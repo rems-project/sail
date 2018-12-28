@@ -67,23 +67,24 @@ val opt_no_effects : bool ref
    assignments in l-expressions. *)
 val opt_no_lexp_bounds_check : bool ref
 
-(** [opt_constraint_synonyms] allows constraint synonyms as toplevel
-   definitions *)
-val opt_constraint_synonyms : bool ref
+(** opt_expand_valspec expands typedefs in valspecs during type check.
+   We prefer not to do it for latex output but it is otherwise a good idea. *)
+val opt_expand_valspec : bool ref
 
 (** {2 Type errors} *)
 
 type type_error =
   | Err_no_casts of unit exp * typ * typ * type_error * type_error list
   | Err_no_overloading of id * (id * type_error) list
-  | Err_unresolved_quants of id * quant_item list
+  | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * n_constraint list
   | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
+  | Err_because of type_error * type_error
 
 exception Type_error of l * type_error;;
 
-val typ_debug : string Lazy.t -> unit
+val typ_debug : ?level:int -> string Lazy.t -> unit
 val typ_print : string Lazy.t -> unit
 
 (** {2 Environments} *)
@@ -95,7 +96,7 @@ module Env : sig
   type t
 
   (** Note: Most get_ functions assume the identifiers exist, and throw
-     type errors if it doesn't. *)
+     type errors if they don't. *)
 
   (** Get the quantifier and type for a function identifier, freshening
       type variables. *)
@@ -127,13 +128,13 @@ module Env : sig
 
   val add_constraint : n_constraint -> t -> t
 
-  val get_typ_var : kid -> t -> base_kind_aux
+  val get_typ_var : kid -> t -> kind_aux
 
-  val get_typ_vars : t -> base_kind_aux KBindings.t
+  val get_typ_vars : t -> kind_aux KBindings.t
 
   val get_typ_var_locs : t -> Ast.l KBindings.t
 
-  val add_typ_var : Ast.l -> kid -> base_kind_aux -> t -> t
+  val add_typ_var : Ast.l -> kinded_id -> t -> t
 
   val is_record : id -> t -> bool
 
@@ -149,7 +150,7 @@ module Env : sig
      won't throw any exceptions. *)
   val get_ret_typ : t -> typ option
 
-  val get_typ_synonym : id -> t -> (t -> typ_arg list -> typ)
+  val get_typ_synonym : id -> t -> (t -> typ_arg list -> typ_arg)
 
   val get_overloads : id -> t -> id list
 
@@ -207,9 +208,14 @@ end
    an environment *)
 val add_typquant : Ast.l -> typquant -> Env.t -> Env.t
 
-val destruct_exist : Env.t -> typ -> (kid list * n_constraint * typ) option
+(** Safely destructure an existential type. Returns None if the type
+   is not existential. This function will pick a fresh name for the
+   existential to ensure that no name-clashes occur. The "plain"
+   version does not treat numeric types as existentials. *)
+val destruct_exist_plain : typ -> (kinded_id list * n_constraint * typ) option
+val destruct_exist : typ -> (kinded_id list * n_constraint * typ) option
 
-val add_existential : Ast.l -> kid list -> n_constraint -> Env.t -> Env.t
+val add_existential : Ast.l -> kinded_id list -> n_constraint -> Env.t -> Env.t
 
 (** When the typechecker creates new type variables it gives them
    fresh names of the form 'fvXXX#name, where XXX is a number (not
@@ -299,6 +305,8 @@ val prove : Env.t -> n_constraint -> bool
 
 val solve : Env.t -> nexp -> Big_int.num option
 
+val canonicalize : Env.t -> typ -> typ
+
 val subtype_check : Env.t -> typ -> typ -> bool
 
 val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp list
@@ -321,9 +329,8 @@ val env_of_annot : Ast.l * tannot -> Env.t
 val typ_of : tannot exp -> typ
 val typ_of_annot : Ast.l * tannot -> typ
 
-
-val pat_typ_of : tannot pat -> typ
-val pat_env_of : tannot pat -> Env.t
+val typ_of_pat : tannot pat -> typ
+val env_of_pat : tannot pat -> Env.t
 
 val typ_of_pexp : tannot pexp -> typ
 val env_of_pexp : tannot pexp -> Env.t
@@ -347,44 +354,33 @@ val expected_typ_of : Ast.l * tannot -> typ option
 
 val destruct_atom_nexp : Env.t -> typ -> nexp option
 
-(** Safely destructure an existential type. Returns None if the type
-   is not existential. This function will pick a fresh name for the
-   existential to ensure that no name-clashes occur. *)
-val destruct_exist : Env.t -> typ -> (kid list * n_constraint * typ) option
-
 val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) option
 
-val destruct_numeric : Env.t -> typ -> (kid list * n_constraint * nexp) option
+val destruct_numeric : typ -> (kid list * n_constraint * nexp) option
 
 val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 
-type uvar =
-  | U_nexp of nexp
-  | U_order of order
-  | U_typ of typ
+val subst_unifiers : typ_arg KBindings.t -> typ -> typ
 
-val string_of_uvar : uvar -> string
-
-val subst_unifiers : uvar KBindings.t -> typ -> typ
-
-val typ_subst_nexp : kid -> nexp_aux -> typ -> typ
-val typ_subst_typ : kid -> typ_aux -> typ -> typ
-val typ_subst_order : kid -> order_aux -> typ -> typ
-val typ_subst_kid : kid -> kid -> typ -> typ
-
-val unify : l -> Env.t -> typ -> typ -> uvar KBindings.t * kid list * n_constraint option
+(** [unify l env goals typ1 typ2] returns set of typ_arg bindings such
+   that substituting those bindings using every type variable in goals
+   will make typ1 and typ2 equal. Will throw a Unification_error if
+   typ1 and typ2 cannot unification (although unification in Sail is
+   not complete). Will throw a type error if any goals appear in in
+   typ2 (occurs check). *)
+val unify : l -> Env.t -> KidSet.t -> typ -> typ -> typ_arg KBindings.t
 
 val alpha_equivalent : Env.t -> typ -> typ -> bool
 
 (** Throws Invalid_argument if the argument is not a E_app expression *)
-val instantiation_of : tannot exp -> uvar KBindings.t
+val instantiation_of : tannot exp -> typ_arg KBindings.t
 
 (** Doesn't use the type of the expression when calculating instantiations.
     May fail if the arguments aren't sufficient to calculate all unifiers. *)
-val instantiation_of_without_type : tannot exp -> uvar KBindings.t
+val instantiation_of_without_type : tannot exp -> typ_arg KBindings.t
 
 (* Type variable instantiations that inference will extract from constraints *)
-val instantiate_simple_equations : quant_item list -> uvar KBindings.t
+val instantiate_simple_equations : quant_item list -> typ_arg KBindings.t
 
 val propagate_exp_effect : tannot exp -> tannot exp
 
@@ -413,7 +409,7 @@ Some invariants that will hold of a fully checked AST are:
    for them to have type annotations.
 
    check throws type_errors rather than Sail generic errors from
-   Reporting_basic. For a function that uses generic errors, use
+   Reporting. For a function that uses generic errors, use
    Type_error.check *)
 val check : Env.t -> 'a defs -> tannot defs * Env.t
 

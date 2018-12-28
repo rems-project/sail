@@ -2006,7 +2006,7 @@ val BigEndianReverse : forall ('width : Int), 'width >= 0 & 'width >= 0.
 function BigEndianReverse value_name = {
   assert('width == 8 | 'width == 16 | 'width == 32 | 'width == 64 | 'width == 128);
   let 'half = 'width / 2;
-  assert(constraint('half * 2 = 'width));
+  assert(constraint('half * 2 == 'width));
   if 'width == 8 then return(value_name) else ();
   return(BigEndianReverse(slice(value_name, 0, half)) @ BigEndianReverse(slice(value_name, half, 'width - half)))
 }
@@ -2131,7 +2131,7 @@ val Replicate : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
 function Replicate x = {
   assert('N % 'M == 0, "((N MOD M) == 0)");
   let 'O = 'N / 'M;
-  assert(constraint('O * 'M = 'N));
+  assert(constraint('O * 'M == 'N));
   return(replicate_bits(x, 'N / 'M))
 }
 
@@ -2945,7 +2945,7 @@ val aarch64_integer_insext_insert_movewide : (int, int, bits(16), MoveWideOp, in
 
 function aarch64_integer_insext_insert_movewide ('d, 'datasize, imm, opcode, 'pos) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   result : bits('datasize) = undefined;
   if opcode == MoveWideOp_K then result = aget_X(d) else result = Zeros();
   result = __SetSlice_bits(datasize, 16, result, pos, imm);
@@ -2957,7 +2957,7 @@ val aarch64_integer_insext_extract_immediate : (int, int, int, int, int) -> unit
 
 function aarch64_integer_insext_extract_immediate ('d, 'datasize, 'lsb, 'm, 'n) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   result : bits('datasize) = undefined;
   operand1 : bits('datasize) = aget_X(n);
   operand2 : bits('datasize) = aget_X(m);
@@ -2970,7 +2970,7 @@ val aarch64_integer_arithmetic_rev : (int, int, int, int) -> unit effect {escape
 
 function aarch64_integer_arithmetic_rev ('container_size, 'd, 'datasize, 'n) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   operand : bits('datasize) = aget_X(n);
   result : bits('datasize) = undefined;
   containers : int = datasize / container_size;
@@ -2992,7 +2992,7 @@ val aarch64_integer_arithmetic_rbit : (int, int, int) -> unit effect {escape, rr
 
 function aarch64_integer_arithmetic_rbit ('d, 'datasize, 'n) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   operand : bits('datasize) = aget_X(n);
   result : bits('datasize) = undefined;
   foreach (i from 0 to (datasize - 1) by 1 in inc)
@@ -3014,7 +3014,7 @@ val aarch64_integer_arithmetic_mul_widening_64128hi : (int, int, int, int, bool)
 
 function aarch64_integer_arithmetic_mul_widening_64128hi ('d, 'datasize, 'm, 'n, unsigned) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   operand1 : bits('datasize) = aget_X(n);
   operand2 : bits('datasize) = aget_X(m);
   result : int = asl_Int(operand1, unsigned) * asl_Int(operand2, unsigned);
@@ -3041,7 +3041,7 @@ function aarch64_integer_arithmetic_mul_widening_3264 ('a, 'd, 'datasize, 'dests
   assert(constraint('destsize in {32, 64}), "destsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   operand1 : bits('datasize) = aget_X(n);
   operand2 : bits('datasize) = aget_X(m);
   operand3 : bits('destsize) = aget_X(a);
@@ -3071,7 +3071,7 @@ function aarch64_integer_arithmetic_mul_uniform_addsub ('a, 'd, 'datasize, 'dest
   assert(constraint('destsize in {32, 64}), "destsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   operand1 : bits('datasize) = aget_X(n);
   operand2 : bits('datasize) = aget_X(m);
   operand3 : bits('destsize) = aget_X(a);
@@ -3098,7 +3098,7 @@ val aarch64_integer_arithmetic_div : (int, int, int, int, bool) -> unit effect {
 
 function aarch64_integer_arithmetic_div ('d, 'datasize, 'm, 'n, unsigned) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   operand1 : bits('datasize) = aget_X(n);
   operand2 : bits('datasize) = aget_X(m);
   result : int = undefined;
@@ -3122,7 +3122,7 @@ val aarch64_integer_arithmetic_cnt : (int, int, int, CountOp) -> unit effect {es
 
 function aarch64_integer_arithmetic_cnt ('d, 'datasize, 'n, opcode) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   result : int = undefined;
   operand1 : bits('datasize) = aget_X(n);
   if opcode == CountOp_CLZ then result = CountLeadingZeroBits(operand1) else result = CountLeadingSignBits(operand1);
@@ -3144,7 +3144,7 @@ val aarch64_integer_arithmetic_addsub_carry : (int, int, int, int, bool, bool) -
 
 function aarch64_integer_arithmetic_addsub_carry ('d, 'datasize, 'm, 'n, setflags, sub_op) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   result : bits('datasize) = undefined;
   operand1 : bits('datasize) = aget_X(n);
   operand2 : bits('datasize) = aget_X(m);
@@ -3341,7 +3341,7 @@ val aarch64_integer_bitfield : forall ('datasize : Int).
 
 function aarch64_integer_bitfield ('R, 'S, 'd, datasize, extend, inzero, 'n, tmask, wmask) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   dst : bits('datasize) = if inzero then Zeros() else aget_X(d);
   src : bits('datasize) = aget_X(n);
   bot : bits('datasize) = dst & ~(wmask) | ROR(src, R) & wmask;
@@ -3367,7 +3367,7 @@ val aarch64_integer_shift_variable : (int, int, int, int, ShiftType) -> unit eff
 
 function aarch64_integer_shift_variable ('d, 'datasize, 'm, 'n, shift_type) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   result : bits('datasize) = undefined;
   operand2 : bits('datasize) = aget_X(m);
   result = ShiftReg(n, shift_type, UInt(operand2) % datasize);
@@ -3390,7 +3390,7 @@ val aarch64_integer_logical_shiftedreg : (int, int, bool, int, int, LogicalOp, b
 
 function aarch64_integer_logical_shiftedreg ('d, 'datasize, invert, 'm, 'n, op, setflags, 'shift_amount, shift_type) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   operand1 : bits('datasize) = aget_X(n);
   operand2 : bits('datasize) = ShiftReg(m, shift_type, shift_amount);
   if invert then operand2 = ~(operand2) else ();
@@ -3408,7 +3408,7 @@ val aarch64_integer_arithmetic_addsub_shiftedreg : (int, int, int, int, bool, in
 
 function aarch64_integer_arithmetic_addsub_shiftedreg ('d, 'datasize, 'm, 'n, setflags, 'shift_amount, shift_type, sub_op) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   result : bits('datasize) = undefined;
   operand1 : bits('datasize) = aget_X(n);
   operand2 : bits('datasize) = ShiftReg(m, shift_type, shift_amount);
@@ -3764,7 +3764,7 @@ val aarch64_integer_logical_immediate : forall ('datasize : Int).
 
 function aarch64_integer_logical_immediate ('d, datasize, imm, 'n, op, setflags) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   result : bits('datasize) = undefined;
   operand1 : bits('datasize) = aget_X(n);
   operand2 : bits('datasize) = imm;
@@ -3782,7 +3782,7 @@ val aarch64_integer_arithmetic_addsub_immediate : forall ('datasize : Int).
 
 function aarch64_integer_arithmetic_addsub_immediate ('d, datasize, imm, 'n, setflags, sub_op) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   result : bits('datasize) = undefined;
   operand1 : bits('datasize) = if n == 31 then aget_SP() else aget_X(n);
   operand2 : bits('datasize) = imm;
@@ -3801,7 +3801,7 @@ val aarch64_integer_arithmetic_addsub_extendedreg : (int, int, ExtendType, int, 
 
 function aarch64_integer_arithmetic_addsub_extendedreg ('d, 'datasize, extend_type, 'm, 'n, setflags, 'shift, sub_op) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   result : bits('datasize) = undefined;
   operand1 : bits('datasize) = if n == 31 then aget_SP() else aget_X(n);
   operand2 : bits('datasize) = ExtendReg(m, extend_type, shift);
@@ -5319,7 +5319,7 @@ function Reduce (op, input, esize) = {
   result : bits('esize) = undefined;
   if 'N == 'esize then return(input) else ();
   let 'half = 'N / 2;
-  assert(constraint('half * 2 = 'N));
+  assert(constraint('half * 2 == 'N));
   hi = Reduce(op, slice(input, half, negate(half) + 'N), 'esize);
   lo = Reduce(op, slice(input, 0, half), 'esize);
   match op {
@@ -5821,7 +5821,7 @@ val aarch64_integer_conditional_select : (bits(4), int, int, bool, bool, int, in
 
 function aarch64_integer_conditional_select (condition, 'd, 'datasize, else_inc, else_inv, 'm, 'n) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   result : bits('datasize) = undefined;
   operand1 : bits('datasize) = aget_X(n);
   operand2 : bits('datasize) = aget_X(m);
@@ -5851,7 +5851,7 @@ val aarch64_integer_conditional_compare_register : (bits(4), int, bits(4), int, 
 
 function aarch64_integer_conditional_compare_register (condition, 'datasize, flags__arg, 'm, 'n, sub_op) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   flags = flags__arg;
   operand1 : bits('datasize) = aget_X(n);
   operand2 : bits('datasize) = aget_X(m);
@@ -5885,7 +5885,7 @@ val aarch64_integer_conditional_compare_immediate : forall ('datasize : Int).
 
 function aarch64_integer_conditional_compare_immediate (condition, datasize, flags__arg, imm, 'n, sub_op) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   flags = flags__arg;
   operand1 : bits('datasize) = aget_X(n);
   operand2 : bits('datasize) = imm;
@@ -7856,7 +7856,7 @@ val aarch64_branch_conditional_test : (int, bits(1), int, bits(64), int) -> unit
 
 function aarch64_branch_conditional_test ('bit_pos, bit_val, 'datasize, offset, 't) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   operand : bits('datasize) = aget_X(t);
   if [operand[bit_pos]] == bit_val then BranchTo(aget_PC() + offset, BranchType_JMP) else ()
 }
@@ -7890,7 +7890,7 @@ val aarch64_branch_conditional_compare : (int, bool, bits(64), int) -> unit effe
 
 function aarch64_branch_conditional_compare ('datasize, iszero, offset, 't) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   operand1 : bits('datasize) = aget_X(t);
   if IsZero(operand1) == iszero then BranchTo(aget_PC() + offset, BranchType_JMP) else ()
 }
@@ -8998,7 +8998,7 @@ val aarch64_vector_transfer_vector_table : (int, int, int, bool, int, int, int) 
 
 function aarch64_vector_transfer_vector_table ('d, 'datasize, 'elements, is_tbl, 'm, n__arg, 'regs) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   assert(constraint('regs >= 1 & 'elements >= 1));
   n : int = n__arg;
   CheckFPAdvSIMDEnabled64();
@@ -9041,7 +9041,7 @@ function aarch64_vector_transfer_vector_permute_zip ('d, 'datasize, 'esize, 'm, 
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -9062,7 +9062,7 @@ function aarch64_vector_transfer_vector_permute_unzip ('d, 'datasize, 'elements,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operandl : bits('datasize) = aget_V(n);
   operandh : bits('datasize) = aget_V(m);
@@ -9080,7 +9080,7 @@ function aarch64_vector_transfer_vector_permute_transpose ('d, 'datasize, 'esize
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -9109,7 +9109,7 @@ val aarch64_vector_transfer_vector_extract : (int, int, int, int, int) -> unit e
 
 function aarch64_vector_transfer_vector_extract ('d, 'datasize, 'm, 'n, 'position) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   hi : bits('datasize) = aget_V(m);
   lo : bits('datasize) = aget_V(n);
@@ -9125,7 +9125,7 @@ function aarch64_vector_transfer_vector_cpydup_sisd ('d, 'datasize, 'elements, '
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('idxdsize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9142,7 +9142,7 @@ function aarch64_vector_transfer_integer_move_unsigned ('d, 'datasize, 'esize, '
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('idxdsize) = aget_V(n);
   aset_X(d, ZeroExtend(aget_Elem(operand, index, esize), datasize))
@@ -9155,7 +9155,7 @@ function aarch64_vector_transfer_integer_move_signed ('d, 'datasize, 'esize, 'id
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('idxdsize) = aget_V(n);
   aset_X(d, SignExtend(aget_Elem(operand, index, esize), datasize))
@@ -9167,7 +9167,7 @@ function aarch64_vector_transfer_integer_insert ('d, 'datasize, 'esize, 'index, 
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   element : bits('esize) = aget_X(n);
   result : bits('datasize) = aget_V(d);
@@ -9182,7 +9182,7 @@ function aarch64_vector_transfer_integer_dup ('d, 'datasize, 'elements, 'esize, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   element : bits('esize) = aget_X(n);
   result : bits('datasize) = undefined;
@@ -9198,7 +9198,7 @@ function aarch64_vector_shift_right_sisd (accumulate, 'd, 'datasize, 'elements, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = undefined;
@@ -9220,7 +9220,7 @@ function aarch64_vector_shift_rightnarrow_uniform_sisd ('d, 'datasize, 'elements
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits(2 * 'datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9244,7 +9244,7 @@ function aarch64_vector_shift_rightnarrow_nonuniform_sisd ('d, 'datasize, 'eleme
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits(2 * 'datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9268,7 +9268,7 @@ function aarch64_vector_shift_rightnarrow_logical ('d, 'datasize, 'elements, 'es
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits(2 * 'datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9288,7 +9288,7 @@ function aarch64_vector_shift_rightinsert_sisd ('d, 'datasize, 'elements, 'esize
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(d);
@@ -9309,7 +9309,7 @@ function aarch64_vector_shift_left_sisd ('d, 'datasize, 'elements, 'esize, 'n, '
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9325,7 +9325,7 @@ function aarch64_vector_shift_leftsat_sisd ('d, 'datasize, dst_unsigned, 'elemen
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9348,7 +9348,7 @@ function aarch64_vector_shift_leftlong ('d, 'datasize, 'elements, 'esize, 'n, 'p
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_Vpart(n, part);
   result : bits(2 * 'datasize) = undefined;
@@ -9367,7 +9367,7 @@ function aarch64_vector_shift_leftinsert_sisd ('d, 'datasize, 'elements, 'esize,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(d);
@@ -9388,7 +9388,7 @@ function aarch64_vector_shift_conv_int_sisd ('d, 'datasize, 'elements, 'esize, '
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9407,7 +9407,7 @@ function aarch64_vector_shift_conv_float_sisd ('d, 'datasize, 'elements, 'esize,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9426,7 +9426,7 @@ function aarch64_vector_reduce_intmax ('d, 'datasize, 'elements, 'esize, min, 'n
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   maxmin : int = undefined;
@@ -9445,7 +9445,7 @@ function aarch64_vector_reduce_fp16maxnm_sisd ('d, 'datasize, 'esize, 'n, op) = 
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   aset_V(d, Reduce(op, operand, esize))
@@ -9470,7 +9470,7 @@ function aarch64_vector_reduce_fp16maxnm_simd ('d, 'datasize, 'esize, 'n, op) = 
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   aset_V(d, Reduce(op, operand, esize))
@@ -9482,7 +9482,7 @@ function aarch64_vector_reduce_fp16max_sisd ('d, 'datasize, 'esize, 'n, op) = {
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   aset_V(d, Reduce(op, operand, esize))
@@ -9507,7 +9507,7 @@ function aarch64_vector_reduce_fp16max_simd ('d, 'datasize, 'esize, 'n, op) = {
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   aset_V(d, Reduce(op, operand, esize))
@@ -9519,7 +9519,7 @@ function aarch64_vector_reduce_fp16add_sisd ('d, 'datasize, 'esize, 'n, op) = {
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   aset_V(d, Reduce(op, operand, esize))
@@ -9544,7 +9544,7 @@ function aarch64_vector_reduce_add_sisd ('d, 'datasize, 'esize, 'n, op) = {
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   aset_V(d, Reduce(op, operand, esize))
@@ -9556,7 +9556,7 @@ function aarch64_vector_reduce_add_simd ('d, 'datasize, 'esize, 'n, op) = {
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   aset_V(d, Reduce(op, operand, esize))
@@ -9569,7 +9569,7 @@ function aarch64_vector_reduce_addlong ('d, 'datasize, 'elements, 'esize, 'n, un
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   sum : int = asl_Int(aget_Elem(operand, 0, esize), unsigned);
@@ -9583,7 +9583,7 @@ val aarch64_vector_logical : forall ('datasize : Int).
 
 function aarch64_vector_logical (datasize, imm, operation, 'rd) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = undefined;
   result : bits('datasize) = undefined;
@@ -9607,7 +9607,7 @@ val aarch64_vector_fp16_movi : forall ('datasize : Int).
 
 function aarch64_vector_fp16_movi (datasize, imm, 'rd) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   aset_V(rd, imm)
 }
@@ -9619,7 +9619,7 @@ function aarch64_vector_arithmetic_unary_special_sqrtfp16 ('d, 'datasize, 'eleme
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9637,7 +9637,7 @@ function aarch64_vector_arithmetic_unary_special_sqrtest_int ('d, 'datasize, 'el
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9656,7 +9656,7 @@ function aarch64_vector_arithmetic_unary_special_sqrtest_fp16_sisd ('d, 'datasiz
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9686,7 +9686,7 @@ function aarch64_vector_arithmetic_unary_special_recip_int ('d, 'datasize, 'elem
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9705,7 +9705,7 @@ function aarch64_vector_arithmetic_unary_special_recip_fp16_sisd ('d, 'datasize,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9736,7 +9736,7 @@ function aarch64_vector_arithmetic_unary_special_frecpxfp16 ('d, 'datasize, 'ele
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9767,7 +9767,7 @@ function aarch64_vector_arithmetic_unary_shift ('d, 'datasize, 'elements, 'esize
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_Vpart(n, part);
   result : bits(2 * 'datasize) = undefined;
@@ -9785,7 +9785,7 @@ function aarch64_vector_arithmetic_unary_rev ('containers, 'd, 'datasize, 'eleme
   assert(constraint('esize >= 0), "esize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9809,7 +9809,7 @@ function aarch64_vector_arithmetic_unary_rbit ('d, 'datasize, 'elements, 'esize,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9843,7 +9843,7 @@ function aarch64_vector_arithmetic_unary_not ('d, 'datasize, 'elements, 'esize, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9874,7 +9874,7 @@ function aarch64_vector_arithmetic_unary_fp16_round ('d, 'datasize, 'elements, '
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9893,7 +9893,7 @@ function aarch64_vector_arithmetic_unary_fp16_conv_int_sisd ('d, 'datasize, 'ele
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9926,7 +9926,7 @@ function aarch64_vector_arithmetic_unary_fp16_conv_float_tieaway_sisd ('d, 'data
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9959,7 +9959,7 @@ function aarch64_vector_arithmetic_unary_fp16_conv_float_bulk_sisd ('d, 'datasiz
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -9992,7 +9992,7 @@ function aarch64_vector_arithmetic_unary_float_xtn_sisd ('d, 'datasize, 'element
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits(2 * 'datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10008,7 +10008,7 @@ function aarch64_vector_arithmetic_unary_float_widen ('d, 'datasize, 'elements, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_Vpart(n, part);
   result : bits(2 * 'datasize) = undefined;
@@ -10037,7 +10037,7 @@ function aarch64_vector_arithmetic_unary_float_narrow ('d, 'datasize, 'elements,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits(2 * 'datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10066,7 +10066,7 @@ function aarch64_vector_arithmetic_unary_extract_sqxtun_sisd ('d, 'datasize, 'el
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits(2 * 'datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10089,7 +10089,7 @@ function aarch64_vector_arithmetic_unary_extract_sat_sisd ('d, 'datasize, 'eleme
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits(2 * 'datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10112,7 +10112,7 @@ function aarch64_vector_arithmetic_unary_extract_nosat ('d, 'datasize, 'elements
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits(2 * 'datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10131,7 +10131,7 @@ function aarch64_vector_arithmetic_unary_diffneg_sat_sisd ('d, 'datasize, 'eleme
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10168,7 +10168,7 @@ function aarch64_vector_arithmetic_unary_diffneg_int_sisd ('d, 'datasize, 'eleme
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10188,7 +10188,7 @@ function aarch64_vector_arithmetic_unary_diffneg_fp16 ('d, 'datasize, 'elements,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10205,7 +10205,7 @@ val aarch64_vector_arithmetic_unary_cnt : (int, int, int, int, int) -> unit effe
 
 function aarch64_vector_arithmetic_unary_cnt ('d, 'datasize, 'elements, 'esize, 'n) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   assert('elements >= 1 & 'esize >= 1);
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
@@ -10225,7 +10225,7 @@ function aarch64_vector_arithmetic_unary_cmp_int_lessthan_sisd (comparison, 'd, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10252,7 +10252,7 @@ function aarch64_vector_arithmetic_unary_cmp_int_bulk_sisd (comparison, 'd, 'dat
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10279,7 +10279,7 @@ function aarch64_vector_arithmetic_unary_cmp_fp16_lessthan_sisd (comparison, 'd,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10320,7 +10320,7 @@ function aarch64_vector_arithmetic_unary_cmp_fp16_bulk_sisd (comparison, 'd, 'da
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10364,7 +10364,7 @@ val aarch64_vector_arithmetic_unary_clsz : (CountOp, int, int, int, int, int) ->
 
 function aarch64_vector_arithmetic_unary_clsz (countop, 'd, 'datasize, 'elements, 'esize, 'n) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   assert('elements >= 1 & 'esize >= 3);
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
@@ -10386,7 +10386,7 @@ function aarch64_vector_arithmetic_unary_add_saturating_sisd ('d, 'datasize, 'el
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10425,7 +10425,7 @@ function aarch64_vector_arithmetic_unary_add_pairwise (acc, 'd, 'datasize, 'elem
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand : bits('datasize) = aget_V(n);
   result : bits('datasize) = undefined;
@@ -10449,7 +10449,7 @@ function aarch64_vector_arithmetic_binary_uniform_sub_saturating_sisd ('d, 'data
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10491,7 +10491,7 @@ function aarch64_vector_arithmetic_binary_uniform_sub_int ('d, 'datasize, 'eleme
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10515,7 +10515,7 @@ function aarch64_vector_arithmetic_binary_uniform_sub_fp16_sisd (abs, 'd, 'datas
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10553,7 +10553,7 @@ function aarch64_vector_arithmetic_binary_uniform_sub_fp16_simd (abs, 'd, 'datas
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10577,7 +10577,7 @@ function aarch64_vector_arithmetic_binary_uniform_shift_sisd ('d, 'datasize, 'el
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10607,7 +10607,7 @@ function aarch64_vector_arithmetic_binary_uniform_rsqrtsfp16_sisd ('d, 'datasize
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10642,7 +10642,7 @@ function aarch64_vector_arithmetic_binary_uniform_recpsfp16_sisd ('d, 'datasize,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10674,7 +10674,7 @@ val aarch64_vector_arithmetic_binary_uniform_mul_int_product : (int, int, int, i
 
 function aarch64_vector_arithmetic_binary_uniform_mul_int_product ('d, 'datasize, 'elements, 'esize, 'm, 'n, poly) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   assert('elements >= 1 & 'esize >= 1);
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
@@ -10700,7 +10700,7 @@ function aarch64_vector_arithmetic_binary_uniform_mul_int_doubling_sisd ('d, 'da
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10729,7 +10729,7 @@ function aarch64_vector_arithmetic_binary_uniform_mul_int_doubling_accum_sisd ('
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10762,7 +10762,7 @@ function aarch64_vector_arithmetic_binary_uniform_mul_int_dotp ('d, 'datasize, '
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10793,7 +10793,7 @@ function aarch64_vector_arithmetic_binary_uniform_mul_int_accum ('d, 'datasize, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10818,7 +10818,7 @@ function aarch64_vector_arithmetic_binary_uniform_mul_fp16_product ('d, 'datasiz
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10840,7 +10840,7 @@ function aarch64_vector_arithmetic_binary_uniform_mul_fp16_fused ('d, 'datasize,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10864,7 +10864,7 @@ function aarch64_vector_arithmetic_binary_uniform_mul_fp16_extended_sisd ('d, 'd
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10899,7 +10899,7 @@ function aarch64_vector_arithmetic_binary_uniform_mul_fp_complex ('d, 'datasize,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10949,7 +10949,7 @@ function aarch64_vector_arithmetic_binary_uniform_maxmin_single ('d, 'datasize, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10973,7 +10973,7 @@ function aarch64_vector_arithmetic_binary_uniform_maxmin_pair ('d, 'datasize, 'e
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -10998,7 +10998,7 @@ function aarch64_vector_arithmetic_binary_uniform_maxmin_fp16_2008 ('d, 'datasiz
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11026,7 +11026,7 @@ function aarch64_vector_arithmetic_binary_uniform_maxmin_fp16_1985 ('d, 'datasiz
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11051,7 +11051,7 @@ val aarch64_vector_arithmetic_binary_uniform_logical_bsleor : (int, int, int, in
 
 function aarch64_vector_arithmetic_binary_uniform_logical_bsleor ('d, 'datasize, 'm, 'n, op) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = undefined;
   operand2 : bits('datasize) = undefined;
@@ -11106,7 +11106,7 @@ val aarch64_vector_arithmetic_binary_uniform_logical_andorr : (int, int, bool, i
 
 function aarch64_vector_arithmetic_binary_uniform_logical_andorr ('d, 'datasize, invert, 'm, 'n, op) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11141,7 +11141,7 @@ function aarch64_vector_arithmetic_binary_uniform_divfp16 ('d, 'datasize, 'eleme
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11163,7 +11163,7 @@ function aarch64_vector_arithmetic_binary_uniform_diff (accumulate, 'd, 'datasiz
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11188,7 +11188,7 @@ function aarch64_vector_arithmetic_binary_uniform_cmp_int_sisd (cmp_eq, 'd, 'dat
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11212,7 +11212,7 @@ function aarch64_vector_arithmetic_binary_uniform_cmp_fp16_sisd (abs, cmp, 'd, '
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11244,7 +11244,7 @@ function aarch64_vector_arithmetic_binary_uniform_cmp_bitwise_sisd (and_test, 'd
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11268,7 +11268,7 @@ function aarch64_vector_arithmetic_binary_uniform_add_wrapping_single_sisd ('d, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11290,7 +11290,7 @@ function aarch64_vector_arithmetic_binary_uniform_add_wrapping_pair ('d, 'datasi
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11313,7 +11313,7 @@ function aarch64_vector_arithmetic_binary_uniform_add_saturating_sisd ('d, 'data
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11355,7 +11355,7 @@ function aarch64_vector_arithmetic_binary_uniform_add_halving_truncating ('d, 'd
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11379,7 +11379,7 @@ function aarch64_vector_arithmetic_binary_uniform_add_halving_rounding ('d, 'dat
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11401,7 +11401,7 @@ function aarch64_vector_arithmetic_binary_uniform_add_fp16 ('d, 'datasize, 'elem
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11429,7 +11429,7 @@ function aarch64_vector_arithmetic_binary_uniform_add_fp_complex ('d, 'datasize,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_V(m);
@@ -11462,7 +11462,7 @@ function aarch64_vector_arithmetic_binary_element_mul_long ('d, 'datasize, 'elem
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_Vpart(n, part);
   operand2 : bits('idxdsize) = aget_V(m);
@@ -11487,7 +11487,7 @@ function aarch64_vector_arithmetic_binary_element_mul_int ('d, 'datasize, 'eleme
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('idxdsize) = aget_V(m);
@@ -11512,7 +11512,7 @@ function aarch64_vector_arithmetic_binary_element_mul_high_sisd ('d, 'datasize, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('idxdsize) = aget_V(m);
@@ -11542,7 +11542,7 @@ function aarch64_vector_arithmetic_binary_element_mul_fp16_sisd ('d, 'datasize, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('idxdsize) = aget_V(m);
@@ -11564,7 +11564,7 @@ function aarch64_vector_arithmetic_binary_element_mul_double_sisd ('d, 'datasize
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_Vpart(n, part);
   operand2 : bits('idxdsize) = aget_V(m);
@@ -11591,7 +11591,7 @@ function aarch64_vector_arithmetic_binary_element_mulacc_long ('d, 'datasize, 'e
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_Vpart(n, part);
   operand2 : bits('idxdsize) = aget_V(m);
@@ -11617,7 +11617,7 @@ function aarch64_vector_arithmetic_binary_element_mulacc_int ('d, 'datasize, 'el
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('idxdsize) = aget_V(m);
@@ -11643,7 +11643,7 @@ function aarch64_vector_arithmetic_binary_element_mulacc_high_sisd ('d, 'datasiz
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('idxdsize) = aget_V(m);
@@ -11677,7 +11677,7 @@ function aarch64_vector_arithmetic_binary_element_mulacc_fp16_sisd ('d, 'datasiz
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('idxdsize) = aget_V(m);
@@ -11701,7 +11701,7 @@ function aarch64_vector_arithmetic_binary_element_mulacc_double_sisd ('d, 'datas
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_Vpart(n, part);
   operand2 : bits('idxdsize) = aget_V(m);
@@ -11733,7 +11733,7 @@ function aarch64_vector_arithmetic_binary_element_mulacc_complex ('d, 'datasize,
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(m);
   operand2 : bits('datasize) = aget_V(n);
@@ -11783,7 +11783,7 @@ function aarch64_vector_arithmetic_binary_element_dotp ('d, 'datasize, 'elements
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits(128) = aget_V(m);
@@ -11814,7 +11814,7 @@ function aarch64_vector_arithmetic_binary_disparate_mul_product ('d, 'datasize, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_Vpart(n, part);
   operand2 : bits('datasize) = aget_Vpart(m, part);
@@ -11836,7 +11836,7 @@ function aarch64_vector_arithmetic_binary_disparate_mul_poly ('d, 'datasize, 'el
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_Vpart(n, part);
   operand2 : bits('datasize) = aget_Vpart(m, part);
@@ -11858,7 +11858,7 @@ function aarch64_vector_arithmetic_binary_disparate_mul_double_sisd ('d, 'datasi
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_Vpart(n, part);
   operand2 : bits('datasize) = aget_Vpart(m, part);
@@ -11884,7 +11884,7 @@ function aarch64_vector_arithmetic_binary_disparate_mul_dmacc_sisd ('d, 'datasiz
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_Vpart(n, part);
   operand2 : bits('datasize) = aget_Vpart(m, part);
@@ -11916,7 +11916,7 @@ function aarch64_vector_arithmetic_binary_disparate_mul_accum ('d, 'datasize, 'e
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_Vpart(n, part);
   operand2 : bits('datasize) = aget_Vpart(m, part);
@@ -11943,7 +11943,7 @@ function aarch64_vector_arithmetic_binary_disparate_diff (accumulate, 'd, 'datas
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_Vpart(n, part);
   operand2 : bits('datasize) = aget_Vpart(m, part);
@@ -11968,7 +11968,7 @@ function aarch64_vector_arithmetic_binary_disparate_addsub_wide ('d, 'datasize, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits(2 * 'datasize) = aget_V(n);
   operand2 : bits('datasize) = aget_Vpart(m, part);
@@ -11992,7 +11992,7 @@ function aarch64_vector_arithmetic_binary_disparate_addsub_narrow ('d, 'datasize
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits(2 * 'datasize) = aget_V(n);
   operand2 : bits(2 * 'datasize) = aget_V(m);
@@ -12018,7 +12018,7 @@ function aarch64_vector_arithmetic_binary_disparate_addsub_long ('d, 'datasize, 
   assert(constraint('elements >= 1), "elements constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_Vpart(n, part);
   operand2 : bits('datasize) = aget_Vpart(m, part);
@@ -12039,7 +12039,7 @@ val aarch64_float_move_fp_select : (bits(4), int, int, int, int) -> unit effect 
 
 function aarch64_float_move_fp_select (condition, 'd, 'datasize, 'm, 'n) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   result : bits('datasize) = if ConditionHolds(condition) then aget_V(n) else aget_V(m);
   aset_V(d, result)
@@ -12050,7 +12050,7 @@ val aarch64_float_move_fp_imm : forall ('datasize : Int).
 
 function aarch64_float_move_fp_imm ('d, datasize, imm) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   aset_V(d, imm)
 }
@@ -12127,7 +12127,7 @@ val aarch64_float_compare_uncond : (bool, int, int, int, bool) -> unit effect {e
 
 function aarch64_float_compare_uncond (cmp_with_zero, 'datasize, 'm, 'n, signal_all_nans) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
   operand2 : bits('datasize) = if cmp_with_zero then FPZero(0b0) else aget_V(m);
@@ -12138,7 +12138,7 @@ val aarch64_float_compare_cond : (bits(4), int, bits(4), int, int, bool) -> unit
 
 function aarch64_float_compare_cond (condition, 'datasize, flags__arg, 'm, 'n, signal_all_nans) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   flags = flags__arg;
   CheckFPAdvSIMDEnabled64();
   operand1 : bits('datasize) = aget_V(n);
@@ -12151,7 +12151,7 @@ val aarch64_float_arithmetic_unary : (int, int, FPUnaryOp, int) -> unit effect {
 
 function aarch64_float_arithmetic_unary ('d, 'datasize, fpop, 'n) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   result : bits('datasize) = undefined;
   operand : bits('datasize) = aget_V(n);
@@ -12168,7 +12168,7 @@ val aarch64_float_arithmetic_round : (int, int, bool, int, FPRounding) -> unit e
 
 function aarch64_float_arithmetic_round ('d, 'datasize, exact, 'n, rounding) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   result : bits('datasize) = undefined;
   operand : bits('datasize) = aget_V(n);
@@ -12180,7 +12180,7 @@ val aarch64_float_arithmetic_mul_product : (int, int, int, int, bool) -> unit ef
 
 function aarch64_float_arithmetic_mul_product ('d, 'datasize, 'm, 'n, negated) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   result : bits('datasize) = undefined;
   operand1 : bits('datasize) = aget_V(n);
@@ -12194,7 +12194,7 @@ val aarch64_float_arithmetic_mul_addsub : (int, int, int, int, int, bool, bool) 
 
 function aarch64_float_arithmetic_mul_addsub ('a, 'd, 'datasize, 'm, 'n, op1_neg, opa_neg) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   result : bits('datasize) = undefined;
   operanda : bits('datasize) = aget_V(a);
@@ -12210,7 +12210,7 @@ val aarch64_float_arithmetic_maxmin : (int, int, int, int, FPMaxMinOp) -> unit e
 
 function aarch64_float_arithmetic_maxmin ('d, 'datasize, 'm, 'n, operation) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   result : bits('datasize) = undefined;
   operand1 : bits('datasize) = aget_V(n);
@@ -12228,7 +12228,7 @@ val aarch64_float_arithmetic_div : (int, int, int, int) -> unit effect {escape, 
 
 function aarch64_float_arithmetic_div ('d, 'datasize, 'm, 'n) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   result : bits('datasize) = undefined;
   operand1 : bits('datasize) = aget_V(n);
@@ -12241,7 +12241,7 @@ val aarch64_float_arithmetic_addsub : (int, int, int, int, bool) -> unit effect 
 
 function aarch64_float_arithmetic_addsub ('d, 'datasize, 'm, 'n, sub_op) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   result : bits('datasize) = undefined;
   operand1 : bits('datasize) = aget_V(n);
@@ -12700,7 +12700,7 @@ function aarch64_memory_vector_single_nowb (datasize, esize, index, m, memop, n,
   element : bits('esize) = undefined;
   s : int = undefined;
   let 'ebytes : {'n, true. atom('n)} = ex_int(esize / 8);
-  assert(constraint(8 * 'ebytes = 'esize));
+  assert(constraint(8 * 'ebytes == 'esize));
   if n == 31 then {
     CheckSPAlignment();
     address = aget_SP()
@@ -12744,7 +12744,7 @@ function aarch64_memory_vector_multiple_nowb (datasize, elements, esize, m, memo
   s : int = undefined;
   tt : int = undefined;
   let 'ebytes = ex_int(esize / 8);
-  assert(constraint(8 * 'ebytes = 'esize));
+  assert(constraint(8 * 'ebytes == 'esize));
   if n == 31 then {
     CheckSPAlignment();
     address = aget_SP()
@@ -12774,7 +12774,7 @@ val aarch64_memory_single_simdfp_register : (AccType, int, ExtendType, int, MemO
 
 function aarch64_memory_single_simdfp_register (acctype, 'datasize, extend_type, 'm, memop, 'n, postindex, 'shift, 't, wback) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   offset : bits(64) = ExtendReg(m, extend_type, shift);
   CheckFPAdvSIMDEnabled64();
   address : bits(64) = undefined;
@@ -12804,7 +12804,7 @@ val aarch64_memory_single_simdfp_immediate_signed_postidx : (AccType, int, MemOp
 
 function aarch64_memory_single_simdfp_immediate_signed_postidx (acctype, 'datasize, memop, 'n, offset, postindex, 't, wback) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
@@ -12833,7 +12833,7 @@ val aarch64_memory_single_simdfp_immediate_signed_offset_normal : (AccType, int,
 
 function aarch64_memory_single_simdfp_immediate_signed_offset_normal (acctype, 'datasize, memop, 'n, offset, postindex, 't, wback) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
@@ -12866,7 +12866,7 @@ function aarch64_memory_ordered (acctype, datasize, memop, n, regsize, t) = {
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
   let 'dbytes = ex_int(datasize / 8);
-  assert(constraint(8 * 'dbytes = 'datasize));
+  assert(constraint(8 * 'dbytes == 'datasize));
   if n == 31 then {
     CheckSPAlignment();
     address = aget_SP()
@@ -12907,7 +12907,7 @@ function aarch64_memory_orderedrcpc (acctype, datasize, n, regsize, t) = {
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
   let 'dbytes = ex_int(datasize / 8);
-  assert(constraint(8 * 'dbytes = 'datasize));
+  assert(constraint(8 * 'dbytes == 'datasize));
   if n == 31 then {
     CheckSPAlignment();
     address = aget_SP()
@@ -12986,7 +12986,7 @@ function aarch64_memory_atomicops_swp ('datasize, ldacctype, 'n, 'regsize, 's, s
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
   if n == 31 then {
@@ -13002,7 +13002,7 @@ val aarch64_memory_atomicops_st : (int, AccType, int, MemAtomicOp, int, AccType)
 
 function aarch64_memory_atomicops_st ('datasize, ldacctype, 'n, op, 's, stacctype) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   address : bits(64) = undefined;
   value_name : bits('datasize) = undefined;
   data : bits('datasize) = undefined;
@@ -13032,7 +13032,7 @@ function aarch64_memory_atomicops_ld ('datasize, ldacctype, 'n, op, 'regsize, 's
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   address : bits(64) = undefined;
   value_name : bits('datasize) = undefined;
   data : bits('datasize) = undefined;
@@ -13063,7 +13063,7 @@ function aarch64_memory_atomicops_cas_single ('datasize, ldacctype, 'n, 'regsize
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   address : bits(64) = undefined;
   comparevalue : bits('datasize) = undefined;
   newvalue : bits('datasize) = undefined;
@@ -13085,7 +13085,7 @@ function aarch64_memory_atomicops_cas_pair ('datasize, ldacctype, 'n, 'regsize, 
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   address : bits(64) = undefined;
   comparevalue : bits(2 * 'datasize) = undefined;
   newvalue : bits(2 * 'datasize) = undefined;
@@ -13366,7 +13366,7 @@ function aarch64_memory_single_general_register (acctype, 'datasize, extend_type
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   wback = wback__arg;
   offset : bits(64) = ExtendReg(m, extend_type, shift);
   address : bits(64) = undefined;
@@ -13422,7 +13422,7 @@ function aarch64_memory_single_general_immediate_unsigned (acctype, 'datasize, m
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   wback = wback__arg;
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
@@ -13477,7 +13477,7 @@ function aarch64_memory_single_general_immediate_signed_postidx (acctype, 'datas
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   wback = wback__arg;
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
@@ -13564,7 +13564,7 @@ function aarch64_memory_single_general_immediate_signed_offset_unpriv (acctype, 
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   wback = wback__arg;
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
@@ -13619,7 +13619,7 @@ function aarch64_memory_single_general_immediate_signed_offset_normal (acctype, 
   assert(constraint('regsize >= 0), "regsize constraint");
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   wback = wback__arg;
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
@@ -13673,7 +13673,7 @@ val aarch64_memory_pair_simdfp_postidx : forall ('datasize : Int).
 
 function aarch64_memory_pair_simdfp_postidx (acctype, datasize, memop, n, offset, postindex, t, t2, wback) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   address : bits(64) = undefined;
   data1 : bits('datasize) = undefined;
@@ -13724,7 +13724,7 @@ val aarch64_memory_pair_simdfp_noalloc : forall ('datasize : Int).
 
 function aarch64_memory_pair_simdfp_noalloc (acctype, datasize, memop, n, offset, postindex, t, t2, wback) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   CheckFPAdvSIMDEnabled64();
   address : bits(64) = undefined;
   data1 : bits('datasize) = undefined;
@@ -13775,7 +13775,7 @@ val aarch64_memory_pair_general_postidx : forall ('datasize : Int).
 
 function aarch64_memory_pair_general_postidx (acctype, datasize, memop, n, offset, postindex, signed, t, t2, wback__arg) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   wback = wback__arg;
   address : bits(64) = undefined;
   data1 : bits('datasize) = undefined;
@@ -13855,7 +13855,7 @@ val aarch64_memory_pair_general_noalloc : forall ('datasize : Int).
 
 function aarch64_memory_pair_general_noalloc (acctype, datasize, memop, n, offset, postindex, t, t2, wback) = let 'dbytes = ex_int(datasize / 8) in {
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   address : bits(64) = undefined;
   data1 : bits('datasize) = undefined;
   data2 : bits('datasize) = undefined;
@@ -13910,7 +13910,7 @@ function aarch64_memory_exclusive_single (acctype, datasize, elsize, memop, n, p
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(- 'elsize + 'datasize >= 0 & 'elsize >= 0));
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
   rt_unknown : bool = false;
@@ -13957,7 +13957,7 @@ function aarch64_memory_exclusive_single (acctype, datasize, elsize, memop, n, p
     MemOp_STORE => {
       if rt_unknown then data = undefined
       else if pair then let 'v = ex_int(datasize / 2) in {
-        assert(constraint(2 * 'v = 'datasize));
+	assert(constraint(2 * 'v == 'datasize));
         el1 : bits('v) = aget_X(t);
         el2 : bits('v) = aget_X(t2);
         data = if BigEndian() then el1 @ el2 else el2 @ el1
@@ -14023,7 +14023,7 @@ function aarch64_memory_exclusive_pair (acctype, datasize, elsize, memop, n, pai
   let 'dbytes = ex_int(datasize / 8);
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(- 'elsize + 'datasize >= 0 & 'elsize >= 0), "datasize constraint");
-  assert(constraint(8 * 'dbytes = 'datasize), "dbytes constraint");
+  assert(constraint(8 * 'dbytes == 'datasize), "dbytes constraint");
   address : bits(64) = undefined;
   data : bits('datasize) = undefined;
   rt_unknown : bool = false;
@@ -14070,7 +14070,7 @@ function aarch64_memory_exclusive_pair (acctype, datasize, elsize, memop, n, pai
     MemOp_STORE => {
       if rt_unknown then data = undefined
       else if pair then let 'v = ex_int(datasize / 2) in {
-        assert(constraint(2 * 'v = 'datasize));
+	assert(constraint(2 * 'v == 'datasize));
         el1 : bits('v) = aget_X(t);
         el2 : bits('v) = aget_X(t2);
         data = if BigEndian() then el1 @ el2 else el2 @ el1
@@ -14305,7 +14305,7 @@ function vector_logical_decode (Q, op, a, b, c, cmode, o2, d, e, f, g, h, Rd) = 
   };
   imm64 = AdvSIMDExpandImm(op, cmode, ((((((a @ b) @ c) @ d) @ e) @ f) @ g) @ h);
   let 'immsize = datasize / 64;
-  assert(constraint('immsize * 64 = 'datasize));
+  assert(constraint('immsize * 64 == 'datasize));
   imm = replicate_bits(imm64, 'immsize);
   aarch64_vector_logical(datasize, imm, operation, rd)
 }
@@ -14321,7 +14321,7 @@ function vector_fp16_movi_decode (Q, op, a, b, c, cmode, o2, d, e, f, g, h, Rd) 
   imm8 : bits(8) = ((((((a @ b) @ c) @ d) @ e) @ f) @ g) @ h;
   imm16 : bits(16) = ((([imm8[7]] @ ~([imm8[6]])) @ replicate_bits([imm8[6]], 2)) @ slice(imm8, 0, 6)) @ Zeros(6);
   let 'immsize = datasize / 16;
-  assert(constraint('immsize * 16 = 'datasize));
+  assert(constraint('immsize * 16 == 'datasize));
   imm = replicate_bits(imm16, immsize);
   aarch64_vector_fp16_movi(datasize, imm, rd)
 }

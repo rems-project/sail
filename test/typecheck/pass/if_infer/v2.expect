@@ -1,0 +1,17 @@
+Type error at file "if_infer/v2.sail", line 10, character 11 to line 10, character 38
+
+  let _ = [41m0b1001[if R then 0 else f()][0m;
+
+No overloadings for vector_access, tried:
+  bitvector_access:
+    Could not resolve quantifiers for bitvector_access (0 <= 'ex42#ex41# & ('ex42#ex41# + 1) <= 4)
+    
+    Try adding named type variables for 
+    
+    
+  plain_vector_access:
+    Could not resolve quantifiers for plain_vector_access (0 <= 'ex45#ex44# & ('ex45#ex44# + 1) <= 4)
+    
+    Try adding named type variables for 
+    
+    

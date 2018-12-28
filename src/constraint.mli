@@ -49,40 +49,14 @@
 (**************************************************************************)
 
 module Big_int = Nat_big_num
-
-type nexp
-type t
+open Ast
+open Ast_util
 
 type smt_result = Unknown | Sat | Unsat
 
 val load_digests : unit -> unit
 val save_digests : unit -> unit
 
-val call_z3 : t -> smt_result
+val call_z3 : l -> kind_aux KBindings.t -> n_constraint -> smt_result
 
-val solve_z3 : t -> int -> Big_int.num option
-
-val string_of : t -> string
-
-val implies : t -> t -> t
-val conj : t -> t -> t
-val disj : t -> t -> t
-val negate : t -> t
-val literal : bool -> t
-val forall : int list -> t -> t
-
-val lt : nexp -> nexp -> t
-val lteq : nexp -> nexp -> t
-val gt : nexp -> nexp -> t
-val gteq : nexp -> nexp -> t
-val eq : nexp -> nexp -> t
-val neq : nexp -> nexp -> t
-
-val pow2 : nexp -> nexp
-val add : nexp -> nexp -> nexp
-val sub : nexp -> nexp -> nexp
-val mult : nexp -> nexp -> nexp
-val app : string -> nexp list -> nexp
-
-val constant : Big_int.num -> nexp
-val variable : int -> nexp
+val solve_z3 : l -> kind_aux KBindings.t -> n_constraint -> kid -> Big_int.num option

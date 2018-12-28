@@ -1,2 +1,2 @@
 
-function test (x : atom('n), y : atom('m)) -> forall 'n 'm. atom('m + 'n) = undefined
+function test forall 'n 'm. (x : int('n), y : int('m)) -> int('m + 'n) = undefined

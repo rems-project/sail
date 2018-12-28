@@ -20,8 +20,8 @@ val main : unit -> unit
 
 function main () = {
   let x : list(int) = [|1, 2, 3|];
-  let y = hd(0 : int, x);
+  let y : int = hd(0, x);
   print_int("y = ", y);
-  print_int("hd(tl(x)) = ", hd(0, tl(x)));
-  print_int("hd(tl(tl(x))) = ", hd(0, tl(tl(x))));
+  print_int("hd(tl(x)) = ", hd(0, tl(x)) : int);
+  print_int("hd(tl(tl(x))) = ", hd(0, tl(tl(x))) : int);
 }

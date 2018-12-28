@@ -35,7 +35,7 @@ function f(n) = {
     assert(constraint('n in {8,16}));
     x : bits('n) = undefined;
     let 'm : {'o, true. atom('o)} = ex_int(n / 8) in {
-        assert(constraint(8 * 'm = 'n));
+        assert(constraint(8 * 'm == 'n));
         x = replicate_bits(0b00000000,'m);
         accept(m,x);
         accept(m,replicate_bits(0b00000000,'m));
@@ -51,7 +51,7 @@ val g : forall 'm 'n. (atom('m), atom('n), bits('n)) -> unit effect {escape}
 function g(m,n,v) = {
   assert(constraint('m >= 0 & 'n >= 0));
   let 'o : {'p, true. atom('p)} = ex_int(m / n) in {
-    assert(constraint('o * 'n = 'm));
+    assert(constraint('o * 'n == 'm));
     accept2(replicate_bits(v,o))
   }
 }

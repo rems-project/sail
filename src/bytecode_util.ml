@@ -67,6 +67,9 @@ let instr_number () =
 let idecl ?loc:(l=Parse_ast.Unknown) ctyp id =
   I_aux (I_decl (ctyp, id), (instr_number (), l))
 
+let ireset ?loc:(l=Parse_ast.Unknown) ctyp id =
+  I_aux (I_reset (ctyp, id), (instr_number (), l))
+
 let iinit ?loc:(l=Parse_ast.Unknown) ctyp id cval =
   I_aux (I_init (ctyp, id, cval), (instr_number (), l))
 
@@ -81,6 +84,9 @@ let iextern ?loc:(l=Parse_ast.Unknown) clexp id cvals =
 
 let icopy l clexp cval =
   I_aux (I_copy (clexp, cval), (instr_number (), l))
+
+let ialias l clexp cval =
+  I_aux (I_alias (clexp, cval), (instr_number (), l))
 
 let iclear ?loc:(l=Parse_ast.Unknown) ctyp id =
   I_aux (I_clear (ctyp, id), (instr_number (), l))
@@ -131,6 +137,77 @@ let rec frag_rename from_id to_id = function
   | F_raw raw -> F_raw raw
   | F_poly f -> F_poly (frag_rename from_id to_id f)
 
+let cval_rename from_id to_id (frag, ctyp) = (frag_rename from_id to_id frag, ctyp)
+
+let rec clexp_rename from_id to_id = function
+  | CL_id (id, ctyp) when Id.compare id from_id = 0 -> CL_id (to_id, ctyp)
+  | CL_id (id, ctyp) -> CL_id (id, ctyp)
+  | CL_field (clexp, field) ->
+     CL_field (clexp_rename from_id to_id clexp, field)
+  | CL_addr clexp ->
+     CL_addr (clexp_rename from_id to_id clexp)
+  | CL_tuple (clexp, n) ->
+     CL_tuple (clexp_rename from_id to_id clexp, n)
+  | CL_current_exception ctyp -> CL_current_exception ctyp
+  | CL_have_exception -> CL_have_exception
+
+let rec instr_rename from_id to_id (I_aux (instr, aux)) =
+  let instr = match instr with
+    | I_decl (ctyp, id) when Id.compare id from_id = 0 -> I_decl (ctyp, to_id)
+    | I_decl (ctyp, id) -> I_decl (ctyp, id)
+
+    | I_init (ctyp, id, cval) when Id.compare id from_id = 0 ->
+       I_init (ctyp, to_id, cval_rename from_id to_id cval)
+    | I_init (ctyp, id, cval) ->
+       I_init (ctyp, id, cval_rename from_id to_id cval)
+
+    | I_if (cval, then_instrs, else_instrs, ctyp2) ->
+       I_if (cval_rename from_id to_id cval,
+             List.map (instr_rename from_id to_id) then_instrs,
+             List.map (instr_rename from_id to_id) else_instrs,
+             ctyp2)
+
+    | I_jump (cval, label) -> I_jump (cval_rename from_id to_id cval, label)
+
+    | I_funcall (clexp, extern, id, args) ->
+       I_funcall (clexp_rename from_id to_id clexp, extern, id, List.map (cval_rename from_id to_id) args)
+
+    | I_copy (clexp, cval) -> I_copy (clexp_rename from_id to_id clexp, cval_rename from_id to_id cval)
+    | I_alias (clexp, cval) -> I_alias (clexp_rename from_id to_id clexp, cval_rename from_id to_id cval)
+
+    | I_clear (ctyp, id) when Id.compare id from_id = 0 -> I_clear (ctyp, to_id)
+    | I_clear (ctyp, id) -> I_clear (ctyp, id)
+
+    | I_return cval -> I_return (cval_rename from_id to_id cval)
+
+    | I_block instrs -> I_block (List.map (instr_rename from_id to_id) instrs)
+
+    | I_try_block instrs -> I_try_block (List.map (instr_rename from_id to_id) instrs)
+
+    | I_throw cval -> I_throw (cval_rename from_id to_id cval)
+
+    | I_comment str -> I_comment str
+
+    | I_raw str -> I_raw str
+
+    | I_label label -> I_label label
+
+    | I_goto label -> I_goto label
+
+    | I_undefined ctyp -> I_undefined ctyp
+
+    | I_match_failure -> I_match_failure
+
+    | I_reset (ctyp, id) when Id.compare id from_id = 0 -> I_reset (ctyp, to_id)
+    | I_reset (ctyp, id) -> I_reset (ctyp, id)
+
+    | I_reinit (ctyp, id, cval) when Id.compare id from_id = 0 ->
+       I_reinit (ctyp, to_id, cval_rename from_id to_id cval)
+    | I_reinit (ctyp, id, cval) ->
+       I_reinit (ctyp, id, cval_rename from_id to_id cval)
+  in
+  I_aux (instr, aux)
+
 (**************************************************************************)
 (* 1. Instruction pretty printer                                          *)
 (**************************************************************************)
@@ -175,12 +252,14 @@ and string_of_fragment' ?zencode:(zencode=true) f =
 (* String representation of ctyps here is only for debugging and
    intermediate language pretty-printer. *)
 and string_of_ctyp = function
-  | CT_int -> "mpz_t"
-  | CT_bits true -> "bv_t(dec)"
-  | CT_bits false -> "bv_t(inc)"
-  | CT_bits64 (n, true) -> "uint64_t(" ^ string_of_int n ^ ", dec)"
-  | CT_bits64 (n, false) -> "uint64_t(" ^ string_of_int n ^ ", int)"
-  | CT_int64 -> "int64_t"
+  | CT_int -> "int"
+  | CT_lbits true -> "lbits(dec)"
+  | CT_lbits false -> "lbits(inc)"
+  | CT_fbits (n, true) -> "fbits(" ^ string_of_int n ^ ", dec)"
+  | CT_fbits (n, false) -> "fbits(" ^ string_of_int n ^ ", int)"
+  | CT_sbits true -> "sbits(dec)"
+  | CT_sbits false -> "sbits(inc)"
+  | CT_int64 -> "int64"
   | CT_bit -> "bit"
   | CT_unit -> "unit"
   | CT_bool -> "bool"
@@ -197,12 +276,14 @@ and string_of_ctyp = function
 (** This function is like string_of_ctyp, but recursively prints all
    constructors in variants and structs. Used for debug output. *)
 and full_string_of_ctyp = function
-  | CT_int -> "mpz_t"
-  | CT_bits true -> "bv_t(dec)"
-  | CT_bits false -> "bv_t(inc)"
-  | CT_bits64 (n, true) -> "uint64_t(" ^ string_of_int n ^ ", dec)"
-  | CT_bits64 (n, false) -> "uint64_t(" ^ string_of_int n ^ ", int)"
-  | CT_int64 -> "int64_t"
+  | CT_int -> "int"
+  | CT_lbits true -> "lbits(dec)"
+  | CT_lbits false -> "lbits(inc)"
+  | CT_fbits (n, true) -> "fbits(" ^ string_of_int n ^ ", dec)"
+  | CT_fbits (n, false) -> "fbits(" ^ string_of_int n ^ ", int)"
+  | CT_sbits true -> "sbits(dec)"
+  | CT_sbits false -> "sbits(inc)"
+  | CT_int64 -> "int64"
   | CT_bit -> "bit"
   | CT_unit -> "unit"
   | CT_bool -> "bool"
@@ -222,7 +303,8 @@ and full_string_of_ctyp = function
   | CT_poly -> "*"
 
 let rec map_ctyp f = function
-  | (CT_int | CT_int64 | CT_bits _ | CT_bits64 _ | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_poly | CT_enum _) as ctyp -> f ctyp
+  | (CT_int | CT_int64 | CT_lbits _ | CT_fbits _ | CT_sbits _
+     | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_poly | CT_enum _) as ctyp -> f ctyp
   | CT_tup ctyps -> f (CT_tup (List.map (map_ctyp f) ctyps))
   | CT_ref ctyp -> f (CT_ref (map_ctyp f ctyp))
   | CT_vector (direction, ctyp) -> f (CT_vector (direction, map_ctyp f ctyp))
@@ -233,8 +315,9 @@ let rec map_ctyp f = function
 let rec ctyp_equal ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
   | CT_int, CT_int -> true
-  | CT_bits d1, CT_bits d2 -> d1 = d2
-  | CT_bits64 (m1, d1), CT_bits64 (m2, d2) -> m1 = m2 && d1 = d2
+  | CT_lbits d1, CT_lbits d2 -> d1 = d2
+  | CT_sbits d1, CT_sbits d2 -> d1 = d2
+  | CT_fbits (m1, d1), CT_fbits (m2, d2) -> m1 = m2 && d1 = d2
   | CT_bit, CT_bit -> true
   | CT_int64, CT_int64 -> true
   | CT_unit, CT_unit -> true
@@ -271,8 +354,9 @@ let rec ctyp_unify ctyp1 ctyp2 =
 
 let rec ctyp_suprema = function
   | CT_int -> CT_int
-  | CT_bits d -> CT_bits d
-  | CT_bits64 (_, d) -> CT_bits d
+  | CT_lbits d -> CT_lbits d
+  | CT_fbits (_, d) -> CT_lbits d
+  | CT_sbits d -> CT_lbits d
   | CT_int64 -> CT_int
   | CT_unit -> CT_unit
   | CT_bool -> CT_bool
@@ -298,7 +382,7 @@ let rec ctyp_ids = function
      IdSet.add id (List.fold_left (fun ids (_, ctyp) -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctors)
   | CT_tup ctyps -> List.fold_left (fun ids ctyp -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctyps
   | CT_vector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> ctyp_ids ctyp
-  | CT_int | CT_int64 | CT_bits _ | CT_bits64 _ | CT_unit
+  | CT_int | CT_int64 | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit
     | CT_bool | CT_real | CT_bit | CT_string | CT_poly -> IdSet.empty
 
 let rec unpoly = function
@@ -310,7 +394,7 @@ let rec unpoly = function
   | f -> f
 
 let rec is_polymorphic = function
-  | CT_int | CT_int64 | CT_bits _ | CT_bits64 _ | CT_bit | CT_unit | CT_bool | CT_real | CT_string -> false
+  | CT_int | CT_int64 | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_real | CT_string -> false
   | CT_tup ctyps -> List.exists is_polymorphic ctyps
   | CT_enum _ -> false
   | CT_struct (_, ctors) | CT_variant (_, ctors) -> List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors
@@ -370,6 +454,8 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
                       string (string_of_id f |> Util.green |> Util.clear) ^^ parens (separate_map (string ", ") pp_cval args) ]
   | I_copy (clexp, cval) ->
      separate space [pp_clexp clexp; string "="; pp_cval cval]
+  | I_alias (clexp, cval) ->
+     pp_keyword "alias" ^^ separate space [pp_clexp clexp; string "="; pp_cval cval]
   | I_clear (ctyp, id) ->
      pp_keyword "kill" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
   | I_return cval ->
@@ -497,6 +583,7 @@ let instr_deps = function
   | I_jump (cval, label) -> cval_deps cval, NS.singleton (G_label label)
   | I_funcall (clexp, _, _, cvals) -> List.fold_left NS.union NS.empty (List.map cval_deps cvals), clexp_deps clexp
   | I_copy (clexp, cval) -> cval_deps cval, clexp_deps clexp
+  | I_alias (clexp, cval) -> cval_deps cval, clexp_deps clexp
   | I_clear (_, id) -> NS.singleton (G_id id), NS.singleton (G_id id)
   | I_throw cval | I_return cval -> cval_deps cval, NS.empty
   | I_block _ | I_try_block _ -> NS.empty, NS.empty
@@ -621,6 +708,7 @@ let rec map_instr_ctyp f (I_aux (instr, aux)) =
     | I_funcall (clexp, extern, id, cvals) ->
        I_funcall (map_clexp_ctyp f clexp, extern, id, List.map (fun (frag, ctyp) -> frag, f ctyp) cvals)
     | I_copy (clexp, (frag, ctyp)) -> I_copy (map_clexp_ctyp f clexp, (frag, f ctyp))
+    | I_alias (clexp, (frag, ctyp)) -> I_alias (map_clexp_ctyp f clexp, (frag, f ctyp))
     | I_clear (ctyp, id) -> I_clear (f ctyp, id)
     | I_return (frag, ctyp) -> I_return (frag, f ctyp)
     | I_block instrs -> I_block (List.map (map_instr_ctyp f) instrs)
@@ -637,7 +725,7 @@ let rec map_instr_ctyp f (I_aux (instr, aux)) =
 let rec map_instr f (I_aux (instr, aux)) =
   let instr = match instr with
     | I_decl _ | I_init _ | I_reset _ | I_reinit _
-      | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _
+      | I_funcall _ | I_copy _ | I_alias _ | I_clear _ | I_jump _ | I_throw _ | I_return _
       | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ -> instr
     | I_if (cval, instrs1, instrs2, ctyp) ->
        I_if (cval, List.map (map_instr f) instrs1, List.map (map_instr f) instrs2, ctyp)
@@ -679,9 +767,52 @@ let rec map_instrs f (I_aux (instr, aux)) =
     | I_decl _ | I_init _ | I_reset _ | I_reinit _ -> instr
     | I_if (cval, instrs1, instrs2, ctyp) ->
        I_if (cval, f (List.map (map_instrs f) instrs1), f (List.map (map_instrs f) instrs2), ctyp)
-    | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _ -> instr
+    | I_funcall _ | I_copy _ | I_alias _ | I_clear _ | I_jump _ | I_throw _ | I_return _ -> instr
     | I_block instrs -> I_block (f (List.map (map_instrs f) instrs))
     | I_try_block instrs -> I_try_block (f (List.map (map_instrs f) instrs))
     | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ -> instr
   in
   I_aux (instr, aux)
+
+let rec instr_ids (I_aux (instr, _)) =
+  let reads, writes = instr_deps instr in
+  let get_id = function
+    | G_id id -> Some id
+    | _ -> None
+  in
+  NS.elements reads @ NS.elements writes
+  |> List.map get_id
+  |> Util.option_these
+  |> IdSet.of_list
+
+let rec instr_reads (I_aux (instr, _)) =
+  let reads, _ = instr_deps instr in
+  let get_id = function
+    | G_id id -> Some id
+    | _ -> None
+  in
+  NS.elements reads
+  |> List.map get_id
+  |> Util.option_these
+  |> IdSet.of_list
+
+let rec instr_writes (I_aux (instr, _)) =
+  let _, writes = instr_deps instr in
+  let get_id = function
+    | G_id id -> Some id
+    | _ -> None
+  in
+  NS.elements writes
+  |> List.map get_id
+  |> Util.option_these
+  |> IdSet.of_list
+
+let rec filter_instrs f instrs =
+  let filter_instrs' = function
+    | I_aux (I_block instrs, aux) -> I_aux (I_block (filter_instrs f instrs), aux)
+    | I_aux (I_try_block instrs, aux) -> I_aux (I_try_block (filter_instrs f instrs), aux)
+    | I_aux (I_if (cval, instrs1, instrs2, ctyp), aux) ->
+       I_aux (I_if (cval, filter_instrs f instrs1, filter_instrs f instrs2, ctyp), aux)
+    | instr -> instr
+  in
+  List.filter f (List.map filter_instrs' instrs)

@@ -26,7 +26,7 @@ unit sail_exit(unit);
  * The intention is that you can use individual bits to turn on/off different
  * pieces of debugging output.
  */
-mach_bits sail_get_verbosity(const unit u);
+fbits sail_get_verbosity(const unit u);
 
 /*
  * Put processor to sleep until an external device calls wakeup_request().
@@ -55,20 +55,20 @@ uint64_t read_mem(uint64_t);
 
 bool write_ram(const mpz_t addr_size,     // Either 32 or 64
 	       const mpz_t data_size_mpz, // Number of bytes
-	       const sail_bits hex_ram,       // Currently unused
-	       const sail_bits addr_bv,
-	       const sail_bits data);
+	       const lbits hex_ram,       // Currently unused
+	       const lbits addr_bv,
+	       const lbits data);
 
-void read_ram(sail_bits *data,
+void read_ram(lbits *data,
 	      const mpz_t addr_size,
 	      const mpz_t data_size_mpz,
-	      const sail_bits hex_ram,
-	      const sail_bits addr_bv);
+	      const lbits hex_ram,
+	      const lbits addr_bv);
 
-unit write_tag_bool(const mach_bits, const bool);
-bool read_tag_bool(const mach_bits);
+unit write_tag_bool(const fbits, const bool);
+bool read_tag_bool(const fbits);
 
-unit load_raw(mach_bits addr, const sail_string file);
+unit load_raw(fbits addr, const sail_string file);
 
 void load_image(char *);
 
@@ -106,8 +106,8 @@ void trace_sail_int(const sail_int);
 void trace_bool(const bool);
 void trace_unit(const unit);
 void trace_sail_string(const sail_string);
-void trace_mach_bits(const mach_bits);
-void trace_sail_bits(const sail_bits);
+void trace_fbits(const fbits);
+void trace_lbits(const lbits);
 
 void trace_unknown(void);
 void trace_argsep(void);

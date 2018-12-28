@@ -214,3 +214,36 @@ intros [H|[H|[H|[H|[H|[]]]]]] H'; subst;
 reflexivity.
 Qed.
 Hint Resolve simdfp_register_lemma2 : sail.
+
+Lemma atomicops_st_lemma {datasize} :
+  8 = datasize \/ 16 = datasize \/ 32 = datasize \/ 64 = datasize \/ 128 = datasize \/ False ->
+  8 * (datasize ÷ 8) > 0.
+intros [H|[H|[H|[H|[H|[]]]]]]; subst;
+reflexivity.
+Qed.
+Hint Resolve atomicops_st_lemma : sail.
+
+Lemma atomicops_cas_pair_lemma1 {datasize x0} :
+  8 = datasize \/ 16 = datasize \/ 32 = datasize \/ 64 = datasize \/ 128 = datasize \/ False ->
+  x0 = 2 * datasize ÷ 8 ->
+  64 >= 0 /\ 8 * x0 >= 0.
+intros [H|[H|[H|[H|[H|[]]]]]]; subst;
+intro H; compute in H; subst; omega.
+Qed.
+
+Lemma atomicops_cas_pair_lemma2 {datasize} :
+  8 = datasize \/ 16 = datasize \/ 32 = datasize \/ 64 = datasize \/ 128 = datasize \/ False ->
+  2 * datasize = 8 * (2 * datasize ÷ 8).
+intros [H|[H|[H|[H|[H|[]]]]]]; subst; reflexivity.
+Qed.
+
+Lemma atomicops_cas_pair_lemma3 {datasize x0} :
+  8 = datasize \/ 16 = datasize \/ 32 = datasize \/ 64 = datasize \/ 128 = datasize \/ False ->
+  x0 = 2 * datasize ÷ 8 ->
+  2 * datasize = 8 * x0.
+intros [H|[H|[H|[H|[H|[]]]]]]; subst;
+intro H; compute in H; subst; omega.
+Qed.
+
+Hint Resolve atomicops_cas_pair_lemma1 atomicops_cas_pair_lemma2 atomicops_cas_pair_lemma3 : sail.
+

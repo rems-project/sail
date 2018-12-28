@@ -64,6 +64,7 @@ let opt_print_ocaml = ref false
 let opt_print_c = ref false
 let opt_print_latex = ref false
 let opt_print_coq = ref false
+let opt_print_cgen = ref false
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
@@ -110,7 +111,7 @@ let options = Arg.align ([
     Arg.String (fun s -> opt_ocaml_generators := s::!opt_ocaml_generators),
     "<types> produce random generators for the given types");
   ( "-latex",
-    Arg.Set opt_print_latex,
+    Arg.Tuple [Arg.Set opt_print_latex; Arg.Clear Type_check.opt_expand_valspec ],
     " pretty print the input to latex");
   ( "-marshal",
     Arg.Set opt_marshal_defs,
@@ -132,17 +133,24 @@ let options = Arg.align ([
                Arg.Set C_backend.optimize_hoist_allocations;
                Arg.Set Initial_check.opt_fast_undefined;
                Arg.Set Type_check.opt_no_effects;
-               Arg.Set C_backend.optimize_struct_updates ],
+               Arg.Set C_backend.optimize_struct_updates;
+               Arg.Set C_backend.optimize_alias],
     " turn on optimizations for C compilation");
   ( "-Oconstant_fold",
     Arg.Set Constant_fold.optimize_constant_fold,
     " Apply constant folding optimizations");
+  ( "-Oexperimental",
+    Arg.Set C_backend.optimize_experimental,
+    " turn on additional, experimental optimisations");
   ( "-static",
     Arg.Set C_backend.opt_static,
     " Make generated C functions static");
   ( "-trace",
     Arg.Tuple [Arg.Set C_backend.opt_trace; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " Instrument ouput with tracing");
+  ( "-cgen",
+    Arg.Set opt_print_cgen,
+    " Generate CGEN source");
   ( "-lem",
     Arg.Set opt_print_lem,
     " output a Lem translated version of the input");
@@ -171,7 +179,7 @@ let options = Arg.align ([
     Arg.String (fun f -> Pretty_print_coq.opt_debug_on := f::!Pretty_print_coq.opt_debug_on),
     "<function> produce debug messages for Coq output on given function");
   ( "-latex_prefix",
-    Arg.String (fun prefix -> Latex.opt_prefix_latex := prefix),
+    Arg.String (fun prefix -> Latex.opt_prefix := prefix),
     " set a custom prefix for generated latex command (default sail)");
   ( "-mono_split",
     Arg.String (fun s ->
@@ -190,6 +198,9 @@ let options = Arg.align ([
   ( "-enum_casts",
     Arg.Set Initial_check.opt_enum_casts,
     " allow enumerations to be automatically casted to numeric range types");
+  ( "-non_lexical_flow",
+    Arg.Set Nl_flow.opt_nl_flow,
+    " allow non-lexical flow typing");
   ( "-no_lexp_bounds_check",
     Arg.Set Type_check.opt_no_lexp_bounds_check,
     " turn off bounds checking for vector assignments in l-expressions");
@@ -227,7 +238,7 @@ let options = Arg.align ([
     Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0)),
     "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
   ( "-ddump_flow_graphs",
-    Arg.Set C_backend.opt_ddump_flow_graphs,
+    Arg.Set C_backend.opt_debug_flow_graphs,
     " (debug) dump flow analysis for Sail functions when compiling to C");
   ( "-dtc_verbose",
     Arg.Int (fun verbosity -> Type_check.opt_tc_debug := verbosity),
@@ -241,9 +252,12 @@ let options = Arg.align ([
   ( "-dmagic_hash",
     Arg.Set Initial_check.opt_magic_hash,
     " (debug) allow special character # in identifiers");
-  ( "-Xconstraint_synonyms",
-    Arg.Set Type_check.opt_constraint_synonyms,
-    " (extension) allow constraint synonyms");
+  ( "-dfunction",
+    Arg.String (fun f -> C_backend.opt_debug_function := f),
+    " (debug) print debugging output for a single function");
+  ( "-dprofile",
+    Arg.Set Profile.opt_profile,
+    " (debug) provides basic profiling information for rewriting passes within Sail");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
@@ -266,15 +280,20 @@ let interactive_env = ref Type_check.initial_env
 let load_files type_envs files =
   if !opt_memo_z3 then Constraint.load_digests () else ();
 
+  let t = Profile.start () in
   let parsed = List.map (fun f -> (f, parse_file f)) files in
   let ast =
     List.fold_right (fun (_, Parse_ast.Defs ast_nodes) (Parse_ast.Defs later_nodes)
                      -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
   let ast = Process_file.preprocess_ast options ast in
   let ast = convert_ast Ast_util.inc_ord ast in
+  Profile.finish "parsing" t;
 
+  let t = Profile.start () in
   let (ast, type_envs) = check_ast type_envs ast in
+  Profile.finish "type checking" t;
 
+  let ast = Scattered.descatter ast in
   let ast = rewrite_ast type_envs ast in
 
   let out_name = match !opt_file_out with
@@ -344,6 +363,9 @@ let main() =
          Util.opt_warnings := true;
          C_backend.compile_ast (C_backend.initial_ctx type_envs) (!opt_includes_c) ast_c
        else ());
+      (if !(opt_print_cgen)
+       then Cgen_backend.output type_envs ast
+       else ());
       (if !(opt_print_lem)
        then
          let mwords = !Pretty_print_lem.opt_mwords in
@@ -360,15 +382,19 @@ let main() =
       (if !(opt_print_latex)
        then
          begin
+           Util.opt_warnings := true;
            let latex_dir = match !opt_file_out with None -> "sail_latex" | Some s -> s in
-           try
-             if not (Sys.is_directory latex_dir) then begin
-                 prerr_endline ("Failure: latex output directory exists but is not a directory: " ^ latex_dir);
-                 exit 1
-               end
-           with Sys_error(_) -> Unix.mkdir latex_dir 0o755;
+           begin
+             try
+               if not (Sys.is_directory latex_dir) then begin
+                   prerr_endline ("Failure: latex output directory exists but is not a directory: " ^ latex_dir);
+                   exit 1
+                 end
+             with Sys_error(_) -> Unix.mkdir latex_dir 0o755
+           end;
+           Latex.opt_directory := latex_dir;
            let chan = open_out (Filename.concat latex_dir "commands.tex") in
-           output_string chan (Pretty_print_sail.to_string (Latex.latex_defs latex_dir ast));
+           output_string chan (Pretty_print_sail.to_string (Latex.defs ast));
            close_out chan
          end
        else ());
@@ -389,6 +415,6 @@ let main() =
 let _ =  try
     begin
       try ignore(main ())
-      with  Failure(s) -> raise (Reporting_basic.err_general Parse_ast.Unknown ("Failure "^s))
+      with  Failure(s) -> raise (Reporting.err_general Parse_ast.Unknown ("Failure "^s))
     end
-  with Reporting_basic.Fatal_error e -> Reporting_basic.report_error e
+  with Reporting.Fatal_error e -> Reporting.report_error e

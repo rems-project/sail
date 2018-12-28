@@ -72,12 +72,13 @@ and exp_of_value =
   | V_bool false -> mk_lit_exp L_false
   | V_string str -> mk_lit_exp (L_string str)
   | V_record ctors ->
-     mk_exp (E_record (FES_aux (FES_Fexps (List.map fexp_of_ctor (StringMap.bindings ctors), false), no_annot)))
+     mk_exp (E_record (List.map fexp_of_ctor (StringMap.bindings ctors)))
   | V_vector vs ->
      mk_exp (E_vector (List.map exp_of_value vs))
   | V_tuple vs ->
      mk_exp (E_tuple (List.map exp_of_value vs))
   | V_unit -> mk_lit_exp L_unit
+  | V_attempted_read str -> mk_exp (E_id (mk_id str))
   | _ -> failwith "No expression for value"
 
 (* We want to avoid evaluating things like print statements at compile
@@ -95,11 +96,13 @@ let safe_primops =
       "print_bits";
       "print_int";
       "print_string";
+      "print_real";
       "prerr_bits";
       "prerr_int";
       "prerr_string";
       "read_ram";
       "write_ram";
+      "get_time_ns";
       "Elf_loader.elf_entry";
       "Elf_loader.elf_tohost"
     ]
@@ -108,7 +111,7 @@ let rec is_constant (E_aux (e_aux, _)) =
   match e_aux with
   | E_lit _ -> true
   | E_vector exps -> List.for_all is_constant exps
-  | E_record (FES_aux (FES_Fexps (fexps, _), _)) -> List.for_all is_constant_fexp fexps
+  | E_record fexps -> List.for_all is_constant_fexp fexps
   | E_cast (_, exp) -> is_constant exp
   | E_tuple exps -> List.for_all is_constant exps
   | _ -> false

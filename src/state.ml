@@ -102,12 +102,12 @@ let generate_initial_regstate defs =
          if string_of_id id = "unit" then "()" else
          Bindings.find id vals []
       | Typ_app (id, _) when string_of_id id = "list" -> "[||]"
-      | Typ_app (id, [Typ_arg_aux (Typ_arg_nexp nexp, _)]) when string_of_id id = "atom" ->
+      | Typ_app (id, [A_aux (A_nexp nexp, _)]) when string_of_id id = "atom" ->
          string_of_nexp nexp
-      | Typ_app (id, [Typ_arg_aux (Typ_arg_nexp nexp, _); _]) when string_of_id id = "range" ->
+      | Typ_app (id, [A_aux (A_nexp nexp, _); _]) when string_of_id id = "range" ->
          string_of_nexp nexp
-      | Typ_app (id, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant len, _)), _); _ ;
-                      Typ_arg_aux (Typ_arg_typ etyp, _)])
+      | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_constant len, _)), _); _ ;
+                      A_aux (A_typ etyp, _)])
         when string_of_id id = "vector" ->
          (* Output a list of initial values of the vector elements, or a
             literal binary zero value if this is a bitvector and the
@@ -127,15 +127,9 @@ let generate_initial_regstate defs =
       | Typ_exist (_, _, typ) -> lookup_init_val vals typ
       | _ -> raise Not_found
     in
-    (* Helper functions to instantiate type arguments *)
-    let typ_subst_targ kid (Typ_arg_aux (arg, _)) typ = match arg with
-      | Typ_arg_nexp (Nexp_aux (nexp, _)) -> typ_subst_nexp kid nexp typ
-      | Typ_arg_typ (Typ_aux (typ', _)) -> typ_subst_typ kid typ' typ
-      | Typ_arg_order (Ord_aux (ord, _)) -> typ_subst_order kid ord typ
-    in
     let typ_subst_quant_item typ (QI_aux (qi, _)) arg = match qi with
-      | QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_, kid)), _)) ->
-         typ_subst_targ kid arg typ
+      | QI_id (KOpt_aux (KOpt_kind (_, kid), _)) ->
+         typ_subst kid arg typ
       | _ -> typ
     in
     let typ_subst_typquant tq args typ =
@@ -152,7 +146,7 @@ let generate_initial_regstate defs =
            string_of_id id1 ^ " (" ^ lookup_init_val vals typ1 ^ ")"
          in
          Bindings.add id init_val vals
-      | TD_abbrev (id, _, TypSchm_aux (TypSchm_ts (tq, typ), _)) ->
+      | TD_abbrev (id, tq, A_aux (A_typ typ, _)) ->
          let init_val args = lookup_init_val vals (typ_subst_typquant tq args typ) in
          Bindings.add id init_val vals
       | TD_record (id, _, tq, fields, _) ->
@@ -180,19 +174,19 @@ let generate_initial_regstate defs =
 let rec regval_constr_id mwords (Typ_aux (t, l) as typ) = match t with
   | Typ_id id -> id
   | Typ_app (id, args) ->
-     let name_arg (Typ_arg_aux (targ, _)) = match targ with
-       | Typ_arg_typ targ -> string_of_id (regval_constr_id mwords targ)
-       | Typ_arg_nexp nexp when is_nexp_constant (nexp_simp nexp) ->
+     let name_arg (A_aux (targ, _)) = match targ with
+       | A_typ targ -> string_of_id (regval_constr_id mwords targ)
+       | A_nexp nexp when is_nexp_constant (nexp_simp nexp) ->
           string_of_nexp (nexp_simp nexp)
-       | Typ_arg_order (Ord_aux (Ord_inc, _)) -> "inc"
-       | Typ_arg_order (Ord_aux (Ord_dec, _)) -> "dec"
+       | A_order (Ord_aux (Ord_inc, _)) -> "inc"
+       | A_order (Ord_aux (Ord_dec, _)) -> "dec"
        | _ ->
-          raise (Reporting_basic.err_typ l "Unsupported register type")
+          raise (Reporting.err_typ l "Unsupported register type")
      in
      let builtins = IdSet.of_list (List.map mk_id ["vector"; "list"; "option"]) in
      if IdSet.mem id builtins && not (mwords && is_bitvector_typ typ) then id else
      append_id id (String.concat "_" ("" :: List.map name_arg args))
-  | _ -> raise (Reporting_basic.err_typ l "Unsupported register type")
+  | _ -> raise (Reporting.err_typ l "Unsupported register type")
 
 let register_base_types mwords typs =
   let rec add_base_typs typs (Typ_aux (t, _) as typ) =
@@ -200,9 +194,9 @@ let register_base_types mwords typs =
     match t with
       | Typ_app (id, args)
         when IdSet.mem id builtins && not (mwords && is_bitvector_typ typ) ->
-         let add_typ_arg base_typs (Typ_arg_aux (targ, _)) =
+         let add_typ_arg base_typs (A_aux (targ, _)) =
            match targ with
-             | Typ_arg_typ typ -> add_base_typs typs typ
+             | A_typ typ -> add_base_typs typs typ
              | _ -> typs
          in
          List.fold_left add_typ_arg typs args
@@ -249,12 +243,12 @@ let rec regval_convs_lem mwords (Typ_aux (t, _) as typ) = match t with
      let etyp_of, of_etyp = regval_convs_lem mwords etyp in
      "(fun v -> vector_of_regval " ^ etyp_of ^ " v)",
      "(fun v -> regval_of_vector " ^ of_etyp ^ " " ^ size ^ " " ^ is_inc ^ " v)"
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ etyp, _)])
+  | Typ_app (id, [A_aux (A_typ etyp, _)])
     when string_of_id id = "list" ->
      let etyp_of, of_etyp = regval_convs_lem mwords etyp in
      "(fun v -> list_of_regval " ^ etyp_of ^ " v)",
      "(fun v -> regval_of_list " ^ of_etyp ^ " v)"
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ etyp, _)])
+  | Typ_app (id, [A_aux (A_typ etyp, _)])
     when string_of_id id = "option" ->
      let etyp_of, of_etyp = regval_convs_lem mwords etyp in
      "(fun v -> option_of_regval " ^ etyp_of ^ " v)",
@@ -413,12 +407,12 @@ let rec regval_convs_coq (Typ_aux (t, _) as typ) = match t with
      let etyp_of, of_etyp = regval_convs_coq etyp in
      "(fun v => vector_of_regval " ^ size ^ " " ^ etyp_of ^ " v)",
      "(fun v => regval_of_vector " ^ of_etyp ^ " " ^ size ^ " " ^ is_inc ^ " v)"
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ etyp, _)])
+  | Typ_app (id, [A_aux (A_typ etyp, _)])
     when string_of_id id = "list" ->
      let etyp_of, of_etyp = regval_convs_coq etyp in
      "(fun v => list_of_regval " ^ etyp_of ^ " v)",
      "(fun v => regval_of_list " ^ of_etyp ^ " v)"
-  | Typ_app (id, [Typ_arg_aux (Typ_arg_typ etyp, _)])
+  | Typ_app (id, [A_aux (A_typ etyp, _)])
     when string_of_id id = "option" ->
      let etyp_of, of_etyp = regval_convs_coq etyp in
      "(fun v => option_of_regval " ^ etyp_of ^ " v)",

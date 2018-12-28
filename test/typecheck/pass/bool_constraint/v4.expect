@@ -1,0 +1,5 @@
+Type error at file "bool_constraint/v4.sail", line 46, character 5 to line 46, character 32
+
+    [41m_prove(constraint('n <= 13))[0m
+
+Cannot prove 'n <= 13

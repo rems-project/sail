@@ -1,5 +1,0 @@
-Type error at file "constraint_sym/v1.sail", line 3, character 23 to line 3, character 24
-
-constraint Size('n) = [41m'm[0m in {32, 64}
-
-No type variable 'm

@@ -1,0 +1,5 @@
+Type error at file "constrained_struct/v1.sail", line 10, character 19 to line 10, character 26
+
+type MyStruct64 = [41mMyStruct[0m(65)
+
+Could not prove (65 == 32 | 65 == 64) for type constructor MyStruct

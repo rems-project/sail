@@ -115,7 +115,7 @@ let rec subst_nc substs (NC_aux (nc,l) as n_constraint) =
        | Nexp_aux (Nexp_constant i,_) ->
           if List.exists (fun j -> Big_int.equal i j) is then re NC_true else re NC_false
        | nexp -> 
-          raise (Reporting_basic.err_general l
+          raise (Reporting.err_general l
                    ("Unable to substitute " ^ string_of_nexp nexp ^
                        " into set constraint " ^ string_of_n_constraint n_constraint))
        | exception Not_found -> n_constraint
@@ -139,15 +139,15 @@ let subst_src_typ substs t =
     | Typ_bidir (t1, t2) -> re (Typ_bidir (s_styp substs t1, s_styp substs t2))
     | Typ_tup ts -> re (Typ_tup (List.map (s_styp substs) ts))
     | Typ_app (id,tas) -> re (Typ_app (id,List.map (s_starg substs) tas))
-    | Typ_exist (kids,nc,t) ->
-       let substs = List.fold_left (fun sub v -> KBindings.remove v sub) substs kids in
-       re (Typ_exist (kids,nc,s_styp substs t))
+    | Typ_exist (kopts,nc,t) ->
+       let substs = List.fold_left (fun sub kopt -> KBindings.remove (kopt_kid kopt) sub) substs kopts in
+       re (Typ_exist (kopts,nc,s_styp substs t))
     | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-  and s_starg substs (Typ_arg_aux (ta,l) as targ) =
+  and s_starg substs (A_aux (ta,l) as targ) =
     match ta with
-    | Typ_arg_nexp ne -> Typ_arg_aux (Typ_arg_nexp (subst_nexp substs ne),l)
-    | Typ_arg_typ t -> Typ_arg_aux (Typ_arg_typ (s_styp substs t),l)
-    | Typ_arg_order _ -> targ
+    | A_nexp ne -> A_aux (A_nexp (subst_nexp substs ne),l)
+    | A_typ t -> A_aux (A_typ (s_styp substs t),l)
+    | A_order _ -> targ
   in s_styp substs t
 
 let make_vector_lit sz i =
@@ -180,7 +180,7 @@ let rec is_value (E_aux (e,(l,annot))) =
   let is_constructor id =
     match destruct_tannot annot with
     | None ->
-       (Reporting_basic.print_err false true l "Monomorphisation"
+       (Reporting.print_err false true l "Monomorphisation"
           ("Missing type information for identifier " ^ string_of_id id);
         false) (* Be conservative if we have no info *)
     | Some (env,_,_) ->
@@ -281,7 +281,7 @@ let extract_set_nc l var nc =
        | None, Some (is,nc2') -> Some (is, re (NC_and (nc1,nc2')))
        | Some (is,nc1'), None -> Some (is, re (NC_and (nc1',nc2)))
        | Some _, Some _ ->
-          raise (Reporting_basic.err_general l ("Multiple set constraints for " ^ string_of_kid var)))
+          raise (Reporting.err_general l ("Multiple set constraints for " ^ string_of_kid var)))
     | NC_or _ ->
        (match aux_or nc_full with
        | Some is -> Some (is, re NC_true)
@@ -290,7 +290,7 @@ let extract_set_nc l var nc =
   in match aux nc with
   | Some is -> is
   | None ->
-     raise (Reporting_basic.err_general l ("No set constraint for " ^ string_of_kid var ^
+     raise (Reporting.err_general l ("No set constraint for " ^ string_of_kid var ^
                                               " in " ^ string_of_n_constraint nc))
 
 let rec peel = function
@@ -315,9 +315,9 @@ let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
   | Typ_var _
     -> insts,typ
   | Typ_fn _ ->
-     raise (Reporting_basic.err_general l "Function type in constructor")
+     raise (Reporting.err_general l "Function type in constructor")
   | Typ_bidir _ ->
-     raise (Reporting_basic.err_general l "Mapping type in constructor")
+     raise (Reporting.err_general l "Mapping type in constructor")
   | Typ_tup ts ->
      let insts,ts = 
        List.fold_right
@@ -330,23 +330,25 @@ let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
          (fun arg (insts,args) -> let insts,arg = inst_src_typ_arg insts arg in insts,arg::args)
          args (insts,[])
      in insts, Typ_aux (Typ_app (id,ts),l)
-  | Typ_exist (kids, nc, t) -> begin
+  | Typ_exist (kopts, nc, t) -> begin
+      (* TODO handle non-integer existentials *)
+     let kids = List.map kopt_kid kopts in
      let kid_insts, insts' = peel (kids,insts) in
      let kids', t' = apply_kid_insts kid_insts t in
      (* TODO: subst in nc *)
      match kids' with
      | [] -> insts', t'
-     | _ -> insts', Typ_aux (Typ_exist (kids', nc, t'), l)
+     | _ -> insts', Typ_aux (Typ_exist (List.map (mk_kopt K_int) kids', nc, t'), l)
     end
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-and inst_src_typ_arg insts (Typ_arg_aux (ta,l) as tyarg) =
+and inst_src_typ_arg insts (A_aux (ta,l) as tyarg) =
   match ta with
-  | Typ_arg_nexp _
-  | Typ_arg_order _
+  | A_nexp _
+  | A_order _
       -> insts, tyarg
-  | Typ_arg_typ typ ->
+  | A_typ typ ->
      let insts', typ' = inst_src_type insts typ in
-     insts', Typ_arg_aux (Typ_arg_typ typ',l)
+     insts', A_aux (A_typ typ',l)
 
 let rec contains_exist (Typ_aux (ty,l)) =
   match ty with
@@ -359,12 +361,12 @@ let rec contains_exist (Typ_aux (ty,l)) =
   | Typ_app (_,args) -> List.exists contains_exist_arg args
   | Typ_exist _ -> true
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-and contains_exist_arg (Typ_arg_aux (arg,_)) =
+and contains_exist_arg (A_aux (arg,_)) =
   match arg with
-  | Typ_arg_nexp _
-  | Typ_arg_order _
+  | A_nexp _
+  | A_order _
       -> false
-  | Typ_arg_typ typ -> contains_exist typ
+  | A_typ typ -> contains_exist typ
 
 let rec size_nvars_nexp (Nexp_aux (ne,_)) =
   match ne with
@@ -393,22 +395,24 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
     | Typ_var _
       -> (KidSet.empty,[[],typ])
     | Typ_fn _ ->
-       raise (Reporting_basic.err_general l ("Function type in constructor " ^ i))
+       raise (Reporting.err_general l ("Function type in constructor " ^ i))
     | Typ_bidir _ ->
-       raise (Reporting_basic.err_general l ("Mapping type in constructor " ^ i))
+       raise (Reporting.err_general l ("Mapping type in constructor " ^ i))
     | Typ_tup ts ->
        let (vars,tys) = List.split (List.map size_nvars_ty ts) in
        let insttys = List.map (fun x -> let (insts,tys) = List.split x in
                                         List.concat insts, Typ_aux (Typ_tup tys,l)) (cross' tys) in
        (kidset_bigunion vars, insttys)
     | Typ_app (Id_aux (Id "vector",_),
-               [Typ_arg_aux (Typ_arg_nexp sz,_);
-                _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
+               [A_aux (A_nexp sz,_);
+                _;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (KidSet.of_list (size_nvars_nexp sz), [[],typ])
     | Typ_app (_, tas) ->
        (KidSet.empty,[[],typ])  (* We only support sizes for bitvectors mentioned explicitly, not any buried
                       inside another type *)
-    | Typ_exist (kids, nc, t) ->
+    | Typ_exist (kopts, nc, t) ->
+       (* TODO handle non integer existentials *)
+       let kids = List.map kopt_kid kopts in
        let (vars,tys) = size_nvars_ty t in
        let find_insts k (insts,nc) =
          let inst,nc' =
@@ -426,7 +430,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
            (* Typ_exist is not allowed an empty list of kids *)
            match kids with
            | [] -> ty
-           | _ -> Typ_aux (Typ_exist (kids, nc', ty),l)
+           | _ -> Typ_aux (Typ_exist (List.map (mk_kopt K_int) kids, nc', ty),l)
          in inst@inst0, ty
        in
        let tys = List.concat (List.map (fun instty -> List.map (ty_and_inst instty) insts) tys) in
@@ -450,10 +454,10 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
                 | Typ_aux (Typ_tup _,_) -> Typ_aux (Typ_tup [ty],Unknown)
                 | _ -> ty) tys in
             if contains_exist t then
-              raise (Reporting_basic.err_general l
+              raise (Reporting.err_general l
                        "Only prenex types in unions are supported by monomorphisation")
             else if List.length kids > 1 then
-              raise (Reporting_basic.err_general l
+              raise (Reporting.err_general l
                        "Only single-variable existential types in unions are currently supported by monomorphisation")
             else tys
        end
@@ -465,7 +469,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
   | [] -> None
   | sample::__ ->
      let () = if List.length variants > size_set_limit then
-         raise (Reporting_basic.err_general ql
+         raise (Reporting.err_general ql
                   (string_of_int (List.length variants) ^ "variants for constructor " ^ i ^
                      "bigger than limit " ^ string_of_int size_set_limit)) else ()
      in
@@ -490,7 +494,7 @@ let reduce_nexp subst ne =
     | Nexp_exp n -> Big_int.shift_left (eval n) 1
     | Nexp_neg n -> Big_int.negate (eval n)
     | _ ->
-       raise (Reporting_basic.err_general Unknown ("Couldn't turn nexp " ^
+       raise (Reporting.err_general Unknown ("Couldn't turn nexp " ^
                                                       string_of_nexp nexp ^ " into concrete value"))
   in eval ne
 
@@ -522,10 +526,12 @@ let refine_constructor refinements l env id args =
     (* A constructor should always have a single argument. *)
     | Typ_aux (Typ_fn ([constr_ty],_,_),_) -> begin
        let arg_ty = typ_of_args args in
-       match Type_check.destruct_exist env constr_ty with
+       match Type_check.destruct_exist (Type_check.Env.expand_synonyms env constr_ty) with
        | None -> None
-       | Some (kids,nc,constr_ty) ->
-          let (bindings,_,_) = Type_check.unify l env constr_ty arg_ty in
+       | Some (kopts,nc,constr_ty) ->
+          (* TODO: Handle non-integer existentials *)
+          let kids = List.map kopt_kid kopts in
+          let bindings = Type_check.unify l env (tyvars_of_typ constr_ty) constr_ty arg_ty  in
           let find_kid kid = try Some (KBindings.find kid bindings) with Not_found -> None in
           let bindings = List.map find_kid kids in
           let matches_refinement (mapping,_,_) =
@@ -533,13 +539,13 @@ let refine_constructor refinements l env id args =
               (fun v (_,w) ->
                 match v,w with
                 | _,None -> true
-                | Some (U_nexp (Nexp_aux (Nexp_constant n, _))),Some m -> Big_int.equal n m
+                | Some (A_aux (A_nexp (Nexp_aux (Nexp_constant n, _)), _)),Some m -> Big_int.equal n m
                 | _,_ -> false) bindings mapping
           in
           match List.find matches_refinement irefinements with
           | (_,new_id,_) -> Some (E_app (new_id,args))
           | exception Not_found ->
-             (Reporting_basic.print_err false true l "Monomorphisation"
+             (Reporting.print_err false true l "Monomorphisation"
                 ("Unable to refine constructor " ^ string_of_id id);
               None)
     end
@@ -615,8 +621,8 @@ let nexp_subst_fns substs =
       | E_vector_append (e1,e2) -> re (E_vector_append (s_exp e1,s_exp e2))
       | E_list es -> re (E_list (List.map s_exp es))
       | E_cons (e1,e2) -> re (E_cons (s_exp e1,s_exp e2))
-      | E_record fes -> re (E_record (s_fexps fes))
-      | E_record_update (e,fes) -> re (E_record_update (s_exp e, s_fexps fes))
+      | E_record fes -> re (E_record (List.map s_fexp fes))
+      | E_record_update (e,fes) -> re (E_record_update (s_exp e, List.map s_fexp fes))
       | E_field (e,id) -> re (E_field (s_exp e,id))
       | E_case (e,cases) -> re (E_case (s_exp e, List.map s_pexp cases))
       | E_let (lb,e) -> re (E_let (s_letbind lb, s_exp e))
@@ -629,8 +635,6 @@ let nexp_subst_fns substs =
       | E_internal_return e -> re (E_internal_return (s_exp e))
       | E_throw e -> re (E_throw (s_exp e))
       | E_try (e,cases) -> re (E_try (s_exp e, List.map s_pexp cases))
-    and s_fexps (FES_aux (FES_Fexps (fes,flag), (l,annot))) =
-      FES_aux (FES_Fexps (List.map s_fexp fes, flag), (l,s_tannot annot))
     and s_fexp (FE_aux (FE_Fexp (id,e), (l,annot))) =
       FE_aux (FE_Fexp (id,s_exp e),(l,s_tannot annot))
     and s_pexp = function
@@ -701,42 +705,43 @@ let fabricate_nexp_exist env l typ kids nc typ' =
   match kids,nc,Env.expand_synonyms env typ' with
   | ([kid],NC_aux (NC_set (kid',i::_),_),
      Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_))
+                       [A_aux (A_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_))
       when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 ->
      Nexp_aux (Nexp_constant i,Unknown)
   | ([kid],NC_aux (NC_true,_),
      Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_))
+                       [A_aux (A_nexp (Nexp_aux (Nexp_var kid'',_)),_)]),_))
       when Kid.compare kid kid'' = 0 ->
      nint 32
   | ([kid],NC_aux (NC_set (kid',i::_),_),
      Typ_aux (Typ_app (Id_aux (Id "range",_),
-                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
-                        Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
+                       [A_aux (A_nexp (Nexp_aux (Nexp_var kid'',_)),_);
+                        A_aux (A_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
       when Kid.compare kid kid' = 0 && Kid.compare kid kid'' = 0 &&
         Kid.compare kid kid''' = 0 ->
      Nexp_aux (Nexp_constant i,Unknown)
   | ([kid],NC_aux (NC_true,_),
      Typ_aux (Typ_app (Id_aux (Id "range",_),
-                       [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid'',_)),_);
-                        Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
+                       [A_aux (A_nexp (Nexp_aux (Nexp_var kid'',_)),_);
+                        A_aux (A_nexp (Nexp_aux (Nexp_var kid''',_)),_)]),_))
       when Kid.compare kid kid'' = 0 &&
         Kid.compare kid kid''' = 0 ->
      nint 32
-  | _ -> raise (Reporting_basic.err_general l
+  | _ -> raise (Reporting.err_general l
                   ("Undefined value at unsupported type " ^ string_of_typ typ))
 
 let fabricate_nexp l tannot =
   match destruct_tannot tannot with
   | None -> nint 32
   | Some (env,typ,_) ->
-     match Type_check.destruct_exist env typ with
+     match Type_check.destruct_exist (Type_check.Env.expand_synonyms env typ) with
      | None -> nint 32
-     | Some (kids,nc,typ') -> fabricate_nexp_exist env l typ kids nc typ'
+     (* TODO: check this *)
+     | Some (kopts,nc,typ') -> fabricate_nexp_exist env l typ (List.map kopt_kid kopts) nc typ'
 
 let atom_typ_kid kid = function
   | Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                      [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_) ->
+                      [A_aux (A_nexp (Nexp_aux (Nexp_var kid',_)),_)]),_) ->
      Kid.compare kid kid' = 0
   | _ -> false
 
@@ -747,24 +752,24 @@ let atom_typ_kid kid = function
 let reduce_cast typ exp l annot =
   let env = env_of_annot (l,annot) in
   let typ' = Env.base_typ_of env typ in
-  match exp, destruct_exist env typ' with
-  | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
-     let nc_env = Env.add_typ_var l kid BK_int env in
-     let nc_env = Env.add_constraint (nc_eq (nvar kid) (nconstant n)) nc_env in
+  match exp, destruct_exist (Env.expand_synonyms env typ') with
+  | E_aux (E_lit (L_aux (L_num n,_)),_), Some ([kopt],nc,typ'') when atom_typ_kid (kopt_kid kopt) typ'' ->
+     let nc_env = Env.add_typ_var l kopt env in
+     let nc_env = Env.add_constraint (nc_eq (nvar (kopt_kid kopt)) (nconstant n)) nc_env in
      if prove nc_env nc
      then exp
-     else raise (Reporting_basic.err_unreachable l __POS__
+     else raise (Reporting.err_unreachable l __POS__
                    ("Constant propagation error: literal " ^ Big_int.to_string n ^
                        " does not satisfy constraint " ^ string_of_n_constraint nc))
-  | E_aux (E_lit (L_aux (L_undef,_)),_), Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
-     let nexp = fabricate_nexp_exist env Unknown typ [kid] nc typ'' in
-     let newtyp = subst_src_typ (KBindings.singleton kid nexp) typ'' in
+  | E_aux (E_lit (L_aux (L_undef,_)),_), Some ([kopt],nc,typ'') when atom_typ_kid (kopt_kid kopt) typ'' ->
+     let nexp = fabricate_nexp_exist env Unknown typ [kopt_kid kopt] nc typ'' in
+     let newtyp = subst_src_typ (KBindings.singleton (kopt_kid kopt) nexp) typ'' in
      E_aux (E_cast (newtyp, exp), (Generated l,replace_typ newtyp annot))
   | E_aux (E_cast (_,
                    (E_aux (E_lit (L_aux (L_undef,_)),_) as exp)),_),
-     Some ([kid],nc,typ'') when atom_typ_kid kid typ'' ->
-     let nexp = fabricate_nexp_exist env Unknown typ [kid] nc typ'' in
-     let newtyp = subst_src_typ (KBindings.singleton kid nexp) typ'' in
+     Some ([kopt],nc,typ'') when atom_typ_kid (kopt_kid kopt) typ'' ->
+     let nexp = fabricate_nexp_exist env Unknown typ [kopt_kid kopt] nc typ'' in
+     let newtyp = subst_src_typ (KBindings.singleton (kopt_kid kopt) nexp) typ'' in
      E_aux (E_cast (newtyp, exp), (Generated l,replace_typ newtyp annot))
   | _ -> E_aux (E_cast (typ,exp),(l,annot))
 
@@ -852,7 +857,7 @@ let try_app (l,ann) (id,args) =
        E_aux (E_lit L_aux (L_num i,_), _);
        E_aux (E_lit L_aux (L_num len,_), _)] ->
        (match Env.base_typ_of (env_of_annot annot) (typ_of_annot annot) with
-       | Typ_aux (Typ_app (_,[_;Typ_arg_aux (Typ_arg_order ord,_);_]),_) ->
+       | Typ_aux (Typ_app (_,[_;A_aux (A_order ord,_);_]),_) ->
           (match slice_lit lit i len ord with
           | Some lit' -> Some (E_aux (E_lit lit',(l,ann)))
           | None -> None)
@@ -954,7 +959,7 @@ let referenced_vars exp =
          { (compute_exp_alg IdSet.empty IdSet.union) with
            e_ref = (fun id -> IdSet.singleton id, E_ref id) } exp)
 
-let assigned_vars_in_fexps (FES_aux (FES_Fexps (fes,_), _)) =
+let assigned_vars_in_fexps fes =
   List.fold_left
     (fun vs (FE_aux (FE_Fexp (_,e),_)) -> IdSet.union vs (assigned_vars e))
     IdSet.empty
@@ -1154,10 +1159,10 @@ let apply_pat_choices choices =
           List.fold_left (fun e (id,e') ->
             E_let (LB_aux (LB_val (P_aux (P_id id, dummyannot),e'),dummyannot),E_aux (e,dummyannot))) e subst
        | Pat_aux (Pat_when _,(l,_)) ->
-          raise (Reporting_basic.err_unreachable l __POS__
+          raise (Reporting.err_unreachable l __POS__
                    "Pattern acquired a guard after analysis!")
        | exception Not_found ->
-          raise (Reporting_basic.err_unreachable (exp_loc e) __POS__
+          raise (Reporting.err_unreachable (exp_loc e) __POS__
                    "Unable to find case I found earlier!"))
     | exception Not_found -> E_case (e,cases)
   in
@@ -1458,10 +1463,10 @@ let split_defs all_errors splits defs =
     | E_internal_plet _
     | E_internal_return _
     | E_internal_value _
-      -> raise (Reporting_basic.err_unreachable l __POS__
+      -> raise (Reporting.err_unreachable l __POS__
                   ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
-  and const_prop_fexps ref_vars substs assigns (FES_aux (FES_Fexps (fes,flag), annot)) =
-    FES_aux (FES_Fexps (List.map (const_prop_fexp ref_vars substs assigns) fes, flag), annot)
+  and const_prop_fexps ref_vars substs assigns fes =
+    List.map (const_prop_fexp ref_vars substs assigns) fes
   and const_prop_fexp ref_vars substs assigns (FE_aux (FE_Fexp (id,e), annot)) =
     FE_aux (FE_Fexp (id,fst (const_prop_exp ref_vars substs assigns e)),annot)
   and const_prop_pexp ref_vars substs assigns = function
@@ -1528,7 +1533,7 @@ let split_defs all_errors splits defs =
 
   and can_match_with_env ref_vars env (E_aux (e,(l,annot)) as exp0) cases (substs,ksubsts) assigns =
     let rec findpat_generic check_pat description assigns = function
-      | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
+      | [] -> (Reporting.print_err false true l "Monomorphisation"
                  ("Failed to find a case for " ^ description); None)
       | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[],[])
       | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
@@ -1575,7 +1580,7 @@ let split_defs all_errors splits defs =
             | P_aux (P_app (id',[]),_) ->
                if Id.compare id id' = 0 then DoesMatch ([],[]) else DoesNotMatch
             | P_aux (_,(l',_)) ->
-               (Reporting_basic.print_err false true l' "Monomorphisation"
+               (Reporting.print_err false true l' "Monomorphisation"
                   "Unexpected kind of pattern for enumeration"; GiveUp)
           in findpat_generic checkpat (string_of_id id) assigns cases
        | _ -> None)
@@ -1598,11 +1603,11 @@ let split_defs all_errors splits defs =
                  DoesMatch ([id, E_aux (E_cast (typ,E_aux (e,(l,empty_tannot))),(l,empty_tannot))],
                             [kid,nexp])
               | _ ->
-                 (Reporting_basic.print_err false true lit_l "Monomorphisation"
+                 (Reporting.print_err false true lit_l "Monomorphisation"
                     "Unexpected kind of literal for var match"; GiveUp)
             end
          | P_aux (_,(l',_)) ->
-            (Reporting_basic.print_err false true l' "Monomorphisation"
+            (Reporting.print_err false true l' "Monomorphisation"
                "Unexpected kind of pattern for literal"; GiveUp)
        in findpat_generic checkpat "literal" assigns cases
     | E_vector es when List.for_all (function (E_aux (E_lit _,_)) -> true | _ -> false) es ->
@@ -1622,11 +1627,11 @@ let split_defs all_errors splits defs =
               | _ -> DoesNotMatch) (DoesMatch ([],[])) matches in
             (match final with
             | GiveUp ->
-               (Reporting_basic.print_err false true l "Monomorphisation"
+               (Reporting.print_err false true l "Monomorphisation"
                   "Unexpected kind of pattern for vector literal"; GiveUp)
             | _ -> final)
          | _ ->
-            (Reporting_basic.print_err false true l "Monomorphisation"
+            (Reporting.print_err false true l "Monomorphisation"
                "Unexpected kind of pattern for vector literal"; GiveUp)
        in findpat_generic checkpat "vector literal" assigns cases
 
@@ -1644,7 +1649,7 @@ let split_defs all_errors splits defs =
             DoesMatch ([id, E_aux (E_cast (typ,e_undef),(l,empty_tannot))],
                        KBindings.bindings ksubst)
          | P_aux (_,(l',_)) ->
-            (Reporting_basic.print_err false true l' "Monomorphisation"
+            (Reporting.print_err false true l' "Monomorphisation"
                "Unexpected kind of pattern for literal"; GiveUp)
        in findpat_generic checkpat "literal" assigns cases
     | _ -> None
@@ -1670,7 +1675,7 @@ let split_defs all_errors splits defs =
     let new_l = Generated l in
     let renew_id (Id_aux (id,l)) = Id_aux (id,new_l) in
     let cannot msg =
-      let open Reporting_basic in
+      let open Reporting in
       let error =
         Err_general (pat_l,
                      ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v ^ ": " ^ msg))
@@ -1700,7 +1705,7 @@ let split_defs all_errors splits defs =
               [L_zero; L_one]
          | _ -> cannot ("don't know about type " ^ string_of_id id))
 
-    | Typ_app (Id_aux (Id "vector",_), [Typ_arg_aux (Typ_arg_nexp len,_);_;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
+    | Typ_app (Id_aux (Id "vector",_), [A_aux (A_nexp len,_);_;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (match len with
        | Nexp_aux (Nexp_constant sz,_) ->
           let lits = make_vectors (Big_int.to_int sz) in
@@ -1711,7 +1716,7 @@ let split_defs all_errors splits defs =
           cannot ("length not constant, " ^ string_of_nexp len)
        )
     (* set constrained numbers *)
-    | Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (value,_) as nexp),_)]) ->
+    | Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp (Nexp_aux (value,_) as nexp),_)]) ->
        begin
          let mk_lit kid i =
             let lit = L_aux (L_num i,new_l) in
@@ -1726,7 +1731,7 @@ let split_defs all_errors splits defs =
            let nc = List.fold_left nc_and nc_true ncs in
            (match extract_set_nc l kvar nc with
            | (is,_) -> List.map (mk_lit (Some kvar)) is
-           | exception Reporting_basic.Fatal_error (Reporting_basic.Err_general (_,msg)) -> cannot msg)
+           | exception Reporting.Fatal_error (Reporting.Err_general (_,msg)) -> cannot msg)
          | _ -> cannot ("unsupport atom nexp " ^ string_of_nexp nexp)
        end
     | _ -> cannot ("unsupported type " ^ string_of_typ typ)
@@ -1737,8 +1742,8 @@ let split_defs all_errors splits defs =
 
   let map_locs ls (Defs defs) =
     let rec match_l = function
-      | Unknown
-      | Int _ -> []
+      | Unknown -> []
+      | Unique (_, l) -> match_l l
       | Generated l -> [] (* Could do match_l l, but only want to split user-written patterns *)
       | Documented (_,l) -> match_l l
       | Range (p,q) ->
@@ -1799,10 +1804,10 @@ let split_defs all_errors splits defs =
         | P_not p ->
            (* todo: not sure that I can't split - but can't figure out how at
             * the moment *)
-           raise (Reporting_basic.err_general l
+           raise (Reporting.err_general l
                     ("Cannot split on 'not' pattern"))
         | P_as (p',id) when id_match id <> None ->
-           raise (Reporting_basic.err_general l
+           raise (Reporting.err_general l
                     ("Cannot split " ^ string_of_id id ^ " on 'as' pattern"))
         | P_as (p',id) ->
            re (fun p -> P_as (p,id)) p'
@@ -1811,7 +1816,7 @@ let split_defs all_errors splits defs =
            (match spl p' with
            | None -> None
            | Some ps ->
-              let kids = equal_kids (pat_env_of p') kid in
+              let kids = equal_kids (env_of_pat p') kid in
               Some (List.map (fun (p,sub,pchoices,ksub) ->
                 P_aux (P_var (p,tp),(l,annot)), sub, pchoices,
                 List.concat
@@ -1846,7 +1851,7 @@ let split_defs all_errors splits defs =
                    let kid_subst = match orig_typ with
                      | Typ_aux
                          (Typ_app (Id_aux (Id "atom",_),
-                                   [Typ_arg_aux (Typ_arg_nexp
+                                   [A_aux (A_nexp
                                                    (Nexp_aux (Nexp_var var,_)),_)]),_) ->
                         [var,nconstant j]
                      | _ -> []
@@ -1907,7 +1912,7 @@ let split_defs all_errors splits defs =
                    match args with
                    | [P_aux (P_var (_, TP_aux (TP_var kid, _)),ann)] -> kid,ann
                    | _ -> 
-                      raise (Reporting_basic.err_general l
+                      raise (Reporting.err_general l
                                "Pattern match not currently supported by monomorphisation")
                  in
                  let map_inst (insts,id',_) =
@@ -1941,7 +1946,7 @@ let split_defs all_errors splits defs =
          let overlap = List.exists (fun (v,_) -> List.mem v pvs) lvs in
          let () =
            if overlap then
-             Reporting_basic.print_err false true l "Monomorphisation"
+             Reporting.print_err false true l "Monomorphisation"
                "Splitting a singleton pattern is not possible"
          in p
     in
@@ -1949,7 +1954,7 @@ let split_defs all_errors splits defs =
     let check_split_size lst l =
       let size = List.length lst in
       if size > size_set_limit then
-        let open Reporting_basic in
+        let open Reporting in
         let error =
           Err_general (l, "Case split is too large (" ^ string_of_int size ^
             " > limit " ^ string_of_int size_set_limit ^ ")")
@@ -1995,8 +2000,8 @@ let split_defs all_errors splits defs =
         | E_vector_append (e1,e2) -> re (E_vector_append (map_exp e1,map_exp e2))
         | E_list es -> re (E_list (List.map map_exp es))
         | E_cons (e1,e2) -> re (E_cons (map_exp e1,map_exp e2))
-        | E_record fes -> re (E_record (map_fexps fes))
-        | E_record_update (e,fes) -> re (E_record_update (map_exp e, map_fexps fes))
+        | E_record fes -> re (E_record (List.map map_fexp fes))
+        | E_record_update (e,fes) -> re (E_record_update (map_exp e, List.map map_fexp fes))
         | E_field (e,id) -> re (E_field (map_exp e,id))
         | E_case (e,cases) -> re (E_case (map_exp e, List.concat (List.map map_pexp cases)))
         | E_let (lb,e) -> re (E_let (map_letbind lb, map_exp e))
@@ -2009,8 +2014,6 @@ let split_defs all_errors splits defs =
         | E_var (le,e1,e2) -> re (E_var (map_lexp le, map_exp e1, map_exp e2))
         | E_internal_plet (p,e1,e2) -> re (E_internal_plet (check_single_pat p, map_exp e1, map_exp e2))
         | E_internal_return e -> re (E_internal_return (map_exp e))
-      and map_fexps (FES_aux (FES_Fexps (fes,flag), annot)) =
-        FES_aux (FES_Fexps (List.map map_fexp fes, flag), annot)
       and map_fexp (FE_aux (FE_Fexp (id,e), annot)) =
         FE_aux (FE_Fexp (id,map_exp e),annot)
       and map_pexp = function
@@ -2100,8 +2103,8 @@ let split_defs all_errors splits defs =
     in
     let map_scattered_def sd =
       match sd with
-      | SD_aux (SD_scattered_funcl fcl, annot) ->
-         List.map (fun fcl' -> SD_aux (SD_scattered_funcl fcl', annot)) (map_funcl fcl)
+      | SD_aux (SD_funcl fcl, annot) ->
+         List.map (fun fcl' -> SD_aux (SD_funcl fcl', annot)) (map_funcl fcl)
       | _ -> [sd]
     in
     let map_def d =
@@ -2113,6 +2116,7 @@ let split_defs all_errors splits defs =
       | DEF_reg_dec _
       | DEF_overload _
       | DEF_fixity _
+      | DEF_pragma _
       | DEF_internal_mutrec _
         -> [d]
       | DEF_fundef fd -> [DEF_fundef (map_fundef fd)]
@@ -2184,25 +2188,25 @@ let rec sizes_of_typ (Typ_aux (t,l)) =
   | Typ_id _
   | Typ_var _
     -> KidSet.empty
-  | Typ_fn _ -> raise (Reporting_basic.err_general l
+  | Typ_fn _ -> raise (Reporting.err_general l
                          "Function type on expression")
-  | Typ_bidir _ -> raise (Reporting_basic.err_general l "Mapping type on expression")
+  | Typ_bidir _ -> raise (Reporting.err_general l "Mapping type on expression")
   | Typ_tup typs -> kidset_bigunion (List.map sizes_of_typ typs)
-  | Typ_exist (kids,_,typ) ->
-     List.fold_left (fun s k -> KidSet.remove k s) (sizes_of_typ typ) kids
+  | Typ_exist (kopts,_,typ) ->
+     List.fold_left (fun s k -> KidSet.remove (kopt_kid k) s) (sizes_of_typ typ) kopts
   | Typ_app (Id_aux (Id "vector",_),
-             [Typ_arg_aux (Typ_arg_nexp size,_);
-              _;Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
+             [A_aux (A_nexp size,_);
+              _;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
      KidSet.of_list (size_nvars_nexp size)
   | Typ_app (_,tas) ->
      kidset_bigunion (List.map sizes_of_typarg tas)
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-and sizes_of_typarg (Typ_arg_aux (ta,_)) =
+and sizes_of_typarg (A_aux (ta,_)) =
   match ta with
-    Typ_arg_nexp _
-  | Typ_arg_order _
+    A_nexp _
+  | A_order _
     -> KidSet.empty
-  | Typ_arg_typ typ -> sizes_of_typ typ
+  | A_typ typ -> sizes_of_typ typ
 
 let sizes_of_annot (l, tannot) =
   match destruct_tannot tannot with
@@ -2221,7 +2225,7 @@ let change_parameter_pat i = function
                            mk_id "==",
                            E_aux (E_lit lit,annot)), annot) in
      P_aux (P_id var, (l,empty_tannot)), ([],[test])
-  | P_aux (_,(l,_)) -> raise (Reporting_basic.err_unreachable l __POS__
+  | P_aux (_,(l,_)) -> raise (Reporting.err_unreachable l __POS__
                                 "Expected variable pattern")
 
 (* TODO: make more precise, preferably with a proper free variables function
@@ -2265,33 +2269,33 @@ let replace_with_the_value bound_nexps (E_aux (_,(l,_)) as exp) =
   let mk_exp nexp l l' =
     let nexp = replace_size nexp in
     E_aux (E_cast (wrap (Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
-                                           [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated Unknown)),
+                                           [A_aux (A_nexp nexp,l')]),Generated Unknown)),
                    E_aux (E_app (Id_aux (Id "make_the_value",Generated Unknown),[exp]),(Generated l,empty_tannot))),
            (Generated l,empty_tannot))
   in
   match typ with
   | Typ_aux (Typ_app (Id_aux (Id "range",_),
-                      [Typ_arg_aux (Typ_arg_nexp nexp,l');Typ_arg_aux (Typ_arg_nexp nexp',_)]),_)
+                      [A_aux (A_nexp nexp,l');A_aux (A_nexp nexp',_)]),_)
     when nexp_identical nexp nexp' ->
      mk_exp nexp l l'
   | Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                      [Typ_arg_aux (Typ_arg_nexp nexp,l')]),_) ->
+                      [A_aux (A_nexp nexp,l')]),_) ->
      mk_exp nexp l l'
-  | _ -> raise (Reporting_basic.err_unreachable l __POS__
+  | _ -> raise (Reporting.err_unreachable l __POS__
                   "atom stopped being an atom?")
 
 let replace_type env typ =
   let Typ_aux (t,l) = Env.expand_synonyms env typ in
   match t with
   | Typ_app (Id_aux (Id "range",_),
-             [Typ_arg_aux (Typ_arg_nexp nexp,l');Typ_arg_aux (Typ_arg_nexp _,_)]) ->
+             [A_aux (A_nexp nexp,l');A_aux (A_nexp _,_)]) ->
      Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
-                       [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated l)
+                       [A_aux (A_nexp nexp,l')]),Generated l)
   | Typ_app (Id_aux (Id "atom",_),
-                      [Typ_arg_aux (Typ_arg_nexp nexp,l')]) ->
+                      [A_aux (A_nexp nexp,l')]) ->
      Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
-                       [Typ_arg_aux (Typ_arg_nexp nexp,l')]),Generated l)
-  | _ -> raise (Reporting_basic.err_unreachable l __POS__
+                       [A_aux (A_nexp nexp,l')]),Generated l)
+  | _ -> raise (Reporting.err_unreachable l __POS__
                   "atom stopped being an atom?")
 
 
@@ -2305,18 +2309,18 @@ let rewrite_size_parameters env (Defs defs) =
     let _, typ = Env.get_val_spec_orig id env in
     let types = match typ with
       | Typ_aux (Typ_fn (arg_typs,_,_),_) -> List.map (Env.expand_synonyms env) arg_typs
-      | _ -> raise (Reporting_basic.err_unreachable l __POS__ "Function clause does not have a function type")
+      | _ -> raise (Reporting.err_unreachable l __POS__ "Function clause does not have a function type")
     in
     let add_parameter (i,nmap) typ =
       let nmap =
         match Env.base_typ_of env typ with
           Typ_aux (Typ_app(Id_aux (Id "range",_),
-                           [Typ_arg_aux (Typ_arg_nexp nexp,_);
-                            Typ_arg_aux (Typ_arg_nexp nexp',_)]),_)
+                           [A_aux (A_nexp nexp,_);
+                            A_aux (A_nexp nexp',_)]),_)
             when Nexp.compare nexp nexp' = 0 && not (NexpMap.mem nexp nmap) ->
               NexpMap.add nexp i nmap
         | Typ_aux (Typ_app(Id_aux (Id "atom", _),
-                           [Typ_arg_aux (Typ_arg_nexp nexp,_)]), _)
+                           [A_aux (A_nexp nexp,_)]), _)
             when not (NexpMap.mem nexp nmap) ->
            NexpMap.add nexp i nmap
         | _ -> nmap
@@ -2325,7 +2329,7 @@ let rewrite_size_parameters env (Defs defs) =
     let (_,nexp_map) = List.fold_left add_parameter (0,NexpMap.empty) types in
     let nexp_list = NexpMap.bindings nexp_map in
 (* let () =
- print_endline ("Type of pattern for " ^ string_of_id id ^": " ^string_of_typ (pat_typ_of pat));
+ print_endline ("Type of pattern for " ^ string_of_id id ^": " ^string_of_typ (typ_of_pat pat));
  print_endline ("Types : " ^ String.concat ", " (List.map string_of_typ types));
  print_endline ("Nexp map for " ^ string_of_id id);
  List.iter (fun (nexp, i) -> print_endline ("  " ^ string_of_nexp nexp ^ " -> " ^ string_of_int i)) nexp_list
@@ -2334,7 +2338,7 @@ in *)
       match destruct_tannot tannot with
       | Some (env,typ,_) ->
          begin match Env.base_typ_of env typ with
-         | Typ_aux (Typ_app (Id_aux (Id "vector",_), [Typ_arg_aux (Typ_arg_nexp size,_);_;_]),_)
+         | Typ_aux (Typ_app (Id_aux (Id "vector",_), [A_aux (A_nexp size,_);_;_]),_)
              when not (is_nexp_constant size) ->
             begin
               match NexpMap.find size nexp_map with
@@ -2602,8 +2606,7 @@ let string_of_lx lx =
 
 let rec simple_string_of_loc = function
   | Parse_ast.Unknown -> "Unknown"
-  | Parse_ast.Int (s,None) -> "Int(" ^ s ^ ",None)"
-  | Parse_ast.Int (s,Some l) -> "Int(" ^ s ^ ",Some("^simple_string_of_loc l^"))"
+  | Parse_ast.Unique (n, l) -> "Unique(" ^ string_of_int n ^ ", " ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
   | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"
@@ -2628,7 +2631,7 @@ let string_of_callerkidset s =
 let string_of_dep = function
   | Have (args,extras) ->
      "Have (" ^ string_of_argsplits args ^ ";" ^ string_of_extra_splits extras ^ ")"
-  | Unknown (l,msg) -> "Unknown " ^ msg ^ " at " ^ Reporting_basic.loc_to_string l
+  | Unknown (l,msg) -> "Unknown " ^ msg ^ " at " ^ Reporting.loc_to_string l
 
 (* If a callee uses a type variable as a size, does it need to be split in the
    current function, or is it also a parameter?  (Note that there may be multiple
@@ -2774,7 +2777,7 @@ let update_env_new_kids env deps typ_env_pre typ_env_post =
   let kbound =
     KBindings.merge (fun k x y ->
       match x,y with
-      | Some bk, None -> Some bk
+      | Some k, None -> Some k
       | _ -> None)
       (Env.get_typ_vars typ_env_post)
       (Env.get_typ_vars typ_env_pre)
@@ -2849,14 +2852,16 @@ let rec deps_of_nc kid_deps (NC_aux (nc,l)) =
 let deps_of_typ l kid_deps arg_deps typ =
   deps_of_tyvars l kid_deps arg_deps (tyvars_of_typ typ)
 
-let deps_of_uvar l fn_id env arg_deps = function
-  | U_nexp (Nexp_aux (Nexp_var kid,_))
+let deps_of_typ_arg l fn_id env arg_deps (A_aux (aux, _)) =
+  match aux with
+  | A_nexp (Nexp_aux (Nexp_var kid,_))
       when List.exists (fun k -> Kid.compare kid k == 0) env.top_kids ->
      Parents (CallerKidSet.singleton (fn_id,kid))
-  | U_nexp nexp -> InFun (deps_of_nexp l env.kid_deps arg_deps nexp)
-  | U_order _ -> InFun dempty
-  | U_typ typ -> InFun (deps_of_typ l env.kid_deps arg_deps typ)
-
+  | A_nexp nexp -> InFun (deps_of_nexp l env.kid_deps arg_deps nexp)
+  | A_order _ -> InFun dempty
+  | A_typ typ -> InFun (deps_of_typ l env.kid_deps arg_deps typ)
+  | A_bool nc -> InFun (deps_of_nc env.kid_deps nc)
+                     
 let mk_subrange_pattern vannot vstart vend =
   let (len,ord,typ) = vector_typ_args_of (Env.base_typ_of (env_of_annot vannot) (typ_of_annot vannot)) in
   match ord with
@@ -2871,7 +2876,7 @@ let mk_subrange_pattern vannot vstart vend =
           let end_len = Big_int.pred (Big_int.sub len vend) in
           (* Wrap pat in its type; in particular the type checker won't
              manage P_wild in the middle of a P_vector_concat *)
-          let pat = P_aux (P_typ (pat_typ_of pat, pat),(Generated (pat_loc pat),empty_tannot)) in
+          let pat = P_aux (P_typ (typ_of_pat pat, pat),(Generated (pat_loc pat),empty_tannot)) in
           let pats = if Big_int.greater end_len Big_int.zero then
               [pat;P_aux (P_typ (vector_typ (nconstant end_len) ord typ,
                                  P_aux (P_wild,(dummyl,empty_tannot))),(dummyl,empty_tannot))]
@@ -2902,8 +2907,8 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
           with
           | Some pats ->
              if l = Parse_ast.Unknown then
-               (Reporting_basic.print_error
-                  (Reporting_basic.Err_general
+               (Reporting.print_error
+                  (Reporting.Err_general
                      (l, "No location for pattern match: " ^ string_of_exp exp));
                 None)
              else
@@ -2941,8 +2946,8 @@ let simplify_size_nexp env typ_env (Nexp_aux (ne,l) as nexp) =
         | kid -> Nexp_aux (Nexp_var kid,Generated l)
         | exception Not_found -> nexp
 
-let simplify_size_uvar env typ_env = function
-  | U_nexp nexp -> U_nexp (simplify_size_nexp env typ_env nexp)
+let simplify_size_typ_arg env typ_env = function
+  | A_aux (A_nexp nexp, l) -> A_aux (A_nexp (simplify_size_nexp env typ_env nexp), l)
   | x -> x
 
 (* Takes an environment of dependencies on vars, type vars, and flow control,
@@ -3034,10 +3039,10 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
          | _ -> Unknown (l, "Effects from function application")
        in
        let kid_inst = instantiation_of exp in
-       let kid_inst = KBindings.map (simplify_size_uvar env typ_env) kid_inst in
+       let kid_inst = KBindings.map (simplify_size_typ_arg env typ_env) kid_inst in
        (* Change kids in instantiation to the canonical ones from the type signature *)
        let kid_inst = KBindings.fold (fun kid -> KBindings.add (orig_kid kid)) kid_inst KBindings.empty in
-       let kid_deps = KBindings.map (deps_of_uvar l fn_id env deps) kid_inst in
+       let kid_deps = KBindings.map (deps_of_typ_arg l fn_id env deps) kid_inst in
        let rdep,r' =
          if Id.compare fn_id id == 0 then
            let bad = Unknown (l,"Recursive call of " ^ string_of_id id) in
@@ -3087,11 +3092,11 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_vector_update_subrange (e1,e2,e3,e4) ->
        let ds, assigns, r = non_det [e1;e2;e3;e4] in
        (merge_deps ds, assigns, r)
-    | E_record (FES_aux (FES_Fexps (fexps,_),_)) ->
+    | E_record fexps ->
        let es = List.map (function (FE_aux (FE_Fexp (_,e),_)) -> e) fexps in
        let ds, assigns, r = non_det es in
        (merge_deps ds, assigns, r)
-    | E_record_update (e,FES_aux (FES_Fexps (fexps,_),_)) ->
+    | E_record_update (e,fexps) ->
        let es = List.map (function (FE_aux (FE_Fexp (_,e),_)) -> e) fexps in
        let ds, assigns, r = non_det (e::es) in
        (merge_deps ds, assigns, r)
@@ -3165,7 +3170,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_internal_plet _
     | E_internal_return _
     | E_internal_value _
-      -> raise (Reporting_basic.err_unreachable l __POS__
+      -> raise (Reporting.err_unreachable l __POS__
                   ("Unexpected expression encountered in monomorphisation: " ^ string_of_exp exp))
 
     | E_var (lexp,e1,e2) ->
@@ -3184,13 +3189,13 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | Some (tenv,typ,_) ->
        let typ = Env.base_typ_of tenv typ in
        let env, tenv, typ =
-         match destruct_exist tenv typ with
+         match destruct_exist (Env.expand_synonyms tenv typ) with
          | None -> env, tenv, typ
-         | Some (kids, nc, typ) ->
+         | Some (kopts, nc, typ) ->
             { env with kid_deps =
-                List.fold_left (fun kds kid -> KBindings.add kid deps kds) env.kid_deps kids },
+                List.fold_left (fun kds kopt -> KBindings.add (kopt_kid kopt) deps kds) env.kid_deps kopts },
            Env.add_constraint nc
-             (List.fold_left (fun tenv kid -> Env.add_typ_var l kid BK_int tenv) tenv kids),
+             (List.fold_left (fun tenv kopt -> Env.add_typ_var l kopt tenv) tenv kopts),
            typ
        in
        if is_bitvector_typ typ then
@@ -3269,7 +3274,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
     let env = env_of_annot annot in
     let Typ_aux (typ,_) = Env.base_typ_of env (typ_of_annot annot) in
     match typ with
-    | Typ_app (Id_aux (Id "atom",_),[Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid,_)),_)]) ->
+    | Typ_app (Id_aux (Id "atom",_),[A_aux (A_nexp (Nexp_aux (Nexp_var kid,_)),_)]) ->
        equal_kids env kid
     | _ -> KidSet.empty
   in
@@ -3291,7 +3296,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
   in
   let eqn_instantiations = Type_check.instantiate_simple_equations qs in
   let eqn_kid_deps = KBindings.map (function
-    | U_nexp nexp -> Some (nexp_frees nexp)
+    | A_aux (A_nexp nexp, _) -> Some (nexp_frees nexp)
     | _ -> None) eqn_instantiations
   in
   let arg i pat =
@@ -3360,7 +3365,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
     in aux pat
   in
   let quant = function
-    | QI_aux (QI_id (KOpt_aux ((KOpt_none kid | KOpt_kind (_,kid)),_)),_) ->
+    | QI_aux (QI_id (KOpt_aux (KOpt_kind (_,kid),_)),_) ->
        Some kid
     | QI_aux (QI_const _,_) -> None
   in
@@ -3373,7 +3378,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
     else
       (* When there's no argument to case split on for a kid, we'll add a
          case expression instead *)
-      let env = pat_env_of pat in
+      let env = env_of_pat pat in
       let split = default_split (mk_tannot env int_typ no_effect) (KidSet.singleton kid) in
       let extra_splits = ExtraSplits.singleton (fn_id, fn_l)
         (KBindings.singleton kid split) in
@@ -3500,7 +3505,7 @@ let print_result r =
   let _ = print_endline ("  kid_in_caller: " ^ string_of_callerkidset r.kid_in_caller) in
   let _ = print_endline ("  failures: \n    " ^
                             (String.concat "\n    "
-                               (List.map (fun (l,s) -> Reporting_basic.loc_to_string l ^ ":\n     " ^
+                               (List.map (fun (l,s) -> Reporting.loc_to_string l ^ ":\n     " ^
                                  String.concat "\n      " (StringSet.elements s))
                                   (Failures.bindings r.failures)))) in
   ()
@@ -3585,7 +3590,7 @@ let analyse_defs debug env (Defs defs) =
   then (true,splits,extras) else
     begin
       Failures.iter (fun l msgs ->
-        Reporting_basic.print_err false false l "Monomorphisation" (String.concat "\n" (StringSet.elements msgs)))
+        Reporting.print_err false false l "Monomorphisation" (String.concat "\n" (StringSet.elements msgs)))
         fails;
       (false, splits,extras)
     end
@@ -3610,7 +3615,7 @@ let add_extra_splits extras (Defs defs) =
          let loc = match Analysis.translate_loc l with
            | Some l -> l
            | None ->
-              (Reporting_basic.print_err false false l "Monomorphisation"
+              (Reporting.print_err false false l "Monomorphisation"
                  "Internal error: bad location for added case";
                ("",0))
          in
@@ -3663,6 +3668,11 @@ let is_constant_vec_typ env typ =
 
 let rewrite_app env typ (id,args) =
   let is_append = is_id env (Id "append") in
+  let is_zero_extend =
+    is_id env (Id "Extend") id || is_id env (Id "ZeroExtend") id ||
+    is_id env (Id "zero_extend") id || is_id env (Id "sail_zero_extend") id ||
+    is_id env (Id "mips_zero_extend") id
+  in
   let try_cast_to_typ (E_aux (e,_) as exp) =
     let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
     match size with
@@ -3819,7 +3829,7 @@ let rewrite_app env typ (id,args) =
               [vector1; start1; end1])
     | _ -> E_app (id,args)
 
-  else if is_id env (Id "Extend") id || is_id env (Id "ZeroExtend") id || is_id env (Id "zero_extend") id then
+  else if is_zero_extend then
     let is_subrange = is_id env (Id "vector_subrange") in
     let is_slice = is_id env (Id "slice") in
     let is_zeros = is_id env (Id "Zeros") in
@@ -3841,11 +3851,16 @@ let rewrite_app env typ (id,args) =
       -> E_app (mk_id "place_slice",
                 [vector1; start1; length1; length2])
 
-    (* If we've already rewritten to slice_slice_concat, we can just drop the
-       zero extension because it can do it *)
-    | (E_aux (E_cast (_, (E_aux (E_app (Id_aux (Id "slice_slice_concat",_), args),_))),_))::
+    (* If we've already rewritten to slice_slice_concat or subrange_subrange_concat,
+       we can just drop the zero extension because those functions can do it
+       themselves *)
+    | (E_aux (E_cast (_, (E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat"),_) as op, args),_))),_))::
         ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
-      -> E_app (mk_id "slice_slice_concat", args)
+      -> E_app (op, args)
+
+    | (E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat"),_) as op, args),_))::
+        ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
+      -> E_app (op, args)
 
     | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
         when is_slice slice1 && not (is_constant length1) ->
@@ -3948,15 +3963,15 @@ let make_bitvector_cast_fns cast_name env quant_kids src_typ target_typ =
        P_aux (P_typ (src_typ, P_aux (P_tup ps,(Generated src_l, src_ann))),(Generated src_l, src_ann)),
        E_aux (E_tuple es,(Generated tar_l, tar_ann))
     | Typ_app (Id_aux (Id "vector",_),
-               [Typ_arg_aux (Typ_arg_nexp size,_); _;
-                Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]),
+               [A_aux (A_nexp size,_); _;
+                A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]),
       Typ_app (Id_aux (Id "vector",_) as t_id,
-               [Typ_arg_aux (Typ_arg_nexp size',l_size'); t_ord;
-                Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_) as t_bit]) -> begin
+               [A_aux (A_nexp size',l_size'); t_ord;
+                A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_) as t_bit]) -> begin
        match simplify_size_nexp env quant_kids size, simplify_size_nexp env quant_kids size' with
        | Some size, Some size' when Nexp.compare size size' <> 0 ->
           let var = fresh () in
-          let tar_typ' = Typ_aux (Typ_app (t_id, [Typ_arg_aux (Typ_arg_nexp size',l_size');t_ord;t_bit]),
+          let tar_typ' = Typ_aux (Typ_app (t_id, [A_aux (A_nexp size',l_size');t_ord;t_bit]),
                                   tar_l) in
           let () = at_least_one := Some tar_typ' in
           P_aux (P_id var,(Generated src_l,src_ann)),
@@ -4031,9 +4046,9 @@ let fill_in_type env typ =
   let tyvars = tyvars_of_typ typ in
   let subst = KidSet.fold (fun kid subst ->
     match Env.get_typ_var kid env with
-    | BK_type
-    | BK_order -> subst
-    | BK_int ->
+    | K_type
+    | K_order -> subst
+    | K_int ->
        (match solve env (nvar kid) with
        | None -> subst
        | Some n -> KBindings.add kid (nconstant n) subst)) tyvars KBindings.empty in
@@ -4056,7 +4071,7 @@ let add_bitvector_casts (Defs defs) =
         let matched_typ = Env.base_typ_of env (typ_of_annot ann') in
         match e',matched_typ with
         | E_sizeof (Nexp_aux (Nexp_var kid,_)), _
-        | _, Typ_aux (Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_) ->
+        | _, Typ_aux (Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_) ->
            let map_case pexp =
              let pat,guard,body,ann = destruct_pexp pexp in
              let body = match pat, guard with
@@ -4134,7 +4149,7 @@ let add_bitvector_casts (Defs defs) =
       match typ with
       | Typ_aux (Typ_fn (_,ret,_),_) -> ret
       | Typ_aux (_,l) as typ ->
-         raise (Reporting_basic.err_unreachable l __POS__
+         raise (Reporting.err_unreachable l __POS__
                   ("Function clause must have function type: " ^ string_of_typ typ ^
                       " is not a function type"))
     in
@@ -4180,16 +4195,16 @@ let replace_nexp_in_typ env typ orig new_nexp =
        let fs, targs = List.split (List.map aux_targ targs) in
        List.exists (fun x -> x) fs, Typ_aux (Typ_app (id, targs),l)
     | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-  and aux_targ (Typ_arg_aux (ta,l) as typ_arg) =
+  and aux_targ (A_aux (ta,l) as typ_arg) =
     match ta with
-    | Typ_arg_nexp nexp ->
+    | A_nexp nexp ->
        if prove env (nc_eq nexp orig)
-       then true, Typ_arg_aux (Typ_arg_nexp new_nexp,l)
+       then true, A_aux (A_nexp new_nexp,l)
        else false, typ_arg
-    | Typ_arg_typ typ ->
+    | A_typ typ ->
        let f, typ = aux typ in
-       f, Typ_arg_aux (Typ_arg_typ typ,l)
-    | Typ_arg_order _ -> false, typ_arg
+       f, A_aux (A_typ typ,l)
+    | A_order _ -> false, typ_arg
   in aux typ
 
 let fresh_nexp_kid nexp =
@@ -4266,7 +4281,7 @@ let rewrite_toplevel_nexps (Defs defs) =
        match nexp_map with
        | [] -> None
        | _ ->
-          let new_vars = List.map (fun (kid,nexp) -> QI_aux (QI_id (KOpt_aux (KOpt_none kid,Generated Unknown)), Generated tq_l)) nexp_map in
+          let new_vars = List.map (fun (kid,nexp) -> QI_aux (QI_id (mk_kopt K_int kid), Generated tq_l)) nexp_map in
           let new_constraints = List.map (fun (kid,nexp) -> QI_aux (QI_const (nc_eq (nvar kid) nexp), Generated tq_l)) nexp_map in
           let tqs = TypQ_aux (TypQ_tq (qs @ new_vars @ new_constraints),tq_l) in
           let vs =
@@ -4281,13 +4296,13 @@ let rewrite_toplevel_nexps (Defs defs) =
        Typ_aux (Typ_exist (kids,(* TODO? *) nc, aux typ'),l)
     | Typ_app (id,targs) -> Typ_aux (Typ_app (id,List.map aux_targ targs),l)
     | _ -> typ_full
-    and aux_targ (Typ_arg_aux (ta,l) as ta_full) =
+    and aux_targ (A_aux (ta,l) as ta_full) =
       match ta with
-      | Typ_arg_typ typ -> Typ_arg_aux (Typ_arg_typ (aux typ),l)
-      | Typ_arg_order _ -> ta_full
-      | Typ_arg_nexp nexp ->
+      | A_typ typ -> A_aux (A_typ (aux typ),l)
+      | A_order _ -> ta_full
+      | A_nexp nexp ->
          match find_nexp env nexp_map nexp with
-         | (kid,_) -> Typ_arg_aux (Typ_arg_nexp (nvar kid),l)
+         | (kid,_) -> A_aux (A_nexp (nvar kid),l)
          | exception Not_found -> ta_full
     in aux typ
   in
@@ -4356,19 +4371,19 @@ let monomorphise opts splits defs =
       let f,r,ex = Analysis.analyse_defs opts.debug_analysis env defs in
       if f || opts.all_split_errors || opts.continue_anyway
       then f, r, ex
-      else raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
+      else raise (Reporting.err_general Unknown "Unable to monomorphise program")
     else true, [], Analysis.ExtraSplits.empty in
   let splits = new_splits @ (List.map (fun (loc,id) -> (loc,id,None)) splits) in
   let ok_extras, defs, extra_splits = add_extra_splits extra_splits defs in
   let splits = splits @ extra_splits in
   let () = if ok_extras || opts.all_split_errors || opts.continue_anyway
       then ()
-      else raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
+      else raise (Reporting.err_general Unknown "Unable to monomorphise program")
   in
   let ok_split, defs = split_defs opts.all_split_errors splits defs in
   let () = if (ok_analysis && ok_extras && ok_split) || opts.continue_anyway
       then ()
-      else raise (Reporting_basic.err_general Unknown "Unable to monomorphise program")
+      else raise (Reporting.err_general Unknown "Unable to monomorphise program")
   in defs
 
 let add_bitvector_casts = BitvectorSizeCasts.add_bitvector_casts

@@ -66,26 +66,28 @@ fragment :: 'F_' ::=
 
 ctyp :: 'CT_' ::=
   {{ com C type }}
-  | mpz_t                   :: :: int
-% Arbitrary precision GMP integer, mpz_t in C. }}
-  | bv_t ( bool )           :: :: bits
-% Variable length bitvector - flag represents direction, true - dec or false - inc }}
-  | 'uint64_t' ( nat , bool ) :: :: bits64
+  | mpz_t                     :: :: int
+% Arbitrary precision GMP integer, mpz_t in C.
+  | bv_t ( bool )             :: :: lbits
+% Variable length bitvector - flag represents direction, true - dec or false - inc
+  | sbv_t ( bool )            :: :: sbits
+% Small variable length bitvector - less than 64 bits
+  | 'uint64_t' ( nat , bool ) :: :: fbits
 % Fixed length bitvector that fits within a 64-bit word. - int
-% represents length, and flag is the same as CT_bv. }}
-  | 'int64_t'               :: :: int64
-% Used for (signed) integers that fit within 64-bits. }}
-  | unit_t                  :: :: unit
+% represents length, and flag is the same as CT_bv.
+  | 'int64_t'                 :: :: int64
+% Used for (signed) integers that fit within 64-bits.
+  | unit_t                    :: :: unit
 % unit is a value in sail, so we represent it as a one element type
 % here too for clarity but we actually compile it to an int which is
 % always 0.
-  | bool_t                  :: :: bool
-  | real_t                  :: :: real
-  | bit_t                   :: :: bit
+  | bool_t                    :: :: bool
+  | real_t                    :: :: real
+  | bit_t                     :: :: bit
 % The real type in sail. Abstract here, but implemented using either
 % GMP rationals or high-precision floating point.
-  | ( ctyp0 , ... , ctypn ) :: :: tup
-  | string_t                :: :: string
+  | ( ctyp0 , ... , ctypn )   :: :: tup
+  | string_t                  :: :: string
   | enum id ( id0 , ... , idn )                    :: :: enum
   | struct id ( id0 * ctyp0 , ... , idn * ctypn )  :: :: struct
   | variant id ( id0 * ctyp0 , ... , idn * ctypn ) :: :: variant
@@ -130,6 +132,7 @@ instr :: 'I_' ::=
   | jump ( cval ) string                           :: :: jump
   | clexp = bool id ( cval0 , ... , cvaln )        :: :: funcall
   | clexp = cval                                   :: :: copy
+  | alias clexp = cval                             :: :: alias
   | clear ctyp id                                  :: :: clear
   | return cval                                    :: :: return
   | { instr0 ; ... ; instrn }                      :: :: block

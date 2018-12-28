@@ -79,24 +79,6 @@ lib/hol/sail-heap
 /power/power_embed_types.lem
 /power/power_toFromInterp.lem
 
-/riscv/Riscv.thy
-/riscv/RiscvAuxiliary.thy
-/riscv/Riscv_extras.thy
-/riscv/Riscv_lemmas.thy
-/riscv/Riscv_types.thy
-/riscv/riscv.lem
-/riscv/riscv_types.lem
-/riscv/riscv_sequential.lem
-/riscv/riscv_sequential_types.lem
-/riscv/Riscv_sequential_lemmas.thy
-/riscv/riscv
-/riscv/platform
-/riscv/riscv.c
-/riscv/riscv_model.c
-/riscv/riscv_c
-/riscv/z3_problems
-/riscv/riscv_sim
-
 /x86/x86.lem
 /x86/x86.ml
 /x86/x86_embed.lem

@@ -1,5 +1,0 @@
-Type error at file "or_pattern/v1.sail", line 11, character 5 to line 11, character 5
-
-    [41my[0m | z       => (),
-
-Bindings are not allowed in this context

@@ -4,9 +4,9 @@ set -e
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SAILDIR="$DIR/../.."
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
+RED='\033[0;91m'
+GREEN='\033[0;92m'
+YELLOW='\033[0;93m'
 NC='\033[0m'
 
 mkdir -p $DIR/rtpass
@@ -50,9 +50,9 @@ printf "<testsuites>\n" >> $DIR/tests.xml
 
 for i in `ls $DIR/pass/ | grep sail`;
 do
-    if $SAILDIR/sail -ddump_tc_ast -dsanity $DIR/pass/$i 2> /dev/null 1> $DIR/rtpass/$i;
+    if $SAILDIR/sail -just_check -ddump_tc_ast -dsanity $DIR/pass/$i 2> /dev/null 1> $DIR/rtpass/$i;
     then
-	if $SAILDIR/sail -ddump_tc_ast -dmagic_hash -dno_cast -dsanity $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
+	if $SAILDIR/sail -just_check -ddump_tc_ast -dmagic_hash -dno_cast -dsanity $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
 	then
 	    if diff $DIR/rtpass/$i $DIR/rtpass2/$i;
 	    then

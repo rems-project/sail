@@ -94,14 +94,14 @@ let rec free_type_names_t consider_var (Typ_aux (t, l)) = match t with
                                         (free_type_names_t consider_var t2)
   | Typ_tup ts -> free_type_names_ts consider_var ts
   | Typ_app (name,targs) -> Nameset.add (string_of_id name) (free_type_names_t_args consider_var targs)
-  | Typ_exist (kids,_,t') -> List.fold_left (fun s kid -> Nameset.remove (string_of_kid kid) s) (free_type_names_t consider_var t') kids
+  | Typ_exist (kopts,_,t') -> List.fold_left (fun s kopt -> Nameset.remove (string_of_kid (kopt_kid kopt)) s) (free_type_names_t consider_var t') kopts
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and free_type_names_ts consider_var ts = nameset_bigunion (List.map (free_type_names_t consider_var) ts)
 and free_type_names_maybe_t consider_var = function
   | Some t -> free_type_names_t consider_var t
   | None -> mt
 and free_type_names_t_arg consider_var = function
-  | Typ_arg_aux (Typ_arg_typ t, _) -> free_type_names_t consider_var t
+  | A_aux (A_typ t, _) -> free_type_names_t consider_var t
   | _ -> mt
 and free_type_names_t_args consider_var targs =
   nameset_bigunion (List.map (free_type_names_t_arg consider_var) targs)
@@ -126,12 +126,15 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
   | Typ_tup ts -> List.fold_right (fun t n -> fv_of_typ consider_var bound n t) ts used
   | Typ_app(id,targs) ->
      List.fold_right (fun ta n -> fv_of_targ consider_var bound n ta) targs (conditional_add_typ bound used id)
-  | Typ_exist (kids,_,t') -> fv_of_typ consider_var (List.fold_left (fun b (Kid_aux (Var v,_)) -> Nameset.add v b) bound kids) used t'
+  | Typ_exist (kopts,_,t') ->
+     fv_of_typ consider_var
+       (List.fold_left (fun b (KOpt_aux (KOpt_kind (_, (Kid_aux (Var v,_))), _)) -> Nameset.add v b) bound kopts)
+       used t'
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 
-and fv_of_targ consider_var bound used (Ast.Typ_arg_aux(targ,_)) : Nameset.t = match targ with
-  | Typ_arg_typ t -> fv_of_typ consider_var bound used t
-  | Typ_arg_nexp n -> fv_of_nexp consider_var bound used n
+and fv_of_targ consider_var bound used (Ast.A_aux(targ,_)) : Nameset.t = match targ with
+  | A_typ t -> fv_of_typ consider_var bound used t
+  | A_nexp n -> fv_of_nexp consider_var bound used n
   | _ -> used
 
 and fv_of_nexp consider_var bound used (Ast.Nexp_aux(n,_)) = match n with
@@ -151,7 +154,6 @@ let typq_bindings (TypQ_aux(tq,_)) = match tq with
         match qi with
         | QI_id (KOpt_aux(k,_)) ->
           (match k with
-           | KOpt_none (Kid_aux (Var s,_)) -> Nameset.add s bounds
            | KOpt_kind (_, Kid_aux (Var s,_)) -> Nameset.add s bounds)
         | _ -> bounds) quants mt
   | TypQ_no_forall -> mt  
@@ -210,11 +212,11 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   | E_vector_update(v,i,e) -> list_fv bound used set [v;i;e]
   | E_vector_update_subrange(v,i1,i2,e) -> list_fv bound used set [v;i1;i2;e]
   | E_vector_append(e1,e2) | E_cons(e1,e2) -> list_fv bound used set [e1;e2]
-  | E_record (FES_aux(FES_Fexps(fexps,_),_)) ->
+  | E_record fexps ->
      let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
      List.fold_right
        (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (bound,used,set)
-  | E_record_update(e,(FES_aux(FES_Fexps(fexps,_),_))) ->
+  | E_record_update(e, fexps) ->
     let b,u,s = fv_of_exp consider_var bound used set e in
     List.fold_right
       (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (b,u,s)
@@ -282,6 +284,10 @@ and fv_of_lexp consider_var bound used set (LEXP_aux(lexp,(_,tannot))) =
         (fun e (b,u,s) ->
           fv_of_exp consider_var b u s e) args (bound,used,set) in
     bound,Nameset.add (string_of_id id) used,set
+  | LEXP_vector_concat(args) ->
+     List.fold_right
+       (fun e (b,u,s) ->
+         fv_of_lexp consider_var b u s e) args (bound,used,set)
   | LEXP_field(lexp,_) -> fv_of_lexp consider_var bound used set lexp
   | LEXP_vector(lexp,exp) ->
     let bound_l,used,set = fv_of_lexp consider_var bound used set lexp in
@@ -304,8 +310,13 @@ let typ_variants consider_var bound tunions =
 let fv_of_kind_def consider_var (KD_aux(k,_)) = match k with
   | KD_nabbrev(_,id,_,nexp) -> init_env (string_of_id id), fv_of_nexp consider_var mt mt nexp
 
+let fv_of_abbrev consider_var bound used typq typ_arg =
+  let ts_bound = if consider_var then typq_bindings typq else mt in
+  ts_bound, fv_of_targ consider_var (Nameset.union bound ts_bound) used typ_arg
+
 let fv_of_type_def consider_var (TD_aux(t,_)) = match t with
-  | TD_abbrev(id,_,typschm) -> init_env (string_of_id id), snd (fv_of_typschm consider_var mt mt typschm)
+  | TD_abbrev(id,typq,typ_arg) ->
+     init_env (string_of_id id), snd (fv_of_abbrev consider_var mt mt typq typ_arg)
   | TD_record(id,_,typq,tids,_) ->
     let binds = init_env (string_of_id id) in
     let bounds = if consider_var then typq_bindings typq else mt in
@@ -382,17 +393,17 @@ let rec find_scattered_of name = function
   | [] -> []
   | DEF_scattered (SD_aux(sda,_) as sd):: defs ->
     (match sda with
-     | SD_scattered_function(_,_,_,id)
-     | SD_scattered_funcl(FCL_aux(FCL_Funcl(id,_),_))
-     | SD_scattered_unioncl(id,_) ->
+     | SD_function(_,_,_,id)
+     | SD_funcl(FCL_aux(FCL_Funcl(id,_),_))
+     | SD_unioncl(id,_) ->
        if name = string_of_id id
        then [sd] else []
      | _ -> [])@
     (find_scattered_of name defs)
   | _::defs -> find_scattered_of name defs
 
-let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd,_)) = match sd with
-  | SD_scattered_function(_,tannot_opt,_,id) ->
+let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd,(l, _))) = match sd with
+  | SD_function(_,tannot_opt,_,id) ->
     let b,ns = (match tannot_opt with
         | Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ),_) ->
           let bindings = if consider_var then typq_bindings typq else mt in
@@ -400,7 +411,7 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
         | Typ_annot_opt_aux(Typ_annot_opt_none, _) ->
           mt, mt) in
     init_env (string_of_id id),ns
-  | SD_scattered_funcl (FCL_aux(FCL_Funcl(id,pexp),_)) ->
+  | SD_funcl (FCL_aux(FCL_Funcl(id,pexp),_)) ->
      begin
        match pexp with
        | Pat_aux(Pat_exp (pat,exp),_) ->
@@ -419,7 +430,7 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
             | _ -> mt in
           scattered_binds, exp_ns
      end
-  | SD_scattered_variant (id,_,_) ->
+  | SD_variant (id,_,_) ->
     let name = string_of_id id in
     let uses =
       if consider_scatter_as_one
@@ -431,12 +442,12 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
         Nameset.remove name pieces_uses
       else mt in
     init_env name, uses
-  | SD_scattered_unioncl(id, type_union) ->
+  | SD_unioncl(id, type_union) ->
     let typ_name = string_of_id id in
     let b = init_env typ_name in
     let (b,r) = typ_variants consider_var b [type_union] in
     (Nameset.remove typ_name b, Nameset.add typ_name r)
-  | SD_scattered_end id ->
+  | SD_end id ->
     let name = string_of_id id in
     let uses = if consider_scatter_as_one
     (*Note: if this is a function ending, the dec is included *)
@@ -446,16 +457,28 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
           (List.map (fv_of_scattered consider_var false []) scattered_defs) (init_env name)
       else init_env name in
     init_env (name ^ "/end"), uses
+  | _ -> raise (Reporting.err_unreachable l __POS__ "Tried to find free variables for scattered mapping clause")
 
-let fv_of_rd consider_var (DEC_aux (d,_)) = match d with
-  | DEC_reg(t,id) ->
-    init_env (string_of_id id), fv_of_typ consider_var mt mt t
-  | DEC_config(id,t,exp) ->
-    init_env (string_of_id id), fv_of_typ consider_var mt mt t
-  | DEC_alias(id,alias) ->
-    init_env (string_of_id id),mt
-  | DEC_typ_alias(t,id,alias) ->
-    init_env (string_of_id id), mt
+let fv_of_rd consider_var (DEC_aux (d, annot)) =
+  (* When we get the free variables of a register, we have to ensure
+     that we expand all synonyms so we can pick up dependencies with
+     undefined_type function, even when type is indirected through a
+     synonym. *)
+  let open Type_check in
+  let env = env_of_annot annot in
+  match d with
+  | DEC_reg(t, id) ->
+     let t' = Env.expand_synonyms env t in
+     init_env (string_of_id id),
+     Nameset.union (fv_of_typ consider_var mt mt t) (fv_of_typ consider_var mt mt t')
+  | DEC_config(id, t, exp) ->
+     let t' = Env.expand_synonyms env t in
+     init_env (string_of_id id),
+     Nameset.union (fv_of_typ consider_var mt mt t) (fv_of_typ consider_var mt mt t')
+  | DEC_alias(id, alias) ->
+     init_env (string_of_id id), mt
+  | DEC_typ_alias(t, id, alias) ->
+     init_env (string_of_id id), mt
 
 let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_kind kdef -> fv_of_kind_def consider_var kdef
@@ -475,6 +498,7 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
      List.fold_left Nameset.union Nameset.empty (List.map snd fvs)
   | DEF_scattered sdef -> fv_of_scattered consider_var consider_scatter_as_one all_defs sdef
   | DEF_reg_dec rdec -> fv_of_rd consider_var rdec
+  | DEF_pragma _ -> mt,mt
 
 let group_defs consider_scatter_as_one (Ast.Defs defs) =
   List.map (fun d -> (fv_of_def false consider_scatter_as_one defs d,d)) defs
@@ -549,6 +573,15 @@ let scc ?(original_order : string list option) (g : graph) =
 
 let add_def_to_graph (prelude, original_order, defset, graph) d =
   let bound, used = fv_of_def false true [] d in
+  let used = match d with
+    | DEF_reg_dec _ ->
+       (* For a register, we need to ensure that any undefined_type
+          functions for types used by the register are placed before
+          the register declaration. *)
+       let undefineds = Nameset.map (fun name -> "undefined_" ^ name) used in
+       Nameset.union undefineds used
+    | _ -> used
+  in
   try
     (* A definition may bind multiple identifiers, e.g. "let (x, y) = ...".
        We add all identifiers to the dependency graph as a cycle.  The actual
@@ -598,7 +631,7 @@ let def_of_component graph defset comp =
        | DEF_fundef fundef -> [fundef]
        | DEF_internal_mutrec fundefs -> fundefs
        | _ ->
-          raise (Reporting_basic.err_unreachable (def_loc def) __POS__
+          raise (Reporting.err_unreachable (def_loc def) __POS__
             "Trying to merge non-function definition with mutually recursive functions") in
      let fundefs = List.concat (List.map get_fundefs defs) in
      print_dot graph (List.map (fun fd -> string_of_id (id_of_fundef fd)) fundefs);

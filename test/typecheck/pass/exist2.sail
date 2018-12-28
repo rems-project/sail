@@ -22,13 +22,13 @@ function unit_fn x : atom(4) = ()
 
 val s_add : forall 'a. (atom('a), atom('a)) -> atom('a + 'a)
 
-let v7 : {'k, 'k = 4. atom('k)} = 4
+let v7 : {'k, 'k == 4. atom('k)} = 4
 
-let v9 : {'n, 0 = 0. atom('n)} = 100
+let v9 : {'n, 0 == 0. atom('n)} = 100
 
 let v10 : int = v9
 
-type MyInt = {'n, 0 = 0. atom('n)}
+type MyInt = {'n, 0 == 0. atom('n)}
 
 val existential_int : int -> MyInt
 
@@ -37,8 +37,8 @@ val existential_range : forall 'n 'm.
 
 overload existential = {existential_int, existential_range}
 
-let v11 : {'n, 0 = 0. atom('n)} = existential(v10)
+let v11 : {'n, 0 == 0. atom('n)} = existential(v10)
 
-let v12 : {'e, 0 <= 'e & 'e <= 3. atom('e)} = existential(2 : range(0, 3))
+let v12 : {'e, 0 <= 'e & 'e <= 3. atom('e)} = 2
 
 let v13 : MyInt = existential(v10)

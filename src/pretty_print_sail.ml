@@ -52,6 +52,8 @@ open Ast
 open Ast_util
 open PPrint
 
+let opt_use_heuristics = ref false
+
 module Big_int = Nat_big_num
 
 let doc_op symb a b = infix 2 1 symb a b
@@ -63,10 +65,16 @@ let doc_id (Id_aux (id_aux, _)) =
 
 let doc_kid kid = string (Ast_util.string_of_kid kid)
 
+let doc_kopt = function
+  | kopt when is_nat_kopt kopt -> doc_kid (kopt_kid kopt)
+  | kopt when is_typ_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])
+  | kopt when is_order_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])
+  | kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Bool"])
+
 let doc_int n = string (Big_int.to_string n)
 
 let docstring (l, _) = match l with
-  | Parse_ast.Documented (str, _) -> string "/**" ^^ string str ^^ string "*/" ^^ hardline
+  | Parse_ast.Documented (str, _) -> string "/*!" ^^ string str ^^ string "*/" ^^ hardline
   | _ -> empty
 
 let doc_ord (Ord_aux(o,_)) = match o with
@@ -111,63 +119,85 @@ let rec doc_nexp =
   in
   nexp0
 
-let doc_nc =
+let rec doc_nc nc =
   let nc_op op n1 n2 = separate space [doc_nexp n1; string op; doc_nexp n2] in
   let rec atomic_nc (NC_aux (nc_aux, _) as nc) =
     match nc_aux with
     | NC_true -> string "true"
     | NC_false -> string "false"
-    | NC_equal (n1, n2) -> nc_op "=" n1 n2
+    | NC_equal (n1, n2) -> nc_op "==" n1 n2
     | NC_not_equal (n1, n2) -> nc_op "!=" n1 n2
     | NC_bounded_ge (n1, n2) -> nc_op ">=" n1 n2
     | NC_bounded_le (n1, n2) -> nc_op "<=" n1 n2
     | NC_set (kid, ints) ->
        separate space [doc_kid kid; string "in"; braces (separate_map (comma ^^ space) doc_int ints)]
-    | NC_app (id, nexps) -> string "where" ^^ space ^^ doc_id id ^^ parens (separate_map (comma ^^ space) doc_nexp nexps)
-    | _ -> parens (nc0 nc)
-  and nc0 (NC_aux (nc_aux, _) as nc) =
-    match nc_aux with
-    | NC_or (c1, c2) -> separate space [nc0 c1; string "|"; nc1 c2]
-    | _ -> nc1 nc
+    | NC_app (id, args) ->
+       doc_id id ^^ parens (separate_map (comma ^^ space) doc_typ_arg args)
+    | NC_var kid -> doc_kid kid
+    | NC_or _ | NC_and _ -> nc0 ~parenthesize:true nc
+  and nc0 ?parenthesize:(parenthesize=false) (NC_aux (nc_aux, _) as nc) =
+    (* Rather than parens (nc0 x) we use nc0 ~parenthesize:true x, because if
+       we rewrite a disjunction as a set constraint, then we can
+       always omit the parens. *)
+    let parens' = if parenthesize then parens else (fun x -> x) in
+    let disjs = constraint_disj nc in
+    let collect_constants kid = function
+      | NC_aux (NC_equal (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant c, _)), _) when Kid.compare kid kid' = 0 -> Some c
+      | _ -> None
+    in
+    match disjs with
+    | NC_aux (NC_equal (Nexp_aux (Nexp_var kid, _), Nexp_aux (Nexp_constant c, _)), _) :: ncs ->
+       let constants = List.map (collect_constants kid) ncs in
+       begin match Util.option_all (List.map (collect_constants kid) ncs) with
+       | None | Some [] -> parens' (separate_map (space ^^ bar ^^ space) nc1 disjs)
+       | Some cs ->
+          separate space [doc_kid kid; string "in"; braces (separate_map (comma ^^ space) doc_int (c :: cs))]
+       end
+    | _ -> parens' (separate_map (space ^^ bar ^^ space) nc1 disjs)
   and nc1 (NC_aux (nc_aux, _) as nc) =
-    match nc_aux with
-    | NC_and (c1, c2) -> separate space [nc1 c1; string "&"; atomic_nc c2]
-    | _ -> atomic_nc nc
+    let conjs = constraint_conj nc in
+    separate_map (space ^^ string "&" ^^ space) atomic_nc conjs
   in
-  nc0
+  atomic_nc (constraint_simp nc)
 
-let rec doc_typ (Typ_aux (typ_aux, l)) =
+and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> doc_id id
   | Typ_app (id, []) -> doc_id id
   | Typ_app (Id_aux (DeIid str, _), [x; y]) ->
      separate space [doc_typ_arg x; doc_typ_arg y]
-              (*
-  | Typ_app (id, [_; len; _; Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id tid, _)), _)]) when Id.compare (mk_id "vector") id == 0 && Id.compare (mk_id "bit") tid == 0->
-     string "bits" ^^ parens (doc_typ_arg len)
-               *)
+  | Typ_app (id, typs) when Id.compare id (mk_id "atom") = 0 ->
+     string "int" ^^ parens (separate_map (string ", ") doc_typ_arg typs)
+  | Typ_app (id, typs) when Id.compare id (mk_id "atom_bool") = 0 ->
+     string "bool" ^^ parens (separate_map (string ", ") doc_typ_arg typs)
   | Typ_app (id, typs) -> doc_id id ^^ parens (separate_map (string ", ") doc_typ_arg typs)
   | Typ_tup typs -> parens (separate_map (string ", ") doc_typ typs)
   | Typ_var kid -> doc_kid kid
   (* Resugar set types like {|1, 2, 3|} *)
-  | Typ_exist ([kid1], NC_aux (NC_set (kid2, ints), _), Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_var kid3, _)), _)]), _))
-         when Kid.compare kid1 kid2 == 0 && Kid.compare kid2 kid3 == 0 && Id.compare (mk_id "atom") id == 0 ->
+  | Typ_exist ([kopt],
+               NC_aux (NC_set (kid1, ints), _),
+               Typ_aux (Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var kid2, _)), _)]), _))
+         when Kid.compare (kopt_kid kopt) kid1 == 0 && Kid.compare kid1 kid2 == 0 && Id.compare (mk_id "atom") id == 0 ->
      enclose (string "{|") (string "|}") (separate_map (string ", ") doc_int ints)
-  | Typ_exist (kids, nc, typ) ->
-     braces (separate_map space doc_kid kids ^^ comma ^^ space ^^ doc_nc nc ^^ dot ^^ space ^^ doc_typ typ)
+  | Typ_exist (kopts, nc, typ) ->
+     braces (separate_map space doc_kopt kopts ^^ comma ^^ space ^^ doc_nc nc ^^ dot ^^ space ^^ doc_typ typ)
   | Typ_fn (typs, typ, Effect_aux (Effect_set [], _)) ->
      separate space [doc_arg_typs typs; string "->"; doc_typ typ]
   | Typ_fn (typs, typ, Effect_aux (Effect_set effs, _)) ->
      let ocaml_eff = braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs)) in
-     separate space [doc_arg_typs typs; string "->"; doc_typ typ; string "effect"; ocaml_eff]
+     if simple then
+       separate space [doc_arg_typs typs; string "->"; doc_typ ~simple:simple typ]
+     else
+       separate space [doc_arg_typs typs; string "->"; doc_typ typ; string "effect"; ocaml_eff]
   | Typ_bidir (typ1, typ2) ->
      separate space [doc_typ typ1; string "<->"; doc_typ typ2]
-  | Typ_internal_unknown -> raise (Reporting_basic.err_unreachable l __POS__ "escaped Typ_internal_unknown")
-and doc_typ_arg (Typ_arg_aux (ta_aux, _)) =
+  | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
+and doc_typ_arg (A_aux (ta_aux, _)) =
   match ta_aux with
-  | Typ_arg_typ typ -> doc_typ typ
-  | Typ_arg_nexp nexp -> doc_nexp nexp
-  | Typ_arg_order o -> doc_ord o
+  | A_typ typ -> doc_typ typ
+  | A_nexp nexp -> doc_nexp nexp
+  | A_order o -> doc_ord o
+  | A_bool nc -> doc_nc nc
 and doc_arg_typs = function
   | [typ] -> doc_typ typ
   | typs -> parens (separate_map (comma ^^ space) doc_typ typs)
@@ -175,9 +205,9 @@ and doc_arg_typs = function
 let doc_quants quants =
   let doc_qi_kopt (QI_aux (qi_aux, _)) =
     match qi_aux with
-    | QI_id (KOpt_aux (KOpt_none kid, _)) -> [doc_kid kid]
     | QI_id kopt when is_nat_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Int"])]
     | QI_id kopt when is_typ_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])]
+    | QI_id kopt when is_bool_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Bool"])]
     | QI_id kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])]
     | QI_const nc -> []
   in
@@ -193,24 +223,53 @@ let doc_quants quants =
   | [nc] -> kdoc ^^ comma ^^ space ^^ doc_nc nc
   | nc :: ncs -> kdoc ^^ comma ^^ space ^^ doc_nc (List.fold_left nc_and nc ncs)
 
+let doc_param_quants quants =
+  let doc_qi_kopt (QI_aux (qi_aux, _)) =
+    match qi_aux with
+    | QI_id kopt when is_nat_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Int"]
+    | QI_id kopt when is_typ_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Type"]
+    | QI_id kopt when is_bool_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Bool"]
+    | QI_id kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Order"]
+    | QI_const nc -> []
+  in
+  let qi_nc (QI_aux (qi_aux, _)) =
+    match qi_aux with
+    | QI_const nc -> [nc]
+    | _ -> []
+  in
+  let kdoc = separate (comma ^^ space) (List.concat (List.map doc_qi_kopt quants)) in
+  let ncs = List.concat (List.map qi_nc quants) in
+  match ncs with
+  | [] -> parens kdoc
+  | [nc] -> parens kdoc ^^ comma ^^ space ^^ doc_nc nc
+  | nc :: ncs -> parens kdoc ^^ comma ^^ space ^^ doc_nc (List.fold_left nc_and nc ncs)
 
-
-let doc_binding (TypQ_aux (tq_aux, _), typ) =
+let doc_binding ?(simple=false) ((TypQ_aux (tq_aux, _) as typq), typ) =
   match tq_aux with
-  | TypQ_no_forall -> doc_typ typ
-  | TypQ_tq [] -> doc_typ typ
+  | TypQ_no_forall -> doc_typ ~simple:simple typ
+  | TypQ_tq [] -> doc_typ ~simple:simple typ
   | TypQ_tq qs ->
-     string "forall" ^^ space ^^ doc_quants qs ^^ dot ^//^ doc_typ typ
+     if !opt_use_heuristics && String.length (string_of_typquant typq) > 60 then
+       let kopts, ncs = quant_split typq in
+       if ncs = [] then
+         string "forall" ^^ space ^^ separate_map space doc_kopt kopts ^^ dot
+         ^//^ doc_typ ~simple:simple typ
+       else
+         string "forall" ^^ space ^^ separate_map space doc_kopt kopts ^^ comma
+         ^//^ (separate_map (space ^^ string "&" ^^ space) doc_nc ncs ^^ dot
+               ^^ hardline ^^ doc_typ ~simple:simple typ)
+     else
+       string "forall" ^^ space ^^ doc_quants qs ^^ dot ^//^ doc_typ ~simple:simple typ
 
-let doc_typschm (TypSchm_aux (TypSchm_ts (typq, typ), _)) = doc_binding (typq, typ)
+let doc_typschm ?(simple=false) (TypSchm_aux (TypSchm_ts (typq, typ), _)) = doc_binding ~simple:simple (typq, typ)
 
 let doc_typschm_typ (TypSchm_aux (TypSchm_ts (TypQ_aux (tq_aux, _), typ), _)) = doc_typ typ
 
-let doc_typschm_quants (TypSchm_aux (TypSchm_ts (TypQ_aux (tq_aux, _), typ), _)) =
+let doc_typquant (TypQ_aux (tq_aux, _)) =
   match tq_aux with
   | TypQ_no_forall -> None
   | TypQ_tq [] -> None
-  | TypQ_tq qs -> Some (doc_quants qs)
+  | TypQ_tq qs -> Some (doc_param_quants qs)
 
 let doc_lit (L_aux(l,_)) =
   utf8string (match l with
@@ -226,7 +285,7 @@ let doc_lit (L_aux(l,_)) =
   | L_undef -> "undefined"
   | L_string s -> "\"" ^ String.escaped s ^ "\"")
 
-let rec doc_pat (P_aux (p_aux, _) as pat) =
+let rec doc_pat (P_aux (p_aux, (l, _)) as pat) =
   match p_aux with
   | P_id id -> doc_id id
   | P_or (pat1, pat2) -> parens (doc_pat pat1 ^^ string " | " ^^ doc_pat pat2)
@@ -237,14 +296,18 @@ let rec doc_pat (P_aux (p_aux, _) as pat) =
   (* P_var short form sugar *)
   | P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)) when Id.compare (id_of_kid kid) id == 0 ->
      doc_kid kid
-  | P_var (pat, tpat) -> separate space [doc_pat pat; string "as"; doc_typ_pat tpat]
+  | P_var (pat, tpat) -> parens (separate space [doc_pat pat; string "as"; doc_typ_pat tpat])
   | P_vector pats -> brackets (separate_map (comma ^^ space) doc_pat pats)
   | P_vector_concat pats -> separate_map (space ^^ string "@" ^^ space) doc_pat pats
   | P_wild -> string "_"
   | P_as (pat, id) -> parens (separate space [doc_pat pat; string "as"; doc_id id])
   | P_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_pat pats)
   | P_list pats -> string "[|" ^^ separate_map (comma ^^ space) doc_pat pats ^^ string "|]"
-  | _ -> string (string_of_pat pat)
+  | P_cons (hd_pat, tl_pat) -> separate space [doc_pat hd_pat; string "::"; doc_pat tl_pat]
+  | P_string_append [] -> string "\"\""
+  | P_string_append pats ->
+     parens (separate_map (string " ^ ") doc_pat pats)
+  | P_record _ -> raise (Reporting.err_unreachable l __POS__ "P_record passed to doc_pat")
 
 (* if_block_x is true if x should be printed like a block, i.e. with
    newlines. Blocks are automatically printed as blocks, so this
@@ -286,8 +349,8 @@ let fixities =
 let rec doc_exp (E_aux (e_aux, _) as exp) =
   match e_aux with
   | E_block [] -> string "()"
-  | E_block [exp] -> doc_exp exp
-  | E_block exps -> surround 2 0 lbrace (doc_block exps) rbrace
+  | E_block exps ->
+     group (lbrace ^^ nest 4 (hardline ^^ doc_block exps) ^^ hardline ^^ rbrace)
   | E_nondet exps -> assert false
   (* This is mostly for the -convert option *)
   | E_app_infix (x, id, y) when Id.compare (mk_id "quot") id == 0 ->
@@ -336,21 +399,16 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_assign (lexp, exp) ->
      separate space [doc_lexp lexp; equals; doc_exp exp]
   | E_for (id, exp1, exp2, exp3, order, exp4) ->
-     begin
-       let header =
-         string "foreach" ^^ space ^^
-           group (parens (separate (break 1)
-                                   [ doc_id id;
-                                     string "from " ^^ doc_atomic_exp exp1;
-                                     string "to " ^^ doc_atomic_exp exp2;
-                                     string "by " ^^ doc_atomic_exp exp3;
-                                     string "in " ^^ doc_ord order ]))
-       in
-       match exp4 with
-       | E_aux (E_block [_], _) -> header ^//^ doc_exp exp4
-       | E_aux (E_block _, _) -> header ^^ space ^^ doc_exp exp4
-       | _ -> header ^//^ doc_exp exp4
-     end
+     let header =
+       string "foreach" ^^ space ^^
+         group (parens (separate (break 1)
+                                 [ doc_id id;
+                                   string "from " ^^ doc_atomic_exp exp1;
+                                   string "to " ^^ doc_atomic_exp exp2;
+                                   string "by " ^^ doc_atomic_exp exp3;
+                                   string "in " ^^ doc_ord order ]))
+     in
+     header ^^ space ^^ doc_exp exp4
   (* Resugar an assert with an empty message *)
   | E_throw exp -> string "throw" ^^ parens (doc_exp exp)
   | E_try (exp, pexps) ->
@@ -404,7 +462,7 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; string ".."; doc_atomic_exp exp3; equals; doc_exp exp4])
   | E_internal_value v -> string (Value.string_of_value v |> Util.green |> Util.clear)
   | _ -> parens (doc_exp exp)
-and doc_fexps (FES_aux (FES_Fexps (fexps, _), _)) =
+and doc_fexps fexps =
   separate_map (comma ^^ space) doc_fexp fexps
 and doc_fexp (FE_aux (FE_Fexp (id, exp), _)) =
   separate space [doc_id id; equals; doc_exp exp]
@@ -451,13 +509,21 @@ let doc_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (pexp,_)), _)) =
 
 let doc_default (DT_aux (DT_order ord, _)) = separate space [string "default"; string "Order"; doc_ord ord]
 
-let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), _)) =
-  match funcls with
-  | [] -> failwith "Empty function list"
-  | _ ->
-     let sep = hardline ^^ string "and" ^^ space in
-     let clauses = separate_map sep doc_funcl funcls in
-     string "function" ^^ space ^^ clauses
+let doc_rec (Rec_aux (r,_)) =
+  match r with
+  | Rec_nonrec
+  | Rec_rec -> empty
+  | Rec_measure (pat,exp) -> braces (doc_pat pat ^^ string " => " ^^ doc_exp exp) ^^ space
+
+let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), annot)) =
+  docstring annot
+  ^^ match funcls with
+     | [] -> failwith "Empty function list"
+     | _ ->
+        let rec_pp = doc_rec r in
+        let sep = hardline ^^ string "and" ^^ space in
+        let clauses = separate_map sep doc_funcl funcls in
+        string "function" ^^ space ^^ rec_pp ^^ clauses
 
 let rec doc_mpat (MP_aux (mp_aux, _) as mpat) =
   match mp_aux with
@@ -512,38 +578,45 @@ let doc_field (typ, id) =
 
 let doc_union (Tu_aux (Tu_ty_id (typ, id), l)) = separate space [doc_id id; colon; doc_typ typ]
 
+let doc_typ_arg_kind (A_aux (aux, _)) =
+  match aux with
+  | A_nexp _ -> space ^^ string "->" ^^ space ^^string "Int"
+  | A_bool _ -> space ^^ string "->" ^^ space ^^ string "Bool"
+  | A_order  _ -> space ^^ string "->" ^^ space ^^ string "Order"
+  | A_typ _ -> empty
+
 let doc_typdef (TD_aux(td,_)) = match td with
-  | TD_abbrev (id, _, typschm) ->
+  | TD_abbrev (id, typq, typ_arg) ->
      begin
-       match doc_typschm_quants typschm with
+       match doc_typquant typq with
        | Some qdoc ->
-          doc_op equals (concat [string "type"; space; doc_id id; space; qdoc]) (doc_typschm_typ typschm)
+          doc_op equals (concat [string "type"; space; doc_id id; qdoc; doc_typ_arg_kind typ_arg]) (doc_typ_arg typ_arg)
        | None ->
-          doc_op equals (concat [string "type"; space; doc_id id]) (doc_typschm_typ typschm)
+          doc_op equals (concat [string "type"; space; doc_id id; doc_typ_arg_kind typ_arg]) (doc_typ_arg typ_arg)
      end
   | TD_enum (id, _, ids, _) ->
      separate space [string "enum"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
   | TD_record (id, _, TypQ_aux (TypQ_no_forall, _), fields, _) | TD_record (id, _, TypQ_aux (TypQ_tq [], _), fields, _) ->
      separate space [string "struct"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace]
   | TD_record (id, _, TypQ_aux (TypQ_tq qs, _), fields, _) ->
-     separate space [string "struct"; doc_id id; doc_quants qs; equals;
+     separate space [string "struct"; doc_id id; doc_param_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace]
   | TD_variant (id, _, TypQ_aux (TypQ_no_forall, _), unions, _) | TD_variant (id, _, TypQ_aux (TypQ_tq [], _), unions, _) ->
      separate space [string "union"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
   | TD_variant (id, _, TypQ_aux (TypQ_tq qs, _), unions, _) ->
-     separate space [string "union"; doc_id id; doc_quants qs; equals;
+     separate space [string "union"; doc_id id; doc_param_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
   | _ -> string "TYPEDEF"
 
 
-let doc_spec (VS_aux (v, annot)) =
+let doc_spec ?comment:(comment=false) (VS_aux (v, annot)) =
   let doc_extern ext =
     let docs = List.map (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\"")) ext in
     if docs = [] then empty else equals ^^ space ^^ braces (separate (comma ^^ space) docs)
   in
   match v with
   | VS_val_spec(ts,id,ext,is_cast) ->
-     docstring annot
+     if comment then docstring annot else empty
      ^^ string "val" ^^ space
      ^^ (if is_cast then (string "cast" ^^ space) else empty)
      ^^ doc_id id ^^ space
@@ -561,13 +634,18 @@ let doc_kind_def (KD_aux (KD_nabbrev (_, id, _, nexp), _)) =
 
 let rec doc_scattered (SD_aux (sd_aux, _)) =
   match sd_aux with
-  | SD_scattered_function (_, _, _, id) ->
+  | SD_function (_, _, _, id) ->
      string "scattered" ^^ space ^^ string "function" ^^ space ^^ doc_id id
-  | SD_scattered_funcl funcl ->
+  | SD_funcl funcl ->
      string "function" ^^ space ^^ string "clause" ^^ space ^^ doc_funcl funcl
-  | SD_scattered_end id ->
+  | SD_end id ->
      string "end" ^^ space ^^ doc_id id
-  | _ -> string "SCATTERED"
+  | SD_variant (id, _, TypQ_aux (TypQ_no_forall, _)) ->
+     string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id
+  | SD_variant (id, _, TypQ_aux (TypQ_tq quants, _)) ->
+     string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id ^^ doc_param_quants quants
+  | SD_unioncl (id, tu) ->
+     separate space [string "union clause"; doc_id id; equals; doc_union tu]
 
 let rec doc_def def = group (match def with
   | DEF_default df -> doc_default df
@@ -582,11 +660,11 @@ let rec doc_def def = group (match def with
      ^^ hardline ^^ string "}"
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
+  | DEF_pragma (pragma, arg, l) ->
+     string ("$" ^ pragma ^ " " ^ arg)
   | DEF_fixity (prec, n, id) ->
      fixities := Bindings.add id (prec, Big_int.to_int n) !fixities;
      separate space [doc_prec prec; doc_int n; doc_id id]
-  | DEF_constraint (id, kids, nc) ->
-     separate space [string "constraint"; doc_id id; parens (separate_map (comma ^^ space) doc_kid kids); equals; doc_nc nc]
   | DEF_overload (id, ids) ->
      separate space [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
   ) ^^ hardline

@@ -1,6 +1,6 @@
 default Order dec
 
-struct State ('a : Type) ('n : Int) = {
+struct State('a: Type, 'n: Int) = {
   N : vector('n, dec, 'a),
   Z : vector(1, dec, bit)
 }

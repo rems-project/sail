@@ -56,7 +56,6 @@ val convert_ast : Ast.order -> Parse_ast.defs -> unit Ast.defs
 val preprocess_ast : (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.defs -> Parse_ast.defs
 val check_ast: Type_check.Env.t -> unit Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
 val rewrite_ast: Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_undefined: bool -> Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_lem : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_coq : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_ocaml : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs

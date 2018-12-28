@@ -495,13 +495,13 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | _ -> fail ("Couldn't find id " ^ string_of_id id)
      end
 
-  | E_record (FES_aux (FES_Fexps (fexps, flag), fes_annot)) ->
+  | E_record fexps ->
      let evaluated, unevaluated = Util.take_drop is_value_fexp fexps in
      begin
        match unevaluated with
        | FE_aux (FE_Fexp (id, exp), fe_annot) :: fexps ->
           step exp >>= fun exp' ->
-          wrap (E_record (FES_aux (FES_Fexps (evaluated @ FE_aux (FE_Fexp (id, exp'), fe_annot) :: fexps, flag), fes_annot)))
+          wrap (E_record (evaluated @ FE_aux (FE_Fexp (id, exp'), fe_annot) :: fexps))
        | [] ->
           List.map value_of_fexp fexps
           |> List.fold_left (fun record (field, v) -> StringMap.add field v record) StringMap.empty
@@ -512,13 +512,13 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
 
   | E_record_update (exp, fexps) when not (is_value exp) ->
      step exp >>= fun exp' -> wrap (E_record_update (exp', fexps))
-  | E_record_update (record, FES_aux (FES_Fexps (fexps, flag), fes_annot)) ->
+  | E_record_update (record, fexps) ->
      let evaluated, unevaluated = Util.take_drop is_value_fexp fexps in
      begin
        match unevaluated with
        | FE_aux (FE_Fexp (id, exp), fe_annot) :: fexps ->
           step exp >>= fun exp' ->
-          wrap (E_record_update (record, FES_aux (FES_Fexps (evaluated @ FE_aux (FE_Fexp (id, exp'), fe_annot) :: fexps, flag), fes_annot)))
+          wrap (E_record_update (record, evaluated @ FE_aux (FE_Fexp (id, exp'), fe_annot) :: fexps))
        | [] ->
           List.map value_of_fexp fexps
           |> List.fold_left (fun record (field, v) -> StringMap.add field v record) (coerce_record (value_of_exp record))
@@ -539,7 +539,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      begin try
          let open Type_check in
          let lexp_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp lexp)) in
-         let exp' = E_aux (E_record_update (lexp_exp, FES_aux (FES_Fexps ([FE_aux (FE_Fexp (id, exp), ul)], false), ul)), ul) in
+         let exp' = E_aux (E_record_update (lexp_exp, [FE_aux (FE_Fexp (id, exp), ul)]), ul) in
          wrap (E_assign (lexp, exp'))
        with Failure s -> fail ("Failure: " ^ s)
      end
@@ -699,13 +699,13 @@ and pattern_match env (P_aux (p_aux, (l, _)) as pat) value =
         recursive call that has an empty_tannot we must not use the
         annotation in the whole vector_concat pattern. *)
      let open Type_check in
-     begin match destruct_vector (pat_env_of pat) (pat_typ_of pat) with
+     begin match destruct_vector (env_of_pat pat) (typ_of_pat pat) with
      | Some (Nexp_aux (Nexp_constant n, _), _, _) ->
         let init, rest = Util.take (Big_int.to_int n) (coerce_gv value), Util.drop (Big_int.to_int n) (coerce_gv value) in
         let init_match, init_bind = pattern_match env pat (V_vector init) in
         let rest_match, rest_bind = pattern_match env (P_aux (P_vector_concat pats, (l, empty_tannot))) (V_vector rest) in
         init_match && rest_match, Bindings.merge combine init_bind rest_bind
-     | _ -> failwith ("Bad vector annotation " ^ string_of_typ (Type_check.pat_typ_of pat))
+     | _ -> failwith ("Bad vector annotation " ^ string_of_typ (Type_check.typ_of_pat pat))
      end
   | P_tup [pat] -> pattern_match env pat value
   | P_tup pats | P_list pats ->
@@ -888,7 +888,7 @@ let rec eval_frame' = function
 let eval_frame frame =
   try eval_frame' frame with
   | Type_check.Type_error (l, err) ->
-     raise (Reporting_basic.err_typ l (Type_error.string_of_type_error err))
+     raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
 let default_effect_interp state eff =
   let lstate, gstate = state in
