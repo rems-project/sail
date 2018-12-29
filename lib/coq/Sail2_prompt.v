@@ -86,6 +86,27 @@ red.
 omega.
 Defined.
 
+(* A version of well-foundedness of measures with a guard to ensure that
+   definitions can be reduced without inspecting proofs, based on a coq-club
+   thread featuring Barras, Gonthier and Gregoire, see
+     https://sympa.inria.fr/sympa/arc/coq-club/2007-07/msg00014.html *)
+
+Fixpoint pos_guard_wf {A:Type} {R:A -> A -> Prop} (p:positive) : well_founded R -> well_founded R :=
+ match p with
+ | xH => fun wfR x => Acc_intro x (fun y _ => wfR y)
+ | xO p' => fun wfR x => let F := pos_guard_wf p' in Acc_intro x (fun y _ => F (F 
+wfR) y)
+ | xI p' => fun wfR x => let F := pos_guard_wf p' in Acc_intro x (fun y _ => F (F 
+wfR) y)
+ end.
+
+Definition Zwf_guarded (z:Z) : Acc (Zwf 0) z :=
+  match z with
+  | Zpos p => pos_guard_wf p (Zwf_well_founded _) _
+  | _ => Zwf_well_founded _ _
+  end.
+
+
 (*val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
                 ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
 let rec whileM vars cond body =

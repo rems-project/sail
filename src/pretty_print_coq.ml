@@ -1296,7 +1296,7 @@ let doc_exp, doc_let =
                                  [parens (string "_limit_reduces _acc")]
                 else match f with
                      | Id_aux (Id x,_) when is_prefix "#rec#" x ->
-                        main_call @ [parens (string "Zwf_well_founded _ _")]
+                        main_call @ [parens (string "Zwf_guarded _")]
                      | _ ->  main_call
               in hang 2 (flow (break 1) all) in
 
