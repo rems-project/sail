@@ -990,6 +990,8 @@ def :: 'DEF_' ::=
     {{ com default kind and type assumptions }}
   | scattered_def                                      :: :: scattered
     {{ com scattered function and type definition }}
+  | 'termination_measure' id pat = exp                 :: :: measure
+    {{ com separate termination measure declaration }}
   | dec_spec                                           :: :: reg_dec
     {{ com register declaration }}
   | fundef1 .. fundefn                                 :: I :: internal_mutrec

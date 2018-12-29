@@ -183,7 +183,7 @@ let rec desugar_rchain chain s e =
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Constant Constraint Throw Try Catch Exit Bitfield
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
-%token Repeat Until While Do Mutual Var Ref Configuration
+%token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure
 
 %nonassoc Then
 %nonassoc Else
@@ -1430,6 +1430,8 @@ def:
     { DEF_internal_mutrec $3 }
   | Pragma
     { DEF_pragma (fst $1, snd $1, loc $startpos $endpos) }
+  | TerminationMeasure id pat Eq exp
+    { DEF_measure ($2, $3, $5) }
 
 defs_list:
   | def

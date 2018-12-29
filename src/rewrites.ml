@@ -4763,6 +4763,35 @@ let minimise_recursive_functions (Defs defs) =
     | d -> d
   in Defs (List.map rewrite_def defs)
 
+let move_termination_measures (Defs defs) =
+  let scan_for id defs =
+    let rec aux = function
+      | [] -> None
+      | (DEF_measure (id',pat,exp))::t ->
+         if Id.compare id id' == 0 then Some (pat,exp) else aux t
+      | (DEF_fundef (FD_aux (FD_function (_,_,_,FCL_aux (FCL_Funcl (id',_),_)::_),_)))::_
+      | (DEF_spec (VS_aux (VS_val_spec (_,id',_,_),_))::_)
+        when Id.compare id id' == 0 -> None
+      | _::t -> aux t
+    in aux defs
+  in
+  let rec aux acc = function
+    | [] -> List.rev acc
+    | (DEF_fundef (FD_aux (FD_function (r,ty,e,fs),(l,f_ann))) as d)::t -> begin
+       let id = match fs with
+         | [] -> assert false (* TODO *)
+         | (FCL_aux (FCL_Funcl (id,_),_))::_ -> id
+       in
+       match scan_for id t with
+       | None -> aux (d::acc) t
+       | Some (pat,exp) ->
+          let r = Rec_aux (Rec_measure (pat,exp), Generated l) in
+          aux (DEF_fundef (FD_aux (FD_function (r,ty,e,fs),(l,f_ann)))::acc) t
+      end
+    | (DEF_measure _)::t -> aux acc t
+    | h::t -> aux (h::acc) t
+  in Defs (aux [] defs)
+
 (* Make recursive functions with a measure use the measure as an
    explicit recursion limit, enforced by an assertion. *)
 let rewrite_explicit_measure (Defs defs) =
@@ -4881,6 +4910,7 @@ let rewrite_explicit_measure (Defs defs) =
              | [wpat] -> wpat
              | _ -> P_aux (P_tup wpats,(loc,empty_tannot))
            in
+           let measure_exp = E_aux (E_cast (int_typ, measure_exp),(loc,empty_tannot)) in
            let wbody = E_aux (E_app (rec_id id,wexps@[measure_exp]),(loc,empty_tannot)) in
            let wrapper =
              FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (wpat,wbody),(loc,empty_tannot))),(loc,empty_tannot))
@@ -5008,6 +5038,7 @@ let rewrite_defs_coq = [
   ("toplevel_string_append", rewrite_defs_toplevel_string_append);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
+  ("move_termination_measures", move_termination_measures);
   ("rewrite_undefined", rewrite_undefined_if_gen true);
   ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("remove_not_pats", rewrite_defs_not_pats);
