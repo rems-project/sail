@@ -5038,7 +5038,6 @@ let rewrite_defs_coq = [
   ("toplevel_string_append", rewrite_defs_toplevel_string_append);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
-  ("move_termination_measures", move_termination_measures);
   ("rewrite_undefined", rewrite_undefined_if_gen true);
   ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("remove_not_pats", rewrite_defs_not_pats);
@@ -5060,6 +5059,7 @@ let rewrite_defs_coq = [
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   (* ("constraint", rewrite_constraint); *)
   (* ("remove_assert", rewrite_defs_remove_assert); *)
+  ("move_termination_measures", move_termination_measures);
   ("top_sort_defs", top_sort_defs);
   ("trivial_sizeof", rewrite_trivial_sizeof);
   ("sizeof", rewrite_sizeof);
