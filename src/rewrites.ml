@@ -5065,6 +5065,9 @@ let rewrite_defs_coq = [
   ("sizeof", rewrite_sizeof);
   ("early_return", rewrite_defs_early_return);
   ("make_cases_exhaustive", MakeExhaustive.rewrite);
+  (* merge funcls before adding the measure argument so that it doesn't
+     disappear into an internal pattern match *)
+  ("merge function clauses", merge_funcls);
   ("rewrite_explicit_measure", rewrite_explicit_measure);
   ("recheck_defs_without_effects", recheck_defs_without_effects);
   ("fix_val_specs", rewrite_fix_val_specs);
@@ -5074,7 +5077,6 @@ let rewrite_defs_coq = [
   ("internal_lets", rewrite_defs_internal_lets);
   ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
   ("remove_superfluous_returns", rewrite_defs_remove_superfluous_returns);
-  ("merge function clauses", merge_funcls);
   ("recheck_defs", recheck_defs)
   ]
 
