@@ -79,7 +79,6 @@ and exp_of_value =
      mk_exp (E_tuple (List.map exp_of_value vs))
   | V_unit -> mk_lit_exp L_unit
   | V_attempted_read str ->
-     prerr_endline ("constant_fold folding away V_attempted_read " ^ str);
      mk_exp (E_id (mk_id str))
   | _ -> failwith "No expression for value"
 
@@ -132,7 +131,6 @@ let rec run frame =
      (* return a dummy value to read_reg requests which we handle above
         if an expression finally evals to it, but the interpreter
         will fail if it tries to actually use. See value.ml *)
-     prerr_endline ("constant_fold returned V_attempted_read " ^ reg ^ "\n");
      run (cont (Value.V_attempted_read reg) st)
   | Interpreter.Effect_request _ ->
      assert false (* effectful, raise exception to abort constant folding *)
