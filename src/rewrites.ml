@@ -4835,8 +4835,8 @@ let rewrite_explicit_measure (Defs defs) =
     | exception Not_found -> [vs]
   in
   (* Add extra argument and assertion to each funcl, and rewrite recursive calls *)
-  let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),ann) as fcl) =
-    let loc = Parse_ast.Generated (fst ann) in
+  let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),fcl_ann) as fcl) =
+    let loc = Parse_ast.Generated (fst fcl_ann) in
     let P_aux (pat,pann),guard,body,ann = destruct_pexp pexp in
     let extra_pat = P_aux (P_id limit,(loc,empty_tannot)) in
     let pat = match pat with
@@ -4868,7 +4868,7 @@ let rewrite_explicit_measure (Defs defs) =
         } body
     in
     let body = E_aux (E_block [assert_exp; body],(loc,empty_tannot)) in
-    FCL_aux (FCL_Funcl (rec_id id, construct_pexp (P_aux (pat,pann),guard,body,ann)),ann)
+    FCL_aux (FCL_Funcl (rec_id id, construct_pexp (P_aux (pat,pann),guard,body,ann)),fcl_ann)
   in
   let rewrite_function (FD_aux (FD_function (r,t,e,fcls),ann) as fd) =
     let loc = Parse_ast.Generated (fst ann) in
@@ -5067,7 +5067,7 @@ let rewrite_defs_coq = [
   (* merge funcls before adding the measure argument so that it doesn't
      disappear into an internal pattern match *)
   ("merge function clauses", merge_funcls);
-  ("recheck_defs", recheck_defs);
+  ("recheck_defs_without_effects", recheck_defs_without_effects);
   ("make_cases_exhaustive", MakeExhaustive.rewrite);
   ("rewrite_explicit_measure", rewrite_explicit_measure);
   ("recheck_defs_without_effects", recheck_defs_without_effects);
