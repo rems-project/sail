@@ -44,6 +44,9 @@ inductive_set T :: "(('rv, 'a, 'e) monad \<times> 'rv event \<times> ('rv, 'a, '
 | Choose: "((Choose descr k), E_choose descr v, k v) \<in> T"
 | Print: "((Print msg k), E_print msg, k) \<in> T"
 
+lemma emitEvent_iff_T: "emitEvent m e = Some m' \<longleftrightarrow> (m, e, m') \<in> T"
+  by (cases e) (auto simp: emitEvent_def elim: T.cases intro: T.intros split: monad.splits)
+
 inductive_set Traces :: "(('rv, 'a, 'e) monad \<times> 'rv event list \<times> ('rv, 'a, 'e) monad) set" where
   Nil: "(s, [], s) \<in> Traces"
 | Step: "\<lbrakk>(s, e, s'') \<in> T; (s'', t, s') \<in> Traces\<rbrakk> \<Longrightarrow> (s, e # t, s') \<in> Traces"
@@ -57,6 +60,12 @@ lemmas Traces_ConsI = T.intros[THEN Step, rotated]
 
 inductive_cases Traces_NilE[elim]: "(s, [], s') \<in> Traces"
 inductive_cases Traces_ConsE[elim]: "(s, e # t, s') \<in> Traces"
+
+lemma runTrace_iff_Traces: "runTrace t m = Some m' \<longleftrightarrow> (m, t, m') \<in> Traces"
+  by (induction t m rule: runTrace.induct; fastforce simp: bind_eq_Some_conv emitEvent_iff_T)
+
+lemma hasTrace_iff_Traces_final: "hasTrace t m \<longleftrightarrow> (\<exists>m'. (m, t, m') \<in> Traces \<and> final m')"
+  by (auto simp: hasTrace_def runTrace_iff_Traces[symmetric] split: option.splits)
 
 lemma Traces_cases:
   fixes m :: "('rv, 'a, 'e) monad"
@@ -91,10 +100,29 @@ qed
 abbreviation Run :: "('rv, 'a, 'e) monad \<Rightarrow> 'rv event list \<Rightarrow> 'a \<Rightarrow> bool"
   where "Run s t a \<equiv> (s, t, Done a) \<in> Traces"
 
-lemma Run_appendI:
+lemma final_cases:
+  assumes "final m"
+  obtains (Done) a where "m = Done a" | (Fail) f where "m = Fail f" | (Ex) e where "m = Exception e"
+  using assms by (cases m) (auto simp: final_def)
+
+lemma hasTraces_elim:
+  assumes "hasTrace t m"
+  obtains m' where "(m, t, m') \<in> Traces" and "final m'"
+  using assms
+  unfolding hasTrace_iff_Traces_final
+  by blast
+
+lemma hasTrace_cases:
+  assumes "hasTrace t m"
+  obtains (Run) a where "Run m t a"
+  | (Fail) f where "(m, t, Fail f) \<in> Traces"
+  | (Ex) e where "(m, t, Exception e) \<in> Traces"
+  using assms by (elim hasTraces_elim final_cases) auto
+
+lemma Traces_appendI:
   assumes "(s, t1, s') \<in> Traces"
-    and "Run s' t2 a"
-  shows "Run s (t1 @ t2) a"
+    and "(s', t2, s'') \<in> Traces"
+  shows "(s, t1 @ t2, s'') \<in> Traces"
 proof (use assms in \<open>induction t1 arbitrary: s\<close>)
   case (Cons e t1)
   then show ?case by (elim Traces_ConsE) auto
@@ -107,19 +135,187 @@ lemma bind_DoneE:
 
 lemma bind_T_cases:
   assumes "(bind m f, e, s') \<in> T"
-  obtains (Done) a where "m = Done a"
+  obtains (Done) a where "m = Done a" and "(f a, e, s') \<in> T"
   | (Bind) m' where "s' = bind m' f" and "(m, e, m') \<in> T"
-  using assms by (cases; blast elim: bind.elims)
+  using assms by (cases; fastforce elim: bind.elims)
 
-lemma Run_bindI:
+lemma Traces_bindI:
   fixes m :: "('r, 'a, 'e) monad"
   assumes "Run m t1 a1"
-    and "Run (f a1) t2 a2"
-  shows "Run (m \<bind> f) (t1 @ t2) a2"
+    and "(f a1, t2, m') \<in> Traces"
+  shows "(m \<bind> f, t1 @ t2, m') \<in> Traces"
 proof (use assms in \<open>induction m t1 "Done a1 :: ('r, 'a, 'e) monad" rule: Traces.induct\<close>)
   case (Step s e s'' t)
   then show ?case by (elim T.cases) auto
 qed auto
+
+lemma Run_DoneE:
+  assumes "Run (Done a) t a'"
+  obtains "t = []" and "a' = a"
+  using assms by (auto elim: Traces.cases T.cases)
+
+lemma Run_Done_iff_Nil[simp]: "Run (Done a) t a' \<longleftrightarrow> t = [] \<and> a' = a"
+  by (auto elim: Run_DoneE)
+
+lemma Run_Nil_iff_Done: "Run m [] a \<longleftrightarrow> m = Done a"
+  by auto
+
+lemma Traces_Nil_iff: "(m, [], m') \<in> Traces \<longleftrightarrow> m' = m"
+  by auto
+
+lemma bind_Traces_cases:
+  assumes "(m \<bind> f, t, m') \<in> Traces"
+  obtains (Left) m'' where "(m, t, m'') \<in> Traces" and "m' = m'' \<bind> f"
+  | (Bind) tm am tf where "t = tm @ tf" and "Run m tm am" and "(f am, tf, m') \<in> Traces"
+proof (use assms in \<open>induction "bind m f" t m' arbitrary: m rule: Traces.induct\<close>)
+  case Nil
+  then show ?case by (auto simp: Traces_Nil_iff)
+next
+  case (Step e s'' t s')
+  note IH = Step(3)
+  note Left' = Step(4)
+  note Bind' = Step(5)
+  show thesis
+  proof (use \<open>(m \<bind> f, e, s'') \<in> T\<close> in \<open>cases rule: bind_T_cases\<close>)
+    case (Done a)
+    then show ?thesis using \<open>(s'', t, s') \<in> Traces\<close> Step(5)[of "[]" "e # t" a] by auto
+  next
+    case (Bind m')
+    show ?thesis
+    proof (rule IH)
+      show "s'' = m' \<bind> f" using Bind by blast
+    next
+      fix m''
+      assume "(m', t, m'') \<in> Traces" and "s' = m'' \<bind> f"
+      then show thesis using \<open>(m, e, m') \<in> T\<close> Left'[of m''] by auto
+    next
+      fix tm tf am
+      assume "t = tm @ tf" and "Run m' tm am" and "(f am, tf, s') \<in> Traces"
+      then show thesis using \<open>(m, e, m') \<in> T\<close> Bind'[of "e # tm" tf am] by auto
+    qed
+  qed
+qed
+
+lemma final_bind_cases:
+  assumes "final (m \<bind> f)"
+  obtains (Done) a where "m = Done a" and "final (f a)"
+  | (Fail) msg where "m = Fail msg"
+  | (Ex) e where "m = Exception e"
+  using assms by (cases m) (auto simp: final_def)
+
+lemma hasFailure_iff_Traces_Fail: "hasFailure t m \<longleftrightarrow> (\<exists>msg. (m, t, Fail msg) \<in> Traces)"
+  by (auto simp: hasFailure_def runTrace_iff_Traces[symmetric] split: option.splits monad.splits)
+
+lemma hasException_iff_Traces_Exception: "hasException t m \<longleftrightarrow> (\<exists>e. (m, t, Exception e) \<in> Traces)"
+  by (auto simp: hasException_def runTrace_iff_Traces[symmetric] split: option.splits monad.splits)
+
+lemma hasTrace_bind_cases:
+  assumes "hasTrace t (m \<bind> f)"
+  obtains (Bind) tm am tf where "t = tm @ tf" and "Run m tm am" and "hasTrace tf (f am)"
+  | (Fail) "hasFailure t m"
+  | (Ex) "hasException t m"
+proof -
+  from assms obtain m' where t: "(m \<bind> f, t, m') \<in> Traces" and m': "final m'"
+    by (auto simp: hasTrace_iff_Traces_final)
+  note [simp] = hasTrace_iff_Traces_final hasFailure_iff_Traces_Fail hasException_iff_Traces_Exception
+  from t show thesis
+  proof (cases rule: bind_Traces_cases)
+    case (Left m'')
+    then show ?thesis
+      using m' Fail Ex Bind[of t "[]"]
+      by (fastforce elim!: final_bind_cases)
+  next
+    case (Bind tm am tf)
+    then show ?thesis
+      using m' that
+      by fastforce
+  qed
+qed
+
+lemma try_catch_T_cases:
+  assumes "(try_catch m h, e, m') \<in> T"
+  obtains (NoEx) m'' where "(m, e, m'') \<in> T" and "m' = try_catch m'' h"
+  | (Ex) ex where "m = Exception ex" and "(h ex, e, m') \<in> T"
+  using assms
+  by (cases m) (auto elim!: T.cases)
+
+lemma try_catch_Traces_cases:
+  assumes "(try_catch m h, t, mtc) \<in> Traces"
+  obtains (NoEx) m' where "(m, t, m') \<in> Traces" and "mtc = try_catch m' h"
+  | (Ex) tm ex th where "(m, tm, Exception ex) \<in> Traces" and "(h ex, th, mtc) \<in> Traces" and "t = tm @ th"
+proof (use assms in \<open>induction "try_catch m h" t mtc arbitrary: m rule: Traces.induct\<close>)
+  case Nil
+  then show ?case by auto
+next
+  case (Step e mtc' t mtc)
+  note e = \<open>(try_catch m h, e, mtc') \<in> T\<close>
+  note t = \<open>(mtc', t, mtc) \<in> Traces\<close>
+  note IH = Step(3)
+  note NoEx_ConsE = Step(4)
+  note Ex_ConsE = Step(5)
+  show ?case
+  proof (use e in \<open>cases rule: try_catch_T_cases\<close>)
+    case (NoEx m1)
+    show ?thesis
+    proof (rule IH)
+      show "mtc' = try_catch m1 h" using NoEx by auto
+    next
+      fix m'
+      assume "(m1, t, m') \<in> Traces" and "mtc = try_catch m' h"
+      then show ?thesis
+        using NoEx NoEx_ConsE[of m']
+        by auto
+    next
+      fix tm ex th
+      assume "(m1, tm, Exception ex) \<in> Traces" and "(h ex, th, mtc) \<in> Traces" and "t = tm @ th"
+      then show ?thesis
+        using NoEx Ex_ConsE[of "e # tm" ex th]
+        by auto
+    qed
+  next
+    case (Ex ex)
+    then show ?thesis
+      using t Ex_ConsE[of "[]" ex "e # t"]
+      by auto
+  qed
+qed
+
+lemma Done_Traces_iff[simp]: "(Done a, t, m') \<in> Traces \<longleftrightarrow> t = [] \<and> m' = Done a"
+  by (auto elim: Traces_cases)
+
+lemma Fail_Traces_iff[simp]: "(Fail msg, t, m') \<in> Traces \<longleftrightarrow> t = [] \<and> m' = Fail msg"
+  by (auto elim: Traces_cases)
+
+lemma Exception_Traces_iff[simp]: "(Exception e, t, m') \<in> Traces \<longleftrightarrow> t = [] \<and> m' = Exception e"
+  by (auto elim: Traces_cases)
+
+lemma Read_reg_TracesE:
+  assumes "(Read_reg r k, t, m') \<in> Traces"
+  obtains (Nil) "t = []" and "m' = Read_reg r k"
+  | (Cons) v t' where "t = E_read_reg r v # t'" and "(k v, t', m') \<in> Traces"
+  using assms
+  by (auto elim: Traces_cases)
+
+lemma Write_reg_TracesE:
+  assumes "(Write_reg r v k, t, m') \<in> Traces"
+  obtains (Nil) "t = []" and "m' = Write_reg r v k"
+  | (Cons) t' where "t = E_write_reg r v # t'" and "(k, t', m') \<in> Traces"
+  using assms
+  by (auto elim: Traces_cases)
+
+lemma Write_ea_TracesE:
+  assumes "(Write_ea wk addr sz k, t, m') \<in> Traces"
+  obtains (Nil) "t = []" and "m' = Write_ea wk addr sz k"
+  | (Cons) t' where "t = E_write_ea wk addr sz # t'" and "(k, t', m') \<in> Traces"
+  using assms
+  by (auto elim: Traces_cases)
+
+lemma Write_memt_TracesE:
+  assumes "(Write_memt wk addr sz v tag k, t, m') \<in> Traces"
+  obtains (Nil) "t = []" and "m' = Write_memt wk addr sz v tag k"
+  | (Cons) t' r where "t = E_write_memt wk addr sz v tag r # t'" and "(k r, t', m') \<in> Traces"
+  using assms
+  by (auto elim: Traces_cases)
 
 lemma Run_bindE:
   fixes m :: "('rv, 'b, 'e) monad" and a :: 'a
@@ -144,14 +340,6 @@ next
     qed
   qed
 qed
-
-lemma Run_DoneE:
-  assumes "Run (Done a) t a'"
-  obtains "t = []" and "a' = a"
-  using assms by (auto elim: Traces.cases T.cases)
-
-lemma Run_Done_iff_Nil[simp]: "Run (Done a) t a' \<longleftrightarrow> t = [] \<and> a' = a"
-  by (auto elim: Run_DoneE)
 
 lemma Run_bindE_ignore_trace:
   assumes "Run (m \<bind> f) t a"

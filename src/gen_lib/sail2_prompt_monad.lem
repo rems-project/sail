@@ -272,6 +272,8 @@ val emitEvent : forall 'regval 'a 'e. Eq 'regval => monad 'regval 'a 'e -> event
 let emitEvent m e = match (e, m) with
   | (E_read_mem rk a sz v, Read_mem rk' a' sz' k) ->
      if rk' = rk && a' = a && sz' = sz then Just (k v) else Nothing
+  | (E_read_memt rk a sz vt, Read_memt rk' a' sz' k) ->
+     if rk' = rk && a' = a && sz' = sz then Just (k vt) else Nothing
   | (E_write_mem wk a sz v r, Write_mem wk' a' sz' v' k) ->
      if wk' = wk && a' = a && sz' = sz && v' = v then Just (k r) else Nothing
   | (E_write_memt wk a sz v tag r, Write_memt wk' a' sz' v' tag' k) ->
