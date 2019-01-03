@@ -72,7 +72,7 @@ let format_code_single fname lnum cnum_from cnum_to contents ppf =
   try
     let in_chan = open_in fname in
     begin
-      try format_code_single' fname in_chan lnum cnum_from cnum_to contents ppf
+      try format_code_single' fname in_chan lnum cnum_from cnum_to contents ppf; close_in in_chan
       with
       | _ -> close_in_noerr in_chan; ()
     end
@@ -83,7 +83,7 @@ let format_code_double fname lnum_from cnum_from lnum_to cnum_to contents ppf =
   try
     let in_chan = open_in fname in
     begin
-      try format_code_double' fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf
+      try format_code_double' fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf; close_in in_chan
       with
       | _ -> close_in_noerr in_chan; ()
     end
