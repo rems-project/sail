@@ -163,7 +163,6 @@ let kw_table =
      ("do",                      (fun _ -> Do));
      ("mutual",                  (fun _ -> Mutual));
      ("bitfield",                (fun _ -> Bitfield));
-     ("where",                   (fun _ -> Where));
 
      ("barr",                    (fun x -> Barr));
      ("depend",                  (fun x -> Depend));

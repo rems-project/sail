@@ -184,6 +184,8 @@ module Env : sig
      old one. *)
   val fresh_kid : ?kid:kid -> t -> kid
 
+  val expand_constraint_synonyms : t -> n_constraint -> n_constraint
+
   val expand_synonyms : t -> typ -> typ
 
   (** Expand type synonyms and remove register annotations (i.e. register<t> -> t)) *)

@@ -261,17 +261,28 @@ let options = Arg.align ([
     " print version");
 ] )
 
+let version =
+  let open Manifest in
+  let default = Printf.sprintf "Sail %s @ %s" branch commit in
+  (* version is parsed from the output of git describe *)
+  match String.split_on_char '-' version with
+  | [vnum; _; _] ->
+     (try
+        let vnum = float_of_string vnum +. 2.0 in
+        Printf.sprintf "Sail %.1f (%s @ %s)" vnum branch commit
+      with
+      | Failure _ -> default)
+  | _ -> default
+
 let usage_msg =
-    ("Sail 2.0\n"
-     ^ "usage: sail <options> <file1.sail> ... <fileN.sail>\n"
-    )
+  version
+  ^ "\nusage: sail <options> <file1.sail> ... <fileN.sail>\n"
 
 let _ =
   Arg.parse options
     (fun s ->
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg
-
 
 let load_files type_envs files =
   if !opt_memo_z3 then Constraint.load_digests () else ();
@@ -344,7 +355,6 @@ let main() =
       | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast, !opt_ocaml_generators)
     in
 
-    (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
     begin
       (if !(Interactive.opt_interactive)
        then

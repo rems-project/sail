@@ -258,6 +258,7 @@ and typ_arg_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
   | A_nexp n -> KidSet.empty
   | A_typ typ -> typ_frees ~exs:exs typ
   | A_order ord -> KidSet.empty
+  | A_bool _ -> KidSet.empty
 
 let rec typ_int_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
@@ -275,6 +276,7 @@ and typ_arg_int_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
   | A_nexp n -> KidSet.diff (tyvars_of_nexp n) exs
   | A_typ typ -> typ_int_frees ~exs:exs typ
   | A_order ord -> KidSet.empty
+  | A_bool _ -> KidSet.empty
 
 let specialize_id_valspec instantiations id ast =
   match split_defs (is_valspec id) ast with

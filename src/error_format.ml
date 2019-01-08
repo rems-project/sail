@@ -114,18 +114,18 @@ type message =
 
 let bullet = Util.(clear (blue "*"))
 
-let rec format_message msg =
+let rec format_message msg ppf =
   match msg with
   | Location (l, msg) ->
-     format_loc l (format_message msg)
+     format_loc l (format_message msg) ppf
   | Line str ->
-     format_endline str
+     format_endline str ppf
   | Seq messages ->
-     fun ppf -> List.iter (fun msg -> format_message msg ppf) messages
+     List.iter (fun msg -> format_message msg ppf) messages
   | List list ->
      let format_list_item ppf (header, msg) =
        format_endline (Util.(clear (blue "*")) ^ " " ^ header) ppf;
        format_message msg { ppf with indent = ppf.indent ^ "   " }
      in
-     fun ppf -> List.iter (format_list_item ppf) list
-  | With (f, msg) -> fun ppf -> format_message msg (f ppf)
+     List.iter (format_list_item ppf) list
+  | With (f, msg) -> format_message msg (f ppf)

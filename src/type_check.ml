@@ -1076,7 +1076,7 @@ end = struct
 
   let add_constraint constr env =
     wf_constraint env constr;
-    let (NC_aux (nc_aux, l) as constr) = expand_constraint_synonyms env constr in
+    let (NC_aux (nc_aux, l) as constr) = constraint_simp (expand_constraint_synonyms env constr) in
     match nc_aux with
     | NC_true -> env
     | _ ->

@@ -2274,25 +2274,29 @@ let rewrite_fix_val_specs (Defs defs) =
 
 (* Turn constraints into numeric expressions with sizeof *)
 let rewrite_constraint =
-  let rec rewrite_nc (NC_aux (nc_aux, l)) = mk_exp (rewrite_nc_aux nc_aux)
-  and rewrite_nc_aux = function
+  let rec rewrite_nc env (NC_aux (nc_aux, l)) = mk_exp (rewrite_nc_aux l env nc_aux)
+  and rewrite_nc_aux l env = function
     | NC_bounded_ge (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">=", mk_exp (E_sizeof n2))
     | NC_bounded_le (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "<=", mk_exp (E_sizeof n2))
     | NC_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "==", mk_exp (E_sizeof n2))
     | NC_not_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "!=", mk_exp (E_sizeof n2))
-    | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc nc1, mk_id "&", rewrite_nc nc2)
-    | NC_or (nc1, nc2) -> E_app_infix (rewrite_nc nc1, mk_id "|", rewrite_nc nc2)
+    | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "&", rewrite_nc env nc2)
+    | NC_or (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "|", rewrite_nc env nc2)
     | NC_false -> E_lit (mk_lit L_false)
     | NC_true -> E_lit (mk_lit L_true)
     | NC_set (kid, []) -> E_lit (mk_lit (L_false))
     | NC_set (kid, int :: ints) ->
        let kid_eq kid int = nc_eq (nvar kid) (nconstant int) in
-       unaux_exp (rewrite_nc (List.fold_left (fun nc int -> nc_or nc (kid_eq kid int)) (kid_eq kid int) ints))
+       unaux_exp (rewrite_nc env (List.fold_left (fun nc int -> nc_or nc (kid_eq kid int)) (kid_eq kid int) ints))
+    | NC_app (f, args) ->
+       unaux_exp (rewrite_nc env (Env.expand_constraint_synonyms env (mk_nc (NC_app (f, args)))))
+    | NC_var v ->
+       Reporting.unreachable l __POS__ "Cannot rewrite this constraint"
   in
   let rewrite_e_aux (E_aux (e_aux, _) as exp) =
     match e_aux with
     | E_constraint nc ->
-       check_exp (env_of exp) (rewrite_nc nc) bool_typ
+       check_exp (env_of exp) (rewrite_nc (env_of exp) nc) bool_typ
     | _ -> exp
   in
 

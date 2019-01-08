@@ -151,21 +151,28 @@ let rec string_of_type_error err =
   Buffer.contents b
 
 let rec collapse_errors = function
-  | (Err_no_overloading (_, (err :: errs)) as no_collapse) ->
-      let err = collapse_errors (snd err) in
-      let errs = List.map (fun (_, err) -> collapse_errors err) errs in
-      let fold_equal msg err =
-        match msg, err with
-        | Some msg, Err_no_overloading _ -> Some msg
-        | Some msg, Err_other _ -> Some msg
-        | Some msg, Err_no_casts _ -> Some msg
-        | Some msg, err when msg = string_of_type_error err -> Some msg
-        | _, _ -> None
-      in
-      begin match List.fold_left fold_equal (Some (string_of_type_error err)) errs with
-      | Some _ -> err
-      | None -> no_collapse
-      end
+  | (Err_no_overloading (_, errs) as no_collapse) ->
+     let errs = List.map (fun (_, err) -> collapse_errors err) errs in
+     let interesting = function
+       | Err_other _ -> false
+       | Err_no_casts _ -> false
+       | _ -> true
+     in
+     begin match List.filter interesting errs with
+     | err :: errs ->
+        let fold_equal msg err =
+          match msg, err with
+          | Some msg, Err_no_overloading _ -> Some msg
+          | Some msg, Err_no_casts _ -> Some msg
+          | Some msg, err when msg = string_of_type_error err -> Some msg
+          | _, _ -> None
+        in
+        begin match List.fold_left fold_equal (Some (string_of_type_error err)) errs with
+        | Some _ -> err
+        | None -> no_collapse
+        end
+     | [] -> no_collapse
+     end
   | Err_because (err1, l, err2) as no_collapse ->
      let err1 = collapse_errors err1 in
      let err2 = collapse_errors err2 in

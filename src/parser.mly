@@ -177,7 +177,7 @@ let rec desugar_rchain chain s e =
 
 /*Terminals with no content*/
 
-%token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op Where
+%token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield
