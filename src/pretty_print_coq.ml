@@ -239,9 +239,9 @@ let doc_nexp ctx ?(skip_vars=KidSet.empty) nexp =
   and app (Nexp_aux (n,l) as nexp) =
     match n with
     | Nexp_app (Id_aux (Id "div",_), [n1;n2])
-        -> separate space [string "Z.quot"; atomic n1; atomic n2]
+        -> separate space [string "ZEuclid.div"; atomic n1; atomic n2]
     | Nexp_app (Id_aux (Id "mod",_), [n1;n2])
-        -> separate space [string "Z.rem"; atomic n1; atomic n2]
+        -> separate space [string "ZEuclid.modulo"; atomic n1; atomic n2]
     | Nexp_app (Id_aux (Id "abs_atom",_), [n1])
         -> separate space [string "Z.abs"; atomic n1]
     | _ -> atomic nexp
