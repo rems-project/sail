@@ -9,6 +9,7 @@ Require Export List.
 Require Export Sumbool.
 Require Export DecidableClass.
 Require Import Eqdep_dec.
+Require Export Zeuclid.
 Import ListNotations.
 
 Open Scope Z.
