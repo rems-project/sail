@@ -182,6 +182,7 @@ let kw_table =
      ("nondet",                  (fun x -> Nondet));
      ("escape",                  (fun x -> Escape));
      ("configuration",           (fun _ -> Configuration));
+     ("termination_measure",     (fun _ -> TerminationMeasure));
    ]
 
 

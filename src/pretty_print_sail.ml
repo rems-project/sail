@@ -662,6 +662,9 @@ let rec doc_def def = group (match def with
      ^^ hardline ^^ string "}"
   | DEF_reg_dec dec -> doc_dec dec
   | DEF_scattered sdef -> doc_scattered sdef
+  | DEF_measure (id,pat,exp) ->
+     string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_pat pat ^^
+       space ^^ equals ^/^ doc_exp exp
   | DEF_pragma (pragma, arg, l) ->
      string ("$" ^ pragma ^ " " ^ arg)
   | DEF_fixity (prec, n, id) ->

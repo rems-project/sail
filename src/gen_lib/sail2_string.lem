@@ -64,10 +64,6 @@ let rec n_leading_spaces s =
          | _ -> 0
       end
     else
-      (* match len with
-   *     (\* | 0 -> 0 *\)
-   * (\* | 1 -> *\) 
-   * | len -> *)
            (* Isabelle generation for pattern matching on characters
               is currently broken, so use an if-expression *)
            if nth s 0 = #' '

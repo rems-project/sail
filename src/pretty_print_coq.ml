@@ -65,6 +65,20 @@ let opt_debug_on : string list ref = ref []
  * PPrint-based sail-to-coq pprinter
 ****************************************************************************)
 
+(* Data representation:
+ *
+ * In pure computations we keep values with top level existential types
+ * (including ranges and nats) separate from the proofs of the accompanying
+ * constraints, which keeps the terms shorter and more manageable.
+ * Existentials embedded in types (e.g., in tuples or datatypes) are dependent
+ * pairs.
+ *
+ * Monadic values always includes the proof in a dependent pair because the
+ * constraint solving tactic won't see the term that defined the value, and
+ * must rely entirely on the type (like the Sail type checker).
+ *)
+
+
 type context = {
   early_ret : bool;
   kid_renames : kid KBindings.t; (* Plain tyvar -> tyvar renames *)
@@ -761,9 +775,9 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
           | _ -> raise (Reporting.err_unreachable l __POS__ "tuple pattern doesn't have tuple type")
         in
         (match pats, typs with
-        | [p], [typ'] -> doc_pat ctxt apat_needed exists_as_pairs (p, typ')
+        | [p], [typ'] -> doc_pat ctxt apat_needed true (p, typ')
         | [_], _ -> raise (Reporting.err_unreachable l __POS__ "tuple pattern length does not match tuple type length")
-        | _ -> parens (separate_map comma_sp (doc_pat ctxt false exists_as_pairs) (List.combine pats typs)))
+        | _ -> parens (separate_map comma_sp (doc_pat ctxt false true) (List.combine pats typs)))
      | P_list pats ->
         let el_typ = match typ with
           | Typ_aux (Typ_app (f, [A_aux (A_typ el_typ,_)]),_)
@@ -1182,13 +1196,39 @@ let doc_exp, doc_let =
             else if IdSet.mem f ctxt.recursive_ids
             then doc_id f, false, false, true
             else doc_id f, false, false, false in
-          let (tqs,fn_ty) = Env.get_val_spec_orig f env in
+          let (tqs,fn_ty) = Env.get_val_spec f env in
+          (* Calculate the renaming *)
+          let tqs_map = List.fold_left
+                          (fun m k ->
+                            let kid = kopt_kid k in
+                            KBindings.add (orig_kid kid) kid m)
+                          KBindings.empty (quant_kopts tqs) in
           let arg_typs, ret_typ, eff = match fn_ty with
             | Typ_aux (Typ_fn (arg_typs,ret_typ,eff),_) -> arg_typs, ret_typ, eff
             | _ -> raise (Reporting.err_unreachable l __POS__ "Function not a function type")
           in
           let inst =
-            match instantiation_of_without_type full_exp with
+            (* We attempt to get an instantiation of the function signature's
+               type variables which agrees with Coq by
+               1. using dummy variables with the expected type of each argument
+                  (avoiding the inferred type, which might have (e.g.) stripped
+                  out an existential quantifier)
+               2. calculating the instantiation without using the expected
+                  return type, so that we can work out if we need a cast around
+                  the function call. *)
+            let dummy_args =
+              Util.list_mapi (fun i exp -> mk_id ("#coq#arg" ^ string_of_int i),
+                                           general_typ_of exp) args
+            in
+            let dummy_exp = mk_exp (E_app (f, List.map (fun (id,_) -> mk_exp (E_id id)) dummy_args)) in
+            let dummy_env = List.fold_left (fun env (id,typ) -> Env.add_local id (Immutable,typ) env) env dummy_args in
+            let inst_exp =
+              try infer_exp dummy_env dummy_exp
+              with ex ->
+                debug ctxt (lazy (" cannot infer dummy application " ^ Printexc.to_string ex));
+                full_exp
+            in
+            match instantiation_of_without_type inst_exp with
             | x -> x
             (* Not all function applications can be inferred, so try falling back to the
                type inferred when we know the target type.
@@ -1196,7 +1236,8 @@ let doc_exp, doc_let =
                to cast. *)
             | exception _ -> instantiation_of full_exp
           in
-          let inst = KBindings.fold (fun k u m -> KBindings.add (orig_kid k) u m) inst KBindings.empty in
+          let inst = KBindings.fold (fun k u m -> KBindings.add (KBindings.find (orig_kid k) tqs_map) u m) inst KBindings.empty in
+          let () = debug ctxt (lazy (" instantiations: " ^ String.concat ", " (List.map (fun (kid,tyarg) -> string_of_kid kid ^ " => " ^ string_of_typ_arg tyarg) (KBindings.bindings inst)))) in
 
           (* Insert existential packing of arguments where necessary *)
           let doc_arg want_parens arg typ_from_fn =
@@ -1221,14 +1262,29 @@ let doc_exp, doc_let =
                  not (similar_nexps ctxt env n1 n2)
               | _ -> false
             in
-            let want_parens1 = want_parens || autocast in
-            let arg_pp =
-              construct_dep_pairs env want_parens1 arg typ_from_fn
+            (* If the argument is an integer that can be inferred from the
+               context in a different form, let Coq fill it in.  E.g.,
+               when "64" is really "8 * width".  Avoid cases where the
+               type checker has introduced a phantom type variable while
+               calculating the instantiations. *)
+            let vars_in_env n =
+              let ekids = Env.get_typ_vars env in
+              KidSet.for_all (fun kid -> KBindings.mem kid ekids) (nexp_frees n)
             in
-            if autocast && false
-            then let arg_pp = string "autocast" ^^ space ^^ arg_pp in
-                 if want_parens then parens arg_pp else arg_pp
-            else arg_pp
+            match typ_of_arg, typ_from_fn with
+            | Typ_aux (Typ_app (Id_aux (Id "atom",_),[A_aux (A_nexp n1,_)]),_),
+              Typ_aux (Typ_app (Id_aux (Id "atom",_),[A_aux (A_nexp n2,_)]),_)
+                 when vars_in_env n2 && not (similar_nexps ctxt env n1 n2) ->
+               underscore
+            | _ ->
+               let want_parens1 = want_parens || autocast in
+               let arg_pp =
+                 construct_dep_pairs env want_parens1 arg typ_from_fn
+               in
+               if autocast && false
+               then let arg_pp = string "autocast" ^^ space ^^ arg_pp in
+                    if want_parens then parens arg_pp else arg_pp
+               else arg_pp
           in
           let epp =
             if is_ctor
@@ -1240,7 +1296,7 @@ let doc_exp, doc_let =
                                  [parens (string "_limit_reduces _acc")]
                 else match f with
                      | Id_aux (Id x,_) when is_prefix "#rec#" x ->
-                        main_call @ [parens (string "Zwf_well_founded _ _")]
+                        main_call @ [parens (string "Zwf_guarded _")]
                      | _ ->  main_call
               in hang 2 (flow (break 1) all) in
 
@@ -1383,7 +1439,11 @@ let doc_exp, doc_let =
          if effects then
            if inner_ex then
              if cast_ex
-             then string "derive_m" ^^ space ^^ epp
+             (* If the types are the same use the cast as a hint to Coq,
+                otherwise derive the new type from the old one. *)
+             then if alpha_equivalent env inner_typ cast_typ
+                  then epp
+                  else string "derive_m" ^^ space ^^ epp
              else string "projT1_m" ^^ space ^^ epp
            else if cast_ex
            then string "build_ex_m" ^^ space ^^ epp
@@ -1409,7 +1469,7 @@ let doc_exp, doc_let =
        in
        if aexp_needed then parens epp else epp
     | E_tuple exps ->
-       parens (align (group (separate_map (comma ^^ break 1) expN exps)))
+       construct_dep_pairs (env_of_annot (l,annot)) true full_exp (general_typ_of full_exp)
     | E_record fexps ->
        let recordtyp = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)

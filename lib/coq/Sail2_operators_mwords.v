@@ -172,6 +172,13 @@ Definition zero_extend {a} (v : mword a) (n : Z) `{ArithFact (n >= a)} : mword n
 
 Definition sign_extend {a} (v : mword a) (n : Z) `{ArithFact (n >= a)} : mword n := exts_vec n v.
 
+Definition zeros (n : Z) `{ArithFact (n >= 0)} : mword n.
+refine (cast_to_mword (Word.wzero (Z.to_nat n)) _).
+unwrap_ArithFacts.
+apply Z2Nat.id.
+auto with zarith.
+Defined.
+
 Lemma truncate_eq {m n} : m >= 0 -> m <= n -> (Z.to_nat n = Z.to_nat m + (Z.to_nat n - Z.to_nat m))%nat.
 intros.
 assert ((Z.to_nat m <= Z.to_nat n)%nat).
