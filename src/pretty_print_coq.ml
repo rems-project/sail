@@ -585,8 +585,9 @@ let doc_lit (L_aux(lit,l)) =
   | L_false -> utf8string "false"
   | L_true  -> utf8string "true"
   | L_num i ->
-     let ipp = Big_int.to_string i in
-     utf8string ipp
+     let s = Big_int.to_string i in
+     let ipp = utf8string s in
+     if Big_int.less i Big_int.zero then parens ipp else ipp
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef ->
