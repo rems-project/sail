@@ -18,6 +18,7 @@ Definition MEM_fence_w_rw  {rv e} (_:unit) : monad rv unit e := barrier Barrier_
 Definition MEM_fence_rw_r  {rv e} (_:unit) : monad rv unit e := barrier Barrier_RISCV_rw_r.
 Definition MEM_fence_r_w   {rv e} (_:unit) : monad rv unit e := barrier Barrier_RISCV_r_w.
 Definition MEM_fence_w_r   {rv e} (_:unit) : monad rv unit e := barrier Barrier_RISCV_w_r.
+Definition MEM_fence_tso   {rv e} (_:unit) : monad rv unit e := barrier Barrier_RISCV_tso.
 Definition MEM_fence_i     {rv e} (_:unit) : monad rv unit e := barrier Barrier_RISCV_i.
 (*
 val MEMea                            : forall 'rv 'a 'e. Size 'a => bitvector 'a -> integer -> monad 'rv unit 'e
@@ -132,3 +133,13 @@ Definition prerr_string (_:string) : unit := tt.
 Definition putchar {T} (_:T) : unit := tt.
 Require DecimalString.
 Definition string_of_int z := DecimalString.NilZero.string_of_int (Z.to_int z).
+
+(* The constraint solver can do this itself, but a Coq bug puts
+   anonymous_subproof into the term instead of an actual subproof. *)
+Lemma n_leading_spaces_fact {w__0} :
+  w__0 >= 0 -> exists ex17629_ : Z, 1 + w__0 = 1 + ex17629_ /\ 0 <= ex17629_.
+intro.
+exists w__0.
+omega.
+Qed.
+Hint Resolve n_leading_spaces_fact : sail.

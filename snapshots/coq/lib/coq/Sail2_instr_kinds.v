@@ -1,6 +1,51 @@
 (*========================================================================*)
-(*  Copyright (c) 2018 Sail contributors.                                 *)
-(*  This material is provided for anonymous review purposes only.         *)
+(*     Sail                                                               *)
+(*                                                                        *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
+(*                                                                        *)
+(*  All rights reserved.                                                  *)
+(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*     notice, this list of conditions and the following disclaimer.      *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
 (*========================================================================*)
 
 
@@ -99,7 +144,7 @@ Inductive barrier_kind :=
   (* AArch64 barriers *)
   | Barrier_DMB | Barrier_DMB_ST | Barrier_DMB_LD | Barrier_DSB
   | Barrier_DSB_ST | Barrier_DSB_LD | Barrier_ISB
-  | Barrier_TM_COMMIT
+ (* | Barrier_TM_COMMIT*)
   (* MIPS barriers *)
   | Barrier_MIPS_SYNC
   (* RISC-V barriers *)
@@ -108,6 +153,11 @@ Inductive barrier_kind :=
   | Barrier_RISCV_r_r
   | Barrier_RISCV_rw_w
   | Barrier_RISCV_w_w
+  | Barrier_RISCV_w_rw
+  | Barrier_RISCV_rw_r
+  | Barrier_RISCV_r_w
+  | Barrier_RISCV_w_r
+  | Barrier_RISCV_tso
   | Barrier_RISCV_i
   (* X86 *)
   | Barrier_x86_MFENCE.
@@ -133,6 +183,11 @@ instance (Show barrier_kind)
     | Barrier_RISCV_r_r   -> "Barrier_RISCV_r_r"
     | Barrier_RISCV_rw_w  -> "Barrier_RISCV_rw_w"
     | Barrier_RISCV_w_w   -> "Barrier_RISCV_w_w"
+    | Barrier_RISCV_w_rw  -> "Barrier_RISCV_w_rw"
+    | Barrier_RISCV_rw_r  -> "Barrier_RISCV_rw_r"
+    | Barrier_RISCV_r_w   -> "Barrier_RISCV_r_w"
+    | Barrier_RISCV_w_r   -> "Barrier_RISCV_w_r"
+    | Barrier_RISCV_tso   -> "Barrier_RISCV_tso"
     | Barrier_RISCV_i     -> "Barrier_RISCV_i"
     | Barrier_x86_MFENCE  -> "Barrier_x86_MFENCE"
   end
@@ -155,11 +210,11 @@ Inductive instruction_kind :=
   | IK_mem_read  : read_kind -> instruction_kind
   | IK_mem_write : write_kind -> instruction_kind
   | IK_mem_rmw   : (read_kind * write_kind) -> instruction_kind
-  | IK_branch (* this includes conditional-branch (multiple nias, none of which is NIA_indirect_address),
+  | IK_branch    : unit -> instruction_kind (* this includes conditional-branch (multiple nias, none of which is NIA_indirect_address),
   indirect/computed-branch (single nia of kind NIA_indirect_address)
   and branch/jump (single nia of kind NIA_concrete_address) *)
   | IK_trans     : trans_kind -> instruction_kind
-  | IK_simple    : instruction_kind.
+  | IK_simple    : unit -> instruction_kind.
 
 (*
 instance (Show instruction_kind)
@@ -246,8 +301,13 @@ instance (EnumerationType barrier_kind)
     | Barrier_RISCV_r_r -> 15
     | Barrier_RISCV_rw_w -> 16
     | Barrier_RISCV_w_w -> 17
-    | Barrier_RISCV_i -> 18
-    | Barrier_x86_MFENCE -> 19
+    | Barrier_RISCV_w_rw -> 18
+    | Barrier_RISCV_rw_r -> 19
+    | Barrier_RISCV_r_w -> 20
+    | Barrier_RISCV_w_r -> 21
+    | Barrier_RISCV_tso -> 22
+    | Barrier_RISCV_i -> 23
+    | Barrier_x86_MFENCE -> 24
   end
 end
 *)

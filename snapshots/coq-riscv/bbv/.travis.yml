@@ -1,5 +1,0 @@
-# we don't use travis, but the mit-plv organization enabled it for all repos by default,
-# so we blacklist all branches:
-branches:
-  except:
-    - /.*/

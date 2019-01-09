@@ -140,10 +140,10 @@ Definition eq_bit (x : bitU) (y : bitU) : bool :=
 
 Require Import Zeuclid.
 Definition euclid_modulo (m n : Z) `{ArithFact (n > 0)} : {z : Z & ArithFact (0 <= z <= n-1)}.
-refine (build_ex (ZEuclid.modulo m n)).
+refine (existT _ (ZEuclid.modulo m n) _).
 constructor.
 destruct H.
-assert (Zabs n = n). { rewrite Zabs_eq; auto with zarith. }
+assert (Z.abs n = n). { rewrite Z.abs_eq; auto with zarith. }
 rewrite <- H at 3.
 lapply (ZEuclid.mod_always_pos m n); omega.
 Qed.
@@ -160,3 +160,32 @@ Definition prerr_string (_:string) : unit := tt.
 Definition putchar {T} (_:T) : unit := tt.
 Require DecimalString.
 Definition string_of_int z := DecimalString.NilZero.string_of_int (Z.to_int z).
+
+Lemma __MIPS_read_lemma : forall width, 8 * width = 8 * (8 * width ÷ 8).
+intros.
+rewrite Z.mul_comm.
+rewrite Z.quot_mul; auto with zarith.
+Qed.
+Hint Resolve __MIPS_read_lemma : sail.
+
+Lemma MEMr_wrapper_lemma : forall size : Z, 8 * size = 8 * (8 * (8 * size ÷ 8) ÷ 8).
+intros.
+rewrite Z.mul_comm.
+rewrite Z.quot_mul; auto with zarith.
+rewrite Z.mul_comm with (m := size).
+rewrite Z.quot_mul; auto with zarith.
+Qed.
+Hint Resolve MEMr_wrapper_lemma : sail.
+
+Lemma getCapOffset_lemma {x0 x1 x2 x : Z} :
+ 0 <= x0 <= 18446744073709551616 - 1 ->
+ 0 <= x1 <= 18446744073709551616 - 1 ->
+ 18446744073709551616 <= x2 <= 18446744073709551616 ->
+ x = ZEuclid.modulo (x0 - x1) x2 ->
+ 0 <= x <= 18446744073709551616 - 1.
+intros.
+match goal with H:context [ZEuclid.modulo ?X ?Y] |- _ => pose proof (ZEuclid.mod_always_pos X Y) end.
+omega with Z.
+Qed.
+Hint Resolve getCapOffset_lemma : sail.
+
