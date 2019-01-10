@@ -83,7 +83,7 @@ let finish msg t =
   if !opt_profile then
     begin match !profile_stack with
     | p :: ps ->
-       prerr_endline (Printf.sprintf "%s %s: %fs" Util.("Profile" |> magenta |> clear) msg (Sys.time () -. t));
+       prerr_endline (Printf.sprintf "%s %s: %fs" Util.("Profiled" |> magenta |> clear) msg (Sys.time () -. t));
        prerr_endline (Printf.sprintf "  Z3 calls: %d, Z3 time: %fs" p.z3_calls p.z3_time);
        profile_stack := ps
     | [] -> ()

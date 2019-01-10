@@ -263,3 +263,5 @@ val file_encode_string : string -> string
 
 val log_line : string -> int -> string -> string
 val header : string -> int -> string
+
+val progress : int -> int -> unit

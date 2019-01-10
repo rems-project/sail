@@ -9,7 +9,7 @@ val div = {
   lem: "integerDiv",
   c: "tdiv_int",
   coq: "div_with_eq"
-} : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o == div('n, 'm). atom('o)}
+} : forall 'n 'm. (atom('n), atom('m)) -> atom(div('n, 'm)) // {'o, 'o == div('n, 'm). atom('o)}
 
 overload operator / = {div}
 

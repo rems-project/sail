@@ -465,3 +465,14 @@ let log_line str line msg =
   "\n[" ^ (str ^ ":" ^ string_of_int line |> blue |> clear) ^ "] " ^ msg
 
 let header str n = "\n" ^ str ^ "\n" ^ String.make (String.length str - 9 * n) '='
+
+let progress n total =
+  let len = truncate ((float n /. float total) *. 50.0) in
+  let percent = truncate ((float n /. float total) *. 100.0) in
+  let str = "[" ^ String.make len '=' ^ String.make (50 - len) ' ' ^ "] " ^ string_of_int percent ^ "%" in
+  prerr_string str;
+  if n = total then
+    prerr_char '\n'
+  else
+    prerr_string ("\x1B[" ^ string_of_int (String.length str) ^ "D");
+  flush stderr

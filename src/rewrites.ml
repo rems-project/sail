@@ -350,13 +350,24 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
   let rec split_nexp (Nexp_aux (nexp_aux, l) as nexp) =
     match nexp_aux with
     | Nexp_sum (n1, n2) ->
-       mk_exp (E_app (mk_id "add_atom", [split_nexp n1; split_nexp n2]))
+       mk_exp ~loc:l (E_app (mk_id "add_atom", [split_nexp n1; split_nexp n2]))
     | Nexp_minus (n1, n2) ->
-       mk_exp (E_app (mk_id "sub_atom", [split_nexp n1; split_nexp n2]))
+       mk_exp ~loc:l (E_app (mk_id "sub_atom", [split_nexp n1; split_nexp n2]))
     | Nexp_times (n1, n2) ->
-       mk_exp (E_app (mk_id "mult_atom", [split_nexp n1; split_nexp n2]))
-    | Nexp_neg nexp -> mk_exp (E_app (mk_id "negate_atom", [split_nexp nexp]))
-    | _ -> mk_exp (E_sizeof nexp)
+       mk_exp ~loc:l (E_app (mk_id "mult_atom", [split_nexp n1; split_nexp n2]))
+    | Nexp_neg nexp ->
+       mk_exp ~loc:l (E_app (mk_id "negate_atom", [split_nexp nexp]))
+    | Nexp_app (f, [n1; n2]) when string_of_id f = "div" ->
+       (* We should be more careful about the right division here *)
+       mk_exp ~loc:l (E_app (mk_id "div", [split_nexp n1; split_nexp n2]))
+    | _ ->
+       mk_exp ~loc:l (E_sizeof nexp)
+  in
+  let is_int_typ env v _ = function
+    | (_, Typ_aux (Typ_app (f, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _)]), _))
+         when Kid.compare v v' = 0 && string_of_id f = "atom" ->
+       true
+    | _ -> false
   in
   let rec rewrite_e_aux split_sizeof (E_aux (e_aux, (l, _)) as orig_exp) =
     let env = env_of orig_exp in
@@ -365,9 +376,13 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
        E_aux (E_lit (L_aux (L_num c, l)), (l, mk_tannot env (atom_typ nexp) no_effect))
     | E_sizeof nexp ->
        begin
+         let locals = Env.get_locals env in
          match nexp_simp (rewrite_nexp_ids (env_of orig_exp) nexp) with
          | Nexp_aux (Nexp_constant c, _) ->
             E_aux (E_lit (L_aux (L_num c, l)), (l, mk_tannot env (atom_typ nexp) no_effect))
+         | Nexp_aux (Nexp_var v, _) when Bindings.exists (is_int_typ env v) locals ->
+            let id = fst (Bindings.choose (Bindings.filter (is_int_typ env v) locals)) in
+            E_aux (E_id id, (l, mk_tannot env (atom_typ nexp) no_effect))
          | _ ->
             let locals = Env.get_locals env in
             let exps = Bindings.bindings locals
@@ -2288,15 +2303,18 @@ let rewrite_constraint =
     | NC_set (kid, int :: ints) ->
        let kid_eq kid int = nc_eq (nvar kid) (nconstant int) in
        unaux_exp (rewrite_nc env (List.fold_left (fun nc int -> nc_or nc (kid_eq kid int)) (kid_eq kid int) ints))
+    | NC_app (f, [A_aux (A_bool nc, _)]) when string_of_id f = "not" ->
+       E_app (mk_id "not_bool", [rewrite_nc env nc])
     | NC_app (f, args) ->
        unaux_exp (rewrite_nc env (Env.expand_constraint_synonyms env (mk_nc (NC_app (f, args)))))
     | NC_var v ->
-       Reporting.unreachable l __POS__ "Cannot rewrite this constraint"
+       (* Would be better to translate change E_sizeof to take a kid, then rewrite to E_sizeof *)
+       E_id (id_of_kid v)
   in
-  let rewrite_e_aux (E_aux (e_aux, _) as exp) =
+  let rewrite_e_aux (E_aux (e_aux, (l, _)) as exp) =
     match e_aux with
     | E_constraint nc ->
-       check_exp (env_of exp) (rewrite_nc (env_of exp) nc) bool_typ
+       locate (fun _ -> gen_loc l) (check_exp (env_of exp) (rewrite_nc (env_of exp) nc) (atom_bool_typ nc))
     | _ -> exp
   in
 

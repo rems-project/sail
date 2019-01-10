@@ -336,7 +336,7 @@ let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
   | LEXP_memory (id,exps) -> rewrap (LEXP_memory(id,List.map (rewriters.rewrite_exp rewriters) exps))
   | LEXP_vector (lexp,exp) ->
     rewrap (LEXP_vector (rewriters.rewrite_lexp rewriters lexp,rewriters.rewrite_exp rewriters exp))
-  | LEXP_vector_range (lexp,exp1,exp2) -> 
+  | LEXP_vector_range (lexp,exp1,exp2) ->
     rewrap (LEXP_vector_range (rewriters.rewrite_lexp rewriters lexp,
                                rewriters.rewrite_exp rewriters exp1,
                                rewriters.rewrite_exp rewriters exp2))
@@ -363,13 +363,18 @@ let rewrite_def rewriters d = match d with
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
   | DEF_pragma (pragma, arg, l) -> DEF_pragma (pragma, arg, l)
-  | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "DEF_scattered survived to rewritter")
+  | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "DEF_scattered survived to rewriter")
 
 let rewrite_defs_base rewriters (Defs defs) =
-  let rec rewrite ds = match ds with
+  let total = List.length defs in
+  let rec rewrite n = function
     | [] -> []
-    | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds) in
-  Defs (rewrite defs)
+    | d :: ds ->
+       if !Profile.opt_profile then Util.progress n total else ();
+       let d = rewriters.rewrite_def rewriters d in
+       d :: rewrite (n + 1) ds
+  in
+  Defs (rewrite 1 defs)
 
 let rewriters_base =
   {rewrite_exp = rewrite_exp;
