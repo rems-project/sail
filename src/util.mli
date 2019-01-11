@@ -53,6 +53,7 @@ val last : 'a list -> 'a
 
 val opt_warnings : bool ref
 val opt_colors : bool ref
+val opt_verbosity : int ref
 
 val butlast : 'a list -> 'a list
 
@@ -264,4 +265,4 @@ val file_encode_string : string -> string
 val log_line : string -> int -> string -> string
 val header : string -> int -> string
 
-val progress : int -> int -> unit
+val progress : string -> string -> int -> int -> unit

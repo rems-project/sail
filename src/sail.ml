@@ -224,8 +224,8 @@ let options = Arg.align ([
     Arg.Set Rewrites.opt_dmono_continue,
     " continue despite monomorphisation errors");
   ( "-verbose",
-    Arg.Set opt_print_verbose,
-    " (debug) pretty-print the input to standard output");
+    Arg.Int (fun verbosity -> Util.opt_verbosity := verbosity),
+    " produce verbose output");
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");

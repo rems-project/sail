@@ -642,8 +642,8 @@ let to_ast_alias_spec ctx (P.E_aux(e, l)) =
 
 let to_ast_dec ctx (P.DEC_aux(regdec,l)) =
   DEC_aux((match regdec with
-           | P.DEC_reg (typ, id) ->
-              DEC_reg (to_ast_typ ctx typ, to_ast_id id)
+           | P.DEC_reg (reffect, weffect, typ, id) ->
+              DEC_reg (to_ast_effects reffect, to_ast_effects weffect, to_ast_typ ctx typ, to_ast_id id)
            | P.DEC_config (id, typ, exp) ->
               DEC_config (to_ast_id id, to_ast_typ ctx typ, to_ast_exp ctx exp)
            | P.DEC_alias (id,e) ->
@@ -932,7 +932,7 @@ let generate_undefineds vs_ids (Defs defs) =
   Defs (undefined_builtins @ undefined_defs defs)
 
 let rec get_registers = function
-  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), _)) :: defs -> (typ, id) :: get_registers defs
+  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) :: defs -> (typ, id) :: get_registers defs
   | _ :: defs -> get_registers defs
   | [] -> []
 

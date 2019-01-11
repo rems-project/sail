@@ -445,7 +445,7 @@ val_spec_aux =  (* Value type specification *)
 
 type 
 dec_spec_aux =  (* Register declarations *)
-   DEC_reg of atyp * id
+   DEC_reg of atyp * atyp * atyp * id
  | DEC_config of id * atyp * exp
  | DEC_alias of id * exp
  | DEC_typ_alias of atyp * id * exp

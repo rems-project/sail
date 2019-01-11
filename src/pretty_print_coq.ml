@@ -2203,7 +2203,7 @@ let rec doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
 
 let doc_dec (DEC_aux (reg, ((l, _) as annot))) =
   match reg with
-  | DEC_reg(typ,id) -> empty
+  | DEC_reg(_,_,typ,id) -> empty
      (*
        let env = env_of_annot annot in
        let rt = Env.base_typ_of env typ in

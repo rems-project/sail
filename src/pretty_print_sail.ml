@@ -119,6 +119,12 @@ let rec doc_nexp =
   in
   nexp0
 
+let doc_effect (Effect_aux (aux, _)) =
+  match aux with
+  | Effect_set [] -> string "pure"
+  | Effect_set effs ->
+     braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs))
+
 let rec doc_nc nc =
   let nc_op op n1 n2 = separate space [doc_nexp n1; string op; doc_nexp n2] in
   let rec atomic_nc (NC_aux (nc_aux, _) as nc) =
@@ -570,7 +576,10 @@ let doc_mapdef (MD_aux (MD_mapping (id, typa, mapcls), _)) =
 
 let doc_dec (DEC_aux (reg,_)) =
   match reg with
-  | DEC_reg (typ, id) -> separate space [string "register"; doc_id id; colon; doc_typ typ]
+  | DEC_reg (Effect_aux (Effect_set [BE_aux (BE_rreg, _)], _), Effect_aux (Effect_set [BE_aux (BE_wreg, _)], _), typ, id) ->
+     separate space [string "register"; doc_id id; colon; doc_typ typ]
+  | DEC_reg (reffect, weffect, typ, id) ->
+     separate space [string "register"; doc_effect reffect; doc_effect weffect; doc_id id; colon; doc_typ typ]
   | DEC_config (id, typ, exp) -> separate space [string "register configuration"; doc_id id; colon; doc_typ typ; equals; doc_exp exp]
   | DEC_alias(id,alspec) -> string "ALIAS"
   | DEC_typ_alias(typ,id,alspec) -> string "ALIAS"

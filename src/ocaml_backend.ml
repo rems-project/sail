@@ -393,7 +393,7 @@ let initial_value_for id inits =
 
 let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
   match reg with
-  | DEC_reg (typ, id) ->
+  | DEC_reg (_, _, typ, id) ->
      separate space [string "let"; zencode ctx id; colon;
                      parens (ocaml_typ ctx typ); string "ref"; equals;
                      string "ref"; parens (ocaml_exp ctx (initial_value_for id ctx.register_inits))]

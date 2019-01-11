@@ -908,7 +908,7 @@ alias_spec :: 'AL_' ::=
 dec_spec :: 'DEC_' ::=
   {{ com register declarations }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | register typ id                                             :: :: reg
+  | register effect effect' typ id                              :: :: reg
   | register configuration id : typ = exp                       :: :: config
   | register alias id = alias_spec				:: :: alias
   | register alias typ id = alias_spec				:: :: typ_alias

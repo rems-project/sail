@@ -2339,7 +2339,7 @@ let rewrite_type_def_typs rw_typ rw_typquant (TD_aux (td, annot)) =
 (* FIXME: other reg_dec types *)
 let rewrite_dec_spec_typs rw_typ (DEC_aux (ds, annot)) =
   match ds with
-  | DEC_reg (typ, id) -> DEC_aux (DEC_reg (rw_typ typ, id), annot)
+  | DEC_reg (reffect, weffect, typ, id) -> DEC_aux (DEC_reg (reffect, weffect, rw_typ typ, id), annot)
   | DEC_config (id, typ, exp) -> DEC_aux (DEC_config (id, rw_typ typ, exp), annot)
   | _ -> assert false
 

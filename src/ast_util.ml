@@ -957,7 +957,7 @@ let id_of_val_spec (VS_aux (VS_val_spec (_, id, _, _), _)) = id
 
 let id_of_dec_spec (DEC_aux (ds_aux, _)) =
   match ds_aux with
-  | DEC_reg (_, id) -> id
+  | DEC_reg (_, _, _, id) -> id
   | DEC_config (id, _, _) -> id
   | DEC_alias (id, _) -> id
   | DEC_typ_alias (_, id, _) -> id
@@ -966,7 +966,7 @@ let ids_of_def = function
   | DEF_type td -> IdSet.singleton (id_of_type_def td)
   | DEF_fundef fd -> IdSet.singleton (id_of_fundef fd)
   | DEF_val (LB_aux (LB_val (pat, _), _)) -> pat_ids pat
-  | DEF_reg_dec (DEC_aux (DEC_reg (_, id), _)) -> IdSet.singleton id
+  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, _, id), _)) -> IdSet.singleton id
   | DEF_spec vs -> IdSet.singleton (id_of_val_spec vs)
   | DEF_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
   | _ -> IdSet.empty

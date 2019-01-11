@@ -1336,7 +1336,7 @@ let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
 
 let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
   match reg with
-  | DEC_reg(typ,id) -> empty
+  | DEC_reg(_,_,typ,id) -> empty
      (* if !opt_sequential then empty
      else
        let env = env_of_annot annot in

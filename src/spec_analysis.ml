@@ -463,7 +463,7 @@ let fv_of_rd consider_var (DEC_aux (d, annot)) =
   let open Type_check in
   let env = env_of_annot annot in
   match d with
-  | DEC_reg(t, id) ->
+  | DEC_reg(_, _, t, id) ->
      let t' = Env.expand_synonyms env t in
      init_env (string_of_id id),
      Nameset.union (fv_of_typ consider_var mt mt t) (fv_of_typ consider_var mt mt t')

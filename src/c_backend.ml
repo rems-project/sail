@@ -1623,8 +1623,8 @@ let fix_destructure fail_label = function
 let letdef_count = ref 0
 
 (** Compile a Sail toplevel definition into an IR definition **)
-let rec compile_def ctx = function
-  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), _)) ->
+let rec compile_def n total ctx = function
+  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) ->
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, [])], ctx
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
      let aexp = analyze_functions ctx analyze_primop (c_literals ctx (no_shadow IdSet.empty (anf exp))) in
@@ -1645,6 +1645,8 @@ let rec compile_def ctx = function
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      c_debug (lazy ("Compiling function " ^ string_of_id id));
+     Util.progress "Compiling " (string_of_id id) n total;
+
      (* Find the function's type. *)
      let quant, Typ_aux (fn_typ, _) =
        try Env.get_val_spec id ctx.local_env
@@ -1763,7 +1765,7 @@ let rec compile_def ctx = function
 
   | DEF_internal_mutrec fundefs ->
      let defs = List.map (fun fdef -> DEF_fundef fdef) fundefs in
-     List.fold_left (fun (cdefs, ctx) def -> let cdefs', ctx = compile_def ctx def in (cdefs @ cdefs', ctx)) ([], ctx) defs
+     List.fold_left (fun (cdefs, ctx) def -> let cdefs', ctx = compile_def n total ctx def in (cdefs @ cdefs', ctx)) ([], ctx) defs
 
   | def ->
      c_error ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def def))
@@ -3321,7 +3323,10 @@ let bytecode_ast ctx rewrites (Defs defs) =
   let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit effect {escape}" in
 
   let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
-  let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
+  let total = List.length defs in
+  let _, chunks, ctx =
+    List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) defs
+  in
   let cdefs = List.concat (List.rev chunks) in
   rewrites cdefs
 
@@ -3362,8 +3367,13 @@ let compile_ast ctx c_includes (Defs defs) =
     let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
     let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit effect {escape}" in
     let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
-    let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
+
+    let total = List.length defs in
+    let _, chunks, ctx =
+      List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) defs
+    in
     let cdefs = List.concat (List.rev chunks) in
+
     let cdefs, ctx = specialize_variants ctx [] cdefs in
     let cdefs = sort_ctype_defs cdefs in
     let cdefs = optimize ctx cdefs in

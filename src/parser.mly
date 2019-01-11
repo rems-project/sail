@@ -1362,7 +1362,11 @@ val_spec_def:
 
 register_def:
   | Register id Colon typ
-    { mk_reg_dec (DEC_reg ($4, $2)) $startpos $endpos }
+    { let rreg = mk_typ (ATyp_set [mk_effect BE_rreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
+      let wreg = mk_typ (ATyp_set [mk_effect BE_wreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
+      mk_reg_dec (DEC_reg (rreg, wreg, $4, $2)) $startpos $endpos }
+  | Register effect_set effect_set id Colon typ
+    { mk_reg_dec (DEC_reg ($2, $3, $6, $4)) $startpos $endpos }
   | Register Configuration id Colon typ Eq exp
     { mk_reg_dec (DEC_config ($3, $5, $7)) $startpos $endpos }
 

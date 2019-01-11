@@ -1511,10 +1511,21 @@ and unify_constraint l env goals (NC_aux (aux1, _) as nc1) (NC_aux (aux2, _) as 
   typ_debug (lazy (Util.("Unify constraint " |> magenta |> clear) ^ string_of_n_constraint nc1 ^ " and " ^ string_of_n_constraint nc2));
   match aux1, aux2 with
   | NC_var v, _ when KidSet.mem v goals -> KBindings.singleton v (arg_bool nc2)
+  | NC_var v, NC_var v' when Kid.compare v v' = 0 -> KBindings.empty
   | NC_and (nc1a, nc2a), NC_and (nc1b, nc2b) | NC_or (nc1a, nc2a), NC_or (nc1b, nc2b) ->
      merge_uvars l (unify_constraint l env goals nc1a nc1b) (unify_constraint l env goals nc2a nc2b)
   | NC_app (f1, args1), NC_app (f2, args2) when Id.compare f1 f2 = 0 && List.length args1 = List.length args2 ->
      List.fold_left (merge_uvars l) KBindings.empty (List.map2 (unify_typ_arg l env goals) args1 args2)
+  | NC_equal (n1a, n2a), NC_equal (n1b, n2b) ->
+     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+  | NC_not_equal (n1a, n2a), NC_equal (n1b, n2b) ->
+     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+  | NC_bounded_ge (n1a, n2a), NC_equal (n1b, n2b) ->
+     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+  | NC_bounded_le (n1a, n2a), NC_equal (n1b, n2b) ->
+     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+  | NC_true, NC_true -> KBindings.empty
+  | NC_false, NC_false -> KBindings.empty
   | _, _ -> unify_error l ("Could not unify constraints " ^ string_of_n_constraint nc1 ^ " and " ^ string_of_n_constraint nc2)
 
 and unify_order l goals (Ord_aux (aux1, _) as ord1) (Ord_aux (aux2, _) as ord2) =
@@ -4557,9 +4568,9 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   | DEF_spec vs -> check_val_spec env vs
   | DEF_default default -> check_default env default
   | DEF_overload (id, ids) -> [DEF_overload (id, ids)], Env.add_overloads id ids env
-  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), (l, _))) ->
-     let env = Env.add_register id (mk_effect [BE_rreg]) (mk_effect [BE_wreg]) typ env in
-     [DEF_reg_dec (DEC_aux (DEC_reg (typ, id), (l, mk_expected_tannot env typ no_effect (Some typ))))], env
+  | DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id), (l, _))) ->
+     let env = Env.add_register id reffect weffect typ env in
+     [DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id), (l, mk_expected_tannot env typ no_effect (Some typ))))], env
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), (l, _))) ->
      let checked_exp = crule check_exp env (strip_exp exp) typ in
      let env = Env.add_register id no_effect (mk_effect [BE_config]) typ env in
@@ -4569,14 +4580,18 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered sdef -> check_scattered env sdef
 
-and check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
-  fun env (Defs defs) ->
+and check_defs : 'a. int -> int -> Env.t -> 'a def list -> tannot defs * Env.t =
+  fun n total env defs ->
   match defs with
-  | [] -> (Defs []), env
+  | [] -> Defs [], env
   | def :: defs ->
+     Util.progress "Type check " (string_of_int n ^ "/" ^ string_of_int total) n total;
      let (def, env) = check_def env def in
-     let (Defs defs, env) = check env (Defs defs) in
-     (Defs (def @ defs)), env
+     let Defs defs, env = check_defs (n + 1) total env defs in
+     Defs (def @ defs), env
+
+and check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
+  fun env (Defs defs) -> let total = List.length defs in check_defs 1 total env defs
 
 let initial_env =
   Env.empty

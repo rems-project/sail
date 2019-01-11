@@ -366,11 +366,20 @@ let rewrite_def rewriters d = match d with
   | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "DEF_scattered survived to rewriter")
 
 let rewrite_defs_base rewriters (Defs defs) =
+  let rec rewrite = function
+    | [] -> []
+    | d :: ds ->
+       let d = rewriters.rewrite_def rewriters d in
+       d :: rewrite ds
+  in
+  Defs (rewrite defs)
+
+let rewrite_defs_base_progress prefix rewriters (Defs defs) =
   let total = List.length defs in
   let rec rewrite n = function
     | [] -> []
     | d :: ds ->
-       if !Profile.opt_profile then Util.progress n total else ();
+       Util.progress (prefix ^ " ") (string_of_int n ^ "/" ^ string_of_int total) n total;
        let d = rewriters.rewrite_def rewriters d in
        d :: rewrite (n + 1) ds
   in

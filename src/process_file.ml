@@ -365,7 +365,7 @@ let output libpath out_arg files =
       output1 libpath out_arg f defs)
     files
 
-let rewrite_step defs (name, rewriter) =
+let rewrite_step n total defs (name, rewriter) =
   let t = Profile.start () in
   let defs = rewriter defs in
   Profile.finish ("rewrite " ^ name) t;
@@ -380,10 +380,12 @@ let rewrite_step defs (name, rewriter) =
         opt_ddump_rewrite_ast := Some (f, i + 1)
       end
     | _ -> () in
+  Util.progress "Rewrite " name n total;
   defs
 
 let rewrite rewriters defs =
-  try List.fold_left rewrite_step defs rewriters with
+  let total = List.length rewriters in
+  try snd (List.fold_left (fun (n, defs) rw -> n + 1, rewrite_step n total defs rw) (1, defs) rewriters) with
   | Type_check.Type_error (_, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
