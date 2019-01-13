@@ -4,13 +4,14 @@ The Sail ISA specification language
 Overview
 ========
 
-Sail is a language for describing the instruction semantics of
-processors. Sail aims to provide a engineer-friendly,
-vendor-pseudocode-like language for describing instruction
-semantics. It is an imperative language containing some advanced
-features like dependent typing for numeric types and bitvector
-lengths, which are automatically checked using Z3. It has been used
-for several papers, available from http://www.cl.cam.ac.uk/~pes20/sail/
+Sail is a language for describing the instruction-set architecture
+(ISA) semantics of processors. Sail aims to provide a
+engineer-friendly, vendor-pseudocode-like language for describing
+instruction semantics. It is essentially a first-order imperative
+language, but with lightweight dependent typing for numeric types and
+bitvector lengths, which are automatically checked using Z3. It has
+been used for several papers, available from
+<http://www.cl.cam.ac.uk/~pes20/sail/>.
 
 This repository contains the implementation of Sail, together with
 some Sail specifications and related tools.
@@ -19,10 +20,7 @@ some Sail specifications and related tools.
 
 * The Sail source code (in [src/](src/))
 
-* A Sail specification of ARMv8.3-A generated from ARM's publically
-  released ASL specification (in [aarch64/](aarch64/))
-
-* Generated Isabelle snapshots of the above ISAs in [snapshots/isabelle](snapshots/isabelle)
+* Generated Isabelle snapshots of some ISA models, in [snapshots/isabelle](snapshots/isabelle)
 
 * Documentation for generating Isabelle and working with the ISA specs
   in Isabelle in [snapshots/isabelle/Manual.pdf](snapshots/isabelle/Manual.pdf)
@@ -31,13 +29,28 @@ some Sail specifications and related tools.
 
 * A test suite for Sail (in [test/](test/))
 
-We also have versions of IBM POWER, a fragment of x86, and a
-hand-written fragment of ARMv8-A, but these are currently not up-to-date
-with the latest version of Sail, which is the (default) sail2 branch
-on Github.
+Sail ISA Models
+===============
 
-The mips and cheri-mips specifications that used to be here have moved to
-https://github.com/CTSRD-CHERI/sail-cheri-mips .
+Sail is currently being used for ARM, RISC-V, MIPS, CHERI-MIPS, IBM Power, and x86 models,  variously ranging from full definitions to core user-mode fragments, and either here or in separate repositories:
+
+* [Sail ARMv8.5-A ISA model, automatically generated from the ARM-internal ASL reference, as used in the ARM ARM](https://github.com/rems-project/sail-arm).
+
+* [Sail ARMv8.3-A ISA model](https://github.com/rems-project/sail/tree/sail2/arm). This is the "public" model described in our [POPL 2019 paper](http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019.pdf), now largely superseded by the above.
+
+* [Sail ARMv8-A ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/arm). This is a handwritten user-mode fragment.
+
+* [Sail RISC-V ISA model, handwritten](https://github.com/rems-project/sail-riscv). 
+
+* [Sail MIPS and CHERI-MIPS ISA models, handwritten](https://github.com/CTSRD-CHERI/sail-cheri-mips).
+
+* [Sail IBM POWER ISA model, automatically generated from IBM XML documentation](https://github.com/rems-project/sail/tree/sail2/power).  This is a user-mode fragment. 
+
+* [Sail x86 ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/x86). This is a handwritten user-mode fragment. 
+
+The hand-written ARMv8-A, IBM POWER, and x86 models are currently not in sync
+with the latest version of Sail, which is the (default) sail2 branch
+on Github.  These and the RISC-V model are integrated with our [RMEM](http://www.cl.cam.ac.uk/users/pes20/rmem) tool for concurrency semantics. 
 
 OPAM Installation
 =================
@@ -81,3 +94,5 @@ the headers of those files.
 
 The POWER model in power/ is distributed under the 2-clause BSD licence in
 the headers of those files.
+
+The models in separate repositories are licensed as described in each. 
