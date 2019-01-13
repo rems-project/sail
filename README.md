@@ -12,6 +12,20 @@ language, but with lightweight dependent typing for numeric types and
 bitvector lengths, which are automatically checked using Z3. It has
 been used for several papers, available from
 <http://www.cl.cam.ac.uk/~pes20/sail/>.
+<p>
+
+Given a Sail definition, the tool will type-check it and generate
+executable emulators, in C and OCaml, theorem-prover definitions for
+Isabelle, HOL4, and Coq, and definitions to integrate with our 
+<a href="http://www.cl.cam.ac.uk/users/pes20/rmem">RMEM</a> tool for
+concurrency semantics.  This is all work in progress, and some
+theorem-prover definitions do not yet work for the more complex
+models; see the most recent papers and the ARMv8.5-A model for
+descriptions of the current state.
+<p>
+
+  <img src="https://www.cl.cam.ac.uk/~pes20/sail/overview-sail.png">
+<p>
 
 This repository contains the implementation of Sail, together with
 some Sail specifications and related tools.
