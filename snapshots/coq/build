@@ -1,7 +1,7 @@
 #!/bin/bash
 
-if [ ! -d mips ]; then
-  echo Run clean from the coq directory
+if [ ! -d cheri-mips ]; then
+  echo Run build from the coq directory
   exit 1
 fi
 
@@ -13,7 +13,13 @@ fi
 set -ex
 cd lib/coq
 make
-cd ../../mips
+cd ../../cheri-mips
 coqc -R ../../bbv/theories bbv -R ../lib/coq Sail mips_extras.v
 coqc -R ../../bbv/theories bbv -R ../lib/coq Sail mips_types.v
 coqc -R ../../bbv/theories bbv -R ../lib/coq Sail mips.v
+coqc -R ../../bbv/theories bbv -R ../lib/coq Sail cheri_types.v
+coqc -R ../../bbv/theories bbv -R ../lib/coq Sail cheri.v
+cd ../riscv
+coqc -R ../../bbv/theories bbv -R ../lib/coq Sail riscv_extras.v
+coqc -R ../../bbv/theories bbv -R ../lib/coq Sail riscv_types.v
+coqc -R ../../bbv/theories bbv -R ../lib/coq Sail riscv.v

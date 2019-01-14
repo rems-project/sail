@@ -726,6 +726,8 @@ let to_ast_def ctx def : unit def ctx_out =
   | P.DEF_scattered sdef ->
      let sdef, ctx = to_ast_scattered ctx sdef in
      DEF_scattered sdef, ctx
+  | P.DEF_measure (id, pat, exp) ->
+     DEF_measure (to_ast_id id, to_ast_pat ctx pat, to_ast_exp ctx exp), ctx
 
 let rec remove_mutrec = function
   | [] -> []

@@ -8,7 +8,7 @@ val div = {
   ocaml: "quotient",
   lem: "integerDiv",
   c: "tdiv_int",
-  coq: "div_with_eq"
+  coq: "ediv_with_eq"
 } : forall 'n 'm. (atom('n), atom('m)) -> atom(div('n, 'm)) // {'o, 'o == div('n, 'm). atom('o)}
 
 overload operator / = {div}
@@ -18,7 +18,7 @@ val mod = {
   ocaml: "modulus",
   lem: "integerMod",
   c: "tmod_int",
-  coq: "mod_with_eq"
+  coq: "emod_with_eq"
 } : forall 'n 'm. (atom('n), atom('m)) -> {'o, 'o == mod('n, 'm). atom('o)}
 
 overload operator % = {mod}

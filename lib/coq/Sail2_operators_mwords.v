@@ -172,7 +172,20 @@ Definition zero_extend {a} (v : mword a) (n : Z) `{ArithFact (n >= a)} : mword n
 
 Definition sign_extend {a} (v : mword a) (n : Z) `{ArithFact (n >= a)} : mword n := exts_vec n v.
 
+Definition zeros (n : Z) `{ArithFact (n >= 0)} : mword n.
+refine (cast_to_mword (Word.wzero (Z.to_nat n)) _).
+unwrap_ArithFacts.
+apply Z2Nat.id.
+auto with zarith.
+Defined.
+
 Lemma truncate_eq {m n} : m >= 0 -> m <= n -> (Z.to_nat n = Z.to_nat m + (Z.to_nat n - Z.to_nat m))%nat.
+intros.
+assert ((Z.to_nat m <= Z.to_nat n)%nat).
+{ apply Z2Nat.inj_le; omega. }
+omega.
+Qed.
+Lemma truncateLSB_eq {m n} : m >= 0 -> m <= n -> (Z.to_nat n = (Z.to_nat n - Z.to_nat m) + Z.to_nat m)%nat.
 intros.
 assert ((Z.to_nat m <= Z.to_nat n)%nat).
 { apply Z2Nat.inj_le; omega. }
@@ -181,6 +194,9 @@ Qed.
 
 Definition vector_truncate {n} (v : mword n) (m : Z) `{ArithFact (m >= 0)} `{ArithFact (m <= n)} : mword m :=
   cast_to_mword (Word.split1 _ _ (cast_word (get_word v) (ltac:(unwrap_ArithFacts; apply truncate_eq; auto) : Z.to_nat n = Z.to_nat m + (Z.to_nat n - Z.to_nat m))%nat)) (ltac:(unwrap_ArithFacts; apply Z2Nat.id; omega) : Z.of_nat (Z.to_nat m) = m).
+
+Definition vector_truncateLSB {n} (v : mword n) (m : Z) `{ArithFact (m >= 0)} `{ArithFact (m <= n)} : mword m :=
+  cast_to_mword (Word.split2 _ _ (cast_word (get_word v) (ltac:(unwrap_ArithFacts; apply truncateLSB_eq; auto) : Z.to_nat n = (Z.to_nat n - Z.to_nat m) + Z.to_nat m)%nat)) (ltac:(unwrap_ArithFacts; apply Z2Nat.id; omega) : Z.of_nat (Z.to_nat m) = m).
 
 Lemma concat_eq {a b} : a >= 0 -> b >= 0 -> Z.of_nat (Z.to_nat b + Z.to_nat a)%nat = a + b.
 intros.

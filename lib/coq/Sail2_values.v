@@ -9,6 +9,7 @@ Require Export List.
 Require Export Sumbool.
 Require Export DecidableClass.
 Require Import Eqdep_dec.
+Require Export Zeuclid.
 Import ListNotations.
 
 Open Scope Z.
@@ -1125,6 +1126,10 @@ repeat
   end.
 *)
 
+(* The linear solver doesn't like existentials. *)
+Ltac destruct_exists :=
+  repeat match goal with H:@ex Z _ |- _ => destruct H end.
+
 Ltac prepare_for_solver :=
 (*dump_context;*)
  clear_irrelevant_defns;
@@ -1134,6 +1139,7 @@ Ltac prepare_for_solver :=
  extract_properties;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
  unwrap_ArithFacts;
+ destruct_exists;
  unbool_comparisons;
  unfold_In; (* after unbool_comparisons to deal with && and || *)
  reduce_list_lengths;
@@ -1175,6 +1181,8 @@ prepare_for_solver;
  [ match goal with |- ArithFact (?x _) => is_evar x; idtac "Warning: unknown constraint"; constructor; exact (I : (fun _ => True) _) end
  | apply ArithFact_mword; assumption
  | constructor; omega with Z
+   (* Try sail hints before dropping the existential *)
+ | constructor; eauto 3 with zarith sail
    (* The datatypes hints give us some list handling, esp In *)
  | constructor; drop_exists; eauto 3 with datatypes zarith sail
  | constructor; idtac "Unable to solve constraint"; dump_context; fail
@@ -1647,8 +1655,8 @@ end
 (* Arithmetic functions which return proofs that match the expected Sail
    types in smt.sail. *)
 
-Definition div_with_eq n m : {o : Z & ArithFact (o = Z.quot n m)} := build_ex (Z.quot n m).
-Definition mod_with_eq n m : {o : Z & ArithFact (o = Z.rem n m)} := build_ex (Z.rem n m).
+Definition ediv_with_eq n m : {o : Z & ArithFact (o = ZEuclid.div n m)} := build_ex (ZEuclid.div n m).
+Definition emod_with_eq n m : {o : Z & ArithFact (o = ZEuclid.modulo n m)} := build_ex (ZEuclid.modulo n m).
 Definition abs_with_eq n   : {o : Z & ArithFact (o = Z.abs n)} := build_ex (Z.abs n).
 
 (* Similarly, for ranges (currently in MIPS) *)
@@ -1798,3 +1806,7 @@ Definition sub_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
 Definition min_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
   {z : Z & ArithFact (z >= 0)} :=
   build_ex (Z.min x y).
+
+Definition max_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
+  {z : Z & ArithFact (z >= 0)} :=
+  build_ex (Z.max x y).

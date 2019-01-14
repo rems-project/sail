@@ -1,11 +1,12 @@
 #!/bin/bash
 
-if [ ! -d mips ]; then
+if [ ! -d cheri-mips ]; then
   echo Run clean from the coq directory
   exit 1
 fi
 
 set -ex 
-rm -f mips/*.vo
+rm -f cheri-mips/*.{vo,glob} cheri-mips/.*.aux
+rm -f riscv/*.{vo,glob} riscv/.*.aux
 cd lib/coq
 make clean

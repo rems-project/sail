@@ -363,15 +363,13 @@ let rewrite_def rewriters d = match d with
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
   | DEF_pragma (pragma, arg, l) -> DEF_pragma (pragma, arg, l)
-  | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "DEF_scattered survived to rewriter")
+  | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "DEF_scattered survived to rewritter")
+  | DEF_measure (id,pat,exp) -> DEF_measure (id,rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
 
 let rewrite_defs_base rewriters (Defs defs) =
-  let rec rewrite = function
+  let rec rewrite ds = match ds with
     | [] -> []
-    | d :: ds ->
-       let d = rewriters.rewrite_def rewriters d in
-       d :: rewrite ds
-  in
+    | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds) in
   Defs (rewrite defs)
 
 let rewrite_defs_base_progress prefix rewriters (Defs defs) =

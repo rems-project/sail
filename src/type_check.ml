@@ -4307,6 +4307,22 @@ let check_tannotopt env typq ret_typ = function
      then ()
      else typ_error env l (string_of_bind (typq, ret_typ) ^ " and " ^ string_of_bind (annot_typq, annot_ret_typ) ^ " do not match between function and val spec")
 
+let check_termination_measure env arg_typs pat exp =
+  let typ = match arg_typs with [x] -> x | _ -> Typ_aux (Typ_tup arg_typs,Unknown) in
+  let tpat, env = bind_pat_no_guard env (strip_pat pat) typ in
+  let texp = check_exp env (strip_exp exp) int_typ in
+  tpat, texp
+
+let check_termination_measure_decl env (id, pat, exp) =
+  let quant, typ = Env.get_val_spec id env in
+  let arg_typs, l = match typ with
+    | Typ_aux (Typ_fn (arg_typs, _ ,_),l) -> arg_typs,l
+    | _ -> typ_error env (id_loc id) "Function val spec is not a function type"
+  in
+  let env = add_typquant l quant env in
+  let tpat, texp = check_termination_measure env arg_typs pat exp in
+  DEF_measure (id, tpat, texp)
+
 let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, _)) as fd_aux) =
   let id =
     match (List.fold_right
@@ -4339,9 +4355,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
     | Rec_aux (Rec_nonrec, l) -> Rec_aux (Rec_nonrec, l)
     | Rec_aux (Rec_rec, l) -> Rec_aux (Rec_rec, l)
     | Rec_aux (Rec_measure (measure_p, measure_e), l) ->
-       let typ = match vtyp_args with [x] -> x | _ -> Typ_aux (Typ_tup vtyp_args,Unknown) in
-       let tpat, env = bind_pat_no_guard funcl_env (strip_pat measure_p) typ in
-       let texp = check_exp env (strip_exp measure_e) int_typ in
+       let tpat, texp = check_termination_measure funcl_env vtyp_args measure_p measure_e in
        Rec_aux (Rec_measure (tpat, texp), l)
   in
   let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
@@ -4579,6 +4593,7 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   | DEF_reg_dec (DEC_aux (DEC_alias (id, aspec), (l, annot))) -> cd_err ()
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered sdef -> check_scattered env sdef
+  | DEF_measure (id, pat, exp) -> [check_termination_measure_decl env (id, pat, exp)], env
 
 and check_defs : 'a. int -> int -> Env.t -> 'a def list -> tannot defs * Env.t =
   fun n total env defs ->
