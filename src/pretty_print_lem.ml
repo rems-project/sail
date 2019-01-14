@@ -1362,6 +1362,7 @@ let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
        else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ)) *)
   | DEC_alias(id,alspec) -> empty
   | DEC_typ_alias(typ,id,alspec) -> empty
+  | DEC_config _ -> empty
 
 let doc_spec_lem (VS_aux (valspec,annot)) =
   match valspec with

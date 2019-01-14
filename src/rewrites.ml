@@ -400,7 +400,7 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
   and rewrite_e_sizeof split_sizeof =
     { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux split_sizeof (E_aux (exp, annot))) }
   in
-  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp (rewrite_e_sizeof true)) }, rewrite_e_aux true
+  rewrite_defs_base_parallel 4 { rewriters_base with rewrite_exp = (fun _ -> fold_exp (rewrite_e_sizeof true)) }, rewrite_e_aux true
 
 (* Rewrite sizeof expressions with type-level variables to
    term-level expressions

@@ -383,6 +383,64 @@ let rewrite_defs_base_progress prefix rewriters (Defs defs) =
   in
   Defs (rewrite 1 defs)
 
+let rec takedrop n xs =
+  match n, xs with
+  | 0, _ -> [], xs
+  | n, [] -> [], []
+  | n, x :: xs ->
+     let ys, xs = takedrop (n - 1) xs in
+     x :: ys, xs
+
+let rewrite_defs_base_parallel j rewriters (Defs defs) =
+  let module IntMap = Map.Make(struct type t = int let compare = compare end) in
+  let total = List.length defs in
+  let defs = ref defs in
+
+  (* We have a list of child processes in pids, and a mapping from pid
+     to result location in results. *)
+  let pids = ref [] in
+  let results = ref IntMap.empty in
+  for i = 1 to j do
+    let work = if i = 1 then total / j + total mod j else total / j in
+    let work, rest = takedrop work !defs in
+    (* Create a temporary file where the child process will return it's result *)
+    let result = Filename.temp_file "sail" ".rewrite" in
+    let pid = Unix.fork () in
+    begin
+      if pid = 0 then
+        let Defs work = rewrite_defs_base rewriters (Defs work) in
+        let out_chan = open_out result in
+        Marshal.to_channel out_chan work [Marshal.Closures];
+        close_out out_chan;
+        exit 0
+      else
+        (pids := pid :: !pids; results := IntMap.add pid result !results)
+    end;
+    defs := rest
+  done;
+  (* Make sure we haven't left any definitions behind! *)
+  assert(List.length !defs = 0);
+
+  let rewritten = ref [] in
+
+  (* Now we wait for all our child processes *)
+  while List.compare_length_with !pids 0 > 0 do
+    let child = List.hd !pids in
+    pids := List.tl !pids;
+    let _, status = Unix.waitpid [] child in
+    match status with
+    | WEXITED 0 ->
+       let result = IntMap.find child !results in
+       let in_chan = open_in result in
+       rewritten := Marshal.from_channel in_chan :: !rewritten;
+       close_in in_chan;
+       Sys.remove result
+    | _ ->
+       prerr_endline "Child process exited abnormally in parallel rewrite";
+       exit 1
+  done;
+  Defs (List.concat !rewritten)
+  
 let rewriters_base =
   {rewrite_exp = rewrite_exp;
    rewrite_pat = rewrite_pat;

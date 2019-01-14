@@ -417,6 +417,8 @@ let main() =
            close_out chan
          end
        else ());
+
+      if !opt_memo_z3 then Constraint.save_digests () else ()
     end
 
 let _ =  try
