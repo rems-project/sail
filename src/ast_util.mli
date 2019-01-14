@@ -282,6 +282,11 @@ module BE : sig
   val compare : base_effect -> base_effect -> int
 end
 
+module NC : sig
+  type t = n_constraint
+  val compare : n_constraint -> n_constraint -> int
+end
+
 (* NB: the comparison function does not expand synonyms *)
 module Typ : sig
   type t = typ

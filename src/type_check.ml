@@ -1512,7 +1512,17 @@ and unify_constraint l env goals (NC_aux (aux1, _) as nc1) (NC_aux (aux2, _) as 
   match aux1, aux2 with
   | NC_var v, _ when KidSet.mem v goals -> KBindings.singleton v (arg_bool nc2)
   | NC_var v, NC_var v' when Kid.compare v v' = 0 -> KBindings.empty
-  | NC_and (nc1a, nc2a), NC_and (nc1b, nc2b) | NC_or (nc1a, nc2a), NC_or (nc1b, nc2b) ->
+  | NC_and (nc1a, nc2a), NC_and (nc1b, nc2b) ->
+     begin
+       try
+         let conjs1 = List.sort NC.compare (constraint_conj nc1) in
+         let conjs2 = List.sort NC.compare (constraint_conj nc2) in
+         let unify_merge uv nc1 nc2 = merge_uvars l uv (unify_constraint l env goals nc1 nc2) in
+         List.fold_left2 unify_merge KBindings.empty conjs1 conjs2
+       with
+       | _ -> merge_uvars l (unify_constraint l env goals nc1a nc1b) (unify_constraint l env goals nc2a nc2b)
+     end
+  | NC_or (nc1a, nc2a), NC_or (nc1b, nc2b) ->
      merge_uvars l (unify_constraint l env goals nc1a nc1b) (unify_constraint l env goals nc2a nc2b)
   | NC_app (f1, args1), NC_app (f2, args2) when Id.compare f1 f2 = 0 && List.length args1 = List.length args2 ->
      List.fold_left (merge_uvars l) KBindings.empty (List.map2 (unify_typ_arg l env goals) args1 args2)
@@ -1562,8 +1572,18 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
        else
          if KidSet.is_empty (nexp_frees n1a)
          then unify_nexp l env goals n1b (nminus nexp2 n1a)
-         else unify_error l ("Both sides of Int expression " ^ string_of_nexp nexp1
-                             ^ " contain free type variables so it cannot be unified with " ^ string_of_nexp nexp2)
+         else begin
+           match nexp_aux2 with
+           | Nexp_sum (n2a, n2b) ->
+              if nexp_identical n1a n2a
+              then unify_nexp l env goals n1b n2b
+              else
+                if nexp_identical n1b n2b
+                then unify_nexp l env goals n1a n2a
+                else unify_error l "Unification error"
+           | _ -> unify_error l ("Both sides of Int expression " ^ string_of_nexp nexp1
+                               ^ " contain free type variables so it cannot be unified with " ^ string_of_nexp nexp2)
+         end
     | Nexp_minus (n1a, n1b) ->
        if KidSet.is_empty (nexp_frees n1b)
        then unify_nexp l env goals n1a (nsum nexp2 n1b)
