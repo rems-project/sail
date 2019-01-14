@@ -1518,11 +1518,11 @@ and unify_constraint l env goals (NC_aux (aux1, _) as nc1) (NC_aux (aux2, _) as 
      List.fold_left (merge_uvars l) KBindings.empty (List.map2 (unify_typ_arg l env goals) args1 args2)
   | NC_equal (n1a, n2a), NC_equal (n1b, n2b) ->
      merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
-  | NC_not_equal (n1a, n2a), NC_equal (n1b, n2b) ->
+  | NC_not_equal (n1a, n2a), NC_not_equal (n1b, n2b) ->
      merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
-  | NC_bounded_ge (n1a, n2a), NC_equal (n1b, n2b) ->
+  | NC_bounded_ge (n1a, n2a), NC_bounded_ge (n1b, n2b) ->
      merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
-  | NC_bounded_le (n1a, n2a), NC_equal (n1b, n2b) ->
+  | NC_bounded_le (n1a, n2a), NC_bounded_le (n1b, n2b) ->
      merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_true, NC_true -> KBindings.empty
   | NC_false, NC_false -> KBindings.empty
