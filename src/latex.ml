@@ -102,8 +102,7 @@ type id_category =
   | FunclNum of int
   | FunclApp of string
 
-let replace_numbers str =
-  let replacements =
+let number_replacements =
     [ ("0", "Zero");
       ("1", "One");
       ("2", "Two");
@@ -114,8 +113,19 @@ let replace_numbers str =
       ("7", "Seven");
       ("8", "Eight");
       ("9", "Nine") ]
-  in
+
+(* add to this as needed *)
+let other_replacements =
+    [ ("_", "Underscore") ]
+
+let char_replace str replacements =
   List.fold_left (fun str (from, into) -> Str.global_replace (Str.regexp_string from) into str) str replacements
+
+let replace_numbers str =
+  char_replace str number_replacements
+
+let replace_others str =
+  char_replace str other_replacements
 
 let category_name = function
   | Function -> "fn"
@@ -123,7 +133,7 @@ let category_name = function
   | Overload -> "overload"
   | FunclNum n -> "fcl" ^ unique_postfix n
   | FunclCtor (id, n) ->
-     let str = replace_numbers (Util.zencode_string (string_of_id id)) in
+     let str = replace_others (replace_numbers (Util.zencode_string (string_of_id id))) in
      "fcl" ^ String.sub str 1 (String.length str - 1) ^ unique_postfix n
   | FunclApp str -> "fcl" ^ str
 
@@ -162,8 +172,8 @@ let latex_id id =
     (* If we have any other weird symbols in the id, remove them using Util.zencode_string (removing the z prefix) *)
     let str = Util.zencode_string str in
     let str = String.sub str 1 (String.length str - 1) in
-    (* Latex only allows letters in identifiers, so replace all numbers *)
-    let str = replace_numbers str in
+    (* Latex only allows letters in identifiers, so replace all numbers and other characters *)
+    let str = replace_others (replace_numbers str) in
 
     let generated = state.generated_names |> Bindings.bindings |> List.map snd |> StringSet.of_list in
 
