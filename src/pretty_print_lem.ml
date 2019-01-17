@@ -581,6 +581,8 @@ let doc_exp_lem, doc_let_lem =
       then wrap_parens (separate space [string "liftR"; parens (doc)])
       else wrap_parens doc in
     match e with
+    | E_assign(_, _) when has_effect (effect_of full_exp) BE_config ->
+       string "return ()" (* TODO *)
     | E_assign((LEXP_aux(le_act,tannot) as le), e) ->
        (* can only be register writes *)
        let t = typ_of_annot tannot in
@@ -825,7 +827,7 @@ let doc_exp_lem, doc_let_lem =
          if is_bitvector_typ base_typ
          then liftR (parens (align (group (prefix 0 1 epp (doc_tannot_lem ctxt env true base_typ)))))
          else liftR epp
-       else if Env.is_register id env then doc_id_lem (append_id id "_ref")
+       else if Env.is_register id env && is_regtyp (typ_of full_exp) env then doc_id_lem (append_id id "_ref")
        else if is_ctor env id then doc_id_lem_ctor id
        else doc_id_lem id
     | E_lit lit -> doc_lit_lem lit
@@ -1360,9 +1362,9 @@ let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
            ^/^ hardline
          else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ))
        else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ)) *)
+  | DEC_config(id, typ, exp) -> separate space [string "let"; doc_id_lem id; equals; doc_exp_lem empty_ctxt false exp] ^^ hardline
   | DEC_alias(id,alspec) -> empty
   | DEC_typ_alias(typ,id,alspec) -> empty
-  | DEC_config _ -> empty
 
 let doc_spec_lem (VS_aux (valspec,annot)) =
   match valspec with
