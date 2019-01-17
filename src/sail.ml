@@ -390,13 +390,13 @@ let main() =
          let mwords = !Pretty_print_lem.opt_mwords in
          let type_envs, ast_lem = State.add_regstate_defs mwords type_envs ast in
          let ast_lem = rewrite_ast_lem ast_lem in
-         output "" (Lem_out (!opt_libs_lem)) [out_name,ast_lem]
+         output "" (Lem_out (!opt_libs_lem)) [out_name,type_envs,ast_lem]
        else ());
       (if !(opt_print_coq)
        then
          let type_envs, ast_coq = State.add_regstate_defs true type_envs ast in
          let ast_coq = rewrite_ast_coq ast_coq in
-         output "" (Coq_out (!opt_libs_coq)) [out_name,ast_coq]
+         output "" (Coq_out (!opt_libs_coq)) [out_name,type_envs,ast_coq]
        else ());
       (if !(opt_print_latex)
        then

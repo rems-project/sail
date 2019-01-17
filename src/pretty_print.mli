@@ -52,4 +52,4 @@ open Ast
 open Type_check
 
 (* Prints on formatter the defs as Lem Ast nodes *)
-val pp_defs_lem : (out_channel * string list) -> (out_channel * string list) -> tannot defs -> string -> unit
+val pp_defs_lem : (out_channel * string list) -> (out_channel * string list) -> Env.t -> tannot defs -> string -> unit
