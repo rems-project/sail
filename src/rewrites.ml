@@ -2836,7 +2836,7 @@ let rewrite_defs_letbind_effects =
        rewrap (E_var (lexp,exp1,n_exp exp2 k))))
     | E_internal_return exp1 ->
        n_exp_name exp1 (fun exp1 ->
-       k (rewrap (E_internal_return exp1)))
+       k (if effectful (propagate_exp_effect exp1) then exp1 else rewrap (E_internal_return exp1)))
     | E_internal_value v ->
        k (rewrap (E_internal_value v))
     | E_return exp' ->
