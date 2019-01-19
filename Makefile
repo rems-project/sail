@@ -73,4 +73,4 @@ clean:
 	for subdir in src arm ; do\
 	  $(MAKE) -C "$$subdir" clean;\
 	done
-	-rm sail
+	rm -f sail
