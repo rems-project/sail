@@ -156,6 +156,9 @@ let options = Arg.align ([
   ( "-lem_output_dir",
     Arg.String (fun dir -> Process_file.opt_lem_output_dir := Some dir),
     " set a custom directory to output generated Lem");
+  ( "-isa_output_dir",
+    Arg.String (fun dir -> Process_file.opt_isa_output_dir := Some dir),
+    " set a custom directory to output generated Isabelle auxiliary theories");
   ( "-lem_lib",
     Arg.String (fun l -> opt_libs_lem := l::!opt_libs_lem),
     "<filename> provide additional library to open in Lem output");
