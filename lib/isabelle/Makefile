@@ -7,7 +7,7 @@ EXTRA_THYS = Sail2_state_monad_lemmas.thy Sail2_state_lemmas.thy \
   Sail2_prompt_monad_lemmas.thy \
   Sail2_operators_mwords_lemmas.thy Hoare.thy
 
-RISCV_DIR = ../../riscv
+RISCV ?= ../../../sail-riscv
 
 .PHONY: all heap-img clean
 
@@ -24,8 +24,8 @@ heap-img: thys $(EXTRA_THYS) ROOT
 
 manual: heap-img manual/Manual.thy manual/ROOT manual/document/root.tex
 	cp output/document/session_graph.pdf manual/document/Sail_session_graph.pdf
-	make -C $(RISCV_DIR) Riscv_duopod.thy
-	isabelle build -d manual -d $(RISCV_DIR) Sail-Manual
+	make -C $(RISCV) riscv_duopod
+	isabelle build -d manual -d $(RISCV)/generated_definitions/isabelle Sail-Manual
 
 Sail2_instr_kinds.thy: ../../src/lem_interp/sail2_instr_kinds.lem
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
