@@ -7,6 +7,11 @@ EXTRA_THYS = Sail2_state_monad_lemmas.thy Sail2_state_lemmas.thy \
   Sail2_prompt_monad_lemmas.thy \
   Sail2_operators_mwords_lemmas.thy Hoare.thy
 
+LEM_ISA_LIB?=$(shell opam config var lem:share)/isabelle-lib
+ifeq ($(wildcard $(LEM_ISA_LIB)/ROOT),)
+$(error isabelle-lib directory of Lem not found. Please set the LEM_ISA_LIB environment variable)
+endif
+
 RISCV ?= ../../../sail-riscv
 
 .PHONY: all heap-img clean
@@ -16,12 +21,12 @@ all: thys
 thys: $(THYS)
 
 heap-img: thys $(EXTRA_THYS) ROOT
-	isabelle build -D .
+	isabelle build -d $(LEM_ISA_LIB) -D .
 
 manual: heap-img manual/Manual.thy manual/ROOT manual/document/root.tex
 	cp output/document/session_graph.pdf manual/document/Sail_session_graph.pdf
 	make -C $(RISCV) riscv_duopod
-	isabelle build -d . -d $(RISCV)/generated_definitions/isabelle -D manual
+	isabelle build -d $(LEM_ISA_LIB) -d . -d $(RISCV)/generated_definitions/isabelle -D manual
 
 Sail2_instr_kinds.thy: ../../src/lem_interp/sail2_instr_kinds.lem
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
