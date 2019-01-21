@@ -82,10 +82,9 @@ with all the required dependencies.
 Emacs Mode
 ==========
 
-[editors/sail2-mode.el](editors/sail2-mode.el) contains an Emacs mode
+[editors/sail-mode.el](editors/sail-mode.el) contains an Emacs mode
 for the most recent version of Sail which provides some basic syntax
-highlighting. [editors/sail-mode.el](editors/sail-mode.el) contains an
-emacs mode for previous versions of the language.
+highlighting.
 
 Licensing
 =========
