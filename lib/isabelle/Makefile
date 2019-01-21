@@ -16,16 +16,12 @@ all: thys
 thys: $(THYS)
 
 heap-img: thys $(EXTRA_THYS) ROOT
-	@echo '*** To build a heap image with the Sail library, please'
-	@echo '*** add this directory to your ROOTS file'
-	@echo '*** (e.g. $$HOME/.isabelle/Isabelle<version>/ROOTS)'
-	@echo '*** and add the isabelle binary to your PATH.'
-	isabelle build -b Sail
+	isabelle build -D .
 
 manual: heap-img manual/Manual.thy manual/ROOT manual/document/root.tex
 	cp output/document/session_graph.pdf manual/document/Sail_session_graph.pdf
 	make -C $(RISCV) riscv_duopod
-	isabelle build -d manual -d $(RISCV)/generated_definitions/isabelle Sail-Manual
+	isabelle build -d . -d $(RISCV)/generated_definitions/isabelle -D manual
 
 Sail2_instr_kinds.thy: ../../src/lem_interp/sail2_instr_kinds.lem
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<

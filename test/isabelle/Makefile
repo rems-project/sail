@@ -1,7 +1,8 @@
-CHERI_DIR = ../../cheri
-AARCH64_DIR = ../../aarch64
+ISA_LIB_DIR = ../../lib/isabelle
+CHERI_DIR ?= ../../../sail-cheri-mips/cheri
+AARCH64_DIR ?= ../../aarch64
 TGTS = run_cheri.native run_aarch64.native
-SESSION_DIRS = -d $(CHERI_DIR) -d $(AARCH64_DIR) -d .
+SESSION_DIRS = -d $(ISA_LIB_DIR) -d $(CHERI_DIR) -d $(AARCH64_DIR) -d .
 
 .PHONY: all clean
 
