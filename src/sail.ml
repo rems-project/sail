@@ -112,6 +112,9 @@ let options = Arg.align ([
   ( "-latex",
     Arg.Tuple [Arg.Set opt_print_latex; Arg.Clear Type_check.opt_expand_valspec ],
     " pretty print the input to latex");
+  ( "-latex_full_valspecs",
+    Arg.Clear Latex.opt_simple_val,
+    " print full valspecs in latex output latex");
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
