@@ -1243,7 +1243,7 @@ let prove_z3 env (NC_aux (_, l) as nc) =
   | Constraint.Sat -> typ_debug (lazy "sat"); false
   | Constraint.Unknown -> typ_debug (lazy "unknown"); false
 
-let solve env (Nexp_aux (_, l) as nexp) = 
+let solve env (Nexp_aux (_, l) as nexp) =
   typ_print (lazy (Util.("Solve " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env)
                    ^ " |- " ^ string_of_nexp nexp ^ " = ?"));
   match nexp with
@@ -1254,6 +1254,8 @@ let solve env (Nexp_aux (_, l) as nexp) =
     let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
     let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
     Constraint.solve_z3 l vars constr (mk_kid "solve#")
+
+
 
 let prove env nc =
   typ_print (lazy (Util.("Prove " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc));
