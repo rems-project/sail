@@ -372,7 +372,7 @@ Sail allows numerous ways to match on bitvectors, for example:
 \begin{lstlisting}
 match v {
   0xFF => print("hex match"),
-  0x0000_0001 => print("binary match"),
+  0b0000_0001 => print("binary match"),
   0xF @ v : bits(4) => print("vector concatenation pattern"),
   0xF @ [bitone, _, b1, b0] => print("vector pattern"),
   _ : bits(4) @ v : bits(4) => print("annotated wildcard pattern")
