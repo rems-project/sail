@@ -629,7 +629,7 @@ implicitly dereference registers if that semantics is desired for a
 specific specification that makes heavy use of register references,
 like so:
 \begin{lstlisting}
-val cast auto_reg_deref = "reg_deref" : forall ('a : Type). register('a) -> a effect {rreg}
+val cast auto_reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 \end{lstlisting}
 
 
