@@ -22,7 +22,7 @@
 
 (defconst sail2-special
   '("_prove" "_not_prove" "create" "kill" "convert" "undefined"
-    "$define" "$include" "$ifdef" "$ifndef" "$else" "$endif" "$option" "$latex"))
+    "$define" "$include" "$ifdef" "$ifndef" "$else" "$endif" "$option" "$optimize" "$latex"))
 
 (defconst sail2-font-lock-keywords
   `((,(regexp-opt sail2-keywords 'symbols) . font-lock-keyword-face)

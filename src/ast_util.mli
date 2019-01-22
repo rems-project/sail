@@ -372,6 +372,8 @@ val is_valspec : id -> 'a def -> bool
 
 val is_fundef : id -> 'a def -> bool
 
+val rename_valspec : id -> 'a val_spec -> 'a val_spec
+
 val rename_fundef : id -> 'a fundef -> 'a fundef
 
 val split_defs : ('a def -> bool) -> 'a defs -> ('a defs * 'a def * 'a defs) option

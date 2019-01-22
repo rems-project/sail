@@ -1763,6 +1763,9 @@ let rec compile_def ctx = function
   (* Only the parser and sail pretty printer care about this. *)
   | DEF_fixity _ -> [], ctx
 
+  (* We just ignore any pragmas we don't want to deal with. *)
+  | DEF_pragma _ -> [], ctx
+
   | DEF_internal_mutrec fundefs ->
      let defs = List.map (fun fdef -> DEF_fundef fdef) fundefs in
      List.fold_left (fun (cdefs, ctx) def -> let cdefs', ctx = compile_def ctx def in (cdefs @ cdefs', ctx)) ([], ctx) defs

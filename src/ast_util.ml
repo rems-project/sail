@@ -128,7 +128,7 @@ let mk_val_spec vs_aux =
 
 let kopt_kid (KOpt_aux (KOpt_kind (_, kid), _)) = kid
 let kopt_kind (KOpt_aux (KOpt_kind (k, _), _)) = k
-                                               
+
 let is_nat_kopt = function
   | KOpt_aux (KOpt_kind (K_aux (K_int, _), _), _) -> true
   | _ -> false
@@ -165,7 +165,7 @@ module Kind = struct
     | K_type, _ -> 1 | _, K_type -> -1
     | K_order, _ -> 1 | _, K_order -> -1
 end
-                                  
+
 module KOpt = struct
   type t = kinded_id
   let compare kopt1 kopt2 =
@@ -1289,6 +1289,9 @@ let is_fundef id = function
   | DEF_fundef (FD_aux (FD_function (_, _, _, FCL_aux (FCL_Funcl (id', _), _) :: _), _)) when Id.compare id' id = 0 -> true
   | _ -> false
 
+let rename_valspec id (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot)) =
+  VS_aux (VS_val_spec (typschm, id, externs, is_cast), annot)
+
 let rename_funcl id (FCL_aux (FCL_Funcl (_, pexp), annot)) = FCL_aux (FCL_Funcl (id, pexp), annot)
 
 let rename_fundef id (FD_aux (FD_function (ropt, topt, eopt, funcls), annot)) =
@@ -1425,7 +1428,7 @@ let locate_id f (Id_aux (name, l)) = Id_aux (name, f l)
 let locate_kid f (Kid_aux (name, l)) = Kid_aux (name, f l)
 
 let locate_kind f (K_aux (kind, l)) = K_aux (kind, f l)
-                                     
+
 let locate_kinded_id f (KOpt_aux (KOpt_kind (k, kid), l)) =
   KOpt_aux (KOpt_kind (locate_kind f k, locate_kid f kid), f l)
 

@@ -4470,6 +4470,14 @@ and check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
      let (Defs defs, env) = check env (Defs defs) in
      (Defs (def @ defs)), env
 
+and check_with_envs : 'a. Env.t -> 'a def list -> (tannot def list * Env.t) list =
+  fun env defs ->
+  match defs with
+  | [] -> []
+  | def :: defs ->
+     let def, env = check_def env def in
+     (def, env) :: check_with_envs env defs
+
 let initial_env =
   Env.empty
   |> Env.add_prover prove
