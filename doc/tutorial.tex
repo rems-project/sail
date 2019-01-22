@@ -499,7 +499,7 @@ written
 \end{lstlisting}
 but it would not have type-checked. The reason for this is if a
 mutable variable is declared without a type, Sail will try to infer
-the most specific type from the left hand side of the
+the most specific type from the right hand side of the
 expression. However, in this case Sail will infer the type as
 \ll{int(3)} and will therefore complain when we try to reassign it to
 \ll{2}, as the type \ll{int(2)} is not a subtype of \ll{int(3)}. We
