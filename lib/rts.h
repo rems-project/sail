@@ -65,6 +65,9 @@ void read_ram(lbits *data,
 	      const lbits hex_ram,
 	      const lbits addr_bv);
 
+sbits fast_read_ram(const int64_t data_size,
+		    const uint64_t addr_bv);
+
 unit write_tag_bool(const fbits, const bool);
 bool read_tag_bool(const fbits);
 

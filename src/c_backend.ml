@@ -1399,9 +1399,11 @@ let compile_type_def ctx (TD_aux (type_def, _)) =
      CTD_struct (id, Bindings.bindings ctors),
      { ctx with records = Bindings.add id ctors ctx.records }
 
-  | TD_variant (id, _, _, tus, _) ->
+  | TD_variant (id, _, typq, tus, _) ->
      let compile_tu = function
-       | Tu_aux (Tu_ty_id (typ, id), _) -> ctyp_of_typ ctx typ, id
+       | Tu_aux (Tu_ty_id (typ, id), _) ->
+          let ctx = { ctx with local_env = add_typquant (id_loc id) typq ctx.local_env } in
+          ctyp_of_typ ctx typ, id
      in
      let ctus = List.fold_left (fun ctus (ctyp, id) -> Bindings.add id ctyp ctus) Bindings.empty (List.map compile_tu tus) in
      CTD_variant (id, Bindings.bindings ctus),

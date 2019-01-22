@@ -238,6 +238,21 @@ bool write_ram(const mpz_t addr_size,     // Either 32 or 64
   return true;
 }
 
+sbits fast_read_ram(const int64_t data_size,
+		    const uint64_t addr)
+{
+  uint64_t r = 0;
+  
+  uint64_t byte;
+  for(uint64_t i = (uint64_t) data_size; i > 0; --i) {
+    byte = read_mem(addr + (i - 1));
+    r = r << 8;
+    r = r + byte;
+  }
+  sbits res = {.len = data_size * 8, .bits = r };
+  return res;
+}
+
 void read_ram(lbits *data,
 	      const mpz_t addr_size,
 	      const mpz_t data_size_mpz,
