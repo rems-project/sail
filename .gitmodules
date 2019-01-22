@@ -1,0 +1,3 @@
+[submodule "sail-riscv"]
+	path = sail-riscv
+	url = https://github.com/rems-project/sail-riscv.git

@@ -52,7 +52,7 @@ ifeq ($(shell which sail),)
 $(error Cannot find sail executable, make sure it is in PATH)
 endif
 
-SAIL_RISCV=../../sail-riscv
+SAIL_RISCV=../sail-riscv
 
 all: manual.pdf
 
