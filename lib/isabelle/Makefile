@@ -8,9 +8,6 @@ EXTRA_THYS = Sail2_state_monad_lemmas.thy Sail2_state_lemmas.thy \
   Sail2_operators_mwords_lemmas.thy Hoare.thy
 
 LEM_ISA_LIB?=$(shell opam config var lem:share)/isabelle-lib
-ifeq ($(wildcard $(LEM_ISA_LIB)/ROOT),)
-$(error isabelle-lib directory of Lem not found. Please set the LEM_ISA_LIB environment variable)
-endif
 
 SAIL_RISCV ?= ../../../sail-riscv
 
@@ -21,6 +18,9 @@ all: thys
 thys: $(THYS)
 
 heap-img: thys $(EXTRA_THYS) ROOT
+ifeq ($(wildcard $(LEM_ISA_LIB)/ROOT),)
+	$(error isabelle-lib directory of Lem not found. Please set the LEM_ISA_LIB environment variable)
+endif
 	isabelle build -d $(LEM_ISA_LIB) -D .
 
 manual: heap-img manual/Manual.thy manual/ROOT manual/document/root.tex
