@@ -3887,12 +3887,10 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          let v = fix_eff_exp (annot_exp expaux pl env typ) in
          Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
     | E_assign (lexp,vexp) ->
-       let mk_id_pat id = match Env.lookup_id id env with
-         | Local (_, typ) ->
-            add_p_typ typ (annot_pat (P_id id) pl env typ)
-         | _ ->
-            raise (Reporting.err_unreachable pl __POS__
-              ("Failed to look up type of variable " ^ string_of_id id)) in
+       let mk_id_pat id =
+         let typ = lvar_typ (Env.lookup_id id env) in
+         add_p_typ typ (annot_pat (P_id id) pl env typ)
+       in
        if effectful exp then
          Same_vars (E_aux (E_assign (lexp,vexp),annot))
        else 
