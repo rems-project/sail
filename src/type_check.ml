@@ -2466,6 +2466,13 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
                Env.add_constraint nc env
             | None -> env
           end
+       | E_aux (E_if (cond, e_t, e_e), _) ->
+          begin
+            match unaux_exp (fst (uncast_exp e_t)) with
+            | E_throw _ | E_block [E_aux (E_throw _, _)] ->
+               add_opt_constraint (option_map nc_not (assert_constraint env false cond)) env
+            | _ -> env
+          end
        | _ -> env in
      let checked_body = crule check_exp env body typ in
      annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) typ
