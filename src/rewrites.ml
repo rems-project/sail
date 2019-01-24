@@ -4966,9 +4966,10 @@ let rewrite_explicit_measure (Defs defs) =
 
 let recheck_defs defs = fst (Type_error.check initial_env defs)
 let recheck_defs_without_effects defs =
+  let old = !opt_no_effects in
   let () = opt_no_effects := true in
   let result,_ = Type_error.check initial_env defs in
-  let () = opt_no_effects := false in
+  let () = opt_no_effects := old in
   result
 
 let remove_mapping_valspecs (Defs defs) =
