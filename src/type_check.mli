@@ -358,6 +358,8 @@ val expected_typ_of : Ast.l * tannot -> typ option
 
 val destruct_atom_nexp : Env.t -> typ -> nexp option
 
+val destruct_atom_bool : Env.t -> typ -> n_constraint option
+
 val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) option
 
 val destruct_numeric : ?name:string option -> typ -> (kid list * n_constraint * nexp) option
