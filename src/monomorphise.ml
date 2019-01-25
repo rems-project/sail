@@ -3418,7 +3418,7 @@ let rec sets_from_assert e =
       match e with
       | E_app (Id_aux (Id "or_bool",_),[e1;e2]) ->
          aux e1 @ aux e2
-      | E_app (Id_aux (Id "eq_atom",_),
+      | E_app (Id_aux (Id "eq_int",_),
                [E_aux (E_sizeof (Nexp_aux (Nexp_var kid,_)),_);
                 E_aux (E_lit (L_aux (L_num i,_)),_)]) ->
          (check_kid kid; [i])
@@ -4034,7 +4034,7 @@ let rec extract_value_from_guard var (E_aux (e,_)) =
   match e with
   | E_app (op, ([E_aux (E_id var',_); E_aux (E_lit (L_aux (L_num i,_)),_)] |
                 [E_aux (E_lit (L_aux (L_num i,_)),_); E_aux (E_id var',_)]))
-      when string_of_id op = "eq_atom" && Id.compare var var' == 0 ->
+      when string_of_id op = "eq_int" && Id.compare var var' == 0 ->
      Some i
   | E_app (op, [e1;e2]) when string_of_id op = "and_bool" ->
      (match extract_value_from_guard var e1 with
@@ -4047,7 +4047,8 @@ let fill_in_type env typ =
   let subst = KidSet.fold (fun kid subst ->
     match Env.get_typ_var kid env with
     | K_type
-    | K_order -> subst
+    | K_order
+    | K_bool -> subst
     | K_int ->
        (match solve env (nvar kid) with
        | None -> subst
@@ -4102,7 +4103,7 @@ let add_bitvector_casts (Defs defs) =
            | E_app (op,
                     ([E_aux (E_sizeof (Nexp_aux (Nexp_var kid,_)),_); y] |
                      [y; E_aux (E_sizeof (Nexp_aux (Nexp_var kid,_)),_)]))
-               when string_of_id op = "eq_atom" ->
+               when string_of_id op = "eq_int" ->
               (match destruct_atom_nexp (env_of y) (typ_of y) with
               | Some (Nexp_aux (Nexp_constant i,_)) -> [(kid,i)]
               | _ -> [])
