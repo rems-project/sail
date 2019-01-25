@@ -350,6 +350,14 @@ match nc1, nc2 with
 | _, NC_aux (NC_true,_) -> nc1
 | _,_ -> nc_and nc1 nc2
 
+let nice_iff nc1 nc2 =
+match nc1, nc2 with
+| NC_aux (NC_true,_), _ -> nc2
+| _, NC_aux (NC_true,_) -> nc1
+| NC_aux (NC_false,_), _ -> nc_not nc2
+| _, NC_aux (NC_false,_) -> nc_not nc1
+| _,_ -> nc_or (nc_and nc1 nc2) (nc_and (nc_not nc1) (nc_not nc2))
+
 (* n_constraint functions are currently just Z3 functions *)
 let doc_nc_fn_prop id =
   match string_of_id id with
@@ -468,6 +476,13 @@ let rec doc_typ_fns ctx =
                        [doc_var ctx var; colon; tpp;
                         ampersand;
                         doc_arithfact ctx ~exists:(List.map kopt_kid kopts) ?extra:length_constraint_pp nc])
+          | Typ_aux (Typ_app (Id_aux (Id "atom_bool",_), [A_aux (A_bool atom_nc,_)]),_) ->
+             let var = mk_kid "_bool" in (* TODO collision avoid *)
+             let nc = nice_and (nice_iff (nc_var var) atom_nc) nc in
+             braces (separate space
+                       [doc_var ctx var; colon; string "bool";
+                        ampersand;
+                        doc_arithfact ctx ~exists:(List.map kopt_kid kopts) nc])
           | _ ->
              raise (Reporting.err_todo l
                   ("Non-atom existential type not yet supported in Coq: " ^
@@ -1065,6 +1080,8 @@ let doc_exp, doc_let =
       then separate space [string "liftR"; parens (doc)]
       else doc in
     match e with
+    | E_assign(_, _) when has_effect (effect_of full_exp) BE_config ->
+       string "returnm tt" (* TODO *)
     | E_assign((LEXP_aux(le_act,tannot) as le), e) ->
        (* can only be register writes *)
        (match le_act (*, t, tag*) with
@@ -1453,7 +1470,7 @@ let doc_exp, doc_let =
          if is_bitvector_typ base_typ
          then wrap_parens (align (group (prefix 0 1 (parens (liftR epp)) (doc_tannot ctxt env true base_typ))))
          else liftR epp
-       else if Env.is_register id env then doc_id (append_id id "_ref")
+       else if Env.is_register id env && is_regtyp typ env then doc_id (append_id id "_ref")
        else if is_ctor env id then doc_id_ctor id
        else begin
          match Env.lookup_id id env with
@@ -1851,7 +1868,10 @@ let types_used_with_generic_eq defs =
   let typs_req_funcl (FCL_aux (FCL_Funcl (_,pexp), _)) =
     fst (Rewriter.fold_pexp alg pexp)
   in
-  let typs_req_def = function
+  let typs_req_fundef (FD_aux (FD_function (_,_,_,fcls),_)) =
+    List.fold_left IdSet.union IdSet.empty (List.map typs_req_funcl fcls)
+  in
+  let rec typs_req_def = function
     | DEF_type _
     | DEF_spec _
     | DEF_fixity _
@@ -1860,13 +1880,13 @@ let types_used_with_generic_eq defs =
     | DEF_pragma _
     | DEF_reg_dec _
       -> IdSet.empty
-    | DEF_fundef (FD_aux (FD_function (_,_,_,fcls),_)) ->
-       List.fold_left IdSet.union IdSet.empty (List.map typs_req_funcl fcls)
+    | DEF_fundef fd -> typs_req_fundef fd
     | DEF_mapdef (MD_aux (_,(l,_)))
     | DEF_scattered (SD_aux (_,(l,_)))
+    | DEF_measure (Id_aux (_,l),_,_)
       -> unreachable l __POS__ "Internal definition found in the Coq back-end"
-    | DEF_internal_mutrec _
-      -> unreachable Unknown __POS__ "Internal definition found in the Coq back-end"
+    | DEF_internal_mutrec fds ->
+       List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
     | DEF_val lb ->
        fst (Rewriter.fold_letbind alg lb)
   in
@@ -2168,7 +2188,9 @@ let merge_var_patterns map pats =
     | _ -> map, (pat,typ)::pats) (map,[]) pats
   in map, List.rev pats
 
-let doc_funcl rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
+type mutrec_pos = NotMutrec | FirstFn | LaterFn
+
+let doc_funcl mutrec rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let env = env_of_annot annot in
   let (tq,typ) = Env.get_val_spec_orig id env in
   let (arg_typs, ret_typ, eff) = match typ with
@@ -2290,6 +2312,13 @@ let doc_funcl rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
        let d = match r with Rec_nonrec -> "Definition" | _ -> "Fixpoint" in
        string d, [], [], []
   in
+  let intropp =
+    match mutrec with
+    | NotMutrec -> intropp
+    | FirstFn -> string "Fixpoint"
+    | LaterFn -> string "with"
+  in
+  let terminalpp = match mutrec with NotMutrec -> dot | _ -> empty in
   (* Work around Coq bug 7975 about pattern binders followed by implicit arguments *)
   let implicitargs =
     if !used_a_pattern && List.length constrspp + List.length atom_constrs > 0 then
@@ -2313,30 +2342,33 @@ let doc_funcl rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   group (prefix 3 1
     (flow (break 1) ([intropp; idpp] @ quantspp @ [patspp] @ constrspp @ [atom_constr_pp] @ accpp) ^/^
        flow (break 1) (measurepp @ [colon; retpp; coloneq]))
-    (bodypp ^^ dot)) ^^ implicitargs
+    (bodypp ^^ terminalpp)) ^^ implicitargs
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
   | (FCL_aux (FCL_Funcl (id,_),_))::_ -> id
 
-(* Strictly speaking, Lem doesn't support multiple clauses for a single function
-   joined by "and", although it has worked for Isabelle before.  However, all
-   the funcls should have been merged by the merge_funcls rewrite now. *)   
-let doc_fundef_rhs (FD_aux(FD_function(r, typa, efa, funcls),fannot)) =
-  separate_map (hardline ^^ string "and ") (doc_funcl r) funcls
+(* Coq doesn't support multiple clauses for a single function joined
+   by "and".  However, all the funcls should have been merged by the
+   merge_funcls rewrite now. *)
+let doc_fundef_rhs ?(mutrec=NotMutrec) (FD_aux(FD_function(r, typa, efa, funcls),(l,_))) =
+  match funcls with
+  | [] -> unreachable l __POS__ "function with no clauses"
+  | [funcl] -> doc_funcl mutrec r funcl
+  | (FCL_aux (FCL_Funcl (id,_),_))::_ -> unreachable l __POS__ ("function " ^ string_of_id id ^ " has multiple clauses in backend")
 
 let doc_mutrec = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
-  | fundefs ->
-     string "let rec " ^^
-     separate_map (hardline ^^ string "and ") doc_fundef_rhs fundefs
+  | fundef::fundefs ->
+     doc_fundef_rhs ~mutrec:FirstFn fundef ^^ hardline ^^
+     separate_map hardline (doc_fundef_rhs ~mutrec:LaterFn) fundefs ^^ dot
 
 let rec doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [FCL_aux (FCL_Funcl(id,_),annot) as funcl]
     when not (Env.is_extern id (env_of_annot annot) "coq") ->
-     doc_funcl r funcl
+     doc_funcl NotMutrec r funcl
   | [_] -> empty (* extern *)
   | _ -> failwith "FD_function with more than one clause"
 
@@ -2363,7 +2395,7 @@ let doc_dec (DEC_aux (reg, ((l, _) as annot))) =
            ^/^ hardline
          else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ))
        else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ)) *)
-  | DEC_config _ -> empty
+  | DEC_config(id, typ, exp) -> separate space [string "Definition"; doc_id id; coloneq; doc_exp empty_ctxt false exp] ^^ dot ^^ hardline
   | DEC_alias(id,alspec) -> empty
   | DEC_typ_alias(typ,id,alspec) -> empty
 
@@ -2519,18 +2551,21 @@ let find_exc_typ defs =
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
 let find_unimplemented defs =
+  let adjust_fundef unimplemented (FD_aux (FD_function (_,_,_,funcls),_)) =
+    match funcls with
+    | [] -> unimplemented
+    | (FCL_aux (FCL_Funcl (id,_),_))::_ ->
+       IdSet.remove id unimplemented
+  in
   let adjust_def unimplemented = function
     | DEF_spec (VS_aux (VS_val_spec (_,id,ext,_),_)) -> begin
       match ext "coq" with
       | Some _ -> unimplemented
       | None -> IdSet.add id unimplemented
     end
-    | DEF_fundef (FD_aux (FD_function (_,_,_,funcls),_)) -> begin
-      match funcls with
-      | [] -> unimplemented
-      | (FCL_aux (FCL_Funcl (id,_),_))::_ ->
-         IdSet.remove id unimplemented
-    end
+    | DEF_internal_mutrec fds ->
+       List.fold_left adjust_fundef unimplemented fds
+    | DEF_fundef fd -> adjust_fundef unimplemented fd
     | _ -> unimplemented
   in
   List.fold_left adjust_def IdSet.empty defs
