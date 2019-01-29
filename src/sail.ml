@@ -72,6 +72,7 @@ let opt_libs_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
+let opt_slice = ref ([]:string list)
 
 let options = Arg.align ([
   ( "-o",
@@ -268,6 +269,9 @@ let options = Arg.align ([
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
     " (debug) provides basic profiling information for rewriting passes within Sail");
+  ( "-slice",
+    Arg.String (fun s -> opt_slice := s::!opt_slice),
+    "<id> produce version of input restricted to the given function");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
@@ -380,6 +384,12 @@ let main() =
       (if !(opt_print_verbose)
        then ((Pretty_print_sail.pp_defs stdout) ast)
        else ());
+      (match !opt_slice with
+       | [] -> ()
+       | ids ->
+          let ids = List.map Ast_util.mk_id ids in
+          let ids = Ast_util.IdSet.of_list ids in
+          Pretty_print_sail.pp_defs stdout (Specialize.slice_defs type_envs ast ids));
       (if !(opt_print_ocaml)
        then
          let ast_ocaml = rewrite_ast_ocaml ast in

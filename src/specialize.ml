@@ -379,8 +379,11 @@ let specialize_id_overloads instantiations id (Defs defs) =
    therefore remove all unused valspecs. Remaining polymorphic
    valspecs are then re-specialized. This process is iterated until
    the whole spec is specialized. *)
-let remove_unused_valspecs env ast =
-  let calls = ref (IdSet.of_list [mk_id "main"; mk_id "__SetConfig"; mk_id "__ListConfig"; mk_id "execute"; mk_id "decode"; mk_id "initialize_registers"; mk_id "append_64"]) in
+
+let initial_calls = (IdSet.of_list [mk_id "main"; mk_id "__SetConfig"; mk_id "__ListConfig"; mk_id "execute"; mk_id "decode"; mk_id "initialize_registers"; mk_id "append_64"])
+
+let remove_unused_valspecs ?(initial_calls=initial_calls) env ast =
+  let calls = ref initial_calls in
   let vs_ids = Initial_check.val_spec_ids ast in
 
   let inspect_exp = function
@@ -412,6 +415,14 @@ let remove_unused_valspecs env ast =
   in
 
   List.fold_left (fun ast id -> Defs (remove_unused ast id)) ast (IdSet.elements unused)
+
+let slice_defs env (Defs defs) keep_ids =
+  let keep = function
+    | DEF_fundef fd -> IdSet.mem (id_of_fundef fd) keep_ids
+    | _ -> true
+  in
+  let defs = List.filter keep defs in
+  remove_unused_valspecs env (Defs defs) ~initial_calls:keep_ids
 
 let specialize_id id ast =
   let instantiations = instantiations_of id ast in
