@@ -508,6 +508,13 @@ let read_ram (addr_size, data_size, hex_ram, addr) =
   Bytes.iter (fun byte -> vector := (byte_of_int (int_of_char byte)) @ !vector) bytes;
   !vector
 
+let fast_read_ram (data_size, addr) =
+  let addr = uint addr in
+  let bytes = read_mem_bytes addr (Big_int.to_int data_size) in
+  let vector = ref [] in
+  Bytes.iter (fun byte -> vector := (byte_of_int (int_of_char byte)) @ !vector) bytes;
+  !vector
+
 let tag_ram = (ref Mem.empty : (bool Mem.t) ref);;
   
 let write_tag_bool (addr, tag) =

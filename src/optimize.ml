@@ -48,45 +48,53 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-(** Parse a file. The optional loc argument is the location of the
-   $include directive that is importing the file, if applicable. *)
-val parse_file : ?loc:Parse_ast.l -> string -> Parse_ast.defs
+open Ast
+open Ast_util
+open Rewriter
 
-val convert_ast : Ast.order -> Parse_ast.defs -> unit Ast.defs
-val preprocess_ast : (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.defs -> Parse_ast.defs
-val check_ast: Type_check.Env.t -> unit Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
-val rewrite_ast: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_lem : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_coq : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_ocaml : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_c : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_interpreter : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_check : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+let recheck (Defs defs) =
+  let defs = Type_check.check_with_envs Type_check.initial_env defs in
 
-val load_file_no_check : (Arg.key * Arg.spec * Arg.doc) list -> Ast.order -> string -> unit Ast.defs
-val load_file : (Arg.key * Arg.spec * Arg.doc) list -> Ast.order -> Type_check.Env.t -> string -> Type_check.tannot Ast.defs * Type_check.Env.t
+  let rec find_optimizations = function
+    | ([DEF_pragma ("optimize", pragma, p_l)], env)
+      :: ([DEF_spec vs as def1], _)
+      :: ([DEF_fundef fdef as def2], _)
+      :: defs ->
+       let id = id_of_val_spec vs in
+       let args = Str.split (Str.regexp " +") (String.trim pragma) in
+       begin match args with
+       | ["unroll"; n]->
+          let n = int_of_string n in
 
-val opt_just_check : bool ref
-val opt_ddump_tc_ast : bool ref
-val opt_ddump_rewrite_ast : ((string * int) option) ref
-val opt_dno_cast : bool ref
+          let rw_app subst (fn, args) =
+            if Id.compare id fn = 0 then E_app (subst, args) else E_app (fn, args)
+          in
+          let rw_exp subst = { id_exp_alg with e_app = rw_app subst } in
+          let rw_defs subst = { rewriters_base with rewrite_exp = (fun _ -> fold_exp (rw_exp subst)) } in
 
-val opt_lem_output_dir : (string option) ref
-val opt_isa_output_dir : (string option) ref
-val opt_coq_output_dir : (string option) ref
+          let specs = ref [def1] in
+          let bodies = ref [rewrite_def (rw_defs (append_id id "_unroll_1")) def2] in
 
-type out_type =
-  | Lem_out of string list (* If present, the strings are files to open in the lem backend*)
-  | Coq_out of string list (* If present, the strings are files to open in the coq backend*)
+          for i = 1 to n do
+            let current_id = append_id id ("_unroll_" ^ string_of_int i) in
+            let next_id = if i = n then current_id else append_id id ("_unroll_" ^ string_of_int (i + 1)) in
+            (* Create a valspec for the new unrolled function *)
+            specs := !specs @ [DEF_spec (rename_valspec current_id vs)];
+            (* Then duplicate it's function body and make it call the next unrolled function *)
+            bodies := !bodies @ [rewrite_def (rw_defs next_id) (DEF_fundef (rename_fundef current_id fdef))]
+          done;
 
-val output :
-  string ->                           (* The path to the library *)
-  out_type ->                         (* Backend kind *)
-  (string * Type_check.Env.t * Type_check.tannot Ast.defs) list -> (*File names paired with definitions *)
-  unit
+          !specs @ !bodies @ find_optimizations defs
 
-(** [always_replace_files] determines whether Sail only updates modified files.
-    If it is set to [true], all output files are written, regardless of whether the
-    files existed before. If it is set to [false] and an output file already exists,
-    the output file is only updated, if its content really changes. *)
-val always_replace_files : bool ref
+       | _ ->
+          Util.warn ("Unrecognised optimize pragma in this context: " ^ pragma);
+          def1 :: def2 :: find_optimizations defs
+       end
+
+    | (defs, _) :: defs' ->
+       defs @ find_optimizations defs'
+
+    | [] -> []
+  in
+
+  Defs (find_optimizations defs)

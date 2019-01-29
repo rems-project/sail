@@ -21,6 +21,8 @@ install:
 	mkdir -p $(INSTALL_DIR)/bin
 	cp src/isail.native $(INSTALL_DIR)/bin/sail
 	mkdir -p $(SHARE_DIR)
+	make -C lib/isabelle all
+	make -C lib/hol all-scripts
 	cp -r lib $(SHARE_DIR)
 	mkdir -p $(SHARE_DIR)/src
 	cp src/elf_loader.ml $(SHARE_DIR)/src
@@ -43,9 +45,6 @@ archs:
 	for arch in arm mips cheri; do\
 	  $(MAKE) -C "$$arch" || exit;\
 	done
-
-isabelle-lib:
-	$(MAKE) -C isabelle-lib
 
 apply_header:
 	$(MAKE) clean
@@ -77,4 +76,4 @@ clean:
 	for subdir in src arm ; do\
 	  $(MAKE) -C "$$subdir" clean;\
 	done
-	-rm sail
+	rm -f sail

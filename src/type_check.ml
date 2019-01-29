@@ -4448,14 +4448,18 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
        typ_print (lazy (Util.("Check val spec " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
        let env = Env.add_extern id ext_opt env in
        let env = if is_cast then Env.add_cast id env else env in
+       let typq', typ' = expand_bind_synonyms ts_l env (typq, typ) in
+       (* !opt_expand_valspec controls whether the actual valspec in
+          the AST is expanded, the val_spec type stored in the
+          environment is always expanded and uses typq' and typ' *)
        let typq, typ =
          if !opt_expand_valspec then
-           expand_bind_synonyms ts_l env (typq, typ)
+           (typq', typ')
          else
            (typq, typ)
        in
        let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, ext_opt, is_cast) in
-       (vs, id, typq, typ, env)
+       (vs, id, typq', typ', env)
   in
   let eff =
     match typ with
@@ -4634,6 +4638,14 @@ and check_defs : 'a. int -> int -> Env.t -> 'a def list -> tannot defs * Env.t =
 
 and check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
   fun env (Defs defs) -> let total = List.length defs in check_defs 1 total env defs
+
+and check_with_envs : 'a. Env.t -> 'a def list -> (tannot def list * Env.t) list =
+  fun env defs ->
+  match defs with
+  | [] -> []
+  | def :: defs ->
+     let def, env = check_def env def in
+     (def, env) :: check_with_envs env defs
 
 let initial_env =
   Env.empty

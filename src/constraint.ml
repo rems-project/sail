@@ -133,16 +133,17 @@ let to_smt l vars constr =
     | _ ->
        raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
   in
-  var_decs l vars, smt_constraint constr
+  var_decs l vars, smt_constraint constr, smt_var
 
-let smtlib_of_constraints ?get_model:(get_model=false) l vars constr : string =
-  let variables, problem = to_smt l vars constr in
+let smtlib_of_constraints ?get_model:(get_model=false) l vars constr : string * (kid -> sexpr) =
+  let variables, problem, var_map = to_smt l vars constr in
   "(push)\n"
   ^ variables ^ "\n"
   ^ pp_sexpr (sfun "define-fun" [Atom "constraint"; List []; Atom "Bool"; problem])
   ^ "\n(assert constraint)\n(check-sat)"
   ^ (if get_model then "\n(get-model)" else "")
-  ^ "\n(pop)"
+  ^ "\n(pop)",
+  var_map
 
 type smt_result = Unknown | Sat | Unsat
 
@@ -185,7 +186,7 @@ let save_digests () =
 
 let call_z3' l vars constraints : smt_result =
   let problems = [constraints] in
-  let z3_file = smtlib_of_constraints l vars constraints in
+  let z3_file, _ = smtlib_of_constraints l vars constraints in
 
   if !opt_smt_verbose then
     prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file)
@@ -243,9 +244,11 @@ let call_z3 l vars constraints =
   result
 
 let rec solve_z3 l vars constraints var =
-  let z3_file = smtlib_of_constraints ~get_model:true l vars constraints in
+  let z3_file, smt_var = smtlib_of_constraints ~get_model:true l vars constraints in
+  let z3_var = pp_sexpr (smt_var var) in
 
-  (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file); *)
+  (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file);
+     prerr_endline ("Solving for " ^ z3_var); *)
 
   let rec input_all chan =
     try
@@ -270,7 +273,7 @@ let rec solve_z3 l vars constraints var =
        raise (Reporting.err_general l ("Got error when calling z3: " ^ Printexc.to_string exn))
   in
   Sys.remove input_file;
-  let regexp = {|(define-fun v|} ^ Util.zencode_string (string_of_kid var) ^ {| () Int[ ]+\([0-9]+\))|} in
+  let regexp = {|(define-fun |} ^ z3_var ^ {| () Int[ ]+\([0-9]+\))|} in
   try
     let _ = Str.search_forward (Str.regexp regexp) z3_output 0 in
     let result = Big_int.of_string (Str.matched_group 1 z3_output) in

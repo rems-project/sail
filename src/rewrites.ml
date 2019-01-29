@@ -5162,7 +5162,7 @@ let rewrite_defs_c = [
   ("trivial_sizeof", rewrite_trivial_sizeof);
   ("sizeof", rewrite_sizeof);
   ("merge_function_clauses", merge_funcls);
-  ("recheck_defs", recheck_defs)
+  ("recheck_defs", Optimize.recheck)
   ]
 
 let rewrite_defs_interpreter = [

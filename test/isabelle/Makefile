@@ -1,7 +1,13 @@
-CHERI_DIR = ../../cheri
-AARCH64_DIR = ../../aarch64
+LEM_ISA_LIB?=$(shell opam config var lem:share)/isabelle-lib
+ifeq ($(wildcard $(LEM_ISA_LIB)/ROOT),)
+$(error isabelle-lib directory of Lem not found. Please set the LEM_ISA_LIB environment variable)
+endif
+
+SAIL_ISA_LIB = ../../lib/isabelle
+CHERI_DIR ?= ../../../sail-cheri-mips/cheri
+AARCH64_DIR ?= ../../aarch64
 TGTS = run_cheri.native run_aarch64.native
-SESSION_DIRS = -d $(CHERI_DIR) -d $(AARCH64_DIR) -d .
+SESSION_DIRS = -d $(LEM_ISA_LIB) -d $(SAIL_ISA_LIB) -d $(CHERI_DIR) -d $(AARCH64_DIR) -d .
 
 .PHONY: all clean
 

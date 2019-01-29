@@ -417,5 +417,9 @@ Some invariants that will hold of a fully checked AST are:
    Type_error.check *)
 val check : Env.t -> 'a defs -> tannot defs * Env.t
 
+(** The same as [check], but exposes the intermediate type-checking
+   environments so we don't have to always re-check the entire AST *)
+val check_with_envs : Env.t -> 'a def list -> (tannot def list * Env.t) list
+
 (** The initial type checking environment *)
 val initial_env : Env.t

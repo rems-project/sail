@@ -52,14 +52,18 @@ ifeq ($(shell which sail),)
 $(error Cannot find sail executable, make sure it is in PATH)
 endif
 
+SAIL_RISCV=../../sail-riscv
+
+all: manual.pdf
+
 .PHONY: clean
 
-code_riscv.tex: ../riscv/prelude.sail ../riscv/riscv_duopod.sail
-	sail -o code_riscv -latex ../riscv/prelude.sail ../riscv/riscv_duopod.sail
+code_riscv.tex: ${SAIL_RISCV}/model/prelude.sail ${SAIL_RISCV}/model/riscv_duopod.sail
+	sail -o code_riscv -latex -latex_full_valspecs ${SAIL_RISCV}/model/prelude.sail ${SAIL_RISCV}/model/riscv_duopod.sail
 	cp code_riscv/commands.tex code_riscv.tex
 
 code_myreplicatebits.tex: examples/my_replicate_bits.sail
-	sail -o code_myreplicatebits -latex -latex_prefix mrb examples/my_replicate_bits.sail
+	sail -o code_myreplicatebits -latex -latex_full_valspecs -latex_prefix mrb examples/my_replicate_bits.sail
 	cp code_myreplicatebits/commands.tex code_myreplicatebits.tex
 
 grammar.tex: ../language/sail.ott
