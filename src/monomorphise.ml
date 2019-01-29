@@ -2733,7 +2733,7 @@ let merge rs rs' = {
 }
 
 type env = {
-  top_kids : kid list;
+  top_kids : kid list; (* Int kids bound by the function type *)
   var_deps : dependencies Bindings.t;
   kid_deps : dependencies KBindings.t;
   referenced_vars : IdSet.t
@@ -2941,8 +2941,6 @@ let simplify_size_nexp env typ_env (Nexp_aux (ne,l) as nexp) =
   | Some n -> nconstant n
   | None ->
      let is_equal kid =
-       (* AA: top_kids should be changed to top_kopts so we don't end
-          up trying to prove v == nexp for a non-Int v. *)
        try
          prove __POS__ typ_env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
        with _ -> false
@@ -3373,12 +3371,11 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
       | P_cons (p1,p2) -> of_list [p1;p2]
     in aux pat
   in
-  let quant = function
-    | QI_aux (QI_id (KOpt_aux (KOpt_kind (_,kid),_)),_) ->
-       Some kid
-    | QI_aux (QI_const _,_) -> None
+  let int_quant = function
+    | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_int,_),kid),_)),_) -> Some kid
+    | _ -> None
   in
-  let top_kids = Util.map_filter quant qs in
+  let top_kids = Util.map_filter int_quant qs in
   let _,var_deps,kid_deps = split3 (List.mapi arg pats) in
   let var_deps = List.fold_left dep_bindings_merge Bindings.empty var_deps in
   let kid_deps = List.fold_left dep_kbindings_merge KBindings.empty kid_deps in
