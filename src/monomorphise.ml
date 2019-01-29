@@ -140,7 +140,7 @@ let subst_nc, subst_src_typ, subst_src_typ_arg =
     | Typ_app (id,tas) -> re (Typ_app (id,List.map (s_starg substs) tas))
     | Typ_exist (kopts,nc,t) ->
        let substs = List.fold_left (fun sub kopt -> KBindings.remove (kopt_kid kopt) sub) substs kopts in
-       re (Typ_exist (kopts,nc,s_styp substs t))
+       re (Typ_exist (kopts,subst_nc substs nc,s_styp substs t))
     | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   and s_starg substs (A_aux (ta,l) as targ) =
     match ta with
