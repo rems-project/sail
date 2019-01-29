@@ -116,6 +116,7 @@ bool gteq(const sail_int, const sail_int);
  * Left and right shift for integers
  */
 mach_int shl_mach_int(const mach_int, const mach_int);
+mach_int shr_mach_int(const mach_int, const mach_int);
 SAIL_INT_FUNCTION(shl_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(shr_int, sail_int, const sail_int, const sail_int);
 
