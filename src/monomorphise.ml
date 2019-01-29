@@ -3687,6 +3687,7 @@ let rewrite_app env typ (id,args) =
       | Some c -> E_cast (vector_typ (nconstant c) order bittyp, exp)
       | None -> e
   in
+  let rewrap e = E_aux (e, (Unknown, empty_tannot)) in
   if is_append id then
     let is_subrange = is_id env (Id "vector_subrange") in
     let is_slice = is_id env (Id "slice") in
@@ -3846,36 +3847,34 @@ let rewrite_app env typ (id,args) =
                       E_aux (E_app (zeros1, [len1]),_)]),_))::
         ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
         when is_subrange subrange1 && is_zeros zeros1 && is_append append1
-      -> E_app (mk_id "place_subrange",
-                [vector1; start1; end1; len1])
+      -> try_cast_to_typ (rewrap (E_app (mk_id "place_subrange", [vector1; start1; end1; len1])))
 
     | (E_aux (E_app (append1,
                      [E_aux (E_app (slice1, [vector1; start1; length1]), _);
                       E_aux (E_app (zeros1, [length2]),_)]),_))::
         ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
         when is_slice slice1 && is_zeros zeros1 && is_append append1
-      -> E_app (mk_id "place_slice",
-                [vector1; start1; length1; length2])
+      -> try_cast_to_typ (rewrap (E_app (mk_id "place_slice", [vector1; start1; length1; length2])))
 
     (* If we've already rewritten to slice_slice_concat or subrange_subrange_concat,
        we can just drop the zero extension because those functions can do it
        themselves *)
     | (E_aux (E_cast (_, (E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat"),_) as op, args),_))),_))::
         ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
-      -> E_app (op, args)
+      -> try_cast_to_typ (rewrap (E_app (op, args)))
 
     | (E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat"),_) as op, args),_))::
         ([] | [_;E_aux (E_id (Id_aux (Id "unsigned",_)),_)])
-      -> E_app (op, args)
+      -> try_cast_to_typ (rewrap (E_app (op, args)))
 
     | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
         when is_slice slice1 && not (is_constant length1) ->
-       E_app (mk_id "zext_slice", [vector1; start1; length1])
+       try_cast_to_typ (rewrap (E_app (mk_id "zext_slice", [vector1; start1; length1])))
 
     | [E_aux (E_app (ones, [len1]),_);
        _ (* unnecessary ZeroExtend length *)]
         when is_ones ones ->
-       E_app (mk_id "zext_ones", [len1])
+       try_cast_to_typ (rewrap (E_app (mk_id "zext_ones", [len1])))
 
     | _ -> E_app (id,args)
 
@@ -4308,9 +4307,10 @@ let rewrite_toplevel_nexps (Defs defs) =
       | A_typ typ -> A_aux (A_typ (aux typ),l)
       | A_order _ -> ta_full
       | A_nexp nexp ->
-         match find_nexp env nexp_map nexp with
+         (match find_nexp env nexp_map nexp with
          | (kid,_) -> A_aux (A_nexp (nvar kid),l)
-         | exception Not_found -> ta_full
+         | exception Not_found -> ta_full)
+      | _ -> ta_full
     in aux typ
   in
   let rewrite_one_exp nexp_map (e,ann) =
