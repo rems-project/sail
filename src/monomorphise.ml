@@ -4107,6 +4107,13 @@ let add_bitvector_casts (Defs defs) =
               (match destruct_atom_nexp (env_of y) (typ_of y) with
               | Some (Nexp_aux (Nexp_constant i,_)) -> [(kid,i)]
               | _ -> [])
+           | E_app (op,[x;y])
+               when string_of_id op = "eq_int" ->
+              (match destruct_atom_nexp (env_of x) (typ_of x), destruct_atom_nexp (env_of y) (typ_of y) with
+              | Some (Nexp_aux (Nexp_var kid,_)), Some (Nexp_aux (Nexp_constant i,_))
+              | Some (Nexp_aux (Nexp_constant i,_)), Some (Nexp_aux (Nexp_var kid,_))
+                -> [(kid,i)]
+              | _ -> [])
            | E_app (op, [x;y]) when string_of_id op = "and_bool" ->
               extract x @ extract y
            | _ -> []
