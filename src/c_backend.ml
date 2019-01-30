@@ -66,6 +66,7 @@ let opt_debug_function = ref ""
 let opt_trace = ref false
 let opt_static = ref false
 let opt_no_main = ref false
+let opt_memo_cache = ref false
 
 (* Optimization flags *)
 let optimize_primops = ref false
@@ -1625,7 +1626,41 @@ let fix_destructure fail_label = function
 let letdef_count = ref 0
 
 (** Compile a Sail toplevel definition into an IR definition **)
-let rec compile_def n total ctx = function
+let rec compile_def n total ctx def =
+  match def with
+  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, _), _)]), _))
+       when !opt_memo_cache ->
+     let digest =
+       def |> Pretty_print_sail.doc_def |> Pretty_print_sail.to_string |> Digest.string
+     in
+     let cachefile = Filename.concat "_sbuild" ("ccache" ^ Digest.to_hex digest) in
+     let cached =
+       if Sys.file_exists cachefile then
+         let in_chan = open_in cachefile in
+         try
+           let compiled = Marshal.from_channel in_chan in
+           close_in in_chan;
+           Some (compiled, ctx)
+         with
+         | _ -> close_in in_chan; None
+       else
+         None
+     in
+     begin match cached with
+     | Some (compiled, ctx) ->
+        Util.progress "Compiling " (string_of_id id) n total;
+        compiled, ctx
+     | None ->
+        let compiled, ctx = compile_def' n total ctx def in
+        let out_chan = open_out cachefile in
+        Marshal.to_channel out_chan compiled [Marshal.Closures];
+        close_out out_chan;
+        compiled, ctx
+     end
+
+  | _ -> compile_def' n total ctx def
+                 
+and compile_def' n total ctx = function
   | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) ->
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, [])], ctx
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
@@ -3373,6 +3408,16 @@ let compile_ast ctx c_includes (Defs defs) =
     let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit effect {escape}" in
     let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
 
+    if !opt_memo_cache then
+      (try
+         if Sys.is_directory "_sbuild" then
+           ()
+         else
+           raise (Reporting.err_general Parse_ast.Unknown "_sbuild exists, but is a file not a directory!")
+       with
+       | Sys_error _ -> Unix.mkdir "_sbuild" 0o775)
+    else ();
+    
     let total = List.length defs in
     let _, chunks, ctx =
       List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) defs

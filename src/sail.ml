@@ -200,6 +200,9 @@ let options = Arg.align ([
   ( "-memo_z3",
     Arg.Set opt_memo_z3,
     " memoize calls to z3, improving performance when typechecking repeatedly");
+  ( "-memo",
+    Arg.Tuple [Arg.Set opt_memo_z3; Arg.Set C_backend.opt_memo_cache],
+    " memoize calls to z3, and intermediate compilation results");
   ( "-undefined_gen",
     Arg.Set Initial_check.opt_undefined_gen,
     " generate undefined_type functions for types in the specification");
