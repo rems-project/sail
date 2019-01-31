@@ -38,6 +38,11 @@ end
 
 declare {isabelle} termination_argument foreachM = automatic
 
+val genlistM : forall 'a 'rv 'e. (nat -> monad 'rv 'a 'e) -> nat -> monad 'rv (list 'a) 'e
+let genlistM f n =
+  let indices = genlist (fun n -> n) n in
+  foreachM indices [] (fun n xs -> (f n >>= (fun x -> return (xs ++ [x]))))
+
 val and_boolM : forall 'rv 'e. monad 'rv bool 'e -> monad 'rv bool 'e -> monad 'rv bool 'e
 let and_boolM l r = l >>= (fun l -> if l then r else return false)
 
@@ -55,7 +60,7 @@ val bool_of_bitU_nondet : forall 'rv 'e. bitU -> monad 'rv bool 'e
 let bool_of_bitU_nondet = function
   | B0 -> return false
   | B1 -> return true
-  | BU -> undefined_bool ()
+  | BU -> choose_bool "bool_of_bitU"
 end
 
 val bools_of_bits_nondet : forall 'rv 'e. list bitU -> monad 'rv (list bool) 'e
@@ -93,15 +98,24 @@ let rec untilM vars cond body =
   cond vars >>= fun cond_val ->
   if cond_val then return vars else untilM vars cond body
 
-val internal_pick : forall 'rv 'a 'e. list 'a -> monad 'rv 'a 'e
-let internal_pick xs =
-  (* Use sufficiently many undefined bits and convert into an index into the list *)
-  bools_of_bits_nondet (repeat [BU] (length_list xs)) >>= fun bs ->
+val choose_bools : forall 'rv 'e. string -> nat -> monad 'rv (list bool) 'e
+let choose_bools descr n = genlistM (fun _ -> choose_bool descr) n
+
+val choose : forall 'rv 'a 'e. string -> list 'a -> monad 'rv 'a 'e
+let choose descr xs =
+  (* Use sufficiently many nondeterministically chosen bits and convert into an
+     index into the list *)
+  choose_bools descr (List.length xs) >>= fun bs ->
   let idx = (natFromNatural (nat_of_bools bs)) mod List.length xs in
   match index xs idx with
     | Just x -> return x
-    | Nothing -> Fail "internal_pick"
+    | Nothing -> Fail ("choose " ^ descr)
   end
+
+declare {isabelle} rename function choose = chooseM
+
+val internal_pick : forall 'rv 'a 'e. list 'a -> monad 'rv 'a 'e
+let internal_pick xs = choose "internal_pick" xs
 
 (*let write_two_regs r1 r2 vec =
   let is_inc =

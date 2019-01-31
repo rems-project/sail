@@ -55,7 +55,7 @@ lemma bool_of_bitU_monadic_simps[simp]:
   "bool_of_bitU_fail BU = Fail ''bool_of_bitU''"
   "bool_of_bitU_nondet B0 = return False"
   "bool_of_bitU_nondet B1 = return True"
-  "bool_of_bitU_nondet BU = undefined_bool ()"
+  "bool_of_bitU_nondet BU = choose_bool ''bool_of_bitU''"
   unfolding bool_of_bitU_fail_def bool_of_bitU_nondet_def
   by auto
 
@@ -68,7 +68,7 @@ lemma update_vec_dec_simps[simp]:
   "update_vec_dec_fail w i BU = Fail ''bool_of_bitU''"
   "update_vec_dec_nondet w i B0 = return (set_bit w (nat i) False)"
   "update_vec_dec_nondet w i B1 = return (set_bit w (nat i) True)"
-  "update_vec_dec_nondet w i BU = undefined_bool () \<bind> (\<lambda>b. return (set_bit w (nat i) b))"
+  "update_vec_dec_nondet w i BU = choose_bool ''bool_of_bitU'' \<bind> (\<lambda>b. return (set_bit w (nat i) b))"
   "update_vec_dec w i B0 = set_bit w (nat i) False"
   "update_vec_dec w i B1 = set_bit w (nat i) True"
   unfolding update_vec_dec_maybe_def update_vec_dec_fail_def update_vec_dec_nondet_def update_vec_dec_def

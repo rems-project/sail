@@ -2,6 +2,8 @@ theory Sail2_state_lemmas
   imports Sail2_state Sail2_state_lifting
 begin
 
+text \<open>Monad lifting\<close>
+
 lemma All_liftState_dom: "liftState_dom (r, m)"
   by (induction m) (auto intro: liftState.domintros)
 termination liftState using All_liftState_dom by auto
@@ -18,7 +20,7 @@ lemma Value_liftState_Run:
   assumes "(Value a, s') \<in> liftState r m s"
   obtains t where "Run m t a"
   by (use assms in \<open>induction r m arbitrary: s s' rule: liftState.induct\<close>;
-      auto simp add: failS_def throwS_def returnS_def simp del: read_regvalS.simps;
+      simp add: failS_def throwS_def returnS_def del: read_regvalS.simps;
       blast elim: Value_bindS_elim)
 
 lemmas liftState_if_distrib[liftState_simp] = if_distrib[where f = "liftState ra" for ra]
@@ -43,6 +45,9 @@ lemma liftState_barrier[liftState_simp]: "liftState r (barrier bk) = returnS ()"
   by (auto simp: barrier_def)
 lemma liftState_footprint[liftState_simp]: "liftState r (footprint ()) = returnS ()"
   by (auto simp: footprint_def)
+lemma liftState_choose_bool[liftState_simp]: "liftState r (choose_bool descr) = choose_boolS ()"
+  by (auto simp: choose_bool_def liftState_simp)
+declare undefined_boolS_def[simp]
 lemma liftState_undefined[liftState_simp]: "liftState r (undefined_bool ()) = undefined_boolS ()"
   by (auto simp: undefined_bool_def liftState_simp)
 lemma liftState_maybe_fail[liftState_simp]: "liftState r (maybe_fail msg x) = maybe_failS msg x"
@@ -78,30 +83,44 @@ lemma liftState_bool_of_bitU_nondet[liftState_simp]:
   "liftState r (bool_of_bitU_nondet b) = bool_of_bitU_nondetS b"
   by (cases b; auto simp: bool_of_bitU_nondet_def bool_of_bitU_nondetS_def liftState_simp)
 
-lemma liftState_read_mem_BC:
-  assumes "unsigned_method BC_bitU_list (bits_of_method BCa a) = unsigned_method BCa a"
-  shows "liftState r (read_mem BCa BCb rk a sz) = read_memS BCa BCb rk a sz"
-  using assms
-  by (auto simp: read_mem_def read_mem_bytes_def read_memS_def read_mem_bytesS_def maybe_failS_def liftState_simp split: option.splits)
+lemma liftState_read_memt[liftState_simp]:
+  shows "liftState r (read_memt BCa BCb rk a sz) = read_memtS BCa BCb rk a sz"
+  by (auto simp: read_memt_def read_memt_bytes_def maybe_failS_def read_memtS_def
+                 prod.case_distrib option.case_distrib[where h = "liftState r"]
+                 option.case_distrib[where h = "\<lambda>c. c \<bind>\<^sub>S f" for f] liftState_simp
+           split: option.splits intro: bindS_cong)
 
 lemma liftState_read_mem[liftState_simp]:
-  "\<And>a. liftState r (read_mem BC_mword BC_mword rk a sz) = read_memS BC_mword BC_mword rk a sz"
-  "\<And>a. liftState r (read_mem BC_bitU_list BC_bitU_list rk a sz) = read_memS BC_bitU_list BC_bitU_list rk a sz"
-  by (auto simp: liftState_read_mem_BC)
+  shows "liftState r (read_mem BCa BCb rk a sz) = read_memS BCa BCb rk a sz"
+  by (auto simp: read_mem_def read_mem_bytes_def read_memS_def read_mem_bytesS_def maybe_failS_def
+                 read_memtS_def
+                 prod.case_distrib option.case_distrib[where h = "liftState r"]
+                 option.case_distrib[where h = "\<lambda>c. c \<bind>\<^sub>S f" for f] liftState_simp
+           split: option.splits intro: bindS_cong)
 
 lemma liftState_write_mem_ea_BC:
-  assumes "unsigned_method BC_bitU_list (bits_of_method BCa a) = unsigned_method BCa a"
-  shows "liftState r (write_mem_ea BCa rk a sz) = write_mem_eaS BCa rk a (nat sz)"
-  using assms by (auto simp: write_mem_ea_def write_mem_eaS_def)
+  assumes "unsigned_method BCa a = Some a'"
+  shows "liftState r (write_mem_ea BCa rk a sz) = returnS ()"
+  using assms by (auto simp: write_mem_ea_def nat_of_bv_def maybe_fail_def)
 
-lemma liftState_write_mem_ea[liftState_simp]:
-  "\<And>a. liftState r (write_mem_ea BC_mword rk a sz) = write_mem_eaS BC_mword rk a (nat sz)"
-  "\<And>a. liftState r (write_mem_ea BC_bitU_list rk a sz) = write_mem_eaS BC_bitU_list rk a (nat sz)"
-  by (auto simp: liftState_write_mem_ea_BC)
+(*lemma liftState_write_mem_ea[liftState_simp]:
+  "\<And>a. liftState r (write_mem_ea BC_mword rk a sz) = returnS ()"
+  "\<And>a. liftState r (write_mem_ea BC_bitU_list rk a sz) = returnS ()"
+  by (auto simp: liftState_write_mem_ea_BC)*)
 
-lemma liftState_write_mem_val[liftState_simp]:
-  "liftState r (write_mem_val BC v) = write_mem_valS BC v"
-  by (auto simp: write_mem_val_def write_mem_valS_def liftState_simp split: option.splits)
+(*lemma write_mem_bytesS_def_BC_bitU_list_BC_mword[simp]:
+  "write_mem_bytesS BC_bitU_list wk (bits_of_method BC_mword addr) sz v t =
+   write_mem_bytesS BC_mword wk addr sz v t"
+  by (auto simp: write_mem_bytesS_def)*)
+
+lemma liftState_write_memt[liftState_simp]:
+  "liftState r (write_memt BCa BCv wk addr sz v t) = write_memtS BCa BCv wk addr sz v t"
+  by (auto simp: write_memt_def write_memtS_def liftState_simp split: option.splits)
+
+lemma liftState_write_mem[liftState_simp]:
+  "liftState r (write_mem BCa BCv wk addr sz v) = write_memS BCa BCv wk addr sz v"
+  by (auto simp: write_mem_def write_memS_def write_memtS_def write_mem_bytesS_def liftState_simp
+           split: option.splits)
 
 lemma liftState_read_reg_readS:
   assumes "\<And>s. Option.bind (get_regval' (name reg) s) (of_regval reg) = Some (read_from reg s)"
@@ -138,6 +157,14 @@ lemma liftState_foreachM[liftState_simp]:
   by (induction xs vars "\<lambda>x vars. liftState r (body x vars)" rule: foreachS.induct)
      (auto simp: liftState_simp cong: bindS_cong)
 
+lemma liftState_genlistM[liftState_simp]:
+  "liftState r (genlistM f n) = genlistS (liftState r \<circ> f) n"
+  by (auto simp: genlistM_def genlistS_def liftState_simp cong: bindS_cong)
+
+lemma liftState_choose_bools[liftState_simp]:
+  "liftState r (choose_bools descr n) = choose_boolsS n"
+  by (auto simp: choose_bools_def choose_boolsS_def liftState_simp comp_def)
+
 lemma liftState_bools_of_bits_nondet[liftState_simp]:
   "liftState r (bools_of_bits_nondet bs) = bools_of_bits_nondetS bs"
   unfolding bools_of_bits_nondet_def bools_of_bits_nondetS_def
@@ -146,6 +173,7 @@ lemma liftState_bools_of_bits_nondet[liftState_simp]:
 lemma liftState_internal_pick[liftState_simp]:
   "liftState r (internal_pick xs) = internal_pickS xs"
   by (auto simp: internal_pick_def internal_pickS_def liftState_simp comp_def
+                 chooseM_def
                  option.case_distrib[where h = "liftState r"]
            simp del: repeat.simps
            cong: option.case_cong)
@@ -301,7 +329,7 @@ proof (use assms in \<open>induction vars "liftState r \<circ> cond" "liftState 
   qed auto
 qed
 
-(* Simplification rules for monadic Boolean connectives *)
+text \<open>Simplification rules for monadic Boolean connectives\<close>
 
 lemma if_return_return[simp]: "(if a then return True else return False) = return a" by auto
 
@@ -383,5 +411,126 @@ lemma Run_and_boolM_E:
 
 lemma maybe_failS_Some[simp]: "maybe_failS msg (Some v) = returnS v"
   by (auto simp: maybe_failS_def)
+
+text \<open>Event traces\<close>
+
+lemma Some_eq_bind_conv: "Some x = Option.bind f g \<longleftrightarrow> (\<exists>y. f = Some y \<and> g y = Some x)"
+  unfolding bind_eq_Some_conv[symmetric] by auto
+
+lemma if_then_Some_eq_Some_iff: "((if b then Some x else None) = Some y) \<longleftrightarrow> (b \<and> y = x)"
+  by auto
+
+lemma Some_eq_if_then_Some_iff: "(Some y = (if b then Some x else None)) \<longleftrightarrow> (b \<and> y = x)"
+  by auto
+
+lemma emitEventS_update_cases:
+  assumes "emitEventS ra e s = Some s'"
+  obtains
+    (Write_mem) wk addr sz v tag r
+      where "e = E_write_memt wk addr sz v tag r \<or> (e = E_write_mem wk addr sz v r \<and> tag = B0)"
+        and "s' = put_mem_bytes addr sz v tag s"
+  | (Write_reg) r v rs'
+      where "e = E_write_reg r v" and "(snd ra) r v (regstate s) = Some rs'"
+        and "s' = s\<lparr>regstate := rs'\<rparr>"
+  | (Read) "s' = s"
+  using assms
+  by (elim emitEventS.elims)
+     (auto simp: Some_eq_bind_conv bind_eq_Some_conv if_then_Some_eq_Some_iff Some_eq_if_then_Some_iff)
+
+lemma runTraceS_singleton[simp]: "runTraceS ra [e] s = emitEventS ra e s"
+  by (cases "emitEventS ra e s"; auto)
+
+lemma runTraceS_ConsE:
+  assumes "runTraceS ra (e # t) s = Some s'"
+  obtains s'' where "emitEventS ra e s = Some s''" and "runTraceS ra t s'' = Some s'"
+  using assms by (auto simp: bind_eq_Some_conv)
+
+lemma runTraceS_ConsI:
+  assumes "emitEventS ra e s = Some s'" and "runTraceS ra t s' = Some s''"
+  shows "runTraceS ra (e # t) s = Some s''"
+  using assms by auto
+
+lemma runTraceS_Cons_tl:
+  assumes "emitEventS ra e s = Some s'"
+  shows "runTraceS ra (e # t) s = runTraceS ra t s'"
+  using assms by (elim emitEventS.elims) (auto simp: Some_eq_bind_conv bind_eq_Some_conv)
+
+lemma runTraceS_appendE:
+  assumes "runTraceS ra (t @ t') s = Some s'"
+  obtains s'' where "runTraceS ra t s = Some s''" and "runTraceS ra t' s'' = Some s'"
+proof -
+  have "\<exists>s''. runTraceS ra t s = Some s'' \<and> runTraceS ra t' s'' = Some s'"
+  proof (use assms in \<open>induction t arbitrary: s\<close>)
+    case (Cons e t)
+    from Cons.prems
+    obtain s_e where "emitEventS ra e s = Some s_e" and "runTraceS ra (t @ t') s_e = Some s'"
+      by (auto elim: runTraceS_ConsE simp: bind_eq_Some_conv)
+    with Cons.IH[of s_e] show ?case by (auto intro: runTraceS_ConsI)
+  qed auto
+  then show ?thesis using that by blast
+qed
+
+lemma runTraceS_nth_split:
+  assumes "runTraceS ra t s = Some s'" and n: "n < length t"
+  obtains s1 s2 where "runTraceS ra (take n t) s = Some s1"
+    and "emitEventS ra (t ! n) s1 = Some s2"
+    and "runTraceS ra (drop (Suc n) t) s2 = Some s'"
+proof -
+  have "runTraceS ra (take n t @ t ! n # drop (Suc n) t) s = Some s'"
+    using assms
+    by (auto simp: id_take_nth_drop[OF n, symmetric])
+  then show thesis by (blast elim: runTraceS_appendE runTraceS_ConsE intro: that)
+qed
+
+text \<open>Memory accesses\<close>
+
+lemma get_mem_bytes_put_mem_bytes_same_addr:
+  assumes "length v = sz"
+  shows "get_mem_bytes addr sz (put_mem_bytes addr sz v tag s) = Some (v, if sz > 0 then tag else B1)"
+proof (unfold assms[symmetric], induction v rule: rev_induct)
+  case Nil
+  then show ?case by (auto simp: get_mem_bytes_def)
+next
+  case (snoc x xs)
+  then show ?case
+    by (cases tag)
+       (auto simp: get_mem_bytes_def put_mem_bytes_def Let_def and_bit_eq_iff foldl_and_bit_eq_iff
+             cong: option.case_cong split: if_splits option.splits)
+qed
+
+lemma memstate_put_mem_bytes:
+  assumes "length v = sz"
+  shows "memstate (put_mem_bytes addr sz v tag s) addr' =
+         (if addr' \<in> {addr..<addr+sz} then Some (v ! (addr' - addr)) else memstate s addr')"
+  unfolding assms[symmetric]
+  by (induction v rule: rev_induct) (auto simp: put_mem_bytes_def nth_Cons nth_append Let_def)
+
+lemma tagstate_put_mem_bytes:
+  assumes "length v = sz"
+  shows "tagstate (put_mem_bytes addr sz v tag s) addr' =
+         (if addr' \<in> {addr..<addr+sz} then Some tag else tagstate s addr')"
+  unfolding assms[symmetric]
+  by (induction v rule: rev_induct) (auto simp: put_mem_bytes_def nth_Cons nth_append Let_def)
+
+lemma get_mem_bytes_cong:
+  assumes "\<forall>addr'. addr \<le> addr' \<and> addr' < addr + sz \<longrightarrow>
+                   (memstate s' addr' = memstate s addr' \<and> tagstate s' addr' = tagstate s addr')"
+  shows "get_mem_bytes addr sz s' = get_mem_bytes addr sz s"
+proof (use assms in \<open>induction sz\<close>)
+  case 0
+  then show ?case by (auto simp: get_mem_bytes_def)
+next
+  case (Suc sz)
+  then show ?case
+    by (auto simp: get_mem_bytes_def Let_def
+             intro!: map_option_cong map_cong foldl_cong
+                     arg_cong[where f = just_list] arg_cong2[where f = and_bit])
+qed
+
+lemma get_mem_bytes_tagged_tagstate:
+  assumes "get_mem_bytes addr sz s = Some (v, B1)"
+  shows "\<forall>addr' \<in> {addr..<addr + sz}. tagstate s addr' = Some B1"
+  using assms
+  by (auto simp: get_mem_bytes_def foldl_and_bit_eq_iff Let_def split: option.splits)
 
 end
