@@ -4432,7 +4432,11 @@ let rewrite_toplevel_nexps (Defs defs) =
     | DEF_spec vs -> (match rewrite_valspec vs with
       | None -> spec_map, def
       | Some (id, nexp_map, vs) -> Bindings.add id nexp_map spec_map, DEF_spec vs)
-    | DEF_fundef (FD_aux (FD_function (recopt,tann,eff,funcls),ann)) ->
+    | DEF_fundef (FD_aux (FD_function (recopt,_,eff,funcls),ann)) ->
+       (* Type annotations on function definitions will have been turned into
+          valspecs by type checking, so it should be safe to drop them rather
+          than updating them. *)
+       let tann = Typ_annot_opt_aux (Typ_annot_opt_none,Generated Unknown) in
        spec_map,
        DEF_fundef (FD_aux (FD_function (recopt,tann,eff,List.map (rewrite_funcl spec_map) funcls),ann))
     | _ -> spec_map, def
