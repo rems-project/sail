@@ -3930,16 +3930,39 @@ end
 module BitvectorSizeCasts =
 struct
 
-let simplify_size_nexp env quant_kids (Nexp_aux (_,l) as nexp) =
-  match solve env nexp with
-  | Some n -> Some (nconstant n)
-  | None ->
-     let is_equal kid =
-       prove env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
-     in
-     match List.find is_equal quant_kids with
-     | kid -> Some (Nexp_aux (Nexp_var kid,Generated l))
-     | exception Not_found -> None
+let simplify_size_nexp env quant_kids nexp =
+  let rec aux (Nexp_aux (ne,l) as nexp) =
+    match solve env nexp with
+    | Some n -> Some (nconstant n)
+    | None ->
+       let is_equal kid =
+         prove env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+       in
+       match List.find is_equal quant_kids with
+       | kid -> Some (Nexp_aux (Nexp_var kid,Generated l))
+       | exception Not_found ->
+          (* Normally rewriting of complex nexps in function signatures will
+             produce a simple constant or variable above, but occasionally it's
+             useful to work when that rewriting hasn't been applied.  In
+             particular, that rewriting isn't fully working with RISC-V at the
+             moment. *)
+          let re f = function
+            | Some n1, Some n2 -> Some (Nexp_aux (f n1 n2,l))
+            | _ -> None
+          in
+          match ne with
+          | Nexp_times(n1,n2) ->
+             re (fun n1 n2 -> Nexp_times(n1,n2)) (aux n1, aux n2)
+          | Nexp_sum(n1,n2) ->
+             re (fun n1 n2 -> Nexp_sum(n1,n2)) (aux n1, aux n2)
+          | Nexp_minus(n1,n2) ->
+             re (fun n1 n2 -> Nexp_times(n1,n2)) (aux n1, aux n2)
+          | Nexp_exp n ->
+             Util.option_map (fun n -> Nexp_aux (Nexp_exp n,l)) (aux n)
+          | Nexp_neg n ->
+             Util.option_map (fun n -> Nexp_aux (Nexp_neg n,l)) (aux n)
+          | _ -> None
+  in aux nexp
 
 (* These functions add cast functions across case splits, so that when a
    bitvector size becomes known in sail, the generated Lem code contains a
@@ -4054,6 +4077,11 @@ let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
     match exp with
     | E_aux (E_let (lb,exp'),ann) ->
        E_aux (E_let (lb,aux exp' (typ, target_typ)),ann)
+    | E_aux (E_block exps,ann) ->
+       let exps' = match List.rev exps with
+         | [] -> []
+         | final::l -> aux final (typ, target_typ)::l
+       in E_aux (E_block (List.rev exps'),ann)
     | E_aux (E_tuple exps,(l,ann)) -> begin
        match Env.expand_synonyms exp_env typ, Env.expand_synonyms exp_env target_typ with
        | Typ_aux (Typ_tup src_typs,_), Typ_aux (Typ_tup tgt_typs,_) ->
