@@ -99,7 +99,7 @@ let options = Arg.align ([
     " output an OCaml translated version of the input");
   ( "-ocaml-nobuild",
     Arg.Set Ocaml_backend.opt_ocaml_nobuild,
-    " do not build generated ocaml");
+    " do not build generated OCaml");
   ( "-ocaml_trace",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml");
@@ -108,28 +108,31 @@ let options = Arg.align ([
     " set a custom directory to build generated OCaml");
   ( "-ocaml-coverage",
     Arg.Set Ocaml_backend.opt_ocaml_coverage,
-    " Build ocaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx).");
+    " build OCaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx).");
   ( "-ocaml_generators",
     Arg.String (fun s -> opt_ocaml_generators := s::!opt_ocaml_generators),
     "<types> produce random generators for the given types");
   ( "-latex",
     Arg.Tuple [Arg.Set opt_print_latex; Arg.Clear Type_check.opt_expand_valspec ],
-    " pretty print the input to latex");
+    " pretty print the input to LaTeX");
+  ( "-latex_prefix",
+    Arg.String (fun prefix -> Latex.opt_prefix := prefix),
+    " set a custom prefix for generated LaTeX macro command (default sail)");
   ( "-latex_full_valspecs",
     Arg.Clear Latex.opt_simple_val,
-    " print full valspecs in latex output latex");
+    " print full valspecs in LaTeX output");
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
   ( "-c_include",
     Arg.String (fun i -> opt_includes_c := i::!opt_includes_c),
-    " <filename> provide additional include for C output");
+    "<filename> provide additional include for C output");
   ( "-c_no_main",
     Arg.Set C_backend.opt_no_main,
     " do not generate the main() function" );
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
-    " process an elf file so that it can be executed by compiled C code");
+    " process an ELF file so that it can be executed by compiled C code");
   ( "-O",
     Arg.Tuple [Arg.Set C_backend.optimize_primops;
                Arg.Set C_backend.optimize_hoist_allocations;
@@ -140,22 +143,22 @@ let options = Arg.align ([
     " turn on optimizations for C compilation");
   ( "-Oconstant_fold",
     Arg.Set Constant_fold.optimize_constant_fold,
-    " Apply constant folding optimizations");
+    " apply constant folding optimizations");
   ( "-Oexperimental",
     Arg.Set C_backend.optimize_experimental,
     " turn on additional, experimental optimisations");
   ( "-static",
     Arg.Set C_backend.opt_static,
-    " Make generated C functions static");
+    " make generated C functions static");
   ( "-trace",
     Arg.Tuple [Arg.Set C_backend.opt_trace; Arg.Set Ocaml_backend.opt_trace_ocaml],
-    " Instrument ouput with tracing");
+    " instrument output with tracing");
   ( "-smt_trace",
     Arg.Tuple [Arg.Set C_backend.opt_smt_trace],
-    " Instrument ouput with tracing for SMT");
+    " instrument output with tracing for SMT");
   ( "-cgen",
     Arg.Set opt_print_cgen,
-    " Generate CGEN source");
+    " generate CGEN source");
   ( "-lem",
     Arg.Set opt_print_lem,
     " output a Lem translated version of the input");
@@ -192,9 +195,6 @@ let options = Arg.align ([
   ( "-dcoq_debug_on",
     Arg.String (fun f -> Pretty_print_coq.opt_debug_on := f::!Pretty_print_coq.opt_debug_on),
     "<function> produce debug messages for Coq output on given function");
-  ( "-latex_prefix",
-    Arg.String (fun prefix -> Latex.opt_prefix := prefix),
-    " set a custom prefix for generated latex command (default sail)");
   ( "-mono_split",
     Arg.String (fun s ->
       let l = Util.split_on_char ':' s in
@@ -283,7 +283,7 @@ let options = Arg.align ([
     " (debug) print debugging output for a single function");
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
-    " (debug) provides basic profiling information for rewriting passes within Sail");
+    " (debug) provide basic profiling information for rewriting passes within Sail");
   ( "-slice",
     Arg.String (fun s -> opt_slice := s::!opt_slice),
     "<id> produce version of input restricted to the given function");
