@@ -4981,6 +4981,10 @@ let if_mono f defs =
   | [], false -> defs
   | _, _ -> f defs
 
+(* Also turn mwords stages on when we're just trying out mono *)
+let if_mwords f defs =
+  if !Pretty_print_lem.opt_mwords then f defs else if_mono f defs
+
 let rewrite_defs_lem = [
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("remove_mapping_valspecs", remove_mapping_valspecs);
@@ -4991,10 +4995,10 @@ let rewrite_defs_lem = [
   ("recheck_defs", if_mono recheck_defs);
   ("rewrite_toplevel_nexps", if_mono rewrite_toplevel_nexps);
   ("monomorphise", if_mono monomorphise);
-  ("recheck_defs", if_mono recheck_defs);
-  ("add_bitvector_casts", if_mono Monomorphise.add_bitvector_casts);
+  ("recheck_defs", if_mwords recheck_defs);
+  ("add_bitvector_casts", if_mwords Monomorphise.add_bitvector_casts);
   ("rewrite_atoms_to_singletons", if_mono Monomorphise.rewrite_atoms_to_singletons);
-  ("recheck_defs", if_mono recheck_defs);
+  ("recheck_defs", if_mwords recheck_defs);
   ("rewrite_undefined", rewrite_undefined_if_gen false);
   ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("remove_not_pats", rewrite_defs_not_pats);

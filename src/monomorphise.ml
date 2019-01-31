@@ -3964,6 +3964,13 @@ let simplify_size_nexp env quant_kids nexp =
           | _ -> None
   in aux nexp
 
+let specs_required = ref IdSet.empty
+let check_for_spec env name =
+  let id = mk_id name in
+  match Env.get_val_spec id env with
+  | _ -> ()
+  | exception _ -> specs_required := IdSet.add id !specs_required
+
 (* These functions add cast functions across case splits, so that when a
    bitvector size becomes known in sail, the generated Lem code contains a
    function call to change mword 'n to (say) mword ty16, and vice versa. *)
@@ -4023,6 +4030,7 @@ let make_bitvector_cast_fns cast_name env quant_kids src_typ target_typ =
   let pat, e' = aux src_typ' target_typ' in
   match !at_least_one with
   | Some one_target_typ -> begin
+    check_for_spec env cast_name;
     let src_ann = mk_tannot env src_typ no_effect in
     let tar_ann = mk_tannot env target_typ no_effect in
     match src_typ' with
@@ -4246,7 +4254,23 @@ let add_bitvector_casts (Defs defs) =
     | DEF_fundef (FD_aux (FD_function (r,t,e,fcls),fd_ann)) ->
        DEF_fundef (FD_aux (FD_function (r,t,e,List.map rewrite_funcl fcls),fd_ann))
     | d -> d
-  in Defs (List.map rewrite_def defs)
+  in
+  specs_required := IdSet.empty;
+  let defs = List.map rewrite_def defs in
+  let l = Generated Unknown in
+  let Defs cast_specs,_ =
+    (* TODO: use default/relevant order *)
+    let kid = mk_kid "n" in
+    let bitsn = vector_typ (nvar kid) dec_ord bit_typ in
+    let ts = mk_typschm (mk_typquant [mk_qi_id K_int kid])
+               (function_typ [bitsn] bitsn no_effect) in
+    let extfn _ = Some "zeroExtend" in
+    let mkfn name =
+      mk_val_spec (VS_val_spec (ts,name,extfn,false))
+    in
+    let defs = List.map mkfn (IdSet.elements !specs_required) in
+    check Env.empty (Defs defs)
+  in Defs (cast_specs @ defs)
 end
 
 let replace_nexp_in_typ env typ orig new_nexp =
