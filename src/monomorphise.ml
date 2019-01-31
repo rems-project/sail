@@ -4207,10 +4207,16 @@ let add_bitvector_casts (Defs defs) =
          E_aux (E_if (e1,e2',e3), ann)
       | E_return e' ->
          E_aux (E_return (make_bitvector_cast_exp "bitvector_cast_out" top_env quant_kids (fill_in_type (env_of e') (typ_of e')) ret_typ e'),ann)
-      | E_assign (LEXP_aux (lexp,lexp_annot),e') ->
-         E_aux (E_assign (LEXP_aux (lexp,lexp_annot),
-                          make_bitvector_cast_exp "bitvector_cast_out" top_env quant_kids (fill_in_type (env_of e') (typ_of e'))
-                            (typ_of_annot lexp_annot) e'),ann)
+      | E_assign (LEXP_aux (_,lexp_annot) as lexp,e') -> begin
+         (* The type in the lexp_annot might come from e' rather than being the
+            type of the storage, so ask the type checker what it really is. *)
+         match infer_lexp (env_of_annot lexp_annot) (strip_lexp lexp) with
+         | LEXP_aux (_,lexp_annot') ->
+            E_aux (E_assign (lexp,
+                             make_bitvector_cast_exp "bitvector_cast_out" top_env quant_kids (fill_in_type (env_of e') (typ_of e'))
+                               (typ_of_annot lexp_annot') e'),ann)
+         | exception _ -> E_aux (e,ann)
+        end
       | E_id id -> begin
         let env = env_of_annot ann in
         match Env.lookup_id id env with
