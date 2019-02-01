@@ -1,3 +1,24 @@
+;;; sail-mode.el --- Major mode for editing .sail files -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2013-2018 The Sail Authors
+;;
+;; Author: The Sail Authors
+;; URL: http://github.com/rems-project/sail
+;; Package-Requires: ((emacs "25"))
+;; Version: 0.0.1
+;; Keywords: language
+
+;; This file is not part of GNU Emacs.
+
+;;; License:
+
+;; Licensed under the same terms as Emacs.
+
+;;; Commentary:
+
+;; This mode is only compatible with new, recent of the new Sail on the "sail2" branch.
+
+;;; Code:
 
 (defvar sail2-mode-hook nil)
 
@@ -65,3 +86,4 @@
 
 (provide 'sail2-mode)
 
+;;; sail-mode.el ends here
