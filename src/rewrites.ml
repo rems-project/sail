@@ -2329,6 +2329,8 @@ let rewrite_type_def_typs rw_typ rw_typquant (TD_aux (td, annot)) =
   match td with
   | TD_abbrev (id, typq, A_aux (A_typ typ, l)) ->
      TD_aux (TD_abbrev (id, rw_typquant typq, A_aux (A_typ (rw_typ typ), l)), annot)
+  | TD_abbrev (id, typq, typ_arg) ->
+     TD_aux (TD_abbrev (id, rw_typquant typq, typ_arg), annot)
   | TD_record (id, typq, typ_ids, flag) ->
      TD_aux (TD_record (id, rw_typquant typq, List.map (fun (typ, id) -> (rw_typ typ, id)) typ_ids, flag), annot)
   | TD_variant (id, typq, tus, flag) ->

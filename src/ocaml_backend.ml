@@ -582,7 +582,7 @@ let ocaml_string_of_abbrev ctx id typq typ =
 let ocaml_string_of_variant ctx id typq cases =
   separate space [string "let"; ocaml_string_of id; string "_"; equals; string "\"VARIANT\""]
 
-let ocaml_typedef ctx (TD_aux (td_aux, _)) =
+let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
   match td_aux with
   | TD_record (id, typq, fields, _) ->
      ((separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; lbrace]
@@ -606,7 +606,10 @@ let ocaml_typedef ctx (TD_aux (td_aux, _)) =
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; ocaml_typ ctx typ]
      ^^ ocaml_def_end
      ^^ ocaml_string_of_abbrev ctx id typq typ
- | _ -> failwith "Unsupported typedef"
+  | TD_abbrev _ ->
+     empty
+  | TD_bitfield _ ->
+     Reporting.unreachable l __POS__ "Bitfield should be re-written"
 
 let get_externs (Defs defs) =
   let extern_id (VS_aux (VS_val_spec (typschm, id, ext, _), _)) =
