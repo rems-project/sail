@@ -559,6 +559,32 @@ end = struct
         with Not_found -> NC_aux (NC_app (id, List.map (expand_synonyms_arg env) args), l))
     | NC_true | NC_false | NC_equal _ | NC_not_equal _ | NC_bounded_le _ | NC_bounded_ge _ | NC_var _ | NC_set _ -> nc
 
+  and expand_nexp_synonyms env (Nexp_aux (aux, l) as nexp) =
+    typ_debug ~level:2 (lazy ("Expanding " ^ string_of_nexp nexp));
+    match aux with
+    | Nexp_app (id, args) ->
+       (try
+          begin match Bindings.find id env.typ_synonyms env [] with
+          | A_aux (A_nexp nexp, _) -> expand_nexp_synonyms env nexp
+          | _ -> typ_error env l ("Expected Int when expanding synonym " ^ string_of_id id)
+          end
+        with
+        | Not_found -> Nexp_aux (Nexp_app (id, List.map (expand_nexp_synonyms env) args), l))
+    | Nexp_id id ->
+       (try
+          begin match Bindings.find id env.typ_synonyms env [] with
+          | A_aux (A_nexp nexp, _) -> expand_nexp_synonyms env nexp
+          | _ -> typ_error env l ("Expected Int when expanding synonym " ^ string_of_id id)
+          end
+        with Not_found -> nexp)
+    | Nexp_times (nexp1, nexp2) -> Nexp_aux (Nexp_times (expand_nexp_synonyms env nexp1, expand_nexp_synonyms env nexp2), l)
+    | Nexp_sum (nexp1, nexp2) -> Nexp_aux (Nexp_sum (expand_nexp_synonyms env nexp1, expand_nexp_synonyms env nexp2), l)
+    | Nexp_minus (nexp1, nexp2) -> Nexp_aux (Nexp_minus (expand_nexp_synonyms env nexp1, expand_nexp_synonyms env nexp2), l)
+    | Nexp_exp nexp -> Nexp_aux (Nexp_exp (expand_nexp_synonyms env nexp), l)
+    | Nexp_neg nexp -> Nexp_aux (Nexp_neg (expand_nexp_synonyms env nexp), l)
+    | Nexp_var kid -> Nexp_aux (Nexp_var kid, l)
+    | Nexp_constant n -> Nexp_aux (Nexp_constant n, l)
+
   and expand_synonyms env (Typ_aux (typ, l) as t) =
     match typ with
     | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
@@ -616,6 +642,7 @@ end = struct
     match typ_arg with
     | A_typ typ -> A_aux (A_typ (expand_synonyms env typ), l)
     | A_bool nc -> A_aux (A_bool (expand_constraint_synonyms env nc), l)
+    | A_nexp nexp -> A_aux (A_nexp (expand_nexp_synonyms env nexp), l)
     | arg -> A_aux (arg, l)
 
   (** Map over all nexps in a type - excluding those in existential constraints **)
