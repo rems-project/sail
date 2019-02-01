@@ -589,11 +589,11 @@ let doc_field (typ, id) =
 
 let doc_union (Tu_aux (Tu_ty_id (typ, id), l)) = separate space [doc_id id; colon; doc_typ typ]
 
-let doc_typ_arg_kind (A_aux (aux, _)) =
+let doc_typ_arg_kind sep (A_aux (aux, _)) =
   match aux with
-  | A_nexp _ -> space ^^ string "->" ^^ space ^^string "Int"
-  | A_bool _ -> space ^^ string "->" ^^ space ^^ string "Bool"
-  | A_order  _ -> space ^^ string "->" ^^ space ^^ string "Order"
+  | A_nexp _ -> space ^^ string sep ^^ space ^^string "Int"
+  | A_bool _ -> space ^^ string sep ^^ space ^^ string "Bool"
+  | A_order  _ -> space ^^ string sep ^^ space ^^ string "Order"
   | A_typ _ -> empty
 
 let doc_typdef (TD_aux(td,_)) = match td with
@@ -601,9 +601,9 @@ let doc_typdef (TD_aux(td,_)) = match td with
      begin
        match doc_typquant typq with
        | Some qdoc ->
-          doc_op equals (concat [string "type"; space; doc_id id; qdoc; doc_typ_arg_kind typ_arg]) (doc_typ_arg typ_arg)
+          doc_op equals (concat [string "type"; space; doc_id id; qdoc; doc_typ_arg_kind "->" typ_arg]) (doc_typ_arg typ_arg)
        | None ->
-          doc_op equals (concat [string "type"; space; doc_id id; doc_typ_arg_kind typ_arg]) (doc_typ_arg typ_arg)
+          doc_op equals (concat [string "type"; space; doc_id id; doc_typ_arg_kind ":" typ_arg]) (doc_typ_arg typ_arg)
      end
   | TD_enum (id, ids, _) ->
      separate space [string "enum"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]

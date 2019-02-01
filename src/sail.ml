@@ -147,6 +147,9 @@ let options = Arg.align ([
   ( "-trace",
     Arg.Tuple [Arg.Set C_backend.opt_trace; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " Instrument ouput with tracing");
+  ( "-smt_trace",
+    Arg.Tuple [Arg.Set C_backend.opt_smt_trace],
+    " Instrument ouput with tracing for SMT");
   ( "-cgen",
     Arg.Set opt_print_cgen,
     " Generate CGEN source");

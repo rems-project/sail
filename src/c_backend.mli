@@ -56,6 +56,7 @@ open Type_check
 val opt_debug_flow_graphs : bool ref
 val opt_debug_function : string ref
 val opt_trace : bool ref
+val opt_smt_trace : bool ref
 val opt_static : bool ref
 val opt_no_main : bool ref
 

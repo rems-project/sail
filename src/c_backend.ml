@@ -64,6 +64,7 @@ let c_verbosity = ref 0
 let opt_debug_flow_graphs = ref false
 let opt_debug_function = ref ""
 let opt_trace = ref false
+let opt_smt_trace = ref false
 let opt_static = ref false
 let opt_no_main = ref false
 let opt_memo_cache = ref false
@@ -1659,7 +1660,7 @@ let rec compile_def n total ctx def =
      end
 
   | _ -> compile_def' n total ctx def
-                 
+
 and compile_def' n total ctx = function
   | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) ->
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, [])], ctx
@@ -1972,6 +1973,7 @@ let flatten_cdef =
     CDEF_let (n, bindings, flatten_instrs instrs)
 
   | cdef -> cdef
+
 
 let rec specialize_variants ctx prior =
   let unifications = ref (Bindings.empty) in
@@ -2606,9 +2608,9 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        empty
      else if fname = "reg_deref" then
        if is_stack_ctyp ctyp then
-         string (Printf.sprintf  " %s = *(%s);" (sgen_clexp_pure x) c_args)
+         string (Printf.sprintf  "  %s = *(%s);" (sgen_clexp_pure x) c_args)
        else
-         string (Printf.sprintf  " COPY(%s)(&%s, *(%s));" (sgen_ctyp_name ctyp) (sgen_clexp_pure x) c_args)
+         string (Printf.sprintf  "  COPY(%s)(&%s, *(%s));" (sgen_ctyp_name ctyp) (sgen_clexp_pure x) c_args)
      else
        if is_stack_ctyp ctyp then
          string (Printf.sprintf "  %s = %s(%s);" (sgen_clexp_pure x) fname c_args)
@@ -3397,6 +3399,79 @@ let rec get_recursive_functions (Defs defs) =
   | _ :: defs -> get_recursive_functions (Defs defs)
   | [] -> IdSet.empty
 
+let trace_cval = function (frag, ctyp) -> string_of_fragment frag ^ " : " ^ string_of_ctyp ctyp
+
+let rec trace_clexp = function
+  | CL_id (id, ctyp) -> sgen_id id ^ " : " ^ string_of_ctyp ctyp
+  | CL_field (clexp, field) -> "(" ^ trace_clexp clexp ^ ")->" ^ field ^ ")"
+  | CL_tuple (clexp, n) -> "(" ^ trace_clexp clexp ^ ")." ^ string_of_int n
+  | CL_addr clexp -> "*(" ^ trace_clexp clexp ^ ")"
+  | CL_have_exception -> "have_exception"
+  | CL_current_exception _ -> "current_exception"
+
+let rec smt_trace_instrs ctx function_id = function
+  | I_aux (I_jump (cval, label), aux) :: instrs ->
+     iraw ("printf(\"!branch %s %s\\n\"," ^ sgen_cval cval ^ " ?\"true\":\"false\", \"" ^ trace_cval cval ^ "\");")
+     :: I_aux (I_jump (cval, label), aux)
+     :: smt_trace_instrs ctx function_id instrs
+
+  | (I_aux ((I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval)), _) as instr) :: instrs ->
+     iraw ("printf(\"!create " ^ Util.zencode_string (string_of_id id) ^ " : " ^ string_of_ctyp ctyp ^ " = " ^ trace_cval cval ^ "\\n\");")
+     :: instr
+     :: smt_trace_instrs ctx function_id instrs
+
+  | (I_aux ((I_decl (ctyp, id) | I_reset (ctyp, id)), _) as instr) :: instrs ->
+     iraw ("printf(\"!create " ^ Util.zencode_string (string_of_id id) ^ " : " ^ string_of_ctyp ctyp ^ "\\n\");")
+     :: instr
+     :: smt_trace_instrs ctx function_id instrs
+
+  | I_aux (I_funcall (x, extern, f, args), aux) :: instrs ->
+     let extern_name =
+       if Env.is_extern f ctx.tc_env "c" then
+         Some (Env.get_extern f ctx.tc_env "c")
+       else if extern then
+         Some (string_of_id f)
+       else None
+     in
+     begin match extern_name with
+     | Some name ->
+        iraw ("printf(\"!"
+              ^ trace_clexp x
+              ^ " = "
+              ^ string_of_id f ^ "(" ^ Util.string_of_list ", " (fun cval -> String.escaped (trace_cval cval)) args ^ ")\\n\");")
+        :: I_aux (I_funcall (x, extern, f, args), aux)
+        :: smt_trace_instrs ctx function_id instrs
+     | None ->
+        iraw ("printf(\"!call " ^ string_of_id f ^ "(" ^ Util.string_of_list ", " (fun cval -> String.escaped (trace_cval cval)) args ^ ")\\n\");")
+        :: I_aux (I_funcall (x, extern, f, args), aux)
+        :: iraw ("printf(\"!" ^ trace_clexp x ^ " = endcall " ^ string_of_id f ^ "\\n\");")
+        :: smt_trace_instrs ctx function_id instrs
+     end
+
+  | I_aux (I_return cval, aux) :: instrs ->
+     iraw ("printf(\"!return " ^ trace_cval cval ^ "\\n\");")
+     :: I_aux (I_return cval, aux)
+     :: smt_trace_instrs ctx function_id instrs
+
+  | instr :: instrs -> instr :: smt_trace_instrs ctx function_id instrs
+
+  | [] -> []
+
+let smt_trace ctx =
+  function
+  | CDEF_fundef (function_id, heap_return, args, body) ->
+     let string_of_heap_return = function
+       | Some id -> Util.zencode_string (string_of_id id)
+       | None -> "return"
+     in
+     let body =
+       iraw ("printf(\"!link " ^ string_of_heap_return heap_return ^ "(" ^ Util.string_of_list ", " (fun id -> Util.zencode_string (string_of_id id)) args ^ ")\\n\");")
+       :: smt_trace_instrs ctx function_id body
+     in
+     CDEF_fundef (function_id, heap_return, args, body)
+
+  | cdef -> cdef
+
 let compile_ast ctx c_includes (Defs defs) =
   try
     c_debug (lazy (Util.log_line __MODULE__ __LINE__ "Identifying recursive functions"));
@@ -3417,7 +3492,7 @@ let compile_ast ctx c_includes (Defs defs) =
        with
        | Sys_error _ -> Unix.mkdir "_sbuild" 0o775)
     else ();
-    
+
     let total = List.length defs in
     let _, chunks, ctx =
       List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) defs
@@ -3428,6 +3503,9 @@ let compile_ast ctx c_includes (Defs defs) =
     let cdefs = sort_ctype_defs cdefs in
     let cdefs = optimize ctx cdefs in
     let cdefs = if !opt_trace then List.map (instrument_tracing ctx) cdefs else cdefs in
+
+    let cdefs = if !opt_smt_trace then List.map (fun cdef -> smt_trace ctx (flatten_cdef cdef)) cdefs else cdefs in
+
     let docs = List.map (codegen_def ctx) cdefs in
 
     let preamble = separate hardline
