@@ -12,7 +12,7 @@ SCRIPTS = $(LEM_SCRIPTS) \
 
 THYS = $(patsubst %Script.sml,%Theory.uo,$(SCRIPTS))
 
-INCLUDES = $(LEM_DIR)
+INCLUDES = $(LEM_DIR)/hol-lib
 
 all: $(THYS)
 .PHONY: all
@@ -23,7 +23,7 @@ ifdef POLY
 HOLHEAP = sail-heap
 EXTRA_CLEANS = $(LEM_CLEANS) $(HOLHEAP) $(HOLHEAP).o
 
-BASE_HEAP = $(LEM_DIR)/lemheap
+BASE_HEAP = $(LEM_DIR)/hol-lib/lemheap
 
 $(HOLHEAP): $(BASE_HEAP)
 	$(protect $(HOLDIR)/bin/buildheap) -o $(HOLHEAP) -b $(BASE_HEAP)

@@ -1,4 +1,4 @@
-LEM_DIR?=$(shell opam config var lem:share)/hol-lib
+LEM_DIR?=$(shell opam config var lem:share)
 
 LEMSRC =  \
   ../../src/lem_interp/sail2_instr_kinds.lem \
