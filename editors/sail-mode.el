@@ -12,7 +12,7 @@
 
 ;;; License:
 
-;; Licensed under the same terms as Emacs.
+;; 2-Clause BSD License (See LICENSE file in Sail repository)
 
 ;;; Commentary:
 
