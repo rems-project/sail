@@ -1678,6 +1678,39 @@ let instantiate_quant (v, arg) (QI_aux (aux, l) as qi) =
 let instantiate_quants quants unifier =
   List.map (instantiate_quant unifier) quants |> Util.option_these
 
+(* During typechecking, we can run into the following issue, where we
+   have a function like
+
+   val and_bool : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p & 'q)
+
+   and we want to check something like Q & P <= bool(X & Y)
+
+   where Q => bool(Y) & P => bool(X)
+
+   if we instantiate using the return type (which is usually good)
+   we'll run into the situtation where we have to check bool(Y)
+   subtype bool(X) because the quantifiers will get instantiated in
+   the wrong order, despite the expression being otherwise well-typed
+   the trick here is to recognise that we shouldn't unify on goals in
+   certain ambiguous positions in types. In this case with and_bool,
+   they'll be unambigiously unified with the argument types so it's
+   better to just not bother with the return type.
+*)
+let rec ambiguous_vars (Typ_aux (aux, _)) =
+  match aux with
+  | Typ_app (_, args) -> List.fold_left KidSet.union KidSet.empty (List.map ambiguous_arg_vars args)
+  | _ -> KidSet.empty
+  
+and ambiguous_arg_vars (A_aux (aux, _)) =
+  match aux with
+  | A_bool nc -> ambiguous_nc_vars nc
+  | _ -> KidSet.empty
+               
+and ambiguous_nc_vars (NC_aux (aux, _)) =
+  match aux with
+  | NC_and (nc1, nc2) -> KidSet.union (tyvars_of_constraint nc1) (tyvars_of_constraint nc2)
+  | _ -> KidSet.empty
+               
 (**************************************************************************)
 (* 3.5. Subtyping with existentials                                       *)
 (**************************************************************************)
@@ -3508,7 +3541,7 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
     | Some expect ->
        let goals = quant_kopts (mk_typquant !quants) |> List.map kopt_kid |> KidSet.of_list in
        try
-         let unifiers = unify l env goals !typ_ret expect in
+         let unifiers = unify l env (KidSet.diff goals (ambiguous_vars !typ_ret)) !typ_ret expect in
          record_unifiers unifiers;
          let unifiers = KBindings.bindings unifiers in
          typ_debug (lazy (Util.("Unifiers " |> magenta |> clear)
