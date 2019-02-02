@@ -1,3 +1,5 @@
+LEM_DIR?=$(shell opam config var lem:share)
+
 LEMSRC =  \
   ../../src/lem_interp/sail2_instr_kinds.lem \
   ../../src/gen_lib/sail2_values.lem \
@@ -25,7 +27,7 @@ $(SCRIPTS): $(LEMSRC)
 	lem -hol -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $(LEMSRC)
 
 $(THYS) sail-heap: $(SCRIPTS)
-	Holmake
+	LEM_DIR=$(LEM_DIR) Holmake
 
 # Holmake will also clear out the generated $(SCRIPTS) files
 clean:
