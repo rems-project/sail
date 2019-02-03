@@ -1,8 +1,3 @@
-(*========================================================================*)
-(*  Copyright (c) 2018 Sail contributors.                                 *)
-(*  This material is provided for anonymous review purposes only.         *)
-(*========================================================================*)
-
 Require Import Sail2_values.
 Require Import Sail2_operators.
 Require Import Sail2_prompt_monad.
@@ -14,49 +9,71 @@ Require Import ZArith.
 Require Import Omega.
 Require Import Eqdep_dec.
 
-Module Z_eq_dec.
-Definition U := Z.
-Definition eq_dec := Z.eq_dec.
-End Z_eq_dec.
-Module ZEqdep := DecidableEqDep (Z_eq_dec).
-
-Definition cast_mword {m n} (x : mword m) (eq : m = n) : mword n.
-rewrite <- eq.
-exact x.
+Fixpoint cast_positive (T : positive -> Type) (p q : positive) : T p -> p = q -> T q.
+refine (
+match p, q with
+| xH, xH => fun x _ => x
+| xO p', xO q' => fun x e => cast_positive (fun x => T (xO x)) p' q' x _
+| xI p', xI q' => fun x e => cast_positive (fun x => T (xI x)) p' q' x _
+| _, _ => _
+end); congruence.
 Defined.
 
-Lemma cast_mword_refl {m} {H:m = m} (x : mword m) : cast_mword x H = x.
-rewrite (ZEqdep.UIP _ _ H eq_refl).
-reflexivity.
+Definition cast_T {T : Z -> Type} {m n} : forall (x : T m) (eq : m = n), T n.
+refine (match m,n with
+| Z0, Z0 => fun x _ => x
+| Zneg p1, Zneg p2 => fun x e => cast_positive (fun p => T (Zneg p)) p1 p2 x _
+| Zpos p1, Zpos p2 => fun x e => cast_positive (fun p => T (Zpos p)) p1 p2 x _
+| _,_ => _
+end); congruence.
+Defined.
+
+Lemma cast_positive_refl : forall p T x (e : p = p),
+  cast_positive T p p x e = x.
+induction p.
+* intros. simpl. rewrite IHp; auto.
+* intros. simpl. rewrite IHp; auto.
+* reflexivity.
 Qed.
 
-Definition autocast {m n} (x : mword m) `{H:ArithFact (m = n)} : mword n :=
-  cast_mword x (use_ArithFact H).
+Lemma cast_T_refl {T : Z -> Type} {m} {H:m = m} (x : T m) : cast_T x H = x.
+destruct m.
+* reflexivity.
+* simpl. rewrite cast_positive_refl. reflexivity.
+* simpl. rewrite cast_positive_refl. reflexivity.
+Qed.
+
+Definition autocast {T : Z -> Type} {m n} (x : T m) `{H:ArithFact (m = n)} : T n :=
+  cast_T x (use_ArithFact H).
 
 Definition autocast_m {rv e m n} (x : monad rv (mword m) e) `{H:ArithFact (m = n)} : monad rv (mword n) e :=
-  x >>= fun x => returnm (cast_mword x (use_ArithFact H)).
+  x >>= fun x => returnm (cast_T x (use_ArithFact H)).
 
-Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n.
-rewrite <- eq.
-exact x.
-Defined.
+Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n :=
+  DepEqNat.nat_cast _ eq x.
 
 Lemma cast_word_refl {m} {H:m = m} (x : word m) : cast_word x H = x.
 rewrite (UIP_refl_nat _ H).
-reflexivity.
+apply nat_cast_same.
 Qed.
 
-Definition mword_of_nat {m} (x : Word.word m) : mword (Z.of_nat m).
-destruct m.
-- exact x.
-- simpl. rewrite SuccNat2Pos.id_succ. exact x.
+Definition mword_of_nat {m} : Word.word m -> mword (Z.of_nat m).
+refine (match m return word m -> mword (Z.of_nat m) with
+| O => fun x => x
+| S m' => fun x => nat_cast _ _ x
+end).
+rewrite SuccNat2Pos.id_succ.
+reflexivity.
 Defined.
 
-Definition cast_to_mword {m n} (x : Word.word m) (eq : Z.of_nat m = n) : mword n.
-destruct n.
-- constructor.
-- rewrite <- eq. exact (mword_of_nat x).
-- exfalso. destruct m; simpl in *; congruence.
+Definition cast_to_mword {m n} (x : Word.word m) : Z.of_nat m = n -> mword n.
+refine (match n return Z.of_nat m = n -> mword n with
+| Z0 => fun _ => WO
+| Zpos p => fun eq => cast_T (mword_of_nat x) eq
+| Zneg p => _
+end).
+intro eq.
+exfalso. destruct m; simpl in *; congruence.
 Defined.
 
 (*
@@ -155,7 +172,20 @@ Definition zero_extend {a} (v : mword a) (n : Z) `{ArithFact (n >= a)} : mword n
 
 Definition sign_extend {a} (v : mword a) (n : Z) `{ArithFact (n >= a)} : mword n := exts_vec n v.
 
+Definition zeros (n : Z) `{ArithFact (n >= 0)} : mword n.
+refine (cast_to_mword (Word.wzero (Z.to_nat n)) _).
+unwrap_ArithFacts.
+apply Z2Nat.id.
+auto with zarith.
+Defined.
+
 Lemma truncate_eq {m n} : m >= 0 -> m <= n -> (Z.to_nat n = Z.to_nat m + (Z.to_nat n - Z.to_nat m))%nat.
+intros.
+assert ((Z.to_nat m <= Z.to_nat n)%nat).
+{ apply Z2Nat.inj_le; omega. }
+omega.
+Qed.
+Lemma truncateLSB_eq {m n} : m >= 0 -> m <= n -> (Z.to_nat n = (Z.to_nat n - Z.to_nat m) + Z.to_nat m)%nat.
 intros.
 assert ((Z.to_nat m <= Z.to_nat n)%nat).
 { apply Z2Nat.inj_le; omega. }
@@ -164,6 +194,9 @@ Qed.
 
 Definition vector_truncate {n} (v : mword n) (m : Z) `{ArithFact (m >= 0)} `{ArithFact (m <= n)} : mword m :=
   cast_to_mword (Word.split1 _ _ (cast_word (get_word v) (ltac:(unwrap_ArithFacts; apply truncate_eq; auto) : Z.to_nat n = Z.to_nat m + (Z.to_nat n - Z.to_nat m))%nat)) (ltac:(unwrap_ArithFacts; apply Z2Nat.id; omega) : Z.of_nat (Z.to_nat m) = m).
+
+Definition vector_truncateLSB {n} (v : mword n) (m : Z) `{ArithFact (m >= 0)} `{ArithFact (m <= n)} : mword m :=
+  cast_to_mword (Word.split2 _ _ (cast_word (get_word v) (ltac:(unwrap_ArithFacts; apply truncateLSB_eq; auto) : Z.to_nat n = (Z.to_nat n - Z.to_nat m) + Z.to_nat m)%nat)) (ltac:(unwrap_ArithFacts; apply Z2Nat.id; omega) : Z.of_nat (Z.to_nat m) = m).
 
 Lemma concat_eq {a b} : a >= 0 -> b >= 0 -> Z.of_nat (Z.to_nat b + Z.to_nat a)%nat = a + b.
 intros.
@@ -421,6 +454,20 @@ Definition sgteq_vec := sgteq_bv.
 
 *)
 
+Definition eq_vec_dec {n} : forall (x y : mword n), {x = y} + {x <> y}.
+refine (match n with
+| Z0 => _
+| Zpos m => _
+| Zneg m => _
+end).
+* simpl. apply Word.weq.
+* simpl. apply Word.weq.
+* simpl. destruct x.
+Defined.
+
+Instance Decidable_eq_mword {n} : forall (x y : mword n), Decidable (x = y) :=
+  Decidable_eq_from_dec eq_vec_dec.
+
 Program Fixpoint reverse_endianness_word {n} (bits : word n) : word n :=
   match n with
   | S (S (S (S (S (S (S (S m))))))) =>
@@ -436,3 +483,17 @@ Qed.
 Definition reverse_endianness {n} (bits : mword n) := with_word (P := id) reverse_endianness_word bits.
 
 Definition get_slice_int {a} `{ArithFact (a >= 0)} : Z -> Z -> Z -> mword a := get_slice_int_bv.
+
+Definition set_slice n m (v : mword n) x (w : mword m) : mword n :=
+  update_subrange_vec_dec v (x + m - 1) x v.
+
+Definition set_slice_int len n lo (v : mword len) : Z :=
+  let hi := lo + len - 1 in
+  (* We don't currently have a constraint on lo in the sail prelude, so let's
+     avoid one here. *)
+  if sumbool_of_bool (Z.gtb hi 0) then
+    let bs : mword (hi + 1) := mword_of_int n in
+    (int_of_mword true (update_subrange_vec_dec bs hi lo v))
+  else n.
+
+Definition prerr_bits {a} (s : string) (bs : mword a) : unit := tt.

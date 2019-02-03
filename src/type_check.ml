@@ -1226,7 +1226,7 @@ let prove_z3 env (NC_aux (_, l) as nc) =
   | Constraint.Sat -> typ_debug (lazy "sat"); false
   | Constraint.Unknown -> typ_debug (lazy "unknown"); false
 
-let solve env (Nexp_aux (_, l) as nexp) = 
+let solve env (Nexp_aux (_, l) as nexp) =
   typ_print (lazy (Util.("Solve " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env)
                    ^ " |- " ^ string_of_nexp nexp ^ " = ?"));
   match nexp with
@@ -1237,6 +1237,8 @@ let solve env (Nexp_aux (_, l) as nexp) =
     let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
     let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
     Constraint.solve_z3 l vars constr (mk_kid "solve#")
+
+
 
 let prove env nc =
   typ_print (lazy (Util.("Prove " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env) ^ " |- " ^ string_of_n_constraint nc));
@@ -4141,6 +4143,22 @@ let check_tannotopt env typq ret_typ = function
      then ()
      else typ_error l (string_of_bind (typq, ret_typ) ^ " and " ^ string_of_bind (annot_typq, annot_ret_typ) ^ " do not match between function and val spec")
 
+let check_termination_measure env arg_typs pat exp =
+  let typ = match arg_typs with [x] -> x | _ -> Typ_aux (Typ_tup arg_typs,Unknown) in
+  let tpat, env = bind_pat_no_guard env (strip_pat pat) typ in
+  let texp = check_exp env (strip_exp exp) int_typ in
+  tpat, texp
+
+let check_termination_measure_decl env (id, pat, exp) =
+  let quant, typ = Env.get_val_spec id env in
+  let arg_typs, l = match typ with
+    | Typ_aux (Typ_fn (arg_typs, _ ,_),l) -> arg_typs,l
+    | _ -> typ_error (id_loc id) "Function val spec is not a function type"
+  in
+  let env = add_typquant l quant env in
+  let tpat, texp = check_termination_measure env arg_typs pat exp in
+  DEF_measure (id, tpat, texp)
+
 let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, _)) as fd_aux) =
   let id =
     match (List.fold_right
@@ -4173,9 +4191,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
     | Rec_aux (Rec_nonrec, l) -> Rec_aux (Rec_nonrec, l)
     | Rec_aux (Rec_rec, l) -> Rec_aux (Rec_rec, l)
     | Rec_aux (Rec_measure (measure_p, measure_e), l) ->
-       let typ = match vtyp_args with [x] -> x | _ -> Typ_aux (Typ_tup vtyp_args,Unknown) in
-       let tpat, env = bind_pat_no_guard funcl_env (strip_pat measure_p) typ in
-       let texp = check_exp env (strip_exp measure_e) int_typ in
+       let tpat, texp = check_termination_measure funcl_env vtyp_args measure_p measure_e in
        Rec_aux (Rec_measure (tpat, texp), l)
   in
   let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
@@ -4241,14 +4257,18 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
        typ_print (lazy (Util.("Check val spec " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
        let env = Env.add_extern id exts env in
        let env = if is_cast then Env.add_cast id env else env in
+       let typq', typ' = expand_bind_synonyms ts_l env (typq, typ) in
+       (* !opt_expand_valspec controls whether the actual valspec in
+          the AST is expanded, the val_spec type stored in the
+          environment is always expanded and uses typq' and typ' *)
        let typq, typ =
          if !opt_expand_valspec then
-           expand_bind_synonyms ts_l env (typq, typ)
+           (typq', typ')
          else
            (typq, typ)
        in
        let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, exts, is_cast) in
-       (vs, id, typq, typ, env)
+       (vs, id, typq', typ', env)
   in
   let eff =
     match typ with
@@ -4422,6 +4442,7 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   | DEF_reg_dec (DEC_aux (DEC_alias (id, aspec), (l, annot))) -> cd_err ()
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered sdef -> check_scattered env sdef
+  | DEF_measure (id, pat, exp) -> [check_termination_measure_decl env (id, pat, exp)], env
 
 and check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
   fun env (Defs defs) ->
@@ -4431,6 +4452,14 @@ and check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
      let (def, env) = check_def env def in
      let (Defs defs, env) = check env (Defs defs) in
      (Defs (def @ defs)), env
+
+and check_with_envs : 'a. Env.t -> 'a def list -> (tannot def list * Env.t) list =
+  fun env defs ->
+  match defs with
+  | [] -> []
+  | def :: defs ->
+     let def, env = check_def env def in
+     (def, env) :: check_with_envs env defs
 
 let initial_env =
   Env.empty

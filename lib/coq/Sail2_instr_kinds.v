@@ -157,6 +157,7 @@ Inductive barrier_kind :=
   | Barrier_RISCV_rw_r
   | Barrier_RISCV_r_w
   | Barrier_RISCV_w_r
+  | Barrier_RISCV_tso
   | Barrier_RISCV_i
   (* X86 *)
   | Barrier_x86_MFENCE.
@@ -182,6 +183,11 @@ instance (Show barrier_kind)
     | Barrier_RISCV_r_r   -> "Barrier_RISCV_r_r"
     | Barrier_RISCV_rw_w  -> "Barrier_RISCV_rw_w"
     | Barrier_RISCV_w_w   -> "Barrier_RISCV_w_w"
+    | Barrier_RISCV_w_rw  -> "Barrier_RISCV_w_rw"
+    | Barrier_RISCV_rw_r  -> "Barrier_RISCV_rw_r"
+    | Barrier_RISCV_r_w   -> "Barrier_RISCV_r_w"
+    | Barrier_RISCV_w_r   -> "Barrier_RISCV_w_r"
+    | Barrier_RISCV_tso   -> "Barrier_RISCV_tso"
     | Barrier_RISCV_i     -> "Barrier_RISCV_i"
     | Barrier_x86_MFENCE  -> "Barrier_x86_MFENCE"
   end
@@ -295,8 +301,13 @@ instance (EnumerationType barrier_kind)
     | Barrier_RISCV_r_r -> 15
     | Barrier_RISCV_rw_w -> 16
     | Barrier_RISCV_w_w -> 17
-    | Barrier_RISCV_i -> 18
-    | Barrier_x86_MFENCE -> 19
+    | Barrier_RISCV_w_rw -> 18
+    | Barrier_RISCV_rw_r -> 19
+    | Barrier_RISCV_r_w -> 20
+    | Barrier_RISCV_w_r -> 21
+    | Barrier_RISCV_tso -> 22
+    | Barrier_RISCV_i -> 23
+    | Barrier_x86_MFENCE -> 24
   end
 end
 *)

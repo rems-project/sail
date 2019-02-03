@@ -202,6 +202,8 @@ module Env : sig
   val pattern_completeness_ctx : t -> Pattern_completeness.ctx
 
   val builtin_typs : typquant Bindings.t
+
+  val get_union_id : id -> t -> typquant * typ
 end
 
 (** Push all the type variables and constraints from a typquant into
@@ -294,6 +296,8 @@ val check_exp : Env.t -> unit exp -> typ -> tannot exp
 val infer_exp : Env.t -> unit exp -> tannot exp
 
 val infer_pat : Env.t -> unit pat -> tannot pat * Env.t * unit exp list
+
+val infer_lexp : Env.t -> unit lexp -> tannot lexp
 
 val check_case : Env.t -> typ -> unit pexp -> typ -> tannot pexp
 
@@ -412,6 +416,10 @@ Some invariants that will hold of a fully checked AST are:
    Reporting. For a function that uses generic errors, use
    Type_error.check *)
 val check : Env.t -> 'a defs -> tannot defs * Env.t
+
+(** The same as [check], but exposes the intermediate type-checking
+   environments so we don't have to always re-check the entire AST *)
+val check_with_envs : Env.t -> 'a def list -> (tannot def list * Env.t) list
 
 (** The initial type checking environment *)
 val initial_env : Env.t

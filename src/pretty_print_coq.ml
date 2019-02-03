@@ -239,9 +239,9 @@ let doc_nexp ctx ?(skip_vars=KidSet.empty) nexp =
   and app (Nexp_aux (n,l) as nexp) =
     match n with
     | Nexp_app (Id_aux (Id "div",_), [n1;n2])
-        -> separate space [string "Z.quot"; atomic n1; atomic n2]
+        -> separate space [string "ZEuclid.div"; atomic n1; atomic n2]
     | Nexp_app (Id_aux (Id "mod",_), [n1;n2])
-        -> separate space [string "Z.rem"; atomic n1; atomic n2]
+        -> separate space [string "ZEuclid.modulo"; atomic n1; atomic n2]
     | Nexp_app (Id_aux (Id "abs_atom",_), [n1])
         -> separate space [string "Z.abs"; atomic n1]
     | _ -> atomic nexp
@@ -585,8 +585,9 @@ let doc_lit (L_aux(lit,l)) =
   | L_false -> utf8string "false"
   | L_true  -> utf8string "true"
   | L_num i ->
-     let ipp = Big_int.to_string i in
-     utf8string ipp
+     let s = Big_int.to_string i in
+     let ipp = utf8string s in
+     if Big_int.less i Big_int.zero then parens ipp else ipp
   | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
   | L_undef ->
@@ -1296,7 +1297,7 @@ let doc_exp, doc_let =
                                  [parens (string "_limit_reduces _acc")]
                 else match f with
                      | Id_aux (Id x,_) when is_prefix "#rec#" x ->
-                        main_call @ [parens (string "Zwf_well_founded _ _")]
+                        main_call @ [parens (string "Zwf_guarded _")]
                      | _ ->  main_call
               in hang 2 (flow (break 1) all) in
 

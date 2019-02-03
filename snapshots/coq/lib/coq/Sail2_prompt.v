@@ -1,12 +1,7 @@
-(*========================================================================*)
-(*  Copyright (c) 2018 Sail contributors.                                 *)
-(*  This material is provided for anonymous review purposes only.         *)
-(*========================================================================*)
-
 (*Require Import Sail_impl_base*)
 Require Import Sail2_values.
 Require Import Sail2_prompt_monad.
-
+Require Export ZArith.Zwf.
 Require Import List.
 Import ListNotations.
 (*
@@ -35,7 +30,7 @@ match l with
   foreachM xs vars body
 end.
 
-Fixpoint foreach_ZM_up' {rv e Vars} from to step off n `{ArithFact (from <= to)} `{ArithFact (0 < step)} `{ArithFact (0 <= off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <= z <= to)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e :=
+Fixpoint foreach_ZM_up' {rv e Vars} from to step off n `{ArithFact (0 < step)} `{ArithFact (0 <= off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <= z <= to)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e :=
   if sumbool_of_bool (from + off <=? to) then
     match n with
     | O => returnm vars
@@ -43,7 +38,7 @@ Fixpoint foreach_ZM_up' {rv e Vars} from to step off n `{ArithFact (from <= to)}
     end
   else returnm vars.
 
-Fixpoint foreach_ZM_down' {rv e Vars} from to step off n `{ArithFact (to <= from)} `{ArithFact (0 < step)} `{ArithFact (off <= 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <= z <= from)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e :=
+Fixpoint foreach_ZM_down' {rv e Vars} from to step off n `{ArithFact (0 < step)} `{ArithFact (off <= 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <= z <= from)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e :=
   if sumbool_of_bool (to <=? from + off) then
     match n with
     | O => returnm vars
@@ -51,9 +46,9 @@ Fixpoint foreach_ZM_down' {rv e Vars} from to step off n `{ArithFact (to <= from
     end
   else returnm vars.
 
-Definition foreach_ZM_up {rv e Vars} from to step vars body `{ArithFact (from <= to)} `{ArithFact (0 < step)} :=
+Definition foreach_ZM_up {rv e Vars} from to step vars body `{ArithFact (0 < step)} :=
     foreach_ZM_up' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
-Definition foreach_ZM_down {rv e Vars} from to step vars body `{ArithFact (to <= from)} `{ArithFact (0 < step)} :=
+Definition foreach_ZM_down {rv e Vars} from to step vars body `{ArithFact (0 < step)} :=
     foreach_ZM_down' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
 
 (*declare {isabelle} termination_argument foreachM = automatic*)
@@ -81,6 +76,35 @@ match b with
   | B1 => returnm true
   | BU => undefined_bool tt
 end.
+
+(* For termination of recursive functions.  We don't name assertions, so use
+   the type class mechanism to find it. *)
+Definition _limit_reduces {_limit} (_acc:Acc (Zwf 0) _limit) `{ArithFact (_limit >= 0)} : Acc (Zwf 0) (_limit - 1).
+refine (Acc_inv _acc _).
+destruct H.
+red.
+omega.
+Defined.
+
+(* A version of well-foundedness of measures with a guard to ensure that
+   definitions can be reduced without inspecting proofs, based on a coq-club
+   thread featuring Barras, Gonthier and Gregoire, see
+     https://sympa.inria.fr/sympa/arc/coq-club/2007-07/msg00014.html *)
+
+Fixpoint pos_guard_wf {A:Type} {R:A -> A -> Prop} (p:positive) : well_founded R -> well_founded R :=
+ match p with
+ | xH => fun wfR x => Acc_intro x (fun y _ => wfR y)
+ | xO p' => fun wfR x => let F := pos_guard_wf p' in Acc_intro x (fun y _ => F (F 
+wfR) y)
+ | xI p' => fun wfR x => let F := pos_guard_wf p' in Acc_intro x (fun y _ => F (F 
+wfR) y)
+ end.
+
+Definition Zwf_guarded (z:Z) : Acc (Zwf 0) z :=
+  match z with
+  | Zpos p => pos_guard_wf p (Zwf_well_founded _) _
+  | _ => Zwf_well_founded _ _
+  end.
 
 
 (*val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
@@ -120,3 +144,15 @@ let rec untilM vars cond body =
   write_reg r1 r1_v >> write_reg r2 r2_v*)
 
 *)
+
+(* If we need to build an existential after a monadic operation, assume that
+   we can do it entirely from the type. *)
+
+Definition build_ex_m {rv e} {T:Type} (x:monad rv T e) {P:T -> Prop} `{H:forall x, ArithFact (P x)} : monad rv {x : T & ArithFact (P x)} e :=
+  x >>= fun y => returnm (existT _ y (H y)).
+
+Definition projT1_m {rv e} {T:Type} {P:T -> Prop} (x: monad rv {x : T & P x} e) : monad rv T e :=
+  x >>= fun y => returnm (projT1 y).
+
+Definition derive_m {rv e} {T:Type} {P Q:T -> Prop} (x : monad rv {x : T & P x} e) `{forall x, ArithFact (P x) -> ArithFact (Q x)} : monad rv {x : T & (ArithFact (Q x))} e :=
+  x >>= fun y => returnm (build_ex (projT1 y)).

@@ -3418,7 +3418,7 @@ let rec sets_from_assert e =
       match e with
       | E_app (Id_aux (Id "or_bool",_),[e1;e2]) ->
          aux e1 @ aux e2
-      | E_app (Id_aux (Id "eq_atom",_),
+      | E_app (Id_aux (Id "eq_int",_),
                [E_aux (E_sizeof (Nexp_aux (Nexp_var kid,_)),_);
                 E_aux (E_lit (L_aux (L_num i,_)),_)]) ->
          (check_kid kid; [i])
@@ -3930,16 +3930,46 @@ end
 module BitvectorSizeCasts =
 struct
 
-let simplify_size_nexp env quant_kids (Nexp_aux (_,l) as nexp) =
-  match solve env nexp with
-  | Some n -> Some (nconstant n)
-  | None ->
-     let is_equal kid =
-       prove env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
-     in
-     match List.find is_equal quant_kids with
-     | kid -> Some (Nexp_aux (Nexp_var kid,Generated l))
-     | exception Not_found -> None
+let simplify_size_nexp env quant_kids nexp =
+  let rec aux (Nexp_aux (ne,l) as nexp) =
+    match solve env nexp with
+    | Some n -> Some (nconstant n)
+    | None ->
+       let is_equal kid =
+         prove env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+       in
+       match List.find is_equal quant_kids with
+       | kid -> Some (Nexp_aux (Nexp_var kid,Generated l))
+       | exception Not_found ->
+          (* Normally rewriting of complex nexps in function signatures will
+             produce a simple constant or variable above, but occasionally it's
+             useful to work when that rewriting hasn't been applied.  In
+             particular, that rewriting isn't fully working with RISC-V at the
+             moment. *)
+          let re f = function
+            | Some n1, Some n2 -> Some (Nexp_aux (f n1 n2,l))
+            | _ -> None
+          in
+          match ne with
+          | Nexp_times(n1,n2) ->
+             re (fun n1 n2 -> Nexp_times(n1,n2)) (aux n1, aux n2)
+          | Nexp_sum(n1,n2) ->
+             re (fun n1 n2 -> Nexp_sum(n1,n2)) (aux n1, aux n2)
+          | Nexp_minus(n1,n2) ->
+             re (fun n1 n2 -> Nexp_times(n1,n2)) (aux n1, aux n2)
+          | Nexp_exp n ->
+             Util.option_map (fun n -> Nexp_aux (Nexp_exp n,l)) (aux n)
+          | Nexp_neg n ->
+             Util.option_map (fun n -> Nexp_aux (Nexp_neg n,l)) (aux n)
+          | _ -> None
+  in aux nexp
+
+let specs_required = ref IdSet.empty
+let check_for_spec env name =
+  let id = mk_id name in
+  match Env.get_val_spec id env with
+  | _ -> ()
+  | exception _ -> specs_required := IdSet.add id !specs_required
 
 (* These functions add cast functions across case splits, so that when a
    bitvector size becomes known in sail, the generated Lem code contains a
@@ -3969,7 +3999,8 @@ let make_bitvector_cast_fns cast_name env quant_kids src_typ target_typ =
                [A_aux (A_nexp size',l_size'); t_ord;
                 A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_) as t_bit]) -> begin
        match simplify_size_nexp env quant_kids size, simplify_size_nexp env quant_kids size' with
-       | Some size, Some size' when Nexp.compare size size' <> 0 ->
+       | Some size, Some size' ->
+          if Nexp.compare size size' <> 0 then
           let var = fresh () in
           let tar_typ' = Typ_aux (Typ_app (t_id, [A_aux (A_nexp size',l_size');t_ord;t_bit]),
                                   tar_l) in
@@ -3980,6 +4011,10 @@ let make_bitvector_cast_fns cast_name env quant_kids src_typ target_typ =
                      E_aux (E_app (Id_aux (Id cast_name, genunk),
                                    [E_aux (E_id var, (genunk, src_ann))]), (genunk, tar_ann))),
              (genunk, tar_ann))
+          else
+          let var = fresh () in
+          P_aux (P_id var,(Generated src_l,src_ann)),
+          E_aux (E_id var,(Generated src_l,tar_ann))
        | _ ->
           let var = fresh () in
           P_aux (P_id var,(Generated src_l,src_ann)),
@@ -3995,6 +4030,7 @@ let make_bitvector_cast_fns cast_name env quant_kids src_typ target_typ =
   let pat, e' = aux src_typ' target_typ' in
   match !at_least_one with
   | Some one_target_typ -> begin
+    check_for_spec env cast_name;
     let src_ann = mk_tannot env src_typ no_effect in
     let tar_ann = mk_tannot env target_typ no_effect in
     match src_typ' with
@@ -4028,13 +4064,55 @@ let make_bitvector_env_casts env quant_kids (kid,i) exp =
   Bindings.fold (fun var (mut,typ) exp ->
     if mut = Immutable then mk_cast var typ exp else exp) locals exp
 
-let make_bitvector_cast_exp cast_name env quant_kids typ target_typ exp = (snd (make_bitvector_cast_fns cast_name env quant_kids typ target_typ)) exp
+let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
+  let infer_arg_typ env f l typ =
+    let (typq, ctor_typ) = Env.get_union_id f env in
+    let quants = quant_items typq in
+    match Env.expand_synonyms env ctor_typ with
+    | Typ_aux (Typ_fn ([arg_typ], ret_typ, _), _) ->
+       begin
+           let goals = quant_kopts typq |> List.map kopt_kid |> KidSet.of_list in
+           let unifiers = unify l env goals ret_typ typ in
+           let arg_typ' = subst_unifiers unifiers arg_typ in
+           arg_typ'
+       end
+    | _ -> typ_error l ("Malformed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
+
+  in
+  (* Push the cast down, including through constructors *)
+  let rec aux exp (typ, target_typ) =
+    let exp_env = env_of exp in
+    match exp with
+    | E_aux (E_let (lb,exp'),ann) ->
+       E_aux (E_let (lb,aux exp' (typ, target_typ)),ann)
+    | E_aux (E_block exps,ann) ->
+       let exps' = match List.rev exps with
+         | [] -> []
+         | final::l -> aux final (typ, target_typ)::l
+       in E_aux (E_block (List.rev exps'),ann)
+    | E_aux (E_tuple exps,(l,ann)) -> begin
+       match Env.expand_synonyms exp_env typ, Env.expand_synonyms exp_env target_typ with
+       | Typ_aux (Typ_tup src_typs,_), Typ_aux (Typ_tup tgt_typs,_) ->
+          E_aux (E_tuple (List.map2 aux exps (List.combine src_typs tgt_typs)),(l,ann))
+       | _ -> raise (Reporting.err_unreachable l __POS__
+                ("Attempted to insert cast on tuple on non-tuple type: " ^
+                   string_of_typ typ ^ " to " ^ string_of_typ target_typ))
+      end
+    | E_aux (E_app (f,args),(l,ann)) when Env.is_union_constructor f (env_of exp) ->
+       let arg = match args with [arg] -> arg | _ -> E_aux (E_tuple args, (l,empty_tannot)) in
+       let src_arg_typ = infer_arg_typ (env_of exp) f l typ in
+       let tgt_arg_typ = infer_arg_typ (env_of exp) f l target_typ in
+       E_aux (E_app (f,[aux arg (src_arg_typ, tgt_arg_typ)]),(l,ann))
+    | _ ->
+       (snd (make_bitvector_cast_fns cast_name cast_env quant_kids typ target_typ)) exp
+  in
+  aux exp (typ, target_typ)
 
 let rec extract_value_from_guard var (E_aux (e,_)) =
   match e with
   | E_app (op, ([E_aux (E_id var',_); E_aux (E_lit (L_aux (L_num i,_)),_)] |
                 [E_aux (E_lit (L_aux (L_num i,_)),_); E_aux (E_id var',_)]))
-      when string_of_id op = "eq_atom" && Id.compare var var' == 0 ->
+      when string_of_id op = "eq_int" && Id.compare var var' == 0 ->
      Some i
   | E_app (op, [e1;e2]) when string_of_id op = "and_bool" ->
      (match extract_value_from_guard var e1 with
@@ -4047,7 +4125,8 @@ let fill_in_type env typ =
   let subst = KidSet.fold (fun kid subst ->
     match Env.get_typ_var kid env with
     | K_type
-    | K_order -> subst
+    | K_order
+    | K_bool -> subst
     | K_int ->
        (match solve env (nvar kid) with
        | None -> subst
@@ -4076,13 +4155,14 @@ let add_bitvector_casts (Defs defs) =
              let pat,guard,body,ann = destruct_pexp pexp in
              let body = match pat, guard with
                | P_aux (P_lit (L_aux (L_num i,_)),_), _ ->
-                  let src_typ = subst_src_typ (KBindings.singleton kid (nconstant i)) result_typ in
+                  (* We used to just substitute kid, but fill_in_type also catches other kids defined by it *)
+                  let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) (nconstant i)) env) result_typ in
                   make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
                     (make_bitvector_env_casts env quant_kids (kid,i) body)
                | P_aux (P_id var,_), Some guard ->
                   (match extract_value_from_guard var guard with
                   | Some i ->
-                     let src_typ = subst_src_typ (KBindings.singleton kid (nconstant i)) result_typ in
+                     let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) (nconstant i)) env) result_typ in
                      make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
                        (make_bitvector_env_casts env quant_kids (kid,i) body)
                   | None -> body)
@@ -4102,9 +4182,16 @@ let add_bitvector_casts (Defs defs) =
            | E_app (op,
                     ([E_aux (E_sizeof (Nexp_aux (Nexp_var kid,_)),_); y] |
                      [y; E_aux (E_sizeof (Nexp_aux (Nexp_var kid,_)),_)]))
-               when string_of_id op = "eq_atom" ->
+               when string_of_id op = "eq_int" ->
               (match destruct_atom_nexp (env_of y) (typ_of y) with
               | Some (Nexp_aux (Nexp_constant i,_)) -> [(kid,i)]
+              | _ -> [])
+           | E_app (op,[x;y])
+               when string_of_id op = "eq_int" ->
+              (match destruct_atom_nexp (env_of x) (typ_of x), destruct_atom_nexp (env_of y) (typ_of y) with
+              | Some (Nexp_aux (Nexp_var kid,_)), Some (Nexp_aux (Nexp_constant i,_))
+              | Some (Nexp_aux (Nexp_constant i,_)), Some (Nexp_aux (Nexp_var kid,_))
+                -> [(kid,i)]
               | _ -> [])
            | E_app (op, [x;y]) when string_of_id op = "and_bool" ->
               extract x @ extract y
@@ -4120,10 +4207,16 @@ let add_bitvector_casts (Defs defs) =
          E_aux (E_if (e1,e2',e3), ann)
       | E_return e' ->
          E_aux (E_return (make_bitvector_cast_exp "bitvector_cast_out" top_env quant_kids (fill_in_type (env_of e') (typ_of e')) ret_typ e'),ann)
-      | E_assign (LEXP_aux (lexp,lexp_annot),e') ->
-         E_aux (E_assign (LEXP_aux (lexp,lexp_annot),
-                          make_bitvector_cast_exp "bitvector_cast_out" top_env quant_kids (fill_in_type (env_of e') (typ_of e'))
-                            (typ_of_annot lexp_annot) e'),ann)
+      | E_assign (LEXP_aux (_,lexp_annot) as lexp,e') -> begin
+         (* The type in the lexp_annot might come from e' rather than being the
+            type of the storage, so ask the type checker what it really is. *)
+         match infer_lexp (env_of_annot lexp_annot) (strip_lexp lexp) with
+         | LEXP_aux (_,lexp_annot') ->
+            E_aux (E_assign (lexp,
+                             make_bitvector_cast_exp "bitvector_cast_out" top_env quant_kids (fill_in_type (env_of e') (typ_of e'))
+                               (typ_of_annot lexp_annot') e'),ann)
+         | exception _ -> E_aux (e,ann)
+        end
       | E_id id -> begin
         let env = env_of_annot ann in
         match Env.lookup_id id env with
@@ -4167,7 +4260,23 @@ let add_bitvector_casts (Defs defs) =
     | DEF_fundef (FD_aux (FD_function (r,t,e,fcls),fd_ann)) ->
        DEF_fundef (FD_aux (FD_function (r,t,e,List.map rewrite_funcl fcls),fd_ann))
     | d -> d
-  in Defs (List.map rewrite_def defs)
+  in
+  specs_required := IdSet.empty;
+  let defs = List.map rewrite_def defs in
+  let l = Generated Unknown in
+  let Defs cast_specs,_ =
+    (* TODO: use default/relevant order *)
+    let kid = mk_kid "n" in
+    let bitsn = vector_typ (nvar kid) dec_ord bit_typ in
+    let ts = mk_typschm (mk_typquant [mk_qi_id K_int kid])
+               (function_typ [bitsn] bitsn no_effect) in
+    let extfn _ = Some "zeroExtend" in
+    let mkfn name =
+      mk_val_spec (VS_val_spec (ts,name,extfn,false))
+    in
+    let defs = List.map mkfn (IdSet.elements !specs_required) in
+    check Env.empty (Defs defs)
+  in Defs (cast_specs @ defs)
 end
 
 let replace_nexp_in_typ env typ orig new_nexp =
@@ -4243,14 +4352,13 @@ let rewrite_toplevel_nexps (Defs defs) =
            let nexp_map, typ = rewrite_typ_in_spec env nexp_map typ in
            (nexp_map, typ::t)) typs (nexp_map,[])
        in nexp_map, Typ_aux (Typ_tup typs,ann)
-    | _ ->
-       let typ' = Env.base_typ_of env typ_full in
+    | _ when is_number typ_full || is_bitvector_typ typ_full -> begin
        let nexp_opt =
-         match destruct_atom_nexp env typ' with
+         match destruct_atom_nexp env typ_full with
          | Some nexp -> Some nexp
          | None ->
-            if is_bitvector_typ typ' then
-              let (size,_,_) = vector_typ_args_of typ' in
+            if is_bitvector_typ typ_full then
+              let (size,_,_) = vector_typ_args_of typ_full in
               Some size
             else None
        in match nexp_opt with
@@ -4266,10 +4374,27 @@ let rewrite_toplevel_nexps (Defs defs) =
                (kid, nexp)::nexp_map, kid
           in
           let new_nexp = nvar kid in
-          (* Try to avoid expanding the original type *)
-          let changed, typ = replace_nexp_in_typ env typ_full nexp new_nexp in
-          if changed then nexp_map, typ
-          else nexp_map, snd (replace_nexp_in_typ env typ' nexp new_nexp)
+          nexp_map, snd (replace_nexp_in_typ env typ_full nexp new_nexp)
+      end
+    | _ ->
+       let typ' = Env.base_typ_of env typ_full in
+       if Typ.compare typ_full typ' == 0 then
+         match t with
+         | Typ_app (f,args) ->
+            let in_arg nexp_map (A_aux (arg,l) as arg_full) =
+              match arg with
+              | A_typ typ ->
+                 let nexp_map, typ' = rewrite_typ_in_spec env nexp_map typ in
+                 nexp_map, A_aux (A_typ typ',l)
+              | A_bool _ | A_nexp _ | A_order _ -> nexp_map, arg_full
+            in
+            let nexp_map, args =
+              List.fold_right (fun arg (nexp_map,args) ->
+                  let nexp_map, arg = in_arg nexp_map arg in
+                  (nexp_map, arg::args)) args (nexp_map,[])
+            in nexp_map, Typ_aux (Typ_app (f,args),ann)
+         | _ -> nexp_map, typ_full
+       else rewrite_typ_in_spec env nexp_map typ'
   in
   let rewrite_valspec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs,typ),ts_l),id,ext_opt,is_cast),ann)) =
     match tqs with
@@ -4337,7 +4462,11 @@ let rewrite_toplevel_nexps (Defs defs) =
     | DEF_spec vs -> (match rewrite_valspec vs with
       | None -> spec_map, def
       | Some (id, nexp_map, vs) -> Bindings.add id nexp_map spec_map, DEF_spec vs)
-    | DEF_fundef (FD_aux (FD_function (recopt,tann,eff,funcls),ann)) ->
+    | DEF_fundef (FD_aux (FD_function (recopt,_,eff,funcls),ann)) ->
+       (* Type annotations on function definitions will have been turned into
+          valspecs by type checking, so it should be safe to drop them rather
+          than updating them. *)
+       let tann = Typ_annot_opt_aux (Typ_annot_opt_none,Generated Unknown) in
        spec_map,
        DEF_fundef (FD_aux (FD_function (recopt,tann,eff,List.map (rewrite_funcl spec_map) funcls),ann))
     | _ -> spec_map, def

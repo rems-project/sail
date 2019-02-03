@@ -1,5 +1,6 @@
 \documentclass[a4paper]{article}
 
+\usepackage{etoolbox}
 \usepackage[nounderscore]{syntax}
 \usepackage{amsmath,amssymb}
 \usepackage[svgnames]{xcolor}
@@ -25,7 +26,7 @@
 \lstdefinelanguage{sail}
   { morekeywords={val,function,cast,type,forall,overload,operator,enum,union,undefined,exit,and,assert,sizeof,
       scattered,register,inc,dec,if,then,else,effect,let,as,@,in,end,Type,Int,Order,match,clause,struct,
-      foreach,from,to,by,infix,infixl,infixr,bitfield,default,try,catch,throw},
+      foreach,from,to,by,infix,infixl,infixr,bitfield,default,try,catch,throw,constraint},
     keywordstyle={\bf\ttfamily\color{blue}},
     morestring=[b]",
     stringstyle={\ttfamily\color{red}},
@@ -43,6 +44,22 @@
 
 \def\sail{\trivlist \item\relax}
 \def\endsail{\endtrivlist}
+
+\newcommand{\saildocval}[2]{
+#1 #2
+}
+\newcommand{\saildocfcl}[2]{
+#1 #2
+}
+\newcommand{\saildoctype}[2]{
+#1 #2
+}
+\newcommand{\saildocfn}[2]{
+#1 #2
+}
+\newcommand{\saildocoverload}[2]{
+#1 #2
+}
 
 \renewcommand{\ll}[1]{\lstinline{#1}}
 

@@ -531,6 +531,7 @@ def =  (* Top-level definition *)
  | DEF_spec of val_spec (* top-level type constraint *)
  | DEF_default of default_typing_spec (* default kind and type assumptions *)
  | DEF_scattered of scattered_def (* scattered definition *)
+ | DEF_measure of id * pat * exp (* separate termination measure declaration *)
  | DEF_reg_dec of dec_spec (* register declaration *)
  | DEF_pragma of string * string * l
  | DEF_internal_mutrec of fundef list

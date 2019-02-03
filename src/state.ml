@@ -135,20 +135,20 @@ let generate_initial_regstate defs =
     let typ_subst_typquant tq args typ =
       List.fold_left2 typ_subst_quant_item typ (quant_items tq) args
     in
-    let add_typ_init_val vals = function
+    let add_typ_init_val (defs', vals) = function
       | TD_enum (id, _, id1 :: _, _) ->
          (* Choose the first value of an enumeration type as default *)
-         Bindings.add id (fun _ -> string_of_id id1) vals
+         (defs', Bindings.add id (fun _ -> string_of_id id1) vals)
       | TD_variant (id, _, tq, (Tu_aux (Tu_ty_id (typ1, id1), _)) :: _, _) ->
          (* Choose the first variant of a union type as default *)
          let init_val args =
            let typ1 = typ_subst_typquant tq args typ1 in
            string_of_id id1 ^ " (" ^ lookup_init_val vals typ1 ^ ")"
          in
-         Bindings.add id init_val vals
+         (defs', Bindings.add id init_val vals)
       | TD_abbrev (id, tq, A_aux (A_typ typ, _)) ->
          let init_val args = lookup_init_val vals (typ_subst_typquant tq args typ) in
-         Bindings.add id init_val vals
+         (defs', Bindings.add id init_val vals)
       | TD_record (id, _, tq, fields, _) ->
          let init_val args =
            let init_field (typ, id) =
@@ -157,16 +157,21 @@ let generate_initial_regstate defs =
            in
            "struct { " ^ (String.concat ", " (List.map init_field fields)) ^ " }"
          in
-         Bindings.add id init_val vals
+         let def_name = "initial_" ^ string_of_id id in
+         if quant_items tq = [] && not (is_defined defs def_name) then
+           (defs' @ ["let " ^ def_name ^ " : " ^ string_of_id id ^ " = " ^ init_val []],
+            Bindings.add id (fun _ -> def_name) vals)
+         else (defs', Bindings.add id init_val vals)
       | TD_bitfield (id, typ, _) ->
-         Bindings.add id (fun _ -> lookup_init_val vals typ) vals
-      | _ -> vals
+         (defs', Bindings.add id (fun _ -> lookup_init_val vals typ) vals)
+      | _ -> (defs', vals)
     in
-    let init_vals = List.fold_left (fun vals def -> match def with
-      | DEF_type (TD_aux (td, _)) -> add_typ_init_val vals td
-      | _ -> vals) Bindings.empty defs
+    let (init_defs, init_vals) = List.fold_left (fun inits def -> match def with
+      | DEF_type (TD_aux (td, _)) -> add_typ_init_val inits td
+      | _ -> inits) ([], Bindings.empty) defs
     in
     let init_reg (typ, id) = string_of_id id ^ " = " ^ lookup_init_val init_vals typ in
+    init_defs @
     ["let initial_regstate : regstate = struct { " ^ (String.concat ", " (List.map init_reg registers)) ^ " }"]
   with
   | _ -> [] (* Do not generate an initial register state if anything goes wrong *)

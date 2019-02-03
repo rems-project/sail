@@ -3,7 +3,7 @@ Installing Sail on Ubuntu and macOS
 
 This note lists the commands needed to get Sail and all dependencies
 working on a new Ubuntu install or macOS. We have recently (2018-02-17) tested these
-on Xubuntu 16.04 LTS in a virtual machine and on macOS Sierre 10.12.6, so they should
+on Xubuntu 16.04 LTS in a virtual machine and on macOS Sierra 10.12.6, so they should
 work. Hopefully this will be useful as a reference.
 
 Basics

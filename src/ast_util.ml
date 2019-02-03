@@ -128,7 +128,7 @@ let mk_val_spec vs_aux =
 
 let kopt_kid (KOpt_aux (KOpt_kind (_, kid), _)) = kid
 let kopt_kind (KOpt_aux (KOpt_kind (k, _), _)) = k
-                                               
+
 let is_nat_kopt = function
   | KOpt_aux (KOpt_kind (K_aux (K_int, _), _), _) -> true
   | _ -> false
@@ -165,7 +165,7 @@ module Kind = struct
     | K_type, _ -> 1 | _, K_type -> -1
     | K_order, _ -> 1 | _, K_order -> -1
 end
-                                  
+
 module KOpt = struct
   type t = kinded_id
   let compare kopt1 kopt2 =
@@ -984,77 +984,88 @@ let lex_ord f g x1 x2 y1 y2 =
   | 0 -> g y1 y2
   | n -> n
 
+let rec nc_compare (NC_aux (nc1,_)) (NC_aux (nc2,_)) =
+  match nc1, nc2 with
+  | NC_equal (n1,n2), NC_equal (n3,n4)
+  | NC_bounded_ge (n1,n2), NC_bounded_ge (n3,n4)
+  | NC_bounded_le (n1,n2), NC_bounded_le (n3,n4)
+  | NC_not_equal (n1,n2), NC_not_equal (n3,n4)
+    -> lex_ord Nexp.compare Nexp.compare n1 n3 n2 n4
+  | NC_set (k1,s1), NC_set (k2,s2) ->
+     lex_ord Kid.compare (Util.compare_list Nat_big_num.compare) k1 k2 s1 s2
+  | NC_or (nc1,nc2), NC_or (nc3,nc4)
+  | NC_and (nc1,nc2), NC_and (nc3,nc4)
+    -> lex_ord nc_compare nc_compare nc1 nc3 nc2 nc4
+  | NC_app (f1,args1), NC_app (f2,args2)
+    -> lex_ord Id.compare (Util.compare_list typ_arg_compare) f1 f2 args1 args2
+  | NC_var v1, NC_var v2
+    -> Kid.compare v1 v2
+  | NC_true, NC_true
+  | NC_false, NC_false
+    -> 0
+  | NC_equal _, _ -> -1      | _, NC_equal _ -> 1
+  | NC_bounded_ge _, _ -> -1 | _, NC_bounded_ge _ -> 1
+  | NC_bounded_le _, _ -> -1 | _, NC_bounded_le _ -> 1
+  | NC_not_equal _, _ -> -1  | _, NC_not_equal _ -> 1
+  | NC_set _, _ -> -1        | _, NC_set _ -> 1
+  | NC_or _, _ -> -1         | _, NC_or _ -> 1
+  | NC_and _, _ -> -1        | _, NC_and _ -> 1
+  | NC_app _, _ -> -1        | _, NC_app _ -> 1
+  | NC_var _, _ -> -1        | _, NC_var _ -> 1
+  | NC_true, _ -> -1         | _, NC_true -> 1
+
+and typ_compare (Typ_aux (t1,_)) (Typ_aux (t2,_)) =
+  match t1,t2 with
+  | Typ_internal_unknown, Typ_internal_unknown -> 0
+  | Typ_id id1, Typ_id id2 -> Id.compare id1 id2
+  | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2
+  | Typ_fn (ts1,t2,e1), Typ_fn (ts3,t4,e2) ->
+     (match Util.compare_list typ_compare ts1 ts3 with
+     | 0 -> (match typ_compare t2 t4 with
+       | 0 -> effect_compare e1 e2
+       | n -> n)
+     | n -> n)
+  | Typ_bidir (t1,t2), Typ_bidir (t3,t4) ->
+     (match typ_compare t1 t3 with
+     | 0 -> typ_compare t2 t3
+     | n -> n)
+  | Typ_tup ts1, Typ_tup ts2 -> Util.compare_list typ_compare ts1 ts2
+  | Typ_exist (ks1,nc1,t1), Typ_exist (ks2,nc2,t2) ->
+     (match Util.compare_list KOpt.compare ks1 ks2 with
+     | 0 -> (match nc_compare nc1 nc2 with
+       | 0 -> typ_compare t1 t2
+       | n -> n)
+     | n -> n)
+  | Typ_app (id1,ts1), Typ_app (id2,ts2) ->
+     (match Id.compare id1 id2 with
+     | 0 -> Util.compare_list typ_arg_compare ts1 ts2
+     | n -> n)
+  | Typ_internal_unknown, _ -> -1 | _, Typ_internal_unknown -> 1
+  | Typ_id _, _ -> -1    | _, Typ_id _ -> 1
+  | Typ_var _, _ -> -1   | _, Typ_var _ -> 1
+  | Typ_fn _, _ -> -1    | _, Typ_fn _ -> 1
+  | Typ_bidir _, _ -> -1 | _, Typ_bidir _ -> 1
+  | Typ_tup _, _ -> -1   | _, Typ_tup _ -> 1
+  | Typ_exist _, _ -> -1 | _, Typ_exist _ -> 1
+
+and typ_arg_compare (A_aux (ta1,_)) (A_aux (ta2,_)) =
+  match ta1, ta2 with
+  | A_nexp n1,  A_nexp n2  -> Nexp.compare n1 n2
+  | A_typ t1,   A_typ t2   -> typ_compare t1 t2
+  | A_order o1, A_order o2 -> order_compare o1 o2
+  | A_bool nc1, A_bool nc2 -> nc_compare nc1 nc2
+  | A_nexp _, _ -> -1  | _, A_nexp _ -> 1
+  | A_typ _, _  -> -1  | _, A_typ _ -> 1
+  | A_order _, _ -> -1 | _, A_order _ -> 1
+
 module NC = struct
   type t = n_constraint
-  let rec compare (NC_aux (nc1,_)) (NC_aux (nc2,_)) =
-    match nc1, nc2 with
-    | NC_equal (n1,n2), NC_equal (n3,n4)
-    | NC_bounded_ge (n1,n2), NC_bounded_ge (n3,n4)
-    | NC_bounded_le (n1,n2), NC_bounded_le (n3,n4)
-    | NC_not_equal (n1,n2), NC_not_equal (n3,n4)
-      -> lex_ord Nexp.compare Nexp.compare n1 n3 n2 n4
-    | NC_set (k1,s1), NC_set (k2,s2) ->
-       lex_ord Kid.compare (Util.compare_list Nat_big_num.compare) k1 k2 s1 s2
-    | NC_or (nc1,nc2), NC_or (nc3,nc4)
-    | NC_and (nc1,nc2), NC_and (nc3,nc4)
-      -> lex_ord compare compare nc1 nc3 nc2 nc4
-    | NC_true, NC_true
-    | NC_false, NC_false
-      -> 0
-    | NC_equal _, _ -> -1      | _, NC_equal _ -> 1
-    | NC_bounded_ge _, _ -> -1 | _, NC_bounded_ge _ -> 1
-    | NC_bounded_le _, _ -> -1 | _, NC_bounded_le _ -> 1
-    | NC_not_equal _, _ -> -1  | _, NC_not_equal _ -> 1
-    | NC_set _, _ -> -1        | _, NC_set _ -> 1
-    | NC_or _, _ -> -1         | _, NC_or _ -> 1
-    | NC_and _, _ -> -1        | _, NC_and _ -> 1
-    | NC_true, _ -> -1         | _, NC_true -> 1
+  let compare = nc_compare
 end
 
 module Typ = struct
   type t = typ
-  let rec compare (Typ_aux (t1,_)) (Typ_aux (t2,_)) =
-    match t1,t2 with
-    | Typ_internal_unknown, Typ_internal_unknown -> 0
-    | Typ_id id1, Typ_id id2 -> Id.compare id1 id2
-    | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2
-    | Typ_fn (ts1,t2,e1), Typ_fn (ts3,t4,e2) ->
-       (match Util.compare_list compare ts1 ts3 with
-       | 0 -> (match compare t2 t4 with
-         | 0 -> effect_compare e1 e2
-         | n -> n)
-       | n -> n)
-    | Typ_bidir (t1,t2), Typ_bidir (t3,t4) ->
-       (match compare t1 t3 with
-       | 0 -> compare t2 t3
-       | n -> n)
-    | Typ_tup ts1, Typ_tup ts2 -> Util.compare_list compare ts1 ts2
-    | Typ_exist (ks1,nc1,t1), Typ_exist (ks2,nc2,t2) ->
-       (match Util.compare_list KOpt.compare ks1 ks2 with
-       | 0 -> (match NC.compare nc1 nc2 with
-         | 0 -> compare t1 t2
-         | n -> n)
-       | n -> n)
-    | Typ_app (id1,ts1), Typ_app (id2,ts2) ->
-       (match Id.compare id1 id2 with
-       | 0 -> Util.compare_list arg_compare ts1 ts2
-       | n -> n)
-    | Typ_internal_unknown, _ -> -1 | _, Typ_internal_unknown -> 1
-    | Typ_id _, _ -> -1    | _, Typ_id _ -> 1
-    | Typ_var _, _ -> -1   | _, Typ_var _ -> 1
-    | Typ_fn _, _ -> -1    | _, Typ_fn _ -> 1
-    | Typ_bidir _, _ -> -1 | _, Typ_bidir _ -> 1
-    | Typ_tup _, _ -> -1   | _, Typ_tup _ -> 1
-    | Typ_exist _, _ -> -1 | _, Typ_exist _ -> 1
-  and arg_compare (A_aux (ta1,_)) (A_aux (ta2,_)) =
-    match ta1, ta2 with
-    | A_nexp n1,  A_nexp n2  -> Nexp.compare n1 n2
-    | A_typ t1,   A_typ t2   -> compare t1 t2
-    | A_order o1, A_order o2 -> order_compare o1 o2
-    | A_bool nc1, A_bool nc2 -> NC.compare nc1 nc2
-    | A_nexp _, _ -> -1  | _, A_nexp _ -> 1
-    | A_typ _, _  -> -1  | _, A_typ _ -> 1
-    | A_order _, _ -> -1 | _, A_order _ -> 1
+  let compare = typ_compare
 end
 
 module TypMap = Map.Make(Typ)
@@ -1289,6 +1300,9 @@ let is_fundef id = function
   | DEF_fundef (FD_aux (FD_function (_, _, _, FCL_aux (FCL_Funcl (id', _), _) :: _), _)) when Id.compare id' id = 0 -> true
   | _ -> false
 
+let rename_valspec id (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot)) =
+  VS_aux (VS_val_spec (typschm, id, externs, is_cast), annot)
+
 let rename_funcl id (FCL_aux (FCL_Funcl (_, pexp), annot)) = FCL_aux (FCL_Funcl (id, pexp), annot)
 
 let rename_fundef id (FD_aux (FD_function (ropt, topt, eopt, funcls), annot)) =
@@ -1425,7 +1439,7 @@ let locate_id f (Id_aux (name, l)) = Id_aux (name, f l)
 let locate_kid f (Kid_aux (name, l)) = Kid_aux (name, f l)
 
 let locate_kind f (K_aux (kind, l)) = K_aux (kind, f l)
-                                     
+
 let locate_kinded_id f (KOpt_aux (KOpt_kind (k, kid), l)) =
   KOpt_aux (KOpt_kind (locate_kind f k, locate_kid f kid), f l)
 

@@ -25,11 +25,11 @@ that the constraint on the \ll{regno} type synonym is satisfied, we
 return an existentially quantified type \ll{\{'n, 0 <= 'n <
   32. regno('n)\}}.
 
-\sailxlent
-\sailregno
-\sailregbits
-\sailregbitstoregno
-\sailfnregbitstoregno
+\sailtype{xlen_t}
+\sailtype{regno}
+\sailtype{regbits}
+\sailval{regbits_to_regno}
+\sailfn{regbits_to_regno}
 
 We now set up some basic architectural state. First creating a
 register of type \ll{xlen_t} for both the program counter \ll{PC}, and
@@ -54,13 +54,14 @@ register nextPC : xlen_t
 register Xs : vector(32, dec, xlen_t)
 \end{lstlisting}
 
-\sailrX
-\sailfnrX
-\sailfnrXA
+\sailval{rX}
+% TODO: Fix funcl commands
+\sailfclrX
+\sailfclMMMrX
 
-\sailwX
-\sailfnwX
-\sailX
+\sailval{wX}
+\sailfn{wX}
+\sailoverloadHHX
 
 We also give a function \ll{MEMr} for reading memory, this function
 just points at a builtin we have defined elsewhere. Note that
@@ -71,8 +72,8 @@ well as a host of other concurrency model related effects. They also
 indicate whether a function throws exceptions or has other non-local
 control flow (the escape effect).
 
-\sailMEMr
-\sailfnMEMr
+\sailval{MEMr}
+\sailfn{MEMr}
 
 It's common when defining architecture specifications to break
 instruction semantics down into separate functions that handle
@@ -85,7 +86,7 @@ architecture reference manual. To support this Sail supports
 decode functions, and declare them as scattered functions, as well as
 the \ll{ast} union.
 
-\sailiop
+\sailtype{iop}
 
 \begin{lstlisting}
 scattered union ast
@@ -110,8 +111,8 @@ its argument.
 union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
 \end{lstlisting}
 
-\sailfndecodeSomeITYPE
-\sailfnexecuteITYPE
+%\sailfndecodeSomeITYPE
+%\sailfnexecuteITYPE
 
 \noindent Now we do the same thing for the load-double instruction:
 
@@ -119,15 +120,15 @@ union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
 union clause ast = LOAD : (bits(12), regbits, regbits)
 \end{lstlisting}
 
-\sailfndecodeSomeLOAD
-\sailfnexecuteLOAD
+%\sailfndecodeSomeLOAD
+%\sailfnexecuteLOAD
 
 Finally we define the fallthrough case for the decode function, and
 end all our scattered definitions. Note that the clauses in a
 scattered function will be matched in the order they appear in the
 file.
 
-\sailfndecodeNone
+%\sailfndecodeNone
 
 \begin{lstlisting}
 end ast

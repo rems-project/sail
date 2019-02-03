@@ -356,9 +356,10 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) 
     | [] -> failwith "fv_of_fun fell off the end looking for the function name"
     | FCL_aux(FCL_Funcl(id,_),_)::_ -> string_of_id id in
   let base_bounds = match rec_opt with
-    (* Current Sail does not have syntax for declaring functions as recursive,
+    (* Current Sail does not require syntax for declaring functions as recursive,
        and type checker does not check whether functions are recursive, so
-       just always add a self-dependency of functions on themselves
+       just always add a self-dependency of functions on themselves, as well as
+       adding dependencies from any specified termination measure further below
     | Rec_aux(Ast.Rec_rec,_) -> init_env fun_name
     | _ -> mt*)
     | _ -> init_env fun_name in
@@ -369,6 +370,13 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) 
       bound, fv_of_typ consider_var bound mt typ
     | Typ_annot_opt_aux(Typ_annot_opt_none, _) ->
       base_bounds, mt in
+  let ns_measure = match rec_opt with
+    | Rec_aux(Rec_measure (pat,exp),_) ->
+       let pat_bs,pat_ns = pat_bindings consider_var base_bounds mt pat in
+       let _, exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty exp in
+       exp_ns
+    | _ -> mt
+  in
   let ns = List.fold_right (fun (FCL_aux(FCL_Funcl(_,pexp),_)) ns ->
     match pexp with
     | Pat_aux(Pat_exp (pat,exp),_) ->
@@ -383,7 +391,7 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) 
   ) funcls mt in
   let ns_vs = init_env ("val:" ^ (string_of_id (id_of_fundef fd))) in
   (* let _ = Printf.eprintf "Function %s uses %s\n" fun_name (set_to_string (Nameset.union ns ns_r)) in *)
-  init_env fun_name, Nameset.union ns_vs (Nameset.union ns ns_r)
+  init_env fun_name, Nameset.union ns_vs (Nameset.union ns (Nameset.union ns_r ns_measure))
 
 let fv_of_vspec consider_var (VS_aux(vspec,_)) = match vspec with
   | VS_val_spec(ts,id,_,_) ->
@@ -499,6 +507,7 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_scattered sdef -> fv_of_scattered consider_var consider_scatter_as_one all_defs sdef
   | DEF_reg_dec rdec -> fv_of_rd consider_var rdec
   | DEF_pragma _ -> mt,mt
+  | DEF_measure _ -> mt,mt (* currently removed beforehand *)
 
 let group_defs consider_scatter_as_one (Ast.Defs defs) =
   List.map (fun d -> (fv_of_def false consider_scatter_as_one defs d,d)) defs

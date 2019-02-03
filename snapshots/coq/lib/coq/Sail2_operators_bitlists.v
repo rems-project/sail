@@ -1,8 +1,3 @@
-(*========================================================================*)
-(*  Copyright (c) 2018 Sail contributors.                                 *)
-(*  This material is provided for anonymous review purposes only.         *)
-(*========================================================================*)
-
 Require Import Sail2_values.
 Require Import Sail2_operators.
 

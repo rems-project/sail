@@ -116,6 +116,9 @@ let options = Arg.align ([
   ( "-marshal",
     Arg.Set opt_marshal_defs,
     " OCaml-marshal out the rewritten AST to a file");
+  ( "-latex_full_valspecs",
+    Arg.Clear Latex.opt_simple_val,
+    " print full valspecs in latex output latex");
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
@@ -154,6 +157,12 @@ let options = Arg.align ([
   ( "-lem",
     Arg.Set opt_print_lem,
     " output a Lem translated version of the input");
+  ( "-lem_output_dir",
+    Arg.String (fun dir -> Process_file.opt_lem_output_dir := Some dir),
+    " set a custom directory to output generated Lem");
+  ( "-isa_output_dir",
+    Arg.String (fun dir -> Process_file.opt_isa_output_dir := Some dir),
+    " set a custom directory to output generated Isabelle auxiliary theories");
   ( "-lem_lib",
     Arg.String (fun l -> opt_libs_lem := l::!opt_libs_lem),
     "<filename> provide additional library to open in Lem output");
@@ -166,6 +175,9 @@ let options = Arg.align ([
   ( "-coq",
     Arg.Set opt_print_coq,
     " output a Coq translated version of the input");
+  ( "-coq_output_dir",
+    Arg.String (fun dir -> Process_file.opt_coq_output_dir := Some dir),
+    " set a custom directory to output generated Coq");
   ( "-coq_lib",
     Arg.String (fun l -> opt_libs_coq := l::!opt_libs_coq),
     "<filename> provide additional library to open in Coq output");

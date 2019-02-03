@@ -57,6 +57,7 @@ module StringSet = Set.Make(String);;
 
 let opt_prefix = ref "sail"
 let opt_directory = ref "sail_latex"
+let opt_simple_val = ref true
 
 let rec unique_postfix n =
   if n < 0 then
@@ -97,13 +98,13 @@ let rec unique_postfix n =
 type id_category =
   | Function
   | Val
-  | Overload
+  | Overload of int
   | FunclCtor of id * int
   | FunclNum of int
   | FunclApp of string
+  | Type
 
-let replace_numbers str =
-  let replacements =
+let number_replacements =
     [ ("0", "Zero");
       ("1", "One");
       ("2", "Two");
@@ -114,16 +115,28 @@ let replace_numbers str =
       ("7", "Seven");
       ("8", "Eight");
       ("9", "Nine") ]
-  in
+
+(* add to this as needed *)
+let other_replacements =
+    [ ("_", "Underscore") ]
+
+let char_replace str replacements =
   List.fold_left (fun str (from, into) -> Str.global_replace (Str.regexp_string from) into str) str replacements
+
+let replace_numbers str =
+  char_replace str number_replacements
+
+let replace_others str =
+  char_replace str other_replacements
 
 let category_name = function
   | Function -> "fn"
   | Val -> "val"
-  | Overload -> "overload"
+  | Type -> "type"
+  | Overload n -> "overload" ^ unique_postfix n
   | FunclNum n -> "fcl" ^ unique_postfix n
   | FunclCtor (id, n) ->
-     let str = replace_numbers (Util.zencode_string (string_of_id id)) in
+     let str = replace_others (replace_numbers (Util.zencode_string (string_of_id id))) in
      "fcl" ^ String.sub str 1 (String.length str - 1) ^ unique_postfix n
   | FunclApp str -> "fcl" ^ str
 
@@ -134,7 +147,8 @@ let category_name_val = function
 let category_name_simple = function
   | Function -> "fn"
   | Val -> "val"
-  | Overload -> "overload"
+  | Type -> "type"
+  | Overload n -> "overload"
   | FunclNum _ -> "fcl"
   | FunclCtor (_, _) -> "fcl"
   | FunclApp _ -> "fcl"
@@ -162,8 +176,8 @@ let latex_id id =
     (* If we have any other weird symbols in the id, remove them using Util.zencode_string (removing the z prefix) *)
     let str = Util.zencode_string str in
     let str = String.sub str 1 (String.length str - 1) in
-    (* Latex only allows letters in identifiers, so replace all numbers *)
-    let str = replace_numbers str in
+    (* Latex only allows letters in identifiers, so replace all numbers and other characters *)
+    let str = replace_others (replace_numbers str) in
 
     let generated = state.generated_names |> Bindings.bindings |> List.map snd |> StringSet.of_list in
 
@@ -290,10 +304,10 @@ let latex_loc no_loc l =
 
 let commands = ref StringSet.empty
 
-let doc_spec_simple (VS_val_spec(ts,id,ext,is_cast)) =
-     Pretty_print_sail.doc_id id ^^ space
-     ^^ colon ^^ space
-     ^^ Pretty_print_sail.doc_typschm ~simple:true ts
+let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext, is_cast), _)) =
+  Pretty_print_sail.doc_id id ^^ space
+  ^^ colon ^^ space
+  ^^ Pretty_print_sail.doc_typschm ~simple:true ts
 
 let rec latex_command cat id no_loc ((l, _) as annot) =
   state.this <- Some id;
@@ -309,7 +323,7 @@ let rec latex_command cat id no_loc ((l, _) as annot) =
   output_string chan (Pretty_print_sail.to_string doc);
   close_out chan;
 
-  ksprintf string "\\newcommand{\\sail%s%s}{\\phantomsection%s\\saildoc%s{" (category_name cat) (latex_id id) labelling (category_name_simple cat)
+  ksprintf string "\\newcommand{\\%s%s%s}{\\phantomsection%s\\saildoc%s{" !opt_prefix (category_name cat) (latex_id id) labelling (category_name_simple cat)
   ^^ docstring l ^^ string "}{"
   ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}}" (Filename.concat !opt_directory code_file)
 
@@ -381,29 +395,46 @@ let process_pragma l command =
      Util.warn (Printf.sprintf "Bad latex pragma %s" (Reporting.loc_to_string l));
      None
 
+let tdef_id = function
+  | TD_abbrev (id, _, _) -> id
+  | TD_record (id, _, _, _, _) -> id
+  | TD_variant (id, _, _, _, _) -> id
+  | TD_enum (id, _, _, _) -> id
+  | TD_bitfield (id, _, _) -> id
+
 let defs (Defs defs) =
   reset_state state;
 
+  let overload_counter = ref 0 in
+
   let valspecs = ref IdSet.empty in
   let fundefs = ref IdSet.empty in
+  let typedefs = ref IdSet.empty in
 
   let latex_def def =
     match def with
-    | DEF_overload (id, ids) -> None
-                                  (*
+    | DEF_overload (id, ids) ->
        let doc =
          string (Printf.sprintf "overload %s = {%s}" (string_of_id id) (Util.string_of_list ", " string_of_id ids))
        in
-       Some (latex_command Overload id doc (id_loc id, None))
-                                   *)
+       incr overload_counter;
+       Some (latex_command (Overload !overload_counter) id doc (id_loc id, None))
 
-    | DEF_spec (VS_aux (VS_val_spec (_, id, _, _) as vs, annot)) as def ->
+    | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), annot) as vs) as def ->
        valspecs := IdSet.add id !valspecs;
-       Some (latex_command Val id (doc_spec_simple vs) annot)
+       if !opt_simple_val then
+         Some (latex_command Val id (doc_spec_simple vs) annot)
+       else
+         Some (latex_command Val id (Pretty_print_sail.doc_spec ~comment:false vs) annot)
 
     | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, _), _)]), annot)) as def ->
        fundefs := IdSet.add id !fundefs;
        Some (latex_command Function id (Pretty_print_sail.doc_def def) annot)
+
+    | DEF_type (TD_aux (tdef, annot)) as def ->
+       let id = tdef_id tdef in
+       typedefs := IdSet.add id !typedefs;
+       Some (latex_command Type id (Pretty_print_sail.doc_def def) annot)
 
     | DEF_fundef (FD_aux (FD_function (_, _, _, funcls), annot)) as def ->
        Some (latex_funcls def funcls)
@@ -432,7 +463,7 @@ let defs (Defs defs) =
      identifiers then outputs the correct mangled command. *)
   let id_command cat ids =
     sprintf "\\newcommand{\\%s%s}[1]{\n  " !opt_prefix (category_name cat)
-    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\sail%s%s}{}" (string_of_id id) (category_name cat) (latex_id id))
+    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\%s%s%s}{}" (string_of_id id) !opt_prefix (category_name cat) (latex_id id))
                           (IdSet.elements ids)
     ^ "}"
     |> string
@@ -449,5 +480,7 @@ let defs (Defs defs) =
   ^^ separate (twice hardline) [id_command Val !valspecs;
                                 ref_command Val !valspecs;
                                 id_command Function !fundefs;
-                                ref_command Function !fundefs]
+                                ref_command Function !fundefs;
+                                id_command Type !typedefs;
+                                ref_command Type !typedefs]
   ^^ hardline
