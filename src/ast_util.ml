@@ -635,6 +635,7 @@ let def_loc = function
   | DEF_overload (Id_aux (_, l), _) -> l
   | DEF_internal_mutrec _ -> Parse_ast.Unknown
   | DEF_pragma (_, _, l) -> l
+  | DEF_measure (id, _, _) -> id_loc id
 
 let string_of_id = function
   | Id_aux (Id v, _) -> v

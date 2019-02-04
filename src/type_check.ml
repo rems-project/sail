@@ -1263,6 +1263,7 @@ and is_typ_arg_monomorphic (A_aux (arg, _)) =
   match arg with
   | A_nexp _ -> true
   | A_typ typ -> is_typ_monomorphic typ
+  | A_bool _ -> true
   | A_order (Ord_aux (Ord_dec, _)) | A_order (Ord_aux (Ord_inc, _)) -> true
   | A_order (Ord_aux (Ord_var _, _)) -> false
 
@@ -1408,7 +1409,15 @@ and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
   | A_nexp n -> [n]
   | A_typ typ -> typ_nexps typ
+  | A_bool nc -> constraint_nexps nc
   | A_order ord -> []
+and constraint_nexps (NC_aux (nc_aux, l)) =
+  match nc_aux with
+  | NC_equal (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_le (n1, n2) | NC_not_equal (n1, n2) ->
+     [n1; n2]
+  | NC_set _ | NC_true | NC_false | NC_var _ -> []
+  | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2
+  | NC_app (_, args) -> List.concat (List.map typ_arg_nexps args)
 
 let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   match nexp1, nexp2 with
