@@ -638,6 +638,9 @@ let string_of_bv v = show_bitlist (bits_of v)
 val print_bits : forall 'a. Bitvector 'a => string -> 'a -> unit
 let print_bits str v = print_endline (str ^ string_of_bv v)
 
+val dec_str : integer -> string
+let dec_str bv = show bv
+
 val concat_str : string -> string -> string
 let concat_str str1 str2 = str1 ^ str2
 
