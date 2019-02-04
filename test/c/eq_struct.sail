@@ -3,7 +3,7 @@ default Order dec
 $include <flow.sail>
 $include <exception_basic.sail>
 
-val eq = "eq_anything" : forall ('a : Type). ('a, 'a) -> bool
+val eq = { lem: "eq", _: "eq_anything" } : forall ('a : Type). ('a, 'a) -> bool
 
 overload operator == = {eq}
 
