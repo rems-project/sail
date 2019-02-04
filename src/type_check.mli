@@ -120,6 +120,8 @@ module Env : sig
 
   val add_local : id -> mut * typ -> t -> t
 
+  val add_scattered_variant : id -> typquant -> t -> t
+
   (** Check if a local variable is mutable. Throws Type_error if it
      isn't a local variable. Probably best to use Env.lookup_id
      instead *)

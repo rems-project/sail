@@ -1121,6 +1121,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let aexp_setup, aexp_call, aexp_cleanup = compile_aexp ctx aexp in
      let try_return_id = gensym () in
      let handled_exception_label = label "handled_exception_" in
+     let fallthrough_label = label "fallthrough_exception_" in
      let compile_case (apat, guard, body) =
        let trivial_guard = match guard with
          | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _, _)
@@ -1146,14 +1147,14 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        [iblock case_instrs; ilabel try_label]
      in
      assert (ctyp_equal ctyp (ctyp_of_typ ctx typ));
-     [icomment "begin try catch";
-      idecl ctyp try_return_id;
+     [idecl ctyp try_return_id;
       itry_block (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
       ijump (F_unary ("!", F_have_exception), CT_bool) handled_exception_label]
      @ List.concat (List.map compile_case cases)
-     @ [imatch_failure ();
+     @ [igoto fallthrough_label;
         ilabel handled_exception_label;
-        icopy l CL_have_exception (F_lit (V_bool false), CT_bool)],
+        icopy l CL_have_exception (F_lit (V_bool false), CT_bool);
+        ilabel fallthrough_label],
      (fun clexp -> icopy l clexp (F_id try_return_id, ctyp)),
      []
 
