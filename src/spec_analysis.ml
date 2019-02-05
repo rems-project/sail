@@ -502,7 +502,14 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_scattered sdef -> fv_of_scattered consider_var consider_scatter_as_one all_defs sdef
   | DEF_reg_dec rdec -> fv_of_rd consider_var rdec
   | DEF_pragma _ -> mt,mt
-  | DEF_measure _ -> mt,mt (* currently removed beforehand *)
+  (* removed beforehand for Coq, but may still be present otherwise *)
+  | DEF_measure(id,pat,exp) ->
+     let i = string_of_id id in
+     let used = Nameset.of_list [i; "val:"^i] in
+     ((fun (_,u,_) -> Nameset.singleton ("measure:"^i),u)
+        (fv_of_pes consider_var mt used mt
+           [Pat_aux(Pat_exp (pat,exp),(Unknown,Type_check.empty_tannot))]))
+
 
 let group_defs consider_scatter_as_one (Ast.Defs defs) =
   List.map (fun d -> (fv_of_def false consider_scatter_as_one defs d,d)) defs
