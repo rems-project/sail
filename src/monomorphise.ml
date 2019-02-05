@@ -2274,30 +2274,18 @@ let replace_with_the_value bound_nexps (E_aux (_,(l,_)) as exp) =
                    E_aux (E_app (Id_aux (Id "make_the_value",Generated Unknown),[exp]),(Generated l,empty_tannot))),
            (Generated l,empty_tannot))
   in
-  match typ with
-  | Typ_aux (Typ_app (Id_aux (Id "range",_),
-                      [A_aux (A_nexp nexp,l');A_aux (A_nexp nexp',_)]),_)
-    when nexp_identical nexp nexp' ->
-     mk_exp nexp l l'
-  | Typ_aux (Typ_app (Id_aux (Id "atom",_),
-                      [A_aux (A_nexp nexp,l')]),_) ->
-     mk_exp nexp l l'
+  match destruct_numeric typ with
+  | Some ([], nc, nexp) when prove __POS__ env nc -> mk_exp nexp l l
   | _ -> raise (Reporting.err_unreachable l __POS__
-                  "atom stopped being an atom?")
+                  ("replace_with_the_value: Unsupported type " ^ string_of_typ typ))
 
 let replace_type env typ =
   let Typ_aux (t,l) = Env.expand_synonyms env typ in
-  match t with
-  | Typ_app (Id_aux (Id "range",_),
-             [A_aux (A_nexp nexp,l');A_aux (A_nexp _,_)]) ->
-     Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
-                       [A_aux (A_nexp nexp,l')]),Generated l)
-  | Typ_app (Id_aux (Id "atom",_),
-                      [A_aux (A_nexp nexp,l')]) ->
-     Typ_aux (Typ_app (Id_aux (Id "itself",Generated Unknown),
-                       [A_aux (A_nexp nexp,l')]),Generated l)
+  match destruct_numeric typ with
+  | Some ([], nc, nexp) when prove __POS__ env nc ->
+     Typ_aux (Typ_app (mk_id "itself", [A_aux (A_nexp nexp, Generated l)]), Generated l)
   | _ -> raise (Reporting.err_unreachable l __POS__
-                  "atom stopped being an atom?")
+                  ("replace_type: Unsupported type " ^ string_of_typ typ))
 
 
 let rewrite_size_parameters env (Defs defs) =
@@ -4425,10 +4413,23 @@ let rewrite_toplevel_nexps (Defs defs) =
       match ta with
       | A_typ typ -> A_aux (A_typ (aux typ),l)
       | A_order _ -> ta_full
-      | A_nexp nexp ->
-         match find_nexp env nexp_map nexp with
-         | (kid,_) -> A_aux (A_nexp (nvar kid),l)
-         | exception Not_found -> ta_full
+      | A_nexp nexp -> A_aux (A_nexp (aux_nexp nexp), l)
+      | A_bool nc -> A_aux (A_bool (aux_nconstraint nc), l)
+    and aux_nexp nexp =
+      match find_nexp env nexp_map nexp with
+      | (kid,_) -> nvar kid
+      | exception Not_found -> nexp
+    and aux_nconstraint (NC_aux (nc, l)) =
+      let rewrap nc = NC_aux (nc, l) in
+      match nc with
+      | NC_equal (n1, n2) -> rewrap (NC_equal (aux_nexp n1, aux_nexp n2))
+      | NC_bounded_ge (n1, n2) -> rewrap (NC_bounded_ge (aux_nexp n1, aux_nexp n2))
+      | NC_bounded_le (n1, n2) -> rewrap (NC_bounded_le (aux_nexp n1, aux_nexp n2))
+      | NC_not_equal (n1, n2) -> rewrap (NC_not_equal (aux_nexp n1, aux_nexp n2))
+      | NC_or (nc1, nc2) -> rewrap (NC_or (aux_nconstraint nc1, aux_nconstraint nc2))
+      | NC_and (nc1, nc2) -> rewrap (NC_and (aux_nconstraint nc1, aux_nconstraint nc2))
+      | NC_app (id, args) -> rewrap (NC_app (id, List.map aux_targ args))
+      | _ -> rewrap nc
     in aux typ
   in
   let rewrite_one_exp nexp_map (e,ann) =
