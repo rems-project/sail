@@ -2024,6 +2024,24 @@ let replace_env env = function
   | Some t -> Some { t with env = env }
   | None -> None
 
+(* Helpers for implicit arguments in infer_funapp' *)
+let is_not_implicit (Typ_aux (aux, _)) =
+  match aux with
+  | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var impl, _)), _)]) when string_of_id id = "implicit" -> false
+  | _ -> true
+
+let implicit_to_int (Typ_aux (aux, l)) =
+  match aux with
+  | Typ_app (id, args) when string_of_id id = "implicit" -> Typ_aux (Typ_app (mk_id "atom", args), l)
+  | _ -> Typ_aux (aux, l)
+
+let rec get_implicits typs =
+  match typs with
+  | Typ_aux (Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var impl, _)), _)]), _) :: typs when string_of_id id = "implicit" ->
+     impl :: get_implicits typs
+  | _ :: typs -> get_implicits typs
+  | [] -> []
+
 let infer_lit env (L_aux (lit_aux, l) as lit) =
   match lit_aux with
   | L_unit -> unit_typ
@@ -3535,9 +3553,16 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
 
   typ_debug (lazy ("Quantifiers " ^ Util.string_of_list ", " string_of_quant_item !quants));
 
-  if not (List.length typ_args = List.length xs) then
-    typ_error env l (Printf.sprintf "Function %s applied to %d args, expected %d" (string_of_id f) (List.length xs) (List.length typ_args))
-  else ();
+  let implicits, typ_args =
+    if not (List.length typ_args = List.length xs) then
+      let typ_args' = List.filter is_not_implicit typ_args in
+      if not (List.length typ_args' = List.length xs) then
+        typ_error env l (Printf.sprintf "Function %s applied to %d args, expected %d" (string_of_id f) (List.length xs) (List.length typ_args))
+      else
+        get_implicits typ_args, typ_args'
+    else
+      [], List.map implicit_to_int typ_args
+  in
 
   let instantiate_quant (v, arg) (QI_aux (aux, l) as qi) =
     match aux with
@@ -3596,6 +3621,13 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
   in
   let xs, _, env = List.fold_left fold_instantiate ([], typ_args, env) xs in
   let xs = List.rev xs in
+
+  let solve_implicit impl = match KBindings.find_opt impl !all_unifiers with
+    | Some (A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _)) -> irule infer_exp env (mk_lit_exp (L_num c))
+    | Some (A_aux (A_nexp n, _)) -> irule infer_exp env (mk_exp (E_sizeof n))
+    | _ -> typ_error env l "bad"
+  in
+  let xs = List.map solve_implicit implicits @ xs in
 
   if not (List.for_all (solve_quant env) !quants) then
     typ_raise env l (Err_unresolved_quants (f, !quants, Env.get_locals env, Env.get_constraints env))
