@@ -1816,7 +1816,9 @@ let rec alpha_equivalent env typ1 typ2 =
       | Typ_tup typs -> Typ_tup (List.map relabel typs)
       | Typ_exist (kopts, nc, typ) ->
          let kind_map = List.fold_left (fun m kopt -> KBindings.add (kopt_kid kopt) (kopt_kind kopt) m) KBindings.empty kopts in
-         let (kopts, _) = kid_order kind_map typ in
+         let (kopts1, kind_map) = kid_order_constraint kind_map nc in
+         let (kopts2, _) = kid_order kind_map typ in
+         let kopts = kopts1 @ kopts2 in
          let kopts = List.map (fun kopt -> (kopt_kid kopt, mk_kopt (unaux_kind (kopt_kind kopt)) (new_kid ()))) kopts in
          let nc = List.fold_left (fun nc (kid, nk) -> constraint_subst kid (arg_kopt nk) nc) nc kopts in
          let typ = List.fold_left (fun nc (kid, nk) -> typ_subst kid (arg_kopt nk) nc) typ kopts in
