@@ -2904,7 +2904,14 @@ let rewrite_defs_internal_lets =
        (* Rewrite assignments to local variables into let bindings *)
        let (lhs, rhs) = rewrite_lexp_to_rhs le in
        let (LEXP_aux (_, lannot)) = lhs in
-       let ltyp = typ_of_annot lannot in
+       let ltyp = typ_of_annot
+         (* The type in the lannot might come from exp rather than being the
+            type of the storage, so ask the type checker what it really is. *)
+         (match infer_lexp (env_of_annot lannot) (strip_lexp lhs) with
+         | LEXP_aux (_,lexp_annot') -> lexp_annot'
+         | _ -> lannot
+         | exception _ -> lannot)
+       in
        let rhs = add_e_cast ltyp (rhs exp) in
        E_let (LB_aux (LB_val (pat_of_local_lexp lhs, rhs), annot), body)
     | LB_aux (LB_val (pat,exp'),annot') ->
