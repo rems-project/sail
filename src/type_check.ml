@@ -310,8 +310,8 @@ module Env : sig
   val add_typ_var : l -> kinded_id -> t -> t
   val get_ret_typ : t -> typ option
   val add_ret_typ : typ -> t -> t
-  val add_typ_synonym : id -> (t -> typ_arg list -> typ_arg) -> t -> t
-  val get_typ_synonym : id -> t -> t -> typ_arg list -> typ_arg
+  val add_typ_synonym : id -> (l -> t -> typ_arg list -> typ_arg) -> t -> t
+  val get_typ_synonym : id -> t -> l -> t -> typ_arg list -> typ_arg
   val add_num_def : id -> nexp -> t -> t
   val get_num_def : id -> t -> nexp
   val add_overloads : id -> id list -> t -> t
@@ -370,7 +370,7 @@ end = struct
       variants : (typquant * type_union list) Bindings.t;
       mappings : (typquant * typ * typ) Bindings.t;
       typ_vars : (Ast.l * kind_aux) KBindings.t;
-      typ_synonyms : (t -> typ_arg list -> typ_arg) Bindings.t;
+      typ_synonyms : (Ast.l -> t -> typ_arg list -> typ_arg) Bindings.t;
       num_defs : nexp Bindings.t;
       overloads : (id list) Bindings.t;
       flow : (typ -> typ) Bindings.t;
@@ -521,7 +521,7 @@ end = struct
     | NC_and (nc1, nc2) -> NC_aux (NC_and (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
     | NC_app (id, args) ->
        (try
-          begin match Bindings.find id env.typ_synonyms env args with
+          begin match Bindings.find id env.typ_synonyms l env args with
           | A_aux (A_bool nc, _) -> expand_constraint_synonyms env nc
           | arg -> typ_error l ("Expected Bool when expanding synonym " ^ string_of_id id ^ " got " ^ string_of_typ_arg arg)
           end
@@ -536,7 +536,7 @@ end = struct
     | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (expand_synonyms env typ1, expand_synonyms env typ2), l)
     | Typ_app (id, args) ->
        (try
-          begin match Bindings.find id env.typ_synonyms env args with
+          begin match Bindings.find id env.typ_synonyms l env args with
           | A_aux (A_typ typ, _) -> expand_synonyms env typ
           | _ -> typ_error l ("Expected Type when expanding synonym " ^ string_of_id id)
           end
@@ -544,7 +544,7 @@ end = struct
         | Not_found -> Typ_aux (Typ_app (id, List.map (expand_synonyms_arg env) args), l))
     | Typ_id id ->
        (try
-          begin match Bindings.find id env.typ_synonyms env [] with
+          begin match Bindings.find id env.typ_synonyms l env [] with
           | A_aux (A_typ typ, _) -> expand_synonyms env typ
           | _ -> typ_error l ("Expected Type when expanding synonym " ^ string_of_id id)
           end
@@ -4338,27 +4338,26 @@ let mk_synonym typq typ_arg =
   let ncs = List.map (fun nc -> List.fold_left (fun nc (kopt, fresh) -> constraint_subst (kopt_kid kopt) (arg_kopt fresh) nc) nc kopts) ncs in
   let typ_arg = List.fold_left (fun typ_arg (kopt, fresh) -> typ_arg_subst (kopt_kid kopt) (arg_kopt fresh) typ_arg) typ_arg kopts in
   let kopts = List.map snd kopts in
-  let rec subst_args kopts args =
+  let rec subst_args l kopts args =
     match kopts, args with
     | kopt :: kopts, A_aux (A_nexp arg, _) :: args when is_nat_kopt kopt ->
-       let typ_arg, ncs = subst_args kopts args in
+       let typ_arg, ncs = subst_args l kopts args in
        typ_arg_subst (kopt_kid kopt) (arg_nexp arg) typ_arg,
        List.map (constraint_subst (kopt_kid kopt) (arg_nexp arg)) ncs
     | kopt :: kopts, A_aux (A_typ arg, _) :: args when is_typ_kopt kopt ->
-       let typ_arg, ncs = subst_args kopts args in
+       let typ_arg, ncs = subst_args l kopts args in
        typ_arg_subst (kopt_kid kopt) (arg_typ arg) typ_arg, ncs
     | kopt :: kopts, A_aux (A_order arg, _) :: args when is_order_kopt kopt ->
-       let typ_arg, ncs = subst_args kopts args in
+       let typ_arg, ncs = subst_args l kopts args in
        typ_arg_subst (kopt_kid kopt) (arg_order arg) typ_arg, ncs
     | kopt :: kopts, A_aux (A_bool arg, _) :: args when is_bool_kopt kopt ->
-       let typ_arg, ncs = subst_args kopts args in
+       let typ_arg, ncs = subst_args l kopts args in
        typ_arg_subst (kopt_kid kopt) (arg_bool arg) typ_arg, ncs
     | [], [] -> typ_arg, ncs
-    | _, A_aux (_, l) :: _ -> typ_error l "Synonym applied to bad arguments"
-    | _, _ -> typ_error Parse_ast.Unknown "Synonym applied to bad arguments"
+    | _, _ -> typ_error l "Synonym applied to bad arguments"
   in
-  fun env args ->
-    let typ_arg, ncs = subst_args kopts args in
+  fun l env args ->
+    let typ_arg, ncs = subst_args l kopts args in
     if List.for_all (prove env) ncs
     then typ_arg
     else typ_error Parse_ast.Unknown ("Could not prove constraints " ^ string_of_list ", " string_of_n_constraint ncs

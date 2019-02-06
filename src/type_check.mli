@@ -150,8 +150,6 @@ module Env : sig
      won't throw any exceptions. *)
   val get_ret_typ : t -> typ option
 
-  val get_typ_synonym : id -> t -> (t -> typ_arg list -> typ_arg)
-
   val get_overloads : id -> t -> id list
 
   val get_num_def : id -> t -> nexp
