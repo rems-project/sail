@@ -128,6 +128,7 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "list") = 0 -> string "list"
   | id when Id.compare id (mk_id "bit") = 0 -> string "bit"
   | id when Id.compare id (mk_id "int") = 0 -> string "Big_int.num"
+  | id when Id.compare id (mk_id "implicit") = 0 -> string "Big_int.num"
   | id when Id.compare id (mk_id "nat") = 0 -> string "Big_int.num"
   | id when Id.compare id (mk_id "bool") = 0 -> string "bool"
   | id when Id.compare id (mk_id "unit") = 0 -> string "unit"

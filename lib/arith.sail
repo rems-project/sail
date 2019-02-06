@@ -102,6 +102,7 @@ val abs_int = {
   smt : "abs",
   ocaml: "abs_int",
   lem: "abs_int",
+  c: "abs_int",
   coq: "Z.abs"
 } : (int, int) -> int
 

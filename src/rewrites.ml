@@ -5147,9 +5147,6 @@ let rewrite_defs_ocaml = [
   ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("top_sort_defs", top_sort_defs);
-  ("constraint", rewrite_constraint);
-  ("trivial_sizeof", rewrite_trivial_sizeof);
-  ("sizeof", rewrite_sizeof);
   ("simple_types", rewrite_simple_types);
   ("overload_cast", rewrite_overload_cast);
   (* ("separate_numbs", rewrite_defs_separate_numbs) *)
@@ -5184,10 +5181,7 @@ let rewrite_defs_interpreter = [
     ("rewrite_undefined", rewrite_undefined_if_gen false);
     ("vector_concat_assignments", rewrite_vector_concat_assignments);
     ("tuple_assignments", rewrite_tuple_assignments);
-    ("simple_assignments", rewrite_simple_assignments);
-    ("constraint", rewrite_constraint);
-    ("trivial_sizeof", rewrite_trivial_sizeof);
-    ("sizeof", rewrite_sizeof);
+    ("simple_assignments", rewrite_simple_assignments)
   ]
 
 let rewrite_check_annot =

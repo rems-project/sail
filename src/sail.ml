@@ -64,7 +64,7 @@ let opt_print_c = ref false
 let opt_print_latex = ref false
 let opt_print_coq = ref false
 let opt_print_cgen = ref false
-let opt_memo_z3 = ref false
+let opt_memo_z3 = ref true
 let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
 let opt_libs_lem = ref ([]:string list)
@@ -202,7 +202,10 @@ let options = Arg.align ([
       "<filename>:<line>:<variable> to case split for monomorphisation");
   ( "-memo_z3",
     Arg.Set opt_memo_z3,
-    " memoize calls to z3, improving performance when typechecking repeatedly");
+    " memoize calls to z3, improving performance when typechecking repeatedly (default)");
+  ( "-no_memo_z3",
+    Arg.Clear opt_memo_z3,
+    " do not memoize calls to z3");
   ( "-memo",
     Arg.Tuple [Arg.Set opt_memo_z3; Arg.Set C_backend.opt_memo_cache],
     " memoize calls to z3, and intermediate compilation results");

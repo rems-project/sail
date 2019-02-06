@@ -4,36 +4,33 @@ $define _SMT
 // see http://smtlib.cs.uiowa.edu/theories-Ints.shtml
 
 val div = {
-  smt: "div",
   ocaml: "quotient",
   lem: "integerDiv",
   c: "tdiv_int",
   coq: "ediv_with_eq"
-} : forall 'n 'm. (atom('n), atom('m)) -> atom(div('n, 'm)) // {'o, 'o == div('n, 'm). atom('o)}
+} : forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))
 
 overload operator / = {div}
 
 val mod = {
-  smt: "mod",
   ocaml: "modulus",
   lem: "integerMod",
   c: "tmod_int",
   coq: "emod_with_eq"
-} : forall 'n 'm. (atom('n), atom('m)) -> atom(mod('n, 'm))
+} : forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))
 
 overload operator % = {mod}
 
-val abs_atom = {
-  smt : "abs",
+val abs_int = {
   ocaml: "abs_int",
   lem: "abs_int",
   c: "abs_int",
   coq: "abs_with_eq"
-} : forall 'n. atom('n) -> atom(abs('n))
+} : forall 'n. int('n) -> int(abs('n))
 
 $ifdef TEST
 
-let __smt_x : atom(div(4, 2)) = div(8, 4)
+let __smt_x : int(div(4, 2)) = div(8, 4)
 
 $endif
 

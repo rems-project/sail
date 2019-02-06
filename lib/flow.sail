@@ -50,4 +50,15 @@ overload operator < = {lt_int}
 overload operator >= = {gteq_int}
 overload operator > = {gt_int}
 
+/*
+
+when we have sizeof('n) where x : int('n), we can remove that sizeof
+by rewriting it to __size(x).
+
+*/
+
+function __id forall 'n. (x: int('n)) -> int('n) = x
+
+overload __size = {__id}
+
 $endif

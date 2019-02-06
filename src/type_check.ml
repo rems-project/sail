@@ -473,6 +473,7 @@ end = struct
     List.fold_left (fun m (name, kinds) -> Bindings.add (mk_id name) (kinds_typq kinds) m) Bindings.empty
       [ ("range", [K_int; K_int]);
         ("atom", [K_int]);
+        ("implicit", [K_int]);
         ("vector", [K_int; K_order; K_type]);
         ("register", [K_type]);
         ("bit", []);
