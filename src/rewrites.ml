@@ -5171,9 +5171,6 @@ let rewrite_defs_c = [
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
-  ("constraint", rewrite_constraint);
-  ("trivial_sizeof", rewrite_trivial_sizeof);
-  ("sizeof", rewrite_sizeof);
   ("merge_function_clauses", merge_funcls);
   ("recheck_defs", Optimize.recheck)
   ]

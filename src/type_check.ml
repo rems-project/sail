@@ -1235,7 +1235,7 @@ let destruct_range env typ =
   in
   match typ_aux with
     | Typ_app (f, [A_aux (A_nexp n, _)])
-         when string_of_id f = "atom" -> Some (List.map kopt_kid kopts, constr, n, n)
+         when string_of_id f = "atom" || string_of_id f = "implicit" -> Some (List.map kopt_kid kopts, constr, n, n)
     | Typ_app (f, [A_aux (A_nexp n1, _); A_aux (A_nexp n2, _)])
          when string_of_id f = "range" -> Some (List.map kopt_kid kopts, constr, n1, n2)
     | _ -> None
@@ -1968,7 +1968,111 @@ let subtype_check env typ1 typ2 =
   | Type_error _ -> false
 
 (**************************************************************************)
-(* 4. Type checking expressions                                           *)
+(* 4. Removing sizeof expressions                                         *)
+(**************************************************************************)
+
+exception No_simple_rewrite;;
+
+let rec rewrite_sizeof' env (Nexp_aux (aux, l) as nexp) =
+  let mk_exp exp = mk_exp ~loc:l exp in
+  match aux with
+  | Nexp_var v ->
+     let locals = Env.get_locals env |> Bindings.bindings in
+     let same_size (local, (_, Typ_aux (aux, _))) =
+       match aux with
+       | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _)])
+            when string_of_id id = "atom" && Kid.compare v v' = 0 -> true
+
+       | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "atom" ->
+          prove __POS__ env (nc_eq (nvar v) n)
+
+       | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _); _; _]) when string_of_id id = "vector" ->
+          Kid.compare v v' = 0
+
+       | _ ->
+          false
+     in
+     begin match List.find_opt same_size locals with
+     | Some (id, (_, typ)) -> mk_exp (E_app (mk_id "__size", [mk_exp (E_id id)]))
+     | None -> raise No_simple_rewrite
+     end
+
+  | Nexp_constant c ->
+     mk_lit_exp (L_num c)
+
+  | Nexp_neg nexp ->
+     let exp = rewrite_sizeof' env nexp in
+     mk_exp (E_app (mk_id "negate_atom", [exp]))
+
+  | Nexp_sum (nexp1, nexp2) ->
+     let exp1 = rewrite_sizeof' env nexp1 in
+     let exp2 = rewrite_sizeof' env nexp2 in
+     mk_exp (E_app (mk_id "add_atom", [exp1; exp2]))
+
+  | Nexp_minus (nexp1, nexp2) ->
+     let exp1 = rewrite_sizeof' env nexp1 in
+     let exp2 = rewrite_sizeof' env nexp2 in
+     mk_exp (E_app (mk_id "sub_atom", [exp1; exp2]))
+
+  | Nexp_times (nexp1, nexp2) ->
+     let exp1 = rewrite_sizeof' env nexp1 in
+     let exp2 = rewrite_sizeof' env nexp2 in
+     mk_exp (E_app (mk_id "mult_atom", [exp1; exp2]))
+
+  | Nexp_exp nexp ->
+     let exp = rewrite_sizeof' env nexp in
+     mk_exp (E_app (mk_id "pow2", [exp]))
+
+  | Nexp_app (id, [nexp1; nexp2]) when string_of_id id = "div" ->
+     let exp1 = rewrite_sizeof' env nexp1 in
+     let exp2 = rewrite_sizeof' env nexp2 in
+     mk_exp (E_app (mk_id "div", [exp1; exp2]))
+
+  | Nexp_app _ | Nexp_id _ ->
+     typ_error env l ("Cannot re-write sizeof(" ^ string_of_nexp nexp ^ ")")
+
+let rewrite_sizeof env nexp =
+  try rewrite_sizeof' env nexp with
+  | No_simple_rewrite ->
+     let locals = Env.get_locals env |> Bindings.bindings in
+     let same_size (local, (_, Typ_aux (aux, _))) =
+       match aux with
+       | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "atom" ->
+          prove __POS__ env (nc_eq nexp n)
+       | _ -> false
+     in
+     begin match List.find_opt same_size locals with
+     | Some (id, (_, typ)) -> mk_exp (E_app (mk_id "__size", [mk_exp (E_id id)]))
+     | None -> raise No_simple_rewrite
+     end
+
+let rec rewrite_nc env (NC_aux (nc_aux, l)) = mk_exp ~loc:l (rewrite_nc_aux l env nc_aux)
+and rewrite_nc_aux l env =
+  let mk_exp exp = mk_exp ~loc:l exp in
+  function
+  | NC_bounded_ge (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">=", mk_exp (E_sizeof n2))
+  | NC_bounded_le (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "<=", mk_exp (E_sizeof n2))
+  | NC_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "==", mk_exp (E_sizeof n2))
+  | NC_not_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "!=", mk_exp (E_sizeof n2))
+  | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "&", rewrite_nc env nc2)
+  | NC_or (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "|", rewrite_nc env nc2)
+  | NC_false -> E_lit (mk_lit L_false)
+  | NC_true -> E_lit (mk_lit L_true)
+  | NC_set (kid, []) -> E_lit (mk_lit (L_false))
+  | NC_set (kid, int :: ints) ->
+     let kid_eq kid int = nc_eq (nvar kid) (nconstant int) in
+     unaux_exp (rewrite_nc env (List.fold_left (fun nc int -> nc_or nc (kid_eq kid int)) (kid_eq kid int) ints))
+  | NC_app (f, [A_aux (A_bool nc, _)]) when string_of_id f = "not" ->
+     E_app (mk_id "not_bool", [rewrite_nc env nc])
+  | NC_app (f, args) ->
+     unaux_exp (rewrite_nc env (Env.expand_constraint_synonyms env (mk_nc (NC_app (f, args)))))
+  | NC_var v ->
+     (* Would be better to translate change E_sizeof to take a kid, then rewrite to E_sizeof *)
+     E_id (id_of_kid v)
+
+
+(**************************************************************************)
+(* 5. Type checking expressions                                           *)
 (**************************************************************************)
 
 (* The type checker produces a fully annoted AST - tannot is the type
@@ -2310,10 +2414,14 @@ let rec filter_casts env from_typ to_typ casts =
        let (quant, cast_typ) = Env.get_val_spec cast env in
        match cast_typ with
        (* A cast should be a function A -> B and have only a single argument type. *)
-       | Typ_aux (Typ_fn ([cast_from_typ], cast_to_typ, _), _)
-            when match_typ env from_typ cast_from_typ && match_typ env to_typ cast_to_typ ->
-          typ_print (lazy ("Considering cast " ^ string_of_typ cast_typ ^ " for " ^ string_of_typ from_typ ^ " to " ^ string_of_typ to_typ));
-          cast :: filter_casts env from_typ to_typ casts
+       | Typ_aux (Typ_fn (arg_typs, cast_to_typ, _), _) ->
+          begin match List.filter is_not_implicit arg_typs with
+          | [cast_from_typ] when match_typ env from_typ cast_from_typ && match_typ env to_typ cast_to_typ ->
+             typ_print (lazy ("Considering cast " ^ string_of_typ cast_typ
+                              ^ " for " ^ string_of_typ from_typ ^ " to " ^ string_of_typ to_typ));
+             cast :: filter_casts env from_typ to_typ casts
+          | _ -> filter_casts env from_typ to_typ casts
+          end
        | _ -> filter_casts env from_typ to_typ casts
      end
   | [] -> []
@@ -3305,10 +3413,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
   | E_sizeof nexp ->
-     annot_exp (E_sizeof nexp) (mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (A_nexp nexp)])))
+     irule infer_exp env (rewrite_sizeof env nexp)
   | E_constraint nc ->
      Env.wf_constraint env nc;
-     annot_exp (E_constraint nc) (atom_bool_typ nc)
+     crule check_exp env (rewrite_nc env nc) (atom_bool_typ nc)
   | E_field (exp, field) ->
      begin
        let inferred_exp = irule infer_exp env exp in
@@ -3938,7 +4046,7 @@ and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) 
      typ_error env l ("Couldn't infer type of mapping-pattern " ^ string_of_mpat mpat)
 
 (**************************************************************************)
-(* 5. Effect system                                                       *)
+(* 6. Effect system                                                       *)
 (**************************************************************************)
 
 let effect_of_annot = function
@@ -4295,7 +4403,7 @@ and propagate_lexp_effect_aux = function
      LEXP_field (p_lexp, id),effect_of_lexp p_lexp
 
 (**************************************************************************)
-(* 6. Checking toplevel definitions                                       *)
+(* 7. Checking toplevel definitions                                       *)
 (**************************************************************************)
 
 let check_letdef orig_env (LB_aux (letbind, (l, _))) =
@@ -4322,6 +4430,7 @@ let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
   match typ with
   | Typ_aux (Typ_fn (typ_args, typ_ret, eff), _) ->
      begin
+       let typ_args = List.map implicit_to_int typ_args in
        let env = Env.add_ret_typ typ_ret env in
        (* We want to forbid polymorphic undefined values in all cases,
           except when type checking the specific undefined_(type)
@@ -4474,7 +4583,8 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
        false, (quant, typ), env
   in
   let vtyp_args, vtyp_ret, declared_eff, vl = match typ with
-    | Typ_aux (Typ_fn (vtyp_args, vtyp_ret, declared_eff), vl) -> vtyp_args, vtyp_ret, declared_eff, vl
+    | Typ_aux (Typ_fn (vtyp_args, vtyp_ret, declared_eff), vl) ->
+       vtyp_args, vtyp_ret, declared_eff, vl
     | _ -> typ_error env l "Function val spec is not a function type"
   in
   check_tannotopt env quant vtyp_ret tannotopt;

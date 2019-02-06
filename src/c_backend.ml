@@ -143,7 +143,7 @@ let rec ctyp_of_typ ctx typ =
 
   | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
 
-  | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" ->
+  | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" ->
      begin match destruct_range Env.empty typ with
      | None -> assert false (* Checked if range type in guard *)
      | Some (kids, constr, n, m) ->
