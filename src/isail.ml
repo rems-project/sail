@@ -59,6 +59,7 @@ type mode =
   | Evaluation of frame
   | Bytecode of Value2.vl Bytecode_interpreter.gstate * Value2.vl Bytecode_interpreter.stack
   | Normal
+  | Emacs
 
 let current_mode = ref Normal
 
@@ -67,6 +68,7 @@ let prompt () =
   | Normal -> "sail> "
   | Evaluation _ -> "eval> "
   | Bytecode _ -> "ir> "
+  | Emacs -> ""
 
 let eval_clear = ref true
 
@@ -75,6 +77,7 @@ let mode_clear () =
   | Normal -> ()
   | Evaluation _ -> if !eval_clear then LNoise.clear_screen () else ()
   | Bytecode _ -> () (* if !eval_clear then LNoise.clear_screen () else () *)
+  | Emacs -> ()
 
 let rec user_input callback =
   match LNoise.linenoise (prompt ()) with
@@ -116,7 +119,7 @@ let sep = "-----------------------------------------------------" |> Util.blue |
 
 let print_program () =
   match !current_mode with
-  | Normal -> ()
+  | Normal | Emacs -> ()
   | Evaluation (Step (out, _, _, stack)) ->
      List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline (Lazy.force code); print_endline sep);
      print_endline (Lazy.force out)
@@ -142,7 +145,7 @@ let print_program () =
 
 let rec run () =
   match !current_mode with
-  | Normal -> ()
+  | Normal | Emacs -> ()
   | Evaluation frame ->
      begin
        match frame with
@@ -168,7 +171,7 @@ let rec run_steps n =
   print_endline ("step " ^ string_of_int n);
   match !current_mode with
   | _ when n <= 0 -> ()
-  | Normal -> ()
+  | Normal | Emacs -> ()
   | Evaluation frame ->
      begin
        match frame with
@@ -225,6 +228,21 @@ let help = function
   | cmd ->
      "Either invalid command passed to help, or no documentation for " ^ cmd ^ ". Try :help :help."
 
+let format_pos_emacs p1 p2 contents =
+  let open Lexing in
+  let b = Buffer.create 160 in
+  Printf.sprintf "(sail-error %d %d %d %d \"%s\")"
+                 p1.pos_lnum (p1.pos_cnum - p1.pos_bol)
+                 p2.pos_lnum (p2.pos_cnum - p2.pos_bol)
+                 contents
+
+let rec emacs_error l contents =
+  match l with
+  | Parse_ast.Unknown -> "(error \"no location info\")"
+  | Parse_ast.Range (p1, p2) -> format_pos_emacs p1 p2 contents
+  | Parse_ast.Unique (_, l) -> emacs_error l contents
+  | Parse_ast.Documented (_, l) -> emacs_error l contents
+  | Parse_ast.Generated l -> emacs_error l contents
 
 type input = Command of string * string | Expression of string | Empty
 
@@ -253,149 +271,176 @@ let handle_input' input =
   in
 
   (* First handle commands that are mode-independent *)
-  begin
-    match input with
-    | Command (cmd, arg) ->
-       begin
-         match cmd with
-         | ":n" | ":normal" ->
-            current_mode := Normal
-         | ":t" | ":type" ->
-            let typq, typ = Type_check.Env.get_val_spec (mk_id arg) !Interactive.env in
-            pretty_sail stdout (doc_binding (typq, typ));
-            print_newline ();
-         | ":q" | ":quit" ->
-            Value.output_close ();
-            exit 0
-         | ":i" | ":infer" ->
-            let exp = Initial_check.exp_of_string arg in
-            let exp = Type_check.infer_exp !Interactive.env exp in
-            pretty_sail stdout (doc_typ (Type_check.typ_of exp));
-            print_newline ()
-         | ":canon" ->
-            let typ = Initial_check.typ_of_string arg in
-            print_endline (string_of_typ (Type_check.canonicalize !Interactive.env typ))
-         | ":prove" ->
-            let nc = Initial_check.constraint_of_string arg in
-            print_endline (string_of_bool (Type_check.prove __POS__ !Interactive.env nc))
-         | ":v" | ":verbose" ->
+  begin match input with
+  | Command (cmd, arg) ->
+     begin match cmd with
+     | ":n" | ":normal" ->
+        current_mode := Normal
+     | ":t" | ":type" ->
+        let typq, typ = Type_check.Env.get_val_spec (mk_id arg) !Interactive.env in
+        pretty_sail stdout (doc_binding (typq, typ));
+        print_newline ();
+     | ":q" | ":quit" ->
+        Value.output_close ();
+        exit 0
+     | ":i" | ":infer" ->
+        let exp = Initial_check.exp_of_string arg in
+        let exp = Type_check.infer_exp !Interactive.env exp in
+        pretty_sail stdout (doc_typ (Type_check.typ_of exp));
+        print_newline ()
+     | ":canon" ->
+        let typ = Initial_check.typ_of_string arg in
+        print_endline (string_of_typ (Type_check.canonicalize !Interactive.env typ))
+     | ":prove" ->
+        let nc = Initial_check.constraint_of_string arg in
+        print_endline (string_of_bool (Type_check.prove __POS__ !Interactive.env nc))
+     | ":v" | ":verbose" ->
             Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 3;
             print_endline ("Verbosity: " ^ string_of_int !Type_check.opt_tc_debug)
-         | ":clear" ->
-            if arg = "on" then
-              eval_clear := true
-            else if arg = "off" then
-              eval_clear := false
-            else print_endline "Invalid argument for :clear, expected either :clear on or :clear off"
-         | ":commands" ->
-            let commands =
-              [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :clear :commands :help :output :option";
-                "Normal mode commands - :elf :(l)oad :(u)nload";
-                "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
-                "";
-                ":(c)ommand can be called as either :c or :command." ]
-            in
-            List.iter print_endline commands
-         | ":poly" ->
-            let is_kopt = match arg with
-              | "Int" -> is_nat_kopt
-              | "Type" -> is_typ_kopt
-              | "Order" -> is_order_kopt
-              | _ -> failwith "Invalid kind"
-            in
-            let ids = Specialize.polymorphic_functions is_kopt !Interactive.ast in
-            List.iter (fun id -> print_endline (string_of_id id)) (IdSet.elements ids)
-         | ":option" ->
-            begin
-              try
-                let args = Str.split (Str.regexp " +") arg in
-                Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) Sail.options (fun _ -> ()) "";
-              with
-              | Arg.Bad message | Arg.Help message -> print_endline message
-            end;
-         | ":spec" ->
-            let ast, env = Specialize.specialize !Interactive.ast !Interactive.env in
-            Interactive.ast := ast;
-            Interactive.env := env;
-            interactive_state := initial_state !Interactive.ast Value.primops
-         | ":pretty" ->
-            print_endline (Pretty_print_sail.to_string (Latex.defs !Interactive.ast))
-         | ":compile" ->
-            let open PPrint in
-            let open C_backend in
-            let ast = Process_file.rewrite_ast_c !Interactive.ast in
-            let ast, env = Specialize.specialize ast !Interactive.env in
-            let ctx = initial_ctx env in
-            interactive_bytecode := bytecode_ast ctx (List.map flatten_cdef) ast
-         | ":ir" ->
-            print_endline arg;
-            let open Bytecode in
-            let open Bytecode_util in
-            let open PPrint in
-            let is_cdef = function
-              | CDEF_fundef (id, _, _, _) when Id.compare id (mk_id arg) = 0 -> true
-              | CDEF_spec (id, _, _) when Id.compare id (mk_id arg) = 0 -> true
-              | _ -> false
-            in
-            let cdefs = List.filter is_cdef !interactive_bytecode in
-            print_endline (Pretty_print_sail.to_string (separate_map hardline pp_cdef cdefs))
-         | ":ast" ->
-            let chan = open_out arg in
-            Pretty_print_sail.pp_defs chan !Interactive.ast;
-            close_out chan
-         | ":output" ->
-            let chan = open_out arg in
-            Value.output_redirect chan
-         | ":help" -> print_endline (help arg)
-         | _ -> recognised := false
-       end
-    | _ -> ()
+     | ":clear" ->
+        if arg = "on" then
+          eval_clear := true
+        else if arg = "off" then
+          eval_clear := false
+        else print_endline "Invalid argument for :clear, expected either :clear on or :clear off"
+     | ":commands" ->
+        let commands =
+          [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :clear :commands :help :output :option";
+            "Normal mode commands - :elf :(l)oad :(u)nload";
+            "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
+            "";
+            ":(c)ommand can be called as either :c or :command." ]
+        in
+        List.iter print_endline commands
+     | ":poly" ->
+        let is_kopt = match arg with
+          | "Int" -> is_nat_kopt
+          | "Type" -> is_typ_kopt
+          | "Order" -> is_order_kopt
+          | _ -> failwith "Invalid kind"
+        in
+        let ids = Specialize.polymorphic_functions is_kopt !Interactive.ast in
+        List.iter (fun id -> print_endline (string_of_id id)) (IdSet.elements ids)
+     | ":option" ->
+        begin
+          try
+            let args = Str.split (Str.regexp " +") arg in
+            Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) Sail.options (fun _ -> ()) "";
+          with
+          | Arg.Bad message | Arg.Help message -> print_endline message
+        end;
+     | ":spec" ->
+        let ast, env = Specialize.specialize !Interactive.ast !Interactive.env in
+        Interactive.ast := ast;
+        Interactive.env := env;
+        interactive_state := initial_state !Interactive.ast Value.primops
+     | ":pretty" ->
+        print_endline (Pretty_print_sail.to_string (Latex.defs !Interactive.ast))
+     | ":compile" ->
+        let open PPrint in
+        let open C_backend in
+        let ast = Process_file.rewrite_ast_c !Interactive.ast in
+        let ast, env = Specialize.specialize ast !Interactive.env in
+        let ctx = initial_ctx env in
+        interactive_bytecode := bytecode_ast ctx (List.map flatten_cdef) ast
+     | ":ir" ->
+        print_endline arg;
+        let open Bytecode in
+        let open Bytecode_util in
+        let open PPrint in
+        let is_cdef = function
+          | CDEF_fundef (id, _, _, _) when Id.compare id (mk_id arg) = 0 -> true
+          | CDEF_spec (id, _, _) when Id.compare id (mk_id arg) = 0 -> true
+          | _ -> false
+        in
+        let cdefs = List.filter is_cdef !interactive_bytecode in
+        print_endline (Pretty_print_sail.to_string (separate_map hardline pp_cdef cdefs))
+     | ":ast" ->
+        let chan = open_out arg in
+        Pretty_print_sail.pp_defs chan !Interactive.ast;
+        close_out chan
+     | ":output" ->
+        let chan = open_out arg in
+        Value.output_redirect chan
+     | ":help" -> print_endline (help arg)
+     | _ -> recognised := false
+     end
+  | _ -> ()
   end;
 
   match !current_mode with
   | Normal ->
-     begin
-       match input with
-       | Command (cmd, arg) ->
-          (* Normal mode commands *)
-          begin
-            match cmd with
-            | ":elf" -> Elf_loader.load_elf arg
-            | ":l" | ":load" ->
+     begin match input with
+     | Command (cmd, arg) ->
+        (* Normal mode commands *)
+        begin match cmd with
+        | ":elf" -> Elf_loader.load_elf arg
+        | ":l" | ":load" ->
+           let files = Util.split_on_char ' ' arg in
+           let (_, ast, env) = load_files !Interactive.env files in
+           let ast = Process_file.rewrite_ast_interpreter ast in
+           Interactive.ast := append_ast !Interactive.ast ast;
+           interactive_state := initial_state !Interactive.ast Value.primops;
+           Interactive.env := env;
+           vs_ids := Initial_check.val_spec_ids !Interactive.ast
+        | ":u" | ":unload" ->
+           Interactive.ast := Ast.Defs [];
+           Interactive.env := Type_check.initial_env;
+           interactive_state := initial_state !Interactive.ast Value.primops;
+           vs_ids := Initial_check.val_spec_ids !Interactive.ast;
+           (* See initial_check.mli for an explanation of why we need this. *)
+           Initial_check.have_undefined_builtins := false;
+           Process_file.clear_symbols ()
+        | ":exec" ->
+           let open Bytecode_interpreter in
+           let exp = Type_check.infer_exp !Interactive.env (Initial_check.exp_of_string arg) in
+           let anf = Anf.anf exp in
+           let ctx = C_backend.initial_ctx !Interactive.env in
+           let ctyp = C_backend.ctyp_of_typ ctx (Type_check.typ_of exp) in
+           let setup, call, cleanup = C_backend.compile_aexp ctx anf in
+           let instrs = C_backend.flatten_instrs (setup @ [call (CL_id (mk_id "interactive#", ctyp))] @ cleanup) in
+           current_mode := Bytecode (new_gstate !interactive_bytecode, new_stack instrs);
+           print_program ()
+        | _ -> unrecognised_command cmd
+        end
+     | Expression str ->
+        (* An expression in normal mode is type checked, then puts
+             us in evaluation mode. *)
+        let exp = Type_check.infer_exp !Interactive.env (Initial_check.exp_of_string str) in
+        current_mode := Evaluation (eval_frame (Step (lazy "", !interactive_state, return exp, [])));
+        print_program ()
+     | Empty -> ()
+     end
+
+  | Emacs ->
+     begin match input with
+     | Command (cmd, arg) ->
+        begin match cmd with
+        | ":load" ->
+           begin
+             try
                let files = Util.split_on_char ' ' arg in
                let (_, ast, env) = load_files !Interactive.env files in
-               let ast = Process_file.rewrite_ast_interpreter ast in
                Interactive.ast := append_ast !Interactive.ast ast;
                interactive_state := initial_state !Interactive.ast Value.primops;
                Interactive.env := env;
                vs_ids := Initial_check.val_spec_ids !Interactive.ast
-            | ":u" | ":unload" ->
-               Interactive.ast := Ast.Defs [];
-               Interactive.env := Type_check.initial_env;
-               interactive_state := initial_state !Interactive.ast Value.primops;
-               vs_ids := Initial_check.val_spec_ids !Interactive.ast;
-               (* See initial_check.mli for an explanation of why we need this. *)
-               Initial_check.have_undefined_builtins := false
-            | ":exec" ->
-               let open Bytecode_interpreter in
-               let exp = Type_check.infer_exp !Interactive.env (Initial_check.exp_of_string arg) in
-               let anf = Anf.anf exp in
-               let ctx = C_backend.initial_ctx !Interactive.env in
-               let ctyp = C_backend.ctyp_of_typ ctx (Type_check.typ_of exp) in
-               let setup, call, cleanup = C_backend.compile_aexp ctx anf in
-               let instrs = C_backend.flatten_instrs (setup @ [call (CL_id (mk_id "interactive#", ctyp))] @ cleanup) in
-               current_mode := Bytecode (new_gstate !interactive_bytecode, new_stack instrs);
-               print_program ()
-            | _ -> unrecognised_command cmd
-          end
-       | Expression str ->
-          (* An expression in normal mode is type checked, then puts
-             us in evaluation mode. *)
-          let exp = Type_check.infer_exp !Interactive.env (Initial_check.exp_of_string str) in
-          current_mode := Evaluation (eval_frame (Step (lazy "", !interactive_state, return exp, [])));
-          print_program ()
-       | Empty -> ()
+             with
+             | Reporting.Fatal_error (Err_type (l, msg)) ->
+                print_endline (emacs_error l (String.escaped msg))
+           end
+        | ":unload" ->
+           Interactive.ast := Ast.Defs [];
+           Interactive.env := Type_check.initial_env;
+           interactive_state := initial_state !Interactive.ast Value.primops;
+           vs_ids := Initial_check.val_spec_ids !Interactive.ast;
+           Initial_check.have_undefined_builtins := false;
+           Process_file.clear_symbols ()
+        | _ -> ()
+        end
+     | Expression _ | Empty -> ()
      end
+
   | Evaluation frame ->
      begin match input with
      | Command (cmd, arg) ->
@@ -495,7 +540,9 @@ let () =
 
   if !Interactive.opt_interactive then
     begin
-      List.iter print_endline sail_logo;
+      if not !Interactive.opt_emacs_mode then
+        List.iter print_endline sail_logo
+      else (current_mode := Emacs; Util.opt_colors := false);
       user_input handle_input
     end
   else ()

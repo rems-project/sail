@@ -88,6 +88,9 @@ let options = Arg.align ([
   ( "-iout",
     Arg.String (fun file -> Value.output_redirect (open_out file)),
     "<filename> print interpreter output to file");
+  ( "-emacs",
+    Arg.Set Interactive.opt_emacs_mode,
+    " run sail interactively as an emacs mode child process");
   ( "-no_warn",
     Arg.Clear Util.opt_warnings,
     " do not print warnings");

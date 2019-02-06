@@ -20,6 +20,8 @@
 
 ;;; Code:
 
+(require 'easymenu)
+
 (defvar sail2-mode-hook nil)
 
 (add-to-list 'auto-mode-alist '("\\.sail\\'" . sail2-mode))
@@ -76,6 +78,8 @@
   (interactive)
   (kill-all-local-variables)
   (set-syntax-table sail2-mode-syntax-table)
+  (use-local-map sail-mode-map)
+  (sail-build-menu)
   (setq font-lock-defaults '(sail2-font-lock-keywords))
   (setq comment-start-skip "\\(//+\\|/\\*+\\)\\s *")
   (setq comment-start "/*")
@@ -83,6 +87,83 @@
   (setq major-mode 'sail2-mode)
   (setq mode-name "Sail2")
   (run-hooks 'sail2-mode-hook))
+
+(defvar sail-process nil)
+
+(defun sail-filter (proc string)
+  (when (buffer-live-p (process-buffer proc))
+    (with-current-buffer (process-buffer proc)
+      (let ((moving (= (point) (process-mark proc))))
+	(save-excursion
+	  ;; Insert the text, advancing the process marker.
+	  (goto-char (process-mark proc))
+	  (insert string)
+	  (set-marker (process-mark proc) (point)))
+	(if moving (goto-char (process-mark proc)))))
+    (eval (car (read-from-string string)))))
+
+(defun sail-start ()
+  "start Sail interactive mode"
+  (interactive)
+  (setq sail-process (start-process "sail" "Sail" "sail" "-i" "-emacs"))
+  (set-process-filter sail-process 'sail-filter))
+
+(defun sail-quit ()
+  "quit Sail interactive mode"
+  (interactive)
+  (when sail-process
+    (process-send-string sail-process ":quit\n")
+    (setq sail-process nil)))
+
+(defun sail-error-region (begin end text)
+  (progn
+    (let ((overlay (make-overlay begin end)))
+      (overlay-put overlay 'face 'error)
+      (overlay-put overlay 'help-echo text)
+      (setq mark-active nil))))
+
+(defun sail-error (l1 c1 l2 c2 text)
+  (let ((begin (save-excursion
+		 (goto-line l1)
+		 (forward-char c1)
+		 (point)))
+	(end (save-excursion
+	       (goto-line l2)
+	       (forward-char c2)
+	       (point))))
+    (sail-error-region begin end text)
+    (message text)))
+
+(defun sail-test ()
+  (interactive)
+  (sail-error 6 18 6 19 "error message\ntooltip"))
+
+(defun sail-load ()
+  "load a Sail file"
+  (interactive)
+  (if (null sail-process)
+      (error "No sail process (call sail-start)")
+    (progn
+      (remove-overlays)
+      (process-send-string sail-process ":unload\n")
+      (process-send-string sail-process (mapconcat 'identity `(":load " ,buffer-file-name "\n") "")))))
+
+(defvar sail-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-s") 'sail-start)
+    (define-key map (kbd "C-c C-l") 'sail-load)
+    (define-key map (kbd "C-c C-q") 'sail-quit)
+    map))
+
+(defun sail-build-menu ()
+  (easy-menu-define
+    sail-mode-menu (list sail-mode-map)
+    "Sail Mode Menu."
+    '("Sail"
+      ["Start" sail-start t]
+      ["Quit" sail-quit t]
+      ["Check buffer" sail-load t]))
+  (easy-menu-add sail-mode-menu))
 
 (provide 'sail2-mode)
 

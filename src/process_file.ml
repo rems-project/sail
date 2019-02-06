@@ -92,6 +92,8 @@ module StringSet = Set.Make(String)
 
 let symbols = ref StringSet.empty
 
+let clear_symbols () = symbols := StringSet.empty
+
 let cond_pragma l defs =
   let depth = ref 0 in
   let in_then = ref true in
