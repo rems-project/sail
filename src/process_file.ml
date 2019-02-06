@@ -239,12 +239,10 @@ let rec preprocess opts = function
 
 let preprocess_ast opts (Parse_ast.Defs defs) = Parse_ast.Defs (preprocess opts defs)
 
-let convert_ast (order : Ast.order) (defs : Parse_ast.defs) : unit Ast.defs = Initial_check.process_ast order defs
-
-let load_file_no_check opts order f = convert_ast order (preprocess_ast opts (parse_file f))
+let load_file_no_check opts order f = Initial_check.process_ast (preprocess_ast opts (parse_file f))
 
 let load_file opts order env f =
-  let ast = convert_ast order (preprocess_ast opts (parse_file f)) in
+  let ast = Initial_check.process_ast (preprocess_ast opts (parse_file f)) in
   Type_error.check env ast
 
 let opt_just_check = ref false

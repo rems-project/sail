@@ -238,11 +238,55 @@ let format_pos_emacs p1 p2 contents =
 
 let rec emacs_error l contents =
   match l with
-  | Parse_ast.Unknown -> "(error \"no location info\")"
+  | Parse_ast.Unknown -> "(error \"no location info: " ^ contents ^ "\")"
   | Parse_ast.Range (p1, p2) -> format_pos_emacs p1 p2 contents
   | Parse_ast.Unique (_, l) -> emacs_error l contents
   | Parse_ast.Documented (_, l) -> emacs_error l contents
   | Parse_ast.Generated l -> emacs_error l contents
+
+type session = {
+    id : string;
+    files : string list
+  }
+
+let default_session = {
+    id = "none";
+    files = []
+  }
+
+let session = ref default_session
+
+let parse_session file =
+  let open Yojson.Basic.Util in
+  if Sys.file_exists file then
+    let json = Yojson.Basic.from_file file in
+    let args = Str.split (Str.regexp " +") (json |> member "options" |> to_string) in
+    Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) Sail.options (fun _ -> ()) "";
+    print_endline ("(message \"Using session " ^ file ^ "\")");
+    {
+      id = file;
+      files = json |> member "files" |> convert_each to_string
+    }
+  else
+    default_session
+
+let load_session upto file =
+  match upto with
+  | None -> None
+  | Some upto_file when Filename.basename upto_file = file -> None
+  | Some upto_file ->
+     let (_, ast, env) =
+       load_files ~generate:false !Interactive.env [Filename.concat (Filename.dirname upto_file) file]
+     in
+     Interactive.ast := append_ast !Interactive.ast ast;
+     Interactive.env := env;
+     print_endline ("(message \"Checked " ^ file ^ "...\")\n");
+     Some upto_file
+
+let load_into_session file =
+  let session_file = Filename.concat (Filename.dirname file) "sail.json" in
+  session := (if session_file = !session.id then !session else parse_session session_file);
+  ignore (List.fold_left load_session (Some file) !session.files)
 
 type input = Command of string * string | Expression of string | Empty
 
@@ -419,12 +463,13 @@ let handle_input' input =
         | ":load" ->
            begin
              try
-               let files = Util.split_on_char ' ' arg in
-               let (_, ast, env) = load_files !Interactive.env files in
+               load_into_session arg;
+               let (_, ast, env) = load_files !Interactive.env [arg] in
                Interactive.ast := append_ast !Interactive.ast ast;
                interactive_state := initial_state !Interactive.ast Value.primops;
                Interactive.env := env;
-               vs_ids := Initial_check.val_spec_ids !Interactive.ast
+               vs_ids := Initial_check.val_spec_ids !Interactive.ast;
+               print_endline ("(message \"Checked " ^ arg ^ " done\")\n");
              with
              | Reporting.Fatal_error (Err_type (l, msg)) ->
                 print_endline (emacs_error l (String.escaped msg))

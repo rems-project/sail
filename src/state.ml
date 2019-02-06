@@ -58,7 +58,7 @@ open PPrint
 open Pretty_print_common
 open Pretty_print_sail
 
-let defs_of_string = ast_of_def_string Ast_util.inc_ord
+let defs_of_string = ast_of_def_string
 
 let is_defined defs name = IdSet.mem (mk_id name) (ids_of_defs (Defs defs))
 

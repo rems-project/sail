@@ -75,7 +75,7 @@ let newtype name size order =
       chunk_rem :: List.rev chunks_64
   in
   let nt = Printf.sprintf "struct %s = {\n  %s }" name (Util.string_of_list ",\n  " (fun x -> x) chunks) in
-  ast_of_def_string order nt
+  ast_of_def_string nt
 
 let rec translate_indices hi lo =
   if hi / 64 = lo / 64 then
@@ -97,7 +97,7 @@ let constructor name order start stop =
                      "}"
     ]
   in
-  combine [ast_of_def_string order constructor_val; ast_of_def_string order constructor_function]
+  combine [ast_of_def_string constructor_val; ast_of_def_string constructor_function]
 
 (* For every index range, create a getter and setter *)
 let index_range_getter name field order start stop =
@@ -108,7 +108,7 @@ let index_range_getter name field order start stop =
     Printf.sprintf "v.%s_chunk_%i[%i .. %i]" name chunk start stop
   in
   let irg_function = Printf.sprintf "function _get_%s_%s v = %s" name field (Util.string_of_list " @ " body indices) in
-  combine [ast_of_def_string order irg_val; ast_of_def_string order irg_function]
+  combine [ast_of_def_string irg_val; ast_of_def_string irg_function]
 
 let index_range_setter name field order start stop =
   let indices = translate_indices start stop in
@@ -127,7 +127,7 @@ let index_range_setter name field order start stop =
                      "}"
     ]
   in
-  combine [ast_of_def_string order irs_val; ast_of_def_string order irs_function]
+  combine [ast_of_def_string irs_val; ast_of_def_string irs_function]
 
 let index_range_update name field order start stop =
   let indices = translate_indices start stop in
@@ -145,10 +145,10 @@ let index_range_update name field order start stop =
     ]
   in
   let iru_overload = Printf.sprintf "overload update_%s = {_update_%s_%s}" field name field in
-  combine [ast_of_def_string order iru_val; ast_of_def_string order iru_function; ast_of_def_string order iru_overload]
+  combine [ast_of_def_string iru_val; ast_of_def_string iru_function; ast_of_def_string iru_overload]
 
 let index_range_overload name field order =
-  ast_of_def_string order (Printf.sprintf "overload _mod_%s = {_get_%s_%s, _set_%s_%s}" field name field name field)
+  ast_of_def_string (Printf.sprintf "overload _mod_%s = {_get_%s_%s, _set_%s_%s}" field name field name field)
 
 let index_range_accessor name field order (BF_aux (bf_aux, l)) =
   let getter n m = index_range_getter name field order (Big_int.to_int n) (Big_int.to_int m) in

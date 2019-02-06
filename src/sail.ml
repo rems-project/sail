@@ -312,7 +312,7 @@ let _ =
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg
 
-let load_files type_envs files =
+let load_files ?generate:(generate=true) type_envs files =
   if !opt_memo_z3 then Constraint.load_digests () else ();
 
   let t = Profile.start () in
@@ -321,7 +321,7 @@ let load_files type_envs files =
     List.fold_right (fun (_, Parse_ast.Defs ast_nodes) (Parse_ast.Defs later_nodes)
                      -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
   let ast = Process_file.preprocess_ast options ast in
-  let ast = convert_ast Ast_util.inc_ord ast in
+  let ast = Initial_check.process_ast ~generate:generate ast in
   Profile.finish "parsing" t;
 
   let t = Profile.start () in

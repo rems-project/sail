@@ -1010,18 +1010,20 @@ let generate_enum_functions vs_ids (Defs defs) =
 
 let incremental_ctx = ref initial_ctx
 
-let process_ast order defs =
+let process_ast ?generate:(generate=true) defs =
   let ast, ctx = to_ast !incremental_ctx defs in
   incremental_ctx := ctx;
   let vs_ids = val_spec_ids ast in
-  if not !opt_undefined_gen then
+  if not !opt_undefined_gen && generate then
     generate_enum_functions vs_ids ast
-  else
+  else if generate then
     ast
     |> generate_undefineds vs_ids
     |> generate_enum_functions vs_ids
     |> generate_initialize_registers vs_ids
-
-let ast_of_def_string order str =
+  else
+    ast
+  
+let ast_of_def_string str =
   let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
-  process_ast order (P.Defs [def])
+  process_ast (P.Defs [def])

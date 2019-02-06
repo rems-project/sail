@@ -82,8 +82,11 @@ val opt_enum_casts : bool ref
    all the loaded files. *)
 val have_undefined_builtins : bool ref
 
-val ast_of_def_string : order -> string -> unit defs
-val process_ast : order -> Parse_ast.defs -> unit defs
+val ast_of_def_string : string -> unit defs
+
+(** If the generate flag is false, then we won't generate any
+   auxilliary definitions, like the initialize_registers function *)
+val process_ast : ?generate:bool -> Parse_ast.defs -> unit defs
 
 val val_spec_ids : 'a defs -> IdSet.t
 

@@ -86,6 +86,8 @@
   (setq comment-end "*/")
   (setq major-mode 'sail2-mode)
   (setq mode-name "Sail2")
+  (add-hook 'sail2-mode-hook
+	    (lambda () (add-hook 'before-save-hook 'sail-load nil 'local)))
   (run-hooks 'sail2-mode-hook))
 
 (defvar sail-process nil)
@@ -105,7 +107,7 @@
 (defun sail-start ()
   "start Sail interactive mode"
   (interactive)
-  (setq sail-process (start-process "sail" "Sail" "sail" "-i" "-emacs"))
+  (setq sail-process (start-process "sail" "Sail" "sail" "-i" "-emacs" "-no_warn"))
   (set-process-filter sail-process 'sail-filter))
 
 (defun sail-quit ()
@@ -122,6 +124,8 @@
       (overlay-put overlay 'help-echo text)
       (setq mark-active nil))))
 
+(defvar sail-error-position nil)
+
 (defun sail-error (l1 c1 l2 c2 text)
   (let ((begin (save-excursion
 		 (goto-line l1)
@@ -131,12 +135,16 @@
 	       (goto-line l2)
 	       (forward-char c2)
 	       (point))))
+    (setq sail-error-position begin)
     (sail-error-region begin end text)
     (message text)))
 
-(defun sail-test ()
+(defun sail-goto-error ()
+  "Go to the next Sail error"
   (interactive)
-  (sail-error 6 18 6 19 "error message\ntooltip"))
+  (if sail-error-position
+      (goto-char sail-error-position)
+    (message "No errors")))
 
 (defun sail-load ()
   "load a Sail file"
@@ -145,6 +153,7 @@
       (error "No sail process (call sail-start)")
     (progn
       (remove-overlays)
+      (setq sail-error-position nil)
       (process-send-string sail-process ":unload\n")
       (process-send-string sail-process (mapconcat 'identity `(":load " ,buffer-file-name "\n") "")))))
 
@@ -153,6 +162,7 @@
     (define-key map (kbd "C-c C-s") 'sail-start)
     (define-key map (kbd "C-c C-l") 'sail-load)
     (define-key map (kbd "C-c C-q") 'sail-quit)
+    (define-key map (kbd "C-c C-x") 'sail-goto-error)
     map))
 
 (defun sail-build-menu ()
@@ -160,9 +170,10 @@
     sail-mode-menu (list sail-mode-map)
     "Sail Mode Menu."
     '("Sail"
-      ["Start" sail-start t]
-      ["Quit" sail-quit t]
-      ["Check buffer" sail-load t]))
+      ["Start interactive" sail-start t]
+      ["Quit interactive" sail-quit t]
+      ["Check buffer" sail-load t]
+      ["Goto next error" sail-goto-error t]))
   (easy-menu-add sail-mode-menu))
 
 (provide 'sail2-mode)
