@@ -62,6 +62,8 @@ Sail is currently being used for ARM, RISC-V, MIPS, CHERI-MIPS, IBM Power, and x
 
 * [Sail x86 ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/x86). This is a handwritten user-mode fragment. 
 
+* [Sail 32-bit RISC-V model, partially handwritten and partially generated](https://github.com/thoughtpolice/rv32-sail). This currently implements a fragment of the machine mode (-M) specification for RV32IM. (Developed independently of the full RISC-V model for the REMS project.)
+
 The hand-written ARMv8-A, IBM POWER, and x86 models are currently not in sync
 with the latest version of Sail, which is the (default) sail2 branch
 on Github.  These and the RISC-V model are integrated with our [RMEM](http://www.cl.cam.ac.uk/users/pes20/rmem) tool for concurrency semantics. 
