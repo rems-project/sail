@@ -3416,6 +3416,17 @@ let rec sets_from_assert e =
                [E_aux (E_sizeof (Nexp_aux (Nexp_var kid,_)),_);
                 E_aux (E_lit (L_aux (L_num i,_)),_)]) ->
          (check_kid kid; [i])
+      (* TODO: Now that E_constraint is re-written by the typechecker,
+         we'll end up with the following for the above - some of this
+         function is probably redundant now *)
+      | E_app (Id_aux (Id "eq_int",_),
+               [E_aux (E_app (Id_aux (Id "__id", _), [E_aux (E_id id, annot)]), _);
+                E_aux (E_lit (L_aux (L_num i,_)),_)]) ->
+         begin match typ_of_annot annot with
+         | Typ_aux (Typ_app (Id_aux (Id "atom", _), [A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _)]), _) ->
+            check_kid kid; [i]
+         | _ -> raise Not_found
+         end
       | _ -> raise Not_found
     in try
          let is = aux e in

@@ -5,8 +5,8 @@ type bits ('n : Int) = vector('n, dec, bit)
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 overload operator == = {eq_int, eq_vec}
 val "extz_vec" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
-val extz : forall 'n 'm. vector('n, dec, bit) -> vector('m, dec, bit) effect pure
-function extz(v) = extz_vec(sizeof('m),v)
+val extz : forall 'n 'm. (implicit('m), vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+function extz(m,v) = extz_vec(m,v)
 val UInt = {
   ocaml: "uint",
   lem: "uint",

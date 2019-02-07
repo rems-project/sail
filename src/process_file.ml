@@ -90,9 +90,13 @@ let parse_file ?loc:(l=Parse_ast.Unknown) (f : string) : Parse_ast.defs =
 (* Simple preprocessor features for conditional file loading *)
 module StringSet = Set.Make(String)
 
-let symbols = ref StringSet.empty
+let default_symbols =
+  List.fold_left (fun set str -> StringSet.add str set) StringSet.empty
+    [ "FEATURE_IMPLICITS" ]
 
-let clear_symbols () = symbols := StringSet.empty
+let symbols = ref default_symbols
+
+let clear_symbols () = symbols := default_symbols
 
 let cond_pragma l defs =
   let depth = ref 0 in
