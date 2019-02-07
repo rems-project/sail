@@ -294,12 +294,8 @@ let version =
   let default = Printf.sprintf "Sail %s @ %s" branch commit in
   (* version is parsed from the output of git describe *)
   match String.split_on_char '-' version with
-  | [vnum; _; _] ->
-     (try
-        let vnum = float_of_string vnum +. 2.0 in
-        Printf.sprintf "Sail %.1f (%s @ %s)" vnum branch commit
-      with
-      | Failure _ -> default)
+  | (vnum :: _) ->
+     Printf.sprintf "Sail %s (%s @ %s)" vnum branch commit
   | _ -> default
 
 let usage_msg =
@@ -340,22 +336,9 @@ let load_files ?generate:(generate=true) type_envs files =
 
   (out_name, ast, type_envs)
 
-let print_version () =
-  let open Manifest in
-  let default = Printf.sprintf "Sail %s @ %s" branch commit in
-  (* version is the output of git describe *)
-  match String.split_on_char '-' version with
-  | [vnum; _; _] ->
-     (try
-        let vnum = float_of_string vnum +. 2.0 in
-        Printf.printf "Sail %.1f (%s @ %s)\n" vnum branch commit
-      with
-      | Failure _ -> print_endline default)
-  | _ -> print_endline default
-
 let main() =
-  if !opt_print_version
-  then print_version ()
+  if !opt_print_version then
+    print_endline version
   else
     let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
     Util.opt_warnings := false; (* Don't show warnings during re-writing for now *)

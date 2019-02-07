@@ -6,8 +6,6 @@ $include <arith.sail>
 
 type bits ('n : Int) = vector('n, dec, bit)
 
-val eq_bit = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", interpreter: "eq_anything", c: "eq_bit", coq: "eq_bit"} : (bit, bit) -> bool
-
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec", c: "eq_bits", coq: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 
 val eq_string = {ocaml: "eq_string", lem: "eq", c: "eq_string", coq: "generic_eq"} : (string, string) -> bool
@@ -28,7 +26,7 @@ val list_length = {ocaml: "length", lem: "length_list", c: "length", coq: "lengt
 
 overload length = {bitvector_length, vector_length, list_length}
 
-overload operator == = {eq_bit, eq_vec, eq_string, eq_real, eq_anything}
+overload operator == = {eq_vec, eq_string, eq_real, eq_anything}
 
 val vector_subrange_A = {
   ocaml: "subrange",
@@ -135,7 +133,7 @@ val or_vec = {lem: "or_vec", c: "or_bits", coq: "or_vec"}: forall 'n. (bits('n),
 
 function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 
-overload operator | = {or_bool, or_vec}
+overload operator | = {or_vec}
 
 val UInt = {
   ocaml: "uint",
@@ -373,3 +371,4 @@ val __GetVerbosity = {c: "sail_get_verbosity"}: unit -> bits(64) effect {rreg, u
 
 val get_cycle_count = { c: "get_cycle_count" } : unit -> int effect {undef, wreg, rreg, rmem, wmem}
 
+overload __size = {length}

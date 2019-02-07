@@ -564,9 +564,9 @@ val UndefinedFault : unit -> unit effect {escape}
 
 function UndefinedFault () = assert(false, "Undefined fault")
 
-val ThisInstrAddr : forall ('N : Int), 'N >= 0. unit -> bits('N) effect {rreg}
+val ThisInstrAddr : forall ('N : Int), 'N >= 0. (implicit('N), unit) -> bits('N) effect {rreg}
 
-function ThisInstrAddr () = return(slice(_PC, 0, 'N))
+function ThisInstrAddr(N, _) = slice(_PC, 0, N)
 
 val ThisInstr : unit -> bits(32) effect {rreg}
 
@@ -1521,9 +1521,9 @@ val AArch32_CurrentCond : unit -> bits(4) effect {rreg}
 function AArch32_CurrentCond () = return(__currentCond)
 
 val aget_SP : forall ('width : Int), 'width >= 0.
-  unit -> bits('width) effect {escape, rreg}
+  (implicit('width), unit) -> bits('width) effect {escape, rreg}
 
-function aget_SP () = {
+function aget_SP(width, _) = {
   assert('width == 8 | 'width == 16 | 'width == 32 | 'width == 64, "((width == 8) || ((width == 16) || ((width == 32) || (width == 64))))");
   if PSTATE.SP == 0b0 then return(slice(SP_EL0, 0, 'width)) else match PSTATE.EL {
     ? if ? == EL0 => return(slice(SP_EL0, 0, 'width)),
@@ -1762,9 +1762,9 @@ function AArch64_InstructionDevice (addrdesc__arg, vaddress, ipaddress, 'level, 
 }
 
 val aget_Vpart : forall ('width : Int), 'width >= 0.
-  (int, int) -> bits('width) effect {escape, rreg}
+  (implicit('width), int, int) -> bits('width) effect {escape, rreg}
 
-function aget_Vpart ('n, 'part) = {
+function aget_Vpart (width, 'n, 'part) = {
   assert(n >= 0 & n <= 31, "((n >= 0) && (n <= 31))");
   assert(part == 0 | part == 1, "((part == 0) || (part == 1))");
   if part == 0 then {
@@ -1777,12 +1777,12 @@ function aget_Vpart ('n, 'part) = {
 }
 
 val aget_V : forall ('width : Int), 'width >= 0.
-  int -> bits('width) effect {escape, rreg}
+  (implicit('width), int) -> bits('width) effect {escape, rreg}
 
-function aget_V 'n = {
+function aget_V(width, n) = {
   assert(n >= 0 & n <= 31, "((n >= 0) && (n <= 31))");
-  assert('width == 8 | 'width == 16 | 'width == 32 | 'width == 64 | 'width == 128, "((width == 8) || ((width == 16) || ((width == 32) || ((width == 64) || (width == 128)))))");
-  return(slice(_V[n], 0, 'width))
+  assert(width == 8 | width == 16 | width == 32 | width == 64 | width == 128);
+  return(slice(_V[n], 0, width))
 }
 
 val LookUpRIndex : (int, bits(5)) -> int effect {escape, undef}
@@ -1829,9 +1829,9 @@ function BitReverse data = {
   return(result)
 }
 
-val NextInstrAddr : forall ('N : Int), 'N >= 0. unit -> bits('N) effect {rreg}
+val NextInstrAddr : forall ('N : Int), 'N >= 0. (implicit('N), unit) -> bits('N) effect {rreg}
 
-function NextInstrAddr () = return(slice(_PC + ThisInstrLength() / 8, 0, 'N))
+function NextInstrAddr(N, _) = slice(_PC + ThisInstrLength() / 8, 0, N)
 
 val AArch32_ExceptionClass : Exception -> (int, bits(1)) effect {escape, rreg, undef}
 
@@ -2000,7 +2000,7 @@ val aget_Elem__0 : forall ('N : Int) ('size : Int), 'N >= 0 & 'size >= 0.
   (bits('N), int, atom('size)) -> bits('size) effect {escape}
 
 val aget_Elem__1 : forall ('N : Int) ('size : Int), 'N >= 0 & 'size >= 0.
-  (bits('N), int) -> bits('size) effect {escape}
+  (implicit('size), bits('N), int) -> bits('size) effect {escape}
 
 overload aget_Elem = {aget_Elem__0, aget_Elem__1}
 
@@ -2009,7 +2009,7 @@ function aget_Elem__0 (vector_name, 'e, size) = {
   return(slice(vector_name, e * 'size, 'size))
 }
 
-function aget_Elem__1 (vector_name, 'e) = return(aget_Elem(vector_name, e, 'size))
+function aget_Elem__1 (size, vector_name, 'e) = return(aget_Elem(vector_name, e, size))
 
 val UnsignedSatQ : forall ('N : Int), 'N >= 0.
   (int, atom('N)) -> (bits('N), bool) effect {undef}
@@ -2060,24 +2060,24 @@ function SatQ ('i, N, unsigned) = {
 }
 
 val Replicate : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
-  bits('M) -> bits('N) effect {escape}
+  (implicit('N), bits('M)) -> bits('N) effect {escape}
 
-function Replicate x = {
-  assert('N % 'M == 0, "((N MOD M) == 0)");
-  let 'O = 'N / 'M;
+function Replicate(N, x) = {
+  assert(N % 'M == 0, "((N MOD M) == 0)");
+  let 'O = N / 'M;
   assert(constraint('O * 'M == 'N));
-  return(replicate_bits(x, 'N / 'M))
+  return(replicate_bits(x, N / 'M))
 }
 
 val Zeros__0  = {c: "zeros"} : forall ('N : Int), 'N >= 0. atom('N) -> bits('N)
 
-val Zeros__1 : forall ('N : Int), 'N >= 0. unit -> bits('N)
+val Zeros__1 : forall ('N : Int), 'N >= 0. (implicit('N), unit) -> bits('N)
 
 overload Zeros = {Zeros__0, Zeros__1}
 
-function Zeros__0 N = return(replicate_bits(0b0, 'N))
+function Zeros__0(N) = replicate_bits(0b0, N)
 
-function Zeros__1 () = return(Zeros('N))
+function Zeros__1(N, _) = Zeros__0(N)
 
 val __ResetMemoryState : unit -> unit effect {rreg, wreg}
 
@@ -2090,16 +2090,16 @@ val ZeroExtend__0 = {c: "zero_extend"} : forall ('M : Int) ('N : Int), 'M >= 0 &
   (bits('M), atom('N)) -> bits('N) effect {escape}
 
 val ZeroExtend__1 : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
-  bits('M) -> bits('N) effect {escape}
+  (implicit('N), bits('M)) -> bits('N) effect {escape}
 
 overload ZeroExtend = {ZeroExtend__0, ZeroExtend__1}
 
-function ZeroExtend__0 (x, N) = {
-  assert('N >= 'M);
-  return(Zeros('N - 'M) @ x)
+function ZeroExtend__0(x, N) = {
+  assert(N >= 'M);
+  Zeros(N - 'M) @ x
 }
 
-function ZeroExtend__1 x = return(ZeroExtend(x, 'N))
+function ZeroExtend__1(N, x) = ZeroExtend__0(x, N)
 
 val aset_Vpart : forall ('width : Int), 'width >= 0.
   (int, int, bits('width)) -> unit effect {escape, wreg, rreg}
@@ -2278,10 +2278,10 @@ function GetPSRFromPSTATE () = {
   return(spsr)
 }
 
-val FPZero : forall ('N : Int), 1 >= 0 & 'N >= 0.
-  bits(1) -> bits('N) effect {escape}
+val FPZero : forall ('N : Int), 'N >= 0.
+  (implicit('N), bits(1)) -> bits('N) effect {escape}
 
-function FPZero sign = {
+function FPZero(N, sign) = {
   assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
   F : atom('N - 'E - 1) = ('N - E) - 1;
@@ -2303,9 +2303,9 @@ function ExceptionSyndrome typ = {
 }
 
 val ConstrainUnpredictableBits : forall ('width : Int), 'width >= 0.
-  Unpredictable -> (Constraint, bits('width)) effect {undef}
+  (implicit('width), Unpredictable) -> (Constraint, bits('width)) effect {undef}
 
-function ConstrainUnpredictableBits which = {
+function ConstrainUnpredictableBits(width, which) = {
   c : Constraint = ConstrainUnpredictable(which);
   if c == Constraint_UNKNOWN then return((c, Zeros('width))) else return((c, undefined))
 }
@@ -2335,9 +2335,9 @@ function AArch32_PhysicalSErrorSyndrome () = {
 }
 
 val VFPExpandImm : forall ('N : Int), 8 >= 0 & 'N >= 0.
-  bits(8) -> bits('N) effect {escape}
+  (implicit('N), bits(8)) -> bits('N) effect {escape}
 
-function VFPExpandImm imm8 = {
+function VFPExpandImm(N, imm8) = {
   assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
   F : atom('N - 'E - 1) = ('N - E) - 1;
@@ -2351,28 +2351,28 @@ val SignExtend__0 : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
   (bits('M), atom('N)) -> bits('N) effect {escape}
 
 val SignExtend__1 : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
-  bits('M) -> bits('N) effect {escape}
+  (implicit('N), bits('M)) -> bits('N) effect {escape}
 
 overload SignExtend = {SignExtend__0, SignExtend__1}
 
-function SignExtend__0 (x, N) = {
+function SignExtend__0(x, N) = {
   assert('N >= 'M);
-  return(replicate_bits([x['M - 1]], 'N - 'M) @ x)
+  replicate_bits([x['M - 1]], 'N - 'M) @ x
 }
 
-function SignExtend__1 x = return(SignExtend(x, 'N))
+function SignExtend__1(N, x) = SignExtend__0(x, N)
 
 val Extend__0 : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
   (bits('M), atom('N), bool) -> bits('N) effect {escape}
 
 val Extend__1 : forall ('M : Int) ('N : Int), 'M >= 0 & 'N >= 0.
-  (bits('M), bool) -> bits('N) effect {escape}
+  (implicit('N), bits('M), bool) -> bits('N) effect {escape}
 
 overload Extend = {Extend__0, Extend__1}
 
-function Extend__0 (x, N, unsigned) = return(if unsigned then ZeroExtend(x, 'N) else SignExtend(x, 'N))
+function Extend__0(x, N, unsigned) = if unsigned then ZeroExtend(x, N) else SignExtend(x, N)
 
-function Extend__1 (x, unsigned) = return(Extend(x, 'N, unsigned))
+function Extend__1(N, x, unsigned) = Extend__0(x, N, unsigned)
 
 val ASR_C : forall ('N : Int), 'N >= 0 & 'N >= 0 & 1 >= 0.
   (bits('N), int) -> (bits('N), bits(1)) effect {escape}
@@ -2398,22 +2398,22 @@ function ASR (x, 'shift) = {
 
 val Ones__0 : forall ('N : Int), 'N >= 0. atom('N) -> bits('N)
 
-val Ones__1 : forall ('N : Int), 'N >= 0. unit -> bits('N)
+val Ones__1 : forall ('N : Int), 'N >= 0. (implicit('N), unit) -> bits('N)
 
 overload Ones = {Ones__0, Ones__1}
 
-function Ones__0 N = return(replicate_bits(0b1, 'N))
+function Ones__0(N) = replicate_bits(0b1, N)
 
-function Ones__1 () = return(Ones('N))
+function Ones__1(N, _) = Ones(N)
 
 val IsOnes : forall ('N : Int), 'N >= 0. bits('N) -> bool
 
 function IsOnes x = return(x == Ones('N))
 
 val FPMaxNormal : forall ('N : Int), 1 >= 0 & 'N >= 0.
-  bits(1) -> bits('N) effect {escape}
+  (implicit('N), bits(1)) -> bits('N) effect {escape}
 
-function FPMaxNormal sign = {
+function FPMaxNormal(N, sign) = {
   assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
   F : atom('N - 'E - 1) = ('N - E) - 1;
@@ -2423,9 +2423,9 @@ function FPMaxNormal sign = {
 }
 
 val FPInfinity : forall ('N : Int), 1 >= 0 & 'N >= 0.
-  bits(1) -> bits('N) effect {escape}
+  (implicit('N), bits(1)) -> bits('N) effect {escape}
 
-function FPInfinity sign = {
+function FPInfinity(N, sign) = {
   assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
   F : atom('N - 'E - 1) = ('N - E) - 1;
@@ -2434,9 +2434,9 @@ function FPInfinity sign = {
   return(append(append(sign, exp), frac))
 }
 
-val FPDefaultNaN : forall ('N : Int), 'N >= 0. unit -> bits('N) effect {escape}
+val FPDefaultNaN : forall ('N : Int), 'N >= 0. (implicit('N), unit) -> bits('N) effect {escape}
 
-function FPDefaultNaN () = {
+function FPDefaultNaN(N, _)= {
   assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   let 'E = (if 'N == 16 then 5 else if 'N == 32 then 8 else 11) : {|5, 8, 11|};
   F : atom('N - 'E - 1) = ('N - E) - 1;
@@ -2447,9 +2447,9 @@ function FPDefaultNaN () = {
 }
 
 val FPConvertNaN : forall ('N : Int) ('M : Int), 'N >= 0 & 'M >= 0.
-  bits('N) -> bits('M) effect {escape, undef}
+  (implicit('M), bits('N)) -> bits('M) effect {escape, undef}
 
-function FPConvertNaN op = {
+function FPConvertNaN(M, op) = {
   assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   assert('M == 16 | 'M == 32 | 'M == 64, "((M == 16) || ((M == 32) || (M == 64)))");
   result : bits('M) = undefined;
@@ -2701,9 +2701,9 @@ function aset_ELR__1 value_name = {
 }
 
 val aget_X : forall ('width : Int), 'width >= 0.
-  int -> bits('width) effect {escape, rreg}
+  (implicit('width), int) -> bits('width) effect {escape, rreg}
 
-function aget_X 'n = {
+function aget_X(width, 'n) = {
   assert(n >= 0 & n <= 31, "((n >= 0) && (n <= 31))");
   assert('width == 8 | 'width == 16 | 'width == 32 | 'width == 64, "((width == 8) || ((width == 16) || ((width == 32) || (width == 64))))");
   if n != 31 then return(slice(_R[n], 0, 'width)) else return(Zeros('width))
@@ -2945,9 +2945,9 @@ function integer_arithmetic_addsub_carry_decode (sf, op, S, Rm, opcode2, Rn, Rd)
 }
 
 val ExtendReg : forall ('N : Int), 'N >= 0.
-  (int, ExtendType, int) -> bits('N) effect {escape, rreg, undef}
+  (implicit('N), int, ExtendType, int) -> bits('N) effect {escape, rreg, undef}
 
-function ExtendReg (reg, typ, shift) = {
+function ExtendReg (N, reg, typ, shift) = {
   assert(shift >= 0 & shift <= 4, "((shift >= 0) && (shift <= 4))");
   val_name : bits('N) = aget_X(reg);
   unsigned : bool = undefined;
@@ -3051,9 +3051,9 @@ function aarch64_integer_bitfield ('R, 'S, 'd, datasize, extend, inzero, 'n, tma
 }
 
 val ShiftReg : forall ('N : Int), 'N >= 0.
-  (int, ShiftType, int) -> bits('N) effect {escape, rreg, undef}
+  (implicit('N), int, ShiftType, int) -> bits('N) effect {escape, rreg, undef}
 
-function ShiftReg ('reg, typ, 'amount) = {
+function ShiftReg (N, 'reg, typ, 'amount) = {
   result : bits('N) = aget_X(reg);
   match typ {
     ShiftType_LSL => result = LSL(result, amount),
@@ -3482,9 +3482,9 @@ function FPProcessException (exception, fpcr) = {
 }
 
 val FPRoundBase : forall ('N : Int), 32 >= 0 & 'N >= 0.
-  (real, bits(32), FPRounding) -> bits('N) effect {escape, wreg, rreg, undef}
+  (implicit('N), real, bits(32), FPRounding) -> bits('N) effect {escape, wreg, rreg, undef}
 
-function FPRoundBase (op, fpcr, rounding) = {
+function FPRoundBase (N, op, fpcr, rounding) = {
   assert('N == 16 | 'N == 32 | 'N == 64);
   assert(op != 0.0);
   assert(rounding != FPRounding_TIEAWAY);
@@ -3591,34 +3591,34 @@ function FPRoundBase (op, fpcr, rounding) = {
 }
 
 val FPRoundCV : forall ('N : Int), 32 >= 0 & 'N >= 0.
-  (real, bits(32), FPRounding) -> bits('N) effect {escape, rreg, undef, wreg}
+  (implicit('N), real, bits(32), FPRounding) -> bits('N) effect {escape, rreg, undef, wreg}
 
-function FPRoundCV (op, fpcr__arg, rounding) = {
+function FPRoundCV (N, op, fpcr__arg, rounding) = {
   fpcr = fpcr__arg;
   fpcr = __SetSlice_bits(32, 1, fpcr, 19, 0b0);
   return(FPRoundBase(op, fpcr, rounding))
 }
 
-val FPRound__0 : forall ('N : Int), 32 >= 0 & 'N >= 0.
-  (real, bits(32), FPRounding) -> bits('N) effect {escape, rreg, undef, wreg}
+val FPRound__0 : forall ('N : Int), 'N >= 0.
+  (implicit('N), real, bits(32), FPRounding) -> bits('N) effect {escape, rreg, undef, wreg}
 
-val FPRound__1 : forall ('N : Int), 32 >= 0 & 'N >= 0.
-  (real, bits(32)) -> bits('N) effect {escape, rreg, undef, wreg}
+val FPRound__1 : forall ('N : Int), 'N >= 0.
+  (implicit('N), real, bits(32)) -> bits('N) effect {escape, rreg, undef, wreg}
 
 overload FPRound = {FPRound__0, FPRound__1}
 
-function FPRound__0 (op, fpcr__arg, rounding) = {
+function FPRound__0 (N, op, fpcr__arg, rounding) = {
   fpcr = fpcr__arg;
   fpcr = __SetSlice_bits(32, 1, fpcr, 26, 0b0);
   return(FPRoundBase(op, fpcr, rounding))
 }
 
-function FPRound__1 (op, fpcr) = return(FPRound(op, fpcr, FPRoundingMode(fpcr)))
+function FPRound__1 (N, op, fpcr) = return(FPRound(op, fpcr, FPRoundingMode(fpcr)))
 
 val FixedToFP : forall ('M : Int) ('N : Int), 'M >= 0 & 32 >= 0 & 'N >= 0.
-  (bits('M), int, bool, bits(32), FPRounding) -> bits('N) effect {escape, undef, wreg, rreg}
+  (implicit('N), bits('M), int, bool, bits(32), FPRounding) -> bits('N) effect {escape, undef, wreg, rreg}
 
-function FixedToFP (op, 'fbits, unsigned, fpcr, rounding) = {
+function FixedToFP (N, op, 'fbits, unsigned, fpcr, rounding) = {
   assert('N == 16 | 'N == 32 | 'N == 64);
   assert('M == 16 | 'M == 32 | 'M == 64);
   result : bits('N) = undefined;
@@ -3896,14 +3896,14 @@ function FPUnpackCV (fpval, fpcr__arg) = {
 }
 
 val FPConvert__0 : forall ('N : Int) ('M : Int), 'N >= 0 & 32 >= 0 & 'M >= 0.
-  (bits('N), bits(32), FPRounding) -> bits('M) effect {escape, rreg, undef, wreg}
+  (implicit('M), bits('N), bits(32), FPRounding) -> bits('M) effect {escape, rreg, undef, wreg}
 
 val FPConvert__1 : forall ('N : Int) ('M : Int), 'N >= 0 & 32 >= 0 & 'M >= 0.
-  (bits('N), bits(32)) -> bits('M) effect {escape, rreg, undef, wreg}
+  (implicit('M), bits('N), bits(32)) -> bits('M) effect {escape, rreg, undef, wreg}
 
 overload FPConvert = {FPConvert__0, FPConvert__1}
 
-function FPConvert__0 (op, fpcr, rounding) = {
+function FPConvert__0 (M, op, fpcr, rounding) = {
   assert('M == 16 | 'M == 32 | 'M == 64);
   assert('N == 16 | 'N == 32 | 'N == 64);
   result : bits('M) = undefined;
@@ -3927,7 +3927,7 @@ function FPConvert__0 (op, fpcr, rounding) = {
   return(result)
 }
 
-function FPConvert__1 (op, fpcr) = return(FPConvert(op, fpcr, FPRoundingMode(fpcr)))
+function FPConvert__1 (M, op, fpcr) = return(FPConvert(op, fpcr, FPRoundingMode(fpcr)))
 
 val FPUnpack : forall ('N : Int), 'N >= 0 & 32 >= 0 & 1 >= 0.
   (bits('N), bits(32)) -> (FPType, bits(1), real) effect {escape, rreg, undef, wreg}
@@ -3943,9 +3943,9 @@ function FPUnpack (fpval, fpcr__arg) = {
 }
 
 val FPToFixedJS : forall ('M : Int) ('N : Int), 'M >= 0 & 32 >= 0 & 'N >= 0.
-  (bits('M), bits(32), bool) -> bits('N) effect {escape, rreg, undef, wreg}
+  (implicit('N), bits('M), bits(32), bool) -> bits('N) effect {escape, rreg, undef, wreg}
 
-function FPToFixedJS (op, fpcr, Is64) = {
+function FPToFixedJS (N, op, fpcr, Is64) = {
   assert('M == 64 & 'N == 32, "((M == 64) && (N == 32))");
   value_name : real = undefined;
   sign : bits(1) = undefined;
@@ -3976,9 +3976,9 @@ function FPToFixedJS (op, fpcr, Is64) = {
 }
 
 val FPToFixed : forall ('N : Int) ('M : Int), 'N >= 0 & 32 >= 0 & 'M >= 0.
-  (bits('N), int, bool, bits(32), FPRounding) -> bits('M) effect {escape, rreg, undef, wreg}
+  (implicit('M), bits('N), int, bool, bits(32), FPRounding) -> bits('M) effect {escape, rreg, undef, wreg}
 
-function FPToFixed (op, 'fbits, unsigned, fpcr, rounding) = {
+function FPToFixed (M, op, 'fbits, unsigned, fpcr, rounding) = {
   assert('N == 16 | 'N == 32 | 'N == 64, "((N == 16) || ((N == 32) || (N == 64)))");
   assert('M == 16 | 'M == 32 | 'M == 64, "((M == 16) || ((M == 32) || (M == 64)))");
   assert(fbits >= 0, "(fbits >= 0)");
@@ -5273,9 +5273,9 @@ function IsOnes_slice (xs, i, 'l) = {
 }
 
 val ZeroExtend_slice_append : forall 'n 'm 'o, 'n >= 0 & 'm >= 0 & 'o >= 0.
-  (bits('n), int, int, bits('m)) -> bits('o) effect {escape}
+  (implicit('o), bits('n), int, int, bits('m)) -> bits('o) effect {escape}
 
-function ZeroExtend_slice_append (xs, i, 'l, ys) = {
+function ZeroExtend_slice_append (o, xs, i, 'l, ys) = {
   assert(constraint('l >= 0));
   ZeroExtend(slice(xs, i, l) @ ys)
 }
@@ -11573,9 +11573,9 @@ function integer_arithmetic_addsub_extendedreg_decode (sf, op, S, opt, Rm, optio
 }
 
 val DecodeBitMasks : forall ('M : Int), 1 >= 0 & 6 >= 0 & 6 >= 0 & 'M >= 0 & 'M >= 0.
-  (bits(1), bits(6), bits(6), bool) -> (bits('M), bits('M)) effect {escape, rreg, undef, wreg}
+  (implicit('M), bits(1), bits(6), bits(6), bool) -> (bits('M), bits('M)) effect {escape, rreg, undef, wreg}
 
-function DecodeBitMasks (immN, imms, immr, immediate) = {
+function DecodeBitMasks (M, immN, imms, immr, immediate) = {
   tmask : bits(64) = undefined;
   wmask : bits(64) = undefined;
   tmask_and : bits(6) = undefined;

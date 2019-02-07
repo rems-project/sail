@@ -2032,7 +2032,7 @@ let rec rewrite_sizeof' env (Nexp_aux (aux, l) as nexp) =
   | Nexp_app _ | Nexp_id _ ->
      typ_error env l ("Cannot re-write sizeof(" ^ string_of_nexp nexp ^ ")")
 
-let rewrite_sizeof env nexp =
+let rewrite_sizeof l env nexp =
   try rewrite_sizeof' env nexp with
   | No_simple_rewrite ->
      let locals = Env.get_locals env |> Bindings.bindings in
@@ -2044,7 +2044,7 @@ let rewrite_sizeof env nexp =
      in
      begin match List.find_opt same_size locals with
      | Some (id, (_, typ)) -> mk_exp (E_app (mk_id "__size", [mk_exp (E_id id)]))
-     | None -> raise No_simple_rewrite
+     | None -> typ_error env l ("Cannot re-write sizeof(" ^ string_of_nexp nexp ^ ")")
      end
 
 let rec rewrite_nc env (NC_aux (nc_aux, l)) = mk_exp ~loc:l (rewrite_nc_aux l env nc_aux)
@@ -3414,7 +3414,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
   | E_sizeof nexp ->
-     irule infer_exp env (rewrite_sizeof env nexp)
+     irule infer_exp env (rewrite_sizeof l env nexp)
   | E_constraint nc ->
      Env.wf_constraint env nc;
      crule check_exp env (rewrite_nc env nc) (atom_bool_typ nc)
