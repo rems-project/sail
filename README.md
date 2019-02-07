@@ -48,6 +48,8 @@ Sail ISA Models
 
 Sail is currently being used for ARM, RISC-V, MIPS, CHERI-MIPS, IBM Power, and x86 models,  variously ranging from full definitions to core user-mode fragments, and either here or in separate repositories:
 
+### REMS Models
+
 * [Sail ARMv8.5-A ISA model, automatically generated from the ARM-internal ASL reference, as used in the ARM ARM](https://github.com/rems-project/sail-arm).
 
 * [Sail ARMv8.3-A ISA model](https://github.com/rems-project/sail/tree/sail2/arm). This is the "public" model described in our [POPL 2019 paper](http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019.pdf), now largely superseded by the above.
@@ -62,11 +64,13 @@ Sail is currently being used for ARM, RISC-V, MIPS, CHERI-MIPS, IBM Power, and x
 
 * [Sail x86 ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/x86). This is a handwritten user-mode fragment. 
 
-* [Sail 32-bit RISC-V model, partially handwritten and partially generated](https://github.com/thoughtpolice/rv32-sail). This currently implements a fragment of the machine mode (-M) specification for RV32IM. (Developed independently of the full RISC-V model for the REMS project.)
-
 The hand-written ARMv8-A, IBM POWER, and x86 models are currently not in sync
 with the latest version of Sail, which is the (default) sail2 branch
 on Github.  These and the RISC-V model are integrated with our [RMEM](http://www.cl.cam.ac.uk/users/pes20/rmem) tool for concurrency semantics. 
+
+### External Models
+
+* [Sail 32-bit RISC-V model, partially handwritten and partially generated](https://github.com/thoughtpolice/rv32-sail). This currently implements a fragment of the machine mode (-M) specification for RV32IM. (Developed independently of the full RISC-V model for the REMS project.)
 
 OPAM Installation
 =================
