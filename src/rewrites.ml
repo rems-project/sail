@@ -4012,6 +4012,16 @@ let rewrite_defs_remove_superfluous_letbinds =
           E_aux (E_internal_return (exp1),e1annot)
        | _ -> E_aux (exp,annot)
        end
+    | E_internal_plet (_, E_aux (E_throw e, a), _) -> E_aux (E_throw e, a)
+    | E_internal_plet (_, E_aux (E_assert (c, msg), a), _) ->
+       begin match typ_of c with
+       | Typ_aux (Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool nc, _)]), _)
+         when prove __POS__ (env_of c) (nc_not nc) ->
+          (* Drop rest of block after an 'assert(false)' *)
+          E_aux (E_exit (infer_exp (env_of c) (mk_lit_exp L_unit)), a)
+       | _ ->
+          E_aux (exp, annot)
+       end
     | _ -> E_aux (exp,annot) in
 
   let alg = { id_exp_alg with e_aux = e_aux } in
@@ -5064,7 +5074,7 @@ let rewrite_defs_lem = [
   (* ("remove_assert", rewrite_defs_remove_assert); *)
   ("top_sort_defs", top_sort_defs);
   ("trivial_sizeof", rewrite_trivial_sizeof);
-  ("sizeof", rewrite_sizeof);
+  (* ("sizeof", rewrite_sizeof); *)
   ("early_return", rewrite_defs_early_return);
   ("fix_val_specs", rewrite_fix_val_specs);
   (* early_return currently breaks the types *)

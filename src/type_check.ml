@@ -689,6 +689,8 @@ end = struct
        typ_error env l "Bidirectional types cannot be the same on both sides"
     | Typ_bidir (typ1, typ2) -> wf_typ ~exs:exs env typ1; wf_typ ~exs:exs env typ2
     | Typ_tup typs -> List.iter (wf_typ ~exs:exs env) typs
+    | Typ_app (id, [A_aux (A_nexp _, _) as arg]) when string_of_id id = "implicit" ->
+       wf_typ_arg ~exs:exs env arg
     | Typ_app (id, args) when bound_typ_id env id ->
        List.iter (wf_typ_arg ~exs:exs env) args;
        check_args_typquant id env args (infer_kind env id)
@@ -1612,12 +1614,12 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
          else begin
            match nexp_aux2 with
            | Nexp_sum (n2a, n2b) ->
-              if nexp_identical n1a n2a
-              then unify_nexp l env goals n1b n2b
+              if KidSet.is_empty (nexp_frees n2a)
+              then unify_nexp l env goals n2b (nminus nexp1 n2a)
               else
-                if nexp_identical n1b n2b
-                then unify_nexp l env goals n1a n2a
-                else unify_error l "Unification error"
+                if KidSet.is_empty (nexp_frees n2a)
+                then unify_nexp l env goals n2a (nminus nexp1 n2b)
+                else merge_uvars l (unify_nexp l env goals n1a n2a) (unify_nexp l env goals n1b n2b)
            | _ -> unify_error l ("Both sides of Int expression " ^ string_of_nexp nexp1
                                ^ " contain free type variables so it cannot be unified with " ^ string_of_nexp nexp2)
          end
@@ -1714,13 +1716,23 @@ let rec ambiguous_vars (Typ_aux (aux, _)) =
 and ambiguous_arg_vars (A_aux (aux, _)) =
   match aux with
   | A_bool nc -> ambiguous_nc_vars nc
+  | A_nexp nexp -> ambiguous_nexp_vars nexp
   | _ -> KidSet.empty
                
 and ambiguous_nc_vars (NC_aux (aux, _)) =
   match aux with
   | NC_and (nc1, nc2) -> KidSet.union (tyvars_of_constraint nc1) (tyvars_of_constraint nc2)
+  | NC_bounded_le (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
+  | NC_bounded_ge (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
+  | NC_equal (n1, n2) | NC_not_equal (n1, n2) ->
+     KidSet.union (ambiguous_nexp_vars n1) (ambiguous_nexp_vars n2)
   | _ -> KidSet.empty
-               
+
+and ambiguous_nexp_vars (Nexp_aux (aux, _)) =
+  match aux with
+  | Nexp_sum (nexp1, nexp2) -> KidSet.union (tyvars_of_nexp nexp1) (tyvars_of_nexp nexp2)
+  | _ -> KidSet.empty
+
 (**************************************************************************)
 (* 3.5. Subtyping with existentials                                       *)
 (**************************************************************************)
@@ -2831,7 +2843,7 @@ and type_coercion_unify env goals (E_aux (_, (l, _)) as annotated_exp) typ =
         try
           let inferred_cast = irule infer_exp (Env.no_casts env) (strip (E_app (cast, [annotated_exp]))) in
           let ityp, env = bind_existential l None (typ_of inferred_cast) env in
-          inferred_cast, unify l env goals typ ityp, env
+          inferred_cast, unify l env (KidSet.diff goals (ambiguous_vars typ)) typ ityp, env
         with
         | Type_error (_, _, err) -> try_casts casts
         | Unification_error (_, err) -> try_casts casts
@@ -2841,7 +2853,7 @@ and type_coercion_unify env goals (E_aux (_, (l, _)) as annotated_exp) typ =
     try
       typ_debug (lazy ("Coercing unification: from " ^ string_of_typ (typ_of annotated_exp) ^ " to " ^ string_of_typ typ));
       let atyp, env = bind_existential l None (typ_of annotated_exp) env in
-      annotated_exp, unify l env goals typ atyp, env
+      annotated_exp, unify l env (KidSet.diff goals (ambiguous_vars typ)) typ atyp, env
     with
     | Unification_error (_, m) when Env.allow_casts env ->
        let casts = filter_casts env (typ_of annotated_exp) typ (Env.get_casts env) in
@@ -3662,15 +3674,21 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
 
   typ_debug (lazy ("Quantifiers " ^ Util.string_of_list ", " string_of_quant_item !quants));
 
-  let implicits, typ_args =
-    if not (List.length typ_args = List.length xs) then
-      let typ_args' = List.filter is_not_implicit typ_args in
-      if not (List.length typ_args' = List.length xs) then
-        typ_error env l (Printf.sprintf "Function %s applied to %d args, expected %d" (string_of_id f) (List.length xs) (List.length typ_args))
-      else
-        get_implicits typ_args, typ_args'
-    else
-      [], List.map implicit_to_int typ_args
+  let implicits, typ_args, xs =
+    let typ_args' = List.filter is_not_implicit typ_args in
+    match xs, typ_args' with
+      (* Support the case where a function has only implicit arguments;
+         allow it to be called either as f() or f(i...) *)
+    | [E_aux (E_lit (L_aux (L_unit, _)), _)], [] ->
+       get_implicits typ_args, [], []
+    | _ ->
+       if not (List.length typ_args = List.length xs) then
+         if not (List.length typ_args' = List.length xs) then
+           typ_error env l (Printf.sprintf "Function %s applied to %d args, expected %d (%d explicit): %s" (string_of_id f) (List.length xs) (List.length typ_args) (List.length typ_args') (String.concat ", " (List.map string_of_typ typ_args)))
+         else
+           get_implicits typ_args, typ_args', xs
+       else
+         [], List.map implicit_to_int typ_args, xs
   in
 
   let instantiate_quant (v, arg) (QI_aux (aux, l) as qi) =
@@ -3734,7 +3752,7 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
   let solve_implicit impl = match KBindings.find_opt impl !all_unifiers with
     | Some (A_aux (A_nexp (Nexp_aux (Nexp_constant c, _)), _)) -> irule infer_exp env (mk_lit_exp (L_num c))
     | Some (A_aux (A_nexp n, _)) -> irule infer_exp env (mk_exp (E_sizeof n))
-    | _ -> typ_error env l "bad"
+    | _ -> typ_error env l ("Cannot solve implicit " ^ string_of_kid impl ^ " in " ^ string_of_exp (mk_exp (E_app (f, List.map strip_exp xs))))
   in
   let xs = List.map solve_implicit implicits @ xs in
 
@@ -4448,10 +4466,10 @@ let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
           function arguments as like a tuple, and maybe we
           shouldn't. *)
        let typed_pexp, prop_eff =
-         match typ_args with
+         match List.map implicit_to_int typ_args with
          | [typ_arg] ->
             propagate_pexp_effect (check_case env typ_arg (strip_pexp pexp) typ_ret)
-         | _ ->
+         | typ_args ->
             propagate_pexp_effect (check_case env (Typ_aux (Typ_tup typ_args, l)) (strip_pexp pexp) typ_ret)
        in
        FCL_aux (FCL_Funcl (id, typed_pexp), (l, mk_expected_tannot env typ prop_eff (Some typ)))
