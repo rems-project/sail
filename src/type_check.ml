@@ -4787,7 +4787,10 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
                                A_aux (A_typ (Typ_aux (Typ_id b, _)), _)]), _)
             when string_of_id v = "vector" && string_of_id b = "bit" ->
           let size = Big_int.to_int size in
-          let (Defs defs), env = check env (Bitfield.macro id size order ranges) in
+          let eval_index_nexp env nexp =
+            int_of_nexp_opt (nexp_simp (Env.expand_nexp_synonyms env nexp)) in
+          let (Defs defs), env =
+            check env (Bitfield.macro (eval_index_nexp env, (typ_error env)) id size order ranges) in
           defs, env
        | _ ->
           typ_error env l "Bad bitfield type"

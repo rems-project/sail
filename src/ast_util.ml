@@ -236,6 +236,11 @@ let rec is_nexp_constant (Nexp_aux (nexp, _)) = match nexp with
   | Nexp_exp n | Nexp_neg n -> is_nexp_constant n
   | Nexp_app (_, nexps) -> List.for_all is_nexp_constant nexps
 
+let int_of_nexp_opt nexp =
+  match nexp with
+  | Nexp_aux(Nexp_constant i,_) -> Some i
+  | _ -> None
+
 let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
 and nexp_simp_aux = function
   (* (n - (n - m)) often appears in foreach loops *)
@@ -911,8 +916,8 @@ and string_of_letbind (LB_aux (lb, l)) =
 
 let rec string_of_index_range (BF_aux (ir, _)) =
   match ir with
-  | BF_single n -> Big_int.to_string n
-  | BF_range (n, m) -> Big_int.to_string n ^ " .. " ^ Big_int.to_string m
+  | BF_single n -> string_of_nexp n
+  | BF_range (n, m) -> string_of_nexp n ^ " .. " ^ string_of_nexp m
   | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ ") : (" ^ string_of_index_range ir2 ^ ")"
 
 

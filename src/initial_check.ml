@@ -201,6 +201,20 @@ and to_ast_nexp ctx (P.ATyp_aux (aux, l)) =
   in
   Nexp_aux (aux, l)
 
+and to_ast_bitfield_index_nexp (P.ATyp_aux (aux, l)) =
+  let aux = match aux with
+    | P.ATyp_id id -> Nexp_id (to_ast_id id)
+    | P.ATyp_lit (P.L_aux (P.L_num c, _)) -> Nexp_constant c
+    | P.ATyp_sum (t1, t2) -> Nexp_sum (to_ast_bitfield_index_nexp t1, to_ast_bitfield_index_nexp t2)
+    | P.ATyp_exp t1 -> Nexp_exp (to_ast_bitfield_index_nexp t1)
+    | P.ATyp_neg t1 -> Nexp_neg (to_ast_bitfield_index_nexp t1)
+    | P.ATyp_times (t1, t2) -> Nexp_times (to_ast_bitfield_index_nexp t1, to_ast_bitfield_index_nexp t2)
+    | P.ATyp_minus (t1, t2) -> Nexp_minus (to_ast_bitfield_index_nexp t1, to_ast_bitfield_index_nexp t2)
+    | P.ATyp_app (id, ts) -> Nexp_app (to_ast_id id, List.map (to_ast_bitfield_index_nexp) ts)
+    | _ -> raise (Reporting.err_typ l "Invalid numeric expression in field index")
+  in
+  Nexp_aux (aux, l)
+
 and to_ast_order ctx (P.ATyp_aux (aux, l)) =
   match aux with
   | ATyp_var v -> Ord_aux (Ord_var (to_ast_var v), l)
@@ -503,9 +517,9 @@ let to_ast_spec ctx (val_:P.val_spec) : (unit val_spec) ctx_out =
 let rec to_ast_range (P.BF_aux(r,l)) = (* TODO add check that ranges are sensible for some definition of sensible *)
   BF_aux(
     (match r with
-    | P.BF_single(i) -> BF_single(i)
-    | P.BF_range(i1,i2) -> BF_range(i1,i2)
-    | P.BF_concat(ir1,ir2) -> BF_concat( to_ast_range ir1, to_ast_range ir2)),
+    | P.BF_single(i) -> BF_single(to_ast_bitfield_index_nexp i)
+    | P.BF_range(i1,i2) -> BF_range(to_ast_bitfield_index_nexp i1,to_ast_bitfield_index_nexp i2)
+    | P.BF_concat(ir1,ir2) -> BF_concat(to_ast_range ir1, to_ast_range ir2)),
     l)
 
 let to_ast_type_union ctx (P.Tu_aux (P.Tu_ty_id (atyp, id), l)) =

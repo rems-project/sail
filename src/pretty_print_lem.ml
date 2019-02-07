@@ -1016,10 +1016,12 @@ let doc_type_union_lem env (Tu_aux(Tu_ty_id(typ,id),_)) =
   separate space [pipe; doc_id_lem_ctor id; string "of";
                   parens (doc_typ_lem env typ)]
 
+(*
 let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_single i -> parens (doc_op comma (doc_int i) (doc_int i))
   | BF_range(i1,i2) -> parens (doc_op comma (doc_int i1) (doc_int i2))
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
+ *)
 
 let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
@@ -1392,7 +1394,14 @@ let is_field_accessor regtypes fdef =
      (access = "get" || access = "set") && is_field_of regtyp field
   | _ -> false
 
+let int_of_field_index tname fid nexp =
+  match int_of_nexp_opt nexp with
+  | Some i -> i
+  | None -> raise (Reporting.err_typ Parse_ast.Unknown
+                   ("Non-constant bitfield index in field " ^ string_of_id fid ^ " of " ^ tname))
+
 let doc_regtype_fields (tname, (n1, n2, fields)) =
+  let const_int fid idx = int_of_field_index tname fid idx in
   let i1, i2 = match n1, n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) -> i1, i2
     | _ -> raise (Reporting.err_typ Parse_ast.Unknown
@@ -1401,8 +1410,8 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   let dir = (if dir_b then "true" else "false") in
   let doc_field (fr, fid) =
     let i, j = match fr with
-    | BF_aux (BF_single i, _) -> (i, i)
-    | BF_aux (BF_range (i, j), _) -> (i, j)
+    | BF_aux (BF_single i, _) -> let i = const_int fid i in (i, i)
+    | BF_aux (BF_range (i, j), _) -> (const_int fid i, const_int fid j)
     | _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__
        ("Unsupported type in field " ^ string_of_id fid ^ " of " ^ tname)) in
     let fsize = Big_int.succ (Big_int.abs (Big_int.sub i j)) in

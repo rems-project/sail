@@ -371,8 +371,8 @@ type_union =
 
 type 
 index_range_aux =  (* index specification, for bitfields in register types *)
-   BF_single of Big_int.num (* single index *)
- | BF_range of Big_int.num * Big_int.num (* index range *)
+   BF_single of atyp       (* single index *)
+ | BF_range of atyp * atyp (* index range *)
  | BF_concat of index_range * index_range (* concatenation of index ranges *)
 
 and index_range = 
