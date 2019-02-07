@@ -1,0 +1,8 @@
+Type error:
+[[96mReplicate/v1.sail[0m]:11:4-30
+11[96m |[0m    replicate_bits(x, 'N / 'M)
+  [91m |[0m    [91m^------------------------^[0m
+  [91m |[0m Tried performing type coercion from vector(('M * div('N, 'M)), dec, bit) to vector('N, dec, bit) on replicate_bits(x, div(__id(N), bitvector_length(x)))
+  [91m |[0m Coercion failed because:
+  [91m |[0m Mismatched argument types in subtype check
+  [91m |[0m 

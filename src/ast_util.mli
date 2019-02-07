@@ -124,6 +124,7 @@ val unknown_typ : typ
 val int_typ : typ
 val nat_typ : typ
 val atom_typ : nexp -> typ
+val implicit_typ : nexp -> typ
 val range_typ : nexp -> nexp -> typ
 val bit_typ : typ
 val bool_typ : typ

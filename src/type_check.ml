@@ -2025,6 +2025,11 @@ let rec rewrite_sizeof' env (Nexp_aux (aux, l) as nexp) =
      let exp2 = rewrite_sizeof' env nexp2 in
      mk_exp (E_app (mk_id "div", [exp1; exp2]))
 
+  | Nexp_app (id, [nexp1; nexp2]) when string_of_id id = "mod" ->
+     let exp1 = rewrite_sizeof' env nexp1 in
+     let exp2 = rewrite_sizeof' env nexp2 in
+     mk_exp (E_app (mk_id "mod", [exp1; exp2]))
+
   | Nexp_app _ | Nexp_id _ ->
      typ_error env l ("Cannot re-write sizeof(" ^ string_of_nexp nexp ^ ")")
 

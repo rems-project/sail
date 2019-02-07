@@ -374,6 +374,8 @@ let app_typ id args = mk_typ (Typ_app (id, args))
 let register_typ typ = mk_typ (Typ_app (mk_id "register", [mk_typ_arg (A_typ typ)]))
 let atom_typ nexp =
   mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (A_nexp (nexp_simp nexp))]))
+let implicit_typ nexp =
+  mk_typ (Typ_app (mk_id "implicit", [mk_typ_arg (A_nexp (nexp_simp nexp))]))
 let range_typ nexp1 nexp2 =
   mk_typ (Typ_app (mk_id "range", [mk_typ_arg (A_nexp (nexp_simp nexp1));
                                    mk_typ_arg (A_nexp (nexp_simp nexp2))]))
