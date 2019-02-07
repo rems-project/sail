@@ -2641,7 +2641,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
         annot_exp (E_if (cond', then_branch', else_branch')) typ
      end
   | E_exit exp, _ ->
-     let checked_exp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
+     let checked_exp = crule check_exp env exp unit_typ in
      annot_exp_effect (E_exit checked_exp) typ (mk_effect [BE_escape])
   | E_throw exp, _ ->
      let checked_exp = crule check_exp env exp exc_typ in
@@ -4627,7 +4627,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
     else [], env, declared_eff
   in
   let env = Env.define_val_spec id env in
-  if (equal_effects eff declared_eff || !opt_no_effects)
+  if (subseteq_effects eff declared_eff || !opt_no_effects)
   then
     vs_def @ [DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, None)))], env
   else typ_error env l ("Effects do not match: " ^ string_of_effect declared_eff ^ " declared and " ^ string_of_effect eff ^ " found")

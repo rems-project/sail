@@ -1196,6 +1196,11 @@ let equal_effects e1 e2 =
   | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
      BESet.compare (BESet.of_list base_effs1) (BESet.of_list base_effs2) = 0
 
+let subseteq_effects e1 e2 =
+  match e1, e2 with
+  | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
+     BESet.subset (BESet.of_list base_effs1) (BESet.of_list base_effs2)
+
 let rec kopts_of_nexp (Nexp_aux (nexp,_)) =
   match nexp with
   | Nexp_id _

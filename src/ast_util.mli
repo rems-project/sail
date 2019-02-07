@@ -357,6 +357,7 @@ val has_effect : effect -> base_effect_aux -> bool
 val effect_set : effect -> BESet.t
 
 val equal_effects : effect -> effect -> bool
+val subseteq_effects : effect -> effect -> bool
 val union_effects : effect -> effect -> effect
 
 val kopts_of_order : order -> KOptSet.t
