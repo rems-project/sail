@@ -582,6 +582,13 @@ let scc ?(original_order : string list option) (g : graph) =
   List.iter (fun v -> if not (Hashtbl.mem node_indices v) then visit_node v) nodes;
   List.rev !components
 
+let add_def_to_map id d defset =
+  Namemap.add id
+    (match Namemap.find id defset with
+     | t -> d::t
+     | exception Not_found -> [d])
+    defset
+
 let add_def_to_graph (prelude, original_order, defset, graph) d =
   let bound, used = fv_of_def false true [] d in
   let used = match d with
@@ -604,7 +611,7 @@ let add_def_to_graph (prelude, original_order, defset, graph) d =
     let add_other_node id' g = Namemap.add id' (Nameset.singleton id) g in
     prelude,
     original_order @ [id],
-    Namemap.add id d defset,
+    add_def_to_map id d defset,
     Nameset.fold add_other_node other_ids graph_id
   with
   | Not_found ->
@@ -633,11 +640,11 @@ let print_dot graph component : unit =
   | [] -> ()
 
 let def_of_component graph defset comp =
-  let get_def id = if Namemap.mem id defset then [Namemap.find id defset] else [] in
+  let get_def id = if Namemap.mem id defset then Namemap.find id defset else [] in
   match List.concat (List.map get_def comp) with
   | [] -> []
   | [def] -> [def]
-  | (def :: _) as defs ->
+  | (((DEF_fundef _ | DEF_internal_mutrec _) as def) :: _) as defs ->
      let get_fundefs = function
        | DEF_fundef fundef -> [fundef]
        | DEF_internal_mutrec fundefs -> fundefs
@@ -647,6 +654,8 @@ let def_of_component graph defset comp =
      let fundefs = List.concat (List.map get_fundefs defs) in
      print_dot graph (List.map (fun fd -> string_of_id (id_of_fundef fd)) fundefs);
      [DEF_internal_mutrec fundefs]
+  (* We could merge other stuff, in particular overloads, but don't need to just now *)
+  | defs -> defs
 
 let top_sort_defs (Defs defs) =
   let prelude, original_order, defset, graph =
