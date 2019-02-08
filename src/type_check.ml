@@ -108,7 +108,6 @@ type env =
     typ_vars : (Ast.l * kind_aux) KBindings.t;
     shadow_vars : int KBindings.t;
     typ_synonyms : (env -> typ_arg list -> typ_arg) Bindings.t;
-    num_defs : nexp Bindings.t;
     overloads : (id list) Bindings.t;
     flow : (typ -> typ) Bindings.t;
     enums : IdSet.t Bindings.t;
@@ -368,8 +367,6 @@ module Env : sig
   val add_ret_typ : typ -> t -> t
   val add_typ_synonym : id -> (t -> typ_arg list -> typ_arg) -> t -> t
   val get_typ_synonym : id -> t -> t -> typ_arg list -> typ_arg
-  val add_num_def : id -> nexp -> t -> t
-  val get_num_def : id -> t -> nexp
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
   val is_extern : id -> t -> string -> bool
@@ -391,6 +388,7 @@ module Env : sig
   val lookup_id : ?raw:bool -> id -> t -> typ lvar
   val fresh_kid : ?kid:kid -> t -> kid
   val expand_synonyms : t -> typ -> typ
+  val expand_nexp_synonyms : t -> nexp -> nexp
   val expand_constraint_synonyms : t -> n_constraint -> n_constraint
   val base_typ_of : t -> typ -> typ
   val allow_unknowns : t -> bool
@@ -430,7 +428,6 @@ end = struct
       typ_vars = KBindings.empty;
       shadow_vars = KBindings.empty;
       typ_synonyms = Bindings.empty;
-      num_defs = Bindings.empty;
       overloads = Bindings.empty;
       flow = Bindings.empty;
       enums = Bindings.empty;
@@ -1088,19 +1085,6 @@ end = struct
         typ_print (lazy (adding ^ "type variable " ^ string_of_kid v ^ " : " ^ string_of_kind_aux k));
         { env with typ_vars = KBindings.add v (l, k) env.typ_vars }
       end
-
-  let add_num_def id nexp env =
-    if Bindings.mem id env.num_defs
-    then typ_error env (id_loc id) ("Num identifier " ^ string_of_id id ^ " is already bound")
-    else
-      begin
-        typ_print (lazy (adding ^ "Num identifier " ^ string_of_id id ^ " : " ^ string_of_nexp nexp));
-        { env with num_defs = Bindings.add id nexp env.num_defs }
-      end
-
-  let get_num_def id env =
-    try Bindings.find id env.num_defs with
-    | Not_found -> typ_raise env (id_loc id) (Err_no_num_ident id)
 
   let get_constraints env = env.constraints
 

@@ -158,8 +158,6 @@ module Env : sig
 
   val get_overloads : id -> t -> id list
 
-  val get_num_def : id -> t -> nexp
-
   val is_extern : id -> t -> string -> bool
 
   val get_extern : id -> t -> string -> string
@@ -188,6 +186,8 @@ module Env : sig
 
   val expand_constraint_synonyms : t -> n_constraint -> n_constraint
 
+  val expand_nexp_synonyms : t -> nexp -> nexp
+    
   val expand_synonyms : t -> typ -> typ
 
   (** Expand type synonyms and remove register annotations (i.e. register<t> -> t)) *)

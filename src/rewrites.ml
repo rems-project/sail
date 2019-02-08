@@ -238,7 +238,7 @@ let lookup_constant_kid env kid =
   List.fold_left check_nc None (Env.get_constraints env)
 
 let rec rewrite_nexp_ids env (Nexp_aux (nexp, l) as nexp_aux) = match nexp with
-  | Nexp_id id -> rewrite_nexp_ids env (Env.get_num_def id env)
+  | Nexp_id id -> Env.expand_nexp_synonyms env nexp_aux
   | Nexp_var kid ->
      begin
        match lookup_constant_kid env kid with
@@ -2909,7 +2909,6 @@ let rewrite_defs_internal_lets =
             type of the storage, so ask the type checker what it really is. *)
          (match infer_lexp (env_of_annot lannot) (strip_lexp lhs) with
          | LEXP_aux (_,lexp_annot') -> lexp_annot'
-         | _ -> lannot
          | exception _ -> lannot)
        in
        let rhs = add_e_cast ltyp (rhs exp) in
