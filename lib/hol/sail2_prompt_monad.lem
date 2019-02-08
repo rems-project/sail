@@ -22,6 +22,8 @@ let inline bind = bindS
 let inline (>>=) = (>>$=)
 let inline (>>) = (>>$)
 
+let inline choose_bool msg = choose_boolS ()
+let inline undefined_bool = undefined_boolS
 let inline exit = exitS
 
 let inline throw = throwS
@@ -46,5 +48,6 @@ let inline write_mem_ea wk addr sz = return ()
 let inline write_memt = write_memtS
 let inline write_mem = write_memS
 let barrier _ = return ()
+let footprint _ = return ()
 
 let inline assert_exp = assert_expS
