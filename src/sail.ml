@@ -251,6 +251,9 @@ let options = Arg.align ([
   ( "-verbose",
     Arg.Int (fun verbosity -> Util.opt_verbosity := verbosity),
     " produce verbose output");
+  ( "-output_sail",
+    Arg.Set opt_print_verbose,
+    " print Sail code after type checking and initial rewriting");
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
