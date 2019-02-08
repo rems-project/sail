@@ -181,6 +181,8 @@ let kw_table =
      ("escape",                  (fun x -> Escape));
      ("configuration",           (fun _ -> Configuration));
      ("termination_measure",     (fun _ -> TerminationMeasure));
+     ("internal_plet",           (fun _ -> InternalPLet));
+     ("internal_return",         (fun _ -> InternalReturn));
    ]
 
 

@@ -183,6 +183,7 @@ let rec desugar_rchain chain s e =
 %token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure
+%token InternalPLet InternalReturn
 
 %nonassoc Then
 %nonassoc Else
@@ -805,6 +806,12 @@ exp:
     { mk_exp (E_loop (Until, $4, $2)) $startpos $endpos }
   | While exp Do exp
     { mk_exp (E_loop (While, $2, $4)) $startpos $endpos }
+
+  /* Debugging only, will be rejected in initial_check if debugging isn't on */
+  | InternalPLet pat Eq exp In exp
+    { mk_exp (E_internal_plet ($2,$4,$6)) $startpos $endpos }
+  | InternalReturn exp
+    { mk_exp (E_internal_return($2)) $startpos $endpos }
 
 /* The following implements all nine levels of user-defined precedence for
 operators in expressions, with both left, right and non-associative operators */

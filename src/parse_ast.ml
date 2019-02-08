@@ -275,6 +275,8 @@ exp_aux =  (* Expression *)
  | E_return of exp
  | E_assert of exp * exp
  | E_var of exp * exp * exp
+ | E_internal_plet of pat * exp * exp
+ | E_internal_return of exp
 
 and exp = 
    E_aux of exp_aux * l
