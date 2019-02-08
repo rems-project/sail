@@ -325,7 +325,7 @@ let load_files ?generate:(generate=true) type_envs files =
   Profile.finish "type checking" t;
 
   let ast = Scattered.descatter ast in
-  let ast = rewrite_ast ast in
+  let ast = rewrite_ast type_envs ast in
 
   let out_name = match !opt_file_out with
     | None when parsed = [] -> "out.sail"
@@ -369,11 +369,11 @@ let main() =
     begin
       (if !(Interactive.opt_interactive)
        then
-         (Interactive.ast := Process_file.rewrite_ast_interpreter ast; Interactive.env := type_envs)
+         (Interactive.ast := Process_file.rewrite_ast_interpreter type_envs ast; Interactive.env := type_envs)
        else ());
       (if !(opt_sanity)
        then
-         let _ = rewrite_ast_check ast in
+         let _ = rewrite_ast_check type_envs ast in
          ()
        else ());
       (if !(opt_print_verbose)
@@ -387,13 +387,13 @@ let main() =
           Pretty_print_sail.pp_defs stdout (Specialize.slice_defs type_envs ast ids));
       (if !(opt_print_ocaml)
        then
-         let ast_ocaml = rewrite_ast_ocaml ast in
+         let ast_ocaml = rewrite_ast_ocaml type_envs ast in
          let out = match !opt_file_out with None -> "out" | Some s -> s in
          Ocaml_backend.ocaml_compile out ast_ocaml ocaml_generator_info
        else ());
       (if !(opt_print_c)
        then
-         let ast_c = rewrite_ast_c ast in
+         let ast_c = rewrite_ast_c type_envs ast in
          let ast_c, type_envs = Specialize.specialize ast_c type_envs in
          (* let ast_c = Spec_analysis.top_sort_defs ast_c in *)
          Util.opt_warnings := true;
@@ -406,13 +406,13 @@ let main() =
        then
          let mwords = !Pretty_print_lem.opt_mwords in
          let type_envs, ast_lem = State.add_regstate_defs mwords type_envs ast in
-         let ast_lem = rewrite_ast_lem ast_lem in
+         let ast_lem = rewrite_ast_lem type_envs ast_lem in
          output "" (Lem_out (!opt_libs_lem)) [out_name,type_envs,ast_lem]
        else ());
       (if !(opt_print_coq)
        then
          let type_envs, ast_coq = State.add_regstate_defs true type_envs ast in
-         let ast_coq = rewrite_ast_coq ast_coq in
+         let ast_coq = rewrite_ast_coq type_envs ast_coq in
          output "" (Coq_out (!opt_libs_coq)) [out_name,type_envs,ast_coq]
        else ());
       (if !(opt_print_latex)

@@ -378,9 +378,9 @@ let output libpath out_arg files =
       output1 libpath out_arg f type_env defs)
     files
 
-let rewrite_step n total defs (name, rewriter) =
+let rewrite_step n total env defs (name, rewriter) =
   let t = Profile.start () in
-  let defs = rewriter defs in
+  let defs = rewriter env defs in
   Profile.finish ("rewrite " ^ name) t;
   let _ = match !(opt_ddump_rewrite_ast) with
     | Some (f, i) ->
@@ -396,20 +396,20 @@ let rewrite_step n total defs (name, rewriter) =
   Util.progress "Rewrite " name n total;
   defs
 
-let rewrite rewriters defs =
+let rewrite env rewriters defs =
   let total = List.length rewriters in
-  try snd (List.fold_left (fun (n, defs) rw -> n + 1, rewrite_step n total defs rw) (1, defs) rewriters) with
+  try snd (List.fold_left (fun (n, defs) rw -> n + 1, rewrite_step n total env defs rw) (1, defs) rewriters) with
   | Type_check.Type_error (_, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
-let rewrite_ast = rewrite [("initial", Rewriter.rewrite_defs)]
-let rewrite_ast_lem = rewrite Rewrites.rewrite_defs_lem
-let rewrite_ast_coq = rewrite Rewrites.rewrite_defs_coq
-let rewrite_ast_ocaml = rewrite Rewrites.rewrite_defs_ocaml
-let rewrite_ast_c ast =
+let rewrite_ast env = rewrite env [("initial", fun _ -> Rewriter.rewrite_defs)]
+let rewrite_ast_lem env = rewrite env Rewrites.rewrite_defs_lem
+let rewrite_ast_coq env = rewrite env Rewrites.rewrite_defs_coq
+let rewrite_ast_ocaml env = rewrite env Rewrites.rewrite_defs_ocaml
+let rewrite_ast_c env ast =
   ast
-  |> rewrite Rewrites.rewrite_defs_c
-  |> rewrite [("constant_fold", Constant_fold.rewrite_constant_function_calls)]
+  |> rewrite env Rewrites.rewrite_defs_c
+  |> rewrite env [("constant_fold", fun _ -> Constant_fold.rewrite_constant_function_calls)]
 
-let rewrite_ast_interpreter = rewrite Rewrites.rewrite_defs_interpreter
-let rewrite_ast_check = rewrite Rewrites.rewrite_defs_check
+let rewrite_ast_interpreter env = rewrite env Rewrites.rewrite_defs_interpreter
+let rewrite_ast_check env = rewrite env Rewrites.rewrite_defs_check

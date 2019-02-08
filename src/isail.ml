@@ -383,7 +383,7 @@ let handle_input' input =
      | ":compile" ->
         let open PPrint in
         let open C_backend in
-        let ast = Process_file.rewrite_ast_c !Interactive.ast in
+        let ast = Process_file.rewrite_ast_c !Interactive.env !Interactive.ast in
         let ast, env = Specialize.specialize ast !Interactive.env in
         let ctx = initial_ctx env in
         interactive_bytecode := bytecode_ast ctx (List.map flatten_cdef) ast
@@ -422,7 +422,7 @@ let handle_input' input =
         | ":l" | ":load" ->
            let files = Util.split_on_char ' ' arg in
            let (_, ast, env) = load_files !Interactive.env files in
-           let ast = Process_file.rewrite_ast_interpreter ast in
+           let ast = Process_file.rewrite_ast_interpreter !Interactive.env ast in
            Interactive.ast := append_ast !Interactive.ast ast;
            interactive_state := initial_state !Interactive.ast Value.primops;
            Interactive.env := env;
