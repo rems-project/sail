@@ -3428,10 +3428,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
   | E_sizeof nexp ->
-     irule infer_exp env (rewrite_sizeof l env nexp)
+     irule infer_exp env (rewrite_sizeof l env (Env.expand_nexp_synonyms env nexp))
   | E_constraint nc ->
      Env.wf_constraint env nc;
-     crule check_exp env (rewrite_nc env nc) (atom_bool_typ nc)
+     crule check_exp env (rewrite_nc env (Env.expand_constraint_synonyms env nc)) (atom_bool_typ nc)
   | E_field (exp, field) ->
      begin
        let inferred_exp = irule infer_exp env exp in
