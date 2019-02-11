@@ -3285,14 +3285,6 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
           subtyp l env typ typ_annot;
           annot_lexp (LEXP_cast (typ_annot, v)) typ, Env.add_local v (Mutable, typ_annot) env
      end
-  | LEXP_deref exp ->
-     let inferred_exp = infer_exp env exp in
-     begin match typ_of inferred_exp with
-     | Typ_aux (Typ_app (r, [A_aux (A_typ vtyp, _)]), _) when string_of_id r = "register" ->
-        subtyp l env typ vtyp; annot_lexp_effect (LEXP_deref inferred_exp) typ (mk_effect [BE_wreg]), env
-     | _ ->
-        typ_error env l (string_of_typ typ  ^ " must be a register type in " ^ string_of_exp exp ^ ")")
-     end
   | LEXP_id v ->
      begin match Env.lookup_id ~raw:true v env with
      | Local (Immutable, _) | Enum _ ->
@@ -3404,6 +3396,14 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
      in
      let typq, _, ret_typ, _ = Env.get_accessor rec_id fid env in
      annot_lexp_effect (LEXP_field (annot_lexp (LEXP_id v) (mk_id_typ rec_id), fid)) ret_typ weff
+  | LEXP_deref exp ->
+     let inferred_exp = infer_exp env exp in
+     begin match typ_of inferred_exp with
+     | Typ_aux (Typ_app (r, [A_aux (A_typ vtyp, _)]), _) when string_of_id r = "register" ->
+        annot_lexp_effect (LEXP_deref inferred_exp) vtyp (mk_effect [BE_wreg])
+     | _ ->
+        typ_error env l (string_of_typ (typ_of inferred_exp)  ^ " must be a register type in " ^ string_of_exp exp ^ ")")
+     end
   | LEXP_tup lexps ->
      let inferred_lexps = List.map (infer_lexp env) lexps in
      annot_lexp (LEXP_tup inferred_lexps) (tuple_typ (List.map lexp_typ_of inferred_lexps))
