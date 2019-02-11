@@ -805,9 +805,22 @@ end = struct
     with
     | Not_found -> typ_error env (id_loc id) ("No union constructor found for " ^ string_of_id id)
 
+  let rec valid_implicits env start = function
+    | Typ_aux (Typ_app (Id_aux (Id "implicit", _), [A_aux (A_nexp (Nexp_aux (Nexp_var v, _)), _)]), l) :: rest ->
+       if start then
+         valid_implicits env true rest
+       else
+         typ_error env l "Arguments are invalid, implicit arguments must come before all other arguments"
+    | Typ_aux (Typ_app (Id_aux (Id "implicit", _), [A_aux (A_nexp _, l)]), _) :: rest ->
+       typ_error env l "Implicit argument must contain a single type variable"
+    | _ :: rest -> valid_implicits env false rest
+    | [] -> ()
+
   let rec update_val_spec id (typq, typ) env =
     begin match expand_synonyms env typ with
     | Typ_aux (Typ_fn (arg_typs, ret_typ, effect), l) ->
+       valid_implicits env true arg_typs;
+
        (* We perform some canonicalisation for function types where existentials appear on the left, so
           ({'n, 'n >= 2, int('n)}, foo) -> bar
           would become
