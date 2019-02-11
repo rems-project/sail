@@ -585,7 +585,7 @@ let scc ?(original_order : string list option) (g : graph) =
 let add_def_to_map id d defset =
   Namemap.add id
     (match Namemap.find id defset with
-     | t -> d::t
+     | t -> t@[d]
      | exception Not_found -> [d])
     defset
 
