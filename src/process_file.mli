@@ -52,16 +52,17 @@
    $include directive that is importing the file, if applicable. *)
 val parse_file : ?loc:Parse_ast.l -> string -> Parse_ast.defs
 
-val convert_ast : Ast.order -> Parse_ast.defs -> unit Ast.defs
+val clear_symbols : unit -> unit
+
 val preprocess_ast : (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.defs -> Parse_ast.defs
 val check_ast: Type_check.Env.t -> unit Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
-val rewrite_ast: Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_lem : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_coq : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_ocaml : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_c : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_interpreter : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_check : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast: Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast_lem : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast_coq : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast_ocaml : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast_c : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast_interpreter : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast_check : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 
 val load_file_no_check : (Arg.key * Arg.spec * Arg.doc) list -> Ast.order -> string -> unit Ast.defs
 val load_file : (Arg.key * Arg.spec * Arg.doc) list -> Ast.order -> Type_check.Env.t -> string -> Type_check.tannot Ast.defs * Type_check.Env.t
@@ -82,7 +83,7 @@ type out_type =
 val output :
   string ->                           (* The path to the library *)
   out_type ->                         (* Backend kind *)
-  (string * Type_check.tannot Ast.defs) list -> (*File names paired with definitions *)
+  (string * Type_check.Env.t * Type_check.tannot Ast.defs) list -> (*File names paired with definitions *)
   unit
 
 (** [always_replace_files] determines whether Sail only updates modified files.

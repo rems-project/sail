@@ -56,8 +56,18 @@ open Type_check
 val opt_debug_flow_graphs : bool ref
 val opt_debug_function : string ref
 val opt_trace : bool ref
+val opt_smt_trace : bool ref
 val opt_static : bool ref
 val opt_no_main : bool ref
+
+(** [opt_memo_cache] will store the compiled function definitions in
+   file _sbuild/ccacheDIGEST where DIGEST is the md5sum of the
+   original function to be compiled. Enabled using the -memo
+   flag. Uses Marshal so it's quite picky about the exact version of
+   the Sail version. This cache can obviously become stale if the C
+   backend changes - it'll load an old version compiled without said
+   changes. *)
+val opt_memo_cache : bool ref
 
 (** Optimization flags *)
 

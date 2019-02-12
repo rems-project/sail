@@ -80,9 +80,11 @@ type type_error =
   | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
-  | Err_because of type_error * type_error
+  | Err_because of type_error * Ast.l * type_error
 
-exception Type_error of l * type_error;;
+type env
+
+exception Type_error of env * l * type_error;;
 
 val typ_debug : ?level:int -> string Lazy.t -> unit
 val typ_print : string Lazy.t -> unit
@@ -93,7 +95,7 @@ val typ_print : string Lazy.t -> unit
    contains functions that operate on that state. *)
 module Env : sig
   (** Env.t is the type of environments *)
-  type t
+  type t = env
 
   (** Note: Most get_ functions assume the identifiers exist, and throw
      type errors if they don't. *)
@@ -117,6 +119,8 @@ module Env : sig
   val get_locals : t -> (mut * typ) Bindings.t
 
   val add_local : id -> mut * typ -> t -> t
+
+  val add_scattered_variant : id -> typquant -> t -> t
 
   (** Check if a local variable is mutable. Throws Type_error if it
      isn't a local variable. Probably best to use Env.lookup_id
@@ -152,8 +156,6 @@ module Env : sig
 
   val get_overloads : id -> t -> id list
 
-  val get_num_def : id -> t -> nexp
-
   val is_extern : id -> t -> string -> bool
 
   val get_extern : id -> t -> string -> string
@@ -180,6 +182,10 @@ module Env : sig
      old one. *)
   val fresh_kid : ?kid:kid -> t -> kid
 
+  val expand_constraint_synonyms : t -> n_constraint -> n_constraint
+
+  val expand_nexp_synonyms : t -> nexp -> nexp
+    
   val expand_synonyms : t -> typ -> typ
 
   (** Expand type synonyms and remove register annotations (i.e. register<t> -> t)) *)
@@ -212,8 +218,8 @@ val add_typquant : Ast.l -> typquant -> Env.t -> Env.t
    is not existential. This function will pick a fresh name for the
    existential to ensure that no name-clashes occur. The "plain"
    version does not treat numeric types as existentials. *)
-val destruct_exist_plain : typ -> (kinded_id list * n_constraint * typ) option
-val destruct_exist : typ -> (kinded_id list * n_constraint * typ) option
+val destruct_exist_plain : ?name:string option -> typ -> (kinded_id list * n_constraint * typ) option
+val destruct_exist : ?name:string option -> typ -> (kinded_id list * n_constraint * typ) option
 
 val add_existential : Ast.l -> kinded_id list -> n_constraint -> Env.t -> Env.t
 
@@ -303,7 +309,7 @@ val check_fundef : Env.t -> 'a fundef -> tannot def list * Env.t
 
 val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t
 
-val prove : Env.t -> n_constraint -> bool
+val prove : (string * int * int * int) -> Env.t -> n_constraint -> bool
 
 val solve : Env.t -> nexp -> Big_int.num option
 
@@ -318,7 +324,7 @@ val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp lis
    on patterns that have previously been type checked. *)
 val bind_pat_no_guard : Env.t -> unit pat -> typ -> tannot pat * Env.t
 
-val typ_error : Ast.l -> string -> 'a
+val typ_error : Env.t -> Ast.l -> string -> 'a
 
 (** {2 Destructuring type annotations} Partial functions: The
    expressions and patterns passed to these functions must be
@@ -356,9 +362,11 @@ val expected_typ_of : Ast.l * tannot -> typ option
 
 val destruct_atom_nexp : Env.t -> typ -> nexp option
 
+val destruct_atom_bool : Env.t -> typ -> n_constraint option
+
 val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) option
 
-val destruct_numeric : typ -> (kid list * n_constraint * nexp) option
+val destruct_numeric : ?name:string option -> typ -> (kid list * n_constraint * nexp) option
 
 val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 

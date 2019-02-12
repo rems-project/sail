@@ -128,6 +128,7 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "list") = 0 -> string "list"
   | id when Id.compare id (mk_id "bit") = 0 -> string "bit"
   | id when Id.compare id (mk_id "int") = 0 -> string "Big_int.num"
+  | id when Id.compare id (mk_id "implicit") = 0 -> string "Big_int.num"
   | id when Id.compare id (mk_id "nat") = 0 -> string "Big_int.num"
   | id when Id.compare id (mk_id "bool") = 0 -> string "bool"
   | id when Id.compare id (mk_id "unit") = 0 -> string "unit"
@@ -393,7 +394,7 @@ let initial_value_for id inits =
 
 let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
   match reg with
-  | DEC_reg (typ, id) ->
+  | DEC_reg (_, _, typ, id) ->
      separate space [string "let"; zencode ctx id; colon;
                      parens (ocaml_typ ctx typ); string "ref"; equals;
                      string "ref"; parens (ocaml_exp ctx (initial_value_for id ctx.register_inits))]
@@ -582,31 +583,39 @@ let ocaml_string_of_abbrev ctx id typq typ =
 let ocaml_string_of_variant ctx id typq cases =
   separate space [string "let"; ocaml_string_of id; string "_"; equals; string "\"VARIANT\""]
 
-let ocaml_typedef ctx (TD_aux (td_aux, _)) =
+let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
   match td_aux with
-  | TD_record (id, _, typq, fields, _) ->
+  | TD_record (id, typq, fields, _) ->
      ((separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; lbrace]
        ^//^ ocaml_fields ctx fields)
       ^/^ rbrace)
      ^^ ocaml_def_end
      ^^ ocaml_string_of_struct ctx id typq fields
-  | TD_variant (id, _, _, cases, _) when string_of_id id = "exception" ->
+     ^^ ocaml_def_end
+  | TD_variant (id, _, cases, _) when string_of_id id = "exception" ->
      ocaml_exceptions ctx cases
-  | TD_variant (id, _, typq, cases, _) ->
+     ^^ ocaml_def_end
+  | TD_variant (id, typq, cases, _) ->
      (separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals]
       ^//^ ocaml_cases ctx cases)
      ^^ ocaml_def_end
      ^^ ocaml_string_of_variant ctx id typq cases
-  | TD_enum (id, _, ids, _) ->
+     ^^ ocaml_def_end
+  | TD_enum (id, ids, _) ->
      (separate space [string "type"; zencode ctx id; equals]
       ^//^ (bar ^^ space ^^ ocaml_enum ctx ids))
      ^^ ocaml_def_end
      ^^ ocaml_string_of_enum ctx id ids
+     ^^ ocaml_def_end
   | TD_abbrev (id, typq, A_aux (A_typ typ, _)) ->
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; ocaml_typ ctx typ]
      ^^ ocaml_def_end
      ^^ ocaml_string_of_abbrev ctx id typq typ
- | _ -> failwith "Unsupported typedef"
+     ^^ ocaml_def_end
+  | TD_abbrev _ ->
+     empty
+  | TD_bitfield _ ->
+     Reporting.unreachable l __POS__ "Bitfield should be re-written"
 
 let get_externs (Defs defs) =
   let extern_id (VS_aux (VS_val_spec (typschm, id, ext, _), _)) =
@@ -630,7 +639,7 @@ let ocaml_def ctx def = match def with
   | DEF_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
   | DEF_internal_mutrec fds ->
      separate_map (twice hardline) (fun fd -> group (ocaml_fundef ctx fd)) fds ^^ twice hardline
-  | DEF_type td -> nf_group (ocaml_typedef ctx td) ^^ ocaml_def_end
+  | DEF_type td -> nf_group (ocaml_typedef ctx td)
   | DEF_val lb -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx lb) ^^ ocaml_def_end
   | _ -> empty
 
@@ -708,9 +717,9 @@ let ocaml_pp_generators ctx defs orig_types required =
     match td with
     | TD_abbrev (_, _, A_aux (A_typ typ, _)) ->
        add_req_from_typ required typ
-    | TD_record (_, _, _, fields, _) ->
+    | TD_record (_, _, fields, _) ->
        List.fold_left (fun req (typ,_) -> add_req_from_typ req typ) required fields
-    | TD_variant (_, _, _, variants, _) ->
+    | TD_variant (_, _, variants, _) ->
        List.fold_left (fun req (Tu_aux (Tu_ty_id (typ,_),_)) ->
            add_req_from_typ req typ) required variants
     | TD_enum _ -> required
@@ -724,8 +733,8 @@ let ocaml_pp_generators ctx defs orig_types required =
       | TD_aux (td,_) ->
          (match td with
           | TD_abbrev (_,tqs,A_aux (A_typ _, _)) -> tqs
-          | TD_record (_,_,tqs,_,_) -> tqs
-          | TD_variant (_,_,tqs,_,_) -> tqs
+          | TD_record (_,tqs,_,_) -> tqs
+          | TD_variant (_,tqs,_,_) -> tqs
           | TD_enum _ -> TypQ_aux (TypQ_no_forall,Unknown)
           | TD_abbrev (_, _, _) -> assert false
           | TD_bitfield _ -> assert false)
@@ -847,7 +856,7 @@ let ocaml_pp_generators ctx defs orig_types required =
         match td with
         | TD_abbrev (_,tqs,A_aux (A_typ typ, _)) ->
            tqs, gen_type typ, None, None
-        | TD_variant (_,_,tqs,variants,_) ->
+        | TD_variant (_,tqs,variants,_) ->
            tqs,
            string "let c = rand_choice [" ^^ group (nest 2 (break 0 ^^
              separate_map (string ";" ^^ break 1) rand_variant variants) ^^
@@ -855,7 +864,7 @@ let ocaml_pp_generators ctx defs orig_types required =
              string "] in c g",
            Some (separate_map (string ";" ^^ break 1) variant_constructor variants),
            Some (separate_map (break 1) build_constructor variants)
-        | TD_enum (_,_,variants,_) ->
+        | TD_enum (_,variants,_) ->
            TypQ_aux (TypQ_no_forall, Parse_ast.Unknown),
            string "rand_choice [" ^^ group (nest 2 (break 0 ^^
              separate_map (string ";" ^^ break 1) (zencode_upper ctx) variants) ^^
@@ -863,7 +872,7 @@ let ocaml_pp_generators ctx defs orig_types required =
                string "]",
            Some (separate_map (string ";" ^^ break 1) enum_constructor variants),
            Some (separate_map (break 1) build_enum_constructor variants)
-        | TD_record (_,_,tqs,fields,_) ->
+        | TD_record (_,tqs,fields,_) ->
            tqs, braces (separate_map (string ";" ^^ break 1) rand_field fields), None, None
         | _ ->
            raise (Reporting.err_todo l "Generators for bitfields not yet supported")
@@ -963,7 +972,7 @@ let ocaml_compile spec defs generator_types =
   let sail_dir =
     try Sys.getenv "SAIL_DIR" with
     | Not_found ->
-       let share_dir = Share_directory.d in
+       let share_dir = Manifest.dir in
        if Sys.file_exists share_dir then
          share_dir
        else

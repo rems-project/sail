@@ -411,7 +411,7 @@ int lookupSymbol(const char *buffer, const int total_file_size, const char *symn
         Elf32_Ehdr *ehdr = (Elf32_Ehdr*) &buffer[0];
         if (total_file_size < rdOff32(le, ehdr->e_shoff)
                               + rdHalf32(le, ehdr->e_shnum)*sizeof(Elf32_Shdr)) {
-            fprintf(stderr, "File too small for %d sections from offset %d\n",
+            fprintf(stderr, "File too small for %d sections from offset %ud\n",
                     rdHalf32(le, ehdr->e_shnum), rdOff32(le, ehdr->e_shoff));
             exit(EXIT_FAILURE);
         }
@@ -468,7 +468,7 @@ int lookupSymbol(const char *buffer, const int total_file_size, const char *symn
         Elf64_Ehdr *ehdr = (Elf64_Ehdr*) &buffer[0];
         if (total_file_size < rdOff64(le, ehdr->e_shoff)
                               + rdHalf64(le, ehdr->e_shnum)*sizeof(Elf64_Shdr)) {
-            fprintf(stderr, "File too small for %d sections from offset %ld\n",
+	    fprintf(stderr, "File too small for %d sections from offset %" PRIu64 "\n",
                     rdHalf64(le, ehdr->e_shnum), rdOff64(le, ehdr->e_shoff));
             exit(EXIT_FAILURE);
         }

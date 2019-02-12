@@ -22,6 +22,8 @@ let inline bind = bindS
 let inline (>>=) = (>>$=)
 let inline (>>) = (>>$)
 
+let inline choose_bool msg = choose_boolS ()
+let inline undefined_bool = undefined_boolS
 let inline exit = exitS
 
 let inline throw = throwS
@@ -34,16 +36,18 @@ let inline try_catchR = try_catchRS
 
 let inline maybe_fail = maybe_failS
 
+let inline read_memt_bytes = read_memt_bytesS
 let inline read_mem_bytes = read_mem_bytesS
 let inline read_reg = read_regS
 let inline reg_deref = read_regS
+let inline read_memt = read_memtS
 let inline read_mem = read_memS
-let inline read_tag = read_tagS
 let inline excl_result = excl_resultS
 let inline write_reg = write_regS
-let inline write_tag = write_tagS
-let inline write_mem_ea wk addr sz = write_mem_eaS wk addr (nat_of_int sz)
-let inline write_mem_val = write_mem_valS
+let inline write_mem_ea wk addr sz = return ()
+let inline write_memt = write_memtS
+let inline write_mem = write_memS
 let barrier _ = return ()
+let footprint _ = return ()
 
 let inline assert_exp = assert_expS

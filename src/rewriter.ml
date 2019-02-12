@@ -336,7 +336,7 @@ let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
   | LEXP_memory (id,exps) -> rewrap (LEXP_memory(id,List.map (rewriters.rewrite_exp rewriters) exps))
   | LEXP_vector (lexp,exp) ->
     rewrap (LEXP_vector (rewriters.rewrite_lexp rewriters lexp,rewriters.rewrite_exp rewriters exp))
-  | LEXP_vector_range (lexp,exp1,exp2) -> 
+  | LEXP_vector_range (lexp,exp1,exp2) ->
     rewrap (LEXP_vector_range (rewriters.rewrite_lexp rewriters lexp,
                                rewriters.rewrite_exp rewriters exp1,
                                rewriters.rewrite_exp rewriters exp2))
@@ -358,7 +358,7 @@ let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls
 let rewrite_def rewriters d = match d with
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), annot)) ->
      DEF_reg_dec (DEC_aux (DEC_config (id, typ, rewriters.rewrite_exp rewriters exp), annot))
-  | DEF_type _ | DEF_mapdef _ | DEF_kind _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_overload _ | DEF_fixity _ -> d
+  | DEF_type _ | DEF_mapdef _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_overload _ | DEF_fixity _ -> d
   | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
@@ -372,6 +372,75 @@ let rewrite_defs_base rewriters (Defs defs) =
     | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds) in
   Defs (rewrite defs)
 
+let rewrite_defs_base_progress prefix rewriters (Defs defs) =
+  let total = List.length defs in
+  let rec rewrite n = function
+    | [] -> []
+    | d :: ds ->
+       Util.progress (prefix ^ " ") (string_of_int n ^ "/" ^ string_of_int total) n total;
+       let d = rewriters.rewrite_def rewriters d in
+       d :: rewrite (n + 1) ds
+  in
+  Defs (rewrite 1 defs)
+
+let rec takedrop n xs =
+  match n, xs with
+  | 0, _ -> [], xs
+  | n, [] -> [], []
+  | n, x :: xs ->
+     let ys, xs = takedrop (n - 1) xs in
+     x :: ys, xs
+
+let rewrite_defs_base_parallel j rewriters (Defs defs) =
+  let module IntMap = Map.Make(struct type t = int let compare = compare end) in
+  let total = List.length defs in
+  let defs = ref defs in
+
+  (* We have a list of child processes in pids, and a mapping from pid
+     to result location in results. *)
+  let pids = ref [] in
+  let results = ref IntMap.empty in
+  for i = 1 to j do
+    let work = if i = 1 then total / j + total mod j else total / j in
+    let work, rest = takedrop work !defs in
+    (* Create a temporary file where the child process will return it's result *)
+    let result = Filename.temp_file "sail" ".rewrite" in
+    let pid = Unix.fork () in
+    begin
+      if pid = 0 then
+        let Defs work = rewrite_defs_base rewriters (Defs work) in
+        let out_chan = open_out result in
+        Marshal.to_channel out_chan work [Marshal.Closures];
+        close_out out_chan;
+        exit 0
+      else
+        (pids := pid :: !pids; results := IntMap.add pid result !results)
+    end;
+    defs := rest
+  done;
+  (* Make sure we haven't left any definitions behind! *)
+  assert(List.length !defs = 0);
+
+  let rewritten = ref [] in
+
+  (* Now we wait for all our child processes *)
+  while List.compare_length_with !pids 0 > 0 do
+    let child = List.hd !pids in
+    pids := List.tl !pids;
+    let _, status = Unix.waitpid [] child in
+    match status with
+    | WEXITED 0 ->
+       let result = IntMap.find child !results in
+       let in_chan = open_in result in
+       rewritten := Marshal.from_channel in_chan :: !rewritten;
+       close_in in_chan;
+       Sys.remove result
+    | _ ->
+       prerr_endline "Child process exited abnormally in parallel rewrite";
+       exit 1
+  done;
+  Defs (List.concat !rewritten)
+  
 let rewriters_base =
   {rewrite_exp = rewrite_exp;
    rewrite_pat = rewrite_pat;
@@ -382,29 +451,6 @@ let rewriters_base =
    rewrite_defs = rewrite_defs_base}
 
 let rewrite_defs (Defs defs) = rewrite_defs_base rewriters_base (Defs defs)
-
-module Envmap = Finite_map.Fmap_map(String)
-
-(* TODO: This seems to only consider a single assignment (or possibly two, in
-   separate branches of an if-expression). Hence, it seems the result is always
-   at most one variable. Is this intended?
-   It is only used below when pulling out local variables inside if-expressions
-   into the outer scope, which seems dubious. I comment it out for now. *)
-(*let rec introduced_variables (E_aux (exp,(l,annot))) =
-  match exp with
-  | E_cast (typ, exp) -> introduced_variables exp
-  | E_if (c,t,e) -> Envmap.intersect (introduced_variables t) (introduced_variables e)
-  | E_assign (lexp,exp) -> introduced_vars_le lexp exp
-  | _ -> Envmap.empty
-
-and introduced_vars_le (LEXP_aux(lexp,annot)) exp =
-  match lexp with
-  | LEXP_id (Id_aux (Id id,_))  | LEXP_cast(_,(Id_aux (Id id,_))) ->
-    (match annot with
-     | Base((_,t),Emp_intro,_,_,_,_) ->
-       Envmap.insert Envmap.empty (id,(t,exp))
-     | _ -> Envmap.empty)
-  | _ -> Envmap.empty*)
 
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux

@@ -51,7 +51,6 @@
 open Ast
 open Ast_util
 open Rewriter
-open Extra_pervasives
 
 let is_typ_ord_uvar = function
   | A_aux (A_typ _, _) -> true
@@ -68,7 +67,7 @@ let rec nexp_simp_typ (Typ_aux (typ_aux, l)) =
     | Typ_fn (arg_typs, ret_typ, effect) ->
        Typ_fn (List.map nexp_simp_typ arg_typs, nexp_simp_typ ret_typ, effect)
     | Typ_bidir (t1, t2) -> Typ_bidir (nexp_simp_typ t1, nexp_simp_typ t2)
-    | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+    | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   in
   Typ_aux (typ_aux, l)
 and nexp_simp_typ_arg (A_aux (typ_arg_aux, l)) =
@@ -172,7 +171,7 @@ let id_of_instantiation id instantiation =
 
 let rec variant_generic_typ id (Defs defs) =
   match defs with
-  | DEF_type (TD_aux (TD_variant (id', _, typq, _, _), _)) :: _ when Id.compare id id' = 0 ->
+  | DEF_type (TD_aux (TD_variant (id', typq, _, _), _)) :: _ when Id.compare id id' = 0 ->
      mk_typ (Typ_app (id', List.map (fun kopt -> mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt))))) (quant_kopts typq)))
   | _ :: defs -> variant_generic_typ id (Defs defs)
   | [] -> failwith ("No variant with id " ^ string_of_id id)
@@ -253,12 +252,13 @@ let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_fn (arg_typs, ret_typ, _) ->
      List.fold_left KidSet.union (typ_frees ~exs:exs ret_typ) (List.map (typ_frees ~exs:exs) arg_typs)
   | Typ_bidir (t1, t2) -> KidSet.union (typ_frees ~exs:exs t1) (typ_frees ~exs:exs t2)
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and typ_arg_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
   | A_nexp n -> KidSet.empty
   | A_typ typ -> typ_frees ~exs:exs typ
   | A_order ord -> KidSet.empty
+  | A_bool _ -> KidSet.empty
 
 let rec typ_int_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
@@ -270,12 +270,13 @@ let rec typ_int_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_fn (arg_typs, ret_typ, _) ->
      List.fold_left KidSet.union (typ_int_frees ~exs:exs ret_typ) (List.map (typ_int_frees ~exs:exs) arg_typs)
   | Typ_bidir (t1, t2) -> KidSet.union (typ_int_frees ~exs:exs t1) (typ_int_frees ~exs:exs t2)
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and typ_arg_int_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
   | A_nexp n -> KidSet.diff (tyvars_of_nexp n) exs
   | A_typ typ -> typ_int_frees ~exs:exs typ
   | A_order ord -> KidSet.empty
+  | A_bool _ -> KidSet.empty
 
 let specialize_id_valspec instantiations id ast =
   match split_defs (is_valspec id) ast with
@@ -378,8 +379,11 @@ let specialize_id_overloads instantiations id (Defs defs) =
    therefore remove all unused valspecs. Remaining polymorphic
    valspecs are then re-specialized. This process is iterated until
    the whole spec is specialized. *)
-let remove_unused_valspecs env ast =
-  let calls = ref (IdSet.of_list [mk_id "main"; mk_id "__SetConfig"; mk_id "__ListConfig"; mk_id "execute"; mk_id "decode"; mk_id "initialize_registers"; mk_id "append_64"]) in
+
+let initial_calls = (IdSet.of_list [mk_id "main"; mk_id "__SetConfig"; mk_id "__ListConfig"; mk_id "execute"; mk_id "decode"; mk_id "initialize_registers"; mk_id "append_64"])
+
+let remove_unused_valspecs ?(initial_calls=initial_calls) env ast =
+  let calls = ref initial_calls in
   let vs_ids = Initial_check.val_spec_ids ast in
 
   let inspect_exp = function
@@ -411,6 +415,14 @@ let remove_unused_valspecs env ast =
   in
 
   List.fold_left (fun ast id -> Defs (remove_unused ast id)) ast (IdSet.elements unused)
+
+let slice_defs env (Defs defs) keep_ids =
+  let keep = function
+    | DEF_fundef fd -> IdSet.mem (id_of_fundef fd) keep_ids
+    | _ -> true
+  in
+  let defs = List.filter keep defs in
+  remove_unused_valspecs env (Defs defs) ~initial_calls:keep_ids
 
 let specialize_id id ast =
   let instantiations = instantiations_of id ast in

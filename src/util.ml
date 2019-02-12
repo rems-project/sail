@@ -96,6 +96,7 @@
 
 let opt_warnings = ref true
 let opt_colors = ref true
+let opt_verbosity = ref 0
 
 let rec last = function
   | [x] -> x
@@ -465,3 +466,32 @@ let log_line str line msg =
   "\n[" ^ (str ^ ":" ^ string_of_int line |> blue |> clear) ^ "] " ^ msg
 
 let header str n = "\n" ^ str ^ "\n" ^ String.make (String.length str - 9 * n) '='
+
+let verbose_endline level str =
+  if level >= !opt_verbosity then
+    prerr_endline str
+  else
+    ()
+
+let progress prefix msg n total =
+  if !opt_verbosity > 0 then
+    let len = truncate ((float n /. float total) *. 50.0) in
+    let percent = truncate ((float n /. float total) *. 100.0) in
+    let msg =
+      if String.length msg <= 20 then
+        msg ^ ")" ^ String.make (20 - String.length msg) ' '
+      else
+        String.sub msg 0 17 ^ "...)"
+    in
+    let str = prefix ^ "[" ^ String.make len '=' ^ String.make (50 - len) ' ' ^ "] "
+              ^ string_of_int percent ^ "%"
+              ^ " (" ^ msg
+    in
+    prerr_string str;
+    if n = total then
+      prerr_char '\n'
+    else
+      prerr_string ("\x1B[" ^ string_of_int (String.length str) ^ "D");
+    flush stderr
+  else
+    ()

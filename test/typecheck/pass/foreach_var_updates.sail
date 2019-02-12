@@ -1,3 +1,5 @@
+$include <flow.sail>
+
 val add_int = {ocaml: "add", lem: "integerAdd"}: (int, int) -> int
 
 overload operator + = {add_int}

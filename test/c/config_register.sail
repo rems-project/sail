@@ -2,8 +2,9 @@ default Order dec
 
 $include <prelude.sail>
 
-function zeros forall 'n. (() : unit) -> bits('n) = {
-  sail_zeros('n)
+val zeros : forall 'n, 'n >= 0. (implicit('n), unit) -> bits('n)
+function zeros(n, _) = {
+  sail_zeros(n)
 }
 
 register configuration R : bits(32) = zeros()

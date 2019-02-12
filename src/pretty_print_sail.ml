@@ -92,6 +92,8 @@ let rec doc_nexp =
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
     | Nexp_constant c -> string (Big_int.to_string c)
+    | Nexp_app (Id_aux (DeIid op, _), [n1; n2]) ->
+       separate space [atomic_nexp n1; string op; atomic_nexp n2]
     | Nexp_app (id, nexps) -> string (string_of_nexp nexp)
     (* This segfaults??!!!!
        doc_id id ^^ (parens (separate_map (comma ^^ space) doc_nexp nexps))
@@ -118,6 +120,12 @@ let rec doc_nexp =
     | _ -> atomic_nexp nexp
   in
   nexp0
+
+let doc_effect (Effect_aux (aux, _)) =
+  match aux with
+  | Effect_set [] -> string "pure"
+  | Effect_set effs ->
+     braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs))
 
 let rec doc_nc nc =
   let nc_op op n1 n2 = separate space [doc_nexp n1; string op; doc_nexp n2] in
@@ -371,6 +379,8 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_if (if_exp, then_exp, else_exp) when if_block_then then_exp ->
      (separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp)
      ^/^ (string "else" ^^ space ^^ doc_exp else_exp)
+  | E_if (if_exp, then_exp, E_aux ((E_lit (L_aux (L_unit, _)) | E_block []), _)) ->
+     group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp])
   | E_if (if_exp, then_exp, else_exp) ->
      group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp; string "else"; doc_exp else_exp])
 
@@ -568,7 +578,10 @@ let doc_mapdef (MD_aux (MD_mapping (id, typa, mapcls), _)) =
 
 let doc_dec (DEC_aux (reg,_)) =
   match reg with
-  | DEC_reg (typ, id) -> separate space [string "register"; doc_id id; colon; doc_typ typ]
+  | DEC_reg (Effect_aux (Effect_set [BE_aux (BE_rreg, _)], _), Effect_aux (Effect_set [BE_aux (BE_wreg, _)], _), typ, id) ->
+     separate space [string "register"; doc_id id; colon; doc_typ typ]
+  | DEC_reg (reffect, weffect, typ, id) ->
+     separate space [string "register"; doc_effect reffect; doc_effect weffect; doc_id id; colon; doc_typ typ]
   | DEC_config (id, typ, exp) -> separate space [string "register configuration"; doc_id id; colon; doc_typ typ; equals; doc_exp exp]
   | DEC_alias(id,alspec) -> string "ALIAS"
   | DEC_typ_alias(typ,id,alspec) -> string "ALIAS"
@@ -578,11 +591,11 @@ let doc_field (typ, id) =
 
 let doc_union (Tu_aux (Tu_ty_id (typ, id), l)) = separate space [doc_id id; colon; doc_typ typ]
 
-let doc_typ_arg_kind (A_aux (aux, _)) =
+let doc_typ_arg_kind sep (A_aux (aux, _)) =
   match aux with
-  | A_nexp _ -> space ^^ string "->" ^^ space ^^string "Int"
-  | A_bool _ -> space ^^ string "->" ^^ space ^^ string "Bool"
-  | A_order  _ -> space ^^ string "->" ^^ space ^^ string "Order"
+  | A_nexp _ -> space ^^ string sep ^^ space ^^string "Int"
+  | A_bool _ -> space ^^ string sep ^^ space ^^ string "Bool"
+  | A_order  _ -> space ^^ string sep ^^ space ^^ string "Order"
   | A_typ _ -> empty
 
 let doc_typdef (TD_aux(td,_)) = match td with
@@ -590,20 +603,20 @@ let doc_typdef (TD_aux(td,_)) = match td with
      begin
        match doc_typquant typq with
        | Some qdoc ->
-          doc_op equals (concat [string "type"; space; doc_id id; qdoc; doc_typ_arg_kind typ_arg]) (doc_typ_arg typ_arg)
+          doc_op equals (concat [string "type"; space; doc_id id; qdoc; doc_typ_arg_kind "->" typ_arg]) (doc_typ_arg typ_arg)
        | None ->
-          doc_op equals (concat [string "type"; space; doc_id id; doc_typ_arg_kind typ_arg]) (doc_typ_arg typ_arg)
+          doc_op equals (concat [string "type"; space; doc_id id; doc_typ_arg_kind ":" typ_arg]) (doc_typ_arg typ_arg)
      end
-  | TD_enum (id, _, ids, _) ->
+  | TD_enum (id, ids, _) ->
      separate space [string "enum"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
-  | TD_record (id, _, TypQ_aux (TypQ_no_forall, _), fields, _) | TD_record (id, _, TypQ_aux (TypQ_tq [], _), fields, _) ->
+  | TD_record (id, TypQ_aux (TypQ_no_forall, _), fields, _) | TD_record (id, TypQ_aux (TypQ_tq [], _), fields, _) ->
      separate space [string "struct"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace]
-  | TD_record (id, _, TypQ_aux (TypQ_tq qs, _), fields, _) ->
+  | TD_record (id, TypQ_aux (TypQ_tq qs, _), fields, _) ->
      separate space [string "struct"; doc_id id; doc_param_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace]
-  | TD_variant (id, _, TypQ_aux (TypQ_no_forall, _), unions, _) | TD_variant (id, _, TypQ_aux (TypQ_tq [], _), unions, _) ->
+  | TD_variant (id, TypQ_aux (TypQ_no_forall, _), unions, _) | TD_variant (id, TypQ_aux (TypQ_tq [], _), unions, _) ->
      separate space [string "union"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
-  | TD_variant (id, _, TypQ_aux (TypQ_tq qs, _), unions, _) ->
+  | TD_variant (id, TypQ_aux (TypQ_tq qs, _), unions, _) ->
      separate space [string "union"; doc_id id; doc_param_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
   | _ -> string "TYPEDEF"
@@ -631,9 +644,6 @@ let doc_prec = function
   | InfixL -> string "infixl"
   | InfixR -> string "infixr"
 
-let doc_kind_def (KD_aux (KD_nabbrev (_, id, _, nexp), _)) =
-  separate space [string "integer"; doc_id id; equals; doc_nexp nexp]
-
 let rec doc_scattered (SD_aux (sd_aux, _)) =
   match sd_aux with
   | SD_function (_, _, _, id) ->
@@ -642,9 +652,9 @@ let rec doc_scattered (SD_aux (sd_aux, _)) =
      string "function" ^^ space ^^ string "clause" ^^ space ^^ doc_funcl funcl
   | SD_end id ->
      string "end" ^^ space ^^ doc_id id
-  | SD_variant (id, _, TypQ_aux (TypQ_no_forall, _)) ->
+  | SD_variant (id, TypQ_aux (TypQ_no_forall, _)) ->
      string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id
-  | SD_variant (id, _, TypQ_aux (TypQ_tq quants, _)) ->
+  | SD_variant (id, TypQ_aux (TypQ_tq quants, _)) ->
      string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id ^^ doc_param_quants quants
   | SD_unioncl (id, tu) ->
      separate space [string "union clause"; doc_id id; equals; doc_union tu]
@@ -653,7 +663,6 @@ let rec doc_def def = group (match def with
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def
-  | DEF_kind k_def -> doc_kind_def k_def
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_mapdef m_def -> doc_mapdef m_def
   | DEF_val lbind -> string "let" ^^ space ^^ doc_letbind lbind

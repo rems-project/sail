@@ -1,4 +1,5 @@
 default Order dec
+$include <flow.sail>
 type bits ('n : Int) = vector('n, dec, bit)
 val operator & = "and_bool" : (bool, bool) -> bool
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
@@ -9,11 +10,11 @@ val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n 
 val mult_int = {ocaml: "mult", lem: "integerMult"} : (int, int) -> int
 overload operator * = {mult_range, mult_int, mult_real}
 val "extz_vec" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
-val extz : forall 'n 'm. vector('n, dec, bit) -> vector('m, dec, bit) effect pure
-function extz(v) = extz_vec(sizeof('m),v)
+val extz : forall 'n 'm. (implicit('m), vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+function extz(m,v) = extz_vec(m,v)
 val "exts_vec" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
-val exts : forall 'n 'm. vector('n, dec, bit) -> vector('m, dec, bit) effect pure
-function exts(v) = exts_vec(sizeof('m),v)
+val exts : forall 'n 'm. (implicit('m), vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+function exts(m,v) = exts_vec(m,v)
 
 /* A function which is merely parametrised by a size does not need to be
    monomorphised */

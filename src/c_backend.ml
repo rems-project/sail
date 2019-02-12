@@ -64,8 +64,10 @@ let c_verbosity = ref 0
 let opt_debug_flow_graphs = ref false
 let opt_debug_function = ref ""
 let opt_trace = ref false
+let opt_smt_trace = ref false
 let opt_static = ref false
 let opt_no_main = ref false
+let opt_memo_cache = ref false
 
 (* Optimization flags *)
 let optimize_primops = ref false
@@ -141,7 +143,7 @@ let rec ctyp_of_typ ctx typ =
 
   | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
 
-  | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" ->
+  | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" ->
      begin match destruct_range Env.empty typ with
      | None -> assert false (* Checked if range type in guard *)
      | Some (kids, constr, n, m) ->
@@ -150,7 +152,7 @@ let rec ctyp_of_typ ctx typ =
              when Big_int.less_equal min_int64 n && Big_int.less_equal m max_int64 ->
            CT_int64
         | n, m when ctx.optimize_z3 ->
-           if prove ctx.local_env (nc_lteq (nconstant min_int64) n) && prove ctx.local_env (nc_lteq m (nconstant max_int64)) then
+           if prove __POS__ ctx.local_env (nc_lteq (nconstant min_int64) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant max_int64)) then
              CT_int64
            else
              CT_int
@@ -171,7 +173,7 @@ let rec ctyp_of_typ ctx typ =
      let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
      begin match nexp_simp n with
      | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_fbits (Big_int.to_int n, direction)
-     | n when ctx.optimize_z3 && prove ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits direction
+     | n when ctx.optimize_z3 && prove __POS__ ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits direction
      | _ -> CT_lbits direction
      end
 
@@ -541,7 +543,7 @@ let analyze_primop' ctx id args typ =
         | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
                when Big_int.less_equal min_int64 n && Big_int.less_equal m max_int64 ->
            AE_val (AV_C_fragment (F_op (op1, "+", op2), typ, CT_int64))
-        | n, m when prove ctx.local_env (nc_lteq (nconstant min_int64) n) && prove ctx.local_env (nc_lteq m (nconstant max_int64)) ->
+        | n, m when prove __POS__ ctx.local_env (nc_lteq (nconstant min_int64) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant max_int64)) ->
            AE_val (AV_C_fragment (F_op (op1, "+", op2), typ, CT_int64))
         | _ -> no_change
      end
@@ -1119,6 +1121,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let aexp_setup, aexp_call, aexp_cleanup = compile_aexp ctx aexp in
      let try_return_id = gensym () in
      let handled_exception_label = label "handled_exception_" in
+     let fallthrough_label = label "fallthrough_exception_" in
      let compile_case (apat, guard, body) =
        let trivial_guard = match guard with
          | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _, _)
@@ -1144,14 +1147,14 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        [iblock case_instrs; ilabel try_label]
      in
      assert (ctyp_equal ctyp (ctyp_of_typ ctx typ));
-     [icomment "begin try catch";
-      idecl ctyp try_return_id;
+     [idecl ctyp try_return_id;
       itry_block (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
       ijump (F_unary ("!", F_have_exception), CT_bool) handled_exception_label]
      @ List.concat (List.map compile_case cases)
-     @ [imatch_failure ();
+     @ [igoto fallthrough_label;
         ilabel handled_exception_label;
-        icopy l CL_have_exception (F_lit (V_bool false), CT_bool)],
+        icopy l CL_have_exception (F_lit (V_bool false), CT_bool);
+        ilabel fallthrough_label],
      (fun clexp -> icopy l clexp (F_id try_return_id, ctyp)),
      []
 
@@ -1390,16 +1393,16 @@ and compile_block ctx = function
    it returns a ctypdef * ctx pair. **)
 let compile_type_def ctx (TD_aux (type_def, _)) =
   match type_def with
-  | TD_enum (id, _, ids, _) ->
+  | TD_enum (id, ids, _) ->
      CTD_enum (id, ids),
      { ctx with enums = Bindings.add id (IdSet.of_list ids) ctx.enums }
 
-  | TD_record (id, _, _, ctors, _) ->
+  | TD_record (id, _, ctors, _) ->
      let ctors = List.fold_left (fun ctors (typ, id) -> Bindings.add id (ctyp_of_typ ctx typ) ctors) Bindings.empty ctors in
      CTD_struct (id, Bindings.bindings ctors),
      { ctx with records = Bindings.add id ctors ctx.records }
 
-  | TD_variant (id, _, typq, tus, _) ->
+  | TD_variant (id, typq, tus, _) ->
      let compile_tu = function
        | Tu_aux (Tu_ty_id (typ, id), _) ->
           let ctx = { ctx with local_env = add_typquant (id_loc id) typq ctx.local_env } in
@@ -1625,8 +1628,42 @@ let fix_destructure fail_label = function
 let letdef_count = ref 0
 
 (** Compile a Sail toplevel definition into an IR definition **)
-let rec compile_def ctx = function
-  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), _)) ->
+let rec compile_def n total ctx def =
+  match def with
+  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, _), _)]), _))
+       when !opt_memo_cache ->
+     let digest =
+       def |> Pretty_print_sail.doc_def |> Pretty_print_sail.to_string |> Digest.string
+     in
+     let cachefile = Filename.concat "_sbuild" ("ccache" ^ Digest.to_hex digest) in
+     let cached =
+       if Sys.file_exists cachefile then
+         let in_chan = open_in cachefile in
+         try
+           let compiled = Marshal.from_channel in_chan in
+           close_in in_chan;
+           Some (compiled, ctx)
+         with
+         | _ -> close_in in_chan; None
+       else
+         None
+     in
+     begin match cached with
+     | Some (compiled, ctx) ->
+        Util.progress "Compiling " (string_of_id id) n total;
+        compiled, ctx
+     | None ->
+        let compiled, ctx = compile_def' n total ctx def in
+        let out_chan = open_out cachefile in
+        Marshal.to_channel out_chan compiled [Marshal.Closures];
+        close_out out_chan;
+        compiled, ctx
+     end
+
+  | _ -> compile_def' n total ctx def
+
+and compile_def' n total ctx = function
+  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) ->
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, [])], ctx
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
      let aexp = analyze_functions ctx analyze_primop (c_literals ctx (no_shadow IdSet.empty (anf exp))) in
@@ -1647,6 +1684,8 @@ let rec compile_def ctx = function
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      c_debug (lazy ("Compiling function " ^ string_of_id id));
+     Util.progress "Compiling " (string_of_id id) n total;
+
      (* Find the function's type. *)
      let quant, Typ_aux (fn_typ, _) =
        try Env.get_val_spec id ctx.local_env
@@ -1768,7 +1807,7 @@ let rec compile_def ctx = function
 
   | DEF_internal_mutrec fundefs ->
      let defs = List.map (fun fdef -> DEF_fundef fdef) fundefs in
-     List.fold_left (fun (cdefs, ctx) def -> let cdefs', ctx = compile_def ctx def in (cdefs @ cdefs', ctx)) ([], ctx) defs
+     List.fold_left (fun (cdefs, ctx) def -> let cdefs', ctx = compile_def n total ctx def in (cdefs @ cdefs', ctx)) ([], ctx) defs
 
   | def ->
      c_error ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def def))
@@ -1935,6 +1974,7 @@ let flatten_cdef =
     CDEF_let (n, bindings, flatten_instrs instrs)
 
   | cdef -> cdef
+
 
 let rec specialize_variants ctx prior =
   let unifications = ref (Bindings.empty) in
@@ -2569,9 +2609,9 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        empty
      else if fname = "reg_deref" then
        if is_stack_ctyp ctyp then
-         string (Printf.sprintf  " %s = *(%s);" (sgen_clexp_pure x) c_args)
+         string (Printf.sprintf  "  %s = *(%s);" (sgen_clexp_pure x) c_args)
        else
-         string (Printf.sprintf  " COPY(%s)(&%s, *(%s));" (sgen_ctyp_name ctyp) (sgen_clexp_pure x) c_args)
+         string (Printf.sprintf  "  COPY(%s)(&%s, *(%s));" (sgen_ctyp_name ctyp) (sgen_clexp_pure x) c_args)
      else
        if is_stack_ctyp ctyp then
          string (Printf.sprintf "  %s = %s(%s);" (sgen_clexp_pure x) fname c_args)
@@ -3326,7 +3366,10 @@ let bytecode_ast ctx rewrites (Defs defs) =
   let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit effect {escape}" in
 
   let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
-  let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
+  let total = List.length defs in
+  let _, chunks, ctx =
+    List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) defs
+  in
   let cdefs = List.concat (List.rev chunks) in
   rewrites cdefs
 
@@ -3357,6 +3400,79 @@ let rec get_recursive_functions (Defs defs) =
   | _ :: defs -> get_recursive_functions (Defs defs)
   | [] -> IdSet.empty
 
+let trace_cval = function (frag, ctyp) -> string_of_fragment frag ^ " : " ^ string_of_ctyp ctyp
+
+let rec trace_clexp = function
+  | CL_id (id, ctyp) -> sgen_id id ^ " : " ^ string_of_ctyp ctyp
+  | CL_field (clexp, field) -> "(" ^ trace_clexp clexp ^ ")->" ^ field ^ ")"
+  | CL_tuple (clexp, n) -> "(" ^ trace_clexp clexp ^ ")." ^ string_of_int n
+  | CL_addr clexp -> "*(" ^ trace_clexp clexp ^ ")"
+  | CL_have_exception -> "have_exception"
+  | CL_current_exception _ -> "current_exception"
+
+let rec smt_trace_instrs ctx function_id = function
+  | I_aux (I_jump (cval, label), aux) :: instrs ->
+     iraw ("printf(\"!branch %s %s\\n\"," ^ sgen_cval cval ^ " ?\"true\":\"false\", \"" ^ trace_cval cval ^ "\");")
+     :: I_aux (I_jump (cval, label), aux)
+     :: smt_trace_instrs ctx function_id instrs
+
+  | (I_aux ((I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval)), _) as instr) :: instrs ->
+     iraw ("printf(\"!create " ^ Util.zencode_string (string_of_id id) ^ " : " ^ string_of_ctyp ctyp ^ " = " ^ trace_cval cval ^ "\\n\");")
+     :: instr
+     :: smt_trace_instrs ctx function_id instrs
+
+  | (I_aux ((I_decl (ctyp, id) | I_reset (ctyp, id)), _) as instr) :: instrs ->
+     iraw ("printf(\"!create " ^ Util.zencode_string (string_of_id id) ^ " : " ^ string_of_ctyp ctyp ^ "\\n\");")
+     :: instr
+     :: smt_trace_instrs ctx function_id instrs
+
+  | I_aux (I_funcall (x, extern, f, args), aux) :: instrs ->
+     let extern_name =
+       if Env.is_extern f ctx.tc_env "c" then
+         Some (Env.get_extern f ctx.tc_env "c")
+       else if extern then
+         Some (string_of_id f)
+       else None
+     in
+     begin match extern_name with
+     | Some name ->
+        iraw ("printf(\"!"
+              ^ trace_clexp x
+              ^ " = "
+              ^ string_of_id f ^ "(" ^ Util.string_of_list ", " (fun cval -> String.escaped (trace_cval cval)) args ^ ")\\n\");")
+        :: I_aux (I_funcall (x, extern, f, args), aux)
+        :: smt_trace_instrs ctx function_id instrs
+     | None ->
+        iraw ("printf(\"!call " ^ string_of_id f ^ "(" ^ Util.string_of_list ", " (fun cval -> String.escaped (trace_cval cval)) args ^ ")\\n\");")
+        :: I_aux (I_funcall (x, extern, f, args), aux)
+        :: iraw ("printf(\"!" ^ trace_clexp x ^ " = endcall " ^ string_of_id f ^ "\\n\");")
+        :: smt_trace_instrs ctx function_id instrs
+     end
+
+  | I_aux (I_return cval, aux) :: instrs ->
+     iraw ("printf(\"!return " ^ trace_cval cval ^ "\\n\");")
+     :: I_aux (I_return cval, aux)
+     :: smt_trace_instrs ctx function_id instrs
+
+  | instr :: instrs -> instr :: smt_trace_instrs ctx function_id instrs
+
+  | [] -> []
+
+let smt_trace ctx =
+  function
+  | CDEF_fundef (function_id, heap_return, args, body) ->
+     let string_of_heap_return = function
+       | Some id -> Util.zencode_string (string_of_id id)
+       | None -> "return"
+     in
+     let body =
+       iraw ("printf(\"!link " ^ string_of_heap_return heap_return ^ "(" ^ Util.string_of_list ", " (fun id -> Util.zencode_string (string_of_id id)) args ^ ")\\n\");")
+       :: smt_trace_instrs ctx function_id body
+     in
+     CDEF_fundef (function_id, heap_return, args, body)
+
+  | cdef -> cdef
+
 let compile_ast ctx c_includes (Defs defs) =
   try
     c_debug (lazy (Util.log_line __MODULE__ __LINE__ "Identifying recursive functions"));
@@ -3367,12 +3483,30 @@ let compile_ast ctx c_includes (Defs defs) =
     let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
     let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit effect {escape}" in
     let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
-    let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
+
+    if !opt_memo_cache then
+      (try
+         if Sys.is_directory "_sbuild" then
+           ()
+         else
+           raise (Reporting.err_general Parse_ast.Unknown "_sbuild exists, but is a file not a directory!")
+       with
+       | Sys_error _ -> Unix.mkdir "_sbuild" 0o775)
+    else ();
+
+    let total = List.length defs in
+    let _, chunks, ctx =
+      List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) defs
+    in
     let cdefs = List.concat (List.rev chunks) in
+
     let cdefs, ctx = specialize_variants ctx [] cdefs in
     let cdefs = sort_ctype_defs cdefs in
     let cdefs = optimize ctx cdefs in
     let cdefs = if !opt_trace then List.map (instrument_tracing ctx) cdefs else cdefs in
+
+    let cdefs = if !opt_smt_trace then List.map (fun cdef -> smt_trace ctx (flatten_cdef cdef)) cdefs else cdefs in
+
     let docs = List.map (codegen_def ctx) cdefs in
 
     let preamble = separate hardline
@@ -3465,4 +3599,4 @@ let compile_ast ctx c_includes (Defs defs) =
                                  ^^ model_main)
     |> print_endline
   with
-    Type_error (l, err) -> c_error ("Unexpected type error when compiling to C:\n" ^ Type_error.string_of_type_error err)
+    Type_error (_, l, err) -> c_error ("Unexpected type error when compiling to C:\n" ^ Type_error.string_of_type_error err)

@@ -292,22 +292,24 @@ bool gteq(const mpz_t op1, const mpz_t op2)
   return mpz_cmp(op1, op2) >= 0;
 }
 
-inline
 void shl_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   mpz_mul_2exp(*rop, op1, mpz_get_ui(op2));
 }
 
-inline
 mach_int shl_mach_int(const mach_int op1, const mach_int op2)
 {
   return op1 << op2;
 }
 
-inline
 void shr_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   mpz_fdiv_q_2exp(*rop, op1, mpz_get_ui(op2));
+}
+
+mach_int shr_mach_int(const mach_int op1, const mach_int op2)
+{
+  return op1 >> op2;
 }
 
 inline

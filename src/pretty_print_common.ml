@@ -89,10 +89,12 @@ let doc_id (Id_aux(i,_)) =
        * token in case of x ending with star. *)
       parens (separate space [string "deinfix"; string x; empty])
 
+(*
 let rec doc_range (BF_aux(r,_)) = match r with
   | BF_single i -> doc_int i
   | BF_range(i1,i2) -> doc_op dotdot (doc_int i1) (doc_int i2)
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
+*)
 
 let print ?(len=100) channel doc = ToChannel.pretty 1. len channel doc
 let to_buf ?(len=100) buf doc = ToBuffer.pretty 1. len buf doc

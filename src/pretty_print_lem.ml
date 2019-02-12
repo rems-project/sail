@@ -51,10 +51,10 @@
 open Type_check
 open Ast
 open Ast_util
+open Reporting
 open Rewriter
 open PPrint
 open Pretty_print_common
-open Extra_pervasives
 
 (****************************************************************************
  * PPrint-based sail-to-lem pprinter
@@ -327,6 +327,9 @@ let doc_typ_lem, doc_atomic_typ_lem =
                                String.concat ", " (List.map string_of_kid bad) ^
                                " escape into Lem"))
         end
+      (* AA: I think the correct thing is likely to filter out
+         non-integer kinded_id's, then use the above code. *)
+      | Typ_exist (_,_,Typ_aux(Typ_app(id,[_]),_)) when string_of_id id = "atom_bool" -> string "bool"
       | Typ_exist _ -> unreachable l __POS__ "Non-integer existentials currently unsupported in Lem" (* TODO *)
       | Typ_bidir _ -> unreachable l __POS__ "Lem doesn't support bidir types"
       | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
@@ -335,7 +338,14 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | A_nexp n -> doc_nexp_lem (nexp_simp n)
       | A_order o -> empty
       | A_bool _ -> empty
-  in typ', atomic_typ
+  in
+  let top env ty =
+    (* If we use the bitlist representation of bitvectors, the type argument in
+       type abbreviations such as "bits('n)" becomes dead, which confuses HOL; as a
+       workaround, we expand type synonyms in this case. *)
+    let ty' = if !opt_mwords then ty else Env.expand_synonyms env ty in
+    typ' ty'
+  in top, atomic_typ
 
 (* Check for variables in types that would be pretty-printed. *)
 let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
@@ -353,7 +363,7 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
        | Some n -> mk_typ (nconstant n)
        | None ->
           let is_equal nexp =
-            prove env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
+            prove __POS__ env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
           in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
           | nexp -> mk_typ nexp
           | exception Not_found -> None
@@ -372,7 +382,7 @@ let doc_tannot_lem ctxt env eff typ =
   match make_printable_type ctxt env typ with
   | None -> empty
   | Some typ ->
-     let ta = doc_typ_lem typ in
+     let ta = doc_typ_lem env typ in
      if eff then string " : M " ^^ parens ta
      else string " : " ^^ ta
 
@@ -472,8 +482,8 @@ let doc_typclasses_lem t =
   if NexpSet.is_empty nexps then (empty, NexpSet.empty) else
   (separate_map comma_sp (fun nexp -> string "Size " ^^ doc_nexp_lem nexp) (NexpSet.elements nexps) ^^ string " => ", nexps)
 
-let doc_typschm_lem quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
-  let pt = doc_typ_lem t in
+let doc_typschm_lem env quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
+  let pt = doc_typ_lem env t in
   if quants
   then
     let nexps_used = lem_nexps_of_typ t in
@@ -513,7 +523,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
     let doc_p = doc_pat_lem ctxt true p in
     (match make_printable_type ctxt (env_of_annot (l,annot)) typ with
     | None -> doc_p
-    | Some typ -> parens (doc_op colon doc_p (doc_typ_lem typ)))
+    | Some typ -> parens (doc_op colon doc_p (doc_typ_lem (env_of_annot (l,annot)) typ)))
   | P_vector pats ->
      let ppp = brackets (separate_map semi (doc_pat_lem ctxt true) pats) in
      if apat_needed then parens ppp else ppp
@@ -578,6 +588,8 @@ let doc_exp_lem, doc_let_lem =
       then wrap_parens (separate space [string "liftR"; parens (doc)])
       else wrap_parens doc in
     match e with
+    | E_assign(_, _) when has_effect (effect_of full_exp) BE_config ->
+       string "return ()" (* TODO *)
     | E_assign((LEXP_aux(le_act,tannot) as le), e) ->
        (* can only be register writes *)
        let t = typ_of_annot tannot in
@@ -661,14 +673,12 @@ let doc_exp_lem, doc_let_lem =
             match args with
             | [exp1; exp2; exp3; ord_exp; vartuple; body] ->
                let loopvar, body = match body with
-                 | E_aux (E_let (LB_aux (LB_val (_, _), _),
-                   E_aux (E_let (LB_aux (LB_val (_, _), _),
-                   E_aux (E_if (_,
+                 | E_aux (E_if (_,
                    E_aux (E_let (LB_aux (LB_val (
                      ((P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _))
                      | (P_aux (P_var (P_aux (P_id id, _), _), _))
                      | (P_aux (P_id id, _))), _), _),
-                     body), _), _), _)), _)), _) -> id, body
+                     body), _), _), _) -> id, body
                  | _ -> raise (Reporting.err_unreachable l __POS__ ("Unable to find loop variable in " ^ string_of_exp body)) in
                let step = match ord_exp with
                  | E_aux (E_lit (L_aux (L_false, _)), _) ->
@@ -824,7 +834,7 @@ let doc_exp_lem, doc_let_lem =
          if is_bitvector_typ base_typ
          then liftR (parens (align (group (prefix 0 1 epp (doc_tannot_lem ctxt env true base_typ)))))
          else liftR epp
-       else if Env.is_register id env then doc_id_lem (append_id id "_ref")
+       else if Env.is_register id env && is_regtyp (typ_of full_exp) env then doc_id_lem (append_id id "_ref")
        else if is_ctor env id then doc_id_lem_ctor id
        else doc_id_lem id
     | E_lit lit -> doc_lit_lem lit
@@ -947,8 +957,8 @@ let doc_exp_lem, doc_let_lem =
        | Some full_typ, Some r_typ ->
           separate space
             [string ": MR";
-            parens (doc_typ_lem full_typ);
-            parens (doc_typ_lem r_typ)]
+            parens (doc_typ_lem (env_of full_exp) full_typ);
+            parens (doc_typ_lem (env_of r) r_typ)]
        | _ -> empty
       in
       align (parens (string "early_return" ^//^ expV true r ^//^ ta))
@@ -1002,28 +1012,30 @@ let doc_exp_lem, doc_let_lem =
   in top_exp, let_exp
 
 (*TODO Upcase and downcase type and constructors as needed*)
-let doc_type_union_lem (Tu_aux(Tu_ty_id(typ,id),_)) =
+let doc_type_union_lem env (Tu_aux(Tu_ty_id(typ,id),_)) =
   separate space [pipe; doc_id_lem_ctor id; string "of";
-                  parens (doc_typ_lem typ)]
+                  parens (doc_typ_lem env typ)]
 
+(*
 let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_single i -> parens (doc_op comma (doc_int i) (doc_int i))
   | BF_range(i1,i2) -> parens (doc_op comma (doc_int i1) (doc_int i2))
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
+ *)
 
-let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
+let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
      let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
      doc_op equals
        (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
-       (doc_typschm_lem false typschm)
+       (doc_typschm_lem env false typschm)
   | TD_abbrev _ -> empty
-  | TD_record(id,nm,typq,fs,_) ->
+  | TD_record(id,typq,fs,_) ->
     let fname fid = if prefix_recordtype && string_of_id id <> "regstate"
                     then concat [doc_id_lem id;string "_";doc_id_lem_type fid;]
                     else doc_id_lem_type fid in
     let f_pp (typ,fid) =
-      concat [fname fid;space;colon;space;doc_typ_lem typ; semi] in
+      concat [fname fid;space;colon;space;doc_typ_lem env typ; semi] in
     let rectyp = match typq with
       | TypQ_aux (TypQ_tq qs, _) ->
         let quant_item = function
@@ -1070,7 +1082,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
            ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space))) ^^ hardline
     (* if !opt_sequential && string_of_id id = "regstate" then empty
     else separate_map hardline doc_field fs *)
-  | TD_variant(id,nm,typq,ar,_) ->
+  | TD_variant(id,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
@@ -1082,7 +1094,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
       | Id_aux ((Id "diafp"),_) -> empty *)
       | Id_aux ((Id "option"),_) -> empty
       | _ ->
-         let ar_doc = group (separate_map (break 1) doc_type_union_lem ar) in
+         let ar_doc = group (separate_map (break 1) (doc_type_union_lem env) ar) in
          let typ_pp =
            (doc_op equals)
              (concat [string "type"; space; doc_id_lem_type id; space; doc_typquant_items_lem None typq])
@@ -1142,7 +1154,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
              fromInterpValuePP ^^ hardline ^^ hardline ^^
                fromToInterpValuePP ^^ hardline
            else empty)
-  | TD_enum(id,nm,enums,_) ->
+  | TD_enum(id,enums,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
@@ -1267,8 +1279,8 @@ let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) arg_typs =
   | _, _ ->
      [pat], identity
 
-let doc_tannot_opt_lem (Typ_annot_opt_aux(t,_)) = match t with
-  | Typ_annot_opt_some(tq,typ) -> (*doc_typquant_lem tq*) (doc_typ_lem typ)
+let doc_tannot_opt_lem env (Typ_annot_opt_aux(t,_)) = match t with
+  | Typ_annot_opt_some(tq,typ) -> (*doc_typquant_lem tq*) (doc_typ_lem env typ)
   | Typ_annot_opt_none -> empty
 
 let doc_fun_body_lem ctxt exp =
@@ -1339,7 +1351,7 @@ let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
 
 let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
   match reg with
-  | DEC_reg(typ,id) -> empty
+  | DEC_reg(_,_,typ,id) -> empty
      (* if !opt_sequential then empty
      else
        let env = env_of_annot annot in
@@ -1359,16 +1371,17 @@ let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
            ^/^ hardline
          else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ))
        else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ)) *)
+  | DEC_config(id, typ, exp) -> separate space [string "let"; doc_id_lem id; equals; doc_exp_lem empty_ctxt false exp] ^^ hardline
   | DEC_alias(id,alspec) -> empty
   | DEC_typ_alias(typ,id,alspec) -> empty
 
-let doc_spec_lem (VS_aux (valspec,annot)) =
+let doc_spec_lem env (VS_aux (valspec,annot)) =
   match valspec with
   | VS_val_spec (typschm,id,ext,_) when ext "lem" = None ->
      (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
      if contains_t_pp_var typ then empty else *)
      doc_docstring_lem annot ^^
-     separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem true typschm] ^/^ hardline 
+     separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem env true typschm] ^/^ hardline
   (* | VS_val_spec (_,_,Some _,_) -> empty *)
   | _ -> empty
 
@@ -1381,7 +1394,14 @@ let is_field_accessor regtypes fdef =
      (access = "get" || access = "set") && is_field_of regtyp field
   | _ -> false
 
+let int_of_field_index tname fid nexp =
+  match int_of_nexp_opt nexp with
+  | Some i -> i
+  | None -> raise (Reporting.err_typ Parse_ast.Unknown
+                   ("Non-constant bitfield index in field " ^ string_of_id fid ^ " of " ^ tname))
+
 let doc_regtype_fields (tname, (n1, n2, fields)) =
+  let const_int fid idx = int_of_field_index tname fid idx in
   let i1, i2 = match n1, n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) -> i1, i2
     | _ -> raise (Reporting.err_typ Parse_ast.Unknown
@@ -1390,8 +1410,8 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   let dir = (if dir_b then "true" else "false") in
   let doc_field (fr, fid) =
     let i, j = match fr with
-    | BF_aux (BF_single i, _) -> (i, i)
-    | BF_aux (BF_range (i, j), _) -> (i, j)
+    | BF_aux (BF_single i, _) -> let i = const_int fid i in (i, i)
+    | BF_aux (BF_range (i, j), _) -> (const_int fid i, const_int fid j)
     | _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__
        ("Unsupported type in field " ^ string_of_id fid ^ " of " ^ tname)) in
     let fsize = Big_int.succ (Big_int.abs (Big_int.sub i j)) in
@@ -1415,13 +1435,13 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   in
   separate_map hardline doc_field fields
 
-let rec doc_def_lem def =
+let rec doc_def_lem type_env def =
   (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
-  | DEF_spec v_spec -> doc_spec_lem v_spec
+  | DEF_spec v_spec -> doc_spec_lem type_env v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
-  | DEF_type t_def -> group (doc_typdef_lem t_def) ^/^ hardline
+  | DEF_type t_def -> group (doc_typdef_lem type_env t_def) ^/^ hardline
   | DEF_reg_dec dec -> group (doc_dec_lem dec)
 
   | DEF_default df -> empty
@@ -1431,9 +1451,9 @@ let rec doc_def_lem def =
      group (doc_let_lem empty_ctxt lbind) ^/^ hardline
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"
 
-  | DEF_kind _ -> empty
   | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
   | DEF_pragma _ -> empty
+  | DEF_measure _ -> empty (* we might use these in future *)
 
 let find_exc_typ defs =
   let is_exc_typ_def = function
@@ -1441,7 +1461,7 @@ let find_exc_typ defs =
     | _ -> false in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
-let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) (Defs defs) top_line =
+let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) type_env (Defs defs) top_line =
   (* let regtypes = find_regtypes d in *)
   let state_ids =
     State.generate_regstate_defs !opt_mwords defs
@@ -1477,9 +1497,9 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) (Defs defs) 
              string "module SIA = Interp_ast"; hardline;
              hardline]
         else empty;
-        separate empty (List.map doc_def_lem typdefs); hardline;
+        separate empty (List.map (doc_def_lem type_env) typdefs); hardline;
         hardline;
-        separate empty (List.map doc_def_lem statedefs); hardline;
+        separate empty (List.map (doc_def_lem type_env) statedefs); hardline;
         hardline;
         register_refs; hardline;
         concat [
@@ -1493,5 +1513,5 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) (Defs defs) 
         (separate_map hardline)
           (fun lib -> separate space [string "open import";string lib]) defs_modules;hardline;
         hardline;
-        separate empty (List.map doc_def_lem defs);
+        separate empty (List.map (doc_def_lem type_env) defs);
         hardline]);

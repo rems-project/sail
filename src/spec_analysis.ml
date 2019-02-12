@@ -51,7 +51,6 @@
 open Ast
 open Util
 open Ast_util
-open Extra_pervasives
 
 module Nameset = Set.Make(String)
 
@@ -95,7 +94,7 @@ let rec free_type_names_t consider_var (Typ_aux (t, l)) = match t with
   | Typ_tup ts -> free_type_names_ts consider_var ts
   | Typ_app (name,targs) -> Nameset.add (string_of_id name) (free_type_names_t_args consider_var targs)
   | Typ_exist (kopts,_,t') -> List.fold_left (fun s kopt -> Nameset.remove (string_of_kid (kopt_kid kopt)) s) (free_type_names_t consider_var t') kopts
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and free_type_names_ts consider_var ts = nameset_bigunion (List.map (free_type_names_t consider_var) ts)
 and free_type_names_maybe_t consider_var = function
   | Some t -> free_type_names_t consider_var t
@@ -130,7 +129,7 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
      fv_of_typ consider_var
        (List.fold_left (fun b (KOpt_aux (KOpt_kind (_, (Kid_aux (Var v,_))), _)) -> Nameset.add v b) bound kopts)
        used t'
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
+  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 
 and fv_of_targ consider_var bound used (Ast.A_aux(targ,_)) : Nameset.t = match targ with
   | A_typ t -> fv_of_typ consider_var bound used t
@@ -307,9 +306,6 @@ let typ_variants consider_var bound tunions =
     tunions
     (bound,mt)
 
-let fv_of_kind_def consider_var (KD_aux(k,_)) = match k with
-  | KD_nabbrev(_,id,_,nexp) -> init_env (string_of_id id), fv_of_nexp consider_var mt mt nexp
-
 let fv_of_abbrev consider_var bound used typq typ_arg =
   let ts_bound = if consider_var then typq_bindings typq else mt in
   ts_bound, fv_of_targ consider_var (Nameset.union bound ts_bound) used typ_arg
@@ -317,14 +313,14 @@ let fv_of_abbrev consider_var bound used typq typ_arg =
 let fv_of_type_def consider_var (TD_aux(t,_)) = match t with
   | TD_abbrev(id,typq,typ_arg) ->
      init_env (string_of_id id), snd (fv_of_abbrev consider_var mt mt typq typ_arg)
-  | TD_record(id,_,typq,tids,_) ->
+  | TD_record(id,typq,tids,_) ->
     let binds = init_env (string_of_id id) in
     let bounds = if consider_var then typq_bindings typq else mt in
     binds, List.fold_right (fun (t,_) n -> fv_of_typ consider_var bounds n t) tids mt
-  | TD_variant(id,_,typq,tunions,_) ->
+  | TD_variant(id,typq,tunions,_) ->
     let bindings = Nameset.add (string_of_id id) (if consider_var then typq_bindings typq else mt) in
     typ_variants consider_var bindings tunions
-  | TD_enum(id,_,ids,_) ->
+  | TD_enum(id,ids,_) ->
     Nameset.of_list (List.map string_of_id (id::ids)),mt
   | TD_bitfield(id,typ,_) ->
     init_env (string_of_id id), Nameset.empty (* fv_of_typ consider_var mt typ *)
@@ -438,7 +434,7 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
             | _ -> mt in
           scattered_binds, exp_ns
      end
-  | SD_variant (id,_,_) ->
+  | SD_variant (id,_) ->
     let name = string_of_id id in
     let uses =
       if consider_scatter_as_one
@@ -475,7 +471,7 @@ let fv_of_rd consider_var (DEC_aux (d, annot)) =
   let open Type_check in
   let env = env_of_annot annot in
   match d with
-  | DEC_reg(t, id) ->
+  | DEC_reg(_, _, t, id) ->
      let t' = Env.expand_synonyms env t in
      init_env (string_of_id id),
      Nameset.union (fv_of_typ consider_var mt mt t) (fv_of_typ consider_var mt mt t')
@@ -489,7 +485,6 @@ let fv_of_rd consider_var (DEC_aux (d, annot)) =
      init_env (string_of_id id), mt
 
 let fv_of_def consider_var consider_scatter_as_one all_defs = function
-  | DEF_kind kdef -> fv_of_kind_def consider_var kdef
   | DEF_type tdef -> fv_of_type_def consider_var tdef
   | DEF_fundef fdef -> fv_of_fun consider_var fdef
   | DEF_mapdef mdef -> mt,mt (* fv_of_map consider_var mdef *)
@@ -507,7 +502,14 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_scattered sdef -> fv_of_scattered consider_var consider_scatter_as_one all_defs sdef
   | DEF_reg_dec rdec -> fv_of_rd consider_var rdec
   | DEF_pragma _ -> mt,mt
-  | DEF_measure _ -> mt,mt (* currently removed beforehand *)
+  (* removed beforehand for Coq, but may still be present otherwise *)
+  | DEF_measure(id,pat,exp) ->
+     let i = string_of_id id in
+     let used = Nameset.of_list [i; "val:"^i] in
+     ((fun (_,u,_) -> Nameset.singleton ("measure:"^i),u)
+        (fv_of_pes consider_var mt used mt
+           [Pat_aux(Pat_exp (pat,exp),(Unknown,Type_check.empty_tannot))]))
+
 
 let group_defs consider_scatter_as_one (Ast.Defs defs) =
   List.map (fun d -> (fv_of_def false consider_scatter_as_one defs d,d)) defs
@@ -580,6 +582,13 @@ let scc ?(original_order : string list option) (g : graph) =
   List.iter (fun v -> if not (Hashtbl.mem node_indices v) then visit_node v) nodes;
   List.rev !components
 
+let add_def_to_map id d defset =
+  Namemap.add id
+    (match Namemap.find id defset with
+     | t -> t@[d]
+     | exception Not_found -> [d])
+    defset
+
 let add_def_to_graph (prelude, original_order, defset, graph) d =
   let bound, used = fv_of_def false true [] d in
   let used = match d with
@@ -602,7 +611,7 @@ let add_def_to_graph (prelude, original_order, defset, graph) d =
     let add_other_node id' g = Namemap.add id' (Nameset.singleton id) g in
     prelude,
     original_order @ [id],
-    Namemap.add id d defset,
+    add_def_to_map id d defset,
     Nameset.fold add_other_node other_ids graph_id
   with
   | Not_found ->
@@ -631,11 +640,11 @@ let print_dot graph component : unit =
   | [] -> ()
 
 let def_of_component graph defset comp =
-  let get_def id = if Namemap.mem id defset then [Namemap.find id defset] else [] in
+  let get_def id = if Namemap.mem id defset then Namemap.find id defset else [] in
   match List.concat (List.map get_def comp) with
   | [] -> []
   | [def] -> [def]
-  | (def :: _) as defs ->
+  | (((DEF_fundef _ | DEF_internal_mutrec _) as def) :: _) as defs ->
      let get_fundefs = function
        | DEF_fundef fundef -> [fundef]
        | DEF_internal_mutrec fundefs -> fundefs
@@ -645,6 +654,8 @@ let def_of_component graph defset comp =
      let fundefs = List.concat (List.map get_fundefs defs) in
      print_dot graph (List.map (fun fd -> string_of_id (id_of_fundef fd)) fundefs);
      [DEF_internal_mutrec fundefs]
+  (* We could merge other stuff, in particular overloads, but don't need to just now *)
+  | defs -> defs
 
 let top_sort_defs (Defs defs) =
   let prelude, original_order, defset, graph =
