@@ -591,22 +591,27 @@ let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
       ^/^ rbrace)
      ^^ ocaml_def_end
      ^^ ocaml_string_of_struct ctx id typq fields
+     ^^ ocaml_def_end
   | TD_variant (id, _, cases, _) when string_of_id id = "exception" ->
      ocaml_exceptions ctx cases
+     ^^ ocaml_def_end
   | TD_variant (id, typq, cases, _) ->
      (separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals]
       ^//^ ocaml_cases ctx cases)
      ^^ ocaml_def_end
      ^^ ocaml_string_of_variant ctx id typq cases
+     ^^ ocaml_def_end
   | TD_enum (id, ids, _) ->
      (separate space [string "type"; zencode ctx id; equals]
       ^//^ (bar ^^ space ^^ ocaml_enum ctx ids))
      ^^ ocaml_def_end
      ^^ ocaml_string_of_enum ctx id ids
+     ^^ ocaml_def_end
   | TD_abbrev (id, typq, A_aux (A_typ typ, _)) ->
      separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; ocaml_typ ctx typ]
      ^^ ocaml_def_end
      ^^ ocaml_string_of_abbrev ctx id typq typ
+     ^^ ocaml_def_end
   | TD_abbrev _ ->
      empty
   | TD_bitfield _ ->
@@ -634,7 +639,7 @@ let ocaml_def ctx def = match def with
   | DEF_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
   | DEF_internal_mutrec fds ->
      separate_map (twice hardline) (fun fd -> group (ocaml_fundef ctx fd)) fds ^^ twice hardline
-  | DEF_type td -> nf_group (ocaml_typedef ctx td) ^^ ocaml_def_end
+  | DEF_type td -> nf_group (ocaml_typedef ctx td)
   | DEF_val lb -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx lb) ^^ ocaml_def_end
   | _ -> empty
 
