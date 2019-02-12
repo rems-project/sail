@@ -440,3 +440,7 @@ val subst_kid : (kid -> typ_arg -> 'a -> 'a) -> kid -> kid -> 'a -> 'a
 
 val quant_item_subst_kid : kid -> kid -> quant_item -> quant_item
 val typquant_subst_kid : kid -> kid -> typquant -> typquant
+
+val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
+
+val find_annot_ast : (Lexing.position * Lexing.position) option -> 'a defs -> (Ast.l * 'a) option

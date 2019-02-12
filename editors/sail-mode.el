@@ -87,7 +87,7 @@
   (setq major-mode 'sail2-mode)
   (setq mode-name "Sail2")
   (add-hook 'sail2-mode-hook
-	    (lambda () (add-hook 'before-save-hook 'sail-load nil 'local)))
+	    (lambda () (add-hook 'after-save-hook 'sail-load nil 'local)))
   (run-hooks 'sail2-mode-hook))
 
 (defvar sail-process nil)
@@ -117,6 +117,22 @@
     (process-send-string sail-process ":quit\n")
     (setq sail-process nil)))
 
+(defun sail-type-at-cursor ()
+  "get type at cursor"
+  (interactive)
+  (when sail-process
+    (let ((loc (number-to-string (point))))
+      (process-send-string sail-process (mapconcat 'identity `(":typeat " ,buffer-file-name " " ,loc "\n") "")))))
+
+(defun sail-highlight-region (begin end text)
+  (progn
+    (remove-overlays)
+    (let ((overlay (make-overlay begin end)))
+      (overlay-put overlay 'face 'bold)
+      (overlay-put overlay 'help-echo text)
+      (message text)
+      (setq mark-active nil))))
+
 (defun sail-error-region (begin end text)
   (progn
     (let ((overlay (make-overlay begin end)))
@@ -125,6 +141,7 @@
       (setq mark-active nil))))
 
 (defvar sail-error-position nil)
+(defvar sail-error-text nil)
 
 (defun sail-error (l1 c1 l2 c2 text)
   (let ((begin (save-excursion
@@ -135,6 +152,7 @@
 	       (goto-line l2)
 	       (forward-char c2)
 	       (point))))
+    (setq sail-error-text text)
     (setq sail-error-position begin)
     (sail-error-region begin end text)
     (message text)))
@@ -143,7 +161,9 @@
   "Go to the next Sail error"
   (interactive)
   (if sail-error-position
-      (goto-char sail-error-position)
+      (progn
+	(message sail-error-text)
+	(goto-char sail-error-position))
     (message "No errors")))
 
 (defun sail-load ()
@@ -154,6 +174,7 @@
     (progn
       (remove-overlays)
       (setq sail-error-position nil)
+      (setq sail-error-text nil)
       (process-send-string sail-process ":unload\n")
       (process-send-string sail-process (mapconcat 'identity `(":load " ,buffer-file-name "\n") "")))))
 
@@ -163,6 +184,7 @@
     (define-key map (kbd "C-c C-l") 'sail-load)
     (define-key map (kbd "C-c C-q") 'sail-quit)
     (define-key map (kbd "C-c C-x") 'sail-goto-error)
+    (define-key map (kbd "C-c C-c") 'sail-type-at-cursor)
     map))
 
 (defun sail-build-menu ()
@@ -173,7 +195,8 @@
       ["Start interactive" sail-start t]
       ["Quit interactive" sail-quit t]
       ["Check buffer" sail-load t]
-      ["Goto next error" sail-goto-error t]))
+      ["Goto next error" sail-goto-error t]
+      ["Type at cursor" sail-type-at-cursor t]))
   (easy-menu-add sail-mode-menu))
 
 (provide 'sail2-mode)

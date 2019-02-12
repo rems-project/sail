@@ -481,6 +481,31 @@ let handle_input' input =
            vs_ids := Initial_check.val_spec_ids !Interactive.ast;
            Initial_check.have_undefined_builtins := false;
            Process_file.clear_symbols ()
+        | ":typeat" ->
+           let args = Str.split (Str.regexp " +") arg in
+           begin match args with
+           | [file; pos] ->
+              let open Lexing in
+              let pos = int_of_string pos in
+              let pos = { dummy_pos with pos_fname = file; pos_cnum = pos - 1 } in
+              let sl = Some (pos, pos) in
+              begin match find_annot_ast sl !Interactive.ast with
+              | Some annot ->
+                 let msg = String.escaped (string_of_typ (Type_check.typ_of_annot annot)) in
+                 begin match simp_loc (fst annot) with
+                 | Some (p1, p2) ->
+                    print_endline ("(sail-highlight-region "
+                                   ^ string_of_int (p1.pos_cnum + 1) ^ " " ^ string_of_int (p2.pos_cnum + 1)
+                                   ^ " \"" ^ msg ^ "\")")
+                 | None ->
+                    print_endline ("(message \"" ^ msg ^ "\")")
+                 end
+              | None ->
+                 print_endline "(message \"No type here\")"
+              end
+           | _ ->
+              print_endline "(error \"Bad arguments for type at cursor\")"
+           end
         | _ -> ()
         end
      | Expression _ | Empty -> ()

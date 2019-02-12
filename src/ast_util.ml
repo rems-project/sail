@@ -1815,3 +1815,116 @@ let typquant_subst_kid_aux sv subst = function
   | TypQ_no_forall -> TypQ_no_forall
 
 let typquant_subst_kid sv subst (TypQ_aux (typq, l)) = TypQ_aux (typquant_subst_kid_aux sv subst typq, l)
+
+let rec simp_loc = function
+  | Parse_ast.Unknown -> None
+  | Parse_ast.Unique (_, l) -> simp_loc l
+  | Parse_ast.Generated l -> simp_loc l
+  | Parse_ast.Range (p1, p2) -> Some (p1, p2)
+  | Parse_ast.Documented (_, l) -> simp_loc l
+
+let before p1 p2 =
+  let open Lexing in
+  p1.pos_fname = p2.pos_fname && p1.pos_cnum <= p2.pos_cnum
+
+let subloc sl l =
+  match sl, simp_loc l with
+  | _, None -> false
+  | None, _ -> false
+  | Some (p1a, p1b), Some (p2a, p2b) ->
+     before p2a p1a && before p1b p2b
+
+let rec option_mapm f = function
+  | [] -> None
+  | x :: xs ->
+     begin match f x with
+     | Some y -> Some y
+     | None -> option_mapm f xs
+     end
+
+let option_chain opt1 opt2 =
+  begin match opt1 with
+  | None -> opt2
+  | _ -> opt1
+  end
+
+let rec find_annot_exp sl (E_aux (aux, (l, annot)) as exp) =
+  if not (subloc sl l) then None else
+    let result = match aux with
+      | E_block exps | E_tuple exps ->
+         option_mapm (find_annot_exp sl) exps
+      | E_app (id, exps) ->
+         option_mapm (find_annot_exp sl) exps
+      | E_let (LB_aux (LB_val (pat, exp), _), body) ->
+         option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [exp; body])
+      | E_assign (lexp, exp) ->
+         option_chain (find_annot_lexp sl lexp) (find_annot_exp sl exp)
+      | E_var (lexp, exp1, exp2) ->
+         option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])
+      | _ -> None
+    in
+    match result with
+    | None -> Some (l, annot)
+    | _ -> result
+
+and find_annot_lexp sl (LEXP_aux (aux, (l, annot))) =
+  if not (subloc sl l) then None else
+    let result = match aux with
+      | LEXP_vector_range (lexp, exp1, exp2) ->
+         option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])
+      | LEXP_deref exp ->
+         find_annot_exp sl exp
+      | LEXP_tup lexps ->
+         option_mapm (find_annot_lexp sl) lexps
+      | LEXP_memory (id, exps) ->
+         option_mapm (find_annot_exp sl) exps
+      | _ -> None
+    in
+    match result with
+    | None -> Some (l, annot)
+    | _ -> result
+
+and find_annot_pat sl (P_aux (aux, (l, annot))) =
+  if not (subloc sl l) then None else
+    let result = match aux with
+      | _ -> None
+    in
+    match result with
+    | None -> Some (l, annot)
+    | _ -> result
+
+and find_annot_pexp sl (Pat_aux (aux, (l, annot))) =
+  if not (subloc sl l) then None else
+    match aux with
+    | Pat_exp (pat, exp) ->
+       find_annot_exp sl exp
+    | Pat_when (pat, guard, exp) ->
+       None
+
+let find_annot_funcl sl (FCL_aux (FCL_Funcl (id, pexp), (l, annot))) =
+  if not (subloc sl l) then
+    None
+  else
+    match find_annot_pexp sl pexp with
+    | None -> Some (l, annot)
+    | result -> result
+
+let find_annot_fundef sl (FD_aux (FD_function (_, _, _, funcls), (l, annot))) =
+  if not (subloc sl l) then
+    None
+  else
+    match option_mapm (find_annot_funcl sl) funcls with
+    | None -> Some (l, annot)
+    | result -> result
+
+let rec find_annot_defs sl = function
+  | DEF_fundef fdef :: defs ->
+     begin match find_annot_fundef sl fdef with
+     | None -> find_annot_defs sl defs
+     | result -> result
+     end
+  | _ :: defs ->
+     find_annot_defs sl defs
+  | [] -> None
+
+let rec find_annot_ast sl (Defs defs) = find_annot_defs sl defs
