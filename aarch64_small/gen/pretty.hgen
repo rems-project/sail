@@ -1,0 +1,393 @@
+| `AArch64TMStart t ->
+      sprintf "TSTART %s" (pp_regzr Set64 t)
+
+| `AArch64TMCommit -> "TCOMMIT"
+
+| `AArch64TMAbort (retry,reason) ->
+      sprintf "TABORT %s" (pp_imm (if retry then 32 + reason else reason))
+
+| `AArch64TMTest -> "TTEST"
+
+| `AArch64ImplementationDefinedStopFetching ->
+      "_STOP_FETCHING"
+
+| `AArch64ImplementationDefinedThreadStart ->
+      "_THREAD_START"
+
+| `AArch64ImplementationDefinedTestBeginEnd (isEnd) ->
+      if isEnd then
+        "_TEST_ENDS"
+      else
+        "_TEST_BEGINS"
+
+| `AArch64AddSubCarry (d,n,m,datasize,sub_op,setflags) ->
+      if sub_op && is_zero_reg n then
+        sprintf "%s %s,%s" (pp_withflags "NGC" setflags) (pp_regzr datasize d) (pp_regzr datasize m)
+      else if sub_op then
+        sprintf "%s %s,%s,%s" (pp_withflags "SBC" setflags) (pp_regzr datasize d) (pp_regzr datasize n) (pp_regzr datasize m)
+      else
+        sprintf "%s %s,%s,%s" (pp_withflags "ADC" setflags) (pp_regzr datasize d) (pp_regzr datasize n) (pp_regzr datasize m)
+
+| `AArch64AddSubExtendRegister (d,n,m,datasize,sub_op,setflags,extend_type,shift) ->
+      if setflags && is_zero_reg d then
+      begin
+        if (is_sp_reg n) && ((datasize = Set32 && extend_type = ExtendType_UXTW) || (datasize = Set64 && extend_type = ExtendType_UXTX)) then
+          sprintf "%s %s,%s%s" (if sub_op then "CMP" else "CMN") (pp_regsp datasize n) (pp_regzrbyext datasize extend_type m)
+                                 (if shift = 0 then "" else (",LSL " ^ (pp_imm shift)))
+        else
+          sprintf "%s %s,%s%s" (if sub_op then "CMP" else "CMN") (pp_regsp datasize n) (pp_regzrbyext datasize extend_type m) (pp_addsub_regext datasize extend_type shift)
+      end
+      else if (is_sp_reg d || is_sp_reg n) && ((datasize = Set32 && extend_type = ExtendType_UXTW) || (datasize = Set64 && extend_type = ExtendType_UXTX)) then
+        sprintf "%s %s,%s,%s%s" (pp_addsub sub_op setflags) (if setflags then pp_regzr datasize d else pp_regsp datasize d) (pp_regsp datasize n) (pp_regzrbyext datasize extend_type m)
+                                  (if shift = 0 then "" else (",LSL " ^ (pp_imm shift)))
+      else
+        sprintf "%s %s,%s,%s%s" (pp_addsub sub_op setflags) (if setflags then pp_regzr datasize d else pp_regsp datasize d) (pp_regsp datasize n) (pp_regzrbyext datasize extend_type m) (pp_addsub_regext datasize extend_type shift)
+
+| `AArch64AddSubImmediate (d,n,datasize,sub_op,setflags,imm) ->
+      let (imm12,shift) =
+        if reg_size_bits_iskbituimm 12 imm then (reg_size_bits_to_int imm, 0)
+        else (reg_size_bits_to_int (reg_size_bits_shift_right imm 12), 12)
+      in
+      if (sub_op,setflags) = (false,false) && (is_sp_reg d || is_sp_reg n) && (shift = 0 && imm12 = 0) then
+        sprintf "MOV %s,%s" (pp_regsp datasize d) (pp_regsp datasize n)
+      else if setflags && is_zero_reg d then
+        sprintf "%s %s,%s%s" (if sub_op then "CMP" else "CMN") (pp_regsp datasize n) (pp_imm imm12) (if shift = 0 then "" else ",LSL #12")
+      else
+        sprintf "%s %s,%s,%s%s" (pp_addsub sub_op setflags) (if setflags then pp_regzr datasize d else pp_regsp datasize d) (pp_regsp datasize n) (pp_imm imm12) (if shift = 0 then "" else ",LSL #12")
+
+| `AArch64AddSubShiftedRegister (d,n,m,datasize,sub_op,setflags,shift_type,shift_amount) ->
+      if setflags && is_zero_reg d then
+      begin
+        if shift_type = ShiftType_LSL && shift_amount = 0 then
+          sprintf "%s %s,%s" (if sub_op then "CMP" else "CMN") (pp_regzr datasize n) (pp_regzr datasize m)
+        else
+          sprintf "%s %s,%s,%s %s" (if sub_op then "CMP" else "CMN") (pp_regzr datasize n) (pp_regzr datasize m) (pp_shift shift_type) (pp_imm shift_amount)
+      end
+      else if sub_op && is_zero_reg n then
+      begin
+        if shift_type = ShiftType_LSL && shift_amount = 0 then
+          sprintf "%s %s,%s" (pp_withflags "NEG" setflags) (pp_regzr datasize d) (pp_regzr datasize m)
+        else
+          sprintf "%s %s,%s,%s %s" (pp_withflags "NEG" setflags) (pp_regzr datasize d) (pp_regzr datasize m) (pp_shift shift_type) (pp_imm shift_amount)
+      end
+      else if shift_type = ShiftType_LSL && shift_amount = 0 then
+        sprintf "%s %s,%s,%s" (pp_addsub sub_op setflags) (pp_regzr datasize d) (pp_regzr datasize n) (pp_regzr datasize m)
+      else
+        sprintf "%s %s,%s,%s,%s %s" (pp_addsub sub_op setflags) (pp_regzr datasize d) (pp_regzr datasize n) (pp_regzr datasize m) (pp_shift shift_type) (pp_imm shift_amount)
+
+| `AArch64Address (d,page,imm) ->
+      sprintf "%s %s,%s" (if page then "ADRP" else "ADR") (pp_regzr Set64 d) (pp_offset page imm)
+
+| `AArch64LogicalImmediate (d,n,datasize,setflags,op,imm) ->
+      if op = LogicalOp_AND && setflags && is_zero_reg d then
+        sprintf "TST %s,%s" (pp_regzr datasize n) (pp_reg_size_imm imm)
+      else if op = LogicalOp_ORR && not setflags && is_zero_reg n && not (moveWidePreferred datasize imm) then (* ARM: missing the check of n=ZR *)
+        sprintf "MOV %s,%s" (pp_regsp datasize d) (pp_reg_size_imm imm)
+      else sprintf "%s %s,%s,%s" (pp_logop op setflags false) (if setflags then pp_regzr datasize d else pp_regsp datasize d) (pp_regzr datasize n) (pp_reg_size_imm imm)
+
+| `AArch64LogicalShiftedRegister (d,n,m,datasize,setflags,op,shift_type,shift_amount,invert) ->
+      if op = LogicalOp_AND && setflags && not invert && is_zero_reg d then
+      begin
+        if shift_type = ShiftType_LSL && shift_amount = 0 then
+          sprintf "TST %s,%s" (pp_regzr datasize n) (pp_regzr datasize m)
+        else
+          sprintf "TST %s,%s,%s %s" (pp_regzr datasize n) (pp_regzr datasize m) (pp_shift shift_type) (pp_imm shift_amount)
+      end
+      else if op = LogicalOp_ORR && not setflags && invert && is_zero_reg n then
+      begin
+        if shift_type = ShiftType_LSL && shift_amount = 0 then
+          sprintf "MVN %s,%s" (pp_regzr datasize d) (pp_regzr datasize m)
+        else
+          sprintf "MVN %s,%s,%s %s" (pp_regzr datasize d) (pp_regzr datasize m) (pp_shift shift_type) (pp_imm shift_amount)
+      end
+      else if op = LogicalOp_ORR && not setflags && not invert && is_zero_reg n && shift_type = ShiftType_LSL && shift_amount = 0 then
+        sprintf "MOV %s,%s" (pp_regzr datasize d) (pp_regzr datasize m)
+      else
+      begin
+        if shift_type = ShiftType_LSL && shift_amount = 0 then
+          sprintf "%s %s,%s,%s" (pp_logop op setflags invert) (pp_regzr datasize d) (pp_regzr datasize n) (pp_regzr datasize m)
+        else
+          sprintf "%s %s,%s,%s,%s %s" (pp_logop op setflags invert) (pp_regzr datasize d) (pp_regzr datasize n) (pp_regzr datasize m) (pp_shift shift_type) (pp_imm shift_amount)
+      end
+
+| `AArch64Shift (d,n,m,datasize,shift_type) ->
+      sprintf "%s %s,%s,%s" (pp_shiftop shift_type) (pp_regzr datasize d) (pp_regzr datasize n) (pp_regzr datasize m)
+
+| `AArch64BranchConditional (offset,condition) ->
+      sprintf "B.%s %s" (pp_cond condition) (pp_offset false offset)
+
+| `AArch64BranchImmediate (branch_type,offset) ->
+      sprintf "%s %s" (pp_branchimmediate branch_type) (pp_offset false offset)
+
+| `AArch64BitfieldMove (d,n,datasize,inzero,extend,_R,_S,wmask,tmask) ->
+      if (inzero,extend) = (false,false) && _S < _R then
+        sprintf "BFI %s,%s,%s,%s" (pp_regzr datasize d) (pp_regzr datasize n) (pp_imm _R) (pp_imm (_S+1)) (* FIXME: I'm not sure this is the right translation of imms and immr *)
+      else if (inzero,extend) = (false,false) && _S >= _R then
+        sprintf "BFXIL %s,%s,%s,%s" (pp_regzr datasize d) (pp_regzr datasize n) (pp_imm _R) (pp_imm (_S-_R+1))
+      else if (inzero,extend) = (true,false) && datasize = Set32 && _S <> 0b011111 && _S+1 = _R then
+        sprintf "LSL %s,%s,%s" (pp_regzr datasize d) (pp_regzr datasize n) (pp_imm (31-_S))
+      else if (inzero,extend) = (true,false) && datasize = Set64 && _S <> 0b111111 && _S+1 = _R then
+        sprintf "LSL %s,%s,%s" (pp_regzr datasize d) (pp_regzr datasize n) (pp_imm (63-_S))
+      else if inzero && datasize = Set32 && _S = 0b011111 then
+        sprintf "%s %s,%s,%s" (if extend then "ASR" else "LSR") (pp_regzr datasize d) (pp_regzr datasize n) (pp_imm _R)
+      else if inzero && datasize = Set64 && _S = 0b111111 then
+        sprintf "%s %s,%s,%s" (if extend then "ASR" else "LSR") (pp_regzr datasize d) (pp_regzr datasize n) (pp_imm _R)
+      else if inzero && _S < _R then
+        sprintf "%s %s,%s,%s,%s" (if extend then "SBFIZ" else "UBFIZ") (pp_regzr datasize d) (pp_regzr datasize n) (pp_imm _R) (pp_imm (_S+1)) (* FIXME: -<lsb> MOD 32/64 *)
+      else if inzero && bFXPreferred datasize (if extend then 0 else 1) _S _R then
+        sprintf "%s %s,%s,%s,%s" (if extend then "SBFX" else "UBFX") (pp_regzr datasize d) (pp_regzr datasize n) (pp_imm _R) (pp_imm (_S - _R + 1))
+      else if inzero && _R = 0 && _S = 0b000111 then
+        sprintf "%s %s,%s" (if extend then "SXTB" else "UXTB") (pp_regzr datasize d) (pp_regzr Set32 n)
+      else if inzero && _R = 0 && _S = 0b001111 then
+        sprintf "%s %s,%s" (if extend then "SXTH" else "UXTH") (pp_regzr datasize d) (pp_regzr Set32 n)
+      else if (inzero,extend) = (true,true) && _R = 0 && _S = 0b011111 then (* implicitly datasize = Set64 *)
+        sprintf "SXTW %s,%s" (pp_regzr datasize d) (pp_regzr Set32 n)
+      else
+        sprintf "%s %s,%s,%s,%s" (pp_bfm inzero extend) (pp_regzr datasize d) (pp_regzr datasize n) (pp_imm _R) (pp_imm _S)
+
+| `AArch64BranchRegister (n,branch_type) ->
+      if branch_type = BranchType_RET && n = X (Ireg R30) then
+        "RET"
+      else
+        sprintf "%s %s" (pp_branchregister branch_type) (pp_regzr Set64 n)
+
+| `AArch64CompareAndBranch (t,datasize,iszero,offset) ->
+      sprintf "%s %s,%s" (if iszero then "CBZ" else "CBNZ") (pp_regzr datasize t) (pp_offset false offset)
+
+| `AArch64ConditionalCompareImmediate (n,datasize,sub_op,condition,flags,imm) ->
+      sprintf "%s %s,%s,%s,%s" (if sub_op then "CCMP" else "CCMN") (pp_regzr datasize n) (pp_reg_size_imm imm) (pp_imm flags) (pp_cond condition)
+
+| `AArch64ConditionalCompareRegister (n,m,datasize,sub_op,condition,flags) ->
+      sprintf "%s %s,%s,%s,%s" (if sub_op then "CCMP" else "CCMN") (pp_regzr datasize n) (pp_regzr datasize m) (pp_imm flags) (pp_cond condition)
+
+| `AArch64ClearExclusiveMonitor (imm) ->
+      if imm = 15 then
+        sprintf "CLREX"
+      else
+        sprintf "CLREX %s" (pp_imm imm)
+
+| `AArch64CountLeading (d,n,datasize,opcode) ->
+      sprintf "%s %s,%s" (pp_countop opcode) (pp_regzr datasize d) (pp_regzr datasize n)
+
+| `AArch64CRC (d,n,m,size,crc32c) ->
+      sprintf "%s %s,%s,%s" (pp_crc size crc32c) (pp_regzr Set32 d) (pp_regzr Set32 n) (pp_regzr (if size = DataSize64 then Set64 else Set32) m)
+
+| `AArch64ConditionalSelect (d,n,m,datasize,condition,else_inv,else_inc) ->
+      if not else_inv && else_inc && n = m && not (is_zero_reg n) && not (condition = 0b1110 || condition = 0b1111) then
+        sprintf "CINC %s,%s,%s" (pp_regzr datasize d) (pp_regzr datasize n) (pp_cond condition)
+      else if not else_inv && else_inc && n = m && is_zero_reg n && not (condition = 0b1110 || condition = 0b1111) then
+        sprintf "CSET %s,%s" (pp_regzr datasize d) (pp_cond condition)
+      else if else_inv && not else_inc && n = m && not (is_zero_reg n) && not (condition = 0b1110 || condition = 0b1111) then
+        sprintf "CINV %s,%s,%s" (pp_regzr datasize d) (pp_regzr datasize n) (pp_cond condition)
+      else if else_inv && not else_inc && n = m && is_zero_reg n && not (condition = 0b1110 || condition = 0b1111) then
+        sprintf "CSETM %s,%s" (pp_regzr datasize d) (pp_cond condition)
+      else if else_inv && else_inc && n = m && not (condition = 0b1110 || condition = 0b1111) then
+        sprintf "CNEG %s,%s,%s" (pp_regzr datasize d) (pp_regzr datasize n) (pp_cond condition)
+      else
+        sprintf "%s %s,%s,%s,%s" (pp_csel else_inv else_inc) (pp_regzr datasize d) (pp_regzr datasize n) (pp_regzr datasize m) (pp_cond condition)
+
+| `AArch64Barrier (op,domain,types) ->
+      if op = MemBarrierOp_ISB && domain = MBReqDomain_FullSystem && types = MBReqTypes_All then
+        pp_barr op
+      else
+        sprintf "%s %s" (pp_barr op) (pp_barroption domain types)
+
+| `AArch64ExtractRegister (d,n,m,datasize,lsb) ->
+      if n = m then
+        sprintf "ROR %s,%s,%s" (pp_regzr datasize d) (pp_regzr datasize n) (pp_imm lsb)
+      else
+        sprintf "EXTR %s,%s,%s,%s" (pp_regzr datasize d) (pp_regzr datasize n) (pp_regzr datasize m) (pp_imm lsb)
+
+| `AArch64Hint (op) ->
+  begin
+      match op with
+      | SystemHintOp_NOP ->   "NOP"
+      | SystemHintOp_YIELD -> "YIELD"
+      | SystemHintOp_WFE ->   "WFE"
+      | SystemHintOp_WFI ->   "WFI"
+      | SystemHintOp_SEV ->   "SEV"
+      | SystemHintOp_SEVL ->  "SEVL"
+  end
+
+| `AArch64LoadStoreAcqExc (n,t,t2,s,acctype,excl,pair,memop,elsize,regsize,datasize) ->
+      if pair && memop = MemOp_LOAD then
+        sprintf "%s %s,%s,[%s]" (pp_ldaxstlxp memop acctype excl pair datasize) (pp_regzr regsize t) (pp_regzr regsize t2) (pp_regsp Set64 n)
+      else if pair && memop = MemOp_STORE then
+        sprintf "%s %s,%s,%s,[%s]" (pp_ldaxstlxp memop acctype excl pair datasize) (pp_regzr Set32 s) (pp_regzr regsize t) (pp_regzr regsize t2) (pp_regsp Set64 n)
+      else if not pair && memop = MemOp_STORE && excl then
+        sprintf "%s %s,%s,[%s]" (pp_ldaxstlxp memop acctype excl pair datasize) (pp_regzr Set32 s) (pp_regzr regsize t) (pp_regsp Set64 n)
+      else
+        sprintf "%s %s,[%s]" (pp_ldaxstlxp memop acctype excl pair datasize) (pp_regzr regsize t) (pp_regsp Set64 n)
+
+| `AArch64LoadStorePair (wback,postindex,n,t,t2,acctype,memop,signed,datasize,offset) ->
+  begin
+      let inst = if signed then "LDPSW" else if memop = MemOp_LOAD then "LDP" else "STP" in
+      let regsize = if signed then Set64 else (match datasize with DataSize32 -> Set32 | DataSize64 -> Set64 | DataSize16 | DataSize8 -> failwith "unexpected value") in
+      match (wback,postindex) with
+      | (true,true) ->
+          sprintf "%s %s,%s,[%s],%s" inst (pp_regzr regsize t) (pp_regzr regsize t2) (pp_regsp Set64 n) (pp_big_imm offset)
+      | (true,false) ->
+          sprintf "%s %s,%s,[%s,%s]!" inst (pp_regzr regsize t) (pp_regzr regsize t2) (pp_regsp Set64 n) (pp_big_imm offset)
+      | (false,false) ->
+          if eq_bit64 offset (bit64_of_int 0) then
+            sprintf "%s %s,%s,[%s]" inst (pp_regzr regsize t) (pp_regzr regsize t2) (pp_regsp Set64 n)
+          else
+            sprintf "%s %s,%s,[%s,%s]" inst (pp_regzr regsize t) (pp_regzr regsize t2) (pp_regsp Set64 n) (pp_big_imm offset)
+      | (false,true) -> failwith "unexpected value"
+  end
+
+| `AArch64LoadImmediate (n,t,acctype,memop,signed,wback,postindex,offset,regsize,datasize) ->
+  begin
+      if memop = MemOp_PREFETCH then
+      begin
+        (* the ast does not hold enough information to distinguish PRFM and PRFUM in some cases.
+           PRFM: <pimm> is a multiple of 8 in the range 0 to 32760
+           PRFUM: <simm> is in the range -256 to 255 *)
+        if eq_bit64 offset (bit64_of_int 0) then
+          sprintf "PRFM %s,[%s]" (pp_prfop (inst_reg_to_int t)) (pp_regsp Set64 n)
+        else if big_in_range offset (-256) 255 then
+          sprintf "PRFUM %s,[%s,%s]" (pp_prfop (inst_reg_to_int t)) (pp_regsp Set64 n) (pp_big_imm offset)
+        else
+          sprintf "PRFM %s,[%s,%s]"  (pp_prfop (inst_reg_to_int t)) (pp_regsp Set64 n) (pp_big_imm offset)
+      end
+      else
+      let inst =
+        (if memop = MemOp_LOAD then "LD" else "ST") ^
+        (if not wback && not postindex &&
+            not begin match datasize with
+                | DataSize8 ->
+                    Nat_big_num.less_equal Nat_big_num.zero offset &&
+                    Nat_big_num.less_equal offset (Nat_big_num.of_int 4095)
+                | DataSize16 ->
+                    Nat_big_num.less_equal Nat_big_num.zero offset &&
+                    Nat_big_num.less_equal offset (Nat_big_num.of_int 8190) &&
+                    Nat_big_num.equal
+                      (Nat_big_num.modulus offset (Nat_big_num.of_int 2))
+                      Nat_big_num.zero
+                | DataSize32 ->
+                    Nat_big_num.less_equal Nat_big_num.zero offset &&
+                    Nat_big_num.less_equal offset (Nat_big_num.of_int 16380) &&
+                    Nat_big_num.equal
+                      (Nat_big_num.modulus offset (Nat_big_num.of_int 4))
+                      Nat_big_num.zero
+                | DataSize64 ->
+                    Nat_big_num.less_equal Nat_big_num.zero offset &&
+                    Nat_big_num.less_equal offset (Nat_big_num.of_int 32760) &&
+                    Nat_big_num.equal
+                      (Nat_big_num.modulus offset (Nat_big_num.of_int 8))
+                      Nat_big_num.zero
+                end
+        then
+        begin
+          if acctype=AccType_UNPRIV then "TR"
+          else "UR"
+        end
+        else "R") ^
+        (if signed then "S" else "") ^
+        (match datasize with
+        | DataSize8 -> "B"
+        | DataSize16 -> "H"
+        | DataSize32 -> if regsize = Set32 then "" else "W"
+        | DataSize64 -> "") in
+      match (wback,postindex) with
+      | (true,true) ->
+          sprintf "%s %s,[%s],%s" inst (pp_regzr regsize t) (pp_regsp Set64 n) (pp_big_imm offset)
+      | (true,false) ->
+          sprintf "%s %s,[%s,%s]!" inst (pp_regzr regsize t) (pp_regsp Set64 n) (pp_big_imm offset)
+      | (false,false) ->
+          if eq_bit64 offset (bit64_of_int 0) then
+            sprintf "%s %s,[%s]" inst (pp_regzr regsize t) (pp_regsp Set64 n)
+          else
+            sprintf "%s %s,[%s,%s]" inst (pp_regzr regsize t) (pp_regsp Set64 n) (pp_big_imm offset)
+      | (false,true) -> failwith "unexpected value"
+  end
+
+| `AArch64LoadLiteral (t,memop,signed,size,offset,datasize) ->
+      if memop = MemOp_PREFETCH then
+        sprintf "PRFM %s,%s" (pp_prfop (inst_reg_to_int t)) (pp_offset false offset)
+      else
+        let datasize =
+          if signed then Set64
+          else
+            begin match datasize with
+            | DataSize64 -> Set64
+            | DataSize32 -> Set32
+            | DataSize16 | DataSize8 -> failwith "unexpected value"
+            end
+        in
+        sprintf "%s %s,%s" (if signed then "LDRSW" else "LDR") (pp_regzr datasize t) (pp_offset false offset)
+
+| `AArch64LoadRegister (n,t,m,acctype,memop,signed,wback,postindex,extend_type,shift,regsize,datasize) ->
+  begin
+      if memop = MemOp_PREFETCH then
+      begin
+        if extend_type = ExtendType_UXTX && shift = 0 then
+          sprintf "PRFM %s,[%s,%s]" (pp_prfop (inst_reg_to_int t)) (pp_regsp Set64 n) (pp_regzrbyext Set64 extend_type m)
+        else if extend_type = ExtendType_UXTX (* && shift <> 0 *) then
+          sprintf "PRFM %s,[%s,%s,LSL %s]" (pp_prfop (inst_reg_to_int t)) (pp_regsp Set64 n) (pp_regzrbyext Set64 extend_type m) (pp_imm shift)
+        else
+          sprintf "PRFM %s,[%s,%s%s]" (pp_prfop (inst_reg_to_int t)) (pp_regsp Set64 n) (pp_regzrbyext Set64 extend_type m) (pp_ldrstr_regext extend_type shift)
+      end
+      else
+      let inst =
+        (if memop = MemOp_LOAD then "LDR" else "STR") ^
+        (if signed then "S" else "") ^
+        (match datasize with
+        | DataSize8 -> "B"
+        | DataSize16 -> "H"
+        | DataSize32 -> if regsize = Set32 then "" else "W"
+        | DataSize64 -> "") in
+      if extend_type = ExtendType_UXTX && shift = 0 then
+        sprintf "%s %s,[%s,%s]" inst (pp_regzr regsize t) (pp_regsp Set64 n) (pp_regzrbyext Set64 extend_type m)
+      else if extend_type = ExtendType_UXTX (* && shift <> 0 *) then
+        sprintf "%s %s,[%s,%s,LSL %s]" inst (pp_regzr regsize t) (pp_regsp Set64 n) (pp_regzrbyext Set64 extend_type m) (pp_imm shift)
+      else
+        sprintf "%s %s,[%s,%s%s]" inst (pp_regzr regsize t) (pp_regsp Set64 n) (pp_regzrbyext Set64 extend_type m) (pp_ldrstr_regext extend_type shift)
+  end
+
+| `AArch64MultiplyAddSub (d,n,m,a,destsize,datasize,sub_op) ->
+      if is_zero_reg a then
+        sprintf "%s %s,%s,%s" (if sub_op then "MNEG" else "MUL") (pp_regzr destsize d) (pp_regzr destsize n) (pp_regzr destsize m)
+      else
+        sprintf "%s %s,%s,%s,%s" (if sub_op then "MSUB" else "MADD") (pp_regzr destsize d) (pp_regzr destsize n) (pp_regzr destsize m) (pp_regzr destsize a)
+
+| `AArch64MoveWide (d,datasize,imm,pos,opcode) ->
+      if opcode = MoveWideOp_N && datasize = Set32 && (not (imm = 0 && pos <> 0)) && not (imm = 0xffff) then
+        sprintf "MOV %s,%s" (pp_regzr datasize d) (pp_imm (lnot (imm lsl (pos*16))))
+      else if opcode = MoveWideOp_N && datasize = Set64 && (not (imm = 0 && pos <> 0)) then
+        sprintf "MOV %s,%s" (pp_regzr datasize d) (pp_imm (lnot (imm lsl (pos*16))))
+      else if opcode = MoveWideOp_Z && (not (imm = 0 && pos <> 0)) then
+        sprintf "MOV %s,%s" (pp_regzr datasize d) (pp_imm (imm lsl (pos*16)))
+      else if pos = 0 then
+        sprintf "%s %s,%s" (pp_movwide opcode) (pp_regzr datasize d) (pp_imm imm)
+      else
+        sprintf "%s %s,%s,LSL %s" (pp_movwide opcode) (pp_regzr datasize d) (pp_imm imm) (pp_imm pos)
+
+| `AArch64Reverse (d,n,datasize,op) ->
+      sprintf "%s %s,%s" (pp_reverse datasize op) (pp_regzr datasize d) (pp_regzr datasize n)
+
+| `AArch64Division (d,n,m,datasize,unsigned) ->
+      sprintf "%s %s,%s,%s" (if unsigned then "UDIV" else "SDIV") (pp_regzr datasize d) (pp_regzr datasize n) (pp_regzr datasize m)
+
+| `AArch64MultiplyAddSubLong (d,n,m,a,destsize,datasize,sub_op,unsigned) ->
+      if sub_op && is_zero_reg a then
+        sprintf "%s %s,%s,%s" (if unsigned then "UMNEGL" else "SMNEGL") (pp_regzr Set64 d) (pp_regzr Set32 n) (pp_regzr Set32 m)
+      else if not sub_op && is_zero_reg a then
+        sprintf "%s %s,%s,%s" (if unsigned then "UMULL" else "SMULL") (pp_regzr Set64 d) (pp_regzr Set32 n) (pp_regzr Set32 m)
+      else
+        sprintf "%s %s,%s,%s,%s" (pp_maddsubl sub_op unsigned) (pp_regzr Set64 d) (pp_regzr Set32 n) (pp_regzr Set32 m) (pp_regzr Set64 a)
+
+| `AArch64MultiplyHigh (d,n,m,a,destsize,datasize,unsigned) ->
+      sprintf "%s %s,%s,%s" (if unsigned then "UMULH" else "SMULH") (pp_regzr Set64 d) (pp_regzr Set64 n) (pp_regzr Set64 m)
+
+| `AArch64TestBitAndBranch (t,datasize,bit_pos,bit_val,offset) ->
+      sprintf "%s %s,%s,%s" (if bit_pos = 1 then "TBNZ" else "TBZ") (pp_regzr datasize t) (pp_imm bit_pos) (pp_offset false offset)
+
+| `AArch64MoveSystemRegister (t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,read) ->
+      if read then
+        sprintf "MRS %s,%s" (pp_regzr Set64 t) (pp_sysreg (sys_op0,sys_op1,sys_op2,sys_crn,sys_crm))
+      else
+        sprintf "MSR %s,%s" (pp_sysreg (sys_op0,sys_op1,sys_op2,sys_crn,sys_crm)) (pp_regzr Set64 t)
+
+| `AArch64MoveSystemImmediate (operand,field) ->
+      sprintf "MSR %s,%s" (pp_pstatefield field) (pp_imm operand)

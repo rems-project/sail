@@ -1,0 +1,78 @@
+/*** instructions ***/
+
+%token <AArch64HGenBase.token_TSTART>  TSTART
+%token <AArch64HGenBase.token_TCOMMIT> TCOMMIT
+%token <AArch64HGenBase.token_TABORT>  TABORT
+%token <AArch64HGenBase.token_TTEST>   TTEST
+
+%token <AArch64HGenBase.token_ADCSBC> ADCSBC
+%token <AArch64HGenBase.token_ADDSUB> ADDSUB
+%token <AArch64HGenBase.token_ADR> ADR
+%token <AArch64HGenBase.token_LOGOP> LOGOP
+%token <AArch64HGenBase.token_SHIFTOP> SHIFTOP
+%token <AArch64HGenBase.token_BCOND> BCOND
+%token <AArch64HGenBase.token_B> B
+%token <AArch64HGenBase.token_BR> BR
+%token <AArch64HGenBase.token_CBZ> CBZ
+%token <AArch64HGenBase.token_BFM> BFM
+%token <AArch64HGenBase.token_CCM> CCM
+%token <AArch64HGenBase.token_CM> CM
+%token <AArch64HGenBase.token_CL> CL
+%token <AArch64HGenBase.token_CRC> CRC
+%token <AArch64HGenBase.token_CRC32X> CRC32X
+%token <AArch64HGenBase.token_CSEL> CSEL
+%token <AArch64HGenBase.token_CSET> CSET
+%token <AArch64HGenBase.token_CSETM> CSETM
+%token <AArch64HGenBase.token_CON> CON
+%token <AArch64HGenBase.token_MEMBARR> MEMBARR
+%token <AArch64HGenBase.token_LDAXR> LDAXR
+%token <AArch64HGenBase.token_STLXR> STLXR
+%token <AArch64HGenBase.token_LDXP> LDXP
+%token <AArch64HGenBase.token_STXP> STXP
+%token <AArch64HGenBase.token_LDSTR> LDSTR
+%token <AArch64HGenBase.token_LDSTTUR> LDSTTUR
+%token <AArch64HGenBase.token_MADDSUB> MADDSUB
+%token <AArch64HGenBase.token_MUL> MUL
+%token <AArch64HGenBase.token_MOVWIDE> MOVWIDE
+%token <AArch64HGenBase.token_NEG> NEG
+%token <AArch64HGenBase.token_NGC> NGC
+%token <AArch64HGenBase.token_REV> REV
+%token <AArch64HGenBase.token_DIV> DIV
+%token <AArch64HGenBase.token_MADDSUBL> MADDSUBL
+%token <AArch64HGenBase.token_MULH> MULH
+%token <AArch64HGenBase.token_MULL> MULL
+%token <AArch64HGenBase.token_LDSTP> LDSTP
+%token <AArch64HGenBase.token_TBZ> TBZ
+%token <AArch64HGenBase.token_BFIZ> BFIZ
+%token <AArch64HGenBase.token_BFX> BFX
+%token <AArch64HGenBase.token_MNEGL> MNEGL
+%token <AArch64HGenBase.token_BFI> BFI
+%token <AArch64HGenBase.token_BFXIL> BFXIL
+%token <AArch64HGenBase.token_CLREX> CLREX
+%token <AArch64HGenBase.token_EXTR> EXTR
+%token <AArch64HGenBase.token_HINT> HINT
+%token <AArch64HGenBase.token_ISB> ISB
+%token <AArch64HGenBase.token_LDPSW> LDPSW
+%token <AArch64HGenBase.token_MOV> MOV
+%token <AArch64HGenBase.token_MVN> MVN
+%token <AArch64HGenBase.token_NOP> NOP
+%token <AArch64HGenBase.token_PRFM> PRFM
+%token <AArch64HGenBase.token_PRFUM> PRFUM
+%token <AArch64HGenBase.token_RET> RET
+%token <AArch64HGenBase.token_TST> TST
+%token <AArch64HGenBase.token_MRS> MRS
+%token <AArch64HGenBase.token_MSR> MSR
+
+/*** instructions/operands ***/
+
+%token <AArch64HGenBase.token_SHIFT> SHIFT
+%token <AArch64HGenBase.token_EXTEND> EXTEND
+
+/*** operands: ***/
+
+%token <AArch64HGenBase.token_COND> COND
+%token <AArch64HGenBase.token_BARROP> BARROP
+%token <AArch64HGenBase.token_PRFOP> PRFOP
+%token <AArch64HGenBase.token_SYSREG> SYSREG
+%token <AArch64HGenBase.token_PSTATEFIELD> PSTATEFIELD
+

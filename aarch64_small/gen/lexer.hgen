@@ -1,0 +1,309 @@
+(* instructions: *)
+
+  "TSTART" , TSTART  {txt="TSTART"} ;
+  "TCOMMIT", TCOMMIT {txt="TCOMMIT"} ;
+  "TABORT" , TABORT  {txt="TABORT"} ;
+  "TTEST"  , TTEST   {txt="TTEST"} ;
+
+  "ADC"  , ADCSBC {txt="ADC";  sub_op = false; setflags = false} ;
+  "SBC"  , ADCSBC {txt="SBC";  sub_op = true;  setflags = false} ;
+  "ADCS" , ADCSBC {txt="ADCS"; sub_op = false; setflags = true} ;
+  "SBCS" , ADCSBC {txt="SBCS"; sub_op = true;  setflags = true} ;
+
+  "ADD"  , ADDSUB {txt="ADD";  sub_op=false; setflags=false} ;
+  "SUB"  , ADDSUB {txt="SUB";  sub_op=true;  setflags=false} ;
+  "ADDS" , ADDSUB {txt="ADDS"; sub_op=false; setflags=true} ;
+  "SUBS" , ADDSUB {txt="SUBS"; sub_op=true;  setflags=true} ;
+
+  "ADR"  , ADR {txt="ADR";  page=false} ;
+  "ADRP" , ADR {txt="ADRP"; page=true} ;
+
+  "AND"  , LOGOP {txt="AND";  op = LogicalOp_AND; setflags = false; invert = false} ;
+  "ANDS" , LOGOP {txt="ANDS"; op = LogicalOp_AND; setflags = true;  invert = false} ;
+  "EOR"  , LOGOP {txt="EOR";  op = LogicalOp_EOR; setflags = false; invert = false} ;
+  "ORR"  , LOGOP {txt="ORR";  op = LogicalOp_ORR; setflags = false; invert = false} ;
+  "BIC"  , LOGOP {txt="BIC";  op = LogicalOp_AND; setflags = false; invert = true} ;
+  "BICS" , LOGOP {txt="BICS"; op = LogicalOp_AND; setflags = true;  invert = true} ;
+  "EON"  , LOGOP {txt="EON";  op = LogicalOp_EOR; setflags = false; invert = true} ;
+  "ORN"  , LOGOP {txt="ORN";  op = LogicalOp_ORR; setflags = false; invert = true} ;
+
+  "ASRV" , SHIFTOP {txt="ASRV"; shift_type=ShiftType_ASR} ;
+  "LSLV" , SHIFTOP {txt="LSLV"; shift_type=ShiftType_LSL} ;
+  "LSRV" , SHIFTOP {txt="LSRV"; shift_type=ShiftType_LSR} ;
+  "RORV" , SHIFTOP {txt="RORV"; shift_type=ShiftType_ROR} ;
+
+  "B.EQ" , BCOND {txt="B.EQ"; condition=0b0000} ;
+  "B.NE" , BCOND {txt="B.NE"; condition=0b0001} ;
+  "B.CS" , BCOND {txt="B.CS"; condition=0b0010} ;
+  "B.HS" , BCOND {txt="B.CS"; condition=0b0010} ;
+  "B.CC" , BCOND {txt="B.CC"; condition=0b0011} ;
+  "B.LO" , BCOND {txt="B.CC"; condition=0b0011} ;
+  "B.MI" , BCOND {txt="B.MI"; condition=0b0100} ;
+  "B.PL" , BCOND {txt="B.PL"; condition=0b0101} ;
+  "B.VS" , BCOND {txt="B.VS"; condition=0b0110} ;
+  "B.VC" , BCOND {txt="B.VC"; condition=0b0111} ;
+  "B.HI" , BCOND {txt="B.HI"; condition=0b1000} ;
+  "B.LS" , BCOND {txt="B.LS"; condition=0b1001} ;
+  "B.GE" , BCOND {txt="B.GE"; condition=0b1010} ;
+  "B.LT" , BCOND {txt="B.LT"; condition=0b1011} ;
+  "B.GT" , BCOND {txt="B.GT"; condition=0b1100} ;
+  "B.LE" , BCOND {txt="B.LE"; condition=0b1101} ;
+  "B.AL" , BCOND {txt="B.AL"; condition=0b1110} ;
+  "B.NV" , BCOND {txt="B.NV"; condition=0b1111} ; (* ARM: exists only to provide a valid disassembly
+                                                     of the 0b1111 encoding, otherwise its
+                                                     behavior is identical to AL *)
+
+  "B"    , B {txt="B";  branch_type=BranchType_JMP} ;
+  "BL"   , B {txt="BL"; branch_type=BranchType_CALL} ;
+
+  "BR"   , BR {txt="BR";  branch_type=BranchType_JMP} ;
+  "BLR"  , BR {txt="BLR"; branch_type=BranchType_CALL} ;
+
+  "CBZ"  , CBZ {txt="CBZ";  iszero=true} ;
+  "CBNZ" , CBZ {txt="CBNZ"; iszero=false} ;
+
+  "BFM"  , BFM {txt="BFM";  inzero=false; extend=false} ;
+  "SBFM" , BFM {txt="SBFM"; inzero=true;  extend=true} ;
+  "UBFM" , BFM {txt="UBFM"; inzero=true;  extend=false} ;
+
+  "CCMN" , CCM {txt="CCMN"; sub_op=false} ;
+  "CCMP" , CCM {txt="CCMP"; sub_op=true} ;
+
+  "CMN" , CM {txt="CMN"; sub_op=false} ;
+  "CMP" , CM {txt="CMP"; sub_op=true} ;
+
+  "CLS" , CL {txt="CLS"; opcode=CountOp_CLS} ;
+  "CLZ" , CL {txt="CLZ"; opcode=CountOp_CLZ} ;
+
+  "CRC32B"  , CRC {txt="CRC32B";  size = DataSize8;  crc32c = false} ;
+  "CRC32H"  , CRC {txt="CRC32H";  size = DataSize16; crc32c = false} ;
+  "CRC32W"  , CRC {txt="CRC32W";  size = DataSize32; crc32c = false} ;
+  "CRC32CB" , CRC {txt="CRC32CB"; size = DataSize8;  crc32c = true} ;
+  "CRC32CH" , CRC {txt="CRC32CH"; size = DataSize16; crc32c = true} ;
+  "CRC32CW" , CRC {txt="CRC32CW"; size = DataSize32; crc32c = true} ;
+
+  "CRC32X"  , CRC32X {txt="CRC32X";  crc32c=false} ;
+  "CRC32CX" , CRC32X {txt="CRC32CX"; crc32c=true} ;
+
+  "CSEL"  , CSEL {txt="CSEL";  else_inv = false; else_inc = false} ;
+  "CSINC" , CSEL {txt="CSINC"; else_inv = false; else_inc = true} ;
+  "CSINV" , CSEL {txt="CSINV"; else_inv = true;  else_inc = false} ;
+  "CSNEG" , CSEL {txt="CSNEG"; else_inv = true;  else_inc = true} ;
+
+  "CSET"  , CSET  {txt="CSET";  else_inv = false; else_inc = true} ;
+  "CSETM" , CSETM {txt="CSETM"; else_inv = true;  else_inc = false} ;
+
+  "CINC"  , CON {txt="CINC"; else_inv = false; else_inc = true} ;
+  "CINV"  , CON {txt="CINV"; else_inv = true;  else_inc = false} ;
+  "CNEG"  , CON {txt="CNEG"; else_inv = true;  else_inc = true} ;
+
+  "DMB" , MEMBARR {txt="DMB"; op=MemBarrierOp_DMB} ;
+  "DSB" , MEMBARR {txt="DSB"; op=MemBarrierOp_DSB} ;
+
+  "LDAR"    , LDAXR {txt="LDAR";   acctype=AccType_ORDERED; excl=false; memop=MemOp_LOAD;  var32={elsize=32; datasize=DataSize32}; var64=true} ;
+  "LDARB"   , LDAXR {txt="LDARB";  acctype=AccType_ORDERED; excl=false; memop=MemOp_LOAD;  var32={elsize=8;  datasize=DataSize8};  var64=false} ;
+  "LDARH"   , LDAXR {txt="LDARH";  acctype=AccType_ORDERED; excl=false; memop=MemOp_LOAD;  var32={elsize=16; datasize=DataSize16}; var64=false} ;
+  "LDAXR"   , LDAXR {txt="LDAXR";  acctype=AccType_ORDERED; excl=true;  memop=MemOp_LOAD;  var32={elsize=32; datasize=DataSize32}; var64=true} ;
+  "LDAXRB"  , LDAXR {txt="LDAXRB"; acctype=AccType_ORDERED; excl=true;  memop=MemOp_LOAD;  var32={elsize=8;  datasize=DataSize8};  var64=false} ;
+  "LDAXRH"  , LDAXR {txt="LDAXRH"; acctype=AccType_ORDERED; excl=true;  memop=MemOp_LOAD;  var32={elsize=16; datasize=DataSize16}; var64=false} ;
+  "LDXR"    , LDAXR {txt="LDXR";   acctype=AccType_ATOMIC;  excl=true;  memop=MemOp_LOAD;  var32={elsize=32; datasize=DataSize32}; var64=true} ;
+  "LDXRB"   , LDAXR {txt="LDXRB";  acctype=AccType_ATOMIC;  excl=true;  memop=MemOp_LOAD;  var32={elsize=8;  datasize=DataSize8};  var64=false} ;
+  "LDXRH"   , LDAXR {txt="LDXRH";  acctype=AccType_ATOMIC;  excl=true;  memop=MemOp_LOAD;  var32={elsize=16; datasize=DataSize16}; var64=false} ;
+  "STLR"    , LDAXR {txt="STLR";   acctype=AccType_ORDERED; excl=false; memop=MemOp_STORE; var32={elsize=32; datasize=DataSize32}; var64=true} ;
+  "STLRB"   , LDAXR {txt="STLRB";  acctype=AccType_ORDERED; excl=false; memop=MemOp_STORE; var32={elsize=8;  datasize=DataSize8};  var64=false} ;
+  "STLRH"   , LDAXR {txt="STLRH";  acctype=AccType_ORDERED; excl=false; memop=MemOp_STORE; var32={elsize=16; datasize=DataSize16}; var64=false} ;
+
+  "STLXR"   , STLXR {txt="STLXR";  acctype=AccType_ORDERED; var32={elsize=32; datasize=DataSize32}; var64=true} ;
+  "STLXRB"  , STLXR {txt="STLXRB"; acctype=AccType_ORDERED; var32={elsize=8;  datasize=DataSize8};  var64=false} ;
+  "STLXRH"  , STLXR {txt="STLXRH"; acctype=AccType_ORDERED; var32={elsize=16; datasize=DataSize16}; var64=false} ;
+  "STXR"    , STLXR {txt="STXR";   acctype=AccType_ATOMIC;  var32={elsize=32; datasize=DataSize32}; var64=true} ;
+  "STXRB"   , STLXR {txt="STXRB";  acctype=AccType_ATOMIC;  var32={elsize=8;  datasize=DataSize8};  var64=false} ;
+  "STXRH"   , STLXR {txt="STXRH";  acctype=AccType_ATOMIC;  var32={elsize=16; datasize=DataSize16}; var64=false} ;
+
+
+  "LDAXP"   , LDXP {txt="LDAXP"; acctype=AccType_ORDERED} ;
+  "LDXP"    , LDXP {txt="LDXP";  acctype=AccType_ATOMIC} ;
+
+  "STLXP"   , STXP {txt="STLXP"; acctype=AccType_ORDERED} ;
+  "STXP"    , STXP {txt="STXP";  acctype=AccType_ATOMIC} ;
+
+  "LDR"    , LDSTR {txt="LDR";   memop=MemOp_LOAD; signed=false;  lit32=true;  var32=Some {datasize=DataSize32}; var64=Some {datasize=DataSize64}; lit64=Some {datasize=DataSize64; size=8}} ;
+  "LDRB"   , LDSTR {txt="LDRB";  memop=MemOp_LOAD; signed=false;  lit32=false; var32=Some {datasize=DataSize8};  var64=None;                       lit64=None} ;
+  "LDRH"   , LDSTR {txt="LDRH";  memop=MemOp_LOAD; signed=false;  lit32=false; var32=Some {datasize=DataSize16}; var64=None;                       lit64=None} ;
+  "LDRSB"  , LDSTR {txt="LDRSB"; memop=MemOp_LOAD; signed=true;   lit32=false; var32=Some {datasize=DataSize8};  var64=Some {datasize=DataSize8};  lit64=None} ;
+  "LDRSH"  , LDSTR {txt="LDRSH"; memop=MemOp_LOAD; signed=true;   lit32=false; var32=Some {datasize=DataSize16}; var64=Some {datasize=DataSize16}; lit64=None} ;
+  "LDRSW"  , LDSTR {txt="LDRSW"; memop=MemOp_LOAD; signed=true;   lit32=false; var32=None;                       var64=Some {datasize=DataSize32}; lit64=Some {datasize=DataSize32; size=4}} ;
+  "STR"    , LDSTR {txt="STR";   memop=MemOp_STORE; signed=false; lit32=false; var32=Some {datasize=DataSize32}; var64=Some {datasize=DataSize64}; lit64=None} ;
+  "STRB"   , LDSTR {txt="STRB";  memop=MemOp_STORE; signed=false; lit32=false; var32=Some {datasize=DataSize8};  var64=None;                       lit64=None} ;
+  "STRH"   , LDSTR {txt="STRH";  memop=MemOp_STORE; signed=false; lit32=false; var32=Some {datasize=DataSize16}; var64=None;                       lit64=None} ;
+
+  "LDTR"    , LDSTTUR {txt="LDTR";   memop=MemOp_LOAD; acctype=AccType_UNPRIV; signed=false; off32=Some {datasize=DataSize32}; off64=Some {datasize=DataSize64}} ;
+  "LDTRB"   , LDSTTUR {txt="LDTRB";  memop=MemOp_LOAD; acctype=AccType_UNPRIV; signed=false; off32=Some {datasize=DataSize8};  off64=None} ;
+  "LDTRH"   , LDSTTUR {txt="LDTRH";  memop=MemOp_LOAD; acctype=AccType_UNPRIV; signed=false; off32=Some {datasize=DataSize16}; off64=None} ;
+  "LDTRSB"  , LDSTTUR {txt="LDTRSB"; memop=MemOp_LOAD; acctype=AccType_UNPRIV; signed=true;  off32=Some {datasize=DataSize8};  off64=Some {datasize=DataSize8}} ;
+  "LDTRSH"  , LDSTTUR {txt="LDTRSH"; memop=MemOp_LOAD; acctype=AccType_UNPRIV; signed=true;  off32=Some {datasize=DataSize16}; off64=Some {datasize=DataSize16}} ;
+  "LDTRSW"  , LDSTTUR {txt="LDTRSW"; memop=MemOp_LOAD; acctype=AccType_UNPRIV; signed=true;  off32=None;                         off64=Some {datasize=DataSize32}} ;
+  "LDUR"    , LDSTTUR {txt="LDUR";   memop=MemOp_LOAD; acctype=AccType_NORMAL; signed=false; off32=Some {datasize=DataSize32}; off64=Some {datasize=DataSize64}} ;
+  "LDURB"   , LDSTTUR {txt="LDURB";  memop=MemOp_LOAD; acctype=AccType_NORMAL; signed=false; off32=Some {datasize=DataSize8};  off64=None} ;
+  "LDURH"   , LDSTTUR {txt="LDURH";  memop=MemOp_LOAD; acctype=AccType_NORMAL; signed=false; off32=Some {datasize=DataSize16}; off64=None} ;
+  "LDURSB"  , LDSTTUR {txt="LDURSB"; memop=MemOp_LOAD; acctype=AccType_NORMAL; signed=true;  off32=Some {datasize=DataSize8};  off64=Some {datasize=DataSize8}} ;
+  "LDURSH"  , LDSTTUR {txt="LDURSH"; memop=MemOp_LOAD; acctype=AccType_NORMAL; signed=true;  off32=Some {datasize=DataSize16}; off64=Some {datasize=DataSize16}} ;
+  "LDURSW"  , LDSTTUR {txt="LDURSW"; memop=MemOp_LOAD; acctype=AccType_NORMAL; signed=true;  off32=None;                         off64=Some {datasize=DataSize32}} ;
+  "STTR"    , LDSTTUR {txt="STTR";   memop=MemOp_STORE; acctype=AccType_UNPRIV; signed=false; off32=Some {datasize=DataSize32}; off64=Some {datasize=DataSize64}} ;
+  "STTRB"   , LDSTTUR {txt="STTRB";  memop=MemOp_STORE; acctype=AccType_UNPRIV; signed=false; off32=Some {datasize=DataSize8};  off64=None} ;
+  "STTRH"   , LDSTTUR {txt="STTRH";  memop=MemOp_STORE; acctype=AccType_UNPRIV; signed=false; off32=Some {datasize=DataSize16}; off64=None} ;
+  "STUR"    , LDSTTUR {txt="STUR";   memop=MemOp_STORE; acctype=AccType_NORMAL; signed=false; off32=Some {datasize=DataSize32}; off64=Some {datasize=DataSize64}} ;
+  "STURB"   , LDSTTUR {txt="STURB";  memop=MemOp_STORE; acctype=AccType_NORMAL; signed=false; off32=Some {datasize=DataSize8};  off64=None} ;
+  "STURH"   , LDSTTUR {txt="STURH";  memop=MemOp_STORE; acctype=AccType_NORMAL; signed=false; off32=Some {datasize=DataSize16}; off64=None} ;
+
+  "MADD" , MADDSUB {txt="MADD"; sub_op=false} ;
+  "MSUB" , MADDSUB {txt="MSUB"; sub_op=true} ;
+
+  "MUL"  , MUL {txt="MUL";  sub_op=false} ;
+  "MNEG" , MUL {txt="MNEG"; sub_op=true} ;
+
+  "MOVK" , MOVWIDE {txt="MOVK"; opcode=MoveWideOp_K} ;
+  "MOVN" , MOVWIDE {txt="MOVN"; opcode=MoveWideOp_N} ;
+  "MOVZ" , MOVWIDE {txt="MOVZ"; opcode=MoveWideOp_Z} ;
+
+  "NEG"  , NEG {txt="NEG";  setflags=false} ;
+  "NEGS" , NEG {txt="NEGS"; setflags=true} ;
+
+  "NGC"  , NGC {txt="NGC";  setflags=false} ;
+  "NGCS" , NGC {txt="NGCS"; setflags=true} ;
+
+  "RBIT"  , REV {txt="RBIT";  op32=Some RevOp_RBIT;  op64=RevOp_RBIT} ;
+  "REV"   , REV {txt="REV";   op32=Some RevOp_REV32; op64=RevOp_REV64} ;
+  "REV16" , REV {txt="REV16"; op32=Some RevOp_REV16; op64=RevOp_REV16} ;
+  "REV32" , REV {txt="REV32"; op32=None;             op64=RevOp_REV32} ;
+
+  "SDIV" , DIV {txt="SDIV"; unsigned=false} ;
+  "UDIV" , DIV {txt="UDIV"; unsigned=true} ;
+
+  "SMADDL" , MADDSUBL {txt="SMADDL"; sub_op=false; unsigned=false} ;
+  "SMSUBL" , MADDSUBL {txt="SMSUBL"; sub_op=true;  unsigned=false} ;
+  "UMADDL" , MADDSUBL {txt="UMADDL"; sub_op=false; unsigned=true} ;
+  "UMSUBL" , MADDSUBL {txt="UMSUBL"; sub_op=true;  unsigned=true} ;
+
+  "SMULH" , MULH {txt="SMULH"; unsigned=false} ;
+  "UMULH" , MULH {txt="UMULH"; unsigned=true} ;
+
+  "SMULL" , MULL {txt="SMULL"; unsigned=false} ;
+  "UMULL" , MULL {txt="UMULL"; unsigned=true} ;
+
+  "LDP" , LDSTP {txt="LDP"; memop=MemOp_LOAD} ;
+  "STP" , LDSTP {txt="STP"; memop=MemOp_STORE} ;
+
+  "TBZ"  , TBZ {txt="TBZ";  bit_val=false} ;
+  "TBNZ" , TBZ {txt="TBNZ"; bit_val=true} ;
+
+  "SBFIZ" , BFIZ {txt="SBFIZ"; extend=true} ;
+  "UBFIZ" , BFIZ {txt="UBFIZ"; extend=false} ;
+
+  "SBFX" , BFX {txt="SBFX"; extend=true} ;
+  "UBFX" , BFX {txt="UBFX"; extend=false} ;
+
+  "SMNEGL" , MNEGL {txt="SMNEGL"; unsigned=false} ;
+  "UMNEGL" , MNEGL {txt="UMNEGL"; unsigned=true} ;
+
+  "BFI" , BFI {txt="BFI"} ;
+  "BFXIL" , BFXIL {txt="BFXIL"} ;
+  "CLREX" , CLREX {txt="CLREX"} ;
+  "EXTR" , EXTR {txt="EXTR"} ;
+  "HINT" , HINT {txt="HINT"} ;
+  "ISB" , ISB {txt="ISB"} ;
+  "LDPSW" , LDPSW {txt="LDPSW"} ;
+  "MOV" , MOV {txt="MOV"} ;
+  "MVN" , MVN {txt="MVN"} ;
+  "NOP" , NOP {txt="NOP"} ;
+  "PRFM" , PRFM {txt="PRFM"} ;
+  "PRFUM" , PRFUM {txt="PRFUM"} ;
+  "RET" , RET {txt="RET"} ;
+  "TST" , TST {txt="TST"} ;
+  "MRS" , MRS {txt="MRS"} ;
+  "MSR" , MSR {txt="MSR"} ;
+
+
+(*** instructions/operands ***)
+
+  "LSL"   , SHIFT {txt="LSL"; shift_type=ShiftType_LSL} ;
+  "LSR"   , SHIFT {txt="LSR"; shift_type=ShiftType_LSR} ;
+  "ASR"   , SHIFT {txt="ASR"; shift_type=ShiftType_ASR} ;
+  "ROR"   , SHIFT {txt="ROR"; shift_type=ShiftType_ROR} ;
+
+  "UXTB"  , EXTEND {txt="UXTB"; _type=ExtendType_UXTB; inst=Some {extend=false; imms=7}} ;
+  "UXTH"  , EXTEND {txt="UXTH"; _type=ExtendType_UXTH; inst=Some {extend=false; imms=15}} ;
+  "UXTW"  , EXTEND {txt="UXTW"; _type=ExtendType_UXTW; inst=None} ;
+  "UXTX"  , EXTEND {txt="UXTX"; _type=ExtendType_UXTX; inst=None} ;
+  "SXTB"  , EXTEND {txt="SXTB"; _type=ExtendType_SXTB; inst=Some {extend=true; imms=7}} ;
+  "SXTH"  , EXTEND {txt="SXTH"; _type=ExtendType_SXTH; inst=Some {extend=true; imms=15}} ;
+  "SXTW"  , EXTEND {txt="SXTW"; _type=ExtendType_SXTW; inst=Some {extend=true; imms=31}} ;
+  "SXTX"  , EXTEND {txt="SXTX"; _type=ExtendType_SXTX; inst=None} ;
+
+(*** operands: ***)
+
+  "EQ" , COND 0b0000 ;
+  "NE" , COND 0b0001 ;
+  "CS" , COND 0b0010 ;
+  "HS" , COND 0b0010 ;
+  "CC" , COND 0b0011 ;
+  "LO" , COND 0b0011 ;
+  "MI" , COND 0b0100 ;
+  "PL" , COND 0b0101 ;
+  "VS" , COND 0b0110 ;
+  "VC" , COND 0b0111 ;
+  "HI" , COND 0b1000 ;
+  "LS" , COND 0b1001 ;
+  "GE" , COND 0b1010 ;
+  "LT" , COND 0b1011 ;
+  "GT" , COND 0b1100 ;
+  "LE" , COND 0b1101 ;
+  "AL" , COND 0b1110 ;
+  "NV" , COND 0b1111 ; (* ARM: exists only to provide a valid disassembly
+                               of the 0b1111 encoding, otherwise its
+                               behavior is identical to AL *)
+
+  "OSHLD" , BARROP {domain=MBReqDomain_OuterShareable; types=MBReqTypes_Reads} ;
+  "OSHST" , BARROP {domain=MBReqDomain_OuterShareable; types=MBReqTypes_Writes} ;
+  "OSH"   , BARROP {domain=MBReqDomain_OuterShareable; types=MBReqTypes_All} ;
+  "NSHLD" , BARROP {domain=MBReqDomain_Nonshareable;   types=MBReqTypes_Reads} ;
+  "NSHST" , BARROP {domain=MBReqDomain_Nonshareable;   types=MBReqTypes_Writes} ;
+  "NSH"   , BARROP {domain=MBReqDomain_Nonshareable;   types=MBReqTypes_All} ;
+  "ISHLD" , BARROP {domain=MBReqDomain_InnerShareable; types=MBReqTypes_Reads} ;
+  "ISHST" , BARROP {domain=MBReqDomain_InnerShareable; types=MBReqTypes_Writes} ;
+  "ISH"   , BARROP {domain=MBReqDomain_InnerShareable; types=MBReqTypes_All} ;
+  "LD"    , BARROP {domain=MBReqDomain_FullSystem;     types=MBReqTypes_Reads} ;
+  "ST"    , BARROP {domain=MBReqDomain_FullSystem;     types=MBReqTypes_Writes} ;
+  "SY"    , BARROP {domain=MBReqDomain_FullSystem;     types=MBReqTypes_All} ;
+
+  "PLDL1KEEP" , PRFOP (X (Ireg R0)) ;
+  "PLDL1STRM" , PRFOP (X (Ireg R1)) ;
+  "PLDL2KEEP" , PRFOP (X (Ireg R2)) ;
+  "PLDL2STRM" , PRFOP (X (Ireg R3)) ;
+  "PLDL3KEEP" , PRFOP (X (Ireg R4)) ;
+  "PLDL3STRM" , PRFOP (X (Ireg R5)) ;
+
+  "PLIL1KEEP" , PRFOP (X (Ireg R8)) ;
+  "PLIL1STRM" , PRFOP (X (Ireg R9)) ;
+  "PLIL2KEEP" , PRFOP (X (Ireg R10)) ;
+  "PLIL2STRM" , PRFOP (X (Ireg R11)) ;
+  "PLIL3KEEP" , PRFOP (X (Ireg R12)) ;
+  "PLIL3STRM" , PRFOP (X (Ireg R13)) ;
+
+  "PSTL1KEEP" , PRFOP (X (Ireg R16)) ;
+  "PSTL1STRM" , PRFOP (X (Ireg R17)) ;
+  "PSTL2KEEP" , PRFOP (X (Ireg R18)) ;
+  "PSTL2STRM" , PRFOP (X (Ireg R19)) ;
+  "PSTL3KEEP" , PRFOP (X (Ireg R20)) ;
+  "PSTL3STRM" , PRFOP (X (Ireg R21)) ;
+
+  "NZCV" , SYSREG {sys_op0=0b11; sys_op1=0b011; sys_op2=0b000; sys_crn=0b0100; sys_crm=0b0010} ;
+  "DAIF" , SYSREG {sys_op0=0b11; sys_op1=0b011; sys_op2=0b001; sys_crn=0b0100; sys_crm=0b0010} ;
+  "TPIDR_EL0" , SYSREG {sys_op0=0b11; sys_op1=0b011; sys_op2=0b010; sys_crn=0b1101; sys_crm=0b0000} ;
+  "TPIDR_EL1" , SYSREG {sys_op0=0b11; sys_op1=0b000; sys_op2=0b100; sys_crn=0b1101; sys_crm=0b0000} ;
+  "TPIDR_EL2" , SYSREG {sys_op0=0b11; sys_op1=0b100; sys_op2=0b010; sys_crn=0b1101; sys_crm=0b0000} ;
+  "TPIDR_EL3" , SYSREG {sys_op0=0b11; sys_op1=0b011; sys_op2=0b011; sys_crn=0b1101; sys_crm=0b0000} ;
+
+  "SPSel"   , PSTATEFIELD (PSTATEField_SP) ;
+  "DAIFSet" , PSTATEFIELD (PSTATEField_DAIFSet) ;
+  "DAIFClr" , PSTATEFIELD (PSTATEField_DAIFClr) ;

@@ -1,0 +1,155 @@
+(* for each instruction instance, identify the role of the registers
+   and possible branching: (outputs, inputs, voidstars, branch) *)
+
+| `AArch64TMStart t -> failwith "TSTART is not implemented"
+| `AArch64TMCommit -> failwith "TCOMMIT is not implemented"
+| `AArch64TMAbort (retry,reason) -> failwith "TABORT is not implemented"
+| `AArch64TMTest -> failwith "TTEST is not implemented"
+
+| `AArch64AddSubCarry (d,n,m,_datasize,_sub_op,_setflags) ->
+      ([d], [n; m], [], [Next])
+
+| `AArch64AddSubExtendRegister (d,n,m,_datasize,_sub_op,_setflags,_extend_type,_shift) ->
+      ([d], [n; m], [], [Next])
+
+| `AArch64AddSubShiftedRegister (d,n,m,_datasize,_sub_op,_setflags,_shift_type,_shift_amount) ->
+      ([d], [n; m], [], [Next])
+
+| `AArch64AddSubImmediate (d,n,_datasize,_sub_op,_setflags,_imm) ->
+      ([d], [n], [], [Next])
+
+| `AArch64Address (d,_page,_imm) ->
+      ([d], [], [], [Next])
+
+| `AArch64LogicalImmediate (d,n,_datasize,_setflags,_op,_imm) ->
+      ([d], [n], [], [Next])
+
+| `AArch64LogicalShiftedRegister (d,n,m,_datasize,_setflags,_op,_shift_type,_shift_amount,_invert) ->
+      ([d], [n; m], [], [Next])
+
+| `AArch64Shift (d,n,m,_datasize,_shift_type) ->
+      ([d], [n; m], [], [Next])
+
+| `AArch64BranchConditional (__offset,_condition) ->
+      ([], [], [], [Next])
+
+| `AArch64BranchImmediate (branch_type,__offset) ->
+      ([], [], [], [Next])
+
+| `AArch64BitfieldMove (d,n,_datasize,_inzero,_extend,_R,_S,_wmask,_tmask) ->
+      ([d], [n], [], [Next])
+
+| `AArch64BranchRegister (n,branch_type) ->
+      ([], [n], [], [Next])
+
+| `AArch64CompareAndBranch (t,_datasize,_iszero,__offset) ->
+      ([], [t], [], [Next])
+
+| `AArch64ConditionalCompareImmediate (n,_datasize,_sub_op,_condition,_flags,_imm) ->
+      ([], [n], [], [Next])
+
+| `AArch64ConditionalCompareRegister (n,m,_datasize,_sub_op,_condition,_flags) ->
+      ([], [n; m], [], [Next])
+
+| `AArch64ClearExclusiveMonitor (_imm) ->
+      ([], [], [], [Next])
+
+| `AArch64CountLeading (d,n,_datasize,__opcode) ->
+      ([d], [n], [], [Next])
+
+| `AArch64CRC (d,n,m,_size,_crc32c) ->
+      ([d], [n; m], [], [Next])
+
+| `AArch64ConditionalSelect (d,n,m,_datasize,_condition,_else_inv,_else_inc) ->
+      ([d], [n; m], [], [Next])
+
+| `AArch64Barrier (_op,_domain,_types) ->
+      ([], [], [], [Next])
+
+| `AArch64ExtractRegister (d,n,m,_datasize,_lsb) ->
+      ([d], [n; m], [], [Next])
+
+| `AArch64Hint (_op) ->
+      ([], [], [], [Next])
+
+| `AArch64LoadStoreAcqExc (n,t,t2,s,_acctype,false,false,MemOp_STORE,_elsize,_regsize,_datasize) ->
+      ([], [t; n], [n], [Next])
+| `AArch64LoadStoreAcqExc (n,t,t2,s,_acctype,true,false,MemOp_STORE,_elsize,_regsize,_datasize) ->
+      ([s], [t; n], [n], [Next])
+| `AArch64LoadStoreAcqExc (n,t,t2,s,_acctype,true,true,MemOp_STORE,_elsize,_regsize,_datasize) ->
+      ([s], [t; t2; n], [n], [Next])
+
+| `AArch64LoadStoreAcqExc (n,t,t2,s,_acctype,false,false,MemOp_LOAD,_elsize,_regsize,_datasize) ->
+      ([t], [n], [n], [Next])
+| `AArch64LoadStoreAcqExc (n,t,t2,s,_acctype,true,false,MemOp_LOAD,_elsize,_regsize,_datasize) ->
+      ([t], [n], [n], [Next])
+| `AArch64LoadStoreAcqExc (n,t,t2,s,_acctype,true,true,MemOp_LOAD,_elsize,_regsize,_datasize) ->
+      ([t; t2], [n], [n], [Next])
+
+| `AArch64LoadStorePair (false,_postindex,n,t,t2,_acctype,MemOp_STORE,_signed,_datasize,_offset) ->
+      ([], [n; t; t2], [n], [Next])
+| `AArch64LoadStorePair (true,_postindex,n,t,t2,_acctype,MemOp_STORE,_signed,_datasize,_offset) ->
+      ([n], [n; t; t2], [n], [Next])
+
+| `AArch64LoadStorePair (false,_postindex,n,t,t2,_acctype,MemOp_LOAD,_signed,_datasize,_offset) ->
+      ([t; t2], [n], [n], [Next])
+| `AArch64LoadStorePair (true,_postindex,n,t,t2,_acctype,MemOp_LOAD,_signed,_datasize,_offset) ->
+      ([t; t2; n], [n], [n], [Next])
+
+| `AArch64LoadImmediate (n,t,_acctype,MemOp_STORE,_signed,false,_postindex,_offset,_regsize,_datasize) ->
+      ([], [n; t], [n], [Next])
+| `AArch64LoadImmediate (n,t,_acctype,MemOp_STORE,_signed,true,_postindex,_offset,_regsize,_datasize) ->
+      ([n], [n; t], [n], [Next])
+
+| `AArch64LoadImmediate (n,t,_acctype,MemOp_LOAD,_signed,false,_postindex,_offset,_regsize,_datasize) ->
+      ([t], [n], [n], [Next])
+| `AArch64LoadImmediate (n,t,_acctype,MemOp_LOAD,_signed,true,_postindex,_offset,_regsize,_datasize) ->
+      ([t; n], [n], [n], [Next])
+
+| `AArch64LoadLiteral (t,MemOp_STORE,_signed,_size,_offset,_datasize) ->
+      ([], [t], [], [Next])
+
+| `AArch64LoadLiteral (t,MemOp_LOAD,_signed,_size,_offset,_datasize) ->
+      ([t], [], [], [Next])
+
+| `AArch64LoadRegister (n,t,m,_acctype,MemOp_STORE,_signed,false,_postindex,_extend_type,_shift,_regsize,_datasize) ->
+    ([], [n; t; m], [n], [Next])
+| `AArch64LoadRegister (n,t,m,_acctype,MemOp_STORE,_signed,true,_postindex,_extend_type,_shift,_regsize,_datasize) ->
+    ([n], [n; t; m], [n], [Next])
+
+| `AArch64LoadRegister (n,t,m,_acctype,MemOp_LOAD,_signed,false,_postindex,_extend_type,_shift,_regsize,_datasize) ->
+    ([t], [n; m], [n], [Next])
+| `AArch64LoadRegister (n,t,m,_acctype,MemOp_LOAD,_signed,true,_postindex,_extend_type,_shift,_regsize,_datasize) ->
+    ([t; n], [n; m], [n], [Next])
+
+| `AArch64LoadRegister (n,t,m,_acctype,MemOp_PREFETCH,_signed,_wback,_postindex,_extend_type,_shift,_regsize,_datasize) ->
+    ([], [n; m], [n], [Next])
+
+| `AArch64MultiplyAddSub (d,n,m,a,_destsize,_datasize,_sub_op) ->
+      ([d], [n; m; a], [], [Next])
+
+| `AArch64MoveWide (d,_datasize,_imm,_pos,_opcode) ->
+      ([d], [], [], [Next])
+
+| `AArch64Reverse (d,n,_datasize,_op) ->
+      ([d], [n], [], [Next])
+
+| `AArch64Division (d,n,m,_datasize,_unsigned) ->
+      ([d], [n; m], [], [Next])
+
+| `AArch64MultiplyAddSubLong (d,n,m,a,_destsize,_datasize,_sub_op,_unsigned) ->
+      ([d], [n; m; a], [], [Next])
+
+| `AArch64MultiplyHigh (d,n,m,a,_destsize,_datasize,_unsigned) ->
+      ([d], [n; m; a], [], [Next])
+
+| `AArch64TestBitAndBranch (t,_datasize,_bit_pos,_bit_val,_offset) ->
+      ([], [t], [], [Next])
+
+| `AArch64MoveSystemRegister (t,_sys_op0,_sys_op1,_sys_op2,_sys_crn,_sys_crm,true) ->
+      ([t], [], [], [Next])
+| `AArch64MoveSystemRegister (t,_sys_op0,_sys_op1,_sys_op2,_sys_crn,_sys_crm,false) ->
+      ([], [t], [], [Next])
+
+| `AArch64MoveSystemImmediate (_operand,_field) ->
+      ([], [], [], [Next])
