@@ -4,9 +4,9 @@ Changelog
 Sail 0.8
 --------
 
-###### More flexible type synonym syntax
+##### More flexible type synonym syntax
 
-Can now define type synonyms for kinds other than type. For example:
+Can now define type synonyms for kinds other than `Type`. For example:
 ```
 type xlen : Int = 64
 type xlenbits = bits(xlen)
@@ -38,7 +38,7 @@ constant x = <value>
 ```
 is no longer supported.
 
-###### Emacs mode improvements
+##### Emacs mode improvements
 
 Can now use `C-c C-s` in Emacs to start a Sail interactive
 sub-process, assuming `sail` is available in `$PATH`. Using `C-c C-l`
@@ -76,7 +76,7 @@ For this to work Sail must be build with interactive support as `make
 isail`. This requires the yojson library as a new dependency (`opam
 install yojson`).
 
-###### Boolean constraints and type-variables
+##### Boolean constraints and type-variables
 
 We now support Boolean type arguments in much the same way as numeric
 type arguments. Much like the type int('n), which means an integer
@@ -118,7 +118,7 @@ x : bool = true // declaration of x
 x = false // fine because x can have any Boolean value
 ```
 
-###### Simpler implicit arguments
+##### Simpler implicit arguments
 
 Function implicit arguments are now given explicitly in their type signatures so
 ```
@@ -142,7 +142,30 @@ to write both new and old-versions if desired for backwards
 compatibility, as the new version is syntactically valid in older Sails,
 but just doesn't typecheck.
 
-###### Lem monad embedding changes
+##### Parameterised bitfields
+
+Bitfields can now be parameterised in the following way:
+```
+type xlenbits = bits(xlen)
+
+bitfield Mstatus : xlenbits = {
+  SD  : xlen - ylen,
+  SXL : xlen - ylen - 1 .. xlen - ylen - 3
+}
+```
+
+This bitfield would then be valid for either
+```
+type xlen : Int = 64
+type ylen : Int = 1
+```
+or
+```
+type xlen : Int = 32
+type ylen : Int = 1
+```
+
+##### Lem monad embedding changes
 
 The monad embedding for Lem has been changed to make it more friendly
 for theorem proving. This can break model-specific Lem that depends on
