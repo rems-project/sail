@@ -62,16 +62,14 @@ endif
 endif
 
 
-.PHONY: all sail sail.native sail.byte test clean doc lib power test_power test_idempotence
+.PHONY: all sail isail coverage sail.native sail.byte manifest.ml clean doc lib
 
 # set to -p on command line to enable gprof profiling
 OCAML_OPTS?=
 
-SHARE_DIR?=$(realpath ..)
-
 all: sail lib doc
 
-full: sail lib power doc test
+full: sail lib doc
 
 ast.lem: ../language/sail.ott
 	ott -sort false -generate_aux_rules true -o ast.lem -picky_multiple_parses true ../language/sail.ott
@@ -87,22 +85,32 @@ bytecode.ml: bytecode.lem
 	lem -ocaml bytecode.lem -lib . -lib gen_lib/
 	sed -i.bak -f ast.sed bytecode.ml
 
-lem_interp/interp_ast.lem: ../language/l2.ott
-	ott -sort false -generate_aux_rules true -o lem_interp/interp_ast.lem -picky_multiple_parses true ../language/l2.ott
+manifest.ml:
+	echo "(* Generated file -- do not edit. *)" > manifest.ml
+ifndef SHARE_DIR
+	echo let dir=\"$(realpath ..)\" >> manifest.ml
+	echo let commit=\"$(shell git rev-parse HEAD)\" >> manifest.ml
+	echo let branch=\"$(shell  git rev-parse --abbrev-ref HEAD)\" >> manifest.ml
+	echo let version=\"$(shell git describe)\" >> manifest.ml
+else
+	echo let dir=\"$(SHARE_DIR)\" >> manifest.ml
+	echo let commit=\"opam\" >> manifest.ml
+	echo let branch=\"sail2\" >> manifest.ml
+	echo let version=\"0.8\" >> manifest.ml
+endif
 
-share_directory.ml:
-	echo "(* Generated file -- do not edit. *)" > share_directory.ml
-	echo let d=\"$(SHARE_DIR)\" >> share_directory.ml
-
-sail: ast.ml bytecode.ml share_directory.ml
+sail: ast.ml bytecode.ml manifest.ml
 	ocamlbuild -use-ocamlfind sail.native sail_lib.cma sail_lib.cmxa
 
-isail: ast.ml bytecode.ml share_directory.ml
+isail: ast.ml bytecode.ml manifest.ml
 	ocamlbuild -use-ocamlfind isail.native
+
+coverage: ast.ml bytecode.ml manifest.ml
+	BISECT_COVERAGE=YES ocamlbuild -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' isail.native
 
 sail.native: sail
 
-sail.byte: ast.ml bytecode.ml share_directory.ml
+sail.byte: ast.ml bytecode.ml manifest.ml
 	ocamlbuild -use-ocamlfind -cflag -g sail.byte
 
 isail.byte: ast.ml bytecode.ml share_directory.ml
@@ -112,30 +120,9 @@ interpreter: lem_interp/interp_ast.lem
 	ocamlbuild -use-ocamlfind lem_interp/extract.cmxa
 	ocamlbuild -use-ocamlfind lem_interp/extract.cma
 
-test: sail interpreter
-	ocamlbuild -use-ocamlfind test/run_tests.native
-	./run_tests.native
-
 THIS_MAKEFILE := $(realpath $(lastword $(MAKEFILE_LIST)))
 SAIL_DIR:=$(realpath $(dir $(THIS_MAKEFILE))..)
 PROJECT_ROOT=$(realpath $(dir $(THIS_MAKEFILE))../..)
-
-_build/sail_values.ml: gen_lib/sail_values.ml
-	$(CP_TO_BUILD)
-
-_build/power.ml: $(SAIL_DIR)/src/test/power.sail sail.native
-	cd _build; \
-	./sail.native -lem_ast -ocaml $< -o $(basename $(@))
-
-_build/power.native: _build/sail_values.ml _build/power.ml
-	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package zarith -package unix -I _build -linkpkg $^ -o $@
-
-_build/armv8_embed.ml: sail.native
-	make -C ../arm ocaml
-	cp ../arm/build/armv8_embed.ml $@
-
-_build/arm.native: _build/sail_values.ml _build/armv8_embed.ml
-	env OCAMLRUNPARAM=l=100M ocamlfind ocamlopt $(OCAML_OPTS) -g -package zarith -package unix -I _build -linkpkg $^ -o $@
 
 clean:
 	-ocamlbuild -clean
@@ -151,7 +138,7 @@ clean:
 	-rm -f bytecode.ml
 	-rm -f bytecode.lem
 	-rm -f bytecode.ml.bak
-	-rm -f share_directory.ml
+	-rm -f manifest.ml
 
 doc:
 	ocamlbuild -use-ocamlfind sail.docdir/index.html

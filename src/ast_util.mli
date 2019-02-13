@@ -113,7 +113,7 @@ val is_nat_kopt : kinded_id -> bool
 val is_order_kopt : kinded_id -> bool
 val is_typ_kopt : kinded_id -> bool
 val is_bool_kopt : kinded_id -> bool
-  
+
 (* Some handy utility functions for constructing types. *)
 val mk_typ : typ_aux -> typ
 val mk_typ_arg : typ_arg_aux -> typ_arg
@@ -124,9 +124,11 @@ val unknown_typ : typ
 val int_typ : typ
 val nat_typ : typ
 val atom_typ : nexp -> typ
+val implicit_typ : nexp -> typ
 val range_typ : nexp -> nexp -> typ
 val bit_typ : typ
 val bool_typ : typ
+val atom_bool_typ : n_constraint -> typ
 val app_typ : id -> typ_arg list -> typ
 val register_typ : typ -> typ
 val unit_typ : typ
@@ -191,7 +193,7 @@ val quant_map_items : (quant_item -> quant_item) -> typquant -> typquant
 
 val is_quant_kopt : quant_item -> bool
 val is_quant_constraint : quant_item -> bool
-  
+
 (* Functions to map over the annotations in sub-expressions *)
 val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
 val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat
@@ -281,6 +283,11 @@ module BE : sig
   val compare : base_effect -> base_effect -> int
 end
 
+module NC : sig
+  type t = n_constraint
+  val compare : n_constraint -> n_constraint -> int
+end
+
 (* NB: the comparison function does not expand synonyms *)
 module Typ : sig
   type t = typ
@@ -330,6 +337,7 @@ end
 val nexp_frees : nexp -> KidSet.t
 val nexp_identical : nexp -> nexp -> bool
 val is_nexp_constant : nexp -> bool
+val int_of_nexp_opt : nexp -> Big_int.num option
 
 val lexp_to_exp : 'a lexp -> 'a exp
 
@@ -351,7 +359,15 @@ val has_effect : effect -> base_effect_aux -> bool
 val effect_set : effect -> BESet.t
 
 val equal_effects : effect -> effect -> bool
+val subseteq_effects : effect -> effect -> bool
 val union_effects : effect -> effect -> effect
+
+val kopts_of_order : order -> KOptSet.t
+val kopts_of_nexp : nexp -> KOptSet.t
+val kopts_of_typ : typ -> KOptSet.t
+val kopts_of_typ_arg : typ_arg -> KOptSet.t
+val kopts_of_constraint : n_constraint -> KOptSet.t
+val kopts_of_quant_item : quant_item -> KOptSet.t
 
 val tyvars_of_nexp : nexp -> KidSet.t
 val tyvars_of_typ : typ -> KidSet.t
@@ -427,3 +443,7 @@ val subst_kid : (kid -> typ_arg -> 'a -> 'a) -> kid -> kid -> 'a -> 'a
 
 val quant_item_subst_kid : kid -> kid -> quant_item -> quant_item
 val typquant_subst_kid : kid -> kid -> typquant -> typquant
+
+val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
+
+val find_annot_ast : (Lexing.position * Lexing.position) option -> 'a defs -> (Ast.l * 'a) option

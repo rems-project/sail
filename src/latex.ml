@@ -397,9 +397,9 @@ let process_pragma l command =
 
 let tdef_id = function
   | TD_abbrev (id, _, _) -> id
-  | TD_record (id, _, _, _, _) -> id
-  | TD_variant (id, _, _, _, _) -> id
-  | TD_enum (id, _, _, _) -> id
+  | TD_record (id, _, _, _) -> id
+  | TD_variant (id, _, _, _) -> id
+  | TD_enum (id, _, _) -> id
   | TD_bitfield (id, _, _) -> id
 
 let defs (Defs defs) =

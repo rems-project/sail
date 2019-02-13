@@ -290,43 +290,6 @@ typschm :: 'TypSchm_' ::=
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 grammar
-%ctor_def :: 'CT_' ::=
-%  {{ com Datatype constructor definition clause }}
-%  {{ aux _ annot }} {{ auxparam 'a }}
-%  | id : typschm                                       :: :: ct
-% but we could get away with disallowing constraints in typschm, we
-% think - if it's useful to do that
-
-%enum_opt :: 'EnumOpt_' ::=
-%  |      :: :: empty
-%  | enum :: :: enum
-
-%% tdefbody :: 'TD_' ::=
-%%   {{ com Type definition bodies }}
-%%   | typschm                                                     :: :: abbrev
-%%     {{ com Type abbreviations }}
-%%   | typquant <| id1 : typ1 ; ... ; idn : typn semi_opt |>     :: :: record
-%%     {{ com Record types }}
-%%   | enumeration_flag_opt '|' ctor_def1 '|' ... '|' ctor_defn            :: :: variant
-%%     {{ com Variant types }}
-%% 
- name_scm_opt :: 'Name_sect_' ::=
-   {{ com optional variable naming-scheme constraint}} 
-   {{ aux _ l }}
-   |                                                   :: :: none
-   | [ name = regexp ]                                 :: :: some
-%% 
-%% type_def :: '' ::=
-%%   {{ com Type definitions }}
-%%   | type id : kind naming_scheme_opt = tdefbody                                :: :: Td
-%% %  | enumeration id naming_scheme_opt = tdefbody                               ::   :: Td2
-%% % the enumeration is sugar for something that uses an enum flag, where the type system will restrict the tdefbody to be a simple enum...
-%% 
-
-% TODO: do we need mutually recursive type definitions?  
-
-
-%%% OR, IN C STYLE
 
 type_def {{ ocaml 'a type_def }} {{ lem type_def 'a }} :: 'TD_' ::=
   {{ ocaml TD_aux of type_def_aux * 'a annot }}
@@ -337,22 +300,14 @@ type_def_aux  :: 'TD_' ::=
   {{ com type definition body }}
   | type id typquant = typ_arg                                        :: :: abbrev
     {{ com type abbreviation }} {{ texlong }}
-  | typedef id name_scm_opt = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: :: record
+  | typedef id = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: :: record
     {{ com struct type definition }} {{ texlong }}
-  | typedef id name_scm_opt = const union typquant { type_union1 ; ... ; type_unionn semi_opt }   :: :: variant
+  | typedef id = const union typquant { type_union1 ; ... ; type_unionn semi_opt }   :: :: variant
     {{ com tagged union type definition}} {{ texlong }}
-  | typedef id name_scm_opt = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
+  | typedef id = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
     {{ com enumeration type definition}} {{ texlong }}
   | bitfield id : typ = { id1 : index_range1 , ... , idn : index_rangen } :: :: bitfield
     {{ com register mutable bitfield type definition }} {{ texlong }}
-
-% the D(eprecated) forms here should be removed; they add complexity for no purpose.  The nexp abbreviation form should have better syntax.
-% ; many are shorthands for type\_defs
-kind_def :: 'KD_' ::=
-  {{ com Definition body for elements of kind }}
-  {{ aux _ annot }} {{ auxparam 'a }}
-  | Def kind id name_scm_opt = nexp :: :: nabbrev
-    {{ com Int-expression abbreviation }}
 
 type_union :: 'Tu_' ::=
   {{ com type union constructors }}
@@ -361,8 +316,8 @@ type_union :: 'Tu_' ::=
 
 index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}} 
   {{ aux _ l }}
-  | num :: :: 'single'  {{ com single index }}
-  | num1 '..' num2 :: :: range {{ com index range }}
+  | nexp :: :: 'single'  {{ com single index }}
+  | nexp1 '..' nexp2 :: :: range {{ com index range }}
   | index_range1 , index_range2 :: :: concat {{ com concatenation of index ranges }}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -924,7 +879,7 @@ scattered_def :: 'SD_' ::=
   | function clause funcl  :: :: funcl
 {{ texlong }} {{ com scattered function definition clause }}
 
-  | scattered typedef id name_scm_opt = const union typquant :: :: variant
+  | scattered typedef id = const union typquant :: :: variant
 {{ texlong }} {{ com scattered union definition header }}
 
   | union id member type_union :: :: unioncl
@@ -953,7 +908,7 @@ alias_spec :: 'AL_' ::=
 dec_spec :: 'DEC_' ::=
   {{ com register declarations }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | register typ id                                             :: :: reg
+  | register effect effect' typ id                              :: :: reg
   | register configuration id : typ = exp                       :: :: config
   | register alias id = alias_spec				:: :: alias
   | register alias typ id = alias_spec				:: :: typ_alias
@@ -970,8 +925,6 @@ prec :: '' ::=
 def :: 'DEF_' ::=
   {{ com top-level definition }}
   {{ auxparam 'a }}
-  | kind_def                                           :: :: kind
-    {{ com definition of named kind identifiers }}
   | type_def                                           :: :: type
     {{ com type definition }}
   | fundef                                             :: :: fundef

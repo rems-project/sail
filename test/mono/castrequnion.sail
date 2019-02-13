@@ -4,9 +4,9 @@ $include <prelude.sail>
 val bitvector_cast_in = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
 val bitvector_cast_out = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
 
-val foo : forall 'm 'n, 'm in {8,16} & 'n in {16,32,64}. bits('m) -> option(bits('n)) effect pure
+val foo : forall 'm 'n, 'm in {8,16} & 'n in {16,32,64}. (implicit('n), bits('m)) -> option(bits('n)) effect pure
 
-function foo(x) =
+function foo(n, x) =
   let y : bits(16) = sail_zero_extend(x,16) in
   match 'n {
     16 => None(),

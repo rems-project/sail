@@ -1,5 +1,6 @@
 $include <smt.sail>
 $include <flow.sail>
+$include <arith.sail>
 default Order dec
 type bits ('n : Int) = vector('n, dec, bit)
 val operator & = "and_bool" : (bool, bool) -> bool

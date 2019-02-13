@@ -1,0 +1,326 @@
+| TMStart t ->
+  `AArch64TMStart (translate_out_regzr Set64 t)
+
+| TMCommit -> `AArch64TMCommit
+
+| TMAbort (retry, reason) ->
+  `AArch64TMAbort ( translate_out_bool retry,
+                    translate_out_bits reason)
+
+| TMTest -> `AArch64TMTest
+
+| ImplementationDefinedStopFetching ->
+  `AArch64ImplementationDefinedStopFetching
+
+| ImplementationDefinedThreadStart ->
+  `AArch64ImplementationDefinedThreadStart
+
+| ImplementationDefinedTestBeginEnd (isEnd) ->
+  `AArch64ImplementationDefinedTestBeginEnd (translate_out_bool isEnd)
+
+| AddSubCarry (d, n, m, datasize, sub_op, setflags) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64AddSubCarry ( translate_out_regzr datasize' d,
+                        translate_out_regzr datasize' n,
+                        translate_out_regzr datasize' m,
+                        datasize',
+                        translate_out_bool sub_op,
+                        translate_out_bool setflags)
+
+| AddSubExtendRegister (d, n, m, datasize, sub_op, setflags, extend_type, shift) ->
+  let setflags' = translate_out_bool setflags in
+  let datasize' = translate_out_reg_size datasize in
+  let extend_type' = translate_out_extendType extend_type in
+  `AArch64AddSubExtendRegister ((if setflags' then translate_out_regzr datasize' d else translate_out_regsp datasize' d),
+                                translate_out_regsp datasize' n,
+                                translate_out_regzrbyext datasize' extend_type' m,
+                                datasize',
+                                translate_out_bool sub_op,
+                                setflags',
+                                extend_type',
+                                translate_out_int shift)
+
+| AddSubShiftedRegister (d, n, m, datasize, sub_op, setflags, shift_type, shift_amount) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64AddSubShiftedRegister ( translate_out_regzr datasize' d,
+                                  translate_out_regzr datasize' n,
+                                  translate_out_regzr datasize' m,
+                                  datasize',
+                                  translate_out_bool sub_op,
+                                  translate_out_bool setflags,
+                                  translate_out_shiftType shift_type,
+                                  translate_out_int shift_amount)
+
+| AddSubImmediate (d, n, datasize, sub_op, setflags, imm) ->
+  let setflags' = translate_out_bool setflags in
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64AddSubImmediate ( (if setflags' then translate_out_regzr datasize' d else translate_out_regsp datasize' d),
+                            translate_out_regsp datasize' n,
+                            datasize',
+                            translate_out_bool sub_op,
+                            setflags',
+                            translate_out_reg_size_bits imm)
+
+| Address0 (d, page, imm) ->
+  `AArch64Address ( translate_out_regzr Set64 d,
+                    translate_out_bool page,
+                    translate_out_signed_big_bit imm)
+
+| LogicalImmediate (d, n, datasize, setflags, op, imm) ->
+  let setflags' = translate_out_bool setflags in
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64LogicalImmediate ((if setflags' then translate_out_regzr datasize' d else translate_out_regsp datasize' d),
+                            translate_out_regzr datasize' n,
+                            datasize',
+                            setflags',
+                            translate_out_logicalOp op,
+                            translate_out_reg_size_bits imm)
+
+| LogicalShiftedRegister (d, n, m, datasize, setflags, op, shift_type, shift_amount, invert) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64LogicalShiftedRegister (translate_out_regzr datasize' d,
+                                  translate_out_regzr datasize' n,
+                                  translate_out_regzr datasize' m,
+                                  datasize',
+                                  translate_out_bool setflags,
+                                  translate_out_logicalOp op,
+                                  translate_out_shiftType shift_type,
+                                  translate_out_int shift_amount,
+                                  translate_out_bool invert)
+
+| Shift (d, n, m, datasize, shift_type) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64Shift ( translate_out_regzr datasize' d,
+                  translate_out_regzr datasize' n,
+                  translate_out_regzr datasize' m,
+                  datasize',
+                  translate_out_shiftType shift_type)
+
+| BranchConditional (offset, condition) ->
+  `AArch64BranchConditional ( translate_out_signed_big_bit offset,
+                              translate_out_bits condition)
+
+| BranchImmediate (branch_type, offset) ->
+  `AArch64BranchImmediate ( translate_out_branchType branch_type,
+                            translate_out_signed_big_bit offset)
+
+| BitfieldMove (d, n, datasize, inzero, extend, _R, _S, wmask, tmask) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64BitfieldMove (translate_out_regzr datasize' d,
+                        translate_out_regzr datasize' n,
+                        datasize',
+                        translate_out_bool inzero,
+                        translate_out_bool extend,
+                        translate_out_int _R,
+                        translate_out_int _S,
+                        translate_out_reg_size_bits wmask,
+                        translate_out_reg_size_bits wmask)
+
+| BranchRegister (n, branch_type) ->
+  `AArch64BranchRegister (translate_out_regzr Set64 n,
+                          translate_out_branchType branch_type)
+
+| CompareAndBranch (t, datasize, iszero, offset) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64CompareAndBranch (translate_out_regzr datasize' t,
+                            datasize',
+                            translate_out_bool iszero,
+                            translate_out_signed_big_bit offset)
+
+| ConditionalCompareImmediate (n, datasize, sub_op, condition, flags, imm) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64ConditionalCompareImmediate ( translate_out_regzr datasize' n,
+                                        datasize',
+                                        translate_out_bool sub_op,
+                                        translate_out_bits condition,
+                                        translate_out_bits flags,
+                                        translate_out_reg_size_bits imm)
+
+| ConditionalCompareRegister (n, m, datasize, sub_op, condition, flags) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64ConditionalCompareRegister (translate_out_regzr datasize' n,
+                                      translate_out_regzr datasize' m,
+                                      datasize',
+                                      translate_out_bool sub_op,
+                                      translate_out_bits condition,
+                                      translate_out_bits flags)
+
+| ClearExclusiveMonitor (imm) -> `AArch64ClearExclusiveMonitor (translate_out_int imm)
+
+| CountLeading (d, n, datasize, opcode) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64CountLeading (translate_out_regzr datasize' d,
+                        translate_out_regzr datasize' d,
+                        datasize',
+                        translate_out_countOp opcode)
+
+| CRC (d, n, m, size, crc32c) ->
+  let size' = translate_out_data_size size in
+  `AArch64CRC ( translate_out_regzr Set32 d,
+                translate_out_regzr Set32 n,
+                translate_out_regzr (if size' = DataSize64 then Set64 else Set32) m,
+                size',
+                translate_out_bool crc32c)
+
+| ConditionalSelect (d, n, m, datasize, condition, else_inf, else_inc) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64ConditionalSelect ( translate_out_regzr datasize' d,
+                              translate_out_regzr datasize' n,
+                              translate_out_regzr datasize' m,
+                              datasize',
+                              translate_out_bits condition,
+                              translate_out_bool else_inf,
+                              translate_out_bool else_inc)
+
+| Barrier3 (op, domain, types) ->
+  `AArch64Barrier ( translate_out_memBarrierOp op,
+                    translate_out_mBReqDomain domain,
+                    translate_out_mBReqTypes types)
+
+| ExtractRegister (d, n, m, datasize, lsb) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64ExtractRegister ( translate_out_regzr datasize' d,
+                            translate_out_regzr datasize' n,
+                            translate_out_regzr datasize' m,
+                            datasize',
+                            translate_out_int lsb)
+
+| Hint (op) -> `AArch64Hint (translate_out_systemHintOp op)
+
+| LoadStoreAcqExc (n, t, t2, s, acctype, excl, pair, memop, elsize, regsize, datasize) ->
+  let regsize' = translate_out_reg_size regsize in
+  `AArch64LoadStoreAcqExc ( translate_out_regsp Set64 n,
+                            translate_out_regzr regsize' t,
+                            translate_out_regzr regsize' t2,
+                            translate_out_regzr Set32 s,
+                            translate_out_accType acctype,
+                            translate_out_bool excl,
+                            translate_out_bool pair,
+                            translate_out_memOp memop,
+                            translate_out_int elsize,
+                            regsize',
+                            translate_out_data_size datasize)
+
+| LoadStorePair(wback, postindex, n, t, t2, acctype, memop, signed, datasize, offset) ->
+  let signed' = translate_out_bool signed in
+  let regsize = if signed' then Set64 else translate_out_reg_size datasize in
+  `AArch64LoadStorePair ( translate_out_bool wback,
+                          translate_out_bool postindex,
+                          translate_out_regsp Set64 n,
+                          translate_out_regzr regsize t,
+                          translate_out_regzr regsize t2,
+                          translate_out_accType acctype,
+                          translate_out_memOp memop,
+                          signed',
+                          translate_out_data_size datasize,
+                          translate_out_signed_big_bit offset)
+
+| LoadImmediate(n, t, acctype, memop, signed, wback, postindex, offset, regsize, datasize) ->
+  let regsize' = translate_out_reg_size regsize in
+  `AArch64LoadImmediate ( translate_out_regsp Set64 n,
+                          translate_out_regzr regsize' t,
+                          translate_out_accType acctype,
+                          translate_out_memOp memop,
+                          translate_out_bool signed,
+                          translate_out_bool wback,
+                          translate_out_bool postindex,
+                          translate_out_signed_big_bit offset,
+                          translate_out_reg_size regsize,
+                          translate_out_data_size datasize)
+
+| LoadLiteral(t, memop, signed, size, offset, datasize) ->
+  `AArch64LoadLiteral ( translate_out_regzr (translate_out_reg_size datasize) t,
+                        translate_out_memOp memop,
+                        translate_out_bool signed,
+                        translate_out_int size,
+                        translate_out_signed_big_bit offset,
+                        translate_out_data_size datasize)
+
+| LoadRegister(n, t, m, acctype, memop, signed, wback, postindex, extend_type, shift, regsize, datasize) ->
+  let regsize' = translate_out_reg_size regsize in
+  let extend_type' = translate_out_extendType extend_type in
+  `AArch64LoadRegister (translate_out_regsp Set64 n,
+                        translate_out_regzr regsize' t,
+                        translate_out_regzrbyext Set64 extend_type' m,
+                        translate_out_accType acctype,
+                        translate_out_memOp memop,
+                        translate_out_bool signed,
+                        translate_out_bool wback,
+                        translate_out_bool postindex,
+                        extend_type',
+                        translate_out_int shift,
+                        translate_out_reg_size regsize ,
+                        translate_out_data_size datasize)
+
+| MultiplyAddSub (d, n, m, a, destsize, datasize, sub_op) ->
+  let destsize' = translate_out_reg_size destsize in
+  `AArch64MultiplyAddSub (translate_out_regzr destsize' d,
+                          translate_out_regzr destsize' n,
+                          translate_out_regzr destsize' m,
+                          translate_out_regzr destsize' a,
+                          destsize',
+                          translate_out_data_size datasize,
+                          translate_out_bool sub_op)
+
+| MoveWide (d, datasize, imm, pos, opcode) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64MoveWide (translate_out_regzr datasize' d,
+                    datasize',
+                    translate_out_bits imm,
+                    translate_out_int pos,
+                    translate_out_moveWideOp opcode)
+
+| Reverse (d, n, datasize, op) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64Reverse ( translate_out_regzr datasize' d,
+                    translate_out_regzr datasize' n,
+                    datasize',
+                    translate_out_revOp op)
+
+| Division (d, n, m, datasize, unsigned) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64Division (translate_out_regzr datasize' d,
+                    translate_out_regzr datasize' n,
+                    translate_out_regzr datasize' m,
+                    datasize',
+                    translate_out_bool unsigned)
+
+| MultiplyAddSubLong (d, n, m, a, destsize, datasize, sub_op, unsigned) ->
+  `AArch64MultiplyAddSubLong (translate_out_regzr Set64 d,
+                              translate_out_regzr Set32 n,
+                              translate_out_regzr Set32 m,
+                              translate_out_regzr Set64 a,
+                              translate_out_reg_size destsize,
+                              translate_out_data_size datasize,
+                              translate_out_bool sub_op,
+                              translate_out_bool unsigned)
+
+| MultiplyHigh (d, n, m, a, destsize, datasize, unsigned) ->
+  `AArch64MultiplyHigh (translate_out_regzr Set64 d,
+                        translate_out_regzr Set64 n,
+                        translate_out_regzr Set64 m,
+                        translate_out_regzr Set64 a,
+                        translate_out_reg_size destsize,
+                        translate_out_data_size datasize,
+                        translate_out_bool unsigned)
+
+| TestBitAndBranch (t, datasize, bit_pos, bit_val, offset) ->
+  let datasize' = translate_out_reg_size datasize in
+  `AArch64TestBitAndBranch (translate_out_regzr datasize' t,
+                            datasize',
+                            translate_out_int bit_pos,
+                            translate_out_bool bit_val,
+                            translate_out_signed_big_bit offset)
+
+| MoveSystemRegister (t, sys_op0, sys_op1, sys_op2, sys_crn, sys_crm, read) ->
+  `AArch64MoveSystemRegister (translate_out_regzr Set64 t,
+                              translate_out_int sys_op0,
+                              translate_out_int sys_op1,
+                              translate_out_int sys_op2,
+                              translate_out_int sys_crn,
+                              translate_out_int sys_crm,
+                              translate_out_bool read)
+
+| MoveSystemImmediate (operand, field) ->
+  `AArch64MoveSystemImmediate ( translate_out_bits operand,
+                                translate_out_pSTATEField field)

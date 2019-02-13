@@ -35,7 +35,7 @@ val test : bool -> unit effect {escape}
 function test(b) = {
     let 'n : {|8,16|} = if b then 8 else 16;
     let x : bits('n) = match 'n { 8 => 0x12, 16 => 0x1234 };
-    assert(UInt(x) == (match n { 8 => 18, 16 => 4660 }), "UInt");
+    assert(UInt(x) == (match n { 8 => 18, 16 => 4660 }) : int, "UInt");
 }
 
 val test2 : bool -> unit effect {escape}
@@ -43,7 +43,7 @@ val test2 : bool -> unit effect {escape}
 function test2(b) = {
     let 'n = (if b then 8 else 16) : {|8,16|};
     let x : bits('n) = match 'n { 8 => 0x12, 16 => 0x1234 };
-    assert(UInt(x) == (match n { 8 => 18, 16 => 4660 }), "UInt");
+    assert(UInt(x) == (match n { 8 => 18, 16 => 4660 }) : int, "UInt");
 }
 
 val test_mult : {|4,8|} -> unit effect {escape}
@@ -51,7 +51,7 @@ val test_mult : {|4,8|} -> unit effect {escape}
 function test_mult('m) = {
     let 'n = 2 * 'm;
     let x : bits('n) = match 'n { 8 => 0x12, 16 => 0x1234 };
-    assert(UInt(x) == (match n { 8 => 18, 16 => 4660 }), "UInt");
+    assert(UInt(x) == (match n { 8 => 18, 16 => 4660 }) : int, "UInt");
 }
 
 val run : unit -> unit effect {escape}

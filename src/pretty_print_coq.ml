@@ -51,10 +51,10 @@
 open Type_check
 open Ast
 open Ast_util
+open Reporting
 open Rewriter
 open PPrint
 open Pretty_print_common
-open Extra_pervasives
 
 module StringSet = Set.Make(String)
 
@@ -84,7 +84,7 @@ type context = {
   kid_renames : kid KBindings.t; (* Plain tyvar -> tyvar renames *)
   kid_id_renames : id KBindings.t; (* tyvar -> argument renames *)
   bound_nvars : KidSet.t;
-  build_ex_return : bool;
+  build_at_return : string option;
   recursive_ids : IdSet.t;
   debug : bool;
 }
@@ -93,7 +93,7 @@ let empty_ctxt = {
   kid_renames = KBindings.empty;
   kid_id_renames = KBindings.empty;
   bound_nvars = KidSet.empty;
-  build_ex_return = false;
+  build_at_return = None;
   recursive_ids = IdSet.empty;
   debug = false;
 }
@@ -272,6 +272,27 @@ let rec orig_nexp (Nexp_aux (nexp, l)) =
   | Nexp_neg n -> rewrap (Nexp_neg (orig_nexp n))
   | _ -> rewrap nexp
 
+let rec orig_nc (NC_aux (nc, l) as full_nc) =
+  let rewrap nc = NC_aux (nc, l) in
+  match nc with
+  | NC_equal (nexp1, nexp2) -> rewrap (NC_equal (orig_nexp nexp1, orig_nexp nexp2))
+  | NC_bounded_ge (nexp1, nexp2) -> rewrap (NC_bounded_ge (orig_nexp nexp1, orig_nexp nexp2))
+  | NC_bounded_le (nexp1, nexp2) -> rewrap (NC_bounded_le (orig_nexp nexp1, orig_nexp nexp2))
+  | NC_not_equal (nexp1, nexp2) -> rewrap (NC_not_equal (orig_nexp nexp1, orig_nexp nexp2))
+  | NC_set (kid,s) -> rewrap (NC_set (orig_kid kid, s))
+  | NC_or (nc1, nc2) -> rewrap (NC_or (orig_nc nc1, orig_nc nc2))
+  | NC_and (nc1, nc2) -> rewrap (NC_and (orig_nc nc1, orig_nc nc2))
+  | NC_app (f,args) -> rewrap (NC_app (f,List.map orig_typ_arg args))
+  | NC_var kid -> rewrap (NC_var (orig_kid kid))
+  | NC_true | NC_false -> full_nc
+and orig_typ_arg (A_aux (arg,l)) =
+  let rewrap a = (A_aux (a,l)) in
+  match arg with
+  | A_nexp nexp -> rewrap (A_nexp (orig_nexp nexp))
+  | A_bool nc -> rewrap (A_bool (orig_nc nc))
+  | A_order _ | A_typ _ ->
+       raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
+
 (* Returns the set of type variables that will appear in the Coq output,
    which may be smaller than those in the Sail type.  May need to be
    updated with doc_typ *)
@@ -289,6 +310,7 @@ let rec coq_nvars_of_typ (Typ_aux (t,l)) =
   | Typ_app(Id_aux (Id "implicit", _),_)
   (* TODO: update when complex atom types are sorted out *)
   | Typ_app(Id_aux (Id "atom", _), _) -> KidSet.empty
+  | Typ_app(Id_aux (Id "atom_bool", _), _) -> KidSet.empty
   | Typ_app (_,tas) ->
      List.fold_left (fun s ta -> KidSet.union s (coq_nvars_of_typ_arg ta))
        KidSet.empty tas
@@ -301,71 +323,7 @@ and coq_nvars_of_typ_arg (A_aux (ta,_)) =
   | A_nexp nexp -> tyvars_of_nexp (orig_nexp nexp)
   | A_typ typ -> coq_nvars_of_typ typ
   | A_order _ -> KidSet.empty
-
-(* Follows Coq precedence levels *)
-let rec doc_nc_prop ctx nc =
-  let rec l85 (NC_aux (nc,_) as nc_full) =
-  match nc with
-  | NC_or (nc1, nc2) -> doc_op (string "\\/") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
-  | _ -> l80 nc_full
-  and l80 (NC_aux (nc,_) as nc_full) =
-  match nc with
-  | NC_and (nc1, nc2) -> doc_op (string "/\\") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
-  | _ -> l70 nc_full
-  and l70 (NC_aux (nc,_) as nc_full) =
-  match nc with
-  | NC_equal (ne1, ne2) -> doc_op equals (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_bounded_le (ne1, ne2) -> doc_op (string "<=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_not_equal (ne1, ne2) -> doc_op (string "<>") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | _ -> l10 nc_full
-  and l10 (NC_aux (nc,_) as nc_full) =
-  match nc with
-  | NC_set (kid, is) ->
-     separate space [string "In"; doc_var ctx kid;
-                     brackets (separate (string "; ")
-                                 (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
-  | NC_true -> string "True"
-  | NC_false -> string "False"
-  | NC_or _
-  | NC_and _
-  | NC_equal _
-  | NC_bounded_ge _
-  | NC_bounded_le _
-  | NC_not_equal _ -> parens (l85 nc_full)
-  in l85 nc
-
-(* Follows Coq precedence levels *)
-let doc_nc_exp ctx nc =
-  let rec l70 (NC_aux (nc,_) as nc_full) =
-    match nc with
-    | NC_equal (ne1, ne2) -> doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-    | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-    | NC_bounded_le (ne1, ne2) -> doc_op (string "<=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-    | _ -> l50 nc_full
-  and l50 (NC_aux (nc,_) as nc_full) =
-    match nc with
-    | NC_or (nc1, nc2) -> doc_op (string "||") (l50 nc1) (l40 nc2)
-    | _ -> l40 nc_full
-  and l40 (NC_aux (nc,_) as nc_full) =
-    match nc with
-    | NC_and (nc1, nc2) -> doc_op (string "&&") (l40 nc1) (l10 nc2)
-    | _ -> l10 nc_full
-  and l10 (NC_aux (nc,_) as nc_full) =
-    match nc with
-    | NC_not_equal (ne1, ne2) -> string "negb" ^^ space ^^ parens (doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2))
-    | NC_set (kid, is) ->
-       separate space [string "member_Z_list"; doc_var ctx kid;
-                       brackets (separate (string "; ")
-                                   (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
-    | NC_true -> string "true"
-    | NC_false -> string "false"
-    | NC_equal _
-    | NC_bounded_ge _
-    | NC_bounded_le _
-    | NC_or _
-    | NC_and _ -> parens (l70 nc_full)
-  in l70 nc
+  | A_bool nc -> tyvars_of_constraint (orig_nc nc)
 
 let maybe_expand_range_type (Typ_aux (typ,l) as full_typ) =
   match typ with
@@ -385,18 +343,6 @@ let maybe_expand_range_type (Typ_aux (typ,l) as full_typ) =
 
 let expand_range_type typ = Util.option_default typ (maybe_expand_range_type typ)
 
-let doc_arithfact ctxt ?(exists = []) ?extra nc =
-  let prop = doc_nc_prop ctxt nc in
-  let prop = match extra with
-    | None -> prop
-    | Some pp -> separate space [pp; string "/\\"; prop]
-  in
-  let prop =
-    match exists with
-    | [] -> prop
-    | _ -> separate space ([string "exists"]@(List.map (doc_var ctxt) exists)@[comma; prop])
-  in
-  string "ArithFact" ^^ space ^^ parens prop
 
 let nice_and nc1 nc2 =
 match nc1, nc2 with
@@ -404,9 +350,28 @@ match nc1, nc2 with
 | _, NC_aux (NC_true,_) -> nc1
 | _,_ -> nc_and nc1 nc2
 
+let nice_iff nc1 nc2 =
+match nc1, nc2 with
+| NC_aux (NC_true,_), _ -> nc2
+| _, NC_aux (NC_true,_) -> nc1
+| NC_aux (NC_false,_), _ -> nc_not nc2
+| _, NC_aux (NC_false,_) -> nc_not nc1
+| _,_ -> nc_or (nc_and nc1 nc2) (nc_and (nc_not nc1) (nc_not nc2))
+
+(* n_constraint functions are currently just Z3 functions *)
+let doc_nc_fn_prop id =
+  match string_of_id id with
+  | "not" -> string "not"
+  | s -> string s
+
+(* n_constraint functions are currently just Z3 functions *)
+let doc_nc_fn id =
+  match string_of_id id with
+  | "not" -> string "negb"
+  | s -> string s
+
 (* When making changes here, check whether they affect coq_nvars_of_typ *)
-let doc_typ, doc_atomic_typ =
-  let fns ctx =
+let rec doc_typ_fns ctx =
   (* following the structure of parser for precedence *)
   let rec typ ty = fn_typ true ty
     and typ' ty = fn_typ false ty
@@ -448,6 +413,10 @@ let doc_typ, doc_atomic_typ =
          (string "Z")
       | Typ_app(Id_aux (Id "atom", _), [A_aux(A_nexp n,_)]) ->
          (string "Z")
+      | Typ_app(Id_aux (Id "atom_bool", _), [_]) -> string "bool"
+      | Typ_app (Id_aux (Id "atom#bool",_), [A_aux (A_bool nc,_)]) ->
+         let tpp = string "Bool" ^^ space ^^ doc_nc_prop ~top:false ctx nc in
+         if atyp_needed then parens tpp else tpp
       | Typ_app(id,args) ->
          let tpp = (doc_id_type id) ^^ space ^^ (separate_map space doc_typ_arg args) in
          if atyp_needed then parens tpp else tpp
@@ -507,6 +476,13 @@ let doc_typ, doc_atomic_typ =
                        [doc_var ctx var; colon; tpp;
                         ampersand;
                         doc_arithfact ctx ~exists:(List.map kopt_kid kopts) ?extra:length_constraint_pp nc])
+          | Typ_aux (Typ_app (Id_aux (Id "atom_bool",_), [A_aux (A_bool atom_nc,_)]),_) ->
+             let var = mk_kid "_bool" in (* TODO collision avoid *)
+             let nc = nice_and (nice_iff (nc_var var) atom_nc) nc in
+             braces (separate space
+                       [doc_var ctx var; colon; string "bool";
+                        ampersand;
+                        doc_arithfact ctx ~exists:(List.map kopt_kid kopts) nc])
           | _ ->
              raise (Reporting.err_todo l
                   ("Non-atom existential type not yet supported in Coq: " ^
@@ -536,8 +512,106 @@ let doc_typ, doc_atomic_typ =
       | A_typ t -> app_typ true t
       | A_nexp n -> doc_nexp ctx n
       | A_order o -> empty
-  in typ', atomic_typ
-  in (fun ctx -> (fst (fns ctx))), (fun ctx -> (snd (fns ctx)))
+      | A_bool nc -> doc_nc_prop ~top:false ctx nc
+  in typ', atomic_typ, doc_typ_arg
+and doc_typ ctx = let f,_,_ = doc_typ_fns ctx in f
+and doc_atomic_typ ctx = let _,f,_ = doc_typ_fns ctx in f
+and doc_typ_arg ctx = let _,_,f = doc_typ_fns ctx in f
+
+and doc_arithfact ctxt ?(exists = []) ?extra nc =
+  let prop = doc_nc_prop ctxt nc in
+  let prop = match extra with
+    | None -> prop
+    | Some pp -> separate space [pp; string "/\\"; prop]
+  in
+  let prop =
+    match exists with
+    | [] -> prop
+    | _ -> separate space ([string "exists"]@(List.map (doc_var ctxt) exists)@[comma; prop])
+  in
+  string "ArithFact" ^^ space ^^ parens prop
+
+(* Follows Coq precedence levels *)
+and doc_nc_prop ?(top = true) ctx nc =
+  let rec l85 (NC_aux (nc,_) as nc_full) =
+  match nc with
+  | NC_or (nc1, nc2) -> doc_op (string "\\/") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
+  | _ -> l80 nc_full
+  and l80 (NC_aux (nc,_) as nc_full) =
+  match nc with
+  | NC_and (nc1, nc2) -> doc_op (string "/\\") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
+  | _ -> l70 nc_full
+  and l70 (NC_aux (nc,_) as nc_full) =
+  match nc with
+  | NC_equal (ne1, ne2) -> doc_op equals (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+  | NC_var kid -> doc_op equals (doc_nexp ctx (nvar kid)) (string "true")
+  | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+  | NC_bounded_le (ne1, ne2) -> doc_op (string "<=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+  | NC_not_equal (ne1, ne2) -> doc_op (string "<>") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+  | _ -> l10 nc_full
+  and l10 (NC_aux (nc,_) as nc_full) =
+  match nc with
+  | NC_set (kid, is) ->
+     separate space [string "In"; doc_var ctx kid;
+                     brackets (separate (string "; ")
+                                 (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
+  | NC_app (f,args) -> separate space (doc_nc_fn_prop f::List.map (doc_typ_arg ctx) args)
+  | _ -> l0 nc_full
+  and l0 (NC_aux (nc,_) as nc_full) =
+  match nc with
+  | NC_true -> string "True"
+  | NC_false -> string "False"
+  | NC_set _
+  | NC_app _
+  | NC_var _
+  | NC_or _
+  | NC_and _
+  | NC_equal _
+  | NC_bounded_ge _
+  | NC_bounded_le _
+  | NC_not_equal _ -> parens (l85 nc_full)
+  in if top then l85 nc else l0 nc
+
+(* Follows Coq precedence levels *)
+let rec doc_nc_exp ctx env nc =
+  let nc = Env.expand_constraint_synonyms env nc in
+  let rec l70 (NC_aux (nc,_) as nc_full) =
+    match nc with
+    | NC_equal (ne1, ne2) -> doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+    | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+    | NC_bounded_le (ne1, ne2) -> doc_op (string "<=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
+    | _ -> l50 nc_full
+  and l50 (NC_aux (nc,_) as nc_full) =
+    match nc with
+    | NC_or (nc1, nc2) -> doc_op (string "||") (l50 nc1) (l40 nc2)
+    | _ -> l40 nc_full
+  and l40 (NC_aux (nc,_) as nc_full) =
+    match nc with
+    | NC_and (nc1, nc2) -> doc_op (string "&&") (l40 nc1) (l10 nc2)
+    | _ -> l10 nc_full
+  and l10 (NC_aux (nc,_) as nc_full) =
+    match nc with
+    | NC_not_equal (ne1, ne2) -> string "negb" ^^ space ^^ parens (doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2))
+    | NC_set (kid, is) ->
+       separate space [string "member_Z_list"; doc_var ctx kid;
+                       brackets (separate (string "; ")
+                                   (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
+    | NC_true -> string "true"
+    | NC_false -> string "false"
+    | NC_app (f,args) -> separate space (doc_nc_fn f::List.map (doc_typ_arg_exp ctx env) args)
+    | NC_var kid -> doc_nexp ctx (nvar kid)
+    | NC_equal _
+    | NC_bounded_ge _
+    | NC_bounded_le _
+    | NC_or _
+    | NC_and _ -> parens (l70 nc_full)
+  in l70 nc
+and doc_typ_arg_exp ctx env (A_aux (arg,l)) =
+  match arg with
+  | A_nexp nexp -> doc_nexp ctx nexp
+  | A_bool nc -> doc_nc_exp ctx env nc
+  | A_order _ | A_typ _ ->
+       raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
 
 (* Check for variables in types that would be pretty-printed and are not
    bound in the val spec of the function. *)
@@ -556,7 +630,7 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
        | Some n -> mk_typ (nconstant n)
        | None ->
           let is_equal nexp =
-            prove env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
+            prove __POS__ env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
           in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
           | nexp -> mk_typ nexp
           | exception Not_found -> None
@@ -619,6 +693,7 @@ let doc_quant_item_id ctx delimit (QI_aux (qi,_)) =
     | K_type -> Some (delimit (separate space [doc_var ctx kid; colon; string "Type"]))
     | K_int -> Some (delimit (separate space [doc_var ctx kid; colon; string "Z"]))
     | K_order -> None
+    | K_bool -> Some (delimit (separate space [doc_var ctx kid; colon; string "bool"]))
   end
   | QI_const nc -> None
 
@@ -630,6 +705,7 @@ let quant_item_id_name ctx (QI_aux (qi,_)) =
     | K_type -> Some (doc_var ctx kid)
     | K_int -> Some (doc_var ctx kid)
     | K_order -> None
+    | K_bool -> Some (doc_var ctx kid)
   end
   | QI_const nc -> None
 
@@ -852,7 +928,7 @@ let similar_nexps ctxt env n1 n2 =
        by tracking which existential kids are equal to bound kids. *)
     | Nexp_var k1, Nexp_var k2 ->
        Kid.compare k1 k2 == 0 ||
-         (prove env (nc_eq (nvar k1) (nvar k2)) && (
+         (prove __POS__ env (nc_eq (nvar k1) (nvar k2)) && (
             not (KidSet.mem k1 ctxt.bound_nvars) ||
               not (KidSet.mem k2 ctxt.bound_nvars)))
     | Nexp_constant c1, Nexp_constant c2 -> Nat_big_num.equal c1 c2
@@ -888,13 +964,15 @@ let condition_produces_constraint exp =
    dependent pair with a proof that the result is the expected integer.  This
    is redundant for basic arithmetic functions and functions which we unfold
    in the constraint solver. *)
-let no_Z_proof_fns = ["Z.add"; "Z.sub"; "Z.opp"; "Z.mul"; "length_mword"; "length"]
+let no_proof_fns = ["Z.add"; "Z.sub"; "Z.opp"; "Z.mul"; "length_mword"; "length";
+                      "negb"; "andb"; "orb";
+                      "Z.leb"; "Z.geb"; "Z.ltb"; "Z.gtb"; "Z.eqb"]
 
-let is_no_Z_proof_fn env id =
+let is_no_proof_fn env id =
   if Env.is_extern id env "coq"
   then
     let s = Env.get_extern id env "coq" in
-    List.exists (fun x -> String.compare x s == 0) no_Z_proof_fns
+    List.exists (fun x -> String.compare x s == 0) no_proof_fns
   else false
 
 let replace_atom_return_type ret_typ =
@@ -902,15 +980,19 @@ let replace_atom_return_type ret_typ =
   match ret_typ with
   | Typ_aux (Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp nexp,_)]),l) ->
      let kid = mk_kid "_retval" in (* TODO: collision avoidance *)
-     true, Typ_aux (Typ_exist ([mk_kopt K_int kid], nc_eq (nvar kid) nexp, atom_typ (nvar kid)),Parse_ast.Generated l)
-  | _ -> false, ret_typ
+     Some "build_ex", Typ_aux (Typ_exist ([mk_kopt K_int kid], nc_eq (nvar kid) nexp, atom_typ (nvar kid)),Parse_ast.Generated l)
+  (* For informative booleans tweak the type name so that doc_typ knows that the
+     constraint should be output. *)
+  | Typ_aux (Typ_app (Id_aux (Id "atom_bool",il), ([A_aux (A_bool _,_)] as args)),l) ->
+     Some "build_Bool", Typ_aux (Typ_app (Id_aux (Id "atom#bool",il), args),l)
+  | _ -> None, ret_typ
 
 let is_range_from_atom env (Typ_aux (argty,_)) (Typ_aux (fnty,_)) =
   match argty, fnty with
   | Typ_app(Id_aux (Id "atom", _), [A_aux (A_nexp nexp,_)]),
     Typ_app(Id_aux (Id "range", _), [A_aux(A_nexp low,_);
                                      A_aux(A_nexp high,_)]) ->
-     Type_check.prove env (nc_and (nc_eq nexp low) (nc_eq nexp high))
+     Type_check.prove __POS__ env (nc_and (nc_eq nexp low) (nc_eq nexp high))
   | _ -> false
 
 (* Get a more general type for an annotation/expression - i.e.,
@@ -998,6 +1080,8 @@ let doc_exp, doc_let =
       then separate space [string "liftR"; parens (doc)]
       else doc in
     match e with
+    | E_assign(_, _) when has_effect (effect_of full_exp) BE_config ->
+       string "returnm tt" (* TODO *)
     | E_assign((LEXP_aux(le_act,tannot) as le), e) ->
        (* can only be register writes *)
        (match le_act (*, t, tag*) with
@@ -1083,14 +1167,12 @@ let doc_exp, doc_let =
             match args with
             | [from_exp; to_exp; step_exp; ord_exp; vartuple; body] ->
                let loopvar, body = match body with
-                 | E_aux (E_let (LB_aux (LB_val (_, _), _),
-                   E_aux (E_let (LB_aux (LB_val (_, _), _),
-                   E_aux (E_if (_,
+                 | E_aux (E_if (_,
                    E_aux (E_let (LB_aux (LB_val (
                      ((P_aux (P_typ (_, P_aux (P_var (P_aux (P_id id, _), _), _)), _))
                      | (P_aux (P_var (P_aux (P_id id, _), _), _))
                      | (P_aux (P_id id, _))), _), _),
-                     body), _), _), _)), _)), _) -> id, body
+                     body), _), _), _) -> id, body
                  | _ -> raise (Reporting.err_unreachable l __POS__ ("Unable to find loop variable in " ^ string_of_exp body)) in
                let dir = match ord_exp with
                  | E_aux (E_lit (L_aux (L_false, _)), _) -> "_down"
@@ -1169,9 +1251,9 @@ let doc_exp, doc_let =
             match args with
             | [exp] ->
                let exp_pp =
-                 if ctxt.build_ex_return
-                 then parens (string "build_ex" ^/^ expY exp)
-                 else expY exp
+                 match ctxt.build_at_return with
+                 | Some s -> parens (string s ^/^ expY exp)
+                 | None -> expY exp
                in
                let epp = separate space [string "early_return"; exp_pp] in
                let aexp_needed, tepp =
@@ -1307,12 +1389,12 @@ let doc_exp, doc_let =
           let ret_typ_inst =
                subst_unifiers inst ret_typ
           in
-          let packeff,unpack,autocast =
+          let packeff,unpack,autocast,projbool =
             let ann_typ = Env.expand_synonyms env (general_typ_of_annot (l,annot)) in
             let ann_typ = expand_range_type ann_typ in
             let ret_typ_inst = expand_range_type (Env.expand_synonyms env ret_typ_inst) in
             let ret_typ_inst =
-              if is_no_Z_proof_fn env f then ret_typ_inst
+              if is_no_proof_fn env f then ret_typ_inst
               else snd (replace_atom_return_type ret_typ_inst) in
             let () = 
               debug ctxt (lazy (" type returned " ^ string_of_typ ret_typ_inst));
@@ -1336,13 +1418,19 @@ let doc_exp, doc_let =
                 Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
                  not (similar_nexps ctxt env n1 n2)
               | _ -> false
-            in pack,unpack,autocast
+            in
+            let projbool =
+              match in_typ with
+              | Typ_aux (Typ_app (Id_aux (Id "atom#bool",_),_),_) -> true
+              | _ -> false
+            in pack,unpack,autocast,projbool
           in
           let autocast_id, proj_id =
             if effectful eff
             then "autocast_m", "projT1_m"
             else "autocast",   "projT1" in
           let epp = if unpack && not (effectful eff) then string proj_id ^^ space ^^ parens epp else epp in
+          let epp = if projbool && not (effectful eff) then string "projBool" ^^ space ^^ parens epp else epp in
           let epp = if autocast then string autocast_id ^^ space ^^ parens epp else epp in
           let epp =
             if effectful eff && packeff && not unpack
@@ -1382,7 +1470,7 @@ let doc_exp, doc_let =
          if is_bitvector_typ base_typ
          then wrap_parens (align (group (prefix 0 1 (parens (liftR epp)) (doc_tannot ctxt env true base_typ))))
          else liftR epp
-       else if Env.is_register id env then doc_id (append_id id "_ref")
+       else if Env.is_register id env && is_regtyp typ env then doc_id (append_id id "_ref")
        else if is_ctor env id then doc_id_ctor id
        else begin
          match Env.lookup_id id env with
@@ -1665,9 +1753,9 @@ let doc_exp, doc_let =
     | E_return r ->
       let ret_monad = " : MR" in
       let exp_pp =
-        if ctxt.build_ex_return
-        then parens (string "build_ex" ^/^ expY r)
-        else expY r
+        match ctxt.build_at_return with
+        | Some s -> parens (string s ^/^ expY r)
+        | None -> expY r
       in
       let ta =
         if contains_t_pp_var ctxt (typ_of full_exp) || contains_t_pp_var ctxt (typ_of r)
@@ -1677,7 +1765,7 @@ let doc_exp, doc_let =
           parens (doc_typ ctxt (typ_of full_exp));
           parens (doc_typ ctxt (typ_of r))] in
       align (parens (string "early_return" ^//^ exp_pp ^//^ ta))
-    | E_constraint nc -> wrap_parens (doc_nc_exp ctxt nc)
+    | E_constraint nc -> wrap_parens (doc_nc_exp ctxt (env_of full_exp) nc)
     | E_internal_value _ ->
       raise (Reporting.err_unreachable l __POS__
         "unsupported internal expression encountered while pretty-printing")
@@ -1780,8 +1868,10 @@ let types_used_with_generic_eq defs =
   let typs_req_funcl (FCL_aux (FCL_Funcl (_,pexp), _)) =
     fst (Rewriter.fold_pexp alg pexp)
   in
-  let typs_req_def = function
-    | DEF_kind _
+  let typs_req_fundef (FD_aux (FD_function (_,_,_,fcls),_)) =
+    List.fold_left IdSet.union IdSet.empty (List.map typs_req_funcl fcls)
+  in
+  let rec typs_req_def = function
     | DEF_type _
     | DEF_spec _
     | DEF_fixity _
@@ -1790,13 +1880,13 @@ let types_used_with_generic_eq defs =
     | DEF_pragma _
     | DEF_reg_dec _
       -> IdSet.empty
-    | DEF_fundef (FD_aux (FD_function (_,_,_,fcls),_)) ->
-       List.fold_left IdSet.union IdSet.empty (List.map typs_req_funcl fcls)
+    | DEF_fundef fd -> typs_req_fundef fd
     | DEF_mapdef (MD_aux (_,(l,_)))
     | DEF_scattered (SD_aux (_,(l,_)))
+    | DEF_measure (Id_aux (_,l),_,_)
       -> unreachable l __POS__ "Internal definition found in the Coq back-end"
-    | DEF_internal_mutrec _
-      -> unreachable Unknown __POS__ "Internal definition found in the Coq back-end"
+    | DEF_internal_mutrec fds ->
+       List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
     | DEF_val lb ->
        fst (Rewriter.fold_letbind alg lb)
   in
@@ -1806,10 +1896,12 @@ let doc_type_union ctxt typ_name (Tu_aux(Tu_ty_id(typ,id),_)) =
   separate space [doc_id_ctor id; colon;
                   doc_typ ctxt typ; arrow; typ_name]
 
-let rec doc_range (BF_aux(r,_)) = match r with
-  | BF_single i -> parens (doc_op comma (doc_int i) (doc_int i))
-  | BF_range(i1,i2) -> parens (doc_op comma (doc_int i1) (doc_int i2))
-  | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
+(*
+let rec doc_range ctxt (BF_aux(r,_)) = match r with
+  | BF_single i -> parens (doc_op comma (doc_nexp ctxt i) (doc_nexp ctxt i))
+  | BF_range(i1,i2) -> parens (doc_op comma (doc_nexp ctxt i1) (doc_nexp ctxt i2))
+  | BF_concat(ir1,ir2) -> (doc_range ctxt ir1) ^^ comma ^^ (doc_range ctxt ir2)
+ *)
 
 let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
@@ -1819,7 +1911,9 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
                         doc_typquant_items empty_ctxt parens typq;
                         colon; string "Type"])
        (doc_typschm empty_ctxt false typschm) ^^ dot
-  | TD_record(id,nm,typq,fs,_) ->
+  | TD_abbrev _ -> empty (* TODO? *)
+  | TD_bitfield _ -> empty (* TODO? *)
+  | TD_record(id,typq,fs,_) ->
     let fname fid = if prefix_recordtype && string_of_id id <> "regstate"
                     then concat [doc_id id;string "_";doc_id_type fid;]
                     else doc_id_type fid in
@@ -1872,7 +1966,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
            (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt parens typq])
            ((*doc_typquant typq*) (braces (space ^^ align fs_doc ^^ space))) ^^
       dot ^^ hardline ^^ eq_pp ^^ updates_pp
-  | TD_variant(id,nm,typq,ar,_) ->
+  | TD_variant(id,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
@@ -1896,7 +1990,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
             type, so undo that here. *)
          let resetimplicit = separate space [string "Arguments"; id_pp; colon; string "clear implicits."] in
          typ_pp ^^ dot ^^ hardline ^^ resetimplicit ^^ hardline ^^ hardline)
-  | TD_enum(id,nm,enums,_) ->
+  | TD_enum(id,enums,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
@@ -1917,7 +2011,6 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
            string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :=" ^/^
            string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec." in
           typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ hardline)
-    | _ -> raise (Reporting.err_unreachable l __POS__ "register with non-constant indices")
 
 let args_of_typ l env typs =
   let arg i typ =
@@ -2066,18 +2159,23 @@ let merge_kids_atoms pats =
   let try_eliminate (gone,map,seen) = function
     | P_aux (P_id id, ann), typ
     | P_aux (P_typ (_,P_aux (P_id id, ann)),_), typ -> begin
-      match Type_check.destruct_atom_nexp (env_of_annot ann) typ with
-      | Some (Nexp_aux (Nexp_var kid,l)) ->
-         if KidSet.mem kid seen then
-           let () = 
-             Reporting.print_err false true l "merge_kids_atoms"
-               ("want to merge tyvar and argument for " ^ string_of_kid kid ^
+        let merge kid l =
+          if KidSet.mem kid seen then
+            let () =
+              Reporting.print_err l "merge_kids_atoms"
+                ("want to merge tyvar and argument for " ^ string_of_kid kid ^
                    " but rearranging arguments isn't supported yet") in
-           gone,map,seen
-         else
-           KidSet.add kid gone, KBindings.add kid id map, KidSet.add kid seen
-      | _ -> gone,map,KidSet.union seen (tyvars_of_typ typ)
-    end
+            gone,map,seen
+          else
+            KidSet.add kid gone, KBindings.add kid id map, KidSet.add kid seen
+        in
+        match Type_check.destruct_atom_nexp (env_of_annot ann) typ with
+        | Some (Nexp_aux (Nexp_var kid,l)) -> merge kid l
+        | _ ->
+           match Type_check.destruct_atom_bool (env_of_annot ann) typ with
+           | Some (NC_aux (NC_var kid,l)) -> merge kid l
+           | _ -> gone,map,KidSet.union seen (tyvars_of_typ typ)
+      end
     | _, typ -> gone,map,KidSet.union seen (tyvars_of_typ typ)
   in
   let gone,map,_ = List.fold_left try_eliminate (KidSet.empty, KBindings.empty, KidSet.empty) pats in
@@ -2092,7 +2190,9 @@ let merge_var_patterns map pats =
     | _ -> map, (pat,typ)::pats) (map,[]) pats
   in map, List.rev pats
 
-let doc_funcl rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
+type mutrec_pos = NotMutrec | FirstFn | LaterFn
+
+let doc_funcl mutrec rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let env = env_of_annot annot in
   let (tq,typ) = Env.get_val_spec_orig id env in
   let (arg_typs, ret_typ, eff) = match typ with
@@ -2101,7 +2201,7 @@ let doc_funcl rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   in
   let build_ex, ret_typ = replace_atom_return_type ret_typ in
   let build_ex = match destruct_exist_plain (Env.expand_synonyms env (expand_range_type ret_typ)) with
-    | Some _ -> true
+    | Some _ -> Some "build_ex"
     | _ -> build_ex
   in
   let ids_to_avoid = all_ids pexp in
@@ -2130,15 +2230,18 @@ let doc_funcl rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
       kid_renames = mk_kid_renames ids_to_avoid kids_used;
       kid_id_renames = kid_to_arg_rename;
       bound_nvars = bound_kids;
-      build_ex_return = effectful eff && build_ex;
+      build_at_return = if effectful eff then build_ex else None;
       recursive_ids = recursive_ids;
       debug = List.mem (string_of_id id) (!opt_debug_on)
     } in
   let () =
     debug ctxt (lazy ("Function " ^ string_of_id id));
     debug ctxt (lazy (" return type " ^ string_of_typ ret_typ));
-    debug ctxt (lazy (" build_ex " ^ if build_ex then "needed" else "not needed"));
-    debug ctxt (lazy (if effectful eff then " effectful" else " pure"))
+    debug ctxt (lazy (" build_ex " ^ match build_ex with Some s -> s ^ " needed" | _ -> "not needed"));
+    debug ctxt (lazy (if effectful eff then " effectful" else " pure"));
+    debug ctxt (lazy (" kid_id_renames " ^ String.concat ", " (List.map
+                        (fun (kid,id) -> string_of_kid kid ^ " |-> " ^ string_of_id id)
+                        (KBindings.bindings kid_to_arg_rename))))
   in
   (* Put the constraints after pattern matching so that any type variable that's
      been replaced by one of the term-level arguments is bound. *)
@@ -2211,6 +2314,13 @@ let doc_funcl rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
        let d = match r with Rec_nonrec -> "Definition" | _ -> "Fixpoint" in
        string d, [], [], []
   in
+  let intropp =
+    match mutrec with
+    | NotMutrec -> intropp
+    | FirstFn -> string "Fixpoint"
+    | LaterFn -> string "with"
+  in
+  let terminalpp = match mutrec with NotMutrec -> dot | _ -> empty in
   (* Work around Coq bug 7975 about pattern binders followed by implicit arguments *)
   let implicitargs =
     if !used_a_pattern && List.length constrspp + List.length atom_constrs > 0 then
@@ -2229,35 +2339,38 @@ let doc_funcl rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
        raise (Reporting.err_unreachable l __POS__
                "guarded pattern expression should have been rewritten before pretty-printing") in
   let bodypp = doc_fun_body ctxt exp in
-  let bodypp = if effectful eff || not build_ex then bodypp else string "build_ex" ^^ parens bodypp in
+  let bodypp = if effectful eff then bodypp else match build_ex with Some s -> string s ^^ parens bodypp | None -> bodypp in
   let bodypp = separate (break 1) fixupspp ^/^ bodypp in
   group (prefix 3 1
     (flow (break 1) ([intropp; idpp] @ quantspp @ [patspp] @ constrspp @ [atom_constr_pp] @ accpp) ^/^
        flow (break 1) (measurepp @ [colon; retpp; coloneq]))
-    (bodypp ^^ dot)) ^^ implicitargs
+    (bodypp ^^ terminalpp)) ^^ implicitargs
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
   | (FCL_aux (FCL_Funcl (id,_),_))::_ -> id
 
-(* Strictly speaking, Lem doesn't support multiple clauses for a single function
-   joined by "and", although it has worked for Isabelle before.  However, all
-   the funcls should have been merged by the merge_funcls rewrite now. *)   
-let doc_fundef_rhs (FD_aux(FD_function(r, typa, efa, funcls),fannot)) =
-  separate_map (hardline ^^ string "and ") (doc_funcl r) funcls
+(* Coq doesn't support multiple clauses for a single function joined
+   by "and".  However, all the funcls should have been merged by the
+   merge_funcls rewrite now. *)
+let doc_fundef_rhs ?(mutrec=NotMutrec) (FD_aux(FD_function(r, typa, efa, funcls),(l,_))) =
+  match funcls with
+  | [] -> unreachable l __POS__ "function with no clauses"
+  | [funcl] -> doc_funcl mutrec r funcl
+  | (FCL_aux (FCL_Funcl (id,_),_))::_ -> unreachable l __POS__ ("function " ^ string_of_id id ^ " has multiple clauses in backend")
 
 let doc_mutrec = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
-  | fundefs ->
-     string "let rec " ^^
-     separate_map (hardline ^^ string "and ") doc_fundef_rhs fundefs
+  | fundef::fundefs ->
+     doc_fundef_rhs ~mutrec:FirstFn fundef ^^ hardline ^^
+     separate_map hardline (doc_fundef_rhs ~mutrec:LaterFn) fundefs ^^ dot
 
 let rec doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [FCL_aux (FCL_Funcl(id,_),annot) as funcl]
     when not (Env.is_extern id (env_of_annot annot) "coq") ->
-     doc_funcl r funcl
+     doc_funcl NotMutrec r funcl
   | [_] -> empty (* extern *)
   | _ -> failwith "FD_function with more than one clause"
 
@@ -2265,7 +2378,7 @@ let rec doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
 
 let doc_dec (DEC_aux (reg, ((l, _) as annot))) =
   match reg with
-  | DEC_reg(typ,id) -> empty
+  | DEC_reg(_,_,typ,id) -> empty
      (*
        let env = env_of_annot annot in
        let rt = Env.base_typ_of env typ in
@@ -2284,7 +2397,7 @@ let doc_dec (DEC_aux (reg, ((l, _) as annot))) =
            ^/^ hardline
          else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ))
        else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ)) *)
-  | DEC_config _ -> empty
+  | DEC_config(id, typ, exp) -> separate space [string "Definition"; doc_id id; coloneq; doc_exp empty_ctxt false exp] ^^ dot ^^ hardline
   | DEC_alias(id,alspec) -> empty
   | DEC_typ_alias(typ,id,alspec) -> empty
 
@@ -2297,7 +2410,15 @@ let is_field_accessor regtypes fdef =
      (access = "get" || access = "set") && is_field_of regtyp field
   | _ -> false
 
+
+let int_of_field_index tname fid nexp =
+  match int_of_nexp_opt nexp with
+  | Some i -> i
+  | None -> raise (Reporting.err_typ Parse_ast.Unknown
+                   ("Non-constant bitfield index in field " ^ string_of_id fid ^ " of " ^ tname))
+
 let doc_regtype_fields (tname, (n1, n2, fields)) =
+  let const_int fid idx = int_of_field_index tname fid idx in
   let i1, i2 = match n1, n2 with
     | Nexp_aux(Nexp_constant i1,_),Nexp_aux(Nexp_constant i2,_) -> i1, i2
     | _ -> raise (Reporting.err_typ Parse_ast.Unknown
@@ -2306,8 +2427,8 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   let dir = (if dir_b then "true" else "false") in
   let doc_field (fr, fid) =
     let i, j = match fr with
-    | BF_aux (BF_single i, _) -> (i, i)
-    | BF_aux (BF_range (i, j), _) -> (i, j)
+    | BF_aux (BF_single i, _) -> let i = const_int fid i in (i, i)
+    | BF_aux (BF_range (i, j), _) -> (const_int fid i, const_int fid j)
     | _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__
         ("Unsupported type in field " ^ string_of_id fid ^ " of " ^ tname)) in
     let fsize = Big_int.succ (Big_int.abs (Big_int.sub i j)) in
@@ -2431,7 +2552,6 @@ let rec doc_def unimplemented generic_eq_types def =
   | DEF_val (LB_aux (LB_val (pat, exp), _)) -> doc_val pat exp
   | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l,_))) -> unreachable l __POS__ "Coq doesn't support mappings"
-  | DEF_kind _ -> empty
   | DEF_pragma _ -> empty
 
 let find_exc_typ defs =
@@ -2441,18 +2561,21 @@ let find_exc_typ defs =
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
 let find_unimplemented defs =
+  let adjust_fundef unimplemented (FD_aux (FD_function (_,_,_,funcls),_)) =
+    match funcls with
+    | [] -> unimplemented
+    | (FCL_aux (FCL_Funcl (id,_),_))::_ ->
+       IdSet.remove id unimplemented
+  in
   let adjust_def unimplemented = function
     | DEF_spec (VS_aux (VS_val_spec (_,id,exts,_),_)) -> begin
       match Ast_util.extern_assoc "coq" exts with
       | Some _ -> unimplemented
       | None -> IdSet.add id unimplemented
     end
-    | DEF_fundef (FD_aux (FD_function (_,_,_,funcls),_)) -> begin
-      match funcls with
-      | [] -> unimplemented
-      | (FCL_aux (FCL_Funcl (id,_),_))::_ ->
-         IdSet.remove id unimplemented
-    end
+    | DEF_internal_mutrec fds ->
+       List.fold_left adjust_fundef unimplemented fds
+    | DEF_fundef fd -> adjust_fundef unimplemented fd
     | _ -> unimplemented
   in
   List.fold_left adjust_def IdSet.empty defs
@@ -2481,7 +2604,7 @@ try
   let generic_eq_types = types_used_with_generic_eq defs in
   let doc_def = doc_def unimplemented generic_eq_types in
   let () = if !opt_undef_axioms || IdSet.is_empty unimplemented then () else
-      Reporting.print_err false false Parse_ast.Unknown "Warning"
+      Reporting.print_err Parse_ast.Unknown "Warning"
         ("The following functions were declared but are undefined:\n" ^
             String.concat "\n" (List.map string_of_id (IdSet.elements unimplemented)))
   in
@@ -2518,7 +2641,7 @@ try
         hardline;
         string "End Content.";
         hardline])
-with Type_check.Type_error (l,err) ->
+with Type_check.Type_error (env,l,err) ->
   let extra =
     "\nError during Coq printing\n" ^
     if Printexc.backtrace_status ()

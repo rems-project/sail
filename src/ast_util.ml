@@ -236,6 +236,11 @@ let rec is_nexp_constant (Nexp_aux (nexp, _)) = match nexp with
   | Nexp_exp n | Nexp_neg n -> is_nexp_constant n
   | Nexp_app (_, nexps) -> List.for_all is_nexp_constant nexps
 
+let int_of_nexp_opt nexp =
+  match nexp with
+  | Nexp_aux(Nexp_constant i,_) -> Some i
+  | _ -> None
+
 let rec nexp_simp (Nexp_aux (nexp, l)) = Nexp_aux (nexp_simp_aux nexp, l)
 and nexp_simp_aux = function
   (* (n - (n - m)) often appears in foreach loops *)
@@ -321,10 +326,23 @@ let rec constraint_simp (NC_aux (nc_aux, l)) =
        | NC_aux (nc, _), NC_aux (NC_true, _) -> NC_true
        | _, _ -> NC_or (nc1, nc2)
        end
+
     | NC_bounded_ge (nexp1, nexp2) ->
-       NC_bounded_ge (nexp_simp nexp1, nexp_simp nexp2)
+       let nexp1, nexp2 = nexp_simp nexp1, nexp_simp nexp2 in
+       begin match nexp1, nexp2 with
+       | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
+          if Big_int.greater_equal c1 c2 then NC_true else NC_false
+       | _, _ -> NC_bounded_ge (nexp1, nexp2)
+       end
+
     | NC_bounded_le (nexp1, nexp2) ->
-       NC_bounded_le (nexp_simp nexp1, nexp_simp nexp2)
+       let nexp1, nexp2 = nexp_simp nexp1, nexp_simp nexp2 in
+       begin match nexp1, nexp2 with
+       | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
+          if Big_int.less_equal c1 c2 then NC_true else NC_false
+       | _, _ -> NC_bounded_le (nexp1, nexp2)
+       end
+
     | _ -> nc_aux
   in
   NC_aux (nc_aux, l)
@@ -361,10 +379,13 @@ let app_typ id args = mk_typ (Typ_app (id, args))
 let register_typ typ = mk_typ (Typ_app (mk_id "register", [mk_typ_arg (A_typ typ)]))
 let atom_typ nexp =
   mk_typ (Typ_app (mk_id "atom", [mk_typ_arg (A_nexp (nexp_simp nexp))]))
+let implicit_typ nexp =
+  mk_typ (Typ_app (mk_id "implicit", [mk_typ_arg (A_nexp (nexp_simp nexp))]))
 let range_typ nexp1 nexp2 =
   mk_typ (Typ_app (mk_id "range", [mk_typ_arg (A_nexp (nexp_simp nexp1));
                                    mk_typ_arg (A_nexp (nexp_simp nexp2))]))
 let bool_typ = mk_id_typ (mk_id "bool")
+let atom_bool_typ nc = mk_typ (Typ_app (mk_id "atom_bool", [mk_typ_arg (A_bool nc)]))
 let string_typ = mk_id_typ (mk_id "string")
 let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (A_typ typ)]))
 let tuple_typ typs = mk_typ (Typ_tup typs)
@@ -609,7 +630,6 @@ let exp_loc = function
   | E_aux (_, (l, _)) -> l
 
 let def_loc = function
-  | DEF_kind (KD_aux (_, (l, _)))
   | DEF_type (TD_aux (_, (l, _)))
   | DEF_fundef (FD_aux (_, (l, _)))
   | DEF_mapdef (MD_aux (_, (l, _)))
@@ -622,6 +642,7 @@ let def_loc = function
   | DEF_overload (Id_aux (_, l), _) -> l
   | DEF_internal_mutrec _ -> Parse_ast.Unknown
   | DEF_pragma (_, _, l) -> l
+  | DEF_measure (id, _, _) -> id_loc id
 
 let string_of_id = function
   | Id_aux (Id v, _) -> v
@@ -895,8 +916,8 @@ and string_of_letbind (LB_aux (lb, l)) =
 
 let rec string_of_index_range (BF_aux (ir, _)) =
   match ir with
-  | BF_single n -> Big_int.to_string n
-  | BF_range (n, m) -> Big_int.to_string n ^ " .. " ^ Big_int.to_string m
+  | BF_single n -> string_of_nexp n
+  | BF_range (n, m) -> string_of_nexp n ^ " .. " ^ string_of_nexp m
   | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ ") : (" ^ string_of_index_range ir2 ^ ")"
 
 
@@ -934,9 +955,9 @@ let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =
 
 let id_of_type_def_aux = function
   | TD_abbrev (id, _, _)
-  | TD_record (id, _, _, _, _)
-  | TD_variant (id, _, _, _, _)
-  | TD_enum (id, _, _, _)
+  | TD_record (id, _, _, _)
+  | TD_variant (id, _, _, _)
+  | TD_enum (id, _, _)
   | TD_bitfield (id, _, _) -> id
 let id_of_type_def (TD_aux (td_aux, _)) = id_of_type_def_aux td_aux
 
@@ -944,17 +965,16 @@ let id_of_val_spec (VS_aux (VS_val_spec (_, id, _, _), _)) = id
 
 let id_of_dec_spec (DEC_aux (ds_aux, _)) =
   match ds_aux with
-  | DEC_reg (_, id) -> id
+  | DEC_reg (_, _, _, id) -> id
   | DEC_config (id, _, _) -> id
   | DEC_alias (id, _) -> id
   | DEC_typ_alias (_, id, _) -> id
 
 let ids_of_def = function
-  | DEF_kind (KD_aux (KD_nabbrev (_, id, _, _), _)) -> IdSet.singleton id
   | DEF_type td -> IdSet.singleton (id_of_type_def td)
   | DEF_fundef fd -> IdSet.singleton (id_of_fundef fd)
   | DEF_val (LB_aux (LB_val (pat, _), _)) -> pat_ids pat
-  | DEF_reg_dec (DEC_aux (DEC_reg (_, id), _)) -> IdSet.singleton id
+  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, _, id), _)) -> IdSet.singleton id
   | DEF_spec vs -> IdSet.singleton (id_of_val_spec vs)
   | DEF_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
   | _ -> IdSet.empty
@@ -1182,6 +1202,72 @@ let equal_effects e1 e2 =
   match e1, e2 with
   | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
      BESet.compare (BESet.of_list base_effs1) (BESet.of_list base_effs2) = 0
+
+let subseteq_effects e1 e2 =
+  match e1, e2 with
+  | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
+     BESet.subset (BESet.of_list base_effs1) (BESet.of_list base_effs2)
+
+let rec kopts_of_nexp (Nexp_aux (nexp,_)) =
+  match nexp with
+  | Nexp_id _
+  | Nexp_constant _ -> KOptSet.empty
+  | Nexp_var kid -> KOptSet.singleton (mk_kopt K_int kid)
+  | Nexp_times (n1,n2)
+  | Nexp_sum (n1,n2)
+  | Nexp_minus (n1,n2) -> KOptSet.union (kopts_of_nexp n1) (kopts_of_nexp n2)
+  | Nexp_exp n
+  | Nexp_neg n -> kopts_of_nexp n
+  | Nexp_app (_, nexps) -> List.fold_left KOptSet.union KOptSet.empty (List.map kopts_of_nexp nexps)
+
+let kopts_of_order (Ord_aux (ord, _)) =
+  match ord with
+  | Ord_var kid -> KOptSet.singleton (mk_kopt K_order kid)
+  | Ord_inc | Ord_dec -> KOptSet.empty
+
+let rec kopts_of_constraint (NC_aux (nc, _)) =
+  match nc with
+  | NC_equal (nexp1, nexp2)
+  | NC_bounded_ge (nexp1, nexp2)
+  | NC_bounded_le (nexp1, nexp2)
+  | NC_not_equal (nexp1, nexp2) ->
+     KOptSet.union (kopts_of_nexp nexp1) (kopts_of_nexp nexp2)
+  | NC_set (kid, _) -> KOptSet.singleton (mk_kopt K_int kid)
+  | NC_or (nc1, nc2)
+  | NC_and (nc1, nc2) ->
+     KOptSet.union (kopts_of_constraint nc1) (kopts_of_constraint nc2)
+  | NC_app (id, args) ->
+     List.fold_left (fun s t -> KOptSet.union s (kopts_of_typ_arg t)) KOptSet.empty args
+  | NC_var kid -> KOptSet.singleton (mk_kopt K_bool kid)
+  | NC_true | NC_false -> KOptSet.empty
+
+and kopts_of_typ (Typ_aux (t,_)) =
+  match t with
+  | Typ_internal_unknown -> KOptSet.empty
+  | Typ_id _ -> KOptSet.empty
+  | Typ_var kid -> KOptSet.singleton (mk_kopt K_type kid)
+  | Typ_fn (ts, t, _) -> List.fold_left KOptSet.union (kopts_of_typ t) (List.map kopts_of_typ ts)
+  | Typ_bidir (t1, t2) -> KOptSet.union (kopts_of_typ t1) (kopts_of_typ t2)
+  | Typ_tup ts ->
+     List.fold_left (fun s t -> KOptSet.union s (kopts_of_typ t))
+       KOptSet.empty ts
+  | Typ_app (_,tas) ->
+     List.fold_left (fun s ta -> KOptSet.union s (kopts_of_typ_arg ta))
+       KOptSet.empty tas
+  | Typ_exist (kopts, nc, t) ->
+     let s = KOptSet.union (kopts_of_typ t) (kopts_of_constraint nc) in
+     KOptSet.diff s (KOptSet.of_list kopts)
+and kopts_of_typ_arg (A_aux (ta,_)) =
+  match ta with
+  | A_nexp nexp -> kopts_of_nexp nexp
+  | A_typ typ -> kopts_of_typ typ
+  | A_order ord -> kopts_of_order ord
+  | A_bool nc -> kopts_of_constraint nc
+
+let kopts_of_quant_item (QI_aux (qi, _)) = match qi with
+  | QI_id kopt ->
+     KOptSet.singleton kopt
+  | QI_const nc -> kopts_of_constraint nc
 
 let rec tyvars_of_nexp (Nexp_aux (nexp,_)) =
   match nexp with
@@ -1738,3 +1824,116 @@ let typquant_subst_kid_aux sv subst = function
   | TypQ_no_forall -> TypQ_no_forall
 
 let typquant_subst_kid sv subst (TypQ_aux (typq, l)) = TypQ_aux (typquant_subst_kid_aux sv subst typq, l)
+
+let rec simp_loc = function
+  | Parse_ast.Unknown -> None
+  | Parse_ast.Unique (_, l) -> simp_loc l
+  | Parse_ast.Generated l -> simp_loc l
+  | Parse_ast.Range (p1, p2) -> Some (p1, p2)
+  | Parse_ast.Documented (_, l) -> simp_loc l
+
+let before p1 p2 =
+  let open Lexing in
+  p1.pos_fname = p2.pos_fname && p1.pos_cnum <= p2.pos_cnum
+
+let subloc sl l =
+  match sl, simp_loc l with
+  | _, None -> false
+  | None, _ -> false
+  | Some (p1a, p1b), Some (p2a, p2b) ->
+     before p2a p1a && before p1b p2b
+
+let rec option_mapm f = function
+  | [] -> None
+  | x :: xs ->
+     begin match f x with
+     | Some y -> Some y
+     | None -> option_mapm f xs
+     end
+
+let option_chain opt1 opt2 =
+  begin match opt1 with
+  | None -> opt2
+  | _ -> opt1
+  end
+
+let rec find_annot_exp sl (E_aux (aux, (l, annot)) as exp) =
+  if not (subloc sl l) then None else
+    let result = match aux with
+      | E_block exps | E_tuple exps ->
+         option_mapm (find_annot_exp sl) exps
+      | E_app (id, exps) ->
+         option_mapm (find_annot_exp sl) exps
+      | E_let (LB_aux (LB_val (pat, exp), _), body) ->
+         option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [exp; body])
+      | E_assign (lexp, exp) ->
+         option_chain (find_annot_lexp sl lexp) (find_annot_exp sl exp)
+      | E_var (lexp, exp1, exp2) ->
+         option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])
+      | _ -> None
+    in
+    match result with
+    | None -> Some (l, annot)
+    | _ -> result
+
+and find_annot_lexp sl (LEXP_aux (aux, (l, annot))) =
+  if not (subloc sl l) then None else
+    let result = match aux with
+      | LEXP_vector_range (lexp, exp1, exp2) ->
+         option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])
+      | LEXP_deref exp ->
+         find_annot_exp sl exp
+      | LEXP_tup lexps ->
+         option_mapm (find_annot_lexp sl) lexps
+      | LEXP_memory (id, exps) ->
+         option_mapm (find_annot_exp sl) exps
+      | _ -> None
+    in
+    match result with
+    | None -> Some (l, annot)
+    | _ -> result
+
+and find_annot_pat sl (P_aux (aux, (l, annot))) =
+  if not (subloc sl l) then None else
+    let result = match aux with
+      | _ -> None
+    in
+    match result with
+    | None -> Some (l, annot)
+    | _ -> result
+
+and find_annot_pexp sl (Pat_aux (aux, (l, annot))) =
+  if not (subloc sl l) then None else
+    match aux with
+    | Pat_exp (pat, exp) ->
+       find_annot_exp sl exp
+    | Pat_when (pat, guard, exp) ->
+       None
+
+let find_annot_funcl sl (FCL_aux (FCL_Funcl (id, pexp), (l, annot))) =
+  if not (subloc sl l) then
+    None
+  else
+    match find_annot_pexp sl pexp with
+    | None -> Some (l, annot)
+    | result -> result
+
+let find_annot_fundef sl (FD_aux (FD_function (_, _, _, funcls), (l, annot))) =
+  if not (subloc sl l) then
+    None
+  else
+    match option_mapm (find_annot_funcl sl) funcls with
+    | None -> Some (l, annot)
+    | result -> result
+
+let rec find_annot_defs sl = function
+  | DEF_fundef fdef :: defs ->
+     begin match find_annot_fundef sl fdef with
+     | None -> find_annot_defs sl defs
+     | result -> result
+     end
+  | _ :: defs ->
+     find_annot_defs sl defs
+  | [] -> None
+
+let rec find_annot_ast sl (Defs defs) = find_annot_defs sl defs

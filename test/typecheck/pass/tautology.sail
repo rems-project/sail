@@ -1,3 +1,4 @@
+$include <flow.sail>
 
 type implies('p: Bool, 'q: Bool) -> Bool = not('p) | 'q
 

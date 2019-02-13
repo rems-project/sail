@@ -115,6 +115,15 @@ let value_of_exp = function
   | (E_aux (E_internal_value v, _)) -> v
   | _ -> failwith "value_of_exp coerction failed"
 
+let fallthrough =
+  let open Type_check in
+  try
+    let env = initial_env |> Env.add_scattered_variant (mk_id "exception") (mk_typquant []) in
+    check_case env exc_typ (mk_pexp (Pat_exp (mk_pat (P_id (mk_id "exn")), mk_exp (E_throw (mk_exp (E_id (mk_id "exn"))))))) unit_typ
+  with
+  | Type_error (_, l, err) ->
+     Reporting.unreachable l __POS__ (Type_error.string_of_type_error err);
+
 (**************************************************************************)
 (* 1. Interpreter Monad                                                   *)
 (**************************************************************************)
@@ -591,7 +600,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      begin
        catch (step exp) >>= fun exp' ->
        match exp' with
-       | Left exn -> wrap (E_case (exp_of_value exn, pexps))
+       | Left exn -> wrap (E_case (exp_of_value exn, pexps @ [fallthrough]))
        | Right exp' -> wrap (E_try (exp', pexps))
      end
 
@@ -887,7 +896,7 @@ let rec eval_frame' = function
 
 let eval_frame frame =
   try eval_frame' frame with
-  | Type_check.Type_error (l, err) ->
+  | Type_check.Type_error (env, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
 let default_effect_interp state eff =
@@ -977,7 +986,7 @@ let initial_gstate primops ast env =
 
 let rec initialize_registers gstate =
   let process_def = function
-    | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), annot)) ->
+    | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), annot)) ->
        begin
          let env = Type_check.env_of_annot annot in
          let typ = Type_check.Env.expand_synonyms env typ in

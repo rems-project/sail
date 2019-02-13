@@ -47,7 +47,11 @@ let power_real b e = realPowInteger b e*)
 
 val print_endline : string -> unit
 let print_endline _ = ()
-(* declare ocaml target_rep function print_endline = `print_endline` *)
+declare ocaml target_rep function print_endline = `print_endline`
+
+val print : string -> unit
+let print _ = ()
+declare ocaml target_rep function print = `print_string`
 
 val prerr_endline : string -> unit
 let prerr_endline _ = ()
@@ -625,8 +629,20 @@ let extz_bv n v = extz_bits n (bits_of v)
 val exts_bv : forall 'a. Bitvector 'a => integer -> 'a -> list bitU
 let exts_bv n v = exts_bits n (bits_of v)
 
+val nat_of_bv : forall 'a. Bitvector 'a => 'a -> maybe nat
+let nat_of_bv v = Maybe.map nat_of_int (unsigned v)
+
 val string_of_bv : forall 'a. Bitvector 'a => 'a -> string
 let string_of_bv v = show_bitlist (bits_of v)
+
+val print_bits : forall 'a. Bitvector 'a => string -> 'a -> unit
+let print_bits str v = print_endline (str ^ string_of_bv v)
+
+val dec_str : integer -> string
+let dec_str bv = show bv
+
+val concat_str : string -> string -> string
+let concat_str str1 str2 = str1 ^ str2
 
 val int_of_bit : bitU -> integer
 let int_of_bit b =

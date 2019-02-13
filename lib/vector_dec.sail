@@ -177,4 +177,6 @@ val signed = {
   _: "sint"
 } : forall 'n, 'n > 0. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
+overload __size = {__id, length}
+
 $endif

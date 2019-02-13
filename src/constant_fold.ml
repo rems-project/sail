@@ -169,7 +169,7 @@ let rec rewrite_constant_function_calls' env ast =
         let v = run (Interpreter.Step (lazy "", (lstate, gstate), initial_monad, [])) in
         let exp = exp_of_value v in
         try (ok (); Type_check.check_exp (env_of_annot annot) exp (typ_of_annot annot)) with
-        | Type_error (l, err) ->
+        | Type_error (env, l, err) ->
            (* A type error here would be unexpected, so don't ignore it! *)
            Util.warn ("Type error when folding constants in "
                       ^ string_of_exp (E_aux (e_aux, annot))

@@ -45,6 +45,26 @@ End Morphism.
 Definition build_ex {T:Type} (n:T) {P:T -> Prop} `{H:ArithFact (P n)} : {x : T & ArithFact (P x)} :=
   existT _ n H.
 
+(* The informative boolean type. *)
+
+Definition Bool (P : Prop) : Type := {P} + {~P}.
+
+Definition build_Bool {P:Prop} (b:bool) `{ArithFact (b = true <-> P)} : Bool P.
+refine (if sumbool_of_bool b then left _ else right _);
+destruct H; subst;
+intuition.
+Defined.
+
+Definition projBool {P:Prop} (b:Bool P) : bool := if b then true else false.
+
+Lemma projBool_true {P:Prop} {b:Bool P} : projBool b = true <-> P.
+destruct b; simpl; intuition.
+Qed.
+Lemma projBool_false {P:Prop} {b:Bool P} : projBool b = false <-> ~P.
+destruct b; simpl; intuition.
+Qed.
+
+
 Definition generic_eq {T:Type} (x y:T) `{Decidable (x = y)} := Decidable_witness.
 Definition generic_neq {T:Type} (x y:T) `{Decidable (x = y)} := negb Decidable_witness.
 Lemma generic_eq_true {T} {x y:T} `{Decidable (x = y)} : generic_eq x y = true -> x = y.
@@ -1037,6 +1057,27 @@ Ltac unbool_comparisons :=
   | H:context [generic_neq _ _ = true] |- _ => apply generic_neq_true in H
   | H:context [generic_neq _ _ = false] |- _ => apply generic_neq_false in H
   end.
+Ltac unbool_comparisons_goal :=
+  repeat match goal with
+  | |- context [Z.geb _ _] => rewrite Z.geb_leb
+  | |- context [Z.gtb _ _] => rewrite Z.gtb_ltb
+  | |- context [Z.leb _ _ = true] => rewrite Z.leb_le
+  | |- context [Z.ltb _ _ = true] => rewrite Z.ltb_lt
+  | |- context [Z.eqb _ _ = true] => rewrite Z.eqb_eq
+  | |- context [Z.leb _ _ = false] => rewrite Z.leb_gt
+  | |- context [Z.ltb _ _ = false] => rewrite Z.ltb_ge
+  | |- context [Z.eqb _ _ = false] => rewrite Z.eqb_neq
+  | |- context [orb _ _ = true] => rewrite Bool.orb_true_iff
+  | |- context [orb _ _ = false] => rewrite Bool.orb_false_iff
+  | |- context [andb _ _ = true] => rewrite Bool.andb_true_iff
+  | |- context [andb _ _ = false] => rewrite Bool.andb_false_iff
+  | |- context [negb _ = true] => rewrite Bool.negb_true_iff
+  | |- context [negb _ = false] => rewrite Bool.negb_false_iff
+  | |- context [generic_eq _ _ = true] => apply generic_eq_true
+  | |- context [generic_eq _ _ = false] => apply generic_eq_false
+  | |- context [generic_neq _ _ = true] => apply generic_neq_true
+  | |- context [generic_neq _ _ = false] => apply generic_neq_false
+  end.
 
 (* Split up dependent pairs to get at proofs of properties *)
 Ltac extract_properties :=
@@ -1072,6 +1113,11 @@ Ltac extract_properties :=
     let Hx := fresh "Hx" in
     destruct X as [x Hx] in *;
     change (projT1 (existT _ x Hx)) with x in * end.
+(* We could also destruct any remaining Bools, if necessary. *)
+Ltac extract_Bool_props :=
+  repeat match goal with
+  | H:projBool _ = true |- _ => rewrite projBool_true in H
+  | H:projBool _ = false |- _ => rewrite projBool_false in H end.
 (* TODO: hyps, too? *)
 Ltac reduce_list_lengths :=
   repeat match goal with |- context [length_list ?X] => 
@@ -1137,10 +1183,12 @@ Ltac prepare_for_solver :=
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  split_cases;
  extract_properties;
+ extract_Bool_props;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
  unwrap_ArithFacts;
  destruct_exists;
  unbool_comparisons;
+ unbool_comparisons_goal;
  unfold_In; (* after unbool_comparisons to deal with && and || *)
  reduce_list_lengths;
  reduce_pow;
@@ -1193,6 +1241,11 @@ Ltac run_solver := solve_arithfact.
 Hint Extern 0 (ArithFact _) => run_solver : typeclass_instances.
 
 Hint Unfold length_mword : sail.
+
+Lemma unit_comparison_lemma : true = true <-> True.
+intuition.
+Qed.
+Hint Resolve unit_comparison_lemma : sail.
 
 Definition neq_atom (x : Z) (y : Z) : bool := negb (Z.eqb x y).
 Hint Unfold neq_atom : sail.

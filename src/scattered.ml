@@ -126,9 +126,9 @@ let rec descatter' funcls mapcls = function
   (* For scattered unions, when we find a union declaration we
      immediately grab all the future clauses and turn it into a
      regular union declaration. *)
-  | DEF_scattered (SD_aux (SD_variant (id, namescm, typq), (l, _))) :: defs ->
+  | DEF_scattered (SD_aux (SD_variant (id, typq), (l, _))) :: defs ->
      let tus = get_union_clauses id defs in
-     DEF_type (TD_aux (TD_variant (id, namescm, typq, tus, false), (gen_loc l, Type_check.empty_tannot)))
+     DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot)))
      :: descatter' funcls mapcls (filter_union_clauses id defs)
 
   (* Therefore we should never see SD_unioncl... *)

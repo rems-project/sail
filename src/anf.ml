@@ -699,9 +699,13 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      (* Interpreter specific *)
      raise (Reporting.err_unreachable l __POS__ "encountered E_internal_value when converting to ANF")
 
-  | E_sizeof _ | E_constraint _ ->
+  | E_sizeof nexp ->
      (* Sizeof nodes removed by sizeof rewriting pass *)
-     raise (Reporting.err_unreachable l __POS__ "encountered E_sizeof or E_constraint node when converting to ANF")
+     raise (Reporting.err_unreachable l __POS__ ("encountered E_sizeof node " ^ string_of_nexp nexp ^ " when converting to ANF"))
+
+  | E_constraint _ ->
+     (* Sizeof nodes removed by sizeof rewriting pass *)
+     raise (Reporting.err_unreachable l __POS__ "encountered E_constraint node when converting to ANF")
 
   | E_nondet _ ->
      (* We don't compile E_nondet nodes *)

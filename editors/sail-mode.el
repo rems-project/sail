@@ -20,6 +20,8 @@
 
 ;;; Code:
 
+(require 'easymenu)
+
 (defvar sail2-mode-hook nil)
 
 (add-to-list 'auto-mode-alist '("\\.sail\\'" . sail2-mode))
@@ -30,7 +32,7 @@
     "overload" "cast" "sizeof" "constant" "constraint" "default" "assert" "newtype" "from"
     "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to"
     "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"
-    "mapping" "where" "with"))
+    "mapping" "where" "with" "implicit"))
 
 (defconst sail2-kinds
   '("Int" "Type" "Order" "Bool" "inc" "dec"
@@ -76,13 +78,126 @@
   (interactive)
   (kill-all-local-variables)
   (set-syntax-table sail2-mode-syntax-table)
+  (use-local-map sail-mode-map)
+  (sail-build-menu)
   (setq font-lock-defaults '(sail2-font-lock-keywords))
   (setq comment-start-skip "\\(//+\\|/\\*+\\)\\s *")
   (setq comment-start "/*")
   (setq comment-end "*/")
   (setq major-mode 'sail2-mode)
   (setq mode-name "Sail2")
+  (add-hook 'sail2-mode-hook
+	    (lambda () (add-hook 'after-save-hook 'sail-load nil 'local)))
   (run-hooks 'sail2-mode-hook))
+
+(defvar sail-process nil)
+
+(defun sail-filter (proc string)
+  (when (buffer-live-p (process-buffer proc))
+    (with-current-buffer (process-buffer proc)
+      (let ((moving (= (point) (process-mark proc))))
+	(save-excursion
+	  ;; Insert the text, advancing the process marker.
+	  (goto-char (process-mark proc))
+	  (insert string)
+	  (set-marker (process-mark proc) (point)))
+	(if moving (goto-char (process-mark proc)))))
+    (eval (car (read-from-string string)))))
+
+(defun sail-start ()
+  "start Sail interactive mode"
+  (interactive)
+  (setq sail-process (start-process "sail" "Sail" "sail" "-i" "-emacs" "-no_warn"))
+  (set-process-filter sail-process 'sail-filter))
+
+(defun sail-quit ()
+  "quit Sail interactive mode"
+  (interactive)
+  (when sail-process
+    (process-send-string sail-process ":quit\n")
+    (setq sail-process nil)))
+
+(defun sail-type-at-cursor ()
+  "get type at cursor"
+  (interactive)
+  (when sail-process
+    (let ((loc (number-to-string (point))))
+      (process-send-string sail-process (mapconcat 'identity `(":typeat " ,buffer-file-name " " ,loc "\n") "")))))
+
+(defun sail-highlight-region (begin end text)
+  (progn
+    (remove-overlays)
+    (let ((overlay (make-overlay begin end)))
+      (overlay-put overlay 'face 'bold)
+      (overlay-put overlay 'help-echo text)
+      (message text)
+      (setq mark-active nil))))
+
+(defun sail-error-region (begin end text)
+  (progn
+    (let ((overlay (make-overlay begin end)))
+      (overlay-put overlay 'face 'error)
+      (overlay-put overlay 'help-echo text)
+      (setq mark-active nil))))
+
+(defvar sail-error-position nil)
+(defvar sail-error-text nil)
+
+(defun sail-error (l1 c1 l2 c2 text)
+  (let ((begin (save-excursion
+		 (goto-line l1)
+		 (forward-char c1)
+		 (point)))
+	(end (save-excursion
+	       (goto-line l2)
+	       (forward-char c2)
+	       (point))))
+    (setq sail-error-text text)
+    (setq sail-error-position begin)
+    (sail-error-region begin end text)
+    (message text)))
+
+(defun sail-goto-error ()
+  "Go to the next Sail error"
+  (interactive)
+  (if sail-error-position
+      (progn
+	(message sail-error-text)
+	(goto-char sail-error-position))
+    (message "No errors")))
+
+(defun sail-load ()
+  "load a Sail file"
+  (interactive)
+  (if (null sail-process)
+      (error "No sail process (call sail-start)")
+    (progn
+      (remove-overlays)
+      (setq sail-error-position nil)
+      (setq sail-error-text nil)
+      (process-send-string sail-process ":unload\n")
+      (process-send-string sail-process (mapconcat 'identity `(":load " ,buffer-file-name "\n") "")))))
+
+(defvar sail-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-c C-s") 'sail-start)
+    (define-key map (kbd "C-c C-l") 'sail-load)
+    (define-key map (kbd "C-c C-q") 'sail-quit)
+    (define-key map (kbd "C-c C-x") 'sail-goto-error)
+    (define-key map (kbd "C-c C-c") 'sail-type-at-cursor)
+    map))
+
+(defun sail-build-menu ()
+  (easy-menu-define
+    sail-mode-menu (list sail-mode-map)
+    "Sail Mode Menu."
+    '("Sail"
+      ["Start interactive" sail-start t]
+      ["Quit interactive" sail-quit t]
+      ["Check buffer" sail-load t]
+      ["Goto next error" sail-goto-error t]
+      ["Type at cursor" sail-type-at-cursor t]))
+  (easy-menu-add sail-mode-menu))
 
 (provide 'sail2-mode)
 

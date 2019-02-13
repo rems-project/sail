@@ -1,0 +1,11 @@
+Type error:
+[[96mreg_32_64/v1.sail[0m]:35:9-28
+35[96m |[0m  R(0) = 0xCAFE_CAFE_0000_00;
+  [91m |[0m         [91m^-----------------^[0m
+  [91m |[0m No overloading for R, tried:
+  [91m |[0m [94m*[0m set_R
+  [91m |[0m    Could not resolve quantifiers for set_R
+  [91m |[0m    [94m*[0m (regno(0) & (56 == 32 | 56 == 64))
+  [91m |[0m [94m*[0m get_R
+  [91m |[0m    No valid casts resulted in unification
+  [91m |[0m 

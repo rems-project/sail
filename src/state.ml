@@ -58,7 +58,7 @@ open PPrint
 open Pretty_print_common
 open Pretty_print_sail
 
-let defs_of_string = ast_of_def_string Ast_util.inc_ord
+let defs_of_string = ast_of_def_string
 
 let is_defined defs name = IdSet.mem (mk_id name) (ids_of_defs (Defs defs))
 
@@ -69,7 +69,7 @@ let find_registers defs =
   List.fold_left
     (fun acc def ->
       match def with
-      | DEF_reg_dec (DEC_aux(DEC_reg (typ, id), (_, tannot))) ->
+      | DEF_reg_dec (DEC_aux(DEC_reg (_, _, typ, id), (_, tannot))) ->
          let env = match destruct_tannot tannot with
            | Some (env, _, _) -> env
            | _ -> Env.empty
@@ -136,10 +136,10 @@ let generate_initial_regstate defs =
       List.fold_left2 typ_subst_quant_item typ (quant_items tq) args
     in
     let add_typ_init_val (defs', vals) = function
-      | TD_enum (id, _, id1 :: _, _) ->
+      | TD_enum (id, id1 :: _, _) ->
          (* Choose the first value of an enumeration type as default *)
          (defs', Bindings.add id (fun _ -> string_of_id id1) vals)
-      | TD_variant (id, _, tq, (Tu_aux (Tu_ty_id (typ1, id1), _)) :: _, _) ->
+      | TD_variant (id, tq, (Tu_aux (Tu_ty_id (typ1, id1), _)) :: _, _) ->
          (* Choose the first variant of a union type as default *)
          let init_val args =
            let typ1 = typ_subst_typquant tq args typ1 in
@@ -149,7 +149,7 @@ let generate_initial_regstate defs =
       | TD_abbrev (id, tq, A_aux (A_typ typ, _)) ->
          let init_val args = lookup_init_val vals (typ_subst_typquant tq args typ) in
          (defs', Bindings.add id init_val vals)
-      | TD_record (id, _, tq, fields, _) ->
+      | TD_record (id, tq, fields, _) ->
          let init_val args =
            let init_field (typ, id) =
              let typ = typ_subst_typquant tq args typ in

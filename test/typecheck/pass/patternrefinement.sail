@@ -12,7 +12,7 @@ val eq_vec = {ocaml: "eq_vec", lem: "eq_vec"}: forall ('m : Int) ('ord : Order).
   (vector('m, 'ord, bit), vector('m, 'ord, bit)) -> bool
 
 val eq_int = {ocaml: "eq_atom", lem: "eq"}: forall ('n : Int) ('m : Int).
-  (int('n), int('m)) -> bool
+  (int('n), int('m)) -> bool('n == 'm)
 
 val eq = {ocaml: "eq", lem: "eq"}: forall ('a : Type). ('a, 'a) -> bool
 

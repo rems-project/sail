@@ -146,7 +146,6 @@ let kw_table =
      ("return",                  (fun x -> Return));
      ("scattered",               (fun x -> Scattered));
      ("sizeof",                  (fun x -> Sizeof));
-     ("constant",                (fun x -> Constant));
      ("constraint",              (fun x -> Constraint));
      ("struct",                  (fun x -> Struct));
      ("then",                    (fun x -> Then));
@@ -164,7 +163,6 @@ let kw_table =
      ("do",                      (fun _ -> Do));
      ("mutual",                  (fun _ -> Mutual));
      ("bitfield",                (fun _ -> Bitfield));
-     ("where",                   (fun _ -> Where));
 
      ("barr",                    (fun x -> Barr));
      ("depend",                  (fun x -> Depend));
@@ -183,6 +181,8 @@ let kw_table =
      ("escape",                  (fun x -> Escape));
      ("configuration",           (fun _ -> Configuration));
      ("termination_measure",     (fun _ -> TerminationMeasure));
+     ("internal_plet",           (fun _ -> InternalPLet));
+     ("internal_return",         (fun _ -> InternalReturn));
    ]
 
 

@@ -275,6 +275,8 @@ exp_aux =  (* Expression *)
  | E_return of exp
  | E_assert of exp * exp
  | E_var of exp * exp * exp
+ | E_internal_plet of pat * exp * exp
+ | E_internal_return of exp
 
 and exp = 
    E_aux of exp_aux * l
@@ -343,13 +345,6 @@ type_union_aux =  (* Type union constructors *)
    Tu_ty_id of atyp * id
  | Tu_ty_anon_rec of (atyp * id) list * id
 
-
-type 
-name_scm_opt_aux =  (* Optional variable-naming-scheme specification for variables of defined type *)
-   Name_sect_none
- | Name_sect_some of string
-
-
 type 
 tannot_opt = 
    Typ_annot_opt_aux of tannot_opt_aux * l
@@ -376,18 +371,12 @@ type_union =
 
 type 
 index_range_aux =  (* index specification, for bitfields in register types *)
-   BF_single of Big_int.num (* single index *)
- | BF_range of Big_int.num * Big_int.num (* index range *)
+   BF_single of atyp       (* single index *)
+ | BF_range of atyp * atyp (* index range *)
  | BF_concat of index_range * index_range (* concatenation of index ranges *)
 
 and index_range = 
    BF_aux of index_range_aux * l
-
-
-type 
-name_scm_opt = 
-   Name_sect_aux of name_scm_opt_aux * l
-
 
 type 
 default_typing_spec_aux =  (* Default kinding or typing assumption, and default order for literal vectors and vector shorthands *)
@@ -447,23 +436,18 @@ fundef_aux =  (* Function definition *)
 type 
 type_def_aux =  (* Type definition body *)
    TD_abbrev of id * typquant * kind * atyp (* type abbreviation *)
- | TD_record of id * name_scm_opt * typquant * ((atyp * id)) list * bool (* struct type definition *)
- | TD_variant of id * name_scm_opt * typquant * (type_union) list * bool (* union type definition *)
- | TD_enum of id * name_scm_opt * (id) list * bool (* enumeration type definition *)
+ | TD_record of id * typquant * ((atyp * id)) list * bool (* struct type definition *)
+ | TD_variant of id * typquant * (type_union) list * bool (* union type definition *)
+ | TD_enum of id * (id) list * bool (* enumeration type definition *)
  | TD_bitfield of id * atyp * (id * index_range) list (* register mutable bitfield type definition *)
 
 type 
 val_spec_aux =  (* Value type specification *)
    VS_val_spec of typschm * id * (string * string) list * bool
 
-
-type 
-kind_def_aux =  (* Definition body for elements of kind; many are shorthands for type\_defs *)
-   KD_nabbrev of kind * id * name_scm_opt * atyp (* type abbreviation *)
-
 type 
 dec_spec_aux =  (* Register declarations *)
-   DEC_reg of atyp * id
+   DEC_reg of atyp * atyp * atyp * id
  | DEC_config of id * atyp * exp
  | DEC_alias of id * exp
  | DEC_typ_alias of atyp * id * exp
@@ -474,7 +458,7 @@ scattered_def_aux =  (* Function and type union definitions that can be spread a
          a file. Each one must end in $_$ *)
    SD_function of rec_opt * tannot_opt * effect_opt * id (* scattered function definition header *)
  | SD_funcl of funcl (* scattered function definition clause *)
- | SD_variant of id * name_scm_opt * typquant (* scattered union definition header *)
+ | SD_variant of id * typquant (* scattered union definition header *)
  | SD_unioncl of id * type_union (* scattered union definition member *)
  | SD_mapping of id * tannot_opt
  | SD_mapcl of id * mapcl
@@ -500,12 +484,6 @@ type
 val_spec = 
    VS_aux of val_spec_aux * l
 
-
-type 
-kind_def = 
-   KD_aux of kind_def_aux * l
-
-
 type 
 dec_spec = 
    DEC_aux of dec_spec_aux * l
@@ -521,8 +499,7 @@ type fixity_token = (prec * Big_int.num * string)
 
 type
 def =  (* Top-level definition *)
-   DEF_kind of kind_def (* definition of named kind identifiers *)
- | DEF_type of type_def (* type definition *)
+   DEF_type of type_def (* type definition *)
  | DEF_fundef of fundef (* function definition *)
  | DEF_mapdef of mapdef (* mapping definition *)
  | DEF_val of letbind (* value definition *)

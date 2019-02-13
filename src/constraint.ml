@@ -53,6 +53,8 @@ open Ast
 open Ast_util
 open Util
 
+let opt_smt_verbose = ref false
+
 (* SMTLIB v2.0 format is based on S-expressions so we have a
    lightweight representation of those here. *)
 type sexpr = List of (sexpr list) | Atom of string
@@ -186,7 +188,9 @@ let call_z3' l vars constraints : smt_result =
   let problems = [constraints] in
   let z3_file, _ = smtlib_of_constraints l vars constraints in
 
-  (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file); *)
+  if !opt_smt_verbose then
+    prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file)
+  else ();
 
   let rec input_lines chan = function
     | 0 -> []
@@ -205,12 +209,21 @@ let call_z3' l vars constraints : smt_result =
   with
   | Not_found ->
     begin
-      let (input_file, tmp_chan) = Filename.open_temp_file "constraint_" ".sat" in
+      let (input_file, tmp_chan) =
+        try Filename.open_temp_file "constraint_" ".sat" with
+        | Sys_error msg -> raise (Reporting.err_general l ("Could not open temp file when calling Z3: " ^ msg))
+      in
       output_string tmp_chan z3_file;
       close_out tmp_chan;
-      let z3_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
-      let z3_output = List.combine problems (input_lines z3_chan (List.length problems)) in
-      let _ = Unix.close_process_in z3_chan in
+      let z3_output =
+        try
+          let z3_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
+          let z3_output = List.combine problems (input_lines z3_chan (List.length problems)) in
+          let _ = Unix.close_process_in z3_chan in
+          z3_output
+        with
+        | exn -> raise (Reporting.err_general l ("Error when calling z3: " ^ Printexc.to_string exn))
+      in
       Sys.remove input_file;
       try
         let (problem, _) = List.find (fun (_, result) -> result = "unsat") z3_output in
@@ -249,9 +262,16 @@ let rec solve_z3 l vars constraints var =
   let (input_file, tmp_chan) = Filename.open_temp_file "constraint_" ".sat" in
   output_string tmp_chan z3_file;
   close_out tmp_chan;
-  let z3_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
-  let z3_output = String.concat " " (input_all z3_chan) in
-  let _ = Unix.close_process_in z3_chan in
+  let z3_output =
+    try
+      let z3_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
+      let z3_output = String.concat " " (input_all z3_chan) in
+      let _ = Unix.close_process_in z3_chan in
+      z3_output
+    with
+    | exn ->
+       raise (Reporting.err_general l ("Got error when calling z3: " ^ Printexc.to_string exn))
+  in
   Sys.remove input_file;
   let regexp = {|(define-fun |} ^ z3_var ^ {| () Int[ ]+\([0-9]+\))|} in
   try

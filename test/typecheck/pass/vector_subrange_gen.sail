@@ -1,3 +1,4 @@
+
 val vector_access : forall ('l : Int) ('o : Order) ('a : Type), 'l >= 0.
   (vector('l, 'o, 'a), range(0, 'l - 1)) -> 'a
 
@@ -10,6 +11,8 @@ val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_inc"} : forall ('l 
 val sub : forall ('n : Int) ('m : Int). (atom('n), atom('m)) -> atom('n - 'm)
 
 val "length" : forall ('n : Int). vector('n, inc, bit) -> atom('n)
+
+overload __size = {length}
 
 default Order inc
 

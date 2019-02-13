@@ -28,6 +28,11 @@ end
 
 declare {isabelle} termination_argument foreachS = automatic
 
+val genlistS : forall 'a 'rv 'e. (nat -> monadS 'rv 'a 'e) -> nat -> monadS 'rv (list 'a) 'e
+let genlistS f n =
+  let indices = genlist (fun n -> n) n in
+  foreachS indices [] (fun n xs -> (f n >>$= (fun x -> returnS (xs ++ [x]))))
+
 val and_boolS : forall 'rv 'e. monadS 'rv bool 'e -> monadS 'rv bool 'e -> monadS 'rv bool 'e
 let and_boolS l r = l >>$= (fun l -> if l then r else returnS false)
 
@@ -84,12 +89,17 @@ let rec untilS vars cond body s =
   (cond vars >>$= (fun cond_val s'' ->
   if cond_val then returnS vars s'' else untilS vars cond body s'')) s')) s
 
+val choose_boolsS : forall 'rv 'e. nat -> monadS 'rv (list bool) 'e
+let choose_boolsS n = genlistS (fun _ -> choose_boolS ()) n
+
+(* TODO: Replace by chooseS and prove equivalence to prompt monad version *)
 val internal_pickS : forall 'rv 'a 'e. list 'a -> monadS 'rv 'a 'e
 let internal_pickS xs =
-  (* Use sufficiently many undefined bits and convert into an index into the list *)
-  bools_of_bits_nondetS (repeat [BU] (length_list xs)) >>$= fun bs ->
+  (* Use sufficiently many nondeterministically chosen bits and convert into an
+     index into the list *)
+  choose_boolsS (List.length xs) >>$= fun bs ->
   let idx = (natFromNatural (nat_of_bools bs)) mod List.length xs in
   match index xs idx with
     | Just x -> returnS x
-    | Nothing -> failS "internal_pick"
+    | Nothing -> failS "choose internal_pick"
   end

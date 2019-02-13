@@ -64,6 +64,30 @@ def test_ocaml(name):
         results.collect(tests)
     return results.finish()
 
+def test_lem(name):
+    banner('Testing {}'.format(name))
+    results = Results(name)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
+            basename = os.path.splitext(os.path.basename(filename))[0]
+            tests[filename] = os.fork()
+            if tests[filename] == 0:
+                step('sail -lem {}'.format(filename))
+                step('mkdir -p _lbuild_{}'.format(basename))
+                step('cp {}*.lem _lbuild_{}'.format(basename, basename))
+                step('cp lbuild/* _lbuild_{}'.format(basename))
+                step('cp ../../src/gen_lib/*.lem _lbuild_{}'.format(basename))
+                os.chdir('_lbuild_{}'.format(basename))
+                step('echo "let _ = {}.main ()" > main.ml'.format(basename.capitalize()))
+                step('ocamlbuild -use-ocamlfind main.native'.format(basename, basename))
+                step('./main.native 1> {}.lresult'.format(basename))
+                step('diff ../{}.expect {}.lresult'.format(basename, basename))
+                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                sys.exit()
+        results.collect(tests)
+    return results.finish()
+
 xml = '<testsuites>\n'
 
 xml += test_c('unoptimized C', '', '', True)
@@ -75,6 +99,8 @@ xml += test_c('address sanitised', '-O2 -fsanitize=undefined', '-O', False)
 xml += test_interpreter('interpreter')
 
 xml += test_ocaml('OCaml')
+
+#xml += test_lem('lem')
 
 xml += '</testsuites>\n'
 

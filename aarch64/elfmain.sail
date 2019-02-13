@@ -23,7 +23,7 @@ function Step_CPU() = {
   interrupt_req.take_IRQ = true; interrupt_req.take_vIRQ = true;
   interrupt_req.take_FIQ = true; interrupt_req.take_vFIQ = true;
   try {
-      var interrupted = false;
+      var interrupted : bool = false;
       interrupted = TakePendingInterrupts(interrupt_req);
       if interrupted then {
           print("Pending interrupt taken\n");
@@ -34,7 +34,7 @@ function Step_CPU() = {
       }
   };
 
-  var fetch_ok = false;
+  var fetch_ok : bool = false;
   try {
       if PSTATE.nRW != bitzero then {
         print("UNIMPLEMENTED: AArch32 support\n");
@@ -247,7 +247,7 @@ function Step_System () = {
                    PSTATE.EL);
       };
       if prevI != PSTATE.I then {
-	prerr_bits("[Sail] PSTATE.I changed to: ", PSTATE.I);
+        prerr_bits("[Sail] PSTATE.I changed to: ", PSTATE.I);
         print(concat_str("   at PC=",
               concat_str(HexStr(UInt(aget_PC())),
               concat_str(" in cycle=",
@@ -263,7 +263,7 @@ function Step_System () = {
 
     } catch {
       Error_ExceptionTaken(_) => {
-	// enable_tracing()
+        // enable_tracing()
         print(concat_str("Exception taken during Step_System.  PC=",
               concat_str(HexStr(UInt(aget_PC())),
               concat_str(" cycle=",

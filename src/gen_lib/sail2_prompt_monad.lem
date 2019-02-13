@@ -8,19 +8,20 @@ type address = list bitU
 
 type monad 'regval 'a 'e =
   | Done of 'a
-  (* Read a number of bytes from memory, returned in little endian order *)
-  | Read_mem of read_kind * address * nat * (list memory_byte -> monad 'regval 'a 'e)
-  (* Read the tag of a memory address *)
-  | Read_tag of address * (bitU -> monad 'regval 'a 'e)
-  (* Tell the system a write is imminent, at address lifted, of size nat *)
-  | Write_ea of write_kind * address * nat * monad 'regval 'a 'e
+  (* Read a number of bytes from memory, returned in little endian order,
+     with or without a tag.  The first nat specifies the address, the second
+     the number of bytes. *)
+  | Read_mem of read_kind * nat * nat * (list memory_byte -> monad 'regval 'a 'e)
+  | Read_memt of read_kind * nat * nat * ((list memory_byte * bitU) -> monad 'regval 'a 'e)
+  (* Tell the system a write is imminent, at the given address and with the
+     given size. *)
+  | Write_ea of write_kind * nat * nat * monad 'regval 'a 'e
   (* Request the result of store-exclusive *)
   | Excl_res of (bool -> monad 'regval 'a 'e)
-  (* Request to write memory at last signalled address. Memory value should be 8
-     times the size given in ea signal, given in little endian order *)
-  | Write_memv of list memory_byte * (bool -> monad 'regval 'a 'e)
-  (* Request to write the tag at given address. *)
-  | Write_tag of address * bitU * (bool -> monad 'regval 'a 'e)
+  (* Request to write a memory value of the given size at the given address,
+     with or without a tag. *)
+  | Write_mem of write_kind * nat * nat * list memory_byte * (bool -> monad 'regval 'a 'e)
+  | Write_memt of write_kind * nat * nat * list memory_byte * bitU * (bool -> monad 'regval 'a 'e)
   (* Tell the system to dynamically recalculate dependency footprint *)
   | Footprint of monad 'regval 'a 'e
   (* Request a memory barrier *)
@@ -29,8 +30,10 @@ type monad 'regval 'a 'e =
   | Read_reg of register_name * ('regval -> monad 'regval 'a 'e)
   (* Request to write register *)
   | Write_reg of register_name * 'regval * monad 'regval 'a 'e
-  (* Request to choose a Boolean, e.g. to resolve an undefined bit *)
-  | Undefined of (bool -> monad 'regval 'a 'e)
+  (* Request to choose a Boolean, e.g. to resolve an undefined bit. The string
+     argument may be used to provide information to the system about what the
+     Boolean is going to be used for. *)
+  | Choose of string * (bool -> monad 'regval 'a 'e)
   (* Print debugging or tracing information *)
   | Print of string * monad 'regval 'a 'e
   (*Result of a failed assert with possible error message to report*)
@@ -38,33 +41,52 @@ type monad 'regval 'a 'e =
   (* Exception of type 'e *)
   | Exception of 'e
 
+type event 'regval =
+  | E_read_mem of read_kind * nat * nat * list memory_byte
+  | E_read_memt of read_kind * nat * nat * (list memory_byte * bitU)
+  | E_write_mem of write_kind * nat * nat * list memory_byte * bool
+  | E_write_memt of write_kind * nat * nat * list memory_byte * bitU * bool
+  | E_write_ea of write_kind * nat * nat
+  | E_excl_res of bool
+  | E_barrier of barrier_kind
+  | E_footprint
+  | E_read_reg of register_name * 'regval
+  | E_write_reg of register_name * 'regval
+  | E_choose of string * bool
+  | E_print of string
+
+type trace 'regval = list (event 'regval)
+
 val return : forall 'rv 'a 'e. 'a -> monad 'rv 'a 'e
 let return a = Done a
 
 val bind : forall 'rv 'a 'b 'e. monad 'rv 'a 'e -> ('a -> monad 'rv 'b 'e) -> monad 'rv 'b 'e
 let rec bind m f = match m with
   | Done a -> f a
-  | Read_mem rk a sz k -> Read_mem rk a sz (fun v -> bind (k v) f)
-  | Read_tag a k ->       Read_tag a       (fun v -> bind (k v) f)
-  | Write_memv descr k -> Write_memv descr (fun v -> bind (k v) f)
-  | Write_tag a t k ->    Write_tag a t    (fun v -> bind (k v) f)
-  | Read_reg descr k ->   Read_reg descr   (fun v -> bind (k v) f)
-  | Excl_res k ->         Excl_res         (fun v -> bind (k v) f)
-  | Undefined k ->        Undefined        (fun v -> bind (k v) f)
-  | Write_ea wk a sz k -> Write_ea wk a sz (bind k f)
-  | Footprint k ->        Footprint        (bind k f)
-  | Barrier bk k ->       Barrier bk       (bind k f)
-  | Write_reg r v k ->    Write_reg r v    (bind k f)
-  | Print msg k ->        Print msg        (bind k f)
-  | Fail descr ->         Fail descr
-  | Exception e ->        Exception e
+  | Read_mem rk a sz k ->       Read_mem rk a sz       (fun v -> bind (k v) f)
+  | Read_memt rk a sz k ->      Read_memt rk a sz      (fun v -> bind (k v) f)
+  | Write_mem wk a sz v k ->    Write_mem wk a sz v    (fun v -> bind (k v) f)
+  | Write_memt wk a sz v t k -> Write_memt wk a sz v t (fun v -> bind (k v) f)
+  | Read_reg descr k ->         Read_reg descr         (fun v -> bind (k v) f)
+  | Excl_res k ->               Excl_res               (fun v -> bind (k v) f)
+  | Choose descr k ->           Choose descr           (fun v -> bind (k v) f)
+  | Write_ea wk a sz k ->       Write_ea wk a sz       (bind k f)
+  | Footprint k ->              Footprint              (bind k f)
+  | Barrier bk k ->             Barrier bk             (bind k f)
+  | Write_reg r v k ->          Write_reg r v          (bind k f)
+  | Print msg k ->              Print msg              (bind k f)
+  | Fail descr ->               Fail descr
+  | Exception e ->              Exception e
 end
 
 val exit : forall 'rv 'a 'e. unit -> monad 'rv 'a 'e
 let exit () = Fail "exit"
 
+val choose_bool : forall 'rv 'e. string -> monad 'rv bool 'e
+let choose_bool descr = Choose descr return
+
 val undefined_bool : forall 'rv 'e. unit -> monad 'rv bool 'e
-let undefined_bool () = Undefined return
+let undefined_bool () = choose_bool "undefined_bool"
 
 val assert_exp : forall 'rv 'e. bool -> string -> monad 'rv unit 'e
 let assert_exp exp msg = if exp then Done () else Fail msg
@@ -74,21 +96,21 @@ let throw e = Exception e
 
 val try_catch : forall 'rv 'a 'e1 'e2. monad 'rv 'a 'e1 -> ('e1 -> monad 'rv 'a 'e2) -> monad 'rv 'a 'e2
 let rec try_catch m h = match m with
-  | Done a ->             Done a
-  | Read_mem rk a sz k -> Read_mem rk a sz (fun v -> try_catch (k v) h)
-  | Read_tag a k ->       Read_tag a       (fun v -> try_catch (k v) h)
-  | Write_memv descr k -> Write_memv descr (fun v -> try_catch (k v) h)
-  | Write_tag a t k ->    Write_tag a t    (fun v -> try_catch (k v) h)
-  | Read_reg descr k ->   Read_reg descr   (fun v -> try_catch (k v) h)
-  | Excl_res k ->         Excl_res         (fun v -> try_catch (k v) h)
-  | Undefined k ->        Undefined        (fun v -> try_catch (k v) h)
-  | Write_ea wk a sz k -> Write_ea wk a sz (try_catch k h)
-  | Footprint k ->        Footprint        (try_catch k h)
-  | Barrier bk k ->       Barrier bk       (try_catch k h)
-  | Write_reg r v k ->    Write_reg r v    (try_catch k h)
-  | Print msg k ->        Print msg        (try_catch k h)
-  | Fail descr ->         Fail descr
-  | Exception e ->        h e
+  | Done a -> Done a
+  | Read_mem rk a sz k ->       Read_mem rk a sz       (fun v -> try_catch (k v) h)
+  | Read_memt rk a sz k ->      Read_memt rk a sz      (fun v -> try_catch (k v) h)
+  | Write_mem wk a sz v k ->    Write_mem wk a sz v    (fun v -> try_catch (k v) h)
+  | Write_memt wk a sz v t k -> Write_memt wk a sz v t (fun v -> try_catch (k v) h)
+  | Read_reg descr k ->         Read_reg descr         (fun v -> try_catch (k v) h)
+  | Excl_res k ->               Excl_res               (fun v -> try_catch (k v) h)
+  | Choose descr k ->           Choose descr           (fun v -> try_catch (k v) h)
+  | Write_ea wk a sz k ->       Write_ea wk a sz       (try_catch k h)
+  | Footprint k ->              Footprint              (try_catch k h)
+  | Barrier bk k ->             Barrier bk             (try_catch k h)
+  | Write_reg r v k ->          Write_reg r v          (try_catch k h)
+  | Print msg k ->              Print msg              (try_catch k h)
+  | Fail descr ->               Fail descr
+  | Exception e ->              h e
 end
 
 (* For early return, we abuse exceptions by throwing and catching
@@ -126,19 +148,37 @@ let maybe_fail msg = function
   | Nothing -> Fail msg
 end
 
+val read_memt_bytes : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv (list memory_byte * bitU) 'e
+let read_memt_bytes rk addr sz =
+  bind
+    (maybe_fail "nat_of_bv" (nat_of_bv addr))
+    (fun addr -> Read_memt rk addr (nat_of_int sz) return)
+
+val read_memt : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv ('b * bitU) 'e
+let read_memt rk addr sz =
+  bind
+    (read_memt_bytes rk addr sz)
+    (fun (bytes, tag) ->
+       match of_bits (bits_of_mem_bytes bytes) with
+         | Just v -> return (v, tag)
+         | Nothing -> Fail "bits_of_mem_bytes"
+       end)
+
 val read_mem_bytes : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv (list memory_byte) 'e
 let read_mem_bytes rk addr sz =
-  Read_mem rk (bits_of addr) (nat_of_int sz) return
+  bind
+    (maybe_fail "nat_of_bv" (nat_of_bv addr))
+    (fun addr -> Read_mem rk addr (nat_of_int sz) return)
 
 val read_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv 'b 'e
 let read_mem rk addr sz =
   bind
     (read_mem_bytes rk addr sz)
     (fun bytes ->
-       maybe_fail "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)))
-
-val read_tag : forall 'rv 'a 'e. Bitvector 'a => 'a -> monad 'rv bitU 'e
-let read_tag addr = Read_tag (bits_of addr) return
+       match of_bits (bits_of_mem_bytes bytes) with
+         | Just v -> return v
+         | Nothing -> Fail "bits_of_mem_bytes"
+       end)
 
 val excl_result : forall 'rv 'e. unit -> monad 'rv bool 'e
 let excl_result () =
@@ -146,16 +186,28 @@ let excl_result () =
   Excl_res k
 
 val write_mem_ea : forall 'rv 'a 'e. Bitvector 'a => write_kind -> 'a -> integer -> monad 'rv unit 'e
-let write_mem_ea wk addr sz = Write_ea wk (bits_of addr) (nat_of_int sz) (Done ())
+let write_mem_ea wk addr sz =
+  bind
+    (maybe_fail "nat_of_bv" (nat_of_bv addr))
+    (fun addr -> Write_ea wk addr (nat_of_int sz) (Done ()))
 
-val write_mem_val : forall 'rv 'a 'e. Bitvector 'a => 'a -> monad 'rv bool 'e
-let write_mem_val v = match mem_bytes_of_bits v with
-  | Just v -> Write_memv v return
-  | Nothing -> Fail "write_mem_val"
-end
+val write_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b =>
+  write_kind -> 'a -> integer -> 'b -> monad 'rv bool 'e
+let write_mem wk addr sz v =
+  match (mem_bytes_of_bits v, nat_of_bv addr) with
+    | (Just v, Just addr) ->
+       Write_mem wk addr (nat_of_int sz) v return
+    | _ -> Fail "write_mem"
+  end
 
-val write_tag : forall 'rv 'a 'e. Bitvector 'a => 'a -> bitU -> monad 'rv bool 'e
-let write_tag addr b = Write_tag (bits_of addr) b return
+val write_memt : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b =>
+  write_kind -> 'a -> integer -> 'b -> bitU -> monad 'rv bool 'e
+let write_memt wk addr sz v tag =
+  match (mem_bytes_of_bits v, nat_of_bv addr) with
+    | (Just v, Just addr) ->
+       Write_memt wk addr (nat_of_int sz) v tag return
+    | _ -> Fail "write_mem"
+  end
 
 val read_reg : forall 's 'rv 'a 'e. register_ref 's 'rv 'a -> monad 'rv 'a 'e
 let read_reg reg =
@@ -213,6 +265,68 @@ let barrier bk = Barrier bk (Done ())
 
 val footprint : forall 'rv 'e. unit -> monad 'rv unit 'e
 let footprint _ = Footprint (Done ())
+
+(* Event traces *)
+
+val emitEvent : forall 'regval 'a 'e. Eq 'regval => monad 'regval 'a 'e -> event 'regval -> maybe (monad 'regval 'a 'e)
+let emitEvent m e = match (e, m) with
+  | (E_read_mem rk a sz v, Read_mem rk' a' sz' k) ->
+     if rk' = rk && a' = a && sz' = sz then Just (k v) else Nothing
+  | (E_read_memt rk a sz vt, Read_memt rk' a' sz' k) ->
+     if rk' = rk && a' = a && sz' = sz then Just (k vt) else Nothing
+  | (E_write_mem wk a sz v r, Write_mem wk' a' sz' v' k) ->
+     if wk' = wk && a' = a && sz' = sz && v' = v then Just (k r) else Nothing
+  | (E_write_memt wk a sz v tag r, Write_memt wk' a' sz' v' tag' k) ->
+     if wk' = wk && a' = a && sz' = sz && v' = v && tag' = tag then Just (k r) else Nothing
+  | (E_read_reg r v, Read_reg r' k) ->
+     if r' = r then Just (k v) else Nothing
+  | (E_write_reg r v, Write_reg r' v' k) ->
+     if r' = r && v' = v then Just k else Nothing
+  | (E_write_ea wk a sz, Write_ea wk' a' sz' k) ->
+     if wk' = wk && a' = a && sz' = sz then Just k else Nothing
+  | (E_barrier bk, Barrier bk' k) ->
+     if bk' = bk then Just k else Nothing
+  | (E_print m, Print m' k) ->
+     if m' = m then Just k else Nothing
+  | (E_excl_res v, Excl_res k) -> Just (k v)
+  | (E_choose descr v, Choose descr' k) -> if descr' = descr then Just (k v) else Nothing
+  | (E_footprint, Footprint k) -> Just k
+  | _ -> Nothing
+end
+
+val runTrace : forall 'regval 'a 'e. Eq 'regval => trace 'regval -> monad 'regval 'a 'e -> maybe (monad 'regval 'a 'e)
+let rec runTrace t m = match t with
+  | [] -> Just m
+  | e :: t' -> Maybe.bind (emitEvent m e) (runTrace t')
+end
+
+declare {isabelle} termination_argument runTrace = automatic
+
+val final : forall 'regval 'a 'e. monad 'regval 'a 'e -> bool
+let final = function
+  | Done _ -> true
+  | Fail _ -> true
+  | Exception _ -> true
+  | _ -> false
+end
+
+val hasTrace : forall 'regval 'a 'e. Eq 'regval => trace 'regval -> monad 'regval 'a 'e -> bool
+let hasTrace t m = match runTrace t m with
+  | Just m -> final m
+  | Nothing -> false
+end
+
+val hasException : forall 'regval 'a 'e. Eq 'regval => trace 'regval -> monad 'regval 'a 'e -> bool
+let hasException t m = match runTrace t m with
+  | Just (Exception _) -> true
+  | _ -> false
+end
+
+val hasFailure : forall 'regval 'a 'e. Eq 'regval => trace 'regval -> monad 'regval 'a 'e -> bool
+let hasFailure t m = match runTrace t m with
+  | Just (Fail _) -> true
+  | _ -> false
+end
 
 (* Define a type synonym that also takes the register state as a type parameter,
    in order to make switching to the state monad without changing generated

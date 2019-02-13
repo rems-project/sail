@@ -12,6 +12,10 @@ isail:
 	$(MAKE) -C src isail
 	ln -f -s src/isail.native sail
 
+coverage:
+	$(MAKE) -C src coverage
+	ln -f -s src/isail.native sail
+
 install:
 	if [ -z "$(SHARE_DIR)" ]; then echo SHARE_DIR is unset; false; fi
 	mkdir -p $(INSTALL_DIR)/bin

@@ -2,7 +2,7 @@ session "Sail" = "LEM" +
   options [browser_info, document = pdf, document_output = "output"]
   sessions
     "HOL-Eisbach"
-  theories [document = false]
+  theories
     Sail2_values_lemmas
     Sail2_prompt
     Sail2_state_lemmas

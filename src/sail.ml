@@ -54,7 +54,6 @@ module Big_int = Nat_big_num
 
 let lib = ref ([] : string list)
 let opt_file_out : string option ref = ref None
-let opt_interactive = ref false
 let opt_interactive_script : string option ref = ref None
 let opt_print_version = ref false
 let opt_print_initial_env = ref false
@@ -65,7 +64,7 @@ let opt_print_c = ref false
 let opt_print_latex = ref false
 let opt_print_coq = ref false
 let opt_print_cgen = ref false
-let opt_memo_z3 = ref false
+let opt_memo_z3 = ref true
 let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
 let opt_libs_lem = ref ([]:string list)
@@ -74,21 +73,25 @@ let opt_file_arguments = ref ([]:string list)
 let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
 let opt_marshal_defs = ref false
+let opt_slice = ref ([]:string list)
 
 let options = Arg.align ([
   ( "-o",
     Arg.String (fun f -> opt_file_out := Some f),
     "<prefix> select output filename prefix");
   ( "-i",
-    Arg.Tuple [Arg.Set opt_interactive; Arg.Set Initial_check.opt_undefined_gen],
+    Arg.Tuple [Arg.Set Interactive.opt_interactive; Arg.Set Initial_check.opt_undefined_gen],
     " start interactive interpreter");
   ( "-is",
-    Arg.Tuple [Arg.Set opt_interactive; Arg.Set Initial_check.opt_undefined_gen;
+    Arg.Tuple [Arg.Set Interactive.opt_interactive; Arg.Set Initial_check.opt_undefined_gen;
                Arg.String (fun s -> opt_interactive_script := Some s)],
     "<filename> start interactive interpreter and execute commands in script");
   ( "-iout",
     Arg.String (fun file -> Value.output_redirect (open_out file)),
     "<filename> print interpreter output to file");
+  ( "-emacs",
+    Arg.Set Interactive.opt_emacs_mode,
+    " run sail interactively as an emacs mode child process");
   ( "-no_warn",
     Arg.Clear Util.opt_warnings,
     " do not print warnings");
@@ -97,7 +100,7 @@ let options = Arg.align ([
     " output an OCaml translated version of the input");
   ( "-ocaml-nobuild",
     Arg.Set Ocaml_backend.opt_ocaml_nobuild,
-    " do not build generated ocaml");
+    " do not build generated OCaml");
   ( "-ocaml_trace",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml");
@@ -106,31 +109,34 @@ let options = Arg.align ([
     " set a custom directory to build generated OCaml");
   ( "-ocaml-coverage",
     Arg.Set Ocaml_backend.opt_ocaml_coverage,
-    " Build ocaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx).");
+    " build OCaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx).");
   ( "-ocaml_generators",
     Arg.String (fun s -> opt_ocaml_generators := s::!opt_ocaml_generators),
     "<types> produce random generators for the given types");
   ( "-latex",
     Arg.Tuple [Arg.Set opt_print_latex; Arg.Clear Type_check.opt_expand_valspec ],
     " pretty print the input to latex");
+  ( "-latex_prefix",
+    Arg.String (fun prefix -> Latex.opt_prefix := prefix),
+    " set a custom prefix for generated LaTeX macro command (default sail)");
+  ( "-latex_full_valspecs",
+    Arg.Clear Latex.opt_simple_val,
+    " print full valspecs in LaTeX output");
   ( "-marshal",
     Arg.Set opt_marshal_defs,
     " OCaml-marshal out the rewritten AST to a file");
-  ( "-latex_full_valspecs",
-    Arg.Clear Latex.opt_simple_val,
-    " print full valspecs in latex output latex");
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
   ( "-c_include",
     Arg.String (fun i -> opt_includes_c := i::!opt_includes_c),
-    " <filename> provide additional include for C output");
+    "<filename> provide additional include for C output");
   ( "-c_no_main",
     Arg.Set C_backend.opt_no_main,
     " do not generate the main() function" );
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
-    " process an elf file so that it can be executed by compiled C code");
+    " process an ELF file so that it can be executed by compiled C code");
   ( "-O",
     Arg.Tuple [Arg.Set C_backend.optimize_primops;
                Arg.Set C_backend.optimize_hoist_allocations;
@@ -141,19 +147,22 @@ let options = Arg.align ([
     " turn on optimizations for C compilation");
   ( "-Oconstant_fold",
     Arg.Set Constant_fold.optimize_constant_fold,
-    " Apply constant folding optimizations");
+    " apply constant folding optimizations");
   ( "-Oexperimental",
     Arg.Set C_backend.optimize_experimental,
     " turn on additional, experimental optimisations");
   ( "-static",
     Arg.Set C_backend.opt_static,
-    " Make generated C functions static");
+    " make generated C functions static");
   ( "-trace",
     Arg.Tuple [Arg.Set C_backend.opt_trace; Arg.Set Ocaml_backend.opt_trace_ocaml],
-    " Instrument ouput with tracing");
+    " instrument output with tracing");
+  ( "-smt_trace",
+    Arg.Tuple [Arg.Set C_backend.opt_smt_trace],
+    " instrument output with tracing for SMT");
   ( "-cgen",
     Arg.Set opt_print_cgen,
-    " Generate CGEN source");
+    " generate CGEN source");
   ( "-lem",
     Arg.Set opt_print_lem,
     " output a Lem translated version of the input");
@@ -190,9 +199,6 @@ let options = Arg.align ([
   ( "-dcoq_debug_on",
     Arg.String (fun f -> Pretty_print_coq.opt_debug_on := f::!Pretty_print_coq.opt_debug_on),
     "<function> produce debug messages for Coq output on given function");
-  ( "-latex_prefix",
-    Arg.String (fun prefix -> Latex.opt_prefix := prefix),
-    " set a custom prefix for generated latex command (default sail)");
   ( "-mono_split",
     Arg.String (fun s ->
       let l = Util.split_on_char ':' s in
@@ -203,7 +209,13 @@ let options = Arg.align ([
       "<filename>:<line>:<variable> to case split for monomorphisation");
   ( "-memo_z3",
     Arg.Set opt_memo_z3,
-    " memoize calls to z3, improving performance when typechecking repeatedly");
+    " memoize calls to z3, improving performance when typechecking repeatedly (default)");
+  ( "-no_memo_z3",
+    Arg.Clear opt_memo_z3,
+    " do not memoize calls to z3");
+  ( "-memo",
+    Arg.Tuple [Arg.Set opt_memo_z3; Arg.Set C_backend.opt_memo_cache],
+    " memoize calls to z3, and intermediate compilation results");
   ( "-undefined_gen",
     Arg.Set Initial_check.opt_undefined_gen,
     " generate undefined_type functions for types in the specification");
@@ -241,8 +253,11 @@ let options = Arg.align ([
     Arg.Set Rewrites.opt_dmono_continue,
     " continue despite monomorphisation errors");
   ( "-verbose",
+    Arg.Int (fun verbosity -> Util.opt_verbosity := verbosity),
+    " produce verbose output");
+  ( "-output_sail",
     Arg.Set opt_print_verbose,
-    " (debug) pretty-print the input to standard output");
+    " print Sail code after type checking and initial rewriting");
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
@@ -255,6 +270,9 @@ let options = Arg.align ([
   ( "-dtc_verbose",
     Arg.Int (fun verbosity -> Type_check.opt_tc_debug := verbosity),
     "<verbosity> (debug) verbose typechecker output: 0 is silent");
+  ( "-dsmt_verbose",
+    Arg.Set Constraint.opt_smt_verbose,
+    " (debug) print SMTLIB constraints sent to Z3");
   ( "-dno_cast",
     Arg.Set opt_dno_cast,
     " (debug) typecheck without any implicit casting");
@@ -269,16 +287,27 @@ let options = Arg.align ([
     " (debug) print debugging output for a single function");
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
-    " (debug) provides basic profiling information for rewriting passes within Sail");
+    " (debug) provide basic profiling information for rewriting passes within Sail");
+  ( "-slice",
+    Arg.String (fun s -> opt_slice := s::!opt_slice),
+    "<id> produce version of input restricted to the given function");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
 ] )
 
+let version =
+  let open Manifest in
+  let default = Printf.sprintf "Sail %s @ %s" branch commit in
+  (* version is parsed from the output of git describe *)
+  match String.split_on_char '-' version with
+  | (vnum :: _) ->
+     Printf.sprintf "Sail %s (%s @ %s)" vnum branch commit
+  | _ -> default
+
 let usage_msg =
-    ("Sail 2.0\n"
-     ^ "usage: sail <options> <file1.sail> ... <fileN.sail>\n"
-    )
+  version
+  ^ "\nusage: sail <options> <file1.sail> ... <fileN.sail>\n"
 
 let _ =
   Arg.parse options
@@ -286,10 +315,7 @@ let _ =
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg
 
-let interactive_ast = ref (Ast.Defs [])
-let interactive_env = ref Type_check.initial_env
-
-let load_files type_envs files =
+let load_files ?generate:(generate=true) type_envs files =
   if !opt_memo_z3 then Constraint.load_digests () else ();
 
   let t = Profile.start () in
@@ -298,7 +324,7 @@ let load_files type_envs files =
     List.fold_right (fun (_, Parse_ast.Defs ast_nodes) (Parse_ast.Defs later_nodes)
                      -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
   let ast = Process_file.preprocess_ast options ast in
-  let ast = convert_ast Ast_util.inc_ord ast in
+  let ast = Initial_check.process_ast ~generate:generate ast in
   Profile.finish "parsing" t;
 
   let t = Profile.start () in
@@ -318,8 +344,8 @@ let load_files type_envs files =
   (out_name, ast, type_envs)
 
 let main() =
-  if !opt_print_version
-  then Printf.printf "Sail 2.0\n"
+  if !opt_print_version then
+    print_endline version
   else
     let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
     Util.opt_warnings := false; (* Don't show warnings during re-writing for now *)
@@ -347,11 +373,10 @@ let main() =
       | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast, !opt_ocaml_generators)
     in
 
-    (*let _ = Printf.eprintf "Type checked, next to pretty print" in*)
     begin
-      (if !(opt_interactive)
+      (if !(Interactive.opt_interactive)
        then
-         (interactive_ast := Process_file.rewrite_ast_interpreter type_envs ast; interactive_env := type_envs)
+         (Interactive.ast := Process_file.rewrite_ast_interpreter type_envs ast; Interactive.env := type_envs)
        else ());
       (if !(opt_sanity)
        then
@@ -361,6 +386,12 @@ let main() =
       (if !(opt_print_verbose)
        then ((Pretty_print_sail.pp_defs stdout) ast)
        else ());
+      (match !opt_slice with
+       | [] -> ()
+       | ids ->
+          let ids = List.map Ast_util.mk_id ids in
+          let ids = Ast_util.IdSet.of_list ids in
+          Pretty_print_sail.pp_defs stdout (Specialize.slice_defs type_envs ast ids));
       (if !(opt_print_ocaml)
        then
          let ast_ocaml = rewrite_ast_ocaml type_envs ast in
@@ -371,7 +402,7 @@ let main() =
        then
          let ast_c = rewrite_ast_c type_envs ast in
          let ast_c, type_envs = Specialize.specialize ast_c type_envs in
-         let ast_c = Spec_analysis.top_sort_defs ast_c in
+         (* let ast_c = Spec_analysis.top_sort_defs ast_c in *)
          Util.opt_warnings := true;
          C_backend.compile_ast (C_backend.initial_ctx type_envs) (!opt_includes_c) ast_c
        else ());
@@ -383,13 +414,13 @@ let main() =
          let mwords = !Pretty_print_lem.opt_mwords in
          let type_envs, ast_lem = State.add_regstate_defs mwords type_envs ast in
          let ast_lem = rewrite_ast_lem type_envs ast_lem in
-         output "" (Lem_out (!opt_libs_lem)) [out_name,ast_lem]
+         output "" (Lem_out (!opt_libs_lem)) [out_name,type_envs,ast_lem]
        else ());
       (if !(opt_print_coq)
        then
          let type_envs, ast_coq = State.add_regstate_defs true type_envs ast in
          let ast_coq = rewrite_ast_coq type_envs ast_coq in
-         output "" (Coq_out (!opt_libs_coq)) [out_name,ast_coq]
+         output "" (Coq_out (!opt_libs_coq)) [out_name,type_envs,ast_coq]
        else ());
       (if !(opt_print_latex)
        then
@@ -422,11 +453,16 @@ let main() =
            close_out f
          end
        else ());
+
+      if !opt_memo_z3 then Constraint.save_digests () else ()
     end
 
 let _ =  try
     begin
-      try ignore(main ())
-      with  Failure(s) -> raise (Reporting.err_general Parse_ast.Unknown ("Failure "^s))
+      try ignore (main ())
+      with Failure s -> raise (Reporting.err_general Parse_ast.Unknown ("Failure " ^ s))
     end
-  with Reporting.Fatal_error e -> Reporting.report_error e
+  with Reporting.Fatal_error e ->
+    Reporting.print_error e;
+    Interactive.opt_suppress_banner := true;
+    if !Interactive.opt_interactive then () else exit 1

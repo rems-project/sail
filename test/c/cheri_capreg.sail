@@ -13,11 +13,11 @@ val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 
 val zeros_0 = "zeros" : forall 'n. int('n) -> bits('n)
 
-val zeros : forall 'n. unit -> bits('n)
-function zeros() = zeros_0('n)
+val zeros : forall 'n. (implicit('n), unit) -> bits('n)
+function zeros(n, _) = zeros_0(n)
 
-val ones : forall 'n, 'n >= 0 . unit -> bits('n)
-function ones() = replicate_bits (0b1,'n)
+val ones : forall 'n, 'n >= 0. (implicit('n), unit) -> bits('n)
+function ones(n, _) = replicate_bits(0b1, n)
 
 val xor_vec = {c: "xor_bits" , _: "xor_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
