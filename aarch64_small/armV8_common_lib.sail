@@ -34,12 +34,11 @@
 
 /** FUNCTION:shared/debug/DoubleLockStatus/DoubleLockStatus */
 
-function boolean DoubleLockStatus() =
-{
+function DoubleLockStatus() -> boolean= {
   if ELUsingAArch32(EL1) then
-    (DBGOSDLR.DLK == 1 & DBGPRCR.CORENPDRQ == 0 & ~(Halted()))
+    (DBGOSDLR.DLK() == 0b1 & DBGPRCR.CORENPDRQ() == 0b0 & ~(Halted()))
   else
-    (OSDLR_EL1.DLK == 1 & DBGPRCR_EL1.CORENPDRQ == 0 & ~(Halted()));
+    (OSDLR_EL1.DLK() == 0b1 & DBGPRCR_EL1.CORENPDRQ() == 0b0 & ~(Halted()));
 }
 
 /** FUNCTION:shared/debug/authentication/Debug_authentication */
@@ -48,15 +47,14 @@ function boolean DoubleLockStatus() =
 
 enum signalValue = {LOw, HIGH}
 
-function signalValue signalDBGEN () = not_implemented_extern("signalDBGEN")
-function signalValue signelNIDEN () = not_implemented_extern("signalNIDEN")
-function signalValue signalSPIDEN () = not_implemented_extern("signalSPIDEN")
-function signalValue signalDPNIDEN () = not_implemented_extern("signalSPNIDEN")
+function signalDBGEN () -> signalValue = not_implemented_extern("signalDBGEN")
+function signelNIDEN () -> signalValue = not_implemented_extern("signalNIDEN")
+function signalSPIDEN () -> signalValue = not_implemented_extern("signalSPIDEN")
+function signalDPNIDEN () -> signalValue = not_implemented_extern("signalSPNIDEN")
 
 /** FUNCTION:shared/debug/authentication/ExternalInvasiveDebugEnabled */
 
-function boolean ExternalInvasiveDebugEnabled() =
-{
+function ExternalInvasiveDebugEnabled() -> boolean = {
   /* In the recommended interface, ExternalInvasiveDebugEnabled returns the state of the DBGEN */
   /* signal. */
   signalDBGEN() == HIGH;
@@ -64,8 +62,7 @@ function boolean ExternalInvasiveDebugEnabled() =
 
 /** FUNCTION:shared/debug/authentication/ExternalSecureInvasiveDebugEnabled */
 
-function boolean ExternalSecureInvasiveDebugEnabled() =
-{
+function ExternalSecureInvasiveDebugEnabled() -> boolean = {
   /* In the recommended interface, ExternalSecureInvasiveDebugEnabled returns the state of the */
   /* (DBGEN AND SPIDEN) signal. */
   /* CoreSight allows asserting SPIDEN without also asserting DBGEN, but this is not recommended. */
@@ -76,15 +73,13 @@ function boolean ExternalSecureInvasiveDebugEnabled() =
 
 /** FUNCTION:shared/debug/halting/DCPSInstruction */
 
-function unit DCPSInstruction(target_el : bits(2)) =
-{
+function DCPSInstruction(target_el : bits(2)) -> unit = {
   not_implemented("DCPSInstruction");
 }
 
 /** FUNCTION:shared/debug/halting/DRPSInstruction */
 
-function unit DRPSInstruction() =
-{
+function DRPSInstruction() -> unit = {
   not_implemented("DRPSInstruction");
 }
 
@@ -104,22 +99,19 @@ let DebugHalt_Step_NoSyndrome   =   0b111011
 
 /** FUNCTION:shared/debug/halting/Halt */
 
-function unit Halt(reason : bits(6)) =
-{
+function Halt(reason : bits(6)) -> unit= {
   not_implemented("Halt");
 }
 
 /** FUNCTION:shared/debug/halting/Halted */
 
-function boolean Halted() =
-{
-  ~(EDSCR.STATUS == 0b000001 | EDSCR.STATUS == 0b000010); /* Halted */
+function Halted() -> boolean = {
+  ~(EDSCR.STATUS() == 0b000001 | EDSCR.STATUS() == 0b000010); /* Halted */
 }
 
 /** FUNCTION:shared/debug/halting/HaltingAllowed */
 
-function boolean HaltingAllowed() =
-{
+function HaltingAllowed() -> boolean = {
   if Halted() | DoubleLockStatus() then
     false
   else if IsSecure() then
@@ -130,8 +122,7 @@ function boolean HaltingAllowed() =
 
 /** FUNCTION:shared/exceptions/traps/ReservedValue */
 
-function unit ReservedValue() =
-{
+function ReservedValue() -> unit = {
   /* ARM: uncomment when adding aarch32
   if UsingAArch32() && !AArch32.GeneralExceptionsToAArch64() then
     AArch32.TakeUndefInstrException()
@@ -141,8 +132,7 @@ function unit ReservedValue() =
 
 /** FUNCTION:shared/exceptions/traps/UnallocatedEncoding */
 
-function unit UnallocatedEncoding() =
-{
+function UnallocatedEncoding() -> unit = {
   /* If the unallocated encoding is an AArch32 CP10 or CP11 instruction, FPEXC.DEX must be written */
   /* to zero. This is omitted from this code. */
   /* ARM: uncomment whenimplementing aarch32
@@ -154,74 +144,90 @@ function unit UnallocatedEncoding() =
 
 /** FUNCTION:shared/functions/aborts/IsFault */
 
-function boolean IsFault(addrdesc : AddressDescriptor) =
-{
+function IsFault(addrdesc : AddressDescriptor) ->  boolean= {
     (addrdesc.fault).faulttype != Fault_None;
 }
 
 /** FUNCTION:shared/functions/common/ASR */
 
-val ASR : forall 'N, 'N >= 0. (bits('N), uinteger) -> bits('N)
-function ASR (x, shift) = 
-{
+/* original: */
+
+/* val ASR : forall 'N, 'N >= 0. (bits('N), uinteger) -> bits('N) */
+/* function ASR (x, shift) =  */
+/* { */
+/*   /\*assert shift >= 0;*\/ */
+/*   result : bits('N) = 0; */
+/*   if shift == 0 then */
+/*     result = x */
+/*   else */
+/*     let (result', _) = ASR_C (x, shift) in { result = result' }; */
+/*   result; */
+/* } */
+
+/* CP: replacing this with the slightly simpler one below */
+
+val ASR : forall 'N, 'N >= 1. (bits('N), uinteger) -> bits('N)
+function ASR (x, shift) = {
   /*assert shift >= 0;*/
-  result : bits('N) = 0;
-  if shift == 0 then
-    result = x
-  else
-    let (result', _) = ASR_C (x, shift) in { result = result' };
-  result;
+  if shift == 0 then x
+  else let (result', _) = ASR_C (x, shift) in result'
 }
+
 
 /** FUNCTION:shared/functions/common/ASR_C */
 
-val ASR_C : forall 'N 'S, 'N >= 0 & 'S >= 1. (bits('N), atom('S)) -> (bits('N), bit)
-function ASR_C (x, shift) = 
-{
+val ASR_C : forall 'N 'S, 'N >= 1 & 'S >= 1. (bits('N), atom('S)) -> (bits('N), bit)
+function ASR_C (x, shift) =  {
   /*assert shift > 0;*/
-  extended_x : bits('S+'N) = SignExtend(x);
-  result : bits('N) = extended_x[(shift + length(x) - 1)..shift];
+  extended_x : bits('S+'N) = SignExtend(sizeof('S+'N),x);
+  result : bits('N) = extended_x[(shift + sizeof('N) - 1)..shift];
   carry_out : bit = extended_x[shift - 1];
   (result, carry_out);
 }
 
+/* SignExtend : */
+
+/* 'S+'N > 'N & 'N >= 1. (atom('S+'N),bits('N)) -> bits('S+'N) */
+
+
 /** FUNCTION:integer Align(integer x, integer y) */
 
-function uinteger Align'(x : uinteger, y : uinteger) =
+function Align'(x : uinteger, y : uinteger) -> uinteger =
     y * (quot (x,y))
 
 /** FUNCTION:bits(N) Align(bits(N) x, integer y) */
 
 val Align : forall 'N, 'N >= 0. (bits('N), uinteger) -> bits('N)
 function Align (x, y) =
-    Align'(UInt(x), y) : (bits('N))
+    to_bits (sizeof('N), Align'(UInt(x), y))
 
 /** FUNCTION:integer CountLeadingSignBits(bits(N) x) */
 
-val CountLeadingSignBits : forall 'N, 'N >= 0. bits('N) -> range(0,'N)
+val CountLeadingSignBits : forall 'N, 'N >= 2. bits('N) -> range(0,'N - 1)
 function CountLeadingSignBits(x) =
-  CountLeadingZeroBits(x[(length(x) - 1)..1] ^ x[(length(x) - 2)..0])
+  CountLeadingZeroBits( (x[(sizeof('N) - 1)..1]) ^ 
+                        (x[(sizeof('N) - 2)..0]) )
 
 /** FUNCTION:integer CountLeadingZeroBits(bits(N) x) */
 
 val CountLeadingZeroBits : forall 'N, 'N >= 0. bits('N) -> range(0,'N)
 function CountLeadingZeroBits(x) =
   match HighestSetBit(x) {
-    None  => length(x),
-    Some(n)  => length(x) - 1 - n
+    None()  => sizeof('N),
+    Some(n)  => sizeof('N) - 1 - n
   }
 /** FUNCTION:bits(N) Extend(bits(M) x, integer N, boolean unsigned) */
 
-val Extend : forall 'N 'M, 0 <= 'M & 'M <= 'N. (implicit('N),bits('M),bit) -> bits('N) effect pure
-function Extend (x, unsigned) =
-  if unsigned then ZeroExtend(x) else SignExtend(x)
+val Extend : forall 'N 'M, 1 <= 'M & 'M < 'N. (atom('N),bits('M),bit) -> bits('N) effect pure
+function Extend (n, x, _unsigned) =
+  if _unsigned then ZeroExtend(n,x) else SignExtend(n,x)
 
 /** FUNCTION:integer HighestSetBit(bits(N) x) */
 
-val HighestSetBit : forall 'N, 'N >= 0. bits('N) -> option(range(0, 'N + -1))
+val HighestSetBit : forall 'N, 'N >= 0. bits('N) -> option(range(0, 'N - 1))
 function HighestSetBit(x) = {
   let N = (length(x)) in {
-  result : range(0, 'N + -1) = 0;
+  result : atom(0) = 0;
   break : bool = false;
   foreach (i from (N - 1) downto 0)
     if ~(break) & x[i] == 1 then {
@@ -381,20 +387,18 @@ function SInt(x) = {
 
 /** FUNCTION:bits(N) SignExtend(bits(M) x, integer N) */
 
-val SignExtend : forall 'N 'M, 'N >= 0 & 'M >= 1. bits('M) -> bits('N)
-function SignExtend ([h]:remainder as x) =
+function SignExtend forall 'N 'M, 'N > M & 'M >= 1. (_ : atom('N), ([h]@remainder as x) : bits('M)) -> bits('N) =
   (Replicate([h]) : bits(('N - 'M))) @ x
 
 /** FUNCTION:integer UInt(bits(N) x) */
 
-/* function forall Nat 'N, Nat 'M, 'M = 2**'N. [|'M + -1|] UInt((bits('N)) x) = ([|'M + -1|]) x */
-val Uint : forall 'M 'N, 'M >= 0 & 'N >= 0. bits('N) -> atom('M)
-function UInt(x) = unsigned(x)
+function UInt forall 'N, 'N >=0 . (x : bits('N)) -> range(0, 2 ^ 'N + -1) =
+  unsigned(x)
 
 /** FUNCTION:bits(N) ZeroExtend(bits(M) x, integer N) */
 
-val ZeroExtend : forall 'M 'N, 'M >= 0 & 'N >= 0. bits('M) -> bits('N)
-function ZeroExtend (x) = (Zeros() : bits(('N + 'M * -1))) @ x
+val ZeroExtend : forall 'M 'N, N >= M & 'M >= 0. (atom('N),bits('M)) -> bits('N)
+function ZeroExtend (x) = (Zeros() : bits(('N - 'M))) @ x
 
 /** FUNCTION:shared/functions/common/Zeros */
 
