@@ -179,8 +179,8 @@ function ASR (x, shift) = {
 val ASR_C : forall 'N 'S, 'N >= 1 & 'S >= 1. (bits('N), atom('S)) -> (bits('N), bit)
 function ASR_C (x, shift) =  {
   /*assert shift > 0;*/
-  extended_x : bits('S+'N) = SignExtend(sizeof('S+'N),x);
-  result : bits('N) = extended_x[(shift + sizeof('N) - 1)..shift];
+  extended_x : bits('S+'N) = SignExtend(x);
+  result : bits('N) = extended_x[(shift + length(x) - 1)..shift];
   carry_out : bit = extended_x[shift - 1];
   (result, carry_out);
 }
@@ -199,22 +199,22 @@ function Align'(x : uinteger, y : uinteger) -> uinteger =
 
 val Align : forall 'N, 'N >= 0. (bits('N), uinteger) -> bits('N)
 function Align (x, y) =
-    to_bits (sizeof('N), Align'(UInt(x), y))
+    to_bits (Align'(UInt(x), y))
 
 /** FUNCTION:integer CountLeadingSignBits(bits(N) x) */
 
 val CountLeadingSignBits : forall 'N, 'N >= 2. bits('N) -> range(0,'N - 1)
 function CountLeadingSignBits(x) =
-  CountLeadingZeroBits( (x[(sizeof('N) - 1)..1]) ^ 
-                        (x[(sizeof('N) - 2)..0]) )
+  CountLeadingZeroBits( (x[(length(x) - 1)..1]) ^ 
+                        (x[(length(x) - 2)..0]) )
 
 /** FUNCTION:integer CountLeadingZeroBits(bits(N) x) */
 
 val CountLeadingZeroBits : forall 'N, 'N >= 0. bits('N) -> range(0,'N)
 function CountLeadingZeroBits(x) =
   match HighestSetBit(x) {
-    None()  => sizeof('N),
-    Some(n)  => sizeof('N) - 1 - n
+    None()  => length(x),
+    Some(n)  => length(x) - 1 - n
   }
 /** FUNCTION:bits(N) Extend(bits(M) x, integer N, boolean unsigned) */
 
@@ -224,26 +224,36 @@ function Extend (n, x, _unsigned) =
 
 /** FUNCTION:integer HighestSetBit(bits(N) x) */
 
+/* val HighestSetBit : forall 'N, 'N >= 0. bits('N) -> option(range(0, 'N - 1)) */
+/* function HighestSetBit(x) = { */
+/*   let N = (length(x)) in { */
+/*   result : range(0,'N - 1) = 0; */
+/*   break : bool = false; */
+/*   foreach (i from (N - 1) downto 0) */
+/*     if ~(break) & (x[i] == bitone) then { */
+/*       result = i; */
+/*       break = true; */
+/*     }; */
+
+/*   if break then Some(result) else None; */
+/* }} */
+
 val HighestSetBit : forall 'N, 'N >= 0. bits('N) -> option(range(0, 'N - 1))
 function HighestSetBit(x) = {
-  let N = (length(x)) in {
-  result : atom(0) = 0;
-  break : bool = false;
+  let N = length(x) in {
   foreach (i from (N - 1) downto 0)
-    if ~(break) & x[i] == 1 then {
-      result = i;
-      break = true;
+    if x[i] == bitone then {
+      return (Some(i));
     };
-
-  if break then Some(result) else None;
+  None();
 }}
+
 
 /** FUNCTION:integer Int(bits(N) x, boolean unsigned) */
 /* used to be called Int */
 val _Int : forall 'N, 'N >= 0. (bits('N), boolean) -> integer
-function _Int (x, unsigned) = {
-  result = if unsigned then UInt(x) else SInt(x);
-  result;
+function _Int (x, _unsigned) = {
+  if _unsigned then UInt(x) else SInt(x)
 }
 
 /** FUNCTION:boolean IsZero(bits(N) x) */
@@ -375,7 +385,7 @@ function Replicate (x) = {
 /** FUNCTION:integer SInt(bits(N) x) */
 
 /*function forall Nat 'N, Nat 'M, Nat 'K, 'M = 'N + -1, 'K = 2**'M. [|'K * -1:'K + -1|] SInt((bits('N)) x) =*/
-val SInt : forall 'N 'M, 'N >= 0 & 'M >= 0. bits('N) -> atom('M)
+val SInt : forall 'N, 'N >= 0. bits('N) -> range(-(2 ^ ('N - 1) - 1), 2 ^ ('N - 1) - 1)
 function SInt(x) = { 
   signed(x)
   /*let N = (length((bits('N)) 0)) in {
@@ -392,7 +402,7 @@ function SignExtend forall 'N 'M, 'N > M & 'M >= 1. (_ : atom('N), ([h]@remainde
 
 /** FUNCTION:integer UInt(bits(N) x) */
 
-function UInt forall 'N, 'N >=0 . (x : bits('N)) -> range(0, 2 ^ 'N + -1) =
+function UInt forall 'N, 'N >=0 . (x : bits('N)) -> range(0, 2 ^ 'N - 1) =
   unsigned(x)
 
 /** FUNCTION:bits(N) ZeroExtend(bits(M) x, integer N) */

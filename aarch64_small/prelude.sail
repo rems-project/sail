@@ -106,7 +106,7 @@ val __raw_GetSlice_int = "get_slice_int" : forall 'w, 'w >= 0. (atom('w), int, i
 val __GetSlice_int : forall 'n, 'n >= 0. (atom('n), int, int) -> bits('n)
 function __GetSlice_int (n, m, o) = __raw_GetSlice_int(n, m, o)
 
-val to_bits : forall 'l, 'l >= 0.(atom('l), int) -> bits('l)
+val to_bits : forall 'l, 'l >= 0.(implicit('l), int) -> bits('l)
 function to_bits (l, n) = __raw_GetSlice_int(l, n, 0)
 
 
