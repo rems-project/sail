@@ -96,7 +96,7 @@ else
 	echo let dir=\"$(SHARE_DIR)\" >> manifest.ml
 	echo let commit=\"opam\" >> manifest.ml
 	echo let branch=\"sail2\" >> manifest.ml
-	echo let version=\"0.8\" >> manifest.ml
+	echo let version=\"$(shell grep '^version:' ../opam | grep -o -E '"[^"]+"')\" >> manifest.ml
 endif
 
 sail: ast.ml bytecode.ml manifest.ml
