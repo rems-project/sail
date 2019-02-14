@@ -1395,12 +1395,11 @@ let prove_z3 env (NC_aux (_, l) as nc) =
   | Constraint.Unknown ->
      (* Work around versions of z3 that are confused by 2^n in
         constraints, even when such constraints are irrelevant *)
-     let ncs = List.concat (List.map constraint_conj ncs) in
-     let ncs = List.filter (fun nc -> not (constraint_variable_power nc)) ncs in
-     match Constraint.call_z3 l vars (List.fold_left nc_and (nc_not nc) ncs) with
+     let ncs' = List.concat (List.map constraint_conj ncs) in
+     let ncs' = List.filter (fun nc -> not (constraint_variable_power nc)) ncs' in
+     match Constraint.call_z3 l vars (List.fold_left nc_and (nc_not nc) ncs') with
      | Constraint.Unsat -> typ_debug (lazy "unsat"); true
-     | Constraint.Sat -> typ_debug (lazy "sat"); false
-     | Constraint.Unknown -> typ_debug (lazy "unknown"); false
+     | Constraint.Sat | Constraint.Unknown -> typ_debug (lazy "sat/unknown"); false
 
 let solve env (Nexp_aux (_, l) as nexp) =
   typ_print (lazy (Util.("Solve " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env)
@@ -2007,11 +2006,24 @@ let subtype_check env typ1 typ2 =
 
 exception No_simple_rewrite;;
 
+let rec move_to_front p ys = function
+  | x :: xs when p x -> x :: (ys @ xs)
+  | x :: xs -> move_to_front p (x :: ys) xs
+  | [] -> ys
+
 let rec rewrite_sizeof' env (Nexp_aux (aux, l) as nexp) =
   let mk_exp exp = mk_exp ~loc:l exp in
   match aux with
   | Nexp_var v ->
+     (* Use a simple heuristic to find the most likely local we can
+        use, and move it to the front of the list. *)
+     let str = string_of_kid v in
+     let likely =
+       try let n = if str.[1] = '_' then 2 else 1 in String.sub str n (String.length str - n) with
+       | Invalid_argument _ -> str
+     in
      let locals = Env.get_locals env |> Bindings.bindings in
+     let locals = move_to_front (fun local -> likely = string_of_id (fst local)) [] locals in
      let same_size (local, (_, Typ_aux (aux, _))) =
        match aux with
        | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _)])
