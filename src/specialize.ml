@@ -160,6 +160,8 @@ let string_of_instantiation instantiation =
        kid_name (mk_kopt K_int kid) ^ " in {" ^ Util.string_of_list ", " Big_int.to_string ns ^ "}"
     | NC_aux (NC_true, _) -> "true"
     | NC_aux (NC_false, _) -> "false"
+    | NC_aux (NC_var kid, _) -> kid_name (mk_kopt K_bool kid)
+    | NC_aux (NC_app (id, args), _) -> string_of_id id ^ "(" ^ Util.string_of_list ", " string_of_typ_arg args ^ ")"
   in
 
   let string_of_binding (kid, arg) = string_of_kid kid ^ " => " ^ string_of_typ_arg arg in

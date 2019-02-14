@@ -619,8 +619,7 @@ let doc_typdef (TD_aux(td,_)) = match td with
   | TD_variant (id, TypQ_aux (TypQ_tq qs, _), unions, _) ->
      separate space [string "union"; doc_id id; doc_param_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
-  | _ -> string "TYPEDEF"
-
+  | TD_bitfield _ -> string "BITFIELD" (* should be rewritten *)
 
 let doc_spec ?comment:(comment=false) (VS_aux (v, annot)) =
   let doc_extern ext =
@@ -656,6 +655,12 @@ let rec doc_scattered (SD_aux (sd_aux, _)) =
      string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id
   | SD_variant (id, TypQ_aux (TypQ_tq quants, _)) ->
      string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id ^^ doc_param_quants quants
+  | SD_mapcl (id, mapcl) ->
+     separate space [string "mapping clause"; doc_id id; equals; doc_mapcl mapcl]
+  | SD_mapping (id, Typ_annot_opt_aux (Typ_annot_opt_none, _)) ->
+     separate space [string "scattered mapping"; doc_id id]
+  | SD_mapping (id, Typ_annot_opt_aux (Typ_annot_opt_some (_, typ), _)) ->
+     separate space [string "scattered mapping"; doc_id id; string ":"; doc_typ typ]
   | SD_unioncl (id, tu) ->
      separate space [string "union clause"; doc_id id; equals; doc_union tu]
 

@@ -3525,7 +3525,11 @@ let rewrite_defs_mapping_patterns env =
        let mapping_in_typ = typ_of_annot p_annot in
 
        let x = Env.get_val_spec mapping_id env in
-       let (_, Typ_aux(Typ_bidir(typ1, typ2), _)) = x in
+
+       let typ1, typ2 = match x with
+         | (_, Typ_aux(Typ_bidir(typ1, typ2), _)) -> typ1, typ2
+         | (_, typ) -> raise (Reporting.err_unreachable (fst p_annot) __POS__ ("Must be bi-directional mapping: " ^ string_of_typ typ))
+       in
 
        let mapping_direction =
          if mapping_in_typ = typ1 then
@@ -4642,8 +4646,11 @@ let rec remove_clause_from_pattern ctx (P_aux (rm_pat,ann)) res_pat =
         rp' @ List.map (function [rp1;rp2] -> RP_cons (rp1,rp2) | _ -> assert false) res_pats
   end
   | P_record _ ->
-     raise (Reporting.err_unreachable (fst ann) __POS__
-              "Record pattern not supported")
+     raise (Reporting.err_unreachable (fst ann) __POS__ "Record pattern not supported")
+  | P_or _ ->
+     raise (Reporting.err_unreachable (fst ann) __POS__ "Or pattern not supported")
+  | P_not _ ->
+     raise (Reporting.err_unreachable (fst ann) __POS__ "Negated pattern not supported")
   | P_vector _
   | P_vector_concat _
   | P_string_append _ ->

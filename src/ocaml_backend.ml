@@ -710,13 +710,12 @@ let ocaml_pp_generators ctx defs orig_types required =
   and add_req_from_typarg required (A_aux (arg,_)) =
     match arg with
     | A_typ typ -> add_req_from_typ required typ
-    | A_nexp _
-    | A_order _
-      -> required
+    | A_nexp _ | A_order _ | A_bool _ -> required
   and add_req_from_td required (TD_aux (td,(l,_))) =
     match td with
     | TD_abbrev (_, _, A_aux (A_typ typ, _)) ->
        add_req_from_typ required typ
+    | TD_abbrev _ -> required
     | TD_record (_, _, fields, _) ->
        List.fold_left (fun req (typ,_) -> add_req_from_typ req typ) required fields
     | TD_variant (_, _, variants, _) ->
@@ -787,7 +786,7 @@ let ocaml_pp_generators ctx defs orig_types required =
                                        | _ -> space ^^ separate space args_pp
         in
         string ("g.gen_" ^ typ_str) ^^ args_pp
-      and typearg (A_aux (arg,_)) =
+      and typearg (A_aux (arg,l)) =
         match arg with
         | A_nexp (Nexp_aux (nexp,l) as full_nexp) ->
            (match nexp with
@@ -801,6 +800,7 @@ let ocaml_pp_generators ctx defs orig_types required =
             | Ord_inc -> string "true"
             | Ord_dec -> string "false")
         | A_typ typ -> parens (string "fun g -> " ^^ gen_type typ)
+        | A_bool nc -> raise (Reporting.err_todo l ("Unsupported constraint for generators: " ^ string_of_n_constraint nc))
       in
       let make_subgen (Typ_aux (typ,l) as full_typ) =
         let typ_str, args_pp =

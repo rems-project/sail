@@ -276,7 +276,7 @@ let load_session upto file =
   | Some upto_file when Filename.basename upto_file = file -> None
   | Some upto_file ->
      let (_, ast, env) =
-       load_files ~generate:false !Interactive.env [Filename.concat (Filename.dirname upto_file) file]
+       load_files ~check:true !Interactive.env [Filename.concat (Filename.dirname upto_file) file]
      in
      Interactive.ast := append_ast !Interactive.ast ast;
      Interactive.env := env;
@@ -464,7 +464,7 @@ let handle_input' input =
            begin
              try
                load_into_session arg;
-               let (_, ast, env) = load_files !Interactive.env [arg] in
+               let (_, ast, env) = load_files ~check:true !Interactive.env [arg] in
                Interactive.ast := append_ast !Interactive.ast ast;
                interactive_state := initial_state !Interactive.ast Value.primops;
                Interactive.env := env;

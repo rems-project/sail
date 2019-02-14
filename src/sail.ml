@@ -311,7 +311,7 @@ let _ =
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg
 
-let load_files ?generate:(generate=true) type_envs files =
+let load_files ?check:(check=false) type_envs files =
   if !opt_memo_z3 then Constraint.load_digests () else ();
 
   let t = Profile.start () in
@@ -320,24 +320,27 @@ let load_files ?generate:(generate=true) type_envs files =
     List.fold_right (fun (_, Parse_ast.Defs ast_nodes) (Parse_ast.Defs later_nodes)
                      -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
   let ast = Process_file.preprocess_ast options ast in
-  let ast = Initial_check.process_ast ~generate:generate ast in
+  let ast = Initial_check.process_ast ~generate:(not check) ast in
   Profile.finish "parsing" t;
 
   let t = Profile.start () in
   let (ast, type_envs) = check_ast type_envs ast in
   Profile.finish "type checking" t;
 
-  let ast = Scattered.descatter ast in
-  let ast = rewrite_ast type_envs ast in
-
-  let out_name = match !opt_file_out with
-    | None when parsed = [] -> "out.sail"
-    | None -> fst (List.hd parsed)
-    | Some f -> f ^ ".sail" in
-
   if !opt_memo_z3 then Constraint.save_digests () else ();
 
-  (out_name, ast, type_envs)
+  if check then
+    ("out.sail", ast, type_envs)
+  else
+    let ast = Scattered.descatter ast in
+    let ast = rewrite_ast type_envs ast in
+
+    let out_name = match !opt_file_out with
+      | None when parsed = [] -> "out.sail"
+      | None -> fst (List.hd parsed)
+      | Some f -> f ^ ".sail" in
+
+    (out_name, ast, type_envs)
 
 let main() =
   if !opt_print_version then

@@ -1355,6 +1355,7 @@ and undefined_of_typ_args mwords l annot (A_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | A_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]
   | A_typ typ -> [undefined_of_typ mwords l annot typ]
+  | A_bool nc -> [E_aux (E_constraint nc, (l, annot (atom_bool_typ nc)))]
   | A_order _ -> []
 
 let destruct_pexp (Pat_aux (pexp,ann)) =
