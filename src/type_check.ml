@@ -1322,6 +1322,32 @@ and simp_typ_aux = function
 
   | typ_aux -> typ_aux
 
+let rec typ_nexps (Typ_aux (typ_aux, l)) =
+  match typ_aux with
+  | Typ_internal_unknown -> []
+  | Typ_id v -> []
+  | Typ_var kid -> []
+  | Typ_tup typs -> List.concat (List.map typ_nexps typs)
+  | Typ_app (f, args) -> List.concat (List.map typ_arg_nexps args)
+  | Typ_exist (kids, nc, typ) -> typ_nexps typ
+  | Typ_fn (arg_typs, ret_typ, _) ->
+     List.concat (List.map typ_nexps arg_typs) @ typ_nexps ret_typ
+  | Typ_bidir (typ1, typ2) ->
+     typ_nexps typ1 @ typ_nexps typ2
+and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
+  match typ_arg_aux with
+  | A_nexp n -> [n]
+  | A_typ typ -> typ_nexps typ
+  | A_bool nc -> constraint_nexps nc
+  | A_order ord -> []
+and constraint_nexps (NC_aux (nc_aux, l)) =
+  match nc_aux with
+  | NC_equal (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_le (n1, n2) | NC_not_equal (n1, n2) ->
+     [n1; n2]
+  | NC_set _ | NC_true | NC_false | NC_var _ -> []
+  | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2
+  | NC_app (_, args) -> List.concat (List.map typ_arg_nexps args)
+
 (* Here's how the constraint generation works for subtyping
 
 X(b,c...) --> {a. Y(a,b,c...)} \subseteq {a. Z(a,b,c...)}
@@ -1343,6 +1369,22 @@ this is equivalent to
 which is then a problem we can feed to the constraint solver expecting unsat.
  *)
 
+let rec nexp_variable_power (Nexp_aux (aux, _)) =
+  match aux with
+  | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) ->
+     nexp_variable_power n1 || nexp_variable_power n2
+  | Nexp_neg n ->
+     nexp_variable_power n
+  | Nexp_id _ | Nexp_var _ | Nexp_constant _ ->
+     false
+  | Nexp_app (_, ns) ->
+     List.exists nexp_variable_power ns
+  | Nexp_exp n ->
+     not (KidSet.is_empty (tyvars_of_nexp n))
+
+let constraint_variable_power nc =
+  List.exists nexp_variable_power (constraint_nexps nc)
+
 let prove_z3 env (NC_aux (_, l) as nc) =
   let vars = Env.get_typ_vars env in
   let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
@@ -1350,7 +1392,15 @@ let prove_z3 env (NC_aux (_, l) as nc) =
   match Constraint.call_z3 l vars (List.fold_left nc_and (nc_not nc) ncs) with
   | Constraint.Unsat -> typ_debug (lazy "unsat"); true
   | Constraint.Sat -> typ_debug (lazy "sat"); false
-  | Constraint.Unknown -> typ_debug (lazy "unknown"); false
+  | Constraint.Unknown ->
+     (* Work around versions of z3 that are confused by 2^n in
+        constraints, even when such constraints are irrelevant *)
+     let ncs = List.concat (List.map constraint_conj ncs) in
+     let ncs = List.filter (fun nc -> not (constraint_variable_power nc)) ncs in
+     match Constraint.call_z3 l vars (List.fold_left nc_and (nc_not nc) ncs) with
+     | Constraint.Unsat -> typ_debug (lazy "unsat"); true
+     | Constraint.Sat -> typ_debug (lazy "sat"); false
+     | Constraint.Unknown -> typ_debug (lazy "unknown"); false
 
 let solve env (Nexp_aux (_, l) as nexp) =
   typ_print (lazy (Util.("Solve " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env)
@@ -1392,32 +1442,6 @@ let rec nexp_frees ?exs:(exs=KidSet.empty) (Nexp_aux (nexp, l)) =
   | Nexp_app (id, ns) -> List.fold_left KidSet.union KidSet.empty (List.map (fun n -> nexp_frees ~exs:exs n) ns)
   | Nexp_exp n -> nexp_frees ~exs:exs n
   | Nexp_neg n -> nexp_frees ~exs:exs n
-
-let rec typ_nexps (Typ_aux (typ_aux, l)) =
-  match typ_aux with
-  | Typ_internal_unknown -> []
-  | Typ_id v -> []
-  | Typ_var kid -> []
-  | Typ_tup typs -> List.concat (List.map typ_nexps typs)
-  | Typ_app (f, args) -> List.concat (List.map typ_arg_nexps args)
-  | Typ_exist (kids, nc, typ) -> typ_nexps typ
-  | Typ_fn (arg_typs, ret_typ, _) ->
-     List.concat (List.map typ_nexps arg_typs) @ typ_nexps ret_typ
-  | Typ_bidir (typ1, typ2) ->
-     typ_nexps typ1 @ typ_nexps typ2
-and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
-  match typ_arg_aux with
-  | A_nexp n -> [n]
-  | A_typ typ -> typ_nexps typ
-  | A_bool nc -> constraint_nexps nc
-  | A_order ord -> []
-and constraint_nexps (NC_aux (nc_aux, l)) =
-  match nc_aux with
-  | NC_equal (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_le (n1, n2) | NC_not_equal (n1, n2) ->
-     [n1; n2]
-  | NC_set _ | NC_true | NC_false | NC_var _ -> []
-  | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2
-  | NC_app (_, args) -> List.concat (List.map typ_arg_nexps args)
 
 let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   match nexp1, nexp2 with
@@ -1709,13 +1733,13 @@ let rec ambiguous_vars (Typ_aux (aux, _)) =
   match aux with
   | Typ_app (_, args) -> List.fold_left KidSet.union KidSet.empty (List.map ambiguous_arg_vars args)
   | _ -> KidSet.empty
-  
+
 and ambiguous_arg_vars (A_aux (aux, _)) =
   match aux with
   | A_bool nc -> ambiguous_nc_vars nc
   | A_nexp nexp -> ambiguous_nexp_vars nexp
   | _ -> KidSet.empty
-               
+
 and ambiguous_nc_vars (NC_aux (aux, _)) =
   match aux with
   | NC_and (nc1, nc2) -> KidSet.union (tyvars_of_constraint nc1) (tyvars_of_constraint nc2)

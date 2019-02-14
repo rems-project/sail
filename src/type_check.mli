@@ -309,6 +309,11 @@ val check_fundef : Env.t -> 'a fundef -> tannot def list * Env.t
 
 val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t
 
+(** Attempt to prove a constraint using z3. Returns true if z3 can
+   prove that the constraint is true, returns false if z3 cannot prove
+   the constraint true. Note that this does not guarantee that the
+   constraint is actually false, as the constraint solver is somewhat
+   untrustworthy. *)
 val prove : (string * int * int * int) -> Env.t -> n_constraint -> bool
 
 val solve : Env.t -> nexp -> Big_int.num option
