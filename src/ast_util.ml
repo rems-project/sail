@@ -1862,6 +1862,12 @@ let rec find_annot_exp sl (E_aux (aux, (l, annot)) as exp) =
          option_chain (find_annot_lexp sl lexp) (find_annot_exp sl exp)
       | E_var (lexp, exp1, exp2) ->
          option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])
+      | E_if (cond_exp, then_exp, else_exp) ->
+         option_mapm (find_annot_exp sl) [cond_exp; then_exp; else_exp]
+      | E_case (exp, cases) | E_try (exp, cases) ->
+         option_chain (find_annot_exp sl exp) (option_mapm (find_annot_pexp sl) cases)
+      | E_return exp | E_cast (_, exp) ->
+         find_annot_exp sl exp
       | _ -> None
     in
     match result with
@@ -1888,6 +1894,8 @@ and find_annot_lexp sl (LEXP_aux (aux, (l, annot))) =
 and find_annot_pat sl (P_aux (aux, (l, annot))) =
   if not (subloc sl l) then None else
     let result = match aux with
+      | P_vector_concat pats ->
+         option_mapm (find_annot_pat sl) pats
       | _ -> None
     in
     match result with
@@ -1898,29 +1906,40 @@ and find_annot_pexp sl (Pat_aux (aux, (l, annot))) =
   if not (subloc sl l) then None else
     match aux with
     | Pat_exp (pat, exp) ->
-       find_annot_exp sl exp
+       option_chain (find_annot_pat sl pat) (find_annot_exp sl exp)
     | Pat_when (pat, guard, exp) ->
-       None
+       option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [guard; exp])
 
 let find_annot_funcl sl (FCL_aux (FCL_Funcl (id, pexp), (l, annot))) =
-  if not (subloc sl l) then
-    None
-  else
+  if not (subloc sl l) then None else
     match find_annot_pexp sl pexp with
     | None -> Some (l, annot)
     | result -> result
 
 let find_annot_fundef sl (FD_aux (FD_function (_, _, _, funcls), (l, annot))) =
-  if not (subloc sl l) then
-    None
-  else
+  if not (subloc sl l) then None else
     match option_mapm (find_annot_funcl sl) funcls with
     | None -> Some (l, annot)
     | result -> result
 
+let find_annot_scattered sl (SD_aux (aux, (l, annot))) =
+  if not (subloc sl l) then None else
+    let result = match aux with
+      | SD_funcl fcl -> find_annot_funcl sl fcl
+      | _ -> None
+    in
+    match result with
+    | None -> Some (l, annot)
+    | _ -> result
+
 let rec find_annot_defs sl = function
   | DEF_fundef fdef :: defs ->
      begin match find_annot_fundef sl fdef with
+     | None -> find_annot_defs sl defs
+     | result -> result
+     end
+  | DEF_scattered sdef :: defs ->
+     begin match find_annot_scattered sl sdef with
      | None -> find_annot_defs sl defs
      | result -> result
      end
