@@ -401,7 +401,7 @@ module Env : sig
   val wf_nexp : ?exs:KidSet.t -> t -> nexp -> unit
   val wf_constraint : ?exs:KidSet.t -> t -> n_constraint -> unit
 
-  (* Some of the code in the environment needs to use the Z3 prover,
+  (* Some of the code in the environment needs to use the smt solver,
      which is defined below. To break the circularity this would cause
      (as the prove code depends on the environment), we add a
      reference to the prover to the initial environment. *)
@@ -1299,7 +1299,7 @@ and simp_typ_aux = function
      would become {('s:Bool) ('r: Bool), nc('r). bool('s & 'r)},
      wherein all the redundant boolean variables have been combined
      into a single one. Making this simplification allows us to avoid
-     having to pass large numbers of pointless variables to Z3 if we
+     having to pass large numbers of pointless variables to SMT if we
      ever bind this existential. *)
   | Typ_exist (vars, nc, Typ_aux (Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool b, _)]), _)) ->
      let kids = KidSet.of_list (List.map kopt_kid vars) in
@@ -1385,11 +1385,11 @@ let rec nexp_variable_power (Nexp_aux (aux, _)) =
 let constraint_variable_power nc =
   List.exists nexp_variable_power (constraint_nexps nc)
 
-let prove_z3 env (NC_aux (_, l) as nc) =
+let prove_smt env (NC_aux (_, l) as nc) =
   let vars = Env.get_typ_vars env in
   let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
   let ncs = Env.get_constraints env in
-  match Constraint.call_z3 l vars (List.fold_left nc_and (nc_not nc) ncs) with
+  match Constraint.call_smt l vars (List.fold_left nc_and (nc_not nc) ncs) with
   | Constraint.Unsat -> typ_debug (lazy "unsat"); true
   | Constraint.Sat -> typ_debug (lazy "sat"); false
   | Constraint.Unknown ->
@@ -1397,7 +1397,7 @@ let prove_z3 env (NC_aux (_, l) as nc) =
         constraints, even when such constraints are irrelevant *)
      let ncs' = List.concat (List.map constraint_conj ncs) in
      let ncs' = List.filter (fun nc -> not (constraint_variable_power nc)) ncs' in
-     match Constraint.call_z3 l vars (List.fold_left nc_and (nc_not nc) ncs') with
+     match Constraint.call_smt l vars (List.fold_left nc_and (nc_not nc) ncs') with
      | Constraint.Unsat -> typ_debug (lazy "unsat"); true
      | Constraint.Sat | Constraint.Unknown -> typ_debug (lazy "sat/unknown"); false
 
@@ -1411,7 +1411,7 @@ let solve env (Nexp_aux (_, l) as nexp) =
     let vars = Env.get_typ_vars env in
     let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
     let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
-    Constraint.solve_z3 l vars constr (mk_kid "solve#")
+    Constraint.solve_smt l vars constr (mk_kid "solve#")
 
 let debug_pos (file, line, _, _) =
   "(" ^ file ^ "/" ^ string_of_int line ^ ") "
@@ -1424,7 +1424,7 @@ let prove pos env nc =
   else ();
   match nc_aux with
   | NC_true -> true
-  | _ -> prove_z3 env nc
+  | _ -> prove_smt env nc
 
 (**************************************************************************)
 (* 3. Unification                                                         *)

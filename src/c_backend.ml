@@ -110,7 +110,7 @@ type ctx =
     letbinds : int list;
     recursive_functions : IdSet.t;
     no_raw : bool;
-    optimize_z3 : bool;
+    optimize_smt : bool;
   }
 
 let initial_ctx env =
@@ -123,13 +123,13 @@ let initial_ctx env =
     letbinds = [];
     recursive_functions = IdSet.empty;
     no_raw = false;
-    optimize_z3 = true;
+    optimize_smt = true;
   }
 
 (** Convert a sail type into a C-type. This function can be quite
-   slow, because it uses ctx.local_env and Z3 to analyse the Sail
+   slow, because it uses ctx.local_env and SMT to analyse the Sail
    types and attempts to fit them into the smallest possible C
-   types, provided ctx.optimize_z3 is true (default) **)
+   types, provided ctx.optimize_smt is true (default) **)
 let rec ctyp_of_typ ctx typ =
   let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
   match typ_aux with
@@ -151,7 +151,7 @@ let rec ctyp_of_typ ctx typ =
         | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
              when Big_int.less_equal min_int64 n && Big_int.less_equal m max_int64 ->
            CT_int64
-        | n, m when ctx.optimize_z3 ->
+        | n, m when ctx.optimize_smt ->
            if prove __POS__ ctx.local_env (nc_lteq (nconstant min_int64) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant max_int64)) then
              CT_int64
            else
@@ -173,7 +173,7 @@ let rec ctyp_of_typ ctx typ =
      let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
      begin match nexp_simp n with
      | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_fbits (Big_int.to_int n, direction)
-     | n when ctx.optimize_z3 && prove __POS__ ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits direction
+     | n when ctx.optimize_smt && prove __POS__ ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits direction
      | _ -> CT_lbits direction
      end
 
@@ -193,8 +193,8 @@ let rec ctyp_of_typ ctx typ =
 
   | Typ_tup typs -> CT_tup (List.map (ctyp_of_typ ctx) typs)
 
-  | Typ_exist _ when ctx.optimize_z3 ->
-     (* Use Type_check.destruct_exist when optimising with z3, to
+  | Typ_exist _ when ctx.optimize_smt ->
+     (* Use Type_check.destruct_exist when optimising with SMT, to
         ensure that we don't cause any type variable clashes in
         local_env, and that we can optimize the existential based upon
         it's constraints. *)

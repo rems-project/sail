@@ -54,11 +54,13 @@ open Ast_util
 
 val opt_smt_verbose : bool ref
 
+val set_solver : string -> unit
+
 type smt_result = Unknown | Sat | Unsat
 
 val load_digests : unit -> unit
 val save_digests : unit -> unit
 
-val call_z3 : l -> kind_aux KBindings.t -> n_constraint -> smt_result
+val call_smt : l -> kind_aux KBindings.t -> n_constraint -> smt_result
 
-val solve_z3 : l -> kind_aux KBindings.t -> n_constraint -> kid -> Big_int.num option
+val solve_smt : l -> kind_aux KBindings.t -> n_constraint -> kid -> Big_int.num option
