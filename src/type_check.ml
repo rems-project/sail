@@ -548,6 +548,10 @@ end = struct
     match aux with
     | NC_or (nc1, nc2) -> NC_aux (NC_or (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
     | NC_and (nc1, nc2) -> NC_aux (NC_and (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
+    | NC_equal (n1, n2) -> NC_aux (NC_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_not_equal (n1, n2) -> NC_aux (NC_not_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_bounded_le (n1, n2) -> NC_aux (NC_bounded_le (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
     | NC_app (id, args) ->
        (try
           begin match Bindings.find id env.typ_synonyms l env args with
@@ -555,7 +559,7 @@ end = struct
           | arg -> typ_error env l ("Expected Bool when expanding synonym " ^ string_of_id id ^ " got " ^ string_of_typ_arg arg)
           end
         with Not_found -> NC_aux (NC_app (id, List.map (expand_synonyms_arg env) args), l))
-    | NC_true | NC_false | NC_equal _ | NC_not_equal _ | NC_bounded_le _ | NC_bounded_ge _ | NC_var _ | NC_set _ -> nc
+    | NC_true | NC_false | NC_var _ | NC_set _ -> nc
 
   and expand_nexp_synonyms env (Nexp_aux (aux, l) as nexp) =
     typ_debug ~level:2 (lazy ("Expanding " ^ string_of_nexp nexp));
