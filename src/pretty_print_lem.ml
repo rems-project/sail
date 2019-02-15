@@ -668,7 +668,7 @@ let doc_exp_lem, doc_let_lem =
           let call = doc_id_lem (append_id f "M") in
           wrap_parens (hang 2 (flow (break 1) (call :: List.map expY args)))
        (* temporary hack to make the loop body a function of the temporary variables *)
-       | Id_aux (Id "foreach", _) ->
+       | Id_aux (Id "foreach#", _) ->
           begin
             match args with
             | [exp1; exp2; exp3; ord_exp; vartuple; body] ->
@@ -713,7 +713,8 @@ let doc_exp_lem, doc_let_lem =
           | _ -> raise (Reporting.err_unreachable l __POS__
             "Unexpected number of arguments for loop combinator")
           end
-       | Id_aux (Id (("while" | "until") as combinator), _) ->
+       | Id_aux (Id (("while#" | "until#") as combinator), _) ->
+          let combinator = String.sub combinator 0 (String.length combinator - 1) in
           begin
             match args with
             | [cond; varstuple; body] ->

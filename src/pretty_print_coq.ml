@@ -1207,7 +1207,7 @@ let doc_exp, doc_let =
           wrap_parens (hang 2 (flow (break 1) (call :: List.map expY args)))
        (* temporary hack to make the loop body a function of the temporary variables *)
        | Id_aux (Id "None", _) as none -> doc_id_ctor none
-       | Id_aux (Id "foreach", _) ->
+       | Id_aux (Id "foreach#", _) ->
           begin
             match args with
             | [from_exp; to_exp; step_exp; ord_exp; vartuple; body] ->
@@ -1254,7 +1254,8 @@ let doc_exp, doc_let =
           | _ -> raise (Reporting.err_unreachable l __POS__
              "Unexpected number of arguments for loop combinator")
           end
-       | Id_aux (Id (("while" | "until") as combinator), _) ->
+       | Id_aux (Id (("while#" | "until#") as combinator), _) ->
+          let combinator = String.sub combinator 0 (String.length combinator - 1) in
           begin
             match args with
             | [cond; varstuple; body] ->

@@ -3826,7 +3826,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        let v =
          fix_eff_exp (annot_exp (E_let (lb_lower,
            fix_eff_exp (annot_exp (E_let (lb_upper,
-             fix_eff_exp (annot_exp (E_app (mk_id "foreach", [exp1; exp2; exp3; ord_exp; tuple_exp vars; guarded_body]))
+             fix_eff_exp (annot_exp (E_app (mk_id "foreach#", [exp1; exp2; exp3; ord_exp; tuple_exp vars; guarded_body]))
                el env (typ_of exp4))))
              el env (typ_of exp4))))
            el env (typ_of exp4)) in
@@ -3842,8 +3842,8 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
         let body = rewrite_var_updates (add_vars overwrite body vars) in
         let (E_aux (_,(_,bannot))) = body in
         let fname = match loop with
-          | While -> "while"
-          | Until -> "until" in
+          | While -> "while#"
+          | Until -> "until#" in
         let funcl = Id_aux (Id fname,gen_loc el) in
         let v = E_aux (E_app (funcl,[cond;tuple_exp vars;body]), (gen_loc el, bannot)) in
         Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
@@ -4144,9 +4144,9 @@ let rewrite_defs_remove_superfluous_returns env =
 
 let rewrite_defs_remove_e_assign env (Defs defs) =
   let (Defs loop_specs) = fst (Type_error.check Env.empty (Defs (List.map gen_vs
-    [("foreach", "forall ('vars : Type). (int, int, int, bool, 'vars, 'vars) -> 'vars");
-     ("while", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars");
-     ("until", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars")]))) in
+    [("foreach#", "forall ('vars : Type). (int, int, int, bool, 'vars, 'vars) -> 'vars");
+     ("while#", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars");
+     ("until#", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars")]))) in
   let rewrite_exp _ e =
     replace_memwrite_e_assign (remove_reference_types (rewrite_var_updates e)) in
   rewrite_defs_base
