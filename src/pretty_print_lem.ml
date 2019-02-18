@@ -359,7 +359,7 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
        let mk_typ nexp =
          Some (Typ_aux (Typ_app (id, [A_aux (A_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
        in
-       match Type_check.solve env size with
+       match Type_check.solve_unique env size with
        | Some n -> mk_typ (nconstant n)
        | None ->
           let is_equal nexp =

@@ -1405,7 +1405,7 @@ let prove_smt env (NC_aux (_, l) as nc) =
      | Constraint.Unsat -> typ_debug (lazy "unsat"); true
      | Constraint.Sat | Constraint.Unknown -> typ_debug (lazy "sat/unknown"); false
 
-let solve env (Nexp_aux (_, l) as nexp) =
+let solve_unique env (Nexp_aux (_, l) as nexp) =
   typ_print (lazy (Util.("Solve " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env)
                    ^ " |- " ^ string_of_nexp nexp ^ " = ?"));
   match nexp with
@@ -1415,7 +1415,7 @@ let solve env (Nexp_aux (_, l) as nexp) =
     let vars = Env.get_typ_vars env in
     let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
     let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
-    Constraint.solve_smt l vars constr (mk_kid "solve#")
+    Constraint.solve_unique_smt l vars constr (mk_kid "solve#")
 
 let debug_pos (file, line, _, _) =
   "(" ^ file ^ "/" ^ string_of_int line ^ ") "

@@ -316,7 +316,7 @@ val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t
    untrustworthy. *)
 val prove : (string * int * int * int) -> Env.t -> n_constraint -> bool
 
-val solve : Env.t -> nexp -> Big_int.num option
+val solve_unique : Env.t -> nexp -> Big_int.num option
 
 val canonicalize : Env.t -> typ -> typ
 

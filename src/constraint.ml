@@ -321,7 +321,7 @@ let call_smt l vars constraints =
   Profile.finish_smt t;
   result
 
-let rec solve_smt l vars constraints var =
+let rec solve_unique_smt l vars constraints var =
   let smt_file, smt_var = smtlib_of_constraints ~get_model:true l vars constraints in
   let smt_var = pp_sexpr (smt_var var) in
 

@@ -63,4 +63,4 @@ val save_digests : unit -> unit
 
 val call_smt : l -> kind_aux KBindings.t -> n_constraint -> smt_result
 
-val solve_smt : l -> kind_aux KBindings.t -> n_constraint -> kid -> Big_int.num option
+val solve_unique_smt : l -> kind_aux KBindings.t -> n_constraint -> kid -> Big_int.num option
