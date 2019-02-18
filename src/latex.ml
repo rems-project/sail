@@ -71,20 +71,23 @@ type latex_state =
   { mutable noindent : bool;
     mutable this : id option;
     mutable norefs : StringSet.t;
-    mutable generated_names : string Bindings.t
+    mutable generated_names : string Bindings.t;
+    mutable commands : StringSet.t
   }
 
 let reset_state state =
   state.noindent <- false;
   state.this <- None;
   state.norefs <- StringSet.empty;
-  state.generated_names <- Bindings.empty
+  state.generated_names <- Bindings.empty;
+  state.commands <- StringSet.empty
 
 let state =
   { noindent = false;
     this = None;
     norefs = StringSet.empty;
-    generated_names = Bindings.empty
+    generated_names = Bindings.empty;
+    commands = StringSet.empty
   }
 
 let rec unique_postfix n =
@@ -285,24 +288,39 @@ let add_links str =
   in
   Str.global_substitute r subst str
 
+let rec skip_lines in_chan = function
+  | n when n <= 0 -> ()
+  | n -> ignore (input_line in_chan); skip_lines in_chan (n - 1)
+
+let rec read_lines in_chan = function
+  | n when n <= 0 -> []
+  | n ->
+     let l = input_line in_chan in
+     let ls = read_lines in_chan (n - 1) in
+     l :: ls
+
 let latex_loc no_loc l =
-  match l with
-  | Parse_ast.Range (_, _) | Parse_ast.Documented (_, Parse_ast.Range (_, _)) ->
+  match simp_loc l with
+  | Some (p1, p2) ->
      begin
-       let using_color = !Util.opt_colors in
-       Util.opt_colors := false;
-       let code = Util.split_on_char '\n' (Reporting.loc_to_string l) in
-       let doc = match code with
-         | _ :: _ :: code -> string (add_links (String.concat "\n" code))
-         | _ -> empty
-       in
-       Util.opt_colors := using_color;
-       doc ^^ hardline
+       let open Lexing in
+       try
+         let in_chan = open_in p1.pos_fname in
+         try
+           skip_lines in_chan (p1.pos_lnum - 3);
+           let code = read_lines in_chan ((p2.pos_lnum - p1.pos_lnum) + 3) in
+           close_in in_chan;
+           let doc = match code with
+             | _ :: _ :: code -> string (add_links (String.concat "\n" code))
+             | _ -> empty
+           in
+           doc ^^ hardline
+         with
+         | _ -> close_in_noerr in_chan; docstring l ^^ no_loc
+       with
+       | _ -> docstring l ^^ no_loc
      end
-
-  | _ -> docstring l ^^ no_loc
-
-let commands = ref StringSet.empty
+  | None -> docstring l ^^ no_loc
 
 let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext, is_cast), _)) =
   Pretty_print_sail.doc_id id ^^ space
@@ -322,10 +340,17 @@ let rec latex_command cat id no_loc ((l, _) as annot) =
   let doc = if cat = Val then no_loc else latex_loc no_loc l in
   output_string chan (Pretty_print_sail.to_string doc);
   close_out chan;
+  let command = sprintf "\\%s%s%s" !opt_prefix (category_name cat) (latex_id id) in
+  if StringSet.mem command state.commands then
+    (Util.warn ("Multiple instances of " ^ string_of_id id ^ " only generating latex for the first"); empty)
+  else
+    begin
+      state.commands <- StringSet.add command state.commands;
 
-  ksprintf string "\\newcommand{\\%s%s%s}{\\phantomsection%s\\saildoc%s{" !opt_prefix (category_name cat) (latex_id id) labelling (category_name_simple cat)
-  ^^ docstring l ^^ string "}{"
-  ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}}" (Filename.concat !opt_directory code_file)
+      ksprintf string "\\newcommand{%s}{\\phantomsection%s\\saildoc%s{" command labelling (category_name_simple cat)
+      ^^ docstring l ^^ string "}{"
+      ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}}" (Filename.concat !opt_directory code_file)
+    end
 
 let latex_label str id =
   string (Printf.sprintf "\\label{%s:%s}" str (Util.zencode_string (string_of_id id)))
