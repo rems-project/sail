@@ -115,8 +115,11 @@ let options = Arg.align ([
   ( "-smt_solver",
     Arg.String (fun s -> Constraint.set_solver (String.trim s)),
     "<solver> choose SMT solver. Supported solvers are z3 (default), alt-ergo, cvc4, mathsat, vampire and yices.");
+  ( "-smt_linearize",
+    Arg.Set Type_check.opt_smt_linearize,
+    "(experimental) force linearization for constraints involving exponentials");
   ( "-latex",
-    Arg.Tuple [Arg.Set opt_print_latex; Arg.Clear Type_check.opt_expand_valspec ],
+    Arg.Tuple [Arg.Set opt_print_latex; Arg.Clear Type_check.opt_expand_valspec],
     " pretty print the input to LaTeX");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix := prefix),

@@ -321,12 +321,13 @@ let call_smt l vars constraints =
   Profile.finish_smt t;
   result
 
-let rec solve_unique_smt l vars constraints var =
+let solve_smt l vars constraints var =
   let smt_file, smt_var = smtlib_of_constraints ~get_model:true l vars constraints in
   let smt_var = pp_sexpr (smt_var var) in
 
-  (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" smt_file);
-     prerr_endline ("Solving for " ^ smt_var); *)
+  if !opt_smt_verbose then
+    prerr_endline (Printf.sprintf "SMTLIB2 constraints are (solve for %s): \n%s%!" smt_var smt_file)
+  else ();
 
   let rec input_all chan =
     try
@@ -355,9 +356,27 @@ let rec solve_unique_smt l vars constraints var =
   try
     let _ = Str.search_forward (Str.regexp regexp) smt_output 0 in
     let result = Big_int.of_string (Str.matched_group 1 smt_output) in
-    begin match call_smt l vars (nc_and constraints (nc_neq (nconstant result) (nvar var))) with
-    | Unsat -> Some result
-    | _ -> None
-    end
+    Some result
   with
-    Not_found -> None
+  | Not_found -> None
+
+let solve_all_smt l vars constraints var =
+  let rec aux results =
+    let constraints = List.fold_left (fun ncs r -> (nc_and ncs (nc_neq (nconstant r) (nvar var)))) constraints results in
+    match solve_smt l vars constraints var with
+    | Some result -> aux (result :: results)
+    | None ->
+       match call_smt l vars constraints with
+       | Unsat -> Some results
+       | _ -> None
+  in
+  aux []
+
+let solve_unique_smt l vars constraints var =
+  match solve_smt l vars constraints var with
+  | Some result ->
+     begin match call_smt l vars (nc_and constraints (nc_neq (nconstant result) (nvar var))) with
+     | Unsat -> Some result
+     | _ -> None
+     end
+  | None -> None

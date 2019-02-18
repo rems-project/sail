@@ -417,10 +417,15 @@ let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
 let nc_gteq n1 n2 = NC_aux (NC_bounded_ge (n1, n2), Parse_ast.Unknown)
 let nc_lt n1 n2 = nc_lteq (nsum n1 (nint 1)) n2
 let nc_gt n1 n2 = nc_gteq n1 (nsum n2 (nint 1))
-let nc_or nc1 nc2 = mk_nc (NC_or (nc1, nc2))
 let nc_var kid = mk_nc (NC_var kid)
 let nc_true = mk_nc NC_true
 let nc_false = mk_nc NC_false
+
+let nc_or nc1 nc2 =
+  match nc1, nc2 with
+  | _, NC_aux (NC_false, _) -> nc1
+  | NC_aux (NC_false, _), _ -> nc2
+  | _, _ -> mk_nc (NC_or (nc1, nc2))
 
 let nc_and nc1 nc2 =
   match nc1, nc2 with
@@ -439,7 +444,7 @@ let arg_kopt (KOpt_aux (KOpt_kind (K_aux (k, _), v), l)) =
   | K_order -> arg_order (Ord_aux (Ord_var v, l))
   | K_bool -> arg_bool (nc_var v)
   | K_type -> arg_typ (mk_typ (Typ_var v))
-           
+
 let nc_not nc = mk_nc (NC_app (mk_id "not", [arg_bool nc]))
 
 let mk_typschm typq typ = TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown)

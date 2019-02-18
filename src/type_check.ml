@@ -72,6 +72,10 @@ let opt_no_lexp_bounds_check = ref false
    We prefer not to do it for latex output but it is otherwise a good idea. *)
 let opt_expand_valspec = ref true
 
+(* Linearize cases involving power where we would otherwise require
+   the SMT solver to use non-linear arithmetic. *)
+let opt_smt_linearize = ref false
+
 let depth = ref 0
 
 let rec indent n = match n with
@@ -247,6 +251,50 @@ and strip_kinded_id_aux = function
 and strip_kind = function
   | K_aux (k_aux, _) -> K_aux (k_aux, Parse_ast.Unknown)
 
+let rec typ_nexps (Typ_aux (typ_aux, l)) =
+  match typ_aux with
+  | Typ_internal_unknown -> []
+  | Typ_id v -> []
+  | Typ_var kid -> []
+  | Typ_tup typs -> List.concat (List.map typ_nexps typs)
+  | Typ_app (f, args) -> List.concat (List.map typ_arg_nexps args)
+  | Typ_exist (kids, nc, typ) -> typ_nexps typ
+  | Typ_fn (arg_typs, ret_typ, _) ->
+     List.concat (List.map typ_nexps arg_typs) @ typ_nexps ret_typ
+  | Typ_bidir (typ1, typ2) ->
+     typ_nexps typ1 @ typ_nexps typ2
+and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
+  match typ_arg_aux with
+  | A_nexp n -> [n]
+  | A_typ typ -> typ_nexps typ
+  | A_bool nc -> constraint_nexps nc
+  | A_order ord -> []
+and constraint_nexps (NC_aux (nc_aux, l)) =
+  match nc_aux with
+  | NC_equal (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_le (n1, n2) | NC_not_equal (n1, n2) ->
+     [n1; n2]
+  | NC_set _ | NC_true | NC_false | NC_var _ -> []
+  | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2
+  | NC_app (_, args) -> List.concat (List.map typ_arg_nexps args)
+
+(* Return a KidSet containing all the type variables appearing in
+   nexp, where nexp occurs underneath a Nexp_exp, i.e. 2^nexp *)
+let rec nexp_power_variables (Nexp_aux (aux, _)) =
+  match aux with
+  | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) ->
+     KidSet.union (nexp_power_variables n1) (nexp_power_variables n2)
+  | Nexp_neg n ->
+     nexp_power_variables n
+  | Nexp_id _ | Nexp_var _ | Nexp_constant _ ->
+     KidSet.empty
+  | Nexp_app (_, ns) ->
+     List.fold_left KidSet.union KidSet.empty (List.map nexp_power_variables ns)
+  | Nexp_exp n ->
+     tyvars_of_nexp n
+
+let constraint_power_variables nc =
+  List.fold_left KidSet.union KidSet.empty (List.map nexp_power_variables (constraint_nexps nc))
+
 let rec name_pat (P_aux (aux, _)) =
   match aux with
   | P_id id | P_as (_, id) -> Some ("_" ^ string_of_id id)
@@ -262,7 +310,7 @@ let fresh_existential k =
 let named_existential k = function
   | Some n -> mk_kopt k (mk_kid n)
   | None -> fresh_existential k
- 
+
 let destruct_exist_plain ?name:(name=None) typ =
   match typ with
   | Typ_aux (Typ_exist ([kopt], nc, typ), _) ->
@@ -1089,7 +1137,7 @@ end = struct
   let add_typ_var l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
     if KBindings.mem v env.typ_vars then begin
         let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
-        let s_l, s_k = KBindings.find v env.typ_vars in 
+        let s_l, s_k = KBindings.find v env.typ_vars in
         let s_v = Kid_aux (Var (string_of_kid v ^ "#" ^ string_of_int n), l) in
         typ_print (lazy (Printf.sprintf "%stype variable (shadowing %s) %s : %s" adding (string_of_kid s_v) (string_of_kid v) (string_of_kind_aux k)));
         { env with
@@ -1108,11 +1156,34 @@ end = struct
   let add_constraint constr env =
     wf_constraint env constr;
     let (NC_aux (nc_aux, l) as constr) = constraint_simp (expand_constraint_synonyms env constr) in
-    match nc_aux with
-    | NC_true -> env
-    | _ ->
-       typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint constr));
-       { env with constraints = constr :: env.constraints }
+    let power_vars = constraint_power_variables constr in
+    if KidSet.cardinal power_vars > 1 && !opt_smt_linearize then
+      typ_error env l ("Cannot add constraint " ^ string_of_n_constraint constr
+                       ^ " where more than two variables appear within an exponential")
+    else if KidSet.cardinal power_vars = 1 && !opt_smt_linearize then
+      let v = KidSet.choose power_vars in
+      let constrs = List.fold_left nc_and nc_true (get_constraints env) in
+      begin match Constraint.solve_all_smt l (get_typ_vars env) constrs v with
+      | Some solutions ->
+         typ_print (lazy (Util.("Linearizing " |> red |> clear) ^ string_of_n_constraint constr
+                          ^ " for " ^ string_of_kid v ^ " in " ^ Util.string_of_list ", " Big_int.to_string solutions));
+         let linearized =
+           List.fold_left
+             (fun c s -> nc_or c (nc_and (nc_eq (nvar v) (nconstant s)) (constraint_subst v (arg_nexp (nconstant s)) constr)))
+             nc_false solutions
+         in
+         typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint linearized));
+         { env with constraints = linearized :: env.constraints }
+      | None ->
+         typ_error env l ("Type variable " ^ string_of_kid v
+                          ^ " must have a finite number of solutions to add " ^ string_of_n_constraint constr)
+      end
+    else
+      match nc_aux with
+      | NC_true -> env
+      | _ ->
+         typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint constr));
+         { env with constraints = constr :: env.constraints }
 
   let get_ret_typ env = env.ret_typ
 
@@ -1326,32 +1397,6 @@ and simp_typ_aux = function
 
   | typ_aux -> typ_aux
 
-let rec typ_nexps (Typ_aux (typ_aux, l)) =
-  match typ_aux with
-  | Typ_internal_unknown -> []
-  | Typ_id v -> []
-  | Typ_var kid -> []
-  | Typ_tup typs -> List.concat (List.map typ_nexps typs)
-  | Typ_app (f, args) -> List.concat (List.map typ_arg_nexps args)
-  | Typ_exist (kids, nc, typ) -> typ_nexps typ
-  | Typ_fn (arg_typs, ret_typ, _) ->
-     List.concat (List.map typ_nexps arg_typs) @ typ_nexps ret_typ
-  | Typ_bidir (typ1, typ2) ->
-     typ_nexps typ1 @ typ_nexps typ2
-and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
-  match typ_arg_aux with
-  | A_nexp n -> [n]
-  | A_typ typ -> typ_nexps typ
-  | A_bool nc -> constraint_nexps nc
-  | A_order ord -> []
-and constraint_nexps (NC_aux (nc_aux, l)) =
-  match nc_aux with
-  | NC_equal (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_le (n1, n2) | NC_not_equal (n1, n2) ->
-     [n1; n2]
-  | NC_set _ | NC_true | NC_false | NC_var _ -> []
-  | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2
-  | NC_app (_, args) -> List.concat (List.map typ_arg_nexps args)
-
 (* Here's how the constraint generation works for subtyping
 
 X(b,c...) --> {a. Y(a,b,c...)} \subseteq {a. Z(a,b,c...)}
@@ -1373,22 +1418,6 @@ this is equivalent to
 which is then a problem we can feed to the constraint solver expecting unsat.
  *)
 
-let rec nexp_variable_power (Nexp_aux (aux, _)) =
-  match aux with
-  | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) ->
-     nexp_variable_power n1 || nexp_variable_power n2
-  | Nexp_neg n ->
-     nexp_variable_power n
-  | Nexp_id _ | Nexp_var _ | Nexp_constant _ ->
-     false
-  | Nexp_app (_, ns) ->
-     List.exists nexp_variable_power ns
-  | Nexp_exp n ->
-     not (KidSet.is_empty (tyvars_of_nexp n))
-
-let constraint_variable_power nc =
-  List.exists nexp_variable_power (constraint_nexps nc)
-
 let prove_smt env (NC_aux (_, l) as nc) =
   let vars = Env.get_typ_vars env in
   let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
@@ -1400,7 +1429,7 @@ let prove_smt env (NC_aux (_, l) as nc) =
      (* Work around versions of z3 that are confused by 2^n in
         constraints, even when such constraints are irrelevant *)
      let ncs' = List.concat (List.map constraint_conj ncs) in
-     let ncs' = List.filter (fun nc -> not (constraint_variable_power nc)) ncs' in
+     let ncs' = List.filter (fun nc -> KidSet.is_empty (constraint_power_variables nc)) ncs' in
      match Constraint.call_smt l vars (List.fold_left nc_and (nc_not nc) ncs') with
      | Constraint.Unsat -> typ_debug (lazy "unsat"); true
      | Constraint.Sat | Constraint.Unknown -> typ_debug (lazy "sat/unknown"); false

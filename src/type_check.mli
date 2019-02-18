@@ -71,6 +71,10 @@ val opt_no_lexp_bounds_check : bool ref
    We prefer not to do it for latex output but it is otherwise a good idea. *)
 val opt_expand_valspec : bool ref
 
+(** Linearize cases involving power where we would otherwise require
+   the SMT solver to use non-linear arithmetic. *)
+val opt_smt_linearize : bool ref
+
 (** {2 Type errors} *)
 
 type type_error =
@@ -316,6 +320,7 @@ val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t
    untrustworthy. *)
 val prove : (string * int * int * int) -> Env.t -> n_constraint -> bool
 
+(** Returns Some c if there is a unique c such that nexp = c *)
 val solve_unique : Env.t -> nexp -> Big_int.num option
 
 val canonicalize : Env.t -> typ -> typ

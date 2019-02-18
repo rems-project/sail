@@ -159,7 +159,7 @@ let rec preprocess opts = function
      symbols := StringSet.add symbol !symbols;
      preprocess opts defs
 
-  | Parse_ast.DEF_pragma ("option", command, l) :: defs ->
+  | (Parse_ast.DEF_pragma ("option", command, l) as opt_pragma) :: defs ->
      begin
        try
          let args = Str.split (Str.regexp " +") command in
@@ -167,7 +167,7 @@ let rec preprocess opts = function
        with
        | Arg.Bad message | Arg.Help message -> raise (Reporting.err_general l message)
      end;
-     preprocess opts defs
+     opt_pragma :: preprocess opts defs
 
   | Parse_ast.DEF_pragma ("ifndef", symbol, l) :: defs ->
      let then_defs, else_defs, defs = cond_pragma l defs in
