@@ -1549,10 +1549,11 @@ let rewrite_exp_remove_bitvector_pat rewriters (E_aux (exp,(l,annot)) as full_ex
        | None -> Pat_aux (Pat_exp (pat', body'), annot'))
      | Pat_aux (Pat_when (pat,guard,body),annot') ->
        let (pat',(guard',decls,_)) = remove_bitvector_pat pat in
+       let guard'' = rewrite_rec guard in
        let body' = decls (rewrite_rec body) in
        (match guard' with
-       | Some guard' -> Pat_aux (Pat_when (pat', bitwise_and_exp (decls guard) guard', body'), annot')
-       | None -> Pat_aux (Pat_when (pat', (decls guard), body'), annot')) in
+       | Some guard' -> Pat_aux (Pat_when (pat', bitwise_and_exp (decls guard'') guard', body'), annot')
+       | None -> Pat_aux (Pat_when (pat', (decls guard''), body'), annot')) in
     rewrap (E_case (e, List.map rewrite_pexp ps))
   | E_let (LB_aux (LB_val (pat,v),annot'),body) ->
      let (pat,(_,decls,_)) = remove_bitvector_pat pat in
