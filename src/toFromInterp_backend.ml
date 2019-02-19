@@ -1,0 +1,159 @@
+(**************************************************************************)
+(*     Sail                                                               *)
+(*                                                                        *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
+(*                                                                        *)
+(*  All rights reserved.                                                  *)
+(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*     notice, this list of conditions and the following disclaimer.      *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
+(**************************************************************************)
+
+open Ast
+open Ast_util
+open PPrint
+open Type_check
+open Util
+open Pretty_print_common
+open Ocaml_backend
+
+let frominterp_typedef (TD_aux (td_aux, (l, _))) =
+  let fromValueArgs (Typ_aux (typ_aux, _)) = match typ_aux with
+    | Typ_tup typs -> brackets (separate (semi ^^ space) (List.mapi (fun i _ -> string ("v" ^ (string_of_int i))) typs))
+    | _ -> brackets (string "v0")
+  in
+  let fromValueKid (Kid_aux ((Var name), _)) =
+    string ("typq_" ^ name)
+  in 
+  let fromValueNexp (Nexp_aux (nexp_aux, _)) = match nexp_aux with
+    | Nexp_constant num -> parens (separate space [string "Big_int.of_string"; dquotes (string (Nat_big_num.to_string num))])
+    | Nexp_var var -> fromValueKid var
+    | _ -> string "NEXP"
+  in
+  let rec fromValueTypArg (A_aux (a_aux, _)) = match a_aux with
+    | A_typ typ -> fromValueTyp typ ""
+    | A_nexp nexp -> fromValueNexp nexp
+    | A_order order -> string ("Order_" ^ (string_of_order order))
+    | _ -> string "TYP_ARG"
+  and fromValueTyp ((Typ_aux (typ_aux, l)) as typ) arg_name = match typ_aux with
+    | Typ_id id -> parens (concat [string (zencode_string (string_of_id id)); string ("FromInterpValue"); space; string arg_name])
+    | Typ_app (typ_id, typ_args) ->
+       assert (typ_args <> []);
+       parens (separate space ([string (zencode_string (string_of_id typ_id) ^ "FromInterpValue")] @ List.map fromValueTypArg typ_args @ [string arg_name]))
+    | Typ_var kid -> parens (separate space [fromValueKid kid; string arg_name])
+    | Typ_fn _ -> parens (string "failwith \"fromValueTyp: Typ_fn arm unimplemented\"")
+    | _ -> parens (string "failwith \"fromValueTyp: type arm unimplemented\"")
+  in 
+  let fromValueVals ((Typ_aux (typ_aux, l)) as typ) = match typ_aux with
+    | Typ_tup typs -> parens (separate comma_sp (List.mapi (fun i typ -> fromValueTyp typ ("v" ^ (string_of_int i))) typs))
+    | _ -> fromValueTyp typ "v0"
+  in
+  let fromValueTypq (QI_aux (qi_aux, _)) = match qi_aux with
+    | QI_id (KOpt_aux (KOpt_kind (K_aux (kind_aux, _), kid), _)) -> fromValueKid kid
+    | QI_const _ -> empty
+  in
+  let fromValueTypqs (TypQ_aux (typq_aux, _)) = match typq_aux with
+    | TypQ_no_forall -> [empty]
+    | TypQ_tq quants -> List.map fromValueTypq quants
+  in
+  match td_aux with
+  | TD_variant (id, typq, arms, _) ->
+     begin match id with
+     | Id_aux ((Id "read_kind"),_) -> empty
+     | Id_aux ((Id "write_kind"),_) -> empty
+     | Id_aux ((Id "barrier_kind"),_) -> empty
+     | Id_aux ((Id "trans_kind"),_) -> empty
+     | Id_aux ((Id "instruction_kind"),_) -> empty
+     (* | Id_aux ((Id "regfp"),_) -> empty
+        | Id_aux ((Id "niafp"),_) -> empty
+        | Id_aux ((Id "diafp"),_) -> empty *)
+     (* | Id_aux ((Id "option"),_) -> empty *)
+     | _ ->
+        let fromInterpValueName = concat [string (zencode_string (string_of_id id)); string "FromInterpValue"] in
+        let fromFallback = separate space [pipe; underscore; arrow; string "failwith";
+                                           dquotes (string ("invalid interpreter value for " ^ (string_of_id id)))] in
+        let fromInterpValue =
+          prefix 2 1
+            (separate space [string "let"; fromInterpValueName; separate space (fromValueTypqs typq @ [string "v"]); equals; string "match v with"])
+            ((separate_map hardline
+                (fun (Tu_aux (Tu_ty_id (typ, ctor_id), _)) ->
+                  print_endline (string_of_typ typ);
+                  separate space
+                    [pipe; string "V_ctor"; parens (concat [dquotes (string (string_of_id ctor_id)); comma_sp;
+                                                            fromValueArgs typ
+                                              ]);
+                     arrow; string (zencode_upper_string (string_of_id ctor_id)); fromValueVals typ
+                    ]
+                )
+                arms)
+            ^^ hardline ^^ fromFallback)
+        in
+        fromInterpValue ^^ (twice hardline)
+     end
+  | TD_abbrev (id, typq, typ_arg) ->
+     let fromInterpValueName = concat [string (zencode_string (string_of_id id)); string "FromInterpValue"] in
+     let fromInterpValue =
+       (separate space [string "let"; fromInterpValueName; separate space (fromValueTypqs typq); equals; fromValueTypArg typ_arg])
+     in
+     fromInterpValue ^^ (twice hardline)
+  | _ -> empty
+
+let tointerp_typedef td = empty
+
+let tofrominterp_def def = match def with
+  | DEF_type td -> group (frominterp_typedef td ^^ twice hardline ^^ tointerp_typedef td)
+  | _ -> empty
+
+let tofrominterp_defs (Defs defs) =
+  (string "open Sail_lib;;" ^^ hardline)
+  ^^ (string "open Value;;" ^^ hardline)
+  ^^ (string "open Interpreter;;" ^^ hardline)
+  ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
+  ^^ concat (List.map tofrominterp_def defs)
+
+let tofrominterp_pp_defs f defs =
+  ToChannel.pretty 1. 80 f (tofrominterp_defs defs)
+
+let tofrominterp_output name defs =
+  let out_chan = open_out (name ^ "_toFromInterp.ml") in
+  tofrominterp_pp_defs out_chan defs;
+  close_out out_chan

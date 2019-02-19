@@ -59,6 +59,7 @@ let opt_print_version = ref false
 let opt_print_initial_env = ref false
 let opt_print_verbose = ref false
 let opt_print_lem = ref false
+let opt_print_tofrominterp = ref false
 let opt_print_ocaml = ref false
 let opt_print_c = ref false
 let opt_print_latex = ref false
@@ -95,6 +96,9 @@ let options = Arg.align ([
   ( "-no_warn",
     Arg.Clear Util.opt_warnings,
     " do not print warnings");
+  ( "-tofrominterp",
+    Arg.Set opt_print_tofrominterp,
+    " output OCaml functions to translate between shallow embedding and interpreter");
   ( "-ocaml",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen],
     " output an OCaml translated version of the input");
@@ -397,6 +401,12 @@ let main() =
          let ast_ocaml = rewrite_ast_ocaml type_envs ast in
          let out = match !opt_file_out with None -> "out" | Some s -> s in
          Ocaml_backend.ocaml_compile out ast_ocaml ocaml_generator_info
+       else ());
+      (if !opt_print_tofrominterp
+       then
+         let ast = rewrite_ast_interpreter type_envs ast in
+         let out = match !opt_file_out with None -> "out" | Some s -> s in
+         ToFromInterp_backend.tofrominterp_output out ast
        else ());
       (if !(opt_print_c)
        then
