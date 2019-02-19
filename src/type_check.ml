@@ -574,7 +574,7 @@ end = struct
     let kopts, ncs = quant_split typq in
     let rec subst_args kopts args =
       match kopts, args with
-      | kopt :: kopts, (A_aux (A_nexp _, _) as arg) :: args when is_nat_kopt kopt ->
+      | kopt :: kopts, (A_aux (A_nexp _, _) as arg) :: args when is_int_kopt kopt ->
          List.map (constraint_subst (kopt_kid kopt) arg) (subst_args kopts args)
       | kopt :: kopts, A_aux (A_typ arg, _) :: args when is_typ_kopt kopt ->
          subst_args kopts args
@@ -992,7 +992,7 @@ end = struct
         typ_print (lazy (adding ^ "record " ^ string_of_id id));
         let rec record_typ_args = function
           | [] -> []
-          | ((QI_aux (QI_id kopt, _)) :: qis) when is_nat_kopt kopt ->
+          | ((QI_aux (QI_id kopt, _)) :: qis) when is_int_kopt kopt ->
              mk_typ_arg (A_nexp (nvar (kopt_kid kopt))) :: record_typ_args qis
           | ((QI_aux (QI_id kopt, _)) :: qis) when is_typ_kopt kopt ->
              mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt)))) :: record_typ_args qis
@@ -4817,7 +4817,7 @@ let mk_synonym typq typ_arg =
   let kopts = List.map snd kopts in
   let rec subst_args env l kopts args =
     match kopts, args with
-    | kopt :: kopts, A_aux (A_nexp arg, _) :: args when is_nat_kopt kopt ->
+    | kopt :: kopts, A_aux (A_nexp arg, _) :: args when is_int_kopt kopt ->
        let typ_arg, ncs = subst_args env l kopts args in
        typ_arg_subst (kopt_kid kopt) (arg_nexp arg) typ_arg,
        List.map (constraint_subst (kopt_kid kopt) (arg_nexp arg)) ncs

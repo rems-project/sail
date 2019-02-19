@@ -66,7 +66,7 @@ let doc_id (Id_aux (id_aux, _)) =
 let doc_kid kid = string (Ast_util.string_of_kid kid)
 
 let doc_kopt = function
-  | kopt when is_nat_kopt kopt -> doc_kid (kopt_kid kopt)
+  | kopt when is_int_kopt kopt -> doc_kid (kopt_kid kopt)
   | kopt when is_typ_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])
   | kopt when is_order_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])
   | kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Bool"])
@@ -213,7 +213,7 @@ and doc_arg_typs = function
 let doc_quants quants =
   let doc_qi_kopt (QI_aux (qi_aux, _)) =
     match qi_aux with
-    | QI_id kopt when is_nat_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Int"])]
+    | QI_id kopt when is_int_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Int"])]
     | QI_id kopt when is_typ_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])]
     | QI_id kopt when is_bool_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Bool"])]
     | QI_id kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])]
@@ -234,7 +234,7 @@ let doc_quants quants =
 let doc_param_quants quants =
   let doc_qi_kopt (QI_aux (qi_aux, _)) =
     match qi_aux with
-    | QI_id kopt when is_nat_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Int"]
+    | QI_id kopt when is_int_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Int"]
     | QI_id kopt when is_typ_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Type"]
     | QI_id kopt when is_bool_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Bool"]
     | QI_id kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Order"]

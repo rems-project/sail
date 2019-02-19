@@ -4300,7 +4300,7 @@ let add_bitvector_casts (Defs defs) =
   let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),fcl_ann)) =
     let fcl_env = env_of_annot fcl_ann in
     let (tq,typ) = Env.get_val_spec_orig id fcl_env in
-    let quant_kids = List.map kopt_kid (List.filter is_nat_kopt (quant_kopts tq)) in
+    let quant_kids = List.map kopt_kid (List.filter is_int_kopt (quant_kopts tq)) in
     let ret_typ =
       match typ with
       | Typ_aux (Typ_fn (_,ret,_),_) -> ret

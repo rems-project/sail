@@ -54,10 +54,18 @@ open Ast
 open Ast_util
 open Type_check
 
+type specialization
+
+(** Only specialize Type- and Ord- kinded polymorphism. *)
+val typ_ord_specialization : specialization
+
+(** (experimental) specialise Int-kinded definitions *)
+val int_specialization : specialization
+
 (** Returns an IdSet with the function ids that have X-kinded
    parameters, e.g. val f : forall ('a : X). 'a -> 'a. The first
    argument specifies what X should be - it should be one of:
-   [is_nat_kopt], [is_order_kopt], or [is_typ_kopt] from [Ast_util],
+   [is_int_kopt], [is_order_kopt], or [is_typ_kopt] from [Ast_util],
    or some combination of those. *)
 val polymorphic_functions : (kinded_id -> bool) -> 'a defs -> IdSet.t
 
@@ -66,11 +74,13 @@ val polymorphic_functions : (kinded_id -> bool) -> 'a defs -> IdSet.t
    AST with [Type_check.initial_env]. The env parameter is the
    environment to return if there is no polymorphism to remove, in
    which case specialize returns the AST unmodified. *)
-val specialize : tannot defs -> Env.t -> tannot defs * Env.t
+val specialize : specialization -> tannot defs -> Env.t -> tannot defs * Env.t
 
-val instantiations_of : id -> tannot defs -> typ_arg KBindings.t list
+(** return all instantiations of a function id, with the
+   instantiations filtered according to the specialization. *)
+val instantiations_of : specialization -> id -> tannot defs -> typ_arg KBindings.t list
 
 val string_of_instantiation : typ_arg KBindings.t -> string
 
-(* Remove all function definitions except for the given set *)
+(** Remove all function definitions except for the given set *)
 val slice_defs : Env.t -> tannot defs -> IdSet.t -> tannot defs

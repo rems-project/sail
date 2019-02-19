@@ -2512,7 +2512,7 @@ let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
      let used = if is_number ret_ty then used else KidSet.union used (tyvars_of_typ ret_ty) in
      let tqs = match tqs with
        | TypQ_aux (TypQ_tq qs,l) -> TypQ_aux (TypQ_tq (List.filter (function
-         | QI_aux (QI_id kopt,_) when is_nat_kopt kopt ->
+         | QI_aux (QI_id kopt,_) when is_int_kopt kopt ->
             let kid = kopt_kid kopt in
             KidSet.mem kid used && not (KidSet.mem kid args)
          | _ -> true) qs),l)

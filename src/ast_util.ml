@@ -129,7 +129,7 @@ let mk_val_spec vs_aux =
 let kopt_kid (KOpt_aux (KOpt_kind (_, kid), _)) = kid
 let kopt_kind (KOpt_aux (KOpt_kind (k, _), _)) = k
 
-let is_nat_kopt = function
+let is_int_kopt = function
   | KOpt_aux (KOpt_kind (K_aux (K_int, _), _), _) -> true
   | _ -> false
 

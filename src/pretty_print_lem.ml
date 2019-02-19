@@ -316,7 +316,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
           * if we add a new Typ constructor *)
          let tpp = typ ty in
          if atyp_needed then parens tpp else tpp
-      | Typ_exist (kopts,_,ty) when List.for_all is_nat_kopt kopts -> begin
+      | Typ_exist (kopts,_,ty) when List.for_all is_int_kopt kopts -> begin
          let kids = List.map kopt_kid kopts in
          let tpp = typ ty in
          let visible_vars = lem_tyvars_of_typ ty in
