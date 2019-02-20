@@ -436,6 +436,8 @@ and pp_aval = function
 
 let ae_lit lit typ = AE_val (AV_lit (lit, typ))
 
+let is_dead_aexp (AE_aux (_, env, _)) = prove __POS__ env nc_false
+
 (** GLOBAL: gensym_counter is used to generate fresh identifiers where
    needed. It should be safe to reset between top level
    definitions. **)

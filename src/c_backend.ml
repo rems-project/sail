@@ -1083,7 +1083,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let compile_case (apat, guard, body) =
        let trivial_guard = match guard with
          | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _, _)
-         | AE_aux (AE_val (AV_C_fragment (F_lit (V_bool true), _, _)), _, _) -> true
+           | AE_aux (AE_val (AV_C_fragment (F_lit (V_bool true), _, _)), _, _) -> true
          | _ -> false
        in
        let case_label = label "case_" in
@@ -1103,7 +1103,10 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
          @ body_setup @ [body_call (CL_id (case_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
          @ [igoto finish_match_label]
        in
-       [iblock case_instrs; ilabel case_label]
+       if is_dead_aexp body then
+         [ilabel case_label]
+       else
+         [iblock case_instrs; ilabel case_label]
      in
      [icomment "begin match"]
      @ aval_setup @ [idecl ctyp case_return_id]
@@ -1159,18 +1162,23 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      []
 
   | AE_if (aval, then_aexp, else_aexp, if_typ) ->
-     let if_ctyp = ctyp_of_typ ctx if_typ in
-     let compile_branch aexp =
-       let setup, call, cleanup = compile_aexp ctx aexp in
-       fun clexp -> setup @ [call clexp] @ cleanup
-     in
-     let setup, cval, cleanup = compile_aval l ctx aval in
-     setup,
-     (fun clexp -> iif cval
-                       (compile_branch then_aexp clexp)
-                       (compile_branch else_aexp clexp)
-                       if_ctyp),
-     cleanup
+     if is_dead_aexp then_aexp then
+       compile_aexp ctx else_aexp
+     else if is_dead_aexp else_aexp then
+       compile_aexp ctx then_aexp
+     else
+       let if_ctyp = ctyp_of_typ ctx if_typ in
+       let compile_branch aexp =
+         let setup, call, cleanup = compile_aexp ctx aexp in
+         fun clexp -> setup @ [call clexp] @ cleanup
+       in
+       let setup, cval, cleanup = compile_aval l ctx aval in
+       setup,
+       (fun clexp -> iif cval
+                         (compile_branch then_aexp clexp)
+                         (compile_branch else_aexp clexp)
+                         if_ctyp),
+       cleanup
 
   (* FIXME: AE_record_update could be AV_record_update - would reduce some copying. *)
   | AE_record_update (aval, fields, typ) ->
