@@ -47,6 +47,10 @@ let opt_elf_threads = ref 1
 let opt_elf_entry = ref Big_int.zero
 let opt_elf_tohost = ref Big_int.zero
 
+(* the type of elf last loaded *)
+type elf_class = ELF_Class_64 | ELF_Class_32
+let opt_elf_class = ref ELF_Class_64 (* default *)
+
 type word8 = int
 
 let escape_char c =
@@ -154,7 +158,8 @@ let load_elf ?writer:(writer=write_sail_lib) name =
                       let size = seg.elf64_segment_size in
                       let memsz = seg.elf64_segment_memsz in
                       load_segment ~writer:writer bs paddr base offset size memsz)
-                     segs
+                     segs;
+           opt_elf_class := ELF_Class_64
      | ELF32 segs ->
            List.iter (fun seg ->
                       let open Elf_interpreted_segment in
@@ -165,7 +170,8 @@ let load_elf ?writer:(writer=write_sail_lib) name =
                       let size = seg.elf32_segment_size in
                       let memsz = seg.elf32_segment_memsz in
                       load_segment ~writer:writer bs paddr base offset size memsz)
-                     segs
+                     segs;
+           opt_elf_class := ELF_Class_32
   )
 
 (* The sail model can access this by externing a unit -> int function
@@ -173,3 +179,5 @@ let load_elf ?writer:(writer=write_sail_lib) name =
 let elf_entry () = !opt_elf_entry
 (* Used by RISCV sail model test harness for exiting test *)
 let elf_tohost () = !opt_elf_tohost
+(* Used to check last loaded elf class. *)
+let elf_class () = !opt_elf_class
