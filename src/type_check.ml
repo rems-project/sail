@@ -1976,9 +1976,17 @@ let rec subtyp l env typ1 typ2 =
      let env = add_typ_vars l (List.map (mk_kopt K_int) (KidSet.elements (KidSet.inter (nexp_frees nexp2) (KidSet.of_list kids2)))) env in
      let kids2 = KidSet.elements (KidSet.diff (KidSet.of_list kids2) (nexp_frees nexp2)) in
      if not (kids2 = []) then typ_error env l ("Universally quantified constraint generated: " ^ Util.string_of_list ", " string_of_kid kids2) else ();
-     let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
-     if prove __POS__ env nc2 then ()
-     else typ_raise env l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
+     let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) (Env.get_typ_vars env) in
+     begin match Constraint.call_smt l vars (nc_eq nexp1 nexp2) with
+     | Constraint.Sat ->
+        let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
+        if prove __POS__ env nc2 then
+          ()
+        else
+          typ_raise env l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
+     | _ ->
+        typ_error env l ("Constraint " ^ string_of_n_constraint (nc_eq nexp1 nexp2) ^ " is not satisfiable")
+     end
   | _, _ ->
   match typ_aux1, typ_aux2 with
   | _, Typ_internal_unknown when Env.allow_unknowns env -> ()
