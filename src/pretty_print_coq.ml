@@ -401,7 +401,7 @@ type prop_dir = Implied_by | Implies | Iff
 
 type atom_bool_prop =
   Bool_boring
-| Bool_complex of prop_dir * kinded_id list * n_constraint * n_constraint
+| Bool_complex of kinded_id list * n_constraint * n_constraint
 
 let simplify_atom_bool l kopts nc atom_nc =
 prerr_endline ("simplify " ^ string_of_n_constraint nc ^ " for bool " ^ string_of_n_constraint atom_nc);
@@ -454,48 +454,6 @@ prerr_endline ("simplify " ^ string_of_n_constraint nc ^ " for bool " ^ string_o
   let new_atom, kill_atom, atom_nc = simplify atom_nc in
   let new_kids = KidSet.union new_nc new_atom in
   let kill_kids = KidSet.union kill_nc kill_atom in
-  let rec strip_implied (NC_aux (nc,l) as nc_full) =
-    match nc with
-    | NC_var kid when KBindings.mem kid lin_bool_vars -> None
-    | NC_var kid when KidSet.mem kid new_kids -> None
-    | NC_and (nc1,nc2) -> begin
-       match strip_implied nc1, strip_implied nc2 with
-       | Some nc1, Some nc2 -> Some (NC_aux (NC_and (nc1,nc2),l))
-       | Some nc, None
-       | None, Some nc -> Some nc
-       | None, None -> None
-      end
-    | NC_or (nc1,nc2) -> begin
-       match strip_implied nc1, strip_implied nc2 with
-       | Some nc1, Some nc2 -> Some (NC_aux (NC_or (nc1,nc2),l))
-       | _ -> None
-      end
-    | _ -> Some nc_full
-  in
-  let rec strip_implies (NC_aux (nc,l) as nc_full) =
-    match nc with
-    | NC_var kid when KBindings.mem kid lin_bool_vars -> None
-    | NC_var kid when KidSet.mem kid new_kids -> None
-    | NC_and (nc1,nc2) -> begin
-       match strip_implied nc1, strip_implied nc2 with
-       | Some nc1, Some nc2 -> Some (NC_aux (NC_and (nc1,nc2),l))
-       | _ -> None
-      end
-    | NC_or (nc1,nc2) -> begin
-       match strip_implied nc1, strip_implied nc2 with
-       | Some nc1, Some nc2 -> Some (NC_aux (NC_or (nc1,nc2),l))
-       | Some nc, None
-       | None, Some nc -> Some nc
-       | None, None -> None
-      end
-    | _ -> Some nc_full
-  in
-  let strip_implied (NC_aux (_,l) as nc) =
-    Util.option_default (NC_aux (NC_true,l)) (strip_implied nc)
-  in
-  let strip_implies (NC_aux (_,l) as nc) =
-    Util.option_default (NC_aux (NC_true,l)) (strip_implies nc)
-  in
   let kopts =
     List.map (fun kid -> mk_kopt K_bool kid) (KidSet.elements new_kids) @
       List.filter (fun kopt -> not (KidSet.mem (kopt_kid kopt) kill_kids)) kopts
@@ -504,15 +462,7 @@ prerr_endline ("now have " ^ string_of_n_constraint nc ^ " for bool " ^ string_o
   match atom_nc with
   | NC_aux (NC_var kid,_) when KBindings.mem kid lin_bool_vars -> Bool_boring
   | NC_aux (NC_var kid,_) when KidSet.mem kid new_kids -> Bool_boring
-  | NC_aux (NC_and (NC_aux (NC_var kid,_),nc'),_) when KBindings.mem kid lin_bool_vars ->
-     Bool_complex (Implies, kopts, nc, strip_implied nc')
-  | NC_aux (NC_and (nc',NC_aux (NC_var kid,_)),_) when KBindings.mem kid lin_bool_vars ->
-     Bool_complex (Implies, kopts, nc, strip_implied nc')
-  | NC_aux (NC_or (NC_aux (NC_var kid,_),nc'),_) when KBindings.mem kid lin_bool_vars ->
-     Bool_complex (Implied_by, kopts, nc, strip_implies nc')
-  | NC_aux (NC_or (nc',NC_aux (NC_var kid,_)),_) when KBindings.mem kid lin_bool_vars ->
-     Bool_complex (Implied_by, kopts, nc, strip_implies nc')
-  | _ -> Bool_complex (Iff, kopts, nc, atom_nc)
+  | _ -> Bool_complex (kopts, nc, atom_nc)
 
 
 type ex_kind = ExNone | ExGeneral
@@ -571,9 +521,13 @@ let rec doc_typ_fns ctx =
       | Typ_app(Id_aux (Id "atom", _), [A_aux(A_nexp n,_)]) ->
          (string "Z")
       | Typ_app(Id_aux (Id "atom_bool", _), [_]) -> string "bool"
-      | Typ_app (Id_aux (Id "atom#bool",_), [A_aux (A_bool nc,_)]) ->
-         let tpp = string "Bool" ^^ space ^^ doc_nc_prop ~top:false ctx nc in
-         if atyp_needed then parens tpp else tpp
+      | Typ_app (Id_aux (Id "atom#bool",_), [A_aux (A_bool atom_nc,_)]) ->
+         let var = mk_kid "_bool" in (* TODO collision avoid *)
+         let nc = nice_iff (nc_var var) atom_nc in
+         braces (separate space
+                   [doc_var ctx var; colon; string "bool";
+                    ampersand;
+                    doc_arithfact ctx nc])
       | Typ_app(id,args) ->
          let tpp = (doc_id_type id) ^^ space ^^ (separate_map space doc_typ_arg args) in
          if atyp_needed then parens tpp else tpp
@@ -636,13 +590,9 @@ let rec doc_typ_fns ctx =
           | Typ_aux (Typ_app (Id_aux (Id "atom_bool",_), [A_aux (A_bool atom_nc,_)]),_) -> begin
              match simplify_atom_bool l kopts nc atom_nc with
              | Bool_boring -> string "bool"
-             | Bool_complex (dir,kopts,nc,atom_nc) ->
+             | Bool_complex (kopts,nc,atom_nc) ->
                 let var = mk_kid "_bool" in (* TODO collision avoid *)
-                let nc = nice_and
-                           (match dir with
-                            | Implies -> nice_imp (nc_var var) atom_nc
-                            | Implied_by -> nice_imp atom_nc (nc_var var)
-                            | Iff -> nice_iff (nc_var var) atom_nc) nc in
+                let nc = nice_and (nice_iff (nc_var var) atom_nc) nc in
                 braces (separate space
                           [doc_var ctx var; colon; string "bool";
                            ampersand;
@@ -1150,7 +1100,7 @@ let replace_atom_return_type ret_typ =
   (* For informative booleans tweak the type name so that doc_typ knows that the
      constraint should be output. *)
   | Typ_aux (Typ_app (Id_aux (Id "atom_bool",il), ([A_aux (A_bool _,_)] as args)),l) ->
-     Some "build_Bool", Typ_aux (Typ_app (Id_aux (Id "atom#bool",il), args),l)
+     Some "build_ex", Typ_aux (Typ_app (Id_aux (Id "atom#bool",il), args),l)
   | _ -> None, ret_typ
 
 let is_range_from_atom env (Typ_aux (argty,_)) (Typ_aux (fnty,_)) =
@@ -1246,7 +1196,7 @@ let doc_exp, doc_let =
              else exp_pp
            in match build_ex with
               | Some s ->
-                let exp_pp = string s ^^ space ^^ exp_pp in
+                let exp_pp = string s ^/^ exp_pp in
                 if want_parens then parens exp_pp else exp_pp
               | None -> exp_pp
       in aux
@@ -1335,9 +1285,17 @@ let doc_exp, doc_let =
        | Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)
          when effectful (effect_of full_exp) ->
           let call = doc_id (append_id f "M") in
-          let epp = hang 2 (flow (break 1) (call :: List.map expY args)) in
+          let doc_arg exp =
+            let epp = expY exp in
+            match is_auto_decomposed_exist (env_of exp) (typ_of exp) with
+            | Some _ ->
+               let proj = if effectful (effect_of exp) then "projT1_m" else "projT1" in
+               parens (string proj ^/^ epp)
+            | None -> epp
+          in
+          let epp = hang 2 (flow (break 1) (call :: List.map doc_arg args)) in
           let epp = match is_auto_decomposed_exist (env_of full_exp) (typ_of full_exp) with
-                        | Some _ -> string "build_ex" ^^ space ^^ parens epp
+                        | Some _ -> string "build_ex_m" ^/^ parens epp
                         | None -> epp
           in wrap_parens epp
        (* temporary hack to make the loop body a function of the temporary variables *)
@@ -1610,12 +1568,12 @@ let doc_exp, doc_let =
             if effectful eff
             then "autocast_m", "projT1_m"
             else "autocast",   "projT1" in
-          let epp = if unpack && not (effectful eff) then string proj_id ^^ space ^^ parens epp else epp in
-          let epp = if projbool && not (effectful eff) then string "projBool" ^^ space ^^ parens epp else epp in
+          let epp = if unpack && not (effectful eff) then string proj_id ^/^ parens epp else epp in
+          let epp = if projbool && not (effectful eff) then string "projT1" ^/^ parens epp else epp in
           let epp = if autocast then string autocast_id ^^ space ^^ parens epp else epp in
           let epp =
             if effectful eff && packeff && not unpack
-            then string "build_ex_m" ^^ space ^^ parens epp
+            then string "build_ex_m" ^^ break 1 ^^ parens epp
             else epp
           in
           liftR (if aexp_needed then parens (align epp) else epp)
@@ -1701,24 +1659,24 @@ let doc_exp, doc_let =
                  otherwise derive the new type from the old one. *)
               if alpha_equivalent env inner_typ cast_typ
               then epp
-              else string "derive_m" ^^ space ^^ epp
+              else string "derive_m" ^/^ epp
            | ExGeneral, ExNone ->
-              string "projT1_m" ^^ space ^^ epp
+              string "projT1_m" ^/^ epp
            | ExNone, ExGeneral ->
-              string "build_ex_m" ^^ space ^^ epp
+              string "build_ex_m" ^/^ epp
            | ExNone, ExNone -> epp
          else match cast_ex with
-              | ExGeneral -> string "build_ex" ^^ space ^^ epp
+              | ExGeneral -> string "build_ex" ^/^ epp
               | ExNone -> epp
        in
        let epp = epp ^/^ doc_tannot ctxt (env_of e) effects typ in
        let epp =
          if effects then
            match cast_ex, outer_ex with
-           | ExGeneral, ExNone -> string "projT1_m" ^^ space ^^ parens epp
+           | ExGeneral, ExNone -> string "projT1_m" ^/^ parens epp
            | _ -> epp
          else match cast_ex with
-              | ExGeneral -> string "projT1" ^^ space ^^ parens epp
+              | ExGeneral -> string "projT1" ^/^ parens epp
               | ExNone -> epp
        in
        let epp =
