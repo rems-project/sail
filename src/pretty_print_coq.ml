@@ -1278,7 +1278,35 @@ let doc_exp, doc_let =
     | E_loop _ ->
        raise (report l __POS__ "E_loop should have been rewritten before pretty-printing")
     | E_let(leb,e) ->
-       let epp = let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ expN e in
+       (* TODO: move the context update out of here and use for other binders, too *)
+       let pat = match leb with LB_aux (LB_val (p,_),_) -> p in
+       let old_env = env_of_annot (l,annot) in
+       let new_env = env_of e in
+       let is_new_binding id =
+         match Env.lookup_id ~raw:true id old_env with
+         | Unbound -> true
+         | _ -> false
+       in
+       let new_ids = IdSet.filter is_new_binding (pat_ids pat) in
+       let merge_new_kids id m =
+         let typ = lvar_typ (Env.lookup_id ~raw:true id new_env) in
+         debug ctxt (lazy (" considering tyvar mapping for " ^ string_of_id id ^ " at type " ^ string_of_typ typ ));
+         match destruct_numeric typ with
+         | Some ([],_,Nexp_aux (Nexp_var kid,_)) ->
+            begin try
+              let _ = Env.get_typ_var kid old_env in
+              debug ctxt (lazy (" tyvar " ^ string_of_kid kid ^ " already in env"));
+              m
+            with _ ->
+              debug ctxt (lazy (" adding tyvar mapping " ^ string_of_kid kid ^ " to " ^ string_of_id id));
+              KBindings.add kid id m
+            end
+         | _ ->
+            debug ctxt (lazy (" not suitable type"));
+            m
+       in
+       let new_ctxt = { ctxt with kid_id_renames = IdSet.fold merge_new_kids new_ids ctxt.kid_id_renames } in
+       let epp = let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ top_exp new_ctxt false e in
        if aexp_needed then parens epp else epp
     | E_app(f,args) ->
        begin match f with
