@@ -61,6 +61,20 @@ Definition and_boolM {rv E} (l : monad rv bool E) (r : monad rv bool E) : monad 
 Definition or_boolM {rv E} (l : monad rv bool E) (r : monad rv bool E) : monad rv bool E :=
  l >>= (fun l => if l then returnm true else r).
 
+Definition and_boolBM {rv E P Q} (l : monad rv (Bool P) E) (r : monad rv (Bool Q) E) : monad rv (Bool (P /\ Q)) E.
+refine (
+ l >>= (fun l => if l then r >>= fun r => if r then returnm (left _) else returnm (right _) else returnm (right _))
+).
+all: tauto.
+Defined.
+
+Definition or_boolBM {rv E P Q} (l : monad rv (Bool P) E) (r : monad rv (Bool Q) E) : monad rv (Bool (P \/ Q)) E.
+refine (
+ l >>= (fun l => if l then returnm (left _) else r >>= fun r => if r then returnm (left _) else returnm (right _))
+).
+all: tauto.
+Defined.
+
 (*val bool_of_bitU_fail : forall 'rv 'e. bitU -> monad 'rv bool 'e*)
 Definition bool_of_bitU_fail {rv E} (b : bitU) : monad rv bool E :=
 match b with

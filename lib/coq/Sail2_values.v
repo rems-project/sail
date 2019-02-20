@@ -64,6 +64,16 @@ Lemma projBool_false {P:Prop} {b:Bool P} : projBool b = false <-> ~P.
 destruct b; simpl; intuition.
 Qed.
 
+Definition and_boolB {P Q} (l : Bool P) (r : Bool Q) : Bool (P /\ Q).
+refine (if l then if r then left _ else right _ else right _).
+all: tauto.
+Defined.
+
+Definition or_boolB {P Q} (l : Bool P) (r : Bool Q) : Bool (P \/ Q).
+refine (if l then left _ else if r then left _ else right _).
+all: tauto.
+Defined.
+
 
 Definition generic_eq {T:Type} (x y:T) `{Decidable (x = y)} := Decidable_witness.
 Definition generic_neq {T:Type} (x y:T) `{Decidable (x = y)} := negb Decidable_witness.

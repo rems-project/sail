@@ -350,6 +350,14 @@ match nc1, nc2 with
 | _, NC_aux (NC_true,_) -> nc1
 | _,_ -> nc_and nc1 nc2
 
+let nice_imp nc1 nc2 =
+match nc1, nc2 with
+| NC_aux (NC_true,_), _ -> nc2
+| _, NC_aux (NC_true,_) -> nc2
+| NC_aux (NC_false,l), _ -> NC_aux (NC_true,l)
+| _, NC_aux (NC_false,_) -> nc_not nc1
+| _,_ -> nc_or (nc_not nc1) nc2
+
 let nice_iff nc1 nc2 =
 match nc1, nc2 with
 | NC_aux (NC_true,_), _ -> nc2
@@ -370,30 +378,151 @@ let doc_nc_fn id =
   | "not" -> string "negb"
   | s -> string s
 
-type ex_atom_bool = ExBool_simple | ExBool_val of bool | ExBool_complex
+let merge_bool_count = KBindings.union (fun _ m n -> Some (m+n))
 
-let non_trivial_ex_atom_bool l kopts nc atom_nc =
-  let vars = KOptSet.union (kopts_of_constraint nc) (kopts_of_constraint atom_nc) in
-  let exists = KOptSet.of_list kopts in
-  if KOptSet.subset vars exists then
-    let kenv = List.fold_left (fun kenv kopt -> KBindings.add (kopt_kid kopt) (unaux_kind (kopt_kind kopt)) kenv) KBindings.empty kopts in
-    match Constraint.call_smt l kenv (nc_and nc atom_nc),
-          Constraint.call_smt l kenv (nc_and nc (nc_not atom_nc)) with
-    | Sat, Sat -> ExBool_simple
-    | Sat, Unsat -> ExBool_val true
-    | Unsat, Sat -> ExBool_val false
-    | _ -> ExBool_complex
-  else ExBool_complex
+let rec count_bool_vars (NC_aux (nc,_)) =
+  let count_arg (A_aux (arg,_)) =
+    match arg with
+    | A_bool nc -> count_bool_vars nc
+    | A_nexp _ | A_typ _ | A_order _ -> KBindings.empty
+  in
+  match nc with
+  | NC_or (nc1,nc2)
+  | NC_and (nc1,nc2)
+    -> merge_bool_count (count_bool_vars nc1) (count_bool_vars nc2)
+  | NC_var kid -> KBindings.singleton kid 1
+  | NC_equal _ | NC_bounded_ge _ | NC_bounded_le _ | NC_not_equal _
+  | NC_set _ | NC_true | NC_false
+    -> KBindings.empty
+  | NC_app (_,args) ->
+     List.fold_left merge_bool_count KBindings.empty (List.map count_arg args)
 
-type ex_kind = ExNone | ExBool | ExGeneral
+type prop_dir = Implied_by | Implies | Iff
+
+type atom_bool_prop =
+  Bool_boring
+| Bool_complex of prop_dir * kinded_id list * n_constraint * n_constraint
+
+let simplify_atom_bool l kopts nc atom_nc =
+prerr_endline ("simplify " ^ string_of_n_constraint nc ^ " for bool " ^ string_of_n_constraint atom_nc);
+  let counter = ref 0 in
+  let is_bound kid = List.exists (fun kopt -> Kid.compare kid (kopt_kid kopt) == 0) kopts in
+  let bool_vars = merge_bool_count (count_bool_vars nc) (count_bool_vars atom_nc) in
+  let lin_bool_vars = KBindings.filter (fun kid n -> is_bound kid && n = 1) bool_vars in
+  let rec simplify (NC_aux (nc,l) as nc_full) =
+    let is_ex_var news (NC_aux (nc,_)) =
+      match nc with
+      | NC_var kid when KBindings.mem kid lin_bool_vars -> Some kid
+      | NC_var kid when KidSet.mem kid news -> Some kid
+      | _ -> None
+    in
+    let replace kills vars =
+      let v = mk_kid ("simp#" ^ string_of_int !counter) in
+      let kills = KidSet.union kills (KidSet.of_list vars) in
+      counter := !counter + 1;
+      KidSet.singleton v, kills, NC_aux (NC_var v,l)
+    in
+    match nc with
+    | NC_or (nc1,nc2) -> begin
+       let new1, kill1, nc1 = simplify nc1 in
+       let new2, kill2, nc2 = simplify nc2 in
+       let news, kills = KidSet.union new1 new2, KidSet.union kill1 kill2 in
+       match is_ex_var news nc1, is_ex_var news nc2 with
+       | Some kid1, Some kid2 -> replace kills [kid1;kid2]
+       | _ -> news, kills, NC_aux (NC_or (nc1,nc2),l)
+      end
+    | NC_and (nc1,nc2) -> begin
+       let new1, kill1, nc1 = simplify nc1 in
+       let new2, kill2, nc2 = simplify nc2 in
+       let news, kills = KidSet.union new1 new2, KidSet.union kill1 kill2 in
+       match is_ex_var news nc1, is_ex_var news nc2 with
+       | Some kid1, Some kid2 -> replace kills [kid1;kid2]
+       | _ -> news, kills, NC_aux (NC_and (nc1,nc2),l)
+      end
+    | NC_app (Id_aux (Id "not",_) as id,[A_aux (A_bool nc1,al)]) -> begin
+       let new1, kill1, nc1 = simplify nc1 in
+       match is_ex_var new1 nc1 with
+       | Some kid -> replace kill1 [kid]
+       | None -> new1, kill1, NC_aux (NC_app (id,[A_aux (A_bool nc1,al)]),l)
+      end
+    (* We don't currently recurse into general uses of NC_app, but the
+       "boring" cases we really want to get rid of won't contain
+       those. *)
+    | _ -> KidSet.empty, KidSet.empty, nc_full
+  in
+  let new_nc, kill_nc, nc = simplify nc in
+  let new_atom, kill_atom, atom_nc = simplify atom_nc in
+  let new_kids = KidSet.union new_nc new_atom in
+  let kill_kids = KidSet.union kill_nc kill_atom in
+  let rec strip_implied (NC_aux (nc,l) as nc_full) =
+    match nc with
+    | NC_var kid when KBindings.mem kid lin_bool_vars -> None
+    | NC_var kid when KidSet.mem kid new_kids -> None
+    | NC_and (nc1,nc2) -> begin
+       match strip_implied nc1, strip_implied nc2 with
+       | Some nc1, Some nc2 -> Some (NC_aux (NC_and (nc1,nc2),l))
+       | Some nc, None
+       | None, Some nc -> Some nc
+       | None, None -> None
+      end
+    | NC_or (nc1,nc2) -> begin
+       match strip_implied nc1, strip_implied nc2 with
+       | Some nc1, Some nc2 -> Some (NC_aux (NC_or (nc1,nc2),l))
+       | _ -> None
+      end
+    | _ -> Some nc_full
+  in
+  let rec strip_implies (NC_aux (nc,l) as nc_full) =
+    match nc with
+    | NC_var kid when KBindings.mem kid lin_bool_vars -> None
+    | NC_var kid when KidSet.mem kid new_kids -> None
+    | NC_and (nc1,nc2) -> begin
+       match strip_implied nc1, strip_implied nc2 with
+       | Some nc1, Some nc2 -> Some (NC_aux (NC_and (nc1,nc2),l))
+       | _ -> None
+      end
+    | NC_or (nc1,nc2) -> begin
+       match strip_implied nc1, strip_implied nc2 with
+       | Some nc1, Some nc2 -> Some (NC_aux (NC_or (nc1,nc2),l))
+       | Some nc, None
+       | None, Some nc -> Some nc
+       | None, None -> None
+      end
+    | _ -> Some nc_full
+  in
+  let strip_implied (NC_aux (_,l) as nc) =
+    Util.option_default (NC_aux (NC_true,l)) (strip_implied nc)
+  in
+  let strip_implies (NC_aux (_,l) as nc) =
+    Util.option_default (NC_aux (NC_true,l)) (strip_implies nc)
+  in
+  let kopts =
+    List.map (fun kid -> mk_kopt K_bool kid) (KidSet.elements new_kids) @
+      List.filter (fun kopt -> not (KidSet.mem (kopt_kid kopt) kill_kids)) kopts
+  in
+prerr_endline ("now have " ^ string_of_n_constraint nc ^ " for bool " ^ string_of_n_constraint atom_nc);
+  match atom_nc with
+  | NC_aux (NC_var kid,_) when KBindings.mem kid lin_bool_vars -> Bool_boring
+  | NC_aux (NC_var kid,_) when KidSet.mem kid new_kids -> Bool_boring
+  | NC_aux (NC_and (NC_aux (NC_var kid,_),nc'),_) when KBindings.mem kid lin_bool_vars ->
+     Bool_complex (Implies, kopts, nc, strip_implied nc')
+  | NC_aux (NC_and (nc',NC_aux (NC_var kid,_)),_) when KBindings.mem kid lin_bool_vars ->
+     Bool_complex (Implies, kopts, nc, strip_implied nc')
+  | NC_aux (NC_or (NC_aux (NC_var kid,_),nc'),_) when KBindings.mem kid lin_bool_vars ->
+     Bool_complex (Implied_by, kopts, nc, strip_implies nc')
+  | NC_aux (NC_or (nc',NC_aux (NC_var kid,_)),_) when KBindings.mem kid lin_bool_vars ->
+     Bool_complex (Implied_by, kopts, nc, strip_implies nc')
+  | _ -> Bool_complex (Iff, kopts, nc, atom_nc)
+
+
+type ex_kind = ExNone | ExGeneral
 
 let classify_ex_type (Typ_aux (t,l) as t0) =
   match t with
   | Typ_exist (kopts,nc,(Typ_aux (Typ_app (Id_aux (Id "atom_bool",_), [A_aux (A_bool atom_nc,_)]),_) as t1)) -> begin
-      match non_trivial_ex_atom_bool l kopts nc atom_nc with
-      | ExBool_simple -> ExNone, t1
-      | ExBool_val _ -> ExBool, t1
-      | ExBool_complex -> ExGeneral, t1
+      match simplify_atom_bool l kopts nc atom_nc with
+      | Bool_boring -> ExNone, t1
+      | Bool_complex _ -> ExGeneral, t1
     end
   | Typ_exist (_,_,t1) -> ExGeneral,t1
   | _ -> ExNone,t0
@@ -505,12 +634,15 @@ let rec doc_typ_fns ctx =
                         ampersand;
                         doc_arithfact ctx ~exists:(List.map kopt_kid kopts) ?extra:length_constraint_pp nc])
           | Typ_aux (Typ_app (Id_aux (Id "atom_bool",_), [A_aux (A_bool atom_nc,_)]),_) -> begin
-             match non_trivial_ex_atom_bool l kopts nc atom_nc with
-             | ExBool_simple -> string "bool"
-             | ExBool_val t -> string "Bool(" ^^ if t then string "True)" else string "False)"
-             | ExBool_complex ->
+             match simplify_atom_bool l kopts nc atom_nc with
+             | Bool_boring -> string "bool"
+             | Bool_complex (dir,kopts,nc,atom_nc) ->
                 let var = mk_kid "_bool" in (* TODO collision avoid *)
-                let nc = nice_and (nice_iff (nc_var var) atom_nc) nc in
+                let nc = nice_and
+                           (match dir with
+                            | Implies -> nice_imp (nc_var var) atom_nc
+                            | Implied_by -> nice_imp atom_nc (nc_var var)
+                            | Iff -> nice_iff (nc_var var) atom_nc) nc in
                 braces (separate space
                           [doc_var ctx var; colon; string "bool";
                            ampersand;
@@ -816,9 +948,9 @@ let is_ctor env id = match Env.lookup_id id env with
 
 let is_auto_decomposed_exist env typ =
   let typ = expand_range_type typ in
-  match destruct_exist_plain (Env.expand_synonyms env typ) with
-  | Some (_, _, typ') -> Some typ'
-  | _ -> None
+  match classify_ex_type (Env.expand_synonyms env typ) with
+  | ExGeneral, typ' -> Some typ'
+  | ExNone, _ -> None
 
 (*Note: vector concatenation, literal vectors, indexed vectors, and record should
   be removed prior to pp. The latter two have never yet been seen
@@ -828,6 +960,7 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
   let typ = Env.expand_synonyms env typ in
   match exists_as_pairs, is_auto_decomposed_exist env typ with
   | true, Some typ' ->
+prerr_endline ("decomposing for pattern " ^ string_of_pat pat ^ " at type " ^ string_of_typ typ ^ " with internal type " ^ string_of_typ typ');
      let pat_pp = doc_pat ctxt true true (pat, typ') in
      let pat_pp = separate space [string "existT"; underscore; pat_pp; underscore] in
      if apat_needed then parens pat_pp else pat_pp
@@ -1068,10 +1201,9 @@ let doc_exp, doc_let =
       match destruct_exist_plain typ with
       | None -> epp
       | Some (kopts,nc,Typ_aux (Typ_app (Id_aux (Id "atom_bool",_), [A_aux (A_bool atom_nc,_)]),l)) -> begin
-          match non_trivial_ex_atom_bool l kopts nc atom_nc with
-          | ExBool_simple -> epp
-          | ExBool_val t -> wrap_parens (string "build_Bool" ^/^ epp)
-          | ExBool_complex -> wrap_parens (string "build_ex" ^/^ epp)
+          match simplify_atom_bool l kopts nc atom_nc with
+          | Bool_boring -> epp
+          | Bool_complex _ -> wrap_parens (string "build_ex" ^/^ epp)
         end
       | Some _ ->
          wrap_parens (string "build_ex" ^/^ epp)
@@ -1088,10 +1220,9 @@ let doc_exp, doc_let =
            let build_ex, out_typ =
              match destruct_exist_plain typ' with
              | Some (kopts,nc,(Typ_aux (Typ_app (Id_aux (Id "atom_bool",_), [A_aux (A_bool atom_nc,_)]),l) as t)) -> begin
-                 match non_trivial_ex_atom_bool l kopts nc atom_nc with
-                 | ExBool_simple -> None, t
-                 | ExBool_val _ -> Some "build_Bool", t
-                 | ExBool_complex -> Some "build_ex", t
+                 match simplify_atom_bool l kopts nc atom_nc with
+                 | Bool_boring -> None, t
+                 | Bool_complex _ -> Some "build_ex", t
                end
              | Some (_,_,t) -> Some "build_ex", t
              | None -> None, typ'
@@ -1204,7 +1335,11 @@ let doc_exp, doc_let =
        | Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)
          when effectful (effect_of full_exp) ->
           let call = doc_id (append_id f "M") in
-          wrap_parens (hang 2 (flow (break 1) (call :: List.map expY args)))
+          let epp = hang 2 (flow (break 1) (call :: List.map expY args)) in
+          let epp = match is_auto_decomposed_exist (env_of full_exp) (typ_of full_exp) with
+                        | Some _ -> string "build_ex" ^^ space ^^ parens epp
+                        | None -> epp
+          in wrap_parens epp
        (* temporary hack to make the loop body a function of the temporary variables *)
        | Id_aux (Id "None", _) as none -> doc_id_ctor none
        | Id_aux (Id "foreach#", _) ->
@@ -1574,7 +1709,6 @@ let doc_exp, doc_let =
            | ExNone, ExNone -> epp
          else match cast_ex with
               | ExGeneral -> string "build_ex" ^^ space ^^ epp
-              | ExBool -> string "build_Bool" ^^ space ^^ epp
               | ExNone -> epp
        in
        let epp = epp ^/^ doc_tannot ctxt (env_of e) effects typ in
@@ -1582,11 +1716,9 @@ let doc_exp, doc_let =
          if effects then
            match cast_ex, outer_ex with
            | ExGeneral, ExNone -> string "projT1_m" ^^ space ^^ parens epp
-           | ExBool, ExNone -> string "projBool_m" ^^ space ^^ parens epp
            | _ -> epp
          else match cast_ex with
               | ExGeneral -> string "projT1" ^^ space ^^ parens epp
-              | ExBool -> string "projBool" ^^ space ^^ parens epp
               | ExNone -> epp
        in
        let epp =
@@ -1759,7 +1891,7 @@ let doc_exp, doc_let =
                       let binder = match classify_ex_type (Env.expand_synonyms (env_of e1) full_typ) with
                         | ExGeneral, _ ->
                            squote ^^ parens (separate space [string "existT"; underscore; doc_id id; underscore; colon; doc_typ ctxt typ])
-                        | (ExBool | ExNone), _ ->
+                        | ExNone, _ ->
                            parens (separate space [doc_id id; colon; doc_typ ctxt typ])
                       in separate space [string ">>= fun"; binder; bigarrow]
                 | _ ->
@@ -2244,7 +2376,6 @@ let doc_funcl mutrec rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let build_ex, ret_typ = replace_atom_return_type ret_typ in
   let build_ex = match classify_ex_type (Env.expand_synonyms env (expand_range_type ret_typ)) with
     | ExGeneral, _ -> Some "build_ex"
-    | ExBool, _ -> Some "build_Bool"
     | ExNone, _ -> build_ex
   in
   let ids_to_avoid = all_ids pexp in
