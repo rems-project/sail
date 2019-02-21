@@ -85,5 +85,5 @@ clean:
 	-rm -f code_riscv.tex
 	-rm -rf code_myreplicatebits/
 	-rm -f code_myreplicatebits.tex
-	-rm *.aux
-	-rm *.log
+	-rm -f *.aux
+	-rm -f *.log

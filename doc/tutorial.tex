@@ -372,7 +372,7 @@ Sail allows numerous ways to match on bitvectors, for example:
 \begin{lstlisting}
 match v {
   0xFF => print("hex match"),
-  0x0000_0001 => print("binary match"),
+  0b0000_0001 => print("binary match"),
   0xF @ v : bits(4) => print("vector concatenation pattern"),
   0xF @ [bitone, _, b1, b0] => print("vector pattern"),
   _ : bits(4) @ v : bits(4) => print("annotated wildcard pattern")
@@ -499,7 +499,7 @@ written
 \end{lstlisting}
 but it would not have type-checked. The reason for this is if a
 mutable variable is declared without a type, Sail will try to infer
-the most specific type from the left hand side of the
+the most specific type from the right hand side of the
 expression. However, in this case Sail will infer the type as
 \ll{int(3)} and will therefore complain when we try to reassign it to
 \ll{2}, as the type \ll{int(2)} is not a subtype of \ll{int(3)}. We
@@ -629,7 +629,7 @@ implicitly dereference registers if that semantics is desired for a
 specific specification that makes heavy use of register references,
 like so:
 \begin{lstlisting}
-val cast auto_reg_deref = "reg_deref" : forall ('a : Type). register('a) -> a effect {rreg}
+val cast auto_reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 \end{lstlisting}
 
 
@@ -687,7 +687,7 @@ the names of its fields.
 \subsubsection{Unions}
 \label{sec:union}
 
-As an example, the \ll{maybe} type \'{a} la Haskell could be defined
+As an example, the \ll{maybe} type \`{a} la Haskell could be defined
 in Sail as follows:
 \begin{lstlisting}
 union maybe ('a : Type) = {
