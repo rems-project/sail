@@ -1460,11 +1460,23 @@ void get_time_ns(sail_int *rop, const unit u)
 
 // ARM specific optimisations
 
-void arm_align(lbits *rop, const lbits x_bv, const sail_int y_mpz) {
+void arm_align(lbits *rop, const lbits x_bv, const sail_int y_mpz)
+{
   uint64_t x = mpz_get_ui(*x_bv.bits);
   uint64_t y = mpz_get_ui(y_mpz);
   uint64_t z = y * (x / y);
   mp_bitcnt_t n = x_bv.len;
   mpz_set_ui(*rop->bits, safe_rshift(UINT64_MAX, 64l - (n - 1)) & z);
   rop->len = n;
+}
+
+// Monomorphisation
+void make_the_value(sail_int *rop, const sail_int op)
+{
+  mpz_set(*rop, op);
+}
+
+void size_itself_int(sail_int *rop, const sail_int op)
+{
+  mpz_set(*rop, op);
 }

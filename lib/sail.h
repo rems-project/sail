@@ -153,6 +153,9 @@ SAIL_INT_FUNCTION(pow_int, sail_int, const sail_int, const sail_int);
 
 SAIL_INT_FUNCTION(pow2, sail_int, const sail_int);
 
+void make_the_value(sail_int *, const sail_int);
+void size_itself_int(sail_int *, const sail_int);
+
 /* ***** Sail bitvectors ***** */
 
 typedef uint64_t fbits;

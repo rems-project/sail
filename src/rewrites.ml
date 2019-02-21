@@ -5172,10 +5172,21 @@ let rewrite_defs_ocaml = [
 
 let rewrite_defs_c = [
   ("no_effect_check", (fun _ defs -> opt_no_effects := true; defs));
+
+  (* Remove bidirectional mappings *)
   ("realise_mappings", rewrite_defs_realise_mappings);
   ("toplevel_string_append", rewrite_defs_toplevel_string_append);
   ("pat_string_append", rewrite_defs_pat_string_append);
   ("mapping_builtins", rewrite_defs_mapping_patterns);
+
+  (* Monomorphisation *)
+  ("mono_rewrites", if_mono mono_rewrites);
+  ("recheck_defs", if_mono recheck_defs);
+  ("rewrite_toplevel_nexps", if_mono rewrite_toplevel_nexps);
+  ("monomorphise", if_mono monomorphise);
+  ("rewrite_atoms_to_singletons", if_mono (fun _ -> Monomorphise.rewrite_atoms_to_singletons));
+  ("recheck_defs", if_mono recheck_defs);
+
   ("rewrite_undefined", rewrite_undefined_if_gen false);
   ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("remove_not_pats", rewrite_defs_not_pats);
