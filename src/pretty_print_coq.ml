@@ -404,7 +404,7 @@ type atom_bool_prop =
 | Bool_complex of kinded_id list * n_constraint * n_constraint
 
 let simplify_atom_bool l kopts nc atom_nc =
-prerr_endline ("simplify " ^ string_of_n_constraint nc ^ " for bool " ^ string_of_n_constraint atom_nc);
+(*prerr_endline ("simplify " ^ string_of_n_constraint nc ^ " for bool " ^ string_of_n_constraint atom_nc);*)
   let counter = ref 0 in
   let is_bound kid = List.exists (fun kopt -> Kid.compare kid (kopt_kid kopt) == 0) kopts in
   let bool_vars = merge_bool_count (count_bool_vars nc) (count_bool_vars atom_nc) in
@@ -458,7 +458,7 @@ prerr_endline ("simplify " ^ string_of_n_constraint nc ^ " for bool " ^ string_o
     List.map (fun kid -> mk_kopt K_bool kid) (KidSet.elements new_kids) @
       List.filter (fun kopt -> not (KidSet.mem (kopt_kid kopt) kill_kids)) kopts
   in
-prerr_endline ("now have " ^ string_of_n_constraint nc ^ " for bool " ^ string_of_n_constraint atom_nc);
+(*prerr_endline ("now have " ^ string_of_n_constraint nc ^ " for bool " ^ string_of_n_constraint atom_nc);*)
   match atom_nc with
   | NC_aux (NC_var kid,_) when KBindings.mem kid lin_bool_vars -> Bool_boring
   | NC_aux (NC_var kid,_) when KidSet.mem kid new_kids -> Bool_boring
@@ -910,7 +910,7 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
   let typ = Env.expand_synonyms env typ in
   match exists_as_pairs, is_auto_decomposed_exist env typ with
   | true, Some typ' ->
-prerr_endline ("decomposing for pattern " ^ string_of_pat pat ^ " at type " ^ string_of_typ typ ^ " with internal type " ^ string_of_typ typ');
+(*prerr_endline ("decomposing for pattern " ^ string_of_pat pat ^ " at type " ^ string_of_typ typ ^ " with internal type " ^ string_of_typ typ');*)
      let pat_pp = doc_pat ctxt true true (pat, typ') in
      let pat_pp = separate space [string "existT"; underscore; pat_pp; underscore] in
      if apat_needed then parens pat_pp else pat_pp
