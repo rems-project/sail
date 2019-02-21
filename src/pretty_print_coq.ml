@@ -1125,6 +1125,32 @@ let is_prefix s s' =
   String.length s' >= l &&
   String.sub s' 0 l = s
 
+let merge_new_tyvars ctxt old_env pat new_env =
+  let is_new_binding id =
+    match Env.lookup_id ~raw:true id old_env with
+    | Unbound -> true
+    | _ -> false
+  in
+  let new_ids = IdSet.filter is_new_binding (pat_ids pat) in
+  let merge_new_kids id m =
+    let typ = lvar_typ (Env.lookup_id ~raw:true id new_env) in
+    debug ctxt (lazy (" considering tyvar mapping for " ^ string_of_id id ^ " at type " ^ string_of_typ typ ));
+    match destruct_numeric typ with
+    | Some ([],_,Nexp_aux (Nexp_var kid,_)) ->
+       begin try
+           let _ = Env.get_typ_var kid old_env in
+           debug ctxt (lazy (" tyvar " ^ string_of_kid kid ^ " already in env"));
+           m
+         with _ ->
+           debug ctxt (lazy (" adding tyvar mapping " ^ string_of_kid kid ^ " to " ^ string_of_id id));
+           KBindings.add kid id m
+       end
+    | _ ->
+       debug ctxt (lazy (" not suitable type"));
+       m
+  in
+  { ctxt with kid_id_renames = IdSet.fold merge_new_kids new_ids ctxt.kid_id_renames }
+
 let prefix_recordtype = true
 let report = Reporting.err_unreachable
 let doc_exp, doc_let =
@@ -1278,34 +1304,8 @@ let doc_exp, doc_let =
     | E_loop _ ->
        raise (report l __POS__ "E_loop should have been rewritten before pretty-printing")
     | E_let(leb,e) ->
-       (* TODO: move the context update out of here and use for other binders, too *)
        let pat = match leb with LB_aux (LB_val (p,_),_) -> p in
-       let old_env = env_of_annot (l,annot) in
-       let new_env = env_of e in
-       let is_new_binding id =
-         match Env.lookup_id ~raw:true id old_env with
-         | Unbound -> true
-         | _ -> false
-       in
-       let new_ids = IdSet.filter is_new_binding (pat_ids pat) in
-       let merge_new_kids id m =
-         let typ = lvar_typ (Env.lookup_id ~raw:true id new_env) in
-         debug ctxt (lazy (" considering tyvar mapping for " ^ string_of_id id ^ " at type " ^ string_of_typ typ ));
-         match destruct_numeric typ with
-         | Some ([],_,Nexp_aux (Nexp_var kid,_)) ->
-            begin try
-              let _ = Env.get_typ_var kid old_env in
-              debug ctxt (lazy (" tyvar " ^ string_of_kid kid ^ " already in env"));
-              m
-            with _ ->
-              debug ctxt (lazy (" adding tyvar mapping " ^ string_of_kid kid ^ " to " ^ string_of_id id));
-              KBindings.add kid id m
-            end
-         | _ ->
-            debug ctxt (lazy (" not suitable type"));
-            m
-       in
-       let new_ctxt = { ctxt with kid_id_renames = IdSet.fold merge_new_kids new_ids ctxt.kid_id_renames } in
+       let new_ctxt = merge_new_tyvars ctxt (env_of_annot (l,annot)) pat (env_of e) in
        let epp = let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ top_exp new_ctxt false e in
        if aexp_needed then parens epp else epp
     | E_app(f,args) ->
@@ -1794,7 +1794,7 @@ let doc_exp, doc_let =
        let only_integers e = expY e in
        let epp =
          group ((separate space [string "match"; only_integers e; string "with"]) ^/^
-                  (separate_map (break 1) (doc_case ctxt (typ_of e)) pexps) ^/^
+                  (separate_map (break 1) (doc_case ctxt (env_of_annot (l,annot)) (typ_of e)) pexps) ^/^
                     (string "end")) in
        if aexp_needed then parens (align epp) else align epp
     | E_try (e, pexps) ->
@@ -1803,7 +1803,7 @@ let doc_exp, doc_let =
          let epp =
            (* TODO capture avoidance for __catch_val *)
            group ((separate space [string try_catch; expY e; string "(fun __catch_val => match __catch_val with "]) ^/^
-                    (separate_map (break 1) (doc_case ctxt exc_typ) pexps) ^/^
+                    (separate_map (break 1) (doc_case ctxt (env_of_annot (l,annot)) exc_typ) pexps) ^/^
                       (string "end)")) in
          if aexp_needed then parens (align epp) else align epp
        else
@@ -1826,11 +1826,12 @@ let doc_exp, doc_let =
            debug ctxt (lazy ("Internal plet, pattern " ^ string_of_pat pat));
            debug ctxt (lazy (" type of e1 " ^ string_of_typ (typ_of e1)))
          in
+         let new_ctxt = merge_new_tyvars ctxt (env_of_annot (l,annot)) pat (env_of e2) in
          match pat, e1, e2 with
          | (P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _)),
            (E_aux (E_assert (assert_e1,assert_e2),_)), _ ->
             let epp = liftR (separate space [string "assert_exp'"; expY assert_e1; expY assert_e2]) in
-            let epp = infix 0 1 (string ">>= fun _ =>") epp (expN e2) in
+            let epp = infix 0 1 (string ">>= fun _ =>") epp (top_exp new_ctxt false e2) in
             if aexp_needed then parens (align epp) else align epp
          (* Special case because we don't handle variables with nested existentials well yet.
             TODO: check that id1 is not used in e2' *)
@@ -1854,7 +1855,7 @@ let doc_exp, doc_let =
                  separate space [string ">>= fun"; doc_id id; colon; doc_typ ctxt typ; bigarrow]              | _ ->
                  separate space [string ">>= fun"; squote ^^ doc_pat ctxt true true (pat', typ'); bigarrow]
             in
-            infix 0 1 middle e1_pp (expN e2')
+            infix 0 1 middle e1_pp (top_exp new_ctxt false e2')
          | _ ->
             let epp =
               let middle =
@@ -1883,7 +1884,7 @@ let doc_exp, doc_let =
                 | _ ->
                    separate space [string ">>= fun"; squote ^^ doc_pat ctxt true true (pat, typ_of e1); bigarrow]
               in
-              infix 0 1 middle (expY e1) (expN e2)
+              infix 0 1 middle (expY e1) (top_exp new_ctxt false e2)
             in
             if aexp_needed then parens (align epp) else epp
        end
@@ -1975,10 +1976,11 @@ let doc_exp, doc_let =
       else doc_id id in
     group (doc_op coloneq fname (top_exp ctxt true e))
 
-  and doc_case ctxt typ = function
+  and doc_case ctxt old_env typ = function
   | Pat_aux(Pat_exp(pat,e),_) ->
-    group (prefix 3 1 (separate space [pipe; doc_pat ctxt false false (pat,typ);bigarrow])
-                  (group (top_exp ctxt false e)))
+     let new_ctxt = merge_new_tyvars ctxt old_env pat (env_of e) in
+     group (prefix 3 1 (separate space [pipe; doc_pat ctxt false false (pat,typ);bigarrow])
+              (group (top_exp new_ctxt false e)))
   | Pat_aux(Pat_when(_,_,_),(l,_)) ->
     raise (Reporting.err_unreachable l __POS__
      "guarded pattern expression should have been rewritten before pretty-printing")
