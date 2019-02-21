@@ -324,7 +324,7 @@ typschm_opt =
 
 type 
 effect_opt_aux =  (* Optional effect annotation for functions *)
-   Effect_opt_pure (* sugar for empty effect set *)
+   Effect_opt_none (* sugar for empty effect set *)
  | Effect_opt_effect of atyp
 
 

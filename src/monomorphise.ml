@@ -201,7 +201,7 @@ let rec is_value (E_aux (e,(l,annot))) =
 
 let is_pure (Effect_opt_aux (e,_)) =
   match e with
-  | Effect_opt_pure -> true
+  | Effect_opt_none -> true
   | Effect_opt_effect (Effect_aux (Effect_set [],_)) -> true
   | _ -> false
 

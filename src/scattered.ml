@@ -66,8 +66,8 @@ let rec last_scattered_mapcl id = function
   | [] -> true
 
 (* Nothing cares about these and the AST should be changed *)
-let fake_effect_opt l = Effect_opt_aux (Effect_opt_pure, gen_loc l)
-let fake_rec_opt l = Rec_aux (Rec_rec, gen_loc l)
+let no_effect_opt l = Effect_opt_aux (Effect_opt_none, gen_loc l)
+let fake_rec_opt l = Rec_aux (Rec_nonrec, gen_loc l)
 
 let no_tannot_opt l = Typ_annot_opt_aux (Typ_annot_opt_none, gen_loc l)
 
@@ -95,7 +95,7 @@ let rec descatter' funcls mapcls = function
        | Some clauses -> List.rev (funcl :: clauses)
        | None -> [funcl]
      in
-     DEF_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, fake_effect_opt l, clauses),
+     DEF_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, no_effect_opt l, clauses),
                          (gen_loc l, Type_check.empty_tannot)))
      :: descatter' funcls mapcls defs
 

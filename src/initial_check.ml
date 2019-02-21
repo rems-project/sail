@@ -595,7 +595,7 @@ let to_ast_typschm_opt ctx (P.TypSchm_opt_aux(aux,l)) : tannot_opt ctx_out =
 
 let to_ast_effects_opt (P.Effect_opt_aux(e,l)) : effect_opt =
   match e with
-  | P.Effect_opt_pure -> Effect_opt_aux(Effect_opt_pure,l)
+  | P.Effect_opt_none -> Effect_opt_aux(Effect_opt_none,l)
   | P.Effect_opt_effect(typ) -> Effect_opt_aux(Effect_opt_effect(to_ast_effects typ),l)
 
 let to_ast_funcl ctx (P.FCL_aux(fcl,l) : P.funcl) : (unit funcl) =

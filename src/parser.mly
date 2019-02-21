@@ -133,7 +133,7 @@ let mk_recn = (Rec_aux((Rec_nonrec), Unknown))
 let mk_typqn = (TypQ_aux(TypQ_no_forall,Unknown))
 let mk_tannotn = Typ_annot_opt_aux(Typ_annot_opt_none,Unknown)
 let mk_tannot typq typ n m = Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ), loc n m)
-let mk_eannotn = Effect_opt_aux(Effect_opt_pure,Unknown)
+let mk_eannotn = Effect_opt_aux(Effect_opt_none,Unknown)
 
 let mk_typq kopts nc n m = TypQ_aux (TypQ_tq (List.map qi_id_of_kopt kopts @ nc), loc n m)
 

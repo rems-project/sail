@@ -3106,7 +3106,7 @@ let construct_toplevel_string_append_func env f_id pat =
   let new_val_spec, env = Type_check.check_val_spec env new_val_spec in
   let non_rec = (Rec_aux (Rec_nonrec, Parse_ast.Unknown)) in
   let no_tannot = (Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)) in
-  let effect_pure = (Effect_opt_aux (Effect_opt_pure, Parse_ast.Unknown)) in
+  let effect_none = (Effect_opt_aux (Effect_opt_none, Parse_ast.Unknown)) in
   let s_id = fresh_stringappend_id () in
   let arg_pat = mk_pat (P_id s_id) in
   (* We can ignore guards here because we've already removed them *)
@@ -3211,7 +3211,7 @@ let construct_toplevel_string_append_func env f_id pat =
   in
   let wildcard = mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_app (mk_id "None", [mk_lit_exp L_unit])))) in
   let new_match = mk_exp (E_case (mk_exp (E_id s_id), [strip_pexp new_pexp; wildcard])) in
-  let new_fun_def = FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl f_id arg_pat new_match]), (unk,())) in
+  let new_fun_def = FD_aux (FD_function (non_rec, no_tannot, effect_none, [mk_funcl f_id arg_pat new_match]), (unk,())) in
   let new_fun_def, env = Type_check.check_fundef env new_fun_def in
   List.flatten [new_val_spec; new_fun_def]
 
@@ -4339,7 +4339,7 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
     let backwards_matches_id = mk_id (string_of_id id ^ "_backwards_matches") in
 
     let non_rec = (Rec_aux (Rec_nonrec, Parse_ast.Unknown)) in
-    let effect_pure = (Effect_opt_aux (Effect_opt_pure, Parse_ast.Unknown)) in
+    let effect_none = (Effect_opt_aux (Effect_opt_none, Parse_ast.Unknown)) in
     (* We need to make sure we get the environment for the last mapping clause *)
     let env = match List.rev mapcls with
       | MCL_aux (_, mapcl_annot) :: _ -> env_of_annot mapcl_annot
@@ -4373,10 +4373,10 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
     let forwards_matches_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_bool_mapcl true forwards_matches_id) mapcls) |> List.flatten) @ [wildcard])) in
     let backwards_matches_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_bool_mapcl false backwards_matches_id) mapcls) |> List.flatten) @ [wildcard])) in
 
-    let forwards_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl forwards_id arg_pat forwards_match]), (l, ()))) in
-    let backwards_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl backwards_id arg_pat backwards_match]), (l, ()))) in
-    let forwards_matches_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl forwards_matches_id arg_pat forwards_matches_match]), (l, ()))) in
-    let backwards_matches_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl backwards_matches_id arg_pat backwards_matches_match]), (l, ()))) in
+    let forwards_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_none, [mk_funcl forwards_id arg_pat forwards_match]), (l, ()))) in
+    let backwards_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_none, [mk_funcl backwards_id arg_pat backwards_match]), (l, ()))) in
+    let forwards_matches_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_none, [mk_funcl forwards_matches_id arg_pat forwards_matches_match]), (l, ()))) in
+    let backwards_matches_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_none, [mk_funcl backwards_matches_id arg_pat backwards_matches_match]), (l, ()))) in
 
     typ_debug (lazy (Printf.sprintf "forwards for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_fun |> Pretty_print_sail.to_string)));
     typ_debug (lazy (Printf.sprintf "backwards for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_fun |> Pretty_print_sail.to_string)));
@@ -4395,7 +4395,7 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
               let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
               let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
               let forwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl true prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
-              let forwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl prefix_id arg_pat forwards_prefix_match]), (l, ()))) in
+              let forwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_none, [mk_funcl prefix_id arg_pat forwards_prefix_match]), (l, ()))) in
               typ_debug (lazy (Printf.sprintf "forwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_prefix_fun |> Pretty_print_sail.to_string)));
               let forwards_prefix_fun, _ = Type_check.check_fundef env forwards_prefix_fun in
               forwards_prefix_spec @ forwards_prefix_fun
@@ -4405,7 +4405,7 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
                 let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, (fun _ -> None), false), (Parse_ast.Unknown,())) in
                 let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
                 let backwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl false prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
-                let backwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_pure, [mk_funcl prefix_id arg_pat backwards_prefix_match]), (l, ()))) in
+                let backwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_none, [mk_funcl prefix_id arg_pat backwards_prefix_match]), (l, ()))) in
                 typ_debug (lazy (Printf.sprintf "backwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_prefix_fun |> Pretty_print_sail.to_string)));
                 let backwards_prefix_fun, _ = Type_check.check_fundef env backwards_prefix_fun in
                 backwards_prefix_spec @ backwards_prefix_fun
@@ -4937,7 +4937,7 @@ let rewrite_explicit_measure env (Defs defs) =
         match Bindings.find id measures with
         | (measure_pat, measure_exp) ->
            let e = match e with
-             | Effect_opt_aux (Effect_opt_pure, _) ->
+             | Effect_opt_aux (Effect_opt_none, _) ->
                 Effect_opt_aux (Effect_opt_effect (mk_effect [BE_escape]), loc)
              | Effect_opt_aux (Effect_opt_effect eff,_) ->
                 Effect_opt_aux (Effect_opt_effect (add_escape eff), loc)

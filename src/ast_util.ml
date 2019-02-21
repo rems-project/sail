@@ -116,7 +116,7 @@ let mk_qi_kopt kopt = QI_aux (QI_id kopt, Parse_ast.Unknown)
 
 let mk_fundef funcls =
   let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown) in
-  let effect_opt = Effect_opt_aux (Effect_opt_pure, Parse_ast.Unknown) in
+  let effect_opt = Effect_opt_aux (Effect_opt_none, Parse_ast.Unknown) in
   let rec_opt = Rec_aux (Rec_nonrec, Parse_ast.Unknown) in
   DEF_fundef
    (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), no_annot))

@@ -773,7 +773,7 @@ rec_opt :: 'Rec_' ::=
 effect_opt :: 'Effect_opt_' ::=
   {{ com optional effect annotation for functions }}
   {{ aux _ l }}
-  |                                             :: :: pure {{ com sugar for empty effect set }}
+  |                                              :: :: none {{ com no effect annotation }}
   | effectkw effect                              :: :: effect
 
 % Generate a pexp, but from slightly different syntax (= rather than ->)
