@@ -304,13 +304,61 @@ and typ_arg_int_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
   | A_order ord -> KidSet.empty
   | A_bool _ -> KidSet.empty
 
+(* Implicit arguments have restrictions that won't hold
+   post-specialisation, but we can just remove them and turn them into
+   regular arguments. *)
+let rec remove_implicit (Typ_aux (aux, l) as t) =
+  match aux with
+  | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
+  | Typ_tup typs -> Typ_aux (Typ_tup (List.map remove_implicit typs), l)
+  | Typ_fn (arg_typs, ret_typ, effs) -> Typ_aux (Typ_fn (List.map remove_implicit arg_typs, remove_implicit ret_typ, effs), l)
+  | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (remove_implicit typ1, remove_implicit typ2), l)
+  | Typ_app (Id_aux (Id "implicit", _), args) -> Typ_aux (Typ_app (mk_id "atom", List.map remove_implicit_arg args), l)
+  | Typ_app (id, args) -> Typ_aux (Typ_app (id, List.map remove_implicit_arg args), l)
+  | Typ_id id -> Typ_aux (Typ_id id, l)
+  | Typ_exist (kopts, nc, typ) -> Typ_aux (Typ_exist (kopts, nc, remove_implicit typ), l)
+  | Typ_var v -> Typ_aux (Typ_var v, l)
+and remove_implicit_arg (A_aux (aux, l)) =
+  match aux with
+  | A_typ typ -> A_aux (A_typ (remove_implicit typ), l)
+  | arg -> A_aux (arg, l)
+
+let kopt_arg = function
+  | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _) -> arg_nexp (nvar kid)
+  | KOpt_aux (KOpt_kind (K_aux (K_type,_), kid), _) -> arg_typ (mk_typ (Typ_var kid))
+  | _ -> failwith "oh no"
+
+(* For numeric type arguments we have to be careful not to run into a
+   situation where we have an instantiation like
+
+   'n => 'm, 'm => 8
+
+   and end up re-writing 'n to 8. This function turns an instantition
+   like the above into two,
+
+   'n => 'i#m, 'm => 8 and 'i#m => 'm
+
+   so we can do the substitution in two steps. *)
+let safe_instantiation instantiation =
+  let args =
+    List.map (fun (_, arg) -> kopts_of_typ_arg arg) (KBindings.bindings instantiation)
+    |> List.fold_left KOptSet.union KOptSet.empty
+    |> KOptSet.elements
+  in
+  List.fold_left (fun (i, r) v -> KBindings.map (fun arg -> subst_kid typ_arg_subst (kopt_kid v) (prepend_kid "i#" (kopt_kid v)) arg) i,
+                                  KBindings.add (prepend_kid "i#" (kopt_kid v)) (kopt_arg v) r)
+                 (instantiation, KBindings.empty) args
+
+let instantiate_constraints instantiation ncs =
+  List.map (fun c -> List.fold_left (fun c (v, a) -> constraint_subst v a c) c (KBindings.bindings instantiation)) ncs
+
 let specialize_id_valspec spec instantiations id ast =
   match split_defs (is_valspec id) ast with
-  | None -> failwith ("Valspec " ^ string_of_id id ^ " does not exist!")
+  | None -> Reporting.unreachable (id_loc id) __POS__ ("Valspec " ^ string_of_id id ^ " does not exist!")
   | Some (pre_ast, vs, post_ast) ->
      let typschm, externs, is_cast, annot = match vs with
        | DEF_spec (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot)) -> typschm, externs, is_cast, annot
-       | _ -> assert false (* unreachable *)
+       | _ -> Reporting.unreachable (id_loc id) __POS__ "val-spec is not actually a val-spec"
      in
      let TypSchm_aux (TypSchm_ts (typq, typ), _) = typschm in
 
@@ -318,8 +366,9 @@ let specialize_id_valspec spec instantiations id ast =
      let spec_ids = ref IdSet.empty in
 
      let specialize_instance instantiation =
+       let safe_instantiation, reverse = safe_instantiation instantiation in
        (* Replace the polymorphic type variables in the type with their concrete instantiation. *)
-       let typ = Type_check.subst_unifiers instantiation typ in
+       let typ = remove_implicit (Type_check.subst_unifiers reverse (Type_check.subst_unifiers safe_instantiation typ)) in
 
        (* Collect any new type variables introduced by the instantiation *)
        let collect_kids kidsets = KidSet.elements (List.fold_left KidSet.union KidSet.empty kidsets) in
@@ -328,7 +377,8 @@ let specialize_id_valspec spec instantiations id ast =
 
        (* Remove type variables from the type quantifier. *)
        let kopts, constraints = quant_split typq in
-       let constraints = List.map (fun c -> List.fold_left (fun c (v, a) -> constraint_subst v a c) c (KBindings.bindings instantiation)) constraints in
+       let constraints = instantiate_constraints safe_instantiation constraints in
+       let constraints = instantiate_constraints reverse constraints in
        let kopts = List.filter (fun kopt -> not (spec.is_polymorphic kopt)) kopts in
        let typq = mk_typquant (List.map (mk_qi_id K_type) typ_frees
                                @ List.map (mk_qi_id K_int) int_frees
@@ -504,10 +554,15 @@ let specialize_ids spec ids ast =
   let ast = remove_unused_valspecs env ast in
   ast, env
 
-let rec specialize spec ast env =
-  let ids = polymorphic_functions spec.is_polymorphic ast in
-  if IdSet.is_empty ids then
+let rec specialize' n spec ast env =
+  if n = 0 then
     ast, env
   else
-    let ast, env = specialize_ids spec ids ast in
-    specialize spec ast env
+    let ids = polymorphic_functions spec.is_polymorphic ast in
+    if IdSet.is_empty ids then
+      ast, env
+    else
+      let ast, env = specialize_ids spec ids ast in
+      specialize' (n - 1) spec ast env
+
+let specialize = specialize' (-1)
