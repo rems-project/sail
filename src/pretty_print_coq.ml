@@ -477,6 +477,43 @@ let classify_ex_type (Typ_aux (t,l) as t0) =
   | Typ_exist (_,_,t1) -> ExGeneral,t1
   | _ -> ExNone,t0
 
+(* The AST doesn't generally have enough type annotations for the booleans,
+   so we attempt to add some (for internal_plet at the moment).  This
+   function helps by checking that the type variables that appear can be
+   printed for Coq, and attempts to replace them if not. *)
+(* TODO: actually check the substitution applies *somewhere* *)
+let clean_typ ctxt env typ =
+  let kids = tyvars_of_typ typ in
+  let is_equal kid kid' =
+    prove __POS__ env (nc_eq (nvar kid) (nvar kid'))
+  in
+  let check kid subst =
+    if KidSet.mem kid ctxt.bound_nvars ||
+         KBindings.mem kid ctxt.kid_renames ||
+           KBindings.mem kid ctxt.kid_id_renames
+    then subst
+    else
+      match KidSet.find_first_opt (is_equal kid) ctxt.bound_nvars with
+      | Some kid' -> KBindings.add kid kid' subst
+      | None ->
+         match KBindings.find_first_opt (is_equal kid) ctxt.kid_renames with
+         | Some (kid',_) -> KBindings.add kid kid' subst
+         | None ->
+            match KBindings.find_first_opt (is_equal kid) ctxt.kid_id_renames with
+            | Some (kid',_) -> KBindings.add kid kid' subst
+            | None ->
+               raise Not_found
+  in
+  try
+    let subst = KidSet.fold check kids KBindings.empty in
+    (* TODO: this is an awful way to do the subsitution! *)
+    let typ = KBindings.fold (fun kid kid' typ -> subst_kid typ_subst kid kid' typ) subst typ in
+    Some typ
+  with Not_found ->
+    debug ctxt (lazy ("Failed to clean type " ^ string_of_typ typ ^ " under constraints " ^
+                        Util.string_of_list ", " string_of_n_constraint (Env.get_constraints env)));
+    None
+
 (* When making changes here, check whether they affect coq_nvars_of_typ *)
 let rec doc_typ_fns ctx =
   (* following the structure of parser for precedence *)
@@ -1135,8 +1172,9 @@ let merge_new_tyvars ctxt old_env pat new_env =
   let merge_new_kids id m =
     let typ = lvar_typ (Env.lookup_id ~raw:true id new_env) in
     debug ctxt (lazy (" considering tyvar mapping for " ^ string_of_id id ^ " at type " ^ string_of_typ typ ));
-    match destruct_numeric typ with
-    | Some ([],_,Nexp_aux (Nexp_var kid,_)) ->
+    match destruct_numeric typ, destruct_atom_bool new_env typ with
+    | Some ([],_,Nexp_aux (Nexp_var kid,_)), _
+    | _, Some (NC_aux (NC_var kid,_)) ->
        begin try
            let _ = Env.get_typ_var kid old_env in
            debug ctxt (lazy (" tyvar " ^ string_of_kid kid ^ " already in env"));
@@ -1312,20 +1350,22 @@ let doc_exp, doc_let =
        begin match f with
        | Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)
          when effectful (effect_of full_exp) ->
-          let call = doc_id (append_id f "M") in
+          let informative = Util.is_some (is_auto_decomposed_exist (env_of full_exp) (typ_of full_exp)) in
+          let suffix = if informative then "MP" else "M" in
+          let call = doc_id (append_id f suffix) in
           let doc_arg exp =
             let epp = expY exp in
             match is_auto_decomposed_exist (env_of exp) (typ_of exp) with
             | Some _ ->
+               if informative then epp else
                let proj = if effectful (effect_of exp) then "projT1_m" else "projT1" in
                parens (string proj ^/^ epp)
-            | None -> epp
+            | None ->
+               if informative then parens (string "build_trivial_ex" ^/^ epp)
+               else epp
           in
           let epp = hang 2 (flow (break 1) (call :: List.map doc_arg args)) in
-          let epp = match is_auto_decomposed_exist (env_of full_exp) (typ_of full_exp) with
-                        | Some _ -> string "build_ex_m" ^/^ parens epp
-                        | None -> epp
-          in wrap_parens epp
+          wrap_parens epp
        (* temporary hack to make the loop body a function of the temporary variables *)
        | Id_aux (Id "None", _) as none -> doc_id_ctor none
        | Id_aux (Id "foreach#", _) ->
@@ -1881,6 +1921,26 @@ let doc_exp, doc_let =
                         | ExNone, _ ->
                            parens (separate space [doc_id id; colon; doc_typ ctxt typ])
                       in separate space [string ">>= fun"; binder; bigarrow]
+                | P_aux (P_id id,_) ->
+                   let typ = typ_of e1 in
+                   let plain_binder = squote ^^ doc_pat ctxt true true (pat, typ_of e1) in
+                   let binder = match classify_ex_type (Env.expand_synonyms (env_of e1) typ) with
+                     | ExGeneral, (Typ_aux (Typ_app (Id_aux (Id "atom_bool",_),_),_) as typ') ->
+                         begin match clean_typ ctxt (env_of_pat pat) typ with
+                         | Some typ' ->
+                            squote ^^ parens (separate space [string "existT"; underscore; doc_id id; underscore; colon; doc_typ ctxt typ'])
+                         | None -> plain_binder end
+                     | ExNone, typ' -> begin
+                        match typ' with
+                        | Typ_aux (Typ_app (Id_aux (Id "atom_bool",_),_),_) ->
+                           begin match clean_typ ctxt (env_of_pat pat) typ with
+                           | Some typ' ->
+                              squote ^^ parens (separate space [string "existT"; underscore; doc_id id; underscore; colon; doc_typ ctxt typ'])
+                           | None -> plain_binder end
+                        | _ -> plain_binder
+                       end
+                     | _ -> plain_binder
+                   in separate space [string ">>= fun"; binder; bigarrow]
                 | _ ->
                    separate space [string ">>= fun"; squote ^^ doc_pat ctxt true true (pat, typ_of e1); bigarrow]
               in
