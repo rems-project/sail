@@ -252,14 +252,14 @@ and string_of_fragment' ?zencode:(zencode=true) f =
 (* String representation of ctyps here is only for debugging and
    intermediate language pretty-printer. *)
 and string_of_ctyp = function
-  | CT_int -> "int"
+  | CT_lint -> "int"
   | CT_lbits true -> "lbits(dec)"
   | CT_lbits false -> "lbits(inc)"
   | CT_fbits (n, true) -> "fbits(" ^ string_of_int n ^ ", dec)"
   | CT_fbits (n, false) -> "fbits(" ^ string_of_int n ^ ", int)"
   | CT_sbits true -> "sbits(dec)"
   | CT_sbits false -> "sbits(inc)"
-  | CT_int64 -> "int64"
+  | CT_fint n -> "int(" ^ string_of_int n ^ ")"
   | CT_bit -> "bit"
   | CT_unit -> "unit"
   | CT_bool -> "bool"
@@ -276,14 +276,14 @@ and string_of_ctyp = function
 (** This function is like string_of_ctyp, but recursively prints all
    constructors in variants and structs. Used for debug output. *)
 and full_string_of_ctyp = function
-  | CT_int -> "int"
+  | CT_lint -> "int"
   | CT_lbits true -> "lbits(dec)"
   | CT_lbits false -> "lbits(inc)"
   | CT_fbits (n, true) -> "fbits(" ^ string_of_int n ^ ", dec)"
   | CT_fbits (n, false) -> "fbits(" ^ string_of_int n ^ ", int)"
   | CT_sbits true -> "sbits(dec)"
   | CT_sbits false -> "sbits(inc)"
-  | CT_int64 -> "int64"
+  | CT_fint n -> "int(" ^ string_of_int n ^ ")"
   | CT_bit -> "bit"
   | CT_unit -> "unit"
   | CT_bool -> "bool"
@@ -303,7 +303,7 @@ and full_string_of_ctyp = function
   | CT_poly -> "*"
 
 let rec map_ctyp f = function
-  | (CT_int | CT_int64 | CT_lbits _ | CT_fbits _ | CT_sbits _
+  | (CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _
      | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_poly | CT_enum _) as ctyp -> f ctyp
   | CT_tup ctyps -> f (CT_tup (List.map (map_ctyp f) ctyps))
   | CT_ref ctyp -> f (CT_ref (map_ctyp f ctyp))
@@ -314,12 +314,12 @@ let rec map_ctyp f = function
 
 let rec ctyp_equal ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
-  | CT_int, CT_int -> true
+  | CT_lint, CT_lint -> true
   | CT_lbits d1, CT_lbits d2 -> d1 = d2
   | CT_sbits d1, CT_sbits d2 -> d1 = d2
   | CT_fbits (m1, d1), CT_fbits (m2, d2) -> m1 = m2 && d1 = d2
   | CT_bit, CT_bit -> true
-  | CT_int64, CT_int64 -> true
+  | CT_fint n, CT_fint m -> n = m
   | CT_unit, CT_unit -> true
   | CT_bool, CT_bool -> true
   | CT_struct (id1, _), CT_struct (id2, _) -> Id.compare id1 id2 = 0
@@ -353,11 +353,11 @@ let rec ctyp_unify ctyp1 ctyp2 =
   | _, _ -> raise (Invalid_argument "ctyp_unify")
 
 let rec ctyp_suprema = function
-  | CT_int -> CT_int
+  | CT_lint -> CT_lint
   | CT_lbits d -> CT_lbits d
   | CT_fbits (_, d) -> CT_lbits d
   | CT_sbits d -> CT_lbits d
-  | CT_int64 -> CT_int
+  | CT_fint _ -> CT_lint
   | CT_unit -> CT_unit
   | CT_bool -> CT_bool
   | CT_real -> CT_real
@@ -382,7 +382,7 @@ let rec ctyp_ids = function
      IdSet.add id (List.fold_left (fun ids (_, ctyp) -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctors)
   | CT_tup ctyps -> List.fold_left (fun ids ctyp -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctyps
   | CT_vector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> ctyp_ids ctyp
-  | CT_int | CT_int64 | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit
+  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit
     | CT_bool | CT_real | CT_bit | CT_string | CT_poly -> IdSet.empty
 
 let rec unpoly = function
@@ -394,7 +394,7 @@ let rec unpoly = function
   | f -> f
 
 let rec is_polymorphic = function
-  | CT_int | CT_int64 | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_real | CT_string -> false
+  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_real | CT_string -> false
   | CT_tup ctyps -> List.exists is_polymorphic ctyps
   | CT_enum _ -> false
   | CT_struct (_, ctors) | CT_variant (_, ctors) -> List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors

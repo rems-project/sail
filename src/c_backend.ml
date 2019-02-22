@@ -135,8 +135,8 @@ let rec ctyp_of_typ ctx typ =
   match typ_aux with
   | Typ_id id when string_of_id id = "bit"    -> CT_bit
   | Typ_id id when string_of_id id = "bool"   -> CT_bool
-  | Typ_id id when string_of_id id = "int"    -> CT_int
-  | Typ_id id when string_of_id id = "nat"    -> CT_int
+  | Typ_id id when string_of_id id = "int"    -> CT_lint
+  | Typ_id id when string_of_id id = "nat"    -> CT_lint
   | Typ_id id when string_of_id id = "unit"   -> CT_unit
   | Typ_id id when string_of_id id = "string" -> CT_string
   | Typ_id id when string_of_id id = "real"   -> CT_real
@@ -152,13 +152,13 @@ let rec ctyp_of_typ ctx typ =
         match nexp_simp n, nexp_simp m with
         | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
              when Big_int.less_equal min_int64 n && Big_int.less_equal m max_int64 ->
-           CT_int64
+           CT_fint 64
         | n, m when ctx.optimize_smt ->
            if prove __POS__ ctx.local_env (nc_lteq (nconstant min_int64) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant max_int64)) then
-             CT_int64
+             CT_fint 64
            else
-             CT_int
-        | _ -> CT_int
+             CT_lint
+        | _ -> CT_lint
      end
 
   | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
@@ -214,8 +214,9 @@ let rec ctyp_of_typ ctx typ =
   | _ -> c_error ~loc:l ("No C type for type " ^ string_of_typ typ)
 
 let rec is_stack_ctyp ctyp = match ctyp with
-  | CT_fbits _ | CT_sbits _ | CT_int64 | CT_bit | CT_unit | CT_bool | CT_enum _ -> true
-  | CT_lbits _ | CT_int | CT_real | CT_string | CT_list _ | CT_vector _ -> false
+  | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_enum _ -> true
+  | CT_fint n -> n <= 64
+  | CT_lbits _ | CT_lint | CT_real | CT_string | CT_list _ | CT_vector _ -> false
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) fields
   | CT_variant (_, ctors) -> false (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *) (* FIXME *)
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
@@ -264,7 +265,7 @@ let hex_char =
 let literal_to_fragment (L_aux (l_aux, _) as lit) =
   match l_aux with
   | L_num n when Big_int.less_equal min_int64 n && Big_int.less_equal n max_int64 ->
-     Some (F_lit (V_int n), CT_int64)
+     Some (F_lit (V_int n), CT_fint 64)
   | L_hex str when String.length str <= 16 ->
      let padding = 16 - String.length str in
      let padding = Util.list_init padding (fun _ -> Sail2_values.B0) in
@@ -399,7 +400,7 @@ let rec analyze_functions ctx f (AE_aux (aexp, env, l)) =
        let aexp3 = analyze_functions ctx f aexp3 in
        let aexp4 = analyze_functions ctx f aexp4 in
        (* Currently we assume that loop indexes are always safe to put into an int64 *)
-       let ctx = { ctx with locals = Bindings.add id (Immutable, CT_int64) ctx.locals } in
+       let ctx = { ctx with locals = Bindings.add id (Immutable, CT_fint 64) ctx.locals } in
        AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
 
     | AE_case (aval, cases, typ) ->
@@ -544,14 +545,14 @@ let analyze_primop' ctx id args typ =
         match nexp_simp n, nexp_simp m with
         | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
                when Big_int.less_equal min_int64 n && Big_int.less_equal m max_int64 ->
-           AE_val (AV_C_fragment (F_op (op1, "+", op2), typ, CT_int64))
+           AE_val (AV_C_fragment (F_op (op1, "+", op2), typ, CT_fint 64))
         | n, m when prove __POS__ ctx.local_env (nc_lteq (nconstant min_int64) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant max_int64)) ->
-           AE_val (AV_C_fragment (F_op (op1, "+", op2), typ, CT_int64))
+           AE_val (AV_C_fragment (F_op (op1, "+", op2), typ, CT_fint 64))
         | _ -> no_change
      end
 
   | "neg_int", [AV_C_fragment (frag, _, _)] ->
-     AE_val (AV_C_fragment (F_op (v_int 0, "-", frag), typ, CT_int64))
+     AE_val (AV_C_fragment (F_op (v_int 0, "-", frag), typ, CT_fint 64))
 
   | "replicate_bits", [AV_C_fragment (vec, vtyp, _); AV_C_fragment (times, _, _)] ->
      begin match destruct_vector ctx.tc_env typ, destruct_vector ctx.tc_env vtyp with
@@ -738,15 +739,15 @@ let rec compile_aval l ctx = function
 
   | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal min_int64 n && Big_int.less_equal n max_int64 ->
      let gs = gensym () in
-     [iinit CT_int gs (F_lit (V_int n), CT_int64)],
-     (F_id gs, CT_int),
-     [iclear CT_int gs]
+     [iinit CT_lint gs (F_lit (V_int n), CT_fint 64)],
+     (F_id gs, CT_lint),
+     [iclear CT_lint gs]
 
   | AV_lit (L_aux (L_num n, _), typ) ->
      let gs = gensym () in
-     [iinit CT_int gs (F_lit (V_string (Big_int.to_string n)), CT_string)],
-     (F_id gs, CT_int),
-     [iclear CT_int gs]
+     [iinit CT_lint gs (F_lit (V_string (Big_int.to_string n)), CT_string)],
+     (F_id gs, CT_lint),
+     [iclear CT_lint gs]
 
   | AV_lit (L_aux (L_zero, _), _) -> [], (F_lit (V_bit Sail2_values.B0), CT_bit), []
   | AV_lit (L_aux (L_one, _), _) -> [], (F_lit (V_bit Sail2_values.B1), CT_bit), []
@@ -870,11 +871,11 @@ let rec compile_aval l ctx = function
        setup
        @ [iextern (CL_id (gs, vector_ctyp))
                   (mk_id "internal_vector_update")
-                  [(F_id gs, vector_ctyp); (F_lit (V_int (Big_int.of_int i)), CT_int64); cval]]
+                  [(F_id gs, vector_ctyp); (F_lit (V_int (Big_int.of_int i)), CT_fint 64); cval]]
        @ cleanup
      in
      [idecl vector_ctyp gs;
-      iextern (CL_id (gs, vector_ctyp)) (mk_id "internal_vector_init") [(F_lit (V_int (Big_int.of_int len)), CT_int64)]]
+      iextern (CL_id (gs, vector_ctyp)) (mk_id "internal_vector_init") [(F_lit (V_int (Big_int.of_int len)), CT_fint 64)]]
      @ List.concat (List.mapi aval_set (if direction then List.rev avals else avals)),
      (F_id gs, vector_ctyp),
      [iclear vector_ctyp gs]
@@ -1342,8 +1343,8 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      cleanup
 
   | AE_for (loop_var, loop_from, loop_to, loop_step, Ord_aux (ord, _), body) ->
-     (* We assume that all loop indices are safe to put in a CT_int64. *)
-     let ctx = { ctx with locals = Bindings.add loop_var (Immutable, CT_int64) ctx.locals } in
+     (* We assume that all loop indices are safe to put in a CT_fint. *)
+     let ctx = { ctx with locals = Bindings.add loop_var (Immutable, CT_fint 64) ctx.locals } in
 
      let is_inc = match ord with
        | Ord_inc -> true
@@ -1359,8 +1360,8 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let step_setup, step_call, step_cleanup = compile_aexp ctx loop_step in
      let step_gs = gensym () in
      let variable_init gs setup call cleanup =
-       [idecl CT_int64 gs;
-        iblock (setup @ [call (CL_id (gs, CT_int64))] @ cleanup)]
+       [idecl (CT_fint 64) gs;
+        iblock (setup @ [call (CL_id (gs, CT_fint 64))] @ cleanup)]
      in
 
      let loop_start_label = label "for_start_" in
@@ -1371,16 +1372,16 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      variable_init from_gs from_setup from_call from_cleanup
      @ variable_init to_gs to_setup to_call to_cleanup
      @ variable_init step_gs step_setup step_call step_cleanup
-     @ [iblock ([idecl CT_int64 loop_var;
-                 icopy l (CL_id (loop_var, CT_int64)) (F_id from_gs, CT_int64);
+     @ [iblock ([idecl (CT_fint 64) loop_var;
+                 icopy l (CL_id (loop_var, (CT_fint 64))) (F_id from_gs, (CT_fint 64));
                  idecl CT_unit body_gs;
                  iblock ([ilabel loop_start_label]
                          @ [ijump (F_op (F_id loop_var, (if is_inc then ">" else "<"), F_id to_gs), CT_bool) loop_end_label]
                          @ body_setup
                          @ [body_call (CL_id (body_gs, CT_unit))]
                          @ body_cleanup
-                         @ [icopy l (CL_id (loop_var, CT_int64))
-                                  (F_op (F_id loop_var, (if is_inc then "+" else "-"), F_id step_gs), CT_int64)]
+                         @ [icopy l (CL_id (loop_var, (CT_fint 64)))
+                                  (F_op (F_id loop_var, (if is_inc then "+" else "-"), F_id step_gs), (CT_fint 64))]
                          @ [igoto loop_start_label]);
                  ilabel loop_end_label])],
      (fun clexp -> icopy l clexp unit_fragment),
@@ -1888,7 +1889,7 @@ let rec instrs_rename from_id to_id =
   | [] -> []
 
 let hoist_ctyp = function
-  | CT_int | CT_lbits _ | CT_struct _ -> true
+  | CT_lint | CT_lbits _ | CT_struct _ -> true
   | _ -> false
 
 let hoist_counter = ref 0
@@ -2420,8 +2421,8 @@ let rec sgen_ctyp = function
   | CT_bool -> "bool"
   | CT_fbits _ -> "fbits"
   | CT_sbits _ -> "sbits"
-  | CT_int64 -> "mach_int"
-  | CT_int -> "sail_int"
+  | CT_fint _ -> "mach_int"
+  | CT_lint -> "sail_int"
   | CT_lbits _ -> "lbits"
   | CT_tup _ as tup -> "struct " ^ Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
   | CT_struct (id, _) -> "struct " ^ sgen_id id
@@ -2440,8 +2441,8 @@ let rec sgen_ctyp_name = function
   | CT_bool -> "bool"
   | CT_fbits _ -> "fbits"
   | CT_sbits _ -> "sbits"
-  | CT_int64 -> "mach_int"
-  | CT_int -> "sail_int"
+  | CT_fint _ -> "mach_int"
+  | CT_lint -> "sail_int"
   | CT_lbits _ -> "lbits"
   | CT_tup _ as tup -> Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
   | CT_struct (id, _) -> sgen_id id
@@ -2657,7 +2658,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        match ctyp with
        | CT_unit -> "UNIT", []
        | CT_bit -> "UINT64_C(0)", []
-       | CT_int64 -> "INT64_C(0xdeadc0de)", []
+       | CT_fint _ -> "INT64_C(0xdeadc0de)", []
        | CT_fbits _ -> "UINT64_C(0xdeadc0de)", []
        | CT_sbits _ -> "undefined_sbits()", []
        | CT_bool -> "false", []
@@ -3275,7 +3276,7 @@ let rec ctyp_dependencies = function
   | CT_ref ctyp -> ctyp_dependencies ctyp
   | CT_struct (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
   | CT_variant (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
-  | CT_int | CT_int64 | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string | CT_enum _ | CT_poly -> []
+  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string | CT_enum _ | CT_poly -> []
 
 let codegen_ctg ctx = function
   | CTG_vector (direction, ctyp) -> codegen_vector ctx (direction, ctyp)
