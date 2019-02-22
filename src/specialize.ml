@@ -380,10 +380,14 @@ let specialize_id_valspec spec instantiations id ast =
        let constraints = instantiate_constraints safe_instantiation constraints in
        let constraints = instantiate_constraints reverse constraints in
        let kopts = List.filter (fun kopt -> not (spec.is_polymorphic kopt)) kopts in
-       let typq = mk_typquant (List.map (mk_qi_id K_type) typ_frees
-                               @ List.map (mk_qi_id K_int) int_frees
-                               @ List.map mk_qi_kopt kopts
-                               @ List.map mk_qi_nc constraints) in
+       let typq =
+         if List.length (typ_frees @ int_frees) = 0 && List.length kopts = 0 then
+           mk_typquant []
+         else
+           mk_typquant (List.map (mk_qi_id K_type) typ_frees
+                        @ List.map (mk_qi_id K_int) int_frees
+                        @ List.map mk_qi_kopt kopts
+                        @ List.map mk_qi_nc constraints) in
        let typschm = mk_typschm typq typ in
 
        let spec_id = id_of_instantiation id instantiation in
