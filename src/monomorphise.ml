@@ -199,10 +199,9 @@ let rec is_value (E_aux (e,(l,annot))) =
 (* TODO: more? *)
   | _ -> false
 
-let is_pure (Effect_opt_aux (e,_)) =
+let is_pure e =
   match e with
-  | Effect_opt_none -> true
-  | Effect_opt_effect (Effect_aux (Effect_set [],_)) -> true
+  | Effect_aux (Effect_set [],_) -> true
   | _ -> false
 
 let rec list_extract f = function
@@ -1507,14 +1506,19 @@ let split_defs all_errors splits defs =
     if not (List.for_all is_value args) then
       None
     else
+      let (tq,typ) = Env.get_val_spec_orig id env in
+      let eff = match typ with
+        | Typ_aux (Typ_fn (_,_,eff),_) -> Some eff
+        | _ -> None
+      in
       let Defs ds = defs in
-      match list_extract (function
+      match eff, list_extract (function
       | (DEF_fundef (FD_aux (FD_function (_,_,eff,((FCL_aux (FCL_Funcl (id',_),_))::_ as fcls)),_)))
-        -> if Id.compare id id' = 0 then Some (eff,fcls) else None
+        -> if Id.compare id id' = 0 then Some fcls else None
       | _ -> None) ds with
-      | None -> None
-      | Some (eff,_) when not (is_pure eff) -> None
-      | Some (_,fcls) ->
+      | None,_ | _,None -> None
+      | Some eff,_ when not (is_pure eff) -> None
+      | Some _,Some fcls ->
          let arg = match args with
            | [] -> E_aux (E_lit (L_aux (L_unit,Generated l)),(Generated l,empty_tannot))
            | [e] -> e
