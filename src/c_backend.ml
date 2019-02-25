@@ -90,8 +90,8 @@ let zencode_id = function
 (* 2. Converting sail types to C types                                    *)
 (**************************************************************************)
 
-let max_int64 = Big_int.of_int64 Int64.max_int
-let min_int64 = Big_int.of_int64 Int64.min_int
+let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
+let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
 
 (** The context type contains two type-checking
    environments. ctx.local_env contains the closest typechecking
@@ -111,6 +111,7 @@ type ctx =
     recursive_functions : IdSet.t;
     no_raw : bool;
     optimize_smt : bool;
+    iterate_size : bool;
   }
 
 let initial_ctx env =
@@ -124,7 +125,16 @@ let initial_ctx env =
     recursive_functions = IdSet.empty;
     no_raw = false;
     optimize_smt = true;
+    iterate_size = false;
   }
+
+let rec iterate_size ctx size n m =
+  if size > 64 then
+    CT_lint
+  else if prove __POS__ ctx.local_env (nc_and (nc_lteq (nconstant (min_int size)) n) (nc_lteq m (nconstant (max_int size)))) then
+    CT_fint size
+  else
+    iterate_size ctx (size + 1) n m
 
 (** Convert a sail type into a C-type. This function can be quite
    slow, because it uses ctx.local_env and SMT to analyse the Sail
@@ -151,10 +161,15 @@ let rec ctyp_of_typ ctx typ =
      | Some (kids, constr, n, m) ->
         match nexp_simp n, nexp_simp m with
         | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-             when Big_int.less_equal min_int64 n && Big_int.less_equal m max_int64 ->
-           CT_fint 64
+             when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
+           if ctx.iterate_size then
+             iterate_size ctx 2 (nconstant n) (nconstant m)
+           else
+             CT_fint 64
         | n, m when ctx.optimize_smt ->
-           if prove __POS__ ctx.local_env (nc_lteq (nconstant min_int64) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant max_int64)) then
+           if ctx.iterate_size then
+             iterate_size ctx 2 n m
+           else if prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) then
              CT_fint 64
            else
              CT_lint
@@ -264,7 +279,7 @@ let hex_char =
 
 let literal_to_fragment (L_aux (l_aux, _) as lit) =
   match l_aux with
-  | L_num n when Big_int.less_equal min_int64 n && Big_int.less_equal n max_int64 ->
+  | L_num n when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
      Some (F_lit (V_int n), CT_fint 64)
   | L_hex str when String.length str <= 16 ->
      let padding = 16 - String.length str in
@@ -544,9 +559,9 @@ let analyze_primop' ctx id args typ =
      | Some (kids, constr, n, m) ->
         match nexp_simp n, nexp_simp m with
         | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-               when Big_int.less_equal min_int64 n && Big_int.less_equal m max_int64 ->
+               when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
            AE_val (AV_C_fragment (F_op (op1, "+", op2), typ, CT_fint 64))
-        | n, m when prove __POS__ ctx.local_env (nc_lteq (nconstant min_int64) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant max_int64)) ->
+        | n, m when prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) ->
            AE_val (AV_C_fragment (F_op (op1, "+", op2), typ, CT_fint 64))
         | _ -> no_change
      end
@@ -717,7 +732,7 @@ let rec chunkify n xs =
 let rec compile_aval l ctx = function
   | AV_C_fragment (frag, typ, ctyp) ->
      let ctyp' = ctyp_of_typ ctx typ in
-     if not (ctyp_equal ctyp ctyp') then
+     if not (ctyp_equal ctyp ctyp' || ctx.iterate_size) then
        raise (Reporting.err_unreachable l __POS__ (string_of_ctyp ctyp ^ " != " ^ string_of_ctyp ctyp'));
      [], (frag, ctyp_of_typ ctx typ), []
 
@@ -737,7 +752,7 @@ let rec compile_aval l ctx = function
   | AV_lit (L_aux (L_string str, _), typ) ->
      [], (F_lit (V_string (String.escaped str)), ctyp_of_typ ctx typ), []
 
-  | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal min_int64 n && Big_int.less_equal n max_int64 ->
+  | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
      let gs = gensym () in
      [iinit CT_lint gs (F_lit (V_int n), CT_fint 64)],
      (F_id gs, CT_lint),

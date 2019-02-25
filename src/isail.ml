@@ -356,15 +356,6 @@ let handle_input' input =
             ":(c)ommand can be called as either :c or :command." ]
         in
         List.iter print_endline commands
-     | ":poly" ->
-        let is_kopt = match arg with
-          | "Int" -> is_int_kopt
-          | "Type" -> is_typ_kopt
-          | "Order" -> is_order_kopt
-          | _ -> failwith "Invalid kind"
-        in
-        let ids = Specialize.polymorphic_functions is_kopt !Interactive.ast in
-        List.iter (fun id -> print_endline (string_of_id id)) (IdSet.elements ids)
      | ":option" ->
         begin
           try

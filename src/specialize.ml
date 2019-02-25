@@ -59,17 +59,26 @@ let is_typ_ord_arg = function
 
 type specialization = {
     is_polymorphic : kinded_id -> bool;
-    instantiation_filter : kid -> typ_arg -> bool
+    instantiation_filter : kid -> typ_arg -> bool;
+    extern_filter : (string -> string option) -> bool
   }
 
 let typ_ord_specialization = {
     is_polymorphic = (fun kopt -> is_typ_kopt kopt || is_order_kopt kopt);
-    instantiation_filter = (fun _ -> is_typ_ord_arg)
+    instantiation_filter = (fun _ -> is_typ_ord_arg);
+    extern_filter = (fun _ -> false)
   }
 
 let int_specialization = {
     is_polymorphic = is_int_kopt;
-    instantiation_filter = (fun _ arg -> match arg with A_aux (A_nexp _, _) -> true | _ -> false)
+    instantiation_filter = (fun _ arg -> match arg with A_aux (A_nexp _, _) -> true | _ -> false);
+    extern_filter = (fun externs -> match externs "c" with Some _ -> true | None -> false)
+  }
+
+let int_specialization_with_externs = {
+    is_polymorphic = is_int_kopt;
+    instantiation_filter = (fun _ arg -> match arg with A_aux (A_nexp _, _) -> true | _ -> false);
+    extern_filter = (fun _ -> false)
   }
 
 let rec nexp_simp_typ (Typ_aux (typ_aux, l)) =
@@ -105,15 +114,15 @@ let fix_instantiation spec instantiation =
    for some set of kinded-identifiers, specified by the is_kopt
    predicate. For example, polymorphic_functions is_int_kopt will
    return all Int-polymorphic functions. *)
-let rec polymorphic_functions is_kopt (Defs defs) =
+let rec polymorphic_functions ctx (Defs defs) =
   match defs with
-  | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ) , _), id, _, externs), _)) :: defs ->
-     let is_polymorphic = List.exists is_kopt (quant_kopts typq) in
-     if is_polymorphic then
-       IdSet.add id (polymorphic_functions is_kopt (Defs defs))
+  | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ) , _), id, externs, _), _)) :: defs ->
+     let is_polymorphic = List.exists ctx.is_polymorphic (quant_kopts typq) in
+     if is_polymorphic && not (ctx.extern_filter externs) then
+       IdSet.add id (polymorphic_functions ctx (Defs defs))
      else
-       polymorphic_functions is_kopt (Defs defs)
-  | _ :: defs -> polymorphic_functions is_kopt (Defs defs)
+       polymorphic_functions ctx (Defs defs)
+  | _ :: defs -> polymorphic_functions ctx (Defs defs)
   | [] -> IdSet.empty
 
 (* When we specialize a function, we need to generate new name. To do
@@ -548,7 +557,13 @@ let reorder_typedefs (Defs defs) =
   Defs (List.rev !tdefs @ others)
 
 let specialize_ids spec ids ast =
-  let ast = List.fold_left (fun ast id -> specialize_id spec id ast) ast (IdSet.elements ids) in
+  let total = IdSet.cardinal ids in
+  let _, ast =
+    List.fold_left
+      (fun (n, ast) id ->
+        Util.progress "Specializing " (string_of_id id) n total; (n + 1, specialize_id spec id ast))
+      (1, ast) (IdSet.elements ids)
+  in
   let ast = reorder_typedefs ast in
   let ast, _ = Type_error.check Type_check.initial_env ast in
   let ast =
@@ -562,7 +577,7 @@ let rec specialize' n spec ast env =
   if n = 0 then
     ast, env
   else
-    let ids = polymorphic_functions spec.is_polymorphic ast in
+    let ids = polymorphic_functions spec ast in
     if IdSet.is_empty ids then
       ast, env
     else
