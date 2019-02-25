@@ -66,7 +66,7 @@ fragment :: 'F_' ::=
 
 ctyp :: 'CT_' ::=
   {{ com C type }}
-  | mpz_t                     :: :: int
+  | mpz_t                     :: :: lint
 % Arbitrary precision GMP integer, mpz_t in C.
   | bv_t ( bool )             :: :: lbits
 % Variable length bitvector - flag represents direction, true - dec or false - inc
@@ -75,7 +75,7 @@ ctyp :: 'CT_' ::=
   | 'uint64_t' ( nat , bool ) :: :: fbits
 % Fixed length bitvector that fits within a 64-bit word. - int
 % represents length, and flag is the same as CT_bv.
-  | 'int64_t'                 :: :: int64
+  | 'int64_t' nat             :: :: fint
 % Used for (signed) integers that fit within 64-bits.
   | unit_t                    :: :: unit
 % unit is a value in sail, so we represent it as a one element type

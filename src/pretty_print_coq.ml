@@ -370,6 +370,34 @@ let doc_nc_fn id =
   | "not" -> string "negb"
   | s -> string s
 
+type ex_atom_bool = ExBool_simple | ExBool_val of bool | ExBool_complex
+
+let non_trivial_ex_atom_bool l kopts nc atom_nc =
+  let vars = KOptSet.union (kopts_of_constraint nc) (kopts_of_constraint atom_nc) in
+  let exists = KOptSet.of_list kopts in
+  if KOptSet.subset vars exists then
+    let kenv = List.fold_left (fun kenv kopt -> KBindings.add (kopt_kid kopt) (unaux_kind (kopt_kind kopt)) kenv) KBindings.empty kopts in
+    match Constraint.call_smt l kenv (nc_and nc atom_nc),
+          Constraint.call_smt l kenv (nc_and nc (nc_not atom_nc)) with
+    | Sat, Sat -> ExBool_simple
+    | Sat, Unsat -> ExBool_val true
+    | Unsat, Sat -> ExBool_val false
+    | _ -> ExBool_complex
+  else ExBool_complex
+
+type ex_kind = ExNone | ExBool | ExGeneral
+
+let classify_ex_type (Typ_aux (t,l) as t0) =
+  match t with
+  | Typ_exist (kopts,nc,(Typ_aux (Typ_app (Id_aux (Id "atom_bool",_), [A_aux (A_bool atom_nc,_)]),_) as t1)) -> begin
+      match non_trivial_ex_atom_bool l kopts nc atom_nc with
+      | ExBool_simple -> ExNone, t1
+      | ExBool_val _ -> ExBool, t1
+      | ExBool_complex -> ExGeneral, t1
+    end
+  | Typ_exist (_,_,t1) -> ExGeneral,t1
+  | _ -> ExNone,t0
+
 (* When making changes here, check whether they affect coq_nvars_of_typ *)
 let rec doc_typ_fns ctx =
   (* following the structure of parser for precedence *)
@@ -476,13 +504,18 @@ let rec doc_typ_fns ctx =
                        [doc_var ctx var; colon; tpp;
                         ampersand;
                         doc_arithfact ctx ~exists:(List.map kopt_kid kopts) ?extra:length_constraint_pp nc])
-          | Typ_aux (Typ_app (Id_aux (Id "atom_bool",_), [A_aux (A_bool atom_nc,_)]),_) ->
-             let var = mk_kid "_bool" in (* TODO collision avoid *)
-             let nc = nice_and (nice_iff (nc_var var) atom_nc) nc in
-             braces (separate space
-                       [doc_var ctx var; colon; string "bool";
-                        ampersand;
-                        doc_arithfact ctx ~exists:(List.map kopt_kid kopts) nc])
+          | Typ_aux (Typ_app (Id_aux (Id "atom_bool",_), [A_aux (A_bool atom_nc,_)]),_) -> begin
+             match non_trivial_ex_atom_bool l kopts nc atom_nc with
+             | ExBool_simple -> string "bool"
+             | ExBool_val t -> string "Bool(" ^^ if t then string "True)" else string "False)"
+             | ExBool_complex ->
+                let var = mk_kid "_bool" in (* TODO collision avoid *)
+                let nc = nice_and (nice_iff (nc_var var) atom_nc) nc in
+                braces (separate space
+                          [doc_var ctx var; colon; string "bool";
+                           ampersand;
+                           doc_arithfact ctx ~exists:(List.map kopt_kid kopts) nc])
+            end
           | _ ->
              raise (Reporting.err_todo l
                   ("Non-atom existential type not yet supported in Coq: " ^
@@ -1034,9 +1067,14 @@ let doc_exp, doc_let =
       let typ = expand_range_type typ in
       match destruct_exist_plain typ with
       | None -> epp
+      | Some (kopts,nc,Typ_aux (Typ_app (Id_aux (Id "atom_bool",_), [A_aux (A_bool atom_nc,_)]),l)) -> begin
+          match non_trivial_ex_atom_bool l kopts nc atom_nc with
+          | ExBool_simple -> epp
+          | ExBool_val t -> wrap_parens (string "build_Bool" ^/^ epp)
+          | ExBool_complex -> wrap_parens (string "build_ex" ^/^ epp)
+        end
       | Some _ ->
-         let epp = string "build_ex" ^/^ epp in
-         if aexp_needed then parens epp else epp
+         wrap_parens (string "build_ex" ^/^ epp)
     in
     let rec construct_dep_pairs env =
       let rec aux want_parens (E_aux (e,_) as exp) (Typ_aux (t,_) as typ) =
@@ -1049,8 +1087,14 @@ let doc_exp, doc_let =
            let typ' = expand_range_type (Env.expand_synonyms (env_of exp) typ) in
            let build_ex, out_typ =
              match destruct_exist_plain typ' with
-             | Some (_,_,t) -> true, t
-             | None -> false, typ'
+             | Some (kopts,nc,(Typ_aux (Typ_app (Id_aux (Id "atom_bool",_), [A_aux (A_bool atom_nc,_)]),l) as t)) -> begin
+                 match non_trivial_ex_atom_bool l kopts nc atom_nc with
+                 | ExBool_simple -> None, t
+                 | ExBool_val _ -> Some "build_Bool", t
+                 | ExBool_complex -> Some "build_ex", t
+               end
+             | Some (_,_,t) -> Some "build_ex", t
+             | None -> None, typ'
            in
            let in_typ = expand_range_type (Env.expand_synonyms (env_of exp) (typ_of exp)) in
            let in_typ = match destruct_exist_plain in_typ with Some (_,_,t) -> t | None -> in_typ in
@@ -1063,16 +1107,17 @@ let doc_exp, doc_let =
                   not (similar_nexps ctxt (env_of exp) n1 n2)
                | _ -> false
            in
-           let exp_pp = expV (want_parens || autocast || build_ex) exp in
+           let exp_pp = expV (want_parens || autocast || Util.is_some build_ex) exp in
            let exp_pp =
              if autocast then
                let exp_pp = string "autocast" ^^ space ^^ exp_pp in
-               if want_parens || build_ex then parens exp_pp else exp_pp
+               if want_parens || Util.is_some build_ex then parens exp_pp else exp_pp
              else exp_pp
-           in if build_ex then
-                let exp_pp = string "build_ex" ^^ space ^^ exp_pp in
+           in match build_ex with
+              | Some s ->
+                let exp_pp = string s ^^ space ^^ exp_pp in
                 if want_parens then parens exp_pp else exp_pp
-              else exp_pp
+              | None -> exp_pp
       in aux
     in
     let liftR doc =
@@ -1162,7 +1207,7 @@ let doc_exp, doc_let =
           wrap_parens (hang 2 (flow (break 1) (call :: List.map expY args)))
        (* temporary hack to make the loop body a function of the temporary variables *)
        | Id_aux (Id "None", _) as none -> doc_id_ctor none
-       | Id_aux (Id "foreach", _) ->
+       | Id_aux (Id "foreach#", _) ->
           begin
             match args with
             | [from_exp; to_exp; step_exp; ord_exp; vartuple; body] ->
@@ -1209,7 +1254,8 @@ let doc_exp, doc_let =
           | _ -> raise (Reporting.err_unreachable l __POS__
              "Unexpected number of arguments for loop combinator")
           end
-       | Id_aux (Id (("while" | "until") as combinator), _) ->
+       | Id_aux (Id (("while#" | "until#") as combinator), _) ->
+          let combinator = String.sub combinator 0 (String.length combinator - 1) in
           begin
             match args with
             | [cond; varstuple; body] ->
@@ -1499,21 +1545,9 @@ let doc_exp, doc_let =
          debug ctxt (lazy (" on expr of type " ^ string_of_typ inner_typ));
          debug ctxt (lazy (" where type expected is " ^ string_of_typ outer_typ))
        in
-       let outer_ex,outer_typ' =
-         match outer_typ with
-         | Typ_aux (Typ_exist (_,_,t1),_) -> true,t1
-         | t1 -> false,t1
-       in
-       let cast_ex,cast_typ' =
-         match cast_typ with
-         | Typ_aux (Typ_exist (_,_,t1),_) -> true,t1
-         | t1 -> false,t1
-       in
-       let inner_ex,inner_typ' =
-         match inner_typ with
-         | Typ_aux (Typ_exist (_,_,t1),_) -> true,t1
-         | t1 -> false,t1
-       in
+       let outer_ex,outer_typ' = classify_ex_type outer_typ in
+       let cast_ex,cast_typ' = classify_ex_type cast_typ in
+       let inner_ex,inner_typ' = classify_ex_type inner_typ in
        let autocast =
                 (* Avoid using helper functions which simplify the nexps *)
          is_bitvector_typ outer_typ' && is_bitvector_typ cast_typ' &&
@@ -1526,30 +1560,34 @@ let doc_exp, doc_let =
        let effects = effectful (effect_of e) in
        let epp =
          if effects then
-           if inner_ex then
-             if cast_ex
-             (* If the types are the same use the cast as a hint to Coq,
-                otherwise derive the new type from the old one. *)
-             then if alpha_equivalent env inner_typ cast_typ
-                  then epp
-                  else string "derive_m" ^^ space ^^ epp
-             else string "projT1_m" ^^ space ^^ epp
-           else if cast_ex
-           then string "build_ex_m" ^^ space ^^ epp
-           else epp
-         else if cast_ex
-         then string "build_ex" ^^ space ^^ epp
-         else epp
+           match inner_ex, cast_ex with
+           | ExGeneral, ExGeneral ->
+              (* If the types are the same use the cast as a hint to Coq,
+                 otherwise derive the new type from the old one. *)
+              if alpha_equivalent env inner_typ cast_typ
+              then epp
+              else string "derive_m" ^^ space ^^ epp
+           | ExGeneral, ExNone ->
+              string "projT1_m" ^^ space ^^ epp
+           | ExNone, ExGeneral ->
+              string "build_ex_m" ^^ space ^^ epp
+           | ExNone, ExNone -> epp
+         else match cast_ex with
+              | ExGeneral -> string "build_ex" ^^ space ^^ epp
+              | ExBool -> string "build_Bool" ^^ space ^^ epp
+              | ExNone -> epp
        in
        let epp = epp ^/^ doc_tannot ctxt (env_of e) effects typ in
        let epp =
          if effects then
-           if cast_ex && not outer_ex
-           then string "projT1_m" ^^ space ^^ parens epp
-           else epp
-         else if cast_ex
-         then string "projT1" ^^ space ^^ parens epp
-         else epp
+           match cast_ex, outer_ex with
+           | ExGeneral, ExNone -> string "projT1_m" ^^ space ^^ parens epp
+           | ExBool, ExNone -> string "projBool_m" ^^ space ^^ parens epp
+           | _ -> epp
+         else match cast_ex with
+              | ExGeneral -> string "projT1" ^^ space ^^ parens epp
+              | ExBool -> string "projBool" ^^ space ^^ parens epp
+              | ExNone -> epp
        in
        let epp =
          if autocast then
@@ -1718,10 +1756,10 @@ let doc_exp, doc_let =
                 | P_aux (P_var (P_aux (P_typ (typ, P_aux (P_id id,_)),_),_),_)
                     when not (is_enum (env_of e1) id) ->
                       let full_typ = (expand_range_type typ) in
-                      let binder = match destruct_exist_plain (Env.expand_synonyms (env_of e1) full_typ) with
-                        | Some _ ->
+                      let binder = match classify_ex_type (Env.expand_synonyms (env_of e1) full_typ) with
+                        | ExGeneral, _ ->
                            squote ^^ parens (separate space [string "existT"; underscore; doc_id id; underscore; colon; doc_typ ctxt typ])
-                        | _ ->
+                        | (ExBool | ExNone), _ ->
                            parens (separate space [doc_id id; colon; doc_typ ctxt typ])
                       in separate space [string ">>= fun"; binder; bigarrow]
                 | _ ->
@@ -1775,6 +1813,10 @@ let doc_exp, doc_let =
       | E_aux (E_if (c', t', e'), _)
       | E_aux (E_cast (_, E_aux (E_if (c', t', e'), _)), _) ->
          if_exp ctxt true c' t' e'
+      (* Special case to prevent current arm decoder becoming a staircase *)
+      (* TODO: replace with smarter pretty printing *)
+      | E_aux (E_internal_plet (pat,exp1,E_aux (E_cast (typ, (E_aux (E_if (_, _, _), _) as exp2)),_)),ann) when Typ.compare typ unit_typ == 0 ->
+         string "else" ^/^ top_exp ctxt false (E_aux (E_internal_plet (pat,exp1,exp2),ann))
       | _ -> prefix 2 1 (string "else") (top_exp ctxt false e)
     in
     (prefix 2 1
@@ -2200,9 +2242,10 @@ let doc_funcl mutrec rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     | _ -> failwith ("Function " ^ string_of_id id ^ " does not have function type")
   in
   let build_ex, ret_typ = replace_atom_return_type ret_typ in
-  let build_ex = match destruct_exist_plain (Env.expand_synonyms env (expand_range_type ret_typ)) with
-    | Some _ -> Some "build_ex"
-    | _ -> build_ex
+  let build_ex = match classify_ex_type (Env.expand_synonyms env (expand_range_type ret_typ)) with
+    | ExGeneral, _ -> Some "build_ex"
+    | ExBool, _ -> Some "build_Bool"
+    | ExNone, _ -> build_ex
   in
   let ids_to_avoid = all_ids pexp in
   let bound_kids = tyvars_of_typquant tq in
@@ -2469,7 +2512,7 @@ let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
      let used = if is_number ret_ty then used else KidSet.union used (tyvars_of_typ ret_ty) in
      let tqs = match tqs with
        | TypQ_aux (TypQ_tq qs,l) -> TypQ_aux (TypQ_tq (List.filter (function
-         | QI_aux (QI_id kopt,_) when is_nat_kopt kopt ->
+         | QI_aux (QI_id kopt,_) when is_int_kopt kopt ->
             let kid = kopt_kid kopt in
             KidSet.mem kid used && not (KidSet.mem kid args)
          | _ -> true) qs),l)

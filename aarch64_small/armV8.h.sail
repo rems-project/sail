@@ -98,14 +98,47 @@ register R2 : bits(64)
 register R1 : bits(64)
 register R0 : bits(64)
 
-let _R : vector(32,dec,(register(bits(64)))) =
-  [undefined,R30,R29,R28,R27,R26,R25,R24,R23,R22,R21,
-             R20,R19,R18,R17,R16,R15,R14,R13,R12,R11,
-             R10,R9 ,R8 ,R7 ,R6 ,R5 ,R4 ,R3 ,R2 ,R1 ,
-             R0]
+/* let _R : vector(32,dec,register(bits(64))) = */
+/*   [ref undefined */
+let _R : vector(31,dec,register(bits(64))) =
+  [ref R30
+  ,ref R29
+  ,ref R28
+  ,ref R27
+  ,ref R26
+  ,ref R25
+  ,ref R24
+  ,ref R23
+  ,ref R22
+  ,ref R21
+  ,ref R20
+  ,ref R19
+  ,ref R18
+  ,ref R17
+  ,ref R16
+  ,ref R15
+  ,ref R14
+  ,ref R13
+  ,ref R12
+  ,ref R11
+  ,ref R10
+  ,ref R9
+  ,ref R8
+  ,ref R7
+  ,ref R6
+  ,ref R5
+  ,ref R4
+  ,ref R3
+  ,ref R2
+  ,ref R1
+  ,ref R0
+  ]
 
-val reg_index : reg_size -> UInt_reg effect pure
-function reg_index x = (x : (reg_index))
+/* val reg_index : reg_size -> UInt_reg effect pure */
+/* function reg_index x = (x : (reg_index)) */
+
+val reg_index : reg_size -> reg_index
+function reg_index x = unsigned(x)
 
 /* SIMD and floating-point registers */
 
@@ -142,11 +175,46 @@ register V2 : bits(128)
 register V1 : bits(128)
 register V0 : bits(128)
 
+/* let _V : vector(33,dec,(register(bits(128)))) = */
+/*   [undefined,V31,V30,V29,V28,V27,V26,V25,V24,V23,V22, */
+/*              V21,V20,V19,V18,V17,V16,V15,V14,V13,V12, */
+/*              V11,V10,V9 ,V8 ,V7 ,V6 ,V5 ,V4 ,V3 ,V2 , */
+/*              V1 ,V0] */
+
 let _V : vector(32,dec,(register(bits(128)))) =
-  [undefined,V31,V30,V29,V28,V27,V26,V25,V24,V23,V22,
-             V21,V20,V19,V18,V17,V16,V15,V14,V13,V12,
-             V11,V10,V9 ,V8 ,V7 ,V6 ,V5 ,V4 ,V3 ,V2 ,
-             V1 ,V0]
+  [ref V31
+  ,ref V30
+  ,ref V29
+  ,ref V28
+  ,ref V27
+  ,ref V26
+  ,ref V25
+  ,ref V24
+  ,ref V23
+  ,ref V22
+  ,ref V21
+  ,ref V20
+  ,ref V19
+  ,ref V18
+  ,ref V17
+  ,ref V16
+  ,ref V15
+  ,ref V14
+  ,ref V13
+  ,ref V12
+  ,ref V11
+  ,ref V10
+  ,ref V9 
+  ,ref V8 
+  ,ref V7 
+  ,ref V6 
+  ,ref V5 
+  ,ref V4 
+  ,ref V3 
+  ,ref V2 
+  ,ref V1 
+  ,ref V0
+  ]
 
 
 /* lsl: used instead of the ARM ARM << over integers */
@@ -154,22 +222,22 @@ val lsl : forall 'm 'n, 'm >= 0 & 'n >= 0. (atom('n), atom('m)) -> atom('n * (2 
 function lsl (n, m) = n * (2 ^ m)
 
 /* not_implemented is used to indicate something WE did not implement */
-val not_implemented : string -> unit effect { escape }
+val not_implemented : forall ('a : Type). string -> 'a effect { escape }
 function not_implemented message = exit () /* TODO message */
 
 /* not_implemented_extern is used to indicate something ARM did not define
    and we did not define yet either. Those functions used to be declared as
    external but undefined there. */
-val not_implemented_extern : forall 'a. string -> 'a effect { escape }
+/* val not_implemented_extern : forall 'a. string -> 'a effect { escape } */
+val not_implemented_extern : forall ('a : Type). string -> 'a effect { escape }
 function not_implemented_extern (message) =
   exit ()  /* message; TODO */
 
 /* info is used to convey information to the user */
 val info : string -> unit effect pure
-let info(message) = ()
+function info(message) = ()
 
-struct IMPLEMENTATION_DEFINED_type = 
-{
+struct IMPLEMENTATION_DEFINED_type =  {
   HaveCRCExt : boolean,
   HaveAArch32EL : boolean,
   HaveAnyAArch32 : boolean,
@@ -178,15 +246,15 @@ struct IMPLEMENTATION_DEFINED_type =
   HighestELUsingAArch32 : boolean,
   IsSecureBelowEL3 : boolean,
 }
-let IMPLEMENTATION_DEFINED =
-{
-  HaveCRCExt = true;
-  HaveAArch32EL = false;
-  HaveAnyAArch32 = false;
-  HaveEL2 = false;
-  HaveEL3 = false;
-  HighestELUsingAArch32 = false;
-  IsSecureBelowEL3 = false;
+
+let IMPLEMENTATION_DEFINED : IMPLEMENTATION_DEFINED_type = struct {
+  HaveCRCExt = true,
+  HaveAArch32EL = false,
+  HaveAnyAArch32 = false,
+  HaveEL2 = false,
+  HaveEL3 = false,
+  HighestELUsingAArch32 = false,
+  IsSecureBelowEL3 = false
 }
 
 /* FIXME: ask Kathy what should we do with this */

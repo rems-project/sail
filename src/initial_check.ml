@@ -595,7 +595,7 @@ let to_ast_typschm_opt ctx (P.TypSchm_opt_aux(aux,l)) : tannot_opt ctx_out =
 
 let to_ast_effects_opt (P.Effect_opt_aux(e,l)) : effect_opt =
   match e with
-  | P.Effect_opt_pure -> Effect_opt_aux(Effect_opt_pure,l)
+  | P.Effect_opt_none -> Effect_opt_aux(Effect_opt_none,l)
   | P.Effect_opt_effect(typ) -> Effect_opt_aux(Effect_opt_effect(to_ast_effects typ),l)
 
 let to_ast_funcl ctx (P.FCL_aux(fcl,l) : P.funcl) : (unit funcl) =
@@ -824,15 +824,15 @@ let val_spec_ids (Defs defs) =
   IdSet.of_list (vs_ids defs)
 
 let quant_item_param = function
-  | QI_aux (QI_id kopt, _) when is_nat_kopt kopt -> [prepend_id "atom_" (id_of_kid (kopt_kid kopt))]
+  | QI_aux (QI_id kopt, _) when is_int_kopt kopt -> [prepend_id "atom_" (id_of_kid (kopt_kid kopt))]
   | QI_aux (QI_id kopt, _) when is_typ_kopt kopt -> [prepend_id "typ_" (id_of_kid (kopt_kid kopt))]
   | _ -> []
 let quant_item_typ = function
-  | QI_aux (QI_id kopt, _) when is_nat_kopt kopt -> [atom_typ (nvar (kopt_kid kopt))]
+  | QI_aux (QI_id kopt, _) when is_int_kopt kopt -> [atom_typ (nvar (kopt_kid kopt))]
   | QI_aux (QI_id kopt, _) when is_typ_kopt kopt -> [mk_typ (Typ_var (kopt_kid kopt))]
   | _ -> []
 let quant_item_arg = function
-  | QI_aux (QI_id kopt, _) when is_nat_kopt kopt -> [mk_typ_arg (A_nexp (nvar (kopt_kid kopt)))]
+  | QI_aux (QI_id kopt, _) when is_int_kopt kopt -> [mk_typ_arg (A_nexp (nvar (kopt_kid kopt)))]
   | QI_aux (QI_id kopt, _) when is_typ_kopt kopt -> [mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt))))]
   | _ -> []
 let undefined_typschm id typq =

@@ -188,6 +188,8 @@ let rec rewrite_constant_function_calls' env ast =
     | E_app (id, args) when List.for_all is_constant args ->
        evaluate e_aux annot
 
+    | E_cast (typ, (E_aux (E_lit _, _) as lit)) -> ok (); lit
+
     | E_field (exp, id) when is_constant exp ->
        evaluate e_aux annot
 

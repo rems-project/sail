@@ -153,21 +153,22 @@ struct AddressDescriptor = {
 
 enum PrefetchHint = {Prefetch_READ, Prefetch_WRITE, Prefetch_EXEC}
 
-val ASR_C : forall 'N 'S, 'N >= 0 & 'S >= 1. (bits('N),atom('S)) -> (bits('N), bit) effect pure
+val ASR_C : forall 'N 'S, 'N >= 1 & 'S >= 1. (bits('N),atom('S)) -> (bits('N), bit) effect pure
 val LSL_C : forall 'N 'S, 'N >= 0 & 'S >= 1. (bits('N),atom('S)) -> (bits('N), bit) effect pure
 val LSR_C : forall 'N 'S, 'N >= 0 & 'S >= 1. (bits('N),atom('S)) -> (bits('N), bit) effect pure
 val ROR_C : forall 'N 'S, 'N >= 0 & ('S >= 1 | 'S <= -1). (bits('N),int('S)) -> (bits('N), bit) effect pure
 val IsZero : forall 'N, 'N >=0. bits('N) -> boolean effect pure
 val Replicate : forall 'N 'M, 'N >=0 & 'M >=0. (implicit('N),bits('M)) -> bits('N) effect pure
-val SignExtend : forall 'N 'M, 'N >= 'M & 'M >= 0. (implicit('N),bits('M)) -> bits('N) effect pure
+val SignExtend : forall 'N 'M, 'N > 'M & 'M >= 1. (implicit('N),bits('M)) -> bits('N) effect pure
 val ZeroExtend : forall 'N 'M, 'N >= 'M & 'M >= 0. (implicit('N),bits('M)) -> bits('N) effect pure
 val Zeros : forall 'N, 'N >=0. implicit('N) -> bits('N) effect pure
 val Ones : forall 'N, 'N >=0. implicit('N) -> bits('N) effect pure
 /* val UInt : forall Nat 'N, Nat 'M, 'M = 2**'N. bits('N) -> [|'M + -1|] effect pure */
-val UInt : forall 'N 'M, 'N >=0 & 'M >= 0. bits('N) -> atom('M) effect pure
+val UInt : forall 'N, 'N >=0 . bits('N) -> range(0, 2 ^ 'N + -1)
+/* val UInt : forall 'N 'M, 'N >=0 & 'M >= 0. bits('N) -> Int('M) effect pure */
 /* val SInt : forall Nat 'N, Nat 'M, Nat 'K, 'M = 'N + -1, 'K = 2**'M. bits('N) -> [|'K * -1:'K + -1|] effect pure */
-val SInt : forall 'N 'M, 'N >= 0 & 'M >=0. bits('N) -> atom('M) effect pure
-val HighestSetBit : forall 'N, 'N >= 0. bits('N+1) -> option(range(0,'N + -1)) effect pure
+val SInt : forall 'N, 'N >= 0. bits('N) -> range(-(2 ^ ('N - 1) - 1), 2 ^ ('N - 1) - 1) effect pure
+val HighestSetBit : forall 'N, 'N >= 0. bits('N) -> option(range(0,'N - 1)) effect pure
 val CountLeadingZeroBits : forall 'N, 'N >= 0. bits('N) -> range(0,'N) effect pure
 val IsSecure : unit -> boolean effect {rreg}
 val IsSecureBelowEL3 : unit -> boolean effect {rreg}

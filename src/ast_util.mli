@@ -109,7 +109,7 @@ val dec_ord : order
 (* Utilites for working with kinded_ids *)
 val kopt_kid : kinded_id -> kid
 val kopt_kind : kinded_id -> kind
-val is_nat_kopt : kinded_id -> bool
+val is_int_kopt : kinded_id -> bool
 val is_order_kopt : kinded_id -> bool
 val is_typ_kopt : kinded_id -> bool
 val is_bool_kopt : kinded_id -> bool

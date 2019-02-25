@@ -50,9 +50,9 @@ printf "<testsuites>\n" >> $DIR/tests.xml
 
 for i in `ls $DIR/pass/ | grep sail`;
 do
-    if $SAILDIR/sail -just_check -ddump_tc_ast -dsanity $DIR/pass/$i 2> /dev/null 1> $DIR/rtpass/$i;
+    if $SAILDIR/sail -no_memo_z3 -just_check -ddump_tc_ast -dsanity $DIR/pass/$i 2> /dev/null 1> $DIR/rtpass/$i;
     then
-	if $SAILDIR/sail -just_check -ddump_tc_ast -dmagic_hash -dno_cast -dsanity $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
+	if $SAILDIR/sail -no_memo_z3 -just_check -ddump_tc_ast -dmagic_hash -dno_cast -dsanity $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
 	then
 	    if diff $DIR/rtpass/$i $DIR/rtpass2/$i;
 	    then
@@ -71,7 +71,7 @@ do
     for file in $DIR/pass/${i%.sail}/*.sail;
     do
 	pushd $DIR/pass > /dev/null;
-	if $SAILDIR/sail ${i%.sail}/$(basename $file) 2> result;
+	if $SAILDIR/sail -no_memo_z3 ${i%.sail}/$(basename $file) 2> result;
 	then
 	    red "failing variant of $i $(basename $file) passed" "fail"
 	else

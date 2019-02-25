@@ -72,6 +72,10 @@ let opt_no_lexp_bounds_check = ref false
    We prefer not to do it for latex output but it is otherwise a good idea. *)
 let opt_expand_valspec = ref true
 
+(* Linearize cases involving power where we would otherwise require
+   the SMT solver to use non-linear arithmetic. *)
+let opt_smt_linearize = ref false
+
 let depth = ref 0
 
 let rec indent n = match n with
@@ -246,6 +250,50 @@ and strip_kinded_id_aux = function
 and strip_kind = function
   | K_aux (k_aux, _) -> K_aux (k_aux, Parse_ast.Unknown)
 
+let rec typ_nexps (Typ_aux (typ_aux, l)) =
+  match typ_aux with
+  | Typ_internal_unknown -> []
+  | Typ_id v -> []
+  | Typ_var kid -> []
+  | Typ_tup typs -> List.concat (List.map typ_nexps typs)
+  | Typ_app (f, args) -> List.concat (List.map typ_arg_nexps args)
+  | Typ_exist (kids, nc, typ) -> typ_nexps typ
+  | Typ_fn (arg_typs, ret_typ, _) ->
+     List.concat (List.map typ_nexps arg_typs) @ typ_nexps ret_typ
+  | Typ_bidir (typ1, typ2) ->
+     typ_nexps typ1 @ typ_nexps typ2
+and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
+  match typ_arg_aux with
+  | A_nexp n -> [n]
+  | A_typ typ -> typ_nexps typ
+  | A_bool nc -> constraint_nexps nc
+  | A_order ord -> []
+and constraint_nexps (NC_aux (nc_aux, l)) =
+  match nc_aux with
+  | NC_equal (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_le (n1, n2) | NC_not_equal (n1, n2) ->
+     [n1; n2]
+  | NC_set _ | NC_true | NC_false | NC_var _ -> []
+  | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2
+  | NC_app (_, args) -> List.concat (List.map typ_arg_nexps args)
+
+(* Return a KidSet containing all the type variables appearing in
+   nexp, where nexp occurs underneath a Nexp_exp, i.e. 2^nexp *)
+let rec nexp_power_variables (Nexp_aux (aux, _)) =
+  match aux with
+  | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) ->
+     KidSet.union (nexp_power_variables n1) (nexp_power_variables n2)
+  | Nexp_neg n ->
+     nexp_power_variables n
+  | Nexp_id _ | Nexp_var _ | Nexp_constant _ ->
+     KidSet.empty
+  | Nexp_app (_, ns) ->
+     List.fold_left KidSet.union KidSet.empty (List.map nexp_power_variables ns)
+  | Nexp_exp n ->
+     tyvars_of_nexp n
+
+let constraint_power_variables nc =
+  List.fold_left KidSet.union KidSet.empty (List.map nexp_power_variables (constraint_nexps nc))
+
 let rec name_pat (P_aux (aux, _)) =
   match aux with
   | P_id id | P_as (_, id) -> Some ("_" ^ string_of_id id)
@@ -261,7 +309,7 @@ let fresh_existential k =
 let named_existential k = function
   | Some n -> mk_kopt k (mk_kid n)
   | None -> fresh_existential k
- 
+
 let destruct_exist_plain ?name:(name=None) typ =
   match typ with
   | Typ_aux (Typ_exist ([kopt], nc, typ), _) ->
@@ -397,7 +445,7 @@ module Env : sig
   val wf_nexp : ?exs:KidSet.t -> t -> nexp -> unit
   val wf_constraint : ?exs:KidSet.t -> t -> n_constraint -> unit
 
-  (* Some of the code in the environment needs to use the Z3 prover,
+  (* Some of the code in the environment needs to use the smt solver,
      which is defined below. To break the circularity this would cause
      (as the prove code depends on the environment), we add a
      reference to the prover to the initial environment. *)
@@ -521,7 +569,7 @@ end = struct
     let kopts, ncs = quant_split typq in
     let rec subst_args kopts args =
       match kopts, args with
-      | kopt :: kopts, (A_aux (A_nexp _, _) as arg) :: args when is_nat_kopt kopt ->
+      | kopt :: kopts, (A_aux (A_nexp _, _) as arg) :: args when is_int_kopt kopt ->
          List.map (constraint_subst (kopt_kid kopt) arg) (subst_args kopts args)
       | kopt :: kopts, A_aux (A_typ arg, _) :: args when is_typ_kopt kopt ->
          subst_args kopts args
@@ -543,6 +591,10 @@ end = struct
     match aux with
     | NC_or (nc1, nc2) -> NC_aux (NC_or (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
     | NC_and (nc1, nc2) -> NC_aux (NC_and (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
+    | NC_equal (n1, n2) -> NC_aux (NC_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_not_equal (n1, n2) -> NC_aux (NC_not_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_bounded_le (n1, n2) -> NC_aux (NC_bounded_le (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
     | NC_app (id, args) ->
        (try
           begin match Bindings.find id env.typ_synonyms l env args with
@@ -550,7 +602,7 @@ end = struct
           | arg -> typ_error env l ("Expected Bool when expanding synonym " ^ string_of_id id ^ " got " ^ string_of_typ_arg arg)
           end
         with Not_found -> NC_aux (NC_app (id, List.map (expand_synonyms_arg env) args), l))
-    | NC_true | NC_false | NC_equal _ | NC_not_equal _ | NC_bounded_le _ | NC_bounded_ge _ | NC_var _ | NC_set _ -> nc
+    | NC_true | NC_false | NC_var _ | NC_set _ -> nc
 
   and expand_nexp_synonyms env (Nexp_aux (aux, l) as nexp) =
     typ_debug ~level:2 (lazy ("Expanding " ^ string_of_nexp nexp));
@@ -935,7 +987,7 @@ end = struct
         typ_print (lazy (adding ^ "record " ^ string_of_id id));
         let rec record_typ_args = function
           | [] -> []
-          | ((QI_aux (QI_id kopt, _)) :: qis) when is_nat_kopt kopt ->
+          | ((QI_aux (QI_id kopt, _)) :: qis) when is_int_kopt kopt ->
              mk_typ_arg (A_nexp (nvar (kopt_kid kopt))) :: record_typ_args qis
           | ((QI_aux (QI_id kopt, _)) :: qis) when is_typ_kopt kopt ->
              mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt)))) :: record_typ_args qis
@@ -1068,7 +1120,7 @@ end = struct
   let add_typ_var l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
     if KBindings.mem v env.typ_vars then begin
         let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
-        let s_l, s_k = KBindings.find v env.typ_vars in 
+        let s_l, s_k = KBindings.find v env.typ_vars in
         let s_v = Kid_aux (Var (string_of_kid v ^ "#" ^ string_of_int n), l) in
         typ_print (lazy (Printf.sprintf "%stype variable (shadowing %s) %s : %s" adding (string_of_kid s_v) (string_of_kid v) (string_of_kind_aux k)));
         { env with
@@ -1087,11 +1139,34 @@ end = struct
   let add_constraint constr env =
     wf_constraint env constr;
     let (NC_aux (nc_aux, l) as constr) = constraint_simp (expand_constraint_synonyms env constr) in
-    match nc_aux with
-    | NC_true -> env
-    | _ ->
-       typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint constr));
-       { env with constraints = constr :: env.constraints }
+    let power_vars = constraint_power_variables constr in
+    if KidSet.cardinal power_vars > 1 && !opt_smt_linearize then
+      typ_error env l ("Cannot add constraint " ^ string_of_n_constraint constr
+                       ^ " where more than two variables appear within an exponential")
+    else if KidSet.cardinal power_vars = 1 && !opt_smt_linearize then
+      let v = KidSet.choose power_vars in
+      let constrs = List.fold_left nc_and nc_true (get_constraints env) in
+      begin match Constraint.solve_all_smt l (get_typ_vars env) constrs v with
+      | Some solutions ->
+         typ_print (lazy (Util.("Linearizing " |> red |> clear) ^ string_of_n_constraint constr
+                          ^ " for " ^ string_of_kid v ^ " in " ^ Util.string_of_list ", " Big_int.to_string solutions));
+         let linearized =
+           List.fold_left
+             (fun c s -> nc_or c (nc_and (nc_eq (nvar v) (nconstant s)) (constraint_subst v (arg_nexp (nconstant s)) constr)))
+             nc_false solutions
+         in
+         typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint linearized));
+         { env with constraints = linearized :: env.constraints }
+      | None ->
+         typ_error env l ("Type variable " ^ string_of_kid v
+                          ^ " must have a finite number of solutions to add " ^ string_of_n_constraint constr)
+      end
+    else
+      match nc_aux with
+      | NC_true -> env
+      | _ ->
+         typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint constr));
+         { env with constraints = constr :: env.constraints }
 
   let get_ret_typ env = env.ret_typ
 
@@ -1282,7 +1357,7 @@ and simp_typ_aux = function
      would become {('s:Bool) ('r: Bool), nc('r). bool('s & 'r)},
      wherein all the redundant boolean variables have been combined
      into a single one. Making this simplification allows us to avoid
-     having to pass large numbers of pointless variables to Z3 if we
+     having to pass large numbers of pointless variables to SMT if we
      ever bind this existential. *)
   | Typ_exist (vars, nc, Typ_aux (Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool b, _)]), _)) ->
      let kids = KidSet.of_list (List.map kopt_kid vars) in
@@ -1326,16 +1401,23 @@ this is equivalent to
 which is then a problem we can feed to the constraint solver expecting unsat.
  *)
 
-let prove_z3 env (NC_aux (_, l) as nc) =
+let prove_smt env (NC_aux (_, l) as nc) =
   let vars = Env.get_typ_vars env in
   let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
   let ncs = Env.get_constraints env in
-  match Constraint.call_z3 l vars (List.fold_left nc_and (nc_not nc) ncs) with
+  match Constraint.call_smt l vars (List.fold_left nc_and (nc_not nc) ncs) with
   | Constraint.Unsat -> typ_debug (lazy "unsat"); true
   | Constraint.Sat -> typ_debug (lazy "sat"); false
-  | Constraint.Unknown -> typ_debug (lazy "unknown"); false
+  | Constraint.Unknown ->
+     (* Work around versions of z3 that are confused by 2^n in
+        constraints, even when such constraints are irrelevant *)
+     let ncs' = List.concat (List.map constraint_conj ncs) in
+     let ncs' = List.filter (fun nc -> KidSet.is_empty (constraint_power_variables nc)) ncs' in
+     match Constraint.call_smt l vars (List.fold_left nc_and (nc_not nc) ncs') with
+     | Constraint.Unsat -> typ_debug (lazy "unsat"); true
+     | Constraint.Sat | Constraint.Unknown -> typ_debug (lazy "sat/unknown"); false
 
-let solve env (Nexp_aux (_, l) as nexp) =
+let solve_unique env (Nexp_aux (_, l) as nexp) =
   typ_print (lazy (Util.("Solve " |> red |> clear) ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env)
                    ^ " |- " ^ string_of_nexp nexp ^ " = ?"));
   match nexp with
@@ -1345,7 +1427,7 @@ let solve env (Nexp_aux (_, l) as nexp) =
     let vars = Env.get_typ_vars env in
     let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
     let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
-    Constraint.solve_z3 l vars constr (mk_kid "solve#")
+    Constraint.solve_unique_smt l vars constr (mk_kid "solve#")
 
 let debug_pos (file, line, _, _) =
   "(" ^ file ^ "/" ^ string_of_int line ^ ") "
@@ -1358,7 +1440,7 @@ let prove pos env nc =
   else ();
   match nc_aux with
   | NC_true -> true
-  | _ -> prove_z3 env nc
+  | _ -> prove_smt env nc
 
 (**************************************************************************)
 (* 3. Unification                                                         *)
@@ -1375,32 +1457,6 @@ let rec nexp_frees ?exs:(exs=KidSet.empty) (Nexp_aux (nexp, l)) =
   | Nexp_app (id, ns) -> List.fold_left KidSet.union KidSet.empty (List.map (fun n -> nexp_frees ~exs:exs n) ns)
   | Nexp_exp n -> nexp_frees ~exs:exs n
   | Nexp_neg n -> nexp_frees ~exs:exs n
-
-let rec typ_nexps (Typ_aux (typ_aux, l)) =
-  match typ_aux with
-  | Typ_internal_unknown -> []
-  | Typ_id v -> []
-  | Typ_var kid -> []
-  | Typ_tup typs -> List.concat (List.map typ_nexps typs)
-  | Typ_app (f, args) -> List.concat (List.map typ_arg_nexps args)
-  | Typ_exist (kids, nc, typ) -> typ_nexps typ
-  | Typ_fn (arg_typs, ret_typ, _) ->
-     List.concat (List.map typ_nexps arg_typs) @ typ_nexps ret_typ
-  | Typ_bidir (typ1, typ2) ->
-     typ_nexps typ1 @ typ_nexps typ2
-and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
-  match typ_arg_aux with
-  | A_nexp n -> [n]
-  | A_typ typ -> typ_nexps typ
-  | A_bool nc -> constraint_nexps nc
-  | A_order ord -> []
-and constraint_nexps (NC_aux (nc_aux, l)) =
-  match nc_aux with
-  | NC_equal (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_le (n1, n2) | NC_not_equal (n1, n2) ->
-     [n1; n2]
-  | NC_set _ | NC_true | NC_false | NC_var _ -> []
-  | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2
-  | NC_app (_, args) -> List.concat (List.map typ_arg_nexps args)
 
 let rec nexp_identical (Nexp_aux (nexp1, _)) (Nexp_aux (nexp2, _)) =
   match nexp1, nexp2 with
@@ -1692,13 +1748,13 @@ let rec ambiguous_vars (Typ_aux (aux, _)) =
   match aux with
   | Typ_app (_, args) -> List.fold_left KidSet.union KidSet.empty (List.map ambiguous_arg_vars args)
   | _ -> KidSet.empty
-  
+
 and ambiguous_arg_vars (A_aux (aux, _)) =
   match aux with
   | A_bool nc -> ambiguous_nc_vars nc
   | A_nexp nexp -> ambiguous_nexp_vars nexp
   | _ -> KidSet.empty
-               
+
 and ambiguous_nc_vars (NC_aux (aux, _)) =
   match aux with
   | NC_and (nc1, nc2) -> KidSet.union (tyvars_of_constraint nc1) (tyvars_of_constraint nc2)
@@ -1903,9 +1959,17 @@ let rec subtyp l env typ1 typ2 =
      let env = add_typ_vars l (List.map (mk_kopt K_int) (KidSet.elements (KidSet.inter (nexp_frees nexp2) (KidSet.of_list kids2)))) env in
      let kids2 = KidSet.elements (KidSet.diff (KidSet.of_list kids2) (nexp_frees nexp2)) in
      if not (kids2 = []) then typ_error env l ("Universally quantified constraint generated: " ^ Util.string_of_list ", " string_of_kid kids2) else ();
-     let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
-     if prove __POS__ env nc2 then ()
-     else typ_raise env l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
+     let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) (Env.get_typ_vars env) in
+     begin match Constraint.call_smt l vars (nc_eq nexp1 nexp2) with
+     | Constraint.Sat ->
+        let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
+        if prove __POS__ env nc2 then
+          ()
+        else
+          typ_raise env l (Err_subtype (typ1, typ2, Env.get_constraints env, Env.get_typ_var_locs env))
+     | _ ->
+        typ_error env l ("Constraint " ^ string_of_n_constraint (nc_eq nexp1 nexp2) ^ " is not satisfiable")
+     end
   | _, _ ->
   match typ_aux1, typ_aux2 with
   | _, Typ_internal_unknown when Env.allow_unknowns env -> ()
@@ -1966,11 +2030,24 @@ let subtype_check env typ1 typ2 =
 
 exception No_simple_rewrite;;
 
+let rec move_to_front p ys = function
+  | x :: xs when p x -> x :: (ys @ xs)
+  | x :: xs -> move_to_front p (x :: ys) xs
+  | [] -> ys
+
 let rec rewrite_sizeof' env (Nexp_aux (aux, l) as nexp) =
   let mk_exp exp = mk_exp ~loc:l exp in
   match aux with
   | Nexp_var v ->
+     (* Use a simple heuristic to find the most likely local we can
+        use, and move it to the front of the list. *)
+     let str = string_of_kid v in
+     let likely =
+       try let n = if str.[1] = '_' then 2 else 1 in String.sub str n (String.length str - n) with
+       | Invalid_argument _ -> str
+     in
      let locals = Env.get_locals env |> Bindings.bindings in
+     let locals = move_to_front (fun local -> likely = string_of_id (fst local)) [] locals in
      let same_size (local, (_, Typ_aux (aux, _))) =
        match aux with
        | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _)])
@@ -4731,7 +4808,7 @@ let mk_synonym typq typ_arg =
   let kopts = List.map snd kopts in
   let rec subst_args env l kopts args =
     match kopts, args with
-    | kopt :: kopts, A_aux (A_nexp arg, _) :: args when is_nat_kopt kopt ->
+    | kopt :: kopts, A_aux (A_nexp arg, _) :: args when is_int_kopt kopt ->
        let typ_arg, ncs = subst_args env l kopts args in
        typ_arg_subst (kopt_kid kopt) (arg_nexp arg) typ_arg,
        List.map (constraint_subst (kopt_kid kopt) (arg_nexp arg)) ncs

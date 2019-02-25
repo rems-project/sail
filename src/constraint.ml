@@ -55,6 +55,76 @@ open Util
 
 let opt_smt_verbose = ref false
 
+type solver = {
+    command : string;
+    header : string;
+    footer : string;
+    negative_literals : bool;
+    uninterpret_power : bool
+  }
+
+let cvc4_solver = {
+    command = "cvc4 -L smtlib2 --tlimit=2000";
+    header = "(set-logic QF_UFNIA)\n";
+    footer = "";
+    negative_literals = false;
+    uninterpret_power = true
+  }
+
+let mathsat_solver = {
+    command = "mathsat";
+    header = "(set-logic QF_UFLIA)\n";
+    footer = "";
+    negative_literals = false;
+    uninterpret_power = true
+  }
+
+let z3_solver = {
+    command = "z3 -t:1000 -T:10";
+    (* Using push and pop is much faster, I believe because
+       incremental mode uses a different solver. *)
+    header = "(push)\n";
+    footer = "(pop)\n";
+    negative_literals = true;
+    uninterpret_power = false;
+  }
+
+let yices_solver = {
+    command = "yices-smt2 --timeout=2";
+    header = "(set-logic QF_UFLIA)\n";
+    footer = "";
+    negative_literals = false;
+    uninterpret_power = true
+  }
+
+let vampire_solver = {
+    (* vampire sometimes likes to ignore its time limit *)
+    command = "timeout -s SIGKILL 3s vampire --time_limit 2s --input_syntax smtlib2 --mode smtcomp";
+    header = "";
+    footer = "";
+    negative_literals = false;
+    uninterpret_power = true
+  }
+
+let alt_ergo_solver ={
+    command = "alt-ergo";
+    header = "";
+    footer = "";
+    negative_literals = false;
+    uninterpret_power = true
+  }
+
+let opt_solver = ref z3_solver
+
+let set_solver = function
+  | "z3" -> opt_solver := z3_solver
+  | "alt-ergo" -> opt_solver := alt_ergo_solver
+  | "cvc4" -> opt_solver := cvc4_solver
+  | "mathsat" -> opt_solver := mathsat_solver
+  | "vampire" -> opt_solver := vampire_solver
+  | "yices" -> opt_solver := yices_solver
+  | unknown -> prerr_endline ("Unrecognised SMT solver " ^ unknown)
+
 (* SMTLIB v2.0 format is based on S-expressions so we have a
    lightweight representation of those here. *)
 type sexpr = List of (sexpr list) | Atom of string
@@ -101,6 +171,9 @@ let to_smt l vars constr =
     match aux with
     | Nexp_id id -> Atom (Util.zencode_string (string_of_id id))
     | Nexp_var v -> smt_var v
+    | Nexp_constant c
+         when Big_int.less_equal c (Big_int.of_int (-1)) && not !opt_solver.negative_literals ->
+       sfun "-" [Atom "0"; Atom (Big_int.to_string (Big_int.abs c))]
     | Nexp_constant c -> Atom (Big_int.to_string c)
     | Nexp_app (id, nexps) -> sfun (string_of_id id) (List.map smt_nexp nexps)
     | Nexp_times (nexp1, nexp2) -> sfun "*" [smt_nexp nexp1; smt_nexp nexp2]
@@ -108,6 +181,7 @@ let to_smt l vars constr =
     | Nexp_minus (nexp1, nexp2) -> sfun "-" [smt_nexp nexp1; smt_nexp nexp2]
     | Nexp_exp (Nexp_aux (Nexp_constant c, _)) when Big_int.greater c Big_int.zero ->
        Atom (Big_int.to_string (Big_int.pow_int_positive 2 (Big_int.to_int c)))
+    | Nexp_exp nexp when !opt_solver.uninterpret_power -> sfun "sailexp" [smt_nexp nexp]
     | Nexp_exp nexp -> sfun "^" [Atom "2"; smt_nexp nexp]
     | Nexp_neg nexp -> sfun "-" [smt_nexp nexp]
   in
@@ -137,12 +211,13 @@ let to_smt l vars constr =
 
 let smtlib_of_constraints ?get_model:(get_model=false) l vars constr : string * (kid -> sexpr) =
   let variables, problem, var_map = to_smt l vars constr in
-  "(push)\n"
+  !opt_solver.header
   ^ variables ^ "\n"
+  ^ (if !opt_solver.uninterpret_power then "(declare-fun sailexp (Int) Int)\n" else "")
   ^ pp_sexpr (sfun "define-fun" [Atom "constraint"; List []; Atom "Bool"; problem])
   ^ "\n(assert constraint)\n(check-sat)"
-  ^ (if get_model then "\n(get-model)" else "")
-  ^ "\n(pop)",
+  ^ (if get_model then "\n(get-model)\n" else "\n")
+  ^ !opt_solver.footer,
   var_map
 
 type smt_result = Unknown | Sat | Unsat
@@ -184,12 +259,12 @@ let save_digests () =
   DigestMap.iter output !known_problems;
   close_out out_chan
 
-let call_z3' l vars constraints : smt_result =
+let call_smt' l vars constraints : smt_result =
   let problems = [constraints] in
-  let z3_file, _ = smtlib_of_constraints l vars constraints in
+  let smt_file, _ = smtlib_of_constraints l vars constraints in
 
   if !opt_smt_verbose then
-    prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file)
+    prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" smt_file)
   else ();
 
   let rec input_lines chan = function
@@ -202,7 +277,7 @@ let call_z3' l vars constraints : smt_result =
        end
   in
 
-  let digest = Digest.string z3_file in
+  let digest = Digest.string smt_file in
   try
     let result = DigestMap.find digest !known_problems in
     result
@@ -210,45 +285,49 @@ let call_z3' l vars constraints : smt_result =
   | Not_found ->
     begin
       let (input_file, tmp_chan) =
-        try Filename.open_temp_file "constraint_" ".sat" with
-        | Sys_error msg -> raise (Reporting.err_general l ("Could not open temp file when calling Z3: " ^ msg))
+        try Filename.open_temp_file "constraint_" ".smt2" with
+        | Sys_error msg -> raise (Reporting.err_general l ("Could not open temp file when calling SMT: " ^ msg))
       in
-      output_string tmp_chan z3_file;
+      output_string tmp_chan smt_file;
       close_out tmp_chan;
-      let z3_output =
+      let smt_output =
         try
-          let z3_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
-          let z3_output = List.combine problems (input_lines z3_chan (List.length problems)) in
-          let _ = Unix.close_process_in z3_chan in
-          z3_output
+          let smt_out, smt_in, smt_err = Unix.open_process_full (!opt_solver.command ^ " " ^ input_file) (Unix.environment ()) in
+          let smt_output =
+            try List.combine problems (input_lines smt_out (List.length problems)) with
+            | End_of_file -> List.combine problems ["unknown"]
+          in
+          let _ = Unix.close_process_full (smt_out, smt_in, smt_err) in
+          smt_output
         with
-        | exn -> raise (Reporting.err_general l ("Error when calling z3: " ^ Printexc.to_string exn))
+        | exn -> raise (Reporting.err_general l ("Error when calling smt: " ^ Printexc.to_string exn))
       in
       Sys.remove input_file;
       try
-        let (problem, _) = List.find (fun (_, result) -> result = "unsat") z3_output in
+        let (problem, _) = List.find (fun (_, result) -> result = "unsat") smt_output in
         known_problems := DigestMap.add digest Unsat !known_problems;
         Unsat
       with
       | Not_found ->
-         let unsolved = List.filter (fun (_, result) -> result = "unknown") z3_output in
+         let unsolved = List.filter (fun (_, result) -> result = "unknown") smt_output in
          if unsolved == []
          then (known_problems := DigestMap.add digest Sat !known_problems; Sat)
          else (known_problems := DigestMap.add digest Unknown !known_problems; Unknown)
     end
 
-let call_z3 l vars constraints =
-  let t = Profile.start_z3 () in
-  let result = call_z3' l vars constraints in
-  Profile.finish_z3 t;
+let call_smt l vars constraints =
+  let t = Profile.start_smt () in
+  let result = call_smt' l vars constraints in
+  Profile.finish_smt t;
   result
 
-let rec solve_z3 l vars constraints var =
-  let z3_file, smt_var = smtlib_of_constraints ~get_model:true l vars constraints in
-  let z3_var = pp_sexpr (smt_var var) in
+let solve_smt l vars constraints var =
+  let smt_file, smt_var = smtlib_of_constraints ~get_model:true l vars constraints in
+  let smt_var = pp_sexpr (smt_var var) in
 
-  (* prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file);
-     prerr_endline ("Solving for " ^ z3_var); *)
+  if !opt_smt_verbose then
+    prerr_endline (Printf.sprintf "SMTLIB2 constraints are (solve for %s): \n%s%!" smt_var smt_file)
+  else ();
 
   let rec input_all chan =
     try
@@ -259,27 +338,45 @@ let rec solve_z3 l vars constraints var =
       End_of_file -> []
   in
 
-  let (input_file, tmp_chan) = Filename.open_temp_file "constraint_" ".sat" in
-  output_string tmp_chan z3_file;
+  let (input_file, tmp_chan) = Filename.open_temp_file "constraint_" ".smt2" in
+  output_string tmp_chan smt_file;
   close_out tmp_chan;
-  let z3_output =
+  let smt_output =
     try
-      let z3_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
-      let z3_output = String.concat " " (input_all z3_chan) in
-      let _ = Unix.close_process_in z3_chan in
-      z3_output
+      let smt_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
+      let smt_output = String.concat " " (input_all smt_chan) in
+      let _ = Unix.close_process_in smt_chan in
+      smt_output
     with
     | exn ->
-       raise (Reporting.err_general l ("Got error when calling z3: " ^ Printexc.to_string exn))
+       raise (Reporting.err_general l ("Got error when calling smt: " ^ Printexc.to_string exn))
   in
   Sys.remove input_file;
-  let regexp = {|(define-fun |} ^ z3_var ^ {| () Int[ ]+\([0-9]+\))|} in
+  let regexp = {|(define-fun |} ^ smt_var ^ {| () Int[ ]+\([0-9]+\))|} in
   try
-    let _ = Str.search_forward (Str.regexp regexp) z3_output 0 in
-    let result = Big_int.of_string (Str.matched_group 1 z3_output) in
-    begin match call_z3 l vars (nc_and constraints (nc_neq (nconstant result) (nvar var))) with
-    | Unsat -> Some result
-    | _ -> None
-    end
+    let _ = Str.search_forward (Str.regexp regexp) smt_output 0 in
+    let result = Big_int.of_string (Str.matched_group 1 smt_output) in
+    Some result
   with
-    Not_found -> None
+  | Not_found -> None
+
+let solve_all_smt l vars constraints var =
+  let rec aux results =
+    let constraints = List.fold_left (fun ncs r -> (nc_and ncs (nc_neq (nconstant r) (nvar var)))) constraints results in
+    match solve_smt l vars constraints var with
+    | Some result -> aux (result :: results)
+    | None ->
+       match call_smt l vars constraints with
+       | Unsat -> Some results
+       | _ -> None
+  in
+  aux []
+
+let solve_unique_smt l vars constraints var =
+  match solve_smt l vars constraints var with
+  | Some result ->
+     begin match call_smt l vars (nc_and constraints (nc_neq (nconstant result) (nvar var))) with
+     | Unsat -> Some result
+     | _ -> None
+     end
+  | None -> None

@@ -201,7 +201,7 @@ let rec is_value (E_aux (e,(l,annot))) =
 
 let is_pure (Effect_opt_aux (e,_)) =
   match e with
-  | Effect_opt_pure -> true
+  | Effect_opt_none -> true
   | Effect_opt_effect (Effect_aux (Effect_set [],_)) -> true
   | _ -> false
 
@@ -2263,7 +2263,7 @@ let replace_with_the_value bound_nexps (E_aux (_,(l,_)) as exp) =
       prove __POS__ env (NC_aux (NC_equal (size,nexp), Parse_ast.Unknown))
     in
     if is_nexp_constant size then size else
-      match solve env size with
+      match solve_unique env size with
       | Some n -> nconstant n
       | None ->
          match List.find is_equal bound_nexps with
@@ -2930,7 +2930,7 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
   | _ -> None
 
 let simplify_size_nexp env typ_env (Nexp_aux (ne,l) as nexp) =
-  match solve typ_env nexp with
+  match solve_unique typ_env nexp with
   | Some n -> nconstant n
   | None ->
      let is_equal kid =
@@ -3691,7 +3691,7 @@ let rec rewrite_app env typ (id,args) =
     let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
     match size with
     | Nexp_aux (Nexp_constant _,_) -> E_cast (typ,exp)
-    | _ -> match solve env size with
+    | _ -> match solve_unique env size with
       | Some c -> E_cast (vector_typ (nconstant c) order bittyp, exp)
       | None -> e
   in
@@ -3711,7 +3711,7 @@ let rec rewrite_app env typ (id,args) =
        let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
        let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
        let midsize = nminus size size1 in begin
-         match solve env midsize with
+         match solve_unique env midsize with
          | Some c ->
             let midtyp = vector_typ (nconstant c) order bittyp in
             E_app (append,
@@ -3739,7 +3739,7 @@ let rec rewrite_app env typ (id,args) =
        let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
        let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
        let midsize = nminus size size1 in begin
-         match solve env midsize with
+         match solve_unique env midsize with
          | Some c ->
             let midtyp = vector_typ (nconstant c) order bittyp in
             E_app (append,
@@ -3797,7 +3797,7 @@ let rec rewrite_app env typ (id,args) =
        let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
        let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
        let midsize = nminus size size1 in begin
-         match solve env midsize with
+         match solve_unique env midsize with
          | Some c ->
             let midtyp = vector_typ (nconstant c) order bittyp in
             try_cast_to_typ
@@ -4000,7 +4000,7 @@ struct
 
 let simplify_size_nexp env quant_kids nexp =
   let rec aux (Nexp_aux (ne,l) as nexp) =
-    match solve env nexp with
+    match solve_unique env nexp with
     | Some n -> Some (nconstant n)
     | None ->
        let is_equal kid =
@@ -4191,7 +4191,7 @@ let fill_in_type env typ =
     | K_order
     | K_bool -> subst
     | K_int ->
-       (match solve env (nvar kid) with
+       (match solve_unique env (nvar kid) with
        | None -> subst
        | Some n -> KBindings.add kid (nconstant n) subst)) tyvars KBindings.empty in
   subst_src_typ subst typ
@@ -4300,7 +4300,7 @@ let add_bitvector_casts (Defs defs) =
   let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),fcl_ann)) =
     let fcl_env = env_of_annot fcl_ann in
     let (tq,typ) = Env.get_val_spec_orig id fcl_env in
-    let quant_kids = List.map kopt_kid (List.filter is_nat_kopt (quant_kopts tq)) in
+    let quant_kids = List.map kopt_kid (List.filter is_int_kopt (quant_kopts tq)) in
     let ret_typ =
       match typ with
       | Typ_aux (Typ_fn (_,ret,_),_) -> ret

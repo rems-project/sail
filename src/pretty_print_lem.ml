@@ -316,7 +316,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
           * if we add a new Typ constructor *)
          let tpp = typ ty in
          if atyp_needed then parens tpp else tpp
-      | Typ_exist (kopts,_,ty) when List.for_all is_nat_kopt kopts -> begin
+      | Typ_exist (kopts,_,ty) when List.for_all is_int_kopt kopts -> begin
          let kids = List.map kopt_kid kopts in
          let tpp = typ ty in
          let visible_vars = lem_tyvars_of_typ ty in
@@ -359,7 +359,7 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
        let mk_typ nexp =
          Some (Typ_aux (Typ_app (id, [A_aux (A_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
        in
-       match Type_check.solve env size with
+       match Type_check.solve_unique env size with
        | Some n -> mk_typ (nconstant n)
        | None ->
           let is_equal nexp =
@@ -668,7 +668,7 @@ let doc_exp_lem, doc_let_lem =
           let call = doc_id_lem (append_id f "M") in
           wrap_parens (hang 2 (flow (break 1) (call :: List.map expY args)))
        (* temporary hack to make the loop body a function of the temporary variables *)
-       | Id_aux (Id "foreach", _) ->
+       | Id_aux (Id "foreach#", _) ->
           begin
             match args with
             | [exp1; exp2; exp3; ord_exp; vartuple; body] ->
@@ -713,7 +713,8 @@ let doc_exp_lem, doc_let_lem =
           | _ -> raise (Reporting.err_unreachable l __POS__
             "Unexpected number of arguments for loop combinator")
           end
-       | Id_aux (Id (("while" | "until") as combinator), _) ->
+       | Id_aux (Id (("while#" | "until#") as combinator), _) ->
+          let combinator = String.sub combinator 0 (String.length combinator - 1) in
           begin
             match args with
             | [cond; varstuple; body] ->

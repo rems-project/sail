@@ -112,6 +112,8 @@ val apat_globals : 'a apat -> (id * 'a) list
 
 val apat_types : 'a apat -> 'a Bindings.t
 
+val is_dead_aexp : 'a aexp -> bool
+
 (* Compiling to ANF expressions *)
 
 val anf_pat : ?global:bool -> tannot pat -> typ apat

@@ -51,13 +51,13 @@
 let opt_profile = ref false
 
 type profile = {
-    z3_calls : int;
-    z3_time : float
+    smt_calls : int;
+    smt_time : float
   }
 
 let new_profile = {
-    z3_calls = 0;
-    z3_time = 0.0
+    smt_calls = 0;
+    smt_time = 0.0
   }
 
 let profile_stack = ref []
@@ -68,12 +68,12 @@ let update_profile f =
   | (p :: ps) ->
      profile_stack := f p :: ps
 
-let start_z3 () =
-  update_profile (fun p -> { p with z3_calls = p.z3_calls + 1 });
+let start_smt () =
+  update_profile (fun p -> { p with smt_calls = p.smt_calls + 1 });
   Sys.time ()
 
-let finish_z3 t =
-  update_profile (fun p -> { p with z3_time = p.z3_time +. (Sys.time () -. t) })
+let finish_smt t =
+  update_profile (fun p -> { p with smt_time = p.smt_time +. (Sys.time () -. t) })
 
 let start () =
   profile_stack := new_profile :: !profile_stack;
@@ -84,7 +84,7 @@ let finish msg t =
     begin match !profile_stack with
     | p :: ps ->
        prerr_endline (Printf.sprintf "%s %s: %fs" Util.("Profiled" |> magenta |> clear) msg (Sys.time () -. t));
-       prerr_endline (Printf.sprintf "  Z3 calls: %d, Z3 time: %fs" p.z3_calls p.z3_time);
+       prerr_endline (Printf.sprintf "  SMT calls: %d, SMT time: %fs" p.smt_calls p.smt_time);
        profile_stack := ps
     | [] -> ()
     end

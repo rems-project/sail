@@ -66,7 +66,7 @@ let doc_id (Id_aux (id_aux, _)) =
 let doc_kid kid = string (Ast_util.string_of_kid kid)
 
 let doc_kopt = function
-  | kopt when is_nat_kopt kopt -> doc_kid (kopt_kid kopt)
+  | kopt when is_int_kopt kopt -> doc_kid (kopt_kid kopt)
   | kopt when is_typ_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])
   | kopt when is_order_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])
   | kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Bool"])
@@ -213,7 +213,7 @@ and doc_arg_typs = function
 let doc_quants quants =
   let doc_qi_kopt (QI_aux (qi_aux, _)) =
     match qi_aux with
-    | QI_id kopt when is_nat_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Int"])]
+    | QI_id kopt when is_int_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Int"])]
     | QI_id kopt when is_typ_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])]
     | QI_id kopt when is_bool_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Bool"])]
     | QI_id kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])]
@@ -234,7 +234,7 @@ let doc_quants quants =
 let doc_param_quants quants =
   let doc_qi_kopt (QI_aux (qi_aux, _)) =
     match qi_aux with
-    | QI_id kopt when is_nat_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Int"]
+    | QI_id kopt when is_int_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Int"]
     | QI_id kopt when is_typ_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Type"]
     | QI_id kopt when is_bool_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Bool"]
     | QI_id kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Order"]
@@ -619,8 +619,7 @@ let doc_typdef (TD_aux(td,_)) = match td with
   | TD_variant (id, TypQ_aux (TypQ_tq qs, _), unions, _) ->
      separate space [string "union"; doc_id id; doc_param_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
-  | _ -> string "TYPEDEF"
-
+  | TD_bitfield _ -> string "BITFIELD" (* should be rewritten *)
 
 let doc_spec ?comment:(comment=false) (VS_aux (v, annot)) =
   let doc_extern ext =
@@ -654,6 +653,12 @@ let rec doc_scattered (SD_aux (sd_aux, _)) =
      string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id
   | SD_variant (id, TypQ_aux (TypQ_tq quants, _)) ->
      string "scattered" ^^ space ^^ string "union" ^^ space ^^ doc_id id ^^ doc_param_quants quants
+  | SD_mapcl (id, mapcl) ->
+     separate space [string "mapping clause"; doc_id id; equals; doc_mapcl mapcl]
+  | SD_mapping (id, Typ_annot_opt_aux (Typ_annot_opt_none, _)) ->
+     separate space [string "scattered mapping"; doc_id id]
+  | SD_mapping (id, Typ_annot_opt_aux (Typ_annot_opt_some (_, typ), _)) ->
+     separate space [string "scattered mapping"; doc_id id; string ":"; doc_typ typ]
   | SD_unioncl (id, tu) ->
      separate space [string "union clause"; doc_id id; equals; doc_union tu]
 

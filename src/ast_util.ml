@@ -116,7 +116,7 @@ let mk_qi_kopt kopt = QI_aux (QI_id kopt, Parse_ast.Unknown)
 
 let mk_fundef funcls =
   let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown) in
-  let effect_opt = Effect_opt_aux (Effect_opt_pure, Parse_ast.Unknown) in
+  let effect_opt = Effect_opt_aux (Effect_opt_none, Parse_ast.Unknown) in
   let rec_opt = Rec_aux (Rec_nonrec, Parse_ast.Unknown) in
   DEF_fundef
    (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), no_annot))
@@ -129,7 +129,7 @@ let mk_val_spec vs_aux =
 let kopt_kid (KOpt_aux (KOpt_kind (_, kid), _)) = kid
 let kopt_kind (KOpt_aux (KOpt_kind (k, _), _)) = k
 
-let is_nat_kopt = function
+let is_int_kopt = function
   | KOpt_aux (KOpt_kind (K_aux (K_int, _), _), _) -> true
   | _ -> false
 
@@ -417,10 +417,15 @@ let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
 let nc_gteq n1 n2 = NC_aux (NC_bounded_ge (n1, n2), Parse_ast.Unknown)
 let nc_lt n1 n2 = nc_lteq (nsum n1 (nint 1)) n2
 let nc_gt n1 n2 = nc_gteq n1 (nsum n2 (nint 1))
-let nc_or nc1 nc2 = mk_nc (NC_or (nc1, nc2))
 let nc_var kid = mk_nc (NC_var kid)
 let nc_true = mk_nc NC_true
 let nc_false = mk_nc NC_false
+
+let nc_or nc1 nc2 =
+  match nc1, nc2 with
+  | _, NC_aux (NC_false, _) -> nc1
+  | NC_aux (NC_false, _), _ -> nc2
+  | _, _ -> mk_nc (NC_or (nc1, nc2))
 
 let nc_and nc1 nc2 =
   match nc1, nc2 with
@@ -439,7 +444,7 @@ let arg_kopt (KOpt_aux (KOpt_kind (K_aux (k, _), v), l)) =
   | K_order -> arg_order (Ord_aux (Ord_var v, l))
   | K_bool -> arg_bool (nc_var v)
   | K_type -> arg_typ (mk_typ (Typ_var v))
-           
+
 let nc_not nc = mk_nc (NC_app (mk_id "not", [arg_bool nc]))
 
 let mk_typschm typq typ = TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown)
@@ -1355,6 +1360,7 @@ and undefined_of_typ_args mwords l annot (A_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | A_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]
   | A_typ typ -> [undefined_of_typ mwords l annot typ]
+  | A_bool nc -> [E_aux (E_constraint nc, (l, annot (atom_bool_typ nc)))]
   | A_order _ -> []
 
 let destruct_pexp (Pat_aux (pexp,ann)) =
@@ -1870,6 +1876,12 @@ let rec find_annot_exp sl (E_aux (aux, (l, annot)) as exp) =
          option_chain (find_annot_lexp sl lexp) (find_annot_exp sl exp)
       | E_var (lexp, exp1, exp2) ->
          option_chain (find_annot_lexp sl lexp) (option_mapm (find_annot_exp sl) [exp1; exp2])
+      | E_if (cond_exp, then_exp, else_exp) ->
+         option_mapm (find_annot_exp sl) [cond_exp; then_exp; else_exp]
+      | E_case (exp, cases) | E_try (exp, cases) ->
+         option_chain (find_annot_exp sl exp) (option_mapm (find_annot_pexp sl) cases)
+      | E_return exp | E_cast (_, exp) ->
+         find_annot_exp sl exp
       | _ -> None
     in
     match result with
@@ -1896,6 +1908,8 @@ and find_annot_lexp sl (LEXP_aux (aux, (l, annot))) =
 and find_annot_pat sl (P_aux (aux, (l, annot))) =
   if not (subloc sl l) then None else
     let result = match aux with
+      | P_vector_concat pats ->
+         option_mapm (find_annot_pat sl) pats
       | _ -> None
     in
     match result with
@@ -1906,29 +1920,40 @@ and find_annot_pexp sl (Pat_aux (aux, (l, annot))) =
   if not (subloc sl l) then None else
     match aux with
     | Pat_exp (pat, exp) ->
-       find_annot_exp sl exp
+       option_chain (find_annot_pat sl pat) (find_annot_exp sl exp)
     | Pat_when (pat, guard, exp) ->
-       None
+       option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [guard; exp])
 
 let find_annot_funcl sl (FCL_aux (FCL_Funcl (id, pexp), (l, annot))) =
-  if not (subloc sl l) then
-    None
-  else
+  if not (subloc sl l) then None else
     match find_annot_pexp sl pexp with
     | None -> Some (l, annot)
     | result -> result
 
 let find_annot_fundef sl (FD_aux (FD_function (_, _, _, funcls), (l, annot))) =
-  if not (subloc sl l) then
-    None
-  else
+  if not (subloc sl l) then None else
     match option_mapm (find_annot_funcl sl) funcls with
     | None -> Some (l, annot)
     | result -> result
 
+let find_annot_scattered sl (SD_aux (aux, (l, annot))) =
+  if not (subloc sl l) then None else
+    let result = match aux with
+      | SD_funcl fcl -> find_annot_funcl sl fcl
+      | _ -> None
+    in
+    match result with
+    | None -> Some (l, annot)
+    | _ -> result
+
 let rec find_annot_defs sl = function
   | DEF_fundef fdef :: defs ->
      begin match find_annot_fundef sl fdef with
+     | None -> find_annot_defs sl defs
+     | result -> result
+     end
+  | DEF_scattered sdef :: defs ->
+     begin match find_annot_scattered sl sdef with
      | None -> find_annot_defs sl defs
      | result -> result
      end

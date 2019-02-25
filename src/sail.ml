@@ -65,7 +65,7 @@ let opt_print_c = ref false
 let opt_print_latex = ref false
 let opt_print_coq = ref false
 let opt_print_cgen = ref false
-let opt_memo_z3 = ref true
+let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
 let opt_libs_lem = ref ([]:string list)
@@ -117,9 +117,15 @@ let options = Arg.align ([
   ( "-ocaml_generators",
     Arg.String (fun s -> opt_ocaml_generators := s::!opt_ocaml_generators),
     "<types> produce random generators for the given types");
+  ( "-smt_solver",
+    Arg.String (fun s -> Constraint.set_solver (String.trim s)),
+    "<solver> choose SMT solver. Supported solvers are z3 (default), alt-ergo, cvc4, mathsat, vampire and yices.");
+  ( "-smt_linearize",
+    Arg.Set Type_check.opt_smt_linearize,
+    "(experimental) force linearization for constraints involving exponentials");
   ( "-latex",
-    Arg.Tuple [Arg.Set opt_print_latex; Arg.Clear Type_check.opt_expand_valspec ],
-    " pretty print the input to latex");
+    Arg.Tuple [Arg.Set opt_print_latex; Arg.Clear Type_check.opt_expand_valspec],
+    " pretty print the input to LaTeX");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix := prefix),
     " set a custom prefix for generated LaTeX macro command (default sail)");
@@ -216,7 +222,7 @@ let options = Arg.align ([
     " memoize calls to z3, improving performance when typechecking repeatedly (default)");
   ( "-no_memo_z3",
     Arg.Clear opt_memo_z3,
-    " do not memoize calls to z3");
+    " do not memoize calls to z3 (default)");
   ( "-memo",
     Arg.Tuple [Arg.Set opt_memo_z3; Arg.Set C_backend.opt_memo_cache],
     " memoize calls to z3, and intermediate compilation results");
@@ -276,7 +282,7 @@ let options = Arg.align ([
     "<verbosity> (debug) verbose typechecker output: 0 is silent");
   ( "-dsmt_verbose",
     Arg.Set Constraint.opt_smt_verbose,
-    " (debug) print SMTLIB constraints sent to Z3");
+    " (debug) print SMTLIB constraints sent to SMT solver");
   ( "-dno_cast",
     Arg.Set opt_dno_cast,
     " (debug) typecheck without any implicit casting");
@@ -319,7 +325,7 @@ let _ =
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg
 
-let load_files ?generate:(generate=true) type_envs files =
+let load_files ?check:(check=false) type_envs files =
   if !opt_memo_z3 then Constraint.load_digests () else ();
 
   let t = Profile.start () in
@@ -328,24 +334,27 @@ let load_files ?generate:(generate=true) type_envs files =
     List.fold_right (fun (_, Parse_ast.Defs ast_nodes) (Parse_ast.Defs later_nodes)
                      -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
   let ast = Process_file.preprocess_ast options ast in
-  let ast = Initial_check.process_ast ~generate:generate ast in
+  let ast = Initial_check.process_ast ~generate:(not check) ast in
   Profile.finish "parsing" t;
 
   let t = Profile.start () in
   let (ast, type_envs) = check_ast type_envs ast in
   Profile.finish "type checking" t;
 
-  let ast = Scattered.descatter ast in
-  let ast = rewrite_ast type_envs ast in
-
-  let out_name = match !opt_file_out with
-    | None when parsed = [] -> "out.sail"
-    | None -> fst (List.hd parsed)
-    | Some f -> f ^ ".sail" in
-
   if !opt_memo_z3 then Constraint.save_digests () else ();
 
-  (out_name, ast, type_envs)
+  if check then
+    ("out.sail", ast, type_envs)
+  else
+    let ast = Scattered.descatter ast in
+    let ast = rewrite_ast type_envs ast in
+
+    let out_name = match !opt_file_out with
+      | None when parsed = [] -> "out.sail"
+      | None -> fst (List.hd parsed)
+      | Some f -> f ^ ".sail" in
+
+    (out_name, ast, type_envs)
 
 let main() =
   if !opt_print_version then
@@ -411,7 +420,8 @@ let main() =
       (if !(opt_print_c)
        then
          let ast_c = rewrite_ast_c type_envs ast in
-         let ast_c, type_envs = Specialize.specialize ast_c type_envs in
+         let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
+         (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization ast_c type_envs) in *)
          (* let ast_c = Spec_analysis.top_sort_defs ast_c in *)
          Util.opt_warnings := true;
          C_backend.compile_ast (C_backend.initial_ctx type_envs) (!opt_includes_c) ast_c
