@@ -331,6 +331,10 @@ let value_modulus = function
   | [v1; v2] -> V_int (Sail_lib.modulus (coerce_int v1, coerce_int v2))
   | _ -> failwith "value modulus"
 
+let value_abs_int = function
+  | [v] -> V_int (Big_int.abs (coerce_int v))
+  | _ -> failwith "value abs_int"
+
 let value_add_vec_int = function
   | [v1; v2] -> mk_vector (Sail_lib.add_vec_int (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value add_vec_int"
@@ -630,6 +634,7 @@ let primops =
       ("shl_int", value_shl_int);
       ("max_int", value_max_int);
       ("min_int", value_min_int);
+      ("abs_int", value_abs_int);
       ("add_vec_int", value_add_vec_int);
       ("sub_vec_int", value_sub_vec_int);
       ("add_vec", value_add_vec);
