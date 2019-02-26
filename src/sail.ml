@@ -60,6 +60,7 @@ let opt_print_initial_env = ref false
 let opt_print_verbose = ref false
 let opt_print_lem = ref false
 let opt_print_tofrominterp = ref false
+let opt_tofrominterp_output_dir : string option ref = ref None
 let opt_print_ocaml = ref false
 let opt_print_c = ref false
 let opt_print_latex = ref false
@@ -99,6 +100,12 @@ let options = Arg.align ([
   ( "-tofrominterp",
     Arg.Set opt_print_tofrominterp,
     " output OCaml functions to translate between shallow embedding and interpreter");
+  ( "-tofrominterp_lem",
+    Arg.Set ToFromInterp_backend.lem_mode,
+    " output embedding translation for the Lem backend rather than the OCaml backend");
+  ( "-tofrominterp_output_dir",
+    Arg.String (fun dir -> opt_tofrominterp_output_dir := Some dir),
+    " set a custom directory to output embedding translation OCaml");
   ( "-ocaml",
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen],
     " output an OCaml translated version of the input");
@@ -415,7 +422,7 @@ let main() =
        then
          let ast = rewrite_ast_interpreter type_envs ast in
          let out = match !opt_file_out with None -> "out" | Some s -> s in
-         ToFromInterp_backend.tofrominterp_output out ast
+         ToFromInterp_backend.tofrominterp_output !opt_tofrominterp_output_dir out ast
        else ());
       (if !(opt_print_c)
        then

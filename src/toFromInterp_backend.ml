@@ -56,6 +56,11 @@ open Util
 open Pretty_print_common
 open Ocaml_backend
 
+let lem_mode = ref false
+
+let maybe_zencode s = if !lem_mode then s else zencode_string s
+let maybe_zencode_upper s = if !lem_mode then String.capitalize_ascii s else zencode_upper_string s
+
 let frominterp_typedef (TD_aux (td_aux, (l, _))) =
   let fromValueArgs (Typ_aux (typ_aux, _)) = match typ_aux with
     | Typ_tup typs -> brackets (separate (semi ^^ space) (List.mapi (fun i _ -> string ("v" ^ (string_of_int i))) typs))
@@ -75,10 +80,10 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
     | A_order order -> string ("Order_" ^ (string_of_order order))
     | _ -> string "TYP_ARG"
   and fromValueTyp ((Typ_aux (typ_aux, l)) as typ) arg_name = match typ_aux with
-    | Typ_id id -> parens (concat [string (zencode_string (string_of_id id)); string ("FromInterpValue"); space; string arg_name])
+    | Typ_id id -> parens (concat [string (maybe_zencode (string_of_id id)); string ("FromInterpValue"); space; string arg_name])
     | Typ_app (typ_id, typ_args) ->
        assert (typ_args <> []);
-       parens (separate space ([string (zencode_string (string_of_id typ_id) ^ "FromInterpValue")] @ List.map fromValueTypArg typ_args @ [string arg_name]))
+       parens (separate space ([string (maybe_zencode (string_of_id typ_id) ^ "FromInterpValue")] @ List.map fromValueTypArg typ_args @ [string arg_name]))
     | Typ_var kid -> parens (separate space [fromValueKid kid; string arg_name])
     | Typ_fn _ -> parens (string "failwith \"fromValueTyp: Typ_fn arm unimplemented\"")
     | _ -> parens (string "failwith \"fromValueTyp: type arm unimplemented\"")
@@ -108,7 +113,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
         | Id_aux ((Id "diafp"),_) -> empty *)
      (* | Id_aux ((Id "option"),_) -> empty *)
      | _ ->
-        let fromInterpValueName = concat [string (zencode_string (string_of_id id)); string "FromInterpValue"] in
+        let fromInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "FromInterpValue"] in
         let fromFallback = separate space [pipe; underscore; arrow; string "failwith";
                                            dquotes (string ("invalid interpreter value for " ^ (string_of_id id)))] in
         let fromInterpValue =
@@ -120,7 +125,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
                     [pipe; string "V_ctor"; parens (concat [dquotes (string (string_of_id ctor_id)); comma_sp;
                                                             fromValueArgs typ
                                               ]);
-                     arrow; string (zencode_upper_string (string_of_id ctor_id)); fromValueVals typ
+                     arrow; string (maybe_zencode_upper (string_of_id ctor_id)); fromValueVals typ
                     ]
                 )
                 arms)
@@ -129,13 +134,13 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
         fromInterpValue ^^ (twice hardline)
      end
   | TD_abbrev (id, typq, typ_arg) ->
-     let fromInterpValueName = concat [string (zencode_string (string_of_id id)); string "FromInterpValue"] in
+     let fromInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "FromInterpValue"] in
      let fromInterpValue =
        (separate space [string "let"; fromInterpValueName; separate space (fromValueTypqs typq); equals; fromValueTypArg typ_arg])
      in
      fromInterpValue ^^ (twice hardline)
   | TD_enum (id, ids, _) ->
-     let fromInterpValueName = concat [string (zencode_string (string_of_id id)); string "FromInterpValue"] in
+     let fromInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "FromInterpValue"] in
      let fromFallback = separate space [pipe; underscore; arrow; string "failwith";
                                         dquotes (string ("invalid interpreter value for " ^ (string_of_id id)))] in
      let fromInterpValue =
@@ -145,9 +150,23 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
              (fun id ->
                separate space
                  [pipe; string "V_ctor"; parens (concat [dquotes (string (string_of_id id)); comma_sp; string "[]"]);
-                  arrow; string (zencode_upper_string (string_of_id id))]
+                  arrow; string (maybe_zencode_upper (string_of_id id))]
              )
              ids)
+          ^^ hardline ^^ fromFallback)
+     in
+     fromInterpValue ^^ (twice hardline)
+  | TD_record (id, typq, fields, _) ->
+     let fromInterpField (typ, id) =
+       separate space [string (maybe_zencode (string_of_id id)); equals; fromValueTyp typ ("(StringMap.find \"" ^ (string_of_id id) ^ "\" fs)")]
+     in
+     let fromInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "FromInterpValue"] in
+     let fromFallback = separate space [pipe; underscore; arrow; string "failwith";
+                                        dquotes (string ("invalid interpreter value for " ^ (string_of_id id)))] in
+     let fromInterpValue =
+       prefix 2 1
+         (separate space [string "let"; fromInterpValueName; separate space (fromValueTypqs typq @ [string "v"]); equals; string "match v with"])
+         ((separate space [pipe; string "V_record fs"; arrow; braces (separate_map (semi ^^ space) fromInterpField fields)])
           ^^ hardline ^^ fromFallback)
      in
      fromInterpValue ^^ (twice hardline)
@@ -172,10 +191,10 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
     | A_order order -> string ("Order_" ^ (string_of_order order))
     | _ -> string "TYP_ARG" 
   and toValueTyp ((Typ_aux (typ_aux, l)) as typ) arg_name = match typ_aux with
-    | Typ_id id -> parens (concat [string (zencode_string (string_of_id id)); string "ToInterpValue"; space; string arg_name])
+    | Typ_id id -> parens (concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"; space; string arg_name])
     | Typ_app (typ_id, typ_args) ->
        assert (typ_args <> []);
-       parens (separate space ([string ((zencode_string (string_of_id typ_id)) ^ "ToInterpValue")] @ List.map toValueTypArg typ_args @ [string arg_name]))
+       parens (separate space ([string ((maybe_zencode (string_of_id typ_id)) ^ "ToInterpValue")] @ List.map toValueTypArg typ_args @ [string arg_name]))
     | Typ_var kid -> parens (separate space [toValueKid kid; string arg_name])
     | _ -> parens (string "failwith \"toValueTyp: type arm unimplemented\"")
   in
@@ -204,14 +223,14 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
         | Id_aux ((Id "diafp"),_) -> empty *)
      (* | Id_aux ((Id "option"),_) -> empty *)
      | _ ->
-        let toInterpValueName = concat [string (zencode_string (string_of_id id)); string "ToInterpValue"] in
+        let toInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"] in
         let toInterpValue =
           prefix 2 1
             (separate space [string "let"; toInterpValueName; separate space (toValueTypqs typq @ [string "v"]); equals; string "match v with"])
             ((separate_map hardline
                 (fun (Tu_aux (Tu_ty_id (typ, ctor_id), _)) ->
                   separate space
-                    [pipe; string (zencode_upper_string (string_of_id ctor_id)); toValueArgs typ;
+                    [pipe; string (maybe_zencode_upper (string_of_id ctor_id)); toValueArgs typ;
                      arrow; string "V_ctor"; parens (concat [dquotes (string (string_of_id ctor_id)); comma_sp; toValueVals typ])
                     ]
                 )
@@ -220,23 +239,34 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
         toInterpValue ^^ (twice hardline)
      end
   | TD_abbrev (id, typq, typ_arg) ->
-     let toInterpValueName = concat [string (zencode_string (string_of_id id)); string "ToInterpValue"] in
+     let toInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"] in
      let toInterpValue =
        (separate space [string "let"; toInterpValueName; separate space (toValueTypqs typq); equals; toValueTypArg typ_arg])
      in
      toInterpValue ^^ (twice hardline)
   | TD_enum (id, ids, _) ->
-     let toInterpValueName = concat [string (zencode_string (string_of_id id)); string "ToInterpValue"] in
+     let toInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"] in
      let toInterpValue =
        prefix 2 1
          (separate space [string "let"; toInterpValueName; string "v"; equals; string "match v with"])
          ((separate_map hardline
              (fun id ->
                separate space
-                 [pipe; string (zencode_upper_string (string_of_id id));
+                 [pipe; string (maybe_zencode_upper (string_of_id id));
                   arrow; string "V_ctor"; parens (concat [dquotes (string (string_of_id id)); comma_sp; string "[]"])]
              )
              ids))
+     in
+     toInterpValue ^^ (twice hardline)
+  | TD_record (id, typq, fields, _) ->
+     let toInterpField (typ, id) =
+       parens (separate comma_sp [dquotes (string (string_of_id id)); toValueTyp typ ("r." ^ (maybe_zencode (string_of_id id)))])
+     in
+     let toInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"] in
+     let toInterpValue =
+       prefix 2 1
+         (separate space [string "let"; toInterpValueName; separate space (toValueTypqs typq @ [string "r"]); equals])
+         (separate space [string "V_record"; parens (separate space [string "List.fold_left (fun m (k, v) -> StringMap.add k v m) StringMap.empty"; (brackets (separate_map (semi ^^ space) toInterpField fields))])])
      in
      toInterpValue ^^ (twice hardline)
   | _ -> empty
@@ -257,9 +287,8 @@ let tofrominterp_defs name (Defs defs) =
 let tofrominterp_pp_defs name f defs =
   ToChannel.pretty 1. 80 f (tofrominterp_defs name defs)
 
-let tofrominterp_output name defs =
-  let out_chan = open_out (name ^ "_toFromInterp.ml") in
+let tofrominterp_output maybe_dir name defs =
+  let dir = match maybe_dir with Some dir -> dir | None -> "." in
+  let out_chan = open_out (Filename.concat dir (name ^ "_toFromInterp.ml")) in
   tofrominterp_pp_defs name out_chan defs;
   close_out out_chan
-
-
