@@ -407,9 +407,11 @@ let main() =
        then
          let ast_c = rewrite_ast_c type_envs ast in
          let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
-         (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization ast_c type_envs) in *)
+         (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in *)
+         let output_chan = match !opt_file_out with Some f -> open_out (f ^ ".c") | None -> stdout in
          Util.opt_warnings := true;
-         C_backend.compile_ast (C_backend.initial_ctx type_envs) (!opt_includes_c) ast_c
+         C_backend.compile_ast (C_backend.initial_ctx type_envs) output_chan (!opt_includes_c) ast_c;
+         close_out output_chan
        else ());
       (if !(opt_print_cgen)
        then Cgen_backend.output type_envs ast
@@ -435,7 +437,7 @@ let main() =
            begin
              try
                if not (Sys.is_directory latex_dir) then begin
-                   prerr_endline ("Failure: latex output directory exists but is not a directory: " ^ latex_dir);
+                   prerr_endline ("Failure: latex output location exists and is not a directory: " ^ latex_dir);
                    exit 1
                  end
              with Sys_error(_) -> Unix.mkdir latex_dir 0o755

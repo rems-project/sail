@@ -79,6 +79,8 @@ val polymorphic_functions : specialization -> 'a defs -> IdSet.t
    which case specialize returns the AST unmodified. *)
 val specialize : specialization -> tannot defs -> Env.t -> tannot defs * Env.t
 
+(** specialize' n performs at most n specialization passes. Useful for
+   int_specialization which is not guaranteed to terminate. *)
 val specialize' : int -> specialization -> tannot defs -> Env.t -> tannot defs * Env.t
 
 (** return all instantiations of a function id, with the

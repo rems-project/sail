@@ -87,10 +87,14 @@ To compile Sail into C, the \verb+-c+ option is used, like so:
 \begin{verbatim}
 sail -c FILES 1> out.c
 \end{verbatim}
-The transated C is currently printed to stdout, so this should be
-redirected to a file as above. To produce an executable this needs to
-be compiled and linked with the C files in the \verb+sail/lib+
-directory:
+The transated C is by default printed to stdout, but one can also use
+the \verb+-o+ option to output to a file, so
+\begin{verbatim}
+sail -c FILES -o out
+\end{verbatim}
+will generate a file called \verb+out.c+. To produce an executable
+this needs to be compiled and linked with the C files in the
+\verb+sail/lib+ directory:
 \begin{verbatim}
 gcc out.c $SAIL_DIR/lib/*.c -lgmp -lz -I $SAIL_DIR/lib/ -o out
 \end{verbatim}

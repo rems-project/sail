@@ -3499,7 +3499,7 @@ let smt_trace ctx =
 
   | cdef -> cdef
 
-let compile_ast ctx c_includes (Defs defs) =
+let compile_ast ctx output_chan c_includes (Defs defs) =
   try
     c_debug (lazy (Util.log_line __MODULE__ __LINE__ "Identifying recursive functions"));
     let recursive_functions = Spec_analysis.top_sort_defs (Defs defs) |> get_recursive_functions in
@@ -3622,7 +3622,7 @@ let compile_ast ctx c_includes (Defs defs) =
                                  ^^ model_init ^^ hlhl
                                  ^^ model_fini ^^ hlhl
                                  ^^ model_default_main ^^ hlhl
-                                 ^^ model_main)
-    |> print_endline
+                                 ^^ model_main ^^ hardline)
+    |> output_string output_chan
   with
     Type_error (_, l, err) -> c_error ("Unexpected type error when compiling to C:\n" ^ Type_error.string_of_type_error err)

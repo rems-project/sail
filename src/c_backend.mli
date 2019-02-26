@@ -89,7 +89,7 @@ val initial_ctx : Env.t -> ctx
 
 val compile_aexp : ctx -> Ast.typ Anf.aexp -> instr list * (clexp -> instr) * instr list
 
-val compile_ast : ctx -> string list -> tannot Ast.defs -> unit
+val compile_ast : ctx -> out_channel -> string list -> tannot Ast.defs -> unit
 
 val bytecode_ast : ctx -> (cdef list -> cdef list) -> tannot Ast.defs -> cdef list
 
