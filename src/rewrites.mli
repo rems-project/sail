@@ -59,6 +59,7 @@ val opt_dmono_analysis : int ref
 val opt_auto_mono : bool ref
 val opt_dall_split_errors : bool ref
 val opt_dmono_continue : bool ref
+val opt_separate_execute : bool ref
 
 (* Generate a fresh id with the given prefix *)
 val fresh_id : string -> l -> id

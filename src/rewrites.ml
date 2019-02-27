@@ -5170,6 +5170,11 @@ let rewrite_defs_ocaml = [
   (* ("separate_numbs", rewrite_defs_separate_numbs) *)
   ]
 
+let opt_separate_execute = ref false
+
+let if_separate f env defs =
+  if !opt_separate_execute then f env defs else defs
+
 let rewrite_defs_c = [
   ("no_effect_check", (fun _ defs -> opt_no_effects := true; defs));
 
@@ -5196,6 +5201,7 @@ let rewrite_defs_c = [
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
+  ("split_execute", if_separate (rewrite_split_fun_constr_pats "execute"));
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("merge_function_clauses", merge_funcls);
   ("recheck_defs", fun _ -> Optimize.recheck)

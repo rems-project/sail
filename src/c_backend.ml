@@ -61,6 +61,7 @@ open Anf
 module Big_int = Nat_big_num
 
 let c_verbosity = ref 0
+
 let opt_debug_flow_graphs = ref false
 let opt_debug_function = ref ""
 let opt_trace = ref false
@@ -68,6 +69,8 @@ let opt_smt_trace = ref false
 let opt_static = ref false
 let opt_no_main = ref false
 let opt_memo_cache = ref false
+let opt_no_rts = ref false
+let opt_prefix = ref "z"
 
 (* Optimization flags *)
 let optimize_primops = ref false
@@ -956,8 +959,7 @@ let compile_funcall l ctx id args typ =
     ifuncall clexp id setup_args
   else
     let gs = gensym () in
-    iblock [icomment "copy call";
-            idecl ret_ctyp gs;
+    iblock [idecl ret_ctyp gs;
             ifuncall (CL_id (gs, ret_ctyp)) id setup_args;
             icopy l clexp (F_id gs, ret_ctyp);
             iclear ret_ctyp gs]
@@ -2420,7 +2422,8 @@ let optimize ctx cdefs =
   |> (if !optimize_alias then concatMap unique_names else nothing)
   |> (if !optimize_alias then concatMap (remove_alias ctx) else nothing)
   |> (if !optimize_alias then concatMap (combine_variables ctx) else nothing)
-  |> (if !optimize_hoist_allocations then concatMap (hoist_allocations ctx) else nothing)
+  (* We need the runtime to initialize hoisted allocations *)
+  |> (if !optimize_hoist_allocations && not !opt_no_rts then concatMap (hoist_allocations ctx) else nothing)
   |> (if !optimize_hoist_allocations && !optimize_experimental then concatMap (hoist_alias ctx) else nothing)
 
 (**************************************************************************)
@@ -2429,6 +2432,12 @@ let optimize ctx cdefs =
 
 let sgen_id id = Util.zencode_string (string_of_id id)
 let codegen_id id = string (sgen_id id)
+
+let sgen_function_id id =
+  let str = Util.zencode_string (string_of_id id) in
+  !opt_prefix ^ String.sub str 1 (String.length str - 1)
+
+let codegen_function_id id = string (sgen_function_id id)
 
 let rec sgen_ctyp = function
   | CT_unit -> "unit"
@@ -2585,7 +2594,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        else if extern then
          string_of_id f
        else
-         sgen_id f
+         sgen_function_id f
      in
      let fname =
        match fname, ctyp with
@@ -2858,7 +2867,7 @@ let codegen_type_def ctx = function
          in
          Printf.sprintf "%s op" (sgen_ctyp ctyp), empty, empty
        in
-       string (Printf.sprintf "static void %s(struct %s *rop, %s)" (sgen_id ctor_id) (sgen_id id) ctor_args) ^^ hardline
+       string (Printf.sprintf "static void %s(struct %s *rop, %s)" (sgen_function_id ctor_id) (sgen_id id) ctor_args) ^^ hardline
        ^^ surround 2 0 lbrace
                    (tuple
                     ^^ each_ctor "rop->" (clear_field "rop") tus ^^ hardline
@@ -3009,7 +3018,7 @@ let codegen_list_set id ctyp =
 
 let codegen_cons id ctyp =
   let cons_id = mk_id ("cons#" ^ string_of_ctyp ctyp) in
-  string (Printf.sprintf "static void %s(%s *rop, const %s x, const %s xs) {\n" (sgen_id cons_id) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
+  string (Printf.sprintf "static void %s(%s *rop, const %s x, const %s xs) {\n" (sgen_function_id cons_id) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
   ^^ string (Printf.sprintf "  *rop = malloc(sizeof(struct node_%s));\n" (sgen_id id))
   ^^ (if is_stack_ctyp ctyp then
         string "  (*rop)->hd = x;\n"
@@ -3174,9 +3183,9 @@ let codegen_def' ctx = function
      if Env.is_extern id ctx.tc_env "c" then
        empty
      else if is_stack_ctyp ret_ctyp then
-       string (Printf.sprintf "%s%s %s(%s);" static (sgen_ctyp ret_ctyp) (sgen_id id) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+       string (Printf.sprintf "%s%s %s(%s);" static (sgen_ctyp ret_ctyp) (sgen_function_id id) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
      else
-       string (Printf.sprintf "%svoid %s(%s *rop, %s);" static (sgen_id id) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+       string (Printf.sprintf "%svoid %s(%s *rop, %s);" static (sgen_function_id id) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
      if !opt_debug_flow_graphs then make_dot id (instrs_graph instrs) else ();
@@ -3217,11 +3226,11 @@ let codegen_def' ctx = function
        | None ->
           assert (is_stack_ctyp ret_ctyp);
           (if !opt_static then string "static " else empty)
-          ^^ string (sgen_ctyp ret_ctyp) ^^ space ^^ codegen_id id ^^ parens (string args) ^^ hardline
+          ^^ string (sgen_ctyp ret_ctyp) ^^ space ^^ codegen_function_id id ^^ parens (string args) ^^ hardline
        | Some gs ->
           assert (not (is_stack_ctyp ret_ctyp));
           (if !opt_static then string "static " else empty)
-          ^^ string "void" ^^ space ^^ codegen_id id
+          ^^ string "void" ^^ space ^^ codegen_function_id id
           ^^ parens (string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_id gs ^ ", ") ^^ string args)
           ^^ hardline
      in
@@ -3235,7 +3244,7 @@ let codegen_def' ctx = function
 
   | CDEF_startup (id, instrs) ->
      let static = if !opt_static then "static " else "" in
-     let startup_header = string (Printf.sprintf "%svoid startup_%s(void)" static (sgen_id id)) in
+     let startup_header = string (Printf.sprintf "%svoid startup_%s(void)" static (sgen_function_id id)) in
      separate_map hardline codegen_decl instrs
      ^^ twice hardline
      ^^ startup_header ^^ hardline
@@ -3245,7 +3254,7 @@ let codegen_def' ctx = function
 
   | CDEF_finish (id, instrs) ->
      let static = if !opt_static then "static " else "" in
-     let finish_header = string (Printf.sprintf "%svoid finish_%s(void)" static (sgen_id id)) in
+     let finish_header = string (Printf.sprintf "%svoid finish_%s(void)" static (sgen_function_id id)) in
      separate_map hardline codegen_decl (List.filter is_decl instrs)
      ^^ twice hardline
      ^^ finish_header ^^ hardline
@@ -3536,9 +3545,10 @@ let compile_ast ctx output_chan c_includes (Defs defs) =
     let docs = List.map (codegen_def ctx) cdefs in
 
     let preamble = separate hardline
-                     ([ string "#include \"sail.h\"";
-                        string "#include \"rts.h\"";
-                        string "#include \"elf.h\"" ]
+                     ([ string "#include \"sail.h\"" ]
+                      @ (if !opt_no_rts then [] else
+                           [ string "#include \"rts.h\"";
+                             string "#include \"elf.h\"" ])
                       @ (List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) c_includes))
     in
 
@@ -3582,7 +3592,7 @@ let compile_ast ctx output_chan c_includes (Defs defs) =
        @ fst exn_boilerplate
        @ startup cdefs
        @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
-       @ (if regs = [] then [] else [ "  zinitializze_registers(UNIT);" ])
+       @ (if regs = [] then [] else [ Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "initialize_registers")) ])
        @ letbind_initializers
        @ [ "}" ] ))
     in
@@ -3603,7 +3613,7 @@ let compile_ast ctx output_chan c_includes (Defs defs) =
            "{";
            "  model_init();";
            "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
-           "  zmain(UNIT);";
+           Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "main"));
            "  model_fini();";
            "  return EXIT_SUCCESS;";
            "}" ] )
@@ -3619,9 +3629,12 @@ let compile_ast ctx output_chan c_includes (Defs defs) =
     let hlhl = hardline ^^ hardline in
 
     Pretty_print_sail.to_string (preamble ^^ hlhl ^^ separate hlhl docs ^^ hlhl
-                                 ^^ model_init ^^ hlhl
-                                 ^^ model_fini ^^ hlhl
-                                 ^^ model_default_main ^^ hlhl
+                                 ^^ (if not !opt_no_rts then
+                                       model_init ^^ hlhl
+                                       ^^ model_fini ^^ hlhl
+                                       ^^ model_default_main ^^ hlhl
+                                     else
+                                       empty)
                                  ^^ model_main ^^ hardline)
     |> output_string output_chan
   with

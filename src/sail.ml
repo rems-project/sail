@@ -123,7 +123,7 @@ let options = Arg.align ([
     " pretty print the input to LaTeX");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix := prefix),
-    " set a custom prefix for generated LaTeX macro command (default sail)");
+    "<prefix> set a custom prefix for generated LaTeX macro command (default sail)");
   ( "-latex_full_valspecs",
     Arg.Clear Latex.opt_simple_val,
     " print full valspecs in LaTeX output");
@@ -136,6 +136,15 @@ let options = Arg.align ([
   ( "-c_no_main",
     Arg.Set C_backend.opt_no_main,
     " do not generate the main() function" );
+  ( "-c_no_rts",
+    Arg.Set C_backend.opt_no_rts,
+    " do not include the Sail runtime" );
+  ( "-c_separate_execute",
+    Arg.Set Rewrites.opt_separate_execute,
+    " separate execute scattered function into multiple functions");
+  ( "-c_prefix",
+    Arg.String (fun prefix -> C_backend.opt_prefix := prefix),
+    "<prefix> prefix generated C functions" );
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an ELF file so that it can be executed by compiled C code");

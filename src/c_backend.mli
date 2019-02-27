@@ -59,6 +59,8 @@ val opt_trace : bool ref
 val opt_smt_trace : bool ref
 val opt_static : bool ref
 val opt_no_main : bool ref
+val opt_no_rts : bool ref
+val opt_prefix : string ref
 
 (** [opt_memo_cache] will store the compiled function definitions in
    file _sbuild/ccacheDIGEST where DIGEST is the md5sum of the
