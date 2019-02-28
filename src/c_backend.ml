@@ -71,6 +71,18 @@ let opt_no_main = ref false
 let opt_memo_cache = ref false
 let opt_no_rts = ref false
 let opt_prefix = ref "z"
+let opt_extra_params = ref None
+let opt_extra_arguments = ref None
+
+let extra_params () =
+  match !opt_extra_params with
+  | Some str -> str ^ ", "
+  | _ -> ""
+
+let extra_arguments is_extern =
+  match !opt_extra_arguments with
+  | Some str when not is_extern -> str ^ ", "
+  | _ -> ""
 
 (* Optimization flags *)
 let optimize_primops = ref false
@@ -2588,6 +2600,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
   | I_funcall (x, extern, f, args) ->
      let c_args = Util.string_of_list ", " sgen_cval args in
      let ctyp = clexp_ctyp x in
+     let is_extern = Env.is_extern f ctx.tc_env "c" || extern in
      let fname =
        if Env.is_extern f ctx.tc_env "c" then
          Env.get_extern f ctx.tc_env "c"
@@ -2649,9 +2662,9 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
          string (Printf.sprintf  "  COPY(%s)(&%s, *(%s));" (sgen_ctyp_name ctyp) (sgen_clexp_pure x) c_args)
      else
        if is_stack_ctyp ctyp then
-         string (Printf.sprintf "  %s = %s(%s);" (sgen_clexp_pure x) fname c_args)
+         string (Printf.sprintf "  %s = %s(%s%s);" (sgen_clexp_pure x) fname (extra_arguments is_extern) c_args)
        else
-         string (Printf.sprintf "  %s(%s, %s);" fname (sgen_clexp x) c_args)
+         string (Printf.sprintf "  %s(%s%s, %s);" fname (extra_arguments is_extern) (sgen_clexp x) c_args)
 
   | I_clear (ctyp, id) when is_stack_ctyp ctyp ->
      empty
@@ -2867,7 +2880,7 @@ let codegen_type_def ctx = function
          in
          Printf.sprintf "%s op" (sgen_ctyp ctyp), empty, empty
        in
-       string (Printf.sprintf "static void %s(struct %s *rop, %s)" (sgen_function_id ctor_id) (sgen_id id) ctor_args) ^^ hardline
+       string (Printf.sprintf "static void %s(%sstruct %s *rop, %s)" (sgen_function_id ctor_id) (extra_params ()) (sgen_id id) ctor_args) ^^ hardline
        ^^ surround 2 0 lbrace
                    (tuple
                     ^^ each_ctor "rop->" (clear_field "rop") tus ^^ hardline
@@ -3183,9 +3196,9 @@ let codegen_def' ctx = function
      if Env.is_extern id ctx.tc_env "c" then
        empty
      else if is_stack_ctyp ret_ctyp then
-       string (Printf.sprintf "%s%s %s(%s);" static (sgen_ctyp ret_ctyp) (sgen_function_id id) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+       string (Printf.sprintf "%s%s %s(%s%s);" static (sgen_ctyp ret_ctyp) (sgen_function_id id) (extra_params ()) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
      else
-       string (Printf.sprintf "%svoid %s(%s *rop, %s);" static (sgen_function_id id) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+       string (Printf.sprintf "%svoid %s(%s%s *rop, %s);" static (sgen_function_id id) (extra_params ()) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
      if !opt_debug_flow_graphs then make_dot id (instrs_graph instrs) else ();
@@ -3226,12 +3239,12 @@ let codegen_def' ctx = function
        | None ->
           assert (is_stack_ctyp ret_ctyp);
           (if !opt_static then string "static " else empty)
-          ^^ string (sgen_ctyp ret_ctyp) ^^ space ^^ codegen_function_id id ^^ parens (string args) ^^ hardline
+          ^^ string (sgen_ctyp ret_ctyp) ^^ space ^^ codegen_function_id id ^^ parens (string (extra_params ()) ^^ string args) ^^ hardline
        | Some gs ->
           assert (not (is_stack_ctyp ret_ctyp));
           (if !opt_static then string "static " else empty)
           ^^ string "void" ^^ space ^^ codegen_function_id id
-          ^^ parens (string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_id gs ^ ", ") ^^ string args)
+          ^^ parens (string (extra_params ()) ^^ string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_id gs ^ ", ") ^^ string args)
           ^^ hardline
      in
      function_header
