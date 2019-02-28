@@ -22,11 +22,18 @@ infix 7 >>
 infix 7 <<
 infix 7 ^^
 
-val operator >> = "shift_bits_right" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
-val operator << = "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val shift_bits_left = "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val shift_bits_right = "shift_bits_right" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val shift_left = "shiftl" : forall 'm. (bits('m), int) -> bits('m)
+val shift_right = "shiftr" : forall 'm. (bits('m), int) -> bits('m)
+
+overload operator << = {shift_bits_left, shift_left}
+overload operator >> = {shift_bits_right, shift_right}
+
 
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 val operator ^^ = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
+
 
 
 infix 4 <_s
@@ -74,6 +81,10 @@ val and_bits = {c:"and_bits", _: "and_vec"} : forall 'n. (bits('n), bits('n)) ->
 
 overload operator & = {and_bool, and_bits}
 
+val or_bits = {c:"or_bits", _: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+
+overload operator | = {or_bool, or_bits}
+
 
 val not_vec = {c:"not_bits", _:"not_vec"} : forall 'n. bits('n) -> bits('n)
 
@@ -115,3 +126,19 @@ val xor_vec = {c: "xor_bits", _: "xor_vec"} : forall 'n. (bits('n), bits('n)) ->
 val int_power = {ocaml: "int_power", lem: "pow", coq: "pow", c: "pow_int"} : (int, int) -> int
 
 overload operator ^ = {xor_vec, int_power, concat_str}
+
+
+val mask : forall 'l 'm, 'l >= 0 & 'm >= 0. (implicit('l), bits('m)) -> bits('l)
+
+
+/* put this val spec into Sail lib for "%" */
+
+val mod = {
+  smt: "mod",
+  ocaml: "modulus",
+  lem: "integerMod",
+  c: "tmod_int",
+  coq: "Z.rem"
+} : forall 'M 'N. (atom('M), atom('N)) -> {'O, 0 <= 'O & 'O < N . atom('O)}
+
+/* overload operator % = {mod_int} */

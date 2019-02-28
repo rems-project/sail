@@ -128,8 +128,8 @@ function wPSTATE_NZCV((), [n,z,c,v]) = {
 }
 
 /* this is a convenient way to do "PSTATE.<D,A,I,F> = daif;" */
-val wPSTATE_DAIF : (unit, bits(4)) -> unit effect {wreg}
-function wPSTATE_DAIF((), [d,a,i,f]) =
+val wPSTATE_DAIF : (bits(4)) -> unit effect {wreg}
+function wPSTATE_DAIF([d,a,i,f]) =
 {
   PSTATE_D() = [d];
   PSTATE_A() = [a];

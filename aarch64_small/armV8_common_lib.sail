@@ -166,7 +166,7 @@ function IsFault(addrdesc : AddressDescriptor) ->  boolean= {
 
 /* CP: replacing this with the slightly simpler one below */
 
-val ASR : forall 'N, 'N >= 1. (bits('N), uinteger) -> bits('N)
+val ASR : forall 'N, 'N >= 1. (bits('N), uinteger) -> bits('N) effect {escape}
 function ASR (x, shift) = {
   /*assert shift >= 0;*/
   if shift == 0 then x
@@ -176,7 +176,6 @@ function ASR (x, shift) = {
 
 /** FUNCTION:shared/functions/common/ASR_C */
 
-val ASR_C : forall 'N 'S, 'N >= 1 & 'S >= 1. (bits('N), atom('S)) -> (bits('N), bit)
 function ASR_C (x, shift) =  {
   /*assert shift > 0;*/
   extended_x : bits('S+'N) = SignExtend(x);
@@ -197,7 +196,7 @@ function Align'(x : uinteger, y : uinteger) -> uinteger =
 
 /** FUNCTION:bits(N) Align(bits(N) x, integer y) */
 
-val Align : forall 'N, 'N >= 0. (bits('N), uinteger) -> bits('N)
+val Align : forall 'N, 'N >= 0. (bits('N), uinteger) -> bits('N) effect {escape}
 function Align (x, y) =
     to_bits (Align'(UInt(x), y))
 
@@ -210,7 +209,6 @@ function CountLeadingSignBits(x) =
 
 /** FUNCTION:integer CountLeadingZeroBits(bits(N) x) */
 
-val CountLeadingZeroBits : forall 'N, 'N >= 0. bits('N) -> range(0,'N)
 function CountLeadingZeroBits(x) =
   match HighestSetBit(x) {
     None()  => length(x),
@@ -218,7 +216,7 @@ function CountLeadingZeroBits(x) =
   }
 /** FUNCTION:bits(N) Extend(bits(M) x, integer N, boolean unsigned) */
 
-val Extend : forall 'N 'M, 1 <= 'M & 'M < 'N. (atom('N),bits('M),bit) -> bits('N) effect pure
+val Extend : forall 'N 'M, 1 <= 'M & 'M < 'N. (atom('N),bits('M),bit) -> bits('N) effect {escape}
 function Extend (n, x, _unsigned) =
   if _unsigned then ZeroExtend(n,x) else SignExtend(n,x)
 
@@ -238,7 +236,6 @@ function Extend (n, x, _unsigned) =
 /*   if break then Some(result) else None; */
 /* }} */
 
-val HighestSetBit : forall 'N, 'N >= 0. bits('N) -> option(range(0, 'N - 1))
 function HighestSetBit(x) = {
   let N = length(x) in {
   foreach (i from (N - 1) downto 0)
@@ -251,20 +248,20 @@ function HighestSetBit(x) = {
 
 /** FUNCTION:integer Int(bits(N) x, boolean unsigned) */
 /* used to be called Int */
-val _Int : forall 'N, 'N >= 0. (bits('N), boolean) -> integer
+val _Int : forall 'N, 'N >= 1. (bits('N), boolean) -> integer effect {escape}
 function _Int (x, _unsigned) = {
   if _unsigned then UInt(x) else SInt(x)
 }
 
 /** FUNCTION:boolean IsZero(bits(N) x) */
 
-val IsZero : forall 'N, 'N >= 0. bits('N) -> boolean
-function IsZero(x) = x == 0 /* ARM: Zeros(N) */
+/* function IsZero(x) = x == 0 /\* ARM: Zeros(N) *\/ */
+function IsZero(x) = x == Zeros() /* ARM: Zeros(N) */
 
 /** FUNCTION:bit IsZeroBit(bits(N) x) */
 
 val IsZeroBit : forall 'N, 'N >= 0. bits('N) -> bit
-function IsZeroBit(x) = if IsZero(x) then 1 else 0
+function IsZeroBit(x) = if IsZero(x) then bitone else bitzero
 
 /** FUNCTION:shared/functions/common/LSL */
 
@@ -272,7 +269,7 @@ val LSL : forall 'N, 'N >= 0. (bits('N), uinteger) -> bits('N)
 function LSL(x, shift) =
 {
   /*assert shift >= 0;*/
-  result : bits('N) = 0;
+  result : bits('N) = Zeros();
   if shift == 0 then
     result = x
   else
@@ -282,7 +279,6 @@ function LSL(x, shift) =
 
 /** FUNCTION:shared/functions/common/LSL_C */
 
-val LSL_C : forall 'N 'S, 'N >= 0 & 'S >= 1. (bits('N), atom('S)) -> (bits('N))
 function LSL_C (x, shift) =
 {
   /*assert shift > 0;*/
@@ -294,11 +290,11 @@ function LSL_C (x, shift) =
 
 /** FUNCTION:shared/functions/common/LSR */
 
-val LSR : forall 'N, 'N >= 0. (bits('N), uinteger) -> bits('N)
+val LSR : forall 'N, 'N >= 1. (bits('N), uinteger) -> bits('N)
 function LSR(x, shift) =
 {
   /*assert shift >= 0;*/
-  result : bits('N) = 0;
+  result : bits('N) = Zeros();
   if shift == 0 then
     result = x
   else
@@ -308,12 +304,10 @@ function LSR(x, shift) =
 
 /** FUNCTION:shared/functions/common/LSR_C */
 
-val LSR_C : forall 'N 'S, 'N >= 0 & 'S >=1. (bits('N), atom('S)) -> (bits('N), bit)
-function LSR_C(x, shift) =
-{
+function LSR_C(x, shift) = {
   /*assert shift > 0;*/
   extended_x : bits('N + 'S) = ZeroExtend(x);
-  result : bits('N) = extended_x[(shift + length(x) - 1)..shift];
+  result : bits('N) = extended_x[(length(x) + shift - 1)..shift];
   carry_out : bit = extended_x[shift - 1];
   (result, carry_out);
 }
@@ -338,16 +332,14 @@ function NOT'(x) = ~(x)
 
 /** FUNCTION:shared/functions/common/Ones */
 
-val Ones : forall 'N, 'N >= 0. unit -> bits('N)
-function Ones() = Replicate([1])
+function Ones(n) = Replicate(n,[bitone])
 
 /** FUNCTION:shared/functions/common/ROR */
 
-val ROR : forall 'N, 'N >= 0. (bits('N), uinteger) -> bits('N)
-function ROR(x, shift) = 
-{
+val ROR : forall 'N, 'N >= 1. (bits('N), uinteger) -> bits('N)
+function ROR(x, shift) =  {
   /*assert shift >= 0;*/
-  result : bits('N) = 0;
+  result : bits('N) = Zeros();
   if shift == 0 then
     result = x
   else
@@ -357,12 +349,12 @@ function ROR(x, shift) =
 
 /** FUNCTION:shared/functions/common/ROR_C */
 
-val ROR_C : forall 'N 'S, 'N >= 0 & ('S >=1 | 'S <= -1). (bits('N), atom('S)) -> (bits('N))
+
 function ROR_C(x, shift) =
 {
   let N = (length(x)) in {
-  /*assert shift != 0;*/
-  m : nat = mod (shift,N);
+  /* assert shift != 0; */
+  m = mod (shift,N);
   result : bits('N) = (LSR(x,m) | LSL(x,N - m));
   carry_out : bit = result[N - 1];
   (result, carry_out);
@@ -370,22 +362,20 @@ function ROR_C(x, shift) =
 
 /** FUNCTION:shared/functions/common/Replicate */
 
-val Replicate : forall 'N 'M, 'N >= 0 & 'M >= 0. bits('M) -> bits('N)
-function Replicate (x) = {
-  let (N,M) : (bits('N),bits('M)) = (0,0) in {
-  assert((mod(N, M) == 0),None);
+function Replicate (N,x) = {
+  let M = length(x);
+  assert(mod(N, M) == 0);
 
-  result : bits('N) = 0;
-  zeros : bits('N-'M) = (Zeros());
-  foreach (i from M to N by M) result = ((result << M) | zeros:x);
+  result : bits('N) = Zeros();
+  zeros : bits('N-'M) = Zeros();
+  foreach (i from M to N by M) result = ((((result << M) : bits('N)) | ((zeros@x) : bits('N))) : bits('N));
 
   result;
-}}
+}
 
 /** FUNCTION:integer SInt(bits(N) x) */
 
 /*function forall Nat 'N, Nat 'M, Nat 'K, 'M = 'N + -1, 'K = 2**'M. [|'K * -1:'K + -1|] SInt((bits('N)) x) =*/
-val SInt : forall 'N, 'N >= 0. bits('N) -> range(-(2 ^ ('N - 1) - 1), 2 ^ ('N - 1) - 1)
 function SInt(x) = { 
   signed(x)
   /*let N = (length((bits('N)) 0)) in {
@@ -397,30 +387,34 @@ function SInt(x) = {
 
 /** FUNCTION:bits(N) SignExtend(bits(M) x, integer N) */
 
-function SignExtend forall 'N 'M, 'N > M & 'M >= 1. (_ : atom('N), ([h]@remainder as x) : bits('M)) -> bits('N) =
-  (Replicate([h]) : bits(('N - 'M))) @ x
+function SignExtend (N, ([h]@(remainder : bits('M - 1)) as x) : bits('M)) = {
+      let M = length(x); /* necessary for the type system to rewrite sizeof */
+      (Replicate([h]) : bits(('N - 'M))) @ x
+  }
+
 
 /** FUNCTION:integer UInt(bits(N) x) */
 
-function UInt forall 'N, 'N >=0 . (x : bits('N)) -> range(0, 2 ^ 'N - 1) =
+function UInt (x : bits('N)) =
   unsigned(x)
 
 /** FUNCTION:bits(N) ZeroExtend(bits(M) x, integer N) */
 
-val ZeroExtend : forall 'M 'N, N >= M & 'M >= 0. (atom('N),bits('M)) -> bits('N)
-function ZeroExtend (x) = (Zeros() : bits(('N - 'M))) @ x
+function ZeroExtend (N, x : bits('M)) = {
+  let M = length(x);
+  (Zeros() : bits(('N - 'M))) @ x
+}
 
 /** FUNCTION:shared/functions/common/Zeros */
 
-val Zeros : forall 'N, 'N >= 0. unit -> bits('N)
-function Zeros() = 0 : bits('N) /* ARM: Zeros(N) */
+function Zeros(N) = (replicate_bits(0b0, 'N)) : bits('N) /* ARM: Zeros(N) */
 
 /** FUNCTION:bits(N) BitReverse(bits(N) data) */
 
 val BitReverse : forall 'N, 'N >= 0. bits('N) -> bits('N)
 function BitReverse(data) = {
   let N = (length(data)) in {
-  result : bits('N) = 0; /* ARM: uninitialized */
+  result : bits('N) = Zeros(); /* ARM: uninitialized */
   foreach (i from 0 to (N - 1))
     result[N - i - 1] = data[i];
   result;
@@ -433,16 +427,16 @@ function HaveCRCExt() -> boolean = IMPLEMENTATION_DEFINED.HaveCRCExt
 
 /** FUNCTION:bits(32) Poly32Mod2(bits(N) data, bits(32) poly) */
 
-val Poly32Mod2 : forall 'N, 'N >= 0. (bits('N), bits(32)) -> bits(32)
+val Poly32Mod2 : forall 'N, 'N >= 0. (bits('N), bits(32)) -> bits(32) effect {escape}
 function Poly32Mod2(data, poly) = {
   result : bits('N) = data;
   let N = (length(data)) in {
-  assert((N > 32 ),None);
+  assert(N > 32);
   data' : bits('N) = data;
-  zeros : bits('N - 32) = Zeros();
+  /* zeros : bits('N - 32) = Zeros(); */
   foreach (i from (N - 1) downto 32) {
-    if data'[i] == 1 then
-      data'[(i - 1)..0] = data'[(i - 1)..0] ^ (poly:zeros[(i - 33)..0]);
+    if data'[i] == bitone then
+      data'[(i - 1)..0] = data'[(i - 1)..0] ^ (poly@Zeros(i - 32)); /* making this match ASL-generated spec */
   };
   data'[31..0];
 }}
@@ -465,12 +459,12 @@ function ClearExclusiveLocal(processorid) =
 
 /** FUNCTION:shared/functions/exclusive/ExclusiveMonitorsStatus */
 
-val ExclusiveMonitorsStatus : unit -> bit effect pure
+val ExclusiveMonitorsStatus : unit -> bit effect {escape}
 function ExclusiveMonitorsStatus() =
 {
   info("The model does not implement the exclusive monitors explicitly.");
   not_implemented("ExclusiveMonitorsStatus should not be called");
-  0;
+  /* bitzero; */
 }
 
 /** FUNCTION:shared/functions/exclusive/IsExclusiveGlobal */
@@ -506,19 +500,19 @@ function MarkExclusiveLocal(paddress, processorid, size) = {
 /** FUNCTION:shared/functions/exclusive/ProcessorID */
 
 /* FIXME: return the real number? */
-function integer ProcessorID() = {0}
+function ProcessorID() -> int = 0
 
 /** FUNCTION:(bits(N), bits(4)) AddWithCarry(bits(N) x, bits(N) y, bit carry_in) */
 
-val AddWithCarry : forall 'N, 'N >= 0. (bits('N), bits('N), bit) -> (bits('N), bits(4))
+val AddWithCarry : forall 'N, 'N > 0. (bits('N), bits('N), bit) -> (bits('N), bits(4)) effect {escape}
 function AddWithCarry (x, y, carry_in) = {
   unsigned_sum : uinteger = UInt(x) + UInt(y) + UInt([carry_in]);
   signed_sum : integer = SInt(x) + SInt(y) + UInt([carry_in]);
-  result : bits('N) =  unsigned_sum; /* same value as signed_sum<N-1:0> */
+  result : bits('N) = __GetSlice_int('N, unsigned_sum, 0); /* same value as signed_sum<N-1:0> */
   n : bit = result[(length(result)) - 1];
-  z : bit = if IsZero(result) then 1 else 0;
-  c : bit = if UInt(result) == unsigned_sum then 0 else 1;
-  v : bit = if SInt(result) == signed_sum then 0 else 1;
+  z : bit = if IsZero(result) then bitone else bitzero;
+  c : bit = if UInt(result) == unsigned_sum then bitone else bitzero;
+  v : bit = if SInt(result) == signed_sum then bitone else bitzero;
   (result,[n,z,c,v])
   /* (result,[n]:[z]:[c]:[v]) */
 }
@@ -528,24 +522,28 @@ function AddWithCarry (x, y, carry_in) = {
 
 val BigEndian : unit -> boolean effect {rreg}
 function BigEndian() = {
-    bigend : boolean = 0; /* ARM: uninitialized */
+    /* bigend : boolean = bitzero; /\* ARM: uninitialized *\/ */
     if UsingAArch32() then
-        bigend = (PSTATE_E != 0)
-    else if PSTATE_EL == EL0 then
-        bigend = (SCTLR_EL1.E0E != 0)
+        /* bigend =  */(PSTATE_E != 0b0)
+    else if PSTATE_EL() == EL0 then
+        /* bigend =  */(SCTLR_EL1.E0E() != 0b0)
     else
-        bigend = ((SCTLR'()).EE != 0);
-    bigend;
+        /* bigend =  */((SCTLR'()).EE() != 0b0);
+    /* bigend; */
 }
 
 /** FUNCTION:shared/functions/memory/BigEndianReverse */
 val BigEndianReverse : forall 'W, 'W in {8,16,32,64,128}. bits('W) -> bits('W) effect pure
-function rec BigEndianReverse (value) =
-{
-    width : uinteger= length(value);
-    half : uinteger = quot(width,2);
-    if width == 8 then /*return*/ value
-    else /*return*/ BigEndianReverse(value[(half - 1)..0]) @ BigEndianReverse(value[(width - 1)..half]);
+function BigEndianReverse (value) = {
+    let 'half = 'W / 2;
+    width : atom('W) = length(value);
+    /* half : uinteger = width / 2; */
+    if width == 8 then value
+    else {
+      let a = BigEndianReverse(value[('half - 1)..0]);
+      let b = BigEndianReverse(value[(width - 1)..half]);
+      a @ b;
+    }
 }
 
 /** FUNCTION:shared/functions/memory/DataMemoryBarrier */
@@ -554,7 +552,7 @@ function rec BigEndianReverse (value) =
 /* external */ val DataMemoryBarrier_Writes : unit -> unit effect {barr}
 /* external */ val DataMemoryBarrier_All : unit -> unit effect {barr}
 
-val DataMemoryBarrier : (MBReqDomain, MBReqTypes) -> unit effect {barr}
+val DataMemoryBarrier : (MBReqDomain, MBReqTypes) -> unit effect {barr, escape}
 function DataMemoryBarrier(domain, types) =
 {
   if domain != MBReqDomain_FullSystem & domain != MBReqDomain_InnerShareable then
@@ -573,7 +571,7 @@ function DataMemoryBarrier(domain, types) =
 /* external */ val DataSynchronizationBarrier_Writes : unit -> unit effect {barr}
 /* external */ val DataSynchronizationBarrier_All : unit -> unit effect {barr}
 
-val DataSynchronizationBarrier : (MBReqDomain, MBReqTypes) -> unit effect {barr}
+val DataSynchronizationBarrier : (MBReqDomain, MBReqTypes) -> unit effect {barr,escape}
 function DataSynchronizationBarrier(domain, types) =
 {
   if domain != MBReqDomain_FullSystem then
@@ -627,45 +625,45 @@ let empty_read_buffer =
   address = 0;
 }
 
-val _rMem : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, AddressDescriptor, atom('N), AccType, bool) -> read_buffer_type effect pure
+val _rMem : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, AddressDescriptor, atom('N), AccType, bool) -> read_buffer_type effect {escape}
 function _rMem(read_buffer, desc, size, acctype, exclusive) = {
-  if read_buffer.size == 0 then {
-    { acctype = acctype;
-      exclusive = exclusive;
-      address = (desc.paddress).physicaladdress;
-      size = size;
+  if read_buffer.size == 0 then 
+    struct { acctype = acctype,
+      exclusive = exclusive,
+      address = (desc.paddress).physicaladdress,
+      size = size
     }
-  }
   else {
-    assert((read_buffer.acctype == acctype), None);
-    assert((read_buffer.exclusive == exclusive), None);
-    assert(((read_buffer.address + read_buffer.size) : bits(64) == (desc.paddress).physicaladdress), None);
+    assert(read_buffer.acctype == acctype);
+    assert(read_buffer.exclusive == exclusive);
+    assert((read_buffer.address + read_buffer.size) : bits(64) == (desc.paddress).physicaladdress);
 
     {read_buffer with size = read_buffer.size + size}
   }
 }
 
-val flush_read_buffer : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, atom('N)) -> bits('N*8)
+val flush_read_buffer : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, atom('N)) -> bits('N*8) effect {rmem, rreg, escape}
 function flush_read_buffer(read_buffer, size) =
 {
-  assert((read_buffer.size == size), None);
+  assert(read_buffer.size == size);
 
-  value : bits('N*8) = 0;
+  value : bits('N*8) = Zeros();
 
   if read_buffer.exclusive then {
     match read_buffer.acctype {
-      AccType_ATOMIC   => value = rMem_ATOMIC(read_buffer.address, read_buffer.size),
-      AccType_ORDERED  => value = rMem_ATOMIC_ORDERED(read_buffer.address, read_buffer.size),
+      AccType_ATOMIC   => value = rMem_ATOMIC(read_buffer.address, size),
+      AccType_ORDERED  => value = rMem_ATOMIC_ORDERED(read_buffer.address, size),
       _  => { not_implemented("unimplemented memory access"); }
     }
   } else {
     match read_buffer.acctype {
-      AccType_NORMAL   => value = rMem_NORMAL (read_buffer.address, read_buffer.size),
-      AccType_STREAM   => value = rMem_STREAM (read_buffer.address, read_buffer.size),
-      AccType_UNPRIV   => value = rMem_NORMAL (read_buffer.address, read_buffer.size),
-      AccType_ORDERED  => value = rMem_ORDERED(read_buffer.address, read_buffer.size),
-      AccType_ATOMIC   => assert(false,Some("Reached AccType_ATOMIC: unreachable when address values are known"))
-        /*/*old code*/ value = rMem_NORMAL (read_buffer.address, read_buffer.size) /* the second read of 64-bit LDXP */*/
+      AccType_NORMAL   => value = rMem_NORMAL (read_buffer.address, size),
+      AccType_STREAM   => value = rMem_STREAM (read_buffer.address, size),
+      AccType_UNPRIV   => value = rMem_NORMAL (read_buffer.address, size),
+      AccType_ORDERED  => value = rMem_ORDERED(read_buffer.address, size),
+      AccType_ATOMIC   => assert(false,"Reached AccType_ATOMIC: unreachable when address values are known"),
+        /* (*old code*) value = rMem_NORMAL (read_buffer.address, size) (* the second read of 64-bit LDXP *)*/
+      _ => assert(false)
     }
   };
 
@@ -685,7 +683,7 @@ function flush_read_buffer(read_buffer, size) =
 /* store-exclusive+release */
 /* external */ val wMem_Addr_ATOMIC_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, atom('N) /*size*/) -> unit effect {eamem}
 
-val wMem_Addr : forall 'N, 'N in {1,2,4,8,16}. (bits(64), atom('N), AccType, boolean) -> unit effect {eamem}
+val wMem_Addr : forall 'N, 'N in {1,2,4,8,16}. (bits(64), atom('N), AccType, boolean) -> unit effect {eamem, escape}
 function wMem_Addr(address, size, acctype, excl) =
 {
   match (excl, acctype) {
@@ -711,7 +709,8 @@ struct write_buffer_type = {
   exclusive : bool,
   address : bits(64),
   value : bits(128),
-  size : uinteger,
+  /* size : uinteger, */
+  size : range(0,16),
 }
 
 let empty_write_buffer = { 
@@ -723,86 +722,89 @@ let empty_write_buffer = {
   value = 0;
 }
 
-val _wMem : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, AddressDescriptor, atom('N), AccType, bool, bits('N*8)) -> write_buffer_type
+val _wMem : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, AddressDescriptor, atom('N), AccType, bool, bits('N*8)) -> write_buffer_type effect {escape}
 function _wMem(write_buffer, desc, size, acctype, exclusive, value) = {
-  if write_buffer.size == 0 then {
-    { acctype = acctype;
-      exclusive = exclusive;
-      address = (desc.paddress).physicaladdress;
-      value : bits(128) = ZeroExtend(value);
-      size = size;
+  let s = write_buffer.size;
+  if s == 0 then {
+    struct { acctype = acctype,
+      exclusive = exclusive,
+      address = (desc.paddress).physicaladdress,
+      value = ZeroExtend(value),
+      size = size
     }
   } else {
-    assert((write_buffer.acctype == acctype),None);
-    assert((write_buffer.exclusive == exclusive), None);
-    assert(((write_buffer.address + write_buffer.size) : bits(64) == (desc.paddress).physicaladdress),None);
-
+    assert(write_buffer.acctype == acctype);
+    assert(write_buffer.exclusive == exclusive);
+    assert((write_buffer.address + s) : bits(64) == (desc.paddress).physicaladdress);
+  assert((s * 8) + ('N * 8) <= 128);
     { write_buffer with
-      value = (ZeroExtend(value @ (write_buffer.value)[((write_buffer.size * 8) - 1) .. 0])),
-      size = write_buffer.size + size
+      value = (ZeroExtend(value @ (write_buffer.value)[((s * 8) - 1) .. 0])),
+      size = s + size
     }
   }
 }
 
-val flush_write_buffer : write_buffer_type -> unit effect {wmv}
+val flush_write_buffer : write_buffer_type -> unit effect {escape, wmv}
 function flush_write_buffer(write_buffer) = {
-  assert((write_buffer.exclusive == false), None);
-
+  assert(write_buffer.exclusive == false);
+  let s : range(0,16) = write_buffer.size;
+  assert (s == 1 | s == 2 | s == 4 | s == 8 | s == 16);
   match write_buffer.acctype {
-    AccType_NORMAL   => wMem_Val_NORMAL (write_buffer.size, (write_buffer.value)[((write_buffer.size * 8) - 1) .. 0]),
-    AccType_STREAM   => wMem_Val_NORMAL (write_buffer.size, (write_buffer.value)[((write_buffer.size * 8) - 1) .. 0]),
-    AccType_UNPRIV   => wMem_Val_NORMAL (write_buffer.size, (write_buffer.value)[((write_buffer.size * 8) - 1) .. 0]),
-    AccType_ORDERED  => wMem_Val_NORMAL (write_buffer.size, (write_buffer.value)[((write_buffer.size * 8) - 1) .. 0]),
+    AccType_NORMAL   => wMem_Val_NORMAL (s, (write_buffer.value)[((s * 8) - 1) .. 0]),
+    AccType_STREAM   => wMem_Val_NORMAL (s, (write_buffer.value)[((s * 8) - 1) .. 0]),
+    AccType_UNPRIV   => wMem_Val_NORMAL (s, (write_buffer.value)[((s * 8) - 1) .. 0]),
+    AccType_ORDERED  => wMem_Val_NORMAL (s, (write_buffer.value)[((s * 8) - 1) .. 0]),
     _  => not_implemented("unrecognised memory access")
   };
 }
 
-val flush_write_buffer_exclusive : write_buffer_type -> bool effect {wmv}
+val flush_write_buffer_exclusive : write_buffer_type -> bool effect {escape, wmv}
 function flush_write_buffer_exclusive(write_buffer) = {
-  assert((write_buffer.exclusive), None);
-
+  assert(write_buffer.exclusive);
+  let s = write_buffer.size;
+  assert (s == 1 | s == 2 | s == 4 | s == 8 | s == 16);
   match write_buffer.acctype {
-    AccType_ATOMIC   => wMem_Val_ATOMIC(write_buffer.size, (write_buffer.value)[((write_buffer.size * 8) - 1) .. 0]),
-    AccType_ORDERED  => wMem_Val_ATOMIC(write_buffer.size, (write_buffer.value)[((write_buffer.size * 8) - 1) .. 0]),
+    AccType_ATOMIC   => wMem_Val_ATOMIC(s, (write_buffer.value)[((s * 8) - 1) .. 0]),
+    AccType_ORDERED  => wMem_Val_ATOMIC(s, (write_buffer.value)[((s * 8) - 1) .. 0]),
     _  => { not_implemented("unrecognised memory access"); false; }
   };
 }
 
 /** FUNCTION:BranchTo(bits(N) target, BranchType branch_type) */
 
-val BranchTo : forall 'N, 'N in {32,64}. BranchType -> unit effect {rreg,wreg}
+val BranchTo : forall 'N, 'N in {32,64}. (bits('N), BranchType) -> unit effect {escape, rreg, wreg}
 function BranchTo(target, branch_type) = {
   target' : bits('N) = target; /* Sail does not let you change parameter vector */
 
   Hint_Branch(branch_type);
   if length(target) == 32 then {
-    assert( UsingAArch32(), None );
+    assert( UsingAArch32());
     _PC = ZeroExtend(target);
   } else {
-    assert(( length(target) == 64 & ~(UsingAArch32()) ), None);
+    assert( length(target) == 64 & ~(UsingAArch32()) );
     /* Remove the tag bits from tagged target */
-    let pstate_el = PSTATE_EL in {
+    let pstate_el = PSTATE_EL() in {
       if pstate_el == EL0 then {
-        if target'[55] == 1 & TCR_EL1.TBI1 == 1 then
+        if target'[55] == bitone & TCR_EL1.TBI1() == 0b1 then
           target'[63..56] = 0b11111111;
-        if target'[55] == 0 & TCR_EL1.TBI0 == 1 then
+        if target'[55] == bitzero & TCR_EL1.TBI0() == 0b1 then
           target'[63..56] = 0b00000000;
       }
       else if pstate_el == EL1 then {
-        if target'[55] == 1 & TCR_EL1.TBI1 == 1 then
+        if target'[55] == bitone & TCR_EL1.TBI1() == 0b1 then
           target'[63..56] = 0b11111111;
-        if target'[55] == 0 & TCR_EL1.TBI0 == 1 then
+        if target'[55] == bitzero & TCR_EL1.TBI0() == 0b1 then
           target'[63..56] = 0b00000000;
       }
       else if pstate_el == EL2 then {
-        if TCR_EL2.TBI == 1 then
+        if TCR_EL2.TBI() == 0b1 then
           target'[63..56] = 0b00000000;
       }
       else if pstate_el == EL3 then {
-        if TCR_EL3.TBI == 1 then
+        if TCR_EL3.TBI() == 0b1 then
           target'[63..56] = 0b00000000;
       }
-      else assert(false,None)
+      else assert(false)
     };
     _PC = target';
   };
@@ -817,22 +819,21 @@ function Hint_Branch(hint) = {
 }
 
 /** FUNCTION:shared/functions/registers/ResetExternalDebugRegisters */
-val ResetExternalDebugRegisters : boolean -> unit
-function unit ResetExternalDebugRegisters (b) = 
+val ResetExternalDebugRegisters : boolean -> unit effect {escape}
+function ResetExternalDebugRegisters (b) = 
   not_implemented_extern("ResetExternalDebugRegisters")
 /** FUNCTION:shared/functions/registers/ThisInstrAddr */
 
-val ThisInstrAddr : forall 'N, 'N >= 0. implicit('N) -> bits('N) effect {rreg}
-function ThisInstrAddr() = {
-  let N = (length(0 : bits('N))) in {
-  assert((N == 64 | (N == 32 & UsingAArch32())), None);
+val ThisInstrAddr : forall 'N, 'N >= 0. implicit('N) -> bits('N) effect {escape,rreg}
+function ThisInstrAddr(N) = {
+  assert(N == 64 | (N == 32 & UsingAArch32()));
   /*return*/ mask(rPC());
-}}
+}
 
 /** FUNCTION:// SPSR[] - non-assignment form */
 
 function rSPSR() -> bits(32) = {
-  result : bits(32) = 0; /* ARM: uninitialized */
+  /* result : bits(32) = Zeros(); /\* ARM: uninitialized *\/ */
   if UsingAArch32() then {
     not_implemented("rSPSR UsingAArch32");
     /* ARM:
@@ -847,19 +848,18 @@ function rSPSR() -> bits(32) = {
       otherwise          Unreachable();
     */
   } else {
-    let pstate_el = PSTATE_EL in {
-      if      pstate_el == EL1 then result = SPSR_EL1
-      else if pstate_el == EL2 then result = SPSR_EL2
-      else if pstate_el == EL3 then result = SPSR_EL3
-      else Unreachable()
+    let pstate_el = PSTATE_EL() in {
+      if      pstate_el == EL1 then /* result =  */SPSR_EL1.bits()
+      else if pstate_el == EL2 then /* result =  */SPSR_EL2.bits()
+      else if pstate_el == EL3 then /* result =  */SPSR_EL3.bits()
+      else {Unreachable(); Zeros()}
     };
   };
-
-  result;
+  /* result; */
 }
 
 /** FUNCTION:shared/functions/system/ClearEventRegister */
-function unit ClearEventRegister () = not_implemented_extern("ClearEventRegister")
+function ClearEventRegister () -> unit = not_implemented_extern("ClearEventRegister")
 /** FUNCTION:boolean ConditionHolds(bits(4) cond) */
 
 val ConditionHolds : bits(4) -> boolean effect {rreg}
@@ -867,19 +867,19 @@ function ConditionHolds(_cond) = {
   result : boolean = false; /* ARM: uninitialized */
   /* Evaluate base condition */
   match _cond[3..1] {
-    0b000  => result = (PSTATE_Z == 1),                        /* EQ or NE */
-    0b001  => result = (PSTATE_C == 1),                        /* CS or CC */
-    0b010  => result = (PSTATE_N == 1),                        /* MI or PL */
-    0b011  => result = (PSTATE_V == 1),                        /* VS or VC */
-    0b100  => result = (PSTATE_C == 1 & PSTATE_Z == 0),        /* HI or LS */
-    0b101  => result = (PSTATE_N == PSTATE_V),                 /* GE or LT */
-    0b110  => result = (PSTATE_N == PSTATE_V & PSTATE_Z == 0), /* GT or LE */
+    0b000  => result = (PSTATE_Z() == 0b1),                        /* EQ or NE */
+    0b001  => result = (PSTATE_C() == 0b1),                        /* CS or CC */
+    0b010  => result = (PSTATE_N() == 0b1),                        /* MI or PL */
+    0b011  => result = (PSTATE_V() == 0b1),                        /* VS or VC */
+    0b100  => result = (PSTATE_C() == 0b1 & PSTATE_Z() == 0b0),        /* HI or LS */
+    0b101  => result = (PSTATE_N() == PSTATE_V()),                 /* GE or LT */
+    0b110  => result = (PSTATE_N() == PSTATE_V() & PSTATE_Z() == 0b0), /* GT or LE */
     0b111  => result = true                                    /* AL */
   };
 
   /* Condition flag values in the set '111x' indicate always true */
   /* Otherwise, invert condition if necessary. */
-  if _cond[0] == 1 & _cond != 0b1111 then
+  if _cond[0] == bitone & _cond != 0b1111 then
     result = ~(result);
 
   result;
@@ -892,12 +892,12 @@ function ELUsingAArch32(el : bits(2)) -> boolean =
     false /* ARM: ELStateUsingAArch32(el, IsSecureBelowEL3()) */ /* FIXME: implement */
 
 /** FUNCTION:shared/functions/system/EventRegisterSet */
-function unit EventRegisterSet () = not_implemented_extern("EventRegisterSet")
+function EventRegisterSet () -> unit = not_implemented_extern("EventRegisterSet")
 /** FUNCTION:shared/functions/system/EventRegistered */
-function boolean EventRegistered () = not_implemented_extern("EventRegistered")
+function EventRegistered () -> boolean = not_implemented_extern("EventRegistered")
 /** FUNCTION:shared/functions/system/HaveAArch32EL */
 
-function boolean HaveAArch32EL(el : bits(2)) = {
+function HaveAArch32EL (el : bits(2)) -> boolean = {
   /* Return TRUE if Exception level 'el' supports AArch32 */
   if ~(HaveEL(el)) then
     false
@@ -914,48 +914,46 @@ function boolean HaveAArch32EL(el : bits(2)) = {
 
 /** FUNCTION:boolean HaveAnyAArch32() */
 
-function boolean HaveAnyAArch32() =
+function HaveAnyAArch32() -> boolean =
 {
   IMPLEMENTATION_DEFINED.HaveAnyAArch32
 }
 
 /** FUNCTION:boolean HaveEL(bits(2) el) */
 
-function boolean HaveEL(el : bits(2)) = {
+function HaveEL(el : bits(2)) -> boolean = {
   if el == EL1 | el == EL0 then
     true /*EL1 and EL0 must exist*/
   else {
 
   if      el == EL2 then IMPLEMENTATION_DEFINED.HaveEL2
   else if el == EL3 then IMPLEMENTATION_DEFINED.HaveEL3
-  else {assert (false,None); false};
+  else {assert (false); false};
   };
 }
 
 /** FUNCTION:boolean HighestELUsingAArch32() */
 
-function boolean HighestELUsingAArch32() =
-{
+function HighestELUsingAArch32() -> boolean = {
   if ~(HaveAnyAArch32()) then false else
   IMPLEMENTATION_DEFINED.HighestELUsingAArch32; /* e.g. CFG32SIGNAL == HIGH */
 }
 
 /** FUNCTION:shared/functions/system/Hint_Yield */
 
-function unit Hint_Yield() = ()
+function Hint_Yield() -> unit = ()
 
 /** FUNCTION:shared/functions/system/InstructionSynchronizationBarrier */
 /* external */ val InstructionSynchronizationBarrier : unit -> unit effect {barr}
 /** FUNCTION:shared/functions/system/InterruptPending */
 
-function boolean InterruptPending () = not_implemented_extern("InterruptPending")
+function InterruptPending () -> boolean = not_implemented_extern("InterruptPending")
 
 /** FUNCTION:boolean IsSecure() */
 
-function boolean IsSecure() =
-{
+function IsSecure() -> boolean = {
   /*Return TRUE if current Exception level is in Secure state.*/
-  if HaveEL(EL3) & ~(UsingAArch32()) & PSTATE_EL == EL3 then
+  if HaveEL(EL3) & ~(UsingAArch32()) & PSTATE_EL() == EL3 then
     true
   else if HaveEL(EL3) & UsingAArch32() & PSTATE_M == M32_Monitor then
     true
@@ -965,9 +963,9 @@ function boolean IsSecure() =
 
 /** FUNCTION:boolean IsSecureBelowEL3() */
 
-function boolean IsSecureBelowEL3() = {
+function IsSecureBelowEL3() -> boolean = {
   if HaveEL(EL3) then
-    ((SCR_GEN()).NS == 0)
+    SCR_GEN().NS() == 0b0
   else if HaveEL(EL2) then
     false
   else
@@ -978,9 +976,9 @@ function boolean IsSecureBelowEL3() = {
 /** ENUMERATE:shared/functions/system/Mode_Bits */
 /** FUNCTION:shared/functions/system/SCR_GEN */
 
-function SCRType SCR_GEN() = {
+function SCR_GEN() -> SCRType = {
   /*AArch32 secure & AArch64 EL3 registers are not architecturally mapped*/
-  assert (HaveEL(EL3),None);
+  assert (HaveEL(EL3));
 
   if HighestELUsingAArch32() then
     SCR
@@ -990,7 +988,7 @@ function SCRType SCR_GEN() = {
 
 /** FUNCTION:shared/functions/system/SendEvent */
 
-function unit SendEvent() =
+function SendEvent() -> unit =
 {
   ()
   /* TODO: ??? */
@@ -998,14 +996,13 @@ function unit SendEvent() =
 
 /** FUNCTION:shared/functions/system/Unreachable */
 
-function unit Unreachable() =
-{
-    assert (false,Some("Unreachable reached"));
+function Unreachable() -> unit = {
+    assert (false,"Unreachable reached");
 }
 
 /** FUNCTION:shared/functions/system/UsingAArch32 */
 
-function boolean UsingAArch32() =
+function UsingAArch32() -> boolean =
 {
   false;
   /* ARM: uncomment when implementing aarch32
@@ -1016,15 +1013,14 @@ function boolean UsingAArch32() =
 }
 
 /** FUNCTION:shared/functions/system/WaitForEvent */
-function unit WaitForEvent () = not_implemented_extern("WaitForEvent")
+function WaitForEvent () -> unit = not_implemented_extern("WaitForEvent")
 /** FUNCTION:shared/functions/system/WaitForInterrupt */
-function unit WaitForInterrupt () = not_implemented_extern("WaitForInterrupt")
+function WaitForInterrupt () -> unit  = not_implemented_extern("WaitForInterrupt")
 /** FUNCTION:shared/translation/translation/PAMax */
 
-function uinteger PAMax() =
-{
-  pa_size : uinteger = 0;
-  match ID_AA64MMFR0_EL1.PARange {
+function PAMax() -> range(32,48) = {
+  pa_size : range(32,48) = 32;
+  match ID_AA64MMFR0_EL1.PARange() {
     0b0000  => pa_size = 32,
     0b0001  => pa_size = 36,
     0b0010  => pa_size = 40,
@@ -1034,15 +1030,15 @@ function uinteger PAMax() =
     _  => Unreachable()
   };
 
-  /*return*/ pa_size;
+  return pa_size;
 }
 
 /** FUNCTION:shared/translation/translation/S1TranslationRegime */
 
-val S1TranslationRegime : unit -> bits(2) effect {rreg}
+val S1TranslationRegime : unit -> bits(2) effect {escape,rreg}
 function S1TranslationRegime () = {
-  if PSTATE_EL != EL0 then
-    PSTATE_EL
+  if PSTATE_EL() != EL0 then
+    PSTATE_EL()
   else if IsSecure() & HaveEL(EL3) & ELUsingAArch32(EL3) then
     EL3
   else

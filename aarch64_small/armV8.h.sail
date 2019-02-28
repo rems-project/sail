@@ -259,6 +259,7 @@ let IMPLEMENTATION_DEFINED : IMPLEMENTATION_DEFINED_type = struct {
 
 /* FIXME: ask Kathy what should we do with this */
 let UNKNOWN = 0
-
+val UNKNOWN_VEC: forall 'N, 'N >= 0. implicit('N) -> bits('N)
+function UNKNOWN_VEC(N) = (replicate_bits(0b0, 'N)) : bits('N)
 
 /* external */ val speculate_exclusive_success : unit -> bool effect {exmem}
