@@ -1793,7 +1793,7 @@ and ambiguous_nexp_vars (Nexp_aux (aux, _)) =
 let destruct_atom_nexp env typ =
   match Env.expand_synonyms env typ with
   | Typ_aux (Typ_app (f, [A_aux (A_nexp n, _)]), _)
-       when string_of_id f = "atom" -> Some n
+       when string_of_id f = "atom" || string_of_id f = "implicit" -> Some n
   | Typ_aux (Typ_app (f, [A_aux (A_nexp n, _); A_aux (A_nexp m, _)]), _)
        when string_of_id f = "range" && nexp_identical n m -> Some n
   | _ -> None
