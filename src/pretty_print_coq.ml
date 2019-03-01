@@ -350,21 +350,14 @@ match nc1, nc2 with
 | _, NC_aux (NC_true,_) -> nc1
 | _,_ -> nc_and nc1 nc2
 
-let nice_imp nc1 nc2 =
-match nc1, nc2 with
-| NC_aux (NC_true,_), _ -> nc2
-| _, NC_aux (NC_true,_) -> nc2
-| NC_aux (NC_false,l), _ -> NC_aux (NC_true,l)
-| _, NC_aux (NC_false,_) -> nc_not nc1
-| _,_ -> nc_or (nc_not nc1) nc2
-
 let nice_iff nc1 nc2 =
 match nc1, nc2 with
 | NC_aux (NC_true,_), _ -> nc2
 | _, NC_aux (NC_true,_) -> nc1
 | NC_aux (NC_false,_), _ -> nc_not nc2
 | _, NC_aux (NC_false,_) -> nc_not nc1
-| _,_ -> nc_or (nc_and nc1 nc2) (nc_and (nc_not nc1) (nc_not nc2))
+ (* TODO: replace this hacky iff with a proper NC_ constructor *)
+| _,_ -> mk_nc (NC_app (mk_id "iff",[arg_bool nc1; arg_bool nc2]))
 
 (* n_constraint functions are currently just Z3 functions *)
 let doc_nc_fn_prop id =
