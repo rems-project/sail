@@ -251,6 +251,25 @@ and strip_kinded_id_aux = function
 and strip_kind = function
   | K_aux (k_aux, _) -> K_aux (k_aux, Parse_ast.Unknown)
 
+let rec typ_constraints (Typ_aux (typ_aux, l)) =
+  match typ_aux with
+  | Typ_internal_unknown -> []
+  | Typ_id v -> []
+  | Typ_var kid -> []
+  | Typ_tup typs -> List.concat (List.map typ_constraints typs)
+  | Typ_app (f, args) -> List.concat (List.map typ_arg_nexps args)
+  | Typ_exist (kids, nc, typ) -> typ_constraints typ
+  | Typ_fn (arg_typs, ret_typ, _) ->
+     List.concat (List.map typ_constraints arg_typs) @ typ_constraints ret_typ
+  | Typ_bidir (typ1, typ2) ->
+     typ_constraints typ1 @ typ_constraints typ2
+and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
+  match typ_arg_aux with
+  | A_nexp n -> []
+  | A_typ typ -> typ_constraints typ
+  | A_bool nc -> [nc]
+  | A_order ord -> []
+
 let rec typ_nexps (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_internal_unknown -> []
@@ -2036,7 +2055,7 @@ let rec subtyp l env typ1 typ2 =
      let env = add_existential l kopts nc env in subtyp l env typ1 typ2
   | None, Some (kopts, nc, typ2) ->
      typ_debug (lazy "Subtype check with unification");
-     let typ1 = canonicalize env typ1 in
+     let typ1, env = bind_existential l None (canonicalize env typ1) env in
      let env = add_typ_vars l kopts env in
      let kids' = KidSet.elements (KidSet.diff (KidSet.of_list (List.map kopt_kid kopts)) (tyvars_of_typ typ2)) in
      if not (kids' = []) then typ_error env l "Universally quantified constraint generated" else ();
@@ -3266,13 +3285,15 @@ and bind_typ_pat env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_aux (typ_aux, _) 
   | TP_wild, _ -> env
   | TP_var kid, _ ->
      begin
-       match typ_nexps typ with
-       | [nexp] ->
+       match typ_nexps typ, typ_constraints typ with
+       | [nexp], [] ->
           Env.add_constraint (nc_eq (nvar kid) nexp) (Env.add_typ_var l (mk_kopt K_int kid) env)
-       | [] ->
+       | [], [nc] ->
+          Env.add_constraint (nc_and (nc_or (nc_not nc) (nc_var kid)) (nc_or nc (nc_not (nc_var kid)))) (Env.add_typ_var l (mk_kopt K_bool kid) env)
+       | [], [] ->
           typ_error env l ("No numeric expressions in " ^ string_of_typ typ ^ " to bind " ^ string_of_kid kid ^ " to")
-       | nexps ->
-          typ_error env l ("Type " ^ string_of_typ typ ^ " has multiple numeric expressions. Cannot bind " ^ string_of_kid kid)
+       | _, _ ->
+          typ_error env l ("Type " ^ string_of_typ typ ^ " has multiple numeric or boolean expressions. Cannot bind " ^ string_of_kid kid)
      end
   | TP_app (f1, tpats), Typ_app (f2, typs) when Id.compare f1 f2 = 0 ->
      List.fold_left2 bind_typ_pat_arg env tpats typs
