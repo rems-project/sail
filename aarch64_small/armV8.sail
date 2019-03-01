@@ -112,16 +112,16 @@ function decodeTMStart (Rt) = {
 function clause execute (TMStart(t)) = {
   nesting : bits(8) = TxNestingLevel;
 
-  if nesting <_u TXIDR_EL0.DEPTH then {
+  if nesting <_u TXIDR_EL0.DEPTH() then {
     TxNestingLevel = nesting + 1;
-    status : bits(64) = 0;
-    if nesting == 0 then
-      status = TMStartEffect; /* fake effect */
+    status : bits(64) = Zeros();
+    if nesting == 0b00000000 then
+      status = TMStartEffect.bits(); /* fake effect */
     wX(t) = status;
   } else {
-    status : bits(64) = 0;
-    status[10] = 1; /* set the NEST bit */
-    TMAbortEffect = status; /* fake effect */
+    status : bits(64) = Zeros();
+    status[10] = bitone; /* set the NEST bit */
+    TMAbortEffect->bits() = status; /* fake effect */
   }
 }
 
@@ -130,17 +130,17 @@ function clause execute (TMStart(t)) = {
 /* TCOMMIT - dummy decoding */
 val decodeTMCommit : forall 'R 'D, 'R in {32,64} & 'D in {8,16,32,64}.
         unit -> option(ast('R,'D)) effect pure
-function decodeTMCommit () = {
-  Some(TMCommit);
-}
+function decodeTMCommit () =
+  Some(TMCommit())
+
 
 /* transactional memory, not part of the official spec */
-function clause execute (TMCommit) = {
+function clause execute (TMCommit()) = {
   nesting : bits(8) = TxNestingLevel;
 
-  if nesting == 1 then
+  if nesting == 0b00000001 then
     TMCommitEffect() /* fake effect */
-  else if nesting == 0 then
+  else if nesting == 0b00000000 then
     AArch64_UndefinedFault();
 
   TxNestingLevel = nesting - 1;
@@ -149,13 +149,13 @@ function clause execute (TMCommit) = {
 /* TTEST - dummy decoding */
 val decodeTMTest : forall 'R 'D, 'R in {32,64} & 'D in {8,16,32,64}.
         unit -> option(ast('R,'D)) effect pure 
-function decodeTMTest () = {
-  Some(TMTest);
-}
+function decodeTMTest () = 
+  Some(TMTest())
+
 
 /* transactional memory, not part of the official spec */
-function clause execute (TMTest) = {
-  if TxNestingLevel > 0 then
+function clause execute (TMTest()) = {
+  if 0b00000000 <_u TxNestingLevel then
     wPSTATE_NZCV() = 0b0000
   else
     wPSTATE_NZCV() = 0b0100
@@ -170,23 +170,25 @@ function decodeTMAbort ([R] @ (imm5 : bits(5))) = {
 
 /* transactional memory, not part of the official spec */
 function clause execute (TMAbort(retry,reason)) = {
-  if TxNestingLevel > 0 then {
-    status : bits(64) = 0;
+  if 0b00000000 <_u TxNestingLevel then {
+    status : bits(64) = Zeros();
     status[4..0] = reason; /* REASON */
     status[8] = retry; /* RTRY */
-    status[9] = 1; /* ABRT */
-    TMAbortEffect = status; /* fake effect */
+    status[9] = bitone; /* ABRT */
+    TMAbortEffect->bits() = status; /* fake effect */
   };
 }
 
 /* CBNZ */
 /* CBZ */
-val decodeCompareBranchImmediate : forall 'R 'D, 'R in {32,64} & 'D in {8,16,32,64}.
-        bits(32) -> option(ast('R,'D)) effect pure
-function decodeCompareBranchImmediate ([sf]@0b011010@[op]@(imm19:bits(19))@Rt) = {
+/* val decodeCompareBranchImmediate : forall 'R 'D, 'R in {32,64} & 'D in {8,16,32,64}. */
+/*         bits(32) -> option(ast('R,'D)) effect pure */
+val decodeCompareBranchImmediate :
+        bits(32) -> {'R 'D, 'R in {32, 64} & 'D in {8,16,32,64}. option(ast('R,'D))} effect pure
+function decodeCompareBranchImmediate ([sf]@0b011010@[op]@(imm19:bits(19))@(Rt:bits(5))) = {
   t : reg_index = UInt_reg(Rt);
-  datasize : atom('R) = if sf == 1 then 64 else 32;
-  iszero : boolean = (op == 0);
+  datasize : {|32,64|} = if sf == bitone then 64 else 32;
+  iszero : boolean = (op == bitzero);
   offset : bits(64) = SignExtend(imm19@0b00);
 
   Some(CompareAndBranch(t,datasize,iszero,offset));

@@ -216,7 +216,7 @@ function CountLeadingZeroBits(x) =
   }
 /** FUNCTION:bits(N) Extend(bits(M) x, integer N, boolean unsigned) */
 
-val Extend : forall 'N 'M, 1 <= 'M & 'M < 'N. (atom('N),bits('M),bit) -> bits('N) effect {escape}
+val Extend : forall 'N 'M, 1 <= 'M & 'M < 'N. (implicit('N),bits('M),bit) -> bits('N) effect {escape}
 function Extend (n, x, _unsigned) =
   if _unsigned then ZeroExtend(n,x) else SignExtend(n,x)
 
@@ -314,11 +314,11 @@ function LSR_C(x, shift) = {
 
 /** FUNCTION:integer Min(integer a, integer b) */
 
-val Min : (integer, integer) -> integer
+val Min : forall 'M 'N.(atom('M), atom('N)) -> min('M,'N)
 function Min (a,b) =
   if a <= b then a else b
 
-val uMin : (uinteger, uinteger) -> uinteger
+val uMin : forall 'M 'N, 'M >= 0 & 'N >= 0. (atom('M), atom('N)) -> min('M,'N)
 function uMin (a,b) =
   if a <= b then a else b
 
@@ -520,7 +520,7 @@ function AddWithCarry (x, y, carry_in) = {
 /** TYPE:shared/functions/memory/AddressDescriptor */
 /** FUNCTION:boolean BigEndian() */
 
-val BigEndian : unit -> boolean effect {rreg}
+val BigEndian : unit -> boolean effect {rreg,escape}
 function BigEndian() = {
     /* bigend : boolean = bitzero; /\* ARM: uninitialized *\/ */
     if UsingAArch32() then
@@ -661,9 +661,9 @@ function flush_read_buffer(read_buffer, size) =
       AccType_STREAM   => value = rMem_STREAM (read_buffer.address, size),
       AccType_UNPRIV   => value = rMem_NORMAL (read_buffer.address, size),
       AccType_ORDERED  => value = rMem_ORDERED(read_buffer.address, size),
-      AccType_ATOMIC   => assert(false,"Reached AccType_ATOMIC: unreachable when address values are known"),
+      AccType_ATOMIC   => error("Reached AccType_ATOMIC: unreachable when address values are known"),
         /* (*old code*) value = rMem_NORMAL (read_buffer.address, size) (* the second read of 64-bit LDXP *)*/
-      _ => assert(false)
+      _ => exit()
     }
   };
 
@@ -804,7 +804,7 @@ function BranchTo(target, branch_type) = {
         if TCR_EL3.TBI() == 0b1 then
           target'[63..56] = 0b00000000;
       }
-      else assert(false)
+      else exit()
     };
     _PC = target';
   };
@@ -928,7 +928,7 @@ function HaveEL(el : bits(2)) -> boolean = {
 
   if      el == EL2 then IMPLEMENTATION_DEFINED.HaveEL2
   else if el == EL3 then IMPLEMENTATION_DEFINED.HaveEL3
-  else {assert (false); false};
+  else exit();
   };
 }
 
@@ -996,9 +996,17 @@ function SendEvent() -> unit =
 
 /** FUNCTION:shared/functions/system/Unreachable */
 
-function Unreachable() -> unit = {
-    assert (false,"Unreachable reached");
-}
+/* CP: adding two variants, one that takes a string argument, the other one doesn't  */
+val Unreachable_no_message : forall ('a : Type) . unit -> 'a effect{escape}
+function Unreachable_no_message() = 
+    error("Unreachable reached")
+
+val Unreachable_message : forall ('a : Type) . string -> 'a effect{escape}
+function Unreachable_message(message) = 
+    error(message)
+
+overload Unreachable = {Unreachable_no_message, Unreachable_message}
+
 
 /** FUNCTION:shared/functions/system/UsingAArch32 */
 

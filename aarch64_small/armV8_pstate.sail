@@ -119,8 +119,8 @@ register PSTATE_M : bits(5)          /* Mode field                         [AArc
 
 
 /* this is a convenient way to do "PSTATE.<N,Z,C,V> = nzcv;" */
-val wPSTATE_NZCV : (unit, bits(4)) -> unit effect {wreg}
-function wPSTATE_NZCV((), [n,z,c,v]) = {
+val wPSTATE_NZCV : (bits(4)) -> unit effect {wreg}
+function wPSTATE_NZCV([n,z,c,v]) = {
   PSTATE_N() = [n];
   PSTATE_Z() = [z];
   PSTATE_C() = [c];

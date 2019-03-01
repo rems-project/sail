@@ -217,7 +217,7 @@ val rX : forall 'N, 'N in {8,16,32,64}. (implicit('N),reg_index) -> bits('N) eff
 val wV : forall 'N, 'N in {8,16,32,64,128}. (SIMD_index,bits('N)) -> unit effect {wreg}
 val rV : forall 'N, 'N in {8,16,32,64,128}. (implicit('N),SIMD_index) -> bits('N) effect {rreg}
 val rVpart : forall 'N, 'N in {8,16,32,64,128}. (implicit('N),SIMD_index,range(0,1)) -> bits('N) effect {rreg,escape}
-val SCTLR' : unit -> SCTLR_type effect {rreg}
+val SCTLR' : unit -> SCTLR_type effect {rreg,escape}
 val AArch64_UndefinedFault : unit -> unit effect {escape}
 val AArch64_TranslateAddress : (bits(64),AccType,boolean,boolean,uinteger) -> AddressDescriptor effect pure
 val AArch64_WFxTrap : (bits(2),boolean) -> unit effect {escape}

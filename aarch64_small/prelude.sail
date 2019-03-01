@@ -78,16 +78,13 @@ function cast_bit_bool (b) =
 
 
 val and_bits = {c:"and_bits", _: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
-
 overload operator & = {and_bool, and_bits}
 
 val or_bits = {c:"or_bits", _: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
-
 overload operator | = {or_bool, or_bits}
 
 
 val not_vec = {c:"not_bits", _:"not_vec"} : forall 'n. bits('n) -> bits('n)
-
 overload ~ = {not_bool, not_vec}
 
 val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", coq: "generic_eq", _:"eq_anything"} : forall ('a : Type). ('a, 'a) -> bool
@@ -101,6 +98,22 @@ val neq_anything = {lem: "neq", coq: "generic_neq"} : forall ('a : Type). ('a, '
 function neq_anything (x, y) = not_bool(x == y)
 
 overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
+
+
+val add_int = {ocaml: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : forall 'n 'm.
+  (int('n), int('m)) -> int('n + 'm)
+val add_vec = {c: "add_bits", _: "add_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val add_vec_int = {c: "add_bits_int", _: "add_vec_int"} : forall 'n. (bits('n), int) -> bits('n)
+overload operator + = {add_int, add_vec, add_vec_int}
+
+val sub_int = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : forall 'n 'm.
+  (int('n), int('m)) -> int('n - 'm)
+val sub_nat = {ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
+	       lem: "integerMinus", coq: "sub_nat", c: "sub_nat"}
+            : (nat, nat) -> nat
+val sub_vec = {c: "sub_bits", _: "sub_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val sub_vec_int = {c: "sub_bits_int", _: "sub_vec_int"} : forall 'n. (bits('n), int) -> bits('n)
+overload operator - = {sub_int, sub_vec, sub_vec_int}
 
 
 /* val reg_index : reg_size -> reg_index */
@@ -142,3 +155,13 @@ val mod = {
 } : forall 'M 'N. (atom('M), atom('N)) -> {'O, 0 <= 'O & 'O < N . atom('O)}
 
 /* overload operator % = {mod_int} */
+
+val print = "print_endline" : string -> unit
+
+val error : forall ('a : Type). string -> 'a effect{escape}
+function error(message) = {
+  print(message); 
+  exit()
+}
+
+type min ('M : Int, 'N : Int) = {'O, ('O == 'M | 'O == 'N) & 'O <= 'M & 'O <= 'N. atom('O)}
