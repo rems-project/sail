@@ -1208,6 +1208,14 @@ prepare_for_solver;
  | constructor; eauto 3 with zarith sail
    (* The datatypes hints give us some list handling, esp In *)
  | constructor; drop_exists; eauto 3 with datatypes zarith sail
+   (* Booleans - and_boolMP *)
+ | match goal with |- ArithFact (forall l r:bool, _ -> _ -> exists _, _) => 
+     constructor; intros l r H1 H2;
+     solve [exists l; destruct l; intuition | exists r; destruct l; intuition]
+   end
+ | match goal with |- context [@eq _ _ _] =>
+     constructor; intuition
+   end
  | constructor; idtac "Unable to solve constraint"; dump_context; fail
  ].
 (* Add an indirection so that you can redefine run_solver to fail to get
