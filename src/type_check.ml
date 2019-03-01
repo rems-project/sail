@@ -105,6 +105,7 @@ type env =
   { top_val_specs : (typquant * typ) Bindings.t;
     defined_val_specs : IdSet.t;
     locals : (mut * typ) Bindings.t;
+    top_letbinds : IdSet.t;
     union_ids : (typquant * typ) Bindings.t;
     registers : (effect * effect * typ) Bindings.t;
     variants : (typquant * type_union list) Bindings.t;
@@ -409,6 +410,8 @@ module Env : sig
   val get_accessor : id -> id -> t -> typquant * typ * typ * effect
   val add_local : id -> mut * typ -> t -> t
   val get_locals : t -> (mut * typ) Bindings.t
+  val add_toplevel_lets : IdSet.t -> t -> t
+  val get_toplevel_lets : t -> IdSet.t
   val add_variant : id -> typquant * type_union list -> t -> t
   val add_scattered_variant : id -> typquant -> t -> t
   val add_variant_clause : id -> type_union -> t -> t
@@ -488,6 +491,7 @@ end = struct
     { top_val_specs = Bindings.empty;
       defined_val_specs = IdSet.empty;
       locals = Bindings.empty;
+      top_letbinds = IdSet.empty;
       union_ids = Bindings.empty;
       registers = Bindings.empty;
       variants = Bindings.empty;
@@ -1059,15 +1063,19 @@ end = struct
     | Mutable -> "ref<" ^ string_of_typ typ ^ ">"
 
   let add_local id mtyp env =
-    begin
-      if not env.allow_bindings then typ_error env (id_loc id) "Bindings are not allowed in this context" else ();
-      wf_typ env (snd mtyp);
-      if Bindings.mem id env.top_val_specs then
-        typ_error env (id_loc id) ("Local variable " ^ string_of_id id ^ " is already bound as a function name")
-      else ();
-      typ_print (lazy (adding ^ "local binding " ^ string_of_id id ^ " : " ^ string_of_mtyp mtyp));
-      { env with locals = Bindings.add id mtyp env.locals }
-    end
+    if not env.allow_bindings then typ_error env (id_loc id) "Bindings are not allowed in this context" else ();
+    wf_typ env (snd mtyp);
+    if Bindings.mem id env.top_val_specs then
+      typ_error env (id_loc id) ("Local variable " ^ string_of_id id ^ " is already bound as a function name")
+    else ();
+    typ_print (lazy (adding ^ "local binding " ^ string_of_id id ^ " : " ^ string_of_mtyp mtyp));
+    { env with locals = Bindings.add id mtyp env.locals;
+               top_letbinds = IdSet.remove id env.top_letbinds }
+
+  let add_toplevel_lets ids env =
+    { env with top_letbinds = IdSet.union ids env.top_letbinds }
+
+  let get_toplevel_lets env = env.top_letbinds
 
   let add_variant id variant env =
     typ_print (lazy (adding ^ "variant " ^ string_of_id id));
@@ -4560,14 +4568,14 @@ let check_letdef orig_env (LB_aux (letbind, (l, _))) =
        let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) typ_annot in
        if (BESet.is_empty (effect_set (effect_of checked_bind)) || !opt_no_effects)
        then
-         [DEF_val (LB_aux (LB_val (tpat, checked_bind), (l, None)))], env
+         [DEF_val (LB_aux (LB_val (tpat, checked_bind), (l, None)))], Env.add_toplevel_lets (pat_ids tpat) env
        else typ_error env l ("Top-level definition with effects " ^ string_of_effect (effect_of checked_bind))
     | LB_val (pat, bind) ->
        let inferred_bind = propagate_exp_effect (irule infer_exp orig_env (strip_exp bind)) in
        let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) (typ_of inferred_bind) in
        if (BESet.is_empty (effect_set (effect_of inferred_bind)) || !opt_no_effects)
        then
-         [DEF_val (LB_aux (LB_val (tpat, inferred_bind), (l, None)))], env
+         [DEF_val (LB_aux (LB_val (tpat, inferred_bind), (l, None)))], Env.add_toplevel_lets (pat_ids tpat) env
        else typ_error env l ("Top-level definition with effects " ^ string_of_effect (effect_of inferred_bind))
   end
 

@@ -88,6 +88,8 @@ module type S =
     (** Topologically sort a graph. Throws Not_a_DAG if the graph is
        not directed acyclic. *)
     val topsort : graph -> node list
+
+    val make_dot : (node -> string) -> (node -> node -> string) -> (node -> string) -> out_channel -> graph -> unit
   end
 
 module Make(Ord: OrderedType) = struct
@@ -152,7 +154,9 @@ module Make(Ord: OrderedType) = struct
 
   let prune roots cuts cg =
     let rs = reachable roots cuts cg in
-    fix_leaves (NM.filter (fun fn _ -> NS.mem fn rs) cg)
+    let cg = NM.filter (fun fn _ -> NS.mem fn rs) cg in
+    let cg = NM.mapi (fun fn children -> if NS.mem fn cuts then NS.empty else children) cg in
+    fix_leaves cg
 
   let remove_self_loops cg =
     NM.mapi (fun fn callees -> NS.remove fn callees) cg
@@ -205,5 +209,20 @@ module Make(Ord: OrderedType) = struct
       | Not_found -> ()
 
     in topsort' (); !list
+
+  let make_dot node_color edge_color string_of_node out_chan graph =
+    Util.opt_colors := false;
+    let to_string node = String.escaped (string_of_node node) in
+    output_string out_chan "digraph DEPS {\n";
+    let make_node from_node =
+      output_string out_chan (Printf.sprintf "  \"%s\" [fillcolor=%s;style=filled];\n" (to_string from_node) (node_color from_node))
+    in
+    let make_line from_node to_node =
+      output_string out_chan (Printf.sprintf "  \"%s\" -> \"%s\" [color=%s];\n" (to_string from_node) (to_string to_node) (edge_color from_node to_node))
+    in
+    NM.bindings graph |> List.iter (fun (from_node, _) -> make_node from_node);
+    NM.bindings graph |> List.iter (fun (from_node, to_nodes) -> NS.iter (make_line from_node) to_nodes);
+    output_string out_chan "}\n";
+    Util.opt_colors := true;
 
 end
