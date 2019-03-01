@@ -145,6 +145,12 @@ let options = Arg.align ([
   ( "-c_prefix",
     Arg.String (fun prefix -> C_backend.opt_prefix := prefix),
     "<prefix> prefix generated C functions" );
+  ( "-c_extra_params",
+    Arg.String (fun params -> C_backend.opt_extra_params := Some params),
+    "<parameters> generate C functions with additional parameters" );
+  ( "-c_extra_args",
+    Arg.String (fun args -> C_backend.opt_extra_arguments := Some args),
+    "<arguments> supply extra argument to every generated C function call" );
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an ELF file so that it can be executed by compiled C code");

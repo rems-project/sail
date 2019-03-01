@@ -1304,6 +1304,15 @@ let bind_existential l name typ env =
   | Some (kids, nc, typ) -> typ, add_existential l kids nc env
   | None -> typ, env
 
+let bind_tuple_existentials l name (Typ_aux (aux, annot) as typ) env =
+  match aux with
+  | Typ_tup typs ->
+     let typs, env =
+       List.fold_right (fun typ (typs, env) -> let typ, env = bind_existential l name typ env in typ :: typs, env) typs ([], env)
+     in
+     Typ_aux (Typ_tup typs, annot), env
+  | _ -> typ, env
+
 let destruct_range env typ =
   let kopts, constr, (Typ_aux (typ_aux, _)) =
     Util.option_default ([], nc_true, typ) (destruct_exist (Env.expand_synonyms env typ))
@@ -1567,6 +1576,8 @@ let merge_uvars l unifiers1 unifiers2 =
   KBindings.merge (merge_unifiers l) unifiers1 unifiers2
 
 let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as typ2) =
+  typ_debug (lazy (Util.("Unify type " |> magenta |> clear) ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2
+                   ^ " goals " ^ string_of_list ", " string_of_kid (KidSet.elements goals)));
   match aux1, aux2 with
   | Typ_internal_unknown, _ | _, Typ_internal_unknown
        when Env.allow_unknowns env ->
@@ -1577,7 +1588,14 @@ let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as 
   | Typ_app (range, [A_aux (A_nexp n1, _); A_aux (A_nexp n2, _)]),
     Typ_app (atom, [A_aux (A_nexp m, _)])
        when string_of_id range = "range" && string_of_id atom = "atom" ->
-     merge_uvars l (unify_nexp l env goals n1 m) (unify_nexp l env goals n2 m)
+     let n1, n2 = nexp_simp n1, nexp_simp n2 in
+     begin match n1, n2 with
+     | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
+        if prove __POS__ env (nc_and (nc_lteq n1 m) (nc_lteq m n2)) then KBindings.empty
+        else unify_error l (string_of_typ typ1 ^ " is not contained within " ^ string_of_typ typ1)
+     | _, _ ->
+        merge_uvars l (unify_nexp l env goals n1 m) (unify_nexp l env goals n2 m)
+     end
 
   | Typ_app (id1, args1), Typ_app (id2, args2) when List.length args1 = List.length args2 && Id.compare id1 id2 = 0 ->
      List.fold_left (merge_uvars l) KBindings.empty (List.map2 (unify_typ_arg l env goals) args1 args2)
@@ -1793,7 +1811,7 @@ and ambiguous_nexp_vars (Nexp_aux (aux, _)) =
 let destruct_atom_nexp env typ =
   match Env.expand_synonyms env typ with
   | Typ_aux (Typ_app (f, [A_aux (A_nexp n, _)]), _)
-       when string_of_id f = "atom" -> Some n
+       when string_of_id f = "atom" || string_of_id f = "implicit" -> Some n
   | Typ_aux (Typ_app (f, [A_aux (A_nexp n, _); A_aux (A_nexp m, _)]), _)
        when string_of_id f = "range" && nexp_identical n m -> Some n
   | _ -> None
@@ -2932,6 +2950,7 @@ and type_coercion_unify env goals (E_aux (_, (l, _)) as annotated_exp) typ =
     try
       typ_debug (lazy ("Coercing unification: from " ^ string_of_typ (typ_of annotated_exp) ^ " to " ^ string_of_typ typ));
       let atyp, env = bind_existential l None (typ_of annotated_exp) env in
+      let atyp, env = bind_tuple_existentials l None atyp env in
       annotated_exp, unify l env (KidSet.diff goals (ambiguous_vars typ)) typ atyp, env
     with
     | Unification_error (_, m) when Env.allow_casts env ->

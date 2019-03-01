@@ -1,0 +1,6 @@
+Type error:
+[[96mexistential_ast/v1.sail[0m]:46:7-21
+46[96m |[0m  Some(Ctor2(y, x, c))
+  [91m |[0m       [91m^------------^[0m
+  [91m |[0m No valid casts resulted in unification
+  [91m |[0m 
