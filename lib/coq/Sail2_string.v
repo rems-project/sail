@@ -188,3 +188,6 @@ Definition decimal_string_of_bv {a} `{Bitvector a} (bv : a) : string :=
 Definition decimal_string_of_bits {n} (bv : mword n) : string := decimal_string_of_bv bv.
 
 
+(* Some aliases for compatibility. *)
+Definition dec_str := string_of_int.
+Definition concat_str := String.append.

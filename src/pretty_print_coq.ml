@@ -1096,7 +1096,7 @@ let condition_produces_constraint exp =
    dependent pair with a proof that the result is the expected integer.  This
    is redundant for basic arithmetic functions and functions which we unfold
    in the constraint solver. *)
-let no_proof_fns = ["Z.add"; "Z.sub"; "Z.opp"; "Z.mul"; "length_mword"; "length";
+let no_proof_fns = ["Z.add"; "Z.sub"; "Z.opp"; "Z.mul"; "Z.rem"; "length_mword"; "length";
                       "negb"; "andb"; "orb";
                       "Z.leb"; "Z.geb"; "Z.ltb"; "Z.gtb"; "Z.eqb"]
 
