@@ -390,8 +390,6 @@ let rec count_bool_vars (NC_aux (nc,_)) =
   | NC_app (_,args) ->
      List.fold_left merge_bool_count KBindings.empty (List.map count_arg args)
 
-type prop_dir = Implied_by | Implies | Iff
-
 type atom_bool_prop =
   Bool_boring
 | Bool_complex of kinded_id list * n_constraint * n_constraint
@@ -2746,6 +2744,9 @@ let rec doc_def unimplemented generic_eq_types def =
   | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l,_))) -> unreachable l __POS__ "Coq doesn't support mappings"
   | DEF_pragma _ -> empty
+  | DEF_measure (id,_,_) -> unreachable (id_loc id) __POS__
+                              ("Termination measure for " ^ string_of_id id ^
+                                 " should have been rewritten before backend")
 
 let find_exc_typ defs =
   let is_exc_typ_def = function
