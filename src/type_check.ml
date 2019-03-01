@@ -1585,6 +1585,9 @@ let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as 
 
   | Typ_var v, _ when KidSet.mem v goals -> KBindings.singleton v (arg_typ typ2)
 
+  (* We need special cases for unifying range(n, m), nat, and int vs atom('n) *)
+  | Typ_id int, Typ_app (atom, [A_aux (A_nexp n, _)]) when string_of_id int = "int" -> KBindings.empty
+
   | Typ_id nat, Typ_app (atom, [A_aux (A_nexp n, _)]) when string_of_id nat = "nat" ->
      if prove __POS__ env (nc_gteq n (nint 0)) then KBindings.empty
      else unify_error l (string_of_typ typ2 ^ " must be a natural number")
