@@ -34,7 +34,7 @@
 
 
 type RegisterSize('R: Int) -> Bool = 'R in {32, 64}
-type DataSize('D: Int) -> Bool = 'D in {8, 16, 32, 64, 128}
+type DataSize('D: Int) -> Bool = 'D in {8, 16, 32, 64}
 
 union ast =  {
   Unallocated : unit,
@@ -68,7 +68,7 @@ union ast =  {
   ExceptionReturn : unit, /* TODO: add to .hgen */
   DebugRestorePState : unit, /* TODO: add to .hgen */
   LoadLiteral : {'D 'size, RegisterSize('D) & 'size in {1,2,4,8/* ,16 */} & 'size * 8 == 'D. (reg_index,MemOp,boolean,atom('size),bits(64),atom('D))},
-  LoadStoreAcqExc : {'D 'R, DataSize('D) & RegisterSize('R). (reg_index,reg_index,reg_index,reg_index,AccType,boolean,boolean,MemOp,uinteger,atom('R),atom('D))},
+  LoadStoreAcqExc : {'D 'R 'elsize, 'D in {8, 16, 32, 64, 128} & RegisterSize('R) & 'elsize <= 'D. (reg_index,reg_index,reg_index,reg_index,AccType,boolean,boolean,MemOp,atom('elsize),atom('R),atom('D))},
   LoadStorePairNonTemp : {'D, DataSize('D). (boolean,boolean,reg_index,reg_index,reg_index,AccType,MemOp,uinteger,atom('D),bits(64))},
   LoadImmediate : {'D 'R, DataSize('D) & RegisterSize('R). (reg_index,reg_index,AccType,MemOp,boolean,boolean,boolean,bits(64),atom('R),atom('D))},
   LoadRegister : {'D 'R, DataSize('D) & RegisterSize('R). (reg_index,reg_index,reg_index,AccType,MemOp,boolean,boolean,boolean,ExtendType,uinteger,atom('R),atom('D))},
@@ -186,8 +186,8 @@ function decodeCompareBranchImmediate ([sf]@0b011010@[op]@(imm19:bits(19))@(Rt:b
   Some(CompareAndBranch(t,datasize,iszero,offset));
 }
 
-function clause execute (CompareAndBranch((t,datasize,iszero,offset))) = {
-  operand1 /* : bits('R) */ = rX(datasize,t);
+function clause execute (CompareAndBranch((t,(datasize as atom('R)),iszero,offset))) = {
+  operand1 : bits('R) = rX(datasize,t);
   if IsZero(operand1) == iszero then
     BranchTo(rPC() + offset, BranchType_JMP);
 }
@@ -554,7 +554,8 @@ val decodeTestBranchImmediate : bits(32) -> option(ast) effect {escape}
 function decodeTestBranchImmediate ([b5]@0b011011@[op]@(b40 : bits(5))@(imm14 : bits(14))@(Rt:bits(5))) = {
   t : reg_index = UInt_reg(Rt);
 
-  let datasize : {| 32, 64 |} /* : atom('R) */ = if b5 == bitone then 64 else 32;
+  let datasize : {| 32, 64 |} as atom('R) = if b5 == bitone then 64 else 32;
+  let datasize as atom('R) = datasize;
   let bit_pos : uinteger = UInt([b5]@b40);
   bit_val : bit = op;
   offset : bits(64) = SignExtend(imm14@0b00);
@@ -564,8 +565,8 @@ function decodeTestBranchImmediate ([b5]@0b011011@[op]@(b40 : bits(5))@(imm14 : 
   Some(TestBitAndBranch((t,datasize,bit_pos,bit_val,offset)));
 }
 
-function clause execute ( TestBitAndBranch((t,datasize,bit_pos,bit_val,offset)) ) = {
-  operand /* : bits('R) */ = rX(datasize,t);
+function clause execute ( TestBitAndBranch((t,(datasize as atom('R)),bit_pos,bit_val,offset)) ) = {
+  operand : bits('R) = rX(datasize,t);
 
   if operand[bit_pos] == bit_val then
     BranchTo(rPC() + offset, BranchType_JMP);
@@ -693,12 +694,12 @@ function decodeLoadRegisterLiteral ((opc : bits(2))@0b011@0b0@0b00@(imm19 : bits
 
   /* CP: adding let bindings so typechecker has more information */
   let size = size;
-  let datasize /* : atom('D) */ = size*8; /* not in ARM ARM */
+  let datasize as atom('D) = size*8; /* not in ARM ARM */
 
   Some(LoadLiteral(t,memop,_signed,size,offset,datasize));
 }
 
-function clause execute ( LoadLiteral((t,memop,_signed,size,offset,datasize /* : atom('D) */)) ) = {
+function clause execute ( LoadLiteral((t,memop,_signed,size,offset,(datasize as atom('D)) )) ) = {
   address : bits(64) = rPC() + offset;
   let data = Zeros(datasize); /* ARM: uninitialized */
   match memop {
@@ -758,11 +759,15 @@ function decodeLoadStoreExclusive ((size : bits(2))@0b001000@[o2]@[L]@[o1]@(Rs:b
   let pair : boolean = (o1 == bitone);
   let memop : MemOp = if L == bitone then MemOp_LOAD else MemOp_STORE;
   let size_uint : range(0,3) = UInt(size);
-  let elsize = lsl(8, size_uint);
+  let size_uint as atom('size) = size_uint;
+  let elsize : atom(8 * (2 ^ 'size)) = lsl(8, size_uint);
+  let elsize as atom('elsize) = elsize;
   assert(elsize == 8 | elsize == 16 | elsize == 32 | elsize == 64); /*FIXME: CP: adding assertion to make typecheck*/
 
-  let regsize : {|32,64|} /* : atom('R) */ = if elsize == 64 then 64 else 32;
-  let datasize : {| 8,16,32,64,128|} /* : atom('D) */ = if pair then elsize * 2 else elsize;
+  let regsize : {|32,64|} = if elsize == 64 then 64 else 32;
+  let regsize as atom('R) = regsize;
+  let datasize : {'n, 'n in {8,16,32,64,128} & 'elsize <= 'n. atom('n)} = if pair then elsize * 2 else elsize;
+  let datasize as atom('D) = datasize;
 
   /* lemma: pair --> datasize = 2*regsize */
   /* follows from "if o1 == 1 & size[1] == 0 then UnallocatedEncoding();" */
@@ -770,10 +775,10 @@ function decodeLoadStoreExclusive ((size : bits(2))@0b001000@[o2]@[L]@[o1]@(Rs:b
   Some(LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsize,regsize,datasize)));
 }
 
-function clause execute ( LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsize,regsize,datasize /* :atom('D) */ ))) = {
+function clause execute ( LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsize,(regsize as atom('R)),(datasize as atom('D)) ))) = {
   address : bits(64) = Zeros(); /* ARM: uninitialized */
-  data /* : bits('D) */ = Zeros(datasize); /* ARM: uninitialized */
-  /*constant*/ dbytes : {|1,2,4,8,16|} = quot (datasize,8);
+  data : bits('D) = Zeros(datasize); /* ARM: uninitialized */
+  /*constant*/ dbytes : atom(div('D,8)) = quot (datasize,8);
   rt_unknown : boolean = false;
   rn_unknown : boolean = false;
 
@@ -839,19 +844,24 @@ function clause execute ( LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsi
       /* anounce the address */
       wMem_Addr(address, dbytes, acctype, excl);
 
-      if rt_unknown then
+      if rt_unknown then { 
+        assert( pair == false & datasize < 128); /* FIXME: CP adding assertion so it typechecks: this should not happen: rt_unknown apparently false in the non-pair case  */
         data = UNKNOWN_BITS(datasize) /* : bits('D) */
+      }
       else if pair then {
-        assert( excl );
-        el1 /* : bits('R) */ = rX(datasize/2/* regsize */,t); /* ARM: bits(datasize / 2) see lemma in the decoding */
-        el2 /* : bits('R) */ = rX(datasize/2/* regsize */,t2); /* ARM: bits(datasize / 2) see lemma in the decoding */
+        let halfsize : atom(div('D,2)) = quot(datasize,2);
+        assert( excl ); /* FIXME: CP adding assertion: in the 'pair' case datasize > 8  */
+        assert(datasize > 8);
+        el1 /* : bits('R) */ = rX(halfsize/* regsize */,t); /* ARM: bits(datasize / 2) see lemma in the decoding */
+        el2 /* : bits('R) */ = rX(halfsize/* regsize */,t2); /* ARM: bits(datasize / 2) see lemma in the decoding */
         data = if BigEndian() then el1@el2 else el2@el1;
-      } else
+      } else {
+        assert(datasize < 128); /* FIXME: CP adding assertion: in the non-'pair' case datasize < 128  */
         data : bits('D) = rX(t);
-
+      };
       if excl then {
         /* store {release} exclusive register|pair (atomic) */
-        status : bit = 1;
+        status : bit = bitone;
         /* Check whether the Exclusive Monitors are set to include the */
         /* physical memory locations corresponding to virtual address */
         /* range [address, address+dbytes-1]. */
@@ -887,16 +897,19 @@ function clause execute ( LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsi
 
       if pair then {
         /* load exclusive pair */
-        assert( excl, None );
-        if rt_unknown then
+        assert( excl );
+        if rt_unknown then {
+          assert( pair == false & datasize < 128); /* FIXME: CP adding assertion so it typechecks: this should not happen: rt_unknown apparently false in the non-pair case  */
           /* ConstrainedUNPREDICTABLE case */
-          wX(t) = UNKNOWN : bits('D)
+          wX(t) = UNKNOWN_BITS() : bits('D)
+        }
         else if elsize == 32 then {
           /* 32-bit load exclusive pair (atomic) */
           data = flush_read_buffer(
             rMem_exclusive(empty_read_buffer, address, dbytes, acctype),
             dbytes
           );
+          assert(datasize == 64); /* FIXME: CP adding assertion so it typechecks: in the 'pair' case elsize*2 == datasize */
           if BigEndian() then {
             wX(t) = data[(datasize - 1)..elsize];
             wX(t2) = data[(elsize - 1)..0];
@@ -924,6 +937,7 @@ function clause execute ( LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsi
           rMem'(empty_read_buffer, address, dbytes, acctype, excl),
           dbytes
         );
+        assert (regsize >= datasize); /* FIXME: CP adding assertion so it typechecks: in the non-'pair' case regsize >= datasize */
         wX(t) = ZeroExtend(data) : bits('R);
       };
     },

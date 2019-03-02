@@ -212,7 +212,7 @@ enum PSTATEField =
 
 val rPC : unit -> bits(64) effect {rreg}
 val rSP : forall 'N, 'N in {8,16,32,64}. implicit('N) -> bits('N) effect {rreg,escape}
-val wX : forall 'N, 'N in {32,64}. (reg_index,bits('N)) -> unit effect {wreg}
+val wX : forall 'N, 'N in {8,16,32,64}. (reg_index,bits('N)) -> unit effect {wreg}
 val rX : forall 'N, 'N in {8,16,32,64}. (implicit('N),reg_index) -> bits('N) effect {rreg}
 val wV : forall 'N, 'N in {8,16,32,64,128}. (SIMD_index,bits('N)) -> unit effect {wreg}
 val rV : forall 'N, 'N in {8,16,32,64,128}. (implicit('N),SIMD_index) -> bits('N) effect {rreg}
