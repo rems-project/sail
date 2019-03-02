@@ -617,13 +617,14 @@ struct read_buffer_type = {
   size : uinteger,
 }
 
-let empty_read_buffer =
-{ size = 0;
-  /* arbitrary values: */
-  acctype = AccType_NORMAL;
-  exclusive = false;
-  address = 0;
-}
+let empty_read_buffer : read_buffer_type = 
+  struct { 
+    size = 0,
+    /* arbitrary values: */
+    acctype = AccType_NORMAL,
+    exclusive = false,
+    address = Zeros()
+  }
 
 val _rMem : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, AddressDescriptor, atom('N), AccType, bool) -> read_buffer_type effect {escape}
 function _rMem(read_buffer, desc, size, acctype, exclusive) = {

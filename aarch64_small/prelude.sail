@@ -120,8 +120,10 @@ overload operator - = {sub_int, sub_vec, sub_vec_int}
 /* function reg_index x = unsigned(x) */
 
 
-val quotient_nat = {ocaml: "quotient", lem: "integerDiv"} : (nat, nat) -> nat
-val quotient = {ocaml: "quotient", lem: "integerDiv"} : (int, int) -> int
+val quotient_nat = {ocaml: "quotient", lem: "integerDiv"} : 
+    forall 'M 'N, 'M >= 0 & 'N >= 0. (atom('M), atom('N)) -> atom(div('M,'N))
+val quotient = {ocaml: "quotient", lem: "integerDiv"} : 
+    forall 'M 'N. (atom('M), atom('N)) -> atom(div('M,'N))
 overload quot = {quotient_nat, quotient}
 
 
