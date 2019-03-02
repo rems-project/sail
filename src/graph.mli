@@ -90,9 +90,11 @@ module type S =
     (** Topologically sort a graph. Throws Not_a_DAG if the graph is
        not directed acyclic. *)
     val topsort : graph -> node list
+
+    val make_dot : (node -> string) -> (node -> node -> string) -> (node -> string) -> out_channel -> graph -> unit
   end
 
 module Make(Ord: OrderedType) : S
        with type node = Ord.t
         and type node_set = Set.Make(Ord).t
-        and type graph = Set.Make(Ord).t Map.Make(Ord).t 
+        and type graph = Set.Make(Ord).t Map.Make(Ord).t
