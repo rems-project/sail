@@ -714,13 +714,13 @@ struct write_buffer_type = {
   size : range(0,16),
 }
 
-let empty_write_buffer = { 
-  size = 0;
+let empty_write_buffer : write_buffer_type = struct { 
+  size = 0,
   /* arbitrary values: */
-  acctype = AccType_NORMAL;
-  exclusive = false;
-  address = 0;
-  value = 0;
+  acctype = AccType_NORMAL,
+  exclusive = false,
+  address = Zeros(),
+  value = Zeros()
 }
 
 val _wMem : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, AddressDescriptor, atom('N), AccType, bool, bits('N*8)) -> write_buffer_type effect {escape}
