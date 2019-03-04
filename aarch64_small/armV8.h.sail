@@ -218,7 +218,7 @@ let _V : vector(32,dec,(register(bits(128)))) =
 
 
 /* lsl: used instead of the ARM ARM << over integers */
-val lsl : forall 'm 'n, 'm >= 0 & 'n >= 0. (atom('n), atom('m)) -> atom('n * (2 ^ 'm)) 
+val lsl : forall 'm 'n, 'm >= 0 & 'n >= 0. (int('n), int('m)) -> int('n * (2 ^ 'm)) 
 function lsl (n, m) = n * (2 ^ m)
 
 /* not_implemented is used to indicate something WE did not implement */

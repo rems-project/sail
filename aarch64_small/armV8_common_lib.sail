@@ -186,7 +186,7 @@ function ASR_C (x, shift) =  {
 
 /* SignExtend : */
 
-/* 'S+'N > 'N & 'N >= 1. (atom('S+'N),bits('N)) -> bits('S+'N) */
+/* 'S+'N > 'N & 'N >= 1. (int('S+'N),bits('N)) -> bits('S+'N) */
 
 
 /** FUNCTION:integer Align(integer x, integer y) */
@@ -314,11 +314,11 @@ function LSR_C(x, shift) = {
 
 /** FUNCTION:integer Min(integer a, integer b) */
 
-val Min : forall 'M 'N.(atom('M), atom('N)) -> min('M,'N)
+val Min : forall 'M 'N.(int('M), int('N)) -> min('M,'N)
 function Min (a,b) =
   if a <= b then a else b
 
-val uMin : forall 'M 'N, 'M >= 0 & 'N >= 0. (atom('M), atom('N)) -> min('M,'N)
+val uMin : forall 'M 'N, 'M >= 0 & 'N >= 0. (int('M), int('N)) -> min('M,'N)
 function uMin (a,b) =
   if a <= b then a else b
 
@@ -537,7 +537,7 @@ function BigEndian() = {
 val BigEndianReverse : forall 'W, 'W in {8,16,32,64,128}. bits('W) -> bits('W) effect pure
 function BigEndianReverse (value) = {
     let 'half = 'W / 2;
-    width : atom('W) = length(value);
+    width : int('W) = length(value);
     /* half : uinteger = width / 2; */
     if width == 8 then value
     else {
@@ -601,15 +601,15 @@ function Hint_Prefetch(addr,hint,target,stream) = ()
 /** FUNCTION:shared/functions/memory/_Mem */
 
 /* regular load */
-/* external */ val rMem_NORMAL : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,atom('N) /*size*/) -> bits('N*8) effect {rmem}
+/* external */ val rMem_NORMAL : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
 /* non-temporal load (LDNP), see ARM ARM for special exception to normal memory ordering rules */
-/* external */ val rMem_STREAM : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,atom('N) /*size*/) -> bits('N*8) effect {rmem}
+/* external */ val rMem_STREAM : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
 /* load-acquire */
-/* external */ val rMem_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,atom('N) /*size*/) -> bits('N*8) effect {rmem}
+/* external */ val rMem_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
 /* load-exclusive */
-/* external */ val rMem_ATOMIC : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,atom('N) /*size*/) -> bits('N*8) effect {rmem}
+/* external */ val rMem_ATOMIC : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
 /* load-exclusive+acquire */
-/* external */ val rMem_ATOMIC_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,atom('N) /*size*/) -> bits('N*8) effect {rmem}
+/* external */ val rMem_ATOMIC_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
 
 struct read_buffer_type = {
   acctype : AccType,
@@ -627,7 +627,7 @@ let empty_read_buffer : read_buffer_type =
     address = Zeros()
   }
 
-val _rMem : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, AddressDescriptor, atom('N), AccType, bool) -> read_buffer_type effect {escape}
+val _rMem : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, AddressDescriptor, int('N), AccType, bool) -> read_buffer_type effect {escape}
 function _rMem(read_buffer, desc, size, acctype, exclusive) = {
   if read_buffer.size == 0 then 
     struct { acctype = acctype,
@@ -644,7 +644,7 @@ function _rMem(read_buffer, desc, size, acctype, exclusive) = {
   }
 }
 
-val flush_read_buffer : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, atom('N)) -> bits('N*8) effect {rmem, rreg, escape}
+val flush_read_buffer : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, int('N)) -> bits('N*8) effect {rmem, rreg, escape}
 function flush_read_buffer(read_buffer, size) =
 {
   assert(read_buffer.size == size);
@@ -677,15 +677,15 @@ function flush_read_buffer(read_buffer, size) =
 /** FUNCTION:_Mem[AddressDescriptor desc, integer size, AccType acctype] = bits(8*size) value; */
 
 /* regular store */
-/* external */ val wMem_Addr_NORMAL : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, atom('N) /*size*/) -> unit effect {eamem}
+/* external */ val wMem_Addr_NORMAL : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, int('N) /*size*/) -> unit effect {eamem}
 /* store-release */
-/* external */ val wMem_Addr_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, atom('N) /*size*/) -> unit effect {eamem}
+/* external */ val wMem_Addr_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, int('N) /*size*/) -> unit effect {eamem}
 /* store-exclusive */
-/* external */ val wMem_Addr_ATOMIC : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, atom('N) /*size*/) -> unit effect {eamem}
+/* external */ val wMem_Addr_ATOMIC : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, int('N) /*size*/) -> unit effect {eamem}
 /* store-exclusive+release */
-/* external */ val wMem_Addr_ATOMIC_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, atom('N) /*size*/) -> unit effect {eamem}
+/* external */ val wMem_Addr_ATOMIC_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, int('N) /*size*/) -> unit effect {eamem}
 
-val wMem_Addr : forall 'N, 'N in {1,2,4,8,16}. (bits(64), atom('N), AccType, boolean) -> unit effect {eamem, escape}
+val wMem_Addr : forall 'N, 'N in {1,2,4,8,16}. (bits(64), int('N), AccType, boolean) -> unit effect {eamem, escape}
 function wMem_Addr(address, size, acctype, excl) =
 {
   match (excl, acctype) {
@@ -701,9 +701,9 @@ function wMem_Addr(address, size, acctype, excl) =
 
 
 /* regular store */
-/* external */ val wMem_Val_NORMAL : forall 'N, 'N in {1,2,4,8,16}. (atom('N) /*size*/, bits('N*8) /*value*/) -> unit effect {wmv}
+/* external */ val wMem_Val_NORMAL : forall 'N, 'N in {1,2,4,8,16}. (int('N) /*size*/, bits('N*8) /*value*/) -> unit effect {wmv}
 /* store-exclusive */
-/* external */ val wMem_Val_ATOMIC : forall 'N, 'N in {1,2,4,8,16}. (atom('N) /*size*/, bits('N*8) /*value*/) -> bool effect {wmv}
+/* external */ val wMem_Val_ATOMIC : forall 'N, 'N in {1,2,4,8,16}. (int('N) /*size*/, bits('N*8) /*value*/) -> bool effect {wmv}
 
 
 struct write_buffer_type = {
@@ -724,7 +724,7 @@ let empty_write_buffer : write_buffer_type = struct {
   value = Zeros()
 }
 
-val _wMem : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, AddressDescriptor, atom('N), AccType, bool, bits('N*8)) -> write_buffer_type effect {escape}
+val _wMem : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, AddressDescriptor, int('N), AccType, bool, bits('N*8)) -> write_buffer_type effect {escape}
 function _wMem(write_buffer, desc, size, acctype, exclusive, value) = {
   let s = write_buffer.size;
   if s == 0 then {

@@ -67,33 +67,33 @@ union ast =  {
   BranchRegister : (reg_index,BranchType),
   ExceptionReturn : unit, /* TODO: add to .hgen */
   DebugRestorePState : unit, /* TODO: add to .hgen */
-  LoadLiteral : {'D 'size, RegisterSize('D) & 'size in {1,2,4,8/* ,16 */} & 'size * 8 == 'D. (reg_index,MemOp,boolean,atom('size),bits(64),atom('D))},
-  LoadStoreAcqExc : {'D 'R 'elsize, 'D in {8, 16, 32, 64, 128} & RegisterSize('R) & 'elsize <= 'D. (reg_index,reg_index,reg_index,reg_index,AccType,boolean,boolean,MemOp,atom('elsize),atom('R),atom('D))},
-  LoadStorePairNonTemp : {'D, DataSize('D). (boolean,boolean,reg_index,reg_index,reg_index,AccType,MemOp,uinteger,atom('D),bits(64))},
-  LoadImmediate : {'D 'R, DataSize('D) & RegisterSize('R). (reg_index,reg_index,AccType,MemOp,boolean,boolean,boolean,bits(64),atom('R),atom('D))},
-  LoadRegister : {'D 'R, DataSize('D) & RegisterSize('R). (reg_index,reg_index,reg_index,AccType,MemOp,boolean,boolean,boolean,ExtendType,range(0,3),atom('R),atom('D))},
-  LoadStorePair : {'D, DataSize('D). (boolean,boolean,reg_index,reg_index,reg_index,AccType,MemOp,boolean,atom('D),bits(64))},
-  AddSubImmediate : {'R, RegisterSize('R). (reg_index,reg_index,atom('R),boolean,boolean,bits('R))},
-  BitfieldMove : {'R 'r 's, RegisterSize('R) & 0 <= 'r < 'R & 0 <= 's < 'R. (reg_index,reg_index,atom('R),boolean,boolean,atom('r),atom('s),bits('R),bits('R))},
-  ExtractRegister : {'R 'lsb, RegisterSize('R) & 0 <= 'lsb <= 'R. (reg_index,reg_index,reg_index,atom('R),atom('lsb))},
-  LogicalImmediate : {'R, RegisterSize('R). (reg_index,reg_index,atom('R),boolean,LogicalOp,bits('R))},
-  MoveWide : {'R 'pos, RegisterSize('R) & 0 <= 'pos < div('R, 2). (reg_index,atom('R),bits(16),atom('pos),MoveWideOp)},
+  LoadLiteral : {'D 'size, RegisterSize('D) & 'size in {1,2,4,8/* ,16 */} & 'size * 8 == 'D. (reg_index,MemOp,boolean,int('size),bits(64),int('D))},
+  LoadStoreAcqExc : {'D 'R 'elsize, 'D in {8, 16, 32, 64, 128} & RegisterSize('R) & 'elsize <= 'D. (reg_index,reg_index,reg_index,reg_index,AccType,boolean,boolean,MemOp,int('elsize),int('R),int('D))},
+  LoadStorePairNonTemp : {'D, DataSize('D). (boolean,boolean,reg_index,reg_index,reg_index,AccType,MemOp,uinteger,int('D),bits(64))},
+  LoadImmediate : {'D 'R, DataSize('D) & RegisterSize('R). (reg_index,reg_index,AccType,MemOp,boolean,boolean,boolean,bits(64),int('R),int('D))},
+  LoadRegister : {'D 'R, DataSize('D) & RegisterSize('R). (reg_index,reg_index,reg_index,AccType,MemOp,boolean,boolean,boolean,ExtendType,range(0,3),int('R),int('D))},
+  LoadStorePair : {'D, DataSize('D). (boolean,boolean,reg_index,reg_index,reg_index,AccType,MemOp,boolean,int('D),bits(64))},
+  AddSubImmediate : {'R, RegisterSize('R). (reg_index,reg_index,int('R),boolean,boolean,bits('R))},
+  BitfieldMove : {'R 'r 's, RegisterSize('R) & 0 <= 'r < 'R & 0 <= 's < 'R. (reg_index,reg_index,int('R),boolean,boolean,int('r),int('s),bits('R),bits('R))},
+  ExtractRegister : {'R 'lsb, RegisterSize('R) & 0 <= 'lsb <= 'R. (reg_index,reg_index,reg_index,int('R),int('lsb))},
+  LogicalImmediate : {'R, RegisterSize('R). (reg_index,reg_index,int('R),boolean,LogicalOp,bits('R))},
+  MoveWide : {'R 'pos, RegisterSize('R) & 0 <= 'pos < div('R, 2). (reg_index,int('R),bits(16),int('pos),MoveWideOp)},
   Address : (reg_index,boolean,bits(64)),
-  AddSubExtendRegister : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,atom('R),boolean,boolean,ExtendType,range(0,7))},
-  AddSubShiftedRegister : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,atom('R),boolean,boolean,ShiftType,range(0,63))},
-  AddSubCarry : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,atom('R),boolean,boolean)},
-  ConditionalCompareImmediate : {'R, RegisterSize('R). (reg_index,atom('R),boolean,bits(4),bits(4),bits('R))},
-  ConditionalCompareRegister : {'R, RegisterSize('R). (reg_index,reg_index,atom('R),boolean,bits(4),bits(4))},
-  ConditionalSelect : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,atom('R),bits(4),boolean,boolean)},
-  Reverse : {'R, RegisterSize('R). (reg_index,reg_index,atom('R),RevOp)},
-  CountLeading : {'R, RegisterSize('R). (reg_index,reg_index,atom('R),CountOp)},
-  Division : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,atom('R),boolean)},
-  Shift : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,atom('R),ShiftType)},
-  CRC : {'D, DataSize('D). (reg_index,reg_index,reg_index,atom('D),boolean)},
-  MultiplyAddSub : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,reg_index,atom('R),atom('R),boolean)},
-  MultiplyAddSubLong : {'D 'R, DataSize('D) & RegisterSize('R). (reg_index,reg_index,reg_index,reg_index,atom('R),atom('D),boolean,boolean)},
-  MultiplyHigh : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,reg_index,atom('R),atom('R),boolean)},
-  LogicalShiftedRegister : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,atom('R),boolean,LogicalOp,ShiftType,range(0,63),boolean)},
+  AddSubExtendRegister : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,int('R),boolean,boolean,ExtendType,range(0,7))},
+  AddSubShiftedRegister : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,int('R),boolean,boolean,ShiftType,range(0,63))},
+  AddSubCarry : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,int('R),boolean,boolean)},
+  ConditionalCompareImmediate : {'R, RegisterSize('R). (reg_index,int('R),boolean,bits(4),bits(4),bits('R))},
+  ConditionalCompareRegister : {'R, RegisterSize('R). (reg_index,reg_index,int('R),boolean,bits(4),bits(4))},
+  ConditionalSelect : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,int('R),bits(4),boolean,boolean)},
+  Reverse : {'R, RegisterSize('R). (reg_index,reg_index,int('R),RevOp)},
+  CountLeading : {'R, RegisterSize('R). (reg_index,reg_index,int('R),CountOp)},
+  Division : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,int('R),boolean)},
+  Shift : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,int('R),ShiftType)},
+  CRC : {'D, DataSize('D). (reg_index,reg_index,reg_index,int('D),boolean)},
+  MultiplyAddSub : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,reg_index,int('R),int('R),boolean)},
+  MultiplyAddSubLong : {'D 'R, DataSize('D) & RegisterSize('R). (reg_index,reg_index,reg_index,reg_index,int('R),int('D),boolean,boolean)},
+  MultiplyHigh : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,reg_index,int('R),int('R),boolean)},
+  LogicalShiftedRegister : {'R, RegisterSize('R). (reg_index,reg_index,reg_index,int('R),boolean,LogicalOp,ShiftType,range(0,63),boolean)},
 }
 
 val execute : ast -> unit effect {rreg,wreg,rmem,barr,eamem,wmv,exmem,escape}
@@ -186,7 +186,7 @@ function decodeCompareBranchImmediate ([sf]@0b011010@[op]@(imm19:bits(19))@(Rt:b
   Some(CompareAndBranch(t,datasize,iszero,offset));
 }
 
-function clause execute (CompareAndBranch((t,(datasize as atom('R)),iszero,offset))) = {
+function clause execute (CompareAndBranch((t,(datasize as int('R)),iszero,offset))) = {
   operand1 : bits('R) = rX(datasize,t);
   if IsZero(operand1) == iszero then
     BranchTo(rPC() + offset, BranchType_JMP);
@@ -554,7 +554,7 @@ val decodeTestBranchImmediate : bits(32) -> option(ast) effect {escape}
 function decodeTestBranchImmediate ([b5]@0b011011@[op]@(b40 : bits(5))@(imm14 : bits(14))@(Rt:bits(5))) = {
   t : reg_index = UInt_reg(Rt);
  
-  let datasize : {| 32, 64 |} /* as atom('R) */ = if b5 == b1 then 64 else 32;
+  let datasize : {| 32, 64 |} /* as int('R) */ = if b5 == b1 then 64 else 32;
   let bit_pos : uinteger = UInt([b5]@b40);
   bit_val : bit = op;
   offset : bits(64) = SignExtend(imm14@0b00);
@@ -696,12 +696,12 @@ function decodeLoadRegisterLiteral ((opc : bits(2))@0b011@0b0@0b00@(imm19 : bits
 
   /* CP: adding let bindings so typechecker has more information */
   let size = size;
-  let datasize /* as atom('D) */ = size*8; /* not in ARM ARM */
+  let datasize /* as int('D) */ = size*8; /* not in ARM ARM */
 
   Some(LoadLiteral(t,memop,_signed,size,offset,datasize));
 }
 
-function clause execute ( LoadLiteral((t,memop,_signed,size,offset,(datasize as atom('D)) )) ) = {
+function clause execute ( LoadLiteral((t,memop,_signed,size,offset,(datasize as int('D)) )) ) = {
   address : bits(64) = rPC() + offset;
   let data = Zeros(datasize); /* ARM: uninitialized */
   match memop {
@@ -759,13 +759,13 @@ function decodeLoadStoreExclusive ((size : bits(2))@0b001000@[o2]@[L]@[o1]@(Rs:b
   let excl : boolean = (o2 == b0);
   let pair : boolean = (o1 == b1);
   let memop : MemOp = if L == b1 then MemOp_LOAD else MemOp_STORE;
-  let size_uint as atom('size) = UInt(size);
-  let elsize : atom(8 * (2 ^ 'size)) = lsl(8, size_uint);
-  let elsize as atom('elsize) = elsize;
+  let size_uint as int('size) = UInt(size);
+  let elsize : int(8 * (2 ^ 'size)) = lsl(8, size_uint);
+  let elsize as int('elsize) = elsize;
   assert(elsize == 8 | elsize == 16 | elsize == 32 | elsize == 64); /*FIXME: CP: adding assertion to make typecheck*/
 
-  let regsize as atom('R) = if elsize == 64 then 64 else 32;
-  let datasize : {'n, 'n in {8,16,32,64,128} & 'elsize <= 'n. atom('n)} = if pair then elsize * 2 else elsize;
+  let regsize as int('R) = if elsize == 64 then 64 else 32;
+  let datasize : {'n, 'n in {8,16,32,64,128} & 'elsize <= 'n. int('n)} = if pair then elsize * 2 else elsize;
 
   /* lemma: pair --> datasize = 2*regsize */
   /* follows from "if o1 == 1 & size[1] == 0 then UnallocatedEncoding();" */
@@ -773,10 +773,10 @@ function decodeLoadStoreExclusive ((size : bits(2))@0b001000@[o2]@[L]@[o1]@(Rs:b
   Some(LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsize,regsize,datasize)));
 }
 
-function clause execute ( LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsize,(regsize as atom('R)),(datasize as atom('D)) ))) = {
+function clause execute ( LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsize,(regsize as int('R)),(datasize as int('D)) ))) = {
   address : bits(64) = Zeros(); /* ARM: uninitialized */
   data : bits('D) = Zeros(datasize); /* ARM: uninitialized */
-  /*constant*/ dbytes : atom(div('D,8)) = quot (datasize,8);
+  /*constant*/ dbytes : int(div('D,8)) = quot (datasize,8);
   rt_unknown : boolean = false;
   rn_unknown : boolean = false;
 
@@ -847,7 +847,7 @@ function clause execute ( LoadStoreAcqExc((n,t,t2,s,acctype,excl,pair,memop,elsi
         data = UNKNOWN_BITS(datasize) /* : bits('D) */
       }
       else if pair then {
-        let halfsize : atom(div('D,2)) = quot(datasize,2);
+        let halfsize : int(div('D,2)) = quot(datasize,2);
         assert( excl ); /* FIXME: CP adding assertion: in the 'pair' case datasize > 8  */
         assert(datasize > 8);
         el1 /* : bits('R) */ = rX(halfsize/* regsize */,t); /* ARM: bits(datasize / 2) see lemma in the decoding */
@@ -960,18 +960,18 @@ function decodeLoadStoreNoAllocatePairOffset ((opc : bits(2))@0b101@0b0@0b000@[L
   memop : MemOp = if L == b1 then MemOp_LOAD else MemOp_STORE;
   if opc[0] == b1 then UnallocatedEncoding();
   let scale : {| 2, 3 |} = 2 + UInt([opc[1]]);
-  let datasize /* : {| 32,64 |} */  /* as atom('D) */ = lsl(8, scale);
+  let datasize /* : {| 32,64 |} */  /* as int('D) */ = lsl(8, scale);
   assert(datasize == 32 | datasize == 64); /*FIXME: CP adding assertion to make typecheck*/
   offset : bits(64) = LSL(SignExtend(imm7), scale);
 
   Some(LoadStorePairNonTemp(wback,postindex,n,t,t2,acctype,memop,scale,datasize,offset));
 }
 
-function clause execute ( LoadStorePairNonTemp((wback,postindex,n,t,t2,acctype,memop,scale,(datasize as atom('D)),offset)) ) = {
+function clause execute ( LoadStorePairNonTemp((wback,postindex,n,t,t2,acctype,memop,scale,(datasize as int('D)),offset)) ) = {
   address : bits(64) = Zeros(); /* ARM: uninitialized */
   data1 : bits('D) = Zeros(); /* ARM: uninitialized */
   data2 : bits('D) = Zeros(); /* ARM: uninitialized */
-  /*constant*/ dbytes : atom(div('D,8)) = quot(datasize,8);
+  /*constant*/ dbytes : int(div('D,8)) = quot(datasize,8);
   rt_unknown : boolean = false;
 
   if memop == MemOp_LOAD & t == t2 then {
@@ -1064,7 +1064,7 @@ function sharedDecodeLoadImmediate (opc : bits(2),size : bits(2), Rn : bits(5), 
   acctype : AccType = AccType_NORMAL/AccType_UNPRIV; */
   memop : MemOp = MemOp_LOAD; /* ARM: uninitialized */
   _signed : boolean = false; /* ARM: uninitialized */
-  regsize : { 'R, RegisterSize('R). atom('R) } = 64; /* ARM: uninitialized */
+  regsize : { 'R, RegisterSize('R). int('R) } = 64; /* ARM: uninitialized */
 
   if opc[1] == b0 then {
     /* store or zero-extending load */
@@ -1090,7 +1090,7 @@ function sharedDecodeLoadImmediate (opc : bits(2),size : bits(2), Rn : bits(5), 
     };
   };
 
-  let datasize /* : { 'D, DataSize('D). atom('D) } */ = lsl(8, scale);
+  let datasize /* : { 'D, DataSize('D). int('D) } */ = lsl(8, scale);
   assert (datasize == 8 | datasize == 16 | datasize == 32 | datasize == 64); /* FIXME: CP: adding assertion so it typechecks */
 
   Some(LoadImmediate(n,t,acctype,memop,_signed,wback,postindex,offset,regsize,datasize));
@@ -1112,7 +1112,7 @@ function decodeLoadStoreRegisterImmediatePostIndexed ((size:bits(2))@0b111@0b0@0
     (opc,size,Rn,Rt,wback,postindex,scale,offset,AccType_NORMAL,false);
 }
 
-function clause execute ( LoadImmediate ((n,t,acctype,memop,_signed,wback,postindex,offset,regsize as atom('R),datasize as atom('D))) ) = {
+function clause execute ( LoadImmediate ((n,t,acctype,memop,_signed,wback,postindex,offset,regsize as int('R),datasize as int('D))) ) = {
   address : bits(64) = Zeros(); /* ARM: uninitialized */
   data : bits('D) = Zeros(); /* ARM: uninitialized */
   wb_unknown : boolean = false;
@@ -1233,7 +1233,7 @@ function sharedDecodeLoadRegister(Rn:bits(5), Rt:bits(5), Rm:bits(5), opc : bits
   acctype : AccType = AccType_NORMAL;
   memop : MemOp = MemOp_LOAD; /* ARM: uninitialized */
   _signed : boolean = b0; /* ARM: uninitialized */
-  regsize : { 'R, RegisterSize('R). atom('R) }/* atom('R) */ = 64; /* ARM: uninitialized */
+  regsize : { 'R, RegisterSize('R). int('R) }/* int('R) */ = 64; /* ARM: uninitialized */
 
   if opc[1] == b0 then {
     /* store or zero-extending load */
@@ -1253,7 +1253,7 @@ function sharedDecodeLoadRegister(Rn:bits(5), Rt:bits(5), Rm:bits(5), opc : bits
     };
   };
 
-  let datasize /* : {'D, DataSize('D). atom('D)} */ /* : atom('D) */ = lsl(8, scale);
+  let datasize /* : {'D, DataSize('D). int('D)} */ /* : int('D) */ = lsl(8, scale);
   assert (datasize == 8 | datasize == 16 | datasize == 32 | datasize == 64); /* FIXME: CP: adding assertion so it typechecks */
   Some (LoadRegister (n,t,m,acctype,memop,_signed,wback,postindex,extend_type,shift,regsize,datasize));
 }
@@ -1278,7 +1278,7 @@ function decodeLoadStoreRegisterRegisterOffset ((size:bits(2))@0b111@0b0@0b00@(o
   sharedDecodeLoadRegister(Rn,Rt,Rm,opc,size,wback,postindex,scale,extend_type,shift);
 }
 
-function clause execute ( LoadRegister((n,t,m,acctype,memop,_signed,wback,postindex,extend_type,shift,regsize as atom('R),datasize as atom('D))) ) = {
+function clause execute ( LoadRegister((n,t,m,acctype,memop,_signed,wback,postindex,extend_type,shift,regsize as int('R),datasize as int('D))) ) = {
   offset : bits(64) = ExtendReg(m, extend_type, shift);
   address : bits(64) = Zeros(); /* ARM: uninitialized */
   data : bits('D) = Zeros(); /* ARM: uninitialized */
@@ -1437,7 +1437,7 @@ function sharedDecodeLoadStorePair (L:boolean,opc : bits(2),imm7:bits(7),Rn:bits
   if [L,opc[0]] == 0b01 | opc == 0b11 then UnallocatedEncoding();
   _signed : (boolean) = (opc[0] != b0);
   scale : range(2,3) = 2 + UInt([opc[1]]);
-  let datasize /* : { 'D, DataSize('D). atom('D) } */ = lsl(8, scale);
+  let datasize /* : { 'D, DataSize('D). int('D) } */ = lsl(8, scale);
   assert (datasize == 8 | datasize == 16 | datasize == 32 | datasize == 64); /* FIXME: CP: adding assertion so it typechecks */
   offset : (bits(64)) = LSL(SignExtend(imm7), scale);
 
@@ -1455,11 +1455,11 @@ function decodeLoadStoreRegisterPairOffset (opc:bits(2)@0b101@0b0@0b010@[L]@(imm
   sharedDecodeLoadStorePair(L,opc,imm7,Rn,Rt,Rt2,wback,postindex);
 }
 
-function clause execute ( LoadStorePair((wback,postindex,n,t,t2,acctype,memop,_signed,datasize as atom('D),offset)) ) = {
+function clause execute ( LoadStorePair((wback,postindex,n,t,t2,acctype,memop,_signed,datasize as int('D),offset)) ) = {
   address : bits(64) = Zeros(); /* ARM: uninitialized */
   data1 : (bits('D)) = Zeros(); /* ARM: uninitialized */
   data2 : (bits('D)) = Zeros(); /* ARM: uninitialized */
-  /*constant*/ let dbytes : {'db, 'db == div('D,8) & 'db in {1,2,4,8}. atom('db) } = quot (datasize,8);
+  /*constant*/ let dbytes : {'db, 'db == div('D,8) & 'db in {1,2,4,8}. int('db) } = quot (datasize,8);
   rt_unknown : (boolean) = false;
   wb_unknown : (boolean) = false;
 
@@ -1615,7 +1615,7 @@ function decodeAddSubtractImmediate ([sf]@[op]@[S]@0b10001@(shift:bits(2))@(imm1
   Some(AddSubImmediate((d,n,datasize,sub_op,setflags,imm)));
 }
 
-function clause execute (AddSubImmediate((d,n,datasize as atom('R),sub_op,setflags,imm))) = {
+function clause execute (AddSubImmediate((d,n,datasize as int('R),sub_op,setflags,imm))) = {
   operand1 : (bits('R)) = if n == 31 then rSP() else rX(n);
   operand2 : (bits('R)) = imm;
   carry_in : (bit) = b0; /* ARM: uninitialized */
@@ -1647,7 +1647,7 @@ function decodeBitfield ([sf]@(opc:bits(2))@0b100110@[N]@(immr : bits(6))@(imms 
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   let datasize : {|32,64|} = if sf == b1 then 64 else 32;
-  /* let datasize as atom('R) = datasize; */
+  /* let datasize as int('R) = datasize; */
 
   inzero : (boolean) = false; /* ARM: uninitialized */
   extend : (boolean) = false; /* ARM: uninitialized */
@@ -1675,7 +1675,7 @@ function decodeBitfield ([sf]@(opc:bits(2))@0b100110@[N]@(immr : bits(6))@(imms 
 }}
 
 
-function clause execute (BitfieldMove((d,n,(datasize as atom('R)),inzero,extend,R,S,wmask,tmask))) = {
+function clause execute (BitfieldMove((d,n,(datasize as int('R)),inzero,extend,R,S,wmask,tmask))) = {
 
   dst : bits('R) = if inzero then Zeros() else rX(d);
   src : bits('R) = rX(n);
@@ -1707,7 +1707,7 @@ function decodeExtract ([sf]@0b00@0b100111@[N]@0b0@(Rm:bits(5))@(imms : bits(6))
   Some(ExtractRegister((d,n,m,datasize,lsb)));
 }
 
-function clause execute ( ExtractRegister((d,n,m,datasize as atom('R),lsb)) ) = {
+function clause execute ( ExtractRegister((d,n,m,datasize as int('R),lsb)) ) = {
   result : (bits('R)) = Zeros(); /* ARM: uninitialized */
   operand1 : (bits('R)) = rX(n);
   operand2 : (bits('R)) = rX(m);
@@ -1724,7 +1724,7 @@ val decodeLogicalImmediate : bits(32) -> option(ast) effect {escape}
 function decodeLogicalImmediate ([sf]@(opc:bits(2))@0b100100@[N]@(immr : bits(6))@(imms : bits(6))@(Rn:bits(5))@(Rd:bits(5))) = {
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
-  let datasize : {|32,64|} /* atom('R) */ = if sf == b1 then 64 else 32;
+  let datasize : {|32,64|} /* int('R) */ = if sf == b1 then 64 else 32;
   setflags : (boolean) = false; /* ARM: uninitialized */
   op : (LogicalOp) = LogicalOp_AND; /* ARM: uninitialized */
   match opc {
@@ -1740,7 +1740,7 @@ function decodeLogicalImmediate ([sf]@(opc:bits(2))@0b100100@[N]@(immr : bits(6)
   Some(LogicalImmediate((d,n,datasize,setflags,op,imm)));
 }}
 
-function clause execute (LogicalImmediate((d,n,datasize as atom('R),setflags,op,imm))) = {
+function clause execute (LogicalImmediate((d,n,datasize as int('R),setflags,op,imm))) = {
   result : (bits('R)) = Zeros(); /* ARM: uninitialized */
   operand1 : (bits('R)) = rX(n);
   operand2 : (bits('R)) = imm;
@@ -1766,7 +1766,7 @@ function clause execute (LogicalImmediate((d,n,datasize as atom('R),setflags,op,
 val decodeMoveWideImmediate : bits(32) -> option(ast) effect {escape}
 function decodeMoveWideImmediate ([sf]@(opc:bits(2))@0b100101@(hw : bits(2))@(imm16 : bits(16))@(Rd:bits(5))) = {
   d : (reg_index) = UInt_reg(Rd);
-  let datasize : {|32,64|} /* : atom('R) */ = if sf == b1 then 64 else 32;
+  let datasize : {|32,64|} /* : int('R) */ = if sf == b1 then 64 else 32;
   imm : (bits(16)) = imm16;
   pos : (uinteger) = 0; /* ARM: uninitialized */
   opcode : (MoveWideOp) = MoveWideOp_N; /* ARM: uninitialized */
@@ -1785,7 +1785,7 @@ function decodeMoveWideImmediate ([sf]@(opc:bits(2))@0b100101@(hw : bits(2))@(im
   Some(MoveWide(d,datasize,imm,pos,opcode));
 }
 
-function clause execute ( MoveWide((d,datasize as atom('R),imm,pos,opcode)) ) = {
+function clause execute ( MoveWide((d,datasize as int('R),imm,pos,opcode)) ) = {
   result : (bits('R)) = Zeros(); /* ARM: uninitialized */
 
   if opcode == MoveWideOp_K then
@@ -1831,7 +1831,7 @@ function decodeAddSubtractExtendedRegister ([sf]@[op]@[S]@0b01011@0b00@0b1@(Rm:b
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
-  datasize : {|32,64|} /* : atom('R) */ = if sf == b1 then 64 else 32;
+  datasize : {|32,64|} /* : int('R) */ = if sf == b1 then 64 else 32;
   sub_op : (boolean) = (op == b1);
   setflags : (boolean) = (S == b1);
   extend_type : (ExtendType) = DecodeRegExtend(option_v);
@@ -1841,7 +1841,7 @@ function decodeAddSubtractExtendedRegister ([sf]@[op]@[S]@0b01011@0b00@0b1@(Rm:b
   Some(AddSubExtendRegister(d,n,m,datasize,sub_op,setflags,extend_type,shift));
 }
 
-function clause execute (AddSubExtendRegister((d,n,m,datasize as atom('R),sub_op,setflags,extend_type,shift))) = {
+function clause execute (AddSubExtendRegister((d,n,m,datasize as int('R),sub_op,setflags,extend_type,shift))) = {
   operand1 : (bits('R)) = if n == 31 then rSP() else rX(n);
   operand2 : (bits('R)) = ExtendReg(m, extend_type, shift);
   carry_in : (bit) = b0; /* ARM: uninitialized */
@@ -1871,7 +1871,7 @@ function decodeAddSubtractShiftedRegister ([sf]@[op]@[S]@0b01011@(shift:bits(2))
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
-  datasize : {| 32,64 |} /* : atom('R) */ = if sf == b1 then 64 else 32;
+  datasize : {| 32,64 |} /* : int('R) */ = if sf == b1 then 64 else 32;
   sub_op : (boolean) = (op == b1);
   setflags : (boolean) = (S == b1);
 
@@ -1884,7 +1884,7 @@ function decodeAddSubtractShiftedRegister ([sf]@[op]@[S]@0b01011@(shift:bits(2))
   Some(AddSubShiftedRegister(d,n,m,datasize,sub_op,setflags,shift_type,shift_amount));
 }
 
-function clause execute (AddSubShiftedRegister((d,n,m,(datasize as atom('R)),sub_op,setflags,shift_type,shift_amount))) = {
+function clause execute (AddSubShiftedRegister((d,n,m,(datasize as int('R)),sub_op,setflags,shift_type,shift_amount))) = {
   operand1 : (bits('R)) = rX(n);
   operand2 : (bits('R)) = ShiftReg(m, shift_type, shift_amount);
   carry_in : (bit) = b0; /* ARM: uninitialized */
@@ -1914,14 +1914,14 @@ function decodeAddSubtractWithCarry ([sf]@[op]@[S]@0b11010000@(Rm:bits(5))@0b000
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
-  datasize : {| 32, 64 |} /* (atom('R)) */ = if sf == b1 then 64 else 32;
+  datasize : {| 32, 64 |} /* (int('R)) */ = if sf == b1 then 64 else 32;
   sub_op : (boolean) = (op == b1);
   setflags : (boolean) = (S == b1);
 
   Some(AddSubCarry(d,n,m,datasize,sub_op,setflags));
 }
 
-function clause execute( AddSubCarry((d,n,m,(datasize as atom('R)),sub_op,setflags))) = {
+function clause execute( AddSubCarry((d,n,m,(datasize as int('R)),sub_op,setflags))) = {
   operand1 : (bits('R)) = rX(n);
   operand2 : (bits('R)) = rX(m);
 
@@ -1941,7 +1941,7 @@ function clause execute( AddSubCarry((d,n,m,(datasize as atom('R)),sub_op,setfla
 val decodeConditionalCompareImmediate : bits(32) -> option(ast) effect pure
 function decodeConditionalCompareImmediate ([sf]@[op]@[b1]@0b11010010@(imm5 : bits(5))@(_cond:bits(4))@[b1]@[b0]@(Rn:bits(5))@[b0]@(nzcv:bits(4))) = {
   n : (reg_index) = UInt_reg(Rn);
-  let datasize : {| 32, 64 |} /* : atom('R) */ = if sf == b1 then 64 else 32;
+  let datasize : {| 32, 64 |} /* : int('R) */ = if sf == b1 then 64 else 32;
   sub_op : boolean = (op == b1);
   condition : bits(4) = _cond;
   flags : bits(4) = nzcv;
@@ -1950,7 +1950,7 @@ function decodeConditionalCompareImmediate ([sf]@[op]@[b1]@0b11010010@(imm5 : bi
   Some(ConditionalCompareImmediate((n,datasize,sub_op,condition,flags,imm)));
 }
 
-function clause execute(ConditionalCompareImmediate((n,datasize as atom('R),sub_op,condition,flags,imm))) = {
+function clause execute(ConditionalCompareImmediate((n,datasize as int('R),sub_op,condition,flags,imm))) = {
   operand1 : (bits('R)) = rX(n);
   operand2 : (bits('R)) = imm;
   carry_in : (bit) = b0;
@@ -1972,7 +1972,7 @@ val decodeConditionalCompareRegister : bits(32) -> option(ast) effect pure
 function decodeConditionalCompareRegister ([sf]@[op]@[b1]@0b11010010@(Rm:bits(5))@ (_cond:bits(4))@[b0]@[b0]@(Rn:bits(5))@[b0]@(nzcv:bits(4))) = {
   n : reg_index = UInt_reg(Rn);
   m : reg_index = UInt_reg(Rm);
-  datasize : {|32,64|} /* : atom('R) */ = if sf == b1 then 64 else 32;
+  datasize : {|32,64|} /* : int('R) */ = if sf == b1 then 64 else 32;
   sub_op : boolean = (op == b1);
   condition : bits(4) = _cond;
   flags : bits(4) = nzcv;
@@ -1980,7 +1980,7 @@ function decodeConditionalCompareRegister ([sf]@[op]@[b1]@0b11010010@(Rm:bits(5)
   Some(ConditionalCompareRegister(n,m,datasize,sub_op,condition,flags));
 }
 
-function clause execute (ConditionalCompareRegister((n,m,datasize as atom('R),sub_op,condition,flags))) = {
+function clause execute (ConditionalCompareRegister((n,m,datasize as int('R),sub_op,condition,flags))) = {
   operand1 : bits('R) = rX(n);
   operand2 : bits('R) = rX(m);
   carry_in : bit = b0;
@@ -2005,7 +2005,7 @@ function decodeConditionalSelect ([sf]@[op]@[b0]@0b11010100@(Rm:bits(5))@(_cond:
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
-  datasize : {|32,64|}/* (atom('R)) */ = if sf == b1 then 64 else 32;
+  datasize : {|32,64|}/* (int('R)) */ = if sf == b1 then 64 else 32;
   condition : (bits(4)) = _cond;
   else_inv : (boolean) = (op == b1);
   else_inc : (boolean) = (o2 == b1);
@@ -2013,7 +2013,7 @@ function decodeConditionalSelect ([sf]@[op]@[b0]@0b11010100@(Rm:bits(5))@(_cond:
   Some(ConditionalSelect(d,n,m,datasize,condition,else_inv,else_inc));
 }
 
-function clause execute ( ConditionalSelect((d,n,m,datasize as atom('R),condition,else_inv,else_inc)) ) = {
+function clause execute ( ConditionalSelect((d,n,m,datasize as int('R),condition,else_inv,else_inc)) ) = {
   result : (bits('R)) = Zeros(); /* ARM: uninitialized */
   operand1 : (bits('R)) = rX(n);
   operand2 : (bits('R)) = rX(m);
@@ -2040,7 +2040,7 @@ function clause decodeData1Source ([sf]@[b1]@[b0]@0b11010110@0b00000@0b0000@(opc
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
 
-  datasize : {|32,64|}/* (atom('R)) */ = if sf == b1 then 64 else 32;
+  datasize : {|32,64|}/* (int('R)) */ = if sf == b1 then 64 else 32;
 
   op : (RevOp) = RevOp_RBIT; /* ARM: uninitialized */
   match opc {
@@ -2059,7 +2059,7 @@ function clause decodeData1Source ([sf]@[b1]@[b0]@0b11010110@0b00000@0b0000@(opc
   Some(Reverse(d,n,datasize,op));
 }
 
-function clause execute ( Reverse((d,n,datasize as atom('R),op)) ) = {
+function clause execute ( Reverse((d,n,datasize as int('R),op)) ) = {
   result : (bits('R)) = Zeros(); /* ARM uninitialized */
   /* let V : (bits(6)) = Zeros(); /\* ARM uninitialized *\/ */
 
@@ -2096,13 +2096,13 @@ function clause execute ( Reverse((d,n,datasize as atom('R),op)) ) = {
 function clause decodeData1Source ([sf]@[b1]@[b0]@0b11010110@0b00000@0b00010@[op]@(Rn:bits(5))@(Rd:bits(5))) = {
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
-  datasize : {| 32,64 |} /* (atom('R)) */ = if sf == b1 then 64 else 32;
+  datasize : {| 32,64 |} /* (int('R)) */ = if sf == b1 then 64 else 32;
   opcode : (CountOp) = if op == b0 then CountOp_CLZ else CountOp_CLS;
 
   Some(CountLeading(d,n,datasize,opcode));
 }
 
-function clause execute (CountLeading((d,n,datasize as atom('R),opcode))) = {
+function clause execute (CountLeading((d,n,datasize as int('R),opcode))) = {
   result : integer = 0; /* ARM: uninitialized */
   operand1 : (bits('R)) = rX(n);
 
@@ -2125,13 +2125,13 @@ function clause decodeData2Source ([sf]@[b0]@[b0]@0b11010110@(Rm:bits(5))@0b0000
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
-  datasize : {| 32, 64 |} /* (atom('R)) */ = if sf == b1 then 64 else 32;
+  datasize : {| 32, 64 |} /* (int('R)) */ = if sf == b1 then 64 else 32;
   _unsigned : (boolean) = (o1 == b0);
 
   Some(Division(d,n,m,datasize,_unsigned));
 }
 
-function clause execute ( Division((d,n,m,datasize as atom('R),_unsigned)) ) = {
+function clause execute ( Division((d,n,m,datasize as int('R),_unsigned)) ) = {
   operand1 : (bits('R)) = rX(n);
   operand2 : (bits('R)) = rX(m);
   result : (integer) = 0; /* ARM: uninitialized */
@@ -2152,13 +2152,13 @@ function clause decodeData2Source ([sf]@[b0]@[b0]@0b11010110@(Rm:bits(5))@0b0010
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
-  datasize : {| 32, 64 |} /* (atom('R)) */ = if sf == b1 then 64 else 32;
+  datasize : {| 32, 64 |} /* (int('R)) */ = if sf == b1 then 64 else 32;
   shift_type : (ShiftType) = DecodeShift(op2);
 
   Some(Shift(d,n,m,datasize,shift_type));
 }
 
-function clause execute (Shift((d,n,m,datasize as atom('R),shift_type))) = {
+function clause execute (Shift((d,n,m,datasize as int('R),shift_type))) = {
   result : (bits('R)) = Zeros(); /* ARM: uninitialized */
   operand2 : (bits('R)) = rX(m);
 
@@ -2174,14 +2174,14 @@ function clause decodeData2Source ([sf]@[b0]@[b0]@0b11010110@(Rm:bits(5))@0b010@
   m : (reg_index) = UInt_reg(Rm);
   if sf == b1 & sz != 0b11 then UnallocatedEncoding();
   if sf == b0 & sz == 0b11 then UnallocatedEncoding();
-  let size /* : {| 8,16,32,64 |} */ /* (atom('D)) */ = lsl(8, UInt(sz)); /* 2-bit size field -> 8, 16, 32, 64 */
+  let size /* : {| 8,16,32,64 |} */ /* (int('D)) */ = lsl(8, UInt(sz)); /* 2-bit size field -> 8, 16, 32, 64 */
   assert (size == 8 | size == 16 | size == 32 | size == 64); /*FIXME: CP adding assertion to make typecheck*/
   crc32c : (boolean) = (C == b1);
 
   Some(CRC(d,n,m,size,crc32c));
 }
 
-function clause execute ( CRC((d,n,m,(size as atom('D)),crc32c)) ) = {
+function clause execute ( CRC((d,n,m,(size as int('D)),crc32c)) ) = {
   if ~(HaveCRCExt()) then
     UnallocatedEncoding();
 
@@ -2208,14 +2208,14 @@ function clause decodeData3Source ([sf]@0b00@0b11011@0b000@(Rm:bits(5))@[o0]@(Ra
   let n : (reg_index) = UInt_reg(Rn);
   let m : (reg_index) = UInt_reg(Rm);
   let a : (reg_index) = UInt_reg(Ra);
-  let destsize /* (atom('R)) */ = if sf == b1 then 64 else 32;
-  let datasize /* (atom('D)) */ = destsize;
+  let destsize /* (int('R)) */ = if sf == b1 then 64 else 32;
+  let datasize /* (int('D)) */ = destsize;
   let sub_op : (boolean) = (o0 == b1);
 
   Some(MultiplyAddSub((d,n,m,a,destsize,datasize,sub_op)));
 }
 
-function clause execute ( MultiplyAddSub((d,n,m,a,destsize as atom('D),datasize as atom('R),sub_op)) ) = {
+function clause execute ( MultiplyAddSub((d,n,m,a,destsize as int('D),datasize as int('R),sub_op)) ) = {
   operand1 : (bits('D)) = rX(n);
   operand2 : (bits('D)) = rX(m);
   operand3 : (bits('R)) = rX(a);
@@ -2239,15 +2239,15 @@ function clause decodeData3Source ([b1]@0b00@0b11011@[U]@0b01@(Rm:bits(5))@[o0]@
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
   a : (reg_index) = UInt_reg(Ra);
-  destsize /* : (atom('R)) */ = 64;
-  datasize /* : (atom('D)) */ = 32;
+  destsize /* : (int('R)) */ = 64;
+  datasize /* : (int('D)) */ = 32;
   sub_op : (boolean) = (o0 == b1);
   _unsigned : (boolean) = (U == b1);
 
   Some(MultiplyAddSubLong(d,n,m,a,destsize,datasize,sub_op,_unsigned));
 }
 
-function clause execute ( MultiplyAddSubLong((d,n,m,a,destsize as atom('R),datasize as atom('D),sub_op,_unsigned)) ) = {
+function clause execute ( MultiplyAddSubLong((d,n,m,a,destsize as int('R),datasize as int('D),sub_op,_unsigned)) ) = {
   operand1 : (bits('D)) = rX(n);
   operand2 : (bits('D)) = rX(m);
   operand3 : (bits('R)) = rX(a);
@@ -2269,14 +2269,14 @@ function clause decodeData3Source ([b1]@0b00@0b11011@[U]@0b10@(Rm:bits(5))@[b0]@
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
   a : (reg_index) = UInt_reg(Ra); /* ignored by UMULH/SMULH */
-  destsize /* : (atom('R)) */ = 64;
-  datasize /* : (atom('D)) */ = destsize;
+  destsize /* : (int('R)) */ = 64;
+  datasize /* : (int('D)) */ = destsize;
   _unsigned : (boolean) = (U == b1);
 
   Some(MultiplyHigh(d,n,m,a,destsize,datasize,_unsigned));
 }
 
-function clause execute ( MultiplyHigh((d,n,m,a,destsize as atom('R),datasize,_unsigned)) ) = {
+function clause execute ( MultiplyHigh((d,n,m,a,destsize as int('R),datasize,_unsigned)) ) = {
   operand1 : (bits('R)) = rX(n);
   operand2 : (bits('R)) = rX(m);
 
@@ -2300,7 +2300,7 @@ function decodeLogicalShiftedRegister ([sf]@(opc:bits(2))@0b01010@(shift:bits(2)
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
-  datasize : {| 32,64 |} /* : (atom('R)) */ = if sf == b1 then 64 else 32;
+  datasize : {| 32,64 |} /* : (int('R)) */ = if sf == b1 then 64 else 32;
   setflags : (boolean) = false; /* ARM: uninitialized */
   op : (LogicalOp) = LogicalOp_AND; /* ARM: uninitialized */
   match opc {
@@ -2319,7 +2319,7 @@ function decodeLogicalShiftedRegister ([sf]@(opc:bits(2))@0b01010@(shift:bits(2)
   Some(LogicalShiftedRegister((d,n,m,datasize,setflags,op,shift_type,shift_amount,invert)))
 }
 
-function clause execute (LogicalShiftedRegister((d,n,m,datasize as atom('R),setflags,op,shift_type,shift_amount,invert))) = {
+function clause execute (LogicalShiftedRegister((d,n,m,datasize as int('R),setflags,op,shift_type,shift_amount,invert))) = {
 
   operand1 : (bits('R)) = rX(n);
   operand2 : (bits('R)) = ShiftReg(m, shift_type, shift_amount);
