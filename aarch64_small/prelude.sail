@@ -35,8 +35,8 @@ overload operator << = {shift_bits_left, shift_left}
 overload operator >> = {shift_bits_right, shift_right}
 
 
-val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
-val operator ^^ = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
+val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), int('m)) -> bits('n * 'm)
+val operator ^^ = "replicate_bits" : forall 'n 'm. (bits('n), int('m)) -> bits('n * 'm)
 
 
 
@@ -58,7 +58,7 @@ function operator <_u  (x, y) = unsigned(x) < unsigned(y)
 function operator >=_u (x, y) = unsigned(x) >= unsigned(y)
 function operator <=_u (x, y) = unsigned(x) <= unsigned(y)
 
-val pow2_atom = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
+val pow2_atom = "pow2" : forall 'n. int('n) -> int(2 ^ 'n)
 val pow2_int = "pow2" : int -> int
 
 overload pow2 = {pow2_atom, pow2_int}
@@ -125,15 +125,15 @@ overload operator - = {sub_int, sub_vec, sub_vec_int}
 
 
 val quotient_nat = {ocaml: "quotient", lem: "integerDiv"} : 
-    forall 'M 'N, 'M >= 0 & 'N >= 0. (atom('M), atom('N)) -> atom(div('M,'N))
+    forall 'M 'N, 'M >= 0 & 'N >= 0. (int('M), int('N)) -> int(div('M,'N))
 val quotient = {ocaml: "quotient", lem: "integerDiv"} : 
-    forall 'M 'N. (atom('M), atom('N)) -> atom(div('M,'N))
+    forall 'M 'N. (int('M), int('N)) -> int(div('M,'N))
 overload quot = {quotient_nat, quotient}
 
 
-val __raw_GetSlice_int = "get_slice_int" : forall 'w, 'w >= 0. (atom('w), int, int) -> bits('w)
+val __raw_GetSlice_int = "get_slice_int" : forall 'w, 'w >= 0. (int('w), int, int) -> bits('w)
 
-val __GetSlice_int : forall 'n, 'n >= 0. (atom('n), int, int) -> bits('n)
+val __GetSlice_int : forall 'n, 'n >= 0. (int('n), int, int) -> bits('n)
 function __GetSlice_int (n, m, o) = __raw_GetSlice_int(n, m, o)
 
 val to_bits : forall 'l, 'l >= 0.(implicit('l), int) -> bits('l)
@@ -158,7 +158,7 @@ val mod = {
   lem: "integerMod",
   c: "tmod_int",
   coq: "Z.rem"
-} : forall 'M 'N. (atom('M), atom('N)) -> {'O, 0 <= 'O & 'O < N . atom('O)}
+} : forall 'M 'N. (int('M), int('N)) -> {'O, 0 <= 'O & 'O < N . int('O)}
 
 /* overload operator % = {mod_int} */
 
@@ -170,7 +170,7 @@ function error(message) = {
   exit()
 }
 
-type min ('M : Int, 'N : Int) = {'O, ('O == 'M | 'O == 'N) & 'O <= 'M & 'O <= 'N. atom('O)}
+type min ('M : Int, 'N : Int) = {'O, ('O == 'M | 'O == 'N) & 'O <= 'M & 'O <= 'N. int('O)}
 
 
 val appendL : forall ('a:Type). (list('a),list('a)) -> list('a)

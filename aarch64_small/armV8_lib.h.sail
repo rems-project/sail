@@ -153,10 +153,10 @@ struct AddressDescriptor = {
 
 enum PrefetchHint = {Prefetch_READ, Prefetch_WRITE, Prefetch_EXEC}
 
-val ASR_C : forall 'N 'S, 'N >= 1 & 'S >= 1. (bits('N),atom('S)) -> (bits('N), bit) effect {escape}
-val LSL_C : forall 'N 'S, 'N >= 0 & 'S >= 1. (bits('N),atom('S)) -> (bits('N), bit) effect pure
-val LSR_C : forall 'N 'S, 'N >= 1 & 'S >= 1. (bits('N),atom('S)) -> (bits('N), bit) effect pure
-val ROR_C : forall 'N 'S, 'N >= 1 & 'S != 0. (bits('N),atom('S)) -> (bits('N), bit) effect pure
+val ASR_C : forall 'N 'S, 'N >= 1 & 'S >= 1. (bits('N),int('S)) -> (bits('N), bit) effect {escape}
+val LSL_C : forall 'N 'S, 'N >= 0 & 'S >= 1. (bits('N),int('S)) -> (bits('N), bit) effect pure
+val LSR_C : forall 'N 'S, 'N >= 1 & 'S >= 1. (bits('N),int('S)) -> (bits('N), bit) effect pure
+val ROR_C : forall 'N 'S, 'N >= 1 & 'S != 0. (bits('N),int('S)) -> (bits('N), bit) effect pure
 val IsZero : forall 'N, 'N >=0. bits('N) -> boolean effect pure
 val Replicate : forall 'N 'M, 'N >='M & 'M >=0. (implicit('N),bits('M)) -> bits('N) effect {escape}
 val SignExtend : forall 'N 'M, 'N > 'M & 'M >= 1. (implicit('N),bits('M)) -> bits('N) effect {escape}

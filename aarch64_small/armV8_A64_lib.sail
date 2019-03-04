@@ -288,7 +288,7 @@ function AArch64_CheckAlignment(address : bits(64), size : uinteger,
 
 /** FUNCTION:// AArch64.MemSingle[] - non-assignment (read) form */
 
-val AArch64_rMemSingle : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64), atom('N), AccType, boolean, bool) -> read_buffer_type effect {escape}
+val AArch64_rMemSingle : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64), int('N), AccType, boolean, bool) -> read_buffer_type effect {escape}
 function AArch64_rMemSingle (read_buffer, address, size, acctype, wasaligned, exclusive) = {
   /*assert size IN {1, 2, 4, 8, 16};*/
   assert(address == Align(address, size));
@@ -310,7 +310,7 @@ function AArch64_rMemSingle (read_buffer, address, size, acctype, wasaligned, ex
 
 /** FUNCTION:// AArch64.MemSingle[] - assignment (write) form */
 
-val AArch64_wMemSingle : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), atom('N), AccType, boolean, bool, bits('N*8)) -> write_buffer_type effect {escape}
+val AArch64_wMemSingle : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), int('N), AccType, boolean, bool, bits('N*8)) -> write_buffer_type effect {escape}
 function AArch64_wMemSingle (write_buffer, address, size, acctype, wasaligned, exclusive, value) = {
   /*assert size IN {1, 2, 4, 8, 16};*/
   assert(address == Align(address, size));
@@ -351,7 +351,7 @@ function CheckSPAlignment() = {
 
 /** FUNCTION://   Mem[] - non-assignment (read) form */
 
-val rMem' : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64),atom('N), AccType, bool) -> read_buffer_type effect {escape,rreg}
+val rMem' : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64),int('N), AccType, bool) -> read_buffer_type effect {escape,rreg}
 function rMem'(read_buffer, address, size, acctype, exclusive) =
 {
   /* ARM: assert size IN {1, 2, 4, 8, 16}; */
@@ -391,11 +391,11 @@ function rMem'(read_buffer, address, size, acctype, exclusive) =
   read_buffer'
 }
 
-val rMem : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64), atom('N), AccType) -> read_buffer_type effect {escape,rreg}
+val rMem : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64), int('N), AccType) -> read_buffer_type effect {escape,rreg}
 function rMem (read_buffer, address, size, acctype) =
   rMem'(read_buffer, address, size, acctype, false)
 
-val rMem_exclusive : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64), atom('N), AccType) -> read_buffer_type effect {escape,rreg}
+val rMem_exclusive : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64), int('N), AccType) -> read_buffer_type effect {escape,rreg}
 function rMem_exclusive(read_buffer, address, size, acctype) =
   rMem'(read_buffer, address, size, acctype, true)
 
@@ -405,7 +405,7 @@ function rMem_exclusive(read_buffer, address, size, acctype) =
    store-exclusive, this function should only be called indirectly by one
    of the functions that follow it.
    returns true if the store-exclusive was successful. */
-val wMem' : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), atom('N), AccType, bits('N*8), bool) -> write_buffer_type effect {escape,rreg}
+val wMem' : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), int('N), AccType, bits('N*8), bool) -> write_buffer_type effect {escape,rreg}
 function wMem' (write_buffer, address, size, acctype, value, exclusive) = {
   write_buffer' : write_buffer_type = write_buffer;
 
@@ -445,11 +445,11 @@ function wMem' (write_buffer, address, size, acctype, value, exclusive) = {
   write_buffer'
 }
 
-val wMem : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), atom('N), AccType, bits('N*8)) -> write_buffer_type effect {escape,rreg}
+val wMem : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), int('N), AccType, bits('N*8)) -> write_buffer_type effect {escape,rreg}
 function wMem (write_buffer, address, size, acctype, value) =
   wMem'(write_buffer, address, size, acctype, value, false)
 
-val wMem_exclusive : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), atom('N), AccType, bits('N*8)) -> write_buffer_type effect {escape,rreg}
+val wMem_exclusive : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), int('N), AccType, bits('N*8)) -> write_buffer_type effect {escape,rreg}
 function wMem_exclusive(write_buffer, address, size, acctype, value) =
   wMem'(write_buffer, address, size, acctype, value, true)
 
@@ -780,7 +780,7 @@ function DecodeRegExtend (op : bits(3)) -> ExtendType = {
 /** FUNCTION:aarch64/instrs/extendreg/ExtendReg */
 
 val ExtendReg : forall 'N 'S, 'N in {8,16,32,64} & 'S >= 0 & 'S <= /* 4 */ 7.
-    (implicit('N), reg_index, ExtendType, atom('S)) -> bits('N) effect {rreg,escape} 
+    (implicit('N), reg_index, ExtendType, int('S)) -> bits('N) effect {rreg,escape} 
 function ExtendReg (N, _reg, etype, shift) = {
   /*assert( shift >= 0 & shift <= 4 );*/
   _val : bits('N) = rX(_reg);
@@ -810,7 +810,7 @@ function ExtendReg (N, _reg, etype, shift) = {
 /** FUNCTION:(bits(M), bits(M)) DecodeBitMasks (bit immN, bits(6) imms, bits(6) immr, boolean immediate) */
 
 val DecodeBitMasks : forall 'M, 'M >= 0 /* & 'E in {2,4,8,16,32,64} */. (implicit('M), bit, bits(6), bits(6), boolean) -> (bits('M), bits('M)) effect {escape} 
-function DecodeBitMasks(M : atom('M), immN : bit, imms : bits(6), immr : bits(6), immediate : boolean) = {
+function DecodeBitMasks(M : int('M), immN : bit, imms : bits(6), immr : bits(6), immediate : boolean) = {
   /* let M = (length((bit['M]) 0)) in { */
   /* ARM: (bit['M]) tmask := 0; (* ARM: uninitialized *) */
   /* ARM: (bit['M]) wmask := 0; (* ARM: uninitialized *) */
@@ -837,7 +837,7 @@ function DecodeBitMasks(M : atom('M), immN : bit, imms : bits(6), immr : bits(6)
   let R = UInt (immr & levels);
   let diff : bits(6) = to_bits(S - R); /* 6-bit subtract with borrow */
 
-  let esize as atom('E) = lsl(1, len);
+  let esize as int('E) = lsl(1, len);
   let d /* : bits(6) */ = UInt (diff[(len - 1)..0]);
   assert(esize >= S+1); /* CP: adding this assertion to make typecheck */
   welem : bits('E) = ZeroExtend(Ones(S + 1));
