@@ -112,7 +112,7 @@ type env =
     mappings : (typquant * typ * typ) Bindings.t;
     typ_vars : (Ast.l * kind_aux) KBindings.t;
     shadow_vars : int KBindings.t;
-    typ_synonyms : (Ast.l -> env -> typ_arg list -> typ_arg) Bindings.t;
+    typ_synonyms : (typquant * typ_arg) Bindings.t;
     overloads : (id list) Bindings.t;
     flow : (typ -> typ) Bindings.t;
     enums : IdSet.t Bindings.t;
@@ -435,7 +435,7 @@ module Env : sig
   val add_typ_var : l -> kinded_id -> t -> t
   val get_ret_typ : t -> typ option
   val add_ret_typ : typ -> t -> t
-  val add_typ_synonym : id -> (Ast.l -> t -> typ_arg list -> typ_arg) -> t -> t
+  val add_typ_synonym : id -> typquant -> typ_arg -> t -> t
   val get_typ_synonym : id -> t -> Ast.l -> t -> typ_arg list -> typ_arg
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
@@ -614,6 +614,53 @@ end = struct
     then ()
     else typ_error env (id_loc id) ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
 
+  let add_typ_synonym id typq arg env =
+    if Bindings.mem id env.typ_synonyms then
+      typ_error env (id_loc id) ("Type synonym " ^ string_of_id id ^ " already exists")
+    else
+      begin
+        typ_print (lazy (adding ^ "type synonym " ^ string_of_id id));
+        { env with typ_synonyms = Bindings.add id (typq, arg) env.typ_synonyms }
+      end
+
+  let mk_synonym typq typ_arg =
+    let kopts, ncs = quant_split typq in
+    let kopts = List.map (fun kopt -> kopt, fresh_existential (unaux_kind (kopt_kind kopt))) kopts in
+    let ncs = List.map (fun nc -> List.fold_left (fun nc (kopt, fresh) -> constraint_subst (kopt_kid kopt) (arg_kopt fresh) nc) nc kopts) ncs in
+    let typ_arg = List.fold_left (fun typ_arg (kopt, fresh) -> typ_arg_subst (kopt_kid kopt) (arg_kopt fresh) typ_arg) typ_arg kopts in
+    let kopts = List.map snd kopts in
+    let rec subst_args env l kopts args =
+      match kopts, args with
+      | kopt :: kopts, A_aux (A_nexp arg, _) :: args when is_int_kopt kopt ->
+         let typ_arg, ncs = subst_args env l kopts args in
+         typ_arg_subst (kopt_kid kopt) (arg_nexp arg) typ_arg,
+         List.map (constraint_subst (kopt_kid kopt) (arg_nexp arg)) ncs
+      | kopt :: kopts, A_aux (A_typ arg, _) :: args when is_typ_kopt kopt ->
+         let typ_arg, ncs = subst_args env l kopts args in
+         typ_arg_subst (kopt_kid kopt) (arg_typ arg) typ_arg, ncs
+      | kopt :: kopts, A_aux (A_order arg, _) :: args when is_order_kopt kopt ->
+         let typ_arg, ncs = subst_args env l kopts args in
+         typ_arg_subst (kopt_kid kopt) (arg_order arg) typ_arg, ncs
+      | kopt :: kopts, A_aux (A_bool arg, _) :: args when is_bool_kopt kopt ->
+         let typ_arg, ncs = subst_args env l kopts args in
+         typ_arg_subst (kopt_kid kopt) (arg_bool arg) typ_arg, ncs
+      | [], [] -> typ_arg, ncs
+      | _, _ -> typ_error env l "Synonym applied to bad arguments"
+    in
+    fun l env args ->
+    let typ_arg, ncs = subst_args env l kopts args in
+    if List.for_all (env.prove env) ncs
+    then typ_arg
+    else typ_error env l ("Could not prove constraints " ^ string_of_list ", " string_of_n_constraint ncs
+                          ^ " in type synonym " ^ string_of_typ_arg typ_arg
+                          ^ " with " ^ Util.string_of_list ", " string_of_n_constraint env.constraints)
+
+  let get_typ_synonym id env =
+    begin match Bindings.find_opt id env.typ_synonyms with
+    | Some (typq, arg) -> mk_synonym typq arg
+    | None -> raise Not_found
+    end
+
   let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
     typ_debug ~level:2 (lazy ("Expanding " ^ string_of_n_constraint nc));
     match aux with
@@ -625,7 +672,7 @@ end = struct
     | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
     | NC_app (id, args) ->
        (try
-          begin match Bindings.find id env.typ_synonyms l env args with
+          begin match get_typ_synonym id env l env args with
           | A_aux (A_bool nc, _) -> expand_constraint_synonyms env nc
           | arg -> typ_error env l ("Expected Bool when expanding synonym " ^ string_of_id id ^ " got " ^ string_of_typ_arg arg)
           end
@@ -637,7 +684,7 @@ end = struct
     match aux with
     | Nexp_app (id, args) ->
        (try
-          begin match Bindings.find id env.typ_synonyms l env [] with
+          begin match get_typ_synonym id env l env [] with
           | A_aux (A_nexp nexp, _) -> expand_nexp_synonyms env nexp
           | _ -> typ_error env l ("Expected Int when expanding synonym " ^ string_of_id id)
           end
@@ -645,7 +692,7 @@ end = struct
         | Not_found -> Nexp_aux (Nexp_app (id, List.map (expand_nexp_synonyms env) args), l))
     | Nexp_id id ->
        (try
-          begin match Bindings.find id env.typ_synonyms l env [] with
+          begin match get_typ_synonym id env l env [] with
           | A_aux (A_nexp nexp, _) -> expand_nexp_synonyms env nexp
           | _ -> typ_error env l ("Expected Int when expanding synonym " ^ string_of_id id)
           end
@@ -666,7 +713,7 @@ end = struct
     | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (expand_synonyms env typ1, expand_synonyms env typ2), l)
     | Typ_app (id, args) ->
        (try
-          begin match Bindings.find id env.typ_synonyms l env args with
+          begin match get_typ_synonym id env l env args with
           | A_aux (A_typ typ, _) -> expand_synonyms env typ
           | _ -> typ_error env l ("Expected Type when expanding synonym " ^ string_of_id id)
           end
@@ -674,7 +721,7 @@ end = struct
         | Not_found -> Typ_aux (Typ_app (id, List.map (expand_synonyms_arg env) args), l))
     | Typ_id id ->
        (try
-          begin match Bindings.find id env.typ_synonyms l env [] with
+          begin match get_typ_synonym id env l env [] with
           | A_aux (A_typ typ, _) -> expand_synonyms env typ
           | _ -> typ_error env l ("Expected Type when expanding synonym " ^ string_of_id id)
           end
@@ -1226,17 +1273,6 @@ end = struct
   let add_cast cast env =
     typ_print (lazy (adding ^ "cast " ^ string_of_id cast));
     { env with casts = cast :: env.casts }
-
-  let add_typ_synonym id synonym env =
-    if Bindings.mem id env.typ_synonyms
-    then typ_error env (id_loc id) ("Type synonym " ^ string_of_id id ^ " already exists")
-    else
-      begin
-        typ_print (lazy (adding ^ "type synonym " ^ string_of_id id));
-        { env with typ_synonyms = Bindings.add id synonym env.typ_synonyms }
-      end
-
-  let get_typ_synonym id env = Bindings.find id env.typ_synonyms
 
   let get_default_order env =
     match env.default_order with
@@ -4872,44 +4908,13 @@ let check_type_union env variant typq (Tu_aux (tu, l)) =
      |> Env.add_val_spec v (typq, typ')
 
 (* FIXME: This code is duplicated with general kind-checking code in environment, can they be merged? *)
-let mk_synonym typq typ_arg =
-  let kopts, ncs = quant_split typq in
-  let kopts = List.map (fun kopt -> kopt, fresh_existential (unaux_kind (kopt_kind kopt))) kopts in
-  let ncs = List.map (fun nc -> List.fold_left (fun nc (kopt, fresh) -> constraint_subst (kopt_kid kopt) (arg_kopt fresh) nc) nc kopts) ncs in
-  let typ_arg = List.fold_left (fun typ_arg (kopt, fresh) -> typ_arg_subst (kopt_kid kopt) (arg_kopt fresh) typ_arg) typ_arg kopts in
-  let kopts = List.map snd kopts in
-  let rec subst_args env l kopts args =
-    match kopts, args with
-    | kopt :: kopts, A_aux (A_nexp arg, _) :: args when is_int_kopt kopt ->
-       let typ_arg, ncs = subst_args env l kopts args in
-       typ_arg_subst (kopt_kid kopt) (arg_nexp arg) typ_arg,
-       List.map (constraint_subst (kopt_kid kopt) (arg_nexp arg)) ncs
-    | kopt :: kopts, A_aux (A_typ arg, _) :: args when is_typ_kopt kopt ->
-       let typ_arg, ncs = subst_args env l kopts args in
-       typ_arg_subst (kopt_kid kopt) (arg_typ arg) typ_arg, ncs
-    | kopt :: kopts, A_aux (A_order arg, _) :: args when is_order_kopt kopt ->
-       let typ_arg, ncs = subst_args env l kopts args in
-       typ_arg_subst (kopt_kid kopt) (arg_order arg) typ_arg, ncs
-    | kopt :: kopts, A_aux (A_bool arg, _) :: args when is_bool_kopt kopt ->
-       let typ_arg, ncs = subst_args env l kopts args in
-       typ_arg_subst (kopt_kid kopt) (arg_bool arg) typ_arg, ncs
-    | [], [] -> typ_arg, ncs
-    | _, _ -> typ_error env l "Synonym applied to bad arguments"
-  in
-  fun l env args ->
-    let typ_arg, ncs = subst_args env l kopts args in
-    if List.for_all (prove __POS__ env) ncs
-    then typ_arg
-    else typ_error env Parse_ast.Unknown ("Could not prove constraints " ^ string_of_list ", " string_of_n_constraint ncs
-                                      ^ " in type synonym " ^ string_of_typ_arg typ_arg
-                                      ^ " with " ^ string_of_list ", " string_of_n_constraint (Env.get_constraints env))
 
 let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
   fun env (TD_aux (tdef, (l, _))) ->
   let td_err () = raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented Typedef") in
   match tdef with
   | TD_abbrev (id, typq, typ_arg) ->
-     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_typ_synonym id (mk_synonym typq typ_arg) env
+     [DEF_type (TD_aux (tdef, (l, None)))], Env.add_typ_synonym id typq typ_arg env
   | TD_record (id, typq, fields, _) ->
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_record id typq fields env
   | TD_variant (id, typq, arms, _) ->
@@ -5018,13 +5023,6 @@ and check_with_envs : 'a. Env.t -> 'a def list -> (tannot def list * Env.t) list
 let initial_env =
   Env.empty
   |> Env.add_prover (prove __POS__)
-  (* |> Env.add_typ_synonym (mk_id "atom") (fun _ args -> mk_typ (Typ_app (mk_id "range", args @ args))) *)
-
-  (* Internal functions for Monomorphise.AtomToItself *)
-
-  (* |> Env.add_val_spec (mk_id "int")
-   *      (TypQ_aux (TypQ_no_forall, Parse_ast.Unknown), Typ_aux (Typ_bidir (int_typ, string_typ), Parse_ast.Unknown)) *)
-
   |> Env.add_extern (mk_id "size_itself_int") (fun _ -> Some "size_itself_int")
   |> Env.add_val_spec (mk_id "size_itself_int")
       (TypQ_aux (TypQ_tq [QI_aux (QI_id (mk_kopt K_int (mk_kid "n")),
