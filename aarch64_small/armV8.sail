@@ -553,7 +553,7 @@ end decodeImplementationDefined
 val decodeTestBranchImmediate : bits(32) -> option(ast) effect {escape}
 function decodeTestBranchImmediate ([b5]@0b011011@[op]@(b40 : bits(5))@(imm14 : bits(14))@(Rt:bits(5))) = {
   t : reg_index = UInt_reg(Rt);
-
+ 
   let datasize : {| 32, 64 |} /* as atom('R) */ = if b5 == b1 then 64 else 32;
   let bit_pos : uinteger = UInt([b5]@b40);
   bit_val : bit = op;
@@ -564,7 +564,7 @@ function decodeTestBranchImmediate ([b5]@0b011011@[op]@(b40 : bits(5))@(imm14 : 
   Some(TestBitAndBranch((t,datasize,bit_pos,bit_val,offset)));
 }
 
-function clause execute ( TestBitAndBranch((t:reg_index,datasize as atom('R),bit_pos,bit_val,offset)) ) = {
+function clause execute ( TestBitAndBranch((t:reg_index,datasize as int('R),bit_pos,bit_val,offset)) ) = {
 
   /* assert ('R == 32 | 'R == 64); */
 
