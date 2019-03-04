@@ -347,9 +347,11 @@ val typ_error : Env.t -> Ast.l -> string -> 'a
 
 val env_of : tannot exp -> Env.t
 val env_of_annot : Ast.l * tannot -> Env.t
+val env_of_tannot : tannot -> Env.t
 
 val typ_of : tannot exp -> typ
 val typ_of_annot : Ast.l * tannot -> typ
+val typ_of_tannot : tannot -> typ
 
 val typ_of_pat : tannot pat -> typ
 val env_of_pat : tannot pat -> Env.t

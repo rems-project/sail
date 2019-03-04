@@ -2392,6 +2392,14 @@ let env_of_annot (l, tannot) = match tannot with
   | Some t -> t.env
   | None -> raise (Reporting.err_unreachable l __POS__ "no type annotation")
 
+let env_of_tannot tannot = match tannot with
+  | Some t -> t.env
+  | None -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "no type annotation")
+
+let typ_of_tannot tannot = match tannot with
+  | Some t -> t.typ
+  | None -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "no type annotation")
+
 let env_of (E_aux (_, (l, tannot))) = env_of_annot (l, tannot)
 
 let typ_of_annot (l, tannot) = match tannot with
