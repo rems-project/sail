@@ -467,7 +467,7 @@ let main() =
       if !opt_memo_z3 then Constraint.save_digests () else ()
     end
 
-let _ =  try
+let _ = try
     begin
       try ignore (main ())
       with Failure s -> raise (Reporting.err_general Parse_ast.Unknown ("Failure " ^ s))
