@@ -212,6 +212,8 @@ module Env : sig
   val builtin_typs : typquant Bindings.t
 
   val get_union_id : id -> t -> typquant * typ
+
+  val set_prover : (t -> n_constraint -> bool) option -> t -> t
 end
 
 (** Push all the type variables and constraints from a typquant into

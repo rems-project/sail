@@ -124,7 +124,7 @@ type env =
     default_order : order option;
     ret_typ : typ option;
     poly_undefineds : bool;
-    prove : env -> n_constraint -> bool;
+    prove : (env -> n_constraint -> bool) option;
     allow_unknowns : bool;
   }
 
@@ -449,7 +449,7 @@ module Env : sig
      which is defined below. To break the circularity this would cause
      (as the prove code depends on the environment), we add a
      reference to the prover to the initial environment. *)
-  val add_prover : (t -> n_constraint -> bool) -> t -> t
+  val set_prover : (t -> n_constraint -> bool) option -> t -> t
 
   (* This must not be exported, initial_env sets up a correct initial
      environment. *)
@@ -484,11 +484,11 @@ end = struct
       default_order = None;
       ret_typ = None;
       poly_undefineds = false;
-      prove = (fun _ _ -> false);
+      prove = None;
       allow_unknowns = false;
     }
 
-  let add_prover f env = { env with prove = f }
+  let set_prover f env = { env with prove = f }
 
   let allow_unknowns env = env.allow_unknowns
   let set_allow_unknowns b env = { env with allow_unknowns = b }
@@ -582,7 +582,7 @@ end = struct
       | _, _ -> typ_error env Parse_ast.Unknown ("Error when processing type quantifer arguments " ^ string_of_typquant typq)
     in
     let ncs = subst_args kopts args in
-    if List.for_all (env.prove env) ncs
+    if (match env.prove with Some prover -> List.for_all (prover env) ncs | None -> false)
     then ()
     else typ_error env (id_loc id) ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
 
@@ -4945,7 +4945,7 @@ and check_with_envs : 'a. Env.t -> 'a def list -> (tannot def list * Env.t) list
 
 let initial_env =
   Env.empty
-  |> Env.add_prover (prove __POS__)
+  |> Env.set_prover (Some (prove __POS__))
   (* |> Env.add_typ_synonym (mk_id "atom") (fun _ args -> mk_typ (Typ_app (mk_id "range", args @ args))) *)
 
   (* Internal functions for Monomorphise.AtomToItself *)
