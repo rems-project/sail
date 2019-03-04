@@ -228,7 +228,7 @@ function Extend (n, x, _unsigned) =
 /*   result : range(0,'N - 1) = 0; */
 /*   break : bool = false; */
 /*   foreach (i from (N - 1) downto 0) */
-/*     if ~(break) & (x[i] == bitone) then { */
+/*     if ~(break) & (x[i] == b1) then { */
 /*       result = i; */
 /*       break = true; */
 /*     }; */
@@ -239,7 +239,7 @@ function Extend (n, x, _unsigned) =
 function HighestSetBit(x) = {
   let N = length(x) in {
   foreach (i from (N - 1) downto 0)
-    if x[i] == bitone then {
+    if x[i] == b1 then {
       return (Some(i));
     };
   None();
@@ -261,7 +261,7 @@ function IsZero(x) = x == Zeros() /* ARM: Zeros(N) */
 /** FUNCTION:bit IsZeroBit(bits(N) x) */
 
 val IsZeroBit : forall 'N, 'N >= 0. bits('N) -> bit
-function IsZeroBit(x) = if IsZero(x) then bitone else bitzero
+function IsZeroBit(x) = if IsZero(x) then b1 else b0
 
 /** FUNCTION:shared/functions/common/LSL */
 
@@ -332,7 +332,7 @@ function NOT'(x) = ~(x)
 
 /** FUNCTION:shared/functions/common/Ones */
 
-function Ones(n) = Replicate(n,[bitone])
+function Ones(n) = Replicate(n,[b1])
 
 /** FUNCTION:shared/functions/common/ROR */
 
@@ -435,7 +435,7 @@ function Poly32Mod2(data, poly) = {
   data' : bits('N) = data;
   /* zeros : bits('N - 32) = Zeros(); */
   foreach (i from (N - 1) downto 32) {
-    if data'[i] == bitone then
+    if data'[i] == b1 then
       data'[(i - 1)..0] = data'[(i - 1)..0] ^ (poly@Zeros(i - 32)); /* making this match ASL-generated spec */
   };
   data'[31..0];
@@ -464,7 +464,7 @@ function ExclusiveMonitorsStatus() =
 {
   info("The model does not implement the exclusive monitors explicitly.");
   not_implemented("ExclusiveMonitorsStatus should not be called");
-  /* bitzero; */
+  /* b0; */
 }
 
 /** FUNCTION:shared/functions/exclusive/IsExclusiveGlobal */
@@ -510,9 +510,9 @@ function AddWithCarry (x, y, carry_in) = {
   signed_sum : integer = SInt(x) + SInt(y) + UInt([carry_in]);
   result : bits('N) = __GetSlice_int('N, unsigned_sum, 0); /* same value as signed_sum<N-1:0> */
   n : bit = result[(length(result)) - 1];
-  z : bit = if IsZero(result) then bitone else bitzero;
-  c : bit = if UInt(result) == unsigned_sum then bitone else bitzero;
-  v : bit = if SInt(result) == signed_sum then bitone else bitzero;
+  z : bit = if IsZero(result) then b1 else b0;
+  c : bit = if UInt(result) == unsigned_sum then b1 else b0;
+  v : bit = if SInt(result) == signed_sum then b1 else b0;
   (result,[n,z,c,v])
   /* (result,[n]:[z]:[c]:[v]) */
 }
@@ -522,7 +522,7 @@ function AddWithCarry (x, y, carry_in) = {
 
 val BigEndian : unit -> boolean effect {rreg,escape}
 function BigEndian() = {
-    /* bigend : boolean = bitzero; /\* ARM: uninitialized *\/ */
+    /* bigend : boolean = b0; /\* ARM: uninitialized *\/ */
     if UsingAArch32() then
         /* bigend =  */(PSTATE_E != 0b0)
     else if PSTATE_EL() == EL0 then
@@ -786,15 +786,15 @@ function BranchTo(target, branch_type) = {
     /* Remove the tag bits from tagged target */
     let pstate_el = PSTATE_EL() in {
       if pstate_el == EL0 then {
-        if target'[55] == bitone & TCR_EL1.TBI1() == 0b1 then
+        if target'[55] == b1 & TCR_EL1.TBI1() == 0b1 then
           target'[63..56] = 0b11111111;
-        if target'[55] == bitzero & TCR_EL1.TBI0() == 0b1 then
+        if target'[55] == b0 & TCR_EL1.TBI0() == 0b1 then
           target'[63..56] = 0b00000000;
       }
       else if pstate_el == EL1 then {
-        if target'[55] == bitone & TCR_EL1.TBI1() == 0b1 then
+        if target'[55] == b1 & TCR_EL1.TBI1() == 0b1 then
           target'[63..56] = 0b11111111;
-        if target'[55] == bitzero & TCR_EL1.TBI0() == 0b1 then
+        if target'[55] == b0 & TCR_EL1.TBI0() == 0b1 then
           target'[63..56] = 0b00000000;
       }
       else if pstate_el == EL2 then {
@@ -880,7 +880,7 @@ function ConditionHolds(_cond) = {
 
   /* Condition flag values in the set '111x' indicate always true */
   /* Otherwise, invert condition if necessary. */
-  if _cond[0] == bitone & _cond != 0b1111 then
+  if _cond[0] == b1 & _cond != 0b1111 then
     result = ~(result);
 
   result;

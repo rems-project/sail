@@ -278,7 +278,7 @@ function AArch64_CheckAlignment(address : bits(64), size : uinteger,
   aligned : boolean = (address == Align(address, size));
   let [A] = SCTLR'().A();
 
-  if ~(aligned) & (acctype == AccType_ATOMIC | acctype == AccType_ORDERED | A == bitone) then {
+  if ~(aligned) & (acctype == AccType_ATOMIC | acctype == AccType_ORDERED | A == b1) then {
     secondstage = false;
     AArch64_Abort(address, AArch64_AlignmentFault(acctype, iswrite, secondstage));
   };
@@ -509,8 +509,8 @@ function rPC () = _PC
 
 /** FUNCTION:// SP[] - assignment form */
 
-val wSP : forall 'N, 'N in {32,64}. (unit, bits('N)) -> unit effect {rreg,wreg,escape}
-function wSP ((), value) = {
+val wSP : forall 'N, 'N in {32,64}. (bits('N)) -> unit effect {rreg,wreg,escape}
+function wSP (value) = {
   /*assert width IN {32,64};*/
   if PSTATE_SP() == 0b0 then
     SP_EL0 = ZeroExtend(value)
@@ -779,7 +779,7 @@ function DecodeRegExtend (op : bits(3)) -> ExtendType = {
 
 /** FUNCTION:aarch64/instrs/extendreg/ExtendReg */
 
-val ExtendReg : forall 'N 'S, 'N in {8,16,32,64} & 'S >= 0 & 'S <= 4.
+val ExtendReg : forall 'N 'S, 'N in {8,16,32,64} & 'S >= 0 & 'S <= /* 4 */ 7.
     (implicit('N), reg_index, ExtendType, atom('S)) -> bits('N) effect {rreg,escape} 
 function ExtendReg (N, _reg, etype, shift) = {
   /*assert( shift >= 0 & shift <= 4 );*/
@@ -809,7 +809,7 @@ function ExtendReg (N, _reg, etype, shift) = {
 /** ENUMERATE:aarch64/instrs/integer/arithmetic/rev/revop/RevOp */
 /** FUNCTION:(bits(M), bits(M)) DecodeBitMasks (bit immN, bits(6) imms, bits(6) immr, boolean immediate) */
 
-val DecodeBitMasks : forall 'M 'E, 'M >= 0 & 'E in {2,4,8,16,32,64}. (implicit('M), bit, bits(6), bits(6), boolean) -> (bits('M), bits('M)) effect {escape} 
+val DecodeBitMasks : forall 'M, 'M >= 0 /* & 'E in {2,4,8,16,32,64} */. (implicit('M), bit, bits(6), bits(6), boolean) -> (bits('M), bits('M)) effect {escape} 
 function DecodeBitMasks(M : atom('M), immN : bit, imms : bits(6), immr : bits(6), immediate : boolean) = {
   /* let M = (length((bit['M]) 0)) in { */
   /* ARM: (bit['M]) tmask := 0; (* ARM: uninitialized *) */
@@ -837,11 +837,11 @@ function DecodeBitMasks(M : atom('M), immN : bit, imms : bits(6), immr : bits(6)
   let R = UInt (immr & levels);
   let diff : bits(6) = to_bits(S - R); /* 6-bit subtract with borrow */
 
-  let esize /* : atom('E) */ = lsl(1, len);
+  let esize as atom('E) = lsl(1, len);
   let d /* : bits(6) */ = UInt (diff[(len - 1)..0]);
   assert(esize >= S+1); /* CP: adding this assertion to make typecheck */
-  welem /* : bits('E) */ = ZeroExtend(esize,Ones(S + 1));
-  telem /* : bits('E) */ = ZeroExtend(esize,Ones(d + 1));
+  welem : bits('E) = ZeroExtend(Ones(S + 1));
+  telem : bits('E) = ZeroExtend(Ones(d + 1));
   wmask = Replicate(M,ROR(welem, R));
   tmask = Replicate(M,telem);
   (wmask, tmask);
@@ -880,7 +880,7 @@ function ShiftReg(N,_reg, stype, amount) = {
 function Prefetch(address : bits(64), prfop : bits(5)) -> unit = {
   hint : PrefetchHint = Prefetch_READ;
   target : uinteger = 0;
-  stream : boolean = bitzero;
+  stream : boolean = b0;
 
   returnv : bool = false;
   match prfop[4..3] {
@@ -891,7 +891,7 @@ function Prefetch(address : bits(64), prfop : bits(5)) -> unit = {
   };
   if ~(returnv) then {
   target = UInt(prfop[2..1]);                /* target cache level        */
-  stream = (prfop[0] != bitzero);            /* streaming (non-temporal)  */
+  stream = (prfop[0] != b0);            /* streaming (non-temporal)  */
   Hint_Prefetch(address, hint, target, stream);
 }}
 
@@ -934,7 +934,7 @@ function AArch64_TranslateAddress
   result : AddressDescriptor = struct {
     fault = AArch64_NoFault(),
     memattrs = struct {MA_type = MemType_Normal, shareable = true},
-    paddress = struct {physicaladdress = vaddress, NS = bitone}
+    paddress = struct {physicaladdress = vaddress, NS = b1}
   };
   /* ARM: uncomment when implementing TLB and delete the code above
   (AddressDescriptor) result = AArch64_FullTranslate(vaddress, acctype, iswrite, wasaligned, size);

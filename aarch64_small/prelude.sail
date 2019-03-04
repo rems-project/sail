@@ -1,3 +1,7 @@
+let b1 = bitone
+let b0 = bitzero
+
+
 /* default Order dec */
 
 val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
@@ -63,15 +67,15 @@ overload pow2 = {pow2_atom, pow2_int}
 val cast cast_bool_bit : bool -> bit
 function cast_bool_bit(b) = 
   match b {
-    true => bitzero,
-    false => bitone
+    true => b0,
+    false => b1
   }
 
 val cast cast_bit_bool : bit -> bool
 function cast_bit_bool (b) = 
   match b {
-    bitzero => false,
-    bitone => true
+    b0 => false,
+    b1 => true
   }
 
 
@@ -167,3 +171,5 @@ function error(message) = {
 }
 
 type min ('M : Int, 'N : Int) = {'O, ('O == 'M | 'O == 'N) & 'O <= 'M & 'O <= 'N. atom('O)}
+
+

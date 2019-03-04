@@ -268,6 +268,6 @@ let IMPLEMENTATION_DEFINED : IMPLEMENTATION_DEFINED_type = struct {
 let UNKNOWN = 0
 val UNKNOWN_BITS: forall 'N, 'N >= 0. implicit('N) -> bits('N)
 function UNKNOWN_BITS(N) = (replicate_bits(0b0, 'N)) : bits('N)
-let UNKNOWN_BIT = bitzero
+let UNKNOWN_BIT = b0
 
 /* external */ val speculate_exclusive_success : unit -> bool effect {exmem}
