@@ -599,7 +599,8 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
       iR = appendL(xFP(n),appendL(xFP(m),iR));
       if setflags then oR = appendL(NZCVfp,oR);
       oR = appendL(xFP(d),oR);
-    }
+    },
+    Unallocated() => exit()
   };
   (iR,oR,aR,Nias,Dia,ik)
 }

@@ -565,6 +565,9 @@ function decodeTestBranchImmediate ([b5]@0b011011@[op]@(b40 : bits(5))@(imm14 : 
 }
 
 function clause execute ( TestBitAndBranch((t:reg_index,datasize as atom('R),bit_pos,bit_val,offset)) ) = {
+
+  /* assert ('R == 32 | 'R == 64); */
+
   let operand : bits('R) = rX(t);
 
   if operand[bit_pos] == bit_val then
