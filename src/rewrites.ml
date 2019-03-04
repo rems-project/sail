@@ -2025,7 +2025,6 @@ let is_funcl_rec (FCL_aux (FCL_Funcl (id, pexp), _)) =
          E_app_infix (e1, f, e2))) }
     exp)
 
-
 let pat_var (P_aux (paux, a)) =
   let env = env_of_annot a in
   let is_var id =
@@ -2035,9 +2034,28 @@ let pat_var (P_aux (paux, a)) =
   | (P_as (_, id) | P_id id) when is_var id -> Some id
   | _ -> None
 
-(* Split out function clauses for individual union constructor patterns
-   (e.g. AST nodes) into auxiliary functions.  Used for the execute function. *)
-let rewrite_split_fun_constr_pats fun_name env (Defs defs) =
+(** Split out function clauses for individual union constructor patterns
+   (e.g. AST nodes) into auxiliary functions. Used for the execute function.
+
+   For example:
+
+   function execute(Instr(x, y)) = ...
+
+   would become
+
+   function execute_Instr(x, y) = ...
+
+   function execute(Instr(x, y)) = execute_C(x, y)
+
+   This is actually a slightly complex rewrite than it first appears, because
+   we have to deal with cases where the AST type has constraints in various
+   places, e.g.
+
+   union ast('x: Int), 0 <= 'x < 32 = {
+     Instr : {'r, 'r in {32, 64}. (int('x), bits('r))}
+   }
+ *)
+let rewrite_split_fun_ctor_pats fun_name env (Defs defs) =
   let rewrite_fundef typquant (FD_aux (FD_function (r_o, t_o, e_o, clauses), ((l, _) as fdannot))) =
     let rec_clauses, clauses = List.partition is_funcl_rec clauses in
     let clauses, aux_funs =
@@ -2045,8 +2063,8 @@ let rewrite_split_fun_constr_pats fun_name env (Defs defs) =
         (fun (clauses, aux_funs) (FCL_aux (FCL_Funcl (id, pexp), fannot) as clause) ->
           let pat, guard, exp, annot = destruct_pexp pexp in
           match pat with
-          | P_aux (P_app (constr_id, args), pannot) ->
-             let ctor_typq, ctor_typ = Env.get_union_id constr_id env in
+          | P_aux (P_app (ctor_id, args), pannot) ->
+             let ctor_typq, ctor_typ = Env.get_union_id ctor_id env in
              let args = match args with [P_aux (P_tup args, _)] -> args | _ -> args in
              let argstup_typ = tuple_typ (List.map typ_of_pat args) in
              let pannot' = swaptyp argstup_typ pannot in
@@ -2056,7 +2074,7 @@ let rewrite_split_fun_constr_pats fun_name env (Defs defs) =
                | _ -> P_aux (P_tup args, pannot')
              in
              let pexp' = construct_pexp (pat', guard, exp, annot) in
-             let aux_fun_id = prepend_id (fun_name ^ "_") constr_id in
+             let aux_fun_id = prepend_id (fun_name ^ "_") ctor_id in
              let aux_funcl = FCL_aux (FCL_Funcl (aux_fun_id, pexp'), pannot') in
              begin
                try
@@ -2074,7 +2092,7 @@ let rewrite_split_fun_constr_pats fun_name env (Defs defs) =
                                                       args)
                  in
                  let pexp = construct_pexp
-                              (P_aux (P_app (constr_id, argpats), pannot),
+                              (P_aux (P_app (ctor_id, argpats), pannot),
                                None,
                                E_aux (E_app (aux_fun_id, argexps), annot),
                                annot)
@@ -5071,7 +5089,7 @@ let rewrite_defs_lem = [
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
   ("nexp_ids", rewrite_defs_nexp_ids);
   ("fix_val_specs", rewrite_fix_val_specs);
-  ("split_execute", rewrite_split_fun_constr_pats "execute");
+  ("split_execute", rewrite_split_fun_ctor_pats "execute");
   ("recheck_defs", recheck_defs);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   (* ("constraint", rewrite_constraint); *)
@@ -5114,7 +5132,7 @@ let rewrite_defs_coq = [
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
   ("nexp_ids", rewrite_defs_nexp_ids);
   ("fix_val_specs", rewrite_fix_val_specs);
-  ("split_execute", rewrite_split_fun_constr_pats "execute");
+  ("split_execute", rewrite_split_fun_ctor_pats "execute");
   ("minimise_recursive_functions", minimise_recursive_functions);
   ("recheck_defs", recheck_defs);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
@@ -5197,7 +5215,7 @@ let rewrite_defs_c = [
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
-  ("split_execute", if_separate (rewrite_split_fun_constr_pats "execute"));
+  ("split_execute", if_separate (rewrite_split_fun_ctor_pats "execute"));
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("merge_function_clauses", merge_funcls);
   ("recheck_defs", fun _ -> Optimize.recheck)

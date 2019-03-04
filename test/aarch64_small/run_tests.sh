@@ -43,6 +43,8 @@ function finish_suite {
     fail=0
 }
 
+printf "<testsuites>\n" >> $DIR/tests.xml
+
 if make -B -C ../../aarch64_small SAIL="$SAILDIR/sail"
 then
     green "built aarch64_small to lem" "ok"
