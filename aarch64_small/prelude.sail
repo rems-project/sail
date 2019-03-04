@@ -173,3 +173,4 @@ function error(message) = {
 type min ('M : Int, 'N : Int) = {'O, ('O == 'M | 'O == 'N) & 'O <= 'M & 'O <= 'N. atom('O)}
 
 
+val appendL : forall ('a:Type). (list('a),list('a)) -> list('a)
