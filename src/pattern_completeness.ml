@@ -89,7 +89,7 @@ let is_wild = function
   | GP_wild -> true
   | _ -> false
 
-let rec generalize ctx (P_aux (p_aux, _) as pat) =
+let rec generalize ctx (P_aux (p_aux, (l, _)) as pat) =
   match p_aux with
   | P_lit (L_aux (L_unit, _)) ->
      (* Unit pattern always matches on unit, so generalize to wildcard *)
@@ -105,7 +105,8 @@ let rec generalize ctx (P_aux (p_aux, _) as pat) =
        match ctx.lookup_id id with
        | Unbound -> GP_wild
        | Local (Immutable, _) -> GP_wild
-       | Register _ | Local (Mutable, _) -> Util.warn "Matching on register or mutable variable"; GP_wild
+       | Register _ | Local (Mutable, _) ->
+          Util.warn ("Matching on register or mutable variable at " ^ Reporting.loc_to_string l); GP_wild
        | Enum _ -> GP_app (Bindings.singleton id GP_wild)
      end
   | P_var (pat, _) -> generalize ctx pat
