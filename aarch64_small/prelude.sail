@@ -1,3 +1,7 @@
+let b1 = bitone
+let b0 = bitzero
+
+
 /* default Order dec */
 
 val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
@@ -22,11 +26,18 @@ infix 7 >>
 infix 7 <<
 infix 7 ^^
 
-val operator >> = "shift_bits_right" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
-val operator << = "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val shift_bits_left = "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val shift_bits_right = "shift_bits_right" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val shift_left = "shiftl" : forall 'm. (bits('m), int) -> bits('m)
+val shift_right = "shiftr" : forall 'm. (bits('m), int) -> bits('m)
+
+overload operator << = {shift_bits_left, shift_left}
+overload operator >> = {shift_bits_right, shift_right}
+
 
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 val operator ^^ = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
+
 
 
 infix 4 <_s
@@ -56,27 +67,28 @@ overload pow2 = {pow2_atom, pow2_int}
 val cast cast_bool_bit : bool -> bit
 function cast_bool_bit(b) = 
   match b {
-    true => bitzero,
-    false => bitone
+    true => b0,
+    false => b1
   }
 
 val cast cast_bit_bool : bit -> bool
 function cast_bit_bool (b) = 
   match b {
-    bitzero => false,
-    bitone => true
+    b0 => false,
+    b1 => true
   }
 
 
 
 
 val and_bits = {c:"and_bits", _: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
-
 overload operator & = {and_bool, and_bits}
+
+val or_bits = {c:"or_bits", _: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+overload operator | = {or_bool, or_bits}
 
 
 val not_vec = {c:"not_bits", _:"not_vec"} : forall 'n. bits('n) -> bits('n)
-
 overload ~ = {not_bool, not_vec}
 
 val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", coq: "generic_eq", _:"eq_anything"} : forall ('a : Type). ('a, 'a) -> bool
@@ -92,12 +104,30 @@ function neq_anything (x, y) = not_bool(x == y)
 overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
 
 
+val add_int = {ocaml: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : forall 'n 'm.
+  (int('n), int('m)) -> int('n + 'm)
+val add_vec = {c: "add_bits", _: "add_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val add_vec_int = {c: "add_bits_int", _: "add_vec_int"} : forall 'n. (bits('n), int) -> bits('n)
+overload operator + = {add_int, add_vec, add_vec_int}
+
+val sub_int = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : forall 'n 'm.
+  (int('n), int('m)) -> int('n - 'm)
+val sub_nat = {ocaml: "(fun (x,y) -> let n = sub_int (x,y) in if Big_int.less_equal n Big_int.zero then Big_int.zero else n)",
+	       lem: "integerMinus", coq: "sub_nat", c: "sub_nat"}
+            : (nat, nat) -> nat
+val sub_vec = {c: "sub_bits", _: "sub_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val sub_vec_int = {c: "sub_bits_int", _: "sub_vec_int"} : forall 'n. (bits('n), int) -> bits('n)
+overload operator - = {sub_int, sub_vec, sub_vec_int}
+
+
 /* val reg_index : reg_size -> reg_index */
 /* function reg_index x = unsigned(x) */
 
 
-val quotient_nat = {ocaml: "quotient", lem: "integerDiv"} : (nat, nat) -> nat
-val quotient = {ocaml: "quotient", lem: "integerDiv"} : (int, int) -> int
+val quotient_nat = {ocaml: "quotient", lem: "integerDiv"} : 
+    forall 'M 'N, 'M >= 0 & 'N >= 0. (atom('M), atom('N)) -> atom(div('M,'N))
+val quotient = {ocaml: "quotient", lem: "integerDiv"} : 
+    forall 'M 'N. (atom('M), atom('N)) -> atom(div('M,'N))
 overload quot = {quotient_nat, quotient}
 
 
@@ -115,3 +145,32 @@ val xor_vec = {c: "xor_bits", _: "xor_vec"} : forall 'n. (bits('n), bits('n)) ->
 val int_power = {ocaml: "int_power", lem: "pow", coq: "pow", c: "pow_int"} : (int, int) -> int
 
 overload operator ^ = {xor_vec, int_power, concat_str}
+
+
+val mask : forall 'l 'm, 'l >= 0 & 'm >= 0. (implicit('l), bits('m)) -> bits('l)
+
+
+/* put this val spec into Sail lib for "%" */
+
+val mod = {
+  smt: "mod",
+  ocaml: "modulus",
+  lem: "integerMod",
+  c: "tmod_int",
+  coq: "Z.rem"
+} : forall 'M 'N. (atom('M), atom('N)) -> {'O, 0 <= 'O & 'O < N . atom('O)}
+
+/* overload operator % = {mod_int} */
+
+val print = "print_endline" : string -> unit
+
+val error : forall ('a : Type). string -> 'a effect{escape}
+function error(message) = {
+  print(message); 
+  exit()
+}
+
+type min ('M : Int, 'N : Int) = {'O, ('O == 'M | 'O == 'N) & 'O <= 'M & 'O <= 'N. atom('O)}
+
+
+val appendL : forall ('a:Type). (list('a),list('a)) -> list('a)

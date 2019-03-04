@@ -34,14 +34,14 @@
 
 /** FUNCTION:aarch64/exceptions/aborts/AArch64.Abort */
 
-val AArch64_Abort : (bits(64), FaultRecord) -> unit
+val AArch64_Abort : (bits(64), FaultRecord) -> unit effect {escape}
 function AArch64_Abort(vaddress, fault) = {
   not_implemented("AArch64_Abort");
 }
 
 /** FUNCTION:AArch64.SPAlignmentFault() */
 
-val AArch64_SPAlignmentFault : unit -> unit effect pure
+val AArch64_SPAlignmentFault : unit -> unit effect {escape}
 function AArch64_SPAlignmentFault() = {
   not_implemented("AArch64_SPAlignmentFault");
 }
@@ -54,15 +54,15 @@ function AArch64_SoftwareBreakpoint(immediate : bits(16)) -> unit = {
 
 /** FUNCTION:aarch64/exceptions/exceptions/AArch64.TakeReset */
 
-val AArch64_TakeReset : boolean -> unit effect {wreg}
+val AArch64_TakeReset : boolean -> unit effect {wreg,rreg,escape}
 function AArch64_TakeReset(cold_reset) = {
-  assert((~(HighestELUsingAArch32())), None);
+  assert(~(HighestELUsingAArch32()));
 
   /* Enter the highest implemented Exception level in AArch64 state */
-  PSTATE_nRW = 0;
+  PSTATE_nRW = 0b0;
   if HaveEL(EL3) then {
     PSTATE_EL = EL3;
-    SCR_EL3.NS = 0; /* Secure state */
+    SCR_EL3->NS() = 0b0; /* Secure state */
   } else if HaveEL(EL2) then
     PSTATE_EL = EL2
   else
@@ -86,7 +86,7 @@ function AArch64_TakeReset(cold_reset) = {
   AArch64_ResetSpecialRegisters();
   ResetExternalDebugRegisters(cold_reset);
 
-  rv : bits(64) = 0; /* ARM: uninitialized */ /* IMPLEMENTATION DEFINED reset vector */
+  rv : bits(64) = Zeros(); /* ARM: uninitialized */ /* IMPLEMENTATION DEFINED reset vector */
   if HaveEL(EL3) then
     rv = RVBAR_EL3
   else if HaveEL(EL2) then
@@ -95,37 +95,37 @@ function AArch64_TakeReset(cold_reset) = {
     rv = RVBAR_EL1;
 
   /* The reset vector must be correctly aligned */
-  assert((IsZero(rv[63..(PAMax())]) & IsZero(rv[1..0])), Some("reset vector not correctly aligned"));
+  assert((IsZero(rv[63..(PAMax())]) & IsZero(rv[1..0])), "reset vector not correctly aligned");
 
   BranchTo(rv, BranchType_UNKNOWN);
 }
 
 /** FUNCTION:aarch64/exceptions/syscalls/AArch64.CallHypervisor */
 
-val AArch64_CallHypervisor : immediate -> unit 
+val AArch64_CallHypervisor : bits(16) -> unit effect {escape}
 function AArch64_CallHypervisor (immediate) = {
   not_implemented("AArch64_CallHypervisor");
 }
 
 /** FUNCTION:aarch64/exceptions/syscalls/AArch64.CallSecureMonitor */
 
-val AArch64_CallSecureMonitor : bits(16) -> unit
+val AArch64_CallSecureMonitor : bits(16) -> unit effect {escape}
 function AArch64_CallSecureMonitor(immediate) = {
   not_implemented("AArch64_CallSecureMonitor");
 }
 
 /** FUNCTION:aarch64/exceptions/syscalls/AArch64.CallSupervisor */
 
-val AArch64_CallSupervisor : bits(16) -> unit
+val AArch64_CallSupervisor : bits(16) -> unit effect {escape}
 function AArch64_CallSupervisor(immediate) = {
   not_implemented("AArch64_CallSupervisor");
 }
 
 /** FUNCTION:aarch64/exceptions/traps/AArch64.CheckForSMCTrap */
 
-val AArch64_CheckForSMCTrap : bits(16) -> unit
+val AArch64_CheckForSMCTrap : bits(16) -> unit effect {escape, rreg}
 function AArch64_CheckForSMCTrap(imm) = {
-  route_to_el2 : boolean = (HaveEL(EL2) & ~(IsSecure()) & (PSTATE_EL == EL0 | PSTATE_EL == EL1) & HCR_EL2.TSC == 1);
+  route_to_el2 : boolean = (HaveEL(EL2) & ~(IsSecure()) & (PSTATE_EL() == EL0 | PSTATE_EL() == EL1) & HCR_EL2.TSC() == 0b1);
   if route_to_el2 then {
     not_implemented("AArch64_CheckForSMCTrap route_to_el2");
     /* ARM:
@@ -140,16 +140,16 @@ function AArch64_CheckForSMCTrap(imm) = {
 
 /** FUNCTION:aarch64/exceptions/traps/AArch64.CheckForWFxTrap */
 
-val AArch64_CheckForWFxTrap : (bits(2), boolean) -> unit effect{rreg}
+val AArch64_CheckForWFxTrap : (bits(2), boolean) -> unit effect{escape,rreg}
 function AArch64_CheckForWFxTrap(target_el, is_wfe) = {
-    assert((HaveEL(target_el)), None);
+    assert(HaveEL(target_el));
 
     trap : boolean = false; /* ARM: uninitialized */
 
-    if      target_el == EL1 then trap = ((if is_wfe then SCTLR_EL1.nTWE else SCTLR_EL1.nTWI) == 0)
-    else if target_el == EL2 then trap = ((if is_wfe then HCR_EL2.TWE else HCR_EL2.TWI) == 1)
-    else if target_el == EL3 then trap = ((if is_wfe then SCR_EL3.TWE else SCR_EL3.TWI) == 1)
-    else {assert(false,None); ()};
+    if      target_el == EL1 then trap = ((if is_wfe then SCTLR_EL1.nTWE() else SCTLR_EL1.nTWI()) == 0b0)
+    else if target_el == EL2 then trap = ((if is_wfe then HCR_EL2.TWE() else HCR_EL2.TWI()) == 0b1)
+    else if target_el == EL3 then trap = ((if is_wfe then SCR_EL3.TWE() else SCR_EL3.TWI()) == 0b1)
+    else {exit()};
 
 
     if trap then
@@ -181,20 +181,18 @@ function AArch64_WFxTrap(target_el : bits(2), is_wfe : boolean) -> unit = {
 function AArch64_CreateFaultRecord(
            faulttype : Fault, ipaddress : bits(48), level : uinteger, acctype : AccType, 
            write : boolean, extflag : bit, secondstage : boolean, s2fs1walk : boolean) -> FaultRecord = {
-  fault : FaultRecord = {
-    faulttype = faulttype;
-    domain = UNKNOWN : bits(4);
-    debugmoe = UNKNOWN : bits(4);
-    ipaddress = ipaddress;
-    level = level;
-    acctype = acctype;
-    write = write;
-    extflag = extflag;
-    secondstage = secondstage;
-    s2fs1walk = s2fs1walk;
+  struct {
+    faulttype = faulttype,
+    domain = UNKNOWN_BITS() : bits(4),
+    debugmoe = UNKNOWN_BITS() : bits(4),
+    ipaddress = ipaddress,
+    level = level,
+    acctype = acctype,
+    write = write,
+    extflag = extflag,
+    secondstage = secondstage,
+    s2fs1walk = s2fs1walk
   };
-
-  fault;
 }
 
 /** FUNCTION:aarch64/functions/exclusive/AArch64.ExclusiveMonitorsPass */
@@ -278,9 +276,9 @@ function AArch64_SetExclusiveMonitors(address : bits(64), size : uinteger) -> un
 function AArch64_CheckAlignment(address : bits(64), size : uinteger, 
                                 acctype : AccType, iswrite : boolean) -> boolean = {
   aligned : boolean = (address == Align(address, size));
-  A : bit = (SCTLR'()).A;
+  let [A] = SCTLR'().A();
 
-  if ~(aligned) & (acctype == AccType_ATOMIC | acctype == AccType_ORDERED | A == 1) then {
+  if ~(aligned) & (acctype == AccType_ATOMIC | acctype == AccType_ORDERED | A == b1) then {
     secondstage = false;
     AArch64_Abort(address, AArch64_AlignmentFault(acctype, iswrite, secondstage));
   };
@@ -290,13 +288,13 @@ function AArch64_CheckAlignment(address : bits(64), size : uinteger,
 
 /** FUNCTION:// AArch64.MemSingle[] - non-assignment (read) form */
 
-val AArch64_rMemSingle : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64), atom('N), AccType, boolean, bool) -> read_buffer_type effect {rmem}
+val AArch64_rMemSingle : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64), atom('N), AccType, boolean, bool) -> read_buffer_type effect {escape}
 function AArch64_rMemSingle (read_buffer, address, size, acctype, wasaligned, exclusive) = {
   /*assert size IN {1, 2, 4, 8, 16};*/
-  assert((address == Align(address, size)), None);
+  assert(address == Align(address, size));
 
   /* ARM: AddressDescriptor memaddrdesc; */
-  value : bits('N*8) = 0;
+  value : bits('N*8) = Zeros();
   iswrite : boolean = false;
 
   /* MMU or MPU */
@@ -312,10 +310,10 @@ function AArch64_rMemSingle (read_buffer, address, size, acctype, wasaligned, ex
 
 /** FUNCTION:// AArch64.MemSingle[] - assignment (write) form */
 
-val AArch64_wMemSingle : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), atom('N), AccType, boolean, bool, bits('N*8)) -> write_buffer_type effect pure
+val AArch64_wMemSingle : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), atom('N), AccType, boolean, bool, bits('N*8)) -> write_buffer_type effect {escape}
 function AArch64_wMemSingle (write_buffer, address, size, acctype, wasaligned, exclusive, value) = {
   /*assert size IN {1, 2, 4, 8, 16};*/
-  assert((address == Align(address, size)), None);
+  assert(address == Align(address, size));
 
   /* ARM: AddressDescriptor memaddrdesc; */
   iswrite : boolean = true;
@@ -337,15 +335,15 @@ function AArch64_wMemSingle (write_buffer, address, size, acctype, wasaligned, e
 
 /** FUNCTION:CheckSPAlignment() */
 
-val CheckSPAlignment : unit -> unit effect {rreg}
+val CheckSPAlignment : unit -> unit effect {rreg,escape}
 function CheckSPAlignment() = {
     sp : bits(64) = rSP();
     stack_align_check : bool = false; /* ARM: this is missing from ARM ARM */
 
-    if PSTATE_EL == EL0 then
-        stack_align_check = (SCTLR_EL1.SA0 != 0)
+    if PSTATE_EL() == EL0 then
+        stack_align_check = (SCTLR_EL1.SA0() != 0b0)
     else
-        stack_align_check = ((SCTLR'()).SA != 0);
+        stack_align_check = (SCTLR'().SA() != 0b0);
 
     if stack_align_check & sp != Align(sp, 16) then
         AArch64_SPAlignmentFault();
@@ -353,7 +351,7 @@ function CheckSPAlignment() = {
 
 /** FUNCTION://   Mem[] - non-assignment (read) form */
 
-val rMem' : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64),atom('N), AccType, bool) -> read_buffer_type effect {rmem}
+val rMem' : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64),atom('N), AccType, bool) -> read_buffer_type effect {escape,rreg}
 function rMem'(read_buffer, address, size, acctype, exclusive) =
 {
   /* ARM: assert size IN {1, 2, 4, 8, 16}; */
@@ -366,9 +364,9 @@ function rMem'(read_buffer, address, size, acctype, exclusive) =
   atomic : boolean = ((aligned & ~(acctype == AccType_VEC | acctype == AccType_VECSTREAM)) | size == 1);
 
   if ~(atomic) then {
-    assert((~(exclusive)), None); /* as far as I can tell this should never happen */
+    assert(~(exclusive)); /* as far as I can tell this should never happen */
 
-    assert((size > 1), None);
+    assert(size > 1);
     if (~(exclusive)) then {
      /*value[7..0] =*/read_buffer' =  AArch64_rMemSingle(read_buffer', address, 1, acctype, aligned, false);
 
@@ -393,11 +391,11 @@ function rMem'(read_buffer, address, size, acctype, exclusive) =
   read_buffer'
 }
 
-val rMem : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64), atom('N), AccType) -> read_buffer_type effect {rmem}
+val rMem : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64), atom('N), AccType) -> read_buffer_type effect {escape,rreg}
 function rMem (read_buffer, address, size, acctype) =
   rMem'(read_buffer, address, size, acctype, false)
 
-val rMem_exclusive : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64), atom('N), AccType) -> read_buffer_type effect {rmem}
+val rMem_exclusive : forall 'N, 'N in {1,2,4,8,16}. (read_buffer_type, bits(64), atom('N), AccType) -> read_buffer_type effect {escape,rreg}
 function rMem_exclusive(read_buffer, address, size, acctype) =
   rMem'(read_buffer, address, size, acctype, true)
 
@@ -407,7 +405,7 @@ function rMem_exclusive(read_buffer, address, size, acctype) =
    store-exclusive, this function should only be called indirectly by one
    of the functions that follow it.
    returns true if the store-exclusive was successful. */
-val wMem' : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), atom('N), AccType, bits('N*8), bool) -> write_buffer_type 
+val wMem' : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), atom('N), AccType, bits('N*8), bool) -> write_buffer_type effect {escape,rreg}
 function wMem' (write_buffer, address, size, acctype, value, exclusive) = {
   write_buffer' : write_buffer_type = write_buffer;
 
@@ -424,10 +422,10 @@ function wMem' (write_buffer, address, size, acctype, value, exclusive) = {
 
   exclusiveSuccess : bool = false;
   if ~(atomic) then {
-    assert((~(exclusive)), None); /* as far as I can tell this should never happen */
+    assert(~(exclusive)); /* as far as I can tell this should never happen */
 
     if (~(exclusive)) then {
-    assert((size > 1), None);
+    assert(size > 1);
     write_buffer' = AArch64_wMemSingle(write_buffer', address, 1, acctype, aligned, false, value'[7..0]);
 
     /* For subsequent bytes it is CONSTRAINED UNPREDICTABLE whether an unaligned Device memory */
@@ -447,61 +445,61 @@ function wMem' (write_buffer, address, size, acctype, value, exclusive) = {
   write_buffer'
 }
 
-val wMem : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), atom('N), AccType, bits('N*8)) -> write_buffer_type
+val wMem : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), atom('N), AccType, bits('N*8)) -> write_buffer_type effect {escape,rreg}
 function wMem (write_buffer, address, size, acctype, value) =
   wMem'(write_buffer, address, size, acctype, value, false)
 
-val wMem_exclusive : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), atom('N), AccType, bits('N*8)) -> buffer_type 
+val wMem_exclusive : forall 'N, 'N in {1,2,4,8,16}. (write_buffer_type, bits(64), atom('N), AccType, bits('N*8)) -> write_buffer_type effect {escape,rreg}
 function wMem_exclusive(write_buffer, address, size, acctype, value) =
   wMem'(write_buffer, address, size, acctype, value, true)
 
 /** FUNCTION:aarch64/functions/registers/AArch64.ResetGeneralRegisters */
 
-function unit AArch64_ResetGeneralRegisters() =
+function AArch64_ResetGeneralRegisters() -> unit =
 {
   foreach (i from 0 to 30)
-    wX(i) = (UNKNOWN : bits(64));
+    wX(i) = (UNKNOWN_BITS() : bits(64));
 }
 
 /** FUNCTION:aarch64/functions/registers/AArch64.ResetSIMDFPRegisters */
 
-function unit AArch64_ResetSIMDFPRegisters() =
+function AArch64_ResetSIMDFPRegisters() -> unit =
 {
   foreach (i from 0 to 31)
-    wV(i) = (UNKNOWN : bits(128));
+    wV(i) = (UNKNOWN_BITS() : bits(128));
 }
 
 /** FUNCTION:aarch64/functions/registers/AArch64.ResetSpecialRegisters */
 
-function unit AArch64_ResetSpecialRegisters() =
+function AArch64_ResetSpecialRegisters() -> unit =
 {
   /* AArch64 special registers */
-  SP_EL0 = (UNKNOWN : bits(64));
-  SP_EL1 = (UNKNOWN : bits(64));
-  SPSR_EL1 = (UNKNOWN : bits(32));
-  ELR_EL1 = (UNKNOWN : bits(64));
+  SP_EL0 = (UNKNOWN_BITS() : bits(64));
+  SP_EL1 = (UNKNOWN_BITS() : bits(64));
+  SPSR_EL1->bits() = (UNKNOWN_BITS() : bits(32));
+  ELR_EL1 = (UNKNOWN_BITS() : bits(64));
   if HaveEL(EL2) then {
-    SP_EL2 = (UNKNOWN : bits(64));
-    SPSR_EL2 = (UNKNOWN : bits(32));
-    ELR_EL2 = (UNKNOWN : bits(64));
+    SP_EL2 = (UNKNOWN_BITS() : bits(64));
+    SPSR_EL2->bits() = (UNKNOWN_BITS() : bits(32));
+    ELR_EL2 = (UNKNOWN_BITS() : bits(64));
   };
   if HaveEL(EL3) then {
-    SP_EL3 = (UNKNOWN : bits(64));
-    SPSR_EL3 = (UNKNOWN : bits(32));
-    ELR_EL3 = (UNKNOWN : bits(64));
+    SP_EL3 = (UNKNOWN_BITS() : bits(64));
+    SPSR_EL3->bits() = (UNKNOWN_BITS() : bits(32));
+    ELR_EL3 = (UNKNOWN_BITS() : bits(64));
   };
 
   /* AArch32 special registers that are not architecturally mapped to AArch64 registers */
   if HaveAArch32EL(EL1) then {
-    SPSR_fiq = (UNKNOWN : bits(32));
-    SPSR_irq = (UNKNOWN : bits(32));
-    SPSR_abt = (UNKNOWN : bits(32));
-    SPSR_und = (UNKNOWN : bits(32));
+    SPSR_fiq = (UNKNOWN_BITS() : bits(32));
+    SPSR_irq = (UNKNOWN_BITS() : bits(32));
+    SPSR_abt = (UNKNOWN_BITS() : bits(32));
+    SPSR_und = (UNKNOWN_BITS() : bits(32));
   };
 
   /* External debug special registers */
-  DLR_EL0 = (UNKNOWN : bits(64));
-  DSPSR_EL0 = (UNKNOWN : bits(32));
+  DLR_EL0 = (UNKNOWN_BITS() : bits(64));
+  DSPSR_EL0 = (UNKNOWN_BITS() : bits(32));
 }
 
 /** FUNCTION:aarch64/functions/registers/PC */
@@ -511,95 +509,89 @@ function rPC () = _PC
 
 /** FUNCTION:// SP[] - assignment form */
 
-val wSP : forall 'N, 'N in {32,64}. (unit, bits('N)) -> unit effect {rreg,wreg}
-function wSP ((), value) = {
+val wSP : forall 'N, 'N in {32,64}. (bits('N)) -> unit effect {rreg,wreg,escape}
+function wSP (value) = {
   /*assert width IN {32,64};*/
-  if PSTATE_SP == 0 then
+  if PSTATE_SP() == 0b0 then
     SP_EL0 = ZeroExtend(value)
   else
-    let pstate_el = PSTATE_EL in {
+    let pstate_el = PSTATE_EL() in {
       if      pstate_el == EL0 then SP_EL0 = ZeroExtend(value)
       else if pstate_el == EL1 then SP_EL1 = ZeroExtend(value)
       else if pstate_el == EL2 then SP_EL2 = ZeroExtend(value)
       else if pstate_el == EL3 then SP_EL3 = ZeroExtend(value)
-      else assert(false,None); ();
+      else exit()
     }
 }
 
 /** FUNCTION:// SP[] - non-assignment form */
 
-val rSP : unit -> bits('N) effect {rreg}
-function rSP () = {
+function rSP(N) = {
   /*assert width IN {8,16,32,64};*/
-  if PSTATE_SP == 0 then
+  if PSTATE_SP() == 0b0 then
     mask(SP_EL0)
   else
-    let pstate_el = PSTATE_EL in {
+    let pstate_el = PSTATE_EL() in {
       if      pstate_el == EL0 then mask(SP_EL0)
       else if pstate_el == EL1 then mask(SP_EL1)
       else if pstate_el == EL2 then mask(SP_EL2)
       else if pstate_el == EL3 then mask(SP_EL3)
-      else {assert(false,None); mask(SP_EL3)}
+      else {exit()}
     }
 }
 
 /** FUNCTION://   V[] - assignment form */
 
-val wV : forall 'N, 'N in {8,16,32,64,128}. (SIMD_index, bits('N)) -> unit effect {wreg}
 function wV (n, value) = {
   /*assert n >= 0 && n <= 31;*/
   /*assert width IN {8,16,32,64,128};*/
-  _V[n] = ZeroExtend(value);
+  (* _V[n]) = ZeroExtend(value);
 }
 
 /** FUNCTION://   V[] - non-assignment form */
 
-val rV: forall 'N, 'N in {8,16,32,64,128}. SIMD_index -> bits('N) effect {rreg}
-function rV (n) = mask(_V[n])
+function rV (N,n) = mask(reg_deref (_V[n]))
 
 
 /** FUNCTION:// Vpart[] - non-assignment form */
 
-val rVpart : forall 'N, 'N in {8,16,32,64,128}. (SIMD_index, range(0,1)) -> bits('N) effect {rreg}
-function rVpart (n,part) = {
+function rVpart (N,n,part) = {
   if part == 0 then
-    mask(_V[n]) : bits('N)
+    mask(reg_deref(_V[n])) : bits('N)
   else {
-    assert((length(0 : bits('N)) == 64), None);
-    ((_V[n])[127..64]) : bits(64);
+    assert(N == 64);
+    (reg_deref(_V[n])[127..64]) : bits(64);
   }
 }
 
 /** FUNCTION:// Vpart[] - assignment form */
 
-val wVpart : forall 'N, 'N in {8,16,32,64,128}. (SIMD_index, range(0,1), bits('N)) -> unit effect {wreg}
+val wVpart : forall 'N, 'N in {8,16,32,64,128}. (SIMD_index, range(0,1), bits('N)) -> unit effect {wreg,escape}
 function wVpart(n, part, value) = {
   if part == 0 then
-    _V[n] = ZeroExtend(value)
+    (* _V[n]) = ZeroExtend(value)
   else {
-    assert((length(0 : bits('N)) == 64), None);
-    (_V[n])[127..64] = value;
+    assert(length(value) == 64);
+    (* _V[n])[127..64] = value;
   }
 }
 
 /** FUNCTION:// X[] - assignment form */
 
-val wX : forall 'N, 'N in {32,64}. (reg_index, bits('N)) -> unit effect {wreg}
 function wX(n, value) = {
   /*assert n >= 0 && n <= 31;*/
   /*assert width IN {32,64};*/
   if n != 31 then
-    _R[n] = ZeroExtend(value);
+    (* _R[n]) = ZeroExtend(value);
 }
 
 /** FUNCTION:// X[] - non-assignment form */
 
-val rX : forall 'N, 'N in {8,16,32,64}. reg_index -> bits('N) effect {rreg}
-function rX(n) = {
+function rX(N,n) = {
   /*assert n >= 0 && n <= 31;*/
   /*assert width IN {8,16,32,64};*/
   if n != 31 then
-    mask(_R[n])
+    mask(reg_deref(_R[n]))
   else
     Zeros();
 }
@@ -607,7 +599,7 @@ function rX(n) = {
 /** FUNCTION:bits(64) ELR[bits(2) el] */
 
 function rELR(el : bits(2)) -> bits(64) = {
-  r = 0 : bits(64); /* ARM: uninitialized */
+  r = Zeros() : bits(64); /* ARM: uninitialized */
   if      el == EL1 then r = ELR_EL1
   else if el == EL2 then r = ELR_EL2
   else if el == EL3 then r = ELR_EL3
@@ -617,42 +609,42 @@ function rELR(el : bits(2)) -> bits(64) = {
 
 /** FUNCTION:bits(64) ELR[] */
 
-function rELR'() -> bits(64) =
-{
-    assert (PSTATE_EL != EL0, None);
-    rELR(PSTATE_EL);
+function rELR'() -> bits(64) = {
+    let pstate_el = PSTATE_EL();
+    assert (pstate_el != EL0);
+    rELR(pstate_el);
 }
 
 /** FUNCTION:SCTLRType SCTLR[bits(2) regime] */
 
-val SCTLR : bits(2) -> SCTLR_type effect {rreg}
+/* FIXME: this reads the whole register. Do we want that? */
+val SCTLR : bits(2) -> SCTLR_type effect {escape, rreg}
 function SCTLR (regime) = {
    if      regime == EL1 then SCTLR_EL1
    else if regime == EL2 then SCTLR_EL2
    else if regime == EL3 then SCTLR_EL3
-   else {assert(false,Some("SCTLR_type unreachable")); SCTLR_EL1} /* ARM: Unreachabe() */
+   else Unreachable("SCTLR_type unreachable") /* ARM: Unreachabe() */
 }
 
 /** FUNCTION:SCTLRType SCTLR[] */
 
-val SCTLR' : unit -> SCTLR_type effect{rreg}
 function SCTLR' () = SCTLR(S1TranslationRegime())
 
 /** FUNCTION:aarch64/functions/system/AArch64.CheckUnallocatedSystemAccess */
 
 /* return true if the access is not allowed */
 function AArch64_CheckUnallocatedSystemAccess (op0 : bits(2), op1 : bits(3), crn : bits(4), 
-                                               crm : bits(4), op2 : bits(3), read : bit) -> boolean =
-{
+                                               crm : bits(4), op2 : bits(3), read : bit) -> boolean = {
   match (op0,op1,crn,crm,op2, read) {
-    (0b00,0b000,0b0100,_,0b101, _)  => PSTATE_EL < EL1 /* SPSel */,
+    (0b00,0b000,0b0100,_,0b101, _)  => UInt(PSTATE_EL()) < UInt(EL1) /* CP: added conversion to uint */ /* SPSel */,
     (0b00,0b011,0b0100,_,0b110, _)  => false, /* DAIFSet */ /* TODO: EL0 Config-RW ??? */
     (0b00,0b011,0b0100,_,0b111, _)  => false, /* DAIFClr */ /* TODO: EL0 Config-RW ??? */
 
     /* follow the "Usage constraints" of each register */
     (0b11,0b011,0b0100,0b0010,0b000, _)  => false, /* NZCV */
-    (0b11,0b011,0b0100,0b0010,0b001, _)  => false /* DAIF */ /* TODO: EL0 Config-RW ??? */
-/*     (0b11,0b000,0b0001,0b0000,0b001, _)  => PSTATE_EL < EL1 /* ACTLR_EL1 */ */
+    (0b11,0b011,0b0100,0b0010,0b001, _)  => false, /* DAIF */ /* TODO: EL0 Config-RW ??? */
+/*     (0b11,0b000,0b0001,0b0000,0b001, _)  => PSTATE_EL < EL1 (* ACTLR_EL1 *) */
+    _ => exit()
   }
 }
 
@@ -665,7 +657,7 @@ function CheckSystemAccess (op0 : bits(2), op1 : bits(3), crn : bits(4), crm : b
   /*level, security state and configuration, based on the opcode's encoding.*/
   unallocated : boolean = false;
   need_secure : boolean = false;
-  min_EL : bits(2) = 0; /* ARM: uninitialized */
+  min_EL : bits(2) = 0b00; /* ARM: uninitialized */
 
   /*Check for traps by HCR_EL2.TIDCP*/
   /* TODO: uncomment when implementing traps
@@ -697,7 +689,7 @@ function CheckSystemAccess (op0 : bits(2), op1 : bits(3), crn : bits(4), crm : b
       need_secure = true;
     }
   };
-  if PSTATE_EL < min_EL then /* ARM: UInt */
+  if UInt(PSTATE_EL()) < UInt(min_EL) then /* ARM: UInt */ /* CP: added Uint */
       UnallocatedEncoding()
   else if need_secure & ~(IsSecure()) then
       UnallocatedEncoding()
@@ -720,27 +712,28 @@ function CheckSystemAccess (op0 : bits(2), op1 : bits(3), crn : bits(4), crm : b
 
 /** FUNCTION:aarch64/functions/system/SysOp_R */
 
-val SysOp_R : (uinteger, uinteger, uinteger, uinteger, uinteger) -> bits(64)
+val SysOp_R : (uinteger, uinteger, uinteger, uinteger, uinteger) -> bits(64) effect {escape}
 function SysOp_R(op0, op1, crn, crm, op2) = {
   not_implemented("SysOp_R");
-  0;
+  Zeros();
 }
 
 /** FUNCTION:aarch64/functions/system/SysOp_W */
 
-val SysOp_W : (uinteger, uinteger, uinteger, uinteger, uinteger, bits(64)) -> unit
-function unit SysOp_W(op0, op1, crn, crm, op2, _val) = {
+val SysOp_W : (uinteger, uinteger, uinteger, uinteger, uinteger, bits(64)) -> unit effect {escape}
+function SysOp_W(op0, op1, crn, crm, op2, _val) = {
   not_implemented("SysOp_W");
 }
 
 /** FUNCTION:bits(64) System_Get(integer op0, integer op1, integer crn, integer crm, integer op2); */
 
-val System_Get : (uinteger, uinteger, uinteger, uinteger, uinteger) -> bits(64) 
+val System_Get : (uinteger, uinteger, uinteger, uinteger, uinteger) -> bits(64) effect{escape,rreg}
 function System_Get(op0, op1, crn, crm, op2) -> bits(64) = {
   match (op0,op1,crn,crm,op2) {
-    (3,3,4,2,0)  => ZeroExtend(NZCV),
-    (3,3,4,2,1)  => ZeroExtend(DAIF),
-    (3, 3, 13, 0, 2)  => TPIDR_EL0
+    (3,3,4,2,0)  => ZeroExtend(NZCV.bits()),
+    (3,3,4,2,1)  => ZeroExtend(DAIF.bits()),
+    (3, 3, 13, 0, 2)  => TPIDR_EL0,
+    _ => exit()
   /* TODO FIXME: higher EL TPIDRs */
 
 /*     (3,0,1,0,1)  => ZeroExtend(ACTLR_EL1) */
@@ -749,12 +742,13 @@ function System_Get(op0, op1, crn, crm, op2) -> bits(64) = {
 
 /** FUNCTION:System_Put(integer op0, integer op1, integer crn, integer crm, integer op2, bits(64) val); */
 
-val System_Put : (uinteger, uinteger, uinteger, uinteger, uinteger, bits(64)) -> unit effect {wreg}
+val System_Put : (uinteger, uinteger, uinteger, uinteger, uinteger, bits(64)) -> unit effect {wreg,escape}
 function System_Put(op0, op1, crn, crm, op2, _val) = {
   match (op0,op1,crn,crm,op2) {
-    (3,3,4,2,0)   => NZCV = _val[31..0],
-    (3,3,4,2,1)   => DAIF = _val[31..0],
-    (3,3,13,0,2)  => TPIDR_EL0 = _val[63..0]
+    (3,3,4,2,0)   => NZCV->bits() = _val[31..0],
+    (3,3,4,2,1)   => DAIF->bits() = _val[31..0],
+    (3,3,13,0,2)  => TPIDR_EL0 = _val[63..0],
+    _ => exit()
   /* TODO FIXME: higher EL TPIDRs */
 
 /*     (3,0,1,0,1)  => ACTLR_EL1 = _val[31..0] */
@@ -763,14 +757,14 @@ function System_Put(op0, op1, crn, crm, op2, _val) = {
 
 /** FUNCTION:aarch64/instrs/branch/eret/AArch64.ExceptionReturn */
 
-function unit AArch64_ExceptionReturn(new_pc : bits(64), spsr : bits(32)) = {
+function AArch64_ExceptionReturn(new_pc : bits(64), spsr : bits(32)) -> unit = {
   not_implemented("AArch64_ExceptionReturn");
 }
 
 /** ENUMERATE:aarch64/instrs/countop/CountOp */
 /** FUNCTION:ExtendType DecodeRegExtend(bits(3) op) */
 
-function ExtendType DecodeRegExtend (op : bits(3)) = {
+function DecodeRegExtend (op : bits(3)) -> ExtendType = {
   match op {
     0b000  => ExtendType_UXTB,
     0b001  => ExtendType_UXTH,
@@ -785,12 +779,11 @@ function ExtendType DecodeRegExtend (op : bits(3)) = {
 
 /** FUNCTION:aarch64/instrs/extendreg/ExtendReg */
 
-val ExtendReg : forall 'N 'S, 'N in {8,16,32,64} & 'S >= 0 & 'S <= 4.
-    (implicit('N), reg_index, ExtendType, atom('S)) -> bits('N) effect {rreg} 
-function ExtendReg (_reg, etype, shift) =
-{
+val ExtendReg : forall 'N 'S, 'N in {8,16,32,64} & 'S >= 0 & 'S <= /* 4 */ 7.
+    (implicit('N), reg_index, ExtendType, atom('S)) -> bits('N) effect {rreg,escape} 
+function ExtendReg (N, _reg, etype, shift) = {
   /*assert( shift >= 0 & shift <= 4 );*/
-   /* _val */ rX : bits('N) = (_reg);
+  _val : bits('N) = rX(_reg);
   _unsigned : boolean = false;
   len : uinteger = 0;
 
@@ -805,7 +798,10 @@ function ExtendReg (_reg, etype, shift) =
     ExtendType_UXTX  => { _unsigned = true;  len = 64}
   };
 
-  len = uMin(len, length(_val) - shift);
+  let len = uMin(len, length(_val) - shift);
+  assert( len >= 1 & 'S + len < 'N);
+  let a = (_val[(len - 1)..0]);
+  /* Zeros() */
   Extend((_val[(len - 1)..0]) @ (Zeros() : bits('S)), _unsigned)
 }
 
@@ -813,21 +809,21 @@ function ExtendReg (_reg, etype, shift) =
 /** ENUMERATE:aarch64/instrs/integer/arithmetic/rev/revop/RevOp */
 /** FUNCTION:(bits(M), bits(M)) DecodeBitMasks (bit immN, bits(6) imms, bits(6) immr, boolean immediate) */
 
-val DecodeBitMasks : forall 'M 'E, 'M >= 0 & 'E in {2,4,8,16,32,64}. (implicit('M),bit,bits(6),bits(6),boolean) -> (bits('M),bits('M)) effect {escape}
-function DecodeBitMasks(immN, imms, immr, immediate) = {
-  let M = (length(0 : bits('M))) in {
-/* ARM: (bits('M)) tmask = 0; /* ARM: uninitialized */ */
-/* ARM: (bits('M)) wmask = 0; /* ARM: uninitialized */ */
-  levels : bits(6) = 0; /* ARM: uninitialized */
+val DecodeBitMasks : forall 'M, 'M >= 0 /* & 'E in {2,4,8,16,32,64} */. (implicit('M), bit, bits(6), bits(6), boolean) -> (bits('M), bits('M)) effect {escape} 
+function DecodeBitMasks(M : atom('M), immN : bit, imms : bits(6), immr : bits(6), immediate : boolean) = {
+  /* let M = (length((bit['M]) 0)) in { */
+  /* ARM: (bit['M]) tmask := 0; (* ARM: uninitialized *) */
+  /* ARM: (bit['M]) wmask := 0; (* ARM: uninitialized *) */
+  levels : bits(6) = Zeros(); /* ARM: uninitialized */
 
   /* Compute log2 of element size */
   /* 2^len must be in range [2, 'M] */
-  len : range(0,6) = match HighestSetBit([immN]@(NOT(imms))) {
-    None  => { assert (false,Some("DecodeBitMasks: HighestSetBit returned None")); 0; },
-    (Some(c))  => c
+  let len : range(0,6) = match HighestSetBit([immN]@(~(imms))) {
+    None() => { assert (false, "DecodeBitMasks: HighestSetBit returned None"); 0; },
+    Some(c) => c
   };
-  if len < 1 then ReservedValue();
-  assert((M >= lsl(1, len)),None);
+  if len < 1 then {ReservedValue(); exit()} else {
+  assert(M >= lsl(1, len));
 
   /* Determine S, R and S - R parameters */
   levels = ZeroExtend(0b1 ^^ len);
@@ -837,28 +833,35 @@ function DecodeBitMasks(immN, imms, immr, immediate) = {
   if immediate & ((imms & levels) == levels) then
     ReservedValue();
 
-  S : bits(6) = (imms & levels);
-  R : bits(6) = (immr & levels);
-  diff : bits(6) = S - R; /* 6-bit subtract with borrow */
+  let S = UInt (imms & levels);
+  let R = UInt (immr & levels);
+  let diff : bits(6) = to_bits(S - R); /* 6-bit subtract with borrow */
 
-  esize : atom('E) = lsl(1, len);
-  d : bits(6) = diff[(len - 1)..0];
-  welem : bits('E) = ZeroExtend(0b1 ^^ (S + 1));
-  telem : bits('E) = ZeroExtend(0b1 ^^ (d + 1));
-  wmask = Replicate(ROR(welem, R));
-  tmask = Replicate(telem);
+  let esize as atom('E) = lsl(1, len);
+  let d /* : bits(6) */ = UInt (diff[(len - 1)..0]);
+  assert(esize >= S+1); /* CP: adding this assertion to make typecheck */
+  welem : bits('E) = ZeroExtend(Ones(S + 1));
+  telem : bits('E) = ZeroExtend(Ones(d + 1));
+  wmask = Replicate(M,ROR(welem, R));
+  tmask = Replicate(M,telem);
   (wmask, tmask);
 }}
 
 /** ENUMERATE:aarch64/instrs/integer/ins-ext/insert/movewide/movewideop/MoveWideOp */
 /** FUNCTION:ShiftType DecodeShift(bits(2) op) */
 
-function ShiftType DecodeShift(op : bits(2)) = op : range(0,4)
+function DecodeShift(op : bits(2)) -> ShiftType =
+  match op {
+    0b00 => ShiftType_LSL,
+    0b01 => ShiftType_LSR,
+    0b10 => ShiftType_ASR,
+    0b11 => ShiftType_ROR
+  }
 
 /** FUNCTION:bits(N) ShiftReg(integer reg, ShiftType type, integer amount) */
 
-val ShiftReg : forall 'N, 'N >= 0. (implicit('N), reg_index, ShiftType, nat) -> bits('N) effect {rreg}
-function ShiftReg(_reg, stype, amount) = {
+val ShiftReg : forall 'N, 'N in {8,16,32,64}. (implicit('N), reg_index, ShiftType, nat) -> bits('N) effect {escape, rreg}
+function ShiftReg(N,_reg, stype, amount) = {
   result : bits('N) = rX(_reg);
   match stype {
     ShiftType_LSL  => result = LSL(result, amount),
@@ -874,10 +877,10 @@ function ShiftReg(_reg, stype, amount) = {
 /** ENUMERATE:aarch64/instrs/memory/memop/MemOp */
 /** FUNCTION:aarch64/instrs/memory/prefetch/Prefetch */
 
-function unit Prefetch(address : bits(64), prfop : bits(5)) = {
-  hint : PrefetchHint = 0;
+function Prefetch(address : bits(64), prfop : bits(5)) -> unit = {
+  hint : PrefetchHint = Prefetch_READ;
   target : uinteger = 0;
-  stream : boolean = 0;
+  stream : boolean = b0;
 
   returnv : bool = false;
   match prfop[4..3] {
@@ -887,8 +890,8 @@ function unit Prefetch(address : bits(64), prfop : bits(5)) = {
     0b11  => returnv = true         /* unallocated hint          */
   };
   if ~(returnv) then {
-  target = prfop[2..1];                /* target cache level        */
-  stream = (prfop[0] != 0);            /* streaming (non-temporal)  */
+  target = UInt(prfop[2..1]);                /* target cache level        */
+  stream = (prfop[0] != b0);            /* streaming (non-temporal)  */
   Hint_Prefetch(address, hint, target, stream);
 }}
 
@@ -897,11 +900,11 @@ function unit Prefetch(address : bits(64), prfop : bits(5)) = {
 /** ENUMERATE:aarch64/instrs/system/register/cpsr/pstatefield/PSTATEField */
 /** FUNCTION:aarch64/translation/faults/AArch64.AlignmentFault */
 
-function FaultRecord AArch64_AlignmentFault(acctype : AccType, iswrite : boolean, secondstage : boolean) = {
-  ipaddress : bits(48) = UNKNOWN;
+function AArch64_AlignmentFault(acctype : AccType, iswrite : boolean, secondstage : boolean) -> FaultRecord = {
+  ipaddress : bits(48) = UNKNOWN_BITS();
   level : uinteger = UNKNOWN;
-  extflag : bit = UNKNOWN;
-  s2fs1walk : boolean = UNKNOWN;
+  extflag : bit = UNKNOWN_BIT;
+  s2fs1walk : boolean = UNKNOWN_BIT;
 
   AArch64_CreateFaultRecord(Fault_Alignment, ipaddress, level, acctype, iswrite,
                             extflag, secondstage, s2fs1walk);
@@ -909,12 +912,12 @@ function FaultRecord AArch64_AlignmentFault(acctype : AccType, iswrite : boolean
 
 /** FUNCTION:aarch64/translation/faults/AArch64.NoFault */
 
-function FaultRecord AArch64_NoFault() = {
-  ipaddress : bits(48) = UNKNOWN;
+function AArch64_NoFault() -> FaultRecord = {
+  ipaddress : bits(48) = UNKNOWN_BITS();
   level : uinteger = UNKNOWN;
   acctype : AccType = AccType_NORMAL;
-  iswrite : boolean = UNKNOWN;
-  extflag : bit = UNKNOWN;
+  iswrite : boolean = UNKNOWN_BIT;
+  extflag : bit = UNKNOWN_BIT;
   secondstage : boolean = false;
   s2fs1walk : boolean = false;
 
@@ -928,10 +931,10 @@ function AArch64_TranslateAddress
            (vaddress : bits(64), acctype : AccType, iswrite : boolean,
            wasaligned : boolean, size : uinteger) -> AddressDescriptor = {
   info("Translation is not implemented, return same address as the virtual (no fault, normal, shareable, non-secure).");
-  result : AddressDescriptor = {
-    fault = AArch64_NoFault();
-    memattrs = {MA_type = MemType_Normal; shareable = true};
-    paddress = {physicaladdress = vaddress; NS = 1};
+  result : AddressDescriptor = struct {
+    fault = AArch64_NoFault(),
+    memattrs = struct {MA_type = MemType_Normal, shareable = true},
+    paddress = struct {physicaladdress = vaddress, NS = b1}
   };
   /* ARM: uncomment when implementing TLB and delete the code above
   (AddressDescriptor) result = AArch64_FullTranslate(vaddress, acctype, iswrite, wasaligned, size);

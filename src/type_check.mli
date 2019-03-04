@@ -171,6 +171,8 @@ module Env : sig
      up the type without any flow typing modifiers. *)
   val lookup_id : ?raw:bool -> id -> t -> typ lvar
 
+  val get_toplevel_lets : t -> IdSet.t
+
   val is_union_constructor : id -> t -> bool
 
   (** Check if the id is both a constructor, and the only constructor of that
@@ -189,7 +191,7 @@ module Env : sig
   val expand_constraint_synonyms : t -> n_constraint -> n_constraint
 
   val expand_nexp_synonyms : t -> nexp -> nexp
-    
+
   val expand_synonyms : t -> typ -> typ
 
   (** Expand type synonyms and remove register annotations (i.e. register<t> -> t)) *)

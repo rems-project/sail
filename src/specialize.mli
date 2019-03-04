@@ -62,12 +62,15 @@ val typ_ord_specialization : specialization
 (** (experimental) specialise Int-kinded definitions *)
 val int_specialization : specialization
 
+(** (experimental) specialise Int-kinded definitions, including externs *)
+val int_specialization_with_externs : specialization
+
 (** Returns an IdSet with the function ids that have X-kinded
    parameters, e.g. val f : forall ('a : X). 'a -> 'a. The first
    argument specifies what X should be - it should be one of:
    [is_int_kopt], [is_order_kopt], or [is_typ_kopt] from [Ast_util],
    or some combination of those. *)
-val polymorphic_functions : (kinded_id -> bool) -> 'a defs -> IdSet.t
+val polymorphic_functions : specialization -> 'a defs -> IdSet.t
 
 (** specialize returns an AST with all the Order and Type polymorphism
    removed, as well as the environment produced by type checking that
@@ -76,6 +79,8 @@ val polymorphic_functions : (kinded_id -> bool) -> 'a defs -> IdSet.t
    which case specialize returns the AST unmodified. *)
 val specialize : specialization -> tannot defs -> Env.t -> tannot defs * Env.t
 
+(** specialize' n performs at most n specialization passes. Useful for
+   int_specialization which is not guaranteed to terminate. *)
 val specialize' : int -> specialization -> tannot defs -> Env.t -> tannot defs * Env.t
 
 (** return all instantiations of a function id, with the

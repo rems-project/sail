@@ -53,16 +53,54 @@ open Type_check
 
 (** Global compilation options *)
 
+(** Output a dataflow graph for each generated function in Graphviz
+   (dot) format. *)
 val opt_debug_flow_graphs : bool ref
+
+(** Print the ANF and IR representations of a specific function. *)
 val opt_debug_function : string ref
+
+(** Instrument generated code to output a trace. opt_smt_trace is WIP
+   but intended to enable generating traces suitable for concolic
+   execution with SMT. *)
 val opt_trace : bool ref
 val opt_smt_trace : bool ref
+
+(** Define generated functions as static *)
 val opt_static : bool ref
+
+(** Do not generate a main function *)
 val opt_no_main : bool ref
 
-(** [opt_memo_cache] will store the compiled function definitions in
-   file _sbuild/ccacheDIGEST where DIGEST is the md5sum of the
-   original function to be compiled. Enabled using the -memo
+(** (WIP) Do not include rts.h (the runtime), and do not generate code
+   that requires any setup or teardown routines to be run by a runtime
+   before executing any instruction semantics. *)
+val opt_no_rts : bool ref
+
+(** Ordinarily we use plain z-encoding to name-mangle generated Sail
+   identifiers into a form suitable for C. If opt_prefix is set, then
+   the "z" which is added on the front of each generated C function
+   will be replaced by opt_prefix. E.g. opt_prefix := "sail_" would
+   give sail_my_function rather than zmy_function. *)
+val opt_prefix : string ref
+
+(** opt_extra_params and opt_extra_arguments allow additional state to
+   be threaded through the generated C code by adding an additional
+   parameter to each function type, and then giving an extra argument
+   to each function call. For example we could have
+
+   opt_extra_params := Some "CPUMIPSState *env"
+   opt_extra_arguments := Some "env"
+
+   and every generated function will take a pointer to a QEMU MIPS
+   processor state, and each function will be passed the env argument
+   when it is called. *)
+val opt_extra_params : string option ref
+val opt_extra_arguments : string option ref
+
+(** (WIP) [opt_memo_cache] will store the compiled function
+   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
+   of the original function to be compiled. Enabled using the -memo
    flag. Uses Marshal so it's quite picky about the exact version of
    the Sail version. This cache can obviously become stale if the C
    backend changes - it'll load an old version compiled without said
@@ -80,16 +118,17 @@ val optimize_experimental : bool ref
 (** The compilation context. *)
 type ctx
 
-(** Convert a typ to a IR ctyp *)
-val ctyp_of_typ : ctx -> Ast.typ -> ctyp
-
 (** Create a context from a typechecking environment. This environment
    should be the environment returned by typechecking the full AST. *)
 val initial_ctx : Env.t -> ctx
 
+(** Convert a typ to a IR ctyp *)
+val ctyp_of_typ : ctx -> Ast.typ -> ctyp
+
+
 val compile_aexp : ctx -> Ast.typ Anf.aexp -> instr list * (clexp -> instr) * instr list
 
-val compile_ast : ctx -> string list -> tannot Ast.defs -> unit
+val compile_ast : ctx -> out_channel -> string list -> tannot Ast.defs -> unit
 
 val bytecode_ast : ctx -> (cdef list -> cdef list) -> tannot Ast.defs -> cdef list
 

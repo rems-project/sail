@@ -26,7 +26,7 @@ armV8.ml: armV8.lem ../src/lem_interp/interp_ast.lem
 
 armV8_embed.lem: $(SOURCES) ../etc/regfp2.sail aarch64_regfp.sail
 # also generates armV8_embed_sequential.lem, armV8_embed_types.lem, armV8_toFromInterp.lem
-	$(SAIL) -lem -lem_lib ArmV8_extras_embed -o armV8 $^
+	$(SAIL) $(SAILFLAGS) -lem -lem_lib ArmV8_extras_embed -o armV8 $^
 
 clean:
 	rm -f armV8.lem armV8.ml

@@ -137,8 +137,8 @@ let _R : vector(31,dec,register(bits(64))) =
 /* val reg_index : reg_size -> UInt_reg effect pure */
 /* function reg_index x = (x : (reg_index)) */
 
-val reg_index : reg_size -> reg_index
-function reg_index x = unsigned(x)
+val UInt_reg : reg_size -> reg_index
+function UInt_reg x = unsigned(x)
 
 /* SIMD and floating-point registers */
 
@@ -223,19 +223,26 @@ function lsl (n, m) = n * (2 ^ m)
 
 /* not_implemented is used to indicate something WE did not implement */
 val not_implemented : forall ('a : Type). string -> 'a effect { escape }
-function not_implemented message = exit () /* TODO message */
+function not_implemented(message) = {
+  print(message);
+  exit ()
+}
 
 /* not_implemented_extern is used to indicate something ARM did not define
    and we did not define yet either. Those functions used to be declared as
    external but undefined there. */
 /* val not_implemented_extern : forall 'a. string -> 'a effect { escape } */
 val not_implemented_extern : forall ('a : Type). string -> 'a effect { escape }
-function not_implemented_extern (message) =
-  exit ()  /* message; TODO */
+function not_implemented_extern (message) = {
+  print(message);
+  exit ()
+}
 
 /* info is used to convey information to the user */
 val info : string -> unit effect pure
-function info(message) = ()
+function info(message) = {
+  print(message)
+}
 
 struct IMPLEMENTATION_DEFINED_type =  {
   HaveCRCExt : boolean,
@@ -259,6 +266,8 @@ let IMPLEMENTATION_DEFINED : IMPLEMENTATION_DEFINED_type = struct {
 
 /* FIXME: ask Kathy what should we do with this */
 let UNKNOWN = 0
-
+val UNKNOWN_BITS: forall 'N, 'N >= 0. implicit('N) -> bits('N)
+function UNKNOWN_BITS(N) = (replicate_bits(0b0, 'N)) : bits('N)
+let UNKNOWN_BIT = b0
 
 /* external */ val speculate_exclusive_success : unit -> bool effect {exmem}

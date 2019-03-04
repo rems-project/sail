@@ -96,7 +96,7 @@ val mod_int = {
   lem: "integerMod",
   c: "tmod_int",
   coq: "Z.rem"
-} : (int, int) -> int
+} : (int, int) -> nat
 
 overload operator % = {mod_int}
 
@@ -107,6 +107,6 @@ val abs_int = {
   lem: "abs_int",
   c: "abs_int",
   coq: "Z.abs"
-} : (int, int) -> int
+} : int -> int
 
 $endif

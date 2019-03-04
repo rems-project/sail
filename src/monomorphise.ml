@@ -199,10 +199,9 @@ let rec is_value (E_aux (e,(l,annot))) =
 (* TODO: more? *)
   | _ -> false
 
-let is_pure (Effect_opt_aux (e,_)) =
+let is_pure e =
   match e with
-  | Effect_opt_none -> true
-  | Effect_opt_effect (Effect_aux (Effect_set [],_)) -> true
+  | Effect_aux (Effect_set [],_) -> true
   | _ -> false
 
 let rec list_extract f = function
@@ -345,6 +344,7 @@ and inst_src_typ_arg insts (A_aux (ta,l) as tyarg) =
   match ta with
   | A_nexp _
   | A_order _
+  | A_bool _
       -> insts, tyarg
   | A_typ typ ->
      let insts', typ' = inst_src_type insts typ in
@@ -365,6 +365,7 @@ and contains_exist_arg (A_aux (arg,_)) =
   match arg with
   | A_nexp _
   | A_order _
+  | A_bool _
       -> false
   | A_typ typ -> contains_exist typ
 
@@ -1507,14 +1508,19 @@ let split_defs all_errors splits defs =
     if not (List.for_all is_value args) then
       None
     else
+      let (tq,typ) = Env.get_val_spec_orig id env in
+      let eff = match typ with
+        | Typ_aux (Typ_fn (_,_,eff),_) -> Some eff
+        | _ -> None
+      in
       let Defs ds = defs in
-      match list_extract (function
+      match eff, list_extract (function
       | (DEF_fundef (FD_aux (FD_function (_,_,eff,((FCL_aux (FCL_Funcl (id',_),_))::_ as fcls)),_)))
-        -> if Id.compare id id' = 0 then Some (eff,fcls) else None
+        -> if Id.compare id id' = 0 then Some fcls else None
       | _ -> None) ds with
-      | None -> None
-      | Some (eff,_) when not (is_pure eff) -> None
-      | Some (_,fcls) ->
+      | None,_ | _,None -> None
+      | Some eff,_ when not (is_pure eff) -> None
+      | Some _,Some fcls ->
          let arg = match args with
            | [] -> E_aux (E_lit (L_aux (L_unit,Generated l)),(Generated l,empty_tannot))
            | [e] -> e
@@ -2081,19 +2087,26 @@ let split_defs all_errors splits defs =
         | LEXP_vector_concat les -> re (LEXP_vector_concat (List.map map_lexp les))
         | LEXP_field (le,id) -> re (LEXP_field (map_lexp le, id))
         | LEXP_deref e -> re (LEXP_deref (map_exp e))
-      in map_pexp, map_letbind
-    in    
+      in map_exp, map_pexp, map_letbind
+    in
+    let map_exp r = let (f,_,_) = map_fns r in f in
+    let map_pexp r = let (_,f,_) = map_fns r in f in
+    let map_letbind r = let (_,_,f) = map_fns r in f in
+    let map_exp exp =
+      let ref_vars = referenced_vars exp in
+      map_exp ref_vars exp
+    in
     let map_pexp top_pexp =
       (* Construct the set of referenced variables so that we don't accidentally
          make false assumptions about them during constant propagation.  Note that
          we assume there aren't any in the guard. *)
       let (_,_,body,_) = destruct_pexp top_pexp in
       let ref_vars = referenced_vars body in
-      fst (map_fns ref_vars) top_pexp
+      map_pexp ref_vars top_pexp
     in
     let map_letbind (LB_aux (LB_val (_,e),_) as lb) =
       let ref_vars = referenced_vars e in
-      snd (map_fns ref_vars) lb
+      map_letbind ref_vars lb
     in
 
     let map_funcl (FCL_aux (FCL_Funcl (id,pexp),annot)) =
@@ -2124,6 +2137,7 @@ let split_defs all_errors splits defs =
       | DEF_mapdef (MD_aux (_, (l, _))) -> Reporting.unreachable l __POS__ "mappings should be gone by now"
       | DEF_val lb -> [DEF_val (map_letbind lb)]
       | DEF_scattered sd -> List.map (fun x -> DEF_scattered x) (map_scattered_def sd)
+      | DEF_measure (id,pat,exp) -> [DEF_measure (id,pat,map_exp exp)]
     in
     Defs (List.concat (List.map map_def defs))
   in
@@ -2206,6 +2220,7 @@ and sizes_of_typarg (A_aux (ta,_)) =
   match ta with
     A_nexp _
   | A_order _
+  | A_bool _
     -> KidSet.empty
   | A_typ typ -> sizes_of_typ typ
 
@@ -4375,7 +4390,9 @@ let replace_nexp_in_typ env typ orig new_nexp =
     | A_typ typ ->
        let f, typ = aux typ in
        f, A_aux (A_typ typ,l)
-    | A_order _ -> false, typ_arg
+    | A_order _
+    | A_bool _
+      -> false, typ_arg
   in aux typ
 
 let fresh_nexp_kid nexp =

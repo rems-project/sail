@@ -45,25 +45,6 @@ End Morphism.
 Definition build_ex {T:Type} (n:T) {P:T -> Prop} `{H:ArithFact (P n)} : {x : T & ArithFact (P x)} :=
   existT _ n H.
 
-(* The informative boolean type. *)
-
-Definition Bool (P : Prop) : Type := {P} + {~P}.
-
-Definition build_Bool {P:Prop} (b:bool) `{ArithFact (b = true <-> P)} : Bool P.
-refine (if sumbool_of_bool b then left _ else right _);
-destruct H; subst;
-intuition.
-Defined.
-
-Definition projBool {P:Prop} (b:Bool P) : bool := if b then true else false.
-
-Lemma projBool_true {P:Prop} {b:Bool P} : projBool b = true <-> P.
-destruct b; simpl; intuition.
-Qed.
-Lemma projBool_false {P:Prop} {b:Bool P} : projBool b = false <-> ~P.
-destruct b; simpl; intuition.
-Qed.
-
 
 Definition generic_eq {T:Type} (x y:T) `{Decidable (x = y)} := Decidable_witness.
 Definition generic_neq {T:Type} (x y:T) `{Decidable (x = y)} := negb Decidable_witness.
@@ -1113,11 +1094,6 @@ Ltac extract_properties :=
     let Hx := fresh "Hx" in
     destruct X as [x Hx] in *;
     change (projT1 (existT _ x Hx)) with x in * end.
-(* We could also destruct any remaining Bools, if necessary. *)
-Ltac extract_Bool_props :=
-  repeat match goal with
-  | H:projBool _ = true |- _ => rewrite projBool_true in H
-  | H:projBool _ = false |- _ => rewrite projBool_false in H end.
 (* TODO: hyps, too? *)
 Ltac reduce_list_lengths :=
   repeat match goal with |- context [length_list ?X] => 
@@ -1183,7 +1159,6 @@ Ltac prepare_for_solver :=
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  split_cases;
  extract_properties;
- extract_Bool_props;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
  unwrap_ArithFacts;
  destruct_exists;
@@ -1233,6 +1208,14 @@ prepare_for_solver;
  | constructor; eauto 3 with zarith sail
    (* The datatypes hints give us some list handling, esp In *)
  | constructor; drop_exists; eauto 3 with datatypes zarith sail
+   (* Booleans - and_boolMP *)
+ | match goal with |- ArithFact (forall l r:bool, _ -> _ -> exists _, _) => 
+     constructor; intros l r H1 H2;
+     solve [exists l; destruct l; intuition | exists r; destruct l; intuition]
+   end
+ | match goal with |- context [@eq _ _ _] =>
+     constructor; intuition
+   end
  | constructor; idtac "Unable to solve constraint"; dump_context; fail
  ].
 (* Add an indirection so that you can redefine run_solver to fail to get

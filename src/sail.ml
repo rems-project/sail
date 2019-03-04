@@ -135,7 +135,7 @@ let options = Arg.align ([
     " pretty print the input to LaTeX");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix := prefix),
-    " set a custom prefix for generated LaTeX macro command (default sail)");
+    "<prefix> set a custom prefix for generated LaTeX macro command (default sail)");
   ( "-latex_full_valspecs",
     Arg.Clear Latex.opt_simple_val,
     " print full valspecs in LaTeX output");
@@ -151,6 +151,21 @@ let options = Arg.align ([
   ( "-c_no_main",
     Arg.Set C_backend.opt_no_main,
     " do not generate the main() function" );
+  ( "-c_no_rts",
+    Arg.Set C_backend.opt_no_rts,
+    " do not include the Sail runtime" );
+  ( "-c_separate_execute",
+    Arg.Set Rewrites.opt_separate_execute,
+    " separate execute scattered function into multiple functions");
+  ( "-c_prefix",
+    Arg.String (fun prefix -> C_backend.opt_prefix := prefix),
+    "<prefix> prefix generated C functions" );
+  ( "-c_extra_params",
+    Arg.String (fun params -> C_backend.opt_extra_params := Some params),
+    "<parameters> generate C functions with additional parameters" );
+  ( "-c_extra_args",
+    Arg.String (fun args -> C_backend.opt_extra_arguments := Some args),
+    "<arguments> supply extra argument to every generated C function call" );
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an ELF file so that it can be executed by compiled C code");
@@ -428,10 +443,11 @@ let main() =
        then
          let ast_c = rewrite_ast_c type_envs ast in
          let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
-         (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization ast_c type_envs) in *)
-         (* let ast_c = Spec_analysis.top_sort_defs ast_c in *)
+         (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in *)
+         let output_chan = match !opt_file_out with Some f -> open_out (f ^ ".c") | None -> stdout in
          Util.opt_warnings := true;
-         C_backend.compile_ast (C_backend.initial_ctx type_envs) (!opt_includes_c) ast_c
+         C_backend.compile_ast (C_backend.initial_ctx type_envs) output_chan (!opt_includes_c) ast_c;
+         close_out output_chan
        else ());
       (if !(opt_print_cgen)
        then Cgen_backend.output type_envs ast
@@ -457,7 +473,7 @@ let main() =
            begin
              try
                if not (Sys.is_directory latex_dir) then begin
-                   prerr_endline ("Failure: latex output directory exists but is not a directory: " ^ latex_dir);
+                   prerr_endline ("Failure: latex output location exists and is not a directory: " ^ latex_dir);
                    exit 1
                  end
              with Sys_error(_) -> Unix.mkdir latex_dir 0o755

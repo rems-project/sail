@@ -47,9 +47,10 @@ let opt_elf_threads = ref 1
 let opt_elf_entry = ref Big_int.zero
 let opt_elf_tohost = ref Big_int.zero
 
-(* the type of elf last loaded *)
+(* the type of elf last loaded, and its symbol map *)
 type elf_class = ELF_Class_64 | ELF_Class_32
 let opt_elf_class = ref ELF_Class_64 (* default *)
+let opt_symbol_map = ref ([] : Elf_file.global_symbol_init_info)
 
 type word8 = int
 
@@ -144,6 +145,7 @@ let load_segment ?writer:(writer=write_sail_lib) bs paddr base offset size memsz
 let load_elf ?writer:(writer=write_sail_lib) name =
   let segments, e_entry, symbol_map = read name in
   opt_elf_entry := e_entry;
+  opt_symbol_map := symbol_map;
   (if List.mem_assoc "tohost" symbol_map then
      let (_, _, tohost_addr, _, _) = List.assoc "tohost" symbol_map in
      opt_elf_tohost := tohost_addr);
@@ -199,3 +201,12 @@ let elf_entry () = !opt_elf_entry
 let elf_tohost () = !opt_elf_tohost
 (* Used to check last loaded elf class. *)
 let elf_class () = !opt_elf_class
+(* Lookup the address for a symbol *)
+let elf_symbol symbol =
+  if List.mem_assoc symbol !opt_symbol_map then
+    let (_, _, addr, _, _) = List.assoc symbol !opt_symbol_map in
+    Some addr
+  else None
+(* Get all symbols *)
+let elf_symbols () =
+  !opt_symbol_map

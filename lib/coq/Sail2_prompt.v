@@ -57,9 +57,37 @@ Definition foreach_ZM_down {rv e Vars} from to step vars body `{ArithFact (0 < s
 Definition and_boolM {rv E} (l : monad rv bool E) (r : monad rv bool E) : monad rv bool E :=
  l >>= (fun l => if l then r else returnm false).
 
+Definition and_boolMP {rv E} {P Q R:bool->Prop} (x : monad rv {b:bool & ArithFact (P b)} E) (y : monad rv {b:bool & ArithFact (Q b)} E)
+  `{H:ArithFact (forall l r, P l -> (l = true -> Q r) -> R (andb l r))}
+  : monad rv {b:bool & ArithFact (R b)} E.
+refine (
+  x >>= fun '(existT _ x (Build_ArithFact _ p)) => (if x return P x -> _ then
+    fun p => y >>= fun '(existT _ y _) => returnm (existT _ y _)
+  else fun p => returnm (existT _ false _)) p
+).
+* constructor. destruct H. destruct a0. change y with (andb true y). auto.
+* constructor. destruct H. change false with (andb false false). apply fact.
+  assumption.
+  congruence.
+Defined.
+
 (*val or_boolM : forall 'rv 'e. monad 'rv bool 'e -> monad 'rv bool 'e -> monad 'rv bool 'e*)
 Definition or_boolM {rv E} (l : monad rv bool E) (r : monad rv bool E) : monad rv bool E :=
  l >>= (fun l => if l then returnm true else r).
+Definition or_boolMP {rv E} {P Q R:bool -> Prop} (l : monad rv {b : bool & ArithFact (P b)} E) (r : monad rv {b : bool & ArithFact (Q b)} E)
+ `{ArithFact (forall l r, P l -> (l = false -> Q r) -> R (orb l r))}
+ : monad rv {b : bool & ArithFact (R b)} E.
+refine (
+ l >>= fun '(existT _ l (Build_ArithFact _ p)) =>
+  (if l return P l -> _ then fun p => returnm (existT _ true _)
+   else fun p => r >>= fun '(existT _ r _) => returnm (existT _ r _)) p
+).
+* constructor. destruct H. change true with (orb true true). apply fact. assumption. congruence.
+* constructor. destruct H. destruct a0. change r with (orb false r). auto.
+Defined.
+
+Definition build_trivial_ex {rv E} {T:Type} (x:monad rv T E) : monad rv {x : T & ArithFact True} E :=
+  x >>= fun x => returnm (existT _ x (Build_ArithFact _ I)).
 
 (*val bool_of_bitU_fail : forall 'rv 'e. bitU -> monad 'rv bool 'e*)
 Definition bool_of_bitU_fail {rv E} (b : bitU) : monad rv bool E :=
