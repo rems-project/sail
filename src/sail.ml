@@ -487,10 +487,10 @@ let main() =
       (if !(opt_marshal_defs)
        then
          begin
-           let ast_marshal = rewrite_ast_ocaml type_envs ast in
+           let ast_marshal = rewrite_ast_interpreter type_envs ast in
            let out_filename = match !opt_file_out with None -> "out" | Some s -> s in
            let f = open_out_bin (out_filename ^ ".defs") in
-           Marshal.to_string ast_marshal [Marshal.No_sharing; Marshal.Compat_32]
+           Marshal.to_string (ast_marshal, Type_check.Env.set_prover None type_envs) [Marshal.No_sharing; Marshal.Compat_32]
            |> B64.encode
            |> output_string f;
            close_out f
