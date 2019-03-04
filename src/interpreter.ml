@@ -740,61 +740,6 @@ let rec ast_letbinds (Defs defs) =
   | DEF_val lb :: defs -> lb :: ast_letbinds (Defs defs)
   | _ :: defs -> ast_letbinds (Defs defs)
 
-let rk_of_string = function
-  | "Read_plain" -> Sail2_instr_kinds.Read_plain
-  | "Read_reserve" -> Sail2_instr_kinds.Read_reserve
-  | "Read_acquire" -> Sail2_instr_kinds.Read_acquire
-  | "Read_exclusive" -> Sail2_instr_kinds.Read_exclusive
-  | "Read_exclusive_acquire" -> Sail2_instr_kinds.Read_exclusive_acquire
-  | "Read_stream" -> Sail2_instr_kinds.Read_stream
-  | "Read_RISCV_acquire" -> Sail2_instr_kinds.Read_RISCV_acquire
-  | "Read_RISCV_strong_acquire" -> Sail2_instr_kinds.Read_RISCV_strong_acquire
-  | "Read_RISCV_reserved" -> Sail2_instr_kinds.Read_RISCV_reserved
-  | "Read_RISCV_reserved_acquire" -> Sail2_instr_kinds.Read_RISCV_reserved_acquire
-  | "Read_RISCV_reserved_strong_acquire" -> Sail2_instr_kinds.Read_RISCV_reserved_strong_acquire
-  | "Read_X86_locked" -> Sail2_instr_kinds.Read_X86_locked
-  | s -> failwith ("Unknown read kind: " ^ s)
-
-let wk_of_string = function
-  | "Write_plain" -> Sail2_instr_kinds.Write_plain
-  | "Write_conditional" -> Sail2_instr_kinds.Write_conditional
-  | "Write_release" -> Sail2_instr_kinds.Write_release
-  | "Write_exclusive" -> Sail2_instr_kinds.Write_exclusive
-  | "Write_exclusive_release" -> Sail2_instr_kinds.Write_exclusive_release
-  | "Write_RISCV_release" -> Sail2_instr_kinds.Write_RISCV_release
-  | "Write_RISCV_strong_release" -> Sail2_instr_kinds.Write_RISCV_strong_release
-  | "Write_RISCV_conditional" -> Sail2_instr_kinds.Write_RISCV_conditional
-  | "Write_RISCV_conditional_release" -> Sail2_instr_kinds.Write_RISCV_conditional_release
-  | "Write_RISCV_conditional_strong_release" -> Sail2_instr_kinds.Write_RISCV_conditional_strong_release
-  | "Write_X86_locked" -> Sail2_instr_kinds.Write_X86_locked
-  | s -> failwith ("Unknown write kind: " ^ s)
-
-let bk_of_string = function
-  | "Barrier_Sync" -> Sail2_instr_kinds.Barrier_Sync
-  | "Barrier_LwSync" -> Sail2_instr_kinds.Barrier_LwSync
-  | "Barrier_Eieio" -> Sail2_instr_kinds.Barrier_Eieio
-  | "Barrier_Isync" -> Sail2_instr_kinds.Barrier_Isync
-  | "Barrier_DMB" -> Sail2_instr_kinds.Barrier_DMB
-  | "Barrier_DMB_ST" -> Sail2_instr_kinds.Barrier_DMB_ST
-  | "Barrier_DMB_LD" -> Sail2_instr_kinds.Barrier_DMB_LD
-  | "Barrier_DSB" -> Sail2_instr_kinds.Barrier_DSB
-  | "Barrier_DSB_ST" -> Sail2_instr_kinds.Barrier_DSB_ST
-  | "Barrier_DSB_LD" -> Sail2_instr_kinds.Barrier_DSB_LD
-  | "Barrier_ISB" -> Sail2_instr_kinds.Barrier_ISB
-  | "Barrier_MIPS_SYNC" -> Sail2_instr_kinds.Barrier_MIPS_SYNC
-  | "Barrier_RISCV_rw_rw" -> Sail2_instr_kinds.Barrier_RISCV_rw_rw
-  | "Barrier_RISCV_r_rw" -> Sail2_instr_kinds.Barrier_RISCV_r_rw
-  | "Barrier_RISCV_r_r" -> Sail2_instr_kinds.Barrier_RISCV_r_r
-  | "Barrier_RISCV_rw_w" -> Sail2_instr_kinds.Barrier_RISCV_rw_w
-  | "Barrier_RISCV_w_w" -> Sail2_instr_kinds.Barrier_RISCV_w_w
-  | "Barrier_RISCV_w_rw" -> Sail2_instr_kinds.Barrier_RISCV_w_rw
-  | "Barrier_RISCV_rw_r" -> Sail2_instr_kinds.Barrier_RISCV_rw_r
-  | "Barrier_RISCV_r_w" -> Sail2_instr_kinds.Barrier_RISCV_r_w
-  | "Barrier_RISCV_w_r" -> Sail2_instr_kinds.Barrier_RISCV_w_r
-  | "Barrier_RISCV_i" -> Sail2_instr_kinds.Barrier_RISCV_i
-  | "Barrier_x86_MFENCE" -> Sail2_instr_kinds.Barrier_x86_MFENCE
-  | s -> failwith ("Unknown barrier kind: " ^ s)
-
 let initial_lstate =
   { locals = Bindings.empty }
 
