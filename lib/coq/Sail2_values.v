@@ -1213,8 +1213,9 @@ prepare_for_solver;
      constructor; intros l r H1 H2;
      solve [exists l; destruct l; intuition | exists r; destruct l; intuition]
    end
- | match goal with |- context [@eq _ _ _] =>
-     constructor; intuition
+ | match goal with |- context [@eq bool _ _] =>
+     (* Don't use auto for the fallback to keep runtime down *)
+     firstorder fail
    end
  | constructor; idtac "Unable to solve constraint"; dump_context; fail
  ].
