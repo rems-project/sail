@@ -155,6 +155,9 @@ let options = Arg.align ([
   ( "-c_specialize",
     Arg.Set opt_specialize_c,
     " specialize integer arguments in C output");
+  ( "-c_fold_unit",
+    Arg.String (fun str -> Constant_fold.opt_fold_to_unit := Util.split_on_char ',' str),
+    " remove comma separated list of functions from C output, replacing them with unit");
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an ELF file so that it can be executed by compiled C code");

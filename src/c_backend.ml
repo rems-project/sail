@@ -499,7 +499,7 @@ let analyze_primop' ctx id args typ =
         AE_val (AV_C_fragment (F_call ("fast_zero_extend", [v1; v_int (Big_int.to_int n)]), typ, CT_fbits (Big_int.to_int n, true)))
      | _ -> no_change
      end
-    
+
   | "sign_extend", [AV_C_fragment (v1, _, CT_fbits (n, _)); _] ->
      begin match destruct_vector ctx.tc_env typ with
      | Some (Nexp_aux (Nexp_constant m, _), _, Typ_aux (Typ_id id, _))
@@ -515,9 +515,19 @@ let analyze_primop' ctx id args typ =
         AE_val (AV_C_fragment (F_call ("fast_sign_extend2", [v1; v_int (Big_int.to_int m)]) , typ, CT_fbits (Big_int.to_int m, true)))
      | _ -> no_change
      end
-    
+
+  | "add_bits", [AV_C_fragment (v1, _, CT_fbits (n, ord)); AV_C_fragment (v2, _, CT_fbits _)]
+       when n <= 63 ->
+     AE_val (AV_C_fragment (F_op (F_op (v1, "+", v2), "&", v_mask_lower n), typ, CT_fbits (n, ord)))
+
+  | "lteq", [AV_C_fragment (v1, _, _); AV_C_fragment (v2, _, _)] ->
+     AE_val (AV_C_fragment (F_op (v1, "<=", v2), typ, CT_bool))
   | "gteq", [AV_C_fragment (v1, _, _); AV_C_fragment (v2, _, _)] ->
      AE_val (AV_C_fragment (F_op (v1, ">=", v2), typ, CT_bool))
+  | "lt", [AV_C_fragment (v1, _, _); AV_C_fragment (v2, _, _)] ->
+     AE_val (AV_C_fragment (F_op (v1, "<", v2), typ, CT_bool))
+  | "gt", [AV_C_fragment (v1, _, _); AV_C_fragment (v2, _, _)] ->
+     AE_val (AV_C_fragment (F_op (v1, ">", v2), typ, CT_bool))
 
   | "xor_bits", [AV_C_fragment (v1, _, (CT_fbits _ as ctyp)); AV_C_fragment (v2, _, CT_fbits _)] ->
      AE_val (AV_C_fragment (F_op (v1, "^", v2), typ, ctyp))
@@ -608,7 +618,7 @@ let analyze_primop' ctx id args typ =
         AE_val (AV_C_fragment (F_call ("fast_signed", [frag; v_int (Big_int.to_int n)]), typ, ctyp_of_typ ctx typ))
      | _ -> no_change
      end
-    
+
   | "add_int", [AV_C_fragment (op1, _, _); AV_C_fragment (op2, _, _)] ->
      begin match destruct_range Env.empty typ with
      | None -> no_change
@@ -638,7 +648,7 @@ let analyze_primop' ctx id args typ =
                                AV_C_fragment (lo, _, CT_fint 64);
                                AV_C_fragment (ys, _, CT_fbits (m, true))] ->
      AE_val (AV_C_fragment (F_call ("fast_update_subrange", [xs; hi; lo; ys]), typ, CT_fbits (n, true)))
-     
+
   | "undefined_bool", _ ->
      AE_val (AV_C_fragment (F_lit (V_bool false), typ, CT_bool))
 
