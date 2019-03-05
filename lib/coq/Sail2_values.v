@@ -1040,20 +1040,20 @@ Ltac unbool_comparisons :=
   end.
 Ltac unbool_comparisons_goal :=
   repeat match goal with
-  | |- context [Z.geb _ _] => rewrite Z.geb_leb
-  | |- context [Z.gtb _ _] => rewrite Z.gtb_ltb
-  | |- context [Z.leb _ _ = true] => rewrite Z.leb_le
-  | |- context [Z.ltb _ _ = true] => rewrite Z.ltb_lt
-  | |- context [Z.eqb _ _ = true] => rewrite Z.eqb_eq
-  | |- context [Z.leb _ _ = false] => rewrite Z.leb_gt
-  | |- context [Z.ltb _ _ = false] => rewrite Z.ltb_ge
-  | |- context [Z.eqb _ _ = false] => rewrite Z.eqb_neq
-  | |- context [orb _ _ = true] => rewrite Bool.orb_true_iff
-  | |- context [orb _ _ = false] => rewrite Bool.orb_false_iff
-  | |- context [andb _ _ = true] => rewrite Bool.andb_true_iff
-  | |- context [andb _ _ = false] => rewrite Bool.andb_false_iff
-  | |- context [negb _ = true] => rewrite Bool.negb_true_iff
-  | |- context [negb _ = false] => rewrite Bool.negb_false_iff
+  | |- context [Z.geb _ _] => setoid_rewrite Z.geb_leb
+  | |- context [Z.gtb _ _] => setoid_rewrite Z.gtb_ltb
+  | |- context [Z.leb _ _ = true] => setoid_rewrite Z.leb_le
+  | |- context [Z.ltb _ _ = true] => setoid_rewrite Z.ltb_lt
+  | |- context [Z.eqb _ _ = true] => setoid_rewrite Z.eqb_eq
+  | |- context [Z.leb _ _ = false] => setoid_rewrite Z.leb_gt
+  | |- context [Z.ltb _ _ = false] => setoid_rewrite Z.ltb_ge
+  | |- context [Z.eqb _ _ = false] => setoid_rewrite Z.eqb_neq
+  | |- context [orb _ _ = true] => setoid_rewrite Bool.orb_true_iff
+  | |- context [orb _ _ = false] => setoid_rewrite Bool.orb_false_iff
+  | |- context [andb _ _ = true] => setoid_rewrite Bool.andb_true_iff
+  | |- context [andb _ _ = false] => setoid_rewrite Bool.andb_false_iff
+  | |- context [negb _ = true] => setoid_rewrite Bool.negb_true_iff
+  | |- context [negb _ = false] => setoid_rewrite Bool.negb_false_iff
   | |- context [generic_eq _ _ = true] => apply generic_eq_true
   | |- context [generic_eq _ _ = false] => apply generic_eq_false
   | |- context [generic_neq _ _ = true] => apply generic_neq_true
