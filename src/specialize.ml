@@ -337,7 +337,8 @@ and remove_implicit_arg (A_aux (aux, l)) =
 let kopt_arg = function
   | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _) -> arg_nexp (nvar kid)
   | KOpt_aux (KOpt_kind (K_aux (K_type,_), kid), _) -> arg_typ (mk_typ (Typ_var kid))
-  | _ -> failwith "oh no"
+  | KOpt_aux (KOpt_kind (K_aux (K_bool, _), kid), _) -> arg_bool (nc_var kid)
+  | KOpt_aux (KOpt_kind (K_aux (K_order, _), kid), _) -> arg_order (mk_ord (Ord_var kid))
 
 (* For numeric type arguments we have to be careful not to run into a
    situation where we have an instantiation like
