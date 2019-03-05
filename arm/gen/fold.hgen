@@ -1,3 +1,4 @@
+| `AArch64Unallocated -> (y_reg, y_sreg)
 | `AArch64TMStart t -> fold_reg t (y_reg, y_sreg)
 | `AArch64TMCommit -> (y_reg, y_sreg)
 | `AArch64TMAbort (retry,reason) -> (y_reg, y_sreg)

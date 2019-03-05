@@ -2467,6 +2467,7 @@ end execute
 val forall Nat 'R, 'R IN {32,64}, Nat 'D, 'D IN {8,16,32,64}. ast<'R,'D> -> option<(ast<'R,'D>)> effect pure supported_instructions
 function option<(ast<'R,'D>)> supported_instructions ((ast<'R,'D>) instr) = {
   switch instr {
+    case Unallocated -> None
     case _ -> Some(instr)
    }
 }
