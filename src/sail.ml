@@ -67,6 +67,7 @@ let opt_print_cgen = ref false
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
+let opt_specialize_c = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
@@ -151,6 +152,9 @@ let options = Arg.align ([
   ( "-c_extra_args",
     Arg.String (fun args -> C_backend.opt_extra_arguments := Some args),
     "<arguments> supply extra argument to every generated C function call" );
+  ( "-c_specialize",
+    Arg.Set opt_specialize_c,
+    " specialize integer arguments in C output");
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an ELF file so that it can be executed by compiled C code");
@@ -422,7 +426,12 @@ let main() =
        then
          let ast_c = rewrite_ast_c type_envs ast in
          let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
-         (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in *)
+         let ast_c, type_envs =
+           if !opt_specialize_c then
+             Specialize.(specialize' 2 int_specialization ast_c type_envs)
+           else
+             ast_c, type_envs
+         in
          let output_chan = match !opt_file_out with Some f -> open_out (f ^ ".c") | None -> stdout in
          Util.opt_warnings := true;
          C_backend.compile_ast (C_backend.initial_ctx type_envs) output_chan (!opt_includes_c) ast_c;

@@ -52,6 +52,8 @@ open Ast
 open Ast_util
 open Rewriter
 
+let opt_ddump_spec_ast = ref None
+   
 let is_typ_ord_arg = function
   | A_aux (A_typ _, _) -> true
   | A_aux (A_order _, _) -> true
@@ -565,6 +567,15 @@ let specialize_ids spec ids ast =
       (1, ast) (IdSet.elements ids)
   in
   let ast = reorder_typedefs ast in
+  begin match !opt_ddump_spec_ast with
+  | Some (f, i) ->
+     let filename = f ^ "_spec_" ^ string_of_int i ^ ".sail" in
+     let out_chan = open_out filename in
+     Pretty_print_sail.pp_defs out_chan ast;
+     close_out out_chan;
+     opt_ddump_spec_ast := Some (f, i + 1)
+  | None -> ()
+  end;
   let ast, _ = Type_error.check Type_check.initial_env ast in
   let ast =
     List.fold_left (fun ast id -> rewrite_polymorphic_calls spec id ast) ast (IdSet.elements ids)

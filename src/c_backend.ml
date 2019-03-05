@@ -174,6 +174,7 @@ let rec ctyp_of_typ ctx typ =
      begin match destruct_range Env.empty typ with
      | None -> assert false (* Checked if range type in guard *)
      | Some (kids, constr, n, m) ->
+        let ctx = { ctx with local_env = add_existential Parse_ast.Unknown (List.map (mk_kopt K_int) kids) constr ctx.local_env } in
         match nexp_simp n, nexp_simp m with
         | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
              when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
@@ -483,6 +484,38 @@ let analyze_primop' ctx id args typ =
      | _ -> no_change
      end
 
+  | "zero_extend", [AV_C_fragment (v1, _, CT_fbits _); _] ->
+     begin match destruct_vector ctx.tc_env typ with
+     | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
+          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
+        AE_val (AV_C_fragment (v1, typ, CT_fbits (Big_int.to_int n, true)))
+     | _ -> no_change
+     end
+
+  | "zero_extend", [AV_C_fragment (v1, _, CT_sbits _); _] ->
+     begin match destruct_vector ctx.tc_env typ with
+     | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
+          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
+        AE_val (AV_C_fragment (F_call ("fast_zero_extend", [v1; v_int (Big_int.to_int n)]), typ, CT_fbits (Big_int.to_int n, true)))
+     | _ -> no_change
+     end
+    
+  | "sign_extend", [AV_C_fragment (v1, _, CT_fbits (n, _)); _] ->
+     begin match destruct_vector ctx.tc_env typ with
+     | Some (Nexp_aux (Nexp_constant m, _), _, Typ_aux (Typ_id id, _))
+          when string_of_id id = "bit" && Big_int.less_equal m (Big_int.of_int 64) ->
+        AE_val (AV_C_fragment (F_call ("fast_sign_extend", [v1; v_int n; v_int (Big_int.to_int m)]) , typ, CT_fbits (Big_int.to_int m, true)))
+     | _ -> no_change
+     end
+
+  | "sign_extend", [AV_C_fragment (v1, _, CT_sbits _); _] ->
+     begin match destruct_vector ctx.tc_env typ with
+     | Some (Nexp_aux (Nexp_constant m, _), _, Typ_aux (Typ_id id, _))
+          when string_of_id id = "bit" && Big_int.less_equal m (Big_int.of_int 64) ->
+        AE_val (AV_C_fragment (F_call ("fast_sign_extend2", [v1; v_int (Big_int.to_int m)]) , typ, CT_fbits (Big_int.to_int m, true)))
+     | _ -> no_change
+     end
+    
   | "gteq", [AV_C_fragment (v1, _, _); AV_C_fragment (v2, _, _)] ->
      AE_val (AV_C_fragment (F_op (v1, ">=", v2), typ, CT_bool))
 
@@ -568,6 +601,14 @@ let analyze_primop' ctx id args typ =
      | _ -> no_change
      end
 
+  | "sail_signed", [AV_C_fragment (frag, vtyp, _)] ->
+     begin match destruct_vector ctx.tc_env vtyp with
+     | Some (Nexp_aux (Nexp_constant n, _), _, _)
+          when Big_int.less_equal n (Big_int.of_int 64) && is_stack_typ ctx typ ->
+        AE_val (AV_C_fragment (F_call ("fast_signed", [frag; v_int (Big_int.to_int n)]), typ, ctyp_of_typ ctx typ))
+     | _ -> no_change
+     end
+    
   | "add_int", [AV_C_fragment (op1, _, _); AV_C_fragment (op2, _, _)] ->
      begin match destruct_range Env.empty typ with
      | None -> no_change
@@ -592,6 +633,12 @@ let analyze_primop' ctx id args typ =
      | _ -> no_change
      end
 
+  | "vector_update_subrange", [AV_C_fragment (xs, _, CT_fbits (n, true));
+                               AV_C_fragment (hi, _, CT_fint 64);
+                               AV_C_fragment (lo, _, CT_fint 64);
+                               AV_C_fragment (ys, _, CT_fbits (m, true))] ->
+     AE_val (AV_C_fragment (F_call ("fast_update_subrange", [xs; hi; lo; ys]), typ, CT_fbits (n, true)))
+     
   | "undefined_bool", _ ->
      AE_val (AV_C_fragment (F_lit (V_bool false), typ, CT_bool))
 
