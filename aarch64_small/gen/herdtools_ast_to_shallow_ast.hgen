@@ -1,3 +1,4 @@
+| `AArch64Unallocated -> Unallocated
 | `AArch64TMStart t -> TMStart (translate_reg "t" t)
 
 | `AArch64TMCommit -> TMCommit

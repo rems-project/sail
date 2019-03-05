@@ -1,3 +1,5 @@
+| Unallocated -> `AArch64Unallocated
+
 | TMStart t ->
   `AArch64TMStart (translate_out_regzr Set64 t)
 

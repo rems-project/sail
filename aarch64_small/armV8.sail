@@ -2443,6 +2443,7 @@ end execute
 val supported_instructions : ast -> option(ast) effect {escape}
 function supported_instructions (instr) = {
   match instr {
+    Unallocated () => None ()
     _  => Some(instr)
   }
 }
