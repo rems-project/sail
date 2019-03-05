@@ -1484,6 +1484,7 @@ let doc_exp, doc_let =
               Util.list_mapi (fun i exp -> mk_id ("#coq#arg" ^ string_of_int i),
                                            general_typ_of exp) args
             in
+            let () = debug ctxt (lazy (" arg types: " ^ String.concat ", " (List.map (fun (_,ty) -> string_of_typ ty) dummy_args))) in
             let dummy_exp = mk_exp (E_app (f, List.map (fun (id,_) -> mk_exp (E_id id)) dummy_args)) in
             let dummy_env = List.fold_left (fun env (id,typ) -> Env.add_local id (Immutable,typ) env) env dummy_args in
             let inst_exp =
@@ -1498,7 +1499,9 @@ let doc_exp, doc_let =
                type inferred when we know the target type.
                TODO: there are probably some edge cases where this won't pick up a need
                to cast. *)
-            | exception _ -> instantiation_of full_exp
+            | exception _ ->
+               (debug ctxt (lazy (" unable to infer function instantiation without return type " ^ string_of_typ (typ_of full_exp)));
+                instantiation_of full_exp)
           in
           let inst = KBindings.fold (fun k u m -> KBindings.add (KBindings.find (orig_kid k) tqs_map) u m) inst KBindings.empty in
           let () = debug ctxt (lazy (" instantiations: " ^ String.concat ", " (List.map (fun (kid,tyarg) -> string_of_kid kid ^ " => " ^ string_of_typ_arg tyarg) (KBindings.bindings inst)))) in
