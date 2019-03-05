@@ -2089,6 +2089,7 @@ let rec doc_range ctxt (BF_aux(r,_)) = match r with
   | BF_concat(ir1,ir2) -> (doc_range ctxt ir1) ^^ comma ^^ (doc_range ctxt ir2)
  *)
 
+(* TODO: check use of empty_ctxt below *)
 let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
      let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
@@ -2097,6 +2098,14 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
                         doc_typquant_items empty_ctxt parens typq;
                         colon; string "Type"])
        (doc_typschm empty_ctxt false typschm) ^^ dot
+  | TD_abbrev(id,typq,A_aux (A_nexp nexp,_)) ->
+     let idpp = doc_id_type id in
+     doc_op coloneq
+       (separate space [string "Definition"; idpp;
+                        doc_typquant_items empty_ctxt parens typq;
+                        colon; string "Z"])
+       (doc_nexp empty_ctxt nexp) ^^ dot ^^ hardline ^^
+     separate space [string "Hint Unfold"; idpp; colon; string "sail."]
   | TD_abbrev _ -> empty (* TODO? *)
   | TD_bitfield _ -> empty (* TODO? *)
   | TD_record(id,typq,fs,_) ->
