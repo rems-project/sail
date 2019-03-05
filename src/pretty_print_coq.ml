@@ -1200,11 +1200,12 @@ let doc_exp, doc_let =
          wrap_parens (string "build_ex" ^/^ epp)
     in
     let construct_dep_pairs ?(rawbools=false) env =
-      let rec aux want_parens (E_aux (e,_) as exp) (Typ_aux (t,_) as typ) =
-        match e,t with
-        | E_tuple exps, Typ_tup typs
-        | E_cast (_, E_aux (E_tuple exps,_)), Typ_tup typs
+      let rec aux want_parens (E_aux (e,_) as exp) typ =
+        match e with
+        | E_tuple exps
+        | E_cast (_, E_aux (E_tuple exps,_))
           ->
+           let typs = List.map general_typ_of exps in
            parens (separate (string ", ") (List.map2 (aux false) exps typs))
         | _ ->
            let typ' = expand_range_type (Env.expand_synonyms (env_of exp) typ) in
