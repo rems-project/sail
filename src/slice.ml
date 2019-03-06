@@ -53,15 +53,12 @@ open Ast_util
 open Rewriter
 
 type node =
-  (* In the graph we have a node Register that represents the actual
-     register, but functions get only get transitive dependencies on
-     that through Register_read, Register_write, and Register_ref
-     nodes. *)
   | Register of id
   | Function of id
   | Letbind of id
   | Type of id
   | Overload of id
+  | Constructor of id
 
 let node_id = function
   | Register id -> id
@@ -69,6 +66,7 @@ let node_id = function
   | Letbind id -> id
   | Type id -> id
   | Overload id -> id
+  | Constructor id -> id
 
 let node_kind = function
   | Register _ -> 0
@@ -76,6 +74,7 @@ let node_kind = function
   | Letbind _ -> 3
   | Type _ -> 4
   | Overload _ -> 5
+  | Constructor _ -> 6
 
 module Node = struct
   type t = node
@@ -93,6 +92,7 @@ let node_color cuts =
   | Letbind _ -> "yellow"
   | Type _ -> "springgreen"
   | Overload _ -> "peachpuff"
+  | Constructor _ -> "lightslateblue"
 
 let node_string n = node_id n |> string_of_id |> String.escaped
 
@@ -102,31 +102,81 @@ let builtins =
   let open Type_check in
   IdSet.of_list (List.map fst (Bindings.bindings Env.builtin_typs))
 
-let typ_ids typ =
-  let rec typ_ids (Typ_aux (aux, _)) =
-    match aux with
-    | Typ_var _ | Typ_internal_unknown -> IdSet.empty
-    | Typ_id id -> IdSet.singleton id
-    | Typ_app (id, typs) ->
-     IdSet.add id (List.fold_left IdSet.union IdSet.empty (List.map typ_arg_ids typs))
-    | Typ_fn (typs, typ, _) ->
-       IdSet.union (typ_ids typ) (List.fold_left IdSet.union IdSet.empty (List.map typ_ids typs))
-    | Typ_bidir (typ1, typ2) ->
-       IdSet.union (typ_ids typ1) (typ_ids typ2)
-    | Typ_tup typs ->
-       List.fold_left IdSet.union IdSet.empty (List.map typ_ids typs)
-    | Typ_exist (_, _, typ) -> typ_ids typ
-  and typ_arg_ids (A_aux (aux, _)) =
-    match aux with
-    | A_typ typ -> typ_ids typ
-    | _ -> IdSet.empty
-  in
-  IdSet.diff (typ_ids typ) builtins
+let rec constraint_ids' (NC_aux (aux, _)) =
+  match aux with
+  | NC_equal (n1, n2) | NC_bounded_le (n1, n2) | NC_bounded_ge (n1, n2) | NC_not_equal (n1, n2) ->
+     IdSet.union (nexp_ids' n1) (nexp_ids' n2)
+  | NC_or (nc1, nc2) | NC_and (nc1, nc2) ->
+     IdSet.union (constraint_ids' nc1) (constraint_ids' nc2)
+  | NC_var _ | NC_true | NC_false | NC_set _ -> IdSet.empty
+  | NC_app (id, args) ->
+     IdSet.add id (List.fold_left IdSet.union IdSet.empty (List.map typ_arg_ids' args))
+
+and nexp_ids' (Nexp_aux (aux, _)) =
+  match aux with
+  | Nexp_id id -> IdSet.singleton id
+  | Nexp_app (id, nexps) ->
+     IdSet.add id (List.fold_left IdSet.union IdSet.empty (List.map nexp_ids' nexps))
+  | Nexp_var _ | Nexp_constant _ -> IdSet.empty
+  | Nexp_exp n | Nexp_neg n -> nexp_ids' n
+  | Nexp_times (n1, n2) | Nexp_sum (n1, n2) | Nexp_minus (n1, n2) ->
+     IdSet.union (nexp_ids' n1) (nexp_ids' n2)
+
+and typ_ids' (Typ_aux (aux, _)) =
+  match aux with
+  | Typ_var _ | Typ_internal_unknown -> IdSet.empty
+  | Typ_id id -> IdSet.singleton id
+  | Typ_app (id, args) ->
+     IdSet.add id (List.fold_left IdSet.union IdSet.empty (List.map typ_arg_ids' args))
+  | Typ_fn (typs, typ, _) ->
+     IdSet.union (typ_ids' typ) (List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs))
+  | Typ_bidir (typ1, typ2) ->
+     IdSet.union (typ_ids' typ1) (typ_ids' typ2)
+  | Typ_tup typs ->
+     List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs)
+  | Typ_exist (_, _, typ) -> typ_ids' typ
+
+and typ_arg_ids' (A_aux (aux, _)) =
+  match aux with
+  | A_typ typ -> typ_ids' typ
+  | A_nexp nexp -> nexp_ids' nexp
+  | A_bool nc -> constraint_ids' nc
+  | A_order _ -> IdSet.empty
+
+let constraint_ids nc = IdSet.diff (constraint_ids' nc) builtins
+let nexp_ids nc = IdSet.diff (constraint_ids' nc) builtins
+and typ_ids typ = IdSet.diff (typ_ids' typ) builtins
+let typ_arg_ids nc = IdSet.diff (typ_arg_ids' nc) builtins
 
 let add_def_to_graph graph def =
   let open Type_check in
   let module G = Graph.Make(Node) in
   let graph = ref graph in
+
+  let scan_pat self p_aux annot =
+    let env = env_of_annot annot in
+    begin match p_aux with
+    | P_app (id, _) ->
+       graph := G.add_edge' self (Constructor id) !graph
+    | P_typ (typ, _) ->
+       IdSet.iter (fun id -> graph := G.add_edge' self (Type id) !graph) (typ_ids typ)
+    | _ -> ()
+    end;
+    P_aux (p_aux, annot)
+  in
+  let rw_pat self = { id_pat_alg with p_aux = (fun (p_aux, annot) -> scan_pat self p_aux annot) } in
+
+  let scan_lexp self lexp_aux annot =
+    let env = env_of_annot annot in
+    begin match lexp_aux with
+    | LEXP_cast (typ, _) ->
+       IdSet.iter (fun id -> graph := G.add_edge' self (Type id) !graph) (typ_ids typ)
+    | LEXP_memory (id, _) ->
+       graph := G.add_edge' self (Function id) !graph
+    | _ -> ()
+    end;
+    LEXP_aux (lexp_aux, annot)
+  in
 
   let scan_exp self e_aux annot =
     let env = env_of_annot annot in
@@ -140,7 +190,10 @@ let add_def_to_graph graph def =
           else ()
        end
     | E_app (id, _) ->
-       graph := G.add_edge' self (Function id) !graph
+       if Env.is_union_constructor id env then
+         graph := G.add_edge' self (Constructor id) !graph
+       else
+         graph := G.add_edge' self (Function id) !graph
     | E_ref id ->
        graph := G.add_edge' self (Register id) !graph
     | E_cast (typ, _) ->
@@ -149,13 +202,56 @@ let add_def_to_graph graph def =
     end;
     E_aux (e_aux, annot)
   in
-  let rw_exp self = { id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp self e_aux annot) } in
+  let rw_exp self = { id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp self e_aux annot);
+                                      pat_alg = rw_pat self } in
 
   let rewriters self =
     { rewriters_base with
       rewrite_exp = (fun _ -> fold_exp (rw_exp self));
+      rewrite_pat = (fun _ -> fold_pat (rw_pat self));
       rewrite_let = (fun _ -> fold_letbind (rw_exp self));
     }
+  in
+
+  let scan_quant_item self (QI_aux (aux, _)) =
+    match aux with
+    | QI_id _ -> ()
+    | QI_const nc ->
+       IdSet.iter (fun id -> graph := G.add_edge' self (Type id) !graph) (constraint_ids nc)
+  in
+
+  let scan_typquant self (TypQ_aux (aux, _)) =
+    match aux with
+    | TypQ_no_forall -> ()
+    | TypQ_tq quants -> List.iter (scan_quant_item self) quants
+  in
+
+  let add_type_def_to_graph (TD_aux (aux, (l, _))) =
+    match aux with
+    | TD_abbrev (id, typq, arg) ->
+       graph := G.add_edges' (Type id) (List.map (fun id -> Type id) (IdSet.elements (typ_arg_ids arg))) !graph;
+       scan_typquant (Type id) typq
+    | TD_record (id, typq, fields, _) ->
+       let field_nodes =
+         List.map (fun (typ, _) -> typ_ids typ) fields
+         |> List.fold_left IdSet.union IdSet.empty
+         |> IdSet.elements
+         |> List.map (fun id -> Type id)
+       in
+       graph := G.add_edges' (Type id) field_nodes !graph;
+       scan_typquant (Type id) typq
+    | TD_variant (id, typq, ctors, _) ->
+       let ctor_nodes =
+         List.map (fun (Tu_aux (Tu_ty_id (typ, id), _)) -> (typ_ids typ, id)) ctors
+         |> List.fold_left (fun (ids, ctors) (ids', ctor) -> (IdSet.union ids ids', IdSet.add ctor ctors)) (IdSet.empty, IdSet.empty)
+       in
+       IdSet.iter (fun ctor_id -> graph := G.add_edge' (Constructor ctor_id) (Type id) !graph) (snd ctor_nodes);
+       IdSet.iter (fun typ_id -> graph := G.add_edge' (Type id) (Type typ_id) !graph) (fst ctor_nodes);
+       scan_typquant (Type id) typq
+    | TD_enum (id, _, _) ->
+       graph := G.add_edges' (Type id) [] !graph
+    | TD_bitfield _ ->
+       Reporting.unreachable l __POS__ "Bitfield should be re-written"
   in
 
   begin match def with
@@ -170,6 +266,9 @@ let add_def_to_graph graph def =
      let ids = pat_ids pat in
      IdSet.iter (fun id -> graph := G.add_edges' (Letbind id) [] !graph) ids;
      IdSet.iter (fun id -> ignore (rewrite_let (rewriters (Letbind id)) lb)) ids
+  | DEF_type tdef ->
+     add_type_def_to_graph tdef
+  | DEF_pragma _ -> ()
   | _ -> ()
   end;
   G.fix_leaves !graph
@@ -184,11 +283,8 @@ let rec graph_of_ast (Defs defs) =
 
   | [] -> G.empty
 
-let dot_of_ast ast =
+let dot_of_ast out_chan ast =
   let module G = Graph.Make(Node) in
   let module NodeSet = Set.Make(Node) in
   let g = graph_of_ast ast in
-  let roots = NodeSet.of_list (List.map (fun str -> Function (mk_id str)) ["execute_CGetPerm"; "execute_CSeal"]) in
-  let cuts = NodeSet.of_list (List.map (fun str -> Function (mk_id str)) ["readCapReg"; "writeCapReg"; "rGPR"; "wGPR"; "SignalException"]) in
-  let g = G.prune roots cuts g in
-  G.make_dot (node_color cuts) edge_color node_string stdout g
+  G.make_dot (node_color NodeSet.empty) edge_color node_string out_chan g
