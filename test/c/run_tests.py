@@ -95,7 +95,8 @@ xml += test_c('optimized C', '-O2', '-O', True)
 xml += test_c('constant folding', '', '-Oconstant_fold', True)
 xml += test_c('monomorphised C', '-O2', '-O -Oconstant_fold -auto_mono', True)
 xml += test_c('full optimizations', '-O2 -mbmi2 -DINTRINSICS', '-O -Oconstant_fold', True)
-xml += test_c('address sanitised', '-O2 -fsanitize=undefined', '-O', False)
+xml += test_c('specialization', '-O1', '-O -c_specialize', True)
+xml += test_c('undefined behavior sanitised', '-O2 -fsanitize=undefined', '-O', False)
 
 xml += test_interpreter('interpreter')
 

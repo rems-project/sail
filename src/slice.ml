@@ -133,18 +133,18 @@ let add_def_to_graph graph def =
     begin match e_aux with
     | E_id id ->
        begin match Env.lookup_id id env with
-       | Register _ -> graph := G.add_edge self (Register id) !graph
+       | Register _ -> graph := G.add_edge' self (Register id) !graph
        | _ ->
           if IdSet.mem id (Env.get_toplevel_lets env) then
-            graph := G.add_edge self (Letbind id) !graph
+            graph := G.add_edge' self (Letbind id) !graph
           else ()
        end
     | E_app (id, _) ->
-       graph := G.add_edge self (Function id) !graph
+       graph := G.add_edge' self (Function id) !graph
     | E_ref id ->
-       graph := G.add_edge self (Register id) !graph
+       graph := G.add_edge' self (Register id) !graph
     | E_cast (typ, _) ->
-       IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
+       IdSet.iter (fun id -> graph := G.add_edge' self (Type id) !graph) (typ_ids typ)
     | _ -> ()
     end;
     E_aux (e_aux, annot)
@@ -160,19 +160,19 @@ let add_def_to_graph graph def =
 
   begin match def with
   | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), id, _, _), _)) ->
-     graph := G.add_edges (Function id) [] !graph;
-     IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ)
+     graph := G.add_edges' (Function id) [] !graph;
+     IdSet.iter (fun typ_id -> graph := G.add_edge' (Function id) (Type typ_id) !graph) (typ_ids typ)
   | DEF_fundef fdef ->
      let id = id_of_fundef fdef in
-     graph := G.add_edges (Function id) [] !graph;
+     graph := G.add_edges' (Function id) [] !graph;
      ignore (rewrite_fun (rewriters (Function id)) fdef)
   | DEF_val (LB_aux (LB_val (pat, exp), _) as lb) ->
      let ids = pat_ids pat in
-     IdSet.iter (fun id -> graph := G.add_edges (Letbind id) [] !graph) ids;
+     IdSet.iter (fun id -> graph := G.add_edges' (Letbind id) [] !graph) ids;
      IdSet.iter (fun id -> ignore (rewrite_let (rewriters (Letbind id)) lb)) ids
   | _ -> ()
   end;
-  !graph
+  G.fix_leaves !graph
 
 let rec graph_of_ast (Defs defs) =
   let module G = Graph.Make(Node) in

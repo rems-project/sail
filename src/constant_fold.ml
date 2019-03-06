@@ -206,10 +206,8 @@ let rec rewrite_constant_function_calls' ast =
 
   let rw_funcall e_aux annot =
     match e_aux with
-      (*
     | E_app (id, args) when fold_to_unit id ->
-       ok (); E_aux (E_lit (L_aux (L_unit, Parse_ast.Unknown)), annot)
-       *)
+       ok (); E_aux (E_lit (L_aux (L_unit, fst annot)), annot)
 
     | E_app (id, args) when List.for_all is_constant args ->
        evaluate e_aux annot
