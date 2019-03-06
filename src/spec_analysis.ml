@@ -662,3 +662,212 @@ let top_sort_defs (Defs defs) =
     List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) defs in
   let components = scc ~original_order:original_order graph in
   Defs (prelude @ List.concat (List.map (def_of_component graph defset) components))
+
+
+(* Functions for finding the set of variables assigned to.  Used in constant propagation
+   and monomorphisation. *)
+
+
+let assigned_vars exp =
+  fst (Rewriter.fold_exp
+         { (Rewriter.compute_exp_alg IdSet.empty IdSet.union) with
+           Rewriter.lEXP_id = (fun id -> IdSet.singleton id, LEXP_id id);
+           Rewriter.lEXP_cast = (fun (ty,id) -> IdSet.singleton id, LEXP_cast (ty,id)) }
+         exp)
+
+let assigned_vars_in_fexps fes =
+  List.fold_left
+    (fun vs (FE_aux (FE_Fexp (_,e),_)) -> IdSet.union vs (assigned_vars e))
+    IdSet.empty
+    fes
+
+let assigned_vars_in_pexp (Pat_aux (p,_)) =
+  match p with
+  | Pat_exp (_,e) -> assigned_vars e
+  | Pat_when (p,e1,e2) -> IdSet.union (assigned_vars e1) (assigned_vars e2)
+
+let rec assigned_vars_in_lexp (LEXP_aux (le,_)) =
+  match le with
+  | LEXP_id id
+  | LEXP_cast (_,id) -> IdSet.singleton id
+  | LEXP_tup lexps
+  | LEXP_vector_concat lexps -> 
+     List.fold_left (fun vs le -> IdSet.union vs (assigned_vars_in_lexp le)) IdSet.empty lexps
+  | LEXP_memory (_,es) -> List.fold_left (fun vs e -> IdSet.union vs (assigned_vars e)) IdSet.empty es
+  | LEXP_vector (le,e) -> IdSet.union (assigned_vars_in_lexp le) (assigned_vars e)
+  | LEXP_vector_range (le,e1,e2) ->
+     IdSet.union (assigned_vars_in_lexp le) (IdSet.union (assigned_vars e1) (assigned_vars e2))
+  | LEXP_field (le,_) -> assigned_vars_in_lexp le
+  | LEXP_deref e -> assigned_vars e
+
+
+let pat_id_is_variable env id =
+  match Type_check.Env.lookup_id id env with
+  (* Unbound is returned for both variables and constructors which take
+     arguments, but the latter only don't appear in a P_id *)
+  | Unbound
+  (* Shadowing of immutable locals is allowed; mutable locals and registers
+     are rejected by the type checker, so don't matter *)
+  | Local _
+  | Register _
+    -> true
+  | Enum _ -> false
+
+let bindings_from_pat p =
+  let rec aux_pat (P_aux (p,(l,annot))) =
+    let env = Type_check.env_of_annot (l, annot) in
+    match p with
+    | P_lit _
+    | P_wild
+      -> []
+    | P_or (p1, p2) -> aux_pat p1 @ aux_pat p2
+    | P_not (p) -> aux_pat p
+    | P_as (p,id) -> id::(aux_pat p)
+    | P_typ (_,p) -> aux_pat p
+    | P_id id ->
+       if pat_id_is_variable env id then [id] else []
+    | P_var (p,kid) -> aux_pat p
+    | P_vector ps
+    | P_vector_concat ps
+    | P_string_append ps
+    | P_app (_,ps)
+    | P_tup ps
+    | P_list ps
+      -> List.concat (List.map aux_pat ps)
+    | P_record (fps,_) -> List.concat (List.map aux_fpat fps)
+    | P_cons (p1,p2) -> aux_pat p1 @ aux_pat p2
+  and aux_fpat (FP_aux (FP_Fpat (_,p), _)) = aux_pat p
+  in aux_pat p
+
+
+(* TODO: replace the below with solutions that don't depend so much on the
+   structure of the environment. *)
+
+let rec flatten_constraints = function
+  | [] -> []
+  | (NC_aux (NC_and (nc1,nc2),_))::t -> flatten_constraints (nc1::nc2::t)
+  | h::t -> h::(flatten_constraints t)
+
+(* NB: this only looks for direct equalities with the given kid.  It would be
+   better in principle to find the entire set of equal kids, but it isn't
+   necessary to deal with the fresh kids produced by the type checker while
+   checking P_var patterns, so we don't do it for now. *)
+let equal_kids_ncs kid ncs =
+  let is_eq = function
+    | NC_aux (NC_equal (Nexp_aux (Nexp_var var1,_), Nexp_aux (Nexp_var var2,_)),_) ->
+       if Kid.compare kid var1 == 0 then Some var2 else
+         if Kid.compare kid var2 == 0 then Some var1 else
+           None
+    | _ -> None
+  in
+  let kids = Util.map_filter is_eq ncs in
+  List.fold_left (fun s k -> KidSet.add k s) (KidSet.singleton kid) kids
+
+let equal_kids env kid =
+  let ncs = flatten_constraints (Type_check.Env.get_constraints env) in
+  equal_kids_ncs kid ncs
+
+
+
+(* TODO: kid shadowing *)
+let nexp_subst_fns substs =
+  let s_t t = subst_kids_typ substs t in
+(*  let s_typschm (TypSchm_aux (TypSchm_ts (q,t),l)) = TypSchm_aux (TypSchm_ts (q,s_t t),l) in
+   hopefully don't need this anyway *)(*
+  let s_typschm tsh = tsh in*)
+  let s_tannot tannot =
+    match Type_check.destruct_tannot tannot with
+    | None -> Type_check.empty_tannot
+    | Some (env,t,eff) -> Type_check.mk_tannot env (s_t t) eff (* TODO: what about env? *)
+  in
+  let rec s_pat (P_aux (p,(l,annot))) =
+    let re p = P_aux (p,(l,s_tannot annot)) in
+    match p with
+    | P_lit _ | P_wild | P_id _ -> re p
+    | P_or (p1, p2) -> re (P_or (s_pat p1, s_pat p2))
+    | P_not (p) -> re (P_not (s_pat p))
+    | P_var (p',tpat) -> re (P_var (s_pat p',tpat))
+    | P_as (p',id) -> re (P_as (s_pat p', id))
+    | P_typ (ty,p') -> re (P_typ (s_t ty,s_pat p'))
+    | P_app (id,ps) -> re (P_app (id, List.map s_pat ps))
+    | P_record (fps,flag) -> re (P_record (List.map s_fpat fps, flag))
+    | P_vector ps -> re (P_vector (List.map s_pat ps))
+    | P_vector_concat ps -> re (P_vector_concat (List.map s_pat ps))
+    | P_string_append ps -> re (P_string_append (List.map s_pat ps))
+    | P_tup ps -> re (P_tup (List.map s_pat ps))
+    | P_list ps -> re (P_list (List.map s_pat ps))
+    | P_cons (p1,p2) -> re (P_cons (s_pat p1, s_pat p2))
+  and s_fpat (FP_aux (FP_Fpat (id, p), (l,annot))) =
+    FP_aux (FP_Fpat (id, s_pat p), (l,s_tannot annot))
+  in
+  let rec s_exp (E_aux (e,(l,annot))) =
+    let re e = E_aux (e,(l,s_tannot annot)) in
+      match e with
+      | E_block es -> re (E_block (List.map s_exp es))
+      | E_nondet es -> re (E_nondet (List.map s_exp es))
+      | E_id _
+      | E_ref _
+      | E_lit _
+      | E_internal_value _
+        -> re e
+      | E_sizeof ne -> begin
+         let ne' = subst_kids_nexp substs ne in
+         match ne' with
+         | Nexp_aux (Nexp_constant i,l) -> re (E_lit (L_aux (L_num i,l)))
+         | _ -> re (E_sizeof ne')
+      end
+      | E_constraint nc -> re (E_constraint (subst_kids_nc substs nc))
+      | E_cast (t,e') -> re (E_cast (s_t t, s_exp e'))
+      | E_app (id,es) -> re (E_app (id, List.map s_exp es))
+      | E_app_infix (e1,id,e2) -> re (E_app_infix (s_exp e1,id,s_exp e2))
+      | E_tuple es -> re (E_tuple (List.map s_exp es))
+      | E_if (e1,e2,e3) -> re (E_if (s_exp e1, s_exp e2, s_exp e3))
+      | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,s_exp e1,s_exp e2,s_exp e3,ord,s_exp e4))
+      | E_loop (loop,e1,e2) -> re (E_loop (loop,s_exp e1,s_exp e2))
+      | E_vector es -> re (E_vector (List.map s_exp es))
+      | E_vector_access (e1,e2) -> re (E_vector_access (s_exp e1,s_exp e2))
+      | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (s_exp e1,s_exp e2,s_exp e3))
+      | E_vector_update (e1,e2,e3) -> re (E_vector_update (s_exp e1,s_exp e2,s_exp e3))
+      | E_vector_update_subrange (e1,e2,e3,e4) -> re (E_vector_update_subrange (s_exp e1,s_exp e2,s_exp e3,s_exp e4))
+      | E_vector_append (e1,e2) -> re (E_vector_append (s_exp e1,s_exp e2))
+      | E_list es -> re (E_list (List.map s_exp es))
+      | E_cons (e1,e2) -> re (E_cons (s_exp e1,s_exp e2))
+      | E_record fes -> re (E_record (List.map s_fexp fes))
+      | E_record_update (e,fes) -> re (E_record_update (s_exp e, List.map s_fexp fes))
+      | E_field (e,id) -> re (E_field (s_exp e,id))
+      | E_case (e,cases) -> re (E_case (s_exp e, List.map s_pexp cases))
+      | E_let (lb,e) -> re (E_let (s_letbind lb, s_exp e))
+      | E_assign (le,e) -> re (E_assign (s_lexp le, s_exp e))
+      | E_exit e -> re (E_exit (s_exp e))
+      | E_return e -> re (E_return (s_exp e))
+      | E_assert (e1,e2) -> re (E_assert (s_exp e1,s_exp e2))
+      | E_var (le,e1,e2) -> re (E_var (s_lexp le, s_exp e1, s_exp e2))
+      | E_internal_plet (p,e1,e2) -> re (E_internal_plet (s_pat p, s_exp e1, s_exp e2))
+      | E_internal_return e -> re (E_internal_return (s_exp e))
+      | E_throw e -> re (E_throw (s_exp e))
+      | E_try (e,cases) -> re (E_try (s_exp e, List.map s_pexp cases))
+    and s_fexp (FE_aux (FE_Fexp (id,e), (l,annot))) =
+      FE_aux (FE_Fexp (id,s_exp e),(l,s_tannot annot))
+    and s_pexp = function
+      | (Pat_aux (Pat_exp (p,e),(l,annot))) ->
+         Pat_aux (Pat_exp (s_pat p, s_exp e),(l,s_tannot annot))
+      | (Pat_aux (Pat_when (p,e1,e2),(l,annot))) ->
+         Pat_aux (Pat_when (s_pat p, s_exp e1, s_exp e2),(l,s_tannot annot))
+    and s_letbind (LB_aux (lb,(l,annot))) =
+      match lb with
+      | LB_val (p,e) -> LB_aux (LB_val (s_pat p,s_exp e), (l,s_tannot annot))
+    and s_lexp (LEXP_aux (e,(l,annot))) =
+      let re e = LEXP_aux (e,(l,s_tannot annot)) in
+      match e with
+      | LEXP_id _ -> re e
+      | LEXP_cast (typ,id) -> re (LEXP_cast (s_t typ, id))
+      | LEXP_memory (id,es) -> re (LEXP_memory (id,List.map s_exp es))
+      | LEXP_tup les -> re (LEXP_tup (List.map s_lexp les))
+      | LEXP_vector (le,e) -> re (LEXP_vector (s_lexp le, s_exp e))
+      | LEXP_vector_range (le,e1,e2) -> re (LEXP_vector_range (s_lexp le, s_exp e1, s_exp e2))
+      | LEXP_vector_concat les -> re (LEXP_vector_concat (List.map s_lexp les))
+      | LEXP_field (le,id) -> re (LEXP_field (s_lexp le, id))
+      | LEXP_deref e -> re (LEXP_deref (s_exp e))
+  in (s_pat,s_exp)
+let nexp_subst_pat substs = fst (nexp_subst_fns substs)
+let nexp_subst_exp substs = snd (nexp_subst_fns substs)

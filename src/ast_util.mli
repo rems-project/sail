@@ -439,6 +439,12 @@ val typ_arg_subst : kid -> typ_arg -> typ_arg -> typ_arg
 
 val subst_kid : (kid -> typ_arg -> 'a -> 'a) -> kid -> kid -> 'a -> 'a
 
+(* Multiple type-level substitution *)
+val subst_kids_nexp : nexp KBindings.t -> nexp -> nexp
+val subst_kids_nc : nexp KBindings.t -> n_constraint -> n_constraint
+val subst_kids_typ : nexp KBindings.t -> typ -> typ
+val subst_kids_typ_arg : nexp KBindings.t -> typ_arg -> typ_arg
+
 val quant_item_subst_kid : kid -> kid -> quant_item -> quant_item
 val typquant_subst_kid : kid -> kid -> typquant -> typquant
 
