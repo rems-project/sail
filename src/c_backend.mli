@@ -122,9 +122,12 @@ type ctx
    should be the environment returned by typechecking the full AST. *)
 val initial_ctx : Env.t -> ctx
 
+(** Same as initial ctx, but iterate to find more precise bounds on
+   integers. *)
+val initial_ctx_iterate : Env.t -> ctx
+
 (** Convert a typ to a IR ctyp *)
 val ctyp_of_typ : ctx -> Ast.typ -> ctyp
-
 
 val compile_aexp : ctx -> Ast.typ Anf.aexp -> instr list * (clexp -> instr) * instr list
 

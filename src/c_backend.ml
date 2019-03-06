@@ -143,6 +143,9 @@ let initial_ctx env =
     iterate_size = false;
   }
 
+let initial_ctx_iterate env =
+  { (initial_ctx env) with iterate_size = true }
+
 let rec iterate_size ctx size n m =
   if size > 64 then
     CT_lint
@@ -3476,6 +3479,7 @@ let bytecode_ast ctx rewrites (Defs defs) =
     List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) defs
   in
   let cdefs = List.concat (List.rev chunks) in
+  let cdefs, ctx = specialize_variants ctx [] cdefs in
   rewrites cdefs
 
 let rec get_recursive_functions (Defs defs) =

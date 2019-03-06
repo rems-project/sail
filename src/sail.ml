@@ -61,6 +61,7 @@ let opt_print_verbose = ref false
 let opt_print_lem = ref false
 let opt_print_ocaml = ref false
 let opt_print_c = ref false
+let opt_print_ir = ref false
 let opt_print_latex = ref false
 let opt_print_coq = ref false
 let opt_print_cgen = ref false
@@ -128,6 +129,9 @@ let options = Arg.align ([
   ( "-latex_full_valspecs",
     Arg.Clear Latex.opt_simple_val,
     " print full valspecs in LaTeX output");
+  ( "-ir",
+    Arg.Set opt_print_ir,
+    " print intermediate representation");
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
@@ -438,6 +442,22 @@ let main() =
          let output_chan = match !opt_file_out with Some f -> open_out (f ^ ".c") | None -> stdout in
          Util.opt_warnings := true;
          C_backend.compile_ast (C_backend.initial_ctx type_envs) output_chan (!opt_includes_c) ast_c;
+         close_out output_chan
+       else ());
+      (if !(opt_print_ir)
+       then
+         let ast_c = rewrite_ast_c type_envs ast in
+         let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
+         let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in
+         let output_chan =
+           match !opt_file_out with
+           | Some f -> Util.opt_colors := false; open_out (f ^ ".ir.sail")
+           | None -> stdout
+         in
+         Util.opt_warnings := true;
+         let cdefs = C_backend.(bytecode_ast (initial_ctx_iterate type_envs) (List.map flatten_cdef) ast_c) in
+         let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Bytecode_util.pp_cdef cdefs) in
+         output_string output_chan (str ^ "\n");
          close_out output_chan
        else ());
       (if !(opt_print_cgen)
