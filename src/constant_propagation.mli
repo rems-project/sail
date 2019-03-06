@@ -65,3 +65,5 @@ val const_prop :
   tannot exp Bindings.t ->
   tannot exp ->
   tannot exp * tannot exp Bindings.t
+
+val referenced_vars : tannot exp -> IdSet.t

@@ -435,12 +435,6 @@ type split =
 let isubst_minus subst subst' =
   Bindings.merge (fun _ x y -> match x,y with (Some a), None -> Some a | _, _ -> None) subst subst'
 
-let referenced_vars exp =
-  let open Rewriter in
-  fst (fold_exp
-         { (compute_exp_alg IdSet.empty IdSet.union) with
-           e_ref = (fun id -> IdSet.singleton id, E_ref id) } exp)
-
 let freshen_id =
   let counter = ref 0 in
   fun id ->
@@ -1074,7 +1068,7 @@ let split_defs all_errors splits defs =
     let map_pexp r = let (_,f,_) = map_fns r in f in
     let map_letbind r = let (_,_,f) = map_fns r in f in
     let map_exp exp =
-      let ref_vars = referenced_vars exp in
+      let ref_vars = Constant_propagation.referenced_vars exp in
       map_exp ref_vars exp
     in
     let map_pexp top_pexp =
@@ -1082,11 +1076,11 @@ let split_defs all_errors splits defs =
          make false assumptions about them during constant propagation.  Note that
          we assume there aren't any in the guard. *)
       let (_,_,body,_) = destruct_pexp top_pexp in
-      let ref_vars = referenced_vars body in
+      let ref_vars = Constant_propagation.referenced_vars body in
       map_pexp ref_vars top_pexp
     in
     let map_letbind (LB_aux (LB_val (_,e),_) as lb) =
-      let ref_vars = referenced_vars e in
+      let ref_vars = Constant_propagation.referenced_vars e in
       map_letbind ref_vars lb
     in
 
@@ -2387,7 +2381,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
     | _, _ -> None
   in
   let kid_deps = KBindings.merge merge_kid_deps_eqns kid_deps eqn_kid_deps in
-  let referenced_vars = referenced_vars body in
+  let referenced_vars = Constant_propagation.referenced_vars body in
   { top_kids; var_deps; kid_deps; referenced_vars }
 
 (* When there's more than one pick the first *)
