@@ -860,9 +860,17 @@ let remove_impossible_int_cases _ =
       | _ -> true
     in aux exp p
   in
-  let rewrite_e_case (exp,cases) =
+  let e_case (exp,cases) =
     E_case (exp, List.filter (must_keep_case exp) cases)
   in
+  let e_if (cond, e_then, e_else) =
+    match destruct_atom_bool (env_of cond) (typ_of cond) with
+    | Some nc ->
+       if prove __POS__ (Env.add_constraint nc (env_of cond)) nc_false
+       then unaux_exp e_else
+       else E_if (cond, e_then, e_else)
+    | _ -> E_if (cond, e_then, e_else)
+  in
   let open Rewriter in
-  let rewrite_exp _ = fold_exp { id_exp_alg with e_case = rewrite_e_case } in
+  let rewrite_exp _ = fold_exp { id_exp_alg with e_case = e_case; e_if = e_if } in
   rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp }
