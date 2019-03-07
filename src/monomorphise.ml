@@ -2961,9 +2961,9 @@ let rec rewrite_app env typ (id,args) =
 
   else if is_id env (Id "__SetSlice_bits") id then
     match args with
-    | [len; slice_len; vector; pos; E_aux (E_app (zeros, _), _)]
+    | [len; slice_len; vector; start; E_aux (E_app (zeros, _), _)]
       when is_zeros zeros ->
-       E_app (mk_id "set_slice_zeros", [len; slice_len; vector; pos])
+       E_app (mk_id "set_slice_zeros", [len; vector; start; slice_len])
     | _ -> E_app (id, args)
 
   else E_app (id,args)
