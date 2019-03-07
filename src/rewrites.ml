@@ -5120,6 +5120,7 @@ let rewrite_defs_coq = [
   ("rewrite_undefined", rewrite_undefined_if_gen true);
   ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("remove_not_pats", rewrite_defs_not_pats);
+  ("remove_impossible_int_cases", Constant_propagation.remove_impossible_int_cases);
   ("pat_lits", rewrite_defs_pat_lits rewrite_lit_lem);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);

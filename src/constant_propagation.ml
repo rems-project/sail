@@ -374,7 +374,7 @@ let is_env_inconsistent env ksubsts =
   prove __POS__ env nc_false
 
 
-let const_prop defs ref_vars =
+let const_props defs ref_vars =
   let rec const_prop_exp substs assigns ((E_aux (e,(l,annot))) as exp) =
     (* Functions to treat lists and tuples of subexpressions as possibly
        non-deterministic: that is, we stop making any assumptions about
@@ -822,11 +822,47 @@ let const_prop defs ref_vars =
     let env = Type_check.env_of exp in
     can_match_with_env env exp
 
-in const_prop_exp
+in (const_prop_exp, const_prop_pexp)
 
+let const_prop d r = fst (const_props d r)
+let const_prop_pexp d r = snd (const_props d r)
 
 let referenced_vars exp =
   let open Rewriter in
   fst (fold_exp
          { (compute_exp_alg IdSet.empty IdSet.union) with
            e_ref = (fun id -> IdSet.singleton id, E_ref id) } exp)
+
+(* This is intended to remove impossible cases when a type-level constant has
+   been used to fix a property of the architecture.  In particular, the current
+   version of the RISC-V model uses constructs like
+
+   match (width, sizeof(xlen)) {
+     (BYTE, _)    => ...
+     ...
+     (DOUBLE, 64) => ...
+   };
+
+   and the type checker will replace the sizeof with the literal 32 or 64.  This
+   pass will then remove the DOUBLE case.
+
+   It would be nice to have the full constant propagation above do this kind of
+   thing too...
+*)
+
+let remove_impossible_int_cases _ =
+
+  let must_keep_case exp (Pat_aux ((Pat_exp (p,_) | Pat_when (p,_,_)),_)) =
+    let rec aux (E_aux (exp,_)) (P_aux (p,_)) =
+      match exp, p with
+      | E_tuple exps, P_tup ps -> List.for_all2 aux exps ps
+      | E_lit (L_aux (lit,_)), P_lit (L_aux (lit',_)) -> lit_match (lit, lit')
+      | _ -> true
+    in aux exp p
+  in
+  let rewrite_e_case (exp,cases) =
+    E_case (exp, List.filter (must_keep_case exp) cases)
+  in
+  let open Rewriter in
+  let rewrite_exp _ = fold_exp { id_exp_alg with e_case = rewrite_e_case } in
+  rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp }

@@ -67,3 +67,5 @@ val const_prop :
   tannot exp * tannot exp Bindings.t
 
 val referenced_vars : tannot exp -> IdSet.t
+
+val remove_impossible_int_cases : 'a -> tannot defs -> tannot defs
