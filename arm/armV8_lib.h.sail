@@ -215,6 +215,15 @@ typedef PSTATEField =
   enumerate {PSTATEField_DAIFSet; PSTATEField_DAIFClr;
              PSTATEField_SP}
 
+typedef SystemOp =
+  enumerate {Sys_AT; Sys_DC; Sys_IC; Sys_TLBI; Sys_SYS}
+
+typedef DCOp =
+  enumerate {IVAC; ISW; CSW; CISW; ZVA; CVAC; CVAU; CIVAC}
+
+typedef ICOp =
+  enumerate {IALLUIS; IALLU; IVAU}
+
 val unit -> bit[64] effect {rreg} rPC
 val forall Nat 'N, 'N IN {8,16,32,64}. implicit<'N> -> bit['N] effect {rreg} rSP
 val forall Nat 'N, 'N IN {32,64}. (reg_index,bit['N]) -> unit effect {wreg} wX

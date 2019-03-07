@@ -58,6 +58,8 @@ typedef ast = const union forall Nat 'R, 'R IN {32, 64},     (* register size *)
   (SystemHintOp) Hint;
   (uinteger) ClearExclusiveMonitor;
   (MemBarrierOp,MBReqDomain,MBReqTypes) Barrier;
+  (reg_index,DCOp) DataCache;
+  (reg_index,ICOp) InstructionCache;
   (reg_index,uinteger,uinteger,uinteger,uinteger,uinteger,boolean) System;
   (reg_index,uinteger,uinteger,uinteger,uinteger,uinteger,boolean) MoveSystemRegister;
   (reg_index,[:'R:],uinteger,bit,bit[64]) TestBitAndBranch;
@@ -489,14 +491,66 @@ function clause decodeSystem (0b1101010100:[L]:0b01:(bit[3]) op1:(bit[4]) CRn:(b
 
   (reg_index) t := UInt_reg(Rt);
 
-  (uinteger) sys_op0 := 1;
-  (uinteger) sys_op1 := UInt(op1);
-  (uinteger) sys_op2 := UInt(op2);
-  (uinteger) sys_crn := UInt(CRn);
-  (uinteger) sys_crm := UInt(CRm);
-  (boolean) has_result := (L == 1);
+  switch SysOp(op1,CRn,CRm,op2) {
+    case Sys_AT -> {not_implemented("AT"); None}
+    case Sys_DC ->
+        switch (op1, CRm, op2) {
+          case (0b000, 0b0110, 0b001) -> Some(DataCache(t,IVAC))
+          case (0b000, 0b0110, 0b010) -> Some(DataCache(t,ISW))
+          case (0b000, 0b1010, 0b010) -> Some(DataCache(t,CSW))
+          case (0b000, 0b1110, 0b010) -> Some(DataCache(t,CISW))
+          case (0b011, 0b0100, 0b001) -> Some(DataCache(t,ZVA))
+          case (0b011, 0b1010, 0b001) -> Some(DataCache(t,CVAC))
+          case (0b011, 0b1011, 0b001) -> Some(DataCache(t,CVAU))
+          case (0b011, 0b1110, 0b001) -> Some(DataCache(t,CIVAC))
+        }
 
-  Some(System(t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,has_result));
+    case Sys_IC ->
+        switch (op1, CRm, op2) {
+          case (0b000, 0b0001, 0b000) -> Some(InstructionCache(t,IALLUIS))
+          case (0b000, 0b0101, 0b000) -> Some(InstructionCache(t,IALLU))
+          case (0b011, 0b0101, 0b001) -> Some(InstructionCache(t,IVAU))
+        }
+
+    case Sys_TLBI -> {not_implemented("TLBI"); None}
+    case _ -> {
+      (uinteger) sys_op0 := 1;
+      (uinteger) sys_op1 := UInt(op1);
+      (uinteger) sys_op2 := UInt(op2);
+      (uinteger) sys_crn := UInt(CRn);
+      (uinteger) sys_crm := UInt(CRm);
+      (boolean) has_result := (L == 1);
+
+      Some(System(t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,has_result));
+    }
+  }
+}
+
+function clause execute ( DataCache(t,dc_op) ) =
+{
+  (bit[64]) addr := rX(t);
+
+  switch dc_op {
+    case IVAC  -> not_implemented("DC IVAC")
+    case ISW   -> not_implemented("DC ISW")
+    case CSW   -> not_implemented("DC CSW")
+    case CISW  -> not_implemented("DC CISW")
+    case ZVA   -> not_implemented("DC ZVA")
+    case CVAC  -> not_implemented("DC CVAC")
+    case CVAU  -> data_cache_operation_CVAU := addr
+    case CIVAC -> not_implemented("DC CIVAC")
+  }
+}
+
+function clause execute ( InstructionCache(t,ic_op) ) =
+{
+  (bit[64]) addr := rX(t);
+
+  switch ic_op {
+    case IALLUIS -> not_implemented("IC IALLUIS")
+    case IALLU   -> not_implemented("IC IALLU")
+    case IVAU    -> instruction_cache_operation_IVAU := addr
+  }
 }
 
 function clause execute ( System(t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,has_result) ) =
