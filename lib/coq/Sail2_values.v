@@ -1190,6 +1190,13 @@ Ltac fill_in_evar_eq :=
    let y := eval cbn in y in*)
    idtac "Warning: unknown equality constraint"; constructor; exact (eq_refl _ : x = y) end.
 
+Ltac bruteforce_bool_exists :=
+match goal with
+| |- exists _ : bool,_ => solve [ exists true; bruteforce_bool_exists
+                                | exists false; bruteforce_bool_exists ]
+| _ => tauto
+end.
+
 Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
@@ -1209,9 +1216,8 @@ prepare_for_solver;
    (* The datatypes hints give us some list handling, esp In *)
  | constructor; drop_exists; eauto 3 with datatypes zarith sail
    (* Booleans - and_boolMP *)
- | match goal with |- ArithFact (forall l r:bool, _ -> _ -> exists _, _) => 
-     constructor; intros l r H1 H2;
-     solve [exists l; destruct l; intuition | exists r; destruct l; intuition]
+ | match goal with |- ArithFact (forall l r:bool, _ -> _ -> exists _ : bool, _) => 
+     constructor; intros [|] [|] H1 H2; bruteforce_bool_exists
    end
  | match goal with |- context [@eq bool _ _] =>
      (* Don't use auto for the fallback to keep runtime down *)
