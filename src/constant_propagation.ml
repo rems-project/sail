@@ -866,9 +866,9 @@ let remove_impossible_int_cases _ =
   let e_if (cond, e_then, e_else) =
     match destruct_atom_bool (env_of cond) (typ_of cond) with
     | Some nc ->
-       if prove __POS__ (Env.add_constraint nc (env_of cond)) nc_false
-       then unaux_exp e_else
-       else E_if (cond, e_then, e_else)
+       if prove __POS__ (env_of cond) nc then unaux_exp e_then else
+       if prove __POS__ (env_of cond) (nc_not nc) then unaux_exp e_else else
+       E_if (cond, e_then, e_else)
     | _ -> E_if (cond, e_then, e_else)
   in
   let open Rewriter in
