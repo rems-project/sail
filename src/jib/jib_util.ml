@@ -50,7 +50,7 @@
 
 open Ast
 open Ast_util
-open Bytecode
+open Jib
 open Value2
 open PPrint
 
@@ -93,6 +93,9 @@ let iclear ?loc:(l=Parse_ast.Unknown) ctyp id =
 
 let ireturn ?loc:(l=Parse_ast.Unknown) cval =
   I_aux (I_return cval, (instr_number (), l))
+
+let iend ?loc:(l=Parse_ast.Unknown) () =
+  I_aux (I_end, (instr_number (), l))
 
 let iblock ?loc:(l=Parse_ast.Unknown) instrs =
   I_aux (I_block instrs, (instr_number (), l))
@@ -150,6 +153,7 @@ let rec clexp_rename from_id to_id = function
      CL_tuple (clexp_rename from_id to_id clexp, n)
   | CL_current_exception ctyp -> CL_current_exception ctyp
   | CL_have_exception -> CL_have_exception
+  | CL_return ctyp -> CL_return ctyp
 
 let rec instr_rename from_id to_id (I_aux (instr, aux)) =
   let instr = match instr with
@@ -197,6 +201,8 @@ let rec instr_rename from_id to_id (I_aux (instr, aux)) =
     | I_undefined ctyp -> I_undefined ctyp
 
     | I_match_failure -> I_match_failure
+
+    | I_end -> I_end
 
     | I_reset (ctyp, id) when Id.compare id from_id = 0 -> I_reset (ctyp, to_id)
     | I_reset (ctyp, id) -> I_reset (ctyp, id)
@@ -257,8 +263,8 @@ and string_of_ctyp = function
   | CT_lbits false -> "lbits(inc)"
   | CT_fbits (n, true) -> "fbits(" ^ string_of_int n ^ ", dec)"
   | CT_fbits (n, false) -> "fbits(" ^ string_of_int n ^ ", int)"
-  | CT_sbits true -> "sbits(dec)"
-  | CT_sbits false -> "sbits(inc)"
+  | CT_sbits (n, true) -> "sbits(" ^ string_of_int n ^ ", dec)"
+  | CT_sbits (n, false) -> "sbits(" ^ string_of_int n ^ ", inc)"
   | CT_fint n -> "int(" ^ string_of_int n ^ ")"
   | CT_bit -> "bit"
   | CT_unit -> "unit"
@@ -276,31 +282,17 @@ and string_of_ctyp = function
 (** This function is like string_of_ctyp, but recursively prints all
    constructors in variants and structs. Used for debug output. *)
 and full_string_of_ctyp = function
-  | CT_lint -> "int"
-  | CT_lbits true -> "lbits(dec)"
-  | CT_lbits false -> "lbits(inc)"
-  | CT_fbits (n, true) -> "fbits(" ^ string_of_int n ^ ", dec)"
-  | CT_fbits (n, false) -> "fbits(" ^ string_of_int n ^ ", int)"
-  | CT_sbits true -> "sbits(dec)"
-  | CT_sbits false -> "sbits(inc)"
-  | CT_fint n -> "int(" ^ string_of_int n ^ ")"
-  | CT_bit -> "bit"
-  | CT_unit -> "unit"
-  | CT_bool -> "bool"
-  | CT_real -> "real"
   | CT_tup ctyps -> "(" ^ Util.string_of_list ", " full_string_of_ctyp ctyps ^ ")"
-  | CT_enum (id, _) -> string_of_id id
   | CT_struct (id, ctors) | CT_variant (id, ctors) ->
      "struct " ^ string_of_id id
      ^ "{ "
      ^ Util.string_of_list ", " (fun (id, ctyp) -> string_of_id id ^ " : " ^ full_string_of_ctyp ctyp) ctors
      ^ "}"
-  | CT_string -> "string"
   | CT_vector (true, ctyp) -> "vector(dec, " ^ full_string_of_ctyp ctyp ^ ")"
   | CT_vector (false, ctyp) -> "vector(inc, " ^ full_string_of_ctyp ctyp ^ ")"
   | CT_list ctyp -> "list(" ^ full_string_of_ctyp ctyp ^ ")"
   | CT_ref ctyp -> "ref(" ^ full_string_of_ctyp ctyp ^ ")"
-  | CT_poly -> "*"
+  | ctyp -> string_of_ctyp ctyp
 
 let rec map_ctyp f = function
   | (CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _
@@ -316,7 +308,7 @@ let rec ctyp_equal ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
   | CT_lint, CT_lint -> true
   | CT_lbits d1, CT_lbits d2 -> d1 = d2
-  | CT_sbits d1, CT_sbits d2 -> d1 = d2
+  | CT_sbits (m1, d1), CT_sbits (m2, d2) -> m1 = m2 && d1 = d2
   | CT_fbits (m1, d1), CT_fbits (m2, d2) -> m1 = m2 && d1 = d2
   | CT_bit, CT_bit -> true
   | CT_fint n, CT_fint m -> n = m
@@ -334,6 +326,75 @@ let rec ctyp_equal ctyp1 ctyp2 =
   | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_equal ctyp1 ctyp2
   | CT_poly, CT_poly -> true
   | _, _ -> false
+
+let rec ctyp_compare ctyp1 ctyp2 =
+  let lex_ord c1 c2 = if c1 = 0 then c2 else c1 in
+  match ctyp1, ctyp2 with
+  | CT_lint, CT_lint -> 0
+  | CT_lint, _ -> 1
+  | _, CT_lint -> -1
+
+  | CT_fint n, CT_fint m -> compare n m
+  | CT_fint _, _ -> 1
+  | _, CT_fint _ -> -1
+
+  | CT_fbits (n, ord1), CT_fbits (m, ord2) -> lex_ord (compare n m) (compare ord1 ord2)
+  | CT_fbits _, _ -> 1
+  | _, CT_fbits _ -> -1
+
+  | CT_sbits (n, ord1), CT_sbits (m, ord2) -> lex_ord (compare n m) (compare ord1 ord2)
+  | CT_sbits _, _ -> 1
+  | _, CT_sbits _ -> -1
+
+  | CT_lbits ord1 , CT_lbits ord2 -> compare ord1 ord2
+  | CT_lbits _, _ -> 1
+  | _, CT_lbits _ -> -1
+
+  | CT_bit, CT_bit -> 0
+  | CT_bit, _ -> 1
+  | _, CT_bit -> -1
+
+  | CT_unit, CT_unit -> 0
+  | CT_unit, _ -> 1
+  | _, CT_unit -> -1
+
+  | CT_real, CT_real -> 0
+  | CT_real, _ -> 1
+  | _, CT_real -> -1
+
+  | CT_poly, CT_poly -> 0
+  | CT_poly, _ -> 1
+  | _, CT_poly -> -1
+
+  | CT_bool, CT_bool -> 0
+  | CT_bool, _ -> 1
+  | _, CT_bool -> -1
+
+  | CT_string, CT_string -> 0
+  | CT_string, _ -> 1
+  | _, CT_string -> -1
+
+  | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_compare ctyp1 ctyp2
+  | CT_ref _, _ -> 1
+  | _, CT_ref _ -> -1
+
+  | CT_list ctyp1, CT_list ctyp2 -> ctyp_compare ctyp1 ctyp2
+  | CT_list _, _ -> 1
+  | _, CT_list _ -> -1
+
+  | CT_vector (d1, ctyp1), CT_vector (d2, ctyp2) ->
+     lex_ord (ctyp_compare ctyp1 ctyp2) (compare d1 d2)
+  | CT_vector _, _ -> 1
+  | _, CT_vector _ -> -1
+
+  | ctyp1, ctyp2 -> String.compare (full_string_of_ctyp ctyp1) (full_string_of_ctyp ctyp2)
+
+module CT = struct
+  type t = ctyp
+  let compare ctyp1 ctyp2 = ctyp_compare ctyp1 ctyp2
+end
+
+module CTSet = Set.Make(CT)
 
 let rec ctyp_unify ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
@@ -356,7 +417,7 @@ let rec ctyp_suprema = function
   | CT_lint -> CT_lint
   | CT_lbits d -> CT_lbits d
   | CT_fbits (_, d) -> CT_lbits d
-  | CT_sbits d -> CT_lbits d
+  | CT_sbits (_, d) -> CT_lbits d
   | CT_fint _ -> CT_lint
   | CT_unit -> CT_unit
   | CT_bool -> CT_bool
@@ -420,6 +481,7 @@ let rec pp_clexp = function
   | CL_addr clexp -> string "*" ^^ pp_clexp clexp
   | CL_current_exception ctyp -> string "current_exception : " ^^ pp_ctyp ctyp
   | CL_have_exception -> string "have_exception"
+  | CL_return ctyp -> string "return : " ^^ pp_ctyp ctyp
 
 let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
   match instr with
@@ -470,6 +532,8 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
      pp_keyword "goto" ^^ string (str |> Util.blue |> Util.clear)
   | I_match_failure ->
      pp_keyword "match_failure"
+  | I_end ->
+     pp_keyword "end"
   | I_undefined ctyp ->
      pp_keyword "undefined" ^^ pp_ctyp ctyp
   | I_raw str ->
@@ -570,6 +634,7 @@ let rec clexp_deps = function
   | CL_addr clexp -> clexp_deps clexp
   | CL_have_exception -> IdSet.empty
   | CL_current_exception _ -> IdSet.empty
+  | CL_return _ -> IdSet.empty
 
 (* Return the direct, read/write dependencies of a single instruction *)
 let instr_deps = function
@@ -589,6 +654,7 @@ let instr_deps = function
   | I_goto label -> IdSet.empty, IdSet.empty
   | I_undefined _ -> IdSet.empty, IdSet.empty
   | I_match_failure -> IdSet.empty, IdSet.empty
+  | I_end -> IdSet.empty, IdSet.empty
 
 (* instrs_graph returns the control-flow graph for a list of
    instructions. *)
@@ -671,6 +737,7 @@ let rec map_clexp_ctyp f = function
   | CL_addr clexp -> CL_addr (map_clexp_ctyp f clexp)
   | CL_current_exception ctyp -> CL_current_exception (f ctyp)
   | CL_have_exception -> CL_have_exception
+  | CL_return ctyp -> CL_return (f ctyp)
 
 let rec map_instr_ctyp f (I_aux (instr, aux)) =
   let instr = match instr with
@@ -691,6 +758,7 @@ let rec map_instr_ctyp f (I_aux (instr, aux)) =
     | I_undefined ctyp -> I_undefined (f ctyp)
     | I_reset (ctyp, id) -> I_reset (f ctyp, id)
     | I_reinit (ctyp1, id, (frag, ctyp2)) -> I_reinit (f ctyp1, id, (frag, f ctyp2))
+    | I_end -> I_end
     | (I_comment _ | I_raw _ | I_label _ | I_goto _ | I_match_failure) as instr -> instr
   in
   I_aux (instr, aux)
@@ -700,7 +768,7 @@ let rec map_instr f (I_aux (instr, aux)) =
   let instr = match instr with
     | I_decl _ | I_init _ | I_reset _ | I_reinit _
       | I_funcall _ | I_copy _ | I_alias _ | I_clear _ | I_jump _ | I_throw _ | I_return _
-      | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ -> instr
+      | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ | I_end -> instr
     | I_if (cval, instrs1, instrs2, ctyp) ->
        I_if (cval, List.map (map_instr f) instrs1, List.map (map_instr f) instrs2, ctyp)
     | I_block instrs ->
@@ -744,7 +812,7 @@ let rec map_instrs f (I_aux (instr, aux)) =
     | I_funcall _ | I_copy _ | I_alias _ | I_clear _ | I_jump _ | I_throw _ | I_return _ -> instr
     | I_block instrs -> I_block (f (List.map (map_instrs f) instrs))
     | I_try_block instrs -> I_try_block (f (List.map (map_instrs f) instrs))
-    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ -> instr
+    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _  | I_end -> instr
   in
   I_aux (instr, aux)
 
@@ -769,3 +837,99 @@ let rec filter_instrs f instrs =
     | instr -> instr
   in
   List.filter f (List.map filter_instrs' instrs)
+
+(** GLOBAL: label_counter is used to make sure all labels have unique
+   names. Like gensym_counter it should be safe to reset between
+   top-level definitions. **)
+let label_counter = ref 0
+
+let label str =
+  let str = str ^ string_of_int !label_counter in
+  incr label_counter;
+  str
+
+let cval_ctyp = function (_, ctyp) -> ctyp
+
+let rec clexp_ctyp = function
+  | CL_id (_, ctyp) -> ctyp
+  | CL_return ctyp -> ctyp
+  | CL_field (clexp, field) ->
+     begin match clexp_ctyp clexp with
+     | CT_struct (id, ctors) ->
+        begin
+          try snd (List.find (fun (id, ctyp) -> string_of_id id = field) ctors) with
+          | Not_found -> failwith ("Struct type " ^ string_of_id id ^ " does not have a constructor " ^ field)
+        end
+     | ctyp -> failwith ("Bad ctyp for CL_field " ^ string_of_ctyp ctyp)
+     end
+  | CL_addr clexp ->
+     begin match clexp_ctyp clexp with
+     | CT_ref ctyp -> ctyp
+     | ctyp -> failwith ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
+     end
+  | CL_tuple (clexp, n) ->
+     begin match clexp_ctyp clexp with
+     | CT_tup typs ->
+        begin
+          try List.nth typs n with
+          | _ -> failwith "Tuple assignment index out of bounds"
+        end
+     | ctyp -> failwith ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
+     end
+  | CL_have_exception -> CT_bool
+  | CL_current_exception ctyp -> ctyp
+
+let rec instr_ctyps (I_aux (instr, aux)) =
+  match instr with
+  | I_decl (ctyp, _) | I_reset (ctyp, _) | I_clear (ctyp, _) | I_undefined ctyp ->
+     CTSet.singleton ctyp
+  | I_init (ctyp, _, cval) | I_reinit (ctyp, _, cval) ->
+     CTSet.add ctyp (CTSet.singleton (cval_ctyp cval))
+  | I_if (cval, instrs1, instrs2, ctyp) ->
+     CTSet.union (instrs_ctyps instrs1) (instrs_ctyps instrs2)
+     |> CTSet.add (cval_ctyp cval)
+     |> CTSet.add ctyp
+  | I_funcall (clexp, _, _, cvals) ->
+     List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty (List.map cval_ctyp cvals)
+     |> CTSet.add (clexp_ctyp clexp)
+  | I_copy (clexp, cval) | I_alias (clexp, cval) ->
+     CTSet.add (clexp_ctyp clexp) (CTSet.singleton (cval_ctyp cval))
+  | I_block instrs | I_try_block instrs ->
+     instrs_ctyps instrs
+  | I_throw cval | I_jump (cval, _) | I_return cval ->
+     CTSet.singleton (cval_ctyp cval)
+  | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_end ->
+     CTSet.empty
+
+and instrs_ctyps instrs = List.fold_left CTSet.union CTSet.empty (List.map instr_ctyps instrs)
+
+let ctype_def_ctyps = function
+  | CTD_enum _ -> []
+  | CTD_struct (_, fields) -> List.map snd fields
+  | CTD_variant (_, ctors) -> List.map snd ctors
+
+let cdef_ctyps = function
+  | CDEF_reg_dec (_, ctyp, instrs) ->
+     CTSet.add ctyp (instrs_ctyps instrs)
+  | CDEF_spec (_, ctyps, ctyp) ->
+     CTSet.add ctyp (List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty ctyps)
+  | CDEF_fundef (_, _, _, instrs) | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) ->
+     instrs_ctyps instrs
+  | CDEF_type tdef ->
+     List.fold_right CTSet.add (ctype_def_ctyps tdef) CTSet.empty
+  | CDEF_let (_, bindings, instrs) ->
+     List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty (List.map snd bindings)
+     |> CTSet.union (instrs_ctyps instrs)
+
+let rec c_ast_registers = function
+  | CDEF_reg_dec (id, ctyp, instrs) :: ast -> (id, ctyp, instrs) :: c_ast_registers ast
+  | _ :: ast -> c_ast_registers ast
+  | [] -> []
+
+let instr_split_at f =
+  let rec instr_split_at' f before = function
+    | [] -> (List.rev before, [])
+    | instr :: instrs when f instr -> (List.rev before, instr :: instrs)
+    | instr :: instrs -> instr_split_at' f (instr :: before) instrs
+  in
+  instr_split_at' f []

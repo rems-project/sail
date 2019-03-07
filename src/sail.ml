@@ -183,11 +183,8 @@ let options = Arg.align ([
     Arg.Set C_backend.opt_static,
     " make generated C functions static");
   ( "-trace",
-    Arg.Tuple [Arg.Set C_backend.opt_trace; Arg.Set Ocaml_backend.opt_trace_ocaml],
+    Arg.Tuple [Arg.Set Ocaml_backend.opt_trace_ocaml],
     " instrument output with tracing");
-  ( "-smt_trace",
-    Arg.Tuple [Arg.Set C_backend.opt_smt_trace],
-    " instrument output with tracing for SMT");
   ( "-cgen",
     Arg.Set opt_print_cgen,
     " generate CGEN source");
@@ -310,9 +307,6 @@ let options = Arg.align ([
   ( "-dmagic_hash",
     Arg.Set Initial_check.opt_magic_hash,
     " (debug) allow special character # in identifiers");
-  ( "-dfunction",
-    Arg.String (fun f -> C_backend.opt_debug_function := f),
-    " (debug) print debugging output for a single function");
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
     " (debug) provide basic profiling information for rewriting passes within Sail");
@@ -441,22 +435,22 @@ let main() =
          in
          let output_chan = match !opt_file_out with Some f -> open_out (f ^ ".c") | None -> stdout in
          Util.opt_warnings := true;
-         C_backend.compile_ast (C_backend.initial_ctx type_envs) output_chan (!opt_includes_c) ast_c;
+         C_backend.compile_ast type_envs output_chan (!opt_includes_c) ast_c;
          close_out output_chan
        else ());
       (if !(opt_print_ir)
        then
          let ast_c = rewrite_ast_c type_envs ast in
          let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
-         let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in
+         let ast_c, type_envs = Specialize.(specialize' 2 int_specialization ast_c type_envs) in
          let output_chan =
            match !opt_file_out with
            | Some f -> Util.opt_colors := false; open_out (f ^ ".ir.sail")
            | None -> stdout
          in
          Util.opt_warnings := true;
-         let cdefs = C_backend.(bytecode_ast (initial_ctx_iterate type_envs) (List.map flatten_cdef) ast_c) in
-         let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Bytecode_util.pp_cdef cdefs) in
+         let cdefs, _ = C_backend.jib_of_ast type_envs ast_c in
+         let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_cdef cdefs) in
          output_string output_chan (str ^ "\n");
          close_out output_chan
        else ());

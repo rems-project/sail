@@ -50,7 +50,7 @@
 
 open Ast
 open Ast_util
-open Bytecode
+open Jib
 open Type_check
 
 (* The A-normal form (ANF) grammar *)

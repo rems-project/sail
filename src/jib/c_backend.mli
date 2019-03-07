@@ -48,115 +48,71 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Ast
-open Ast_util
-open Bytecode
-open Bytecode_util
+open Jib
+open Type_check
 
-module StringMap = Map.Make(String)
+(** Global compilation options *)
 
-type 'a frame = {
-    jump_table : int StringMap.t;
-    locals : 'a Bindings.t;
-    pc : int;
-    instrs : instr array
-  }
+(** Output a dataflow graph for each generated function in Graphviz
+   (dot) format. *)
+val opt_debug_flow_graphs : bool ref
 
-type 'a gstate = {
-    globals : 'a Bindings.t;
-    cdefs : cdef list
-  }
+(** Define generated functions as static *)
+val opt_static : bool ref
 
-type 'a stack = {
-    top : 'a frame;
-    ret : ('a -> 'a frame) list
-  }
+(** Do not generate a main function *)
+val opt_no_main : bool ref
 
-let make_jump_table instrs =
-  let rec aux n = function
-    | I_aux (I_label label, _) :: instrs -> StringMap.add label n (aux (n + 1) instrs)
-    | _ :: instrs -> aux (n + 1) instrs
-    | [] -> StringMap.empty
-  in
-  aux 0 instrs
+(** (WIP) Do not include rts.h (the runtime), and do not generate code
+   that requires any setup or teardown routines to be run by a runtime
+   before executing any instruction semantics. *)
+val opt_no_rts : bool ref
 
-let new_gstate cdefs = {
-    globals = Bindings.empty;
-    cdefs = cdefs
-  }
+(** Ordinarily we use plain z-encoding to name-mangle generated Sail
+   identifiers into a form suitable for C. If opt_prefix is set, then
+   the "z" which is added on the front of each generated C function
+   will be replaced by opt_prefix. E.g. opt_prefix := "sail_" would
+   give sail_my_function rather than zmy_function. *)
+val opt_prefix : string ref
 
-let new_stack instrs = {
-    top = {
-      jump_table = make_jump_table instrs;
-      locals = Bindings.empty;
-      pc = 0;
-      instrs = Array.of_list instrs
-    };
-    ret = []
-  }
+(** opt_extra_params and opt_extra_arguments allow additional state to
+   be threaded through the generated C code by adding an additional
+   parameter to each function type, and then giving an extra argument
+   to each function call. For example we could have
 
-let with_top stack f =
-  { stack with top = f (stack.top) }
+   opt_extra_params := Some "CPUMIPSState *env"
+   opt_extra_arguments := Some "env"
 
-let eval_fragment gstate locals = function
-  | F_id id ->
-     begin match Bindings.find_opt id locals with
-     | Some vl -> vl
-     | None ->
-        begin match Bindings.find_opt id gstate.globals with
-        | Some vl -> vl
-        | None -> failwith "Identifier not found"
-        end
-     end
-  | F_lit vl -> vl
-  | _ -> failwith "Cannot eval fragment"
+   and every generated function will take a pointer to a QEMU MIPS
+   processor state, and each function will be passed the env argument
+   when it is called. *)
+val opt_extra_params : string option ref
+val opt_extra_arguments : string option ref
 
-let is_function id = function
-  | CDEF_fundef (id', _, _, _) when Id.compare id id' = 0 -> true
-  | _ -> false
+(** (WIP) [opt_memo_cache] will store the compiled function
+   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
+   of the original function to be compiled. Enabled using the -memo
+   flag. Uses Marshal so it's quite picky about the exact version of
+b   the Sail version. This cache can obviously become stale if the C
+   backend changes - it'll load an old version compiled without said
+   changes. *)
+val opt_memo_cache : bool ref
 
-let step (gstate, stack) =
-  let I_aux (instr_aux, (_, l)) = stack.top.instrs.(stack.top.pc) in
-  match instr_aux with
-  | I_decl _ ->
-     gstate, with_top stack (fun frame -> { frame with pc = frame.pc + 1 })
+(** Optimization flags *)
 
-  | I_init (_, id, (fragment, _)) ->
-     let vl = eval_fragment gstate stack.top.locals fragment in
-     gstate,
-     with_top stack (fun frame -> { frame with pc = frame.pc + 1; locals = Bindings.add id vl frame.locals })
+val optimize_primops : bool ref
+val optimize_hoist_allocations : bool ref
+val optimize_struct_updates : bool ref
+val optimize_alias : bool ref
+val optimize_experimental : bool ref
 
-  | I_jump ((fragment, _), label) ->
-     let vl = eval_fragment gstate stack.top.locals fragment in
-     gstate,
-     begin match vl with
-     | V_bool true ->
-        with_top stack (fun frame -> { frame with pc = StringMap.find label frame.jump_table })
-     | V_bool false ->
-        with_top stack (fun frame -> { frame with pc = frame.pc + 1 })
-     | _ ->
-        failwith "Type error"
-     end
+(** Convert a typ to a IR ctyp *)
+val ctyp_of_typ : Jib_compile.ctx -> Ast.typ -> ctyp
 
-  | I_funcall (clexp, _, id, cvals) ->
-     let args = List.map (fun (fragment, _) -> eval_fragment gstate stack.top.locals fragment) cvals in
-     let params, instrs =
-       match List.find_opt (is_function id) gstate.cdefs with
-       | Some (CDEF_fundef (_, _, params, instrs)) -> params, instrs
-       | _ -> failwith "Function not found"
-     in
-     gstate,
-     {
-       top = {
-         jump_table = make_jump_table instrs;
-         locals = List.fold_left2 (fun locals param arg -> Bindings.add param arg locals) Bindings.empty params args;
-         pc = 0;
-         instrs = Array.of_list instrs;
-       };
-       ret = (fun vl -> { stack.top with pc = stack.top.pc + 1 }) :: stack.ret
-     }
+(** Rewriting steps for compiled ASTs *)
+val flatten_instrs : instr list -> instr list
 
-  | I_goto label ->
-     gstate, with_top stack (fun frame -> { frame with pc = StringMap.find label frame.jump_table })
+val flatten_cdef : cdef -> cdef
 
-  | _ -> raise (Reporting.err_unreachable l __POS__ "Unhandled instruction")
+val jib_of_ast : Env.t -> tannot Ast.defs -> cdef list * Jib_compile.ctx
+val compile_ast : Env.t -> out_channel -> string list -> tannot Ast.defs -> unit

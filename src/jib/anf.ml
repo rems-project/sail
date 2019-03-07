@@ -50,8 +50,8 @@
 
 open Ast
 open Ast_util
-open Bytecode
-open Bytecode_util
+open Jib
+open Jib_util
 open Type_check
 open PPrint
 
