@@ -522,13 +522,11 @@ let pp_cdef = function
 (**************************************************************************)
 
 type graph_node =
-  | G_id of id
   | G_label of string
   | G_instr of int * instr
   | G_start
 
 let string_of_node = function
-  | G_id id -> string_of_id id
   | G_label label -> label
   | G_instr (n, instr) -> string_of_int n ^ ": " ^ Pretty_print_sail.to_string (pp_instr ~short:true instr)
   | G_start -> "START"
@@ -537,7 +535,6 @@ module Node = struct
   type t = graph_node
   let compare gn1 gn2 =
     match gn1, gn2 with
-    | G_id id1, G_id id2 -> Id.compare id1 id2
     | G_label str1, G_label str2 -> String.compare str1 str2
     | G_instr (n1, _), G_instr (n2, _) -> compare n1 n2
     | G_start  , G_start   -> 0
@@ -545,8 +542,6 @@ module Node = struct
     | _        , G_start   -> -1
     | G_instr _, _         -> 1
     | _        , G_instr _ -> -1
-    | G_id _   , _         -> 1
-    | _        , G_id _    -> -1
 end
 
 module NodeGraph = Graph.Make(Node)
@@ -557,45 +552,46 @@ module NS = Set.Make(Node)
 type dep_graph = NodeGraph.graph
 
 let rec fragment_deps = function
-  | F_id id | F_ref id -> NS.singleton (G_id id)
-  | F_lit _ -> NS.empty
+  | F_id id | F_ref id -> IdSet.singleton id
+  | F_lit _ -> IdSet.empty
   | F_field (frag, _) | F_unary (_, frag) | F_poly frag -> fragment_deps frag
-  | F_call (_, frags) -> List.fold_left NS.union NS.empty (List.map fragment_deps frags)
-  | F_op (frag1, _, frag2) -> NS.union (fragment_deps frag1) (fragment_deps frag2)
-  | F_current_exception -> NS.empty
-  | F_have_exception -> NS.empty
-  | F_raw _ -> NS.empty
+  | F_call (_, frags) -> List.fold_left IdSet.union IdSet.empty (List.map fragment_deps frags)
+  | F_op (frag1, _, frag2) -> IdSet.union (fragment_deps frag1) (fragment_deps frag2)
+  | F_current_exception -> IdSet.empty
+  | F_have_exception -> IdSet.empty
+  | F_raw _ -> IdSet.empty
 
 let cval_deps = function (frag, _) -> fragment_deps frag
 
 let rec clexp_deps = function
-  | CL_id (id, _) -> NS.singleton (G_id id)
+  | CL_id (id, _) -> IdSet.singleton id
   | CL_field (clexp, _) -> clexp_deps clexp
   | CL_tuple (clexp, _) -> clexp_deps clexp
   | CL_addr clexp -> clexp_deps clexp
-  | CL_have_exception -> NS.empty
-  | CL_current_exception _ -> NS.empty
+  | CL_have_exception -> IdSet.empty
+  | CL_current_exception _ -> IdSet.empty
 
-(** Return the direct, non program-order dependencies of a single
-   instruction **)
+(* Return the direct, read/write dependencies of a single instruction *)
 let instr_deps = function
-  | I_decl (ctyp, id) -> NS.empty, NS.singleton (G_id id)
-  | I_reset (ctyp, id) -> NS.empty, NS.singleton (G_id id)
-  | I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval) -> cval_deps cval, NS.singleton (G_id id)
-  | I_if (cval, _, _, _) -> cval_deps cval, NS.empty
-  | I_jump (cval, label) -> cval_deps cval, NS.singleton (G_label label)
-  | I_funcall (clexp, _, _, cvals) -> List.fold_left NS.union NS.empty (List.map cval_deps cvals), clexp_deps clexp
+  | I_decl (ctyp, id) -> IdSet.empty, IdSet.singleton id
+  | I_reset (ctyp, id) -> IdSet.empty, IdSet.singleton id
+  | I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval) -> cval_deps cval, IdSet.singleton id
+  | I_if (cval, _, _, _) -> cval_deps cval, IdSet.empty
+  | I_jump (cval, label) -> cval_deps cval, IdSet.empty
+  | I_funcall (clexp, _, _, cvals) -> List.fold_left IdSet.union IdSet.empty (List.map cval_deps cvals), clexp_deps clexp
   | I_copy (clexp, cval) -> cval_deps cval, clexp_deps clexp
   | I_alias (clexp, cval) -> cval_deps cval, clexp_deps clexp
-  | I_clear (_, id) -> NS.singleton (G_id id), NS.singleton (G_id id)
-  | I_throw cval | I_return cval -> cval_deps cval, NS.empty
-  | I_block _ | I_try_block _ -> NS.empty, NS.empty
-  | I_comment _ | I_raw _ -> NS.empty, NS.empty
-  | I_label label -> NS.singleton (G_label label), NS.empty
-  | I_goto label -> NS.empty, NS.singleton (G_label label)
-  | I_undefined _ -> NS.empty, NS.empty
-  | I_match_failure -> NS.empty, NS.empty
+  | I_clear (_, id) -> IdSet.singleton id, IdSet.singleton id
+  | I_throw cval | I_return cval -> cval_deps cval, IdSet.empty
+  | I_block _ | I_try_block _ -> IdSet.empty, IdSet.empty
+  | I_comment _ | I_raw _ -> IdSet.empty, IdSet.empty
+  | I_label label -> IdSet.empty, IdSet.empty
+  | I_goto label -> IdSet.empty, IdSet.empty
+  | I_undefined _ -> IdSet.empty, IdSet.empty
+  | I_match_failure -> IdSet.empty, IdSet.empty
 
+(* instrs_graph returns the control-flow graph for a list of
+   instructions. *)
 let instrs_graph instrs =
   let icounter = ref 0 in
   let graph = ref NodeGraph.empty in
@@ -607,43 +603,34 @@ let instrs_graph instrs =
     | I_block instrs | I_try_block instrs ->
        List.fold_left add_instr last_instrs instrs
     | I_if (_, then_instrs, else_instrs, _) ->
-       begin
-         let inputs, _ = instr_deps instr in (* if has no outputs *)
-         List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
-         NS.iter (fun input -> graph := NodeGraph.add_edge' input node !graph) inputs;
-         let n1 = List.fold_left add_instr [node] then_instrs in
-         let n2 = List.fold_left add_instr [node] else_instrs in
-         incr icounter;
-         let join = G_instr (!icounter, icomment "join") in
-         List.iter (fun i -> graph := NodeGraph.add_edge' i join !graph) n1;
-         List.iter (fun i -> graph := NodeGraph.add_edge' i join !graph) n2;
-         [join]
-       end
+       List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
+       let n1 = List.fold_left add_instr [node] then_instrs in
+       let n2 = List.fold_left add_instr [node] else_instrs in
+       incr icounter;
+       let join = G_instr (!icounter, icomment "join") in
+       List.iter (fun i -> graph := NodeGraph.add_edge' i join !graph) n1;
+       List.iter (fun i -> graph := NodeGraph.add_edge' i join !graph) n2;
+       [join]
     | I_return _ ->
-       begin
-         let inputs, outputs = instr_deps instr in
-         List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
-         NS.iter (fun input -> graph := NodeGraph.add_edge' input node !graph) inputs;
-         NS.iter (fun output -> graph := NodeGraph.add_edge' node output !graph) outputs;
-         []
-       end
-    | I_label _ ->
+       List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
+       []
+    | I_label label ->
+       graph := NodeGraph.add_edge' (G_label label) node !graph;
        node :: last_instrs
     | I_goto label ->
-       begin
-         let _, outputs = instr_deps instr in
-         List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
-         NS.iter (fun output -> graph := NodeGraph.add_edge' node output !graph) outputs;
-         []
-       end
+       List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
+       graph := NodeGraph.add_edge' node (G_label label) !graph;
+       []
+    | I_jump (cval, label) ->
+       List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
+       graph := NodeGraph.add_edges' (G_label label) [] !graph;
+       [node]
+    | I_match_failure ->
+       List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
+       []
     | _ ->
-       begin
-         let inputs, outputs = instr_deps instr in
-         List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
-         NS.iter (fun input -> graph := NodeGraph.add_edge' input node !graph) inputs;
-         NS.iter (fun output -> graph := NodeGraph.add_edge' node output !graph) outputs;
-         [node]
-       end
+       List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
+       [node]
   in
   ignore (List.fold_left add_instr [G_start] instrs);
   let graph = NodeGraph.fix_leaves !graph in
@@ -653,17 +640,17 @@ let make_dot id graph =
   Util.opt_colors := false;
   let to_string node = String.escaped (string_of_node node) in
   let node_color = function
-    | G_start                            -> "lightpink"
-    | G_id _                             -> "yellow"
-    | G_instr (_, I_aux (I_decl _, _))   -> "olivedrab1"
-    | G_instr (_, I_aux (I_init _, _))   -> "springgreen"
-    | G_instr (_, I_aux (I_clear _, _))  -> "peachpuff"
-    | G_instr (_, I_aux (I_goto _, _))   -> "orange1"
-    | G_instr (_, I_aux (I_label _, _))  -> "white"
-    | G_instr (_, I_aux (I_raw _, _))    -> "khaki"
-    | G_instr (_, I_aux (I_return _, _)) -> "deeppink"
-    | G_instr _                          -> "azure"
-    | G_label _                          -> "lightpink"
+    | G_start                               -> "lightpink"
+    | G_instr (_, I_aux (I_decl _, _))      -> "olivedrab1"
+    | G_instr (_, I_aux (I_init _, _))      -> "springgreen"
+    | G_instr (_, I_aux (I_clear _, _))     -> "peachpuff"
+    | G_instr (_, I_aux (I_goto _, _))      -> "orange1"
+    | G_instr (_, I_aux (I_label _, _))     -> "white"
+    | G_instr (_, I_aux (I_raw _, _))       -> "khaki"
+    | G_instr (_, I_aux (I_return _, _))    -> "deeppink"
+    | G_instr (_, I_aux (I_undefined _, _)) -> "deeppink"
+    | G_instr _                             -> "azure"
+    | G_label _                             -> "lightpink"
   in
   let edge_color from_node to_node =
     match from_node, to_node with
@@ -671,8 +658,6 @@ let make_dot id graph =
     | G_label _, _         -> "darkgreen"
     | _        , G_label _ -> "goldenrod4"
     | G_instr _, G_instr _ -> "black"
-    | G_id _   , G_instr _ -> "blue3"
-    | G_instr _, G_id _    -> "red3"
     | _        , _         -> "coral3"
   in
   let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".gv") in
@@ -765,36 +750,15 @@ let rec map_instrs f (I_aux (instr, aux)) =
 
 let rec instr_ids (I_aux (instr, _)) =
   let reads, writes = instr_deps instr in
-  let get_id = function
-    | G_id id -> Some id
-    | _ -> None
-  in
-  NS.elements reads @ NS.elements writes
-  |> List.map get_id
-  |> Util.option_these
-  |> IdSet.of_list
+  IdSet.of_list (IdSet.elements reads @ IdSet.elements writes)
 
 let rec instr_reads (I_aux (instr, _)) =
   let reads, _ = instr_deps instr in
-  let get_id = function
-    | G_id id -> Some id
-    | _ -> None
-  in
-  NS.elements reads
-  |> List.map get_id
-  |> Util.option_these
-  |> IdSet.of_list
+  IdSet.of_list (IdSet.elements reads)
 
 let rec instr_writes (I_aux (instr, _)) =
   let _, writes = instr_deps instr in
-  let get_id = function
-    | G_id id -> Some id
-    | _ -> None
-  in
-  NS.elements writes
-  |> List.map get_id
-  |> Util.option_these
-  |> IdSet.of_list
+  IdSet.of_list (IdSet.elements writes)
 
 let rec filter_instrs f instrs =
   let filter_instrs' = function
