@@ -1,7 +1,7 @@
 SAIL=../src/sail.native
 LEM:=../../lem/lem
 
-SOURCES=../etc/regfp.sail x64.sail
+SOURCES=../lib/regfp.sail x64.sail
 
 all: x86.lem x86.ml x86_embed.lem
 

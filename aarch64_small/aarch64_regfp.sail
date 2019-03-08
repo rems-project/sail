@@ -240,6 +240,32 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
           IK_barrier(Barrier_ISB)
       };
     },
+
+    (DataCache(t,dc_op)) => {
+      iR = appendL(iR,xFP(t));
+
+      ik = match dc_op {
+        IVAC  => not_implemented("DC IVAC"),
+        ISW   => not_implemented("DC ISW"),
+        CSW   => not_implemented("DC CSW"),
+        CISW  => not_implemented("DC CISW"),
+        ZVA   => not_implemented("DC ZVA"),
+        CVAC  => not_implemented("DC CVAC"),
+        CVAU  => IK_cache_op(Cache_op_D_CVAU),
+        CIVAC => not_implemented("DC CIVAC")
+      };
+    },
+
+    (InstructionCache(t,ic_op)) => {
+      iR = appendL(iR,xFP(t));
+
+      ik = match ic_op {
+        IALLUIS => not_implemented("IC IALLUIS"),
+        IALLU   => not_implemented("IC IALLU"),
+        IVAU    => IK_cache_op(Cache_op_I_IVAU)
+      };
+    },
+
     (System(t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,has_result))  => {
       oR = appendL(oR,xFP(t));
       not_implemented("System"); /* because SysOp_R and SysOp_W */

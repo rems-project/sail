@@ -64,6 +64,10 @@ bitfield TMSTATUS_type : bits(64) =
 register TMAbortEffect : TMSTATUS_type /* we abuse the register write to pass out the status value */
 register TMStartEffect : TMSTATUS_type /* we abuse the register read to pass in the status value */
 
+/* abuse register write effect, instead of adding proper effects: */
+register data_cache_operation_CVAU : bits(64)
+register instruction_cache_operation_IVAU : bits(64)
+
 /* General purpose registers */
 
 register R30 : bits(64)
