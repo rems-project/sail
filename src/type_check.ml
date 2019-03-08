@@ -1851,7 +1851,7 @@ let instantiate_quants quants unifier =
    they'll be unambigiously unified with the argument types so it's
    better to just not bother with the return type.
 *)
-let rec ambiguous_vars (Typ_aux (aux, _)) =
+let rec ambiguous_vars' (Typ_aux (aux, _)) =
   match aux with
   | Typ_app (_, args) -> List.fold_left KidSet.union KidSet.empty (List.map ambiguous_arg_vars args)
   | _ -> KidSet.empty
@@ -1875,6 +1875,10 @@ and ambiguous_nexp_vars (Nexp_aux (aux, _)) =
   match aux with
   | Nexp_sum (nexp1, nexp2) -> KidSet.union (tyvars_of_nexp nexp1) (tyvars_of_nexp nexp2)
   | _ -> KidSet.empty
+
+let ambiguous_vars typ =
+  let vars = ambiguous_vars' typ in
+  if KidSet.cardinal vars > 1 then vars else KidSet.empty
 
 (**************************************************************************)
 (* 3.5. Subtyping with existentials                                       *)
