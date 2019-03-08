@@ -2222,59 +2222,6 @@ let sgen_finish = function
      Printf.sprintf "  finish_%s();" (sgen_id id)
   | _ -> assert false
 
-let instrument_tracing ctx =
-  let module StringSet = Set.Make(String) in
-  let traceable = StringSet.of_list ["fbits"; "sail_string"; "lbits"; "sail_int"; "unit"; "bool"] in
-  let rec instrument = function
-    | (I_aux (I_funcall (clexp, _, id, args), _) as instr) :: instrs ->
-       let trace_start =
-         iraw (Printf.sprintf "trace_start(\"%s\");" (String.escaped (string_of_id id)))
-       in
-       let trace_arg cval =
-         let ctyp_name = sgen_ctyp_name (cval_ctyp cval) in
-         if StringSet.mem ctyp_name traceable then
-           iraw (Printf.sprintf "trace_%s(%s);" ctyp_name (sgen_cval cval))
-         else
-           iraw "trace_unknown();"
-       in
-       let rec trace_args = function
-         | [] -> []
-         | [cval] -> [trace_arg cval]
-         | cval :: cvals ->
-            trace_arg cval :: iraw "trace_argsep();" :: trace_args cvals
-       in
-       let trace_end = iraw "trace_end();" in
-       let trace_ret = iraw "trace_unknown();"
-                            (*
-         let ctyp_name = sgen_ctyp_name ctyp in
-         if StringSet.mem ctyp_name traceable then
-           iraw (Printf.sprintf "trace_%s(%s);" (sgen_ctyp_name ctyp) (sgen_clexp_pure clexp))
-         else
-           iraw "trace_unknown();"
-                             *)
-       in
-       [trace_start]
-       @ trace_args args
-       @ [iraw "trace_argend();";
-          instr;
-          trace_end;
-          trace_ret;
-          iraw "trace_retend();"]
-       @ instrument instrs
-
-    | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (instrument block), aux) :: instrument instrs
-    | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (instrument block), aux) :: instrument instrs
-    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
-       I_aux (I_if (cval, instrument then_instrs, instrument else_instrs, ctyp), aux) :: instrument instrs
-
-    | instr :: instrs -> instr :: instrument instrs
-    | [] -> []
-  in
-  function
-  | CDEF_fundef (function_id, heap_return, args, body) ->
-     CDEF_fundef (function_id, heap_return, args, instrument body)
-  | cdef -> cdef
-
 let rec get_recursive_functions (Defs defs) =
   match defs with
   | DEF_internal_mutrec fundefs :: defs ->
