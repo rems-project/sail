@@ -485,14 +485,22 @@ function clause execute ( Barrier(op,domain,types) ) = {
 
 (* SYS L=0b0 *)
 (* SYSL L=0b1 *)
+(* The following are actually aliases of SYS: *)
+(* DC L=0b0,SysOp(op1,CRn,CRm,op2) = Sys_DC *)
+(* IC L=0b0,SysOp(op1,CRn,CRm,op2) = Sys_IC *)
 function clause decodeSystem (0b1101010100:[L]:0b01:(bit[3]) op1:(bit[4]) CRn:(bit[4]) CRm:(bit[3]) op2:Rt) = {
   (* FIXME: we don't allow register reads in the decoding *)
   (* ARM: CheckSystemAccess(0b01, op1, CRn, CRm, op2, Rt, L);*)
 
   (reg_index) t := UInt_reg(Rt);
 
-  switch SysOp(op1,CRn,CRm,op2) {
+  (SystemOp) sysop := Sys_SYS;
+  if L == 0 then
+    sysop := SysOp(op1,CRn,CRm,op2);
+
+  switch sysop {
     case Sys_AT -> {not_implemented("AT"); None}
+
     case Sys_DC ->
         switch (op1, CRm, op2) {
           case (0b000, 0b0110, 0b001) -> Some(DataCache(t,IVAC))
@@ -513,7 +521,8 @@ function clause decodeSystem (0b1101010100:[L]:0b01:(bit[3]) op1:(bit[4]) CRn:(b
         }
 
     case Sys_TLBI -> {not_implemented("TLBI"); None}
-    case _ -> {
+
+    case Sys_SYS -> {
       (uinteger) sys_op0 := 1;
       (uinteger) sys_op1 := UInt(op1);
       (uinteger) sys_op2 := UInt(op2);

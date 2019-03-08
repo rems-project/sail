@@ -117,3 +117,9 @@ let translate_revOp =
 
 let translate_pSTATEField =
   translate_enum [PSTATEField_DAIFSet; PSTATEField_DAIFClr; PSTATEField_SP]
+
+let translate_dCOp =
+  translate_enum [IVAC; ISW; CSW; CISW; ZVA; CVAC; CVAU; CIVAC]
+
+let translate_iCOp =
+  translate_enum [IALLUIS; IALLU; IVAU]

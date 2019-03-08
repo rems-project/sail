@@ -43,3 +43,5 @@
 | `AArch64TestBitAndBranch (t,datasize,bit_pos,bit_val,offset) -> fold_reg t (y_reg, y_sreg)
 | `AArch64MoveSystemRegister (t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,read) -> fold_reg t (y_reg, y_sreg)
 | `AArch64MoveSystemImmediate (operand,field) -> (y_reg, y_sreg)
+| `AArch64DataCache (t, dc_op) -> fold_reg t (y_reg, y_sreg)
+| `AArch64InstructionCache (t, ic_op) -> fold_reg t (y_reg, y_sreg)

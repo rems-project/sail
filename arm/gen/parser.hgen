@@ -1401,3 +1401,15 @@
   | MSR SYSREG COMMA xreg
     { if not (isregzr $4) then error_registers ("expected " ^ $1.txt ^ " <systemreg>, <Xt>")
       else `AArch64MoveSystemRegister($4,$2.sys_op0,$2.sys_op1,$2.sys_op2,$2.sys_crn,$2.sys_crm,false) }
+
+  /* DC */
+
+  | DC DCOP COMMA xreg
+    { if not (isregzr $4) then error_registers ("expected " ^ $1.txt ^ " <dc_op>, <Xt>")
+      else `AArch64DataCache($4,$2) }
+
+  /* IC */
+
+  | IC ICOP COMMA xreg
+    { if not (isregzr $4) then error_registers ("expected " ^ $1.txt ^ " <ic_op>, <Xt>")
+      else `AArch64InstructionCache($4,$2) }

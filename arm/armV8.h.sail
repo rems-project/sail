@@ -64,6 +64,7 @@ typedef TMSTATUS_type = register bits [63:0]
 register (TMSTATUS_type) TMAbortEffect (* we abuse the register write to pass out the status value *)
 register (TMSTATUS_type) TMStartEffect (* we abuse the register read to pass in the status value *)
 
+(* abuse register write effect, instead of adding proper effects: *)
 register (bit[64]) data_cache_operation_CVAU
 register (bit[64]) instruction_cache_operation_IVAU
 

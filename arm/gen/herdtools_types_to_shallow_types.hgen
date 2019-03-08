@@ -151,3 +151,18 @@ let translate_pSTATEField _ = function
   | PSTATEField_DAIFSet -> ArmV8_embed_types.PSTATEField_DAIFSet
   | PSTATEField_DAIFClr -> ArmV8_embed_types.PSTATEField_DAIFClr
   | PSTATEField_SP -> ArmV8_embed_types.PSTATEField_SP
+
+let translate_dCOp _ = function
+  | IVAC  -> ArmV8_embed_types.IVAC
+  | ISW   -> ArmV8_embed_types.ISW
+  | CSW   -> ArmV8_embed_types.CSW
+  | CISW  -> ArmV8_embed_types.CISW
+  | ZVA   -> ArmV8_embed_types.ZVA
+  | CVAC  -> ArmV8_embed_types.CVAC
+  | CVAU  -> ArmV8_embed_types.CVAU
+  | CIVAC -> ArmV8_embed_types.CIVAC
+
+let translate_iCOp _ = function
+  | IALLUIS -> ArmV8_embed_types.IALLUIS
+  | IALLU   -> ArmV8_embed_types.IALLU
+  | IVAU    -> ArmV8_embed_types.IVAU

@@ -334,3 +334,13 @@
     MoveSystemImmediate
       (translate_bit4 "operand" operand,
         translate_pSTATEField "field" field)
+
+| `AArch64DataCache (t, dc_op) ->
+    DataCache
+      (translate_reg "t" t,
+      translate_dCOp "dc_op" dc_op)
+
+| `AArch64InstructionCache (t, ic_op) ->
+    InstructionCache
+      (translate_reg "t" t,
+      translate_iCOp "ic_op" ic_op)

@@ -152,3 +152,17 @@ let translate_out_pSTATEField = function
     | ArmV8_embed_types.PSTATEField_DAIFClr -> PSTATEField_DAIFClr
     | ArmV8_embed_types.PSTATEField_SP -> PSTATEField_SP
 
+let translate_out_dCOp = function
+    | ArmV8_embed_types.IVAC  -> IVAC
+    | ArmV8_embed_types.ISW   -> ISW
+    | ArmV8_embed_types.CSW   -> CSW
+    | ArmV8_embed_types.CISW  -> CISW
+    | ArmV8_embed_types.ZVA   -> ZVA
+    | ArmV8_embed_types.CVAC  -> CVAC
+    | ArmV8_embed_types.CVAU  -> CVAU
+    | ArmV8_embed_types.CIVAC -> CIVAC
+
+let translate_out_iCOp = function
+    | ArmV8_embed_types.IALLUIS -> IALLUIS
+    | ArmV8_embed_types.IALLU   -> IALLU
+    | ArmV8_embed_types.IVAU    -> IVAU
