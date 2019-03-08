@@ -478,7 +478,7 @@ function clause decodeSystem (0b1101010100@[L]@0b01@(op1 : bits(3))@(CRn : bits(
     sysop = SysOp(op1,CRn,CRm,op2);
 
   match sysop {
-    Sys_AT => {not_implemented("AT"); None ();},
+    Sys_AT => not_implemented("AT"),
 
     Sys_DC =>
         match (op1, CRm, op2) {
@@ -490,7 +490,7 @@ function clause decodeSystem (0b1101010100@[L]@0b01@(op1 : bits(3))@(CRn : bits(
           (0b011, 0b1010, 0b001) => Some(DataCache(t,CVAC)),
           (0b011, 0b1011, 0b001) => Some(DataCache(t,CVAU)),
           (0b011, 0b1110, 0b001) => Some(DataCache(t,CIVAC)),
-          _ => {assert(false); None ();}
+          _ => error("should never happen")
         },
 
     Sys_IC =>
@@ -498,10 +498,10 @@ function clause decodeSystem (0b1101010100@[L]@0b01@(op1 : bits(3))@(CRn : bits(
           (0b000, 0b0001, 0b000) => Some(InstructionCache(t,IALLUIS)),
           (0b000, 0b0101, 0b000) => Some(InstructionCache(t,IALLU)),
           (0b011, 0b0101, 0b001) => Some(InstructionCache(t,IVAU)),
-          _ => {assert(false); None ();}
+          _ => error("should never happen")
         },
 
-    Sys_TLBI => {not_implemented("TLBI"); None ();},
+    Sys_TLBI => not_implemented("TLBI"),
 
     Sys_SYS => {
       sys_op0 : uinteger = 1;
