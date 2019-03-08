@@ -92,6 +92,15 @@ typedef trans_kind = enumerate {
   Transaction_start; Transaction_commit; Transaction_abort;
 }
 
+(* cache maintenance instructions *)
+typedef cache_op_kind = enumerate {
+  (* AArch64 DC *)
+  Cache_op_D_IVAC; Cache_op_D_ISW;  Cache_op_D_CSW;  Cache_op_D_CISW;
+  Cache_op_D_ZVA;  Cache_op_D_CVAC; Cache_op_D_CVAU; Cache_op_D_CIVAC;
+  (* AArch64 IC *)
+  Cache_op_I_IALLUIS; Cache_op_I_IALLU; Cache_op_I_IVAU;
+}
+
 typedef instruction_kind = const union {
   (barrier_kind) IK_barrier;
   (read_kind) IK_mem_read;
@@ -99,5 +108,6 @@ typedef instruction_kind = const union {
   (read_kind, write_kind) IK_mem_rmw;
   IK_branch;
   (trans_kind) IK_trans;
-  IK_simple
+  IK_simple;
+  (cache_op_kind) IK_cache_op
 }

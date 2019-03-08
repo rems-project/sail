@@ -238,6 +238,30 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) effect pure initia
           IK_barrier(Barrier_ISB)
       };
     }
+
+    case (DataCache(t,dc_op)) -> {
+      iR := append(iR,xFP(t));
+      switch dc_op {
+        case IVAC  -> not_implemented("DC IVAC")
+        case ISW   -> not_implemented("DC ISW")
+        case CSW   -> not_implemented("DC CSW")
+        case CISW  -> not_implemented("DC CISW")
+        case ZVA   -> not_implemented("DC ZVA")
+        case CVAC  -> not_implemented("DC CVAC")
+        case CVAU  -> ik := IK_cache_op(Cache_op_D_CVAU)
+        case CIVAC -> not_implemented("DC CIVAC")
+      }
+    }
+
+    case (InstructionCache(t,ic_op)) -> {
+      iR := append(iR,xFP(t));
+      switch ic_op {
+        case IALLUIS -> not_implemented("IC IALLUIS")
+        case IALLU   -> not_implemented("IC IALLU")
+        case IVAU    -> ik := IK_cache_op(Cache_op_I_IVAU)
+      }
+    }
+
     case (System(t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,has_result)) -> {
       oR := append(oR,xFP(t));
       not_implemented("System"); (* because SysOp_R and SysOp_W *)
