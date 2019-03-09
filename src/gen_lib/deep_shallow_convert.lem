@@ -555,6 +555,41 @@ instance (ToFromInterpValue trans_kind)
 end
 
 
+let cache_op_kindToInterpValue = function
+  | Cache_op_D_IVAC -> V_ctor (Id_aux (Id "Cache_op_D_IVAC") Unknown) (T_id "cache_op_kind") (C_Enum 0) (toInterpValue ())
+  | Cache_op_D_ISW -> V_ctor (Id_aux (Id "Cache_op_D_ISW") Unknown) (T_id "cache_op_kind") (C_Enum 1) (toInterpValue ())
+  | Cache_op_D_CSW -> V_ctor (Id_aux (Id "Cache_op_D_CSW") Unknown) (T_id "cache_op_kind") (C_Enum 2) (toInterpValue ())
+  | Cache_op_D_CISW -> V_ctor (Id_aux (Id "Cache_op_D_CISW") Unknown) (T_id "cache_op_kind") (C_Enum 3) (toInterpValue ())
+  | Cache_op_D_ZVA -> V_ctor (Id_aux (Id "Cache_op_D_ZVA") Unknown) (T_id "cache_op_kind") (C_Enum 4) (toInterpValue ())
+  | Cache_op_D_CVAC -> V_ctor (Id_aux (Id "Cache_op_D_CVAC") Unknown) (T_id "cache_op_kind") (C_Enum 5) (toInterpValue ())
+  | Cache_op_D_CVAU -> V_ctor (Id_aux (Id "Cache_op_D_CVAU") Unknown) (T_id "cache_op_kind") (C_Enum 6) (toInterpValue ())
+  | Cache_op_D_CIVAC -> V_ctor (Id_aux (Id "Cache_op_D_CIVAC") Unknown) (T_id "cache_op_kind") (C_Enum 7) (toInterpValue ())
+  | Cache_op_I_IALLUIS -> V_ctor (Id_aux (Id "Cache_op_I_IALLUIS") Unknown) (T_id "cache_op_kind") (C_Enum 8) (toInterpValue ())
+  | Cache_op_I_IALLU -> V_ctor (Id_aux (Id "Cache_op_I_IALLU") Unknown) (T_id "cache_op_kind") (C_Enum 9) (toInterpValue ())
+  | Cache_op_I_IVAU -> V_ctor (Id_aux (Id "Cache_op_I_IVAU") Unknown) (T_id "cache_op_kind") (C_Enum 10) (toInterpValue ())
+  end
+let rec cache_op_kindFromInterpValue v = match v with
+  | V_ctor (Id_aux (Id "Cache_op_D_IVAC") _) _ _ v -> Cache_op_D_IVAC
+  | V_ctor (Id_aux (Id "Cache_op_D_ISW") _) _ _ v -> Cache_op_D_ISW
+  | V_ctor (Id_aux (Id "Cache_op_D_CSW") _) _ _ v -> Cache_op_D_CSW
+  | V_ctor (Id_aux (Id "Cache_op_D_CISW") _) _ _ v -> Cache_op_D_CISW
+  | V_ctor (Id_aux (Id "Cache_op_D_ZVA") _) _ _ v -> Cache_op_D_ZVA
+  | V_ctor (Id_aux (Id "Cache_op_D_CVAC") _) _ _ v -> Cache_op_D_CVAC
+  | V_ctor (Id_aux (Id "Cache_op_D_CVAU") _) _ _ v -> Cache_op_D_CVAU
+  | V_ctor (Id_aux (Id "Cache_op_D_CIVAC") _) _ _ v -> Cache_op_D_CIVAC
+  | V_ctor (Id_aux (Id "Cache_op_I_IALLUIS") _) _ _ v -> Cache_op_I_IALLUIS
+  | V_ctor (Id_aux (Id "Cache_op_I_IALLU") _) _ _ v -> Cache_op_I_IALLU
+  | V_ctor (Id_aux (Id "Cache_op_I_IVAU") _) _ _ v -> Cache_op_I_IVAU
+  | V_tuple [v] -> cache_op_kindFromInterpValue v
+  | v -> failwith ("fromInterpValue cache_op_kind: unexpected value. " ^
+                     Interp.debug_print_value v)
+  end
+instance (ToFromInterpValue cache_op_kind)
+  let toInterpValue = cache_op_kindToInterpValue
+  let fromInterpValue = cache_op_kindFromInterpValue
+end
+
+
 let instruction_kindToInterpValue = function
   | IK_barrier v -> V_ctor (Id_aux (Id "IK_barrier") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   | IK_mem_read v -> V_ctor (Id_aux (Id "IK_mem_read") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
@@ -563,6 +598,7 @@ let instruction_kindToInterpValue = function
   | IK_branch -> V_ctor (Id_aux (Id "IK_branch") Unknown) (T_id "instruction_kind") C_Union (toInterpValue ())
   | IK_trans v -> V_ctor (Id_aux (Id "IK_trans") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   | IK_simple -> V_ctor (Id_aux (Id "IK_simple") Unknown) (T_id "instruction_kind") C_Union (toInterpValue ())
+  | IK_cache_op v -> V_ctor (Id_aux (Id "IK_cache_op") Unknown) (T_id "instruction_kind") C_Union (toInterpValue v)
   end
 let rec instruction_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "IK_barrier") _) _ _ v -> IK_barrier (fromInterpValue v)
@@ -572,6 +608,7 @@ let rec instruction_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "IK_branch") _) _ _ v -> IK_branch
   | V_ctor (Id_aux (Id "IK_trans") _) _ _ v -> IK_trans (fromInterpValue v)
   | V_ctor (Id_aux (Id "IK_simple") _) _ _ v -> IK_simple
+  | V_ctor (Id_aux (Id "IK_cache_op") _) _ _ v -> IK_cache_op (fromInterpValue v)
   | V_tuple [v] -> instruction_kindFromInterpValue v
   | v -> failwith ("fromInterpValue instruction_kind: unexpected value. " ^
                      Interp.debug_print_value v)
