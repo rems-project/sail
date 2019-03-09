@@ -53,7 +53,10 @@ open Ast
 open Ast_util
 open Jib
 open Type_check
-
+   
+(** Print the IR representation of a specific function. *)
+val opt_debug_function : string ref
+  
 (** Context for compiling Sail to Jib. We need to pass a (global)
    typechecking environment given by checking the full AST. We have to
    provide a conversion function from Sail types into Jib types, as

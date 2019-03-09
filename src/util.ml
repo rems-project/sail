@@ -149,11 +149,16 @@ let rec power i tothe =
   then 1
   else i * power i (tothe - 1)
 
-let rec assoc_maybe eq l k =
+let rec assoc_equal_opt eq k l =
   match l with
     | [] -> None
-    | (k',v)::l -> if (eq k k') then Some v else assoc_maybe eq l k
+    | (k',v)::l -> if (eq k k') then Some v else assoc_equal_opt eq k l
 
+let rec assoc_compare_opt cmp k l =
+  match l with
+    | [] -> None
+    | (k',v)::l -> if cmp k k' = 0 then Some v else assoc_compare_opt cmp k l
+                 
 let rec compare_list f l1 l2 = 
   match (l1,l2) with
     | ([],[]) -> 0

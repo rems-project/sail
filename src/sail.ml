@@ -307,6 +307,9 @@ let options = Arg.align ([
   ( "-dmagic_hash",
     Arg.Set Initial_check.opt_magic_hash,
     " (debug) allow special character # in identifiers");
+  ( "-dfunction",
+    Arg.String (fun f -> Jib_compile.opt_debug_function := f),
+    " (debug) print debugging output for a single function");
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
     " (debug) provide basic profiling information for rewriting passes within Sail");

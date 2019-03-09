@@ -466,7 +466,7 @@ let pp_id id =
   string (string_of_id id)
 
 let pp_ctyp ctyp =
-  string (string_of_ctyp ctyp |> Util.yellow |> Util.clear)
+  string (full_string_of_ctyp ctyp |> Util.yellow |> Util.clear)
 
 let pp_keyword str =
   string ((str |> Util.red |> Util.clear) ^ " ")

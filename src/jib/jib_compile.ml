@@ -57,6 +57,7 @@ open Value2
 
 open Anf
 
+let opt_debug_function = ref ""
 let opt_memo_cache = ref false
 
 (**************************************************************************)
@@ -773,9 +774,19 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      (fun clexp -> icomment "unreachable after throw"),
      []
 
-  | AE_field (aval, id, typ) ->
-     let ctyp = ctyp_of_typ ctx typ in
+  | AE_field (aval, id, _) ->
      let setup, cval, cleanup = compile_aval l ctx aval in
+     let ctyp = match cval_ctyp cval with
+       | CT_struct (struct_id, fields) ->
+          begin match Util.assoc_compare_opt Id.compare id fields with
+          | Some ctyp -> ctyp
+          | None ->
+             raise (Reporting.err_unreachable l __POS__
+                      ("Struct " ^ string_of_id struct_id ^ " does not have expected field " ^ string_of_id id ^ "?"))
+          end
+       | _ ->
+          raise (Reporting.err_unreachable l __POS__ "Field access on non-struct type in ANF representation!")
+     in
      setup,
      (fun clexp -> icopy l clexp (F_field (fst cval, Util.zencode_string (string_of_id id)), ctyp)),
      cleanup
@@ -846,8 +857,11 @@ let compile_type_def ctx (TD_aux (type_def, (l, _))) =
      CTD_enum (id, ids),
      { ctx with enums = Bindings.add id (IdSet.of_list ids) ctx.enums }
 
-  | TD_record (id, _, ctors, _) ->
-     let ctors = List.fold_left (fun ctors (typ, id) -> Bindings.add id (ctyp_of_typ ctx typ) ctors) Bindings.empty ctors in
+  | TD_record (id, typq, ctors, _) ->
+     let record_ctx = { ctx with local_env = add_typquant l typq ctx.local_env } in
+     let ctors =
+       List.fold_left (fun ctors (typ, id) -> Bindings.add id (ctyp_of_typ record_ctx typ) ctors) Bindings.empty ctors
+     in
      CTD_struct (id, Bindings.bindings ctors),
      { ctx with records = Bindings.add id ctors ctx.records }
 
@@ -1149,6 +1163,18 @@ and compile_def' n total ctx = function
      let instrs = arg_setup @ destructure @ setup @ [call (CL_return ret_ctyp)] @ cleanup @ destructure_cleanup @ arg_cleanup in
      let instrs = fix_early_return (CL_return ret_ctyp) instrs in
      let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
+
+     if Id.compare (mk_id !opt_debug_function) id = 0 then
+       let header =
+         Printf.sprintf "Sail IR for %s %s(%s) : (%s) -> %s" Util.("function" |> red |> clear) (string_of_id id)
+                        (Util.string_of_list ", " string_of_id (List.map fst compiled_args))
+                        (Util.string_of_list ", " (fun ctyp -> Util.(string_of_ctyp ctyp |> yellow |> clear)) arg_ctyps)
+                        Util.(string_of_ctyp ret_ctyp |> yellow |> clear)
+       in
+       prerr_endline (Util.header header (List.length arg_ctyps + 2));
+       prerr_endline (Pretty_print_sail.to_string PPrint.(separate_map hardline pp_instr instrs))
+     else ();
+     
      [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], orig_ctx
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, []), (l, _))) ->
