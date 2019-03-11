@@ -319,7 +319,7 @@ let rewrite_bitvector_exps env defs =
     | (e_aux, a) -> E_aux (e_aux, a)
   in
   let rewrite_exp _ = fold_exp { id_exp_alg with e_aux = e_aux } in
-  if IdSet.mem (mk_id "bitvector_of_bitlist") (Initial_check.val_spec_ids defs) then
+  if IdSet.mem (mk_id "bitvector_of_bitlist") (val_spec_ids defs) then
     rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp } defs
   else defs
 

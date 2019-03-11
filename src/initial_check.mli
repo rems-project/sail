@@ -48,14 +48,18 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+(** Initial desugaring pass over AST after parsing *)
+
 open Ast
 open Ast_util
 
-(* Generate undefined_T functions for every type T. False by
+(** {2 Options} *)
+
+(** Generate undefined_T functions for every type T. False by
    default. *)
 val opt_undefined_gen : bool ref
 
-(* Generate faster undefined_T functions. Rather than generating
+(** Generate faster undefined_T functions. Rather than generating
    functions that allow for the undefined values of enums and variants
    to be picked at runtime using a RNG or similar, this creates
    undefined_T functions for those types that simply return a specific
@@ -65,16 +69,17 @@ val opt_undefined_gen : bool ref
    default. *)
 val opt_fast_undefined : bool ref
 
-(* Allow # in identifiers when set, like the GHC option of the same name *)
+(** Allow # in identifiers when set, much like the GHC option of the same
+   name *)
 val opt_magic_hash : bool ref
 
-(* When true enums can be automatically casted to range types and
+(** When true enums can be automatically casted to range types and
    back.  Otherwise generated T_of_num and num_of_T functions must be
    manually used for each enum T *)
 val opt_enum_casts : bool ref
 
-(* This is a bit of a hack right now - it ensures that the undefiend
-   builtins (undefined_vector etc), only get added to the ast
+(** This is a bit of a hack right now - it ensures that the undefiend
+   builtins (undefined_vector etc), only get added to the AST
    once. The original assumption in sail is that the whole AST gets
    processed at once (therefore they could only get added once), and
    this isn't true any more with the interpreter. This needs to be
@@ -82,17 +87,17 @@ val opt_enum_casts : bool ref
    all the loaded files. *)
 val have_undefined_builtins : bool ref
 
-val ast_of_def_string : string -> unit defs
+(** {2 Desugar and process AST } *)
 
 (** If the generate flag is false, then we won't generate any
    auxilliary definitions, like the initialize_registers function *)
 val process_ast : ?generate:bool -> Parse_ast.defs -> unit defs
 
-val val_spec_ids : 'a defs -> IdSet.t
+(** {2 Parsing expressions and definitions from strings} *)
 
 val extern_of_string : id -> string -> unit def
 val val_spec_of_string : id -> string -> unit def
-
+val ast_of_def_string : string -> unit defs
 val exp_of_string : string -> unit exp
 val typ_of_string : string -> typ
 val constraint_of_string : string -> n_constraint

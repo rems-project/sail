@@ -48,7 +48,7 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-(** Utilities for operating on Sail ASTs *)
+(** Utilities and helper functions for operating on Sail ASTs *)
 
 open Ast
 module Big_int = Nat_big_num
@@ -56,15 +56,25 @@ module Big_int = Nat_big_num
 type mut = Immutable | Mutable
 
 (** [lvar] is the type of variables - they can either be registers,
-   local mutable or immutable variables, nullary union constructors
-   (i.e. None in option), or unbound identifiers *)
+   local mutable or immutable variables constructors or unbound
+   identifiers. *)
 type 'a lvar = Register of effect * effect * 'a | Enum of 'a | Local of mut * 'a | Unbound
 
 (** Note: Partial function -- fails for Unknown lvars *)
 val lvar_typ : 'a lvar -> 'a
 
+(** The empty annotation. Should be used carefully because it can
+   result in unhelpful error messgaes. However a common pattern is
+   generating code with [no_annot], then adding location information
+   with the various [locate_] functions in this module. *)
 val no_annot : unit annot
+
+(** [gen_loc l] takes a location l and generates a location which
+   means 'generated from location l'. This is useful for debugging
+   errors that occur in generated code. *)
 val gen_loc : Parse_ast.l -> Parse_ast.l
+
+(** {2 Functions for building (untyped) AST elements} *)
 
 val mk_id : string -> id
 val mk_kid : string -> kid
@@ -92,6 +102,11 @@ val mk_fexp : id -> unit exp -> unit fexp
 val mk_letbind : unit pat -> unit exp -> unit letbind
 val mk_kopt : kind_aux -> kid -> kinded_id
 
+val inc_ord : order
+val dec_ord : order
+
+(** {2 Unwrap aux constructors} *)
+
 val unaux_exp : 'a exp -> 'a exp_aux
 val unaux_pat : 'a pat -> 'a pat_aux
 val unaux_nexp : nexp -> nexp_aux
@@ -100,26 +115,33 @@ val unaux_typ : typ -> typ_aux
 val unaux_kind : kind -> kind_aux
 val unaux_constraint : n_constraint -> n_constraint_aux
 
+(** {2 Destruct type annotated patterns and expressions} *)
+
+(** [untyp_pat (P_aux (P_typ (typ, pat)), _)] returns [Some (pat,
+   typ)] or [None] if the pattern does not match. *)
 val untyp_pat : 'a pat -> 'a pat * typ option
+
+(** Same as [untyp_pat], but for [E_cast] nodes *)
 val uncast_exp : 'a exp -> 'a exp * typ option
 
-val inc_ord : order
-val dec_ord : order
+(** {2 Utilites for working with kinded_ids} *)
 
-(* Utilites for working with kinded_ids *)
 val kopt_kid : kinded_id -> kid
 val kopt_kind : kinded_id -> kind
+
 val is_int_kopt : kinded_id -> bool
 val is_order_kopt : kinded_id -> bool
 val is_typ_kopt : kinded_id -> bool
 val is_bool_kopt : kinded_id -> bool
 
-(* Some handy utility functions for constructing types. *)
+(** {2 Utility functions for constructing types} *)
+
 val mk_typ : typ_aux -> typ
 val mk_typ_arg : typ_arg_aux -> typ_arg
 val mk_id_typ : id -> typ
 
-(* Sail builtin types. *)
+(** {2 Sail builtin types} *)
+
 val unknown_typ : typ
 val int_typ : typ
 val nat_typ : typ
@@ -140,118 +162,31 @@ val exc_typ : typ
 val tuple_typ : typ list -> typ
 val function_typ : typ list -> typ -> effect -> typ
 
-val no_effect : effect
-val mk_effect : base_effect_aux list -> effect
+val is_unit_typ : typ -> bool
+val is_number : typ -> bool
+val is_ref_typ : typ -> bool
+val is_vector_typ : typ -> bool
+val is_bit_typ : typ -> bool
+val is_bitvector_typ : typ -> bool
+
+(** {2 Simplifcation of numeric expressions and constraints}
+
+   These functions simplify nexps and n_constraints using various
+   basic rules. In general they will guarantee to reduce constant
+   numeric expressions like 2 + 5 into 7, although they will not
+   simplify 2^constant, as that often leads to unreadable error
+   messages containing huge numbers. *)
 
 val nexp_simp : nexp -> nexp
 val constraint_simp : n_constraint -> n_constraint
 
-(* If a constraint is a conjunction, return a list of all the top-level conjuncts *)
+(** If a constraint is a conjunction, return a list of all the top-level conjuncts *)
 val constraint_conj : n_constraint -> n_constraint list
-(* Same as constraint_conj but for disjunctions *)
+
+(** Same as constraint_conj but for disjunctions *)
 val constraint_disj : n_constraint -> n_constraint list
 
-(* Utilities for building n-expressions *)
-val nconstant : Big_int.num -> nexp
-val nint : int -> nexp
-val nminus : nexp -> nexp -> nexp
-val nsum : nexp -> nexp -> nexp
-val ntimes : nexp -> nexp -> nexp
-val npow2 : nexp -> nexp
-val nvar : kid -> nexp
-val napp : id -> nexp list -> nexp
-val nid : id -> nexp
-
-(* Numeric constraint builders *)
-val nc_eq : nexp -> nexp -> n_constraint
-val nc_neq : nexp -> nexp -> n_constraint
-val nc_lteq : nexp -> nexp -> n_constraint
-val nc_gteq : nexp -> nexp -> n_constraint
-val nc_lt : nexp -> nexp -> n_constraint
-val nc_gt : nexp -> nexp -> n_constraint
-val nc_and : n_constraint -> n_constraint -> n_constraint
-val nc_or : n_constraint -> n_constraint -> n_constraint
-val nc_not : n_constraint -> n_constraint
-val nc_true : n_constraint
-val nc_false : n_constraint
-val nc_set : kid -> Big_int.num list -> n_constraint
-val nc_int_set : kid -> int list -> n_constraint
-val nc_var : kid -> n_constraint
-
-val arg_nexp : ?loc:l -> nexp -> typ_arg
-val arg_order : ?loc:l -> order -> typ_arg
-val arg_typ : ?loc:l -> typ -> typ_arg
-val arg_bool : ?loc:l -> n_constraint -> typ_arg
-val arg_kopt : kinded_id -> typ_arg
-
-(* Functions for working with type quantifiers *)
-val quant_add : quant_item -> typquant -> typquant
-val quant_items : typquant -> quant_item list
-val quant_kopts : typquant -> kinded_id list
-val quant_split : typquant -> kinded_id list * n_constraint list
-val quant_map_items : (quant_item -> quant_item) -> typquant -> typquant
-
-val is_quant_kopt : quant_item -> bool
-val is_quant_constraint : quant_item -> bool
-
-(* Functions to map over the annotations in sub-expressions *)
-val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
-val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat
-val map_pexp_annot : ('a annot -> 'b annot) -> 'a pexp -> 'b pexp
-val map_lexp_annot : ('a annot -> 'b annot) -> 'a lexp -> 'b lexp
-val map_letbind_annot : ('a annot -> 'b annot) -> 'a letbind -> 'b letbind
-val map_mpat_annot : ('a annot -> 'b annot) -> 'a mpat -> 'b mpat
-val map_mfpat_annot : ('a annot -> 'b annot) -> 'a mfpat -> 'b mfpat
-val map_mpexp_annot : ('a annot -> 'b annot) -> 'a mpexp -> 'b mpexp
-val map_mapcl_annot : ('a annot -> 'b annot) -> 'a mapcl -> 'b mapcl
-
-(* Extract locations from identifiers *)
-val id_loc : id -> Parse_ast.l
-val kid_loc : kid -> Parse_ast.l
-val typ_loc : typ -> Parse_ast.l
-val pat_loc : 'a pat -> Parse_ast.l
-val exp_loc : 'a exp -> Parse_ast.l
-val def_loc : 'a def -> Parse_ast.l
-
-(* For debugging and error messages only: Not guaranteed to produce
-   parseable SAIL, or even print all language constructs! *)
-val string_of_id : id -> string
-val string_of_kid : kid -> string
-val string_of_base_effect_aux : base_effect_aux -> string
-val string_of_kind_aux : kind_aux -> string
-val string_of_kind : kind -> string
-val string_of_base_effect : base_effect -> string
-val string_of_effect : effect -> string
-val string_of_order : order -> string
-val string_of_nexp : nexp -> string
-val string_of_typ : typ -> string
-val string_of_typ_arg : typ_arg -> string
-val string_of_typ_pat : typ_pat -> string
-val string_of_n_constraint : n_constraint -> string
-val string_of_kinded_id : kinded_id -> string
-val string_of_quant_item : quant_item -> string
-val string_of_typquant : typquant -> string
-val string_of_typschm : typschm -> string
-val string_of_lit : lit -> string
-val string_of_exp : 'a exp -> string
-val string_of_pexp : 'a pexp -> string
-val string_of_lexp : 'a lexp -> string
-val string_of_pat : 'a pat -> string
-val string_of_mpat : 'a mpat -> string
-val string_of_letbind : 'a letbind -> string
-val string_of_index_range : index_range -> string
-
-val id_of_fundef : 'a fundef -> id
-val id_of_type_def : 'a type_def -> id
-val id_of_val_spec : 'a val_spec -> id
-val id_of_dec_spec : 'a dec_spec -> id
-
-val id_of_kid : kid -> id
-val kid_of_id : id -> kid
-
-val prepend_id : string -> id -> id
-val append_id : id -> string -> id
-val prepend_kid : string -> kid -> kid
+(** {2 Set and Map modules for various AST elements} *)
 
 module Id : sig
   type t = id
@@ -334,6 +269,137 @@ module TypMap : sig
   include Map.S with type key = typ
 end
 
+
+(** {2 Functions for building and manipulating effects} *)
+
+val no_effect : effect
+val mk_effect : base_effect_aux list -> effect
+
+val has_effect : effect -> base_effect_aux -> bool
+val effect_set : effect -> BESet.t
+
+val equal_effects : effect -> effect -> bool
+val subseteq_effects : effect -> effect -> bool
+val union_effects : effect -> effect -> effect
+
+(** {2 Functions for building numeric expressions} *)
+
+val nconstant : Big_int.num -> nexp
+val nint : int -> nexp
+val nminus : nexp -> nexp -> nexp
+val nsum : nexp -> nexp -> nexp
+val ntimes : nexp -> nexp -> nexp
+val npow2 : nexp -> nexp
+val nvar : kid -> nexp
+val napp : id -> nexp list -> nexp
+val nid : id -> nexp
+
+(** {2 Functions for building numeric constraints} *)
+
+val nc_eq : nexp -> nexp -> n_constraint
+val nc_neq : nexp -> nexp -> n_constraint
+val nc_lteq : nexp -> nexp -> n_constraint
+val nc_gteq : nexp -> nexp -> n_constraint
+val nc_lt : nexp -> nexp -> n_constraint
+val nc_gt : nexp -> nexp -> n_constraint
+val nc_and : n_constraint -> n_constraint -> n_constraint
+val nc_or : n_constraint -> n_constraint -> n_constraint
+val nc_not : n_constraint -> n_constraint
+val nc_true : n_constraint
+val nc_false : n_constraint
+val nc_set : kid -> Big_int.num list -> n_constraint
+val nc_int_set : kid -> int list -> n_constraint
+val nc_var : kid -> n_constraint
+
+(** {2 Functions for building type arguments}*)
+
+val arg_nexp : ?loc:l -> nexp -> typ_arg
+val arg_order : ?loc:l -> order -> typ_arg
+val arg_typ : ?loc:l -> typ -> typ_arg
+val arg_bool : ?loc:l -> n_constraint -> typ_arg
+val arg_kopt : kinded_id -> typ_arg
+
+(** {2 Functions for working with type quantifiers} *)
+
+val quant_add : quant_item -> typquant -> typquant
+val quant_items : typquant -> quant_item list
+val quant_kopts : typquant -> kinded_id list
+val quant_split : typquant -> kinded_id list * n_constraint list
+val quant_map_items : (quant_item -> quant_item) -> typquant -> typquant
+
+val is_quant_kopt : quant_item -> bool
+val is_quant_constraint : quant_item -> bool
+
+(** {2 Functions to map over annotations in sub-expressions} *)
+
+val map_exp_annot : ('a annot -> 'b annot) -> 'a exp -> 'b exp
+val map_pat_annot : ('a annot -> 'b annot) -> 'a pat -> 'b pat
+val map_pexp_annot : ('a annot -> 'b annot) -> 'a pexp -> 'b pexp
+val map_lexp_annot : ('a annot -> 'b annot) -> 'a lexp -> 'b lexp
+val map_letbind_annot : ('a annot -> 'b annot) -> 'a letbind -> 'b letbind
+val map_mpat_annot : ('a annot -> 'b annot) -> 'a mpat -> 'b mpat
+val map_mfpat_annot : ('a annot -> 'b annot) -> 'a mfpat -> 'b mfpat
+val map_mpexp_annot : ('a annot -> 'b annot) -> 'a mpexp -> 'b mpexp
+val map_mapcl_annot : ('a annot -> 'b annot) -> 'a mapcl -> 'b mapcl
+
+(** {2 Extract locations from terms} *)
+
+val id_loc : id -> Parse_ast.l
+val kid_loc : kid -> Parse_ast.l
+val typ_loc : typ -> Parse_ast.l
+val pat_loc : 'a pat -> Parse_ast.l
+val exp_loc : 'a exp -> Parse_ast.l
+val def_loc : 'a def -> Parse_ast.l
+
+(** {2 Printing utilities}
+
+   Note: For debugging and error messages only - not guaranteed to
+   produce parseable Sail, or even print all language constructs! *)
+
+val string_of_id : id -> string
+val string_of_kid : kid -> string
+val string_of_base_effect_aux : base_effect_aux -> string
+val string_of_kind_aux : kind_aux -> string
+val string_of_kind : kind -> string
+val string_of_base_effect : base_effect -> string
+val string_of_effect : effect -> string
+val string_of_order : order -> string
+val string_of_nexp : nexp -> string
+val string_of_typ : typ -> string
+val string_of_typ_arg : typ_arg -> string
+val string_of_typ_pat : typ_pat -> string
+val string_of_n_constraint : n_constraint -> string
+val string_of_kinded_id : kinded_id -> string
+val string_of_quant_item : quant_item -> string
+val string_of_typquant : typquant -> string
+val string_of_typschm : typschm -> string
+val string_of_lit : lit -> string
+val string_of_exp : 'a exp -> string
+val string_of_pexp : 'a pexp -> string
+val string_of_lexp : 'a lexp -> string
+val string_of_pat : 'a pat -> string
+val string_of_mpat : 'a mpat -> string
+val string_of_letbind : 'a letbind -> string
+val string_of_index_range : index_range -> string
+
+(** {2 Functions for getting identifiers from toplevel definitions} *)
+
+val id_of_fundef : 'a fundef -> id
+val id_of_type_def : 'a type_def -> id
+val id_of_val_spec : 'a val_spec -> id
+val id_of_dec_spec : 'a dec_spec -> id
+
+(** {2 Functions for manipulating identifiers} *)
+
+val id_of_kid : kid -> id
+val kid_of_id : id -> kid
+
+val prepend_id : string -> id -> id
+val append_id : id -> string -> id
+val prepend_kid : string -> kid -> kid
+
+(** {2 Misc functions} *)
+
 val nexp_frees : nexp -> KidSet.t
 val nexp_identical : nexp -> nexp -> bool
 val is_nexp_constant : nexp -> bool
@@ -341,26 +407,11 @@ val int_of_nexp_opt : nexp -> Big_int.num option
 
 val lexp_to_exp : 'a lexp -> 'a exp
 
-val is_unit_typ : typ -> bool
-val is_number : typ -> bool
-val is_ref_typ : typ -> bool
-val is_vector_typ : typ -> bool
-val is_bit_typ : typ -> bool
-val is_bitvector_typ : typ -> bool
-
 val typ_app_args_of : typ -> string * typ_arg_aux list * Ast.l
 val vector_typ_args_of : typ -> nexp * order * typ
 val vector_start_index : typ -> nexp
 
 val is_order_inc : order -> bool
-
-val has_effect : effect -> base_effect_aux -> bool
-
-val effect_set : effect -> BESet.t
-
-val equal_effects : effect -> effect -> bool
-val subseteq_effects : effect -> effect -> bool
-val union_effects : effect -> effect -> effect
 
 val kopts_of_order : order -> KOptSet.t
 val kopts_of_nexp : nexp -> KOptSet.t
@@ -383,9 +434,7 @@ val construct_pexp : 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a) ->  'a pex
 val destruct_mpexp : 'a mpexp -> 'a mpat * ('a exp) option * (Ast.l * 'a)
 val construct_mpexp : 'a mpat * ('a exp) option * (Ast.l * 'a) ->  'a mpexp
 
-
 val is_valspec : id -> 'a def -> bool
-
 val is_fundef : id -> 'a def -> bool
 
 val rename_valspec : id -> 'a val_spec -> 'a val_spec
@@ -402,11 +451,15 @@ val type_union_id : type_union -> id
 val ids_of_def : 'a def -> IdSet.t
 val ids_of_defs : 'a defs -> IdSet.t
 
+val val_spec_ids : 'a defs -> IdSet.t
+
 val pat_ids : 'a pat -> IdSet.t
 
 val subst : id -> 'a exp -> 'a exp -> 'a exp
 
 val hex_to_bin : string -> string
+
+(** {2 Manipulating locations} *)
 
 (** locate takes an expression and recursively sets the location in
    every subexpression using a function that takes the orginal
@@ -422,15 +475,26 @@ val locate_lexp : (l -> l) -> 'a lexp -> 'a lexp
 
 val locate_typ : (l -> l) -> typ -> typ
 
-(* Make a unique location by giving it a Parse_ast.Unique wrapper with
+(** Make a unique location by giving it a Parse_ast.Unique wrapper with
    a generated number. *)
 val unique : l -> l
 
-(** Substitutions *)
+(** Reduce a location to a pair of positions if possible *)
+val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
 
-(* The function X_subst substitutes a type argument into something of
+(** Try to find the annotation closest to the provided (simplified)
+   location. Note that this function makes no guarantees about finding
+   the closest annotation or even finding an annotation at all. This
+   is used by the Emacs mode to provide type-at-cursor functionality
+   and we don't mind if it's a bit fuzzy in that context. *)
+val find_annot_ast : (Lexing.position * Lexing.position) option -> 'a defs -> (Ast.l * 'a) option
+
+(** {2 Substitutions}
+
+   The function X_subst substitutes a type argument into something of
    type X. The type of the type argument determines which kind of type
-   variables willb e replaced *)
+   variables will be replaced *)
+
 val nexp_subst : kid -> typ_arg -> nexp -> nexp
 val constraint_subst : kid -> typ_arg -> n_constraint -> n_constraint
 val order_subst : kid -> typ_arg -> order -> order
@@ -439,7 +503,7 @@ val typ_arg_subst : kid -> typ_arg -> typ_arg -> typ_arg
 
 val subst_kid : (kid -> typ_arg -> 'a -> 'a) -> kid -> kid -> 'a -> 'a
 
-(* Multiple type-level substitution *)
+(* Multiple type-level substitutions *)
 val subst_kids_nexp : nexp KBindings.t -> nexp -> nexp
 val subst_kids_nc : nexp KBindings.t -> n_constraint -> n_constraint
 val subst_kids_typ : nexp KBindings.t -> typ -> typ
@@ -447,7 +511,3 @@ val subst_kids_typ_arg : nexp KBindings.t -> typ_arg -> typ_arg
 
 val quant_item_subst_kid : kid -> kid -> quant_item -> quant_item
 val typquant_subst_kid : kid -> kid -> typquant -> typquant
-
-val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
-
-val find_annot_ast : (Lexing.position * Lexing.position) option -> 'a defs -> (Ast.l * 'a) option

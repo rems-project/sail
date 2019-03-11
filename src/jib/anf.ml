@@ -61,31 +61,6 @@ module Big_int = Nat_big_num
 (* 1. Conversion to A-normal form (ANF)                                   *)
 (**************************************************************************)
 
-(* The first step in compiling sail is converting the Sail expression
-   grammar into A-normal form. Essentially this converts expressions
-   such as f(g(x), h(y)) into something like:
-
-   let v0 = g(x) in let v1 = h(x) in f(v0, v1)
-
-   Essentially the arguments to every function must be trivial, and
-   complex expressions must be let bound to new variables, or used in
-   a block, assignment, or control flow statement (if, for, and
-   while/until loops). The aexp datatype represents these expressions,
-   while aval represents the trivial values.
-
-   The convention is that the type of an aexp is given by last
-   argument to a constructor. It is omitted where it is obvious - for
-   example all for loops have unit as their type. If some constituent
-   part of the aexp has an annotation, the it refers to the previous
-   argument, so in
-
-   AE_let (id, typ1, _, body, typ2)
-
-   typ1 is the type of the bound identifer, whereas typ2 is the type
-   of the whole let expression (and therefore also the body).
-
-   See Flanagan et al's 'The Essence of Compiling with Continuations'
-   *)
 type 'a aexp = AE_aux of 'a aexp_aux * Env.t * l
 
 and 'a aexp_aux =

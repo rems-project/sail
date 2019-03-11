@@ -106,7 +106,7 @@ let sail_logo =
   in
   List.map banner logo @ [""] @ help @ [""]
 
-let vs_ids = ref (Initial_check.val_spec_ids !Interactive.ast)
+let vs_ids = ref (val_spec_ids !Interactive.ast)
 
 let interactive_state = ref (initial_state !Interactive.ast Value.primops)
 
@@ -399,12 +399,12 @@ let handle_input' input =
            Interactive.ast := append_ast !Interactive.ast ast;
            interactive_state := initial_state !Interactive.ast Value.primops;
            Interactive.env := env;
-           vs_ids := Initial_check.val_spec_ids !Interactive.ast
+           vs_ids := val_spec_ids !Interactive.ast
         | ":u" | ":unload" ->
            Interactive.ast := Ast.Defs [];
            Interactive.env := Type_check.initial_env;
            interactive_state := initial_state !Interactive.ast Value.primops;
-           vs_ids := Initial_check.val_spec_ids !Interactive.ast;
+           vs_ids := val_spec_ids !Interactive.ast;
            (* See initial_check.mli for an explanation of why we need this. *)
            Initial_check.have_undefined_builtins := false;
            Process_file.clear_symbols ()
@@ -431,7 +431,7 @@ let handle_input' input =
                Interactive.ast := append_ast !Interactive.ast ast;
                interactive_state := initial_state !Interactive.ast Value.primops;
                Interactive.env := env;
-               vs_ids := Initial_check.val_spec_ids !Interactive.ast;
+               vs_ids := val_spec_ids !Interactive.ast;
                print_endline ("(message \"Checked " ^ arg ^ " done\")\n");
              with
              | Reporting.Fatal_error (Err_type (l, msg)) ->
@@ -441,7 +441,7 @@ let handle_input' input =
            Interactive.ast := Ast.Defs [];
            Interactive.env := Type_check.initial_env;
            interactive_state := initial_state !Interactive.ast Value.primops;
-           vs_ids := Initial_check.val_spec_ids !Interactive.ast;
+           vs_ids := val_spec_ids !Interactive.ast;
            Initial_check.have_undefined_builtins := false;
            Process_file.clear_symbols ()
         | ":typeat" ->

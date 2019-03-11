@@ -48,12 +48,38 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+(** The A-normal form (ANF) grammar *)
+
 open Ast
 open Ast_util
 open Jib
 open Type_check
 
-(* The A-normal form (ANF) grammar *)
+(** The first step in compiling Sail is converting the Sail expression
+   grammar into A-normal form (ANF). Essentially this converts
+   expressions such as [f(g(x), h(y))] into something like:
+
+   [let v0 = g(x) in let v1 = h(x) in f(v0, v1)]
+
+   Essentially the arguments to every function must be trivial, and
+   complex expressions must be let bound to new variables, or used in
+   a block, assignment, or control flow statement (if, for, and
+   while/until loops). The aexp datatype represents these expressions,
+   while aval represents the trivial values.
+
+   The convention is that the type of an aexp is given by last
+   argument to a constructor. It is omitted where it is obvious - for
+   example all for loops have unit as their type. If some constituent
+   part of the aexp has an annotation, the it refers to the previous
+   argument, so in
+
+   [AE_let (id, typ1, _, body, typ2)]
+
+   [typ1] is the type of the bound identifer, whereas [typ2] is the type
+   of the whole let expression (and therefore also the body).
+
+   See Flanagan et al's {e The Essence of Compiling with Continuations}.
+   *)
 
 type 'a aexp = AE_aux of 'a aexp_aux * Env.t * l
 
@@ -88,6 +114,9 @@ and 'a apat_aux =
   | AP_nil of 'a
   | AP_wild of 'a
 
+(** We allow ANF->ANF optimization to insert fragments of C code
+   directly in the ANF grammar via [AV_C_fragment]. Such fragments
+   must be side-effect free expressions. *)
 and 'a aval =
   | AV_lit of lit * 'a
   | AV_id of id * 'a lvar
@@ -98,28 +127,35 @@ and 'a aval =
   | AV_record of ('a aval) Bindings.t * 'a
   | AV_C_fragment of fragment * 'a * ctyp
 
+(** Function for generating unique identifiers during ANF
+   translation. *)
 val gensym : unit -> id
 
-(* Functions for transforming ANF expressions *)
+(** {2 Functions for transforming ANF expressions} *)
 
+(** Map over all values in an ANF expression *)
 val map_aval : (Env.t -> Ast.l -> 'a aval -> 'a aval) -> 'a aexp -> 'a aexp
 
+(** Map over all function calls in an ANF expression *)
 val map_functions : (Env.t -> Ast.l -> id -> ('a aval) list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
 
+(** Remove all variable shadowing in an ANF expression *)
 val no_shadow : IdSet.t -> 'a aexp -> 'a aexp
 
 val apat_globals : 'a apat -> (id * 'a) list
-
 val apat_types : 'a apat -> 'a Bindings.t
 
+(** Returns true if an ANF expression is dead due to flow typing
+   implying it is unreachable. Note: This function calls SMT. *)
 val is_dead_aexp : 'a aexp -> bool
 
-(* Compiling to ANF expressions *)
+(** {2 Compiling to ANF expressions} *)
 
 val anf_pat : ?global:bool -> tannot pat -> typ apat
 
 val anf : tannot exp -> typ aexp
 
-(* Pretty printing ANF expressions *)
+(** {2 Pretty printing ANF expressions} *)
+
 val pp_aval : typ aval -> PPrint.document
 val pp_aexp : typ aexp -> PPrint.document

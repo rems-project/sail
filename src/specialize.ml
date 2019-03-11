@@ -256,7 +256,7 @@ let rec instantiations_of spec id ast =
   !instantiations
 
 let rec rewrite_polymorphic_calls spec id ast =
-  let vs_ids = Initial_check.val_spec_ids ast in
+  let vs_ids = val_spec_ids ast in
 
   let rewrite_e_aux = function
     | E_aux (E_app (id', args), annot) as exp when Id.compare id id' = 0 ->
@@ -495,7 +495,7 @@ let initial_calls = IdSet.of_list
 
 let remove_unused_valspecs ?(initial_calls=initial_calls) env ast =
   let calls = ref initial_calls in
-  let vs_ids = Initial_check.val_spec_ids ast in
+  let vs_ids = val_spec_ids ast in
 
   let inspect_exp = function
     | E_aux (E_app (call, _), _) as exp ->

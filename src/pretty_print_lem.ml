@@ -1466,7 +1466,7 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) type_env (De
   (* let regtypes = find_regtypes d in *)
   let state_ids =
     State.generate_regstate_defs !opt_mwords defs
-    |> Initial_check.val_spec_ids
+    |> val_spec_ids
   in
   let is_state_def = function
     | DEF_spec vs -> IdSet.mem (id_of_val_spec vs) state_ids

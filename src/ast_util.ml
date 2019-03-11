@@ -986,6 +986,18 @@ let ids_of_def = function
 let ids_of_defs (Defs defs) =
   List.fold_left IdSet.union IdSet.empty (List.map ids_of_def defs)
 
+let val_spec_ids (Defs defs) =
+  let val_spec_id (VS_aux (vs_aux, _)) =
+    match vs_aux with
+    | VS_val_spec (_, id, _, _) -> id
+  in
+  let rec vs_ids = function
+    | DEF_spec vs :: defs -> val_spec_id vs :: vs_ids defs
+    | def :: defs -> vs_ids defs
+    | [] -> []
+  in
+  IdSet.of_list (vs_ids defs)
+
 module BE = struct
   type t = base_effect
   let compare be1 be2 = String.compare (string_of_base_effect be1) (string_of_base_effect be2)

@@ -48,6 +48,8 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+(** Various non Sail specific utility functions *)
+
 (* Last element of a list *)
 val last : 'a list -> 'a
 
@@ -78,7 +80,7 @@ val remove_dups : ('a -> 'a -> int) -> ('a -> 'a -> bool) -> 'a list -> 'a list
 val assoc_equal_opt : ('a -> 'a -> bool) -> 'a -> ('a * 'b) list -> 'b option
 
 val assoc_compare_opt : ('a -> 'a -> int) -> 'a -> ('a * 'b) list -> 'b option
-  
+
 val power : int -> int -> int
 
 (** {2 Option Functions} *)
@@ -123,6 +125,9 @@ val option_all : 'a option list -> 'a list option
     similarly [y] in case [h y] returns [None]. *)
 val changed2 : ('a -> 'b -> 'c) -> ('a -> 'a option) -> 'a -> ('b -> 'b option) -> 'b -> 'c option
 
+val is_some : 'a option -> bool
+val is_none : 'a option -> bool
+
 (** {2 List Functions} *)
 
 (** [list_index p l] returns the first index [i] such that
@@ -139,14 +144,14 @@ val option_first: ('a -> 'b option) -> 'a list -> 'b option
     If for all elements of [l] the
     function [f] returns [None], then [map_changed f l] returns [None].
     Otherwise, it uses [x] for all elements, where [f x] returns [None],
-    and returns the resulting list. *)   
+    and returns the resulting list. *)
 val map_changed : ('a -> 'a option) -> 'a list -> 'a list option
 
 (** [map_changed_default d f l] maps [f] over [l].
     If for all elements of [l] the
     function [f] returns [None], then [map_changed f l] returns [None].
     Otherwise, it uses [d x] for all elements [x], where [f x] returns [None],
-    and returns the resulting list. *)   
+    and returns the resulting list. *)
 val map_changed_default : ('a -> 'b) -> ('a -> 'b option) -> 'a list -> 'b list option
 
 (** [list_mapi f l] maps [f] over [l]. In contrast to the standard
@@ -156,7 +161,7 @@ val list_mapi : (int -> 'a -> 'b) -> 'a list -> 'b list
 
 (** [list_iter sf f [a1; ...; an]] applies function [f] in turn to [a1; ...; an] and
     calls [sf ()] in between. It is equivalent to [begin f a1; sf(); f a2; sf(); ...; f an; () end]. *)
-val list_iter_sep : (unit -> unit) -> ('a -> unit) -> 'a list -> unit 
+val list_iter_sep : (unit -> unit) -> ('a -> unit) -> 'a list -> unit
 
 (** [map_filter f l] maps [f] over [l] and removes all entries [x] of [l]
     with [f x = None]. *)
@@ -184,6 +189,12 @@ val split3 : ('a * 'b * 'c) list -> 'a list * 'b list * 'c list
 
 val compare_list : ('a -> 'b -> int) -> 'a list -> 'b list -> int
 
+val take : int -> 'a list -> 'a list
+val drop : int -> 'a list -> 'a list
+
+val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
+
+val list_init : int -> (int -> 'a) -> 'a list
 
 (** {2 Files} *)
 
@@ -213,41 +224,16 @@ val string_to_list : string -> char list
 module IntSet : Set.S with type elt = int
 module IntIntSet : Set.S with type elt = int * int
 
-(** Some useful extra functions for sets *)
-module ExtraSet : functor (S : Set.S) ->
-   sig
-     (** Add a list of values to an existing set. *)
-     val add_list : S.t -> S.elt list -> S.t
+(** {2 Formatting functions} *)
 
-     (** Construct a set from a list. *)
-     val from_list : S.elt list -> S.t
-
-     (** Builds the union of a list of sets  *)
-     val list_union : S.t list -> S.t
-
-     (** Builds the intersection of a list of sets.
-         If the list is empty, a match exception is thrown. *)
-     val list_inter : S.t list -> S.t
-   end
-
-val list_init : int -> (int -> 'a) -> 'a list
-
-(*Formatting functions*)
 val string_of_list : string -> ('a -> string) -> 'a list -> string
 
 val string_of_option : ('a -> string) -> 'a option -> string
 
 val split_on_char : char -> string -> string list
 
-val is_some : 'a option -> bool
-val is_none : 'a option -> bool
+(** {2 Terminal color codes} *)
 
-val take : int -> 'a list -> 'a list
-val drop : int -> 'a list -> 'a list
-
-val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
-
-(* Terminal color codes *)
 val termcode : int -> string
 val bold : string -> string
 val darkgray : string -> string
@@ -260,14 +246,27 @@ val blue : string -> string
 val magenta : string -> string
 val clear : string -> string
 
-val warn : string -> unit
+(** {2 Encoding schemes for strings} *)
+
+(** z-encoding will take any string with ASCII characters in the range
+   32-126 inclusive, and map it to a string that just contains ASCII
+   upper and lower case letters and numbers, prefixed with the letter
+   z. This mapping is one-to-one. *)
 
 val zencode_string : string -> string
 val zencode_upper_string : string -> string
 
+(** Encode string for use as a filename. We can't use zencode directly
+   because some operating systems make the mistake of being
+   case-insensitive. *)
 val file_encode_string : string -> string
 
+(** {2 Misc output functions} *)
+
 val log_line : string -> int -> string -> string
+
 val header : string -> int -> string
 
 val progress : string -> string -> int -> int -> unit
+
+val warn : string -> unit

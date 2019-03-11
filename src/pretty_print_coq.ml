@@ -2792,7 +2792,7 @@ try
   (* let regtypes = find_regtypes d in *)
   let state_ids =
     State.generate_regstate_defs true defs
-    |> Initial_check.val_spec_ids
+    |> val_spec_ids
   in
   let is_state_def = function
     | DEF_spec vs -> IdSet.mem (id_of_val_spec vs) state_ids

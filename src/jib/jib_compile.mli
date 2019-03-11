@@ -48,6 +48,8 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+(** Compile Sail ASTs to Jib intermediate representation *)
+
 open Anf
 open Ast
 open Ast_util
@@ -57,6 +59,9 @@ open Type_check
 (** Print the IR representation of a specific function. *)
 val opt_debug_function : string ref
   
+
+(** {2 Jib context} *)
+
 (** Context for compiling Sail to Jib. We need to pass a (global)
    typechecking environment given by checking the full AST. We have to
    provide a conversion function from Sail types into Jib types, as
@@ -80,6 +85,8 @@ val initial_ctx :
   optimize_anf:(ctx -> typ aexp -> typ aexp) ->
   Env.t ->
   ctx
+
+(** {2 Compilation functions} *)
 
 (** Compile a Sail definition into a Jib definition. The first two
    arguments are is the current definition number and the total number

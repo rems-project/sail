@@ -329,18 +329,7 @@ module IntIntSet = Set.Make(
     type t = int * int
   end )
 
-
-module ExtraSet = functor (S : Set.S) ->
-  struct 
-    let add_list s l = List.fold_left (fun s x -> S.add x s) s l
-    let from_list l = add_list S.empty l
-    let list_union l = List.fold_left S.union S.empty l
-    let list_inter = function s :: l -> List.fold_left S.inter s l
-       | [] -> raise (Failure "ExtraSet.list_inter")
-  end;;
-
-
-let copy_file src dst = 
+let copy_file src dst =
   let len = 5096 in
   let b = Bytes.make len ' ' in
   let read_len = ref 0 in
@@ -357,7 +346,7 @@ let move_file src dst =
    try
      (* try efficient version *)
      Sys.rename src dst
-   with Sys_error _ -> 
+   with Sys_error _ ->
    begin
      (* OK, do it the the hard way *)
      copy_file src dst;
@@ -370,7 +359,7 @@ let same_content_files file1 file2 : bool =
     let s1 = Stream.of_channel (open_in_bin file1) in
     let s2 = Stream.of_channel (open_in_bin file2) in
     let stream_is_empty s = (try Stream.empty s; true with Stream.Failure -> false) in
-    try 
+    try
       while ((Stream.next s1) = (Stream.next s2)) do () done;
       false
     with Stream.Failure -> stream_is_empty s1 && stream_is_empty s2
@@ -454,9 +443,6 @@ let zencode_string str = "z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.ma
 
 let zencode_upper_string str = "Z" ^ List.fold_left (fun s1 s2 -> s1 ^ s2) "" (List.map zchar (string_to_list str))
 
-(** Encode string for use as a filename. We can't use zencode directly
-   because some operating systems make the mistake of being
-   case-insensitive. *)
 let file_encode_string str =
   let zstr = zencode_string str in
   let md5 = Digest.to_hex (Digest.string zstr) in
