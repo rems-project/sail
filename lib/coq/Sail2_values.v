@@ -1037,6 +1037,8 @@ Ltac unbool_comparisons :=
   | H:context [generic_eq _ _ = false] |- _ => apply generic_eq_false in H
   | H:context [generic_neq _ _ = true] |- _ => apply generic_neq_true in H
   | H:context [generic_neq _ _ = false] |- _ => apply generic_neq_false in H
+  | H:context [_ <> true] |- _ => rewrite Bool.not_true_iff_false in H
+  | H:context [_ <> false] |- _ => rewrite Bool.not_false_iff_true in H
   end.
 Ltac unbool_comparisons_goal :=
   repeat match goal with
@@ -1058,6 +1060,8 @@ Ltac unbool_comparisons_goal :=
   | |- context [generic_eq _ _ = false] => apply generic_eq_false
   | |- context [generic_neq _ _ = true] => apply generic_neq_true
   | |- context [generic_neq _ _ = false] => apply generic_neq_false
+  | |- context [_ <> true] => rewrite Bool.not_true_iff_false
+  | |- context [_ <> false] => rewrite Bool.not_false_iff_true
   end.
 
 (* Split up dependent pairs to get at proofs of properties *)
@@ -1217,7 +1221,10 @@ prepare_for_solver;
  | constructor; drop_exists; eauto 3 with datatypes zarith sail
    (* Booleans - and_boolMP *)
  | match goal with |- ArithFact (forall l r:bool, _ -> _ -> exists _ : bool, _) => 
-     constructor; intros [|] [|] H1 H2; bruteforce_bool_exists
+     constructor; intros [|] [|] H1 H2;
+     repeat match goal with H:?X = ?X -> _ |- _ => specialize (H eq_refl) end;
+     repeat match goal with H:@ex _ _ |- _ => destruct H end;
+     bruteforce_bool_exists
    end
  | match goal with |- context [@eq bool _ _] =>
      (* Don't use auto for the fallback to keep runtime down *)

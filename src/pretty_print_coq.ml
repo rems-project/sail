@@ -652,7 +652,7 @@ and doc_arithfact ctxt ?(exists = []) ?extra nc =
   let prop = doc_nc_prop ctxt nc in
   let prop = match extra with
     | None -> prop
-    | Some pp -> separate space [pp; string "/\\"; prop]
+    | Some pp -> separate space [pp; string "/\\"; parens prop]
   in
   let prop =
     match exists with
@@ -665,11 +665,11 @@ and doc_arithfact ctxt ?(exists = []) ?extra nc =
 and doc_nc_prop ?(top = true) ctx nc =
   let rec l85 (NC_aux (nc,_) as nc_full) =
   match nc with
-  | NC_or (nc1, nc2) -> doc_op (string "\\/") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
+  | NC_or (nc1, nc2) -> doc_op (string "\\/") (l80 nc1) (l85 nc2)
   | _ -> l80 nc_full
   and l80 (NC_aux (nc,_) as nc_full) =
   match nc with
-  | NC_and (nc1, nc2) -> doc_op (string "/\\") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
+  | NC_and (nc1, nc2) -> doc_op (string "/\\") (l70 nc1) (l80 nc2)
   | _ -> l70 nc_full
   and l70 (NC_aux (nc,_) as nc_full) =
   match nc with
@@ -1846,29 +1846,6 @@ let doc_exp, doc_let =
             let epp = liftR (separate space [string "assert_exp'"; expY assert_e1; expY assert_e2]) in
             let epp = infix 0 1 (string ">>= fun _ =>") epp (top_exp new_ctxt false e2) in
             if aexp_needed then parens (align epp) else align epp
-         (* Special case because we don't handle variables with nested existentials well yet.
-            TODO: check that id1 is not used in e2' *)
-         | ((P_aux (P_id id1,_)) | P_aux (P_typ (_, P_aux (P_id id1,_)),_)),
-           _,
-           (E_aux (E_let (LB_aux (LB_val (pat', E_aux (E_cast (typ', E_aux (E_id id2,_)),_)),_), e2'),_))
-             when Id.compare id1 id2 == 0 ->
-            let m_str, tail_pp = if ctxt.early_ret then "MR",[string "_"] else "M",[] in
-            let e1_pp = parens (separate space ([expY e1; colon;
-                                                string m_str;
-                                                parens (doc_typ ctxt typ')]@tail_pp)) in
-            let middle =
-              match pat' with
-              | P_aux (P_id id,_)
-                   when Util.is_none (is_auto_decomposed_exist ctxt (env_of e1) (typ_of e1)) &&
-                          not (is_enum (env_of e1) id) ->
-                 separate space [string ">>= fun"; doc_id id; bigarrow]
-              | P_aux (P_typ (typ, P_aux (P_id id,_)),_)
-                   when Util.is_none (is_auto_decomposed_exist ctxt (env_of e1) typ) &&
-                          not (is_enum (env_of e1) id) ->
-                 separate space [string ">>= fun"; doc_id id; colon; doc_typ ctxt typ; bigarrow]              | _ ->
-                 separate space [string ">>= fun"; squote ^^ doc_pat ctxt true true (pat', typ'); bigarrow]
-            in
-            infix 0 1 middle e1_pp (top_exp new_ctxt false e2')
          | _ ->
             let epp =
               let middle =
