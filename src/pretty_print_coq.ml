@@ -2138,10 +2138,11 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
         string "Defined." ^^ hardline
       else empty
     in
+    let resetimplicit = separate space [string "Arguments"; id_pp; colon; string "clear implicits."] in
     doc_op coloneq
-           (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt parens typq])
+           (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt braces typq])
            ((*doc_typquant typq*) (braces (space ^^ align fs_doc ^^ space))) ^^
-      dot ^^ hardline ^^ eq_pp ^^ updates_pp
+      dot ^^ hardline ^^ resetimplicit ^^ hardline ^^ eq_pp ^^ updates_pp
   | TD_variant(id,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
