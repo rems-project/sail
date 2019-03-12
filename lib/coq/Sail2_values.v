@@ -10,6 +10,7 @@ Require Export Sumbool.
 Require Export DecidableClass.
 Require Import Eqdep_dec.
 Require Export Zeuclid.
+Require Import Psatz.
 Import ListNotations.
 
 Open Scope Z.
@@ -1219,6 +1220,7 @@ prepare_for_solver;
  | constructor; eauto 3 with zarith sail
    (* The datatypes hints give us some list handling, esp In *)
  | constructor; drop_exists; eauto 3 with datatypes zarith sail
+ | match goal with |- context [Z.mul] => constructor; nia end
    (* Booleans - and_boolMP *)
  | match goal with |- ArithFact (forall l r:bool, _ -> _ -> exists _ : bool, _) => 
      constructor; intros [|] [|] H1 H2;
