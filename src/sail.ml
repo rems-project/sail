@@ -140,7 +140,7 @@ let options = Arg.align ([
     Arg.Clear Latex.opt_simple_val,
     " print full valspecs in LaTeX output");
   ( "-marshal",
-    Arg.Set opt_marshal_defs,
+    Arg.Tuple [Arg.Set opt_marshal_defs; Arg.Set Initial_check.opt_undefined_gen],
     " OCaml-marshal out the rewritten AST to a file");
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
@@ -490,7 +490,13 @@ let main() =
            let ast_marshal = rewrite_ast_interpreter type_envs ast in
            let out_filename = match !opt_file_out with None -> "out" | Some s -> s in
            let f = open_out_bin (out_filename ^ ".defs") in
-           Marshal.to_string (ast_marshal, Type_check.Env.set_prover None type_envs) [Marshal.No_sharing; Marshal.Compat_32]
+           let remove_prover (l, tannot) =
+             if Type_check.is_empty_tannot tannot then
+               (l, Type_check.empty_tannot)
+             else
+               (l, Type_check.replace_env (Type_check.Env.set_prover None (Type_check.env_of_tannot tannot)) tannot)
+           in
+           Marshal.to_string (Ast_util.map_defs_annot remove_prover ast_marshal, Type_check.Env.set_prover None type_envs) [Marshal.Compat_32]
            |> B64.encode
            |> output_string f;
            close_out f

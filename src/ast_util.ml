@@ -619,6 +619,80 @@ and map_lexp_annot_aux f = function
   | LEXP_vector_range (lexp, exp1, exp2) -> LEXP_vector_range (map_lexp_annot f lexp, map_exp_annot f exp1, map_exp_annot f exp2)
   | LEXP_field (lexp, id) -> LEXP_field (map_lexp_annot f lexp, id)
 
+and map_typedef_annot f = function
+  | TD_aux (td_aux, annot) -> TD_aux (td_aux, f annot)
+
+and map_fundef_annot f = function
+  | FD_aux (fd_aux, annot) -> FD_aux (map_fundef_annot_aux f fd_aux, f annot)
+and map_fundef_annot_aux f = function
+  | FD_function (rec_opt, tannot_opt, eff_opt, funcls) -> FD_function (map_recopt_annot f rec_opt, tannot_opt, eff_opt,
+                                                                       List.map (map_funcl_annot f) funcls)
+and map_funcl_annot f = function
+  | FCL_aux (fcl, annot) -> FCL_aux (map_funcl_annot_aux f fcl, f annot)
+and map_funcl_annot_aux f = function
+  | FCL_Funcl (id, pexp) -> FCL_Funcl (id, map_pexp_annot f pexp)
+and map_recopt_annot f = function
+  | Rec_aux (rec_aux, l) -> Rec_aux (map_recopt_annot_aux f rec_aux, l)
+and map_recopt_annot_aux f = function
+  | Rec_nonrec -> Rec_nonrec
+  | Rec_rec -> Rec_rec
+  | Rec_measure (pat, exp) -> Rec_measure (map_pat_annot f pat, map_exp_annot f exp)
+
+and map_mapdef_annot f = function
+  | MD_aux (md_aux, annot) -> MD_aux (map_mapdef_annot_aux f md_aux, f annot)
+and map_mapdef_annot_aux f = function
+  | MD_mapping (id, tannot_opt, mapcls) -> MD_mapping (id, tannot_opt, List.map (map_mapcl_annot f) mapcls)
+
+and map_valspec_annot f = function
+  | VS_aux (vs_aux, annot) -> VS_aux (vs_aux, f annot)
+
+and map_scattered_annot f = function
+  | SD_aux (sd_aux, annot) -> SD_aux (map_scattered_annot_aux f sd_aux, f annot)
+and map_scattered_annot_aux f = function
+  | SD_function (rec_opt, tannot_opt, eff_opt, name) -> SD_function (map_recopt_annot f rec_opt, tannot_opt, eff_opt, name)
+  | SD_funcl fcl -> SD_funcl (map_funcl_annot f fcl)
+  | SD_variant (id, typq) -> SD_variant (id, typq)
+  | SD_unioncl (id, tu) -> SD_unioncl (id, tu)
+  | SD_mapping (id, tannot_opt) -> SD_mapping (id, tannot_opt)
+  | SD_mapcl (id, mcl) -> SD_mapcl (id, map_mapcl_annot f mcl)
+  | SD_end id -> SD_end id
+
+and map_decspec_annot f = function
+  | DEC_aux (dec_aux, annot) -> DEC_aux (map_decspec_annot_aux f dec_aux, f annot)
+and map_decspec_annot_aux f = function
+  | DEC_reg (eff1, eff2, typ, id) -> DEC_reg (eff1, eff2, typ, id)
+  | DEC_config (id, typ, exp) -> DEC_config (id, typ, map_exp_annot f exp)
+  | DEC_alias (id, als) -> DEC_alias (id, map_aliasspec_annot f als)
+  | DEC_typ_alias (typ, id, als) -> DEC_typ_alias (typ, id, map_aliasspec_annot f als)
+and map_aliasspec_annot f = function
+  | AL_aux (al_aux, annot) -> AL_aux (map_aliasspec_annot_aux f al_aux, f annot)
+and map_aliasspec_annot_aux f = function
+  | AL_subreg (reg_id, id) -> AL_subreg (map_regid_annot f reg_id, id)
+  | AL_bit (reg_id, exp) -> AL_bit (map_regid_annot f reg_id, map_exp_annot f exp)
+  | AL_slice (reg_id, exp1, exp2) -> AL_slice (map_regid_annot f reg_id, map_exp_annot f exp1, map_exp_annot f exp2)
+  | AL_concat (reg_id1, reg_id2) -> AL_concat (map_regid_annot f reg_id1, map_regid_annot f reg_id2)
+and map_regid_annot f = function
+  | RI_aux (ri_aux, annot) -> RI_aux (map_regid_annot_aux f ri_aux, f annot)
+and map_regid_annot_aux f = function
+  | RI_id id -> RI_id id
+
+and map_def_annot f = function
+  | DEF_type td -> DEF_type (map_typedef_annot f td)
+  | DEF_fundef fd -> DEF_fundef (map_fundef_annot f fd)
+  | DEF_mapdef md -> DEF_mapdef (map_mapdef_annot f md)
+  | DEF_val lb -> DEF_val (map_letbind_annot f lb)
+  | DEF_spec vs -> DEF_spec (map_valspec_annot f vs)
+  | DEF_fixity (prec, n, id) -> DEF_fixity (prec, n, id)
+  | DEF_overload (name, overloads) -> DEF_overload (name, overloads)
+  | DEF_default ds -> DEF_default ds
+  | DEF_scattered sd -> DEF_scattered (map_scattered_annot f sd)
+  | DEF_measure (id, pat, exp) -> DEF_measure (id, map_pat_annot f pat, map_exp_annot f exp)
+  | DEF_reg_dec ds -> DEF_reg_dec (map_decspec_annot f ds)
+  | DEF_internal_mutrec fds -> DEF_internal_mutrec (List.map (map_fundef_annot f) fds)
+  | DEF_pragma (name, arg, l) -> DEF_pragma (name, arg, l)
+and map_defs_annot f = function
+  | Defs defs -> Defs (List.map (map_def_annot f) defs)
+
 let id_loc = function
   | Id_aux (_, l) -> l
 
