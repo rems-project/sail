@@ -9,6 +9,8 @@ type vector_order =
  | Order_inc
  | Order_dec
 
+(* zencoded variants are for the OCaml backend, non-zencoded are for the Lem backend compiled to OCaml.
+   Sometimes they're just aliased. *)
 
 let zunitFromInterpValue v = match v with
   | V_unit -> ()
@@ -99,3 +101,26 @@ let zbitToInterpValue v = V_bit v
 
 let bitFromInterpValue = zbitFromInterpValue
 let bitToInterpValue = zbitToInterpValue
+
+let optionFromInterpValue typq_'a v = match v with
+  | V_ctor ("None", [v0]) -> None
+  | V_ctor ("Some", [v0]) -> Some (typq_'a v0)
+  | _ -> failwith "invalid interpreter value for option"
+
+let optionToInterpValue typq_'a v = match v with
+  | None -> V_ctor ("None", [(unitToInterpValue ())])
+  | Some (v0) -> V_ctor ("Some", [(typq_'a v0)])
+
+
+let bitsFromInterpValue typq_'n v = match v with
+  | V_vector vs ->
+     assert (Big_int.of_int (List.length vs) = typq_'n);
+     Lem.wordFromBitlist (List.map (fun b -> bitFromInterpValue b |> Sail_lib.bool_of_bit) vs)
+  | _ -> failwith "invalid interpreter value for bits"
+
+let bitsToInterpValue typq_'n v =
+  let bs = Lem.bitlistFromWord v in
+  assert (Big_int.of_int (List.length bs) = typq_'n);
+  V_vector (List.map (fun b -> Sail_lib.bit_of_bool b |> bitToInterpValue) bs)
+
+
