@@ -103,11 +103,11 @@ let is_value = function
   | _ -> false
 
 let is_true = function
-  | (E_aux (E_internal_value (V_bool b), _)) -> b == true
+  | (E_aux (E_internal_value (V_bool b), annot)) -> b
   | _ -> false
 
 let is_false = function
-  | (E_aux (E_internal_value (V_bool b), _)) -> b == false
+  | (E_aux (E_internal_value (V_bool b), _)) -> not b
   | _ -> false
 
 let exp_of_value v = (E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot)))
