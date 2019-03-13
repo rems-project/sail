@@ -142,7 +142,7 @@ type 'a response =
   | Read_mem of (* read_kind : *) value * (* address : *) value * (* length : *) value * (value -> 'a)
   | Write_ea of (* write_kind : *) value * (* address : *) value * (* length : *) value * (unit -> 'a)
   | Excl_res of (bool -> 'a)
-  | Write_memv of value * (bool -> 'a)
+  | Write_mem of (* write_kind : *) value * (* address : *) value * (* length : *) value * (* value : *) value * (bool -> 'a)
   | Barrier of (* barrier_kind : *) value * (unit -> 'a)
   | Read_reg of string * (value -> 'a)
   | Write_reg of string * value * (unit -> 'a)
@@ -164,7 +164,7 @@ let map_response f = function
   | Read_mem (rk, addr, len, cont) -> Read_mem (rk, addr, len, fun v -> f (cont v))
   | Write_ea (wk, addr, len, cont) -> Write_ea (wk, addr, len, fun () -> f (cont ()))
   | Excl_res cont -> Excl_res (fun b -> f (cont b))
-  | Write_memv (v, cont) -> Write_memv (v, fun b -> f (cont b))
+  | Write_mem (wk, addr, len, v, cont) -> Write_mem (wk, addr, len, v, fun b -> f (cont b))
   | Barrier (bk, cont) -> Barrier (bk, fun () -> f (cont ()))
   | Read_reg (name, cont) -> Read_reg (name, fun v -> f (cont v))
   | Write_reg (name, v, cont) -> Write_reg (name, v, fun () -> f (cont ()))
@@ -215,8 +215,8 @@ let write_ea wk addr len : unit monad =
 let excl_res () : bool monad =
   Yield (Excl_res (fun b -> Pure b))
 
-let write_memv v : bool monad =
-  Yield (Write_memv (v, fun b -> Pure b))
+let write_mem wk addr len v : bool monad =
+  Yield (Write_mem (wk, addr, len, v, fun b -> Pure b))
 
 let barrier bk : unit monad =
   Yield (Barrier (bk, fun () -> Pure ()))
@@ -393,7 +393,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
                | _ ->
                   fail "Wrong number of parameters to read_mem intrinsic"
                end
-            | "write_ea" ->
+            | "write_mem_ea" ->
                begin match evaluated with
                | [wk; addr; len] ->
                   write_ea (value_of_exp wk) (value_of_exp addr) (value_of_exp len) >> wrap unit_exp
@@ -407,10 +407,10 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
                | _ ->
                   fail "Wrong number of parameters to excl_res intrinsic"
                end
-            | "write_memv" ->
+            | "write_mem" ->
                begin match evaluated with
-               | [v] ->
-                  write_memv (value_of_exp v) >>= fun b -> return (exp_of_value (V_bool b))
+               | [wk; addr; len; v] ->
+                  write_mem (value_of_exp wk) (value_of_exp v) (value_of_exp len) (value_of_exp v) >>= fun b -> return (exp_of_value (V_bool b))
                | _ ->
                   fail "Wrong number of parameters to write_memv intrinsic"
                end
@@ -751,22 +751,24 @@ type frame =
   | Done of state * value
   | Step of string Lazy.t * state * (Type_check.tannot exp) monad * (string Lazy.t * lstate * (return_value -> (Type_check.tannot exp) monad)) list
   | Break of frame
-  | Effect_request of state * effect_request
+  | Effect_request of string Lazy.t * state * (string Lazy.t * lstate * (return_value -> (Type_check.tannot exp) monad)) list * effect_request
+  | Fail of string Lazy.t * state * (Type_check.tannot exp) monad * (string Lazy.t * lstate * (return_value -> (Type_check.tannot exp) monad)) list * string
 
 (* when changing effect_request remember to also update response type above *)
 and effect_request =
   | Read_mem of (* read_kind : *) value * (* address : *) value * (* length : *) value * (value -> state -> frame)
   | Write_ea of (* write_kind : *) value * (* address : *) value * (* length : *) value * (unit -> state -> frame)
   | Excl_res of (bool -> state -> frame)
-  | Write_memv of value * (bool -> state -> frame)
+  | Write_mem of (* write_kind : *) value * (* address : *) value * (* length : *) value * (* value : *) value * (bool -> state -> frame)
   | Barrier of (* barrier_kind : *) value * (unit -> state -> frame)
   | Read_reg of string * (value -> state -> frame)
   | Write_reg of string * value * (unit -> state -> frame)
 
 let rec eval_frame' = function
   | Done (state, v) -> Done (state, v)
+  | Fail (out, state, m, stack, msg) -> Fail (out, state, m, stack, msg)
   | Break frame -> Break frame
-  | Effect_request (state, eff) -> Effect_request (state, eff)
+  | Effect_request (out, state, stack, eff) -> Effect_request (out, state, stack, eff)
   | Step (out, state, m, stack) ->
      let lstate, gstate = state in
      match (m, stack) with
@@ -796,9 +798,9 @@ let rec eval_frame' = function
         end
 
      | Yield (Read_reg (name, cont)), _ ->
-        Effect_request (state, Read_reg (name, fun v state' -> eval_frame' (Step (out, state', cont v, stack))))
+        Effect_request (out, state, stack, Read_reg (name, fun v state' -> eval_frame' (Step (out, state', cont v, stack))))
      | Yield (Write_reg (name, v, cont)), _ ->
-        Effect_request (state, Write_reg (name, v, fun () state' -> eval_frame' (Step (out, state', cont (), stack))))
+        Effect_request (out, state, stack, Write_reg (name, v, fun () state' -> eval_frame' (Step (out, state', cont (), stack))))
      | Yield (Get_primop (name, cont)), _ ->
         begin
           try
@@ -820,22 +822,22 @@ let rec eval_frame' = function
      | Yield (Get_global_letbinds cont), _ ->
         eval_frame' (Step (out, state, cont gstate.letbinds, stack))
      | Yield (Read_mem (rk, addr, len, cont)), _ ->
-        Effect_request (state, Read_mem (rk, addr, len, fun result state' -> eval_frame' (Step (out, state', cont result, stack))))
+        Effect_request (out, state, stack, Read_mem (rk, addr, len, fun result state' -> eval_frame' (Step (out, state', cont result, stack))))
      | Yield (Write_ea (wk, addr, len, cont)), _ ->
-        Effect_request (state, Write_ea (wk, addr, len, fun () state' -> eval_frame' (Step (out, state', cont (), stack))))
+        Effect_request (out, state, stack, Write_ea (wk, addr, len, fun () state' -> eval_frame' (Step (out, state', cont (), stack))))
      | Yield (Excl_res cont), _ ->
-        Effect_request (state, Excl_res (fun b state' -> eval_frame' (Step (out, state', cont b, stack))))
-     | Yield (Write_memv (v, cont)), _ ->
-        Effect_request (state, Write_memv (v, fun b state' -> eval_frame' (Step (out, state', cont b, stack))))
+        Effect_request (out, state, stack, Excl_res (fun b state' -> eval_frame' (Step (out, state', cont b, stack))))
+     | Yield (Write_mem (wk, addr, len, v, cont)), _ ->
+        Effect_request (out, state, stack, Write_mem (wk, addr, len, v, fun b state' -> eval_frame' (Step (out, state', cont b, stack))))
      | Yield (Barrier (bk, cont)), _ ->
-        Effect_request (state, Barrier (bk, fun () state' -> eval_frame' (Step (out, state', cont (), stack))))
+        Effect_request (out, state, stack, Barrier (bk, fun () state' -> eval_frame' (Step (out, state', cont (), stack))))
      | Yield (Early_return v), [] -> Done (state, v)
      | Yield (Early_return v), (head :: stack') ->
         Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_ok v), stack')
      | Yield (Assertion_failed msg), _ | Yield (Fail msg), _ ->
-        failwith msg
+        Fail (out, state, m, stack, msg)
      | Yield (Exception v), [] ->
-        failwith ("Uncaught Exception" |> Util.cyan |> Util.clear)
+        Fail (out, state, m, stack, "Uncaught exception: " ^ string_of_value v)
      | Yield (Exception v), (head :: stack') ->
         Step (stack_string head, (stack_state head, gstate), stack_cont head (Return_exception v), stack')
 
@@ -860,10 +862,10 @@ let default_effect_interp state eff =
   | Excl_res cont ->
      (* always succeeds in single-threaded interpreter *)
      cont true state
-  | Write_memv (v, cont) ->
+  | Write_mem (wk, addr, len, v, cont) ->
      begin
        match gstate.last_write_ea with
-       | Some (wk, addr, len) ->
+       | Some (wk', addr', len') ->
           let state' = (lstate, { gstate with last_write_ea = None }) in
           (* all write-kinds treated the same in single-threaded interpreter *)
           let addr' = coerce_bv addr in
@@ -909,11 +911,12 @@ let default_effect_interp state eff =
 let rec run_frame frame =
   match frame with
   | Done (state, v) -> v
+  | Fail (_, _, _, _, msg) -> failwith ("run_frame got Fail: " ^ msg)
   | Step (lazy_str, _, _, _) ->
      run_frame (eval_frame frame)
   | Break frame ->
      run_frame (eval_frame frame)
-  | Effect_request (state, eff) ->
+  | Effect_request (out, state, stack, eff) ->
      run_frame (default_effect_interp state eff)
 
 let eval_exp state exp =

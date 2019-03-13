@@ -120,7 +120,9 @@ let sep = "-----------------------------------------------------" |> Util.blue |
 let print_program () =
   match !current_mode with
   | Normal | Emacs -> ()
-  | Evaluation (Step (out, _, _, stack)) ->
+  | Evaluation (Step (out, _, _, stack))
+    | Evaluation (Effect_request(out, _, stack,  _))
+    | Evaluation (Fail (out, _, _, stack, _)) ->
      List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline (Lazy.force code); print_endline sep);
      print_endline (Lazy.force out)
   | Evaluation (Done (_, v)) ->
@@ -153,6 +155,9 @@ let rec run () =
           interactive_state := state;
           print_endline ("Result = " ^ Value.string_of_value v);
           current_mode := Normal
+       | Fail (_, _, _, _, msg) ->
+          print_endline ("Error: " ^ msg);
+          current_mode := Normal
        | Step (out, state, _, stack) ->
           begin
             try
@@ -164,7 +169,7 @@ let rec run () =
        | Break frame ->
           print_endline "Breakpoint";
           current_mode := Evaluation frame
-       | Effect_request (state, eff) ->
+       | Effect_request (out, state, stack, eff) ->
           begin
             try
               current_mode := Evaluation (Interpreter.default_effect_interp state eff)
@@ -187,6 +192,9 @@ let rec run_steps n =
           interactive_state := state;
           print_endline ("Result = " ^ Value.string_of_value v);
           current_mode := Normal
+       | Fail (_, _, _, _, msg) ->
+          print_endline ("Error: " ^ msg);
+          current_mode := Normal
        | Step (out, state, _, stack) ->
           begin
             try
@@ -198,7 +206,7 @@ let rec run_steps n =
        | Break frame ->
           print_endline "Breakpoint";
           current_mode := Evaluation frame
-       | Effect_request (state, eff) ->
+       | Effect_request (out, state, stack, eff) ->
           begin
             try
               current_mode := Evaluation (Interpreter.default_effect_interp state eff)
@@ -552,6 +560,9 @@ let handle_input' input =
            interactive_state := state;
            print_endline ("Result = " ^ Value.string_of_value v);
            current_mode := Normal
+        | Fail (_, _, _, _, msg) ->
+           print_endline ("Error: " ^ msg);
+           current_mode := Normal
         | Step (out, state, _, stack) ->
            begin
              try
@@ -564,7 +575,7 @@ let handle_input' input =
         | Break frame ->
            print_endline "Breakpoint";
            current_mode := Evaluation frame
-        | Effect_request (state, eff) ->
+        | Effect_request (out, state, stack, eff) ->
            begin
              try
                interactive_state := state;
