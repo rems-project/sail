@@ -1356,3 +1356,16 @@ end
 instance (Show dia)
   let show = stringFromDia
 end
+
+
+
+(* Formerly in rmem's machineDefTypes *)
+type size = nat (* the number of bytes in a footprint *)
+
+type footprint = address * size
+
+type integer_footprint = integer*integer
+
+let footprintCompare (fp1: footprint) (fp2: footprint) = compare fp1 fp2
+
+let stringFromFootprint (a,sz) = show a ^ "/" ^ show sz
