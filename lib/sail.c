@@ -930,6 +930,20 @@ void set_slice_int(sail_int *rop,
   }
 }
 
+void update_lbits(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit)
+{
+  uint64_t n = mpz_get_ui(n_mpz);
+
+  mpz_set(*rop->bits, *op.bits);
+  rop->len = op.len;
+
+  if (bit == UINT64_C(0)) {
+    mpz_clrbit(*rop->bits, n);
+  } else {
+    mpz_setbit(*rop->bits, n);
+  }
+}
+
 void vector_update_subrange_lbits(lbits *rop,
 				 const lbits op,
 				 const sail_int n_mpz,

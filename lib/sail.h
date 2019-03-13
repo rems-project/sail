@@ -290,6 +290,8 @@ void set_slice_int(sail_int *rop,
 		   const sail_int start_mpz,
 		   const lbits slice);
 
+void update_lbits(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit);
+
 void vector_update_subrange_lbits(lbits *rop,
 				      const lbits op,
 				      const sail_int n_mpz,
