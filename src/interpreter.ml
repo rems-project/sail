@@ -422,7 +422,11 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
                   fail "Wrong number of parameters to barrier intrinsic"
                end
             | _ ->
-               get_primop extern >>= fun op -> return (exp_of_value (op (List.map value_of_exp evaluated)))
+               prerr_endline ("calling get_primop for '" ^ extern ^ "' with args (" ^ String.concat ", " (List.map string_of_exp evaluated) ^ ")");
+               get_primop extern >>=
+                 fun op -> try
+                          return (exp_of_value (op (List.map value_of_exp evaluated)))
+                        with _ as exc -> fail ("Exception calling primop '" ^ extern ^ "': " ^ Printexc.to_string exc)
           end
        | [] ->
           call id (List.map value_of_exp evaluated) >>=
