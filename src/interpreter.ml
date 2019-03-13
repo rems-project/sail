@@ -643,7 +643,16 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        | None -> fail "Sizeof unevaluable nexp"
      end
 
-  | _ -> fail ("Unimplemented " ^ string_of_exp orig_exp)
+  | E_cons (hd, tl) when is_value hd && is_value tl ->
+     let hd = value_of_exp hd in
+     let tl = coerce_listlike (value_of_exp tl) in
+     return (exp_of_value (V_list (hd :: tl)))
+  | E_cons (hd, tl) when is_value hd ->
+     step tl >>= fun tl' -> wrap (E_cons (hd, tl'))
+  | E_cons (hd, tl) ->
+     step hd >>= fun hd' -> wrap (E_cons (hd', tl))
+
+  | _ -> raise (Invalid_argument ("Unimplemented " ^ string_of_exp orig_exp))
 
 and combine _ v1 v2 =
   match (v1, v2) with
