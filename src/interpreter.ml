@@ -992,17 +992,13 @@ let annot_exp e_aux l env typ = annot_exp_effect e_aux l env typ no_effect
 let id_typ id = mk_typ (Typ_id (mk_id id))
 
 let analyse_instruction state ast =
-  try
-    let env = (snd state).typecheck_env in
-    let unk = Parse_ast.Unknown in
-    let typed = annot_exp
-                  (E_app (mk_id "initial_analysis", [annot_exp (E_internal_value ast) unk env (id_typ "ast")])) unk env
-                  (tuple_typ [id_typ "regfps"; id_typ "regfps"; id_typ "regfps"; id_typ "niafps"; id_typ "diafp"; id_typ "instruction_kind"])
-    in
-    let evaled = eval_exp state typed in
-    Value_success evaled
-  with _ as exn ->
-    Value_error exn
+  let env = (snd state).typecheck_env in
+  let unk = Parse_ast.Unknown in
+  let typed = annot_exp
+                (E_app (mk_id "initial_analysis", [annot_exp (E_internal_value ast) unk env (id_typ "ast")])) unk env
+                (tuple_typ [id_typ "regfps"; id_typ "regfps"; id_typ "regfps"; id_typ "niafps"; id_typ "diafp"; id_typ "instruction_kind"])
+  in
+  Step (lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp typed)), state, return typed, [])
 
 let execute_instruction state ast =
   let env = (snd state).typecheck_env in
