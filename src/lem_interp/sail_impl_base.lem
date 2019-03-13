@@ -334,22 +334,24 @@ end
 (* Registers *)
 type slice = (nat * nat)
 
+type reg_base_name = string
+
 type reg_name = 
   (* do we really need this here if ppcmem already has this information by itself? *)
-| Reg of string * nat * nat * direction
+| Reg of reg_base_name * nat * nat * direction
 (*Name of the register, accessing the entire register, the start and size of this register, and its direction *)
 
-| Reg_slice of string * nat * direction * slice 
+| Reg_slice of reg_base_name * nat * direction * slice 
 (* Name of the register, accessing from the bit indexed by the first
 to the bit indexed by the second integer of the slice, inclusive. For
 machineDef* the first is a smaller number or equal to the second, adjusted
 to reflect the correct span direction in the interpreter side.  *)
 
-| Reg_field of string * nat * direction * string * slice 
+| Reg_field of reg_base_name * nat * direction * string * slice 
 (*Name of the register, start and direction, and name of the field of the register
 accessed. The slice specifies where this field is in the register*)
 
-| Reg_f_slice of string * nat * direction * string * slice * slice 
+| Reg_f_slice of reg_base_name * nat * direction * string * slice * slice 
 (* The first four components are as in Reg_field; the final slice
 specifies a part of the field, indexed w.r.t. the register as a whole *)
 
@@ -792,6 +794,17 @@ type outcome 'a =
 type outcome_s 'a = with_aux (outcome 'a)
 (* first string : output of instruction_stack_to_string
    second string: output of local_variables_to_string *)
+
+type outcome_S = outcome_s unit
+(* An outcome_S corresponds to the instruction state. It contains:
+   - the next outcome
+   - maybe (a pp of the current interpreter state)
+   - maybe (a function that given an environment gives us the exhaustive events from this state)
+   This is so we can hide the interpreter state from machineDefTypes but still get the functionality
+   we need for the interpreter.
+ *)
+
+
 
 (** operations and coercions on basic values *)
 
@@ -1369,3 +1382,6 @@ type integer_footprint = integer*integer
 let footprintCompare (fp1: footprint) (fp2: footprint) = compare fp1 fp2
 
 let stringFromFootprint (a,sz) = show a ^ "/" ^ show sz
+
+
+
