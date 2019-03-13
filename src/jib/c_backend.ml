@@ -63,7 +63,6 @@ module Big_int = Nat_big_num
 
 let c_verbosity = ref 0
 
-let opt_debug_flow_graphs = ref false
 let opt_static = ref false
 let opt_no_main = ref false
 let opt_memo_cache = ref false
@@ -849,48 +848,6 @@ let hoist_allocations recursive_functions = function
 
   | cdef -> [cdef]
 
-let flat_counter = ref 0
-let flat_id () =
-  let id = mk_id ("local#" ^ string_of_int !flat_counter) in
-  incr flat_counter;
-  id
-
-let rec flatten_instrs = function
-  | I_aux (I_decl (ctyp, decl_id), aux) :: instrs ->
-     let fid = flat_id () in
-     I_aux (I_decl (ctyp, fid), aux) :: flatten_instrs (instrs_rename decl_id fid instrs)
-
-  | I_aux ((I_block block | I_try_block block), _) :: instrs ->
-     flatten_instrs block @ flatten_instrs instrs
-
-  | I_aux (I_if (cval, then_instrs, else_instrs, _), _) :: instrs ->
-     let then_label = label "then_" in
-     let endif_label = label "endif_" in
-     [ijump cval then_label]
-     @ flatten_instrs else_instrs
-     @ [igoto endif_label]
-     @ [ilabel then_label]
-     @ flatten_instrs then_instrs
-     @ [ilabel endif_label]
-     @ flatten_instrs instrs
-
-  | I_aux (I_comment _, _) :: instrs -> flatten_instrs instrs
-
-  | instr :: instrs -> instr :: flatten_instrs instrs
-  | [] -> []
-
-let flatten_cdef =
-  function
-  | CDEF_fundef (function_id, heap_return, args, body) ->
-     flat_counter := 0;
-     CDEF_fundef (function_id, heap_return, args, flatten_instrs body)
-
-  | CDEF_let (n, bindings, instrs) ->
-    flat_counter := 0;
-    CDEF_let (n, bindings, flatten_instrs instrs)
-
-  | cdef -> cdef
-
 let rec specialize_variants ctx prior =
   let unifications = ref (Bindings.empty) in
 
@@ -1386,6 +1343,7 @@ let rec sgen_clexp = function
   | CL_have_exception -> "have_exception"
   | CL_current_exception _ -> "current_exception"
   | CL_return _ -> assert false
+  | CL_void -> assert false
 
 let rec sgen_clexp_pure = function
   | CL_id (id, _) -> sgen_id id
@@ -1395,6 +1353,7 @@ let rec sgen_clexp_pure = function
   | CL_have_exception -> "have_exception"
   | CL_current_exception _ -> "current_exception"
   | CL_return _ -> assert false
+  | CL_void -> assert false
 
 (** Generate instructions to copy from a cval to a clexp. This will
    insert any needed type conversions from big integers to small
@@ -2079,8 +2038,6 @@ let codegen_def' ctx = function
        string (Printf.sprintf "%svoid %s(%s%s *rop, %s);" static (sgen_function_id id) (extra_params ()) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
-     if !opt_debug_flow_graphs then make_dot id (instrs_graph instrs) else ();
-
      (* Extract type information about the function from the environment. *)
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with

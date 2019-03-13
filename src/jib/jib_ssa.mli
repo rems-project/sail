@@ -48,62 +48,38 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Jib
-open Type_check
+open Array
 
-(** Global compilation options *)
+(** A mutable array based graph type, with nodes indexed by integers. *)
+type 'a array_graph
 
-(** Define generated functions as static *)
-val opt_static : bool ref
+(** Create an empty array_graph, specifying the initial size of the
+   underlying array. *)
+val make : initial_size:int -> unit -> 'a array_graph
 
-(** Do not generate a main function *)
-val opt_no_main : bool ref
+(** Add a vertex to a graph, returning the index of the inserted
+   vertex. If the number of vertices exceeds the size of the
+   underlying array, then it is dynamically resized. *)
+val add_vertex : 'a -> 'a array_graph -> int
 
-(** (WIP) Do not include rts.h (the runtime), and do not generate code
-   that requires any setup or teardown routines to be run by a runtime
-   before executing any instruction semantics. *)
-val opt_no_rts : bool ref
+(** Add an edge between two existing vertices. Raises Invalid_argument
+   if either of the vertices do not exist. *)
+val add_edge : int -> int -> 'a array_graph -> unit
 
-(** Ordinarily we use plain z-encoding to name-mangle generated Sail
-   identifiers into a form suitable for C. If opt_prefix is set, then
-   the "z" which is added on the front of each generated C function
-   will be replaced by opt_prefix. E.g. opt_prefix := "sail_" would
-   give sail_my_function rather than zmy_function. *)
-val opt_prefix : string ref
+type cf_node =
+  | CF_label of string
+  | CF_block of Jib.instr list
+  | CF_start
 
-(** opt_extra_params and opt_extra_arguments allow additional state to
-   be threaded through the generated C code by adding an additional
-   parameter to each function type, and then giving an extra argument
-   to each function call. For example we could have
+val control_flow_graph : Jib.instr list -> int * int list * ('a list * cf_node) array_graph
 
-   opt_extra_params := Some "CPUMIPSState *env"
-   opt_extra_arguments := Some "env"
+type ssa_elem =
+  | Phi of Ast.id * Ast.id list
 
-   and every generated function will take a pointer to a QEMU MIPS
-   processor state, and each function will be passed the env argument
-   when it is called. *)
-val opt_extra_params : string option ref
-val opt_extra_arguments : string option ref
+(** Convert a list of instructions into SSA form *)
+val ssa : Jib.instr list -> (ssa_elem list * cf_node) array_graph
 
-(** (WIP) [opt_memo_cache] will store the compiled function
-   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
-   of the original function to be compiled. Enabled using the -memo
-   flag. Uses Marshal so it's quite picky about the exact version of
-b   the Sail version. This cache can obviously become stale if the C
-   backend changes - it'll load an old version compiled without said
-   changes. *)
-val opt_memo_cache : bool ref
-
-(** Optimization flags *)
-
-val optimize_primops : bool ref
-val optimize_hoist_allocations : bool ref
-val optimize_struct_updates : bool ref
-val optimize_alias : bool ref
-val optimize_experimental : bool ref
-
-(** Convert a typ to a IR ctyp *)
-val ctyp_of_typ : Jib_compile.ctx -> Ast.typ -> ctyp
-
-val jib_of_ast : Env.t -> tannot Ast.defs -> cdef list * Jib_compile.ctx
-val compile_ast : Env.t -> out_channel -> string list -> tannot Ast.defs -> unit
+(** Output the control-flow graph in graphviz format for
+   debugging. Can use 'dot -Tpng X.gv -o X.png' to generate a png
+   image of the graph. *)
+val make_dot : out_channel -> (ssa_elem list * cf_node) array_graph -> unit

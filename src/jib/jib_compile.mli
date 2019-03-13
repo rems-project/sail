@@ -55,10 +55,13 @@ open Ast
 open Ast_util
 open Jib
 open Type_check
-   
+
+(** Output a dataflow graph for each generated function in Graphviz
+   (dot) format. *)
+val opt_debug_flow_graphs : bool ref
+
 (** Print the IR representation of a specific function. *)
 val opt_debug_function : string ref
-  
 
 (** {2 Jib context} *)
 

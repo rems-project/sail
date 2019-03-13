@@ -48,62 +48,82 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+open Ast_util
 open Jib
-open Type_check
+open Jib_util
 
-(** Global compilation options *)
+let optimize_unit instrs =
+  let unit_cval cval =
+    match cval_ctyp cval with
+    | CT_unit -> (F_lit V_unit, CT_unit)
+    | _ -> cval
+  in
+  let unit_instr = function
+    | I_aux (I_funcall (clexp, extern, id, args), annot) as instr ->
+       begin match clexp_ctyp clexp with
+       | CT_unit ->
+          I_aux (I_funcall (CL_void, extern, id, List.map unit_cval args), annot)
+       | _ -> instr
+       end
+    | I_aux (I_copy (clexp, cval), annot) as instr ->
+       begin match clexp_ctyp clexp with
+       | CT_unit ->
+          I_aux (I_copy (CL_void, unit_cval cval), annot)
+       | _ -> instr
+       end
+    | I_aux (I_alias (clexp, cval), annot) as instr ->
+       begin match clexp_ctyp clexp with
+       | CT_unit ->
+          I_aux (I_alias (CL_void, unit_cval cval), annot)
+       | _ -> instr
+       end
+    | instr -> instr
+  in
+  let non_pointless_copy (I_aux (aux, annot)) =
+    match aux with
+    | I_copy (CL_void, _) -> false
+    | _ -> true
+  in
+  filter_instrs non_pointless_copy (map_instr_list unit_instr instrs)
 
-(** Define generated functions as static *)
-val opt_static : bool ref
+let flat_counter = ref 0
+let flat_id () =
+  let id = mk_id ("local#" ^ string_of_int !flat_counter) in
+  incr flat_counter;
+  id
 
-(** Do not generate a main function *)
-val opt_no_main : bool ref
+let rec flatten_instrs = function
+  | I_aux (I_decl (ctyp, decl_id), aux) :: instrs ->
+     let fid = flat_id () in
+     I_aux (I_decl (ctyp, fid), aux) :: flatten_instrs (instrs_rename decl_id fid instrs)
 
-(** (WIP) Do not include rts.h (the runtime), and do not generate code
-   that requires any setup or teardown routines to be run by a runtime
-   before executing any instruction semantics. *)
-val opt_no_rts : bool ref
+  | I_aux ((I_block block | I_try_block block), _) :: instrs ->
+     flatten_instrs block @ flatten_instrs instrs
 
-(** Ordinarily we use plain z-encoding to name-mangle generated Sail
-   identifiers into a form suitable for C. If opt_prefix is set, then
-   the "z" which is added on the front of each generated C function
-   will be replaced by opt_prefix. E.g. opt_prefix := "sail_" would
-   give sail_my_function rather than zmy_function. *)
-val opt_prefix : string ref
+  | I_aux (I_if (cval, then_instrs, else_instrs, _), _) :: instrs ->
+     let then_label = label "then_" in
+     let endif_label = label "endif_" in
+     [ijump cval then_label]
+     @ flatten_instrs else_instrs
+     @ [igoto endif_label]
+     @ [ilabel then_label]
+     @ flatten_instrs then_instrs
+     @ [ilabel endif_label]
+     @ flatten_instrs instrs
 
-(** opt_extra_params and opt_extra_arguments allow additional state to
-   be threaded through the generated C code by adding an additional
-   parameter to each function type, and then giving an extra argument
-   to each function call. For example we could have
+  | I_aux (I_comment _, _) :: instrs -> flatten_instrs instrs
 
-   opt_extra_params := Some "CPUMIPSState *env"
-   opt_extra_arguments := Some "env"
+  | instr :: instrs -> instr :: flatten_instrs instrs
+  | [] -> []
 
-   and every generated function will take a pointer to a QEMU MIPS
-   processor state, and each function will be passed the env argument
-   when it is called. *)
-val opt_extra_params : string option ref
-val opt_extra_arguments : string option ref
+let flatten_cdef =
+  function
+  | CDEF_fundef (function_id, heap_return, args, body) ->
+     flat_counter := 0;
+     CDEF_fundef (function_id, heap_return, args, flatten_instrs body)
 
-(** (WIP) [opt_memo_cache] will store the compiled function
-   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
-   of the original function to be compiled. Enabled using the -memo
-   flag. Uses Marshal so it's quite picky about the exact version of
-b   the Sail version. This cache can obviously become stale if the C
-   backend changes - it'll load an old version compiled without said
-   changes. *)
-val opt_memo_cache : bool ref
+  | CDEF_let (n, bindings, instrs) ->
+    flat_counter := 0;
+    CDEF_let (n, bindings, flatten_instrs instrs)
 
-(** Optimization flags *)
-
-val optimize_primops : bool ref
-val optimize_hoist_allocations : bool ref
-val optimize_struct_updates : bool ref
-val optimize_alias : bool ref
-val optimize_experimental : bool ref
-
-(** Convert a typ to a IR ctyp *)
-val ctyp_of_typ : Jib_compile.ctx -> Ast.typ -> ctyp
-
-val jib_of_ast : Env.t -> tannot Ast.defs -> cdef list * Jib_compile.ctx
-val compile_ast : Env.t -> out_channel -> string list -> tannot Ast.defs -> unit
+  | cdef -> cdef

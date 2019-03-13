@@ -154,6 +154,7 @@ let rec clexp_rename from_id to_id = function
   | CL_current_exception ctyp -> CL_current_exception ctyp
   | CL_have_exception -> CL_have_exception
   | CL_return ctyp -> CL_return ctyp
+  | CL_void -> CL_void
 
 let rec instr_rename from_id to_id (I_aux (instr, aux)) =
   let instr = match instr with
@@ -482,6 +483,7 @@ let rec pp_clexp = function
   | CL_current_exception ctyp -> string "current_exception : " ^^ pp_ctyp ctyp
   | CL_have_exception -> string "have_exception"
   | CL_return ctyp -> string "return : " ^^ pp_ctyp ctyp
+  | CL_void -> string "void"
 
 let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
   match instr with
@@ -581,40 +583,6 @@ let pp_cdef = function
      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
      ^^ hardline
 
-(**************************************************************************)
-(* 2. Dependency Graphs                                                   *)
-(**************************************************************************)
-
-type graph_node =
-  | G_label of string
-  | G_instr of int * instr
-  | G_start
-
-let string_of_node = function
-  | G_label label -> label
-  | G_instr (n, instr) -> string_of_int n ^ ": " ^ Pretty_print_sail.to_string (pp_instr ~short:true instr)
-  | G_start -> "START"
-
-module Node = struct
-  type t = graph_node
-  let compare gn1 gn2 =
-    match gn1, gn2 with
-    | G_label str1, G_label str2 -> String.compare str1 str2
-    | G_instr (n1, _), G_instr (n2, _) -> compare n1 n2
-    | G_start  , G_start   -> 0
-    | G_start  , _         -> 1
-    | _        , G_start   -> -1
-    | G_instr _, _         -> 1
-    | _        , G_instr _ -> -1
-end
-
-module NodeGraph = Graph.Make(Node)
-
-module NM = Map.Make(Node)
-module NS = Set.Make(Node)
-
-type dep_graph = NodeGraph.graph
-
 let rec fragment_deps = function
   | F_id id | F_ref id -> IdSet.singleton id
   | F_lit _ -> IdSet.empty
@@ -635,6 +603,7 @@ let rec clexp_deps = function
   | CL_have_exception -> IdSet.empty
   | CL_current_exception _ -> IdSet.empty
   | CL_return _ -> IdSet.empty
+  | CL_void -> IdSet.empty
 
 (* Return the direct, read/write dependencies of a single instruction *)
 let instr_deps = function
@@ -646,7 +615,7 @@ let instr_deps = function
   | I_funcall (clexp, _, _, cvals) -> List.fold_left IdSet.union IdSet.empty (List.map cval_deps cvals), clexp_deps clexp
   | I_copy (clexp, cval) -> cval_deps cval, clexp_deps clexp
   | I_alias (clexp, cval) -> cval_deps cval, clexp_deps clexp
-  | I_clear (_, id) -> IdSet.singleton id, IdSet.singleton id
+  | I_clear (_, id) -> IdSet.singleton id, IdSet.empty
   | I_throw cval | I_return cval -> cval_deps cval, IdSet.empty
   | I_block _ | I_try_block _ -> IdSet.empty, IdSet.empty
   | I_comment _ | I_raw _ -> IdSet.empty, IdSet.empty
@@ -656,80 +625,6 @@ let instr_deps = function
   | I_match_failure -> IdSet.empty, IdSet.empty
   | I_end -> IdSet.empty, IdSet.empty
 
-(* instrs_graph returns the control-flow graph for a list of
-   instructions. *)
-let instrs_graph instrs =
-  let icounter = ref 0 in
-  let graph = ref NodeGraph.empty in
-
-  let rec add_instr last_instrs (I_aux (instr, _) as iaux) =
-    incr icounter;
-    let node = G_instr (!icounter, iaux) in
-    match instr with
-    | I_block instrs | I_try_block instrs ->
-       List.fold_left add_instr last_instrs instrs
-    | I_if (_, then_instrs, else_instrs, _) ->
-       List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
-       let n1 = List.fold_left add_instr [node] then_instrs in
-       let n2 = List.fold_left add_instr [node] else_instrs in
-       incr icounter;
-       let join = G_instr (!icounter, icomment "join") in
-       List.iter (fun i -> graph := NodeGraph.add_edge' i join !graph) n1;
-       List.iter (fun i -> graph := NodeGraph.add_edge' i join !graph) n2;
-       [join]
-    | I_return _ ->
-       List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
-       []
-    | I_label label ->
-       graph := NodeGraph.add_edge' (G_label label) node !graph;
-       node :: last_instrs
-    | I_goto label ->
-       List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
-       graph := NodeGraph.add_edge' node (G_label label) !graph;
-       []
-    | I_jump (cval, label) ->
-       List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
-       graph := NodeGraph.add_edges' (G_label label) [] !graph;
-       [node]
-    | I_match_failure ->
-       List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
-       []
-    | _ ->
-       List.iter (fun i -> graph := NodeGraph.add_edge' i node !graph) last_instrs;
-       [node]
-  in
-  ignore (List.fold_left add_instr [G_start] instrs);
-  let graph = NodeGraph.fix_leaves !graph in
-  graph
-
-let make_dot id graph =
-  Util.opt_colors := false;
-  let to_string node = String.escaped (string_of_node node) in
-  let node_color = function
-    | G_start                               -> "lightpink"
-    | G_instr (_, I_aux (I_decl _, _))      -> "olivedrab1"
-    | G_instr (_, I_aux (I_init _, _))      -> "springgreen"
-    | G_instr (_, I_aux (I_clear _, _))     -> "peachpuff"
-    | G_instr (_, I_aux (I_goto _, _))      -> "orange1"
-    | G_instr (_, I_aux (I_label _, _))     -> "white"
-    | G_instr (_, I_aux (I_raw _, _))       -> "khaki"
-    | G_instr (_, I_aux (I_return _, _))    -> "deeppink"
-    | G_instr (_, I_aux (I_undefined _, _)) -> "deeppink"
-    | G_instr _                             -> "azure"
-    | G_label _                             -> "lightpink"
-  in
-  let edge_color from_node to_node =
-    match from_node, to_node with
-    | G_start  , _         -> "goldenrod4"
-    | G_label _, _         -> "darkgreen"
-    | _        , G_label _ -> "goldenrod4"
-    | G_instr _, G_instr _ -> "black"
-    | _        , _         -> "coral3"
-  in
-  let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".gv") in
-  NodeGraph.make_dot node_color edge_color to_string out_chan graph;
-  close_out out_chan
-
 let rec map_clexp_ctyp f = function
   | CL_id (id, ctyp) -> CL_id (id, f ctyp)
   | CL_field (clexp, field) -> CL_field (map_clexp_ctyp f clexp, field)
@@ -738,6 +633,7 @@ let rec map_clexp_ctyp f = function
   | CL_current_exception ctyp -> CL_current_exception (f ctyp)
   | CL_have_exception -> CL_have_exception
   | CL_return ctyp -> CL_return (f ctyp)
+  | CL_void -> CL_void
 
 let rec map_instr_ctyp f (I_aux (instr, aux)) =
   let instr = match instr with
@@ -778,6 +674,18 @@ let rec map_instr f (I_aux (instr, aux)) =
   in
   f (I_aux (instr, aux))
 
+(** Iterate over each instruction within an instruction, bottom-up *)
+let rec iter_instr f (I_aux (instr, aux)) =
+  match instr with
+  | I_decl _ | I_init _ | I_reset _ | I_reinit _
+    | I_funcall _ | I_copy _ | I_alias _ | I_clear _ | I_jump _ | I_throw _ | I_return _
+    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ | I_end -> f (I_aux (instr, aux))
+  | I_if (cval, instrs1, instrs2, ctyp) ->
+     List.iter (iter_instr f) instrs1;
+     List.iter (iter_instr f) instrs2
+  | I_block instrs | I_try_block instrs ->
+     List.iter (iter_instr f) instrs
+
 (** Map over each instruction in a cdef using map_instr *)
 let cdef_map_instr f = function
   | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, ctyp, List.map (map_instr f) instrs)
@@ -816,17 +724,21 @@ let rec map_instrs f (I_aux (instr, aux)) =
   in
   I_aux (instr, aux)
 
+let map_instr_list f instrs =
+  List.map (map_instr f) instrs
+
+let map_instrs_list f instrs =
+  f (List.map (map_instrs f) instrs)
+
 let rec instr_ids (I_aux (instr, _)) =
   let reads, writes = instr_deps instr in
-  IdSet.of_list (IdSet.elements reads @ IdSet.elements writes)
+  IdSet.union reads writes
 
 let rec instr_reads (I_aux (instr, _)) =
-  let reads, _ = instr_deps instr in
-  IdSet.of_list (IdSet.elements reads)
+  fst (instr_deps instr)
 
 let rec instr_writes (I_aux (instr, _)) =
-  let _, writes = instr_deps instr in
-  IdSet.of_list (IdSet.elements writes)
+  snd (instr_deps instr)
 
 let rec filter_instrs f instrs =
   let filter_instrs' = function
@@ -878,6 +790,7 @@ let rec clexp_ctyp = function
      end
   | CL_have_exception -> CT_bool
   | CL_current_exception ctyp -> ctyp
+  | CL_void -> CT_unit
 
 let rec instr_ctyps (I_aux (instr, aux)) =
   match instr with
@@ -933,3 +846,29 @@ let instr_split_at f =
     | instr :: instrs -> instr_split_at' f (instr :: before) instrs
   in
   instr_split_at' f []
+
+let rec instrs_rename from_id to_id =
+  let rename id = if Id.compare id from_id = 0 then to_id else id in
+  let crename = cval_rename from_id to_id in
+  let irename instrs = instrs_rename from_id to_id instrs in
+  let lrename = clexp_rename from_id to_id in
+  function
+  | (I_aux (I_decl (ctyp, new_id), _) :: _) as instrs when Id.compare from_id new_id = 0 -> instrs
+  | I_aux (I_decl (ctyp, new_id), aux) :: instrs -> I_aux (I_decl (ctyp, new_id), aux) :: irename instrs
+  | I_aux (I_reset (ctyp, id), aux) :: instrs -> I_aux (I_reset (ctyp, rename id), aux) :: irename instrs
+  | I_aux (I_init (ctyp, id, cval), aux) :: instrs -> I_aux (I_init (ctyp, rename id, crename cval), aux) :: irename instrs
+  | I_aux (I_reinit (ctyp, id, cval), aux) :: instrs -> I_aux (I_reinit (ctyp, rename id, crename cval), aux) :: irename instrs
+  | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
+     I_aux (I_if (crename cval, irename then_instrs, irename else_instrs, ctyp), aux) :: irename instrs
+  | I_aux (I_jump (cval, label), aux) :: instrs -> I_aux (I_jump (crename cval, label), aux) :: irename instrs
+  | I_aux (I_funcall (clexp, extern, id, cvals), aux) :: instrs ->
+     I_aux (I_funcall (lrename clexp, extern, rename id, List.map crename cvals), aux) :: irename instrs
+  | I_aux (I_copy (clexp, cval), aux) :: instrs -> I_aux (I_copy (lrename clexp, crename cval), aux) :: irename instrs
+  | I_aux (I_alias (clexp, cval), aux) :: instrs -> I_aux (I_alias (lrename clexp, crename cval), aux) :: irename instrs
+  | I_aux (I_clear (ctyp, id), aux) :: instrs -> I_aux (I_clear (ctyp, rename id), aux) :: irename instrs
+  | I_aux (I_return cval, aux) :: instrs -> I_aux (I_return (crename cval), aux) :: irename instrs
+  | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (irename block), aux) :: irename instrs
+  | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (irename block), aux) :: irename instrs
+  | I_aux (I_throw cval, aux) :: instrs -> I_aux (I_throw (crename cval), aux) :: irename instrs
+  | (I_aux ((I_comment _ | I_raw _ | I_end | I_label _ | I_goto _ | I_match_failure | I_undefined _), _) as instr) :: instrs -> instr :: irename instrs
+  | [] -> []

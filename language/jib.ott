@@ -136,6 +136,7 @@ clexp :: 'CL_' ::=
   | current_exception : ctyp :: :: current_exception
   | have_exception           :: :: have_exception
   | return : ctyp            :: :: return
+  | void                     :: :: void
 
 ctype_def :: 'CTD_' ::=
   {{ com C type definition }}

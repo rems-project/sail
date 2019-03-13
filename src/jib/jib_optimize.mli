@@ -49,61 +49,15 @@
 (**************************************************************************)
 
 open Jib
-open Type_check
 
-(** Global compilation options *)
+(** Remove redundant assignments and variables of type
+   unit. unit-typed identifiers that are assigned to are replaced with
+   CL_void, and cvals (which should be pure!) are replaced with unit
+   types are replaced by unit-literals. *)
+val optimize_unit : instr list -> instr list
 
-(** Define generated functions as static *)
-val opt_static : bool ref
+(** Remove all instructions that can contain other nested
+   instructions, prodcing a flat list of instructions. *)
+val flatten_instrs : instr list -> instr list
+val flatten_cdef : cdef -> cdef
 
-(** Do not generate a main function *)
-val opt_no_main : bool ref
-
-(** (WIP) Do not include rts.h (the runtime), and do not generate code
-   that requires any setup or teardown routines to be run by a runtime
-   before executing any instruction semantics. *)
-val opt_no_rts : bool ref
-
-(** Ordinarily we use plain z-encoding to name-mangle generated Sail
-   identifiers into a form suitable for C. If opt_prefix is set, then
-   the "z" which is added on the front of each generated C function
-   will be replaced by opt_prefix. E.g. opt_prefix := "sail_" would
-   give sail_my_function rather than zmy_function. *)
-val opt_prefix : string ref
-
-(** opt_extra_params and opt_extra_arguments allow additional state to
-   be threaded through the generated C code by adding an additional
-   parameter to each function type, and then giving an extra argument
-   to each function call. For example we could have
-
-   opt_extra_params := Some "CPUMIPSState *env"
-   opt_extra_arguments := Some "env"
-
-   and every generated function will take a pointer to a QEMU MIPS
-   processor state, and each function will be passed the env argument
-   when it is called. *)
-val opt_extra_params : string option ref
-val opt_extra_arguments : string option ref
-
-(** (WIP) [opt_memo_cache] will store the compiled function
-   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
-   of the original function to be compiled. Enabled using the -memo
-   flag. Uses Marshal so it's quite picky about the exact version of
-b   the Sail version. This cache can obviously become stale if the C
-   backend changes - it'll load an old version compiled without said
-   changes. *)
-val opt_memo_cache : bool ref
-
-(** Optimization flags *)
-
-val optimize_primops : bool ref
-val optimize_hoist_allocations : bool ref
-val optimize_struct_updates : bool ref
-val optimize_alias : bool ref
-val optimize_experimental : bool ref
-
-(** Convert a typ to a IR ctyp *)
-val ctyp_of_typ : Jib_compile.ctx -> Ast.typ -> ctyp
-
-val jib_of_ast : Env.t -> tannot Ast.defs -> cdef list * Jib_compile.ctx
-val compile_ast : Env.t -> out_channel -> string list -> tannot Ast.defs -> unit

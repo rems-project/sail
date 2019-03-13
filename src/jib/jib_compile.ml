@@ -58,6 +58,7 @@ open Value2
 open Anf
 
 let opt_debug_function = ref ""
+let opt_debug_flow_graphs = ref false
 let opt_memo_cache = ref false
 
 (**************************************************************************)
@@ -1174,7 +1175,16 @@ and compile_def' n total ctx = function
        prerr_endline (Util.header header (List.length arg_ctyps + 2));
        prerr_endline (Pretty_print_sail.to_string PPrint.(separate_map hardline pp_instr instrs))
      else ();
-     
+
+     if !opt_debug_flow_graphs then
+       begin
+         let instrs = Jib_optimize.(instrs |> optimize_unit |> flatten_instrs) in
+         let cfg = Jib_ssa.ssa instrs in
+         let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".gv") in
+         Jib_ssa.make_dot out_chan cfg;
+         close_out out_chan;
+       end;
+
      [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], orig_ctx
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, []), (l, _))) ->

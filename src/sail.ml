@@ -290,7 +290,7 @@ let options = Arg.align ([
     Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0)),
     "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
   ( "-ddump_flow_graphs",
-    Arg.Set C_backend.opt_debug_flow_graphs,
+    Arg.Set Jib_compile.opt_debug_flow_graphs,
     " (debug) dump flow analysis for Sail functions when compiling to C");
   ( "-dtc_verbose",
     Arg.Int (fun verbosity -> Type_check.opt_tc_debug := verbosity),

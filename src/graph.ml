@@ -234,6 +234,6 @@ module Make(Ord: OrderedType) = struct
     NM.bindings graph |> List.iter (fun (from_node, _) -> make_node from_node);
     NM.bindings graph |> List.iter (fun (from_node, to_nodes) -> NS.iter (make_line from_node) to_nodes);
     output_string out_chan "}\n";
-    Util.opt_colors := true;
+    Util.opt_colors := true
 
 end
