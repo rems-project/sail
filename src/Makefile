@@ -103,7 +103,8 @@ sail: ast.ml bytecode.ml manifest.ml
 	ocamlbuild -use-ocamlfind sail.native sail_lib.cma sail_lib.cmxa
 
 isail: ast.ml bytecode.ml manifest.ml
-	ocamlbuild -use-ocamlfind isail.native
+	ocamlbuild -use-ocamlfind isail.native sail_lib.cma sail_lib.cmxa libsail.cma libsail.cmxa
+
 
 coverage: ast.ml bytecode.ml manifest.ml
 	BISECT_COVERAGE=YES ocamlbuild -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' isail.native
