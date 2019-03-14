@@ -277,6 +277,9 @@ let options = Arg.align ([
   ( "-dmono_continue",
     Arg.Set Rewrites.opt_dmono_continue,
     " continue despite monomorphisation errors");
+  ( "-const_prop_mutrec",
+    Arg.String (fun name -> Constant_propagation_mutrec.targets := Ast_util.mk_id name :: !Constant_propagation_mutrec.targets),
+    " unroll function in a set of mutually recursive functions");
   ( "-verbose",
     Arg.Int (fun verbosity -> Util.opt_verbosity := verbosity),
     " produce verbose output");

@@ -4688,9 +4688,11 @@ let rewrite_defs_lem = [
   ("fix_val_specs", rewrite_fix_val_specs);
   ("split_execute", rewrite_split_fun_ctor_pats "execute");
   ("recheck_defs", recheck_defs);
+  ("top_sort_defs", fun _ -> top_sort_defs);
+  ("const_prop_mutrec", Constant_propagation_mutrec.rewrite_defs);
+  ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   (* ("remove_assert", rewrite_defs_remove_assert); *)
-  ("top_sort_defs", fun _ -> top_sort_defs);
   (* ("sizeof", rewrite_sizeof); *)
   ("early_return", rewrite_defs_early_return);
   ("fix_val_specs", rewrite_fix_val_specs);

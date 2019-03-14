@@ -136,13 +136,17 @@ let fold_to_unit id =
   in
   IdSet.mem id remove
 
-let rec is_constant (E_aux (e_aux, _)) =
+let rec is_constant (E_aux (e_aux, _) as exp) =
   match e_aux with
   | E_lit _ -> true
   | E_vector exps -> List.for_all is_constant exps
   | E_record fexps -> List.for_all is_constant_fexp fexps
   | E_cast (_, exp) -> is_constant exp
   | E_tuple exps -> List.for_all is_constant exps
+  | E_id id ->
+     (match Env.lookup_id id (env_of exp) with
+      | Enum _ -> true
+      | _ -> false)
   | _ -> false
 
 and is_constant_fexp (FE_aux (FE_Fexp (_, exp), _)) = is_constant exp
@@ -173,21 +177,18 @@ let rec run frame =
    - Throws an exception that isn't caught.
  *)
 
-let rec rewrite_constant_function_calls' ast =
-  let rewrite_count = ref 0 in
-  let ok () = incr rewrite_count in
-  let not_ok () = decr rewrite_count in
-
+let initial_state ast =
   let lstate, gstate =
     Interpreter.initial_state ast safe_primops
   in
-  let gstate = { gstate with Interpreter.allow_registers = false } in
+  (lstate, { gstate with Interpreter.allow_registers = false })
 
+let rw_exp ok not_ok istate =
   let evaluate e_aux annot =
     let initial_monad = Interpreter.return (E_aux (e_aux, annot)) in
     try
       begin
-        let v = run (Interpreter.Step (lazy "", (lstate, gstate), initial_monad, [])) in
+        let v = run (Interpreter.Step (lazy "", istate, initial_monad, [])) in
         let exp = exp_of_value v in
         try (ok (); Type_check.check_exp (env_of_annot annot) exp (typ_of_annot annot)) with
         | Type_error (env, l, err) ->
@@ -231,11 +232,19 @@ let rec rewrite_constant_function_calls' ast =
 
     | _ -> E_aux (e_aux, annot)
   in
-  let rw_exp = {
-      id_exp_alg with
-      e_aux = (fun (e_aux, annot) -> rw_funcall e_aux annot)
+  fold_exp { id_exp_alg with e_aux = (fun (e_aux, annot) -> rw_funcall e_aux annot)}
+
+let rewrite_exp_once = rw_exp (fun _ -> ()) (fun _ -> ())
+
+let rec rewrite_constant_function_calls' ast =
+  let rewrite_count = ref 0 in
+  let ok () = incr rewrite_count in
+  let not_ok () = decr rewrite_count in
+
+  let rw_defs = {
+      rewriters_base with
+      rewrite_exp = (fun _ -> rw_exp ok not_ok (initial_state ast))
     } in
-  let rw_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp rw_exp) } in
   let ast = rewrite_defs_base rw_defs ast in
   (* We keep iterating until we have no more re-writes to do *)
   if !rewrite_count > 0
