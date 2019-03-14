@@ -402,7 +402,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
                end
             | "excl_res" ->
                begin match evaluated with
-               | [] ->
+               | [_] ->
                   excl_res () >>= fun b -> return (exp_of_value (V_bool b))
                | _ ->
                   fail "Wrong number of parameters to excl_res intrinsic"
