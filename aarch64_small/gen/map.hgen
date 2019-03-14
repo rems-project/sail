@@ -1,3 +1,4 @@
+| `AArch64Unallocated -> `AArch64Unallocated
 | `AArch64TMStart t -> `AArch64TMStart (map_reg t)
 | `AArch64TMCommit -> `AArch64TMCommit
 | `AArch64TMAbort (retry,reason) -> `AArch64TMAbort (retry,reason)

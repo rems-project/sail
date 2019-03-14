@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_util
 open Util
 open Type_check
 
@@ -76,3 +77,21 @@ val is_within_machine64 : typ -> nexp_range list -> triple *)
 (* val restrict_defs : 'a defs -> string list -> 'a defs *)
 
 val top_sort_defs : tannot defs -> tannot defs
+
+(** Return the set of mutable variables assigned to in the given AST. *)
+val assigned_vars : 'a exp -> IdSet.t
+val assigned_vars_in_fexps : 'a fexp list -> IdSet.t
+val assigned_vars_in_pexp : 'a pexp -> IdSet.t
+val assigned_vars_in_lexp : 'a lexp -> IdSet.t
+
+(** Variable bindings in patterns *)
+val pat_id_is_variable : env -> id -> bool
+val bindings_from_pat : tannot pat -> id list
+
+val equal_kids_ncs : kid -> n_constraint list -> KidSet.t
+val equal_kids : env -> kid -> KidSet.t
+
+(** Type-level substitutions into patterns and expressions.  Also attempts to
+    update type annotations, but not the associated environments. *)
+val nexp_subst_pat : nexp KBindings.t -> tannot pat -> tannot pat
+val nexp_subst_exp : nexp KBindings.t -> tannot exp -> tannot exp

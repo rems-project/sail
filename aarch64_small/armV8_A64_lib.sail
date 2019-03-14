@@ -898,6 +898,70 @@ function Prefetch(address : bits(64), prfop : bits(5)) -> unit = {
 /** ENUMERATE:aarch64/instrs/system/barriers/barrierop/MemBarrierOp */
 /** ENUMERATE:aarch64/instrs/system/hints/syshintop/SystemHintOp */
 /** ENUMERATE:aarch64/instrs/system/register/cpsr/pstatefield/PSTATEField */
+/** FUNCTION:aarch64/instrs/system/sysops/sysop/SysOp */
+
+function SysOp(op1 : bits(3), CRn : bits(4), CRm : bits(4), op2 : bits(3)) -> SystemOp = {
+  match (op1@CRn@CRm@op2) {
+    (0b000@0b0111@0b1000@0b000) => Sys_AT,   /* S1E1R        */
+    (0b100@0b0111@0b1000@0b000) => Sys_AT,   /* S1E2R        */
+    (0b110@0b0111@0b1000@0b000) => Sys_AT,   /* S1E3R        */
+    (0b000@0b0111@0b1000@0b001) => Sys_AT,   /* S1E1W        */
+    (0b100@0b0111@0b1000@0b001) => Sys_AT,   /* S1E2W        */
+    (0b110@0b0111@0b1000@0b001) => Sys_AT,   /* S1E3W        */
+    (0b000@0b0111@0b1000@0b010) => Sys_AT,   /* S1E0R        */
+    (0b000@0b0111@0b1000@0b011) => Sys_AT,   /* S1E0W        */
+    (0b100@0b0111@0b1000@0b100) => Sys_AT,   /* S12E1R       */
+    (0b100@0b0111@0b1000@0b101) => Sys_AT,   /* S12E1W       */
+    (0b100@0b0111@0b1000@0b110) => Sys_AT,   /* S12E0R       */
+    (0b100@0b0111@0b1000@0b111) => Sys_AT,   /* S12E0W       */
+    (0b011@0b0111@0b0100@0b001) => Sys_DC,   /* ZVA          */
+    (0b000@0b0111@0b0110@0b001) => Sys_DC,   /* IVAC         */
+    (0b000@0b0111@0b0110@0b010) => Sys_DC,   /* ISW          */
+    (0b011@0b0111@0b1010@0b001) => Sys_DC,   /* CVAC         */
+    (0b000@0b0111@0b1010@0b010) => Sys_DC,   /* CSW          */
+    (0b011@0b0111@0b1011@0b001) => Sys_DC,   /* CVAU         */
+    (0b011@0b0111@0b1110@0b001) => Sys_DC,   /* CIVAC        */
+    (0b000@0b0111@0b1110@0b010) => Sys_DC,   /* CISW         */
+    (0b000@0b0111@0b0001@0b000) => Sys_IC,   /* IALLUIS      */
+    (0b000@0b0111@0b0101@0b000) => Sys_IC,   /* IALLU        */
+    (0b011@0b0111@0b0101@0b001) => Sys_IC,   /* IVAU         */
+    (0b100@0b1000@0b0000@0b001) => Sys_TLBI, /* IPAS2E1IS    */
+    (0b100@0b1000@0b0000@0b101) => Sys_TLBI, /* IPAS2LE1IS   */
+    (0b000@0b1000@0b0011@0b000) => Sys_TLBI, /* VMALLE1IS    */
+    (0b100@0b1000@0b0011@0b000) => Sys_TLBI, /* ALLE2IS      */
+    (0b110@0b1000@0b0011@0b000) => Sys_TLBI, /* ALLE3IS      */
+    (0b000@0b1000@0b0011@0b001) => Sys_TLBI, /* VAE1IS       */
+    (0b100@0b1000@0b0011@0b001) => Sys_TLBI, /* VAE2IS       */
+    (0b110@0b1000@0b0011@0b001) => Sys_TLBI, /* VAE3IS       */
+    (0b000@0b1000@0b0011@0b010) => Sys_TLBI, /* ASIDE1IS     */
+    (0b000@0b1000@0b0011@0b011) => Sys_TLBI, /* VAAE1IS      */
+    (0b100@0b1000@0b0011@0b100) => Sys_TLBI, /* ALLE1IS      */
+    (0b000@0b1000@0b0011@0b101) => Sys_TLBI, /* VALE1IS      */
+    (0b100@0b1000@0b0011@0b101) => Sys_TLBI, /* VALE2IS      */
+    (0b110@0b1000@0b0011@0b101) => Sys_TLBI, /* VALE3IS      */
+    (0b100@0b1000@0b0011@0b110) => Sys_TLBI, /* VMALLS12E1IS */
+    (0b000@0b1000@0b0011@0b111) => Sys_TLBI, /* VAALE1IS     */
+    (0b100@0b1000@0b0100@0b001) => Sys_TLBI, /* IPAS2E1      */
+    (0b100@0b1000@0b0100@0b101) => Sys_TLBI, /* IPAS2LE1     */
+    (0b000@0b1000@0b0111@0b000) => Sys_TLBI, /* VMALLE1      */
+    (0b100@0b1000@0b0111@0b000) => Sys_TLBI, /* ALLE2        */
+    (0b110@0b1000@0b0111@0b000) => Sys_TLBI, /* ALLE3        */
+    (0b000@0b1000@0b0111@0b001) => Sys_TLBI, /* VAE1         */
+    (0b100@0b1000@0b0111@0b001) => Sys_TLBI, /* VAE2         */
+    (0b110@0b1000@0b0111@0b001) => Sys_TLBI, /* VAE3         */
+    (0b000@0b1000@0b0111@0b010) => Sys_TLBI, /* ASIDE1       */
+    (0b000@0b1000@0b0111@0b011) => Sys_TLBI, /* VAAE1        */
+    (0b100@0b1000@0b0111@0b100) => Sys_TLBI, /* ALLE1        */
+    (0b000@0b1000@0b0111@0b101) => Sys_TLBI, /* VALE1        */
+    (0b100@0b1000@0b0111@0b101) => Sys_TLBI, /* VALE2        */
+    (0b110@0b1000@0b0111@0b101) => Sys_TLBI, /* VALE3        */
+    (0b100@0b1000@0b0111@0b110) => Sys_TLBI, /* VMALLS12E1   */
+    (0b000@0b1000@0b0111@0b111) => Sys_TLBI, /* VAALE1       */
+    _ => Sys_SYS
+  };
+}
+
+/** ENUMERATE:aarch64/instrs/system/sysops/sysop/SystemOp */
 /** FUNCTION:aarch64/translation/faults/AArch64.AlignmentFault */
 
 function AArch64_AlignmentFault(acctype : AccType, iswrite : boolean, secondstage : boolean) -> FaultRecord = {

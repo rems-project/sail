@@ -1,3 +1,4 @@
+  | `AArch64Unallocated
   | `AArch64TMStart of inst_reg (* t *)
   | `AArch64TMCommit
   | `AArch64TMAbort of boolean*bit5 (* retry,reason *)

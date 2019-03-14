@@ -50,7 +50,7 @@
 
 open Ast
 open Ast_util
-open Bytecode
+open Jib
 open Value2
 open PPrint
 
@@ -93,6 +93,9 @@ let iclear ?loc:(l=Parse_ast.Unknown) ctyp id =
 
 let ireturn ?loc:(l=Parse_ast.Unknown) cval =
   I_aux (I_return cval, (instr_number (), l))
+
+let iend ?loc:(l=Parse_ast.Unknown) () =
+  I_aux (I_end, (instr_number (), l))
 
 let iblock ?loc:(l=Parse_ast.Unknown) instrs =
   I_aux (I_block instrs, (instr_number (), l))
@@ -150,6 +153,8 @@ let rec clexp_rename from_id to_id = function
      CL_tuple (clexp_rename from_id to_id clexp, n)
   | CL_current_exception ctyp -> CL_current_exception ctyp
   | CL_have_exception -> CL_have_exception
+  | CL_return ctyp -> CL_return ctyp
+  | CL_void -> CL_void
 
 let rec instr_rename from_id to_id (I_aux (instr, aux)) =
   let instr = match instr with
@@ -197,6 +202,8 @@ let rec instr_rename from_id to_id (I_aux (instr, aux)) =
     | I_undefined ctyp -> I_undefined ctyp
 
     | I_match_failure -> I_match_failure
+
+    | I_end -> I_end
 
     | I_reset (ctyp, id) when Id.compare id from_id = 0 -> I_reset (ctyp, to_id)
     | I_reset (ctyp, id) -> I_reset (ctyp, id)
@@ -257,8 +264,8 @@ and string_of_ctyp = function
   | CT_lbits false -> "lbits(inc)"
   | CT_fbits (n, true) -> "fbits(" ^ string_of_int n ^ ", dec)"
   | CT_fbits (n, false) -> "fbits(" ^ string_of_int n ^ ", int)"
-  | CT_sbits true -> "sbits(dec)"
-  | CT_sbits false -> "sbits(inc)"
+  | CT_sbits (n, true) -> "sbits(" ^ string_of_int n ^ ", dec)"
+  | CT_sbits (n, false) -> "sbits(" ^ string_of_int n ^ ", inc)"
   | CT_fint n -> "int(" ^ string_of_int n ^ ")"
   | CT_bit -> "bit"
   | CT_unit -> "unit"
@@ -276,31 +283,17 @@ and string_of_ctyp = function
 (** This function is like string_of_ctyp, but recursively prints all
    constructors in variants and structs. Used for debug output. *)
 and full_string_of_ctyp = function
-  | CT_lint -> "int"
-  | CT_lbits true -> "lbits(dec)"
-  | CT_lbits false -> "lbits(inc)"
-  | CT_fbits (n, true) -> "fbits(" ^ string_of_int n ^ ", dec)"
-  | CT_fbits (n, false) -> "fbits(" ^ string_of_int n ^ ", int)"
-  | CT_sbits true -> "sbits(dec)"
-  | CT_sbits false -> "sbits(inc)"
-  | CT_fint n -> "int(" ^ string_of_int n ^ ")"
-  | CT_bit -> "bit"
-  | CT_unit -> "unit"
-  | CT_bool -> "bool"
-  | CT_real -> "real"
   | CT_tup ctyps -> "(" ^ Util.string_of_list ", " full_string_of_ctyp ctyps ^ ")"
-  | CT_enum (id, _) -> string_of_id id
   | CT_struct (id, ctors) | CT_variant (id, ctors) ->
      "struct " ^ string_of_id id
      ^ "{ "
      ^ Util.string_of_list ", " (fun (id, ctyp) -> string_of_id id ^ " : " ^ full_string_of_ctyp ctyp) ctors
      ^ "}"
-  | CT_string -> "string"
   | CT_vector (true, ctyp) -> "vector(dec, " ^ full_string_of_ctyp ctyp ^ ")"
   | CT_vector (false, ctyp) -> "vector(inc, " ^ full_string_of_ctyp ctyp ^ ")"
   | CT_list ctyp -> "list(" ^ full_string_of_ctyp ctyp ^ ")"
   | CT_ref ctyp -> "ref(" ^ full_string_of_ctyp ctyp ^ ")"
-  | CT_poly -> "*"
+  | ctyp -> string_of_ctyp ctyp
 
 let rec map_ctyp f = function
   | (CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _
@@ -316,7 +309,7 @@ let rec ctyp_equal ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
   | CT_lint, CT_lint -> true
   | CT_lbits d1, CT_lbits d2 -> d1 = d2
-  | CT_sbits d1, CT_sbits d2 -> d1 = d2
+  | CT_sbits (m1, d1), CT_sbits (m2, d2) -> m1 = m2 && d1 = d2
   | CT_fbits (m1, d1), CT_fbits (m2, d2) -> m1 = m2 && d1 = d2
   | CT_bit, CT_bit -> true
   | CT_fint n, CT_fint m -> n = m
@@ -334,6 +327,75 @@ let rec ctyp_equal ctyp1 ctyp2 =
   | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_equal ctyp1 ctyp2
   | CT_poly, CT_poly -> true
   | _, _ -> false
+
+let rec ctyp_compare ctyp1 ctyp2 =
+  let lex_ord c1 c2 = if c1 = 0 then c2 else c1 in
+  match ctyp1, ctyp2 with
+  | CT_lint, CT_lint -> 0
+  | CT_lint, _ -> 1
+  | _, CT_lint -> -1
+
+  | CT_fint n, CT_fint m -> compare n m
+  | CT_fint _, _ -> 1
+  | _, CT_fint _ -> -1
+
+  | CT_fbits (n, ord1), CT_fbits (m, ord2) -> lex_ord (compare n m) (compare ord1 ord2)
+  | CT_fbits _, _ -> 1
+  | _, CT_fbits _ -> -1
+
+  | CT_sbits (n, ord1), CT_sbits (m, ord2) -> lex_ord (compare n m) (compare ord1 ord2)
+  | CT_sbits _, _ -> 1
+  | _, CT_sbits _ -> -1
+
+  | CT_lbits ord1 , CT_lbits ord2 -> compare ord1 ord2
+  | CT_lbits _, _ -> 1
+  | _, CT_lbits _ -> -1
+
+  | CT_bit, CT_bit -> 0
+  | CT_bit, _ -> 1
+  | _, CT_bit -> -1
+
+  | CT_unit, CT_unit -> 0
+  | CT_unit, _ -> 1
+  | _, CT_unit -> -1
+
+  | CT_real, CT_real -> 0
+  | CT_real, _ -> 1
+  | _, CT_real -> -1
+
+  | CT_poly, CT_poly -> 0
+  | CT_poly, _ -> 1
+  | _, CT_poly -> -1
+
+  | CT_bool, CT_bool -> 0
+  | CT_bool, _ -> 1
+  | _, CT_bool -> -1
+
+  | CT_string, CT_string -> 0
+  | CT_string, _ -> 1
+  | _, CT_string -> -1
+
+  | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_compare ctyp1 ctyp2
+  | CT_ref _, _ -> 1
+  | _, CT_ref _ -> -1
+
+  | CT_list ctyp1, CT_list ctyp2 -> ctyp_compare ctyp1 ctyp2
+  | CT_list _, _ -> 1
+  | _, CT_list _ -> -1
+
+  | CT_vector (d1, ctyp1), CT_vector (d2, ctyp2) ->
+     lex_ord (ctyp_compare ctyp1 ctyp2) (compare d1 d2)
+  | CT_vector _, _ -> 1
+  | _, CT_vector _ -> -1
+
+  | ctyp1, ctyp2 -> String.compare (full_string_of_ctyp ctyp1) (full_string_of_ctyp ctyp2)
+
+module CT = struct
+  type t = ctyp
+  let compare ctyp1 ctyp2 = ctyp_compare ctyp1 ctyp2
+end
+
+module CTSet = Set.Make(CT)
 
 let rec ctyp_unify ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
@@ -356,7 +418,7 @@ let rec ctyp_suprema = function
   | CT_lint -> CT_lint
   | CT_lbits d -> CT_lbits d
   | CT_fbits (_, d) -> CT_lbits d
-  | CT_sbits d -> CT_lbits d
+  | CT_sbits (_, d) -> CT_lbits d
   | CT_fint _ -> CT_lint
   | CT_unit -> CT_unit
   | CT_bool -> CT_bool
@@ -405,7 +467,7 @@ let pp_id id =
   string (string_of_id id)
 
 let pp_ctyp ctyp =
-  string (string_of_ctyp ctyp |> Util.yellow |> Util.clear)
+  string (full_string_of_ctyp ctyp |> Util.yellow |> Util.clear)
 
 let pp_keyword str =
   string ((str |> Util.red |> Util.clear) ^ " ")
@@ -420,6 +482,8 @@ let rec pp_clexp = function
   | CL_addr clexp -> string "*" ^^ pp_clexp clexp
   | CL_current_exception ctyp -> string "current_exception : " ^^ pp_ctyp ctyp
   | CL_have_exception -> string "have_exception"
+  | CL_return ctyp -> string "return : " ^^ pp_ctyp ctyp
+  | CL_void -> string "void"
 
 let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
   match instr with
@@ -470,6 +534,8 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
      pp_keyword "goto" ^^ string (str |> Util.blue |> Util.clear)
   | I_match_failure ->
      pp_keyword "match_failure"
+  | I_end ->
+     pp_keyword "end"
   | I_undefined ctyp ->
      pp_keyword "undefined" ^^ pp_ctyp ctyp
   | I_raw str ->
@@ -517,178 +583,47 @@ let pp_cdef = function
      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
      ^^ hardline
 
-(**************************************************************************)
-(* 2. Dependency Graphs                                                   *)
-(**************************************************************************)
-
-type graph_node =
-  | G_id of id
-  | G_label of string
-  | G_instr of int * instr
-  | G_start
-
-let string_of_node = function
-  | G_id id -> string_of_id id
-  | G_label label -> label
-  | G_instr (n, instr) -> string_of_int n ^ ": " ^ Pretty_print_sail.to_string (pp_instr ~short:true instr)
-  | G_start -> "START"
-
-module Node = struct
-  type t = graph_node
-  let compare gn1 gn2 =
-    match gn1, gn2 with
-    | G_id id1, G_id id2 -> Id.compare id1 id2
-    | G_label str1, G_label str2 -> String.compare str1 str2
-    | G_instr (n1, _), G_instr (n2, _) -> compare n1 n2
-    | G_start  , _         -> 1
-    | _        , G_start   -> -1
-    | G_instr _, _         -> 1
-    | _        , G_instr _ -> -1
-    | G_id _   , _         -> 1
-    | _        , G_id _    -> -1
-end
-
-module NM = Map.Make(Node)
-module NS = Set.Make(Node)
-
-type dep_graph = NS.t NM.t
-
 let rec fragment_deps = function
-  | F_id id | F_ref id -> NS.singleton (G_id id)
-  | F_lit _ -> NS.empty
+  | F_id id | F_ref id -> IdSet.singleton id
+  | F_lit _ -> IdSet.empty
   | F_field (frag, _) | F_unary (_, frag) | F_poly frag -> fragment_deps frag
-  | F_call (_, frags) -> List.fold_left NS.union NS.empty (List.map fragment_deps frags)
-  | F_op (frag1, _, frag2) -> NS.union (fragment_deps frag1) (fragment_deps frag2)
-  | F_current_exception -> NS.empty
-  | F_have_exception -> NS.empty
-  | F_raw _ -> NS.empty
+  | F_call (_, frags) -> List.fold_left IdSet.union IdSet.empty (List.map fragment_deps frags)
+  | F_op (frag1, _, frag2) -> IdSet.union (fragment_deps frag1) (fragment_deps frag2)
+  | F_current_exception -> IdSet.empty
+  | F_have_exception -> IdSet.empty
+  | F_raw _ -> IdSet.empty
 
 let cval_deps = function (frag, _) -> fragment_deps frag
 
 let rec clexp_deps = function
-  | CL_id (id, _) -> NS.singleton (G_id id)
+  | CL_id (id, _) -> IdSet.singleton id
   | CL_field (clexp, _) -> clexp_deps clexp
   | CL_tuple (clexp, _) -> clexp_deps clexp
   | CL_addr clexp -> clexp_deps clexp
-  | CL_have_exception -> NS.empty
-  | CL_current_exception _ -> NS.empty
+  | CL_have_exception -> IdSet.empty
+  | CL_current_exception _ -> IdSet.empty
+  | CL_return _ -> IdSet.empty
+  | CL_void -> IdSet.empty
 
-(** Return the direct, non program-order dependencies of a single
-   instruction **)
+(* Return the direct, read/write dependencies of a single instruction *)
 let instr_deps = function
-  | I_decl (ctyp, id) -> NS.empty, NS.singleton (G_id id)
-  | I_reset (ctyp, id) -> NS.empty, NS.singleton (G_id id)
-  | I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval) -> cval_deps cval, NS.singleton (G_id id)
-  | I_if (cval, _, _, _) -> cval_deps cval, NS.empty
-  | I_jump (cval, label) -> cval_deps cval, NS.singleton (G_label label)
-  | I_funcall (clexp, _, _, cvals) -> List.fold_left NS.union NS.empty (List.map cval_deps cvals), clexp_deps clexp
+  | I_decl (ctyp, id) -> IdSet.empty, IdSet.singleton id
+  | I_reset (ctyp, id) -> IdSet.empty, IdSet.singleton id
+  | I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval) -> cval_deps cval, IdSet.singleton id
+  | I_if (cval, _, _, _) -> cval_deps cval, IdSet.empty
+  | I_jump (cval, label) -> cval_deps cval, IdSet.empty
+  | I_funcall (clexp, _, _, cvals) -> List.fold_left IdSet.union IdSet.empty (List.map cval_deps cvals), clexp_deps clexp
   | I_copy (clexp, cval) -> cval_deps cval, clexp_deps clexp
   | I_alias (clexp, cval) -> cval_deps cval, clexp_deps clexp
-  | I_clear (_, id) -> NS.singleton (G_id id), NS.singleton (G_id id)
-  | I_throw cval | I_return cval -> cval_deps cval, NS.empty
-  | I_block _ | I_try_block _ -> NS.empty, NS.empty
-  | I_comment _ | I_raw _ -> NS.empty, NS.empty
-  | I_label label -> NS.singleton (G_label label), NS.empty
-  | I_goto label -> NS.empty, NS.singleton (G_label label)
-  | I_undefined _ -> NS.empty, NS.empty
-  | I_match_failure -> NS.empty, NS.empty
-
-let add_link from_node to_node graph =
-  try
-    NM.add from_node (NS.add to_node (NM.find from_node graph)) graph
-  with
-  | Not_found -> NM.add from_node (NS.singleton to_node) graph
-
-let leaves graph =
-  List.fold_left (fun acc (from_node, to_nodes) -> NS.filter (fun to_node -> Node.compare to_node from_node != 0) (NS.union acc to_nodes))
-                 NS.empty
-                 (NM.bindings graph)
-
-(* Ensure that all leaves exist in the graph *)
-let fix_leaves graph =
-  NS.fold (fun leaf graph -> if NM.mem leaf graph then graph else NM.add leaf NS.empty graph) (leaves graph) graph
-
-let instrs_graph instrs =
-  let icounter = ref 0 in
-  let graph = ref NM.empty in
-
-  let rec add_instr last_instr (I_aux (instr, _) as iaux) =
-    incr icounter;
-    let node = G_instr (!icounter, iaux) in
-    match instr with
-    | I_block instrs | I_try_block instrs ->
-       List.fold_left add_instr last_instr instrs
-    | I_if (_, then_instrs, else_instrs, _) ->
-       begin
-         let inputs, _ = instr_deps instr in (* if has no outputs *)
-         graph := add_link last_instr node !graph;
-         NS.iter (fun input -> graph := add_link input node !graph) inputs;
-         let n1 = List.fold_left add_instr node then_instrs in
-         let n2 = List.fold_left add_instr node else_instrs in
-         incr icounter;
-         let join = G_instr (!icounter, icomment "join") in
-         graph := add_link n1 join !graph;
-         graph := add_link n2 join !graph;
-         join
-       end
-    | I_goto label ->
-       begin
-         let _, outputs = instr_deps instr in
-         graph := add_link last_instr node !graph;
-         NS.iter (fun output -> graph := add_link node output !graph) outputs;
-         incr icounter;
-         G_instr (!icounter, icomment "after goto")
-       end
-    | _ ->
-       begin
-         let inputs, outputs = instr_deps instr in
-         graph := add_link last_instr node !graph;
-         NS.iter (fun input -> graph := add_link input node !graph) inputs;
-         NS.iter (fun output -> graph := add_link node output !graph) outputs;
-         node
-       end
-  in
-  ignore (List.fold_left add_instr G_start instrs);
-  fix_leaves !graph
-
-let make_dot id graph =
-  Util.opt_colors := false;
-  let to_string node = String.escaped (string_of_node node) in
-  let node_color = function
-    | G_start                           -> "lightpink"
-    | G_id _                            -> "yellow"
-    | G_instr (_, I_aux (I_decl _, _))  -> "olivedrab1"
-    | G_instr (_, I_aux (I_init _, _))  -> "springgreen"
-    | G_instr (_, I_aux (I_clear _, _)) -> "peachpuff"
-    | G_instr (_, I_aux (I_goto _, _))  -> "orange1"
-    | G_instr (_, I_aux (I_label _, _)) -> "white"
-    | G_instr (_, I_aux (I_raw _, _))   -> "khaki"
-    | G_instr _                         -> "azure"
-    | G_label _                         -> "lightpink"
-  in
-  let edge_color from_node to_node =
-    match from_node, to_node with
-    | G_start  , _         -> "goldenrod4"
-    | G_label _, _         -> "darkgreen"
-    | _        , G_label _ -> "goldenrod4"
-    | G_instr _, G_instr _ -> "black"
-    | G_id _   , G_instr _ -> "blue3"
-    | G_instr _, G_id _    -> "red3"
-    | _        , _         -> "coral3"
-  in
-  let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".gv") in
-  output_string out_chan "digraph DEPS {\n";
-  let make_node from_node =
-    output_string out_chan (Printf.sprintf "  \"%s\" [fillcolor=%s;style=filled];\n" (to_string from_node) (node_color from_node))
-  in
-  let make_line from_node to_node =
-    output_string out_chan (Printf.sprintf "  \"%s\" -> \"%s\" [color=%s];\n" (to_string from_node) (to_string to_node) (edge_color from_node to_node))
-  in
-  NM.bindings graph |> List.iter (fun (from_node, _) -> make_node from_node);
-  NM.bindings graph |> List.iter (fun (from_node, to_nodes) -> NS.iter (make_line from_node) to_nodes);
-  output_string out_chan "}\n";
-  Util.opt_colors := true;
-  close_out out_chan
+  | I_clear (_, id) -> IdSet.singleton id, IdSet.empty
+  | I_throw cval | I_return cval -> cval_deps cval, IdSet.empty
+  | I_block _ | I_try_block _ -> IdSet.empty, IdSet.empty
+  | I_comment _ | I_raw _ -> IdSet.empty, IdSet.empty
+  | I_label label -> IdSet.empty, IdSet.empty
+  | I_goto label -> IdSet.empty, IdSet.empty
+  | I_undefined _ -> IdSet.empty, IdSet.empty
+  | I_match_failure -> IdSet.empty, IdSet.empty
+  | I_end -> IdSet.empty, IdSet.empty
 
 let rec map_clexp_ctyp f = function
   | CL_id (id, ctyp) -> CL_id (id, f ctyp)
@@ -697,6 +632,8 @@ let rec map_clexp_ctyp f = function
   | CL_addr clexp -> CL_addr (map_clexp_ctyp f clexp)
   | CL_current_exception ctyp -> CL_current_exception (f ctyp)
   | CL_have_exception -> CL_have_exception
+  | CL_return ctyp -> CL_return (f ctyp)
+  | CL_void -> CL_void
 
 let rec map_instr_ctyp f (I_aux (instr, aux)) =
   let instr = match instr with
@@ -717,6 +654,7 @@ let rec map_instr_ctyp f (I_aux (instr, aux)) =
     | I_undefined ctyp -> I_undefined (f ctyp)
     | I_reset (ctyp, id) -> I_reset (f ctyp, id)
     | I_reinit (ctyp1, id, (frag, ctyp2)) -> I_reinit (f ctyp1, id, (frag, f ctyp2))
+    | I_end -> I_end
     | (I_comment _ | I_raw _ | I_label _ | I_goto _ | I_match_failure) as instr -> instr
   in
   I_aux (instr, aux)
@@ -726,7 +664,7 @@ let rec map_instr f (I_aux (instr, aux)) =
   let instr = match instr with
     | I_decl _ | I_init _ | I_reset _ | I_reinit _
       | I_funcall _ | I_copy _ | I_alias _ | I_clear _ | I_jump _ | I_throw _ | I_return _
-      | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ -> instr
+      | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ | I_end -> instr
     | I_if (cval, instrs1, instrs2, ctyp) ->
        I_if (cval, List.map (map_instr f) instrs1, List.map (map_instr f) instrs2, ctyp)
     | I_block instrs ->
@@ -735,6 +673,18 @@ let rec map_instr f (I_aux (instr, aux)) =
        I_try_block (List.map (map_instr f) instrs)
   in
   f (I_aux (instr, aux))
+
+(** Iterate over each instruction within an instruction, bottom-up *)
+let rec iter_instr f (I_aux (instr, aux)) =
+  match instr with
+  | I_decl _ | I_init _ | I_reset _ | I_reinit _
+    | I_funcall _ | I_copy _ | I_alias _ | I_clear _ | I_jump _ | I_throw _ | I_return _
+    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ | I_end -> f (I_aux (instr, aux))
+  | I_if (cval, instrs1, instrs2, ctyp) ->
+     List.iter (iter_instr f) instrs1;
+     List.iter (iter_instr f) instrs2
+  | I_block instrs | I_try_block instrs ->
+     List.iter (iter_instr f) instrs
 
 (** Map over each instruction in a cdef using map_instr *)
 let cdef_map_instr f = function
@@ -770,42 +720,25 @@ let rec map_instrs f (I_aux (instr, aux)) =
     | I_funcall _ | I_copy _ | I_alias _ | I_clear _ | I_jump _ | I_throw _ | I_return _ -> instr
     | I_block instrs -> I_block (f (List.map (map_instrs f) instrs))
     | I_try_block instrs -> I_try_block (f (List.map (map_instrs f) instrs))
-    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ -> instr
+    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _  | I_end -> instr
   in
   I_aux (instr, aux)
 
+let map_instr_list f instrs =
+  List.map (map_instr f) instrs
+
+let map_instrs_list f instrs =
+  f (List.map (map_instrs f) instrs)
+
 let rec instr_ids (I_aux (instr, _)) =
   let reads, writes = instr_deps instr in
-  let get_id = function
-    | G_id id -> Some id
-    | _ -> None
-  in
-  NS.elements reads @ NS.elements writes
-  |> List.map get_id
-  |> Util.option_these
-  |> IdSet.of_list
+  IdSet.union reads writes
 
 let rec instr_reads (I_aux (instr, _)) =
-  let reads, _ = instr_deps instr in
-  let get_id = function
-    | G_id id -> Some id
-    | _ -> None
-  in
-  NS.elements reads
-  |> List.map get_id
-  |> Util.option_these
-  |> IdSet.of_list
+  fst (instr_deps instr)
 
 let rec instr_writes (I_aux (instr, _)) =
-  let _, writes = instr_deps instr in
-  let get_id = function
-    | G_id id -> Some id
-    | _ -> None
-  in
-  NS.elements writes
-  |> List.map get_id
-  |> Util.option_these
-  |> IdSet.of_list
+  snd (instr_deps instr)
 
 let rec filter_instrs f instrs =
   let filter_instrs' = function
@@ -816,3 +749,126 @@ let rec filter_instrs f instrs =
     | instr -> instr
   in
   List.filter f (List.map filter_instrs' instrs)
+
+(** GLOBAL: label_counter is used to make sure all labels have unique
+   names. Like gensym_counter it should be safe to reset between
+   top-level definitions. **)
+let label_counter = ref 0
+
+let label str =
+  let str = str ^ string_of_int !label_counter in
+  incr label_counter;
+  str
+
+let cval_ctyp = function (_, ctyp) -> ctyp
+
+let rec clexp_ctyp = function
+  | CL_id (_, ctyp) -> ctyp
+  | CL_return ctyp -> ctyp
+  | CL_field (clexp, field) ->
+     begin match clexp_ctyp clexp with
+     | CT_struct (id, ctors) ->
+        begin
+          try snd (List.find (fun (id, ctyp) -> string_of_id id = field) ctors) with
+          | Not_found -> failwith ("Struct type " ^ string_of_id id ^ " does not have a constructor " ^ field)
+        end
+     | ctyp -> failwith ("Bad ctyp for CL_field " ^ string_of_ctyp ctyp)
+     end
+  | CL_addr clexp ->
+     begin match clexp_ctyp clexp with
+     | CT_ref ctyp -> ctyp
+     | ctyp -> failwith ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
+     end
+  | CL_tuple (clexp, n) ->
+     begin match clexp_ctyp clexp with
+     | CT_tup typs ->
+        begin
+          try List.nth typs n with
+          | _ -> failwith "Tuple assignment index out of bounds"
+        end
+     | ctyp -> failwith ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
+     end
+  | CL_have_exception -> CT_bool
+  | CL_current_exception ctyp -> ctyp
+  | CL_void -> CT_unit
+
+let rec instr_ctyps (I_aux (instr, aux)) =
+  match instr with
+  | I_decl (ctyp, _) | I_reset (ctyp, _) | I_clear (ctyp, _) | I_undefined ctyp ->
+     CTSet.singleton ctyp
+  | I_init (ctyp, _, cval) | I_reinit (ctyp, _, cval) ->
+     CTSet.add ctyp (CTSet.singleton (cval_ctyp cval))
+  | I_if (cval, instrs1, instrs2, ctyp) ->
+     CTSet.union (instrs_ctyps instrs1) (instrs_ctyps instrs2)
+     |> CTSet.add (cval_ctyp cval)
+     |> CTSet.add ctyp
+  | I_funcall (clexp, _, _, cvals) ->
+     List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty (List.map cval_ctyp cvals)
+     |> CTSet.add (clexp_ctyp clexp)
+  | I_copy (clexp, cval) | I_alias (clexp, cval) ->
+     CTSet.add (clexp_ctyp clexp) (CTSet.singleton (cval_ctyp cval))
+  | I_block instrs | I_try_block instrs ->
+     instrs_ctyps instrs
+  | I_throw cval | I_jump (cval, _) | I_return cval ->
+     CTSet.singleton (cval_ctyp cval)
+  | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_end ->
+     CTSet.empty
+
+and instrs_ctyps instrs = List.fold_left CTSet.union CTSet.empty (List.map instr_ctyps instrs)
+
+let ctype_def_ctyps = function
+  | CTD_enum _ -> []
+  | CTD_struct (_, fields) -> List.map snd fields
+  | CTD_variant (_, ctors) -> List.map snd ctors
+
+let cdef_ctyps = function
+  | CDEF_reg_dec (_, ctyp, instrs) ->
+     CTSet.add ctyp (instrs_ctyps instrs)
+  | CDEF_spec (_, ctyps, ctyp) ->
+     CTSet.add ctyp (List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty ctyps)
+  | CDEF_fundef (_, _, _, instrs) | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) ->
+     instrs_ctyps instrs
+  | CDEF_type tdef ->
+     List.fold_right CTSet.add (ctype_def_ctyps tdef) CTSet.empty
+  | CDEF_let (_, bindings, instrs) ->
+     List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty (List.map snd bindings)
+     |> CTSet.union (instrs_ctyps instrs)
+
+let rec c_ast_registers = function
+  | CDEF_reg_dec (id, ctyp, instrs) :: ast -> (id, ctyp, instrs) :: c_ast_registers ast
+  | _ :: ast -> c_ast_registers ast
+  | [] -> []
+
+let instr_split_at f =
+  let rec instr_split_at' f before = function
+    | [] -> (List.rev before, [])
+    | instr :: instrs when f instr -> (List.rev before, instr :: instrs)
+    | instr :: instrs -> instr_split_at' f (instr :: before) instrs
+  in
+  instr_split_at' f []
+
+let rec instrs_rename from_id to_id =
+  let rename id = if Id.compare id from_id = 0 then to_id else id in
+  let crename = cval_rename from_id to_id in
+  let irename instrs = instrs_rename from_id to_id instrs in
+  let lrename = clexp_rename from_id to_id in
+  function
+  | (I_aux (I_decl (ctyp, new_id), _) :: _) as instrs when Id.compare from_id new_id = 0 -> instrs
+  | I_aux (I_decl (ctyp, new_id), aux) :: instrs -> I_aux (I_decl (ctyp, new_id), aux) :: irename instrs
+  | I_aux (I_reset (ctyp, id), aux) :: instrs -> I_aux (I_reset (ctyp, rename id), aux) :: irename instrs
+  | I_aux (I_init (ctyp, id, cval), aux) :: instrs -> I_aux (I_init (ctyp, rename id, crename cval), aux) :: irename instrs
+  | I_aux (I_reinit (ctyp, id, cval), aux) :: instrs -> I_aux (I_reinit (ctyp, rename id, crename cval), aux) :: irename instrs
+  | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
+     I_aux (I_if (crename cval, irename then_instrs, irename else_instrs, ctyp), aux) :: irename instrs
+  | I_aux (I_jump (cval, label), aux) :: instrs -> I_aux (I_jump (crename cval, label), aux) :: irename instrs
+  | I_aux (I_funcall (clexp, extern, id, cvals), aux) :: instrs ->
+     I_aux (I_funcall (lrename clexp, extern, rename id, List.map crename cvals), aux) :: irename instrs
+  | I_aux (I_copy (clexp, cval), aux) :: instrs -> I_aux (I_copy (lrename clexp, crename cval), aux) :: irename instrs
+  | I_aux (I_alias (clexp, cval), aux) :: instrs -> I_aux (I_alias (lrename clexp, crename cval), aux) :: irename instrs
+  | I_aux (I_clear (ctyp, id), aux) :: instrs -> I_aux (I_clear (ctyp, rename id), aux) :: irename instrs
+  | I_aux (I_return cval, aux) :: instrs -> I_aux (I_return (crename cval), aux) :: irename instrs
+  | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (irename block), aux) :: irename instrs
+  | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (irename block), aux) :: irename instrs
+  | I_aux (I_throw cval, aux) :: instrs -> I_aux (I_throw (crename cval), aux) :: irename instrs
+  | (I_aux ((I_comment _ | I_raw _ | I_end | I_label _ | I_goto _ | I_match_failure | I_undefined _), _) as instr) :: instrs -> instr :: irename instrs
+  | [] -> []

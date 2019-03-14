@@ -48,6 +48,8 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+(** General rewriting framework for Sail->Sail rewrites *)
+
 module Big_int = Nat_big_num
 open Ast
 open Type_check
@@ -65,14 +67,14 @@ val rewrite_exp : tannot rewriters -> tannot exp -> tannot exp
 
 val rewriters_base : tannot rewriters
 
-(* The identity re-writer *)
+(** The identity re-writer *)
 val rewrite_defs : tannot defs -> tannot defs
 
 val rewrite_defs_base : tannot rewriters -> tannot defs -> tannot defs
 
 val rewrite_defs_base_parallel : int -> tannot rewriters -> tannot defs -> tannot defs
-  
-(* Same as rewrite_defs base but display a progress bar when verbosity >= 1 *)
+
+(** Same as rewrite_defs_base but display a progress bar when verbosity >= 1 *)
 val rewrite_defs_base_progress : string -> tannot rewriters -> tannot defs -> tannot defs
 
 val rewrite_lexp : tannot rewriters -> tannot lexp -> tannot lexp

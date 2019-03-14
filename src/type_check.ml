@@ -428,6 +428,7 @@ module Env : sig
   val get_typ_var_loc : kid -> t -> Ast.l
   val get_typ_vars : t -> kind_aux KBindings.t
   val get_typ_var_locs : t -> Ast.l KBindings.t
+  val add_typ_var_shadow : l -> kinded_id -> t -> t * kid option
   val add_typ_var : l -> kinded_id -> t -> t
   val get_ret_typ : t -> typ option
   val add_ret_typ : typ -> t -> t
@@ -651,10 +652,9 @@ end = struct
                           ^ " with " ^ Util.string_of_list ", " string_of_n_constraint env.constraints)
 
   let get_typ_synonym id env =
-    begin match Bindings.find_opt id env.typ_synonyms with
+    match Bindings.find_opt id env.typ_synonyms with
     | Some (typq, arg) -> mk_synonym typq arg
     | None -> raise Not_found
-    end
 
   let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
     typ_debug ~level:2 (lazy ("Expanding " ^ string_of_n_constraint nc));
@@ -1191,7 +1191,7 @@ end = struct
     with
     | Not_found -> Unbound
 
-  let add_typ_var l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
+  let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
     if KBindings.mem v env.typ_vars then begin
         let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
         let s_l, s_k = KBindings.find v env.typ_vars in
@@ -1201,12 +1201,14 @@ end = struct
           constraints = List.map (constraint_subst v (arg_kopt (mk_kopt s_k s_v))) env.constraints;
           typ_vars = KBindings.add v (l, k) (KBindings.add s_v (s_l, s_k) env.typ_vars);
           shadow_vars = KBindings.add v (n + 1) env.shadow_vars
-        }
+        }, Some s_v
       end
     else begin
         typ_print (lazy (adding ^ "type variable " ^ string_of_kid v ^ " : " ^ string_of_kind_aux k));
-        { env with typ_vars = KBindings.add v (l, k) env.typ_vars }
+        { env with typ_vars = KBindings.add v (l, k) env.typ_vars }, None
       end
+
+  let add_typ_var l kopt env = fst (add_typ_var_shadow l kopt env)
 
   let get_constraints env = env.constraints
 
@@ -1832,7 +1834,7 @@ let instantiate_quants quants unifier =
    they'll be unambigiously unified with the argument types so it's
    better to just not bother with the return type.
 *)
-let rec ambiguous_vars (Typ_aux (aux, _)) =
+let rec ambiguous_vars' (Typ_aux (aux, _)) =
   match aux with
   | Typ_app (_, args) -> List.fold_left KidSet.union KidSet.empty (List.map ambiguous_arg_vars args)
   | _ -> KidSet.empty
@@ -1856,6 +1858,10 @@ and ambiguous_nexp_vars (Nexp_aux (aux, _)) =
   match aux with
   | Nexp_sum (nexp1, nexp2) -> KidSet.union (tyvars_of_nexp nexp1) (tyvars_of_nexp nexp2)
   | _ -> KidSet.empty
+
+let ambiguous_vars typ =
+  let vars = ambiguous_vars' typ in
+  if KidSet.cardinal vars > 1 then vars else KidSet.empty
 
 (**************************************************************************)
 (* 3.5. Subtyping with existentials                                       *)
@@ -3124,6 +3130,8 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
      end
   | P_app (f, pats) when Env.is_union_constructor f env ->
      begin
+       (* Treat Ctor((p, x)) the same as Ctor(p, x) *)
+       let pats = match pats with [P_aux (P_tup pats, _)] -> pats | _ -> pats in
        let (typq, ctor_typ) = Env.get_union_id f env in
        let quants = quant_items typq in
        let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
@@ -3143,6 +3151,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
                 typ_raise env l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env))
               else ();
               let ret_typ' = subst_unifiers unifiers ret_typ in
+              let arg_typ', env = bind_existential l None arg_typ' env in
               let tpats, env, guards =
                 try List.fold_left2 bind_tuple_pat ([], env, []) pats (untuple arg_typ') with
                 | Invalid_argument _ -> typ_error env l "Union constructor pattern arguments have incorrect length"
@@ -3316,15 +3325,20 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
   | _ -> typ_error env l ("Couldn't infer type of pattern " ^ string_of_pat pat)
 
 and bind_typ_pat env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_aux (typ_aux, _) as typ) =
+  typ_print (lazy (Util.("Binding type pattern " |> yellow |> clear) ^ string_of_typ_pat typ_pat ^ " to " ^ string_of_typ typ));
   match typ_pat_aux, typ_aux with
   | TP_wild, _ -> env
   | TP_var kid, _ ->
      begin
        match typ_nexps typ, typ_constraints typ with
        | [nexp], [] ->
-          Env.add_constraint (nc_eq (nvar kid) nexp) (Env.add_typ_var l (mk_kopt K_int kid) env)
+          let env, shadow = Env.add_typ_var_shadow l (mk_kopt K_int kid) env in
+          let nexp = match shadow with Some s_v -> nexp_subst kid (arg_nexp (nvar s_v)) nexp | None -> nexp in
+          Env.add_constraint (nc_eq (nvar kid) nexp) env
        | [], [nc] ->
-          Env.add_constraint (nc_and (nc_or (nc_not nc) (nc_var kid)) (nc_or nc (nc_not (nc_var kid)))) (Env.add_typ_var l (mk_kopt K_bool kid) env)
+          let env, shadow = Env.add_typ_var_shadow l (mk_kopt K_bool kid) env in
+          let nexp = match shadow with Some s_v -> constraint_subst kid (arg_bool (nc_var s_v)) nc | None -> nc in
+          Env.add_constraint (nc_and (nc_or (nc_not nc) (nc_var kid)) (nc_or nc (nc_not (nc_var kid)))) env
        | [], [] ->
           typ_error env l ("No numeric expressions in " ^ string_of_typ typ ^ " to bind " ^ string_of_kid kid ^ " to")
        | _, _ ->
@@ -3337,7 +3351,9 @@ and bind_typ_pat_arg env (TP_aux (typ_pat_aux, l) as typ_pat) (A_aux (typ_arg_au
   match typ_pat_aux, typ_arg_aux with
   | TP_wild, _ -> env
   | TP_var kid, A_nexp nexp ->
-     Env.add_constraint (nc_eq (nvar kid) nexp) (Env.add_typ_var l (mk_kopt K_int kid) env)
+     let env, shadow = Env.add_typ_var_shadow l (mk_kopt K_int kid) env in
+     let nexp = match shadow with Some s_v -> nexp_subst kid (arg_nexp (nvar s_v)) nexp | None -> nexp in
+     Env.add_constraint (nc_eq (nvar kid) nexp) env
   | _, A_typ typ -> bind_typ_pat env typ_pat typ
   | _, A_order _ -> typ_error env l "Cannot bind type pattern against order"
   | _, _ -> typ_error env l ("Couldn't bind type argument " ^ string_of_typ_arg typ_arg ^ " with " ^ string_of_typ_pat typ_pat)

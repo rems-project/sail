@@ -119,9 +119,9 @@ function place_slice(m,xs,i,l,shift) = {
 }
 
 val set_slice_zeros : forall 'n, 'n >= 0.
-  (atom('n), int, bits('n), int) -> bits('n) effect pure
+  (atom('n), bits('n), int, int) -> bits('n) effect pure
 
-function set_slice_zeros(n, i, xs, l) = {
+function set_slice_zeros(n, xs, i, l) = {
   let ys : bits('n) = slice_mask(n, i, l) in
   xs & ~(ys)
 }

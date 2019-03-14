@@ -71,6 +71,15 @@ module type S =
     val add_edge : node -> node -> graph -> graph
     val add_edges : node -> node list -> graph -> graph
 
+    (** Add edges to the graph, but may leave the internal structure
+       of the graph in a non-normalized state. Fix leaves repairs any
+       such issue in the graph. These additional functions are much
+       faster than those above, but it is important to call fix_leaves
+       before calling reachable, prune, or any other function. *)
+    val add_edge' : node -> node -> graph -> graph
+    val add_edges' : node -> node list -> graph -> graph
+    val fix_leaves : graph -> graph
+
     val children : graph -> node -> node list
 
     (** Return the set of nodes that are reachable from the first set

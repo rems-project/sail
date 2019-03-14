@@ -1,3 +1,6 @@
+| `AArch64Unallocated ->
+      "UNALLOCATED"
+
 | `AArch64TMStart t ->
       sprintf "TSTART %s" (pp_regzr Set64 t)
 

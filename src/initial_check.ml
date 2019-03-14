@@ -811,18 +811,6 @@ let constraint_of_string str =
 let extern_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, [("_", string_of_id id)], false))
 let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, [], false))
 
-let val_spec_ids (Defs defs) =
-  let val_spec_id (VS_aux (vs_aux, _)) =
-    match vs_aux with
-    | VS_val_spec (_, id, _, _) -> id
-  in
-  let rec vs_ids = function
-    | DEF_spec vs :: defs -> val_spec_id vs :: vs_ids defs
-    | def :: defs -> vs_ids defs
-    | [] -> []
-  in
-  IdSet.of_list (vs_ids defs)
-
 let quant_item_param = function
   | QI_aux (QI_id kopt, _) when is_int_kopt kopt -> [prepend_id "atom_" (id_of_kid (kopt_kid kopt))]
   | QI_aux (QI_id kopt, _) when is_typ_kopt kopt -> [prepend_id "typ_" (id_of_kid (kopt_kid kopt))]
@@ -1047,7 +1035,7 @@ let process_ast ?generate:(generate=true) defs =
     |> generate_initialize_registers vs_ids
   else
     ast
-  
+
 let ast_of_def_string str =
   let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
   process_ast (P.Defs [def])

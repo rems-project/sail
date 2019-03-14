@@ -1024,6 +1024,22 @@ let rec doc_range_lem (BF_aux(r,_)) = match r with
   | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
  *)
 
+let doc_typquant_sorts idpp (TypQ_aux (typq,_)) =
+  match typq with
+  | TypQ_tq qs ->
+     let q (QI_aux (qi,_)) =
+       match qi with
+       | QI_id (KOpt_aux (KOpt_kind (K_aux (K_int,_),kid),_)) -> Some (string "`len`")
+       | QI_id (KOpt_aux (KOpt_kind (K_aux (K_type,_),kid),_)) -> Some underscore
+       | QI_id (KOpt_aux (KOpt_kind (K_aux ((K_order|K_bool),_),kid),_)) -> None
+       | QI_const _ -> None
+     in
+     if List.exists (function (QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_int,_),_),_)),_)) -> true | _ -> false) qs then
+       let qs_pp = Util.map_filter q qs in
+       string "declare isabelle target_sorts " ^^ idpp ^^ space ^^ separate space (equals::qs_pp) ^^ hardline
+     else empty
+  | TypQ_no_forall -> empty
+
 let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
      let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
@@ -1078,9 +1094,10 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
           doc_op equals (string "field_is_inc") (string (if is_inc then "true" else "false")); semi_sp;
           doc_op equals (string "get_field") (parens (doc_op arrow (string "fun rec_val") get)); semi_sp;
           doc_op equals (string "set_field") (parens (doc_op arrow (string "fun rec_val v") set)); space])) in *)
+    let sorts_pp = doc_typquant_sorts (doc_id_lem_type id) typq in
     doc_op equals
            (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
-           ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space))) ^^ hardline
+           ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space))) ^^ hardline ^^ sorts_pp
     (* if !opt_sequential && string_of_id id = "regstate" then empty
     else separate_map hardline doc_field fs *)
   | TD_variant(id,typq,ar,_) ->
@@ -1466,7 +1483,7 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) type_env (De
   (* let regtypes = find_regtypes d in *)
   let state_ids =
     State.generate_regstate_defs !opt_mwords defs
-    |> Initial_check.val_spec_ids
+    |> val_spec_ids
   in
   let is_state_def = function
     | DEF_spec vs -> IdSet.mem (id_of_val_spec vs) state_ids

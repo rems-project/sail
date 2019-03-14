@@ -1,0 +1,224 @@
+indexvar n , m , i , j ::=
+  {{ phantom }}
+  {{ com Index variables for meta-lists }}
+
+metavar nat ::=
+  {{ phantom }}
+  {{ ocaml int }}
+  {{ lem nat }}
+
+metavar id ::=
+  {{ phantom }}
+  {{ ocaml id }}
+  {{ lem id }}
+
+metavar mid ::=
+  {{ phantom }}
+  {{ ocaml id option }}
+  {{ lem maybe id }}
+
+metavar string ::=
+  {{ phantom }}
+  {{ ocaml string }}
+  {{ lem string }}
+
+metavar op ::=
+  {{ phantom }}
+  {{ ocaml string }}
+  {{ lem string }}
+
+metavar bool ::=
+  {{ phantom }}
+  {{ ocaml bool }}
+  {{ lem bool }}
+
+metavar value ::=
+  {{ phantom }}
+  {{ lem vl }}
+  {{ ocaml vl }}
+
+embed
+{{ lem
+
+open import Ast
+open import Value2
+
+}}
+
+grammar
+
+% Fragments are small pure snippets of (abstract) C code, mostly
+% expressions, used by the aval and cval types.
+
+fragment :: 'F_' ::=
+  | id                                     :: :: id
+  | '&' id                                 :: :: ref
+  | value                                  :: :: lit
+  | have_exception                         :: :: have_exception
+  | current_exception                      :: :: current_exception
+  | fragment op fragment'                  :: :: op
+  | op fragment                            :: :: unary
+  | string ( fragment0 , ... , fragmentn ) :: :: call
+  | fragment . string                      :: :: field
+  | string                                 :: :: raw
+  | poly fragment                          :: :: poly
+
+% Note that init / clear are sometimes refered to as create / kill
+
+%%% IR types
+
+ctyp :: 'CT_' ::=
+  {{ com C type }}
+% Integer types
+%
+% lint is a large (l) arbitrary precision integer, mpz_t in C.
+% fint(n) is a fixed precision signed integer that is representable in exactly n bits
+  | lint                      :: :: lint
+  | fint nat                  :: :: fint
+
+% Bitvector types - flag represents bit indexing direction, true - dec or false - inc
+%
+% lbits is a large (l) arbitrary precision bitvector
+% sbits is a small (s) bitvector, such that sbits(n, _) is guaranteed to have a length of at most n.
+% fbits is a fixed (f) bitvector, such that fbits(n, _) has a length of exactly n bits
+  | lbits ( bool )            :: :: lbits
+  | sbits ( nat , bool )      :: :: sbits
+  | fbits ( nat , bool )      :: :: fbits
+
+% Other Sail types
+  | unit                      :: :: unit
+  | bool_t                    :: :: bool
+  | bit                       :: :: bit
+  | string_t                  :: :: string
+
+% The real type in sail. Abstract here, so the code generator can
+% choose to implement it using either GMP rationals or high-precision
+% floating point.
+  | real                      :: :: real
+
+  | ( ctyp0 , ... , ctypn )   :: :: tup
+
+% Abstractly represent how all the Sail user defined types get mapped
+% into C. We don't fully worry about precise implementation details at
+% this point, as C doesn't have variants or tuples natively, but these
+% need to be encoded.
+  | enum id ( id0 , ... , idn )                    :: :: enum
+  | struct id ( id0 * ctyp0 , ... , idn * ctypn )  :: :: struct
+  | variant id ( id0 * ctyp0 , ... , idn * ctypn ) :: :: variant
+
+% A vector type for non-bit vectors, and a (linked) list type.
+  | vector ( bool , ctyp )         :: :: vector
+  | list ( ctyp )                  :: :: list
+
+  | ref ( ctyp )                   :: :: ref
+
+% We can still have a very limited amount of polymorphism in this IR
+% representation, as variants can have polymorphic constructors. The
+% reason is we can put more precise types into constructors and then
+% consume them as more general types meaning the underlying
+% representation (rather than the high-level sail types) are what we
+% need to specialise constructors, e.g. Some(0xFF) would be a Some
+% constructor containing a fbits(8, true), but this could be pattern
+% matched as Some(x) where the matching context expects x to have type
+% lbits, and this must work without compiling to type incorrect C.
+  | poly                           :: :: poly
+
+
+cval :: 'CV_' ::=
+  {{ ocaml fragment * ctyp }}
+  {{ lem fragment * ctyp }}
+
+clexp :: 'CL_' ::=
+  | id : ctyp                :: :: id
+  | clexp . string           :: :: field
+  | * clexp                  :: :: addr
+  | clexp . nat              :: :: tuple
+  | current_exception : ctyp :: :: current_exception
+  | have_exception           :: :: have_exception
+  | return : ctyp            :: :: return
+  | void                     :: :: void
+
+ctype_def :: 'CTD_' ::=
+  {{ com C type definition }}
+  | enum id = id0 '|' ... '|' idn                     :: :: enum
+  | struct id = { id0 : ctyp0 , ... , idn : ctypn }   :: :: struct
+  | variant id  = { id0 : ctyp0 , ... , idn : ctypn } :: :: variant
+
+iannot :: 'IA_' ::=
+  {{ lem nat * nat * nat }}
+  {{ ocaml int * int * int }}
+
+instr :: 'I_' ::=
+  {{ aux _ iannot }}
+% The following are the minimal set of instructions output by
+% Jib_compile.ml.
+  | ctyp id                                        :: :: decl
+  | ctyp id = cval                                 :: :: init
+  | jump ( cval ) string                           :: :: jump
+  | goto string                                    :: :: goto
+  | string :                                       :: :: label
+  | clexp = bool id ( cval0 , ... , cvaln )        :: :: funcall
+  | clexp = cval                                   :: :: copy
+  | clear ctyp id                                  :: :: clear
+  | undefined ctyp                                 :: :: undefined
+  | match_failure                                  :: :: match_failure
+  | end                                            :: :: end
+
+% All instructions containing nested instructions can be flattened
+% away. try and throw only exist for internal use within
+% Jib_compile.ml, as exceptional control flow is handled by a separate
+% Jib->Jib pass.
+  | if ( cval ) { instr0 ; ... ; instrn }
+    else { instr0 ; ... ; instrm } : ctyp          :: :: if
+  | { instr0 ; ... ; instrn }                      :: :: block
+  | try { instr0 ; ... ; instrn }                  :: :: try_block
+  | throw cval                                     :: :: throw
+
+% We can embed either comments or pass raw-strings through to the
+% code-generator. The first is useful for annotating generated source,
+% the second for inserting instrumention. I_raw should be side-effect
+% free.
+  | '//' string                                    :: :: comment
+  | C string                                       :: :: raw
+
+% Jib_compile.ml will represent all returns as assigments to the clexp
+% CL_return, followed by end to signify the end of the
+% function.
+  | return cval                                    :: :: return
+
+% For optimising away allocations and copying.
+  | reset ctyp id                                  :: :: reset
+  | ctyp id = cval                                 :: :: reinit
+  | alias clexp = cval                             :: :: alias
+
+cdef :: 'CDEF_' ::=
+  | register id : ctyp = {
+      instr0 ; ... ; instrn
+    } :: :: reg_dec
+  | ctype_def :: :: type
+
+% The first list of instructions sets up the global letbinding, while
+% the second clears it.
+  | let nat ( id0 : ctyp0 , ... , idn : ctypn ) = {
+      instr0 ; ... ; instrm
+    } :: :: let
+
+  | val id ( ctyp0 , ... , ctypn ) -> ctyp :: :: spec
+
+% If mid = Some id this indicates that the caller should allocate the
+% return type and passes a pointer to it as an extra argument id for
+% the function to fill in. This is only done via Jib->Jib rewrites
+% used when compiling to C.
+  | function id mid ( id0 , ... , idn ) {
+      instr0 ; ... ; instrm
+    } :: :: fundef
+
+% Each function can have custom global state. In CDEF_startup and
+% CDEF_finish all I_decl and I_init nodes are treated as global and no
+% nested-instructions (if/block) are allowed.
+  | startup id {
+      instr0 ; ... ; instrn
+    } :: :: startup
+  | finish id {
+      instr0 ; ... ; instrn
+    } :: :: finish

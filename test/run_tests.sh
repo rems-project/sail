@@ -47,3 +47,9 @@ printf "==========================================\n"
 
 ./arm/run_tests.sh
 
+printf "\n==========================================\n"
+printf "aarch64_small spec tests\n"
+printf "==========================================\n"
+
+./aarch64_small/run_tests.sh
+

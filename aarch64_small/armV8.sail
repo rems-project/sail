@@ -61,6 +61,8 @@ union ast =  {
   ClearExclusiveMonitor : (uinteger),
   Barrier : (MemBarrierOp,MBReqDomain,MBReqTypes),
   System : (reg_index,uinteger,uinteger,uinteger,uinteger,uinteger,boolean),
+  DataCache : (reg_index,DCOp),
+  InstructionCache : (reg_index,ICOp),
   MoveSystemRegister : (reg_index,uinteger,uinteger,uinteger,uinteger,uinteger,boolean),
   TestBitAndBranch : {'R 'bit_pos, RegisterSize('R) & 0 <= 'bit_pos < 'R. (reg_index,int('R),int('bit_pos),bit,bits(64))},
   BranchImmediate : (BranchType,bits(64)),
@@ -462,24 +464,84 @@ function clause execute ( Barrier(op,domain,types) ) = {
 
 /* SYS L=0b0 */
 /* SYSL L=0b1 */
+/* The following are actually aliases of SYS: */
+/* DC L=0b0,SysOp(op1,CRn,CRm,op2) = Sys_DC */
+/* IC L=0b0,SysOp(op1,CRn,CRm,op2) = Sys_IC */
 function clause decodeSystem (0b1101010100@[L]@0b01@(op1 : bits(3))@(CRn : bits(4))@(CRm : bits(4))@(op2 : bits(3))@(Rt:bits(5))) = {
   /* FIXME: we don't allow register reads in the decoding */
   /* ARM: CheckSystemAccess(0b01, op1, CRn, CRm, op2, Rt, L);*/
 
   t : reg_index = UInt_reg(Rt);
 
-  sys_op0 : uinteger = 1;
-  sys_op1 : uinteger = UInt(op1);
-  sys_op2 : uinteger = UInt(op2);
-  sys_crn : uinteger = UInt(CRn);
-  sys_crm : uinteger = UInt(CRm);
-  has_result : boolean = (L == b1);
+  sysop : SystemOp = Sys_SYS;
+  if L == b0 then
+    sysop = SysOp(op1,CRn,CRm,op2);
 
-  Some(System(t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,has_result));
+  match sysop {
+    Sys_AT => not_implemented("AT"),
+
+    Sys_DC =>
+        match (op1, CRm, op2) {
+          (0b000, 0b0110, 0b001) => Some(DataCache(t,IVAC)),
+          (0b000, 0b0110, 0b010) => Some(DataCache(t,ISW)),
+          (0b000, 0b1010, 0b010) => Some(DataCache(t,CSW)),
+          (0b000, 0b1110, 0b010) => Some(DataCache(t,CISW)),
+          (0b011, 0b0100, 0b001) => Some(DataCache(t,ZVA)),
+          (0b011, 0b1010, 0b001) => Some(DataCache(t,CVAC)),
+          (0b011, 0b1011, 0b001) => Some(DataCache(t,CVAU)),
+          (0b011, 0b1110, 0b001) => Some(DataCache(t,CIVAC)),
+          _ => error("should never happen")
+        },
+
+    Sys_IC =>
+        match (op1, CRm, op2) {
+          (0b000, 0b0001, 0b000) => Some(InstructionCache(t,IALLUIS)),
+          (0b000, 0b0101, 0b000) => Some(InstructionCache(t,IALLU)),
+          (0b011, 0b0101, 0b001) => Some(InstructionCache(t,IVAU)),
+          _ => error("should never happen")
+        },
+
+    Sys_TLBI => not_implemented("TLBI"),
+
+    Sys_SYS => {
+      sys_op0 : uinteger = 1;
+      sys_op1 : uinteger = UInt(op1);
+      sys_op2 : uinteger = UInt(op2);
+      sys_crn : uinteger = UInt(CRn);
+      sys_crm : uinteger = UInt(CRm);
+      has_result : boolean = (L == b1);
+
+      Some(System(t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,has_result));
+    }
+  };
 }
 
-function clause execute ( System(t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,has_result) ) =
-{
+function clause execute ( DataCache(t,dc_op) ) = {
+  addr : bits(64) = rX(t);
+
+  match dc_op {
+    IVAC  => not_implemented("DC IVAC"),
+    ISW   => not_implemented("DC ISW"),
+    CSW   => not_implemented("DC CSW"),
+    CISW  => not_implemented("DC CISW"),
+    ZVA   => not_implemented("DC ZVA"),
+    CVAC  => not_implemented("DC CVAC"),
+    CVAU  => data_cache_operation_CVAU = addr,
+    CIVAC => not_implemented("DC CIVAC")
+  };
+}
+
+function clause execute ( InstructionCache(t,ic_op) ) = {
+  addr : bits(64) = rX(t);
+
+  match ic_op {
+    IALLUIS => not_implemented("IC IALLUIS"),
+    IALLU   => not_implemented("IC IALLU"),
+    IVAU    => instruction_cache_operation_IVAU = addr
+  };
+}
+
+function clause execute ( System(t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,has_result) ) = {
   if has_result then
     wX(t) = SysOp_R(sys_op0, sys_op1, sys_crn, sys_crm, sys_op2)
   else
@@ -2443,6 +2505,7 @@ end execute
 val supported_instructions : ast -> option(ast) effect {escape}
 function supported_instructions (instr) = {
   match instr {
+    Unallocated () => None (),
     _  => Some(instr)
   }
 }

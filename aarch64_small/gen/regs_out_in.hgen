@@ -1,6 +1,7 @@
 (* for each instruction instance, identify the role of the registers
    and possible branching: (outputs, inputs, voidstars, branch) *)
 
+| `AArch64Unallocated -> failwith "UNALLOCATED is not implemented"
 | `AArch64TMStart t -> failwith "TSTART is not implemented"
 | `AArch64TMCommit -> failwith "TCOMMIT is not implemented"
 | `AArch64TMAbort (retry,reason) -> failwith "TABORT is not implemented"

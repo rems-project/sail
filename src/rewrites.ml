@@ -319,379 +319,10 @@ let rewrite_bitvector_exps env defs =
     | (e_aux, a) -> E_aux (e_aux, a)
   in
   let rewrite_exp _ = fold_exp { id_exp_alg with e_aux = e_aux } in
-  if IdSet.mem (mk_id "bitvector_of_bitlist") (Initial_check.val_spec_ids defs) then
+  if IdSet.mem (mk_id "bitvector_of_bitlist") (val_spec_ids defs) then
     rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp } defs
   else defs
 
-
-(* Re-write trivial sizeof expressions - trivial meaning that the
-   value of the sizeof can be directly inferred from the type
-   variables in scope. *)
-let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
-  let extract_typ_var l env nexp (id, (_, typ)) =
-    let var = E_aux (E_id id, (l, mk_tannot env typ no_effect)) in
-    match destruct_atom_nexp env typ with
-    | Some size when prove __POS__ env (nc_eq size nexp) -> Some var
-    (* AA: This next case is a bit of a hack... is there a more
-       general way to deal with trivial nexps that are offset by
-       constants? This will resolve a 'n - 1 sizeof when 'n is in
-       scope. *)
-    | Some size when prove __POS__ env (nc_eq (nsum size (nint 1)) nexp) ->
-       let one_exp = infer_exp env (mk_lit_exp (L_num (Big_int.of_int 1))) in
-       Some (E_aux (E_app (mk_id "add_atom", [var; one_exp]), (gen_loc l, mk_tannot env (atom_typ (nsum size (nint 1))) no_effect)))
-    | _ ->
-       begin
-         match destruct_vector env typ with
-         | Some (len, _, _) when prove __POS__ env (nc_eq len nexp) ->
-            Some (E_aux (E_app (mk_id "length", [var]), (l, mk_tannot env (atom_typ len) no_effect)))
-         | _ -> None
-       end
-  in
-  let rec split_nexp (Nexp_aux (nexp_aux, l) as nexp) =
-    match nexp_aux with
-    | Nexp_sum (n1, n2) ->
-       mk_exp ~loc:l (E_app (mk_id "add_atom", [split_nexp n1; split_nexp n2]))
-    | Nexp_minus (n1, n2) ->
-       mk_exp ~loc:l (E_app (mk_id "sub_atom", [split_nexp n1; split_nexp n2]))
-    | Nexp_times (n1, n2) ->
-       mk_exp ~loc:l (E_app (mk_id "mult_atom", [split_nexp n1; split_nexp n2]))
-    | Nexp_neg nexp ->
-       mk_exp ~loc:l (E_app (mk_id "negate_atom", [split_nexp nexp]))
-    | Nexp_app (f, [n1; n2]) when string_of_id f = "div" ->
-       (* We should be more careful about the right division here *)
-       mk_exp ~loc:l (E_app (mk_id "div", [split_nexp n1; split_nexp n2]))
-    | _ ->
-       mk_exp ~loc:l (E_sizeof nexp)
-  in
-  let is_int_typ env v _ = function
-    | (_, Typ_aux (Typ_app (f, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _)]), _))
-         when Kid.compare v v' = 0 && string_of_id f = "atom" ->
-       true
-    | _ -> false
-  in
-  let rec rewrite_e_aux split_sizeof (E_aux (e_aux, (l, _)) as orig_exp) =
-    let env = env_of orig_exp in
-    match e_aux with
-    | E_sizeof (Nexp_aux (Nexp_constant c, _) as nexp) ->
-       E_aux (E_lit (L_aux (L_num c, l)), (l, mk_tannot env (atom_typ nexp) no_effect))
-    | E_sizeof nexp ->
-       begin
-         let locals = Env.get_locals env in
-         match nexp_simp (rewrite_nexp_ids (env_of orig_exp) nexp) with
-         | Nexp_aux (Nexp_constant c, _) ->
-            E_aux (E_lit (L_aux (L_num c, l)), (l, mk_tannot env (atom_typ nexp) no_effect))
-         | Nexp_aux (Nexp_var v, _) when Bindings.exists (is_int_typ env v) locals ->
-            let id = fst (Bindings.choose (Bindings.filter (is_int_typ env v) locals)) in
-            E_aux (E_id id, (l, mk_tannot env (atom_typ nexp) no_effect))
-         | _ ->
-            let locals = Env.get_locals env in
-            let exps = Bindings.bindings locals
-                       |> List.map (extract_typ_var l env nexp)
-                       |> List.map (fun opt -> match opt with Some x -> [x] | None -> [])
-                       |> List.concat
-            in
-            match exps with
-            | (exp :: _) -> check_exp env (strip_exp exp) (typ_of exp)
-            | [] when split_sizeof ->
-               fold_exp (rewrite_e_sizeof false) (check_exp env (split_nexp nexp) (typ_of orig_exp))
-            | [] -> orig_exp
-       end
-    | _ -> orig_exp
-  and rewrite_e_sizeof split_sizeof =
-    { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux split_sizeof (E_aux (exp, annot))) }
-  in
-  (fun env -> rewrite_defs_base_parallel 4 { rewriters_base with rewrite_exp = (fun _ -> fold_exp (rewrite_e_sizeof true)) }), rewrite_e_aux true
-
-(* Rewrite sizeof expressions with type-level variables to
-   term-level expressions
-
-   For each type-level variable used in a sizeof expressions whose value cannot
-   be directly extracted from existing parameters of the surrounding function,
-   a further parameter is added; calls to the function are rewritten
-   accordingly (possibly causing further rewriting in the calling function) *)
-let rewrite_sizeof env (Defs defs) =
-  let sizeof_frees exp =
-    fst (fold_exp
-           { (compute_exp_alg KidSet.empty KidSet.union) with
-             e_sizeof = (fun nexp -> (nexp_frees nexp, E_sizeof nexp)) }
-           exp) in
-
-  (* Collect nexps whose values can be obtained directly from a pattern bind *)
-  let nexps_from_params pat =
-    fst (fold_pat
-           { (compute_pat_alg [] (@)) with
-             p_aux = (fun ((v,pat),((l,_) as annot)) ->
-             let v' = match pat with
-               | P_id id | P_as (_, id) ->
-                  let (Typ_aux (typ,_) as typ_aux) = typ_of_annot annot in
-                  (match typ with
-                   | Typ_app (atom, [A_aux (A_nexp nexp, _)])
-                        when string_of_id atom = "atom" ->
-                      [nexp, E_id id]
-                   | Typ_app (vector, _) when string_of_id vector = "vector" ->
-                      let id_length = Id_aux (Id "length", gen_loc l) in
-                      (try
-                         (match Env.get_val_spec id_length (env_of_annot annot) with
-                          | _ ->
-                             let (len,_,_) = vector_typ_args_of typ_aux in
-                             let exp = E_app (id_length, [E_aux (E_id id, annot)]) in
-                             [len, exp])
-                       with
-                       | _ -> [])
-                   | _ -> [])
-               | _ -> [] in
-             (v @ v', P_aux (pat,annot)))} pat) in
-
-  (* Substitute collected values in sizeof expressions *)
-  let rec e_sizeof nmap (Nexp_aux (nexp, l) as nexp_aux) =
-    try snd (List.find (fun (nexp,_) -> nexp_identical nexp nexp_aux) nmap)
-    with
-    | Not_found ->
-       let binop nexp1 op nexp2 = E_app_infix (
-                                      E_aux (e_sizeof nmap nexp1, simple_annot l (atom_typ nexp1)),
-                                      Id_aux (Id op, Parse_ast.Unknown),
-                                      E_aux (e_sizeof nmap nexp2, simple_annot l (atom_typ nexp2))
-                                    ) in
-       let (Nexp_aux (nexp, l) as nexp_aux) = nexp_simp nexp_aux in
-       (match nexp with
-        | Nexp_constant i -> E_lit (L_aux (L_num i, l))
-        | Nexp_times (nexp1, nexp2) -> binop nexp1 "*" nexp2
-        | Nexp_sum (nexp1, nexp2) -> binop nexp1 "+" nexp2
-        | Nexp_minus (nexp1, nexp2) -> binop nexp1 "-" nexp2
-        | _ -> E_sizeof nexp_aux) in
-
-  let ex_regex = Str.regexp "'ex[0-9]+" in
-
-  (* Rewrite calls to functions which have had parameters added to pass values
-     of type-level variables; these are added as sizeof expressions first, and
-     then further rewritten as above. *)
-  let e_app_aux param_map ((exp, exp_orig), ((l, _) as annot)) =
-    let env = env_of_annot annot in
-    let full_exp = E_aux (exp, annot) in
-    let orig_exp = E_aux (exp_orig, annot) in
-    match exp with
-    | E_app (f, args) ->
-       if Bindings.mem f param_map then
-         (* Retrieve instantiation of the type variables of the called function
-           for the given parameters in the original environment *)
-         let inst =
-           try instantiation_of orig_exp with
-           | Type_error (_, l, err) ->
-             raise (Reporting.err_typ l (Type_error.string_of_type_error err)) in
-         (* Rewrite the inst using orig_kid so that each type variable has it's
-            original name rather than a mangled typechecker name *)
-         let inst = KBindings.fold (fun kid uvar b -> KBindings.add (orig_kid kid) uvar b) inst KBindings.empty in
-         let kid_exp kid = begin
-             (* We really don't want to see an existential here! *)
-             assert (not (Str.string_match ex_regex (string_of_kid kid) 0));
-             let uvar = try Some (KBindings.find (orig_kid kid) inst) with Not_found -> None in
-             match uvar with
-             | Some (A_aux (A_nexp nexp, _)) ->
-                let sizeof = E_aux (E_sizeof nexp, (l, mk_tannot env (atom_typ nexp) no_effect)) in
-                (try rewrite_trivial_sizeof_exp sizeof with
-                | Type_error (_, l, err) ->
-                  raise (Reporting.err_typ l (Type_error.string_of_type_error err)))
-             (* If the type variable is Not_found then it was probably
-                introduced by a P_var pattern, so it likely exists as
-                a variable in scope. It can't be an existential because the assert rules that out. *)
-             | None -> annot_exp (E_id (id_of_kid (orig_kid kid))) l env (atom_typ (nvar (orig_kid kid)))
-             | _ ->
-                raise (Reporting.err_unreachable l __POS__
-                                                       ("failed to infer nexp for type variable " ^ string_of_kid kid ^
-                                                          " of function " ^ string_of_id f))
-           end in
-         let kid_exps = List.map kid_exp (KidSet.elements (Bindings.find f param_map)) in
-         (E_aux (E_app (f, kid_exps @ args), annot), orig_exp)
-       else (full_exp, orig_exp)
-    | _ -> (full_exp, orig_exp) in
-
-  (* Plug this into a folding algorithm that also keeps around a copy of the
-  original expressions, which we use to infer instantiations of type variables
-  in the original environments *)
-  let copy_exp_alg =
-    { e_block = (fun es -> let (es, es') = List.split es in (E_block es, E_block es'))
-    ; e_nondet = (fun es -> let (es, es') = List.split es in (E_nondet es, E_nondet es'))
-    ; e_id = (fun id -> (E_id id, E_id id))
-    ; e_ref = (fun id -> (E_ref id, E_ref id))
-    ; e_lit = (fun lit -> (E_lit lit, E_lit lit))
-    ; e_cast = (fun (typ,(e,e')) -> (E_cast (typ,e), E_cast (typ,e')))
-    ; e_app = (fun (id,es) -> let (es, es') = List.split es in (E_app (id,es), E_app (id,es')))
-    ; e_app_infix = (fun ((e1,e1'),id,(e2,e2')) -> (E_app_infix (e1,id,e2), E_app_infix (e1',id,e2')))
-    ; e_tuple = (fun es -> let (es, es') = List.split es in (E_tuple es, E_tuple es'))
-    ; e_if = (fun ((e1,e1'),(e2,e2'),(e3,e3')) -> (E_if (e1,e2,e3), E_if (e1',e2',e3')))
-    ; e_for = (fun (id,(e1,e1'),(e2,e2'),(e3,e3'),order,(e4,e4')) -> (E_for (id,e1,e2,e3,order,e4), E_for (id,e1',e2',e3',order,e4')))
-    ; e_loop = (fun (lt, (e1, e1'), (e2, e2')) -> (E_loop (lt, e1, e2), E_loop (lt, e1', e2')))
-    ; e_vector = (fun es -> let (es, es') = List.split es in (E_vector es, E_vector es'))
-    ; e_vector_access = (fun ((e1,e1'),(e2,e2')) -> (E_vector_access (e1,e2), E_vector_access (e1',e2')))
-    ; e_vector_subrange =  (fun ((e1,e1'),(e2,e2'),(e3,e3')) -> (E_vector_subrange (e1,e2,e3), E_vector_subrange (e1',e2',e3')))
-    ; e_vector_update = (fun ((e1,e1'),(e2,e2'),(e3,e3')) -> (E_vector_update (e1,e2,e3), E_vector_update (e1',e2',e3')))
-    ; e_vector_update_subrange =  (fun ((e1,e1'),(e2,e2'),(e3,e3'),(e4,e4')) -> (E_vector_update_subrange (e1,e2,e3,e4), E_vector_update_subrange (e1',e2',e3',e4')))
-    ; e_vector_append = (fun ((e1,e1'),(e2,e2')) -> (E_vector_append (e1,e2), E_vector_append (e1',e2')))
-    ; e_list = (fun es -> let (es, es') = List.split es in (E_list es, E_list es'))
-    ; e_cons = (fun ((e1,e1'),(e2,e2')) -> (E_cons (e1,e2), E_cons (e1',e2')))
-    ; e_record = (fun fexps -> let (fexps, fexps') = List.split fexps in (E_record fexps, E_record fexps'))
-    ; e_record_update = (fun ((e1,e1'),fexps) -> let (fexps, fexps') = List.split fexps in (E_record_update (e1,fexps), E_record_update (e1',fexps')))
-    ; e_field = (fun ((e1,e1'),id) -> (E_field (e1,id), E_field (e1',id)))
-    ; e_case = (fun ((e1,e1'),pexps) -> let (pexps, pexps') = List.split pexps in (E_case (e1,pexps), E_case (e1',pexps')))
-    ; e_try = (fun ((e1,e1'),pexps) -> let (pexps, pexps') = List.split pexps in (E_try (e1,pexps), E_try (e1',pexps')))
-    ; e_let = (fun ((lb,lb'),(e2,e2')) -> (E_let (lb,e2), E_let (lb',e2')))
-    ; e_assign = (fun ((lexp,lexp'),(e2,e2')) -> (E_assign (lexp,e2), E_assign (lexp',e2')))
-    ; e_sizeof = (fun nexp -> (E_sizeof nexp, E_sizeof nexp))
-    ; e_constraint = (fun nc -> (E_constraint nc, E_constraint nc))
-    ; e_exit = (fun (e1,e1') -> (E_exit (e1), E_exit (e1')))
-    ; e_throw = (fun (e1,e1') -> (E_throw (e1), E_throw (e1')))
-    ; e_return = (fun (e1,e1') -> (E_return e1, E_return e1'))
-    ; e_assert = (fun ((e1,e1'),(e2,e2')) -> (E_assert(e1,e2), E_assert(e1',e2')) )
-    ; e_var = (fun ((lexp,lexp'), (e2,e2'), (e3,e3')) -> (E_var (lexp,e2,e3), E_var (lexp',e2',e3')))
-    ; e_internal_plet = (fun (pat, (e1,e1'), (e2,e2')) -> (E_internal_plet (pat,e1,e2), E_internal_plet (pat,e1',e2')))
-    ; e_internal_return = (fun (e,e') -> (E_internal_return e, E_internal_return e'))
-    ; e_internal_value = (fun v -> (E_internal_value v, E_internal_value v))
-    ; e_aux = (fun ((e,e'),annot) -> (E_aux (e,annot), E_aux (e',annot)))
-    ; lEXP_id = (fun id -> (LEXP_id id, LEXP_id id))
-    ; lEXP_deref = (fun (e, e') -> (LEXP_deref e, LEXP_deref e'))
-    ; lEXP_memory = (fun (id,es) -> let (es, es') = List.split es in (LEXP_memory (id,es), LEXP_memory (id,es')))
-    ; lEXP_cast = (fun (typ,id) -> (LEXP_cast (typ,id), LEXP_cast (typ,id)))
-    ; lEXP_tup = (fun tups -> let (tups,tups') = List.split tups in (LEXP_tup tups, LEXP_tup tups'))
-    ; lEXP_vector = (fun ((lexp,lexp'),(e2,e2')) -> (LEXP_vector (lexp,e2), LEXP_vector (lexp',e2')))
-    ; lEXP_vector_range = (fun ((lexp,lexp'),(e2,e2'),(e3,e3')) -> (LEXP_vector_range (lexp,e2,e3), LEXP_vector_range (lexp',e2',e3')))
-    ; lEXP_vector_concat = (fun lexps -> let (lexps,lexps') = List.split lexps in (LEXP_vector_concat lexps, LEXP_vector_concat lexps'))
-    ; lEXP_field = (fun ((lexp,lexp'),id) -> (LEXP_field (lexp,id), LEXP_field (lexp',id)))
-    ; lEXP_aux = (fun ((lexp,lexp'),annot) -> (LEXP_aux (lexp,annot), LEXP_aux (lexp',annot)))
-    ; fE_Fexp = (fun (id,(e,e')) -> (FE_Fexp (id,e), FE_Fexp (id,e')))
-    ; fE_aux = (fun ((fexp,fexp'),annot) -> (FE_aux (fexp,annot), FE_aux (fexp',annot)))
-    ; def_val_empty = (Def_val_empty, Def_val_empty)
-    ; def_val_dec = (fun (e,e') -> (Def_val_dec e, Def_val_dec e'))
-    ; def_val_aux = (fun ((defval,defval'),aux) -> (Def_val_aux (defval,aux), Def_val_aux (defval',aux)))
-    ; pat_exp = (fun (pat,(e,e')) -> (Pat_exp (pat,e), Pat_exp (pat,e')))
-    ; pat_when = (fun (pat,(e1,e1'),(e2,e2')) -> (Pat_when (pat,e1,e2), Pat_when (pat,e1',e2')))
-    ; pat_aux = (fun ((pexp,pexp'),a) -> (Pat_aux (pexp,a), Pat_aux (pexp',a)))
-    ; lB_val = (fun (pat,(e,e')) -> (LB_val (pat,e), LB_val (pat,e')))
-    ; lB_aux = (fun ((lb,lb'),annot) -> (LB_aux (lb,annot), LB_aux (lb',annot)))
-    ; pat_alg = id_pat_alg
-    } in
-
-  let rewrite_sizeof_fun params_map
-                         (FD_aux (FD_function (rec_opt,tannot,eff,funcls),((l,_) as annot))) =
-    let rewrite_funcl_body (FCL_aux (FCL_Funcl (id,pexp), annot)) (funcls,nvars) =
-      let pat,guard,exp,pannot = destruct_pexp pexp in
-      let nmap = nexps_from_params pat in
-      (* first rewrite calls to other functions... *)
-      let exp' = fst (fold_exp { copy_exp_alg with e_aux = e_app_aux params_map } exp) in
-      (* ... then rewrite sizeof expressions in current function body *)
-      let exp'' = fold_exp { id_exp_alg with e_sizeof = e_sizeof nmap } exp' in
-      let guard' = match guard with
-        | Some guard ->
-           (* As above *)
-           let guard' = fst (fold_exp { copy_exp_alg with e_aux = e_app_aux params_map } guard) in
-           Some (fold_exp { id_exp_alg with e_sizeof = e_sizeof nmap } guard')
-        | None -> None in
-      let pexp' = construct_pexp (pat,guard',exp'',pannot) in
-      (FCL_aux (FCL_Funcl (id,pexp'), annot) :: funcls,
-       KidSet.union nvars (sizeof_frees exp'')) in
-    let (funcls, nvars) = List.fold_right rewrite_funcl_body funcls ([], KidSet.empty) in
-    (* Add a parameter for each remaining free type-level variable in a
-       sizeof expression *)
-    let kid_typ kid = atom_typ (nvar kid) in
-    let kid_annot kid = simple_annot l (kid_typ kid) in
-    let kid_pat kid =
-      P_aux (P_typ (kid_typ kid,
-                    P_aux (P_id (Id_aux (Id (string_of_id (id_of_kid kid) ^ "__tv"), l)),
-                           kid_annot kid)), kid_annot kid) in
-    let kid_eaux kid = E_id (Id_aux (Id (string_of_id (id_of_kid kid) ^ "__tv"), l)) in
-    let kid_typs = List.map kid_typ (KidSet.elements nvars) in
-    let kid_pats = List.map kid_pat (KidSet.elements nvars) in
-    let kid_nmap = List.map (fun kid -> (nvar kid, kid_eaux kid)) (KidSet.elements nvars) in
-    let rewrite_funcl_params (FCL_aux (FCL_Funcl (id, pexp), annot) as funcl) =
-      let rec rewrite_pat (P_aux (pat, ((l, _) as pannot)) as paux) =
-        let penv = env_of_annot pannot in
-        let peff = effect_of_annot (snd pannot) in
-        if KidSet.is_empty nvars then paux else
-          match typ_of_pat paux with
-          | Typ_aux (Typ_tup typs, _) ->
-             let ptyp' = Typ_aux (Typ_tup (kid_typs @ typs), l) in
-             (match pat with
-              | P_tup pats ->
-                 P_aux (P_tup (kid_pats @ pats), (l, mk_tannot penv ptyp' peff))
-              | P_wild -> P_aux (pat, (l, mk_tannot penv ptyp' peff))
-              | P_typ (Typ_aux (Typ_tup typs, l), pat) ->
-                 P_aux (P_typ (Typ_aux (Typ_tup (kid_typs @ typs), l),
-                               rewrite_pat pat), (l, mk_tannot penv ptyp' peff))
-              | P_as (_, id) | P_id id ->
-                 (* adding parameters here would change the type of id;
-              we should remove the P_as/P_id here and add a let-binding to the body *)
-                 raise (Reporting.err_todo l
-                                                 "rewriting as- or id-patterns for sizeof expressions not yet implemented")
-              | _ ->
-                 raise (Reporting.err_unreachable l __POS__
-                                                        "unexpected pattern while rewriting function parameters for sizeof expressions"))
-          | ptyp ->
-             let ptyp' = Typ_aux (Typ_tup (kid_typs @ [ptyp]), l) in
-             P_aux (P_tup (kid_pats @ [paux]), (l, mk_tannot penv ptyp' peff)) in
-      let pat,guard,exp,pannot = destruct_pexp pexp in
-      let pat' = rewrite_pat pat in
-      let guard' = match guard with
-        | Some guard -> Some (fold_exp { id_exp_alg with e_sizeof = e_sizeof kid_nmap } guard)
-        | None -> None in
-      let exp' = fold_exp { id_exp_alg with e_sizeof = e_sizeof kid_nmap } exp in
-      let pexp' = construct_pexp (pat',guard',exp',pannot) in
-      FCL_aux (FCL_Funcl (id, pexp'), annot) in
-    let funcls = List.map rewrite_funcl_params funcls in
-    let fd = FD_aux (FD_function (rec_opt,tannot,eff,funcls),annot) in
-    let params_map =
-      if KidSet.is_empty nvars then params_map else
-        Bindings.add (id_of_fundef fd) nvars params_map in
-    (params_map, FD_aux (FD_function (rec_opt,tannot,eff,funcls),annot)) in
-
-  let rewrite_sizeof_def (params_map, defs) = function
-    | DEF_fundef fd ->
-       let (params_map', fd') = rewrite_sizeof_fun params_map fd in
-       (params_map', defs @ [DEF_fundef fd'])
-    | DEF_internal_mutrec fds ->
-       let rewrite_fd (params_map, fds) fd =
-         let (params_map', fd') = rewrite_sizeof_fun params_map fd in
-         (params_map', fds @ [fd']) in
-       (* TODO Split rewrite_sizeof_fun into an analysis and a rewrite pass,
-          so that we can call the analysis until a fixpoint is reached and then
-          rewrite the mutually recursive functions *)
-       let (params_map', fds') = List.fold_left rewrite_fd (params_map, []) fds in
-       (params_map', defs @ [DEF_internal_mutrec fds'])
-    | DEF_val (LB_aux (lb, annot)) ->
-       begin
-         let lb' = match lb with
-         | LB_val (pat, exp) ->
-           let exp' = fst (fold_exp { copy_exp_alg with e_aux = e_app_aux params_map } exp) in
-           LB_val (pat, exp') in
-         (params_map, defs @ [DEF_val (LB_aux (lb', annot))])
-       end
-    | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), annot)) ->
-       let exp' = fst (fold_exp { copy_exp_alg with e_aux = e_app_aux params_map } exp) in
-       (params_map, defs @ [DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp'), annot))])
-    | def ->
-       (params_map, defs @ [def]) in
-
-  let rewrite_sizeof_valspec params_map def =
-    let rewrite_typschm (TypSchm_aux (TypSchm_ts (tq, typ), l) as ts) id =
-      if Bindings.mem id params_map then
-        let kid_typs = List.map (fun kid -> atom_typ (nvar kid))
-                                (KidSet.elements (Bindings.find id params_map)) in
-        let typ' = match typ with
-          | Typ_aux (Typ_fn (vtyp_args, vtyp_ret, declared_eff), vl) ->
-             Typ_aux (Typ_fn (kid_typs @ vtyp_args, vtyp_ret, declared_eff), vl)
-          | _ ->
-            raise (Reporting.err_typ l "val spec with non-function type") in
-        TypSchm_aux (TypSchm_ts (tq, typ'), l)
-      else ts in
-    match def with
-    | DEF_spec (VS_aux (VS_val_spec (typschm, id, ext, is_cast), a)) ->
-       DEF_spec (VS_aux (VS_val_spec (rewrite_typschm typschm id, id, ext, is_cast), a))
-    | def -> def
-  in
-
-  let (params_map, defs) = List.fold_left rewrite_sizeof_def
-                                          (Bindings.empty, []) defs in
-  let defs = List.map (rewrite_sizeof_valspec params_map) defs in
-  (* Defs defs *)
-  fst (Type_error.check initial_env (Defs defs))
 
 let rewrite_defs_remove_assert defs =
   let e_assert ((E_aux (eaux, (l, _)) as exp), str) = match eaux with
@@ -2025,7 +1656,6 @@ let is_funcl_rec (FCL_aux (FCL_Funcl (id, pexp), _)) =
          E_app_infix (e1, f, e2))) }
     exp)
 
-
 let pat_var (P_aux (paux, a)) =
   let env = env_of_annot a in
   let is_var id =
@@ -2035,68 +1665,101 @@ let pat_var (P_aux (paux, a)) =
   | (P_as (_, id) | P_id id) when is_var id -> Some id
   | _ -> None
 
-(* Split out function clauses for individual union constructor patterns
-   (e.g. AST nodes) into auxiliary functions.  Used for the execute function. *)
-let rewrite_split_fun_constr_pats fun_name env (Defs defs) =
+(** Split out function clauses for individual union constructor patterns
+   (e.g. AST nodes) into auxiliary functions. Used for the execute function.
+
+   For example:
+
+   function execute(Instr(x, y)) = ...
+
+   would become
+
+   function execute_Instr(x, y) = ...
+
+   function execute(Instr(x, y)) = execute_C(x, y)
+
+   This is actually a slightly complex rewrite than it first appears, because
+   we have to deal with cases where the AST type has constraints in various
+   places, e.g.
+
+   union ast('x: Int), 0 <= 'x < 32 = {
+     Instr : {'r, 'r in {32, 64}. (int('x), bits('r))}
+   }
+ *)
+let rewrite_split_fun_ctor_pats fun_name env (Defs defs) =
   let rewrite_fundef typquant (FD_aux (FD_function (r_o, t_o, e_o, clauses), ((l, _) as fdannot))) =
     let rec_clauses, clauses = List.partition is_funcl_rec clauses in
     let clauses, aux_funs =
       List.fold_left
         (fun (clauses, aux_funs) (FCL_aux (FCL_Funcl (id, pexp), fannot) as clause) ->
-           let pat, guard, exp, annot = destruct_pexp pexp in
-           match pat with
-             | P_aux (P_app (constr_id, args), pannot) ->
-                let argstup_typ = tuple_typ (List.map typ_of_pat args) in
-                let pannot' = swaptyp argstup_typ pannot in
-                let pat' =
-                  match args with
-                  | [arg] -> arg
-                  | _ -> P_aux (P_tup args, pannot')
-                in
-                let pexp' = construct_pexp (pat', guard, exp, annot) in
-                let aux_fun_id = prepend_id (fun_name ^ "_") constr_id in
-                let aux_funcl = FCL_aux (FCL_Funcl (aux_fun_id, pexp'), pannot') in
-                begin
-                  try
-                    let aux_clauses = Bindings.find aux_fun_id aux_funs in
-                    clauses,
-                    Bindings.add aux_fun_id (aux_clauses @ [aux_funcl]) aux_funs
-                  with Not_found ->
-                    let argpats, argexps = List.split (List.mapi
-                     (fun idx (P_aux (_,a) as pat) ->
-                        let id = match pat_var pat with
-                          | Some id -> id
-                          | None -> mk_id ("arg" ^ string_of_int idx)
-                        in
-                        P_aux (P_id id, a), E_aux (E_id id, a))
-                     args)
-                    in
-                    let pexp = construct_pexp
-                     (P_aux (P_app (constr_id, argpats), pannot),
-                      None,
-                      E_aux (E_app (aux_fun_id, argexps), annot),
-                      annot)
-                    in
-                    clauses @ [FCL_aux (FCL_Funcl (id, pexp), fannot)],
-                    Bindings.add aux_fun_id [aux_funcl] aux_funs
-                end
-             | _ -> clauses @ [clause], aux_funs)
+          let pat, guard, exp, annot = destruct_pexp pexp in
+          match pat with
+          | P_aux (P_app (ctor_id, args), pannot) ->
+             let ctor_typq, ctor_typ = Env.get_union_id ctor_id env in
+             let args = match args with [P_aux (P_tup args, _)] -> args | _ -> args in
+             let argstup_typ = tuple_typ (List.map typ_of_pat args) in
+             let pannot' = swaptyp argstup_typ pannot in
+             let pat' =
+               match args with
+               | [arg] -> arg
+               | _ -> P_aux (P_tup args, pannot')
+             in
+             let pexp' = construct_pexp (pat', guard, exp, annot) in
+             let aux_fun_id = prepend_id (fun_name ^ "_") ctor_id in
+             let aux_funcl = FCL_aux (FCL_Funcl (aux_fun_id, pexp'), pannot') in
+             begin
+               try
+                 let aux_clauses = Bindings.find aux_fun_id aux_funs in
+                 clauses,
+                 Bindings.add aux_fun_id (aux_clauses @ [(aux_funcl, ctor_typq, ctor_typ)]) aux_funs
+               with Not_found ->
+                 let argpats, argexps = List.split (List.mapi
+                                                      (fun idx (P_aux (_,a) as pat) ->
+                                                        let id = match pat_var pat with
+                                                          | Some id -> id
+                                                          | None -> mk_id ("arg" ^ string_of_int idx)
+                                                        in
+                                                        P_aux (P_id id, a), E_aux (E_id id, a))
+                                                      args)
+                 in
+                 let pexp = construct_pexp
+                              (P_aux (P_app (ctor_id, argpats), pannot),
+                               None,
+                               E_aux (E_app (aux_fun_id, argexps), annot),
+                               annot)
+                 in
+                 clauses @ [FCL_aux (FCL_Funcl (id, pexp), fannot)],
+                 Bindings.add aux_fun_id [(aux_funcl, ctor_typq, ctor_typ)] aux_funs
+             end
+          | _ -> clauses @ [clause], aux_funs)
         ([], Bindings.empty) clauses
     in
-    let add_aux_def id funcls defs =
-      let env, args_typ, ret_typ = match funcls with
-        | FCL_aux (FCL_Funcl (_, pexp), _) :: _ ->
+    let add_aux_def id aux_funs defs =
+      let funcls = List.map (fun (fcl, _, _) -> fcl) aux_funs in
+      let env, quants, args_typ, ret_typ = match aux_funs with
+        | (FCL_aux (FCL_Funcl (_, pexp), _), ctor_typq, ctor_typ) :: _ ->
            let pat, _, exp, _ = destruct_pexp pexp in
-           env_of exp, typ_of_pat pat, typ_of exp
+           let ctor_quants args_typ =
+             List.filter (fun qi -> KOptSet.subset (kopts_of_quant_item qi) (kopts_of_typ args_typ))
+                         (quant_items ctor_typq)
+           in
+           begin match ctor_typ with
+           | Typ_aux (Typ_fn ([Typ_aux (Typ_exist (kopts, nc, args_typ), _)], _, _), _) ->
+              env_of exp, ctor_quants args_typ @ List.map mk_qi_kopt kopts @ [mk_qi_nc nc], args_typ, typ_of exp
+           | Typ_aux (Typ_fn ([args_typ], _, _), _) -> env_of exp, ctor_quants args_typ, args_typ, typ_of exp
+           | _ ->
+              raise (Reporting.err_unreachable l __POS__
+                      ("Union constructor has non-function type: " ^ string_of_typ ctor_typ))
+           end
         | _ ->
            raise (Reporting.err_unreachable l __POS__
-             "rewrite_split_fun_constr_pats: empty auxiliary function")
+                   "rewrite_split_fun_constr_pats: empty auxiliary function")
       in
       let eff = List.fold_left
-        (fun eff (FCL_aux (FCL_Funcl (_, pexp), _)) ->
-           let _, _, exp, _ = destruct_pexp pexp in
-           union_effects eff (effect_of exp))
-        no_effect funcls
+                  (fun eff (FCL_aux (FCL_Funcl (_, pexp), _)) ->
+                    let _, _, exp, _ = destruct_pexp pexp in
+                    union_effects eff (effect_of exp))
+                  no_effect funcls
       in
       let fun_typ =
         (* Because we got the argument type from a pattern we need to
@@ -2107,27 +1770,9 @@ let rewrite_split_fun_constr_pats fun_name env (Defs defs) =
         | _ ->
            function_typ [args_typ] ret_typ eff
       in
-      let quant_new_kopts qis =
-        let quant_kopts = List.fold_left KOptSet.union KOptSet.empty (List.map kopts_of_quant_item qis) in
-        let typ_kopts = kopts_of_typ fun_typ in
-        let new_kopts = KOptSet.diff typ_kopts quant_kopts in
-        List.map mk_qi_kopt (KOptSet.elements new_kopts)
-      in
-      let typquant = match typquant with
-        | TypQ_aux (TypQ_tq qis, l) ->
-           let qis =
-             List.filter
-               (fun qi -> KOptSet.subset (kopts_of_quant_item qi) (kopts_of_typ fun_typ))
-               qis
-             @ quant_new_kopts qis
-           in
-           TypQ_aux (TypQ_tq qis, l)
-        | _ ->
-           TypQ_aux (TypQ_tq (List.map mk_qi_kopt (KOptSet.elements (kopts_of_typ fun_typ))), l)
-      in
       let val_spec =
         VS_aux (VS_val_spec
-          (mk_typschm typquant fun_typ, id, [], false),
+          (mk_typschm (mk_typquant quants) fun_typ, id, [], false),
           (Parse_ast.Unknown, empty_tannot))
       in
       let fundef = FD_aux (FD_function (r_o, t_o, e_o, funcls), fdannot) in
@@ -2287,41 +1932,6 @@ let rewrite_fix_val_specs env (Defs defs) =
   then *)
   Defs defs
   (* else Defs defs *)
-
-(* Turn constraints into numeric expressions with sizeof *)
-let rewrite_constraint =
-  let rec rewrite_nc env (NC_aux (nc_aux, l)) = mk_exp (rewrite_nc_aux l env nc_aux)
-  and rewrite_nc_aux l env = function
-    | NC_bounded_ge (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">=", mk_exp (E_sizeof n2))
-    | NC_bounded_le (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "<=", mk_exp (E_sizeof n2))
-    | NC_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "==", mk_exp (E_sizeof n2))
-    | NC_not_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "!=", mk_exp (E_sizeof n2))
-    | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "&", rewrite_nc env nc2)
-    | NC_or (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "|", rewrite_nc env nc2)
-    | NC_false -> E_lit (mk_lit L_false)
-    | NC_true -> E_lit (mk_lit L_true)
-    | NC_set (kid, []) -> E_lit (mk_lit (L_false))
-    | NC_set (kid, int :: ints) ->
-       let kid_eq kid int = nc_eq (nvar kid) (nconstant int) in
-       unaux_exp (rewrite_nc env (List.fold_left (fun nc int -> nc_or nc (kid_eq kid int)) (kid_eq kid int) ints))
-    | NC_app (f, [A_aux (A_bool nc, _)]) when string_of_id f = "not" ->
-       E_app (mk_id "not_bool", [rewrite_nc env nc])
-    | NC_app (f, args) ->
-       unaux_exp (rewrite_nc env (Env.expand_constraint_synonyms env (mk_nc (NC_app (f, args)))))
-    | NC_var v ->
-       (* Would be better to translate change E_sizeof to take a kid, then rewrite to E_sizeof *)
-       E_id (id_of_kid v)
-  in
-  let rewrite_e_aux (E_aux (e_aux, (l, _)) as exp) =
-    match e_aux with
-    | E_constraint nc ->
-       locate (fun _ -> gen_loc l) (check_exp (env_of exp) (rewrite_nc (env_of exp) nc) (atom_bool_typ nc))
-    | _ -> exp
-  in
-
-  let rewrite_e_constraint = { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
-
-  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_e_constraint) }
 
 let rewrite_type_union_typs rw_typ (Tu_aux (Tu_ty_id (typ, id), annot)) =
   Tu_aux (Tu_ty_id (rw_typ typ, id), annot)
@@ -5063,6 +4673,7 @@ let rewrite_defs_lem = [
   ("rewrite_undefined", rewrite_undefined_if_gen false);
   ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("remove_not_pats", rewrite_defs_not_pats);
+  ("remove_impossible_int_cases", Constant_propagation.remove_impossible_int_cases);
   ("pat_lits", rewrite_defs_pat_lits rewrite_lit_lem);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -5075,13 +4686,11 @@ let rewrite_defs_lem = [
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
   ("nexp_ids", rewrite_defs_nexp_ids);
   ("fix_val_specs", rewrite_fix_val_specs);
-  ("split_execute", rewrite_split_fun_constr_pats "execute");
+  ("split_execute", rewrite_split_fun_ctor_pats "execute");
   ("recheck_defs", recheck_defs);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
-  (* ("constraint", rewrite_constraint); *)
   (* ("remove_assert", rewrite_defs_remove_assert); *)
   ("top_sort_defs", fun _ -> top_sort_defs);
-  ("trivial_sizeof", rewrite_trivial_sizeof);
   (* ("sizeof", rewrite_sizeof); *)
   ("early_return", rewrite_defs_early_return);
   ("fix_val_specs", rewrite_fix_val_specs);
@@ -5106,6 +4715,7 @@ let rewrite_defs_coq = [
   ("rewrite_undefined", rewrite_undefined_if_gen true);
   ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("remove_not_pats", rewrite_defs_not_pats);
+  ("remove_impossible_int_cases", Constant_propagation.remove_impossible_int_cases);
   ("pat_lits", rewrite_defs_pat_lits rewrite_lit_lem);
   ("vector_concat_assignments", rewrite_vector_concat_assignments);
   ("tuple_assignments", rewrite_tuple_assignments);
@@ -5118,16 +4728,13 @@ let rewrite_defs_coq = [
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
   ("nexp_ids", rewrite_defs_nexp_ids);
   ("fix_val_specs", rewrite_fix_val_specs);
-  ("split_execute", rewrite_split_fun_constr_pats "execute");
+  ("split_execute", rewrite_split_fun_ctor_pats "execute");
   ("minimise_recursive_functions", minimise_recursive_functions);
   ("recheck_defs", recheck_defs);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
-  (* ("constraint", rewrite_constraint); *)
   (* ("remove_assert", rewrite_defs_remove_assert); *)
   ("move_termination_measures", move_termination_measures);
   ("top_sort_defs", fun _ -> top_sort_defs);
-  ("trivial_sizeof", rewrite_trivial_sizeof);
-  ("sizeof", rewrite_sizeof);
   ("early_return", rewrite_defs_early_return);
   (* merge funcls before adding the measure argument so that it doesn't
      disappear into an internal pattern match *)
@@ -5201,7 +4808,7 @@ let rewrite_defs_c = [
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
-  ("split_execute", if_separate (rewrite_split_fun_constr_pats "execute"));
+  ("split_execute", if_separate (rewrite_split_fun_ctor_pats "execute"));
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("merge_function_clauses", merge_funcls);
   ("recheck_defs", fun _ -> Optimize.recheck)

@@ -10,6 +10,7 @@ Require Export Sumbool.
 Require Export DecidableClass.
 Require Import Eqdep_dec.
 Require Export Zeuclid.
+Require Import Psatz.
 Import ListNotations.
 
 Open Scope Z.
@@ -1037,27 +1038,31 @@ Ltac unbool_comparisons :=
   | H:context [generic_eq _ _ = false] |- _ => apply generic_eq_false in H
   | H:context [generic_neq _ _ = true] |- _ => apply generic_neq_true in H
   | H:context [generic_neq _ _ = false] |- _ => apply generic_neq_false in H
+  | H:context [_ <> true] |- _ => rewrite Bool.not_true_iff_false in H
+  | H:context [_ <> false] |- _ => rewrite Bool.not_false_iff_true in H
   end.
 Ltac unbool_comparisons_goal :=
   repeat match goal with
-  | |- context [Z.geb _ _] => rewrite Z.geb_leb
-  | |- context [Z.gtb _ _] => rewrite Z.gtb_ltb
-  | |- context [Z.leb _ _ = true] => rewrite Z.leb_le
-  | |- context [Z.ltb _ _ = true] => rewrite Z.ltb_lt
-  | |- context [Z.eqb _ _ = true] => rewrite Z.eqb_eq
-  | |- context [Z.leb _ _ = false] => rewrite Z.leb_gt
-  | |- context [Z.ltb _ _ = false] => rewrite Z.ltb_ge
-  | |- context [Z.eqb _ _ = false] => rewrite Z.eqb_neq
-  | |- context [orb _ _ = true] => rewrite Bool.orb_true_iff
-  | |- context [orb _ _ = false] => rewrite Bool.orb_false_iff
-  | |- context [andb _ _ = true] => rewrite Bool.andb_true_iff
-  | |- context [andb _ _ = false] => rewrite Bool.andb_false_iff
-  | |- context [negb _ = true] => rewrite Bool.negb_true_iff
-  | |- context [negb _ = false] => rewrite Bool.negb_false_iff
+  | |- context [Z.geb _ _] => setoid_rewrite Z.geb_leb
+  | |- context [Z.gtb _ _] => setoid_rewrite Z.gtb_ltb
+  | |- context [Z.leb _ _ = true] => setoid_rewrite Z.leb_le
+  | |- context [Z.ltb _ _ = true] => setoid_rewrite Z.ltb_lt
+  | |- context [Z.eqb _ _ = true] => setoid_rewrite Z.eqb_eq
+  | |- context [Z.leb _ _ = false] => setoid_rewrite Z.leb_gt
+  | |- context [Z.ltb _ _ = false] => setoid_rewrite Z.ltb_ge
+  | |- context [Z.eqb _ _ = false] => setoid_rewrite Z.eqb_neq
+  | |- context [orb _ _ = true] => setoid_rewrite Bool.orb_true_iff
+  | |- context [orb _ _ = false] => setoid_rewrite Bool.orb_false_iff
+  | |- context [andb _ _ = true] => setoid_rewrite Bool.andb_true_iff
+  | |- context [andb _ _ = false] => setoid_rewrite Bool.andb_false_iff
+  | |- context [negb _ = true] => setoid_rewrite Bool.negb_true_iff
+  | |- context [negb _ = false] => setoid_rewrite Bool.negb_false_iff
   | |- context [generic_eq _ _ = true] => apply generic_eq_true
   | |- context [generic_eq _ _ = false] => apply generic_eq_false
   | |- context [generic_neq _ _ = true] => apply generic_neq_true
   | |- context [generic_neq _ _ = false] => apply generic_neq_false
+  | |- context [_ <> true] => rewrite Bool.not_true_iff_false
+  | |- context [_ <> false] => rewrite Bool.not_false_iff_true
   end.
 
 (* Split up dependent pairs to get at proofs of properties *)
@@ -1190,6 +1195,13 @@ Ltac fill_in_evar_eq :=
    let y := eval cbn in y in*)
    idtac "Warning: unknown equality constraint"; constructor; exact (eq_refl _ : x = y) end.
 
+Ltac bruteforce_bool_exists :=
+match goal with
+| |- exists _ : bool,_ => solve [ exists true; bruteforce_bool_exists
+                                | exists false; bruteforce_bool_exists ]
+| _ => tauto
+end.
+
 Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
@@ -1208,13 +1220,17 @@ prepare_for_solver;
  | constructor; eauto 3 with zarith sail
    (* The datatypes hints give us some list handling, esp In *)
  | constructor; drop_exists; eauto 3 with datatypes zarith sail
+ | match goal with |- context [Z.mul] => constructor; nia end
    (* Booleans - and_boolMP *)
- | match goal with |- ArithFact (forall l r:bool, _ -> _ -> exists _, _) => 
-     constructor; intros l r H1 H2;
-     solve [exists l; destruct l; intuition | exists r; destruct l; intuition]
+ | match goal with |- ArithFact (forall l r:bool, _ -> _ -> exists _ : bool, _) => 
+     constructor; intros [|] [|] H1 H2;
+     repeat match goal with H:?X = ?X -> _ |- _ => specialize (H eq_refl) end;
+     repeat match goal with H:@ex _ _ |- _ => destruct H end;
+     bruteforce_bool_exists
    end
- | match goal with |- context [@eq _ _ _] =>
-     constructor; intuition
+ | match goal with |- context [@eq bool _ _] =>
+     (* Don't use auto for the fallback to keep runtime down *)
+     firstorder fail
    end
  | constructor; idtac "Unable to solve constraint"; dump_context; fail
  ].

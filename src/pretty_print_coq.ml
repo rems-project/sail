@@ -652,7 +652,7 @@ and doc_arithfact ctxt ?(exists = []) ?extra nc =
   let prop = doc_nc_prop ctxt nc in
   let prop = match extra with
     | None -> prop
-    | Some pp -> separate space [pp; string "/\\"; prop]
+    | Some pp -> separate space [pp; string "/\\"; parens prop]
   in
   let prop =
     match exists with
@@ -665,11 +665,11 @@ and doc_arithfact ctxt ?(exists = []) ?extra nc =
 and doc_nc_prop ?(top = true) ctx nc =
   let rec l85 (NC_aux (nc,_) as nc_full) =
   match nc with
-  | NC_or (nc1, nc2) -> doc_op (string "\\/") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
+  | NC_or (nc1, nc2) -> doc_op (string "\\/") (l80 nc1) (l85 nc2)
   | _ -> l80 nc_full
   and l80 (NC_aux (nc,_) as nc_full) =
   match nc with
-  | NC_and (nc1, nc2) -> doc_op (string "/\\") (doc_nc_prop ctx nc1) (doc_nc_prop ctx nc2)
+  | NC_and (nc1, nc2) -> doc_op (string "/\\") (l70 nc1) (l80 nc2)
   | _ -> l70 nc_full
   and l70 (NC_aux (nc,_) as nc_full) =
   match nc with
@@ -1200,11 +1200,12 @@ let doc_exp, doc_let =
          wrap_parens (string "build_ex" ^/^ epp)
     in
     let construct_dep_pairs ?(rawbools=false) env =
-      let rec aux want_parens (E_aux (e,_) as exp) (Typ_aux (t,_) as typ) =
-        match e,t with
-        | E_tuple exps, Typ_tup typs
-        | E_cast (_, E_aux (E_tuple exps,_)), Typ_tup typs
+      let rec aux want_parens (E_aux (e,_) as exp) typ =
+        match e with
+        | E_tuple exps
+        | E_cast (_, E_aux (E_tuple exps,_))
           ->
+           let typs = List.map general_typ_of exps in
            parens (separate (string ", ") (List.map2 (aux false) exps typs))
         | _ ->
            let typ' = expand_range_type (Env.expand_synonyms (env_of exp) typ) in
@@ -1484,6 +1485,7 @@ let doc_exp, doc_let =
               Util.list_mapi (fun i exp -> mk_id ("#coq#arg" ^ string_of_int i),
                                            general_typ_of exp) args
             in
+            let () = debug ctxt (lazy (" arg types: " ^ String.concat ", " (List.map (fun (_,ty) -> string_of_typ ty) dummy_args))) in
             let dummy_exp = mk_exp (E_app (f, List.map (fun (id,_) -> mk_exp (E_id id)) dummy_args)) in
             let dummy_env = List.fold_left (fun env (id,typ) -> Env.add_local id (Immutable,typ) env) env dummy_args in
             let inst_exp =
@@ -1498,7 +1500,9 @@ let doc_exp, doc_let =
                type inferred when we know the target type.
                TODO: there are probably some edge cases where this won't pick up a need
                to cast. *)
-            | exception _ -> instantiation_of full_exp
+            | exception _ ->
+               (debug ctxt (lazy (" unable to infer function instantiation without return type " ^ string_of_typ (typ_of full_exp)));
+                instantiation_of full_exp)
           in
           let inst = KBindings.fold (fun k u m -> KBindings.add (KBindings.find (orig_kid k) tqs_map) u m) inst KBindings.empty in
           let () = debug ctxt (lazy (" instantiations: " ^ String.concat ", " (List.map (fun (kid,tyarg) -> string_of_kid kid ^ " => " ^ string_of_typ_arg tyarg) (KBindings.bindings inst)))) in
@@ -1842,29 +1846,6 @@ let doc_exp, doc_let =
             let epp = liftR (separate space [string "assert_exp'"; expY assert_e1; expY assert_e2]) in
             let epp = infix 0 1 (string ">>= fun _ =>") epp (top_exp new_ctxt false e2) in
             if aexp_needed then parens (align epp) else align epp
-         (* Special case because we don't handle variables with nested existentials well yet.
-            TODO: check that id1 is not used in e2' *)
-         | ((P_aux (P_id id1,_)) | P_aux (P_typ (_, P_aux (P_id id1,_)),_)),
-           _,
-           (E_aux (E_let (LB_aux (LB_val (pat', E_aux (E_cast (typ', E_aux (E_id id2,_)),_)),_), e2'),_))
-             when Id.compare id1 id2 == 0 ->
-            let m_str, tail_pp = if ctxt.early_ret then "MR",[string "_"] else "M",[] in
-            let e1_pp = parens (separate space ([expY e1; colon;
-                                                string m_str;
-                                                parens (doc_typ ctxt typ')]@tail_pp)) in
-            let middle =
-              match pat' with
-              | P_aux (P_id id,_)
-                   when Util.is_none (is_auto_decomposed_exist ctxt (env_of e1) (typ_of e1)) &&
-                          not (is_enum (env_of e1) id) ->
-                 separate space [string ">>= fun"; doc_id id; bigarrow]
-              | P_aux (P_typ (typ, P_aux (P_id id,_)),_)
-                   when Util.is_none (is_auto_decomposed_exist ctxt (env_of e1) typ) &&
-                          not (is_enum (env_of e1) id) ->
-                 separate space [string ">>= fun"; doc_id id; colon; doc_typ ctxt typ; bigarrow]              | _ ->
-                 separate space [string ">>= fun"; squote ^^ doc_pat ctxt true true (pat', typ'); bigarrow]
-            in
-            infix 0 1 middle e1_pp (top_exp new_ctxt false e2')
          | _ ->
             let epp =
               let middle =
@@ -2089,6 +2070,7 @@ let rec doc_range ctxt (BF_aux(r,_)) = match r with
   | BF_concat(ir1,ir2) -> (doc_range ctxt ir1) ^^ comma ^^ (doc_range ctxt ir2)
  *)
 
+(* TODO: check use of empty_ctxt below *)
 let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
      let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
@@ -2097,6 +2079,14 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
                         doc_typquant_items empty_ctxt parens typq;
                         colon; string "Type"])
        (doc_typschm empty_ctxt false typschm) ^^ dot
+  | TD_abbrev(id,typq,A_aux (A_nexp nexp,_)) ->
+     let idpp = doc_id_type id in
+     doc_op coloneq
+       (separate space [string "Definition"; idpp;
+                        doc_typquant_items empty_ctxt parens typq;
+                        colon; string "Z"])
+       (doc_nexp empty_ctxt nexp) ^^ dot ^^ hardline ^^
+     separate space [string "Hint Unfold"; idpp; colon; string "sail."]
   | TD_abbrev _ -> empty (* TODO? *)
   | TD_bitfield _ -> empty (* TODO? *)
   | TD_record(id,typq,fs,_) ->
@@ -2148,10 +2138,11 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
         string "Defined." ^^ hardline
       else empty
     in
+    let resetimplicit = separate space [string "Arguments"; id_pp; colon; string "clear implicits."] in
     doc_op coloneq
-           (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt parens typq])
+           (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt braces typq])
            ((*doc_typquant typq*) (braces (space ^^ align fs_doc ^^ space))) ^^
-      dot ^^ hardline ^^ eq_pp ^^ updates_pp
+      dot ^^ hardline ^^ resetimplicit ^^ hardline ^^ eq_pp ^^ updates_pp
   | TD_variant(id,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
@@ -2779,7 +2770,7 @@ try
   (* let regtypes = find_regtypes d in *)
   let state_ids =
     State.generate_regstate_defs true defs
-    |> Initial_check.val_spec_ids
+    |> val_spec_ids
   in
   let is_state_def = function
     | DEF_spec vs -> IdSet.mem (id_of_val_spec vs) state_ids

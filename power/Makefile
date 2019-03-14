@@ -1,7 +1,7 @@
 SAIL:=../src/sail.native
 LEM:=../../lem/lem
 
-SOURCES:=power.sail ../etc/regfp.sail power_regfp.sail
+SOURCES:=power.sail ../lib/regfp.sail power_regfp.sail
 
 
 all: power.lem power.ml power_embed.lem

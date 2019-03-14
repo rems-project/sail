@@ -246,7 +246,10 @@ void mult_vec(lbits *rop, const lbits op1, const lbits op2);
 void zeros(lbits *rop, const sail_int op);
 
 void zero_extend(lbits *rop, const lbits op, const sail_int len);
+fbits fast_zero_extend(const sbits op, const uint64_t n);
 void sign_extend(lbits *rop, const lbits op, const sail_int len);
+fbits fast_sign_extend(const fbits op, const uint64_t n, const uint64_t m);
+fbits fast_sign_extend2(const sbits op, const uint64_t m);
 
 void length_lbits(sail_int *rop, const lbits op);
 
@@ -267,6 +270,7 @@ fbits bitvector_access(const lbits op, const sail_int n_mpz);
 void sail_unsigned(sail_int *rop, const lbits op);
 void sail_signed(sail_int *rop, const lbits op);
 
+mach_int fast_signed(const fbits, const uint64_t);
 mach_int fast_unsigned(const fbits);
 
 void append(lbits *rop, const lbits op1, const lbits op2);
@@ -286,11 +290,18 @@ void set_slice_int(sail_int *rop,
 		   const sail_int start_mpz,
 		   const lbits slice);
 
+void update_lbits(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit);
+
 void vector_update_subrange_lbits(lbits *rop,
 				      const lbits op,
 				      const sail_int n_mpz,
 				      const sail_int m_mpz,
 				      const lbits slice);
+
+fbits fast_update_subrange(const fbits op,
+			   const mach_int n,
+			   const mach_int m,
+			   const fbits slice);
 
 void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz);
 

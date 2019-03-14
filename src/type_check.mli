@@ -56,19 +56,21 @@ module Big_int = Nat_big_num
 
 (** [opt_tc_debug] controls the verbosity of the type checker. 0 is
    silent, 1 prints a tree of the type derivation and 2 is like 1 but
-   with much more debugging information. *)
+   with much more debugging information. 3 is the highest level, and
+   is even more verbose still. *)
 val opt_tc_debug : int ref
 
-(** [opt_no_effects] turns of the effect checking. This can break
-   re-writer passes, so it should only be used for debugging. *)
+(** [opt_no_effects] turns of the effect checking. Effects will still
+   be propagated as normal however. *)
 val opt_no_effects : bool ref
 
 (** [opt_no_lexp_bounds_check] turns of the bounds checking in vector
    assignments in l-expressions. *)
 val opt_no_lexp_bounds_check : bool ref
 
-(** opt_expand_valspec expands typedefs in valspecs during type check.
-   We prefer not to do it for latex output but it is otherwise a good idea. *)
+(** [opt_expand_valspec] expands typedefs in valspecs during type
+   checking. We prefer not to do it for latex output but it is
+   otherwise a good idea. *)
 val opt_expand_valspec : bool ref
 
 (** Linearize cases involving power where we would otherwise require
@@ -204,9 +206,11 @@ module Env : sig
      node. *)
   val no_casts : t -> t
 
-  (* Is casting allowed by the environment? *)
+  (** Is casting allowed by the environment? *)
   val allow_casts : t -> bool
 
+  (** Note: Likely want use Type_check.initial_env instead. The empty
+     environment is lacking even basic builtins. *)
   val empty : t
 
   val pattern_completeness_ctx : t -> Pattern_completeness.ctx
@@ -218,16 +222,11 @@ module Env : sig
   val set_prover : (t -> n_constraint -> bool) option -> t -> t
 end
 
+(** {4 Environment helper functions} *)
+
 (** Push all the type variables and constraints from a typquant into
    an environment *)
 val add_typquant : Ast.l -> typquant -> Env.t -> Env.t
-
-(** Safely destructure an existential type. Returns None if the type
-   is not existential. This function will pick a fresh name for the
-   existential to ensure that no name-clashes occur. The "plain"
-   version does not treat numeric types as existentials. *)
-val destruct_exist_plain : ?name:string option -> typ -> (kinded_id list * n_constraint * typ) option
-val destruct_exist : ?name:string option -> typ -> (kinded_id list * n_constraint * typ) option
 
 val add_existential : Ast.l -> kinded_id list -> n_constraint -> Env.t -> Env.t
 
@@ -240,10 +239,10 @@ val add_existential : Ast.l -> kinded_id list -> n_constraint -> Env.t -> Env.t
    not of this form. *)
 val orig_kid : kid -> kid
 
-(* Vector with default order. *)
+(** Vector with default order as set in environment by [default Order ord] *)
 val dvector_typ : Env.t -> nexp -> typ -> typ
 
-val exist_typ : (kid -> n_constraint) -> (kid -> typ) -> typ
+(** {2 Type annotations} *)
 
 (** The type of type annotations *)
 type tannot
@@ -282,7 +281,7 @@ val strip_lexp : 'a lexp -> unit lexp
 val strip_mpexp : 'a mpexp -> unit mpexp
 val strip_mapcl : 'a mapcl -> unit mapcl
 
-(* Strip location information from types for comparison purposes *)
+(** Strip location information from types for comparison purposes *)
 val strip_typ : typ -> typ
 val strip_typq : typquant -> typquant
 val strip_id : id -> id
@@ -376,6 +375,15 @@ val expected_typ_of : Ast.l * tannot -> typ option
 
 (** {2 Utilities } *)
 
+(** Safely destructure an existential type. Returns None if the type
+   is not existential. This function will pick a fresh name for the
+   existential to ensure that no name-collisions occur, although we
+   can optionally suggest a name for the case where it would not cause
+   a collision. The "plain" version does not treat numeric types
+   (i.e. range, int, nat) as existentials. *)
+val destruct_exist_plain : ?name:string option -> typ -> (kinded_id list * n_constraint * typ) option
+val destruct_exist : ?name:string option -> typ -> (kinded_id list * n_constraint * typ) option
+
 val destruct_atom_nexp : Env.t -> typ -> nexp option
 
 val destruct_atom_bool : Env.t -> typ -> n_constraint option
@@ -385,6 +393,10 @@ val destruct_range : Env.t -> typ -> (kid list * n_constraint * nexp * nexp) opt
 val destruct_numeric : ?name:string option -> typ -> (kid list * n_constraint * nexp) option
 
 val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
+
+(** Construct an existential type with a guaranteed fresh
+   identifier. *)
+val exist_typ : (kid -> n_constraint) -> (kid -> typ) -> typ
 
 val subst_unifiers : typ_arg KBindings.t -> typ -> typ
 
@@ -396,6 +408,7 @@ val subst_unifiers : typ_arg KBindings.t -> typ -> typ
    typ2 (occurs check). *)
 val unify : l -> Env.t -> KidSet.t -> typ -> typ -> typ_arg KBindings.t
 
+(** Check if two types are alpha equivalent *)
 val alpha_equivalent : Env.t -> typ -> typ -> bool
 
 (** Throws Invalid_argument if the argument is not a E_app expression *)
@@ -414,7 +427,7 @@ val propagate_pexp_effect : tannot pexp -> tannot pexp * effect
 
 val big_int_of_nexp : nexp -> Big_int.num option
 
-(** {2 Checking full AST} *)
+(** {2 Checking full ASTs} *)
 
 (** Fully type-check an AST
 

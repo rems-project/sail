@@ -62,6 +62,9 @@ let optimize_constant_fold = ref false
 let rec fexp_of_ctor (field, value) =
   FE_aux (FE_Fexp (mk_id field, exp_of_value value), no_annot)
 
+(* The interpreter will return a value for each folded expression, so
+   we must convert that back to expression to re-insert it in the AST
+   *)
 and exp_of_value =
   let open Value in
   function
@@ -107,6 +110,32 @@ let safe_primops =
       "Elf_loader.elf_entry";
       "Elf_loader.elf_tohost"
     ]
+
+(** We can specify a list of identifiers that we want to remove from
+   the final AST here. This is useful for removing tracing features in
+   optimized builds, e.g. for booting an OS as fast as possible.
+
+   Basically we just do this by mapping
+
+   f(x, y, z) -> ()
+
+   when f is in the list of identifiers to be mapped to unit. The
+   advantage of doing it like this is if x, y, and z are
+   computationally expensive then we remove them also. String
+   concatentation is very expensive at runtime so this is something we
+   really want when cutting out tracing features. Obviously it's
+   important that they don't have any meaningful side effects, and
+   that f does actually have type unit.
+*)
+let opt_fold_to_unit = ref []
+
+let fold_to_unit id =
+  let remove =
+    !opt_fold_to_unit
+    |> List.map mk_id
+    |> List.fold_left (fun m id -> IdSet.add id m) IdSet.empty
+  in
+  IdSet.mem id remove
 
 let rec is_constant (E_aux (e_aux, _)) =
   match e_aux with
@@ -188,6 +217,9 @@ let rec rewrite_constant_function_calls' env ast =
 
   let rw_funcall e_aux annot =
     match e_aux with
+    | E_app (id, args) when fold_to_unit id ->
+       ok (); E_aux (E_lit (L_aux (L_unit, fst annot)), annot)
+
     | E_app (id, args) when List.for_all is_constant args ->
        evaluate e_aux annot
 

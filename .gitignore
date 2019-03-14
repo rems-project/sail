@@ -12,6 +12,8 @@ a.out
 _build/
 _sbuild/
 
+z3_problems
+
 # HOL4
 
 .HOLMK

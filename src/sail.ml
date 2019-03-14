@@ -63,12 +63,14 @@ let opt_print_tofrominterp = ref false
 let opt_tofrominterp_output_dir : string option ref = ref None
 let opt_print_ocaml = ref false
 let opt_print_c = ref false
+let opt_print_ir = ref false
 let opt_print_latex = ref false
 let opt_print_coq = ref false
 let opt_print_cgen = ref false
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
+let opt_specialize_c = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
@@ -142,6 +144,9 @@ let options = Arg.align ([
   ( "-marshal",
     Arg.Tuple [Arg.Set opt_marshal_defs; Arg.Set Initial_check.opt_undefined_gen],
     " OCaml-marshal out the rewritten AST to a file");
+  ( "-ir",
+    Arg.Set opt_print_ir,
+    " print intermediate representation");
   ( "-c",
     Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
@@ -166,6 +171,12 @@ let options = Arg.align ([
   ( "-c_extra_args",
     Arg.String (fun args -> C_backend.opt_extra_arguments := Some args),
     "<arguments> supply extra argument to every generated C function call" );
+  ( "-c_specialize",
+    Arg.Set opt_specialize_c,
+    " specialize integer arguments in C output");
+  ( "-c_fold_unit",
+    Arg.String (fun str -> Constant_fold.opt_fold_to_unit := Util.split_on_char ',' str),
+    " remove comma separated list of functions from C output, replacing them with unit");
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an ELF file so that it can be executed by compiled C code");
@@ -187,11 +198,8 @@ let options = Arg.align ([
     Arg.Set C_backend.opt_static,
     " make generated C functions static");
   ( "-trace",
-    Arg.Tuple [Arg.Set C_backend.opt_trace; Arg.Set Ocaml_backend.opt_trace_ocaml],
+    Arg.Tuple [Arg.Set Ocaml_backend.opt_trace_ocaml],
     " instrument output with tracing");
-  ( "-smt_trace",
-    Arg.Tuple [Arg.Set C_backend.opt_smt_trace],
-    " instrument output with tracing for SMT");
   ( "-cgen",
     Arg.Set opt_print_cgen,
     " generate CGEN source");
@@ -297,7 +305,7 @@ let options = Arg.align ([
     Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0)),
     "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
   ( "-ddump_flow_graphs",
-    Arg.Set C_backend.opt_debug_flow_graphs,
+    Arg.Set Jib_compile.opt_debug_flow_graphs,
     " (debug) dump flow analysis for Sail functions when compiling to C");
   ( "-dtc_verbose",
     Arg.Int (fun verbosity -> Type_check.opt_tc_debug := verbosity),
@@ -315,7 +323,7 @@ let options = Arg.align ([
     Arg.Set Initial_check.opt_magic_hash,
     " (debug) allow special character # in identifiers");
   ( "-dfunction",
-    Arg.String (fun f -> C_backend.opt_debug_function := f),
+    Arg.String (fun f -> Jib_compile.opt_debug_function := f),
     " (debug) print debugging output for a single function");
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
@@ -443,10 +451,31 @@ let main() =
        then
          let ast_c = rewrite_ast_c type_envs ast in
          let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
-         (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in *)
+         let ast_c, type_envs =
+           if !opt_specialize_c then
+             Specialize.(specialize' 2 int_specialization ast_c type_envs)
+           else
+             ast_c, type_envs
+         in
          let output_chan = match !opt_file_out with Some f -> open_out (f ^ ".c") | None -> stdout in
          Util.opt_warnings := true;
-         C_backend.compile_ast (C_backend.initial_ctx type_envs) output_chan (!opt_includes_c) ast_c;
+         C_backend.compile_ast type_envs output_chan (!opt_includes_c) ast_c;
+         close_out output_chan
+       else ());
+      (if !(opt_print_ir)
+       then
+         let ast_c = rewrite_ast_c type_envs ast in
+         let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
+         let ast_c, type_envs = Specialize.(specialize' 2 int_specialization ast_c type_envs) in
+         let output_chan =
+           match !opt_file_out with
+           | Some f -> Util.opt_colors := false; open_out (f ^ ".ir.sail")
+           | None -> stdout
+         in
+         Util.opt_warnings := true;
+         let cdefs, _ = C_backend.jib_of_ast type_envs ast_c in
+         let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_cdef cdefs) in
+         output_string output_chan (str ^ "\n");
          close_out output_chan
        else ());
       (if !(opt_print_cgen)

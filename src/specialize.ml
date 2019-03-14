@@ -52,6 +52,8 @@ open Ast
 open Ast_util
 open Rewriter
 
+let opt_ddump_spec_ast = ref None
+   
 let is_typ_ord_arg = function
   | A_aux (A_typ _, _) -> true
   | A_aux (A_order _, _) -> true
@@ -254,7 +256,7 @@ let rec instantiations_of spec id ast =
   !instantiations
 
 let rec rewrite_polymorphic_calls spec id ast =
-  let vs_ids = Initial_check.val_spec_ids ast in
+  let vs_ids = val_spec_ids ast in
 
   let rewrite_e_aux = function
     | E_aux (E_app (id', args), annot) as exp when Id.compare id id' = 0 ->
@@ -335,7 +337,8 @@ and remove_implicit_arg (A_aux (aux, l)) =
 let kopt_arg = function
   | KOpt_aux (KOpt_kind (K_aux (K_int, _), kid), _) -> arg_nexp (nvar kid)
   | KOpt_aux (KOpt_kind (K_aux (K_type,_), kid), _) -> arg_typ (mk_typ (Typ_var kid))
-  | _ -> failwith "oh no"
+  | KOpt_aux (KOpt_kind (K_aux (K_bool, _), kid), _) -> arg_bool (nc_var kid)
+  | KOpt_aux (KOpt_kind (K_aux (K_order, _), kid), _) -> arg_order (mk_ord (Ord_var kid))
 
 (* For numeric type arguments we have to be careful not to run into a
    situation where we have an instantiation like
@@ -492,7 +495,7 @@ let initial_calls = IdSet.of_list
 
 let remove_unused_valspecs ?(initial_calls=initial_calls) env ast =
   let calls = ref initial_calls in
-  let vs_ids = Initial_check.val_spec_ids ast in
+  let vs_ids = val_spec_ids ast in
 
   let inspect_exp = function
     | E_aux (E_app (call, _), _) as exp ->
@@ -565,6 +568,15 @@ let specialize_ids spec ids ast =
       (1, ast) (IdSet.elements ids)
   in
   let ast = reorder_typedefs ast in
+  begin match !opt_ddump_spec_ast with
+  | Some (f, i) ->
+     let filename = f ^ "_spec_" ^ string_of_int i ^ ".sail" in
+     let out_chan = open_out filename in
+     Pretty_print_sail.pp_defs out_chan ast;
+     close_out out_chan;
+     opt_ddump_spec_ast := Some (f, i + 1)
+  | None -> ()
+  end;
   let ast, _ = Type_error.check Type_check.initial_env ast in
   let ast =
     List.fold_left (fun ast id -> rewrite_polymorphic_calls spec id ast) ast (IdSet.elements ids)

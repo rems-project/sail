@@ -210,6 +210,13 @@ enum SystemHintOp =
 enum PSTATEField = 
   {PSTATEField_DAIFSet, PSTATEField_DAIFClr, PSTATEField_SP}
 
+enum SystemOp = {Sys_AT, Sys_DC, Sys_IC, Sys_TLBI, Sys_SYS}
+
+enum DCOp = {IVAC, ISW, CSW, CISW, ZVA, CVAC, CVAU, CIVAC}
+
+enum ICOp = {IALLUIS, IALLU, IVAU}
+
+
 val rPC : unit -> bits(64) effect {rreg}
 val rSP : forall 'N, 'N in {8,16,32,64}. implicit('N) -> bits('N) effect {rreg,escape}
 val wX : forall 'N, 'N in {8,16,32,64}. (reg_index,bits('N)) -> unit effect {wreg}

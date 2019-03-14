@@ -999,7 +999,7 @@ let ocaml_compile spec defs generator_types =
     ignore(Unix.system ("cp -r " ^ sail_dir ^ "/lib/myocamlbuild_coverage.ml myocamlbuild.ml"));
   ocaml_pp_defs out_chan defs generator_types;
   close_out out_chan;
-  if IdSet.mem (mk_id "main") (Initial_check.val_spec_ids defs)
+  if IdSet.mem (mk_id "main") (val_spec_ids defs)
   then
     begin
       print_endline "Generating main";

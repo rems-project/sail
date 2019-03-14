@@ -74,16 +74,16 @@ full: sail lib doc
 ast.lem: ../language/sail.ott
 	ott -sort false -generate_aux_rules true -o ast.lem -picky_multiple_parses true ../language/sail.ott
 
-bytecode.lem: ../language/bytecode.ott ast.lem
-	ott -sort false -generate_aux_rules true -o bytecode.lem -picky_multiple_parses true ../language/bytecode.ott
+jib.lem: ../language/jib.ott ast.lem
+	ott -sort false -generate_aux_rules true -o jib.lem -picky_multiple_parses true ../language/jib.ott
 
 ast.ml: ast.lem
 	lem -ocaml ast.lem
 	sed -i.bak -f ast.sed ast.ml
 
-bytecode.ml: bytecode.lem
-	lem -ocaml bytecode.lem -lib . -lib gen_lib/
-	sed -i.bak -f ast.sed bytecode.ml
+jib.ml: jib.lem
+	lem -ocaml jib.lem -lib . -lib gen_lib/
+	sed -i.bak -f ast.sed jib.ml
 
 manifest.ml:
 	echo "(* Generated file -- do not edit. *)" > manifest.ml
@@ -99,19 +99,19 @@ else
 	echo let version=\"$(shell grep '^version:' ../opam | grep -o -E '"[^"]+"')\" >> manifest.ml
 endif
 
-sail: ast.ml bytecode.ml manifest.ml
+sail: ast.ml jib.ml manifest.ml
 	ocamlbuild -use-ocamlfind sail.native sail_lib.cma sail_lib.cmxa
 
-isail: ast.ml bytecode.ml manifest.ml
+isail: ast.ml jib.ml manifest.ml
 	ocamlbuild -use-ocamlfind isail.native sail_lib.cma sail_lib.cmxa libsail.cma libsail.cmxa
 
 
-coverage: ast.ml bytecode.ml manifest.ml
+coverage: ast.ml jib.ml manifest.ml
 	BISECT_COVERAGE=YES ocamlbuild -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' isail.native
 
 sail.native: sail
 
-sail.byte: ast.ml bytecode.ml manifest.ml
+sail.byte: ast.ml jib.ml manifest.ml
 	ocamlbuild -use-ocamlfind -cflag -g sail.byte
 
 isail.byte: ast.ml bytecode.ml share_directory.ml
@@ -136,9 +136,9 @@ clean:
 	-rm -f ast.ml
 	-rm -f ast.lem
 	-rm -f ast.ml.bak
-	-rm -f bytecode.ml
-	-rm -f bytecode.lem
-	-rm -f bytecode.ml.bak
+	-rm -f jib.ml
+	-rm -f jib.lem
+	-rm -f jib.ml.bak
 	-rm -f manifest.ml
 
 doc:

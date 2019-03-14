@@ -11,6 +11,7 @@ true: -traverse, debug, use_menhir
 <**/*.m{l,li}>: package(lem), package(base64)
 
 <gen_lib>: include
+<jib>: include
 <pprint> or <pprint/src>: include
 
 # disable partial match and unused variable warnings

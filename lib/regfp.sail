@@ -93,6 +93,16 @@ enum trans_kind = {
   Transaction_abort
 }
 
+/* cache maintenance instructions */
+enum cache_op_kind = {
+  /* AArch64 DC */
+  Cache_op_D_IVAC, Cache_op_D_ISW,  Cache_op_D_CSW,  Cache_op_D_CISW,
+  Cache_op_D_ZVA,  Cache_op_D_CVAC, Cache_op_D_CVAU, Cache_op_D_CIVAC,
+  /* AArch64 IC */
+  Cache_op_I_IALLUIS, Cache_op_I_IALLU, Cache_op_I_IVAU
+}
+
+
 union instruction_kind = {
   IK_barrier : barrier_kind,
   IK_mem_read : read_kind,
@@ -100,7 +110,8 @@ union instruction_kind = {
   IK_mem_rmw : (read_kind, write_kind),
   IK_branch : unit,
   IK_trans : trans_kind,
-  IK_simple : unit
+  IK_simple : unit,
+  IK_cache_op : cache_op_kind
 }
 
 val __read_mem

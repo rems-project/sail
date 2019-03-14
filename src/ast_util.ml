@@ -1060,6 +1060,18 @@ let ids_of_def = function
 let ids_of_defs (Defs defs) =
   List.fold_left IdSet.union IdSet.empty (List.map ids_of_def defs)
 
+let val_spec_ids (Defs defs) =
+  let val_spec_id (VS_aux (vs_aux, _)) =
+    match vs_aux with
+    | VS_val_spec (_, id, _, _) -> id
+  in
+  let rec vs_ids = function
+    | DEF_spec vs :: defs -> val_spec_id vs :: vs_ids defs
+    | def :: defs -> vs_ids defs
+    | [] -> []
+  in
+  IdSet.of_list (vs_ids defs)
+
 module BE = struct
   type t = base_effect
   let compare be1 be2 = String.compare (string_of_base_effect be1) (string_of_base_effect be2)
@@ -1905,6 +1917,77 @@ let typquant_subst_kid_aux sv subst = function
 
 let typquant_subst_kid sv subst (TypQ_aux (typq, l)) = TypQ_aux (typquant_subst_kid_aux sv subst typq, l)
 
+
+let subst_kids_nexp substs nexp =
+  let rec s_snexp substs (Nexp_aux (ne,l) as nexp) =
+    let re ne = Nexp_aux (ne,l) in
+    let s_snexp = s_snexp substs in
+    match ne with
+    | Nexp_var (Kid_aux (_,l) as kid) ->
+       (try KBindings.find kid substs
+       with Not_found -> nexp)
+    | Nexp_id _
+    | Nexp_constant _ -> nexp
+    | Nexp_times (n1,n2) -> re (Nexp_times (s_snexp n1, s_snexp n2))
+    | Nexp_sum (n1,n2)   -> re (Nexp_sum   (s_snexp n1, s_snexp n2))
+    | Nexp_minus (n1,n2) -> re (Nexp_minus (s_snexp n1, s_snexp n2))
+    | Nexp_exp ne -> re (Nexp_exp (s_snexp ne))
+    | Nexp_neg ne -> re (Nexp_neg (s_snexp ne))
+    | Nexp_app (id,args) -> re (Nexp_app (id,List.map s_snexp args))
+  in s_snexp substs nexp
+
+let subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
+  let rec subst_kids_nc substs (NC_aux (nc,l) as n_constraint) =
+    let snexp nexp = subst_kids_nexp substs nexp in
+    let snc nc = subst_kids_nc substs nc in
+    let re nc = NC_aux (nc,l) in
+    match nc with
+    | NC_equal (n1,n2) -> re (NC_equal (snexp n1, snexp n2))
+    | NC_bounded_ge (n1,n2) -> re (NC_bounded_ge (snexp n1, snexp n2))
+    | NC_bounded_le (n1,n2) -> re (NC_bounded_le (snexp n1, snexp n2))
+    | NC_not_equal (n1,n2) -> re (NC_not_equal (snexp n1, snexp n2))
+    | NC_set (kid,is) ->
+       begin
+         match KBindings.find kid substs with
+         | Nexp_aux (Nexp_constant i,_) ->
+            if List.exists (fun j -> Big_int.equal i j) is then re NC_true else re NC_false
+         | nexp -> 
+            raise (Reporting.err_general l
+                     ("Unable to substitute " ^ string_of_nexp nexp ^
+                        " into set constraint " ^ string_of_n_constraint n_constraint))
+         | exception Not_found -> n_constraint
+       end
+    | NC_or (nc1,nc2) -> re (NC_or (snc nc1, snc nc2))
+    | NC_and (nc1,nc2) -> re (NC_and (snc nc1, snc nc2))
+    | NC_true
+      | NC_false
+      -> n_constraint
+    | NC_var kid -> re (NC_var kid)
+    | NC_app (f, args) ->
+       re (NC_app (f, List.map (s_starg substs) args))
+  and  s_styp substs ((Typ_aux (t,l)) as ty) =
+    let re t = Typ_aux (t,l) in
+    match t with
+    | Typ_id _
+    | Typ_var _
+      -> ty
+    | Typ_fn (t1,t2,e) -> re (Typ_fn (List.map (s_styp substs) t1, s_styp substs t2,e))
+    | Typ_bidir (t1, t2) -> re (Typ_bidir (s_styp substs t1, s_styp substs t2))
+    | Typ_tup ts -> re (Typ_tup (List.map (s_styp substs) ts))
+    | Typ_app (id,tas) -> re (Typ_app (id,List.map (s_starg substs) tas))
+    | Typ_exist (kopts,nc,t) ->
+       let substs = List.fold_left (fun sub kopt -> KBindings.remove (kopt_kid kopt) sub) substs kopts in
+       re (Typ_exist (kopts,subst_kids_nc substs nc,s_styp substs t))
+    | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
+  and s_starg substs (A_aux (ta,l) as targ) =
+    match ta with
+    | A_nexp ne -> A_aux (A_nexp (subst_kids_nexp substs ne),l)
+    | A_typ t -> A_aux (A_typ (s_styp substs t),l)
+    | A_order _ -> targ
+    | A_bool nc -> A_aux (A_bool (subst_kids_nc substs nc), l)
+  in subst_kids_nc, s_styp, s_starg
+
+
 let rec simp_loc = function
   | Parse_ast.Unknown -> None
   | Parse_ast.Unique (_, l) -> simp_loc l
@@ -2036,3 +2119,4 @@ let rec find_annot_defs sl = function
   | [] -> None
 
 let rec find_annot_ast sl (Defs defs) = find_annot_defs sl defs
+

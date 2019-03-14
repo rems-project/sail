@@ -48,11 +48,24 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Format
-val pp_str : formatter -> string -> unit
+open Ast
+open Ast_util
+open Type_check
 
-val lst : ('a, formatter, unit) format -> (formatter -> 'b -> unit) -> formatter -> 'b list -> unit
+(** [const_prop defs ref_vars substs assigns exp] performs constant propagation
+    on [exp] where [substs] is a pair of substitutions on immutable variables
+    and type variables, [assigns] is a substitution on mutable variables, and
+    [ref_vars] is the set of variable which may have had a reference taken
+    (and hence we cannot reliably track). *)
 
-val opt : (formatter -> 'a -> unit) -> formatter -> 'a option -> unit
+val const_prop :
+  tannot defs ->
+  IdSet.t ->
+  tannot exp Bindings.t * nexp KBindings.t ->
+  tannot exp Bindings.t ->
+  tannot exp ->
+  tannot exp * tannot exp Bindings.t
 
-val pp_to_string : (formatter -> 'a) -> string
+val referenced_vars : tannot exp -> IdSet.t
+
+val remove_impossible_int_cases : 'a -> tannot defs -> tannot defs

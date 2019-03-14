@@ -3,8 +3,6 @@ Ast
 Ast_util
 Bitfield
 Bytecode
-Bytecode_interpreter
-Bytecode_util
 C_backend
 Cgen_backend
 Constant_fold
@@ -16,6 +14,7 @@ Initial_check
 Interactive
 Interpreter
 Isail
+Jib
 Latex
 Lexer
 Manifest

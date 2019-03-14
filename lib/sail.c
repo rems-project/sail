@@ -680,6 +680,11 @@ void zero_extend(lbits *rop, const lbits op, const sail_int len)
   mpz_set(*rop->bits, *op.bits);
 }
 
+fbits fast_zero_extend(const sbits op, const uint64_t n)
+{
+  return op.bits;
+}
+
 void sign_extend(lbits *rop, const lbits op, const sail_int len)
 {
   assert(op.len <= mpz_get_ui(len));
@@ -691,6 +696,32 @@ void sign_extend(lbits *rop, const lbits op, const sail_int len)
     }
   } else {
     mpz_set(*rop->bits, *op.bits);
+  }
+}
+
+fbits fast_sign_extend(const fbits op, const uint64_t n, const uint64_t m)
+{
+  uint64_t rop = op;
+  if (op & (UINT64_C(1) << (n - 1))) {
+    for (uint64_t i = m - 1; i >= n; i--) {
+      rop = rop | (UINT64_C(1) << i);
+    }
+    return rop;
+  } else {
+    return rop;
+  }
+}
+
+fbits fast_sign_extend2(const sbits op, const uint64_t m)
+{
+  uint64_t rop = op.bits;
+  if (op.bits & (UINT64_C(1) << (op.len - 1))) {
+    for (uint64_t i = m - 1; i >= op.len; i--) {
+      rop = rop | (UINT64_C(1) << i);
+    }
+    return rop;
+  } else {
+    return rop;
   }
 }
 
@@ -783,10 +814,19 @@ void sail_signed(sail_int *rop, const lbits op)
   }
 }
 
-inline
 mach_int fast_unsigned(const fbits op)
 {
   return (mach_int) op;
+}
+
+mach_int fast_signed(const fbits op, const uint64_t n)
+{
+  if (op & (UINT64_C(1) << (n - 1))) {
+    uint64_t rop = op & ~(UINT64_C(1) << (n - 1));
+    return (mach_int) (rop - (UINT64_C(1) << (n - 1)));
+  } else {
+    return (mach_int) op;
+  }
 }
 
 void append(lbits *rop, const lbits op1, const lbits op2)
@@ -890,6 +930,20 @@ void set_slice_int(sail_int *rop,
   }
 }
 
+void update_lbits(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit)
+{
+  uint64_t n = mpz_get_ui(n_mpz);
+
+  mpz_set(*rop->bits, *op.bits);
+  rop->len = op.len;
+
+  if (bit == UINT64_C(0)) {
+    mpz_clrbit(*rop->bits, n);
+  } else {
+    mpz_setbit(*rop->bits, n);
+  }
+}
+
 void vector_update_subrange_lbits(lbits *rop,
 				 const lbits op,
 				 const sail_int n_mpz,
@@ -909,6 +963,23 @@ void vector_update_subrange_lbits(lbits *rop,
       mpz_clrbit(*rop->bits, i + m);
     }
   }
+}
+
+fbits fast_update_subrange(const fbits op,
+			   const mach_int n,
+			   const mach_int m,
+			   const fbits slice)
+{
+  fbits rop = op;
+  for (mach_int i = 0; i < n - (m - UINT64_C(1)); i++) {
+    uint64_t bit = UINT64_C(1) << ((uint64_t) i);
+    if (slice & bit) {
+      rop |= (bit << m);
+    } else {
+      rop &= ~(bit << m);
+    }
+  }
+  return rop;
 }
 
 void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz)

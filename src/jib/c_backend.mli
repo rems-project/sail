@@ -48,78 +48,62 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Ast
-open Ast_util
-open Bytecode
+open Jib
 open Type_check
 
-(* The A-normal form (ANF) grammar *)
+(** Global compilation options *)
 
-type 'a aexp = AE_aux of 'a aexp_aux * Env.t * l
+(** Define generated functions as static *)
+val opt_static : bool ref
 
-and 'a aexp_aux =
-  | AE_val of 'a aval
-  | AE_app of id * ('a aval) list * 'a
-  | AE_cast of 'a aexp * 'a
-  | AE_assign of id * 'a * 'a aexp
-  | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
-  | AE_block of ('a aexp) list * 'a aexp * 'a
-  | AE_return of 'a aval * 'a
-  | AE_throw of 'a aval * 'a
-  | AE_if of 'a aval * 'a aexp * 'a aexp * 'a
-  | AE_field of 'a aval * id * 'a
-  | AE_case of 'a aval * ('a apat * 'a aexp * 'a aexp) list * 'a
-  | AE_try of 'a aexp * ('a apat * 'a aexp * 'a aexp) list * 'a
-  | AE_record_update of 'a aval * ('a aval) Bindings.t * 'a
-  | AE_for of id * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
-  | AE_loop of loop * 'a aexp * 'a aexp
-  | AE_short_circuit of sc_op * 'a aval * 'a aexp
+(** Do not generate a main function *)
+val opt_no_main : bool ref
 
-and sc_op = SC_and | SC_or
+(** (WIP) Do not include rts.h (the runtime), and do not generate code
+   that requires any setup or teardown routines to be run by a runtime
+   before executing any instruction semantics. *)
+val opt_no_rts : bool ref
 
-and 'a apat = AP_aux of 'a apat_aux * Env.t * l
+(** Ordinarily we use plain z-encoding to name-mangle generated Sail
+   identifiers into a form suitable for C. If opt_prefix is set, then
+   the "z" which is added on the front of each generated C function
+   will be replaced by opt_prefix. E.g. opt_prefix := "sail_" would
+   give sail_my_function rather than zmy_function. *)
+val opt_prefix : string ref
 
-and 'a apat_aux =
-  | AP_tup of ('a apat) list
-  | AP_id of id * 'a
-  | AP_global of id * 'a
-  | AP_app of id * 'a apat * 'a
-  | AP_cons of 'a apat * 'a apat
-  | AP_nil of 'a
-  | AP_wild of 'a
+(** opt_extra_params and opt_extra_arguments allow additional state to
+   be threaded through the generated C code by adding an additional
+   parameter to each function type, and then giving an extra argument
+   to each function call. For example we could have
 
-and 'a aval =
-  | AV_lit of lit * 'a
-  | AV_id of id * 'a lvar
-  | AV_ref of id * 'a lvar
-  | AV_tuple of ('a aval) list
-  | AV_list of ('a aval) list * 'a
-  | AV_vector of ('a aval) list * 'a
-  | AV_record of ('a aval) Bindings.t * 'a
-  | AV_C_fragment of fragment * 'a * ctyp
+   opt_extra_params := Some "CPUMIPSState *env"
+   opt_extra_arguments := Some "env"
 
-val gensym : unit -> id
+   and every generated function will take a pointer to a QEMU MIPS
+   processor state, and each function will be passed the env argument
+   when it is called. *)
+val opt_extra_params : string option ref
+val opt_extra_arguments : string option ref
 
-(* Functions for transforming ANF expressions *)
+(** (WIP) [opt_memo_cache] will store the compiled function
+   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
+   of the original function to be compiled. Enabled using the -memo
+   flag. Uses Marshal so it's quite picky about the exact version of
+b   the Sail version. This cache can obviously become stale if the C
+   backend changes - it'll load an old version compiled without said
+   changes. *)
+val opt_memo_cache : bool ref
 
-val map_aval : (Env.t -> Ast.l -> 'a aval -> 'a aval) -> 'a aexp -> 'a aexp
+(** Optimization flags *)
 
-val map_functions : (Env.t -> Ast.l -> id -> ('a aval) list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
+val optimize_primops : bool ref
+val optimize_hoist_allocations : bool ref
+val optimize_struct_updates : bool ref
+val optimize_alias : bool ref
+val optimize_experimental : bool ref
 
-val no_shadow : IdSet.t -> 'a aexp -> 'a aexp
+(** Convert a typ to a IR ctyp *)
+val ctyp_of_typ : Jib_compile.ctx -> Ast.typ -> ctyp
 
-val apat_globals : 'a apat -> (id * 'a) list
-
-val apat_types : 'a apat -> 'a Bindings.t
-
-val is_dead_aexp : 'a aexp -> bool
-
-(* Compiling to ANF expressions *)
-
-val anf_pat : ?global:bool -> tannot pat -> typ apat
-
-val anf : tannot exp -> typ aexp
-
-(* Pretty printing ANF expressions *)
-val pp_aval : typ aval -> PPrint.document
-val pp_aexp : typ aexp -> PPrint.document
+val jib_of_ast : Env.t -> tannot Ast.defs -> cdef list * Jib_compile.ctx
+val compile_ast : Env.t -> out_channel -> string list -> tannot Ast.defs -> unit
