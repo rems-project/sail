@@ -90,7 +90,7 @@ let flat_counter = ref 0
 let flat_id () =
   let id = mk_id ("local#" ^ string_of_int !flat_counter) in
   incr flat_counter;
-  id
+  name id
 
 let rec flatten_instrs = function
   | I_aux (I_decl (ctyp, decl_id), aux) :: instrs ->

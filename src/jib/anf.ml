@@ -158,7 +158,7 @@ let rec aval_rename from_id to_id = function
   | AV_list (avals, typ) -> AV_list (List.map (aval_rename from_id to_id) avals, typ)
   | AV_vector (avals, typ) -> AV_vector (List.map (aval_rename from_id to_id) avals, typ)
   | AV_record (avals, typ) -> AV_record (Bindings.map (aval_rename from_id to_id) avals, typ)
-  | AV_C_fragment (fragment, typ, ctyp) -> AV_C_fragment (frag_rename from_id to_id fragment, typ, ctyp)
+  | AV_C_fragment (fragment, typ, ctyp) -> AV_C_fragment (frag_rename (name from_id) (name to_id) fragment, typ, ctyp)
 
 let rec aexp_rename from_id to_id (AE_aux (aexp, env, l)) =
   let recur = aexp_rename from_id to_id in

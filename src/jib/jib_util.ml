@@ -81,6 +81,9 @@ let ifuncall ?loc:(l=Parse_ast.Unknown) clexp id cvals =
 
 let iextern ?loc:(l=Parse_ast.Unknown) clexp id cvals =
   I_aux (I_funcall (clexp, true, id, cvals), (instr_number (), l))
+  
+let icall ?loc:(l=Parse_ast.Unknown) clexp extern id cvals =
+  I_aux (I_funcall (clexp, extern, id, cvals), (instr_number (), l))
 
 let icopy l clexp cval =
   I_aux (I_copy (clexp, cval), (instr_number (), l))
@@ -125,14 +128,39 @@ let iraw ?loc:(l=Parse_ast.Unknown) str =
 let ijump ?loc:(l=Parse_ast.Unknown) cval label =
   I_aux (I_jump (cval, label), (instr_number (), l))
 
+module Name = struct
+  type t = name
+  let compare id1 id2 =
+    match id1, id2 with
+    | Name (x, n), Name (y, m) ->
+       let c1 = Id.compare x y in
+       if c1 = 0 then compare n m else c1
+    | Have_exception n, Have_exception m -> compare n m
+    | Current_exception n, Current_exception m -> compare n m
+    | Return n, Return m -> compare n m
+    | Name _, _ -> 1
+    | _, Name _ -> -1
+    | Have_exception _, _ -> 1
+    | _, Have_exception _ -> -1
+    | Current_exception _, _ -> 1
+    | _, Current_exception _ -> -1
+end
+
+module NameSet = Set.Make(Name)
+module NameMap = Map.Make(Name)
+
+let current_exception = Current_exception (-1)
+let have_exception = Have_exception (-1)
+let return = Return (-1)
+               
+let name id = Name (id, -1)
+
 let rec frag_rename from_id to_id = function
-  | F_id id when Id.compare id from_id = 0 -> F_id to_id
+  | F_id id when Name.compare id from_id = 0 -> F_id to_id
   | F_id id -> F_id id
-  | F_ref id when Id.compare id from_id = 0 -> F_ref to_id
+  | F_ref id when Name.compare id from_id = 0 -> F_ref to_id
   | F_ref id -> F_ref id
   | F_lit v -> F_lit v
-  | F_have_exception -> F_have_exception
-  | F_current_exception -> F_current_exception
   | F_call (call, frags) -> F_call (call, List.map (frag_rename from_id to_id) frags)
   | F_op (f1, op, f2) -> F_op (frag_rename from_id to_id f1, op, frag_rename from_id to_id f2)
   | F_unary (op, f) -> F_unary (op, frag_rename from_id to_id f)
@@ -143,7 +171,7 @@ let rec frag_rename from_id to_id = function
 let cval_rename from_id to_id (frag, ctyp) = (frag_rename from_id to_id frag, ctyp)
 
 let rec clexp_rename from_id to_id = function
-  | CL_id (id, ctyp) when Id.compare id from_id = 0 -> CL_id (to_id, ctyp)
+  | CL_id (id, ctyp) when Name.compare id from_id = 0 -> CL_id (to_id, ctyp)
   | CL_id (id, ctyp) -> CL_id (id, ctyp)
   | CL_field (clexp, field) ->
      CL_field (clexp_rename from_id to_id clexp, field)
@@ -151,17 +179,14 @@ let rec clexp_rename from_id to_id = function
      CL_addr (clexp_rename from_id to_id clexp)
   | CL_tuple (clexp, n) ->
      CL_tuple (clexp_rename from_id to_id clexp, n)
-  | CL_current_exception ctyp -> CL_current_exception ctyp
-  | CL_have_exception -> CL_have_exception
-  | CL_return ctyp -> CL_return ctyp
   | CL_void -> CL_void
 
 let rec instr_rename from_id to_id (I_aux (instr, aux)) =
   let instr = match instr with
-    | I_decl (ctyp, id) when Id.compare id from_id = 0 -> I_decl (ctyp, to_id)
+    | I_decl (ctyp, id) when Name.compare id from_id = 0 -> I_decl (ctyp, to_id)
     | I_decl (ctyp, id) -> I_decl (ctyp, id)
 
-    | I_init (ctyp, id, cval) when Id.compare id from_id = 0 ->
+    | I_init (ctyp, id, cval) when Name.compare id from_id = 0 ->
        I_init (ctyp, to_id, cval_rename from_id to_id cval)
     | I_init (ctyp, id, cval) ->
        I_init (ctyp, id, cval_rename from_id to_id cval)
@@ -180,7 +205,7 @@ let rec instr_rename from_id to_id (I_aux (instr, aux)) =
     | I_copy (clexp, cval) -> I_copy (clexp_rename from_id to_id clexp, cval_rename from_id to_id cval)
     | I_alias (clexp, cval) -> I_alias (clexp_rename from_id to_id clexp, cval_rename from_id to_id cval)
 
-    | I_clear (ctyp, id) when Id.compare id from_id = 0 -> I_clear (ctyp, to_id)
+    | I_clear (ctyp, id) when Name.compare id from_id = 0 -> I_clear (ctyp, to_id)
     | I_clear (ctyp, id) -> I_clear (ctyp, id)
 
     | I_return cval -> I_return (cval_rename from_id to_id cval)
@@ -205,10 +230,10 @@ let rec instr_rename from_id to_id (I_aux (instr, aux)) =
 
     | I_end -> I_end
 
-    | I_reset (ctyp, id) when Id.compare id from_id = 0 -> I_reset (ctyp, to_id)
+    | I_reset (ctyp, id) when Name.compare id from_id = 0 -> I_reset (ctyp, to_id)
     | I_reset (ctyp, id) -> I_reset (ctyp, id)
 
-    | I_reinit (ctyp, id, cval) when Id.compare id from_id = 0 ->
+    | I_reinit (ctyp, id, cval) when Name.compare id from_id = 0 ->
        I_reinit (ctyp, to_id, cval_rename from_id to_id cval)
     | I_reinit (ctyp, id, cval) ->
        I_reinit (ctyp, id, cval_rename from_id to_id cval)
@@ -233,11 +258,21 @@ let string_of_value = function
   | V_ctor_kind str -> "Kind_" ^ Util.zencode_string str
   | _ -> failwith "Cannot convert value to string"
 
+let string_of_name ?zencode:(zencode=true) =
+  let ssa_num n = if n < 0 then "" else ("/" ^ string_of_int n) in
+  function
+  | Name (id, n) ->
+     (if zencode then Util.zencode_string (string_of_id id) else string_of_id id) ^ ssa_num n
+  | Have_exception n ->
+     "have_exception" ^ ssa_num n
+  | Return n ->
+     "return" ^ ssa_num n
+  | Current_exception n ->
+     "(*current_exception)" ^ ssa_num n
+    
 let rec string_of_fragment ?zencode:(zencode=true) = function
-  | F_id id when zencode -> Util.zencode_string (string_of_id id)
-  | F_id id -> string_of_id id
-  | F_ref id when zencode -> "&" ^ Util.zencode_string (string_of_id id)
-  | F_ref id -> "&" ^ string_of_id id
+  | F_id id -> string_of_name ~zencode:zencode id
+  | F_ref id -> "&" ^ string_of_name ~zencode:zencode id
   | F_lit v -> string_of_value v
   | F_call (str, frags) ->
      Printf.sprintf "%s(%s)" str (Util.string_of_list ", " (string_of_fragment ~zencode:zencode) frags)
@@ -247,8 +282,6 @@ let rec string_of_fragment ?zencode:(zencode=true) = function
      Printf.sprintf "%s %s %s" (string_of_fragment' ~zencode:zencode f1) op (string_of_fragment' ~zencode:zencode f2)
   | F_unary (op, f) ->
      op ^ string_of_fragment' ~zencode:zencode f
-  | F_have_exception -> "have_exception"
-  | F_current_exception -> "(*current_exception)"
   | F_raw raw -> raw
   | F_poly f -> string_of_fragment ~zencode:zencode f
 and string_of_fragment' ?zencode:(zencode=true) f =
@@ -466,6 +499,9 @@ let rec is_polymorphic = function
 let pp_id id =
   string (string_of_id id)
 
+let pp_name id =
+  string (string_of_name ~zencode:false id)
+
 let pp_ctyp ctyp =
   string (full_string_of_ctyp ctyp |> Util.yellow |> Util.clear)
 
@@ -476,19 +512,16 @@ let pp_cval (frag, ctyp) =
   string (string_of_fragment ~zencode:false frag) ^^ string " : " ^^ pp_ctyp ctyp
 
 let rec pp_clexp = function
-  | CL_id (id, ctyp) -> pp_id id ^^ string " : " ^^ pp_ctyp ctyp
+  | CL_id (id, ctyp) -> pp_name id ^^ string " : " ^^ pp_ctyp ctyp
   | CL_field (clexp, field) -> parens (pp_clexp clexp) ^^ string "." ^^ string field
   | CL_tuple (clexp, n) -> parens (pp_clexp clexp) ^^ string "." ^^ string (string_of_int n)
   | CL_addr clexp -> string "*" ^^ pp_clexp clexp
-  | CL_current_exception ctyp -> string "current_exception : " ^^ pp_ctyp ctyp
-  | CL_have_exception -> string "have_exception"
-  | CL_return ctyp -> string "return : " ^^ pp_ctyp ctyp
   | CL_void -> string "void"
 
 let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
   match instr with
   | I_decl (ctyp, id) ->
-     pp_keyword "var" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
+     pp_keyword "var" ^^ pp_name id ^^ string " : " ^^ pp_ctyp ctyp
   | I_if (cval, then_instrs, else_instrs, ctyp) ->
      let pp_if_block = function
        | [] -> string "{}"
@@ -508,11 +541,11 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
   | I_try_block instrs ->
      pp_keyword "try" ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
   | I_reset (ctyp, id) ->
-     pp_keyword "recreate" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
+     pp_keyword "recreate" ^^ pp_name id ^^ string " : " ^^ pp_ctyp ctyp
   | I_init (ctyp, id, cval) ->
-     pp_keyword "create" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp ^^ string " = " ^^ pp_cval cval
+     pp_keyword "create" ^^ pp_name id ^^ string " : " ^^ pp_ctyp ctyp ^^ string " = " ^^ pp_cval cval
   | I_reinit (ctyp, id, cval) ->
-     pp_keyword "recreate" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp ^^ string " = " ^^ pp_cval cval
+     pp_keyword "recreate" ^^ pp_name id ^^ string " : " ^^ pp_ctyp ctyp ^^ string " = " ^^ pp_cval cval
   | I_funcall (x, _, f, args) ->
      separate space [ pp_clexp x; string "=";
                       string (string_of_id f |> Util.green |> Util.clear) ^^ parens (separate_map (string ", ") pp_cval args) ]
@@ -521,7 +554,7 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
   | I_alias (clexp, cval) ->
      pp_keyword "alias" ^^ separate space [pp_clexp clexp; string "="; pp_cval cval]
   | I_clear (ctyp, id) ->
-     pp_keyword "kill" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
+     pp_keyword "kill" ^^ pp_name id ^^ string " : " ^^ pp_ctyp ctyp
   | I_return cval ->
      pp_keyword "return" ^^ pp_cval cval
   | I_throw cval ->
@@ -584,55 +617,47 @@ let pp_cdef = function
      ^^ hardline
 
 let rec fragment_deps = function
-  | F_id id | F_ref id -> IdSet.singleton id
-  | F_lit _ -> IdSet.empty
+  | F_id id | F_ref id -> NameSet.singleton id
+  | F_lit _ -> NameSet.empty
   | F_field (frag, _) | F_unary (_, frag) | F_poly frag -> fragment_deps frag
-  | F_call (_, frags) -> List.fold_left IdSet.union IdSet.empty (List.map fragment_deps frags)
-  | F_op (frag1, _, frag2) -> IdSet.union (fragment_deps frag1) (fragment_deps frag2)
-  | F_current_exception -> IdSet.empty
-  | F_have_exception -> IdSet.empty
-  | F_raw _ -> IdSet.empty
+  | F_call (_, frags) -> List.fold_left NameSet.union NameSet.empty (List.map fragment_deps frags)
+  | F_op (frag1, _, frag2) -> NameSet.union (fragment_deps frag1) (fragment_deps frag2)
+  | F_raw _ -> NameSet.empty
 
 let cval_deps = function (frag, _) -> fragment_deps frag
 
 let rec clexp_deps = function
-  | CL_id (id, _) -> IdSet.singleton id
+  | CL_id (id, _) -> NameSet.singleton id
   | CL_field (clexp, _) -> clexp_deps clexp
   | CL_tuple (clexp, _) -> clexp_deps clexp
   | CL_addr clexp -> clexp_deps clexp
-  | CL_have_exception -> IdSet.empty
-  | CL_current_exception _ -> IdSet.empty
-  | CL_return _ -> IdSet.empty
-  | CL_void -> IdSet.empty
+  | CL_void -> NameSet.empty
 
 (* Return the direct, read/write dependencies of a single instruction *)
 let instr_deps = function
-  | I_decl (ctyp, id) -> IdSet.empty, IdSet.singleton id
-  | I_reset (ctyp, id) -> IdSet.empty, IdSet.singleton id
-  | I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval) -> cval_deps cval, IdSet.singleton id
-  | I_if (cval, _, _, _) -> cval_deps cval, IdSet.empty
-  | I_jump (cval, label) -> cval_deps cval, IdSet.empty
-  | I_funcall (clexp, _, _, cvals) -> List.fold_left IdSet.union IdSet.empty (List.map cval_deps cvals), clexp_deps clexp
+  | I_decl (ctyp, id) -> NameSet.empty, NameSet.singleton id
+  | I_reset (ctyp, id) -> NameSet.empty, NameSet.singleton id
+  | I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval) -> cval_deps cval, NameSet.singleton id
+  | I_if (cval, _, _, _) -> cval_deps cval, NameSet.empty
+  | I_jump (cval, label) -> cval_deps cval, NameSet.empty
+  | I_funcall (clexp, _, _, cvals) -> List.fold_left NameSet.union NameSet.empty (List.map cval_deps cvals), clexp_deps clexp
   | I_copy (clexp, cval) -> cval_deps cval, clexp_deps clexp
   | I_alias (clexp, cval) -> cval_deps cval, clexp_deps clexp
-  | I_clear (_, id) -> IdSet.singleton id, IdSet.empty
-  | I_throw cval | I_return cval -> cval_deps cval, IdSet.empty
-  | I_block _ | I_try_block _ -> IdSet.empty, IdSet.empty
-  | I_comment _ | I_raw _ -> IdSet.empty, IdSet.empty
-  | I_label label -> IdSet.empty, IdSet.empty
-  | I_goto label -> IdSet.empty, IdSet.empty
-  | I_undefined _ -> IdSet.empty, IdSet.empty
-  | I_match_failure -> IdSet.empty, IdSet.empty
-  | I_end -> IdSet.empty, IdSet.empty
+  | I_clear (_, id) -> NameSet.singleton id, NameSet.empty
+  | I_throw cval | I_return cval -> cval_deps cval, NameSet.empty
+  | I_block _ | I_try_block _ -> NameSet.empty, NameSet.empty
+  | I_comment _ | I_raw _ -> NameSet.empty, NameSet.empty
+  | I_label label -> NameSet.empty, NameSet.empty
+  | I_goto label -> NameSet.empty, NameSet.empty
+  | I_undefined _ -> NameSet.empty, NameSet.empty
+  | I_match_failure -> NameSet.empty, NameSet.empty
+  | I_end -> NameSet.empty, NameSet.empty
 
 let rec map_clexp_ctyp f = function
   | CL_id (id, ctyp) -> CL_id (id, f ctyp)
   | CL_field (clexp, field) -> CL_field (map_clexp_ctyp f clexp, field)
   | CL_tuple (clexp, n) -> CL_tuple (map_clexp_ctyp f clexp, n)
   | CL_addr clexp -> CL_addr (map_clexp_ctyp f clexp)
-  | CL_current_exception ctyp -> CL_current_exception (f ctyp)
-  | CL_have_exception -> CL_have_exception
-  | CL_return ctyp -> CL_return (f ctyp)
   | CL_void -> CL_void
 
 let rec map_instr_ctyp f (I_aux (instr, aux)) =
@@ -732,7 +757,7 @@ let map_instrs_list f instrs =
 
 let rec instr_ids (I_aux (instr, _)) =
   let reads, writes = instr_deps instr in
-  IdSet.union reads writes
+  NameSet.union reads writes
 
 let rec instr_reads (I_aux (instr, _)) =
   fst (instr_deps instr)
@@ -764,7 +789,6 @@ let cval_ctyp = function (_, ctyp) -> ctyp
 
 let rec clexp_ctyp = function
   | CL_id (_, ctyp) -> ctyp
-  | CL_return ctyp -> ctyp
   | CL_field (clexp, field) ->
      begin match clexp_ctyp clexp with
      | CT_struct (id, ctors) ->
@@ -788,8 +812,6 @@ let rec clexp_ctyp = function
         end
      | ctyp -> failwith ("Bad ctyp for CL_addr " ^ string_of_ctyp ctyp)
      end
-  | CL_have_exception -> CT_bool
-  | CL_current_exception ctyp -> ctyp
   | CL_void -> CT_unit
 
 let rec instr_ctyps (I_aux (instr, aux)) =
@@ -848,12 +870,12 @@ let instr_split_at f =
   instr_split_at' f []
 
 let rec instrs_rename from_id to_id =
-  let rename id = if Id.compare id from_id = 0 then to_id else id in
+  let rename id = if Name.compare id from_id = 0 then to_id else id in
   let crename = cval_rename from_id to_id in
   let irename instrs = instrs_rename from_id to_id instrs in
   let lrename = clexp_rename from_id to_id in
   function
-  | (I_aux (I_decl (ctyp, new_id), _) :: _) as instrs when Id.compare from_id new_id = 0 -> instrs
+  | (I_aux (I_decl (ctyp, new_id), _) :: _) as instrs when Name.compare from_id new_id = 0 -> instrs
   | I_aux (I_decl (ctyp, new_id), aux) :: instrs -> I_aux (I_decl (ctyp, new_id), aux) :: irename instrs
   | I_aux (I_reset (ctyp, id), aux) :: instrs -> I_aux (I_reset (ctyp, rename id), aux) :: irename instrs
   | I_aux (I_init (ctyp, id, cval), aux) :: instrs -> I_aux (I_init (ctyp, rename id, crename cval), aux) :: irename instrs
@@ -861,8 +883,8 @@ let rec instrs_rename from_id to_id =
   | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
      I_aux (I_if (crename cval, irename then_instrs, irename else_instrs, ctyp), aux) :: irename instrs
   | I_aux (I_jump (cval, label), aux) :: instrs -> I_aux (I_jump (crename cval, label), aux) :: irename instrs
-  | I_aux (I_funcall (clexp, extern, id, cvals), aux) :: instrs ->
-     I_aux (I_funcall (lrename clexp, extern, rename id, List.map crename cvals), aux) :: irename instrs
+  | I_aux (I_funcall (clexp, extern, function_id, cvals), aux) :: instrs ->
+     I_aux (I_funcall (lrename clexp, extern, function_id, List.map crename cvals), aux) :: irename instrs
   | I_aux (I_copy (clexp, cval), aux) :: instrs -> I_aux (I_copy (lrename clexp, crename cval), aux) :: irename instrs
   | I_aux (I_alias (clexp, cval), aux) :: instrs -> I_aux (I_alias (lrename clexp, crename cval), aux) :: irename instrs
   | I_aux (I_clear (ctyp, id), aux) :: instrs -> I_aux (I_clear (ctyp, rename id), aux) :: irename instrs

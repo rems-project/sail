@@ -61,6 +61,8 @@ let opt_debug_function = ref ""
 let opt_debug_flow_graphs = ref false
 let opt_memo_cache = ref false
 
+let ngensym () = name (gensym ())
+
 (**************************************************************************)
 (* 4. Conversion to low-level AST                                         *)
 (**************************************************************************)
@@ -183,26 +185,26 @@ let rec compile_aval l ctx = function
      begin
        try
          let _, ctyp = Bindings.find id ctx.locals in
-         [], (F_id id, ctyp), []
+         [], (F_id (name id), ctyp), []
        with
        | Not_found ->
-          [], (F_id id, ctyp_of_typ ctx (lvar_typ typ)), []
+          [], (F_id (name id), ctyp_of_typ ctx (lvar_typ typ)), []
      end
 
   | AV_ref (id, typ) ->
-     [], (F_ref id, CT_ref (ctyp_of_typ ctx (lvar_typ typ))), []
+     [], (F_ref (name id), CT_ref (ctyp_of_typ ctx (lvar_typ typ))), []
 
   | AV_lit (L_aux (L_string str, _), typ) ->
      [], (F_lit (V_string (String.escaped str)), ctyp_of_typ ctx typ), []
 
   | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
-     let gs = gensym () in
+     let gs = ngensym () in
      [iinit CT_lint gs (F_lit (V_int n), CT_fint 64)],
      (F_id gs, CT_lint),
      [iclear CT_lint gs]
 
   | AV_lit (L_aux (L_num n, _), typ) ->
-     let gs = gensym () in
+     let gs = ngensym () in
      [iinit CT_lint gs (F_lit (V_string (Big_int.to_string n)), CT_string)],
      (F_id gs, CT_lint),
      [iclear CT_lint gs]
@@ -214,7 +216,7 @@ let rec compile_aval l ctx = function
   | AV_lit (L_aux (L_false, _), _) -> [], (F_lit (V_bool false), CT_bool), []
 
   | AV_lit (L_aux (L_real str, _), _) ->
-     let gs = gensym () in
+     let gs = ngensym () in
      [iinit CT_real gs (F_lit (V_string str), CT_string)],
      (F_id gs, CT_real),
      [iclear CT_real gs]
@@ -230,7 +232,7 @@ let rec compile_aval l ctx = function
      let setup = List.concat (List.map (fun (setup, _, _) -> setup) elements) in
      let cleanup = List.concat (List.rev (List.map (fun (_, _, cleanup) -> cleanup) elements)) in
      let tup_ctyp = CT_tup (List.map cval_ctyp cvals) in
-     let gs = gensym () in
+     let gs = ngensym () in
      setup
      @ [idecl tup_ctyp gs]
      @ List.mapi (fun n cval -> icopy l (CL_tuple (CL_id (gs, tup_ctyp), n)) cval) cvals,
@@ -240,7 +242,7 @@ let rec compile_aval l ctx = function
 
   | AV_record (fields, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
-     let gs = gensym () in
+     let gs = ngensym () in
      let compile_fields (id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup
@@ -278,7 +280,7 @@ let rec compile_aval l ctx = function
      let bitstring avals = F_lit (V_bits (List.map value_of_aval_bit avals)) in
      let first_chunk = bitstring (Util.take (len mod 64) avals) in
      let chunks = Util.drop (len mod 64) avals |> chunkify 64 |> List.map bitstring in
-     let gs = gensym () in
+     let gs = ngensym () in
      [iinit (CT_lbits true) gs (first_chunk, CT_fbits (len mod 64, true))]
      @ List.map (fun chunk -> ifuncall (CL_id (gs, CT_lbits true))
                                        (mk_id "append_64")
@@ -295,7 +297,7 @@ let rec compile_aval l ctx = function
        | Ord_aux (Ord_dec, _) -> true
        | Ord_aux (Ord_var _, _) -> raise (Reporting.err_general l "Polymorphic vector direction found")
      in
-     let gs = gensym () in
+     let gs = ngensym () in
      let ctyp = CT_fbits (len, direction) in
      let mask i = V_bits (Util.list_init (63 - i) (fun _ -> Sail2_values.B0) @ [Sail2_values.B1] @ Util.list_init i (fun _ -> Sail2_values.B0)) in
      let aval_mask i aval =
@@ -323,7 +325,7 @@ let rec compile_aval l ctx = function
        | Ord_aux (Ord_var _, _) -> raise (Reporting.err_general l "Polymorphic vector direction found")
      in
      let vector_ctyp = CT_vector (direction, ctyp_of_typ ctx typ) in
-     let gs = gensym () in
+     let gs = ngensym () in
      let aval_set i aval =
        let setup, cval, cleanup = compile_aval l ctx aval in
        setup
@@ -346,7 +348,7 @@ let rec compile_aval l ctx = function
        | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" -> ctyp_of_typ ctx typ
        | _ -> raise (Reporting.err_general l "Invalid list type")
      in
-     let gs = gensym () in
+     let gs = ngensym () in
      let mk_cons aval =
        let setup, cval, cleanup = compile_aval l ctx aval in
        setup @ [ifuncall (CL_id (gs, CT_list ctyp)) (mk_id ("cons#" ^ string_of_ctyp ctyp)) [cval; (F_id gs, CT_list ctyp)]] @ cleanup
@@ -384,7 +386,7 @@ let compile_funcall l ctx id args typ =
     else if ctyp_equal ctyp have_ctyp then
       cval
     else
-      let gs = gensym () in
+      let gs = ngensym () in
       setup := iinit ctyp gs cval :: !setup;
       cleanup := iclear ctyp gs :: !cleanup;
       (F_id gs, ctyp)
@@ -399,7 +401,7 @@ let compile_funcall l ctx id args typ =
   if ctyp_equal (clexp_ctyp clexp) ret_ctyp then
     ifuncall clexp id setup_args
   else
-    let gs = gensym () in
+    let gs = ngensym () in
     iblock [idecl ret_ctyp gs;
             ifuncall (CL_id (gs, ret_ctyp)) id setup_args;
             icopy l clexp (F_id gs, ret_ctyp);
@@ -425,19 +427,19 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
 
   | AP_global (pid, typ), (frag, ctyp) ->
      let global_ctyp = ctyp_of_typ ctx typ in
-     [icopy l (CL_id (pid, global_ctyp)) cval], [], ctx
+     [icopy l (CL_id (name pid, global_ctyp)) cval], [], ctx
 
   | AP_id (pid, _), (frag, ctyp) when is_ct_enum ctyp ->
      begin match Env.lookup_id pid ctx.tc_env with
-     | Unbound -> [idecl ctyp pid; icopy l (CL_id (pid, ctyp)) (frag, ctyp)], [], ctx
-     | _ -> [ijump (F_op (F_id pid, "!=", frag), CT_bool) case_label], [], ctx
+     | Unbound -> [idecl ctyp (name pid); icopy l (CL_id (name pid, ctyp)) (frag, ctyp)], [], ctx
+     | _ -> [ijump (F_op (F_id (name pid), "!=", frag), CT_bool) case_label], [], ctx
      end
 
   | AP_id (pid, typ), _ ->
      let ctyp = cval_ctyp cval in
      let id_ctyp = ctyp_of_typ ctx typ in
      let ctx = { ctx with locals = Bindings.add pid (Immutable, id_ctyp) ctx.locals } in
-     [idecl id_ctyp pid; icopy l (CL_id (pid, id_ctyp)) cval], [iclear id_ctyp pid], ctx
+     [idecl id_ctyp (name pid); icopy l (CL_id (name pid, id_ctyp)) cval], [iclear id_ctyp (name pid)], ctx
 
   | AP_tup apats, (frag, ctyp) ->
      begin
@@ -507,7 +509,9 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let binding_ctyp = ctyp_of_typ { ctx with local_env = body_env } binding_typ in
      let setup, call, cleanup = compile_aexp ctx binding in
      let letb_setup, letb_cleanup =
-       [idecl binding_ctyp id; iblock (setup @ [call (CL_id (id, binding_ctyp))] @ cleanup)], [iclear binding_ctyp id]
+       [idecl binding_ctyp (name id);
+        iblock (setup @ [call (CL_id (name id, binding_ctyp))] @ cleanup)],
+       [iclear binding_ctyp (name id)]
      in
      let ctx = { ctx with locals = Bindings.add id (mut, binding_ctyp) ctx.locals } in
      let setup, call, cleanup = compile_aexp ctx body in
@@ -524,7 +528,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   | AE_case (aval, cases, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
      let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
-     let case_return_id = gensym () in
+     let case_return_id = ngensym () in
      let finish_match_label = label "finish_match_" in
      let compile_case (apat, guard, body) =
        let trivial_guard = match guard with
@@ -536,7 +540,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        let destructure, destructure_cleanup, ctx = compile_match ctx apat cval case_label in
        let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
        let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-       let gs = gensym () in
+       let gs = ngensym () in
        let case_instrs =
          destructure @ [icomment "end destructuring"]
          @ (if not trivial_guard then
@@ -566,7 +570,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   | AE_try (aexp, cases, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
      let aexp_setup, aexp_call, aexp_cleanup = compile_aexp ctx aexp in
-     let try_return_id = gensym () in
+     let try_return_id = ngensym () in
      let handled_exception_label = label "handled_exception_" in
      let fallthrough_label = label "fallthrough_exception_" in
      let compile_case (apat, guard, body) =
@@ -576,11 +580,11 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
          | _ -> false
        in
        let try_label = label "try_" in
-       let exn_cval = (F_current_exception, ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
+       let exn_cval = (F_id current_exception, ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
        let destructure, destructure_cleanup, ctx = compile_match ctx apat exn_cval try_label in
        let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
        let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-       let gs = gensym () in
+       let gs = ngensym () in
        let case_instrs =
          destructure @ [icomment "end destructuring"]
          @ (if not trivial_guard then
@@ -596,11 +600,11 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      assert (ctyp_equal ctyp (ctyp_of_typ ctx typ));
      [idecl ctyp try_return_id;
       itry_block (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
-      ijump (F_unary ("!", F_have_exception), CT_bool) handled_exception_label]
+      ijump (F_unary ("!", F_id have_exception), CT_bool) handled_exception_label]
      @ List.concat (List.map compile_case cases)
      @ [igoto fallthrough_label;
         ilabel handled_exception_label;
-        icopy l CL_have_exception (F_lit (V_bool false), CT_bool);
+        icopy l (CL_id (have_exception, CT_bool)) (F_lit (V_bool false), CT_bool);
         ilabel fallthrough_label],
      (fun clexp -> icopy l clexp (F_id try_return_id, ctyp)),
      []
@@ -631,7 +635,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        | CT_struct (_, ctors) -> List.fold_left (fun m (k, v) -> Bindings.add k v m) Bindings.empty ctors
        | _ -> raise (Reporting.err_general l "Cannot perform record update for non-record type")
      in
-     let gs = gensym () in
+     let gs = ngensym () in
      let compile_fields (id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup
@@ -650,7 +654,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   | AE_short_circuit (SC_and, aval, aexp) ->
      let left_setup, cval, left_cleanup = compile_aval l ctx aval in
      let right_setup, call, right_cleanup = compile_aexp ctx aexp in
-     let gs = gensym () in
+     let gs = ngensym () in
      left_setup
      @ [ idecl CT_bool gs;
          iif cval
@@ -663,7 +667,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   | AE_short_circuit (SC_or, aval, aexp) ->
      let left_setup, cval, left_cleanup = compile_aval l ctx aval in
      let right_setup, call, right_cleanup = compile_aexp ctx aexp in
-     let gs = gensym () in
+     let gs = ngensym () in
      left_setup
      @ [ idecl CT_bool gs;
          iif cval
@@ -681,7 +685,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let compile_fields (field_id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup
-       @ [icopy l (CL_field (CL_id (id, ctyp_of_typ ctx typ), string_of_id field_id)) cval]
+       @ [icopy l (CL_field (CL_id (name id, ctyp_of_typ ctx typ), string_of_id field_id)) cval]
        @ field_cleanup
      in
      List.concat (List.map compile_fields (Bindings.bindings fields)),
@@ -695,7 +699,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        | None -> ctyp_of_typ ctx assign_typ
      in
      let setup, call, cleanup = compile_aexp ctx aexp in
-     setup @ [call (CL_id (id, assign_ctyp))], (fun clexp -> icopy l clexp unit_fragment), cleanup
+     setup @ [call (CL_id (name id, assign_ctyp))], (fun clexp -> icopy l clexp unit_fragment), cleanup
 
   | AE_block (aexps, aexp, _) ->
      let block = compile_block ctx aexps in
@@ -707,8 +711,8 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let loop_end_label = label "wend_" in
      let cond_setup, cond_call, cond_cleanup = compile_aexp ctx cond in
      let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-     let gs = gensym () in
-     let unit_gs = gensym () in
+     let gs = ngensym () in
+     let unit_gs = ngensym () in
      let loop_test = (F_unary ("!", F_id gs), CT_bool) in
      [idecl CT_bool gs; idecl CT_unit unit_gs]
      @ [ilabel loop_start_label]
@@ -729,8 +733,8 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let loop_end_label = label "until_" in
      let cond_setup, cond_call, cond_cleanup = compile_aexp ctx cond in
      let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-     let gs = gensym () in
-     let unit_gs = gensym () in
+     let gs = ngensym () in
+     let unit_gs = ngensym () in
      let loop_test = (F_id gs, CT_bool) in
      [idecl CT_bool gs; idecl CT_unit unit_gs]
      @ [ilabel loop_start_label]
@@ -759,7 +763,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        if ctyp_equal fn_return_ctyp (cval_ctyp cval) then
          [ireturn cval]
        else
-         let gs = gensym () in
+         let gs = ngensym () in
          [idecl fn_return_ctyp gs;
           icopy l (CL_id (gs, fn_return_ctyp)) cval;
           ireturn (F_id gs, fn_return_ctyp)]
@@ -804,11 +808,11 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
 
      (* Loop variables *)
      let from_setup, from_call, from_cleanup = compile_aexp ctx loop_from in
-     let from_gs = gensym () in
+     let from_gs = ngensym () in
      let to_setup, to_call, to_cleanup = compile_aexp ctx loop_to in
-     let to_gs = gensym () in
+     let to_gs = ngensym () in
      let step_setup, step_call, step_cleanup = compile_aexp ctx loop_step in
-     let step_gs = gensym () in
+     let step_gs = ngensym () in
      let variable_init gs setup call cleanup =
        [idecl (CT_fint 64) gs;
         iblock (setup @ [call (CL_id (gs, CT_fint 64))] @ cleanup)]
@@ -817,8 +821,10 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let loop_start_label = label "for_start_" in
      let loop_end_label = label "for_end_" in
      let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-     let body_gs = gensym () in
+     let body_gs = ngensym () in
 
+     let loop_var = name loop_var in
+     
      variable_init from_gs from_setup from_call from_cleanup
      @ variable_init to_gs to_setup to_call to_cleanup
      @ variable_init step_gs step_setup step_call step_cleanup
@@ -842,7 +848,7 @@ and compile_block ctx = function
   | exp :: exps ->
      let setup, call, cleanup = compile_aexp ctx exp in
      let rest = compile_block ctx exps in
-     let gs = gensym () in
+     let gs = ngensym () in
      iblock (setup @ [idecl CT_unit gs; call (CL_id (gs, CT_unit))] @ cleanup) :: rest
 
 (** Compile a sail type definition into a IR one. Most of the
@@ -892,14 +898,14 @@ let generate_cleanup instrs =
     | instr -> []
   in
   let is_clear ids = function
-    | I_aux (I_clear (_, id), _) -> IdSet.add id ids
+    | I_aux (I_clear (_, id), _) -> NameSet.add id ids
     | _ -> ids
   in
-  let cleaned = List.fold_left is_clear IdSet.empty instrs in
+  let cleaned = List.fold_left is_clear NameSet.empty instrs in
   instrs
   |> List.map generate_cleanup'
   |> List.concat
-  |> List.filter (fun (id, _) -> not (IdSet.mem id cleaned))
+  |> List.filter (fun (id, _) -> not (NameSet.mem id cleaned))
   |> List.map snd
 
 let fix_exception_block ?return:(return=None) ctx instrs =
@@ -927,8 +933,8 @@ let fix_exception_block ?return:(return=None) ctx instrs =
        @ rewrite_exception historic after
     | before, I_aux (I_throw cval, (_, l)) :: after ->
        before
-       @ [icopy l (CL_current_exception (cval_ctyp cval)) cval;
-          icopy l CL_have_exception (F_lit (V_bool true), CT_bool)]
+       @ [icopy l (CL_id (current_exception, cval_ctyp cval)) cval;
+          icopy l (CL_id (have_exception, CT_bool)) (F_lit (V_bool true), CT_bool)]
        @ generate_cleanup (historic @ before)
        @ [igoto end_block_label]
        @ rewrite_exception (historic @ before) after
@@ -941,7 +947,7 @@ let fix_exception_block ?return:(return=None) ctx instrs =
        if has_effect effects BE_escape then
          before
          @ [funcall;
-            iif (F_have_exception, CT_bool) (generate_cleanup (historic @ before) @ [igoto end_block_label]) [] CT_unit]
+            iif (F_id have_exception, CT_bool) (generate_cleanup (historic @ before) @ [igoto end_block_label]) [] CT_unit]
          @ rewrite_exception (historic @ before) after
        else
          before @ funcall :: rewrite_exception (historic @ before) after
@@ -979,7 +985,7 @@ let rec compile_arg_pat ctx label (P_aux (p_aux, (l, _)) as pat) ctyp =
   | _ ->
      let apat = anf_pat pat in
      let gs = gensym () in
-     let destructure, cleanup, _ = compile_match ctx apat (F_id gs, ctyp) label in
+     let destructure, cleanup, _ = compile_match ctx apat (F_id (name gs), ctyp) label in
      (gs, (destructure, cleanup))
 
 let rec compile_arg_pats ctx label (P_aux (p_aux, (l, _)) as pat) ctyps =
@@ -994,10 +1000,10 @@ let rec compile_arg_pats ctx label (P_aux (p_aux, (l, _)) as pat) ctyps =
      let arg_id, (destructure, cleanup) = compile_arg_pat ctx label pat (CT_tup ctyps) in
      let new_ids = List.map (fun ctyp -> gensym (), ctyp) ctyps in
      destructure
-     @ [idecl (CT_tup ctyps) arg_id]
-     @ List.mapi (fun i (id, ctyp) -> icopy l (CL_tuple (CL_id (arg_id, CT_tup ctyps), i)) (F_id id, ctyp)) new_ids,
+     @ [idecl (CT_tup ctyps) (name arg_id)]
+     @ List.mapi (fun i (id, ctyp) -> icopy l (CL_tuple (CL_id (name arg_id, CT_tup ctyps), i)) (F_id (name id), ctyp)) new_ids,
      List.map (fun (id, _) -> id, ([], [])) new_ids,
-     [iclear (CT_tup ctyps) arg_id]
+     [iclear (CT_tup ctyps) (name arg_id)]
      @ cleanup
 
 let combine_destructure_cleanup xs = List.concat (List.map fst xs), List.concat (List.rev (List.map snd xs))
@@ -1108,7 +1114,7 @@ and compile_def' n total ctx = function
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
      let aexp = ctx.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
-     let instrs = setup @ [call (CL_id (id, ctyp_of_typ ctx typ))] @ cleanup in
+     let instrs = setup @ [call (CL_id (name id, ctyp_of_typ ctx typ))] @ cleanup in
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, instrs)], ctx
 
   | DEF_reg_dec (DEC_aux (_, (l, _))) ->
@@ -1161,8 +1167,8 @@ and compile_def' n total ctx = function
        compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure fundef_label
      in
 
-     let instrs = arg_setup @ destructure @ setup @ [call (CL_return ret_ctyp)] @ cleanup @ destructure_cleanup @ arg_cleanup in
-     let instrs = fix_early_return (CL_return ret_ctyp) instrs in
+     let instrs = arg_setup @ destructure @ setup @ [call (CL_id (return, ret_ctyp))] @ cleanup @ destructure_cleanup @ arg_cleanup in
+     let instrs = fix_early_return (CL_id (return, ret_ctyp)) instrs in
      let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
 
      if Id.compare (mk_id !opt_debug_function) id = 0 then
@@ -1211,7 +1217,7 @@ and compile_def' n total ctx = function
      let aexp = ctx.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
      let apat = anf_pat ~global:true pat in
-     let gs = gensym () in
+     let gs = ngensym () in
      let end_label = label "let_end_" in
      let destructure, destructure_cleanup, _ = compile_match ctx apat (F_id gs, ctyp) end_label in
      let gs_setup, gs_cleanup =
@@ -1278,7 +1284,7 @@ let rec specialize_variants ctx prior =
            if ctyp_equal ctyp suprema then
              [], (unpoly frag, ctyp), []
            else
-             let gs = gensym () in
+             let gs = ngensym () in
              [idecl suprema gs;
               icopy l (CL_id (gs, suprema)) (unpoly frag, ctyp)],
              (F_id gs, suprema),
