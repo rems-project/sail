@@ -1179,9 +1179,14 @@ and compile_def' n total ctx = function
      if !opt_debug_flow_graphs then
        begin
          let instrs = Jib_optimize.(instrs |> optimize_unit |> flatten_instrs) in
+         let root, _, cfg = Jib_ssa.control_flow_graph instrs in
+         let idom = Jib_ssa.immediate_dominators cfg root in
          let cfg = Jib_ssa.ssa instrs in
          let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".gv") in
          Jib_ssa.make_dot out_chan cfg;
+         close_out out_chan;
+         let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".dom.gv") in
+         Jib_ssa.make_dominators_dot out_chan idom cfg;
          close_out out_chan;
        end;
 

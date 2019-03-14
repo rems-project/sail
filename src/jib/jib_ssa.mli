@@ -69,9 +69,14 @@ val add_edge : int -> int -> 'a array_graph -> unit
 type cf_node =
   | CF_label of string
   | CF_block of Jib.instr list
+  | CF_guard of Jib.cval
   | CF_start
 
 val control_flow_graph : Jib.instr list -> int * int list * ('a list * cf_node) array_graph
+
+(** [immediate_dominators graph root] will calculate the immediate
+   dominators for a control flow graph with a specified root node. *)
+val immediate_dominators : 'a array_graph -> int -> int array
 
 type ssa_elem =
   | Phi of Ast.id * Ast.id list
@@ -83,3 +88,5 @@ val ssa : Jib.instr list -> (ssa_elem list * cf_node) array_graph
    debugging. Can use 'dot -Tpng X.gv -o X.png' to generate a png
    image of the graph. *)
 val make_dot : out_channel -> (ssa_elem list * cf_node) array_graph -> unit
+
+val make_dominators_dot : out_channel -> int array -> (ssa_elem list * cf_node) array_graph -> unit

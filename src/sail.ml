@@ -445,7 +445,7 @@ let main() =
        then
          let ast_c = rewrite_ast_c type_envs ast in
          let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
-         let ast_c, type_envs = Specialize.(specialize' 2 int_specialization ast_c type_envs) in
+         let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in
          let output_chan =
            match !opt_file_out with
            | Some f -> Util.opt_colors := false; open_out (f ^ ".ir.sail")

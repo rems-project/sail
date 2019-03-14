@@ -133,7 +133,10 @@ let prune visited graph =
 type cf_node =
   | CF_label of string
   | CF_block of instr list
+  | CF_guard of cval
   | CF_start
+
+let cval_not (f, ctyp) = (F_unary ("!", f), ctyp)
 
 let control_flow_graph instrs =
   let module StringMap = Map.Make(String) in
@@ -157,7 +160,7 @@ let control_flow_graph instrs =
   let rec cfg preds instrs =
     let before, after = instr_split_at cf_split instrs in
     let last = match after with
-      | I_aux (I_label _, _) :: _ -> []
+      | I_aux ((I_label _ | I_goto _ | I_jump _), _) :: _ -> []
       | instr :: _ -> [instr]
       | _ -> []
     in
@@ -182,8 +185,11 @@ let control_flow_graph instrs =
        cfg [] after
 
     | I_aux (I_jump (cval, label), _) :: after ->
-       List.iter (fun p -> add_edge p (StringMap.find label !labels) graph) preds;
-       cfg preds after
+       let t = add_vertex ([], CF_guard cval) graph in
+       let f = add_vertex ([], CF_guard (cval_not cval)) graph in
+       List.iter (fun p -> add_edge p t graph; add_edge p f graph) preds;
+       add_edge t (StringMap.find label !labels) graph;
+       cfg [f] after
 
     | I_aux (I_label label, _) :: after ->
        cfg (StringMap.find label !labels :: preds) after
@@ -359,7 +365,7 @@ let place_phi_functions graph df =
   let all_vars = ref IdSet.empty in
 
   let rec all_decls = function
-    | I_aux (I_decl (_, id), _) :: instrs ->
+    | I_aux ((I_init (_, id, _) | I_decl (_, id)), _) :: instrs ->
        IdSet.add id (all_decls instrs)
     | _ :: instrs -> all_decls instrs
     | [] -> IdSet.empty
@@ -474,6 +480,8 @@ let rename_variables graph root children =
          counts := Bindings.add id i !counts;
          push_stack id i;
          I_init (ctyp, append_id id ("_" ^ string_of_int i), cval)
+      | I_jump (cval, label) ->
+         I_jump (fold_cval cval, label)
       | instr -> instr
     in
     I_aux (aux, annot)
@@ -483,6 +491,7 @@ let rename_variables graph root children =
     | CF_start -> CF_start
     | CF_block instrs -> CF_block (List.map ssa_instr instrs)
     | CF_label label -> CF_label label
+    | CF_guard cval -> CF_guard (fold_cval cval)
   in
 
   let ssa_ssanode = function
@@ -548,24 +557,19 @@ let string_of_node = function
   | (phis, CF_label label) -> string_of_phis phis ^ label
   | (phis, CF_block instrs) -> string_of_phis phis ^ Util.string_of_list "\\l" (fun instr -> String.escaped (Pretty_print_sail.to_string (pp_instr ~short:true instr))) instrs
   | (phis, CF_start) -> string_of_phis phis ^ "START"
+  | (phis, CF_guard cval) -> string_of_phis phis ^ (String.escaped (Pretty_print_sail.to_string (pp_cval cval)))
 
 let vertex_color = function
   | (_, CF_start)   -> "peachpuff"
   | (_, CF_block _) -> "white"
   | (_, CF_label _) -> "springgreen"
-
-let edge_color node_from node_to =
-  match node_from, node_to with
-  | CF_block _, CF_block _ -> "black"
-  | CF_label _, CF_block _ -> "red"
-  | CF_block _, CF_label _ -> "blue"
-  | _, _ -> "deeppink"
+  | (_, CF_guard _) -> "yellow"
 
 let make_dot out_chan graph =
   Util.opt_colors := false;
   output_string out_chan "digraph DEPS {\n";
   let make_node i n =
-    output_string out_chan (Printf.sprintf "  n%i [label=\"%s\";shape=box;style=filled;fillcolor=%s];\n" i (string_of_node n) (vertex_color n))
+    output_string out_chan (Printf.sprintf "  n%i [label=\"%i\\n%s\\l\";shape=box;style=filled;fillcolor=%s];\n" i i (string_of_node n) (vertex_color n))
   in
   let make_line i s =
     output_string out_chan (Printf.sprintf "  n%i -> n%i [color=black];\n" i s)
@@ -584,7 +588,7 @@ let make_dominators_dot out_chan idom graph =
   Util.opt_colors := false;
   output_string out_chan "digraph DOMS {\n";
   let make_node i n =
-    output_string out_chan (Printf.sprintf "  n%i [label=\"%s\";shape=box;style=filled;fillcolor=%s];\n" i (string_of_node n) (vertex_color n))
+    output_string out_chan (Printf.sprintf "  n%i [label=\"%i\\n%s\\l\";shape=box;style=filled;fillcolor=%s];\n" i i (string_of_node n) (vertex_color n))
   in
   let make_line i s =
     output_string out_chan (Printf.sprintf "  n%i -> n%i [color=black];\n" i s)
