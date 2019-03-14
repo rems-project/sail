@@ -290,17 +290,24 @@ let call_smt' l vars constraints : smt_result =
       in
       output_string tmp_chan smt_file;
       close_out tmp_chan;
-      let smt_output =
+      let status, smt_output =
         try
           let smt_out, smt_in, smt_err = Unix.open_process_full (!opt_solver.command ^ " " ^ input_file) (Unix.environment ()) in
           let smt_output =
             try List.combine problems (input_lines smt_out (List.length problems)) with
             | End_of_file -> List.combine problems ["unknown"]
           in
-          let _ = Unix.close_process_full (smt_out, smt_in, smt_err) in
-          smt_output
+          let status = Unix.close_process_full (smt_out, smt_in, smt_err) in
+          status, smt_output
         with
         | exn -> raise (Reporting.err_general l ("Error when calling smt: " ^ Printexc.to_string exn))
+      in
+      let _ = match status with
+        | Unix.WEXITED 0 -> ()
+        | Unix.WEXITED n ->
+           raise (Reporting.err_general l ("SMT solver returned unexpected status " ^ string_of_int n))
+        | Unix.WSIGNALED n | Unix.WSTOPPED n ->
+           raise (Reporting.err_general l ("SMT solver killed by signal " ^ string_of_int n))
       in
       Sys.remove input_file;
       try
