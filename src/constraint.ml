@@ -259,7 +259,15 @@ let save_digests () =
   DigestMap.iter output !known_problems;
   close_out out_chan
 
-let call_smt' l vars constraints : smt_result =
+let kopt_pair kopt = (kopt_kid kopt, unaux_kind (kopt_kind kopt))
+
+let call_smt' l constraints : smt_result =
+  let vars =
+    kopts_of_constraint constraints
+    |> KOptSet.elements
+    |> List.map kopt_pair
+    |> List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty
+  in
   let problems = [constraints] in
   let smt_file, _ = smtlib_of_constraints l vars constraints in
 
@@ -278,57 +286,61 @@ let call_smt' l vars constraints : smt_result =
   in
 
   let digest = Digest.string smt_file in
-  try
-    let result = DigestMap.find digest !known_problems in
-    result
-  with
-  | Not_found ->
-    begin
-      let (input_file, tmp_chan) =
-        try Filename.open_temp_file "constraint_" ".smt2" with
-        | Sys_error msg -> raise (Reporting.err_general l ("Could not open temp file when calling SMT: " ^ msg))
-      in
-      output_string tmp_chan smt_file;
-      close_out tmp_chan;
-      let status, smt_output =
-        try
-          let smt_out, smt_in, smt_err = Unix.open_process_full (!opt_solver.command ^ " " ^ input_file) (Unix.environment ()) in
-          let smt_output =
-            try List.combine problems (input_lines smt_out (List.length problems)) with
-            | End_of_file -> List.combine problems ["unknown"]
-          in
-          let status = Unix.close_process_full (smt_out, smt_in, smt_err) in
-          status, smt_output
-        with
-        | exn -> raise (Reporting.err_general l ("Error when calling smt: " ^ Printexc.to_string exn))
-      in
-      let _ = match status with
-        | Unix.WEXITED 0 -> ()
-        | Unix.WEXITED n ->
-           raise (Reporting.err_general l ("SMT solver returned unexpected status " ^ string_of_int n))
-        | Unix.WSIGNALED n | Unix.WSTOPPED n ->
-           raise (Reporting.err_general l ("SMT solver killed by signal " ^ string_of_int n))
-      in
-      Sys.remove input_file;
-      try
-        let (problem, _) = List.find (fun (_, result) -> result = "unsat") smt_output in
-        known_problems := DigestMap.add digest Unsat !known_problems;
-        Unsat
-      with
-      | Not_found ->
-         let unsolved = List.filter (fun (_, result) -> result = "unknown") smt_output in
-         if unsolved == []
-         then (known_problems := DigestMap.add digest Sat !known_problems; Sat)
-         else (known_problems := DigestMap.add digest Unknown !known_problems; Unknown)
-    end
 
-let call_smt l vars constraints =
+  match DigestMap.find_opt digest !known_problems with
+  | Some result -> result
+  | None ->
+     let (input_file, tmp_chan) =
+       try Filename.open_temp_file "constraint_" ".smt2" with
+       | Sys_error msg -> raise (Reporting.err_general l ("Could not open temp file when calling SMT: " ^ msg))
+     in
+     output_string tmp_chan smt_file;
+     close_out tmp_chan;
+     let status, smt_output =
+       try
+         let smt_out, smt_in, smt_err = Unix.open_process_full (!opt_solver.command ^ " " ^ input_file) (Unix.environment ()) in
+         let smt_output =
+           try List.combine problems (input_lines smt_out (List.length problems)) with
+           | End_of_file -> List.combine problems ["unknown"]
+         in
+         let status = Unix.close_process_full (smt_out, smt_in, smt_err) in
+         status, smt_output
+       with
+       | exn ->
+          raise (Reporting.err_general l ("Error when calling smt: " ^ Printexc.to_string exn))
+     in
+     let _ = match status with
+       | Unix.WEXITED 0 -> ()
+       | Unix.WEXITED n ->
+          raise (Reporting.err_general l ("SMT solver returned unexpected status " ^ string_of_int n))
+       | Unix.WSIGNALED n | Unix.WSTOPPED n ->
+          raise (Reporting.err_general l ("SMT solver killed by signal " ^ string_of_int n))
+     in
+     Sys.remove input_file;
+     try
+       let (problem, _) = List.find (fun (_, result) -> result = "unsat") smt_output in
+       known_problems := DigestMap.add digest Unsat !known_problems;
+       Unsat
+     with
+     | Not_found ->
+        let unsolved = List.filter (fun (_, result) -> result = "unknown") smt_output in
+        if unsolved == []
+        then (known_problems := DigestMap.add digest Sat !known_problems; Sat)
+        else (known_problems := DigestMap.add digest Unknown !known_problems; Unknown)
+
+let call_smt l constraints =
   let t = Profile.start_smt () in
-  let result = call_smt' l vars constraints in
+  let result = call_smt' l constraints in
   Profile.finish_smt t;
   result
 
-let solve_smt l vars constraints var =
+let solve_smt l constraints var =
+  let vars =
+    kopts_of_constraint constraints
+    |> KOptSet.elements
+    |> List.map kopt_pair
+    |> List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty
+  in
   let smt_file, smt_var = smtlib_of_constraints ~get_model:true l vars constraints in
   let smt_var = pp_sexpr (smt_var var) in
 
@@ -367,22 +379,22 @@ let solve_smt l vars constraints var =
   with
   | Not_found -> None
 
-let solve_all_smt l vars constraints var =
+let solve_all_smt l constraints var =
   let rec aux results =
     let constraints = List.fold_left (fun ncs r -> (nc_and ncs (nc_neq (nconstant r) (nvar var)))) constraints results in
-    match solve_smt l vars constraints var with
+    match solve_smt l constraints var with
     | Some result -> aux (result :: results)
     | None ->
-       match call_smt l vars constraints with
+       match call_smt l constraints with
        | Unsat -> Some results
        | _ -> None
   in
   aux []
 
-let solve_unique_smt l vars constraints var =
-  match solve_smt l vars constraints var with
+let solve_unique_smt l constraints var =
+  match solve_smt l constraints var with
   | Some result ->
-     begin match call_smt l vars (nc_and constraints (nc_neq (nconstant result) (nvar var))) with
+     begin match call_smt l (nc_and constraints (nc_neq (nconstant result) (nvar var))) with
      | Unsat -> Some result
      | _ -> None
      end

@@ -1239,7 +1239,7 @@ end = struct
     else if KidSet.cardinal power_vars = 1 && !opt_smt_linearize then
       let v = KidSet.choose power_vars in
       let constrs = List.fold_left nc_and nc_true (get_constraints env) in
-      begin match Constraint.solve_all_smt l (get_typ_vars env) constrs v with
+      begin match Constraint.solve_all_smt l constrs v with
       | Some solutions ->
          typ_print (lazy (Util.("Linearizing " |> red |> clear) ^ string_of_n_constraint constr
                           ^ " for " ^ string_of_kid v ^ " in " ^ Util.string_of_list ", " Big_int.to_string solutions));
@@ -1493,10 +1493,8 @@ which is then a problem we can feed to the constraint solver expecting unsat.
  *)
 
 let prove_smt env (NC_aux (_, l) as nc) =
-  let vars = Env.get_typ_vars env in
-  let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
   let ncs = Env.get_constraints env in
-  match Constraint.call_smt l vars (List.fold_left nc_and (nc_not nc) ncs) with
+  match Constraint.call_smt l (List.fold_left nc_and (nc_not nc) ncs) with
   | Constraint.Unsat -> typ_debug (lazy "unsat"); true
   | Constraint.Sat -> typ_debug (lazy "sat"); false
   | Constraint.Unknown ->
@@ -1504,7 +1502,7 @@ let prove_smt env (NC_aux (_, l) as nc) =
         constraints, even when such constraints are irrelevant *)
      let ncs' = List.concat (List.map constraint_conj ncs) in
      let ncs' = List.filter (fun nc -> KidSet.is_empty (constraint_power_variables nc)) ncs' in
-     match Constraint.call_smt l vars (List.fold_left nc_and (nc_not nc) ncs') with
+     match Constraint.call_smt l (List.fold_left nc_and (nc_not nc) ncs') with
      | Constraint.Unsat -> typ_debug (lazy "unsat"); true
      | Constraint.Sat | Constraint.Unknown -> typ_debug (lazy "sat/unknown"); false
 
@@ -1518,7 +1516,7 @@ let solve_unique env (Nexp_aux (_, l) as nexp) =
     let vars = Env.get_typ_vars env in
     let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
     let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
-    Constraint.solve_unique_smt l vars constr (mk_kid "solve#")
+    Constraint.solve_unique_smt l constr (mk_kid "solve#")
 
 let debug_pos (file, line, _, _) =
   "(" ^ file ^ "/" ^ string_of_int line ^ ") "
@@ -2071,7 +2069,7 @@ let rec subtyp l env typ1 typ2 =
      let kids2 = KidSet.elements (KidSet.diff (KidSet.of_list kids2) (nexp_frees nexp2)) in
      if not (kids2 = []) then typ_error env l ("Universally quantified constraint generated: " ^ Util.string_of_list ", " string_of_kid kids2) else ();
      let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) (Env.get_typ_vars env) in
-     begin match Constraint.call_smt l vars (nc_eq nexp1 nexp2) with
+     begin match Constraint.call_smt l (nc_eq nexp1 nexp2) with
      | Constraint.Sat ->
         let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
         if prove __POS__ env nc2 then
