@@ -37,4 +37,4 @@ depends: [
   "conf-zlib"
   "yojson"
 ]
-available: [ocaml-version >= "4.06.0"]
+available: [ocaml-version >= "4.06.1"]
