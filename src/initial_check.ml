@@ -1036,6 +1036,10 @@ let process_ast ?generate:(generate=true) defs =
   else
     ast
 
+let ast_of_def_string_with f str =
+  let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
+  process_ast (f (P.Defs [def]))
+
 let ast_of_def_string str =
   let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
   process_ast (P.Defs [def])

@@ -358,6 +358,7 @@ let dominance_frontiers graph root idom children =
 
 type ssa_elem =
   | Phi of Ast.id * Ast.id list
+  | Pi of Jib.cval list
 
 let place_phi_functions graph df =
   let defsites = ref Bindings.empty in
@@ -500,6 +501,7 @@ let rename_variables graph root children =
        counts := Bindings.add id i !counts;
        push_stack id i;
        Phi (append_id id ("_" ^ string_of_int i), args)
+    | Pi _ -> assert false (* Should not be introduced at this point *)
   in
 
   let fix_phi j = function
@@ -510,6 +512,7 @@ let rename_variables graph root children =
                       append_id a ("_" ^ string_of_int i)
                     else a)
                   ids)
+    | Pi _ -> assert false (* Should not be introduced at this point *)
   in
 
   let rec rename n =
@@ -538,6 +541,53 @@ let rename_variables graph root children =
   in
   rename root
 
+let place_pi_functions graph start idom children =
+  let get_guard = function
+    | CF_guard guard -> [guard]
+    | _ -> []
+  in
+  let get_pi_contents ssanodes =
+    List.concat (List.map (function Pi guards -> guards | _ -> []) ssanodes)
+  in
+
+  let rec go n =
+    begin match graph.nodes.(n) with
+    | Some ((ssa, cfnode), preds, succs) ->
+       let p = idom.(n) in
+       if p <> -1 then
+         begin match graph.nodes.(p) with
+         | Some ((dom_ssa, _), _, _) ->
+            let args = get_guard cfnode @ get_pi_contents dom_ssa in
+            graph.nodes.(n) <- Some ((Pi args :: ssa, cfnode), preds, succs)
+         | None -> assert false
+         end
+    | None -> assert false
+    end;
+    IntSet.iter go children.(n)
+  in
+  go start
+
+(** Remove p nodes. Assumes the graph is acyclic. *)
+let remove_nodes remove_cf graph =
+  for n = 0 to graph.next - 1 do
+    match graph.nodes.(n) with
+    | Some ((_, cfnode), preds, succs) when remove_cf cfnode ->
+       IntSet.iter (fun pred ->
+           match graph.nodes.(pred) with
+           | Some (content, preds', succs') ->
+              graph.nodes.(pred) <- Some (content, preds', IntSet.remove n (IntSet.union succs succs'))
+           | None -> assert false
+         ) preds;
+       IntSet.iter (fun succ ->
+           match graph.nodes.(succ) with
+           | Some (content, preds', succs') ->
+              graph.nodes.(succ) <- Some (content, IntSet.remove n (IntSet.union preds preds'), succs')
+           | None -> assert false
+         ) succs;
+       graph.nodes.(n) <- None
+    | _ -> ()
+  done
+
 let ssa instrs =
   let start, finish, cfg = control_flow_graph instrs in
   let idom = immediate_dominators cfg start in
@@ -545,13 +595,21 @@ let ssa instrs =
   let df = dominance_frontiers cfg start idom children in
   place_phi_functions cfg df;
   rename_variables cfg start children;
+  place_pi_functions cfg start idom children;
+  (* remove_guard_nodes (function CF_guard _ -> true | CF_label _ -> true | _ -> false) cfg; *)
   cfg
 
 (* Debugging utilities for outputing Graphviz files. *)
 
+let string_of_ssainstr = function
+  | Phi (id, args) ->
+     string_of_id id ^ " = &phi;(" ^ Util.string_of_list ", " string_of_id args ^ ")"
+  | Pi cvals ->
+     "&pi;(" ^ Util.string_of_list ", " (fun (f, _) -> String.escaped (string_of_fragment ~zencode:false f)) cvals ^ ")"
+
 let string_of_phis = function
   | [] -> ""
-  | phis -> Util.string_of_list "\\l" (fun (Phi (id, args)) -> string_of_id id ^ " = phi(" ^ Util.string_of_list ", " string_of_id args ^ ")") phis ^ "\\l"
+  | phis -> Util.string_of_list "\\l" string_of_ssainstr phis ^ "\\l"
 
 let string_of_node = function
   | (phis, CF_label label) -> string_of_phis phis ^ label

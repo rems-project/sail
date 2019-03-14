@@ -1217,6 +1217,7 @@ end = struct
         { env with
           constraints = List.map (constraint_subst v (arg_kopt (mk_kopt s_k s_v))) env.constraints;
           typ_vars = KBindings.add v (l, k) (KBindings.add s_v (s_l, s_k) env.typ_vars);
+          locals = Bindings.map (fun (mut, typ) -> mut, typ_subst v (arg_kopt (mk_kopt s_k s_v)) typ) env.locals;
           shadow_vars = KBindings.add v (n + 1) env.shadow_vars
         }, Some s_v
       end

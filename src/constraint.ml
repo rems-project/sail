@@ -278,11 +278,9 @@ let call_smt' l constraints : smt_result =
   let rec input_lines chan = function
     | 0 -> []
     | n ->
-       begin
-         let l = input_line chan in
-         let ls = input_lines chan (n - 1) in
-         l :: ls
-       end
+       let l = input_line chan in
+       let ls = input_lines chan (n - 1) in
+       l :: ls
   in
 
   let digest = Digest.string smt_file in

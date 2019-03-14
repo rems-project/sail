@@ -80,6 +80,7 @@ val immediate_dominators : 'a array_graph -> int -> int array
 
 type ssa_elem =
   | Phi of Ast.id * Ast.id list
+  | Pi of Jib.cval list
 
 (** Convert a list of instructions into SSA form *)
 val ssa : Jib.instr list -> (ssa_elem list * cf_node) array_graph

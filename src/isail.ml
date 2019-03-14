@@ -181,6 +181,14 @@ let help = function
      "(:i | :infer) <expression> - Infer the type of an expression."
   | ":v" | ":verbose" ->
      "(:v | :verbose) - Increase the verbosity level, or reset to zero at max verbosity."
+  | ":b" | ":bind" ->
+     "(:b | :bind) <id> : <typ> - Declare a variable of a specific type"
+  | ":let" ->
+     ":let <id> = <exp> - Bind a variable to expression"
+  | ":def" ->
+     ":def <definition> - Evaluate a top-level definition"
+  | ":prove" ->
+     ":prove <constraint> - Try to prove a constraint in the top-level environment"
   | ":commands" ->
      ":commands - List all available commands."
   | ":help" ->
@@ -311,9 +319,6 @@ let handle_input' input =
         let exp = Type_check.infer_exp !Interactive.env exp in
         pretty_sail stdout (doc_typ (Type_check.typ_of exp));
         print_newline ()
-     | ":canon" ->
-        let typ = Initial_check.typ_of_string arg in
-        print_endline (string_of_typ (Type_check.canonicalize !Interactive.env typ))
      | ":prove" ->
         let nc = Initial_check.constraint_of_string arg in
         print_endline (string_of_bool (Type_check.prove __POS__ !Interactive.env nc))
@@ -328,8 +333,8 @@ let handle_input' input =
         else print_endline "Invalid argument for :clear, expected either :clear on or :clear off"
      | ":commands" ->
         let commands =
-          [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :clear :commands :help :output :option";
-            "Normal mode commands - :elf :(l)oad :(u)nload";
+          [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :clear :commands :help :output :option";
+            "Normal mode commands - :elf :(l)oad :(u)nload :let :(b)ind";
             "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
             "";
             ":(c)ommand can be called as either :c or :command." ]
@@ -350,16 +355,6 @@ let handle_input' input =
         interactive_state := initial_state !Interactive.ast Value.primops
      | ":pretty" ->
         print_endline (Pretty_print_sail.to_string (Latex.defs !Interactive.ast))
-     | ":compile" ->
-        (*
-        let open PPrint in
-        let open C_backend in
-        let ast = Process_file.rewrite_ast_c !Interactive.env !Interactive.ast in
-        let ast, env = Specialize.(specialize typ_ord_specialization ast !Interactive.env) in
-        let ctx = initial_ctx env in
-        interactive_bytecode := bytecode_ast ctx (List.map flatten_cdef) ast
-         *)
-        ()
      | ":ir" ->
         print_endline arg;
         let open Jib in
@@ -408,6 +403,32 @@ let handle_input' input =
            (* See initial_check.mli for an explanation of why we need this. *)
            Initial_check.have_undefined_builtins := false;
            Process_file.clear_symbols ()
+        | ":b" | ":bind" ->
+           let args = Str.split (Str.regexp " +") arg in
+           begin match args with
+           | v :: ":" :: args ->
+              let typ = Initial_check.typ_of_string (String.concat " " args) in
+              let _, env, _ = Type_check.bind_pat !Interactive.env (mk_pat (P_id (mk_id v))) typ in
+              Interactive.env := env
+           | _ -> print_endline "Invalid arguments for :bind"
+           end
+        | ":let" ->
+           let args = Str.split (Str.regexp " +") arg in
+           begin match args with
+           | v :: "=" :: args ->
+              let exp = Initial_check.exp_of_string (String.concat " " args) in
+              let ast, env = Type_check.check !Interactive.env (Defs [DEF_val (mk_letbind (mk_pat (P_id (mk_id v))) exp)]) in
+              Interactive.ast := append_ast !Interactive.ast ast;
+              Interactive.env := env;
+              interactive_state := initial_state !Interactive.ast Value.primops;
+           | _ -> print_endline "Invalid arguments for :let"
+           end
+        | ":def" ->
+           let ast = Initial_check.ast_of_def_string_with (Process_file.preprocess_ast options) arg in
+           let ast, env = Type_check.check !Interactive.env ast in
+           Interactive.ast := append_ast !Interactive.ast ast;
+           Interactive.env := env;
+           interactive_state := initial_state !Interactive.ast Value.primops;
         | _ -> unrecognised_command cmd
         end
      | Expression str ->
