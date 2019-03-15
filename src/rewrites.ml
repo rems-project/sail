@@ -2460,14 +2460,20 @@ let rewrite_defs_letbind_effects env =
        k (rewrap (E_throw exp')))
     | E_internal_plet _ -> failwith "E_internal_plet should not be here yet" in
 
-  let rewrite_fun _ (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),fdannot)) =
+  let rewrite_fun _ (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),fdannot) as fd) =
     (* let propagate_funcl_effect (FCL_aux (FCL_Funcl(id, pexp), (l, a))) =
       let pexp, eff = propagate_pexp_effect pexp in
       FCL_aux (FCL_Funcl(id, pexp), (l, add_effect_annot a eff))
     in
     let funcls = List.map propagate_funcl_effect funcls in *)
+    let effectful_vs =
+      match Env.get_val_spec (id_of_fundef fd) env with
+      | _, Typ_aux (Typ_fn (_, _, effs), _) -> effectful_effs effs
+      | _, _ -> false
+      | exception Type_error _ -> false
+    in
     let effectful_funcl (FCL_aux (FCL_Funcl(_, pexp), _)) = effectful_pexp pexp in
-    let newreturn = List.exists effectful_funcl funcls in
+    let newreturn = effectful_vs || List.exists effectful_funcl funcls in
     let rewrite_funcl (FCL_aux (FCL_Funcl(id,pexp),annot)) =
       let _ = reset_fresh_name_counter () in
       FCL_aux (FCL_Funcl (id,n_pexp newreturn pexp (fun x -> x)),annot)
@@ -4664,13 +4670,13 @@ let rewrite_defs_lem = [
   ("mapping_builtins", rewrite_defs_mapping_patterns);
   ("mono_rewrites", mono_rewrites);
   ("recheck_defs", if_mono recheck_defs);
+  ("rewrite_undefined", rewrite_undefined_if_gen false);
   ("rewrite_toplevel_nexps", if_mono rewrite_toplevel_nexps);
   ("monomorphise", if_mono monomorphise);
   ("recheck_defs", if_mwords recheck_defs);
   ("add_bitvector_casts", if_mwords (fun _ -> Monomorphise.add_bitvector_casts));
   ("rewrite_atoms_to_singletons", if_mono (fun _ -> Monomorphise.rewrite_atoms_to_singletons));
   ("recheck_defs", if_mwords recheck_defs);
-  ("rewrite_undefined", rewrite_undefined_if_gen false);
   ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
   ("remove_not_pats", rewrite_defs_not_pats);
   ("remove_impossible_int_cases", Constant_propagation.remove_impossible_int_cases);

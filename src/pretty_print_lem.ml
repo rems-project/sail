@@ -927,7 +927,9 @@ let doc_exp_lem, doc_let_lem =
          let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
          let middle =
            match fst (untyp_pat pat) with
-           | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) -> string ">>"
+           | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _)
+             when is_unit_typ (typ_of_pat pat) ->
+              string ">>"
            | P_aux (P_tup _, _)
              when not (IdSet.mem (mk_id "varstup") (find_e_ids e2)) ->
               (* Work around indentation issues in Lem when translating

@@ -174,6 +174,9 @@ function sail_ones(n) = not_vec(sail_zeros(n))
 
 // Some ARM specific builtins
 
+val slice = "slice" : forall 'n 'm 'o, 0 <= 'm & 0 <= 'n.
+  (bits('m), atom('o), atom('n)) -> bits('n)
+
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 
 val slice_mask : forall 'n, 'n >= 0. (implicit('n), int, int) -> bits('n) effect pure

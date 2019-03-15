@@ -695,6 +695,7 @@ let string_of_zbit = function
   | B1 -> "1"
 let string_of_znat n = Big_int.to_string n
 let string_of_zint n = Big_int.to_string n
+let string_of_zimplicit n = Big_int.to_string n
 let string_of_zunit () = "()"
 let string_of_zbool = function
   | true -> "true"
