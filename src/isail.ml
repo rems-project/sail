@@ -189,6 +189,8 @@ let help = function
      ":def <definition> - Evaluate a top-level definition"
   | ":prove" ->
      ":prove <constraint> - Try to prove a constraint in the top-level environment"
+  | ":assume" ->
+     ":assume <constraint> - Add a constraint to the top-level environment"
   | ":commands" ->
      ":commands - List all available commands."
   | ":help" ->
@@ -322,6 +324,9 @@ let handle_input' input =
      | ":prove" ->
         let nc = Initial_check.constraint_of_string arg in
         print_endline (string_of_bool (Type_check.prove __POS__ !Interactive.env nc))
+     | ":assume" ->
+        let nc = Initial_check.constraint_of_string arg in
+        Interactive.env := Type_check.Env.add_constraint nc !Interactive.env
      | ":v" | ":verbose" ->
             Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 3;
             print_endline ("Verbosity: " ^ string_of_int !Type_check.opt_tc_debug)
@@ -333,8 +338,8 @@ let handle_input' input =
         else print_endline "Invalid argument for :clear, expected either :clear on or :clear off"
      | ":commands" ->
         let commands =
-          [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :clear :commands :help :output :option";
-            "Normal mode commands - :elf :(l)oad :(u)nload :let :(b)ind";
+          [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help :output :option";
+            "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind";
             "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
             "";
             ":(c)ommand can be called as either :c or :command." ]
@@ -542,26 +547,42 @@ let handle_input input =
      print_endline (Printexc.to_string exn)
 
 let () =
-  (* Auto complete function names based on val specs *)
-  LNoise.set_completion_callback
-    begin
+  (* Auto complete function names based on val specs, or directories if :load command *)
+  LNoise.set_completion_callback (
       fun line_so_far ln_completions ->
       let line_so_far, last_id =
         try
-          let p = Str.search_backward (Str.regexp "[^a-zA-Z0-9_]") line_so_far (String.length line_so_far - 1) in
+          let p = Str.search_backward (Str.regexp "[^a-zA-Z0-9_/]") line_so_far (String.length line_so_far - 1) in
           Str.string_before line_so_far (p + 1), Str.string_after line_so_far (p + 1)
         with
         | Not_found -> "", line_so_far
         | Invalid_argument _ -> line_so_far, ""
       in
+      let n = try String.index line_so_far ' ' with Not_found -> String.length line_so_far in
+      let cmd = Str.string_before line_so_far n in
       if last_id <> "" then
-        IdSet.elements !vs_ids
-        |> List.map string_of_id
-        |> List.filter (fun id -> Str.string_match (Str.regexp_string last_id) id 0)
-        |> List.map (fun completion -> line_so_far ^ completion)
-        |> List.iter (LNoise.add_completion ln_completions)
+        if cmd = ":load" || cmd = ":l" then
+          begin
+            let dirname, basename = Filename.dirname last_id, Filename.basename last_id in
+            if Sys.file_exists last_id then
+              LNoise.add_completion ln_completions (line_so_far ^ last_id);
+            if (try Sys.is_directory dirname with Sys_error _ -> false) then
+              let contents = Sys.readdir (Filename.concat (Sys.getcwd ()) dirname) in
+              for i = 0 to Array.length contents - 1 do
+                if Str.string_match (Str.regexp_string basename) contents.(i) 0 then
+                  let is_dir = (try Sys.is_directory (Filename.concat dirname contents.(i)) with Sys_error _ -> false) in
+                  LNoise.add_completion ln_completions
+                    (line_so_far ^ Filename.concat dirname contents.(i) ^ (if is_dir then Filename.dir_sep else ""))
+              done
+          end
+        else
+          IdSet.elements !vs_ids
+          |> List.map string_of_id
+          |> List.filter (fun id -> Str.string_match (Str.regexp_string last_id) id 0)
+          |> List.map (fun completion -> line_so_far ^ completion)
+          |> List.iter (LNoise.add_completion ln_completions)
       else ()
-    end;
+    );
 
   (* Read the script file if it is set with the -is option, and excute them *)
   begin
