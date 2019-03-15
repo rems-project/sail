@@ -552,7 +552,7 @@ let () =
       fun line_so_far ln_completions ->
       let line_so_far, last_id =
         try
-          let p = Str.search_backward (Str.regexp "[^a-zA-Z0-9_/]") line_so_far (String.length line_so_far - 1) in
+          let p = Str.search_backward (Str.regexp "[^a-zA-Z0-9_/-]") line_so_far (String.length line_so_far - 1) in
           Str.string_before line_so_far (p + 1), Str.string_after line_so_far (p + 1)
         with
         | Not_found -> "", line_so_far
@@ -575,6 +575,11 @@ let () =
                     (line_so_far ^ Filename.concat dirname contents.(i) ^ (if is_dir then Filename.dir_sep else ""))
               done
           end
+        else if cmd = ":option" then
+          List.map (fun (opt, _, _) -> opt) options
+          |> List.filter (fun opt -> Str.string_match (Str.regexp_string last_id) opt 0)
+          |> List.map (fun completion -> line_so_far ^ completion)
+          |> List.iter (LNoise.add_completion ln_completions)
         else
           IdSet.elements !vs_ids
           |> List.map string_of_id
@@ -582,6 +587,31 @@ let () =
           |> List.map (fun completion -> line_so_far ^ completion)
           |> List.iter (LNoise.add_completion ln_completions)
       else ()
+    );
+
+  LNoise.set_hints_callback (
+      fun line_so_far ->
+      let hint str = Some (" " ^ str, LNoise.Yellow, false) in
+      match String.trim line_so_far with
+      | _ when !Interactive.opt_emacs_mode -> None
+      | ":load"  | ":l" -> hint "<sail file>"
+      | ":bind"  | ":b" -> hint "<id> : <type>"
+      | ":infer" | ":i" -> hint "<expression>"
+      | ":type"  | ":t" -> hint "<function id>"
+      | ":let" -> hint "<id> = <expression>"
+      | ":def" -> hint "<definition>"
+      | ":prove" -> hint "<constraint>"
+      | ":assume" -> hint "<constraint>"
+      | str ->
+         let args = Str.split (Str.regexp " +") str in
+         match args with
+         | [":option"] -> hint "<flag>"
+         | [":option"; flag] ->
+            begin match List.find_opt (fun (opt, _, _) -> flag = opt) options with
+            | Some (_, _, help) -> hint (Str.global_replace (Str.regexp " +") " " help)
+            | None -> None
+            end
+         | _ -> None
     );
 
   (* Read the script file if it is set with the -is option, and excute them *)
