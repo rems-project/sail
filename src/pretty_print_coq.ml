@@ -1076,21 +1076,13 @@ let similar_nexps ctxt env n1 n2 =
     | _ -> false
   in if same_nexp_shape (nexp_const_eval n1) (nexp_const_eval n2) then true else false
 
-let constraint_fns = ["Z.leb"; "Z.geb"; "Z.ltb"; "Z.gtb"; "Z.eqb"; "neq_atom"]
+let constraint_fns = ["Z.leb"; "Z.geb"; "Z.ltb"; "Z.gtb"; "Z.eqb"; "neq_int"]
 
-let condition_produces_constraint exp =
-  (* Cheat a little - this isn't quite the right environment for subexpressions
-     but will have all of the relevant functions in it. *)
+let condition_produces_constraint ctxt exp =
   let env = env_of exp in
-  Rewriter.fold_exp
-    { (Rewriter.pure_exp_alg false (||)) with
-      Rewriter.e_app = fun (f,bs) ->
-        List.exists (fun x -> x) bs ||
-        (let name = if Env.is_extern f env "coq"
-          then Env.get_extern f env "coq"
-          else string_id f in
-         List.exists (fun id -> String.compare name id == 0) constraint_fns)
-    } exp
+  match classify_ex_type ctxt env ~rawbools:true (typ_of exp) with
+  | ExNone, _, _ -> false
+  | ExGeneral, _, _ -> true
 
 (* For most functions whose return types are non-trivial atoms we return a
    dependent pair with a proof that the result is the expected integer.  This
@@ -1362,6 +1354,7 @@ let doc_exp, doc_let =
                in
                let combinator = if effectful (effect_of body) then "foreach_ZM" else "foreach_Z" in
                let combinator = combinator ^ dir in
+               let body_ctxt = { ctxt with kid_id_renames = KBindings.add (mk_kid ("loop_" ^ string_of_id loopvar)) loopvar ctxt.kid_id_renames } in
                let used_vars_body = find_e_ids body in
                let body_lambda =
                  (* Work around indentation issues in Lem when translating
@@ -1384,7 +1377,7 @@ let doc_exp, doc_let =
                                         expY from_exp; expY to_exp; expY step_exp;
                                         expY vartuple])
                      (parens
-                        (prefix 2 1 (group body_lambda) (expN body))
+                        (prefix 2 1 (group body_lambda) (top_exp body_ctxt false body))
                      )
                  )
           | _ -> raise (Reporting.err_unreachable l __POS__
@@ -1945,7 +1938,7 @@ let doc_exp, doc_let =
     in
     (prefix 2 1
       (soft_surround 2 1 if_pp
-         ((if condition_produces_constraint c then string "sumbool_of_bool" ^^ space else empty)
+         ((if condition_produces_constraint ctxt c then string "sumbool_of_bool" ^^ space else empty)
           ^^ parens (top_exp ctxt true c)) (string "then"))
       (top_exp ctxt false t)) ^^
     break 1 ^^

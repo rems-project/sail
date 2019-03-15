@@ -1155,7 +1155,8 @@ repeat
 
 (* The linear solver doesn't like existentials. *)
 Ltac destruct_exists :=
-  repeat match goal with H:@ex Z _ |- _ => destruct H end.
+  repeat match goal with H:@ex Z _ |- _ => destruct H end;
+  repeat match goal with H:@ex bool _ |- _ => destruct H end.
 
 Ltac prepare_for_solver :=
 (*dump_context;*)
@@ -1222,6 +1223,7 @@ prepare_for_solver;
  | constructor; drop_exists; eauto 3 with datatypes zarith sail
  | match goal with |- context [Z.mul] => constructor; nia end
    (* Booleans - and_boolMP *)
+ | constructor; intuition
  | match goal with |- ArithFact (forall l r:bool, _ -> _ -> exists _ : bool, _) => 
      constructor; intros [|] [|] H1 H2;
      repeat match goal with H:?X = ?X -> _ |- _ => specialize (H eq_refl) end;
