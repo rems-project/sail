@@ -87,6 +87,11 @@ val opt_enum_casts : bool ref
    all the loaded files. *)
 val have_undefined_builtins : bool ref
 
+(** Val specs of undefined functions for builtin types that get added to
+    the AST if opt_undefined_gen is set (minus those functions that already
+    exist in the AST). *)
+val undefined_builtin_val_specs : unit def list
+
 (** {2 Desugar and process AST } *)
 
 (** If the generate flag is false, then we won't generate any

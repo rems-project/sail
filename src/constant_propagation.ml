@@ -298,13 +298,25 @@ let is_env_inconsistent env ksubsts =
     Env.add_constraint (nc_eq (nvar k) nexp) env) ksubsts env in
   prove __POS__ env nc_false
 
+module StringSet = Set.Make(String)
+module StringMap = Map.Make(String)
 
 let const_props defs ref_vars =
   let const_fold exp =
+    (* Constant-fold function applications with constant arguments *)
+    let interpreter_istate =
+      (* Do not interpret undefined_X functions *)
+      let open Interpreter in
+      let undefined_builtin_ids = ids_of_defs (Defs Initial_check.undefined_builtin_val_specs) in
+      let remove_primop id = StringMap.remove (string_of_id id) in
+      let remove_undefined_primops = IdSet.fold remove_primop undefined_builtin_ids in
+      let (lstate, gstate) = Constant_fold.initial_state defs in
+      (lstate, { gstate with primops = remove_undefined_primops gstate.primops })
+    in
     try
       strip_exp exp
       |> infer_exp (env_of exp)
-      |> Constant_fold.rewrite_exp_once (Constant_fold.initial_state defs)
+      |> Constant_fold.rewrite_exp_once interpreter_istate
       |> keep_undef_typ
     with
     | _ -> exp

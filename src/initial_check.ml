@@ -834,30 +834,31 @@ let undefined_typschm id typq =
 
 let have_undefined_builtins = ref false
 
+let undefined_builtin_val_specs =
+  [extern_of_string (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a effect {undef}";
+   extern_of_string (mk_id "undefined_bool") "unit -> bool effect {undef}";
+   extern_of_string (mk_id "undefined_bit") "unit -> bit effect {undef}";
+   extern_of_string (mk_id "undefined_int") "unit -> int effect {undef}";
+   extern_of_string (mk_id "undefined_nat") "unit -> nat effect {undef}";
+   extern_of_string (mk_id "undefined_real") "unit -> real effect {undef}";
+   extern_of_string (mk_id "undefined_string") "unit -> string effect {undef}";
+   extern_of_string (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a) effect {undef}";
+   extern_of_string (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
+   extern_of_string (mk_id "undefined_vector") "forall 'n ('a:Type) ('ord : Order). (atom('n), 'a) -> vector('n, 'ord,'a) effect {undef}";
+   (* Only used with lem_mwords *)
+   extern_of_string (mk_id "undefined_bitvector") "forall 'n. atom('n) -> vector('n, dec, bit) effect {undef}";
+   extern_of_string (mk_id "undefined_unit") "unit -> unit effect {undef}"]
+
 let generate_undefineds vs_ids (Defs defs) =
-  let gen_vs id str =
-    if (IdSet.mem id vs_ids) then [] else [extern_of_string id str]
-  in
   let undefined_builtins =
     if !have_undefined_builtins then
       []
     else
       begin
         have_undefined_builtins := true;
-        List.concat
-          [gen_vs (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a effect {undef}";
-           gen_vs (mk_id "undefined_bool") "unit -> bool effect {undef}";
-           gen_vs (mk_id "undefined_bit") "unit -> bit effect {undef}";
-           gen_vs (mk_id "undefined_int") "unit -> int effect {undef}";
-           gen_vs (mk_id "undefined_nat") "unit -> nat effect {undef}";
-           gen_vs (mk_id "undefined_real") "unit -> real effect {undef}";
-           gen_vs (mk_id "undefined_string") "unit -> string effect {undef}";
-           gen_vs (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a) effect {undef}";
-           gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
-           gen_vs (mk_id "undefined_vector") "forall 'n ('a:Type) ('ord : Order). (atom('n), 'a) -> vector('n, 'ord,'a) effect {undef}";
-           (* Only used with lem_mwords *)
-           gen_vs (mk_id "undefined_bitvector") "forall 'n. atom('n) -> vector('n, dec, bit) effect {undef}";
-           gen_vs (mk_id "undefined_unit") "unit -> unit effect {undef}"]
+        List.filter
+          (fun def -> IdSet.is_empty (IdSet.inter vs_ids (ids_of_def def)))
+          undefined_builtin_val_specs
       end
   in
   let undefined_tu = function
