@@ -5,8 +5,8 @@ Type error:
   [91m |[0m No overloading for vector_access, tried:
   [91m |[0m [94m*[0m bitvector_access
   [91m |[0m    Could not resolve quantifiers for bitvector_access
-  [91m |[0m    [94m*[0m (0 <= 'ex76# & ('ex76# + 1) <= 3)
+  [91m |[0m    [94m*[0m (0 <= 'ex114# & ('ex114# + 1) <= 3)
   [91m |[0m [94m*[0m plain_vector_access
   [91m |[0m    Could not resolve quantifiers for plain_vector_access
-  [91m |[0m    [94m*[0m (0 <= 'ex79# & ('ex79# + 1) <= 3)
+  [91m |[0m    [94m*[0m (0 <= 'ex117# & ('ex117# + 1) <= 3)
   [91m |[0m 
