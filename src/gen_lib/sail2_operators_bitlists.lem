@@ -41,6 +41,9 @@ let zeros len = repeat [B0] len
 val vector_truncate : list bitU -> integer -> list bitU
 let vector_truncate bs len = extz_bv len bs
 
+val vector_truncateLSB : list bitU -> integer -> list bitU
+let vector_truncateLSB bs len = take_list len bs
+
 val vec_of_bits_maybe    : list bitU -> maybe (list bitU)
 val vec_of_bits_fail     : forall 'rv 'e. list bitU -> monad 'rv (list bitU) 'e
 val vec_of_bits_nondet   : forall 'rv 'e. list bitU -> monad 'rv (list bitU) 'e
