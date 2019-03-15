@@ -13,3 +13,9 @@ pure_record2.sail
 pure_record3.sail
 vector_access_dec.sail
 vector_access.sail
+XXXXX unsupported existential quantification of a vector length
+bind_typ_var.sail
+XXXXX needs impliciation in constraints fixed
+bool_constraint.sail
+XXXXX needs some smart existential instantiation
+complex_exist_sat.sail

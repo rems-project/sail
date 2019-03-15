@@ -1061,8 +1061,8 @@ Ltac unbool_comparisons_goal :=
   | |- context [generic_eq _ _ = false] => apply generic_eq_false
   | |- context [generic_neq _ _ = true] => apply generic_neq_true
   | |- context [generic_neq _ _ = false] => apply generic_neq_false
-  | |- context [_ <> true] => rewrite Bool.not_true_iff_false
-  | |- context [_ <> false] => rewrite Bool.not_false_iff_true
+  | |- context [_ <> true] => setoid_rewrite Bool.not_true_iff_false
+  | |- context [_ <> false] => setoid_rewrite Bool.not_false_iff_true
   end.
 
 (* Split up dependent pairs to get at proofs of properties *)

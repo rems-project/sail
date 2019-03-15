@@ -2056,6 +2056,19 @@ let doc_type_union ctxt typ_name (Tu_aux(Tu_ty_id(typ,id),_)) =
   separate space [doc_id_ctor id; colon;
                   doc_typ ctxt typ; arrow; typ_name]
 
+(* For records and variants we declare the type parameters as implicit
+   so that they're implicit in the constructors.  Currently Coq also
+   makes them implicit in the type, so undo that here. *)
+let doc_reset_implicits id_pp typq =
+  let (kopts,ncs) = quant_split typq in
+  let resets = List.map (fun _ -> underscore) kopts in
+  let implicits = List.map (fun _ -> string "{_}") ncs in
+  let args = match implicits with
+    | [] -> [colon; string "clear implicits"]
+    | _ -> resets @ implicits
+  in
+  separate space ([string "Arguments"; id_pp] @ args) ^^ dot
+
 (*
 let rec doc_range ctxt (BF_aux(r,_)) = match r with
   | BF_single i -> parens (doc_op comma (doc_nexp ctxt i) (doc_nexp ctxt i))
@@ -2131,11 +2144,11 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
         string "Defined." ^^ hardline
       else empty
     in
-    let resetimplicit = separate space [string "Arguments"; id_pp; colon; string "clear implicits."] in
+    let reset_implicits_pp = doc_reset_implicits id_pp typq in
     doc_op coloneq
            (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt braces typq])
            ((*doc_typquant typq*) (braces (space ^^ align fs_doc ^^ space))) ^^
-      dot ^^ hardline ^^ resetimplicit ^^ hardline ^^ eq_pp ^^ updates_pp
+      dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ updates_pp
   | TD_variant(id,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
@@ -2155,11 +2168,8 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
            (doc_op coloneq)
              (concat [string "Inductive"; space; typ_nm])
              ((*doc_typquant typq*) ar_doc) in
-         (* We declared the type parameters as implicit so that they're implicit
-            in the constructors.  Currently Coq also makes them implicit in the
-            type, so undo that here. *)
-         let resetimplicit = separate space [string "Arguments"; id_pp; colon; string "clear implicits."] in
-         typ_pp ^^ dot ^^ hardline ^^ resetimplicit ^^ hardline ^^ hardline)
+         let reset_implicits_pp = doc_reset_implicits id_pp typq in
+         typ_pp ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ hardline)
   | TD_enum(id,enums,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
@@ -2628,7 +2638,7 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   separate_map hardline doc_field fields
 
 (* Remove some type variables in a similar fashion to merge_kids_atoms *)
-let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
+let doc_axiom_typschm typ_env l (tqs,typ) =
   let typ_env = add_typquant l tqs typ_env in
   match typ with
   | Typ_aux (Typ_fn (typs, ret_ty, eff),l') ->
@@ -2642,6 +2652,8 @@ let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
      in
      let args, used = List.fold_left check_typ (KidSet.empty, KidSet.empty) typs in
      let used = if is_number ret_ty then used else KidSet.union used (tyvars_of_typ ret_ty) in
+     let kopts,constraints = quant_split tqs in
+     let used = List.fold_left (fun used nc -> KidSet.union used (tyvars_of_constraint nc)) used constraints in
      let tqs = match tqs with
        | TypQ_aux (TypQ_tq qs,l) -> TypQ_aux (TypQ_tq (List.filter (function
          | QI_aux (QI_id kopt,_) when is_int_kopt kopt ->
@@ -2667,13 +2679,17 @@ let doc_axiom_typschm typ_env (TypSchm_aux (TypSchm_ts (tqs,typ),l) as ts) =
      let tyvars_pp, constrs_pp = doc_typquant_items_separate empty_ctxt braces tqs in
      string "forall" ^/^ separate space tyvars_pp ^/^
        arg_typs_pp ^/^ separate space constrs_pp ^^ comma ^/^ ret_typ_pp
-  | _ -> doc_typschm empty_ctxt true ts
+  | _ -> doc_typschm empty_ctxt true (TypSchm_aux (TypSchm_ts (tqs,typ),l))
 
-let doc_val_spec unimplemented (VS_aux (VS_val_spec(tys,id,_,_),ann)) =
+let doc_val_spec unimplemented (VS_aux (VS_val_spec(_,id,_,_),(l,ann)) as vs) =
   if !opt_undef_axioms && IdSet.mem id unimplemented then
-    let typ_env = env_of_annot ann in
+    let typ_env = env_of_annot (l,ann) in
+    (* The type checker will expand the type scheme, and we need to look at the
+       environment afterwards to find it. *)
+    let _, next_env = check_val_spec typ_env vs in
+    let tys = Env.get_val_spec id next_env in
     group (separate space
-             [string "Axiom"; doc_id id; colon; doc_axiom_typschm typ_env tys] ^^ dot) ^/^ hardline
+             [string "Axiom"; doc_id id; colon; doc_axiom_typschm typ_env l tys] ^^ dot) ^/^ hardline
   else empty (* Type signatures appear in definitions *)
 
 (* If a top-level value is declared with an existential type, we turn it into
@@ -2791,6 +2807,8 @@ try
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
         (separate_map hardline)
           (fun lib -> separate space [string "Require Import";string lib] ^^ dot) types_modules;hardline;
+        string "Import ListNotations.";
+        hardline;
         separate empty (List.map doc_def typdefs); hardline;
         hardline;
         separate empty (List.map doc_def statedefs); hardline;
