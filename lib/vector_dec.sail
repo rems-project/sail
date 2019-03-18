@@ -166,9 +166,9 @@ val sail_shiftright = "shiftr" : forall 'n ('ord : Order).
 val sail_arith_shiftright = "arith_shiftr" : forall 'n ('ord : Order).
     (vector('n, 'ord, bit), int) -> vector('n, 'ord, bit) effect pure
 
-val sail_zeros = "zeros" : forall 'n. atom('n) -> bits('n)
+val sail_zeros = "zeros" : forall 'n, 'n >= 0. atom('n) -> bits('n)
 
-val sail_ones : forall 'n. atom('n) -> bits('n)
+val sail_ones : forall 'n, 'n >= 0. atom('n) -> bits('n)
 
 function sail_ones(n) = not_vec(sail_zeros(n))
 
