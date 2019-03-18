@@ -163,7 +163,7 @@ instr :: 'I_' ::=
   | clear ctyp name                                :: :: clear
   | undefined ctyp                                 :: :: undefined
   | match_failure                                  :: :: match_failure
-  | end                                            :: :: end
+  | end name                                       :: :: end
 
 % All instructions containing nested instructions can be flattened
 % away. try and throw only exist for internal use within

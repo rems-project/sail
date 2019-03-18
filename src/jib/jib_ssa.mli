@@ -57,6 +57,12 @@ type 'a array_graph
    underlying array. *)
 val make : initial_size:int -> unit -> 'a array_graph
 
+module IntSet : Set.S with type elt = int
+  
+val get_vertex : 'a array_graph -> int -> ('a * IntSet.t * IntSet.t) option
+
+val iter_graph : ('a -> IntSet.t -> IntSet.t -> unit) -> 'a array_graph -> unit
+  
 (** Add a vertex to a graph, returning the index of the inserted
    vertex. If the number of vertices exceeds the size of the
    underlying array, then it is dynamically resized. *)
@@ -83,7 +89,7 @@ type ssa_elem =
   | Pi of Jib.cval list
 
 (** Convert a list of instructions into SSA form *)
-val ssa : Jib.instr list -> (ssa_elem list * cf_node) array_graph
+val ssa : Jib.instr list -> int * (ssa_elem list * cf_node) array_graph
 
 (** Output the control-flow graph in graphviz format for
    debugging. Can use 'dot -Tpng X.gv -o X.png' to generate a png

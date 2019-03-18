@@ -95,7 +95,7 @@ let ireturn ?loc:(l=Parse_ast.Unknown) cval =
   I_aux (I_return cval, (instr_number (), l))
 
 let iend ?loc:(l=Parse_ast.Unknown) () =
-  I_aux (I_end, (instr_number (), l))
+  I_aux (I_end (Return (-1)), (instr_number (), l))
 
 let iblock ?loc:(l=Parse_ast.Unknown) instrs =
   I_aux (I_block instrs, (instr_number (), l))
@@ -226,7 +226,8 @@ let rec instr_rename from_id to_id (I_aux (instr, aux)) =
 
     | I_match_failure -> I_match_failure
 
-    | I_end -> I_end
+    | I_end id when Name.compare id from_id = 0 -> I_end to_id
+    | I_end id -> I_end id
 
     | I_reset (ctyp, id) when Name.compare id from_id = 0 -> I_reset (ctyp, to_id)
     | I_reset (ctyp, id) -> I_reset (ctyp, id)
@@ -563,7 +564,7 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
      pp_keyword "goto" ^^ string (str |> Util.blue |> Util.clear)
   | I_match_failure ->
      pp_keyword "match_failure"
-  | I_end ->
+  | I_end _ ->
      pp_keyword "end"
   | I_undefined ctyp ->
      pp_keyword "undefined" ^^ pp_ctyp ctyp
@@ -646,7 +647,7 @@ let instr_deps = function
   | I_goto label -> NameSet.empty, NameSet.empty
   | I_undefined _ -> NameSet.empty, NameSet.empty
   | I_match_failure -> NameSet.empty, NameSet.empty
-  | I_end -> NameSet.empty, NameSet.empty
+  | I_end id -> NameSet.singleton id, NameSet.empty
 
 module NameCT = struct
   type t = name * ctyp
@@ -697,7 +698,7 @@ let rec map_instr_ctyp f (I_aux (instr, aux)) =
     | I_undefined ctyp -> I_undefined (f ctyp)
     | I_reset (ctyp, id) -> I_reset (f ctyp, id)
     | I_reinit (ctyp1, id, (frag, ctyp2)) -> I_reinit (f ctyp1, id, (frag, f ctyp2))
-    | I_end -> I_end
+    | I_end id -> I_end id
     | (I_comment _ | I_raw _ | I_label _ | I_goto _ | I_match_failure) as instr -> instr
   in
   I_aux (instr, aux)
@@ -707,7 +708,7 @@ let rec map_instr f (I_aux (instr, aux)) =
   let instr = match instr with
     | I_decl _ | I_init _ | I_reset _ | I_reinit _
       | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _
-      | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ | I_end -> instr
+      | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ | I_end _ -> instr
     | I_if (cval, instrs1, instrs2, ctyp) ->
        I_if (cval, List.map (map_instr f) instrs1, List.map (map_instr f) instrs2, ctyp)
     | I_block instrs ->
@@ -722,7 +723,7 @@ let rec iter_instr f (I_aux (instr, aux)) =
   match instr with
   | I_decl _ | I_init _ | I_reset _ | I_reinit _
     | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _
-    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ | I_end -> f (I_aux (instr, aux))
+    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ | I_end _ -> f (I_aux (instr, aux))
   | I_if (cval, instrs1, instrs2, ctyp) ->
      List.iter (iter_instr f) instrs1;
      List.iter (iter_instr f) instrs2
@@ -763,7 +764,7 @@ let rec map_instrs f (I_aux (instr, aux)) =
     | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _ -> instr
     | I_block instrs -> I_block (f (List.map (map_instrs f) instrs))
     | I_try_block instrs -> I_try_block (f (List.map (map_instrs f) instrs))
-    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _  | I_end -> instr
+    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _  | I_end _ -> instr
   in
   I_aux (instr, aux)
 
@@ -851,7 +852,7 @@ let rec instr_ctyps (I_aux (instr, aux)) =
      instrs_ctyps instrs
   | I_throw cval | I_jump (cval, _) | I_return cval ->
      CTSet.singleton (cval_ctyp cval)
-  | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_end ->
+  | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_end _ ->
      CTSet.empty
 
 and instrs_ctyps instrs = List.fold_left CTSet.union CTSet.empty (List.map instr_ctyps instrs)
@@ -909,5 +910,5 @@ let rec instrs_rename from_id to_id =
   | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (irename block), aux) :: irename instrs
   | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (irename block), aux) :: irename instrs
   | I_aux (I_throw cval, aux) :: instrs -> I_aux (I_throw (crename cval), aux) :: irename instrs
-  | (I_aux ((I_comment _ | I_raw _ | I_end | I_label _ | I_goto _ | I_match_failure | I_undefined _), _) as instr) :: instrs -> instr :: irename instrs
+  | (I_aux ((I_comment _ | I_raw _ | I_end _ | I_label _ | I_goto _ | I_match_failure | I_undefined _), _) as instr) :: instrs -> instr :: irename instrs
   | [] -> []

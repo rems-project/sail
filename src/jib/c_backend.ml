@@ -624,7 +624,7 @@ let fix_early_heap_return ret ret_ctyp instrs =
   let end_function_label = label "end_function_" in
   let is_return_recur (I_aux (instr, _)) =
     match instr with
-    | I_if _ | I_block _ | I_end | I_funcall _ | I_copy _ | I_undefined _ -> true
+    | I_if _ | I_block _ | I_end _ | I_funcall _ | I_copy _ | I_undefined _ -> true
     | _ -> false
   in
   let rec rewrite_return instrs =
@@ -646,7 +646,7 @@ let fix_early_heap_return ret ret_ctyp instrs =
        before
        @ [I_aux (I_copy (CL_addr (CL_id (ret, CT_ref ctyp)), cval), aux)]
        @ rewrite_return after
-    | before, I_aux ((I_end | I_undefined _), _) :: after ->
+    | before, I_aux ((I_end _ | I_undefined _), _) :: after ->
        before
        @ [igoto end_function_label]
        @ rewrite_return after
@@ -661,7 +661,7 @@ let fix_early_heap_return ret ret_ctyp instrs =
 let fix_early_stack_return ret ret_ctyp instrs =
   let is_return_recur (I_aux (instr, _)) =
     match instr with
-    | I_if _ | I_block _ | I_end | I_funcall _ | I_copy _ -> true
+    | I_if _ | I_block _ | I_end _ | I_funcall _ | I_copy _ -> true
     | _ -> false
   in
   let rec rewrite_return instrs =
@@ -683,7 +683,7 @@ let fix_early_stack_return ret ret_ctyp instrs =
        before
        @ [I_aux (I_copy (CL_id (ret, ctyp), cval), aux)]
        @ rewrite_return after
-    | before, I_aux (I_end, _) :: after ->
+    | before, I_aux (I_end _, _) :: after ->
        before
        @ [ireturn (F_id ret, ret_ctyp)]
        @ rewrite_return after
@@ -1468,7 +1468,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
   | I_raw str ->
      string ("  " ^ str)
 
-  | I_end -> assert false
+  | I_end _ -> assert false
 
   | I_match_failure ->
      string ("  sail_match_failure(\"" ^ String.escaped (string_of_id fid) ^ "\");")

@@ -974,7 +974,7 @@ let rec map_try_block f (I_aux (instr, aux)) =
     | I_funcall _ | I_copy _ | I_clear _ | I_throw _ | I_return _ -> instr
     | I_block instrs -> I_block (List.map (map_try_block f) instrs)
     | I_try_block instrs -> I_try_block (f (List.map (map_try_block f) instrs))
-    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_jump _ | I_match_failure | I_undefined _ | I_end -> instr
+    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_jump _ | I_match_failure | I_undefined _ | I_end _ -> instr
   in
   I_aux (instr, aux)
 
@@ -1194,7 +1194,7 @@ and compile_def' n total ctx = function
          let instrs = Jib_optimize.(instrs |> optimize_unit |> flatten_instrs) in
          let root, _, cfg = Jib_ssa.control_flow_graph instrs in
          let idom = Jib_ssa.immediate_dominators cfg root in
-         let cfg = Jib_ssa.ssa instrs in
+         let _, cfg = Jib_ssa.ssa instrs in
          let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".gv") in
          Jib_ssa.make_dot out_chan cfg;
          close_out out_chan;

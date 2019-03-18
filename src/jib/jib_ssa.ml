@@ -68,6 +68,15 @@ let make ~initial_size () = {
     nodes = Array.make initial_size None
   }
 
+let get_vertex graph n = graph.nodes.(n)
+
+let iter_graph f graph =
+  for n = 0 to graph.next - 1 do
+    match graph.nodes.(n) with
+    | Some (x, y, z) -> f x y z
+    | None -> ()
+  done
+                       
 (** Add a vertex to a graph, returning the node index *)
 let add_vertex data graph =
   let n = graph.next in
@@ -153,7 +162,7 @@ let control_flow_graph instrs =
 
   let cf_split (I_aux (aux, _)) =
     match aux with
-    | I_block _ | I_label _ | I_goto _ | I_jump _ | I_if _ | I_end | I_match_failure | I_undefined _ -> true
+    | I_block _ | I_label _ | I_goto _ | I_jump _ | I_if _ | I_end _ | I_match_failure | I_undefined _ -> true
     | _ -> false
   in
 
@@ -177,7 +186,7 @@ let control_flow_graph instrs =
        let e = cfg preds else_instrs in
        cfg (t @ e) after
 
-    | I_aux ((I_end | I_match_failure | I_undefined _), _) :: after ->
+    | I_aux ((I_end _ | I_match_failure | I_undefined _), _) :: after ->
        cfg [] after
 
     | I_aux (I_goto label, _) :: after ->
@@ -485,6 +494,9 @@ let rename_variables graph root children =
          I_init (ctyp, ssa_name i id, cval)
       | I_jump (cval, label) ->
          I_jump (fold_cval cval, label)
+      | I_end id ->
+         let i = top_stack id in
+         I_end (ssa_name i id)
       | instr -> instr
     in
     I_aux (aux, annot)
@@ -600,7 +612,7 @@ let ssa instrs =
   rename_variables cfg start children;
   place_pi_functions cfg start idom children;
   (* remove_guard_nodes (function CF_guard _ -> true | CF_label _ -> true | _ -> false) cfg; *)
-  cfg
+  start, cfg
 
 (* Debugging utilities for outputing Graphviz files. *)
 
