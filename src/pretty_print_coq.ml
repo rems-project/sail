@@ -2648,7 +2648,13 @@ let doc_axiom_typschm typ_env l (tqs,typ) =
           if KidSet.mem kid used then args,used else
             KidSet.add kid args, used
        | Some _ -> args, used
-       | _ -> args, KidSet.union used (tyvars_of_typ typ)
+       | _ ->
+          match Type_check.destruct_atom_bool typ_env typ with
+          | Some (NC_aux (NC_var kid,_)) ->
+             if KidSet.mem kid used then args,used else
+               KidSet.add kid args, used
+          | _ ->
+             args, KidSet.union used (tyvars_of_typ typ)
      in
      let args, used = List.fold_left check_typ (KidSet.empty, KidSet.empty) typs in
      let used = if is_number ret_ty then used else KidSet.union used (tyvars_of_typ ret_ty) in
@@ -2656,7 +2662,7 @@ let doc_axiom_typschm typ_env l (tqs,typ) =
      let used = List.fold_left (fun used nc -> KidSet.union used (tyvars_of_constraint nc)) used constraints in
      let tqs = match tqs with
        | TypQ_aux (TypQ_tq qs,l) -> TypQ_aux (TypQ_tq (List.filter (function
-         | QI_aux (QI_id kopt,_) when is_int_kopt kopt ->
+         | QI_aux (QI_id kopt,_) ->
             let kid = kopt_kid kopt in
             KidSet.mem kid used && not (KidSet.mem kid args)
          | _ -> true) qs),l)
@@ -2666,7 +2672,12 @@ let doc_axiom_typschm typ_env l (tqs,typ) =
        match Type_check.destruct_atom_nexp typ_env typ with
        | Some (Nexp_aux (Nexp_var kid,_)) when KidSet.mem kid args ->
           parens (doc_var empty_ctxt kid ^^ string " : Z")
-       | _ -> parens (underscore ^^ string " : " ^^ doc_typ empty_ctxt typ)
+       | _ ->
+          match Type_check.destruct_atom_bool typ_env typ with
+          | Some (NC_aux (NC_var kid,_)) when KidSet.mem kid args ->
+             parens (doc_var empty_ctxt kid ^^ string " : bool")
+          | _ ->
+             parens (underscore ^^ string " : " ^^ doc_typ empty_ctxt typ)
      in
      let arg_typs_pp = separate space (List.map doc_typ' typs) in
      let _, ret_ty = replace_atom_return_type ret_ty in
