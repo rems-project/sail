@@ -371,24 +371,51 @@ let doc_nc_fn id =
   | "not" -> string "negb"
   | s -> string s
 
-let merge_bool_count = KBindings.union (fun _ m n -> Some (m+n))
+let merge_kid_count = KBindings.union (fun _ m n -> Some (m+n))
 
-let rec count_bool_vars (NC_aux (nc,_)) =
+let rec count_nexp_vars (Nexp_aux (nexp,_)) =
+  match nexp with
+  | Nexp_id _
+  | Nexp_constant _
+    -> KBindings.empty
+  | Nexp_var kid -> KBindings.singleton kid 1
+  | Nexp_app (_,nes) ->
+     List.fold_left merge_kid_count KBindings.empty (List.map count_nexp_vars nes)
+  | Nexp_times (n1,n2)
+  | Nexp_sum (n1,n2)
+  | Nexp_minus (n1,n2)
+    -> merge_kid_count (count_nexp_vars n1) (count_nexp_vars n2)
+  | Nexp_exp n
+  | Nexp_neg n
+    -> count_nexp_vars n
+
+let rec count_nc_vars (NC_aux (nc,_)) =
   let count_arg (A_aux (arg,_)) =
     match arg with
-    | A_bool nc -> count_bool_vars nc
-    | A_nexp _ | A_typ _ | A_order _ -> KBindings.empty
+    | A_bool nc -> count_nc_vars nc
+    | A_nexp nexp -> count_nexp_vars nexp
+    | A_typ _ | A_order _ -> KBindings.empty
   in
   match nc with
   | NC_or (nc1,nc2)
   | NC_and (nc1,nc2)
-    -> merge_bool_count (count_bool_vars nc1) (count_bool_vars nc2)
-  | NC_var kid -> KBindings.singleton kid 1
-  | NC_equal _ | NC_bounded_ge _ | NC_bounded_le _ | NC_not_equal _
-  | NC_set _ | NC_true | NC_false
+    -> merge_kid_count (count_nc_vars nc1) (count_nc_vars nc2)
+  | NC_var kid
+  | NC_set (kid,_)
+    -> KBindings.singleton kid 1
+  | NC_equal (n1,n2)
+  | NC_bounded_ge (n1,n2)
+  | NC_bounded_le (n1,n2)
+  | NC_not_equal  (n1,n2)
+    -> merge_kid_count (count_nexp_vars n1) (count_nexp_vars n2)
+  | NC_true | NC_false
     -> KBindings.empty
   | NC_app (_,args) ->
-     List.fold_left merge_bool_count KBindings.empty (List.map count_arg args)
+     List.fold_left merge_kid_count KBindings.empty (List.map count_arg args)
+
+(* Simplify some of the complex boolean types created by the Sail type checker,
+   whereever an existentially bound variable is used once in a trivial way,
+   for example exists b, b and exists n, n = 32. *)
 
 type atom_bool_prop =
   Bool_boring
@@ -398,13 +425,23 @@ let simplify_atom_bool l kopts nc atom_nc =
 (*prerr_endline ("simplify " ^ string_of_n_constraint nc ^ " for bool " ^ string_of_n_constraint atom_nc);*)
   let counter = ref 0 in
   let is_bound kid = List.exists (fun kopt -> Kid.compare kid (kopt_kid kopt) == 0) kopts in
-  let bool_vars = merge_bool_count (count_bool_vars nc) (count_bool_vars atom_nc) in
-  let lin_bool_vars = KBindings.filter (fun kid n -> is_bound kid && n = 1) bool_vars in
+  let ty_vars = merge_kid_count (count_nc_vars nc) (count_nc_vars atom_nc) in
+  let lin_ty_vars = KBindings.filter (fun kid n -> is_bound kid && n = 1) ty_vars in
   let rec simplify (NC_aux (nc,l) as nc_full) =
     let is_ex_var news (NC_aux (nc,_)) =
       match nc with
-      | NC_var kid when KBindings.mem kid lin_bool_vars -> Some kid
+      | NC_var kid when KBindings.mem kid lin_ty_vars -> Some kid
       | NC_var kid when KidSet.mem kid news -> Some kid
+      | NC_equal (Nexp_aux (Nexp_var kid,_), Nexp_aux (Nexp_constant _, _))
+      | NC_equal (Nexp_aux (Nexp_constant _, _), Nexp_aux (Nexp_var kid,_))
+      | NC_bounded_ge (Nexp_aux (Nexp_var kid,_), Nexp_aux (Nexp_constant _, _))
+      | NC_bounded_ge (Nexp_aux (Nexp_constant _, _), Nexp_aux (Nexp_var kid,_))
+      | NC_bounded_le (Nexp_aux (Nexp_var kid,_), Nexp_aux (Nexp_constant _, _))
+      | NC_bounded_le (Nexp_aux (Nexp_constant _, _), Nexp_aux (Nexp_var kid,_))
+      | NC_not_equal (Nexp_aux (Nexp_var kid,_), Nexp_aux (Nexp_constant _, _))
+      | NC_not_equal (Nexp_aux (Nexp_constant _, _), Nexp_aux (Nexp_var kid,_))
+      | NC_set (kid, _::_)
+        -> if KBindings.mem kid lin_ty_vars then Some kid else None
       | _ -> None
     in
     let replace kills vars =
@@ -451,7 +488,7 @@ let simplify_atom_bool l kopts nc atom_nc =
   in
 (*prerr_endline ("now have " ^ string_of_n_constraint nc ^ " for bool " ^ string_of_n_constraint atom_nc);*)
   match atom_nc with
-  | NC_aux (NC_var kid,_) when KBindings.mem kid lin_bool_vars -> Bool_boring
+  | NC_aux (NC_var kid,_) when KBindings.mem kid lin_ty_vars -> Bool_boring
   | NC_aux (NC_var kid,_) when KidSet.mem kid new_kids -> Bool_boring
   | _ -> Bool_complex (kopts, nc, atom_nc)
 
