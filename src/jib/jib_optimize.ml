@@ -71,12 +71,6 @@ let optimize_unit instrs =
           I_aux (I_copy (CL_void, unit_cval cval), annot)
        | _ -> instr
        end
-    | I_aux (I_alias (clexp, cval), annot) as instr ->
-       begin match clexp_ctyp clexp with
-       | CT_unit ->
-          I_aux (I_alias (CL_void, unit_cval cval), annot)
-       | _ -> instr
-       end
     | instr -> instr
   in
   let non_pointless_copy (I_aux (aux, annot)) =
@@ -136,19 +130,14 @@ let unique_per_function_ids cdefs =
   let rec unique_instrs i = function
     | I_aux (I_decl (ctyp, id), aux) :: rest ->
        I_aux (I_decl (ctyp, unique_id i id), aux) :: unique_instrs i (instrs_rename id (unique_id i id) rest)
-
     | I_aux (I_init (ctyp, id, cval), aux) :: rest ->
        I_aux (I_init (ctyp, unique_id i id, cval), aux) :: unique_instrs i (instrs_rename id (unique_id i id) rest)
-
     | I_aux (I_block instrs, aux) :: rest ->
        I_aux (I_block (unique_instrs i instrs), aux) :: unique_instrs i rest
-
     | I_aux (I_try_block instrs, aux) :: rest ->
        I_aux (I_try_block (unique_instrs i instrs), aux) :: unique_instrs i rest
-
     | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: rest ->
        I_aux (I_if (cval, unique_instrs i then_instrs, unique_instrs i else_instrs, ctyp), aux) :: unique_instrs i rest
-
     | instr :: instrs -> instr :: unique_instrs i instrs
     | [] -> []
   in
@@ -214,7 +203,6 @@ let rec instrs_subst id subst =
        | I_return cval -> I_return cval
        | I_reset (ctyp, id') -> I_reset (ctyp, id')
        | I_reinit (ctyp, id', cval) -> I_reinit (ctyp, id', cval_subst id subst cval)
-       | I_alias (clexp, cval) -> I_alias (clexp, cval_subst id subst cval)
      in
      I_aux (instr, aux) :: instrs
 
@@ -246,13 +234,12 @@ let inline cdefs should_inline instrs =
        I_aux (I_funcall (clexp_subst return subst clexp, extern, fid, args), aux)
     | I_aux (I_copy (clexp, cval), aux) ->
        I_aux (I_copy (clexp_subst return subst clexp, cval), aux)
-    | I_aux (I_alias (clexp, cval), aux) ->
-       I_aux (I_alias (clexp_subst return subst clexp, cval), aux)
     | instr -> instr
   in
 
   let replace_end label = function
     | I_aux (I_end, aux) -> I_aux (I_goto label, aux)
+    | I_aux (I_undefined _, aux) -> I_aux (I_goto label, aux)
     | instr -> instr
   in
 

@@ -190,7 +190,6 @@ instr :: 'I_' ::=
 % For optimising away allocations and copying.
   | reset ctyp name                                :: :: reset
   | ctyp name = cval                               :: :: reinit
-  | alias clexp = cval                             :: :: alias
 
 cdef :: 'CDEF_' ::=
   | register id : ctyp = {

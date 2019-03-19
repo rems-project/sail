@@ -86,7 +86,6 @@ let optimize_primops = ref false
 let optimize_hoist_allocations = ref false
 let optimize_struct_updates = ref false
 let optimize_alias = ref false
-let optimize_experimental = ref false
 
 let c_debug str =
   if !c_verbosity > 0 then prerr_endline (Lazy.force str) else ()
@@ -1156,63 +1155,6 @@ let combine_variables =
      [CDEF_fundef (function_id, heap_return, args, opt body)]
   | cdef -> [cdef]
 
-(** hoist_alias looks for patterns like
-
-    recreate x; y = x; // no furthner mentions of x
-
-    Provided x has a certain type, then we can make y an alias to x
-    (denoted in the IR as 'alias y = x'). This only works if y also has
-    a lifespan that also spans the entire function body. It's possible
-    we may need to do a more thorough lifetime evaluation to get this
-    to be 100% correct - so it's behind the -Oexperimental flag
-    for now. Some benchmarking shows that this kind of optimization
-    is very valuable however! *)
-let hoist_alias =
-  (* Must return true for a subset of the types hoist_ctyp would return true for. *)
-  let is_struct = function
-    | CT_struct _ -> true
-    | _ -> false
-  in
-  let pattern heap_return id ctyp instrs =
-    let rec scan instrs =
-      match instrs with
-      (* The only thing that has a longer lifetime than id is the
-         function return, so we want to make sure we avoid that
-         case. *)
-      | (I_aux (I_copy (clexp, (F_id id', ctyp')), aux) as instr) :: instrs
-           when not (NameSet.mem heap_return (instr_writes instr)) && Name.compare id id' = 0
-                && ctyp_equal (clexp_ctyp clexp) ctyp && ctyp_equal ctyp ctyp' ->
-         if List.exists (NameSet.mem id) (List.map instr_ids instrs) then
-           instr :: scan instrs
-         else
-           I_aux (I_alias (clexp, (F_id id', ctyp')), aux) :: instrs
-
-      | instr :: instrs -> instr :: scan instrs
-      | [] -> []
-    in
-    scan instrs
-  in
-  let optimize heap_return =
-    let rec opt = function
-      | (I_aux (I_reset (ctyp, id), _) as instr) :: instrs when not (is_stack_ctyp ctyp) && is_struct ctyp ->
-         instr :: opt (pattern heap_return id ctyp instrs)
-
-      | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (opt block), aux) :: opt instrs
-      | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (opt block), aux) :: opt instrs
-      | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
-         I_aux (I_if (cval, opt then_instrs, opt else_instrs, ctyp), aux) :: opt instrs
-
-      | instr :: instrs ->
-         instr :: opt instrs
-      | [] -> []
-    in
-    opt
-  in
-  function
-  | CDEF_fundef (function_id, Some heap_return, args, body) ->
-     [CDEF_fundef (function_id, Some heap_return, args, optimize (name heap_return) body)]
-  | cdef -> [cdef]
-
 let concatMap f xs = List.concat (List.map f xs)
 
 let optimize recursive_functions cdefs =
@@ -1223,7 +1165,6 @@ let optimize recursive_functions cdefs =
   |> (if !optimize_alias then concatMap combine_variables else nothing)
   (* We need the runtime to initialize hoisted allocations *)
   |> (if !optimize_hoist_allocations && not !opt_no_rts then concatMap (hoist_allocations recursive_functions) else nothing)
-  |> (if !optimize_hoist_allocations && !optimize_experimental then concatMap hoist_alias else nothing)
 
 (**************************************************************************)
 (* 6. Code generation                                                     *)
@@ -1361,9 +1302,6 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
 
   | I_copy (clexp, cval) -> codegen_conversion l clexp cval
 
-  | I_alias (clexp, cval) ->
-     ksprintf string "  %s = %s;" (sgen_clexp_pure clexp) (sgen_cval cval)
-
   | I_jump (cval, label) ->
      ksprintf string "  if (%s) goto %s;" (sgen_cval cval) label
 
@@ -1445,9 +1383,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | "undefined_vector", _ -> Printf.sprintf "UNDEFINED(vector_%s)" (sgen_ctyp_name ctyp)
        | fname, _ -> fname
      in
-     if fname = "sail_assert" && !optimize_experimental then
-       empty
-     else if fname = "reg_deref" then
+     if fname = "reg_deref" then
        if is_stack_ctyp ctyp then
          string (Printf.sprintf  "  %s = *(%s);" (sgen_clexp_pure x) c_args)
        else
