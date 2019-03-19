@@ -1771,6 +1771,8 @@ and constraint_subst_aux l sv subst = function
   | NC_not_equal (n1, n2) -> NC_not_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_set (kid, ints) as set_nc ->
      begin match subst with
+     | A_aux (A_nexp (Nexp_aux (Nexp_var kid',_)), _) when Kid.compare kid sv = 0 ->
+        NC_set (kid', ints)
      | A_aux (A_nexp n, _) when Kid.compare kid sv = 0 ->
         nexp_set_to_or l n ints
      | _ -> set_nc
