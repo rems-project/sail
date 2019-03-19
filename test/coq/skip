@@ -19,3 +19,15 @@ XXXXX needs impliciation in constraints fixed
 bool_constraint.sail
 XXXXX needs some smart existential instantiation
 complex_exist_sat.sail
+XXXXX needs name collision avoidance due to type/constructor punning
+constraint_ctor.sail
+XXXXX Complex existential type - probably going to need this for ARM instruction ASTs
+execute_decode_hard.sail
+existential_ast.sail
+existential_ast2.sail
+existential_ast3.sail
+XXXXX Needs an existential witness
+exist1.sail
+exist2.sail
+XXXXX Needs a type synonym expanded - awkward because we don't attach environments everywhere
+exist_synonym.sail

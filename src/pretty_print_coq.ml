@@ -458,6 +458,10 @@ let simplify_atom_bool l kopts nc atom_nc =
 
 type ex_kind = ExNone | ExGeneral
 
+let string_of_ex_kind = function
+  | ExNone -> "none"
+  | ExGeneral -> "general"
+
 (* Should a Sail type be turned into a dependent pair in Coq?
    Optionally takes a variable that we're binding (to avoid trivial cases where
    the type is exactly the boolean we're binding), and whether to turn bools
@@ -1599,6 +1603,11 @@ let doc_exp, doc_let =
               | _ -> false
             in pack,unpack,autocast
           in
+          let () =
+            debug ctxt (lazy (" packeff: " ^ string_of_bool packeff ^
+                              " unpack: " ^ string_of_bool unpack ^
+                              " autocast: " ^ string_of_bool autocast))
+          in
           let autocast_id, proj_id =
             if effectful eff
             then "autocast_m", "projT1_m"
@@ -1660,7 +1669,6 @@ let doc_exp, doc_let =
        end
     | E_lit lit -> doc_lit lit
     | E_cast(typ,e) ->
-       let epp = expV true e in
        let env = env_of_annot (l,annot) in
        let outer_typ = Env.expand_synonyms env (general_typ_of_annot (l,annot)) in
        let outer_typ = expand_range_type outer_typ in
@@ -1672,6 +1680,7 @@ let doc_exp, doc_let =
          debug ctxt (lazy (" on expr of type " ^ string_of_typ inner_typ));
          debug ctxt (lazy (" where type expected is " ^ string_of_typ outer_typ))
        in
+       let epp = expV true e in
        let outer_ex,_,outer_typ' = classify_ex_type ctxt env outer_typ in
        let cast_ex,_,cast_typ' = classify_ex_type ctxt env ~rawbools:true cast_typ in
        let inner_ex,_,inner_typ' = classify_ex_type ctxt env inner_typ in
@@ -1685,6 +1694,18 @@ let doc_exp, doc_let =
            | _ -> false
        in
        let effects = effectful (effect_of e) in
+       let autocast =
+         (* We don't currently have a version of autocast under existentials,
+            but they're rare and may be unnecessary *)
+         if effects && outer_ex = ExGeneral then false else autocast
+       in
+       let () =
+         debug ctxt (lazy (" effectful: " ^ string_of_bool effects ^
+                           " outer_ex: " ^ string_of_ex_kind outer_ex ^
+                           " cast_ex: " ^ string_of_ex_kind cast_ex ^
+                           " inner_ex: " ^ string_of_ex_kind inner_ex ^
+                           " autocast: " ^ string_of_bool autocast))
+       in
        let epp =
          if effects then
            match inner_ex, cast_ex with
@@ -1882,7 +1903,9 @@ let doc_exp, doc_let =
                 | _ ->
                    separate space [string ">>= fun"; squote ^^ doc_pat ctxt true true (pat, typ_of e1); bigarrow]
               in
-              infix 0 1 middle (expY e1) (top_exp new_ctxt false e2)
+              let e1_pp = expY e1 in
+              let e2_pp = top_exp new_ctxt false e2 in
+              infix 0 1 middle e1_pp e2_pp
             in
             if aexp_needed then parens (align epp) else epp
        end
@@ -1926,6 +1949,8 @@ let doc_exp, doc_let =
         "unsupported internal expression encountered while pretty-printing")
   and if_exp ctxt (elseif : bool) c t e =
     let if_pp = string (if elseif then "else if" else "if") in
+    let c_pp = top_exp ctxt true c in
+    let t_pp = top_exp ctxt false t in
     let else_pp = match e with
       | E_aux (E_if (c', t', e'), _)
       | E_aux (E_cast (_, E_aux (E_if (c', t', e'), _)), _) ->
@@ -1939,8 +1964,8 @@ let doc_exp, doc_let =
     (prefix 2 1
       (soft_surround 2 1 if_pp
          ((if condition_produces_constraint ctxt c then string "sumbool_of_bool" ^^ space else empty)
-          ^^ parens (top_exp ctxt true c)) (string "then"))
-      (top_exp ctxt false t)) ^^
+          ^^ parens c_pp) (string "then"))
+      t_pp) ^^
     break 1 ^^
     else_pp
   and let_exp ctxt (LB_aux(lb,_)) = match lb with

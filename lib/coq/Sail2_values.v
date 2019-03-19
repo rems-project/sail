@@ -1210,6 +1210,9 @@ intros; (* To solve implications for derive_m *)
 try (exact trivial_range);
 try fill_in_evar_eq;
 try match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end;
+(* Trying reflexivity will fill in more complex metavariable examples than
+   fill_in_evar_eq above, e.g., 8 * n = 8 * ?Goal3 *)
+try (constructor; reflexivity);
 try (constructor; omega);
 prepare_for_solver;
 (*dump_context;*)
