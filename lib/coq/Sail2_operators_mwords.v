@@ -497,3 +497,4 @@ Definition set_slice_int len n lo (v : mword len) : Z :=
   else n.
 
 Definition prerr_bits {a} (s : string) (bs : mword a) : unit := tt.
+Definition print_bits {a} (s : string) (bs : mword a) : unit := tt.

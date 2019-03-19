@@ -2693,10 +2693,22 @@ let doc_axiom_typschm typ_env l (tqs,typ) =
          | _ -> true) qs),l)
        | _ -> tqs
      in
+     let typ_count = ref 0 in
+     let fresh_var () =
+       let n = !typ_count in
+       let () = typ_count := n+1 in
+       string ("x" ^ string_of_int n)
+     in
      let doc_typ' typ =
        match Type_check.destruct_atom_nexp typ_env typ with
        | Some (Nexp_aux (Nexp_var kid,_)) when KidSet.mem kid args ->
           parens (doc_var empty_ctxt kid ^^ string " : Z")
+       (* This case is silly, but useful for tests *)
+       | Some (Nexp_aux (Nexp_constant n,_)) ->
+          let v = fresh_var () in
+          parens (v ^^ string " : Z") ^/^
+            bquote ^^ braces (string "ArithFact " ^^
+                                parens (v ^^ string " = " ^^ string (Big_int.to_string n)))
        | _ ->
           match Type_check.destruct_atom_bool typ_env typ with
           | Some (NC_aux (NC_var kid,_)) when KidSet.mem kid args ->
