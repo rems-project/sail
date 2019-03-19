@@ -81,7 +81,7 @@ let ifuncall ?loc:(l=Parse_ast.Unknown) clexp id cvals =
 
 let iextern ?loc:(l=Parse_ast.Unknown) clexp id cvals =
   I_aux (I_funcall (clexp, true, id, cvals), (instr_number (), l))
-  
+
 let icall ?loc:(l=Parse_ast.Unknown) clexp extern id cvals =
   I_aux (I_funcall (clexp, extern, id, cvals), (instr_number (), l))
 
@@ -108,11 +108,13 @@ let itry_block ?loc:(l=Parse_ast.Unknown) instrs =
 
 let ithrow ?loc:(l=Parse_ast.Unknown) cval =
   I_aux (I_throw cval, (instr_number (), l))
+
 let icomment ?loc:(l=Parse_ast.Unknown) str =
   I_aux (I_comment str, (instr_number (), l))
 
 let ilabel ?loc:(l=Parse_ast.Unknown) label =
   I_aux (I_label label, (instr_number (), l))
+
 let igoto ?loc:(l=Parse_ast.Unknown) label =
   I_aux (I_goto label, (instr_number (), l))
 
@@ -152,7 +154,7 @@ module NameMap = Map.Make(Name)
 let current_exception = Current_exception (-1)
 let have_exception = Have_exception (-1)
 let return = Return (-1)
-               
+
 let name id = Name (id, -1)
 
 let rec frag_rename from_id to_id = function
@@ -269,7 +271,7 @@ let string_of_name ?zencode:(zencode=true) =
      "return" ^ ssa_num n
   | Current_exception n ->
      "(*current_exception)" ^ ssa_num n
-    
+
 let rec string_of_fragment ?zencode:(zencode=true) = function
   | F_id id -> string_of_name ~zencode:zencode id
   | F_ref id -> "&" ^ string_of_name ~zencode:zencode id
@@ -503,7 +505,7 @@ let pp_name id =
   string (string_of_name ~zencode:false id)
 
 let pp_ctyp ctyp =
-  string (full_string_of_ctyp ctyp |> Util.yellow |> Util.clear)
+  string (string_of_ctyp ctyp |> Util.yellow |> Util.clear)
 
 let pp_keyword str =
   string ((str |> Util.red |> Util.clear) ^ " ")

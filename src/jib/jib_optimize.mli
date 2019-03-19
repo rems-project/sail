@@ -61,3 +61,6 @@ val optimize_unit : instr list -> instr list
 val flatten_instrs : instr list -> instr list
 val flatten_cdef : cdef -> cdef
 
+val unique_per_function_ids : cdef list -> cdef list
+
+val inline : cdef list -> (Ast.id -> bool) -> instr list -> instr list
