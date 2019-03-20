@@ -446,16 +446,15 @@ let simplify_atom_bool l kopts nc atom_nc =
       match nc with
       | NC_var kid when KBindings.mem kid lin_ty_vars -> Some kid
       | NC_var kid when KidSet.mem kid news -> Some kid
-      | NC_equal (Nexp_aux (Nexp_var kid,_), Nexp_aux (Nexp_constant _, _))
-      | NC_equal (Nexp_aux (Nexp_constant _, _), Nexp_aux (Nexp_var kid,_))
-      | NC_bounded_ge (Nexp_aux (Nexp_var kid,_), Nexp_aux (Nexp_constant _, _))
-      | NC_bounded_ge (Nexp_aux (Nexp_constant _, _), Nexp_aux (Nexp_var kid,_))
-      | NC_bounded_le (Nexp_aux (Nexp_var kid,_), Nexp_aux (Nexp_constant _, _))
-      | NC_bounded_le (Nexp_aux (Nexp_constant _, _), Nexp_aux (Nexp_var kid,_))
-      | NC_not_equal (Nexp_aux (Nexp_var kid,_), Nexp_aux (Nexp_constant _, _))
-      | NC_not_equal (Nexp_aux (Nexp_constant _, _), Nexp_aux (Nexp_var kid,_))
-      | NC_set (kid, _::_)
-        -> if KBindings.mem kid lin_ty_vars then Some kid else None
+      | NC_equal (Nexp_aux (Nexp_var kid,_), _) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_equal (_, Nexp_aux (Nexp_var kid,_)) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_bounded_ge (Nexp_aux (Nexp_var kid,_), _) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_bounded_ge (_, Nexp_aux (Nexp_var kid,_)) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_bounded_le (Nexp_aux (Nexp_var kid,_), _) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_bounded_le (_, Nexp_aux (Nexp_var kid,_)) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_not_equal (Nexp_aux (Nexp_var kid,_), _) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_not_equal (_, Nexp_aux (Nexp_var kid,_)) when KBindings.mem kid lin_ty_vars -> Some kid
+      | NC_set (kid, _::_) when KBindings.mem kid lin_ty_vars -> Some kid
       | _ -> None
     in
     let replace kills vars =
@@ -490,7 +489,10 @@ let simplify_atom_bool l kopts nc atom_nc =
     (* We don't currently recurse into general uses of NC_app, but the
        "boring" cases we really want to get rid of won't contain
        those. *)
-    | _ -> KidSet.empty, KidSet.empty, nc_full
+    | _ ->
+       match is_ex_var KidSet.empty nc_full with
+       | Some kid -> replace KidSet.empty [kid]
+       | None -> KidSet.empty, KidSet.empty, nc_full
   in
   let new_nc, kill_nc, nc = simplify nc in
   let new_atom, kill_atom, atom_nc = simplify atom_nc in
@@ -1186,7 +1188,6 @@ let is_prefix s s' =
   String.length s' >= l &&
   String.sub s' 0 l = s
 
-(* TODO: name clashes *)
 let merge_new_tyvars ctxt old_env pat new_env =
   let remove_binding id (m,r) =
     match Bindings.find_opt id r with
