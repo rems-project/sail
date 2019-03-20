@@ -82,7 +82,8 @@ let opt_debug_on : string list ref = ref []
 type context = {
   early_ret : bool;
   kid_renames : kid KBindings.t; (* Plain tyvar -> tyvar renames *)
-  kid_id_renames : id KBindings.t; (* tyvar -> argument renames *)
+  kid_id_renames : (id option) KBindings.t; (* tyvar -> argument renames *)
+  kid_id_renames_rev : kid Bindings.t; (* reverse of kid_id_renames *)
   bound_nvars : KidSet.t;
   build_at_return : string option;
   recursive_ids : IdSet.t;
@@ -92,11 +93,23 @@ let empty_ctxt = {
   early_ret = false;
   kid_renames = KBindings.empty;
   kid_id_renames = KBindings.empty;
+  kid_id_renames_rev = Bindings.empty;
   bound_nvars = KidSet.empty;
   build_at_return = None;
   recursive_ids = IdSet.empty;
   debug = false;
 }
+
+let add_single_kid_id_rename ctxt id kid =
+  let kir =
+    match Bindings.find_opt id ctxt.kid_id_renames_rev with
+    | Some kid -> KBindings.add kid None ctxt.kid_id_renames
+    | None -> ctxt.kid_id_renames
+  in
+  { ctxt with
+      kid_id_renames = KBindings.add kid (Some id) kir;
+      kid_id_renames_rev = Bindings.add id kid ctxt.kid_id_renames_rev
+    }
 
 let debug_depth = ref 0
 
@@ -186,7 +199,8 @@ let doc_id_ctor (Id_aux(i,_)) =
 
 let doc_var ctx kid =
   match KBindings.find kid ctx.kid_id_renames with
-  | id -> doc_id id
+  | Some id -> doc_id id
+  | None -> underscore (* The original id has been shadowed, hope Coq can work it out...  TODO: warn? *)
   | exception Not_found ->
      string (fix_id true (string_of_kid (try KBindings.find kid ctx.kid_renames with Not_found -> kid)))
 
@@ -506,7 +520,7 @@ let string_of_ex_kind = function
 let classify_ex_type ctxt env ?binding ?(rawbools=false) (Typ_aux (t,l) as t0) =
   let is_binding kid =
     match binding, KBindings.find_opt kid ctxt.kid_id_renames with
-    | Some id, Some id' when Id.compare id id' == 0 -> true
+    | Some id, Some (Some id') when Id.compare id id' == 0 -> true
     | _ -> false
   in
   let simplify_atom_bool l kopts nc atom_nc =
@@ -1172,32 +1186,65 @@ let is_prefix s s' =
   String.length s' >= l &&
   String.sub s' 0 l = s
 
+(* TODO: name clashes *)
 let merge_new_tyvars ctxt old_env pat new_env =
-  let is_new_binding id =
-    match Env.lookup_id ~raw:true id old_env with
-    | Unbound -> true
-    | _ -> false
+  let remove_binding id (m,r) =
+    match Bindings.find_opt id r with
+    | Some kid ->
+debug ctxt (lazy ("Removing " ^ string_of_kid kid ^ " to " ^ string_of_id id));
+ KBindings.add kid None m, Bindings.remove id r
+    | None -> m,r
   in
-  let new_ids = IdSet.filter is_new_binding (pat_ids pat) in
+  let check_kid id kid (m,r) =
+    let m,r = remove_binding id (m,r) in
+    try
+      let _ = Env.get_typ_var kid old_env in
+      debug ctxt (lazy (" tyvar " ^ string_of_kid kid ^ " already in env"));
+      m,r
+    with _ ->
+      debug ctxt (lazy (" adding tyvar mapping " ^ string_of_kid kid ^ " to " ^ string_of_id id));
+      KBindings.add kid (Some id) m, Bindings.add id kid r
+  in
   let merge_new_kids id m =
     let typ = lvar_typ (Env.lookup_id ~raw:true id new_env) in
     debug ctxt (lazy (" considering tyvar mapping for " ^ string_of_id id ^ " at type " ^ string_of_typ typ ));
     match destruct_numeric typ, destruct_atom_bool new_env typ with
     | Some ([],_,Nexp_aux (Nexp_var kid,_)), _
-    | _, Some (NC_aux (NC_var kid,_)) ->
-       begin try
-           let _ = Env.get_typ_var kid old_env in
-           debug ctxt (lazy (" tyvar " ^ string_of_kid kid ^ " already in env"));
-           m
-         with _ ->
-           debug ctxt (lazy (" adding tyvar mapping " ^ string_of_kid kid ^ " to " ^ string_of_id id));
-           KBindings.add kid id m
-       end
+    | _, Some (NC_aux (NC_var kid,_))
+      -> check_kid id kid m
     | _ ->
        debug ctxt (lazy (" not suitable type"));
-       m
+       remove_binding id m
   in
-  { ctxt with kid_id_renames = IdSet.fold merge_new_kids new_ids ctxt.kid_id_renames }
+  let rec merge_pat m (P_aux (p,(l,_))) =
+    match p with
+    | P_lit _ | P_wild
+      -> m
+    | P_not _ -> unreachable l __POS__ "Coq backend doesn't support not patterns"
+    | P_or _ -> unreachable l __POS__ "Coq backend doesn't support or patterns yet"
+    | P_typ (_,p) -> merge_pat m p
+    | P_as (p,id) -> merge_new_kids id (merge_pat m p)
+    | P_id id -> merge_new_kids id m
+    | P_var (p,ty_p) ->
+       begin match p, ty_p with
+       | _, TP_aux (TP_wild,_) -> merge_pat m p
+       | P_aux (P_id id,_), TP_aux (TP_var kid,_) -> check_kid id kid m
+       | _ -> merge_pat m p
+       end
+    (* Some of these don't make it through to the backend, but it's obvious what
+       they'd do *)
+    | P_app (_,ps)
+    | P_vector ps
+    | P_vector_concat ps
+    | P_tup ps
+    | P_list ps
+    | P_string_append ps
+      -> List.fold_left merge_pat m ps
+    | P_record (fps,_) -> unreachable l __POS__ "Coq backend doesn't support record patterns properly yet"
+    | P_cons (p1,p2) -> merge_pat (merge_pat m p1) p2
+  in
+  let m,r = merge_pat (ctxt.kid_id_renames, ctxt.kid_id_renames_rev) pat in
+  { ctxt with kid_id_renames = m; kid_id_renames_rev = r }
 
 let prefix_recordtype = true
 let report = Reporting.err_unreachable
@@ -1350,6 +1397,7 @@ let doc_exp, doc_let =
        raise (report l __POS__ "E_loop should have been rewritten before pretty-printing")
     | E_let(leb,e) ->
        let pat = match leb with LB_aux (LB_val (p,_),_) -> p in
+       let () = debug ctxt (lazy ("Let with pattern " ^ string_of_pat pat)) in
        let new_ctxt = merge_new_tyvars ctxt (env_of_annot (l,annot)) pat (env_of e) in
        let epp = let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ top_exp new_ctxt false e in
        if aexp_needed then parens epp else epp
@@ -1395,7 +1443,7 @@ let doc_exp, doc_let =
                in
                let combinator = if effectful (effect_of body) then "foreach_ZM" else "foreach_Z" in
                let combinator = combinator ^ dir in
-               let body_ctxt = { ctxt with kid_id_renames = KBindings.add (mk_kid ("loop_" ^ string_of_id loopvar)) loopvar ctxt.kid_id_renames } in
+               let body_ctxt = add_single_kid_id_rename ctxt loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
                let used_vars_body = find_e_ids body in
                let body_lambda =
                  (* Work around indentation issues in Lem when translating
@@ -2342,7 +2390,7 @@ let rec atom_constraint ctxt (pat, typ) =
      (match nexp with
        (* When the kid is mapped to the id, we don't need a constraint *)
      | Nexp_aux (Nexp_var kid,_)
-         when (try Id.compare (KBindings.find kid ctxt.kid_id_renames) id == 0 with _ -> false) ->
+         when (try Id.compare (Util.option_get_exn Not_found (KBindings.find kid ctxt.kid_id_renames)) id == 0 with _ -> false) ->
            None
      | _ ->
         Some (bquote ^^ braces (string "ArithFact" ^^ space ^^
@@ -2409,7 +2457,7 @@ let merge_kids_atoms pats =
                    " but rearranging arguments isn't supported yet") in
             gone,map,seen
           else
-            KidSet.add kid gone, KBindings.add kid id map, KidSet.add kid seen
+            KidSet.add kid gone, KBindings.add kid (Some id) map, KidSet.add kid seen
         in
         match Type_check.destruct_atom_nexp (env_of_annot ann) typ with
         | Some (Nexp_aux (Nexp_var kid,l)) -> merge kid l
@@ -2428,7 +2476,7 @@ let merge_var_patterns map pats =
   let map,pats = List.fold_left (fun (map,pats) (pat, typ) ->
     match pat with
     | P_aux (P_var (P_aux (P_id id,_), TP_aux (TP_var kid,_)),ann) ->
-       KBindings.add kid id map, (P_aux (P_id id,ann), typ) :: pats
+       KBindings.add kid (Some id) map, (P_aux (P_id id,ann), typ) :: pats
     | _ -> map, (pat,typ)::pats) (map,[]) pats
   in map, List.rev pats
 
@@ -2462,10 +2510,16 @@ let doc_funcl mutrec rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     | Rec_aux (Rec_measure _,_) -> true, IdSet.singleton id
     | _ -> false, IdSet.empty
   in
+  let kir_rev =
+    KBindings.fold
+      (fun kid idopt m -> match idopt with Some id -> Bindings.add id kid m | None -> m)
+      kid_to_arg_rename Bindings.empty
+  in
   let ctxt0 =
     { early_ret = contains_early_return exp;
       kid_renames = mk_kid_renames ids_to_avoid kids_used;
       kid_id_renames = kid_to_arg_rename;
+      kid_id_renames_rev = kir_rev;
       bound_nvars = bound_kids;
       build_at_return = None; (* filled in below *)
       recursive_ids = recursive_ids;
@@ -2485,7 +2539,8 @@ let doc_funcl mutrec rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     debug ctxt (lazy (" build_ex " ^ match build_ex with Some s -> s ^ " needed" | _ -> "not needed"));
     debug ctxt (lazy (if effectful eff then " effectful" else " pure"));
     debug ctxt (lazy (" kid_id_renames " ^ String.concat ", " (List.map
-                        (fun (kid,id) -> string_of_kid kid ^ " |-> " ^ string_of_id id)
+                        (fun (kid,id) -> string_of_kid kid ^ " |-> " ^ 
+                                           match id with Some id -> string_of_id id | None -> "<>")
                         (KBindings.bindings kid_to_arg_rename))))
   in
   (* Put the constraints after pattern matching so that any type variable that's
