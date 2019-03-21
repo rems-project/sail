@@ -546,10 +546,10 @@ let const_props defs ref_vars =
     (* TODO maybe - tuple assignments *)
     | E_assign (le,e) ->
        let env = Type_check.env_of_annot (l, annot) in
-       let e',_ = const_prop_exp substs assigns e in
        let assigned_in = IdSet.union (assigned_vars_in_lexp le) (assigned_vars e) in
        let assigns = isubst_minus_set assigns assigned_in in
        let le',idopt = const_prop_lexp substs assigns le in
+       let e',_ = const_prop_exp substs assigns e in
        let assigns =
          match idopt with
          | Some id ->
