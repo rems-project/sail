@@ -463,6 +463,7 @@ let ocaml_funcls ctx =
          match Bindings.find id ctx.val_specs with
          | Typ_aux (Typ_fn (typs, typ, _), _) -> (typs, typ)
          | _ -> failwith "Found val spec which was not a function!"
+         | exception Not_found -> failwith ("No val spec found for " ^ string_of_id id)
        in
        (* Any remaining type variables after simple_typ rewrite should
         ind   icate Type-polymorphism. If we have it, we need to generate

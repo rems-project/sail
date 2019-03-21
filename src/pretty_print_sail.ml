@@ -574,7 +574,7 @@ let doc_mapdef (MD_aux (MD_mapping (id, typa, mapcls), _)) =
   | _ ->
      let sep = string "," ^^ hardline in
      let clauses = separate_map sep doc_mapcl mapcls in
-     string "mapping" ^^ space ^^ doc_id id ^^ space ^^ string "=" ^^ (surround 2 0 lbrace clauses rbrace)
+     string "mapping" ^^ space ^^ doc_id id ^^ space ^^ string "=" ^^ space ^^ (surround 2 0 lbrace clauses rbrace)
 
 let doc_dec (DEC_aux (reg,_)) =
   match reg with
@@ -663,6 +663,10 @@ let rec doc_scattered (SD_aux (sd_aux, _)) =
      separate space [string "scattered mapping"; doc_id id; string ":"; doc_typ typ]
   | SD_unioncl (id, tu) ->
      separate space [string "union clause"; doc_id id; equals; doc_union tu]
+  | SD_mapping (id, _) ->
+     string "scattered" ^^ space ^^ string "mapping" ^^ space ^^ doc_id id
+  | SD_mapcl (id, mapcl) ->
+     separate space [string "mapping clause"; doc_id id; equals; doc_mapcl mapcl]
 
 let rec doc_def def = group (match def with
   | DEF_default df -> doc_default df
