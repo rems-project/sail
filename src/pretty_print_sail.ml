@@ -659,14 +659,10 @@ let rec doc_scattered (SD_aux (sd_aux, _)) =
      separate space [string "mapping clause"; doc_id id; equals; doc_mapcl mapcl]
   | SD_mapping (id, Typ_annot_opt_aux (Typ_annot_opt_none, _)) ->
      separate space [string "scattered mapping"; doc_id id]
-  | SD_mapping (id, Typ_annot_opt_aux (Typ_annot_opt_some (_, typ), _)) ->
-     separate space [string "scattered mapping"; doc_id id; string ":"; doc_typ typ]
+  | SD_mapping (id, Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), _)) ->
+     separate space [string "scattered mapping"; doc_id id; colon; doc_binding (typq, typ)]
   | SD_unioncl (id, tu) ->
      separate space [string "union clause"; doc_id id; equals; doc_union tu]
-  | SD_mapping (id, _) ->
-     string "scattered" ^^ space ^^ string "mapping" ^^ space ^^ doc_id id
-  | SD_mapcl (id, mapcl) ->
-     separate space [string "mapping clause"; doc_id id; equals; doc_mapcl mapcl]
 
 let rec doc_def def = group (match def with
   | DEF_default df -> doc_default df
