@@ -357,56 +357,56 @@ let dominance_frontiers graph root idom children =
 (**************************************************************************)
 
 type ssa_elem =
-  | Phi of Jib.name * Jib.name list
+  | Phi of Jib.name * Jib.ctyp * Jib.name list
   | Pi of Jib.cval list
 
 let place_phi_functions graph df =
-  let defsites = ref NameMap.empty in
+  let defsites = ref NameCTMap.empty in
 
-  let all_vars = ref NameSet.empty in
+  let all_vars = ref NameCTSet.empty in
 
   let rec all_decls = function
-    | I_aux ((I_init (_, id, _) | I_decl (_, id)), _) :: instrs ->
-       NameSet.add id (all_decls instrs)
+    | I_aux ((I_init (ctyp, id, _) | I_decl (ctyp, id)), _) :: instrs ->
+       NameCTSet.add (id, ctyp) (all_decls instrs)
     | _ :: instrs -> all_decls instrs
-    | [] -> NameSet.empty
+    | [] -> NameCTSet.empty
   in
 
   let orig_A n =
     match graph.nodes.(n) with
     | Some ((_, CF_block instrs), _, _) ->
-       let vars = List.fold_left NameSet.union NameSet.empty (List.map instr_writes instrs) in
-       let vars = NameSet.diff vars (all_decls instrs) in
-       all_vars := NameSet.union vars !all_vars;
+       let vars = List.fold_left NameCTSet.union NameCTSet.empty (List.map instr_typed_writes instrs) in
+       let vars = NameCTSet.diff vars (all_decls instrs) in
+       all_vars := NameCTSet.union vars !all_vars;
        vars
-    | Some _ -> NameSet.empty
-    | None -> NameSet.empty
+    | Some _ -> NameCTSet.empty
+    | None -> NameCTSet.empty
   in
-  let phi_A = ref NameMap.empty in
+  let phi_A = ref NameCTMap.empty in
 
   for n = 0 to graph.next - 1 do
-    NameSet.iter (fun a ->
-        let ds = match NameMap.find_opt a !defsites with Some ds -> ds | None -> IntSet.empty in
-        defsites := NameMap.add a (IntSet.add n ds) !defsites
+    NameCTSet.iter (fun a ->
+        let ds = match NameCTMap.find_opt a !defsites with Some ds -> ds | None -> IntSet.empty in
+        defsites := NameCTMap.add a (IntSet.add n ds) !defsites
       ) (orig_A n)
   done;
 
-  NameSet.iter (fun a ->
-      let workset = ref (NameMap.find a !defsites) in
+  NameCTSet.iter (fun a ->
+      let workset = ref (NameCTMap.find a !defsites) in
       while not (IntSet.is_empty !workset) do
         let n = IntSet.choose !workset in
         workset := IntSet.remove n !workset;
         IntSet.iter (fun y ->
-            let phi_A_a = match NameMap.find_opt a !phi_A with Some set -> set | None -> IntSet.empty in
+            let phi_A_a = match NameCTMap.find_opt a !phi_A with Some set -> set | None -> IntSet.empty in
             if not (IntSet.mem y phi_A_a) then
               begin
                 begin match graph.nodes.(y) with
                 | Some ((phis, cfnode), preds, succs) ->
-                   graph.nodes.(y) <- Some ((Phi (a, Util.list_init (IntSet.cardinal preds) (fun _ -> a)) :: phis, cfnode), preds, succs)
+                   graph.nodes.(y) <- Some ((Phi (fst a, snd a, Util.list_init (IntSet.cardinal preds) (fun _ -> fst a)) :: phis, cfnode), preds, succs)
                 | None -> assert false
                 end;
-                phi_A := NameMap.add a (IntSet.add y phi_A_a) !phi_A;
-                if not (NameSet.mem a (orig_A y)) then
+                phi_A := NameCTMap.add a (IntSet.add y phi_A_a) !phi_A;
+                if not (NameCTSet.mem a (orig_A y)) then
                   workset := IntSet.add y !workset
               end
           ) df.(n)
@@ -433,7 +433,7 @@ let rename_variables graph root children =
     | Current_exception _ -> Current_exception i
     | Return _ -> Return i
   in
-  
+
   let rec fold_frag = function
     | F_id id ->
        let i = top_stack id in
@@ -498,22 +498,23 @@ let rename_variables graph root children =
   in
 
   let ssa_ssanode = function
-    | Phi (id, args) ->
+    | Phi (id, ctyp, args) ->
        let i = get_count id + 1 in
        counts := NameMap.add id i !counts;
        push_stack id i;
-       Phi (ssa_name i id, args)
+       Phi (ssa_name i id, ctyp, args)
     | Pi _ -> assert false (* Should not be introduced at this point *)
   in
 
   let fix_phi j = function
-    | Phi (id, ids) ->
-       Phi (id, List.mapi (fun k a ->
-                    if k = j then
-                      let i = top_stack a in
-                      ssa_name i a
-                    else a)
-                  ids)
+    | Phi (id, ctyp, ids) ->
+       let fix_arg k a =
+         if k = j then
+           let i = top_stack a in
+           ssa_name i a
+         else a
+       in
+       Phi (id, ctyp, List.mapi fix_arg ids)
     | Pi _ -> assert false (* Should not be introduced at this point *)
   in
 
@@ -604,8 +605,8 @@ let ssa instrs =
 (* Debugging utilities for outputing Graphviz files. *)
 
 let string_of_ssainstr = function
-  | Phi (id, args) ->
-     string_of_name id ^ " = &phi;(" ^ Util.string_of_list ", " string_of_name args ^ ")"
+  | Phi (id, ctyp, args) ->
+     string_of_name id ^ " : " ^ string_of_ctyp ctyp ^ " = &phi;(" ^ Util.string_of_list ", " string_of_name args ^ ")"
   | Pi cvals ->
      "&pi;(" ^ Util.string_of_list ", " (fun (f, _) -> String.escaped (string_of_fragment ~zencode:false f)) cvals ^ ")"
 

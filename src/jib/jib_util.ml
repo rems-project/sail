@@ -648,6 +648,30 @@ let instr_deps = function
   | I_match_failure -> NameSet.empty, NameSet.empty
   | I_end -> NameSet.empty, NameSet.empty
 
+module NameCT = struct
+  type t = name * ctyp
+  let compare (n1, ctyp1) (n2, ctyp2) =
+    let c = Name.compare n1 n2 in
+    if c = 0 then CT.compare ctyp1 ctyp2 else c
+end
+
+module NameCTSet = Set.Make(NameCT)
+module NameCTMap = Map.Make(NameCT)
+
+let rec clexp_typed_writes = function
+  | CL_id (id, ctyp) -> NameCTSet.singleton (id, ctyp)
+  | CL_field (clexp, _) -> clexp_typed_writes clexp
+  | CL_tuple (clexp, _) -> clexp_typed_writes clexp
+  | CL_addr clexp -> clexp_typed_writes clexp
+  | CL_void -> NameCTSet.empty
+
+let instr_typed_writes (I_aux (aux, _)) =
+  match aux with
+  | I_decl (ctyp, id) | I_reset (ctyp, id) -> NameCTSet.singleton (id, ctyp)
+  | I_init (ctyp, id, _) | I_reinit (ctyp, id, _) -> NameCTSet.singleton (id, ctyp)
+  | I_funcall (clexp, _, _, _) | I_copy (clexp, _) -> clexp_typed_writes clexp
+  | _ -> NameCTSet.empty
+
 let rec map_clexp_ctyp f = function
   | CL_id (id, ctyp) -> CL_id (id, f ctyp)
   | CL_field (clexp, field) -> CL_field (map_clexp_ctyp f clexp, field)
