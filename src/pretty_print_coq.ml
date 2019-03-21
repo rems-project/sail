@@ -1192,12 +1192,11 @@ let merge_new_tyvars ctxt old_env pat new_env =
   let remove_binding id (m,r) =
     match Bindings.find_opt id r with
     | Some kid ->
-debug ctxt (lazy ("Removing " ^ string_of_kid kid ^ " to " ^ string_of_id id));
- KBindings.add kid None m, Bindings.remove id r
+       debug ctxt (lazy ("Removing " ^ string_of_kid kid ^ " to " ^ string_of_id id));
+       KBindings.add kid None m, Bindings.remove id r
     | None -> m,r
   in
   let check_kid id kid (m,r) =
-    let m,r = remove_binding id (m,r) in
     try
       let _ = Env.get_typ_var kid old_env in
       debug ctxt (lazy (" tyvar " ^ string_of_kid kid ^ " already in env"));
@@ -1215,7 +1214,7 @@ debug ctxt (lazy ("Removing " ^ string_of_kid kid ^ " to " ^ string_of_id id));
       -> check_kid id kid m
     | _ ->
        debug ctxt (lazy (" not suitable type"));
-       remove_binding id m
+       m
   in
   let rec merge_pat m (P_aux (p,(l,_))) =
     match p with
@@ -1229,7 +1228,7 @@ debug ctxt (lazy ("Removing " ^ string_of_kid kid ^ " to " ^ string_of_id id));
     | P_var (p,ty_p) ->
        begin match p, ty_p with
        | _, TP_aux (TP_wild,_) -> merge_pat m p
-       | P_aux (P_id id,_), TP_aux (TP_var kid,_) -> check_kid id kid m
+       | P_aux (P_id id,_), TP_aux (TP_var kid,_) -> check_kid id kid (merge_pat m p)
        | _ -> merge_pat m p
        end
     (* Some of these don't make it through to the backend, but it's obvious what
@@ -1244,7 +1243,8 @@ debug ctxt (lazy ("Removing " ^ string_of_kid kid ^ " to " ^ string_of_id id));
     | P_record (fps,_) -> unreachable l __POS__ "Coq backend doesn't support record patterns properly yet"
     | P_cons (p1,p2) -> merge_pat (merge_pat m p1) p2
   in
-  let m,r = merge_pat (ctxt.kid_id_renames, ctxt.kid_id_renames_rev) pat in
+  let m,r = IdSet.fold remove_binding (pat_ids pat) (ctxt.kid_id_renames, ctxt.kid_id_renames_rev) in
+  let m,r = merge_pat (m, r) pat in
   { ctxt with kid_id_renames = m; kid_id_renames_rev = r }
 
 let prefix_recordtype = true
