@@ -150,17 +150,9 @@ overload operator ^ = {xor_vec, int_power, concat_str}
 val mask : forall 'l 'm, 'l >= 0 & 'm >= 0. (implicit('l), bits('m)) -> bits('l)
 
 
-/* put this val spec into Sail lib for "%" */
-
-val mod = {
-  smt: "mod",
-  ocaml: "modulus",
-  lem: "integerMod",
-  c: "tmod_int",
-  coq: "Z.rem"
-} : forall 'M 'N. (int('M), int('N)) -> {'O, 0 <= 'O & 'O < N . int('O)}
-
-/* overload operator % = {mod_int} */
+overload operator % = {emod_int}
+overload operator / = {ediv_int}
+overload mod = {emod_int}
 
 val print = "print_endline" : string -> unit
 

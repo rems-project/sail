@@ -138,6 +138,8 @@ SAIL_INT_FUNCTION(add_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(sub_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(sub_nat, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(mult_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(ediv_int, sail_int, const sail_int, const sail_int);
+SAIL_INT_FUNCTION(emod_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(tdiv_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(tmod_int, sail_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(fdiv_int, sail_int, const sail_int, const sail_int);

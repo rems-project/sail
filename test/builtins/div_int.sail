@@ -5,6 +5,8 @@ $include <flow.sail>
 $include <vector_dec.sail>
 $include <arith.sail>
 
+overload div_int = {tdiv_int}
+
 function main (() : unit) -> unit = {
   assert(div_int(48240160, 8) == 6030020);
   assert(div_int(48240168, 8) == 6030021);

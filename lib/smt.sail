@@ -3,23 +3,20 @@ $define _SMT
 
 // see http://smtlib.cs.uiowa.edu/theories-Ints.shtml
 
-val div = {
+/*! Euclidean division */
+val ediv_int = {
   ocaml: "quotient",
   lem: "integerDiv",
-  c: "tdiv_int",
+  c: "ediv_int",
   coq: "ediv_with_eq"
 } : forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))
 
-overload operator / = {div}
-
-val mod = {
+val emod_int = {
   ocaml: "modulus",
   lem: "integerMod",
-  c: "tmod_int",
+  c: "emod_int",
   coq: "emod_with_eq"
 } : forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))
-
-overload operator % = {mod}
 
 val abs_int = {
   ocaml: "abs_int",

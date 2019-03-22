@@ -187,35 +187,26 @@ let sint = function
 let add_int (x, y) = Big_int.add x y
 let sub_int (x, y) = Big_int.sub x y
 let mult (x, y) = Big_int.mul x y
+
+(* This is euclidian division from lem *)
 let quotient (x, y) = Big_int.div x y
 
-(* Big_int does not provide divide with rounding towards zero so roll
-   our own, assuming that division of positive integers rounds down *)
-let quot_round_zero (x, y) = 
-  let posX = Big_int.greater_equal x Big_int.zero in
-  let posY = Big_int.greater_equal y Big_int.zero in
-  let absX = Big_int.abs x in
-  let absY = Big_int.abs y in
-  let q = Big_int.div absX absY in
-  if posX != posY then
-    Big_int.negate q
-  else
-    q
+(* This is the same as tdiv_int, kept for compatibility with old preludes *)
+let quot_round_zero (x, y) =
+  Big_int.integerDiv_t x y
 
 (* The corresponding remainder function for above just respects the sign of x *)
-let rem_round_zero (x, y) = 
-  let posX = Big_int.greater_equal x Big_int.zero in
-  let absX = Big_int.abs x in
-  let absY = Big_int.abs y in
-  let r = Big_int.modulus absX absY in
-  if posX then
-    r
-  else
-    Big_int.negate r
+let rem_round_zero (x, y) =
+  Big_int.integerRem_t x y
 
+(* Lem provides euclidian modulo by default *)
 let modulus (x, y) = Big_int.modulus x y
 
 let negate x = Big_int.negate x
+
+let tdiv_int (x, y) = Big_int.integerDiv_t x y
+
+let tmod_int (x, y) = Big_int.integerRem_t x y
 
 let add_bit_with_carry (x, y, carry) =
   match x, y, carry with

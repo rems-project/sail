@@ -1,8 +1,9 @@
 default Order dec
 
 $include <prelude.sail>
+$include <smt.sail>
 
-overload operator / = {quotient}
+overload operator / = {ediv_int}
 
 union T = {C1 : int, C2 : int}
 

@@ -2,6 +2,8 @@ default Order dec
 
 $include <prelude.sail>
 
+overload operator / = {tdiv_int}
+
 val log2 : int -> int
 
 function log2(n) =
