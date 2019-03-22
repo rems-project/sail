@@ -416,6 +416,7 @@ let rec apat_ctyp ctx (AP_aux (apat, _, _)) =
   | AP_cons (apat, _) -> CT_list (apat_ctyp ctx apat)
   | AP_wild typ | AP_nil typ | AP_id (_, typ) -> ctyp_of_typ ctx typ
   | AP_app (_, _, typ) -> ctyp_of_typ ctx typ
+  | AP_as (_, _, typ) -> ctyp_of_typ ctx typ
 
 let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   let ctx = { ctx with local_env = env } in
@@ -440,6 +441,12 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
      let id_ctyp = ctyp_of_typ ctx typ in
      let ctx = { ctx with locals = Bindings.add pid (Immutable, id_ctyp) ctx.locals } in
      [idecl id_ctyp (name pid); icopy l (CL_id (name pid, id_ctyp)) cval], [iclear id_ctyp (name pid)], ctx
+
+  | AP_as (apat, id, typ), _ ->
+     let id_ctyp = ctyp_of_typ ctx typ in
+     let instrs, cleanup, ctx = compile_match ctx apat cval case_label in
+     let ctx = { ctx with locals = Bindings.add id (Immutable, id_ctyp) ctx.locals } in
+     instrs @ [idecl id_ctyp (name id); icopy l (CL_id (name id, id_ctyp)) cval], iclear id_ctyp (name id) :: cleanup, ctx
 
   | AP_tup apats, (frag, ctyp) ->
      begin
