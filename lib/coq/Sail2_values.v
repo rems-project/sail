@@ -1135,7 +1135,7 @@ Qed.
    the variable is unused.  This is used so that we can use eauto with a low
    search bound that doesn't include the exists.  (Not terribly happy with
    how this works...) *)
-Ltac drop_exists :=
+Ltac drop_Z_exists :=
 repeat
   match goal with |- @ex Z ?p =>
    let a := eval hnf in (p 0) in
@@ -1152,6 +1152,9 @@ repeat
    clear xx
   end.
 *)
+(* For boolean solving we just use plain metavariables *)
+Ltac drop_bool_exists :=
+repeat match goal with |- @ex bool _ => eexists end.
 
 (* The linear solver doesn't like existentials. *)
 Ltac destruct_exists :=
@@ -1203,6 +1206,17 @@ match goal with
 | _ => tauto
 end.
 
+Lemma or_iff_cong : forall A B C D, A <-> B -> C <-> D -> A \/ C <-> B \/ D.
+intros.
+tauto.
+Qed.
+
+Lemma and_iff_cong : forall A B C D, A <-> B -> C <-> D -> A /\ C <-> B /\ D.
+intros.
+tauto.
+Qed.
+
+
 Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
@@ -1223,20 +1237,23 @@ prepare_for_solver;
    (* Try sail hints before dropping the existential *)
  | constructor; eauto 3 with zarith sail
    (* The datatypes hints give us some list handling, esp In *)
- | constructor; drop_exists; eauto 3 with datatypes zarith sail
+ | constructor; drop_Z_exists; eauto 3 with datatypes zarith sail
  | match goal with |- context [Z.mul] => constructor; nia end
    (* Booleans - and_boolMP *)
- | constructor; intuition
+ | constructor; drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
  | match goal with |- ArithFact (forall l r:bool, _ -> _ -> exists _ : bool, _) => 
      constructor; intros [|] [|] H1 H2;
      repeat match goal with H:?X = ?X -> _ |- _ => specialize (H eq_refl) end;
      repeat match goal with H:@ex _ _ |- _ => destruct H end;
      bruteforce_bool_exists
    end
+(* While firstorder was quite effective at dealing with existentially quantified
+   goals from boolean expressions, it attempts lazy normalization of terms,
+   which blows up on integer comparisons with large constants.
  | match goal with |- context [@eq bool _ _] =>
      (* Don't use auto for the fallback to keep runtime down *)
      firstorder fail
-   end
+   end*)
  | constructor; idtac "Unable to solve constraint"; dump_context; fail
  ].
 (* Add an indirection so that you can redefine run_solver to fail to get
