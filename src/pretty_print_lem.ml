@@ -389,22 +389,24 @@ let doc_tannot_lem ctxt env eff typ =
 let min_int32 = Big_int.of_int64 (Int64.of_int32 Int32.min_int)
 let max_int32 = Big_int.of_int64 (Int64.of_int32 Int32.max_int)
 
-let doc_lit_lem (L_aux(lit,l)) =
+let rec doc_lit_lem (L_aux(lit,l)) =
   match lit with
   | L_unit  -> utf8string "()"
   | L_zero  -> utf8string "B0"
   | L_one   -> utf8string "B1"
   | L_false -> utf8string "false"
   | L_true  -> utf8string "true"
-  | L_num i when Big_int.less_equal min_int32 i && Big_int.less_equal i max_int32 ->
+  | L_num i ->
      let ipp = Big_int.to_string i in
      utf8string (
        if Big_int.less i Big_int.zero then "((0"^ipp^"):ii)"
        else "("^ipp^":ii)")
-  | L_num i ->
-     utf8string (Printf.sprintf "(integerOfString \"%s\")" (Big_int.to_string i))
-  | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
-  | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
+  | L_hex n when !opt_mwords -> utf8string ("0x" ^ n)
+  | L_bin n when !opt_mwords -> utf8string ("0b" ^ n)
+  | L_hex _ | L_bin _ ->
+     vector_string_to_bit_list (L_aux(lit,l))
+     |> flow_map (semi ^^ break 0) doc_lit_lem
+     |> group |> align |> brackets
   | L_undef ->
      utf8string "(return (failwith \"undefined value of unsupported type\"))"
   | L_string s -> utf8string ("\"" ^ (String.escaped s) ^ "\"")
@@ -838,8 +840,14 @@ let doc_exp_lem, doc_let_lem =
        else if Env.is_register id env && is_regtyp (typ_of full_exp) env then doc_id_lem (append_id id "_ref")
        else if is_ctor env id then doc_id_lem_ctor id
        else doc_id_lem id
-    | E_lit lit -> doc_lit_lem lit
-    | E_cast(typ,e) -> expV aexp_needed e
+    | E_lit lit ->
+       let env = env_of full_exp in
+       let typ = Env.expand_synonyms env (typ_of full_exp) in
+       let eff = effect_of full_exp in
+       if typ_needs_printed typ
+       then parens (doc_lit_lem lit ^^ doc_tannot_lem ctxt env (effectful eff) typ)
+       else doc_lit_lem lit
+    | E_cast (typ,e) -> expV aexp_needed e (*parens (expN e ^^ doc_tannot_lem ctxt (env_of full_exp) (effectful (effect_of full_exp)) typ)*)
     | E_tuple exps ->
        parens (align (group (separate_map (comma ^^ break 1) expN exps)))
     | E_record fexps ->

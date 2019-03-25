@@ -459,6 +459,8 @@ val subst : id -> 'a exp -> 'a exp -> 'a exp
 
 val hex_to_bin : string -> string
 
+val vector_string_to_bit_list : lit -> lit list
+
 (** {2 Manipulating locations} *)
 
 (** locate takes an expression and recursively sets the location in

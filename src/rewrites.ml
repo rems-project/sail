@@ -145,40 +145,6 @@ let lexp_is_effectful (LEXP_aux (_, (_, annot))) = match destruct_tannot annot w
   | Some (_, _, eff) -> effectful_effs eff
   | _ -> false
 
-let explode s =
-  let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
-  exp (String.length s - 1) []
-
-let vector_string_to_bit_list l lit =
-
-  let hexchar_to_binlist = function
-    | '0' -> ['0';'0';'0';'0']
-    | '1' -> ['0';'0';'0';'1']
-    | '2' -> ['0';'0';'1';'0']
-    | '3' -> ['0';'0';'1';'1']
-    | '4' -> ['0';'1';'0';'0']
-    | '5' -> ['0';'1';'0';'1']
-    | '6' -> ['0';'1';'1';'0']
-    | '7' -> ['0';'1';'1';'1']
-    | '8' -> ['1';'0';'0';'0']
-    | '9' -> ['1';'0';'0';'1']
-    | 'A' -> ['1';'0';'1';'0']
-    | 'B' -> ['1';'0';'1';'1']
-    | 'C' -> ['1';'1';'0';'0']
-    | 'D' -> ['1';'1';'0';'1']
-    | 'E' -> ['1';'1';'1';'0']
-    | 'F' -> ['1';'1';'1';'1']
-    | _ -> raise (Reporting.err_unreachable l __POS__ "hexchar_to_binlist given unrecognized character") in
-
-  let s_bin = match lit with
-    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode (String.uppercase_ascii s_hex)))
-    | L_bin s_bin -> explode s_bin
-    | _ -> raise (Reporting.err_unreachable l __POS__ "s_bin given non vector literal") in
-
-  List.map (function '0' -> L_aux (L_zero, gen_loc l)
-                   | '1' -> L_aux (L_one, gen_loc l)
-                   | _ -> raise (Reporting.err_unreachable (gen_loc l) __POS__ "binary had non-zero or one")) s_bin
-
 let find_used_vars exp =
   (* Overapproximates the set of used identifiers, but for the use cases below
      this is acceptable. *)
@@ -298,30 +264,6 @@ let rewrite_defs_nexp_ids, rewrite_typ_nexp_ids =
     rewrite_exp = (fun _ -> map_exp_annot rewrite_annot); rewrite_def = rewrite_def env
     } defs),
   rewrite_typ
-
-
-let rewrite_bitvector_exps env defs =
-  let e_aux = function
-    | (E_vector es, ((l, tannot) as a)) when not (is_empty_tannot tannot) ->
-       let env = env_of_annot (l, tannot) in
-       let typ = typ_of_annot (l, tannot) in
-       let eff = effect_of_annot tannot in
-       if is_bitvector_typ typ then
-         try
-           let len = mk_lit_exp (L_num (Big_int.of_int (List.length es))) in
-           let es = mk_exp (E_list (List.map strip_exp es)) in
-           let exp = mk_exp (E_app (mk_id "bitvector_of_bitlist", [len; es])) in
-           check_exp env exp typ
-         with
-         | _ -> E_aux (E_vector es, a)
-       else
-         E_aux (E_vector es, a)
-    | (e_aux, a) -> E_aux (e_aux, a)
-  in
-  let rewrite_exp _ = fold_exp { id_exp_alg with e_aux = e_aux } in
-  if IdSet.mem (mk_id "bitvector_of_bitlist") (val_spec_ids defs) then
-    rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp } defs
-  else defs
 
 
 let rewrite_defs_remove_assert defs =
@@ -1275,7 +1217,7 @@ let rewrite_defs_vector_string_pats_to_bit_list env =
     match pat with
     | P_lit (L_aux (lit, l) as l_aux) ->
        begin match lit with
-       | L_hex _ | L_bin _ -> P_aux (P_vector (List.map (fun p -> P_aux (P_lit p, (l, mk_tannot env bit_typ no_effect))) (vector_string_to_bit_list l lit)), annot)
+       | L_hex _ | L_bin _ -> P_aux (P_vector (List.map (fun p -> P_aux (P_lit p, (l, mk_tannot env bit_typ no_effect))) (vector_string_to_bit_list l_aux)), annot)
        | lit -> P_aux (P_lit l_aux, annot)
        end
     | pat -> (P_aux (pat, annot))
@@ -1285,7 +1227,7 @@ let rewrite_defs_vector_string_pats_to_bit_list env =
     match exp with
     | E_lit (L_aux (lit, l) as l_aux) ->
        begin match lit with
-       | L_hex _ | L_bin _ -> E_aux (E_vector (List.map (fun e -> E_aux (E_lit e, (l, mk_tannot env bit_typ no_effect))) (vector_string_to_bit_list l lit)), annot)
+       | L_hex _ | L_bin _ -> E_aux (E_vector (List.map (fun e -> E_aux (E_lit e, (l, mk_tannot env bit_typ no_effect))) (vector_string_to_bit_list l_aux)), annot)
        | lit -> E_aux (E_lit l_aux, annot)
        end
     | exp -> (E_aux (exp, annot))
@@ -1298,6 +1240,39 @@ let rewrite_defs_vector_string_pats_to_bit_list env =
     fold_exp { id_exp_alg with e_aux = rewrite_e_aux; pat_alg = pat_alg } exp
   in
   rewrite_defs_base { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp }
+
+let rewrite_bit_lists_to_lits env =
+  (* TODO Make all rewriting passes support bitvector literals instead of
+     converting back and forth *)
+  let open Sail2_values in
+  let bit_of_lit = function
+    | L_aux (L_zero, _) -> Some B0
+    | L_aux (L_one, _)  -> Some B1
+    | _ -> None
+  in
+  let bit_of_exp = function E_aux (E_lit lit, _) -> bit_of_lit lit | _ -> None in
+  let string_of_chars cs = String.concat "" (List.map (String.make 1) cs) in
+  let lit_of_bits bits = match hexstring_of_bits bits with
+    | Some h -> L_hex (string_of_chars h)
+    | None -> L_bin (string_of_chars (List.map bitU_char bits))
+  in
+  let e_aux (e, (l, annot)) =
+    let rewrap e = E_aux (e, (l, annot)) in
+    try
+      let env = env_of_annot (l, annot) in
+      let typ = typ_of_annot (l, annot) in
+      match e with
+      | E_vector es when is_bitvector_typ typ ->
+         (match just_list (List.map bit_of_exp es) with
+          | Some bits ->
+             check_exp env (mk_exp (E_cast (typ, mk_lit_exp (lit_of_bits bits)))) typ
+          | None -> rewrap e)
+      | E_cast (typ', E_aux (E_cast (_, e'), _)) -> rewrap (E_cast (typ', e'))
+      | _ -> rewrap e
+    with _ -> rewrap e
+  in
+  let rewrite_exp rw = fold_exp { id_exp_alg with e_aux = e_aux; } in
+  rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp }
 
 (* Remove pattern guards by rewriting them to if-expressions within the
    pattern expression. *)
@@ -2032,7 +2007,7 @@ let rewrite_simple_types env (Defs defs) =
   let rec simple_lit (L_aux (lit_aux, l) as lit) =
     match lit_aux with
     | L_bin _ | L_hex _ ->
-       E_list (List.map (fun b -> E_aux (E_lit b, simple_annot l bit_typ)) (vector_string_to_bit_list l lit_aux))
+       E_list (List.map (fun b -> E_aux (E_lit b, simple_annot l bit_typ)) (vector_string_to_bit_list lit))
     | _ -> E_lit lit
   in
   let simple_def = function
@@ -4688,7 +4663,6 @@ let rewrite_defs_lem = [
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("guarded_pats", rewrite_defs_guarded_pats);
-  ("bitvector_exps", rewrite_bitvector_exps);
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
   ("nexp_ids", rewrite_defs_nexp_ids);
   ("fix_val_specs", rewrite_fix_val_specs);
@@ -4711,6 +4685,7 @@ let rewrite_defs_lem = [
   ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
   ("remove_superfluous_returns", rewrite_defs_remove_superfluous_returns);
   ("merge function clauses", merge_funcls);
+  ("bit_lists_to_lits", rewrite_bit_lists_to_lits);
   ("recheck_defs", recheck_defs)
   ]
 
@@ -4732,7 +4707,6 @@ let rewrite_defs_coq = [
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
   ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("guarded_pats", rewrite_defs_guarded_pats);
-  ("bitvector_exps", rewrite_bitvector_exps);
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
   ("nexp_ids", rewrite_defs_nexp_ids);
   ("fix_val_specs", rewrite_fix_val_specs);

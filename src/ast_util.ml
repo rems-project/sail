@@ -1536,6 +1536,41 @@ let hex_to_bin hex =
   |> List.map Sail_lib.char_of_bit
   |> (fun bits -> String.init (List.length bits) (List.nth bits))
 
+let explode s =
+  let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
+  exp (String.length s - 1) []
+
+let vector_string_to_bit_list (L_aux (lit, l)) =
+
+  let hexchar_to_binlist = function
+    | '0' -> ['0';'0';'0';'0']
+    | '1' -> ['0';'0';'0';'1']
+    | '2' -> ['0';'0';'1';'0']
+    | '3' -> ['0';'0';'1';'1']
+    | '4' -> ['0';'1';'0';'0']
+    | '5' -> ['0';'1';'0';'1']
+    | '6' -> ['0';'1';'1';'0']
+    | '7' -> ['0';'1';'1';'1']
+    | '8' -> ['1';'0';'0';'0']
+    | '9' -> ['1';'0';'0';'1']
+    | 'A' -> ['1';'0';'1';'0']
+    | 'B' -> ['1';'0';'1';'1']
+    | 'C' -> ['1';'1';'0';'0']
+    | 'D' -> ['1';'1';'0';'1']
+    | 'E' -> ['1';'1';'1';'0']
+    | 'F' -> ['1';'1';'1';'1']
+    | _ -> raise (Reporting.err_unreachable l __POS__ "hexchar_to_binlist given unrecognized character") in
+
+  let s_bin = match lit with
+    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode (String.uppercase_ascii s_hex)))
+    | L_bin s_bin -> explode s_bin
+    | _ -> raise (Reporting.err_unreachable l __POS__ "s_bin given non vector literal") in
+
+  List.map (function '0' -> L_aux (L_zero, gen_loc l)
+                   | '1' -> L_aux (L_one, gen_loc l)
+                   | _ -> raise (Reporting.err_unreachable (gen_loc l) __POS__ "binary had non-zero or one")) s_bin
+
+
 (* Functions for working with locations *)
 
 let locate_id f (Id_aux (name, l)) = Id_aux (name, f l)
@@ -2038,4 +2073,3 @@ let rec find_annot_defs sl = function
   | [] -> None
 
 let rec find_annot_ast sl (Defs defs) = find_annot_defs sl defs
-
