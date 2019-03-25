@@ -975,6 +975,10 @@ let doc_exp_lem, doc_let_lem =
       | E_aux (E_if (c', t', e'), _)
       | E_aux (E_cast (_, E_aux (E_if (c', t', e'), _)), _) ->
          if_exp ctxt true c' t' e'
+      (* Special case to prevent current arm decoder becoming a staircase *)
+      (* TODO: replace with smarter pretty printing *)
+      | E_aux (E_internal_plet (pat,exp1,E_aux (E_cast (typ, (E_aux (E_if (_, _, _), _) as exp2)),_)),ann) when Typ.compare typ unit_typ == 0 ->
+         string "else" ^/^ top_exp ctxt false (E_aux (E_internal_plet (pat,exp1,exp2),ann))
       | _ -> prefix 2 1 (string "else") (top_exp ctxt false e)
     in
     (prefix 2 1
