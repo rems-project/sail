@@ -144,9 +144,6 @@ let options = Arg.align ([
   ( "-c_no_rts",
     Arg.Set C_backend.opt_no_rts,
     " do not include the Sail runtime" );
-  ( "-c_separate_execute",
-    Arg.Set Rewrites.opt_separate_execute,
-    " separate execute scattered function into multiple functions");
   ( "-c_prefix",
     Arg.String (fun prefix -> C_backend.opt_prefix := prefix),
     "<prefix> prefix generated C functions" );

@@ -233,6 +233,18 @@ let rec emacs_error l contents =
   | Parse_ast.Documented (_, l) -> emacs_error l contents
   | Parse_ast.Generated l -> emacs_error l contents
 
+module SliceNodeSet = Set.Make(Slice.Node)
+let slice_roots = ref SliceNodeSet.empty
+let slice_cuts = ref SliceNodeSet.empty
+
+let rec describe_rewrite =
+  let open Rewrites in
+  function
+  | String_rewriter rw -> "<string>" :: describe_rewrite (rw "")
+  | Bool_rewriter rw -> "<bool>" :: describe_rewrite (rw false)
+  | Literal_rewriter rw -> "<ocaml/lem/all>" :: describe_rewrite (rw (fun _ -> true))
+  | Basic_rewriter rw -> []
+
 type session = {
     id : string;
     files : string list
@@ -434,6 +446,55 @@ let handle_input' input =
            Interactive.ast := append_ast !Interactive.ast ast;
            Interactive.env := env;
            interactive_state := initial_state !Interactive.ast Value.primops;
+        | ":graph" ->
+           let format = if arg = "" then "svg" else arg in
+           let dotfile, out_chan = Filename.open_temp_file "sail_graph_" ".gz" in
+           let image = Filename.temp_file "sail_graph_" ("." ^ format) in
+           Slice.dot_of_ast out_chan !Interactive.ast;
+           close_out out_chan;
+           let _ = Unix.system (Printf.sprintf "dot -T%s %s -o %s" format dotfile image) in
+           let _ = Unix.system (Printf.sprintf "xdg-open %s" image) in
+           ()
+        | ":slice_roots" ->
+           let args = Str.split (Str.regexp " +") arg in
+           let ids = List.map (fun str -> Slice.Function (mk_id str)) args |> SliceNodeSet.of_list in
+           slice_roots := SliceNodeSet.union ids !slice_roots
+        | ":slice_cuts" ->
+           let args = Str.split (Str.regexp " +") arg in
+           let ids = List.map (fun str -> Slice.Function (mk_id str)) args |> SliceNodeSet.of_list in
+           slice_cuts := SliceNodeSet.union ids !slice_cuts
+        | ":slice" ->
+           let module G = Graph.Make(Slice.Node) in
+           let g = Slice.graph_of_ast !Interactive.ast in
+           let g = G.prune !slice_roots !slice_cuts g in
+           Interactive.ast := Slice.filter_ast g !Interactive.ast
+        | ":list_rewrites" ->
+           List.iter print_endline (List.map fst Rewrites.all_rewrites)
+        | ":rewrite" ->
+           let open Rewrites in
+           let args = Str.split (Str.regexp " +") arg in
+           let rec parse_args rw args =
+             match rw, args with
+             | Basic_rewriter rw, [] -> rw
+             | Bool_rewriter rw, arg :: args -> parse_args (rw (bool_of_string arg)) args
+             | String_rewriter rw, arg :: args -> parse_args (rw arg) args
+             | Literal_rewriter rw, arg :: args ->
+                begin match arg with
+                | "ocaml" -> parse_args (rw rewrite_lit_ocaml) args
+                | "lem" -> parse_args (rw rewrite_lit_lem) args
+                | "all" -> parse_args (rw (fun _ -> true)) args
+                | _ -> failwith "target for literal rewrite must be one of ocaml/lem/all"
+                end
+             | _, _ -> failwith "Invalid arguments to rewrite"
+           in
+           begin match args with
+           | rw :: args ->
+              let rw = List.assoc rw Rewrites.all_rewrites in
+              let rw = parse_args rw args in
+              Interactive.ast := rw !Interactive.env !Interactive.ast
+           | [] ->
+              failwith "Must provide the name of a rewrite, use :list_rewrites for a list of possible rewrites"
+           end
         | _ -> unrecognised_command cmd
         end
      | Expression str ->
@@ -539,6 +600,8 @@ let handle_input' input =
 
 let handle_input input =
   try handle_input' input with
+  | Failure str ->
+     print_endline ("Error: " ^ str)
   | Type_check.Type_error (env, l, err) ->
      print_endline (Type_error.string_of_type_error err)
   | Reporting.Fatal_error err ->
@@ -547,7 +610,7 @@ let handle_input input =
      print_endline (Printexc.to_string exn)
 
 let () =
-  (* Auto complete function names based on val specs, or directories if :load command *)
+  (* Auto complete function names based on val specs, directories if :load command, or rewrites if :rewrite command *)
   LNoise.set_completion_callback (
       fun line_so_far ln_completions ->
       let line_so_far, last_id =
@@ -561,31 +624,36 @@ let () =
       let n = try String.index line_so_far ' ' with Not_found -> String.length line_so_far in
       let cmd = Str.string_before line_so_far n in
       if last_id <> "" then
-        if cmd = ":load" || cmd = ":l" then
-          begin
-            let dirname, basename = Filename.dirname last_id, Filename.basename last_id in
-            if Sys.file_exists last_id then
-              LNoise.add_completion ln_completions (line_so_far ^ last_id);
-            if (try Sys.is_directory dirname with Sys_error _ -> false) then
-              let contents = Sys.readdir (Filename.concat (Sys.getcwd ()) dirname) in
-              for i = 0 to Array.length contents - 1 do
-                if Str.string_match (Str.regexp_string basename) contents.(i) 0 then
-                  let is_dir = (try Sys.is_directory (Filename.concat dirname contents.(i)) with Sys_error _ -> false) in
-                  LNoise.add_completion ln_completions
-                    (line_so_far ^ Filename.concat dirname contents.(i) ^ (if is_dir then Filename.dir_sep else ""))
-              done
-          end
-        else if cmd = ":option" then
-          List.map (fun (opt, _, _) -> opt) options
-          |> List.filter (fun opt -> Str.string_match (Str.regexp_string last_id) opt 0)
-          |> List.map (fun completion -> line_so_far ^ completion)
-          |> List.iter (LNoise.add_completion ln_completions)
-        else
+        begin match cmd with
+        | ":load" | ":l" ->
+           let dirname, basename = Filename.dirname last_id, Filename.basename last_id in
+           if Sys.file_exists last_id then
+             LNoise.add_completion ln_completions (line_so_far ^ last_id);
+           if (try Sys.is_directory dirname with Sys_error _ -> false) then
+             let contents = Sys.readdir (Filename.concat (Sys.getcwd ()) dirname) in
+             for i = 0 to Array.length contents - 1 do
+               if Str.string_match (Str.regexp_string basename) contents.(i) 0 then
+                 let is_dir = (try Sys.is_directory (Filename.concat dirname contents.(i)) with Sys_error _ -> false) in
+                 LNoise.add_completion ln_completions
+                   (line_so_far ^ Filename.concat dirname contents.(i) ^ (if is_dir then Filename.dir_sep else ""))
+             done
+        | ":rewrite" ->
+           List.map fst Rewrites.all_rewrites
+           |> List.filter (fun opt -> Str.string_match (Str.regexp_string last_id) opt 0)
+           |> List.map (fun completion -> line_so_far ^ completion)
+           |> List.iter (LNoise.add_completion ln_completions)
+        | ":option" ->
+           List.map (fun (opt, _, _) -> opt) options
+           |> List.filter (fun opt -> Str.string_match (Str.regexp_string last_id) opt 0)
+           |> List.map (fun completion -> line_so_far ^ completion)
+           |> List.iter (LNoise.add_completion ln_completions)
+        | _ ->
           IdSet.elements !vs_ids
           |> List.map string_of_id
           |> List.filter (fun id -> Str.string_match (Str.regexp_string last_id) id 0)
           |> List.map (fun completion -> line_so_far ^ completion)
           |> List.iter (LNoise.add_completion ln_completions)
+        end
       else ()
     );
 
@@ -605,6 +673,15 @@ let () =
       | str ->
          let args = Str.split (Str.regexp " +") str in
          match args with
+         | [":rewrite"] -> hint "<rewrite>"
+         | ":rewrite" :: rw :: args ->
+            begin match List.assoc_opt rw Rewrites.all_rewrites with
+            | Some rw ->
+               let hints = describe_rewrite rw in
+               let hints = Util.drop (List.length args) hints in
+               (match hints with [] -> None | _ ->  hint (String.concat " " hints))
+            | None -> None
+            end
          | [":option"] -> hint "<flag>"
          | [":option"; flag] ->
             begin match List.find_opt (fun (opt, _, _) -> flag = opt) options with

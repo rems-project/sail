@@ -283,6 +283,21 @@ let rec graph_of_ast (Defs defs) =
 
   | [] -> G.empty
 
+let rec filter_ast' g =
+  let module NM = Map.Make(Node) in
+  function
+  | DEF_fundef fdef :: defs when NM.mem (Function (id_of_fundef fdef)) g -> DEF_fundef fdef :: filter_ast' g defs
+  | DEF_fundef _ :: defs -> filter_ast' g defs
+
+  | DEF_spec vs :: defs when NM.mem (Function (id_of_val_spec vs)) g -> DEF_spec vs :: filter_ast' g defs
+  | DEF_spec _ :: defs -> filter_ast' g defs
+
+  | def :: defs -> def :: filter_ast' g defs
+
+  | [] -> []
+
+let filter_ast g (Defs defs) = Defs (filter_ast' g defs)
+
 let dot_of_ast out_chan ast =
   let module G = Graph.Make(Node) in
   let module NodeSet = Set.Make(Node) in

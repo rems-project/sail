@@ -4047,7 +4047,6 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
   in
   Defs (List.map rewrite_def defs |> List.flatten)
 
-
 (* Rewrite to make all pattern matches in Coq output exhaustive.
    Assumes that guards, vector patterns, etc have been rewritten already,
    and the scattered functions have been merged.
@@ -4761,78 +4760,138 @@ let rewrite_defs_coq = [
   ("recheck_defs", recheck_defs)
   ]
 
-let rewrite_defs_ocaml = [
-    (* ("undefined", rewrite_undefined); *)
-  ("no_effect_check", (fun _ defs -> opt_no_effects := true; defs));
-  ("realise_mappings", rewrite_defs_realise_mappings);
-  ("toplevel_string_append", rewrite_defs_toplevel_string_append);
-  ("pat_string_append", rewrite_defs_pat_string_append);
-  ("mapping_builtins", rewrite_defs_mapping_patterns);
-  ("rewrite_undefined", rewrite_undefined_if_gen false);
-  ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
-  ("pat_lits", rewrite_defs_pat_lits rewrite_lit_ocaml);
-  ("vector_concat_assignments", rewrite_vector_concat_assignments);
-  ("tuple_assignments", rewrite_tuple_assignments);
-  ("simple_assignments", rewrite_simple_assignments);
-  ("remove_not_pats", rewrite_defs_not_pats);
-  ("remove_vector_concat", rewrite_defs_remove_vector_concat);
-  ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
-  ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
-  ("exp_lift_assign", rewrite_defs_exp_lift_assign);
-  ("top_sort_defs", fun _ -> top_sort_defs);
-  ("simple_types", rewrite_simple_types);
-  ("overload_cast", rewrite_overload_cast);
-  (* ("separate_numbs", rewrite_defs_separate_numbs) *)
+type rewriter =
+  | Basic_rewriter of (Env.t -> tannot defs -> tannot defs)
+  | Bool_rewriter of (bool -> rewriter)
+  | String_rewriter of (string -> rewriter)
+  | Literal_rewriter of ((lit -> bool) -> rewriter)
+
+type rewriter_arg =
+  | If_mono_arg
+  | Bool_arg of bool
+  | String_arg of string
+  | Literal_arg of string
+
+let instantiate_rewrite rewriter args =
+  let selector_function = function
+    | "ocaml" -> rewrite_lit_ocaml
+    | "lem" -> rewrite_lit_lem
+    | "all" -> (fun _ -> true)
+    | arg ->
+       raise (Reporting.err_general Parse_ast.Unknown ("No rewrite for literal target \"" ^ arg ^ "\", valid targets are ocaml/lem/all"))
+  in
+  let instantiate rewriter arg =
+    match rewriter, arg with
+    | Basic_rewriter rw, If_mono_arg -> Basic_rewriter (if_mono rw)
+    | Bool_rewriter rw, Bool_arg b -> rw b
+    | String_rewriter rw, String_arg str -> rw str
+    | Literal_rewriter rw, Literal_arg selector -> rw (selector_function selector)
+    | _, _ ->
+       raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Invalid rewrite argument")
+  in
+  match List.fold_left instantiate rewriter args with
+  | Basic_rewriter rw -> rw
+  | _ ->
+     raise (Reporting.err_general Parse_ast.Unknown "Rewrite not fully instantiated")
+
+let all_rewrites = [
+    ("no_effect_check", Basic_rewriter (fun _ defs -> opt_no_effects := true; defs));
+    ("recheck_defs", Basic_rewriter recheck_defs);
+    ("optimize_recheck_defs", Basic_rewriter (fun _ -> Optimize.recheck));
+    ("realise_mappings", Basic_rewriter rewrite_defs_realise_mappings);
+    ("toplevel_string_append", Basic_rewriter rewrite_defs_toplevel_string_append);
+    ("pat_string_append", Basic_rewriter rewrite_defs_pat_string_append);
+    ("mapping_builtins", Basic_rewriter rewrite_defs_mapping_patterns);
+    ("mono_rewrites", Basic_rewriter mono_rewrites);
+    ("toplevel_nexps", Basic_rewriter rewrite_toplevel_nexps);
+    ("monomorphise", Basic_rewriter monomorphise);
+    ("atoms_to_singletons", Basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons));
+    ("undefined", Bool_rewriter (fun b -> Basic_rewriter (rewrite_undefined_if_gen b)));
+    ("vector_string_pats_to_bit_list", Basic_rewriter rewrite_defs_vector_string_pats_to_bit_list);
+    ("remove_not_pats", Basic_rewriter rewrite_defs_not_pats);
+    ("pattern_literals", Literal_rewriter (fun f -> Basic_rewriter (rewrite_defs_pat_lits f)));
+    ("vector_concat_assignments", Basic_rewriter rewrite_vector_concat_assignments);
+    ("tuple_assignments", Basic_rewriter rewrite_tuple_assignments);
+    ("simple_assignments", Basic_rewriter rewrite_simple_assignments);
+    ("remove_vector_concat", Basic_rewriter rewrite_defs_remove_vector_concat);
+    ("remove_bitvector_pats", Basic_rewriter rewrite_defs_remove_bitvector_pats);
+    ("remove_numeral_pats", Basic_rewriter rewrite_defs_remove_numeral_pats);
+    ("exp_lift_assign", Basic_rewriter rewrite_defs_exp_lift_assign);
+    ("merge_function_clauses", Basic_rewriter merge_funcls);
+    ("simple_types", Basic_rewriter rewrite_simple_types);
+    ("overload_cast", Basic_rewriter rewrite_overload_cast);
+    ("top_sort_defs", Basic_rewriter (fun _ -> top_sort_defs));
+    ("split", String_rewriter (fun str -> Basic_rewriter (rewrite_split_fun_ctor_pats str)))
   ]
 
-let opt_separate_execute = ref false
-
-let if_separate f env defs =
-  if !opt_separate_execute then f env defs else defs
-
-let rewrite_defs_c = [
-  ("no_effect_check", (fun _ defs -> opt_no_effects := true; defs));
-
-  (* Remove bidirectional mappings *)
-  ("realise_mappings", rewrite_defs_realise_mappings);
-  ("toplevel_string_append", rewrite_defs_toplevel_string_append);
-  ("pat_string_append", rewrite_defs_pat_string_append);
-  ("mapping_builtins", rewrite_defs_mapping_patterns);
-
-  (* Monomorphisation *)
-  ("mono_rewrites", if_mono mono_rewrites);
-  ("recheck_defs", if_mono recheck_defs);
-  ("rewrite_toplevel_nexps", if_mono rewrite_toplevel_nexps);
-  ("monomorphise", if_mono monomorphise);
-  ("rewrite_atoms_to_singletons", if_mono (fun _ -> Monomorphise.rewrite_atoms_to_singletons));
-  ("recheck_defs", if_mono recheck_defs);
-
-  ("rewrite_undefined", rewrite_undefined_if_gen false);
-  ("rewrite_defs_vector_string_pats_to_bit_list", rewrite_defs_vector_string_pats_to_bit_list);
-  ("remove_not_pats", rewrite_defs_not_pats);
-  ("pat_lits", rewrite_defs_pat_lits (fun _ -> true));
-  ("vector_concat_assignments", rewrite_vector_concat_assignments);
-  ("tuple_assignments", rewrite_tuple_assignments);
-  ("simple_assignments", rewrite_simple_assignments);
-  ("remove_vector_concat", rewrite_defs_remove_vector_concat);
-  ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
-  ("split_execute", if_separate (rewrite_split_fun_ctor_pats "execute"));
-  ("exp_lift_assign", rewrite_defs_exp_lift_assign);
-  ("merge_function_clauses", merge_funcls);
-  ("recheck_defs", fun _ -> Optimize.recheck)
+let rewriters_ocaml = [
+    ("no_effect_check", []);
+    ("realise_mappings", []);
+    ("toplevel_string_append", []);
+    ("pat_string_append", []);
+    ("mapping_builtins", []);
+    ("undefined", [Bool_arg false]);
+    ("vector_string_pats_to_bit_list", []);
+    ("pattern_literals", [Literal_arg "ocaml"]);
+    ("vector_concat_assignments", []);
+    ("tuple_assignments", []);
+    ("simple_assignments", []);
+    ("remove_not_pats", []);
+    ("remove_vector_concat", []);
+    ("remove_bitvector_pats", []);
+    ("remove_numeral_pats", []);
+    ("exp_lift_assign", []);
+    ("top_sort_defs", []);
+    ("simple_types", []);
+    ("overload_cast", [])
   ]
 
-let rewrite_defs_interpreter = [
-    ("no_effect_check", (fun _ defs -> opt_no_effects := true; defs));
-    ("realise_mappings", rewrite_defs_realise_mappings);
-    ("toplevel_string_append", rewrite_defs_toplevel_string_append);
-    ("pat_string_append", rewrite_defs_pat_string_append);
-    ("mapping_builtins", rewrite_defs_mapping_patterns);
-    ("rewrite_undefined", rewrite_undefined_if_gen false);
-    ("vector_concat_assignments", rewrite_vector_concat_assignments);
-    ("tuple_assignments", rewrite_tuple_assignments);
-    ("simple_assignments", rewrite_simple_assignments)
+let rewriters_c = [
+    ("no_effect_check", []);
+    ("realise_mappings", []);
+    ("toplevel_string_append", []);
+    ("pat_string_append", []);
+    ("mapping_builtins", []);
+    ("mono_rewrites", [If_mono_arg]);
+    ("recheck_defs", [If_mono_arg]);
+    ("toplevel_nexps", [If_mono_arg]);
+    ("monomorphise", [If_mono_arg]);
+    ("atoms_to_singletons", [If_mono_arg]);
+    ("recheck_defs", [If_mono_arg]);
+    ("undefined", [Bool_arg false]);
+    ("vector_string_pats_to_bit_list", []);
+    ("remove_not_pats", []);
+    ("pattern_literals", [Literal_arg "all"]);
+    ("vector_concat_assignments", []);
+    ("tuple_assignments", []);
+    ("simple_assignments", []);
+    ("remove_vector_concat", []);
+    ("remove_bitvector_pats", []);
+    ("exp_lift_assign", []);
+    ("merge_function_clauses", []);
+    ("optimize_recheck_defs", [])
   ]
+
+let rewriters_interpreter = [
+    ("no_effect_check", []);
+    ("realise_mappings", []);
+    ("toplevel_string_append", []);
+    ("pat_string_append", []);
+    ("mapping_builtins", []);
+    ("undefined", [Bool_arg false]);
+    ("vector_concat_assignments", []);
+    ("tuple_assignments", []);
+    ("simple_assignments", [])
+  ]
+
+let rewrite_defs_ocaml =
+  List.map (fun (name, args) -> (name, instantiate_rewrite (List.assoc name all_rewrites) args)) rewriters_ocaml
+
+let rewrite_defs_c =
+  List.map (fun (name, args) -> (name, instantiate_rewrite (List.assoc name all_rewrites) args)) rewriters_c
+
+let rewrite_defs_interpreter =
+  List.map (fun (name, args) -> (name, instantiate_rewrite (List.assoc name all_rewrites) args)) rewriters_interpreter
 
 let rewrite_check_annot =
   let check_annot exp =
