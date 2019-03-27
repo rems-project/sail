@@ -469,7 +469,11 @@ let handle_input' input =
            let g = G.prune !slice_roots !slice_cuts g in
            Interactive.ast := Slice.filter_ast g !Interactive.ast
         | ":list_rewrites" ->
-           List.iter print_endline (List.map fst Rewrites.all_rewrites)
+           let print_rewrite (name, rw) =
+             print_endline (name ^ " " ^ Util.(String.concat " " (describe_rewrite rw) |> yellow |> clear))
+           in
+           List.sort (fun a b -> String.compare (fst a) (fst b)) Rewrites.all_rewrites
+           |> List.iter print_rewrite
         | ":rewrite" ->
            let open Rewrites in
            let args = Str.split (Str.regexp " +") arg in
