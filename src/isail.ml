@@ -263,9 +263,8 @@ let rec emacs_error l contents =
   | Parse_ast.Documented (_, l) -> emacs_error l contents
   | Parse_ast.Generated l -> emacs_error l contents
 
-module SliceNodeSet = Set.Make(Slice.Node)
-let slice_roots = ref SliceNodeSet.empty
-let slice_cuts = ref SliceNodeSet.empty
+let slice_roots = ref IdSet.empty
+let slice_cuts = ref IdSet.empty
 
 let rec describe_rewrite =
   let open Rewrites in
@@ -391,7 +390,11 @@ let handle_input' input =
         begin
           try
             let args = Str.split (Str.regexp " +") arg in
-            Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) Sail.options (fun _ -> ()) "";
+            begin match args with
+            | opt :: args ->
+               Arg.parse_argv ~current:(ref 0) (Array.of_list ["sail"; opt; String.concat " " args]) Sail.options (fun _ -> ()) "";
+            | [] -> print_endline "Must provide a valid option"
+            end
           with
           | Arg.Bad message | Arg.Help message -> print_endline message
         end;
@@ -486,17 +489,22 @@ let handle_input' input =
            ()
         | ":slice_roots" ->
            let args = Str.split (Str.regexp " +") arg in
-           let ids = List.map (fun str -> Slice.Function (mk_id str)) args |> SliceNodeSet.of_list in
-           slice_roots := SliceNodeSet.union ids !slice_roots
+           let ids = List.map mk_id args |> IdSet.of_list in
+           Specialize.add_initial_calls ids;
+           slice_roots := IdSet.union ids !slice_roots
         | ":slice_cuts" ->
            let args = Str.split (Str.regexp " +") arg in
-           let ids = List.map (fun str -> Slice.Function (mk_id str)) args |> SliceNodeSet.of_list in
-           slice_cuts := SliceNodeSet.union ids !slice_cuts
+           let ids = List.map mk_id args |> IdSet.of_list in
+           slice_cuts := IdSet.union ids !slice_cuts
         | ":slice" ->
+           let open Slice in
+           let module SliceNodeSet = Set.Make(Slice.Node) in
            let module G = Graph.Make(Slice.Node) in
            let g = Slice.graph_of_ast !Interactive.ast in
-           let g = G.prune !slice_roots !slice_cuts g in
-           Interactive.ast := Slice.filter_ast g !Interactive.ast
+           let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> SliceNodeSet.of_list in
+           let cuts = !slice_cuts |> IdSet.elements |> List.map (fun id -> Function id) |> SliceNodeSet.of_list in
+           let g = G.prune roots cuts g in
+           Interactive.ast := Slice.filter_ast !slice_cuts g !Interactive.ast
         | ":list_rewrites" ->
            let print_rewrite (name, rw) =
              print_endline (name ^ " " ^ Util.(String.concat " " (describe_rewrite rw) |> yellow |> clear))
@@ -525,18 +533,23 @@ let handle_input' input =
               let rw = List.assoc rw Rewrites.all_rewrites in
               let rw = parse_args rw args in
               Interactive.ast := rw !Interactive.env !Interactive.ast;
-              interactive_state := initial_state !Interactive.ast Value.primops;
            | [] ->
               failwith "Must provide the name of a rewrite, use :list_rewrites for a list of possible rewrites"
            end
         | ":rewrites" ->
            Interactive.ast := Process_file.rewrite_ast_target arg !Interactive.env !Interactive.ast;
-           interactive_state := initial_state !Interactive.ast Value.primops;
+           interactive_state := initial_state !Interactive.ast Value.primops
         | ":prover_regstate" ->
            let env, ast = prover_regstate (Some arg) !Interactive.ast !Interactive.env in
            Interactive.env := env;
            Interactive.ast := ast;
+           interactive_state := initial_state !Interactive.ast Value.primops
+        | ":recheck" ->
+           let ast, env = Type_check.check Type_check.initial_env !Interactive.ast in
+           Interactive.env := env;
+           Interactive.ast := ast;
            interactive_state := initial_state !Interactive.ast Value.primops;
+           vs_ids := val_spec_ids !Interactive.ast
         | ":compile" ->
            let out_name = match !opt_file_out with
              | None -> "out.sail"

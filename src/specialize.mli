@@ -72,6 +72,8 @@ val int_specialization_with_externs : specialization
    or some combination of those. *)
 val polymorphic_functions : specialization -> 'a defs -> IdSet.t
 
+val add_initial_calls : IdSet.t -> unit
+
 (** specialize returns an AST with all the Order and Type polymorphism
    removed, as well as the environment produced by type checking that
    AST with [Type_check.initial_env]. The env parameter is the
@@ -88,6 +90,3 @@ val specialize' : int -> specialization -> tannot defs -> Env.t -> tannot defs *
 val instantiations_of : specialization -> id -> tannot defs -> typ_arg KBindings.t list
 
 val string_of_instantiation : typ_arg KBindings.t -> string
-
-(** Remove all function definitions except for the given set *)
-val slice_defs : Env.t -> tannot defs -> IdSet.t -> tannot defs

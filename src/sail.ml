@@ -66,7 +66,6 @@ let opt_libs_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
-let opt_slice = ref ([]:string list)
 
 let set_target name = Arg.Unit (fun _ -> opt_target := Some name)
 
@@ -300,9 +299,6 @@ let options = Arg.align ([
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
     " (debug) provide basic profiling information for rewriting passes within Sail");
-  ( "-slice",
-    Arg.String (fun s -> opt_slice := s::!opt_slice),
-    "<id> produce version of input restricted to the given function");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
@@ -394,6 +390,7 @@ let target name out_name ast type_envs =
      let close, output_chan = match !opt_file_out with Some f -> true, open_out (f ^ ".c") | None -> false, stdout in
      Util.opt_warnings := true;
      C_backend.compile_ast type_envs output_chan (!opt_includes_c) ast_c;
+     flush output_chan;
      if close then close_out output_chan else ()
 
   | Some "ir" ->
@@ -408,6 +405,7 @@ let target name out_name ast type_envs =
      let cdefs, _ = C_backend.jib_of_ast type_envs ast_c in
      let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_cdef cdefs) in
      output_string output_chan (str ^ "\n");
+     flush output_chan;
      if close then close_out output_chan else ()
 
   | Some "lem" ->
@@ -463,14 +461,6 @@ let main () =
       if !opt_sanity then
         ignore (rewrite_ast_check type_envs ast)
       else ();
-
-      begin match !opt_slice with
-      | [] -> ()
-      | ids ->
-         let ids = List.map Ast_util.mk_id ids in
-         let ids = Ast_util.IdSet.of_list ids in
-         Pretty_print_sail.pp_defs stdout (Specialize.slice_defs type_envs ast ids)
-      end;
 
       let type_envs, ast = prover_regstate !opt_target ast type_envs in
       let ast = match !opt_target with Some tgt -> rewrite_ast_target tgt type_envs ast | None -> ast in

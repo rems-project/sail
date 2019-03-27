@@ -1184,9 +1184,9 @@ let rec sgen_ctyp = function
   | CT_unit -> "unit"
   | CT_bit -> "fbits"
   | CT_bool -> "bool"
-  | CT_fbits _ -> "fbits"
+  | CT_fbits _ -> "uint64_t"
   | CT_sbits _ -> "sbits"
-  | CT_fint _ -> "mach_int"
+  | CT_fint _ -> "int64_t"
   | CT_lint -> "sail_int"
   | CT_lbits _ -> "lbits"
   | CT_tup _ as tup -> "struct " ^ Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
