@@ -402,14 +402,8 @@ let rewrite env rewriters defs =
   | Type_check.Type_error (_, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
-let rewrite_ast env = rewrite env [("initial", fun _ -> Rewriter.rewrite_defs)]
-let rewrite_ast_lem env = rewrite env Rewrites.rewrite_defs_lem
-let rewrite_ast_coq env = rewrite env Rewrites.rewrite_defs_coq
-let rewrite_ast_ocaml env = rewrite env Rewrites.rewrite_defs_ocaml
-let rewrite_ast_c env ast =
-  ast
-  |> rewrite env Rewrites.rewrite_defs_c
-  |> rewrite env [("constant_fold", fun _ -> Constant_fold.rewrite_constant_function_calls)]
+let rewrite_ast_initial env = rewrite env [("initial", fun _ -> Rewriter.rewrite_defs)]
 
-let rewrite_ast_interpreter env = rewrite env Rewrites.rewrite_defs_interpreter
+let rewrite_ast_target tgt env = rewrite env (Rewrites.rewrite_defs_target tgt)
+
 let rewrite_ast_check env = rewrite env Rewrites.rewrite_defs_check

@@ -56,15 +56,7 @@ let lib = ref ([] : string list)
 let opt_file_out : string option ref = ref None
 let opt_interactive_script : string option ref = ref None
 let opt_print_version = ref false
-let opt_print_initial_env = ref false
-let opt_print_verbose = ref false
-let opt_print_lem = ref false
-let opt_print_ocaml = ref false
-let opt_print_c = ref false
-let opt_print_ir = ref false
-let opt_print_latex = ref false
-let opt_print_coq = ref false
-let opt_print_cgen = ref false
+let opt_target = ref None
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
@@ -76,16 +68,17 @@ let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
 let opt_slice = ref ([]:string list)
 
+let set_target name = Arg.Unit (fun _ -> opt_target := Some name)
+
 let options = Arg.align ([
   ( "-o",
     Arg.String (fun f -> opt_file_out := Some f),
     "<prefix> select output filename prefix");
   ( "-i",
-    Arg.Tuple [Arg.Set Interactive.opt_interactive; Arg.Set Initial_check.opt_undefined_gen],
+    Arg.Tuple [Arg.Set Interactive.opt_interactive],
     " start interactive interpreter");
   ( "-is",
-    Arg.Tuple [Arg.Set Interactive.opt_interactive; Arg.Set Initial_check.opt_undefined_gen;
-               Arg.String (fun s -> opt_interactive_script := Some s)],
+    Arg.Tuple [Arg.Set Interactive.opt_interactive; Arg.String (fun s -> opt_interactive_script := Some s)],
     "<filename> start interactive interpreter and execute commands in script");
   ( "-iout",
     Arg.String (fun file -> Value.output_redirect (open_out file)),
@@ -97,13 +90,13 @@ let options = Arg.align ([
     Arg.Clear Util.opt_warnings,
     " do not print warnings");
   ( "-ocaml",
-    Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen],
+    Arg.Tuple [set_target "ocaml"; Arg.Set Initial_check.opt_undefined_gen],
     " output an OCaml translated version of the input");
   ( "-ocaml-nobuild",
     Arg.Set Ocaml_backend.opt_ocaml_nobuild,
     " do not build generated OCaml");
   ( "-ocaml_trace",
-    Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
+    Arg.Tuple [set_target "ocaml"; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml");
   ( "-ocaml_build_dir",
     Arg.String (fun dir -> Ocaml_backend.opt_ocaml_build_dir := dir),
@@ -121,7 +114,7 @@ let options = Arg.align ([
     Arg.Set Type_check.opt_smt_linearize,
     "(experimental) force linearization for constraints involving exponentials");
   ( "-latex",
-    Arg.Tuple [Arg.Set opt_print_latex; Arg.Clear Type_check.opt_expand_valspec],
+    Arg.Tuple [set_target "latex"; Arg.Clear Type_check.opt_expand_valspec],
     " pretty print the input to LaTeX");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix := prefix),
@@ -130,10 +123,10 @@ let options = Arg.align ([
     Arg.Clear Latex.opt_simple_val,
     " print full valspecs in LaTeX output");
   ( "-ir",
-    Arg.Set opt_print_ir,
+    set_target "ir",
     " print intermediate representation");
   ( "-c",
-    Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
+    Arg.Tuple [set_target "c"; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
   ( "-c_include",
     Arg.String (fun i -> opt_includes_c := i::!opt_includes_c),
@@ -179,11 +172,8 @@ let options = Arg.align ([
   ( "-trace",
     Arg.Tuple [Arg.Set Ocaml_backend.opt_trace_ocaml],
     " instrument output with tracing");
-  ( "-cgen",
-    Arg.Set opt_print_cgen,
-    " generate CGEN source");
   ( "-lem",
-    Arg.Set opt_print_lem,
+    set_target "lem",
     " output a Lem translated version of the input");
   ( "-lem_output_dir",
     Arg.String (fun dir -> Process_file.opt_lem_output_dir := Some dir),
@@ -201,7 +191,7 @@ let options = Arg.align ([
     Arg.Set Pretty_print_lem.opt_mwords,
     " use native machine word library for Lem output");
   ( "-coq",
-    Arg.Set opt_print_coq,
+    set_target "coq",
     " output a Coq translated version of the input");
   ( "-coq_output_dir",
     Arg.String (fun dir -> Process_file.opt_coq_output_dir := Some dir),
@@ -278,7 +268,7 @@ let options = Arg.align ([
     Arg.Int (fun verbosity -> Util.opt_verbosity := verbosity),
     " produce verbose output");
   ( "-output_sail",
-    Arg.Set opt_print_verbose,
+    set_target "sail",
     " print Sail code after type checking and initial rewriting");
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
@@ -359,7 +349,7 @@ let load_files ?check:(check=false) type_envs files =
     ("out.sail", ast, type_envs)
   else
     let ast = Scattered.descatter ast in
-    let ast = rewrite_ast type_envs ast in
+    let ast = rewrite_ast_initial type_envs ast in
 
     let out_name = match !opt_file_out with
       | None when parsed = [] -> "out.sail"
@@ -368,127 +358,124 @@ let load_files ?check:(check=false) type_envs files =
 
     (out_name, ast, type_envs)
 
-let main() =
+let target name out_name ast type_envs =
+  match name with
+  | None -> ()
+
+  | Some "sail" ->
+     Pretty_print_sail.pp_defs stdout ast
+
+  | Some "ocaml" ->
+     let ocaml_generator_info =
+       match !opt_ocaml_generators with
+       | [] -> None
+       | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast, !opt_ocaml_generators)
+     in
+     let ast_ocaml = rewrite_ast_target "ocaml" type_envs ast in
+     let out = match !opt_file_out with None -> "out" | Some s -> s in
+     Ocaml_backend.ocaml_compile out ast_ocaml ocaml_generator_info
+
+  | Some "c" ->
+     let ast_c = rewrite_ast_target "c" type_envs ast in
+     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
+     let ast_c, type_envs =
+       if !opt_specialize_c then
+         Specialize.(specialize' 2 int_specialization ast_c type_envs)
+       else
+         ast_c, type_envs
+     in
+     let close, output_chan = match !opt_file_out with Some f -> true, open_out (f ^ ".c") | None -> false, stdout in
+     Util.opt_warnings := true;
+     C_backend.compile_ast type_envs output_chan (!opt_includes_c) ast_c;
+     if close then close_out output_chan else ()
+
+  | Some "ir" ->
+     let ast_c = rewrite_ast_target "c" type_envs ast in
+     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
+     let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in
+     let close, output_chan =
+       match !opt_file_out with
+       | Some f -> Util.opt_colors := false; (true, open_out (f ^ ".ir.sail"))
+       | None -> false, stdout
+     in
+     Util.opt_warnings := true;
+     let cdefs, _ = C_backend.jib_of_ast type_envs ast_c in
+     let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_cdef cdefs) in
+     output_string output_chan (str ^ "\n");
+     if close then close_out output_chan else ()
+
+  | Some "lem" ->
+     let mwords = !Pretty_print_lem.opt_mwords in
+     let type_envs, ast_lem = State.add_regstate_defs mwords type_envs ast in
+     let ast_lem = rewrite_ast_target "lem" type_envs ast_lem in
+     output "" (Lem_out (!opt_libs_lem)) [(out_name, type_envs, ast_lem)]
+
+  | Some "coq" ->
+     let type_envs, ast_coq = State.add_regstate_defs true type_envs ast in
+     let ast_coq = rewrite_ast_target "coq" type_envs ast_coq in
+     output "" (Coq_out (!opt_libs_coq)) [(out_name, type_envs, ast_coq)]
+
+  | Some "latex" ->
+     Util.opt_warnings := true;
+     let latex_dir = match !opt_file_out with None -> "sail_latex" | Some s -> s in
+     begin
+       try
+         if not (Sys.is_directory latex_dir) then begin
+             prerr_endline ("Failure: latex output location exists and is not a directory: " ^ latex_dir);
+             exit 1
+           end
+       with Sys_error(_) -> Unix.mkdir latex_dir 0o755
+     end;
+     Latex.opt_directory := latex_dir;
+     let chan = open_out (Filename.concat latex_dir "commands.tex") in
+     output_string chan (Pretty_print_sail.to_string (Latex.defs ast));
+     close_out chan
+
+  | Some t ->
+     raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ ("Undefined target: " ^ t))
+
+let main () =
   if !opt_print_version then
     print_endline version
   else
-    let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
-    Util.opt_warnings := false; (* Don't show warnings during re-writing for now *)
-
-    begin match !opt_process_elf, !opt_file_out with
-    | Some elf, Some out ->
-       begin
-         let open Elf_loader in
-         let chan = open_out out in
-         load_elf ~writer:(write_file chan) elf;
-         output_string chan "elf_entry\n";
-         output_string chan (Big_int.to_string !opt_elf_entry ^ "\n");
-         close_out chan;
-         exit 0
-       end
-    | Some _, None ->
-       prerr_endline "Failure: No output file given for processed ELF (option -o).";
-       exit 1
-    | None, _ -> ()
-    end;
-
-    let ocaml_generator_info =
-      match !opt_ocaml_generators with
-      | [] -> None
-      | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast, !opt_ocaml_generators)
-    in
-
     begin
-      (if !(Interactive.opt_interactive)
-       then
-         (Interactive.ast := Process_file.rewrite_ast_interpreter type_envs ast; Interactive.env := type_envs)
-       else ());
-      (if !(opt_sanity)
-       then
-         let _ = rewrite_ast_check type_envs ast in
-         ()
-       else ());
-      (if !(opt_print_verbose)
-       then ((Pretty_print_sail.pp_defs stdout) ast)
-       else ());
-      (match !opt_slice with
-       | [] -> ()
-       | ids ->
-          let ids = List.map Ast_util.mk_id ids in
-          let ids = Ast_util.IdSet.of_list ids in
-          Pretty_print_sail.pp_defs stdout (Specialize.slice_defs type_envs ast ids));
-      (if !(opt_print_ocaml)
-       then
-         let ast_ocaml = rewrite_ast_ocaml type_envs ast in
-         let out = match !opt_file_out with None -> "out" | Some s -> s in
-         Ocaml_backend.ocaml_compile out ast_ocaml ocaml_generator_info
-       else ());
-      (if !(opt_print_c)
-       then
-         let ast_c = rewrite_ast_c type_envs ast in
-         let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
-         let ast_c, type_envs =
-           if !opt_specialize_c then
-             Specialize.(specialize' 2 int_specialization ast_c type_envs)
-           else
-             ast_c, type_envs
-         in
-         let output_chan = match !opt_file_out with Some f -> open_out (f ^ ".c") | None -> stdout in
-         Util.opt_warnings := true;
-         C_backend.compile_ast type_envs output_chan (!opt_includes_c) ast_c;
-         close_out output_chan
-       else ());
-      (if !(opt_print_ir)
-       then
-         let ast_c = rewrite_ast_c type_envs ast in
-         let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
-         let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in
-         let output_chan =
-           match !opt_file_out with
-           | Some f -> Util.opt_colors := false; open_out (f ^ ".ir.sail")
-           | None -> stdout
-         in
-         Util.opt_warnings := true;
-         let cdefs, _ = C_backend.jib_of_ast type_envs ast_c in
-         let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_cdef cdefs) in
-         output_string output_chan (str ^ "\n");
-         close_out output_chan
-       else ());
-      (if !(opt_print_cgen)
-       then Cgen_backend.output type_envs ast
-       else ());
-      (if !(opt_print_lem)
-       then
-         let mwords = !Pretty_print_lem.opt_mwords in
-         let type_envs, ast_lem = State.add_regstate_defs mwords type_envs ast in
-         let ast_lem = rewrite_ast_lem type_envs ast_lem in
-         output "" (Lem_out (!opt_libs_lem)) [out_name,type_envs,ast_lem]
-       else ());
-      (if !(opt_print_coq)
-       then
-         let type_envs, ast_coq = State.add_regstate_defs true type_envs ast in
-         let ast_coq = rewrite_ast_coq type_envs ast_coq in
-         output "" (Coq_out (!opt_libs_coq)) [out_name,type_envs,ast_coq]
-       else ());
-      (if !(opt_print_latex)
-       then
+      let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
+      Util.opt_warnings := false; (* Don't show warnings during re-writing for now *)
+
+      begin match !opt_process_elf, !opt_file_out with
+      | Some elf, Some out ->
          begin
-           Util.opt_warnings := true;
-           let latex_dir = match !opt_file_out with None -> "sail_latex" | Some s -> s in
-           begin
-             try
-               if not (Sys.is_directory latex_dir) then begin
-                   prerr_endline ("Failure: latex output location exists and is not a directory: " ^ latex_dir);
-                   exit 1
-                 end
-             with Sys_error(_) -> Unix.mkdir latex_dir 0o755
-           end;
-           Latex.opt_directory := latex_dir;
-           let chan = open_out (Filename.concat latex_dir "commands.tex") in
-           output_string chan (Pretty_print_sail.to_string (Latex.defs ast));
-           close_out chan
+           let open Elf_loader in
+           let chan = open_out out in
+           load_elf ~writer:(write_file chan) elf;
+           output_string chan "elf_entry\n";
+           output_string chan (Big_int.to_string !opt_elf_entry ^ "\n");
+           close_out chan;
+           exit 0
          end
-       else ());
+      | Some _, None ->
+         prerr_endline "Failure: No output file given for processed ELF (option -o).";
+         exit 1
+      | None, _ -> ()
+      end;
+
+      if !opt_sanity then
+        ignore (rewrite_ast_check type_envs ast)
+      else ();
+
+      begin match !opt_slice with
+      | [] -> ()
+      | ids ->
+         let ids = List.map Ast_util.mk_id ids in
+         let ids = Ast_util.IdSet.of_list ids in
+         Pretty_print_sail.pp_defs stdout (Specialize.slice_defs type_envs ast ids)
+      end;
+
+      target !opt_target out_name ast type_envs;
+
+      if !Interactive.opt_interactive then
+        (Interactive.ast := ast; Interactive.env := type_envs)
+      else ();
 
       if !opt_memo_z3 then Constraint.save_digests () else ()
     end

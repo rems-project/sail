@@ -4745,6 +4745,7 @@ let all_rewrites = [
     ("simple_types", Basic_rewriter rewrite_simple_types);
     ("overload_cast", Basic_rewriter rewrite_overload_cast);
     ("top_sort_defs", Basic_rewriter (fun _ -> top_sort_defs));
+    ("constant_fold", Basic_rewriter (fun _ -> Constant_fold.rewrite_constant_function_calls));
     ("split", String_rewriter (fun str -> Basic_rewriter (rewrite_split_fun_ctor_pats str)))
   ]
 
@@ -4845,7 +4846,6 @@ let rewrites_coq = [
     ("recheck_defs", [])
   ]
 
-
 let rewrites_ocaml = [
     ("no_effect_check", []);
     ("realise_mappings", []);
@@ -4891,7 +4891,8 @@ let rewrites_c = [
     ("remove_bitvector_pats", []);
     ("exp_lift_assign", []);
     ("merge_function_clauses", []);
-    ("optimize_recheck_defs", [])
+    ("optimize_recheck_defs", []);
+    ("constant_fold", [])
   ]
 
 let rewrites_interpreter = [
@@ -4906,20 +4907,18 @@ let rewrites_interpreter = [
     ("simple_assignments", [])
   ]
 
-let rewrite_defs_coq =
-  List.map (fun (name, args) -> (name, instantiate_rewrite (List.assoc name all_rewrites) args)) rewrites_coq
+let rewrites_target tgt =
+  match tgt with
+  | "coq" -> rewrites_coq
+  | "lem" -> rewrites_lem
+  | "ocaml" -> rewrites_ocaml
+  | "c" -> rewrites_c
+  | "interpreter" -> rewrites_interpreter
+  | _ ->
+     raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ ("Invalid target for rewriting: " ^ tgt))
 
-let rewrite_defs_lem =
-  List.map (fun (name, args) -> (name, instantiate_rewrite (List.assoc name all_rewrites) args)) rewrites_lem
-
-let rewrite_defs_ocaml =
-  List.map (fun (name, args) -> (name, instantiate_rewrite (List.assoc name all_rewrites) args)) rewrites_ocaml
-
-let rewrite_defs_c =
-  List.map (fun (name, args) -> (name, instantiate_rewrite (List.assoc name all_rewrites) args)) rewrites_c
-
-let rewrite_defs_interpreter =
-  List.map (fun (name, args) -> (name, instantiate_rewrite (List.assoc name all_rewrites) args)) rewrites_interpreter
+let rewrite_defs_target tgt =
+  List.map (fun (name, args) -> (name, instantiate_rewrite (List.assoc name all_rewrites) args)) (rewrites_target tgt)
 
 let rewrite_check_annot =
   let check_annot exp =

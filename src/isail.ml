@@ -148,7 +148,6 @@ let rec run () =
      end
 
 let rec run_steps n =
-  print_endline ("step " ^ string_of_int n);
   match !current_mode with
   | _ when n <= 0 -> ()
   | Normal | Emacs -> ()
@@ -172,50 +171,81 @@ let rec run_steps n =
           current_mode := Evaluation frame
      end
 
-let help = function
+let help =
+  let open Printf in
+  let open Util in
+  let color c str = str |> c |> clear in
+  function
   | ":t" | ":type" ->
-     "(:t | :type) <function name> - Print the type of a function."
+     sprintf "(:t | :type) %s - Print the type of a function."
+             (color yellow "<function name>")
   | ":q" | ":quit" ->
      "(:q | :quit) - Exit the interpreter."
   | ":i" | ":infer" ->
-     "(:i | :infer) <expression> - Infer the type of an expression."
+     sprintf "(:i | :infer) %s - Infer the type of an expression."
+             (color yellow "<expression>")
   | ":v" | ":verbose" ->
      "(:v | :verbose) - Increase the verbosity level, or reset to zero at max verbosity."
   | ":b" | ":bind" ->
-     "(:b | :bind) <id> : <typ> - Declare a variable of a specific type"
+     sprintf "(:b | :bind) %s : %s - Declare a variable of a specific type"
+             (color yellow "<id>") (color yellow "<type>")
   | ":let" ->
-     ":let <id> = <exp> - Bind a variable to expression"
+     sprintf ":let %s = %s - Bind a variable to expression"
+             (color yellow "<id>") (color yellow "<expression>")
   | ":def" ->
-     ":def <definition> - Evaluate a top-level definition"
+     sprintf ":def %s - Evaluate a top-level definition"
+             (color yellow "<definition>")
   | ":prove" ->
-     ":prove <constraint> - Try to prove a constraint in the top-level environment"
+     sprintf ":prove %s - Try to prove a constraint in the top-level environment"
+             (color yellow "<constraint>")
   | ":assume" ->
-     ":assume <constraint> - Add a constraint to the top-level environment"
+     sprintf ":assume %s - Add a constraint to the top-level environment"
+             (color yellow "<constraint>")
   | ":commands" ->
      ":commands - List all available commands."
   | ":help" ->
-     ":help <command> - Get a description of <command>. Commands are prefixed with a colon, e.g. :help :type."
+     sprintf ":help %s - Get a description of <command>. Commands are prefixed with a colon, e.g. %s."
+             (color yellow "<command>") (color green ":help :type")
   | ":elf" ->
-     ":elf <file> - Load an ELF file."
+     sprintf ":elf %s - Load an ELF file."
+             (color yellow "<file>")
   | ":r" | ":run" ->
      "(:r | :run) - Completely evaluate the currently evaluating expression."
   | ":s" | ":step" ->
-     "(:s | :step) <number> - Perform a number of evaluation steps."
+     sprintf "(:s | :step) %s - Perform a number of evaluation steps."
+             (color yellow "<number>")
   | ":n" | ":normal" ->
      "(:n | :normal) - Exit evaluation mode back to normal mode."
   | ":clear" ->
-     ":clear (on|off) - Set whether to clear the screen or not in evaluation mode."
+     sprintf ":clear %s - Set whether to clear the screen or not in evaluation mode."
+             (color yellow "(on|off)")
   | ":l" | ":load" -> String.concat "\n"
-     [ "(:l | :load) <files> - Load sail files and add their definitions to the interactive environment.";
+     [ sprintf "(:l | :load) %s - Load sail files and add their definitions to the interactive environment."
+               (color yellow "<files>");
        "Files containing scattered definitions must be loaded together." ]
   | ":u" | ":unload" ->
      "(:u | :unload) - Unload all loaded files."
   | ":output" ->
-     ":output <file> - Redirect evaluating expression output to a file."
+     sprintf ":output %s - Redirect evaluating expression output to a file."
+             (color yellow "<file>")
   | ":option" ->
-     ":option string - Parse string as if it was an option passed on the command line. Try :option -help."
+     sprintf ":option %s - Parse string as if it was an option passed on the command line. e.g. :option -help."
+             (color yellow "<string>")
+  | ":rewrite" ->
+     sprintf ":rewrite %s - Apply a rewrite to the AST. %s shows all possible rewrites. See also %s"
+             (color yellow "<rewrite> <args>") (color green ":list_rewrites") (color green ":rewrites")
+  | ":rewrites" ->
+     sprintf ":rewrites %s - Apply all rewrites for a specific target, valid targets are lem, coq, ocaml, c, and interpreter"
+             (color yellow "<target>")
+  | ":compile" ->
+     sprintf ":compile %s - Compile AST to a specified target, valid targets are lem, coq, ocaml, c, and ir (intermediate representation)"
+             (color yellow "<target>")
+  | "" ->
+     sprintf "Type %s for a list of commands, and %s %s for information about a specific command"
+             (color green ":commands") (color green ":help") (color yellow "<command>")
   | cmd ->
-     "Either invalid command passed to help, or no documentation for " ^ cmd ^ ". Try :help :help."
+     sprintf "Either invalid command passed to help, or no documentation for %s. Try %s."
+             (color green cmd) (color green ":help :help")
 
 let format_pos_emacs p1 p2 contents =
   let open Lexing in
@@ -242,7 +272,7 @@ let rec describe_rewrite =
   function
   | String_rewriter rw -> "<string>" :: describe_rewrite (rw "")
   | Bool_rewriter rw -> "<bool>" :: describe_rewrite (rw false)
-  | Literal_rewriter rw -> "<ocaml/lem/all>" :: describe_rewrite (rw (fun _ -> true))
+  | Literal_rewriter rw -> "(ocaml|lem|all)" :: describe_rewrite (rw (fun _ -> true))
   | Basic_rewriter rw -> []
 
 type session = {
@@ -351,7 +381,7 @@ let handle_input' input =
      | ":commands" ->
         let commands =
           [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help :output :option";
-            "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind";
+            "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :rewrite :rewrites :list_rewrites :compile";
             "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
             "";
             ":(c)ommand can be called as either :c or :command." ]
@@ -407,7 +437,7 @@ let handle_input' input =
         | ":l" | ":load" ->
            let files = Util.split_on_char ' ' arg in
            let (_, ast, env) = load_files !Interactive.env files in
-           let ast = Process_file.rewrite_ast_interpreter !Interactive.env ast in
+           let ast = Process_file.rewrite_ast_target "interpreter" !Interactive.env ast in
            Interactive.ast := append_ast !Interactive.ast ast;
            interactive_state := initial_state !Interactive.ast Value.primops;
            Interactive.env := env;
@@ -495,10 +525,20 @@ let handle_input' input =
            | rw :: args ->
               let rw = List.assoc rw Rewrites.all_rewrites in
               let rw = parse_args rw args in
-              Interactive.ast := rw !Interactive.env !Interactive.ast
+              Interactive.ast := rw !Interactive.env !Interactive.ast;
+              interactive_state := initial_state !Interactive.ast Value.primops;
            | [] ->
               failwith "Must provide the name of a rewrite, use :list_rewrites for a list of possible rewrites"
            end
+        | ":rewrites" ->
+           Interactive.ast := Process_file.rewrite_ast_target arg !Interactive.env !Interactive.ast;
+           interactive_state := initial_state !Interactive.ast Value.primops;
+        | ":compile" ->
+           let out_name = match !opt_file_out with
+             | None -> "out.sail"
+             | Some f -> f ^ ".sail"
+           in
+           target (Some arg) out_name !Interactive.ast !Interactive.env
         | _ -> unrecognised_command cmd
         end
      | Expression str ->
@@ -674,6 +714,8 @@ let () =
       | ":def" -> hint "<definition>"
       | ":prove" -> hint "<constraint>"
       | ":assume" -> hint "<constraint>"
+      | ":compile" -> hint "<target>"
+      | ":rewrites" -> hint "<target>"
       | str ->
          let args = Str.split (Str.regexp " +") str in
          match args with

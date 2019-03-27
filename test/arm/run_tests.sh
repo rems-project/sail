@@ -83,7 +83,7 @@ printf "\nLoading specification into interpreter...\n"
 
 cd $SAILDIR/aarch64
 
-if $SAILDIR/sail -no_lexp_bounds_check -is $DIR/test.isail no_vector.sail 1> /dev/null 2> /dev/null;
+if $SAILDIR/sail -undefined_gen -no_lexp_bounds_check -is $DIR/test.isail no_vector.sail 1> /dev/null 2> /dev/null;
 then
     green "loaded no_vector specification" "ok";
 
