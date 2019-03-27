@@ -437,7 +437,6 @@ let handle_input' input =
         | ":l" | ":load" ->
            let files = Util.split_on_char ' ' arg in
            let (_, ast, env) = load_files !Interactive.env files in
-           let ast = Process_file.rewrite_ast_target "interpreter" !Interactive.env ast in
            Interactive.ast := append_ast !Interactive.ast ast;
            interactive_state := initial_state !Interactive.ast Value.primops;
            Interactive.env := env;
@@ -532,6 +531,11 @@ let handle_input' input =
            end
         | ":rewrites" ->
            Interactive.ast := Process_file.rewrite_ast_target arg !Interactive.env !Interactive.ast;
+           interactive_state := initial_state !Interactive.ast Value.primops;
+        | ":prover_regstate" ->
+           let env, ast = prover_regstate (Some arg) !Interactive.ast !Interactive.env in
+           Interactive.env := env;
+           Interactive.ast := ast;
            interactive_state := initial_state !Interactive.ast Value.primops;
         | ":compile" ->
            let out_name = match !opt_file_out with

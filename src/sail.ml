@@ -358,6 +358,15 @@ let load_files ?check:(check=false) type_envs files =
 
     (out_name, ast, type_envs)
 
+let prover_regstate tgt ast type_envs =
+  match tgt with
+  | Some "coq" ->
+     State.add_regstate_defs true type_envs ast
+  | Some "lem" ->
+     State.add_regstate_defs !Pretty_print_lem.opt_mwords type_envs ast
+  | _ ->
+     type_envs, ast
+
 let target name out_name ast type_envs =
   match name with
   | None -> ()
@@ -371,13 +380,11 @@ let target name out_name ast type_envs =
        | [] -> None
        | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast, !opt_ocaml_generators)
      in
-     let ast_ocaml = rewrite_ast_target "ocaml" type_envs ast in
      let out = match !opt_file_out with None -> "out" | Some s -> s in
-     Ocaml_backend.ocaml_compile out ast_ocaml ocaml_generator_info
+     Ocaml_backend.ocaml_compile out ast ocaml_generator_info
 
   | Some "c" ->
-     let ast_c = rewrite_ast_target "c" type_envs ast in
-     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
+     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast type_envs) in
      let ast_c, type_envs =
        if !opt_specialize_c then
          Specialize.(specialize' 2 int_specialization ast_c type_envs)
@@ -390,8 +397,7 @@ let target name out_name ast type_envs =
      if close then close_out output_chan else ()
 
   | Some "ir" ->
-     let ast_c = rewrite_ast_target "c" type_envs ast in
-     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast_c type_envs) in
+     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast type_envs) in
      let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in
      let close, output_chan =
        match !opt_file_out with
@@ -405,15 +411,10 @@ let target name out_name ast type_envs =
      if close then close_out output_chan else ()
 
   | Some "lem" ->
-     let mwords = !Pretty_print_lem.opt_mwords in
-     let type_envs, ast_lem = State.add_regstate_defs mwords type_envs ast in
-     let ast_lem = rewrite_ast_target "lem" type_envs ast_lem in
-     output "" (Lem_out (!opt_libs_lem)) [(out_name, type_envs, ast_lem)]
+     output "" (Lem_out (!opt_libs_lem)) [(out_name, type_envs, ast)]
 
   | Some "coq" ->
-     let type_envs, ast_coq = State.add_regstate_defs true type_envs ast in
-     let ast_coq = rewrite_ast_target "coq" type_envs ast_coq in
-     output "" (Coq_out (!opt_libs_coq)) [(out_name, type_envs, ast_coq)]
+     output "" (Coq_out (!opt_libs_coq)) [(out_name, type_envs, ast)]
 
   | Some "latex" ->
      Util.opt_warnings := true;
@@ -471,6 +472,8 @@ let main () =
          Pretty_print_sail.pp_defs stdout (Specialize.slice_defs type_envs ast ids)
       end;
 
+      let type_envs, ast = prover_regstate !opt_target ast type_envs in
+      let ast = match !opt_target with Some tgt -> rewrite_ast_target tgt type_envs ast | None -> ast in
       target !opt_target out_name ast type_envs;
 
       if !Interactive.opt_interactive then

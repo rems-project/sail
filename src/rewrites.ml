@@ -4913,6 +4913,9 @@ let rewrites_target tgt =
   | "lem" -> rewrites_lem
   | "ocaml" -> rewrites_ocaml
   | "c" -> rewrites_c
+  | "ir" -> rewrites_c
+  | "sail" -> []
+  | "latex" -> []
   | "interpreter" -> rewrites_interpreter
   | _ ->
      raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ ("Invalid target for rewriting: " ^ tgt))
