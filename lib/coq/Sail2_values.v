@@ -144,6 +144,47 @@ unfold pow.
 auto using Z.le_refl.
 Qed.
 
+Lemma ZEuclid_div_pos : forall x y, y > 0 -> x >= 0 -> ZEuclid.div x y >= 0.
+intros.
+unfold ZEuclid.div.
+change 0 with (0 * 0).
+apply Zmult_ge_compat; auto with zarith.
+* apply Z.le_ge. apply Z.sgn_nonneg. apply Z.ge_le. auto with zarith.
+* apply Z_div_ge0; auto. apply Z.lt_gt. apply Z.abs_pos. auto with zarith.
+Qed.
+
+Lemma ZEuclid_div_ge : forall x y, y > 0 -> x >= 0 -> x - ZEuclid.div x y >= 0.
+intros.
+unfold ZEuclid.div.
+rewrite Z.sgn_pos; auto with zarith.
+rewrite Z.mul_1_l.
+apply Z.le_ge.
+apply Zle_minus_le_0.
+apply Z.div_le_upper_bound.
+* apply Z.abs_pos. auto with zarith.
+* rewrite Z.mul_comm.
+  assert (0 < Z.abs y). {
+    apply Z.abs_pos.
+    omega.
+  }
+  revert H1.
+  generalize (Z.abs y). intros. nia.
+Qed.
+
+Lemma ZEuclid_div_mod0 : forall x y, y <> 0 ->
+  ZEuclid.modulo x y = 0 ->
+  y * ZEuclid.div x y = x.
+intros x y H1 H2.
+rewrite Zplus_0_r_reverse at 1.
+rewrite <- H2.
+symmetry.
+apply ZEuclid.div_mod.
+assumption.
+Qed.
+
+Hint Resolve ZEuclid_div_pos ZEuclid_div_ge ZEuclid_div_mod0 : sail.
+
+
 (*
 Definition inline lt := (<)
 Definition inline gt := (>)
@@ -1235,9 +1276,9 @@ prepare_for_solver;
  | apply ArithFact_mword; assumption
  | constructor; omega with Z
    (* Try sail hints before dropping the existential *)
- | constructor; eauto 3 with zarith sail
+ | constructor; subst; eauto 3 with zarith sail
    (* The datatypes hints give us some list handling, esp In *)
- | constructor; drop_Z_exists; eauto 3 with datatypes zarith sail
+ | constructor; subst; drop_Z_exists; eauto 3 with datatypes zarith sail
  | match goal with |- context [Z.mul] => constructor; nia end
    (* Booleans - and_boolMP *)
  | constructor; drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
