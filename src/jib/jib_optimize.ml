@@ -192,7 +192,7 @@ let rec instrs_subst id subst =
        | I_clear (clexp, id') -> I_clear (clexp, id')
        | I_undefined ctyp -> I_undefined ctyp
        | I_match_failure -> I_match_failure
-       | I_end -> I_end
+       | I_end id' -> I_end id'
        | I_if (cval, then_instrs, else_instrs, ctyp) ->
           I_if (cval_subst id subst cval, instrs_subst id subst then_instrs, instrs_subst id subst else_instrs, ctyp)
        | I_block instrs -> I_block (instrs_subst id subst instrs)
@@ -238,7 +238,7 @@ let inline cdefs should_inline instrs =
   in
 
   let replace_end label = function
-    | I_aux (I_end, aux) -> I_aux (I_goto label, aux)
+    | I_aux (I_end _, aux) -> I_aux (I_goto label, aux)
     | I_aux (I_undefined _, aux) -> I_aux (I_goto label, aux)
     | instr -> instr
   in
