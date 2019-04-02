@@ -265,6 +265,10 @@ module Bindings : sig
   include Map.S with type key = id
 end
 
+module NCMap : sig
+  include Map.S with type key = n_constraint
+end
+
 module TypMap : sig
   include Map.S with type key = typ
 end

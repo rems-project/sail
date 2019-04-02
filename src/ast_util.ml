@@ -1100,6 +1100,8 @@ module NC = struct
   let compare = nc_compare
 end
 
+module NCMap = Map.Make(NC)
+
 module Typ = struct
   type t = typ
   let compare = typ_compare
