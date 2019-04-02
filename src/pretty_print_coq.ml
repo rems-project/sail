@@ -1444,9 +1444,9 @@ let doc_exp, doc_let =
             let epp = expY exp in
             match is_auto_decomposed_exist ctxt (env_of exp) ~rawbools:true (general_typ_of exp) with
             | Some _ ->
-               if informative then parens (epp ^^ doc_tannot ctxt (env_of exp) true (general_typ_of exp)) else
-               let proj = if effectful (effect_of exp) then "projT1_m" else "projT1" in
-               parens (string proj ^/^ epp)
+               if informative
+               then parens (epp ^^ doc_tannot ctxt (env_of exp) true (general_typ_of exp))
+               else parens (string "projT1_m" ^/^ epp)
             | None ->
                if informative then parens (string "build_trivial_ex" ^/^ epp)
                else epp
