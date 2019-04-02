@@ -457,24 +457,27 @@ type read_kind =
   (* x86 reads *)
   | Read_X86_locked (* the read part of a lock'd instruction (rmw) *)
 
+
+let stringFromReadKind = function
+  | Read_plain -> "Read_plain"
+  | Read_reserve -> "Read_reserve"
+  | Read_acquire -> "Read_acquire"
+  | Read_weak_acquire -> "Read_weak_acquire"
+  | Read_exclusive -> "Read_exclusive"
+  | Read_exclusive_acquire -> "Read_exclusive_acquire"
+  | Read_stream -> "Read_stream"
+  | Read_RISCV_acquire_RCpc             -> "Read_RISCV_acquire_RCpc"
+  | Read_RISCV_acquire_RCsc             -> "Read_RISCV_acquire_RCsc"
+  | Read_RISCV_acquire_release          -> "Read_RISCV_acquire_release"
+  | Read_RISCV_reserved                 -> "Read_RISCV_reserved"
+  | Read_RISCV_reserved_acquire_RCpc    -> "Read_RISCV_reserved_acquire_RCpc"
+  | Read_RISCV_reserved_acquire_RCsc    -> "Read_RISCV_reserved_acquire_RCsc"
+  | Read_RISCV_reserved_acquire_release -> "Read_RISCV_reserved_acquire_release"
+  | Read_X86_locked -> "Read_X86_locked"
+end
+
 instance (Show read_kind)
-  let show = function
-    | Read_plain -> "Read_plain"
-    | Read_reserve -> "Read_reserve"
-    | Read_acquire -> "Read_acquire"
-    | Read_weak_acquire -> "Read_weak_acquire"
-    | Read_exclusive -> "Read_exclusive"
-    | Read_exclusive_acquire -> "Read_exclusive_acquire"
-    | Read_stream -> "Read_stream"
-    | Read_RISCV_acquire_RCpc             -> "Read_RISCV_acquire_RCpc"
-    | Read_RISCV_acquire_RCsc             -> "Read_RISCV_acquire_RCsc"
-    | Read_RISCV_acquire_release          -> "Read_RISCV_acquire_release"
-    | Read_RISCV_reserved                 -> "Read_RISCV_reserved"
-    | Read_RISCV_reserved_acquire_RCpc    -> "Read_RISCV_reserved_acquire_RCpc"
-    | Read_RISCV_reserved_acquire_RCsc    -> "Read_RISCV_reserved_acquire_RCsc"
-    | Read_RISCV_reserved_acquire_release -> "Read_RISCV_reserved_acquire_release"
-    | Read_X86_locked -> "Read_X86_locked"
-  end
+  let show = stringFromReadKind
 end
 
 type write_kind =
@@ -495,22 +498,24 @@ type write_kind =
   (* x86 writes *)
   | Write_X86_locked (* the write part of a lock'd instruction (rmw) *)
 
+let stringFromWriteKind = function
+  | Write_plain -> "Write_plain"
+  | Write_conditional -> "Write_conditional"
+  | Write_release -> "Write_release"
+  | Write_exclusive -> "Write_exclusive"
+  | Write_exclusive_release -> "Write_exclusive_release"
+  | Write_RISCV_release_RCpc                -> "Write_RISCV_release_RCpc"
+  | Write_RISCV_release_RCsc                -> "Write_RISCV_release_RCsc"
+  | Write_RISCV_acquire_release             -> "Write_RISCV_acquire_release"
+  | Write_RISCV_conditional                 -> "Write_RISCV_conditional"
+  | Write_RISCV_conditional_release_RCpc    -> "Write_RISCV_conditional_release_RCpc"
+  | Write_RISCV_conditional_release_RCsc    -> "Write_RISCV_conditional_release_RCsc"
+  | Write_RISCV_conditional_acquire_release -> "Write_RISCV_conditional_acquire_release"
+  | Write_X86_locked -> "Write_X86_locked"
+end
+
 instance (Show write_kind)
-  let show = function
-    | Write_plain -> "Write_plain"
-    | Write_conditional -> "Write_conditional"
-    | Write_release -> "Write_release"
-    | Write_exclusive -> "Write_exclusive"
-    | Write_exclusive_release -> "Write_exclusive_release"
-    | Write_RISCV_release_RCpc                -> "Write_RISCV_release_RCpc"
-    | Write_RISCV_release_RCsc                -> "Write_RISCV_release_RCsc"
-    | Write_RISCV_acquire_release             -> "Write_RISCV_acquire_release"
-    | Write_RISCV_conditional                 -> "Write_RISCV_conditional"
-    | Write_RISCV_conditional_release_RCpc    -> "Write_RISCV_conditional_release_RCpc"
-    | Write_RISCV_conditional_release_RCsc    -> "Write_RISCV_conditional_release_RCsc"
-    | Write_RISCV_conditional_acquire_release -> "Write_RISCV_conditional_acquire_release"
-    | Write_X86_locked -> "Write_X86_locked"
-  end
+  let show = stringFromWriteKind
 end
 
 type barrier_kind =
@@ -537,47 +542,50 @@ type barrier_kind =
   (* X86 *)
   | Barrier_x86_MFENCE
 
+let stringFromBarrierKind = function
+  | Barrier_Sync -> "Barrier_Sync"
+  | Barrier_LwSync -> "Barrier_LwSync"
+  | Barrier_Eieio -> "Barrier_Eieio"
+  | Barrier_Isync -> "Barrier_Isync"
+  | Barrier_DMB -> "Barrier_DMB"
+  | Barrier_DMB_ST -> "Barrier_DMB_ST"
+  | Barrier_DMB_LD -> "Barrier_DMB_LD"
+  | Barrier_DSB -> "Barrier_DSB"
+  | Barrier_DSB_ST -> "Barrier_DSB_ST"
+  | Barrier_DSB_LD -> "Barrier_DSB_LD"
+  | Barrier_ISB -> "Barrier_ISB"
+  | Barrier_TM_COMMIT -> "Barrier_TM_COMMIT"
+  | Barrier_MIPS_SYNC -> "Barrier_MIPS_SYNC"
+  | Barrier_RISCV_rw_rw -> "Barrier_RISCV_rw_rw"
+  | Barrier_RISCV_r_rw  -> "Barrier_RISCV_r_rw"
+  | Barrier_RISCV_w_rw  -> "Barrier_RISCV_w_rw"
+  | Barrier_RISCV_rw_r  -> "Barrier_RISCV_rw_r"
+  | Barrier_RISCV_r_r   -> "Barrier_RISCV_r_r"
+  | Barrier_RISCV_w_r   -> "Barrier_RISCV_w_r"
+  | Barrier_RISCV_rw_w  -> "Barrier_RISCV_rw_w"
+  | Barrier_RISCV_r_w   -> "Barrier_RISCV_r_w"
+  | Barrier_RISCV_w_w   -> "Barrier_RISCV_w_w"
+  | Barrier_RISCV_tso   -> "Barrier_RISCV_tso"
+  | Barrier_RISCV_i     -> "Barrier_RISCV_i"
+  | Barrier_x86_MFENCE  -> "Barrier_x86_MFENCE"
+end
 
 instance (Show barrier_kind)
-  let show = function
-    | Barrier_Sync -> "Barrier_Sync"
-    | Barrier_LwSync -> "Barrier_LwSync"
-    | Barrier_Eieio -> "Barrier_Eieio"
-    | Barrier_Isync -> "Barrier_Isync"
-    | Barrier_DMB -> "Barrier_DMB"
-    | Barrier_DMB_ST -> "Barrier_DMB_ST"
-    | Barrier_DMB_LD -> "Barrier_DMB_LD"
-    | Barrier_DSB -> "Barrier_DSB"
-    | Barrier_DSB_ST -> "Barrier_DSB_ST"
-    | Barrier_DSB_LD -> "Barrier_DSB_LD"
-    | Barrier_ISB -> "Barrier_ISB"
-    | Barrier_TM_COMMIT -> "Barrier_TM_COMMIT"
-    | Barrier_MIPS_SYNC -> "Barrier_MIPS_SYNC"
-    | Barrier_RISCV_rw_rw -> "Barrier_RISCV_rw_rw"
-    | Barrier_RISCV_r_rw  -> "Barrier_RISCV_r_rw"
-    | Barrier_RISCV_w_rw  -> "Barrier_RISCV_w_rw"
-    | Barrier_RISCV_rw_r  -> "Barrier_RISCV_rw_r"
-    | Barrier_RISCV_r_r   -> "Barrier_RISCV_r_r"
-    | Barrier_RISCV_w_r   -> "Barrier_RISCV_w_r"
-    | Barrier_RISCV_rw_w  -> "Barrier_RISCV_rw_w"
-    | Barrier_RISCV_r_w   -> "Barrier_RISCV_r_w"
-    | Barrier_RISCV_w_w   -> "Barrier_RISCV_w_w"
-    | Barrier_RISCV_tso   -> "Barrier_RISCV_tso"
-    | Barrier_RISCV_i     -> "Barrier_RISCV_i"
-    | Barrier_x86_MFENCE  -> "Barrier_x86_MFENCE"
-  end
+  let show = stringFromBarrierKind
 end
 
 type trans_kind =
   (* AArch64 *)
   | Transaction_start | Transaction_commit | Transaction_abort
 
-instance (Show trans_kind)
-  let show = function
+let stringFromTrans_kind = function
   | Transaction_start  -> "Transaction_start"
   | Transaction_commit -> "Transaction_commit"
   | Transaction_abort  -> "Transaction_abort"
   end
+
+instance (Show trans_kind)
+  let show = stringFromTrans_kind
 end
 
 (* cache maintenance instructions *)
@@ -588,8 +596,7 @@ type cache_op_kind =
   (* AArch64 IC *)
   | Cache_op_I_IALLUIS | Cache_op_I_IALLU | Cache_op_I_IVAU
 
-instance (Show cache_op_kind)
-  let show = function
+let stringFromCache_op_kind = function
   | Cache_op_D_IVAC    -> "Cache_op_D_IVAC"
   | Cache_op_D_ISW     -> "Cache_op_D_ISW"
   | Cache_op_D_CSW     -> "Cache_op_D_CSW"
@@ -601,7 +608,10 @@ instance (Show cache_op_kind)
   | Cache_op_I_IALLUIS -> "Cache_op_I_IALLUIS"
   | Cache_op_I_IALLU   -> "Cache_op_I_IALLU"
   | Cache_op_I_IVAU    -> "Cache_op_I_IVAU"
-  end
+end
+
+instance (Show cache_op_kind)
+  let show = stringFromCache_op_kind
 end
 
 type instruction_kind = 
