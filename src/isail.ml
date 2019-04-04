@@ -603,7 +603,7 @@ let handle_input' input =
               begin match find_annot_ast sl !Interactive.ast with
               | Some annot ->
                  let msg = String.escaped (string_of_typ (Type_check.typ_of_annot annot)) in
-                 begin match simp_loc (fst annot) with
+                 begin match Reporting.simp_loc (fst annot) with
                  | Some (p1, p2) ->
                     print_endline ("(sail-highlight-region "
                                    ^ string_of_int (p1.pos_cnum + 1) ^ " " ^ string_of_int (p2.pos_cnum + 1)

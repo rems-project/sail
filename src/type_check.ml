@@ -2643,10 +2643,10 @@ let irule r env exp =
 
 
 (* This function adds useful assertion messages to asserts missing them *)
-let assert_msg test = function
+let assert_msg = function
   | E_aux (E_lit (L_aux (L_string "", _)), (l, _)) ->
      let open Reporting in
-     locate (fun _ -> l) (mk_lit_exp (L_string (loc_to_string ~code:false l ^ ": " ^ string_of_exp test)))
+     locate (fun _ -> l) (mk_lit_exp (L_string (short_loc_to_string l)))
   | msg -> msg
 
 let strip_exp : 'a exp -> unit exp = function exp -> map_exp_annot (fun (l, _) -> (l, ())) exp
@@ -2894,7 +2894,7 @@ and check_block l env exps ret_typ =
      let texp, env = bind_assignment env lexp bind in
      texp :: check_block l env exps ret_typ
   | ((E_aux (E_assert (constr_exp, msg), _) as exp) :: exps) ->
-     let msg = assert_msg constr_exp msg in
+     let msg = assert_msg msg in
      let constr_exp = crule check_exp env constr_exp bool_typ in
      let checked_msg = crule check_exp env msg string_typ in
      let env = match assert_constraint env true constr_exp with
@@ -3761,7 +3761,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let vec_typ = dvector_typ env (nint (List.length vec)) (typ_of inferred_item) in
      annot_exp (E_vector (inferred_item :: checked_items)) vec_typ
   | E_assert (test, msg) ->
-     let msg = assert_msg test msg in
+     let msg = assert_msg msg in
      let checked_test = crule check_exp env test bool_typ in
      let checked_msg = crule check_exp env msg string_typ in
      annot_exp_effect (E_assert (checked_test, checked_msg)) unit_typ (mk_effect [BE_escape])

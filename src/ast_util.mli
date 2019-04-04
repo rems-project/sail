@@ -483,9 +483,6 @@ val locate_typ : (l -> l) -> typ -> typ
    a generated number. *)
 val unique : l -> l
 
-(** Reduce a location to a pair of positions if possible *)
-val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
-
 (** Try to find the annotation closest to the provided (simplified)
    location. Note that this function makes no guarantees about finding
    the closest annotation or even finding an annotation at all. This

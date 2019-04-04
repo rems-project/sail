@@ -1908,20 +1908,12 @@ let subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
     | A_bool nc -> A_aux (A_bool (subst_kids_nc substs nc), l)
   in subst_kids_nc, s_styp, s_starg
 
-
-let rec simp_loc = function
-  | Parse_ast.Unknown -> None
-  | Parse_ast.Unique (_, l) -> simp_loc l
-  | Parse_ast.Generated l -> simp_loc l
-  | Parse_ast.Range (p1, p2) -> Some (p1, p2)
-  | Parse_ast.Documented (_, l) -> simp_loc l
-
 let before p1 p2 =
   let open Lexing in
   p1.pos_fname = p2.pos_fname && p1.pos_cnum <= p2.pos_cnum
 
 let subloc sl l =
-  match sl, simp_loc l with
+  match sl, Reporting.simp_loc l with
   | _, None -> false
   | None, _ -> false
   | Some (p1a, p1b), Some (p2a, p2b) ->

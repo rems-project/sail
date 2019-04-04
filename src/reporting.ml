@@ -111,6 +111,20 @@ let loc_to_string ?code:(code=true) l =
   format_message (Location (l, Line "")) (buffer_formatter b);
   Buffer.contents b
 
+let rec simp_loc = function
+  | Parse_ast.Unknown -> None
+  | Parse_ast.Unique (_, l) -> simp_loc l
+  | Parse_ast.Generated l -> simp_loc l
+  | Parse_ast.Range (p1, p2) -> Some (p1, p2)
+  | Parse_ast.Documented (_, l) -> simp_loc l
+  
+let short_loc_to_string l =
+  match simp_loc l with
+  | None -> "unknown location"
+  | Some (p1, p2) ->
+     Printf.sprintf "%s %d:%d - %d:%d"
+       p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol)
+  
 let print_err l m1 m2 =
   print_err_internal (Loc l) m1 m2
 
