@@ -1214,6 +1214,7 @@ Ltac prepare_for_solver :=
  destruct_exists;
  unbool_comparisons;
  unbool_comparisons_goal;
+ repeat match goal with H:and _ _ |- _ => destruct H end;
  unfold_In; (* after unbool_comparisons to deal with && and || *)
  reduce_list_lengths;
  reduce_pow;
@@ -1257,6 +1258,16 @@ intros.
 tauto.
 Qed.
 
+Ltac solve_euclid :=
+repeat match goal with |- context [ZEuclid.modulo ?x ?y] =>
+  specialize (ZEuclid.div_mod x y);
+  specialize (ZEuclid.mod_always_pos x y);
+  generalize (ZEuclid.modulo x y);
+  generalize (ZEuclid.div x y);
+  intros
+end;
+nia.
+
 
 Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
@@ -1271,19 +1282,24 @@ try (constructor; reflexivity);
 try (constructor; omega);
 prepare_for_solver;
 (*dump_context;*)
+constructor;
+repeat match goal with |- and _ _ => split end;
  solve
- [ match goal with |- ArithFact (?x _) => is_evar x; idtac "Warning: unknown constraint"; constructor; exact (I : (fun _ => True) _) end
+ [ match goal with |- (?x _) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) _) end
  | apply ArithFact_mword; assumption
- | constructor; omega with Z
+ | omega with Z
    (* Try sail hints before dropping the existential *)
- | constructor; subst; eauto 3 with zarith sail
+ | subst; eauto 3 with zarith sail
    (* The datatypes hints give us some list handling, esp In *)
- | constructor; subst; drop_Z_exists; eauto 3 with datatypes zarith sail
- | match goal with |- context [Z.mul] => constructor; nia end
+ | subst; drop_Z_exists; eauto 3 with datatypes zarith sail
+ | subst; match goal with |- context [ZEuclid.div] => solve_euclid
+                        | |- context [ZEuclid.modulo] => solve_euclid
+   end
+ | match goal with |- context [Z.mul] => nia end
    (* Booleans - and_boolMP *)
- | constructor; drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
- | match goal with |- ArithFact (forall l r:bool, _ -> _ -> exists _ : bool, _) => 
-     constructor; intros [|] [|] H1 H2;
+ | drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
+ | match goal with |- (forall l r:bool, _ -> _ -> exists _ : bool, _) => 
+     intros [|] [|] H1 H2;
      repeat match goal with H:?X = ?X -> _ |- _ => specialize (H eq_refl) end;
      repeat match goal with H:@ex _ _ |- _ => destruct H end;
      bruteforce_bool_exists
@@ -1295,7 +1311,7 @@ prepare_for_solver;
      (* Don't use auto for the fallback to keep runtime down *)
      firstorder fail
    end*)
- | constructor; idtac "Unable to solve constraint"; dump_context; fail
+ | idtac "Unable to solve constraint"; dump_context; fail
  ].
 (* Add an indirection so that you can redefine run_solver to fail to get
    slow running constraints into proof mode. *)

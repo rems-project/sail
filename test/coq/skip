@@ -5,7 +5,6 @@ option_tuple.sail
 pat_completeness.sail
 XXXXX tests which need inline extern definitions adjusted
 patternrefinement.sail
-procstate1.sail
 vector_subrange_gen.sail
 XXXXX currently unsupported use of a bitvector in a parametric vector type
 pure_record.sail
