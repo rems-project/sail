@@ -78,7 +78,7 @@ val write_ram : forall 'rv 'e.
   integer -> integer -> list bitU -> list bitU -> list bitU -> monad 'rv unit 'e
 let write_ram addrsize size hexRAM address value =
   write_mem_ea Write_plain address size >>
-  write_mem_val value >>= fun _ ->
+  write_mem Write_plain address size value >>= fun _ ->
   return ()
 
 val read_ram : forall 'rv 'e.
