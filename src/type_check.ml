@@ -3145,40 +3145,34 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           typ_error env l (Printf.sprintf "Cannot bind tuple pattern %s against non tuple type %s"
                          (string_of_pat pat) (string_of_typ typ))
      end
-  | P_app (f, pats) when Env.is_union_constructor f env ->
-     begin
-       (* Treat Ctor((p, x)) the same as Ctor(p, x) *)
-       let pats = match pats with [P_aux (P_tup pats, _)] -> pats | _ -> pats in
-       let (typq, ctor_typ) = Env.get_union_id f env in
-       let quants = quant_items typq in
-       let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
-         | Typ_tup typs -> typs
-         | _ -> [typ]
-       in
-       match Env.expand_synonyms env ctor_typ with
-       | Typ_aux (Typ_fn ([arg_typ], ret_typ, _), _) ->
-          begin
-            try
-              let goals = quant_kopts typq |> List.map kopt_kid |> KidSet.of_list in
-              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for pattern " ^ string_of_typ typ));
-              let unifiers = unify l env goals ret_typ typ in
-              let arg_typ' = subst_unifiers unifiers arg_typ in
-              let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
-              if not (List.for_all (solve_quant env) quants') then
-                typ_raise env l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env))
-              else ();
-              let ret_typ' = subst_unifiers unifiers ret_typ in
-              let arg_typ', env = bind_existential l None arg_typ' env in
-              let tpats, env, guards =
-                try List.fold_left2 bind_tuple_pat ([], env, []) pats (untuple arg_typ') with
-                | Invalid_argument _ -> typ_error env l "Union constructor pattern arguments have incorrect length"
-              in
-              annot_pat (P_app (f, List.rev tpats)) typ, env, guards
-            with
-            | Unification_error (l, m) -> typ_error env l ("Unification error when pattern matching against union constructor: " ^ m)
-          end
-       | _ -> typ_error env l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
+  | P_app (f, [pat]) when Env.is_union_constructor f env ->
+     let (typq, ctor_typ) = Env.get_union_id f env in
+     let quants = quant_items typq in
+     begin match Env.expand_synonyms env ctor_typ with
+     | Typ_aux (Typ_fn ([arg_typ], ret_typ, _), _) ->
+        begin
+          try
+            let goals = quant_kopts typq |> List.map kopt_kid |> KidSet.of_list in
+            typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for pattern " ^ string_of_typ typ));
+            let unifiers = unify l env goals ret_typ typ in
+            let arg_typ' = subst_unifiers unifiers arg_typ in
+            let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
+            if not (List.for_all (solve_quant env) quants') then
+              typ_raise env l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env))
+            else ();
+            let ret_typ' = subst_unifiers unifiers ret_typ in
+            let arg_typ', env = bind_existential l None arg_typ' env in
+            let tpat, env, guards = bind_pat env pat arg_typ' in
+            annot_pat (P_app (f, [tpat])) typ, env, guards
+          with
+          | Unification_error (l, m) -> typ_error env l ("Unification error when pattern matching against union constructor: " ^ m)
+        end
+     | _ -> typ_error env l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
      end
+     
+  | P_app (f, pats) when Env.is_union_constructor f env ->
+     (* Treat Ctor(x, y) as Ctor((x, y)) *)
+     bind_pat env (mk_pat (P_app (f, [mk_pat (P_tup pats)]))) typ
 
   | P_app (f, pats) when Env.is_mapping f env ->
      begin
