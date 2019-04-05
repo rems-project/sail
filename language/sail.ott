@@ -119,44 +119,16 @@ l :: '' ::=                                     {{ phantom }}
     {{ hol () }}
 
 annot :: '' ::=
-                                                {{ phantom }}
-                                                {{ ocaml 'a annot }}
-                                                {{ lem annot 'a }}
-                                                {{ hol unit }}
+  {{ phantom }}
+  {{ ocaml 'a annot }}
+  {{ lem annot 'a }}
+  {{ hol unit }}
 
 id :: '' ::=
   {{ com Identifier }}
   {{ aux _ l }}
-  | x                           :: :: id
-  | ( deinfix x )                       :: D :: deIid {{ com remove infix status }}
-  | bool      		   	 :: M :: bool {{ com built in type identifiers }} {{ ichlo (Id "bool") }}
-  | bit				 :: M :: bit {{ ichlo (Id "bit") }}
-  | unit			 :: M :: unit {{ ichlo (Id "unit") }}
-  | nat				 :: M :: nat  {{ ichlo (Id "nat") }}
-  | int				 :: M :: int  {{ ichlo (Id "int") }}
-  | string                       :: M :: string {{ tex \ottkw{string} }} {{ ichlo (Id "string") }}
-  | range                        :: M :: range {{ ichlo (Id "range") }}
-  | atom			 :: M :: atom {{ ichlo (Id "atom") }}
-  | vector			 :: M :: vector {{ ichlo (Id "vector") }}
-  | list			 :: M :: list {{ ichlo (Id "list") }}
-%  | set                          :: M :: set {{ ichlo (Id "set") }}
-  | reg                          :: M :: reg {{ ichlo (Id "reg") }}
-  | to_num			 :: M :: tonum {{ com built-in function identifiers }} {{ ichlo (Id "to_num") }}
-  | to_vec			 :: M :: tovec {{ ichlo (Id "to_vec") }}
-  | msb                          :: M :: msb {{ ichlo (Id "msb") }}
-% Note: we have just a single namespace. We don't want the same
-% identifier to be reused as a type name or variable, expression
-% variable, and field name.  We don't enforce any lexical convention
-% on type variables (or variables of other kinds)
-% We don't enforce a lexical convention on infix operators, as some of the 
-% targets use alphabetical infix operators.
-
-% Vector builtins
-  | vector_access          :: M :: vector_access  {{ ichlo (Id "vector_access") }} 
-  | vector_update          :: M :: vector_update  {{ ichlo (Id "vector_update") }}
-  | vector_update_subrange :: M :: vector_update_subrange {{ ichlo (Id "vector_update_subrange") }}
-  | vector_subrange        :: M :: vector_subrange {{ ichlo (Id "vector_subrange") }}
-  | vector_append          :: M :: vector_append {{ ichlo (Id "vector_append") }}
+  | x              :: :: id
+  | ( operator x ) :: D :: operator {{ com remove infix status }}
 
 kid :: '' ::=
   {{ com kinded IDs: Type, Int, and Order variables }}
@@ -180,23 +152,23 @@ kind :: 'K_' ::=
 nexp :: 'Nexp_' ::=
   {{ com numeric expression, of kind Int }}
   {{ aux _ l }}
-  | id                                  :: :: id       {{ com abbreviation identifier }}
-  | kid                                 :: :: var      {{ com variable }}
-  | num                                 :: :: constant {{ com constant }}
-  | id ( nexp1 , ... , nexpn )          :: :: app      {{ com app }}
-  | nexp1 * nexp2                       :: :: times    {{ com product }}
-  | nexp1 + nexp2                       :: :: sum      {{ com sum }}
-  | nexp1 - nexp2                       :: :: minus    {{ com subtraction }}
-  | 2** nexp                            :: :: exp      {{ com exponential }}
-  | neg nexp                            :: I :: neg    {{ com for internal use only}}
-  | ( nexp )                            :: S :: paren  {{ ichlo [[nexp]] }}
+  | id                         :: :: id       {{ com abbreviation identifier }}
+  | kid                        :: :: var      {{ com variable }}
+  | num                        :: :: constant {{ com constant }}
+  | id ( nexp1 , ... , nexpn ) :: :: app      {{ com app }}
+  | nexp1 * nexp2              :: :: times    {{ com product }}
+  | nexp1 + nexp2              :: :: sum      {{ com sum }}
+  | nexp1 - nexp2              :: :: minus    {{ com subtraction }}
+  | 2 ^ nexp                   :: :: exp      {{ com exponential }}
+  | - nexp                     :: :: neg      {{ com unary negation}}
+  | ( nexp )                   :: S :: paren  {{ ichlo [[nexp]] }}
 
 order :: 'Ord_' ::=
   {{ com vector order specifications, of kind Order }}
   {{ aux _ l }}
   | kid                                 :: :: var {{ com variable }} 
-  | inc                                 :: :: inc  {{ com increasing }}
-  | dec                                 :: :: dec  {{ com decreasing }}
+  | inc                                 :: :: inc {{ com increasing }}
+  | dec                                 :: :: dec {{ com decreasing }}
   | ( order )                           :: S :: paren {{ ichlo [[order]] }}
 
 base_effect :: 'BE_' ::=

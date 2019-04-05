@@ -161,7 +161,8 @@ let rec frag_subst id subst = function
   | F_call (op, frags) -> F_call (op, List.map (frag_subst id subst) frags)
   | F_field (frag, field) -> F_field (frag_subst id subst frag, field)
   | F_raw str -> F_raw str
-  | F_ctor_kind (ctor, unifiers, ctyp) -> F_ctor_kind (ctor, unifiers, ctyp)
+  | F_ctor_kind (frag, ctor, unifiers, ctyp) -> F_ctor_kind (frag_subst id subst frag, ctor, unifiers, ctyp)
+  | F_ctor_unwrap (ctor, unifiers, frag) -> F_ctor_unwrap (ctor, unifiers, frag_subst id subst frag)
   | F_poly frag -> F_poly (frag_subst id subst frag)
 
 let cval_subst id subst (frag, ctyp) = frag_subst id subst frag, ctyp

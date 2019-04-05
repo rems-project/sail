@@ -165,7 +165,8 @@ let rec frag_rename from_id to_id = function
   | F_unary (op, f) -> F_unary (op, frag_rename from_id to_id f)
   | F_field (f, field) -> F_field (frag_rename from_id to_id f, field)
   | F_raw raw -> F_raw raw
-  | F_ctor_kind (ctor, unifiers, ctyp) -> F_ctor_kind (ctor, unifiers, ctyp)
+  | F_ctor_kind (f, ctor, unifiers, ctyp) -> F_ctor_kind (frag_rename from_id to_id f, ctor, unifiers, ctyp)
+  | F_ctor_unwrap (ctor, unifiers, f) -> F_ctor_unwrap (ctor, unifiers, frag_rename from_id to_id f)
   | F_poly f -> F_poly (frag_rename from_id to_id f)
 
 let cval_rename from_id to_id (frag, ctyp) = (frag_rename from_id to_id frag, ctyp)
@@ -282,9 +283,20 @@ let rec string_of_fragment ?zencode:(zencode=true) = function
   | F_unary (op, f) ->
      op ^ string_of_fragment' ~zencode:zencode f
   | F_raw raw -> raw
-  | F_ctor_kind (ctor, [], _) -> "Kind_" ^ Util.zencode_string (string_of_id ctor)
-  | F_ctor_kind (ctor, unifiers, _) ->
-     "Kind_" ^ Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
+  | F_ctor_kind (f, ctor, [], _) ->
+     string_of_fragment' ~zencode:zencode f ^ ".kind"
+     ^ " != Kind_" ^ Util.zencode_string (string_of_id ctor)
+  | F_ctor_kind (f, ctor, unifiers, _) ->
+     string_of_fragment' ~zencode:zencode f ^ ".kind"
+     ^ " != Kind_" ^ Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
+  | F_ctor_unwrap (ctor, [], f) ->
+     Printf.sprintf "%s.%s"
+       (string_of_fragment' ~zencode:zencode f)
+       (Util.zencode_string (string_of_id ctor))
+  | F_ctor_unwrap (ctor, unifiers, f) ->
+     Printf.sprintf "%s.%s"
+       (string_of_fragment' ~zencode:zencode f)
+       (Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers))
   | F_poly f -> string_of_fragment ~zencode:zencode f
 and string_of_fragment' ?zencode:(zencode=true) f =
   match f with
@@ -319,9 +331,14 @@ and string_of_ctyp = function
    constructors in variants and structs. Used for debug output. *)
 and full_string_of_ctyp = function
   | CT_tup ctyps -> "(" ^ Util.string_of_list ", " full_string_of_ctyp ctyps ^ ")"
-  | CT_struct (id, ctors) | CT_variant (id, ctors) ->
+  | CT_struct (id, ctors) ->
      "struct " ^ string_of_id id
-     ^ "{ "
+     ^ "{"
+     ^ Util.string_of_list ", " (fun (id, ctyp) -> string_of_id id ^ " : " ^ full_string_of_ctyp ctyp) ctors
+     ^ "}"
+  | CT_variant (id, ctors) ->
+     "union " ^ string_of_id id
+     ^ "{"
      ^ Util.string_of_list ", " (fun (id, ctyp) -> string_of_id id ^ " : " ^ full_string_of_ctyp ctyp) ctors
      ^ "}"
   | CT_vector (true, ctyp) -> "vector(dec, " ^ full_string_of_ctyp ctyp ^ ")"
@@ -442,6 +459,13 @@ let rec ctyp_unify ctyp1 ctyp2 =
 
   | CT_list ctyp1, CT_list ctyp2 -> ctyp_unify ctyp1 ctyp2
 
+  | CT_struct (id1, fields1), CT_struct (id2, fields2)
+       when Id.compare id1 id2 = 0 && List.length fields1 == List.length fields2 ->
+     if List.for_all2 (fun x y -> x = y) (List.map fst fields1) (List.map fst fields2) then
+       List.concat (List.map2 ctyp_unify (List.map snd fields1) (List.map snd fields2))
+     else
+       raise (Invalid_argument "ctyp_unify")
+                                  
   | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_unify ctyp1 ctyp2
 
   | CT_poly, _ -> [ctyp2]
@@ -505,7 +529,7 @@ let pp_name id =
   string (string_of_name ~zencode:false id)
 
 let pp_ctyp ctyp =
-  string (string_of_ctyp ctyp |> Util.yellow |> Util.clear)
+  string (full_string_of_ctyp ctyp |> Util.yellow |> Util.clear)
 
 let pp_keyword str =
   string ((str |> Util.red |> Util.clear) ^ " ")
@@ -622,7 +646,8 @@ let rec fragment_deps = function
   | F_field (frag, _) | F_unary (_, frag) | F_poly frag -> fragment_deps frag
   | F_call (_, frags) -> List.fold_left NameSet.union NameSet.empty (List.map fragment_deps frags)
   | F_op (frag1, _, frag2) -> NameSet.union (fragment_deps frag1) (fragment_deps frag2)
-  | F_ctor_kind _ -> NameSet.empty
+  | F_ctor_kind (frag, _, _, _) -> fragment_deps frag
+  | F_ctor_unwrap (_, _, frag) -> fragment_deps frag
   | F_raw _ -> NameSet.empty
 
 let cval_deps = function (frag, _) -> fragment_deps frag

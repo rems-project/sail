@@ -140,8 +140,8 @@ let typ_error env l m = raise (Type_error (env, l, Err_other m))
 let typ_raise env l err = raise (Type_error (env, l, err))
 
 let deinfix = function
-  | Id_aux (Id v, l) -> Id_aux (DeIid v, l)
-  | Id_aux (DeIid v, l) -> Id_aux (DeIid v, l)
+  | Id_aux (Id v, l) -> Id_aux (Operator v, l)
+  | Id_aux (Operator v, l) -> Id_aux (Operator v, l)
 
 let field_name rec_id id =
   match rec_id, id with
@@ -181,7 +181,7 @@ let is_atom_bool (Typ_aux (typ_aux, _)) =
 
 let rec strip_id = function
   | Id_aux (Id x, _) -> Id_aux (Id x, Parse_ast.Unknown)
-  | Id_aux (DeIid x, _) -> Id_aux (DeIid x, Parse_ast.Unknown)
+  | Id_aux (Operator x, _) -> Id_aux (Operator x, Parse_ast.Unknown)
 and strip_kid = function
   | Kid_aux (Var x, _) -> Kid_aux (Var x, Parse_ast.Unknown)
 and strip_base_effect = function

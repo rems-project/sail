@@ -184,7 +184,7 @@ let rec fix_id remove_tick name = match name with
 let string_id (Id_aux(i,_)) =
   match i with
   | Id i -> fix_id false i
-  | DeIid x -> Util.zencode_string ("op " ^ x)
+  | Operator x -> Util.zencode_string ("op " ^ x)
 
 let doc_id id = string (string_id id)
 
@@ -193,12 +193,12 @@ let doc_id_type (Id_aux(i,_)) =
   | Id("int") -> string "Z"
   | Id("real") -> string "R"
   | Id i -> string (fix_id false i)
-  | DeIid x -> string (Util.zencode_string ("op " ^ x))
+  | Operator x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_id_ctor (Id_aux(i,_)) =
   match i with
   | Id i -> string (fix_id false i)
-  | DeIid x -> string (Util.zencode_string ("op " ^ x))
+  | Operator x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_var ctx kid =
   match KBindings.find kid ctx.kid_id_renames with
@@ -2468,7 +2468,7 @@ let tyvars_of_typquant (TypQ_aux (tq,_)) =
 let mk_kid_renames ids_to_avoid kids =
   let map_id = function
     | Id_aux (Id i, _) -> Some (fix_id false i)
-    | Id_aux (DeIid _, _) -> None
+    | Id_aux (Operator _, _) -> None
   in
   let ids = StringSet.of_list (Util.map_filter map_id (IdSet.elements ids_to_avoid)) in
   let rec check_kid kid (newkids,rebindings) =

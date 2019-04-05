@@ -579,7 +579,7 @@ let ocaml_string_of_struct ctx id typq fields =
   let ocaml_field (typ, id) =
     separate space [string (string_of_id id ^ " = \""); string "^"; ocaml_string_typ typ (arg ^^ string "." ^^ zencode ctx id)]
   in
-  separate space [string "let"; ocaml_string_of id; parens (arg ^^ space ^^ colon ^^ space ^^ zencode ctx id); equals]
+  separate space [string "let"; ocaml_string_of id; parens (arg ^^ space ^^ colon ^^ space ^^ ocaml_typquant typq ^^ space ^^ zencode ctx id); equals]
   ^//^ (string "\"{" ^^ separate_map (hardline ^^ string "^ \", ") ocaml_field fields ^^ string " ^ \"}\"")
 
 let ocaml_string_of_abbrev ctx id typq typ =

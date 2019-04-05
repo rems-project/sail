@@ -95,7 +95,7 @@ let c_error ?loc:(l=Parse_ast.Unknown) message =
 
 let zencode_id = function
   | Id_aux (Id str, l) -> Id_aux (Id (Util.zencode_string str), l)
-  | Id_aux (DeIid str, l) -> Id_aux (Id (Util.zencode_string ("op " ^ str)), l)
+  | Id_aux (Operator str, l) -> Id_aux (Id (Util.zencode_string ("op " ^ str)), l)
 
 (**************************************************************************)
 (* 2. Converting sail types to C types                                    *)

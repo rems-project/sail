@@ -422,7 +422,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   let ctx = { ctx with local_env = env } in
   match apat_aux, cval with
   | AP_id (pid, _), (frag, ctyp) when Env.is_union_constructor pid ctx.tc_env ->
-     [ijump (F_op (F_field (frag, "kind"), "!=", F_ctor_kind (pid, [], ctyp)), CT_bool) case_label],
+     [ijump (F_ctor_kind (frag, pid, [], ctyp), CT_bool) case_label],
      [],
      ctx
 
@@ -478,12 +478,8 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
           else
             [], ctor_ctyp
         in
-        let ctor_field = match unifiers with
-          | [] -> Util.zencode_string (string_of_id ctor)
-          | _ -> Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
-        in
-        let instrs, cleanup, ctx = compile_match ctx apat ((F_field (frag, ctor_field), ctor_ctyp)) case_label in
-        [ijump (F_op (F_field (frag, "kind"), "!=", F_ctor_kind (ctor, unifiers, pat_ctyp)), CT_bool) case_label]
+        let instrs, cleanup, ctx = compile_match ctx apat (F_ctor_unwrap (ctor, unifiers, frag), ctor_ctyp) case_label in
+        [ijump (F_ctor_kind (frag, ctor, unifiers, pat_ctyp), CT_bool) case_label]
         @ instrs,
         cleanup,
         ctx
@@ -783,7 +779,8 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      (fun clexp -> icomment "unreachable after throw"),
      []
 
-  | AE_field (aval, id, _) ->
+  | AE_field (aval, id, typ) ->
+     let aval_ctyp = ctyp_of_typ ctx typ in
      let setup, cval, cleanup = compile_aval l ctx aval in
      let ctyp = match cval_ctyp cval with
        | CT_struct (struct_id, fields) ->
@@ -796,8 +793,19 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        | _ ->
           raise (Reporting.err_unreachable l __POS__ "Field access on non-struct type in ANF representation!")
      in
+     let unifiers, ctyp =
+       if is_polymorphic ctyp then
+         let unifiers = List.map ctyp_suprema (ctyp_unify ctyp aval_ctyp) in
+         unifiers, ctyp_suprema aval_ctyp
+       else
+         [], ctyp
+     in
+     let field_str = match unifiers with
+       | [] -> Util.zencode_string (string_of_id id)
+       | _ -> Util.zencode_string (string_of_id id ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
+     in
      setup,
-     (fun clexp -> icopy l clexp (F_field (fst cval, Util.zencode_string (string_of_id id)), ctyp)),
+     (fun clexp -> icopy l clexp (F_field (fst cval, field_str), ctyp)),
      cleanup
 
   | AE_for (loop_var, loop_from, loop_to, loop_step, Ord_aux (ord, _), body) ->
@@ -1272,9 +1280,15 @@ let rec specialize_variants ctx prior =
     | CT_variant (id, ctors) when Id.compare id var_id = 0 -> CT_variant (id, new_ctors)
     | ctyp -> ctyp
   in
+  let fix_struct_ctyp struct_id new_fields = function
+    | CT_struct (id, ctors) when Id.compare id struct_id = 0 -> CT_struct (id, new_fields)
+    | ctyp -> ctyp
+  in
 
-  let specialize_constructor ctx ctor_id ctyp =
-    function
+  (* specialize_constructor is called on all instructions when we find
+     a constructor in a union type that is polymorphic. It's job is to
+     record all uses of that constructor so we can monomorphise it. *)
+  let specialize_constructor ctx ctor_id ctyp = function
     | I_aux (I_funcall (clexp, extern, id, [cval]), ((_, l) as aux)) as instr when Id.compare id ctor_id = 0 ->
        (* Work out how each call to a constructor in instantiated and add that to unifications *)
        let unifiers = List.map ctyp_suprema (ctyp_unify ctyp (cval_ctyp cval)) in
@@ -1313,7 +1327,7 @@ let rec specialize_variants ctx prior =
        Reporting.unreachable l __POS__ "Multiple argument constructor found"
 
     (* We have to be careful this is the only place where an F_ctor_kind can appear before calling specialize variants *)
-    | I_aux (I_jump ((F_op (_, "!=", F_ctor_kind (id, unifiers, pat_ctyp)), CT_bool), _), _) as instr when Id.compare id ctor_id = 0 ->
+    | I_aux (I_jump ((F_ctor_kind (_, id, unifiers, pat_ctyp), CT_bool), _), _) as instr when Id.compare id ctor_id = 0 ->
        let mono_id = append_id ctor_id ("_" ^ Util.string_of_list "_" (fun ctyp -> string_of_ctyp ctyp) unifiers) in
        unifications := Bindings.add mono_id (ctyp_suprema pat_ctyp) !unifications;
        instr
@@ -1321,14 +1335,27 @@ let rec specialize_variants ctx prior =
     | instr -> instr
   in
 
+  (* specialize_field performs the same job as specialize_constructor,
+     but for struct fields rather than union constructors. *)
+  let specialize_field ctx field_id ctyp = function
+    | I_aux (I_copy (CL_field (clexp, field_str), cval), aux) when string_of_id field_id = field_str ->
+       let unifiers = List.map ctyp_suprema (ctyp_unify ctyp (cval_ctyp cval)) in
+       let mono_id = append_id field_id ("_" ^ Util.string_of_list "_" (fun ctyp -> string_of_ctyp ctyp) unifiers) in
+       unifications := Bindings.add mono_id (ctyp_suprema (cval_ctyp cval)) !unifications;
+       I_aux (I_copy (CL_field (clexp, string_of_id mono_id), cval), aux)
+      
+    | instr -> instr
+  in
+  
   function
   | (CDEF_type (CTD_variant (var_id, ctors)) as cdef) :: cdefs ->
      let polymorphic_ctors = List.filter (fun (_, ctyp) -> is_polymorphic ctyp) ctors in
 
      let cdefs =
-       List.fold_left (fun cdefs (ctor_id, ctyp) -> List.map (cdef_map_instr (specialize_constructor ctx ctor_id ctyp)) cdefs)
-                      cdefs
-                      polymorphic_ctors
+       List.fold_left
+         (fun cdefs (ctor_id, ctyp) -> List.map (cdef_map_instr (specialize_constructor ctx ctor_id ctyp)) cdefs)
+         cdefs
+         polymorphic_ctors
      in
 
      let monomorphic_ctors = List.filter (fun (_, ctyp) -> not (is_polymorphic ctyp)) ctors in
@@ -1345,6 +1372,30 @@ let rec specialize_variants ctx prior =
      let prior = List.map (cdef_map_ctyp (map_ctyp (fix_variant_ctyp var_id new_ctors))) prior in
      specialize_variants ctx (CDEF_type (CTD_variant (var_id, new_ctors)) :: prior) cdefs
 
+  | (CDEF_type (CTD_struct (struct_id, fields)) as cdef) :: cdefs ->
+     let polymorphic_fields = List.filter (fun (_, ctyp) -> is_polymorphic ctyp) fields in
+
+     let cdefs =
+       List.fold_left
+         (fun cdefs (field_id, ctyp) -> List.map (cdef_map_instr (specialize_field ctx field_id ctyp)) cdefs)
+         cdefs
+         polymorphic_fields
+     in
+
+     let monomorphic_fields = List.filter (fun (_, ctyp) -> not (is_polymorphic ctyp)) fields in
+     let specialized_fields = Bindings.bindings !unifications in
+     let new_fields = monomorphic_fields @ specialized_fields in
+
+     let ctx = {
+         ctx with records = Bindings.add struct_id
+                              (List.fold_left (fun m (id, ctyp) -> Bindings.add id ctyp m) !unifications monomorphic_fields)
+                              ctx.records
+       } in
+
+     let cdefs = List.map (cdef_map_ctyp (map_ctyp (fix_struct_ctyp struct_id new_fields))) cdefs in
+     let prior = List.map (cdef_map_ctyp (map_ctyp (fix_struct_ctyp struct_id new_fields))) prior in     
+     specialize_variants ctx (CDEF_type (CTD_struct (struct_id, new_fields)) :: prior) cdefs
+     
   | cdef :: cdefs ->
      let remove_poly (I_aux (instr, aux)) =
        match instr with

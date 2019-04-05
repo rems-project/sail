@@ -339,7 +339,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
      in
      let wrap = match id with
        | Id_aux (Id i,l) -> (fun f -> Id_aux (Id (f i),Generated l))
-       | Id_aux (DeIid i,l) -> (fun f -> Id_aux (DeIid (f i),l))
+       | Id_aux (Operator i,l) -> (fun f -> Id_aux (Operator (f i),l))
      in
      let name_seg = function
        | (_,None) -> ""
@@ -442,7 +442,7 @@ let freshen_id =
     let () = counter := n + 1 in
     match id with
     | Id_aux (Id x, l) -> Id_aux (Id (x ^ "#m" ^ string_of_int n),Generated l)
-    | Id_aux (DeIid x, l) -> Id_aux (DeIid (x ^ "#m" ^ string_of_int n),Generated l)
+    | Id_aux (Operator x, l) -> Id_aux (Operator (x ^ "#m" ^ string_of_int n),Generated l)
 
 (* TODO: only freshen bindings that might be shadowed *)
 let rec freshen_pat_bindings p =
@@ -746,7 +746,7 @@ let split_defs all_errors splits defs =
     let split_pat vars p =
       let id_match = function
         | Id_aux (Id x,_) -> (try Some (List.assoc x vars) with Not_found -> None)
-        | Id_aux (DeIid x,_) -> (try Some (List.assoc x vars) with Not_found -> None)
+        | Id_aux (Operator x,_) -> (try Some (List.assoc x vars) with Not_found -> None)
       in
 
       let rec list f = function

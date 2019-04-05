@@ -57,16 +57,17 @@ name :: '' ::=
 % expressions, used by the aval (ANF) and cval (Jib) types.
 
 fragment :: 'F_' ::=
-  | name                                   :: :: id
-  | '&' name                               :: :: ref
-  | value                                  :: :: lit
-  | kind id ( ctyp0 , ... , ctypn ) ctyp   :: :: ctor_kind
-  | fragment op fragment'                  :: :: op
-  | op fragment                            :: :: unary
-  | string ( fragment0 , ... , fragmentn ) :: :: call
-  | fragment . string                      :: :: field
-  | string                                 :: :: raw
-  | poly fragment                          :: :: poly
+  | name                                             :: :: id
+  | '&' name                                         :: :: ref
+  | value                                            :: :: lit
+  | fragment != kind id ( ctyp0 , ... , ctypn ) ctyp :: :: ctor_kind
+  | unwrap id ( ctyp0 , ... , ctypn ) fragment       :: :: ctor_unwrap
+  | fragment op fragment'                            :: :: op
+  | op fragment                                      :: :: unary
+  | string ( fragment0 , ... , fragmentn )           :: :: call
+  | fragment . string                                :: :: field
+  | string                                           :: :: raw
+  | poly fragment                                    :: :: poly
 
 % Note that init / clear are sometimes refered to as create / kill
 

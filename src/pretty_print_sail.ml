@@ -61,7 +61,7 @@ let doc_op symb a b = infix 2 1 symb a b
 let doc_id (Id_aux (id_aux, _)) =
   string (match id_aux with
           | Id v -> v
-          | DeIid op -> "operator " ^ op)
+          | Operator op -> "operator " ^ op)
 
 let doc_kid kid = string (Ast_util.string_of_kid kid)
 
@@ -92,7 +92,7 @@ let rec doc_nexp =
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
     | Nexp_constant c -> string (Big_int.to_string c)
-    | Nexp_app (Id_aux (DeIid op, _), [n1; n2]) ->
+    | Nexp_app (Id_aux (Operator op, _), [n1; n2]) ->
        separate space [atomic_nexp n1; string op; atomic_nexp n2]
     | Nexp_app (id, nexps) -> string (string_of_nexp nexp)
     (* This segfaults??!!!!
@@ -172,7 +172,7 @@ and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> doc_id id
   | Typ_app (id, []) -> doc_id id
-  | Typ_app (Id_aux (DeIid str, _), [x; y]) ->
+  | Typ_app (Id_aux (Operator str, _), [x; y]) ->
      separate space [doc_typ_arg x; doc_typ_arg y]
   | Typ_app (id, typs) when Id.compare id (mk_id "atom") = 0 ->
      string "int" ^^ parens (separate_map (string ", ") doc_typ_arg typs)

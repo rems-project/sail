@@ -408,7 +408,7 @@ let const_props defs ref_vars =
           let env1 = env_of e1_no_casts in
           let is_equal id =
             List.exists (fun id' -> Id.compare id id' == 0)
-              (Env.get_overloads (Id_aux (DeIid "==", Parse_ast.Unknown))
+              (Env.get_overloads (Id_aux (Operator "==", Parse_ast.Unknown))
                  env1)
           in
           let substs_true =

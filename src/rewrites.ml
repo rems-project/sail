@@ -1018,7 +1018,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
   let mk_exp e_aux = E_aux (e_aux, (l, ())) in
   let mk_num_exp i = mk_lit_exp (L_num i) in
   let check_eq_exp l r =
-    let exp = mk_exp (E_app_infix (l, Id_aux (DeIid "==", Parse_ast.Unknown), r)) in
+    let exp = mk_exp (E_app_infix (l, Id_aux (Operator "==", Parse_ast.Unknown), r)) in
     check_exp env exp bool_typ in
 
   let access_bit_exp rootid l typ idx =
@@ -2767,7 +2767,7 @@ let construct_toplevel_string_append_func env f_id pat =
        let mapping_prefix_func =
          match mapping_id with
          | Id_aux (Id id, _)
-         | Id_aux (DeIid id, _) -> id ^ "_matches_prefix"
+         | Id_aux (Operator id, _) -> id ^ "_matches_prefix"
        in
        let mapping_inner_typ =
          match Env.get_val_spec (mk_id mapping_prefix_func) env with
@@ -2943,7 +2943,7 @@ let rec rewrite_defs_pat_string_append env =
        let mapping_prefix_func =
          match mapping_id with
          | Id_aux (Id id, _)
-         | Id_aux (DeIid id, _) -> id ^ "_matches_prefix"
+         | Id_aux (Operator id, _) -> id ^ "_matches_prefix"
        in
        let mapping_inner_typ =
          match Env.get_val_spec (mk_id mapping_prefix_func) env with
@@ -3165,7 +3165,7 @@ let rewrite_defs_mapping_patterns env =
        let mapping_name =
          match mapping_id with
          | Id_aux (Id id, _)
-         | Id_aux (DeIid id, _) -> id
+         | Id_aux (Operator id, _) -> id
        in
 
        let mapping_matches_id = mk_id (mapping_name ^ "_" ^ mapping_direction ^ "_matches") in
@@ -4488,7 +4488,7 @@ let rewrite_explicit_measure env (Defs defs) =
   (* NB: the Coq backend relies on recognising the #rec# prefix *)
   let rec_id = function
     | Id_aux (Id id,l)
-    | Id_aux (DeIid id,l) -> Id_aux (Id ("#rec#" ^ id),Generated l)
+    | Id_aux (Operator id,l) -> Id_aux (Id ("#rec#" ^ id),Generated l)
   in
   let limit = mk_id "#reclimit" in
   (* Add helper function with extra argument to spec *)

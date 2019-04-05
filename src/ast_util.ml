@@ -179,9 +179,9 @@ module Id = struct
   let compare id1 id2 =
     match (id1, id2) with
     | Id_aux (Id x, _), Id_aux (Id y, _) -> String.compare x y
-    | Id_aux (DeIid x, _), Id_aux (DeIid y, _) -> String.compare x y
-    | Id_aux (Id _, _), Id_aux (DeIid _, _) -> -1
-    | Id_aux (DeIid _, _), Id_aux (Id _, _) -> 1
+    | Id_aux (Operator x, _), Id_aux (Operator y, _) -> String.compare x y
+    | Id_aux (Id _, _), Id_aux (Operator _, _) -> -1
+    | Id_aux (Operator _, _), Id_aux (Id _, _) -> 1
 end
 
 module Nexp = struct
@@ -360,7 +360,7 @@ let rec constraint_disj (NC_aux (nc_aux, l) as nc) =
 let mk_typ typ = Typ_aux (typ, Parse_ast.Unknown)
 let mk_typ_arg arg = A_aux (arg, Parse_ast.Unknown)
 let mk_kid str = Kid_aux (Var ("'" ^ str), Parse_ast.Unknown)
-let mk_infix_id str = Id_aux (DeIid str, Parse_ast.Unknown)
+let mk_infix_id str = Id_aux (Operator str, Parse_ast.Unknown)
 
 let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
 
@@ -651,23 +651,23 @@ let def_loc = function
 
 let string_of_id = function
   | Id_aux (Id v, _) -> v
-  | Id_aux (DeIid v, _) -> "(operator " ^ v ^ ")"
+  | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
 
 let id_of_kid = function
   | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
 let kid_of_id = function
   | Id_aux (Id v, l) -> Kid_aux (Var ("'" ^ v), l)
-  | Id_aux (DeIid v, _) -> assert false
+  | Id_aux (Operator v, _) -> assert false
 
 let prepend_id str = function
   | Id_aux (Id v, l) -> Id_aux (Id (str ^ v), l)
-  | Id_aux (DeIid v, l) -> Id_aux (DeIid (str ^ v), l)
+  | Id_aux (Operator v, l) -> Id_aux (Operator (str ^ v), l)
 
 let append_id id str =
   match id with
   | Id_aux (Id v, l) -> Id_aux (Id (v ^ str), l)
-  | Id_aux (DeIid v, l) -> Id_aux (DeIid (v ^ str), l)
+  | Id_aux (Operator v, l) -> Id_aux (Operator (v ^ str), l)
 
 let prepend_kid str = function
   | Kid_aux (Var v, l) -> Kid_aux (Var ("'" ^ str ^ String.sub v 1 (String.length v - 1)), l)
@@ -765,7 +765,7 @@ and string_of_n_constraint = function
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_set (kid, ns), _) ->
      string_of_kid kid ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
-  | NC_aux (NC_app (Id_aux (DeIid op, _), [arg1; arg2]), _) ->
+  | NC_aux (NC_app (Id_aux (Operator op, _), [arg1; arg2]), _) ->
      "(" ^ string_of_typ_arg arg1 ^ " " ^ op ^ " " ^ string_of_typ_arg arg2 ^ ")"
   | NC_aux (NC_app (id, args), _) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | NC_aux (NC_var v, _) -> string_of_kid v
