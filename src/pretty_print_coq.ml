@@ -2519,7 +2519,7 @@ let merge_var_patterns map pats =
 
 type mutrec_pos = NotMutrec | FirstFn | LaterFn
 
-let doc_funcl mutrec rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
+let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let env = env_of_annot annot in
   let (tq,typ) = Env.get_val_spec_orig id env in
   let (arg_typs, ret_typ, eff) = match typ with
@@ -2542,9 +2542,8 @@ let doc_funcl mutrec rec_opt (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let kid_to_arg_rename, pats = merge_var_patterns kid_to_arg_rename pats in
   let kids_used = KidSet.diff bound_kids eliminated_kids in
   let is_measured, recursive_ids = match rec_opt with
-    (* No mutual recursion in this backend yet; only change recursive
-       definitions where we have a measure *)
-    | Rec_aux (Rec_measure _,_) -> true, IdSet.singleton id
+    | Rec_aux (Rec_measure _,_) ->
+       true, (match rec_set with None -> IdSet.singleton id | Some s -> s)
     | _ -> false, IdSet.empty
   in
   let kir_rev =
@@ -2694,17 +2693,17 @@ let get_id = function
 (* Coq doesn't support multiple clauses for a single function joined
    by "and".  However, all the funcls should have been merged by the
    merge_funcls rewrite now. *)
-let doc_fundef_rhs ?(mutrec=NotMutrec) (FD_aux(FD_function(r, typa, efa, funcls),(l,_))) =
+let doc_fundef_rhs ?(mutrec=NotMutrec) rec_set (FD_aux(FD_function(r, typa, efa, funcls),(l,_))) =
   match funcls with
   | [] -> unreachable l __POS__ "function with no clauses"
-  | [funcl] -> doc_funcl mutrec r funcl
+  | [funcl] -> doc_funcl mutrec r ~rec_set funcl
   | (FCL_aux (FCL_Funcl (id,_),_))::_ -> unreachable l __POS__ ("function " ^ string_of_id id ^ " has multiple clauses in backend")
 
-let doc_mutrec = function
+let doc_mutrec rec_set = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
   | fundef::fundefs ->
-     doc_fundef_rhs ~mutrec:FirstFn fundef ^^ hardline ^^
-     separate_map hardline (doc_fundef_rhs ~mutrec:LaterFn) fundefs ^^ dot
+     doc_fundef_rhs ~mutrec:FirstFn rec_set fundef ^^ hardline ^^
+     separate_map hardline (doc_fundef_rhs ~mutrec:LaterFn rec_set) fundefs ^^ dot
 
 let rec doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
   match fcls with
@@ -2918,7 +2917,7 @@ let rec doc_def unimplemented generic_eq_types def =
 
   | DEF_default df -> empty
   | DEF_fundef fdef -> group (doc_fundef fdef) ^/^ hardline
-  | DEF_internal_mutrec fundefs -> doc_mutrec fundefs ^/^ hardline
+  | DEF_internal_mutrec fundefs -> doc_mutrec (ids_of_def def) fundefs ^/^ hardline
   | DEF_val (LB_aux (LB_val (pat, exp), _)) -> doc_val pat exp
   | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l,_))) -> unreachable l __POS__ "Coq doesn't support mappings"

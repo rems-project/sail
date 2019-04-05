@@ -129,11 +129,11 @@ wfR) y)
  end.
 
 Definition Zwf_guarded (z:Z) : Acc (Zwf 0) z :=
-  match z with
+  Acc_intro _ (fun y H => match z with
   | Zpos p => pos_guard_wf p (Zwf_well_founded _) _
-  | _ => Zwf_well_founded _ _
-  end.
-
+  | Zneg p => pos_guard_wf p (Zwf_well_founded _) _
+  | Z0 => Zwf_well_founded _ _
+  end).
 
 (*val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
                 ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
