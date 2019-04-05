@@ -53,7 +53,7 @@ open Ast_util
 open Rewriter
 
 let opt_ddump_spec_ast = ref None
-   
+
 let is_typ_ord_arg = function
   | A_aux (A_typ _, _) -> true
   | A_aux (A_order _, _) -> true

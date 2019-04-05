@@ -165,6 +165,7 @@ let rec frag_rename from_id to_id = function
   | F_unary (op, f) -> F_unary (op, frag_rename from_id to_id f)
   | F_field (f, field) -> F_field (frag_rename from_id to_id f, field)
   | F_raw raw -> F_raw raw
+  | F_ctor_kind (ctor, unifiers, ctyp) -> F_ctor_kind (ctor, unifiers, ctyp)
   | F_poly f -> F_poly (frag_rename from_id to_id f)
 
 let cval_rename from_id to_id (frag, ctyp) = (frag_rename from_id to_id frag, ctyp)
@@ -253,9 +254,8 @@ let string_of_value = function
   | V_unit -> "UNIT"
   | V_bit Sail2_values.B0 -> "UINT64_C(0)"
   | V_bit Sail2_values.B1 -> "UINT64_C(1)"
+  | V_bit Sail2_values.BU -> failwith "Undefined bit found in value"
   | V_string str -> "\"" ^ str ^ "\""
-  | V_ctor_kind str -> "Kind_" ^ Util.zencode_string str
-  | _ -> failwith "Cannot convert value to string"
 
 let string_of_name ?zencode:(zencode=true) =
   let ssa_num n = if n < 0 then "" else ("/" ^ string_of_int n) in
@@ -282,6 +282,9 @@ let rec string_of_fragment ?zencode:(zencode=true) = function
   | F_unary (op, f) ->
      op ^ string_of_fragment' ~zencode:zencode f
   | F_raw raw -> raw
+  | F_ctor_kind (ctor, [], _) -> "Kind_" ^ Util.zencode_string (string_of_id ctor)
+  | F_ctor_kind (ctor, unifiers, _) ->
+     "Kind_" ^ Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
   | F_poly f -> string_of_fragment ~zencode:zencode f
 and string_of_fragment' ?zencode:(zencode=true) f =
   match f with
@@ -619,6 +622,7 @@ let rec fragment_deps = function
   | F_field (frag, _) | F_unary (_, frag) | F_poly frag -> fragment_deps frag
   | F_call (_, frags) -> List.fold_left NameSet.union NameSet.empty (List.map fragment_deps frags)
   | F_op (frag1, _, frag2) -> NameSet.union (fragment_deps frag1) (fragment_deps frag2)
+  | F_ctor_kind _ -> NameSet.empty
   | F_raw _ -> NameSet.empty
 
 let cval_deps = function (frag, _) -> fragment_deps frag

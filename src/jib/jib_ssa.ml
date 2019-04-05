@@ -456,6 +456,7 @@ let rename_variables graph root children =
     | F_call (id, fs) -> F_call (id, List.map fold_frag fs)
     | F_field (f, field) -> F_field (fold_frag f, field)
     | F_raw str -> F_raw str
+    | F_ctor_kind (ctor, unifiers, ctyp) -> F_ctor_kind (ctor, unifiers, ctyp)
     | F_poly f -> F_poly (fold_frag f)
   in
 

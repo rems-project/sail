@@ -49,34 +49,14 @@
 (*========================================================================*)
 
 open import Pervasives
-open import Assert_extra
-open Map
 
 open import Sail2_values
 
 type vl =
-  | V_vector of list vl
-  | V_list of list vl
   | V_bits of list bitU
   | V_bit of bitU
-  | V_tuple of list vl
   | V_bool of bool
-  | V_nondet (* Special nondeterministic boolean *)
   | V_unit
   | V_int of integer
   | V_string of string
-  | V_ctor of string * list vl
-  | V_ctor_kind of string
-  | V_record of list (string * vl)
   | V_null (* Used for unitialized values and null pointers in C compilation *)
-
-
-let value_int_op_int op = function
-  | [V_int v1; V_int v2] -> V_int (op v1 v2)
-  | _ -> V_null
-end
-
-let value_bool_op_int op = function
-  | [V_int v1; V_int v2] -> V_bool (op v1 v2)
-  | _ -> V_null
-end

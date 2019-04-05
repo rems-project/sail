@@ -54,6 +54,8 @@ open Ast
 open Ast_util
 open Type_check
 
+val opt_ddump_spec_ast : (string * int) option ref
+
 type specialization
 
 (** Only specialize Type- and Ord- kinded polymorphism. *)

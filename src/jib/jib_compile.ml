@@ -422,7 +422,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   let ctx = { ctx with local_env = env } in
   match apat_aux, cval with
   | AP_id (pid, _), (frag, ctyp) when Env.is_union_constructor pid ctx.tc_env ->
-     [ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind (string_of_id pid))), CT_bool) case_label],
+     [ijump (F_op (F_field (frag, "kind"), "!=", F_ctor_kind (pid, [], ctyp)), CT_bool) case_label],
      [],
      ctx
 
@@ -465,25 +465,25 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   | AP_app (ctor, apat, variant_typ), (frag, ctyp) ->
      begin match ctyp with
      | CT_variant (_, ctors) ->
-        let ctor_c_id = string_of_id ctor in
         let ctor_ctyp = Bindings.find ctor (ctor_bindings ctors) in
+        let pat_ctyp = apat_ctyp ctx apat in
         (* These should really be the same, something has gone wrong if they are not. *)
         if ctyp_equal ctor_ctyp (ctyp_of_typ ctx variant_typ) then
           raise (Reporting.err_general l (Printf.sprintf "%s is not the same type as %s" (string_of_ctyp ctor_ctyp) (string_of_ctyp (ctyp_of_typ ctx variant_typ))))
         else ();
-        let ctor_c_id, ctor_ctyp =
+        let unifiers, ctor_ctyp =
           if is_polymorphic ctor_ctyp then
-            let unification = List.map ctyp_suprema (ctyp_unify ctor_ctyp (apat_ctyp ctx apat)) in
-            (if List.length unification > 0 then
-               ctor_c_id ^ "_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification
-             else
-               ctor_c_id),
-            ctyp_suprema (apat_ctyp ctx apat)
+            let unifiers = List.map ctyp_suprema (ctyp_unify ctor_ctyp pat_ctyp) in
+            unifiers, ctyp_suprema (apat_ctyp ctx apat)
           else
-            ctor_c_id, ctor_ctyp
+            [], ctor_ctyp
         in
-        let instrs, cleanup, ctx = compile_match ctx apat ((F_field (frag, Util.zencode_string ctor_c_id), ctor_ctyp)) case_label in
-        [ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind ctor_c_id)), CT_bool) case_label]
+        let ctor_field = match unifiers with
+          | [] -> Util.zencode_string (string_of_id ctor)
+          | _ -> Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
+        in
+        let instrs, cleanup, ctx = compile_match ctx apat ((F_field (frag, ctor_field), ctor_ctyp)) case_label in
+        [ijump (F_op (F_field (frag, "kind"), "!=", F_ctor_kind (ctor, unifiers, pat_ctyp)), CT_bool) case_label]
         @ instrs,
         cleanup,
         ctx
@@ -549,11 +549,10 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        let body_setup, body_call, body_cleanup = compile_aexp ctx body in
        let gs = ngensym () in
        let case_instrs =
-         destructure @ [icomment "end destructuring"]
+         destructure
          @ (if not trivial_guard then
               guard_setup @ [idecl CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
               @ [iif (F_unary ("!", F_id gs), CT_bool) (destructure_cleanup @ [igoto case_label]) [] CT_unit]
-              @ [icomment "end guard"]
             else [])
          @ body_setup @ [body_call (CL_id (case_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
          @ [igoto finish_match_label]
@@ -563,15 +562,13 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        else
          [iblock case_instrs; ilabel case_label]
      in
-     [icomment "begin match"]
-     @ aval_setup @ [idecl ctyp case_return_id]
+     aval_setup @ [idecl ctyp case_return_id]
      @ List.concat (List.map compile_case cases)
      @ [imatch_failure ()]
      @ [ilabel finish_match_label],
      (fun clexp -> icopy l clexp (F_id case_return_id, ctyp)),
      [iclear ctyp case_return_id]
      @ aval_cleanup
-     @ [icomment "end match"]
 
   (* Compile try statement *)
   | AE_try (aexp, cases, typ) ->
@@ -1280,8 +1277,8 @@ let rec specialize_variants ctx prior =
     function
     | I_aux (I_funcall (clexp, extern, id, [cval]), ((_, l) as aux)) as instr when Id.compare id ctor_id = 0 ->
        (* Work out how each call to a constructor in instantiated and add that to unifications *)
-       let unification = List.map ctyp_suprema (ctyp_unify ctyp (cval_ctyp cval)) in
-       let mono_id = append_id ctor_id ("_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification) in
+       let unifiers = List.map ctyp_suprema (ctyp_unify ctyp (cval_ctyp cval)) in
+       let mono_id = append_id ctor_id ("_" ^ Util.string_of_list "_" (fun ctyp -> string_of_ctyp ctyp) unifiers) in
        unifications := Bindings.add mono_id (ctyp_suprema (cval_ctyp cval)) !unifications;
 
        (* We need to cast each cval to it's ctyp_suprema in order to put it in the most general constructor *)
@@ -1314,6 +1311,12 @@ let rec specialize_variants ctx prior =
 
     | I_aux (I_funcall (clexp, extern, id, cvals), ((_, l) as aux)) as instr when Id.compare id ctor_id = 0 ->
        Reporting.unreachable l __POS__ "Multiple argument constructor found"
+
+    (* We have to be careful this is the only place where an F_ctor_kind can appear before calling specialize variants *)
+    | I_aux (I_jump ((F_op (_, "!=", F_ctor_kind (id, unifiers, pat_ctyp)), CT_bool), _), _) as instr when Id.compare id ctor_id = 0 ->
+       let mono_id = append_id ctor_id ("_" ^ Util.string_of_list "_" (fun ctyp -> string_of_ctyp ctyp) unifiers) in
+       unifications := Bindings.add mono_id (ctyp_suprema pat_ctyp) !unifications;
+       instr
 
     | instr -> instr
   in
