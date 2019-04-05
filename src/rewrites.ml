@@ -4922,6 +4922,7 @@ let rewrites_target tgt =
   | "ocaml" -> rewrites_ocaml
   | "c" -> rewrites_c
   | "ir" -> rewrites_c
+  | "smt" -> rewrites_c
   | "sail" -> []
   | "latex" -> []
   | "interpreter" -> rewrites_interpreter

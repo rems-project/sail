@@ -124,6 +124,9 @@ let options = Arg.align ([
   ( "-ir",
     set_target "ir",
     " print intermediate representation");
+  ( "-smt",
+    set_target "smt",
+    " print SMT translated version of input");
   ( "-c",
     Arg.Tuple [set_target "c"; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
@@ -405,6 +408,19 @@ let target name out_name ast type_envs =
      let cdefs, _ = C_backend.jib_of_ast type_envs ast_c in
      let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_cdef cdefs) in
      output_string output_chan (str ^ "\n");
+     flush output_chan;
+     if close then close_out output_chan else ()
+
+  | Some "smt" ->
+     let ast_smt, type_envs = Specialize.(specialize typ_ord_specialization ast type_envs) in
+     (* let ast_smt, type_envs = Specialize.(specialize' 1 int_specialization_with_externs ast_smt type_envs) in *)
+     let close, output_chan =
+       match !opt_file_out with
+       | Some f -> Util.opt_colors := false; (true, open_out (f ^ ".smt2"))
+       | None -> false, stdout
+     in
+     Util.opt_warnings := true;
+     Jib_smt.generate_smt output_chan type_envs ast_smt;
      flush output_chan;
      if close then close_out output_chan else ()
 

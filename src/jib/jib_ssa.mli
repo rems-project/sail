@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Array
+open Jib_util
 
 (** A mutable array based graph type, with nodes indexed by integers. *)
 type 'a array_graph
@@ -58,11 +59,11 @@ type 'a array_graph
 val make : initial_size:int -> unit -> 'a array_graph
 
 module IntSet : Set.S with type elt = int
-  
+
 val get_vertex : 'a array_graph -> int -> ('a * IntSet.t * IntSet.t) option
 
 val iter_graph : ('a -> IntSet.t -> IntSet.t -> unit) -> 'a array_graph -> unit
-  
+
 (** Add a vertex to a graph, returning the index of the inserted
    vertex. If the number of vertices exceeds the size of the
    underlying array, then it is dynamically resized. *)
@@ -72,11 +73,13 @@ val add_vertex : 'a -> 'a array_graph -> int
    if either of the vertices do not exist. *)
 val add_edge : int -> int -> 'a array_graph -> unit
 
+val topsort : 'a array_graph -> int list
+
 type cf_node =
   | CF_label of string
   | CF_block of Jib.instr list
   | CF_guard of Jib.cval
-  | CF_start
+  | CF_start of Jib.ctyp NameMap.t
 
 val control_flow_graph : Jib.instr list -> int * int list * ('a list * cf_node) array_graph
 

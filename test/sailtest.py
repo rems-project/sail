@@ -22,7 +22,7 @@ def chunks(filenames, cores):
     ys = []
     chunk = []
     for filename in filenames:
-        if re.match('.+\.sail', filename):
+        if re.match('.+\.sail$', filename):
             chunk.append(filename)
         if len(chunk) >= cores:
             ys.append(list(chunk))

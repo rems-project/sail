@@ -485,6 +485,7 @@ let specialize_id_overloads instantiations id (Defs defs) =
 
 let initial_calls = ref (IdSet.of_list
   [ mk_id "main";
+    mk_id "check_sat";
     mk_id "__SetConfig";
     mk_id "__ListConfig";
     mk_id "execute";
@@ -554,6 +555,7 @@ let reorder_typedefs (Defs defs) =
   Defs (List.rev !tdefs @ others)
 
 let specialize_ids spec ids ast =
+  let t = Profile.start () in
   let total = IdSet.cardinal ids in
   let _, ast =
     List.fold_left
@@ -577,6 +579,7 @@ let specialize_ids spec ids ast =
   in
   let ast, env = Type_error.check Type_check.initial_env ast in
   let ast = remove_unused_valspecs env ast in
+  Profile.finish "specialization pass" t;
   ast, env
 
 let rec specialize' n spec ast env =

@@ -76,7 +76,7 @@ let iter_graph f graph =
     | Some (x, y, z) -> f x y z
     | None -> ()
   done
-                       
+
 (** Add a vertex to a graph, returning the node index *)
 let add_vertex data graph =
   let n = graph.next in
@@ -124,6 +124,52 @@ let reachable roots graph =
   in
   IntSet.iter reachable' roots; !visited
 
+let topsort graph =
+  let marked = ref IntSet.empty in
+  let temp_marked = ref IntSet.empty in
+  let list = ref [] in
+
+  let rec visit node =
+    if IntSet.mem node !temp_marked then
+      failwith "Not a DAG"
+    else if IntSet.mem node !marked then
+      ()
+    else
+      begin match get_vertex graph node with
+      | None -> failwith "Node does not exist in topsort"
+      | Some (_, _, succs) ->
+         temp_marked := IntSet.add node !temp_marked;
+         IntSet.iter visit succs;
+         marked := IntSet.add node !marked;
+         temp_marked := IntSet.remove node !temp_marked;
+         list := node :: !list
+      end
+  in
+
+  let find_unmarked () =
+    let unmarked = ref (-1) in
+    let i = ref 0 in
+    while !unmarked = -1 && !i < Array.length graph.nodes do
+      begin match get_vertex graph !i with
+      | None -> ()
+      | Some _ ->
+         if not (IntSet.mem !i !marked) then
+           unmarked := !i
+      end;
+      incr i
+    done;
+    !unmarked
+  in
+
+  let rec topsort' () =
+    let unmarked = find_unmarked () in
+    if unmarked = -1 then
+      ()
+    else
+      (visit unmarked; topsort' ())
+  in
+  topsort' (); !list
+
 let prune visited graph =
   for i = 0 to graph.next - 1 do
     match graph.nodes.(i) with
@@ -143,7 +189,7 @@ type cf_node =
   | CF_label of string
   | CF_block of instr list
   | CF_guard of cval
-  | CF_start
+  | CF_start of ctyp NameMap.t
 
 let cval_not (f, ctyp) = (F_unary ("!", f), ctyp)
 
@@ -212,7 +258,7 @@ let control_flow_graph instrs =
     | [] -> preds
   in
 
-  let start = add_vertex ([], CF_start) graph in
+  let start = add_vertex ([], CF_start NameMap.empty) graph in
   let finish = cfg [start] instrs in
 
   let visited = reachable (IntSet.singleton start) graph in
@@ -426,21 +472,26 @@ let rename_variables graph root children =
   let counts = ref NameMap.empty in
   let stacks = ref NameMap.empty in
 
-  let get_count id =
-    match NameMap.find_opt id !counts with Some n -> n | None -> 0
-  in
-  let top_stack id =
-    match NameMap.find_opt id !stacks with Some (x :: _) -> x | (Some [] | None) -> 0
-  in
-  let push_stack id n =
-    stacks := NameMap.add id (n :: match NameMap.find_opt id !stacks with Some s -> s | None -> []) !stacks
-  in
+  let phi_zeros = ref NameMap.empty in
 
   let ssa_name i = function
     | Name (id, _) -> Name (id, i)
     | Have_exception _ -> Have_exception i
     | Current_exception _ -> Current_exception i
     | Return _ -> Return i
+  in
+
+  let get_count id =
+    match NameMap.find_opt id !counts with Some n -> n | None -> 0
+  in
+  let top_stack id =
+    match NameMap.find_opt id !stacks with Some (x :: _) -> x | Some [] -> 0 | None -> 0
+  in
+  let top_stack_phi id ctyp =
+    match NameMap.find_opt id !stacks with Some (x :: _) -> x | Some [] -> 0 | None -> (phi_zeros := NameMap.add (ssa_name 0 id) ctyp !phi_zeros; 0)
+  in
+  let push_stack id n =
+    stacks := NameMap.add id (n :: match NameMap.find_opt id !stacks with Some s -> s | None -> []) !stacks
   in
 
   let rec fold_frag = function
@@ -455,21 +506,29 @@ let rename_variables graph root children =
     | F_unary (op, f) -> F_unary (op, fold_frag f)
     | F_call (id, fs) -> F_call (id, List.map fold_frag fs)
     | F_field (f, field) -> F_field (fold_frag f, field)
+    | F_tuple_member (f, len, n) -> F_tuple_member (fold_frag f, len, n)
     | F_raw str -> F_raw str
     | F_ctor_kind (f, ctor, unifiers, ctyp) -> F_ctor_kind (fold_frag f, ctor, unifiers, ctyp)
     | F_ctor_unwrap (ctor, unifiers, f) -> F_ctor_unwrap (ctor, unifiers, fold_frag f)
     | F_poly f -> F_poly (fold_frag f)
   in
 
-  let rec fold_clexp = function
+  let rec fold_clexp rmw = function
+    | CL_id (id, ctyp) when rmw ->
+       let i = top_stack id in
+       let j = get_count id + 1 in
+       counts := NameMap.add id j !counts;
+       push_stack id j;
+       CL_rmw (ssa_name i id, ssa_name j id, ctyp)
     | CL_id (id, ctyp) ->
        let i = get_count id + 1 in
        counts := NameMap.add id i !counts;
        push_stack id i;
        CL_id (ssa_name i id, ctyp)
-    | CL_field (clexp, field) -> CL_field (fold_clexp clexp, field)
-    | CL_addr clexp -> CL_addr (fold_clexp clexp)
-    | CL_tuple (clexp, n) -> CL_tuple (fold_clexp clexp, n)
+    | CL_rmw _ -> assert false
+    | CL_field (clexp, field) -> CL_field (fold_clexp true clexp, field)
+    | CL_addr clexp -> CL_addr (fold_clexp true clexp)
+    | CL_tuple (clexp, n) -> CL_tuple (fold_clexp true clexp, n)
     | CL_void -> CL_void
   in
 
@@ -479,10 +538,10 @@ let rename_variables graph root children =
     let aux = match aux with
       | I_funcall (clexp, extern, id, args) ->
          let args = List.map fold_cval args in
-         I_funcall (fold_clexp clexp, extern, id, args)
+         I_funcall (fold_clexp false clexp, extern, id, args)
       | I_copy (clexp, cval) ->
          let cval = fold_cval cval in
-         I_copy (fold_clexp clexp, cval)
+         I_copy (fold_clexp false clexp, cval)
       | I_decl (ctyp, id) ->
          let i = get_count id + 1 in
          counts := NameMap.add id i !counts;
@@ -505,7 +564,7 @@ let rename_variables graph root children =
   in
 
   let ssa_cfnode = function
-    | CF_start -> CF_start
+    | CF_start inits -> CF_start inits
     | CF_block instrs -> CF_block (List.map ssa_instr instrs)
     | CF_label label -> CF_label label
     | CF_guard cval -> CF_guard (fold_cval cval)
@@ -524,7 +583,7 @@ let rename_variables graph root children =
     | Phi (id, ctyp, ids) ->
        let fix_arg k a =
          if k = j then
-           let i = top_stack a in
+           let i = top_stack_phi a ctyp in
            ssa_name i a
          else a
        in
@@ -556,7 +615,11 @@ let rename_variables graph root children =
     IntSet.iter (fun child -> rename child) (children.(n));
     stacks := old_stacks
   in
-  rename root
+  rename root;
+  match graph.nodes.(root) with
+  | Some ((ssa, CF_start _), preds, succs) ->
+     graph.nodes.(root) <- Some ((ssa, CF_start !phi_zeros), preds, succs)
+  | _ -> failwith "root node is not CF_start"
 
 let place_pi_functions graph start idom children =
   let get_guard = function
@@ -631,11 +694,11 @@ let string_of_phis = function
 let string_of_node = function
   | (phis, CF_label label) -> string_of_phis phis ^ label
   | (phis, CF_block instrs) -> string_of_phis phis ^ Util.string_of_list "\\l" (fun instr -> String.escaped (Pretty_print_sail.to_string (pp_instr ~short:true instr))) instrs
-  | (phis, CF_start) -> string_of_phis phis ^ "START"
+  | (phis, CF_start inits) -> string_of_phis phis ^ "START"
   | (phis, CF_guard cval) -> string_of_phis phis ^ (String.escaped (Pretty_print_sail.to_string (pp_cval cval)))
 
 let vertex_color = function
-  | (_, CF_start)   -> "peachpuff"
+  | (_, CF_start _) -> "peachpuff"
   | (_, CF_block _) -> "white"
   | (_, CF_label _) -> "springgreen"
   | (_, CF_guard _) -> "yellow"

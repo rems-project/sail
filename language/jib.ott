@@ -7,6 +7,10 @@ metavar nat ::=
   {{ ocaml int }}
   {{ lem nat }}
 
+metavar big_int ::=
+  {{ phantom }}
+  {{ lem integer }}
+
 metavar id ::=
   {{ phantom }}
   {{ ocaml id }}
@@ -63,6 +67,7 @@ fragment :: 'F_' ::=
   | fragment != kind id ( ctyp0 , ... , ctypn ) ctyp :: :: ctor_kind
   | unwrap id ( ctyp0 , ... , ctypn ) fragment       :: :: ctor_unwrap
   | fragment op fragment'                            :: :: op
+  | fragment nat0 nat1                               :: :: tuple_member
   | op fragment                                      :: :: unary
   | string ( fragment0 , ... , fragmentn )           :: :: call
   | fragment . string                                :: :: field
@@ -81,6 +86,7 @@ ctyp :: 'CT_' ::=
 % fint(n) is a fixed precision signed integer that is representable in exactly n bits
   | lint                      :: :: lint
   | fint nat                  :: :: fint
+  | constant big_int          :: :: constant
 
 % Bitvector types - flag represents bit indexing direction, true - dec or false - inc
 %
@@ -136,6 +142,7 @@ cval :: 'CV_' ::=
 
 clexp :: 'CL_' ::=
   | name : ctyp              :: :: id
+  | name0 rmw name1 : ctyp   :: :: rmw
   | clexp . string           :: :: field
   | * clexp                  :: :: addr
   | clexp . nat              :: :: tuple

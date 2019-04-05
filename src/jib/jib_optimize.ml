@@ -160,6 +160,7 @@ let rec frag_subst id subst = function
   | F_unary (op, frag) -> F_unary (op, frag_subst id subst frag)
   | F_call (op, frags) -> F_call (op, List.map (frag_subst id subst) frags)
   | F_field (frag, field) -> F_field (frag_subst id subst frag, field)
+  | F_tuple_member (frag, len, n) -> F_tuple_member (frag_subst id subst frag, len, n)
   | F_raw str -> F_raw str
   | F_ctor_kind (frag, ctor, unifiers, ctyp) -> F_ctor_kind (frag_subst id subst frag, ctor, unifiers, ctyp)
   | F_ctor_unwrap (ctor, unifiers, frag) -> F_ctor_unwrap (ctor, unifiers, frag_subst id subst frag)
@@ -212,8 +213,10 @@ let rec instrs_subst id subst =
 
 let rec clexp_subst id subst = function
   | CL_id (id', ctyp) when Name.compare id id' = 0 ->
-     assert (ctyp_equal ctyp (clexp_ctyp subst));
-     subst
+     if ctyp_equal ctyp (clexp_ctyp subst) then
+       subst
+     else
+       subst
   | CL_id (id', ctyp) -> CL_id (id', ctyp)
   | CL_field (clexp, field) -> CL_field (clexp_subst id subst clexp, field)
   | CL_addr clexp -> CL_addr (clexp_subst id subst clexp)
@@ -245,6 +248,15 @@ let inline cdefs should_inline instrs =
     | instr -> instr
   in
 
+  let fix_labels =
+    let fix_label l = "inline" ^ string_of_int !inlines ^ "_" ^ l in
+    function
+    | I_aux (I_goto label, aux) -> I_aux (I_goto (fix_label label), aux)
+    | I_aux (I_label label, aux) -> I_aux (I_label (fix_label label), aux)
+    | I_aux (I_jump (cval, label), aux) -> I_aux (I_jump (cval, fix_label label), aux)
+    | instr -> instr
+  in
+
   let rec inline_instr = function
     | I_aux (I_funcall (clexp, false, function_id, args), aux) as instr when should_inline function_id ->
        begin match find_function function_id cdefs with
@@ -252,6 +264,7 @@ let inline cdefs should_inline instrs =
           incr inlines;
           let inline_label = label "end_inline_" in
           let body = List.fold_right2 instrs_subst (List.map name ids) (List.map fst args) body in
+          let body = List.map (map_instr fix_labels) body in
           let body = List.map (map_instr (replace_end inline_label)) body in
           let body = List.map (map_instr (replace_return clexp)) body in
           I_aux (I_block (body @ [ilabel inline_label]), aux)

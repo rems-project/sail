@@ -64,7 +64,7 @@ val opt_debug_flow_graphs : bool ref
 val opt_debug_function : string ref
 
 val ngensym : unit -> name
-  
+
 (** {2 Jib context} *)
 
 (** Context for compiling Sail to Jib. We need to pass a (global)
@@ -82,7 +82,9 @@ type ctx =
     letbinds : int list;
     no_raw : bool;
     convert_typ : ctx -> typ -> ctyp;
-    optimize_anf : ctx -> typ aexp -> typ aexp
+    optimize_anf : ctx -> typ aexp -> typ aexp;
+    specialize_calls : bool;
+    ignore_64 : bool
   }
 
 val initial_ctx :

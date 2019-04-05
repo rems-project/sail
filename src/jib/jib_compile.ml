@@ -151,7 +151,9 @@ type ctx =
     letbinds : int list;
     no_raw : bool;
     convert_typ : ctx -> typ -> ctyp;
-    optimize_anf : ctx -> typ aexp -> typ aexp
+    optimize_anf : ctx -> typ aexp -> typ aexp;
+    specialize_calls : bool;
+    ignore_64 : bool
   }
 
 let initial_ctx ~convert_typ:convert_typ ~optimize_anf:optimize_anf env =
@@ -164,7 +166,9 @@ let initial_ctx ~convert_typ:convert_typ ~optimize_anf:optimize_anf env =
     letbinds = [];
     no_raw = false;
     convert_typ = convert_typ;
-    optimize_anf = optimize_anf
+    optimize_anf = optimize_anf;
+    specialize_calls = false;
+    ignore_64 = false
   }
 
 let ctyp_of_typ ctx typ = ctx.convert_typ ctx typ
@@ -196,6 +200,9 @@ let rec compile_aval l ctx = function
 
   | AV_lit (L_aux (L_string str, _), typ) ->
      [], (F_lit (V_string (String.escaped str)), ctyp_of_typ ctx typ), []
+
+  | AV_lit (L_aux (L_num n, _), typ) when ctx.ignore_64 ->
+     [], (F_lit (V_int n), ctyp_of_typ ctx typ), []
 
   | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
      let gs = ngensym () in
@@ -258,7 +265,7 @@ let rec compile_aval l ctx = function
      raise (Reporting.err_general l "Encountered empty vector literal")
 
   (* Convert a small bitvector to a uint64_t literal. *)
-  | AV_vector (avals, typ) when is_bitvector avals && List.length avals <= 64 ->
+  | AV_vector (avals, typ) when is_bitvector avals && (List.length avals <= 64 || ctx.ignore_64) ->
      begin
        let bitstring = F_lit (V_bits (List.map value_of_aval_bit avals)) in
        let len = List.length avals in
@@ -383,7 +390,7 @@ let compile_funcall l ctx id args typ =
     let have_ctyp = cval_ctyp cval in
     if is_polymorphic ctyp then
       (F_poly (fst cval), have_ctyp)
-    else if ctyp_equal ctyp have_ctyp then
+    else if ctx.specialize_calls || ctyp_equal ctyp have_ctyp then
       cval
     else
       let gs = ngensym () in
@@ -398,7 +405,7 @@ let compile_funcall l ctx id args typ =
 
   List.rev !setup,
   begin fun clexp ->
-  if ctyp_equal (clexp_ctyp clexp) ret_ctyp then
+  if ctx.specialize_calls || ctyp_equal (clexp_ctyp clexp) ret_ctyp then
     ifuncall clexp id setup_args
   else
     let gs = ngensym () in
@@ -450,7 +457,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
 
   | AP_tup apats, (frag, ctyp) ->
      begin
-       let get_tup n ctyp = (F_field (frag, "ztup" ^ string_of_int n), ctyp) in
+       let get_tup n ctyp = (F_tuple_member (frag, List.length apats, n), ctyp) in
        let fold (instrs, cleanup, n, ctx) apat ctyp =
          let instrs', cleanup', ctx = compile_match ctx apat (get_tup n ctyp) case_label in
          instrs @ instrs', cleanup' @ cleanup, n + 1, ctx
@@ -1039,12 +1046,16 @@ let fix_early_return ret instrs =
   let end_function_label = label "end_function_" in
   let is_return_recur (I_aux (instr, _)) =
     match instr with
-    | I_return _ | I_undefined _ | I_if _ | I_block _ -> true
+    | I_return _ | I_undefined _ | I_if _ | I_block _ | I_try_block _ -> true
     | _ -> false
   in
   let rec rewrite_return historic instrs =
     match instr_split_at is_return_recur instrs with
     | instrs, [] -> instrs
+    | before, I_aux (I_try_block instrs, _) :: after ->
+       before
+       @ [itry_block (rewrite_return (historic @ before) instrs)]
+       @ rewrite_return (historic @ before) after
     | before, I_aux (I_block instrs, _) :: after ->
        before
        @ [iblock (rewrite_return (historic @ before) instrs)]
