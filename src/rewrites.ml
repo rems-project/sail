@@ -4568,15 +4568,16 @@ let rewrite_explicit_measure env (Defs defs) =
              | _, P_aux (P_tup ps,_) -> ps
              | _, _ -> [measure_pat]
            in
-           let mk_wrap i (P_aux (p,(l,_))) =
+           let mk_wrap i (P_aux (p,(l,_)) as p_full) =
              let id =
                match p with
                | P_id id
                | P_typ (_,(P_aux (P_id id,_))) -> id
+               | P_lit _
                | P_wild
                | P_typ (_,(P_aux (P_wild,_))) ->
                   mk_id ("_arg" ^ string_of_int i)
-               | _ -> raise (Reporting.err_todo l "Measure patterns can only be identifiers or wildcards")
+               | _ -> raise (Reporting.err_todo l ("Measure patterns can only be identifiers or wildcards, not " ^ string_of_pat p_full))
              in
              P_aux (P_id id,(loc,empty_tannot)),
              E_aux (E_id id,(loc,empty_tannot))
