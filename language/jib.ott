@@ -41,6 +41,10 @@ metavar value ::=
   {{ lem vl }}
   {{ ocaml vl }}
 
+metavar alpha ::=
+  {{ phantom }}
+  {{ lem 'a }}
+
 embed
 {{ lem
 
@@ -60,19 +64,20 @@ name :: '' ::=
 % Fragments are small pure snippets of (abstract) C code, mostly
 % expressions, used by the aval (ANF) and cval (Jib) types.
 
-fragment :: 'F_' ::=
-  | name                                             :: :: id
-  | '&' name                                         :: :: ref
-  | value                                            :: :: lit
-  | fragment != kind id ( ctyp0 , ... , ctypn ) ctyp :: :: ctor_kind
-  | unwrap id ( ctyp0 , ... , ctypn ) fragment       :: :: ctor_unwrap
-  | fragment op fragment'                            :: :: op
-  | fragment nat0 nat1                               :: :: tuple_member
-  | op fragment                                      :: :: unary
-  | string ( fragment0 , ... , fragmentn )           :: :: call
-  | fragment . string                                :: :: field
-  | string                                           :: :: raw
-  | poly fragment                                    :: :: poly
+cval :: 'V_' ::=
+  | name : ctyp                                  :: :: id
+  | '&' name : ctyp                              :: :: ref
+  | value : ctyp                                 :: :: lit
+  | cval != kind id ( ctyp0 , ... , ctypn ) ctyp :: :: ctor_kind
+  | unwrap id cval ( ctyp0 , ... , ctypn ) ctyp  :: :: ctor_unwrap
+  | cval op cval'                                :: :: op
+  | cval nat0 nat1                               :: :: tuple_member
+  | op cval                                      :: :: unary
+  | string ( cval0 , ... , cvaln )               :: :: call
+  | cval . string                                :: :: field
+  | hd ( cval )                                  :: :: hd
+  | tl ( cval )                                  :: :: tl
+  | poly cval ctyp                               :: :: poly
 
 % Note that init / clear are sometimes refered to as create / kill
 
@@ -134,11 +139,6 @@ ctyp :: 'CT_' ::=
 % matched as Some(x) where the matching context expects x to have type
 % lbits, and this must work without compiling to type incorrect C.
   | poly                           :: :: poly
-
-
-cval :: 'CV_' ::=
-  {{ ocaml fragment * ctyp }}
-  {{ lem fragment * ctyp }}
 
 clexp :: 'CL_' ::=
   | name : ctyp              :: :: id

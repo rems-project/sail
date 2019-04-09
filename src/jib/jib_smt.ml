@@ -56,17 +56,17 @@ let bvint sz x =
 let smt_value vl ctyp =
   let open Value2 in
   match vl, ctyp with
-  | V_bits bs, _ ->
+  | VL_bits (bs, true), _ ->
      begin match Sail2_values.hexstring_of_bits bs with
      | Some s -> Hex (Xstring.implode s)
      | None -> Bin (Xstring.implode (List.map Sail2_values.bitU_char bs))
      end
-  | V_bool b, _ -> Bool_lit b
-  | V_int n, CT_constant m -> bvint (required_width n) (Big_int.to_int n)
-  | V_int n, CT_fint sz -> bvint sz (Big_int.to_int n)
-  | V_bit Sail2_values.B0, CT_bit -> Bin "0"
-  | V_bit Sail2_values.B1, CT_bit -> Bin "1"
-  | V_unit, _ -> Var "unit"
+  | VL_bool b, _ -> Bool_lit b
+  | VL_int n, CT_constant m -> bvint (required_width n) (Big_int.to_int n)
+  | VL_int n, CT_fint sz -> bvint sz (Big_int.to_int n)
+  | VL_bit Sail2_values.B0, CT_bit -> Bin "0"
+  | VL_bit Sail2_values.B1, CT_bit -> Bin "1"
+  | VL_unit, _ -> Var "unit"
 
   | vl, _ -> failwith ("Bad literal " ^ string_of_value vl)
 
@@ -79,30 +79,26 @@ let zencode_ctor ctor_id unifiers =
 
 let rec smt_cval env cval =
   match cval with
-  | F_lit vl, ctyp -> smt_value vl ctyp
-  | frag, _ -> smt_fragment env frag
-
-and smt_fragment env frag =
-  match frag with
-  | F_id (Name (id, _) as ssa_id) ->
+  | V_lit (vl, ctyp) -> smt_value vl ctyp
+  | V_id (Name (id, _) as ssa_id, _) ->
      begin match Type_check.Env.lookup_id id env with
      | Enum _ -> Var (zencode_id id)
      | _ -> Var (zencode_name ssa_id)
      end
-  | F_id ssa_id -> Var (zencode_name ssa_id)
-  | F_op (frag1, "!=", frag2) ->
-     Fn ("not", [Fn ("=", [smt_fragment env frag1; smt_fragment env frag2])])
-  | F_unary ("!", frag) ->
-     Fn ("not", [smt_cval env (frag, CT_bool)])
-  | F_ctor_kind (union, ctor_id, unifiers, _) ->
-     Fn ("not", [Tester (zencode_ctor ctor_id unifiers, smt_fragment env union)])
-  | F_ctor_unwrap (ctor_id, unifiers, union) ->
-     Fn ("un" ^ zencode_ctor ctor_id unifiers, [smt_fragment env union])
-  | F_field (union, field) ->
-     Fn ("un" ^ field, [smt_fragment env union])
-  | F_tuple_member (frag, len, n) ->
-     Fn (Printf.sprintf "tup_%d_%d" len n, [smt_fragment env frag])
-  | frag -> failwith ("Unrecognised fragment " ^ string_of_fragment ~zencode:false frag)
+  | V_id (ssa_id, _) -> Var (zencode_name ssa_id)
+  | V_op (frag1, "!=", frag2) ->
+     Fn ("not", [Fn ("=", [smt_cval env frag1; smt_cval env frag2])])
+  | V_unary ("!", cval) ->
+     Fn ("not", [smt_cval env cval])
+  | V_ctor_kind (union, ctor_id, unifiers, _) ->
+     Fn ("not", [Tester (zencode_ctor ctor_id unifiers, smt_cval env union)])
+  | V_ctor_unwrap (ctor_id, union, unifiers, _) ->
+     Fn ("un" ^ zencode_ctor ctor_id unifiers, [smt_cval env union])
+  | V_field (union, field) ->
+     Fn (field, [smt_cval env union])
+  | V_tuple_member (frag, len, n) ->
+     Fn (Printf.sprintf "tup_%d_%d" len n, [smt_cval env frag])
+  | cval -> failwith ("Unrecognised cval " ^ string_of_cval ~zencode:false cval)
 
 let builtin_zeros env cval = function
   | CT_fbits (n, _) -> bvzero n
@@ -140,8 +136,8 @@ let int_size = function
    exactly esz bits. *)
 let bvzeint env esz cval =
   let sz = int_size (cval_ctyp cval) in
-  match fst cval with
-  | F_lit (V_int n) ->
+  match cval with
+  | V_lit (VL_int n, _) ->
      bvint esz (Big_int.to_int n)
   | _ ->
      let smt = smt_cval env cval in
@@ -239,7 +235,14 @@ let builtin_unsigned env v ret_ctyp =
      let smt = smt_cval env v in
      Fn ("concat", [bvzero (m - n); smt])
 
-  | _ -> failwith "Cannot compile unsigned"
+  | CT_fbits (n, _), CT_lint ->
+     if n >= !lint_size then
+       failwith "Overflow detected"
+     else
+       let smt = smt_cval env v in
+       Fn ("concat", [bvzero (!lint_size - n); smt])
+
+  | ctyp, _ -> failwith (Printf.sprintf "Cannot compile unsigned : %s -> %s" (string_of_ctyp ctyp) (string_of_ctyp ret_ctyp))
 
 let builtin_eq_int env v1 v2 =
   match cval_ctyp v1, cval_ctyp v2 with
@@ -256,6 +259,18 @@ let builtin_add_bits env v1 v2 ret_ctyp =
 
   | _ -> failwith "Cannot compile add_bits"
 
+let builtin_replicate_bits env v1 v2 ret_ctyp =
+  match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
+  | CT_fbits (n, _), CT_constant c, CT_fbits (m, _) ->
+     assert (n * Big_int.to_int c = m);
+     let smt = smt_cval env v1 in
+     Fn ("concat", List.init (Big_int.to_int c) (fun _ -> smt))
+
+  | _ -> failwith "Cannot compile replicate_bits"
+
+let builtin_lt env v1 v2 =
+  Fn ("bvult", [smt_cval env v1; smt_cval env v2])
+
 let smt_primop env name args ret_ctyp =
   match name, args, ret_ctyp with
   | "eq_bits", [v1; v2], _ ->
@@ -266,8 +281,13 @@ let smt_primop env name args ret_ctyp =
      let smt1 = smt_cval env v1 in
      let smt2 = smt_cval env v2 in
      Fn ("=", [smt1; smt2])
+  | "eq_anything", [v1; v2], _ ->
+     let smt1 = smt_cval env v1 in
+     let smt2 = smt_cval env v2 in
+     Fn ("=", [smt1; smt2])
 
   | "not", [v], _ -> Fn ("not", [smt_cval env v])
+  | "lt", [v1; v2], _ -> builtin_lt env v1 v2
 
   | "zeros", [v1], _ -> builtin_zeros env v1 ret_ctyp
   | "zero_extend", [v1; v2], _ -> builtin_zero_extend env v1 v2 ret_ctyp
@@ -281,9 +301,10 @@ let smt_primop env name args ret_ctyp =
   | "vector_access", [v1; v2], ret_ctyp -> builtin_vector_access env v1 v2 ret_ctyp
   | "vector_subrange", [v1; v2; v3], ret_ctyp -> builtin_vector_subrange env v1 v2 v3 ret_ctyp
   | "sail_unsigned", [v], ret_ctyp -> builtin_unsigned env v ret_ctyp
+  | "replicate_bits", [v1; v2], ret_ctyp -> builtin_replicate_bits env v1 v2 ret_ctyp
   | "eq_int", [v1; v2], _ -> builtin_eq_int env v1 v2
 
-  | _ -> failwith ("Bad primop " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map snd args) ^ " -> " ^ string_of_ctyp ret_ctyp)
+  | _ -> failwith ("Bad primop " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
 
 let rec smt_conversion from_ctyp to_ctyp x =
   match from_ctyp, to_ctyp with
@@ -441,22 +462,22 @@ let hex_char =
   | 'F' | 'f' -> [B1; B1; B1; B1]
   | _ -> failwith "Invalid hex character"
 
-let literal_to_fragment (L_aux (l_aux, _) as lit) =
+let literal_to_cval (L_aux (l_aux, _) as lit) =
   match l_aux with
-  | L_num n -> Some (F_lit (V_int n), CT_constant n)
+  | L_num n -> Some (V_lit (VL_int n, CT_constant n))
   | L_hex str when String.length str <= 16 ->
      let content = Util.string_to_list str |> List.map hex_char |> List.concat in
-     Some (F_lit (V_bits content), CT_fbits (String.length str * 4, true))
-  | L_unit -> Some (F_lit V_unit, CT_unit)
-  | L_true -> Some (F_lit (V_bool true), CT_bool)
-  | L_false -> Some (F_lit (V_bool false), CT_bool)
+     Some (V_lit (VL_bits (content, true), CT_fbits (String.length str * 4, true)))
+  | L_unit -> Some (V_lit (VL_unit, CT_unit))
+  | L_true -> Some (V_lit (VL_bool true, CT_bool))
+  | L_false -> Some (V_lit (VL_bool false, CT_bool))
   | _ -> None
 
 let c_literals ctx =
   let rec c_literal env l = function
     | AV_lit (lit, typ) as v ->
-       begin match literal_to_fragment lit with
-       | Some (frag, ctyp) -> AV_C_fragment (frag, typ, ctyp)
+       begin match literal_to_cval lit with
+       | Some cval -> AV_cval (cval, typ)
        | None -> v
        end
     | AV_tuple avals -> AV_tuple (List.map (c_literal env l) avals)
@@ -533,6 +554,7 @@ let rec rmw_write = function
   | CL_rmw (_, write, ctyp) -> write, ctyp
   | CL_id _ -> assert false
   | CL_tuple (clexp, _) -> rmw_write clexp
+  | CL_field (clexp, _) -> rmw_write clexp
   | clexp ->
      failwith (Pretty_print_sail.to_string (pp_clexp clexp))
 
@@ -555,6 +577,20 @@ let rmw_modify smt = function
         Fn ("tup4", List.init len set_tup)
      | _ ->
         failwith "Tuple modify does not have tuple type"
+     end
+  | CL_field (clexp, field) ->
+     let ctyp = clexp_ctyp clexp in
+     begin match ctyp with
+     | CT_struct (struct_id, fields) ->
+        let set_field (field', _) =
+          if Util.zencode_string field = zencode_id field' then
+            smt
+          else
+            Fn (zencode_id field', [Var (rmw_read clexp)])
+        in
+        Fn (zencode_upper_id struct_id, List.map set_field fields)
+     | _ ->
+        failwith "Struct modify does not have struct type"
      end
   | _ -> assert false
 
@@ -637,6 +673,7 @@ let smt_cdef out_chan env all_cdefs = function
           (* |> optimize_unit *)
           |> inline all_cdefs (fun _ -> true)
           |> flatten_instrs
+          |> remove_pointless_goto
         in
 
         let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_instr instrs) in

@@ -103,7 +103,7 @@ and 'a aval =
   | AV_list of ('a aval) list * 'a
   | AV_vector of ('a aval) list * 'a
   | AV_record of ('a aval) Bindings.t * 'a
-  | AV_C_fragment of fragment * 'a * ctyp
+  | AV_cval of cval * 'a
 
 (* Renaming variables in ANF expressions *)
 
@@ -163,7 +163,7 @@ let rec aval_rename from_id to_id = function
   | AV_list (avals, typ) -> AV_list (List.map (aval_rename from_id to_id) avals, typ)
   | AV_vector (avals, typ) -> AV_vector (List.map (aval_rename from_id to_id) avals, typ)
   | AV_record (avals, typ) -> AV_record (Bindings.map (aval_rename from_id to_id) avals, typ)
-  | AV_C_fragment (fragment, typ, ctyp) -> AV_C_fragment (frag_rename (name from_id) (name to_id) fragment, typ, ctyp)
+  | AV_cval (cval, typ) -> AV_cval (cval_rename (name from_id) (name to_id) cval, typ)
 
 let rec aexp_rename from_id to_id (AE_aux (aexp, env, l)) =
   let recur = aexp_rename from_id to_id in
@@ -404,8 +404,8 @@ and pp_aval = function
   | AV_id (id, lvar) -> pp_lvar lvar (pp_id id)
   | AV_tuple avals -> parens (separate_map (comma ^^ space) pp_aval avals)
   | AV_ref (id, lvar) -> string "ref" ^^ space ^^ pp_lvar lvar (pp_id id)
-  | AV_C_fragment (frag, typ, ctyp) ->
-     pp_annot typ (string ("(" ^ string_of_ctyp ctyp ^ ")" ^ string_of_fragment frag |> Util.cyan |> Util.clear))
+  | AV_cval (cval, typ) ->
+     pp_annot typ (string (string_of_cval cval |> Util.cyan |> Util.clear))
   | AV_vector (avals, typ) ->
      pp_annot typ (string "[" ^^ separate_map (comma ^^ space) pp_aval avals ^^ string "]")
   | AV_list (avals, typ) ->

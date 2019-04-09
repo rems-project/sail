@@ -55,7 +55,7 @@ open Jib_util
 let optimize_unit instrs =
   let unit_cval cval =
     match cval_ctyp cval with
-    | CT_unit -> (F_lit V_unit, CT_unit)
+    | CT_unit -> (V_lit (VL_unit, CT_unit))
     | _ -> cval
   in
   let unit_instr = function
@@ -152,21 +152,18 @@ let unique_per_function_ids cdefs =
   in
   List.mapi unique_cdef cdefs
 
-let rec frag_subst id subst = function
-  | F_id id' -> if Name.compare id id' = 0 then subst else F_id id'
-  | F_ref reg_id -> F_ref reg_id
-  | F_lit vl -> F_lit vl
-  | F_op (frag1, op, frag2) -> F_op (frag_subst id subst frag1, op, frag_subst id subst frag2)
-  | F_unary (op, frag) -> F_unary (op, frag_subst id subst frag)
-  | F_call (op, frags) -> F_call (op, List.map (frag_subst id subst) frags)
-  | F_field (frag, field) -> F_field (frag_subst id subst frag, field)
-  | F_tuple_member (frag, len, n) -> F_tuple_member (frag_subst id subst frag, len, n)
-  | F_raw str -> F_raw str
-  | F_ctor_kind (frag, ctor, unifiers, ctyp) -> F_ctor_kind (frag_subst id subst frag, ctor, unifiers, ctyp)
-  | F_ctor_unwrap (ctor, unifiers, frag) -> F_ctor_unwrap (ctor, unifiers, frag_subst id subst frag)
-  | F_poly frag -> F_poly (frag_subst id subst frag)
-
-let cval_subst id subst (frag, ctyp) = frag_subst id subst frag, ctyp
+let rec cval_subst id subst = function
+  | V_id (id', ctyp) -> if Name.compare id id' = 0 then subst else V_id (id', ctyp)
+  | V_ref (reg_id, ctyp) -> V_ref (reg_id, ctyp)
+  | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
+  | V_op (cval1, op, cval2) -> V_op (cval_subst id subst cval1, op, cval_subst id subst cval2)
+  | V_unary (op, cval) -> V_unary (op, cval_subst id subst cval)
+  | V_call (op, cvals) -> V_call (op, List.map (cval_subst id subst) cvals)
+  | V_field (cval, field) -> V_field (cval_subst id subst cval, field)
+  | V_tuple_member (cval, len, n) -> V_tuple_member (cval_subst id subst cval, len, n)
+  | V_ctor_kind (cval, ctor, unifiers, ctyp) -> V_ctor_kind (cval_subst id subst cval, ctor, unifiers, ctyp)
+  | V_ctor_unwrap (ctor, cval, unifiers, ctyp) -> V_ctor_unwrap (ctor, cval_subst id subst cval, unifiers, ctyp)
+  | V_poly (cval, ctyp) -> V_poly (cval_subst id subst cval, ctyp)
 
 let rec instrs_subst id subst =
   function
@@ -263,7 +260,7 @@ let inline cdefs should_inline instrs =
        | Some (None, ids, body) ->
           incr inlines;
           let inline_label = label "end_inline_" in
-          let body = List.fold_right2 instrs_subst (List.map name ids) (List.map fst args) body in
+          let body = List.fold_right2 instrs_subst (List.map name ids) args body in
           let body = List.map (map_instr fix_labels) body in
           let body = List.map (map_instr (replace_end inline_label)) body in
           let body = List.map (map_instr (replace_return clexp)) body in
@@ -288,3 +285,10 @@ let inline cdefs should_inline instrs =
       instrs
   in
   go instrs
+
+let rec remove_pointless_goto = function
+  | I_aux (I_goto label, _) :: I_aux (I_label label', aux) :: instrs when label = label' ->
+     I_aux (I_label label', aux) :: remove_pointless_goto instrs
+  | instr :: instrs ->
+     instr :: remove_pointless_goto instrs
+  | [] -> []

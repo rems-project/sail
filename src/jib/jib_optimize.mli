@@ -64,3 +64,6 @@ val flatten_cdef : cdef -> cdef
 val unique_per_function_ids : cdef list -> cdef list
 
 val inline : cdef list -> (Ast.id -> bool) -> instr list -> instr list
+
+(** Remove gotos immediately followed by the label it jumps to *)
+val remove_pointless_goto : instr list -> instr list

@@ -191,7 +191,7 @@ type cf_node =
   | CF_guard of cval
   | CF_start of ctyp NameMap.t
 
-let cval_not (f, ctyp) = (F_unary ("!", f), ctyp)
+let cval_not cval = V_unary ("!", cval)
 
 let control_flow_graph instrs =
   let module StringMap = Map.Make(String) in
@@ -494,23 +494,22 @@ let rename_variables graph root children =
     stacks := NameMap.add id (n :: match NameMap.find_opt id !stacks with Some s -> s | None -> []) !stacks
   in
 
-  let rec fold_frag = function
-    | F_id id ->
+  let rec fold_cval = function
+    | V_id (id, ctyp) ->
        let i = top_stack id in
-       F_id (ssa_name i id)
-    | F_ref id ->
+       V_id (ssa_name i id, ctyp)
+    | V_ref (id, ctyp) ->
        let i = top_stack id in
-       F_ref (ssa_name i id)
-    | F_lit vl -> F_lit vl
-    | F_op (f1, op, f2) -> F_op (fold_frag f1, op, fold_frag f2)
-    | F_unary (op, f) -> F_unary (op, fold_frag f)
-    | F_call (id, fs) -> F_call (id, List.map fold_frag fs)
-    | F_field (f, field) -> F_field (fold_frag f, field)
-    | F_tuple_member (f, len, n) -> F_tuple_member (fold_frag f, len, n)
-    | F_raw str -> F_raw str
-    | F_ctor_kind (f, ctor, unifiers, ctyp) -> F_ctor_kind (fold_frag f, ctor, unifiers, ctyp)
-    | F_ctor_unwrap (ctor, unifiers, f) -> F_ctor_unwrap (ctor, unifiers, fold_frag f)
-    | F_poly f -> F_poly (fold_frag f)
+       V_ref (ssa_name i id, ctyp)
+    | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
+    | V_op (f1, op, f2) -> V_op (fold_cval f1, op, fold_cval f2)
+    | V_unary (op, f) -> V_unary (op, fold_cval f)
+    | V_call (id, fs) -> V_call (id, List.map fold_cval fs)
+    | V_field (f, field) -> V_field (fold_cval f, field)
+    | V_tuple_member (f, len, n) -> V_tuple_member (fold_cval f, len, n)
+    | V_ctor_kind (f, ctor, unifiers, ctyp) -> V_ctor_kind (fold_cval f, ctor, unifiers, ctyp)
+    | V_ctor_unwrap (ctor, f, unifiers, ctyp) -> V_ctor_unwrap (ctor, fold_cval f, unifiers, ctyp)
+    | V_poly (f, ctyp) -> V_poly (fold_cval f, ctyp)
   in
 
   let rec fold_clexp rmw = function
@@ -531,8 +530,6 @@ let rename_variables graph root children =
     | CL_tuple (clexp, n) -> CL_tuple (fold_clexp true clexp, n)
     | CL_void -> CL_void
   in
-
-  let fold_cval (f, ctyp) = (fold_frag f, ctyp) in
 
   let ssa_instr (I_aux (aux, annot)) =
     let aux = match aux with
@@ -685,7 +682,7 @@ let string_of_ssainstr = function
   | Phi (id, ctyp, args) ->
      string_of_name id ^ " : " ^ string_of_ctyp ctyp ^ " = &phi;(" ^ Util.string_of_list ", " string_of_name args ^ ")"
   | Pi cvals ->
-     "&pi;(" ^ Util.string_of_list ", " (fun (f, _) -> String.escaped (string_of_fragment ~zencode:false f)) cvals ^ ")"
+     "&pi;(" ^ Util.string_of_list ", " (fun v -> String.escaped (string_of_cval ~zencode:false v)) cvals ^ ")"
 
 let string_of_phis = function
   | [] -> ""

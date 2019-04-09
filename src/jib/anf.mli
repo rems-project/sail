@@ -116,7 +116,7 @@ and 'a apat_aux =
   | AP_wild of 'a
 
 (** We allow ANF->ANF optimization to insert fragments of C code
-   directly in the ANF grammar via [AV_C_fragment]. Such fragments
+   directly in the ANF grammar via [AV_cval]. Such fragments
    must be side-effect free expressions. *)
 and 'a aval =
   | AV_lit of lit * 'a
@@ -126,7 +126,7 @@ and 'a aval =
   | AV_list of ('a aval) list * 'a
   | AV_vector of ('a aval) list * 'a
   | AV_record of ('a aval) Bindings.t * 'a
-  | AV_C_fragment of fragment * 'a * ctyp
+  | AV_cval of cval * 'a
 
 (** Function for generating unique identifiers during ANF
    translation. *)

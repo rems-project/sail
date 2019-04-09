@@ -241,15 +241,15 @@ let hex_char =
 let literal_to_fragment (L_aux (l_aux, _) as lit) =
   match l_aux with
   | L_num n when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
-     Some (F_lit (V_int n), CT_fint 64)
+     Some (V_lit (VL_int n, CT_fint 64))
   | L_hex str when String.length str <= 16 ->
      let padding = 16 - String.length str in
      let padding = Util.list_init padding (fun _ -> Sail2_values.B0) in
      let content = Util.string_to_list str |> List.map hex_char |> List.concat in
-     Some (F_lit (V_bits (padding @ content)), CT_fbits (String.length str * 4, true))
-  | L_unit -> Some (F_lit V_unit, CT_unit)
-  | L_true -> Some (F_lit (V_bool true), CT_bool)
-  | L_false -> Some (F_lit (V_bool false), CT_bool)
+     Some (V_lit (VL_bits (padding @ content, true), CT_fbits (String.length str * 4, true)))
+  | L_unit -> Some (V_lit (VL_unit, CT_unit))
+  | L_true -> Some (V_lit (VL_bool true, CT_bool))
+  | L_false -> Some (V_lit (VL_bool false, CT_bool))
   | _ -> None
 
 let c_literals ctx =
@@ -257,7 +257,7 @@ let c_literals ctx =
     | AV_lit (lit, typ) as v when is_stack_ctyp (ctyp_of_typ { ctx with local_env = env } typ) ->
        begin
          match literal_to_fragment lit with
-         | Some (frag, ctyp) -> AV_C_fragment (frag, typ, ctyp)
+         | Some cval -> AV_cval (cval, typ)
          | None -> v
        end
     | AV_tuple avals -> AV_tuple (List.map (c_literal env l) avals)
@@ -292,10 +292,10 @@ let rec c_aval ctx = function
   | AV_lit (lit, typ) as v ->
      begin
        match literal_to_fragment lit with
-       | Some (frag, ctyp) -> AV_C_fragment (frag, typ, ctyp)
+       | Some cval -> AV_cval (cval, typ)
        | None -> v
      end
-  | AV_C_fragment (str, typ, ctyp) -> AV_C_fragment (str, typ, ctyp)
+  | AV_cval (cval, typ) -> AV_cval (cval, typ)
   (* An id can be converted to a C fragment if it's type can be
      stack-allocated. *)
   | AV_id (id, lvar) as v ->
@@ -309,40 +309,36 @@ let rec c_aval ctx = function
                 (* We need to check that id's type hasn't changed due to flow typing *)
                 let _, ctyp' = Bindings.find id ctx.locals in
                 if ctyp_equal ctyp ctyp' then
-                  AV_C_fragment (F_id (name id), typ, ctyp)
+                  AV_cval (V_id (name id, ctyp), typ)
                 else
                   (* id's type changed due to flow
                      typing, so it's really still heap allocated!  *)
                   v
               with
                 (* Hack: Assuming global letbindings don't change from flow typing... *)
-                Not_found -> AV_C_fragment (F_id (name id), typ, ctyp)
+                Not_found -> AV_cval (V_id (name id, ctyp), typ)
             end
           else
             v
        | Register (_, _, typ) when is_stack_typ ctx typ ->
           let ctyp = ctyp_of_typ ctx typ in
           if is_stack_ctyp ctyp then
-            AV_C_fragment (F_id (name id), typ, ctyp)
+            AV_cval (V_id (name id, ctyp), typ)
           else
             v
        | _ -> v
      end
   | AV_vector (v, typ) when is_bitvector v && List.length v <= 64 ->
-     let bitstring = F_lit (V_bits (List.map value_of_aval_bit v)) in
-     AV_C_fragment (bitstring, typ, CT_fbits (List.length v, true))
+     let bitstring = VL_bits (List.map value_of_aval_bit v, true) in
+     AV_cval (V_lit (bitstring, CT_fbits (List.length v, true)), typ)
   | AV_tuple avals -> AV_tuple (List.map (c_aval ctx) avals)
   | aval -> aval
 
-let is_c_fragment = function
-  | AV_C_fragment _ -> true
-  | _ -> false
-
 let c_fragment = function
-  | AV_C_fragment (frag, _, _) -> frag
+  | AV_cval (cval, _) -> cval
   | _ -> assert false
 
-let v_mask_lower i = F_lit (V_bits (Util.list_init i (fun _ -> Sail2_values.B1)))
+let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1), true), CT_fbits (i, true))
 
 (* Map over all the functions in an aexp. *)
 let rec analyze_functions ctx f (AE_aux (aexp, env, l)) =
@@ -402,24 +398,25 @@ let analyze_primop' ctx id args typ =
   let args = List.map (c_aval ctx) args in
   let extern = if Env.is_extern id ctx.tc_env "c" then Env.get_extern id ctx.tc_env "c" else failwith "Not extern" in
 
-  let v_one = F_lit (V_int (Big_int.of_int 1)) in
-  let v_int n = F_lit (V_int (Big_int.of_int n)) in
+  let v_one = V_lit (VL_int (Big_int.of_int 1), CT_fint 64) in
+  let v_int n = V_lit (VL_int (Big_int.of_int n), CT_fint 64) in
 
   c_debug (lazy ("Analyzing primop " ^ extern ^ "(" ^ Util.string_of_list ", " (fun aval -> Pretty_print_sail.to_string (pp_aval aval)) args ^ ")"));
 
   match extern, args with
-  | "eq_bits", [AV_C_fragment (v1, _, CT_fbits _); AV_C_fragment (v2, _, _)] ->
-     AE_val (AV_C_fragment (F_op (v1, "==", v2), typ, CT_bool))
-  | "eq_bits", [AV_C_fragment (v1, _, CT_sbits _); AV_C_fragment (v2, _, _)] ->
-     AE_val (AV_C_fragment (F_call ("eq_sbits", [v1; v2]), typ, CT_bool))
+    (*
+  | "eq_bits", [AV_cval (v1, _, CT_fbits _); AV_cval (v2, _, _)] ->
+     AE_val (AV_cval (F_op (v1, "==", v2), typ, CT_bool))
+  | "eq_bits", [AV_cval (v1, _, CT_sbits _); AV_cval (v2, _, _)] ->
+     AE_val (AV_cval (F_call ("eq_sbits", [v1; v2]), typ, CT_bool))
 
-  | "neq_bits", [AV_C_fragment (v1, _, CT_fbits _); AV_C_fragment (v2, _, _)] ->
-     AE_val (AV_C_fragment (F_op (v1, "!=", v2), typ, CT_bool))
-  | "neq_bits", [AV_C_fragment (v1, _, CT_sbits _); AV_C_fragment (v2, _, _)] ->
-     AE_val (AV_C_fragment (F_call ("neq_sbits", [v1; v2]), typ, CT_bool))
+  | "neq_bits", [AV_cval (v1, _, CT_fbits _); AV_cval (v2, _, _)] ->
+     AE_val (AV_cval (F_op (v1, "!=", v2), typ, CT_bool))
+  | "neq_bits", [AV_cval (v1, _, CT_sbits _); AV_cval (v2, _, _)] ->
+     AE_val (AV_cval (F_call ("neq_sbits", [v1; v2]), typ, CT_bool))
 
-  | "eq_int", [AV_C_fragment (v1, typ1, _); AV_C_fragment (v2, typ2, _)] ->
-     AE_val (AV_C_fragment (F_op (v1, "==", v2), typ, CT_bool))
+  | "eq_int", [AV_cval (v1, typ1, _); AV_cval (v2, typ2, _)] ->
+     AE_val (AV_cval (F_op (v1, "==", v2), typ, CT_bool))
 
   | "zeros", [_] ->
      begin match destruct_vector ctx.tc_env typ with
@@ -596,7 +593,7 @@ let analyze_primop' ctx id args typ =
 
   | "undefined_bool", _ ->
      AE_val (AV_C_fragment (F_lit (V_bool false), typ, CT_bool))
-
+ *)
   | _, _ ->
      c_debug (lazy ("No optimization routine found"));
      no_change
@@ -685,7 +682,7 @@ let fix_early_stack_return ret ret_ctyp instrs =
        @ rewrite_return after
     | before, I_aux (I_end _, _) :: after ->
        before
-       @ [ireturn (F_id ret, ret_ctyp)]
+       @ [ireturn (V_id (ret, ret_ctyp))]
        @ rewrite_return after
     | before, (I_aux ((I_copy _ | I_funcall _), _) as instr) :: after ->
        before @ instr :: rewrite_return after
@@ -803,92 +800,6 @@ let hoist_allocations recursive_functions = function
 
   | cdef -> [cdef]
 
-let rec specialize_variants ctx prior =
-  let unifications = ref (Bindings.empty) in
-
-  let fix_variant_ctyp var_id new_ctors = function
-    | CT_variant (id, ctors) when Id.compare id var_id = 0 -> CT_variant (id, new_ctors)
-    | ctyp -> ctyp
-  in
-
-  let specialize_constructor ctx ctor_id ctyp =
-    function
-    | I_aux (I_funcall (clexp, extern, id, [cval]), ((_, l) as aux)) as instr when Id.compare id ctor_id = 0 ->
-       (* Work out how each call to a constructor in instantiated and add that to unifications *)
-       let unification = List.map ctyp_suprema (ctyp_unify ctyp (cval_ctyp cval)) in
-       let mono_id = append_id ctor_id ("_" ^ Util.string_of_list "_" (fun ctyp -> Util.zencode_string (string_of_ctyp ctyp)) unification) in
-       unifications := Bindings.add mono_id (ctyp_suprema (cval_ctyp cval)) !unifications;
-
-       (* We need to cast each cval to it's ctyp_suprema in order to put it in the most general constructor *)
-       let casts =
-         let cast_to_suprema (frag, ctyp) =
-           let suprema = ctyp_suprema ctyp in
-           if ctyp_equal ctyp suprema then
-             [], (unpoly frag, ctyp), []
-           else
-             let gs = ngensym () in
-             [idecl suprema gs;
-              icopy l (CL_id (gs, suprema)) (unpoly frag, ctyp)],
-             (F_id gs, suprema),
-             [iclear suprema gs]
-         in
-         List.map cast_to_suprema [cval]
-       in
-       let setup = List.concat (List.map (fun (setup, _, _) -> setup) casts) in
-       let cvals = List.map (fun (_, cval, _) -> cval) casts in
-       let cleanup = List.concat (List.map (fun (_, _, cleanup) -> cleanup) casts) in
-
-       let mk_funcall instr =
-         if List.length setup = 0 then
-           instr
-         else
-           iblock (setup @ [instr] @ cleanup)
-       in
-
-       mk_funcall (I_aux (I_funcall (clexp, extern, mono_id, cvals), aux))
-
-    | I_aux (I_funcall (clexp, extern, id, cvals), ((_, l) as aux)) as instr when Id.compare id ctor_id = 0 ->
-       c_error ~loc:l "Multiple argument constructor found"
-
-    | instr -> instr
-  in
-
-  function
-  | (CDEF_type (CTD_variant (var_id, ctors)) as cdef) :: cdefs ->
-     let polymorphic_ctors = List.filter (fun (_, ctyp) -> is_polymorphic ctyp) ctors in
-
-     let cdefs =
-       List.fold_left (fun cdefs (ctor_id, ctyp) -> List.map (cdef_map_instr (specialize_constructor ctx ctor_id ctyp)) cdefs)
-                      cdefs
-                      polymorphic_ctors
-     in
-
-     let monomorphic_ctors = List.filter (fun (_, ctyp) -> not (is_polymorphic ctyp)) ctors in
-     let specialized_ctors = Bindings.bindings !unifications in
-     let new_ctors = monomorphic_ctors @ specialized_ctors in
-
-     let ctx = {
-         ctx with variants = Bindings.add var_id
-                               (List.fold_left (fun m (id, ctyp) -> Bindings.add id ctyp m) !unifications monomorphic_ctors)
-                               ctx.variants
-       } in
-
-     let cdefs = List.map (cdef_map_ctyp (map_ctyp (fix_variant_ctyp var_id new_ctors))) cdefs in
-     let prior = List.map (cdef_map_ctyp (map_ctyp (fix_variant_ctyp var_id new_ctors))) prior in
-     specialize_variants ctx (CDEF_type (CTD_variant (var_id, new_ctors)) :: prior) cdefs
-
-  | cdef :: cdefs ->
-     let remove_poly (I_aux (instr, aux)) =
-       match instr with
-       | I_copy (clexp, (frag, ctyp)) when is_polymorphic ctyp ->
-          I_aux (I_copy (clexp, (frag, ctyp_suprema (clexp_ctyp clexp))), aux)
-       | instr -> I_aux (instr, aux)
-     in
-     let cdef = cdef_map_instr remove_poly cdef in
-     specialize_variants ctx (cdef :: prior) cdefs
-
-  | [] -> List.rev prior, ctx
-
 (** Once we specialize variants, there may be additional type
    dependencies which could be in the wrong order. As such we need to
    sort the type definitions in the list of cdefs. *)
@@ -951,12 +862,12 @@ let remove_alias =
     let alias = ref None in
     let rec scan ctyp id n instrs =
       match n, !alias, instrs with
-      | 0, None, I_aux (I_copy (CL_id (id', ctyp'), (F_id a, ctyp'')), _) :: instrs
+      | 0, None, I_aux (I_copy (CL_id (id', ctyp'), V_id (a, ctyp'')), _) :: instrs
            when Name.compare id id' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
          alias := Some a;
          scan ctyp id 1 instrs
 
-      | 1, Some a, I_aux (I_copy (CL_id (a', ctyp'), (F_id id', ctyp'')), _) :: instrs
+      | 1, Some a, I_aux (I_copy (CL_id (a', ctyp'), V_id (id', ctyp'')), _) :: instrs
            when Name.compare a a' = 0 && Name.compare id id' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
          scan ctyp id 2 instrs
 
@@ -985,9 +896,9 @@ let remove_alias =
     scan ctyp id 0
   in
   let remove_alias id alias = function
-    | I_aux (I_copy (CL_id (id', _), (F_id alias', _)), _)
+    | I_aux (I_copy (CL_id (id', _), V_id (alias', _)), _)
          when Name.compare id id' = 0 && Name.compare alias alias' = 0 -> removed
-    | I_aux (I_copy (CL_id (alias', _), (F_id id', _)), _)
+    | I_aux (I_copy (CL_id (alias', _), V_id (id', _)), _)
          when Name.compare id id' = 0 && Name.compare alias alias' = 0 -> removed
     | I_aux (I_clear (_, id'), _) -> removed
     | instr -> instr
@@ -1089,7 +1000,7 @@ let combine_variables =
          combine := Some id';
          scan id 1 instrs
 
-      | 1, Some c, I_aux (I_copy (CL_id (id', ctyp'), (F_id c', ctyp'')), _) :: instrs
+      | 1, Some c, I_aux (I_copy (CL_id (id', ctyp'), V_id (c', ctyp'')), _) :: instrs
            when Name.compare c c' = 0 && Name.compare id id' = 0 && ctyp_equal ctyp ctyp' && ctyp_equal ctyp' ctyp'' ->
          scan id 2 instrs
 
@@ -1127,7 +1038,7 @@ let combine_variables =
     | instr -> instr
   in
   let is_not_self_assignment = function
-    | I_aux (I_copy (CL_id (id, _), (F_id id', _)), _) when Name.compare id id' = 0 -> false
+    | I_aux (I_copy (CL_id (id, _), V_id (id', _)), _) when Name.compare id id' = 0 -> false
     | _ -> true
   in
   let rec opt = function
@@ -1220,18 +1131,18 @@ let rec sgen_ctyp_name = function
   | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
   | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
-let sgen_cval_param (frag, ctyp) =
-  match ctyp with
-  | CT_lbits direction ->
-     string_of_fragment frag ^ ", " ^ string_of_bool direction
-  | CT_sbits (_, direction) ->
-     string_of_fragment frag ^ ", " ^ string_of_bool direction
-  | CT_fbits (len, direction) ->
-     string_of_fragment frag ^ ", UINT64_C(" ^ string_of_int len ^ ") , " ^ string_of_bool direction
-  | _ ->
-     string_of_fragment frag
+let sgen_cval cval = string_of_cval cval
 
-let sgen_cval = function (frag, _) -> string_of_fragment frag
+let sgen_cval_param cval =
+  match cval_ctyp cval with
+  | CT_lbits direction ->
+     string_of_cval cval ^ ", " ^ string_of_bool direction
+  | CT_sbits (_, direction) ->
+     string_of_cval cval ^ ", " ^ string_of_bool direction
+  | CT_fbits (len, direction) ->
+     string_of_cval cval ^ ", UINT64_C(" ^ string_of_int len ^ ") , " ^ string_of_bool direction
+  | _ ->
+     string_of_cval cval
 
 let rec sgen_clexp = function
   | CL_id (Have_exception _, _) -> "have_exception"
@@ -1274,8 +1185,9 @@ let rec codegen_conversion l clexp cval =
 
   (* If we have to convert between tuple types, convert the fields individually. *)
   | CT_tup ctyps_to, CT_tup ctyps_from when List.length ctyps_to = List.length ctyps_from ->
+     let len = List.length ctyps_to in
      let conversions =
-       List.mapi (fun i ctyp -> codegen_conversion l (CL_tuple (clexp, i)) (F_field (fst cval, "ztup" ^ string_of_int i), ctyp)) ctyps_from
+       List.mapi (fun i ctyp -> codegen_conversion l (CL_tuple (clexp, i)) (V_tuple_member (cval, len, i))) ctyps_from
      in
      string "  /* conversions */"
      ^^ hardline

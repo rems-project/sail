@@ -53,10 +53,10 @@ open import Pervasives
 open import Sail2_values
 
 type vl =
-  | V_bits of list bitU
-  | V_bit of bitU
-  | V_bool of bool
-  | V_unit
-  | V_int of integer
-  | V_string of string
-  | V_null (* Used for unitialized values and null pointers in C compilation *)
+  | VL_bits of list bitU * bool
+  | VL_bit of bitU
+  | VL_bool of bool
+  | VL_unit
+  | VL_int of integer
+  | VL_string of string
+  | VL_null (* Used for unitialized values and null pointers in C compilation *)

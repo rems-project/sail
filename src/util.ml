@@ -158,7 +158,7 @@ let rec assoc_compare_opt cmp k l =
   match l with
     | [] -> None
     | (k',v)::l -> if cmp k k' = 0 then Some v else assoc_compare_opt cmp k l
-                 
+
 let rec compare_list f l1 l2 = 
   match (l1,l2) with
     | ([],[]) -> 0
