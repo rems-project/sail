@@ -110,6 +110,9 @@ refine ((if Decidable_witness as b return (b = true <-> x = y -> _) then fun H' 
 * right. intuition.
 Defined.
 
+Instance Decidable_eq_list {A : Type} `(D : forall x y : A, Decidable (x = y)) : forall (x y : list A), Decidable (x = y) :=
+  Decidable_eq_from_dec (list_eq_dec (fun x y => generic_dec x y)).
+
 (* Used by generated code that builds Decidable equality instances for records. *)
 Ltac cmp_record_field x y :=
   let H := fresh "H" in
@@ -457,19 +460,23 @@ Definition binop_bit op x y :=
   match (x, y) with
   | (BU,_) => BU (*Do we want to do this or to respect | of I and & of B0 rules?*)
   | (_,BU) => BU (*Do we want to do this or to respect | of I and & of B0 rules?*)
-  | (x,y) => bitU_of_bool (op (bool_of_bitU x) (bool_of_bitU y))
+(*  | (x,y) => bitU_of_bool (op (bool_of_bitU x) (bool_of_bitU y))*)
+  | (B0,B0) => bitU_of_bool (op false false)
+  | (B0,B1) => bitU_of_bool (op false  true)
+  | (B1,B0) => bitU_of_bool (op  true false)
+  | (B1,B1) => bitU_of_bool (op  true  true)
   end.
 
-(*val and_bit : bitU -> bitU -> bitU
-Definition and_bit := binop_bit (&&)
+(*val and_bit : bitU -> bitU -> bitU*)
+Definition and_bit := binop_bit andb.
 
-val or_bit : bitU -> bitU -> bitU
-Definition or_bit := binop_bit (||)
+(*val or_bit : bitU -> bitU -> bitU*)
+Definition or_bit := binop_bit orb.
 
-val xor_bit : bitU -> bitU -> bitU
-Definition xor_bit := binop_bit xor
+(*val xor_bit : bitU -> bitU -> bitU*)
+Definition xor_bit := binop_bit xorb.
 
-val (&.) : bitU -> bitU -> bitU
+(*val (&.) : bitU -> bitU -> bitU
 Definition inline (&.) x y := and_bit x y
 
 val (|.) : bitU -> bitU -> bitU
