@@ -421,6 +421,10 @@ let value_vector_truncate = function
   | [v1; v2] -> mk_vector (Sail_lib.vector_truncate (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value vector_truncate"
 
+let value_vector_truncateLSB = function
+  | [v1; v2] -> mk_vector (Sail_lib.vector_truncateLSB (coerce_bv v1, coerce_int v2))
+  | _ -> failwith "value vector_truncateLSB"
+
 let value_eq_anything = function
   | [v1; v2] -> V_bool (eq_value v1 v2)
   | _ -> failwith "value eq_anything"
@@ -639,6 +643,7 @@ let primops =
       ("add_vec", value_add_vec);
       ("sub_vec", value_sub_vec);
       ("vector_truncate", value_vector_truncate);
+      ("vector_truncateLSB", value_vector_truncateLSB);
       ("read_ram", value_read_ram);
       ("write_ram", value_write_ram);
       ("trace_memory_read", fun _ -> V_unit);
