@@ -1,3 +1,53 @@
+(**************************************************************************)
+(*     Sail                                                               *)
+(*                                                                        *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
+(*                                                                        *)
+(*  All rights reserved.                                                  *)
+(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*     notice, this list of conditions and the following disclaimer.      *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
+(**************************************************************************)
+
 open Anf
 open Ast
 open Ast_util
@@ -95,7 +145,11 @@ let rec smt_cval env cval =
   | V_ctor_unwrap (ctor_id, union, unifiers, _) ->
      Fn ("un" ^ zencode_ctor ctor_id unifiers, [smt_cval env union])
   | V_field (union, field) ->
-     Fn (field, [smt_cval env union])
+     begin match cval_ctyp union with
+     | CT_struct (struct_id, _) ->
+        Fn (zencode_upper_id struct_id ^ "_" ^ field, [smt_cval env union])
+     | _ -> failwith "Field for non-struct type"
+     end
   | V_tuple_member (frag, len, n) ->
      Fn (Printf.sprintf "tup_%d_%d" len n, [smt_cval env frag])
   | cval -> failwith ("Unrecognised cval " ^ string_of_cval ~zencode:false cval)
@@ -321,7 +375,7 @@ let smt_ctype_def = function
   | CTD_struct (id, fields) ->
      [declare_datatypes
        (mk_record (zencode_upper_id id)
-          (List.map (fun (field, ctyp) -> zencode_id field, smt_ctyp ctyp) fields))]
+          (List.map (fun (field, ctyp) -> zencode_upper_id id ^ "_" ^ zencode_id field, smt_ctyp ctyp) fields))]
 
   | CTD_variant (id, ctors) ->
      [declare_datatypes
@@ -489,6 +543,9 @@ let c_literals ctx =
 (* 3. Generating SMT                                                      *)
 (**************************************************************************)
 
+let push_smt_defs stack smt_defs =
+  List.iter (fun def -> Stack.push def stack) smt_defs
+
 (* When generating SMT when we encounter joins between two or more
    blocks such as in the example below, we have to generate a muxer
    that chooses the correct value of v_n or v_m to assign to v_o. We
@@ -586,7 +643,7 @@ let rmw_modify smt = function
           if Util.zencode_string field = zencode_id field' then
             smt
           else
-            Fn (zencode_id field', [Var (rmw_read clexp)])
+            Fn (zencode_upper_id struct_id ^ "_" ^ zencode_id field', [Var (rmw_read clexp)])
         in
         Fn (zencode_upper_id struct_id, List.map set_field fields)
      | _ ->
@@ -656,7 +713,7 @@ let rec find_function id = function
      find_function id cdefs
   | [] -> None
 
-let smt_cdef out_chan env all_cdefs = function
+let smt_cdef stack env all_cdefs = function
   | CDEF_spec (function_id, arg_ctyps, ret_ctyp)
        when string_of_id function_id = "check_sat" ->
      begin match find_function function_id all_cdefs with
@@ -665,7 +722,7 @@ let smt_cdef out_chan env all_cdefs = function
         let smt_args =
           List.map2 (fun id ctyp -> declare_const (Name (id, 0)) ctyp) args arg_ctyps
         in
-        output_smt_defs out_chan smt_args;
+        push_smt_defs stack smt_args;
 
         let instrs =
           let open Jib_optimize in
@@ -694,8 +751,8 @@ let smt_cdef out_chan env all_cdefs = function
                  ssanodes |> List.map (smt_ssanode env cfg preds) |> List.concat
                in
                let basic_block = smt_cfnode all_cdefs env cfnode in
-               output_smt_defs out_chan muxers;
-               output_smt_defs out_chan basic_block;
+               push_smt_defs stack muxers;
+               push_smt_defs stack basic_block;
             end
           ) visit_order
 
@@ -703,12 +760,77 @@ let smt_cdef out_chan env all_cdefs = function
      end
   | _ -> ()
 
-let rec smt_cdefs out_chan env ast =
+let rec smt_cdefs stack env ast =
   function
   | cdef :: cdefs ->
-     smt_cdef out_chan env ast cdef;
-     smt_cdefs out_chan env ast cdefs
+     smt_cdef stack env ast cdef;
+     smt_cdefs stack env ast cdefs
   | [] -> ()
+
+let optimize_smt stack =
+  let stack' = Stack.create () in
+  let uses = Hashtbl.create (Stack.length stack) in
+
+  let rec uses_in_exp = function
+    | Var var ->
+       begin match Hashtbl.find_opt uses var with
+       | Some n -> Hashtbl.replace uses var (n + 1)
+       | None -> Hashtbl.add uses var 1
+       end
+    | Hex _ | Bin _ | Bool_lit _ -> ()
+    | Fn (f, exps) ->
+       List.iter uses_in_exp exps
+    | Ite (cond, t, e) ->
+       uses_in_exp cond; uses_in_exp t; uses_in_exp e
+    | Extract (_, _, exp) | Tester (_, exp) ->
+       uses_in_exp exp
+  in
+
+  let remove_unused () = function
+    | Declare_const (var, _) as def ->
+       begin match Hashtbl.find_opt uses var with
+       | None -> ()
+       | Some _ ->
+          Stack.push def stack'
+       end
+    | Define_const (var, _, exp) as def ->
+       begin match Hashtbl.find_opt uses var with
+       | None -> ()
+       | Some _ ->
+          uses_in_exp exp;
+          Stack.push def stack'
+       end
+    | (Declare_datatypes _ | Declare_tuple _) as def ->
+       Stack.push def stack'
+    | Assert exp as def ->
+       uses_in_exp exp;
+       Stack.push def stack'
+    | Define_fun _ -> assert false
+  in
+  Stack.fold remove_unused () stack;
+
+  let vars = Hashtbl.create (Stack.length stack') in
+  let queue = Queue.create () in
+
+  let constant_propagate = function
+    | Declare_const _ as def ->
+       Queue.add def queue
+    | Define_const (var, typ, exp) ->
+       begin match Hashtbl.find_opt uses var with
+       | Some 1 ->
+          Hashtbl.add vars var exp
+       | Some _ ->
+          Queue.add (Define_const (var, typ, simp_smt_exp vars exp)) queue
+       | None -> assert false
+       end
+    | Assert exp ->
+       Queue.add (Assert (simp_smt_exp vars exp)) queue
+    | (Declare_datatypes _ | Declare_tuple _) as def ->
+       Queue.add def queue
+    | Define_fun _ -> assert false
+  in
+  Stack.iter constant_propagate stack';
+  queue
 
 let generate_smt out_chan env ast =
   try
@@ -723,9 +845,11 @@ let generate_smt out_chan env ast =
     let cdefs, ctx = compile_ast { ctx with specialize_calls = true; ignore_64 = true } ast in
     Profile.finish "Compiling to Jib IR" t;
 
+    let stack = Stack.create () in
+
     (* output_string out_chan "(set-option :produce-models true)\n"; *)
     output_string out_chan "(set-logic QF_AUFBVDT)\n";
-    output_smt_defs out_chan
+    push_smt_defs stack
       [declare_datatypes (mk_enum "Unit" ["unit"]);
        Declare_tuple 2;
        Declare_tuple 3;
@@ -737,11 +861,16 @@ let generate_smt out_chan env ast =
       ];
 
     let smt_type_defs = List.concat (generate_ctype_defs cdefs) in
-    output_string out_chan "\n; Sail type definitions\n";
-    output_smt_defs out_chan smt_type_defs;
+    push_smt_defs stack smt_type_defs;
 
-    output_string out_chan "\n; Sail function\n";
-    smt_cdefs out_chan env cdefs cdefs;
+    smt_cdefs stack env cdefs cdefs;
+
+    (* let stack' = Stack.create () in
+    Stack.iter (fun def -> Stack.push def stack') stack;
+    Stack.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") stack'; *)
+    let queue = optimize_smt stack in
+    Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
+
     output_string out_chan "(check-sat)\n"
   with
   | Type_check.Type_error (_, l, err) ->
