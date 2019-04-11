@@ -9,16 +9,17 @@ union exception = {
 
 register R : bool
 
-function check_sat((): unit) -> bool = {
+$property
+function prop((): unit) -> bool = {
   try {
     if R then {
-       throw(E_bool(false))
+       throw(E_bool(true))
     } else {
-       return(false);
-       true
+       return(true);
+       false
     }
   } catch {
     E_bool(b) => b,
-    E_unit() => true
+    E_unit() => false
   }
 }

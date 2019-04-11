@@ -143,13 +143,14 @@ function clause execute (ITYPE (imm, rs1, rd, RISCV_ADDI)) =
 
 function clause decode _ = None()
 
-function check_sat(imm:  bits(12), rs1: regbits, rd: regbits, v: xlenbits) -> bool = {
+$property
+function prop(imm:  bits(12), rs1: regbits, rd: regbits, v: xlenbits) -> bool = {
   X(rs1) = v;
   match decode(imm @ rs1 @ 0b000 @ rd @ 0b0010011) {
     Some(instr) => {
       execute(instr);
-      not_bool(X(rd) == v + sail_sign_extend(imm, sizeof(xlen)) | rd == 0)
+      X(rd) == v + sail_sign_extend(imm, sizeof(xlen)) | rd == 0
     },
-    _ => true
+    _ => false
   }
 }

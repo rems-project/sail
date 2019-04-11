@@ -4754,7 +4754,8 @@ let all_rewrites = [
     ("overload_cast", Basic_rewriter rewrite_overload_cast);
     ("top_sort_defs", Basic_rewriter (fun _ -> top_sort_defs));
     ("constant_fold", Basic_rewriter (fun _ -> Constant_fold.rewrite_constant_function_calls));
-    ("split", String_rewriter (fun str -> Basic_rewriter (rewrite_split_fun_ctor_pats str)))
+    ("split", String_rewriter (fun str -> Basic_rewriter (rewrite_split_fun_ctor_pats str)));
+    ("properties", Basic_rewriter (fun _ -> Property.rewrite));
   ]
 
 let rewrites_lem = [
@@ -4922,7 +4923,7 @@ let rewrites_target tgt =
   | "ocaml" -> rewrites_ocaml
   | "c" -> rewrites_c
   | "ir" -> rewrites_c
-  | "smt" -> rewrites_c
+  | "smt" -> rewrites_c @ [("properties", [])]
   | "sail" -> []
   | "latex" -> []
   | "interpreter" -> rewrites_interpreter

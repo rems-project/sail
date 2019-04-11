@@ -17,9 +17,10 @@ function clause decode imm : bits(12) @ rs1 : regbits @ 0b000 @ rd : regbits @ 0
 
 function clause decode _ = None()
 
-function check_sat(imm:  bits(12), rs1: regbits, rd: regbits) -> bool = {
+$property
+function prop(imm:  bits(12), rs1: regbits, rd: regbits) -> bool = {
   match decode(imm @ rs1 @ 0b000 @ rd @ 0b0010011) {
-    Some(ITYPE(_)) => false,
-    _ => true
+    Some(ITYPE(_)) => true,
+    _ => false
   }
 }

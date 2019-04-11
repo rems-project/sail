@@ -128,7 +128,8 @@ scattered union ast
 
 union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
 
-function check_sat(r: regbits, v: xlenbits) -> bool = {
+$property
+function prop(r: regbits, v: xlenbits) -> bool = {
   X(r) = v;
-  not_bool(X(r) == v | r == 0)
+  X(r) == v | r == 0
 }

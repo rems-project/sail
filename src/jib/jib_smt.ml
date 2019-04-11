@@ -847,7 +847,7 @@ let smt_instr env =
      let checks =
        Stack.fold (fun checks -> function (Define_const (name, _, _) as def) -> (name, def) :: checks | _ -> assert false) [] overflow_checks
      in
-     List.map snd checks @ [Assert (Fn ("and", Var (zencode_name id) :: List.map (fun check -> Var (fst check)) checks))]
+     List.map snd checks @ [Assert (Fn ("and", Fn ("not", [Var (zencode_name id)]) :: List.map (fun check -> Var (fst check)) checks))]
 
   | I_aux (I_clear _, _) -> []
 
@@ -878,60 +878,6 @@ let rec find_function id = function
   | _ :: cdefs ->
      find_function id cdefs
   | [] -> None
-
-let smt_cdef stack env all_cdefs = function
-  | CDEF_spec (function_id, arg_ctyps, ret_ctyp)
-       when string_of_id function_id = "check_sat" ->
-     begin match find_function function_id all_cdefs with
-     | Some (None, args, instrs) ->
-        let open Jib_ssa in
-        let smt_args =
-          List.map2 (fun id ctyp -> declare_const (Name (id, 0)) ctyp) args arg_ctyps
-        in
-        push_smt_defs stack smt_args;
-
-        let instrs =
-          let open Jib_optimize in
-          instrs
-          (* |> optimize_unit *)
-          |> inline all_cdefs (fun _ -> true)
-          |> flatten_instrs
-          |> remove_pointless_goto
-        in
-
-        let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_instr instrs) in
-        prerr_endline str;
-
-        let start, cfg = ssa instrs in
-        let chan = open_out "smt_ssa.gv" in
-        make_dot chan cfg;
-        close_out chan;
-
-        let visit_order = topsort cfg in
-
-        List.iter (fun n ->
-            begin match get_vertex cfg n with
-            | None -> ()
-            | Some ((ssanodes, cfnode), preds, succs) ->
-               let muxers =
-                 ssanodes |> List.map (smt_ssanode env cfg preds) |> List.concat
-               in
-               let basic_block = smt_cfnode all_cdefs env cfnode in
-               push_smt_defs stack muxers;
-               push_smt_defs stack basic_block;
-            end
-          ) visit_order
-
-     | _ -> failwith "Bad function body"
-     end
-  | _ -> ()
-
-let rec smt_cdefs stack env ast =
-  function
-  | cdef :: cdefs ->
-     smt_cdef stack env ast cdef;
-     smt_cdefs stack env ast cdefs
-  | [] -> ()
 
 let optimize_smt stack =
   let stack' = Stack.create () in
@@ -998,7 +944,92 @@ let optimize_smt stack =
   Stack.iter constant_propagate stack';
   queue
 
-let generate_smt out_chan env ast =
+(** [smt_header stack cdefs] pushes all the type declarations required
+   for cdefs onto the SMT stack *)
+let smt_header stack cdefs =
+  push_smt_defs stack
+    [declare_datatypes (mk_enum "Unit" ["unit"]);
+     Declare_tuple 2;
+     Declare_tuple 3;
+     Declare_tuple 4;
+     Declare_tuple 5;
+     declare_datatypes (mk_record "Bits" [("len", Bitvec !lbits_index);
+                                          ("contents", Bitvec (lbits_size ()))])
+
+    ];
+  let smt_type_defs = List.concat (generate_ctype_defs cdefs) in
+  push_smt_defs stack smt_type_defs
+
+let smt_cdef props name_file env all_cdefs = function
+  | CDEF_spec (function_id, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
+     begin match find_function function_id all_cdefs with
+     | Some (None, args, instrs) ->
+        let prop_type, prop_args, pragma_l, vs = Bindings.find function_id props in
+
+        let stack = Stack.create () in
+
+        smt_header stack all_cdefs;
+        let smt_args =
+          List.map2 (fun id ctyp -> declare_const (Name (id, 0)) ctyp) args arg_ctyps
+        in
+        push_smt_defs stack smt_args;
+
+        let instrs =
+          let open Jib_optimize in
+          instrs
+          (* |> optimize_unit *)
+          |> inline all_cdefs (fun _ -> true)
+          |> flatten_instrs
+          |> remove_pointless_goto
+        in
+
+        (* let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_instr instrs) in
+        prerr_endline str; *)
+
+        let open Jib_ssa in
+        let start, cfg = ssa instrs in
+        (* let chan = open_out "smt_ssa.gv" in
+        make_dot chan cfg;
+        close_out chan; *)
+
+        let visit_order = topsort cfg in
+
+        List.iter (fun n ->
+            begin match get_vertex cfg n with
+            | None -> ()
+            | Some ((ssanodes, cfnode), preds, succs) ->
+               let muxers =
+                 ssanodes |> List.map (smt_ssanode env cfg preds) |> List.concat
+               in
+               let basic_block = smt_cfnode all_cdefs env cfnode in
+               push_smt_defs stack muxers;
+               push_smt_defs stack basic_block;
+            end
+          ) visit_order;
+
+        let out_chan = open_out (name_file (string_of_id function_id)) in
+        output_string out_chan "(set-logic QF_AUFBVDT)\n";
+
+        (* let stack' = Stack.create () in
+        Stack.iter (fun def -> Stack.push def stack') stack;
+        Stack.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") stack'; *)
+        let queue = optimize_smt stack in
+        Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
+
+        output_string out_chan "(check-sat)\n"
+
+     | _ -> failwith "Bad function body"
+     end
+  | _ -> ()
+
+let rec smt_cdefs props name_file env ast =
+  function
+  | cdef :: cdefs ->
+     smt_cdef props name_file env ast cdef;
+     smt_cdefs props name_file env ast cdefs
+  | [] -> ()
+
+let generate_smt props name_file env ast =
   try
     let open Jib_compile in
     let ctx =
@@ -1011,33 +1042,7 @@ let generate_smt out_chan env ast =
     let cdefs, ctx = compile_ast { ctx with specialize_calls = true; ignore_64 = true } ast in
     Profile.finish "Compiling to Jib IR" t;
 
-    let stack = Stack.create () in
-
-    (* output_string out_chan "(set-option :produce-models true)\n"; *)
-    output_string out_chan "(set-logic QF_AUFBVDT)\n";
-    push_smt_defs stack
-      [declare_datatypes (mk_enum "Unit" ["unit"]);
-       Declare_tuple 2;
-       Declare_tuple 3;
-       Declare_tuple 4;
-       Declare_tuple 5;
-       declare_datatypes (mk_record "Bits" [("len", Bitvec !lbits_index);
-                                            ("contents", Bitvec (lbits_size ()))])
-
-      ];
-
-    let smt_type_defs = List.concat (generate_ctype_defs cdefs) in
-    push_smt_defs stack smt_type_defs;
-
-    smt_cdefs stack env cdefs cdefs;
-
-    (* let stack' = Stack.create () in
-    Stack.iter (fun def -> Stack.push def stack') stack;
-    Stack.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") stack'; *)
-    let queue = optimize_smt stack in
-    Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
-
-    output_string out_chan "(check-sat)\n"
+    smt_cdefs props name_file env cdefs cdefs
   with
   | Type_check.Type_error (_, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err));

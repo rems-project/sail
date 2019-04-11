@@ -50,7 +50,10 @@ let underline_double_from color cnum_from eol =
   Util.(String.make cnum_from ' ' ^ clear (color ("^" ^ String.make (eol - cnum_from - 1) '-')))
 
 let underline_double_to color cnum_to =
-  Util.(clear (color (String.make (cnum_to - 1) '-' ^ "^")))
+  if cnum_to = 0 then
+    Util.(clear (color "^"))
+  else
+    Util.(clear (color (String.make (cnum_to - 1) '-' ^ "^")))
 
 let format_code_double' fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf =
   skip_lines in_chan (lnum_from - 1);
@@ -85,7 +88,7 @@ let format_code_double fname lnum_from cnum_from lnum_to cnum_to contents ppf =
     begin
       try format_code_double' fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf; close_in in_chan
       with
-      | _ -> close_in_noerr in_chan; ()
+      | exn -> close_in_noerr in_chan; ()
     end
   with
   | _ -> ()

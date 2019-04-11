@@ -2,8 +2,9 @@ default Order dec
 
 $include <flow.sail>
 
-function f((): unit) -> bool = true
+function f((): unit) -> bool = false
 
-function check_sat((): unit) -> bool = {
+$property
+function prop((): unit) -> bool = {
   f()
 }

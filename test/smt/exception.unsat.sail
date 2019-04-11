@@ -7,11 +7,12 @@ union exception = {
   E_unit : unit
 }
 
-function check_sat((): unit) -> bool = {
+$property
+function prop((): unit) -> bool = {
   try {
-    throw(E_bool(false))
+    throw(E_bool(true))
   } catch {
     E_bool(b) => b,
-    E_unit() => true
+    E_unit() => false
   }
 }

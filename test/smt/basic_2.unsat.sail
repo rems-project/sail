@@ -15,11 +15,12 @@ struct S = {
 register R1 : bits(16)
 register R2 : bits(8)
 
-function check_sat(x: bool) -> bool = {
+$property
+function prop(x: bool) -> bool = {
   if x then {
     R1 = 0x01FF
   } else {
     R1 = 0xFFFF
   };
-  R1 == sail_zero_extend(R2, 16)
+  R1 != sail_zero_extend(R2, 16)
 }

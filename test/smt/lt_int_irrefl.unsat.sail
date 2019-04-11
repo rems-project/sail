@@ -2,6 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-function check_sat(x: int) -> bool = {
-  x < x
+$property
+function prop(x: int) -> bool = {
+  not_bool(x < x)
 }

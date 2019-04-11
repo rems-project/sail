@@ -386,6 +386,14 @@ let rec take_drop f = function
      let (ys, zs) = take_drop f xs in
      (x :: ys, zs)
 
+let find_next f xs =
+  let rec find_next' f acc = function
+    | x :: xs when f x -> List.rev acc, Some (x, xs)
+    | x :: xs -> find_next' f (x :: acc) xs
+    | [] -> List.rev acc, None
+  in
+  find_next' f [] xs
+
 let is_none opt = not (is_some opt)
 
 let rec take n xs = match n, xs with

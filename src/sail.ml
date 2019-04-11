@@ -412,17 +412,18 @@ let target name out_name ast type_envs =
      if close then close_out output_chan else ()
 
   | Some "smt" ->
+     let open Ast_util in
+     let props = Property.find_properties ast in
+     Bindings.bindings props |> List.map fst |> IdSet.of_list |> Specialize.add_initial_calls;
      let ast_smt, type_envs = Specialize.(specialize typ_ord_specialization ast type_envs) in
      (* let ast_smt, type_envs = Specialize.(specialize' 1 int_specialization_with_externs ast_smt type_envs) in *)
-     let close, output_chan =
+     let name_file =
        match !opt_file_out with
-       | Some f -> Util.opt_colors := false; (true, open_out (f ^ ".smt2"))
-       | None -> false, stdout
+       | Some f -> fun str -> f ^ "_" ^ str ^ ".smt2"
+       | None -> fun str -> str ^ ".smt2"
      in
      Util.opt_warnings := true;
-     Jib_smt.generate_smt output_chan type_envs ast_smt;
-     flush output_chan;
-     if close then close_out output_chan else ()
+     Jib_smt.generate_smt props name_file type_envs ast_smt;
 
   | Some "lem" ->
      output "" (Lem_out (!opt_libs_lem)) [(out_name, type_envs, ast)]

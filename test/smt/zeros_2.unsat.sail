@@ -2,6 +2,7 @@ default Order dec
 
 $include <vector_dec.sail>
 
-function check_sat((): unit) -> bool = {
-  0b1 == sail_zeros(1)
+$property
+function prop((): unit) -> bool = {
+  0b1 != sail_zeros(1)
 }

@@ -15,7 +15,8 @@ struct S = {
 register R1 : bits(16)
 register R2 : bits(8)
 
-function check_sat(x: bool) -> bool = {
+$property
+function prop(x: bool) -> bool = {
   if x then {
     R1 = 0x00FF
   } else {

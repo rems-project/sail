@@ -19,10 +19,11 @@ def test_smt(name, solver, sail_opts):
         tests = {}
         for filename in filenames:
             basename = os.path.splitext(os.path.basename(filename))[0]
+            basename = basename.replace('.', '_')
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('sail {} -smt {} -o {}'.format(sail_opts, filename, basename))
-                step('{} {}.smt2 1> {}.out'.format(solver, basename, basename))
+                step('{} {}_prop.smt2 1> {}.out'.format(solver, basename, basename))
                 if re.match('.+\.sat\.sail$', filename):
                     step('grep -q ^sat$ {}.out'.format(basename))
                 else:

@@ -194,6 +194,8 @@ val drop : int -> 'a list -> 'a list
 
 val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
 
+val find_next : ('a -> bool) -> 'a list -> ('a list * ('a * 'a list) option)
+
 val list_init : int -> (int -> 'a) -> 'a list
 
 (** {2 Files} *)

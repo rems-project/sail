@@ -4,7 +4,8 @@ $include <prelude.sail>
 
 overload ~ = {not_bool}
 
-function check_sat(x: int, y: int, z: int) -> bool = {
+$property
+function prop(x: int, y: int, z: int) -> bool = {
   let lteq_refl    = x <= x;
   let lteq_trans   = (if x <= y & y <= z then x <= z else true);
   let lteq_antisym = (if x <= y & y <= x then x == y else true);
@@ -26,7 +27,7 @@ function check_sat(x: int, y: int, z: int) -> bool = {
   let lt_negate = (if x > 0 then negate(x) < x else true);
   let gt_negate = (if x < 0 then negate(x) > x else true);
 
-  ~(lteq_refl & lteq_trans & lteq_antisym & lt_irrefl & lt_trans & lt_implies_lteq
+  lteq_refl & lteq_trans & lteq_antisym & lt_irrefl & lt_trans & lt_implies_lteq
   & gteq_refl & gteq_trans & gteq_antisym & gt_irrefl & gt_trans & gt_implies_gteq
-  & lt_negate & gt_negate)
+  & lt_negate & gt_negate
 }
