@@ -63,7 +63,7 @@ let lbits_index = ref 8
 
 let lbits_size () = Util.power 2 !lbits_index
 
-let lint_size = ref 8
+let lint_size = ref 128
 
 let smt_unit = mk_enum "Unit" ["Unit"]
 let smt_lbits = mk_record "Bits" [("size", Bitvec !lbits_index); ("bits", Bitvec (lbits_size ()))]
@@ -109,6 +109,18 @@ let bvint sz x =
       let bin = String.concat "" (List.map string_of_bit bin) in
       let padding = String.make (sz - String.length bin) '0' in
       Bin (padding ^ bin)
+  ) else if Big_int.greater x (Big_int.of_int max_int) then (
+    let open Sail_lib in
+    let x = ref x in
+    let bin = ref [] in
+    while (not (Big_int.equal !x Big_int.zero)) do
+      let (q, m) = Big_int.quomod !x (Big_int.of_int 2) in
+      bin := (if Big_int.equal m Big_int.zero then B0 else B1) :: !bin;
+      x := q
+    done;
+    let bin = String.concat "" (List.map string_of_bit !bin) in
+    let padding = String.make (sz - String.length bin) '0' in
+    Bin (padding ^ bin)
   ) else
     failwith "Invalid bvint"
 
@@ -336,6 +348,9 @@ let builtin_eq_int env v1 v2 =
   | CT_fint m, CT_constant c ->
      Fn ("=", [smt_cval env v1; bvint m c])
 
+  | CT_lint, CT_constant c ->
+     Fn ("=", [smt_cval env v1; bvint !lint_size c])
+    
   | CT_lint, CT_lint ->
      Fn ("=", [smt_cval env v1; smt_cval env v2])
 
@@ -345,7 +360,7 @@ let builtin_add_int env v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
   | CT_fint n, CT_constant c, CT_fint m when n = m ->
      Fn ("bvadd", [smt_cval env v1; bvint n c])
-
+    
   | _ -> failwith "Cannot compile add_int"
 
 let builtin_sub_int env v1 v2 ret_ctyp =
@@ -466,6 +481,10 @@ let smt_primop env name args ret_ctyp =
      let smt1 = smt_cval env v1 in
      let smt2 = smt_cval env v2 in
      Fn ("=", [smt1; smt2])
+  | "eq_bool", [v1; v2], _ ->
+     let smt1 = smt_cval env v1 in
+     let smt2 = smt_cval env v2 in
+     Fn ("=", [smt1; smt2])
   | "eq_anything", [v1; v2], _ ->
      let smt1 = smt_cval env v1 in
      let smt2 = smt_cval env v2 in
@@ -484,7 +503,7 @@ let smt_primop env name args ret_ctyp =
   | "zero_extend", [v1; v2], _ -> builtin_zero_extend env v1 v2 ret_ctyp
   | "sign_extend", [v1; v2], _ -> builtin_sign_extend env v1 v2 ret_ctyp
   | "sail_truncate", [v1; v2], _ -> builtin_sail_truncate env v1 v2 ret_ctyp
-  | "sail_truncateLSB", [v1; v2], _ -> builtin_sail_truncate env v1 v2 ret_ctyp
+  | "sail_truncateLSB", [v1; v2], _ -> builtin_sail_truncateLSB env v1 v2 ret_ctyp
   | "shiftl", [v1; v2], _ -> builtin_shift "bvshl" env v1 v2 ret_ctyp
   | "shiftr", [v1; v2], _ -> builtin_shift "bvlshr" env v1 v2 ret_ctyp
   | "or_bits", [v1; v2], _ -> builtin_or_bits env v1 v2 ret_ctyp
@@ -1012,11 +1031,11 @@ let generate_smt out_chan env ast =
 
     smt_cdefs stack env cdefs cdefs;
 
-    let stack' = Stack.create () in
+    (* let stack' = Stack.create () in
     Stack.iter (fun def -> Stack.push def stack') stack;
-    Stack.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") stack';
-    (* let queue = optimize_smt stack in
-    Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue; *)
+    Stack.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") stack'; *)
+    let queue = optimize_smt stack in
+    Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
 
     output_string out_chan "(check-sat)\n"
   with
