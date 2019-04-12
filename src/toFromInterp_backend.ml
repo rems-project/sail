@@ -114,6 +114,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
      | Id_aux ((Id "barrier_kind"),_) -> empty
      | Id_aux ((Id "trans_kind"),_) -> empty
      | Id_aux ((Id "instruction_kind"),_) -> empty
+     | Id_aux ((Id "cache_op_kind"),_) -> empty
      | Id_aux ((Id "regfp"),_) -> empty
      | Id_aux ((Id "regfps"),_) -> empty
      | Id_aux ((Id "niafp"),_) -> empty
@@ -156,6 +157,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
   | TD_enum (Id_aux (Id "write_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "barrier_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "trans_kind", _), _, _) -> empty
+  | TD_enum (Id_aux (Id "cache_op_kind", _), _, _) -> empty
   | TD_enum (id, ids, _) ->
      let fromInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "FromInterpValue"] in
      let fromFallback = separate space [pipe; underscore; arrow; string "failwith";
@@ -241,6 +243,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
      | Id_aux ((Id "barrier_kind"),_) -> empty
      | Id_aux ((Id "trans_kind"),_) -> empty
      | Id_aux ((Id "instruction_kind"),_) -> empty
+     | Id_aux ((Id "cache_op_kind"),_) -> empty
      | Id_aux ((Id "regfp"),_) -> empty
      | Id_aux ((Id "regfps"),_) -> empty
      | Id_aux ((Id "niafp"),_) -> empty
@@ -278,6 +281,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
   | TD_enum (Id_aux (Id "write_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "barrier_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "trans_kind", _), _, _) -> empty
+  | TD_enum (Id_aux (Id "cache_op_kind", _), _, _) -> empty
   | TD_enum (id, ids, _) ->
      let toInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"] in
      let toInterpValue =
