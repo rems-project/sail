@@ -89,6 +89,7 @@ type smt_exp =
   | Var of string
   | Fn of string * smt_exp list
   | Ite of smt_exp * smt_exp * smt_exp
+  | SignExtend of int * smt_exp
   | Extract of int * int * smt_exp
   | Tester of string * smt_exp
 
@@ -143,6 +144,9 @@ let rec simp_smt_exp vars = function
   | Tester (str, exp) ->
      let exp = simp_smt_exp vars exp in
      Tester (str, exp)
+  | SignExtend (i, exp) ->
+     let exp = simp_smt_exp vars exp in
+     SignExtend (i, exp)
 
 type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
@@ -174,7 +178,9 @@ let rec pp_smt_exp =
      parens (string (Printf.sprintf "(_ extract %d %d)" i j) ^^ space ^^ pp_smt_exp exp)
   | Tester (kind, exp) ->
      parens (string (Printf.sprintf "(_ is %s)" kind) ^^ space ^^ pp_smt_exp exp)
-
+  | SignExtend (i, exp) ->
+     parens (string (Printf.sprintf "(_ sign_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
+    
 let rec pp_smt_typ =
   let open PPrint in
   function

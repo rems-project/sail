@@ -2,6 +2,8 @@ default Order dec
 
 $include <prelude.sail>
 
+$option -smt_ignore_overflow
+
 type xlen       : Int  = 32
 type xlen_bytes : Int  = 4
 type xlenbits   : Type = bits(xlen)
