@@ -69,10 +69,11 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
   let fromValueKid (Kid_aux ((Var name), _)) =
     string ("typq_" ^ name)
   in 
-  let fromValueNexp (Nexp_aux (nexp_aux, _)) = match nexp_aux with
+  let fromValueNexp ((Nexp_aux (nexp_aux, annot)) as nexp) = match nexp_aux with
     | Nexp_constant num -> parens (separate space [string "Big_int.of_string"; dquotes (string (Nat_big_num.to_string num))])
     | Nexp_var var -> fromValueKid var
-    | _ -> string "NEXP"
+    | Nexp_id id -> string (string_of_id id ^ "FromInterpValue")
+    | _ -> string ("NEXP(" ^ string_of_nexp nexp ^ ")")
   in
   let rec fromValueTypArg (A_aux (a_aux, _)) = match a_aux with
     | A_typ typ -> fromValueTyp typ ""
@@ -196,10 +197,11 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
   let toValueKid (Kid_aux ((Var name), _)) =
     string ("typq_" ^ name)
   in
-  let toValueNexp (Nexp_aux (nexp_aux, _)) = match nexp_aux with
+  let toValueNexp ((Nexp_aux (nexp_aux, _)) as nexp) = match nexp_aux with
     | Nexp_constant num -> parens (separate space [string "Big_int.of_string"; dquotes (string (Nat_big_num.to_string num))])
     | Nexp_var var -> toValueKid var
-    | _ -> string "NEXP"
+    | Nexp_id id -> string (string_of_id id ^ "ToInterpValue")
+    | _ -> string ("NEXP(" ^ string_of_nexp nexp ^ ")")
   in
   let rec toValueTypArg (A_aux (a_aux, _)) = match a_aux with
     | A_typ typ -> toValueTyp typ ""
