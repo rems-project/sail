@@ -148,11 +148,24 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
   | TD_abbrev (Id_aux (Id "regfps", _), _, _) -> empty
   | TD_abbrev (Id_aux (Id "niafps", _), _, _) -> empty
   | TD_abbrev (id, typq, typ_arg) ->
-     let fromInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "FromInterpValue"] in
-     let fromInterpValue =
-       (separate space [string "let"; fromInterpValueName; separate space (fromValueTypqs typq); equals; fromValueTypArg typ_arg])
-     in
-     fromInterpValue ^^ (twice hardline)
+     begin
+       let fromInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "FromInterpValue"] in
+       (* HACK: print a type annotation for abbrevs of unquantified types, to help cases ocaml can't type-infer on its own *)
+       let fromInterpValspec =
+         (* HACK because of lem renaming *)
+         if string_of_id id = "opcode" then empty else
+         match typ_arg with
+         | A_aux (A_typ _, _) -> begin match typq with
+                                 | TypQ_aux (TypQ_no_forall, _) -> separate space [colon; string "value"; arrow; string (maybe_zencode (string_of_id id))]
+                                 | _ -> empty
+                                 end
+         | _ -> empty
+       in
+       let fromInterpValue =
+         (separate space [string "let"; fromInterpValueName; separate space (fromValueTypqs typq); fromInterpValspec; equals; fromValueTypArg typ_arg])
+       in
+       fromInterpValue ^^ (twice hardline)
+     end
   | TD_enum (Id_aux (Id "read_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "write_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "barrier_kind", _), _, _) -> empty
@@ -272,11 +285,24 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
   | TD_abbrev (Id_aux (Id "regfps", _), _, _) -> empty
   | TD_abbrev (Id_aux (Id "niafps", _), _, _) -> empty
   | TD_abbrev (id, typq, typ_arg) ->
-     let toInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"] in
-     let toInterpValue =
-       (separate space [string "let"; toInterpValueName; separate space (toValueTypqs typq); equals; toValueTypArg typ_arg])
-     in
-     toInterpValue ^^ (twice hardline)
+     begin
+       let toInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"] in
+       (* HACK: print a type annotation for abbrevs of unquantified types, to help cases ocaml can't type-infer on its own *) 
+       let toInterpValspec =
+         (* HACK because of lem renaming *)
+         if string_of_id id = "opcode" then empty else
+         match typ_arg with
+         | A_aux (A_typ _, _) -> begin match typq with
+                                 | TypQ_aux (TypQ_no_forall, _) -> separate space [colon; string (maybe_zencode (string_of_id id)); arrow; string "value"]
+                                 | _ -> empty
+                                 end
+         | _ -> empty
+       in
+       let toInterpValue =
+         (separate space [string "let"; toInterpValueName; separate space (toValueTypqs typq); toInterpValspec; equals; toValueTypArg typ_arg])
+       in
+       toInterpValue ^^ (twice hardline)
+     end
   | TD_enum (Id_aux (Id "read_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "write_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "barrier_kind", _), _, _) -> empty
