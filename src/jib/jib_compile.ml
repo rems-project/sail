@@ -620,11 +620,13 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      []
 
   | AE_if (aval, then_aexp, else_aexp, if_typ) ->
+     (* FIXME:
      if is_dead_aexp then_aexp then
        compile_aexp ctx else_aexp
      else if is_dead_aexp else_aexp then
        compile_aexp ctx then_aexp
      else
+      *)
        let if_ctyp = ctyp_of_typ ctx if_typ in
        let compile_branch aexp =
          let setup, call, cleanup = compile_aexp ctx aexp in

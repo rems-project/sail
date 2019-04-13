@@ -4922,7 +4922,7 @@ let rewrites_target tgt =
   | "lem" -> rewrites_lem
   | "ocaml" -> rewrites_ocaml
   | "c" -> rewrites_c
-  | "ir" -> rewrites_c
+  | "ir" -> rewrites_c @ [("properties", [])]
   | "smt" -> rewrites_c @ [("properties", [])]
   | "sail" -> []
   | "latex" -> []

@@ -132,7 +132,7 @@ let options = Arg.align ([
     " ignore integer overflow in generated SMT");
   ( "-smt_int_size",
     Arg.String (fun n -> Jib_smt.lint_size := int_of_string n),
-    " set a bound on the maximum integer bitwidth");
+    " set a bound on the maximum integer bitwidth for generated SMT");
   ( "-c",
     Arg.Tuple [set_target "c"; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
@@ -404,7 +404,7 @@ let target name out_name ast type_envs =
 
   | Some "ir" ->
      let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast type_envs) in
-     let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in
+     (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in *)
      let close, output_chan =
        match !opt_file_out with
        | Some f -> Util.opt_colors := false; (true, open_out (f ^ ".ir.sail"))
@@ -412,6 +412,7 @@ let target name out_name ast type_envs =
      in
      Util.opt_warnings := true;
      let cdefs, _ = C_backend.jib_of_ast type_envs ast_c in
+     (* let cdefs = List.map Jib_optimize.flatten_cdef cdefs in *)
      let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_cdef cdefs) in
      output_string output_chan (str ^ "\n");
      flush output_chan;
