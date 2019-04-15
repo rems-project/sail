@@ -150,11 +150,11 @@ let smt_value vl ctyp =
   | VL_bool b, _ -> Bool_lit b
   | VL_int n, CT_constant m -> bvint (required_width n) n
   | VL_int n, CT_fint sz -> bvint sz n
+  | VL_int n, CT_lint -> bvint !lint_size n
   | VL_bit Sail2_values.B0, CT_bit -> Bin "0"
   | VL_bit Sail2_values.B1, CT_bit -> Bin "1"
   | VL_unit, _ -> Var "unit"
-
-  | vl, _ -> failwith ("Bad literal " ^ string_of_value vl)
+  | vl, _ -> failwith ("Cannot translate literal to SMT " ^ string_of_value vl)
 
 let zencode_ctor ctor_id unifiers =
   match unifiers with
@@ -426,15 +426,18 @@ let builtin_shift shiftop env vbits vshift ret_ctyp =
 let builtin_not_bits env v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
   | CT_lbits _, CT_fbits (n, _) ->
-     Fn ("bvnot", [Extract (n - 1, 0, Fn ("contents", [smt_cval env v]))])
+     bvnot (Extract (n - 1, 0, Fn ("contents", [smt_cval env v])))
 
   | CT_lbits _, CT_lbits _ ->
      let bv = smt_cval env v in
      let len = Fn ("len", [bv]) in
      Fn ("Bits", [len; Fn ("bvand", [bvmask len; bvnot (Fn ("contents", [bv]))])])
-    
+
+  | CT_fbits (n, _), CT_fbits (m, _) when n = m ->
+     bvnot (smt_cval env v)
+
   | _, _ -> builtin_type_error "not_bits" [v] (Some ret_ctyp)
-       
+
 let builtin_or_bits env v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2 with
   | CT_fbits (n, _), CT_fbits (m, _) ->
@@ -464,7 +467,7 @@ let builtin_and_bits env v1 v2 ret_ctyp =
      Fn ("Bits", [Fn ("len", [smt1]); bvand (Fn ("contents", [smt1])) (Fn ("contents", [smt2]))])
 
   | _ -> failwith "Cannot compile or_bits"
-       
+
 let builtin_append env v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
   | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
@@ -1224,11 +1227,11 @@ let smt_cdef props name_file env all_cdefs = function
         let out_chan = open_out (name_file (string_of_id function_id)) in
         output_string out_chan "(set-logic QF_AUFBVDT)\n";
 
-        let stack' = Stack.create () in
+        (* let stack' = Stack.create () in
         Stack.iter (fun def -> Stack.push def stack') stack;
-        Stack.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") stack';
-        (* let queue = optimize_smt stack in
-        Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue; *)
+        Stack.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") stack'; *)
+        let queue = optimize_smt stack in
+        Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
 
         output_string out_chan "(check-sat)\n"
 

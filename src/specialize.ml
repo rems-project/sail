@@ -79,7 +79,7 @@ let int_specialization = {
 
 let int_specialization_with_externs = {
     is_polymorphic = is_int_kopt;
-    instantiation_filter = (fun _ arg -> match arg with A_aux (A_nexp _, _) -> true | _ -> false);
+    instantiation_filter = (fun _ arg -> match arg with A_aux (A_nexp (Nexp_aux (Nexp_constant _, _)), _) -> true | _ -> false);
     extern_filter = (fun _ -> false)
   }
 
@@ -391,7 +391,7 @@ let specialize_id_valspec spec instantiations id ast =
        let kopts, constraints = quant_split typq in
        let constraints = instantiate_constraints safe_instantiation constraints in
        let constraints = instantiate_constraints reverse constraints in
-       let kopts = List.filter (fun kopt -> not (spec.is_polymorphic kopt)) kopts in
+       let kopts = List.filter (fun kopt -> not (spec.is_polymorphic kopt && KBindings.mem (kopt_kid kopt) safe_instantiation)) kopts in
        let typq =
          if List.length (typ_frees @ int_frees) = 0 && List.length kopts = 0 then
            mk_typquant []

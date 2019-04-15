@@ -423,7 +423,7 @@ let target name out_name ast type_envs =
      let props = Property.find_properties ast in
      Bindings.bindings props |> List.map fst |> IdSet.of_list |> Specialize.add_initial_calls;
      let ast_smt, type_envs = Specialize.(specialize typ_ord_specialization ast type_envs) in
-     (* let ast_smt, type_envs = Specialize.(specialize' 1 int_specialization_with_externs ast_smt type_envs) in *)
+     let ast_smt, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_smt type_envs) in
      let name_file =
        match !opt_file_out with
        | Some f -> fun str -> f ^ "_" ^ str ^ ".smt2"

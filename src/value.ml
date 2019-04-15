@@ -100,7 +100,7 @@ let coerce_bit = function
 let is_bit = function
   | V_bit _ -> true
   | _ -> false
-       
+
 let rec string_of_value = function
   | V_vector vs when List.for_all is_bit vs -> Sail_lib.string_of_bits (List.map coerce_bit vs)
   | V_vector vs -> "[" ^ Util.string_of_list ", " string_of_value vs ^ "]"
