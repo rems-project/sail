@@ -518,7 +518,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      raise (Reporting.err_unreachable l __POS__
        ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF"))
 
-  | E_loop (loop_typ, cond, exp) ->
+  | E_loop (loop_typ, _, cond, exp) ->
      let acond = anf cond in
      let aexp = anf exp in
      mk_aexp (AE_loop (loop_typ, acond, aexp))

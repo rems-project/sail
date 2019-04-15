@@ -1264,6 +1264,7 @@ and compile_def' n total ctx = function
 
   (* Termination measures only needed for Coq, and other theorem prover output *)
   | DEF_measure _ -> [], ctx
+  | DEF_loop_measures _ -> [], ctx
 
   | DEF_internal_mutrec fundefs ->
      let defs = List.map (fun fdef -> DEF_fundef fdef) fundefs in

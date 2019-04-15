@@ -494,6 +494,13 @@ loop :: loop ::= {{ phantom }}
   | while ::   :: while 
   | until ::  :: until 
 
+internal_loop_measure :: 'Measure_' ::=
+  {{ com internal syntax for an optional termination measure for a loop }}
+  {{ auxparam 'a }}
+  {{ aux _ l }}
+  |                               :: :: none
+  | 'termination_measure' { exp } :: :: some
+
 exp :: 'E_' ::=
   {{ com expression }}
   {{ aux _ annot }} {{ auxparam 'a }}  
@@ -529,10 +536,10 @@ exp :: 'E_' ::=
     {{ com conditional }}
 
   | if exp1 then exp2                                   :: S :: ifnoelse {{ ichlo [[ if exp1 then exp2 else ( ) ]] }}
-  | loop exp1 exp2 :: :: loop
-  | while exp1 do exp2  :: S :: while        {{ ichlo [[ loop while exp1 exp2 ]] }}
-  | repeat exp1 until exp2 :: S :: until      {{ ichlo [[ loop until exp2 exp1 ]] }}
-  | foreach ( id from exp1 to exp2 by exp3 in order ) exp4  ::   :: for {{ com loop }}
+  | loop internal_loop_measure exp1 exp2                    :: :: loop
+  | while internal_loop_measure exp1 do exp2                :: S :: while {{ ichlo [[ loop internal_loop_measure while exp1 exp2 ]] }}
+  | repeat internal_loop_measure exp1 until exp2            :: S :: until {{ ichlo [[ loop internal_loop_measure until exp2 exp1 ]] }}
+  | foreach ( id from exp1 to exp2 by exp3 in order ) exp4  ::   :: for   {{ com loop }}
 
 % vectors
   | [ exp1 , ... , expn ]                             :: :: vector {{ com vector (indexed from 0) }}
@@ -894,6 +901,10 @@ prec :: '' ::=
    | infixl :: :: InfixL
    | infixr :: :: InfixR
 
+loop_measure :: '' ::=
+   {{ auxparam 'a }}
+   | loop exp :: :: Loop
+
 def :: 'DEF_' ::=
   {{ com top-level definition }}
   {{ auxparam 'a }}
@@ -916,6 +927,8 @@ def :: 'DEF_' ::=
   | scattered_def                                      :: :: scattered
     {{ com scattered function and type definition }}
   | 'termination_measure' id pat = exp                 :: :: measure
+    {{ com separate termination measure declaration }}
+  | 'termination_measure' id loop_measure1 , .. , loop_measuren :: :: loop_measures
     {{ com separate termination measure declaration }}
   | dec_spec                                           :: :: reg_dec
     {{ com register declaration }}

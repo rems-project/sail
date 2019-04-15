@@ -333,6 +333,9 @@ let load_files ?check:(check=false) type_envs files =
                      -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
   let ast = Process_file.preprocess_ast options ast in
   let ast = Initial_check.process_ast ~generate:(not check) ast in
+  (* The separate loop measures declarations would be awkward to type check, so
+     move them into the definitions beforehand. *)
+  let ast = Rewrites.move_loop_measures ast in
   Profile.finish "parsing" t;
 
   let t = Profile.start () in

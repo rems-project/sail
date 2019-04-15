@@ -715,11 +715,12 @@ let doc_exp_lem, doc_let_lem =
           | _ -> raise (Reporting.err_unreachable l __POS__
             "Unexpected number of arguments for loop combinator")
           end
-       | Id_aux (Id (("while#" | "until#") as combinator), _) ->
-          let combinator = String.sub combinator 0 (String.length combinator - 1) in
+       | Id_aux (Id (("while#" | "until#" | "while#t" | "until#t") as combinator), _) ->
+          let combinator = String.sub combinator 0 (String.index combinator '#') in
           begin
             match args with
-            | [cond; varstuple; body] ->
+            | [cond; varstuple; body]
+            | [cond; varstuple; body; _] -> (* Ignore termination measures - not used in Lem *)
                let return (E_aux (e, a)) = E_aux (E_internal_return (E_aux (e, a)), a) in
                let csuffix, cond, body =
                  match effectful (effect_of cond), effectful (effect_of body) with
@@ -1485,6 +1486,7 @@ let rec doc_def_lem type_env def =
   | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
   | DEF_pragma _ -> empty
   | DEF_measure _ -> empty (* we might use these in future *)
+  | DEF_loop_measures _ -> empty
 
 let find_exc_typ defs =
   let is_exc_typ_def = function

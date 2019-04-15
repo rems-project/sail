@@ -2369,10 +2369,15 @@ let rewrite_defs_letbind_effects env =
        n_exp_name by (fun by ->
        let body = n_exp_term (effectful body) body in
        k (rewrap (E_for (id,start,stop,by,dir,body))))))
-    | E_loop (loop, cond, body) ->
+    | E_loop (loop, measure, cond, body) ->
+       let measure = match measure with
+         | Measure_aux (Measure_none,_) -> measure
+         | Measure_aux (Measure_some exp,l) ->
+            Measure_aux (Measure_some (n_exp_term false exp),l)
+       in
        let cond = n_exp_term (effectful cond) cond in
        let body = n_exp_term (effectful body) body in
-       k (rewrap (E_loop (loop,cond,body)))
+       k (rewrap (E_loop (loop,measure,cond,body)))
     | E_vector exps ->
        n_exp_nameL exps (fun exps ->
        k (rewrap (E_vector exps)))
@@ -3448,7 +3453,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
              el env (typ_of exp4))))
            el env (typ_of exp4)) in
        Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
-     | E_loop(loop,cond,body) ->
+     | E_loop(loop,Measure_aux (measure,_),cond,body) ->
         (* Find variables that might be updated in the loop body and are used
            either after or within the loop. *)
         let vars, varpats =
@@ -3458,11 +3463,14 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
         in
         let body = rewrite_var_updates (add_vars overwrite body vars) in
         let (E_aux (_,(_,bannot))) = body in
-        let fname = match loop with
-          | While -> "while#"
-          | Until -> "until#" in
+        let fname, measure = match loop, measure with
+          | While, Measure_none -> "while#", []
+          | Until, Measure_none -> "until#", []
+          | While, Measure_some exp -> "while#t", [exp]
+          | Until, Measure_some exp -> "until#t", [exp]
+        in
         let funcl = Id_aux (Id fname,gen_loc el) in
-        let v = E_aux (E_app (funcl,[cond;tuple_exp vars;body]), (gen_loc el, bannot)) in
+        let v = E_aux (E_app (funcl,[cond;tuple_exp vars;body]@measure), (gen_loc el, bannot)) in
         Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
     | E_if (c,e1,e2) ->
        let vars, varpats =
@@ -3763,8 +3771,10 @@ let rewrite_defs_remove_e_assign env (Defs defs) =
   let (Defs loop_specs) = fst (Type_error.check Env.empty (Defs (List.map gen_vs
     [("foreach#", "forall ('vars : Type). (int, int, int, bool, 'vars, 'vars) -> 'vars");
      ("while#", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars");
-     ("until#", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars")]))) in
-  let rewrite_exp _ e =
+     ("until#", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars");
+     ("while#t", "forall ('vars : Type). (bool, 'vars, 'vars, int) -> 'vars");
+     ("until#t", "forall ('vars : Type). (bool, 'vars, 'vars, int) -> 'vars")]))) in
+ let rewrite_exp _ e =
     replace_memwrite_e_assign (remove_reference_types (rewrite_var_updates e)) in
   rewrite_defs_base
     { rewrite_exp = rewrite_exp
@@ -4438,6 +4448,7 @@ let minimise_recursive_functions env (Defs defs) =
     | d -> d
   in Defs (List.map rewrite_def defs)
 
+(* Move recursive function termination measures into the function definitions. *)
 let move_termination_measures env (Defs defs) =
   let scan_for id defs =
     let rec aux = function
@@ -4630,6 +4641,59 @@ let remove_mapping_valspecs env (Defs defs) =
     | _ -> true
   in
   Defs (List.filter allowed_def defs)
+
+
+(* Move loop termination measures into loop AST nodes.  This is used before
+   type checking so that we avoid the complexity of type checking separate
+   measures. *)
+let rec move_loop_measures (Defs defs) =
+  let loop_measures =
+    List.fold_left
+      (fun m d ->
+        match d with
+        | DEF_loop_measures (id, measures) ->
+           (* Allow multiple measure definitions, concatenating them *)
+           Bindings.add id
+             (match Bindings.find_opt id m with
+              | None -> measures
+              | Some m -> m @ measures)
+             m
+        | _ -> m) Bindings.empty defs
+  in
+  let do_exp exp_rec measures (E_aux (e,ann) as exp) =
+    match e, measures with
+    | E_loop (loop, _, e1, e2), (Loop (loop',exp))::t when loop = loop' ->
+       let t,e1 = exp_rec t e1 in
+       let t,e2 = exp_rec t e2 in
+       t,E_aux (E_loop (loop, Measure_aux (Measure_some exp, exp_loc exp), e1, e2),ann)
+    | _ -> exp_rec measures exp
+  in
+  let do_funcl (m,acc) (FCL_aux (FCL_Funcl (id, pexp),ann) as fcl) =
+    match Bindings.find_opt id m with
+    | Some measures ->
+       let measures,pexp = foldin_pexp do_exp measures pexp in
+       Bindings.add id measures m, (FCL_aux (FCL_Funcl (id, pexp),ann))::acc
+    | None -> m, fcl::acc
+  in
+  let unused,rev_defs =
+    List.fold_left
+      (fun (m,acc) d ->
+        match d with
+        | DEF_loop_measures _ -> m, acc
+        | DEF_fundef (FD_aux (FD_function (r,t,e,fcls),ann)) ->
+            let m,rfcls = List.fold_left do_funcl (m,[]) fcls in
+            m, (DEF_fundef (FD_aux (FD_function (r,t,e,List.rev rfcls),ann)))::acc
+        | _ -> m, d::acc)
+      (loop_measures,[]) defs
+  in let () = Bindings.iter
+                (fun id -> function
+                  | [] -> ()
+                  | _::_ ->
+                     Reporting.print_err (id_loc id) "Warning"
+                       ("unused loop measure for function " ^ string_of_id id))
+                unused
+  in Defs (List.rev rev_defs)
+
 
 
 let opt_mono_rewrites = ref false

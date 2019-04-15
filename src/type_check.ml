@@ -3696,10 +3696,15 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      in
      try_overload ([], Env.get_overloads f env)
   | E_app (f, xs) -> infer_funapp l env f xs None
-  | E_loop (loop_type, cond, body) ->
+  | E_loop (loop_type, measure, cond, body) ->
      let checked_cond = crule check_exp env cond bool_typ in
+     let checked_measure = match measure with
+       | Measure_aux (Measure_none,l) -> Measure_aux (Measure_none,l)
+       | Measure_aux (Measure_some exp,l) ->
+          Measure_aux (Measure_some (crule check_exp env exp int_typ),l)
+     in
      let checked_body = crule check_exp (add_opt_constraint (assert_constraint env true checked_cond) env) body unit_typ in
-     annot_exp (E_loop (loop_type, checked_cond, checked_body)) unit_typ
+     annot_exp (E_loop (loop_type, checked_measure, checked_cond, checked_body)) unit_typ
   | E_for (v, f, t, step, ord, body) ->
      begin
        let f, t, is_dec = match ord with
@@ -4372,10 +4377,18 @@ and propagate_exp_effect_aux = function
      let p_body = propagate_exp_effect body in
      E_for (v, p_f, p_t, p_step, ord, p_body),
      collect_effects [p_f; p_t; p_step; p_body]
-  | E_loop (loop_type, cond, body) ->
+  | E_loop (loop_type, measure, cond, body) ->
      let p_cond = propagate_exp_effect cond in
+     let () = match measure with
+       | Measure_aux (Measure_some exp,l) ->
+          let eff = effect_of (propagate_exp_effect exp) in
+          if (BESet.is_empty (effect_set eff) || !opt_no_effects)
+          then ()
+          else typ_error (env_of exp) l ("Loop termination measure with effects " ^ string_of_effect eff)
+       | _ -> ()
+     in
      let p_body = propagate_exp_effect body in
-     E_loop (loop_type, p_cond, p_body),
+     E_loop (loop_type, measure, p_cond, p_body),
      union_effects (effect_of p_cond) (effect_of p_body)
   | E_let (letbind, exp) ->
      let p_lb, eff = propagate_letbind_effect letbind in
@@ -5016,6 +5029,9 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered sdef -> check_scattered env sdef
   | DEF_measure (id, pat, exp) -> [check_termination_measure_decl env (id, pat, exp)], env
+  | DEF_loop_measures (id, _) ->
+     Reporting.unreachable (id_loc id) __POS__
+       "Loop termination measures should have been rewritten before type checking"
 
 and check_defs : 'a. int -> int -> Env.t -> 'a def list -> tannot defs * Env.t =
   fun n total env defs ->

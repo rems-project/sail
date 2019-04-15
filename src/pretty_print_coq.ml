@@ -1504,43 +1504,58 @@ let doc_exp, doc_let =
           | _ -> raise (Reporting.err_unreachable l __POS__
              "Unexpected number of arguments for loop combinator")
           end
-       | Id_aux (Id (("while#" | "until#") as combinator), _) ->
-          let combinator = String.sub combinator 0 (String.length combinator - 1) in
+       | Id_aux (Id (("while#" | "until#" | "while#t" | "until#t") as combinator), _) ->
+          let combinator = String.sub combinator 0 (String.index combinator '#') in
           begin
-            match args with
-            | [cond; varstuple; body] ->
-               let return (E_aux (e, a)) = E_aux (E_internal_return (E_aux (e, a)), a) in
-               let csuffix, cond, body =
-                 match effectful (effect_of cond), effectful (effect_of body) with
-                   | false, false -> "", cond, body
-                   | false, true  -> "M", return cond, body
-                   | true,  false -> "M", cond, return body
-                   | true,  true  -> "M", cond, body
-               in
-               let used_vars_body = find_e_ids body in
-               let lambda =
-                 (* Work around indentation issues in Lem when translating
-                    tuple or literal unit patterns to Isabelle *)
-                 match fst (uncast_exp varstuple) with
-                   | E_aux (E_tuple _, _)
-                     when not (IdSet.mem (mk_id "varstup") used_vars_body)->
-                      separate space [string "fun varstup"; bigarrow] ^^ break 1 ^^
-                      separate space [string "let"; squote ^^ expY varstuple; string ":= varstup in"]
-                   | E_aux (E_lit (L_aux (L_unit, _)), _)
-                     when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
-                      separate space [string "fun unit_var"; bigarrow]
-                   | _ ->
-                      separate space [string "fun"; expY varstuple; bigarrow]
-               in
-               parens (
-                   (prefix 2 1)
-                     ((separate space) [string (combinator ^ csuffix); expY varstuple])
-                     ((prefix 0 1)
-                       (parens (prefix 2 1 (group lambda) (expN cond)))
-                       (parens (prefix 2 1 (group lambda) (expN body))))
-                 )
-            | _ -> raise (Reporting.err_unreachable l __POS__
-               "Unexpected number of arguments for loop combinator")
+            let cond, varstuple, body, measure =
+              match args with
+              | [cond; varstuple; body] -> cond, varstuple, body, None
+              | [cond; varstuple; body; measure] -> cond, varstuple, body, Some measure
+              | _ -> raise (Reporting.err_unreachable l __POS__
+                              "Unexpected number of arguments for loop combinator")
+            in
+            let return (E_aux (e, (l,a))) =
+              let a' = mk_tannot (env_of_annot (l,a)) bool_typ no_effect in
+              E_aux (E_internal_return (E_aux (e, (l,a))), (l,a'))
+            in
+            let simple_bool (E_aux (_, (l,a)) as exp) =
+              let a' = mk_tannot (env_of_annot (l,a)) bool_typ no_effect in
+              E_aux (E_cast (bool_typ, exp), (l,a'))
+            in
+            let csuffix, cond, body =
+              match effectful (effect_of cond), effectful (effect_of body) with
+              | false, false -> "", cond, body
+              | false, true  -> "M", return cond, body
+              | true,  false -> "M", simple_bool cond, return body
+              | true,  true  -> "M", simple_bool cond, body
+            in
+            let msuffix, measure_pp =
+              match measure with
+              | None -> "", []
+              | Some exp -> "T", [expY exp]
+            in
+            let used_vars_body = find_e_ids body in
+            let lambda =
+              (* Work around indentation issues in Lem when translating
+                 tuple or literal unit patterns to Isabelle *)
+              match fst (uncast_exp varstuple) with
+              | E_aux (E_tuple _, _)
+                   when not (IdSet.mem (mk_id "varstup") used_vars_body)->
+                 separate space [string "fun varstup"; bigarrow] ^^ break 1 ^^
+                   separate space [string "let"; squote ^^ expY varstuple; string ":= varstup in"]
+              | E_aux (E_lit (L_aux (L_unit, _)), _)
+                   when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
+                 separate space [string "fun unit_var"; bigarrow]
+              | _ ->
+                 separate space [string "fun"; expY varstuple; bigarrow]
+            in
+            parens (
+                (prefix 2 1)
+                  ((separate space) (string (combinator ^ csuffix ^ msuffix)::measure_pp@[expY varstuple]))
+                  ((prefix 0 1)
+                     (parens (prefix 2 1 (group lambda) (expN cond)))
+                     (parens (prefix 2 1 (group lambda) (expN body))))
+              )
           end
        | Id_aux (Id "early_return", _) ->
           begin
@@ -2191,7 +2206,9 @@ let types_used_with_generic_eq defs =
     | DEF_mapdef (MD_aux (_,(l,_)))
     | DEF_scattered (SD_aux (_,(l,_)))
     | DEF_measure (Id_aux (_,l),_,_)
-      -> unreachable l __POS__ "Internal definition found in the Coq back-end"
+    | DEF_loop_measures (Id_aux (_,l),_)
+      -> unreachable l __POS__
+           "Definition found in the Coq back-end that should have been rewritten away"
     | DEF_internal_mutrec fds ->
        List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
     | DEF_val lb ->
@@ -2925,6 +2942,10 @@ let rec doc_def unimplemented generic_eq_types def =
   | DEF_measure (id,_,_) -> unreachable (id_loc id) __POS__
                               ("Termination measure for " ^ string_of_id id ^
                                  " should have been rewritten before backend")
+  | DEF_loop_measures (id,_) ->
+     unreachable (id_loc id) __POS__
+       ("Loop termination measures for " ^ string_of_id id ^
+          " should have been rewritten before backend")
 
 let find_exc_typ defs =
   let is_exc_typ_def = function
