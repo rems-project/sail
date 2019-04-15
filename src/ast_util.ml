@@ -519,7 +519,7 @@ and map_exp_annot_aux f = function
   | E_tuple xs -> E_tuple (List.map (map_exp_annot f) xs)
   | E_if (cond, t, e) -> E_if (map_exp_annot f cond, map_exp_annot f t, map_exp_annot f e)
   | E_for (v, e1, e2, e3, o, e4) -> E_for (v, map_exp_annot f e1, map_exp_annot f e2, map_exp_annot f e3, o, map_exp_annot f e4)
-  | E_loop (loop_type, e1, e2) -> E_loop (loop_type, map_exp_annot f e1, map_exp_annot f e2)
+  | E_loop (loop_type, measure, e1, e2) -> E_loop (loop_type, map_measure_annot f measure, map_exp_annot f e1, map_exp_annot f e2)
   | E_vector exps -> E_vector (List.map (map_exp_annot f) exps)
   | E_vector_access (exp1, exp2) -> E_vector_access (map_exp_annot f exp1, map_exp_annot f exp2)
   | E_vector_subrange (exp1, exp2, exp3) -> E_vector_subrange (map_exp_annot f exp1, map_exp_annot f exp2, map_exp_annot f exp3)
@@ -546,6 +546,10 @@ and map_exp_annot_aux f = function
   | E_var (lexp, exp1, exp2) -> E_var (map_lexp_annot f lexp, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_plet (pat, exp1, exp2) -> E_internal_plet (map_pat_annot f pat, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_return exp -> E_internal_return (map_exp_annot f exp)
+and map_measure_annot f (Measure_aux (m, l)) = Measure_aux (map_measure_annot_aux f m, l)
+and map_measure_annot_aux f = function
+  | Measure_none -> Measure_none
+  | Measure_some exp -> Measure_some (map_exp_annot f exp)
 and map_opt_default_annot f (Def_val_aux (df, annot)) = Def_val_aux (map_opt_default_annot_aux f df, f annot)
 and map_opt_default_annot_aux f = function
   | Def_val_empty -> Def_val_empty
@@ -722,6 +726,7 @@ let def_loc = function
   | DEF_internal_mutrec _ -> Parse_ast.Unknown
   | DEF_pragma (_, _, l) -> l
   | DEF_measure (id, _, _) -> id_loc id
+  | DEF_loop_measures (id, _) -> id_loc id
 
 let string_of_id = function
   | Id_aux (Id v, _) -> v
@@ -912,8 +917,8 @@ let rec string_of_exp (E_aux (exp, _)) =
      ^ " by " ^ string_of_exp u ^ " order " ^ string_of_order ord
      ^ ") { "
      ^ string_of_exp body
-  | E_loop (While, cond, body) -> "while " ^ string_of_exp cond ^ " do " ^ string_of_exp body
-  | E_loop (Until, cond, body) -> "repeat " ^ string_of_exp body ^ " until " ^ string_of_exp cond
+  | E_loop (While, measure, cond, body) -> "while " ^ string_of_measure measure ^ string_of_exp cond ^ " do " ^ string_of_exp body
+  | E_loop (Until, measure, cond, body) -> "repeat " ^ string_of_measure measure  ^ string_of_exp body ^ " until " ^ string_of_exp cond
   | E_assert (test, msg) -> "assert(" ^ string_of_exp test ^ ", " ^ string_of_exp msg ^ ")"
   | E_exit exp -> "exit " ^ string_of_exp exp
   | E_throw exp -> "throw " ^ string_of_exp exp
@@ -928,6 +933,11 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_internal_plet (pat, exp, body) -> "internal_plet " ^ string_of_pat pat ^ " = " ^ string_of_exp exp ^ " in " ^ string_of_exp body
   | E_nondet _ -> "NONDET"
   | E_internal_value v -> "INTERNAL_VALUE(" ^ Value.string_of_value v ^ ")"
+
+and string_of_measure (Measure_aux (m,_)) =
+  match m with
+  | Measure_none -> ""
+  | Measure_some exp -> "termination_measure { " ^ string_of_exp exp ^ "}"
 
 and string_of_fexp (FE_aux (FE_Fexp (field, exp), _)) =
   string_of_id field ^ " = " ^ string_of_exp exp
@@ -1522,8 +1532,8 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_if (cond, then_exp, else_exp) ->
        E_if (subst id value cond, subst id value then_exp, subst id value else_exp)
 
-    | E_loop (loop, cond, body) ->
-       E_loop (loop, subst id value cond, subst id value body)
+    | E_loop (loop, measure, cond, body) ->
+       E_loop (loop, subst_measure id value measure, subst id value cond, subst id value body)
     | E_for (id', exp1, exp2, exp3, order, body) when Id.compare id id' = 0 ->
        E_for (id', exp1, exp2, exp3, order, body)
     | E_for (id', exp1, exp2, exp3, order, body) ->
@@ -1576,6 +1586,11 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
     | E_internal_plet _ | E_internal_return _ -> failwith ("subst " ^ string_of_exp exp)
   in
   wrap e_aux
+
+and subst_measure id value (Measure_aux (m_aux, l)) =
+  match m_aux with
+  | Measure_none -> Measure_aux (Measure_none, l)
+  | Measure_some exp -> Measure_aux (Measure_some (subst id value exp), l)
 
 and subst_pexp id value (Pat_aux (pexp_aux, annot)) =
   let pexp_aux = match pexp_aux with
@@ -1734,7 +1749,7 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp = fun f (E_aux (e_aux, (l, ann
     | E_app_infix (exp1, op, exp2) -> E_app_infix (locate f exp1, locate_id f op, locate f exp2)
     | E_tuple exps -> E_tuple (List.map (locate f) exps)
     | E_if (cond_exp, then_exp, else_exp) -> E_if (locate f cond_exp, locate f then_exp, locate f else_exp)
-    | E_loop (loop, cond, body) -> E_loop (loop, locate f cond, locate f body)
+    | E_loop (loop, measure, cond, body) -> E_loop (loop, locate_measure f measure, locate f cond, locate f body)
     | E_for (id, exp1, exp2, exp3, ord, exp4) ->
        E_for (locate_id f id, locate f exp1, locate f exp2, locate f exp3, ord, locate f exp4)
     | E_vector exps -> E_vector (List.map (locate f) exps)
@@ -1767,6 +1782,12 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp = fun f (E_aux (e_aux, (l, ann
     | E_internal_value value -> E_internal_value value
   in
   E_aux (e_aux, (f l, annot))
+
+and locate_measure : 'a. (l -> l) -> 'a internal_loop_measure -> 'a internal_loop_measure = fun f (Measure_aux (m, l)) ->
+  let m = match m with
+    | Measure_none -> Measure_none
+    | Measure_some exp -> Measure_some (locate f exp)
+  in Measure_aux (m, f l)
 
 and locate_letbind : 'a. (l -> l) -> 'a letbind -> 'a letbind = fun f (LB_aux (LB_val (pat, exp), (l, annot))) ->
   LB_aux (LB_val (locate_pat f pat, locate f exp), (f l, annot))

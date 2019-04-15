@@ -440,11 +440,17 @@ let const_props defs ref_vars =
        let assigns = isubst_minus_set assigns (assigned_vars e4) in
        let e4',_ = const_prop_exp (Bindings.remove id (fst substs),snd substs) assigns e4 in
        re (E_for (id,e1',e2',e3',ord,e4')) assigns
-    | E_loop (loop,e1,e2) ->
+    | E_loop (loop,m,e1,e2) ->
        let assigns = isubst_minus_set assigns (IdSet.union (assigned_vars e1) (assigned_vars e2)) in
+       let m' = match m with
+         | Measure_aux (Measure_none,_) -> m
+         | Measure_aux (Measure_some exp,l) ->
+            let exp',_ = const_prop_exp substs assigns exp in
+            Measure_aux (Measure_some exp',l)
+       in
        let e1',_ = const_prop_exp substs assigns e1 in
        let e2',_ = const_prop_exp substs assigns e2 in
-       re (E_loop (loop,e1',e2')) assigns
+       re (E_loop (loop,m',e1',e2')) assigns
     | E_vector es ->
        let es',assigns = non_det_exp_list es in
        begin

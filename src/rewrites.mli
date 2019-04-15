@@ -63,6 +63,9 @@ val opt_dmono_continue : bool ref
 (* Generate a fresh id with the given prefix *)
 val fresh_id : string -> l -> id
 
+(* Move loop termination measures into loop AST nodes *)
+val move_loop_measures : 'a defs -> 'a defs
+
 (* Re-write undefined to functions created by -undefined_gen flag *)
 val rewrite_undefined : bool -> Env.t -> tannot defs -> tannot defs
 

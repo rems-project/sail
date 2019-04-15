@@ -151,7 +151,7 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match destruct_tannot (snd annot)
       union_effects (fun_app_effects f env) (union_eff_exps [e1;e2])
     | E_if (e1,e2,e3) -> union_eff_exps [e1;e2;e3]
     | E_for (_,e1,e2,e3,_,e4) -> union_eff_exps [e1;e2;e3;e4]
-    | E_loop (_,e1,e2) -> union_eff_exps [e1;e2]
+    | E_loop (_,_,e1,e2) -> union_eff_exps [e1;e2]
     | E_vector es -> union_eff_exps es
     | E_vector_access (e1,e2) -> union_eff_exps [e1;e2]
     | E_vector_subrange (e1,e2,e3) -> union_eff_exps [e1;e2;e3]
@@ -280,8 +280,12 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   | E_if (c,t,e) -> rewrap (E_if (rewrite c,rewrite t, rewrite e))
   | E_for (id, e1, e2, e3, o, body) ->
     rewrap (E_for (id, rewrite e1, rewrite e2, rewrite e3, o, rewrite body))
-  | E_loop (loop, e1, e2) ->
-    rewrap (E_loop (loop, rewrite e1, rewrite e2))
+  | E_loop (loop, m, e1, e2) ->
+     let m = match m with
+       | Measure_aux (Measure_none,_) -> m
+       | Measure_aux (Measure_some exp,l) -> Measure_aux (Measure_some (rewrite exp),l)
+     in
+    rewrap (E_loop (loop, m, rewrite e1, rewrite e2))
   | E_vector exps -> rewrap (E_vector (List.map rewrite exps))
   | E_vector_access (vec,index) -> rewrap (E_vector_access (rewrite vec,rewrite index))
   | E_vector_subrange (vec,i1,i2) ->
@@ -362,8 +366,9 @@ let rewrite_def rewriters d = match d with
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
   | DEF_pragma (pragma, arg, l) -> DEF_pragma (pragma, arg, l)
-  | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "DEF_scattered survived to rewritter")
+  | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "DEF_scattered survived to rewriter")
   | DEF_measure (id,pat,exp) -> DEF_measure (id,rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
+  | DEF_loop_measures (id,_) -> raise (Reporting.err_unreachable (id_loc id) __POS__ "DEF_loop_measures survived to rewriter")
 
 let rewrite_defs_base rewriters (Defs defs) =
   let rec rewrite ds = match ds with
@@ -539,7 +544,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
   ; e_tuple                  : 'exp list -> 'exp_aux
   ; e_if                     : 'exp * 'exp * 'exp -> 'exp_aux
   ; e_for                    : id * 'exp * 'exp * 'exp * Ast.order * 'exp -> 'exp_aux
-  ; e_loop                   : loop * 'exp * 'exp -> 'exp_aux
+  ; e_loop                   : loop * ('exp option * Parse_ast.l) * 'exp * 'exp -> 'exp_aux
   ; e_vector                 : 'exp list -> 'exp_aux
   ; e_vector_access          : 'exp * 'exp -> 'exp_aux
   ; e_vector_subrange        : 'exp * 'exp * 'exp -> 'exp_aux
@@ -602,8 +607,12 @@ let rec fold_exp_aux alg = function
   | E_if (e1,e2,e3) -> alg.e_if (fold_exp alg e1, fold_exp alg e2, fold_exp alg e3)
   | E_for (id,e1,e2,e3,order,e4) ->
      alg.e_for (id,fold_exp alg e1, fold_exp alg e2, fold_exp alg e3, order, fold_exp alg e4)
-  | E_loop (loop_type, e1, e2) ->
-     alg.e_loop (loop_type, fold_exp alg e1, fold_exp alg e2)
+  | E_loop (loop_type, m, e1, e2) ->
+     let m = match m with
+       | Measure_aux (Measure_none,l) -> None,l
+       | Measure_aux (Measure_some exp,l) -> Some (fold_exp alg exp),l
+     in
+     alg.e_loop (loop_type, m, fold_exp alg e1, fold_exp alg e2)
   | E_vector es -> alg.e_vector (List.map (fold_exp alg) es)
   | E_vector_access (e1,e2) -> alg.e_vector_access (fold_exp alg e1, fold_exp alg e2)
   | E_vector_subrange (e1,e2,e3) ->
@@ -681,7 +690,9 @@ let id_exp_alg =
   ; e_tuple = (fun es -> E_tuple es)
   ; e_if = (fun (e1,e2,e3) -> E_if (e1,e2,e3))
   ; e_for = (fun (id,e1,e2,e3,order,e4) -> E_for (id,e1,e2,e3,order,e4))
-  ; e_loop = (fun (lt, e1, e2) -> E_loop (lt, e1, e2))
+  ; e_loop = (fun (lt, (m,l), e1, e2) ->
+    let m = match m with None -> Measure_none | Some e -> Measure_some e in
+    E_loop (lt, Measure_aux (m,l), e1, e2))
   ; e_vector = (fun es -> E_vector es)
   ; e_vector_access = (fun (e1,e2) -> E_vector_access (e1,e2))
   ; e_vector_subrange =  (fun (e1,e2,e3) -> E_vector_subrange (e1,e2,e3))
@@ -776,8 +787,12 @@ let compute_exp_alg bot join =
   ; e_if = (fun ((v1,e1),(v2,e2),(v3,e3)) -> (join_list [v1;v2;v3], E_if (e1,e2,e3)))
   ; e_for = (fun (id,(v1,e1),(v2,e2),(v3,e3),order,(v4,e4)) ->
     (join_list [v1;v2;v3;v4], E_for (id,e1,e2,e3,order,e4)))
-  ; e_loop = (fun (lt, (v1, e1), (v2, e2)) ->
-    (join_list [v1;v2], E_loop (lt, e1, e2)))
+  ; e_loop = (fun (lt, (m,l), (v1, e1), (v2, e2)) ->
+    let vs,m = match m with
+    | None -> [], Measure_none
+    | Some (v,e) -> [v], Measure_some e
+    in
+    (join_list (vs@[v1;v2]), E_loop (lt, Measure_aux (m,l), e1, e2)))
   ; e_vector = split_join (fun es -> E_vector es)
   ; e_vector_access = (fun ((v1,e1),(v2,e2)) -> (join v1 v2, E_vector_access (e1,e2)))
   ; e_vector_subrange =  (fun ((v1,e1),(v2,e2),(v3,e3)) -> (join_list [v1;v2;v3], E_vector_subrange (e1,e2,e3)))
@@ -878,7 +893,8 @@ let pure_exp_alg bot join =
   ; e_tuple = join_list
   ; e_if = (fun (v1,v2,v3) -> join_list [v1;v2;v3])
   ; e_for = (fun (id,v1,v2,v3,order,v4) -> join_list [v1;v2;v3;v4])
-  ; e_loop = (fun (lt, v1, v2) -> join v1 v2)
+  ; e_loop = (fun (lt, (m,_), v1, v2) ->
+    let v = join v1 v2 in match m with None -> v | Some v' -> join v v')
   ; e_vector = join_list
   ; e_vector_access = (fun (v1,v2) -> join v1 v2)
   ; e_vector_subrange =  (fun (v1,v2,v3) -> join_list [v1;v2;v3])
@@ -927,3 +943,200 @@ let pure_exp_alg bot join =
   ; lB_aux = (fun (vl,annot) -> vl)
   ; pat_alg = pure_pat_alg bot join
   }
+
+let default_fold_fexp f x (FE_aux (FE_Fexp (id,e),annot)) =
+  let x,e = f x e in
+  x, FE_aux (FE_Fexp (id,e),annot)
+
+let default_fold_pexp f x (Pat_aux (pe,ann)) =
+  let x,pe = match pe with
+  | Pat_exp (p,e) ->
+     let x,e = f x e in
+     x,Pat_exp (p,e)
+  | Pat_when (p,e1,e2) ->
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     x,Pat_when (p,e1,e2)
+  in x, Pat_aux (pe,ann)
+
+let default_fold_letbind f x (LB_aux (LB_val (p,e),ann)) =
+  let x,e = f x e in
+  x, LB_aux (LB_val (p,e),ann)
+
+let rec default_fold_lexp f x (LEXP_aux (le,ann) as lexp) =
+  let re le = LEXP_aux (le,ann) in
+  match le with
+  | LEXP_id _
+  | LEXP_cast _
+    -> x, lexp
+  | LEXP_deref e ->
+     let x, e = f x e in
+     x, re (LEXP_deref e)
+  | LEXP_memory (id,es) ->
+     let x,es = List.fold_left (fun (x,es) e ->
+                    let x,e' = f x e in x,e'::es) (x,[]) es in
+     x, re (LEXP_memory (id, List.rev es))
+  | LEXP_tup les ->
+     let x,les = List.fold_left (fun (x,les) le ->
+                    let x,le' = default_fold_lexp f x le in x,le'::les) (x,[]) les in
+     x, re (LEXP_tup (List.rev les))
+  | LEXP_vector_concat les ->
+     let x,les = List.fold_left (fun (x,les) le ->
+                    let x,le' = default_fold_lexp f x le in x,le'::les) (x,[]) les in
+     x, re (LEXP_vector_concat (List.rev les))
+  | LEXP_vector (le,e) ->
+     let x, le = default_fold_lexp f x le in
+     let x, e = f x e in
+     x, re (LEXP_vector (le,e))
+  | LEXP_vector_range (le,e1,e2) ->
+     let x, le = default_fold_lexp f x le in
+     let x, e1 = f x e1 in
+     let x, e2 = f x e2 in
+     x, re (LEXP_vector_range (le,e1,e2))
+  | LEXP_field (le,id) ->
+     let x, le = default_fold_lexp f x le in
+     x, re (LEXP_field (le,id))
+
+let default_fold_exp f x (E_aux (e,ann) as exp) =
+  let re e = E_aux (e,ann) in
+  match e with
+  | E_block es ->
+     let x,es = List.fold_left (fun (x,es) e ->
+                    let x,e' = f x e in x,e'::es) (x,[]) es in
+     x, re (E_block (List.rev es))
+  | E_nondet es ->
+     let x,es = List.fold_left (fun (x,es) e ->
+                    let x,e' = f x e in x,e'::es) (x,[]) es in
+     x, re (E_nondet (List.rev es))
+  | E_id _
+  | E_ref _
+  | E_lit _ -> x, exp
+  | E_cast (typ,e) ->
+     let x,e = f x e in
+     x, re (E_cast (typ,e))
+  | E_app (id,es) ->
+     let x,es = List.fold_left (fun (x,es) e ->
+                    let x,e' = f x e in x,e'::es) (x,[]) es in
+     x, re (E_app (id, List.rev es))
+  | E_app_infix (e1,id,e2) ->
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     x, re (E_app_infix (e1,id,e2))
+  | E_tuple es ->
+     let x,es = List.fold_left (fun (x,es) e ->
+                    let x,e' = f x e in x,e'::es) (x,[]) es in
+     x, re (E_tuple (List.rev es))
+  | E_if (e1,e2,e3) ->
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     let x,e3 = f x e3 in
+     x, re (E_if (e1,e2,e3))
+  | E_for (id,e1,e2,e3,order,e4) ->
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     let x,e3 = f x e3 in
+     let x,e4 = f x e4 in
+     x, re (E_for (id,e1,e2,e3,order,e4))
+  | E_loop (loop_type, m, e1, e2) ->
+     let x,m = match m with
+       | Measure_aux (Measure_none,_) -> x,m
+       | Measure_aux (Measure_some exp,l) ->
+          let x, exp = f x exp in
+          x, Measure_aux (Measure_some exp,l)
+     in
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     x, re (E_loop (loop_type, m, e1, e2))
+  | E_vector es ->
+     let x,es = List.fold_left (fun (x,es) e ->
+                    let x,e' = f x e in x,e'::es) (x,[]) es in
+     x, re (E_vector (List.rev es))
+  | E_vector_access (e1,e2) ->
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     x, re (E_vector_access (e1,e2))
+  | E_vector_subrange (e1,e2,e3) ->
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     let x,e3 = f x e3 in
+     x, re (E_vector_subrange (e1,e2,e3))
+  | E_vector_update (e1,e2,e3) ->
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     let x,e3 = f x e3 in
+     x, re (E_vector_update (e1,e2,e3))
+  | E_vector_update_subrange (e1,e2,e3,e4) ->
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     let x,e3 = f x e3 in
+     let x,e4 = f x e4 in
+     x, re (E_vector_update_subrange (e1,e2,e3,e4))
+  | E_vector_append (e1,e2) ->
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     x, re (E_vector_append (e1,e2))
+  | E_list es ->
+     let x,es = List.fold_left (fun (x,es) e ->
+                    let x,e' = f x e in x,e'::es) (x,[]) es in
+     x, re (E_list (List.rev es))
+  | E_cons (e1,e2) ->
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     x, re (E_cons (e1,e2))
+  | E_record fexps ->
+     let x,fexps = List.fold_left (fun (x,fes) fe ->
+                       let x,fe' = default_fold_fexp f x fe in x,fe'::fes) (x,[]) fexps in
+     x, re (E_record (List.rev fexps))
+  | E_record_update (e,fexps) ->
+     let x,e = f x e in
+     let x,fexps = List.fold_left (fun (x,fes) fe ->
+                       let x,fe' = default_fold_fexp f x fe in x,fe'::fes) (x,[]) fexps in
+     x, re (E_record_update (e, List.rev fexps))
+  | E_field (e,id) ->
+     let x,e = f x e in x, re (E_field (e,id))
+  | E_case (e,pexps) ->
+     let x,e = f x e in
+     let x,pexps = List.fold_left (fun (x,pes) pe ->
+                       let x,pe' = default_fold_pexp f x pe in x,pe'::pes) (x,[]) pexps in
+     x, re (E_case (e, List.rev pexps))
+  | E_try (e,pexps) ->
+     let x,e = f x e in
+     let x,pexps = List.fold_left (fun (x,pes) pe ->
+                       let x,pe' = default_fold_pexp f x pe in x,pe'::pes) (x,[]) pexps in
+     x, re (E_try (e, List.rev pexps))
+  | E_let (letbind,e) ->
+     let x,letbind = default_fold_letbind f x letbind in
+     let x,e = f x e in
+     x, re (E_let (letbind,e))
+  | E_assign (lexp,e) ->
+     let x,lexp = default_fold_lexp f x lexp in
+     let x,e = f x e in
+     x, re (E_assign (lexp,e))
+  | E_sizeof _
+  | E_constraint _
+    -> x,exp
+  | E_exit e ->
+     let x,e = f x e in x, re (E_exit e)
+  | E_throw e ->
+     let x,e = f x e in x, re (E_throw e)
+  | E_return e ->
+     let x,e = f x e in x, re (E_return e)
+  | E_assert(e1,e2) ->
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     x, re (E_assert (e1,e2))
+  | E_var (lexp,e1,e2) ->
+     let x,lexp = default_fold_lexp f x lexp in
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     x, re (E_var (lexp,e1,e2))
+  | E_internal_plet (pat,e1,e2) ->
+     let x,e1 = f x e1 in
+     let x,e2 = f x e2 in
+     x, re (E_internal_plet (pat,e1,e2))
+  | E_internal_return e ->
+     let x,e = f x e in x, re (E_internal_return e)
+  | E_internal_value _ -> x,exp
+
+let rec foldin_exp f x e = f (default_fold_exp (foldin_exp f)) x e
+let rec foldin_pexp f x e = default_fold_pexp (foldin_exp f) x e

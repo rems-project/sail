@@ -312,8 +312,8 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_if (exp, then_exp, else_exp) ->
      step exp >>= fun exp' -> wrap (E_if (exp', then_exp, else_exp))
 
-  | E_loop (While, exp, body) -> wrap (E_if (exp, E_aux (E_block [body; orig_exp], annot), exp_of_value V_unit))
-  | E_loop (Until, exp, body) -> wrap (E_block [body; E_aux (E_if (exp, exp_of_value V_unit, orig_exp), annot)])
+  | E_loop (While, _, exp, body) -> wrap (E_if (exp, E_aux (E_block [body; orig_exp], annot), exp_of_value V_unit))
+  | E_loop (Until, _, exp, body) -> wrap (E_block [body; E_aux (E_if (exp, exp_of_value V_unit, orig_exp), annot)])
 
   | E_assert (exp, msg) when is_true exp -> wrap unit_exp
   | E_assert (exp, msg) when is_false exp && is_value msg ->

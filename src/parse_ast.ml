@@ -238,7 +238,14 @@ and fpat =
 
 type loop = While | Until
 
-type 
+type measure_aux =  (* optional termination measure for a loop *)
+ | Measure_none
+ | Measure_some of exp
+
+and measure = 
+ | Measure_aux of measure_aux * l
+
+and
 exp_aux =  (* Expression *)
    E_block of (exp) list (* block (parsing conflict with structs?) *)
  | E_nondet of (exp) list (* block that can evaluate the contained expressions in any ordering *)
@@ -251,7 +258,7 @@ exp_aux =  (* Expression *)
  | E_app_infix of exp * id * exp (* infix function application *)
  | E_tuple of (exp) list (* tuple *)
  | E_if of exp * exp * exp (* conditional *)
- | E_loop of loop * exp * exp
+ | E_loop of loop * measure * exp * exp
  | E_for of id * exp * exp * exp * atyp * exp (* loop *)
  | E_vector of (exp) list (* vector (indexed from 0) *)
  | E_vector_access of exp * exp (* vector access *)
@@ -489,6 +496,10 @@ dec_spec =
    DEC_aux of dec_spec_aux * l
 
 
+type loop_measure = 
+ | Loop of loop * exp
+
+
 type 
 scattered_def = 
    SD_aux of scattered_def_aux * l
@@ -509,6 +520,7 @@ def =  (* Top-level definition *)
  | DEF_default of default_typing_spec (* default kind and type assumptions *)
  | DEF_scattered of scattered_def (* scattered definition *)
  | DEF_measure of id * pat * exp (* separate termination measure declaration *)
+ | DEF_loop_measures of id * loop_measure list (* separate termination measure declaration *)
  | DEF_reg_dec of dec_spec (* register declaration *)
  | DEF_pragma of string * string * l
  | DEF_internal_mutrec of fundef list

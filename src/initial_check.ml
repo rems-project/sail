@@ -367,8 +367,8 @@ and to_ast_exp ctx (P.E_aux(exp,l) : P.exp) =
     | P.E_for(id,e1,e2,e3,atyp,e4) ->
       E_for(to_ast_id id,to_ast_exp ctx e1, to_ast_exp ctx e2,
             to_ast_exp ctx e3,to_ast_order ctx atyp, to_ast_exp ctx e4)
-    | P.E_loop (P.While, e1, e2) -> E_loop (While, to_ast_exp ctx e1, to_ast_exp ctx e2)
-    | P.E_loop (P.Until, e1, e2) -> E_loop (Until, to_ast_exp ctx e1, to_ast_exp ctx e2)
+    | P.E_loop (P.While, m, e1, e2) -> E_loop (While, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
+    | P.E_loop (P.Until, m, e1, e2) -> E_loop (Until, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
     | P.E_vector(exps) -> E_vector(List.map (to_ast_exp ctx) exps)
     | P.E_vector_access(vexp,exp) -> E_vector_access(to_ast_exp ctx vexp, to_ast_exp ctx exp)
     | P.E_vector_subrange(vex,exp1,exp2) ->
@@ -413,6 +413,16 @@ and to_ast_exp ctx (P.E_aux(exp,l) : P.exp) =
          raise (Reporting.err_general l "Internal return construct found without -dmagic_hash")
     | _ -> raise (Reporting.err_unreachable l __POS__ "Unparsable construct in to_ast_exp")
     ), (l,()))
+
+and to_ast_measure ctx (P.Measure_aux(m,l)) : unit internal_loop_measure =
+  let m = match m with
+    | P.Measure_none -> Measure_none
+    | P.Measure_some exp ->
+       if !opt_magic_hash then
+         Measure_some (to_ast_exp ctx exp)
+       else
+         raise (Reporting.err_general l "Internal loop termination measure found without -dmagic_hash")
+  in Measure_aux (m,l)
 
 and to_ast_lexp ctx (P.E_aux(exp,l) : P.exp) : unit lexp =
   let lexp = match exp with
@@ -762,6 +772,10 @@ let to_ast_prec = function
   | P.InfixL -> InfixL
   | P.InfixR -> InfixR
 
+let to_ast_loop_measure ctx = function
+  | P.Loop (P.While, exp) -> Loop (While, to_ast_exp ctx exp)
+  | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
+
 let to_ast_def ctx def : unit def list ctx_out =
   match def with
   | P.DEF_overload (id, ids) ->
@@ -800,6 +814,8 @@ let to_ast_def ctx def : unit def list ctx_out =
      [DEF_scattered sdef], ctx
   | P.DEF_measure (id, pat, exp) ->
      [DEF_measure (to_ast_id id, to_ast_pat ctx pat, to_ast_exp ctx exp)], ctx
+  | P.DEF_loop_measures (id, measures) ->
+     [DEF_loop_measures (to_ast_id id, List.map (to_ast_loop_measure ctx) measures)], ctx
 
 let rec remove_mutrec = function
   | [] -> []

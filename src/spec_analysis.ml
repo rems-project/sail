@@ -205,7 +205,9 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   | E_for(id,from,to_,by,_,body) ->
     let _,used,set = list_fv bound used set [from;to_;by] in
     fv_of_exp consider_var (Nameset.add (string_of_id id) bound) used set body
-  | E_loop(_, cond, body) -> list_fv bound used set [cond; body]
+  | E_loop(_, measure, cond, body) ->
+     let m = match measure with Measure_aux (Measure_some exp,_) -> [exp] | _ -> [] in
+     list_fv bound used set (m @ [cond; body])
   | E_vector_access(v,i) -> list_fv bound used set [v;i]
   | E_vector_subrange(v,i1,i2) -> list_fv bound used set [v;i1;i2]
   | E_vector_update(v,i,e) -> list_fv bound used set [v;i;e]
@@ -509,6 +511,8 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
      ((fun (_,u,_) -> Nameset.singleton ("measure:"^i),u)
         (fv_of_pes consider_var mt used mt
            [Pat_aux(Pat_exp (pat,exp),(Unknown,Type_check.empty_tannot))]))
+  | DEF_loop_measures(id,_) ->
+     Reporting.unreachable (id_loc id) __POS__ "Loop termination measures should be rewritten before now"
 
 
 let group_defs consider_scatter_as_one (Ast.Defs defs) =
@@ -823,7 +827,7 @@ let nexp_subst_fns substs =
       | E_tuple es -> re (E_tuple (List.map s_exp es))
       | E_if (e1,e2,e3) -> re (E_if (s_exp e1, s_exp e2, s_exp e3))
       | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,s_exp e1,s_exp e2,s_exp e3,ord,s_exp e4))
-      | E_loop (loop,e1,e2) -> re (E_loop (loop,s_exp e1,s_exp e2))
+      | E_loop (loop,m,e1,e2) -> re (E_loop (loop,s_measure m,s_exp e1,s_exp e2))
       | E_vector es -> re (E_vector (List.map s_exp es))
       | E_vector_access (e1,e2) -> re (E_vector_access (s_exp e1,s_exp e2))
       | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (s_exp e1,s_exp e2,s_exp e3))
@@ -846,6 +850,12 @@ let nexp_subst_fns substs =
       | E_internal_return e -> re (E_internal_return (s_exp e))
       | E_throw e -> re (E_throw (s_exp e))
       | E_try (e,cases) -> re (E_try (s_exp e, List.map s_pexp cases))
+    and s_measure (Measure_aux (m,l)) =
+      let m = match m with
+        | Measure_none -> m
+        | Measure_some exp -> Measure_some (s_exp exp)
+      in
+      Measure_aux (m,l)
     and s_fexp (FE_aux (FE_Fexp (id,e), (l,annot))) =
       FE_aux (FE_Fexp (id,s_exp e),(l,s_tannot annot))
     and s_pexp = function

@@ -980,7 +980,7 @@ let split_defs all_errors splits defs =
         | E_tuple es -> re (E_tuple (List.map map_exp es))
         | E_if (e1,e2,e3) -> re (E_if (map_exp e1, map_exp e2, map_exp e3))
         | E_for (id,e1,e2,e3,ord,e4) -> re (E_for (id,map_exp e1,map_exp e2,map_exp e3,ord,map_exp e4))
-        | E_loop (loop,e1,e2) -> re (E_loop (loop,map_exp e1,map_exp e2))
+        | E_loop (loop,m,e1,e2) -> re (E_loop (loop,m,map_exp e1,map_exp e2))
         | E_vector es -> re (E_vector (List.map map_exp es))
         | E_vector_access (e1,e2) -> re (E_vector_access (map_exp e1,map_exp e2))
         | E_vector_subrange (e1,e2,e3) -> re (E_vector_subrange (map_exp e1,map_exp e2,map_exp e3))
@@ -1115,10 +1115,14 @@ let split_defs all_errors splits defs =
       | DEF_internal_mutrec _
         -> [d]
       | DEF_fundef fd -> [DEF_fundef (map_fundef fd)]
-      | DEF_mapdef (MD_aux (_, (l, _))) -> Reporting.unreachable l __POS__ "mappings should be gone by now"
+      | DEF_mapdef (MD_aux (_, (l, _))) ->
+         Reporting.unreachable l __POS__ "mappings should be gone by now"
       | DEF_val lb -> [DEF_val (map_letbind lb)]
       | DEF_scattered sd -> List.map (fun x -> DEF_scattered x) (map_scattered_def sd)
       | DEF_measure (id,pat,exp) -> [DEF_measure (id,pat,map_exp exp)]
+      | DEF_loop_measures (id,_) ->
+         Reporting.unreachable (id_loc id) __POS__
+           "Loop termination measures should have been rewritten before now"
     in
     Defs (List.concat (List.map map_def defs))
   in
@@ -2065,7 +2069,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        let d3,a3,r3 = analyse_exp fn_id env assigns e3 in
        let assigns = add_dep_to_assigned d1 (dep_bindings_merge a2 a3) [e2;e3] in
        (dmerge d1 (dmerge d2 d3), assigns, merge r1 (merge r2 r3))
-    | E_loop (_,e1,e2) ->
+    | E_loop (_,_,e1,e2) ->
        (* We remove all of the variables assigned in the loop, so we don't
           need to add control dependencies *)
        let assigns = remove_assigns [e1;e2] " assigned in a loop" in

@@ -256,7 +256,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      separate space [string "let"; ocaml_atomic_lexp ctx lexp;
                      equals; string "ref"; parens (ocaml_atomic_exp ctx exp1 ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (Rewrites.simple_typ (typ_of exp1))); string "in"]
      ^/^ ocaml_exp ctx exp2
-  | E_loop (Until, cond, body) ->
+  | E_loop (Until, _, cond, body) ->
      let loop_body =
        (ocaml_atomic_exp ctx body ^^ semi)
        ^/^
@@ -267,7 +267,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      (string "let rec loop () =" ^//^ loop_body)
      ^/^ string "in"
      ^/^ string "loop ()"
-  | E_loop (While, cond, body) ->
+  | E_loop (While, _, cond, body) ->
      let loop_body =
        separate space [string "if"; ocaml_atomic_exp ctx cond;
                        string "then"; parens (ocaml_atomic_exp ctx body ^^ semi ^^ space ^^ string "loop ()");

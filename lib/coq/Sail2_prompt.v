@@ -136,19 +136,29 @@ Definition Zwf_guarded (z:Z) : Acc (Zwf 0) z :=
   end).
 
 (*val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
-                ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
-let rec whileM vars cond body =
-  cond vars >>= fun cond_val ->
-  if cond_val then
-    body vars >>= fun vars -> whileM vars cond body
-  else return vars
+                ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e*)
+Fixpoint whileMT' {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) (acc : Acc (Zwf 0) limit) : monad RV Vars E :=
+  if Z_ge_dec limit 0 then
+    cond vars >>= fun cond_val =>
+    if cond_val then
+      body vars >>= fun vars => whileMT' (limit - 1) vars cond body (_limit_reduces acc)
+    else returnm vars
+  else Fail "Termination limit reached".
 
-val untilM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
-                ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e
-let rec untilM vars cond body =
-  body vars >>= fun vars ->
-  cond vars >>= fun cond_val ->
-  if cond_val then return vars else untilM vars cond body
+Definition whileMT {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) : monad RV Vars E :=
+  whileMT' limit vars cond body (Zwf_guarded limit).
+
+(*val untilM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
+                ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e*)
+Fixpoint untilMT' {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) (acc : Acc (Zwf 0) limit) : monad RV Vars E :=
+  if Z_ge_dec limit 0 then
+    body vars >>= fun vars =>
+    cond vars >>= fun cond_val =>
+    if cond_val then returnm vars else untilMT' (limit - 1) vars cond body (_limit_reduces acc)
+  else Fail "Termination limit reached".
+
+Definition untilMT {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) : monad RV Vars E :=
+  untilMT' limit vars cond body (Zwf_guarded limit).
 
 (*let write_two_regs r1 r2 vec =
   let is_inc =
@@ -170,8 +180,6 @@ let rec untilM vars cond body =
     then slice vec (size_r1 - start_vec) (size_vec - start_vec)
     else slice vec (start_vec - size_r1) (start_vec - size_vec) in
   write_reg r1 r1_v >> write_reg r2 r2_v*)
-
-*)
 
 (* If we need to build an existential after a monadic operation, assume that
    we can do it entirely from the type. *)

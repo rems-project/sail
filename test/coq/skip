@@ -42,3 +42,12 @@ reg_mod.sail
 reg_ref.sail
 XXXXX Dodgy division/modulo stuff
 Replicate.sail
+XXXXX Non-terminating loops - I've written terminating versions of these
+while_MM.sail
+while_MP.sail
+while_PM.sail
+while_PP.sail
+XXXXX Not yet - haven't decided whether to support register reads in measures
+while_MM_terminating.sail
+XXXXX Not yet - haven't arranged for lifting pure loops into the monad (or proving termination outright) yet
+while_PP_terminating.sail
