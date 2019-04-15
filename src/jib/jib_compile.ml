@@ -256,7 +256,7 @@ let rec compile_aval l ctx = function
 
   | AV_vector ([], typ) ->
      let vector_ctyp = ctyp_of_typ ctx typ in
-     begin match ctyp_of_typ ctx typ with
+     begin match vector_ctyp with
      | CT_fbits (0, _) ->
         [], (F_lit (V_bits []), vector_ctyp), []
      | _ ->
@@ -277,12 +277,12 @@ let rec compile_aval l ctx = function
      | Some (_, Ord_aux (Ord_dec, _), _) ->
         [], (bitstring, CT_fbits (len, true)), []
      | Some _ ->
-        raise (Reporting.err_general l "Encountered order polymorphic bitvector literal")
+          raise (Reporting.err_general l "Encountered order polymorphic bitvector literal")
      | None ->
         raise (Reporting.err_general l "Encountered vector literal without vector type")
      end
 
-  (* Convert a bitvector literal that is larger than 64-bits to a
+     (* Convert a bitvector literal that is larger than 64-bits to a
      variable size bitvector, converting it in 64-bit chunks. *)
   | AV_vector (avals, typ) when is_bitvector avals ->
      let len = List.length avals in
