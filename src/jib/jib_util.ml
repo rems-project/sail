@@ -169,6 +169,8 @@ let rec cval_rename from_id to_id = function
   | V_ctor_unwrap (ctor, f, unifiers, ctyp) -> V_ctor_unwrap (ctor, cval_rename from_id to_id f, unifiers, ctyp)
   | V_hd cval -> V_hd (cval_rename from_id to_id cval)
   | V_tl cval -> V_tl (cval_rename from_id to_id cval)
+  | V_struct (fields, ctyp) ->
+     V_struct (List.map (fun (field, cval) -> field, cval_rename from_id to_id cval) fields, ctyp)
   | V_poly (f, ctyp) -> V_poly (cval_rename from_id to_id f, ctyp)
 
 let rec clexp_rename from_id to_id = function
@@ -305,6 +307,9 @@ let rec string_of_cval ?zencode:(zencode=true) = function
      Printf.sprintf "%s.%s"
        (string_of_cval' ~zencode:zencode f)
        (Util.zencode_string (string_of_id ctor))
+  | V_struct (fields, _) ->
+     Printf.sprintf "{%s}"
+       (Util.string_of_list ", " (fun (field, cval) -> string_of_id field ^ " = " ^ string_of_cval' ~zencode:zencode cval) fields)
   | V_ctor_unwrap (ctor, f, unifiers, _) ->
      Printf.sprintf "%s.%s"
        (string_of_cval' ~zencode:zencode f)
@@ -755,6 +760,7 @@ let rec map_cval_ctyp f = function
      V_field (map_cval_ctyp f cval, field)
   | V_hd cval -> V_hd (map_cval_ctyp f cval)
   | V_tl cval -> V_tl (map_cval_ctyp f cval)
+  | V_struct (fields, ctyp) -> V_struct (List.map (fun (id, cval) -> id, map_cval_ctyp f cval) fields, f ctyp)
   | V_poly (cval, ctyp) -> V_poly (map_cval_ctyp f cval, f ctyp)
 
 
@@ -933,6 +939,7 @@ and cval_ctyp = function
         end
      | ctyp -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Inavlid type for V_field " ^ full_string_of_ctyp ctyp)
      end
+  | V_struct (fields, ctyp) -> ctyp
   | V_call (op, vs) -> infer_call vs op
 
 let rec clexp_ctyp = function

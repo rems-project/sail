@@ -191,6 +191,19 @@ let rec smt_cval env cval =
         Fn (zencode_upper_id struct_id ^ "_" ^ field, [smt_cval env union])
      | _ -> failwith "Field for non-struct type"
      end
+  | V_struct (fields, ctyp) ->
+     begin match ctyp with
+     | CT_struct (struct_id, field_ctyps) ->
+        let set_field (field, cval) =
+          match Util.assoc_compare_opt Id.compare field field_ctyps with
+          | None -> failwith "Field type not found"
+          | Some ctyp when ctyp_equal (cval_ctyp cval) ctyp ->
+             smt_cval env cval
+          | _ -> failwith "Type mismatch when generating struct for SMT"
+        in
+        Fn (zencode_upper_id struct_id, List.map set_field fields)
+     | _ -> failwith "Struct does not have struct type"
+     end 
   | V_tuple_member (frag, len, n) ->
      Fn (Printf.sprintf "tup_%d_%d" len n, [smt_cval env frag])
   | cval -> failwith ("Unrecognised cval " ^ string_of_cval ~zencode:false cval)
@@ -440,9 +453,6 @@ let builtin_shift shiftop env vbits vshift ret_ctyp =
 
 let builtin_not_bits env v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
-  | CT_fbits _, CT_fbits _ ->
-     Fn ("bvnot", [smt_cval env v])
-
   | CT_lbits _, CT_fbits (n, _) ->
      bvnot (Extract (n - 1, 0, Fn ("contents", [smt_cval env v])))
 
@@ -1341,7 +1351,7 @@ let generate_smt props name_file env ast =
         env
     in
     let t = Profile.start () in
-    let cdefs, ctx = compile_ast { ctx with specialize_calls = true; ignore_64 = true } ast in
+    let cdefs, ctx = compile_ast { ctx with specialize_calls = true; ignore_64 = true; struct_value = true } ast in
     Profile.finish "Compiling to Jib IR" t;
 
     smt_cdefs props name_file env cdefs cdefs

@@ -153,7 +153,8 @@ type ctx =
     convert_typ : ctx -> typ -> ctyp;
     optimize_anf : ctx -> typ aexp -> typ aexp;
     specialize_calls : bool;
-    ignore_64 : bool
+    ignore_64 : bool;
+    struct_value : bool
   }
 
 let initial_ctx ~convert_typ:convert_typ ~optimize_anf:optimize_anf env =
@@ -168,7 +169,8 @@ let initial_ctx ~convert_typ:convert_typ ~optimize_anf:optimize_anf env =
     convert_typ = convert_typ;
     optimize_anf = optimize_anf;
     specialize_calls = false;
-    ignore_64 = false
+    ignore_64 = false;
+    struct_value = false
   }
 
 let ctyp_of_typ ctx typ = ctx.convert_typ ctx typ
@@ -248,6 +250,23 @@ let rec compile_aval l ctx = function
      [iclear tup_ctyp gs]
      @ cleanup
 
+  | AV_record (fields, typ) when ctx.struct_value ->
+     let ctyp = ctyp_of_typ ctx typ in
+     let gs = ngensym () in
+     let compile_fields (id, aval) =
+       let field_setup, cval, field_cleanup = compile_aval l ctx aval in
+       field_setup,
+       (id, cval),
+       field_cleanup
+     in
+     let field_triples = List.map compile_fields (Bindings.bindings fields) in
+     let setup = List.concat (List.map (fun (s, _, _) -> s) field_triples) in
+     let fields = List.map (fun (_, f, _) -> f) field_triples in
+     let cleanup = List.concat (List.map (fun (_, _, c) -> c) field_triples) in
+     [idecl ctyp gs],
+     V_struct (fields, ctyp),
+     [iclear ctyp gs]
+     
   | AV_record (fields, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
      let gs = ngensym () in

@@ -163,6 +163,7 @@ let rec cval_subst id subst = function
   | V_tuple_member (cval, len, n) -> V_tuple_member (cval_subst id subst cval, len, n)
   | V_ctor_kind (cval, ctor, unifiers, ctyp) -> V_ctor_kind (cval_subst id subst cval, ctor, unifiers, ctyp)
   | V_ctor_unwrap (ctor, cval, unifiers, ctyp) -> V_ctor_unwrap (ctor, cval_subst id subst cval, unifiers, ctyp)
+  | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> field, cval_subst id subst cval) fields, ctyp)
   | V_poly (cval, ctyp) -> V_poly (cval_subst id subst cval, ctyp)
 
 let rec instrs_subst id subst =

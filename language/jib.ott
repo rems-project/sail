@@ -65,19 +65,20 @@ name :: '' ::=
 % expressions, used by the aval (ANF) and cval (Jib) types.
 
 cval :: 'V_' ::=
-  | name : ctyp                                  :: :: id
-  | '&' name : ctyp                              :: :: ref
-  | value : ctyp                                 :: :: lit
-  | cval != kind id ( ctyp0 , ... , ctypn ) ctyp :: :: ctor_kind
-  | unwrap id cval ( ctyp0 , ... , ctypn ) ctyp  :: :: ctor_unwrap
-  | cval op cval'                                :: :: op
-  | cval nat0 nat1                               :: :: tuple_member
-  | op cval                                      :: :: unary
-  | string ( cval0 , ... , cvaln )               :: :: call
-  | cval . string                                :: :: field
-  | hd ( cval )                                  :: :: hd
-  | tl ( cval )                                  :: :: tl
-  | poly cval ctyp                               :: :: poly
+  | name : ctyp                                     :: :: id
+  | '&' name : ctyp                                 :: :: ref
+  | value : ctyp                                    :: :: lit
+  | struct { id0 = cval0 , ... , idn = cvaln } ctyp :: :: struct
+  | cval != kind id ( ctyp0 , ... , ctypn ) ctyp    :: :: ctor_kind
+  | unwrap id cval ( ctyp0 , ... , ctypn ) ctyp     :: :: ctor_unwrap
+  | cval op cval'                                   :: :: op
+  | cval nat0 nat1                                  :: :: tuple_member
+  | op cval                                         :: :: unary
+  | string ( cval0 , ... , cvaln )                  :: :: call
+  | cval . string                                   :: :: field
+  | hd ( cval )                                     :: :: hd
+  | tl ( cval )                                     :: :: tl
+  | poly cval ctyp                                  :: :: poly
 
 % Note that init / clear are sometimes refered to as create / kill
 

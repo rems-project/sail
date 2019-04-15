@@ -123,6 +123,11 @@ let rec simp_fn = function
   | Fn ("not", [Fn ("not", [exp])]) -> exp
   | exp -> exp
 
+let rec simp_ite = function
+  | Ite (cond, Bool_lit true, Bool_lit false) -> cond
+  | Ite (_, Var v, Var v') when v = v' -> Var v
+  | exp -> exp
+         
 let rec simp_smt_exp vars = function
   | Var v -> 
      begin match Hashtbl.find_opt vars v with
@@ -137,7 +142,7 @@ let rec simp_smt_exp vars = function
      let cond = simp_smt_exp vars cond in
      let t = simp_smt_exp vars t in
      let e = simp_smt_exp vars e in
-     Ite (cond, t, e)
+     simp_ite (Ite (cond, t, e))
   | Extract (i, j, exp) ->
      let exp = simp_smt_exp vars exp in
      Extract (i, j, exp)

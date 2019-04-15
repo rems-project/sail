@@ -84,7 +84,8 @@ type ctx =
     convert_typ : ctx -> typ -> ctyp;
     optimize_anf : ctx -> typ aexp -> typ aexp;
     specialize_calls : bool;
-    ignore_64 : bool
+    ignore_64 : bool;
+    struct_value : bool
   }
 
 val initial_ctx :
