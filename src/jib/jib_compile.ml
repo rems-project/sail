@@ -254,23 +254,32 @@ let rec compile_aval l ctx = function
      (F_id gs, ctyp),
      [iclear ctyp gs]
 
-  | AV_vector ([], _) ->
-     raise (Reporting.err_general l "Encountered empty vector literal")
+  | AV_vector ([], typ) ->
+     let vector_ctyp = ctyp_of_typ ctx typ in
+     begin match ctyp_of_typ ctx typ with
+     | CT_fbits (0, _) ->
+        [], (F_lit (V_bits []), vector_ctyp), []
+     | _ ->
+        let gs = ngensym () in
+        [idecl vector_ctyp gs;
+         iextern (CL_id (gs, vector_ctyp)) (mk_id "internal_vector_init") [(F_lit (V_int Big_int.zero), CT_fint 64)]],
+        (F_id gs, vector_ctyp),
+        [iclear vector_ctyp gs]
+     end
 
   (* Convert a small bitvector to a uint64_t literal. *)
   | AV_vector (avals, typ) when is_bitvector avals && List.length avals <= 64 ->
-     begin
-       let bitstring = F_lit (V_bits (List.map value_of_aval_bit avals)) in
-       let len = List.length avals in
-       match destruct_vector ctx.tc_env typ with
-       | Some (_, Ord_aux (Ord_inc, _), _) ->
-          [], (bitstring, CT_fbits (len, false)), []
-       | Some (_, Ord_aux (Ord_dec, _), _) ->
-          [], (bitstring, CT_fbits (len, true)), []
-       | Some _ ->
-          raise (Reporting.err_general l "Encountered order polymorphic bitvector literal")
-       | None ->
-          raise (Reporting.err_general l "Encountered vector literal without vector type")
+     let bitstring = F_lit (V_bits (List.map value_of_aval_bit avals)) in
+     let len = List.length avals in
+     begin match destruct_vector ctx.tc_env typ with
+     | Some (_, Ord_aux (Ord_inc, _), _) ->
+        [], (bitstring, CT_fbits (len, false)), []
+     | Some (_, Ord_aux (Ord_dec, _), _) ->
+        [], (bitstring, CT_fbits (len, true)), []
+     | Some _ ->
+        raise (Reporting.err_general l "Encountered order polymorphic bitvector literal")
+     | None ->
+        raise (Reporting.err_general l "Encountered vector literal without vector type")
      end
 
   (* Convert a bitvector literal that is larger than 64-bits to a

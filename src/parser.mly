@@ -1064,6 +1064,8 @@ atomic_exp:
     { mk_exp (E_record $3) $startpos $endpos }
   | Lcurly exp With fexp_exp_list Rcurly
     { mk_exp (E_record_update ($2, $4)) $startpos $endpos }
+  | Lsquare Rsquare
+    { mk_exp (E_vector []) $startpos $endpos }
   | Lsquare exp_list Rsquare
     { mk_exp (E_vector $2) $startpos $endpos }
   | Lsquare exp With atomic_exp Eq exp Rsquare
