@@ -545,6 +545,11 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      let record = coerce_record (value_of_exp exp) in
      return (exp_of_value (StringMap.find (string_of_id id) record))
 
+  | E_var (lexp, exp, E_aux (E_block body, _)) ->
+     wrap (E_block (E_aux (E_assign (lexp, exp), annot) :: body))
+  | E_var (lexp, exp, body) ->
+     wrap (E_block [E_aux (E_assign (lexp, exp), annot); body])
+     
   | E_assign (lexp, exp) when not (is_value exp) -> step exp >>= fun exp' -> wrap (E_assign (lexp, exp'))
   | E_assign (LEXP_aux (LEXP_memory (id, args), _), exp) -> wrap (E_app (id, args @ [exp]))
   | E_assign (LEXP_aux (LEXP_field (lexp, id), ul), exp) ->

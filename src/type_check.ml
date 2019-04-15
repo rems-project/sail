@@ -76,6 +76,9 @@ let opt_expand_valspec = ref true
    the SMT solver to use non-linear arithmetic. *)
 let opt_smt_linearize = ref false
 
+(* Allow use of div and mod when rewriting nexps *)
+let opt_smt_div = ref false
+
 let depth = ref 0
 
 let rec indent n = match n with
@@ -136,8 +139,8 @@ let typ_error env l m = raise (Type_error (env, l, Err_other m))
 let typ_raise env l err = raise (Type_error (env, l, err))
 
 let deinfix = function
-  | Id_aux (Id v, l) -> Id_aux (DeIid v, l)
-  | Id_aux (DeIid v, l) -> Id_aux (DeIid v, l)
+  | Id_aux (Id v, l) -> Id_aux (Operator v, l)
+  | Id_aux (Operator v, l) -> Id_aux (Operator v, l)
 
 let field_name rec_id id =
   match rec_id, id with
@@ -177,7 +180,7 @@ let is_atom_bool (Typ_aux (typ_aux, _)) =
 
 let rec strip_id = function
   | Id_aux (Id x, _) -> Id_aux (Id x, Parse_ast.Unknown)
-  | Id_aux (DeIid x, _) -> Id_aux (DeIid x, Parse_ast.Unknown)
+  | Id_aux (Operator x, _) -> Id_aux (Operator x, Parse_ast.Unknown)
 and strip_kid = function
   | Kid_aux (Var x, _) -> Kid_aux (Var x, Parse_ast.Unknown)
 and strip_base_effect = function
@@ -1200,6 +1203,7 @@ end = struct
         { env with
           constraints = List.map (constraint_subst v (arg_kopt (mk_kopt s_k s_v))) env.constraints;
           typ_vars = KBindings.add v (l, k) (KBindings.add s_v (s_l, s_k) env.typ_vars);
+          locals = Bindings.map (fun (mut, typ) -> mut, typ_subst v (arg_kopt (mk_kopt s_k s_v)) typ) env.locals;
           shadow_vars = KBindings.add v (n + 1) env.shadow_vars
         }, Some s_v
       end
@@ -1222,7 +1226,7 @@ end = struct
     else if KidSet.cardinal power_vars = 1 && !opt_smt_linearize then
       let v = KidSet.choose power_vars in
       let constrs = List.fold_left nc_and nc_true (get_constraints env) in
-      begin match Constraint.solve_all_smt l (get_typ_vars env) constrs v with
+      begin match Constraint.solve_all_smt l constrs v with
       | Some solutions ->
          typ_print (lazy (Util.("Linearizing " |> red |> clear) ^ string_of_n_constraint constr
                           ^ " for " ^ string_of_kid v ^ " in " ^ Util.string_of_list ", " Big_int.to_string solutions));
@@ -1476,10 +1480,8 @@ which is then a problem we can feed to the constraint solver expecting unsat.
  *)
 
 let prove_smt env (NC_aux (_, l) as nc) =
-  let vars = Env.get_typ_vars env in
-  let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
   let ncs = Env.get_constraints env in
-  match Constraint.call_smt l vars (List.fold_left nc_and (nc_not nc) ncs) with
+  match Constraint.call_smt l (List.fold_left nc_and (nc_not nc) ncs) with
   | Constraint.Unsat -> typ_debug (lazy "unsat"); true
   | Constraint.Sat -> typ_debug (lazy "sat"); false
   | Constraint.Unknown ->
@@ -1487,7 +1489,7 @@ let prove_smt env (NC_aux (_, l) as nc) =
         constraints, even when such constraints are irrelevant *)
      let ncs' = List.concat (List.map constraint_conj ncs) in
      let ncs' = List.filter (fun nc -> KidSet.is_empty (constraint_power_variables nc)) ncs' in
-     match Constraint.call_smt l vars (List.fold_left nc_and (nc_not nc) ncs') with
+     match Constraint.call_smt l (List.fold_left nc_and (nc_not nc) ncs') with
      | Constraint.Unsat -> typ_debug (lazy "unsat"); true
      | Constraint.Sat | Constraint.Unknown -> typ_debug (lazy "sat/unknown"); false
 
@@ -1501,7 +1503,7 @@ let solve_unique env (Nexp_aux (_, l) as nexp) =
     let vars = Env.get_typ_vars env in
     let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) vars in
     let constr = List.fold_left nc_and (nc_eq (nvar (mk_kid "solve#")) nexp) (Env.get_constraints env) in
-    Constraint.solve_unique_smt l vars constr (mk_kid "solve#")
+    Constraint.solve_unique_smt l constr (mk_kid "solve#")
 
 let debug_pos (file, line, _, _) =
   "(" ^ file ^ "/" ^ string_of_int line ^ ") "
@@ -1662,7 +1664,7 @@ let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as 
   | Typ_tup typs1, Typ_tup typs2 when List.length typs1 = List.length typs2 ->
      List.fold_left (merge_uvars l) KBindings.empty (List.map2 (unify_typ l env goals) typs1 typs2)
 
-  | _, _ -> unify_error l ("Cound not unify " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2)
+  | _, _ -> unify_error l ("Could not unify " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2)
 
 and unify_typ_arg l env goals (A_aux (aux1, _) as typ_arg1) (A_aux (aux2, _) as typ_arg2) =
   match aux1, aux2 with
@@ -1709,7 +1711,7 @@ and unify_order l goals (Ord_aux (aux1, _) as ord1) (Ord_aux (aux2, _) as ord2) 
   | Ord_var v, _ when KidSet.mem v goals -> KBindings.singleton v (arg_order ord2)
   | Ord_inc, Ord_inc -> KBindings.empty
   | Ord_dec, Ord_dec -> KBindings.empty
-  | _, _ -> unify_error l ("Cound not unify " ^ string_of_order ord1 ^ " and " ^ string_of_order ord2)
+  | _, _ -> unify_error l ("Could not unify " ^ string_of_order ord1 ^ " and " ^ string_of_order ord2)
 
 and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_aux2, _) as nexp2) =
   typ_debug (lazy (Util.("Unify nexp " |> magenta |> clear) ^ string_of_nexp nexp1 ^ " and " ^ string_of_nexp nexp2
@@ -1759,9 +1761,9 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
 
           mod(m, C) = 0 && C != 0 --> (C * n = m <--> n = m / C)
 
-          to help us unify multiplications and divisions. 
+          to help us unify multiplications and divisions. *)
        let valid n c = prove __POS__ env (nc_eq (napp (mk_id "mod") [n; c]) (nint 0)) && prove __POS__ env (nc_neq c (nint 0)) in
-       if KidSet.is_empty (nexp_frees n1b) && valid nexp2 n1b then
+       (*if KidSet.is_empty (nexp_frees n1b) && valid nexp2 n1b then
          unify_nexp l env goals n1a (napp (mk_id "div") [nexp2; n1b])
        else if KidSet.is_empty (nexp_frees n1a) && valid nexp2 n1a then
          unify_nexp l env goals n1b (napp (mk_id "div") [nexp2; n1a]) *)
@@ -1777,6 +1779,8 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
                    unify_nexp l env goals n1b (nconstant (Big_int.div c2 c1))
                 | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
               end
+           | Nexp_var kid when (not (KidSet.mem kid goals)) && valid nexp2 n1a && !opt_smt_div ->
+              unify_nexp l env goals n1b (napp (mk_id "div") [nexp2; n1a])
            | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
          end
        else if KidSet.is_empty (nexp_frees n1b) then
@@ -1784,6 +1788,8 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
            match nexp_aux2 with
            | Nexp_times (n2a, n2b) when prove __POS__ env (NC_aux (NC_equal (n1b, n2b), Parse_ast.Unknown)) ->
               unify_nexp l env goals n1a n2a
+           | Nexp_var kid when (not (KidSet.mem kid goals)) && valid nexp2 n1b && !opt_smt_div ->
+              unify_nexp l env goals n1a (napp (mk_id "div") [nexp2; n1b])
            | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
          end
        else unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
@@ -2054,7 +2060,7 @@ let rec subtyp l env typ1 typ2 =
      let kids2 = KidSet.elements (KidSet.diff (KidSet.of_list kids2) (nexp_frees nexp2)) in
      if not (kids2 = []) then typ_error env l ("Universally quantified constraint generated: " ^ Util.string_of_list ", " string_of_kid kids2) else ();
      let vars = KBindings.filter (fun _ k -> match k with K_int | K_bool -> true | _ -> false) (Env.get_typ_vars env) in
-     begin match Constraint.call_smt l vars (nc_eq nexp1 nexp2) with
+     begin match Constraint.call_smt l (nc_eq nexp1 nexp2) with
      | Constraint.Sat ->
         let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
         if prove __POS__ env nc2 then
@@ -2187,15 +2193,17 @@ let rec rewrite_sizeof' env (Nexp_aux (aux, l) as nexp) =
      let exp = rewrite_sizeof' env nexp in
      mk_exp (E_app (mk_id "pow2", [exp]))
 
+  (* SMT solver div/mod is euclidian, so we must use those versions of
+     div and mod in lib/smt.sail *)
   | Nexp_app (id, [nexp1; nexp2]) when string_of_id id = "div" ->
      let exp1 = rewrite_sizeof' env nexp1 in
      let exp2 = rewrite_sizeof' env nexp2 in
-     mk_exp (E_app (mk_id "div", [exp1; exp2]))
+     mk_exp (E_app (mk_id "ediv_int", [exp1; exp2]))
 
   | Nexp_app (id, [nexp1; nexp2]) when string_of_id id = "mod" ->
      let exp1 = rewrite_sizeof' env nexp1 in
      let exp2 = rewrite_sizeof' env nexp2 in
-     mk_exp (E_app (mk_id "mod", [exp1; exp2]))
+     mk_exp (E_app (mk_id "emod_int", [exp1; exp2]))
 
   | Nexp_app _ | Nexp_id _ ->
      typ_error env l ("Cannot re-write sizeof(" ^ string_of_nexp nexp ^ ")")
@@ -2626,10 +2634,10 @@ let irule r env exp =
 
 
 (* This function adds useful assertion messages to asserts missing them *)
-let assert_msg test = function
+let assert_msg = function
   | E_aux (E_lit (L_aux (L_string "", _)), (l, _)) ->
      let open Reporting in
-     locate (fun _ -> l) (mk_lit_exp (L_string (loc_to_string ~code:false l ^ ": " ^ string_of_exp test)))
+     locate (fun _ -> l) (mk_lit_exp (L_string (short_loc_to_string l)))
   | msg -> msg
 
 let strip_exp : 'a exp -> unit exp = function exp -> map_exp_annot (fun (l, _) -> (l, ())) exp
@@ -2877,7 +2885,7 @@ and check_block l env exps ret_typ =
      let texp, env = bind_assignment env lexp bind in
      texp :: check_block l env exps ret_typ
   | ((E_aux (E_assert (constr_exp, msg), _) as exp) :: exps) ->
-     let msg = assert_msg constr_exp msg in
+     let msg = assert_msg msg in
      let constr_exp = crule check_exp env constr_exp bool_typ in
      let checked_msg = crule check_exp env msg string_typ in
      let env = match assert_constraint env true constr_exp with
@@ -3128,40 +3136,34 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           typ_error env l (Printf.sprintf "Cannot bind tuple pattern %s against non tuple type %s"
                          (string_of_pat pat) (string_of_typ typ))
      end
-  | P_app (f, pats) when Env.is_union_constructor f env ->
-     begin
-       (* Treat Ctor((p, x)) the same as Ctor(p, x) *)
-       let pats = match pats with [P_aux (P_tup pats, _)] -> pats | _ -> pats in
-       let (typq, ctor_typ) = Env.get_union_id f env in
-       let quants = quant_items typq in
-       let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
-         | Typ_tup typs -> typs
-         | _ -> [typ]
-       in
-       match Env.expand_synonyms env ctor_typ with
-       | Typ_aux (Typ_fn ([arg_typ], ret_typ, _), _) ->
-          begin
-            try
-              let goals = quant_kopts typq |> List.map kopt_kid |> KidSet.of_list in
-              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for pattern " ^ string_of_typ typ));
-              let unifiers = unify l env goals ret_typ typ in
-              let arg_typ' = subst_unifiers unifiers arg_typ in
-              let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
-              if not (List.for_all (solve_quant env) quants') then
-                typ_raise env l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env))
-              else ();
-              let ret_typ' = subst_unifiers unifiers ret_typ in
-              let arg_typ', env = bind_existential l None arg_typ' env in
-              let tpats, env, guards =
-                try List.fold_left2 bind_tuple_pat ([], env, []) pats (untuple arg_typ') with
-                | Invalid_argument _ -> typ_error env l "Union constructor pattern arguments have incorrect length"
-              in
-              annot_pat (P_app (f, List.rev tpats)) typ, env, guards
-            with
-            | Unification_error (l, m) -> typ_error env l ("Unification error when pattern matching against union constructor: " ^ m)
-          end
-       | _ -> typ_error env l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
+  | P_app (f, [pat]) when Env.is_union_constructor f env ->
+     let (typq, ctor_typ) = Env.get_union_id f env in
+     let quants = quant_items typq in
+     begin match Env.expand_synonyms env ctor_typ with
+     | Typ_aux (Typ_fn ([arg_typ], ret_typ, _), _) ->
+        begin
+          try
+            let goals = quant_kopts typq |> List.map kopt_kid |> KidSet.of_list in
+            typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for pattern " ^ string_of_typ typ));
+            let unifiers = unify l env goals ret_typ typ in
+            let arg_typ' = subst_unifiers unifiers arg_typ in
+            let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
+            if not (List.for_all (solve_quant env) quants') then
+              typ_raise env l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env))
+            else ();
+            let ret_typ' = subst_unifiers unifiers ret_typ in
+            let arg_typ', env = bind_existential l None arg_typ' env in
+            let tpat, env, guards = bind_pat env pat arg_typ' in
+            annot_pat (P_app (f, [tpat])) typ, env, guards
+          with
+          | Unification_error (l, m) -> typ_error env l ("Unification error when pattern matching against union constructor: " ^ m)
+        end
+     | _ -> typ_error env l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
      end
+     
+  | P_app (f, pats) when Env.is_union_constructor f env ->
+     (* Treat Ctor(x, y) as Ctor((x, y)) *)
+     bind_pat env (mk_pat (P_app (f, [mk_pat (P_tup pats)]))) typ
 
   | P_app (f, pats) when Env.is_mapping f env ->
      begin
@@ -3750,7 +3752,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let vec_typ = dvector_typ env (nint (List.length vec)) (typ_of inferred_item) in
      annot_exp (E_vector (inferred_item :: checked_items)) vec_typ
   | E_assert (test, msg) ->
-     let msg = assert_msg test msg in
+     let msg = assert_msg msg in
      let checked_test = crule check_exp env test bool_typ in
      let checked_msg = crule check_exp env msg string_typ in
      annot_exp_effect (E_assert (checked_test, checked_msg)) unit_typ (mk_effect [BE_escape])

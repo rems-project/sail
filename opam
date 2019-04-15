@@ -1,6 +1,6 @@
 opam-version: "1.2"
 name: "sail"
-version: "0.8"
+version: "0.9"
 maintainer: "Sail Devs <cl-sail-dev@lists.cam.ac.uk>"
 authors: [
   "Alasdair Armstrong"
@@ -28,7 +28,7 @@ depends: [
   "ocamlbuild"
   "zarith"
   "menhir"
-  "linenoise"
+  "linenoise" {>= "1.1.0"}
   "ott" {>= "0.28"}
   "lem" {>= "2018-12-14"}
   "linksem" {>= "0.3"}
@@ -38,4 +38,4 @@ depends: [
   "base64"
   "yojson"
 ]
-available: [ocaml-version >= "4.06.0"]
+available: [ocaml-version >= "4.06.1"]

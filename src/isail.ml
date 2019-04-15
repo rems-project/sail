@@ -161,7 +161,6 @@ let rec run () =
      end
 
 let rec run_steps n =
-  print_endline ("step " ^ string_of_int n);
   match !current_mode with
   | _ when n <= 0 -> ()
   | Normal | Emacs -> ()
@@ -196,42 +195,83 @@ let rec run_steps n =
           run_steps (n - 1)
      end
 
-let help = function
+let help =
+  let open Printf in
+  let open Util in
+  let color c str = str |> c |> clear in
+  function
   | ":t" | ":type" ->
-     "(:t | :type) <function name> - Print the type of a function."
+     sprintf "(:t | :type) %s - Print the type of a function."
+             (color yellow "<function name>")
   | ":q" | ":quit" ->
      "(:q | :quit) - Exit the interpreter."
   | ":i" | ":infer" ->
-     "(:i | :infer) <expression> - Infer the type of an expression."
+     sprintf "(:i | :infer) %s - Infer the type of an expression."
+             (color yellow "<expression>")
   | ":v" | ":verbose" ->
      "(:v | :verbose) - Increase the verbosity level, or reset to zero at max verbosity."
+  | ":b" | ":bind" ->
+     sprintf "(:b | :bind) %s : %s - Declare a variable of a specific type"
+             (color yellow "<id>") (color yellow "<type>")
+  | ":let" ->
+     sprintf ":let %s = %s - Bind a variable to expression"
+             (color yellow "<id>") (color yellow "<expression>")
+  | ":def" ->
+     sprintf ":def %s - Evaluate a top-level definition"
+             (color yellow "<definition>")
+  | ":prove" ->
+     sprintf ":prove %s - Try to prove a constraint in the top-level environment"
+             (color yellow "<constraint>")
+  | ":assume" ->
+     sprintf ":assume %s - Add a constraint to the top-level environment"
+             (color yellow "<constraint>")
   | ":commands" ->
      ":commands - List all available commands."
   | ":help" ->
-     ":help <command> - Get a description of <command>. Commands are prefixed with a colon, e.g. :help :type."
+     sprintf ":help %s - Get a description of <command>. Commands are prefixed with a colon, e.g. %s."
+             (color yellow "<command>") (color green ":help :type")
   | ":elf" ->
-     ":elf <file> - Load an ELF file."
+     sprintf ":elf %s - Load an ELF file."
+       (color yellow "<file>")
   | ":bin" ->
      ":bin <address> <file> - Load a binary file at the given address."
   | ":r" | ":run" ->
      "(:r | :run) - Completely evaluate the currently evaluating expression."
   | ":s" | ":step" ->
-     "(:s | :step) <number> - Perform a number of evaluation steps."
+     sprintf "(:s | :step) %s - Perform a number of evaluation steps."
+             (color yellow "<number>")
   | ":n" | ":normal" ->
      "(:n | :normal) - Exit evaluation mode back to normal mode."
   | ":clear" ->
-     ":clear (on|off) - Set whether to clear the screen or not in evaluation mode."
+     sprintf ":clear %s - Set whether to clear the screen or not in evaluation mode."
+             (color yellow "(on|off)")
   | ":l" | ":load" -> String.concat "\n"
-     [ "(:l | :load) <files> - Load sail files and add their definitions to the interactive environment.";
+     [ sprintf "(:l | :load) %s - Load sail files and add their definitions to the interactive environment."
+               (color yellow "<files>");
        "Files containing scattered definitions must be loaded together." ]
   | ":u" | ":unload" ->
      "(:u | :unload) - Unload all loaded files."
   | ":output" ->
-     ":output <file> - Redirect evaluating expression output to a file."
+     sprintf ":output %s - Redirect evaluating expression output to a file."
+             (color yellow "<file>")
   | ":option" ->
-     ":option string - Parse string as if it was an option passed on the command line. Try :option -help."
+     sprintf ":option %s - Parse string as if it was an option passed on the command line. e.g. :option -help."
+             (color yellow "<string>")
+  | ":rewrite" ->
+     sprintf ":rewrite %s - Apply a rewrite to the AST. %s shows all possible rewrites. See also %s"
+             (color yellow "<rewrite> <args>") (color green ":list_rewrites") (color green ":rewrites")
+  | ":rewrites" ->
+     sprintf ":rewrites %s - Apply all rewrites for a specific target, valid targets are lem, coq, ocaml, c, and interpreter"
+             (color yellow "<target>")
+  | ":compile" ->
+     sprintf ":compile %s - Compile AST to a specified target, valid targets are lem, coq, ocaml, c, and ir (intermediate representation)"
+             (color yellow "<target>")
+  | "" ->
+     sprintf "Type %s for a list of commands, and %s %s for information about a specific command"
+             (color green ":commands") (color green ":help") (color yellow "<command>")
   | cmd ->
-     "Either invalid command passed to help, or no documentation for " ^ cmd ^ ". Try :help :help."
+     sprintf "Either invalid command passed to help, or no documentation for %s. Try %s."
+             (color green cmd) (color green ":help :help")
 
 let format_pos_emacs p1 p2 contents =
   let open Lexing in
@@ -248,6 +288,17 @@ let rec emacs_error l contents =
   | Parse_ast.Unique (_, l) -> emacs_error l contents
   | Parse_ast.Documented (_, l) -> emacs_error l contents
   | Parse_ast.Generated l -> emacs_error l contents
+
+let slice_roots = ref IdSet.empty
+let slice_cuts = ref IdSet.empty
+
+let rec describe_rewrite =
+  let open Rewrites in
+  function
+  | String_rewriter rw -> "<string>" :: describe_rewrite (rw "")
+  | Bool_rewriter rw -> "<bool>" :: describe_rewrite (rw false)
+  | Literal_rewriter rw -> "(ocaml|lem|all)" :: describe_rewrite (rw (fun _ -> true))
+  | Basic_rewriter rw -> []
 
 type session = {
     id : string;
@@ -337,12 +388,12 @@ let handle_input' input =
         let exp = Type_check.infer_exp !Interactive.env exp in
         pretty_sail stdout (doc_typ (Type_check.typ_of exp));
         print_newline ()
-     | ":canon" ->
-        let typ = Initial_check.typ_of_string arg in
-        print_endline (string_of_typ (Type_check.canonicalize !Interactive.env typ))
      | ":prove" ->
         let nc = Initial_check.constraint_of_string arg in
         print_endline (string_of_bool (Type_check.prove __POS__ !Interactive.env nc))
+     | ":assume" ->
+        let nc = Initial_check.constraint_of_string arg in
+        Interactive.env := Type_check.Env.add_constraint nc !Interactive.env
      | ":v" | ":verbose" ->
             Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 3;
             print_endline ("Verbosity: " ^ string_of_int !Type_check.opt_tc_debug)
@@ -354,8 +405,8 @@ let handle_input' input =
         else print_endline "Invalid argument for :clear, expected either :clear on or :clear off"
      | ":commands" ->
         let commands =
-          [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :clear :commands :help :output :option";
-            "Normal mode commands - :elf :(l)oad :(u)nload";
+          [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help :output :option";
+            "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :rewrite :rewrites :list_rewrites :compile";
             "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
             "";
             ":(c)ommand can be called as either :c or :command." ]
@@ -365,7 +416,11 @@ let handle_input' input =
         begin
           try
             let args = Str.split (Str.regexp " +") arg in
-            Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) Sail.options (fun _ -> ()) "";
+            begin match args with
+            | opt :: args ->
+               Arg.parse_argv ~current:(ref 0) (Array.of_list ["sail"; opt; String.concat " " args]) Sail.options (fun _ -> ()) "";
+            | [] -> print_endline "Must provide a valid option"
+            end
           with
           | Arg.Bad message | Arg.Help message -> print_endline message
         end;
@@ -376,16 +431,6 @@ let handle_input' input =
         interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops
      | ":pretty" ->
         print_endline (Pretty_print_sail.to_string (Latex.defs !Interactive.ast))
-     | ":compile" ->
-        (*
-        let open PPrint in
-        let open C_backend in
-        let ast = Process_file.rewrite_ast_c !Interactive.env !Interactive.ast in
-        let ast, env = Specialize.(specialize typ_ord_specialization ast !Interactive.env) in
-        let ctx = initial_ctx env in
-        interactive_bytecode := bytecode_ast ctx (List.map flatten_cdef) ast
-         *)
-        ()
      | ":ir" ->
         print_endline arg;
         let open Jib in
@@ -421,7 +466,6 @@ let handle_input' input =
         | ":l" | ":load" ->
            let files = Util.split_on_char ' ' arg in
            let (_, ast, env) = load_files !Interactive.env files in
-           let ast = Process_file.rewrite_ast_interpreter !Interactive.env ast in
            Interactive.ast := append_ast !Interactive.ast ast;
            interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
            Interactive.env := env;
@@ -444,6 +488,110 @@ let handle_input' input =
            (* See initial_check.mli for an explanation of why we need this. *)
            Initial_check.have_undefined_builtins := false;
            Process_file.clear_symbols ()
+        | ":b" | ":bind" ->
+           let args = Str.split (Str.regexp " +") arg in
+           begin match args with
+           | v :: ":" :: args ->
+              let typ = Initial_check.typ_of_string (String.concat " " args) in
+              let _, env, _ = Type_check.bind_pat !Interactive.env (mk_pat (P_id (mk_id v))) typ in
+              Interactive.env := env
+           | _ -> print_endline "Invalid arguments for :bind"
+           end
+        | ":let" ->
+           let args = Str.split (Str.regexp " +") arg in
+           begin match args with
+           | v :: "=" :: args ->
+              let exp = Initial_check.exp_of_string (String.concat " " args) in
+              let ast, env = Type_check.check !Interactive.env (Defs [DEF_val (mk_letbind (mk_pat (P_id (mk_id v))) exp)]) in
+              Interactive.ast := append_ast !Interactive.ast ast;
+              Interactive.env := env;
+              interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
+           | _ -> print_endline "Invalid arguments for :let"
+           end
+        | ":def" ->
+           let ast = Initial_check.ast_of_def_string_with (Process_file.preprocess_ast options) arg in
+           let ast, env = Type_check.check !Interactive.env ast in
+           Interactive.ast := append_ast !Interactive.ast ast;
+           Interactive.env := env;
+           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
+        | ":graph" ->
+           let format = if arg = "" then "svg" else arg in
+           let dotfile, out_chan = Filename.open_temp_file "sail_graph_" ".gz" in
+           let image = Filename.temp_file "sail_graph_" ("." ^ format) in
+           Slice.dot_of_ast out_chan !Interactive.ast;
+           close_out out_chan;
+           let _ = Unix.system (Printf.sprintf "dot -T%s %s -o %s" format dotfile image) in
+           let _ = Unix.system (Printf.sprintf "xdg-open %s" image) in
+           ()
+        | ":slice_roots" ->
+           let args = Str.split (Str.regexp " +") arg in
+           let ids = List.map mk_id args |> IdSet.of_list in
+           Specialize.add_initial_calls ids;
+           slice_roots := IdSet.union ids !slice_roots
+        | ":slice_cuts" ->
+           let args = Str.split (Str.regexp " +") arg in
+           let ids = List.map mk_id args |> IdSet.of_list in
+           slice_cuts := IdSet.union ids !slice_cuts
+        | ":slice" ->
+           let open Slice in
+           let module SliceNodeSet = Set.Make(Slice.Node) in
+           let module G = Graph.Make(Slice.Node) in
+           let g = Slice.graph_of_ast !Interactive.ast in
+           let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> SliceNodeSet.of_list in
+           let cuts = !slice_cuts |> IdSet.elements |> List.map (fun id -> Function id) |> SliceNodeSet.of_list in
+           let g = G.prune roots cuts g in
+           Interactive.ast := Slice.filter_ast !slice_cuts g !Interactive.ast
+        | ":list_rewrites" ->
+           let print_rewrite (name, rw) =
+             print_endline (name ^ " " ^ Util.(String.concat " " (describe_rewrite rw) |> yellow |> clear))
+           in
+           List.sort (fun a b -> String.compare (fst a) (fst b)) Rewrites.all_rewrites
+           |> List.iter print_rewrite
+        | ":rewrite" ->
+           let open Rewrites in
+           let args = Str.split (Str.regexp " +") arg in
+           let rec parse_args rw args =
+             match rw, args with
+             | Basic_rewriter rw, [] -> rw
+             | Bool_rewriter rw, arg :: args -> parse_args (rw (bool_of_string arg)) args
+             | String_rewriter rw, arg :: args -> parse_args (rw arg) args
+             | Literal_rewriter rw, arg :: args ->
+                begin match arg with
+                | "ocaml" -> parse_args (rw rewrite_lit_ocaml) args
+                | "lem" -> parse_args (rw rewrite_lit_lem) args
+                | "all" -> parse_args (rw (fun _ -> true)) args
+                | _ -> failwith "target for literal rewrite must be one of ocaml/lem/all"
+                end
+             | _, _ -> failwith "Invalid arguments to rewrite"
+           in
+           begin match args with
+           | rw :: args ->
+              let rw = List.assoc rw Rewrites.all_rewrites in
+              let rw = parse_args rw args in
+              Interactive.ast := rw !Interactive.env !Interactive.ast;
+           | [] ->
+              failwith "Must provide the name of a rewrite, use :list_rewrites for a list of possible rewrites"
+           end
+        | ":rewrites" ->
+           Interactive.ast := Process_file.rewrite_ast_target arg !Interactive.env !Interactive.ast;
+           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops
+        | ":prover_regstate" ->
+           let env, ast = prover_regstate (Some arg) !Interactive.ast !Interactive.env in
+           Interactive.env := env;
+           Interactive.ast := ast;
+           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops
+        | ":recheck" ->
+           let ast, env = Type_check.check Type_check.initial_env !Interactive.ast in
+           Interactive.env := env;
+           Interactive.ast := ast;
+           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
+           vs_ids := val_spec_ids !Interactive.ast
+        | ":compile" ->
+           let out_name = match !opt_file_out with
+             | None -> "out.sail"
+             | Some f -> f ^ ".sail"
+           in
+           target (Some arg) out_name !Interactive.ast !Interactive.env
         | _ -> unrecognised_command cmd
         end
      | Expression str ->
@@ -491,7 +639,7 @@ let handle_input' input =
               begin match find_annot_ast sl !Interactive.ast with
               | Some annot ->
                  let msg = String.escaped (string_of_typ (Type_check.typ_of_annot annot)) in
-                 begin match simp_loc (fst annot) with
+                 begin match Reporting.simp_loc (fst annot) with
                  | Some (p1, p2) ->
                     print_endline ("(sail-highlight-region "
                                    ^ string_of_int (p1.pos_cnum + 1) ^ " " ^ string_of_int (p2.pos_cnum + 1)
@@ -561,6 +709,8 @@ let handle_input' input =
 
 let handle_input input =
   try handle_input' input with
+  | Failure str ->
+     print_endline ("Error: " ^ str)
   | Type_check.Type_error (env, l, err) ->
      print_endline (Type_error.string_of_type_error err)
   | Reporting.Fatal_error err ->
@@ -569,26 +719,88 @@ let handle_input input =
      print_endline (Printexc.to_string exn)
 
 let () =
-  (* Auto complete function names based on val specs *)
-  LNoise.set_completion_callback
-    begin
+  (* Auto complete function names based on val specs, directories if :load command, or rewrites if :rewrite command *)
+  LNoise.set_completion_callback (
       fun line_so_far ln_completions ->
       let line_so_far, last_id =
         try
-          let p = Str.search_backward (Str.regexp "[^a-zA-Z0-9_]") line_so_far (String.length line_so_far - 1) in
+          let p = Str.search_backward (Str.regexp "[^a-zA-Z0-9_/-]") line_so_far (String.length line_so_far - 1) in
           Str.string_before line_so_far (p + 1), Str.string_after line_so_far (p + 1)
         with
         | Not_found -> "", line_so_far
         | Invalid_argument _ -> line_so_far, ""
       in
+      let n = try String.index line_so_far ' ' with Not_found -> String.length line_so_far in
+      let cmd = Str.string_before line_so_far n in
       if last_id <> "" then
-        IdSet.elements !vs_ids
-        |> List.map string_of_id
-        |> List.filter (fun id -> Str.string_match (Str.regexp_string last_id) id 0)
-        |> List.map (fun completion -> line_so_far ^ completion)
-        |> List.iter (LNoise.add_completion ln_completions)
+        begin match cmd with
+        | ":load" | ":l" ->
+           let dirname, basename = Filename.dirname last_id, Filename.basename last_id in
+           if Sys.file_exists last_id then
+             LNoise.add_completion ln_completions (line_so_far ^ last_id);
+           if (try Sys.is_directory dirname with Sys_error _ -> false) then
+             let contents = Sys.readdir (Filename.concat (Sys.getcwd ()) dirname) in
+             for i = 0 to Array.length contents - 1 do
+               if Str.string_match (Str.regexp_string basename) contents.(i) 0 then
+                 let is_dir = (try Sys.is_directory (Filename.concat dirname contents.(i)) with Sys_error _ -> false) in
+                 LNoise.add_completion ln_completions
+                   (line_so_far ^ Filename.concat dirname contents.(i) ^ (if is_dir then Filename.dir_sep else ""))
+             done
+        | ":rewrite" ->
+           List.map fst Rewrites.all_rewrites
+           |> List.filter (fun opt -> Str.string_match (Str.regexp_string last_id) opt 0)
+           |> List.map (fun completion -> line_so_far ^ completion)
+           |> List.iter (LNoise.add_completion ln_completions)
+        | ":option" ->
+           List.map (fun (opt, _, _) -> opt) options
+           |> List.filter (fun opt -> Str.string_match (Str.regexp_string last_id) opt 0)
+           |> List.map (fun completion -> line_so_far ^ completion)
+           |> List.iter (LNoise.add_completion ln_completions)
+        | _ ->
+          IdSet.elements !vs_ids
+          |> List.map string_of_id
+          |> List.filter (fun id -> Str.string_match (Str.regexp_string last_id) id 0)
+          |> List.map (fun completion -> line_so_far ^ completion)
+          |> List.iter (LNoise.add_completion ln_completions)
+        end
       else ()
-    end;
+    );
+
+  LNoise.set_hints_callback (
+      fun line_so_far ->
+      let hint str = Some (" " ^ str, LNoise.Yellow, false) in
+      match String.trim line_so_far with
+      | _ when !Interactive.opt_emacs_mode -> None
+      | ":load"  | ":l" -> hint "<sail file>"
+      | ":bind"  | ":b" -> hint "<id> : <type>"
+      | ":infer" | ":i" -> hint "<expression>"
+      | ":type"  | ":t" -> hint "<function id>"
+      | ":let" -> hint "<id> = <expression>"
+      | ":def" -> hint "<definition>"
+      | ":prove" -> hint "<constraint>"
+      | ":assume" -> hint "<constraint>"
+      | ":compile" -> hint "<target>"
+      | ":rewrites" -> hint "<target>"
+      | str ->
+         let args = Str.split (Str.regexp " +") str in
+         match args with
+         | [":rewrite"] -> hint "<rewrite>"
+         | ":rewrite" :: rw :: args ->
+            begin match List.assoc_opt rw Rewrites.all_rewrites with
+            | Some rw ->
+               let hints = describe_rewrite rw in
+               let hints = Util.drop (List.length args) hints in
+               (match hints with [] -> None | _ ->  hint (String.concat " " hints))
+            | None -> None
+            end
+         | [":option"] -> hint "<flag>"
+         | [":option"; flag] ->
+            begin match List.find_opt (fun (opt, _, _) -> flag = opt) options with
+            | Some (_, _, help) -> hint (Str.global_replace (Str.regexp " +") " " help)
+            | None -> None
+            end
+         | _ -> None
+    );
 
   (* Read the script file if it is set with the -is option, and excute them *)
   begin

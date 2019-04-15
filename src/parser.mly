@@ -69,7 +69,7 @@ let cons_fst h (t,x) = (h::t,x)
 
 let string_of_id = function
   | Id_aux (Id str, _) -> str
-  | Id_aux (DeIid str, _) -> str
+  | Id_aux (Operator str, _) -> str
 
 let prepend_id str1 = function
   | Id_aux (Id str2, loc) -> Id_aux (Id (str1 ^ str2), loc)
@@ -84,8 +84,8 @@ let id_of_kid = function
   | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
 let deinfix = function
-  | (Id_aux (Id v, l)) -> Id_aux (DeIid v, l)
-  | (Id_aux (DeIid v, l)) -> Id_aux (Id v, l)
+  | (Id_aux (Id v, l)) -> Id_aux (Operator v, l)
+  | (Id_aux (Operator v, l)) -> Id_aux (Id v, l)
 
 let mk_effect e n m = BE_aux (e, loc n m)
 let mk_typ t n m = ATyp_aux (t, loc n m)
@@ -142,7 +142,7 @@ type lchain =
 | LC_lteq
 | LC_nexp of atyp
 
-let tyop op t1 t2 s e = mk_typ (ATyp_app (Id_aux (DeIid op, loc s e), [t1; t2])) s e
+let tyop op t1 t2 s e = mk_typ (ATyp_app (Id_aux (Operator op, loc s e), [t1; t2])) s e
 
 let rec desugar_lchain chain s e =
   match chain with
@@ -230,51 +230,51 @@ let rec desugar_rchain chain s e =
 id:
   | Id { mk_id (Id $1) $startpos $endpos }
 
-  | Op Op0 { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op1 { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op2 { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op3 { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op4 { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op5 { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op6 { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op7 { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op8 { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op9 { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op0 { mk_id (Operator $2) $startpos $endpos }
+  | Op Op1 { mk_id (Operator $2) $startpos $endpos }
+  | Op Op2 { mk_id (Operator $2) $startpos $endpos }
+  | Op Op3 { mk_id (Operator $2) $startpos $endpos }
+  | Op Op4 { mk_id (Operator $2) $startpos $endpos }
+  | Op Op5 { mk_id (Operator $2) $startpos $endpos }
+  | Op Op6 { mk_id (Operator $2) $startpos $endpos }
+  | Op Op7 { mk_id (Operator $2) $startpos $endpos }
+  | Op Op8 { mk_id (Operator $2) $startpos $endpos }
+  | Op Op9 { mk_id (Operator $2) $startpos $endpos }
 
-  | Op Op0l { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op1l { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op2l { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op3l { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op4l { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op5l { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op6l { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op7l { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op8l { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op9l { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op0l { mk_id (Operator $2) $startpos $endpos }
+  | Op Op1l { mk_id (Operator $2) $startpos $endpos }
+  | Op Op2l { mk_id (Operator $2) $startpos $endpos }
+  | Op Op3l { mk_id (Operator $2) $startpos $endpos }
+  | Op Op4l { mk_id (Operator $2) $startpos $endpos }
+  | Op Op5l { mk_id (Operator $2) $startpos $endpos }
+  | Op Op6l { mk_id (Operator $2) $startpos $endpos }
+  | Op Op7l { mk_id (Operator $2) $startpos $endpos }
+  | Op Op8l { mk_id (Operator $2) $startpos $endpos }
+  | Op Op9l { mk_id (Operator $2) $startpos $endpos }
 
-  | Op Op0r { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op1r { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op2r { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op3r { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op4r { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op5r { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op6r { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op7r { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op8r { mk_id (DeIid $2) $startpos $endpos }
-  | Op Op9r { mk_id (DeIid $2) $startpos $endpos }
+  | Op Op0r { mk_id (Operator $2) $startpos $endpos }
+  | Op Op1r { mk_id (Operator $2) $startpos $endpos }
+  | Op Op2r { mk_id (Operator $2) $startpos $endpos }
+  | Op Op3r { mk_id (Operator $2) $startpos $endpos }
+  | Op Op4r { mk_id (Operator $2) $startpos $endpos }
+  | Op Op5r { mk_id (Operator $2) $startpos $endpos }
+  | Op Op6r { mk_id (Operator $2) $startpos $endpos }
+  | Op Op7r { mk_id (Operator $2) $startpos $endpos }
+  | Op Op8r { mk_id (Operator $2) $startpos $endpos }
+  | Op Op9r { mk_id (Operator $2) $startpos $endpos }
 
-  | Op Plus { mk_id (DeIid "+") $startpos $endpos }
-  | Op Minus { mk_id (DeIid "-") $startpos $endpos }
-  | Op Star { mk_id (DeIid "*") $startpos $endpos }
-  | Op EqEq { mk_id (DeIid "==") $startpos $endpos }
-  | Op ExclEq { mk_id (DeIid "!=") $startpos $endpos }
-  | Op Lt { mk_id (DeIid "<") $startpos $endpos }
-  | Op Gt { mk_id (DeIid ">") $startpos $endpos }
-  | Op LtEq { mk_id (DeIid "<=") $startpos $endpos }
-  | Op GtEq { mk_id (DeIid ">=") $startpos $endpos }
-  | Op Amp { mk_id (DeIid "&") $startpos $endpos }
-  | Op Bar { mk_id (DeIid "|") $startpos $endpos }
-  | Op Caret { mk_id (DeIid "^") $startpos $endpos }
+  | Op Plus   { mk_id (Operator "+")  $startpos $endpos }
+  | Op Minus  { mk_id (Operator "-")  $startpos $endpos }
+  | Op Star   { mk_id (Operator "*")  $startpos $endpos }
+  | Op EqEq   { mk_id (Operator "==") $startpos $endpos }
+  | Op ExclEq { mk_id (Operator "!=") $startpos $endpos }
+  | Op Lt     { mk_id (Operator "<")  $startpos $endpos }
+  | Op Gt     { mk_id (Operator ">")  $startpos $endpos }
+  | Op LtEq   { mk_id (Operator "<=") $startpos $endpos }
+  | Op GtEq   { mk_id (Operator ">=") $startpos $endpos }
+  | Op Amp    { mk_id (Operator "&")  $startpos $endpos }
+  | Op Bar    { mk_id (Operator "|")  $startpos $endpos }
+  | Op Caret  { mk_id (Operator "^")  $startpos $endpos }
 
 op0: Op0 { mk_id (Id $1) $startpos $endpos }
 op1: Op1 { mk_id (Id $1) $startpos $endpos }

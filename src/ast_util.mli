@@ -265,6 +265,10 @@ module Bindings : sig
   include Map.S with type key = id
 end
 
+module NCMap : sig
+  include Map.S with type key = n_constraint
+end
+
 module TypMap : sig
   include Map.S with type key = typ
 end
@@ -489,9 +493,6 @@ val locate_typ : (l -> l) -> typ -> typ
 val unique : l -> l
 
 val extern_assoc : string -> (string * string) list -> string option
-
-(** Reduce a location to a pair of positions if possible *)
-val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
 
 (** Try to find the annotation closest to the provided (simplified)
    location. Note that this function makes no guarantees about finding

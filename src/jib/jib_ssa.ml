@@ -68,6 +68,15 @@ let make ~initial_size () = {
     nodes = Array.make initial_size None
   }
 
+let get_vertex graph n = graph.nodes.(n)
+
+let iter_graph f graph =
+  for n = 0 to graph.next - 1 do
+    match graph.nodes.(n) with
+    | Some (x, y, z) -> f x y z
+    | None -> ()
+  done
+                       
 (** Add a vertex to a graph, returning the node index *)
 let add_vertex data graph =
   let n = graph.next in
@@ -133,7 +142,10 @@ let prune visited graph =
 type cf_node =
   | CF_label of string
   | CF_block of instr list
+  | CF_guard of cval
   | CF_start
+
+let cval_not (f, ctyp) = (F_unary ("!", f), ctyp)
 
 let control_flow_graph instrs =
   let module StringMap = Map.Make(String) in
@@ -150,14 +162,14 @@ let control_flow_graph instrs =
 
   let cf_split (I_aux (aux, _)) =
     match aux with
-    | I_block _ | I_label _ | I_goto _ | I_jump _ | I_if _ | I_end | I_match_failure | I_undefined _ -> true
+    | I_block _ | I_label _ | I_goto _ | I_jump _ | I_if _ | I_end _ | I_match_failure | I_undefined _ -> true
     | _ -> false
   in
 
   let rec cfg preds instrs =
     let before, after = instr_split_at cf_split instrs in
     let last = match after with
-      | I_aux (I_label _, _) :: _ -> []
+      | I_aux ((I_label _ | I_goto _ | I_jump _), _) :: _ -> []
       | instr :: _ -> [instr]
       | _ -> []
     in
@@ -174,7 +186,7 @@ let control_flow_graph instrs =
        let e = cfg preds else_instrs in
        cfg (t @ e) after
 
-    | I_aux ((I_end | I_match_failure | I_undefined _), _) :: after ->
+    | I_aux ((I_end _ | I_match_failure | I_undefined _), _) :: after ->
        cfg [] after
 
     | I_aux (I_goto label, _) :: after ->
@@ -182,8 +194,11 @@ let control_flow_graph instrs =
        cfg [] after
 
     | I_aux (I_jump (cval, label), _) :: after ->
-       List.iter (fun p -> add_edge p (StringMap.find label !labels) graph) preds;
-       cfg preds after
+       let t = add_vertex ([], CF_guard cval) graph in
+       let f = add_vertex ([], CF_guard (cval_not cval)) graph in
+       List.iter (fun p -> add_edge p t graph; add_edge p f graph) preds;
+       add_edge t (StringMap.find label !labels) graph;
+       cfg [f] after
 
     | I_aux (I_label label, _) :: after ->
        cfg (StringMap.find label !labels :: preds) after
@@ -351,55 +366,56 @@ let dominance_frontiers graph root idom children =
 (**************************************************************************)
 
 type ssa_elem =
-  | Phi of Ast.id * Ast.id list
+  | Phi of Jib.name * Jib.ctyp * Jib.name list
+  | Pi of Jib.cval list
 
 let place_phi_functions graph df =
-  let defsites = ref Bindings.empty in
+  let defsites = ref NameCTMap.empty in
 
-  let all_vars = ref IdSet.empty in
+  let all_vars = ref NameCTSet.empty in
 
   let rec all_decls = function
-    | I_aux (I_decl (_, id), _) :: instrs ->
-       IdSet.add id (all_decls instrs)
+    | I_aux ((I_init (ctyp, id, _) | I_decl (ctyp, id)), _) :: instrs ->
+       NameCTSet.add (id, ctyp) (all_decls instrs)
     | _ :: instrs -> all_decls instrs
-    | [] -> IdSet.empty
+    | [] -> NameCTSet.empty
   in
 
   let orig_A n =
     match graph.nodes.(n) with
     | Some ((_, CF_block instrs), _, _) ->
-       let vars = List.fold_left IdSet.union IdSet.empty (List.map instr_writes instrs) in
-       let vars = IdSet.diff vars (all_decls instrs) in
-       all_vars := IdSet.union vars !all_vars;
+       let vars = List.fold_left NameCTSet.union NameCTSet.empty (List.map instr_typed_writes instrs) in
+       let vars = NameCTSet.diff vars (all_decls instrs) in
+       all_vars := NameCTSet.union vars !all_vars;
        vars
-    | Some _ -> IdSet.empty
-    | None -> IdSet.empty
+    | Some _ -> NameCTSet.empty
+    | None -> NameCTSet.empty
   in
-  let phi_A = ref Bindings.empty in
+  let phi_A = ref NameCTMap.empty in
 
   for n = 0 to graph.next - 1 do
-    IdSet.iter (fun a ->
-        let ds = match Bindings.find_opt a !defsites with Some ds -> ds | None -> IntSet.empty in
-        defsites := Bindings.add a (IntSet.add n ds) !defsites
+    NameCTSet.iter (fun a ->
+        let ds = match NameCTMap.find_opt a !defsites with Some ds -> ds | None -> IntSet.empty in
+        defsites := NameCTMap.add a (IntSet.add n ds) !defsites
       ) (orig_A n)
   done;
 
-  IdSet.iter (fun a ->
-      let workset = ref (Bindings.find a !defsites) in
+  NameCTSet.iter (fun a ->
+      let workset = ref (NameCTMap.find a !defsites) in
       while not (IntSet.is_empty !workset) do
         let n = IntSet.choose !workset in
         workset := IntSet.remove n !workset;
         IntSet.iter (fun y ->
-            let phi_A_a = match Bindings.find_opt a !phi_A with Some set -> set | None -> IntSet.empty in
+            let phi_A_a = match NameCTMap.find_opt a !phi_A with Some set -> set | None -> IntSet.empty in
             if not (IntSet.mem y phi_A_a) then
               begin
                 begin match graph.nodes.(y) with
                 | Some ((phis, cfnode), preds, succs) ->
-                   graph.nodes.(y) <- Some ((Phi (a, Util.list_init (IntSet.cardinal preds) (fun _ -> a)) :: phis, cfnode), preds, succs)
+                   graph.nodes.(y) <- Some ((Phi (fst a, snd a, Util.list_init (IntSet.cardinal preds) (fun _ -> fst a)) :: phis, cfnode), preds, succs)
                 | None -> assert false
                 end;
-                phi_A := Bindings.add a (IntSet.add y phi_A_a) !phi_A;
-                if not (IdSet.mem a (orig_A y)) then
+                phi_A := NameCTMap.add a (IntSet.add y phi_A_a) !phi_A;
+                if not (NameCTSet.mem a (orig_A y)) then
                   workset := IntSet.add y !workset
               end
           ) df.(n)
@@ -407,49 +423,53 @@ let place_phi_functions graph df =
     ) !all_vars
 
 let rename_variables graph root children =
-  let counts = ref Bindings.empty in
-  let stacks = ref Bindings.empty in
+  let counts = ref NameMap.empty in
+  let stacks = ref NameMap.empty in
 
   let get_count id =
-    match Bindings.find_opt id !counts with Some n -> n | None -> 0
+    match NameMap.find_opt id !counts with Some n -> n | None -> 0
   in
   let top_stack id =
-    match Bindings.find_opt id !stacks with Some (x :: _) -> x | (Some [] | None) -> 0
+    match NameMap.find_opt id !stacks with Some (x :: _) -> x | (Some [] | None) -> 0
   in
   let push_stack id n =
-    stacks := Bindings.add id (n :: match Bindings.find_opt id !stacks with Some s -> s | None -> []) !stacks
+    stacks := NameMap.add id (n :: match NameMap.find_opt id !stacks with Some s -> s | None -> []) !stacks
+  in
+
+  let ssa_name i = function
+    | Name (id, _) -> Name (id, i)
+    | Have_exception _ -> Have_exception i
+    | Current_exception _ -> Current_exception i
+    | Return _ -> Return i
   in
 
   let rec fold_frag = function
     | F_id id ->
        let i = top_stack id in
-       F_id (append_id id ("_" ^ string_of_int i))
+       F_id (ssa_name i id)
     | F_ref id ->
        let i = top_stack id in
-       F_ref (append_id id ("_" ^ string_of_int i))
+       F_ref (ssa_name i id)
     | F_lit vl -> F_lit vl
-    | F_have_exception -> F_have_exception
-    | F_current_exception -> F_current_exception
     | F_op (f1, op, f2) -> F_op (fold_frag f1, op, fold_frag f2)
     | F_unary (op, f) -> F_unary (op, fold_frag f)
     | F_call (id, fs) -> F_call (id, List.map fold_frag fs)
     | F_field (f, field) -> F_field (fold_frag f, field)
     | F_raw str -> F_raw str
+    | F_ctor_kind (f, ctor, unifiers, ctyp) -> F_ctor_kind (fold_frag f, ctor, unifiers, ctyp)
+    | F_ctor_unwrap (ctor, unifiers, f) -> F_ctor_unwrap (ctor, unifiers, fold_frag f)
     | F_poly f -> F_poly (fold_frag f)
   in
 
   let rec fold_clexp = function
     | CL_id (id, ctyp) ->
        let i = get_count id + 1 in
-       counts := Bindings.add id i !counts;
+       counts := NameMap.add id i !counts;
        push_stack id i;
-       CL_id (append_id id ("_" ^ string_of_int i), ctyp)
+       CL_id (ssa_name i id, ctyp)
     | CL_field (clexp, field) -> CL_field (fold_clexp clexp, field)
     | CL_addr clexp -> CL_addr (fold_clexp clexp)
     | CL_tuple (clexp, n) -> CL_tuple (fold_clexp clexp, n)
-    | CL_current_exception ctyp -> CL_current_exception ctyp
-    | CL_have_exception -> CL_have_exception
-    | CL_return ctyp -> CL_return ctyp
     | CL_void -> CL_void
   in
 
@@ -465,15 +485,20 @@ let rename_variables graph root children =
          I_copy (fold_clexp clexp, cval)
       | I_decl (ctyp, id) ->
          let i = get_count id + 1 in
-         counts := Bindings.add id i !counts;
+         counts := NameMap.add id i !counts;
          push_stack id i;
-         I_decl (ctyp, append_id id ("_" ^ string_of_int i))
+         I_decl (ctyp, ssa_name i id)
       | I_init (ctyp, id, cval) ->
          let cval = fold_cval cval in
          let i = get_count id + 1 in
-         counts := Bindings.add id i !counts;
+         counts := NameMap.add id i !counts;
          push_stack id i;
-         I_init (ctyp, append_id id ("_" ^ string_of_int i), cval)
+         I_init (ctyp, ssa_name i id, cval)
+      | I_jump (cval, label) ->
+         I_jump (fold_cval cval, label)
+      | I_end id ->
+         let i = top_stack id in
+         I_end (ssa_name i id)
       | instr -> instr
     in
     I_aux (aux, annot)
@@ -483,24 +508,28 @@ let rename_variables graph root children =
     | CF_start -> CF_start
     | CF_block instrs -> CF_block (List.map ssa_instr instrs)
     | CF_label label -> CF_label label
+    | CF_guard cval -> CF_guard (fold_cval cval)
   in
 
   let ssa_ssanode = function
-    | Phi (id, args) ->
+    | Phi (id, ctyp, args) ->
        let i = get_count id + 1 in
-       counts := Bindings.add id i !counts;
+       counts := NameMap.add id i !counts;
        push_stack id i;
-       Phi (append_id id ("_" ^ string_of_int i), args)
+       Phi (ssa_name i id, ctyp, args)
+    | Pi _ -> assert false (* Should not be introduced at this point *)
   in
 
   let fix_phi j = function
-    | Phi (id, ids) ->
-       Phi (id, List.mapi (fun k a ->
-                    if k = j then
-                      let i = top_stack a in
-                      append_id a ("_" ^ string_of_int i)
-                    else a)
-                  ids)
+    | Phi (id, ctyp, ids) ->
+       let fix_arg k a =
+         if k = j then
+           let i = top_stack a in
+           ssa_name i a
+         else a
+       in
+       Phi (id, ctyp, List.mapi fix_arg ids)
+    | Pi _ -> assert false (* Should not be introduced at this point *)
   in
 
   let rec rename n =
@@ -529,6 +558,53 @@ let rename_variables graph root children =
   in
   rename root
 
+let place_pi_functions graph start idom children =
+  let get_guard = function
+    | CF_guard guard -> [guard]
+    | _ -> []
+  in
+  let get_pi_contents ssanodes =
+    List.concat (List.map (function Pi guards -> guards | _ -> []) ssanodes)
+  in
+
+  let rec go n =
+    begin match graph.nodes.(n) with
+    | Some ((ssa, cfnode), preds, succs) ->
+       let p = idom.(n) in
+       if p <> -1 then
+         begin match graph.nodes.(p) with
+         | Some ((dom_ssa, _), _, _) ->
+            let args = get_guard cfnode @ get_pi_contents dom_ssa in
+            graph.nodes.(n) <- Some ((Pi args :: ssa, cfnode), preds, succs)
+         | None -> assert false
+         end
+    | None -> assert false
+    end;
+    IntSet.iter go children.(n)
+  in
+  go start
+
+(** Remove p nodes. Assumes the graph is acyclic. *)
+let remove_nodes remove_cf graph =
+  for n = 0 to graph.next - 1 do
+    match graph.nodes.(n) with
+    | Some ((_, cfnode), preds, succs) when remove_cf cfnode ->
+       IntSet.iter (fun pred ->
+           match graph.nodes.(pred) with
+           | Some (content, preds', succs') ->
+              graph.nodes.(pred) <- Some (content, preds', IntSet.remove n (IntSet.union succs succs'))
+           | None -> assert false
+         ) preds;
+       IntSet.iter (fun succ ->
+           match graph.nodes.(succ) with
+           | Some (content, preds', succs') ->
+              graph.nodes.(succ) <- Some (content, IntSet.remove n (IntSet.union preds preds'), succs')
+           | None -> assert false
+         ) succs;
+       graph.nodes.(n) <- None
+    | _ -> ()
+  done
+
 let ssa instrs =
   let start, finish, cfg = control_flow_graph instrs in
   let idom = immediate_dominators cfg start in
@@ -536,36 +612,39 @@ let ssa instrs =
   let df = dominance_frontiers cfg start idom children in
   place_phi_functions cfg df;
   rename_variables cfg start children;
-  cfg
+  place_pi_functions cfg start idom children;
+  (* remove_guard_nodes (function CF_guard _ -> true | CF_label _ -> true | _ -> false) cfg; *)
+  start, cfg
 
 (* Debugging utilities for outputing Graphviz files. *)
 
+let string_of_ssainstr = function
+  | Phi (id, ctyp, args) ->
+     string_of_name id ^ " : " ^ string_of_ctyp ctyp ^ " = &phi;(" ^ Util.string_of_list ", " string_of_name args ^ ")"
+  | Pi cvals ->
+     "&pi;(" ^ Util.string_of_list ", " (fun (f, _) -> String.escaped (string_of_fragment ~zencode:false f)) cvals ^ ")"
+
 let string_of_phis = function
   | [] -> ""
-  | phis -> Util.string_of_list "\\l" (fun (Phi (id, args)) -> string_of_id id ^ " = phi(" ^ Util.string_of_list ", " string_of_id args ^ ")") phis ^ "\\l"
+  | phis -> Util.string_of_list "\\l" string_of_ssainstr phis ^ "\\l"
 
 let string_of_node = function
   | (phis, CF_label label) -> string_of_phis phis ^ label
   | (phis, CF_block instrs) -> string_of_phis phis ^ Util.string_of_list "\\l" (fun instr -> String.escaped (Pretty_print_sail.to_string (pp_instr ~short:true instr))) instrs
   | (phis, CF_start) -> string_of_phis phis ^ "START"
+  | (phis, CF_guard cval) -> string_of_phis phis ^ (String.escaped (Pretty_print_sail.to_string (pp_cval cval)))
 
 let vertex_color = function
   | (_, CF_start)   -> "peachpuff"
   | (_, CF_block _) -> "white"
   | (_, CF_label _) -> "springgreen"
-
-let edge_color node_from node_to =
-  match node_from, node_to with
-  | CF_block _, CF_block _ -> "black"
-  | CF_label _, CF_block _ -> "red"
-  | CF_block _, CF_label _ -> "blue"
-  | _, _ -> "deeppink"
+  | (_, CF_guard _) -> "yellow"
 
 let make_dot out_chan graph =
   Util.opt_colors := false;
   output_string out_chan "digraph DEPS {\n";
   let make_node i n =
-    output_string out_chan (Printf.sprintf "  n%i [label=\"%s\";shape=box;style=filled;fillcolor=%s];\n" i (string_of_node n) (vertex_color n))
+    output_string out_chan (Printf.sprintf "  n%i [label=\"%i\\n%s\\l\";shape=box;style=filled;fillcolor=%s];\n" i i (string_of_node n) (vertex_color n))
   in
   let make_line i s =
     output_string out_chan (Printf.sprintf "  n%i -> n%i [color=black];\n" i s)
@@ -584,7 +663,7 @@ let make_dominators_dot out_chan idom graph =
   Util.opt_colors := false;
   output_string out_chan "digraph DOMS {\n";
   let make_node i n =
-    output_string out_chan (Printf.sprintf "  n%i [label=\"%s\";shape=box;style=filled;fillcolor=%s];\n" i (string_of_node n) (vertex_color n))
+    output_string out_chan (Printf.sprintf "  n%i [label=\"%i\\n%s\\l\";shape=box;style=filled;fillcolor=%s];\n" i i (string_of_node n) (vertex_color n))
   in
   let make_line i s =
     output_string out_chan (Printf.sprintf "  n%i -> n%i [color=black];\n" i s)

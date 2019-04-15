@@ -91,6 +91,7 @@ and 'a apat_aux =
   | AP_global of id * 'a
   | AP_app of id * 'a apat * 'a
   | AP_cons of 'a apat * 'a apat
+  | AP_as of 'a apat * id * 'a
   | AP_nil of 'a
   | AP_wild of 'a
 
@@ -113,6 +114,7 @@ let rec apat_bindings (AP_aux (apat_aux, _, _)) =
   | AP_global (id, _) -> IdSet.empty
   | AP_app (id, apat, _) -> apat_bindings apat
   | AP_cons (apat1, apat2) -> IdSet.union (apat_bindings apat1) (apat_bindings apat2)
+  | AP_as (apat, id, _) -> IdSet.add id (apat_bindings apat)
   | AP_nil _ -> IdSet.empty
   | AP_wild _ -> IdSet.empty
 
@@ -132,6 +134,7 @@ let rec apat_types (AP_aux (apat_aux, _, _)) =
   | AP_global (id, _) -> Bindings.empty
   | AP_app (id, apat, _) -> apat_types apat
   | AP_cons (apat1, apat2) -> (Bindings.merge merge) (apat_types apat1) (apat_types apat2)
+  | AP_as (apat, id, typ) -> Bindings.add id typ (apat_types apat)
   | AP_nil _ -> Bindings.empty
   | AP_wild _ -> Bindings.empty
 
@@ -143,6 +146,8 @@ let rec apat_rename from_id to_id (AP_aux (apat_aux, env, l)) =
     | AP_global (id, typ) -> AP_global (id, typ)
     | AP_app (ctor, apat, typ) -> AP_app (ctor, apat_rename from_id to_id apat, typ)
     | AP_cons (apat1, apat2) -> AP_cons (apat_rename from_id to_id apat1, apat_rename from_id to_id apat2)
+    | AP_as (apat, id, typ) when Id.compare id from_id = 0 -> AP_as (apat, to_id, typ)
+    | AP_as (apat, id, typ) -> AP_as (apat, id, typ)
     | AP_nil typ -> AP_nil typ
     | AP_wild typ -> AP_wild typ
   in
@@ -158,7 +163,7 @@ let rec aval_rename from_id to_id = function
   | AV_list (avals, typ) -> AV_list (List.map (aval_rename from_id to_id) avals, typ)
   | AV_vector (avals, typ) -> AV_vector (List.map (aval_rename from_id to_id) avals, typ)
   | AV_record (avals, typ) -> AV_record (Bindings.map (aval_rename from_id to_id) avals, typ)
-  | AV_C_fragment (fragment, typ, ctyp) -> AV_C_fragment (frag_rename from_id to_id fragment, typ, ctyp)
+  | AV_C_fragment (fragment, typ, ctyp) -> AV_C_fragment (frag_rename (name from_id) (name to_id) fragment, typ, ctyp)
 
 let rec aexp_rename from_id to_id (AE_aux (aexp, env, l)) =
   let recur = aexp_rename from_id to_id in
@@ -382,6 +387,7 @@ and pp_apat (AP_aux (apat_aux, _, _)) =
   | AP_app (id, apat, typ) -> pp_annot typ (pp_id id ^^ parens (pp_apat apat))
   | AP_nil _ -> string "[||]"
   | AP_cons (hd_apat, tl_apat) -> pp_apat hd_apat ^^ string " :: " ^^ pp_apat tl_apat
+  | AP_as (apat, id, ctyp) -> pp_apat apat ^^ string " as " ^^ pp_id id
 
 and pp_cases cases = surround 2 0 lbrace (separate_map (comma ^^ hardline) pp_case cases) rbrace
 
@@ -445,6 +451,7 @@ let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   | P_cons (hd_pat, tl_pat) -> mk_apat (AP_cons (anf_pat ~global:global hd_pat, anf_pat ~global:global tl_pat))
   | P_list pats -> List.fold_right (fun pat apat -> mk_apat (AP_cons (anf_pat ~global:global pat, apat))) pats (mk_apat (AP_nil (typ_of_pat pat)))
   | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
+  | P_as (pat, id) -> mk_apat (AP_as (anf_pat ~global:global pat, id, typ_of_pat pat))
   | _ ->
      raise (Reporting.err_unreachable (fst annot) __POS__
        ("Could not convert pattern to ANF: " ^ string_of_pat pat))
@@ -456,6 +463,7 @@ let rec apat_globals (AP_aux (aux, _, _)) =
   | AP_tup apats -> List.concat (List.map apat_globals apats)
   | AP_app (_, apat, _) -> apat_globals apat
   | AP_cons (hd_apat, tl_apat) -> apat_globals hd_apat @ apat_globals tl_apat
+  | AP_as (apat, _, _) -> apat_globals apat
 
 let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   let mk_aexp aexp = AE_aux (aexp, env_of_annot exp_annot, l) in
@@ -526,8 +534,8 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      wrap (mk_aexp (AE_if (cond_val, then_aexp, else_aexp, typ_of exp)))
 
   | E_app_infix (x, Id_aux (Id op, l), y) ->
-     anf (E_aux (E_app (Id_aux (DeIid op, l), [x; y]), exp_annot))
-  | E_app_infix (x, Id_aux (DeIid op, l), y) ->
+     anf (E_aux (E_app (Id_aux (Operator op, l), [x; y]), exp_annot))
+  | E_app_infix (x, Id_aux (Operator op, l), y) ->
      anf (E_aux (E_app (Id_aux (Id op, l), [x; y]), exp_annot))
 
   | E_vector exps ->

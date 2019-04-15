@@ -3,6 +3,9 @@ default Order dec
 $include <smt.sail>
 $include <prelude.sail>
 
+overload operator / = {ediv_int}
+overload operator % = {emod_int}
+
 val Replicate : forall ('M : Int) ('N : Int), 'M >= 1.
   (implicit('N), bits('M)) -> bits('N) effect {escape}
 

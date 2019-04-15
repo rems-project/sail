@@ -78,27 +78,21 @@ overload shr_int = {_shr32, _shr_int}
 
 // ***** div and mod *****
 
-val div_int = {
-  smt: "div",
-  ocaml: "quotient",
-  interpreter: "quotient",
-  lem: "integerDiv",
-  c: "tdiv_int",
-  coq: "Z.quot"
+/*! Truncating division (rounds towards zero) */
+val tdiv_int = {
+  ocaml: "tdiv_int",
+  interpreter: "tdiv_int",
+  lem: "integerDiv_t",
+  c: "tdiv_int"
 } : (int, int) -> int
 
-overload operator / = {div_int}
-
-val mod_int = {
-  smt: "mod",
-  ocaml: "modulus",
-  interpreter: "modulus",
-  lem: "integerMod",
-  c: "tmod_int",
-  coq: "Z.rem"
+/*! Remainder for truncating division (has sign of dividend) */
+val tmod_int = {
+  ocaml: "tmod_int",
+  interpreter: "tmod_int",
+  lem: "integerMod_t",
+  c: "tmod_int"
 } : (int, int) -> nat
-
-overload operator % = {mod_int}
 
 val abs_int = {
   smt : "abs",

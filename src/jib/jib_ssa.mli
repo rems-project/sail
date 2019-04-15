@@ -57,6 +57,12 @@ type 'a array_graph
    underlying array. *)
 val make : initial_size:int -> unit -> 'a array_graph
 
+module IntSet : Set.S with type elt = int
+  
+val get_vertex : 'a array_graph -> int -> ('a * IntSet.t * IntSet.t) option
+
+val iter_graph : ('a -> IntSet.t -> IntSet.t -> unit) -> 'a array_graph -> unit
+  
 (** Add a vertex to a graph, returning the index of the inserted
    vertex. If the number of vertices exceeds the size of the
    underlying array, then it is dynamically resized. *)
@@ -69,17 +75,25 @@ val add_edge : int -> int -> 'a array_graph -> unit
 type cf_node =
   | CF_label of string
   | CF_block of Jib.instr list
+  | CF_guard of Jib.cval
   | CF_start
 
 val control_flow_graph : Jib.instr list -> int * int list * ('a list * cf_node) array_graph
 
+(** [immediate_dominators graph root] will calculate the immediate
+   dominators for a control flow graph with a specified root node. *)
+val immediate_dominators : 'a array_graph -> int -> int array
+
 type ssa_elem =
-  | Phi of Ast.id * Ast.id list
+  | Phi of Jib.name * Jib.ctyp * Jib.name list
+  | Pi of Jib.cval list
 
 (** Convert a list of instructions into SSA form *)
-val ssa : Jib.instr list -> (ssa_elem list * cf_node) array_graph
+val ssa : Jib.instr list -> int * (ssa_elem list * cf_node) array_graph
 
 (** Output the control-flow graph in graphviz format for
    debugging. Can use 'dot -Tpng X.gv -o X.png' to generate a png
    image of the graph. *)
 val make_dot : out_channel -> (ssa_elem list * cf_node) array_graph -> unit
+
+val make_dominators_dot : out_channel -> int array -> (ssa_elem list * cf_node) array_graph -> unit

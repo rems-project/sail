@@ -87,6 +87,11 @@ val opt_enum_casts : bool ref
    all the loaded files. *)
 val have_undefined_builtins : bool ref
 
+(** Val specs of undefined functions for builtin types that get added to
+    the AST if opt_undefined_gen is set (minus those functions that already
+    exist in the AST). *)
+val undefined_builtin_val_specs : unit def list
+
 (** {2 Desugar and process AST } *)
 
 (** If the generate flag is false, then we won't generate any
@@ -98,6 +103,7 @@ val process_ast : ?generate:bool -> Parse_ast.defs -> unit defs
 val extern_of_string : id -> string -> unit def
 val val_spec_of_string : id -> string -> unit def
 val ast_of_def_string : string -> unit defs
+val ast_of_def_string_with : (Parse_ast.defs -> Parse_ast.defs) -> string -> unit defs
 val exp_of_string : string -> unit exp
 val typ_of_string : string -> typ
 val constraint_of_string : string -> n_constraint

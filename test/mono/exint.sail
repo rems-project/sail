@@ -39,7 +39,7 @@ function test(x) = {
     0b00 => n = 1,
     0b01 => n = 2,
     0b10 => n = 4,
-    0b11 => ()
+    0b11 => n = 8
   };
   let 'n2 = ex_int(n) in {
     assert(constraint('n2 >= 0));

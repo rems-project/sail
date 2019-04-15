@@ -111,9 +111,13 @@ let rec is_value (E_aux (e,(l,annot))) =
   | E_id id -> is_constructor id
   | E_lit _ -> true
   | E_tuple es -> List.for_all is_value es
+  | E_record fes ->
+     List.for_all (fun (FE_aux (FE_Fexp (_, e), _)) -> is_value e) fes
   | E_app (id,es) -> is_constructor id && List.for_all is_value es
   (* We add casts to undefined to keep the type information in the AST *)
   | E_cast (typ,E_aux (E_lit (L_aux (L_undef,_)),_)) -> true
+  (* Also keep casts around records, as type inference fails without *)
+  | E_cast (_, (E_aux (E_record _, _) as e')) -> is_value e'
 (* TODO: more? *)
   | _ -> false
 
@@ -263,93 +267,6 @@ let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
   | L_num i1, L_num i2 -> Some (Big_int.equal i1 i2)
   | _ -> Some (l1 = l2)
 
-let try_app (l,ann) (id,args) =
-  let new_l = Parse_ast.Generated l in
-  let env = env_of_annot (l,ann) in
-  let get_overloads f = List.map string_of_id
-    (Env.get_overloads (Id_aux (Id f, Parse_ast.Unknown)) env @
-    Env.get_overloads (Id_aux (DeIid f, Parse_ast.Unknown)) env) in
-  let is_id f = List.mem (string_of_id id) (f :: get_overloads f) in
-  if is_id "==" || is_id "!=" then
-    match args with
-    | [E_aux (E_lit l1,_); E_aux (E_lit l2,_)] ->
-       let lit b = if b then L_true else L_false in
-       let lit b = lit (if is_id "==" then b else not b) in
-       (match lit_eq l1 l2 with
-       | None -> None
-       | Some b -> Some (E_aux (E_lit (L_aux (lit b,new_l)),(l,ann))))
-    | _ -> None
-  else if is_id "cast_bit_bool" then
-    match args with
-    | [E_aux (E_lit L_aux (L_zero,_),_)] -> Some (E_aux (E_lit (L_aux (L_false,new_l)),(l,ann)))
-    | [E_aux (E_lit L_aux (L_one ,_),_)] -> Some (E_aux (E_lit (L_aux (L_true ,new_l)),(l,ann)))
-    | _ -> None
-  else if is_id "UInt" || is_id "unsigned" then
-    match args with
-    | [E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit,_), _)] ->
-       Some (E_aux (E_lit (L_aux (L_num (int_of_str_lit lit),new_l)),(l,ann)))
-    | _ -> None
-  else if is_id "slice" then
-    match args with
-    | [E_aux (E_lit (L_aux ((L_hex _| L_bin _),_) as lit), annot);
-       E_aux (E_lit L_aux (L_num i,_), _);
-       E_aux (E_lit L_aux (L_num len,_), _)] ->
-       (match Env.base_typ_of (env_of_annot annot) (typ_of_annot annot) with
-       | Typ_aux (Typ_app (_,[_;A_aux (A_order ord,_);_]),_) ->
-          (match slice_lit lit i len ord with
-          | Some lit' -> Some (E_aux (E_lit lit',(l,ann)))
-          | None -> None)
-       | _ -> None)
-    | _ -> None
-  else if is_id "bitvector_concat" then
-    match args with
-    | [E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit1,_), _);
-       E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit2,_), _)] ->
-       Some (E_aux (E_lit (L_aux (concat_vec lit1 lit2,new_l)),(l,ann)))
-    | _ -> None
-  else if is_id "shl_int" then
-    match args with
-    | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
-       Some (E_aux (E_lit (L_aux (L_num (Big_int.shift_left i (Big_int.to_int j)),new_l)),(l,ann)))
-    | _ -> None
-  else if is_id "mult_atom" || is_id "mult_int" || is_id "mult_range" then
-    match args with
-    | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
-       Some (E_aux (E_lit (L_aux (L_num (Big_int.mul i j),new_l)),(l,ann)))
-    | _ -> None
-  else if is_id "quotient_nat" then
-    match args with
-    | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
-       Some (E_aux (E_lit (L_aux (L_num (Big_int.div i j),new_l)),(l,ann)))
-    | _ -> None
-  else if is_id "add_atom" || is_id "add_int" || is_id "add_range" then
-    match args with
-    | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
-       Some (E_aux (E_lit (L_aux (L_num (Big_int.add i j),new_l)),(l,ann)))
-    | _ -> None
-  else if is_id "negate_range" then
-    match args with
-    | [E_aux (E_lit L_aux (L_num i,_),_)] ->
-       Some (E_aux (E_lit (L_aux (L_num (Big_int.negate i),new_l)),(l,ann)))
-    | _ -> None
-  else if is_id "ex_int" then
-    match args with
-    | [E_aux (E_lit lit,(l,_))] -> Some (E_aux (E_lit lit,(l,ann)))
-    | [E_aux (E_cast (_,(E_aux (E_lit (L_aux (L_undef,_)),_) as e)),(l,_))] ->
-       Some (reduce_cast (typ_of_annot (l,ann)) e l ann)
-    | _ -> None
-  else if is_id "vector_access" || is_id "bitvector_access" then
-    match args with
-    | [E_aux (E_lit L_aux ((L_hex _ | L_bin _) as lit,_),_);
-       E_aux (E_lit L_aux (L_num i,_),_)] ->
-       let v = int_of_str_lit lit in
-       let b = Big_int.bitwise_and (Big_int.shift_right v (Big_int.to_int i)) (Big_int.of_int 1) in
-       let lit' = if Big_int.equal b (Big_int.of_int 1) then L_one else L_zero in
-       Some (E_aux (E_lit (L_aux (lit',new_l)),(l,ann)))
-    | _ -> None
-  else None
-
-
 let construct_lit_vector args =
   let rec aux l = function
     | [] -> Some (L_aux (L_bin (String.concat "" (List.rev l)),Unknown))
@@ -361,10 +278,18 @@ let construct_lit_vector args =
 (* Add a cast to undefined so that it retains its type, otherwise it can't be
    substituted safely *)
 let keep_undef_typ value =
-  match value with
-  | E_aux (E_lit (L_aux (L_undef,lann)),eann) ->
-     E_aux (E_cast (typ_of_annot eann,value),(Generated Unknown,snd eann))
-  | _ -> value
+  let e_aux (e, ann) =
+    match e with
+    | E_lit (L_aux (L_undef, _)) ->
+       (* Add cast to undefined... *)
+       E_aux (E_cast (typ_of_annot ann, E_aux (e, ann)), ann)
+    | E_cast (typ, E_aux (E_cast (_, e), _)) ->
+       (* ... unless there was a cast already *)
+       E_aux (E_cast (typ, e), ann)
+    | _ -> E_aux (e, ann)
+  in
+  let open Rewriter in
+  fold_exp { id_exp_alg with e_aux = e_aux } value
 
 (* Check whether the current environment with the given kid assignments is
    inconsistent (and hence whether the code is dead) *)
@@ -373,8 +298,29 @@ let is_env_inconsistent env ksubsts =
     Env.add_constraint (nc_eq (nvar k) nexp) env) ksubsts env in
   prove __POS__ env nc_false
 
+module StringSet = Set.Make(String)
+module StringMap = Map.Make(String)
 
 let const_props defs ref_vars =
+  let const_fold exp =
+    (* Constant-fold function applications with constant arguments *)
+    let interpreter_istate =
+      (* Do not interpret undefined_X functions *)
+      let open Interpreter in
+      let undefined_builtin_ids = ids_of_defs (Defs Initial_check.undefined_builtin_val_specs) in
+      let remove_primop id = StringMap.remove (string_of_id id) in
+      let remove_undefined_primops = IdSet.fold remove_primop undefined_builtin_ids in
+      let (lstate, gstate) = Constant_fold.initial_state defs Type_check.initial_env in
+      (lstate, { gstate with primops = remove_undefined_primops gstate.primops })
+    in
+    try
+      strip_exp exp
+      |> infer_exp (env_of exp)
+      |> Constant_fold.rewrite_exp_once interpreter_istate
+      |> keep_undef_typ
+    with
+    | _ -> exp
+  in
   let rec const_prop_exp substs assigns ((E_aux (e,(l,annot))) as exp) =
     (* Functions to treat lists and tuples of subexpressions as possibly
        non-deterministic: that is, we stop making any assumptions about
@@ -414,7 +360,8 @@ let const_props defs ref_vars =
        let e4',_ = const_prop_exp substs assigns e4 in
        e1',e2',e3',e4',assigns
     in
-    let re e assigns = E_aux (e,(l,annot)),assigns in
+    let rewrap e = E_aux (e,(l,annot)) in
+    let re e assigns = rewrap e,assigns in
     match e with
       (* TODO: are there more circumstances in which we should get rid of these? *)
     | E_block [e] -> const_prop_exp substs assigns e
@@ -444,12 +391,7 @@ let const_props defs ref_vars =
     | E_app (id,es) ->
        let es',assigns = non_det_exp_list es in
        let env = Type_check.env_of_annot (l, annot) in
-       (match try_app (l,annot) (id,es') with
-       | None ->
-          (match const_prop_try_fn l env (id,es') with
-          | None -> re (E_app (id,es')) assigns
-          | Some r -> r,assigns)
-       | Some r -> r,assigns)
+       const_prop_try_fn env (id, es') (l, annot), assigns
     | E_tuple es ->
        let es',assigns = non_det_exp_list es in
        re (E_tuple es') assigns
@@ -466,7 +408,7 @@ let const_props defs ref_vars =
           let env1 = env_of e1_no_casts in
           let is_equal id =
             List.exists (fun id' -> Id.compare id id' == 0)
-              (Env.get_overloads (Id_aux (DeIid "==", Parse_ast.Unknown))
+              (Env.get_overloads (Id_aux (Operator "==", Parse_ast.Unknown))
                  env1)
           in
           let substs_true =
@@ -539,10 +481,33 @@ let const_props defs ref_vars =
        let assigned_in = IdSet.union (assigned_vars_in_fexps fes) (assigned_vars e) in
        let assigns = isubst_minus_set assigns assigned_in in
        let e',_ = const_prop_exp substs assigns e in
-       re (E_record_update (e', const_prop_fexps substs assigns fes)) assigns
+       let fes' = const_prop_fexps substs assigns fes in
+       begin
+         match unaux_exp (fst (uncast_exp e')) with
+         | E_record (fes0) ->
+            let apply_fexp (FE_aux (FE_Fexp (id, e), _)) (FE_aux (FE_Fexp (id', e'), ann)) =
+              if Id.compare id id' = 0 then
+                FE_aux (FE_Fexp (id', e), ann)
+              else
+                FE_aux (FE_Fexp (id', e'), ann)
+            in
+            let update_fields fexp = List.map (apply_fexp fexp) in
+            let fes0' = List.fold_right update_fields fes' fes0 in
+            re (E_record fes0') assigns
+         | _ ->
+            re (E_record_update (e', fes')) assigns
+       end
     | E_field (e,id) ->
        let e',assigns = const_prop_exp substs assigns e in
-       re (E_field (e',id)) assigns
+       begin
+         let is_field (FE_aux (FE_Fexp (id', _), _)) = Id.compare id id' = 0 in
+         match unaux_exp e' with
+         | E_record fes0 when List.exists is_field fes0 ->
+            let (FE_aux (FE_Fexp (_, e), _)) = List.find is_field fes0 in
+            re (unaux_exp e) assigns
+         | _ ->
+            re (E_field (e',id)) assigns
+       end
     | E_case (e,cases) ->
        let e',assigns = const_prop_exp substs assigns e in
        (match can_match e' cases substs assigns with
@@ -568,7 +533,7 @@ let const_props defs ref_vars =
               let e2',assigns = const_prop_exp substs' assigns e2 in
               re (E_let (LB_aux (LB_val (p,e'), annot),
                          e2')) assigns in
-            if is_value e' && not (is_value e) then
+            if is_value e' then
               match can_match e' [Pat_aux (Pat_exp (p,e2),(Unknown,empty_tannot))] substs assigns with
               | None -> plain ()
               | Some (e'',bindings,kbindings) ->
@@ -653,48 +618,36 @@ let const_props defs ref_vars =
     | LEXP_field (le,id) -> re (LEXP_field (fst (const_prop_lexp substs assigns le), id))
     | LEXP_deref e ->
        re (LEXP_deref (fst (const_prop_exp substs assigns e)))
-  (* Reduce a function when
-     1. all arguments are values,
-     2. the function is pure,
-     3. the result is a value
-     (and 4. the function is not scattered, but that's not terribly important)
-     to try and keep execution time and the results managable.
+  (* Try to evaluate function calls with constant arguments via
+     (interpreter-based) constant folding.
+     Boolean connectives are special-cased to support short-circuiting when one
+     argument has a suitable value (even if the other one is not constant).
+     Moreover, calls to a __size function (in particular generated by sizeof
+     rewriting) with a known-constant return type are replaced by that constant;
+     e.g., (length(op : bits(32)) : int(32)) becomes 32 even if op is not constant.
   *)
-  and const_prop_try_fn l env (id,args) =
-    if not (List.for_all is_value args) then
-      None
-    else
-      let (tq,typ) = Env.get_val_spec_orig id env in
-      let eff = match typ with
-        | Typ_aux (Typ_fn (_,_,eff),_) -> Some eff
-        | _ -> None
-      in
-      let Defs ds = defs in
-      match eff, list_extract (function
-      | (DEF_fundef (FD_aux (FD_function (_,_,eff,((FCL_aux (FCL_Funcl (id',_),_))::_ as fcls)),_)))
-        -> if Id.compare id id' = 0 then Some fcls else None
-      | _ -> None) ds with
-      | None,_ | _,None -> None
-      | Some eff,_ when not (is_pure eff) -> None
-      | Some _,Some fcls ->
-         let arg = match args with
-           | [] -> E_aux (E_lit (L_aux (L_unit,Generated l)),(Generated l,empty_tannot))
-           | [e] -> e
-           | _ -> E_aux (E_tuple args,(Generated l,empty_tannot)) in
-         let cases = List.map (function
-           | FCL_aux (FCL_Funcl (_,pexp), ann) -> pexp)
-           fcls in
-         match can_match_with_env env arg cases (Bindings.empty,KBindings.empty) Bindings.empty with
-         | Some (exp,bindings,kbindings) ->
-            let substs = bindings_from_list bindings, kbindings_from_list kbindings in
-            let result,_ = const_prop_exp substs Bindings.empty exp in
-            let result = match result with
-              | E_aux (E_return e,_) -> e
-              | _ -> result
-            in
-            if is_value result then Some result else None
-         | None -> None
-  
+  and const_prop_try_fn env (id, args) (l, annot) =
+    let exp = E_aux (E_app (id, args), (l, annot)) in
+    let rec is_overload_of f =
+      Env.get_overloads f env
+      |> List.exists (fun id' -> Id.compare id id' = 0 || is_overload_of id')
+    in
+    match (string_of_id id, args) with
+    | "and_bool", ([E_aux (E_lit (L_aux (L_false, _)), _) as e_false; _] |
+                   [_; E_aux (E_lit (L_aux (L_false, _)), _) as e_false]) ->
+       e_false
+    | "or_bool", ([E_aux (E_lit (L_aux (L_true, _)), _) as e_true; _] |
+                  [_; E_aux (E_lit (L_aux (L_true, _)), _) as e_true]) ->
+       e_true
+    | _, _ when List.for_all Constant_fold.is_constant args ->
+       const_fold exp
+    | _, [arg] when is_overload_of (mk_id "__size") ->
+       (match destruct_atom_nexp env (typ_of exp) with
+        | Some (Nexp_aux (Nexp_constant i, _)) ->
+           E_aux (E_lit (mk_lit (L_num i)), (l, annot))
+        | _ -> exp)
+    | _ -> exp
+
   and can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases (substs,ksubsts) assigns =
     let rec findpat_generic check_pat description assigns = function
       | [] -> (Reporting.print_err l "Monomorphisation"
@@ -816,6 +769,8 @@ let const_props defs ref_vars =
             (Reporting.print_err l' "Monomorphisation"
                "Unexpected kind of pattern for literal"; GiveUp)
        in findpat_generic checkpat "literal" assigns cases
+    | E_record _ | E_cast (_, E_aux (E_record _, _)) ->
+       findpat_generic (fun _ -> DoesNotMatch) "record" assigns cases
     | _ -> None
   
   and can_match exp =

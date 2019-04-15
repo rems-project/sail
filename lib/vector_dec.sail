@@ -15,6 +15,16 @@ val eq_bits = {
 
 overload operator == = {eq_bit, eq_bits}
 
+val neq_bits = {
+  lem: "neq_vec",
+  c: "neq_bits",
+  coq: "neq_vec"
+} : forall 'n. (vector('n, dec, bit), vector('n, dec, bit)) -> bool
+
+function neq_bits(x, y) = not_bool(eq_bits(x, y))
+
+overload operator != = {neq_bits}
+
 val bitvector_length = {coq: "length_mword", _:"length"} : forall 'n. bits('n) -> atom('n)
 
 val vector_length = {
@@ -26,8 +36,6 @@ val vector_length = {
 } : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
 
 overload length = {bitvector_length, vector_length}
-
-val sail_zeros = "zeros" : forall 'n. atom('n) -> bits('n)
 
 val "print_bits" : forall 'n. (string, bits('n)) -> unit
 
@@ -126,6 +134,23 @@ val add_bits_int = {
 
 overload operator + = {add_bits, add_bits_int}
 
+val sub_bits = {
+  ocaml: "sub_vec",
+  lem: "sub_vec",
+  c: "sub_bits",
+  coq: "sub_vec"
+} : forall 'n. (bits('n), bits('n)) -> bits('n)
+
+val not_vec = {c: "not_bits", _: "not_vec"} : forall 'n. bits('n) -> bits('n)
+
+val and_vec = {lem: "and_vec", c: "and_bits", coq: "and_vec", ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+
+overload operator & = {and_vec}
+
+val or_vec = {lem: "or_vec", c: "or_bits", coq: "or_vec", ocaml: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+
+overload operator | = {or_vec}
+
 val vector_subrange = {
   ocaml: "subrange",
   interpreter: "subrange",
@@ -143,7 +168,36 @@ val vector_update_subrange = {
   coq: "update_subrange_vec_dec"
 } : forall 'n 'm 'o, 0 <= 'o <= 'm < 'n. (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
 
+val sail_shiftleft = "shiftl" : forall 'n ('ord : Order).
+    (vector('n, 'ord, bit), int) -> vector('n, 'ord, bit) effect pure
+
+val sail_shiftright = "shiftr" : forall 'n ('ord : Order).
+    (vector('n, 'ord, bit), int) -> vector('n, 'ord, bit) effect pure
+
+val sail_arith_shiftright = "arith_shiftr" : forall 'n ('ord : Order).
+    (vector('n, 'ord, bit), int) -> vector('n, 'ord, bit) effect pure
+
+val sail_zeros = "zeros" : forall 'n, 'n >= 0. atom('n) -> bits('n)
+
+val sail_ones : forall 'n, 'n >= 0. atom('n) -> bits('n)
+
+function sail_ones(n) = not_vec(sail_zeros(n))
+
 // Some ARM specific builtins
+
+val slice = "slice" : forall 'n 'm 'o, 0 <= 'm & 0 <= 'n.
+  (bits('m), atom('o), atom('n)) -> bits('n)
+
+val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
+
+val slice_mask : forall 'n, 'n >= 0. (implicit('n), int, int) -> bits('n) effect pure
+function slice_mask(n,i,l) =
+  if l >= n then {
+    sail_ones(n)
+  } else {
+    let one : bits('n) = sail_mask(n, [bitone] : bits(1)) in
+    sail_shiftleft(sub_bits(sail_shiftleft(one, l), one), i)
+  }
 
 val get_slice_int = "get_slice_int" : forall 'w. (atom('w), int, int) -> bits('w)
 
@@ -151,11 +205,6 @@ val set_slice_int = "set_slice_int" : forall 'w. (atom('w), int, int, bits('w)) 
 
 val set_slice_bits = "set_slice" : forall 'n 'm.
   (atom('n), atom('m), bits('n), int, bits('m)) -> bits('n)
-
-val slice = "slice" : forall 'n 'm 'o, 0 <= 'o < 'm & 'o + 'n <= 'm & 0 <= 'n.
-  (bits('m), atom('o), atom('n)) -> bits('n)
-
-val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 
 /*!
 converts a bit vector of length $n$ to an integer in the range $0$ to $2^n - 1$.

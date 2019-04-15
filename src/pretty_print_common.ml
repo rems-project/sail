@@ -76,25 +76,9 @@ let semi_sp = semi ^^ space
 let comma_sp = comma ^^ space
 let colon_sp = spaces colon
 
-let doc_var (Kid_aux(Var v,_)) = string v
 let doc_int i = string (Big_int.to_string i)
 let doc_op symb a b = infix 2 1 symb a b
 let doc_unop symb a = prefix 2 1 symb a
-
-let doc_id (Id_aux(i,_)) =
-  match i with
-  | Id i -> string i
-  | DeIid x ->
-      (* add an extra space through empty to avoid a closing-comment
-       * token in case of x ending with star. *)
-      parens (separate space [string "deinfix"; string x; empty])
-
-(*
-let rec doc_range (BF_aux(r,_)) = match r with
-  | BF_single i -> doc_int i
-  | BF_range(i1,i2) -> doc_op dotdot (doc_int i1) (doc_int i2)
-  | BF_concat(ir1,ir2) -> (doc_range ir1) ^^ comma ^^ (doc_range ir2)
-*)
 
 let print ?(len=100) channel doc = ToChannel.pretty 1. len channel doc
 let to_buf ?(len=100) buf doc = ToBuffer.pretty 1. len buf doc

@@ -300,7 +300,7 @@ let rec read_lines in_chan = function
      l :: ls
 
 let latex_loc no_loc l =
-  match simp_loc l with
+  match Reporting.simp_loc l with
   | Some (p1, p2) ->
      begin
        let open Lexing in

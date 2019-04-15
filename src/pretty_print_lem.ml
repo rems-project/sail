@@ -69,11 +69,13 @@ type context = {
   top_env : Env.t
 }
 let empty_ctxt = { early_ret = false; bound_nexps = NexpSet.empty; top_env = Env.empty }
-
+              
 let print_to_from_interp_value = ref false
 let langlebar = string "<|"
 let ranglebar = string "|>"
 let anglebars = enclose langlebar ranglebar
+
+let doc_var (Kid_aux(Var v,_)) = string v
 
 let is_number_char c =
   c = '0' || c = '1' || c = '2' || c = '3' || c = '4' || c = '5' ||
@@ -113,7 +115,7 @@ let rec fix_id remove_tick name = match name with
 let doc_id_lem (Id_aux(i,_)) =
   match i with
   | Id i -> string (fix_id false i)
-  | DeIid x -> string (Util.zencode_string ("op " ^ x))
+  | Operator x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_id_lem_type (Id_aux(i,_)) =
   match i with
@@ -121,7 +123,7 @@ let doc_id_lem_type (Id_aux(i,_)) =
   | Id("nat") -> string "ii"
   | Id("option") -> string "maybe"
   | Id i -> string (fix_id false i)
-  | DeIid x -> string (Util.zencode_string ("op " ^ x))
+  | Operator x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_id_lem_ctor (Id_aux(i,_)) =
   match i with
@@ -131,11 +133,11 @@ let doc_id_lem_ctor (Id_aux(i,_)) =
   | Id("Some") -> string "Just"
   | Id("None") -> string "Nothing"
   | Id i -> string (fix_id false (String.capitalize_ascii i))
-  | DeIid x -> string (Util.zencode_string ("op " ^ x))
+  | Operator x -> string (Util.zencode_string ("op " ^ x))
 
 let deinfix = function
-  | Id_aux (Id v, l) -> Id_aux (DeIid v, l)
-  | Id_aux (DeIid v, l) -> Id_aux (DeIid v, l)
+  | Id_aux (Id v, l) -> Id_aux (Operator v, l)
+  | Id_aux (Operator v, l) -> Id_aux (Operator v, l)
 
 let doc_var_lem kid = string (fix_id true (string_of_kid kid))
 
@@ -927,7 +929,9 @@ let doc_exp_lem, doc_let_lem =
          let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
          let middle =
            match fst (untyp_pat pat) with
-           | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) -> string ">>"
+           | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _)
+             when is_unit_typ (typ_of_pat pat) ->
+              string ">>"
            | P_aux (P_tup _, _)
              when not (IdSet.mem (mk_id "varstup") (find_e_ids e2)) ->
               (* Work around indentation issues in Lem when translating
@@ -973,6 +977,10 @@ let doc_exp_lem, doc_let_lem =
       | E_aux (E_if (c', t', e'), _)
       | E_aux (E_cast (_, E_aux (E_if (c', t', e'), _)), _) ->
          if_exp ctxt true c' t' e'
+      (* Special case to prevent current arm decoder becoming a staircase *)
+      (* TODO: replace with smarter pretty printing *)
+      | E_aux (E_internal_plet (pat,exp1,E_aux (E_cast (typ, (E_aux (E_if (_, _, _), _) as exp2)),_)),ann) when Typ.compare typ unit_typ == 0 ->
+         string "else" ^/^ top_exp ctxt false (E_aux (E_internal_plet (pat,exp1,exp2),ann))
       | _ -> prefix 2 1 (string "else") (top_exp ctxt false e)
     in
     (prefix 2 1
@@ -1039,6 +1047,11 @@ let doc_typquant_sorts idpp (TypQ_aux (typq,_)) =
        string "declare isabelle target_sorts " ^^ idpp ^^ space ^^ separate space (equals::qs_pp) ^^ hardline
      else empty
   | TypQ_no_forall -> empty
+
+let doc_sia_id (Id_aux(i,_)) =
+  match i with
+  | Id i -> string i
+  | Operator x -> string ("operator " ^ x)
 
 let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
@@ -1119,7 +1132,7 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
              ((*doc_typquant_lem typq*) ar_doc) in
          let make_id pat id =
            separate space [string "SIA.Id_aux";
-                           parens (string "SIA.Id " ^^ string_lit (doc_id id));
+                           parens (string "SIA.Id " ^^ string_lit (doc_sia_id id));
                            if pat then underscore else string "SIA.Unknown"] in
          let fromInterpValueF = concat [doc_id_lem_type id;string "FromInterpValue"] in
          let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
@@ -1155,7 +1168,7 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
                       [pipe;doc_id_lem_ctor cid;string "v";arrow;
                        string "SI.V_ctor";
                        parens (make_id false cid);
-                       parens (string "SIA.T_id " ^^ string_lit (doc_id id));
+                       parens (string "SIA.T_id " ^^ string_lit (doc_sia_id id));
                        string "SI.C_Union";
                        parens (string "toInterpValue v")])
                   ar) ^/^
@@ -1193,7 +1206,7 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
          let toInterpValueF = concat [doc_id_lem_type id;string "ToInterpValue"] in
          let make_id pat id =
            separate space [string "SIA.Id_aux";
-                           parens (string "SIA.Id " ^^ string_lit (doc_id id));
+                           parens (string "SIA.Id " ^^ string_lit (doc_sia_id id));
                            if pat then underscore else string "SIA.Unknown"] in
          let fromInterpValuePP =
            (prefix 2 1)
@@ -1246,7 +1259,7 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
                       [pipe;doc_id_lem_ctor cid;arrow;
                        string "SI.V_ctor";
                        parens (make_id false cid);
-                       parens (string "SIA.T_id " ^^ string_lit (doc_id id));
+                       parens (string "SIA.T_id " ^^ string_lit (doc_sia_id id));
                        parens (string ("SI.C_Enum " ^ string_of_int number));
                        parens (string "toInterpValue ()")])
                   (List.combine enums (nats ((List.length enums) - 1)))) ^/^

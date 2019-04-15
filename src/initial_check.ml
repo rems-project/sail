@@ -70,7 +70,7 @@ type ctx = {
 
 let string_of_parse_id_aux = function
   | P.Id v -> v
-  | P.DeIid v -> v
+  | P.Operator v -> v
 
 let string_of_parse_id (P.Id_aux (id, l)) = string_of_parse_id_aux id
 
@@ -93,7 +93,7 @@ let to_ast_id (P.Id_aux(id, l)) =
   else
     Id_aux ((match id with
              | P.Id x -> Id x
-             | P.DeIid x -> DeIid x),
+             | P.Operator x -> Operator x),
             l)
 
 let to_ast_var (P.Kid_aux (P.Var v, l)) = Kid_aux (Var v, l)
@@ -224,7 +224,7 @@ and to_ast_order ctx (P.ATyp_aux (aux, l)) =
 
 and to_ast_constraint ctx (P.ATyp_aux (aux, l) as atyp) =
   let aux = match aux with
-    | P.ATyp_app (Id_aux (DeIid op, _) as id, [t1; t2]) ->
+    | P.ATyp_app (Id_aux (Operator op, _) as id, [t1; t2]) ->
        begin match op with
        | "==" -> NC_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
        | "!=" -> NC_not_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
@@ -522,52 +522,100 @@ let rec to_ast_range (P.BF_aux(r,l)) = (* TODO add check that ranges are sensibl
     | P.BF_concat(ir1,ir2) -> BF_concat(to_ast_range ir1, to_ast_range ir2)),
     l)
 
-let to_ast_type_union ctx (P.Tu_aux (P.Tu_ty_id (atyp, id), l)) =
-  let typ = to_ast_typ ctx atyp in
-  Tu_aux (Tu_ty_id (typ, to_ast_id id), l)
+let to_ast_type_union ctx = function
+  | P.Tu_aux (P.Tu_ty_id (atyp, id), l) ->
+     let typ = to_ast_typ ctx atyp in
+     Tu_aux (Tu_ty_id (typ, to_ast_id id), l)
+  | P.Tu_aux (_, l) ->
+     raise (Reporting.err_unreachable l __POS__ "Anonymous record type should have been rewritten by now")
 
 let add_constructor id typq ctx =
   let kinds = List.map (fun kopt -> unaux_kind (kopt_kind kopt)) (quant_kopts typq) in
   { ctx with type_constructors = Bindings.add id kinds ctx.type_constructors }
 
-let to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : unit type_def ctx_out =
-  let aux, ctx = match aux with
-    | P.TD_abbrev (id, typq, kind, typ_arg) ->
-       let id = to_ast_id id in
-       let typq, typq_ctx = to_ast_typquant ctx typq in
-       let kind = to_ast_kind kind in
-       let typ_arg = to_ast_typ_arg typq_ctx typ_arg (unaux_kind kind) in
-       TD_abbrev (id, typq, typ_arg),
-       add_constructor id typq ctx
+let anon_rec_constructor_typ record_id = function
+  | P.TypQ_aux (P.TypQ_no_forall, l) -> P.ATyp_aux (P.ATyp_id record_id, Generated l)
+  | P.TypQ_aux (P.TypQ_tq quants, l) ->
+     let rec quant_arg = function
+       | P.QI_aux (P.QI_id (P.KOpt_aux (P.KOpt_none v, l)), _) -> [P.ATyp_aux (P.ATyp_var v, Generated l)]
+       | P.QI_aux (P.QI_id (P.KOpt_aux (P.KOpt_kind (_, v), l)), _) -> [P.ATyp_aux (P.ATyp_var v, Generated l)]
+       | P.QI_aux (P.QI_const _, _) -> []
+     in
+     match List.concat (List.map quant_arg quants) with
+     | [] -> P.ATyp_aux (P.ATyp_id record_id, Generated l)
+     | args -> P.ATyp_aux (P.ATyp_app (record_id, args), Generated l)
 
-    | P.TD_record (id, typq, fields, _) ->
-       let id = to_ast_id id in
-       let typq, typq_ctx = to_ast_typquant ctx typq in
-       let fields = List.map (fun (atyp, id) -> to_ast_typ typq_ctx atyp, to_ast_id id) fields in
-       TD_record (id, typq, fields, false),
-       add_constructor id typq ctx
+let rec realise_union_anon_rec_types orig_union arms =
+  match orig_union with
+  | P.TD_variant (union_id, typq, _, flag) ->
+     begin match arms with
+     | [] -> []
+     | arm :: arms ->
+        match arm with
+        | (P.Tu_aux ((P.Tu_ty_id _), _)) -> (None, arm) :: realise_union_anon_rec_types orig_union arms
+        | (P.Tu_aux ((P.Tu_ty_anon_rec (fields, id)), l)) ->
+           let open Parse_ast in
+           let record_str = "_" ^ string_of_parse_id union_id ^ "_" ^ string_of_parse_id id ^ "_record" in
+           let record_id = Id_aux (Id record_str, Generated l) in
+           let new_arm = Tu_aux (Tu_ty_id (anon_rec_constructor_typ record_id typq, id), Generated l) in
+           let new_rec_def = TD_aux (TD_record (record_id, typq, fields, flag), Generated l) in
+           (Some new_rec_def, new_arm) :: (realise_union_anon_rec_types orig_union arms)
+     end
+  | _ ->
+     raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Non union type-definition passed to realise_union_anon_rec_typs")
 
-    | P.TD_variant (id, typq, arms, _) ->
-       let id = to_ast_id id in
-       let typq, typq_ctx = to_ast_typquant ctx typq in
-       let arms = List.map (to_ast_type_union typq_ctx) arms in
-       TD_variant (id, typq, arms, false),
-       add_constructor id typq ctx
+let rec to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : unit type_def list ctx_out =
+  match aux with
+  | P.TD_abbrev (id, typq, kind, typ_arg) ->
+     let id = to_ast_id id in
+     let typq, typq_ctx = to_ast_typquant ctx typq in
+     let kind = to_ast_kind kind in
+     let typ_arg = to_ast_typ_arg typq_ctx typ_arg (unaux_kind kind) in
+     [TD_aux (TD_abbrev (id, typq, typ_arg), (l, ()))],
+     add_constructor id typq ctx
 
-    | P.TD_enum (id, enums, _) ->
-       let id = to_ast_id id in
-       let enums = List.map to_ast_id enums in
-       TD_enum (id, enums, false),
-       { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
+  | P.TD_record (id, typq, fields, _) ->
+     let id = to_ast_id id in
+     let typq, typq_ctx = to_ast_typquant ctx typq in
+     let fields = List.map (fun (atyp, id) -> to_ast_typ typq_ctx atyp, to_ast_id id) fields in
+     [TD_aux (TD_record (id, typq, fields, false), (l, ()))],
+     add_constructor id typq ctx
 
-    | P.TD_bitfield (id, typ, ranges) ->
-       let id = to_ast_id id in
-       let typ = to_ast_typ ctx typ in
-       let ranges = List.map (fun (id, range) -> (to_ast_id id, to_ast_range range)) ranges in
-       TD_bitfield (id, typ, ranges),
-       { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
-  in
-  TD_aux (aux, (l, ())), ctx
+  | P.TD_variant (id, typq, arms, _) as union ->
+     (* First generate auxilliary record types for anonymous records in constructors *)
+     let records_and_arms = realise_union_anon_rec_types union arms in
+     let rec filter_records = function
+       | [] -> []
+       | Some x :: xs -> x :: filter_records xs
+       | None :: xs -> filter_records xs
+     in
+     let generated_records = filter_records (List.map fst records_and_arms) in
+     let generated_records, ctx =
+       List.fold_left (fun (prev, ctx) td -> let td, ctx = to_ast_typedef ctx td in prev @ td, ctx)
+         ([], ctx)
+         generated_records
+     in
+     let arms = List.map snd records_and_arms in
+     let union = Parse_ast.TD_variant (id, typq, arms, false) in
+     (* Now generate the AST union type *)
+     let id = to_ast_id id in
+     let typq, typq_ctx = to_ast_typquant ctx typq in
+     let arms = List.map (to_ast_type_union typq_ctx) arms in
+     [TD_aux (TD_variant (id, typq, arms, false), (l, ()))] @ generated_records,
+     add_constructor id typq ctx
+
+  | P.TD_enum (id, enums, _) ->
+     let id = to_ast_id id in
+     let enums = List.map to_ast_id enums in
+     [TD_aux (TD_enum (id, enums, false), (l, ()))],
+     { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
+
+  | P.TD_bitfield (id, typ, ranges) ->
+     let id = to_ast_id id in
+     let typ = to_ast_typ ctx typ in
+     let ranges = List.map (fun (id, range) -> (to_ast_id id, to_ast_range range)) ranges in
+     [TD_aux (TD_bitfield (id, typ, ranges), (l, ()))],
+     { ctx with type_constructors = Bindings.add id [] ctx.type_constructors }
 
 let to_ast_rec ctx (P.Rec_aux(r,l): P.rec_opt) : unit rec_opt =
   Rec_aux((match r with
@@ -714,44 +762,44 @@ let to_ast_prec = function
   | P.InfixL -> InfixL
   | P.InfixR -> InfixR
 
-let to_ast_def ctx def : unit def ctx_out =
+let to_ast_def ctx def : unit def list ctx_out =
   match def with
   | P.DEF_overload (id, ids) ->
-     DEF_overload (to_ast_id id, List.map to_ast_id ids), ctx
+     [DEF_overload (to_ast_id id, List.map to_ast_id ids)], ctx
   | P.DEF_fixity (prec, n, op) ->
-     DEF_fixity (to_ast_prec prec, n, to_ast_id op), ctx
+     [DEF_fixity (to_ast_prec prec, n, to_ast_id op)], ctx
   | P.DEF_type(t_def) ->
-     let td, ctx = to_ast_typedef ctx t_def in
-     DEF_type td, ctx
+     let tds, ctx = to_ast_typedef ctx t_def in
+     List.map (fun td -> DEF_type td) tds, ctx
   | P.DEF_fundef(f_def) ->
      let fd = to_ast_fundef ctx f_def in
-     DEF_fundef fd, ctx
+     [DEF_fundef fd], ctx
   | P.DEF_mapdef(m_def) ->
      let md = to_ast_mapdef ctx m_def in
-     DEF_mapdef md, ctx
+     [DEF_mapdef md], ctx
   | P.DEF_val(lbind) ->
      let lb = to_ast_letbind ctx lbind in
-     DEF_val lb, ctx
+     [DEF_val lb], ctx
   | P.DEF_spec(val_spec) ->
      let vs,ctx = to_ast_spec ctx val_spec in
-     DEF_spec vs, ctx
+     [DEF_spec vs], ctx
   | P.DEF_default(typ_spec) ->
      let default,ctx = to_ast_default ctx typ_spec in
-     DEF_default default, ctx
+     [DEF_default default], ctx
   | P.DEF_reg_dec dec ->
      let d = to_ast_dec ctx dec in
-     DEF_reg_dec d, ctx
+     [DEF_reg_dec d], ctx
   | P.DEF_pragma (pragma, arg, l) ->
-     DEF_pragma (pragma, arg, l), ctx
+     [DEF_pragma (pragma, arg, l)], ctx
   | P.DEF_internal_mutrec _ ->
      (* Should never occur because of remove_mutrec *)
      raise (Reporting.err_unreachable P.Unknown __POS__
                                       "Internal mutual block found when processing scattered defs")
   | P.DEF_scattered sdef ->
      let sdef, ctx = to_ast_scattered ctx sdef in
-     DEF_scattered sdef, ctx
+     [DEF_scattered sdef], ctx
   | P.DEF_measure (id, pat, exp) ->
-     DEF_measure (to_ast_id id, to_ast_pat ctx pat, to_ast_exp ctx exp), ctx
+     [DEF_measure (to_ast_id id, to_ast_pat ctx pat, to_ast_exp ctx exp)], ctx
 
 let rec remove_mutrec = function
   | [] -> []
@@ -763,7 +811,7 @@ let rec remove_mutrec = function
 let to_ast ctx (P.Defs(defs)) =
   let defs = remove_mutrec defs in
   let defs, ctx =
-    List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def ctx def in (def :: defs, ctx)) ([], ctx) defs
+    List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def ctx def in (def @ defs, ctx)) ([], ctx) defs
   in
   Defs (List.rev defs), ctx
 
@@ -834,30 +882,31 @@ let undefined_typschm id typq =
 
 let have_undefined_builtins = ref false
 
+let undefined_builtin_val_specs =
+  [extern_of_string (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a effect {undef}";
+   extern_of_string (mk_id "undefined_bool") "unit -> bool effect {undef}";
+   extern_of_string (mk_id "undefined_bit") "unit -> bit effect {undef}";
+   extern_of_string (mk_id "undefined_int") "unit -> int effect {undef}";
+   extern_of_string (mk_id "undefined_nat") "unit -> nat effect {undef}";
+   extern_of_string (mk_id "undefined_real") "unit -> real effect {undef}";
+   extern_of_string (mk_id "undefined_string") "unit -> string effect {undef}";
+   extern_of_string (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a) effect {undef}";
+   extern_of_string (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
+   extern_of_string (mk_id "undefined_vector") "forall 'n ('a:Type) ('ord : Order). (atom('n), 'a) -> vector('n, 'ord,'a) effect {undef}";
+   (* Only used with lem_mwords *)
+   extern_of_string (mk_id "undefined_bitvector") "forall 'n. atom('n) -> vector('n, dec, bit) effect {undef}";
+   extern_of_string (mk_id "undefined_unit") "unit -> unit effect {undef}"]
+
 let generate_undefineds vs_ids (Defs defs) =
-  let gen_vs id str =
-    if (IdSet.mem id vs_ids) then [] else [extern_of_string id str]
-  in
   let undefined_builtins =
     if !have_undefined_builtins then
       []
     else
       begin
         have_undefined_builtins := true;
-        List.concat
-          [gen_vs (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a effect {undef}";
-           gen_vs (mk_id "undefined_bool") "unit -> bool effect {undef}";
-           gen_vs (mk_id "undefined_bit") "unit -> bit effect {undef}";
-           gen_vs (mk_id "undefined_int") "unit -> int effect {undef}";
-           gen_vs (mk_id "undefined_nat") "unit -> nat effect {undef}";
-           gen_vs (mk_id "undefined_real") "unit -> real effect {undef}";
-           gen_vs (mk_id "undefined_string") "unit -> string effect {undef}";
-           gen_vs (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a) effect {undef}";
-           gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
-           gen_vs (mk_id "undefined_vector") "forall 'n ('a:Type) ('ord : Order). (atom('n), 'a) -> vector('n, 'ord,'a) effect {undef}";
-           (* Only used with lem_mwords *)
-           gen_vs (mk_id "undefined_bitvector") "forall 'n. atom('n) -> vector('n, dec, bit) effect {undef}";
-           gen_vs (mk_id "undefined_unit") "unit -> unit effect {undef}"]
+        List.filter
+          (fun def -> IdSet.is_empty (IdSet.inter vs_ids (ids_of_def def)))
+          undefined_builtin_val_specs
       end
   in
   let undefined_tu = function
@@ -1035,6 +1084,10 @@ let process_ast ?generate:(generate=true) defs =
     |> generate_initialize_registers vs_ids
   else
     ast
+
+let ast_of_def_string_with f str =
+  let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
+  process_ast (f (P.Defs [def]))
 
 let ast_of_def_string str =
   let def = Parser.def_eof Lexer.token (Lexing.from_string str) in

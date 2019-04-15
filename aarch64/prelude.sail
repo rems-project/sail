@@ -284,17 +284,11 @@ val abs_real = {coq: "Rabs", _: "abs_real"} : real -> real
 
 overload abs = {abs_atom, abs_real}
 
-val quotient_nat = {ocaml: "quotient", lem: "integerDiv", c: "tdiv_int"} : (nat, nat) -> nat
-
 val quotient_real = {ocaml: "quotient_real", lem: "realDiv", c: "div_real", coq: "Rdiv"} : (real, real) -> real
 
-val quotient = {ocaml: "quotient", lem: "integerDiv", c: "tdiv_int", coq: "Z.quot"} : (int, int) -> int
-
-overload operator / = {quotient_nat, quotient, quotient_real}
-
-val modulus = {ocaml: "modulus", lem: "hardware_mod", c: "tmod_int", coq: "Z.rem"} : (int, int) -> int
-
-overload operator % = {modulus}
+overload operator / = {ediv_int, quotient_real}
+overload div = {ediv_int}
+overload operator % = {emod_int}
 
 val Real = {ocaml: "to_real", lem: "realFromInteger", c: "to_real", coq: "IZR"} : int -> real
 

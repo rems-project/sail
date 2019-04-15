@@ -82,6 +82,13 @@ let zeros _ = Machine_word.wordFromNatural 0
 val vector_truncate : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
 let vector_truncate w _ = Machine_word.zeroExtend w
 
+val vector_truncateLSB : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
+let vector_truncateLSB w len =
+  let len = nat_of_int len in
+  let lo = Machine_word.word_length w - len in
+  let hi = lo + len - 1 in
+  Machine_word.word_extract lo hi w
+
 val concat_vec : forall 'a 'b 'c. Size 'a, Size 'b, Size 'c => mword 'a -> mword 'b -> mword 'c
 let concat_vec = Machine_word.word_concat
 

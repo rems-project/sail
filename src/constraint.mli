@@ -61,10 +61,10 @@ type smt_result = Unknown | Sat | Unsat
 val load_digests : unit -> unit
 val save_digests : unit -> unit
 
-val call_smt : l -> kind_aux KBindings.t -> n_constraint -> smt_result
+val call_smt : l -> n_constraint -> smt_result
 
-val solve_smt : l -> kind_aux KBindings.t -> n_constraint -> kid -> Big_int.num option
+val solve_smt : l -> n_constraint -> kid -> Big_int.num option
 
-val solve_all_smt : l -> kind_aux KBindings.t -> n_constraint -> kid -> Big_int.num list option
+val solve_all_smt : l -> n_constraint -> kid -> Big_int.num list option
 
-val solve_unique_smt : l -> kind_aux KBindings.t -> n_constraint -> kid -> Big_int.num option
+val solve_unique_smt : l -> n_constraint -> kid -> Big_int.num option

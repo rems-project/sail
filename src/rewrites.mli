@@ -59,7 +59,6 @@ val opt_dmono_analysis : int ref
 val opt_auto_mono : bool ref
 val opt_dall_split_errors : bool ref
 val opt_dmono_continue : bool ref
-val opt_separate_execute : bool ref
 
 (* Generate a fresh id with the given prefix *)
 val fresh_id : string -> l -> id
@@ -67,24 +66,30 @@ val fresh_id : string -> l -> id
 (* Re-write undefined to functions created by -undefined_gen flag *)
 val rewrite_undefined : bool -> Env.t -> tannot defs -> tannot defs
 
-(* Perform rewrites to exclude AST nodes not supported for ocaml out*)
-val rewrite_defs_ocaml : (string * (Env.t -> tannot defs -> tannot defs)) list
+(* Perform rewrites to create an AST supported for a specific target *)
+val rewrite_defs_target : string -> (string * (Env.t -> tannot defs -> tannot defs)) list
 
-(* Perform rewrites to exclude AST nodes not supported for interpreter *)
-val rewrite_defs_interpreter : (string * (Env.t -> tannot defs -> tannot defs)) list
+type rewriter =
+  | Basic_rewriter of (Env.t -> tannot defs -> tannot defs)
+  | Bool_rewriter of (bool -> rewriter)
+  | String_rewriter of (string -> rewriter)
+  | Literal_rewriter of ((lit -> bool) -> rewriter)
 
-(* Perform rewrites to exclude AST nodes not supported for lem out*)
-val rewrite_defs_lem : (string * (Env.t -> tannot defs -> tannot defs)) list
+val rewrite_lit_ocaml : lit -> bool
+val rewrite_lit_lem : lit -> bool
 
-(* Perform rewrites to exclude AST nodes not supported for coq out*)
-val rewrite_defs_coq : (string * (Env.t -> tannot defs -> tannot defs)) list
+type rewriter_arg =
+  | If_mono_arg
+  | If_mwords_arg
+  | Bool_arg of bool
+  | String_arg of string
+  | Literal_arg of string
+
+val all_rewrites : (string * rewriter) list
 
 (* Warn about matches where we add a default case for Coq because they're not
    exhaustive *)
 val opt_coq_warn_nonexhaustive : bool ref
-
-(* Perform rewrites to exclude AST nodes not supported for C compilation *)
-val rewrite_defs_c : (string * (Env.t -> tannot defs -> tannot defs)) list
 
 (* This is a special rewriter pass that checks AST invariants without
    actually doing any re-writing *)

@@ -96,7 +96,7 @@ cd $DIR
 for i in `ls -d */`;
 do
     cd $DIR/$i;
-    if $SAILDIR/sail -no_warn -is test.isail ../prelude.sail `ls *.sail` 1> /dev/null;
+    if $SAILDIR/sail -no_warn -undefined_gen -is test.isail ../prelude.sail `ls *.sail` 1> /dev/null;
     then
 	if diff expect result;
 	then

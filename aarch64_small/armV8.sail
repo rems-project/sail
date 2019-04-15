@@ -2201,7 +2201,7 @@ function clause execute ( Division((d,n,m,datasize as int('R),_unsigned)) ) = {
   if IsZero(operand2) then
     result = 0
   else
-    result = /* ARM: RoundTowardsZero*/ quot (_Int(operand1, _unsigned), _Int(operand2, _unsigned)); /* FIXME: does quot round towards zero? */
+    result = /* ARM: RoundTowardsZero*/ tdiv_int (_Int(operand1, _unsigned), _Int(operand2, _unsigned));
 
   wX(d) = to_bits(result) : (bits('R)) ; /* ARM: result[(datasize-1)..0] */
 }

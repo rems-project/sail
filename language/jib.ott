@@ -47,21 +47,27 @@ open import Value2
 
 grammar
 
+name :: '' ::=
+  | id nat                :: :: name
+  | have_exception nat    :: :: have_exception
+  | current_exception nat :: :: current_exception
+  | return nat            :: :: return
+
 % Fragments are small pure snippets of (abstract) C code, mostly
-% expressions, used by the aval and cval types.
+% expressions, used by the aval (ANF) and cval (Jib) types.
 
 fragment :: 'F_' ::=
-  | id                                     :: :: id
-  | '&' id                                 :: :: ref
-  | value                                  :: :: lit
-  | have_exception                         :: :: have_exception
-  | current_exception                      :: :: current_exception
-  | fragment op fragment'                  :: :: op
-  | op fragment                            :: :: unary
-  | string ( fragment0 , ... , fragmentn ) :: :: call
-  | fragment . string                      :: :: field
-  | string                                 :: :: raw
-  | poly fragment                          :: :: poly
+  | name                                             :: :: id
+  | '&' name                                         :: :: ref
+  | value                                            :: :: lit
+  | fragment != kind id ( ctyp0 , ... , ctypn ) ctyp :: :: ctor_kind
+  | unwrap id ( ctyp0 , ... , ctypn ) fragment       :: :: ctor_unwrap
+  | fragment op fragment'                            :: :: op
+  | op fragment                                      :: :: unary
+  | string ( fragment0 , ... , fragmentn )           :: :: call
+  | fragment . string                                :: :: field
+  | string                                           :: :: raw
+  | poly fragment                                    :: :: poly
 
 % Note that init / clear are sometimes refered to as create / kill
 
@@ -129,13 +135,10 @@ cval :: 'CV_' ::=
   {{ lem fragment * ctyp }}
 
 clexp :: 'CL_' ::=
-  | id : ctyp                :: :: id
+  | name : ctyp              :: :: id
   | clexp . string           :: :: field
   | * clexp                  :: :: addr
   | clexp . nat              :: :: tuple
-  | current_exception : ctyp :: :: current_exception
-  | have_exception           :: :: have_exception
-  | return : ctyp            :: :: return
   | void                     :: :: void
 
 ctype_def :: 'CTD_' ::=
@@ -152,17 +155,17 @@ instr :: 'I_' ::=
   {{ aux _ iannot }}
 % The following are the minimal set of instructions output by
 % Jib_compile.ml.
-  | ctyp id                                        :: :: decl
-  | ctyp id = cval                                 :: :: init
+  | ctyp name                                      :: :: decl
+  | ctyp name = cval                               :: :: init
   | jump ( cval ) string                           :: :: jump
   | goto string                                    :: :: goto
   | string :                                       :: :: label
   | clexp = bool id ( cval0 , ... , cvaln )        :: :: funcall
   | clexp = cval                                   :: :: copy
-  | clear ctyp id                                  :: :: clear
+  | clear ctyp name                                :: :: clear
   | undefined ctyp                                 :: :: undefined
   | match_failure                                  :: :: match_failure
-  | end                                            :: :: end
+  | end name                                       :: :: end
 
 % All instructions containing nested instructions can be flattened
 % away. try and throw only exist for internal use within
@@ -187,9 +190,8 @@ instr :: 'I_' ::=
   | return cval                                    :: :: return
 
 % For optimising away allocations and copying.
-  | reset ctyp id                                  :: :: reset
-  | ctyp id = cval                                 :: :: reinit
-  | alias clexp = cval                             :: :: alias
+  | reset ctyp name                                :: :: reset
+  | ctyp name = cval                               :: :: reinit
 
 cdef :: 'CDEF_' ::=
   | register id : ctyp = {

@@ -179,9 +179,9 @@ module Id = struct
   let compare id1 id2 =
     match (id1, id2) with
     | Id_aux (Id x, _), Id_aux (Id y, _) -> String.compare x y
-    | Id_aux (DeIid x, _), Id_aux (DeIid y, _) -> String.compare x y
-    | Id_aux (Id _, _), Id_aux (DeIid _, _) -> -1
-    | Id_aux (DeIid _, _), Id_aux (Id _, _) -> 1
+    | Id_aux (Operator x, _), Id_aux (Operator y, _) -> String.compare x y
+    | Id_aux (Id _, _), Id_aux (Operator _, _) -> -1
+    | Id_aux (Operator _, _), Id_aux (Id _, _) -> 1
 end
 
 module Nexp = struct
@@ -360,7 +360,7 @@ let rec constraint_disj (NC_aux (nc_aux, l) as nc) =
 let mk_typ typ = Typ_aux (typ, Parse_ast.Unknown)
 let mk_typ_arg arg = A_aux (arg, Parse_ast.Unknown)
 let mk_kid str = Kid_aux (Var ("'" ^ str), Parse_ast.Unknown)
-let mk_infix_id str = Id_aux (DeIid str, Parse_ast.Unknown)
+let mk_infix_id str = Id_aux (Operator str, Parse_ast.Unknown)
 
 let mk_id_typ id = Typ_aux (Typ_id id, Parse_ast.Unknown)
 
@@ -725,23 +725,23 @@ let def_loc = function
 
 let string_of_id = function
   | Id_aux (Id v, _) -> v
-  | Id_aux (DeIid v, _) -> "(operator " ^ v ^ ")"
+  | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
 
 let id_of_kid = function
   | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
 let kid_of_id = function
   | Id_aux (Id v, l) -> Kid_aux (Var ("'" ^ v), l)
-  | Id_aux (DeIid v, _) -> assert false
+  | Id_aux (Operator v, _) -> assert false
 
 let prepend_id str = function
   | Id_aux (Id v, l) -> Id_aux (Id (str ^ v), l)
-  | Id_aux (DeIid v, l) -> Id_aux (DeIid (str ^ v), l)
+  | Id_aux (Operator v, l) -> Id_aux (Operator (str ^ v), l)
 
 let append_id id str =
   match id with
   | Id_aux (Id v, l) -> Id_aux (Id (v ^ str), l)
-  | Id_aux (DeIid v, l) -> Id_aux (DeIid (v ^ str), l)
+  | Id_aux (Operator v, l) -> Id_aux (Operator (v ^ str), l)
 
 let prepend_kid str = function
   | Kid_aux (Var v, l) -> Kid_aux (Var ("'" ^ str ^ String.sub v 1 (String.length v - 1)), l)
@@ -839,7 +839,7 @@ and string_of_n_constraint = function
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_set (kid, ns), _) ->
      string_of_kid kid ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
-  | NC_aux (NC_app (Id_aux (DeIid op, _), [arg1; arg2]), _) ->
+  | NC_aux (NC_app (Id_aux (Operator op, _), [arg1; arg2]), _) ->
      "(" ^ string_of_typ_arg arg1 ^ " " ^ op ^ " " ^ string_of_typ_arg arg2 ^ ")"
   | NC_aux (NC_app (id, args), _) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | NC_aux (NC_var v, _) -> string_of_kid v
@@ -1173,6 +1173,8 @@ module NC = struct
   type t = n_constraint
   let compare = nc_compare
 end
+
+module NCMap = Map.Make(NC)
 
 module Typ = struct
   type t = typ
@@ -1854,6 +1856,8 @@ and constraint_subst_aux l sv subst = function
   | NC_not_equal (n1, n2) -> NC_not_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_set (kid, ints) as set_nc ->
      begin match subst with
+     | A_aux (A_nexp (Nexp_aux (Nexp_var kid',_)), _) when Kid.compare kid sv = 0 ->
+        NC_set (kid', ints)
      | A_aux (A_nexp n, _) when Kid.compare kid sv = 0 ->
         nexp_set_to_or l n ints
      | _ -> set_nc
@@ -1987,20 +1991,12 @@ let subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
     | A_bool nc -> A_aux (A_bool (subst_kids_nc substs nc), l)
   in subst_kids_nc, s_styp, s_starg
 
-
-let rec simp_loc = function
-  | Parse_ast.Unknown -> None
-  | Parse_ast.Unique (_, l) -> simp_loc l
-  | Parse_ast.Generated l -> simp_loc l
-  | Parse_ast.Range (p1, p2) -> Some (p1, p2)
-  | Parse_ast.Documented (_, l) -> simp_loc l
-
 let before p1 p2 =
   let open Lexing in
   p1.pos_fname = p2.pos_fname && p1.pos_cnum <= p2.pos_cnum
 
 let subloc sl l =
-  match sl, simp_loc l with
+  match sl, Reporting.simp_loc l with
   | _, None -> false
   | None, _ -> false
   | Some (p1a, p1b), Some (p2a, p2b) ->

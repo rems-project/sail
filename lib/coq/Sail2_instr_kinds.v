@@ -48,14 +48,13 @@
 (*  SUCH DAMAGE.                                                          *)
 (*========================================================================*)
 
+Require Import DecidableClass.
+
+Class EnumerationType (A : Type) := {
+  toNat : A -> nat
+}.
 
 (*
-
-class ( EnumerationType 'a )
-  val toNat : 'a -> nat
-end
-
-
 val enumeration_typeCompare : forall 'a. EnumerationType 'a => 'a -> 'a -> ordering
 let ~{ocaml} enumeration_typeCompare e1 e2 :=
   compare (toNat e1) (toNat e2)
@@ -89,6 +88,7 @@ Inductive read_kind :=
   (* x86 reads *)
   | Read_X86_locked (* the read part of a lock'd instruction (rmw) *)
 .
+Scheme Equality for read_kind.
 (*
 instance (Show read_kind)
   let show := function
@@ -121,6 +121,7 @@ Inductive write_kind :=
   (* x86 writes *)
   | Write_X86_locked (* the write part of a lock'd instruction (rmw) *)
 .
+Scheme Equality for write_kind.
 (*
 instance (Show write_kind)
   let show := function
@@ -161,6 +162,7 @@ Inductive barrier_kind :=
   | Barrier_RISCV_i
   (* X86 *)
   | Barrier_x86_MFENCE.
+Scheme Equality for barrier_kind.
 
 (*
 instance (Show barrier_kind)
@@ -196,6 +198,7 @@ end*)
 Inductive trans_kind :=
   (* AArch64 *)
   | Transaction_start | Transaction_commit | Transaction_abort.
+Scheme Equality for trans_kind.
 (*
 instance (Show trans_kind)
   let show := function

@@ -40,7 +40,7 @@ def test_interpreter(name):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('sail -is execute.isail -iout {}.iresult {}'.format(basename, filename))
+                step('sail -undefined_gen -is execute.isail -iout {}.iresult {}'.format(basename, filename))
                 step('diff {}.iresult {}.expect'.format(basename, basename))
                 print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
                 sys.exit()

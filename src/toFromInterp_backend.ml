@@ -123,7 +123,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
      | Id_aux ((Id "diafps"),_) -> empty
      (* | Id_aux ((Id "option"),_) -> empty *)
      | Id_aux ((Id id_string), _)
-       | Id_aux ((DeIid id_string), _) ->
+       | Id_aux ((Operator id_string), _) ->
         if !lem_mode && id_string = "option" then empty else
           let fromInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "FromInterpValue"] in
           let fromFallback = separate space [pipe; underscore; arrow; string "failwith";
@@ -265,7 +265,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
      | Id_aux ((Id "diafps"),_) -> empty
      (* | Id_aux ((Id "option"),_) -> empty *)
      | Id_aux ((Id id_string), _)
-       | Id_aux ((DeIid id_string), _) ->
+       | Id_aux ((Operator id_string), _) ->
         if !lem_mode && id_string = "option" then empty else
           let toInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"] in
           let toInterpValue =

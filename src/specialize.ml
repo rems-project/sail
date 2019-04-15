@@ -53,7 +53,7 @@ open Ast_util
 open Rewriter
 
 let opt_ddump_spec_ast = ref None
-   
+
 let is_typ_ord_arg = function
   | A_aux (A_typ _, _) -> true
   | A_aux (A_order _, _) -> true
@@ -483,7 +483,7 @@ let specialize_id_overloads instantiations id (Defs defs) =
    valspecs are then re-specialized. This process is iterated until
    the whole spec is specialized. *)
 
-let initial_calls = IdSet.of_list
+let initial_calls = ref (IdSet.of_list
   [ mk_id "main";
     mk_id "__SetConfig";
     mk_id "__ListConfig";
@@ -491,10 +491,12 @@ let initial_calls = IdSet.of_list
     mk_id "decode";
     mk_id "initialize_registers";
     mk_id "append_64" (* used to construct bitvector literals in C backend *)
-  ]
+  ])
 
-let remove_unused_valspecs ?(initial_calls=initial_calls) env ast =
-  let calls = ref initial_calls in
+let add_initial_calls ids = initial_calls := IdSet.union ids !initial_calls
+
+let remove_unused_valspecs env ast =
+  let calls = ref !initial_calls in
   let vs_ids = val_spec_ids ast in
 
   let inspect_exp = function
@@ -526,14 +528,6 @@ let remove_unused_valspecs ?(initial_calls=initial_calls) env ast =
   in
 
   List.fold_left (fun ast id -> Defs (remove_unused ast id)) ast (IdSet.elements unused)
-
-let slice_defs env (Defs defs) keep_ids =
-  let keep = function
-    | DEF_fundef fd -> IdSet.mem (id_of_fundef fd) keep_ids
-    | _ -> true
-  in
-  let defs = List.filter keep defs in
-  remove_unused_valspecs env (Defs defs) ~initial_calls:keep_ids
 
 let specialize_id spec id ast =
   let instantiations = instantiations_of spec id ast in

@@ -63,6 +63,8 @@ val opt_debug_flow_graphs : bool ref
 (** Print the IR representation of a specific function. *)
 val opt_debug_function : string ref
 
+val ngensym : unit -> name
+  
 (** {2 Jib context} *)
 
 (** Context for compiling Sail to Jib. We need to pass a (global)

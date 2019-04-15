@@ -110,6 +110,9 @@ refine ((if Decidable_witness as b return (b = true <-> x = y -> _) then fun H' 
 * right. intuition.
 Defined.
 
+Instance Decidable_eq_list {A : Type} `(D : forall x y : A, Decidable (x = y)) : forall (x y : list A), Decidable (x = y) :=
+  Decidable_eq_from_dec (list_eq_dec (fun x y => generic_dec x y)).
+
 (* Used by generated code that builds Decidable equality instances for records. *)
 Ltac cmp_record_field x y :=
   let H := fresh "H" in
@@ -143,6 +146,47 @@ constructor.
 unfold pow.
 auto using Z.le_refl.
 Qed.
+
+Lemma ZEuclid_div_pos : forall x y, y > 0 -> x >= 0 -> ZEuclid.div x y >= 0.
+intros.
+unfold ZEuclid.div.
+change 0 with (0 * 0).
+apply Zmult_ge_compat; auto with zarith.
+* apply Z.le_ge. apply Z.sgn_nonneg. apply Z.ge_le. auto with zarith.
+* apply Z_div_ge0; auto. apply Z.lt_gt. apply Z.abs_pos. auto with zarith.
+Qed.
+
+Lemma ZEuclid_div_ge : forall x y, y > 0 -> x >= 0 -> x - ZEuclid.div x y >= 0.
+intros.
+unfold ZEuclid.div.
+rewrite Z.sgn_pos; auto with zarith.
+rewrite Z.mul_1_l.
+apply Z.le_ge.
+apply Zle_minus_le_0.
+apply Z.div_le_upper_bound.
+* apply Z.abs_pos. auto with zarith.
+* rewrite Z.mul_comm.
+  assert (0 < Z.abs y). {
+    apply Z.abs_pos.
+    omega.
+  }
+  revert H1.
+  generalize (Z.abs y). intros. nia.
+Qed.
+
+Lemma ZEuclid_div_mod0 : forall x y, y <> 0 ->
+  ZEuclid.modulo x y = 0 ->
+  y * ZEuclid.div x y = x.
+intros x y H1 H2.
+rewrite Zplus_0_r_reverse at 1.
+rewrite <- H2.
+symmetry.
+apply ZEuclid.div_mod.
+assumption.
+Qed.
+
+Hint Resolve ZEuclid_div_pos ZEuclid_div_ge ZEuclid_div_mod0 : sail.
+
 
 (*
 Definition inline lt := (<)
@@ -416,19 +460,23 @@ Definition binop_bit op x y :=
   match (x, y) with
   | (BU,_) => BU (*Do we want to do this or to respect | of I and & of B0 rules?*)
   | (_,BU) => BU (*Do we want to do this or to respect | of I and & of B0 rules?*)
-  | (x,y) => bitU_of_bool (op (bool_of_bitU x) (bool_of_bitU y))
+(*  | (x,y) => bitU_of_bool (op (bool_of_bitU x) (bool_of_bitU y))*)
+  | (B0,B0) => bitU_of_bool (op false false)
+  | (B0,B1) => bitU_of_bool (op false  true)
+  | (B1,B0) => bitU_of_bool (op  true false)
+  | (B1,B1) => bitU_of_bool (op  true  true)
   end.
 
-(*val and_bit : bitU -> bitU -> bitU
-Definition and_bit := binop_bit (&&)
+(*val and_bit : bitU -> bitU -> bitU*)
+Definition and_bit := binop_bit andb.
 
-val or_bit : bitU -> bitU -> bitU
-Definition or_bit := binop_bit (||)
+(*val or_bit : bitU -> bitU -> bitU*)
+Definition or_bit := binop_bit orb.
 
-val xor_bit : bitU -> bitU -> bitU
-Definition xor_bit := binop_bit xor
+(*val xor_bit : bitU -> bitU -> bitU*)
+Definition xor_bit := binop_bit xorb.
 
-val (&.) : bitU -> bitU -> bitU
+(*val (&.) : bitU -> bitU -> bitU
 Definition inline (&.) x y := and_bit x y
 
 val (|.) : bitU -> bitU -> bitU
@@ -1061,8 +1109,8 @@ Ltac unbool_comparisons_goal :=
   | |- context [generic_eq _ _ = false] => apply generic_eq_false
   | |- context [generic_neq _ _ = true] => apply generic_neq_true
   | |- context [generic_neq _ _ = false] => apply generic_neq_false
-  | |- context [_ <> true] => rewrite Bool.not_true_iff_false
-  | |- context [_ <> false] => rewrite Bool.not_false_iff_true
+  | |- context [_ <> true] => setoid_rewrite Bool.not_true_iff_false
+  | |- context [_ <> false] => setoid_rewrite Bool.not_false_iff_true
   end.
 
 (* Split up dependent pairs to get at proofs of properties *)
@@ -1135,7 +1183,7 @@ Qed.
    the variable is unused.  This is used so that we can use eauto with a low
    search bound that doesn't include the exists.  (Not terribly happy with
    how this works...) *)
-Ltac drop_exists :=
+Ltac drop_Z_exists :=
 repeat
   match goal with |- @ex Z ?p =>
    let a := eval hnf in (p 0) in
@@ -1152,10 +1200,14 @@ repeat
    clear xx
   end.
 *)
+(* For boolean solving we just use plain metavariables *)
+Ltac drop_bool_exists :=
+repeat match goal with |- @ex bool _ => eexists end.
 
 (* The linear solver doesn't like existentials. *)
 Ltac destruct_exists :=
-  repeat match goal with H:@ex Z _ |- _ => destruct H end.
+  repeat match goal with H:@ex Z _ |- _ => destruct H end;
+  repeat match goal with H:@ex bool _ |- _ => destruct H end.
 
 Ltac prepare_for_solver :=
 (*dump_context;*)
@@ -1169,6 +1221,7 @@ Ltac prepare_for_solver :=
  destruct_exists;
  unbool_comparisons;
  unbool_comparisons_goal;
+ repeat match goal with H:and _ _ |- _ => destruct H end;
  unfold_In; (* after unbool_comparisons to deal with && and || *)
  reduce_list_lengths;
  reduce_pow;
@@ -1202,6 +1255,27 @@ match goal with
 | _ => tauto
 end.
 
+Lemma or_iff_cong : forall A B C D, A <-> B -> C <-> D -> A \/ C <-> B \/ D.
+intros.
+tauto.
+Qed.
+
+Lemma and_iff_cong : forall A B C D, A <-> B -> C <-> D -> A /\ C <-> B /\ D.
+intros.
+tauto.
+Qed.
+
+Ltac solve_euclid :=
+repeat match goal with |- context [ZEuclid.modulo ?x ?y] =>
+  specialize (ZEuclid.div_mod x y);
+  specialize (ZEuclid.mod_always_pos x y);
+  generalize (ZEuclid.modulo x y);
+  generalize (ZEuclid.div x y);
+  intros
+end;
+nia.
+
+
 Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
@@ -1209,30 +1283,42 @@ intros; (* To solve implications for derive_m *)
 try (exact trivial_range);
 try fill_in_evar_eq;
 try match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end;
+(* Trying reflexivity will fill in more complex metavariable examples than
+   fill_in_evar_eq above, e.g., 8 * n = 8 * ?Goal3 *)
+try (constructor; reflexivity);
 try (constructor; omega);
 prepare_for_solver;
 (*dump_context;*)
+constructor;
+repeat match goal with |- and _ _ => split end;
  solve
- [ match goal with |- ArithFact (?x _) => is_evar x; idtac "Warning: unknown constraint"; constructor; exact (I : (fun _ => True) _) end
+ [ match goal with |- (?x _) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) _) end
  | apply ArithFact_mword; assumption
- | constructor; omega with Z
+ | omega with Z
    (* Try sail hints before dropping the existential *)
- | constructor; eauto 3 with zarith sail
+ | subst; eauto 3 with zarith sail
    (* The datatypes hints give us some list handling, esp In *)
- | constructor; drop_exists; eauto 3 with datatypes zarith sail
- | match goal with |- context [Z.mul] => constructor; nia end
+ | subst; drop_Z_exists; eauto 3 with datatypes zarith sail
+ | subst; match goal with |- context [ZEuclid.div] => solve_euclid
+                        | |- context [ZEuclid.modulo] => solve_euclid
+   end
+ | match goal with |- context [Z.mul] => nia end
    (* Booleans - and_boolMP *)
- | match goal with |- ArithFact (forall l r:bool, _ -> _ -> exists _ : bool, _) => 
-     constructor; intros [|] [|] H1 H2;
+ | drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
+ | match goal with |- (forall l r:bool, _ -> _ -> exists _ : bool, _) => 
+     intros [|] [|] H1 H2;
      repeat match goal with H:?X = ?X -> _ |- _ => specialize (H eq_refl) end;
      repeat match goal with H:@ex _ _ |- _ => destruct H end;
      bruteforce_bool_exists
    end
+(* While firstorder was quite effective at dealing with existentially quantified
+   goals from boolean expressions, it attempts lazy normalization of terms,
+   which blows up on integer comparisons with large constants.
  | match goal with |- context [@eq bool _ _] =>
      (* Don't use auto for the fallback to keep runtime down *)
      firstorder fail
-   end
- | constructor; idtac "Unable to solve constraint"; dump_context; fail
+   end*)
+ | idtac "Unable to solve constraint"; dump_context; fail
  ].
 (* Add an indirection so that you can redefine run_solver to fail to get
    slow running constraints into proof mode. *)

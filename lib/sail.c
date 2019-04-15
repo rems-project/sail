@@ -350,6 +350,27 @@ void mult_int(sail_int *rop, const sail_int op1, const sail_int op2)
   mpz_mul(*rop, op1, op2);
 }
 
+
+inline
+void ediv_int(sail_int *rop, const sail_int op1, const sail_int op2)
+{
+  /* GMP doesn't have Euclidean division but we can emulate it using 
+     flooring and ceiling division. */
+  if (mpz_sgn(op2) >= 0) {
+    mpz_fdiv_q(*rop, op1, op2);
+  } else {
+    mpz_cdiv_q(*rop, op1, op2);
+  }
+}
+
+inline
+void emod_int(sail_int *rop, const sail_int op1, const sail_int op2)
+{
+  /* The documentation isn't that explicit but I think this is 
+     Euclidean mod. */
+  mpz_mod(*rop, op1, op2);
+}
+
 inline
 void tdiv_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {

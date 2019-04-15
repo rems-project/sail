@@ -65,6 +65,12 @@
 (** [loc_to_string] includes code from file if code optional argument is true (default) *)
 val loc_to_string : ?code:bool -> Parse_ast.l -> string
 
+(** Reduce a location to a pair of positions if possible *)
+val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
+
+(** [short_loc_to_string] prints the location as a single line in a simple format *)
+val short_loc_to_string : Parse_ast.l -> string
+  
 (** [print_err fatal print_loc_source l head mes] prints an error / warning message to
     std-err. It starts with printing location information stored in [l]
     It then prints "head: mes". If [fatal] is set, the program exists with error-code 1 afterwards.

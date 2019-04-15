@@ -109,7 +109,7 @@ kid_aux =  (* identifiers with kind, ticked to differntiate from program variabl
 type 
 id_aux =  (* Identifier *)
    Id of x
- | DeIid of x (* remove infix status *)
+ | Operator of x (* remove infix status *)
 
 type
 base_effect = 

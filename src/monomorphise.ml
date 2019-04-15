@@ -339,7 +339,7 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
      in
      let wrap = match id with
        | Id_aux (Id i,l) -> (fun f -> Id_aux (Id (f i),Generated l))
-       | Id_aux (DeIid i,l) -> (fun f -> Id_aux (DeIid (f i),l))
+       | Id_aux (Operator i,l) -> (fun f -> Id_aux (Operator (f i),l))
      in
      let name_seg = function
        | (_,None) -> ""
@@ -442,7 +442,7 @@ let freshen_id =
     let () = counter := n + 1 in
     match id with
     | Id_aux (Id x, l) -> Id_aux (Id (x ^ "#m" ^ string_of_int n),Generated l)
-    | Id_aux (DeIid x, l) -> Id_aux (DeIid (x ^ "#m" ^ string_of_int n),Generated l)
+    | Id_aux (Operator x, l) -> Id_aux (Operator (x ^ "#m" ^ string_of_int n),Generated l)
 
 (* TODO: only freshen bindings that might be shadowed *)
 let rec freshen_pat_bindings p =
@@ -690,13 +690,19 @@ let split_defs all_errors splits defs =
 
     | Typ_app (Id_aux (Id "vector",_), [A_aux (A_nexp len,_);_;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)]) ->
        (match len with
-       | Nexp_aux (Nexp_constant sz,_) ->
-          let lits = make_vectors (Big_int.to_int sz) in
-          List.map (fun lit ->
-            P_aux (P_lit lit,(l,annot)),
-            [var,E_aux (E_lit lit,(new_l,annot))],[],[]) lits
+       | Nexp_aux (Nexp_constant sz,_) when Big_int.greater_equal sz Big_int.zero ->
+          let sz = Big_int.to_int sz in
+          let num_lits = Big_int.pow_int (Big_int.of_int 2) sz in
+          (* Check that split size is within limits before generating the list of literals *)
+          if (Big_int.less_equal num_lits (Big_int.of_int size_set_limit)) then
+            let lits = make_vectors sz in
+            List.map (fun lit ->
+              P_aux (P_lit lit,(l,annot)),
+              [var,E_aux (E_lit lit,(new_l,annot))],[],[]) lits
+          else
+            cannot ("bitvector length outside limit, " ^ string_of_nexp len)
        | _ ->
-          cannot ("length not constant, " ^ string_of_nexp len)
+          cannot ("length not constant and positive, " ^ string_of_nexp len)
        )
     (* set constrained numbers *)
     | Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp (Nexp_aux (value,_) as nexp),_)]) ->
@@ -740,7 +746,7 @@ let split_defs all_errors splits defs =
     let split_pat vars p =
       let id_match = function
         | Id_aux (Id x,_) -> (try Some (List.assoc x vars) with Not_found -> None)
-        | Id_aux (DeIid x,_) -> (try Some (List.assoc x vars) with Not_found -> None)
+        | Id_aux (Operator x,_) -> (try Some (List.assoc x vars) with Not_found -> None)
       in
 
       let rec list f = function
@@ -1289,6 +1295,11 @@ let rewrite_size_parameters env (Defs defs) =
     let pat,guard,exp,pannot = destruct_pexp pexp in
     let env = env_of_annot (l,ann) in
     let _, typ = Env.get_val_spec_orig id env in
+    let already_visible_nexps =
+      NexpSet.union
+         (Pretty_print_lem.lem_nexps_of_typ typ)
+         (Pretty_print_lem.typeclass_nexps typ)
+    in
     let types = match typ with
       | Typ_aux (Typ_fn (arg_typs,_,_),_) -> List.map (Env.expand_synonyms env) arg_typs
       | _ -> raise (Reporting.err_unreachable l __POS__ "Function clause does not have a function type")
@@ -1299,11 +1310,14 @@ let rewrite_size_parameters env (Defs defs) =
           Typ_aux (Typ_app(Id_aux (Id "range",_),
                            [A_aux (A_nexp nexp,_);
                             A_aux (A_nexp nexp',_)]),_)
-            when Nexp.compare nexp nexp' = 0 && not (NexpMap.mem nexp nmap) ->
-              NexpMap.add nexp i nmap
+            when Nexp.compare nexp nexp' = 0 && not (NexpMap.mem nexp nmap) &&
+                 not (NexpSet.mem nexp already_visible_nexps) ->
+           (* Split integer variables if the nexp is not already available via a bitvector length *)
+           NexpMap.add nexp i nmap
         | Typ_aux (Typ_app(Id_aux (Id "atom", _),
                            [A_aux (A_nexp nexp,_)]), _)
-            when not (NexpMap.mem nexp nmap) ->
+            when not (NexpMap.mem nexp nmap) &&
+                 not (NexpSet.mem nexp already_visible_nexps) ->
            NexpMap.add nexp i nmap
         | _ -> nmap
       in (i+1,nmap)
@@ -2172,6 +2186,11 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_constraint nc ->
        (deps_of_nc env.kid_deps nc, assigns, empty)
   in
+  let deps =
+    match destruct_atom_bool (env_of exp) (typ_of exp) with
+    | Some nc -> dmerge deps (deps_of_nc env.kid_deps nc)
+    | None -> deps
+  in
   let r =
     (* Check for bitvector types with parametrised sizes *)
     match destruct_tannot annot with
@@ -2450,11 +2469,14 @@ let rec sets_from_assert e =
        | None -> KBindings.empty)
     | _ -> KBindings.empty
   in
-  match e with
-  | E_aux (E_app (Id_aux (Id "and_bool",_),[e1;e2]),_) ->
-     merge_set_asserts_by_kid (sets_from_assert e1) (sets_from_assert e2)
-  | E_aux (E_constraint nc,_) -> sets_from_nc nc
-  | _ -> set_from_or_exps e
+  match destruct_atom_bool (env_of e) (typ_of e) with
+  | Some nc -> sets_from_nc nc
+  | None ->
+     match e with
+     | E_aux (E_app (Id_aux (Id "and_bool",_),[e1;e2]),_) ->
+        merge_set_asserts_by_kid (sets_from_assert e1) (sets_from_assert e2)
+     | E_aux (E_constraint nc,_) -> sets_from_nc nc
+     | _ -> set_from_or_exps e
 
 (* Find all the easily reached set assertions in a function body, to use as
    case splits.  Note that this should be mirrored in stop_at_false_assertions,
@@ -2670,12 +2692,17 @@ let rec rewrite_app env typ (id,args) =
   let is_append = is_id env (Id "append") in
   let is_subrange = is_id env (Id "vector_subrange") in
   let is_slice = is_id env (Id "slice") in
-  let is_zeros = is_id env (Id "Zeros") in
+  let is_zeros id =
+    is_id env (Id "Zeros") id || is_id env (Id "zeros") id ||
+    is_id env (Id "sail_zeros") id
+  in
+  let is_ones = is_id env (Id "Ones") in
   let is_zero_extend =
     is_id env (Id "ZeroExtend") id ||
     is_id env (Id "zero_extend") id || is_id env (Id "sail_zero_extend") id ||
     is_id env (Id "mips_zero_extend") id
   in
+  let is_truncate = is_id env (Id "truncate") id in
   let mk_exp e = E_aux (e, (Unknown, empty_tannot)) in
   let try_cast_to_typ (E_aux (e,(l, _)) as exp) =
     let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
@@ -2777,6 +2804,17 @@ let rec rewrite_app env typ (id,args) =
          (E_aux (E_app (mk_id "slice_slice_concat",
                         [vector1; start1; length1; vector2; start2; length2]),(Unknown,empty_tannot)))
 
+    (* variable-slice @ local-var *)
+    | [E_aux (E_app (slice1,
+                     [vector1; start1; length1]),_);
+       (E_aux (E_id _,_) as vector2)]
+        when is_slice slice1 && not (is_constant length1) ->
+       let start2 = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
+       let length2 = mk_exp (E_app (mk_id "length", [vector2])) in
+       try_cast_to_typ
+         (E_aux (E_app (mk_id "slice_slice_concat",
+                        [vector1; start1; length1; vector2; start2; length2]),(Unknown,empty_tannot)))
+
     | [E_aux (E_app (append1,
                      [e1;
                       E_aux (E_app (slice1, [vector1; start1; length1]),_)]),_);
@@ -2805,13 +2843,24 @@ let rec rewrite_app env typ (id,args) =
                                             [vector1; start1; length1; length2]),(Unknown,empty_tannot))]),
                       (Unknown,empty_tannot)))
        end
+
+    (* known-length @ (known-length @ var-length) *)
+    | [e1; E_aux (E_app (append1, [e2; e3]), _)]
+      when is_append append1 && is_constant_vec_typ env (typ_of e1) &&
+           is_constant_vec_typ env (typ_of e2) &&
+           not (is_constant_vec_typ env (typ_of e3)) ->
+       let (size1,order,bittyp) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+       let (size2,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e2)) in
+       let size12 = nexp_simp (nsum size1 size2) in
+       let tannot12 = mk_tannot env (vector_typ size12 order bittyp) no_effect in
+       E_app (id, [E_aux (E_app (append1, [e1; e2]), (Unknown, tannot12)); e3])
+
     | _ -> E_app (id,args)
 
-  else if is_id env (Id "eq_vec") id || is_id env (Id "neq_vec") id then
+  else if is_id env (Id "eq_bits") id || is_id env (Id "neq_bits") id then
     (* variable-range == variable_range *)
-    let is_subrange = is_id env (Id "vector_subrange") in
     let wrap e =
-      if is_id env (Id "neq_vec") id
+      if is_id env (Id "neq_bits") id
       then E_app (mk_id "not_bool", [mk_exp e])
       else e
     in
@@ -2867,11 +2916,7 @@ let rec rewrite_app env typ (id,args) =
        E_app (mk_id "is_ones_slice", [vector1; start1; len1])
     | _ -> E_app (id,args)
 
-  else if is_zero_extend then
-    let is_subrange = is_id env (Id "vector_subrange") in
-    let is_slice = is_id env (Id "slice") in
-    let is_zeros = is_id env (Id "Zeros") in
-    let is_ones = is_id env (Id "Ones") in
+  else if is_zero_extend || is_truncate then
     let length_arg = List.filter (fun arg -> is_number (typ_of arg)) args in
     match List.filter (fun arg -> not (is_number (typ_of arg))) args with
     | [E_aux (E_app (append1,
@@ -2881,10 +2926,18 @@ let rec rewrite_app env typ (id,args) =
       -> try_cast_to_typ (rewrap (E_app (mk_id "place_subrange", length_arg @ [vector1; start1; end1; len1])))
 
     | [E_aux (E_app (append1,
-                     [E_aux (E_app (slice1, [vector1; start1; length1]), _);
+                     [vector1;
                       E_aux (E_app (zeros1, [length2]),_)]),_)]
-        when is_slice slice1 && is_zeros zeros1 && is_append append1
-      -> try_cast_to_typ (rewrap (E_app (mk_id "place_slice", length_arg @ [vector1; start1; length1; length2])))
+        when is_constant_vec_typ env (typ_of vector1) && is_zeros zeros1 && is_append append1
+      -> let (vector1, start1, length1) =
+           match vector1 with
+           | E_aux (E_app (slice1, [vector1; start1; length1]), _) ->
+              (vector1, start1, length1)
+           | _ ->
+              let (length1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of vector1)) in
+              (vector1, mk_exp (E_lit (mk_lit (L_num (Big_int.zero)))), mk_exp (E_sizeof length1))
+         in
+         try_cast_to_typ (rewrap (E_app (mk_id "place_slice", length_arg @ [vector1; start1; length1; length2])))
 
     (* If we've already rewritten to slice_slice_concat or subrange_subrange_concat,
        we can just drop the zero extension because those functions can do it
@@ -2902,10 +2955,19 @@ let rec rewrite_app env typ (id,args) =
     | [E_aux (E_app (ones, [len1]),_)] when is_ones ones ->
        try_cast_to_typ (rewrap (E_app (mk_id "zext_ones", length_arg @ [len1])))
 
+    | [E_aux (E_app (replicate_bits, [E_aux (E_lit (L_aux (L_bin "1", _)), _); len1]), _)]
+        when is_id env (Id "replicate_bits") replicate_bits ->
+       let start1 = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
+       try_cast_to_typ (rewrap (E_app (mk_id "slice_mask", length_arg @ [start1; len1])))
+
+    | [E_aux (E_app (zeros, [len1]),_)]
+    | [E_aux (E_cast (_, E_aux (E_app (zeros, [len1]),_)), _)]
+      when is_zeros zeros ->
+       try_cast_to_typ (rewrap (E_app (id, length_arg)))
+
     | _ -> E_app (id,args)
 
   else if is_id env (Id "SignExtend") id || is_id env (Id "sign_extend") id then
-    let is_slice = is_id env (Id "slice") in
     let length_arg = List.filter (fun arg -> is_number (typ_of arg)) args in
     match List.filter (fun arg -> not (is_number (typ_of arg))) args with
     | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
@@ -2947,8 +3009,6 @@ let rec rewrite_app env typ (id,args) =
     | _ -> E_app (id, args)
 
   else if is_id env (Id "UInt") id || is_id env (Id "unsigned") id then
-    let is_slice = is_id env (Id "slice") in
-    let is_subrange = is_id env (Id "vector_subrange") in
     match args with
     | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
         when is_slice slice1 && not (is_constant length1) ->
@@ -3032,7 +3092,7 @@ let check_for_spec env name =
 (* These functions add cast functions across case splits, so that when a
    bitvector size becomes known in sail, the generated Lem code contains a
    function call to change mword 'n to (say) mword ty16, and vice versa. *)
-let make_bitvector_cast_fns cast_name env quant_kids src_typ target_typ =
+let make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ =
   let genunk = Generated Unknown in
   let fresh =
     let counter = ref 0 in
@@ -3056,7 +3116,7 @@ let make_bitvector_cast_fns cast_name env quant_kids src_typ target_typ =
       Typ_app (Id_aux (Id "vector",_) as t_id,
                [A_aux (A_nexp size',l_size'); t_ord;
                 A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_) as t_bit]) -> begin
-       match simplify_size_nexp env quant_kids size, simplify_size_nexp env quant_kids size' with
+       match simplify_size_nexp env quant_kids size, simplify_size_nexp top_env quant_kids size' with
        | Some size, Some size' when Nexp.compare size size' <> 0 ->
           let var = fresh () in
           let tar_typ' = Typ_aux (Typ_app (t_id, [A_aux (A_nexp size',l_size');t_ord;t_bit]),
@@ -3112,7 +3172,7 @@ let make_bitvector_cast_fns cast_name env quant_kids src_typ target_typ =
 
 (* TODO: bound vars *)
 let make_bitvector_env_casts env quant_kids (kid,i) exp =
-  let mk_cast var typ exp = (fst (make_bitvector_cast_fns "bitvector_cast_in" env quant_kids typ (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ))) var exp in
+  let mk_cast var typ exp = (fst (make_bitvector_cast_fns "bitvector_cast_in" env env quant_kids typ (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ))) var exp in
   let locals = Env.get_locals env in
   Bindings.fold (fun var (mut,typ) exp ->
     if mut = Immutable then mk_cast var typ exp else exp) locals exp
@@ -3157,7 +3217,7 @@ let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
        let tgt_arg_typ = infer_arg_typ (env_of exp) f l target_typ in
        E_aux (E_app (f,[aux arg (src_arg_typ, tgt_arg_typ)]),(l,ann))
     | _ ->
-       (snd (make_bitvector_cast_fns cast_name cast_env quant_kids typ target_typ)) exp
+       (snd (make_bitvector_cast_fns cast_name cast_env (env_of exp) quant_kids typ target_typ)) exp
   in
   aux exp (typ, target_typ)
 
@@ -3287,9 +3347,10 @@ let add_bitvector_casts (Defs defs) =
       { id_exp_alg with
         e_aux = rewrite_aux } exp
   in
-  let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),fcl_ann)) =
+  let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),((l,_) as fcl_ann))) =
     let fcl_env = env_of_annot fcl_ann in
     let (tq,typ) = Env.get_val_spec_orig id fcl_env in
+    let fun_env = add_typquant l tq fcl_env in
     let quant_kids = List.map kopt_kid (List.filter is_int_kopt (quant_kopts tq)) in
     let ret_typ =
       match typ with
@@ -3300,11 +3361,10 @@ let add_bitvector_casts (Defs defs) =
                       " is not a function type"))
     in
     let pat,guard,body,annot = destruct_pexp pexp in
-    let body_env = env_of body in
-    let body = rewrite_body id quant_kids body_env ret_typ body in
+    let body = rewrite_body id quant_kids fun_env ret_typ body in
     (* Also add a cast around the entire function clause body, if necessary *)
     let body =
-      make_bitvector_cast_exp "bitvector_cast_out" fcl_env quant_kids (fill_in_type body_env (typ_of body)) ret_typ body
+      make_bitvector_cast_exp "bitvector_cast_out" fun_env quant_kids (fill_in_type (env_of body) (typ_of body)) ret_typ body
     in
     let pexp = construct_pexp (pat,guard,body,annot) in
     FCL_aux (FCL_Funcl (id,pexp),fcl_ann)
@@ -3469,7 +3529,7 @@ let rewrite_toplevel_nexps (Defs defs) =
   in
   (* Changing types in the body confuses simple sizeof rewriting, so turn it
      off for now *)
-  (* let rewrite_typ_in_body env nexp_map typ =
+  let rewrite_typ_in_body env nexp_map typ =
     let rec aux (Typ_aux (t,l) as typ_full) =
     match t with
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map aux typs),l)
@@ -3514,10 +3574,17 @@ let rewrite_toplevel_nexps (Defs defs) =
     | P_typ (typ,p') -> P_aux (P_typ (rewrite_typ_in_body (env_of_annot ann) nexp_map typ,p'),ann)
     | _ -> P_aux (p,ann)
   in
+  let rewrite_one_lexp nexp_map (lexp, ann) =
+    match lexp with
+    | LEXP_cast (typ, id) ->
+       LEXP_aux (LEXP_cast (rewrite_typ_in_body (env_of_annot ann) nexp_map typ, id), ann)
+    | _ -> LEXP_aux (lexp, ann)
+  in
   let rewrite_body nexp_map pexp =
     let open Rewriter in
     fold_pexp { id_exp_alg with
       e_aux = rewrite_one_exp nexp_map;
+      lEXP_aux = rewrite_one_lexp nexp_map;
       pat_alg = { id_pat_alg with p_aux = rewrite_one_pat nexp_map }
     } pexp
   in
@@ -3525,25 +3592,29 @@ let rewrite_toplevel_nexps (Defs defs) =
     match Bindings.find id spec_map with
     | nexp_map -> FCL_aux (FCL_Funcl (id,rewrite_body nexp_map pexp),ann)
     | exception Not_found -> funcl
-  in *)
+  in
   let rewrite_def spec_map def =
     match def with
     | DEF_spec vs -> (match rewrite_valspec vs with
       | None -> spec_map, def
       | Some (id, nexp_map, vs) -> Bindings.add id nexp_map spec_map, DEF_spec vs)
-    (* | DEF_fundef (FD_aux (FD_function (recopt,_,eff,funcls),ann)) ->
+    | DEF_fundef (FD_aux (FD_function (recopt,_,eff,funcls),ann)) ->
        (* Type annotations on function definitions will have been turned into
           valspecs by type checking, so it should be safe to drop them rather
           than updating them. *)
        let tann = Typ_annot_opt_aux (Typ_annot_opt_none,Generated Unknown) in
        spec_map,
-       DEF_fundef (FD_aux (FD_function (recopt,tann,eff,List.map (rewrite_funcl spec_map) funcls),ann)) *)
+       DEF_fundef (FD_aux (FD_function (recopt,tann,eff,List.map (rewrite_funcl spec_map) funcls),ann))
     | _ -> spec_map, def
   in
   let _, defs = List.fold_left (fun (spec_map,t) def ->
     let spec_map, def = rewrite_def spec_map def in
     (spec_map, def::t)) (Bindings.empty, []) defs
-  in Defs (List.rev defs)
+  in
+  (* Allow use of div and mod in nexp rewriting during later typechecking passes
+     to help prove equivalences such as (8 * 'n) = 'p8_times_n# *)
+  Type_check.opt_smt_div := true;
+  Defs (List.rev defs)
 
 type options = {
   auto : bool;
