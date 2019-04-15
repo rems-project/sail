@@ -278,9 +278,9 @@ let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
      "current_exception" ^ ssa_num n
 
 let rec string_of_cval ?zencode:(zencode=true) = function
-  | V_id (id, _) -> string_of_name ~zencode:zencode id
+  | V_id (id, ctyp) -> string_of_name ~zencode:zencode id ^ " : " ^ string_of_ctyp ctyp
   | V_ref (id, _) -> "&" ^ string_of_name ~zencode:zencode id
-  | V_lit (vl, _) -> string_of_value vl
+  | V_lit (vl, ctyp) -> string_of_value vl ^ " : " ^ string_of_ctyp ctyp
   | V_call (str, cvals) ->
      Printf.sprintf "%s(%s)" str (Util.string_of_list ", " (string_of_cval ~zencode:zencode) cvals)
   | V_field (f, field) ->
@@ -884,6 +884,7 @@ let label str =
 
 let rec infer_unary v = function
   | "!" -> CT_bool
+  | "bit_to_bool" -> CT_bool
   | op -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Could not infer unary " ^ op)
 
 and infer_op v1 v2 = function

@@ -142,10 +142,11 @@ let bvint sz x =
 let smt_value vl ctyp =
   let open Value2 in
   match vl, ctyp with
-  | VL_bits (bs, true), _ ->
-     begin match Sail2_values.hexstring_of_bits bs with
+  | VL_bits (bs, true), CT_fbits (n, _) ->
+     (* FIXME: Output the correct number of bits *)
+     begin match Sail2_values.hexstring_of_bits (List.rev (Util.take n (List.rev bs))) with
      | Some s -> Hex (Xstring.implode s)
-     | None -> Bin (Xstring.implode (List.map Sail2_values.bitU_char bs))
+     | None -> Bin (Xstring.implode (List.map Sail2_values.bitU_char (List.rev (Util.take n (List.rev bs)))))
      end
   | VL_bool b, _ -> Bool_lit b
   | VL_int n, CT_constant m -> bvint (required_width n) n
@@ -174,6 +175,10 @@ let rec smt_cval env cval =
   | V_id (ssa_id, _) -> Var (zencode_name ssa_id)
   | V_op (frag1, "!=", frag2) ->
      Fn ("not", [Fn ("=", [smt_cval env frag1; smt_cval env frag2])])
+  | V_op (frag1, "|", frag2) ->
+     Fn ("bvor", [smt_cval env frag1; smt_cval env frag2])
+  | V_unary ("bit_to_bool", cval) ->
+     Fn ("=", [smt_cval env cval; Bin "1"])
   | V_unary ("!", cval) ->
      Fn ("not", [smt_cval env cval])
   | V_ctor_kind (union, ctor_id, unifiers, _) ->
@@ -227,6 +232,8 @@ let builtin_int_comparison fn big_int_fn env v1 v2 =
      Fn (fn, [bvint !lint_size c; smt_cval env v2])
   | CT_fint sz, CT_constant c ->
      Fn (fn, [smt_cval env v1; bvint sz c])
+  | CT_fint sz, CT_lint when sz < !lint_size ->
+     Fn (fn, [SignExtend (!lint_size - sz, smt_cval env v1); smt_cval env v2])
   | CT_lint, CT_constant c ->
      Fn (fn, [smt_cval env v1; bvint !lint_size c])
   | CT_constant c1, CT_constant c2 ->
@@ -367,30 +374,6 @@ let builtin_ones env cval = function
      Fn ("Bits", [len; Fn ("bvand", [bvmask len; bvones (lbits_size ())])]); 
   | ret_ctyp -> builtin_type_error "ones" [cval] (Some ret_ctyp)
      
-let builtin_zero_extend env vbits vlen ret_ctyp =
-  match cval_ctyp vbits, ret_ctyp with
-  | CT_fbits (n, _), CT_fbits (m, _) when n = m ->
-     smt_cval env vbits
-  | CT_fbits (n, _), CT_fbits (m, _) ->
-     let bv = smt_cval env vbits in
-     Fn ("concat", [bvzero (m - n); bv])
-  | CT_lbits _, CT_fbits (m, _) ->
-     assert (lbits_size () >= m);
-     Extract (m - 1, 0, Fn ("contents", [smt_cval env vbits]))
-     
-  | _ -> builtin_type_error "zero_extend" [vbits; vlen] (Some ret_ctyp)
-
-let builtin_sign_extend env vbits vlen ret_ctyp =
-  match cval_ctyp vbits, ret_ctyp with
-  | CT_fbits (n, _), CT_fbits (m, _) when n = m ->
-     smt_cval env vbits
-  | CT_fbits (n, _), CT_fbits (m, _) ->
-     let bv = smt_cval env vbits in
-     let top_bit_one = Fn ("=", [Extract (n - 1, n - 1, bv); Bin "1"]) in
-     Ite (top_bit_one, Fn ("concat", [bvones (m - n); bv]), Fn ("concat", [bvzero (m - n); bv]))
-     
-  | _ -> failwith "Cannot compile zero_extend"
-
 (* [bvzeint esz cval] (BitVector Zero Extend INTeger), takes a cval
    which must be an integer type (either CT_fint, or CT_lint), and
    produces a bitvector which is either zero extended or truncated to
@@ -409,6 +392,38 @@ let bvzeint env esz cval =
      else
        Extract (esz - 1, 0, smt)
 
+let builtin_zero_extend env vbits vlen ret_ctyp =
+  match cval_ctyp vbits, ret_ctyp with
+  | CT_fbits (n, _), CT_fbits (m, _) when n = m ->
+     smt_cval env vbits
+  | CT_fbits (n, _), CT_fbits (m, _) ->
+     let bv = smt_cval env vbits in
+     Fn ("concat", [bvzero (m - n); bv])
+  | CT_lbits _, CT_fbits (m, _) ->
+     assert (lbits_size () >= m);
+     Extract (m - 1, 0, Fn ("contents", [smt_cval env vbits]))
+  | CT_fbits (n, _), CT_lbits _ ->
+     assert (lbits_size () >= n);
+     let vbits =
+       if lbits_size () = n then smt_cval env vbits else
+       if lbits_size () > n then Fn ("concat", [bvzero (lbits_size () - n); smt_cval env vbits]) else
+       assert false
+     in
+     Fn ("Bits", [bvzeint env !lbits_index vlen; vbits])
+
+  | _ -> builtin_type_error "zero_extend" [vbits; vlen] (Some ret_ctyp)
+
+let builtin_sign_extend env vbits vlen ret_ctyp =
+  match cval_ctyp vbits, ret_ctyp with
+  | CT_fbits (n, _), CT_fbits (m, _) when n = m ->
+     smt_cval env vbits
+  | CT_fbits (n, _), CT_fbits (m, _) ->
+     let bv = smt_cval env vbits in
+     let top_bit_one = Fn ("=", [Extract (n - 1, n - 1, bv); Bin "1"]) in
+     Ite (top_bit_one, Fn ("concat", [bvones (m - n); bv]), Fn ("concat", [bvzero (m - n); bv]))
+     
+  | _ -> failwith "Cannot compile zero_extend"
+
 let builtin_shift shiftop env vbits vshift ret_ctyp =
   match cval_ctyp vbits with
   | CT_fbits (n, _) ->
@@ -425,6 +440,9 @@ let builtin_shift shiftop env vbits vshift ret_ctyp =
 
 let builtin_not_bits env v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
+  | CT_fbits _, CT_fbits _ ->
+     Fn ("bvnot", [smt_cval env v])
+
   | CT_lbits _, CT_fbits (n, _) ->
      bvnot (Extract (n - 1, 0, Fn ("contents", [smt_cval env v])))
 
@@ -501,8 +519,12 @@ let builtin_append env v1 v2 ret_ctyp =
 
 let builtin_length env v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
-  | CT_lbits _, CT_fint m ->
+  | CT_fbits (n, _), (CT_constant _ | CT_fint _ | CT_lint) ->
+     bvint (int_size ret_ctyp) (Big_int.of_int n)
+
+  | CT_lbits _, (CT_constant _ | CT_fint _ | CT_lint) ->
      let sz = !lbits_index in
+     let m = int_size ret_ctyp in
      let len = Fn ("len", [smt_cval env v]) in
      if m = sz then
        len
@@ -511,7 +533,7 @@ let builtin_length env v ret_ctyp =
      else
        Extract (m - 1, 0, len)
 
-  | _, _ -> failwith "Cannot compile length"
+  | _, _ -> builtin_type_error "length" [v] (Some ret_ctyp)
 
 let builtin_vector_subrange env vec i j ret_ctyp =
   match cval_ctyp vec, cval_ctyp i, cval_ctyp j with
@@ -584,7 +606,23 @@ let builtin_add_bits_int env v1 v2 ret_ctyp =
   | CT_fbits (n, _), CT_fint m, CT_fbits (o, _) when n = o ->
      Fn ("bvadd", [smt_cval env v1; force_size o m (smt_cval env v2)])
 
+  | CT_fbits (n, _), CT_lint, CT_fbits (o, _) when n = o ->
+     Fn ("bvadd", [smt_cval env v1; force_size o !lint_size (smt_cval env v2)])
+
   | _ -> builtin_type_error "add_bits_int" [v1; v2] (Some ret_ctyp)
+
+let builtin_sub_bits_int env v1 v2 ret_ctyp =
+  match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
+  | CT_fbits (n, _), CT_constant c, CT_fbits (o, _) when n = o ->
+     Fn ("bvadd", [smt_cval env v1; bvint o (Big_int.negate c)])
+
+  | CT_fbits (n, _), CT_fint m, CT_fbits (o, _) when n = o ->
+     Fn ("bvsub", [smt_cval env v1; force_size o m (smt_cval env v2)])
+
+  | CT_fbits (n, _), CT_lint, CT_fbits (o, _) when n = o ->
+     Fn ("bvsub", [smt_cval env v1; force_size o !lint_size (smt_cval env v2)])
+
+  | _ -> builtin_type_error "sub_bits_int" [v1; v2] (Some ret_ctyp)
 
 let builtin_replicate_bits env v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
@@ -593,11 +631,11 @@ let builtin_replicate_bits env v1 v2 ret_ctyp =
      let smt = smt_cval env v1 in
      Fn ("concat", List.init (Big_int.to_int c) (fun _ -> smt))
 
-  | CT_fbits (n, _), ctyp2, CT_lbits _ ->
+  (*| CT_fbits (n, _), ctyp2, CT_lbits _ ->
      let len = Fn ("bvmul", [bvint !lbits_index (Big_int.of_int n);
                              Extract (!lbits_index - 1, 0, smt_cval env v2)])
      in
-     assert false
+     assert false*)
      
   | _ -> builtin_type_error "replicate_bits" [v1; v2] (Some ret_ctyp)
 
@@ -620,6 +658,27 @@ let builtin_sail_truncateLSB env v1 v2 ret_ctyp =
      Extract (n - 1, n - Big_int.to_int c, smt_cval env v1)
 
   | _ -> failwith "Cannot compile sail_truncate"
+
+let builtin_slice env v1 v2 v3 ret_ctyp =
+  match cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, ret_ctyp with
+  | CT_lbits _, CT_constant start, CT_constant len, CT_fbits (_, _) ->
+     let top = Big_int.pred (Big_int.add start len) in
+     Extract(Big_int.to_int top, Big_int.to_int start, Fn ("contents", [smt_cval env v1]))
+
+  | CT_fbits (_, _), CT_constant start, CT_constant len, CT_fbits (_, _) ->
+     let top = Big_int.pred (Big_int.add start len) in
+     Extract(Big_int.to_int top, Big_int.to_int start, smt_cval env v1)
+
+  | CT_fbits (_, ord), CT_fint _, CT_constant len, CT_fbits (_, _) ->
+     Extract(Big_int.to_int (Big_int.pred len), 0, builtin_shift "bvlshr" env v1 v2 (cval_ctyp v1))
+
+  | CT_fbits(n, ord), ctyp2, _, CT_lbits _ ->
+     let smt1 = force_size (lbits_size ()) n (smt_cval env v1) in
+     let smt2 = force_size (lbits_size ()) (int_size ctyp2) (smt_cval env v2) in
+     let smt3 = bvzeint env !lbits_index v3 in
+     Fn ("Bits", [smt3; Fn ("bvand", [Fn ("bvlshr", [smt1; smt2]); bvmask smt3])])
+
+  | _ -> builtin_type_error "slice" [v1; v2; v3] (Some ret_ctyp)
 
 let builtin_get_slice_int env v1 v2 v3 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, ret_ctyp with
@@ -679,6 +738,26 @@ let builtin_count_leading_zeros env v ret_ctyp =
 
   | _ -> builtin_type_error "count_leading_zeros" [v] (Some ret_ctyp)
 
+let builtin_set_slice_bits env v1 v2 v3 v4 v5 ret_ctyp =
+  match cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, cval_ctyp v4, cval_ctyp v5, ret_ctyp with
+  | CT_constant n', CT_constant m', CT_fbits (n, _), CT_constant pos, CT_fbits (m, _), CT_fbits(n'', _)
+    when Big_int.to_int m' = m && Big_int.to_int n' = n && n'' = n && Big_int.less_equal (Big_int.add pos m') n' ->
+     let pos = Big_int.to_int pos in
+     if pos = 0 then
+       let mask = Fn ("concat", [bvones (n - m); bvzero m]) in
+       let smt5 = Fn ("concat", [bvzero (n - m); smt_cval env v5]) in
+       Fn ("bvor", [Fn ("bvand", [smt_cval env v3; mask]); smt5])
+     else if n - m - pos = 0 then
+       let mask = Fn ("concat", [bvzero m; bvones pos]) in
+       let smt5 = Fn ("concat", [smt_cval env v5; bvzero pos]) in
+       Fn ("bvor", [Fn ("bvand", [smt_cval env v3; mask]); smt5])
+     else
+       let mask = Fn ("concat", [bvones (n - m - pos); Fn ("concat", [bvzero m; bvones pos])]) in
+       let smt5 = Fn ("concat", [bvzero (n - m - pos); Fn ("concat", [smt_cval env v5; bvzero pos])]) in
+       Fn ("bvor", [Fn ("bvand", [smt_cval env v3; mask]); smt5])
+
+  | _ -> builtin_type_error "set_slice" [v1; v2; v3; v4; v5] (Some ret_ctyp)
+
 let smt_builtin env name args ret_ctyp =
   match name, args, ret_ctyp with
   | "eq_bits", [v1; v2], _ -> Fn ("=", [smt_cval env v1; smt_cval env v2])
@@ -710,7 +789,9 @@ let smt_builtin env name args ret_ctyp =
 
   (* lib/vector_dec.sail *)
   | "zeros", [v], _ -> builtin_zeros env v ret_ctyp
+  | "sail_zeros", [v], _ -> builtin_zeros env v ret_ctyp
   | "ones", [v], _ -> builtin_ones env v ret_ctyp
+  | "sail_ones", [v], _ -> builtin_ones env v ret_ctyp
   | "zero_extend", [v1; v2], _ -> builtin_zero_extend env v1 v2 ret_ctyp
   | "sign_extend", [v1; v2], _ -> builtin_sign_extend env v1 v2 ret_ctyp
   | "sail_truncate", [v1; v2], _ -> builtin_sail_truncate env v1 v2 ret_ctyp
@@ -723,6 +804,7 @@ let smt_builtin env name args ret_ctyp =
   | "add_bits", [v1; v2], _ -> builtin_add_bits env v1 v2 ret_ctyp
   | "add_bits_int", [v1; v2], _ -> builtin_add_bits_int env v1 v2 ret_ctyp
   | "sub_bits", [v1; v2], _ -> builtin_sub_bits env v1 v2 ret_ctyp
+  | "sub_bits_int", [v1; v2], _ -> builtin_sub_bits_int env v1 v2 ret_ctyp
   | "append", [v1; v2], _ -> builtin_append env v1 v2 ret_ctyp
   | "length", [v], ret_ctyp -> builtin_length env v ret_ctyp
   | "vector_access", [v1; v2], ret_ctyp -> builtin_vector_access env v1 v2 ret_ctyp
@@ -731,7 +813,9 @@ let smt_builtin env name args ret_ctyp =
   | "sail_unsigned", [v], ret_ctyp -> builtin_unsigned env v ret_ctyp
   | "replicate_bits", [v1; v2], ret_ctyp -> builtin_replicate_bits env v1 v2 ret_ctyp
   | "count_leading_zeros", [v], ret_ctyp -> builtin_count_leading_zeros env v ret_ctyp
+  | "slice", [v1; v2; v3], ret_ctyp -> builtin_slice env v1 v2 v3 ret_ctyp
   | "get_slice_int", [v1; v2; v3], ret_ctyp -> builtin_get_slice_int env v1 v2 v3 ret_ctyp
+  | "set_slice", [v1; v2; v3; v4; v5], ret_ctyp -> builtin_set_slice_bits env v1 v2 v3 v4 v5 ret_ctyp
                                           
   | _ -> failwith ("Bad builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
 
@@ -832,6 +916,7 @@ let rec ctyp_of_typ ctx typ =
        when string_of_id id = "vector" && string_of_id vtyp_id = "bit" ->
      let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
      begin match nexp_simp n with
+     | Nexp_aux (Nexp_constant n, _) when Big_int.equal n Big_int.zero -> CT_lbits direction
      | Nexp_aux (Nexp_constant n, _) -> CT_fbits (Big_int.to_int n, direction)
      | _ -> CT_lbits direction
      end
