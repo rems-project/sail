@@ -83,7 +83,8 @@ val tdiv_int = {
   ocaml: "tdiv_int",
   interpreter: "tdiv_int",
   lem: "integerDiv_t",
-  c: "tdiv_int"
+  c: "tdiv_int",
+  coq: "Z.quot"
 } : (int, int) -> int
 
 /*! Remainder for truncating division (has sign of dividend) */
@@ -91,7 +92,8 @@ val tmod_int = {
   ocaml: "tmod_int",
   interpreter: "tmod_int",
   lem: "integerMod_t",
-  c: "tmod_int"
+  c: "tmod_int",
+  coq: "Z.rem"
 } : (int, int) -> nat
 
 val abs_int = {
