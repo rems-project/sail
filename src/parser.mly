@@ -1414,6 +1414,8 @@ scattered_clause:
 loop_measure:
   | Until exp
     { Loop (Until, $2) }
+  | Repeat exp
+    { Loop (Until, $2) }
   | While exp
     { Loop (While, $2) }
 
