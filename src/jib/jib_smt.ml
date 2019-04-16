@@ -203,7 +203,7 @@ let rec smt_cval env cval =
         in
         Fn (zencode_upper_id struct_id, List.map set_field fields)
      | _ -> failwith "Struct does not have struct type"
-     end 
+     end
   | V_tuple_member (frag, len, n) ->
      Fn (Printf.sprintf "tup_%d_%d" len n, [smt_cval env frag])
   | cval -> failwith ("Unrecognised cval " ^ string_of_cval ~zencode:false cval)
@@ -379,14 +379,14 @@ let bvmask len =
   let all_ones = bvones (lbits_size ()) in
   let shift = Fn ("concat", [bvzero (lbits_size () - !lbits_index); len]) in
   bvnot (bvshl all_ones shift)
-       
+
 let builtin_ones env cval = function
   | CT_fbits (n, _) -> bvones n
   | CT_lbits _ ->
      let len = extract (!lbits_index - 1) 0 (smt_cval env cval) in
-     Fn ("Bits", [len; Fn ("bvand", [bvmask len; bvones (lbits_size ())])]); 
+     Fn ("Bits", [len; Fn ("bvand", [bvmask len; bvones (lbits_size ())])]);
   | ret_ctyp -> builtin_type_error "ones" [cval] (Some ret_ctyp)
-     
+
 (* [bvzeint esz cval] (BitVector Zero Extend INTeger), takes a cval
    which must be an integer type (either CT_fint, or CT_lint), and
    produces a bitvector which is either zero extended or truncated to
@@ -434,7 +434,7 @@ let builtin_sign_extend env vbits vlen ret_ctyp =
      let bv = smt_cval env vbits in
      let top_bit_one = Fn ("=", [Extract (n - 1, n - 1, bv); Bin "1"]) in
      Ite (top_bit_one, Fn ("concat", [bvones (m - n); bv]), Fn ("concat", [bvzero (m - n); bv]))
-     
+
   | _ -> failwith "Cannot compile zero_extend"
 
 let builtin_shift shiftop env vbits vshift ret_ctyp =
@@ -646,7 +646,7 @@ let builtin_replicate_bits env v1 v2 ret_ctyp =
                              Extract (!lbits_index - 1, 0, smt_cval env v2)])
      in
      assert false*)
-     
+
   | _ -> builtin_type_error "replicate_bits" [v1; v2] (Some ret_ctyp)
 
 let builtin_sail_truncate env v1 v2 ret_ctyp =
@@ -768,6 +768,13 @@ let builtin_set_slice_bits env v1 v2 v3 v4 v5 ret_ctyp =
 
   | _ -> builtin_type_error "set_slice" [v1; v2; v3; v4; v5] (Some ret_ctyp)
 
+let builtin_compare_bits fn env v1 v2 ret_ctyp =
+  match cval_ctyp v1, cval_ctyp v2 with
+  | CT_fbits (n, _), CT_fbits (m, _) when n = m ->
+     Fn (fn, [smt_cval env v1; smt_cval env v2])
+
+  | _ -> builtin_type_error fn [v1; v2] (Some ret_ctyp)
+
 let smt_builtin env name args ret_ctyp =
   match name, args, ret_ctyp with
   | "eq_bits", [v1; v2], _ -> Fn ("=", [smt_cval env v1; smt_cval env v2])
@@ -796,6 +803,16 @@ let smt_builtin env name args ret_ctyp =
   | "shl_mach_int", [v1; v2], _ -> builtin_shl_int env v1 v2 ret_ctyp
   | "shr_mach_int", [v1; v2], _ -> builtin_shr_int env v1 v2 ret_ctyp
   | "abs_int", [v], _ -> builtin_abs_int env v ret_ctyp
+
+  (* All signed and unsigned bitvector comparisons *)
+  | "slt_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvslt" env v1 v2 ret_ctyp
+  | "ult_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvult" env v1 v2 ret_ctyp
+  | "sgt_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvsgt" env v1 v2 ret_ctyp
+  | "ugt_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvugt" env v1 v2 ret_ctyp
+  | "slteq_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvsle" env v1 v2 ret_ctyp
+  | "ulteq_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvule" env v1 v2 ret_ctyp
+  | "sgteq_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvsge" env v1 v2 ret_ctyp
+  | "ugteq_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvuge" env v1 v2 ret_ctyp
 
   (* lib/vector_dec.sail *)
   | "zeros", [v], _ -> builtin_zeros env v ret_ctyp
@@ -826,7 +843,7 @@ let smt_builtin env name args ret_ctyp =
   | "slice", [v1; v2; v3], ret_ctyp -> builtin_slice env v1 v2 v3 ret_ctyp
   | "get_slice_int", [v1; v2; v3], ret_ctyp -> builtin_get_slice_int env v1 v2 v3 ret_ctyp
   | "set_slice", [v1; v2; v3; v4; v5], ret_ctyp -> builtin_set_slice_bits env v1 v2 v3 v4 v5 ret_ctyp
-                                          
+
   | _ -> failwith ("Bad builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
 
 let rec smt_conversion from_ctyp to_ctyp x =
@@ -1292,6 +1309,7 @@ let smt_cdef props name_file env all_cdefs = function
           (* |> optimize_unit *)
           |> inline all_cdefs (fun _ -> true)
           |> flatten_instrs
+          |> remove_unused_labels
           |> remove_pointless_goto
         in
 
@@ -1320,8 +1338,8 @@ let smt_cdef props name_file env all_cdefs = function
           ) visit_order;
 
         let out_chan = open_out (name_file (string_of_id function_id)) in
-        output_string out_chan "(set-option :produce-models true)\n";
-        (*output_string out_chan "(set-logic QF_AUFBVDT)\n";*)
+        (* output_string out_chan "(set-option :produce-models true)\n"; *)
+        output_string out_chan "(set-logic QF_AUFBVDT)\n";
 
         (* let stack' = Stack.create () in
         Stack.iter (fun def -> Stack.push def stack') stack;
@@ -1330,7 +1348,7 @@ let smt_cdef props name_file env all_cdefs = function
         Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
 
         output_string out_chan "(check-sat)\n";
-        output_string out_chan "(get-model)\n"
+        (* output_string out_chan "(get-model)\n" *)
 
      | _ -> failwith "Bad function body"
      end
@@ -1355,6 +1373,7 @@ let generate_smt props name_file env ast =
     let t = Profile.start () in
     let cdefs, ctx = compile_ast { ctx with specialize_calls = true; ignore_64 = true; struct_value = true } ast in
     Profile.finish "Compiling to Jib IR" t;
+    let cdefs = Jib_optimize.unique_per_function_ids cdefs in
 
     smt_cdefs props name_file env cdefs cdefs
   with

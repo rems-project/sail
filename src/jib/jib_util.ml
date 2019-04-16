@@ -266,7 +266,7 @@ let string_of_value = function
   | VL_string str -> "\"" ^ str ^ "\""
 
 let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
-  let ssa_num n = if n < 0 then "" else ("/" ^ string_of_int n) in
+  let ssa_num n = if n = -1 then "" else ("/" ^ string_of_int n) in
   function
   | Name (id, n) ->
      (if zencode then Util.zencode_string (string_of_id id) else string_of_id id) ^ ssa_num n
@@ -1047,5 +1047,6 @@ let rec instrs_rename from_id to_id =
   | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (irename block), aux) :: irename instrs
   | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (irename block), aux) :: irename instrs
   | I_aux (I_throw cval, aux) :: instrs -> I_aux (I_throw (crename cval), aux) :: irename instrs
-  | (I_aux ((I_comment _ | I_raw _ | I_end _ | I_label _ | I_goto _ | I_match_failure | I_undefined _), _) as instr) :: instrs -> instr :: irename instrs
+  | I_aux (I_end id, aux) :: instrs -> I_aux (I_end (rename id), aux) :: irename instrs
+  | (I_aux ((I_comment _ | I_raw _ | I_label _ | I_goto _ | I_match_failure | I_undefined _), _) as instr) :: instrs -> instr :: irename instrs
   | [] -> []

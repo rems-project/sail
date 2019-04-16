@@ -82,7 +82,7 @@ let optimize_unit instrs =
 
 let flat_counter = ref 0
 let flat_id orig_id =
-  let id = mk_id (string_of_name orig_id ^ "_local#" ^ string_of_int !flat_counter) in
+  let id = mk_id (string_of_name ~zencode:false orig_id ^ "_l#" ^ string_of_int !flat_counter) in
   incr flat_counter;
   name id
 
@@ -170,14 +170,29 @@ let rec cval_subst id subst = function
   | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> field, cval_subst id subst cval) fields, ctyp)
   | V_poly (cval, ctyp) -> V_poly (cval_subst id subst cval, ctyp)
 
+let rec cval_map_id f = function
+  | V_id (id, ctyp) -> V_id (f id, ctyp)
+  | V_ref (id, ctyp) -> V_ref (f id, ctyp)
+  | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
+  | V_call (call, cvals) -> V_call (call, List.map (cval_map_id f) cvals)
+  | V_op (cval1, op, cval2) -> V_op (cval_map_id f cval1, op, cval_map_id f cval2)
+  | V_unary (op, cval) -> V_unary (op, cval_map_id f cval)
+  | V_field (cval, field) -> V_field (cval_map_id f cval, field)
+  | V_tuple_member (cval, len, n) -> V_tuple_member (cval_map_id f cval, len, n)
+  | V_ctor_kind (cval, ctor, unifiers, ctyp) -> V_ctor_kind (cval_map_id f cval, ctor, unifiers, ctyp)
+  | V_ctor_unwrap (ctor, cval, unifiers, ctyp) -> V_ctor_unwrap (ctor, cval_map_id f cval, unifiers, ctyp)
+  | V_hd cval -> V_hd (cval_map_id f cval)
+  | V_tl cval -> V_tl (cval_map_id f cval)
+  | V_struct (fields, ctyp) ->
+     V_struct (List.map (fun (field, cval) -> field, cval_map_id f cval) fields, ctyp)
+  | V_poly (cval, ctyp) -> V_poly (cval_map_id f cval, ctyp)
+
 let rec instrs_subst id subst =
   function
   | (I_aux (I_decl (_, id'), _) :: _) as instrs when Name.compare id id' = 0 ->
-     prerr_endline ("DECL: " ^ string_of_name id);
      instrs
 
   | I_aux (I_init (ctyp, id', cval), aux) :: rest when Name.compare id id' = 0 ->
-     prerr_endline ("INIT: " ^ string_of_name id);
      I_aux (I_init (ctyp, id', cval_subst id subst cval), aux) :: rest
 
   | (I_aux (I_reset (_, id'), _) :: _) as instrs when Name.compare id id' = 0 ->
@@ -215,10 +230,6 @@ let rec instrs_subst id subst =
 
   | [] -> []
 
-let instrs_subst' id subst =
-  prerr_endline (string_of_name id ^ " => " ^ string_of_cval subst);
-  instrs_subst id subst
-
 let rec clexp_subst id subst = function
   | CL_id (id', ctyp) when Name.compare id id' = 0 ->
      if ctyp_equal ctyp (clexp_ctyp subst) then
@@ -238,6 +249,12 @@ let rec find_function fid = function
   | cdef :: cdefs -> find_function fid cdefs
 
   | [] -> None
+
+let ssa_name i = function
+  | Name (id, _) -> Name (id, i)
+  | Have_exception _ -> Have_exception i
+  | Current_exception _ -> Current_exception i
+  | Return _ -> Return i
 
 let inline cdefs should_inline instrs =
   let inlines = ref (-1) in
@@ -266,6 +283,26 @@ let inline cdefs should_inline instrs =
     | instr -> instr
   in
 
+  let fix_substs =
+    let f = cval_map_id (ssa_name (-1)) in
+    function
+    | I_aux (I_init (ctyp, id, cval), aux) ->
+       I_aux (I_init (ctyp, id, f cval), aux)
+    | I_aux (I_jump (cval, label), aux) ->
+       I_aux (I_jump (f cval, label), aux)
+    | I_aux (I_funcall (clexp, extern, function_id, args), aux) ->
+       I_aux (I_funcall (clexp, extern, function_id, List.map f args), aux)
+    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) ->
+       I_aux (I_if (f cval, then_instrs, else_instrs, ctyp), aux)
+    | I_aux (I_copy (clexp, cval), aux) ->
+       I_aux (I_copy (clexp, f cval), aux)
+    | I_aux (I_return cval, aux) ->
+       I_aux (I_return (f cval), aux)
+    | I_aux (I_throw cval, aux) ->
+       I_aux (I_throw (f cval), aux)
+    | instr -> instr
+  in
+
   let rec inline_instr = function
     | I_aux (I_funcall (clexp, false, function_id, args), aux) as instr when should_inline function_id ->
        begin match find_function function_id cdefs with
@@ -273,7 +310,14 @@ let inline cdefs should_inline instrs =
           incr inlines;
           incr label_count;
           let inline_label = label "end_inline_" in
-          let body = List.fold_right2 instrs_subst' (List.map name ids) args body in
+          (* For situations where we have e.g. x => x' and x' => y, we
+             use a dummy SSA number turning this into x => x'/-2 and
+             x' => y/-2, ensuring x's won't get turned into y's. This
+             is undone by fix_substs which removes the -2 SSA
+             numbers. *)
+          let args = List.map (cval_map_id (ssa_name (-2))) args in
+          let body = List.fold_right2 instrs_subst (List.map name ids) args body in
+          let body = List.map (map_instr fix_substs) body in
           let body = List.map (map_instr fix_labels) body in
           let body = List.map (map_instr (replace_end inline_label)) body in
           let body = List.map (map_instr (replace_return clexp)) body in
@@ -302,6 +346,30 @@ let inline cdefs should_inline instrs =
 let rec remove_pointless_goto = function
   | I_aux (I_goto label, _) :: I_aux (I_label label', aux) :: instrs when label = label' ->
      I_aux (I_label label', aux) :: remove_pointless_goto instrs
+  | I_aux (I_goto label, aux) :: I_aux (I_goto _, _) :: instrs ->
+     I_aux (I_goto label, aux) :: remove_pointless_goto instrs
   | instr :: instrs ->
      instr :: remove_pointless_goto instrs
+  | [] -> []
+
+module StringSet = Set.Make(String)
+
+let rec get_used_labels set = function
+  | I_aux (I_goto label, _) :: instrs -> get_used_labels (StringSet.add label set) instrs
+  | I_aux (I_jump (_, label), _) :: instrs -> get_used_labels (StringSet.add label set) instrs
+  | _ :: instrs -> get_used_labels set instrs
+  | [] -> set
+
+let remove_unused_labels instrs =
+  let used = get_used_labels StringSet.empty instrs in
+  let rec go acc = function
+    | I_aux (I_label label, _) :: instrs when not (StringSet.mem label used) -> go acc instrs
+    | instr :: instrs -> go (instr :: acc) instrs
+    | [] -> List.rev acc
+  in
+  go [] instrs
+
+let rec remove_clear = function
+  | I_aux (I_clear _, _) :: instrs -> remove_clear instrs
+  | instr :: instrs -> instr :: remove_clear instrs
   | [] -> []

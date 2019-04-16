@@ -119,17 +119,21 @@ let bvones n =
   else
     Bin (String.concat "" (Util.list_init n (fun _ -> "1")))
 
-let rec simp_fn = function
+let simp_fn = function
   | Fn ("not", [Fn ("not", [exp])]) -> exp
+  | Fn ("contents", [Fn ("Bits", [_; contents])]) -> contents
+  | Fn ("len", [Fn ("Bits", [len; _])]) -> len
   | exp -> exp
 
-let rec simp_ite = function
+let simp_ite = function
   | Ite (cond, Bool_lit true, Bool_lit false) -> cond
   | Ite (_, Var v, Var v') when v = v' -> Var v
+  | Ite (Bool_lit true, then_exp, _) -> then_exp
+  | Ite (Bool_lit false, _, else_exp) -> else_exp
   | exp -> exp
-         
+
 let rec simp_smt_exp vars = function
-  | Var v -> 
+  | Var v ->
      begin match Hashtbl.find_opt vars v with
      | Some exp -> simp_smt_exp vars exp
      | None -> Var v
@@ -185,7 +189,7 @@ let rec pp_smt_exp =
      parens (string (Printf.sprintf "(_ is %s)" kind) ^^ space ^^ pp_smt_exp exp)
   | SignExtend (i, exp) ->
      parens (string (Printf.sprintf "(_ sign_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
-    
+
 let rec pp_smt_typ =
   let open PPrint in
   function
