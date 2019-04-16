@@ -485,7 +485,7 @@ Definition reverse_endianness {n} (bits : mword n) := with_word (P := id) revers
 Definition get_slice_int {a} `{ArithFact (a >= 0)} : Z -> Z -> Z -> mword a := get_slice_int_bv.
 
 Definition set_slice n m (v : mword n) x (w : mword m) : mword n :=
-  update_subrange_vec_dec v (x + m - 1) x v.
+  update_subrange_vec_dec v (x + m - 1) x w.
 
 Definition set_slice_int len n lo (v : mword len) : Z :=
   let hi := lo + len - 1 in
