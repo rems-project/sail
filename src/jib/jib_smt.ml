@@ -851,6 +851,8 @@ let rec smt_conversion from_ctyp to_ctyp x =
   | _, _ when ctyp_equal from_ctyp to_ctyp -> x
   | CT_constant c, CT_fint sz ->
      bvint sz c
+  | CT_constant c, CT_lint ->
+     bvint !lint_size c
   | _, _ -> failwith (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
 
 let define_const id ctyp exp = Define_const (zencode_name id, smt_ctyp ctyp, exp)
@@ -1289,7 +1291,7 @@ let smt_header stack cdefs =
   let smt_type_defs = List.concat (generate_ctype_defs cdefs) in
   push_smt_defs stack smt_type_defs
 
-let smt_cdef props name_file env all_cdefs = function
+let smt_cdef props lets name_file env all_cdefs = function
   | CDEF_spec (function_id, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
      begin match find_function function_id all_cdefs with
      | Some (None, args, instrs) ->
@@ -1305,8 +1307,7 @@ let smt_cdef props name_file env all_cdefs = function
 
         let instrs =
           let open Jib_optimize in
-          instrs
-          (* |> optimize_unit *)
+          (lets @ instrs)
           |> inline all_cdefs (fun _ -> true)
           |> flatten_instrs
           |> remove_unused_labels
@@ -1354,11 +1355,15 @@ let smt_cdef props name_file env all_cdefs = function
      end
   | _ -> ()
 
-let rec smt_cdefs props name_file env ast =
+let rec smt_cdefs props lets name_file env ast =
   function
+  | CDEF_let (_, vars, setup) :: cdefs ->
+     let vars = List.map (fun (id, ctyp) -> idecl ctyp (name id)) vars in
+     print_endline (Pretty_print_sail.to_string PPrint.(separate_map hardline pp_instr (vars @ setup)));
+     smt_cdefs props (lets @ vars @ setup) name_file env ast cdefs;
   | cdef :: cdefs ->
-     smt_cdef props name_file env ast cdef;
-     smt_cdefs props name_file env ast cdefs
+     smt_cdef props lets name_file env ast cdef;
+     smt_cdefs props lets name_file env ast cdefs
   | [] -> ()
 
 let generate_smt props name_file env ast =
@@ -1375,7 +1380,7 @@ let generate_smt props name_file env ast =
     Profile.finish "Compiling to Jib IR" t;
     let cdefs = Jib_optimize.unique_per_function_ids cdefs in
 
-    smt_cdefs props name_file env cdefs cdefs
+    smt_cdefs props [] name_file env cdefs cdefs
   with
   | Type_check.Type_error (_, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err));
