@@ -231,6 +231,7 @@ let rec find_function fid = function
 
 let inline cdefs should_inline instrs =
   let inlines = ref (-1) in
+  let label_count = ref (-1) in
 
   let replace_return subst = function
     | I_aux (I_funcall (clexp, extern, fid, args), aux) ->
@@ -247,7 +248,7 @@ let inline cdefs should_inline instrs =
   in
 
   let fix_labels =
-    let fix_label l = "inline" ^ string_of_int !inlines ^ "_" ^ l in
+    let fix_label l = "inline" ^ string_of_int !label_count ^ "_" ^ l in
     function
     | I_aux (I_goto label, aux) -> I_aux (I_goto (fix_label label), aux)
     | I_aux (I_label label, aux) -> I_aux (I_label (fix_label label), aux)
@@ -260,6 +261,7 @@ let inline cdefs should_inline instrs =
        begin match find_function function_id cdefs with
        | Some (None, ids, body) ->
           incr inlines;
+          incr label_count;
           let inline_label = label "end_inline_" in
           let body = List.fold_right2 instrs_subst (List.map name ids) args body in
           let body = List.map (map_instr fix_labels) body in
