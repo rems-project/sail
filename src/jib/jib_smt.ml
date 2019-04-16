@@ -702,7 +702,6 @@ let builtin_get_slice_int env v1 v2 v3 ret_ctyp =
        else
          smt_cval env v2
      in
-     assert (start + len <= in_sz);
      Extract ((start + len) - 1, start, smt)
 
   | _, _, _, _ -> builtin_type_error "get_slice_int" [v1; v2; v3] (Some ret_ctyp)
