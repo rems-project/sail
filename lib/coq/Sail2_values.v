@@ -553,15 +553,23 @@ end.
 Definition add_one_bool_ignore_overflow bits :=
   List.rev (add_one_bool_ignore_overflow_aux (List.rev bits)).
 
-(*let bool_list_of_int n =
-  let bs_abs = false :: bools_of_nat (naturalFromInteger (abs n)) in
-  if n >= (0 : integer) then bs_abs
-  else add_one_bool_ignore_overflow (List.map not bs_abs)
-let bools_of_int len n = exts_bools len (bool_list_of_int n)*)
+(* Ported from Lem, bad for large n.
 Definition bools_of_int len n :=
   let bs_abs := bools_of_nat len (Z.abs_nat n) in
   if n >=? 0 then bs_abs
   else add_one_bool_ignore_overflow (List.map negb bs_abs).
+*)
+Fixpoint bitlistFromWord_rev {n} w :=
+match w with
+| WO => []
+| WS b w => b :: bitlistFromWord_rev w
+end.
+Definition bitlistFromWord {n} w :=
+  List.rev (@bitlistFromWord_rev n w).
+
+Definition bools_of_int len n :=
+  let w := Word.ZToWord (Z.to_nat len) n in
+  bitlistFromWord w.
 
 (*** Bit lists ***)
 
@@ -969,14 +977,6 @@ Definition size_itself_int x := Z.of_nat (size_itself x)
 val make_the_value : forall n. Z -> itself n
 Definition inline make_the_value x := the_value
 *)
-
-Fixpoint bitlistFromWord_rev {n} w :=
-match w with
-| WO => []
-| WS b w => b :: bitlistFromWord_rev w
-end.
-Definition bitlistFromWord {n} w :=
-  List.rev (@bitlistFromWord_rev n w).
 
 Fixpoint wordFromBitlist_rev l : word (length l) :=
 match l with
