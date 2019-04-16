@@ -1994,9 +1994,14 @@ let doc_exp, doc_let =
          match pat, e1, e2 with
          | (P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _)),
            (E_aux (E_assert (assert_e1,assert_e2),_)), _ ->
-            let epp = liftR (separate space [string "assert_exp'"; expY assert_e1; expY assert_e2]) in
-            let epp = infix 0 1 (string ">>= fun _ =>") epp (top_exp new_ctxt false e2) in
-            if aexp_needed then parens (align epp) else align epp
+             let assert_fn, mid = 
+               match assert_constraint outer_env true assert_e1 with
+               | Some _ -> "assert_exp'", ">>= fun _ =>"
+               | None -> "assert_exp", ">>"
+             in
+             let epp = liftR (separate space [string assert_fn; expY assert_e1; expY assert_e2]) in
+             let epp = infix 0 1 (string mid) epp (top_exp new_ctxt false e2) in
+             if aexp_needed then parens (align epp) else align epp
          | _ ->
             let epp =
               let middle =

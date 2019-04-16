@@ -319,6 +319,8 @@ val check_fundef : Env.t -> 'a fundef -> tannot def list * Env.t
 
 val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t
 
+val assert_constraint : Env.t -> bool -> tannot exp -> n_constraint option
+
 (** Attempt to prove a constraint using z3. Returns true if z3 can
    prove that the constraint is true, returns false if z3 cannot prove
    the constraint true. Note that this does not guarantee that the
