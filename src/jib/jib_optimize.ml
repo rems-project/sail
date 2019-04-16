@@ -81,15 +81,19 @@ let optimize_unit instrs =
   filter_instrs non_pointless_copy (map_instr_list unit_instr instrs)
 
 let flat_counter = ref 0
-let flat_id () =
-  let id = mk_id ("local#" ^ string_of_int !flat_counter) in
+let flat_id orig_id =
+  let id = mk_id (string_of_name orig_id ^ "_local#" ^ string_of_int !flat_counter) in
   incr flat_counter;
   name id
 
 let rec flatten_instrs = function
   | I_aux (I_decl (ctyp, decl_id), aux) :: instrs ->
-     let fid = flat_id () in
+     let fid = flat_id decl_id in
      I_aux (I_decl (ctyp, fid), aux) :: flatten_instrs (instrs_rename decl_id fid instrs)
+
+  | I_aux (I_init (ctyp, decl_id, cval), aux) :: instrs ->
+     let fid = flat_id decl_id in
+     I_aux (I_init (ctyp, fid, cval), aux) :: flatten_instrs (instrs_rename decl_id fid instrs)
 
   | I_aux ((I_block block | I_try_block block), _) :: instrs ->
      flatten_instrs block @ flatten_instrs instrs
@@ -169,9 +173,11 @@ let rec cval_subst id subst = function
 let rec instrs_subst id subst =
   function
   | (I_aux (I_decl (_, id'), _) :: _) as instrs when Name.compare id id' = 0 ->
+     prerr_endline ("DECL: " ^ string_of_name id);
      instrs
 
   | I_aux (I_init (ctyp, id', cval), aux) :: rest when Name.compare id id' = 0 ->
+     prerr_endline ("INIT: " ^ string_of_name id);
      I_aux (I_init (ctyp, id', cval_subst id subst cval), aux) :: rest
 
   | (I_aux (I_reset (_, id'), _) :: _) as instrs when Name.compare id id' = 0 ->
@@ -201,13 +207,17 @@ let rec instrs_subst id subst =
        | I_throw cval -> I_throw (cval_subst id subst cval)
        | I_comment str -> I_comment str
        | I_raw str -> I_raw str
-       | I_return cval -> I_return cval
+       | I_return cval -> I_return (cval_subst id subst cval)
        | I_reset (ctyp, id') -> I_reset (ctyp, id')
        | I_reinit (ctyp, id', cval) -> I_reinit (ctyp, id', cval_subst id subst cval)
      in
      I_aux (instr, aux) :: instrs
 
   | [] -> []
+
+let instrs_subst' id subst =
+  prerr_endline (string_of_name id ^ " => " ^ string_of_cval subst);
+  instrs_subst id subst
 
 let rec clexp_subst id subst = function
   | CL_id (id', ctyp) when Name.compare id id' = 0 ->
@@ -263,7 +273,7 @@ let inline cdefs should_inline instrs =
           incr inlines;
           incr label_count;
           let inline_label = label "end_inline_" in
-          let body = List.fold_right2 instrs_subst (List.map name ids) args body in
+          let body = List.fold_right2 instrs_subst' (List.map name ids) args body in
           let body = List.map (map_instr fix_labels) body in
           let body = List.map (map_instr (replace_end inline_label)) body in
           let body = List.map (map_instr (replace_return clexp)) body in

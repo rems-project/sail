@@ -1320,7 +1320,8 @@ let smt_cdef props name_file env all_cdefs = function
           ) visit_order;
 
         let out_chan = open_out (name_file (string_of_id function_id)) in
-        output_string out_chan "(set-logic QF_AUFBVDT)\n";
+        output_string out_chan "(set-option :produce-models true)\n";
+        (*output_string out_chan "(set-logic QF_AUFBVDT)\n";*)
 
         (* let stack' = Stack.create () in
         Stack.iter (fun def -> Stack.push def stack') stack;
@@ -1328,7 +1329,8 @@ let smt_cdef props name_file env all_cdefs = function
         let queue = optimize_smt stack in
         Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
 
-        output_string out_chan "(check-sat)\n"
+        output_string out_chan "(check-sat)\n";
+        output_string out_chan "(get-model)\n"
 
      | _ -> failwith "Bad function body"
      end
