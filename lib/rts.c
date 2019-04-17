@@ -276,6 +276,52 @@ void read_ram(lbits *data,
   mpz_clear(byte);
 }
 
+void platform_read_mem(lbits *data,
+                       const int read_kind,
+                       const uint64_t addr,
+                       const mpz_t n)
+{
+    mpz_t addr_size;
+    mpz_init(addr_size);
+    mpz_set_ui(addr_size, 64);
+    mpz_t addr_bv;
+    mpz_init(addr_bv);
+    mpz_set_ui(addr_bv, addr);
+    read_ram(data, addr_size, n, (lbits){.len=0, .bits=NULL}, (lbits){.len=64, .bits=&addr_bv});
+}
+
+unit platform_write_mem_ea(const int write_kind,
+                           const uint64_t addr,
+                           const mpz_t n)
+{
+    return UNIT;
+}
+
+bool platform_write_mem(const int write_kind,
+                        const uint64_t addr,
+                        const mpz_t n,
+                        const lbits data)
+{
+    mpz_t addr_size;
+    mpz_init(addr_size);
+    mpz_set_ui(addr_size, 64);
+    mpz_t addr_bv;
+    mpz_init(addr_bv);
+    mpz_set_ui(addr_bv, addr);
+    return write_ram(addr_size, n, (lbits){.len=0, .bits=NULL}, (lbits){.len=64, .bits=&addr_bv}, data);
+}
+
+bool platform_excl_res(const unit unit)
+{
+    return true;
+}
+
+unit platform_barrier(const int barrier_kind)
+{
+    return UNIT;
+}
+
+
 unit load_raw(fbits addr, const sail_string file)
 {
   FILE *fp = fopen(file, "r");

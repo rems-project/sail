@@ -71,6 +71,22 @@ sbits fast_read_ram(const int64_t data_size,
 unit write_tag_bool(const fbits, const bool);
 bool read_tag_bool(const fbits);
 
+void platform_read_mem(lbits *data,
+                       const int read_kind,
+                       const uint64_t addr,
+                       const mpz_t n);
+unit platform_write_mem_ea(const int write_kind,
+                           const uint64_t addr,
+                           const mpz_t n);
+bool platform_write_mem(const int write_kind,
+                        const uint64_t addr,
+                        const mpz_t n,
+                        const lbits data);
+bool platform_excl_res(const unit unit);
+unit platform_barrier(const int barrier_kind);
+
+
+
 unit load_raw(fbits addr, const sail_string file);
 
 void load_image(char *);
