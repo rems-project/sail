@@ -83,8 +83,14 @@ type ctx =
     no_raw : bool;
     convert_typ : ctx -> typ -> ctyp;
     optimize_anf : ctx -> typ aexp -> typ aexp;
+    (** If false (default), function arguments must match the function
+       type exactly. If true, they can be more specific. *)
     specialize_calls : bool;
+    (** If false (default), will ensure that fixed size bitvectors are
+       specifically less that 64-bits. If true this restriction will
+       be ignored. *)
     ignore_64 : bool;
+    (** If false (default) we won't generate any V_struct values *)
     struct_value : bool
   }
 
