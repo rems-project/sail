@@ -143,11 +143,23 @@ val sub_bits = {
 
 val not_vec = {c: "not_bits", _: "not_vec"} : forall 'n. bits('n) -> bits('n)
 
-val and_vec = {lem: "and_vec", c: "and_bits", coq: "and_vec", ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val and_vec = {
+  lem: "and_vec",
+  c: "and_bits",
+  coq: "and_vec",
+  ocaml: "and_vec",
+  interpreter: "and_vec"
+} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 overload operator & = {and_vec}
 
-val or_vec = {lem: "or_vec", c: "or_bits", coq: "or_vec", ocaml: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val or_vec = {
+  lem: "or_vec",
+  c: "or_bits",
+  coq: "or_vec",
+  ocaml: "or_vec",
+  interpreter: "or_vec"
+} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 overload operator | = {or_vec}
 
