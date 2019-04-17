@@ -288,6 +288,8 @@ void platform_read_mem(lbits *data,
     mpz_init(addr_bv);
     mpz_set_ui(addr_bv, addr);
     read_ram(data, addr_size, n, (lbits){.len=0, .bits=NULL}, (lbits){.len=64, .bits=&addr_bv});
+    mpz_clear(addr_size);
+    mpz_clear(addr_bv);
 }
 
 unit platform_write_mem_ea(const int write_kind,
@@ -308,7 +310,10 @@ bool platform_write_mem(const int write_kind,
     mpz_t addr_bv;
     mpz_init(addr_bv);
     mpz_set_ui(addr_bv, addr);
-    return write_ram(addr_size, n, (lbits){.len=0, .bits=NULL}, (lbits){.len=64, .bits=&addr_bv}, data);
+    bool res = write_ram(addr_size, n, (lbits){.len=0, .bits=NULL}, (lbits){.len=64, .bits=&addr_bv}, data);
+    mpz_clear(addr_size);
+    mpz_clear(addr_bv);
+    return res;
 }
 
 bool platform_excl_res(const unit unit)
