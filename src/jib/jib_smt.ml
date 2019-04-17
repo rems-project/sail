@@ -177,7 +177,7 @@ let rec smt_cval env cval =
      Fn ("not", [Fn ("=", [smt_cval env frag1; smt_cval env frag2])])
   | V_op (frag1, "|", frag2) ->
      Fn ("bvor", [smt_cval env frag1; smt_cval env frag2])
-  | V_unary ("bit_to_bool", cval) ->
+  | V_call ("bit_to_bool", [cval]) ->
      Fn ("=", [smt_cval env cval; Bin "1"])
   | V_unary ("!", cval) ->
      Fn ("not", [smt_cval env cval])
@@ -1029,6 +1029,27 @@ let c_literals ctx =
   in
   map_aval c_literal
 
+let unroll_foreach ctx = function
+  | AE_aux (AE_for (id, from_aexp, to_aexp, by_aexp, order, body), env, l) as aexp ->
+     begin match ctyp_of_typ ctx (aexp_typ from_aexp), ctyp_of_typ ctx (aexp_typ to_aexp), ctyp_of_typ ctx (aexp_typ by_aexp), order with
+     | CT_constant f, CT_constant t, CT_constant b, Ord_aux (Ord_inc, _) ->
+        let i = ref f in
+        let unrolled = ref [] in
+        while Big_int.less_equal !i t do
+          let current_index = AE_aux (AE_val (AV_lit (L_aux (L_num !i, gen_loc l), atom_typ (nconstant !i))), env, gen_loc l) in
+          let iteration = AE_aux (AE_let (Immutable, id, atom_typ (nconstant !i), current_index, body, unit_typ), env, gen_loc l) in
+          unrolled := iteration :: !unrolled;
+          i := Big_int.add !i b
+        done;
+        begin match !unrolled with
+        | last :: iterations ->
+           AE_aux (AE_block (List.rev iterations, last, unit_typ), env, gen_loc l)
+        | [] -> AE_aux (AE_val (AV_lit (L_aux (L_unit, gen_loc l), unit_typ)), env, gen_loc l)
+        end
+     | _ -> aexp
+     end
+  | aexp -> aexp
+
 (**************************************************************************)
 (* 3. Generating SMT                                                      *)
 (**************************************************************************)
@@ -1371,7 +1392,7 @@ let generate_smt props name_file env ast =
     let ctx =
       initial_ctx
         ~convert_typ:ctyp_of_typ
-        ~optimize_anf:(fun ctx aexp -> c_literals ctx aexp)
+        ~optimize_anf:(fun ctx aexp -> fold_aexp (unroll_foreach ctx) (c_literals ctx aexp))
         env
     in
     let t = Profile.start () in

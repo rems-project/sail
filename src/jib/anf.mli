@@ -134,11 +134,16 @@ val gensym : unit -> id
 
 (** {2 Functions for transforming ANF expressions} *)
 
+val aval_typ : typ aval -> typ
+val aexp_typ : typ aexp -> typ
+
 (** Map over all values in an ANF expression *)
 val map_aval : (Env.t -> Ast.l -> 'a aval -> 'a aval) -> 'a aexp -> 'a aexp
 
 (** Map over all function calls in an ANF expression *)
 val map_functions : (Env.t -> Ast.l -> id -> ('a aval) list -> 'a -> 'a aexp_aux) -> 'a aexp -> 'a aexp
+
+val fold_aexp : ('a aexp -> 'a aexp) -> 'a aexp -> 'a aexp
 
 (** Remove all variable shadowing in an ANF expression *)
 val no_shadow : IdSet.t -> 'a aexp -> 'a aexp

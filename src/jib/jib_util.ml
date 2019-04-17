@@ -280,9 +280,9 @@ let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
      "current_exception" ^ ssa_num n
 
 let rec string_of_cval ?zencode:(zencode=true) = function
-  | V_id (id, ctyp) -> string_of_name ~zencode:zencode id ^ " : " ^ string_of_ctyp ctyp
+  | V_id (id, ctyp) -> string_of_name ~zencode:zencode id
   | V_ref (id, _) -> "&" ^ string_of_name ~zencode:zencode id
-  | V_lit (vl, ctyp) -> string_of_value vl ^ " : " ^ string_of_ctyp ctyp
+  | V_lit (vl, ctyp) -> string_of_value vl
   | V_call (str, cvals) ->
      Printf.sprintf "%s(%s)" str (Util.string_of_list ", " (string_of_cval ~zencode:zencode) cvals)
   | V_field (f, field) ->
@@ -675,6 +675,7 @@ let rec cval_deps = function
   | V_ctor_kind (cval, _, _, _) -> cval_deps cval
   | V_ctor_unwrap (_, cval, _, _) -> cval_deps cval
   | V_hd cval | V_tl cval -> cval_deps cval
+  | V_struct (fields, ctyp) -> List.fold_left (fun ns (_, cval) -> NameSet.union ns (cval_deps cval)) NameSet.empty fields
 
 let rec clexp_deps = function
   | CL_id (id, _) -> NameSet.empty, NameSet.singleton id
@@ -890,7 +891,6 @@ let label str =
 
 let rec infer_unary v = function
   | "!" -> CT_bool
-  | "bit_to_bool" -> CT_bool
   | op -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Could not infer unary " ^ op)
 
 and infer_op v1 v2 = function
@@ -907,6 +907,7 @@ and infer_op v1 v2 = function
   | op -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Cannot infer binary op: " ^ op)
 
 and infer_call vs = function
+  | "bit_to_bool" -> CT_bool
   | op -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Cannot infer call: " ^ op)
 
 and cval_ctyp = function

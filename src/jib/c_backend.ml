@@ -405,40 +405,46 @@ let analyze_primop' ctx id args typ =
 
   match extern, args with
     (*
-  | "eq_bits", [AV_cval (v1, _, CT_fbits _); AV_cval (v2, _, _)] ->
-     AE_val (AV_cval (F_op (v1, "==", v2), typ, CT_bool))
-  | "eq_bits", [AV_cval (v1, _, CT_sbits _); AV_cval (v2, _, _)] ->
-     AE_val (AV_cval (F_call ("eq_sbits", [v1; v2]), typ, CT_bool))
+  | "eq_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     begin match cval_ctyp v1 with
+     | CT_fbits _ ->
+        AE_val (AV_cval (V_op (v1, "==", v2), typ))
+     | CT_sbits _ ->
+        AE_val (AV_cval (V_call ("eq_sbits", [v1; v2]), typ))
+     | _ -> no_change
+     end
 
-  | "neq_bits", [AV_cval (v1, _, CT_fbits _); AV_cval (v2, _, _)] ->
-     AE_val (AV_cval (F_op (v1, "!=", v2), typ, CT_bool))
-  | "neq_bits", [AV_cval (v1, _, CT_sbits _); AV_cval (v2, _, _)] ->
-     AE_val (AV_cval (F_call ("neq_sbits", [v1; v2]), typ, CT_bool))
+  | "neq_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     begin match cval_ctyp v1 with
+     | CT_fbits _ ->
+        AE_val (AV_cval (V_op (v1, "!=", v2), typ))
+     | CT_sbits _ ->
+        AE_val (AV_cval (V_call ("neq_sbits", [v1; v2]), typ))
+     | _ -> no_change
+     end
 
-  | "eq_int", [AV_cval (v1, typ1, _); AV_cval (v2, typ2, _)] ->
-     AE_val (AV_cval (F_op (v1, "==", v2), typ, CT_bool))
+  | "eq_int", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     AE_val (AV_cval (V_op (v1, "==", v2), typ))
 
   | "zeros", [_] ->
      begin match destruct_vector ctx.tc_env typ with
      | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
           when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
-        AE_val (AV_C_fragment (F_raw "0x0", typ, CT_fbits (Big_int.to_int n, true)))
+        let n = Big_int.to_int n in
+        AE_val (AV_cval (V_lit (VL_bits (Util.list_init n (fun _ -> Sail2_values.B0), true), CT_fbits (n, true)), typ))
      | _ -> no_change
      end
 
-  | "zero_extend", [AV_C_fragment (v1, _, CT_fbits _); _] ->
+  | "zero_extend", [AV_cval (v1, _); _] ->
      begin match destruct_vector ctx.tc_env typ with
      | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
           when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
-        AE_val (AV_C_fragment (v1, typ, CT_fbits (Big_int.to_int n, true)))
-     | _ -> no_change
-     end
-
-  | "zero_extend", [AV_C_fragment (v1, _, CT_sbits _); _] ->
-     begin match destruct_vector ctx.tc_env typ with
-     | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
-          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
-        AE_val (AV_C_fragment (F_call ("fast_zero_extend", [v1; v_int (Big_int.to_int n)]), typ, CT_fbits (Big_int.to_int n, true)))
+        begin match cval_ctyp v1 with
+        | CT_fbits _ ->
+           AE_val (AV_C_fragment (v1, typ, CT_fbits (Big_int.to_int n, true)))
+        | CT_sbits _ ->
+           AE_val (AV_C_fragment (F_call ("fast_zero_extend", [v1; v_int (Big_int.to_int n)]), typ, CT_fbits (Big_int.to_int n, true)))
+        end
      | _ -> no_change
      end
 

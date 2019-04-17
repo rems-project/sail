@@ -153,6 +153,21 @@ let rec apat_rename from_id to_id (AP_aux (apat_aux, env, l)) =
   in
   AP_aux (apat_aux, env, l)
 
+let rec aval_typ = function
+  | AV_lit (_, typ) -> typ
+  | AV_id (_, lvar) -> lvar_typ lvar
+  | AV_ref (_, lvar) -> lvar_typ lvar
+  | AV_tuple avals -> tuple_typ (List.map aval_typ avals)
+  | AV_list (_, typ) -> typ
+  | AV_vector (_, typ) -> typ
+  | AV_record (_, typ) -> typ
+  | AV_cval (_, typ) -> typ
+
+let aexp_typ (AE_aux (aux, _, _)) =
+  match aux with
+  | AE_val aval -> aval_typ aval
+  | AE_app (_, _, typ) -> typ
+
 let rec aval_rename from_id to_id = function
   | AV_lit (lit, typ) -> AV_lit (lit, typ)
   | AV_id (id, lvar) when Id.compare id from_id = 0 -> AV_id (to_id, lvar)
@@ -297,6 +312,27 @@ let rec map_functions f (AE_aux (aexp, env, l)) =
     | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_throw _ as v -> v
   in
   AE_aux (aexp, env, l)
+
+let rec fold_aexp f (AE_aux (aexp, env, l)) =
+  let aexp = match aexp with
+    | AE_app (id, vs, typ) -> AE_app (id, vs, typ)
+    | AE_cast (aexp, typ) -> AE_cast (fold_aexp f aexp, typ)
+    | AE_assign (id, typ, aexp) -> AE_assign (id, typ, fold_aexp f aexp)
+    | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, fold_aexp f aexp)
+    | AE_let (mut, id, typ1, aexp1, aexp2, typ2) -> AE_let (mut, id, typ1, fold_aexp f aexp1, fold_aexp f aexp2, typ2)
+    | AE_block (aexps, aexp, typ) -> AE_block (List.map (fold_aexp f) aexps, fold_aexp f aexp, typ)
+    | AE_if (aval, aexp1, aexp2, typ) ->
+       AE_if (aval, fold_aexp f aexp1, fold_aexp f aexp2, typ)
+    | AE_loop (loop_typ, aexp1, aexp2) -> AE_loop (loop_typ, fold_aexp f aexp1, fold_aexp f aexp2)
+    | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
+       AE_for (id, fold_aexp f aexp1, fold_aexp f aexp2, fold_aexp f aexp3, order, fold_aexp f aexp4)
+    | AE_case (aval, cases, typ) ->
+       AE_case (aval, List.map (fun (pat, aexp1, aexp2) -> pat, fold_aexp f aexp1, fold_aexp f aexp2) cases, typ)
+    | AE_try (aexp, cases, typ) ->
+       AE_try (fold_aexp f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, fold_aexp f aexp1, fold_aexp f aexp2) cases, typ)
+    | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_throw _ as v -> v
+  in
+  f (AE_aux (aexp, env, l))
 
 (* For debugging we provide a pretty printer for ANF expressions. *)
 

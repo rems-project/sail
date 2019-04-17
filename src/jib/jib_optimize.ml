@@ -169,6 +169,8 @@ let rec cval_subst id subst = function
   | V_ctor_unwrap (ctor, cval, unifiers, ctyp) -> V_ctor_unwrap (ctor, cval_subst id subst cval, unifiers, ctyp)
   | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> field, cval_subst id subst cval) fields, ctyp)
   | V_poly (cval, ctyp) -> V_poly (cval_subst id subst cval, ctyp)
+  | V_hd cval -> V_hd (cval_subst id subst cval)
+  | V_tl cval -> V_tl (cval_subst id subst cval)
 
 let rec cval_map_id f = function
   | V_id (id, ctyp) -> V_id (f id, ctyp)
@@ -231,16 +233,13 @@ let rec instrs_subst id subst =
   | [] -> []
 
 let rec clexp_subst id subst = function
-  | CL_id (id', ctyp) when Name.compare id id' = 0 ->
-     if ctyp_equal ctyp (clexp_ctyp subst) then
-       subst
-     else
-       subst
+  | CL_id (id', ctyp) when Name.compare id id' = 0 -> subst
   | CL_id (id', ctyp) -> CL_id (id', ctyp)
   | CL_field (clexp, field) -> CL_field (clexp_subst id subst clexp, field)
   | CL_addr clexp -> CL_addr (clexp_subst id subst clexp)
   | CL_tuple (clexp, n) -> CL_tuple (clexp_subst id subst clexp, n)
   | CL_void -> CL_void
+  | CL_rmw _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot substitute into read-modify-write construct"
 
 let rec find_function fid = function
   | CDEF_fundef (fid', heap_return, args, body) :: _ when Id.compare fid fid' = 0 ->

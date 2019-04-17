@@ -164,6 +164,11 @@ typedef uint64_t fbits;
 
 bool eq_bit(const fbits a, const fbits b);
 
+static inline bool bit_to_bool(const fbits a)
+{
+  return (bool) a;
+}
+
 bool EQUAL(fbits)(const fbits, const fbits);
 
 typedef struct {
