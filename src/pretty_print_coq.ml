@@ -1529,6 +1529,18 @@ let doc_exp, doc_let =
               | true,  false -> "M", simple_bool cond, return body
               | true,  true  -> "M", simple_bool cond, body
             in
+            (* If rewrite_loops_with_escape_effect added a dummy assertion to
+               ensure that the loop can escape when it reaches the limit, omit
+               the dummy assert here. *)
+            let body = match body with
+              | E_aux (E_internal_plet
+                  (P_aux ((P_wild | P_typ (_,P_aux (P_wild, _))),_),
+                   E_aux (E_assert
+                            (E_aux (E_lit (L_aux (L_true,_)),_),
+                             E_aux (E_lit (L_aux (L_string "loop dummy assert",_)),_))
+                         ,_),body'),_) -> body'
+              | _ -> body
+            in
             let msuffix, measure_pp =
               match measure with
               | None -> "", []

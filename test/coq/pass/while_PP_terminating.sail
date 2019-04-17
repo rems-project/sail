@@ -11,3 +11,5 @@ function test n : int -> int = {
   };
   j
 }
+
+termination_measure test while n - i

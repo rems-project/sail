@@ -4626,6 +4626,29 @@ let rewrite_explicit_measure env (Defs defs) =
   in
   Defs (List.flatten (List.map rewrite_def defs))
 
+(* Add a dummy assert to loops for backends that require loops to be able to
+   fail.  Note that the Coq backend will spot the assert and omit it. *)
+let rewrite_loops_with_escape_effect env defs =
+  let dummy_ann = Parse_ast.Unknown,empty_tannot in
+  let assert_exp =
+    E_aux (E_assert (E_aux (E_lit (L_aux (L_true,Unknown)),dummy_ann),
+                     E_aux (E_lit (L_aux (L_string "loop dummy assert",Unknown)),dummy_ann)),
+           dummy_ann)
+  in
+  let rewrite_exp rws exp =
+    let (E_aux (e,ann) as exp) = Rewriter.rewrite_exp rws exp in
+    match e with
+    | E_loop (l,(Measure_aux (Measure_some _,_) as m),guard,body) ->
+       if has_effect (effect_of exp) BE_escape then exp else
+       let body = match body with
+         | E_aux (E_block es,ann) ->
+            E_aux (E_block (assert_exp::es),ann)
+         | _ -> E_aux (E_block [assert_exp;body],dummy_ann)
+       in E_aux (E_loop (l,m,guard,body),ann)
+    | _ -> exp
+  in
+  rewrite_defs_base { rewriters_base with rewrite_exp } defs
+
 let recheck_defs env defs = fst (Type_error.check initial_env defs)
 let recheck_defs_without_effects env defs =
   let old = !opt_no_effects in
@@ -4815,6 +4838,7 @@ let all_rewrites = [
     ("minimise_recursive_functions", Basic_rewriter minimise_recursive_functions);
     ("move_termination_measures", Basic_rewriter move_termination_measures);
     ("rewrite_explicit_measure", Basic_rewriter rewrite_explicit_measure);
+    ("rewrite_loops_with_escape_effect", Basic_rewriter rewrite_loops_with_escape_effect);
     ("simple_types", Basic_rewriter rewrite_simple_types);
     ("overload_cast", Basic_rewriter rewrite_overload_cast);
     ("top_sort_defs", Basic_rewriter (fun _ -> top_sort_defs));
@@ -4908,6 +4932,7 @@ let rewrites_coq = [
     ("recheck_defs_without_effects", []);
     ("make_cases_exhaustive", []);
     ("rewrite_explicit_measure", []);
+    ("rewrite_loops_with_escape_effect", []);
     ("recheck_defs_without_effects", []);
     ("fix_val_specs", []);
     ("remove_blocks", []);
