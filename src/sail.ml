@@ -131,7 +131,7 @@ let options = Arg.align ([
     Arg.Set Jib_smt.ignore_overflow,
     " ignore integer overflow in generated SMT");
   ( "-smt_int_size",
-    Arg.String (fun n -> Jib_smt.lint_size := int_of_string n),
+    Arg.String (fun n -> Jib_smt.opt_lint_size := int_of_string n),
     " set a bound on the maximum integer bitwidth for generated SMT");
   ( "-c",
     Arg.Tuple [set_target "c"; Arg.Set Initial_check.opt_undefined_gen],

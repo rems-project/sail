@@ -471,6 +471,7 @@ module CT = struct
 end
 
 module CTSet = Set.Make(CT)
+module CTMap = Map.Make(CT)
 
 let rec ctyp_unify ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
