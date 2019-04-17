@@ -198,6 +198,7 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
   | CT_ref ctyp -> true
   | CT_poly -> true
+  | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
 
 let is_stack_typ ctx typ = is_stack_ctyp (ctyp_of_typ ctx typ)
 
@@ -1116,6 +1117,7 @@ let rec sgen_ctyp = function
   | CT_real -> "real"
   | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
   | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
+  | CT_constant _ -> "CONSTANT"
 
 let rec sgen_ctyp_name = function
   | CT_unit -> "unit"
@@ -1136,6 +1138,7 @@ let rec sgen_ctyp_name = function
   | CT_real -> "real"
   | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
   | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
+  | CT_constant _ -> "CONSTANT"
 
 let sgen_cval cval = string_of_cval cval
 
@@ -1159,6 +1162,7 @@ let rec sgen_clexp = function
   | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp clexp ^ ")->ztup" ^ string_of_int n ^ ")"
   | CL_addr clexp -> "(*(" ^ sgen_clexp clexp ^ "))"
   | CL_void -> assert false
+  | CL_rmw _ -> assert false
 
 let rec sgen_clexp_pure = function
   | CL_id (Have_exception _, _) -> "have_exception"
@@ -1169,6 +1173,7 @@ let rec sgen_clexp_pure = function
   | CL_tuple (clexp, n) -> sgen_clexp_pure clexp ^ ".ztup" ^ string_of_int n
   | CL_addr clexp -> "(*(" ^ sgen_clexp_pure clexp ^ "))"
   | CL_void -> assert false
+  | CL_rmw _ -> assert false
 
 (** Generate instructions to copy from a cval to a clexp. This will
    insert any needed type conversions from big integers to small
@@ -1947,7 +1952,7 @@ let rec ctyp_dependencies = function
   | CT_ref ctyp -> ctyp_dependencies ctyp
   | CT_struct (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
   | CT_variant (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
-  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string | CT_enum _ | CT_poly -> []
+  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string | CT_enum _ | CT_poly | CT_constant _ -> []
 
 let codegen_ctg ctx = function
   | CTG_vector (direction, ctyp) -> codegen_vector ctx (direction, ctyp)

@@ -167,6 +167,20 @@ let aexp_typ (AE_aux (aux, _, _)) =
   match aux with
   | AE_val aval -> aval_typ aval
   | AE_app (_, _, typ) -> typ
+  | AE_cast (_, typ) -> typ
+  | AE_assign _ -> unit_typ
+  | AE_let (_, _, _, _, _, typ) -> typ
+  | AE_block (_, _, typ) -> typ
+  | AE_return (_, typ) -> typ
+  | AE_throw (_, typ) -> typ
+  | AE_if (_, _, _, typ) -> typ
+  | AE_field (_, _, typ) -> typ
+  | AE_case (_, _, typ) -> typ
+  | AE_try (_, _, typ) -> typ
+  | AE_record_update (_, _, typ) -> typ
+  | AE_for _ -> unit_typ
+  | AE_loop _ -> unit_typ
+  | AE_short_circuit _ -> bool_typ
 
 let rec aval_rename from_id to_id = function
   | AV_lit (lit, typ) -> AV_lit (lit, typ)

@@ -67,6 +67,8 @@ let lbits_size () = Util.power 2 !lbits_index
 
 let lint_size = ref 128
 
+let vector_index = ref 5
+
 let smt_unit = mk_enum "Unit" ["Unit"]
 let smt_lbits = mk_record "Bits" [("size", Bitvec !lbits_index); ("bits", Bitvec (lbits_size ()))]
 
@@ -96,7 +98,7 @@ let rec smt_ctyp = function
   | CT_variant (id, ctors) ->
      mk_variant (zencode_upper_id id) (List.map (fun (id, ctyp) -> (zencode_id id, smt_ctyp ctyp)) ctors)
   | CT_tup ctyps -> Tuple (List.map smt_ctyp ctyps)
-  | CT_vector (_, ctyp) -> Array (Bitvec 8, smt_ctyp ctyp)
+  | CT_vector (_, ctyp) -> Array (Bitvec !vector_index, smt_ctyp ctyp)
   | CT_string -> Bitvec 64
   | ctyp -> failwith ("Unhandled ctyp: " ^ string_of_ctyp ctyp)
 
@@ -557,7 +559,12 @@ let builtin_vector_access env vec i ret_ctyp =
   | CT_fbits (n, _), CT_constant i, CT_bit ->
      Extract (Big_int.to_int i, Big_int.to_int i, smt_cval env vec)
 
-  | _ -> failwith "Cannot compile vector subrange"
+  | CT_vector _, CT_constant i, _ ->
+     Fn ("select", [smt_cval env vec; bvint !vector_index i])
+  | CT_vector _, index_ctyp, _ ->
+     Fn ("select", [smt_cval env vec; force_size !vector_index (int_size index_ctyp) (smt_cval env i)])
+
+  | _ -> builtin_type_error "vector_access" [vec; i] (Some ret_ctyp)
 
 let builtin_vector_update env vec i x ret_ctyp =
   match cval_ctyp vec, cval_ctyp i, cval_ctyp x, ret_ctyp with
@@ -575,7 +582,12 @@ let builtin_vector_update env vec i x ret_ctyp =
      let top = Extract (n - 1, 1, smt_cval env vec) in
      Fn ("concat", [top; smt_cval env x])
 
-  | _ -> failwith "Cannot compile vector update"
+  | CT_vector _, CT_constant i, ctyp, CT_vector _ ->
+     Fn ("store", [smt_cval env vec; bvint !vector_index i; smt_cval env x])
+  | CT_vector _, index_ctyp, _, CT_vector _ ->
+     Fn ("store", [smt_cval env vec; force_size !vector_index (int_size index_ctyp) (smt_cval env i); smt_cval env x])
+
+  | _ -> builtin_type_error "vector_update" [vec; i; x] (Some ret_ctyp)
 
 let builtin_unsigned env v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
@@ -1223,12 +1235,19 @@ let smt_cfnode all_cdefs env =
   (* We can ignore any non basic-block/start control-flow nodes *)
   | _ -> []
 
-let rec find_function id = function
+(** When we generate a property for a CDEF_spec, we find it's
+   associated function body in a CDEF_fundef node. However, we must
+   keep track of any global letbindings between the spec and the
+   fundef, so they can appear in the generated SMT. *)
+let rec find_function lets id = function
   | CDEF_fundef (id', heap_return, args, body) :: _ when Id.compare id id' = 0 ->
-     Some (heap_return, args, body)
+     lets, Some (heap_return, args, body)
+  | CDEF_let (_, vars, setup) :: cdefs ->
+     let vars = List.map (fun (id, ctyp) -> idecl ctyp (name id)) vars in
+     find_function (lets @ vars @ setup) id cdefs;
   | _ :: cdefs ->
-     find_function id cdefs
-  | [] -> None
+     find_function lets id cdefs
+  | [] -> lets, None
 
 let optimize_smt stack =
   let stack' = Stack.create () in
@@ -1313,8 +1332,8 @@ let smt_header stack cdefs =
 
 let smt_cdef props lets name_file env all_cdefs = function
   | CDEF_spec (function_id, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
-     begin match find_function function_id all_cdefs with
-     | Some (None, args, instrs) ->
+     begin match find_function [] function_id all_cdefs with
+     | intervening_lets, Some (None, args, instrs) ->
         let prop_type, prop_args, pragma_l, vs = Bindings.find function_id props in
 
         let stack = Stack.create () in
@@ -1327,7 +1346,7 @@ let smt_cdef props lets name_file env all_cdefs = function
 
         let instrs =
           let open Jib_optimize in
-          (lets @ instrs)
+          (lets @ intervening_lets @ instrs)
           |> inline all_cdefs (fun _ -> true)
           |> flatten_instrs
           |> remove_unused_labels
@@ -1379,7 +1398,6 @@ let rec smt_cdefs props lets name_file env ast =
   function
   | CDEF_let (_, vars, setup) :: cdefs ->
      let vars = List.map (fun (id, ctyp) -> idecl ctyp (name id)) vars in
-     print_endline (Pretty_print_sail.to_string PPrint.(separate_map hardline pp_instr (vars @ setup)));
      smt_cdefs props (lets @ vars @ setup) name_file env ast cdefs;
   | cdef :: cdefs ->
      smt_cdef props lets name_file env ast cdef;
