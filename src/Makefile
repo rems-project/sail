@@ -103,7 +103,7 @@ sail: ast.ml jib.ml manifest.ml
 	ocamlbuild -use-ocamlfind sail.native sail_lib.cma sail_lib.cmxa
 
 isail: ast.ml jib.ml manifest.ml
-	ocamlbuild -use-ocamlfind isail.native sail_lib.cma sail_lib.cmxa
+	ocamlbuild -use-ocamlfind isail.native sail_lib.cma sail_lib.cmxa libsail.cma libsail.cmxa
 
 
 coverage: ast.ml jib.ml manifest.ml

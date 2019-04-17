@@ -2,7 +2,6 @@ Anf
 Ast
 Ast_util
 Bitfield
-Bytecode
 C_backend
 Cgen_backend
 Constant_fold
@@ -48,7 +47,6 @@ Sail
 Sail2_values
 Sail_lib
 Scattered
-Share_directory
 Spec_analysis
 Specialize
 State
