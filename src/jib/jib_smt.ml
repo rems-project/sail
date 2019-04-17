@@ -55,26 +55,36 @@ open Jib
 open Jib_util
 open Smtlib
 
-let ignore_overflow = ref false
-
 let zencode_upper_id id = Util.zencode_upper_string (string_of_id id)
 let zencode_id id = Util.zencode_string (string_of_id id)
 let zencode_name id = string_of_name ~deref_current_exception:false ~zencode:true id
 
+let opt_ignore_overflow = ref false
+
 type ctx = {
+    (* Arbitrary-precision bitvectors are represented as a (BitVec lbits_index, BitVec (2 ^ lbits_index)) pair. *)
     lbits_index : int;
+    (* The size we use for integers where we don't know how large they are statically. *)
     lint_size : int;
+    (* A generic vector, vector('a) becomes Array (BitVec vector_index) 'a.
+       We need to take care that vector_index is large enough for all generic vectors. *)
     vector_index : int;
     register_map : id list CTMap.t;
     tc_env : Type_check.Env.t
   }
 
-let opt_lint_size = ref 128
+(* These give the default bounds for various SMT types, stored in the
+   initial_ctx. They shouldn't be read or written by anything else! If
+   they are changed the output of sail -help needs to be updated to
+   reflect this. *)
+let opt_default_lint_size = ref 128
+let opt_default_lbits_index = ref 8
+let opt_default_vector_index = ref 5
 
 let initial_ctx () = {
-    lbits_index = 8;
-    lint_size = !opt_lint_size;
-    vector_index = 5;
+    lbits_index = !opt_default_lbits_index;
+    lint_size = !opt_default_lint_size;
+    vector_index = !opt_default_vector_index;
     register_map = CTMap.empty;
     tc_env = Type_check.initial_env
   }
@@ -86,6 +96,8 @@ let vector_index = ref 5
 let smt_unit = mk_enum "Unit" ["Unit"]
 let smt_lbits ctx = mk_record "Bits" [("size", Bitvec ctx.lbits_index); ("bits", Bitvec (lbits_size ctx))]
 
+(* [required_width n] is the required number of bits to losslessly
+   represent an integer n *)
 let required_width n =
   let rec required_width' n =
     if Big_int.equal n Big_int.zero then
@@ -121,6 +133,11 @@ let rec smt_ctyp ctx = function
      end
   | ctyp -> failwith ("Unhandled ctyp: " ^ string_of_ctyp ctyp)
 
+(* We often need to create a SMT bitvector of a length sz with integer
+   value x. [bvpint sz x] does this for positive integers, and [bvint sz x]
+   does this for all integers. It's quite awkward because we
+   don't have a very good way to get the binary representation of
+   either an ocaml integer or a big integer. *)
 let bvpint sz x =
   if Big_int.less_equal Big_int.zero x && Big_int.less_equal x (Big_int.of_int max_int) then (
     let open Sail_lib in
@@ -160,11 +177,12 @@ let bvint sz x =
   else
     bvpint sz x
 
+(* Translate Jib literals into SMT *)
 let smt_value ctx vl ctyp =
   let open Value2 in
   match vl, ctyp with
   | VL_bits (bs, true), CT_fbits (n, _) ->
-     (* FIXME: Output the correct number of bits *)
+     (* FIXME: Output the correct number of bits in Jib_compile *)
      begin match Sail2_values.hexstring_of_bits (List.rev (Util.take n (List.rev bs))) with
      | Some s -> Hex (Xstring.implode s)
      | None -> Bin (Xstring.implode (List.map Sail2_values.bitU_char (List.rev (Util.take n (List.rev bs)))))
@@ -227,7 +245,6 @@ let rec smt_cval ctx cval =
      end
   | V_tuple_member (frag, len, n) ->
      Fn (Printf.sprintf "tup_%d_%d" len n, [smt_cval ctx frag])
-
   | V_ref (Name (id, _), _) ->
      let rmap = CTMap.filter (fun ctyp regs -> List.exists (fun reg -> Id.compare reg id = 0) regs) ctx.register_map in
      assert (CTMap.cardinal rmap = 1);
@@ -240,17 +257,19 @@ let rec smt_cval ctx cval =
         end
      | _ -> assert false
      end
-
   | cval -> failwith ("Unrecognised cval " ^ string_of_cval ~zencode:false cval)
-
 
 let overflow_checks = Stack.create ()
 
 let overflow_check smt =
-  if not !ignore_overflow then (
+  if not !opt_ignore_overflow then (
     Util.warn "Adding overflow check in generated SMT";
     Stack.push (Define_const ("overflow" ^ string_of_int (Stack.length overflow_checks), Bool, Fn ("not", [smt]))) overflow_checks
   )
+
+(**************************************************************************)
+(* 1. Generating SMT for Sail builtins                                    *)
+(**************************************************************************)
 
 let builtin_type_error fn cvals =
   let args = Util.string_of_list ", " (fun cval -> string_of_ctyp (cval_ctyp cval)) cvals in
@@ -328,7 +347,7 @@ let builtin_arith fn big_int_fn padding ctx v1 v2 ret_ctyp =
      to some size determined by a padding function, then check we
      don't lose precision when going back after performing the
      operation. *)
-  let padding = if !ignore_overflow then (fun x -> x) else padding in
+  let padding = if !opt_ignore_overflow then (fun x -> x) else padding in
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
   | _, _, CT_constant c ->
      bvint (required_width c) c
@@ -400,6 +419,13 @@ let builtin_abs_int ctx v ret_ctyp =
      Ite (Fn ("=", [Extract (sz - 1, sz -1, smt); Bin "1"]),
           force_size (int_size ctx ret_ctyp) sz (Fn ("bvneg", [smt])),
           force_size (int_size ctx ret_ctyp) sz smt)
+
+let builtin_pow2 ctx v ret_ctyp =
+  match cval_ctyp v, ret_ctyp with
+  | CT_constant n, _ when Big_int.greater_equal n Big_int.zero ->
+     bvint (int_size ctx ret_ctyp) (Big_int.pow_int_positive 2 (Big_int.to_int n))
+
+  | _ -> builtin_type_error "pow2" [v] (Some ret_ctyp)
 
 let builtin_zeros ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
@@ -847,6 +873,7 @@ let smt_builtin ctx name args ret_ctyp =
   | "shl_mach_int", [v1; v2], _ -> builtin_shl_int ctx v1 v2 ret_ctyp
   | "shr_mach_int", [v1; v2], _ -> builtin_shr_int ctx v1 v2 ret_ctyp
   | "abs_int", [v], _ -> builtin_abs_int ctx v ret_ctyp
+  | "pow2", [v], _ -> builtin_pow2 ctx v ret_ctyp
 
   (* All signed and unsigned bitvector comparisons *)
   | "slt_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvslt" ctx v1 v2 ret_ctyp
@@ -888,7 +915,7 @@ let smt_builtin ctx name args ret_ctyp =
   | "get_slice_int", [v1; v2; v3], ret_ctyp -> builtin_get_slice_int ctx v1 v2 v3 ret_ctyp
   | "set_slice", [v1; v2; v3; v4; v5], ret_ctyp -> builtin_set_slice_bits ctx v1 v2 v3 v4 v5 ret_ctyp
 
-  | _ -> failwith ("Bad builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
+  | _ -> failwith ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
 
 let rec smt_conversion ctx from_ctyp to_ctyp x =
   match from_ctyp, to_ctyp with
@@ -1248,7 +1275,7 @@ let smt_instr ctx =
      [declare_const ctx id ctyp]
 
   | I_aux (I_end id, _) ->
-     if !ignore_overflow then
+     if !opt_ignore_overflow then
        [Assert (Fn ("not", [Var (zencode_name id)]))]
      else
        let checks =
@@ -1456,7 +1483,8 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           ) visit_order;
 
         let out_chan = open_out (name_file (string_of_id function_id)) in
-        (* output_string out_chan "(set-option :produce-models true)\n"; *)
+        if prop_type = "counterexample" then
+          output_string out_chan "(set-option :produce-models true)\n";
         output_string out_chan "(set-logic QF_AUFBVDT)\n";
 
         (* let stack' = Stack.create () in
@@ -1466,7 +1494,8 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
 
         output_string out_chan "(check-sat)\n";
-        (* output_string out_chan "(get-model)\n" *)
+        if prop_type = "counterexample" then
+          output_string out_chan "(get-model)\n"
 
      | _ -> failwith "Bad function body"
      end

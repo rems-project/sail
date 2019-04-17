@@ -128,11 +128,17 @@ let options = Arg.align ([
     set_target "smt",
     " print SMT translated version of input");
   ( "-smt_ignore_overflow",
-    Arg.Set Jib_smt.ignore_overflow,
+    Arg.Set Jib_smt.opt_ignore_overflow,
     " ignore integer overflow in generated SMT");
   ( "-smt_int_size",
-    Arg.String (fun n -> Jib_smt.opt_lint_size := int_of_string n),
-    " set a bound on the maximum integer bitwidth for generated SMT");
+    Arg.String (fun n -> Jib_smt.opt_default_lint_size := int_of_string n),
+    "<n> set a bound of n on the maximum integer bitwidth for generated SMT (default 128)");
+  ( "-smt_bits_size",
+    Arg.String (fun n -> Jib_smt.opt_default_lbits_index := int_of_string n),
+    "<n> set a bound of 2 ^ n for bitvector bitwidth in generated SMT (default 8)");
+  ( "-smt_vector_size",
+    Arg.String (fun n -> Jib_smt.opt_default_vector_index := int_of_string n),
+    "<n> set a bound of 2 ^ n for generic vectors in generated SMT (default 5)");
   ( "-c",
     Arg.Tuple [set_target "c"; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
