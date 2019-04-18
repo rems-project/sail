@@ -73,13 +73,16 @@ bool read_tag_bool(const fbits);
 
 void platform_read_mem(lbits *data,
                        const int read_kind,
-                       const uint64_t addr,
+                       const uint64_t addr_size,
+                       const sbits addr,
                        const mpz_t n);
 unit platform_write_mem_ea(const int write_kind,
-                           const uint64_t addr,
+                           const uint64_t addr_size,
+                           const sbits addr,
                            const mpz_t n);
 bool platform_write_mem(const int write_kind,
-                        const uint64_t addr,
+                        const uint64_t addr_size,
+                        const sbits addr,
                         const mpz_t n,
                         const lbits data);
 bool platform_excl_res(const unit unit);
