@@ -58,6 +58,15 @@ open Pretty_print_common
 
 module StringSet = Set.Make(String)
 
+let rec list_contains cmp l1 = function
+  | [] -> Some l1
+  | h::t ->
+     let rec remove = function
+       | [] -> None
+       | h'::t' -> if cmp h h' = 0 then Some t'
+                   else Util.option_map (List.cons h') (remove t')
+     in Util.option_bind (fun l1' -> list_contains cmp l1' t) (remove l1)
+
 let opt_undef_axioms = ref false
 let opt_debug_on : string list ref = ref []
 
@@ -549,6 +558,11 @@ let classify_ex_type ctxt env ?binding ?(rawbools=false) (Typ_aux (t,l) as t0) =
   | Typ_exist (kopts,_,t1) -> ExGeneral,kopts,t1
   | _ -> ExNone,[],t0
 
+let rec flatten_nc (NC_aux (nc,l) as nc_full) =
+  match nc with
+  | NC_and (nc1,nc2) -> flatten_nc nc1 @ flatten_nc nc2
+  | _ -> [nc_full]
+
 (* When making changes here, check whether they affect coq_nvars_of_typ *)
 let rec doc_typ_fns ctx env =
   (* following the structure of parser for precedence *)
@@ -729,15 +743,19 @@ and doc_nc_prop ?(top = true) ctx env nc =
       (fun m (v,(_,Typ_aux (typ,_))) ->
         match typ with
         | Typ_app (id, [A_aux (A_bool nc,_)]) when string_of_id id = "atom_bool" ->
-           NCMap.add nc v m
-        | _ -> m) NCMap.empty locals
+           (flatten_nc nc, v)::m
+        | _ -> m) [] locals
   in
-  let newnc f nc =
-    match NCMap.find_opt nc nc_id_map with
-    | Some id -> parens (doc_op equals (doc_id id) (string "true"))
-    | None -> f nc
-  in
-  let rec l85 (NC_aux (nc,_) as nc_full) =
+  let rec newnc f nc =
+    let ncs = flatten_nc nc in
+    let candidates =
+      Util.map_filter (fun (ncs',id) -> Util.option_map (fun x -> x,id) (list_contains NC.compare ncs ncs')) nc_id_map
+    in
+    match List.sort (fun (l,_) (l',_) -> compare l l') candidates with
+    | ([],id)::_ -> parens (doc_op equals (doc_id id) (string "true"))
+    | ((h::t),id)::_ -> parens (doc_op (string "/\\") (doc_op equals (doc_id id) (string "true")) (l80 (List.fold_left nc_and h t)))
+    | [] -> f nc
+  and l85 (NC_aux (nc,_) as nc_full) =
   match nc with
   | NC_or (nc1, nc2) -> doc_op (string "\\/") (newnc l80 nc1) (newnc l85 nc2)
   | _ -> l80 nc_full
@@ -779,21 +797,25 @@ and doc_nc_prop ?(top = true) ctx env nc =
 (* Follows Coq precedence levels *)
 let rec doc_nc_exp ctx env nc =
   let locals = Env.get_locals env |> Bindings.bindings in
+  let nc = Env.expand_constraint_synonyms env nc in
   let nc_id_map =
     List.fold_left
       (fun m (v,(_,Typ_aux (typ,_))) ->
         match typ with
         | Typ_app (id, [A_aux (A_bool nc,_)]) when string_of_id id = "atom_bool" ->
-           NCMap.add nc v m
-        | _ -> m) NCMap.empty locals
+           (flatten_nc nc, v)::m
+        | _ -> m) [] locals
   in
-  let newnc f nc =
-    match NCMap.find_opt nc nc_id_map with
-    | Some id -> doc_id id
-    | None -> f nc
-  in
-  let nc = Env.expand_constraint_synonyms env nc in
-  let rec l70 (NC_aux (nc,_) as nc_full) =
+  let rec newnc f nc =
+    let ncs = flatten_nc nc in
+    let candidates =
+      Util.map_filter (fun (ncs',id) -> Util.option_map (fun x -> x,id) (list_contains NC.compare ncs ncs')) nc_id_map
+    in
+    match List.sort (fun (l,_) (l',_) -> compare l l') candidates with
+    | ([],id)::_ -> doc_id id
+    | ((h::t),id)::_ -> parens (doc_op (string "&&") (doc_id id) (l10 (List.fold_left nc_and h t)))
+    | [] -> f nc
+  and l70 (NC_aux (nc,_) as nc_full) =
     match nc with
     | NC_equal (ne1, ne2) -> doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
     | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
