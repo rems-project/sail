@@ -88,6 +88,7 @@ and 'a aexp_aux =
   | AE_app of id * ('a aval) list * 'a
   | AE_cast of 'a aexp * 'a
   | AE_assign of id * 'a * 'a aexp
+  | AE_write_ref of id * 'a * 'a aexp
   | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
   | AE_block of ('a aexp) list * 'a aexp * 'a
   | AE_return of 'a aval * 'a

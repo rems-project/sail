@@ -527,7 +527,7 @@ let rename_variables graph root children =
        CL_id (ssa_name i id, ctyp)
     | CL_rmw _ -> assert false
     | CL_field (clexp, field) -> CL_field (fold_clexp true clexp, field)
-    | CL_addr clexp -> CL_addr (fold_clexp true clexp)
+    | CL_addr clexp -> CL_addr (fold_clexp false clexp)
     | CL_tuple (clexp, n) -> CL_tuple (fold_clexp true clexp, n)
     | CL_void -> CL_void
   in

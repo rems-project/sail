@@ -351,6 +351,8 @@ let rec analyze_functions ctx f (AE_aux (aexp, env, l)) =
 
     | AE_assign (id, typ, aexp) -> AE_assign (id, typ, analyze_functions ctx f aexp)
 
+    | AE_write_ref (id, typ, aexp) -> AE_write_ref (id, typ, analyze_functions ctx f aexp)
+
     | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, analyze_functions ctx f aexp)
 
     | AE_let (mut, id, typ1, aexp1, (AE_aux (_, env2, _) as aexp2), typ2) ->

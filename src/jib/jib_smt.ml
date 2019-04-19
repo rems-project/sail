@@ -1262,6 +1262,9 @@ let smt_instr ctx =
        let smt_args = List.map (smt_cval ctx) args in
        [define_const ctx id ret_ctyp (Fn (zencode_id function_id, smt_args))]
 
+  | I_aux (I_copy (CL_addr (CL_id (_, _)), _), (_, l)) ->
+     Reporting.unreachable l __POS__ "Register reference write should be re-written by now"
+
   | I_aux (I_init (ctyp, id, cval), _) | I_aux (I_copy (CL_id (id, ctyp), cval), _) ->
      [define_const ctx id ctyp
         (smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval))]
@@ -1404,7 +1407,8 @@ let smt_header ctx stack cdefs =
 (* For generating SMT when we have a reg_deref(r : register(t))
    function, we have to expand it into a if-then-else cascade that
    checks if r is any one of the registers with type t, and reads that
-   register if it is. *)
+   register if it is. We also do a similar thing for *r = x
+*)
 let expand_reg_deref ctx = function
   | I_aux (I_funcall (clexp, false, function_id, [reg_ref]), (_, l)) as instr ->
      let open Type_check in
@@ -1431,6 +1435,26 @@ let expand_reg_deref ctx = function
            raise (Reporting.err_general l "Register dereference must have a register reference as an argument")
         end
      | _ -> instr
+     end
+  | I_aux (I_copy (CL_addr (CL_id (id, ctyp)), cval), (_, l)) ->
+     begin match ctyp with
+     | CT_ref reg_ctyp ->
+        begin match CTMap.find_opt reg_ctyp ctx.register_map with
+        | Some regs ->
+           let end_label = label "end_reg_write_" in
+           let try_reg r =
+             let next_label = label "next_reg_write_" in
+             [ijump (V_op (V_ref (name r, reg_ctyp), "!=", V_id (id, ctyp))) next_label;
+              icopy l (CL_id (name r, reg_ctyp)) cval;
+              igoto end_label;
+              ilabel next_label]
+           in
+           iblock (List.concat (List.map try_reg regs) @ [ilabel end_label])
+        | None ->
+           raise (Reporting.err_general l ("Could not find any registers with type " ^ string_of_ctyp reg_ctyp))
+        end
+     | _ ->
+        raise (Reporting.err_general l "Register reference assignment must take a register reference as an argument")
      end
   | instr -> instr
 

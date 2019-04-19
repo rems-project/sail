@@ -733,6 +733,15 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let setup, call, cleanup = compile_aexp ctx aexp in
      setup @ [call (CL_id (name id, assign_ctyp))], (fun clexp -> icopy l clexp unit_cval), cleanup
 
+  | AE_write_ref (id, assign_typ, aexp) ->
+     let assign_ctyp =
+       match Bindings.find_opt id ctx.locals with
+       | Some (_, ctyp) -> ctyp
+       | None -> ctyp_of_typ ctx assign_typ
+     in
+     let setup, call, cleanup = compile_aexp ctx aexp in
+     setup @ [call (CL_addr (CL_id (name id, assign_ctyp)))], (fun clexp -> icopy l clexp unit_cval), cleanup
+
   | AE_block (aexps, aexp, _) ->
      let block = compile_block ctx aexps in
      let setup, call, cleanup = compile_aexp ctx aexp in
