@@ -1225,9 +1225,10 @@ Ltac prepare_for_solver :=
  unfold_In; (* after unbool_comparisons to deal with && and || *)
  reduce_list_lengths;
  reduce_pow;
- (* omega doesn't cope well with extra "True"s in the goal *)
- repeat setoid_rewrite True_left;
- repeat setoid_rewrite True_right.
+ (* omega doesn't cope well with extra "True"s in the goal.
+    Check that they actually appear because setoid_rewrite can fill in evars. *)
+ repeat match goal with |- context[True /\ _] => setoid_rewrite True_left end;
+ repeat match goal with |- context[_ /\ True] => setoid_rewrite True_right end.
 
 Lemma trivial_range {x : Z} : ArithFact (x <= x /\ x <= x).
 constructor.
@@ -1292,7 +1293,7 @@ prepare_for_solver;
 constructor;
 repeat match goal with |- and _ _ => split end;
  solve
- [ match goal with |- (?x _) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) _) end
+ [ match goal with |- (?x ?y) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) y) end
  | apply ArithFact_mword; assumption
  | omega with Z
    (* Try sail hints before dropping the existential *)
