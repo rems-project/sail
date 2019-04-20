@@ -251,10 +251,11 @@ let rec rewrite_constant_function_calls' ast =
   let rewrite_count = ref 0 in
   let ok () = incr rewrite_count in
   let not_ok () = decr rewrite_count in
+  let istate = initial_state ast Type_check.initial_env in
 
   let rw_defs = {
       rewriters_base with
-      rewrite_exp = (fun _ -> rw_exp ok not_ok (initial_state ast Type_check.initial_env))
+      rewrite_exp = (fun _ -> rw_exp ok not_ok istate)
     } in
   let ast = rewrite_defs_base rw_defs ast in
   (* We keep iterating until we have no more re-writes to do *)

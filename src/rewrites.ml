@@ -2153,6 +2153,10 @@ let rewrite_simple_assignments env defs =
   let assign_e_aux e_aux annot =
     let env = env_of_annot annot in
     match e_aux with
+    | E_assign (LEXP_aux (LEXP_id _, _), _) ->
+       E_aux (e_aux, annot)
+    | E_assign (LEXP_aux (LEXP_cast (_, _), _), _) ->
+       E_aux (e_aux, annot)
     | E_assign (lexp, exp) ->
        let (lexp, rhs) = rewrite_lexp_to_rhs lexp in
        let assign = mk_exp (E_assign (strip_lexp lexp, strip_exp (rhs exp))) in
