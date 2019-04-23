@@ -330,19 +330,41 @@ let parse_sexps input =
   | Ok (result, _) -> result
   | Fail -> failwith "Parse failure"
 
-let rec find_arg id = function
-  | List [Atom "define-fun"; Atom str; List []; _; value] :: _ when (Ast_util.string_of_id id ^ "/0") = str ->
-     Some (id, value)
-  | _ :: sexps -> find_arg id sexps
-  | [] -> None
+let value_of_sexpr sexpr =
+  let open Jib in
+  let open Value in
+  function
+  | CT_fbits (n, _) ->
+     begin match sexpr with
+     | List [Atom "_"; Atom v; Atom m]
+          when int_of_string m = n && String.length v > 2 && String.sub v 0 2 = "bv" ->
+        let v = String.sub v 2 (String.length v - 2) in
+        mk_vector (Sail_lib.get_slice_int' (n, Big_int.of_string v, 0))
+     | _ -> failwith "Cannot parse sexpr as ctyp"
+     end
+  | _ -> assert false
+          
+let rec find_arg id ctyp arg_smt_names = function
+  | List [Atom "define-fun"; Atom str; List []; _; value] :: _
+       when Util.assoc_compare_opt Id.compare id arg_smt_names = Some (Some str) ->
+     (id, value_of_sexpr value ctyp)
+  | _ :: sexps -> find_arg id ctyp arg_smt_names sexps
+  | [] -> (id, V_unit)
 
-let build_counterexample args sexps =
-  Util.map_filter (fun id -> find_arg id sexps) args
-  |> List.fold_left (fun m (k, v) -> Bindings.add k v m) Bindings.empty
+let build_counterexample args arg_ctyps arg_smt_names model =
+  List.map2 (fun id ctyp -> find_arg id ctyp arg_smt_names model) args arg_ctyps
 
-let check_counterexample fname args =
+let rec run frame =
+  match frame with
+  | Interpreter.Done (state, v) -> v
+  | Interpreter.Step (lazy_str, _, _, _) ->
+     run (Interpreter.eval_frame frame)
+  | Interpreter.Break frame ->
+     run (Interpreter.eval_frame frame)
+  
+let check_counterexample ast env fname args arg_ctyps arg_smt_names =
   let open Printf in
-  prerr_endline ("Checking counterexample: " ^ fname ^ Util.string_of_list ", " Ast_util.string_of_id args);
+  prerr_endline ("Checking counterexample: " ^ fname);
   let in_chan = ksprintf Unix.open_process_in "cvc4 --lang=smt2.6 %s" fname in
   let lines = ref [] in
   begin
@@ -356,10 +378,20 @@ let check_counterexample fname args =
   let solver_output = List.rev !lines |> String.concat "\n" |> parse_sexps in
   begin match solver_output with
   | Atom "sat" :: List (Atom "model" :: model) :: _ ->
-     prerr_endline (sprintf "Solver found counterexample: %s" Util.("success" |> green |> clear));
-     let counterexample = build_counterexample args model in
-     if not (Bindings.cardinal counterexample = List.length args) then
-       ksprintf prerr_endline "Could not find all arguments in model %s" Util.("failure" |> red |> clear);
+     let open Value in
+     let open Interpreter in
+     prerr_endline (sprintf "Solver found counterexample: %s" Util.("ok" |> green |> clear));
+     let counterexample = build_counterexample args arg_ctyps arg_smt_names model in
+     List.iter (fun (id, v) -> prerr_endline ("  " ^ string_of_id id ^ " -> " ^ string_of_value v)) counterexample;
+     let istate = initial_state ast primops in
+     let annot = (Parse_ast.Unknown, Type_check.mk_tannot env bool_typ no_effect) in
+     let call = E_aux (E_app (mk_id "prop", List.map (fun (_, v) -> E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot))) counterexample), annot) in
+     let result = run (Step (lazy "", istate, return call, [])) in
+     begin match result with
+     | V_bool false ->
+        ksprintf prerr_endline "Replaying counterexample: %s" Util.("ok" |> green |> clear)
+     | _ -> ()
+     end
   | _ ->
      prerr_endline "failure"
   end;

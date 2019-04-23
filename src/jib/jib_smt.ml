@@ -55,6 +55,8 @@ open Jib
 open Jib_util
 open Smtlib
 
+module IntMap = Map.Make(struct type t = int let compare = compare end)
+   
 let zencode_upper_id id = Util.zencode_upper_string (string_of_id id)
 let zencode_id id = Util.zencode_string (string_of_id id)
 let zencode_name id = string_of_name ~deref_current_exception:false ~zencode:true id
@@ -72,7 +74,10 @@ type ctx = {
        We need to take care that vector_index is large enough for all generic vectors. *)
     vector_index : int;
     register_map : id list CTMap.t;
-    tc_env : Type_check.Env.t
+    tc_env : Type_check.Env.t;
+    pragma_l : Ast.l;
+    arg_stack : (int * string) Stack.t;
+    ast : Type_check.tannot defs
   }
 
 (* These give the default bounds for various SMT types, stored in the
@@ -88,7 +93,10 @@ let initial_ctx () = {
     lint_size = !opt_default_lint_size;
     vector_index = !opt_default_vector_index;
     register_map = CTMap.empty;
-    tc_env = Type_check.initial_env
+    tc_env = Type_check.initial_env;
+    pragma_l = Parse_ast.Unknown;
+    arg_stack = Stack.create ();
+    ast = Defs []
   }
 
 let lbits_size ctx = Util.power 2 ctx.lbits_index
@@ -273,14 +281,14 @@ let overflow_check smt =
 (* 1. Generating SMT for Sail builtins                                    *)
 (**************************************************************************)
 
-let builtin_type_error fn cvals =
+let builtin_type_error ctx fn cvals =
   let args = Util.string_of_list ", " (fun cval -> string_of_ctyp (cval_ctyp cval)) cvals in
   function
   | Some ret_ctyp ->
-     Reporting.unreachable Parse_ast.Unknown __POS__
+     Reporting.unreachable ctx.pragma_l __POS__
        (Printf.sprintf "%s : (%s) -> %s" fn args (string_of_ctyp ret_ctyp))
   | None ->
-     Reporting.unreachable Parse_ast.Unknown __POS__ (Printf.sprintf "%s : (%s)" fn args)
+     Reporting.unreachable ctx.pragma_l __POS__ (Printf.sprintf "%s : (%s)" fn args)
 
 (* ***** Basic comparisons: lib/flow.sail ***** *)
 
@@ -309,7 +317,7 @@ let builtin_int_comparison fn big_int_fn ctx v1 v2 =
      Fn (fn, [smt_cval ctx v1; bvint ctx.lint_size c])
   | CT_constant c1, CT_constant c2 ->
      Bool_lit (big_int_fn c1 c2)
-  | _, _ -> builtin_type_error fn [v1; v2] None
+  | _, _ -> builtin_type_error ctx fn [v1; v2] None
 
 let builtin_eq_int = builtin_int_comparison "=" Big_int.equal
 
@@ -344,7 +352,7 @@ let int_size ctx = function
   | CT_constant n -> required_width n
   | CT_fint sz -> sz
   | CT_lint -> ctx.lint_size
-  | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Argument to int_size must be an integer type"
+  | _ -> Reporting.unreachable ctx.pragma_l __POS__ "Argument to int_size must be an integer type"
 
 let builtin_arith fn big_int_fn padding ctx v1 v2 ret_ctyp =
   (* To detect arithmetic overflow we can expand the input bitvectors
@@ -429,7 +437,7 @@ let builtin_pow2 ctx v ret_ctyp =
   | CT_constant n, _ when Big_int.greater_equal n Big_int.zero ->
      bvint (int_size ctx ret_ctyp) (Big_int.pow_int_positive 2 (Big_int.to_int n))
 
-  | _ -> builtin_type_error "pow2" [v] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "pow2" [v] (Some ret_ctyp)
 
 let builtin_zeros ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
@@ -438,7 +446,7 @@ let builtin_zeros ctx v ret_ctyp =
      Fn ("Bits", [bvint ctx.lbits_index c; bvzero (lbits_size ctx)])
   | ctyp, CT_lbits _ when int_size ctx ctyp >= ctx.lbits_index ->
      Fn ("Bits", [extract (ctx.lbits_index - 1) 0 (smt_cval ctx v); bvzero (lbits_size ctx)])
-  | _ -> builtin_type_error "zeros" [v] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "zeros" [v] (Some ret_ctyp)
 
 let bvmask ctx len =
   let all_ones = bvones (lbits_size ctx) in
@@ -450,7 +458,7 @@ let builtin_ones ctx cval = function
   | CT_lbits _ ->
      let len = extract (ctx.lbits_index - 1) 0 (smt_cval ctx cval) in
      Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; bvones (lbits_size ctx)])]);
-  | ret_ctyp -> builtin_type_error "ones" [cval] (Some ret_ctyp)
+  | ret_ctyp -> builtin_type_error ctx "ones" [cval] (Some ret_ctyp)
 
 (* [bvzeint esz cval] (BitVector Zero Extend INTeger), takes a cval
    which must be an integer type (either CT_fint, or CT_lint), and
@@ -489,7 +497,7 @@ let builtin_zero_extend ctx vbits vlen ret_ctyp =
      in
      Fn ("Bits", [bvzeint ctx ctx.lbits_index vlen; vbits])
 
-  | _ -> builtin_type_error "zero_extend" [vbits; vlen] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "zero_extend" [vbits; vlen] (Some ret_ctyp)
 
 let builtin_sign_extend ctx vbits vlen ret_ctyp =
   match cval_ctyp vbits, ret_ctyp with
@@ -500,7 +508,7 @@ let builtin_sign_extend ctx vbits vlen ret_ctyp =
      let top_bit_one = Fn ("=", [Extract (n - 1, n - 1, bv); Bin "1"]) in
      Ite (top_bit_one, Fn ("concat", [bvones (m - n); bv]), Fn ("concat", [bvzero (m - n); bv]))
 
-  | _ -> builtin_type_error "sign_extend" [vbits; vlen] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "sign_extend" [vbits; vlen] (Some ret_ctyp)
 
 let builtin_shift shiftop ctx vbits vshift ret_ctyp =
   match cval_ctyp vbits with
@@ -514,7 +522,7 @@ let builtin_shift shiftop ctx vbits vshift ret_ctyp =
      let shift = bvzeint ctx (lbits_size ctx) vshift in
      Fn ("Bits", [Fn ("len", [bv]); Fn (shiftop, [Fn ("contents", [bv]); shift])])
 
-  | _ -> builtin_type_error shiftop [vbits; vshift] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx shiftop [vbits; vshift] (Some ret_ctyp)
 
 let builtin_not_bits ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
@@ -529,7 +537,7 @@ let builtin_not_bits ctx v ret_ctyp =
   | CT_fbits (n, _), CT_fbits (m, _) when n = m ->
      bvnot (smt_cval ctx v)
 
-  | _, _ -> builtin_type_error "not_bits" [v] (Some ret_ctyp)
+  | _, _ -> builtin_type_error ctx "not_bits" [v] (Some ret_ctyp)
 
 let builtin_bitwise fn ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2 with
@@ -544,7 +552,7 @@ let builtin_bitwise fn ctx v1 v2 ret_ctyp =
      let smt2 = smt_cval ctx v2 in
      Fn ("Bits", [Fn ("len", [smt1]); Fn (fn, [Fn ("contents", [smt1]); Fn ("contents", [smt2])])])
 
-  | _ -> builtin_type_error fn [v1; v2] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx fn [v1; v2] (Some ret_ctyp)
 
 let builtin_and_bits = builtin_bitwise "bvand"
 let builtin_or_bits = builtin_bitwise "bvor"
@@ -578,7 +586,7 @@ let builtin_append ctx v1 v2 ret_ctyp =
      let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); Fn ("len", [smt2])]) in
      Fn ("Bits", [bvadd (Fn ("len", [smt1])) (Fn ("len", [smt2])); bvor (bvshl x shift) (Fn ("contents", [smt2]))])
 
-  | _ -> builtin_type_error "append" [v1; v2] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "append" [v1; v2] (Some ret_ctyp)
 
 let builtin_length ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
@@ -596,7 +604,7 @@ let builtin_length ctx v ret_ctyp =
      else
        Extract (m - 1, 0, len)
 
-  | _, _ -> builtin_type_error "length" [v] (Some ret_ctyp)
+  | _, _ -> builtin_type_error ctx "length" [v] (Some ret_ctyp)
 
 let builtin_vector_subrange ctx vec i j ret_ctyp =
   match cval_ctyp vec, cval_ctyp i, cval_ctyp j with
@@ -615,7 +623,7 @@ let builtin_vector_access ctx vec i ret_ctyp =
   | CT_vector _, index_ctyp, _ ->
      Fn ("select", [smt_cval ctx vec; force_size !vector_index (int_size ctx index_ctyp) (smt_cval ctx i)])
 
-  | _ -> builtin_type_error "vector_access" [vec; i] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "vector_access" [vec; i] (Some ret_ctyp)
 
 let builtin_vector_update ctx vec i x ret_ctyp =
   match cval_ctyp vec, cval_ctyp i, cval_ctyp x, ret_ctyp with
@@ -638,7 +646,7 @@ let builtin_vector_update ctx vec i x ret_ctyp =
   | CT_vector _, index_ctyp, _, CT_vector _ ->
      Fn ("store", [smt_cval ctx vec; force_size !vector_index (int_size ctx index_ctyp) (smt_cval ctx i); smt_cval ctx x])
 
-  | _ -> builtin_type_error "vector_update" [vec; i; x] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "vector_update" [vec; i; x] (Some ret_ctyp)
 
 let builtin_unsigned ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
@@ -653,7 +661,7 @@ let builtin_unsigned ctx v ret_ctyp =
        let smt = smt_cval ctx v in
        Fn ("concat", [bvzero (ctx.lint_size - n); smt])
 
-  | ctyp, _ -> builtin_type_error "unsigned" [v] (Some ret_ctyp)
+  | ctyp, _ -> builtin_type_error ctx "unsigned" [v] (Some ret_ctyp)
 
 let builtin_signed ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
@@ -668,7 +676,7 @@ let builtin_add_bits ctx v1 v2 ret_ctyp =
      assert (n = m && m = o);
      Fn ("bvadd", [smt_cval ctx v1; smt_cval ctx v2])
 
-  | _ -> builtin_type_error "add_bits" [v1; v2] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "add_bits" [v1; v2] (Some ret_ctyp)
 
 let builtin_sub_bits ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
@@ -689,7 +697,7 @@ let builtin_add_bits_int ctx v1 v2 ret_ctyp =
   | CT_fbits (n, _), CT_lint, CT_fbits (o, _) when n = o ->
      Fn ("bvadd", [smt_cval ctx v1; force_size o ctx.lint_size (smt_cval ctx v2)])
 
-  | _ -> builtin_type_error "add_bits_int" [v1; v2] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "add_bits_int" [v1; v2] (Some ret_ctyp)
 
 let builtin_sub_bits_int ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
@@ -702,7 +710,7 @@ let builtin_sub_bits_int ctx v1 v2 ret_ctyp =
   | CT_fbits (n, _), CT_lint, CT_fbits (o, _) when n = o ->
      Fn ("bvsub", [smt_cval ctx v1; force_size o ctx.lint_size (smt_cval ctx v2)])
 
-  | _ -> builtin_type_error "sub_bits_int" [v1; v2] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "sub_bits_int" [v1; v2] (Some ret_ctyp)
 
 let builtin_replicate_bits ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
@@ -717,7 +725,7 @@ let builtin_replicate_bits ctx v1 v2 ret_ctyp =
      in
      assert false*)
 
-  | _ -> builtin_type_error "replicate_bits" [v1; v2] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "replicate_bits" [v1; v2] (Some ret_ctyp)
 
 let builtin_sail_truncate ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
@@ -758,7 +766,7 @@ let builtin_slice ctx v1 v2 v3 ret_ctyp =
      let smt3 = bvzeint ctx ctx.lbits_index v3 in
      Fn ("Bits", [smt3; Fn ("bvand", [Fn ("bvlshr", [smt1; smt2]); bvmask ctx smt3])])
 
-  | _ -> builtin_type_error "slice" [v1; v2; v3] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "slice" [v1; v2; v3] (Some ret_ctyp)
 
 let builtin_get_slice_int ctx v1 v2 v3 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, ret_ctyp with
@@ -774,7 +782,7 @@ let builtin_get_slice_int ctx v1 v2 v3 ret_ctyp =
      in
      Extract ((start + len) - 1, start, smt)
 
-  | _, _, _, _ -> builtin_type_error "get_slice_int" [v1; v2; v3] (Some ret_ctyp)
+  | _, _, _, _ -> builtin_type_error ctx "get_slice_int" [v1; v2; v3] (Some ret_ctyp)
 
 let builtin_count_leading_zeros ctx v ret_ctyp =
   let ret_sz = int_size ctx ret_ctyp in
@@ -815,7 +823,7 @@ let builtin_count_leading_zeros ctx v ret_ctyp =
                    Fn ("bvsub", [bvint ret_sz (Big_int.of_int (lbits_size ctx));
                                  Fn ("concat", [bvzero (ret_sz - ctx.lbits_index); Fn ("len", [smt])])])])
 
-  | _ -> builtin_type_error "count_leading_zeros" [v] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "count_leading_zeros" [v] (Some ret_ctyp)
 
 let builtin_set_slice_bits ctx v1 v2 v3 v4 v5 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, cval_ctyp v4, cval_ctyp v5, ret_ctyp with
@@ -835,14 +843,14 @@ let builtin_set_slice_bits ctx v1 v2 v3 v4 v5 ret_ctyp =
        let smt5 = Fn ("concat", [bvzero (n - m - pos); Fn ("concat", [smt_cval ctx v5; bvzero pos])]) in
        Fn ("bvor", [Fn ("bvand", [smt_cval ctx v3; mask]); smt5])
 
-  | _ -> builtin_type_error "set_slice" [v1; v2; v3; v4; v5] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "set_slice" [v1; v2; v3; v4; v5] (Some ret_ctyp)
 
 let builtin_compare_bits fn ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2 with
   | CT_fbits (n, _), CT_fbits (m, _) when n = m ->
      Fn (fn, [smt_cval ctx v1; smt_cval ctx v2])
 
-  | _ -> builtin_type_error fn [v1; v2] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx fn [v1; v2] (Some ret_ctyp)
 
 let smt_builtin ctx name args ret_ctyp =
   match name, args, ret_ctyp with
@@ -1271,7 +1279,15 @@ let smt_instr ctx =
      let write, ctyp = rmw_write clexp in
      [define_const ctx write ctyp (rmw_modify smt clexp)]
 
-  | I_aux (I_decl (ctyp, id), _) ->
+  | I_aux (I_decl (ctyp, id), (_, l)) ->
+     (* Function arguments have unique locations defined from the
+        $property pragma. We record how they will appear in the
+        generated SMT so we can check models. *)
+     begin match l with
+     | Unique (n, l') when l' = ctx.pragma_l ->
+        Stack.push (n, zencode_name id) ctx.arg_stack
+     | _ -> ()
+     end;
      [declare_const ctx id ctyp]
 
   | I_aux (I_end id, _) ->
@@ -1464,8 +1480,13 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         let stack = Stack.create () in
 
         smt_header ctx stack all_cdefs;
+
+        let ctx = { ctx with pragma_l = pragma_l; arg_stack = Stack.create () } in
+        
+        (* When we create each argument declaration, give it a unique
+           location from the $property pragma, so we can identify it later. *)
         let arg_decls =
-          List.map2 (fun id ctyp -> idecl ctyp (name id)) args arg_ctyps
+          List.map2 (fun id ctyp -> let l = unique pragma_l in idecl ~loc:l ctyp (name id)) args arg_ctyps
         in
         let instrs =
           let open Jib_optimize in
@@ -1477,15 +1498,11 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           |> remove_pointless_goto
         in
 
-        let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_instr instrs) in
-        prerr_endline str;
+        (* let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_instr instrs) in
+        prerr_endline str; *)
 
         let open Jib_ssa in
         let start, cfg = ssa instrs in
-        (* let chan = open_out "smt_ssa.gv" in
-        make_dot chan cfg;
-        close_out chan; *)
-
         let visit_order = topsort cfg in
 
         List.iter (fun n ->
@@ -1507,9 +1524,6 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           output_string out_chan "(set-option :produce-models true)\n";
         output_string out_chan "(set-logic QF_AUFBVDT)\n";
 
-        (* let stack' = Stack.create () in
-        Stack.iter (fun def -> Stack.push def stack') stack;
-        Stack.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") stack'; *)
         let queue = optimize_smt stack in
         Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
 
@@ -1518,8 +1532,17 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           output_string out_chan "(get-model)\n";
 
         close_out out_chan;
-        if prop_type = "counterexample" && !opt_auto then
-          check_counterexample fname args
+        if prop_type = "counterexample" && !opt_auto then (
+          let arg_names = Stack.fold (fun m (k, v) -> (k, v) :: m) [] ctx.arg_stack in
+          let arg_smt_names =
+            List.map (function
+                | (I_aux (I_decl (_, Name (id, _)), (_, Unique (n, _)))) ->
+                   (id, List.assoc_opt n arg_names)
+                | _ -> assert false
+              ) arg_decls
+          in
+          check_counterexample ctx.ast ctx.tc_env fname args arg_ctyps arg_smt_names
+        );
 
      | _ -> failwith "Bad function body"
      end
@@ -1570,7 +1593,7 @@ let generate_smt props name_file env ast =
     let cdefs = Jib_optimize.unique_per_function_ids cdefs in
     let rmap = build_register_map CTMap.empty cdefs in
 
-    smt_cdefs props [] name_file { (initial_ctx ()) with tc_env = env; register_map = rmap } cdefs cdefs
+    smt_cdefs props [] name_file { (initial_ctx ()) with tc_env = env; register_map = rmap; ast = ast } cdefs cdefs
   with
   | Type_check.Type_error (_, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err));
