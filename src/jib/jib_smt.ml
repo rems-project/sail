@@ -301,6 +301,8 @@ let builtin_int_comparison fn big_int_fn ctx v1 v2 =
      Fn (fn, [smt_cval ctx v1; bvint sz c])
   | CT_fint sz, CT_lint when sz < ctx.lint_size ->
      Fn (fn, [SignExtend (ctx.lint_size - sz, smt_cval ctx v1); smt_cval ctx v2])
+  | CT_lint, CT_fint sz when sz < ctx.lint_size ->
+     Fn (fn, [smt_cval ctx v1; SignExtend (ctx.lint_size - sz, smt_cval ctx v2)])
   | CT_lint, CT_constant c ->
      Fn (fn, [smt_cval ctx v1; bvint ctx.lint_size c])
   | CT_constant c1, CT_constant c2 ->
@@ -663,6 +665,13 @@ let builtin_unsigned ctx v ret_ctyp =
 
   | ctyp, _ -> failwith (Printf.sprintf "Cannot compile unsigned : %s -> %s" (string_of_ctyp ctyp) (string_of_ctyp ret_ctyp))
 
+let builtin_signed ctx v ret_ctyp =
+  match cval_ctyp v, ret_ctyp with
+  | CT_fbits (n, _), CT_fint m when m > n ->
+     SignExtend(m - n, smt_cval ctx v)
+
+  | ctyp, _ -> failwith (Printf.sprintf "Cannot compile signed : %s -> %s" (string_of_ctyp ctyp) (string_of_ctyp ret_ctyp))
+
 let builtin_add_bits ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
   | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
@@ -909,6 +918,7 @@ let smt_builtin ctx name args ret_ctyp =
   | "vector_subrange", [v1; v2; v3], ret_ctyp -> builtin_vector_subrange ctx v1 v2 v3 ret_ctyp
   | "vector_update", [v1; v2; v3], ret_ctyp -> builtin_vector_update ctx v1 v2 v3 ret_ctyp
   | "sail_unsigned", [v], ret_ctyp -> builtin_unsigned ctx v ret_ctyp
+  | "sail_signed", [v], ret_ctyp -> builtin_signed ctx v ret_ctyp
   | "replicate_bits", [v1; v2], ret_ctyp -> builtin_replicate_bits ctx v1 v2 ret_ctyp
   | "count_leading_zeros", [v], ret_ctyp -> builtin_count_leading_zeros ctx v ret_ctyp
   | "slice", [v1; v2; v3], ret_ctyp -> builtin_slice ctx v1 v2 v3 ret_ctyp
