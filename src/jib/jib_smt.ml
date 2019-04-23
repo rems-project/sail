@@ -61,6 +61,8 @@ let zencode_name id = string_of_name ~deref_current_exception:false ~zencode:tru
 
 let opt_ignore_overflow = ref false
 
+let opt_auto = ref false
+
 type ctx = {
     (* Arbitrary-precision bitvectors are represented as a (BitVec lbits_index, BitVec (2 ^ lbits_index)) pair. *)
     lbits_index : int;
@@ -498,7 +500,7 @@ let builtin_sign_extend ctx vbits vlen ret_ctyp =
      let top_bit_one = Fn ("=", [Extract (n - 1, n - 1, bv); Bin "1"]) in
      Ite (top_bit_one, Fn ("concat", [bvones (m - n); bv]), Fn ("concat", [bvzero (m - n); bv]))
 
-  | _ -> failwith "Cannot compile zero_extend"
+  | _ -> builtin_type_error "sign_extend" [vbits; vlen] (Some ret_ctyp)
 
 let builtin_shift shiftop ctx vbits vshift ret_ctyp =
   match cval_ctyp vbits with
@@ -512,7 +514,7 @@ let builtin_shift shiftop ctx vbits vshift ret_ctyp =
      let shift = bvzeint ctx (lbits_size ctx) vshift in
      Fn ("Bits", [Fn ("len", [bv]); Fn (shiftop, [Fn ("contents", [bv]); shift])])
 
-  | _ -> failwith ("Cannot compile shift: " ^ shiftop)
+  | _ -> builtin_type_error shiftop [vbits; vshift] (Some ret_ctyp)
 
 let builtin_not_bits ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
@@ -529,35 +531,23 @@ let builtin_not_bits ctx v ret_ctyp =
 
   | _, _ -> builtin_type_error "not_bits" [v] (Some ret_ctyp)
 
-let builtin_or_bits ctx v1 v2 ret_ctyp =
+let builtin_bitwise fn ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2 with
   | CT_fbits (n, _), CT_fbits (m, _) ->
      assert (n = m);
      let smt1 = smt_cval ctx v1 in
      let smt2 = smt_cval ctx v2 in
-     bvor smt1 smt2
+     Fn (fn, [smt1; smt2])
 
   | CT_lbits _, CT_lbits _ ->
      let smt1 = smt_cval ctx v1 in
      let smt2 = smt_cval ctx v2 in
-     Fn ("Bits", [Fn ("len", [smt1]); bvor (Fn ("contents", [smt1])) (Fn ("contents", [smt2]))])
+     Fn ("Bits", [Fn ("len", [smt1]); Fn (fn, [Fn ("contents", [smt1]); Fn ("contents", [smt2])])])
 
-  | _ -> failwith "Cannot compile or_bits"
+  | _ -> builtin_type_error fn [v1; v2] (Some ret_ctyp)
 
-let builtin_and_bits ctx v1 v2 ret_ctyp =
-  match cval_ctyp v1, cval_ctyp v2 with
-  | CT_fbits (n, _), CT_fbits (m, _) ->
-     assert (n = m);
-     let smt1 = smt_cval ctx v1 in
-     let smt2 = smt_cval ctx v2 in
-     bvand smt1 smt2
-
-  | CT_lbits _, CT_lbits _ ->
-     let smt1 = smt_cval ctx v1 in
-     let smt2 = smt_cval ctx v2 in
-     Fn ("Bits", [Fn ("len", [smt1]); bvand (Fn ("contents", [smt1])) (Fn ("contents", [smt2]))])
-
-  | _ -> failwith "Cannot compile or_bits"
+let builtin_and_bits = builtin_bitwise "bvand"
+let builtin_or_bits = builtin_bitwise "bvor"
 
 let builtin_append ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
@@ -663,7 +653,7 @@ let builtin_unsigned ctx v ret_ctyp =
        let smt = smt_cval ctx v in
        Fn ("concat", [bvzero (ctx.lint_size - n); smt])
 
-  | ctyp, _ -> failwith (Printf.sprintf "Cannot compile unsigned : %s -> %s" (string_of_ctyp ctyp) (string_of_ctyp ret_ctyp))
+  | ctyp, _ -> builtin_type_error "unsigned" [v] (Some ret_ctyp)
 
 let builtin_signed ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
@@ -1016,10 +1006,7 @@ let rec ctyp_of_typ ctx typ =
   | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
      CT_list (ctyp_of_typ ctx typ)
 
-  (* When converting a sail bitvector type into C, we have three options in order of efficiency:
-     - If the length is obviously static and smaller than 64, use the fixed bits type (aka uint64_t), fbits.
-     - If the length is less than 64, then use a small bits type, sbits.
-     - If the length may be larger than 64, use a large bits type lbits. *)
+  (* Note that we have to use lbits for zero-length bitvectors because they are not allowed by SMTLIB *)
   | Typ_app (id, [A_aux (A_nexp n, _);
                   A_aux (A_order ord, _);
                   A_aux (A_typ (Typ_aux (Typ_id vtyp_id, _)), _)])
@@ -1477,14 +1464,12 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         let stack = Stack.create () in
 
         smt_header ctx stack all_cdefs;
-        let smt_args =
-          List.map2 (fun id ctyp -> declare_const ctx (Name (id, 0)) ctyp) args arg_ctyps
+        let arg_decls =
+          List.map2 (fun id ctyp -> idecl ctyp (name id)) args arg_ctyps
         in
-        push_smt_defs stack smt_args;
-
         let instrs =
           let open Jib_optimize in
-          (lets @ intervening_lets @ instrs)
+          (lets @ intervening_lets @ arg_decls @ instrs)
           |> inline all_cdefs (fun _ -> true)
           |> List.map (map_instr (expand_reg_deref ctx))
           |> flatten_instrs
@@ -1516,7 +1501,8 @@ let smt_cdef props lets name_file ctx all_cdefs = function
             end
           ) visit_order;
 
-        let out_chan = open_out (name_file (string_of_id function_id)) in
+        let fname = name_file (string_of_id function_id) in
+        let out_chan = open_out fname in
         if prop_type = "counterexample" then
           output_string out_chan "(set-option :produce-models true)\n";
         output_string out_chan "(set-logic QF_AUFBVDT)\n";
@@ -1529,7 +1515,11 @@ let smt_cdef props lets name_file ctx all_cdefs = function
 
         output_string out_chan "(check-sat)\n";
         if prop_type = "counterexample" then
-          output_string out_chan "(get-model)\n"
+          output_string out_chan "(get-model)\n";
+
+        close_out out_chan;
+        if prop_type = "counterexample" then
+          check_counterexample fname args
 
      | _ -> failwith "Bad function body"
      end

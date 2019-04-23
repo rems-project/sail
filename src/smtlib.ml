@@ -48,6 +48,9 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+open Ast
+open Ast_util
+
 type smt_typ =
   | Bitvec of int
   | Bool
@@ -244,3 +247,121 @@ let string_of_smt_def def = Pretty_print_sail.to_string (pp_smt_def def)
 
 let output_smt_defs out_chan smt =
   List.iter (fun def -> output_string out_chan (string_of_smt_def def ^ "\n")) smt
+
+(**************************************************************************)
+(* 2. Parser for SMT solver output                                        *)
+(**************************************************************************)
+
+(* Output format from each SMT solver does not seem to be completely
+   standardised, unlike the SMTLIB input format, but usually is some
+   form of s-expression based representation. Therefore we define a
+   simple parser for s-expressions using monadic parser combinators. *)
+
+type sexpr = List of (sexpr list) | Atom of string
+
+let rec string_of_sexpr = function
+  | List sexprs -> "(" ^ Util.string_of_list " " string_of_sexpr sexprs ^ ")"
+  | Atom str -> str
+
+type 'a parse_result =
+  | Ok of 'a * Str.split_result list
+  | Fail
+
+type 'a parser = Str.split_result list -> 'a parse_result
+
+let (>>=) (m : 'a parser) (f : 'a -> 'b parser) (toks : Str.split_result list) =
+  match m toks with
+  | Ok (r, toks) -> f r toks
+  | Fail -> Fail
+
+let pmap f m toks =
+  match m toks with
+  | Ok (r, toks) -> Ok (f r, toks)
+  | Fail -> Fail
+
+let token f = function
+  | tok :: toks ->
+     begin match f tok with
+     | Some x -> Ok (x, toks)
+     | None -> Fail
+     end
+  | [] -> Fail
+
+let preturn x toks = Ok (x, toks)
+
+let rec plist m toks =
+  match m toks with
+  | Ok (x, toks) ->
+     begin match plist m toks with
+     | Ok (xs, toks) -> Ok (x :: xs, toks)
+     | Fail -> Fail
+     end
+  | Fail -> Ok ([], toks)
+
+let pchoose m n toks =
+  match m toks with
+  | Fail -> n toks
+  | Ok (x, toks) -> Ok (x, toks)
+
+let lparen = token (function Str.Delim "(" -> Some () | _ -> None)
+let rparen = token (function Str.Delim ")" -> Some () | _ -> None)
+let atom   = token (function Str.Text str -> Some str | _ -> None)
+
+let rec sexp toks =
+  let parse =
+    pchoose
+      (atom >>= fun str -> preturn (Atom str))
+      (lparen     >>= fun _ ->
+       plist sexp >>= fun xs ->
+       rparen     >>= fun _ ->
+       preturn (List xs))
+  in
+  parse toks
+
+let parse_sexps input =
+  let delim = Str.regexp "[ \n\t]+\\|(\\|)" in
+  let tokens = Str.full_split delim input in
+  let non_whitespace = function
+    | Str.Delim "(" | Str.Delim ")" | Str.Text _ -> true
+    | Str.Delim _ -> false
+  in
+  let tokens = List.filter non_whitespace tokens in
+  match plist sexp tokens with
+  | Ok (result, _) -> result
+  | Fail -> failwith "Parse failure"
+
+let rec find_arg id = function
+  | List [Atom "define-fun"; Atom str; List []; _; value] :: _ when (Ast_util.string_of_id id ^ "/0") = str ->
+     Some (id, value)
+  | _ :: sexps -> find_arg id sexps
+  | [] -> None
+
+let build_counterexample args sexps =
+  Util.map_filter (fun id -> find_arg id sexps) args
+  |> List.fold_left (fun m (k, v) -> Bindings.add k v m) Bindings.empty
+
+let check_counterexample fname args =
+  let open Printf in
+  prerr_endline ("Checking counterexample: " ^ fname ^ Util.string_of_list ", " Ast_util.string_of_id args);
+  let in_chan = ksprintf Unix.open_process_in "cvc4 --lang=smt2.6 %s" fname in
+  let lines = ref [] in
+  begin
+    try
+      while true do
+        lines := input_line in_chan :: !lines
+      done
+    with
+    | End_of_file -> ()
+  end;
+  let solver_output = List.rev !lines |> String.concat "\n" |> parse_sexps in
+  begin match solver_output with
+  | Atom "sat" :: List (Atom "model" :: model) :: _ ->
+     prerr_endline (sprintf "Solver found counterexample: %s" Util.("success" |> green |> clear));
+     let counterexample = build_counterexample args model in
+     if not (Bindings.cardinal counterexample = List.length args) then
+       ksprintf prerr_endline "Could not find all arguments in model %s" Util.("failure" |> red |> clear);
+  | _ ->
+     prerr_endline "failure"
+  end;
+  let status = Unix.close_process_in in_chan in
+  ()

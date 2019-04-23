@@ -127,6 +127,9 @@ let options = Arg.align ([
   ( "-smt",
     set_target "smt",
     " print SMT translated version of input");
+  ( "-smt_auto",
+    Arg.Tuple [set_target "smt"; Arg.Set Jib_smt.opt_auto],
+    " generate SMT and automatically call the solver (implies -smt)");
   ( "-smt_ignore_overflow",
     Arg.Set Jib_smt.opt_ignore_overflow,
     " ignore integer overflow in generated SMT");
