@@ -1518,7 +1518,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           output_string out_chan "(get-model)\n";
 
         close_out out_chan;
-        if prop_type = "counterexample" then
+        if prop_type = "counterexample" && !opt_auto then
           check_counterexample fname args
 
      | _ -> failwith "Bad function body"
