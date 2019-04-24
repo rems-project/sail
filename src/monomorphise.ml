@@ -249,7 +249,18 @@ let rec size_nvars_nexp (Nexp_aux (ne,_)) =
 
 (* Given a type for a constructor, work out which refinements we ought to produce *)
 (* TODO collision avoidance *)
-let split_src_type id ty (TypQ_aux (q,ql)) =
+let split_src_type all_errors id ty (TypQ_aux (q,ql)) =
+  let cannot l msg default =
+    let open Reporting in
+    let error = Err_general (l, msg) in
+    match all_errors with
+    | None -> raise (Fatal_error error)
+    | Some flag -> begin
+        flag := false;
+        print_error error;
+        default
+      end
+  in
   let i = string_of_id id in
   (* This was originally written for the general case, but I cut it down to the
      more manageable prenex-form below *)
@@ -259,9 +270,9 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
     | Typ_var _
       -> (KidSet.empty,[[],typ])
     | Typ_fn _ ->
-       raise (Reporting.err_general l ("Function type in constructor " ^ i))
+       cannot l ("Function type in constructor " ^ i) (KidSet.empty,[[],typ])
     | Typ_bidir _ ->
-       raise (Reporting.err_general l ("Mapping type in constructor " ^ i))
+       cannot l ("Mapping type in constructor " ^ i) (KidSet.empty,[[],typ])
     | Typ_tup ts ->
        let (vars,tys) = List.split (List.map size_nvars_ty ts) in
        let insttys = List.map (fun x -> let (insts,tys) = List.split x in
@@ -318,11 +329,10 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
                 | Typ_aux (Typ_tup _,_) -> Typ_aux (Typ_tup [ty],Unknown)
                 | _ -> ty) tys in
             if contains_exist t then
-              raise (Reporting.err_general l
-                       "Only prenex types in unions are supported by monomorphisation")
+              cannot l "Only prenex types in unions are supported by monomorphisation" []
             else if List.length kids > 1 then
-              raise (Reporting.err_general l
-                       "Only single-variable existential types in unions are currently supported by monomorphisation")
+              cannot l
+                "Only single-variable existential types in unions are currently supported by monomorphisation" []
             else tys
        end
     | _ -> []
@@ -332,11 +342,11 @@ let split_src_type id ty (TypQ_aux (q,ql)) =
   match variants with
   | [] -> None
   | sample::__ ->
-     let () = if List.length variants > size_set_limit then
-         raise (Reporting.err_general ql
-                  (string_of_int (List.length variants) ^ "variants for constructor " ^ i ^
-                     "bigger than limit " ^ string_of_int size_set_limit)) else ()
-     in
+     if List.length variants > size_set_limit then
+       cannot ql
+         (string_of_int (List.length variants) ^ "variants for constructor " ^ i ^
+            "bigger than limit " ^ string_of_int size_set_limit) None
+     else
      let wrap = match id with
        | Id_aux (Id i,l) -> (fun f -> Id_aux (Id (f i),Generated l))
        | Id_aux (Operator i,l) -> (fun f -> Id_aux (Operator (f i),l))
@@ -616,9 +626,10 @@ let apply_pat_choices choices =
 
 let split_defs all_errors splits defs =
   let no_errors_happened = ref true in
+  let error_opt = if all_errors then Some no_errors_happened else None in
   let split_constructors (Defs defs) =
     let sc_type_union q (Tu_aux (Tu_ty_id (ty, id), l)) =
-      match split_src_type id ty q with
+      match split_src_type error_opt id ty q with
       | None -> ([],[Tu_aux (Tu_ty_id (ty,id),l)])
       | Some variants ->
          ([(id,variants)],
