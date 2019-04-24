@@ -56,7 +56,7 @@ open Jib_util
 open Smtlib
 
 module IntMap = Map.Make(struct type t = int let compare = compare end)
-   
+
 let zencode_upper_id id = Util.zencode_upper_string (string_of_id id)
 let zencode_id id = Util.zencode_string (string_of_id id)
 let zencode_name id = string_of_name ~deref_current_exception:false ~zencode:true id
@@ -1481,8 +1481,9 @@ let smt_cdef props lets name_file ctx all_cdefs = function
 
         smt_header ctx stack all_cdefs;
 
+        Stack.clear overflow_checks;
         let ctx = { ctx with pragma_l = pragma_l; arg_stack = Stack.create () } in
-        
+
         (* When we create each argument declaration, give it a unique
            location from the $property pragma, so we can identify it later. *)
         let arg_decls =

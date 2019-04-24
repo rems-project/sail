@@ -94,9 +94,10 @@ void write_mem(uint64_t address, uint64_t byte)
   uint64_t mask = address & ~MASK;
   uint64_t offset = address & MASK;
 
-  //if ((byte >= 97 && byte <= 122) || (byte >= 64 && byte <= 90) || (byte >= 48 && byte <= 57) || byte == 10 || byte == 32) {
-  //  fprintf(stderr, "%c", (char) byte);
-  //}
+  /* if ((byte >= 97 && byte <= 122) || (byte >= 64 && byte <= 90) || (byte >= 48 && byte <= 57) || byte == 10 || byte == 32) {
+    fprintf(stderr, "%" PRIx64 "\n", address);
+    fprintf(stderr, "%c", (char) byte);
+  } */
 
   struct block *current = sail_memory;
 
