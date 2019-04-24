@@ -1,14 +1,5 @@
-$include <smt.sail>
-$include <flow.sail>
 default Order dec
-type bits ('n : Int) = vector('n, dec, bit)
-val operator & = "and_bool" : (bool, bool) -> bool
-val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
-overload operator == = {eq_int, eq_vec}
-val mult_int = {ocaml: "mult", lem: "integerMult"} : (int, int) -> int
-overload operator * = {mult_range, mult_int, mult_real}
-val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
-overload operator < = {lt_atom, lt_int}
+$include <prelude.sail>
 
 /* Should find a set constraint below the let */
 
