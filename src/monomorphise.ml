@@ -3182,6 +3182,7 @@ let make_bitvector_env_casts env quant_kids (kid,i) exp =
     if mut = Immutable then mk_cast var typ exp else exp) locals exp
 
 let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
+  if alpha_equivalent cast_env typ target_typ then exp else
   let infer_arg_typ env f l typ =
     let (typq, ctor_typ) = Env.get_union_id f env in
     let quants = quant_items typq in
