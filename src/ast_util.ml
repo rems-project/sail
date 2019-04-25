@@ -691,11 +691,15 @@ and map_def_annot f = function
   | DEF_default ds -> DEF_default ds
   | DEF_scattered sd -> DEF_scattered (map_scattered_annot f sd)
   | DEF_measure (id, pat, exp) -> DEF_measure (id, map_pat_annot f pat, map_exp_annot f exp)
+  | DEF_loop_measures (id, measures) -> DEF_loop_measures (id, List.map (map_loop_measure_annot f) measures)
   | DEF_reg_dec ds -> DEF_reg_dec (map_decspec_annot f ds)
   | DEF_internal_mutrec fds -> DEF_internal_mutrec (List.map (map_fundef_annot f) fds)
   | DEF_pragma (name, arg, l) -> DEF_pragma (name, arg, l)
 and map_defs_annot f = function
   | Defs defs -> Defs (List.map (map_def_annot f) defs)
+
+and map_loop_measure_annot f = function
+  | Loop (loop, exp) -> Loop (loop, map_exp_annot f exp)
 
 let id_loc = function
   | Id_aux (_, l) -> l
