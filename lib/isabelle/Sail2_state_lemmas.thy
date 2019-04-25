@@ -91,7 +91,7 @@ lemma liftState_read_memt[liftState_simp]:
            split: option.splits intro: bindS_cong)
 
 lemma liftState_read_mem[liftState_simp]:
-  shows "liftState r (read_mem BCa BCb rk a sz) = read_memS BCa BCb rk a sz"
+  shows "liftState r (read_mem BCa BCb rk asz a sz) = read_memS BCa BCb rk a sz"
   by (auto simp: read_mem_def read_mem_bytes_def read_memS_def read_mem_bytesS_def maybe_failS_def
                  read_memtS_def
                  prod.case_distrib option.case_distrib[where h = "liftState r"]
@@ -100,7 +100,7 @@ lemma liftState_read_mem[liftState_simp]:
 
 lemma liftState_write_mem_ea_BC:
   assumes "unsigned_method BCa a = Some a'"
-  shows "liftState r (write_mem_ea BCa rk a sz) = returnS ()"
+  shows "liftState r (write_mem_ea BCa rk asz a sz) = returnS ()"
   using assms by (auto simp: write_mem_ea_def nat_of_bv_def maybe_fail_def)
 
 (*lemma liftState_write_mem_ea[liftState_simp]:
@@ -118,7 +118,7 @@ lemma liftState_write_memt[liftState_simp]:
   by (auto simp: write_memt_def write_memtS_def liftState_simp split: option.splits)
 
 lemma liftState_write_mem[liftState_simp]:
-  "liftState r (write_mem BCa BCv wk addr sz v) = write_memS BCa BCv wk addr sz v"
+  "liftState r (write_mem BCa BCv wk addrsize addr sz v) = write_memS BCa BCv wk addr sz v"
   by (auto simp: write_mem_def write_memS_def write_memtS_def write_mem_bytesS_def liftState_simp
            split: option.splits)
 
