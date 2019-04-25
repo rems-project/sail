@@ -1410,6 +1410,7 @@ let smt_header ctx stack cdefs =
      Declare_tuple 3;
      Declare_tuple 4;
      Declare_tuple 5;
+     Declare_tuple 6;
      declare_datatypes (mk_record "Bits" [("len", Bitvec ctx.lbits_index);
                                           ("contents", Bitvec (lbits_size ctx))])
 
@@ -1504,7 +1505,17 @@ let smt_cdef props lets name_file ctx all_cdefs = function
 
         let open Jib_ssa in
         let start, cfg = ssa instrs in
-        let visit_order = topsort cfg in
+        let visit_order =
+          try topsort cfg with
+          | Not_a_DAG n ->
+             let gv_file = string_of_id function_id ^ ".gv" in
+             let out_chan = open_out gv_file in
+             make_dot out_chan cfg;
+             close_out out_chan;
+             raise (Reporting.err_general pragma_l
+                      (Printf.sprintf "$%s %s: control flow graph is not acyclic (node %d is in cycle)\nWrote graph to %s"
+                         prop_type (string_of_id function_id) n gv_file))
+        in
 
         List.iter (fun n ->
             begin match get_vertex cfg n with

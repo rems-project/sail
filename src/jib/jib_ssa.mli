@@ -73,6 +73,8 @@ val add_vertex : 'a -> 'a array_graph -> int
    if either of the vertices do not exist. *)
 val add_edge : int -> int -> 'a array_graph -> unit
 
+exception Not_a_DAG of int
+
 val topsort : 'a array_graph -> int list
 
 type cf_node =

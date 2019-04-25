@@ -124,6 +124,8 @@ let reachable roots graph =
   in
   IntSet.iter reachable' roots; !visited
 
+exception Not_a_DAG of int;;
+  
 let topsort graph =
   let marked = ref IntSet.empty in
   let temp_marked = ref IntSet.empty in
@@ -131,7 +133,7 @@ let topsort graph =
 
   let rec visit node =
     if IntSet.mem node !temp_marked then
-      failwith "Not a DAG"
+      raise (Not_a_DAG node)
     else if IntSet.mem node !marked then
       ()
     else
