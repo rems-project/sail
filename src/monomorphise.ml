@@ -167,7 +167,9 @@ let rec split_insts = function
 
 let apply_kid_insts kid_insts t =
   let kid_insts, kids' = split_insts kid_insts in
-  let kid_insts = List.map (fun (v,i) -> (v,Nexp_aux (Nexp_constant i,Generated Unknown))) kid_insts in
+  let kid_insts = List.map
+    (fun (v,i) -> (kopt_kid v,Nexp_aux (Nexp_constant i,Generated Unknown)))
+    kid_insts in
   let subst = kbindings_from_list kid_insts in
   kids', subst_kids_typ subst t
 
@@ -193,14 +195,12 @@ let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
          args (insts,[])
      in insts, Typ_aux (Typ_app (id,ts),l)
   | Typ_exist (kopts, nc, t) -> begin
-      (* TODO handle non-integer existentials *)
-     let kids = List.map kopt_kid kopts in
-     let kid_insts, insts' = peel (kids,insts) in
-     let kids', t' = apply_kid_insts kid_insts t in
+     let kid_insts, insts' = peel (kopts,insts) in
+     let kopts', t' = apply_kid_insts kid_insts t in
      (* TODO: subst in nc *)
-     match kids' with
+     match kopts' with
      | [] -> insts', t'
-     | _ -> insts', Typ_aux (Typ_exist (List.map (mk_kopt K_int) kids', nc, t'), l)
+     | _ -> insts', Typ_aux (Typ_exist (kopts', nc, t'), l)
     end
   | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and inst_src_typ_arg insts (A_aux (ta,l) as tyarg) =
@@ -249,7 +249,7 @@ let rec size_nvars_nexp (Nexp_aux (ne,_)) =
 
 (* Given a type for a constructor, work out which refinements we ought to produce *)
 (* TODO collision avoidance *)
-let split_src_type all_errors id ty (TypQ_aux (q,ql)) =
+let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
   let cannot l msg default =
     let open Reporting in
     let error = Err_general (l, msg) in
@@ -264,7 +264,8 @@ let split_src_type all_errors id ty (TypQ_aux (q,ql)) =
   let i = string_of_id id in
   (* This was originally written for the general case, but I cut it down to the
      more manageable prenex-form below *)
-  let rec size_nvars_ty (Typ_aux (ty,l) as typ) =
+  let rec size_nvars_ty typ =
+    let Typ_aux (ty,l) = Env.expand_synonyms env typ in
     match ty with
     | Typ_id _
     | Typ_var _
@@ -286,30 +287,28 @@ let split_src_type all_errors id ty (TypQ_aux (q,ql)) =
        (KidSet.empty,[[],typ])  (* We only support sizes for bitvectors mentioned explicitly, not any buried
                       inside another type *)
     | Typ_exist (kopts, nc, t) ->
-       (* TODO handle non integer existentials *)
-       let kids = List.map kopt_kid kopts in
        let (vars,tys) = size_nvars_ty t in
        let find_insts k (insts,nc) =
          let inst,nc' =
-           if KidSet.mem k vars then
-             let is,nc' = extract_set_nc l k nc in
+           if KidSet.mem (kopt_kid k) vars then
+             let is,nc' = extract_set_nc l (kopt_kid k) nc in
              Some is,nc'
            else None,nc
          in (k,inst)::insts,nc'
        in
-       let (insts,nc') = List.fold_right find_insts kids ([],nc) in
+       let (insts,nc') = List.fold_right find_insts kopts ([],nc) in
        let insts = cross'' insts in
        let ty_and_inst (inst0,ty) inst =
-         let kids, ty = apply_kid_insts inst ty in
+         let kopts, ty = apply_kid_insts inst ty in
          let ty =
            (* Typ_exist is not allowed an empty list of kids *)
-           match kids with
+           match kopts with
            | [] -> ty
-           | _ -> Typ_aux (Typ_exist (List.map (mk_kopt K_int) kids, nc', ty),l)
+           | _ -> Typ_aux (Typ_exist (kopts, nc', ty),l)
          in inst@inst0, ty
        in
        let tys = List.concat (List.map (fun instty -> List.map (ty_and_inst instty) insts) tys) in
-       let free = List.fold_left (fun vars k -> KidSet.remove k vars) vars kids in
+       let free = List.fold_left (fun vars k -> KidSet.remove (kopt_kid k) vars) vars kopts in
        (free,tys)
     | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   in
@@ -320,14 +319,8 @@ let split_src_type all_errors id ty (TypQ_aux (q,ql)) =
        begin
          match snd (size_nvars_ty typ) with
          | [] -> []
+         | [[],_] -> []
          | tys ->
-            (* One level of tuple type is stripped off by the type checker, so
-               add another here *)
-            let tys =
-              List.map (fun (x,ty) ->
-                x, match ty with
-                | Typ_aux (Typ_tup _,_) -> Typ_aux (Typ_tup [ty],Unknown)
-                | _ -> ty) tys in
             if contains_exist t then
               cannot l "Only prenex types in unions are supported by monomorphisation" []
             else if List.length kids > 1 then
@@ -341,7 +334,7 @@ let split_src_type all_errors id ty (TypQ_aux (q,ql)) =
   let variants = size_nvars_ty ty in
   match variants with
   | [] -> None
-  | sample::__ ->
+  | sample::_ ->
      if List.length variants > size_set_limit then
        cannot ql
          (string_of_int (List.length variants) ^ "variants for constructor " ^ i ^
@@ -353,7 +346,7 @@ let split_src_type all_errors id ty (TypQ_aux (q,ql)) =
      in
      let name_seg = function
        | (_,None) -> ""
-       | (k,Some i) -> string_of_kid k ^ Big_int.to_string i
+       | (k,Some i) -> string_of_kid (kopt_kid k) ^ Big_int.to_string i
      in
      let name l i = String.concat "_" (i::(List.map name_seg l)) in
      Some (List.map (fun (l,ty) -> (l, wrap (name l),ty)) variants)
@@ -395,7 +388,7 @@ let typ_of_args args =
 let refine_constructor refinements l env id args =
   match List.find (fun (id',_) -> Id.compare id id' = 0) refinements with
   | (_,irefinements) -> begin
-    let (_,constr_ty) = Env.get_val_spec id env in
+    let (_,constr_ty) = Env.get_union_id id env in
     match constr_ty with
     (* A constructor should always have a single argument. *)
     | Typ_aux (Typ_fn ([constr_ty],_,_),_) -> begin
@@ -403,11 +396,9 @@ let refine_constructor refinements l env id args =
        match Type_check.destruct_exist (Type_check.Env.expand_synonyms env constr_ty) with
        | None -> None
        | Some (kopts,nc,constr_ty) ->
-          (* TODO: Handle non-integer existentials *)
-          let kids = List.map kopt_kid kopts in
           let bindings = Type_check.unify l env (tyvars_of_typ constr_ty) constr_ty arg_ty  in
-          let find_kid kid = try Some (KBindings.find kid bindings) with Not_found -> None in
-          let bindings = List.map find_kid kids in
+          let find_kopt kopt = try Some (KBindings.find (kopt_kid kopt) bindings) with Not_found -> None in
+          let bindings = List.map find_kopt kopts in
           let matches_refinement (mapping,_,_) =
             List.for_all2
               (fun v (_,w) ->
@@ -624,12 +615,12 @@ let apply_pat_choices choices =
     e_assert = rewrite_assert;
     e_case = rewrite_case }
 
-let split_defs all_errors splits defs =
+let split_defs all_errors splits env defs =
   let no_errors_happened = ref true in
   let error_opt = if all_errors then Some no_errors_happened else None in
   let split_constructors (Defs defs) =
     let sc_type_union q (Tu_aux (Tu_ty_id (ty, id), l)) =
-      match split_src_type error_opt id ty q with
+      match split_src_type error_opt env id ty q with
       | None -> ([],[Tu_aux (Tu_ty_id (ty,id),l)])
       | Some variants ->
          ([(id,variants)],
@@ -908,12 +899,14 @@ let split_defs all_errors splits defs =
             begin
               match List.find (fun (id',_) -> Id.compare id id' = 0) refinements with
               | (_,variants) ->
+(* TODO: what changes to the pattern and what substitutions do we need in general?
                  let kid,kid_annot =
                    match args with
                    | [P_aux (P_var (_, TP_aux (TP_var kid, _)),ann)] -> kid,ann
                    | _ -> 
                       raise (Reporting.err_general l
-                               "Pattern match not currently supported by monomorphisation")
+                               ("Pattern match not currently supported by monomorphisation: "
+                               ^ string_of_pat pat))
                  in
                  let map_inst (insts,id',_) =
                    let insts =
@@ -930,6 +923,11 @@ let split_defs all_errors splits defs =
 *)
                    P_aux (P_app (id',[P_aux (P_id (id_of_kid kid),kid_annot)]),(Generated l,tannot)),
                    kbindings_from_list insts
+                 in
+*)
+                 let map_inst (insts,id',_) =
+                   P_aux (P_app (id',args),(Generated l,tannot)),
+                   KBindings.empty
                  in
                  ConstrSplit (List.map map_inst variants)
               | exception Not_found -> NoSplit
@@ -1018,9 +1016,9 @@ let split_defs all_errors splits defs =
         FE_aux (FE_Fexp (id,map_exp e),annot)
       and map_pexp = function
         | Pat_aux (Pat_exp (p,e),l) ->
-           let nosplit = [Pat_aux (Pat_exp (p,map_exp e),l)] in
+           let nosplit = lazy [Pat_aux (Pat_exp (p,map_exp e),l)] in
            (match map_pat p with
-           | NoSplit -> nosplit
+           | NoSplit -> Lazy.force nosplit
            | VarSplit patsubsts ->
               if check_split_size patsubsts (pat_loc p) then
                 List.map (fun (pat',substs,pchoices,ksubsts) ->
@@ -1031,7 +1029,7 @@ let split_defs all_errors splits defs =
                   let exp' = stop_at_false_assertions exp' in
                   Pat_aux (Pat_exp (pat', map_exp exp'),l))
                   patsubsts
-              else nosplit
+              else Lazy.force nosplit
            | ConstrSplit patnsubsts ->
               List.map (fun (pat',nsubst) ->
                 let pat' = Spec_analysis.nexp_subst_pat nsubst pat' in
@@ -1039,9 +1037,9 @@ let split_defs all_errors splits defs =
                 Pat_aux (Pat_exp (pat', map_exp exp'),l)
               ) patnsubsts)
         | Pat_aux (Pat_when (p,e1,e2),l) ->
-           let nosplit = [Pat_aux (Pat_when (p,map_exp e1,map_exp e2),l)] in
+           let nosplit = lazy [Pat_aux (Pat_when (p,map_exp e1,map_exp e2),l)] in
            (match map_pat p with
-           | NoSplit -> nosplit
+           | NoSplit -> Lazy.force nosplit
            | VarSplit patsubsts ->
               if check_split_size patsubsts (pat_loc p) then
                 List.map (fun (pat',substs,pchoices,ksubsts) ->
@@ -1055,7 +1053,7 @@ let split_defs all_errors splits defs =
                   let exp2' = stop_at_false_assertions exp2' in
                   Pat_aux (Pat_when (pat', map_exp exp1', map_exp exp2'),l))
                   patsubsts
-              else nosplit
+              else Lazy.force nosplit
            | ConstrSplit patnsubsts ->
               List.map (fun (pat',nsubst) ->
                 let pat' = Spec_analysis.nexp_subst_pat nsubst pat' in
@@ -2222,30 +2220,34 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
              (List.fold_left (fun tenv kopt -> Env.add_typ_var l kopt tenv) tenv kopts),
            typ
        in
-       if is_bitvector_typ typ then
-         let size,_,_ = vector_typ_args_of typ in
-         let Nexp_aux (size,_) as size_nexp = simplify_size_nexp env tenv size in
-         let is_tyvar_parameter v =
-           List.exists (fun k -> Kid.compare k v == 0) env.top_kids
-         in
-         match size with
-         | Nexp_constant _ -> r
-         | Nexp_var v when is_tyvar_parameter v ->
-             { r with kid_in_caller = CallerKidSet.add (fn_id,v) r.kid_in_caller }
-         | _ ->
-             match deps_of_nexp l env.kid_deps [] size_nexp with
-             | Have (args,extras) ->
-                { r with
-                  split = ArgSplits.merge merge_detail r.split args;
-                  extra_splits = merge_extras r.extra_splits extras
-                }
-             | Unknown (l,msg) ->
-                { r with
-                  failures =
-                    Failures.add l (StringSet.singleton ("Unable to monomorphise " ^ string_of_nexp size_nexp ^ ": " ^ msg))
-                      r.failures }
-       else
-         r
+       let rec check_typ typ =
+         if is_bitvector_typ typ then
+           let size,_,_ = vector_typ_args_of typ in
+           let Nexp_aux (size,_) as size_nexp = simplify_size_nexp env tenv size in
+           let is_tyvar_parameter v =
+             List.exists (fun k -> Kid.compare k v == 0) env.top_kids
+           in
+           match size with
+           | Nexp_constant _ -> r
+           | Nexp_var v when is_tyvar_parameter v ->
+               { r with kid_in_caller = CallerKidSet.add (fn_id,v) r.kid_in_caller }
+           | _ ->
+               match deps_of_nexp l env.kid_deps [] size_nexp with
+               | Have (args,extras) ->
+                  { r with
+                    split = ArgSplits.merge merge_detail r.split args;
+                    extra_splits = merge_extras r.extra_splits extras
+                  }
+               | Unknown (l,msg) ->
+                  { r with
+                    failures =
+                      Failures.add l (StringSet.singleton ("Unable to monomorphise " ^ string_of_nexp size_nexp ^ ": " ^ msg))
+                        r.failures }
+         else match typ with
+              | Typ_aux (Typ_tup typs,_) ->
+                 List.fold_left (fun r ty -> merge r (check_typ ty)) r typs
+              | _ -> r
+       in check_typ typ
   in (deps, assigns, r)
 
 
@@ -3665,7 +3667,7 @@ let monomorphise opts splits defs =
       then ()
       else raise (Reporting.err_general Unknown "Unable to monomorphise program")
   in
-  let ok_split, defs = split_defs opts.all_split_errors splits defs in
+  let ok_split, defs = split_defs opts.all_split_errors splits env defs in
   let () = if (ok_analysis && ok_extras && ok_split) || opts.continue_anyway
       then ()
       else raise (Reporting.err_general Unknown "Unable to monomorphise program")

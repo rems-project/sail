@@ -655,87 +655,49 @@ let const_props defs ref_vars =
     | _ -> exp
 
   and can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases (substs,ksubsts) assigns =
-    let rec findpat_generic check_pat description assigns = function
-      | [] -> (Reporting.print_err l "Monomorphisation"
-                 ("Failed to find a case for " ^ description); None)
-      | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[],[])
-      | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
-         findpat_generic check_pat description assigns ((Pat_aux (Pat_exp (p,exp),ann))::tl)
-      | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tlx
-          when pat_id_is_variable env id' ->
-         Some (exp, [(id', exp0)], [])
-      | (Pat_aux (Pat_when (P_aux (P_id id',_),guard,exp),_))::tl
-          when pat_id_is_variable env id' -> begin
-            let substs = Bindings.add id' exp0 substs, ksubsts in
-            let (E_aux (guard,_)),assigns = const_prop_exp substs assigns guard in
-            match guard with
-            | E_lit (L_aux (L_true,_)) -> Some (exp,[(id',exp0)],[])
-            | E_lit (L_aux (L_false,_)) -> findpat_generic check_pat description assigns tl
-            | _ -> None
-          end
-      | (Pat_aux (Pat_when (p,guard,exp),_))::tl -> begin
-        match check_pat p with
-        | DoesNotMatch -> findpat_generic check_pat description assigns tl
-        | DoesMatch (vsubst,ksubst) -> begin
-          let guard = nexp_subst_exp (kbindings_from_list ksubst) guard in
-          let substs = bindings_union substs (bindings_from_list vsubst),
-                       kbindings_union ksubsts (kbindings_from_list ksubst) in
-          let (E_aux (guard,_)),assigns = const_prop_exp substs assigns guard in
-          match guard with
-          | E_lit (L_aux (L_true,_)) -> Some (exp,vsubst,ksubst)
-          | E_lit (L_aux (L_false,_)) -> findpat_generic check_pat description assigns tl
-          | _ -> None
-        end
-        | GiveUp -> None
-      end
-      | (Pat_aux (Pat_exp (p,exp),_))::tl ->
-         match check_pat p with
-         | DoesNotMatch -> findpat_generic check_pat description assigns tl
-         | DoesMatch (subst,ksubst) -> Some (exp,subst,ksubst)
-         | GiveUp -> None
-    in
-    match e with
-    | E_id id ->
-       (match Env.lookup_id id env with
-       | Enum _ ->
-          let checkpat = function
-            | P_aux (P_id id',_)
-            | P_aux (P_app (id',[]),_) ->
+    let rec check_exp_pat (E_aux (e,(l,annot))) (P_aux (p,(l',_))) =
+      match e with
+      | E_id id ->
+         (match Env.lookup_id id env with
+         | Enum _ -> begin
+            match p with
+            | P_id id'
+            | P_app (id',[]) ->
                if Id.compare id id' = 0 then DoesMatch ([],[]) else DoesNotMatch
-            | P_aux (_,(l',_)) ->
+            | _ ->
                (Reporting.print_err l' "Monomorphisation"
                   "Unexpected kind of pattern for enumeration"; GiveUp)
-          in findpat_generic checkpat (string_of_id id) assigns cases
-       | _ -> None)
-    | E_lit (L_aux (lit_e, lit_l)) ->
-       let checkpat = function
-         | P_aux (P_lit (L_aux (lit_p, _)),_) ->
-            if lit_match (lit_e,lit_p) then DoesMatch ([],[]) else DoesNotMatch
-         | P_aux (P_var (P_aux (P_id id,p_id_annot), TP_aux (TP_var kid, _)),_) ->
-            begin
-              match lit_e with
-              | L_num i ->
-                 DoesMatch ([id, E_aux (e,(l,annot))],
-                            [kid,Nexp_aux (Nexp_constant i,Unknown)])
-              (* For undefined we fix the type-level size (because there's no good
-                 way to construct an undefined size), but leave the term as undefined
-                 to make the meaning clear. *)
-              | L_undef ->
-                 let nexp = fabricate_nexp l annot in
-                 let typ = subst_kids_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
-                 DoesMatch ([id, E_aux (E_cast (typ,E_aux (e,(l,empty_tannot))),(l,empty_tannot))],
-                            [kid,nexp])
-              | _ ->
-                 (Reporting.print_err lit_l "Monomorphisation"
-                    "Unexpected kind of literal for var match"; GiveUp)
-            end
-         | P_aux (_,(l',_)) ->
-            (Reporting.print_err l' "Monomorphisation"
-               "Unexpected kind of pattern for literal"; GiveUp)
-       in findpat_generic checkpat "literal" assigns cases
-    | E_vector es when List.for_all (function (E_aux (E_lit _,_)) -> true | _ -> false) es ->
-       let checkpat = function
-         | P_aux (P_vector ps,_) ->
+           end
+         | _ -> GiveUp)
+      | E_lit (L_aux (lit_e, lit_l)) -> begin
+          match p with
+          | P_lit (L_aux (lit_p, _)) ->
+             if lit_match (lit_e,lit_p) then DoesMatch ([],[]) else DoesNotMatch
+          | P_var (P_aux (P_id id,p_id_annot), TP_aux (TP_var kid, _)) ->
+             begin
+               match lit_e with
+               | L_num i ->
+                  DoesMatch ([id, E_aux (e,(l,annot))],
+                             [kid,Nexp_aux (Nexp_constant i,Unknown)])
+               (* For undefined we fix the type-level size (because there's no good
+                  way to construct an undefined size), but leave the term as undefined
+                  to make the meaning clear. *)
+               | L_undef ->
+                  let nexp = fabricate_nexp l annot in
+                  let typ = subst_kids_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
+                  DoesMatch ([id, E_aux (E_cast (typ,E_aux (e,(l,empty_tannot))),(l,empty_tannot))],
+                             [kid,nexp])
+               | _ ->
+                  (Reporting.print_err lit_l "Monomorphisation"
+                     "Unexpected kind of literal for var match"; GiveUp)
+             end
+          | _ ->
+             (Reporting.print_err l' "Monomorphisation"
+                "Unexpected kind of pattern for literal"; GiveUp)
+        end
+      | E_vector es when List.for_all (function (E_aux (E_lit _,_)) -> true | _ -> false) es -> begin
+         match p with
+         | P_vector ps ->
             let matches = List.map2 (fun e p ->
               match e, p with
               | E_aux (E_lit (L_aux (lit,_)),_), P_aux (P_lit (L_aux (lit',_)),_) ->
@@ -756,28 +718,67 @@ let const_props defs ref_vars =
          | _ ->
             (Reporting.print_err l "Monomorphisation"
                "Unexpected kind of pattern for vector literal"; GiveUp)
-       in findpat_generic checkpat "vector literal" assigns cases
-  
-    | E_cast (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_) as e_undef)) ->
-       let checkpat = function
-         | P_aux (P_lit (L_aux (lit_p, _)),_) -> DoesNotMatch
-         | P_aux (P_var (P_aux (P_id id,p_id_annot), TP_aux (TP_var kid, _)),_) ->
-              (* For undefined we fix the type-level size (because there's no good
-                 way to construct an undefined size), but leave the term as undefined
-                 to make the meaning clear. *)
-            let nexp = fabricate_nexp l annot in
-            let kids = equal_kids (env_of_annot p_id_annot) kid in
-            let ksubst = KidSet.fold (fun k b -> KBindings.add k nexp b) kids KBindings.empty in
-            let typ = subst_kids_typ ksubst (typ_of_annot p_id_annot) in
-            DoesMatch ([id, E_aux (E_cast (typ,e_undef),(l,empty_tannot))],
-                       KBindings.bindings ksubst)
-         | P_aux (_,(l',_)) ->
-            (Reporting.print_err l' "Monomorphisation"
-               "Unexpected kind of pattern for literal"; GiveUp)
-       in findpat_generic checkpat "literal" assigns cases
-    | E_record _ | E_cast (_, E_aux (E_record _, _)) ->
-       findpat_generic (fun _ -> DoesNotMatch) "record" assigns cases
-    | _ -> None
+        end
+      | E_cast (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_) as e_undef)) -> begin
+          match p with
+          | P_lit (L_aux (lit_p, _)) -> DoesNotMatch
+          | P_var (P_aux (P_id id,p_id_annot), TP_aux (TP_var kid, _)) ->
+               (* For undefined we fix the type-level size (because there's no good
+                  way to construct an undefined size), but leave the term as undefined
+                  to make the meaning clear. *)
+             let nexp = fabricate_nexp l annot in
+             let kids = equal_kids (env_of_annot p_id_annot) kid in
+             let ksubst = KidSet.fold (fun k b -> KBindings.add k nexp b) kids KBindings.empty in
+             let typ = subst_kids_typ ksubst (typ_of_annot p_id_annot) in
+             DoesMatch ([id, E_aux (E_cast (typ,e_undef),(l,empty_tannot))],
+                        KBindings.bindings ksubst)
+          | _ ->
+             (Reporting.print_err l' "Monomorphisation"
+                "Unexpected kind of pattern for literal"; GiveUp)
+        end
+      | E_record _ | E_cast (_, E_aux (E_record _, _)) -> DoesNotMatch
+      | _ -> GiveUp
+    in
+    let check_pat = check_exp_pat exp0 in
+    let rec findpat_generic description assigns = function
+      | [] -> (Reporting.print_err l "Monomorphisation"
+                 ("Failed to find a case for " ^ description); None)
+      | [Pat_aux (Pat_exp (P_aux (P_wild,_),exp),_)] -> Some (exp,[],[])
+      | (Pat_aux (Pat_exp (P_aux (P_typ (_,p),_),exp),ann))::tl ->
+         findpat_generic description assigns ((Pat_aux (Pat_exp (p,exp),ann))::tl)
+      | (Pat_aux (Pat_exp (P_aux (P_id id',_),exp),_))::tlx
+          when pat_id_is_variable env id' ->
+         Some (exp, [(id', exp0)], [])
+      | (Pat_aux (Pat_when (P_aux (P_id id',_),guard,exp),_))::tl
+          when pat_id_is_variable env id' -> begin
+            let substs = Bindings.add id' exp0 substs, ksubsts in
+            let (E_aux (guard,_)),assigns = const_prop_exp substs assigns guard in
+            match guard with
+            | E_lit (L_aux (L_true,_)) -> Some (exp,[(id',exp0)],[])
+            | E_lit (L_aux (L_false,_)) -> findpat_generic description assigns tl
+            | _ -> None
+          end
+      | (Pat_aux (Pat_when (p,guard,exp),_))::tl -> begin
+        match check_pat p with
+        | DoesNotMatch -> findpat_generic description assigns tl
+        | DoesMatch (vsubst,ksubst) -> begin
+          let guard = nexp_subst_exp (kbindings_from_list ksubst) guard in
+          let substs = bindings_union substs (bindings_from_list vsubst),
+                       kbindings_union ksubsts (kbindings_from_list ksubst) in
+          let (E_aux (guard,_)),assigns = const_prop_exp substs assigns guard in
+          match guard with
+          | E_lit (L_aux (L_true,_)) -> Some (exp,vsubst,ksubst)
+          | E_lit (L_aux (L_false,_)) -> findpat_generic description assigns tl
+          | _ -> None
+        end
+        | GiveUp -> None
+      end
+      | (Pat_aux (Pat_exp (p,exp),_))::tl ->
+         match check_pat p with
+         | DoesNotMatch -> findpat_generic description assigns tl
+         | DoesMatch (subst,ksubst) -> Some (exp,subst,ksubst)
+         | GiveUp -> None
+    in findpat_generic (string_of_exp exp0) assigns cases
   
   and can_match exp =
     let env = Type_check.env_of exp in
