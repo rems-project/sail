@@ -165,13 +165,13 @@ let rec split_insts = function
   | (k,None)::t -> let l1,l2 = split_insts t in l1,k::l2
   | (k,Some v)::t -> let l1,l2 = split_insts t in (k,v)::l1,l2
 
-let apply_kid_insts kid_insts t =
+let apply_kid_insts kid_insts nc t =
   let kid_insts, kids' = split_insts kid_insts in
   let kid_insts = List.map
     (fun (v,i) -> (kopt_kid v,Nexp_aux (Nexp_constant i,Generated Unknown)))
     kid_insts in
   let subst = kbindings_from_list kid_insts in
-  kids', subst_kids_typ subst t
+  kids', subst_kids_nc subst nc, subst_kids_typ subst t
 
 let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
   match ty with
@@ -196,11 +196,10 @@ let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
      in insts, Typ_aux (Typ_app (id,ts),l)
   | Typ_exist (kopts, nc, t) -> begin
      let kid_insts, insts' = peel (kopts,insts) in
-     let kopts', t' = apply_kid_insts kid_insts t in
-     (* TODO: subst in nc *)
+     let kopts', nc', t' = apply_kid_insts kid_insts nc t in
      match kopts' with
      | [] -> insts', t'
-     | _ -> insts', Typ_aux (Typ_exist (kopts', nc, t'), l)
+     | _ -> insts', Typ_aux (Typ_exist (kopts', nc', t'), l)
     end
   | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and inst_src_typ_arg insts (A_aux (ta,l) as tyarg) =
@@ -299,7 +298,7 @@ let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
        let (insts,nc') = List.fold_right find_insts kopts ([],nc) in
        let insts = cross'' insts in
        let ty_and_inst (inst0,ty) inst =
-         let kopts, ty = apply_kid_insts inst ty in
+         let kopts, nc', ty = apply_kid_insts inst nc' ty in
          let ty =
            (* Typ_exist is not allowed an empty list of kids *)
            match kopts with
@@ -312,7 +311,6 @@ let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
        (free,tys)
     | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   in
-  (* Only single-variable prenex-form for now *)
   let size_nvars_ty (Typ_aux (ty,l) as typ) =
     match ty with
     | Typ_exist (kids,_,t) ->
@@ -323,9 +321,6 @@ let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
          | tys ->
             if contains_exist t then
               cannot l "Only prenex types in unions are supported by monomorphisation" []
-            else if List.length kids > 1 then
-              cannot l
-                "Only single-variable existential types in unions are currently supported by monomorphisation" []
             else tys
        end
     | _ -> []
@@ -3212,6 +3207,7 @@ let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
   in
   (* Push the cast down, including through constructors *)
   let rec aux exp (typ, target_typ) =
+    if alpha_equivalent cast_env typ target_typ then exp else
     let exp_env = env_of exp in
     match exp with
     | E_aux (E_let (lb,exp'),ann) ->
