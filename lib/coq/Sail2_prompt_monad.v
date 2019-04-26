@@ -201,7 +201,7 @@ Definition read_mem_bytes {rv A E} rk (addr : mword A) sz : monad rv (list memor
   Read_mem rk (Word.wordToNat (get_word addr)) (Z.to_nat sz) returnm.
 
 (*val read_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv 'b 'e*)
-Definition read_mem {rv A B E} `{ArithFact (B >= 0)} rk (addr : mword A) sz : monad rv (mword B) E :=
+Definition read_mem {rv A B E} `{ArithFact (B >= 0)} rk (addrsz : Z) (addr : mword A) sz : monad rv (mword B) E :=
   bind
     (read_mem_bytes rk addr sz)
     (fun bytes =>
@@ -212,12 +212,12 @@ Definition excl_result {rv e} (_:unit) : monad rv bool e :=
   let k successful := (returnm successful) in
   Excl_res k.
 
-Definition write_mem_ea {rv a E} wk (addr: mword a) sz : monad rv unit E :=
+Definition write_mem_ea {rv a E} wk (addrsz : Z) (addr: mword a) sz : monad rv unit E :=
  Write_ea wk (Word.wordToNat (get_word addr)) (Z.to_nat sz) (Done tt).
 
 (*val write_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b =>
-  write_kind -> 'a -> integer -> 'b -> monad 'rv bool 'e*)
-Definition write_mem {rv a b E} wk (addr : mword a) sz (v : mword b) : monad rv bool E :=
+  write_kind -> integer -> 'a -> integer -> 'b -> monad 'rv bool 'e*)
+Definition write_mem {rv a b E} wk (addrsz : Z) (addr : mword a) sz (v : mword b) : monad rv bool E :=
   match (mem_bytes_of_bits v, Word.wordToNat (get_word addr)) with
     | (Some v, addr) =>
        Write_mem wk addr (Z.to_nat sz) v returnm
