@@ -147,8 +147,8 @@ let read_memtS rk a sz =
   maybe_failS "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)) >>$= (fun mem_val ->
   returnS (mem_val, tag))))
 
-val read_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs 'b 'e
-let read_memS rk a sz =
+val read_memS : forall 'regs 'e 'a 'b 'addrsize. Bitvector 'a, Bitvector 'b => read_kind -> 'addrsize -> 'a -> integer -> monadS 'regs 'b 'e
+let read_memS rk addr_size a sz =
   read_memtS rk a sz >>$= (fun (bytes, _) ->
   returnS bytes)
 
@@ -186,9 +186,9 @@ let write_memtS wk addr sz v t =
     | _ -> failS "write_mem"
   end
 
-val write_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
-  write_kind -> 'a -> integer -> 'b -> monadS 'regs bool 'e
-let write_memS wk addr sz v = write_memtS wk addr sz v B0
+val write_memS : forall 'regs 'e 'a 'b 'addrsize. Bitvector 'a, Bitvector 'b =>
+  write_kind -> 'addrsize -> 'a -> integer -> 'b -> monadS 'regs bool 'e
+let write_memS wk addr_size addr sz v = write_memtS wk addr sz v B0
 
 val read_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> monadS 'regs 'a 'e
 let read_regS reg = readS (fun s -> reg.read_from s.regstate)

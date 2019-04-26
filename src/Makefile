@@ -103,7 +103,8 @@ sail: ast.ml jib.ml manifest.ml
 	ocamlbuild -use-ocamlfind sail.native sail_lib.cma sail_lib.cmxa
 
 isail: ast.ml jib.ml manifest.ml
-	ocamlbuild -use-ocamlfind isail.native
+	ocamlbuild -use-ocamlfind isail.native sail_lib.cma sail_lib.cmxa libsail.cma libsail.cmxa
+
 
 coverage: ast.ml jib.ml manifest.ml
 	BISECT_COVERAGE=YES ocamlbuild -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' isail.native
@@ -112,6 +113,9 @@ sail.native: sail
 
 sail.byte: ast.ml jib.ml manifest.ml
 	ocamlbuild -use-ocamlfind -cflag -g sail.byte
+
+isail.byte: ast.ml bytecode.ml share_directory.ml
+	ocamlbuild -use-ocamlfind isail.byte
 
 interpreter: lem_interp/interp_ast.lem
 	ocamlbuild -use-ocamlfind lem_interp/extract.cmxa

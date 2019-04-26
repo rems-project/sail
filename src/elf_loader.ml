@@ -176,6 +176,24 @@ let load_elf ?writer:(writer=write_sail_lib) name =
            opt_elf_class := ELF_Class_32
   )
 
+let load_binary ?writer:(writer=write_sail_lib) addr name =
+  let f = open_in_bin name in
+  let buf = Buffer.create 1024 in
+  try
+    while true do
+      let char = input_char f in
+      Buffer.add_char buf char;
+    done;
+    assert false
+  with
+  | End_of_file -> begin
+      Bytes.iteri (fun i ch -> writer addr i (int_of_char ch)) (Buffer.to_bytes buf);
+      close_in f
+    end
+  | exc ->
+     close_in f;
+     raise exc
+
 (* The sail model can access this by externing a unit -> int function
    as Elf_loader.elf_entry. *)
 let elf_entry () = !opt_elf_entry

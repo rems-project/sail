@@ -81,7 +81,8 @@ and exp_of_value =
   | V_tuple vs ->
      mk_exp (E_tuple (List.map exp_of_value vs))
   | V_unit -> mk_lit_exp L_unit
-  | V_attempted_read str -> mk_exp (E_id (mk_id str))
+  | V_attempted_read str ->
+     mk_exp (E_id (mk_id str))
   | _ -> failwith "No expression for value"
 
 (* We want to avoid evaluating things like print statements at compile
@@ -155,10 +156,20 @@ and is_constant_fexp (FE_aux (FE_Fexp (_, exp), _)) = is_constant exp
 let rec run frame =
   match frame with
   | Interpreter.Done (state, v) -> v
+  | Interpreter.Fail _ ->
+     (* something went wrong, raise exception to abort constant folding *)
+     assert false
   | Interpreter.Step (lazy_str, _, _, _) ->
      run (Interpreter.eval_frame frame)
   | Interpreter.Break frame ->
      run (Interpreter.eval_frame frame)
+  | Interpreter.Effect_request (out, st, stack, Interpreter.Read_reg (reg, cont)) ->
+     (* return a dummy value to read_reg requests which we handle above
+        if an expression finally evals to it, but the interpreter
+        will fail if it tries to actually use. See value.ml *)
+     run (cont (Value.V_attempted_read reg) st)
+  | Interpreter.Effect_request _ ->
+     assert false (* effectful, raise exception to abort constant folding *)
 
 (** This rewriting pass looks for function applications (E_app)
    expressions where every argument is a literal. It passes these
@@ -177,9 +188,9 @@ let rec run frame =
    - Throws an exception that isn't caught.
  *)
 
-let initial_state ast =
+let initial_state ast env =
   let lstate, gstate =
-    Interpreter.initial_state ast safe_primops
+    Interpreter.initial_state ast env safe_primops
   in
   (lstate, { gstate with Interpreter.allow_registers = false })
 
@@ -240,10 +251,11 @@ let rec rewrite_constant_function_calls' ast =
   let rewrite_count = ref 0 in
   let ok () = incr rewrite_count in
   let not_ok () = decr rewrite_count in
+  let istate = initial_state ast Type_check.initial_env in
 
   let rw_defs = {
       rewriters_base with
-      rewrite_exp = (fun _ -> rw_exp ok not_ok (initial_state ast))
+      rewrite_exp = (fun _ -> rw_exp ok not_ok istate)
     } in
   let ast = rewrite_defs_base rw_defs ast in
   (* We keep iterating until we have no more re-writes to do *)

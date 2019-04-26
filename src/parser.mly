@@ -92,6 +92,7 @@ let mk_typ t n m = ATyp_aux (t, loc n m)
 let mk_pat p n m = P_aux (p, loc n m)
 let mk_pexp p n m = Pat_aux (p, loc n m)
 let mk_exp e n m = E_aux (e, loc n m)
+let mk_measure meas n m = Measure_aux (meas, loc n m)
 let mk_lit l n m = L_aux (l, loc n m)
 let mk_lit_exp l n m = mk_exp (E_lit (mk_lit l n m)) n m
 let mk_typschm tq t n m = TypSchm_aux (TypSchm_ts (tq, t), loc n m)
@@ -748,6 +749,13 @@ exp_eof:
   | exp Eof
     { $1 }
 
+/* Internal syntax for loop measures, rejected in normal code by initial_check */
+internal_loop_measure:
+  |
+    { mk_measure Measure_none $startpos $endpos }
+  | TerminationMeasure Lcurly exp Rcurly
+    { mk_measure (Measure_some $3) $startpos $endpos }
+
 exp:
   | exp0
     { $1 }
@@ -802,10 +810,10 @@ exp:
         else ATyp_aux(ATyp_dec,loc $startpos($6) $endpos($6))
       in
       mk_exp (E_for ($3, $5, $7, step, ord, $9)) $startpos $endpos }
-  | Repeat exp Until exp
-    { mk_exp (E_loop (Until, $4, $2)) $startpos $endpos }
-  | While exp Do exp
-    { mk_exp (E_loop (While, $2, $4)) $startpos $endpos }
+  | Repeat internal_loop_measure exp Until exp
+    { mk_exp (E_loop (Until, $2, $5, $3)) $startpos $endpos }
+  | While internal_loop_measure exp Do exp
+    { mk_exp (E_loop (While, $2, $3, $5)) $startpos $endpos }
 
   /* Debugging only, will be rejected in initial_check if debugging isn't on */
   | InternalPLet pat Eq exp In exp
@@ -1056,6 +1064,8 @@ atomic_exp:
     { mk_exp (E_record $3) $startpos $endpos }
   | Lcurly exp With fexp_exp_list Rcurly
     { mk_exp (E_record_update ($2, $4)) $startpos $endpos }
+  | Lsquare Rsquare
+    { mk_exp (E_vector []) $startpos $endpos }
   | Lsquare exp_list Rsquare
     { mk_exp (E_vector $2) $startpos $endpos }
   | Lsquare exp With atomic_exp Eq exp Rsquare
@@ -1341,31 +1351,31 @@ let_def:
 
 externs:
   | id Colon String
-    { ([(string_of_id $1, $3)], None) }
+    { [(string_of_id $1, $3)] }
   | Under Colon String
-    { ([], Some $3) }
+    { [("_", $3)] }
   | id Colon String Comma externs
-    { cons_fst (string_of_id $1, $3) $5 }
+    { (string_of_id $1, $3) :: $5 }
 
 val_spec_def:
   | Doc val_spec_def
     { doc_vs $1 $2 }
   | Val id Colon typschm
-    { mk_vs (VS_val_spec ($4, $2, (fun _ -> None), false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($4, $2, [], false)) $startpos $endpos }
   | Val Cast id Colon typschm
-    { mk_vs (VS_val_spec ($5, $3, (fun _ -> None), true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($5, $3, [], true)) $startpos $endpos }
   | Val id Eq String Colon typschm
-    { mk_vs (VS_val_spec ($6, $2, (fun _ -> Some $4), false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($6, $2, [("_", $4)], false)) $startpos $endpos }
   | Val Cast id Eq String Colon typschm
-    { mk_vs (VS_val_spec ($7, $3, (fun _ -> Some $5), true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($7, $3, [("_", $5)], true)) $startpos $endpos }
   | Val String Colon typschm
-    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), (fun _ -> Some $2), false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), [("_", $2)], false)) $startpos $endpos }
   | Val Cast String Colon typschm
-    { mk_vs (VS_val_spec ($5, mk_id (Id $3) $startpos($3) $endpos($3), (fun _ -> Some $3), true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($5, mk_id (Id $3) $startpos($3) $endpos($3), [("_", $3)], true)) $startpos $endpos }
   | Val id Eq Lcurly externs Rcurly Colon typschm
-    { mk_vs (VS_val_spec ($8, $2, (fun backend -> (assoc_opt backend $5)), false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($8, $2, $5, false)) $startpos $endpos }
   | Val Cast id Eq Lcurly externs Rcurly Colon typschm
-    { mk_vs (VS_val_spec ($9, $3, (fun backend -> (assoc_opt backend $6)), true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($9, $3, $6, true)) $startpos $endpos }
 
 register_def:
   | Register id Colon typ
@@ -1401,6 +1411,19 @@ scattered_clause:
   | Function_ Clause funcl
     { mk_sd (SD_funcl $3) $startpos $endpos }
 
+loop_measure:
+  | Until exp
+    { Loop (Until, $2) }
+  | Repeat exp
+    { Loop (Until, $2) }
+  | While exp
+    { Loop (While, $2) }
+
+loop_measures:
+  | loop_measure
+    { [$1] }
+  | loop_measure Comma loop_measures
+    { $1::$3 }
 
 def:
   | fun_def
@@ -1439,6 +1462,8 @@ def:
     { DEF_pragma (fst $1, snd $1, loc $startpos $endpos) }
   | TerminationMeasure id pat Eq exp
     { DEF_measure ($2, $3, $5) }
+  | TerminationMeasure id loop_measures
+    { DEF_loop_measures ($2,$3) }
 
 defs_list:
   | def

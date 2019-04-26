@@ -62,7 +62,7 @@ let is_typ_ord_arg = function
 type specialization = {
     is_polymorphic : kinded_id -> bool;
     instantiation_filter : kid -> typ_arg -> bool;
-    extern_filter : (string -> string option) -> bool
+    extern_filter : (string * string) list -> bool
   }
 
 let typ_ord_specialization = {
@@ -74,7 +74,7 @@ let typ_ord_specialization = {
 let int_specialization = {
     is_polymorphic = is_int_kopt;
     instantiation_filter = (fun _ arg -> match arg with A_aux (A_nexp _, _) -> true | _ -> false);
-    extern_filter = (fun externs -> match externs "c" with Some _ -> true | None -> false)
+    extern_filter = (fun externs -> match Ast_util.extern_assoc "c" externs with Some _ -> true | None -> false)
   }
 
 let int_specialization_with_externs = {

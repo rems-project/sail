@@ -6,6 +6,7 @@ $define _SMT
 /*! Euclidean division */
 val ediv_int = {
   ocaml: "quotient",
+  interpreter: "quotient",
   lem: "integerDiv",
   c: "ediv_int",
   coq: "ediv_with_eq"
@@ -13,6 +14,7 @@ val ediv_int = {
 
 val emod_int = {
   ocaml: "modulus",
+  interpreter: "modulus",
   lem: "integerMod",
   c: "emod_int",
   coq: "emod_with_eq"
@@ -20,6 +22,7 @@ val emod_int = {
 
 val abs_int = {
   ocaml: "abs_int",
+  interpreter: "abs_int",
   lem: "abs_int",
   c: "abs_int",
   coq: "abs_with_eq"

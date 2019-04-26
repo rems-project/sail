@@ -346,8 +346,17 @@ val map_mfpat_annot : ('a annot -> 'b annot) -> 'a mfpat -> 'b mfpat
 val map_mpexp_annot : ('a annot -> 'b annot) -> 'a mpexp -> 'b mpexp
 val map_mapcl_annot : ('a annot -> 'b annot) -> 'a mapcl -> 'b mapcl
 
-(** {2 Extract locations from terms} *)
+val map_typedef_annot : ('a annot -> 'b annot) -> 'a type_def -> 'b type_def
+val map_fundef_annot : ('a annot -> 'b annot) -> 'a fundef -> 'b fundef
+val map_funcl_annot : ('a annot -> 'b annot) -> 'a funcl -> 'b funcl
+val map_mapdef_annot : ('a annot -> 'b annot) -> 'a mapdef -> 'b mapdef
+val map_valspec_annot : ('a annot -> 'b annot) -> 'a val_spec -> 'b val_spec
+val map_scattered_annot : ('a annot -> 'b annot) -> 'a scattered_def -> 'b scattered_def
 
+val map_def_annot : ('a annot -> 'b annot) -> 'a def -> 'b def
+val map_defs_annot : ('a annot -> 'b annot) -> 'a defs -> 'b defs
+
+(** {2 Extract locations from terms} *)
 val id_loc : id -> Parse_ast.l
 val kid_loc : kid -> Parse_ast.l
 val typ_loc : typ -> Parse_ast.l
@@ -482,6 +491,8 @@ val locate_typ : (l -> l) -> typ -> typ
 (** Make a unique location by giving it a Parse_ast.Unique wrapper with
    a generated number. *)
 val unique : l -> l
+
+val extern_assoc : string -> (string * string) list -> string option
 
 (** Try to find the annotation closest to the provided (simplified)
    location. Note that this function makes no guarantees about finding

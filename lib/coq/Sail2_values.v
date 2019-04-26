@@ -110,6 +110,9 @@ refine ((if Decidable_witness as b return (b = true <-> x = y -> _) then fun H' 
 * right. intuition.
 Defined.
 
+Instance Decidable_eq_list {A : Type} `(D : forall x y : A, Decidable (x = y)) : forall (x y : list A), Decidable (x = y) :=
+  Decidable_eq_from_dec (list_eq_dec (fun x y => generic_dec x y)).
+
 (* Used by generated code that builds Decidable equality instances for records. *)
 Ltac cmp_record_field x y :=
   let H := fresh "H" in
@@ -457,19 +460,23 @@ Definition binop_bit op x y :=
   match (x, y) with
   | (BU,_) => BU (*Do we want to do this or to respect | of I and & of B0 rules?*)
   | (_,BU) => BU (*Do we want to do this or to respect | of I and & of B0 rules?*)
-  | (x,y) => bitU_of_bool (op (bool_of_bitU x) (bool_of_bitU y))
+(*  | (x,y) => bitU_of_bool (op (bool_of_bitU x) (bool_of_bitU y))*)
+  | (B0,B0) => bitU_of_bool (op false false)
+  | (B0,B1) => bitU_of_bool (op false  true)
+  | (B1,B0) => bitU_of_bool (op  true false)
+  | (B1,B1) => bitU_of_bool (op  true  true)
   end.
 
-(*val and_bit : bitU -> bitU -> bitU
-Definition and_bit := binop_bit (&&)
+(*val and_bit : bitU -> bitU -> bitU*)
+Definition and_bit := binop_bit andb.
 
-val or_bit : bitU -> bitU -> bitU
-Definition or_bit := binop_bit (||)
+(*val or_bit : bitU -> bitU -> bitU*)
+Definition or_bit := binop_bit orb.
 
-val xor_bit : bitU -> bitU -> bitU
-Definition xor_bit := binop_bit xor
+(*val xor_bit : bitU -> bitU -> bitU*)
+Definition xor_bit := binop_bit xorb.
 
-val (&.) : bitU -> bitU -> bitU
+(*val (&.) : bitU -> bitU -> bitU
 Definition inline (&.) x y := and_bit x y
 
 val (|.) : bitU -> bitU -> bitU
@@ -546,15 +553,23 @@ end.
 Definition add_one_bool_ignore_overflow bits :=
   List.rev (add_one_bool_ignore_overflow_aux (List.rev bits)).
 
-(*let bool_list_of_int n =
-  let bs_abs = false :: bools_of_nat (naturalFromInteger (abs n)) in
-  if n >= (0 : integer) then bs_abs
-  else add_one_bool_ignore_overflow (List.map not bs_abs)
-let bools_of_int len n = exts_bools len (bool_list_of_int n)*)
+(* Ported from Lem, bad for large n.
 Definition bools_of_int len n :=
   let bs_abs := bools_of_nat len (Z.abs_nat n) in
   if n >=? 0 then bs_abs
   else add_one_bool_ignore_overflow (List.map negb bs_abs).
+*)
+Fixpoint bitlistFromWord_rev {n} w :=
+match w with
+| WO => []
+| WS b w => b :: bitlistFromWord_rev w
+end.
+Definition bitlistFromWord {n} w :=
+  List.rev (@bitlistFromWord_rev n w).
+
+Definition bools_of_int len n :=
+  let w := Word.ZToWord (Z.to_nat len) n in
+  bitlistFromWord w.
 
 (*** Bit lists ***)
 
@@ -963,14 +978,6 @@ val make_the_value : forall n. Z -> itself n
 Definition inline make_the_value x := the_value
 *)
 
-Fixpoint bitlistFromWord_rev {n} w :=
-match w with
-| WO => []
-| WS b w => b :: bitlistFromWord_rev w
-end.
-Definition bitlistFromWord {n} w :=
-  List.rev (@bitlistFromWord_rev n w).
-
 Fixpoint wordFromBitlist_rev l : word (length l) :=
 match l with
 | [] => WO
@@ -1218,9 +1225,10 @@ Ltac prepare_for_solver :=
  unfold_In; (* after unbool_comparisons to deal with && and || *)
  reduce_list_lengths;
  reduce_pow;
- (* omega doesn't cope well with extra "True"s in the goal *)
- repeat setoid_rewrite True_left;
- repeat setoid_rewrite True_right.
+ (* omega doesn't cope well with extra "True"s in the goal.
+    Check that they actually appear because setoid_rewrite can fill in evars. *)
+ repeat match goal with |- context[True /\ _] => setoid_rewrite True_left end;
+ repeat match goal with |- context[_ /\ True] => setoid_rewrite True_right end.
 
 Lemma trivial_range {x : Z} : ArithFact (x <= x /\ x <= x).
 constructor.
@@ -1285,7 +1293,7 @@ prepare_for_solver;
 constructor;
 repeat match goal with |- and _ _ => split end;
  solve
- [ match goal with |- (?x _) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) _) end
+ [ match goal with |- (?x ?y) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) y) end
  | apply ArithFact_mword; assumption
  | omega with Z
    (* Try sail hints before dropping the existential *)
@@ -1941,3 +1949,20 @@ Definition min_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
 Definition max_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
   {z : Z & ArithFact (z >= 0)} :=
   build_ex (Z.max x y).
+
+Definition shl_int_8 (x y : Z) `{HE:ArithFact (x = 8)} `{HR:ArithFact (0 <= y <= 3)}: {z : Z & ArithFact (In z [8;16;32;64])}.
+refine (existT _ (shl_int x y) _).
+destruct HE as [HE].
+destruct HR as [HR].
+assert (H : y = 0 \/ y = 1 \/ y = 2 \/ y = 3) by omega.
+constructor.
+intuition (subst; compute; auto).
+Defined.
+
+Definition shl_int_32 (x y : Z) `{HE:ArithFact (x = 32)} `{HR:ArithFact (In y [0;1])}: {z : Z & ArithFact (In z [32;64])}.
+refine (existT _ (shl_int x y) _).
+destruct HE as [HE].
+destruct HR as [[HR1 | [HR2 | []]]];
+subst; compute;
+auto using Build_ArithFact.
+Defined.

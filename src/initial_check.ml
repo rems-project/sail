@@ -367,8 +367,8 @@ and to_ast_exp ctx (P.E_aux(exp,l) : P.exp) =
     | P.E_for(id,e1,e2,e3,atyp,e4) ->
       E_for(to_ast_id id,to_ast_exp ctx e1, to_ast_exp ctx e2,
             to_ast_exp ctx e3,to_ast_order ctx atyp, to_ast_exp ctx e4)
-    | P.E_loop (P.While, e1, e2) -> E_loop (While, to_ast_exp ctx e1, to_ast_exp ctx e2)
-    | P.E_loop (P.Until, e1, e2) -> E_loop (Until, to_ast_exp ctx e1, to_ast_exp ctx e2)
+    | P.E_loop (P.While, m, e1, e2) -> E_loop (While, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
+    | P.E_loop (P.Until, m, e1, e2) -> E_loop (Until, to_ast_measure ctx m, to_ast_exp ctx e1, to_ast_exp ctx e2)
     | P.E_vector(exps) -> E_vector(List.map (to_ast_exp ctx) exps)
     | P.E_vector_access(vexp,exp) -> E_vector_access(to_ast_exp ctx vexp, to_ast_exp ctx exp)
     | P.E_vector_subrange(vex,exp1,exp2) ->
@@ -413,6 +413,16 @@ and to_ast_exp ctx (P.E_aux(exp,l) : P.exp) =
          raise (Reporting.err_general l "Internal return construct found without -dmagic_hash")
     | _ -> raise (Reporting.err_unreachable l __POS__ "Unparsable construct in to_ast_exp")
     ), (l,()))
+
+and to_ast_measure ctx (P.Measure_aux(m,l)) : unit internal_loop_measure =
+  let m = match m with
+    | P.Measure_none -> Measure_none
+    | P.Measure_some exp ->
+       if !opt_magic_hash then
+         Measure_some (to_ast_exp ctx exp)
+       else
+         raise (Reporting.err_general l "Internal loop termination measure found without -dmagic_hash")
+  in Measure_aux (m,l)
 
 and to_ast_lexp ctx (P.E_aux(exp,l) : P.exp) : unit lexp =
   let lexp = match exp with
@@ -762,6 +772,10 @@ let to_ast_prec = function
   | P.InfixL -> InfixL
   | P.InfixR -> InfixR
 
+let to_ast_loop_measure ctx = function
+  | P.Loop (P.While, exp) -> Loop (While, to_ast_exp ctx exp)
+  | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
+
 let to_ast_def ctx def : unit def list ctx_out =
   match def with
   | P.DEF_overload (id, ids) ->
@@ -800,6 +814,8 @@ let to_ast_def ctx def : unit def list ctx_out =
      [DEF_scattered sdef], ctx
   | P.DEF_measure (id, pat, exp) ->
      [DEF_measure (to_ast_id id, to_ast_pat ctx pat, to_ast_exp ctx exp)], ctx
+  | P.DEF_loop_measures (id, measures) ->
+     [DEF_loop_measures (to_ast_id id, List.map (to_ast_loop_measure ctx) measures)], ctx
 
 let rec remove_mutrec = function
   | [] -> []
@@ -856,8 +872,8 @@ let constraint_of_string str =
   let atyp = Parser.typ_eof Lexer.token (Lexing.from_string str) in
   to_ast_constraint initial_ctx atyp
 
-let extern_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, (fun _ -> Some (string_of_id id)), false))
-let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, (fun _ -> None), false))
+let extern_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, [("_", string_of_id id)], false))
+let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, [], false))
 
 let quant_item_param = function
   | QI_aux (QI_id kopt, _) when is_int_kopt kopt -> [prepend_id "atom_" (id_of_kid (kopt_kid kopt))]
@@ -921,7 +937,7 @@ let generate_undefineds vs_ids (Defs defs) =
   let undefined_td = function
     | TD_enum (id, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let typschm = typschm_of_string ("unit -> " ^ string_of_id id ^ " effect {undef}") in
-       [mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, (fun _ -> None), false));
+       [mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, [], false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             (mk_pat (P_lit (mk_lit L_unit)))
                             (if !opt_fast_undefined && List.length ids > 0 then
@@ -931,7 +947,7 @@ let generate_undefineds vs_ids (Defs defs) =
                                               [mk_exp (E_list (List.map (fun id -> mk_exp (E_id id)) ids))])))]]
     | TD_record (id, typq, fields, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let pat = p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id))) in
-       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, (fun _ -> None), false));
+       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, [], false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             pat
                             (mk_exp (E_record (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)))]]
@@ -979,7 +995,7 @@ let generate_undefineds vs_ids (Defs defs) =
              (mk_exp (E_app (mk_id "internal_pick",
                              [mk_exp (E_list (List.map (make_constr typ_to_var) constr_args))]))) letbinds
        in
-       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, (fun _ -> None), false));
+       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, [], false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                       pat
                       body]]
@@ -1015,7 +1031,7 @@ let generate_enum_functions vs_ids (Defs defs) =
   let rec gen_enums = function
     | DEF_type (TD_aux (TD_enum (id, elems, _), _)) as enum :: defs ->
        let enum_val_spec name quants typ =
-         mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, (fun _ -> None), !opt_enum_casts))
+         mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, [], !opt_enum_casts))
        in
        let range_constraint kid = nc_and (nc_lteq (nint 0) (nvar kid)) (nc_lteq (nvar kid) (nint (List.length elems - 1))) in
 

@@ -256,7 +256,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      separate space [string "let"; ocaml_atomic_lexp ctx lexp;
                      equals; string "ref"; parens (ocaml_atomic_exp ctx exp1 ^^ space ^^ colon ^^ space ^^ ocaml_typ ctx (Rewrites.simple_typ (typ_of exp1))); string "in"]
      ^/^ ocaml_exp ctx exp2
-  | E_loop (Until, cond, body) ->
+  | E_loop (Until, _, cond, body) ->
      let loop_body =
        (ocaml_atomic_exp ctx body ^^ semi)
        ^/^
@@ -267,7 +267,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      (string "let rec loop () =" ^//^ loop_body)
      ^/^ string "in"
      ^/^ string "loop ()"
-  | E_loop (While, cond, body) ->
+  | E_loop (While, _, cond, body) ->
      let loop_body =
        separate space [string "if"; ocaml_atomic_exp ctx cond;
                        string "then"; parens (ocaml_atomic_exp ctx body ^^ semi ^^ space ^^ string "loop ()");
@@ -466,8 +466,8 @@ let ocaml_funcls ctx =
          | exception Not_found -> failwith ("No val spec found for " ^ string_of_id id)
        in
        (* Any remaining type variables after simple_typ rewrite should
-        ind   icate Type-polymorphism. If we have it, we need to generate
-        explic      it type signatures with universal quantification. *)
+          indicate Type-polymorphism. If we have it, we need to generate
+          explicit type signatures with universal quantification. *)
        let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
        let pat_sym = gensym () in
        let pat, exp =
@@ -625,8 +625,8 @@ let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
      Reporting.unreachable l __POS__ "Bitfield should be re-written"
 
 let get_externs (Defs defs) =
-  let extern_id (VS_aux (VS_val_spec (typschm, id, ext, _), _)) =
-    match ext "ocaml" with
+  let extern_id (VS_aux (VS_val_spec (typschm, id, exts, _), _)) =
+    match Ast_util.extern_assoc "ocaml" exts with
     | None -> []
     | Some ext -> [(id, mk_id ext)]
   in
@@ -991,6 +991,8 @@ let ocaml_compile spec defs generator_types =
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/elf_loader.ml .") in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/sail_lib.ml .") in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/util.ml .") in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/value.ml .") in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/toFromInterp_lib.ml .") in
   let tags_file = if !opt_ocaml_coverage then "_tags_coverage" else "_tags" in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/lib/" ^ tags_file ^ " _tags") in
   let out_chan = open_out (spec ^ ".ml") in

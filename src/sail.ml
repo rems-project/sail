@@ -57,6 +57,7 @@ let opt_file_out : string option ref = ref None
 let opt_interactive_script : string option ref = ref None
 let opt_print_version = ref false
 let opt_target = ref None
+let opt_tofrominterp_output_dir : string option ref = ref None
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
@@ -88,6 +89,15 @@ let options = Arg.align ([
   ( "-no_warn",
     Arg.Clear Util.opt_warnings,
     " do not print warnings");
+  ( "-tofrominterp",
+    set_target "tofrominterp",
+    " output OCaml functions to translate between shallow embedding and interpreter");
+  ( "-tofrominterp_lem",
+    Arg.Tuple [set_target "tofrominterp"; Arg.Set ToFromInterp_backend.lem_mode],
+    " output embedding translation for the Lem backend rather than the OCaml backend, implies -tofrominterp");
+  ( "-tofrominterp_output_dir",
+    Arg.String (fun dir -> opt_tofrominterp_output_dir := Some dir),
+    " set a custom directory to output embedding translation OCaml");
   ( "-ocaml",
     Arg.Tuple [set_target "ocaml"; Arg.Set Initial_check.opt_undefined_gen],
     " output an OCaml translated version of the input");
@@ -121,6 +131,9 @@ let options = Arg.align ([
   ( "-latex_full_valspecs",
     Arg.Clear Latex.opt_simple_val,
     " print full valspecs in LaTeX output");
+  ( "-marshal",
+    Arg.Tuple [set_target "marshal"; Arg.Set Initial_check.opt_undefined_gen],
+    " OCaml-marshal out the rewritten AST to a file");
   ( "-ir",
     set_target "ir",
     " print intermediate representation");
@@ -351,6 +364,9 @@ let load_files ?check:(check=false) type_envs files =
                      -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
   let ast = Process_file.preprocess_ast options ast in
   let ast = Initial_check.process_ast ~generate:(not check) ast in
+  (* The separate loop measures declarations would be awkward to type check, so
+     move them into the definitions beforehand. *)
+  let ast = Rewrites.move_loop_measures ast in
   Profile.finish "parsing" t;
 
   let t = Profile.start () in
@@ -396,6 +412,24 @@ let target name out_name ast type_envs =
      in
      let out = match !opt_file_out with None -> "out" | Some s -> s in
      Ocaml_backend.ocaml_compile out ast ocaml_generator_info
+
+  | Some "tofrominterp" ->
+     let out = match !opt_file_out with None -> "out" | Some s -> s in
+     ToFromInterp_backend.tofrominterp_output !opt_tofrominterp_output_dir out ast
+
+  | Some "marshal" ->
+     let out_filename = match !opt_file_out with None -> "out" | Some s -> s in
+     let f = open_out_bin (out_filename ^ ".defs") in
+     let remove_prover (l, tannot) =
+       if Type_check.is_empty_tannot tannot then
+         (l, Type_check.empty_tannot)
+       else
+         (l, Type_check.replace_env (Type_check.Env.set_prover None (Type_check.env_of_tannot tannot)) tannot)
+     in
+     Marshal.to_string (Ast_util.map_defs_annot remove_prover ast, Type_check.Env.set_prover None type_envs) [Marshal.Compat_32]
+     |> B64.encode
+     |> output_string f;
+     close_out f
 
   | Some "c" ->
      let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast type_envs) in

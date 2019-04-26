@@ -387,10 +387,10 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_list exps -> string "[|" ^^ separate_map (comma ^^ space) doc_exp exps ^^ string "|]"
   | E_cons (exp1, exp2) -> doc_atomic_exp exp1 ^^ space ^^ string "::" ^^ space ^^ doc_exp exp2
   | E_record fexps -> separate space [string "struct"; string "{"; doc_fexps fexps; string "}"]
-  | E_loop (While, cond, exp) ->
-     separate space [string "while"; doc_exp cond; string "do"; doc_exp exp]
-  | E_loop (Until, cond, exp) ->
-     separate space [string "repeat"; doc_exp exp; string "until"; doc_exp cond]
+  | E_loop (While, measure, cond, exp) ->
+     separate space ([string "while"] @ doc_measure measure @ [doc_exp cond; string "do"; doc_exp exp])
+  | E_loop (Until, measure, cond, exp) ->
+     separate space ([string "repeat"] @ doc_measure measure @ [doc_exp exp; string "until"; doc_exp cond])
   | E_record_update (exp, fexps) ->
      separate space [string "{"; doc_exp exp; string "with"; doc_fexps fexps; string "}"]
   | E_vector_append (exp1, exp2) -> separate space [doc_atomic_exp exp1; string "@"; doc_atomic_exp exp2]
@@ -429,6 +429,10 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
      separate space [string "2"; string "^"; doc_atomic_exp exp]
   | _ -> doc_atomic_exp exp
+and doc_measure (Measure_aux (m_aux, _)) =
+  match m_aux with
+  | Measure_none -> []
+  | Measure_some exp -> [string "termination_measure"; braces (doc_exp exp)]
 and doc_infix n (E_aux (e_aux, _) as exp) =
   match e_aux with
   | E_app_infix (l, op, r) when n < 10 ->
@@ -470,7 +474,7 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; equals; doc_exp exp3])
   | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; string ".."; doc_atomic_exp exp3; equals; doc_exp exp4])
-  | E_internal_value v -> string (Value.string_of_value v |> Util.green |> Util.clear)
+  | E_internal_value v -> string (Value.string_of_value v (* |> Util.green |> Util.clear *))
   | _ -> parens (doc_exp exp)
 and doc_fexps fexps =
   separate_map (comma ^^ space) doc_fexp fexps
@@ -623,9 +627,7 @@ let doc_typdef (TD_aux(td,_)) = match td with
 
 let doc_spec ?comment:(comment=false) (VS_aux (v, annot)) =
   let doc_extern ext =
-    let doc_backend b = Util.option_map (fun id -> string (b ^ ":") ^^ space ^^
-      utf8string ("\"" ^ String.escaped id ^  "\"")) (ext b) in
-    let docs = Util.option_these (List.map doc_backend ["ocaml"; "lem"; "smt"; "interpreter"; "c"]) in
+    let docs = List.map (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\"")) ext in
     if docs = [] then empty else equals ^^ space ^^ braces (separate (comma ^^ space) docs)
   in
   match v with
@@ -642,6 +644,13 @@ let doc_prec = function
   | Infix -> string "infix"
   | InfixL -> string "infixl"
   | InfixR -> string "infixr"
+
+let doc_loop_measures l =
+  separate_map (comma ^^ break 1)
+    (function (Loop (l,e)) ->
+       string (match l with While -> "while" | Until -> "until") ^^
+         space ^^ doc_exp e)
+    l
 
 let rec doc_scattered (SD_aux (sd_aux, _)) =
   match sd_aux with
@@ -679,6 +688,8 @@ let rec doc_def def = group (match def with
   | DEF_measure (id,pat,exp) ->
      string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_pat pat ^^
        space ^^ equals ^/^ doc_exp exp
+  | DEF_loop_measures (id,measures) ->
+     string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_loop_measures measures
   | DEF_pragma (pragma, arg, l) ->
      string ("$" ^ pragma ^ " " ^ arg)
   | DEF_fixity (prec, n, id) ->

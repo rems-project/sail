@@ -35,6 +35,7 @@ depends: [
   "omd"
   "conf-gmp"
   "conf-zlib"
+  "base64" {< "3.0.0"}
   "yojson"
 ]
 available: [ocaml-version >= "4.06.1"]

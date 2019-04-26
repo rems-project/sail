@@ -58,6 +58,15 @@ open Pretty_print_common
 
 module StringSet = Set.Make(String)
 
+let rec list_contains cmp l1 = function
+  | [] -> Some l1
+  | h::t ->
+     let rec remove = function
+       | [] -> None
+       | h'::t' -> if cmp h h' = 0 then Some t'
+                   else Util.option_map (List.cons h') (remove t')
+     in Util.option_bind (fun l1' -> list_contains cmp l1' t) (remove l1)
+
 let opt_undef_axioms = ref false
 let opt_debug_on : string list ref = ref []
 
@@ -549,6 +558,11 @@ let classify_ex_type ctxt env ?binding ?(rawbools=false) (Typ_aux (t,l) as t0) =
   | Typ_exist (kopts,_,t1) -> ExGeneral,kopts,t1
   | _ -> ExNone,[],t0
 
+let rec flatten_nc (NC_aux (nc,l) as nc_full) =
+  match nc with
+  | NC_and (nc1,nc2) -> flatten_nc nc1 @ flatten_nc nc2
+  | _ -> [nc_full]
+
 (* When making changes here, check whether they affect coq_nvars_of_typ *)
 let rec doc_typ_fns ctx env =
   (* following the structure of parser for precedence *)
@@ -729,15 +743,19 @@ and doc_nc_prop ?(top = true) ctx env nc =
       (fun m (v,(_,Typ_aux (typ,_))) ->
         match typ with
         | Typ_app (id, [A_aux (A_bool nc,_)]) when string_of_id id = "atom_bool" ->
-           NCMap.add nc v m
-        | _ -> m) NCMap.empty locals
+           (flatten_nc nc, v)::m
+        | _ -> m) [] locals
   in
-  let newnc f nc =
-    match NCMap.find_opt nc nc_id_map with
-    | Some id -> parens (doc_op equals (doc_id id) (string "true"))
-    | None -> f nc
-  in
-  let rec l85 (NC_aux (nc,_) as nc_full) =
+  let rec newnc f nc =
+    let ncs = flatten_nc nc in
+    let candidates =
+      Util.map_filter (fun (ncs',id) -> Util.option_map (fun x -> x,id) (list_contains NC.compare ncs ncs')) nc_id_map
+    in
+    match List.sort (fun (l,_) (l',_) -> compare l l') candidates with
+    | ([],id)::_ -> parens (doc_op equals (doc_id id) (string "true"))
+    | ((h::t),id)::_ -> parens (doc_op (string "/\\") (doc_op equals (doc_id id) (string "true")) (l80 (List.fold_left nc_and h t)))
+    | [] -> f nc
+  and l85 (NC_aux (nc,_) as nc_full) =
   match nc with
   | NC_or (nc1, nc2) -> doc_op (string "\\/") (newnc l80 nc1) (newnc l85 nc2)
   | _ -> l80 nc_full
@@ -779,21 +797,25 @@ and doc_nc_prop ?(top = true) ctx env nc =
 (* Follows Coq precedence levels *)
 let rec doc_nc_exp ctx env nc =
   let locals = Env.get_locals env |> Bindings.bindings in
+  let nc = Env.expand_constraint_synonyms env nc in
   let nc_id_map =
     List.fold_left
       (fun m (v,(_,Typ_aux (typ,_))) ->
         match typ with
         | Typ_app (id, [A_aux (A_bool nc,_)]) when string_of_id id = "atom_bool" ->
-           NCMap.add nc v m
-        | _ -> m) NCMap.empty locals
+           (flatten_nc nc, v)::m
+        | _ -> m) [] locals
   in
-  let newnc f nc =
-    match NCMap.find_opt nc nc_id_map with
-    | Some id -> doc_id id
-    | None -> f nc
-  in
-  let nc = Env.expand_constraint_synonyms env nc in
-  let rec l70 (NC_aux (nc,_) as nc_full) =
+  let rec newnc f nc =
+    let ncs = flatten_nc nc in
+    let candidates =
+      Util.map_filter (fun (ncs',id) -> Util.option_map (fun x -> x,id) (list_contains NC.compare ncs ncs')) nc_id_map
+    in
+    match List.sort (fun (l,_) (l',_) -> compare l l') candidates with
+    | ([],id)::_ -> doc_id id
+    | ((h::t),id)::_ -> parens (doc_op (string "&&") (doc_id id) (l10 (List.fold_left nc_and h t)))
+    | [] -> f nc
+  and l70 (NC_aux (nc,_) as nc_full) =
     match nc with
     | NC_equal (ne1, ne2) -> doc_op (string "=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
     | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=?") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
@@ -1504,43 +1526,70 @@ let doc_exp, doc_let =
           | _ -> raise (Reporting.err_unreachable l __POS__
              "Unexpected number of arguments for loop combinator")
           end
-       | Id_aux (Id (("while#" | "until#") as combinator), _) ->
-          let combinator = String.sub combinator 0 (String.length combinator - 1) in
+       | Id_aux (Id (("while#" | "until#" | "while#t" | "until#t") as combinator), _) ->
+          let combinator = String.sub combinator 0 (String.index combinator '#') in
           begin
-            match args with
-            | [cond; varstuple; body] ->
-               let return (E_aux (e, a)) = E_aux (E_internal_return (E_aux (e, a)), a) in
-               let csuffix, cond, body =
-                 match effectful (effect_of cond), effectful (effect_of body) with
-                   | false, false -> "", cond, body
-                   | false, true  -> "M", return cond, body
-                   | true,  false -> "M", cond, return body
-                   | true,  true  -> "M", cond, body
-               in
-               let used_vars_body = find_e_ids body in
-               let lambda =
-                 (* Work around indentation issues in Lem when translating
-                    tuple or literal unit patterns to Isabelle *)
-                 match fst (uncast_exp varstuple) with
-                   | E_aux (E_tuple _, _)
-                     when not (IdSet.mem (mk_id "varstup") used_vars_body)->
-                      separate space [string "fun varstup"; bigarrow] ^^ break 1 ^^
-                      separate space [string "let"; squote ^^ expY varstuple; string ":= varstup in"]
-                   | E_aux (E_lit (L_aux (L_unit, _)), _)
-                     when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
-                      separate space [string "fun unit_var"; bigarrow]
-                   | _ ->
-                      separate space [string "fun"; expY varstuple; bigarrow]
-               in
-               parens (
-                   (prefix 2 1)
-                     ((separate space) [string (combinator ^ csuffix); expY varstuple])
-                     ((prefix 0 1)
-                       (parens (prefix 2 1 (group lambda) (expN cond)))
-                       (parens (prefix 2 1 (group lambda) (expN body))))
-                 )
-            | _ -> raise (Reporting.err_unreachable l __POS__
-               "Unexpected number of arguments for loop combinator")
+            let cond, varstuple, body, measure =
+              match args with
+              | [cond; varstuple; body] -> cond, varstuple, body, None
+              | [cond; varstuple; body; measure] -> cond, varstuple, body, Some measure
+              | _ -> raise (Reporting.err_unreachable l __POS__
+                              "Unexpected number of arguments for loop combinator")
+            in
+            let return (E_aux (e, (l,a))) =
+              let a' = mk_tannot (env_of_annot (l,a)) bool_typ no_effect in
+              E_aux (E_internal_return (E_aux (e, (l,a))), (l,a'))
+            in
+            let simple_bool (E_aux (_, (l,a)) as exp) =
+              let a' = mk_tannot (env_of_annot (l,a)) bool_typ no_effect in
+              E_aux (E_cast (bool_typ, exp), (l,a'))
+            in
+            let csuffix, cond, body =
+              match effectful (effect_of cond), effectful (effect_of body) with
+              | false, false -> "", cond, body
+              | false, true  -> "M", return cond, body
+              | true,  false -> "M", simple_bool cond, return body
+              | true,  true  -> "M", simple_bool cond, body
+            in
+            (* If rewrite_loops_with_escape_effect added a dummy assertion to
+               ensure that the loop can escape when it reaches the limit, omit
+               the dummy assert here. *)
+            let body = match body with
+              | E_aux (E_internal_plet
+                  (P_aux ((P_wild | P_typ (_,P_aux (P_wild, _))),_),
+                   E_aux (E_assert
+                            (E_aux (E_lit (L_aux (L_true,_)),_),
+                             E_aux (E_lit (L_aux (L_string "loop dummy assert",_)),_))
+                         ,_),body'),_) -> body'
+              | _ -> body
+            in
+            let msuffix, measure_pp =
+              match measure with
+              | None -> "", []
+              | Some exp -> "T", [expY exp]
+            in
+            let used_vars_body = find_e_ids body in
+            let lambda =
+              (* Work around indentation issues in Lem when translating
+                 tuple or literal unit patterns to Isabelle *)
+              match fst (uncast_exp varstuple) with
+              | E_aux (E_tuple _, _)
+                   when not (IdSet.mem (mk_id "varstup") used_vars_body)->
+                 separate space [string "fun varstup"; bigarrow] ^^ break 1 ^^
+                   separate space [string "let"; squote ^^ expY varstuple; string ":= varstup in"]
+              | E_aux (E_lit (L_aux (L_unit, _)), _)
+                   when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
+                 separate space [string "fun unit_var"; bigarrow]
+              | _ ->
+                 separate space [string "fun"; expY varstuple; bigarrow]
+            in
+            parens (
+                (prefix 2 1)
+                  ((separate space) (string (combinator ^ csuffix ^ msuffix)::measure_pp@[expY varstuple]))
+                  ((prefix 0 1)
+                     (parens (prefix 2 1 (group lambda) (expN cond)))
+                     (parens (prefix 2 1 (group lambda) (expN body))))
+              )
           end
        | Id_aux (Id "early_return", _) ->
           begin
@@ -1979,9 +2028,14 @@ let doc_exp, doc_let =
          match pat, e1, e2 with
          | (P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _)),
            (E_aux (E_assert (assert_e1,assert_e2),_)), _ ->
-            let epp = liftR (separate space [string "assert_exp'"; expY assert_e1; expY assert_e2]) in
-            let epp = infix 0 1 (string ">>= fun _ =>") epp (top_exp new_ctxt false e2) in
-            if aexp_needed then parens (align epp) else align epp
+             let assert_fn, mid = 
+               match assert_constraint outer_env true assert_e1 with
+               | Some _ -> "assert_exp'", ">>= fun _ =>"
+               | None -> "assert_exp", ">>"
+             in
+             let epp = liftR (separate space [string assert_fn; expY assert_e1; expY assert_e2]) in
+             let epp = infix 0 1 (string mid) epp (top_exp new_ctxt false e2) in
+             if aexp_needed then parens (align epp) else align epp
          | _ ->
             let epp =
               let middle =
@@ -2191,7 +2245,9 @@ let types_used_with_generic_eq defs =
     | DEF_mapdef (MD_aux (_,(l,_)))
     | DEF_scattered (SD_aux (_,(l,_)))
     | DEF_measure (Id_aux (_,l),_,_)
-      -> unreachable l __POS__ "Internal definition found in the Coq back-end"
+    | DEF_loop_measures (Id_aux (_,l),_)
+      -> unreachable l __POS__
+           "Definition found in the Coq back-end that should have been rewritten away"
     | DEF_internal_mutrec fds ->
        List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
     | DEF_val lb ->
@@ -2925,6 +2981,10 @@ let rec doc_def unimplemented generic_eq_types def =
   | DEF_measure (id,_,_) -> unreachable (id_loc id) __POS__
                               ("Termination measure for " ^ string_of_id id ^
                                  " should have been rewritten before backend")
+  | DEF_loop_measures (id,_) ->
+     unreachable (id_loc id) __POS__
+       ("Loop termination measures for " ^ string_of_id id ^
+          " should have been rewritten before backend")
 
 let find_exc_typ defs =
   let is_exc_typ_def = function
@@ -2940,8 +3000,8 @@ let find_unimplemented defs =
        IdSet.remove id unimplemented
   in
   let adjust_def unimplemented = function
-    | DEF_spec (VS_aux (VS_val_spec (_,id,ext,_),_)) -> begin
-      match ext "coq" with
+    | DEF_spec (VS_aux (VS_val_spec (_,id,exts,_),_)) -> begin
+      match Ast_util.extern_assoc "coq" exts with
       | Some _ -> unimplemented
       | None -> IdSet.add id unimplemented
     end

@@ -86,6 +86,37 @@ def test_lem_builtins(name):
         results.collect(tests)
     return results.finish()
 
+def test_coq_builtins(name):
+    banner('Testing builtins: {}'.format(name))
+    results = Results(name)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
+            basename = os.path.splitext(os.path.basename(filename))[0]
+            tests[filename] = os.fork()
+            if tests[filename] == 0:
+                # Generate Coq from Sail
+                step('sail -no_warn -coq -o {} {}'.format(basename, filename))
+
+                step('mkdir -p _coqbuild_{}'.format(basename))
+                step('mv {}.v _coqbuild_{}'.format(basename, basename))
+                step('mv {}_types.v _coqbuild_{}'.format(basename, basename))
+                step('cp test.v _coqbuild_{}'.format(basename))
+                os.chdir('_coqbuild_{}'.format(basename))
+
+                # TODO: find bbv properly
+                step('coqc -R $SAIL_DIR/../bbv/theories bbv -R $SAIL_DIR/lib/coq Sail {}_types.v'.format(basename))
+                step('coqc -R $SAIL_DIR/../bbv/theories bbv -R $SAIL_DIR/lib/coq Sail {}.v'.format(basename))
+                step('coqtop -R "$SAIL_DIR/../bbv/theories" bbv -R "$SAIL_DIR/lib/coq" Sail -require {}_types -require {} -l test.v -batch | tee /dev/stderr | grep -q OK'.format(basename,basename))
+
+                os.chdir('..')
+                step('rm -r _coqbuild_{}'.format(basename))
+
+                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                sys.exit()
+        results.collect(tests)
+    return results.finish()
+
 xml = '<testsuites>\n'
 
 xml += test_c_builtins('C, No optimisations', '')
@@ -96,6 +127,7 @@ xml += test_ocaml_builtins('OCaml', '')
 
 # Comment this out for most runs because it's really slow
 # xml += test_lem_builtins('Lem to OCaml')
+# xml += test_coq_builtins('Coq')
 
 xml += '</testsuites>\n'
 

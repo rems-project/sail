@@ -108,7 +108,7 @@ let sail_logo =
 
 let vs_ids = ref (val_spec_ids !Interactive.ast)
 
-let interactive_state = ref (initial_state !Interactive.ast Value.primops)
+let interactive_state = ref (initial_state !Interactive.ast !Interactive.env Value.primops)
 
 let interactive_bytecode = ref []
 
@@ -117,7 +117,9 @@ let sep = "-----------------------------------------------------" |> Util.blue |
 let print_program () =
   match !current_mode with
   | Normal | Emacs -> ()
-  | Evaluation (Step (out, _, _, stack)) ->
+  | Evaluation (Step (out, _, _, stack))
+    | Evaluation (Effect_request(out, _, stack,  _))
+    | Evaluation (Fail (out, _, _, stack, _)) ->
      List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline (Lazy.force code); print_endline sep);
      print_endline (Lazy.force out)
   | Evaluation (Done (_, v)) ->
@@ -134,6 +136,9 @@ let rec run () =
           interactive_state := state;
           print_endline ("Result = " ^ Value.string_of_value v);
           current_mode := Normal
+       | Fail (_, _, _, _, msg) ->
+          print_endline ("Error: " ^ msg);
+          current_mode := Normal
        | Step (out, state, _, stack) ->
           begin
             try
@@ -145,6 +150,14 @@ let rec run () =
        | Break frame ->
           print_endline "Breakpoint";
           current_mode := Evaluation frame
+       | Effect_request (out, state, stack, eff) ->
+          begin
+            try
+              current_mode := Evaluation (Interpreter.default_effect_interp state eff)
+            with
+            | Failure str -> print_endline str; current_mode := Normal
+          end;
+          run ()
      end
 
 let rec run_steps n =
@@ -158,6 +171,9 @@ let rec run_steps n =
           interactive_state := state;
           print_endline ("Result = " ^ Value.string_of_value v);
           current_mode := Normal
+       | Fail (_, _, _, _, msg) ->
+          print_endline ("Error: " ^ msg);
+          current_mode := Normal
        | Step (out, state, _, stack) ->
           begin
             try
@@ -169,6 +185,14 @@ let rec run_steps n =
        | Break frame ->
           print_endline "Breakpoint";
           current_mode := Evaluation frame
+       | Effect_request (out, state, stack, eff) ->
+          begin
+            try
+              current_mode := Evaluation (Interpreter.default_effect_interp state eff)
+            with
+            | Failure str -> print_endline str; current_mode := Normal
+          end;
+          run_steps (n - 1)
      end
 
 let help =
@@ -208,7 +232,9 @@ let help =
              (color yellow "<command>") (color green ":help :type")
   | ":elf" ->
      sprintf ":elf %s - Load an ELF file."
-             (color yellow "<file>")
+       (color yellow "<file>")
+  | ":bin" ->
+     ":bin <address> <file> - Load a binary file at the given address."
   | ":r" | ":run" ->
      "(:r | :run) - Completely evaluate the currently evaluating expression."
   | ":s" | ":step" ->
@@ -402,7 +428,7 @@ let handle_input' input =
         let ast, env = Specialize.(specialize' 1 int_specialization !Interactive.ast !Interactive.env) in
         Interactive.ast := ast;
         Interactive.env := env;
-        interactive_state := initial_state !Interactive.ast Value.primops
+        interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops
      | ":pretty" ->
         print_endline (Pretty_print_sail.to_string (Latex.defs !Interactive.ast))
      | ":ir" ->
@@ -441,13 +467,23 @@ let handle_input' input =
            let files = Util.split_on_char ' ' arg in
            let (_, ast, env) = load_files !Interactive.env files in
            Interactive.ast := append_ast !Interactive.ast ast;
-           interactive_state := initial_state !Interactive.ast Value.primops;
+           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
            Interactive.env := env;
            vs_ids := val_spec_ids !Interactive.ast
+        | ":bin" ->
+           begin
+             let args = Util.split_on_char ' ' arg in
+             match args with
+             | [addr_s; filename] ->
+                let addr = Big_int.of_string addr_s in
+                Elf_loader.load_binary addr filename
+             | _ ->
+                print_endline "Invalid argument for :bin, expected <addr> <filename>"
+           end
         | ":u" | ":unload" ->
            Interactive.ast := Ast.Defs [];
            Interactive.env := Type_check.initial_env;
-           interactive_state := initial_state !Interactive.ast Value.primops;
+           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
            vs_ids := val_spec_ids !Interactive.ast;
            (* See initial_check.mli for an explanation of why we need this. *)
            Initial_check.have_undefined_builtins := false;
@@ -469,7 +505,7 @@ let handle_input' input =
               let ast, env = Type_check.check !Interactive.env (Defs [DEF_val (mk_letbind (mk_pat (P_id (mk_id v))) exp)]) in
               Interactive.ast := append_ast !Interactive.ast ast;
               Interactive.env := env;
-              interactive_state := initial_state !Interactive.ast Value.primops;
+              interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
            | _ -> print_endline "Invalid arguments for :let"
            end
         | ":def" ->
@@ -477,7 +513,7 @@ let handle_input' input =
            let ast, env = Type_check.check !Interactive.env ast in
            Interactive.ast := append_ast !Interactive.ast ast;
            Interactive.env := env;
-           interactive_state := initial_state !Interactive.ast Value.primops;
+           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
         | ":graph" ->
            let format = if arg = "" then "svg" else arg in
            let dotfile, out_chan = Filename.open_temp_file "sail_graph_" ".gz" in
@@ -538,17 +574,17 @@ let handle_input' input =
            end
         | ":rewrites" ->
            Interactive.ast := Process_file.rewrite_ast_target arg !Interactive.env !Interactive.ast;
-           interactive_state := initial_state !Interactive.ast Value.primops
+           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops
         | ":prover_regstate" ->
            let env, ast = prover_regstate (Some arg) !Interactive.ast !Interactive.env in
            Interactive.env := env;
            Interactive.ast := ast;
-           interactive_state := initial_state !Interactive.ast Value.primops
+           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops
         | ":recheck" ->
            let ast, env = Type_check.check Type_check.initial_env !Interactive.ast in
            Interactive.env := env;
            Interactive.ast := ast;
-           interactive_state := initial_state !Interactive.ast Value.primops;
+           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
            vs_ids := val_spec_ids !Interactive.ast
         | ":compile" ->
            let out_name = match !opt_file_out with
@@ -577,7 +613,7 @@ let handle_input' input =
                load_into_session arg;
                let (_, ast, env) = load_files ~check:true !Interactive.env [arg] in
                Interactive.ast := append_ast !Interactive.ast ast;
-               interactive_state := initial_state !Interactive.ast Value.primops;
+               interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
                Interactive.env := env;
                vs_ids := val_spec_ids !Interactive.ast;
                print_endline ("(message \"Checked " ^ arg ^ " done\")\n");
@@ -588,7 +624,7 @@ let handle_input' input =
         | ":unload" ->
            Interactive.ast := Ast.Defs [];
            Interactive.env := Type_check.initial_env;
-           interactive_state := initial_state !Interactive.ast Value.primops;
+           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
            vs_ids := val_spec_ids !Interactive.ast;
            Initial_check.have_undefined_builtins := false;
            Process_file.clear_symbols ()
@@ -644,6 +680,9 @@ let handle_input' input =
            interactive_state := state;
            print_endline ("Result = " ^ Value.string_of_value v);
            current_mode := Normal
+        | Fail (_, _, _, _, msg) ->
+           print_endline ("Error: " ^ msg);
+           current_mode := Normal
         | Step (out, state, _, stack) ->
            begin
              try
@@ -656,6 +695,15 @@ let handle_input' input =
         | Break frame ->
            print_endline "Breakpoint";
            current_mode := Evaluation frame
+        | Effect_request (out, state, stack, eff) ->
+           begin
+             try
+               interactive_state := state;
+               current_mode := Evaluation (Interpreter.default_effect_interp state eff);
+               print_program ()
+             with
+             | Failure str -> print_endline str; current_mode := Normal
+           end
         end
      end
 

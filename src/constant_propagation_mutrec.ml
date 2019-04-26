@@ -125,7 +125,7 @@ let generate_val_spec env id args l annot =
        mk_typquant
      in
      let typschm = mk_typschm tq' typ' in
-     mk_val_spec (VS_val_spec (typschm, generate_fun_id id args, (fun _ -> None), false)),
+     mk_val_spec (VS_val_spec (typschm, generate_fun_id id args, [], false)),
      ksubsts
   | _, Typ_aux (_, l) ->
      raise (Reporting.err_unreachable l __POS__ "Function val spec is not a function type")

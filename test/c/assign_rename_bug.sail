@@ -7,9 +7,8 @@ $include <vector_dec.sail>
 $include <exception_basic.sail>
 
 val sub_vec_int = {
-  ocaml: "sub_vec_int",
-  lem: "sub_vec_int",
-  c: "sub_bits_int"
+  c: "sub_bits_int",
+  _: "sub_vec_int"
 } : forall 'n. (bits('n), int) -> bits('n)
 
 overload operator - = {sub_vec_int}

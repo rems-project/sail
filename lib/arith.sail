@@ -5,19 +5,19 @@ $include <flow.sail>
 
 // ***** Addition *****
 
-val add_atom = {ocaml: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : forall 'n 'm.
+val add_atom = {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : forall 'n 'm.
   (int('n), int('m)) -> int('n + 'm)
 
-val add_int = {ocaml: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : (int, int) -> int
+val add_int = {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : (int, int) -> int
 
 overload operator + = {add_atom, add_int}
 
 // ***** Subtraction *****
 
-val sub_atom = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : forall 'n 'm.
+val sub_atom = {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : forall 'n 'm.
   (int('n), int('m)) -> int('n - 'm)
 
-val sub_int = {ocaml: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : (int, int) -> int
+val sub_int = {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : (int, int) -> int
 
 overload operator - = {sub_atom, sub_int}
 
@@ -29,18 +29,18 @@ val sub_nat = {
 
 // ***** Negation *****
 
-val negate_atom = {ocaml: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : forall 'n. int('n) -> int(- 'n)
+val negate_atom = {ocaml: "negate", interpreter: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : forall 'n. int('n) -> int(- 'n)
 
-val negate_int = {ocaml: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : int -> int
+val negate_int = {ocaml: "negate", interpreter: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : int -> int
 
 overload negate = {negate_atom, negate_int}
 
 // ***** Multiplication *****
 
-val mult_atom = {ocaml: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : forall 'n 'm.
+val mult_atom = {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : forall 'n 'm.
   (int('n), int('m)) -> int('n * 'm)
 
-val mult_int = {ocaml: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : (int, int) -> int
+val mult_int = {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : (int, int) -> int
 
 overload operator * = {mult_atom, mult_int}
 
@@ -57,13 +57,13 @@ let elsize = shl_int(8, UInt(size))
 ```
 THIS ensures that in this case the typechecker knows that the end result will be a value in the set `{8, 16, 32, 64}`
 */
-val _shl8 = {c: "shl_mach_int", _: "shl_int"} :
+val _shl8 = {c: "shl_mach_int", coq: "shl_int_8", _: "shl_int"} :
   forall 'n, 0 <= 'n <= 3. (int(8), int('n)) -> {'m, 'm in {8, 16, 32, 64}. int('m)}
 
 /*!
 Similarly, we can shift 32 by either 0 or 1 to get a value in `{32, 64}`
 */
-val _shl32 = {c: "shl_mach_int", _: "shl_int"} :
+val _shl32 = {c: "shl_mach_int", coq: "shl_int_32", _: "shl_int"} :
   forall 'n, 'n in {0, 1}. (int(32), int('n)) -> {'m, 'm in {32, 64}. int('m)}
 
 val _shl_int = "shl_int" : (int, int) -> int
@@ -81,20 +81,25 @@ overload shr_int = {_shr32, _shr_int}
 /*! Truncating division (rounds towards zero) */
 val tdiv_int = {
   ocaml: "tdiv_int",
+  interpreter: "tdiv_int",
   lem: "integerDiv_t",
-  c: "tdiv_int"
+  c: "tdiv_int",
+  coq: "Z.quot"
 } : (int, int) -> int
 
 /*! Remainder for truncating division (has sign of dividend) */
 val tmod_int = {
   ocaml: "tmod_int",
+  interpreter: "tmod_int",
   lem: "integerMod_t",
-  c: "tmod_int"
+  c: "tmod_int",
+  coq: "Z.rem"
 } : (int, int) -> nat
 
 val abs_int = {
   smt : "abs",
   ocaml: "abs_int",
+  interpreter: "abs_int",
   lem: "abs_int",
   c: "abs_int",
   coq: "Z.abs"

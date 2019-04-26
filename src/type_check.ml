@@ -117,11 +117,10 @@ type env =
     shadow_vars : int KBindings.t;
     typ_synonyms : (typquant * typ_arg) Bindings.t;
     overloads : (id list) Bindings.t;
-    flow : (typ -> typ) Bindings.t;
     enums : IdSet.t Bindings.t;
     records : (typquant * (typ * id) list) Bindings.t;
     accessors : (typquant * typ) Bindings.t;
-    externs : (string -> string option) Bindings.t;
+    externs : (string * string) list Bindings.t;
     casts : id list;
     allow_casts : bool;
     allow_bindings : bool;
@@ -129,7 +128,7 @@ type env =
     default_order : order option;
     ret_typ : typ option;
     poly_undefineds : bool;
-    prove : env -> n_constraint -> bool;
+    prove : (env -> n_constraint -> bool) option;
     allow_unknowns : bool;
   }
 
@@ -422,9 +421,6 @@ module Env : sig
   val add_mapping : id -> typquant * typ * typ -> t -> t
   val add_union_id : id -> typquant * typ -> t -> t
   val get_union_id  : id -> t -> typquant * typ
-  val add_flow : id -> (typ -> typ) -> t -> t
-  val get_flow : id -> t -> typ -> typ
-  val remove_flow : id -> t -> t
   val is_register : id -> t -> bool
   val get_register : id -> t -> effect * effect * typ
   val add_register : id -> effect -> effect -> typ -> t -> t
@@ -444,7 +440,7 @@ module Env : sig
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
   val is_extern : id -> t -> string -> bool
-  val add_extern : id -> (string -> string option) -> t -> t
+  val add_extern : id -> (string * string) list -> t -> t
   val get_extern : id -> t -> string -> string
   val get_default_order : t -> order
   val set_default_order : order_aux -> t -> t
@@ -479,7 +475,7 @@ module Env : sig
      which is defined below. To break the circularity this would cause
      (as the prove code depends on the environment), we add a
      reference to the prover to the initial environment. *)
-  val add_prover : (t -> n_constraint -> bool) -> t -> t
+  val set_prover : (t -> n_constraint -> bool) option -> t -> t
 
   (* This must not be exported, initial_env sets up a correct initial
      environment. *)
@@ -504,7 +500,6 @@ end = struct
       shadow_vars = KBindings.empty;
       typ_synonyms = Bindings.empty;
       overloads = Bindings.empty;
-      flow = Bindings.empty;
       enums = Bindings.empty;
       records = Bindings.empty;
       accessors = Bindings.empty;
@@ -516,11 +511,11 @@ end = struct
       default_order = None;
       ret_typ = None;
       poly_undefineds = false;
-      prove = (fun _ _ -> false);
+      prove = None;
       allow_unknowns = false;
     }
 
-  let add_prover f env = { env with prove = f }
+  let set_prover f env = { env with prove = f }
 
   let allow_unknowns env = env.allow_unknowns
   let set_allow_unknowns b env = { env with allow_unknowns = b }
@@ -614,7 +609,7 @@ end = struct
       | _, _ -> typ_error env Parse_ast.Unknown ("Error when processing type quantifer arguments " ^ string_of_typquant typq)
     in
     let ncs = subst_args kopts args in
-    if List.for_all (env.prove env) ncs
+    if (match env.prove with Some prover -> List.for_all (prover env) ncs | None -> false)
     then ()
     else typ_error env (id_loc id) ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
 
@@ -653,7 +648,7 @@ end = struct
     in
     fun l env args ->
     let typ_arg, ncs = subst_args env l kopts args in
-    if List.for_all (env.prove env) ncs
+    if (match env.prove with Some prover -> List.for_all (prover env) ncs | None -> false)
     then typ_arg
     else typ_error env l ("Could not prove constraints " ^ string_of_list ", " string_of_n_constraint ncs
                           ^ " in type synonym " ^ string_of_typ_arg typ_arg
@@ -1144,17 +1139,6 @@ end = struct
     match Bindings.find_opt id env.variants with
     | Some (typq, tus) -> typq, tus
     | None -> typ_error env (id_loc id) ("union " ^ string_of_id id ^ " not found")
-  let get_flow id env =
-    try Bindings.find id env.flow with
-    | Not_found -> fun typ -> typ
-
-  let add_flow id f env =
-    typ_print (lazy (adding ^ "flow constraints for " ^ string_of_id id));
-    { env with flow = Bindings.add id (fun typ -> f (get_flow id env typ)) env.flow }
-
-  let remove_flow id env =
-    typ_print (lazy ("Removing flow constraints for " ^ string_of_id id));
-    { env with flow = Bindings.remove id env.flow }
 
   let is_register id env =
     Bindings.mem id env.registers
@@ -1164,7 +1148,7 @@ end = struct
     | Not_found -> typ_error env (id_loc id) ("No register binding found for " ^ string_of_id id)
 
   let is_extern id env backend =
-    try not (Bindings.find id env.externs backend = None) with
+    try not (Ast_util.extern_assoc backend (Bindings.find id env.externs) = None) with
     | Not_found -> false
     (* Bindings.mem id env.externs *)
 
@@ -1173,7 +1157,7 @@ end = struct
 
   let get_extern id env backend =
     try
-      match Bindings.find id env.externs backend with
+      match Ast_util.extern_assoc backend (Bindings.find id env.externs) with
       | Some ext -> ext
       | None -> typ_error env (id_loc id) ("No extern binding found for " ^ string_of_id id)
     with
@@ -1196,8 +1180,7 @@ end = struct
   let lookup_id ?raw:(raw=false) id env =
     try
       let (mut, typ) = Bindings.find id env.locals in
-      let flow = get_flow id env in
-      Local (mut, if raw then typ else flow typ)
+      Local (mut, typ)
     with
     | Not_found ->
     try
@@ -2423,6 +2406,14 @@ let env_of_annot (l, tannot) = match tannot with
   | Some t -> t.env
   | None -> raise (Reporting.err_unreachable l __POS__ "no type annotation")
 
+let env_of_tannot tannot = match tannot with
+  | Some t -> t.env
+  | None -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "no type annotation")
+
+let typ_of_tannot tannot = match tannot with
+  | Some t -> t.typ
+  | None -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "no type annotation")
+
 let env_of (E_aux (_, (l, tannot))) = env_of_annot (l, tannot)
 
 let typ_of_annot (l, tannot) = match tannot with
@@ -3475,7 +3466,7 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
      begin match Env.lookup_id ~raw:true v env with
      | Local (Immutable, _) | Enum _ ->
         typ_error env l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
-     | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, Env.remove_flow v env
+     | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
      | Register (_, weff, vtyp) -> subtyp l env typ vtyp; annot_lexp_effect (LEXP_id v) typ weff, env
      | Unbound -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
      end
@@ -3696,10 +3687,15 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      in
      try_overload ([], Env.get_overloads f env)
   | E_app (f, xs) -> infer_funapp l env f xs None
-  | E_loop (loop_type, cond, body) ->
+  | E_loop (loop_type, measure, cond, body) ->
      let checked_cond = crule check_exp env cond bool_typ in
+     let checked_measure = match measure with
+       | Measure_aux (Measure_none,l) -> Measure_aux (Measure_none,l)
+       | Measure_aux (Measure_some exp,l) ->
+          Measure_aux (Measure_some (crule check_exp env exp int_typ),l)
+     in
      let checked_body = crule check_exp (add_opt_constraint (assert_constraint env true checked_cond) env) body unit_typ in
-     annot_exp (E_loop (loop_type, checked_cond, checked_body)) unit_typ
+     annot_exp (E_loop (loop_type, checked_measure, checked_cond, checked_body)) unit_typ
   | E_for (v, f, t, step, ord, body) ->
      begin
        let f, t, is_dec = match ord with
@@ -4372,10 +4368,18 @@ and propagate_exp_effect_aux = function
      let p_body = propagate_exp_effect body in
      E_for (v, p_f, p_t, p_step, ord, p_body),
      collect_effects [p_f; p_t; p_step; p_body]
-  | E_loop (loop_type, cond, body) ->
+  | E_loop (loop_type, measure, cond, body) ->
      let p_cond = propagate_exp_effect cond in
+     let () = match measure with
+       | Measure_aux (Measure_some exp,l) ->
+          let eff = effect_of (propagate_exp_effect exp) in
+          if (BESet.is_empty (effect_set eff) || !opt_no_effects)
+          then ()
+          else typ_error (env_of exp) l ("Loop termination measure with effects " ^ string_of_effect eff)
+       | _ -> ()
+     in
      let p_body = propagate_exp_effect body in
-     E_loop (loop_type, p_cond, p_body),
+     E_loop (loop_type, measure, p_cond, p_body),
      union_effects (effect_of p_cond) (effect_of p_body)
   | E_let (letbind, exp) ->
      let p_lb, eff = propagate_letbind_effect letbind in
@@ -4744,7 +4748,7 @@ let mk_val_spec env typq typ id =
     | Typ_aux (Typ_fn (_,_,eff),_) -> eff
     | _ -> no_effect
   in
-  DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, (fun _ -> None), false), (Parse_ast.Unknown, mk_tannot env typ eff)))
+  DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, [], false), (Parse_ast.Unknown, mk_tannot env typ eff)))
 
 let check_tannotopt env typq ret_typ = function
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
@@ -4864,9 +4868,9 @@ let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md
 let check_val_spec env (VS_aux (vs, (l, _))) =
   let annotate vs typ eff = DEF_spec (VS_aux (vs, (l, mk_tannot env typ eff))) in
   let vs, id, typq, typ, env = match vs with
-    | VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l) as typschm, id, ext_opt, is_cast) ->
+    | VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l) as typschm, id, exts, is_cast) ->
        typ_print (lazy (Util.("Check val spec " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
-       let env = Env.add_extern id ext_opt env in
+       let env = Env.add_extern id exts env in
        let env = if is_cast then Env.add_cast id env else env in
        let typq', typ' = expand_bind_synonyms ts_l env (typq, typ) in
        (* !opt_expand_valspec controls whether the actual valspec in
@@ -4878,7 +4882,7 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
          else
            (typq, typ)
        in
-       let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, ext_opt, is_cast) in
+       let vs = VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l), id, exts, is_cast) in
        (vs, id, typq', typ', env)
   in
   let eff =
@@ -5016,6 +5020,9 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered sdef -> check_scattered env sdef
   | DEF_measure (id, pat, exp) -> [check_termination_measure_decl env (id, pat, exp)], env
+  | DEF_loop_measures (id, _) ->
+     Reporting.unreachable (id_loc id) __POS__
+       "Loop termination measures should have been rewritten before type checking"
 
 and check_defs : 'a. int -> int -> Env.t -> 'a def list -> tannot defs * Env.t =
   fun n total env defs ->
@@ -5040,14 +5047,14 @@ and check_with_envs : 'a. Env.t -> 'a def list -> (tannot def list * Env.t) list
 
 let initial_env =
   Env.empty
-  |> Env.add_prover (prove __POS__)
-  |> Env.add_extern (mk_id "size_itself_int") (fun _ -> Some "size_itself_int")
+  |> Env.set_prover (Some (prove __POS__))
+  |> Env.add_extern (mk_id "size_itself_int") [("_", "size_itself_int")]
   |> Env.add_val_spec (mk_id "size_itself_int")
       (TypQ_aux (TypQ_tq [QI_aux (QI_id (mk_kopt K_int (mk_kid "n")),
                                   Parse_ast.Unknown)],Parse_ast.Unknown),
        function_typ [app_typ (mk_id "itself") [mk_typ_arg (A_nexp (nvar (mk_kid "n")))]]
          (atom_typ (nvar (mk_kid "n"))) no_effect)
-  |> Env.add_extern (mk_id "make_the_value") (fun _ -> Some "make_the_value")
+  |> Env.add_extern (mk_id "make_the_value") [("_", "make_the_value")]
   |> Env.add_val_spec (mk_id "make_the_value")
       (TypQ_aux (TypQ_tq [QI_aux (QI_id (mk_kopt K_int (mk_kid "n")),
                                   Parse_ast.Unknown)],Parse_ast.Unknown),

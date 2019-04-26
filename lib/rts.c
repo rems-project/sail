@@ -277,6 +277,60 @@ void read_ram(lbits *data,
   mpz_clear(byte);
 }
 
+void platform_read_mem(lbits *data,
+                       const int read_kind,
+                       const uint64_t addr_size,
+                       const sbits addr,
+                       const mpz_t n)
+{
+    mpz_t mpz_addr_size;
+    mpz_init(mpz_addr_size);
+    mpz_set_ui(mpz_addr_size, addr_size);
+    mpz_t addr_bv;
+    mpz_init(addr_bv);
+    mpz_set_ui(addr_bv, addr.bits);
+    read_ram(data, mpz_addr_size, n, (lbits){.len=0, .bits=NULL}, (lbits){.len=addr.len, .bits=&addr_bv});
+    mpz_clear(mpz_addr_size);
+    mpz_clear(addr_bv);
+}
+
+unit platform_write_mem_ea(const int write_kind,
+                           const uint64_t addr_size,
+                           const sbits addr,
+                           const mpz_t n)
+{
+    return UNIT;
+}
+
+bool platform_write_mem(const int write_kind,
+                        const uint64_t addr_size,
+                        const sbits addr,
+                        const mpz_t n,
+                        const lbits data)
+{
+    mpz_t mpz_addr_size;
+    mpz_init(mpz_addr_size);
+    mpz_set_ui(mpz_addr_size, addr_size);
+    mpz_t addr_bv;
+    mpz_init(addr_bv);
+    mpz_set_ui(addr_bv, addr.bits);
+    bool res = write_ram(mpz_addr_size, n, (lbits){.len=0, .bits=NULL}, (lbits){.len=addr.len, .bits=&addr_bv}, data);
+    mpz_clear(mpz_addr_size);
+    mpz_clear(addr_bv);
+    return res;
+}
+
+bool platform_excl_res(const unit unit)
+{
+    return true;
+}
+
+unit platform_barrier(const int barrier_kind)
+{
+    return UNIT;
+}
+
+
 unit load_raw(fbits addr, const sail_string file)
 {
   FILE *fp = fopen(file, "r");

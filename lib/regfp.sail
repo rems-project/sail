@@ -1,3 +1,6 @@
+$ifndef _REGFP
+$define _REGFP
+
 /* iR : input registers,
  * oR : output registers,
  * aR : registers feeding into the memory address */
@@ -110,3 +113,30 @@ union instruction_kind = {
   IK_simple : unit,
   IK_cache_op : cache_op_kind
 }
+
+val __read_mem
+  = { ocaml: "Platform.read_mem", c: "platform_read_mem", _: "read_mem" }
+  : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (read_kind, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n) effect {rmem}
+val __write_mem_ea
+  = { ocaml: "Platform.write_mem_ea", c: "platform_write_mem_ea", _: "write_mem_ea" }
+  : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (write_kind, int('addrsize), bits('addrsize), int('n)) -> unit effect {eamem}
+val __write_mem
+  = { ocaml: "Platform.write_mem", c: "platform_write_mem", _: "write_mem" }
+  : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (write_kind, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool effect {wmv}
+val __excl_res
+  = { ocaml: "Platform.excl_res", c: "platform_excl_res", _: "excl_res" }
+  : unit -> bool effect {exmem}
+val __barrier
+  = { ocaml: "Platform.barrier", c: "platform_barrier", _: "barrier" }
+  : barrier_kind -> unit effect {barr}
+
+
+/*
+val __write : forall 'n, 'n > 0. (write_kind, bits(64), int('n), bits(8 * 'n)) -> bool effect {eamem,wmv}
+function __write (wk, addr, len, value) = {
+  __write_mem_ea(wk, addr, len);
+  __write_mem(wk, addr, len, value)
+}
+*/
+
+$endif

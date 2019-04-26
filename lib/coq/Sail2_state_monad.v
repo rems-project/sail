@@ -1,184 +1,237 @@
 Require Import Sail2_instr_kinds.
 Require Import Sail2_values.
-(*
-(* 'a is result type *)
+Require FMapList.
+Require Import OrderedType.
+Require OrderedTypeEx.
+Require Import List.
+Require bbv.Word.
+Import ListNotations.
 
-type memstate = map integer memory_byte
-type tagstate = map integer bitU
+(* TODO: revisit choice of FMapList *)
+Module NatMap := FMapList.Make(OrderedTypeEx.Nat_as_OT).
+
+Definition Memstate : Type := NatMap.t memory_byte.
+Definition Tagstate : Type := NatMap.t bitU.
 (* type regstate = map string (vector bitU) *)
 
-type sequential_state 'regs =
-  <| regstate : 'regs;
-     memstate : memstate;
-     tagstate : tagstate;
-     write_ea : maybe (write_kind * integer * integer);
-     last_exclusive_operation_was_load : bool|>
+Record sequential_state {Regs} :=
+  { regstate : Regs;
+    memstate : Memstate;
+    tagstate : Tagstate }.
+Arguments sequential_state : clear implicits.
 
-val init_state : forall 'regs. 'regs -> sequential_state 'regs
-let init_state regs =
-  <| regstate = regs;
-     memstate = Map.empty;
-     tagstate = Map.empty;
-     write_ea = Nothing;
-     last_exclusive_operation_was_load = false |>
+(*val init_state : forall 'regs. 'regs -> sequential_state 'regs*)
+Definition init_state {Regs} regs : sequential_state Regs :=
+  {| regstate := regs;
+     memstate := NatMap.empty _;
+     tagstate := NatMap.empty _ |}.
 
-type ex 'e =
-  | Failure of string
-  | Throw of 'e
+Inductive ex E :=
+  | Failure : string -> ex E
+  | Throw : E -> ex E.
+Arguments Failure {E} _.
+Arguments Throw {E} _.
 
-type result 'a 'e =
-  | Value of 'a
-  | Ex of (ex 'e)
+Inductive result A E :=
+  | Value : A -> result A E
+  | Ex : ex E -> result A E.
+Arguments Value {A} {E} _.
+Arguments Ex {A} {E} _.
 
 (* State, nondeterminism and exception monad with result value type 'a
    and exception type 'e. *)
-type monadS 'regs 'a 'e = sequential_state 'regs -> list (result 'a 'e * sequential_state 'regs)
+(* TODO: the list was originally a set, can we reasonably go back to a set? *)
+Definition monadS Regs a e : Type :=
+ sequential_state Regs -> list (result a e * sequential_state Regs).
 
-val returnS : forall 'regs 'a 'e. 'a -> monadS 'regs 'a 'e
-let returnS a s = [(Value a,s)]
+(*val returnS : forall 'regs 'a 'e. 'a -> monadS 'regs 'a 'e*)
+Definition returnS {Regs A E} (a:A) : monadS Regs A E := fun s => [(Value a,s)].
 
-val bindS : forall 'regs 'a 'b 'e. monadS 'regs 'a 'e -> ('a -> monadS 'regs 'b 'e) -> monadS 'regs 'b 'e
-let bindS m f (s : sequential_state 'regs) =
-  List.concatMap (function
-                  | (Value a, s') -> f a s'
-                  | (Ex e, s') -> [(Ex e, s')]
-                  end) (m s)
+(*val bindS : forall 'regs 'a 'b 'e. monadS 'regs 'a 'e -> ('a -> monadS 'regs 'b 'e) -> monadS 'regs 'b 'e*)
+Definition bindS {Regs A B E} (m : monadS Regs A E) (f : A -> monadS Regs B E) : monadS Regs B E :=
+ fun (s : sequential_state Regs) =>
+  List.concat (List.map (fun v => match v with
+                | (Value a, s') => f a s'
+                | (Ex e, s') => [(Ex e, s')]
+                end) (m s)).
 
-val seqS: forall 'regs 'b 'e. monadS 'regs unit 'e -> monadS 'regs 'b 'e -> monadS 'regs 'b 'e
-let seqS m n = bindS m (fun (_ : unit) -> n)
-
+(*val seqS: forall 'regs 'b 'e. monadS 'regs unit 'e -> monadS 'regs 'b 'e -> monadS 'regs 'b 'e*)
+Definition seqS {Regs B E} (m : monadS Regs unit E) (n : monadS Regs B E) : monadS Regs B E :=
+ bindS m (fun (_ : unit) => n).
+(*
 let inline (>>$=) = bindS
 let inline (>>$) = seqS
+*)
+Notation "m >>$= f" := (bindS m f) (at level 50, left associativity).
+Notation "m >>$ n" := (seqS m n) (at level 50, left associativity).
 
-val chooseS : forall 'regs 'a 'e. list 'a -> monadS 'regs 'a 'e
-let chooseS xs s = List.map (fun x -> (Value x, s)) xs
+(*val chooseS : forall 'regs 'a 'e. SetType 'a => list 'a -> monadS 'regs 'a 'e*)
+Definition chooseS {Regs A E} (xs : list A) : monadS Regs A E :=
+ fun s => (List.map (fun x => (Value x, s)) xs).
 
-val readS : forall 'regs 'a 'e. (sequential_state 'regs -> 'a) -> monadS 'regs 'a 'e
-let readS f = (fun s -> returnS (f s) s)
+(*val readS : forall 'regs 'a 'e. (sequential_state 'regs -> 'a) -> monadS 'regs 'a 'e*)
+Definition readS {Regs A E} (f : sequential_state Regs -> A) : monadS Regs A E :=
+ (fun s => returnS (f s) s).
 
-val updateS : forall 'regs 'e. (sequential_state 'regs -> sequential_state 'regs) -> monadS 'regs unit 'e
-let updateS f = (fun s -> returnS () (f s))
+(*val updateS : forall 'regs 'e. (sequential_state 'regs -> sequential_state 'regs) -> monadS 'regs unit 'e*)
+Definition updateS {Regs E} (f : sequential_state Regs -> sequential_state Regs) : monadS Regs unit E :=
+ (fun s => returnS tt (f s)).
 
-val failS : forall 'regs 'a 'e. string -> monadS 'regs 'a 'e
-let failS msg s = [(Ex (Failure msg), s)]
+(*val failS : forall 'regs 'a 'e. string -> monadS 'regs 'a 'e*)
+Definition failS {Regs A E} msg : monadS Regs A E :=
+ fun s => [(Ex (Failure msg), s)].
 
-val exitS : forall 'regs 'e 'a. unit -> monadS 'regs 'a 'e
-let exitS () = failS "exit"
+(*val choose_boolS : forall 'regval 'regs 'a 'e. unit -> monadS 'regs bool 'e*)
+Definition choose_boolS {Regs E} (_:unit) : monadS Regs bool E :=
+ chooseS [false; true].
+Definition undefined_boolS {Regs E} := @choose_boolS Regs E.
 
-val throwS : forall 'regs 'a 'e. 'e -> monadS 'regs 'a 'e
-let throwS e s = [(Ex (Throw e), s)]
+(*val exitS : forall 'regs 'e 'a. unit -> monadS 'regs 'a 'e*)
+Definition exitS {Regs A E} (_:unit) : monadS Regs A E := failS "exit".
 
-val try_catchS : forall 'regs 'a 'e1 'e2. monadS 'regs 'a 'e1 -> ('e1 -> monadS 'regs 'a 'e2) ->  monadS 'regs 'a 'e2
-let try_catchS m h s =
-  List.concatMap (function
-                  | (Value a, s') -> returnS a s'
-                  | (Ex (Throw e), s') -> h e s'
-                  | (Ex (Failure msg), s') -> [(Ex (Failure msg), s')]
-                  end) (m s)
+(*val throwS : forall 'regs 'a 'e. 'e -> monadS 'regs 'a 'e*)
+Definition throwS {Regs A E} (e : E) :monadS Regs A E :=
+ fun s => [(Ex (Throw e), s)].
 
-val assert_expS : forall 'regs 'e. bool -> string -> monadS 'regs unit 'e
-let assert_expS exp msg = if exp then returnS () else failS msg
+(*val try_catchS : forall 'regs 'a 'e1 'e2. monadS 'regs 'a 'e1 -> ('e1 -> monadS 'regs 'a 'e2) ->  monadS 'regs 'a 'e2*)
+Definition try_catchS {Regs A E1 E2} (m : monadS Regs A E1) (h : E1 -> monadS Regs A E2) : monadS Regs A E2 :=
+fun s =>
+  List.concat (List.map (fun v => match v with
+                | (Value a, s') => returnS a s'
+                | (Ex (Throw e), s') => h e s'
+                | (Ex (Failure msg), s') => [(Ex (Failure msg), s')]
+                end) (m s)).
+
+(*val assert_expS : forall 'regs 'e. bool -> string -> monadS 'regs unit 'e*)
+Definition assert_expS {Regs E} (exp : bool) (msg : string) : monadS Regs unit E :=
+ if exp then returnS tt else failS msg.
 
 (* For early return, we abuse exceptions by throwing and catching
    the return value. The exception type is "either 'r 'e", where "Right e"
    represents a proper exception and "Left r" an early return of value "r". *)
-type monadSR 'regs 'a 'r 'e = monadS 'regs 'a (either 'r 'e)
+Definition monadRS Regs A R E := monadS Regs A (sum R E).
 
-val early_returnS : forall 'regs 'a 'r 'e. 'r -> monadSR 'regs 'a 'r 'e
-let early_returnS r = throwS (Left r)
+(*val early_returnS : forall 'regs 'a 'r 'e. 'r -> monadRS 'regs 'a 'r 'e*)
+Definition early_returnS {Regs A R E} (r : R) : monadRS Regs A R E := throwS (inl r).
 
-val catch_early_returnS : forall 'regs 'a 'e. monadSR 'regs 'a 'a 'e -> monadS 'regs 'a 'e
-let catch_early_returnS m =
+(*val catch_early_returnS : forall 'regs 'a 'e. monadRS 'regs 'a 'a 'e -> monadS 'regs 'a 'e*)
+Definition catch_early_returnS {Regs A E} (m : monadRS Regs A A E) : monadS Regs A E :=
   try_catchS m
-    (function
-      | Left a -> returnS a
-      | Right e -> throwS e
-     end)
+    (fun v => match v with
+      | inl a => returnS a
+      | inr e => throwS e
+     end).
 
 (* Lift to monad with early return by wrapping exceptions *)
-val liftSR : forall 'a 'r 'regs 'e. monadS 'regs 'a 'e -> monadSR 'regs 'a 'r 'e
-let liftSR m = try_catchS m (fun e -> throwS (Right e))
+(*val liftRS : forall 'a 'r 'regs 'e. monadS 'regs 'a 'e -> monadRS 'regs 'a 'r 'e*)
+Definition liftRS {A R Regs E} (m : monadS Regs A E) : monadRS Regs A R E :=
+ try_catchS m (fun e => throwS (inr e)).
 
 (* Catch exceptions in the presence of early returns *)
-val try_catchSR : forall 'regs 'a 'r 'e1 'e2. monadSR 'regs 'a 'r 'e1 -> ('e1 -> monadSR 'regs 'a 'r 'e2) ->  monadSR 'regs 'a 'r 'e2
-let try_catchSR m h =
+(*val try_catchRS : forall 'regs 'a 'r 'e1 'e2. monadRS 'regs 'a 'r 'e1 -> ('e1 -> monadRS 'regs 'a 'r 'e2) ->  monadRS 'regs 'a 'r 'e2*)
+Definition try_catchRS {Regs A R E1 E2} (m : monadRS Regs A R E1) (h : E1 -> monadRS Regs A R E2) : monadRS Regs A R E2 :=
   try_catchS m
-    (function
-      | Left r -> throwS (Left r)
-      | Right e -> h e
-     end)
+    (fun v => match v with
+      | inl r => throwS (inl r)
+      | inr e => h e
+     end).
 
-val read_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> monadS 'regs bitU 'e
-let read_tagS addr =
-  readS (fun s -> fromMaybe B0 (Map.lookup (unsigned addr) s.tagstate))
+(*val maybe_failS : forall 'regs 'a 'e. string -> maybe 'a -> monadS 'regs 'a 'e*)
+Definition maybe_failS {Regs A E} msg (v : option A) : monadS Regs A E :=
+match v with
+  | Some a  => returnS a
+  | None => failS msg
+end.
+
+(*val read_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> monadS 'regs bitU 'e*)
+Definition read_tagS {Regs A E} (addr : mword A) : monadS Regs bitU E :=
+  let addr := Word.wordToNat (get_word addr) in
+  readS (fun s => opt_def B0 (NatMap.find addr s.(tagstate))).
+
+Fixpoint genlist_acc {A:Type} (f : nat -> A) n acc : list A :=
+  match n with
+    | O => acc
+    | S n' => genlist_acc f n' (f n' :: acc)
+  end.
+Definition genlist {A} f n := @genlist_acc A f n [].
+
 
 (* Read bytes from memory and return in little endian order *)
-val read_mem_bytesS : forall 'regs 'e 'a. Bitvector 'a => read_kind -> 'a -> nat -> monadS 'regs (list memory_byte) 'e
-let read_mem_bytesS read_kind addr sz =
-  let addr = unsigned addr in
-  let sz = integerFromNat sz in
-  let addrs = index_list addr (addr+sz-1) 1 in
-  let read_byte s addr = Map.lookup addr s.memstate in
-  readS (fun s -> just_list (List.map (read_byte s) addrs)) >>$= (function
-    | Just mem_val ->
-       updateS (fun s ->
-         if read_is_exclusive read_kind
-         then <| s with last_exclusive_operation_was_load = true |>
-         else s) >>$
-       returnS mem_val
-    | Nothing -> failS "read_memS"
-  end)
+(*val get_mem_bytes : forall 'regs. nat -> nat -> sequential_state 'regs -> maybe (list memory_byte * bitU)*)
+Definition get_mem_bytes {Regs} addr sz (s : sequential_state Regs) : option (list memory_byte * bitU) :=
+  let addrs := genlist (fun n => addr + n)%nat sz in
+  let read_byte s addr := NatMap.find addr s.(memstate) in
+  let read_tag s addr := opt_def B0 (NatMap.find addr s.(tagstate)) in
+  option_map
+    (fun mem_val => (mem_val, List.fold_left and_bit (List.map (read_tag s) addrs) B1))
+    (just_list (List.map (read_byte s) addrs)).
 
-val read_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs 'b 'e
-let read_memS rk a sz =
-  read_mem_bytesS rk a (natFromInteger sz) >>$= (fun bytes ->
-  returnS (bits_of_mem_bytes bytes))
+(*val read_memt_bytesS : forall 'regs 'e. read_kind -> nat -> nat -> monadS 'regs (list memory_byte * bitU) 'e*)
+Definition read_memt_bytesS {Regs E} (_ : read_kind) addr sz : monadS Regs (list memory_byte * bitU) E :=
+  readS (get_mem_bytes addr sz) >>$=
+  maybe_failS "read_memS".
 
-val excl_resultS : forall 'regs 'e. unit -> monadS 'regs bool 'e
-let excl_resultS () =
-  readS (fun s -> s.last_exclusive_operation_was_load) >>$= (fun excl_load ->
-  updateS (fun s -> <| s with last_exclusive_operation_was_load = false |>) >>$
-  chooseS (if excl_load then [false; true] else [false]))
+(*val read_mem_bytesS : forall 'regs 'e. read_kind -> nat -> nat -> monadS 'regs (list memory_byte) 'e*)
+Definition read_mem_bytesS {Regs E} (rk : read_kind) addr sz : monadS Regs (list memory_byte) E :=
+  read_memt_bytesS rk addr sz >>$= (fun '(bytes, _) =>
+  returnS bytes).
 
-val write_mem_eaS : forall 'regs 'e 'a. Bitvector 'a => write_kind -> 'a -> nat -> monadS 'regs unit 'e
-let write_mem_eaS write_kind addr sz =
-  let addr = unsigned addr in
-  let sz = integerFromNat sz in
-  updateS (fun s -> <| s with write_ea = Just (write_kind, addr, sz) |>)
+(*val read_memtS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs ('b * bitU) 'e*)
+Definition read_memtS {Regs E A B} (rk : read_kind) (a : mword A) sz `{ArithFact (B >= 0)} : monadS Regs (mword B * bitU) E :=
+  let a := Word.wordToNat (get_word a) in
+  read_memt_bytesS rk a (Z.to_nat sz) >>$= (fun '(bytes, tag) =>
+  maybe_failS "bits_of_mem_bytes" (of_bits (bits_of_mem_bytes bytes)) >>$= (fun mem_val =>
+  returnS (mem_val, tag))).
 
-(* Write little-endian list of bytes to previously announced address *)
-val write_mem_bytesS : forall 'regs 'e. list memory_byte -> monadS 'regs bool 'e
-let write_mem_bytesS v =
-  readS (fun s -> s.write_ea) >>$= (function
-      | Nothing -> failS "write ea has not been announced yet"
-      | Just (_, addr, sz) ->
-         let addrs = index_list addr (addr+sz-1) 1 in
-         (*let v = external_mem_value (bits_of v) in*)
-         let a_v = List.zip addrs v in
-         let write_byte mem (addr, v) = Map.insert addr v mem in
-         updateS (fun s ->
-           <| s with memstate = List.foldl write_byte s.memstate a_v |>) >>$
-         returnS true
-    end)
+(*val read_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monadS 'regs 'b 'e*)
+Definition read_memS {Regs E A B} rk (a : mword A) sz `{ArithFact (B >= 0)} : monadS Regs (mword B) E :=
+  read_memtS rk a sz >>$= (fun '(bytes, _) =>
+  returnS bytes).
 
-val write_mem_valS : forall 'regs 'e 'a. Bitvector 'a => 'a -> monadS 'regs bool 'e
-let write_mem_valS v = match mem_bytes_of_bits v with
-  | Just v -> write_mem_bytesS v
-  | Nothing -> failS "write_mem_val"
-end
+(*val excl_resultS : forall 'regs 'e. unit -> monadS 'regs bool 'e*)
+Definition excl_resultS {Regs E} : unit -> monadS Regs bool E :=
+  (* TODO: This used to be more deterministic, checking a flag in the state
+     whether an exclusive load has occurred before.  However, this does not
+     seem very precise; it might be safer to overapproximate the possible
+     behaviours by always making a nondeterministic choice. *)
+  @undefined_boolS Regs E.
 
-val write_tagS : forall 'regs 'e. bitU -> monadS 'regs bool 'e
-let write_tagS t =
-  readS (fun s -> s.write_ea) >>$= (function
-      | Nothing -> failS "write ea has not been announced yet"
-      | Just (_, addr, _) ->
-         (*let taddr = addr / cap_alignment in*)
-         updateS (fun s -> <| s with tagstate = Map.insert addr t s.tagstate |>) >>$
-         returnS true
-    end)
+(* Write little-endian list of bytes to given address *)
+(*val put_mem_bytes : forall 'regs. nat -> nat -> list memory_byte -> bitU -> sequential_state 'regs -> sequential_state 'regs*)
+Definition put_mem_bytes {Regs} addr sz (v : list memory_byte) (tag : bitU) (s : sequential_state Regs) : sequential_state Regs :=
+  let addrs := genlist (fun n => addr + n)%nat sz in
+  let a_v := List.combine addrs v in
+  let write_byte mem '(addr, v) := NatMap.add addr v mem in
+  let write_tag mem addr := NatMap.add addr tag mem in
+  {| regstate := s.(regstate);
+     memstate := List.fold_left write_byte a_v s.(memstate);
+     tagstate := List.fold_left write_tag addrs s.(tagstate) |}.
 
-val read_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> monadS 'regs 'a 'e
-let read_regS reg = readS (fun s -> reg.read_from s.regstate)
+(*val write_memt_bytesS : forall 'regs 'e. write_kind -> nat -> nat -> list memory_byte -> bitU -> monadS 'regs bool 'e*)
+Definition write_memt_bytesS {Regs E} (_ : write_kind) addr sz (v : list memory_byte) (t : bitU) : monadS Regs bool E :=
+  updateS (put_mem_bytes addr sz v t) >>$
+  returnS true.
+
+(*val write_mem_bytesS : forall 'regs 'e. write_kind -> nat -> nat -> list memory_byte -> monadS 'regs bool 'e*)
+Definition write_mem_bytesS {Regs E} wk addr sz (v : list memory_byte) : monadS Regs bool E :=
+ write_memt_bytesS wk addr sz v B0.
+
+(*val write_memtS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
+  write_kind -> 'a -> integer -> 'b -> bitU -> monadS 'regs bool 'e*)
+Definition write_memtS {Regs E A B} wk (addr : mword A) sz (v : mword B) (t : bitU) : monadS Regs bool E :=
+  match (Word.wordToNat (get_word addr), mem_bytes_of_bits v) with
+    | (addr, Some v) => write_memt_bytesS wk addr (Z.to_nat sz) v t
+    | _ => failS "write_mem"
+  end.
+
+(*val write_memS : forall 'regs 'e 'a 'b. Bitvector 'a, Bitvector 'b =>
+  write_kind -> 'a -> integer -> 'b -> monadS 'regs bool 'e*)
+Definition write_memS {Regs E A B} wk (addr : mword A) sz (v : mword B) : monadS Regs bool E :=
+ write_memtS wk addr sz v B0.
+
+(*val read_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> monadS 'regs 'a 'e*)
+Definition read_regS {Regs RV A E} (reg : register_ref Regs RV A) : monadS Regs A E :=
+ readS (fun s => reg.(read_from) s.(regstate)).
 
 (* TODO
 let read_reg_range reg i j state =
@@ -194,25 +247,27 @@ let read_reg_bitfield reg regfield =
   let (i,_) = register_field_indices reg regfield in
   read_reg_bit reg i *)
 
-val read_regvalS : forall 'regs 'rv 'e.
-  register_accessors 'regs 'rv -> string -> monadS 'regs 'rv 'e
-let read_regvalS (read, _) reg =
-  readS (fun s -> read reg s.regstate) >>$= (function
-      | Just v ->  returnS v
-      | Nothing -> failS ("read_regvalS " ^ reg)
-    end)
+(*val read_regvalS : forall 'regs 'rv 'e.
+  register_accessors 'regs 'rv -> string -> monadS 'regs 'rv 'e*)
+Definition read_regvalS {Regs RV E} (acc : register_accessors Regs RV) reg : monadS Regs RV E :=
+  let '(read, _) := acc in
+  readS (fun s => read reg s.(regstate)) >>$= (fun v => match v with
+      | Some v =>  returnS v
+      | None => failS ("read_regvalS " ++ reg)
+    end).
 
-val write_regvalS : forall 'regs 'rv 'e.
-  register_accessors 'regs 'rv -> string -> 'rv -> monadS 'regs unit 'e
-let write_regvalS (_, write) reg v =
-  readS (fun s -> write reg v s.regstate) >>$= (function
-      | Just rs' -> updateS (fun s -> <| s with regstate = rs' |>)
-      | Nothing ->  failS ("write_regvalS " ^ reg)
-    end)
+(*val write_regvalS : forall 'regs 'rv 'e.
+  register_accessors 'regs 'rv -> string -> 'rv -> monadS 'regs unit 'e*)
+Definition write_regvalS {Regs RV E} (acc : register_accessors Regs RV) reg (v : RV) : monadS Regs unit E :=
+  let '(_, write) := acc in
+  readS (fun s => write reg v s.(regstate)) >>$= (fun x => match x with
+      | Some rs' => updateS (fun s => {| regstate := rs'; memstate := s.(memstate); tagstate := s.(tagstate) |})
+      | None =>  failS ("write_regvalS " ++ reg)
+    end).
 
-val write_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> 'a -> monadS 'regs unit 'e
-let write_regS reg v =
-  updateS (fun s -> <| s with regstate = reg.write_to v s.regstate |>)
+(*val write_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> 'a -> monadS 'regs unit 'e*)
+Definition write_regS {Regs RV A E} (reg : register_ref Regs RV A) (v:A) : monadS Regs unit E :=
+  updateS (fun s => {| regstate := reg.(write_to) v s.(regstate); memstate := s.(memstate); tagstate := s.(tagstate) |}).
 
 (* TODO
 val update_reg : forall 'regs 'rv 'a 'b 'e. register_ref 'regs 'rv 'a -> ('a -> 'b -> 'a) -> 'b -> monadS 'regs unit 'e
@@ -250,4 +305,17 @@ let update_reg_field_bit regfield i reg_val bit =
   let new_field_value = set_bit (regfield.field_is_inc) current_field_value i (to_bitU bit) in
   regfield.set_field reg_val new_field_value
 let write_reg_field_bit reg regfield i = update_reg reg (update_reg_field_bit regfield i)*)
-*)
+
+(* TODO Add Show typeclass for value and exception type *)
+(*val show_result : forall 'a 'e. result 'a 'e -> string*)
+Definition show_result {A E} (x : result A E) : string := match x with
+  | Value _ => "Value ()"
+  | Ex (Failure msg) => "Failure " ++ msg
+  | Ex (Throw _) => "Throw"
+end.
+
+(*val prerr_results : forall 'a 'e 's. SetType 's => set (result 'a 'e * 's) -> unit*)
+Definition prerr_results {A E S} (rs : list (result A E * S)) : unit := tt.
+(*  let _ = Set.map (fun (r, _) -> let _ = prerr_endline (show_result r) in ()) rs in
+  ()*)
+

@@ -221,6 +221,8 @@ module Env : sig
   val builtin_typs : typquant Bindings.t
 
   val get_union_id : id -> t -> typquant * typ
+
+  val set_prover : (t -> n_constraint -> bool) option -> t -> t
 end
 
 (** {4 Environment helper functions} *)
@@ -317,6 +319,8 @@ val check_fundef : Env.t -> 'a fundef -> tannot def list * Env.t
 
 val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t
 
+val assert_constraint : Env.t -> bool -> tannot exp -> n_constraint option
+
 (** Attempt to prove a constraint using z3. Returns true if z3 can
    prove that the constraint is true, returns false if z3 cannot prove
    the constraint true. Note that this does not guarantee that the
@@ -347,9 +351,11 @@ val typ_error : Env.t -> Ast.l -> string -> 'a
 
 val env_of : tannot exp -> Env.t
 val env_of_annot : Ast.l * tannot -> Env.t
+val env_of_tannot : tannot -> Env.t
 
 val typ_of : tannot exp -> typ
 val typ_of_annot : Ast.l * tannot -> typ
+val typ_of_tannot : tannot -> typ
 
 val typ_of_pat : tannot pat -> typ
 val env_of_pat : tannot pat -> Env.t
@@ -423,6 +429,8 @@ val instantiate_simple_equations : quant_item list -> typ_arg KBindings.t
 val propagate_exp_effect : tannot exp -> tannot exp
 
 val propagate_pexp_effect : tannot pexp -> tannot pexp * effect
+
+val big_int_of_nexp : nexp -> Big_int.num option
 
 (** {2 Checking full ASTs} *)
 

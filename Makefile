@@ -30,10 +30,19 @@ install:
 	cp src/util.ml $(SHARE_DIR)/src
 	cp -r src/gen_lib $(SHARE_DIR)/src
 	cp -r src/lem_interp $(SHARE_DIR)/src
+	$(MAKE) install_libsail
+
+install_libsail:
+	-$(MAKE) uninstall_libsail
+	ocamlfind install sail src/META src/_build/libsail.* $$(find src/_build \( -name '*.mli' -or -name '*.cmi' -or -name '*.cmx' \) -and -not -name 'myocamlbuild.*')
 
 uninstall:
 	if [ -z "$(SHARE_DIR)" ]; then echo SHARE_DIR is unset; false; else rm -rf $(SHARE_DIR); fi
 	rm -f $(INSTALL_DIR)/bin/sail
+	$(MAKE) uninstall_libsail
+
+uninstall_libsail:
+	ocamlfind remove sail
 
 language:
 	$(MAKE) -C language

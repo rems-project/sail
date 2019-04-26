@@ -38,9 +38,6 @@ lib/hol/sail-heap
 /src/sail.docdir
 /src/ast.lem
 /src/ast.ml
-/src/bytecode.lem
-/src/bytecode.ml
-/src/share_directory.ml
 
 /test/typecheck/rtpass*/
 /test/typecheck/tests.xml
@@ -48,6 +45,7 @@ lib/hol/sail-heap
 /test/lem/out.lem
 /test/lem/out_types.lem
 /test/*/tests.xml
+/test/riscv/tests/*.iout
 
 /language/*.pdf
 /language/*.uo

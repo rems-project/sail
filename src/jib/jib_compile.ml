@@ -281,8 +281,18 @@ let rec compile_aval l ctx = function
      V_id (gs, ctyp),
      [iclear ctyp gs]
 
-  | AV_vector ([], _) ->
-     raise (Reporting.err_general l "Encountered empty vector literal")
+  | AV_vector ([], typ) ->
+     let vector_ctyp = ctyp_of_typ ctx typ in
+     begin match ctyp_of_typ ctx typ with
+     | CT_fbits (0, ord) ->
+           [], V_lit (VL_bits ([], ord), vector_ctyp), []
+        | _ ->
+        let gs = ngensym () in
+        [idecl vector_ctyp gs;
+         iextern (CL_id (gs, vector_ctyp)) (mk_id "internal_vector_init") [V_lit (VL_int Big_int.zero, CT_fint 64)]],
+        V_id (gs, vector_ctyp),
+        [iclear vector_ctyp gs]
+     end
 
   (* Convert a small bitvector to a uint64_t literal. *)
   | AV_vector (avals, typ) when is_bitvector avals && (List.length avals <= 64 || ctx.ignore_64) ->
@@ -1309,7 +1319,8 @@ and compile_def' n total ctx = function
 
   (* Termination measures only needed for Coq, and other theorem prover output *)
   | DEF_measure _ -> [], ctx
-
+  | DEF_loop_measures _ -> [], ctx
+                   
   | DEF_internal_mutrec fundefs ->
      let defs = List.map (fun fdef -> DEF_fundef fdef) fundefs in
      List.fold_left (fun (cdefs, ctx) def -> let cdefs', ctx = compile_def n total ctx def in (cdefs @ cdefs', ctx)) ([], ctx) defs
