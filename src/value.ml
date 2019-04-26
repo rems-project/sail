@@ -375,7 +375,7 @@ let value_add_vec_int = function
 
 let value_sub_vec_int = function
   | [v1; v2] -> mk_vector (Sail_lib.sub_vec_int (coerce_bv v1, coerce_int v2))
-  | _ -> failwith "value add_vec_int"
+  | _ -> failwith "value sub_vec_int"
 
 let value_add_vec = function
   | [v1; v2] -> mk_vector (Sail_lib.add_vec (coerce_bv v1, coerce_bv v2))
