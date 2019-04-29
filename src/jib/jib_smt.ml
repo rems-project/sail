@@ -55,6 +55,7 @@ open Jib
 open Jib_util
 open Smtlib
 
+module IntSet = Set.Make(struct type t = int let compare = compare end)
 module IntMap = Map.Make(struct type t = int let compare = compare end)
 
 let zencode_upper_id id = Util.zencode_upper_string (string_of_id id)
@@ -74,6 +75,8 @@ type ctx = {
        We need to take care that vector_index is large enough for all generic vectors. *)
     vector_index : int;
     register_map : id list CTMap.t;
+    (* Keep track of all the tuple sizes we need to genenerate types for *)
+    mutable tuple_sizes : IntSet.t;
     tc_env : Type_check.Env.t;
     pragma_l : Ast.l;
     arg_stack : (int * string) Stack.t;
@@ -93,6 +96,7 @@ let initial_ctx () = {
     lint_size = !opt_default_lint_size;
     vector_index = !opt_default_vector_index;
     register_map = CTMap.empty;
+    tuple_sizes = IntSet.empty;
     tc_env = Type_check.initial_env;
     pragma_l = Parse_ast.Unknown;
     arg_stack = Stack.create ();
@@ -133,7 +137,9 @@ let rec smt_ctyp ctx = function
      mk_record (zencode_upper_id id) (List.map (fun (id, ctyp) -> (zencode_id id, smt_ctyp ctx ctyp)) fields)
   | CT_variant (id, ctors) ->
      mk_variant (zencode_upper_id id) (List.map (fun (id, ctyp) -> (zencode_id id, smt_ctyp ctx ctyp)) ctors)
-  | CT_tup ctyps -> Tuple (List.map (smt_ctyp ctx) ctyps)
+  | CT_tup ctyps ->
+     ctx.tuple_sizes <- IntSet.add (List.length ctyps) ctx.tuple_sizes;
+     Tuple (List.map (smt_ctyp ctx) ctyps)
   | CT_vector (_, ctyp) -> Array (Bitvec !vector_index, smt_ctyp ctx ctyp)
   | CT_string -> Bitvec 64
   | CT_ref ctyp ->
@@ -254,6 +260,7 @@ let rec smt_cval ctx cval =
      | _ -> failwith "Struct does not have struct type"
      end
   | V_tuple_member (frag, len, n) ->
+     ctx.tuple_sizes <- IntSet.add len ctx.tuple_sizes;
      Fn (Printf.sprintf "tup_%d_%d" len n, [smt_cval ctx frag])
   | V_ref (Name (id, _), _) ->
      let rmap = CTMap.filter (fun ctyp regs -> List.exists (fun reg -> Id.compare reg id = 0) regs) ctx.register_map in
@@ -1403,20 +1410,15 @@ let optimize_smt stack =
 
 (** [smt_header stack cdefs] pushes all the type declarations required
    for cdefs onto the SMT stack *)
-let smt_header ctx stack cdefs =
-  push_smt_defs stack
-    [declare_datatypes (mk_enum "Unit" ["unit"]);
-     Declare_tuple 2;
-     Declare_tuple 3;
-     Declare_tuple 4;
-     Declare_tuple 5;
-     Declare_tuple 6;
-     declare_datatypes (mk_record "Bits" [("len", Bitvec ctx.lbits_index);
+let smt_header ctx cdefs =
+  let smt_ctype_defs = List.concat (generate_ctype_defs ctx cdefs) in
+  [declare_datatypes (mk_enum "Unit" ["unit"])]
+  @ (IntSet.elements ctx.tuple_sizes |> List.map (fun n -> Declare_tuple n))
+  @ [declare_datatypes (mk_record "Bits" [("len", Bitvec ctx.lbits_index);
                                           ("contents", Bitvec (lbits_size ctx))])
 
-    ];
-  let smt_type_defs = List.concat (generate_ctype_defs ctx cdefs) in
-  push_smt_defs stack smt_type_defs
+    ]
+  @ smt_ctype_defs
 
 (* For generating SMT when we have a reg_deref(r : register(t))
    function, we have to expand it into a if-then-else cascade that
@@ -1480,8 +1482,6 @@ let smt_cdef props lets name_file ctx all_cdefs = function
 
         let stack = Stack.create () in
 
-        smt_header ctx stack all_cdefs;
-
         Stack.clear overflow_checks;
         let ctx = { ctx with pragma_l = pragma_l; arg_stack = Stack.create () } in
 
@@ -1535,6 +1535,8 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         if prop_type = "counterexample" then
           output_string out_chan "(set-option :produce-models true)\n";
         output_string out_chan "(set-logic QF_AUFBVDT)\n";
+
+        List.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") (smt_header ctx all_cdefs);
 
         let queue = optimize_smt stack in
         Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
