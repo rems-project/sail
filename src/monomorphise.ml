@@ -120,7 +120,7 @@ let kidset_bigunion = function
   | h::t -> List.fold_left KidSet.union h t
 
 (* TODO: deal with non-set constraints, intersections, etc somehow *)
-let extract_set_nc l var nc =
+let extract_set_nc env l var nc =
   let vars = Spec_analysis.equal_kids_ncs var [nc] in
   let rec aux_or (NC_aux (nc,l)) =
     match nc with
@@ -133,12 +133,13 @@ let extract_set_nc l var nc =
        | _, _ -> None)
     | _ -> None
   in
-  let rec aux (NC_aux (nc,l) as nc_full) =
+  (* Lazily expand constraints to keep close to the original form *)
+  let rec aux expanded (NC_aux (nc,l) as nc_full) =
     let re nc = NC_aux (nc,l) in
     match nc with
     | NC_set (id,is) when KidSet.mem id vars -> Some (is,re NC_true)
     | NC_and (nc1,nc2) ->
-       (match aux nc1, aux nc2 with
+       (match aux expanded nc1, aux expanded nc2 with
        | None, None -> None
        | None, Some (is,nc2') -> Some (is, re (NC_and (nc1,nc2')))
        | Some (is,nc1'), None -> Some (is, re (NC_and (nc1',nc2)))
@@ -148,8 +149,8 @@ let extract_set_nc l var nc =
        (match aux_or nc_full with
        | Some is -> Some (is, re NC_true)
        | None -> None)
-    | _ -> None
-  in match aux nc with
+    | _ -> if expanded then None else aux true (Env.expand_constraint_synonyms env nc_full)
+  in match aux false nc with
   | Some is -> is
   | None ->
      raise (Reporting.err_general l ("No set constraint for " ^ string_of_kid var ^
@@ -290,7 +291,7 @@ let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
        let find_insts k (insts,nc) =
          let inst,nc' =
            if KidSet.mem (kopt_kid k) vars then
-             let is,nc' = extract_set_nc l (kopt_kid k) nc in
+             let is,nc' = extract_set_nc env l (kopt_kid k) nc in
              Some is,nc'
            else None,nc
          in (k,inst)::insts,nc'
@@ -715,7 +716,7 @@ let split_defs all_errors splits env defs =
          | Nexp_var kvar ->
            let ncs = Env.get_constraints env in
            let nc = List.fold_left nc_and nc_true ncs in
-           (match extract_set_nc l kvar nc with
+           (match extract_set_nc env l kvar nc with
            | (is,_) -> List.map (mk_lit (Some kvar)) is
            | exception Reporting.Fatal_error (Reporting.Err_general (_,msg)) -> cannot msg)
          | _ -> cannot ("unsupport atom nexp " ^ string_of_nexp nexp)
