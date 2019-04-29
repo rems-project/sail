@@ -124,12 +124,16 @@ let bvones n =
 
 let simp_fn = function
   | Fn ("not", [Fn ("not", [exp])]) -> exp
+  | Fn ("not", [Bool_lit b]) -> Bool_lit (not b)
   | Fn ("contents", [Fn ("Bits", [_; contents])]) -> contents
   | Fn ("len", [Fn ("Bits", [len; _])]) -> len
+  | Fn ("or", [x]) -> x
+  | Fn ("and", [x]) -> x
   | exp -> exp
 
 let simp_ite = function
   | Ite (cond, Bool_lit true, Bool_lit false) -> cond
+  | Ite (cond, Bool_lit x, Bool_lit y) when x = y -> Bool_lit x
   | Ite (_, Var v, Var v') when v = v' -> Var v
   | Ite (Bool_lit true, then_exp, _) -> then_exp
   | Ite (Bool_lit false, _, else_exp) -> else_exp
