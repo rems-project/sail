@@ -66,11 +66,23 @@ let opt_ignore_overflow = ref false
 
 let opt_auto = ref false
 
-type event = Overflow | Assertion
+type event = Overflow | Assertion | Match | Return
+
+type query =
+   | Q_all of event   (* All events of type are true *)
+   | Q_exist of event (* Some event of type is true *)
+   | Q_not of query
+   | Q_and of query list
+   | Q_or of query list
+
+let default_query =
+  Q_or [Q_and [Q_all Assertion; Q_all Return; Q_not (Q_exist Match)]; Q_exist Overflow]
 
 let event_name = function
   | Overflow -> "overflow"
   | Assertion -> "assert"
+  | Match -> "match"
+  | Return -> "end"
 
 module Event = struct
   type t = event
@@ -78,8 +90,14 @@ module Event = struct
     match e1, e2 with
     | Overflow, Overflow -> 0
     | Assertion, Assertion -> 0
+    | Match, Match -> 0
+    | Return, Return -> 0
     | Overflow, _ -> 1
     | _, Overflow -> -1
+    | Assertion, _ -> 1
+    | _, Assertion -> -1
+    | Match, _ -> 1
+    | _, Match -> -1
 end
 
 module EventMap = Map.Make(Event)
@@ -102,7 +120,10 @@ type ctx = {
     pragma_l : Ast.l;
     arg_stack : (int * string) Stack.t;
     ast : Type_check.tannot defs;
-    events : smt_def Stack.t EventMap.t ref;
+    events : smt_exp Stack.t EventMap.t ref;
+    (* When generating SMT for an instruction pathcond will contain
+       the global path conditional of the containing block in the
+       control flow graph *)
     pathcond : smt_exp;
   }
 
@@ -135,17 +156,6 @@ let event_stack ctx ev =
      let stack = Stack.create () in
      ctx.events := EventMap.add ev stack !(ctx.events);
      stack
-
-let event_check check (ev, checks) =
-  match ev with
-  | Overflow ->
-     if !opt_ignore_overflow then
-       Bool_lit false
-     else
-       Fn ("and", check :: checks)
-
-  | Assertion ->
-     Fn ("or", check :: List.map (fun c -> Fn ("not", [c])) checks)
 
 let lbits_size ctx = Util.power 2 ctx.lbits_index
 
@@ -323,12 +333,12 @@ let rec smt_cval ctx cval =
 
 let add_event ctx ev smt =
   let stack = event_stack ctx ev in
-  Stack.push (Define_const (event_name ev ^ string_of_int (Stack.length stack), Bool, Fn ("=>", [ctx.pathcond; smt]))) stack
+  Stack.push (Fn ("=>", [ctx.pathcond; smt])) stack
 
 let overflow_check ctx smt =
   if not !opt_ignore_overflow then (
     Util.warn "Adding overflow check in generated SMT";
-    add_event ctx Overflow (Fn ("not", [smt]))
+    add_event ctx Overflow smt
   )
 
 (**************************************************************************)
@@ -1363,19 +1373,14 @@ let smt_instr ctx =
      [declare_const ctx id ctyp]
 
   | I_aux (I_end id, _) ->
-     let checks =
-       EventMap.bindings !(ctx.events)
-       |> List.map (fun (ev, stack) ->
-              (ev, Stack.fold (fun checks -> function (Define_const (name, _, _) as def) -> (Var name, def) :: checks | _ -> assert false) [] stack))
-       |> List.map (fun (ev, checks) ->
-              ((ev, List.map fst checks), List.map snd checks))
-     in
-     List.concat (List.map snd checks)
-     @ [Assert (List.fold_left event_check (Fn ("not", [Var (zencode_name id)])) (List.map fst checks))]
+     add_event ctx Return (Var (zencode_name id));
+     []
 
   | I_aux (I_clear _, _) -> []
 
-  | I_aux (I_match_failure, _) -> []
+  | I_aux (I_match_failure, _) ->
+     add_event ctx Match (Bool_lit false);
+     []
 
   | I_aux (I_undefined ctyp, _) -> []
 
@@ -1544,6 +1549,30 @@ let expand_reg_deref ctx = function
      end
   | instr -> instr
 
+let smt_conj = function
+  | [] -> Bool_lit true
+  | [x] -> x
+  | xs -> Fn ("and", xs)
+
+let smt_disj = function
+  | [] -> Bool_lit false
+  | [x] -> x
+  | xs -> Fn ("or", xs)
+
+let rec smt_query ctx = function
+  | Q_all ev ->
+     let stack = event_stack ctx ev in
+     smt_conj (Stack.fold (fun xs x -> x :: xs) [] stack)
+  | Q_exist ev ->
+     let stack = event_stack ctx ev in
+     smt_disj (Stack.fold (fun xs x -> x :: xs) [] stack)
+  | Q_not q ->
+     Fn ("not", [smt_query ctx q])
+  | Q_and qs ->
+     Fn ("and", List.map (smt_query ctx) qs)
+  | Q_or qs ->
+     Fn ("or", List.map (smt_query ctx) qs)
+
 let smt_cdef props lets name_file ctx all_cdefs = function
   | CDEF_spec (function_id, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
      begin match find_function [] function_id all_cdefs with
@@ -1569,8 +1598,8 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           |> remove_pointless_goto
         in
 
-        (* let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_instr instrs) in
-        prerr_endline str; *)
+        let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_instr instrs) in
+        prerr_endline str;
 
         let open Jib_ssa in
         let start, cfg = ssa instrs in
@@ -1598,6 +1627,9 @@ let smt_cdef props lets name_file ctx all_cdefs = function
                push_smt_defs stack basic_block;
             end
           ) visit_order;
+
+        let query = smt_query ctx default_query in
+        push_smt_defs stack [Assert (Fn ("not", [query]))];
 
         let fname = name_file (string_of_id function_id) in
         let out_chan = open_out fname in

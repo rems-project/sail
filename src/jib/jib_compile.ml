@@ -1499,8 +1499,8 @@ let sort_ctype_defs cdefs =
   ctype_defs @ cdefs
 
 let compile_ast ctx (Defs defs) =
-  let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
-  let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit effect {escape}" in
+  let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
+  let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
 
   let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
 
