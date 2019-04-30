@@ -322,12 +322,25 @@ let rec sexp toks =
   in
   parse toks
 
+let parse p delim_regexp input =
+  let delim = Str.regexp delim_regexp in
+  let tokens = Str.full_split delim input in
+  let non_whitespace = function
+    | Str.Delim d when String.trim d = "" -> false
+    | _ -> true
+  in
+  let tokens = List.filter non_whitespace tokens in
+  match p tokens with
+  | Ok (result, []) -> Some result
+  | Ok (result, _) -> None
+  | Fail -> None
+
 let parse_sexps input =
   let delim = Str.regexp "[ \n\t]+\\|(\\|)" in
   let tokens = Str.full_split delim input in
   let non_whitespace = function
-    | Str.Delim "(" | Str.Delim ")" | Str.Text _ -> true
-    | Str.Delim _ -> false
+    | Str.Delim d when String.trim d = "" -> false
+    | _ -> true
   in
   let tokens = List.filter non_whitespace tokens in
   match plist sexp tokens with
@@ -347,7 +360,7 @@ let value_of_sexpr sexpr =
      | _ -> failwith "Cannot parse sexpr as ctyp"
      end
   | _ -> assert false
-          
+
 let rec find_arg id ctyp arg_smt_names = function
   | List [Atom "define-fun"; Atom str; List []; _; value] :: _
        when Util.assoc_compare_opt Id.compare id arg_smt_names = Some (Some str) ->
@@ -365,7 +378,7 @@ let rec run frame =
      run (Interpreter.eval_frame frame)
   | Interpreter.Break frame ->
      run (Interpreter.eval_frame frame)
-  
+
 let check_counterexample ast env fname args arg_ctyps arg_smt_names =
   let open Printf in
   prerr_endline ("Checking counterexample: " ^ fname);

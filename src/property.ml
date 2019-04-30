@@ -50,6 +50,7 @@
 
 open Ast
 open Ast_util
+open Smtlib
 
 let find_properties (Defs defs) =
   let rec find_prop acc = function
@@ -120,3 +121,103 @@ let add_property_guards props (Defs defs) =
 
 let rewrite defs =
   add_property_guards (find_properties defs) defs
+
+type event = Overflow | Assertion | Assumption | Match | Return
+
+type query =
+   | Q_all of event   (* All events of type are true *)
+   | Q_exist of event (* Some event of type is true *)
+   | Q_not of query
+   | Q_and of query list
+   | Q_or of query list
+
+let default_query =
+  Q_or [Q_and [Q_all Assertion; Q_all Return; Q_not (Q_exist Match)]; Q_exist Overflow; Q_not (Q_all Assumption)]
+
+module Event = struct
+  type t = event
+  let compare e1 e2 =
+    match e1, e2 with
+    | Overflow, Overflow -> 0
+    | Assertion, Assertion -> 0
+    | Assumption, Assumption -> 0
+    | Match, Match -> 0
+    | Return, Return -> 0
+    | Overflow, _ -> 1
+    | _, Overflow -> -1
+    | Assertion, _ -> 1
+    | _, Assertion -> -1
+    | Assumption, _ -> 1
+    | _, Assumption -> -1
+    | Match, _ -> 1
+    | _, Match -> -1
+end
+
+let string_of_event = function
+  | Overflow -> "overflow"
+  | Assertion -> "assertion"
+  | Assumption -> "assumption"
+  | Match -> "match_failure"
+  | Return -> "return"
+
+let rec string_of_query = function
+  | Q_all ev -> "A " ^ string_of_event ev
+  | Q_exist ev -> "E " ^ string_of_event ev
+  | Q_not q -> "~(" ^ string_of_query q ^ ")"
+  | Q_and qs -> "(" ^ Util.string_of_list " & " string_of_query qs ^ ")"
+  | Q_or qs -> "(" ^ Util.string_of_list " | " string_of_query qs ^ ")"
+
+let parse_query =
+  let amp = token (function Str.Delim "&" -> Some () | _ -> None) in
+  let bar = token (function Str.Delim "|" -> Some () | _ -> None) in
+  let lparen = token (function Str.Delim "(" -> Some () | _ -> None) in
+  let rparen = token (function Str.Delim ")" -> Some () | _ -> None) in
+  let quant = token (function Str.Text ("A" | "all") -> Some (fun x -> Q_all x)
+                            | Str.Text ("E" | "exist") -> Some (fun x -> Q_exist x)
+                            | _ -> None) in
+  let event = token (function Str.Text "overflow" -> Some Overflow
+                            | Str.Text "assertion" -> Some Assertion
+                            | Str.Text "assumption" -> Some Assumption
+                            | Str.Text "match_failure" -> Some Match
+                            | Str.Text "return"-> Some Return
+                            | _ -> None) in
+  let tilde = token (function Str.Delim "~" -> Some () | _ -> None) in
+
+  let rec exp0 () =
+    pchoose (exp1 () >>= fun x -> bar >>= fun _ -> exp0 () >>= fun y -> preturn (Q_or [x; y]))
+            (exp1 ())
+  and exp1 () =
+    pchoose (exp2 () >>= fun x -> amp >>= fun _ -> exp1 () >>= fun y -> preturn (Q_and [x; y]))
+            (exp2 ())
+  and exp2 () =
+    pchoose (tilde >>= fun _ -> exp3 () >>= fun x -> preturn (Q_not x))
+            (exp3 ())
+  and exp3 () =
+    pchoose (lparen >>= fun _ -> exp0 () >>= fun x -> rparen >>= fun _ -> preturn x)
+            (quant >>= fun f -> event >>= fun ev -> preturn (f ev))
+  in
+  parse (exp0 ()) "[ \n\t]+\\|(\\|)\\|&\\||\\|~"
+
+type pragma = {
+    query : query
+  }
+
+let default_pragma = {
+    query = default_query
+  }
+
+let parse_pragma l input =
+  let key = Str.regexp ":[a-z]+" in
+  let tokens = Str.full_split key input in
+  let rec process_toks pragma = function
+    | Str.Delim ":query" :: Str.Text query :: rest ->
+       begin match parse_query query with
+       | Some q -> process_toks { query = q } rest
+       | None ->
+          raise (Reporting.err_general l ("Could not parse query " ^ String.trim query))
+       end
+    | [] -> pragma
+    | _ ->
+       raise (Reporting.err_general l "Could not parse pragma")
+  in
+  process_toks default_pragma tokens

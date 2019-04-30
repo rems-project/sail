@@ -54,6 +54,7 @@ open Ast_util
 open Jib
 open Jib_util
 open Smtlib
+open Property
 
 module IntSet = Set.Make(struct type t = int let compare = compare end)
 module IntMap = Map.Make(struct type t = int let compare = compare end)
@@ -65,37 +66,6 @@ let zencode_name id = string_of_name ~deref_current_exception:false ~zencode:tru
 let opt_ignore_overflow = ref false
 
 let opt_auto = ref false
-
-type event = Overflow | Assertion | Assumption | Match | Return
-
-type query =
-   | Q_all of event   (* All events of type are true *)
-   | Q_exist of event (* Some event of type is true *)
-   | Q_not of query
-   | Q_and of query list
-   | Q_or of query list
-
-let default_query =
-  Q_or [Q_and [Q_all Assertion; Q_all Return; Q_not (Q_exist Match)]; Q_exist Overflow; Q_not (Q_all Assumption)]
-
-module Event = struct
-  type t = event
-  let compare e1 e2 =
-    match e1, e2 with
-    | Overflow, Overflow -> 0
-    | Assertion, Assertion -> 0
-    | Assumption, Assumption -> 0
-    | Match, Match -> 0
-    | Return, Return -> 0
-    | Overflow, _ -> 1
-    | _, Overflow -> -1
-    | Assertion, _ -> 1
-    | _, Assertion -> -1
-    | Assumption, _ -> 1
-    | _, Assumption -> -1
-    | Match, _ -> 1
-    | _, Match -> -1
-end
 
 module EventMap = Map.Make(Event)
 
@@ -1585,6 +1555,8 @@ let smt_cdef props lets name_file ctx all_cdefs = function
      | intervening_lets, Some (None, args, instrs) ->
         let prop_type, prop_args, pragma_l, vs = Bindings.find function_id props in
 
+        let pragma = parse_pragma pragma_l prop_args in
+
         let stack = Stack.create () in
 
         let ctx = { ctx with events = ref EventMap.empty; pragma_l = pragma_l; arg_stack = Stack.create () } in
@@ -1604,8 +1576,8 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           |> remove_pointless_goto
         in
 
-        let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_instr instrs) in
-        prerr_endline str;
+        (* let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_instr instrs) in
+        prerr_endline str; *)
 
         let open Jib_ssa in
         let start, cfg = ssa instrs in
@@ -1634,7 +1606,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
             end
           ) visit_order;
 
-        let query = smt_query ctx default_query in
+        let query = smt_query ctx pragma.query in
         push_smt_defs stack [Assert (Fn ("not", [query]))];
 
         let fname = name_file (string_of_id function_id) in

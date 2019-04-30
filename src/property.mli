@@ -87,3 +87,24 @@ val find_properties : 'a defs -> (string * string * l * 'a val_spec) Bindings.t
    constraints of the function are ignored.
 *)
 val rewrite : tannot defs -> tannot defs
+
+type event = Overflow | Assertion | Assumption | Match | Return
+
+module Event : sig
+  type t = event
+  val compare : event -> event -> int
+end
+
+type query =
+   | Q_all of event
+   | Q_exist of event
+   | Q_not of query
+   | Q_and of query list
+   | Q_or of query list
+
+type pragma = {
+    query : query
+  }
+
+val parse_pragma : Parse_ast.l -> string -> pragma
+
