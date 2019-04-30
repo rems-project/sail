@@ -650,13 +650,11 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      []
 
   | AE_if (aval, then_aexp, else_aexp, if_typ) ->
-     (* FIXME:
      if is_dead_aexp then_aexp then
        compile_aexp ctx else_aexp
      else if is_dead_aexp else_aexp then
        compile_aexp ctx then_aexp
      else
-      *)
        let if_ctyp = ctyp_of_typ ctx if_typ in
        let compile_branch aexp =
          let setup, call, cleanup = compile_aexp ctx aexp in
@@ -1499,8 +1497,8 @@ let sort_ctype_defs cdefs =
   ctype_defs @ cdefs
 
 let compile_ast ctx (Defs defs) =
-  let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
-  let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
+  let assert_vs = Initial_check.extern_of_string (mk_id "__assert") "(bool, string) -> unit" in
+  let exit_vs = Initial_check.extern_of_string (mk_id "__exit") "unit -> unit" in
 
   let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
 

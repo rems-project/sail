@@ -66,7 +66,7 @@ let opt_ignore_overflow = ref false
 
 let opt_auto = ref false
 
-type event = Overflow | Assertion | Match | Return
+type event = Overflow | Assertion | Assumption | Match | Return
 
 type query =
    | Q_all of event   (* All events of type are true *)
@@ -76,13 +76,7 @@ type query =
    | Q_or of query list
 
 let default_query =
-  Q_or [Q_and [Q_all Assertion; Q_all Return; Q_not (Q_exist Match)]; Q_exist Overflow]
-
-let event_name = function
-  | Overflow -> "overflow"
-  | Assertion -> "assert"
-  | Match -> "match"
-  | Return -> "end"
+  Q_or [Q_and [Q_all Assertion; Q_all Return; Q_not (Q_exist Match)]; Q_exist Overflow; Q_not (Q_all Assumption)]
 
 module Event = struct
   type t = event
@@ -90,12 +84,15 @@ module Event = struct
     match e1, e2 with
     | Overflow, Overflow -> 0
     | Assertion, Assertion -> 0
+    | Assumption, Assumption -> 0
     | Match, Match -> 0
     | Return, Return -> 0
     | Overflow, _ -> 1
     | _, Overflow -> -1
     | Assertion, _ -> 1
     | _, Assertion -> -1
+    | Assumption, _ -> 1
+    | _, Assumption -> -1
     | Match, _ -> 1
     | _, Match -> -1
 end
@@ -1334,7 +1331,7 @@ let smt_instr ctx =
        | _ ->
           Reporting.unreachable l __POS__ "Bad arguments for internal_vector_update"
        end
-     else if string_of_id function_id = "sail_assert" then
+     else if string_of_id function_id = "__assert" then
        begin match args with
        | [assertion; _] ->
           let smt = smt_cval ctx assertion in
@@ -1342,6 +1339,15 @@ let smt_instr ctx =
           []
        | _ ->
           Reporting.unreachable l __POS__ "Bad arguments for assertion"
+       end
+     else if string_of_id function_id = "__assume" then
+       begin match args with
+       | [assumption] ->
+          let smt = smt_cval ctx assumption in
+          add_event ctx Assumption smt;
+          []
+       | _ ->
+          Reporting.unreachable l __POS__ "Bad arguments for assumption"
        end
      else if not extern then
        let smt_args = List.map (smt_cval ctx) args in
