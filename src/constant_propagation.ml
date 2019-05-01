@@ -321,6 +321,25 @@ let const_props defs ref_vars =
     with
     | _ -> exp
   in
+  let constants =
+    let add m = function
+      | DEF_val (LB_aux (LB_val (P_aux ((P_id id | P_typ (_,P_aux (P_id id,_))),_), exp),_))
+           when Constant_fold.is_constant exp ->
+         Bindings.add id exp m
+      | _ -> m
+    in
+    match defs with
+    | Defs defs ->
+       List.fold_left add Bindings.empty defs
+  in
+  let replace_constant (E_aux (e,annot) as exp) =
+    match e with
+    | E_id id ->
+       (match Bindings.find_opt id constants with
+        | Some e -> e
+        | None -> exp)
+    | _ -> exp
+  in
   let rec const_prop_exp substs assigns ((E_aux (e,(l,annot))) as exp) =
     (* Functions to treat lists and tuples of subexpressions as possibly
        non-deterministic: that is, we stop making any assumptions about
@@ -633,6 +652,8 @@ let const_props defs ref_vars =
      e.g., (length(op : bits(32)) : int(32)) becomes 32 even if op is not constant.
   *)
   and const_prop_try_fn env (id, args) (l, annot) =
+    let exp_orig = E_aux (E_app (id, args), (l, annot)) in
+    let args = List.map replace_constant args in
     let exp = E_aux (E_app (id, args), (l, annot)) in
     let rec is_overload_of f =
       Env.get_overloads f env
@@ -651,8 +672,8 @@ let const_props defs ref_vars =
        (match destruct_atom_nexp env (typ_of exp) with
         | Some (Nexp_aux (Nexp_constant i, _)) ->
            E_aux (E_lit (mk_lit (L_num i)), (l, annot))
-        | _ -> exp)
-    | _ -> exp
+        | _ -> exp_orig)
+    | _ -> exp_orig
 
   and can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases (substs,ksubsts) assigns =
     let rec check_exp_pat (E_aux (e,(l,annot)) as exp) (P_aux (p,(l',_)) as pat) =

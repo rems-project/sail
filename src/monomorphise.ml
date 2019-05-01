@@ -1751,7 +1751,8 @@ type env = {
   top_kids : kid list; (* Int kids bound by the function type *)
   var_deps : dependencies Bindings.t;
   kid_deps : dependencies KBindings.t;
-  referenced_vars : IdSet.t
+  referenced_vars : IdSet.t;
+  globals : bool Bindings.t (* is_value or not *)
 }
 
 let rec split3 = function
@@ -2043,8 +2044,11 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
                | _ ->
                   if IdSet.mem id env.referenced_vars then
                     Unknown (l, string_of_id id ^ " may be modified via a reference"),assigns,empty
-                  else
-                    Unknown (l, string_of_id id ^ " is not in the environment"),assigns,empty
+                  else match Bindings.find id env.globals with
+                       | true -> dempty,assigns,empty (* value *)
+                       | false -> Unknown (l, string_of_id id ^ " is a global but not a value"),assigns,empty
+                       | exception Not_found ->
+                          Unknown (l, string_of_id id ^ " is not in the environment"),assigns,empty
        end
     | E_lit _ -> (dempty,assigns,empty)
     | E_cast (_,e) -> analyse_exp fn_id env assigns e
@@ -2293,7 +2297,7 @@ let rec translate_loc l =
   | Generated l -> translate_loc l
   | _ -> None
 
-let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
+let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions globals =
   let pats = 
     match pat with
     | P_aux (P_tup pats,_) -> pats
@@ -2423,7 +2427,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
   in
   let kid_deps = KBindings.merge merge_kid_deps_eqns kid_deps eqn_kid_deps in
   let referenced_vars = Constant_propagation.referenced_vars body in
-  { top_kids; var_deps; kid_deps; referenced_vars }
+  { top_kids; var_deps; kid_deps; referenced_vars; globals }
 
 (* When there's more than one pick the first *)
 let merge_set_asserts _ x y =
@@ -2554,13 +2558,13 @@ let print_result r =
                                   (Failures.bindings r.failures)))) in
   ()
 
-let analyse_funcl debug tenv (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
+let analyse_funcl debug tenv constants (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
   let _ = if debug > 2 then print_endline (string_of_id id) else () in
   let pat,guard,body,_ = destruct_pexp pexp in
   let (tq,_) = Env.get_val_spec id tenv in
   let set_assertions = find_set_assertions body in
   let _ = if debug > 2 then print_set_assertions set_assertions in
-  let aenv = initial_env id l tq pat body set_assertions in
+  let aenv = initial_env id l tq pat body set_assertions constants in
   let _,_,r = analyse_exp id aenv Bindings.empty body in
   let r = match guard with
     | None -> r
@@ -2577,11 +2581,14 @@ let analyse_funcl debug tenv (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
   let _ = if debug > 2 then print_result r else ()
   in r
 
-let analyse_def debug env = function
+let analyse_def debug env globals = function
   | DEF_fundef (FD_aux (FD_function (_,_,_,funcls),_)) ->
-     List.fold_left (fun r f -> merge r (analyse_funcl debug env f)) empty funcls
+     globals, List.fold_left (fun r f -> merge r (analyse_funcl debug env globals f)) empty funcls
 
-  | _ -> empty
+  | DEF_val (LB_aux (LB_val (P_aux ((P_id id | P_typ (_,P_aux (P_id id,_))),_), exp),_)) ->
+     Bindings.add id (Constant_fold.is_constant exp) globals, empty
+
+  | _ -> globals, empty
 
 let detail_to_split = function
   | Total -> None
@@ -2595,7 +2602,11 @@ let argset_to_list splits =
   List.map argelt l
 
 let analyse_defs debug env (Defs defs) =
-  let r = List.fold_left (fun r d -> merge r (analyse_def debug env d)) empty defs in
+  let def (globals,r) d =
+    let globals,r' = analyse_def debug env globals d in
+    globals, merge r r'
+  in
+  let _,r = List.fold_left def (Bindings.empty,empty) defs in
 
   (* Resolve the interprocedural dependencies *)
 
