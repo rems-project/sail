@@ -5062,6 +5062,6 @@ let initial_env =
          (app_typ (mk_id "itself") [mk_typ_arg (A_nexp (nvar (mk_kid "n")))]) no_effect)
   (* __assume is used by property.ml to add guards for SMT generation,
      but which don't affect flow-typing. *)
-  |> Env.add_val_spec (mk_id "__assume")
+  |> Env.add_val_spec (mk_id "sail_assume")
       (TypQ_aux (TypQ_no_forall, Parse_ast.Unknown),
        function_typ [bool_typ] unit_typ no_effect)

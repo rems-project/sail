@@ -342,10 +342,10 @@ let rec compile_aval l ctx = function
        match cval with
        | V_lit (VL_bit Sail2_values.B0, _) -> []
        | V_lit (VL_bit Sail2_values.B1, _) ->
-          [icopy l (CL_id (gs, ctyp)) (V_op (V_id (gs, ctyp), "|", V_lit (mask i, ctyp)))]
+          [icopy l (CL_id (gs, ctyp)) (V_call (Bvor, [V_id (gs, ctyp); V_lit (mask i, ctyp)]))]
        | _ ->
           (* FIXME: Make this work in C *)
-          setup @ [iif (V_call ("bit_to_bool", [cval])) [icopy l (CL_id (gs, ctyp)) (V_op (V_id (gs, ctyp), "|", V_lit (mask i, ctyp)))] [] CT_unit] @ cleanup
+          setup @ [iif (V_call (Bit_to_bool, [cval])) [icopy l (CL_id (gs, ctyp)) (V_call (Bvor, [V_id (gs, ctyp); V_lit (mask i, ctyp)]))] [] CT_unit] @ cleanup
      in
      [idecl ctyp gs;
       icopy l (CL_id (gs, ctyp)) (V_lit (VL_bits (Util.list_init 64 (fun _ -> Sail2_values.B0), direction), ctyp))]
@@ -472,7 +472,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   | AP_id (pid, _) when is_ct_enum ctyp ->
      begin match Env.lookup_id pid ctx.tc_env with
      | Unbound -> [idecl ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx
-     | _ -> [ijump (V_op (V_id (name pid, ctyp), "!=", cval)) case_label], [], ctx
+     | _ -> [ijump (V_call (Neq, [V_id (name pid, ctyp); cval])) case_label], [], ctx
      end
 
   | AP_id (pid, typ) ->
@@ -525,7 +525,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
         raise (Reporting.err_general l (Printf.sprintf "Variant constructor %s : %s matching against non-variant type %s : %s"
                                                        (string_of_id ctor)
                                                        (string_of_typ variant_typ)
-                                                       (string_of_cval ~zencode:false cval)
+                                                       (string_of_cval cval)
                                                        (string_of_ctyp ctyp)))
      end
 
@@ -534,14 +534,14 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   | AP_cons (hd_apat, tl_apat) ->
      begin match ctyp with
      | CT_list ctyp ->
-        let hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_hd cval) case_label in
-        let tl_setup, tl_cleanup, ctx = compile_match ctx tl_apat (V_tl cval) case_label in
-        [ijump (V_op (cval, "==", V_lit (VL_null, CT_list ctyp))) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup, ctx
+        let hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_call (List_hd, [cval])) case_label in
+        let tl_setup, tl_cleanup, ctx = compile_match ctx tl_apat (V_call (List_tl, [cval])) case_label in
+        [ijump (V_call (Eq, [cval; V_lit (VL_null, CT_list ctyp)])) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup, ctx
      | _ ->
         raise (Reporting.err_general l "Tried to pattern match cons on non list type")
      end
 
-  | AP_nil _ -> [ijump (V_op (cval, "!=", V_lit (VL_null, ctyp))) case_label], [], ctx
+  | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_null, ctyp)])) case_label], [], ctx
 
 let unit_cval = V_lit (VL_unit, CT_unit)
 
@@ -588,7 +588,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
          destructure
          @ (if not trivial_guard then
               guard_setup @ [idecl CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
-              @ [iif (V_unary ("!", V_id (gs, CT_bool))) (destructure_cleanup @ [igoto case_label]) [] CT_unit]
+              @ [iif (V_call (Bnot, [V_id (gs, CT_bool)])) (destructure_cleanup @ [igoto case_label]) [] CT_unit]
             else [])
          @ body_setup @ [body_call (CL_id (case_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
          @ [igoto finish_match_label]
@@ -629,7 +629,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
          destructure @ [icomment "end destructuring"]
          @ (if not trivial_guard then
               guard_setup @ [idecl CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
-              @ [ijump (V_unary ("!", V_id (gs, CT_bool))) try_label]
+              @ [ijump (V_call (Bnot, [V_id (gs, CT_bool)])) try_label]
               @ [icomment "end guard"]
             else [])
          @ body_setup @ [body_call (CL_id (try_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
@@ -640,7 +640,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      assert (ctyp_equal ctyp (ctyp_of_typ ctx typ));
      [idecl ctyp try_return_id;
       itry_block (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
-      ijump (V_unary ("!", V_id (have_exception, CT_bool))) handled_exception_label]
+      ijump (V_call (Bnot, [V_id (have_exception, CT_bool)])) handled_exception_label]
      @ List.concat (List.map compile_case cases)
      @ [igoto fallthrough_label;
         ilabel handled_exception_label;
@@ -762,7 +762,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let body_setup, body_call, body_cleanup = compile_aexp ctx body in
      let gs = ngensym () in
      let unit_gs = ngensym () in
-     let loop_test = V_unary ("!", V_id (gs, CT_bool)) in
+     let loop_test = V_call (Bnot, [V_id (gs, CT_bool)]) in
      [idecl CT_bool gs; idecl CT_unit unit_gs]
      @ [ilabel loop_start_label]
      @ [iblock (cond_setup
@@ -893,12 +893,12 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
                  icopy l (CL_id (loop_var, (CT_fint 64))) (V_id (from_gs, CT_fint 64));
                  idecl CT_unit body_gs;
                  iblock ([ilabel loop_start_label]
-                         @ [ijump (V_op (V_id (loop_var, CT_fint 64), (if is_inc then ">" else "<"), V_id (to_gs, CT_fint 64))) loop_end_label]
+                         @ [ijump (V_call ((if is_inc then Igt else Ilt), [V_id (loop_var, CT_fint 64); V_id (to_gs, CT_fint 64)])) loop_end_label]
                          @ body_setup
                          @ [body_call (CL_id (body_gs, CT_unit))]
                          @ body_cleanup
                          @ [icopy l (CL_id (loop_var, (CT_fint 64)))
-                                  (V_op (V_id (loop_var, CT_fint 64), (if is_inc then "+" else "-"), V_id (step_gs, CT_fint 64)))]
+                                  (V_call ((if is_inc then Iadd else Isub), [V_id (loop_var, CT_fint 64); V_id (step_gs, CT_fint 64)]))]
                          @ [igoto loop_start_label]);
                  ilabel loop_end_label])],
      (fun clexp -> icopy l clexp unit_cval),
@@ -1497,8 +1497,8 @@ let sort_ctype_defs cdefs =
   ctype_defs @ cdefs
 
 let compile_ast ctx (Defs defs) =
-  let assert_vs = Initial_check.extern_of_string (mk_id "__assert") "(bool, string) -> unit" in
-  let exit_vs = Initial_check.extern_of_string (mk_id "__exit") "unit -> unit" in
+  let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
+  let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
 
   let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
 

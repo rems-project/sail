@@ -26,11 +26,6 @@ metavar string ::=
   {{ ocaml string }}
   {{ lem string }}
 
-metavar op ::=
-  {{ phantom }}
-  {{ ocaml string }}
-  {{ lem string }}
-
 metavar bool ::=
   {{ phantom }}
   {{ ocaml bool }}
@@ -61,8 +56,25 @@ name :: '' ::=
   | current_exception nat :: :: current_exception
   | return nat            :: :: return
 
-% Fragments are small pure snippets of (abstract) C code, mostly
-% expressions, used by the aval (ANF) and cval (Jib) types.
+op :: '' ::=
+  | not             :: :: bnot
+  | hd              :: :: list_hd
+  | tl              :: :: list_tl
+  | bit_to_bool     :: :: bit_to_bool
+  | eq              :: :: eq
+  | neq             :: :: neq
+% Integer ops
+  | lt              :: :: ilt
+  | lteq            :: :: ilteq
+  | gt              :: :: igt
+  | gteq            :: :: igteq
+  | add             :: :: iadd
+  | sub             :: :: isub
+% Bitvector ops
+  | bvor            :: :: bvor
+  | bvand           :: :: bvand
+  | zero_extend nat :: :: zero_extend
+  | sign_extend nat :: :: sign_extend
 
 cval :: 'V_' ::=
   | name : ctyp                                     :: :: id
@@ -71,13 +83,9 @@ cval :: 'V_' ::=
   | struct { id0 = cval0 , ... , idn = cvaln } ctyp :: :: struct
   | cval != kind id ( ctyp0 , ... , ctypn ) ctyp    :: :: ctor_kind
   | unwrap id cval ( ctyp0 , ... , ctypn ) ctyp     :: :: ctor_unwrap
-  | cval op cval'                                   :: :: op
   | cval nat0 nat1                                  :: :: tuple_member
-  | op cval                                         :: :: unary
-  | string ( cval0 , ... , cvaln )                  :: :: call
+  | op ( cval0 , ... , cvaln )                      :: :: call
   | cval . string                                   :: :: field
-  | hd ( cval )                                     :: :: hd
-  | tl ( cval )                                     :: :: tl
   | poly cval ctyp                                  :: :: poly
 
 % Note that init / clear are sometimes refered to as create / kill

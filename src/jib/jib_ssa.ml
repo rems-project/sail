@@ -193,8 +193,6 @@ type cf_node =
   | CF_guard of cval
   | CF_start of ctyp NameMap.t
 
-let cval_not cval = V_unary ("!", cval)
-
 let control_flow_graph instrs =
   let module StringMap = Map.Make(String) in
   let labels = ref StringMap.empty in
@@ -243,7 +241,7 @@ let control_flow_graph instrs =
 
     | I_aux (I_jump (cval, label), _) :: after ->
        let t = add_vertex ([], CF_guard cval) graph in
-       let f = add_vertex ([], CF_guard (cval_not cval)) graph in
+       let f = add_vertex ([], CF_guard (V_call (Bnot, [cval]))) graph in
        List.iter (fun p -> add_edge p t graph; add_edge p f graph) preds;
        add_edge t (StringMap.find label !labels) graph;
        cfg [f] after
@@ -504,8 +502,6 @@ let rename_variables graph root children =
        let i = top_stack id in
        V_ref (ssa_name i id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
-    | V_op (f1, op, f2) -> V_op (fold_cval f1, op, fold_cval f2)
-    | V_unary (op, f) -> V_unary (op, fold_cval f)
     | V_call (id, fs) -> V_call (id, List.map fold_cval fs)
     | V_field (f, field) -> V_field (fold_cval f, field)
     | V_tuple_member (f, len, n) -> V_tuple_member (fold_cval f, len, n)
@@ -685,7 +681,7 @@ let string_of_ssainstr = function
   | Phi (id, ctyp, args) ->
      string_of_name id ^ " : " ^ string_of_ctyp ctyp ^ " = &phi;(" ^ Util.string_of_list ", " string_of_name args ^ ")"
   | Pi cvals ->
-     "&pi;(" ^ Util.string_of_list ", " (fun v -> String.escaped (string_of_cval ~zencode:false v)) cvals ^ ")"
+     "&pi;(" ^ Util.string_of_list ", " (fun v -> String.escaped (string_of_cval v)) cvals ^ ")"
 
 let string_of_phis = function
   | [] -> ""

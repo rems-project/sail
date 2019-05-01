@@ -407,7 +407,7 @@ let analyze_primop' ctx id args typ =
   c_debug (lazy ("Analyzing primop " ^ extern ^ "(" ^ Util.string_of_list ", " (fun aval -> Pretty_print_sail.to_string (pp_aval aval)) args ^ ")"));
 
   match extern, args with
-    (*
+  (*
   | "eq_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
      begin match cval_ctyp v1 with
      | CT_fbits _ ->
@@ -444,9 +444,9 @@ let analyze_primop' ctx id args typ =
           when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
         begin match cval_ctyp v1 with
         | CT_fbits _ ->
-           AE_val (AV_C_fragment (v1, typ, CT_fbits (Big_int.to_int n, true)))
+           AE_val (AV_cval (v1, typ, CT_fbits (Big_int.to_int n, true)))
         | CT_sbits _ ->
-           AE_val (AV_C_fragment (F_call ("fast_zero_extend", [v1; v_int (Big_int.to_int n)]), typ, CT_fbits (Big_int.to_int n, true)))
+           AE_val (AV_cval (F_call ("fast_zero_extend", [v1; v_int (Big_int.to_int n)]), typ, CT_fbits (Big_int.to_int n, true)))
         end
      | _ -> no_change
      end
@@ -1142,18 +1142,76 @@ let rec sgen_ctyp_name = function
   | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
   | CT_constant _ -> "CONSTANT"
 
-let sgen_cval cval = string_of_cval cval
+let rec sgen_cval = function
+  | V_id (id, ctyp) -> string_of_name id
+  | V_ref (id, _) -> "&" ^ string_of_name id
+  | V_lit (vl, ctyp) -> string_of_value vl
+  | V_call (op, cvals) -> sgen_call op cvals
+  | V_field (f, field) ->
+     Printf.sprintf "%s.%s" (sgen_cval f) field
+  | V_tuple_member (f, _, n) ->
+     Printf.sprintf "%s.ztup%d" (sgen_cval f) n
+  | V_ctor_kind (f, ctor, [], _) ->
+     sgen_cval f ^ ".kind"
+     ^ " != Kind_" ^ Util.zencode_string (string_of_id ctor)
+  | V_ctor_kind (f, ctor, unifiers, _) ->
+     sgen_cval f ^ ".kind"
+     ^ " != Kind_" ^ Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
+  | V_ctor_unwrap (ctor, f, [], _) ->
+     Printf.sprintf "%s.%s" (sgen_cval f) (Util.zencode_string (string_of_id ctor))
+  | V_struct (fields, _) ->
+     Printf.sprintf "{%s}"
+       (Util.string_of_list ", " (fun (field, cval) -> string_of_id field ^ " = " ^ sgen_cval cval) fields)
+  | V_ctor_unwrap (ctor, f, unifiers, _) ->
+     Printf.sprintf "%s.%s"
+       (sgen_cval f)
+       (Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers))
+  | V_poly (f, _) -> sgen_cval f
+
+and sgen_call op cvals =
+  match op, cvals with
+  | Bnot, [v] -> "!(" ^ sgen_cval v ^ ")"
+  | List_hd, [v] ->
+     Printf.sprintf "(%s).hd" ("*" ^ sgen_cval v)
+  | List_tl, [v] ->
+     Printf.sprintf "(%s).tl" ("*" ^ sgen_cval v)
+  | Eq, [v1; v2] ->
+     Printf.sprintf "(%s == %s)" (sgen_cval v1) (sgen_cval v2)
+  | Neq, [v1; v2] ->
+     Printf.sprintf "(%s != %s)" (sgen_cval v1) (sgen_cval v2)
+  | Ilt, [v1; v2] ->
+     Printf.sprintf "(%s < %s)" (sgen_cval v1) (sgen_cval v2)
+  | Igt, [v1; v2] ->
+     Printf.sprintf "(%s > %s)" (sgen_cval v1) (sgen_cval v2)
+  | Ilteq, [v1; v2] ->
+     Printf.sprintf "(%s <= %s)" (sgen_cval v1) (sgen_cval v2)
+  | Igteq, [v1; v2] ->
+     Printf.sprintf "(%s >= %s)" (sgen_cval v1) (sgen_cval v2)
+  | Iadd, [v1; v2] ->
+     Printf.sprintf "(%s + %s)" (sgen_cval v1) (sgen_cval v2)
+  | Isub, [v1; v2] ->
+     Printf.sprintf "(%s - %s)" (sgen_cval v1) (sgen_cval v2)
+  | Bvand, [v1; v2] ->
+     Printf.sprintf "(%s & %s)" (sgen_cval v1) (sgen_cval v2)
+  | Bvor, [v1; v2] ->
+     Printf.sprintf "(%s | %s)" (sgen_cval v1) (sgen_cval v2)
+  | Zero_extend n, [v] ->
+     Printf.sprintf "fast_zero_extend(%d, %s)" n (sgen_cval v)
+  | Sign_extend n, [v] ->
+     Printf.sprintf "fast_sign_extend(%d, %s)" n (sgen_cval v)
+  | _, vs ->
+     Printf.sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " sgen_cval cvals)
 
 let sgen_cval_param cval =
   match cval_ctyp cval with
   | CT_lbits direction ->
-     string_of_cval cval ^ ", " ^ string_of_bool direction
+     sgen_cval cval ^ ", " ^ string_of_bool direction
   | CT_sbits (_, direction) ->
-     string_of_cval cval ^ ", " ^ string_of_bool direction
+     sgen_cval cval ^ ", " ^ string_of_bool direction
   | CT_fbits (len, direction) ->
-     string_of_cval cval ^ ", UINT64_C(" ^ string_of_int len ^ ") , " ^ string_of_bool direction
+     sgen_cval cval ^ ", UINT64_C(" ^ string_of_int len ^ ") , " ^ string_of_bool direction
   | _ ->
-     string_of_cval cval
+     sgen_cval cval
 
 let rec sgen_clexp = function
   | CL_id (Have_exception _, _) -> "have_exception"

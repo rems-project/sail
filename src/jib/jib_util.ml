@@ -161,14 +161,10 @@ let rec cval_rename from_id to_id = function
   | V_ref (id, ctyp) -> V_ref (id, ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
   | V_call (call, cvals) -> V_call (call, List.map (cval_rename from_id to_id) cvals)
-  | V_op (f1, op, f2) -> V_op (cval_rename from_id to_id f1, op, cval_rename from_id to_id f2)
-  | V_unary (op, f) -> V_unary (op, cval_rename from_id to_id f)
   | V_field (f, field) -> V_field (cval_rename from_id to_id f, field)
   | V_tuple_member (f, len, n) -> V_tuple_member (cval_rename from_id to_id f, len, n)
   | V_ctor_kind (f, ctor, unifiers, ctyp) -> V_ctor_kind (cval_rename from_id to_id f, ctor, unifiers, ctyp)
   | V_ctor_unwrap (ctor, f, unifiers, ctyp) -> V_ctor_unwrap (ctor, cval_rename from_id to_id f, unifiers, ctyp)
-  | V_hd cval -> V_hd (cval_rename from_id to_id cval)
-  | V_tl cval -> V_tl (cval_rename from_id to_id cval)
   | V_struct (fields, ctyp) ->
      V_struct (List.map (fun (field, cval) -> field, cval_rename from_id to_id cval) fields, ctyp)
   | V_poly (f, ctyp) -> V_poly (cval_rename from_id to_id f, ctyp)
@@ -279,46 +275,50 @@ let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
   | Current_exception n ->
      "current_exception" ^ ssa_num n
 
-let rec string_of_cval ?zencode:(zencode=true) = function
-  | V_id (id, ctyp) -> string_of_name ~zencode:zencode id
-  | V_ref (id, _) -> "&" ^ string_of_name ~zencode:zencode id
+let string_of_op = function
+  | Bnot -> "not"
+  | List_hd -> "hd"
+  | List_tl -> "tl"
+  | Bit_to_bool -> "bit_to_bool"
+  | Eq -> "eq"
+  | Neq -> "neq"
+  | Bvor -> "bvor"
+  | Bvand -> "bvand"
+  | Ilt -> "lt"
+  | Igt -> "gt"
+  | Ilteq -> "lteq"
+  | Igteq -> "gteq"
+  | Iadd -> "iadd"
+  | Isub -> "isub"
+  | Zero_extend n -> "zero_extend" ^ string_of_int n
+  | Sign_extend n -> "sign_extend" ^ string_of_int n
+
+let rec string_of_cval = function
+  | V_id (id, ctyp) -> string_of_name id
+  | V_ref (id, _) -> "&" ^ string_of_name id
   | V_lit (vl, ctyp) -> string_of_value vl
-  | V_call (str, cvals) ->
-     Printf.sprintf "%s(%s)" str (Util.string_of_list ", " (string_of_cval ~zencode:zencode) cvals)
+  | V_call (op, cvals) ->
+     Printf.sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " string_of_cval cvals)
   | V_field (f, field) ->
-     Printf.sprintf "%s.%s" (string_of_cval' ~zencode:zencode f) field
+     Printf.sprintf "%s.%s" (string_of_cval f) field
   | V_tuple_member (f, _, n) ->
-     Printf.sprintf "%s.ztup%d" (string_of_cval' ~zencode:zencode f) n
-  | V_op (f1, op, f2) ->
-     Printf.sprintf "%s %s %s" (string_of_cval' ~zencode:zencode f1) op (string_of_cval' ~zencode:zencode f2)
-  | V_unary (op, f) ->
-     op ^ string_of_cval' ~zencode:zencode f
-  | V_hd f ->
-     Printf.sprintf "(%s).hd" ("*" ^ string_of_cval' ~zencode:zencode f)
-  | V_tl f ->
-     Printf.sprintf "(%s).tl" ("*" ^ string_of_cval' ~zencode:zencode f)
+     Printf.sprintf "%s.ztup%d" (string_of_cval f) n
   | V_ctor_kind (f, ctor, [], _) ->
-     string_of_cval' ~zencode:zencode f ^ ".kind"
+     string_of_cval f ^ ".kind"
      ^ " != Kind_" ^ Util.zencode_string (string_of_id ctor)
   | V_ctor_kind (f, ctor, unifiers, _) ->
-     string_of_cval' ~zencode:zencode f ^ ".kind"
+     string_of_cval f ^ ".kind"
      ^ " != Kind_" ^ Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
   | V_ctor_unwrap (ctor, f, [], _) ->
-     Printf.sprintf "%s.%s"
-       (string_of_cval' ~zencode:zencode f)
-       (Util.zencode_string (string_of_id ctor))
+     Printf.sprintf "%s.%s" (string_of_cval f) (string_of_id ctor)
   | V_struct (fields, _) ->
      Printf.sprintf "{%s}"
-       (Util.string_of_list ", " (fun (field, cval) -> string_of_id field ^ " = " ^ string_of_cval' ~zencode:zencode cval) fields)
+       (Util.string_of_list ", " (fun (field, cval) -> string_of_id field ^ " = " ^ string_of_cval cval) fields)
   | V_ctor_unwrap (ctor, f, unifiers, _) ->
      Printf.sprintf "%s.%s"
-       (string_of_cval' ~zencode:zencode f)
+       (string_of_cval f)
        (Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers))
-  | V_poly (f, _) -> string_of_cval ~zencode:zencode f
-and string_of_cval' ?zencode:(zencode=true) f =
-  match f with
-  | V_op _ | V_unary _ -> "(" ^ string_of_cval ~zencode:zencode f ^ ")"
-  | _ -> string_of_cval ~zencode:zencode f
+  | V_poly (f, _) -> string_of_cval f
 
 (* String representation of ctyps here is only for debugging and
    intermediate language pretty-printer. *)
@@ -535,8 +535,6 @@ let rec unpoly = function
   | V_poly (cval, _) -> unpoly cval
   | V_call (call, cvals) -> V_call (call, List.map unpoly cvals)
   | V_field (cval, field) -> V_field (unpoly cval, field)
-  | V_op (cval1, op, cval2) -> V_op (unpoly cval1, op, unpoly cval2)
-  | V_unary (op, cval) -> V_unary (op, unpoly cval)
   | cval -> cval
 
 let rec is_polymorphic = function
@@ -560,7 +558,7 @@ let pp_keyword str =
   string ((str |> Util.red |> Util.clear) ^ " ")
 
 let pp_cval cval =
-  string (string_of_cval ~zencode:false cval)
+  string (string_of_cval cval)
 
 let rec pp_clexp = function
   | CL_id (id, ctyp) -> pp_name id ^^ string " : " ^^ pp_ctyp ctyp
@@ -670,12 +668,10 @@ let pp_cdef = function
 let rec cval_deps = function
   | V_id (id, _) | V_ref (id, _) -> NameSet.singleton id
   | V_lit _ -> NameSet.empty
-  | V_field (cval, _) | V_unary (_, cval) | V_poly (cval, _) | V_tuple_member (cval, _, _) -> cval_deps cval
+  | V_field (cval, _) | V_poly (cval, _) | V_tuple_member (cval, _, _) -> cval_deps cval
   | V_call (_, cvals) -> List.fold_left NameSet.union NameSet.empty (List.map cval_deps cvals)
-  | V_op (cval1, _, cval2) -> NameSet.union (cval_deps cval1) (cval_deps cval2)
   | V_ctor_kind (cval, _, _, _) -> cval_deps cval
   | V_ctor_unwrap (_, cval, _, _) -> cval_deps cval
-  | V_hd cval | V_tl cval -> cval_deps cval
   | V_struct (fields, ctyp) -> List.fold_left (fun ns (_, cval) -> NameSet.union ns (cval_deps cval)) NameSet.empty fields
 
 let rec clexp_deps = function
@@ -750,21 +746,14 @@ let rec map_cval_ctyp f = function
      V_ctor_kind (map_cval_ctyp f cval, id, List.map f unifiers, f ctyp)
   | V_ctor_unwrap (id, cval, unifiers, ctyp) ->
      V_ctor_unwrap (id, map_cval_ctyp f cval, List.map f unifiers, f ctyp)
-  | V_op (cval1, op, cval2) ->
-     V_op (map_cval_ctyp f cval1, op, map_cval_ctyp f cval2)
   | V_tuple_member (cval, i, j) ->
      V_tuple_member (map_cval_ctyp f cval, i, j)
-  | V_unary (op, cval) ->
-     V_unary (op, map_cval_ctyp f cval)
   | V_call (op, cvals) ->
      V_call (op, List.map (map_cval_ctyp f) cvals)
   | V_field (cval, field) ->
      V_field (map_cval_ctyp f cval, field)
-  | V_hd cval -> V_hd (map_cval_ctyp f cval)
-  | V_tl cval -> V_tl (map_cval_ctyp f cval)
   | V_struct (fields, ctyp) -> V_struct (List.map (fun (id, cval) -> id, map_cval_ctyp f cval) fields, f ctyp)
   | V_poly (cval, ctyp) -> V_poly (map_cval_ctyp f cval, f ctyp)
-
 
 let rec map_instr_ctyp f (I_aux (instr, aux)) =
   let instr = match instr with
@@ -890,26 +879,32 @@ let label str =
   incr label_counter;
   str
 
-let rec infer_unary v = function
-  | "!" -> CT_bool
-  | op -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Could not infer unary " ^ op)
-
-and infer_op v1 v2 = function
-  | "==" -> CT_bool
-  | "!=" -> CT_bool
-  | ">=" -> CT_bool
-  | "<=" -> CT_bool
-  | ">" -> CT_bool
-  | "<" -> CT_bool
-  | "+" -> cval_ctyp v1
-  | "-" -> cval_ctyp v1
-  | "|" -> cval_ctyp v1
-  | "&" -> cval_ctyp v1
-  | op -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Cannot infer binary op: " ^ op)
-
-and infer_call vs = function
-  | "bit_to_bool" -> CT_bool
-  | op -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Cannot infer call: " ^ op)
+let rec infer_call op vs =
+  match op, vs with
+  | Bit_to_bool, _ -> CT_bool
+  | Bnot, _ -> CT_bool
+  | List_hd, [v] ->
+     begin match cval_ctyp v with
+     | CT_list ctyp -> ctyp
+     | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid call to hd"
+     end
+  | List_tl, [v] ->
+     begin match cval_ctyp v with
+     | CT_list ctyp -> CT_list ctyp
+     | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid call to tl"
+     end
+  | (Eq | Neq), _ -> CT_bool
+  | (Bvor | Bvand), [v; _] -> cval_ctyp v
+  | (Ilt | Igt | Ilteq | Igteq), _ -> CT_bool
+  | (Iadd | Isub), _ -> CT_fint 64
+  | (Zero_extend n | Sign_extend n), [v] ->
+     begin match cval_ctyp v with
+     | CT_fbits (_, ord) | CT_sbits (_, ord) | CT_lbits ord ->
+        CT_fbits (n, ord)
+     | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for zero/sign_extend argument"
+     end
+  | _, _ ->
+     Reporting.unreachable Parse_ast.Unknown __POS__ ("Invalid call to function " ^ string_of_op op)
 
 and cval_ctyp = function
   | V_id (_, ctyp) -> ctyp
@@ -917,14 +912,6 @@ and cval_ctyp = function
   | V_lit (vl, ctyp) -> ctyp
   | V_ctor_kind _ -> CT_bool
   | V_ctor_unwrap (ctor, cval, unifiers, ctyp) -> ctyp
-  | V_hd v ->
-     begin match cval_ctyp v with
-     | CT_list ctyp -> ctyp
-     | ctyp -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Invalid list type " ^ full_string_of_ctyp ctyp)
-     end
-  | V_tl v -> cval_ctyp v
-  | V_op (v1, op, v2) -> infer_op v1 v2 op
-  | V_unary (op, v) -> infer_unary v op
   | V_poly (_, ctyp) -> ctyp
   | V_tuple_member (cval, _, n) ->
      begin match cval_ctyp cval with
@@ -942,7 +929,7 @@ and cval_ctyp = function
      | ctyp -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Inavlid type for V_field " ^ full_string_of_ctyp ctyp)
      end
   | V_struct (fields, ctyp) -> ctyp
-  | V_call (op, vs) -> infer_call vs op
+  | V_call (op, vs) -> infer_call op vs
 
 let rec clexp_ctyp = function
   | CL_id (_, ctyp) -> ctyp

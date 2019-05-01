@@ -373,13 +373,17 @@ let build_counterexample args arg_ctyps arg_smt_names model =
 
 let rec run frame =
   match frame with
-  | Interpreter.Done (state, v) -> v
+  | Interpreter.Done (state, v) -> Some v
   | Interpreter.Step (lazy_str, _, _, _) ->
      run (Interpreter.eval_frame frame)
   | Interpreter.Break frame ->
      run (Interpreter.eval_frame frame)
+  | Interpreter.Fail (_, _, _, _, msg) ->
+     None
+  | Interpreter.Effect_request (out, state, stack, eff) ->
+     run (Interpreter.default_effect_interp state eff)
 
-let check_counterexample ast env fname args arg_ctyps arg_smt_names =
+let check_counterexample ast env fname function_id args arg_ctyps arg_smt_names =
   let open Printf in
   prerr_endline ("Checking counterexample: " ^ fname);
   let in_chan = ksprintf Unix.open_process_in "cvc4 --lang=smt2.6 %s" fname in
@@ -402,15 +406,15 @@ let check_counterexample ast env fname args arg_ctyps arg_smt_names =
      List.iter (fun (id, v) -> prerr_endline ("  " ^ string_of_id id ^ " -> " ^ string_of_value v)) counterexample;
      let istate = initial_state ast env primops in
      let annot = (Parse_ast.Unknown, Type_check.mk_tannot env bool_typ no_effect) in
-     let call = E_aux (E_app (mk_id "prop", List.map (fun (_, v) -> E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot))) counterexample), annot) in
+     let call = E_aux (E_app (function_id, List.map (fun (_, v) -> E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot))) counterexample), annot) in
      let result = run (Step (lazy "", istate, return call, [])) in
      begin match result with
-     | V_bool false ->
+     | Some (V_bool false) | None ->
         ksprintf prerr_endline "Replaying counterexample: %s" Util.("ok" |> green |> clear)
      | _ -> ()
      end
   | _ ->
-     prerr_endline "failure"
+     prerr_endline "Solver could not find counterexample"
   end;
   let status = Unix.close_process_in in_chan in
   ()

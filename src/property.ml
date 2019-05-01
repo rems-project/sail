@@ -80,7 +80,7 @@ let add_property_guards props (Defs defs) =
              let add_constraints_to_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (pexp, pexp_aux)), fcl_aux)) =
                let add_guard exp =
                  (* FIXME: Use an assert *)
-                 let exp' = mk_exp (E_block [mk_exp (E_app (mk_id "__assume", [mk_exp (E_constraint (List.fold_left nc_and nc_true constraints))]));
+                 let exp' = mk_exp (E_block [mk_exp (E_app (mk_id "sail_assume", [mk_exp (E_constraint (List.fold_left nc_and nc_true constraints))]));
                                              strip_exp exp])
                  in
                  try Type_check.check_exp (env_of exp) exp' (typ_of exp) with

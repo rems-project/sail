@@ -250,13 +250,13 @@ let rec smt_cval ctx cval =
      | _ -> Var (zencode_name ssa_id)
      end
   | V_id (ssa_id, _) -> Var (zencode_name ssa_id)
-  | V_op (frag1, "!=", frag2) ->
-     Fn ("not", [Fn ("=", [smt_cval ctx frag1; smt_cval ctx frag2])])
-  | V_op (frag1, "|", frag2) ->
-     Fn ("bvor", [smt_cval ctx frag1; smt_cval ctx frag2])
-  | V_call ("bit_to_bool", [cval]) ->
+  | V_call (Neq, [cval1; cval2]) ->
+     Fn ("not", [Fn ("=", [smt_cval ctx cval1; smt_cval ctx cval2])])
+  | V_call (Bvor, [cval1; cval2]) ->
+     Fn ("bvor", [smt_cval ctx cval1; smt_cval ctx cval2])
+  | V_call (Bit_to_bool, [cval]) ->
      Fn ("=", [smt_cval ctx cval; Bin "1"])
-  | V_unary ("!", cval) ->
+  | V_call (Bnot, [cval]) ->
      Fn ("not", [smt_cval ctx cval])
   | V_ctor_kind (union, ctor_id, unifiers, _) ->
      Fn ("not", [Tester (zencode_ctor ctor_id unifiers, smt_cval ctx union)])
@@ -296,7 +296,7 @@ let rec smt_cval ctx cval =
         end
      | _ -> assert false
      end
-  | cval -> failwith ("Unrecognised cval " ^ string_of_cval ~zencode:false cval)
+  | cval -> failwith ("Unrecognised cval " ^ string_of_cval cval)
 
 let add_event ctx ev smt =
   let stack = event_stack ctx ev in
@@ -1301,7 +1301,7 @@ let smt_instr ctx =
        | _ ->
           Reporting.unreachable l __POS__ "Bad arguments for internal_vector_update"
        end
-     else if string_of_id function_id = "__assert" then
+     else if string_of_id function_id = "sail_assert" then
        begin match args with
        | [assertion; _] ->
           let smt = smt_cval ctx assertion in
@@ -1310,7 +1310,7 @@ let smt_instr ctx =
        | _ ->
           Reporting.unreachable l __POS__ "Bad arguments for assertion"
        end
-     else if string_of_id function_id = "__assume" then
+     else if string_of_id function_id = "sail_assume" then
        begin match args with
        | [assumption] ->
           let smt = smt_cval ctx assumption in
@@ -1489,7 +1489,7 @@ let expand_reg_deref ctx = function
               let end_label = label "end_reg_deref_" in
               let try_reg r =
                 let next_label = label "next_reg_deref_" in
-                [ijump (V_op (V_ref (name r, reg_ctyp), "!=", reg_ref)) next_label;
+                [ijump (V_call (Neq, [V_ref (name r, reg_ctyp); reg_ref])) next_label;
                  icopy l clexp (V_id (name r, reg_ctyp));
                  igoto end_label;
                  ilabel next_label]
@@ -1511,7 +1511,7 @@ let expand_reg_deref ctx = function
            let end_label = label "end_reg_write_" in
            let try_reg r =
              let next_label = label "next_reg_write_" in
-             [ijump (V_op (V_ref (name r, reg_ctyp), "!=", V_id (id, ctyp))) next_label;
+             [ijump (V_call (Neq, [V_ref (name r, reg_ctyp); V_id (id, ctyp)])) next_label;
               icopy l (CL_id (name r, reg_ctyp)) cval;
               igoto end_label;
               ilabel next_label]
@@ -1634,7 +1634,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
                 | _ -> assert false
               ) arg_decls
           in
-          check_counterexample ctx.ast ctx.tc_env fname args arg_ctyps arg_smt_names
+          check_counterexample ctx.ast ctx.tc_env fname function_id args arg_ctyps arg_smt_names
         );
 
      | _ -> failwith "Bad function body"
