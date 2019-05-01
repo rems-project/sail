@@ -407,27 +407,22 @@ let analyze_primop' ctx id args typ =
   c_debug (lazy ("Analyzing primop " ^ extern ^ "(" ^ Util.string_of_list ", " (fun aval -> Pretty_print_sail.to_string (pp_aval aval)) args ^ ")"));
 
   match extern, args with
-  (*
   | "eq_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
      begin match cval_ctyp v1 with
-     | CT_fbits _ ->
-        AE_val (AV_cval (V_op (v1, "==", v2), typ))
-     | CT_sbits _ ->
-        AE_val (AV_cval (V_call ("eq_sbits", [v1; v2]), typ))
+     | CT_fbits _ | CT_sbits _ ->
+        AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
      | _ -> no_change
      end
 
   | "neq_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
      begin match cval_ctyp v1 with
-     | CT_fbits _ ->
-        AE_val (AV_cval (V_op (v1, "!=", v2), typ))
-     | CT_sbits _ ->
-        AE_val (AV_cval (V_call ("neq_sbits", [v1; v2]), typ))
+     | CT_fbits _ | CT_sbits _ ->
+        AE_val (AV_cval (V_call (Neq, [v1; v2]), typ))
      | _ -> no_change
      end
 
   | "eq_int", [AV_cval (v1, _); AV_cval (v2, _)] ->
-     AE_val (AV_cval (V_op (v1, "==", v2), typ))
+     AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
 
   | "zeros", [_] ->
      begin match destruct_vector ctx.tc_env typ with
@@ -438,47 +433,42 @@ let analyze_primop' ctx id args typ =
      | _ -> no_change
      end
 
-  | "zero_extend", [AV_cval (v1, _); _] ->
+  | "zero_extend", [AV_cval (v, _); _] ->
      begin match destruct_vector ctx.tc_env typ with
      | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
           when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
-        begin match cval_ctyp v1 with
-        | CT_fbits _ ->
-           AE_val (AV_cval (v1, typ, CT_fbits (Big_int.to_int n, true)))
-        | CT_sbits _ ->
-           AE_val (AV_cval (F_call ("fast_zero_extend", [v1; v_int (Big_int.to_int n)]), typ, CT_fbits (Big_int.to_int n, true)))
-        end
+        AE_val (AV_cval (V_call (Zero_extend (Big_int.to_int n), [v]), typ))
      | _ -> no_change
      end
 
-  | "sign_extend", [AV_C_fragment (v1, _, CT_fbits (n, _)); _] ->
+  | "sign_extend", [AV_cval (v, _); _] ->
      begin match destruct_vector ctx.tc_env typ with
-     | Some (Nexp_aux (Nexp_constant m, _), _, Typ_aux (Typ_id id, _))
-          when string_of_id id = "bit" && Big_int.less_equal m (Big_int.of_int 64) ->
-        AE_val (AV_C_fragment (F_call ("fast_sign_extend", [v1; v_int n; v_int (Big_int.to_int m)]) , typ, CT_fbits (Big_int.to_int m, true)))
+     | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
+          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
+        AE_val (AV_cval (V_call (Sign_extend (Big_int.to_int n), [v]), typ))
      | _ -> no_change
      end
 
-  | "sign_extend", [AV_C_fragment (v1, _, CT_sbits _); _] ->
-     begin match destruct_vector ctx.tc_env typ with
-     | Some (Nexp_aux (Nexp_constant m, _), _, Typ_aux (Typ_id id, _))
-          when string_of_id id = "bit" && Big_int.less_equal m (Big_int.of_int 64) ->
-        AE_val (AV_C_fragment (F_call ("fast_sign_extend2", [v1; v_int (Big_int.to_int m)]) , typ, CT_fbits (Big_int.to_int m, true)))
+  | "lteq", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     AE_val (AV_cval (V_call (Ilteq, [v1; v2]), typ))
+  | "gteq", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     AE_val (AV_cval (V_call (Igteq, [v1; v2]), typ))
+  | "lt", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     AE_val (AV_cval (V_call (Ilt, [v1; v2]), typ))
+  | "gt", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     AE_val (AV_cval (V_call (Igt, [v1; v2]), typ))
+
+  | "append", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     begin match ctyp_of_typ ctx typ with
+     | CT_fbits _ | CT_sbits _ ->
+        AE_val (AV_cval (V_call (Concat, [v1; v2]), typ))
      | _ -> no_change
      end
 
+       (*
   | "add_bits", [AV_C_fragment (v1, _, CT_fbits (n, ord)); AV_C_fragment (v2, _, CT_fbits _)]
        when n <= 63 ->
      AE_val (AV_C_fragment (F_op (F_op (v1, "+", v2), "&", v_mask_lower n), typ, CT_fbits (n, ord)))
-
-  | "lteq", [AV_C_fragment (v1, _, _); AV_C_fragment (v2, _, _)] ->
-     AE_val (AV_C_fragment (F_op (v1, "<=", v2), typ, CT_bool))
-  | "gteq", [AV_C_fragment (v1, _, _); AV_C_fragment (v2, _, _)] ->
-     AE_val (AV_C_fragment (F_op (v1, ">=", v2), typ, CT_bool))
-  | "lt", [AV_C_fragment (v1, _, _); AV_C_fragment (v2, _, _)] ->
-     AE_val (AV_C_fragment (F_op (v1, "<", v2), typ, CT_bool))
-  | "gt", [AV_C_fragment (v1, _, _); AV_C_fragment (v2, _, _)] ->
-     AE_val (AV_C_fragment (F_op (v1, ">", v2), typ, CT_bool))
 
   | "xor_bits", [AV_C_fragment (v1, _, (CT_fbits _ as ctyp)); AV_C_fragment (v2, _, CT_fbits _)] ->
      AE_val (AV_C_fragment (F_op (v1, "^", v2), typ, ctyp))
@@ -524,27 +514,6 @@ let analyze_primop' ctx id args typ =
 
   | "undefined_bit", _ ->
      AE_val (AV_C_fragment (F_lit (V_bit Sail2_values.B0), typ, CT_bit))
-
-  (* Optimized routines for all combinations of fixed and small bits
-     appends, where the result is guaranteed to be smaller than 64. *)
-  | "append", [AV_C_fragment (vec1, _, CT_fbits (0, ord1)); AV_C_fragment (vec2, _, CT_fbits (n2, ord2)) as v2]
-       when ord1 = ord2 ->
-     AE_val v2
-  | "append", [AV_C_fragment (vec1, _, CT_fbits (n1, ord1)); AV_C_fragment (vec2, _, CT_fbits (n2, ord2))]
-       when ord1 = ord2 && n1 + n2 <= 64 ->
-     AE_val (AV_C_fragment (F_op (F_op (vec1, "<<", v_int n2), "|", vec2), typ, CT_fbits (n1 + n2, ord1)))
-
-  | "append", [AV_C_fragment (vec1, _, CT_sbits (64, ord1)); AV_C_fragment (vec2, _, CT_fbits (n2, ord2))]
-       when ord1 = ord2 && is_sbits_typ ctx typ ->
-     AE_val (AV_C_fragment (F_call ("append_sf", [vec1; vec2; v_int n2]), typ, ctyp_of_typ ctx typ))
-
-  | "append", [AV_C_fragment (vec1, _, CT_fbits (n1, ord1)); AV_C_fragment (vec2, _, CT_sbits (64, ord2))]
-       when ord1 = ord2 && is_sbits_typ ctx typ ->
-     AE_val (AV_C_fragment (F_call ("append_fs", [vec1; v_int n1; vec2]), typ, ctyp_of_typ ctx typ))
-
-  | "append", [AV_C_fragment (vec1, _, CT_sbits (64, ord1)); AV_C_fragment (vec2, _, CT_sbits (64, ord2))]
-       when ord1 = ord2 && is_sbits_typ ctx typ ->
-     AE_val (AV_C_fragment (F_call ("append_ss", [vec1; vec2]), typ, ctyp_of_typ ctx typ))
 
   | "undefined_vector", [AV_C_fragment (len, _, _); _] ->
      begin match destruct_vector ctx.tc_env typ with
@@ -1169,38 +1138,76 @@ let rec sgen_cval = function
   | V_poly (f, _) -> sgen_cval f
 
 and sgen_call op cvals =
+  let open Printf in
   match op, cvals with
   | Bnot, [v] -> "!(" ^ sgen_cval v ^ ")"
   | List_hd, [v] ->
-     Printf.sprintf "(%s).hd" ("*" ^ sgen_cval v)
+     sprintf "(%s).hd" ("*" ^ sgen_cval v)
   | List_tl, [v] ->
-     Printf.sprintf "(%s).tl" ("*" ^ sgen_cval v)
+     sprintf "(%s).tl" ("*" ^ sgen_cval v)
   | Eq, [v1; v2] ->
-     Printf.sprintf "(%s == %s)" (sgen_cval v1) (sgen_cval v2)
+     begin match cval_ctyp v1 with
+     | CT_sbits _ ->
+        sprintf "eq_sbits(%s, %s)" (sgen_cval v1) (sgen_cval v2)
+     | _ ->
+        sprintf "(%s == %s)" (sgen_cval v1) (sgen_cval v2)
+     end
   | Neq, [v1; v2] ->
-     Printf.sprintf "(%s != %s)" (sgen_cval v1) (sgen_cval v2)
+     begin match cval_ctyp v1 with
+     | CT_sbits _ ->
+        sprintf "neq_sbits(%s, %s)" (sgen_cval v1) (sgen_cval v2)
+     | _ ->
+        sprintf "(%s != %s)" (sgen_cval v1) (sgen_cval v2)
+     end
   | Ilt, [v1; v2] ->
-     Printf.sprintf "(%s < %s)" (sgen_cval v1) (sgen_cval v2)
+     sprintf "(%s < %s)" (sgen_cval v1) (sgen_cval v2)
   | Igt, [v1; v2] ->
-     Printf.sprintf "(%s > %s)" (sgen_cval v1) (sgen_cval v2)
+     sprintf "(%s > %s)" (sgen_cval v1) (sgen_cval v2)
   | Ilteq, [v1; v2] ->
-     Printf.sprintf "(%s <= %s)" (sgen_cval v1) (sgen_cval v2)
+     sprintf "(%s <= %s)" (sgen_cval v1) (sgen_cval v2)
   | Igteq, [v1; v2] ->
-     Printf.sprintf "(%s >= %s)" (sgen_cval v1) (sgen_cval v2)
+     sprintf "(%s >= %s)" (sgen_cval v1) (sgen_cval v2)
   | Iadd, [v1; v2] ->
-     Printf.sprintf "(%s + %s)" (sgen_cval v1) (sgen_cval v2)
+     sprintf "(%s + %s)" (sgen_cval v1) (sgen_cval v2)
   | Isub, [v1; v2] ->
-     Printf.sprintf "(%s - %s)" (sgen_cval v1) (sgen_cval v2)
+     sprintf "(%s - %s)" (sgen_cval v1) (sgen_cval v2)
   | Bvand, [v1; v2] ->
-     Printf.sprintf "(%s & %s)" (sgen_cval v1) (sgen_cval v2)
+     sprintf "(%s & %s)" (sgen_cval v1) (sgen_cval v2)
   | Bvor, [v1; v2] ->
-     Printf.sprintf "(%s | %s)" (sgen_cval v1) (sgen_cval v2)
+     sprintf "(%s | %s)" (sgen_cval v1) (sgen_cval v2)
   | Zero_extend n, [v] ->
-     Printf.sprintf "fast_zero_extend(%d, %s)" n (sgen_cval v)
+     begin match cval_ctyp v with
+     | CT_fbits _ -> sgen_cval v
+     | CT_sbits _ ->
+        sprintf "fast_zero_extend(%s, %d)" (sgen_cval v) n
+     | _ -> assert false
+     end
   | Sign_extend n, [v] ->
-     Printf.sprintf "fast_sign_extend(%d, %s)" n (sgen_cval v)
+     begin match cval_ctyp v with
+     | CT_fbits (m, _) ->
+        sprintf "fast_sign_extend(%s, %d, %d)" (sgen_cval v) m n
+     | CT_sbits _ ->
+        sprintf "fast_sign_extend2(%s, %d)" (sgen_cval v) n
+     | _ -> assert false
+     end
+  | Concat, [v1; v2] ->
+     (* Optimized routines for all combinations of fixed and small bits
+        appends, where the result is guaranteed to be smaller than 64. *)
+     begin match cval_ctyp v1, cval_ctyp v2 with
+     | CT_fbits (0, _), CT_fbits (n2, _) ->
+        sgen_cval v2
+     | CT_fbits (n1, _), CT_fbits (n2, _) ->
+        sprintf "(%s << %d) | %s" (sgen_cval v1) n2 (sgen_cval v2)
+     | CT_sbits (64, ord1), CT_fbits (n2, _) ->
+        sprintf "append_sf(%s, %s, %d)" (sgen_cval v1) (sgen_cval v2) n2
+     | CT_fbits (n1, ord1), CT_sbits (64, ord2) ->
+        sprintf "append_fs(%s, %d, %s)" (sgen_cval v1) n1 (sgen_cval v2)
+     | CT_sbits (64, ord1), CT_sbits (64, ord2) ->
+        sprintf "append_ss(%s, %s)" (sgen_cval v1) (sgen_cval v2)
+     | _ -> assert false
+     end
   | _, vs ->
-     Printf.sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " sgen_cval cvals)
+     sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " sgen_cval cvals)
 
 let sgen_cval_param cval =
   match cval_ctyp cval with

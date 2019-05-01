@@ -651,7 +651,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   | E_exit exp ->
      let aexp = anf exp in
      let aval, wrap = to_aval aexp in
-     wrap (mk_aexp (AE_app (mk_id "__exit", [aval], unit_typ)))
+     wrap (mk_aexp (AE_app (mk_id "sail_exit", [aval], unit_typ)))
 
   | E_return ret_exp ->
      let aexp = anf ret_exp in

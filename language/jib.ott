@@ -73,6 +73,7 @@ op :: '' ::=
 % Bitvector ops
   | bvor            :: :: bvor
   | bvand           :: :: bvand
+  | concat          :: :: concat
   | zero_extend nat :: :: zero_extend
   | sign_extend nat :: :: sign_extend
 

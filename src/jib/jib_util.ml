@@ -292,6 +292,7 @@ let string_of_op = function
   | Isub -> "isub"
   | Zero_extend n -> "zero_extend" ^ string_of_int n
   | Sign_extend n -> "sign_extend" ^ string_of_int n
+  | Concat -> "concat"
 
 let rec string_of_cval = function
   | V_id (id, ctyp) -> string_of_name id
@@ -902,6 +903,18 @@ let rec infer_call op vs =
      | CT_fbits (_, ord) | CT_sbits (_, ord) | CT_lbits ord ->
         CT_fbits (n, ord)
      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for zero/sign_extend argument"
+     end
+  | Concat, [v1; v2] ->
+     begin match cval_ctyp v1, cval_ctyp v2 with
+     | CT_fbits (n, ord), CT_fbits (m, _) ->
+        CT_fbits (n + m, ord)
+     | CT_fbits (n, ord), CT_sbits (m, _) ->
+        CT_sbits (m, ord)
+     | CT_sbits (n, ord), CT_fbits (m, _) ->
+        CT_sbits (n, ord)
+     | CT_sbits (n, ord), CT_sbits (m, _) ->
+        CT_sbits (max n m, ord)
+     | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for concat argument"
      end
   | _, _ ->
      Reporting.unreachable Parse_ast.Unknown __POS__ ("Invalid call to function " ^ string_of_op op)
