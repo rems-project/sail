@@ -189,10 +189,7 @@ let rec run frame =
  *)
 
 let initial_state ast env =
-  let lstate, gstate =
-    Interpreter.initial_state ast env safe_primops
-  in
-  (lstate, { gstate with Interpreter.allow_registers = false })
+  Interpreter.initial_state ~registers:false ast env safe_primops
 
 let rw_exp ok not_ok istate =
   let evaluate e_aux annot =
