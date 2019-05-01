@@ -392,7 +392,16 @@ let refine_constructor refinements l env id args =
        match Type_check.destruct_exist (Type_check.Env.expand_synonyms env constr_ty) with
        | None -> None
        | Some (kopts,nc,constr_ty) ->
-          let bindings = Type_check.unify l env (tyvars_of_typ constr_ty) constr_ty arg_ty  in
+          (* Remove existentials in argument types to prevent unification failures *)
+          let unwrap (Typ_aux (t,_) as typ) = match t with
+            | Typ_exist (_,_,typ) -> typ
+            | _ -> typ
+          in
+          let arg_ty = match arg_ty with
+            | Typ_aux (Typ_tup ts,annot) -> Typ_aux (Typ_tup (List.map unwrap ts),annot)
+            | _ -> arg_ty
+          in
+          let bindings = Type_check.unify l env (tyvars_of_typ constr_ty) constr_ty arg_ty in
           let find_kopt kopt = try Some (KBindings.find (kopt_kid kopt) bindings) with Not_found -> None in
           let bindings = List.map find_kopt kopts in
           let matches_refinement (mapping,_,_) =
