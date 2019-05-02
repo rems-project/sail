@@ -330,6 +330,7 @@ let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
   let variants = size_nvars_ty ty in
   match variants with
   | [] -> None
+  | [l,_] when List.for_all (function (_,None) -> true | _ -> false) l -> None
   | sample::_ ->
      if List.length variants > size_set_limit then
        cannot ql
@@ -342,9 +343,9 @@ let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
      in
      let name_seg = function
        | (_,None) -> ""
-       | (k,Some i) -> string_of_kid (kopt_kid k) ^ Big_int.to_string i
+       | (k,Some i) -> "#" ^ string_of_kid (kopt_kid k) ^ Big_int.to_string i
      in
-     let name l i = String.concat "_" (i::(List.map name_seg l)) in
+     let name l i = String.concat "" (i::(List.map name_seg l)) in
      Some (List.map (fun (l,ty) -> (l, wrap (name l),ty)) variants)
 
 let reduce_nexp subst ne =
