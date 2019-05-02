@@ -415,8 +415,12 @@ let refine_constructor refinements l env id args =
           match List.find matches_refinement irefinements with
           | (_,new_id,_) -> Some (E_app (new_id,args))
           | exception Not_found ->
+             let print_map kopt = function
+               | None -> string_of_kid (kopt_kid kopt) ^ " -> _"
+               | Some ta -> string_of_kid (kopt_kid kopt) ^ " -> " ^ string_of_typ_arg ta
+             in
              (Reporting.print_err l "Monomorphisation"
-                ("Unable to refine constructor " ^ string_of_id id);
+                ("Unable to refine constructor " ^ string_of_id id ^ " using mapping " ^ String.concat "," (List.map2 print_map kopts bindings));
               None)
     end
     | _ -> None
@@ -896,48 +900,50 @@ let split_defs all_errors splits env defs =
       | vars -> split_pat vars pat
     in
     let map_pat (P_aux (p,(l,tannot)) as pat) =
-      match map_pat_by_loc pat with
-      | Some l -> VarSplit l
-      | None ->
-         match p with
-         | P_app (id,args) ->
-            begin
-              match List.find (fun (id',_) -> Id.compare id id' = 0) refinements with
-              | (_,variants) ->
-(* TODO: what changes to the pattern and what substitutions do we need in general?
-                 let kid,kid_annot =
-                   match args with
-                   | [P_aux (P_var (_, TP_aux (TP_var kid, _)),ann)] -> kid,ann
-                   | _ -> 
-                      raise (Reporting.err_general l
-                               ("Pattern match not currently supported by monomorphisation: "
-                               ^ string_of_pat pat))
+      let try_by_location () =
+        match map_pat_by_loc pat with
+        | Some l -> VarSplit l
+        | None -> NoSplit
+      in
+      match p with
+      | P_app (id,args) ->
+         begin
+            match List.find (fun (id',_) -> Id.compare id id' = 0) refinements with
+            | (_,variants) ->
+(* TODO: at changes to the pattern and what substitutions do we need in general?
+               let kid,kid_annot =
+                 match args with
+                 | [P_aux (P_var (_, TP_aux (TP_var kid, _)),ann)] -> kid,ann
+                 | _ -> 
+                    raise (Reporting.err_general l
+                             ("Pattern match not currently supported by monomorphisation: "
+                             ^ string_of_pat pat))
+               in
+               let map_inst (insts,id',_) =
+                 let insts =
+                   match insts with [(v,Some i)] -> [(kid,Nexp_aux (Nexp_constant i, Generated l))]
+                   | _ -> assert false
                  in
-                 let map_inst (insts,id',_) =
-                   let insts =
-                     match insts with [(v,Some i)] -> [(kid,Nexp_aux (Nexp_constant i, Generated l))]
-                     | _ -> assert false
-                   in
 (*
-                   let insts,_ = split_insts insts in
-                   let insts = List.map (fun (v,i) ->
-                     (??,
-                      Nexp_aux (Nexp_constant i,Generated l)))
-                     insts in
-  P_aux (P_app (id',args),(Generated l,tannot)),
+                 let insts,_ = split_insts insts in
+                 let insts = List.map (fun (v,i) ->
+                   (??,
+                    Nexp_aux (Nexp_constant i,Generated l)))
+                   insts in
+  P_aux (app (id',args),(Generated l,tannot)),
 *)
-                   P_aux (P_app (id',[P_aux (P_id (id_of_kid kid),kid_annot)]),(Generated l,tannot)),
-                   kbindings_from_list insts
-                 in
+                 P_aux (P_app (id',[P_aux (P_id (id_of_kid kid),kid_annot)]),(Generated l,tannot)),
+                 kbindings_from_list insts
+               in
 *)
-                 let map_inst (insts,id',_) =
-                   P_aux (P_app (id',args),(Generated l,tannot)),
-                   KBindings.empty
-                 in
-                 ConstrSplit (List.map map_inst variants)
-              | exception Not_found -> NoSplit
-            end
-         | _ -> NoSplit
+               let map_inst (insts,id',_) =
+                 P_aux (P_app (id',args),(Generated l,tannot)),
+                 KBindings.empty
+               in
+               ConstrSplit (List.map map_inst variants)
+            | exception Not_found -> try_by_location ()
+          end
+       | _ -> try_by_location ()
     in
 
     let check_single_pat (P_aux (_,(l,annot)) as p) =
