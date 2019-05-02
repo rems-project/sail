@@ -680,7 +680,17 @@ let const_props defs ref_vars =
       match e, p with
       | _, P_wild -> DoesMatch ([],[])
       | _, P_typ (_,p') -> check_exp_pat exp p'
-      | _, P_id id' when pat_id_is_variable env id' -> DoesMatch ([id',exp],[])
+      | _, P_id id' when pat_id_is_variable env id' ->
+         let exp_typ = typ_of exp in
+         let pat_typ = typ_of_pat pat in
+         let goals = KidSet.diff (tyvars_of_typ pat_typ) (tyvars_of_typ exp_typ) in
+         let unifiers = Type_check.unify l env goals pat_typ exp_typ in
+         let is_nexp (k,a) = match a with
+           | A_aux (A_nexp n,_) -> Some (k,n)
+           | _ -> None
+         in
+         let kbindings = Util.map_filter is_nexp (KBindings.bindings unifiers) in
+         DoesMatch ([id',exp],kbindings)
       | E_tuple es, P_tup ps ->
          let rec check = function
            | DoesNotMatch -> fun _ -> DoesNotMatch
