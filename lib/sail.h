@@ -333,7 +333,12 @@ void reverse_endianness(lbits*, lbits);
 
 bool eq_sbits(const sbits op1, const sbits op2);
 bool neq_sbits(const sbits op1, const sbits op2);
+sbits not_sbits(const sbits op);
 sbits xor_sbits(const sbits op1, const sbits op2);
+sbits or_sbits(const sbits op1, const sbits op2);
+sbits and_sbits(const sbits op1, const sbits op2);
+sbits add_sbits(const sbits op1, const sbits op2);
+sbits sub_sbits(const sbits op1, const sbits op2);
 
 /* ***** Sail reals ***** */
 

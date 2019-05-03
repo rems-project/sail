@@ -282,21 +282,29 @@ let string_of_op = function
   | Bit_to_bool -> "bit_to_bool"
   | Eq -> "eq"
   | Neq -> "neq"
+  | Bvnot -> "bvnot"
   | Bvor -> "bvor"
   | Bvand -> "bvand"
+  | Bvxor -> "bvxor"
+  | Bvadd -> "bvadd"
+  | Bvsub -> "bvsub"
+  | Bvaccess -> "bvaccess"
   | Ilt -> "lt"
   | Igt -> "gt"
   | Ilteq -> "lteq"
   | Igteq -> "gteq"
   | Iadd -> "iadd"
   | Isub -> "isub"
-  | Zero_extend n -> "zero_extend" ^ string_of_int n
-  | Sign_extend n -> "sign_extend" ^ string_of_int n
+  | Zero_extend n -> "zero_extend::<" ^ string_of_int n ^ ">"
+  | Sign_extend n -> "sign_extend::<" ^ string_of_int n ^ ">"
+  | Slice n -> "slice::<" ^ string_of_int n ^ ">"
+  | Sslice n -> "sslice::<" ^ string_of_int n ^ ">"
+  | Replicate n -> "replicate::<" ^ string_of_int n ^ ">"
   | Concat -> "concat"
 
 let rec string_of_cval = function
-  | V_id (id, ctyp) -> string_of_name id
-  | V_ref (id, _) -> "&" ^ string_of_name id
+  | V_id (id, ctyp) -> string_of_name ~zencode:false id
+  | V_ref (id, _) -> "&" ^ string_of_name ~zencode:false id
   | V_lit (vl, ctyp) -> string_of_value vl
   | V_call (op, cvals) ->
      Printf.sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " string_of_cval cvals)
@@ -895,7 +903,9 @@ let rec infer_call op vs =
      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid call to tl"
      end
   | (Eq | Neq), _ -> CT_bool
-  | (Bvor | Bvand), [v; _] -> cval_ctyp v
+  | Bvnot, [v] -> cval_ctyp v
+  | Bvaccess, _ -> CT_bit
+  | (Bvor | Bvand | Bvxor | Bvadd | Bvsub), [v; _] -> cval_ctyp v
   | (Ilt | Igt | Ilteq | Igteq), _ -> CT_bool
   | (Iadd | Isub), _ -> CT_fint 64
   | (Zero_extend n | Sign_extend n), [v] ->
@@ -903,6 +913,23 @@ let rec infer_call op vs =
      | CT_fbits (_, ord) | CT_sbits (_, ord) | CT_lbits ord ->
         CT_fbits (n, ord)
      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for zero/sign_extend argument"
+     end
+  | Slice n, [vec; start] ->
+     begin match cval_ctyp vec with
+     | CT_fbits (_, ord) | CT_sbits (_, ord) ->
+        CT_fbits (n, ord)
+     | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for extract argument"
+     end
+  | Sslice n, [vec; start; len] ->
+     begin match cval_ctyp vec with
+     | CT_fbits (_, ord) | CT_sbits (_, ord) ->
+        CT_sbits (n, ord)
+     | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for extract argument"
+     end
+  | Replicate n, [vec] ->
+     begin match cval_ctyp vec with
+     | CT_fbits (m, ord) -> CT_fbits (n * m, ord)
+     | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for replicate argument"
      end
   | Concat, [v1; v2] ->
      begin match cval_ctyp v1, cval_ctyp v2 with

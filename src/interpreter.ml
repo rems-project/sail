@@ -241,7 +241,7 @@ let put_local name v : unit monad =
 
 let get_global_letbinds () : (Type_check.tannot letbind) list monad =
   Yield (Get_global_letbinds (fun lbs -> Pure lbs))
-  
+
 let early_return v = Yield (Early_return v)
 
 let assertion_failed msg = Yield (Assertion_failed msg)

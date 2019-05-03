@@ -196,6 +196,9 @@ let options = Arg.align ([
   ( "-Oconstant_fold",
     Arg.Set Constant_fold.optimize_constant_fold,
     " apply constant folding optimizations");
+  ( "-Oaarch64_fast",
+    Arg.Set Jib_compile.optimize_aarch64_fast_struct,
+    " apply ARMv8.5 specific optimizations (potentially unsound in general)");
   ( "-static",
     Arg.Set C_backend.opt_static,
     " make generated C functions static");

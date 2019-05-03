@@ -1017,15 +1017,11 @@ void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int 
   }
 }
 
-inline
+__attribute__((target ("bmi2")))
 sbits sslice(const fbits op, const mach_int start, const mach_int len)
 {
   sbits rop;
-#ifdef INTRINSICS
   rop.bits = _bzhi_u64(op >> start, len);
-#else
-  rop.bits = (op >> start) & safe_rshift(UINT64_MAX, 64 - len);
-#endif
   rop.len = len;
   return rop;
 }
@@ -1126,22 +1122,63 @@ void reverse_endianness(lbits *rop, const lbits op)
   }
 }
 
-inline
 bool eq_sbits(const sbits op1, const sbits op2)
 {
   return op1.bits == op2.bits;
 }
 
-inline
 bool neq_sbits(const sbits op1, const sbits op2)
 {
   return op1.bits != op2.bits;
+}
+
+__attribute__((target ("bmi2")))
+sbits not_sbits(const sbits op)
+{
+  sbits rop;
+  rop.bits = (~op.bits) & _bzhi_u64(UINT64_MAX, op.len);
+  rop.len = op.len;
+  return rop;
 }
 
 sbits xor_sbits(const sbits op1, const sbits op2)
 {
   sbits rop;
   rop.bits = op1.bits ^ op2.bits;
+  rop.len = op1.len;
+  return rop;
+}
+
+sbits or_sbits(const sbits op1, const sbits op2)
+{
+  sbits rop;
+  rop.bits = op1.bits | op2.bits;
+  rop.len = op1.len;
+  return rop;
+}
+
+sbits and_sbits(const sbits op1, const sbits op2)
+{
+  sbits rop;
+  rop.bits = op1.bits & op2.bits;
+  rop.len = op1.len;
+  return rop;
+}
+
+__attribute__((target ("bmi2")))
+sbits add_sbits(const sbits op1, const sbits op2)
+{
+  sbits rop;
+  rop.bits = (op1.bits + op2.bits) & _bzhi_u64(UINT64_MAX, op1.len);
+  rop.len = op1.len;
+  return rop;
+}
+
+__attribute__((target ("bmi2")))
+sbits sub_sbits(const sbits op1, const sbits op2)
+{
+  sbits rop;
+  rop.bits = (op1.bits - op2.bits) & _bzhi_u64(UINT64_MAX, op1.len);
   rop.len = op1.len;
   return rop;
 }

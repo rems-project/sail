@@ -73,7 +73,7 @@ let typ_ord_specialization = {
 
 let int_specialization = {
     is_polymorphic = is_int_kopt;
-    instantiation_filter = (fun _ arg -> match arg with A_aux (A_nexp _, _) -> true | _ -> false);
+    instantiation_filter = (fun _ arg -> match arg with A_aux (A_nexp (Nexp_aux (Nexp_constant _, _)), _) -> true | _ -> false);
     extern_filter = (fun externs -> match Ast_util.extern_assoc "c" externs with Some _ -> true | None -> false)
   }
 
@@ -574,8 +574,12 @@ let specialize_ids spec ids ast =
   | None -> ()
   end;
   let ast, _ = Type_error.check Type_check.initial_env ast in
-  let ast =
-    List.fold_left (fun ast id -> rewrite_polymorphic_calls spec id ast) ast (IdSet.elements ids)
+  let _, ast =
+    List.fold_left
+      (fun (n, ast) id ->
+        Util.progress "Rewriting " (string_of_id id) n total;
+        (n + 1, rewrite_polymorphic_calls spec id ast))
+      (1, ast) (IdSet.elements ids)
   in
   let ast, env = Type_error.check Type_check.initial_env ast in
   let ast = remove_unused_valspecs env ast in

@@ -127,7 +127,7 @@ let rec ctyp_of_typ ctx typ =
      begin match destruct_range Env.empty typ with
      | None -> assert false (* Checked if range type in guard *)
      | Some (kids, constr, n, m) ->
-        let ctx = { ctx with local_env = add_existential Parse_ast.Unknown (List.map (mk_kopt K_int) kids) constr ctx.local_env } in
+        let ctx = { ctx with local_env = add_existential Parse_ast.Unknown (List.map (mk_kopt K_int) kids) constr ctx.local_env }in
         match nexp_simp n, nexp_simp m with
         | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
              when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
@@ -265,18 +265,6 @@ let c_literals ctx =
     | v -> v
   in
   map_aval c_literal
-
-let mask m =
-  if Big_int.less_equal m (Big_int.of_int 64) then
-    let n = Big_int.to_int m in
-    if n = 0 then
-      "UINT64_C(0)"
-    else if n mod 4 = 0 then
-      "UINT64_C(0x" ^ String.make (16 - n / 4) '0' ^ String.make (n / 4) 'F' ^ ")"
-    else
-      "UINT64_C(" ^ String.make (64 - n) '0' ^ String.make n '1' ^ ")"
-  else
-    failwith "Tried to create a mask literal for a vector greater than 64 bits."
 
 let rec is_bitvector = function
   | [] -> true
@@ -424,6 +412,9 @@ let analyze_primop' ctx id args typ =
   | "eq_int", [AV_cval (v1, _); AV_cval (v2, _)] ->
      AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
 
+  | "eq_bit", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
+
   | "zeros", [_] ->
      begin match destruct_vector ctx.tc_env typ with
      | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
@@ -465,56 +456,70 @@ let analyze_primop' ctx id args typ =
      | _ -> no_change
      end
 
-       (*
-  | "add_bits", [AV_C_fragment (v1, _, CT_fbits (n, ord)); AV_C_fragment (v2, _, CT_fbits _)]
-       when n <= 63 ->
-     AE_val (AV_C_fragment (F_op (F_op (v1, "+", v2), "&", v_mask_lower n), typ, CT_fbits (n, ord)))
+  | "not_bits", [AV_cval (v, _)] ->
+     AE_val (AV_cval (V_call (Bvnot, [v]), typ))
 
-  | "xor_bits", [AV_C_fragment (v1, _, (CT_fbits _ as ctyp)); AV_C_fragment (v2, _, CT_fbits _)] ->
-     AE_val (AV_C_fragment (F_op (v1, "^", v2), typ, ctyp))
-  | "xor_bits", [AV_C_fragment (v1, _, (CT_sbits _ as ctyp)); AV_C_fragment (v2, _, CT_sbits _)] ->
-     AE_val (AV_C_fragment (F_call ("xor_sbits", [v1; v2]), typ, ctyp))
+  | "add_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     AE_val (AV_cval (V_call (Bvadd, [v1; v2]), typ))
 
-  | "or_bits", [AV_C_fragment (v1, _, (CT_fbits _ as ctyp)); AV_C_fragment (v2, _, CT_fbits _)] ->
-     AE_val (AV_C_fragment (F_op (v1, "|", v2), typ, ctyp))
+  | "sub_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     AE_val (AV_cval (V_call (Bvsub, [v1; v2]), typ))
 
-  | "and_bits", [AV_C_fragment (v1, _, (CT_fbits _ as ctyp)); AV_C_fragment (v2, _, CT_fbits _)] ->
-     AE_val (AV_C_fragment (F_op (v1, "&", v2), typ, ctyp))
+  | "and_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     AE_val (AV_cval (V_call (Bvand, [v1; v2]), typ))
 
-  | "not_bits", [AV_C_fragment (v, _, ctyp)] ->
-     begin match destruct_vector ctx.tc_env typ with
-     | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
-          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
-        AE_val (AV_C_fragment (F_op (F_unary ("~", v), "&", v_mask_lower (Big_int.to_int n)), typ, ctyp))
+  | "or_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     AE_val (AV_cval (V_call (Bvor, [v1; v2]), typ))
+
+  | "xor_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+     AE_val (AV_cval (V_call (Bvxor, [v1; v2]), typ))
+
+  | "vector_subrange", [AV_cval (vec, _); AV_cval (f, _); AV_cval (t, _)] ->
+     begin match ctyp_of_typ ctx typ with
+     | CT_fbits (n, true) ->
+        AE_val (AV_cval (V_call (Slice n, [vec; t]), typ))
      | _ -> no_change
      end
 
-  | "vector_subrange", [AV_C_fragment (vec, _, CT_fbits _); AV_C_fragment (f, _, _); AV_C_fragment (t, _, _)]
-       when is_fbits_typ ctx typ ->
-     let len = F_op (f, "-", F_op (t, "-", v_one)) in
-     AE_val (AV_C_fragment (F_op (F_call ("safe_rshift", [F_raw "UINT64_MAX"; F_op (v_int 64, "-", len)]), "&", F_op (vec, ">>", t)),
-                            typ,
-                            ctyp_of_typ ctx typ))
+  | "slice", [AV_cval (vec, _); AV_cval (start, _); AV_cval (len, _)] ->
+     begin match ctyp_of_typ ctx typ with
+     | CT_fbits (n, _) ->
+        AE_val (AV_cval (V_call (Slice n, [vec; start]), typ))
+     | CT_sbits (64, _) ->
+        AE_val (AV_cval (V_call (Sslice 64, [vec; start; len]), typ))
+     | _ -> no_change
+     end
 
-  | "vector_access", [AV_C_fragment (vec, _, CT_fbits _); AV_C_fragment (n, _, _)] ->
-     AE_val (AV_C_fragment (F_op (v_one, "&", F_op (vec, ">>", n)), typ, CT_bit))
+  | "vector_access", [AV_cval (vec, _); AV_cval (n, _)] ->
+     AE_val (AV_cval (V_call (Bvaccess, [vec; n]), typ))
 
-  | "eq_bit", [AV_C_fragment (a, _, _); AV_C_fragment (b, _, _)] ->
-     AE_val (AV_C_fragment (F_op (a, "==", b), typ, CT_bool))
+  | "add_int", [AV_cval (op1, _); AV_cval (op2, _)] ->
+     begin match destruct_range Env.empty typ with
+     | None -> no_change
+     | Some (kids, constr, n, m) ->
+        match nexp_simp n, nexp_simp m with
+        | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
+               when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
+           AE_val (AV_cval (V_call (Iadd, [op1; op2]), typ))
+        | n, m when prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) ->
+           AE_val (AV_cval (V_call (Iadd, [op1; op2]), typ))
+        | _ -> no_change
+     end
 
-  | "slice", [AV_C_fragment (vec, _, CT_fbits _); AV_C_fragment (start, _, _); AV_C_fragment (len, _, _)]
-       when is_fbits_typ ctx typ ->
-     AE_val (AV_C_fragment (F_op (F_call ("safe_rshift", [F_raw "UINT64_MAX"; F_op (v_int 64, "-", len)]), "&", F_op (vec, ">>", start)),
-                            typ,
-                            ctyp_of_typ ctx typ))
+  | "replicate_bits", [AV_cval (vec, vtyp); _] ->
+     begin match destruct_vector ctx.tc_env typ, destruct_vector ctx.tc_env vtyp with
+     | Some (Nexp_aux (Nexp_constant n, _), _, _), Some (Nexp_aux (Nexp_constant m, _), _, _)
+          when Big_int.less_equal n (Big_int.of_int 64) ->
+        let times = Big_int.div n m in
+        if Big_int.equal (Big_int.mul m times) n then
+          AE_val (AV_cval (V_call (Replicate (Big_int.to_int times), [vec]), typ))
+        else
+          no_change
+     | _, _ ->
+        no_change
+     end
 
-  | "slice", [AV_C_fragment (vec, _, CT_fbits _); AV_C_fragment (start, _, _); AV_C_fragment (len, _, _)]
-       when is_sbits_typ ctx typ ->
-     AE_val (AV_C_fragment (F_call ("sslice", [vec; start; len]), typ, ctyp_of_typ ctx typ))
-
-  | "undefined_bit", _ ->
-     AE_val (AV_C_fragment (F_lit (V_bit Sail2_values.B0), typ, CT_bit))
-
+            (*
   | "undefined_vector", [AV_C_fragment (len, _, _); _] ->
      begin match destruct_vector ctx.tc_env typ with
      | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
@@ -539,29 +544,8 @@ let analyze_primop' ctx id args typ =
      | _ -> no_change
      end
 
-  | "add_int", [AV_C_fragment (op1, _, _); AV_C_fragment (op2, _, _)] ->
-     begin match destruct_range Env.empty typ with
-     | None -> no_change
-     | Some (kids, constr, n, m) ->
-        match nexp_simp n, nexp_simp m with
-        | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-               when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
-           AE_val (AV_C_fragment (F_op (op1, "+", op2), typ, CT_fint 64))
-        | n, m when prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) ->
-           AE_val (AV_C_fragment (F_op (op1, "+", op2), typ, CT_fint 64))
-        | _ -> no_change
-     end
-
   | "neg_int", [AV_C_fragment (frag, _, _)] ->
      AE_val (AV_C_fragment (F_op (v_int 0, "-", frag), typ, CT_fint 64))
-
-  | "replicate_bits", [AV_C_fragment (vec, vtyp, _); AV_C_fragment (times, _, _)] ->
-     begin match destruct_vector ctx.tc_env typ, destruct_vector ctx.tc_env vtyp with
-     | Some (Nexp_aux (Nexp_constant n, _), _, _), Some (Nexp_aux (Nexp_constant m, _), _, _)
-          when Big_int.less_equal n (Big_int.of_int 64) ->
-        AE_val (AV_C_fragment (F_call ("fast_replicate_bits", [F_lit (V_int m); vec; times]), typ, ctyp_of_typ ctx typ))
-     | _ -> no_change
-     end
 
   | "vector_update_subrange", [AV_C_fragment (xs, _, CT_fbits (n, true));
                                AV_C_fragment (hi, _, CT_fint 64);
@@ -569,9 +553,14 @@ let analyze_primop' ctx id args typ =
                                AV_C_fragment (ys, _, CT_fbits (m, true))] ->
      AE_val (AV_C_fragment (F_call ("fast_update_subrange", [xs; hi; lo; ys]), typ, CT_fbits (n, true)))
 
+        *)
+
+  | "undefined_bit", _ ->
+     AE_val (AV_cval (V_lit (VL_bit Sail2_values.B0, CT_bit), typ))
+
   | "undefined_bool", _ ->
-     AE_val (AV_C_fragment (F_lit (V_bool false), typ, CT_bool))
- *)
+     AE_val (AV_cval (V_lit (VL_bool false, CT_bool), typ))
+
   | _, _ ->
      c_debug (lazy ("No optimization routine found"));
      no_change
@@ -1076,6 +1065,7 @@ let rec sgen_ctyp = function
   | CT_fbits _ -> "uint64_t"
   | CT_sbits _ -> "sbits"
   | CT_fint _ -> "int64_t"
+  | CT_constant _ -> "int64_t"
   | CT_lint -> "sail_int"
   | CT_lbits _ -> "lbits"
   | CT_tup _ as tup -> "struct " ^ Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
@@ -1088,7 +1078,6 @@ let rec sgen_ctyp = function
   | CT_real -> "real"
   | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
   | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
-  | CT_constant _ -> "CONSTANT"
 
 let rec sgen_ctyp_name = function
   | CT_unit -> "unit"
@@ -1097,6 +1086,7 @@ let rec sgen_ctyp_name = function
   | CT_fbits _ -> "fbits"
   | CT_sbits _ -> "sbits"
   | CT_fint _ -> "mach_int"
+  | CT_constant _ -> "mach_int"
   | CT_lint -> "sail_int"
   | CT_lbits _ -> "lbits"
   | CT_tup _ as tup -> Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
@@ -1109,7 +1099,6 @@ let rec sgen_ctyp_name = function
   | CT_real -> "real"
   | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
   | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
-  | CT_constant _ -> "CONSTANT"
 
 let rec sgen_cval = function
   | V_id (id, ctyp) -> string_of_name id
@@ -1172,9 +1161,77 @@ and sgen_call op cvals =
   | Isub, [v1; v2] ->
      sprintf "(%s - %s)" (sgen_cval v1) (sgen_cval v2)
   | Bvand, [v1; v2] ->
-     sprintf "(%s & %s)" (sgen_cval v1) (sgen_cval v2)
+     begin match cval_ctyp v1 with
+     | CT_fbits _ ->
+        sprintf "(%s & %s)" (sgen_cval v1) (sgen_cval v2)
+     | CT_sbits _ ->
+        sprintf "and_sbits(%s, %s)" (sgen_cval v1) (sgen_cval v2)
+     | _ -> assert false
+     end
+  | Bvnot, [v] ->
+     begin match cval_ctyp v with
+     | CT_fbits (n, _) ->
+        sprintf "(~(%s) & %s)" (sgen_cval v) (sgen_cval (v_mask_lower n))
+     | CT_sbits _ ->
+        sprintf "not_sbits(%s)" (sgen_cval v)
+     | _ -> assert false
+     end
   | Bvor, [v1; v2] ->
-     sprintf "(%s | %s)" (sgen_cval v1) (sgen_cval v2)
+     begin match cval_ctyp v1 with
+     | CT_fbits _ ->
+        sprintf "(%s | %s)" (sgen_cval v1) (sgen_cval v2)
+     | CT_sbits _ ->
+        sprintf "or_sbits(%s, %s)" (sgen_cval v1) (sgen_cval v2)
+     | _ -> assert false
+     end
+  | Bvxor, [v1; v2] ->
+     begin match cval_ctyp v1 with
+     | CT_fbits _ ->
+        sprintf "(%s ^ %s)" (sgen_cval v1) (sgen_cval v2)
+     | CT_sbits _ ->
+        sprintf "xor_sbits(%s, %s)" (sgen_cval v1) (sgen_cval v2)
+     | _ -> assert false
+     end
+  | Bvadd, [v1; v2] ->
+     begin match cval_ctyp v1 with
+     | CT_fbits (n, _) ->
+        sprintf "((%s + %s) & %s)" (sgen_cval v1) (sgen_cval v2) (sgen_cval (v_mask_lower n))
+     | CT_sbits _ ->
+        sprintf "add_sbits(%s, %s)" (sgen_cval v1) (sgen_cval v2)
+     | _ -> assert false
+     end
+  | Bvsub, [v1; v2] ->
+     begin match cval_ctyp v1 with
+     | CT_fbits (n, _) ->
+        sprintf "((%s - %s) & %s)" (sgen_cval v1) (sgen_cval v2) (sgen_cval (v_mask_lower n))
+     | CT_sbits _ ->
+        sprintf "sub_sbits(%s, %s)" (sgen_cval v1) (sgen_cval v2)
+     | _ -> assert false
+     end
+  | Bvaccess, [vec; n] ->
+     begin match cval_ctyp vec with
+     | CT_fbits _ ->
+        sprintf "(UINT64_C(1) & (%s >> %s))" (sgen_cval vec) (sgen_cval n)
+     | CT_sbits _ ->
+        sprintf "(UINT64_C(1) & (%s.bits >> %s))" (sgen_cval vec) (sgen_cval n)
+     | _ -> assert false
+     end
+  | Slice len, [vec; start] ->
+     begin match cval_ctyp vec with
+     | CT_fbits _ ->
+        sprintf "(safe_rshift(UINT64_MAX, 64 - %d) & (%s >> %s))" len (sgen_cval vec) (sgen_cval start)
+     | CT_sbits _ ->
+        sprintf "(safe_rshift(UINT64_MAX, 64 - %d) & (%s.bits >> %s))" len (sgen_cval vec) (sgen_cval start)
+     | _ -> assert false
+     end
+  | Sslice 64, [vec; start; len] ->
+     begin match cval_ctyp vec with
+     | CT_fbits _ ->
+        sprintf "sslice(%s, %s, %s)" (sgen_cval vec) (sgen_cval start) (sgen_cval len)
+     | CT_sbits _ ->
+        sprintf "sslice(%s.bits, %s, %s)" (sgen_cval vec) (sgen_cval start) (sgen_cval len)
+     | _ -> assert false
+     end
   | Zero_extend n, [v] ->
      begin match cval_ctyp v with
      | CT_fbits _ -> sgen_cval v
@@ -1188,6 +1245,12 @@ and sgen_call op cvals =
         sprintf "fast_sign_extend(%s, %d, %d)" (sgen_cval v) m n
      | CT_sbits _ ->
         sprintf "fast_sign_extend2(%s, %d)" (sgen_cval v) n
+     | _ -> assert false
+     end
+  | Replicate n, [v] ->
+     begin match cval_ctyp v with
+     | CT_fbits (m, _) ->
+        sprintf "fast_replicate_bits(UINT64_C(%d), %s, %d)" m (sgen_cval v) n
      | _ -> assert false
      end
   | Concat, [v1; v2] ->

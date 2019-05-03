@@ -61,6 +61,8 @@ let opt_debug_function = ref ""
 let opt_debug_flow_graphs = ref false
 let opt_memo_cache = ref false
 
+let optimize_aarch64_fast_struct = ref false
+
 let ngensym () = name (gensym ())
 
 (**************************************************************************)
@@ -131,6 +133,10 @@ let is_ct_struct = function
 let is_ct_ref = function
   | CT_ref _ -> true
   | _ -> false
+
+let iblock1 = function
+  | [instr] -> instr
+  | instrs -> iblock instrs
 
 let ctor_bindings = List.fold_left (fun map (id, ctyp) -> Bindings.add id ctyp map) Bindings.empty
 
@@ -266,7 +272,7 @@ let rec compile_aval l ctx = function
      [idecl ctyp gs],
      V_struct (fields, ctyp),
      [iclear ctyp gs]
-     
+
   | AV_record (fields, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
      let gs = ngensym () in
@@ -396,7 +402,49 @@ let rec compile_aval l ctx = function
      V_id (gs, CT_list ctyp),
      [iclear (CT_list ctyp) gs]
 
-let compile_funcall l ctx id args typ =
+let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
+  let call () =
+    let setup = ref [] in
+    let cleanup = ref [] in
+    let cast_args =
+      List.map2
+        (fun ctyp cval ->
+          let have_ctyp = cval_ctyp cval in
+          if is_polymorphic ctyp then
+            V_poly (cval, have_ctyp)
+          else if ctx.specialize_calls || ctyp_equal ctyp have_ctyp then
+            cval
+          else
+            let gs = ngensym () in
+            setup := iinit ctyp gs cval :: !setup;
+            cleanup := iclear ctyp gs :: !cleanup;
+            V_id (gs, ctyp))
+        arg_ctyps args
+    in
+    if ctx.specialize_calls || ctyp_equal (clexp_ctyp clexp) ret_ctyp then
+      !setup @ [ifuncall clexp id cast_args] @ !cleanup
+    else
+      let gs = ngensym () in
+      List.rev !setup
+      @ [idecl ret_ctyp gs;
+         ifuncall (CL_id (gs, ret_ctyp)) id cast_args;
+         icopy l clexp (V_id (gs, ret_ctyp));
+         iclear ret_ctyp gs]
+      @ !cleanup
+  in
+  if not ctx.specialize_calls && Env.is_extern id ctx.tc_env "c" then
+    let extern = Env.get_extern id ctx.tc_env "c" in
+    begin match extern, List.map cval_ctyp args, clexp_ctyp clexp with
+    | "slice", [CT_fbits _; _; _], CT_fbits (n, _) ->
+       let start = ngensym () in
+       [iinit (CT_fint 64) start (List.nth args 1);
+        icopy l clexp (V_call (Slice n, [List.nth args 0; V_id (start, CT_fint 64)]))]
+    | _, _, _ ->
+       call ()
+    end
+  else call ()
+
+let compile_funcall l ctx id args =
   let setup = ref [] in
   let cleanup = ref [] in
 
@@ -412,38 +460,21 @@ let compile_funcall l ctx id args typ =
   in
   let ctx' = { ctx with local_env = add_typquant (id_loc id) quant ctx.tc_env } in
   let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ in
-  let final_ctyp = ctyp_of_typ ctx typ in
+
+  assert (List.length arg_ctyps = List.length args);
 
   let setup_arg ctyp aval =
     let arg_setup, cval, arg_cleanup = compile_aval l ctx aval in
     setup := List.rev arg_setup @ !setup;
     cleanup := arg_cleanup @ !cleanup;
-    let have_ctyp = cval_ctyp cval in
-    if is_polymorphic ctyp then
-      V_poly (cval, have_ctyp)
-    else if ctx.specialize_calls || ctyp_equal ctyp have_ctyp then
-      cval
-    else
-      let gs = ngensym () in
-      setup := iinit ctyp gs cval :: !setup;
-      cleanup := iclear ctyp gs :: !cleanup;
-      V_id (gs, ctyp)
+    cval
   in
-
-  assert (List.length arg_ctyps = List.length args);
 
   let setup_args = List.map2 setup_arg arg_ctyps args in
 
   List.rev !setup,
   begin fun clexp ->
-  if ctx.specialize_calls || ctyp_equal (clexp_ctyp clexp) ret_ctyp then
-    ifuncall clexp id setup_args
-  else
-    let gs = ngensym () in
-    iblock [idecl ret_ctyp gs;
-            ifuncall (CL_id (gs, ret_ctyp)) id setup_args;
-            icopy l clexp (V_id (gs, ret_ctyp));
-            iclear ret_ctyp gs]
+  iblock1 (optimize_call l ctx clexp id setup_args arg_ctyps ret_ctyp)
   end,
   !cleanup
 
@@ -553,15 +584,15 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let setup, call, cleanup = compile_aexp ctx binding in
      let letb_setup, letb_cleanup =
        [idecl binding_ctyp (name id);
-        iblock (setup @ [call (CL_id (name id, binding_ctyp))] @ cleanup)],
+        iblock1 (setup @ [call (CL_id (name id, binding_ctyp))] @ cleanup)],
        [iclear binding_ctyp (name id)]
      in
      let ctx = { ctx with locals = Bindings.add id (mut, binding_ctyp) ctx.locals } in
      let setup, call, cleanup = compile_aexp ctx body in
      letb_setup @ setup, call, cleanup @ letb_cleanup
 
-  | AE_app (id, vs, typ) ->
-     compile_funcall l ctx id vs typ
+  | AE_app (id, vs, _) ->
+     compile_funcall l ctx id vs
 
   | AE_val aval ->
      let setup, cval, cleanup = compile_aval l ctx aval in
@@ -912,6 +943,10 @@ and compile_block ctx = function
      let gs = ngensym () in
      iblock (setup @ [idecl CT_unit gs; call (CL_id (gs, CT_unit))] @ cleanup) :: rest
 
+let fast_int = function
+  | CT_lint when !optimize_aarch64_fast_struct -> CT_fint 64
+  | ctyp -> ctyp
+
 (** Compile a sail type definition into a IR one. Most of the
    actual work of translating the typedefs into C is done by the code
    generator, as it's easy to keep track of structs, tuples and unions
@@ -928,7 +963,7 @@ let compile_type_def ctx (TD_aux (type_def, (l, _))) =
   | TD_record (id, typq, ctors, _) ->
      let record_ctx = { ctx with local_env = add_typquant l typq ctx.local_env } in
      let ctors =
-       List.fold_left (fun ctors (typ, id) -> Bindings.add id (ctyp_of_typ record_ctx typ) ctors) Bindings.empty ctors
+       List.fold_left (fun ctors (typ, id) -> Bindings.add id (fast_int (ctyp_of_typ record_ctx typ)) ctors) Bindings.empty ctors
      in
      CTD_struct (id, Bindings.bindings ctors),
      { ctx with records = Bindings.add id ctors ctx.records }
@@ -1318,7 +1353,7 @@ and compile_def' n total ctx = function
   (* Termination measures only needed for Coq, and other theorem prover output *)
   | DEF_measure _ -> [], ctx
   | DEF_loop_measures _ -> [], ctx
-                   
+
   | DEF_internal_mutrec fundefs ->
      let defs = List.map (fun fdef -> DEF_fundef fdef) fundefs in
      List.fold_left (fun (cdefs, ctx) def -> let cdefs', ctx = compile_def n total ctx def in (cdefs @ cdefs', ctx)) ([], ctx) defs

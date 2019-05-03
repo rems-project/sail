@@ -57,25 +57,33 @@ name :: '' ::=
   | return nat            :: :: return
 
 op :: '' ::=
-  | not             :: :: bnot
-  | hd              :: :: list_hd
-  | tl              :: :: list_tl
-  | bit_to_bool     :: :: bit_to_bool
-  | eq              :: :: eq
-  | neq             :: :: neq
+  | not               :: :: bnot
+  | hd                :: :: list_hd
+  | tl                :: :: list_tl
+  | bit_to_bool       :: :: bit_to_bool
+  | eq                :: :: eq
+  | neq               :: :: neq
 % Integer ops
-  | lt              :: :: ilt
-  | lteq            :: :: ilteq
-  | gt              :: :: igt
-  | gteq            :: :: igteq
-  | add             :: :: iadd
-  | sub             :: :: isub
+  | lt                :: :: ilt
+  | lteq              :: :: ilteq
+  | gt                :: :: igt
+  | gteq              :: :: igteq
+  | add               :: :: iadd
+  | sub               :: :: isub
 % Bitvector ops
-  | bvor            :: :: bvor
-  | bvand           :: :: bvand
-  | concat          :: :: concat
-  | zero_extend nat :: :: zero_extend
-  | sign_extend nat :: :: sign_extend
+  | bvnot             :: :: bvnot
+  | bvor              :: :: bvor
+  | bvand             :: :: bvand
+  | bvxor             :: :: bvxor
+  | bvadd             :: :: bvadd
+  | bvsub             :: :: bvsub
+  | bvaccess          :: :: bvaccess
+  | concat            :: :: concat
+  | zero_extend nat   :: :: zero_extend
+  | sign_extend nat   :: :: sign_extend
+  | slice nat         :: :: slice
+  | sslice nat        :: :: sslice
+  | replicate nat     :: :: replicate
 
 cval :: 'V_' ::=
   | name : ctyp                                     :: :: id

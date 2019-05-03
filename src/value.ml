@@ -599,7 +599,7 @@ let value_string_append = function
 let value_decimal_string_of_bits = function
   | [v] -> V_string (Sail_lib.decimal_string_of_bits (coerce_bv v))
   | _ -> failwith "value decimal_string_of_bits"
-       
+
 let primops =
   List.fold_left
     (fun r (x, y) -> StringMap.add x y r)
