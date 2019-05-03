@@ -658,16 +658,17 @@ let def_of_component graph defset comp =
   (* We could merge other stuff, in particular overloads, but don't need to just now *)
   | defs -> defs
 
+let build_graph defs =
+  List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) defs
+
 let top_sort_defs (Defs defs) =
-  let prelude, original_order, defset, graph =
-    List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) defs in
+  let prelude, original_order, defset, graph = build_graph defs in
   let components = scc ~original_order:original_order graph in
   Defs (prelude @ List.concat (List.map (def_of_component graph defset) components))
 
 
-(* Functions for finding the set of variables assigned to.  Used in constant propagation
-   and monomorphisation. *)
-
+(* Functions for finding the set of variables assigned to, the ids of functions
+   called, etc.  Used in constant propagation and monomorphisation. *)
 
 let assigned_vars exp =
   fst (Rewriter.fold_exp
@@ -701,6 +702,39 @@ let rec assigned_vars_in_lexp (LEXP_aux (le,_)) =
   | LEXP_field (le,_) -> assigned_vars_in_lexp le
   | LEXP_deref e -> assigned_vars e
 
+
+let called_funs_in_exp exp =
+  (Rewriter.fold_exp
+     { (Rewriter.pure_exp_alg IdSet.empty IdSet.union) with
+       Rewriter.e_app = (fun (id, ids) -> List.fold_left IdSet.union (IdSet.singleton id) ids);
+       Rewriter.e_app_infix = (fun (ids1, id, ids2) -> IdSet.union (IdSet.singleton id) (IdSet.union ids1 ids2));
+       Rewriter.lEXP_memory = (fun (id, ids) -> List.fold_left IdSet.union (IdSet.singleton id) ids) }
+     exp)
+
+let regs_read_in_exp exp =
+  let e_id id = match Type_check.Env.lookup_id id (Type_check.env_of exp) with
+    | Register _ -> IdSet.singleton id
+    | _ ->
+       (* TODO Handle register references *)
+       IdSet.empty
+  in
+  Rewriter.fold_exp
+    { (Rewriter.pure_exp_alg IdSet.empty IdSet.union) with Rewriter.e_id = e_id }
+    exp
+
+let regs_written_in_exp exp =
+  let open Type_check in
+  let reg_idset id =
+    if Env.is_register id (env_of exp)
+    then IdSet.singleton id
+    else IdSet.empty
+  in
+  Rewriter.fold_exp
+    { (Rewriter.pure_exp_alg IdSet.empty IdSet.union) with
+      lEXP_id = reg_idset;
+      lEXP_cast = (fun (_, id) -> reg_idset id);
+      lEXP_field = (fun (ids, id) -> IdSet.union ids (reg_idset id)) }
+    exp
 
 let pat_id_is_variable env id =
   match Type_check.Env.lookup_id id env with
@@ -871,3 +905,55 @@ let nexp_subst_fns substs =
   in (s_pat,s_exp)
 let nexp_subst_pat substs = fst (nexp_subst_fns substs)
 let nexp_subst_exp substs = snd (nexp_subst_fns substs)
+
+type fun_info =
+  { effect : effect;
+    calls : IdSet.t;
+    regs_read : IdSet.t;
+    regs_written : IdSet.t;
+    trans_regs_read : IdSet.t;
+    trans_regs_written : IdSet.t }
+
+let add_fun_infos_of_def env fun_infos = function
+  | DEF_fundef (FD_aux (FD_function (_, _, _, funcls), _) as fd) ->
+     let id = id_of_fundef fd in
+     let exp_of_pexp pexp =
+       let (_, _, exp, _) = destruct_pexp pexp in
+       exp
+     in
+     let exp_of_funcl (FCL_aux (FCL_Funcl (_, p), _)) = exp_of_pexp p in
+     let exps = List.map exp_of_funcl funcls in
+     let merge = List.fold_left IdSet.union IdSet.empty in
+     let calls = merge (List.map called_funs_in_exp exps) in
+     let calls_infos = List.filter (fun (id, _) -> IdSet.mem id calls) fun_infos in
+     let regs_read = merge (List.map regs_read_in_exp exps) in
+     let regs_written = merge (List.map regs_written_in_exp exps) in
+     let trans_regs_read =
+       List.map (fun (_, info) -> info.regs_read) calls_infos
+       |> List.fold_left IdSet.union regs_read
+     in
+     let trans_regs_written =
+       List.map (fun (_, info) -> info.regs_written) calls_infos
+       |> List.fold_left IdSet.union regs_written
+     in
+     let effect = match Type_check.Env.get_val_spec id env with
+       | _, Typ_aux (Typ_fn (_, _, effect), _) -> effect
+       | _ -> no_effect
+     in
+     (id, { effect = effect; calls = calls; regs_read = regs_read; regs_written = regs_written; trans_regs_read = trans_regs_read; trans_regs_written = trans_regs_written }) :: fun_infos
+  | _ -> fun_infos
+
+let fun_infos_of_ast env (Defs defs) =
+  List.fold_left (add_fun_infos_of_def env) [] defs |> List.rev
+
+(*let json_of_fun_info fi : Yojson.Basic.json =
+  let calls =
+    IdSet.elements fi.calls
+    |> List.map (fun id -> `String (string_of_id id))
+  in
+  `Assoc [("calls", `List calls)]
+
+let json_of_fun_infos fis : Yojson.Basic.json =
+  `Assoc (List.map (fun (id, fi) -> (string_of_id id, json_of_fun_info fi)) fis)
+
+let json_of_ast (Defs defs) = fun_infos_of_defs defs |> json_of_fun_infos*)

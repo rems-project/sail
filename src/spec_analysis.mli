@@ -95,3 +95,13 @@ val equal_kids : env -> kid -> KidSet.t
     update type annotations, but not the associated environments. *)
 val nexp_subst_pat : nexp KBindings.t -> tannot pat -> tannot pat
 val nexp_subst_exp : nexp KBindings.t -> tannot exp -> tannot exp
+
+type fun_info =
+  { effect : effect;
+    calls : IdSet.t;
+    regs_read : IdSet.t;
+    regs_written : IdSet.t;
+    trans_regs_read : IdSet.t;
+    trans_regs_written : IdSet.t }
+
+val fun_infos_of_ast : Env.t -> tannot defs -> (id * fun_info) list
