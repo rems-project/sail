@@ -701,6 +701,12 @@ void zero_extend(lbits *rop, const lbits op, const sail_int len)
   mpz_set(*rop->bits, *op.bits);
 }
 
+__attribute__((target ("bmi2")))
+fbits pdep_fbits(const fbits op, const uint64_t selector)
+{
+  return _pdep_u64(op, selector);
+}
+
 fbits fast_zero_extend(const sbits op, const uint64_t n)
 {
   return op.bits;

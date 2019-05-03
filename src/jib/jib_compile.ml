@@ -439,6 +439,12 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
        let start = ngensym () in
        [iinit (CT_fint 64) start (List.nth args 1);
         icopy l clexp (V_call (Slice n, [List.nth args 0; V_id (start, CT_fint 64)]))]
+    | "sail_unsigned", [CT_fbits _], CT_fint 64 ->
+       [icopy l clexp (V_call (Unsigned 64, [List.nth args 0]))]
+    | "sail_signed", [CT_fbits _], CT_fint 64 ->
+       [icopy l clexp (V_call (Signed 64, [List.nth args 0]))]
+    | "set_slice", [_; _; CT_fbits (n, _); CT_fint 64; CT_fbits (m, _)], CT_fbits (n', _) when n = n' ->
+       [icopy l clexp (V_call (Set_slice, [List.nth args 2; List.nth args 3; List.nth args 4]))]
     | _, _, _ ->
        call ()
     end

@@ -70,6 +70,8 @@ op :: '' ::=
   | gteq              :: :: igteq
   | add               :: :: iadd
   | sub               :: :: isub
+  | unsigned nat      :: :: unsigned
+  | signed nat        :: :: signed
 % Bitvector ops
   | bvnot             :: :: bvnot
   | bvor              :: :: bvor
@@ -83,6 +85,7 @@ op :: '' ::=
   | sign_extend nat   :: :: sign_extend
   | slice nat         :: :: slice
   | sslice nat        :: :: sslice
+  | set_slice         :: :: set_slice
   | replicate nat     :: :: replicate
 
 cval :: 'V_' ::=

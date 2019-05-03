@@ -276,31 +276,34 @@ let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
      "current_exception" ^ ssa_num n
 
 let string_of_op = function
-  | Bnot -> "not"
-  | List_hd -> "hd"
-  | List_tl -> "tl"
-  | Bit_to_bool -> "bit_to_bool"
-  | Eq -> "eq"
-  | Neq -> "neq"
-  | Bvnot -> "bvnot"
-  | Bvor -> "bvor"
-  | Bvand -> "bvand"
-  | Bvxor -> "bvxor"
-  | Bvadd -> "bvadd"
-  | Bvsub -> "bvsub"
-  | Bvaccess -> "bvaccess"
-  | Ilt -> "lt"
-  | Igt -> "gt"
-  | Ilteq -> "lteq"
-  | Igteq -> "gteq"
-  | Iadd -> "iadd"
-  | Isub -> "isub"
-  | Zero_extend n -> "zero_extend::<" ^ string_of_int n ^ ">"
-  | Sign_extend n -> "sign_extend::<" ^ string_of_int n ^ ">"
-  | Slice n -> "slice::<" ^ string_of_int n ^ ">"
-  | Sslice n -> "sslice::<" ^ string_of_int n ^ ">"
-  | Replicate n -> "replicate::<" ^ string_of_int n ^ ">"
-  | Concat -> "concat"
+  | Bnot -> "@not"
+  | List_hd -> "@hd"
+  | List_tl -> "@tl"
+  | Bit_to_bool -> "@bit_to_bool"
+  | Eq -> "@eq"
+  | Neq -> "@neq"
+  | Bvnot -> "@bvnot"
+  | Bvor -> "@bvor"
+  | Bvand -> "@bvand"
+  | Bvxor -> "@bvxor"
+  | Bvadd -> "@bvadd"
+  | Bvsub -> "@bvsub"
+  | Bvaccess -> "@bvaccess"
+  | Ilt -> "@lt"
+  | Igt -> "@gt"
+  | Ilteq -> "@lteq"
+  | Igteq -> "@gteq"
+  | Iadd -> "@iadd"
+  | Isub -> "@isub"
+  | Unsigned n -> "@unsigned::<" ^ string_of_int n ^ "@>"
+  | Signed n -> "@signed::<" ^ string_of_int n ^ "@>"
+  | Zero_extend n -> "@zero_extend::<" ^ string_of_int n ^ "@>"
+  | Sign_extend n -> "@sign_extend::<" ^ string_of_int n ^ "@>"
+  | Slice n -> "@slice::<" ^ string_of_int n ^ "@>"
+  | Sslice n -> "@sslice::<" ^ string_of_int n ^ "@>"
+  | Replicate n -> "@replicate::<" ^ string_of_int n ^ "@>"
+  | Set_slice -> "@set_slice"
+  | Concat -> "@concat"
 
 let rec string_of_cval = function
   | V_id (id, ctyp) -> string_of_name ~zencode:false id
@@ -908,6 +911,7 @@ let rec infer_call op vs =
   | (Bvor | Bvand | Bvxor | Bvadd | Bvsub), [v; _] -> cval_ctyp v
   | (Ilt | Igt | Ilteq | Igteq), _ -> CT_bool
   | (Iadd | Isub), _ -> CT_fint 64
+  | (Unsigned n | Signed n), _ -> CT_fint n
   | (Zero_extend n | Sign_extend n), [v] ->
      begin match cval_ctyp v with
      | CT_fbits (_, ord) | CT_sbits (_, ord) | CT_lbits ord ->
@@ -926,6 +930,7 @@ let rec infer_call op vs =
         CT_sbits (n, ord)
      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for extract argument"
      end
+  | Set_slice, [vec; _; _] -> cval_ctyp vec
   | Replicate n, [vec] ->
      begin match cval_ctyp vec with
      | CT_fbits (m, ord) -> CT_fbits (n * m, ord)

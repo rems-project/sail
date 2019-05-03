@@ -528,22 +528,6 @@ let analyze_primop' ctx id args typ =
      | _ -> no_change
      end
 
-  | "sail_unsigned", [AV_C_fragment (frag, vtyp, _)] ->
-     begin match destruct_vector ctx.tc_env vtyp with
-     | Some (Nexp_aux (Nexp_constant n, _), _, _)
-          when Big_int.less_equal n (Big_int.of_int 63) && is_stack_typ ctx typ ->
-        AE_val (AV_C_fragment (F_call ("fast_unsigned", [frag]), typ, ctyp_of_typ ctx typ))
-     | _ -> no_change
-     end
-
-  | "sail_signed", [AV_C_fragment (frag, vtyp, _)] ->
-     begin match destruct_vector ctx.tc_env vtyp with
-     | Some (Nexp_aux (Nexp_constant n, _), _, _)
-          when Big_int.less_equal n (Big_int.of_int 64) && is_stack_typ ctx typ ->
-        AE_val (AV_C_fragment (F_call ("fast_signed", [frag; v_int (Big_int.to_int n)]), typ, ctyp_of_typ ctx typ))
-     | _ -> no_change
-     end
-
   | "neg_int", [AV_C_fragment (frag, _, _)] ->
      AE_val (AV_C_fragment (F_op (v_int 0, "-", frag), typ, CT_fint 64))
 
@@ -1100,6 +1084,22 @@ let rec sgen_ctyp_name = function
   | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
   | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
+let sgen_mask n =
+  if n = 0 then
+    "UINT64_C(0)"
+  else if n <= 64 then
+    let chars_F = String.make (n / 4) 'F' in
+    let first = match (n mod 4) with
+      | 0 -> ""
+      | 1 -> "1"
+      | 2 -> "3"
+      | 3 -> "7"
+      | _ -> assert false
+    in
+    "UINT64_C(0x" ^ first ^ chars_F ^ ")"
+  else
+    failwith "Tried to create a mask literal for a vector greater than 64 bits."
+
 let rec sgen_cval = function
   | V_id (id, ctyp) -> string_of_name id
   | V_ref (id, _) -> "&" ^ string_of_name id
@@ -1129,6 +1129,8 @@ let rec sgen_cval = function
 and sgen_call op cvals =
   let open Printf in
   match op, cvals with
+  | Bit_to_bool, [v] ->
+     sprintf "((bool) %s)" (sgen_cval v)
   | Bnot, [v] -> "!(" ^ sgen_cval v ^ ")"
   | List_hd, [v] ->
      sprintf "(%s).hd" ("*" ^ sgen_cval v)
@@ -1160,6 +1162,14 @@ and sgen_call op cvals =
      sprintf "(%s + %s)" (sgen_cval v1) (sgen_cval v2)
   | Isub, [v1; v2] ->
      sprintf "(%s - %s)" (sgen_cval v1) (sgen_cval v2)
+  | Unsigned 64, [vec] ->
+     sprintf "((mach_int) %s)" (sgen_cval vec)
+  | Signed 64, [vec] ->
+     begin match cval_ctyp vec with
+     | CT_fbits (n, _) ->
+        sprintf "fast_signed(%s, %d)" (sgen_cval vec) n
+     | _ -> assert false
+     end
   | Bvand, [v1; v2] ->
      begin match cval_ctyp v1 with
      | CT_fbits _ ->
@@ -1232,6 +1242,12 @@ and sgen_call op cvals =
         sprintf "sslice(%s.bits, %s, %s)" (sgen_cval vec) (sgen_cval start) (sgen_cval len)
      | _ -> assert false
      end
+  | Set_slice, [vec; start; slice] ->
+     begin match cval_ctyp vec, cval_ctyp slice with
+     | CT_fbits (n, _), CT_fbits (m, _) ->
+        sprintf "((%s & ~(%s << %s)) | (%s << %s))" (sgen_cval vec) (sgen_mask m) (sgen_cval start) (sgen_cval slice) (sgen_cval start)
+     | _ -> assert false
+     end
   | Zero_extend n, [v] ->
      begin match cval_ctyp v with
      | CT_fbits _ -> sgen_cval v
@@ -1269,8 +1285,8 @@ and sgen_call op cvals =
         sprintf "append_ss(%s, %s)" (sgen_cval v1) (sgen_cval v2)
      | _ -> assert false
      end
-  | _, vs ->
-     sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " sgen_cval cvals)
+  | _, _ ->
+     failwith "Could not generate cval primop"
 
 let sgen_cval_param cval =
   match cval_ctyp cval with
