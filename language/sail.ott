@@ -12,6 +12,7 @@ metavar num,numZero,numOne ::=
   {{ ocaml big_int }}
   {{ hol num }}
   {{ lem integer }}
+  {{ isa int }}
   {{ com Numeric literals }}
 
 metavar nat ::=
@@ -19,12 +20,14 @@ metavar nat ::=
   {{ ocaml int }}
   {{ lex numeric }}
   {{ lem nat }}
-
+  {{ isa nat }}
+  
 metavar hex ::=
   {{ phantom }}
   {{ lex numeric }}
   {{ ocaml string }}
   {{ lem string }}
+  {{ isa string }}
   {{ com Bit vector literal, specified by C-style hex number }}
 
 metavar bin ::=
@@ -32,6 +35,7 @@ metavar bin ::=
   {{ lex numeric }}
   {{ ocaml string }}
   {{ lem string }}
+  {{ isa string }}
   {{ com Bit vector literal, specified by C-style binary number }}
 
 metavar string ::=
@@ -39,6 +43,7 @@ metavar string ::=
   {{ ocaml string }}
   {{ lem string }}
   {{ hol string }}
+  {{ isa string }}
   {{ com String literals }}
 
 metavar regexp ::=
@@ -46,6 +51,7 @@ metavar regexp ::=
   {{ ocaml string }}
   {{ lem string }}
   {{ hol string }}
+  {{ isa string }}
   {{ com Regular expresions, as a string literal }}
 
 metavar real ::=
@@ -53,12 +59,14 @@ metavar real ::=
   {{ ocaml string }}
   {{ lem string }}
   {{ hol string }}
+  {{ isa string }}
   {{ com Real number literal }}
 
 metavar value ::=
   {{ phantom }}
   {{ ocaml value }}
   {{ lem value }}
+  {{ isa value }}
 
 embed
 {{ ocaml
@@ -89,22 +97,39 @@ type annot 'a = l * 'a
 
 }}
 
+embed
+{{ isa
+
+datatype "l" = Unknown 
+
+datatype "value" = Val
+
+datatype "loop" = While | Until
+
+type_synonym "annot" = l
+
+}}
+
 metavar x , y , z ::=
   {{ ocaml text }}
   {{ lem string }}
   {{ hol string }}
+  {{ isa string }}
   {{ com identifier }}
   {{ ocamlvar "[[x]]" }}
   {{ lemvar "[[x]]" }}
+
 
 metavar ix ::=
   {{ lex alphanum }}
   {{ ocaml text }}
   {{ lem string }}
   {{ hol string }}
+  {{ isa string }}
   {{ com infix identifier }}
   {{ ocamlvar "[[ix]]" }}
   {{ lemvar "[[ix]]" }}
+
 
 grammar
 
@@ -195,7 +220,7 @@ effect :: 'Effect_' ::=
   {{ aux _ l }}
   | { base_effect1 , .. , base_effectn } :: :: set {{ com effect set }}
   | pure                                 :: M :: pure {{ com sugar for empty effect set }}
-    {{ lem (Effect_set []) }}
+    {{ ichlo (Effect_set []) }} 
 
 typ :: 'Typ_' ::=
   {{ com type expressions, of kind Type }}
@@ -238,7 +263,7 @@ kinded_id :: 'KOpt_' ::=
   {{ com optionally kind-annotated identifier }}
   {{ aux _ l }}
   | kind kid       :: :: kind {{ com kind-annotated variable }}
-  | kid            :: S :: none {{ ichlo [[kinded_id]] }}
+  | kid            :: S :: none {{ ichlo [[kid]] }}
 
 quant_item :: 'QI_' ::=
   {{ com kinded identifier or Int constraint }}
@@ -315,15 +340,18 @@ semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
                                                         {{ ocaml bool }}
                                                         {{ lem bool }}
                                                         {{ hol bool }}
+							{{ isa bool }}
   {{ com optional semi-colon }}
   |                                                     :: :: no
     {{ hol F }}
     {{ ocaml false }}
     {{ lem false }}
+    {{ isa False }}
   | ';'                                                 :: :: yes
     {{ hol T }}
     {{ ocaml true }}
     {{ lem true }}
+    {{ isa True }}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Patterns                                                     %
@@ -602,7 +630,7 @@ exp :: 'E_' ::=
 
 %  and maybe with nice syntax
 
-  | switch exp { case pexp1  ... case pexpn } :: :: case
+  | match exp { pexp1 '|'  ... '|' pexpn } :: :: case
     {{ com pattern matching }}
 %  | ( typ ) exp                                      :: :: Typed
 %    {{ com Type-annotated expressions }}
@@ -758,7 +786,8 @@ effect_opt :: 'Effect_opt_' ::=
 % Generate a pexp, but from slightly different syntax (= rather than ->)
 pexp_funcl :: 'Pat_funcl_' ::=
   {{ auxparam 'a }}
-  {{ icho ('a pexp) }}
+  {{ ocaml ('a pexp) }}
+  {{ isa pexp }}
   {{ lem (pexp 'a) }}
   | pat = exp                       :: :: exp {{ ichlo (Pat_aux (Pat_exp [[pat]] [[exp]],Unknown)) }}
   | ( pat when exp1 ) = exp         :: :: when {{ ichlo (Pat_aux (Pat_when [[pat]] [[exp1]] [[exp]],Unknown)) }}
@@ -831,17 +860,18 @@ val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
   {{ ocaml  VS_val_spec of typschm * id * (string * string) list * bool }}
   {{ lem VS_val_spec of typschm * id * list (string * string) * bool }}
+  {{ isa  typschm * id  * (string => string option) * bool }}
   | val typschm id                                  :: S :: val_spec
     {{ com specify the type of an upcoming definition }}
-    {{ ocaml (VS_val_spec [[typschm]] [[id]] None false) }} {{ lem }}
+    {{ ocaml (VS_val_spec [[typschm]] [[id]] None false) }} {{ lem }} {{ isa }}
   | val cast typschm id                             :: S :: cast
-    {{ ocaml  (VS_val_spec [[typschm]] [[id]] None true) }} {{ lem }}
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] None true) }} {{ lem }} {{ isa }}
   | val extern typschm id                           :: S :: extern_no_rename
     {{ com specify the type of an external function }}
-    {{ ocaml  (VS_val_spec [[typschm]] [[id]] ([[Some id]]) false) }} {{ lem }}
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] (Some [[id]]) false) }} {{ lem }} {{ isa }}
   | val extern typschm id = string                  :: S :: extern_spec
     {{ com specify the type of a function from Lem }}
-    {{ ocaml  (VS_val_spec [[typschm]] [[id]] ([[Some string]]) false) }} {{ lem }}
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] (Some [[string]]) false) }} {{ lem }} {{ isa }}
 %where the string must provide an explicit path to the required function but will not be checked
 
 default_spec :: 'DT_' ::=
