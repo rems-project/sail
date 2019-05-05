@@ -11,31 +11,17 @@
 
 #include"sail.h"
 
-/*
- * Temporary mpzs for use in functions below. To avoid conflicts, only
- * use in functions that do not call other functions in this file.
- */
-static sail_int sail_lib_tmp1, sail_lib_tmp2, sail_lib_tmp3;
-static real sail_lib_tmp_real;
-
-#define FLOAT_PRECISION 255
-
-void setup_library(void)
+void mpz_set_si128(mpz_t rop, __int128 op)
 {
-  srand(0x0);
-  mpz_init(sail_lib_tmp1);
-  mpz_init(sail_lib_tmp2);
-  mpz_init(sail_lib_tmp3);
-  mpq_init(sail_lib_tmp_real);
-  mpf_set_default_prec(FLOAT_PRECISION);
+  mpz_set_si(rop, (int64_t) (op >> (__int128) 64));
+  mpz_mul_2exp(rop, rop, 64);
+  mpz_add_ui(rop, rop, (uint64_t) op);
 }
 
-void cleanup_library(void)
+void mpz_init_set_si128(mpz_t rop, __int128 op)
 {
-  mpz_clear(sail_lib_tmp1);
-  mpz_clear(sail_lib_tmp2);
-  mpz_clear(sail_lib_tmp3);
-  mpq_clear(sail_lib_tmp_real);
+  mpz_init(rop);
+  mpz_set_si128(rop, op);
 }
 
 bool EQUAL(unit)(const unit a, const unit b)
@@ -103,16 +89,24 @@ void KILL(sail_string)(sail_string *str)
   free(*str);
 }
 
-void dec_str(sail_string *str, const mpz_t n)
+void dec_str(sail_string *str, const sail_int n)
 {
-  free(*str);
-  gmp_asprintf(str, "%Zd", n);
+  if (INT64_MIN <= n && n <= INT64_MAX) {
+    int ret = asprintf(str, "%" PRId64, (int64_t) n);
+    if (ret == -1) {
+      printf("dec_str failed");
+      exit(1);
+    }
+  } else {
+    printf("dec_str");
+    exit(1);
+  }
 }
 
-void hex_str(sail_string *str, const mpz_t n)
+void hex_str(sail_string *str, const sail_int n)
 {
-  free(*str);
-  gmp_asprintf(str, "0x%Zx", n);
+  //free(*str);
+  //gmp_asprintf(str, "0x%Zx", n);
 }
 
 bool eq_string(const sail_string str1, const sail_string str2)
@@ -140,9 +134,9 @@ bool string_startswith(sail_string s, sail_string prefix)
   return strstr(s, prefix) == s;
 }
 
-void string_length(sail_int *len, sail_string s)
+sail_int string_length(sail_string s)
 {
-  mpz_set_ui(*len, strlen(s));
+  return (sail_int) strlen(s);
 }
 
 void string_drop(sail_string *dst, sail_string s, sail_int ns)
@@ -176,130 +170,83 @@ void string_take(sail_string *dst, sail_string s, sail_int ns)
 
 /* ***** Sail integers ***** */
 
-uint64_t sail_int_get_ui(const mpz_t op)
+uint64_t sail_int_get_ui(const sail_int op)
 {
-  return mpz_get_ui(op);
+  return (uint64_t) op;
 }
 
-inline
 bool EQUAL(mach_int)(const mach_int op1, const mach_int op2)
 {
   return op1 == op2;
 }
 
-#ifndef USE_INT128
-
-inline
-void COPY(sail_int)(sail_int *rop, const sail_int op)
+sail_int CREATE_OF(sail_int, mach_int)(const mach_int op)
 {
-  mpz_set(*rop, op);
+  return (sail_int) op;
 }
 
-inline
-void CREATE(sail_int)(sail_int *rop)
-{
-  mpz_init(*rop);
-}
-
-inline
-void RECREATE(sail_int)(sail_int *rop)
-{
-  mpz_set_ui(*rop, 0);
-}
-
-inline
-void KILL(sail_int)(sail_int *rop)
-{
-  mpz_clear(*rop);
-}
-
-inline
-void CREATE_OF(sail_int, mach_int)(sail_int *rop, mach_int op)
-{
-  mpz_init_set_si(*rop, op);
-}
-
-inline
 mach_int CREATE_OF(mach_int, sail_int)(const sail_int op)
 {
-  return mpz_get_ui(op);
+  return (mach_int) op;
 }
 
-inline
-void RECREATE_OF(sail_int, mach_int)(sail_int *rop, mach_int op)
-{
-  mpz_set_si(*rop, op);
-}
-
-inline
-void CREATE_OF(sail_int, sail_string)(sail_int *rop, sail_string str)
-{
-  mpz_init_set_str(*rop, str, 10);
-}
-
-inline
-void CONVERT_OF(sail_int, sail_string)(sail_int *rop, sail_string str)
-{
-  mpz_set_str(*rop, str, 10);
-}
-
-inline
-void RECREATE_OF(sail_int, sail_string)(mpz_t *rop, sail_string str)
-{
-  mpz_set_str(*rop, str, 10);
-}
-
-inline
 mach_int CONVERT_OF(mach_int, sail_int)(const sail_int op)
 {
-  return mpz_get_si(op);
+  return (mach_int) op;
 }
 
-inline
-void CONVERT_OF(sail_int, mach_int)(sail_int *rop, const mach_int op)
+sail_int CONVERT_OF(sail_int, mach_int)(const mach_int op)
 {
-  mpz_set_si(*rop, op);
+  return (sail_int) op;
 }
 
-inline
+sail_int CONVERT_OF(sail_int, sail_string)(const sail_string str)
+{
+  mpz_t tmp;
+  mpz_init(tmp);
+  mpz_set_str(tmp, str, 10);
+  uint64_t lo = mpz_get_ui(tmp);
+  mpz_div_2exp(tmp, tmp, 64);
+  uint64_t hi = mpz_get_ui(tmp);
+  mpz_clear(tmp);
+  
+  unsigned __int128 r = (((unsigned __int128) hi) << 64) + ((unsigned __int128) lo);
+  return (__int128) r;
+}
+
 bool eq_int(const sail_int op1, const sail_int op2)
 {
-  return !abs(mpz_cmp(op1, op2));
+  return op1 == op2;
 }
 
-inline
 bool EQUAL(sail_int)(const sail_int op1, const sail_int op2)
 {
-  return !abs(mpz_cmp(op1, op2));
+  return op1 == op2;
 }
 
-inline
 bool lt(const sail_int op1, const sail_int op2)
 {
-  return mpz_cmp(op1, op2) < 0;
+  return op1 < op2;
 }
 
-inline
-bool gt(const mpz_t op1, const mpz_t op2)
+bool gt(const sail_int op1, const sail_int op2)
 {
-  return mpz_cmp(op1, op2) > 0;
+  return op1 > op2;
 }
 
-inline
-bool lteq(const mpz_t op1, const mpz_t op2)
+bool lteq(const sail_int op1, const sail_int op2)
 {
-  return mpz_cmp(op1, op2) <= 0;
+  return op1 <= op2;
 }
 
-inline
-bool gteq(const mpz_t op1, const mpz_t op2)
+bool gteq(const sail_int op1, const sail_int op2)
 {
-  return mpz_cmp(op1, op2) >= 0;
+  return op1 >= op2;
 }
 
-void shl_int(sail_int *rop, const sail_int op1, const sail_int op2)
+sail_int shl_int(const sail_int op1, const sail_int op2)
 {
-  mpz_mul_2exp(*rop, op1, mpz_get_ui(op2));
+  return op1 << op2;
 }
 
 mach_int shl_mach_int(const mach_int op1, const mach_int op2)
@@ -307,9 +254,9 @@ mach_int shl_mach_int(const mach_int op1, const mach_int op2)
   return op1 << op2;
 }
 
-void shr_int(sail_int *rop, const sail_int op1, const sail_int op2)
+sail_int shr_int(const sail_int op1, const sail_int op2)
 {
-  mpz_fdiv_q_2exp(*rop, op1, mpz_get_ui(op2));
+  return op1 >> op2;
 }
 
 mach_int shr_mach_int(const mach_int op1, const mach_int op2)
@@ -317,137 +264,112 @@ mach_int shr_mach_int(const mach_int op1, const mach_int op2)
   return op1 >> op2;
 }
 
-inline
-void undefined_int(sail_int *rop, const int n)
+sail_int undefined_int(const int n)
 {
-  mpz_set_ui(*rop, (uint64_t) n);
+  return (__int128) n;
 }
 
-inline
-void undefined_range(sail_int *rop, const sail_int l, const sail_int u)
+sail_int undefined_range(const sail_int l, const sail_int u)
 {
-  mpz_set(*rop, l);
+  return l;
 }
 
-inline
-void add_int(sail_int *rop, const sail_int op1, const sail_int op2)
+sail_int add_int(const sail_int op1, const sail_int op2)
 {
-  mpz_add(*rop, op1, op2);
+  return op1 + op2;
 }
 
-inline
-void sub_int(sail_int *rop, const sail_int op1, const sail_int op2)
+sail_int sub_int(const sail_int op1, const sail_int op2)
 {
-  mpz_sub(*rop, op1, op2);
+  return op1 - op2;
 }
 
-void sub_nat(sail_int *rop, const sail_int op1, const sail_int op2)
+sail_int sub_nat(const sail_int op1, const sail_int op2)
 {
-  mpz_sub(*rop, op1, op2);
-  if (mpz_cmp_ui(*rop, 0) < 0ul) {
-    mpz_set_ui(*rop, 0ul);
-  }
+  sail_int rop = op1 - op2;
+  if (rop < 0) return (sail_int) 0;
+  return rop;
 }
 
-inline
-void mult_int(sail_int *rop, const sail_int op1, const sail_int op2)
+sail_int mult_int(const sail_int op1, const sail_int op2)
 {
-  mpz_mul(*rop, op1, op2);
+  return op1 * op2;
 }
 
-
-inline
-void ediv_int(sail_int *rop, const sail_int op1, const sail_int op2)
+// FIXME: Make sure all division operators do the right thing
+sail_int ediv_int(const sail_int op1, const sail_int op2)
 {
-  /* GMP doesn't have Euclidean division but we can emulate it using 
-     flooring and ceiling division. */
-  if (mpz_sgn(op2) >= 0) {
-    mpz_fdiv_q(*rop, op1, op2);
+  return op1 / op2;
+}
+
+sail_int emod_int(const sail_int op1, const sail_int op2)
+{
+  return op1 % op2;
+}
+
+sail_int tdiv_int(const sail_int op1, const sail_int op2)
+{
+  return op1 / op2;
+}
+
+sail_int tmod_int(const sail_int op1, const sail_int op2)
+{
+  return op1 % op2;
+}
+
+sail_int max_int(const sail_int op1, const sail_int op2)
+{
+  if (op1 < op2) {
+    return op2;
   } else {
-    mpz_cdiv_q(*rop, op1, op2);
+    return op1;
   }
 }
 
-inline
-void emod_int(sail_int *rop, const sail_int op1, const sail_int op2)
+sail_int min_int(const sail_int op1, const sail_int op2)
 {
-  /* The documentation isn't that explicit but I think this is 
-     Euclidean mod. */
-  mpz_mod(*rop, op1, op2);
-}
-
-inline
-void tdiv_int(sail_int *rop, const sail_int op1, const sail_int op2)
-{
-  mpz_tdiv_q(*rop, op1, op2);
-}
-
-inline
-void tmod_int(sail_int *rop, const sail_int op1, const sail_int op2)
-{
-  mpz_tdiv_r(*rop, op1, op2);
-}
-
-inline
-void fdiv_int(sail_int *rop, const sail_int op1, const sail_int op2)
-{
-  mpz_fdiv_q(*rop, op1, op2);
-}
-
-inline
-void fmod_int(sail_int *rop, const sail_int op1, const sail_int op2)
-{
-  mpz_fdiv_r(*rop, op1, op2);
-}
-
-void max_int(sail_int *rop, const sail_int op1, const sail_int op2)
-{
-  if (lt(op1, op2)) {
-    mpz_set(*rop, op2);
+  if (op1 > op2) {
+    return op2;
   } else {
-    mpz_set(*rop, op1);
+    return op1;
   }
 }
 
-void min_int(sail_int *rop, const sail_int op1, const sail_int op2)
+sail_int neg_int(const sail_int op)
 {
-  if (gt(op1, op2)) {
-    mpz_set(*rop, op2);
+  return -op;
+}
+
+sail_int abs_int(const sail_int op)
+{
+  if (op < 0) {
+    return -op;
   } else {
-    mpz_set(*rop, op1);
+    return op;
   }
 }
 
-inline
-void neg_int(sail_int *rop, const sail_int op)
+sail_int pow_int(sail_int base, sail_int exp)
 {
-  mpz_neg(*rop, op);
+  sail_int result = 1;
+  while (true)
+  {
+    if (exp & 1) {
+      result *= base;
+    }
+    exp >>= 1;
+    if (!exp) {
+      break;
+    }
+    base *= base;
+  }
+  return result;
 }
 
-inline
-void abs_int(sail_int *rop, const sail_int op)
+sail_int pow2(const sail_int exp)
 {
-  mpz_abs(*rop, op);
+  return pow_int(2, exp);
 }
-
-inline
-void pow_int(sail_int *rop, const sail_int op1, const sail_int op2)
-{
-  uint64_t n = mpz_get_ui(op2);
-  mpz_pow_ui(*rop, op1, n);
-}
-
-void pow2(sail_int *rop, const sail_int exp)
-{
-  /* Assume exponent is never more than 2^64... */
-  uint64_t exp_ui = mpz_get_ui(exp);
-  mpz_t base;
-  mpz_init_set_ui(base, 2ul);
-  mpz_pow_ui(*rop, base, exp_ui);
-  mpz_clear(base);
-}
-
-#endif
 
 /* ***** Sail bitvectors ***** */
 
@@ -530,13 +452,11 @@ void RECREATE_OF(lbits, sbits)(lbits *rop, const sbits op, const bool direction)
 
 // Bitvector conversions
 
-inline
 fbits CONVERT_OF(fbits, lbits)(const lbits op, const bool direction)
 {
   return mpz_get_ui(*op.bits);
 }
 
-inline
 fbits CONVERT_OF(fbits, sbits)(const sbits op, const bool direction)
 {
   return op.bits;
@@ -597,12 +517,17 @@ fbits safe_rshift(const fbits x, const fbits n)
   }
 }
 
-void normalize_lbits(lbits *rop) {
-  /* TODO optimisation: keep a set of masks of various sizes handy */
-  mpz_set_ui(sail_lib_tmp1, 1);
-  mpz_mul_2exp(sail_lib_tmp1, sail_lib_tmp1, rop->len);
-  mpz_sub_ui(sail_lib_tmp1, sail_lib_tmp1, 1);
-  mpz_and(*rop->bits, *rop->bits, sail_lib_tmp1);
+void normalize_lbits(lbits *rop)
+{
+  mpz_t tmp;
+  mpz_init(tmp);
+  
+  mpz_set_ui(tmp, 1);
+  mpz_mul_2exp(tmp, tmp, rop->len);
+  mpz_sub_ui(tmp, tmp, 1);
+  mpz_and(*rop->bits, *rop->bits, tmp);
+
+  mpz_clear(tmp);
 }
 
 void append_64(lbits *rop, const lbits op, const fbits chunk)
@@ -627,17 +552,19 @@ void sub_bits(lbits *rop, const lbits op1, const lbits op2)
   normalize_lbits(rop);
 }
 
-void add_bits_int(lbits *rop, const lbits op1, const mpz_t op2)
+void add_bits_int(lbits *rop, const lbits op1, const sail_int op2)
 {
+  assert(op2 >= 0);
   rop->len = op1.len;
-  mpz_add(*rop->bits, *op1.bits, op2);
+  mpz_add_ui(*rop->bits, *op1.bits, (uint64_t) op2);
   normalize_lbits(rop);
 }
 
-void sub_bits_int(lbits *rop, const lbits op1, const mpz_t op2)
+void sub_bits_int(lbits *rop, const lbits op1, const sail_int op2)
 {
+  assert(op2 >= 0);
   rop->len = op1.len;
-  mpz_sub(*rop->bits, *op1.bits, op2);
+  mpz_sub_ui(*rop->bits, *op1.bits, (uint64_t) op2);
   normalize_lbits(rop);
 }
 
@@ -673,16 +600,7 @@ void not_bits(lbits *rop, const lbits op)
 
 void mults_vec(lbits *rop, const lbits op1, const lbits op2)
 {
-  mpz_t op1_int, op2_int;
-  mpz_init(op1_int);
-  mpz_init(op2_int);
-  sail_signed(&op1_int, op1);
-  sail_signed(&op2_int, op2);
-  rop->len = op1.len * 2;
-  mpz_mul(*rop->bits, op1_int, op2_int);
-  normalize_lbits(rop);
-  mpz_clear(op1_int);
-  mpz_clear(op2_int);
+  return;
 }
 
 void mult_vec(lbits *rop, const lbits op1, const lbits op2)
@@ -695,21 +613,15 @@ void mult_vec(lbits *rop, const lbits op1, const lbits op2)
 
 void zeros(lbits *rop, const sail_int op)
 {
-  rop->len = mpz_get_ui(op);
+  rop->len = (mp_bitcnt_t) op;
   mpz_set_ui(*rop->bits, 0);
 }
 
 void zero_extend(lbits *rop, const lbits op, const sail_int len)
 {
-  assert(op.len <= mpz_get_ui(len));
-  rop->len = mpz_get_ui(len);
+  assert(op.len <= (uint64_t) len);
+  rop->len = (uint64_t) len;
   mpz_set(*rop->bits, *op.bits);
-}
-
-__attribute__((target ("bmi2")))
-fbits pdep_fbits(const fbits op, const uint64_t selector)
-{
-  return _pdep_u64(op, selector);
 }
 
 fbits fast_zero_extend(const sbits op, const uint64_t n)
@@ -719,8 +631,8 @@ fbits fast_zero_extend(const sbits op, const uint64_t n)
 
 void sign_extend(lbits *rop, const lbits op, const sail_int len)
 {
-  assert(op.len <= mpz_get_ui(len));
-  rop->len = mpz_get_ui(len);
+  assert(op.len <= (uint64_t) len);
+  rop->len = (uint64_t) len;
   if(mpz_tstbit(*op.bits, op.len - 1)) {
     mpz_set(*rop->bits, *op.bits);
     for(mp_bitcnt_t i = rop->len - 1; i >= op.len; i--) {
@@ -757,9 +669,9 @@ fbits fast_sign_extend2(const sbits op, const uint64_t m)
   }
 }
 
-void length_lbits(sail_int *rop, const lbits op)
+sail_int length_lbits(const lbits op)
 {
-  mpz_set_ui(*rop, op.len);
+  return (sail_int) op.len;
 }
 
 bool eq_bits(const lbits op1, const lbits op2)
@@ -790,8 +702,8 @@ void vector_subrange_lbits(lbits *rop,
 			       const sail_int n_mpz,
 			       const sail_int m_mpz)
 {
-  uint64_t n = mpz_get_ui(n_mpz);
-  uint64_t m = mpz_get_ui(m_mpz);
+  uint64_t n = (uint64_t) n_mpz;
+  uint64_t m = (uint64_t) m_mpz;
 
   rop->len = n - (m - 1ul);
   mpz_fdiv_q_2exp(*rop->bits, *op.bits, m);
@@ -800,15 +712,14 @@ void vector_subrange_lbits(lbits *rop,
 
 void sail_truncate(lbits *rop, const lbits op, const sail_int len)
 {
-  assert(op.len >= mpz_get_ui(len));
-  rop->len = mpz_get_ui(len);
+  rop->len = (mp_bitcnt_t) len;
   mpz_set(*rop->bits, *op.bits);
   normalize_lbits(rop);
 }
 
 void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len)
 {
-  uint64_t rlen = mpz_get_ui(len);
+  uint64_t rlen = (uint64_t) len;
   assert(op.len >= rlen);
   rop->len = rlen;
   // similar to vector_subrange_lbits above -- right shift LSBs away
@@ -816,33 +727,49 @@ void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len)
   normalize_lbits(rop);
 }
 
-fbits bitvector_access(const lbits op, const sail_int n_mpz)
+fbits bitvector_access(const lbits op, const sail_int n)
 {
-  uint64_t n = mpz_get_ui(n_mpz);
-  return (fbits) mpz_tstbit(*op.bits, n);
+  return (fbits) mpz_tstbit(*op.bits, (uint64_t) n);
 }
 
-void sail_unsigned(sail_int *rop, const lbits op)
+sail_int sail_unsigned(const lbits op)
 {
-  /* Normal form of bv_t is always positive so just return the bits. */
-  mpz_set(*rop, *op.bits);
+  return (sail_int) mpz_get_ui(*op.bits);
 }
 
-void sail_signed(sail_int *rop, const lbits op)
+sail_int sail_signed(const lbits op)
 {
-  if (op.len == 0) {
-    mpz_set_ui(*rop, 0);
-  } else {
-    mp_bitcnt_t sign_bit = op.len - 1;
-    mpz_set(*rop, *op.bits);
-    if (mpz_tstbit(*op.bits, sign_bit) != 0) {
-      /* If sign bit is unset then we are done,
-         otherwise clear sign_bit and subtract 2**sign_bit */
-      mpz_set_ui(sail_lib_tmp1, 1);
-      mpz_mul_2exp(sail_lib_tmp1, sail_lib_tmp1, sign_bit); /* 2**sign_bit */
-      mpz_combit(*rop, sign_bit); /* clear sign_bit */
-      mpz_sub(*rop, *rop, sail_lib_tmp1);
+  if (op.len <= 64) {
+    uint64_t b = mpz_get_ui(*op.bits);
+    uint64_t sign_bit = UINT64_C(1) << (op.len - UINT64_C(1));
+    if ((b & sign_bit) > 0) {
+      return ((sail_int) (b & ~sign_bit)) - ((sail_int) sign_bit);
+    } else {
+      return (sail_int) b;
     }
+  } else if (op.len <= 128) {
+    uint64_t b_lo = mpz_get_ui(*op.bits);
+    mpz_t tmp;
+    mpz_init(tmp);
+    mpz_tdiv_q_2exp(tmp, *op.bits, 64);
+    uint64_t b_hi = mpz_get_ui(tmp);
+    mpz_clear(tmp);
+    uint64_t sign_bit = UINT64_C(1) << (op.len - UINT64_C(65));
+    if (b_hi & sign_bit) {
+      unsigned __int128 b = b_hi & ~sign_bit;
+      b <<= 64;
+      b |= (unsigned __int128) b_lo;
+      unsigned __int128 sb = (unsigned __int128) sign_bit << (unsigned __int128) 64;
+      return (sail_int) b + (sail_int) (~sb + 1);
+    } else {
+      unsigned __int128 b = b_hi;
+      b <<= 64;
+      b |= (unsigned __int128) b_lo;
+      return (__int128) b;
+    }
+  } else {
+    printf("sail_signed >128\n");
+    exit(1);
   }
 }
 
@@ -892,9 +819,9 @@ sbits append_ss(const sbits op1, const sbits op2)
   return rop;
 }
 
-void replicate_bits(lbits *rop, const lbits op1, const mpz_t op2)
+void replicate_bits(lbits *rop, const lbits op1, const sail_int op2)
 {
-  uint64_t op2_ui = mpz_get_ui(op2);
+  uint64_t op2_ui = (uint64_t) op2;
   rop->len = op1.len * op2_ui;
   mpz_set_ui(*rop->bits, 0);
   for (int i = 0; i < op2_ui; i++) {
@@ -928,43 +855,32 @@ uint64_t fast_replicate_bits(const uint64_t shift, const uint64_t v, const int64
 //                    <-------^
 //                    (8 bit) 4
 //
-void get_slice_int(lbits *rop, const sail_int len_mpz, const sail_int n, const sail_int start_mpz)
+__attribute__((target ("bmi2")))
+void get_slice_int(lbits *rop, const sail_int len, const sail_int n, const sail_int start)
 {
-  uint64_t start = mpz_get_ui(start_mpz);
-  uint64_t len = mpz_get_ui(len_mpz);
+  assert(len <= 128);
+  
+  unsigned __int128 nbits = (unsigned __int128) (n >> start);
 
-  mpz_set_ui(*rop->bits, 0ul);
-  rop->len = len;
-
-  for (uint64_t i = 0; i < len; i++) {
-    if (mpz_tstbit(n, i + start)) mpz_setbit(*rop->bits, i);
+  if (len <= 64) {
+    mpz_set_ui(*rop->bits, _bzhi_u64((uint64_t) nbits, (uint64_t) len));
+    rop->len = (uint64_t) len;
+  } else {
+    print("get_slice_int");
+    exit(1);
   }
 }
 
-// Set slice uses the same indexing scheme as get_slice_int, but it
-// puts a bitvector slice into an integer rather than returning it.
-void set_slice_int(sail_int *rop,
-		   const sail_int len_mpz,
-		   const sail_int n,
-		   const sail_int start_mpz,
-		   const lbits slice)
+sail_int set_slice_int(const sail_int len, const sail_int n, const sail_int start, const lbits slice)
 {
-  uint64_t start = mpz_get_ui(start_mpz);
-
-  mpz_set(*rop, n);
-
-  for (uint64_t i = 0; i < slice.len; i++) {
-    if (mpz_tstbit(*slice.bits, i)) {
-      mpz_setbit(*rop, i + start);
-    } else {
-      mpz_clrbit(*rop, i + start);
-    }
-  }
+  printf("set_slice_int");
+  exit(1);
+  return 0;
 }
 
 void update_lbits(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit)
 {
-  uint64_t n = mpz_get_ui(n_mpz);
+  uint64_t n = (uint64_t) n_mpz;
 
   mpz_set(*rop->bits, *op.bits);
   rop->len = op.len;
@@ -982,8 +898,8 @@ void vector_update_subrange_lbits(lbits *rop,
 				 const sail_int m_mpz,
 				 const lbits slice)
 {
-  uint64_t n = mpz_get_ui(n_mpz);
-  uint64_t m = mpz_get_ui(m_mpz);
+  uint64_t n = (uint64_t) n_mpz;
+  uint64_t m = (uint64_t) m_mpz;
 
   mpz_set(*rop->bits, *op.bits);
   rop->len = op.len;
@@ -1014,17 +930,22 @@ fbits fast_update_subrange(const fbits op,
   return rop;
 }
 
-void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz)
+__attribute__((target ("bmi2")))
+void slice(lbits *rop, const lbits op, const sail_int start_big, const sail_int len_big)
 {
-  assert(mpz_get_ui(start_mpz) + mpz_get_ui(len_mpz) <= op.len);
-  uint64_t start = mpz_get_ui(start_mpz);
-  uint64_t len = mpz_get_ui(len_mpz);
+  uint64_t start = (uint64_t) start_big;
+  uint64_t len = (uint64_t) len_big;
 
-  mpz_set_ui(*rop->bits, 0);
-  rop->len = len;
+  if (len + start <= 64) {
+    mpz_set_ui(*rop->bits, _bzhi_u64(mpz_get_ui(*op.bits) >> start, len));
+    rop->len = len;
+  } else {
+    mpz_set_ui(*rop->bits, 0);
+    rop->len = len;
 
-  for (uint64_t i = 0; i < len; i++) {
-    if (mpz_tstbit(*op.bits, i + start)) mpz_setbit(*rop->bits, i);
+    for (uint64_t i = 0; i < len; i++) {
+      if (mpz_tstbit(*op.bits, i + start)) mpz_setbit(*rop->bits, i);
+    }
   }
 }
 
@@ -1032,8 +953,8 @@ __attribute__((target ("bmi2")))
 sbits sslice(const fbits op, const mach_int start, const mach_int len)
 {
   sbits rop;
-  rop.bits = _bzhi_u64(op >> start, len);
-  rop.len = len;
+  rop.bits = _bzhi_u64(op >> start, (uint64_t) len);
+  rop.len = (uint64_t) len;
   return rop;
 }
 
@@ -1044,7 +965,7 @@ void set_slice(lbits *rop,
 	       const sail_int start_mpz,
 	       const lbits slice)
 {
-  uint64_t start = mpz_get_ui(start_mpz);
+  uint64_t start = (uint64_t) start_mpz;
 
   mpz_set(*rop->bits, *op.bits);
   rop->len = op.len;
@@ -1089,14 +1010,14 @@ void shift_bits_right_arith(lbits *rop, const lbits op1, const lbits op2)
 void shiftl(lbits *rop, const lbits op1, const sail_int op2)
 {
   rop->len = op1.len;
-  mpz_mul_2exp(*rop->bits, *op1.bits, mpz_get_ui(op2));
+  mpz_mul_2exp(*rop->bits, *op1.bits, (uint64_t) op2);
   normalize_lbits(rop);
 }
 
 void shiftr(lbits *rop, const lbits op1, const sail_int op2)
 {
   rop->len = op1.len;
-  mpz_tdiv_q_2exp(*rop->bits, *op1.bits, mpz_get_ui(op2));
+  mpz_tdiv_q_2exp(*rop->bits, *op1.bits, (uint64_t) op2);
 }
 
 void reverse_endianness(lbits *rop, const lbits op)
@@ -1120,15 +1041,20 @@ void reverse_endianness(lbits *rop, const lbits op)
   } else if (rop->len == 8ul) {
     mpz_set(*rop->bits, *op.bits);
   } else {
+    mpz_t tmp1;
+    mpz_t tmp2;
+    mpz_init(tmp1);
+    mpz_init(tmp2);
+    
     /* For other numbers of bytes we reverse the bytes.
      * XXX could use mpz_import/export for this. */
-    mpz_set_ui(sail_lib_tmp1, 0xff); // byte mask
+    mpz_set_ui(tmp1, 0xff); // byte mask
     mpz_set_ui(*rop->bits, 0); // reset accumulator for result
     for(mp_bitcnt_t byte = 0; byte < op.len; byte+=8) {
-      mpz_tdiv_q_2exp(sail_lib_tmp2, *op.bits, byte); // shift byte to bottom
-      mpz_and(sail_lib_tmp2, sail_lib_tmp2, sail_lib_tmp1); // and with mask
+      mpz_tdiv_q_2exp(tmp2, *op.bits, byte); // shift byte to bottom
+      mpz_and(tmp2, tmp2, tmp1); // and with mask
       mpz_mul_2exp(*rop->bits, *rop->bits, 8); // shift result left 8
-      mpz_ior(*rop->bits, *rop->bits, sail_lib_tmp2); // or byte into result
+      mpz_ior(*rop->bits, *rop->bits, tmp2); // or byte into result
     }
   }
 }
@@ -1318,20 +1244,35 @@ void abs_real(real *rop, const real op)
   mpq_abs(*rop, op);
 }
 
-void round_up(sail_int *rop, const real op)
+sail_int round_up(const real op)
 {
-  mpz_cdiv_q(*rop, mpq_numref(op), mpq_denref(op));
+  mpz_t rop;
+  mpz_init(rop);
+  mpz_cdiv_q(rop, mpq_numref(op), mpq_denref(op));
+  sail_int r = mpz_get_si(rop);
+  mpz_clear(rop);
+  return r;
 }
 
-void round_down(sail_int *rop, const real op)
+sail_int round_down(const real op)
 {
-  mpz_fdiv_q(*rop, mpq_numref(op), mpq_denref(op));
+  mpz_t rop;
+  mpz_init(rop);
+  mpz_fdiv_q(rop, mpq_numref(op), mpq_denref(op));
+  sail_int r = mpz_get_si(rop);
+  mpz_clear(rop);
+  return r;
 }
 
 void to_real(real *rop, const sail_int op)
 {
-  mpq_set_z(*rop, op);
+  mpz_t op_mpz;
+  mpz_init_set_si128(op_mpz, op);
+  
+  mpq_set_z(*rop, op_mpz);
   mpq_canonicalize(*rop);
+
+  mpz_clear(op_mpz);
 }
 
 bool EQUAL(real)(const real op1, const real op2)
@@ -1361,7 +1302,7 @@ bool gteq_real(const real op1, const real op2)
 
 void real_power(real *rop, const real base, const sail_int exp)
 {
-  int64_t exp_si = mpz_get_si(exp);
+  int64_t exp_si = (int64_t) exp;
 
   mpz_set_ui(mpq_numref(*rop), 1);
   mpz_set_ui(mpq_denref(*rop), 1);
@@ -1388,37 +1329,38 @@ void real_power(real *rop, const real base, const sail_int exp)
 
 void CREATE_OF(real, sail_string)(real *rop, const sail_string op)
 {
-  int decimal;
-  int total;
-
   mpq_init(*rop);
-  gmp_sscanf(op, "%Zd.%n%Zd%n", sail_lib_tmp1, &decimal, sail_lib_tmp2, &total);
-
-  int len = total - decimal;
-  mpz_ui_pow_ui(sail_lib_tmp3, 10, len);
-  mpz_set(mpq_numref(*rop), sail_lib_tmp2);
-  mpz_set(mpq_denref(*rop), sail_lib_tmp3);
-  mpq_canonicalize(*rop);
-  mpz_set(mpq_numref(sail_lib_tmp_real), sail_lib_tmp1);
-  mpz_set_ui(mpq_denref(sail_lib_tmp_real), 1);
-  mpq_add(*rop, *rop, sail_lib_tmp_real);
+  CONVERT_OF(real, sail_string)(rop, op);
 }
 
 void CONVERT_OF(real, sail_string)(real *rop, const sail_string op)
 {
   int decimal;
   int total;
-
-  gmp_sscanf(op, "%Zd.%n%Zd%n", sail_lib_tmp1, &decimal, sail_lib_tmp2, &total);
+  mpz_t tmp1;
+  mpz_t tmp2;
+  mpz_t tmp3;
+  mpq_t tmp_real;
+  mpz_init(tmp1);
+  mpz_init(tmp2);
+  mpz_init(tmp3);
+  mpq_init(tmp_real);
+  
+  gmp_sscanf(op, "%Zd.%n%Zd%n", tmp1, &decimal, tmp2, &total);
 
   int len = total - decimal;
-  mpz_ui_pow_ui(sail_lib_tmp3, 10, len);
-  mpz_set(mpq_numref(*rop), sail_lib_tmp2);
-  mpz_set(mpq_denref(*rop), sail_lib_tmp3);
+  mpz_ui_pow_ui(tmp3, 10, len);
+  mpz_set(mpq_numref(*rop), tmp2);
+  mpz_set(mpq_denref(*rop), tmp3);
   mpq_canonicalize(*rop);
-  mpz_set(mpq_numref(sail_lib_tmp_real), sail_lib_tmp1);
-  mpz_set_ui(mpq_denref(sail_lib_tmp_real), 1);
-  mpq_add(*rop, *rop, sail_lib_tmp_real);
+  mpz_set(mpq_numref(tmp_real), tmp1);
+  mpz_set_ui(mpq_denref(tmp_real), 1);
+  mpq_add(*rop, *rop, tmp_real);
+
+  mpz_clear(tmp1);
+  mpz_clear(tmp2);
+  mpz_clear(tmp3);
+  mpq_clear(tmp_real);
 }
 
 unit print_real(const sail_string str, const real op)
@@ -1449,7 +1391,7 @@ void random_real(real *rop, const unit u)
 void string_of_int(sail_string *str, const sail_int i)
 {
   free(*str);
-  gmp_asprintf(str, "%Zd", i);
+  //gmp_asprintf(str, "%Zd", i);
 }
 
 /* asprintf is a GNU extension, but it should exist on BSD */
@@ -1567,56 +1509,50 @@ unit prerr_endline(const sail_string str)
 
 unit print_int(const sail_string str, const sail_int op)
 {
+  mpz_t op_mpz;
+  mpz_init_set_si128(op_mpz, op);
+  
   fputs(str, stdout);
-  mpz_out_str(stdout, 10, op);
+  mpz_out_str(stdout, 10, op_mpz);
   putchar('\n');
+
+  mpz_clear(op_mpz);
   return UNIT;
 }
 
 unit prerr_int(const sail_string str, const sail_int op)
 {
   fputs(str, stderr);
-  mpz_out_str(stderr, 10, op);
+  //mpz_out_str(stderr, 10, op);
   fputs("\n", stderr);
   return UNIT;
 }
 
 unit sail_putchar(const sail_int op)
 {
-  char c = (char) mpz_get_ui(op);
+  char c = (char) op;
   putchar(c);
   fflush(stdout);
   return UNIT;
 }
 
-void get_time_ns(sail_int *rop, const unit u)
+sail_int get_time_ns(const unit u)
 {
   struct timespec t;
   clock_gettime(CLOCK_REALTIME, &t);
-  mpz_set_si(*rop, t.tv_sec);
-  mpz_mul_ui(*rop, *rop, 1000000000);
-  mpz_add_ui(*rop, *rop, t.tv_nsec);
-}
-
-// ARM specific optimisations
-
-void arm_align(lbits *rop, const lbits x_bv, const sail_int y_mpz)
-{
-  uint64_t x = mpz_get_ui(*x_bv.bits);
-  uint64_t y = mpz_get_ui(y_mpz);
-  uint64_t z = y * (x / y);
-  mp_bitcnt_t n = x_bv.len;
-  mpz_set_ui(*rop->bits, safe_rshift(UINT64_MAX, 64l - (n - 1)) & z);
-  rop->len = n;
+  __int128 rop = (__int128) t.tv_sec;
+  rop *= 1000000000;
+  rop += (__int128) t.tv_nsec;
+  return rop;
 }
 
 // Monomorphisation
-void make_the_value(sail_int *rop, const sail_int op)
+sail_int make_the_value(const sail_int op)
 {
-  mpz_set(*rop, op);
+  return op;
 }
 
-void size_itself_int(sail_int *rop, const sail_int op)
+sail_int size_itself_int(const sail_int op)
 {
-  mpz_set(*rop, op);
+  return op;
 }

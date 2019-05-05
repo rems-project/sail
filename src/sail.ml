@@ -196,6 +196,9 @@ let options = Arg.align ([
   ( "-Oconstant_fold",
     Arg.Set Constant_fold.optimize_constant_fold,
     " apply constant folding optimizations");
+  ( "-Oint128",
+    Arg.Set C_backend.optimize_int128,
+    " use 128-bit integers rather than GMP arbitrary precision integers");
   ( "-Oaarch64_fast",
     Arg.Set Jib_compile.optimize_aarch64_fast_struct,
     " apply ARMv8.5 specific optimizations (potentially unsound in general)");

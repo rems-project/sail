@@ -100,6 +100,7 @@ val optimize_primops : bool ref
 val optimize_hoist_allocations : bool ref
 val optimize_struct_updates : bool ref
 val optimize_alias : bool ref
+val optimize_int128 : bool ref
 
 (** Convert a typ to a IR ctyp *)
 val ctyp_of_typ : Jib_compile.ctx -> Ast.typ -> ctyp

@@ -86,6 +86,7 @@ let optimize_primops = ref false
 let optimize_hoist_allocations = ref false
 let optimize_struct_updates = ref false
 let optimize_alias = ref false
+let optimize_int128 = ref false                
 
 let c_debug str =
   if !c_verbosity > 0 then prerr_endline (Lazy.force str) else ()
@@ -192,7 +193,9 @@ let rec ctyp_of_typ ctx typ =
 let rec is_stack_ctyp ctyp = match ctyp with
   | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_enum _ -> true
   | CT_fint n -> n <= 64
-  | CT_lbits _ | CT_lint | CT_real | CT_string | CT_list _ | CT_vector _ -> false
+  | CT_lint when !optimize_int128 -> true
+  | CT_lint -> false
+  | CT_lbits _ | CT_real | CT_string | CT_list _ | CT_vector _ -> false
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) fields
   | CT_variant (_, ctors) -> false (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *) (* FIXME *)
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
@@ -1493,6 +1496,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | CT_unit -> "UNIT", []
        | CT_bit -> "UINT64_C(0)", []
        | CT_fint _ -> "INT64_C(0xdeadc0de)", []
+       | CT_lint when !optimize_int128 -> "((sail_int) 0xdeadc0de)", []
        | CT_fbits _ -> "UINT64_C(0xdeadc0de)", []
        | CT_sbits _ -> "undefined_sbits()", []
        | CT_bool -> "false", []
@@ -1898,8 +1902,8 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ string "}"
     in
     let vector_update =
-      string (Printf.sprintf "static void vector_update_%s(%s *rop, %s op, mpz_t n, %s elem) {\n" (sgen_id id) (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
-      ^^ string "  int m = mpz_get_ui(n);\n"
+      string (Printf.sprintf "static void vector_update_%s(%s *rop, %s op, sail_int n, %s elem) {\n" (sgen_id id) (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
+      ^^ string "  int m = sail_int_get_ui(n);\n"
       ^^ string "  if (rop->data == op.data) {\n"
       ^^ string (if is_stack_ctyp ctyp then
                    "    rop->data[m] = elem;\n"
@@ -1924,13 +1928,13 @@ let codegen_vector ctx (direction, ctyp) =
     in
     let vector_access =
       if is_stack_ctyp ctyp then
-        string (Printf.sprintf "static %s vector_access_%s(%s op, mpz_t n) {\n" (sgen_ctyp ctyp) (sgen_id id) (sgen_id id))
-        ^^ string "  int m = mpz_get_ui(n);\n"
+        string (Printf.sprintf "static %s vector_access_%s(%s op, sail_int n) {\n" (sgen_ctyp ctyp) (sgen_id id) (sgen_id id))
+        ^^ string "  int m = sail_int_get_ui(n);\n"
         ^^ string "  return op.data[m];\n"
         ^^ string "}"
       else
-        string (Printf.sprintf "static void vector_access_%s(%s *rop, %s op, mpz_t n) {\n" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
-        ^^ string "  int m = mpz_get_ui(n);\n"
+        string (Printf.sprintf "static void vector_access_%s(%s *rop, %s op, sail_int n) {\n" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
+        ^^ string "  int m = sail_int_get_ui(n);\n"
         ^^ string (Printf.sprintf "  COPY(%s)(rop, op.data[m]);\n" (sgen_ctyp_name ctyp))
         ^^ string "}"
     in
@@ -1946,8 +1950,8 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ string "}"
     in
     let vector_undefined =
-      string (Printf.sprintf "static void undefined_vector_%s(%s *rop, mpz_t len, %s elem) {\n" (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
-      ^^ string (Printf.sprintf "  rop->len = mpz_get_ui(len);\n")
+      string (Printf.sprintf "static void undefined_vector_%s(%s *rop, sail_int len, %s elem) {\n" (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
+      ^^ string (Printf.sprintf "  rop->len = sail_int_get_ui(len);\n")
       ^^ string (Printf.sprintf "  rop->data = malloc((rop->len) * sizeof(%s));\n" (sgen_ctyp ctyp))
       ^^ string "  for (int i = 0; i < (rop->len); i++) {\n"
       ^^ string (if is_stack_ctyp ctyp then
