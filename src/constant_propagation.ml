@@ -684,7 +684,9 @@ let const_props defs ref_vars =
          let exp_typ = typ_of exp in
          let pat_typ = typ_of_pat pat in
          let goals = KidSet.diff (tyvars_of_typ pat_typ) (tyvars_of_typ exp_typ) in
-         let unifiers = Type_check.unify l env goals pat_typ exp_typ in
+         let unifiers =
+           try Type_check.unify l env goals pat_typ exp_typ
+           with _ -> KBindings.empty in
          let is_nexp (k,a) = match a with
            | A_aux (A_nexp n,_) -> Some (k,n)
            | _ -> None
