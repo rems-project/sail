@@ -316,10 +316,10 @@ let builtin_type_error ctx fn cvals =
   let args = Util.string_of_list ", " (fun cval -> string_of_ctyp (cval_ctyp cval)) cvals in
   function
   | Some ret_ctyp ->
-     Reporting.unreachable ctx.pragma_l __POS__
-       (Printf.sprintf "%s : (%s) -> %s" fn args (string_of_ctyp ret_ctyp))
+     raise (Reporting.err_todo ctx.pragma_l
+       (Printf.sprintf "%s : (%s) -> %s" fn args (string_of_ctyp ret_ctyp)))
   | None ->
-     Reporting.unreachable ctx.pragma_l __POS__ (Printf.sprintf "%s : (%s)" fn args)
+     raise (Reporting.err_todo ctx.pragma_l (Printf.sprintf "%s : (%s)" fn args))
 
 (* ***** Basic comparisons: lib/flow.sail ***** *)
 
@@ -642,7 +642,7 @@ let builtin_vector_subrange ctx vec i j ret_ctyp =
   | CT_fbits (n, _), CT_constant i, CT_constant j ->
      Extract (Big_int.to_int i, Big_int.to_int j, smt_cval ctx vec)
 
-  | _ -> failwith "Cannot compile vector subrange"
+  | _ -> builtin_type_error ctx "vector_subrange" [vec; i; j] (Some ret_ctyp)
 
 let builtin_vector_access ctx vec i ret_ctyp =
   match cval_ctyp vec, cval_ctyp i, ret_ctyp with
@@ -699,7 +699,7 @@ let builtin_signed ctx v ret_ctyp =
   | CT_fbits (n, _), CT_fint m when m > n ->
      SignExtend(m - n, smt_cval ctx v)
 
-  | ctyp, _ -> failwith (Printf.sprintf "Cannot compile signed : %s -> %s" (string_of_ctyp ctyp) (string_of_ctyp ret_ctyp))
+  | ctyp, _ -> builtin_type_error ctx "signed" [v] (Some ret_ctyp)
 
 let builtin_add_bits ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
@@ -768,7 +768,7 @@ let builtin_sail_truncate ctx v1 v2 ret_ctyp =
      assert (Big_int.to_int c = m && m < lbits_size ctx);
      Extract (Big_int.to_int c - 1, 0, Fn ("contents", [smt_cval ctx v1]))
 
-  | t1, t2, _ -> failwith (Printf.sprintf "Cannot compile sail_truncate (%s, %s) -> %s" (string_of_ctyp t1) (string_of_ctyp t2) (string_of_ctyp ret_ctyp))
+  | _ -> builtin_type_error ctx "sail_truncate" [v2; v2] (Some ret_ctyp)
 
 let builtin_sail_truncateLSB ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
@@ -776,7 +776,7 @@ let builtin_sail_truncateLSB ctx v1 v2 ret_ctyp =
      assert (Big_int.to_int c = m);
      Extract (n - 1, n - Big_int.to_int c, smt_cval ctx v1)
 
-  | _ -> failwith "Cannot compile sail_truncate"
+  | _ -> builtin_type_error ctx "sail_truncateLSB" [v1; v2] (Some ret_ctyp)
 
 let builtin_slice ctx v1 v2 v3 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, cval_ctyp v3, ret_ctyp with
@@ -813,7 +813,7 @@ let builtin_get_slice_int ctx v1 v2 v3 ret_ctyp =
      in
      Extract ((start + len) - 1, start, smt)
 
-  | _, _, _, _ -> builtin_type_error ctx "get_slice_int" [v1; v2; v3] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "get_slice_int" [v1; v2; v3] (Some ret_ctyp)
 
 let builtin_count_leading_zeros ctx v ret_ctyp =
   let ret_sz = int_size ctx ret_ctyp in
