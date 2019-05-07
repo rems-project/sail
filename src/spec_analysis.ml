@@ -948,6 +948,7 @@ let add_fun_infos_of_def env fun_infos = function
 let fun_infos_of_ast env (Defs defs) =
   let prelude, original_order, defset, graph = build_graph defs in
   let components = scc ~original_order:original_order graph in
-  (prelude @ List.concat (List.map (def_of_component graph defset) components))
-  |> List.fold_left (add_fun_infos_of_def env) []
+  let defs = prelude @ List.concat (List.map (def_of_component graph defset) components) in
+  let (Defs defs, env) = Type_check.check Type_check.initial_env (Defs defs) in
+  List.fold_left (add_fun_infos_of_def env) [] defs
   |> List.rev
