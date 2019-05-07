@@ -120,7 +120,7 @@ let kidset_bigunion = function
   | h::t -> List.fold_left KidSet.union h t
 
 (* TODO: deal with non-set constraints, intersections, etc somehow *)
-let extract_set_nc l var nc =
+let extract_set_nc env l var nc =
   let vars = Spec_analysis.equal_kids_ncs var [nc] in
   let rec aux_or (NC_aux (nc,l)) =
     match nc with
@@ -133,12 +133,13 @@ let extract_set_nc l var nc =
        | _, _ -> None)
     | _ -> None
   in
-  let rec aux (NC_aux (nc,l) as nc_full) =
+  (* Lazily expand constraints to keep close to the original form *)
+  let rec aux expanded (NC_aux (nc,l) as nc_full) =
     let re nc = NC_aux (nc,l) in
     match nc with
     | NC_set (id,is) when KidSet.mem id vars -> Some (is,re NC_true)
     | NC_and (nc1,nc2) ->
-       (match aux nc1, aux nc2 with
+       (match aux expanded nc1, aux expanded nc2 with
        | None, None -> None
        | None, Some (is,nc2') -> Some (is, re (NC_and (nc1,nc2')))
        | Some (is,nc1'), None -> Some (is, re (NC_and (nc1',nc2)))
@@ -148,8 +149,8 @@ let extract_set_nc l var nc =
        (match aux_or nc_full with
        | Some is -> Some (is, re NC_true)
        | None -> None)
-    | _ -> None
-  in match aux nc with
+    | _ -> if expanded then None else aux true (Env.expand_constraint_synonyms env nc_full)
+  in match aux false nc with
   | Some is -> is
   | None ->
      raise (Reporting.err_general l ("No set constraint for " ^ string_of_kid var ^
@@ -290,7 +291,7 @@ let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
        let find_insts k (insts,nc) =
          let inst,nc' =
            if KidSet.mem (kopt_kid k) vars then
-             let is,nc' = extract_set_nc l (kopt_kid k) nc in
+             let is,nc' = extract_set_nc env l (kopt_kid k) nc in
              Some is,nc'
            else None,nc
          in (k,inst)::insts,nc'
@@ -329,6 +330,7 @@ let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
   let variants = size_nvars_ty ty in
   match variants with
   | [] -> None
+  | [l,_] when List.for_all (function (_,None) -> true | _ -> false) l -> None
   | sample::_ ->
      if List.length variants > size_set_limit then
        cannot ql
@@ -341,9 +343,9 @@ let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
      in
      let name_seg = function
        | (_,None) -> ""
-       | (k,Some i) -> string_of_kid (kopt_kid k) ^ Big_int.to_string i
+       | (k,Some i) -> "#" ^ string_of_kid (kopt_kid k) ^ Big_int.to_string i
      in
-     let name l i = String.concat "_" (i::(List.map name_seg l)) in
+     let name l i = String.concat "" (i::(List.map name_seg l)) in
      Some (List.map (fun (l,ty) -> (l, wrap (name l),ty)) variants)
 
 let reduce_nexp subst ne =
@@ -391,7 +393,16 @@ let refine_constructor refinements l env id args =
        match Type_check.destruct_exist (Type_check.Env.expand_synonyms env constr_ty) with
        | None -> None
        | Some (kopts,nc,constr_ty) ->
-          let bindings = Type_check.unify l env (tyvars_of_typ constr_ty) constr_ty arg_ty  in
+          (* Remove existentials in argument types to prevent unification failures *)
+          let unwrap (Typ_aux (t,_) as typ) = match t with
+            | Typ_exist (_,_,typ) -> typ
+            | _ -> typ
+          in
+          let arg_ty = match arg_ty with
+            | Typ_aux (Typ_tup ts,annot) -> Typ_aux (Typ_tup (List.map unwrap ts),annot)
+            | _ -> arg_ty
+          in
+          let bindings = Type_check.unify l env (tyvars_of_typ constr_ty) constr_ty arg_ty in
           let find_kopt kopt = try Some (KBindings.find (kopt_kid kopt) bindings) with Not_found -> None in
           let bindings = List.map find_kopt kopts in
           let matches_refinement (mapping,_,_) =
@@ -405,8 +416,12 @@ let refine_constructor refinements l env id args =
           match List.find matches_refinement irefinements with
           | (_,new_id,_) -> Some (E_app (new_id,args))
           | exception Not_found ->
+             let print_map kopt = function
+               | None -> string_of_kid (kopt_kid kopt) ^ " -> _"
+               | Some ta -> string_of_kid (kopt_kid kopt) ^ " -> " ^ string_of_typ_arg ta
+             in
              (Reporting.print_err l "Monomorphisation"
-                ("Unable to refine constructor " ^ string_of_id id);
+                ("Unable to refine constructor " ^ string_of_id id ^ " using mapping " ^ String.concat "," (List.map2 print_map kopts bindings));
               None)
     end
     | _ -> None
@@ -715,7 +730,7 @@ let split_defs all_errors splits env defs =
          | Nexp_var kvar ->
            let ncs = Env.get_constraints env in
            let nc = List.fold_left nc_and nc_true ncs in
-           (match extract_set_nc l kvar nc with
+           (match extract_set_nc env l kvar nc with
            | (is,_) -> List.map (mk_lit (Some kvar)) is
            | exception Reporting.Fatal_error (Reporting.Err_general (_,msg)) -> cannot msg)
          | _ -> cannot ("unsupport atom nexp " ^ string_of_nexp nexp)
@@ -886,48 +901,50 @@ let split_defs all_errors splits env defs =
       | vars -> split_pat vars pat
     in
     let map_pat (P_aux (p,(l,tannot)) as pat) =
-      match map_pat_by_loc pat with
-      | Some l -> VarSplit l
-      | None ->
-         match p with
-         | P_app (id,args) ->
-            begin
-              match List.find (fun (id',_) -> Id.compare id id' = 0) refinements with
-              | (_,variants) ->
-(* TODO: what changes to the pattern and what substitutions do we need in general?
-                 let kid,kid_annot =
-                   match args with
-                   | [P_aux (P_var (_, TP_aux (TP_var kid, _)),ann)] -> kid,ann
-                   | _ -> 
-                      raise (Reporting.err_general l
-                               ("Pattern match not currently supported by monomorphisation: "
-                               ^ string_of_pat pat))
+      let try_by_location () =
+        match map_pat_by_loc pat with
+        | Some l -> VarSplit l
+        | None -> NoSplit
+      in
+      match p with
+      | P_app (id,args) ->
+         begin
+            match List.find (fun (id',_) -> Id.compare id id' = 0) refinements with
+            | (_,variants) ->
+(* TODO: at changes to the pattern and what substitutions do we need in general?
+               let kid,kid_annot =
+                 match args with
+                 | [P_aux (P_var (_, TP_aux (TP_var kid, _)),ann)] -> kid,ann
+                 | _ -> 
+                    raise (Reporting.err_general l
+                             ("Pattern match not currently supported by monomorphisation: "
+                             ^ string_of_pat pat))
+               in
+               let map_inst (insts,id',_) =
+                 let insts =
+                   match insts with [(v,Some i)] -> [(kid,Nexp_aux (Nexp_constant i, Generated l))]
+                   | _ -> assert false
                  in
-                 let map_inst (insts,id',_) =
-                   let insts =
-                     match insts with [(v,Some i)] -> [(kid,Nexp_aux (Nexp_constant i, Generated l))]
-                     | _ -> assert false
-                   in
 (*
-                   let insts,_ = split_insts insts in
-                   let insts = List.map (fun (v,i) ->
-                     (??,
-                      Nexp_aux (Nexp_constant i,Generated l)))
-                     insts in
-  P_aux (P_app (id',args),(Generated l,tannot)),
+                 let insts,_ = split_insts insts in
+                 let insts = List.map (fun (v,i) ->
+                   (??,
+                    Nexp_aux (Nexp_constant i,Generated l)))
+                   insts in
+  P_aux (app (id',args),(Generated l,tannot)),
 *)
-                   P_aux (P_app (id',[P_aux (P_id (id_of_kid kid),kid_annot)]),(Generated l,tannot)),
-                   kbindings_from_list insts
-                 in
+                 P_aux (P_app (id',[P_aux (P_id (id_of_kid kid),kid_annot)]),(Generated l,tannot)),
+                 kbindings_from_list insts
+               in
 *)
-                 let map_inst (insts,id',_) =
-                   P_aux (P_app (id',args),(Generated l,tannot)),
-                   KBindings.empty
-                 in
-                 ConstrSplit (List.map map_inst variants)
-              | exception Not_found -> NoSplit
-            end
-         | _ -> NoSplit
+               let map_inst (insts,id',_) =
+                 P_aux (P_app (id',args),(Generated l,tannot)),
+                 KBindings.empty
+               in
+               ConstrSplit (List.map map_inst variants)
+            | exception Not_found -> try_by_location ()
+          end
+       | _ -> try_by_location ()
     in
 
     let check_single_pat (P_aux (_,(l,annot)) as p) =
@@ -1741,7 +1758,8 @@ type env = {
   top_kids : kid list; (* Int kids bound by the function type *)
   var_deps : dependencies Bindings.t;
   kid_deps : dependencies KBindings.t;
-  referenced_vars : IdSet.t
+  referenced_vars : IdSet.t;
+  globals : bool Bindings.t (* is_value or not *)
 }
 
 let rec split3 = function
@@ -1798,6 +1816,19 @@ let update_env env deps pat typ_env_pre typ_env_post =
   let bound = Spec_analysis.bindings_from_pat pat in
   let var_deps = List.fold_left (fun ds v -> Bindings.add v deps ds) env.var_deps bound in
   update_env_new_kids { env with var_deps = var_deps } deps typ_env_pre typ_env_post
+
+(* A function argument may end up with fresh type variables due to coercing
+   unification (which will eventually be existentially bound in the type of
+   the function).  Here we record the dependencies for these variables. *)
+
+let add_arg_only_kids env typ_env typ deps =
+  let all_vars = tyvars_of_typ typ in
+  let check_kid kid kid_deps =
+    if KBindings.mem kid kid_deps then kid_deps
+    else KBindings.add kid deps kid_deps
+  in
+  let kid_deps = KidSet.fold check_kid all_vars env.kid_deps in
+  { env with kid_deps }
 
 let assigned_vars_exps es =
   List.fold_left (fun vs exp -> IdSet.union vs (Spec_analysis.assigned_vars exp))
@@ -1983,39 +2014,40 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
      follow the type checker in processing them in-order to detect the automatic
      unpacking of existentials.  When we spot a new type variable (using
      update_env_new_kids) we set them to depend on the previous argument. *)
-  let non_det_args es =
+  let non_det_args es typs =
     let assigns = remove_assigns es " assigned in non-deterministic expressions" in
-    let rec aux prev_typ_env prev_deps env = function
-      | [] -> [], empty
-      | h::t ->
+    let rec aux env = function
+      | [], _ -> [], empty, env
+      | (E_aux (_,ann) as h)::t, typ::typs ->
          let typ_env = env_of h in
-         let env = update_env_new_kids env prev_deps prev_typ_env typ_env in
          let new_deps, _, new_r = analyse_exp fn_id env assigns h in
-         let t_deps, t_r = aux typ_env new_deps env t in
-         new_deps::t_deps, merge new_r t_r
+         let env = add_arg_only_kids env typ_env typ new_deps in
+         let t_deps, t_r, t_env = aux env (t,typs) in
+         new_deps::t_deps, merge new_r t_r, t_env
     in
-    let deps, r = match es with
-      | [] -> [], empty
-      | h::t ->
-         let new_deps, _, new_r = analyse_exp fn_id env assigns h in
-         let t_deps, t_r = aux (env_of h) new_deps env t in
-         new_deps::t_deps, merge new_r t_r
-    in
-    (deps, assigns, r)
+    let deps, r, env = aux env (es,typs) in
+    (deps, assigns, r, env)
   in
   let merge_deps deps = List.fold_left dmerge dempty deps in
   let deps, assigns, r =
     match e with
     | E_block es ->
-       let rec aux assigns = function
+       let rec aux env assigns = function
          | [] -> (dempty, assigns, empty)
          | [e] -> analyse_exp fn_id env assigns e
+         (* There's also a lone assignment case below where no env update is needed *)
+         | E_aux (E_assign (lexp,e1),ann)::e2::es ->
+            let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
+            let assigns,r2 = analyse_lexp fn_id env assigns d1 lexp in
+            let env = update_env_new_kids env d1 (env_of_annot ann) (env_of e2) in
+            let d3, assigns, r3 = aux env assigns (e2::es) in
+            (d3, assigns, merge (merge r1 r2) r3)
          | e::es ->
             let _, assigns, r' = analyse_exp fn_id env assigns e in
-            let d, assigns, r = aux assigns es in
+            let d, assigns, r = aux env assigns es in
             d, assigns, merge r r'
        in
-       aux assigns es
+       aux env assigns es
     | E_nondet es ->
        let _, assigns, r = non_det es in
        (dempty, assigns, r)
@@ -2033,27 +2065,35 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
                | _ ->
                   if IdSet.mem id env.referenced_vars then
                     Unknown (l, string_of_id id ^ " may be modified via a reference"),assigns,empty
-                  else
-                    Unknown (l, string_of_id id ^ " is not in the environment"),assigns,empty
+                  else match Bindings.find id env.globals with
+                       | true -> dempty,assigns,empty (* value *)
+                       | false -> Unknown (l, string_of_id id ^ " is a global but not a value"),assigns,empty
+                       | exception Not_found ->
+                          Unknown (l, string_of_id id ^ " is not in the environment"),assigns,empty
        end
     | E_lit _ -> (dempty,assigns,empty)
     | E_cast (_,e) -> analyse_exp fn_id env assigns e
     | E_app (id,args) ->
-       let deps, assigns, r = non_det_args args in
        let typ_env = env_of_annot (l,annot) in
-       let (_,fn_typ) = Env.get_val_spec id typ_env in
-       let fn_effect = match fn_typ with
-         | Typ_aux (Typ_fn (_,_,eff),_) -> eff
-         | _ -> Effect_aux (Effect_set [],Unknown)
+       let (_,fn_typ) = Env.get_val_spec_orig id typ_env in
+       let kid_inst = instantiation_of exp in
+       let kid_inst = KBindings.fold (fun kid -> KBindings.add (orig_kid kid)) kid_inst KBindings.empty in
+       let fn_typ = subst_unifiers kid_inst fn_typ in
+       let arg_typs, fn_effect = match fn_typ with
+         | Typ_aux (Typ_fn (args,_,eff),_) -> args,eff
+         | _ -> [], Effect_aux (Effect_set [],Unknown)
        in
+       (* We have to use the types from the val_spec here so that we can track
+          any type variables that are generated by the coercing unification that
+          the type checker applies after inferring the type of an argument, and
+          that only appear in the unifiers. *)
+       let deps, assigns, r, env = non_det_args args arg_typs in
        let eff_dep = match fn_effect with
          | Effect_aux (Effect_set ([] | [BE_aux (BE_undef,_)]),_) -> dempty
          | _ -> Unknown (l, "Effects from function application")
        in
-       let kid_inst = instantiation_of exp in
        let kid_inst = KBindings.map (simplify_size_typ_arg env typ_env) kid_inst in
        (* Change kids in instantiation to the canonical ones from the type signature *)
-       let kid_inst = KBindings.fold (fun kid -> KBindings.add (orig_kid kid)) kid_inst KBindings.empty in
        let kid_deps = KBindings.map (deps_of_typ_arg l fn_id env deps) kid_inst in
        let rdep,r' =
          if Id.compare fn_id id == 0 then
@@ -2142,6 +2182,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        let env = update_env env d1 pat (env_of_annot (l,annot)) (env_of e2) in
        let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
        (d2,assigns,merge r1 r2)
+    (* There's a more general assignment case above to update env inside a block. *)
     | E_assign (lexp,e1) ->
        let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
        let assigns,r2 = analyse_lexp fn_id env assigns d1 lexp in
@@ -2283,7 +2324,7 @@ let rec translate_loc l =
   | Generated l -> translate_loc l
   | _ -> None
 
-let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
+let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions globals =
   let pats = 
     match pat with
     | P_aux (P_tup pats,_) -> pats
@@ -2413,7 +2454,7 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions =
   in
   let kid_deps = KBindings.merge merge_kid_deps_eqns kid_deps eqn_kid_deps in
   let referenced_vars = Constant_propagation.referenced_vars body in
-  { top_kids; var_deps; kid_deps; referenced_vars }
+  { top_kids; var_deps; kid_deps; referenced_vars; globals }
 
 (* When there's more than one pick the first *)
 let merge_set_asserts _ x y =
@@ -2544,13 +2585,13 @@ let print_result r =
                                   (Failures.bindings r.failures)))) in
   ()
 
-let analyse_funcl debug tenv (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
+let analyse_funcl debug tenv constants (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
   let _ = if debug > 2 then print_endline (string_of_id id) else () in
   let pat,guard,body,_ = destruct_pexp pexp in
   let (tq,_) = Env.get_val_spec id tenv in
   let set_assertions = find_set_assertions body in
   let _ = if debug > 2 then print_set_assertions set_assertions in
-  let aenv = initial_env id l tq pat body set_assertions in
+  let aenv = initial_env id l tq pat body set_assertions constants in
   let _,_,r = analyse_exp id aenv Bindings.empty body in
   let r = match guard with
     | None -> r
@@ -2567,11 +2608,14 @@ let analyse_funcl debug tenv (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
   let _ = if debug > 2 then print_result r else ()
   in r
 
-let analyse_def debug env = function
+let analyse_def debug env globals = function
   | DEF_fundef (FD_aux (FD_function (_,_,_,funcls),_)) ->
-     List.fold_left (fun r f -> merge r (analyse_funcl debug env f)) empty funcls
+     globals, List.fold_left (fun r f -> merge r (analyse_funcl debug env globals f)) empty funcls
 
-  | _ -> empty
+  | DEF_val (LB_aux (LB_val (P_aux ((P_id id | P_typ (_,P_aux (P_id id,_))),_), exp),_)) ->
+     Bindings.add id (Constant_fold.is_constant exp) globals, empty
+
+  | _ -> globals, empty
 
 let detail_to_split = function
   | Total -> None
@@ -2585,7 +2629,11 @@ let argset_to_list splits =
   List.map argelt l
 
 let analyse_defs debug env (Defs defs) =
-  let r = List.fold_left (fun r d -> merge r (analyse_def debug env d)) empty defs in
+  let def (globals,r) d =
+    let globals,r' = analyse_def debug env globals d in
+    globals, merge r r'
+  in
+  let _,r = List.fold_left def (Bindings.empty,empty) defs in
 
   (* Resolve the interprocedural dependencies *)
 

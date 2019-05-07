@@ -4,11 +4,7 @@ Type error:
   [91m |[0m                                                [91m^---------------^[0m
   [91m |[0m Tried performing type coercion from (int(33), range(0, (2 ^ 5 - 1))) to {('d : Int) ('n : Int), (datasize('d) & (0 <= 'n & ('n + 1) <= 'd)). (int('d), int('n))} on (33, unsigned(a))
   [91m |[0m Coercion failed because:
-  [91m |[0m (int(33), int('ex157#)) is not a subtype of (int('ex152#), int('ex153#))
-  [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
-  [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
-  [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
-  [91m |[0m   [93m |[0m 'ex152# bound here
+  [91m |[0m (int(33), int('ex158#)) is not a subtype of (int('ex153#), int('ex154#))
   [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
   [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
@@ -16,5 +12,9 @@ Type error:
   [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
   [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
-  [91m |[0m   [93m |[0m 'ex157# bound here
+  [91m |[0m   [93m |[0m 'ex154# bound here
+  [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
+  [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
+  [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
+  [91m |[0m   [93m |[0m 'ex158# bound here
   [91m |[0m 

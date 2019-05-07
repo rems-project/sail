@@ -4,5 +4,5 @@ Type error:
  [91m |[0m                  [91m^[0m
  [91m |[0m Tried performing type coercion from int(3) to {('q : Int), 'q in {0, 1}. int((2 * 'q))} on 3
  [91m |[0m Coercion failed because:
- [91m |[0m Constraint 3 == (2 * 'ex1#) is not satisfiable
+ [91m |[0m Constraint 3 == (2 * 'ex2#) is not satisfiable
  [91m |[0m 

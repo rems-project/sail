@@ -2786,6 +2786,25 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
          end
      in
      try_overload ([], Env.get_overloads f env)
+  | E_app (f, [x; y]), _ when string_of_id f = "and_bool" || string_of_id f = "or_bool" ->
+     (* We have to ensure that the type of y in (x || y) and (x && y)
+        is non-empty, otherwise it could force the entire type of the
+        expression to become empty even when unevaluted due to
+        short-circuiting. *)
+     begin match destruct_exist (typ_of (irule infer_exp env y)) with
+     | None | Some (_, NC_aux (NC_true, _), _) ->
+        let inferred_exp = infer_funapp l env f [x; y] (Some typ) in
+        type_coercion env inferred_exp typ
+     | Some _ ->
+        let inferred_exp = infer_funapp l env f [x; mk_exp (E_cast (bool_typ, y))] (Some typ) in
+        type_coercion env inferred_exp typ
+     | exception Type_error _ ->
+        let inferred_exp = infer_funapp l env f [x; mk_exp (E_cast (bool_typ, y))] (Some typ) in
+        type_coercion env inferred_exp typ
+     end
+  | E_app (f, xs), _ ->
+     let inferred_exp = infer_funapp l env f xs (Some typ) in
+     type_coercion env inferred_exp typ
   | E_return exp, _ ->
      let checked_exp = match Env.get_ret_typ env with
        | Some ret_typ -> crule check_exp env exp ret_typ
@@ -2795,9 +2814,6 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_tuple exps, Typ_tup typs when List.length exps = List.length typs ->
      let checked_exps = List.map2 (fun exp typ -> crule check_exp env exp typ) exps typs in
      annot_exp (E_tuple checked_exps) typ
-  | E_app (f, xs), _ ->
-     let inferred_exp = infer_funapp l env f xs (Some typ) in
-     type_coercion env inferred_exp typ
   | E_if (cond, then_branch, else_branch), _ ->
      let cond' = try irule infer_exp env cond with Type_error _ -> crule check_exp env cond bool_typ in
      begin match destruct_exist (typ_of cond') with
@@ -3163,7 +3179,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
      
   | P_app (f, pats) when Env.is_union_constructor f env ->
      (* Treat Ctor(x, y) as Ctor((x, y)) *)
-     bind_pat env (mk_pat (P_app (f, [mk_pat (P_tup pats)]))) typ
+     bind_pat env (P_aux (P_app (f, [mk_pat (P_tup pats)]),(l,()))) typ
 
   | P_app (f, pats) when Env.is_mapping f env ->
      begin
@@ -3686,6 +3702,12 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
          end
      in
      try_overload ([], Env.get_overloads f env)
+  | E_app (f, [x; y]) when string_of_id f = "and_bool" || string_of_id f = "or_bool" ->
+     begin match destruct_exist (typ_of (irule infer_exp env y)) with
+     | None | Some (_, NC_aux (NC_true, _), _) -> infer_funapp l env f [x; y] None
+     | Some _ -> infer_funapp l env f [x; mk_exp (E_cast (bool_typ, y))] None
+     | exception Type_error _ -> infer_funapp l env f [x; mk_exp (E_cast (bool_typ, y))] None
+     end
   | E_app (f, xs) -> infer_funapp l env f xs None
   | E_loop (loop_type, measure, cond, body) ->
      let checked_cond = crule check_exp env cond bool_typ in

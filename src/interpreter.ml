@@ -949,9 +949,9 @@ let initial_gstate primops ast env =
     typecheck_env = env;
   }
 
-let rec initialize_registers gstate =
+let rec initialize_registers allow_registers gstate =
   let process_def = function
-    | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), annot)) ->
+    | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), annot)) when allow_registers ->
        begin
          let env = Type_check.env_of_annot annot in
          let typ = Type_check.Env.expand_synonyms env typ in
@@ -959,7 +959,7 @@ let rec initialize_registers gstate =
          let exp = Type_check.check_exp env exp typ in
          { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
        end
-    | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
+    | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) when allow_registers ->
        { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
     | DEF_fundef fdef ->
        { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
@@ -967,10 +967,16 @@ let rec initialize_registers gstate =
   in
   function
   | Defs (def :: defs) ->
-     initialize_registers (process_def def) (Defs defs)
+     initialize_registers allow_registers (process_def def) (Defs defs)
   | Defs [] -> gstate
 
-let initial_state ast env primops = initial_lstate, initialize_registers (initial_gstate primops ast env) ast
+let initial_state ?(registers=true) ast env primops =
+  let gstate = initial_gstate primops ast env in
+  let gstate =
+    { (initialize_registers registers gstate ast)
+      with allow_registers = registers }
+  in
+  initial_lstate, gstate
 
 type value_result =
   | Value_success of value
