@@ -464,10 +464,10 @@ let handle_input' input =
           | Effect_aux (Effect_set effs, _) ->
              `List (List.map (fun e -> `String (string_of_base_effect e)) effs)
         in
-        let json_of_fun_info (id, fi) : (string * json) =
-          (string_of_id id,
-           `Assoc
-             [("effects", json_of_effect fi.effect);
+        let json_of_fun_info (id, fi) : json =
+          (`Assoc
+             [("name", `String (string_of_id id));
+              ("effects", json_of_effect fi.effect);
               ("calls", `List (List.map json_of_id (IdSet.elements fi.calls)));
               ("regs_read", `List (List.map json_of_id (IdSet.elements fi.regs_read)));
               ("regs_written", `List (List.map json_of_id (IdSet.elements fi.regs_written)));
@@ -478,7 +478,7 @@ let handle_input' input =
         let json : json =
           `Assoc
             [("version", `Int 0);
-             ("fun_infos", `Assoc (List.map json_of_fun_info fun_infos))]
+             ("fun_infos", `List (List.map json_of_fun_info fun_infos))]
         in
         let chan = open_out arg in
         to_channel chan json;
