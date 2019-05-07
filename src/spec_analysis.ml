@@ -941,19 +941,13 @@ let add_fun_infos_of_def env fun_infos = function
        | _ -> no_effect
      in
      (id, { effect = effect; calls = calls; regs_read = regs_read; regs_written = regs_written; trans_regs_read = trans_regs_read; trans_regs_written = trans_regs_written }) :: fun_infos
+  | DEF_internal_mutrec _ ->
+     raise (Reporting.err_todo Parse_ast.Unknown "Analysis of mutually recursive functions not implemented")
   | _ -> fun_infos
 
 let fun_infos_of_ast env (Defs defs) =
-  List.fold_left (add_fun_infos_of_def env) [] defs |> List.rev
-
-(*let json_of_fun_info fi : Yojson.Basic.json =
-  let calls =
-    IdSet.elements fi.calls
-    |> List.map (fun id -> `String (string_of_id id))
-  in
-  `Assoc [("calls", `List calls)]
-
-let json_of_fun_infos fis : Yojson.Basic.json =
-  `Assoc (List.map (fun (id, fi) -> (string_of_id id, json_of_fun_info fi)) fis)
-
-let json_of_ast (Defs defs) = fun_infos_of_defs defs |> json_of_fun_infos*)
+  let prelude, original_order, defset, graph = build_graph defs in
+  let components = scc ~original_order:original_order graph in
+  (prelude @ List.concat (List.map (def_of_component graph defset) components))
+  |> List.fold_left (add_fun_infos_of_def env) []
+  |> List.rev
