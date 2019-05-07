@@ -86,7 +86,7 @@ let optimize_primops = ref false
 let optimize_hoist_allocations = ref false
 let optimize_struct_updates = ref false
 let optimize_alias = ref false
-let optimize_int128 = ref false                
+let optimize_int128 = ref false
 
 let c_debug str =
   if !c_verbosity > 0 then prerr_endline (Lazy.force str) else ()
@@ -521,26 +521,6 @@ let analyze_primop' ctx id args typ =
      | _, _ ->
         no_change
      end
-
-            (*
-  | "undefined_vector", [AV_C_fragment (len, _, _); _] ->
-     begin match destruct_vector ctx.tc_env typ with
-     | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
-          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
-       AE_val (AV_C_fragment (F_lit (V_bit Sail2_values.B0), typ, ctyp_of_typ ctx typ))
-     | _ -> no_change
-     end
-
-  | "neg_int", [AV_C_fragment (frag, _, _)] ->
-     AE_val (AV_C_fragment (F_op (v_int 0, "-", frag), typ, CT_fint 64))
-
-  | "vector_update_subrange", [AV_C_fragment (xs, _, CT_fbits (n, true));
-                               AV_C_fragment (hi, _, CT_fint 64);
-                               AV_C_fragment (lo, _, CT_fint 64);
-                               AV_C_fragment (ys, _, CT_fbits (m, true))] ->
-     AE_val (AV_C_fragment (F_call ("fast_update_subrange", [xs; hi; lo; ys]), typ, CT_fbits (n, true)))
-
-        *)
 
   | "undefined_bit", _ ->
      AE_val (AV_cval (V_lit (VL_bit Sail2_values.B0, CT_bit), typ))

@@ -50,7 +50,7 @@
 
 open Ast
 open Ast_util
-open Smtlib
+open Parser_combinators
 
 let find_properties (Defs defs) =
   let rec find_prop acc = function

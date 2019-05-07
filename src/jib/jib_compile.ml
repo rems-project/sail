@@ -435,7 +435,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
   if not ctx.specialize_calls && Env.is_extern id ctx.tc_env "c" then
     let extern = Env.get_extern id ctx.tc_env "c" in
     begin match extern, List.map cval_ctyp args, clexp_ctyp clexp with
-    | "slice", [CT_fbits _; _; _], CT_fbits (n, _) ->
+    | "slice", [CT_fbits _; CT_lint; _], CT_fbits (n, _) ->
        let start = ngensym () in
        [iinit (CT_fint 64) start (List.nth args 1);
         icopy l clexp (V_call (Slice n, [List.nth args 0; V_id (start, CT_fint 64)]))]

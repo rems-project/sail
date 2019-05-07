@@ -672,7 +672,6 @@ let ssa instrs =
   place_phi_functions cfg df;
   rename_variables cfg start children;
   place_pi_functions cfg start idom children;
-  (* remove_guard_nodes (function CF_guard _ -> true | CF_label _ -> true | _ -> false) cfg; *)
   start, cfg
 
 (* Debugging utilities for outputing Graphviz files. *)

@@ -267,45 +267,7 @@ let rec string_of_sexpr = function
   | List sexprs -> "(" ^ Util.string_of_list " " string_of_sexpr sexprs ^ ")"
   | Atom str -> str
 
-type 'a parse_result =
-  | Ok of 'a * Str.split_result list
-  | Fail
-
-type 'a parser = Str.split_result list -> 'a parse_result
-
-let (>>=) (m : 'a parser) (f : 'a -> 'b parser) (toks : Str.split_result list) =
-  match m toks with
-  | Ok (r, toks) -> f r toks
-  | Fail -> Fail
-
-let pmap f m toks =
-  match m toks with
-  | Ok (r, toks) -> Ok (f r, toks)
-  | Fail -> Fail
-
-let token f = function
-  | tok :: toks ->
-     begin match f tok with
-     | Some x -> Ok (x, toks)
-     | None -> Fail
-     end
-  | [] -> Fail
-
-let preturn x toks = Ok (x, toks)
-
-let rec plist m toks =
-  match m toks with
-  | Ok (x, toks) ->
-     begin match plist m toks with
-     | Ok (xs, toks) -> Ok (x :: xs, toks)
-     | Fail -> Fail
-     end
-  | Fail -> Ok ([], toks)
-
-let pchoose m n toks =
-  match m toks with
-  | Fail -> n toks
-  | Ok (x, toks) -> Ok (x, toks)
+open Parser_combinators
 
 let lparen = token (function Str.Delim "(" -> Some () | _ -> None)
 let rparen = token (function Str.Delim ")" -> Some () | _ -> None)
@@ -321,19 +283,6 @@ let rec sexp toks =
        preturn (List xs))
   in
   parse toks
-
-let parse p delim_regexp input =
-  let delim = Str.regexp delim_regexp in
-  let tokens = Str.full_split delim input in
-  let non_whitespace = function
-    | Str.Delim d when String.trim d = "" -> false
-    | _ -> true
-  in
-  let tokens = List.filter non_whitespace tokens in
-  match p tokens with
-  | Ok (result, []) -> Some result
-  | Ok (result, _) -> None
-  | Fail -> None
 
 let parse_sexps input =
   let delim = Str.regexp "[ \n\t]+\\|(\\|)" in
