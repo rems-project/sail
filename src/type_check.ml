@@ -3163,7 +3163,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
      
   | P_app (f, pats) when Env.is_union_constructor f env ->
      (* Treat Ctor(x, y) as Ctor((x, y)) *)
-     bind_pat env (mk_pat (P_app (f, [mk_pat (P_tup pats)]))) typ
+     bind_pat env (P_aux (P_app (f, [mk_pat (P_tup pats)]),(l,()))) typ
 
   | P_app (f, pats) when Env.is_mapping f env ->
      begin
