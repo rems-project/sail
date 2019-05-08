@@ -125,7 +125,7 @@ let reachable roots graph =
   IntSet.iter reachable' roots; !visited
 
 exception Not_a_DAG of int;;
-  
+
 let topsort graph =
   let marked = ref IntSet.empty in
   let temp_marked = ref IntSet.empty in
@@ -193,6 +193,7 @@ type cf_node =
   | CF_guard of cval
   | CF_start of ctyp NameMap.t
 
+(* For now we only generate CFGs for flat lists of instructions *)
 let control_flow_graph instrs =
   let module StringMap = Map.Make(String) in
   let labels = ref StringMap.empty in
@@ -215,7 +216,7 @@ let control_flow_graph instrs =
   let rec cfg preds instrs =
     let before, after = instr_split_at cf_split instrs in
     let last = match after with
-      | I_aux ((I_label _ | I_goto _ | I_jump _), _) :: _ -> []
+      | I_aux (I_label _, _) :: _ -> []
       | instr :: _ -> [instr]
       | _ -> []
     in
@@ -227,11 +228,6 @@ let control_flow_graph instrs =
          [n]
     in
     match after with
-    | I_aux (I_if (cond, then_instrs, else_instrs, _), _) :: after ->
-       let t = cfg preds then_instrs in
-       let e = cfg preds else_instrs in
-       cfg (t @ e) after
-
     | I_aux ((I_end _ | I_match_failure | I_undefined _), _) :: after ->
        cfg [] after
 
@@ -249,11 +245,8 @@ let control_flow_graph instrs =
     | I_aux (I_label label, _) :: after ->
        cfg (StringMap.find label !labels :: preds) after
 
-    | I_aux (I_block instrs, _) :: after ->
-       let m = cfg preds instrs in
-       cfg m after
-
-    | _ :: after -> assert false
+    | I_aux (_, (_, l)) :: after ->
+       Reporting.unreachable l __POS__ "Could not add instruction to control-flow graph"
 
     | [] -> preds
   in

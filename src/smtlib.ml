@@ -54,6 +54,8 @@ open Ast_util
 type smt_typ =
   | Bitvec of int
   | Bool
+  | String
+  | Real
   | Datatype of string * (string * (string * smt_typ) list) list
   | Tuple of smt_typ list
   | Array of smt_typ * smt_typ
@@ -89,6 +91,8 @@ type smt_exp =
   | Bool_lit of bool
   | Hex of string
   | Bin of string
+  | Real_lit of string
+  | String_lit of string
   | Var of string
   | Fn of string * smt_exp list
   | Ite of smt_exp * smt_exp * smt_exp
@@ -145,7 +149,7 @@ let rec simp_smt_exp vars = function
      | Some exp -> simp_smt_exp vars exp
      | None -> Var v
      end
-  | (Hex _ | Bin _ | Bool_lit _ as exp) -> exp
+  | (Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ as exp) -> exp
   | Fn (f, exps) ->
      let exps = List.map (simp_smt_exp vars) exps in
      simp_fn (Fn (f, exps))
@@ -184,6 +188,8 @@ let rec pp_smt_exp =
   let open PPrint in
   function
   | Bool_lit b -> string (string_of_bool b)
+  | Real_lit str -> string str
+  | String_lit str -> string ("\"" ^ str ^ "\"")
   | Hex str -> string ("#x" ^ str)
   | Bin str -> string ("#b" ^ str)
   | Var str -> string str
@@ -201,6 +207,8 @@ let rec pp_smt_typ =
   let open PPrint in
   function
   | Bool -> string "Bool"
+  | String -> string "String"
+  | Real -> string "Real"
   | Bitvec n -> string (Printf.sprintf "(_ BitVec %d)" n)
   | Datatype (name, _) -> string name
   | Tuple tys -> pp_sfun ("Tup" ^ string_of_int (List.length tys)) (List.map pp_smt_typ tys)

@@ -92,6 +92,9 @@ type ctx = {
        the global path conditional of the containing block in the
        control flow graph *)
     pathcond : smt_exp;
+    (* Set if we need to use strings *)
+    use_string : bool ref;
+    use_real : bool ref
   }
 
 (* These give the default bounds for various SMT types, stored in the
@@ -114,6 +117,8 @@ let initial_ctx () = {
     ast = Defs [];
     events = ref EventMap.empty;
     pathcond = Bool_lit true;
+    use_string = ref false;
+    use_real = ref false;
   }
 
 let event_stack ctx ev =
@@ -162,7 +167,12 @@ let rec smt_ctyp ctx = function
      ctx.tuple_sizes := IntSet.add (List.length ctyps) !(ctx.tuple_sizes);
      Tuple (List.map (smt_ctyp ctx) ctyps)
   | CT_vector (_, ctyp) -> Array (Bitvec !vector_index, smt_ctyp ctx ctyp)
-  | CT_string -> Bitvec 64
+  | CT_string ->
+     ctx.use_string := true;
+     String
+  | CT_real ->
+     ctx.use_real := true;
+     Real
   | CT_ref ctyp ->
      begin match CTMap.find_opt ctyp ctx.register_map with
      | Some regs -> Bitvec (required_width (Big_int.of_int (List.length regs)))
@@ -231,8 +241,16 @@ let smt_value ctx vl ctyp =
   | VL_bit Sail2_values.B0, CT_bit -> Bin "0"
   | VL_bit Sail2_values.B1, CT_bit -> Bin "1"
   | VL_unit, _ -> Var "unit"
-  | VL_string _, _ -> Var "unit" (* FIXME: String support *)
-  | vl, _ -> failwith ("Cannot translate literal to SMT " ^ string_of_value vl)
+  | VL_string str, _ ->
+     ctx.use_string := true;
+     String_lit (String.escaped str)
+  | VL_real str, _ ->
+     ctx.use_real := true;
+     if str.[0] = '-' then
+       Fn ("-", [Real_lit (String.sub str 1 (String.length str - 1))])
+     else
+       Real_lit str
+  | vl, _ -> failwith ("Cannot translate literal to SMT: " ^ string_of_value vl)
 
 let zencode_ctor ctor_id unifiers =
   match unifiers with
@@ -883,9 +901,18 @@ let builtin_compare_bits fn ctx v1 v2 ret_ctyp =
 
   | _ -> builtin_type_error ctx fn [v1; v2] (Some ret_ctyp)
 
+(* ***** Real number operations: lib/real.sail ***** *)
+
+let builtin_sqrt_real ctx root v =
+  ctx.use_real := true;
+  let smt = smt_cval ctx v in
+  [Declare_const (root, Real);
+   Assert (Fn ("and", [Fn ("=", [smt; Fn ("*", [Var root; Var root])]);
+                       Fn (">=", [Var root; Real_lit "0.0"])]))]
+
 let smt_builtin ctx name args ret_ctyp =
   match name, args, ret_ctyp with
-  | "eq_bits", [v1; v2], _ -> Fn ("=", [smt_cval ctx v1; smt_cval ctx v2])
+  | "eq_bits", [v1; v2], CT_bool -> Fn ("=", [smt_cval ctx v1; smt_cval ctx v2])
   | "eq_anything", [v1; v2], CT_bool -> Fn ("=", [smt_cval ctx v1; smt_cval ctx v2])
 
   (* lib/flow.sail *)
@@ -953,6 +980,23 @@ let smt_builtin ctx name args ret_ctyp =
   | "slice", [v1; v2; v3], ret_ctyp -> builtin_slice ctx v1 v2 v3 ret_ctyp
   | "get_slice_int", [v1; v2; v3], ret_ctyp -> builtin_get_slice_int ctx v1 v2 v3 ret_ctyp
   | "set_slice", [v1; v2; v3; v4; v5], ret_ctyp -> builtin_set_slice_bits ctx v1 v2 v3 v4 v5 ret_ctyp
+
+  (* string builtins *)
+  | "concat_str", [v1; v2], CT_string -> ctx.use_string := true; Fn ("str.++", [smt_cval ctx v1; smt_cval ctx v2])
+  | "eq_string", [v1; v2], CT_bool -> ctx.use_string := true; Fn ("=", [smt_cval ctx v1; smt_cval ctx v2])
+
+  (* lib/real.sail *)
+  (* Note that sqrt_real is special and is handled by smt_instr. *)
+  | "eq_real", [v1; v2], CT_bool -> ctx.use_real := true; Fn ("=", [smt_cval ctx v1; smt_cval ctx v2])
+  | "neg_real", [v], CT_real -> ctx.use_real := true; Fn ("-", [smt_cval ctx v])
+  | "add_real",  [v1; v2], CT_real -> ctx.use_real := true; Fn ("+", [smt_cval ctx v1; smt_cval ctx v2])
+  | "sub_real",  [v1; v2], CT_real -> ctx.use_real := true; Fn ("-", [smt_cval ctx v1; smt_cval ctx v2])
+  | "mult_real", [v1; v2], CT_real -> ctx.use_real := true; Fn ("*", [smt_cval ctx v1; smt_cval ctx v2])
+  | "div_real",  [v1; v2], CT_real -> ctx.use_real := true; Fn ("/", [smt_cval ctx v1; smt_cval ctx v2])
+  | "lt_real",   [v1; v2], CT_bool -> ctx.use_real := true; Fn ("<", [smt_cval ctx v1; smt_cval ctx v2])
+  | "gt_real",   [v1; v2], CT_bool -> ctx.use_real := true; Fn (">", [smt_cval ctx v1; smt_cval ctx v2])
+  | "lteq_real", [v1; v2], CT_bool -> ctx.use_real := true; Fn ("<=", [smt_cval ctx v1; smt_cval ctx v2])
+  | "gteq_real", [v1; v2], CT_bool -> ctx.use_real := true; Fn (">=", [smt_cval ctx v1; smt_cval ctx v2])
 
   | _ -> failwith ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
 
@@ -1288,8 +1332,15 @@ let smt_instr ctx =
   | I_aux (I_funcall (CL_id (id, ret_ctyp), extern, function_id, args), (_, l)) ->
      if Env.is_extern function_id ctx.tc_env "c" && not extern then
        let name = Env.get_extern function_id ctx.tc_env "c" in
-       let value = smt_builtin ctx name args ret_ctyp in
-       [define_const ctx id ret_ctyp value]
+       if name = "sqrt_real" then
+         begin match args with
+         | [v] -> builtin_sqrt_real ctx (zencode_name id) v
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for sqrt_real"
+         end
+       else
+         let value = smt_builtin ctx name args ret_ctyp in
+         [define_const ctx id ret_ctyp value]
      else if extern && string_of_id function_id = "internal_vector_init" then
        [declare_const ctx id ret_ctyp]
      else if extern && string_of_id function_id = "internal_vector_update" then
@@ -1360,6 +1411,10 @@ let smt_instr ctx =
 
   | I_aux (I_undefined ctyp, _) -> []
 
+  (* I_jump and I_goto will only appear as terminators for basic blocks. *)
+  | I_aux ((I_jump _ | I_goto _), _) -> []
+
+
   | instr ->
      failwith ("Cannot translate: " ^ Pretty_print_sail.to_string (pp_instr instr))
 
@@ -1404,7 +1459,7 @@ let optimize_smt stack =
        | Some n -> Hashtbl.replace uses var (n + 1)
        | None -> Hashtbl.add uses var 1
        end
-    | Hex _ | Bin _ | Bool_lit _ -> ()
+    | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
     | Fn (f, exps) ->
        List.iter uses_in_exp exps
     | Ite (cond, t, e) ->
@@ -1613,7 +1668,11 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         let out_chan = open_out fname in
         if prop_type = "counterexample" then
           output_string out_chan "(set-option :produce-models true)\n";
-        output_string out_chan "(set-logic QF_AUFBVDT)\n";
+
+        if !(ctx.use_string) || !(ctx.use_real) then
+          output_string out_chan "(set-logic ALL)\n"
+        else
+          output_string out_chan "(set-logic QF_AUFBVDT)\n";
 
         List.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") (smt_header ctx all_cdefs);
 
@@ -1679,7 +1738,7 @@ let generate_smt props name_file env ast =
           env
       in
       let t = Profile.start () in
-      let cdefs, ctx = compile_ast { ctx with specialize_calls = true; ignore_64 = true; struct_value = true } ast in
+      let cdefs, ctx = compile_ast { ctx with specialize_calls = true; ignore_64 = true; struct_value = true; use_real = true } ast in
       Profile.finish "Compiling to Jib IR" t;
       cdefs
     in

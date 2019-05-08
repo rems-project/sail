@@ -96,7 +96,9 @@ type ctx =
        be ignored. *)
     ignore_64 : bool;
     (** If false (default) we won't generate any V_struct values *)
-    struct_value : bool
+    struct_value : bool;
+    (** Allow real literals *)
+    use_real : bool;
   }
 
 val initial_ctx :

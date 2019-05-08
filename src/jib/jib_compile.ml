@@ -160,7 +160,8 @@ type ctx =
     optimize_anf : ctx -> typ aexp -> typ aexp;
     specialize_calls : bool;
     ignore_64 : bool;
-    struct_value : bool
+    struct_value : bool;
+    use_real : bool;
   }
 
 let initial_ctx ~convert_typ:convert_typ ~optimize_anf:optimize_anf env =
@@ -176,7 +177,8 @@ let initial_ctx ~convert_typ:convert_typ ~optimize_anf:optimize_anf env =
     optimize_anf = optimize_anf;
     specialize_calls = false;
     ignore_64 = false;
-    struct_value = false
+    struct_value = false;
+    use_real = false;
   }
 
 let ctyp_of_typ ctx typ = ctx.convert_typ ctx typ
@@ -232,10 +234,13 @@ let rec compile_aval l ctx = function
   | AV_lit (L_aux (L_false, _), _) -> [], V_lit (VL_bool false, CT_bool), []
 
   | AV_lit (L_aux (L_real str, _), _) ->
-     let gs = ngensym () in
-     [iinit CT_real gs (V_lit (VL_string str, CT_string))],
-     V_id (gs, CT_real),
-     [iclear CT_real gs]
+     if ctx.use_real then
+       [], V_lit (VL_real str, CT_real), []
+     else
+       let gs = ngensym () in
+       [iinit CT_real gs (V_lit (VL_string str, CT_string))],
+       V_id (gs, CT_real),
+       [iclear CT_real gs]
 
   | AV_lit (L_aux (L_unit, _), _) -> [], V_lit (VL_unit, CT_unit), []
 

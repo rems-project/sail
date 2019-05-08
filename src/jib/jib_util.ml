@@ -259,6 +259,7 @@ let string_of_value = function
   | VL_bit Sail2_values.B0 -> "UINT64_C(0)"
   | VL_bit Sail2_values.B1 -> "UINT64_C(1)"
   | VL_bit Sail2_values.BU -> failwith "Undefined bit found in value"
+  | VL_real str -> str
   | VL_string str -> "\"" ^ str ^ "\""
 
 let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =

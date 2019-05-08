@@ -59,4 +59,5 @@ type vl =
   | VL_unit
   | VL_int of integer
   | VL_string of string
+  | VL_real of string
   | VL_null (* Used for unitialized values and null pointers in C compilation *)
