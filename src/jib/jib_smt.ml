@@ -178,7 +178,9 @@ let rec smt_ctyp ctx = function
      | Some regs -> Bitvec (required_width (Big_int.of_int (List.length regs)))
      | _ -> failwith ("No registers with ctyp: " ^ string_of_ctyp ctyp)
      end
-  | ctyp -> failwith ("Unhandled ctyp: " ^ string_of_ctyp ctyp)
+  | CT_list _ -> raise (Reporting.err_todo ctx.pragma_l "Lists not yet supported in SMT generation")
+  | CT_poly ->
+     Reporting.unreachable ctx.pragma_l __POS__ "Found polymorphic type in SMT property"
 
 (* We often need to create a SMT bitvector of a length sz with integer
    value x. [bvpint sz x] does this for positive integers, and [bvint sz x]
