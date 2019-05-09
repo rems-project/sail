@@ -1343,6 +1343,19 @@ let rmw_modify smt = function
      end
   | _ -> assert false
 
+let smt_terminator ctx =
+  let open Jib_ssa in
+  function
+  | T_end id ->
+     add_event ctx Return (Var (zencode_name id));
+     []
+
+  | T_match_failure ->
+     add_pathcond_event ctx Match;
+     []
+
+  | T_undefined _ | T_goto _ | T_jump _ | T_label _ | T_none -> []
+
 (* For a basic block (contained in a control-flow node / cfnode), we
    turn the instructions into a sequence of define-const and
    declare-const expressions. Because we are working with a SSA graph,
@@ -1421,21 +1434,11 @@ let smt_instr ctx =
      end;
      [declare_const ctx id ctyp]
 
-  | I_aux (I_end id, _) ->
-     add_event ctx Return (Var (zencode_name id));
-     []
-
   | I_aux (I_clear _, _) -> []
 
-  | I_aux (I_match_failure, _) ->
-     add_pathcond_event ctx Match;
-     []
-
-  | I_aux (I_undefined ctyp, _) -> []
-
-  (* I_jump and I_goto will only appear as terminators for basic blocks. *)
-  | I_aux ((I_jump _ | I_goto _), _) -> []
-
+  (* Should only appear as terminators for basic blocks. *)
+  | I_aux ((I_jump _ | I_goto _ | I_end _ | I_match_failure | I_undefined _), (_, l)) ->
+     Reporting.unreachable l __POS__ "SMT: Instruction should only appear as block terminator"
 
   | instr ->
      failwith ("Cannot translate: " ^ Pretty_print_sail.to_string (pp_instr instr))
@@ -1451,9 +1454,11 @@ let smt_cfnode all_cdefs ctx ssanodes =
        | _ -> declare_const ctx id ctyp
      in
      smt_reg_decs @ List.map smt_start (NameMap.bindings inits)
-  | CF_block instrs ->
+  | CF_block (instrs, terminator) ->
      let ctx = { ctx with pathcond = get_pathcond ctx ssanodes } in
-     List.concat (List.map (smt_instr ctx) instrs)
+     let smt_instrs = List.map (smt_instr ctx) instrs in
+     let smt_term = smt_terminator ctx terminator in
+     List.concat (smt_instrs @ [smt_term])
   (* We can ignore any non basic-block/start control-flow nodes *)
   | _ -> []
 

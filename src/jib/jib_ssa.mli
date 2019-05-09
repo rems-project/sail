@@ -77,10 +77,19 @@ exception Not_a_DAG of int
 
 val topsort : 'a array_graph -> int list
 
+type terminator =
+  | T_undefined of Jib.ctyp
+  | T_match_failure
+  | T_end of Jib.name
+  | T_goto of string
+  | T_jump of int * string
+  | T_label of string
+  | T_none
+
 type cf_node =
   | CF_label of string
-  | CF_block of Jib.instr list
-  | CF_guard of Jib.cval
+  | CF_block of Jib.instr list * terminator
+  | CF_guard of int
   | CF_start of Jib.ctyp NameMap.t
 
 val control_flow_graph : Jib.instr list -> int * int list * ('a list * cf_node) array_graph
