@@ -100,6 +100,16 @@ type smt_exp =
   | Extract of int * int * smt_exp
   | Tester of string * smt_exp
 
+let smt_conj = function
+  | [] -> Bool_lit true
+  | [x] -> x
+  | xs -> Fn ("and", xs)
+
+let smt_disj = function
+  | [] -> Bool_lit false
+  | [x] -> x
+  | xs -> Fn ("or", xs)
+
 let extract i j x = Extract (i, j, x)
 
 let bvnot x    = Fn ("bvnot", [x])

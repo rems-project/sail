@@ -60,6 +60,8 @@ val make : initial_size:int -> unit -> 'a array_graph
 
 module IntSet : Set.S with type elt = int
 
+val get_cond : 'a array_graph -> int -> Jib.cval
+     
 val get_vertex : 'a array_graph -> int -> ('a * IntSet.t * IntSet.t) option
 
 val iter_graph : ('a -> IntSet.t -> IntSet.t -> unit) -> 'a array_graph -> unit

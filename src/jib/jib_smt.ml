@@ -93,7 +93,7 @@ type ctx = {
     (* When generating SMT for an instruction pathcond will contain
        the global path conditional of the containing block in the
        control flow graph *)
-    pathcond : smt_exp;
+    pathcond : smt_exp Lazy.t;
     (* Set if we need to use strings *)
     use_string : bool ref;
     use_real : bool ref
@@ -118,7 +118,7 @@ let initial_ctx () = {
     arg_stack = Stack.create ();
     ast = Defs [];
     events = ref EventMap.empty;
-    pathcond = Bool_lit true;
+    pathcond = lazy (Bool_lit true);
     use_string = ref false;
     use_real = ref false;
   }
@@ -281,9 +281,9 @@ let rec smt_cval ctx cval =
   | V_call (Bnot, [cval]) ->
      Fn ("not", [smt_cval ctx cval])
   | V_call (Band, cvals) ->
-     Fn ("and", List.map (smt_cval ctx) cvals)
+     smt_conj (List.map (smt_cval ctx) cvals)
   | V_call (Bor, cvals) ->
-     Fn ("or", List.map (smt_cval ctx) cvals)
+     smt_disj (List.map (smt_cval ctx) cvals)
   | V_ctor_kind (union, ctor_id, unifiers, _) ->
      Fn ("not", [Tester (zencode_ctor ctor_id unifiers, smt_cval ctx union)])
   | V_ctor_unwrap (ctor_id, union, unifiers, _) ->
@@ -326,10 +326,10 @@ let rec smt_cval ctx cval =
 
 let add_event ctx ev smt =
   let stack = event_stack ctx ev in
-  Stack.push (Fn ("=>", [ctx.pathcond; smt])) stack
+  Stack.push (Fn ("=>", [Lazy.force ctx.pathcond; smt])) stack
 
 let add_pathcond_event ctx ev =
-  Stack.push ctx.pathcond (event_stack ctx ev)
+  Stack.push (Lazy.force ctx.pathcond) (event_stack ctx ev)
 
 let overflow_check ctx smt =
   if not !opt_ignore_overflow then (
@@ -1269,11 +1269,7 @@ let smt_ssanode ctx cfg preds =
      let pis = List.map get_pi (IntSet.elements preds) in
      let mux =
        List.fold_right2 (fun pi id chain ->
-           let pathcond =
-             match pi with
-             | [cval] -> smt_cval ctx cval
-             | _ -> Fn ("and", List.map (smt_cval ctx) pi)
-           in
+           let pathcond = smt_conj (List.map (smt_cval ctx) pi) in
            match chain with
            | Some smt ->
               Some (Ite (pathcond, Var (zencode_name id), smt))
@@ -1286,12 +1282,28 @@ let smt_ssanode ctx cfg preds =
      | Some mux ->
         [Define_const (zencode_name id, smt_ctyp ctx ctyp, mux)]
 
-let rec get_pathcond ctx fns =
+let rec get_pathcond n cfg ctx =
   let open Jib_ssa in
-  match fns with
-  | [] | Pi [] :: _ -> Bool_lit true
-  | Pi cvals :: _ -> Fn ("and", List.map (smt_cval ctx) cvals)
-  | Phi _ :: fns -> get_pathcond ctx fns
+  match get_vertex cfg n with
+  | Some ((_, CF_guard cond), _, _) ->
+     smt_cval ctx (get_cond cfg cond)
+  | Some (_, preds, succs) ->
+     if IntSet.cardinal preds = 0 then
+       Bool_lit true
+     else if IntSet.cardinal preds = 1 then
+       get_pathcond (IntSet.min_elt preds) cfg ctx
+     else
+       let get_pi m =
+         match get_vertex cfg m with
+         | Some ((ssanodes, _), _, _) ->
+            V_call (Band, List.concat (List.map (function Pi guards -> guards | _ -> []) ssanodes))
+         | None -> failwith "Predecessor node does not exist"
+       in
+       let pis = List.map get_pi (IntSet.elements preds) in
+       prerr_endline (string_of_int n ^ string_of_cval (V_call (Bor, pis)));
+       smt_cval ctx (V_call (Bor, pis))
+       
+  | None -> assert false (* Should never be called for a non-existent node *)
 
 (* For any complex l-expression we need to turn it into a
    read-modify-write in the SMT solver. The SSA transform turns CL_id
@@ -1455,7 +1467,6 @@ let smt_cfnode all_cdefs ctx ssanodes =
      in
      smt_reg_decs @ List.map smt_start (NameMap.bindings inits)
   | CF_block (instrs, terminator) ->
-     let ctx = { ctx with pathcond = get_pathcond ctx ssanodes } in
      let smt_instrs = List.map (smt_instr ctx) instrs in
      let smt_term = smt_terminator ctx terminator in
      List.concat (smt_instrs @ [smt_term])
@@ -1607,16 +1618,6 @@ let expand_reg_deref ctx = function
      end
   | instr -> instr
 
-let smt_conj = function
-  | [] -> Bool_lit true
-  | [x] -> x
-  | xs -> Fn ("and", xs)
-
-let smt_disj = function
-  | [] -> Bool_lit false
-  | [x] -> x
-  | xs -> Fn ("or", xs)
-
 let rec smt_query ctx = function
   | Q_all ev ->
      let stack = event_stack ctx ev in
@@ -1687,6 +1688,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
                let muxers =
                  ssanodes |> List.map (smt_ssanode ctx cfg preds) |> List.concat
                in
+               let ctx = { ctx with pathcond = lazy (get_pathcond n cfg ctx) } in
                let basic_block = smt_cfnode all_cdefs ctx ssanodes cfnode in
                push_smt_defs stack muxers;
                push_smt_defs stack basic_block;
