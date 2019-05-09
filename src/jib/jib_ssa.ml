@@ -619,15 +619,33 @@ let place_pi_functions graph start idom children =
     List.concat (List.map (function Pi guards -> guards | _ -> []) ssanodes)
   in
 
+  let rec between_dom p n =
+    if n = p then
+      []
+    else
+      match graph.nodes.(n) with
+      | Some ((_, cfnode), preds, _) ->
+         let preds = List.concat (List.map (between_dom p) (IntSet.elements preds)) in
+         begin match get_guard cfnode, preds with
+         | [guard], [pred] -> [V_call (Band, [guard; pred])]
+         | [guard], [] -> [guard]
+         | [guard], _ -> [V_call (Band, [guard; V_call (Bor, preds)])]
+         | _, (_ :: _ :: _ as preds) -> [V_call (Bor, preds)]
+         | _, pred -> pred
+         end
+      | None -> assert false
+  in
+
   let rec go n =
     begin match graph.nodes.(n) with
     | Some ((ssa, cfnode), preds, succs) ->
        let p = idom.(n) in
+       let bd = between_dom p n in
        if p <> -1 then
          begin match graph.nodes.(p) with
          | Some ((dom_ssa, _), _, _) ->
             let args = get_guard cfnode @ get_pi_contents dom_ssa in
-            graph.nodes.(n) <- Some ((Pi args :: ssa, cfnode), preds, succs)
+            graph.nodes.(n) <- Some ((Pi (bd @ args) :: ssa, cfnode), preds, succs)
          | None -> assert false
          end
     | None -> assert false

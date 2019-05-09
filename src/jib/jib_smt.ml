@@ -67,6 +67,8 @@ let opt_ignore_overflow = ref false
 
 let opt_auto = ref false
 
+let opt_debug_graphs = ref false
+
 module EventMap = Map.Make(Event)
 
 (* Note that we have to use x : ty ref rather than mutable x : ty, to
@@ -278,6 +280,10 @@ let rec smt_cval ctx cval =
      Fn ("=", [smt_cval ctx cval; Bin "1"])
   | V_call (Bnot, [cval]) ->
      Fn ("not", [smt_cval ctx cval])
+  | V_call (Band, cvals) ->
+     Fn ("and", List.map (smt_cval ctx) cvals)
+  | V_call (Bor, cvals) ->
+     Fn ("or", List.map (smt_cval ctx) cvals)
   | V_ctor_kind (union, ctor_id, unifiers, _) ->
      Fn ("not", [Tester (zencode_ctor ctor_id unifiers, smt_cval ctx union)])
   | V_ctor_unwrap (ctor_id, union, unifiers, _) ->
@@ -321,6 +327,9 @@ let rec smt_cval ctx cval =
 let add_event ctx ev smt =
   let stack = event_stack ctx ev in
   Stack.push (Fn ("=>", [ctx.pathcond; smt])) stack
+
+let add_pathcond_event ctx ev =
+  Stack.push ctx.pathcond (event_stack ctx ev)
 
 let overflow_check ctx smt =
   if not !opt_ignore_overflow then (
@@ -903,6 +912,16 @@ let builtin_compare_bits fn ctx v1 v2 ret_ctyp =
 
   | _ -> builtin_type_error ctx fn [v1; v2] (Some ret_ctyp)
 
+(* ***** String operations: lib/real.sail ***** *)
+
+let builtin_decimal_string_of_bits ctx v =
+  begin match cval_ctyp v with
+  | CT_fbits (n, _) ->
+     Fn ("int.to.str", [Fn ("bv2nat", [smt_cval ctx v])])
+
+  | _ -> builtin_type_error ctx "decimal_string_of_bits" [v] None
+  end
+
 (* ***** Real number operations: lib/real.sail ***** *)
 
 let builtin_sqrt_real ctx root v =
@@ -986,6 +1005,7 @@ let smt_builtin ctx name args ret_ctyp =
   (* string builtins *)
   | "concat_str", [v1; v2], CT_string -> ctx.use_string := true; Fn ("str.++", [smt_cval ctx v1; smt_cval ctx v2])
   | "eq_string", [v1; v2], CT_bool -> ctx.use_string := true; Fn ("=", [smt_cval ctx v1; smt_cval ctx v2])
+  | "decimal_string_of_bits", [v], CT_string -> ctx.use_string := true; builtin_decimal_string_of_bits ctx v
 
   (* lib/real.sail *)
   (* Note that sqrt_real is special and is handled by smt_instr. *)
@@ -1408,7 +1428,7 @@ let smt_instr ctx =
   | I_aux (I_clear _, _) -> []
 
   | I_aux (I_match_failure, _) ->
-     add_event ctx Match (Bool_lit false);
+     add_pathcond_event ctx Match;
      []
 
   | I_aux (I_undefined ctyp, _) -> []
@@ -1606,6 +1626,12 @@ let rec smt_query ctx = function
   | Q_or qs ->
      Fn ("or", List.map (smt_query ctx) qs)
 
+let dump_graph function_id cfg =
+  let gv_file = string_of_id function_id ^ ".gv" in
+  let out_chan = open_out gv_file in
+  Jib_ssa.make_dot out_chan cfg;
+  close_out out_chan
+
 let smt_cdef props lets name_file ctx all_cdefs = function
   | CDEF_spec (function_id, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
      begin match find_function [] function_id all_cdefs with
@@ -1641,14 +1667,13 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         let visit_order =
           try topsort cfg with
           | Not_a_DAG n ->
-             let gv_file = string_of_id function_id ^ ".gv" in
-             let out_chan = open_out gv_file in
-             make_dot out_chan cfg;
-             close_out out_chan;
+             dump_graph function_id cfg;
              raise (Reporting.err_general pragma_l
-                      (Printf.sprintf "$%s %s: control flow graph is not acyclic (node %d is in cycle)\nWrote graph to %s"
-                         prop_type (string_of_id function_id) n gv_file))
+                      (Printf.sprintf "$%s %s: control flow graph is not acyclic (node %d is in cycle)\nWrote graph to %s.gv"
+                         prop_type (string_of_id function_id) n (string_of_id function_id)))
         in
+        if !opt_debug_graphs then
+          dump_graph function_id cfg;
 
         List.iter (fun n ->
             begin match get_vertex cfg n with

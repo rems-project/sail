@@ -315,6 +315,9 @@ let options = Arg.align ([
   ( "-ddump_flow_graphs",
     Arg.Set Jib_compile.opt_debug_flow_graphs,
     " (debug) dump flow analysis for Sail functions when compiling to C");
+  ( "-ddump_smt_graphs",
+    Arg.Set Jib_smt.opt_debug_graphs,
+    " (debug) dump flow analysis for properties when generating SMT");
   ( "-dtc_verbose",
     Arg.Int (fun verbosity -> Type_check.opt_tc_debug := verbosity),
     "<verbosity> (debug) verbose typechecker output: 0 is silent");

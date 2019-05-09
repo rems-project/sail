@@ -90,6 +90,8 @@ val rewrite : tannot defs -> tannot defs
 
 type event = Overflow | Assertion | Assumption | Match | Return
 
+val string_of_event : event -> string
+
 module Event : sig
   type t = event
   val compare : event -> event -> int

@@ -1,5 +1,5 @@
-$ifndef __REAL
-$define __REAL
+$ifndef _REAL
+$define _REAL
 
 val "neg_real" : real -> real
 

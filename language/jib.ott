@@ -58,6 +58,8 @@ name :: '' ::=
 
 op :: '' ::=
   | not               :: :: bnot
+  | or                :: :: bor
+  | and               :: :: band
   | hd                :: :: list_hd
   | tl                :: :: list_tl
   | bit_to_bool       :: :: bit_to_bool
