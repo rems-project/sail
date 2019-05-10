@@ -216,16 +216,16 @@ declare size_itself_def[simp]
 declare word_size[simp]
 
 lemma int_of_mword_simps[simp]:
-  "int_of_mword False w = uint w"
-  "int_of_mword True w = sint w"
-  "int_of_bv BC_mword False w = Some (uint w)"
-  "int_of_bv BC_mword True w = Some (sint w)"
+  "\<And>w. int_of_mword False w = uint w"
+  "\<And>w. int_of_mword True w = sint w"
+  "\<And>w. int_of_bv BC_mword False w = Some (uint w)"
+  "\<And>w. int_of_bv BC_mword True w = Some (sint w)"
   by (auto simp: int_of_mword_def int_of_bv_def BC_mword_defs)
 
 lemma BC_mword_simps[simp]:
-  "unsigned_method BC_mword a = Some (uint a)"
-  "signed_method BC_mword a = Some (sint a)"
-  "length_method BC_mword (a :: ('a :: len) word) = int (LENGTH('a))"
+  "\<And>a. unsigned_method BC_mword a = Some (uint a)"
+  "\<And>a. signed_method BC_mword a = Some (sint a)"
+  "\<And>a. length_method BC_mword (a :: ('a :: len0) word) = int (LENGTH('a))"
   by (auto simp: BC_mword_defs)
 
 lemma of_bits_mword_of_bl[simp]:
@@ -247,12 +247,12 @@ lemma unsigned_bits_of_mword[simp]:
   "unsigned_method BC_bitU_list (bits_of_method BC_mword a) = Some (uint a)"
   by (auto simp: BC_bitU_list_def BC_mword_defs unsigned_of_bits_def unsigned_of_bools_def)
 
-definition mem_bytes_of_word :: "'a::len word \<Rightarrow> bitU list list" where
+definition mem_bytes_of_word :: "'a::len0 word \<Rightarrow> bitU list list" where
   "mem_bytes_of_word w = rev (take_chunks 8 (map bitU_of_bool (to_bl w)))"
 
 lemma mem_bytes_of_bits_mem_bytes_of_word[simp]:
   assumes "8 dvd LENGTH('a)"
-  shows "mem_bytes_of_bits BC_mword (w :: 'a::len word) = Some (mem_bytes_of_word w)"
+  shows "mem_bytes_of_bits BC_mword (w :: 'a::len0 word) = Some (mem_bytes_of_word w)"
   using assms
   by (auto simp: mem_bytes_of_bits_def bytes_of_bits_def BC_mword_defs byte_chunks_take_chunks_8 mem_bytes_of_word_def)
 
@@ -292,7 +292,7 @@ lemma access_list_dec_rev_nth:
   by (auto simp: access_list_dec_def rev_nth intro!: arg_cong2[where f = List.nth])
 
 lemma access_bv_dec_mword[simp]:
-  fixes w :: "('a::len) word"
+  fixes w :: "('a::len0) word"
   assumes "0 \<le> n" and "nat n < LENGTH('a)"
   shows "access_bv_dec BC_mword w n = bitU_of_bool (w !! (nat n))"
   using assms unfolding access_bv_dec_def access_list_def

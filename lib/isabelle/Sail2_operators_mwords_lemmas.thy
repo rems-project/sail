@@ -43,7 +43,7 @@ lemma vec_of_bits_of_bl[simp]:
 lemmas access_vec_dec_test_bit[simp] = access_bv_dec_mword[folded access_vec_dec_def]
 
 lemma access_vec_inc_test_bit[simp]:
-  fixes w :: "('a::len) word"
+  fixes w :: "('a::len0) word"
   assumes "n \<ge> 0" and "nat n < LENGTH('a)"
   shows "access_vec_inc w n = bitU_of_bool (w !! (LENGTH('a) - 1 - nat n))"
   using assms
@@ -82,7 +82,7 @@ declare subrange_vec_dec_def[simp]
 
 lemma update_subrange_vec_dec_update_subrange_list_dec:
   assumes "0 \<le> j" and "j \<le> i" and "i < int LENGTH('a)"
-  shows "update_subrange_vec_dec (w :: 'a::len word) i j w' =
+  shows "update_subrange_vec_dec (w :: 'a::len0 word) i j w' =
          of_bl (update_subrange_list_dec (to_bl w) i j (to_bl w'))"
   using assms
   unfolding update_subrange_vec_dec_def update_subrange_list_dec_def update_subrange_list_inc_def
@@ -90,7 +90,7 @@ lemma update_subrange_vec_dec_update_subrange_list_dec:
 
 lemma subrange_vec_dec_subrange_list_dec:
   assumes "0 \<le> j" and "j \<le> i" and "i < int LENGTH('a)" and "int LENGTH('b) = i - j + 1"
-  shows "subrange_vec_dec (w :: 'a::len word) i j = (of_bl (subrange_list_dec (to_bl w) i j) :: 'b::len word)"
+  shows "subrange_vec_dec (w :: 'a::len0 word) i j = (of_bl (subrange_list_dec (to_bl w) i j) :: 'b::len0 word)"
   using assms unfolding subrange_vec_dec_def
   by (auto simp: subrange_list_dec_drop_take slice_take of_bl_drop')
 
@@ -103,7 +103,7 @@ lemma of_bools_of_bl[simp]: "of_bools_method BC_mword = of_bl"
   by (auto simp: BC_mword_defs)
 
 lemma of_bl_bin_word_of_int:
-  "len = LENGTH('a) \<Longrightarrow> of_bl (bin_to_bl_aux len n []) = (word_of_int n :: ('a::len) word)"
+  "len = LENGTH('a) \<Longrightarrow> of_bl (bin_to_bl_aux len n []) = (word_of_int n :: ('a::len0) word)"
   by (auto simp: of_bl_def bin_bl_bin')
 
 lemma get_slice_int_0_bin_to_bl[simp]:
@@ -113,21 +113,22 @@ lemma get_slice_int_0_bin_to_bl[simp]:
 
 lemma to_bl_of_bl[simp]:
   fixes bl :: "bool list"
-  defines w: "w \<equiv> of_bl bl :: 'a::len word"
+  defines w: "w \<equiv> of_bl bl :: 'a::len0 word"
   assumes len: "length bl = LENGTH('a)"
   shows "to_bl w = bl"
   using len unfolding w by (intro word_bl.Abs_inverse) auto
 
 lemma reverse_endianness_byte[simp]:
-  "LENGTH('a) = 8 \<Longrightarrow> reverse_endianness (w :: 'a::len word) = w"
+  "LENGTH('a) = 8 \<Longrightarrow> reverse_endianness (w :: 'a::len0 word) = w"
   unfolding reverse_endianness_def by (auto simp: reverse_endianness_list_simps)
 
 lemma reverse_reverse_endianness[simp]:
-  "8 dvd LENGTH('a) \<Longrightarrow> reverse_endianness (reverse_endianness w) = (w :: 'a::len word)"
+  "8 dvd LENGTH('a) \<Longrightarrow> reverse_endianness (reverse_endianness w) = (w :: 'a::len0 word)"
   unfolding reverse_endianness_def by (simp)
 
-lemma replicate_bits_zero[simp]: "replicate_bits 0 n = 0"
-  by (intro word_eqI) (auto simp: replicate_bits_def test_bit_of_bl rev_nth nth_repeat simp del: repeat.simps)
+lemma replicate_bits_zero[simp]: "replicate_bits (0::'a::len0 word) n = (0::'b::len0 word)"
+  by (intro word_eqI; cases "LENGTH('a) = 0"; cases "LENGTH('b) = 0")
+     (auto simp: replicate_bits_def test_bit_of_bl rev_nth nth_repeat simp del: repeat.simps)
 
 declare extz_vec_def[simp]
 declare exts_vec_def[simp]
