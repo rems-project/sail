@@ -46,37 +46,10 @@ function clause execute(STORE(rd, rs)) = {
   __write_mem(Write_plain, 32, addr, 4, X(rs))
 }
 
-/*
-RISCV LB
-"PodRW Rfe PodRW Rfe"
-Cycle=Rfe PodRW Rfe PodRW
-Relax=PodRW
-Safe=Rfe
-Generator=diy7 (version 7.51+4(dev))
-Prefetch=0:x=F,0:y=W,1:y=F,1:x=W
-Com=Rf Rf
-Orig=PodRW Rfe PodRW Rfe
-{
-0:x6=x; 0:x7=1; 0:x8=y;
-1:x6=y; 1:x7=1; 1:x8=x;
-}
- P0          | P1          ;
- lw x5,0(x6) | lw x5,0(x6) ;
- sw x7,0(x8) | sw x7,0(x8) ;
-exists
-(0:x5=1 /\ 1:x5=1)
-*/
-
-$property
-function P0() -> bool = {
-  let i1 = execute(LOAD(0b00, 0b01));
-  let i2 = execute(STORE(0b10, 0b11));
-  i1 & i2
-}
-
-$property
-function P1() -> bool = {
-  let i1 = execute(LOAD(0b00, 0b01));
-  let i2 = execute(STORE(0b10, 0b11));
-  i1 & i2
+/* Default memory model is as weak as possible, so this is not true */
+$counterexample
+function prop() -> bool = {
+  let _ = execute(STORE(0b01, 0b10));
+  let _ = execute(LOAD(0b00, 0b01));
+  X(0b00) == X(0b10)
 }

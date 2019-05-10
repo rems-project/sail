@@ -182,8 +182,8 @@ type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
   | Declare_const of string * smt_typ
   | Define_const of string * smt_typ * smt_exp
-  | Write_mem of smt_exp * smt_exp * smt_exp
-  | Read_mem of string * smt_exp * smt_exp
+  | Write_mem of string * smt_exp * smt_exp * smt_exp
+  | Read_mem of string * smt_typ * smt_exp * smt_exp
   | Declare_datatypes of string * (string * (string * smt_typ) list) list
   | Declare_tuple of int
   | Assert of smt_exp
@@ -244,11 +244,11 @@ let pp_smt_def =
   | Define_const (name, ty, exp) ->
      pp_sfun "define-const" [string name; pp_smt_typ ty; pp_smt_exp exp]
 
-  | Write_mem (wk, addr, data) ->
-     pp_sfun "write-mem" [pp_smt_exp wk; pp_smt_exp addr; pp_smt_exp data]
+  | Write_mem (name, wk, addr, data) ->
+     pp_sfun "declare-const" [string name; pp_smt_typ Bool]
 
-  | Read_mem (name, rk, addr) ->
-     pp_sfun "read-mem" [string name; pp_smt_exp rk; pp_smt_exp addr]
+  | Read_mem (name, ty, rk, addr) ->
+     pp_sfun "declare-const" [string name; pp_smt_typ ty]
 
   | Declare_datatypes (name, ctors) ->
      let pp_ctor (ctor_name, fields) =

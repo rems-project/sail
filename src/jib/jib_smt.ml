@@ -1022,18 +1022,22 @@ let smt_builtin ctx name args ret_ctyp =
 
   | _ -> failwith ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
 
-
+(* Memory reads and writes as defined in lib/regfp.sail *)
 let writes = ref (-1)
 
 let builtin_write_mem ctx wk addr_size addr data_size data =
-  [Write_mem (smt_cval ctx wk, smt_cval ctx addr, smt_cval ctx data)]
+  incr writes;
+  let name = "W" ^ string_of_int !writes in
+  [Write_mem (name, smt_cval ctx wk, smt_cval ctx addr, smt_cval ctx data)],
+  Var name
 
 let reads = ref (-1)
 
-let builtin_read_mem ctx rk addr_size addr data_size =
+let builtin_read_mem ctx rk addr_size addr data_size ret_ctyp =
   incr reads;
   let name = "R" ^ string_of_int !reads in
-  [Read_mem (name, smt_cval ctx rk, smt_cval ctx addr)]
+  [Read_mem (name, smt_ctyp ctx ret_ctyp, smt_cval ctx rk, smt_cval ctx addr)],
+  Var name
 
 let rec smt_conversion ctx from_ctyp to_ctyp x =
   match from_ctyp, to_ctyp with
@@ -1401,14 +1405,17 @@ let smt_instr ctx =
        else if name = "platform_write_mem" then
          begin match args with
          | [wk; addr_size; addr; data_size; data] ->
-            builtin_write_mem ctx wk addr_size addr data_size data
+            let mem_event, var = builtin_write_mem ctx wk addr_size addr data_size data in
+            mem_event @ [define_const ctx id ret_ctyp var]
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __write_mem"
          end
        else if name = "platform_read_mem" then
          begin match args with
          | [rk; addr_size; addr; data_size] ->
-            builtin_read_mem ctx rk addr_size addr data_size
+            let mem_event, var = builtin_read_mem ctx rk addr_size addr data_size ret_ctyp in
+            mem_event @ [define_const ctx id ret_ctyp var]
+                                                   
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __read_mem"
          end
@@ -1549,10 +1556,10 @@ let optimize_smt stack =
        end
     | (Declare_datatypes _ | Declare_tuple _) as def ->
        Stack.push def stack'
-    | Write_mem (wk, addr, data) as def ->
+    | Write_mem (_, wk, addr, data) as def ->
        uses_in_exp wk; uses_in_exp addr; uses_in_exp data;
        Stack.push def stack'
-    | Read_mem (name, rk, addr) as def ->
+    | Read_mem (_, _, rk, addr) as def ->
        uses_in_exp rk; uses_in_exp addr;
        Stack.push def stack'
     | Assert exp as def ->
@@ -1576,10 +1583,10 @@ let optimize_smt stack =
           Queue.add (Define_const (var, typ, simp_smt_exp vars exp)) queue
        | None -> assert false
        end
-    | Write_mem (wk, addr, data) ->
-       Queue.add (Write_mem (simp_smt_exp vars wk, simp_smt_exp vars addr, simp_smt_exp vars data)) queue
-    | Read_mem (name, rk, addr) ->
-       Queue.add (Read_mem (name, simp_smt_exp vars rk, simp_smt_exp vars addr)) queue
+    | Write_mem (name, wk, addr, data) ->
+       Queue.add (Write_mem (name, simp_smt_exp vars wk, simp_smt_exp vars addr, simp_smt_exp vars data)) queue
+    | Read_mem (name, typ, rk, addr) ->
+       Queue.add (Read_mem (name, typ, simp_smt_exp vars rk, simp_smt_exp vars addr)) queue
     | Assert exp ->
        Queue.add (Assert (simp_smt_exp vars exp)) queue
     | (Declare_datatypes _ | Declare_tuple _) as def ->
@@ -1740,12 +1747,14 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         if prop_type = "counterexample" then
           output_string out_chan "(set-option :produce-models true)\n";
 
+        let header = smt_header ctx all_cdefs in
+        
         if !(ctx.use_string) || !(ctx.use_real) then
           output_string out_chan "(set-logic ALL)\n"
         else
           output_string out_chan "(set-logic QF_AUFBVDT)\n";
 
-        List.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") (smt_header ctx all_cdefs);
+        List.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") header;
 
         let queue = optimize_smt stack in
         Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
