@@ -459,14 +459,18 @@ let handle_input' input =
         let open Yojson.Basic in
         let open Spec_analysis in
         let fun_infos = Spec_analysis.fun_infos_of_ast !Interactive.env !Interactive.ast in
-        let json_of_id id : Yojson.Basic.t = `String (string_of_id id) in
+        let json_of_id id : json = `String (string_of_id id) in
+        let json_of_typ typ : json = `String (string_of_typ typ) in
+        let json_of_typs typs : json = `List (List.map json_of_typ typs) in
         let json_of_effect = function
           | Effect_aux (Effect_set effs, _) ->
              `List (List.map (fun e -> `String (string_of_base_effect e)) effs)
         in
-        let json_of_fun_info (id, fi) : Yojson.Basic.t =
+        let json_of_fun_info (id, fi) : json =
           (`Assoc
              [("name", `String (string_of_id id));
+              ("arg_typs", json_of_typs fi.arg_typs);
+              ("ret_typ", json_of_typ fi.ret_typ);
               ("effects", json_of_effect fi.effect);
               ("calls", `List (List.map json_of_id (IdSet.elements fi.calls)));
               ("regs_read", `List (List.map json_of_id (IdSet.elements fi.regs_read)));
@@ -475,7 +479,7 @@ let handle_input' input =
               ("trans_regs_written", `List (List.map json_of_id (IdSet.elements fi.trans_regs_written)))
              ])
         in
-        let json : Yojson.Basic.t =
+        let json : json =
           `Assoc
             [("version", `Int 0);
              ("fun_infos", `List (List.map json_of_fun_info fun_infos))]

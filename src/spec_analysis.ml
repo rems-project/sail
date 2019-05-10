@@ -719,7 +719,7 @@ let regs_read_in_exp exp =
        IdSet.empty
   in
   Rewriter.fold_exp
-    { (Rewriter.pure_exp_alg IdSet.empty IdSet.union) with Rewriter.e_id = e_id }
+    { (Rewriter.pure_exp_alg IdSet.empty IdSet.union) with Rewriter.e_id = e_id; Rewriter.e_ref = e_id }
     exp
 
 let regs_written_in_exp exp =
@@ -731,6 +731,7 @@ let regs_written_in_exp exp =
   in
   Rewriter.fold_exp
     { (Rewriter.pure_exp_alg IdSet.empty IdSet.union) with
+      e_ref = reg_idset;
       lEXP_id = reg_idset;
       lEXP_cast = (fun (_, id) -> reg_idset id);
       lEXP_field = (fun (ids, id) -> IdSet.union ids (reg_idset id)) }
@@ -907,7 +908,9 @@ let nexp_subst_pat substs = fst (nexp_subst_fns substs)
 let nexp_subst_exp substs = snd (nexp_subst_fns substs)
 
 type fun_info =
-  { effect : effect;
+  { arg_typs : typ list;
+    ret_typ : typ;
+    effect : effect;
     calls : IdSet.t;
     regs_read : IdSet.t;
     regs_written : IdSet.t;
@@ -929,18 +932,18 @@ let add_fun_infos_of_def env fun_infos = function
      let regs_read = merge (List.map regs_read_in_exp exps) in
      let regs_written = merge (List.map regs_written_in_exp exps) in
      let trans_regs_read =
-       List.map (fun (_, info) -> info.regs_read) calls_infos
+       List.map (fun (_, info) -> info.trans_regs_read) calls_infos
        |> List.fold_left IdSet.union regs_read
      in
      let trans_regs_written =
-       List.map (fun (_, info) -> info.regs_written) calls_infos
+       List.map (fun (_, info) -> info.trans_regs_written) calls_infos
        |> List.fold_left IdSet.union regs_written
      in
-     let effect = match Type_check.Env.get_val_spec id env with
-       | _, Typ_aux (Typ_fn (_, _, effect), _) -> effect
-       | _ -> no_effect
+     let arg_typs, ret_typ, effect = match Type_check.Env.get_val_spec id env with
+       | _, Typ_aux (Typ_fn (arg_typs, ret_typ, effect), _) -> arg_typs, ret_typ, effect
+       | _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ ("Function " ^ string_of_id id ^ " does not have function type"))
      in
-     (id, { effect = effect; calls = calls; regs_read = regs_read; regs_written = regs_written; trans_regs_read = trans_regs_read; trans_regs_written = trans_regs_written }) :: fun_infos
+     (id, { arg_typs = arg_typs; ret_typ = ret_typ; effect = effect; calls = calls; regs_read = regs_read; regs_written = regs_written; trans_regs_read = trans_regs_read; trans_regs_written = trans_regs_written }) :: fun_infos
   | DEF_internal_mutrec _ ->
      raise (Reporting.err_todo Parse_ast.Unknown "Analysis of mutually recursive functions not implemented")
   | _ -> fun_infos

@@ -1,5 +1,4 @@
 session "Sail" = "LEM" +
-  options [browser_info, document = pdf, document_output = "output"]
   sessions
     "HOL-Eisbach"
   theories

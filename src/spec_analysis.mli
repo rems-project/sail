@@ -97,7 +97,9 @@ val nexp_subst_pat : nexp KBindings.t -> tannot pat -> tannot pat
 val nexp_subst_exp : nexp KBindings.t -> tannot exp -> tannot exp
 
 type fun_info =
-  { effect : effect;
+  { arg_typs : typ list;
+    ret_typ : typ;
+    effect : effect;
     calls : IdSet.t;
     regs_read : IdSet.t;
     regs_written : IdSet.t;

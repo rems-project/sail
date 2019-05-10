@@ -1595,6 +1595,9 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
        E_let (LB_aux (LB_val (pat, subst id value bind), lb_annot),
               if IdSet.mem id (pat_ids pat) then body else subst id value body)
 
+    | E_internal_plet (pat, bind, body) ->
+       E_internal_plet (pat, subst id value bind, if IdSet.mem id (pat_ids pat) then body else subst id value body)
+
     | E_assign (lexp, exp) -> E_assign (subst_lexp id value lexp, subst id value exp) (* Shadowing... *)
 
     (* Should be re-written *)
@@ -1617,7 +1620,7 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
 
     | E_var (lexp, exp1, exp2) -> E_var (subst_lexp id value lexp, subst id value exp1, subst id value exp2)
 
-    | E_internal_plet _ | E_internal_return _ -> failwith ("subst " ^ string_of_exp exp)
+    | E_internal_return exp -> E_internal_return (subst id value exp)
   in
   wrap e_aux
 

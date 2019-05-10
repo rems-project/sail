@@ -358,6 +358,15 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      else
        fail "Match failure"
 
+  | E_internal_plet (pat, bind, body) when not (is_value bind) ->
+     step bind >>= fun bind' -> wrap (E_internal_plet (pat, bind', body))
+  | E_internal_plet (pat, bind, body) ->
+     let matched, bindings = pattern_match (Type_check.env_of orig_exp) pat (value_of_exp bind) in
+     if matched then
+       return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
+     else
+       fail "Match failure"
+
   | E_vector_subrange (vec, n, m) ->
      wrap (E_app (mk_id "vector_subrange_dec", [vec; n; m]))
   | E_vector_access (vec, n) ->
@@ -655,6 +664,8 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      step tl >>= fun tl' -> wrap (E_cons (hd, tl'))
   | E_cons (hd, tl) ->
      step hd >>= fun hd' -> wrap (E_cons (hd', tl))
+
+  | E_internal_return exp -> return exp
 
   | _ -> raise (Invalid_argument ("Unimplemented " ^ string_of_exp orig_exp))
 

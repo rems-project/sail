@@ -2734,12 +2734,12 @@ let rec rewrite_app env typ (id,args) =
   in
   let is_ones id = is_id env (Id "Ones") id || is_id env (Id "ones") id ||
     is_id env (Id "sail_ones") id in
-  let is_zero_extend =
+  let is_zero_extend id =
     is_id env (Id "ZeroExtend") id ||
     is_id env (Id "zero_extend") id || is_id env (Id "sail_zero_extend") id ||
     is_id env (Id "mips_zero_extend") id || is_id env (Id "EXTZ") id
   in
-  let is_truncate = is_id env (Id "truncate") id in
+  let is_truncate id = is_id env (Id "truncate") id in
   let mk_exp e = E_aux (e, (Unknown, empty_tannot)) in
   let try_cast_to_typ (E_aux (e,(l, _)) as exp) =
     let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
@@ -2751,6 +2751,8 @@ let rec rewrite_app env typ (id,args) =
   in
   let rewrap e = E_aux (e, (Unknown, empty_tannot)) in
   if is_append id then
+    let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+    let length = mk_exp (E_sizeof size) in
     match args with
       (* (known-size-vector @ variable-vector) @ variable-vector *)
     | [E_aux (E_app (append,
@@ -2762,7 +2764,6 @@ let rec rewrite_app env typ (id,args) =
         when is_append append && is_subrange subrange1 && is_subrange subrange2 &&
           is_constant_vec_typ env (typ_of e1) &&
           not (is_constant_range (start1, end1) || is_constant_range (start2, end2)) ->
-       let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
        let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
        let midsize = nminus size size1 in begin
          match solve_unique env midsize with
@@ -2790,7 +2791,6 @@ let rec rewrite_app env typ (id,args) =
         when is_append append && is_slice slice1 && is_slice slice2 &&
           is_constant_vec_typ env (typ_of e1) &&
           not (is_constant length1 || is_constant length2) ->
-       let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
        let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
        let midsize = nminus size size1 in begin
          match solve_unique env midsize with
@@ -2800,13 +2800,13 @@ let rec rewrite_app env typ (id,args) =
                    [e1;
                     E_aux (E_cast (midtyp,
                                    E_aux (E_app (mk_id "slice_slice_concat",
-                                                 [vector1; start1; length1; vector2; start2; length2]),
+                                                 [length; vector1; start1; length1; vector2; start2; length2]),
                                           (Unknown,empty_tannot))),(Unknown,empty_tannot))])
          | _ ->
             E_app (append,
                    [e1;
                     E_aux (E_app (mk_id "slice_slice_concat",
-                                  [vector1; start1; length1; vector2; start2; length2]),
+                                  [length; vector1; start1; length1; vector2; start2; length2]),
                            (Unknown,empty_tannot))])
        end
 
@@ -2847,7 +2847,7 @@ let rec rewrite_app env typ (id,args) =
           not (is_constant length1 || is_constant length2) ->
        try_cast_to_typ
          (E_aux (E_app (mk_id "slice_slice_concat",
-                        [vector1; start1; length1; vector2; start2; length2]),(Unknown,empty_tannot)))
+                        [length; vector1; start1; length1; vector2; start2; length2]),(Unknown,empty_tannot)))
 
     (* variable-slice @ local-var *)
     | [E_aux (E_app (slice1,
@@ -2858,7 +2858,7 @@ let rec rewrite_app env typ (id,args) =
        let length2 = mk_exp (E_app (mk_id "length", [vector2])) in
        try_cast_to_typ
          (E_aux (E_app (mk_id "slice_slice_concat",
-                        [vector1; start1; length1; vector2; start2; length2]),(Unknown,empty_tannot)))
+                        [length; vector1; start1; length1; vector2; start2; length2]),(Unknown,empty_tannot)))
 
     | [E_aux (E_app (append1,
                      [e1;
@@ -2899,6 +2899,23 @@ let rec rewrite_app env typ (id,args) =
        let size12 = nexp_simp (nsum size1 size2) in
        let tannot12 = mk_tannot env (bitvector_typ size12 order) no_effect in
        E_app (id, [E_aux (E_app (append1, [e1; e2]), (Unknown, tannot12)); e3])
+
+    (* known-vector @ zeros *)
+    | [e1; E_aux (E_app (zeros2, [len2]),_)]
+      when is_zeros zeros2 && not (is_constant len2) && is_constant_vec_typ env (typ_of e1) ->
+       let (nlen1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
+       let start1 = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
+       let len1 = mk_exp (E_sizeof nlen1) in
+       try_cast_to_typ
+         (mk_exp (E_app (mk_id "place_slice", [e1; start1; len1; len2])))
+
+    (* zeros @ vector *)
+    | [E_aux (E_app (zeros1, [len1]), _); e2]
+      when is_zeros zeros1 && not (is_constant len1) ->
+       let (size, _, _) = vector_typ_args_of (Env.base_typ_of env typ) in
+       let len = E_aux (E_sizeof size, (Parse_ast.Unknown, mk_tannot env (atom_typ size) no_effect)) in
+       try_cast_to_typ
+         (mk_exp (E_app (mk_id "sail_zero_extend", [e2; len])))
 
     | _ -> E_app (id,args)
 
@@ -2961,7 +2978,7 @@ let rec rewrite_app env typ (id,args) =
        E_app (mk_id "is_ones_slice", [vector1; start1; len1])
     | _ -> E_app (id,args)
 
-  else if is_zero_extend || is_truncate then
+  else if is_zero_extend id || is_truncate id then
     let length_arg = List.filter (fun arg -> is_number (typ_of arg)) args in
     match List.filter (fun arg -> not (is_number (typ_of arg))) args with
     | [E_aux (E_app (append1,
@@ -2991,11 +3008,22 @@ let rec rewrite_app env typ (id,args) =
     (* If we've already rewritten to slice_slice_concat or subrange_subrange_concat,
        we can just drop the zero extension because those functions can do it
        themselves *)
-    | [E_aux (E_cast (_, (E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat" | Id "place_slice"),_) as op, args),_))),_)]
-      -> try_cast_to_typ (rewrap (E_app (op, length_arg @ args)))
+    | [E_aux (E_cast (_, (E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat"),_) as op, args),(l,_)))),_)]
+    | [E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat"),_) as op, args),(l,_))] ->
+       let (xs, i, l, ys, i', l') = match args with
+         | [xs; i; l; ys; i'; l'] | [_; xs; i; l; ys; i'; l'] -> (xs, i, l, ys, i', l')
+         | _ -> typ_error env l "Unexpected number of arguments"
+       in
+       try_cast_to_typ (rewrap (E_app (op, length_arg @ [xs; i; l; ys; i'; l'])))
 
-    | [E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat" | Id "place_slice"),_) as op, args),_)]
-      -> try_cast_to_typ (rewrap (E_app (op, length_arg @ args)))
+    | [E_aux (E_cast (_, E_aux (E_app (place_slice, args), _)),(l,_))]
+    | [E_aux (E_app (place_slice, args),(l,_))]
+      when string_of_id place_slice = "place_slice" ->
+       let (xs, i, l, shift) = match args with
+         | [xs; i; l; shift] | [_; xs; i; l; shift] -> (xs, i, l, shift)
+         | _ -> typ_error env l "Unexpected number of arguments"
+       in
+       try_cast_to_typ (rewrap (E_app (place_slice, length_arg @ [xs; i; l; shift])))
 
     | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
         when is_slice slice1 && not (is_constant length1) ->
@@ -3078,6 +3106,16 @@ let rec rewrite_app env typ (id,args) =
        E_app (mk_id "unsigned_subrange", [vector1; start1; end1])
 
     | _ -> E_app (id,args)
+
+  else if is_slice id then
+    match args with
+    | [E_aux (E_app (zero_extend, args'), _) as ext_vec; start; len]
+      when is_zero_extend zero_extend && not (is_constant_vec_typ env (typ_of ext_vec)) ->
+       let vec = List.filter (fun arg -> not (is_number (typ_of arg))) args' in
+       let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
+       let length = mk_exp (E_sizeof size) in
+       E_app (mk_id "zext_slice", [length] @ vec @ [start; len])
+    | _ -> E_app (id, args)
 
   else if is_id env (Id "__SetSlice_bits") id then
     match args with
