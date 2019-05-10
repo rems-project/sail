@@ -341,6 +341,10 @@ let value_sub_int = function
   | [v1; v2] -> V_int (Sail_lib.sub_int (coerce_int v1, coerce_int v2))
   | _ -> failwith "value sub"
 
+let value_sub_nat = function
+  | [v1; v2] -> V_int (Sail_lib.sub_nat (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value sub_nat"
+
 let value_negate = function
   | [v1] -> V_int (Sail_lib.negate (coerce_int v1))
   | _ -> failwith "value negate"
@@ -663,6 +667,7 @@ let primops =
       ("shift_bits_right", value_shift_bits_right);
       ("add_int", value_add_int);
       ("sub_int", value_sub_int);
+      ("sub_nat", value_sub_nat);
       ("div_int", value_quotient);
       ("mult_int", value_mult);
       ("mult", value_mult);

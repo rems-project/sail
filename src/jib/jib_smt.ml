@@ -1022,6 +1022,19 @@ let smt_builtin ctx name args ret_ctyp =
 
   | _ -> failwith ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
 
+
+let writes = ref (-1)
+
+let builtin_write_mem ctx wk addr_size addr data_size data =
+  [Write_mem (smt_cval ctx wk, smt_cval ctx addr, smt_cval ctx data)]
+
+let reads = ref (-1)
+
+let builtin_read_mem ctx rk addr_size addr data_size =
+  incr reads;
+  let name = "R" ^ string_of_int !reads in
+  [Read_mem (name, smt_cval ctx rk, smt_cval ctx addr)]
+
 let rec smt_conversion ctx from_ctyp to_ctyp x =
   match from_ctyp, to_ctyp with
   | _, _ when ctyp_equal from_ctyp to_ctyp -> x
@@ -1384,6 +1397,21 @@ let smt_instr ctx =
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for sqrt_real"
          end
+       (* See lib/regfp.sail *)
+       else if name = "platform_write_mem" then
+         begin match args with
+         | [wk; addr_size; addr; data_size; data] ->
+            builtin_write_mem ctx wk addr_size addr data_size data
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for __write_mem"
+         end
+       else if name = "platform_read_mem" then
+         begin match args with
+         | [rk; addr_size; addr; data_size] ->
+            builtin_read_mem ctx rk addr_size addr data_size
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for __read_mem"
+         end
        else
          let value = smt_builtin ctx name args ret_ctyp in
          [define_const ctx id ret_ctyp value]
@@ -1521,6 +1549,12 @@ let optimize_smt stack =
        end
     | (Declare_datatypes _ | Declare_tuple _) as def ->
        Stack.push def stack'
+    | Write_mem (wk, addr, data) as def ->
+       uses_in_exp wk; uses_in_exp addr; uses_in_exp data;
+       Stack.push def stack'
+    | Read_mem (name, rk, addr) as def ->
+       uses_in_exp rk; uses_in_exp addr;
+       Stack.push def stack'
     | Assert exp as def ->
        uses_in_exp exp;
        Stack.push def stack'
@@ -1542,6 +1576,10 @@ let optimize_smt stack =
           Queue.add (Define_const (var, typ, simp_smt_exp vars exp)) queue
        | None -> assert false
        end
+    | Write_mem (wk, addr, data) ->
+       Queue.add (Write_mem (simp_smt_exp vars wk, simp_smt_exp vars addr, simp_smt_exp vars data)) queue
+    | Read_mem (name, rk, addr) ->
+       Queue.add (Read_mem (name, simp_smt_exp vars rk, simp_smt_exp vars addr)) queue
     | Assert exp ->
        Queue.add (Assert (simp_smt_exp vars exp)) queue
     | (Declare_datatypes _ | Declare_tuple _) as def ->

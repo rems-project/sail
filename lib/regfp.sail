@@ -4,7 +4,7 @@ $define _REGFP
 /* iR : input registers,
  * oR : output registers,
  * aR : registers feeding into the memory address */
- 
+
 /* branch instructions currently are not writing to NIA */
 
 union regfp = {

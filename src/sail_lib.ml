@@ -186,6 +186,10 @@ let sint = function
 
 let add_int (x, y) = Big_int.add x y
 let sub_int (x, y) = Big_int.sub x y
+let sub_nat (x, y) =
+  let z = Big_int.sub x y in
+  if Big_int.less z Big_int.zero then Big_int.zero else z
+
 let mult (x, y) = Big_int.mul x y
 
 (* This is euclidian division from lem *)
