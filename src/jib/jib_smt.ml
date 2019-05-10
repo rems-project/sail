@@ -1284,25 +1284,24 @@ let smt_ssanode ctx cfg preds =
 
 let rec get_pathcond n cfg ctx =
   let open Jib_ssa in
+  let get_pi m =
+    match get_vertex cfg m with
+    | Some ((ssanodes, _), _, _) ->
+       V_call (Band, List.concat (List.map (function Pi guards -> guards | _ -> []) ssanodes))
+    | None -> failwith "Node does not exist"
+  in
   match get_vertex cfg n with
   | Some ((_, CF_guard cond), _, _) ->
-     smt_cval ctx (get_cond cfg cond)
+     smt_cval ctx (get_pi n)
   | Some (_, preds, succs) ->
      if IntSet.cardinal preds = 0 then
        Bool_lit true
      else if IntSet.cardinal preds = 1 then
        get_pathcond (IntSet.min_elt preds) cfg ctx
      else
-       let get_pi m =
-         match get_vertex cfg m with
-         | Some ((ssanodes, _), _, _) ->
-            V_call (Band, List.concat (List.map (function Pi guards -> guards | _ -> []) ssanodes))
-         | None -> failwith "Predecessor node does not exist"
-       in
        let pis = List.map get_pi (IntSet.elements preds) in
-       prerr_endline (string_of_int n ^ string_of_cval (V_call (Bor, pis)));
        smt_cval ctx (V_call (Bor, pis))
-       
+
   | None -> assert false (* Should never be called for a non-existent node *)
 
 (* For any complex l-expression we need to turn it into a
