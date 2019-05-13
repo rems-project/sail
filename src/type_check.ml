@@ -902,7 +902,7 @@ end = struct
     try
       Bindings.find id env.top_val_specs
     with
-    | Not_found -> typ_error env (id_loc id) ("No val spec found for " ^ string_of_id id)
+    | Not_found -> typ_error env (id_loc id) ("No type signature found for " ^ string_of_id id)
 
   let get_val_spec id env =
     try

@@ -411,7 +411,8 @@ and to_ast_exp ctx (P.E_aux(exp,l) : P.exp) =
          E_internal_return(to_ast_exp ctx exp)
        else
          raise (Reporting.err_general l "Internal return construct found without -dmagic_hash")
-    | _ -> raise (Reporting.err_unreachable l __POS__ "Unparsable construct in to_ast_exp")
+    | P.E_deref exp ->
+       E_app (Id_aux (Id "__deref", l), [to_ast_exp ctx exp])
     ), (l,()))
 
 and to_ast_measure ctx (P.Measure_aux(m,l)) : unit internal_loop_measure =

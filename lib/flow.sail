@@ -61,4 +61,6 @@ function __id forall 'n. (x: int('n)) -> int('n) = x
 
 overload __size = {__id}
 
+val __deref = "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
+
 $endif
