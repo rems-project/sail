@@ -179,7 +179,6 @@ val Halted : unit -> boolean effect {rreg}
 val HaveEL : bits(2) -> boolean effect {escape}
 val HaveAnyAArch32 : unit -> boolean effect pure
 val HighestELUsingAArch32 : unit -> boolean effect pure
-val Unreachable : unit -> unit effect {escape}
 val Hint_Branch : BranchType -> unit effect pure
 
 /*************************************************************************/

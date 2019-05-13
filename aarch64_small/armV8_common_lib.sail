@@ -32,6 +32,20 @@
 /*  SUCH DAMAGE.                                                          */
 /*========================================================================*/
 
+
+/** FUNCTION:shared/functions/system/Unreachable */
+
+/* CP: adding two variants, one that takes a string argument, the other one doesn't  */
+val Unreachable_no_message : forall ('a : Type) . unit -> 'a effect{escape}
+function Unreachable_no_message() = 
+    error("Unreachable reached")
+
+val Unreachable_message : forall ('a : Type) . string -> 'a effect{escape}
+function Unreachable_message(message) = 
+    error(message)
+
+overload Unreachable = {Unreachable_no_message, Unreachable_message}
+
 /** FUNCTION:shared/debug/DoubleLockStatus/DoubleLockStatus */
 
 function DoubleLockStatus() -> boolean= {
@@ -995,19 +1009,6 @@ function SendEvent() -> unit =
   ()
   /* TODO: ??? */
 }
-
-/** FUNCTION:shared/functions/system/Unreachable */
-
-/* CP: adding two variants, one that takes a string argument, the other one doesn't  */
-val Unreachable_no_message : forall ('a : Type) . unit -> 'a effect{escape}
-function Unreachable_no_message() = 
-    error("Unreachable reached")
-
-val Unreachable_message : forall ('a : Type) . string -> 'a effect{escape}
-function Unreachable_message(message) = 
-    error(message)
-
-overload Unreachable = {Unreachable_no_message, Unreachable_message}
 
 
 /** FUNCTION:shared/functions/system/UsingAArch32 */
