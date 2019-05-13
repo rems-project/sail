@@ -1,20 +1,20 @@
-| `AArch64Unallocated -> Unallocated
+| `AArch64Unallocated -> Unallocated ()
 | `AArch64TMStart t -> TMStart (translate_reg "t" t)
 
-| `AArch64TMCommit -> TMCommit
+| `AArch64TMCommit -> TMCommit ()
 
 | `AArch64TMAbort (retry,reason) ->
     TMAbort
-      (translate_boolean "retry" retry,
+      (translate_bool "retry" retry,
         translate_bit5 "reason" reason)
 
-| `AArch64TMTest -> TMTest
+| `AArch64TMTest -> TMTest ()
 
 | `AArch64ImplementationDefinedStopFetching ->
-    ImplementationDefinedStopFetching
+    ImplementationDefinedStopFetching ()
 
 | `AArch64ImplementationDefinedThreadStart ->
-    ImplementationDefinedThreadStart
+    ImplementationDefinedThreadStart ()
 
 | `AArch64ImplementationDefinedTestBeginEnd(isEnd) ->
     ImplementationDefinedTestBeginEnd

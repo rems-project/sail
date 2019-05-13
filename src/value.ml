@@ -170,6 +170,10 @@ let coerce_tuple = function
   | V_tuple vs -> vs
   | _ -> assert false
 
+let coerce_list = function
+  | V_list vs -> vs
+  | _ -> assert false
+
 let coerce_listlike = function
   | V_tuple vs -> vs
   | V_list vs -> vs
@@ -281,6 +285,10 @@ let value_update_subrange = function
 let value_append = function
   | [v1; v2] -> V_vector (coerce_gv v1 @ coerce_gv v2)
   | _ -> failwith "value append"
+
+let value_append_list = function
+  | [v1; v2] -> V_list (coerce_list v1 @ coerce_list v2)
+  | _ -> failwith "value_append_list"
 
 let value_slice = function
   | [v1; v2; v3] -> V_vector (Sail_lib.slice (coerce_gv v1, coerce_int v2, coerce_int v3))
@@ -647,6 +655,7 @@ let primops =
       ("update_subrange", value_update_subrange);
       ("slice", value_slice);
       ("append", value_append);
+      ("append_list", value_append_list);
       ("not", value_not);
       ("not_vec", value_not_vec);
       ("and_vec", value_and_vec);

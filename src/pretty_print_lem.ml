@@ -1192,6 +1192,7 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
       | Id_aux ((Id "barrier_kind"),_) -> empty
       | Id_aux ((Id "trans_kind"),_) -> empty
       | Id_aux ((Id "instruction_kind"),_) -> empty
+      | Id_aux ((Id "cache_op_kind"),_) -> empty
       | Id_aux ((Id "regfp"),_) -> empty
       | Id_aux ((Id "niafp"),_) -> empty
       | Id_aux ((Id "diafp"),_) -> empty

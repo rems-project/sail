@@ -523,3 +523,5 @@ val subst_kids_typ_arg : nexp KBindings.t -> typ_arg -> typ_arg
 
 val quant_item_subst_kid : kid -> kid -> quant_item -> quant_item
 val typquant_subst_kid : kid -> kid -> typquant -> typquant
+
+val simple_string_of_loc : Parse_ast.l -> string

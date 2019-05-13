@@ -57,9 +57,28 @@ open Pretty_print_common
 open Ocaml_backend
 
 let lem_mode = ref false
+let mword_mode = ref false
 
 let maybe_zencode s = if !lem_mode then String.uncapitalize_ascii s else zencode_string s
 let maybe_zencode_upper s = if !lem_mode then String.capitalize_ascii s else zencode_upper_string s
+
+let rec rewriteExistential (kids : kinded_id list) (Typ_aux (typ_aux, annot) as typ) =
+  print_endline (string_of_typ typ);
+  match typ_aux with
+  | Typ_tup typs -> Typ_aux (Typ_tup (List.map (rewriteExistential kids) typs), annot)
+  | Typ_exist _ -> Reporting.unreachable annot __POS__ "nested Typ_exist in rewriteExistential"
+  | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var kid, _)), _)])
+       when (string_of_id id = "atom" || string_of_id id = "int") ->
+              (* List.exists (fun k -> string_of_kid (kopt_kid k) = string_of_kid kid) kids -> *)
+     print_endline("*** rewriting to int - kid is '" ^ string_of_kid kid ^ "'" );
+     Typ_aux (Typ_id (mk_id "int"), annot)
+  | Typ_internal_unknown
+    | Typ_id _
+    | Typ_var _
+    | Typ_fn _
+    | Typ_bidir _
+    | Typ_app _ ->
+     typ
 
 let frominterp_typedef (TD_aux (td_aux, (l, _))) =
   let fromValueArgs (Typ_aux (typ_aux, _)) = match typ_aux with
@@ -79,20 +98,30 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
     | A_typ typ -> fromValueTyp typ ""
     | A_nexp nexp -> fromValueNexp nexp
     | A_order order -> string ("Order_" ^ (string_of_order order))
-    | _ -> string "TYP_ARG"
+    | A_bool _ -> parens (string "boolFromInterpValue")
   and fromValueTyp ((Typ_aux (typ_aux, l)) as typ) arg_name = match typ_aux with
     | Typ_id id -> parens (concat [string (maybe_zencode (string_of_id id)); string ("FromInterpValue"); space; string arg_name])
     (* special case bit vectors for lem *)
     | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp len_nexp, _);
                                          A_aux (A_order (Ord_aux (Ord_dec, _)), _);
                                          A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _)), _)]) when !lem_mode ->
-       parens (separate space ([string (maybe_zencode "bitsFromInterpValue"); fromValueNexp len_nexp; string arg_name]))
+       parens (separate space ([string (maybe_zencode "bitsFromInterpValue"); string arg_name]))
     | Typ_app (typ_id, typ_args) ->
        assert (typ_args <> []);
-       parens (separate space ([string (maybe_zencode (string_of_id typ_id) ^ "FromInterpValue")] @ List.map fromValueTypArg typ_args @ [string arg_name]))
+       if string_of_id typ_id = "bits" then
+         parens (separate space ([string "bitsFromInterpValue"] @ [string arg_name]))
+       else
+         parens (separate space ([string (maybe_zencode (string_of_id typ_id) ^ "FromInterpValue")] @ List.map fromValueTypArg typ_args @ [string arg_name]))
     | Typ_var kid -> parens (separate space [fromValueKid kid; string arg_name])
     | Typ_fn _ -> parens (string "failwith \"fromValueTyp: Typ_fn arm unimplemented\"")
-    | _ -> parens (string "failwith \"fromValueTyp: type arm unimplemented\"")
+    | Typ_bidir _ -> parens (string "failwith \"fromValueTyp: Typ_bidir arm unimplemented\"")
+    | Typ_exist (kids, _, t) -> parens (fromValueTyp (rewriteExistential kids t) arg_name)
+    | Typ_tup typs -> parens (string ("match " ^ arg_name ^ " with V_tuple ") ^^
+                                brackets (separate (string ";" ^^ space)
+                                          (List.mapi (fun i _ -> string (arg_name ^ "_tup" ^ string_of_int i)) typs)) ^^
+                                  (string " -> ") ^^
+                                    parens (separate comma_sp (List.mapi (fun i t -> fromValueTyp t (arg_name ^ "_tup" ^ string_of_int i)) typs)))
+    | Typ_internal_unknown -> failwith "escaped Typ_internal_unknown"
   in 
   let fromValueVals ((Typ_aux (typ_aux, l)) as typ) = match typ_aux with
     | Typ_tup typs -> parens (separate comma_sp (List.mapi (fun i typ -> fromValueTyp typ ("v" ^ (string_of_int i))) typs))
@@ -147,13 +176,14 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
      end
   | TD_abbrev (Id_aux (Id "regfps", _), _, _) -> empty
   | TD_abbrev (Id_aux (Id "niafps", _), _, _) -> empty
+  | TD_abbrev (Id_aux (Id "bits", _), _, _) when !lem_mode -> empty
   | TD_abbrev (id, typq, typ_arg) ->
      begin
        let fromInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "FromInterpValue"] in
        (* HACK: print a type annotation for abbrevs of unquantified types, to help cases ocaml can't type-infer on its own *)
        let fromInterpValspec =
          (* HACK because of lem renaming *)
-         if string_of_id id = "opcode" then empty else
+         if string_of_id id = "opcode" || string_of_id id = "integer" then empty else
          match typ_arg with
          | A_aux (A_typ _, _) -> begin match typq with
                                  | TypQ_aux (TypQ_no_forall, _) -> separate space [colon; string "value"; arrow; string (maybe_zencode (string_of_id id))]
@@ -222,19 +252,30 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
     | A_typ typ -> toValueTyp typ ""
     | A_nexp nexp -> toValueNexp nexp
     | A_order order -> string ("Order_" ^ (string_of_order order))
-    | _ -> string "TYP_ARG" 
+    | A_bool _ -> parens (string "boolToInterpValue") 
   and toValueTyp ((Typ_aux (typ_aux, l)) as typ) arg_name = match typ_aux with
     | Typ_id id -> parens (concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"; space; string arg_name])
     (* special case bit vectors for lem *)
     | Typ_app (Id_aux (Id "vector", _), [A_aux (A_nexp len_nexp, _);
                                          A_aux (A_order (Ord_aux (Ord_dec, _)), _);
                                          A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit", _)), _)), _)]) when !lem_mode ->
-       parens (separate space ([string (maybe_zencode "bitsToInterpValue"); toValueNexp len_nexp; string arg_name]))
+       parens (separate space ([string (maybe_zencode "bitsToInterpValue"); string arg_name]))
     | Typ_app (typ_id, typ_args) ->
        assert (typ_args <> []);
-       parens (separate space ([string ((maybe_zencode (string_of_id typ_id)) ^ "ToInterpValue")] @ List.map toValueTypArg typ_args @ [string arg_name]))
+       if string_of_id typ_id = "bits" then
+         parens (separate space ([string "bitsToInterpValue"] @ [string arg_name]))
+       else
+         parens (separate space ([string ((maybe_zencode (string_of_id typ_id)) ^ "ToInterpValue")] @ List.map toValueTypArg typ_args @ [string arg_name]))
     | Typ_var kid -> parens (separate space [toValueKid kid; string arg_name])
-    | _ -> parens (string "failwith \"toValueTyp: type arm unimplemented\"")
+    | Typ_fn _ -> parens (string "failwith \"toValueTyp: Typ_fn arm unimplemented\"")
+    | Typ_bidir _ -> parens (string "failwith \"toValueTyp: Typ_bidir arm unimplemented\"")
+    | Typ_exist (kids, _, t) -> parens (toValueTyp (rewriteExistential kids t) arg_name)
+    | Typ_tup typs -> parens (string ("match " ^ arg_name ^ " with ") ^^
+                                parens (separate comma_sp (List.mapi (fun i _ -> string (arg_name ^ "_tup" ^ string_of_int i)) typs)) ^^
+                                  (string " -> V_tuple ") ^^
+                                    brackets (separate (string ";" ^^ space)
+                                          (List.mapi (fun i t -> toValueTyp t (arg_name ^ "_tup" ^ string_of_int i)) typs)))
+    | Typ_internal_unknown -> failwith "escaped Typ_internal_unknown"
   in
   let toValueVals ((Typ_aux (typ_aux, _)) as typ) = match typ_aux with
     | Typ_tup typs -> brackets (separate space [string "V_tuple"; brackets (separate (semi ^^ space) (List.mapi (fun i typ -> toValueTyp typ ("v" ^ (string_of_int i))) typs))])
@@ -284,13 +325,14 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
      end
   | TD_abbrev (Id_aux (Id "regfps", _), _, _) -> empty
   | TD_abbrev (Id_aux (Id "niafps", _), _, _) -> empty
+  | TD_abbrev (Id_aux (Id "bits", _), _, _) when !lem_mode -> empty
   | TD_abbrev (id, typq, typ_arg) ->
      begin
        let toInterpValueName = concat [string (maybe_zencode (string_of_id id)); string "ToInterpValue"] in
        (* HACK: print a type annotation for abbrevs of unquantified types, to help cases ocaml can't type-infer on its own *) 
        let toInterpValspec =
          (* HACK because of lem renaming *)
-         if string_of_id id = "opcode" then empty else
+         if string_of_id id = "opcode" || string_of_id id = "integer" then empty else
          match typ_arg with
          | A_aux (A_typ _, _) -> begin match typq with
                                  | TypQ_aux (TypQ_no_forall, _) -> separate space [colon; string (maybe_zencode (string_of_id id)); arrow; string "value"]
@@ -343,12 +385,13 @@ let tofrominterp_def def = match def with
 let tofrominterp_defs name (Defs defs) =
   (string "open Sail_lib;;" ^^ hardline)
   ^^ (string "open Value;;" ^^ hardline)
-  ^^ (string "open ToFromInterp_lib;;" ^^ hardline)
   ^^ (if !lem_mode then (string "open Sail2_instr_kinds;;" ^^ hardline) else empty)
   ^^ (string ("open " ^ String.capitalize_ascii name ^ ";;") ^^ hardline)
   ^^ (if !lem_mode then (string ("open " ^ String.capitalize_ascii name ^ "_types;;") ^^ hardline) else empty)
   ^^ (if !lem_mode then (string ("open " ^ String.capitalize_ascii name ^ "_extras;;") ^^ hardline) else empty)
   ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
+  ^^ (if !mword_mode then (string "include ToFromInterp_lib_mword" ^^ hardline) else empty)
+  ^^ (if not !mword_mode then (string "include ToFromInterp_lib_bitlist.Make(struct type t = Sail2_values.bitU0 let b0 = Sail2_values.B00 let b1 = Sail2_values.B10 end)" ^^ hardline) else empty)
   ^^ concat (List.map tofrominterp_def defs)
 
 let tofrominterp_pp_defs name f defs =

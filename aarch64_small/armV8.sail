@@ -125,7 +125,7 @@ function clause execute (TMStart(t)) = {
   }
 }
 
-/* external */ val TMCommitEffect : unit -> unit effect {barr}
+/* external */ val "TMCommitEffect" : unit -> unit effect {barr}
 
 /* TCOMMIT - dummy decoding */
 val decodeTMCommit : unit -> option(ast) effect pure
@@ -2091,7 +2091,7 @@ function clause execute ( ConditionalSelect((d,n,m,datasize as int('R),condition
   wX(d) = result;
 }
 
-val decodeData1Source : bits(32) -> option(ast) effect pure
+val decodeData1Source : bits(32) -> option(ast) effect {escape}
 scattered function decodeData1Source
 
 /* RBIT */
@@ -2178,7 +2178,7 @@ function clause execute (CountLeading((d,n,datasize as int('R),opcode))) = {
 
 end decodeData1Source
 
-val decodeData2Source : bits(32) -> option(ast) effect pure
+val decodeData2Source : bits(32) -> option(ast) effect {escape}
 scattered function decodeData2Source
 
 /* SDIV o1=1 */

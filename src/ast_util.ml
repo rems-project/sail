@@ -1457,7 +1457,10 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
         initial_check.ml. i.e. the rewriter should only encounter this
         case when re-writing those functions. *)
      wrap (E_id (prepend_id "typ_" (id_of_kid kid))) typ
-  | Typ_internal_unknown | Typ_bidir _ | Typ_fn _ | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
+  | Typ_internal_unknown -> assert false
+  | Typ_bidir _ -> assert false
+  | Typ_fn _ -> assert false
+  | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
 and undefined_of_typ_args mwords l annot (A_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | A_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]
@@ -2141,3 +2144,13 @@ let rec find_annot_defs sl = function
 
 let rec find_annot_ast sl (Defs defs) = find_annot_defs sl defs
 
+let string_of_lx lx =
+  let open Lexing in
+  Printf.sprintf "%s,%d,%d,%d" lx.pos_fname lx.pos_lnum lx.pos_bol lx.pos_cnum
+
+let rec simple_string_of_loc = function
+  | Parse_ast.Unknown -> "Unknown"
+  | Parse_ast.Unique (n, l) -> "Unique(" ^ string_of_int n ^ ", " ^ simple_string_of_loc l ^ ")"
+  | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
+  | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
+  | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"

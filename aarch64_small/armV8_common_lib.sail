@@ -32,6 +32,20 @@
 /*  SUCH DAMAGE.                                                          */
 /*========================================================================*/
 
+
+/** FUNCTION:shared/functions/system/Unreachable */
+
+/* CP: adding two variants, one that takes a string argument, the other one doesn't  */
+val Unreachable_no_message : forall ('a : Type) . unit -> 'a effect{escape}
+function Unreachable_no_message() = 
+    error("Unreachable reached")
+
+val Unreachable_message : forall ('a : Type) . string -> 'a effect{escape}
+function Unreachable_message(message) = 
+    error(message)
+
+overload Unreachable = {Unreachable_no_message, Unreachable_message}
+
 /** FUNCTION:shared/debug/DoubleLockStatus/DoubleLockStatus */
 
 function DoubleLockStatus() -> boolean= {
@@ -550,8 +564,11 @@ function BigEndianReverse (value) = {
 /** FUNCTION:shared/functions/memory/DataMemoryBarrier */
 
 /* external */ val DataMemoryBarrier_Reads : unit -> unit effect {barr}
+function DataMemoryBarrier_Reads () = __barrier(Barrier_DMB_LD)
 /* external */ val DataMemoryBarrier_Writes : unit -> unit effect {barr}
+function DataMemoryBarrier_Writes () = __barrier(Barrier_DMB_ST)
 /* external */ val DataMemoryBarrier_All : unit -> unit effect {barr}
+function DataMemoryBarrier_All () = __barrier(Barrier_DMB)
 
 val DataMemoryBarrier : (MBReqDomain, MBReqTypes) -> unit effect {barr, escape}
 function DataMemoryBarrier(domain, types) =
@@ -569,8 +586,11 @@ function DataMemoryBarrier(domain, types) =
 /** FUNCTION:shared/functions/memory/DataSynchronizationBarrier */
 
 /* external */ val DataSynchronizationBarrier_Reads : unit -> unit effect {barr}
+function DataSynchronizationBarrier_Reads () = __barrier(Barrier_DSB_LD)
 /* external */ val DataSynchronizationBarrier_Writes : unit -> unit effect {barr}
+function DataSynchronizationBarrier_Writes () = __barrier(Barrier_DSB_ST)
 /* external */ val DataSynchronizationBarrier_All : unit -> unit effect {barr}
+function DataSynchronizationBarrier_All () = __barrier(Barrier_DSB)
 
 val DataSynchronizationBarrier : (MBReqDomain, MBReqTypes) -> unit effect {barr,escape}
 function DataSynchronizationBarrier(domain, types) =
@@ -602,14 +622,19 @@ function Hint_Prefetch(addr,hint,target,stream) = ()
 
 /* regular load */
 /* external */ val rMem_NORMAL : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
+function rMem_NORMAL (address, size) = __read_mem(Read_plain, 64, address, size)
 /* non-temporal load (LDNP), see ARM ARM for special exception to normal memory ordering rules */
 /* external */ val rMem_STREAM : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
+function rMem_STREAM (address, size) = __read_mem(Read_stream, 64, address, size)
 /* load-acquire */
 /* external */ val rMem_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
+function rMem_ORDERED (address, size) = __read_mem(Read_acquire, 64, address, size)
 /* load-exclusive */
 /* external */ val rMem_ATOMIC : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
+function rMem_ATOMIC (address, size) = __read_mem(Read_exclusive, 64, address, size)
 /* load-exclusive+acquire */
 /* external */ val rMem_ATOMIC_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
+function rMem_ATOMIC_ORDERED (address, size) = __read_mem(Read_exclusive_acquire, 64, address, size)
 
 struct read_buffer_type = {
   acctype : AccType,
@@ -678,12 +703,16 @@ function flush_read_buffer(read_buffer, size) =
 
 /* regular store */
 /* external */ val wMem_Addr_NORMAL : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, int('N) /*size*/) -> unit effect {eamem}
+function wMem_Addr_NORMAL (address, size) = { __write_mem_ea(Write_plain, 64, address, size); () }
 /* store-release */
 /* external */ val wMem_Addr_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, int('N) /*size*/) -> unit effect {eamem}
+function wMem_Addr_ORDERED (address, size) = { __write_mem_ea(Write_release, 64, address, size); () }
 /* store-exclusive */
 /* external */ val wMem_Addr_ATOMIC : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, int('N) /*size*/) -> unit effect {eamem}
+function wMem_Addr_ATOMIC (address, size) = { __write_mem_ea(Write_exclusive, 64, address, size); () }
 /* store-exclusive+release */
 /* external */ val wMem_Addr_ATOMIC_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/, int('N) /*size*/) -> unit effect {eamem}
+function wMem_Addr_ATOMIC_ORDERED (address, size) = { __write_mem_ea(Write_exclusive_release, 64, address, size); () }
 
 val wMem_Addr : forall 'N, 'N in {1,2,4,8,16}. (bits(64), int('N), AccType, boolean) -> unit effect {eamem, escape}
 function wMem_Addr(address, size, acctype, excl) =
@@ -701,9 +730,15 @@ function wMem_Addr(address, size, acctype, excl) =
 
 
 /* regular store */
-/* external */ val wMem_Val_NORMAL : forall 'N, 'N in {1,2,4,8,16}. (int('N) /*size*/, bits('N*8) /*value*/) -> unit effect {wmv}
+/* external */ val wMem_Val_NORMAL : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*addr*/, int('N) /*size*/, bits('N*8) /*value*/) -> unit effect {wmv}
+function wMem_Val_NORMAL (address, size, value) = { let b = __write_mem(Write_plain, 64, address, size, value); () }
+/* external */ val wMem_Val_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*addr*/, int('N) /*size*/, bits('N*8) /*value*/) -> unit effect {wmv}
+function wMem_Val_ORDERED (address, size, value) = { let b = __write_mem(Write_release, 64, address, size, value); () }
 /* store-exclusive */
-/* external */ val wMem_Val_ATOMIC : forall 'N, 'N in {1,2,4,8,16}. (int('N) /*size*/, bits('N*8) /*value*/) -> bool effect {wmv}
+/* external */ val wMem_Val_ATOMIC : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*addr*/, int('N) /*size*/, bits('N*8) /*value*/) -> bool effect {wmv}
+function wMem_Val_ATOMIC (address, size, value) = __write_mem(Write_exclusive, 64, address, size, value)
+/* external */ val wMem_Val_ATOMIC_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*addr*/, int('N) /*size*/, bits('N*8) /*value*/) -> bool effect {wmv}
+function wMem_Val_ATOMIC_ORDERED (address, size, value) = __write_mem(Write_exclusive_release, 64, address, size, value)
 
 
 struct write_buffer_type = {
@@ -752,10 +787,10 @@ function flush_write_buffer(write_buffer) = {
   let s : range(0,16) = write_buffer.size;
   assert (s == 1 | s == 2 | s == 4 | s == 8 | s == 16);
   match write_buffer.acctype {
-    AccType_NORMAL   => wMem_Val_NORMAL (s, (write_buffer.value)[((s * 8) - 1) .. 0]),
-    AccType_STREAM   => wMem_Val_NORMAL (s, (write_buffer.value)[((s * 8) - 1) .. 0]),
-    AccType_UNPRIV   => wMem_Val_NORMAL (s, (write_buffer.value)[((s * 8) - 1) .. 0]),
-    AccType_ORDERED  => wMem_Val_NORMAL (s, (write_buffer.value)[((s * 8) - 1) .. 0]),
+    AccType_NORMAL   => wMem_Val_NORMAL (write_buffer.address, s, (write_buffer.value)[((s * 8) - 1) .. 0]),
+    AccType_STREAM   => wMem_Val_NORMAL (write_buffer.address, s, (write_buffer.value)[((s * 8) - 1) .. 0]),
+    AccType_UNPRIV   => wMem_Val_NORMAL (write_buffer.address, s, (write_buffer.value)[((s * 8) - 1) .. 0]),
+    AccType_ORDERED  => wMem_Val_ORDERED (write_buffer.address, s, (write_buffer.value)[((s * 8) - 1) .. 0]),
     _  => not_implemented("unrecognised memory access")
   };
 }
@@ -766,8 +801,8 @@ function flush_write_buffer_exclusive(write_buffer) = {
   let s = write_buffer.size;
   assert (s == 1 | s == 2 | s == 4 | s == 8 | s == 16);
   match write_buffer.acctype {
-    AccType_ATOMIC   => wMem_Val_ATOMIC(s, (write_buffer.value)[((s * 8) - 1) .. 0]),
-    AccType_ORDERED  => wMem_Val_ATOMIC(s, (write_buffer.value)[((s * 8) - 1) .. 0]),
+    AccType_ATOMIC   => wMem_Val_ATOMIC(write_buffer.address, s, (write_buffer.value)[((s * 8) - 1) .. 0]),
+    AccType_ORDERED  => wMem_Val_ATOMIC_ORDERED(write_buffer.address, s, (write_buffer.value)[((s * 8) - 1) .. 0]),
     _  => { not_implemented("unrecognised memory access"); false; }
   };
 }
@@ -947,6 +982,7 @@ function Hint_Yield() -> unit = ()
 
 /** FUNCTION:shared/functions/system/InstructionSynchronizationBarrier */
 /* external */ val InstructionSynchronizationBarrier : unit -> unit effect {barr}
+function InstructionSynchronizationBarrier () = __barrier(Barrier_ISB)
 /** FUNCTION:shared/functions/system/InterruptPending */
 
 function InterruptPending () -> boolean = not_implemented_extern("InterruptPending")
@@ -995,19 +1031,6 @@ function SendEvent() -> unit =
   ()
   /* TODO: ??? */
 }
-
-/** FUNCTION:shared/functions/system/Unreachable */
-
-/* CP: adding two variants, one that takes a string argument, the other one doesn't  */
-val Unreachable_no_message : forall ('a : Type) . unit -> 'a effect{escape}
-function Unreachable_no_message() = 
-    error("Unreachable reached")
-
-val Unreachable_message : forall ('a : Type) . string -> 'a effect{escape}
-function Unreachable_message(message) = 
-    error(message)
-
-overload Unreachable = {Unreachable_no_message, Unreachable_message}
 
 
 /** FUNCTION:shared/functions/system/UsingAArch32 */

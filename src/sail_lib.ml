@@ -1,5 +1,12 @@
 module Big_int = Nat_big_num
 
+(* for ToFromInterp_lib_foo *)
+module type BitType = sig
+  type t
+  val b0 : t
+  val b1 : t
+end
+
 type 'a return = { return : 'b . 'a -> 'b }
 type 'za zoption = | ZNone of unit | ZSome of 'za;;
 
