@@ -388,14 +388,14 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
                read_reg regname >>= fun v -> return (exp_of_value v)
             | "read_mem" ->
                begin match evaluated with
-               | [rk; addr; len] ->
+               | [rk; addrsize; addr; len] ->
                   read_mem (value_of_exp rk) (value_of_exp addr) (value_of_exp len) >>= fun v -> return (exp_of_value v)
                | _ ->
                   fail "Wrong number of parameters to read_mem intrinsic"
                end
             | "write_mem_ea" ->
                begin match evaluated with
-               | [wk; addr; len] ->
+               | [wk; addrsize; addr; len] ->
                   write_ea (value_of_exp wk) (value_of_exp addr) (value_of_exp len) >> wrap unit_exp
                | _ ->
                   fail "Wrong number of parameters to write_ea intrinsic"
@@ -409,7 +409,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
                end
             | "write_mem" ->
                begin match evaluated with
-               | [wk; addr; len; v] ->
+               | [wk; addrsize; addr; len; v] ->
                   write_mem (value_of_exp wk) (value_of_exp v) (value_of_exp len) (value_of_exp v) >>= fun b -> return (exp_of_value (V_bool b))
                | _ ->
                   fail "Wrong number of parameters to write_memv intrinsic"
