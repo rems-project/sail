@@ -95,6 +95,9 @@ let options = Arg.align ([
   ( "-tofrominterp_lem",
     Arg.Tuple [set_target "tofrominterp"; Arg.Set ToFromInterp_backend.lem_mode],
     " output embedding translation for the Lem backend rather than the OCaml backend, implies -tofrominterp");
+  ( "-tofrominterp_mwords",
+    Arg.Tuple [set_target "tofrominterp"; Arg.Set ToFromInterp_backend.mword_mode],
+    " output embedding translation in machine-word mode rather than bit-list mode, implies -tofrominterp");
   ( "-tofrominterp_output_dir",
     Arg.String (fun dir -> opt_tofrominterp_output_dir := Some dir),
     " set a custom directory to output embedding translation OCaml");
@@ -202,6 +205,9 @@ let options = Arg.align ([
   ( "-Oaarch64_fast",
     Arg.Set Jib_compile.optimize_aarch64_fast_struct,
     " apply ARMv8.5 specific optimizations (potentially unsound in general)");
+  ( "-Ofast_undefined",
+    Arg.Set Initial_check.opt_fast_undefined,
+    " turn on fast-undefined mode");
   ( "-static",
     Arg.Set C_backend.opt_static,
     " make generated C functions static");

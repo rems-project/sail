@@ -5,6 +5,8 @@
 open Sail_lib;;
 open Value;;
 
+module Make(BitT : BitType) = struct
+
 type vector_order =
  | Order_inc
  | Order_dec
@@ -52,6 +54,17 @@ let znatToInterpValue v =
 let natFromInterpValue = znatFromInterpValue
 let natToInterpValue = znatToInterpValue 
 
+let zrangeFromInterpValue low high v = match v with
+  | V_int i when i >= low && i <= high -> i
+  | _ -> failwith (Printf.sprintf "invalid interpreter value for range(%s, %s)" (Big_int.to_string low) (Big_int.to_string high))
+
+let zrangeToInterpValue low high v =
+  assert (v >= low && v <= high);
+  V_int v
+
+let rangeFromInterpValue = zrangeFromInterpValue
+let rangeToInterpValue = zrangeToInterpValue
+
 
 let zboolFromInterpValue v = match v with
   | V_bool b -> b
@@ -94,10 +107,15 @@ let vectorFromInterpValue = zvectorFromInterpValue
 let vectorToInterpValue = zvectorToInterpValue 
 
 let zbitFromInterpValue v = match v with
-  | V_bit b -> b
+  | V_bit b -> (match b with
+                | Sail_lib.B0 -> BitT.b0
+                | Sail_lib.B1 -> BitT.b1)
   | _ -> failwith "invalid interpreter value for bit"
 
-let zbitToInterpValue v = V_bit v
+let zbitToInterpValue v = V_bit (match v with
+                                 | b when b = BitT.b0 -> Sail_lib.B0
+                                 | b when b = BitT.b1 -> Sail_lib.B1
+                                 | _ -> failwith "invalid BitT (usually bitU) value for bit")
 
 let bitFromInterpValue = zbitFromInterpValue
 let bitToInterpValue = zbitToInterpValue
@@ -112,15 +130,13 @@ let optionToInterpValue typq_'a v = match v with
   | Some (v0) -> V_ctor ("Some", [(typq_'a v0)])
 
 
-let bitsFromInterpValue typq_'n v = match v with
+let bitsFromInterpValue v = match v with
   | V_vector vs ->
-     assert (Big_int.of_int (List.length vs) = typq_'n);
-     Lem.wordFromBitlist (List.map (fun b -> bitFromInterpValue b |> Sail_lib.bool_of_bit) vs)
+     List.map bitFromInterpValue vs
   | _ -> failwith "invalid interpreter value for bits"
 
-let bitsToInterpValue typq_'n v =
-  let bs = Lem.bitlistFromWord v in
-  assert (Big_int.of_int (List.length bs) = typq_'n);
-  V_vector (List.map (fun b -> Sail_lib.bit_of_bool b |> bitToInterpValue) bs)
+let bitsToInterpValue v =
+  V_vector (List.map bitToInterpValue v)
 
 
+end
