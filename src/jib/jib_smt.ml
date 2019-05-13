@@ -1251,7 +1251,7 @@ let push_smt_defs stack smt_defs =
 (* When generating SMT when we encounter joins between two or more
    blocks such as in the example below, we have to generate a muxer
    that chooses the correct value of v_n or v_m to assign to v_o. We
-   use the pi nodes that contain the global path condition for each
+   use the pi nodes that contain the path condition for each
    block to generate an if-then-else for each phi function. The order
    of the arguments to each phi function is based on the graph node
    index for the predecessor nodes.
@@ -1299,6 +1299,47 @@ let smt_ssanode ctx cfg preds =
      | Some mux ->
         [Define_const (zencode_name id, smt_ctyp ctx ctyp, mux)]
 
+(* The pi condition are computed by traversing the dominator tree,
+   with each node having a pi condition defined as the conjunction of
+   all guards between it and the start node in the dominator
+   tree. This is imprecise because we have situations like:
+
+      1
+     / \
+    2   3
+    |   |
+    |   4
+    |   |\
+    5   6 9
+     \ /  |
+      7   10
+      |
+      8
+
+   where 8 = match_failure, 1 = start and 10 = return.
+   2, 3, 6 and 9 are guards as they come directly after a control flow
+   split, which always follows a conditional jump.
+
+   Here the path through the dominator tree for the match_failure is
+   1->7->8 which contains no guards so the pi condition would be empty.
+   What we do now is walk backwards (CFG must be acyclic at this point)
+   until we hit the join point prior to where we require a path
+   condition. We then take the disjunction of the pi conditions for the
+   join point's predecessors, so 5 and 6 in this case. Which gives us a
+   path condition of 2 | (3 & 6) as the dominator chains are 1->2->5 and
+   1->3->4->6.
+
+   This should work as any split in the control flow must have been
+   caused by a conditional jump followed by distinct guards, so each of
+   the nodes immediately prior to a join point must be dominated by at
+   least one unique guard. It also explains why the pi conditions are
+   sufficient to choose outcomes of phi functions above.
+
+   If we hit a guard before a join (such as 9 for return's path
+   conditional) we just return the pi condition for that guard, i.e.
+   (3 & 9) for 10. If we reach start then the path condition is simply
+   true.
+*)
 let rec get_pathcond n cfg ctx =
   let open Jib_ssa in
   let get_pi m =
