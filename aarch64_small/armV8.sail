@@ -125,7 +125,7 @@ function clause execute (TMStart(t)) = {
   }
 }
 
-/* external */ val TMCommitEffect : unit -> unit effect {barr}
+/* external */ val "TMCommitEffect" : unit -> unit effect {barr}
 
 /* TCOMMIT - dummy decoding */
 val decodeTMCommit : unit -> option(ast) effect pure

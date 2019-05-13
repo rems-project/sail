@@ -51,9 +51,8 @@ let DataSynchronizationBarrier_Writes () = barrier Barrier_DSB_ST
 let DataSynchronizationBarrier_All ()    = barrier Barrier_DSB
 let InstructionSynchronizationBarrier () = barrier Barrier_ISB
 
-val TMCommitEffect : unit -> M unit
+val TMCommitEffect : forall 'rv 'e. unit -> monad 'rv unit 'e
 let TMCommitEffect () = barrier Barrier_TM_COMMIT
 
-let duplicate_bits (Vector bits start direction,len) =
-  let bits' = repeat bits len in
-  Vector bits' start direction
+val SCTLR_EL1_type_to_SCTLR_type : SCTLR_EL1_type -> SCTLR_type
+let SCTLR_EL1_type_to_SCTLR_type <| SCTLR_EL1_type_SCTLR_EL1_type_chunk_0 = x |> = <| SCTLR_type_SCTLR_type_chunk_0 = x |>
