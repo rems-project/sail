@@ -1,47 +1,55 @@
 open import Pervasives
-open import Sail_impl_base
-open import Sail_values
-open import Prompt
+open import Pervasives_extra
+open import Sail2_instr_kinds
+open import Sail2_values
+open import Sail2_operators_mwords
+open import Sail2_prompt_monad
+open import Sail2_prompt
+open import ArmV8_types
 
-val rMem_NORMAL         : (vector bitU * integer) -> M (vector bitU)
-val rMem_STREAM         : (vector bitU * integer) -> M (vector bitU)
-val rMem_ORDERED        : (vector bitU * integer) -> M (vector bitU)
-val rMem_ATOMICL        : (vector bitU * integer) -> M (vector bitU)
-val rMem_ATOMIC_ORDERED : (vector bitU * integer) -> M (vector bitU)
+val rMem_NORMAL         : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
+val rMem_STREAM         : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
+val rMem_ORDERED        : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
+val rMem_ATOMICL        : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
+val rMem_ATOMIC_ORDERED : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
 
-let rMem_NORMAL (addr,size)         = read_mem false Read_plain addr size
-let rMem_STREAM (addr,size)         = read_mem false Read_stream addr size
-let rMem_ORDERED (addr,size)        = read_mem false Read_acquire addr size
-let rMem_ATOMIC (addr,size)         = read_mem false Read_exclusive addr size
-let rMem_ATOMIC_ORDERED (addr,size) = read_mem false Read_exclusive_acquire addr size
+let rMem_NORMAL addr size         = read_mem Read_plain () addr size
+let rMem_STREAM addr size         = read_mem Read_stream () addr size
+let rMem_ORDERED addr size        = read_mem Read_acquire () addr size
+let rMem_ATOMIC addr size         = read_mem Read_exclusive () addr size
+let rMem_ATOMIC_ORDERED addr size = read_mem Read_exclusive_acquire () addr size
 
-val wMem_Addr_NORMAL         : (vector bitU * integer) -> M unit
-val wMem_Addr_ORDERED        : (vector bitU * integer) -> M unit
-val wMem_Addr_ATOMIC         : (vector bitU * integer) -> M unit
-val wMem_Addr_ATOMIC_ORDERED : (vector bitU * integer) -> M unit
+val wMem_Addr_NORMAL         : forall 'rv 'e. list bitU -> integer -> monad 'rv unit 'e
+val wMem_Addr_ORDERED        : forall 'rv 'e. list bitU -> integer -> monad 'rv unit 'e
+val wMem_Addr_ATOMIC         : forall 'rv 'e. list bitU -> integer -> monad 'rv unit 'e
+val wMem_Addr_ATOMIC_ORDERED : forall 'rv 'e. list bitU -> integer -> monad 'rv unit 'e
 
-let wMem_Addr_NORMAL (addr,size)         = write_mem_ea Write_plain addr size
-let wMem_Addr_ORDERED (addr,size)        = write_mem_ea Write_release addr size
-let wMem_Addr_ATOMIC (addr,size)         = write_mem_ea Write_exclusive addr size
-let wMem_Addr_ATOMIC_ORDERED (addr,size) = write_mem_ea Write_exclusive_release addr size
+let wMem_Addr_NORMAL addr size         = write_mem_ea Write_plain () addr size
+let wMem_Addr_ORDERED addr size        = write_mem_ea Write_release () addr size
+let wMem_Addr_ATOMIC addr size         = write_mem_ea Write_exclusive () addr size
+let wMem_Addr_ATOMIC_ORDERED addr size = write_mem_ea Write_exclusive_release () addr size
 
 
-val wMem_Val_NORMAL : (integer * vector bitU) -> M unit
-val wMem_Val_ATOMIC : (integer * vector bitU) -> M bitU
+val wMem_Val_NORMAL : forall 'rv 'e. list bitU -> integer -> list bitU -> monad 'rv unit 'e
+val wMem_Val_ORDERED : forall 'rv 'e. list bitU -> integer -> list bitU -> monad 'rv unit 'e
+val wMem_Val_ATOMIC : forall 'rv 'e. list bitU -> integer -> list bitU -> monad 'rv bool 'e
+val wMem_Val_ATOMIC_ORDERED : forall 'rv 'e. list bitU -> integer -> list bitU -> monad 'rv bool 'e
 
-let wMem_Val_NORMAL (_,v) = write_mem_val v >>= fun _ -> return ()
+let wMem_Val_NORMAL addr size v = write_mem Write_plain () addr size v >>= fun _ -> return ()
+let wMem_Val_ORDERED addr size v = write_mem Write_release () addr size v >>= fun _ -> return ()
 (* in ARM the status returned is inversed *)
-let wMem_Val_ATOMIC (_,v) = write_mem_val v >>= fun b -> return (if b then B0 else B1)
+let wMem_Val_ATOMIC addr size v = write_mem Write_exclusive () addr size v >>= fun b -> return (not b)
+let wMem_Val_ATOMIC_ORDERED addr size v = write_mem Write_exclusive_release () addr size v >>= fun b -> return (not b)
 
-let speculate_exclusive_success () = excl_result () >>= fun b -> return (if b then B1 else B0)
+let speculate_exclusive_success () = excl_result ()
 
-val DataMemoryBarrier_Reads            : unit -> M unit
-val DataMemoryBarrier_Writes           : unit -> M unit
-val DataMemoryBarrier_All              : unit -> M unit
-val DataSynchronizationBarrier_Reads   : unit -> M unit
-val DataSynchronizationBarrier_Writes  : unit -> M unit
-val DataSynchronizationBarrier_All     : unit -> M unit
-val InstructionSynchronizationBarrier  : unit -> M unit
+val DataMemoryBarrier_Reads            : forall 'rv 'e. unit -> monad 'rv unit 'e
+val DataMemoryBarrier_Writes           : forall 'rv 'e. unit -> monad 'rv unit 'e
+val DataMemoryBarrier_All              : forall 'rv 'e. unit -> monad 'rv unit 'e
+val DataSynchronizationBarrier_Reads   : forall 'rv 'e. unit -> monad 'rv unit 'e
+val DataSynchronizationBarrier_Writes  : forall 'rv 'e. unit -> monad 'rv unit 'e
+val DataSynchronizationBarrier_All     : forall 'rv 'e. unit -> monad 'rv unit 'e
+val InstructionSynchronizationBarrier  : forall 'rv 'e. unit -> monad 'rv unit 'e
 
 let DataMemoryBarrier_Reads ()           = barrier Barrier_DMB_LD
 let DataMemoryBarrier_Writes ()          = barrier Barrier_DMB_ST
