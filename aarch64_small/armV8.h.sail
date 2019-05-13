@@ -275,3 +275,4 @@ function UNKNOWN_BITS(N) = (replicate_bits(0b0, 'N)) : bits('N)
 let UNKNOWN_BIT = b0
 
 /* external */ val speculate_exclusive_success : unit -> bool effect {exmem}
+function speculate_exclusive_success () = __excl_res ()
