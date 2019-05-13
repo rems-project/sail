@@ -4,7 +4,7 @@ $define _REGFP
 /* iR : input registers,
  * oR : output registers,
  * aR : registers feeding into the memory address */
- 
+
 /* branch instructions currently are not writing to NIA */
 
 union regfp = {
@@ -116,13 +116,14 @@ union instruction_kind = {
 
 val __read_mem
   = { ocaml: "Platform.read_mem", c: "platform_read_mem", _: "read_mem" }
-  : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (read_kind, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n) effect {rmem}
+  : forall 'n (constant 'addrsize : Int), 'n > 0 & 'addrsize in {32, 64}.
+  (read_kind, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n) effect {rmem}
 val __write_mem_ea
   = { ocaml: "Platform.write_mem_ea", c: "platform_write_mem_ea", _: "write_mem_ea" }
-  : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (write_kind, int('addrsize), bits('addrsize), int('n)) -> unit effect {eamem}
+  : forall 'n (constant 'addrsize : Int), 'n > 0 & 'addrsize in {32, 64}. (write_kind, int('addrsize), bits('addrsize), int('n)) -> unit effect {eamem}
 val __write_mem
   = { ocaml: "Platform.write_mem", c: "platform_write_mem", _: "write_mem" }
-  : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (write_kind, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool effect {wmv}
+  : forall 'n (constant 'addrsize : Int), 'n > 0 & 'addrsize in {32, 64}. (write_kind, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool effect {wmv}
 val __excl_res
   = { ocaml: "Platform.excl_res", c: "platform_excl_res", _: "excl_result" }
   : unit -> bool effect {exmem}

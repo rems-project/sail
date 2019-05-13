@@ -181,7 +181,7 @@ let rec desugar_rchain chain s e =
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
-%token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield
+%token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield Constant
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure
 %token InternalPLet InternalReturn
@@ -549,7 +549,8 @@ atomic_typ:
     { let v = mk_kid "n" $startpos $endpos in
       let atom_id = mk_id (Id "atom") $startpos $endpos in
       let atom_of_v = mk_typ (ATyp_app (atom_id, [mk_typ (ATyp_var v) $startpos $endpos])) $startpos $endpos in
-      mk_typ (ATyp_exist ([mk_kopt (KOpt_none v) $startpos $endpos], ATyp_aux (ATyp_nset (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
+      let kopt = mk_kopt (KOpt_kind (None, [v], None)) $startpos $endpos in
+      mk_typ (ATyp_exist ([kopt], ATyp_aux (ATyp_nset (v, $2), loc $startpos($2) $endpos($2)), atom_of_v)) $startpos $endpos }
   | Lcurly kopt_list Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, ATyp_aux (ATyp_lit (L_aux (L_true, loc $startpos $endpos)), loc $startpos $endpos), $4)) $startpos $endpos }
   | Lcurly kopt_list Comma typ Dot typ Rcurly
@@ -573,11 +574,19 @@ kind:
   | Bool
     { K_aux (K_bool, loc $startpos $endpos) }
 
-kopt:
-  | Lparen kid Colon kind Rparen
-    { KOpt_aux (KOpt_kind ($4, $2), loc $startpos $endpos) }
+kid_list:
   | kid
-    { KOpt_aux (KOpt_none $1, loc $startpos $endpos) }
+    { [$1] }
+  | kid kid_list
+    { $1 :: $2 }
+
+kopt:
+  | Lparen Constant kid_list Colon kind Rparen
+    { KOpt_aux (KOpt_kind (Some "constant", $3, Some $5), loc $startpos $endpos) }
+  | Lparen kid_list Colon kind Rparen
+    { KOpt_aux (KOpt_kind (None, $2, Some $4), loc $startpos $endpos) }
+  | kid
+    { KOpt_aux (KOpt_kind (None, [$1], None), loc $startpos $endpos) }
 
 kopt_list:
   | kopt
@@ -587,7 +596,7 @@ kopt_list:
 
 typquant:
   | kopt_list Comma typ
-    { let qi_nc = QI_aux (QI_const $3, loc $startpos($3) $endpos($3)) in
+    { let qi_nc = QI_aux (QI_constraint $3, loc $startpos($3) $endpos($3)) in
       TypQ_aux (TypQ_tq (List.map qi_id_of_kopt $1 @ [qi_nc]), loc $startpos $endpos) }
   | kopt_list
     { TypQ_aux (TypQ_tq (List.map qi_id_of_kopt $1), loc $startpos $endpos) }
@@ -1159,9 +1168,9 @@ r_def_body:
 
 param_kopt:
   | kid Colon kind
-    { KOpt_aux (KOpt_kind ($3, $1), loc $startpos $endpos) }
+    { KOpt_aux (KOpt_kind (None, [$1], Some $3), loc $startpos $endpos) }
   | kid
-    { KOpt_aux (KOpt_none $1, loc $startpos $endpos) }
+    { KOpt_aux (KOpt_kind (None, [$1], None), loc $startpos $endpos) }
 
 param_kopt_list:
   | param_kopt
@@ -1171,7 +1180,7 @@ param_kopt_list:
 
 typaram:
   | Lparen param_kopt_list Rparen Comma typ
-    { let qi_nc = QI_aux (QI_const $5, loc $startpos($5) $endpos($5)) in
+    { let qi_nc = QI_aux (QI_constraint $5, loc $startpos($5) $endpos($5)) in
       mk_typq $2 [qi_nc] $startpos $endpos }
   | Lparen param_kopt_list Rparen
     { mk_typq $2 [] $startpos $endpos }

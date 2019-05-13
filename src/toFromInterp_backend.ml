@@ -129,7 +129,8 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
   in
   let fromValueTypq (QI_aux (qi_aux, _)) = match qi_aux with
     | QI_id (KOpt_aux (KOpt_kind (K_aux (kind_aux, _), kid), _)) -> fromValueKid kid
-    | QI_const _ -> empty
+    | QI_constant _ -> empty
+    | QI_constraint _ -> empty
   in
   let fromValueTypqs (TypQ_aux (typq_aux, _)) = match typq_aux with
     | TypQ_no_forall -> [empty]
@@ -283,7 +284,8 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
   in
   let toValueTypq (QI_aux (qi_aux, _)) = match qi_aux with
     | QI_id (KOpt_aux (KOpt_kind (K_aux (kind_aux, _), kid), _)) -> toValueKid kid
-    | QI_const _ -> empty
+    | QI_constant _ -> empty
+    | QI_constraint _ -> empty
   in
   let toValueTypqs (TypQ_aux (typq_aux, _)) = match typq_aux with
     | TypQ_no_forall -> [empty]

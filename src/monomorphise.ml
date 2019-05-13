@@ -3583,7 +3583,7 @@ let rewrite_toplevel_nexps (Defs defs) =
        | [] -> None
        | _ ->
           let new_vars = List.map (fun (kid,nexp) -> QI_aux (QI_id (mk_kopt K_int kid), Generated tq_l)) nexp_map in
-          let new_constraints = List.map (fun (kid,nexp) -> QI_aux (QI_const (nc_eq (nvar kid) nexp), Generated tq_l)) nexp_map in
+          let new_constraints = List.map (fun (kid,nexp) -> QI_aux (QI_constraint (nc_eq (nvar kid) nexp), Generated tq_l)) nexp_map in
           let tqs = TypQ_aux (TypQ_tq (qs @ new_vars @ new_constraints),tq_l) in
           let vs =
             VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tqs,typ),ts_l),id,ext_opt,is_cast),ann) in

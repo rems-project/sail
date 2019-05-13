@@ -217,7 +217,7 @@ let add_def_to_graph graph def =
   let scan_quant_item self (QI_aux (aux, _)) =
     match aux with
     | QI_id _ -> ()
-    | QI_const nc ->
+    | QI_constraint nc ->
        IdSet.iter (fun id -> graph := G.add_edge' self (Type id) !graph) (constraint_ids nc)
   in
 

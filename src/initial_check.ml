@@ -129,17 +129,18 @@ let format_kind_aux_list = function
   | [kind] -> string_of_kind_aux kind
   | kinds -> "(" ^ Util.string_of_list ", " string_of_kind_aux kinds ^ ")"
 
-let to_ast_kopt ctx (P.KOpt_aux (aux, l)) =
-  let aux, ctx = match aux with
-    | P.KOpt_none v ->
-       let v = to_ast_var v in
-       KOpt_kind (K_aux (K_int, gen_loc l), v), { ctx with kinds = KBindings.add v K_int ctx.kinds }
-    | P.KOpt_kind (k, v) ->
-       let v = to_ast_var v in
-       let k = to_ast_kind k in
-       KOpt_kind (k, v), { ctx with kinds = KBindings.add v (unaux_kind k) ctx.kinds }
+let to_ast_kopts ctx (P.KOpt_aux (aux, l)) =
+  let mk_kopt v k =
+    let v = to_ast_var v in
+    let k = to_ast_kind k in
+    KOpt_aux (KOpt_kind (k, v), l), { ctx with kinds = KBindings.add v (unaux_kind k) ctx.kinds }
   in
-  KOpt_aux (aux, l), ctx
+  match aux with
+  | P.KOpt_kind (attr, vs, None) ->
+     let k = P.K_aux (P.K_int, gen_loc l) in
+     List.fold_left (fun (kopts, ctx) v -> let kopt, ctx = mk_kopt v k in (kopt :: kopts, ctx)) ([], ctx) vs, attr
+  | P.KOpt_kind (attr, vs, Some k) ->
+     List.fold_left (fun (kopts, ctx) v -> let kopt, ctx = mk_kopt v k in (kopt :: kopts, ctx)) ([], ctx) vs, attr
 
 let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
   let aux = match aux with
@@ -171,7 +172,14 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
        end
     | P.ATyp_exist (kopts, nc, atyp) ->
        let kopts, ctx =
-         List.fold_right (fun kopt (kopts, ctx) -> let kopt, ctx = to_ast_kopt ctx kopt in (kopt :: kopts, ctx)) kopts ([], ctx)
+         List.fold_right (fun kopt (kopts, ctx) ->
+             let (kopts', ctx), attr = to_ast_kopts ctx kopt in
+             match attr with
+             | None ->
+                kopts' @ kopts, ctx
+             | Some attr ->
+                raise (Reporting.err_typ l (sprintf "Attribute %s cannot appear within an existential type" attr))
+           ) kopts ([], ctx)
        in
        Typ_exist (kopts, to_ast_constraint ctx nc, to_ast_typ ctx atyp)
     | P.ATyp_base (id, kind, nc) ->
@@ -262,19 +270,25 @@ and to_ast_constraint ctx (P.ATyp_aux (aux, l) as atyp) =
   in
   NC_aux (aux, l)
 
-let to_ast_quant_item ctx (P.QI_aux (aux, l)) =
+let to_ast_quant_items ctx (P.QI_aux (aux, l)) =
   match aux with
-  | P.QI_const nc -> QI_aux (QI_const (to_ast_constraint ctx nc), l), ctx
+  | P.QI_constraint nc -> [QI_aux (QI_constraint (to_ast_constraint ctx nc), l)], ctx
   | P.QI_id kopt ->
-     let kopt, ctx = to_ast_kopt ctx kopt in
-     QI_aux (QI_id kopt, l), ctx
+     let (kopts, ctx), attr = to_ast_kopts ctx kopt in
+     match attr with
+     | Some "constant" ->
+        QI_aux (QI_constant kopts, l) :: List.map (fun kopt -> QI_aux (QI_id kopt, l)) kopts, ctx
+     | Some attr ->
+        raise (Reporting.err_typ l (sprintf "Unknown attribute %s" attr))
+     | None ->
+        List.map (fun kopt -> QI_aux (QI_id kopt, l)) kopts, ctx
 
 let to_ast_typquant ctx (P.TypQ_aux (aux, l)) =
   match aux with
   | P.TypQ_no_forall -> TypQ_aux (TypQ_no_forall, l), ctx
   | P.TypQ_tq quants ->
      let quants, ctx =
-       List.fold_left (fun (qis, ctx) qi -> let qi', ctx = to_ast_quant_item ctx qi in qi' :: qis, ctx) ([], ctx) quants
+       List.fold_left (fun (qis, ctx) qi -> let qis', ctx = to_ast_quant_items ctx qi in qis' @ qis, ctx) ([], ctx) quants
      in
      TypQ_aux (TypQ_tq (List.rev quants), l), ctx
 
@@ -547,9 +561,9 @@ let anon_rec_constructor_typ record_id = function
   | P.TypQ_aux (P.TypQ_no_forall, l) -> P.ATyp_aux (P.ATyp_id record_id, Generated l)
   | P.TypQ_aux (P.TypQ_tq quants, l) ->
      let rec quant_arg = function
-       | P.QI_aux (P.QI_id (P.KOpt_aux (P.KOpt_none v, l)), _) -> [P.ATyp_aux (P.ATyp_var v, Generated l)]
-       | P.QI_aux (P.QI_id (P.KOpt_aux (P.KOpt_kind (_, v), l)), _) -> [P.ATyp_aux (P.ATyp_var v, Generated l)]
-       | P.QI_aux (P.QI_const _, _) -> []
+       | P.QI_aux (P.QI_id (P.KOpt_aux (P.KOpt_kind (_, vs, _), l)), _) ->
+          List.map (fun v -> P.ATyp_aux (P.ATyp_var v, Generated l)) vs
+       | P.QI_aux (P.QI_constraint _, _) -> []
      in
      match List.concat (List.map quant_arg quants) with
      | [] -> P.ATyp_aux (P.ATyp_id record_id, Generated l)

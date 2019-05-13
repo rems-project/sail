@@ -58,7 +58,7 @@ type suggestion =
   | Suggest_none
 
 let rec analyze_unresolved_quant locals ncs = function
-  | QI_aux (QI_const nc, _) ->
+  | QI_aux (QI_constraint nc, _) ->
      let gen_kids = List.filter is_kid_generated (KidSet.elements (tyvars_of_constraint nc)) in
      if gen_kids = [] then
        Suggest_add_constraint nc
@@ -99,7 +99,7 @@ let rec analyze_unresolved_quant locals ncs = function
          else
            Suggest_none
 
-  | QI_aux (QI_id kopt, _) ->
+  | QI_aux (QI_id _, _) | QI_aux (QI_constant _, _) ->
      Suggest_none
 
 let message_of_type_error =

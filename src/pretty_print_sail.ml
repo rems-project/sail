@@ -210,21 +210,48 @@ and doc_arg_typs = function
   | [typ] -> doc_typ typ
   | typs -> parens (separate_map (comma ^^ space) doc_typ typs)
 
+let doc_kind (K_aux (k, _)) =
+  string (match k with
+          | K_int -> "Int"
+          | K_type -> "Type"
+          | K_bool -> "Bool"
+          | K_order -> "Order")
+
+let rec doc_kopts constants =
+  let is_in_group is_constant kind kopt =
+    Kind.compare kind (kopt_kind kopt) = 0 && KOptSet.mem kopt constants = is_constant
+  in
+  function
+  | kopt :: kopts ->
+     let is_constant = KOptSet.mem kopt constants in
+     let group, kopts = Util.take_drop (is_in_group is_constant (kopt_kind kopt)) kopts in
+     let attr = if is_constant then string "constant" ^^ space else empty in
+     parens (attr ^^ separate space (List.map (fun kopt -> doc_kid (kopt_kid kopt)) (kopt :: group))
+             ^^ space ^^ colon
+             ^^ space ^^ doc_kind (kopt_kind kopt))
+     ^^ begin match kopts with
+        | [] -> empty
+        | _ -> doc_kopts constants kopts
+        end
+  | [] -> empty
+
 let doc_quants quants =
-  let doc_qi_kopt (QI_aux (qi_aux, _)) =
-    match qi_aux with
-    | QI_id kopt when is_int_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Int"])]
-    | QI_id kopt when is_typ_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])]
-    | QI_id kopt when is_bool_kopt kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Bool"])]
-    | QI_id kopt -> [parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])]
-    | QI_const nc -> []
+  let rec get_constants = function
+    | QI_aux (QI_constant kopts, _) :: qis -> KOptSet.union (KOptSet.of_list kopts) (get_constants qis)
+    | _ :: qis -> get_constants qis
+    | [] -> KOptSet.empty
+  in
+  let rec get_kopts = function
+    | QI_aux (QI_id kopt, _) :: qis -> kopt :: get_kopts qis
+    | _ :: qis -> get_kopts qis
+    | [] -> []
   in
   let qi_nc (QI_aux (qi_aux, _)) =
     match qi_aux with
-    | QI_const nc -> [nc]
+    | QI_constraint nc -> [nc]
     | _ -> []
   in
-  let kdoc = separate space (List.concat (List.map doc_qi_kopt quants)) in
+  let kdoc = doc_kopts (get_constants quants) (get_kopts quants) in
   let ncs = List.concat (List.map qi_nc quants) in
   match ncs with
   | [] -> kdoc
@@ -238,11 +265,12 @@ let doc_param_quants quants =
     | QI_id kopt when is_typ_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Type"]
     | QI_id kopt when is_bool_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Bool"]
     | QI_id kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Order"]
-    | QI_const nc -> []
+    | QI_constraint _ -> []
+    | QI_constant _ -> []
   in
   let qi_nc (QI_aux (qi_aux, _)) =
     match qi_aux with
-    | QI_const nc -> [nc]
+    | QI_constraint nc -> [nc]
     | _ -> []
   in
   let kdoc = separate (comma ^^ space) (List.concat (List.map doc_qi_kopt quants)) in

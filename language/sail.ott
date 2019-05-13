@@ -269,7 +269,8 @@ quant_item :: 'QI_' ::=
   {{ com kinded identifier or Int constraint }}
   {{ aux _ l }}
   | kinded_id 	  	 	       	      :: :: id {{ com optionally kinded identifier }}
-  | n_constraint			      :: :: const {{ com Int constraint }}
+  | n_constraint			      :: :: constraint {{ com constraint }}
+  | kinded_id0 ... kinded_idn                 :: :: constant
 
 typquant :: 'TypQ_' ::=
   {{ com type quantifiers and constraints}}

@@ -172,8 +172,7 @@ and atyp =
 
 and 
 kinded_id_aux =  (* optionally kind-annotated identifier *)
-   KOpt_none of kid (* identifier *)
- | KOpt_kind of kind * kid (* kind-annotated variable *)
+   KOpt_kind of string option * kid list * kind option (* kind-annotated variable *)
 
 and
 kinded_id = 
@@ -182,7 +181,7 @@ kinded_id =
 type
 quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
    QI_id of kinded_id (* An optionally kinded identifier *)
- | QI_const of atyp (* A constraint for this type *)
+ | QI_constraint of atyp (* A constraint for this type *)
 
 
 type 

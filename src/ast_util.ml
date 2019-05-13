@@ -104,7 +104,7 @@ let mk_lit_exp lit_aux = mk_exp (E_lit (mk_lit lit_aux))
 
 let mk_funcl id pat body = FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, body),no_annot)), no_annot)
 
-let mk_qi_nc nc = QI_aux (QI_const nc, Parse_ast.Unknown)
+let mk_qi_nc nc = QI_aux (QI_constraint nc, Parse_ast.Unknown)
 
 let mk_qi_id k kid =
   let kopt =
@@ -460,9 +460,10 @@ let no_effect = mk_effect []
 
 let quant_add qi typq =
   match qi, typq with
-  | QI_aux (QI_const (NC_aux (NC_true, _)), _), _ -> typq
+  | QI_aux (QI_constraint (NC_aux (NC_true, _)), _), _ -> typq
   | QI_aux (QI_id _, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qi :: qis), l)
-  | QI_aux (QI_const nc, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qis @ [qi]), l)
+  | QI_aux (QI_constant _, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qis @ [qi]), l)
+  | QI_aux (QI_constraint nc, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qis @ [qi]), l)
   | _, TypQ_aux (TypQ_no_forall, l) -> TypQ_aux (TypQ_tq [qi], l)
 
 let quant_items : typquant -> quant_item list = function
@@ -482,7 +483,7 @@ let quant_split typq =
     | _ -> []
   in
   let qi_nc = function
-    | QI_aux (QI_const nc, _) -> [nc]
+    | QI_aux (QI_constraint nc, _) -> [nc]
     | _ -> []
   in
   let qis = quant_items typq in
@@ -497,9 +498,9 @@ let is_quant_kopt = function
   | _ -> false
 
 let is_quant_constraint = function
-  | QI_aux (QI_const _, _) -> true
+  | QI_aux (QI_constraint _, _) -> true
   | _ -> false
-                               
+
 let unaux_nexp (Nexp_aux (nexp, _)) = nexp
 let unaux_order (Ord_aux (ord, _)) = ord
 let unaux_typ (Typ_aux (typ, _)) = typ
@@ -859,7 +860,8 @@ let string_of_kinded_id (KOpt_aux (KOpt_kind (k, kid), _)) = "(" ^ string_of_kid
 
 let string_of_quant_item_aux = function
   | QI_id kopt -> string_of_kinded_id kopt
-  | QI_const constr -> string_of_n_constraint constr
+  | QI_constant kopts -> "is_constant(" ^ Util.string_of_list ", " string_of_kinded_id kopts ^ ")"
+  | QI_constraint constr -> string_of_n_constraint constr
 
 let string_of_quant_item = function
   | QI_aux (qi, _) -> string_of_quant_item_aux qi
@@ -1374,7 +1376,8 @@ and kopts_of_typ_arg (A_aux (ta,_)) =
 let kopts_of_quant_item (QI_aux (qi, _)) = match qi with
   | QI_id kopt ->
      KOptSet.singleton kopt
-  | QI_const nc -> kopts_of_constraint nc
+  | QI_constant kopts -> KOptSet.of_list kopts
+  | QI_constraint nc -> kopts_of_constraint nc
 
 let rec tyvars_of_nexp (Nexp_aux (nexp,_)) =
   match nexp with
@@ -1431,7 +1434,8 @@ and tyvars_of_typ_arg (A_aux (ta,_)) =
 let tyvars_of_quant_item (QI_aux (qi, _)) = match qi with
   | QI_id (KOpt_aux (KOpt_kind (_, kid), _)) ->
      KidSet.singleton kid
-  | QI_const nc -> tyvars_of_constraint nc
+  | QI_constant kopts -> KidSet.of_list (List.map kopt_kid kopts)
+  | QI_constraint nc -> tyvars_of_constraint nc
 
 let is_kid_generated kid = String.contains (string_of_kid kid) '#'
 
@@ -1935,11 +1939,16 @@ let subst_kid subst sv v x =
   |> subst sv (mk_typ_arg (A_order (Ord_aux (Ord_var v, Parse_ast.Unknown))))
   |> subst sv (mk_typ_arg (A_typ (mk_typ (Typ_var v))))
 
+let kopt_subst_kid sv subst (KOpt_aux (KOpt_kind (k, kid), l) as orig) =
+  if Kid.compare kid sv = 0 then KOpt_aux (KOpt_kind (k, subst), l) else orig
+
 let quant_item_subst_kid_aux sv subst = function
-  | QI_id (KOpt_aux (KOpt_kind (k, kid), l)) as qid ->
-     if Kid.compare kid sv = 0 then QI_id (KOpt_aux (KOpt_kind (k, subst), l)) else qid
-  | QI_const nc ->
-     QI_const (subst_kid constraint_subst sv subst nc)
+  | QI_id kopt ->
+     QI_id (kopt_subst_kid sv subst kopt)
+  | QI_constant kopts ->
+     QI_constant (List.map (kopt_subst_kid sv subst) kopts)
+  | QI_constraint nc ->
+     QI_constraint (subst_kid constraint_subst sv subst nc)
 
 let quant_item_subst_kid sv subst (QI_aux (quant, l)) = QI_aux (quant_item_subst_kid_aux sv subst quant, l)
 

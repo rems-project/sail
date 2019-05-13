@@ -153,10 +153,13 @@ and ocaml_typ_arg ctx (A_aux (typ_arg_aux, _) as typ_arg) =
   | A_typ typ -> ocaml_typ ctx typ
   | _ -> failwith ("OCaml: unexpected type argument " ^ string_of_typ_arg typ_arg)
 
-let ocaml_typquant typq =
+let ocaml_typquant (TypQ_aux (_, l) as typq) =
   let ocaml_qi = function
     | QI_aux (QI_id kopt, _) -> zencode_kid (kopt_kid kopt)
-    | QI_aux (QI_const _, _) -> failwith "Ocaml type quantifiers should no longer contain constraints"
+    | QI_aux (QI_constraint _, _) ->
+       raise (Reporting.err_general l "Ocaml: type quantifiers should no longer contain constraints")
+    | QI_aux (QI_constant _, _) ->
+       raise (Reporting.err_general l "Ocaml: type quantifiers should no longer contain constrant constraints")
   in
   match quant_items typq with
   | [] -> empty

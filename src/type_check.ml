@@ -246,7 +246,8 @@ and strip_quant_item = function
   | QI_aux (qi_aux, _) -> QI_aux (strip_qi_aux qi_aux, Parse_ast.Unknown)
 and strip_qi_aux = function
   | QI_id kinded_id -> QI_id (strip_kinded_id kinded_id)
-  | QI_const constr -> QI_const (strip_n_constraint constr)
+  | QI_constant kopts -> QI_constant (List.map strip_kinded_id kopts)
+  | QI_constraint constr -> QI_constraint (strip_n_constraint constr)
 and strip_kinded_id = function
   | KOpt_aux (kinded_id_aux, _) -> KOpt_aux (strip_kinded_id_aux kinded_id_aux, Parse_ast.Unknown)
 and strip_kinded_id_aux = function
@@ -1312,7 +1313,8 @@ let add_typquant l (quant : typquant) (env : Env.t) : Env.t =
   let rec add_quant_item env = function
     | QI_aux (qi, _) -> add_quant_item_aux env qi
   and add_quant_item_aux env = function
-    | QI_const constr -> Env.add_constraint constr env
+    | QI_constraint constr -> Env.add_constraint constr env
+    | QI_constant _ -> env
     | QI_id kopt -> Env.add_typ_var l kopt env
   in
   match quant with
@@ -1811,16 +1813,32 @@ let subst_unifiers unifiers typ =
 let subst_unifiers_typ_arg unifiers typ_arg =
   List.fold_left (fun typ_arg (v, arg) -> typ_arg_subst v arg typ_arg) typ_arg (KBindings.bindings unifiers)
 
-let instantiate_quant (v, arg) (QI_aux (aux, l) as qi) =
+let instantiate_quant env (v, arg) (QI_aux (aux, l) as qi) =
   match aux with
   | QI_id kopt when Kid.compare (kopt_kid kopt) v = 0 ->
      typ_debug (lazy ("Instantiated " ^ string_of_quant_item qi));
      None
   | QI_id _ -> Some qi
-  | QI_const nc -> Some (QI_aux (QI_const (constraint_subst v arg nc), l))
+  | QI_constant kopts ->
+     let kopts =
+       Util.map_filter (fun kopt ->
+           if Kid.compare (kopt_kid kopt) v = 0 then
+             begin match arg with
+             | A_aux (A_nexp nexp, _) ->
+                if is_nexp_constant (Env.expand_nexp_synonyms env nexp) then None else Some kopt
+             | _ -> Some kopt
+             end
+           else
+             Some kopt
+         ) kopts in
+     begin match kopts with
+     | [] -> None
+     | _ -> Some (QI_aux (QI_constant kopts, l))
+     end
+  | QI_constraint nc -> Some (QI_aux (QI_constraint (constraint_subst v arg nc), l))
 
-let instantiate_quants quants unifier =
-  List.map (instantiate_quant unifier) quants |> Util.option_these
+let instantiate_quants env quants unifier =
+  List.map (instantiate_quant env unifier) quants |> Util.option_these
 
 (* During typechecking, we can run into the following issue, where we
    have a function like
@@ -2374,8 +2392,8 @@ let instantiate_simple_equations =
   in
   let rec find_eqs_quant kid (QI_aux (qi,_)) =
     match qi with
-    | QI_id _ -> []
-    | QI_const nc -> find_eqs kid nc
+    | QI_id _ | QI_constant _ -> []
+    | QI_constraint nc -> find_eqs kid nc
   in
   let rec inst_from_eq = function
     | [] -> KBindings.empty
@@ -2561,7 +2579,8 @@ let rec add_constraints constrs env =
 
 let solve_quant env = function
   | QI_aux (QI_id _, _) -> false
-  | QI_aux (QI_const nc, _) -> prove __POS__ env nc
+  | QI_aux (QI_constant _, _) -> false
+  | QI_aux (QI_constraint nc, _) -> prove __POS__ env nc
 
 (* When doing implicit type coercion, for performance reasons we want
    to filter out the possible casts to only those that could
@@ -3163,7 +3182,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
             typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for pattern " ^ string_of_typ typ));
             let unifiers = unify l env goals ret_typ typ in
             let arg_typ' = subst_unifiers unifiers arg_typ in
-            let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
+            let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
             if not (List.for_all (solve_quant env) quants') then
               typ_raise env l (Err_unresolved_quants (f, quants', Env.get_locals env, Env.get_constraints env))
             else ();
@@ -3176,7 +3195,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
         end
      | _ -> typ_error env l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
      end
-     
+
   | P_app (f, pats) when Env.is_union_constructor f env ->
      (* Treat Ctor(x, y) as Ctor((x, y)) *)
      bind_pat env (P_aux (P_app (f, [mk_pat (P_tup pats)]),(l,()))) typ
@@ -3198,7 +3217,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
               (* FIXME: There's no obvious goals here *)
               let unifiers = unify l env (tyvars_of_typ typ2) typ2 typ in
               let arg_typ' = subst_unifiers unifiers typ1 in
-              let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
+              let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
               if (match quants' with [] -> false | _ -> true)
               then typ_error env l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in pattern " ^ string_of_pat pat)
               else ();
@@ -3216,7 +3235,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
                  typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
                  let unifiers = unify l env (tyvars_of_typ typ1) typ1 typ in
                  let arg_typ' = subst_unifiers unifiers typ2 in
-                 let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
+                 let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
                  if (match quants' with [] -> false | _ -> true)
                  then typ_error env l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in pattern " ^ string_of_pat pat)
                  else ();
@@ -3875,7 +3894,7 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
   typ_debug (lazy (string_of_list ", " (fun (kid, arg) -> string_of_kid kid ^ " => " ^ string_of_typ_arg arg) (KBindings.bindings unifiers)));
   all_unifiers := unifiers;
   let typ_args = List.map (subst_unifiers unifiers) typ_args in
-  List.iter (fun unifier -> quants := instantiate_quants !quants unifier) (KBindings.bindings unifiers);
+  List.iter (fun unifier -> quants := instantiate_quants env !quants unifier) (KBindings.bindings unifiers);
   List.iter (fun (v, arg) -> typ_ret := typ_subst v arg !typ_ret) (KBindings.bindings unifiers);
 
   typ_debug (lazy ("Quantifiers " ^ Util.string_of_list ", " string_of_quant_item !quants));
@@ -3897,13 +3916,6 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
          [], List.map implicit_to_int typ_args, xs
   in
 
-  let instantiate_quant (v, arg) (QI_aux (aux, l) as qi) =
-    match aux with
-    | QI_id kopt when Kid.compare (kopt_kid kopt) v = 0 -> None
-    | QI_id _ -> Some qi
-    | QI_const nc -> Some (QI_aux (QI_const (constraint_subst v arg nc), l))
-  in
-
   let typ_args = match expected_ret_typ with
     | None -> typ_args
     | Some expect when is_exist (Env.expand_synonyms env expect) || is_exist !typ_ret -> typ_args
@@ -3915,7 +3927,7 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
          let unifiers = KBindings.bindings unifiers in
          typ_debug (lazy (Util.("Unifiers " |> magenta |> clear)
                           ^ Util.string_of_list ", " (fun (v, arg) -> string_of_kid v ^ " => " ^ string_of_typ_arg arg) unifiers));
-         List.iter (fun unifier -> quants := instantiate_quants !quants unifier) unifiers;
+         List.iter (fun unifier -> quants := instantiate_quants env !quants unifier) unifiers;
          List.iter (fun (v, arg) -> typ_ret := typ_subst v arg !typ_ret) unifiers;
          List.map (fun typ -> List.fold_left (fun typ (v, arg) -> typ_subst v arg typ) typ unifiers) typ_args
        with Unification_error _ -> typ_args
@@ -3938,7 +3950,7 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
       let unifiers = KBindings.bindings unifiers in
       typ_debug (lazy (Util.("Unifiers " |> magenta |> clear)
                        ^ Util.string_of_list ", " (fun (v, arg) -> string_of_kid v ^ " => " ^ string_of_typ_arg arg) unifiers));
-      List.iter (fun unifier -> quants := instantiate_quants !quants unifier) unifiers;
+      List.iter (fun unifier -> quants := instantiate_quants env !quants unifier) unifiers;
       List.iter (fun (v, arg) -> typ_ret := typ_subst v arg !typ_ret) unifiers;
       let remaining_typs =
         List.map (fun typ -> List.fold_left (fun typ (v, arg) -> typ_subst v arg typ) typ unifiers) remaining_typs
@@ -4084,7 +4096,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) (
               typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
               let unifiers = unify l env (tyvars_of_typ ret_typ) ret_typ typ in
               let arg_typ' = subst_unifiers unifiers arg_typ in
-              let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
+              let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
               if (match quants' with [] -> false | _ -> true)
               then typ_error env l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in mapping-pattern " ^ string_of_mpat mpat)
               else ();
@@ -4114,7 +4126,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) (
               typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
               let unifiers = unify l env (tyvars_of_typ typ2) typ2 typ in
               let arg_typ' = subst_unifiers unifiers typ1 in
-              let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
+              let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
               if (match quants' with [] -> false | _ -> true)
               then typ_error env l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in mapping-pattern " ^ string_of_mpat mpat)
               else ();
@@ -4131,7 +4143,7 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) (
                  typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
                  let unifiers = unify l env (tyvars_of_typ typ1) typ1 typ in
                  let arg_typ' = subst_unifiers unifiers typ2 in
-                 let quants' = List.fold_left instantiate_quants quants (KBindings.bindings unifiers) in
+                 let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
                  if (match quants' with [] -> false | _ -> true)
                  then typ_error env l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in mapping-pattern " ^ string_of_mpat mpat)
                  else ();
