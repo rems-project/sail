@@ -170,6 +170,10 @@ let coerce_tuple = function
   | V_tuple vs -> vs
   | _ -> assert false
 
+let coerce_list = function
+  | V_list vs -> vs
+  | _ -> assert false
+
 let coerce_listlike = function
   | V_tuple vs -> vs
   | V_list vs -> vs
@@ -282,6 +286,10 @@ let value_append = function
   | [v1; v2] -> V_vector (coerce_gv v1 @ coerce_gv v2)
   | _ -> failwith "value append"
 
+let value_append_list = function
+  | [v1; v2] -> V_list (coerce_list v1 @ coerce_list v2)
+  | _ -> failwith "value_append_list"
+
 let value_slice = function
   | [v1; v2; v3] -> V_vector (Sail_lib.slice (coerce_gv v1, coerce_int v2, coerce_int v3))
   | _ -> failwith "value slice"
@@ -340,6 +348,13 @@ let value_add_int = function
 let value_sub_int = function
   | [v1; v2] -> V_int (Sail_lib.sub_int (coerce_int v1, coerce_int v2))
   | _ -> failwith "value sub"
+
+let value_sub_nat = function
+  | [v1; v2] -> V_int (
+                    let n = Sail_lib.sub_int (coerce_int v1, coerce_int v2) in
+                    if Big_int.less_equal n Big_int.zero then Big_int.zero else n
+                  )
+  | _ -> failwith "value sub_int"
 
 let value_negate = function
   | [v1] -> V_int (Sail_lib.negate (coerce_int v1))
@@ -643,6 +658,7 @@ let primops =
       ("update_subrange", value_update_subrange);
       ("slice", value_slice);
       ("append", value_append);
+      ("append_list", value_append_list);
       ("not", value_not);
       ("not_vec", value_not_vec);
       ("and_vec", value_and_vec);
@@ -663,6 +679,7 @@ let primops =
       ("shift_bits_right", value_shift_bits_right);
       ("add_int", value_add_int);
       ("sub_int", value_sub_int);
+      ("sub_nat", value_sub_nat);
       ("div_int", value_quotient);
       ("mult_int", value_mult);
       ("mult", value_mult);
