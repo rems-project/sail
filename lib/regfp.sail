@@ -124,7 +124,7 @@ val __write_mem
   = { ocaml: "Platform.write_mem", c: "platform_write_mem", _: "write_mem" }
   : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}. (write_kind, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool effect {wmv}
 val __excl_res
-  = { ocaml: "Platform.excl_res", c: "platform_excl_res", _: "excl_res" }
+  = { ocaml: "Platform.excl_res", c: "platform_excl_res", _: "excl_result" }
   : unit -> bool effect {exmem}
 val __barrier
   = { ocaml: "Platform.barrier", c: "platform_barrier", _: "barrier" }
