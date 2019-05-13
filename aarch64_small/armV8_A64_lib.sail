@@ -504,7 +504,6 @@ function AArch64_ResetSpecialRegisters() -> unit =
 
 /** FUNCTION:aarch64/functions/registers/PC */
 
-val rPC : unit -> bits(64) effect {rreg}
 function rPC () = _PC
 
 /** FUNCTION:// SP[] - assignment form */
