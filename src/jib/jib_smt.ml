@@ -244,7 +244,7 @@ let smt_value ctx vl ctyp =
   | VL_int n, CT_lint -> bvint ctx.lint_size n
   | VL_bit Sail2_values.B0, CT_bit -> Bin "0"
   | VL_bit Sail2_values.B1, CT_bit -> Bin "1"
-  | VL_unit, _ -> Var "unit"
+  | VL_unit, _ -> Enum "unit"
   | VL_string str, _ ->
      ctx.use_string := true;
      String_lit (String.escaped str)
@@ -268,7 +268,7 @@ let rec smt_cval ctx cval =
   | V_lit (vl, ctyp) -> smt_value ctx vl ctyp
   | V_id (Name (id, _) as ssa_id, _) ->
      begin match Type_check.Env.lookup_id id ctx.tc_env with
-     | Enum _ -> Var (zencode_id id)
+     | Enum _ -> Enum (zencode_id id)
      | _ -> Var (zencode_name ssa_id)
      end
   | V_id (ssa_id, _) -> Var (zencode_name ssa_id)
@@ -1170,7 +1170,7 @@ let rec ctyp_of_typ ctx typ =
 
   | Typ_var kid -> CT_poly
 
-  | _ -> raise (Reporting.err_unreachable l __POS__ ("No C type for type " ^ string_of_typ typ))
+  | _ -> raise (Reporting.err_unreachable l __POS__ ("No SMT type for type " ^ string_of_typ typ))
 
 (**************************************************************************)
 (* 3. Optimization of primitives and literals                             *)
@@ -1571,7 +1571,7 @@ let optimize_smt stack =
        | Some n -> Hashtbl.replace uses var (n + 1)
        | None -> Hashtbl.add uses var 1
        end
-    | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
+    | Enum _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
     | Fn (f, exps) ->
        List.iter uses_in_exp exps
     | Ite (cond, t, e) ->
@@ -1788,16 +1788,16 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           output_string out_chan "(set-option :produce-models true)\n";
 
         let header = smt_header ctx all_cdefs in
-        
+
         if !(ctx.use_string) || !(ctx.use_real) then
           output_string out_chan "(set-logic ALL)\n"
         else
           output_string out_chan "(set-logic QF_AUFBVDT)\n";
 
-        List.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") header;
+        List.iter (fun def -> output_string out_chan (string_of_smt_def "" def); output_string out_chan "\n") header;
 
         let queue = optimize_smt stack in
-        Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
+        Queue.iter (fun def -> output_string out_chan (string_of_smt_def "" def); output_string out_chan "\n") queue;
 
         output_string out_chan "(check-sat)\n";
         if prop_type = "counterexample" then

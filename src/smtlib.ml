@@ -94,6 +94,7 @@ type smt_exp =
   | Real_lit of string
   | String_lit of string
   | Var of string
+  | Enum of string
   | Fn of string * smt_exp list
   | Ite of smt_exp * smt_exp * smt_exp
   | SignExtend of int * smt_exp
@@ -159,7 +160,7 @@ let rec simp_smt_exp vars = function
      | Some exp -> simp_smt_exp vars exp
      | None -> Var v
      end
-  | (Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ as exp) -> exp
+  | (Enum _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ as exp) -> exp
   | Fn (f, exps) ->
      let exps = List.map (simp_smt_exp vars) exps in
      simp_fn (Fn (f, exps))
@@ -196,7 +197,9 @@ let pp_sfun str docs =
   let open PPrint in
   parens (separate space (string str :: docs))
 
-let rec pp_smt_exp =
+let prefix_string pre str = PPrint.string (pre ^ str)
+
+let rec pp_smt_exp pre =
   let open PPrint in
   function
   | Bool_lit b -> string (string_of_bool b)
@@ -204,16 +207,17 @@ let rec pp_smt_exp =
   | String_lit str -> string ("\"" ^ str ^ "\"")
   | Hex str -> string ("#x" ^ str)
   | Bin str -> string ("#b" ^ str)
-  | Var str -> string str
-  | Fn (str, exps) -> parens (string str ^^ space ^^ separate_map space pp_smt_exp exps)
+  | Var str -> prefix_string pre str
+  | Enum str -> string str
+  | Fn (str, exps) -> parens (string str ^^ space ^^ separate_map space (pp_smt_exp pre) exps)
   | Ite (cond, then_exp, else_exp) ->
-     parens (separate space [string "ite"; pp_smt_exp cond; pp_smt_exp then_exp; pp_smt_exp else_exp])
+     parens (separate space [string "ite"; pp_smt_exp pre cond; pp_smt_exp pre then_exp; pp_smt_exp pre else_exp])
   | Extract (i, j, exp) ->
-     parens (string (Printf.sprintf "(_ extract %d %d)" i j) ^^ space ^^ pp_smt_exp exp)
+     parens (string (Printf.sprintf "(_ extract %d %d)" i j) ^^ space ^^ pp_smt_exp pre exp)
   | Tester (kind, exp) ->
-     parens (string (Printf.sprintf "(_ is %s)" kind) ^^ space ^^ pp_smt_exp exp)
+     parens (string (Printf.sprintf "(_ is %s)" kind) ^^ space ^^ pp_smt_exp pre exp)
   | SignExtend (i, exp) ->
-     parens (string (Printf.sprintf "(_ sign_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
+     parens (string (Printf.sprintf "(_ sign_extend %d)" i) ^^ space ^^ pp_smt_exp pre exp)
 
 let rec pp_smt_typ =
   let open PPrint in
@@ -228,7 +232,7 @@ let rec pp_smt_typ =
 
 let pp_str_smt_typ (str, ty) = let open PPrint in string str ^^ space ^^ pp_smt_typ ty
 
-let pp_smt_def =
+let pp_smt_def pre =
   let open PPrint in
   let open Printf in
   function
@@ -236,19 +240,19 @@ let pp_smt_def =
      parens (string "define-fun"
              ^^ space ^^ parens (separate_map space pp_str_smt_typ args)
              ^^ space ^^ pp_smt_typ ty
-             ^//^ pp_smt_exp exp)
+             ^//^ pp_smt_exp pre exp)
 
   | Declare_const (name, ty) ->
-     pp_sfun "declare-const" [string name; pp_smt_typ ty]
+     pp_sfun "declare-const" [prefix_string pre name; pp_smt_typ ty]
 
   | Define_const (name, ty, exp) ->
-     pp_sfun "define-const" [string name; pp_smt_typ ty; pp_smt_exp exp]
+     pp_sfun "define-const" [prefix_string pre name; pp_smt_typ ty; pp_smt_exp pre exp]
 
   | Write_mem (name, wk, addr, data) ->
-     pp_sfun "declare-const" [string name; pp_smt_typ Bool]
+     pp_sfun "declare-const" [prefix_string pre name; pp_smt_typ Bool]
 
   | Read_mem (name, ty, rk, addr) ->
-     pp_sfun "declare-const" [string name; pp_smt_typ ty]
+     pp_sfun "declare-const" [prefix_string pre name; pp_smt_typ ty]
 
   | Declare_datatypes (name, ctors) ->
      let pp_ctor (ctor_name, fields) =
@@ -271,12 +275,12 @@ let pp_smt_def =
                            parens (parens (ksprintf string "tup%d" n ^^ space ^^ fields))]))]
 
   | Assert exp ->
-     pp_sfun "assert" [pp_smt_exp exp]
+     pp_sfun "assert" [pp_smt_exp pre exp]
 
-let string_of_smt_def def = Pretty_print_sail.to_string (pp_smt_def def)
+let string_of_smt_def pre def = Pretty_print_sail.to_string (pp_smt_def pre def)
 
-let output_smt_defs out_chan smt =
-  List.iter (fun def -> output_string out_chan (string_of_smt_def def ^ "\n")) smt
+let output_smt_defs out_chan pre smt =
+  List.iter (fun def -> output_string out_chan (string_of_smt_def pre def ^ "\n")) smt
 
 (**************************************************************************)
 (* 2. Parser for SMT solver output                                        *)
