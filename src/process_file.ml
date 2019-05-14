@@ -126,6 +126,24 @@ let cond_pragma l defs =
   in
   scan defs
 
+(* We want to provide warnings for e.g. a mispelled pragma rather than
+   just silently ignoring them, so we have a list here of all
+   recognised pragmas. *)
+let all_pragmas =
+  List.fold_left (fun set str -> StringSet.add str set) StringSet.empty
+    [ "define";
+      "include";
+      "ifdef";
+      "ifndef";
+      "else";
+      "endif";
+      "option";
+      "optimize";
+      "latex";
+      "property";
+      "counterexample";
+    ]
+
 let rec preprocess opts = function
   | [] -> []
   | Parse_ast.DEF_pragma ("define", symbol, _) :: defs ->
@@ -189,6 +207,8 @@ let rec preprocess opts = function
        (Util.warn ("Skipping bad $include " ^ file ^ ". " ^ help); preprocess opts defs)
 
   | Parse_ast.DEF_pragma (p, arg, l) :: defs ->
+     if not (StringSet.mem p all_pragmas) then
+       Util.warn (Reporting.loc_to_string l ^ "Unrecognised directive: " ^ p);
      Parse_ast.DEF_pragma (p, arg, l) :: preprocess opts defs
 
   | (Parse_ast.DEF_default (Parse_ast.DT_aux (Parse_ast.DT_order (_, Parse_ast.ATyp_aux (atyp, _)), _)) as def) :: defs ->
