@@ -63,4 +63,7 @@ overload __size = {__id}
 
 val __deref = "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 
+/* Used to implement bitfield desugaring */
+val __bitfield_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a effect pure
+
 $endif

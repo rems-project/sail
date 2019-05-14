@@ -323,6 +323,11 @@ void undefined_int(sail_int *rop, const int n)
   mpz_set_ui(*rop, (uint64_t) n);
 }
 
+void undefined_nat(sail_int *rop, const unit u)
+{
+  mpz_set_ui(*rop, 0);
+}
+
 inline
 void undefined_range(sail_int *rop, const sail_int l, const sail_int u)
 {

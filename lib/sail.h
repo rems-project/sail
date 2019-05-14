@@ -129,6 +129,7 @@ SAIL_INT_FUNCTION(shr_int, sail_int, const sail_int, const sail_int);
  * constraints.
  */
 SAIL_INT_FUNCTION(undefined_int, sail_int, const int);
+SAIL_INT_FUNCTION(undefined_nat, sail_int, const unit);
 SAIL_INT_FUNCTION(undefined_range, sail_int, const sail_int, const sail_int);
 
 /*

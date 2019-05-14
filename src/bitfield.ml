@@ -121,7 +121,7 @@ let index_range_setter name field order start stop =
   in
   let irs_function = String.concat "\n"
     [ Printf.sprintf "function _set_%s_%s (r_ref, v) = {" name field;
-                     "  r = _reg_deref(r_ref);";
+                     "  r = __bitfield_deref(r_ref);";
       Printf.sprintf "  %s;" (Util.string_of_list ";\n  " body indices);
                      "  (*r_ref) = r";
                      "}"

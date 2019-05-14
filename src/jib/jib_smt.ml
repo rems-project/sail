@@ -1456,7 +1456,6 @@ let smt_instr ctx =
          | [rk; addr_size; addr; data_size] ->
             let mem_event, var = builtin_read_mem ctx rk addr_size addr data_size ret_ctyp in
             mem_event @ [define_const ctx id ret_ctyp var]
-                                                   
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __read_mem"
          end

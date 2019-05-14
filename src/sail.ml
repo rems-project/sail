@@ -260,7 +260,7 @@ let options = Arg.align ([
       "<filename>:<line>:<variable> to case split for monomorphisation");
   ( "-memo_z3",
     Arg.Set opt_memo_z3,
-    " memoize calls to z3, improving performance when typechecking repeatedly (default)");
+    " memoize calls to z3, improving performance when typechecking repeatedly");
   ( "-no_memo_z3",
     Arg.Clear opt_memo_z3,
     " do not memoize calls to z3 (default)");
