@@ -145,7 +145,7 @@ function clause execute (ITYPE (imm, rs1, rd, RISCV_ADDI)) =
 
 function clause decode _ = None()
 
-$counterexample
+$property
 function prop(imm:  bits(12), rs1: regbits, rd: regbits, v: xlenbits) -> bool = {
   X(rs1) = v;
   match decode(imm @ rs1 @ 0b000 @ rd @ 0b0010011) {

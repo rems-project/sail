@@ -133,7 +133,7 @@ type error =
   | Err_unreachable of Parse_ast.l * (string * int * int * int) * string
   | Err_todo of Parse_ast.l * string
   | Err_syntax of Lexing.position * string
-  | Err_syntax_locn of Parse_ast.l * string
+  | Err_syntax_loc of Parse_ast.l * string
   | Err_lex of Lexing.position * string
   | Err_type of Parse_ast.l * string
 
@@ -145,7 +145,7 @@ let dest_err = function
      (Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line, Loc l, m ^ issues)
   | Err_todo (l, m) -> ("Todo" ^ m, Loc l, "")
   | Err_syntax (p, m) -> ("Syntax error", Pos p, m)
-  | Err_syntax_locn (l, m) -> ("Syntax error", Loc l, m)
+  | Err_syntax_loc (l, m) -> ("Syntax error", Loc l, m)
   | Err_lex (p, s) -> ("Lexical error", Pos p, s)
   | Err_type (l, m) -> ("Type error", Loc l, m)
 
@@ -156,6 +156,7 @@ let err_todo l m = Fatal_error (Err_todo (l, m))
 let err_unreachable l ocaml_pos m = Fatal_error (Err_unreachable (l, ocaml_pos, m))
 let err_general l m = Fatal_error (Err_general (l, m))
 let err_typ l m = Fatal_error (Err_type (l,m))
+let err_syntax_loc l m = Fatal_error (Err_syntax_loc (l, m))
 
 let unreachable l pos msg =
   raise (err_unreachable l pos msg)

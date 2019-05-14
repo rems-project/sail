@@ -67,6 +67,8 @@ let opt_ignore_overflow = ref false
 
 let opt_auto = ref false
 
+let opt_debug_graphs = ref false
+
 module EventMap = Map.Make(Event)
 
 (* Note that we have to use x : ty ref rather than mutable x : ty, to
@@ -91,7 +93,7 @@ type ctx = {
     (* When generating SMT for an instruction pathcond will contain
        the global path conditional of the containing block in the
        control flow graph *)
-    pathcond : smt_exp;
+    pathcond : smt_exp Lazy.t;
     (* Set if we need to use strings *)
     use_string : bool ref;
     use_real : bool ref
@@ -116,7 +118,7 @@ let initial_ctx () = {
     arg_stack = Stack.create ();
     ast = Defs [];
     events = ref EventMap.empty;
-    pathcond = Bool_lit true;
+    pathcond = lazy (Bool_lit true);
     use_string = ref false;
     use_real = ref false;
   }
@@ -278,6 +280,10 @@ let rec smt_cval ctx cval =
      Fn ("=", [smt_cval ctx cval; Bin "1"])
   | V_call (Bnot, [cval]) ->
      Fn ("not", [smt_cval ctx cval])
+  | V_call (Band, cvals) ->
+     smt_conj (List.map (smt_cval ctx) cvals)
+  | V_call (Bor, cvals) ->
+     smt_disj (List.map (smt_cval ctx) cvals)
   | V_ctor_kind (union, ctor_id, unifiers, _) ->
      Fn ("not", [Tester (zencode_ctor ctor_id unifiers, smt_cval ctx union)])
   | V_ctor_unwrap (ctor_id, union, unifiers, _) ->
@@ -320,7 +326,10 @@ let rec smt_cval ctx cval =
 
 let add_event ctx ev smt =
   let stack = event_stack ctx ev in
-  Stack.push (Fn ("=>", [ctx.pathcond; smt])) stack
+  Stack.push (Fn ("=>", [Lazy.force ctx.pathcond; smt])) stack
+
+let add_pathcond_event ctx ev =
+  Stack.push (Lazy.force ctx.pathcond) (event_stack ctx ev)
 
 let overflow_check ctx smt =
   if not !opt_ignore_overflow then (
@@ -903,6 +912,16 @@ let builtin_compare_bits fn ctx v1 v2 ret_ctyp =
 
   | _ -> builtin_type_error ctx fn [v1; v2] (Some ret_ctyp)
 
+(* ***** String operations: lib/real.sail ***** *)
+
+let builtin_decimal_string_of_bits ctx v =
+  begin match cval_ctyp v with
+  | CT_fbits (n, _) ->
+     Fn ("int.to.str", [Fn ("bv2nat", [smt_cval ctx v])])
+
+  | _ -> builtin_type_error ctx "decimal_string_of_bits" [v] None
+  end
+
 (* ***** Real number operations: lib/real.sail ***** *)
 
 let builtin_sqrt_real ctx root v =
@@ -986,6 +1005,7 @@ let smt_builtin ctx name args ret_ctyp =
   (* string builtins *)
   | "concat_str", [v1; v2], CT_string -> ctx.use_string := true; Fn ("str.++", [smt_cval ctx v1; smt_cval ctx v2])
   | "eq_string", [v1; v2], CT_bool -> ctx.use_string := true; Fn ("=", [smt_cval ctx v1; smt_cval ctx v2])
+  | "decimal_string_of_bits", [v], CT_string -> ctx.use_string := true; builtin_decimal_string_of_bits ctx v
 
   (* lib/real.sail *)
   (* Note that sqrt_real is special and is handled by smt_instr. *)
@@ -1001,6 +1021,23 @@ let smt_builtin ctx name args ret_ctyp =
   | "gteq_real", [v1; v2], CT_bool -> ctx.use_real := true; Fn (">=", [smt_cval ctx v1; smt_cval ctx v2])
 
   | _ -> failwith ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
+
+(* Memory reads and writes as defined in lib/regfp.sail *)
+let writes = ref (-1)
+
+let builtin_write_mem ctx wk addr_size addr data_size data =
+  incr writes;
+  let name = "W" ^ string_of_int !writes in
+  [Write_mem (name, smt_cval ctx wk, smt_cval ctx addr, smt_cval ctx data)],
+  Var name
+
+let reads = ref (-1)
+
+let builtin_read_mem ctx rk addr_size addr data_size ret_ctyp =
+  incr reads;
+  let name = "R" ^ string_of_int !reads in
+  [Read_mem (name, smt_ctyp ctx ret_ctyp, smt_cval ctx rk, smt_cval ctx addr)],
+  Var name
 
 let rec smt_conversion ctx from_ctyp to_ctyp x =
   match from_ctyp, to_ctyp with
@@ -1214,7 +1251,7 @@ let push_smt_defs stack smt_defs =
 (* When generating SMT when we encounter joins between two or more
    blocks such as in the example below, we have to generate a muxer
    that chooses the correct value of v_n or v_m to assign to v_o. We
-   use the pi nodes that contain the global path condition for each
+   use the pi nodes that contain the path condition for each
    block to generate an if-then-else for each phi function. The order
    of the arguments to each phi function is based on the graph node
    index for the predecessor nodes.
@@ -1249,11 +1286,7 @@ let smt_ssanode ctx cfg preds =
      let pis = List.map get_pi (IntSet.elements preds) in
      let mux =
        List.fold_right2 (fun pi id chain ->
-           let pathcond =
-             match pi with
-             | [cval] -> smt_cval ctx cval
-             | _ -> Fn ("and", List.map (smt_cval ctx) pi)
-           in
+           let pathcond = smt_conj (List.map (smt_cval ctx) pi) in
            match chain with
            | Some smt ->
               Some (Ite (pathcond, Var (zencode_name id), smt))
@@ -1266,12 +1299,68 @@ let smt_ssanode ctx cfg preds =
      | Some mux ->
         [Define_const (zencode_name id, smt_ctyp ctx ctyp, mux)]
 
-let rec get_pathcond ctx fns =
+(* The pi condition are computed by traversing the dominator tree,
+   with each node having a pi condition defined as the conjunction of
+   all guards between it and the start node in the dominator
+   tree. This is imprecise because we have situations like:
+
+      1
+     / \
+    2   3
+    |   |
+    |   4
+    |   |\
+    5   6 9
+     \ /  |
+      7   10
+      |
+      8
+
+   where 8 = match_failure, 1 = start and 10 = return.
+   2, 3, 6 and 9 are guards as they come directly after a control flow
+   split, which always follows a conditional jump.
+
+   Here the path through the dominator tree for the match_failure is
+   1->7->8 which contains no guards so the pi condition would be empty.
+   What we do now is walk backwards (CFG must be acyclic at this point)
+   until we hit the join point prior to where we require a path
+   condition. We then take the disjunction of the pi conditions for the
+   join point's predecessors, so 5 and 6 in this case. Which gives us a
+   path condition of 2 | (3 & 6) as the dominator chains are 1->2->5 and
+   1->3->4->6.
+
+   This should work as any split in the control flow must have been
+   caused by a conditional jump followed by distinct guards, so each of
+   the nodes immediately prior to a join point must be dominated by at
+   least one unique guard. It also explains why the pi conditions are
+   sufficient to choose outcomes of phi functions above.
+
+   If we hit a guard before a join (such as 9 for return's path
+   conditional) we just return the pi condition for that guard, i.e.
+   (3 & 9) for 10. If we reach start then the path condition is simply
+   true.
+*)
+let rec get_pathcond n cfg ctx =
   let open Jib_ssa in
-  match fns with
-  | [] | Pi [] :: _ -> Bool_lit true
-  | Pi cvals :: _ -> Fn ("and", List.map (smt_cval ctx) cvals)
-  | Phi _ :: fns -> get_pathcond ctx fns
+  let get_pi m =
+    match get_vertex cfg m with
+    | Some ((ssanodes, _), _, _) ->
+       V_call (Band, List.concat (List.map (function Pi guards -> guards | _ -> []) ssanodes))
+    | None -> failwith "Node does not exist"
+  in
+  match get_vertex cfg n with
+  | Some ((_, CF_guard cond), _, _) ->
+     smt_cval ctx (get_pi n)
+  | Some (_, preds, succs) ->
+     if IntSet.cardinal preds = 0 then
+       Bool_lit true
+     else if IntSet.cardinal preds = 1 then
+       get_pathcond (IntSet.min_elt preds) cfg ctx
+     else
+       let pis = List.map get_pi (IntSet.elements preds) in
+       smt_cval ctx (V_call (Bor, pis))
+
+  | None -> assert false (* Should never be called for a non-existent node *)
 
 (* For any complex l-expression we need to turn it into a
    read-modify-write in the SMT solver. The SSA transform turns CL_id
@@ -1323,6 +1412,19 @@ let rmw_modify smt = function
      end
   | _ -> assert false
 
+let smt_terminator ctx =
+  let open Jib_ssa in
+  function
+  | T_end id ->
+     add_event ctx Return (Var (zencode_name id));
+     []
+
+  | T_match_failure ->
+     add_pathcond_event ctx Match;
+     []
+
+  | T_undefined _ | T_goto _ | T_jump _ | T_label _ | T_none -> []
+
 (* For a basic block (contained in a control-flow node / cfnode), we
    turn the instructions into a sequence of define-const and
    declare-const expressions. Because we are working with a SSA graph,
@@ -1339,6 +1441,24 @@ let smt_instr ctx =
          | [v] -> builtin_sqrt_real ctx (zencode_name id) v
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for sqrt_real"
+         end
+       (* See lib/regfp.sail *)
+       else if name = "platform_write_mem" then
+         begin match args with
+         | [wk; addr_size; addr; data_size; data] ->
+            let mem_event, var = builtin_write_mem ctx wk addr_size addr data_size data in
+            mem_event @ [define_const ctx id ret_ctyp var]
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for __write_mem"
+         end
+       else if name = "platform_read_mem" then
+         begin match args with
+         | [rk; addr_size; addr; data_size] ->
+            let mem_event, var = builtin_read_mem ctx rk addr_size addr data_size ret_ctyp in
+            mem_event @ [define_const ctx id ret_ctyp var]
+                                                   
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for __read_mem"
          end
        else
          let value = smt_builtin ctx name args ret_ctyp in
@@ -1401,21 +1521,11 @@ let smt_instr ctx =
      end;
      [declare_const ctx id ctyp]
 
-  | I_aux (I_end id, _) ->
-     add_event ctx Return (Var (zencode_name id));
-     []
-
   | I_aux (I_clear _, _) -> []
 
-  | I_aux (I_match_failure, _) ->
-     add_event ctx Match (Bool_lit false);
-     []
-
-  | I_aux (I_undefined ctyp, _) -> []
-
-  (* I_jump and I_goto will only appear as terminators for basic blocks. *)
-  | I_aux ((I_jump _ | I_goto _), _) -> []
-
+  (* Should only appear as terminators for basic blocks. *)
+  | I_aux ((I_jump _ | I_goto _ | I_end _ | I_match_failure | I_undefined _), (_, l)) ->
+     Reporting.unreachable l __POS__ "SMT: Instruction should only appear as block terminator"
 
   | instr ->
      failwith ("Cannot translate: " ^ Pretty_print_sail.to_string (pp_instr instr))
@@ -1431,9 +1541,10 @@ let smt_cfnode all_cdefs ctx ssanodes =
        | _ -> declare_const ctx id ctyp
      in
      smt_reg_decs @ List.map smt_start (NameMap.bindings inits)
-  | CF_block instrs ->
-     let ctx = { ctx with pathcond = get_pathcond ctx ssanodes } in
-     List.concat (List.map (smt_instr ctx) instrs)
+  | CF_block (instrs, terminator) ->
+     let smt_instrs = List.map (smt_instr ctx) instrs in
+     let smt_term = smt_terminator ctx terminator in
+     List.concat (smt_instrs @ [smt_term])
   (* We can ignore any non basic-block/start control-flow nodes *)
   | _ -> []
 
@@ -1486,6 +1597,12 @@ let optimize_smt stack =
        end
     | (Declare_datatypes _ | Declare_tuple _) as def ->
        Stack.push def stack'
+    | Write_mem (_, wk, addr, data) as def ->
+       uses_in_exp wk; uses_in_exp addr; uses_in_exp data;
+       Stack.push def stack'
+    | Read_mem (_, _, rk, addr) as def ->
+       uses_in_exp rk; uses_in_exp addr;
+       Stack.push def stack'
     | Assert exp as def ->
        uses_in_exp exp;
        Stack.push def stack'
@@ -1507,6 +1624,10 @@ let optimize_smt stack =
           Queue.add (Define_const (var, typ, simp_smt_exp vars exp)) queue
        | None -> assert false
        end
+    | Write_mem (name, wk, addr, data) ->
+       Queue.add (Write_mem (name, simp_smt_exp vars wk, simp_smt_exp vars addr, simp_smt_exp vars data)) queue
+    | Read_mem (name, typ, rk, addr) ->
+       Queue.add (Read_mem (name, typ, simp_smt_exp vars rk, simp_smt_exp vars addr)) queue
     | Assert exp ->
        Queue.add (Assert (simp_smt_exp vars exp)) queue
     | (Declare_datatypes _ | Declare_tuple _) as def ->
@@ -1582,16 +1703,6 @@ let expand_reg_deref ctx = function
      end
   | instr -> instr
 
-let smt_conj = function
-  | [] -> Bool_lit true
-  | [x] -> x
-  | xs -> Fn ("and", xs)
-
-let smt_disj = function
-  | [] -> Bool_lit false
-  | [x] -> x
-  | xs -> Fn ("or", xs)
-
 let rec smt_query ctx = function
   | Q_all ev ->
      let stack = event_stack ctx ev in
@@ -1605,6 +1716,12 @@ let rec smt_query ctx = function
      Fn ("and", List.map (smt_query ctx) qs)
   | Q_or qs ->
      Fn ("or", List.map (smt_query ctx) qs)
+
+let dump_graph function_id cfg =
+  let gv_file = string_of_id function_id ^ ".gv" in
+  let out_chan = open_out gv_file in
+  Jib_ssa.make_dot out_chan cfg;
+  close_out out_chan
 
 let smt_cdef props lets name_file ctx all_cdefs = function
   | CDEF_spec (function_id, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
@@ -1641,14 +1758,13 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         let visit_order =
           try topsort cfg with
           | Not_a_DAG n ->
-             let gv_file = string_of_id function_id ^ ".gv" in
-             let out_chan = open_out gv_file in
-             make_dot out_chan cfg;
-             close_out out_chan;
+             dump_graph function_id cfg;
              raise (Reporting.err_general pragma_l
-                      (Printf.sprintf "$%s %s: control flow graph is not acyclic (node %d is in cycle)\nWrote graph to %s"
-                         prop_type (string_of_id function_id) n gv_file))
+                      (Printf.sprintf "$%s %s: control flow graph is not acyclic (node %d is in cycle)\nWrote graph to %s.gv"
+                         prop_type (string_of_id function_id) n (string_of_id function_id)))
         in
+        if !opt_debug_graphs then
+          dump_graph function_id cfg;
 
         List.iter (fun n ->
             begin match get_vertex cfg n with
@@ -1657,6 +1773,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
                let muxers =
                  ssanodes |> List.map (smt_ssanode ctx cfg preds) |> List.concat
                in
+               let ctx = { ctx with pathcond = lazy (get_pathcond n cfg ctx) } in
                let basic_block = smt_cfnode all_cdefs ctx ssanodes cfnode in
                push_smt_defs stack muxers;
                push_smt_defs stack basic_block;
@@ -1671,12 +1788,14 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         if prop_type = "counterexample" then
           output_string out_chan "(set-option :produce-models true)\n";
 
+        let header = smt_header ctx all_cdefs in
+        
         if !(ctx.use_string) || !(ctx.use_real) then
           output_string out_chan "(set-logic ALL)\n"
         else
           output_string out_chan "(set-logic QF_AUFBVDT)\n";
 
-        List.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") (smt_header ctx all_cdefs);
+        List.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") header;
 
         let queue = optimize_smt stack in
         Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;

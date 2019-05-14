@@ -100,6 +100,16 @@ type smt_exp =
   | Extract of int * int * smt_exp
   | Tester of string * smt_exp
 
+let smt_conj = function
+  | [] -> Bool_lit true
+  | [x] -> x
+  | xs -> Fn ("and", xs)
+
+let smt_disj = function
+  | [] -> Bool_lit false
+  | [x] -> x
+  | xs -> Fn ("or", xs)
+
 let extract i j x = Extract (i, j, x)
 
 let bvnot x    = Fn ("bvnot", [x])
@@ -172,6 +182,8 @@ type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
   | Declare_const of string * smt_typ
   | Define_const of string * smt_typ * smt_exp
+  | Write_mem of string * smt_exp * smt_exp * smt_exp
+  | Read_mem of string * smt_typ * smt_exp * smt_exp
   | Declare_datatypes of string * (string * (string * smt_typ) list) list
   | Declare_tuple of int
   | Assert of smt_exp
@@ -231,6 +243,12 @@ let pp_smt_def =
 
   | Define_const (name, ty, exp) ->
      pp_sfun "define-const" [string name; pp_smt_typ ty; pp_smt_exp exp]
+
+  | Write_mem (name, wk, addr, data) ->
+     pp_sfun "declare-const" [string name; pp_smt_typ Bool]
+
+  | Read_mem (name, ty, rk, addr) ->
+     pp_sfun "declare-const" [string name; pp_smt_typ ty]
 
   | Declare_datatypes (name, ctors) ->
      let pp_ctor (ctor_name, fields) =

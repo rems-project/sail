@@ -423,8 +423,7 @@ let doc_lit_lem (L_aux(lit,l)) =
       let denom = Big_int.pow_int_positive 10 (String.length f) in
       (Big_int.add (Big_int.mul (Big_int.of_string i) denom) (Big_int.of_string f), denom)
     | _ ->
-      raise (Reporting.Fatal_error
-        (Reporting.Err_syntax_locn (l, "could not parse real literal"))) in
+      raise (Reporting.err_syntax_loc l "could not parse real literal") in
     parens (separate space (List.map string [
       "realFromFrac"; Big_int.to_string num; Big_int.to_string denom]))
 

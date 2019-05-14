@@ -53,6 +53,7 @@ open Jib
 open Jib_util
 
 module IntSet = Set.Make(struct type t = int let compare = compare end)
+module IntMap = Map.Make(struct type t = int let compare = compare end)
 
 (**************************************************************************)
 (* 1. Mutable graph type                                                  *)
@@ -60,14 +61,24 @@ module IntSet = Set.Make(struct type t = int let compare = compare end)
 
 type 'a array_graph = {
     mutable next : int;
-    mutable nodes : ('a * IntSet.t * IntSet.t) option array
+    mutable nodes : ('a * IntSet.t * IntSet.t) option array;
+    mutable next_cond : int;
+    mutable conds : cval IntMap.t
   }
 
 let make ~initial_size () = {
     next = 0;
-    nodes = Array.make initial_size None
+    nodes = Array.make initial_size None;
+    next_cond = 1;
+    conds = IntMap.empty
   }
 
+let get_cond graph n =
+  if n >= 0 then
+    IntMap.find n graph.conds
+  else
+    V_call (Bnot, [IntMap.find (abs n) graph.conds])
+     
 let get_vertex graph n = graph.nodes.(n)
 
 let iter_graph f graph =
@@ -76,6 +87,12 @@ let iter_graph f graph =
     | Some (x, y, z) -> f x y z
     | None -> ()
   done
+
+let add_cond cval graph =
+  let n = graph.next_cond in
+  graph.conds <- IntMap.add n cval graph.conds;
+  graph.next_cond <- n + 1;
+  n
 
 (** Add a vertex to a graph, returning the node index *)
 let add_vertex data graph =
@@ -187,11 +204,31 @@ let prune visited graph =
 (* 2. Mutable control flow graph                                          *)
 (**************************************************************************)
 
+type terminator =
+  | T_undefined of ctyp
+  | T_match_failure
+  | T_end of name
+  | T_goto of string
+  | T_jump of int * string
+  | T_label of string
+  | T_none
+
 type cf_node =
   | CF_label of string
-  | CF_block of instr list
-  | CF_guard of cval
+  | CF_block of instr list * terminator
+  | CF_guard of int
   | CF_start of ctyp NameMap.t
+
+let to_terminator graph = function
+  | I_label label -> T_label label
+  | I_goto label -> T_goto label
+  | I_jump (cval, label) ->
+     let n = add_cond cval graph in
+     T_jump (n, label)
+  | I_end name -> T_end name
+  | I_match_failure -> T_match_failure
+  | I_undefined ctyp -> T_undefined ctyp
+  | _ -> assert false
 
 (* For now we only generate CFGs for flat lists of instructions *)
 let control_flow_graph instrs =
@@ -209,46 +246,42 @@ let control_flow_graph instrs =
 
   let cf_split (I_aux (aux, _)) =
     match aux with
-    | I_block _ | I_label _ | I_goto _ | I_jump _ | I_if _ | I_end _ | I_match_failure | I_undefined _ -> true
+    | I_label _ | I_goto _ | I_jump _ | I_end _ | I_match_failure | I_undefined _ -> true
     | _ -> false
   in
 
   let rec cfg preds instrs =
     let before, after = instr_split_at cf_split instrs in
-    let last = match after with
-      | I_aux (I_label _, _) :: _ -> []
-      | instr :: _ -> [instr]
-      | _ -> []
+    let terminator, after = match after with
+      | I_aux (instr, _) :: after -> to_terminator graph instr, after
+      | [] -> T_none, []
     in
-    let preds = match before @ last with
-      | [] -> preds
-      | instrs ->
-         let n = add_vertex ([], CF_block instrs) graph in
+    let preds = match before, terminator with
+      | [], (T_none | T_label _) -> preds
+      | instrs, _ ->
+         let n = add_vertex ([], CF_block (instrs, terminator)) graph in
          List.iter (fun p -> add_edge p n graph) preds;
          [n]
     in
-    match after with
-    | I_aux ((I_end _ | I_match_failure | I_undefined _), _) :: after ->
+    match terminator with
+    | T_end _ | T_match_failure | T_undefined _ ->
        cfg [] after
 
-    | I_aux (I_goto label, _) :: after ->
+    | T_goto label ->
        List.iter (fun p -> add_edge p (StringMap.find label !labels) graph) preds;
        cfg [] after
 
-    | I_aux (I_jump (cval, label), _) :: after ->
-       let t = add_vertex ([], CF_guard cval) graph in
-       let f = add_vertex ([], CF_guard (V_call (Bnot, [cval]))) graph in
+    | T_jump (cond, label) ->
+       let t = add_vertex ([], CF_guard cond) graph in
+       let f = add_vertex ([], CF_guard (- cond)) graph in
        List.iter (fun p -> add_edge p t graph; add_edge p f graph) preds;
        add_edge t (StringMap.find label !labels) graph;
        cfg [f] after
 
-    | I_aux (I_label label, _) :: after ->
+    | T_label label ->
        cfg (StringMap.find label !labels :: preds) after
 
-    | I_aux (_, (_, l)) :: after ->
-       Reporting.unreachable l __POS__ "Could not add instruction to control-flow graph"
-
-    | [] -> preds
+    | T_none -> preds
   in
 
   let start = add_vertex ([], CF_start NameMap.empty) graph in
@@ -422,7 +455,7 @@ let place_phi_functions graph df =
 
   let orig_A n =
     match graph.nodes.(n) with
-    | Some ((_, CF_block instrs), _, _) ->
+    | Some ((_, CF_block (instrs, _)), _, _) ->
        let vars = List.fold_left NameCTSet.union NameCTSet.empty (List.map instr_typed_writes instrs) in
        let vars = NameCTSet.diff vars (all_decls instrs) in
        all_vars := NameCTSet.union vars !all_vars;
@@ -542,21 +575,32 @@ let rename_variables graph root children =
          counts := NameMap.add id i !counts;
          push_stack id i;
          I_init (ctyp, ssa_name i id, cval)
-      | I_jump (cval, label) ->
-         I_jump (fold_cval cval, label)
-      | I_end id ->
-         let i = top_stack id in
-         I_end (ssa_name i id)
       | instr -> instr
     in
     I_aux (aux, annot)
   in
 
+  let ssa_terminator = function
+    | T_jump (cond, label) ->
+       begin match IntMap.find_opt cond graph.conds with
+       | Some cval ->
+          graph.conds <- IntMap.add cond (fold_cval cval) graph.conds;
+          T_jump (cond, label)
+       | None -> assert false
+       end
+    | T_end id ->
+       let i = top_stack id in
+       T_end (ssa_name i id)
+    | terminator -> terminator
+  in
+
   let ssa_cfnode = function
     | CF_start inits -> CF_start inits
-    | CF_block instrs -> CF_block (List.map ssa_instr instrs)
+    | CF_block (instrs, terminator) ->
+       let instrs = List.map ssa_instr instrs in
+       CF_block (instrs, ssa_terminator terminator)
     | CF_label label -> CF_label label
-    | CF_guard cval -> CF_guard (fold_cval cval)
+    | CF_guard cond -> CF_guard cond
   in
 
   let ssa_ssanode = function
@@ -612,7 +656,12 @@ let rename_variables graph root children =
 
 let place_pi_functions graph start idom children =
   let get_guard = function
-    | CF_guard guard -> [guard]
+    | CF_guard cond ->
+       begin match IntMap.find_opt (abs cond) graph.conds with
+       | Some guard when cond > 0 -> [guard]
+       | Some guard -> [V_call (Bnot, [guard])]
+       | None -> assert false
+       end
     | _ -> []
   in
   let get_pi_contents ssanodes =
@@ -681,9 +730,9 @@ let string_of_phis = function
 
 let string_of_node = function
   | (phis, CF_label label) -> string_of_phis phis ^ label
-  | (phis, CF_block instrs) -> string_of_phis phis ^ Util.string_of_list "\\l" (fun instr -> String.escaped (Pretty_print_sail.to_string (pp_instr ~short:true instr))) instrs
+  | (phis, CF_block (instrs, terminator)) -> string_of_phis phis ^ Util.string_of_list "\\l" (fun instr -> String.escaped (Pretty_print_sail.to_string (pp_instr ~short:true instr))) instrs
   | (phis, CF_start inits) -> string_of_phis phis ^ "START"
-  | (phis, CF_guard cval) -> string_of_phis phis ^ (String.escaped (Pretty_print_sail.to_string (pp_cval cval)))
+  | (phis, CF_guard cval) -> string_of_phis phis ^ string_of_int cval
 
 let vertex_color = function
   | (_, CF_start _) -> "peachpuff"

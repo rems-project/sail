@@ -278,6 +278,8 @@ let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
 
 let string_of_op = function
   | Bnot -> "@not"
+  | Band -> "@and"
+  | Bor -> "@or"
   | List_hd -> "@hd"
   | List_tl -> "@tl"
   | Bit_to_bool -> "@bit_to_bool"
@@ -896,6 +898,8 @@ let rec infer_call op vs =
   match op, vs with
   | Bit_to_bool, _ -> CT_bool
   | Bnot, _ -> CT_bool
+  | Band, _ -> CT_bool
+  | Bor, _ -> CT_bool
   | List_hd, [v] ->
      begin match cval_ctyp v with
      | CT_list ctyp -> ctyp

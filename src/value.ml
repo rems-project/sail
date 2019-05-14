@@ -350,11 +350,8 @@ let value_sub_int = function
   | _ -> failwith "value sub"
 
 let value_sub_nat = function
-  | [v1; v2] -> V_int (
-                    let n = Sail_lib.sub_int (coerce_int v1, coerce_int v2) in
-                    if Big_int.less_equal n Big_int.zero then Big_int.zero else n
-                  )
-  | _ -> failwith "value sub_int"
+  | [v1; v2] -> V_int (Sail_lib.sub_nat (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value sub_nat"
 
 let value_negate = function
   | [v1] -> V_int (Sail_lib.negate (coerce_int v1))

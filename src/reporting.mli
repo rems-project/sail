@@ -93,7 +93,7 @@ type error =
   | Err_todo of Parse_ast.l * string
 
   | Err_syntax of Lexing.position * string
-  | Err_syntax_locn of Parse_ast.l * string
+  | Err_syntax_loc of Parse_ast.l * string
   | Err_lex of Lexing.position * string
   | Err_type of Parse_ast.l * string
 
@@ -111,6 +111,9 @@ val err_unreachable : Parse_ast.l -> (string * int * int * int) -> string -> exn
 (** [err_typ l m] is an abreviatiation for [Fatal_error (Err_type (l, m))] *)
 val err_typ : Parse_ast.l -> string -> exn
 
+(** [err_syntax_loc] is an abbreviation for [Fatal_error (Err_syntax_loc (l, m))] *)
+val err_syntax_loc : Parse_ast.l -> string -> exn
+  
 val unreachable : Parse_ast.l -> (string * int * int * int) -> string -> 'a
 
 val print_error : error -> unit
