@@ -1,5 +1,7 @@
-/* from prelude */
 default Order dec
+
+$include <flow.sail>
+
 type bits ('n : Int) = vector('n, dec, bit)
 
 val vector_subrange = {
@@ -25,10 +27,6 @@ val vector_concat = {ocaml: "append", lem: "append_list"} : forall ('n : Int) ('
   (vector('n, dec, 'a), vector('m, dec, 'a)) -> vector('n + 'm, dec, 'a)
 
 overload append = {bitvector_concat, vector_concat}
-
-val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
-/* sneaky deref with no effect necessary for bitfield writes */
-val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 
 type xlen : Int = 64
 type ylen : Int = 1
