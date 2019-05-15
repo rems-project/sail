@@ -48,65 +48,66 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-(** This file implements utilities for dealing with $property and
-   $counterexample pragmas. *)
-
 open Ast
 open Ast_util
-open Type_check
+open Jib
+open Jib_util
+open Smtlib
 
-(** [find_properties defs] returns a mapping from ids to of 4-tuples of the form
-   (prop_type, command, loc, val_spec), which contains the information
-   from any pragmas of the form
+val opt_ignore_overflow : bool ref
+val opt_auto : bool ref
+val opt_debug_graphs : bool ref
+val opt_propagate_vars : bool ref
 
-   $prop_type command
-   ...
-   val <val_spec>
+module IntSet : Set.S with type elt = int
+module EventMap : Map.S with type key = Property.event
 
-   where prop_type is either "counterexample" or "property" and the
-   location loc is the location that was attached to the pragma
-*)
-val find_properties : 'a defs -> (string * string * l * 'a val_spec) Bindings.t
+val opt_default_lint_size : int ref
+val opt_default_lbits_index : int ref
+val opt_default_vector_index : int ref
 
-(** For a property
-
-   $prop_type val f : forall X, C. T -> bool
-
-   find the function body for id:
-
-   function f(args) = exp
-
-   and rewrite the function body to
-
-   function f(args) = if constraint(not(C)) then true else exp
-
-   The reason we do this is that the type information in T constrained
-   by C might be lost when translating to Jib, as Jib types are
-   simpler and less precise. If we then do random test
-   generation/proving we want to ensure that inputs outside the
-   constraints of the function are ignored.
-*)
-val rewrite : tannot defs -> tannot defs
-
-type event = Overflow | Assertion | Assumption | Match | Return
-
-val string_of_event : event -> string
-
-module Event : sig
-  type t = event
-  val compare : event -> event -> int
-end
-
-type query =
-   | Q_all of event
-   | Q_exist of event
-   | Q_not of query
-   | Q_and of query list
-   | Q_or of query list
-
-type pragma = {
-    query : query;
-    litmus : string list;
+type ctx = {
+    (** Arbitrary-precision bitvectors are represented as a (BitVec lbits_index, BitVec (2 ^ lbits_index)) pair. *)
+    lbits_index : int;
+    (** The size we use for integers where we don't know how large they are statically. *)
+    lint_size : int;
+    (** A generic vector, vector('a) becomes Array (BitVec vector_index) 'a.
+       We need to take care that vector_index is large enough for all generic vectors. *)
+    vector_index : int;
+    (** A map from each ctyp to a list of registers of that ctyp *)
+    register_map : id list CTMap.t;
+    (** A set to keep track of all the tuple sizes we need to generate types for *)
+    tuple_sizes : IntSet.t ref;
+    (** tc_env is the global type-checking environment *)
+    tc_env : Type_check.Env.t;
+    (** A location, usually the $counterexample or $property we are
+       generating the SMT for. Used for error messages. *)
+    pragma_l : Ast.l;
+    (** Used internally to keep track of function argument names *)
+    arg_stack : (int * string) Stack.t;
+    (** The fully type-checked ast *)
+    ast : Type_check.tannot defs;
+    (** For every event type we have a stack of boolean SMT
+       expressions for each occurance of that event. See
+       src/property.ml for the event types *)
+    events : smt_exp Stack.t EventMap.t ref;
+    (** When generating SMT for an instruction pathcond will contain
+       the global path conditional of the containing block in the
+       control flow graph *)
+    pathcond : smt_exp Lazy.t;
+    (** Set if we need to use strings or real numbers in the generated
+       SMT, which then requires set-logic ALL or similar depending on
+       the solver *)
+    use_string : bool ref;
+    use_real : bool ref
   }
 
-val parse_pragma : Parse_ast.l -> string -> pragma
+val smt_instr_list : string -> ctx -> cdef list -> instr list -> smt_def Stack.t
+
+(** Generate SMT for all the $property and $counterexample pragmas in an AST *)
+val generate_smt :
+  (string * string * l * 'a val_spec) Bindings.t
+  -> (string -> string)
+  -> Type_check.Env.t
+  -> Type_check.tannot defs
+  -> unit

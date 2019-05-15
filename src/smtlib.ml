@@ -101,6 +101,14 @@ type smt_exp =
   | Extract of int * int * smt_exp
   | Tester of string * smt_exp
 
+let rec fold_smt_exp f = function
+  | Fn (name, args) -> f (Fn (name, List.map (fold_smt_exp f) args))
+  | Ite (cond, t, e) -> f (Ite (fold_smt_exp f cond, fold_smt_exp f t, fold_smt_exp f e))
+  | SignExtend (n, exp) -> f (SignExtend (n, fold_smt_exp f exp))
+  | Extract (n, m, exp) -> f (Extract (n, m, fold_smt_exp f exp))
+  | Tester (ctor, exp) -> f (Tester (ctor, fold_smt_exp f exp))
+  | (Bool_lit _ | Hex _ | Bin _ | Real_lit _ | String_lit _ | Var _ | Enum _ as exp) -> f exp
+
 let smt_conj = function
   | [] -> Bool_lit true
   | [x] -> x
@@ -137,13 +145,47 @@ let bvones n =
   else
     Bin (String.concat "" (Util.list_init n (fun _ -> "1")))
 
+let simp_equal x y =
+  match x, y with
+  | Bin str1, Bin str2 -> Some (str1 = str2)
+  | _, _ -> None
+
+let simp_and xs =
+  let xs = List.filter (function Bool_lit true -> false | _ -> true) xs in
+  match xs with
+  | [] -> Bool_lit true
+  | [x] -> x
+  | _ ->
+     if List.exists (function Bool_lit false -> true | _ -> false) xs then
+       Bool_lit false
+     else
+       Fn ("and", xs)
+
+let simp_or xs =
+  let xs = List.filter (function Bool_lit false -> false | _ -> true) xs in
+  match xs with
+  | [] -> Bool_lit false
+  | [x] -> x
+  | _ ->
+     if List.exists (function Bool_lit true -> true | _ -> false) xs then
+       Bool_lit true
+     else
+       Fn ("or", xs)
+
 let simp_fn = function
   | Fn ("not", [Fn ("not", [exp])]) -> exp
   | Fn ("not", [Bool_lit b]) -> Bool_lit (not b)
   | Fn ("contents", [Fn ("Bits", [_; contents])]) -> contents
   | Fn ("len", [Fn ("Bits", [len; _])]) -> len
-  | Fn ("or", [x]) -> x
-  | Fn ("and", [x]) -> x
+  | Fn ("or", xs) -> simp_or xs
+  | Fn ("and", xs) -> simp_and xs
+  | Fn ("=>", [Bool_lit true; y]) -> y
+  | Fn ("=>", [Bool_lit false; y]) -> Bool_lit true
+  | Fn ("=", [x; y]) as exp ->
+     begin match simp_equal x y with
+     | Some b -> Bool_lit b
+     | None -> exp
+     end
   | exp -> exp
 
 let simp_ite = function
@@ -171,7 +213,11 @@ let rec simp_smt_exp vars = function
      simp_ite (Ite (cond, t, e))
   | Extract (i, j, exp) ->
      let exp = simp_smt_exp vars exp in
-     Extract (i, j, exp)
+     begin match exp with
+     | Bin str ->
+        Bin (String.sub str ((String.length str - 1) - i) ((i + 1) - j))
+     | _ -> Extract (i, j, exp)
+     end
   | Tester (str, exp) ->
      let exp = simp_smt_exp vars exp in
      Tester (str, exp)
@@ -183,8 +229,8 @@ type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
   | Declare_const of string * smt_typ
   | Define_const of string * smt_typ * smt_exp
-  | Write_mem of string * smt_exp * smt_exp * smt_exp
-  | Read_mem of string * smt_typ * smt_exp * smt_exp
+  | Write_mem of string * smt_exp * smt_exp * smt_typ * smt_exp * smt_typ
+  | Read_mem of string * smt_typ * smt_exp * smt_exp * smt_typ
   | Declare_datatypes of string * (string * (string * smt_typ) list) list
   | Declare_tuple of int
   | Assert of smt_exp
@@ -193,13 +239,64 @@ let declare_datatypes = function
   | Datatype (name, ctors) -> Declare_datatypes (name, ctors)
   | _ -> assert false
 
+let suffix_variables_exp sfx =
+  fold_smt_exp (function Var v -> Var (v ^ sfx) | exp -> exp)
+
+let suffix_variables_def sfx = function
+  | Define_fun (name, args, ty, exp) ->
+     Define_fun (name ^ sfx, List.map (fun (arg, ty) -> sfx ^ arg, ty) args, ty, suffix_variables_exp sfx exp)
+  | Declare_const (name, ty) ->
+     Declare_const (name ^ sfx, ty)
+  | Define_const (name, ty, exp) ->
+     Define_const (name ^ sfx, ty, suffix_variables_exp sfx exp)
+  | Write_mem (name, wk, addr, addr_ty, data, data_ty) ->
+     Write_mem (name ^ sfx, suffix_variables_exp sfx wk, suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data, data_ty)
+  | Read_mem (name, ty, rk, addr, addr_ty) ->
+     Read_mem (name ^ sfx, ty, suffix_variables_exp sfx rk, suffix_variables_exp sfx addr, addr_ty)
+  | Declare_datatypes (name, ctors) ->
+     Declare_datatypes (name, ctors)
+  | Declare_tuple n ->
+     Declare_tuple n
+  | Assert exp ->
+     Assert (suffix_variables_exp sfx exp)
+
+let merge_datatypes defs1 defs2 =
+  let module StringSet = Set.Make(String) in
+  let datatype_name = function
+    | Declare_datatypes (name, _) -> name
+    | _ -> assert false
+  in
+  let names = List.fold_left (fun set def -> StringSet.add (datatype_name def) set) StringSet.empty defs1 in
+  defs1 @ List.filter (fun def -> not (StringSet.mem (datatype_name def) names)) defs2
+
+let merge_tuples defs1 defs2 =
+  let tuple_size = function
+    | Declare_tuple size -> size
+    | _ -> assert false
+  in
+  let names = List.fold_left (fun set def -> Util.IntSet.add (tuple_size def) set) Util.IntSet.empty defs1 in
+  defs1 @ List.filter (fun def -> not (Util.IntSet.mem (tuple_size def) names)) defs2
+
+let merge_smt_defs defs1 defs2 =
+  let is_tuple = function
+    | Declare_datatypes _ | Declare_tuple _ -> true
+    | _ -> false
+  in
+  let is_datatype = function
+    | Declare_datatypes _ | Declare_tuple _ -> true
+    | _ -> false
+  in
+  let datatypes1, body1 = List.partition is_datatype defs1 in
+  let datatypes2, body2 = List.partition is_datatype defs2 in
+  let tuples1, datatypes1 = List.partition is_tuple datatypes1 in
+  let tuples2, datatypes2 = List.partition is_tuple datatypes2 in
+  merge_tuples tuples1 tuples2 @ merge_datatypes datatypes1 datatypes2 @ body1 @ body2
+
 let pp_sfun str docs =
   let open PPrint in
   parens (separate space (string str :: docs))
 
-let prefix_string pre str = PPrint.string (pre ^ str)
-
-let rec pp_smt_exp pre =
+let rec pp_smt_exp =
   let open PPrint in
   function
   | Bool_lit b -> string (string_of_bool b)
@@ -207,17 +304,17 @@ let rec pp_smt_exp pre =
   | String_lit str -> string ("\"" ^ str ^ "\"")
   | Hex str -> string ("#x" ^ str)
   | Bin str -> string ("#b" ^ str)
-  | Var str -> prefix_string pre str
+  | Var str -> string str
   | Enum str -> string str
-  | Fn (str, exps) -> parens (string str ^^ space ^^ separate_map space (pp_smt_exp pre) exps)
+  | Fn (str, exps) -> parens (string str ^^ space ^^ separate_map space pp_smt_exp exps)
   | Ite (cond, then_exp, else_exp) ->
-     parens (separate space [string "ite"; pp_smt_exp pre cond; pp_smt_exp pre then_exp; pp_smt_exp pre else_exp])
+     parens (separate space [string "ite"; pp_smt_exp cond; pp_smt_exp then_exp; pp_smt_exp else_exp])
   | Extract (i, j, exp) ->
-     parens (string (Printf.sprintf "(_ extract %d %d)" i j) ^^ space ^^ pp_smt_exp pre exp)
+     parens (string (Printf.sprintf "(_ extract %d %d)" i j) ^^ space ^^ pp_smt_exp exp)
   | Tester (kind, exp) ->
-     parens (string (Printf.sprintf "(_ is %s)" kind) ^^ space ^^ pp_smt_exp pre exp)
+     parens (string (Printf.sprintf "(_ is %s)" kind) ^^ space ^^ pp_smt_exp exp)
   | SignExtend (i, exp) ->
-     parens (string (Printf.sprintf "(_ sign_extend %d)" i) ^^ space ^^ pp_smt_exp pre exp)
+     parens (string (Printf.sprintf "(_ sign_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
 
 let rec pp_smt_typ =
   let open PPrint in
@@ -232,27 +329,32 @@ let rec pp_smt_typ =
 
 let pp_str_smt_typ (str, ty) = let open PPrint in string str ^^ space ^^ pp_smt_typ ty
 
-let pp_smt_def pre =
+let pp_smt_def =
   let open PPrint in
   let open Printf in
   function
-  | Define_fun (str, args, ty, exp) ->
-     parens (string "define-fun"
+  | Define_fun (name, args, ty, exp) ->
+     parens (string "define-fun" ^^ space ^^ string name
              ^^ space ^^ parens (separate_map space pp_str_smt_typ args)
              ^^ space ^^ pp_smt_typ ty
-             ^//^ pp_smt_exp pre exp)
+             ^//^ pp_smt_exp exp)
 
   | Declare_const (name, ty) ->
-     pp_sfun "declare-const" [prefix_string pre name; pp_smt_typ ty]
+     pp_sfun "declare-const" [string name; pp_smt_typ ty]
 
   | Define_const (name, ty, exp) ->
-     pp_sfun "define-const" [prefix_string pre name; pp_smt_typ ty; pp_smt_exp pre exp]
+     pp_sfun "define-const" [string name; pp_smt_typ ty; pp_smt_exp exp]
 
-  | Write_mem (name, wk, addr, data) ->
-     pp_sfun "declare-const" [prefix_string pre name; pp_smt_typ Bool]
+  | Write_mem (name, wk, addr, addr_ty, data, data_ty) ->
+     pp_sfun "define-const" [string (name ^ "_kind"); string "Zwrite_kind"; pp_smt_exp wk] ^^ hardline
+     ^^ pp_sfun "define-const" [string (name ^ "_data"); pp_smt_typ data_ty; pp_smt_exp data] ^^ hardline
+     ^^ pp_sfun "define-const" [string (name ^ "_addr"); pp_smt_typ addr_ty; pp_smt_exp addr] ^^ hardline
+     ^^ pp_sfun "declare-const" [string (name ^ "_ret"); pp_smt_typ Bool]
 
-  | Read_mem (name, ty, rk, addr) ->
-     pp_sfun "declare-const" [prefix_string pre name; pp_smt_typ ty]
+  | Read_mem (name, ty, rk, addr, addr_ty) ->
+     pp_sfun "define-const" [string (name ^ "_kind"); string "Zread_kind"; pp_smt_exp rk] ^^ hardline
+     ^^ pp_sfun "define-const" [string (name ^ "_addr"); pp_smt_typ addr_ty; pp_smt_exp addr] ^^ hardline
+     ^^ pp_sfun "declare-const" [string (name ^ "_ret"); pp_smt_typ ty]
 
   | Declare_datatypes (name, ctors) ->
      let pp_ctor (ctor_name, fields) =
@@ -275,12 +377,12 @@ let pp_smt_def pre =
                            parens (parens (ksprintf string "tup%d" n ^^ space ^^ fields))]))]
 
   | Assert exp ->
-     pp_sfun "assert" [pp_smt_exp pre exp]
+     pp_sfun "assert" [pp_smt_exp exp]
 
-let string_of_smt_def pre def = Pretty_print_sail.to_string (pp_smt_def pre def)
+let string_of_smt_def def = Pretty_print_sail.to_string (pp_smt_def def)
 
-let output_smt_defs out_chan pre smt =
-  List.iter (fun def -> output_string out_chan (string_of_smt_def pre def ^ "\n")) smt
+let output_smt_defs out_chan smt =
+  List.iter (fun def -> output_string out_chan (string_of_smt_def def ^ "\n")) smt
 
 (**************************************************************************)
 (* 2. Parser for SMT solver output                                        *)

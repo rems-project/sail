@@ -199,11 +199,13 @@ let parse_query =
   parse (exp0 ()) "[ \n\t]+\\|(\\|)\\|&\\||\\|~"
 
 type pragma = {
-    query : query
+    query : query;
+    litmus : string list;
   }
 
 let default_pragma = {
-    query = default_query
+    query = default_query;
+    litmus = [];
   }
 
 let parse_pragma l input =
@@ -212,10 +214,13 @@ let parse_pragma l input =
   let rec process_toks pragma = function
     | Str.Delim ":query" :: Str.Text query :: rest ->
        begin match parse_query query with
-       | Some q -> process_toks { query = q } rest
+       | Some q -> process_toks { pragma with query = q } rest
        | None ->
           raise (Reporting.err_general l ("Could not parse query " ^ String.trim query))
        end
+    | Str.Delim ":litmus" :: rest ->
+       let args, rest = Util.take_drop (function Str.Text _ -> true | _ -> false) rest in
+       process_toks { pragma with litmus = List.map (function Str.Text t -> t | _ -> assert false) args } rest
     | [] -> pragma
     | _ ->
        raise (Reporting.err_general l "Could not parse pragma")

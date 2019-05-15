@@ -69,32 +69,26 @@ let opt_auto = ref false
 
 let opt_debug_graphs = ref false
 
+let opt_propagate_vars = ref false
+
 module EventMap = Map.Make(Event)
 
 (* Note that we have to use x : ty ref rather than mutable x : ty, to
    make sure { ctx with x = ... } doesn't break the mutable state. *)
 
+(* See mli file for a description of each field *)
 type ctx = {
-    (* Arbitrary-precision bitvectors are represented as a (BitVec lbits_index, BitVec (2 ^ lbits_index)) pair. *)
     lbits_index : int;
-    (* The size we use for integers where we don't know how large they are statically. *)
     lint_size : int;
-    (* A generic vector, vector('a) becomes Array (BitVec vector_index) 'a.
-       We need to take care that vector_index is large enough for all generic vectors. *)
     vector_index : int;
     register_map : id list CTMap.t;
-    (* Keep track of all the tuple sizes we need to genenerate types for *)
     tuple_sizes : IntSet.t ref;
     tc_env : Type_check.Env.t;
     pragma_l : Ast.l;
     arg_stack : (int * string) Stack.t;
     ast : Type_check.tannot defs;
     events : smt_exp Stack.t EventMap.t ref;
-    (* When generating SMT for an instruction pathcond will contain
-       the global path conditional of the containing block in the
-       control flow graph *)
     pathcond : smt_exp Lazy.t;
-    (* Set if we need to use strings *)
     use_string : bool ref;
     use_real : bool ref
   }
@@ -1028,16 +1022,16 @@ let writes = ref (-1)
 let builtin_write_mem ctx wk addr_size addr data_size data =
   incr writes;
   let name = "W" ^ string_of_int !writes in
-  [Write_mem (name, smt_cval ctx wk, smt_cval ctx addr, smt_cval ctx data)],
-  Var name
+  [Write_mem (name, smt_cval ctx wk, smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr), smt_cval ctx data, smt_ctyp ctx (cval_ctyp data))],
+  Var (name ^ "_ret")
 
 let reads = ref (-1)
 
 let builtin_read_mem ctx rk addr_size addr data_size ret_ctyp =
   incr reads;
   let name = "R" ^ string_of_int !reads in
-  [Read_mem (name, smt_ctyp ctx ret_ctyp, smt_cval ctx rk, smt_cval ctx addr)],
-  Var name
+  [Read_mem (name, smt_ctyp ctx ret_ctyp, smt_cval ctx rk, smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr))],
+  Var (name ^ "_ret")
 
 let rec smt_conversion ctx from_ctyp to_ctyp x =
   match from_ctyp, to_ctyp with
@@ -1596,10 +1590,10 @@ let optimize_smt stack =
        end
     | (Declare_datatypes _ | Declare_tuple _) as def ->
        Stack.push def stack'
-    | Write_mem (_, wk, addr, data) as def ->
+    | Write_mem (_, wk, addr, _, data, _) as def ->
        uses_in_exp wk; uses_in_exp addr; uses_in_exp data;
        Stack.push def stack'
-    | Read_mem (_, _, rk, addr) as def ->
+    | Read_mem (_, _, rk, addr, _) as def ->
        uses_in_exp rk; uses_in_exp addr;
        Stack.push def stack'
     | Assert exp as def ->
@@ -1616,17 +1610,21 @@ let optimize_smt stack =
     | Declare_const _ as def ->
        Queue.add def queue
     | Define_const (var, typ, exp) ->
-       begin match Hashtbl.find_opt uses var with
-       | Some 1 ->
+       begin match Hashtbl.find_opt uses var, simp_smt_exp vars exp with
+       | _, (Bin _ | Bool_lit _) ->
           Hashtbl.add vars var exp
-       | Some _ ->
-          Queue.add (Define_const (var, typ, simp_smt_exp vars exp)) queue
-       | None -> assert false
+       | _, Var _ when !opt_propagate_vars ->
+          Hashtbl.add vars var exp
+       | Some 1, _ ->
+          Hashtbl.add vars var exp
+       | Some _, exp ->
+          Queue.add (Define_const (var, typ, exp)) queue
+       | None, _ -> assert false
        end
-    | Write_mem (name, wk, addr, data) ->
-       Queue.add (Write_mem (name, simp_smt_exp vars wk, simp_smt_exp vars addr, simp_smt_exp vars data)) queue
-    | Read_mem (name, typ, rk, addr) ->
-       Queue.add (Read_mem (name, typ, simp_smt_exp vars rk, simp_smt_exp vars addr)) queue
+    | Write_mem (name, wk, addr, addr_ty, data, data_ty) ->
+       Queue.add (Write_mem (name, simp_smt_exp vars wk, simp_smt_exp vars addr, addr_ty, simp_smt_exp vars data, data_ty)) queue
+    | Read_mem (name, typ, rk, addr, addr_typ) ->
+       Queue.add (Read_mem (name, typ, simp_smt_exp vars rk, simp_smt_exp vars addr, addr_typ)) queue
     | Assert exp ->
        Queue.add (Assert (simp_smt_exp vars exp)) queue
     | (Declare_datatypes _ | Declare_tuple _) as def ->
@@ -1653,15 +1651,15 @@ let smt_header ctx cdefs =
    checks if r is any one of the registers with type t, and reads that
    register if it is. We also do a similar thing for *r = x
 *)
-let expand_reg_deref ctx = function
+let expand_reg_deref env register_map = function
   | I_aux (I_funcall (clexp, false, function_id, [reg_ref]), (_, l)) as instr ->
      let open Type_check in
-     begin match (if Env.is_extern function_id ctx.tc_env "smt" then Some (Env.get_extern function_id ctx.tc_env "smt") else None) with
+     begin match (if Env.is_extern function_id env "smt" then Some (Env.get_extern function_id env "smt") else None) with
      | Some "reg_deref" ->
         begin match cval_ctyp reg_ref with
         | CT_ref reg_ctyp ->
            (* Not find all the registers with this ctyp *)
-           begin match CTMap.find_opt reg_ctyp ctx.register_map with
+           begin match CTMap.find_opt reg_ctyp register_map with
            | Some regs ->
               let end_label = label "end_reg_deref_" in
               let try_reg r =
@@ -1683,7 +1681,7 @@ let expand_reg_deref ctx = function
   | I_aux (I_copy (CL_addr (CL_id (id, ctyp)), cval), (_, l)) ->
      begin match ctyp with
      | CT_ref reg_ctyp ->
-        begin match CTMap.find_opt reg_ctyp ctx.register_map with
+        begin match CTMap.find_opt reg_ctyp register_map with
         | Some regs ->
            let end_label = label "end_reg_write_" in
            let try_reg r =
@@ -1716,11 +1714,42 @@ let rec smt_query ctx = function
   | Q_or qs ->
      Fn ("or", List.map (smt_query ctx) qs)
 
-let dump_graph function_id cfg =
-  let gv_file = string_of_id function_id ^ ".gv" in
+let dump_graph name cfg =
+  let gv_file = name ^ ".gv" in
   let out_chan = open_out gv_file in
   Jib_ssa.make_dot out_chan cfg;
   close_out out_chan
+
+let smt_instr_list name ctx all_cdefs instrs =
+  let stack = Stack.create () in
+
+  let open Jib_ssa in
+  let start, cfg = ssa instrs in
+  let visit_order =
+    try topsort cfg with
+    | Not_a_DAG n ->
+       dump_graph name cfg;
+       raise (Reporting.err_general ctx.pragma_l
+               (Printf.sprintf "%s: control flow graph is not acyclic (node %d is in cycle)\nWrote graph to %s.gv" name n name))
+  in
+  if !opt_debug_graphs then
+    dump_graph name cfg;
+
+  List.iter (fun n ->
+      begin match get_vertex cfg n with
+      | None -> ()
+      | Some ((ssanodes, cfnode), preds, succs) ->
+         let muxers =
+           ssanodes |> List.map (smt_ssanode ctx cfg preds) |> List.concat
+         in
+         let ctx = { ctx with pathcond = lazy (get_pathcond n cfg ctx) } in
+         let basic_block = smt_cfnode all_cdefs ctx ssanodes cfnode in
+         push_smt_defs stack muxers;
+         push_smt_defs stack basic_block;
+      end
+    ) visit_order;
+
+  stack
 
 let smt_cdef props lets name_file ctx all_cdefs = function
   | CDEF_spec (function_id, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
@@ -1729,8 +1758,6 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         let prop_type, prop_args, pragma_l, vs = Bindings.find function_id props in
 
         let pragma = parse_pragma pragma_l prop_args in
-
-        let stack = Stack.create () in
 
         let ctx = { ctx with events = ref EventMap.empty; pragma_l = pragma_l; arg_stack = Stack.create () } in
 
@@ -1743,41 +1770,13 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           let open Jib_optimize in
           (lets @ intervening_lets @ arg_decls @ instrs)
           |> inline all_cdefs (fun _ -> true)
-          |> List.map (map_instr (expand_reg_deref ctx))
+          |> List.map (map_instr (expand_reg_deref ctx.tc_env ctx.register_map))
           |> flatten_instrs
           |> remove_unused_labels
           |> remove_pointless_goto
         in
 
-        (* let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_instr instrs) in
-        prerr_endline str; *)
-
-        let open Jib_ssa in
-        let start, cfg = ssa instrs in
-        let visit_order =
-          try topsort cfg with
-          | Not_a_DAG n ->
-             dump_graph function_id cfg;
-             raise (Reporting.err_general pragma_l
-                      (Printf.sprintf "$%s %s: control flow graph is not acyclic (node %d is in cycle)\nWrote graph to %s.gv"
-                         prop_type (string_of_id function_id) n (string_of_id function_id)))
-        in
-        if !opt_debug_graphs then
-          dump_graph function_id cfg;
-
-        List.iter (fun n ->
-            begin match get_vertex cfg n with
-            | None -> ()
-            | Some ((ssanodes, cfnode), preds, succs) ->
-               let muxers =
-                 ssanodes |> List.map (smt_ssanode ctx cfg preds) |> List.concat
-               in
-               let ctx = { ctx with pathcond = lazy (get_pathcond n cfg ctx) } in
-               let basic_block = smt_cfnode all_cdefs ctx ssanodes cfnode in
-               push_smt_defs stack muxers;
-               push_smt_defs stack basic_block;
-            end
-          ) visit_order;
+        let stack = smt_instr_list (string_of_id function_id) ctx all_cdefs instrs in
 
         let query = smt_query ctx pragma.query in
         push_smt_defs stack [Assert (Fn ("not", [query]))];
@@ -1794,10 +1793,10 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         else
           output_string out_chan "(set-logic QF_AUFBVDT)\n";
 
-        List.iter (fun def -> output_string out_chan (string_of_smt_def "" def); output_string out_chan "\n") header;
+        List.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") header;
 
         let queue = optimize_smt stack in
-        Queue.iter (fun def -> output_string out_chan (string_of_smt_def "" def); output_string out_chan "\n") queue;
+        Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
 
         output_string out_chan "(check-sat)\n";
         if prop_type = "counterexample" then
