@@ -1903,7 +1903,7 @@ let rewrite_fix_val_specs env (Defs defs) =
            let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
            (* Add rreg effect to internal _reg_deref function (cf. bitfield.ml) *)
            let vs =
-             if string_of_id id = "_reg_deref" then
+             if string_of_id id = "_reg_deref" || string_of_id id = "__bitfield_deref" then
                add_eff_to_vs (mk_effect [BE_rreg]) (tq, typ)
              else (tq, typ) in
            typschm, Bindings.add id vs val_specs
