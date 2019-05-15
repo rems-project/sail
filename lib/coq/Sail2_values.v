@@ -1043,6 +1043,9 @@ repeat match goal with
 | H:context [member_Z_list _ _ = true] |- _ => rewrite member_Z_list_In in H
 | H:context [In ?x (?y :: ?t)] |- _ => change (In x (y :: t)) with (y = x \/ In x t) in H
 | H:context [In ?x []] |- _ => change (In x []) with False in H
+| |- context [member_Z_list _ _ = true] => rewrite member_Z_list_In
+| |- context [In ?x (?y :: ?t)] => change (In x (y :: t)) with (y = x \/ In x t) 
+| |- context [In ?x []] => change (In x []) with False
 end.
 
 (* Definitions in the context that involve proof for other constraints can
@@ -1209,6 +1212,90 @@ Ltac destruct_exists :=
   repeat match goal with H:@ex Z _ |- _ => destruct H end;
   repeat match goal with H:@ex bool _ |- _ => destruct H end.
 
+(* The ASL to Sail translator sometimes puts constraints of the form
+   p | not(q) into function signatures, then the body case splits on q.
+   The filter_disjunctions tactic simplifies hypotheses by obtaining p. *)
+
+Lemma truefalse : true = false <-> False.
+intuition.
+Qed.
+Lemma falsetrue : false = true <-> False.
+intuition.
+Qed.
+Lemma or_False_l P : False \/ P <-> P.
+intuition.
+Qed.
+Lemma or_False_r P : P \/ False <-> P.
+intuition.
+Qed.
+
+Ltac filter_disjunctions :=
+  repeat match goal with
+  | H1:?P \/ ?t1 = ?t2, H2: ?t3 = ?t4 |- _ =>
+    (* I used to use non-linear matching above, but Coq is happy to match up
+       to conversion, including more unfolding than we normally do. *)
+    constr_eq t1 t3; constr_eq t2 t4; clear H1
+  | H1:context [?P \/ ?t = true], H2: ?t = false |- _ => is_var t; rewrite H2 in H1
+  | H1:context [?P \/ ?t = false], H2: ?t = true |- _ => is_var t; rewrite H2 in H1
+  | H1:context [?t = true \/ ?P], H2: ?t = false |- _ => is_var t; rewrite H2 in H1
+  | H1:context [?t = false \/ ?P], H2: ?t = true |- _ => is_var t; rewrite H2 in H1
+  end;
+  repeat rewrite truefalse, falsetrue, or_False_l, or_False_r in *.
+
+(* Turn x := if _ then ... into x = ... \/ x = ... *)
+
+Ltac Z_if_to_or :=
+  repeat match goal with x := ?t : Z |- _ =>
+    let rec build_goal t :=
+      match t with
+      | if _ then ?y else ?z =>
+        let Hy := build_goal y in
+        let Hz := build_goal z in
+        constr:(Hy \/ Hz)
+      | ?y => constr:(x = y)
+      end
+    in
+    let rec split_hyp t :=
+      match t with
+      | if ?b then ?y else ?z =>
+        destruct b in x; [split_hyp y| split_hyp z]
+      | _ => idtac
+      end
+    in
+    let g := build_goal t in
+    assert g by (clear -x; split_hyp t; auto);
+    clearbody x
+  end.
+
+(* Once we've done everything else, get rid of irrelevant bool and Z bindings
+   to help the brute force solver *)
+Ltac clear_irrelevant_bindings :=
+  repeat
+    match goal with
+    | b : bool |- _ =>
+      lazymatch goal with
+      | _ : context [b] |- _ => fail
+      | |- context [b] => fail
+      | _ => clear b
+      end
+    | x : Z |- _ =>
+      lazymatch goal with
+      | _ : context [x] |- _ => fail
+      | |- context [x] => fail
+      | _ => clear x
+      end
+    | H:?x |- _ =>
+      let s := type of x in
+      lazymatch s with
+      | Prop =>
+        match x with
+        | context [?v] => is_var v; fail 1
+        | _ => clear H
+        end
+      | _ => fail
+      end
+    end.
+
 Ltac prepare_for_solver :=
 (*dump_context;*)
  clear_irrelevant_defns;
@@ -1225,6 +1312,9 @@ Ltac prepare_for_solver :=
  unfold_In; (* after unbool_comparisons to deal with && and || *)
  reduce_list_lengths;
  reduce_pow;
+ filter_disjunctions;
+ Z_if_to_or;
+ clear_irrelevant_bindings;
  (* omega doesn't cope well with extra "True"s in the goal.
     Check that they actually appear because setoid_rewrite can fill in evars. *)
  repeat match goal with |- context[True /\ _] => setoid_rewrite True_left end;
@@ -1276,6 +1366,121 @@ repeat match goal with |- context [ZEuclid.modulo ?x ?y] =>
 end;
 nia.
 
+(* A more ambitious brute force existential solver. *)
+
+Ltac guess_ex_solver :=
+  match goal with
+  | |- @ex bool ?t =>
+    match t with
+    | context [@eq bool ?b _] =>
+      solve [ exists b; guess_ex_solver
+            | exists (negb b); rewrite ?Bool.negb_true_iff, ?Bool.negb_false_iff;
+              guess_ex_solver ]
+    end
+(*  | b : bool |- @ex bool _ => exists b; guess_ex_solver
+  | b : bool |- @ex bool _ =>
+    exists (negb b); rewrite ?Bool.negb_true_iff, ?Bool.negb_false_iff;
+    guess_ex_solver*)
+  | |- @ex bool _ => exists true; guess_ex_solver
+  | |- @ex bool _ => exists false; guess_ex_solver
+  | x : Z |- @ex Z _ => exists x; guess_ex_solver
+  | _ => solve [tauto | eauto 3 with zarith sail | omega | intuition]
+  end.
+
+(* A straightforward solver for simple problems like
+
+   exists ..., _ = true \/ _ = false /\ _ = true <-> _ = true \/ _ = true
+*)
+
+Ltac form_iff_true :=
+repeat match goal with
+| |- ?l <-> _ = true =>
+  let rec aux t :=
+      match t with
+      | _ = true \/ _ = true => rewrite <- Bool.orb_true_iff
+      | _ = true /\ _ = true => rewrite <- Bool.andb_true_iff
+      | _ = false => rewrite <- Bool.negb_true_iff
+      | ?l \/ ?r => aux l || aux r
+      | ?l /\ ?r => aux l || aux r
+      end
+  in aux l
+       end.
+Ltac simple_split_iff :=
+  repeat
+    match goal with
+    | |- _ /\ _ <-> _ /\ _ => apply and_iff_cong
+    | |- _ \/ _ <-> _ \/ _ => apply or_iff_cong
+    end.
+Ltac simple_ex_iff :=
+  match goal with
+  | |- @ex _ _ => eexists; simple_ex_iff
+  | |- _ <-> _ =>
+    simple_split_iff;
+    form_iff_true;
+    solve [apply iff_refl | eassumption]
+  end.
+
+Lemma iff_false_left {P Q R : Prop} : (false = true) <-> Q -> (false = true) /\ P <-> Q /\ R.
+intuition.
+Qed.
+
+Ltac main_solver :=
+ solve
+ [ match goal with |- (?x ?y) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) y) end
+ | apply ArithFact_mword; assumption
+ | omega with Z
+   (* Try sail hints before dropping the existential *)
+ | subst; eauto 3 with zarith sail
+   (* The datatypes hints give us some list handling, esp In *)
+ | subst; drop_Z_exists;
+   repeat match goal with |- and _ _ => split end;
+   eauto 3 with datatypes zarith sail
+ | subst; match goal with |- context [ZEuclid.div] => solve_euclid
+                        | |- context [ZEuclid.modulo] => solve_euclid
+   end
+ | match goal with |- context [Z.mul] => nia end
+ (* Booleans - and_boolMP *)
+ | simple_ex_iff
+ | drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
+ | match goal with |- (forall l r:bool, _ -> _ -> exists _ : bool, _) =>
+     let r := fresh "r" in
+     let H1 := fresh "H" in
+     let H2 := fresh "H" in
+     intros [|] r H1 H2;
+     let t2 := type of H2 in
+     match t2 with
+     | ?b = ?b -> _ =>
+       destruct (H2 eq_refl);
+       repeat match goal with H:@ex _ _ |- _ => destruct H end;
+       simple_ex_iff
+     | ?b = _ -> _ =>
+       repeat match goal with H:@ex _ _ |- _ => destruct H end;
+       clear H2;
+       repeat match goal with
+              | |- @ex bool _ => exists b
+              | |- @ex Z _ => exists 0
+              end;
+       intuition
+     end
+   end
+ | match goal with |- (forall l r:bool, _ -> _ -> @ex _ _) =>
+     let H1 := fresh "H" in
+     let H2 := fresh "H" in
+     intros [|] [|] H1 H2;
+     repeat match goal with H:?X = ?X -> _ |- _ => specialize (H eq_refl) end;
+     repeat match goal with H:@ex _ _ |- _ => destruct H end;
+     guess_ex_solver
+   end
+ | match goal with |- @ex _ _ => guess_ex_solver end
+(* While firstorder was quite effective at dealing with existentially quantified
+   goals from boolean expressions, it attempts lazy normalization of terms,
+   which blows up on integer comparisons with large constants.
+ | match goal with |- context [@eq bool _ _] =>
+     (* Don't use auto for the fallback to keep runtime down *)
+     firstorder fail
+   end*)
+ | idtac "Unable to solve constraint"; dump_context; fail
+ ].
 
 Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
@@ -1292,35 +1497,8 @@ prepare_for_solver;
 (*dump_context;*)
 constructor;
 repeat match goal with |- and _ _ => split end;
- solve
- [ match goal with |- (?x ?y) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) y) end
- | apply ArithFact_mword; assumption
- | omega with Z
-   (* Try sail hints before dropping the existential *)
- | subst; eauto 3 with zarith sail
-   (* The datatypes hints give us some list handling, esp In *)
- | subst; drop_Z_exists; eauto 3 with datatypes zarith sail
- | subst; match goal with |- context [ZEuclid.div] => solve_euclid
-                        | |- context [ZEuclid.modulo] => solve_euclid
-   end
- | match goal with |- context [Z.mul] => nia end
-   (* Booleans - and_boolMP *)
- | drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
- | match goal with |- (forall l r:bool, _ -> _ -> exists _ : bool, _) => 
-     intros [|] [|] H1 H2;
-     repeat match goal with H:?X = ?X -> _ |- _ => specialize (H eq_refl) end;
-     repeat match goal with H:@ex _ _ |- _ => destruct H end;
-     bruteforce_bool_exists
-   end
-(* While firstorder was quite effective at dealing with existentially quantified
-   goals from boolean expressions, it attempts lazy normalization of terms,
-   which blows up on integer comparisons with large constants.
- | match goal with |- context [@eq bool _ _] =>
-     (* Don't use auto for the fallback to keep runtime down *)
-     firstorder fail
-   end*)
- | idtac "Unable to solve constraint"; dump_context; fail
- ].
+main_solver.
+
 (* Add an indirection so that you can redefine run_solver to fail to get
    slow running constraints into proof mode. *)
 Ltac run_solver := solve_arithfact.
@@ -1966,3 +2144,20 @@ destruct HR as [[HR1 | [HR2 | []]]];
 subst; compute;
 auto using Build_ArithFact.
 Defined.
+
+Lemma shl_8_ge_0 {n} : shl_int 8 n >= 0.
+unfold shl_int.
+apply Z.le_ge.  
+apply <- Z.shiftl_nonneg.
+omega.
+Qed.
+Hint Resolve shl_8_ge_0 : sail.
+
+(* This is needed because Sail's internal constraint language doesn't have
+   < and could disappear if we add it... *)
+
+Lemma sail_lt_ge (x y : Z) :
+  x < y <-> y >= x +1.
+omega.
+Qed.
+Hint Resolve sail_lt_ge : sail.
