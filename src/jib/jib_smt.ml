@@ -1555,87 +1555,104 @@ let rec find_function lets id = function
      find_function lets id cdefs
   | [] -> lets, None
 
-let optimize_smt stack =
-  let stack' = Stack.create () in
-  let uses = Hashtbl.create (Stack.length stack) in
+module type Sequence = sig
+  type 'a t
+  val create : unit -> 'a t
+  val add : 'a -> 'a t -> unit
+end
 
-  let rec uses_in_exp = function
-    | Var var ->
-       begin match Hashtbl.find_opt uses var with
-       | Some n -> Hashtbl.replace uses var (n + 1)
-       | None -> Hashtbl.add uses var 1
-       end
-    | Enum _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
-    | Fn (f, exps) ->
-       List.iter uses_in_exp exps
-    | Ite (cond, t, e) ->
-       uses_in_exp cond; uses_in_exp t; uses_in_exp e
-    | Extract (_, _, exp) | Tester (_, exp) | SignExtend (_, exp) ->
-       uses_in_exp exp
-  in
+module Make_optimizer(S : Sequence) = struct
 
-  let remove_unused () = function
-    | Declare_const (var, _) as def ->
-       begin match Hashtbl.find_opt uses var with
-       | None -> ()
-       | Some _ ->
-          Stack.push def stack'
-       end
-    | Define_const (var, _, exp) as def ->
-       begin match Hashtbl.find_opt uses var with
-       | None -> ()
-       | Some _ ->
-          uses_in_exp exp;
-          Stack.push def stack'
-       end
-    | (Declare_datatypes _ | Declare_tuple _) as def ->
-       Stack.push def stack'
-    | Write_mem (_, wk, addr, _, data, _) as def ->
-       uses_in_exp wk; uses_in_exp addr; uses_in_exp data;
-       Stack.push def stack'
-    | Read_mem (_, _, rk, addr, _) as def ->
-       uses_in_exp rk; uses_in_exp addr;
-       Stack.push def stack'
-    | Assert exp as def ->
-       uses_in_exp exp;
-       Stack.push def stack'
-    | Define_fun _ -> assert false
-  in
-  Stack.fold remove_unused () stack;
+  let optimize stack =
+    let stack' = Stack.create () in
+    let uses = Hashtbl.create (Stack.length stack) in
 
-  let vars = Hashtbl.create (Stack.length stack') in
-  let queue = Queue.create () in
+    let rec uses_in_exp = function
+      | Var var ->
+         begin match Hashtbl.find_opt uses var with
+         | Some n -> Hashtbl.replace uses var (n + 1)
+         | None -> Hashtbl.add uses var 1
+         end
+      | Enum _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
+      | Fn (f, exps) ->
+         List.iter uses_in_exp exps
+      | Ite (cond, t, e) ->
+         uses_in_exp cond; uses_in_exp t; uses_in_exp e
+      | Extract (_, _, exp) | Tester (_, exp) | SignExtend (_, exp) ->
+         uses_in_exp exp
+    in
 
-  let constant_propagate = function
-    | Declare_const _ as def ->
-       Queue.add def queue
-    | Define_const (var, typ, exp) ->
-       begin match Hashtbl.find_opt uses var, simp_smt_exp vars exp with
-       | _, (Bin _ | Bool_lit _) ->
-          Hashtbl.add vars var exp
-       | _, Var _ when !opt_propagate_vars ->
-          Hashtbl.add vars var exp
-       | Some 1, _ ->
-          Hashtbl.add vars var exp
-       | Some _, exp ->
-          Queue.add (Define_const (var, typ, exp)) queue
-       | None, _ -> assert false
-       end
-    | Write_mem (name, wk, addr, addr_ty, data, data_ty) ->
-       Queue.add (Write_mem (name, simp_smt_exp vars wk, simp_smt_exp vars addr, addr_ty, simp_smt_exp vars data, data_ty)) queue
-    | Read_mem (name, typ, rk, addr, addr_typ) ->
-       Queue.add (Read_mem (name, typ, simp_smt_exp vars rk, simp_smt_exp vars addr, addr_typ)) queue
-    | Assert exp ->
-       Queue.add (Assert (simp_smt_exp vars exp)) queue
-    | (Declare_datatypes _ | Declare_tuple _) as def ->
-       Queue.add def queue
-    | Define_fun _ -> assert false
-  in
-  Stack.iter constant_propagate stack';
-  queue
+    let remove_unused () = function
+      | Declare_const (var, _) as def ->
+         begin match Hashtbl.find_opt uses var with
+         | None -> ()
+         | Some _ ->
+            Stack.push def stack'
+         end
+      | Define_const (var, _, exp) as def ->
+         begin match Hashtbl.find_opt uses var with
+         | None -> ()
+         | Some _ ->
+            uses_in_exp exp;
+            Stack.push def stack'
+         end
+      | (Declare_datatypes _ | Declare_tuple _) as def ->
+         Stack.push def stack'
+      | Write_mem (_, wk, addr, _, data, _) as def ->
+         uses_in_exp wk; uses_in_exp addr; uses_in_exp data;
+         Stack.push def stack'
+      | Read_mem (_, _, rk, addr, _) as def ->
+         uses_in_exp rk; uses_in_exp addr;
+         Stack.push def stack'
+      | Assert exp as def ->
+         uses_in_exp exp;
+         Stack.push def stack'
+      | Define_fun _ -> assert false
+    in
+    Stack.fold remove_unused () stack;
 
-(** [smt_header stack cdefs] pushes all the type declarations required
-   for cdefs onto the SMT stack *)
+    let vars = Hashtbl.create (Stack.length stack') in
+    let seq = S.create () in
+
+    let constant_propagate = function
+      | Declare_const _ as def ->
+         S.add def seq
+      | Define_const (var, typ, exp) ->
+         begin match Hashtbl.find_opt uses var, simp_smt_exp vars exp with
+         | _, (Bin _ | Bool_lit _) ->
+            Hashtbl.add vars var exp
+         | _, Var _ when !opt_propagate_vars ->
+            Hashtbl.add vars var exp
+         | Some 1, _ ->
+            Hashtbl.add vars var exp
+         | Some _, exp ->
+            S.add (Define_const (var, typ, exp)) seq
+         | None, _ -> assert false
+         end
+      | Write_mem (name, wk, addr, addr_ty, data, data_ty) ->
+         S.add (Write_mem (name, simp_smt_exp vars wk, simp_smt_exp vars addr, addr_ty, simp_smt_exp vars data, data_ty)) seq
+      | Read_mem (name, typ, rk, addr, addr_typ) ->
+         S.add (Read_mem (name, typ, simp_smt_exp vars rk, simp_smt_exp vars addr, addr_typ)) seq
+      | Assert exp ->
+         S.add (Assert (simp_smt_exp vars exp)) seq
+      | (Declare_datatypes _ | Declare_tuple _) as def ->
+         S.add def seq
+      | Define_fun _ -> assert false
+    in
+    Stack.iter constant_propagate stack';
+    seq
+
+end
+
+module Queue_optimizer =
+  Make_optimizer(struct
+    type 'a t = 'a Queue.t
+    let create = Queue.create
+    let add = Queue.add
+    let iter = Queue.iter
+  end)
+
+(** [smt_header ctx cdefs] produces a list of smt definitions for all the datatypes in a specification *)
 let smt_header ctx cdefs =
   let smt_ctype_defs = List.concat (generate_ctype_defs ctx cdefs) in
   [declare_datatypes (mk_enum "Unit" ["unit"])]
@@ -1795,7 +1812,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
 
         List.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") header;
 
-        let queue = optimize_smt stack in
+        let queue = Queue_optimizer.optimize stack in
         Queue.iter (fun def -> output_string out_chan (string_of_smt_def def); output_string out_chan "\n") queue;
 
         output_string out_chan "(check-sat)\n";
@@ -1846,25 +1863,28 @@ let rec build_register_map rmap = function
   | _ :: cdefs -> build_register_map rmap cdefs
   | [] -> rmap
 
+let compile env ast =
+  let cdefs =
+    let open Jib_compile in
+    let ctx =
+      initial_ctx
+        ~convert_typ:ctyp_of_typ
+        ~optimize_anf:(fun ctx aexp -> fold_aexp (unroll_foreach ctx) (c_literals ctx aexp))
+        env
+    in
+    let t = Profile.start () in
+    let cdefs, ctx = compile_ast { ctx with specialize_calls = true; ignore_64 = true; struct_value = true; use_real = true } ast in
+    Profile.finish "Compiling to Jib IR" t;
+    cdefs
+  in
+  let cdefs = Jib_optimize.unique_per_function_ids cdefs in
+  let rmap = build_register_map CTMap.empty cdefs in
+  cdefs, { (initial_ctx ()) with tc_env = env; register_map = rmap; ast = ast }
+
 let generate_smt props name_file env ast =
   try
-    let cdefs =
-      let open Jib_compile in
-      let ctx =
-        initial_ctx
-          ~convert_typ:ctyp_of_typ
-          ~optimize_anf:(fun ctx aexp -> fold_aexp (unroll_foreach ctx) (c_literals ctx aexp))
-          env
-      in
-      let t = Profile.start () in
-      let cdefs, ctx = compile_ast { ctx with specialize_calls = true; ignore_64 = true; struct_value = true; use_real = true } ast in
-      Profile.finish "Compiling to Jib IR" t;
-      cdefs
-    in
-    let cdefs = Jib_optimize.unique_per_function_ids cdefs in
-    let rmap = build_register_map CTMap.empty cdefs in
-
-    smt_cdefs props [] name_file { (initial_ctx ()) with tc_env = env; register_map = rmap; ast = ast } cdefs cdefs
+    let cdefs, ctx = compile env ast in
+    smt_cdefs props [] name_file ctx cdefs cdefs
   with
   | Type_check.Type_error (_, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err));
