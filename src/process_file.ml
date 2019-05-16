@@ -92,7 +92,9 @@ module StringSet = Set.Make(String)
 
 let default_symbols =
   List.fold_left (fun set str -> StringSet.add str set) StringSet.empty
-    [ "FEATURE_IMPLICITS" ]
+    [ "FEATURE_IMPLICITS";
+      "FEATURE_CONSTANT_TYPES";
+    ]
 
 let symbols = ref default_symbols
 
