@@ -6,5 +6,5 @@ Type error:
   [91m |[0m [94m*[0m bitvector_access
   [91m |[0m    Numeric type is non-simple
   [91m |[0m [94m*[0m plain_vector_access
-  [91m |[0m    Numeric type is non-simple
+  [91m |[0m    No valid casts resulted in unification
   [91m |[0m 

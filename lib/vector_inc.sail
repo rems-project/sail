@@ -3,7 +3,7 @@ $define _VECTOR_INC
 
 $include <flow.sail>
 
-type bits ('n : Int) = vector('n, inc, bit)
+type bits ('n : Int) = bitvector('n, inc)
 
 val "eq_bit" : (bit, bit) -> bool
 
@@ -13,7 +13,7 @@ val eq_bits = {
   lem: "eq_vec",
   c: "eq_bits",
   coq: "eq_vec"
-} : forall 'n. (vector('n, inc, bit), vector('n, inc, bit)) -> bool
+} : forall 'n. (bits('n), bits('n)) -> bool
 
 overload operator == = {eq_bit, eq_bits}
 
@@ -43,9 +43,9 @@ val truncate = {
   lem: "vector_truncate",
   coq: "vector_truncate",
   c: "truncate"
-} : forall 'm 'n, 'm >= 0 & 'm <= 'n. (vector('n, inc, bit), atom('m)) -> vector('m, inc, bit)
+} : forall 'm 'n, 'm >= 0 & 'm <= 'n. (bits('n), atom('m)) -> bits('m)
 
-val mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (atom('len), vector('v, inc, bit)) -> vector('len, inc, bit)
+val mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (atom('len), bits('v)) -> bits('len)
 
 function mask(len, v) = if len <= length(v) then truncate(v, len) else zero_extend(v, len)
 

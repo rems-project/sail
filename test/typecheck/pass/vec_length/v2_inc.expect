@@ -7,6 +7,5 @@ Type error:
  [91m |[0m    Could not resolve quantifiers for bitvector_update
  [91m |[0m    [94m*[0m (0 <= 10 & (10 + 1) <= 8)
  [91m |[0m [94m*[0m plain_vector_update
- [91m |[0m    Could not resolve quantifiers for plain_vector_update
- [91m |[0m    [94m*[0m (0 <= 10 & (10 + 1) <= 8)
+ [91m |[0m    No valid casts resulted in unification
  [91m |[0m 

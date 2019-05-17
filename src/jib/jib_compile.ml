@@ -310,10 +310,10 @@ let rec compile_aval l ctx = function
      begin
        let bitstring = List.map value_of_aval_bit avals in
        let len = List.length avals in
-       match destruct_vector ctx.tc_env typ with
-       | Some (_, Ord_aux (Ord_inc, _), _) ->
+       match destruct_bitvector ctx.tc_env typ with
+       | Some (_, Ord_aux (Ord_inc, _)) ->
           [], V_lit (VL_bits (bitstring, false), CT_fbits (len, false)), []
-       | Some (_, Ord_aux (Ord_dec, _), _) ->
+       | Some (_, Ord_aux (Ord_dec, _)) ->
           [], V_lit (VL_bits (bitstring, true), CT_fbits (len, true)), []
        | Some _ ->
           raise (Reporting.err_general l "Encountered order polymorphic bitvector literal")
@@ -337,8 +337,8 @@ let rec compile_aval l ctx = function
      [iclear (CT_lbits true) gs]
 
   (* If we have a bitvector value, that isn't a literal then we need to set bits individually. *)
-  | AV_vector (avals, Typ_aux (Typ_app (id, [_; A_aux (A_order ord, _); A_aux (A_typ (Typ_aux (Typ_id bit_id, _)), _)]), _))
-       when string_of_id bit_id = "bit" && string_of_id id = "vector" && List.length avals <= 64 ->
+  | AV_vector (avals, Typ_aux (Typ_app (id, [_; A_aux (A_order ord, _)]), _))
+       when string_of_id id = "bitvector" && List.length avals <= 64 ->
      let len = List.length avals in
      let direction = match ord with
        | Ord_aux (Ord_inc, _) -> false

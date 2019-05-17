@@ -570,7 +570,7 @@ let remove_vector_concat_pat pat =
         let eff = effect_of_annot (snd annot) in
         let (l,_) = annot in
         let wild _ = P_aux (P_wild,(gen_loc l, mk_tannot env bit_typ eff)) in
-        if is_vector_typ typ then
+        if is_vector_typ typ || is_bitvector_typ typ then
           match p, vector_typ_args_of typ with
           | P_vector ps,_ -> acc @ ps
           | _, (Nexp_aux (Nexp_constant length,_),_,_) ->
@@ -1990,11 +1990,13 @@ let rewrite_undefined_if_gen always_bitvector env defs =
   then rewrite_undefined (always_bitvector || !Pretty_print_lem.opt_mwords) env defs
   else defs
 
-let rec simple_typ (Typ_aux (typ_aux, l) as typ) = Typ_aux (simple_typ_aux typ_aux, l)
-and simple_typ_aux = function
+let rec simple_typ (Typ_aux (typ_aux, l) as typ) = Typ_aux (simple_typ_aux l typ_aux, l)
+and simple_typ_aux l = function
   | Typ_id id -> Typ_id id
   | Typ_app (id, [_; _; A_aux (A_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
      Typ_app (mk_id "list", [A_aux (A_typ (simple_typ typ), l)])
+  | Typ_app (id, [_; _]) when Id.compare id (mk_id "bitvector") = 0 ->
+     Typ_app (mk_id "list", [A_aux (A_typ bit_typ, gen_loc l)])
   | Typ_app (id, [_]) when Id.compare id (mk_id "atom") = 0 ->
      Typ_id (mk_id "int")
   | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 ->
@@ -2004,7 +2006,7 @@ and simple_typ_aux = function
   | Typ_app (id, args) -> Typ_app (id, List.concat (List.map simple_typ_arg args))
   | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map simple_typ arg_typs, simple_typ ret_typ, effs)
   | Typ_tup typs -> Typ_tup (List.map simple_typ typs)
-  | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux typ
+  | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux l typ
   | typ_aux -> typ_aux
 and simple_typ_arg (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with

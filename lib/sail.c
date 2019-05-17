@@ -578,7 +578,7 @@ sbits CONVERT_OF(sbits, lbits)(const lbits op, const bool direction)
   return rop;
 }
 
-void UNDEFINED(lbits)(lbits *rop, const sail_int len, const fbits bit)
+void UNDEFINED(lbits)(lbits *rop, const sail_int len)
 {
   zeros(rop, len);
 }

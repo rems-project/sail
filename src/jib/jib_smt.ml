@@ -1147,10 +1147,8 @@ let rec ctyp_of_typ ctx typ =
      CT_list (ctyp_of_typ ctx typ)
 
   (* Note that we have to use lbits for zero-length bitvectors because they are not allowed by SMTLIB *)
-  | Typ_app (id, [A_aux (A_nexp n, _);
-                  A_aux (A_order ord, _);
-                  A_aux (A_typ (Typ_aux (Typ_id vtyp_id, _)), _)])
-       when string_of_id id = "vector" && string_of_id vtyp_id = "bit" ->
+  | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_order ord, _)])
+       when string_of_id id = "bitvector"  ->
      let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
      begin match nexp_simp n with
      | Nexp_aux (Nexp_constant n, _) when Big_int.equal n Big_int.zero -> CT_lbits direction

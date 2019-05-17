@@ -148,9 +148,8 @@ let rec ctyp_of_typ ctx typ =
      - If the length is less than 64, then use a small bits type, sbits.
      - If the length may be larger than 64, use a large bits type lbits. *)
   | Typ_app (id, [A_aux (A_nexp n, _);
-                  A_aux (A_order ord, _);
-                  A_aux (A_typ (Typ_aux (Typ_id vtyp_id, _)), _)])
-       when string_of_id id = "vector" && string_of_id vtyp_id = "bit" ->
+                  A_aux (A_order ord, _)])
+       when string_of_id id = "bitvector" ->
      let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
      begin match nexp_simp n with
      | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_fbits (Big_int.to_int n, direction)
@@ -1429,8 +1428,8 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
           end
        | "internal_vector_update", _ -> Printf.sprintf "internal_vector_update_%s" (sgen_ctyp_name ctyp)
        | "internal_vector_init", _ -> Printf.sprintf "internal_vector_init_%s" (sgen_ctyp_name ctyp)
-       | "undefined_vector", CT_fbits _ -> "UNDEFINED(fbits)"
-       | "undefined_vector", CT_lbits _ -> "UNDEFINED(lbits)"
+       | "undefined_bitvector", CT_fbits _ -> "UNDEFINED(fbits)"
+       | "undefined_bitvector", CT_lbits _ -> "UNDEFINED(lbits)"
        | "undefined_bit", _ -> "UNDEFINED(fbits)"
        | "undefined_vector", _ -> Printf.sprintf "UNDEFINED(vector_%s)" (sgen_ctyp_name ctyp)
        | fname, _ -> fname

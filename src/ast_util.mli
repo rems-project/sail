@@ -157,6 +157,7 @@ val unit_typ : typ
 val string_typ : typ
 val real_typ : typ
 val vector_typ : nexp -> order -> typ -> typ
+val bitvector_typ : nexp -> order -> typ
 val list_typ : typ -> typ
 val exc_typ : typ
 val tuple_typ : typ list -> typ

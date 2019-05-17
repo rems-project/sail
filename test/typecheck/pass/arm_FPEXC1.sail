@@ -1,17 +1,17 @@
 default Order dec
 
 val vector_access = {ocaml: "access", lem: "access_vec_dec", coq: "access_vec_dec"}: forall ('n : Int).
-  (vector('n, dec, bit), int) -> bit
+  (bitvector('n, dec), int) -> bit
 
 val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec", coq: "subrange_vec_dec"}: forall ('n : Int) ('m : Int) ('o : Int), 'm >= 'o & 'o >= 0 & 'n >= 'm + 1.
-  (vector('n, dec, bit), atom('m), atom('o)) -> vector('m - ('o - 1), dec, bit)
+  (bitvector('n, dec), atom('m), atom('o)) -> bitvector('m - ('o - 1), dec)
 
 val vector_update_subrange = {ocaml: "update_subrange", lem: "update_subrange_vec_dec", coq: "update_subrange_vec_dec"} : forall 'n 'm 'o.
-  (vector('n, dec, bit), atom('m), atom('o), vector('m - ('o - 1), dec, bit)) -> vector('n, dec, bit)
+  (bitvector('n, dec), atom('m), atom('o), bitvector('m - ('o - 1), dec)) -> bitvector('n, dec)
 
-register _FPEXC32_EL2 : vector(32, dec, bit)
+register _FPEXC32_EL2 : bitvector(32, dec)
 
-val set_FPEXC32_EL2 : vector(32, dec, bit) -> unit effect {wreg}
+val set_FPEXC32_EL2 : bitvector(32, dec) -> unit effect {wreg}
 
 function set_FPEXC32_EL2 value_name = {
   _FPEXC32_EL2[0 .. 0] = [value_name[0]];
@@ -26,10 +26,10 @@ function set_FPEXC32_EL2 value_name = {
   _FPEXC32_EL2[30 .. 30] = [value_name[30]]
 }
 
-val get_FPEXC32_EL2 : unit -> vector(32, dec, bit) effect {rreg}
+val get_FPEXC32_EL2 : unit -> bitvector(32, dec) effect {rreg}
 
 function get_FPEXC32_EL2 () = {
-  value_name : vector(32, dec, bit) = 0x04000700;
+  value_name : bitvector(32, dec) = 0x04000700;
   value_name[0 .. 0] = [_FPEXC32_EL2[0]];
   value_name[1 .. 1] = [_FPEXC32_EL2[1]];
   value_name[2 .. 2] = [_FPEXC32_EL2[2]];
@@ -44,11 +44,11 @@ function get_FPEXC32_EL2 () = {
   value_name
 }
 
-val set_FPEXC : vector(32, dec, bit) -> unit effect {rreg, wreg}
+val set_FPEXC : bitvector(32, dec) -> unit effect {rreg, wreg}
 
 function set_FPEXC val_name = {
-  r : vector(32, dec, bit) = val_name;
-  __tmp_45 : vector(32, dec, bit) = get_FPEXC32_EL2();
+  r : bitvector(32, dec) = val_name;
+  __tmp_45 : bitvector(32, dec) = get_FPEXC32_EL2();
   __tmp_45[31 .. 0] = r;
   set_FPEXC32_EL2(__tmp_45)
 }

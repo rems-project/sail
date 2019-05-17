@@ -1,6 +1,6 @@
 default Order dec
 
-type bits ('n : Int) = vector('n, dec, bit)
+type bits ('n : Int) = bitvector('n, dec)
 
 union option ('a : Type) = {
   Some : 'a,

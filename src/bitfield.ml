@@ -55,7 +55,7 @@ open Ast
 open Ast_util
 
 let bitvec size order =
-  Printf.sprintf "vector(%i, %s, bit)" size (string_of_order order)
+  Printf.sprintf "bitvector(%i, %s)" size (string_of_order order)
 
 let rec combine = function
   | [] -> Defs []
@@ -65,12 +65,12 @@ let rec combine = function
 
 let newtype name size order =
   let chunks_64 =
-    Util.list_init (size / 64) (fun i -> Printf.sprintf "%s_chunk_%i : vector(64, %s, bit)" name i (string_of_order order))
+    Util.list_init (size / 64) (fun i -> Printf.sprintf "%s_chunk_%i : bitvector(64, %s)" name i (string_of_order order))
   in
   let chunks =
     if size mod 64 = 0 then chunks_64 else
       let chunk_rem =
-        Printf.sprintf "%s_chunk_%i : vector(%i, %s, bit)" name (List.length chunks_64) (size mod 64) (string_of_order order)
+        Printf.sprintf "%s_chunk_%i : bitvector(%i, %s)" name (List.length chunks_64) (size mod 64) (string_of_order order)
       in
       chunk_rem :: List.rev chunks_64
   in

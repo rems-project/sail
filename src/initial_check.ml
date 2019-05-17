@@ -859,6 +859,7 @@ let initial_ctx = {
           ("list", [K_type]);
           ("register", [K_type]);
           ("range", [K_int; K_int]);
+          ("bitvector", [K_int; K_order]);
           ("vector", [K_int; K_order; K_type]);
           ("atom", [K_int]);
           ("implicit", [K_int]);
@@ -925,7 +926,7 @@ let undefined_builtin_val_specs =
    extern_of_string (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
    extern_of_string (mk_id "undefined_vector") "forall 'n ('a:Type) ('ord : Order). (atom('n), 'a) -> vector('n, 'ord,'a) effect {undef}";
    (* Only used with lem_mwords *)
-   extern_of_string (mk_id "undefined_bitvector") "forall 'n. atom('n) -> vector('n, dec, bit) effect {undef}";
+   extern_of_string (mk_id "undefined_bitvector") "forall 'n. atom('n) -> bitvector('n, dec) effect {undef}";
    extern_of_string (mk_id "undefined_unit") "unit -> unit effect {undef}"]
 
 let generate_undefineds vs_ids (Defs defs) =
