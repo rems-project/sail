@@ -2900,7 +2900,18 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      else typ_error env l "List length didn't match" (* FIXME: improve error message *)
   | E_lit (L_aux (L_undef, _) as lit), _ ->
      if is_typ_monomorphic typ || Env.polymorphic_undefineds env
-     then annot_exp_effect (E_lit lit) typ (mk_effect [BE_undef])
+     then
+       (* This is a bit of a stop-gap measure; TODO: check undefined
+          literals for types that contain embedded vectors. *)
+       let () =
+         match destruct_vec_typ l env typ with
+         | (len, _, _) ->
+            if prove __POS__ env (nc_gteq len (nint 0))
+            then ()
+            else typ_error env l "Unable to prove that undefined vector has non-negative length"
+         | exception _ -> ()
+       in
+       annot_exp_effect (E_lit lit) typ (mk_effect [BE_undef])
      else typ_error env l ("Type " ^ string_of_typ typ ^ " failed undefined monomorphism restriction")
   | _, _ ->
      let inferred_exp = irule infer_exp env exp in
