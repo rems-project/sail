@@ -2070,7 +2070,7 @@ let rewrite_vector_concat_assignments env defs =
     match e_aux with
     | E_assign (LEXP_aux (LEXP_vector_concat lexps, lannot), exp) ->
        let typ = Env.base_typ_of env (typ_of exp) in
-       if is_vector_typ typ then
+       if is_vector_typ typ || is_bitvector_typ typ then
          (* let _ = Pretty_print_common.print stderr (Pretty_print_sail.doc_exp (E_aux (e_aux, annot))) in *)
          let start = vector_start_index typ in
          let (_, ord, etyp) = vector_typ_args_of typ in

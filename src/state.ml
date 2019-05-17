@@ -106,20 +106,30 @@ let generate_initial_regstate defs =
          string_of_nexp nexp
       | Typ_app (id, [A_aux (A_nexp nexp, _); _]) when string_of_id id = "range" ->
          string_of_nexp nexp
-      | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_constant len, _)), _); _ ;
-                      A_aux (A_typ etyp, _)])
-        when string_of_id id = "vector" ->
-         (* Output a list of initial values of the vector elements, or a
-            literal binary zero value if this is a bitvector and the
-            environment has a default indexing order (required by the
-            typechecker for binary and hex literals) *)
-         let literal_bitvec = is_bit_typ etyp && has_default_order defs in
-         let init_elem = if literal_bitvec then "0" else lookup_init_val vals etyp in
+      | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_constant len, _)), _); _])
+        when string_of_id id = "bitvector" ->
+         (* Output a literal binary zero value if this is a bitvector
+            and the environment has a default indexing order (required
+            by the typechecker for binary and hex literals) *)
+         let literal_bitvec = has_default_order defs in
+         let init_elem = if literal_bitvec then "0" else lookup_init_val vals bit_typ in
          let rec elems len =
            if (Nat_big_num.less_equal len Nat_big_num.zero) then [] else
            init_elem :: elems (Nat_big_num.pred len)
          in
-         if literal_bitvec then "0b" ^ (String.concat "" (elems len)) else
+         if literal_bitvec then
+           "0b" ^ (String.concat "" (elems len))
+         else
+           "[" ^ (String.concat ", " (elems len)) ^ "]"
+      | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_constant len, _)), _); _ ;
+                      A_aux (A_typ etyp, _)])
+        when string_of_id id = "vector" ->
+         (* Output a list of initial values of the vector elements. *)
+         let init_elem = lookup_init_val vals etyp in
+         let rec elems len =
+           if (Nat_big_num.less_equal len Nat_big_num.zero) then [] else
+           init_elem :: elems (Nat_big_num.pred len)
+         in
          "[" ^ (String.concat ", " (elems len)) ^ "]"
       | Typ_app (id, args) -> Bindings.find id vals args
       | Typ_tup typs ->
@@ -188,7 +198,7 @@ let rec regval_constr_id mwords (Typ_aux (t, l) as typ) = match t with
        | _ ->
           raise (Reporting.err_typ l "Unsupported register type")
      in
-     let builtins = IdSet.of_list (List.map mk_id ["vector"; "list"; "option"]) in
+     let builtins = IdSet.of_list (List.map mk_id ["vector"; "bitvector"; "list"; "option"]) in
      if IdSet.mem id builtins && not (mwords && is_bitvector_typ typ) then id else
      append_id id (String.concat "_" ("" :: List.map name_arg args))
   | _ -> raise (Reporting.err_typ l "Unsupported register type")
@@ -207,7 +217,7 @@ let register_base_types mwords typs =
          List.fold_left add_typ_arg typs args
       | _ -> Bindings.add (regval_constr_id mwords typ) typ typs
   in
-  List.fold_left add_base_typs Bindings.empty typs
+  List.fold_left add_base_typs Bindings.empty (bit_typ :: typs)
 
 let generate_regval_typ typs =
   let constr (constr_id, typ) =
@@ -241,7 +251,7 @@ let add_regval_conv id typ (Defs defs) =
   append_ast (Defs defs) cdefs
 
 let rec regval_convs_lem mwords (Typ_aux (t, _) as typ) = match t with
-  | Typ_app _ when is_vector_typ typ && not (mwords && is_bitvector_typ typ) ->
+  | Typ_app _ when (is_vector_typ typ || is_bitvector_typ typ) && not (mwords && is_bitvector_typ typ) ->
      let size, ord, etyp = vector_typ_args_of typ in
      let size = string_of_nexp (nexp_simp size) in
      let is_inc = if is_order_inc ord then "true" else "false" in

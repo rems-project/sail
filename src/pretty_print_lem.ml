@@ -225,14 +225,18 @@ let rec lem_nexps_of_typ (Typ_aux (t,l)) =
   | Typ_tup ts ->
      List.fold_left (fun s t -> NexpSet.union s (trec t))
        NexpSet.empty ts
+  | Typ_app(Id_aux (Id "bitvector", _), [
+    A_aux (A_nexp m, _);
+    A_aux (A_order ord, _)]) ->
+     let m = nexp_simp m in
+     if !opt_mwords && not (is_nexp_constant m) then
+       NexpSet.singleton (orig_nexp m)
+     else trec bit_typ
   | Typ_app(Id_aux (Id "vector", _), [
     A_aux (A_nexp m, _);
     A_aux (A_order ord, _);
     A_aux (A_typ elem_typ, _)]) ->
-     let m = nexp_simp m in
-     if !opt_mwords && is_bit_typ elem_typ && not (is_nexp_constant m) then
-       NexpSet.singleton (orig_nexp m)
-     else trec elem_typ
+     trec elem_typ
   | Typ_app(Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
      trec etyp
   | Typ_app(Id_aux (Id "range", _),_)
@@ -280,15 +284,17 @@ let doc_typ_lem, doc_atomic_typ_lem =
           A_aux (A_nexp m, _);
           A_aux (A_order ord, _);
           A_aux (A_typ elem_typ, _)]) ->
-         let tpp = match elem_typ with
-           | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) when !opt_mwords ->
+         let tpp = string "list" ^^ space ^^ typ elem_typ in
+         if atyp_needed then parens tpp else tpp
+      | Typ_app(Id_aux (Id "bitvector", _), [
+          A_aux (A_nexp m, _);
+          A_aux (A_order ord, _)]) ->
+         let tpp =
+           if !opt_mwords then
              string "mword " ^^ doc_nexp_lem (nexp_simp m)
-             (* (match nexp_simp m with
-               | (Nexp_aux(Nexp_constant i,_)) -> string "bitvector ty" ^^ doc_int i
-               | (Nexp_aux(Nexp_var _, _)) -> separate space [string "bitvector"; doc_nexp m]
-               | _ -> raise (Reporting.err_unreachable l __POS__
-                "cannot pretty-print bitvector type with non-constant length")) *)
-           | _ -> string "list" ^^ space ^^ typ elem_typ in
+           else
+             string "list" ^^ space ^^ typ bit_typ
+         in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
          let tpp = string "register_ref regstate register_value " ^^ typ etyp in
@@ -458,9 +464,8 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
       -> NexpSet.empty
     | Typ_fn (ts,t,_) -> List.fold_left NexpSet.union (typeclass_nexps t) (List.map typeclass_nexps ts)
     | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
-    | Typ_app (Id_aux (Id "vector",_),
-               [A_aux (A_nexp size_nexp,_);
-                _;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)])
+    | Typ_app (Id_aux (Id "bitvector",_),
+               [A_aux (A_nexp size_nexp,_)])
     | Typ_app (Id_aux (Id "itself",_),
                [A_aux (A_nexp size_nexp,_)]) ->
        let size_nexp = nexp_simp size_nexp in
@@ -865,7 +870,7 @@ let doc_exp_lem, doc_let_lem =
     | E_vector exps ->
        let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let start, (len, order, etyp) =
-         if is_vector_typ t then vector_start_index t, vector_typ_args_of t
+         if is_vector_typ t || is_bitvector_typ t then vector_start_index t, vector_typ_args_of t
          else raise (Reporting.err_unreachable l __POS__
           "E_vector of non-vector type") in
        let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
