@@ -230,7 +230,10 @@ type smt_def =
   | Declare_const of string * smt_typ
   | Define_const of string * smt_typ * smt_exp
   | Write_mem of string * smt_exp * smt_exp * smt_typ * smt_exp * smt_typ
+  | Write_mem_ea of string * smt_exp * smt_exp * smt_typ * smt_exp * smt_typ
   | Read_mem of string * smt_typ * smt_exp * smt_exp * smt_typ
+  | Barrier of string * smt_exp
+  | Excl_res of string
   | Declare_datatypes of string * (string * (string * smt_typ) list) list
   | Declare_tuple of int
   | Assert of smt_exp
@@ -251,8 +254,14 @@ let suffix_variables_def sfx = function
      Define_const (name ^ sfx, ty, suffix_variables_exp sfx exp)
   | Write_mem (name, wk, addr, addr_ty, data, data_ty) ->
      Write_mem (name ^ sfx, suffix_variables_exp sfx wk, suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data, data_ty)
+  | Write_mem_ea (name, wk, addr, addr_ty, data_size, data_size_ty) ->
+     Write_mem (name ^ sfx, suffix_variables_exp sfx wk, suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data_size, data_size_ty)
   | Read_mem (name, ty, rk, addr, addr_ty) ->
      Read_mem (name ^ sfx, ty, suffix_variables_exp sfx rk, suffix_variables_exp sfx addr, addr_ty)
+  | Barrier (name, bk) ->
+     Barrier (name ^ sfx, bk)
+  | Excl_res name ->
+     Excl_res (name ^ sfx)
   | Declare_datatypes (name, ctors) ->
      Declare_datatypes (name, ctors)
   | Declare_tuple n ->
@@ -351,10 +360,21 @@ let pp_smt_def =
      ^^ pp_sfun "define-const" [string (name ^ "_addr"); pp_smt_typ addr_ty; pp_smt_exp addr] ^^ hardline
      ^^ pp_sfun "declare-const" [string (name ^ "_ret"); pp_smt_typ Bool]
 
+  | Write_mem_ea (name, wk, addr, addr_ty, data_size, data_size_ty) ->
+     pp_sfun "define-const" [string (name ^ "_kind"); string "Zwrite_kind"; pp_smt_exp wk] ^^ hardline
+     ^^ pp_sfun "define-const" [string (name ^ "_size"); pp_smt_typ data_size_ty; pp_smt_exp data_size] ^^ hardline
+     ^^ pp_sfun "define-const" [string (name ^ "_addr"); pp_smt_typ addr_ty; pp_smt_exp addr]
+
   | Read_mem (name, ty, rk, addr, addr_ty) ->
      pp_sfun "define-const" [string (name ^ "_kind"); string "Zread_kind"; pp_smt_exp rk] ^^ hardline
      ^^ pp_sfun "define-const" [string (name ^ "_addr"); pp_smt_typ addr_ty; pp_smt_exp addr] ^^ hardline
      ^^ pp_sfun "declare-const" [string (name ^ "_ret"); pp_smt_typ ty]
+
+  | Barrier (name, bk) ->
+     pp_sfun "define-const" [string (name ^ "_kind"); string "Zbarrier_kind"; pp_smt_exp bk]
+
+  | Excl_res name ->
+     pp_sfun "declare-const" [string (name ^ "_res"); pp_smt_typ Bool]
 
   | Declare_datatypes (name, ctors) ->
      let pp_ctor (ctor_name, fields) =

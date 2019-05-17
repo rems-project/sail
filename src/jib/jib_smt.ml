@@ -1025,6 +1025,14 @@ let builtin_write_mem ctx wk addr_size addr data_size data =
   [Write_mem (name, smt_cval ctx wk, smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr), smt_cval ctx data, smt_ctyp ctx (cval_ctyp data))],
   Var (name ^ "_ret")
 
+let ea_writes = ref (-1)
+
+let builtin_write_mem_ea ctx wk addr_size addr data_size =
+  incr ea_writes;
+  let name = "A" ^ string_of_int !ea_writes in
+  [Write_mem_ea (name, smt_cval ctx wk, smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr), smt_cval ctx data_size, smt_ctyp ctx (cval_ctyp data_size))],
+  Enum "unit"
+
 let reads = ref (-1)
 
 let builtin_read_mem ctx rk addr_size addr data_size ret_ctyp =
@@ -1032,6 +1040,22 @@ let builtin_read_mem ctx rk addr_size addr data_size ret_ctyp =
   let name = "R" ^ string_of_int !reads in
   [Read_mem (name, smt_ctyp ctx ret_ctyp, smt_cval ctx rk, smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr))],
   Var (name ^ "_ret")
+
+let excl_results = ref (-1)
+
+let builtin_excl_res ctx =
+  incr excl_results;
+  let name = "E" ^ string_of_int !excl_results in
+  [Excl_res name],
+  Var (name ^ "_ret")
+
+let barriers = ref (-1)
+
+let builtin_barrier ctx bk =
+  incr barriers;
+  let name = "B" ^ string_of_int !barriers in
+  [Barrier (name, smt_cval ctx bk)],
+  Enum "unit"
 
 let rec smt_conversion ctx from_ctyp to_ctyp x =
   match from_ctyp, to_ctyp with
@@ -1445,6 +1469,14 @@ let smt_instr ctx =
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __write_mem"
          end
+       else if name = "platform_write_mem_ea" then
+         begin match args with
+         | [wk; addr_size; addr; data_size] ->
+            let mem_event, var = builtin_write_mem_ea ctx wk addr_size addr data_size in
+            mem_event @ [define_const ctx id ret_ctyp var]
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for __write_mem_ea"
+         end
        else if name = "platform_read_mem" then
          begin match args with
          | [rk; addr_size; addr; data_size] ->
@@ -1452,6 +1484,22 @@ let smt_instr ctx =
             mem_event @ [define_const ctx id ret_ctyp var]
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __read_mem"
+         end
+       else if name = "platform_barrier" then
+         begin match args with
+         | [bk] ->
+            let mem_event, var = builtin_barrier ctx bk in
+            mem_event @ [define_const ctx id ret_ctyp var]
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for __barrier"
+         end
+       else if name = "platform_excl_res" then
+         begin match args with
+         | [_] ->
+            let mem_event, var = builtin_excl_res ctx in
+            mem_event @ [define_const ctx id ret_ctyp var]
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for __excl_res"
          end
        else
          let value = smt_builtin ctx name args ret_ctyp in
@@ -1601,8 +1649,16 @@ module Make_optimizer(S : Sequence) = struct
       | Write_mem (_, wk, addr, _, data, _) as def ->
          uses_in_exp wk; uses_in_exp addr; uses_in_exp data;
          Stack.push def stack'
+      | Write_mem_ea (_, wk, addr, _, data_size, _) as def ->
+         uses_in_exp wk; uses_in_exp addr; uses_in_exp data_size;
+         Stack.push def stack'
       | Read_mem (_, _, rk, addr, _) as def ->
          uses_in_exp rk; uses_in_exp addr;
+         Stack.push def stack'
+      | Barrier (_, bk) as def ->
+         uses_in_exp bk;
+         Stack.push def stack'
+      | Excl_res _ as def ->
          Stack.push def stack'
       | Assert exp as def ->
          uses_in_exp exp;
@@ -1631,8 +1687,14 @@ module Make_optimizer(S : Sequence) = struct
          end
       | Write_mem (name, wk, addr, addr_ty, data, data_ty) ->
          S.add (Write_mem (name, simp_smt_exp vars wk, simp_smt_exp vars addr, addr_ty, simp_smt_exp vars data, data_ty)) seq
+      | Write_mem_ea (name, wk, addr, addr_ty, data_size, data_size_ty) ->
+         S.add (Write_mem_ea (name, simp_smt_exp vars wk, simp_smt_exp vars addr, addr_ty, simp_smt_exp vars data_size, data_size_ty)) seq
       | Read_mem (name, typ, rk, addr, addr_typ) ->
          S.add (Read_mem (name, typ, simp_smt_exp vars rk, simp_smt_exp vars addr, addr_typ)) seq
+      | Barrier (name, bk) ->
+         S.add (Barrier (name, simp_smt_exp vars bk)) seq
+      | Excl_res name ->
+         S.add (Excl_res name) seq
       | Assert exp ->
          S.add (Assert (simp_smt_exp vars exp)) seq
       | (Declare_datatypes _ | Declare_tuple _) as def ->
