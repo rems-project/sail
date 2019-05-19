@@ -873,6 +873,9 @@ Program Definition to_word {n} : n >= 0 -> word (Z.to_nat n) -> mword n :=
   | Zpos _ => fun _ w => w
   end.
 
+Definition word_to_mword {n} (w : word (Z.to_nat n)) `{H:ArithFact (n >= 0)} : mword n :=
+  to_word (match H with Build_ArithFact _ H' => H' end) w.
+
 (*val length_mword : forall a. mword a -> Z*)
 Definition length_mword {n} (w : mword n) := n.
 
