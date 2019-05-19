@@ -1604,16 +1604,11 @@ let doc_exp, doc_let =
                  | None -> expY exp
                in
                let epp = separate space [string "early_return"; exp_pp] in
-               let aexp_needed, tepp =
-                 if contains_t_pp_var ctxt (typ_of exp) ||
-                    contains_t_pp_var ctxt (typ_of full_exp) then
-                   aexp_needed, epp
-                 else
-                   let tannot = separate space [string "MR";
-                     doc_atomic_typ ctxt (env_of full_exp) false (typ_of full_exp);
-                     doc_atomic_typ ctxt (env_of exp) false (typ_of exp)] in
-                   true, doc_op colon epp tannot in
-               if aexp_needed then parens tepp else tepp
+               let tannot = separate space [string "MR";
+                 doc_atomic_typ ctxt (env_of full_exp) false (typ_of full_exp);
+                 doc_atomic_typ ctxt (env_of exp) false (typ_of exp)]
+               in
+               parens (doc_op colon epp tannot)
             | _ -> raise (Reporting.err_unreachable l __POS__
                "Unexpected number of arguments for early_return builtin")
           end
