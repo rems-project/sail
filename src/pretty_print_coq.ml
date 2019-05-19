@@ -1841,7 +1841,7 @@ let doc_exp, doc_let =
        let outer_typ = Env.expand_synonyms env (general_typ_of_annot (l,annot)) in
        let outer_typ = expand_range_type outer_typ in
        let cast_typ = expand_range_type (Env.expand_synonyms env typ) in
-       let inner_typ = Env.expand_synonyms env (general_typ_of e) in
+       let inner_typ = Env.expand_synonyms env (typ_of e) in
        let inner_typ = expand_range_type inner_typ in
        let () =
          debug ctxt (lazy ("Cast of type " ^ string_of_typ cast_typ));
@@ -1852,8 +1852,8 @@ let doc_exp, doc_let =
        let outer_ex,_,outer_typ' = classify_ex_type ctxt env outer_typ in
        let cast_ex,_,cast_typ' = classify_ex_type ctxt env ~rawbools:true cast_typ in
        let inner_ex,_,inner_typ' = classify_ex_type ctxt env inner_typ in
-       let autocast =
-                (* Avoid using helper functions which simplify the nexps *)
+       let autocast_out =
+         (* Avoid using helper functions which simplify the nexps *)
          is_bitvector_typ outer_typ' && is_bitvector_typ cast_typ' &&
            match outer_typ', cast_typ' with
            | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
@@ -1861,18 +1861,37 @@ let doc_exp, doc_let =
               not (similar_nexps ctxt env n1 n2)
            | _ -> false
        in
+       let autocast_in =
+         (* Avoid using helper functions which simplify the nexps *)
+         is_bitvector_typ inner_typ' && is_bitvector_typ cast_typ' &&
+           match inner_typ', cast_typ' with
+           | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
+         Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
+              not (similar_nexps ctxt env n1 n2)
+           | _ -> false
+       in
        let effects = effectful (effect_of e) in
-       let autocast =
-         (* We don't currently have a version of autocast under existentials,
-            but they're rare and may be unnecessary *)
-         if effects && outer_ex = ExGeneral then false else autocast
+       (* We don't currently have a version of autocast under existentials,
+          but they're rare and may be unnecessary *)
+       let autocast_out =
+         if effects && outer_ex = ExGeneral then false else autocast_out
+       in
+       let autocast_in =
+         if effects && inner_ex = ExGeneral then false else autocast_in
        in
        let () =
          debug ctxt (lazy (" effectful: " ^ string_of_bool effects ^
                            " outer_ex: " ^ string_of_ex_kind outer_ex ^
                            " cast_ex: " ^ string_of_ex_kind cast_ex ^
                            " inner_ex: " ^ string_of_ex_kind inner_ex ^
-                           " autocast: " ^ string_of_bool autocast))
+                           " autocast_in: " ^ string_of_bool autocast_in ^
+                           " autocast_out: " ^ string_of_bool autocast_out))
+       in
+       let epp =
+         if autocast_in then
+           string "autocast" ^/^ parens epp
+         else
+           epp
        in
        let epp =
          if effects then
@@ -1903,7 +1922,7 @@ let doc_exp, doc_let =
               | ExNone -> epp
        in
        let epp =
-         if autocast then
+         if autocast_out then
            string (if effects then "autocast_m" else "autocast") ^^ space ^^ parens epp
          else epp
        in
@@ -2074,6 +2093,8 @@ let doc_exp, doc_let =
                        end
                      | _ -> plain_binder
                    in separate space [string ">>= fun"; binder; bigarrow]
+                | P_aux (P_typ (typ, pat'),_) ->
+                   separate space [string ">>= fun"; squote ^^ parens (doc_pat ctxt true true (pat, typ_of e1) ^/^ colon ^^ space ^^ doc_typ ctxt outer_env typ); bigarrow]
                 | _ ->
                    separate space [string ">>= fun"; squote ^^ doc_pat ctxt true true (pat, typ_of e1); bigarrow]
               in
@@ -2146,8 +2167,7 @@ let doc_exp, doc_let =
     (* Prefer simple lets over patterns, because I've found Coq can struggle to
        work out return types otherwise *)
     | LB_val(P_aux (P_id id,_),e)
-      when Util.is_none (is_auto_decomposed_exist ctxt (env_of e) (typ_of e)) &&
-           not (is_enum (env_of e) id) ->
+      when not (is_enum (env_of e) id) ->
        prefix 2 1
               (separate space [string "let"; doc_id id; coloneq])
               (top_exp ctxt false e)
@@ -2156,6 +2176,12 @@ let doc_exp, doc_let =
            not (is_enum (env_of e) id) ->
        prefix 2 1
               (separate space [string "let"; doc_id id; colon; doc_typ ctxt (env_of e) typ; coloneq])
+              (top_exp ctxt false e)
+    | LB_val(P_aux (P_typ (typ,P_aux (P_id id,_)),_),e)
+      when (* is auto decomposed *)
+           not (is_enum (env_of e) id) ->
+       prefix 2 1
+              (separate space [string "let"; doc_id id; coloneq])
               (top_exp ctxt false e)
     | LB_val(P_aux (P_typ (typ,pat),_),(E_aux (_,e_ann) as e)) ->
        prefix 2 1
