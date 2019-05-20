@@ -157,9 +157,9 @@ let add_def_to_graph graph def =
     let env = env_of_annot annot in
     begin match p_aux with
     | P_app (id, _) ->
-       graph := G.add_edge' self (Constructor id) !graph
+       graph := G.add_edge self (Constructor id) !graph
     | P_typ (typ, _) ->
-       IdSet.iter (fun id -> graph := G.add_edge' self (Type id) !graph) (typ_ids typ)
+       IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
     | _ -> ()
     end;
     P_aux (p_aux, annot)
@@ -170,9 +170,9 @@ let add_def_to_graph graph def =
     let env = env_of_annot annot in
     begin match lexp_aux with
     | LEXP_cast (typ, _) ->
-       IdSet.iter (fun id -> graph := G.add_edge' self (Type id) !graph) (typ_ids typ)
+       IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
     | LEXP_memory (id, _) ->
-       graph := G.add_edge' self (Function id) !graph
+       graph := G.add_edge self (Function id) !graph
     | _ -> ()
     end;
     LEXP_aux (lexp_aux, annot)
@@ -183,22 +183,22 @@ let add_def_to_graph graph def =
     begin match e_aux with
     | E_id id ->
        begin match Env.lookup_id id env with
-       | Register _ -> graph := G.add_edge' self (Register id) !graph
-       | Enum _ -> graph := G.add_edge' self (Constructor id) !graph
+       | Register _ -> graph := G.add_edge self (Register id) !graph
+       | Enum _ -> graph := G.add_edge self (Constructor id) !graph
        | _ ->
           if IdSet.mem id (Env.get_toplevel_lets env) then
-            graph := G.add_edge' self (Letbind id) !graph
+            graph := G.add_edge self (Letbind id) !graph
           else ()
        end
     | E_app (id, _) ->
        if Env.is_union_constructor id env then
-         graph := G.add_edge' self (Constructor id) !graph
+         graph := G.add_edge self (Constructor id) !graph
        else
-         graph := G.add_edge' self (Function id) !graph
+         graph := G.add_edge self (Function id) !graph
     | E_ref id ->
-       graph := G.add_edge' self (Register id) !graph
+       graph := G.add_edge self (Register id) !graph
     | E_cast (typ, _) ->
-       IdSet.iter (fun id -> graph := G.add_edge' self (Type id) !graph) (typ_ids typ)
+       IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
     | _ -> ()
     end;
     E_aux (e_aux, annot)
@@ -218,7 +218,7 @@ let add_def_to_graph graph def =
     match aux with
     | QI_id _ -> ()
     | QI_constraint nc ->
-       IdSet.iter (fun id -> graph := G.add_edge' self (Type id) !graph) (constraint_ids nc)
+       IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (constraint_ids nc)
   in
 
   let scan_typquant self (TypQ_aux (aux, _)) =
@@ -230,7 +230,7 @@ let add_def_to_graph graph def =
   let add_type_def_to_graph (TD_aux (aux, (l, _))) =
     match aux with
     | TD_abbrev (id, typq, arg) ->
-       graph := G.add_edges' (Type id) (List.map (fun id -> Type id) (IdSet.elements (typ_arg_ids arg))) !graph;
+       graph := G.add_edges (Type id) (List.map (fun id -> Type id) (IdSet.elements (typ_arg_ids arg))) !graph;
        scan_typquant (Type id) typq
     | TD_record (id, typq, fields, _) ->
        let field_nodes =
@@ -239,44 +239,44 @@ let add_def_to_graph graph def =
          |> IdSet.elements
          |> List.map (fun id -> Type id)
        in
-       graph := G.add_edges' (Type id) field_nodes !graph;
+       graph := G.add_edges (Type id) field_nodes !graph;
        scan_typquant (Type id) typq
     | TD_variant (id, typq, ctors, _) ->
        let ctor_nodes =
          List.map (fun (Tu_aux (Tu_ty_id (typ, id), _)) -> (typ_ids typ, id)) ctors
          |> List.fold_left (fun (ids, ctors) (ids', ctor) -> (IdSet.union ids ids', IdSet.add ctor ctors)) (IdSet.empty, IdSet.empty)
        in
-       IdSet.iter (fun ctor_id -> graph := G.add_edge' (Constructor ctor_id) (Type id) !graph) (snd ctor_nodes);
-       IdSet.iter (fun typ_id -> graph := G.add_edge' (Type id) (Type typ_id) !graph) (fst ctor_nodes);
+       IdSet.iter (fun ctor_id -> graph := G.add_edge (Constructor ctor_id) (Type id) !graph) (snd ctor_nodes);
+       IdSet.iter (fun typ_id -> graph := G.add_edge (Type id) (Type typ_id) !graph) (fst ctor_nodes);
        scan_typquant (Type id) typq
     | TD_enum (id, ctors, _) ->
-       List.iter (fun ctor_id -> graph := G.add_edge' (Constructor ctor_id) (Type id) !graph) ctors
+       List.iter (fun ctor_id -> graph := G.add_edge (Constructor ctor_id) (Type id) !graph) ctors
     | TD_bitfield _ ->
        Reporting.unreachable l __POS__ "Bitfield should be re-written"
   in
 
   begin match def with
   | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), id, _, _), _)) ->
-     graph := G.add_edges' (Function id) [] !graph;
-     IdSet.iter (fun typ_id -> graph := G.add_edge' (Function id) (Type typ_id) !graph) (typ_ids typ)
+     graph := G.add_edges (Function id) [] !graph;
+     IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ)
   | DEF_fundef fdef ->
      let id = id_of_fundef fdef in
-     graph := G.add_edges' (Function id) [] !graph;
+     graph := G.add_edges (Function id) [] !graph;
      ignore (rewrite_fun (rewriters (Function id)) fdef)
   | DEF_val (LB_aux (LB_val (pat, exp), _) as lb) ->
      let ids = pat_ids pat in
-     IdSet.iter (fun id -> graph := G.add_edges' (Letbind id) [] !graph) ids;
+     IdSet.iter (fun id -> graph := G.add_edges (Letbind id) [] !graph) ids;
      IdSet.iter (fun id -> ignore (rewrite_let (rewriters (Letbind id)) lb)) ids
   | DEF_type tdef ->
      add_type_def_to_graph tdef
   | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) ->
-     IdSet.iter (fun typ_id -> graph := G.add_edge' (Register id) (Type typ_id) !graph) (typ_ids typ)
+     IdSet.iter (fun typ_id -> graph := G.add_edge (Register id) (Type typ_id) !graph) (typ_ids typ)
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
      ignore (rewrite_exp  (rewriters (Register id)) exp);
-     IdSet.iter (fun typ_id -> graph := G.add_edge' (Register id) (Type typ_id) !graph) (typ_ids typ)
+     IdSet.iter (fun typ_id -> graph := G.add_edge (Register id) (Type typ_id) !graph) (typ_ids typ)
   | _ -> ()
   end;
-  G.fix_leaves !graph
+  !graph
 
 let rec graph_of_ast (Defs defs) =
   let module G = Graph.Make(Node) in
