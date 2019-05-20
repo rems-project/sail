@@ -327,6 +327,10 @@ let filter_ast cuts g (Defs defs) =
     | DEF_type tdef :: defs when NM.mem (Type (id_of_typedef tdef)) g -> DEF_type tdef :: filter_ast' g defs
     | DEF_type _ :: defs -> filter_ast' g defs
 
+    | DEF_measure (id,_,_) :: defs when IdSet.mem id cuts -> filter_ast' g defs
+    | (DEF_measure (id,_,_) as def) :: defs when NM.mem (Function id) g -> def :: filter_ast' g defs
+    | DEF_measure _ :: defs -> filter_ast' g defs
+
     | def :: defs -> def :: filter_ast' g defs
 
     | [] -> []
