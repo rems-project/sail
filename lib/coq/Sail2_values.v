@@ -1122,7 +1122,7 @@ Ltac unbool_comparisons_goal :=
 (* Split up dependent pairs to get at proofs of properties *)
 Ltac extract_properties :=
   (* Properties of local definitions *)
-  repeat match goal with H := (projT1 ?X) |- _ =>
+  repeat match goal with H := context[projT1 ?X] |- _ =>
     let x := fresh "x" in
     let Hx := fresh "Hx" in
     destruct X as [x Hx] in *;
@@ -1427,6 +1427,9 @@ Lemma iff_false_left {P Q R : Prop} : (false = true) <-> Q -> (false = true) /\ 
 intuition.
 Qed.
 
+(* Redefine this to add extra solver tactics *)
+Ltac sail_extra_tactic := fail.
+
 Ltac main_solver :=
  solve
  [ match goal with |- (?x ?y) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) y) end
@@ -1442,6 +1445,18 @@ Ltac main_solver :=
                         | |- context [ZEuclid.modulo] => solve_euclid
    end
  | match goal with |- context [Z.mul] => nia end
+ (* If we have a disjunction from a set constraint on a variable we can often
+    solve a goal by trying them (admittedly this is quite heavy handed...) *)
+ | let aux x :=
+    is_var x;
+    intuition (subst;auto)
+   in
+   match goal with
+   | _:(@eq Z _ ?x) \/ (@eq Z _ ?x) \/ _ |- context[?x] => aux x
+   | _:(@eq Z ?x _) \/ (@eq Z ?x _) \/ _ |- context[?x] => aux x
+   | _:(@eq Z _ ?x) \/ (@eq Z _ ?x) \/ _, _:@eq Z ?y (ZEuclid.div ?x _) |- context[?y] => is_var x; aux y
+   | _:(@eq Z ?x _) \/ (@eq Z ?x _) \/ _, _:@eq Z ?y (ZEuclid.div ?x _) |- context[?y] => is_var x; aux y
+   end
  (* Booleans - and_boolMP *)
  | simple_ex_iff
  | drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
@@ -1482,6 +1497,7 @@ Ltac main_solver :=
      (* Don't use auto for the fallback to keep runtime down *)
      firstorder fail
    end*)
+ | sail_extra_tactic
  | idtac "Unable to solve constraint"; dump_context; fail
  ].
 
