@@ -1126,7 +1126,7 @@ Ltac extract_properties :=
     let x := fresh "x" in
     let Hx := fresh "Hx" in
     destruct X as [x Hx] in *;
-    change (projT1 (existT _ x Hx)) with x in *; unfold H in * end;
+    change (projT1 (existT _ x Hx)) with x in * end;
   (* Properties in the goal *)
   repeat match goal with |- context [projT1 ?X] =>
     let x := fresh "x" in
