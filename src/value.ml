@@ -724,6 +724,7 @@ let primops =
       ("undefined_unit", fun _ -> V_unit);
       ("undefined_bit", fun _ -> V_bit Sail_lib.B0);
       ("undefined_int", fun _ -> V_int Big_int.zero);
+      ("undefined_nat", fun _ -> V_int Big_int.zero);
       ("undefined_bool", fun _ -> V_bool false);
       ("undefined_vector", value_undefined_vector);
       ("undefined_string", fun _ -> V_string "");
