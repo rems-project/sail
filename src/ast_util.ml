@@ -197,7 +197,7 @@ module Nexp = struct
        let lex2 = List.length args1 - List.length args2 in
        let lex3 =
          if lex2 = 0 then
-           List.fold_left2 (fun l n1 n2 -> if compare n1 n2 = 0 then 0 else compare n1 n2) 0 args1 args2
+           List.fold_left2 (fun l n1 n2 -> lex_ord (l, compare n1 n2)) 0 args1 args2
          else 0
        in
        lex_ord (lex1, lex_ord (lex2, lex3))
