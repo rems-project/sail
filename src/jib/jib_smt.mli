@@ -52,6 +52,7 @@ open Ast
 open Ast_util
 open Jib
 open Jib_util
+open Jib_ssa
 open Smtlib
 
 val opt_ignore_overflow : bool ref
@@ -95,8 +96,9 @@ type ctx = {
        src/property.ml for the event types *)
     events : smt_exp Stack.t EventMap.t ref;
     (** When generating SMT for an instruction pathcond will contain
-       the global path conditional of the containing block in the
+       the global path conditional of the containing block/node in the
        control flow graph *)
+    node : int;
     pathcond : smt_exp Lazy.t;
     (** Set if we need to use strings or real numbers in the generated
        SMT, which then requires set-logic ALL or similar depending on
@@ -116,7 +118,7 @@ val compile : Type_check.Env.t -> Type_check.tannot defs -> cdef list * ctx
 
 val smt_header : ctx -> cdef list -> smt_def list
 
-val smt_instr_list : string -> ctx -> cdef list -> instr list -> smt_def Stack.t
+val smt_instr_list : string -> ctx -> cdef list -> instr list -> smt_def Stack.t * (ssa_elem list * cf_node) Jib_ssa.array_graph
 
 module type Sequence = sig
   type 'a t

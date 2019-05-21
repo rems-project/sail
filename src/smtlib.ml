@@ -96,6 +96,7 @@ type smt_exp =
   | Var of string
   | Enum of string
   | Fn of string * smt_exp list
+  | Ctor of string * smt_exp list
   | Ite of smt_exp * smt_exp * smt_exp
   | SignExtend of int * smt_exp
   | Extract of int * int * smt_exp
@@ -103,6 +104,7 @@ type smt_exp =
 
 let rec fold_smt_exp f = function
   | Fn (name, args) -> f (Fn (name, List.map (fold_smt_exp f) args))
+  | Ctor (name, args) -> f (Ctor (name, List.map (fold_smt_exp f) args))
   | Ite (cond, t, e) -> f (Ite (fold_smt_exp f cond, fold_smt_exp f t, fold_smt_exp f e))
   | SignExtend (n, exp) -> f (SignExtend (n, fold_smt_exp f exp))
   | Extract (n, m, exp) -> f (Extract (n, m, fold_smt_exp f exp))
@@ -196,44 +198,55 @@ let simp_ite = function
   | Ite (Bool_lit false, _, else_exp) -> else_exp
   | exp -> exp
 
-let rec simp_smt_exp vars = function
+let rec simp_smt_exp vars kinds = function
   | Var v ->
      begin match Hashtbl.find_opt vars v with
-     | Some exp -> simp_smt_exp vars exp
+     | Some exp -> simp_smt_exp vars kinds exp
      | None -> Var v
      end
   | (Enum _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ as exp) -> exp
   | Fn (f, exps) ->
-     let exps = List.map (simp_smt_exp vars) exps in
+     let exps = List.map (simp_smt_exp vars kinds) exps in
      simp_fn (Fn (f, exps))
+  | Ctor (f, exps) ->
+     let exps = List.map (simp_smt_exp vars kinds) exps in
+     simp_fn (Ctor (f, exps))
   | Ite (cond, t, e) ->
-     let cond = simp_smt_exp vars cond in
-     let t = simp_smt_exp vars t in
-     let e = simp_smt_exp vars e in
+     let cond = simp_smt_exp vars kinds cond in
+     let t = simp_smt_exp vars kinds t in
+     let e = simp_smt_exp vars kinds e in
      simp_ite (Ite (cond, t, e))
   | Extract (i, j, exp) ->
-     let exp = simp_smt_exp vars exp in
+     let exp = simp_smt_exp vars kinds exp in
      begin match exp with
      | Bin str ->
         Bin (String.sub str ((String.length str - 1) - i) ((i + 1) - j))
      | _ -> Extract (i, j, exp)
      end
   | Tester (str, exp) ->
-     let exp = simp_smt_exp vars exp in
-     Tester (str, exp)
+     let exp = simp_smt_exp vars kinds exp in
+     begin match exp with
+     | Var v ->
+        begin match Hashtbl.find_opt kinds v with
+        | Some str' when str = str' -> Bool_lit true
+        | Some str' -> Bool_lit false
+        | None -> Tester (str, exp)
+        end
+     | _ -> Tester (str, exp)
+     end
   | SignExtend (i, exp) ->
-     let exp = simp_smt_exp vars exp in
+     let exp = simp_smt_exp vars kinds exp in
      SignExtend (i, exp)
 
 type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
   | Declare_const of string * smt_typ
   | Define_const of string * smt_typ * smt_exp
-  | Write_mem of string * smt_exp * smt_exp * smt_typ * smt_exp * smt_typ
-  | Write_mem_ea of string * smt_exp * smt_exp * smt_typ * smt_exp * smt_typ
-  | Read_mem of string * smt_typ * smt_exp * smt_exp * smt_typ
-  | Barrier of string * smt_exp
-  | Excl_res of string
+  | Write_mem of string * int * smt_exp * smt_exp * smt_exp * smt_typ * smt_exp * smt_typ
+  | Write_mem_ea of string * int * smt_exp * smt_exp * smt_exp * smt_typ * smt_exp * smt_typ
+  | Read_mem of string * int * smt_exp * smt_typ * smt_exp * smt_exp * smt_typ
+  | Barrier of string * int * smt_exp * smt_exp
+  | Excl_res of string * int * smt_exp
   | Declare_datatypes of string * (string * (string * smt_typ) list) list
   | Declare_tuple of int
   | Assert of smt_exp
@@ -252,16 +265,19 @@ let suffix_variables_def sfx = function
      Declare_const (name ^ sfx, ty)
   | Define_const (name, ty, exp) ->
      Define_const (name ^ sfx, ty, suffix_variables_exp sfx exp)
-  | Write_mem (name, wk, addr, addr_ty, data, data_ty) ->
-     Write_mem (name ^ sfx, suffix_variables_exp sfx wk, suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data, data_ty)
-  | Write_mem_ea (name, wk, addr, addr_ty, data_size, data_size_ty) ->
-     Write_mem (name ^ sfx, suffix_variables_exp sfx wk, suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data_size, data_size_ty)
-  | Read_mem (name, ty, rk, addr, addr_ty) ->
-     Read_mem (name ^ sfx, ty, suffix_variables_exp sfx rk, suffix_variables_exp sfx addr, addr_ty)
-  | Barrier (name, bk) ->
-     Barrier (name ^ sfx, bk)
-  | Excl_res name ->
-     Excl_res (name ^ sfx)
+  | Write_mem (name, node, active, wk, addr, addr_ty, data, data_ty) ->
+     Write_mem (name ^ sfx, node, suffix_variables_exp sfx active, suffix_variables_exp sfx wk,
+                suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data, data_ty)
+  | Write_mem_ea (name, node, active , wk, addr, addr_ty, data_size, data_size_ty) ->
+     Write_mem (name ^ sfx, node, suffix_variables_exp sfx active, suffix_variables_exp sfx wk,
+                suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data_size, data_size_ty)
+  | Read_mem (name, node, active, ty, rk, addr, addr_ty) ->
+     Read_mem (name ^ sfx, node, suffix_variables_exp sfx active, ty, suffix_variables_exp sfx rk,
+               suffix_variables_exp sfx addr, addr_ty)
+  | Barrier (name, node, active, bk) ->
+     Barrier (name ^ sfx, node, suffix_variables_exp sfx active, suffix_variables_exp sfx bk)
+  | Excl_res (name, node, active) ->
+     Excl_res (name ^ sfx, node, suffix_variables_exp sfx active)
   | Declare_datatypes (name, ctors) ->
      Declare_datatypes (name, ctors)
   | Declare_tuple n ->
@@ -316,6 +332,7 @@ let rec pp_smt_exp =
   | Var str -> string str
   | Enum str -> string str
   | Fn (str, exps) -> parens (string str ^^ space ^^ separate_map space pp_smt_exp exps)
+  | Ctor (str, exps) -> parens (string str ^^ space ^^ separate_map space pp_smt_exp exps)
   | Ite (cond, then_exp, else_exp) ->
      parens (separate space [string "ite"; pp_smt_exp cond; pp_smt_exp then_exp; pp_smt_exp else_exp])
   | Extract (i, j, exp) ->
@@ -354,27 +371,32 @@ let pp_smt_def =
   | Define_const (name, ty, exp) ->
      pp_sfun "define-const" [string name; pp_smt_typ ty; pp_smt_exp exp]
 
-  | Write_mem (name, wk, addr, addr_ty, data, data_ty) ->
+  | Write_mem (name, _, active, wk, addr, addr_ty, data, data_ty) ->
      pp_sfun "define-const" [string (name ^ "_kind"); string "Zwrite_kind"; pp_smt_exp wk] ^^ hardline
+     ^^ pp_sfun "define-const" [string (name ^ "_active"); pp_smt_typ Bool; pp_smt_exp active] ^^ hardline
      ^^ pp_sfun "define-const" [string (name ^ "_data"); pp_smt_typ data_ty; pp_smt_exp data] ^^ hardline
      ^^ pp_sfun "define-const" [string (name ^ "_addr"); pp_smt_typ addr_ty; pp_smt_exp addr] ^^ hardline
      ^^ pp_sfun "declare-const" [string (name ^ "_ret"); pp_smt_typ Bool]
 
-  | Write_mem_ea (name, wk, addr, addr_ty, data_size, data_size_ty) ->
+  | Write_mem_ea (name, _, active, wk, addr, addr_ty, data_size, data_size_ty) ->
      pp_sfun "define-const" [string (name ^ "_kind"); string "Zwrite_kind"; pp_smt_exp wk] ^^ hardline
+     ^^ pp_sfun "define-const" [string (name ^ "_active"); pp_smt_typ Bool; pp_smt_exp active] ^^ hardline
      ^^ pp_sfun "define-const" [string (name ^ "_size"); pp_smt_typ data_size_ty; pp_smt_exp data_size] ^^ hardline
      ^^ pp_sfun "define-const" [string (name ^ "_addr"); pp_smt_typ addr_ty; pp_smt_exp addr]
 
-  | Read_mem (name, ty, rk, addr, addr_ty) ->
+  | Read_mem (name, _, active, ty, rk, addr, addr_ty) ->
      pp_sfun "define-const" [string (name ^ "_kind"); string "Zread_kind"; pp_smt_exp rk] ^^ hardline
+     ^^ pp_sfun "define-const" [string (name ^ "_active"); pp_smt_typ Bool; pp_smt_exp active] ^^ hardline
      ^^ pp_sfun "define-const" [string (name ^ "_addr"); pp_smt_typ addr_ty; pp_smt_exp addr] ^^ hardline
      ^^ pp_sfun "declare-const" [string (name ^ "_ret"); pp_smt_typ ty]
 
-  | Barrier (name, bk) ->
-     pp_sfun "define-const" [string (name ^ "_kind"); string "Zbarrier_kind"; pp_smt_exp bk]
+  | Barrier (name, _, active, bk) ->
+     pp_sfun "define-const" [string (name ^ "_kind"); string "Zbarrier_kind"; pp_smt_exp bk] ^^ hardline
+     ^^ pp_sfun "define-const" [string (name ^ "_active"); pp_smt_typ Bool; pp_smt_exp active]
 
-  | Excl_res name ->
-     pp_sfun "declare-const" [string (name ^ "_res"); pp_smt_typ Bool]
+  | Excl_res (name, _, active) ->
+     pp_sfun "declare-const" [string (name ^ "_res"); pp_smt_typ Bool] ^^ hardline
+     ^^ pp_sfun "define-const" [string (name ^ "_active"); pp_smt_typ Bool; pp_smt_exp active]
 
   | Declare_datatypes (name, ctors) ->
      let pp_ctor (ctor_name, fields) =

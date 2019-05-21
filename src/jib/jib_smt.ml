@@ -88,6 +88,7 @@ type ctx = {
     arg_stack : (int * string) Stack.t;
     ast : Type_check.tannot defs;
     events : smt_exp Stack.t EventMap.t ref;
+    node : int;
     pathcond : smt_exp Lazy.t;
     use_string : bool ref;
     use_real : bool ref
@@ -112,6 +113,7 @@ let initial_ctx () = {
     arg_stack = Stack.create ();
     ast = Defs [];
     events = ref EventMap.empty;
+    node = -1;
     pathcond = lazy (Bool_lit true);
     use_string = ref false;
     use_real = ref false;
@@ -1022,7 +1024,8 @@ let writes = ref (-1)
 let builtin_write_mem ctx wk addr_size addr data_size data =
   incr writes;
   let name = "W" ^ string_of_int !writes in
-  [Write_mem (name, smt_cval ctx wk, smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr), smt_cval ctx data, smt_ctyp ctx (cval_ctyp data))],
+  [Write_mem (name, ctx.node, Lazy.force ctx.pathcond, smt_cval ctx wk,
+              smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr), smt_cval ctx data, smt_ctyp ctx (cval_ctyp data))],
   Var (name ^ "_ret")
 
 let ea_writes = ref (-1)
@@ -1030,7 +1033,8 @@ let ea_writes = ref (-1)
 let builtin_write_mem_ea ctx wk addr_size addr data_size =
   incr ea_writes;
   let name = "A" ^ string_of_int !ea_writes in
-  [Write_mem_ea (name, smt_cval ctx wk, smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr), smt_cval ctx data_size, smt_ctyp ctx (cval_ctyp data_size))],
+  [Write_mem_ea (name, ctx.node, Lazy.force ctx.pathcond, smt_cval ctx wk,
+                 smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr), smt_cval ctx data_size, smt_ctyp ctx (cval_ctyp data_size))],
   Enum "unit"
 
 let reads = ref (-1)
@@ -1038,7 +1042,8 @@ let reads = ref (-1)
 let builtin_read_mem ctx rk addr_size addr data_size ret_ctyp =
   incr reads;
   let name = "R" ^ string_of_int !reads in
-  [Read_mem (name, smt_ctyp ctx ret_ctyp, smt_cval ctx rk, smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr))],
+  [Read_mem (name, ctx.node, Lazy.force ctx.pathcond, smt_ctyp ctx ret_ctyp, smt_cval ctx rk,
+             smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr))],
   Var (name ^ "_ret")
 
 let excl_results = ref (-1)
@@ -1046,7 +1051,7 @@ let excl_results = ref (-1)
 let builtin_excl_res ctx =
   incr excl_results;
   let name = "E" ^ string_of_int !excl_results in
-  [Excl_res name],
+  [Excl_res (name, ctx.node, Lazy.force ctx.pathcond)],
   Var (name ^ "_ret")
 
 let barriers = ref (-1)
@@ -1054,7 +1059,7 @@ let barriers = ref (-1)
 let builtin_barrier ctx bk =
   incr barriers;
   let name = "B" ^ string_of_int !barriers in
-  [Barrier (name, smt_cval ctx bk)],
+  [Barrier (name, ctx.node, Lazy.force ctx.pathcond, smt_cval ctx bk)],
   Enum "unit"
 
 let rec smt_conversion ctx from_ctyp to_ctyp x =
@@ -1297,8 +1302,8 @@ let smt_ssanode ctx cfg preds =
   | Phi (id, ctyp, ids) ->
      let get_pi n =
        match get_vertex cfg n with
-       | Some ((ssanodes, _), _, _) ->
-          List.concat (List.map (function Pi guards -> guards | _ -> []) ssanodes)
+       | Some ((ssa_elems, _), _, _) ->
+          List.concat (List.map (function Pi guards -> guards | _ -> []) ssa_elems)
        | None -> failwith "Predecessor node does not exist"
      in
      let pis = List.map get_pi (IntSet.elements preds) in
@@ -1362,8 +1367,8 @@ let rec get_pathcond n cfg ctx =
   let open Jib_ssa in
   let get_pi m =
     match get_vertex cfg m with
-    | Some ((ssanodes, _), _, _) ->
-       V_call (Band, List.concat (List.map (function Pi guards -> guards | _ -> []) ssanodes))
+    | Some ((ssa_elems, _), _, _) ->
+       V_call (Band, List.concat (List.map (function Pi guards -> guards | _ -> []) ssa_elems))
     | None -> failwith "Node does not exist"
   in
   match get_vertex cfg n with
@@ -1535,7 +1540,7 @@ let smt_instr ctx =
        end
      else if not extern then
        let smt_args = List.map (smt_cval ctx) args in
-       [define_const ctx id ret_ctyp (Fn (zencode_id function_id, smt_args))]
+       [define_const ctx id ret_ctyp (Ctor (zencode_id function_id, smt_args))]
      else
        failwith ("Unrecognised function " ^ string_of_id function_id)
 
@@ -1571,7 +1576,7 @@ let smt_instr ctx =
   | instr ->
      failwith ("Cannot translate: " ^ Pretty_print_sail.to_string (pp_instr instr))
 
-let smt_cfnode all_cdefs ctx ssanodes =
+let smt_cfnode all_cdefs ctx ssa_elems =
   let open Jib_ssa in
   function
   | CF_start inits ->
@@ -1622,7 +1627,7 @@ module Make_optimizer(S : Sequence) = struct
          | None -> Hashtbl.add uses var 1
          end
       | Enum _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
-      | Fn (f, exps) ->
+      | Fn (_, exps) | Ctor (_, exps) ->
          List.iter uses_in_exp exps
       | Ite (cond, t, e) ->
          uses_in_exp cond; uses_in_exp t; uses_in_exp e
@@ -1646,19 +1651,20 @@ module Make_optimizer(S : Sequence) = struct
          end
       | (Declare_datatypes _ | Declare_tuple _) as def ->
          Stack.push def stack'
-      | Write_mem (_, wk, addr, _, data, _) as def ->
-         uses_in_exp wk; uses_in_exp addr; uses_in_exp data;
+      | Write_mem (_, _, active, wk, addr, _, data, _) as def ->
+         uses_in_exp active; uses_in_exp wk; uses_in_exp addr; uses_in_exp data;
          Stack.push def stack'
-      | Write_mem_ea (_, wk, addr, _, data_size, _) as def ->
-         uses_in_exp wk; uses_in_exp addr; uses_in_exp data_size;
+      | Write_mem_ea (_, _, active, wk, addr, _, data_size, _) as def ->
+         uses_in_exp active; uses_in_exp wk; uses_in_exp addr; uses_in_exp data_size;
          Stack.push def stack'
-      | Read_mem (_, _, rk, addr, _) as def ->
-         uses_in_exp rk; uses_in_exp addr;
+      | Read_mem (_, _, active, _, rk, addr, _) as def ->
+         uses_in_exp active; uses_in_exp rk; uses_in_exp addr;
          Stack.push def stack'
-      | Barrier (_, bk) as def ->
-         uses_in_exp bk;
+      | Barrier (_, _, active, bk) as def ->
+         uses_in_exp active; uses_in_exp bk;
          Stack.push def stack'
-      | Excl_res _ as def ->
+      | Excl_res (_, _, active) as def ->
+         uses_in_exp active;
          Stack.push def stack'
       | Assert exp as def ->
          uses_in_exp exp;
@@ -1668,35 +1674,46 @@ module Make_optimizer(S : Sequence) = struct
     Stack.fold remove_unused () stack;
 
     let vars = Hashtbl.create (Stack.length stack') in
+    let kinds = Hashtbl.create (Stack.length stack') in
     let seq = S.create () in
 
     let constant_propagate = function
       | Declare_const _ as def ->
          S.add def seq
       | Define_const (var, typ, exp) ->
-         begin match Hashtbl.find_opt uses var, simp_smt_exp vars exp with
+         let exp = simp_smt_exp vars kinds exp in
+         begin match Hashtbl.find_opt uses var, simp_smt_exp vars kinds exp with
          | _, (Bin _ | Bool_lit _) ->
             Hashtbl.add vars var exp
          | _, Var _ when !opt_propagate_vars ->
             Hashtbl.add vars var exp
+         | _, (Ctor (str, _)) ->
+            Hashtbl.add kinds var str;
+            S.add (Define_const (var, typ, exp)) seq
          | Some 1, _ ->
             Hashtbl.add vars var exp
          | Some _, exp ->
             S.add (Define_const (var, typ, exp)) seq
          | None, _ -> assert false
          end
-      | Write_mem (name, wk, addr, addr_ty, data, data_ty) ->
-         S.add (Write_mem (name, simp_smt_exp vars wk, simp_smt_exp vars addr, addr_ty, simp_smt_exp vars data, data_ty)) seq
-      | Write_mem_ea (name, wk, addr, addr_ty, data_size, data_size_ty) ->
-         S.add (Write_mem_ea (name, simp_smt_exp vars wk, simp_smt_exp vars addr, addr_ty, simp_smt_exp vars data_size, data_size_ty)) seq
-      | Read_mem (name, typ, rk, addr, addr_typ) ->
-         S.add (Read_mem (name, typ, simp_smt_exp vars rk, simp_smt_exp vars addr, addr_typ)) seq
-      | Barrier (name, bk) ->
-         S.add (Barrier (name, simp_smt_exp vars bk)) seq
-      | Excl_res name ->
-         S.add (Excl_res name) seq
+      | Write_mem (name, node, active, wk, addr, addr_ty, data, data_ty) ->
+         S.add (Write_mem (name, node, simp_smt_exp vars kinds active, simp_smt_exp vars kinds wk,
+                           simp_smt_exp vars kinds addr, addr_ty, simp_smt_exp vars kinds data, data_ty))
+               seq
+      | Write_mem_ea (name, node, active, wk, addr, addr_ty, data_size, data_size_ty) ->
+         S.add (Write_mem_ea (name, node, simp_smt_exp vars kinds active, simp_smt_exp vars kinds wk,
+                              simp_smt_exp vars kinds addr, addr_ty, simp_smt_exp vars kinds data_size, data_size_ty))
+               seq
+      | Read_mem (name, node, active, typ, rk, addr, addr_typ) ->
+         S.add (Read_mem (name, node, simp_smt_exp vars kinds active, typ, simp_smt_exp vars kinds rk,
+                          simp_smt_exp vars kinds addr, addr_typ))
+               seq
+      | Barrier (name, node, active, bk) ->
+         S.add (Barrier (name, node, simp_smt_exp vars kinds active, simp_smt_exp vars kinds bk)) seq
+      | Excl_res (name, node, active) ->
+         S.add (Excl_res (name, node, simp_smt_exp vars kinds active)) seq
       | Assert exp ->
-         S.add (Assert (simp_smt_exp vars exp)) seq
+         S.add (Assert (simp_smt_exp vars kinds exp)) seq
       | (Declare_datatypes _ | Declare_tuple _) as def ->
          S.add def seq
       | Define_fun _ -> assert false
@@ -1817,18 +1834,18 @@ let smt_instr_list name ctx all_cdefs instrs =
   List.iter (fun n ->
       begin match get_vertex cfg n with
       | None -> ()
-      | Some ((ssanodes, cfnode), preds, succs) ->
+      | Some ((ssa_elems, cfnode), preds, succs) ->
          let muxers =
-           ssanodes |> List.map (smt_ssanode ctx cfg preds) |> List.concat
+           ssa_elems |> List.map (smt_ssanode ctx cfg preds) |> List.concat
          in
-         let ctx = { ctx with pathcond = lazy (get_pathcond n cfg ctx) } in
-         let basic_block = smt_cfnode all_cdefs ctx ssanodes cfnode in
+         let ctx = { ctx with node = n; pathcond = lazy (get_pathcond n cfg ctx) } in
+         let basic_block = smt_cfnode all_cdefs ctx ssa_elems cfnode in
          push_smt_defs stack muxers;
-         push_smt_defs stack basic_block;
+         push_smt_defs stack basic_block
       end
     ) visit_order;
 
-  stack
+  stack, cfg
 
 let smt_cdef props lets name_file ctx all_cdefs = function
   | CDEF_spec (function_id, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
@@ -1855,7 +1872,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           |> remove_pointless_goto
         in
 
-        let stack = smt_instr_list (string_of_id function_id) ctx all_cdefs instrs in
+        let stack, _ = smt_instr_list (string_of_id function_id) ctx all_cdefs instrs in
 
         let query = smt_query ctx pragma.query in
         push_smt_defs stack [Assert (Fn ("not", [query]))];
