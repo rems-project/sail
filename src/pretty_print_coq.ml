@@ -1828,11 +1828,24 @@ let doc_exp, doc_let =
             let exp_typ = expand_range_type (Env.expand_synonyms env typ) in
             let ann_typ = general_typ_of full_exp in
             let ann_typ = expand_range_type (Env.expand_synonyms env ann_typ) in
+            let autocast =
+              (* Avoid using helper functions which simplify the nexps *)
+              is_bitvector_typ exp_typ && is_bitvector_typ ann_typ &&
+                match exp_typ, ann_typ with
+                | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
+                  Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
+                   not (similar_nexps ctxt env n1 n2)
+                | _ -> false
+            in
             let () =
               debug ctxt (lazy ("Variable " ^ string_of_id id ^ " with type " ^ string_of_typ typ));
-              debug ctxt (lazy (" expected type " ^ string_of_typ ann_typ))
+              debug ctxt (lazy (" expected type " ^ string_of_typ ann_typ));
+              debug ctxt (lazy (" autocast " ^ string_of_bool autocast))
             in
-            doc_id id
+            if autocast then
+              wrap_parens (string "autocast" ^/^ doc_id id)
+            else
+              doc_id id
          | _ -> doc_id id
        end
     | E_lit lit -> doc_lit lit
