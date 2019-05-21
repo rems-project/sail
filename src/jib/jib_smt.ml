@@ -1044,7 +1044,7 @@ let builtin_read_mem ctx rk addr_size addr data_size ret_ctyp =
   let name = "R" ^ string_of_int !reads in
   [Read_mem (name, ctx.node, Lazy.force ctx.pathcond, smt_ctyp ctx ret_ctyp, smt_cval ctx rk,
              smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr))],
-  Var (name ^ "_ret")
+  Read_res name
 
 let excl_results = ref (-1)
 
@@ -1626,7 +1626,7 @@ module Make_optimizer(S : Sequence) = struct
          | Some n -> Hashtbl.replace uses var (n + 1)
          | None -> Hashtbl.add uses var 1
          end
-      | Enum _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
+      | Enum _ | Read_res _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
       | Fn (_, exps) | Ctor (_, exps) ->
          List.iter uses_in_exp exps
       | Ite (cond, t, e) ->
