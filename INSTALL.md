@@ -2,9 +2,15 @@ Installing Sail on Ubuntu and macOS
 =========================
 
 This note lists the commands needed to get Sail and all dependencies
-working on a new Ubuntu install or macOS. We have recently (2018-02-17) tested these
-on Xubuntu 16.04 LTS in a virtual machine and on macOS Sierra 10.12.6, so they should
+working and built from source on a new Ubuntu install or macOS. We
+have recently (2018-02-17) tested these on Xubuntu 16.04 LTS in a
+virtual machine and on macOS Sierra 10.12.6, so they should
 work. Hopefully this will be useful as a reference.
+
+For most users, installing and building the dependencies using OPAM is
+likely easier than building everything manually, see:
+
+https://github.com/rems-project/sail/wiki/OPAMInstall
 
 Basics
 ------
@@ -35,8 +41,17 @@ OCaml and OPAM
 
 Install OPAM. Either directly from [https://opam.ocaml.org] or from
 the package manager - both should work, but we used the install script
-from the website. This should install OCaml 4.05. Don't forget to run
-```opam init``` after installing OPAM.
+from the website. ```opam init``` must be run after installing OPAM.
+
+Distributions often contain quite outdated OCaml packages, so we need to make sure that we use an up-to-date OCaml compiler with opam:
+```
+opam switch 4.06.1
+```
+For opam versions >=2.0 the command syntax for opam switch is slightly different:
+```
+opam switch create ocaml-base-compiler.4.06.1
+```
+After doing opam switch it is important to check that the ocaml tools in your $PATH point at the opam installed toolchain, rather than any installed by the distribution package manager.
 
 We now need the following packages from OPAM.
 ```
@@ -46,6 +61,7 @@ opam install zarith
 opam install menhir
 opam install omd
 ```
+
 
 Ott
 ---
