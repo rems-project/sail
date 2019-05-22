@@ -201,9 +201,10 @@ let rw_exp ok not_ok istate =
         try (ok (); Type_check.check_exp (env_of_annot annot) exp (typ_of_annot annot)) with
         | Type_error (env, l, err) ->
            (* A type error here would be unexpected, so don't ignore it! *)
-           Util.warn ("Type error when folding constants in "
-                      ^ string_of_exp (E_aux (e_aux, annot))
-                      ^ "\n" ^ Type_error.string_of_type_error err);
+           Reporting.warn "" l
+             ("Type error when folding constants in "
+              ^ string_of_exp (E_aux (e_aux, annot))
+              ^ "\n" ^ Type_error.string_of_type_error err);
            not_ok ();
            E_aux (e_aux, annot)
       end

@@ -94,7 +94,6 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (**************************************************************************)
 
-let opt_warnings = ref true
 let opt_colors = ref true
 let opt_verbosity = ref 0
 
@@ -110,7 +109,7 @@ let rec butlast = function
 
 module Duplicate(S : Set.S) = struct
 
-type dups = 
+type dups =
   | No_dups of S.t
   | Has_dups of S.elt
 
@@ -129,7 +128,7 @@ end
 let remove_duplicates l =
   let l' = List.sort Pervasives.compare l in
   let rec aux acc l = match (acc, l) with
-      (_, []) -> List.rev acc 
+      (_, []) -> List.rev acc
     | ([], x :: xs) -> aux [x] xs
     | (y::ys, x :: xs) -> if (x = y) then aux (y::ys) xs else aux (x::y::ys) xs
   in
@@ -138,7 +137,7 @@ let remove_duplicates l =
 let remove_dups compare eq l =
   let l' = List.sort compare l in
   let rec aux acc l = match (acc, l) with
-      (_, []) -> List.rev acc 
+      (_, []) -> List.rev acc
     | ([], x :: xs) -> aux [x] xs
     | (y::ys, x :: xs) -> if (eq x y) then aux (y::ys) xs else aux (x::y::ys) xs
   in
@@ -159,7 +158,7 @@ let rec assoc_compare_opt cmp k l =
     | [] -> None
     | (k',v)::l -> if cmp k k' = 0 then Some v else assoc_compare_opt cmp k l
 
-let rec compare_list f l1 l2 = 
+let rec compare_list f l1 l2 =
   match (l1,l2) with
     | ([],[]) -> 0
     | (_,[]) -> 1
@@ -199,7 +198,7 @@ let rec map_filter (f : 'a -> 'b option) (l : 'a list) : 'b list =
   match l with [] -> []
     | x :: xs ->
       let xs' = map_filter f xs in
-      match (f x) with None -> xs' 
+      match (f x) with None -> xs'
         | Some x' -> x' :: xs'
 
 let list_index p l =
@@ -317,13 +316,13 @@ let string_to_list s =
     else aux (i-1) (s.[i] :: acc)
   in aux (String.length s - 1) []
 
-module IntSet = Set.Make( 
+module IntSet = Set.Make(
   struct
     let compare = Pervasives.compare
     type t = int
   end )
 
-module IntIntSet = Set.Make( 
+module IntIntSet = Set.Make(
   struct
     let compare = Pervasives.compare
     type t = int * int
@@ -455,11 +454,6 @@ let file_encode_string str =
   let zstr = zencode_string str in
   let md5 = Digest.to_hex (Digest.string zstr) in
   String.lowercase_ascii zstr ^ String.lowercase_ascii md5
-
-let warn str =
-  if !opt_warnings then
-    prerr_endline (("Warning" |> yellow |> clear) ^ ": " ^ str)
-  else ()
 
 let log_line str line msg =
   "\n[" ^ (str ^ ":" ^ string_of_int line |> blue |> clear) ^ "] " ^ msg

@@ -87,7 +87,7 @@ let options = Arg.align ([
     Arg.Set Interactive.opt_emacs_mode,
     " run sail interactively as an emacs mode child process");
   ( "-no_warn",
-    Arg.Clear Util.opt_warnings,
+    Arg.Clear Reporting.opt_warnings,
     " do not print warnings");
   ( "-tofrominterp",
     set_target "tofrominterp",
@@ -458,7 +458,7 @@ let target name out_name ast type_envs =
          ast_c, type_envs
      in
      let close, output_chan = match !opt_file_out with Some f -> true, open_out (f ^ ".c") | None -> false, stdout in
-     Util.opt_warnings := true;
+     Reporting.opt_warnings := true;
      C_backend.compile_ast type_envs output_chan (!opt_includes_c) ast_c;
      flush output_chan;
      if close then close_out output_chan else ()
@@ -471,7 +471,7 @@ let target name out_name ast type_envs =
        | Some f -> Util.opt_colors := false; (true, open_out (f ^ ".ir.sail"))
        | None -> false, stdout
      in
-     Util.opt_warnings := true;
+     Reporting.opt_warnings := true;
      let cdefs, _ = C_backend.jib_of_ast type_envs ast_c in
      (* let cdefs = List.map Jib_optimize.flatten_cdef cdefs in *)
      let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_cdef cdefs) in
@@ -490,7 +490,7 @@ let target name out_name ast type_envs =
        | Some f -> fun str -> f ^ "_" ^ str ^ ".smt2"
        | None -> fun str -> str ^ ".smt2"
      in
-     Util.opt_warnings := true;
+     Reporting.opt_warnings := true;
      Jib_smt.generate_smt props name_file type_envs ast_smt;
 
   | Some "lem" ->
@@ -500,7 +500,7 @@ let target name out_name ast type_envs =
      output "" (Coq_out (!opt_libs_coq)) [(out_name, type_envs, ast)]
 
   | Some "latex" ->
-     Util.opt_warnings := true;
+     Reporting.opt_warnings := true;
      let latex_dir = match !opt_file_out with None -> "sail_latex" | Some s -> s in
      begin
        try
@@ -524,7 +524,7 @@ let main () =
   else
     begin
       let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
-      Util.opt_warnings := false; (* Don't show warnings during re-writing for now *)
+      Reporting.opt_warnings := false; (* Don't show warnings during re-writing for now *)
 
       begin match !opt_process_elf, !opt_file_out with
       | Some elf, Some out ->

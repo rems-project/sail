@@ -3686,10 +3686,10 @@ type options = {
 }
 
 let recheck defs =
-  let w = !Util.opt_warnings in
-  let () = Util.opt_warnings := false in
+  let w = !Reporting.opt_warnings in
+  let () = Reporting.opt_warnings := false in
   let r = Type_error.check (Type_check.Env.no_casts Type_check.initial_env) defs in
-  let () = Util.opt_warnings := w in
+  let () = Reporting.opt_warnings := w in
   r
 
 let mono_rewrites = MonoRewrites.mono_rewrite

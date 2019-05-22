@@ -329,7 +329,7 @@ let add_pathcond_event ctx ev =
 
 let overflow_check ctx smt =
   if not !opt_ignore_overflow then (
-    Util.warn "Adding overflow check in generated SMT";
+    Reporting.warn "Overflow check in generated SMT for" ctx.pragma_l "";
     add_event ctx Overflow smt
   )
 

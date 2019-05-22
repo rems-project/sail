@@ -3090,9 +3090,9 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
        (* If the identifier we're matching on is also a constructor of
           a union, that's probably a mistake, so warn about it. *)
        if Env.is_union_constructor v env then
-         Util.warn (Printf.sprintf "Identifier %s found in pattern is also a union constructor at %s\n"
-                                   (string_of_id v)
-                                   (Reporting.loc_to_string l))
+         Reporting.warn (Printf.sprintf "Identifier %s found in pattern is also a union constructor at"
+                                        (string_of_id v))
+                        l ""
        else ();
        match Env.lookup_id v env with
        | Local _ | Unbound -> annot_pat (P_id v) typ, Env.add_local v (Immutable, typ) env, []
@@ -4014,9 +4014,9 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) (
        (* If the identifier we're matching on is also a constructor of
           a union, that's probably a mistake, so warn about it. *)
        if Env.is_union_constructor v env then
-         Util.warn (Printf.sprintf "Identifier %s found in mapping-pattern is also a union constructor at %s\n"
-                                   (string_of_id v)
-                                   (Reporting.loc_to_string l))
+         Reporting.warn (Printf.sprintf "Identifier %s found in mapping-pattern is also a union constructor at"
+                                        (string_of_id v))
+                        l ""
        else ();
        match Env.lookup_id v env with
        | Local (Immutable, _) | Unbound -> annot_mpat (MP_id v) typ, Env.add_local v (Immutable, typ) env, []
