@@ -1447,7 +1447,8 @@ Ltac main_solver :=
  | match goal with |- context [Z.mul] => nia end
  (* If we have a disjunction from a set constraint on a variable we can often
     solve a goal by trying them (admittedly this is quite heavy handed...) *)
- | let aux x :=
+ | subst;
+   let aux x :=
     is_var x;
     intuition (subst;auto)
    in
