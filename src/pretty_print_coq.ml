@@ -1700,9 +1700,8 @@ let doc_exp, doc_let =
               let ekids = Env.get_typ_vars env in
               KidSet.for_all (fun kid -> KBindings.mem kid ekids) (nexp_frees n)
             in
-            match typ_of_arg, typ_from_fn with
-            | Typ_aux (Typ_app (Id_aux (Id "atom",_),[A_aux (A_nexp n1,_)]),_),
-              Typ_aux (Typ_app (Id_aux (Id "atom",_),[A_aux (A_nexp n2,_)]),_)
+            match destruct_atom_nexp env typ_of_arg, destruct_atom_nexp env typ_from_fn with
+            | Some n1, Some n2
                  when vars_in_env n2 && not (similar_nexps ctxt env n1 n2) ->
                underscore
             | _ ->
