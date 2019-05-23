@@ -1459,6 +1459,42 @@ let doc_exp, doc_let =
        let epp = let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ top_exp new_ctxt false e in
        if aexp_needed then parens epp else epp
     | E_app(f,args) ->
+       let env = env_of full_exp in
+       let doc_loop_var (E_aux (e,(l,_)) as exp) =
+         match e with
+         | E_id id ->
+            let id_pp = doc_id id in
+            let typ = general_typ_of exp in
+            if Util.is_some (is_auto_decomposed_exist ctxt env typ)
+            then string "build_ex" ^^ space ^^ id_pp ^/^
+                   colon ^^ space ^^ doc_typ ctxt env typ,
+                 separate space [string "existT"; underscore; id_pp; underscore],
+                 true
+            else id_pp, id_pp, false
+         | E_lit (L_aux (L_unit,_)) -> string "tt", underscore, false
+         | _ -> raise (Reporting.err_unreachable l __POS__
+                         ("Bad expression for variable in loop: " ^ string_of_exp exp))
+       in
+       let make_loop_vars extra_binders varstuple =
+         match varstuple with
+         | E_aux (E_tuple vs, _) ->
+            let vs = List.map doc_loop_var vs in
+            let mkpp f vs = separate (string ", ") (List.map f vs) in
+            let tup_pp = mkpp (fun (pp,_,_) -> pp) vs in
+            let match_pp = mkpp (fun (_,pp,_) -> pp) vs in
+            parens tup_pp,
+            separate space (string "fun" :: extra_binders @
+                              [squote ^^ parens match_pp; bigarrow])
+         | _ ->
+            let exp_pp,match_pp,decompose = doc_loop_var varstuple in
+            let vpp = if decompose
+                      then squote ^^ parens match_pp
+                      else match_pp
+            in
+            let exp_pp = if decompose then parens exp_pp else exp_pp in
+            exp_pp,
+            separate space (string "fun" :: extra_binders @ [vpp; bigarrow])
+       in
        begin match f with
        | Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)
          when effectful (effect_of full_exp) ->
@@ -1498,30 +1534,21 @@ let doc_exp, doc_let =
                  | E_aux (E_lit (L_aux (L_true, _)), _) -> "_up"
                  | _ -> raise (Reporting.err_unreachable l __POS__ ("Unexpected loop direction " ^ string_of_exp ord_exp))
                in
-               let combinator = if effectful (effect_of body) then "foreach_ZM" else "foreach_Z" in
+               let effects = effectful (effect_of body) in
+               let combinator = if effects then "foreach_ZM" else "foreach_Z" in
                let combinator = combinator ^ dir in
                let body_ctxt = add_single_kid_id_rename ctxt loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
-               let used_vars_body = find_e_ids body in
-               let body_lambda =
-                 (* Work around indentation issues in Lem when translating
-                    tuple or literal unit patterns to Isabelle *)
-                 match fst (uncast_exp vartuple) with
-                   | E_aux (E_tuple _, _)
-                     when not (IdSet.mem (mk_id "varstup") used_vars_body)->
-                      separate space [string "fun"; doc_id loopvar; string "_"; string "varstup"; bigarrow]
-                      ^^ break 1 ^^
-                      separate space [string "let"; squote ^^ expY vartuple; string ":= varstup in"]
-                   | E_aux (E_lit (L_aux (L_unit, _)), _)
-                     when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
-                      separate space [string "fun"; doc_id loopvar; string "_"; string "unit_var"; bigarrow]
-                   | _ ->
-                      separate space [string "fun"; doc_id loopvar; string "_"; expY vartuple; bigarrow]
+               let from_exp_pp, to_exp_pp, step_exp_pp =
+                 expY from_exp, expY to_exp, expY step_exp
+               in
+               let vartuple_pp, body_lambda =
+                 make_loop_vars [doc_id loopvar; underscore] vartuple
                in
                parens (
                    (prefix 2 1)
                      ((separate space) [string combinator;
-                                        expY from_exp; expY to_exp; expY step_exp;
-                                        expY vartuple])
+                                        from_exp_pp; to_exp_pp; step_exp_pp;
+                                        vartuple_pp])
                      (parens
                         (prefix 2 1 (group body_lambda) (top_exp body_ctxt false body))
                      )
@@ -1572,23 +1599,13 @@ let doc_exp, doc_let =
               | Some exp -> "T", [expY exp]
             in
             let used_vars_body = find_e_ids body in
-            let lambda =
-              (* Work around indentation issues in Lem when translating
-                 tuple or literal unit patterns to Isabelle *)
-              match fst (uncast_exp varstuple) with
-              | E_aux (E_tuple _, _)
-                   when not (IdSet.mem (mk_id "varstup") used_vars_body)->
-                 separate space [string "fun varstup"; bigarrow] ^^ break 1 ^^
-                   separate space [string "let"; squote ^^ expY varstuple; string ":= varstup in"]
-              | E_aux (E_lit (L_aux (L_unit, _)), _)
-                   when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
-                 separate space [string "fun unit_var"; bigarrow]
-              | _ ->
-                 separate space [string "fun"; expY varstuple; bigarrow]
+            let varstuple_pp, lambda =
+              make_loop_vars [] varstuple
             in
             parens (
                 (prefix 2 1)
-                  ((separate space) (string (combinator ^ csuffix ^ msuffix)::measure_pp@[expY varstuple]))
+                  ((separate space) (string (combinator ^ csuffix ^ msuffix)::
+                                       measure_pp@[varstuple_pp]))
                   ((prefix 0 1)
                      (parens (prefix 2 1 (group lambda) (expN cond)))
                      (parens (prefix 2 1 (group lambda) (expN body))))
