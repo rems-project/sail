@@ -1360,7 +1360,14 @@ tauto.
 Qed.
 
 Ltac solve_euclid :=
-repeat match goal with |- context [ZEuclid.modulo ?x ?y] =>
+repeat match goal with
+| |- context [ZEuclid.modulo ?x ?y] =>
+  specialize (ZEuclid.div_mod x y);
+  specialize (ZEuclid.mod_always_pos x y);
+  generalize (ZEuclid.modulo x y);
+  generalize (ZEuclid.div x y);
+  intros
+| |- context [ZEuclid.div ?x ?y] =>
   specialize (ZEuclid.div_mod x y);
   specialize (ZEuclid.mod_always_pos x y);
   generalize (ZEuclid.modulo x y);
