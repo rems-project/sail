@@ -205,7 +205,7 @@ val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bi
 val slice_mask : forall 'n, 'n >= 0. (implicit('n), int, int) -> bits('n) effect pure
 function slice_mask(n,i,l) =
   if l >= n then {
-    sail_ones(n)
+    sail_shiftleft(sail_ones(n), i)
   } else {
     let one : bits('n) = sail_mask(n, [bitone] : bits(1)) in
     sail_shiftleft(sub_bits(sail_shiftleft(one, l), one), i)
