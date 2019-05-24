@@ -2082,6 +2082,31 @@ let doc_exp, doc_let =
              let epp = liftR (separate space [string assert_fn; expY assert_e1; expY assert_e2]) in
              let epp = infix 0 1 (string mid) epp (top_exp new_ctxt false e2) in
              if aexp_needed then parens (align epp) else align epp
+         | _,
+           (E_aux (E_if (if_cond,
+                         (  E_aux (E_throw _,_)
+                          | E_aux (E_block [E_aux (E_throw _,_)],_) as throw_exp),
+                   else_exp),_)), _
+              when condition_produces_constraint ctxt if_cond ->
+            let cond_pp = expY if_cond in
+            let throw_pp = expN throw_exp in
+            (* Push non-trivial else branches below *)
+            let e2 =
+              match else_exp with
+              | E_aux (E_internal_return (E_aux (E_lit (L_aux (L_unit,_)),_)),_)
+              | E_aux (E_internal_return
+                         (E_aux (E_cast (_, E_aux (E_lit (L_aux (L_unit,_)),_)),_)),_)
+                -> e2
+              | _ -> E_aux (E_internal_plet (pat,else_exp,e2),(l,annot))
+            in
+            (* TODO: capture avoid *)
+            let hyp = string "_non_throw_hyp" in
+            group (parens (string "match sumbool_of_bool " ^^ space ^^ cond_pp ^^ space ^^ string "with" ^/^
+                      group (string "| left _ =>" ^/^ throw_pp) ^/^
+                        group (string "| right " ^^ hyp ^^ string " =>" ^/^
+                          string "returnm " ^^ hyp) ^/^ string "end")) ^/^
+              string " >>= fun _ => " ^/^
+                top_exp new_ctxt false e2
          | _ ->
             let epp =
               let middle =
