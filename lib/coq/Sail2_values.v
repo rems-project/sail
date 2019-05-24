@@ -907,7 +907,7 @@ Parameter undefined_bit : bool.
 Definition getBit {n} :=
 match n with
 | O => fun (w : word O) i => undefined_bit
-| S n => fun (w : word (S n)) i => wlsb (wrshift w i)
+| S n => fun (w : word (S n)) i => wlsb (wrshift' w i)
 end.
 
 Definition access_mword_dec {m} (w : mword m) n := bitU_of_bool (getBit (get_word w) (Z.to_nat n)).
@@ -925,7 +925,7 @@ Definition setBit {n} :=
 match n with
 | O => fun (w : word O) i b => w
 | S n => fun (w : word (S n)) i (b : bool) =>
-  let bit : word (S n) := wlshift (natToWord _ 1) i in
+  let bit : word (S n) := wlshift' (natToWord _ 1) i in
   let mask : word (S n) := wnot bit in
   let masked := wand mask w in
   if b then masked else wor masked bit
