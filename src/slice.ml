@@ -305,9 +305,10 @@ let id_of_reg_dec (DEC_aux (aux, _)) =
 
 let filter_ast cuts g (Defs defs) =
   let rec filter_ast' g =
+    let module NS = Set.Make(Node) in
     let module NM = Map.Make(Node) in
     function
-    | DEF_fundef fdef :: defs when IdSet.mem (id_of_fundef fdef) cuts -> filter_ast' g defs
+    | DEF_fundef fdef :: defs when NS.mem (Function (id_of_fundef fdef)) cuts -> filter_ast' g defs
     | DEF_fundef fdef :: defs when NM.mem (Function (id_of_fundef fdef)) g -> DEF_fundef fdef :: filter_ast' g defs
     | DEF_fundef _ :: defs -> filter_ast' g defs
 
@@ -327,7 +328,7 @@ let filter_ast cuts g (Defs defs) =
     | DEF_type tdef :: defs when NM.mem (Type (id_of_typedef tdef)) g -> DEF_type tdef :: filter_ast' g defs
     | DEF_type _ :: defs -> filter_ast' g defs
 
-    | DEF_measure (id,_,_) :: defs when IdSet.mem id cuts -> filter_ast' g defs
+    | DEF_measure (id,_,_) :: defs when NS.mem (Function id) cuts -> filter_ast' g defs
     | (DEF_measure (id,_,_) as def) :: defs when NM.mem (Function id) g -> def :: filter_ast' g defs
     | DEF_measure _ :: defs -> filter_ast' g defs
 

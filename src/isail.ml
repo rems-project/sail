@@ -266,6 +266,10 @@ let help =
   | ":compile" ->
      sprintf ":compile %s - Compile AST to a specified target, valid targets are lem, coq, ocaml, c, and ir (intermediate representation)"
              (color yellow "<target>")
+  | ":slice" ->
+     ":slice - Slice AST to the definitions which the functions given by :slice_roots depend on, up to the functions given by :slice_cuts"
+  | ":thin_slice" ->
+     ":thin_slice - Slice AST to the function definitions given with :slice_roots"
   | "" ->
      sprintf "Type %s for a list of commands, and %s %s for information about a specific command"
              (color green ":commands") (color green ":help") (color yellow "<command>")
@@ -540,7 +544,22 @@ let handle_input' input =
            let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> SliceNodeSet.of_list in
            let cuts = !slice_cuts |> IdSet.elements |> List.map (fun id -> Function id) |> SliceNodeSet.of_list in
            let g = G.prune roots cuts g in
-           Interactive.ast := Slice.filter_ast !slice_cuts g !Interactive.ast
+           Interactive.ast := Slice.filter_ast cuts g !Interactive.ast
+        | ":thin_slice" ->
+           let open Slice in
+           let module SliceNodeSet = Set.Make(Slice.Node) in
+           let module SliceNodeMap = Map.Make(Slice.Node) in
+           let module G = Graph.Make(Slice.Node) in
+           let g = Slice.graph_of_ast !Interactive.ast in
+           let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> SliceNodeSet.of_list in
+           let keep = function
+             | (Function id,_) when IdSet.mem id (!slice_roots) -> None
+             | (Function id,_) -> Some (Function id)
+             | _ -> None
+           in
+           let cuts = SliceNodeMap.bindings g |> Util.map_filter keep |> SliceNodeSet.of_list in
+           let g = G.prune roots cuts g in
+           Interactive.ast := Slice.filter_ast cuts g !Interactive.ast
         | ":list_rewrites" ->
            let print_rewrite (name, rw) =
              print_endline (name ^ " " ^ Util.(String.concat " " (describe_rewrite rw) |> yellow |> clear))
