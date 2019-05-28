@@ -156,6 +156,16 @@ apply Zmult_ge_compat; auto with zarith.
 * apply Z_div_ge0; auto. apply Z.lt_gt. apply Z.abs_pos. auto with zarith.
 Qed.
 
+Lemma ZEuclid_pos_div : forall x y, y > 0 -> ZEuclid.div x y >= 0 -> x >= 0.
+intros x y GT.
+  specialize (ZEuclid.div_mod x y);
+  specialize (ZEuclid.mod_always_pos x y);
+  generalize (ZEuclid.modulo x y);
+  generalize (ZEuclid.div x y);
+  intros.
+nia.
+Qed.
+
 Lemma ZEuclid_div_ge : forall x y, y > 0 -> x >= 0 -> x - ZEuclid.div x y >= 0.
 intros.
 unfold ZEuclid.div.
@@ -185,7 +195,7 @@ apply ZEuclid.div_mod.
 assumption.
 Qed.
 
-Hint Resolve ZEuclid_div_pos ZEuclid_div_ge ZEuclid_div_mod0 : sail.
+Hint Resolve ZEuclid_div_pos ZEuclid_pos_div ZEuclid_div_ge ZEuclid_div_mod0 : sail.
 
 
 (*
@@ -1299,6 +1309,32 @@ Ltac clear_irrelevant_bindings :=
       end
     end.
 
+(* Currently, the ASL to Sail translation produces some constraints of the form
+   P \/ x = true, P \/ x = false, which are simplified by the tactic below.  In
+   future the translation is likely to be cleverer, and this won't be
+   necessary. *)
+Lemma remove_unnecessary_casesplit {P:Prop} {x} :
+  P \/ x = true -> P \/ x = false -> P.
+  intuition congruence.
+Qed.
+Ltac remove_unnecessary_casesplit :=
+repeat match goal with
+| H1 : ?P \/ ?v = true, H2 : ?P \/ ?v = false |- _ =>
+  apply (remove_unnecessary_casesplit H1) in H2;
+  clear H1
+  (* There are worse cases where the hypotheses are different, so we actually
+     do the casesplit *)
+| H1 : _ \/ ?v = true, H2 : _ \/ ?v = false |- _ =>
+  is_var v;
+  destruct v;
+  [ clear H1; destruct H2; [ | congruence ]
+  | clear H2; destruct H1; [ | congruence ]
+  ]
+end;
+(* We may have uncovered more conjunctions *)
+repeat match goal with H:and _ _ |- _ => destruct H end.
+
+
 Ltac prepare_for_solver :=
 (*dump_context;*)
  clear_irrelevant_defns;
@@ -1312,6 +1348,7 @@ Ltac prepare_for_solver :=
  unbool_comparisons;
  unbool_comparisons_goal;
  repeat match goal with H:and _ _ |- _ => destruct H end;
+ remove_unnecessary_casesplit;
  unfold_In; (* after unbool_comparisons to deal with && and || *)
  reduce_list_lengths;
  reduce_pow;
@@ -1434,6 +1471,27 @@ Lemma iff_false_left {P Q R : Prop} : (false = true) <-> Q -> (false = true) /\ 
 intuition.
 Qed.
 
+(* Very simple proofs for trivial arithmetic.  Preferable to running omega/lia because
+   they can get bogged down if they see large definitions; should also guarantee small
+   proof terms. *)
+Lemma Z_compare_lt_eq : Lt = Eq -> False. congruence. Qed.
+Lemma Z_compare_lt_gt : Lt = Gt -> False. congruence. Qed.
+Lemma Z_compare_eq_lt : Eq = Lt -> False. congruence. Qed.
+Lemma Z_compare_eq_gt : Eq = Gt -> False. congruence. Qed.
+Lemma Z_compare_gt_lt : Gt = Lt -> False. congruence. Qed.
+Lemma Z_compare_gt_eq : Gt = Eq -> False. congruence. Qed.
+Ltac z_comparisons :=
+  solve [
+    exact eq_refl
+  | exact Z_compare_lt_eq
+  | exact Z_compare_lt_gt
+  | exact Z_compare_eq_lt
+  | exact Z_compare_eq_gt
+  | exact Z_compare_gt_lt
+  | exact Z_compare_gt_eq
+  ].
+
+
 (* Redefine this to add extra solver tactics *)
 Ltac sail_extra_tactic := fail.
 
@@ -1441,6 +1499,7 @@ Ltac main_solver :=
  solve
  [ match goal with |- (?x ?y) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) y) end
  | apply ArithFact_mword; assumption
+ | z_comparisons
  | omega with Z
    (* Try sail hints before dropping the existential *)
  | subst; eauto 3 with zarith sail
@@ -1519,6 +1578,7 @@ try match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end
 (* Trying reflexivity will fill in more complex metavariable examples than
    fill_in_evar_eq above, e.g., 8 * n = 8 * ?Goal3 *)
 try (constructor; reflexivity);
+try (constructor; z_comparisons);
 try (constructor; omega);
 prepare_for_solver;
 (*dump_context;*)
