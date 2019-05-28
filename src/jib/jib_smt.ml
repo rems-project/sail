@@ -495,6 +495,32 @@ let builtin_pow2 ctx v ret_ctyp =
 
   | _ -> builtin_type_error ctx "pow2" [v] (Some ret_ctyp)
 
+let builtin_max_int ctx v1 v2 ret_ctyp =
+  match cval_ctyp v1, cval_ctyp v2 with
+  | CT_constant n, CT_constant m ->
+     bvint (int_size ctx ret_ctyp) (max n m)
+
+  | ctyp1, ctyp2 ->
+     let ret_sz = int_size ctx ret_ctyp in
+     let smt1 = force_size ctx ret_sz (int_size ctx ctyp1) (smt_cval ctx v1) in
+     let smt2 = force_size ctx ret_sz (int_size ctx ctyp2) (smt_cval ctx v2) in
+     Ite (Fn ("bvslt", [smt1; smt2]),
+          smt2,
+          smt1)
+
+let builtin_min_int ctx v1 v2 ret_ctyp =
+  match cval_ctyp v1, cval_ctyp v2 with
+  | CT_constant n, CT_constant m ->
+     bvint (int_size ctx ret_ctyp) (min n m)
+
+  | ctyp1, ctyp2 ->
+     let ret_sz = int_size ctx ret_ctyp in
+     let smt1 = force_size ctx ret_sz (int_size ctx ctyp1) (smt_cval ctx v1) in
+     let smt2 = force_size ctx ret_sz (int_size ctx ctyp2) (smt_cval ctx v2) in
+     Ite (Fn ("bvslt", [smt1; smt2]),
+          smt1,
+          smt2)
+
 let builtin_zeros ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
   | _, CT_fbits (n, _) -> bvzero n
@@ -957,6 +983,9 @@ let smt_builtin ctx name args ret_ctyp =
   | "abs_int", [v], _ -> builtin_abs_int ctx v ret_ctyp
   | "pow2", [v], _ -> builtin_pow2 ctx v ret_ctyp
 
+  | "max_int", [v1; v2], _ -> builtin_max_int ctx v1 v2 ret_ctyp
+  | "min_int", [v1; v2], _ -> builtin_min_int ctx v1 v2 ret_ctyp
+
   (* All signed and unsigned bitvector comparisons *)
   | "slt_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvslt" ctx v1 v2 ret_ctyp
   | "ult_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvult" ctx v1 v2 ret_ctyp
@@ -1069,6 +1098,8 @@ let rec smt_conversion ctx from_ctyp to_ctyp x =
      bvint sz c
   | CT_constant c, CT_lint ->
      bvint ctx.lint_size c
+  | CT_fint sz, CT_lint ->
+     force_size ctx ctx.lint_size sz x
   | _, _ -> failwith (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
 
 let define_const ctx id ctyp exp = Define_const (zencode_name id, smt_ctyp ctx ctyp, exp)
