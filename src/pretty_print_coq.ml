@@ -2226,7 +2226,7 @@ let doc_exp, doc_let =
               (separate space [string "let"; doc_id id; coloneq])
               (top_exp ctxt false e)
     | LB_val(P_aux (P_typ (typ,P_aux (P_id id,_)),_),e)
-      when Util.is_none (is_auto_decomposed_exist ctxt (env_of e) typ) &&
+      when Util.is_none (is_auto_decomposed_exist ctxt (env_of e) ~rawbools:true typ) &&
            not (is_enum (env_of e) id) ->
        prefix 2 1
               (separate space [string "let"; doc_id id; colon; doc_typ ctxt (env_of e) typ; coloneq])
