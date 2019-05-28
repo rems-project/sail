@@ -473,10 +473,17 @@ let ocaml_funcls ctx =
           explicit type signatures with universal quantification. *)
        let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
        let pat_sym = gensym () in
-       let pat, exp =
+       let pat, guard, exp =
          match pexp with
-         | Pat_aux (Pat_exp (pat, exp),_) -> pat,exp
-         | Pat_aux (Pat_when (pat, wh, exp),_) -> failwith "OCaml: top-level pattern guards not supported"
+         | Pat_aux (Pat_exp (pat, exp),_) -> pat, None, exp
+         | Pat_aux (Pat_when (pat, guard, exp),_) -> pat, Some guard, exp
+       in
+       let ocaml_guarded_exp ctx exp = function
+         | Some guard ->
+            separate space [string "if"; ocaml_exp ctx guard;
+                            string "then"; parens (ocaml_exp ctx exp);
+                            string "else"; Printf.ksprintf string "failwith \"Pattern match failure in %s\"" (string_of_id id)]
+         | None -> ocaml_exp ctx exp
        in
        let annot_pat =
          let pat =
@@ -496,7 +503,7 @@ let ocaml_funcls ctx =
            separate space [call_header; zencode ctx id;
                            annot_pat; colon; ocaml_typ ctx ret_typ; equals;
                            sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
-           ^//^ ocaml_exp ctx exp
+           ^//^ ocaml_guarded_exp ctx exp guard
            ^^ rparen
          else
            separate space [call_header; zencode ctx id; colon;
@@ -504,7 +511,7 @@ let ocaml_funcls ctx =
                            ocaml_typ ctx (mk_typ (Typ_tup arg_typs)); string "->"; ocaml_typ ctx ret_typ; equals;
                            string "fun"; annot_pat; string "->";
                            sail_call id arg_sym pat_sym ret_sym; string "(fun r ->"]
-           ^//^ ocaml_exp ctx exp
+           ^//^ ocaml_guarded_exp ctx exp guard
            ^^ rparen
        in
        ocaml_funcl call string_of_arg string_of_ret
