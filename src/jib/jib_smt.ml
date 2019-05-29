@@ -531,6 +531,27 @@ let builtin_min_int ctx v1 v2 ret_ctyp =
           smt1,
           smt2)
 
+let builtin_eq_bits ctx v1 v2 =
+  match cval_ctyp v1, cval_ctyp v2 with
+  | CT_fbits (n, _), CT_fbits (m, _) ->
+     let o = max n m in
+     let smt1 = unsigned_size ctx o n (smt_cval ctx v1) in
+     let smt2 = unsigned_size ctx o n (smt_cval ctx v2) in
+     Fn ("=", [smt1; smt2])
+
+  | CT_lbits _, CT_lbits _ ->
+     Fn ("=", [smt_cval ctx v1; smt_cval ctx v2])
+
+  | CT_lbits _, CT_fbits (n, _) ->
+     let smt2 = unsigned_size ctx (lbits_size ctx) n (smt_cval ctx v2) in
+     Fn ("=", [Fn ("contents", [smt_cval ctx v1]); smt2])
+
+  | CT_fbits (n, _), CT_lbits _ ->
+     let smt1 = unsigned_size ctx (lbits_size ctx) n (smt_cval ctx v1) in
+     Fn ("=", [smt1; Fn ("contents", [smt_cval ctx v2])])
+
+  | _ -> builtin_type_error ctx "eq_bits" [v1; v2] None
+
 let builtin_zeros ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
   | _, CT_fbits (n, _) -> bvzero n
@@ -969,7 +990,6 @@ let builtin_sqrt_real ctx root v =
 
 let smt_builtin ctx name args ret_ctyp =
   match name, args, ret_ctyp with
-  | "eq_bits", [v1; v2], CT_bool -> Fn ("=", [smt_cval ctx v1; smt_cval ctx v2])
   | "eq_anything", [v1; v2], CT_bool -> Fn ("=", [smt_cval ctx v1; smt_cval ctx v2])
 
   (* lib/flow.sail *)
@@ -1011,6 +1031,7 @@ let smt_builtin ctx name args ret_ctyp =
   | "ugteq_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvuge" ctx v1 v2 ret_ctyp
 
   (* lib/vector_dec.sail *)
+  | "eq_bits", [v1; v2], CT_bool -> builtin_eq_bits ctx v1 v2
   | "zeros", [v], _ -> builtin_zeros ctx v ret_ctyp
   | "sail_zeros", [v], _ -> builtin_zeros ctx v ret_ctyp
   | "ones", [v], _ -> builtin_ones ctx v ret_ctyp
