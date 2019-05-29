@@ -75,7 +75,7 @@ variables etc. Note that type variables in Sail are often internally
 referred to as *kids*, I think this is because type variables are
 defined as having a specific *kind*, i.e. `'n : Int` is a type
 variable with kind `Int`. (Although `kinded_id` is technically a
-separate type which is a type variablem * kind pair).
+separate type which is a type variable * kind pair).
 
 ### Parse AST
 
@@ -99,7 +99,7 @@ backend option e.g. `-c`, `-lem`, `-ocaml` etc, is referred to as a
 ```OCaml
   ( "-c",
     Arg.Tuple [set_target "c"; Arg.Set Initial_check.opt_undefined_gen],
-	" output a C translated version of the input");
+    " output a C translated version of the input");
 ```
 
 defines the `-c` option. Each Sail option is configured via via `opt_`
@@ -111,18 +111,18 @@ thereafter.
 
 The first function called by `main` is `Sail.load_files`. This
 function parses all the files passed to Sail, and then concatenates
-their ASTs. The preprocessor is then run, which evaluates `$directive`
+their ASTs. The pre-processor is then run, which evaluates `$directive`
 statements in Sail, such as
 
 ```
 $include <prelude.sail>
 ```
 
-Unlike the C preprocessor the Sail pre-processor operates over actual
+Unlike the C pre-processor the Sail pre-processor operates over actual
 Sail ASTs rather than strings. This can recursively include other
 files into the AST, as well as add/remove parts of the AST with
 `$ifdef` etc. Directives that are used are preserved in the AST, so
-they also function as a useful way to pass auxilliary information to
+they also function as a useful way to pass auxiliary information to
 the various Sail backends.
 
 The initial check mentioned above is then run to desugar the AST, and
@@ -145,12 +145,12 @@ The file
 
 ```OCaml
 let all_rewrites = [
-	("pat_string_append", Basic_rewriter rewrite_defs_pat_string_append);
+    ("pat_string_append", Basic_rewriter rewrite_defs_pat_string_append);
     ("mapping_builtins", Basic_rewriter rewrite_defs_mapping_patterns);
     ("mono_rewrites", Basic_rewriter mono_rewrites);
     ("toplevel_nexps", Basic_rewriter rewrite_toplevel_nexps);
-	("monomorphise", Basic_rewriter monomorphise);
-	...
+    ("monomorphise", Basic_rewriter monomorphise);
+    ...
 ```
 
 and each target specifies a list of rewrites to apply like so:
@@ -180,7 +180,7 @@ which invokes the backend for each target, e.g. for OCaml:
        | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast, !opt_ocaml_generators)
      in
      let out = match !opt_file_out with None -> "out" | Some s -> s in
-	 Ocaml_backend.ocaml_compile out ast ocaml_generator_info
+     Ocaml_backend.ocaml_compile out ast ocaml_generator_info
 ```
 
 There is also a `Sail.prover_regstate` function that allows the
@@ -207,7 +207,7 @@ file is long, but is structured as follows:
    up. The code that actually talks to an external SMT solver is
    contained within a separate file
    [src/constraint.ml](https://github.com/rems-project/sail/blob/sail2/src/constraint.ml),
-   wheras the code here sets up the interface between the typing
+   whereas the code here sets up the interface between the typing
    environment and the solver.
 
 3. Next comes the definitions for unification and instantiation of
@@ -261,9 +261,9 @@ The C and SMT backends for Sail use a custom intermediate
 representation (IR) called *Jib* (it's a type of Sail). Like the full
 AST this is defined as an ott grammar in
 [language/jib.ott](https://github.com/rems-project/sail/blob/sail2/language/jib.ott). The
-sail "-ir" option allows Sail to be converted into this IR without any further processing.
+sail "-ir" target allows Sail to be converted into this IR without any further processing.
 
-The Jib related files are contained within a subdirectory
+The Jib related files are contained within a sub-directory
 `src/jib/`. First we convert Sail to A-normal form (ANF) in
 [src/jib/anf.ml](https://github.com/rems-project/sail/blob/sail2/src/jib/anf.ml),
 then
@@ -276,11 +276,11 @@ types are replaced with simpler ones (`ctyp`). Note that many
 Jib-related types are prefixed by `c` as it was originally only used
 when generating C.
 
-The key optimization we do when generating Jib is we analyze the Sail
+The key optimisation we do when generating Jib is we analyse the Sail
 types using SMT to try to fit arbitrary-precision types into smaller
 fixed-precision machine-word types that exist within Jib. To aid in
 this we have a
-[specialization pass](https://github.com/rems-project/sail/blob/sail2/src/specialize.ml)
+[specialisation pass](https://github.com/rems-project/sail/blob/sail2/src/specialize.ml)
 that removes polymorphism by creating specialised copies of functions
 based on how their type-quantifiers are instantiated. This can be used
 in addition to the Sail monomorphisation above.
