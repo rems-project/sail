@@ -2232,6 +2232,23 @@ subst; compute;
 auto using Build_ArithFact.
 Defined.
 
+Definition shr_int_32 (x y : Z) `{HE:ArithFact (0 <= x <= 31)} `{HR:ArithFact (y = 1)}: {z : Z & ArithFact (0 <= z <= 15)}.
+refine (existT _ (shr_int x y) _).
+destruct HE as [HE].
+destruct HR as [HR];
+subst.
+unfold shr_int.
+rewrite <- Z.div2_spec.
+constructor.
+rewrite Z.div2_div.
+specialize (Z.div_mod x 2).
+specialize (Z.mod_pos_bound x 2).
+generalize (Z.div x 2).
+generalize (x mod 2).
+intros.
+nia.
+Defined.
+
 Lemma shl_8_ge_0 {n} : shl_int 8 n >= 0.
 unfold shl_int.
 apply Z.le_ge.  

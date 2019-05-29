@@ -70,7 +70,7 @@ val _shl_int = "shl_int" : (int, int) -> int
 
 overload shl_int = {_shl8, _shl32, _shl_int}
 
-val _shr32 = {c: "shr_mach_int", _: "shr_int"} : forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}
+val _shr32 = {c: "shr_mach_int", coq: "shr_int_32", _: "shr_int"} : forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}
 
 val _shr_int = "shr_int" : (int, int) -> int
 
