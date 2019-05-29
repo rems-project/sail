@@ -819,7 +819,7 @@ let builtin_sail_truncate ctx v1 v2 ret_ctyp =
      assert (Big_int.to_int c = m && m < lbits_size ctx);
      Extract (Big_int.to_int c - 1, 0, Fn ("contents", [smt_cval ctx v1]))
 
-  | _ -> builtin_type_error ctx "sail_truncate" [v2; v2] (Some ret_ctyp)
+  | _ -> builtin_type_error ctx "sail_truncate" [v1; v2] (Some ret_ctyp)
 
 let builtin_sail_truncateLSB ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with

@@ -145,7 +145,7 @@ let dest_err = function
   | Err_general (l, m) -> ("Error", Loc l, m)
   | Err_unreachable (l, (file, line, _, _), m) ->
      (Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line, Loc l, m ^ issues)
-  | Err_todo (l, m) -> ("Todo" ^ m, Loc l, "")
+  | Err_todo (l, m) -> ("Todo", Loc l, m)
   | Err_syntax (p, m) -> ("Syntax error", Pos p, m)
   | Err_syntax_loc (l, m) -> ("Syntax error", Loc l, m)
   | Err_lex (p, s) -> ("Lexical error", Pos p, s)
