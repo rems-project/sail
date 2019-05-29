@@ -384,7 +384,7 @@ let builtin_gteq = builtin_int_comparison "bvsge" Big_int.greater_equal
 
 (* ***** Arithmetic operations: lib/arith.sail ***** *)
 
-(** [force_size n m exp] takes a smt expression assumed to be a
+(** [force_size ctx n m exp] takes a smt expression assumed to be a
    integer (signed bitvector) of length m and forces it to be length n
    by either sign extending it or truncating it as required *)
 let force_size ?checked:(checked=true) ctx n m smt =
@@ -403,6 +403,16 @@ let force_size ?checked:(checked=true) ctx n m smt =
     in
     if checked then overflow_check ctx check else ();
     Extract (n - 1, 0, smt)
+
+(** [unsigned_size ctx n m exp] is much like force_size, but it
+   assumes that the bitvector is unsigned *)
+let unsigned_size ?checked:(checked=true) ctx n m smt =
+  if n = m then
+    smt
+  else if n > m then
+    Fn ("concat", [bvzero (n - m); smt])
+  else
+    failwith "bad arguments to unsigned_size"
 
 let int_size ctx = function
   | CT_constant n -> required_width n
@@ -542,7 +552,7 @@ let builtin_ones ctx cval = function
      Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; bvones (lbits_size ctx)])]);
   | ret_ctyp -> builtin_type_error ctx "ones" [cval] (Some ret_ctyp)
 
-(* [bvzeint esz cval] (BitVector Zero Extend INTeger), takes a cval
+(* [bvzeint ctx esz cval] (BitVector Zero Extend INTeger), takes a cval
    which must be an integer type (either CT_fint, or CT_lint), and
    produces a bitvector which is either zero extended or truncated to
    exactly esz bits. *)
@@ -801,11 +811,10 @@ let builtin_replicate_bits ctx v1 v2 ret_ctyp =
      let smt = smt_cval ctx v1 in
      Fn ("concat", List.init (Big_int.to_int c) (fun _ -> smt))
 
-  (*| CT_fbits (n, _), ctyp2, CT_lbits _ ->
-     let len = Fn ("bvmul", [bvint ctx.lbits_index (Big_int.of_int n);
-                             Extract (ctx.lbits_index - 1, 0, smt_cval ctx v2)])
-     in
-     assert false*)
+  | CT_fbits (n, _), _, CT_fbits (m, _) ->
+     let smt = smt_cval ctx v1 in
+     let c = m / n in
+     Fn ("concat", List.init c (fun _ -> smt))
 
   | _ -> builtin_type_error ctx "replicate_bits" [v1; v2] (Some ret_ctyp)
 
@@ -818,6 +827,11 @@ let builtin_sail_truncate ctx v1 v2 ret_ctyp =
   | CT_lbits _, CT_constant c, CT_fbits (m, _) ->
      assert (Big_int.to_int c = m && m < lbits_size ctx);
      Extract (Big_int.to_int c - 1, 0, Fn ("contents", [smt_cval ctx v1]))
+
+  | CT_fbits (n, _), _, CT_lbits _ ->
+     let smt1 = unsigned_size ctx (lbits_size ctx) n (smt_cval ctx v1) in
+     let smt2 = bvzeint ctx ctx.lbits_index v2 in
+     Fn ("Bits", [smt2; Fn ("bvand", [bvmask ctx smt2; smt1])])
 
   | _ -> builtin_type_error ctx "sail_truncate" [v1; v2] (Some ret_ctyp)
 
