@@ -1064,9 +1064,9 @@ end.
 (* Definitions in the context that involve proof for other constraints can
    break some of the constraint solving tactics, so prune definition bodies
    down to integer types. *)
-Ltac not_Z ty := match ty with Z => fail 1 | _ => idtac end.
-Ltac clear_non_Z_defns := 
-  repeat match goal with H := _ : ?X |- _ => not_Z X; clearbody H end.
+Ltac not_Z_bool ty := match ty with Z => fail 1 | bool => fail 1 | _ => idtac end.
+Ltac clear_non_Z_bool_defns := 
+  repeat match goal with H := _ : ?X |- _ => not_Z_bool X; clearbody H end.
 Ltac clear_irrelevant_defns :=
 repeat match goal with X := _ |- _ =>
   match goal with |- context[X] => idtac end ||
@@ -1253,7 +1253,9 @@ Ltac filter_disjunctions :=
   | H1:context [?t = true \/ ?P], H2: ?t = false |- _ => is_var t; rewrite H2 in H1
   | H1:context [?t = false \/ ?P], H2: ?t = true |- _ => is_var t; rewrite H2 in H1
   end;
-  repeat rewrite truefalse, falsetrue, or_False_l, or_False_r in *.
+  rewrite ?truefalse, ?falsetrue, ?or_False_l, ?or_False_r in *;
+  (* We may have uncovered more conjunctions *)
+  repeat match goal with H:and _ _ |- _ => destruct H end.
 
 (* Turn x := if _ then ... into x = ... \/ x = ... *)
 
@@ -1313,13 +1315,28 @@ Ltac clear_irrelevant_bindings :=
    P \/ x = true, P \/ x = false, which are simplified by the tactic below.  In
    future the translation is likely to be cleverer, and this won't be
    necessary. *)
+(* TODO: remove duplication with filter_disjunctions *)
 Lemma remove_unnecessary_casesplit {P:Prop} {x} :
   P \/ x = true -> P \/ x = false -> P.
   intuition congruence.
 Qed.
+Lemma remove_eq_false_true {P:Prop} {x} :
+  x = true -> P \/ x = false -> P.
+intros H1 [H|H]; congruence.
+Qed.
+Lemma remove_eq_true_false {P:Prop} {x} :
+  x = false -> P \/ x = true -> P.
+intros H1 [H|H]; congruence.
+Qed.
 Ltac remove_unnecessary_casesplit :=
 repeat match goal with
-| H1 : ?P \/ ?v = true, H2 : ?P \/ ?v = false |- _ =>
+| H1 : ?P \/ ?v = true, H2 : ?v = true |- _ => clear H1
+| H1 : ?P \/ ?v = true, H2 : ?v = false |- _ => apply (remove_eq_true_false H2) in H1
+| H1 : ?P \/ ?v = false, H2 : ?v = false |- _ => clear H1
+| H1 : ?P \/ ?v = false, H2 : ?v = true |- _ => apply (remove_eq_false_true H2) in H1
+| H1 : ?P \/ ?v1 = true, H2 : ?P \/ ?v2 = false |- _ =>
+  constr_eq v1 v2;
+  is_var v1;
   apply (remove_unnecessary_casesplit H1) in H2;
   clear H1
   (* There are worse cases where the hypotheses are different, so we actually
@@ -1338,7 +1355,7 @@ repeat match goal with H:and _ _ |- _ => destruct H end.
 Ltac prepare_for_solver :=
 (*dump_context;*)
  clear_irrelevant_defns;
- clear_non_Z_defns;
+ clear_non_Z_bool_defns;
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  split_cases;
  extract_properties;
