@@ -8,7 +8,7 @@ generates a OCaml (and lem) version of the ast in `src/ast.ml` and
 `src/ast.lem`. Technically the OCaml version of the AST is generated
 by [Lem](https://github.com/rems-project/lem), which allows the Sail
 OCaml source to seamlessly interoperate with parts written in
-Lem. Although we do not make much use of this, it in principle allows
+Lem. Although we do not make much use of this, in principle it allows
 us to implement parts of Sail in Lem, which would enable them to be
 verified in Isabelle or HOL.
 
@@ -86,7 +86,7 @@ it contains some additional syntactic sugar. The parse ast is
 desugared by the
 [initial_check](https://github.com/rems-project/sail/blob/sail2/src/initial_check.mli)
 file, which performs some basic checks in addition from mapping the
-parse AST to the full AST.
+parse AST to the main AST.
 
 ## Overall Structure
 
@@ -232,10 +232,10 @@ file is long, but is structured as follows:
    definitions of functions and datatypes.
 
 The interface by which the rest of Sail can interact with the
-type-checker and type annotations is strictly controlled by it's
-[mli interface](https://github.com/rems-project/sail/blob/sail2/src/type_check.mli)
-file. As much of the type-checking internals is kept as abstract as
-possible.
+type-checker and type annotations is strictly controlled by it's [mli
+interface](https://github.com/rems-project/sail/blob/sail2/src/type_check.mli)
+file. We try to keep much of the type-checking internals as abstract
+as possible.
 
 ## Rewriter
 
