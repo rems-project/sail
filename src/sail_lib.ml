@@ -728,6 +728,7 @@ let sign_extend (vec, n) =
   | B1 :: _ as vec -> replicate_bits ([B1], Big_int.of_int (m - List.length vec)) @ vec
 
 let zeros n = replicate_bits ([B0], n)
+let ones  n = replicate_bits ([B1], n)
 
 let shift_bits_right_arith (x, y) =
   let ybi = uint(y) in
