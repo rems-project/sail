@@ -61,6 +61,7 @@ THIS`(v, n)` truncates `v`, keeping only the _most_ significant `n` bits.
  */
 val truncateLSB = {
   ocaml: "vector_truncateLSB",
+  interpreter: "vector_truncateLSB",
   lem: "vector_truncateLSB",
   coq: "vector_truncateLSB",
   c: "sail_truncateLSB"
