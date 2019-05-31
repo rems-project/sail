@@ -429,7 +429,7 @@ let handle_input' input =
           | Arg.Bad message | Arg.Help message -> print_endline message
         end;
      | ":spec" ->
-        let ast, env = Specialize.(specialize' 1 int_specialization !Interactive.ast !Interactive.env) in
+        let ast, env = Specialize.(specialize_passes 1 int_specialization !Interactive.env !Interactive.ast) in
         Interactive.ast := ast;
         Interactive.env := env;
         interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops

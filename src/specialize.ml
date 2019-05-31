@@ -586,7 +586,7 @@ let specialize_ids spec ids ast =
   Profile.finish "specialization pass" t;
   ast, env
 
-let rec specialize' n spec ast env =
+let rec specialize_passes n spec env ast =
   if n = 0 then
     ast, env
   else
@@ -595,6 +595,6 @@ let rec specialize' n spec ast env =
       ast, env
     else
       let ast, env = specialize_ids spec ids ast in
-      specialize' (n - 1) spec ast env
+      specialize_passes (n - 1) spec env ast
 
-let specialize = specialize' (-1)
+let specialize = specialize_passes (-1)

@@ -450,10 +450,10 @@ let target name out_name ast type_envs =
      close_out f
 
   | Some "c" ->
-     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast type_envs) in
+     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
      let ast_c, type_envs =
        if !opt_specialize_c then
-         Specialize.(specialize' 2 int_specialization ast_c type_envs)
+         Specialize.(specialize_passes 2 int_specialization type_envs ast_c)
        else
          ast_c, type_envs
      in
@@ -464,7 +464,7 @@ let target name out_name ast type_envs =
      if close then close_out output_chan else ()
 
   | Some "ir" ->
-     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization ast type_envs) in
+     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
      (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in *)
      let close, output_chan =
        match !opt_file_out with
@@ -483,8 +483,8 @@ let target name out_name ast type_envs =
      let open Ast_util in
      let props = Property.find_properties ast in
      Bindings.bindings props |> List.map fst |> IdSet.of_list |> Specialize.add_initial_calls;
-     let ast_smt, type_envs = Specialize.(specialize typ_ord_specialization ast type_envs) in
-     let ast_smt, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_smt type_envs) in
+     let ast_smt, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
+     let ast_smt, type_envs = Specialize.(specialize_passes 2 int_specialization_with_externs type_envs ast_smt) in
      let name_file =
        match !opt_file_out with
        | Some f -> fun str -> f ^ "_" ^ str ^ ".smt2"

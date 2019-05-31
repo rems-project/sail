@@ -81,11 +81,11 @@ val add_initial_calls : IdSet.t -> unit
    AST with [Type_check.initial_env]. The env parameter is the
    environment to return if there is no polymorphism to remove, in
    which case specialize returns the AST unmodified. *)
-val specialize : specialization -> tannot defs -> Env.t -> tannot defs * Env.t
+val specialize : specialization -> Env.t -> tannot defs -> tannot defs * Env.t
 
 (** specialize' n performs at most n specialization passes. Useful for
    int_specialization which is not guaranteed to terminate. *)
-val specialize' : int -> specialization -> tannot defs -> Env.t -> tannot defs * Env.t
+val specialize_passes : int -> specialization -> Env.t -> tannot defs -> tannot defs * Env.t
 
 (** return all instantiations of a function id, with the
    instantiations filtered according to the specialization. *)
