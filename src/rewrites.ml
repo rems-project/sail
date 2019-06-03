@@ -4338,12 +4338,18 @@ let funcl_loc (FCL_aux (_,(l,_))) = l
 
 let rewrite_case (e,ann) =
   match e with
-  | E_case (e1,cases) ->
+  | E_case (e1,cases)
+  | E_try (e1,cases) ->
      begin
      let env = env_of_annot ann in
      let cases, rps = check_cases (process_pexp env) pexp_is_wild pexp_loc cases in
+     let rebuild cases = match e with
+       | E_case _ -> E_case (e1,cases)
+       | E_try _ -> E_try (e1,cases)
+       | _ -> assert false
+     in
      match rps with
-     | [] -> E_aux (E_case (e1,cases),ann)
+     | [] -> E_aux (rebuild cases,ann)
      | (example::_) ->
 
         let _ =
@@ -4356,7 +4362,7 @@ let rewrite_case (e,ann) =
         let ann' = mk_tannot env (typ_of_annot ann) (mk_effect [BE_escape]) in
         (* TODO: use an expression that specifically indicates a failed pattern match *)
         let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)),(l,empty_tannot))),(l,ann')) in
-        E_aux (E_case (e1,cases@[Pat_aux (Pat_exp (p,b),(l,empty_tannot))]),ann)
+        E_aux (rebuild (cases@[Pat_aux (Pat_exp (p,b),(l,empty_tannot))]),ann)
      end
   | E_let (LB_aux (LB_val (pat,e1),lb_ann),e2) ->
      begin
