@@ -1484,6 +1484,45 @@ Ltac simple_ex_iff :=
     solve [apply iff_refl | eassumption]
   end.
 
+(* Another attempt at similar goals, this time allowing for conjuncts to move around.
+   TODO: generalise / combine with simple_ex_iff. *)
+Ltac single_ex_iff :=
+eexists;
+let rec search x y :=
+  match y with
+  | x => constr:(true)
+  | ?y1 /\ ?y2 => first [search x y1 | search x y2]
+  | _ => constr:(false)
+  end
+in
+let rec add_clause x xs :=
+  let l := lazymatch x with
+    | ?l = true => l
+    | ?l = false => constr:(negb l)
+    | @eq Z ?l ?n => constr:(Z.eqb l n)
+    | _ => fail
+    end in
+  match xs with
+  | true => l
+  | _ => constr:(andb l xs)
+  end
+in
+let rec construct_ex l r x :=
+  lazymatch l with
+  | ?l1 /\ ?l2 =>
+    let y := construct_ex l1 r x in
+    construct_ex l2 r y
+  | _ => match search l r with true => x | _ => add_clause l x end
+  end
+in
+let witness := match goal with
+| |- ?l <-> ?r => construct_ex l r constr:(true)
+end in
+instantiate (1 := witness);
+unbool_comparisons_goal;
+clear;
+intuition.
+
 Lemma iff_false_left {P Q R : Prop} : (false = true) <-> Q -> (false = true) /\ P <-> Q /\ R.
 intuition.
 Qed.
@@ -1543,6 +1582,7 @@ Ltac main_solver :=
    end
  (* Booleans - and_boolMP *)
  | simple_ex_iff
+ | single_ex_iff
  | drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
  | match goal with |- (forall l r:bool, _ -> _ -> exists _ : bool, _) =>
      let r := fresh "r" in
