@@ -38,6 +38,9 @@ lib/hol/sail-heap
 /src/sail.docdir
 /src/ast.lem
 /src/ast.ml
+/src/jib.lem
+/src/jib.ml
+/src/manifest.ml
 
 /test/typecheck/rtpass*/
 /test/typecheck/tests.xml
