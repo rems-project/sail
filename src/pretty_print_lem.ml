@@ -250,7 +250,9 @@ let rec lem_nexps_of_typ (Typ_aux (t,l)) =
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 and lem_nexps_of_typ_arg (A_aux (ta,_)) =
   match ta with
-  | A_nexp nexp -> NexpSet.singleton (nexp_simp (orig_nexp nexp))
+  | A_nexp nexp ->
+      let nexp = nexp_simp (orig_nexp nexp) in
+      if is_nexp_constant nexp then NexpSet.empty else NexpSet.singleton nexp
   | A_typ typ -> lem_nexps_of_typ typ
   | A_order _ -> NexpSet.empty
   | A_bool _ -> NexpSet.empty
@@ -433,24 +435,11 @@ let doc_lit_lem (L_aux(lit,l)) =
     parens (separate space (List.map string [
       "realFromFrac"; Big_int.to_string num; Big_int.to_string denom]))
 
-(* typ_doc is the doc for the type being quantified *)
-let doc_quant_item vars_included (QI_aux (qi, _)) = match qi with
-| QI_id (KOpt_aux (KOpt_kind (_, kid), _)) ->
-   (match vars_included with
-     None -> doc_var kid
-   | Some set -> (*when KidSet.mem kid set -> doc_var kid*)
-      let nexps = NexpSet.filter (fun nexp -> KidSet.mem (orig_kid kid) (nexp_frees nexp)) set in
-      separate_map space doc_nexp_lem (NexpSet.elements nexps))
-| _ -> empty
+let kid_nexps_of_typquant tq =
+  quant_kopts tq |> List.filter (fun k -> is_int_kopt k || is_typ_kopt k) |> List.map kopt_kid |> List.map nvar
 
-let doc_typquant_items_lem vars_included (TypQ_aux(tq,_)) = match tq with
-| TypQ_tq qs -> separate_map space (doc_quant_item vars_included) qs
-| _ -> empty
-
-let doc_typquant_lem (TypQ_aux(tq,_)) vars_included typ = match tq with
-| TypQ_tq ((_ :: _) as qs) ->
-  string "forall " ^^ separate_map space (doc_quant_item vars_included) qs ^^ string ". " ^^ typ
-| _ -> typ
+let doc_typquant_items_lem quant_nexps =
+  separate_map space doc_nexp_lem quant_nexps
 
 (* Produce Size type constraints for bitvector sizes when using
    machine words.  Often these will be unnecessary, but this simple
@@ -497,7 +486,7 @@ let doc_typschm_lem env quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
     let nexps_to_include = NexpSet.union nexps_used nexps_sizes in
     if NexpSet.is_empty nexps_to_include
     then pt
-    else doc_typquant_lem tq (Some nexps_to_include) (ptyc ^^ pt)
+    else string "forall " ^^ doc_typquant_items_lem (NexpSet.elements nexps_to_include) ^^ string ". " ^^ ptyc ^^ pt
   else pt
 
 let is_ctor env id = match Env.lookup_id id env with
@@ -831,7 +820,6 @@ let doc_exp_lem, doc_let_lem =
            raise (report l __POS__ "E_field expression with no register or record type"))
     | E_block [] -> string "()"
     | E_block exps -> raise (report l __POS__ "Blocks should have been removed till now.")
-    | E_nondet exps -> raise (report l __POS__ "Nondet blocks not supported.")
     | E_id id | E_ref id ->
        let env = env_of full_exp in
        let typ = typ_of full_exp in
@@ -1063,7 +1051,7 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
   | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
      let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
      doc_op equals
-       (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
+       (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem (kid_nexps_of_typquant typq)])
        (doc_typschm_lem env false typschm)
   | TD_abbrev _ -> empty
   | TD_record(id,typq,fs,_) ->
@@ -1115,7 +1103,7 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
           doc_op equals (string "set_field") (parens (doc_op arrow (string "fun rec_val v") set)); space])) in *)
     let sorts_pp = doc_typquant_sorts (doc_id_lem_type id) typq in
     doc_op equals
-           (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem None typq])
+           (separate space [string "type"; doc_id_lem_type id; doc_typquant_items_lem (kid_nexps_of_typquant typq)])
            ((*doc_typquant_lem typq*) (anglebars (space ^^ align fs_doc ^^ space))) ^^ hardline ^^ sorts_pp
     (* if !opt_sequential && string_of_id id = "regstate" then empty
     else separate_map hardline doc_field fs *)
@@ -1134,7 +1122,7 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
          let ar_doc = group (separate_map (break 1) (doc_type_union_lem env) ar) in
          let typ_pp =
            (doc_op equals)
-             (concat [string "type"; space; doc_id_lem_type id; space; doc_typquant_items_lem None typq])
+             (concat [string "type"; space; doc_id_lem_type id; space; doc_typquant_items_lem (kid_nexps_of_typquant typq)])
              ((*doc_typquant_lem typq*) ar_doc) in
          let make_id pat id =
            separate space [string "SIA.Id_aux";

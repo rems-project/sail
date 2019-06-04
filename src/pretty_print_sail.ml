@@ -387,7 +387,6 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_block [] -> string "()"
   | E_block exps ->
      group (lbrace ^^ nest 4 (hardline ^^ doc_block exps) ^^ hardline ^^ rbrace)
-  | E_nondet exps -> assert false
   (* This is mostly for the -convert option *)
   | E_app_infix (x, id, y) when Id.compare (mk_id "quot") id == 0 ->
      separate space [doc_atomic_exp x; string "/"; doc_atomic_exp y]

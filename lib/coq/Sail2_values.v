@@ -156,6 +156,16 @@ apply Zmult_ge_compat; auto with zarith.
 * apply Z_div_ge0; auto. apply Z.lt_gt. apply Z.abs_pos. auto with zarith.
 Qed.
 
+Lemma ZEuclid_pos_div : forall x y, y > 0 -> ZEuclid.div x y >= 0 -> x >= 0.
+intros x y GT.
+  specialize (ZEuclid.div_mod x y);
+  specialize (ZEuclid.mod_always_pos x y);
+  generalize (ZEuclid.modulo x y);
+  generalize (ZEuclid.div x y);
+  intros.
+nia.
+Qed.
+
 Lemma ZEuclid_div_ge : forall x y, y > 0 -> x >= 0 -> x - ZEuclid.div x y >= 0.
 intros.
 unfold ZEuclid.div.
@@ -185,7 +195,7 @@ apply ZEuclid.div_mod.
 assumption.
 Qed.
 
-Hint Resolve ZEuclid_div_pos ZEuclid_div_ge ZEuclid_div_mod0 : sail.
+Hint Resolve ZEuclid_div_pos ZEuclid_pos_div ZEuclid_div_ge ZEuclid_div_mod0 : sail.
 
 
 (*
@@ -873,6 +883,9 @@ Program Definition to_word {n} : n >= 0 -> word (Z.to_nat n) -> mword n :=
   | Zpos _ => fun _ w => w
   end.
 
+Definition word_to_mword {n} (w : word (Z.to_nat n)) `{H:ArithFact (n >= 0)} : mword n :=
+  to_word (match H with Build_ArithFact _ H' => H' end) w.
+
 (*val length_mword : forall a. mword a -> Z*)
 Definition length_mword {n} (w : mword n) := n.
 
@@ -904,7 +917,7 @@ Parameter undefined_bit : bool.
 Definition getBit {n} :=
 match n with
 | O => fun (w : word O) i => undefined_bit
-| S n => fun (w : word (S n)) i => wlsb (wrshift w i)
+| S n => fun (w : word (S n)) i => wlsb (wrshift' w i)
 end.
 
 Definition access_mword_dec {m} (w : mword m) n := bitU_of_bool (getBit (get_word w) (Z.to_nat n)).
@@ -922,7 +935,7 @@ Definition setBit {n} :=
 match n with
 | O => fun (w : word O) i b => w
 | S n => fun (w : word (S n)) i (b : bool) =>
-  let bit : word (S n) := wlshift (natToWord _ 1) i in
+  let bit : word (S n) := wlshift' (natToWord _ 1) i in
   let mask : word (S n) := wnot bit in
   let masked := wand mask w in
   if b then masked else wor masked bit
@@ -1051,9 +1064,9 @@ end.
 (* Definitions in the context that involve proof for other constraints can
    break some of the constraint solving tactics, so prune definition bodies
    down to integer types. *)
-Ltac not_Z ty := match ty with Z => fail 1 | _ => idtac end.
-Ltac clear_non_Z_defns := 
-  repeat match goal with H := _ : ?X |- _ => not_Z X; clearbody H end.
+Ltac not_Z_bool ty := match ty with Z => fail 1 | bool => fail 1 | _ => idtac end.
+Ltac clear_non_Z_bool_defns := 
+  repeat match goal with H := _ : ?X |- _ => not_Z_bool X; clearbody H end.
 Ltac clear_irrelevant_defns :=
 repeat match goal with X := _ |- _ =>
   match goal with |- context[X] => idtac end ||
@@ -1119,11 +1132,11 @@ Ltac unbool_comparisons_goal :=
 (* Split up dependent pairs to get at proofs of properties *)
 Ltac extract_properties :=
   (* Properties of local definitions *)
-  repeat match goal with H := (projT1 ?X) |- _ =>
+  repeat match goal with H := context[projT1 ?X] |- _ =>
     let x := fresh "x" in
     let Hx := fresh "Hx" in
     destruct X as [x Hx] in *;
-    change (projT1 (existT _ x Hx)) with x in *; unfold H in * end;
+    change (projT1 (existT _ x Hx)) with x in * end;
   (* Properties in the goal *)
   repeat match goal with |- context [projT1 ?X] =>
     let x := fresh "x" in
@@ -1240,7 +1253,9 @@ Ltac filter_disjunctions :=
   | H1:context [?t = true \/ ?P], H2: ?t = false |- _ => is_var t; rewrite H2 in H1
   | H1:context [?t = false \/ ?P], H2: ?t = true |- _ => is_var t; rewrite H2 in H1
   end;
-  repeat rewrite truefalse, falsetrue, or_False_l, or_False_r in *.
+  rewrite ?truefalse, ?falsetrue, ?or_False_l, ?or_False_r in *;
+  (* We may have uncovered more conjunctions *)
+  repeat match goal with H:and _ _ |- _ => destruct H end.
 
 (* Turn x := if _ then ... into x = ... \/ x = ... *)
 
@@ -1296,10 +1311,51 @@ Ltac clear_irrelevant_bindings :=
       end
     end.
 
+(* Currently, the ASL to Sail translation produces some constraints of the form
+   P \/ x = true, P \/ x = false, which are simplified by the tactic below.  In
+   future the translation is likely to be cleverer, and this won't be
+   necessary. *)
+(* TODO: remove duplication with filter_disjunctions *)
+Lemma remove_unnecessary_casesplit {P:Prop} {x} :
+  P \/ x = true -> P \/ x = false -> P.
+  intuition congruence.
+Qed.
+Lemma remove_eq_false_true {P:Prop} {x} :
+  x = true -> P \/ x = false -> P.
+intros H1 [H|H]; congruence.
+Qed.
+Lemma remove_eq_true_false {P:Prop} {x} :
+  x = false -> P \/ x = true -> P.
+intros H1 [H|H]; congruence.
+Qed.
+Ltac remove_unnecessary_casesplit :=
+repeat match goal with
+| H1 : ?P \/ ?v = true, H2 : ?v = true |- _ => clear H1
+| H1 : ?P \/ ?v = true, H2 : ?v = false |- _ => apply (remove_eq_true_false H2) in H1
+| H1 : ?P \/ ?v = false, H2 : ?v = false |- _ => clear H1
+| H1 : ?P \/ ?v = false, H2 : ?v = true |- _ => apply (remove_eq_false_true H2) in H1
+| H1 : ?P \/ ?v1 = true, H2 : ?P \/ ?v2 = false |- _ =>
+  constr_eq v1 v2;
+  is_var v1;
+  apply (remove_unnecessary_casesplit H1) in H2;
+  clear H1
+  (* There are worse cases where the hypotheses are different, so we actually
+     do the casesplit *)
+| H1 : _ \/ ?v = true, H2 : _ \/ ?v = false |- _ =>
+  is_var v;
+  destruct v;
+  [ clear H1; destruct H2; [ | congruence ]
+  | clear H2; destruct H1; [ | congruence ]
+  ]
+end;
+(* We may have uncovered more conjunctions *)
+repeat match goal with H:and _ _ |- _ => destruct H end.
+
+
 Ltac prepare_for_solver :=
 (*dump_context;*)
  clear_irrelevant_defns;
- clear_non_Z_defns;
+ clear_non_Z_bool_defns;
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
  split_cases;
  extract_properties;
@@ -1309,6 +1365,7 @@ Ltac prepare_for_solver :=
  unbool_comparisons;
  unbool_comparisons_goal;
  repeat match goal with H:and _ _ |- _ => destruct H end;
+ remove_unnecessary_casesplit;
  unfold_In; (* after unbool_comparisons to deal with && and || *)
  reduce_list_lengths;
  reduce_pow;
@@ -1357,7 +1414,14 @@ tauto.
 Qed.
 
 Ltac solve_euclid :=
-repeat match goal with |- context [ZEuclid.modulo ?x ?y] =>
+repeat match goal with
+| |- context [ZEuclid.modulo ?x ?y] =>
+  specialize (ZEuclid.div_mod x y);
+  specialize (ZEuclid.mod_always_pos x y);
+  generalize (ZEuclid.modulo x y);
+  generalize (ZEuclid.div x y);
+  intros
+| |- context [ZEuclid.div ?x ?y] =>
   specialize (ZEuclid.div_mod x y);
   specialize (ZEuclid.mod_always_pos x y);
   generalize (ZEuclid.modulo x y);
@@ -1420,14 +1484,136 @@ Ltac simple_ex_iff :=
     solve [apply iff_refl | eassumption]
   end.
 
+(* Another attempt at similar goals, this time allowing for conjuncts to move
+  around, and filling in integer existentials and redundant boolean ones.
+   TODO: generalise / combine with simple_ex_iff. *)
+
+Ltac ex_iff_construct_bool_witness :=
+let rec search x y :=
+  lazymatch y with
+  | x => constr:(true)
+  | ?y1 /\ ?y2 =>
+    let b1 := search x y1 in
+    let b2 := search x y2 in
+    constr:(orb b1 b2)
+  | _ => constr:(false)
+  end
+in
+let rec make_clause x :=
+  lazymatch x with
+  | ?l = true => l
+  | ?l = false => constr:(negb l)
+  | @eq Z ?l ?n => constr:(Z.eqb l n)
+  | ?p \/ ?q =>
+    let p' := make_clause p in
+    let q' := make_clause q in
+    constr:(orb p' q')
+  | _ => fail
+  end in
+let add_clause x xs :=
+  let l := make_clause x in
+  match xs with
+  | true => l
+  | _ => constr:(andb l xs)
+  end
+in
+let rec construct_ex l r x :=
+  lazymatch l with
+  | ?l1 /\ ?l2 =>
+    let y := construct_ex l1 r x in
+    construct_ex l2 r y
+  | _ =>
+   let present := search l r in
+   lazymatch eval compute in present with true => x | _ => add_clause l x end
+  end
+in
+let witness := match goal with
+| |- ?l <-> ?r => construct_ex l r constr:(true)
+end in
+instantiate (1 := witness).
+
+Ltac ex_iff_fill_in_ints :=
+  let rec search l r y :=
+    match y with
+    | l = r => idtac
+    | ?v = r => is_evar v; unify v l
+    | ?y1 /\ ?y2 => first [search l r y1 | search l r y2]
+    | _ => fail
+    end
+  in
+  match goal with
+  | |- ?l <-> ?r =>
+    let rec traverse l :=
+    lazymatch l with
+    | ?l1 /\ ?l2 =>
+      traverse l1; traverse l2
+    | @eq Z ?x ?y => search x y r
+    | _ => idtac
+    end
+    in traverse l
+  end.
+
+Ltac ex_iff_fill_in_bools :=
+  let rec traverse t :=
+    lazymatch t with
+    | ?v = ?t => try (is_evar v; unify v t)
+    | ?p /\ ?q => traverse p; traverse q
+    | _ => idtac
+    end
+  in match goal with
+  | |- _ <-> ?r => traverse r
+  end.
+
+Ltac conjuncts_iff_solve :=
+  ex_iff_fill_in_ints;
+  ex_iff_construct_bool_witness;
+  ex_iff_fill_in_bools;
+  unbool_comparisons_goal;
+  clear;
+  intuition.
+
+Ltac ex_iff_solve :=
+  match goal with
+  | |- @ex _ _ => eexists; ex_iff_solve
+  (* Range constraints are attached to the right *)
+  | |- _ /\ _ => split; [ex_iff_solve | omega]
+  | |- _ <-> _ => conjuncts_iff_solve
+  end.
+
+
 Lemma iff_false_left {P Q R : Prop} : (false = true) <-> Q -> (false = true) /\ P <-> Q /\ R.
 intuition.
 Qed.
+
+(* Very simple proofs for trivial arithmetic.  Preferable to running omega/lia because
+   they can get bogged down if they see large definitions; should also guarantee small
+   proof terms. *)
+Lemma Z_compare_lt_eq : Lt = Eq -> False. congruence. Qed.
+Lemma Z_compare_lt_gt : Lt = Gt -> False. congruence. Qed.
+Lemma Z_compare_eq_lt : Eq = Lt -> False. congruence. Qed.
+Lemma Z_compare_eq_gt : Eq = Gt -> False. congruence. Qed.
+Lemma Z_compare_gt_lt : Gt = Lt -> False. congruence. Qed.
+Lemma Z_compare_gt_eq : Gt = Eq -> False. congruence. Qed.
+Ltac z_comparisons :=
+  solve [
+    exact eq_refl
+  | exact Z_compare_lt_eq
+  | exact Z_compare_lt_gt
+  | exact Z_compare_eq_lt
+  | exact Z_compare_eq_gt
+  | exact Z_compare_gt_lt
+  | exact Z_compare_gt_eq
+  ].
+
+
+(* Redefine this to add extra solver tactics *)
+Ltac sail_extra_tactic := fail.
 
 Ltac main_solver :=
  solve
  [ match goal with |- (?x ?y) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) y) end
  | apply ArithFact_mword; assumption
+ | z_comparisons
  | omega with Z
    (* Try sail hints before dropping the existential *)
  | subst; eauto 3 with zarith sail
@@ -1439,8 +1625,22 @@ Ltac main_solver :=
                         | |- context [ZEuclid.modulo] => solve_euclid
    end
  | match goal with |- context [Z.mul] => nia end
+ (* If we have a disjunction from a set constraint on a variable we can often
+    solve a goal by trying them (admittedly this is quite heavy handed...) *)
+ | subst;
+   let aux x :=
+    is_var x;
+    intuition (subst;auto)
+   in
+   match goal with
+   | _:(@eq Z _ ?x) \/ (@eq Z _ ?x) \/ _ |- context[?x] => aux x
+   | _:(@eq Z ?x _) \/ (@eq Z ?x _) \/ _ |- context[?x] => aux x
+   | _:(@eq Z _ ?x) \/ (@eq Z _ ?x) \/ _, _:@eq Z ?y (ZEuclid.div ?x _) |- context[?y] => is_var x; aux y
+   | _:(@eq Z ?x _) \/ (@eq Z ?x _) \/ _, _:@eq Z ?y (ZEuclid.div ?x _) |- context[?y] => is_var x; aux y
+   end
  (* Booleans - and_boolMP *)
  | simple_ex_iff
+ | ex_iff_solve
  | drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
  | match goal with |- (forall l r:bool, _ -> _ -> exists _ : bool, _) =>
      let r := fresh "r" in
@@ -1479,8 +1679,17 @@ Ltac main_solver :=
      (* Don't use auto for the fallback to keep runtime down *)
      firstorder fail
    end*)
+ | sail_extra_tactic
  | idtac "Unable to solve constraint"; dump_context; fail
  ].
+
+(* Omega can get upset by local definitions that are projections from value/proof pairs.
+   Complex goals can use prepare_for_solver to extract facts; this tactic can be used
+   for simpler proofs without using prepare_for_solver. *)
+Ltac simple_omega :=
+  repeat match goal with
+  H := projT1 _ |- _ => clearbody H
+  end; omega.
 
 Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
@@ -1492,7 +1701,8 @@ try match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end
 (* Trying reflexivity will fill in more complex metavariable examples than
    fill_in_evar_eq above, e.g., 8 * n = 8 * ?Goal3 *)
 try (constructor; reflexivity);
-try (constructor; omega);
+try (constructor; repeat match goal with |- and _ _ => split end; z_comparisons);
+try (constructor; simple_omega);
 prepare_for_solver;
 (*dump_context;*)
 constructor;
@@ -2143,6 +2353,23 @@ destruct HE as [HE].
 destruct HR as [[HR1 | [HR2 | []]]];
 subst; compute;
 auto using Build_ArithFact.
+Defined.
+
+Definition shr_int_32 (x y : Z) `{HE:ArithFact (0 <= x <= 31)} `{HR:ArithFact (y = 1)}: {z : Z & ArithFact (0 <= z <= 15)}.
+refine (existT _ (shr_int x y) _).
+destruct HE as [HE].
+destruct HR as [HR];
+subst.
+unfold shr_int.
+rewrite <- Z.div2_spec.
+constructor.
+rewrite Z.div2_div.
+specialize (Z.div_mod x 2).
+specialize (Z.mod_pos_bound x 2).
+generalize (Z.div x 2).
+generalize (x mod 2).
+intros.
+nia.
 Defined.
 
 Lemma shl_8_ge_0 {n} : shl_int 8 n >= 0.

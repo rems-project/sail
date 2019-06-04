@@ -87,7 +87,7 @@ let recheck (Defs defs) =
           !specs @ !bodies @ find_optimizations defs
 
        | _ ->
-          Util.warn ("Unrecognised optimize pragma in this context: " ^ pragma);
+          Reporting.warn "Unrecognised optimize pragma at" p_l "";
           def1 :: def2 :: find_optimizations defs
        end
 

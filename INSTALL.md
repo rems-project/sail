@@ -1,112 +1,70 @@
-Installing Sail on Ubuntu and macOS
-=========================
+These are instructions for installing Sail via opam, the ocaml package manager.
+The most up-to-date version of this document can be found on the Sail wiki
 
-This note lists the commands needed to get Sail and all dependencies
-working on a new Ubuntu install or macOS. We have recently (2018-02-17) tested these
-on Xubuntu 16.04 LTS in a virtual machine and on macOS Sierra 10.12.6, so they should
-work. Hopefully this will be useful as a reference.
+https://github.com/rems-project/sail/wiki/OPAMInstall
 
-Basics
-------
+To build everything from source, instructions can be found here:
 
-First we need some basic packages if they're not already installed.
+https://github.com/rems-project/sail/wiki/Building-from-Source
 
-For Ubuntu:
+# How to install Sail from opam
+
+Install opam if you haven't already: https://opam.ocaml.org/doc/Install.html
+
+Use opam to install a version of ocaml we know works for us:
 ```
-sudo apt-get install build-essential git
+opam switch 4.06.1
 ```
-
-For macOS: compilers and supporting utilities are called Xcode instead of build-essential. First, download Xcode from the Mac App Store, and then run the following in the terminal:
+OR, if you are using opam >=2.0, the syntax of the switch command changed slightly:
 ```
-xcode-select --install
-```
-git can be installed using ```brew install git```
-
-OCaml and sail expect some packages. m4 is for OPAM, libgmp-dev is for
-zarith which most of our tools rely on. Sail uses Z3 as a constraint
-solver.
-```
-sudo apt-get install m4 libgmp-dev z3
-```
-For macOS: ```brew install m4 gmp z3``` 
-
-OCaml and OPAM
---------------
-
-Install OPAM. Either directly from [https://opam.ocaml.org] or from
-the package manager - both should work, but we used the install script
-from the website. This should install OCaml 4.05. Don't forget to run
-```opam init``` after installing OPAM.
-
-We now need the following packages from OPAM.
-```
-opam install ocamlbuild
-opam install num
-opam install zarith
-opam install menhir
-opam install omd
+opam switch create ocaml-base-compiler.4.06.1
 ```
 
-Ott
----
-
-Before cloning the repositories you may need to set up ssh keys with
-github or use https. Create a directory to install the various REMS
-tools and cd into it.
+Then set up the environment for the ocaml we just installed:
 ```
-git clone git@github.com:ott-lang/ott.git
-cd ott
-make
-cd ..
+eval `opam config env` 
 ```
-Sail depends on ott, so add the ott executable (``` path-to-ott/bin```) in the $PATH.
-
-
-Lem
----
-
-If you are using OCaml 4.06, you'll need to run `opam install num` before building lem.
-
+Add our local opam repo:
 ```
-git clone git@github.com:rems-project/lem.git
-cd lem
-make
-cd ocaml-lib
-make install
-cd ../..
+opam repository add rems https://github.com/rems-project/opam-repository.git
 ```
-
-Linksem
--------
-
-Before installing linksem, we are required to set the LEMLIB environment variable and to put the lem executable in $PATH. LEMLIB should be the library directory within the checked-out lem directory (i.e. ```path-to-lem/library/```). Next, install linksem as
-
+Install system dependencies, on Ubuntu:
 ```
-git clone git@github.com:rems-project/linksem.git
-cd linksem
-make && make install
+sudo apt-get install build-essential libgmp-dev z3
 ```
-
-Sail
-----
-
-Sail depends on lem and ott, so make sure lem and ott executables
-exist in $PATH.
+or homebrew:
 ```
-git clone git@github.com:rems-project/sail.git
+brew install gmp z3
+```
+Install sail and its dependencies:
+```
+opam install sail
+```
+If all goes well then you'll have sail in your path:
+```
+which sail
+sail --help
+```
+Some source files that sail uses are found in at ``opam config var sail:share`` (e.g. for ``$include <foo.sail>``) but sail should find those when it needs them.
+
+### Installing development versions of Sail
+Released Sail packages lag behind the latest development in the repository. If you find you need a recently added feature or bug fix you can use opam pin to install the latest version of Sail from the repository. Assuming you have previously followed the above instructions (required to install dependencies):
+```
+git clone https://github.com/rems-project/sail.git
 cd sail
-make
+opam pin add sail .
 ```
-To build Sail with interactive support we need two more commands
+will install from a local checkout of the Sail sources.
+
+You can update with new changes as they are committed by pulling and reinstalling:
 ```
-opam install linenoise
-make isail
+git pull
+opam reinstall sail
 ```
-To test Sail is installed correctly, execute the following from the
-root directory of the sail repository. You may also need to set
-$LEM_DIR to the root of the lem repository for the lem tests. Some of
-the C backend tests will fail if valgrind isn't installed.
+
+To remove the pin and revert to the latest released opam package type:
 ```
-export SAIL_DIR=$PWD
-test/run_tests.sh
+opam pin remove sail
 ```
+
+Alternatively you could follow the instructions to [build Sail manually](https://github.com/rems-project/sail/wiki/Building-from-Source), optionally skipping the steps to install ott, lem and linksem if they were already installed via opam.

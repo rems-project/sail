@@ -69,15 +69,6 @@ module type S =
     val add_edge : node -> node -> graph -> graph
     val add_edges : node -> node list -> graph -> graph
 
-    (** Add edges to the graph, but may leave the internal structure
-       of the graph in a non-normalized state. Fix leaves repairs any
-       such issue in the graph. These additional functions are much
-       faster than those above, but it is important to call fix_leaves
-       before calling reachable, prune, or any other function. *)
-    val add_edge' : node -> node -> graph -> graph
-    val add_edges' : node -> node list -> graph -> graph
-    val fix_leaves : graph -> graph
-
     val children : graph -> node -> node list
 
     (** Return the set of nodes that are reachable from the first set
@@ -125,24 +116,25 @@ module Make(Ord: OrderedType) = struct
     with
     | Not_found -> []
 
-  let fix_leaves cg =
-    NS.fold (fun leaf cg -> if NM.mem leaf cg then cg else NM.add leaf NS.empty cg) (leaves cg) cg
+  let fix_some_leaves cg nodes =
+    NS.fold (fun leaf cg -> if NM.mem leaf cg then cg else NM.add leaf NS.empty cg) nodes cg
 
-  let add_edge' caller callee cg =
+  let fix_leaves cg = fix_some_leaves cg (leaves cg)
+
+  let add_edge caller callee cg =
+    let cg = fix_some_leaves cg (NS.singleton callee) in
     try
       NM.add caller (NS.add callee (NM.find caller cg)) cg
     with
     | Not_found -> NM.add caller (NS.singleton callee) cg
 
-  let add_edges' caller callees cg =
+  let add_edges caller callees cg =
     let callees = List.fold_left (fun s c -> NS.add c s) NS.empty callees in
+    let cg = fix_some_leaves cg callees in
     try
       NM.add caller (NS.union callees (NM.find caller cg)) cg
     with
     | Not_found -> NM.add caller callees cg
-
-  let add_edge caller callee cg = fix_leaves (add_edge' caller callee cg)
-  let add_edges caller callees cg = fix_leaves (add_edges' caller callees cg)
 
   let reachable roots cuts cg =
     let visited = ref NS.empty in

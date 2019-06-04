@@ -556,8 +556,8 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   | E_lit lit -> mk_aexp (ae_lit lit (typ_of exp))
 
   | E_block [] ->
-     Util.warn (Reporting.loc_to_string l
-                ^ "\n\nTranslating empty block (possibly assigning to an uninitialized variable at the end of a block?)");
+     Reporting.warn "" l
+       "Translating empty block (possibly assigning to an uninitialized variable at the end of a block?)";
      mk_aexp (ae_lit (L_aux (L_unit, l)) (typ_of exp))
   | E_block exps ->
      let exps, last = split_block l exps in
@@ -751,10 +751,6 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   | E_constraint _ ->
      (* Sizeof nodes removed by sizeof rewriting pass *)
      raise (Reporting.err_unreachable l __POS__ "encountered E_constraint node when converting to ANF")
-
-  | E_nondet _ ->
-     (* We don't compile E_nondet nodes *)
-     raise (Reporting.err_unreachable l __POS__ "encountered E_nondet node when converting to ANF")
 
   | E_internal_return _ | E_internal_plet _ ->
      raise (Reporting.err_unreachable l __POS__ "encountered unexpected internal node when converting to ANF")

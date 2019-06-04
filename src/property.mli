@@ -104,6 +104,8 @@ type query =
    | Q_and of query list
    | Q_or of query list
 
+val default_query : query
+
 type pragma = {
     query : query;
     litmus : string list;

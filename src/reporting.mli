@@ -50,15 +50,17 @@
 
 (** Basic error reporting
 
-  [Reporting] contains functions to report errors and warnings. 
+  [Reporting] contains functions to report errors and warnings.
   It contains functions to print locations ([Parse_ast.l] and [Ast.l]) and lexing positions.
 
   The main functionality is reporting errors. This is done by raising a
-  [Fatal_error] exception. This is caught internally and reported via [report_error]. 
+  [Fatal_error] exception. This is caught internally and reported via [report_error].
   There are several predefined types of errors which all cause different error
-  messages. If none of these fit, [Err_general] can be used.       
+  messages. If none of these fit, [Err_general] can be used.
 
 *)
+
+val opt_warnings : bool ref
 
 (** {2 Auxiliary Functions } *)
 
@@ -70,7 +72,7 @@ val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
 
 (** [short_loc_to_string] prints the location as a single line in a simple format *)
 val short_loc_to_string : Parse_ast.l -> string
-  
+
 (** [print_err fatal print_loc_source l head mes] prints an error / warning message to
     std-err. It starts with printing location information stored in [l]
     It then prints "head: mes". If [fatal] is set, the program exists with error-code 1 afterwards.
@@ -113,7 +115,15 @@ val err_typ : Parse_ast.l -> string -> exn
 
 (** [err_syntax_loc] is an abbreviation for [Fatal_error (Err_syntax_loc (l, m))] *)
 val err_syntax_loc : Parse_ast.l -> string -> exn
-  
+
 val unreachable : Parse_ast.l -> (string * int * int * int) -> string -> 'a
 
 val print_error : error -> unit
+
+(** Print a warning message. The first string is printed before the
+   location, the second after. *)
+val warn : string -> Parse_ast.l -> string -> unit
+
+(** Will suppress all warnings for a given file. Used by
+   $suppress_warnings directive in process_file.ml *)
+val suppress_warnings_for_file : string -> unit

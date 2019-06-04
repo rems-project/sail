@@ -3129,9 +3129,9 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
        (* If the identifier we're matching on is also a constructor of
           a union, that's probably a mistake, so warn about it. *)
        if Env.is_union_constructor v env then
-         Util.warn (Printf.sprintf "Identifier %s found in pattern is also a union constructor at %s\n"
-                                   (string_of_id v)
-                                   (Reporting.loc_to_string l))
+         Reporting.warn (Printf.sprintf "Identifier %s found in pattern is also a union constructor at"
+                                        (string_of_id v))
+                        l ""
        else ();
        match Env.lookup_id v env with
        | Local _ | Unbound -> annot_pat (P_id v) typ, Env.add_local v (Immutable, typ) env, []
@@ -3696,8 +3696,6 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let rec last_typ = function [exp] -> typ_of exp | _ :: exps -> last_typ exps | [] -> unit_typ in
      let inferred_block = check_block l env exps None in
      annot_exp (E_block inferred_block) (last_typ inferred_block)
-  | E_nondet exps ->
-     annot_exp (E_nondet (List.map (fun exp -> crule check_exp env exp unit_typ) exps)) unit_typ
   | E_id v ->
      begin
        match Env.lookup_id v env with
@@ -4087,9 +4085,9 @@ and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) (
        (* If the identifier we're matching on is also a constructor of
           a union, that's probably a mistake, so warn about it. *)
        if Env.is_union_constructor v env then
-         Util.warn (Printf.sprintf "Identifier %s found in mapping-pattern is also a union constructor at %s\n"
-                                   (string_of_id v)
-                                   (Reporting.loc_to_string l))
+         Reporting.warn (Printf.sprintf "Identifier %s found in mapping-pattern is also a union constructor at"
+                                        (string_of_id v))
+                        l ""
        else ();
        match Env.lookup_id v env with
        | Local (Immutable, _) | Unbound -> annot_mpat (MP_id v) typ, Env.add_local v (Immutable, typ) env, []
@@ -4411,9 +4409,6 @@ and propagate_exp_effect_aux = function
   | E_block xs ->
      let p_xs = List.map propagate_exp_effect xs in
      E_block p_xs, collect_effects p_xs
-  | E_nondet xs ->
-     let p_xs = List.map propagate_exp_effect xs in
-     E_nondet p_xs, collect_effects p_xs
   | E_id id -> E_id id, no_effect
   | E_ref id -> E_ref id, no_effect
   | E_lit lit -> E_lit lit, no_effect

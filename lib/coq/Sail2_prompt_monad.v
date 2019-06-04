@@ -113,6 +113,8 @@ Definition choose_bool {rv E} descr : monad rv bool E := Choose descr returnm.
 (*val undefined_bool : forall 'rv 'e. unit -> monad 'rv bool 'e*)
 Definition undefined_bool {rv e} (_:unit) : monad rv bool e := choose_bool "undefined_bool".
 
+Definition undefined_unit {rv e} (_:unit) : monad rv unit e := returnm tt.
+
 (*val assert_exp : forall rv e. bool -> string -> monad rv unit e*)
 Definition assert_exp {rv E} (exp :bool) msg : monad rv unit E :=
  if exp then Done tt else Fail msg.

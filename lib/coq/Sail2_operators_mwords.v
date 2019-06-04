@@ -291,6 +291,9 @@ rewrite <- Z.lt_le_pred.
 auto.
 Defined.
 
+Definition sint0 {a} `{ArithFact (a >= 0)} (x : mword a) : Z :=
+  if sumbool_of_bool (Z.eqb a 0) then 0 else projT1 (sint x).
+
 Lemma length_list_pos : forall {A} {l:list A}, length_list l >= 0.
 unfold length_list.
 auto with zarith.
@@ -393,9 +396,9 @@ val arith_shiftr : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val rotl         : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val rotr         : forall 'a. Size 'a => mword 'a -> integer -> mword 'a*)
 (* TODO: check/redefine behaviour on out-of-range n *)
-Definition shiftl       {a} (v : mword a) n : mword a := with_word (P := id) (fun w => Word.wlshift w (Z.to_nat n)) v.
-Definition shiftr       {a} (v : mword a) n : mword a := with_word (P := id) (fun w => Word.wrshift w (Z.to_nat n)) v.
-Definition arith_shiftr {a} (v : mword a) n : mword a := with_word (P := id) (fun w => Word.wrshifta w (Z.to_nat n)) v.
+Definition shiftl       {a} (v : mword a) n : mword a := with_word (P := id) (fun w => Word.wlshift' w (Z.to_nat n)) v.
+Definition shiftr       {a} (v : mword a) n : mword a := with_word (P := id) (fun w => Word.wrshift' w (Z.to_nat n)) v.
+Definition arith_shiftr {a} (v : mword a) n : mword a := with_word (P := id) (fun w => Word.wrshifta' w (Z.to_nat n)) v.
 (*
 Definition rotl         := rotl_bv
 Definition rotr         := rotr_bv

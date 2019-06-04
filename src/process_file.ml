@@ -145,6 +145,7 @@ let all_pragmas =
       "latex";
       "property";
       "counterexample";
+      "suppress_warnings";
     ]
 
 let rec preprocess opts = function
@@ -180,7 +181,7 @@ let rec preprocess opts = function
   | Parse_ast.DEF_pragma ("include", file, l) :: defs ->
      let len = String.length file in
      if len = 0 then
-       (Util.warn "Skipping bad $include. No file argument."; preprocess opts defs)
+       (Reporting.warn "" l "Skipping bad $include. No file argument."; preprocess opts defs)
      else if file.[0] = '"' && file.[len - 1] = '"' then
        let relative = match l with
          | Parse_ast.Range (pos, _) -> Filename.dirname (Lexing.(pos.pos_fname))
@@ -207,11 +208,18 @@ let rec preprocess opts = function
        include_defs @ preprocess opts defs
      else
        let help = "Make sure the filename is surrounded by quotes or angle brackets" in
-       (Util.warn ("Skipping bad $include " ^ file ^ ". " ^ help); preprocess opts defs)
+       (Reporting.warn "" l ("Skipping bad $include " ^ file ^ ". " ^ help); preprocess opts defs)
+
+  | Parse_ast.DEF_pragma ("suppress_warnings", _, l) :: defs ->
+     begin match Reporting.simp_loc l with
+     | None -> () (* This shouldn't happen, but if it does just continue *)
+     | Some (p, _) -> Reporting.suppress_warnings_for_file p.pos_fname
+     end;
+     preprocess opts defs
 
   | Parse_ast.DEF_pragma (p, arg, l) :: defs ->
      if not (StringSet.mem p all_pragmas) then
-       Util.warn (Reporting.loc_to_string l ^ "Unrecognised directive: " ^ p);
+       Reporting.warn "" l ("Unrecognised directive: " ^ p);
      Parse_ast.DEF_pragma (p, arg, l) :: preprocess opts defs
 
   | (Parse_ast.DEF_default (Parse_ast.DT_aux (Parse_ast.DT_order (_, Parse_ast.ATyp_aux (atyp, _)), _)) as def) :: defs ->

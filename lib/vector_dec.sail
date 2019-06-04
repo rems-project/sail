@@ -61,6 +61,7 @@ THIS`(v, n)` truncates `v`, keeping only the _most_ significant `n` bits.
  */
 val truncateLSB = {
   ocaml: "vector_truncateLSB",
+  interpreter: "vector_truncateLSB",
   lem: "vector_truncateLSB",
   coq: "vector_truncateLSB",
   c: "sail_truncateLSB"
@@ -205,7 +206,7 @@ val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), int('m)) -> bit
 val slice_mask : forall 'n, 'n >= 0. (implicit('n), int, int) -> bits('n) effect pure
 function slice_mask(n,i,l) =
   if l >= n then {
-    sail_ones(n)
+    sail_shiftleft(sail_ones(n), i)
   } else {
     let one : bits('n) = sail_mask(n, 0b1 : bits(1)) in
     sail_shiftleft(sub_bits(sail_shiftleft(one, l), one), i)

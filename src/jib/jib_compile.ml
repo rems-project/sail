@@ -1184,6 +1184,89 @@ let fix_early_return ret instrs =
 
 let letdef_count = ref 0
 
+let compile_funcl ctx id pat guard exp =
+  (* Find the function's type. *)
+  let quant, Typ_aux (fn_typ, _) =
+    try Env.get_val_spec id ctx.local_env with Type_error _ -> Env.get_val_spec id ctx.tc_env
+  in
+  let arg_typs, ret_typ = match fn_typ with
+    | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
+    | _ -> assert false
+  in
+
+  (* Handle the argument pattern. *)
+  let fundef_label = label "fundef_fail_" in
+  let orig_ctx = ctx in
+  (* The context must be updated before we call ctyp_of_typ on the argument types. *)
+  let ctx = { ctx with local_env = add_typquant (id_loc id) quant ctx.tc_env } in
+
+  let arg_ctyps =  List.map (ctyp_of_typ ctx) arg_typs in
+  let ret_ctyp = ctyp_of_typ ctx ret_typ in
+
+  (* Compile the function arguments as patterns. *)
+  let arg_setup, compiled_args, arg_cleanup = compile_arg_pats ctx fundef_label pat arg_ctyps in
+  let ctx =
+    (* We need the primop analyzer to be aware of the function argument types, so put them in ctx *)
+    List.fold_left2 (fun ctx (id, _) ctyp -> { ctx with locals = Bindings.add id (Immutable, ctyp) ctx.locals }) ctx compiled_args arg_ctyps
+  in
+
+  let guard_instrs = match guard with
+    | Some guard ->
+       let guard_aexp = ctx.optimize_anf ctx (no_shadow (pat_ids pat) (anf guard)) in
+       let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard_aexp in
+       let guard_label = label "guard_" in
+       let gs = ngensym () in
+       [iblock (
+            [idecl CT_bool gs]
+            @ guard_setup
+            @ [guard_call (CL_id (gs, CT_bool))]
+            @ guard_cleanup
+            @ [ijump (V_id (gs, CT_bool)) guard_label;
+               imatch_failure ();
+               ilabel guard_label]
+       )]
+    | None -> []
+  in
+
+  (* Optimize and compile the expression to ANF. *)
+  let aexp = ctx.optimize_anf ctx (no_shadow (pat_ids pat) (anf exp)) in
+
+  let setup, call, cleanup = compile_aexp ctx aexp in
+  let destructure, destructure_cleanup =
+    compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure fundef_label
+  in
+
+  let instrs = arg_setup @ destructure @ guard_instrs @ setup @ [call (CL_id (return, ret_ctyp))] @ cleanup @ destructure_cleanup @ arg_cleanup in
+  let instrs = fix_early_return (CL_id (return, ret_ctyp)) instrs in
+  let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
+
+  if Id.compare (mk_id !opt_debug_function) id = 0 then
+    let header =
+      Printf.sprintf "Sail IR for %s %s(%s) : (%s) -> %s" Util.("function" |> red |> clear) (string_of_id id)
+                     (Util.string_of_list ", " string_of_id (List.map fst compiled_args))
+                     (Util.string_of_list ", " (fun ctyp -> Util.(string_of_ctyp ctyp |> yellow |> clear)) arg_ctyps)
+                     Util.(string_of_ctyp ret_ctyp |> yellow |> clear)
+    in
+    prerr_endline (Util.header header (List.length arg_ctyps + 2));
+    prerr_endline (Pretty_print_sail.to_string PPrint.(separate_map hardline pp_instr instrs))
+  else ();
+
+  if !opt_debug_flow_graphs then
+    begin
+      let instrs = Jib_optimize.(instrs |> optimize_unit |> flatten_instrs) in
+      let root, _, cfg = Jib_ssa.control_flow_graph instrs in
+      let idom = Jib_ssa.immediate_dominators cfg root in
+      let _, cfg = Jib_ssa.ssa instrs in
+      let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".gv") in
+      Jib_ssa.make_dot out_chan cfg;
+      close_out out_chan;
+      let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".dom.gv") in
+      Jib_ssa.make_dominators_dot out_chan idom cfg;
+      close_out out_chan;
+    end;
+
+  [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], orig_ctx
+
 (** Compile a Sail toplevel definition into an IR definition **)
 let rec compile_def n total ctx def =
   match def with
@@ -1243,76 +1326,16 @@ and compile_def' n total ctx = function
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      Util.progress "Compiling " (string_of_id id) n total;
+     compile_funcl ctx id pat None exp
 
-     (* Find the function's type. *)
-     let quant, Typ_aux (fn_typ, _) =
-       try Env.get_val_spec id ctx.local_env with Type_error _ -> Env.get_val_spec id ctx.tc_env
-     in
-     let arg_typs, ret_typ = match fn_typ with
-       | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
-       | _ -> assert false
-     in
-
-     (* Handle the argument pattern. *)
-     let fundef_label = label "fundef_fail_" in
-     let orig_ctx = ctx in
-     (* The context must be updated before we call ctyp_of_typ on the argument types. *)
-     let ctx = { ctx with local_env = add_typquant (id_loc id) quant ctx.tc_env } in
-
-     let arg_ctyps =  List.map (ctyp_of_typ ctx) arg_typs in
-     let ret_ctyp = ctyp_of_typ ctx ret_typ in
-
-     (* Compile the function arguments as patterns. *)
-     let arg_setup, compiled_args, arg_cleanup = compile_arg_pats ctx fundef_label pat arg_ctyps in
-     let ctx =
-       (* We need the primop analyzer to be aware of the function argument types, so put them in ctx *)
-       List.fold_left2 (fun ctx (id, _) ctyp -> { ctx with locals = Bindings.add id (Immutable, ctyp) ctx.locals }) ctx compiled_args arg_ctyps
-     in
-
-     (* Optimize and compile the expression to ANF. *)
-     let aexp = no_shadow (pat_ids pat) (anf exp) in
-     let aexp = ctx.optimize_anf ctx aexp in
-
-     let setup, call, cleanup = compile_aexp ctx aexp in
-     let destructure, destructure_cleanup =
-       compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure fundef_label
-     in
-
-     let instrs = arg_setup @ destructure @ setup @ [call (CL_id (return, ret_ctyp))] @ cleanup @ destructure_cleanup @ arg_cleanup in
-     let instrs = fix_early_return (CL_id (return, ret_ctyp)) instrs in
-     let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
-
-     if Id.compare (mk_id !opt_debug_function) id = 0 then
-       let header =
-         Printf.sprintf "Sail IR for %s %s(%s) : (%s) -> %s" Util.("function" |> red |> clear) (string_of_id id)
-                        (Util.string_of_list ", " string_of_id (List.map fst compiled_args))
-                        (Util.string_of_list ", " (fun ctyp -> Util.(string_of_ctyp ctyp |> yellow |> clear)) arg_ctyps)
-                        Util.(string_of_ctyp ret_ctyp |> yellow |> clear)
-       in
-       prerr_endline (Util.header header (List.length arg_ctyps + 2));
-       prerr_endline (Pretty_print_sail.to_string PPrint.(separate_map hardline pp_instr instrs))
-     else ();
-
-     if !opt_debug_flow_graphs then
-       begin
-         let instrs = Jib_optimize.(instrs |> optimize_unit |> flatten_instrs) in
-         let root, _, cfg = Jib_ssa.control_flow_graph instrs in
-         let idom = Jib_ssa.immediate_dominators cfg root in
-         let _, cfg = Jib_ssa.ssa instrs in
-         let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".gv") in
-         Jib_ssa.make_dot out_chan cfg;
-         close_out out_chan;
-         let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".dom.gv") in
-         Jib_ssa.make_dominators_dot out_chan idom cfg;
-         close_out out_chan;
-       end;
-
-     [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], orig_ctx
+  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_when (pat, guard, exp), _)), _)]), _)) ->
+     Util.progress "Compiling " (string_of_id id) n total;
+     compile_funcl ctx id pat (Some guard) exp
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, []), (l, _))) ->
      raise (Reporting.err_general l "Encountered function with no clauses")
 
-  | DEF_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) ->
+  | DEF_fundef (FD_aux (FD_function (_, _, _, _ :: _ :: _), (l, _))) ->
      raise (Reporting.err_general l "Encountered function with multiple clauses")
 
   (* All abbreviations should expanded by the typechecker, so we don't

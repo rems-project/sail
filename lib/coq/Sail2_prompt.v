@@ -181,6 +181,37 @@ Definition untilMT {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool
     else slice vec (start_vec - size_r1) (start_vec - size_vec) in
   write_reg r1 r1_v >> write_reg r2 r2_v*)
 
+Fixpoint pick_bit_list {rv e} (n:nat) : monad rv (list bool) e :=
+  match n with
+  | O => returnm []
+  | S m => choose_bool "pick_bit_list" >>= fun b =>
+           pick_bit_list m >>= fun t =>
+           returnm (b::t)
+  end%list.
+
+Definition internal_pick {rv a e} (xs : list a) : monad rv a e :=
+  let n := length xs in
+  match xs with
+  | h::_ =>
+    pick_bit_list (2 + n) >>= fun bs =>
+    let i := (Word.wordToNat (wordFromBitlist bs) mod n)%nat in
+    returnm (List.nth i xs h)
+  | [] => Fail "internal_pick called on empty list"
+  end.
+
+Fixpoint undefined_word_nat {rv e} n : monad rv (Word.word n) e :=
+  match n with
+  | O => returnm Word.WO
+  | S m =>
+    choose_bool "undefined_word_nat" >>= fun b =>
+    undefined_word_nat m >>= fun t =>
+    returnm (Word.WS b t)
+  end.
+
+Definition undefined_bitvector {rv e} n `{ArithFact (n >= 0)} : monad rv (mword n) e :=
+  undefined_word_nat (Z.to_nat n) >>= fun w =>
+  returnm (word_to_mword w).
+
 (* If we need to build an existential after a monadic operation, assume that
    we can do it entirely from the type. *)
 

@@ -95,6 +95,8 @@
 (*  IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.                         *)
 (**************************************************************************)
 
+let opt_warnings = ref true
+
 type pos_or_loc = Loc of Parse_ast.l | Pos of Lexing.position
 
 let print_err_internal p_l m1 m2 =
@@ -143,7 +145,7 @@ let dest_err = function
   | Err_general (l, m) -> ("Error", Loc l, m)
   | Err_unreachable (l, (file, line, _, _), m) ->
      (Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line, Loc l, m ^ issues)
-  | Err_todo (l, m) -> ("Todo" ^ m, Loc l, "")
+  | Err_todo (l, m) -> ("Todo", Loc l, m)
   | Err_syntax (p, m) -> ("Syntax error", Pos p, m)
   | Err_syntax_loc (l, m) -> ("Syntax error", Loc l, m)
   | Err_lex (p, s) -> ("Lexical error", Pos p, s)
@@ -164,3 +166,24 @@ let unreachable l pos msg =
 let print_error e =
   let (m1, pos_l, m2) = dest_err e in
   print_err_internal pos_l m1 m2
+
+(* Warnings *)
+
+module StringSet = Set.Make(String)
+
+let ignored_files = ref StringSet.empty
+
+let suppress_warnings_for_file f =
+  ignored_files := StringSet.add f !ignored_files
+
+let warn str1 l str2 =
+  if !opt_warnings then
+    match simp_loc l with
+    | None ->
+       prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ str1 ^ "\n" ^ str2)
+    | Some (p1, p2) when not (StringSet.mem p1.pos_fname !ignored_files) ->
+       prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": "
+                      ^ str1 ^ (if str1 <> "" then " " else "") ^ loc_to_string l ^ str2)
+    | Some _ -> ()
+  else
+    ()

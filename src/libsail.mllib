@@ -5,6 +5,8 @@ Bitfield
 C_backend
 Cgen_backend
 Constant_fold
+Constant_propagation
+Constant_propagation_mutrec
 Constraint
 Elf_loader
 Error_format
@@ -17,6 +19,7 @@ Jib
 Jib_compile
 Jib_optimize
 Jib_ssa
+Jib_smt
 Jib_util
 Latex
 Lexer
@@ -27,6 +30,7 @@ Ocaml_backend
 Optimize
 Parse_ast
 Parser
+Parser_combinators
 Pattern_completeness
 PPrint
 PPrintCombinators
@@ -40,6 +44,7 @@ Pretty_print_lem
 Pretty_print_sail
 Process_file
 Profile
+Property
 Reporting
 Rewriter
 Rewrites

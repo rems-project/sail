@@ -45,7 +45,7 @@ function finish_suite {
 
 printf "<testsuites>\n" >> $DIR/tests.xml
 
-if make -B -C ../../aarch64_small SAIL="$SAILDIR/sail"
+if make -B -C ../../aarch64_small armV8.lem SAIL="$SAILDIR/sail"
 then
     green "built aarch64_small to lem" "ok"
 else

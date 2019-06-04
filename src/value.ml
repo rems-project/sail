@@ -433,6 +433,10 @@ let value_zeros = function
   | [v] -> mk_vector (Sail_lib.zeros (coerce_int v))
   | _ -> failwith "value zeros"
 
+let value_ones = function
+  | [v] -> mk_vector (Sail_lib.ones (coerce_int v))
+  | _ -> failwith "value ones"
+
 let value_shiftl = function
   | [v1; v2] -> mk_vector (Sail_lib.shiftl (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value shiftl"
@@ -670,6 +674,7 @@ let primops =
       ("zero_extend", value_zero_extend);
       ("sign_extend", value_sign_extend);
       ("zeros", value_zeros);
+      ("ones", value_ones);
       ("shiftr", value_shiftr);
       ("shiftl", value_shiftl);
       ("shift_bits_left", value_shift_bits_left);
@@ -724,6 +729,7 @@ let primops =
       ("undefined_unit", fun _ -> V_unit);
       ("undefined_bit", fun _ -> V_bit Sail_lib.B0);
       ("undefined_int", fun _ -> V_int Big_int.zero);
+      ("undefined_nat", fun _ -> V_int Big_int.zero);
       ("undefined_bool", fun _ -> V_bool false);
       ("undefined_vector", value_undefined_vector);
       ("undefined_string", fun _ -> V_string "");

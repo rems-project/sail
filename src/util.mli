@@ -50,12 +50,11 @@
 
 (** Various non Sail specific utility functions *)
 
-(* Last element of a list *)
-val last : 'a list -> 'a
-
-val opt_warnings : bool ref
 val opt_colors : bool ref
 val opt_verbosity : int ref
+
+(* Last element of a list *)
+val last : 'a list -> 'a
 
 val butlast : 'a list -> 'a list
 
@@ -270,5 +269,3 @@ val log_line : string -> int -> string -> string
 val header : string -> int -> string
 
 val progress : string -> string -> int -> int -> unit
-
-val warn : string -> unit

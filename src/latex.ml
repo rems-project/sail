@@ -342,7 +342,7 @@ let rec latex_command cat id no_loc ((l, _) as annot) =
   close_out chan;
   let command = sprintf "\\%s%s%s" !opt_prefix (category_name cat) (latex_id id) in
   if StringSet.mem command state.commands then
-    (Util.warn ("Multiple instances of " ^ string_of_id id ^ " only generating latex for the first"); empty)
+    (Reporting.warn "" l ("Multiple instances of " ^ string_of_id id ^ " only generating latex for the first"); empty)
   else
     begin
       state.commands <- StringSet.add command state.commands;
@@ -417,7 +417,7 @@ let process_pragma l command =
      Some (ksprintf string "\\newcommand{\\%s}{%s}" name body)
 
   | _ ->
-     Util.warn (Printf.sprintf "Bad latex pragma %s" (Reporting.loc_to_string l));
+     Reporting.warn "Bad latex pragma at" l "";
      None
 
 let tdef_id = function

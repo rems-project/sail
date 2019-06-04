@@ -1459,6 +1459,42 @@ let doc_exp, doc_let =
        let epp = let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ top_exp new_ctxt false e in
        if aexp_needed then parens epp else epp
     | E_app(f,args) ->
+       let env = env_of full_exp in
+       let doc_loop_var (E_aux (e,(l,_)) as exp) =
+         match e with
+         | E_id id ->
+            let id_pp = doc_id id in
+            let typ = general_typ_of exp in
+            if Util.is_some (is_auto_decomposed_exist ctxt env typ)
+            then string "build_ex" ^^ space ^^ id_pp ^/^
+                   colon ^^ space ^^ doc_typ ctxt env typ,
+                 separate space [string "existT"; underscore; id_pp; underscore],
+                 true
+            else id_pp, id_pp, false
+         | E_lit (L_aux (L_unit,_)) -> string "tt", underscore, false
+         | _ -> raise (Reporting.err_unreachable l __POS__
+                         ("Bad expression for variable in loop: " ^ string_of_exp exp))
+       in
+       let make_loop_vars extra_binders varstuple =
+         match varstuple with
+         | E_aux (E_tuple vs, _) ->
+            let vs = List.map doc_loop_var vs in
+            let mkpp f vs = separate (string ", ") (List.map f vs) in
+            let tup_pp = mkpp (fun (pp,_,_) -> pp) vs in
+            let match_pp = mkpp (fun (_,pp,_) -> pp) vs in
+            parens tup_pp,
+            separate space (string "fun" :: extra_binders @
+                              [squote ^^ parens match_pp; bigarrow])
+         | _ ->
+            let exp_pp,match_pp,decompose = doc_loop_var varstuple in
+            let vpp = if decompose
+                      then squote ^^ parens match_pp
+                      else match_pp
+            in
+            let exp_pp = if decompose then parens exp_pp else exp_pp in
+            exp_pp,
+            separate space (string "fun" :: extra_binders @ [vpp; bigarrow])
+       in
        begin match f with
        | Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)
          when effectful (effect_of full_exp) ->
@@ -1498,30 +1534,21 @@ let doc_exp, doc_let =
                  | E_aux (E_lit (L_aux (L_true, _)), _) -> "_up"
                  | _ -> raise (Reporting.err_unreachable l __POS__ ("Unexpected loop direction " ^ string_of_exp ord_exp))
                in
-               let combinator = if effectful (effect_of body) then "foreach_ZM" else "foreach_Z" in
+               let effects = effectful (effect_of body) in
+               let combinator = if effects then "foreach_ZM" else "foreach_Z" in
                let combinator = combinator ^ dir in
                let body_ctxt = add_single_kid_id_rename ctxt loopvar (mk_kid ("loop_" ^ string_of_id loopvar)) in
-               let used_vars_body = find_e_ids body in
-               let body_lambda =
-                 (* Work around indentation issues in Lem when translating
-                    tuple or literal unit patterns to Isabelle *)
-                 match fst (uncast_exp vartuple) with
-                   | E_aux (E_tuple _, _)
-                     when not (IdSet.mem (mk_id "varstup") used_vars_body)->
-                      separate space [string "fun"; doc_id loopvar; string "_"; string "varstup"; bigarrow]
-                      ^^ break 1 ^^
-                      separate space [string "let"; squote ^^ expY vartuple; string ":= varstup in"]
-                   | E_aux (E_lit (L_aux (L_unit, _)), _)
-                     when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
-                      separate space [string "fun"; doc_id loopvar; string "_"; string "unit_var"; bigarrow]
-                   | _ ->
-                      separate space [string "fun"; doc_id loopvar; string "_"; expY vartuple; bigarrow]
+               let from_exp_pp, to_exp_pp, step_exp_pp =
+                 expY from_exp, expY to_exp, expY step_exp
+               in
+               let vartuple_pp, body_lambda =
+                 make_loop_vars [doc_id loopvar; underscore] vartuple
                in
                parens (
                    (prefix 2 1)
                      ((separate space) [string combinator;
-                                        expY from_exp; expY to_exp; expY step_exp;
-                                        expY vartuple])
+                                        from_exp_pp; to_exp_pp; step_exp_pp;
+                                        vartuple_pp])
                      (parens
                         (prefix 2 1 (group body_lambda) (top_exp body_ctxt false body))
                      )
@@ -1572,23 +1599,13 @@ let doc_exp, doc_let =
               | Some exp -> "T", [expY exp]
             in
             let used_vars_body = find_e_ids body in
-            let lambda =
-              (* Work around indentation issues in Lem when translating
-                 tuple or literal unit patterns to Isabelle *)
-              match fst (uncast_exp varstuple) with
-              | E_aux (E_tuple _, _)
-                   when not (IdSet.mem (mk_id "varstup") used_vars_body)->
-                 separate space [string "fun varstup"; bigarrow] ^^ break 1 ^^
-                   separate space [string "let"; squote ^^ expY varstuple; string ":= varstup in"]
-              | E_aux (E_lit (L_aux (L_unit, _)), _)
-                   when not (IdSet.mem (mk_id "unit_var") used_vars_body) ->
-                 separate space [string "fun unit_var"; bigarrow]
-              | _ ->
-                 separate space [string "fun"; expY varstuple; bigarrow]
+            let varstuple_pp, lambda =
+              make_loop_vars [] varstuple
             in
             parens (
                 (prefix 2 1)
-                  ((separate space) (string (combinator ^ csuffix ^ msuffix)::measure_pp@[expY varstuple]))
+                  ((separate space) (string (combinator ^ csuffix ^ msuffix)::
+                                       measure_pp@[varstuple_pp]))
                   ((prefix 0 1)
                      (parens (prefix 2 1 (group lambda) (expN cond)))
                      (parens (prefix 2 1 (group lambda) (expN body))))
@@ -1604,16 +1621,11 @@ let doc_exp, doc_let =
                  | None -> expY exp
                in
                let epp = separate space [string "early_return"; exp_pp] in
-               let aexp_needed, tepp =
-                 if contains_t_pp_var ctxt (typ_of exp) ||
-                    contains_t_pp_var ctxt (typ_of full_exp) then
-                   aexp_needed, epp
-                 else
-                   let tannot = separate space [string "MR";
-                     doc_atomic_typ ctxt (env_of full_exp) false (typ_of full_exp);
-                     doc_atomic_typ ctxt (env_of exp) false (typ_of exp)] in
-                   true, doc_op colon epp tannot in
-               if aexp_needed then parens tepp else tepp
+               let tannot = separate space [string "MR";
+                 doc_atomic_typ ctxt (env_of full_exp) false (typ_of full_exp);
+                 doc_atomic_typ ctxt (env_of exp) false (typ_of exp)]
+               in
+               parens (doc_op colon epp tannot)
             | _ -> raise (Reporting.err_unreachable l __POS__
                "Unexpected number of arguments for early_return builtin")
           end
@@ -1705,9 +1717,8 @@ let doc_exp, doc_let =
               let ekids = Env.get_typ_vars env in
               KidSet.for_all (fun kid -> KBindings.mem kid ekids) (nexp_frees n)
             in
-            match typ_of_arg, typ_from_fn with
-            | Typ_aux (Typ_app (Id_aux (Id "atom",_),[A_aux (A_nexp n1,_)]),_),
-              Typ_aux (Typ_app (Id_aux (Id "atom",_),[A_aux (A_nexp n2,_)]),_)
+            match destruct_atom_nexp env typ_of_arg, destruct_atom_nexp env typ_from_fn with
+            | Some n1, Some n2
                  when vars_in_env n2 && not (similar_nexps ctxt env n1 n2) ->
                underscore
             | _ ->
@@ -1814,7 +1825,6 @@ let doc_exp, doc_let =
            raise (report l __POS__ "E_field expression with no register or record type"))
     | E_block [] -> string "tt"
     | E_block exps -> raise (report l __POS__ "Blocks should have been removed till now.")
-    | E_nondet exps -> raise (report l __POS__ "Nondet blocks not supported.")
     | E_id id | E_ref id ->
        let env = env_of full_exp in
        let typ = typ_of full_exp in
@@ -1833,11 +1843,24 @@ let doc_exp, doc_let =
             let exp_typ = expand_range_type (Env.expand_synonyms env typ) in
             let ann_typ = general_typ_of full_exp in
             let ann_typ = expand_range_type (Env.expand_synonyms env ann_typ) in
+            let autocast =
+              (* Avoid using helper functions which simplify the nexps *)
+              is_bitvector_typ exp_typ && is_bitvector_typ ann_typ &&
+                match exp_typ, ann_typ with
+                | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
+                  Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
+                   not (similar_nexps ctxt env n1 n2)
+                | _ -> false
+            in
             let () =
               debug ctxt (lazy ("Variable " ^ string_of_id id ^ " with type " ^ string_of_typ typ));
-              debug ctxt (lazy (" expected type " ^ string_of_typ ann_typ))
+              debug ctxt (lazy (" expected type " ^ string_of_typ ann_typ));
+              debug ctxt (lazy (" autocast " ^ string_of_bool autocast))
             in
-            doc_id id
+            if autocast then
+              wrap_parens (string "autocast" ^/^ doc_id id)
+            else
+              doc_id id
          | _ -> doc_id id
        end
     | E_lit lit -> doc_lit lit
@@ -1846,7 +1869,7 @@ let doc_exp, doc_let =
        let outer_typ = Env.expand_synonyms env (general_typ_of_annot (l,annot)) in
        let outer_typ = expand_range_type outer_typ in
        let cast_typ = expand_range_type (Env.expand_synonyms env typ) in
-       let inner_typ = Env.expand_synonyms env (general_typ_of e) in
+       let inner_typ = Env.expand_synonyms env (typ_of e) in
        let inner_typ = expand_range_type inner_typ in
        let () =
          debug ctxt (lazy ("Cast of type " ^ string_of_typ cast_typ));
@@ -1857,8 +1880,8 @@ let doc_exp, doc_let =
        let outer_ex,_,outer_typ' = classify_ex_type ctxt env outer_typ in
        let cast_ex,_,cast_typ' = classify_ex_type ctxt env ~rawbools:true cast_typ in
        let inner_ex,_,inner_typ' = classify_ex_type ctxt env inner_typ in
-       let autocast =
-                (* Avoid using helper functions which simplify the nexps *)
+       let autocast_out =
+         (* Avoid using helper functions which simplify the nexps *)
          is_bitvector_typ outer_typ' && is_bitvector_typ cast_typ' &&
            match outer_typ', cast_typ' with
            | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
@@ -1866,18 +1889,37 @@ let doc_exp, doc_let =
               not (similar_nexps ctxt env n1 n2)
            | _ -> false
        in
+       let autocast_in =
+         (* Avoid using helper functions which simplify the nexps *)
+         is_bitvector_typ inner_typ' && is_bitvector_typ cast_typ' &&
+           match inner_typ', cast_typ' with
+           | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
+         Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
+              not (similar_nexps ctxt env n1 n2)
+           | _ -> false
+       in
        let effects = effectful (effect_of e) in
-       let autocast =
-         (* We don't currently have a version of autocast under existentials,
-            but they're rare and may be unnecessary *)
-         if effects && outer_ex = ExGeneral then false else autocast
+       (* We don't currently have a version of autocast under existentials,
+          but they're rare and may be unnecessary *)
+       let autocast_out =
+         if effects && outer_ex = ExGeneral then false else autocast_out
+       in
+       let autocast_in =
+         if effects && inner_ex = ExGeneral then false else autocast_in
        in
        let () =
          debug ctxt (lazy (" effectful: " ^ string_of_bool effects ^
                            " outer_ex: " ^ string_of_ex_kind outer_ex ^
                            " cast_ex: " ^ string_of_ex_kind cast_ex ^
                            " inner_ex: " ^ string_of_ex_kind inner_ex ^
-                           " autocast: " ^ string_of_bool autocast))
+                           " autocast_in: " ^ string_of_bool autocast_in ^
+                           " autocast_out: " ^ string_of_bool autocast_out))
+       in
+       let epp =
+         if autocast_in then
+           string "autocast" ^/^ parens epp
+         else
+           epp
        in
        let epp =
          if effects then
@@ -1908,7 +1950,7 @@ let doc_exp, doc_let =
               | ExNone -> epp
        in
        let epp =
-         if autocast then
+         if autocast_out then
            string (if effects then "autocast_m" else "autocast") ^^ space ^^ parens epp
          else epp
        in
@@ -2039,6 +2081,31 @@ let doc_exp, doc_let =
              let epp = liftR (separate space [string assert_fn; expY assert_e1; expY assert_e2]) in
              let epp = infix 0 1 (string mid) epp (top_exp new_ctxt false e2) in
              if aexp_needed then parens (align epp) else align epp
+         | _,
+           (E_aux (E_if (if_cond,
+                         (  E_aux (E_throw _,_)
+                          | E_aux (E_block [E_aux (E_throw _,_)],_) as throw_exp),
+                   else_exp),_)), _
+              when condition_produces_constraint ctxt if_cond ->
+            let cond_pp = expY if_cond in
+            let throw_pp = expN throw_exp in
+            (* Push non-trivial else branches below *)
+            let e2 =
+              match else_exp with
+              | E_aux (E_internal_return (E_aux (E_lit (L_aux (L_unit,_)),_)),_)
+              | E_aux (E_internal_return
+                         (E_aux (E_cast (_, E_aux (E_lit (L_aux (L_unit,_)),_)),_)),_)
+                -> e2
+              | _ -> E_aux (E_internal_plet (pat,else_exp,e2),(l,annot))
+            in
+            (* TODO: capture avoid *)
+            let hyp = string "_non_throw_hyp" in
+            group (parens (string "match sumbool_of_bool " ^^ space ^^ cond_pp ^^ space ^^ string "with" ^/^
+                      group (string "| left _ =>" ^/^ throw_pp) ^/^
+                        group (string "| right " ^^ hyp ^^ string " =>" ^/^
+                          string "returnm " ^^ hyp) ^/^ string "end")) ^/^
+              string " >>= fun _ => " ^/^
+                top_exp new_ctxt false e2
          | _ ->
             let epp =
               let middle =
@@ -2079,6 +2146,8 @@ let doc_exp, doc_let =
                        end
                      | _ -> plain_binder
                    in separate space [string ">>= fun"; binder; bigarrow]
+                | P_aux (P_typ (typ, pat'),_) ->
+                   separate space [string ">>= fun"; squote ^^ parens (doc_pat ctxt true true (pat, typ_of e1) ^/^ colon ^^ space ^^ doc_typ ctxt outer_env typ); bigarrow]
                 | _ ->
                    separate space [string ">>= fun"; squote ^^ doc_pat ctxt true true (pat, typ_of e1); bigarrow]
               in
@@ -2151,16 +2220,21 @@ let doc_exp, doc_let =
     (* Prefer simple lets over patterns, because I've found Coq can struggle to
        work out return types otherwise *)
     | LB_val(P_aux (P_id id,_),e)
-      when Util.is_none (is_auto_decomposed_exist ctxt (env_of e) (typ_of e)) &&
-           not (is_enum (env_of e) id) ->
+      when not (is_enum (env_of e) id) ->
        prefix 2 1
               (separate space [string "let"; doc_id id; coloneq])
               (top_exp ctxt false e)
     | LB_val(P_aux (P_typ (typ,P_aux (P_id id,_)),_),e)
-      when Util.is_none (is_auto_decomposed_exist ctxt (env_of e) typ) &&
+      when Util.is_none (is_auto_decomposed_exist ctxt (env_of e) ~rawbools:true typ) &&
            not (is_enum (env_of e) id) ->
        prefix 2 1
               (separate space [string "let"; doc_id id; colon; doc_typ ctxt (env_of e) typ; coloneq])
+              (top_exp ctxt false e)
+    | LB_val(P_aux (P_typ (typ,P_aux (P_id id,_)),_),e)
+      when (* is auto decomposed *)
+           not (is_enum (env_of e) id) ->
+       prefix 2 1
+              (separate space [string "let"; doc_id id; coloneq])
               (top_exp ctxt false e)
     | LB_val(P_aux (P_typ (typ,pat),_),(E_aux (_,e_ann) as e)) ->
        prefix 2 1

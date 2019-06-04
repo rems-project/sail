@@ -106,7 +106,7 @@ let rec generalize ctx (P_aux (p_aux, (l, _)) as pat) =
        | Unbound -> GP_wild
        | Local (Immutable, _) -> GP_wild
        | Register _ | Local (Mutable, _) ->
-          Util.warn ("Matching on register or mutable variable at " ^ Reporting.loc_to_string l); GP_wild
+          Reporting.warn "Matching on register or mutable variable at " l ""; GP_wild
        | Enum _ -> GP_app (Bindings.singleton id GP_wild)
      end
   | P_var (pat, _) -> generalize ctx pat
@@ -164,7 +164,7 @@ let join_bits bits1 bits2 =
 
 (* The join_lit function takes two patterns and produces a pattern
    that matches both literals *)
-let rec join_lit (L_aux (l_aux1, _) as lit1) (L_aux (l_aux2, _) as lit2) =
+let rec join_lit (L_aux (l_aux1, l) as lit1) (L_aux (l_aux2, _) as lit2) =
   match l_aux1, l_aux2 with
   (* The only literal with type unit is the unit literal *)
   | L_unit, _ -> GP_lit lit1
@@ -207,7 +207,7 @@ let rec join_lit (L_aux (l_aux1, _) as lit1) (L_aux (l_aux2, _) as lit2) =
        Printf.sprintf "Have two differently typed pattern literals %s and %s matching the same thing"
                       (string_of_lit lit1) (string_of_lit lit2)
      in
-     Util.warn message;
+     Reporting.warn "" l message;
      GP_wild
 
 let rec join ctx gpat1 gpat2 =
@@ -270,7 +270,7 @@ let combine ctx gpat (l, pat) =
      (* This warning liable to false positives as join returns a
         pattern that overapproximates what can match, so we only
         report when the second match is a constructor. *)
-     Util.warn (Printf.sprintf "Possible redundant pattern match at %s\n" (Reporting.loc_to_string l));
+     Reporting.warn "Possible redundant pattern match at" l "";
      GP_wild
   | _, gpat' -> join ctx gpat gpat'
 
@@ -288,15 +288,11 @@ let shrink_loc = function
 
 let check l ctx cases =
   match cases_to_pats cases with
-  | [] -> Util.warn (Printf.sprintf "No non-guarded patterns at %s\n" (Reporting.loc_to_string (shrink_loc l)))
+  | [] -> Reporting.warn "No non-guarded patterns at" (shrink_loc l) ""
   | (_, pat) :: pats ->
      let top_pat = List.fold_left (combine ctx) (generalize ctx pat) pats in
      if is_wild top_pat then
        ()
      else
-       let message =
-         Printf.sprintf "Possible incomplete pattern match at %s\n\nMost general matched pattern is %s\n"
-                        (Reporting.loc_to_string (shrink_loc l))
-                        (string_of_gpat top_pat |> Util.cyan |> Util.clear)
-       in
-       Util.warn message
+       Reporting.warn "Possible incomplete pattern match at" (shrink_loc l)
+         (Printf.sprintf "Most general matched pattern is %s" (string_of_gpat top_pat |> Util.cyan |> Util.clear))

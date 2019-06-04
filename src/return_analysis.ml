@@ -69,8 +69,6 @@ let analyze_exp_returns exp =
           analyze last exp
        end
 
-    | E_nondet exps -> List.iter (analyze last) exps
-
     | E_id id ->
        if last then
          add_return annot

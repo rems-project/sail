@@ -545,11 +545,6 @@ let stop_at_false_assertions e =
              then E_aux (E_block es,ann), stop
              else E_aux (E_block (es@[dummy_value_of_typ typ']),ann), Some typ'
        end
-    | E_nondet es ->
-       let es,stops = List.split (List.map exp es) in
-       let stop = List.exists (function Some _ -> true | _ -> false) stops in
-       let stop = if stop then Some (typ_of_annot ann) else None in
-       E_aux (E_nondet es,ann), stop
     | E_cast (typ,e) -> let e,stop = exp e in
                         let stop = match stop with Some _ -> Some typ | None -> None in
                         E_aux (E_cast (typ,e),ann),stop
@@ -980,7 +975,6 @@ let split_defs all_errors splits env defs =
         let re e = E_aux (e,annot) in
         match e with
         | E_block es -> re (E_block (List.map map_exp es))
-        | E_nondet es -> re (E_nondet (List.map map_exp es))
         | E_id _
         | E_lit _
         | E_sizeof _
@@ -2048,9 +2042,6 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
             d, assigns, merge r r'
        in
        aux env assigns es
-    | E_nondet es ->
-       let _, assigns, r = non_det es in
-       (dempty, assigns, r)
     | E_id id ->
        begin 
          match Bindings.find id env.var_deps with
@@ -2536,8 +2527,7 @@ let rec sets_from_assert e =
    above. *)
 let rec find_set_assertions (E_aux (e,_)) =
   match e with
-  | E_block es
-  | E_nondet es ->
+  | E_block es ->
      List.fold_left merge_set_asserts_by_kid KBindings.empty (List.map find_set_assertions es)
   | E_cast (_,e) -> find_set_assertions e
   | E_let (LB_aux (LB_val (p,e1),_),e2) ->
@@ -3686,10 +3676,10 @@ type options = {
 }
 
 let recheck defs =
-  let w = !Util.opt_warnings in
-  let () = Util.opt_warnings := false in
+  let w = !Reporting.opt_warnings in
+  let () = Reporting.opt_warnings := false in
   let r = Type_error.check (Type_check.Env.no_casts Type_check.initial_env) defs in
-  let () = Util.opt_warnings := w in
+  let () = Reporting.opt_warnings := w in
   r
 
 let mono_rewrites = MonoRewrites.mono_rewrite
