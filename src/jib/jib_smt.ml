@@ -212,7 +212,7 @@ let bvpint sz x =
     let padding_size = sz - String.length bin in
     if padding_size < 0 then
       raise (Reporting.err_general Parse_ast.Unknown
-               (Printf.sprintf "Count not create a %d-bit integer with value %s.\nTry increasing the maximum integer size"
+               (Printf.sprintf "Could not create a %d-bit integer with value %s.\nTry increasing the maximum integer size"
                   sz (Big_int.to_string x)));
     let padding = String.make (sz - String.length bin) '0' in
     Bin (padding ^ bin)
@@ -260,65 +260,71 @@ let zencode_ctor ctor_id unifiers =
      Util.zencode_string (string_of_id ctor_id ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
 
 let rec smt_cval ctx cval =
-  match cval with
-  | V_lit (vl, ctyp) -> smt_value ctx vl ctyp
-  | V_id (Name (id, _) as ssa_id, _) ->
-     begin match Type_check.Env.lookup_id id ctx.tc_env with
-     | Enum _ -> Enum (zencode_id id)
-     | _ -> Var (zencode_name ssa_id)
-     end
-  | V_id (ssa_id, _) -> Var (zencode_name ssa_id)
-  | V_call (Neq, [cval1; cval2]) ->
-     Fn ("not", [Fn ("=", [smt_cval ctx cval1; smt_cval ctx cval2])])
-  | V_call (Bvor, [cval1; cval2]) ->
-     Fn ("bvor", [smt_cval ctx cval1; smt_cval ctx cval2])
-  | V_call (Bit_to_bool, [cval]) ->
-     Fn ("=", [smt_cval ctx cval; Bin "1"])
-  | V_call (Bnot, [cval]) ->
-     Fn ("not", [smt_cval ctx cval])
-  | V_call (Band, cvals) ->
-     smt_conj (List.map (smt_cval ctx) cvals)
-  | V_call (Bor, cvals) ->
-     smt_disj (List.map (smt_cval ctx) cvals)
-  | V_ctor_kind (union, ctor_id, unifiers, _) ->
-     Fn ("not", [Tester (zencode_ctor ctor_id unifiers, smt_cval ctx union)])
-  | V_ctor_unwrap (ctor_id, union, unifiers, _) ->
-     Fn ("un" ^ zencode_ctor ctor_id unifiers, [smt_cval ctx union])
-  | V_field (union, field) ->
-     begin match cval_ctyp union with
-     | CT_struct (struct_id, _) ->
-        Fn (zencode_upper_id struct_id ^ "_" ^ field, [smt_cval ctx union])
-     | _ -> failwith "Field for non-struct type"
-     end
-  | V_struct (fields, ctyp) ->
-     begin match ctyp with
-     | CT_struct (struct_id, field_ctyps) ->
-        let set_field (field, cval) =
-          match Util.assoc_compare_opt Id.compare field field_ctyps with
-          | None -> failwith "Field type not found"
-          | Some ctyp when ctyp_equal (cval_ctyp cval) ctyp ->
-             smt_cval ctx cval
-          | _ -> failwith "Type mismatch when generating struct for SMT"
-        in
-        Fn (zencode_upper_id struct_id, List.map set_field fields)
-     | _ -> failwith "Struct does not have struct type"
-     end
-  | V_tuple_member (frag, len, n) ->
-     ctx.tuple_sizes := IntSet.add len !(ctx.tuple_sizes);
-     Fn (Printf.sprintf "tup_%d_%d" len n, [smt_cval ctx frag])
-  | V_ref (Name (id, _), _) ->
-     let rmap = CTMap.filter (fun ctyp regs -> List.exists (fun reg -> Id.compare reg id = 0) regs) ctx.register_map in
-     assert (CTMap.cardinal rmap = 1);
-     begin match CTMap.min_binding_opt rmap with
-     | Some (ctyp, regs) ->
-        begin match Util.list_index (fun reg -> Id.compare reg id = 0) regs with
-        | Some i ->
-           bvint (required_width (Big_int.of_int (List.length regs))) (Big_int.of_int i)
-        | None -> assert false
+  match cval_ctyp cval with
+  | CT_constant n ->
+     bvint (required_width n) n
+  | _ ->
+     match cval with
+     | V_lit (vl, ctyp) -> smt_value ctx vl ctyp
+     | V_id (Name (id, _) as ssa_id, _) ->
+        begin match Type_check.Env.lookup_id id ctx.tc_env with
+        | Enum _ -> Enum (zencode_id id)
+        | _ -> Var (zencode_name ssa_id)
         end
-     | _ -> assert false
-     end
-  | cval -> failwith ("Unrecognised cval " ^ string_of_cval cval)
+     | V_id (ssa_id, _) -> Var (zencode_name ssa_id)
+     | V_call (Neq, [cval1; cval2]) ->
+        Fn ("not", [Fn ("=", [smt_cval ctx cval1; smt_cval ctx cval2])])
+     | V_call (Bvor, [cval1; cval2]) ->
+        Fn ("bvor", [smt_cval ctx cval1; smt_cval ctx cval2])
+     | V_call (Bit_to_bool, [cval]) ->
+        Fn ("=", [smt_cval ctx cval; Bin "1"])
+     | V_call (Eq, [cval1; cval2]) ->
+        Fn ("=", [smt_cval ctx cval1; smt_cval ctx cval2])
+     | V_call (Bnot, [cval]) ->
+        Fn ("not", [smt_cval ctx cval])
+     | V_call (Band, cvals) ->
+        smt_conj (List.map (smt_cval ctx) cvals)
+     | V_call (Bor, cvals) ->
+        smt_disj (List.map (smt_cval ctx) cvals)
+     | V_ctor_kind (union, ctor_id, unifiers, _) ->
+        Fn ("not", [Tester (zencode_ctor ctor_id unifiers, smt_cval ctx union)])
+     | V_ctor_unwrap (ctor_id, union, unifiers, _) ->
+        Fn ("un" ^ zencode_ctor ctor_id unifiers, [smt_cval ctx union])
+     | V_field (union, field) ->
+        begin match cval_ctyp union with
+        | CT_struct (struct_id, _) ->
+           Fn (zencode_upper_id struct_id ^ "_" ^ field, [smt_cval ctx union])
+        | _ -> failwith "Field for non-struct type"
+        end
+     | V_struct (fields, ctyp) ->
+        begin match ctyp with
+        | CT_struct (struct_id, field_ctyps) ->
+           let set_field (field, cval) =
+             match Util.assoc_compare_opt Id.compare field field_ctyps with
+             | None -> failwith "Field type not found"
+             | Some ctyp when ctyp_equal (cval_ctyp cval) ctyp ->
+                smt_cval ctx cval
+             | _ -> failwith "Type mismatch when generating struct for SMT"
+           in
+           Fn (zencode_upper_id struct_id, List.map set_field fields)
+        | _ -> failwith "Struct does not have struct type"
+        end
+     | V_tuple_member (frag, len, n) ->
+        ctx.tuple_sizes := IntSet.add len !(ctx.tuple_sizes);
+        Fn (Printf.sprintf "tup_%d_%d" len n, [smt_cval ctx frag])
+     | V_ref (Name (id, _), _) ->
+        let rmap = CTMap.filter (fun ctyp regs -> List.exists (fun reg -> Id.compare reg id = 0) regs) ctx.register_map in
+        assert (CTMap.cardinal rmap = 1);
+        begin match CTMap.min_binding_opt rmap with
+        | Some (ctyp, regs) ->
+           begin match Util.list_index (fun reg -> Id.compare reg id = 0) regs with
+           | Some i ->
+              bvint (required_width (Big_int.of_int (List.length regs))) (Big_int.of_int i)
+           | None -> assert false
+           end
+        | _ -> assert false
+        end
+     | cval -> failwith ("Unrecognised cval " ^ string_of_cval cval)
 
 let add_event ctx ev smt =
   let stack = event_stack ctx ev in
@@ -432,13 +438,6 @@ let builtin_arith fn big_int_fn padding ctx v1 v2 ret_ctyp =
   | CT_constant c1, CT_constant c2, _ ->
      bvint (int_size ctx ret_ctyp) (big_int_fn c1 c2)
 
-  | ctyp, CT_constant c, _ ->
-     let n = int_size ctx ctyp in
-     force_size ctx (int_size ctx ret_ctyp) n (Fn (fn, [smt_cval ctx v1; bvint n c]))
-  | CT_constant c, ctyp, _ ->
-     let n = int_size ctx ctyp in
-     force_size ctx (int_size ctx ret_ctyp) n (Fn (fn, [bvint n c; smt_cval ctx v2]))
-
   | ctyp1, ctyp2, _ ->
      let ret_sz = int_size ctx ret_ctyp in
      let smt1 = smt_cval ctx v1 in
@@ -449,6 +448,12 @@ let builtin_arith fn big_int_fn padding ctx v1 v2 ret_ctyp =
 let builtin_add_int = builtin_arith "bvadd" Big_int.add (fun x -> x + 1)
 let builtin_sub_int = builtin_arith "bvsub" Big_int.sub (fun x -> x + 1)
 let builtin_mult_int = builtin_arith "bvmul" Big_int.mul (fun x -> x * 2)
+
+let builtin_sub_nat ctx v1 v2 ret_ctyp =
+  let result = builtin_arith "bvsub" Big_int.sub (fun x -> x + 1) ctx v1 v2 ret_ctyp in
+  Ite (Fn ("bvslt", [result; bvint (int_size ctx ret_ctyp) Big_int.zero]),
+       bvint (int_size ctx ret_ctyp) Big_int.zero,
+       result)
 
 let builtin_negate_int ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
@@ -1008,6 +1013,7 @@ let smt_builtin ctx name args ret_ctyp =
   (* lib/arith.sail *)
   | "add_int", [v1; v2], _ -> builtin_add_int ctx v1 v2 ret_ctyp
   | "sub_int", [v1; v2], _ -> builtin_sub_int ctx v1 v2 ret_ctyp
+  | "sub_nat", [v1; v2], _ -> builtin_sub_nat ctx v1 v2 ret_ctyp
   | "mult_int", [v1; v2], _ -> builtin_mult_int ctx v1 v2 ret_ctyp
   | "neg_int", [v], _ -> builtin_negate_int ctx v ret_ctyp
   | "shl_int", [v1; v2], _ -> builtin_shl_int ctx v1 v2 ret_ctyp

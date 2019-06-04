@@ -60,6 +60,8 @@ val opt_auto : bool ref
 val opt_debug_graphs : bool ref
 val opt_propagate_vars : bool ref
 
+val zencode_name : name -> string
+
 module IntSet : Set.S with type elt = int
 module EventMap : Map.S with type key = Property.event
 
@@ -117,6 +119,8 @@ val compile : Type_check.Env.t -> Type_check.tannot defs -> cdef list * ctx
    really better than just using lists. *)
 
 val smt_header : ctx -> cdef list -> smt_def list
+
+val smt_query : ctx -> Property.query -> smt_exp
 
 val smt_instr_list : string -> ctx -> cdef list -> instr list -> smt_def Stack.t * (ssa_elem list * cf_node) Jib_ssa.array_graph
 

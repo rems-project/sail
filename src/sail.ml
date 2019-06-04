@@ -348,6 +348,9 @@ let options = Arg.align ([
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
     " (debug) provide basic profiling information for rewriting passes within Sail");
+  ( "-dsmtfuzz",
+    set_target "smtfuzz",
+    " (debug) fuzz sail SMT builtins");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
@@ -478,6 +481,9 @@ let target name out_name ast type_envs =
      output_string output_chan (str ^ "\n");
      flush output_chan;
      if close then close_out output_chan else ()
+
+  | Some "smtfuzz" ->
+     Jib_smt_fuzz.fuzz 0 type_envs ast
 
   | Some "smt" ->
      let open Ast_util in
