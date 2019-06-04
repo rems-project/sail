@@ -387,9 +387,6 @@ let const_props defs ref_vars =
     | E_block es ->
        let es',assigns = threaded_map (const_prop_exp substs) assigns es in
        re (E_block es') assigns
-    | E_nondet es ->
-       let es',assigns = non_det_exp_list es in
-       re (E_nondet es') assigns
     | E_id id ->
        let env = Type_check.env_of_annot (l, annot) in
        (try

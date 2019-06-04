@@ -532,133 +532,69 @@ internal_loop_measure :: 'Measure_' ::=
 
 exp :: 'E_' ::=
   {{ com expression }}
-  {{ aux _ annot }} {{ auxparam 'a }}  
-
-  | { exp1 ; ... ; expn }                               :: :: block {{ com sequential block }}
-% maybe we really should have indentation-sensitive syntax :-)  (given that some of the targets do)
-
-  | nondet { exp1 ; ... ; expn }                        :: :: nondet {{ com nondeterministic block }}
-
+  {{ aux _ annot }} {{ auxparam 'a }}
+  | { exp1 ; ... ; expn }                               :: :: block
+    {{ com sequential block }}
   | id                                                  :: :: id
     {{ com identifier }}
-
   | lit                                                 :: :: lit
     {{ com literal constant }}
-
   | ( typ ) exp                                         :: :: cast
     {{ com cast }}
-
-  | id ( exp1 , .. , expn )                                   :: :: app
+  | id ( exp1 , .. , expn )                             :: :: app
     {{ com function application }}
-  | id exp                                               :: S :: tup_app {{ ichlo [[id ( exp ) ]] }} 
-   {{ com funtion application to tuple }}
-
-% Note: fully applied function application only
-
   | exp1 id exp2                                        :: :: app_infix
     {{ com infix function application }}
- 
   | ( exp1 , .... , expn )                              :: :: tuple
     {{ com tuple }}
-
   | if exp1 then exp2 else exp3                         :: :: if
     {{ com conditional }}
-
   | if exp1 then exp2                                   :: S :: ifnoelse {{ ichlo [[ if exp1 then exp2 else ( ) ]] }}
   | loop internal_loop_measure exp1 exp2                    :: :: loop
   | while internal_loop_measure exp1 do exp2                :: S :: while {{ ichlo [[ loop internal_loop_measure while exp1 exp2 ]] }}
   | repeat internal_loop_measure exp1 until exp2            :: S :: until {{ ichlo [[ loop internal_loop_measure until exp2 exp1 ]] }}
   | foreach ( id from exp1 to exp2 by exp3 in order ) exp4  ::   :: for   {{ com loop }}
 
-% vectors
+  % vectors
   | [ exp1 , ... , expn ]                             :: :: vector {{ com vector (indexed from 0) }}
-% order comes from global command-line option???
-% here the expi are of type 'a and the result is a vector of 'a, whereas in exp1 : ... : expn 
-% the expi and the result are both of type vector of 'a 
+  | exp [ exp' ]                                      :: :: vector_access {{ com vector access }}
+  | exp [ exp1 '..' exp2 ]                            :: :: vector_subrange {{ com subvector extraction }}
+  | [ exp with exp1 = exp2 ]                          :: :: vector_update {{ com vector functional update }}
+  | [ exp with exp1 '..' exp2 = exp3 ]                :: :: vector_update_subrange {{ com vector subrange update, with vector}}
+  | exp1 @ exp2                                       :: :: vector_append {{ com vector concatenation }}
 
-% we pick [ ] not { } for vector literals for consistency with their
-% array-like access syntax, in contrast to the C which has funny
-% syntax for array literals.  We don't have to preserve [ ] for lists
-% as we don't expect to use lists very much. 
+  % lists
+  | [| exp1 , ..  , expn |]                           :: :: list {{ com list }}
+  | exp1 '::' exp2                                    :: :: cons {{ com cons }}
 
-  | exp [ exp' ]                                      :: :: vector_access
-  {{ com vector access }}
+  % structs
+  | struct { fexp0 , ... , fexpn }                    :: :: record {{ com struct }}
+  | { exp with fexp0 , ... , fexpn }                  :: :: record_update {{ com functional update of struct }}
+  | exp . id                                          :: :: field {{ com field projection from struct  }}
 
-  | exp [ exp1 '..' exp2 ]                               :: :: vector_subrange
-  {{ com subvector extraction }}
-  % do we want to allow a comma-separated list of such thingies?  
+  | match exp { pexp1 , ... , pexpn }                 :: :: case {{ com pattern matching }}
 
-  | [ exp with exp1 = exp2 ]                          :: :: vector_update 
-  {{ com vector functional update }}
-
-  | [ exp with exp1 : exp2 = exp3 ]                   :: :: vector_update_subrange
-  {{ com vector subrange update, with vector}}
-  % do we want a functional update form with a comma-separated list of such?
-
-  | exp : exp2                                        :: :: vector_append
-  {{ com vector concatenation }}
-
-% lists 
-  | [|| exp1 , ..  , expn ||]                           :: :: list
-  {{ com list }}
-  | exp1 '::' exp2                                    :: :: cons
-    {{ com cons }}
-
-
-% const unions
-
-% const structs
-
-% TODO
-
-  | { fexp0 , ... , fexpn }                    :: :: record
-    {{ com struct }}
-  | { exp with fexp0 , ... , fexpn }           :: :: record_update
-    {{ com functional update of struct }}
-  | exp . id                                   :: :: field
-    {{ com field projection from struct  }}
-
-%Expressions for creating and accessing vectors
-
-
-
-%  map : forall 'x 'y ''N.  ('x -> 'y) -> vector ''N 'x -> vector ''N 'y
-%  zip : forall 'x 'y ''N.  vector ''N 'x  -> vector ''N 'y -> vector ''N ('x*'y) 
-%  foldl : forall 'x 'y ''N. ('x 'y -> 'y) -> vector ''N 'x -> 'y -> 'y
-% foldr : forall 'x 'y ''N. ('x 'y -> 'y) -> 'y -> vector ''N 'x -> 'y
-% foldmap : forall 'x 'y 'z ''N. ((x,y) -> (x,z)) -> x -> vector ''N y -> vector ''N z
-%(or unzip)
-
-%  and maybe with nice syntax
-
-  | match exp { pexp1 '|'  ... '|' pexpn } :: :: case
-    {{ com pattern matching }}
-%  | ( typ ) exp                                      :: :: Typed
-%    {{ com Type-annotated expressions }}
-  | letbind in exp                                  :: :: let
+  | letbind in exp                                    :: :: let
     {{ com let expression }}
 
-  | lexp := exp                                      :: :: assign
+  | lexp = exp                                        :: :: assign
     {{ com imperative assignment }}
 
-  | sizeof nexp                                         :: :: sizeof
-  {{ com the value of $[[nexp]]$ at run time }}
+  | sizeof nexp                                       :: :: sizeof
+    {{ com the value of $[[nexp]]$ at run time }}
 
-  | return exp                                       :: :: return {{ com  return $[[exp]]$ from current function }}
-% this can be used to break out of for loops
-  | exit exp						:: :: exit
+  | return exp                                        :: :: return {{ com  return $[[exp]]$ from current function }}
+  | exit exp                                          :: :: exit
     {{ com halt all current execution }}
-  | ref id                                     :: :: ref
-  | throw exp                                  :: :: throw
-  | try exp catch pexp1 .. pexpn             :: :: try
-%, potentially calling a system, trap, or interrupt handler with exp
-  | assert ( exp , exp' )                            :: :: assert
-    {{ com halt with error $[[exp']]$ when not $[[exp]]$ }}
-% exp' is optional?
-  | ( exp )                                             :: S :: paren {{ ichlo [[exp]] }}
-  | var lexp = exp in exp'    :: I :: var {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
-  | let pat = exp in exp' :: I :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
-  | return_int ( exp )                                          ::  :: internal_return {{ com For internal use to embed into monad definition }}
+  | ref id                                            :: :: ref
+  | throw exp                                         :: :: throw
+  | try exp catch { pexp1 , ... , pexpn }             :: :: try
+  | assert ( exp , exp' )                             :: :: assert
+    {{ com halt with error message $[[exp']]$ when not $[[exp]]$. exp' is optional. }}
+  | ( exp )                                           :: S :: paren {{ ichlo [[exp]] }}
+  | var lexp = exp in exp'  :: I :: var {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
+  | let pat = exp in exp'   :: I :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
+  | return_int ( exp )      ::  :: internal_return {{ com For internal use to embed into monad definition }}
   | value :: I :: internal_value {{ com For internal use in interpreter to wrap pre-evaluated values when returning an action }}
   | constraint n_constraint :: :: constraint
 

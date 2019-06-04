@@ -140,7 +140,6 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match destruct_tannot (snd annot)
 | Some (env, typ, eff) ->
   let effsum = match e with
     | E_block es -> union_eff_exps es
-    | E_nondet es -> union_eff_exps es
     | E_id _ | E_ref _
     | E_lit _ -> eff
     | E_cast (_,e) -> effect_of e
@@ -271,7 +270,6 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   let rewrite = rewriters.rewrite_exp rewriters in
   match exp with
   | E_block exps -> rewrap (E_block (List.map rewrite exps))
-  | E_nondet exps -> rewrap (E_nondet (List.map rewrite exps))
   | E_id _ | E_lit _  -> rewrap exp
   | E_cast (typ, exp) -> rewrap (E_cast (typ, rewrite exp))
   | E_app (id,exps) -> rewrap (E_app (id,List.map rewrite exps))
@@ -534,7 +532,6 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
       'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
       'pat,'pat_aux,'fpat,'fpat_aux) exp_alg =
   { e_block                  : 'exp list -> 'exp_aux
-  ; e_nondet                 : 'exp list -> 'exp_aux
   ; e_id                     : id -> 'exp_aux
   ; e_ref                    : id -> 'exp_aux
   ; e_lit                    : lit -> 'exp_aux
@@ -596,7 +593,6 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
 
 let rec fold_exp_aux alg = function
   | E_block es -> alg.e_block (List.map (fold_exp alg) es)
-  | E_nondet es -> alg.e_nondet (List.map (fold_exp alg) es)
   | E_id id -> alg.e_id id
   | E_ref id -> alg.e_ref id
   | E_lit lit -> alg.e_lit lit
@@ -680,7 +676,6 @@ let fold_function alg (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, fun
 
 let id_exp_alg =
   { e_block = (fun es -> E_block es)
-  ; e_nondet = (fun es -> E_nondet es)
   ; e_id = (fun id -> E_id id)
   ; e_ref = (fun id -> E_ref id)
   ; e_lit = (fun lit -> (E_lit lit))
@@ -776,7 +771,6 @@ let compute_exp_alg bot join =
   let join_list vs = List.fold_left join bot vs in
   let split_join f es = let (vs,es) = List.split es in (join_list vs, f es) in
   { e_block = split_join (fun es -> E_block es)
-  ; e_nondet = split_join (fun es -> E_nondet es)
   ; e_id = (fun id -> (bot, E_id id))
   ; e_ref = (fun id -> (bot, E_ref id))
   ; e_lit = (fun lit -> (bot, E_lit lit))
@@ -883,7 +877,6 @@ let pure_pat_alg bot join =
 let pure_exp_alg bot join =
   let join_list vs = List.fold_left join bot vs in
   { e_block = join_list
-  ; e_nondet = join_list
   ; e_id = (fun id -> bot)
   ; e_ref = (fun id -> bot)
   ; e_lit = (fun lit -> bot)
@@ -1004,10 +997,6 @@ let default_fold_exp f x (E_aux (e,ann) as exp) =
      let x,es = List.fold_left (fun (x,es) e ->
                     let x,e' = f x e in x,e'::es) (x,[]) es in
      x, re (E_block (List.rev es))
-  | E_nondet es ->
-     let x,es = List.fold_left (fun (x,es) e ->
-                    let x,e' = f x e in x,e'::es) (x,[]) es in
-     x, re (E_nondet (List.rev es))
   | E_id _
   | E_ref _
   | E_lit _ -> x, exp

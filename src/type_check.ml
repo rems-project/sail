@@ -3629,8 +3629,6 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let rec last_typ = function [exp] -> typ_of exp | _ :: exps -> last_typ exps | [] -> unit_typ in
      let inferred_block = check_block l env exps None in
      annot_exp (E_block inferred_block) (last_typ inferred_block)
-  | E_nondet exps ->
-     annot_exp (E_nondet (List.map (fun exp -> crule check_exp env exp unit_typ) exps)) unit_typ
   | E_id v ->
      begin
        match Env.lookup_id v env with
@@ -4329,9 +4327,6 @@ and propagate_exp_effect_aux = function
   | E_block xs ->
      let p_xs = List.map propagate_exp_effect xs in
      E_block p_xs, collect_effects p_xs
-  | E_nondet xs ->
-     let p_xs = List.map propagate_exp_effect xs in
-     E_nondet p_xs, collect_effects p_xs
   | E_id id -> E_id id, no_effect
   | E_ref id -> E_ref id, no_effect
   | E_lit lit -> E_lit lit, no_effect

@@ -510,7 +510,6 @@ let unaux_constraint (NC_aux (nc, _)) = nc
 let rec map_exp_annot f (E_aux (exp, annot)) = E_aux (map_exp_annot_aux f exp, f annot)
 and map_exp_annot_aux f = function
   | E_block xs -> E_block (List.map (map_exp_annot f) xs)
-  | E_nondet xs -> E_nondet (List.map (map_exp_annot f) xs)
   | E_id id -> E_id id
   | E_ref id -> E_ref id
   | E_lit lit -> E_lit lit
@@ -937,7 +936,6 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_var (lexp, binding, exp) -> "var " ^ string_of_lexp lexp ^ " = " ^ string_of_exp binding ^ " in " ^ string_of_exp exp
   | E_internal_return exp -> "internal_return (" ^ string_of_exp exp ^ ")"
   | E_internal_plet (pat, exp, body) -> "internal_plet " ^ string_of_pat pat ^ " = " ^ string_of_exp exp ^ " in " ^ string_of_exp body
-  | E_nondet _ -> "NONDET"
   | E_internal_value v -> "INTERNAL_VALUE(" ^ Value.string_of_value v ^ ")"
 
 and string_of_measure (Measure_aux (m,_)) =
@@ -1530,7 +1528,6 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
   let wrap e_aux = E_aux (e_aux, annot) in
   let e_aux = match e_aux with
     | E_block exps -> E_block (List.map (subst id value) exps)
-    | E_nondet exps -> E_nondet (List.map (subst id value) exps)
     | E_id id' -> if Id.compare id id' = 0 then unaux_exp value else E_id id'
     | E_lit lit -> E_lit lit
     | E_cast (typ, exp) -> E_cast (typ, subst id value exp)
@@ -1752,7 +1749,6 @@ and locate_fpat : 'a. (l -> l) -> 'a fpat -> 'a fpat = fun f (FP_aux (FP_Fpat (i
 let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp = fun f (E_aux (e_aux, (l, annot))) ->
   let e_aux = match e_aux with
     | E_block exps -> E_block (List.map (locate f) exps)
-    | E_nondet exps -> E_nondet (List.map (locate f) exps)
     | E_id id -> E_id (locate_id f id)
     | E_lit lit -> E_lit (locate_lit f lit)
     | E_cast (typ, exp) -> E_cast (locate_typ f typ, locate f exp)

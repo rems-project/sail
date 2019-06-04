@@ -2333,7 +2333,6 @@ let rewrite_defs_letbind_effects env =
 
     match exp_aux with
     | E_block es -> failwith "E_block should have been removed till now"
-    | E_nondet _ -> failwith "E_nondet not supported"
     | E_id id -> k exp
     | E_ref id -> k exp
     | E_lit _ -> k exp

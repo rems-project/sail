@@ -184,7 +184,7 @@ let rec pat_bindings consider_var bound used (P_aux(p,(_,tannot))) =
 let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.t * Nameset.t * Nameset.t) =
   let list_fv b n s es = List.fold_right (fun e (b,n,s) -> fv_of_exp consider_var b n s e) es (b,n,s) in
   match e with
-  | E_block es | Ast.E_nondet es | Ast.E_tuple es | Ast.E_vector es | Ast.E_list es ->
+  | E_block es | Ast.E_tuple es | Ast.E_vector es | Ast.E_list es ->
     list_fv bound used set es
   | E_id id ->
      let used = conditional_add_exp bound used id in
@@ -808,7 +808,6 @@ let nexp_subst_fns substs =
     let re e = E_aux (e,(l,s_tannot annot)) in
       match e with
       | E_block es -> re (E_block (List.map s_exp es))
-      | E_nondet es -> re (E_nondet (List.map s_exp es))
       | E_id _
       | E_ref _
       | E_lit _

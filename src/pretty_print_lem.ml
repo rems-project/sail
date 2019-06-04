@@ -815,7 +815,6 @@ let doc_exp_lem, doc_let_lem =
            raise (report l __POS__ "E_field expression with no register or record type"))
     | E_block [] -> string "()"
     | E_block exps -> raise (report l __POS__ "Blocks should have been removed till now.")
-    | E_nondet exps -> raise (report l __POS__ "Nondet blocks not supported.")
     | E_id id | E_ref id ->
        let env = env_of full_exp in
        let typ = typ_of full_exp in

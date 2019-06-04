@@ -365,7 +365,6 @@ and to_ast_exp ctx (P.E_aux(exp,l) : P.exp) =
       (match to_ast_fexps false ctx exps with
       | Some(fexps) -> E_record(fexps)
       | None -> E_block(List.map (to_ast_exp ctx) exps))
-    | P.E_nondet(exps) -> E_nondet(List.map (to_ast_exp ctx) exps)
     | P.E_id(id) -> E_id(to_ast_id id)
     | P.E_ref(id) -> E_ref(to_ast_id id)
     | P.E_lit(lit) -> E_lit(to_ast_lit lit)
