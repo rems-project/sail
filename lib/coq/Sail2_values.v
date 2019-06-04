@@ -1484,24 +1484,34 @@ Ltac simple_ex_iff :=
     solve [apply iff_refl | eassumption]
   end.
 
-(* Another attempt at similar goals, this time allowing for conjuncts to move around.
+(* Another attempt at similar goals, this time allowing for conjuncts to move
+  around, and filling in integer existentials and redundant boolean ones.
    TODO: generalise / combine with simple_ex_iff. *)
-Ltac single_ex_iff :=
-eexists;
+
+Ltac ex_iff_construct_bool_witness :=
 let rec search x y :=
-  match y with
+  lazymatch y with
   | x => constr:(true)
-  | ?y1 /\ ?y2 => first [search x y1 | search x y2]
+  | ?y1 /\ ?y2 =>
+    let b1 := search x y1 in
+    let b2 := search x y2 in
+    constr:(orb b1 b2)
   | _ => constr:(false)
   end
 in
-let rec add_clause x xs :=
-  let l := lazymatch x with
-    | ?l = true => l
-    | ?l = false => constr:(negb l)
-    | @eq Z ?l ?n => constr:(Z.eqb l n)
-    | _ => fail
-    end in
+let rec make_clause x :=
+  lazymatch x with
+  | ?l = true => l
+  | ?l = false => constr:(negb l)
+  | @eq Z ?l ?n => constr:(Z.eqb l n)
+  | ?p \/ ?q =>
+    let p' := make_clause p in
+    let q' := make_clause q in
+    constr:(orb p' q')
+  | _ => fail
+  end in
+let add_clause x xs :=
+  let l := make_clause x in
   match xs with
   | true => l
   | _ => constr:(andb l xs)
@@ -1512,16 +1522,64 @@ let rec construct_ex l r x :=
   | ?l1 /\ ?l2 =>
     let y := construct_ex l1 r x in
     construct_ex l2 r y
-  | _ => match search l r with true => x | _ => add_clause l x end
+  | _ =>
+   let present := search l r in
+   lazymatch eval compute in present with true => x | _ => add_clause l x end
   end
 in
 let witness := match goal with
 | |- ?l <-> ?r => construct_ex l r constr:(true)
 end in
-instantiate (1 := witness);
-unbool_comparisons_goal;
-clear;
-intuition.
+instantiate (1 := witness).
+
+Ltac ex_iff_fill_in_ints :=
+  let rec search l r y :=
+    match y with
+    | l = r => idtac
+    | ?v = r => is_evar v; unify v l
+    | ?y1 /\ ?y2 => first [search l r y1 | search l r y2]
+    | _ => fail
+    end
+  in
+  match goal with
+  | |- ?l <-> ?r =>
+    let rec traverse l :=
+    lazymatch l with
+    | ?l1 /\ ?l2 =>
+      traverse l1; traverse l2
+    | @eq Z ?x ?y => search x y r
+    | _ => idtac
+    end
+    in traverse l
+  end.
+
+Ltac ex_iff_fill_in_bools :=
+  let rec traverse t :=
+    lazymatch t with
+    | ?v = ?t => try (is_evar v; unify v t)
+    | ?p /\ ?q => traverse p; traverse q
+    | _ => idtac
+    end
+  in match goal with
+  | |- _ <-> ?r => traverse r
+  end.
+
+Ltac conjuncts_iff_solve :=
+  ex_iff_fill_in_ints;
+  ex_iff_construct_bool_witness;
+  ex_iff_fill_in_bools;
+  unbool_comparisons_goal;
+  clear;
+  intuition.
+
+Ltac ex_iff_solve :=
+  match goal with
+  | |- @ex _ _ => eexists; ex_iff_solve
+  (* Range constraints are attached to the right *)
+  | |- _ /\ _ => split; [ex_iff_solve | omega]
+  | |- _ <-> _ => conjuncts_iff_solve
+  end.
+
 
 Lemma iff_false_left {P Q R : Prop} : (false = true) <-> Q -> (false = true) /\ P <-> Q /\ R.
 intuition.
@@ -1582,7 +1640,7 @@ Ltac main_solver :=
    end
  (* Booleans - and_boolMP *)
  | simple_ex_iff
- | single_ex_iff
+ | ex_iff_solve
  | drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
  | match goal with |- (forall l r:bool, _ -> _ -> exists _ : bool, _) =>
      let r := fresh "r" in
@@ -1625,6 +1683,14 @@ Ltac main_solver :=
  | idtac "Unable to solve constraint"; dump_context; fail
  ].
 
+(* Omega can get upset by local definitions that are projections from value/proof pairs.
+   Complex goals can use prepare_for_solver to extract facts; this tactic can be used
+   for simpler proofs without using prepare_for_solver. *)
+Ltac simple_omega :=
+  repeat match goal with
+  H := projT1 _ |- _ => clearbody H
+  end; omega.
+
 Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
@@ -1635,8 +1701,8 @@ try match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end
 (* Trying reflexivity will fill in more complex metavariable examples than
    fill_in_evar_eq above, e.g., 8 * n = 8 * ?Goal3 *)
 try (constructor; reflexivity);
-try (constructor; z_comparisons);
-try (constructor; omega);
+try (constructor; repeat match goal with |- and _ _ => split end; z_comparisons);
+try (constructor; simple_omega);
 prepare_for_solver;
 (*dump_context;*)
 constructor;
