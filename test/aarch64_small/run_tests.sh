@@ -52,6 +52,13 @@ else
     red "failed to build lem" "fail"
 fi
 
+if make -B -C ../../aarch64_small smt SAIL="$SAILDIR/sail"
+then
+    green "compiled aarch64_small for SMT generation" "ok"
+else
+    red "failed to build aarch64_small for SMT generation" "fail"
+fi
+
 finish_suite "aarch64_small tests"
 
 printf "</testsuites>\n" >> $DIR/tests.xml
