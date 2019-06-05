@@ -398,14 +398,14 @@ let analyze_primop' ctx id args typ =
   c_debug (lazy ("Analyzing primop " ^ extern ^ "(" ^ Util.string_of_list ", " (fun aval -> Pretty_print_sail.to_string (pp_aval aval)) args ^ ")"));
 
   match extern, args with
-  | "eq_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+  | "eq_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
      begin match cval_ctyp v1 with
      | CT_fbits _ | CT_sbits _ ->
         AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
      | _ -> no_change
      end
 
-  | "neq_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+  | "neq_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
      begin match cval_ctyp v1 with
      | CT_fbits _ | CT_sbits _ ->
         AE_val (AV_cval (V_call (Neq, [v1; v2]), typ))
