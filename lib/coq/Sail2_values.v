@@ -1613,6 +1613,36 @@ Ltac z_comparisons :=
   | exact Z_compare_gt_eq
   ].
 
+(* Try to get the linear arithmetic solver to do booleans. *)
+
+Lemma b2z_true x : x = true <-> Z.b2z x = 1.
+destruct x; compute; split; congruence.
+Qed.
+
+Lemma b2z_false x : x = false <-> Z.b2z x = 0.
+destruct x; compute; split; congruence.
+Qed.
+
+Lemma b2z_tf x : Z.b2z x = 0 \/ Z.b2z x = 1.
+destruct x; auto.
+Qed.
+
+Ltac solve_bool_with_Z :=
+  subst;
+  rewrite ?truefalse, ?falsetrue, ?or_False_l, ?or_False_r in *;
+  repeat match goal with
+  |  H:context [?v = true] |- _  => is_var v; rewrite (b2z_true v) in *
+  | |- context [?v = true]       => is_var v; rewrite (b2z_true v) in *
+  |  H:context [?v = false] |- _ => is_var v; rewrite (b2z_false v) in *
+  | |- context [?v = false]      => is_var v; rewrite (b2z_false v) in *
+  end;
+  repeat match goal with
+  | _:context [Z.b2z ?v] |- _ => generalize (b2z_tf v); generalize dependent (Z.b2z v)
+  | |- context [Z.b2z ?v]     => generalize (b2z_tf v); generalize dependent (Z.b2z v)
+  end;
+  intros;
+  omega.
+
 
 (* Redefine this to add extra solver tactics *)
 Ltac sail_extra_tactic := fail.
@@ -1647,6 +1677,7 @@ Ltac main_solver :=
    | _:(@eq Z ?x _) \/ (@eq Z ?x _) \/ _, _:@eq Z ?y (ZEuclid.div ?x _) |- context[?y] => is_var x; aux y
    end
  (* Booleans - and_boolMP *)
+ | solve_bool_with_Z
  | simple_ex_iff
  | ex_iff_solve
  | drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
