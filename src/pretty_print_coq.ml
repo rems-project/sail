@@ -738,6 +738,7 @@ and doc_arithfact ctxt env ?(exists = []) ?extra nc =
 (* Follows Coq precedence levels *)
 and doc_nc_prop ?(top = true) ctx env nc =
   let locals = Env.get_locals env |> Bindings.bindings in
+  let nc = Env.expand_constraint_synonyms env nc in
   let nc_id_map =
     List.fold_left
       (fun m (v,(_,Typ_aux (typ,_))) ->
@@ -950,11 +951,11 @@ let quant_item_id_name ctx (QI_aux (qi,_)) =
   | QI_constraint nc -> None
   | QI_constant _ -> None
 
-let doc_quant_item_constr ctx delimit (QI_aux (qi,_)) =
+let doc_quant_item_constr ctx env delimit (QI_aux (qi,_)) =
   match qi with
   | QI_id  _ -> None
   | QI_constant _ -> None
-  | QI_constraint nc -> Some (bquote ^^ braces (doc_arithfact ctx Env.empty nc))
+  | QI_constraint nc -> Some (bquote ^^ braces (doc_arithfact ctx env nc))
 
 (* At the moment these are all anonymous - when used we rely on Coq to fill
    them in. *)
@@ -964,18 +965,18 @@ let quant_item_constr_name ctx (QI_aux (qi,_)) =
   | QI_constant _ -> None
   | QI_constraint nc -> Some underscore
 
-let doc_typquant_items ctx delimit (TypQ_aux (tq,_)) =
+let doc_typquant_items ctx env delimit (TypQ_aux (tq,_)) =
   match tq with
   | TypQ_tq qis ->
      separate_opt space (doc_quant_item_id ctx delimit) qis ^^
-     separate_opt space (doc_quant_item_constr ctx delimit) qis
+     separate_opt space (doc_quant_item_constr ctx env delimit) qis
   | TypQ_no_forall -> empty
 
-let doc_typquant_items_separate ctx delimit (TypQ_aux (tq,_)) =
+let doc_typquant_items_separate ctx env delimit (TypQ_aux (tq,_)) =
   match tq with
   | TypQ_tq qis ->
      Util.map_filter (doc_quant_item_id ctx delimit) qis,
-     Util.map_filter (doc_quant_item_constr ctx delimit) qis
+     Util.map_filter (doc_quant_item_constr ctx env delimit) qis
   | TypQ_no_forall -> [], []
 
 let typquant_names_separate ctx (TypQ_aux (tq,_)) =
@@ -986,10 +987,10 @@ let typquant_names_separate ctx (TypQ_aux (tq,_)) =
   | TypQ_no_forall -> [], []
 
 
-let doc_typquant ctx (TypQ_aux(tq,_)) typ = match tq with
+let doc_typquant ctx env (TypQ_aux(tq,_)) typ = match tq with
 | TypQ_tq ((_ :: _) as qs) ->
    string "forall " ^^ separate_opt space (doc_quant_item_id ctx braces) qs ^/^
-     separate_opt space (doc_quant_item_constr ctx parens) qs ^^ string ", " ^^ typ
+     separate_opt space (doc_quant_item_constr ctx env parens) qs ^^ string ", " ^^ typ
 | _ -> typ
 
 (* Produce Size type constraints for bitvector sizes when using
@@ -1016,9 +1017,9 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
   | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
   | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 
-let doc_typschm ctx quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
-  let pt = doc_typ ctx Env.empty t in
-  if quants then doc_typquant ctx tq pt else pt
+let doc_typschm ctx env quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
+  let pt = doc_typ ctx env t in
+  if quants then doc_typquant ctx env tq pt else pt
 
 let is_ctor env id = match Env.lookup_id id env with
 | Enum _ -> true
@@ -2362,14 +2363,14 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
      let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
      doc_op coloneq
        (separate space [string "Definition"; doc_id_type id;
-                        doc_typquant_items empty_ctxt parens typq;
+                        doc_typquant_items empty_ctxt Env.empty parens typq;
                         colon; string "Type"])
-       (doc_typschm empty_ctxt false typschm) ^^ dot
+       (doc_typschm empty_ctxt Env.empty false typschm) ^^ dot
   | TD_abbrev(id,typq,A_aux (A_nexp nexp,_)) ->
      let idpp = doc_id_type id in
      doc_op coloneq
        (separate space [string "Definition"; idpp;
-                        doc_typquant_items empty_ctxt parens typq;
+                        doc_typquant_items empty_ctxt Env.empty parens typq;
                         colon; string "Z"])
        (doc_nexp empty_ctxt nexp) ^^ dot ^^ hardline ^^
      separate space [string "Hint Unfold"; idpp; colon; string "sail."]
@@ -2426,7 +2427,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
     in
     let reset_implicits_pp = doc_reset_implicits id_pp typq in
     doc_op coloneq
-           (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt braces typq])
+           (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt Env.empty braces typq])
            ((*doc_typquant typq*) (braces (space ^^ align fs_doc ^^ space))) ^^
       dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ updates_pp
   | TD_variant(id,typq,ar,_) ->
@@ -2442,7 +2443,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
       | Id_aux ((Id "option"),_) -> empty
       | _ ->
          let id_pp = doc_id_type id in
-         let typ_nm = separate space [id_pp; doc_typquant_items empty_ctxt braces typq] in
+         let typ_nm = separate space [id_pp; doc_typquant_items empty_ctxt Env.empty braces typq] in
          let ar_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_type_union empty_ctxt id_pp) ar) in
          let typ_pp =
            (doc_op coloneq)
@@ -2714,7 +2715,7 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   in
   (* Put the constraints after pattern matching so that any type variable that's
      been replaced by one of the term-level arguments is bound. *)
-  let quantspp, constrspp = doc_typquant_items_separate ctxt braces tq in
+  let quantspp, constrspp = doc_typquant_items_separate ctxt env braces tq in
   let exp = List.fold_left (fun body f -> f body) (bind exp) binds in
   let used_a_pattern = ref false in
   let doc_binder (P_aux (p,ann) as pat, typ) =
@@ -2987,10 +2988,10 @@ let doc_axiom_typschm typ_env l (tqs,typ) =
        then string "M" ^^ space ^^ parens ret_typ_pp
        else ret_typ_pp
      in
-     let tyvars_pp, constrs_pp = doc_typquant_items_separate empty_ctxt braces tqs in
+     let tyvars_pp, constrs_pp = doc_typquant_items_separate empty_ctxt typ_env braces tqs in
      string "forall" ^/^ separate space tyvars_pp ^/^
        arg_typs_pp ^/^ separate space constrs_pp ^^ comma ^/^ ret_typ_pp
-  | _ -> doc_typschm empty_ctxt true (TypSchm_aux (TypSchm_ts (tqs,typ),l))
+  | _ -> doc_typschm empty_ctxt typ_env true (TypSchm_aux (TypSchm_ts (tqs,typ),l))
 
 let doc_val_spec unimplemented (VS_aux (VS_val_spec(_,id,_,_),(l,ann)) as vs) =
   if !opt_undef_axioms && IdSet.mem id unimplemented then
