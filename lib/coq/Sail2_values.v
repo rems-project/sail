@@ -1351,9 +1351,17 @@ end;
 (* We may have uncovered more conjunctions *)
 repeat match goal with H:and _ _ |- _ => destruct H end.
 
+Ltac generalize_embedded_proofs :=
+  repeat match goal with H:context [?X] |- _ =>
+    match type of X with ArithFact _ =>
+      generalize dependent X
+    end
+  end;
+  intros.
 
 Ltac prepare_for_solver :=
 (*dump_context;*)
+ generalize_embedded_proofs;
  clear_irrelevant_defns;
  clear_non_Z_bool_defns;
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
