@@ -179,10 +179,13 @@ let to_smt l vars constr =
     | Nexp_times (nexp1, nexp2) -> sfun "*" [smt_nexp nexp1; smt_nexp nexp2]
     | Nexp_sum (nexp1, nexp2) -> sfun "+" [smt_nexp nexp1; smt_nexp nexp2]
     | Nexp_minus (nexp1, nexp2) -> sfun "-" [smt_nexp nexp1; smt_nexp nexp2]
-    | Nexp_exp (Nexp_aux (Nexp_constant c, _)) when Big_int.greater c Big_int.zero ->
-       Atom (Big_int.to_string (Big_int.pow_int_positive 2 (Big_int.to_int c)))
-    | Nexp_exp nexp when !opt_solver.uninterpret_power -> sfun "sailexp" [smt_nexp nexp]
-    | Nexp_exp nexp -> sfun "^" [Atom "2"; smt_nexp nexp]
+    | Nexp_exp nexp ->
+       begin match nexp_simp nexp with
+       | Nexp_aux (Nexp_constant c, _) when Big_int.greater c Big_int.zero ->
+          Atom (Big_int.to_string (Big_int.pow_int_positive 2 (Big_int.to_int c)))
+       | nexp when !opt_solver.uninterpret_power -> sfun "sailexp" [smt_nexp nexp]
+       | nexp -> sfun "^" [Atom "2"; smt_nexp nexp]
+       end
     | Nexp_neg nexp -> sfun "-" [smt_nexp nexp]
   in
   let rec smt_constraint (NC_aux (aux, l) : n_constraint) : sexpr =

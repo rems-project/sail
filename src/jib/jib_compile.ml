@@ -193,8 +193,10 @@ let rec compile_aval l ctx = function
      let ctyp = cval_ctyp cval in
      let ctyp' = ctyp_of_typ ctx typ in
      if not (ctyp_equal ctyp ctyp') then
-       raise (Reporting.err_unreachable l __POS__ (string_of_ctyp ctyp ^ " != " ^ string_of_ctyp ctyp'));
-     [], cval, []
+       let gs = ngensym () in
+       [iinit ctyp' gs cval], V_id (gs, ctyp'), [iclear ctyp' gs]
+     else
+       [], cval, []
 
   | AV_id (id, typ) ->
      begin
