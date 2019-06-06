@@ -1359,6 +1359,40 @@ Ltac generalize_embedded_proofs :=
   end;
   intros.
 
+Lemma iff_equal_l {T:Type} {P:Prop} {x:T} : (x = x <-> P) -> P.
+tauto.
+Qed.
+Lemma iff_equal_r {T:Type} {P:Prop} {x:T} : (P <-> x = x) -> P.
+tauto.
+Qed.
+
+Lemma iff_known_l {P Q : Prop} : P -> P <-> Q -> Q.
+tauto.
+Qed.
+Lemma iff_known_r {P Q : Prop} : P -> Q <-> P -> Q.
+tauto.
+Qed.
+
+Ltac clean_up_props :=
+  repeat match goal with
+  (* I did try phrasing these as rewrites, but Coq was oddly reluctant to use them *)
+  | H:?x = ?x <-> _ |- _ => apply iff_equal_l in H
+  | H:_ <-> ?x = ?x |- _ => apply iff_equal_r in H
+  | H:context[true = false] |- _ => rewrite truefalse in H
+  | H:context[false = true] |- _ => rewrite falsetrue in H
+  | H1:?P <-> False, H2:context[?Q] |- _ => constr_eq P Q; rewrite -> H1 in H2
+  | H1:False <-> ?P, H2:context[?Q] |- _ => constr_eq P Q; rewrite <- H1 in H2
+  | H1:?P, H2:?Q <-> ?R |- _ => constr_eq P Q; apply (iff_known_l H1) in H2
+  | H1:?P, H2:?R <-> ?Q |- _ => constr_eq P Q; apply (iff_known_r H1) in H2
+  | H:context[_ \/ False] |- _ => rewrite or_False_r in H
+  | H:context[False \/ _] |- _ => rewrite or_False_l in H
+ (* omega doesn't cope well with extra "True"s in the goal.
+    Check that they actually appear because setoid_rewrite can fill in evars. *)
+  | |- context[True /\ _] => setoid_rewrite True_left
+  | |- context[_ /\ True] => setoid_rewrite True_right
+  end;
+  remove_unnecessary_casesplit.
+
 Ltac prepare_for_solver :=
 (*dump_context;*)
  generalize_embedded_proofs;
@@ -1380,10 +1414,8 @@ Ltac prepare_for_solver :=
  filter_disjunctions;
  Z_if_to_or;
  clear_irrelevant_bindings;
- (* omega doesn't cope well with extra "True"s in the goal.
-    Check that they actually appear because setoid_rewrite can fill in evars. *)
- repeat match goal with |- context[True /\ _] => setoid_rewrite True_left end;
- repeat match goal with |- context[_ /\ True] => setoid_rewrite True_right end.
+ subst;
+ clean_up_props.
 
 Lemma trivial_range {x : Z} : ArithFact (x <= x /\ x <= x).
 constructor.
@@ -1625,13 +1657,6 @@ Qed.
 
 Lemma b2z_tf x : 0 <= Z.b2z x <= 1.
 destruct x; simpl; omega.
-Qed.
-
-Lemma iff_equal_l {T:Type} {P:Prop} {x:T} : (x = x <-> P) -> P.
-tauto.
-Qed.
-Lemma iff_equal_r {T:Type} {P:Prop} {x:T} : (P <-> x = x) -> P.
-tauto.
 Qed.
 
 Ltac solve_bool_with_Z :=
