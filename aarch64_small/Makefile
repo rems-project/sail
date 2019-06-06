@@ -24,7 +24,7 @@ armV8.lem: $(SOURCES)
 	$(SAIL) $(SAILFLAGS) -lem -lem_lib ArmV8_extras_embed -o armV8 $^
 
 armV8.axiomatic_model: $(SOURCES)
-	$(SAIL) $(SAILFLAGS) -axiomatic $^
+	$(SAIL) $(SAILFLAGS) -axiomatic -o armV8 $^
 
 for-rmem/armV8.lem: $(SOURCES)
 	mkdir -p $(dir $@)
