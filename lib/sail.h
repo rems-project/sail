@@ -330,6 +330,7 @@ void shift_bits_right_arith(lbits *rop, const lbits op1, const lbits op2);
 
 void shiftl(lbits *rop, const lbits op1, const sail_int op2);
 void shiftr(lbits *rop, const lbits op1, const sail_int op2);
+void arith_shiftr(lbits *rop, const lbits op1, const sail_int op2);
 
 void reverse_endianness(lbits*, lbits);
 

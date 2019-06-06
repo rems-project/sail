@@ -741,6 +741,11 @@ let shiftr (x, y) =
   let rbits = zeros @ x in
   take (List.length x) rbits
 
+let arith_shiftr (x, y) =
+  let msbs = replicate_bits (take 1 x, y) in
+  let rbits = msbs @ x in
+  take (List.length x) rbits
+
 let shift_bits_right (x, y) =
   shiftr (x, uint(y))
 
