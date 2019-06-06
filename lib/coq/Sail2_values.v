@@ -1623,13 +1623,25 @@ Lemma b2z_false x : x = false <-> Z.b2z x = 0.
 destruct x; compute; split; congruence.
 Qed.
 
-Lemma b2z_tf x : Z.b2z x = 0 \/ Z.b2z x = 1.
-destruct x; auto.
+Lemma b2z_tf x : 0 <= Z.b2z x <= 1.
+destruct x; simpl; omega.
+Qed.
+
+Lemma iff_equal_l {T:Type} {P:Prop} {x:T} : (x = x <-> P) -> P.
+tauto.
+Qed.
+Lemma iff_equal_r {T:Type} {P:Prop} {x:T} : (P <-> x = x) -> P.
+tauto.
 Qed.
 
 Ltac solve_bool_with_Z :=
   subst;
   rewrite ?truefalse, ?falsetrue, ?or_False_l, ?or_False_r in *;
+  (* I did try phrasing these as rewrites, but Coq was oddly reluctant to use them *)
+  repeat match goal with
+  | H:?x = ?x <-> _ |- _ => apply iff_equal_l in H
+  | H:_ <-> ?x = ?x |- _ => apply iff_equal_r in H
+  end;
   repeat match goal with
   |  H:context [?v = true] |- _  => is_var v; rewrite (b2z_true v) in *
   | |- context [?v = true]       => is_var v; rewrite (b2z_true v) in *
@@ -1641,7 +1653,7 @@ Ltac solve_bool_with_Z :=
   | |- context [Z.b2z ?v]     => generalize (b2z_tf v); generalize dependent (Z.b2z v)
   end;
   intros;
-  omega.
+  lia.
 
 
 (* Redefine this to add extra solver tactics *)
