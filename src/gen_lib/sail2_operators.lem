@@ -163,9 +163,9 @@ let arith_op_bv_no0 op sign size l r =
   Maybe.bind (int_of_bv sign r) (fun r' ->
   if r' = 0 then Nothing else Just (of_int (length l * size) (op l' r'))))
 
-let mod_bv = arith_op_bv_no0 hardware_mod false 1
-let quot_bv = arith_op_bv_no0 hardware_quot false 1
-let quots_bv = arith_op_bv_no0 hardware_quot true 1
+let mod_bv = arith_op_bv_no0 tmod_int false 1
+let quot_bv = arith_op_bv_no0 tdiv_int false 1
+let quots_bv = arith_op_bv_no0 tdiv_int true 1
 
 let mod_mword = Machine_word.modulo
 let quot_mword = Machine_word.unsignedDivide
@@ -174,8 +174,8 @@ let quots_mword = Machine_word.signedDivide
 let arith_op_bv_int_no0 op sign size l r =
   arith_op_bv_no0 op sign size l (of_int (length l) r)
 
-let quot_bv_int = arith_op_bv_int_no0 hardware_quot false 1
-let mod_bv_int = arith_op_bv_int_no0 hardware_mod false 1
+let quot_bv_int = arith_op_bv_int_no0 tdiv_int false 1
+let mod_bv_int = arith_op_bv_int_no0 tmod_int false 1
 
 let mod_mword_int l r = Machine_word.modulo l (wordFromInteger r)
 let quot_mword_int l r = Machine_word.unsignedDivide l (wordFromInteger r)

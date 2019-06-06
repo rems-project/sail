@@ -82,7 +82,7 @@ overload shr_int = {_shr32, _shr_int}
 val tdiv_int = {
   ocaml: "tdiv_int",
   interpreter: "tdiv_int",
-  lem: "integerDiv_t",
+  lem: "tdiv_int",
   c: "tdiv_int",
   coq: "Z.quot"
 } : (int, int) -> int
@@ -91,7 +91,7 @@ val tdiv_int = {
 val tmod_int = {
   ocaml: "tmod_int",
   interpreter: "tmod_int",
-  lem: "integerMod_t",
+  lem: "tmod_int",
   c: "tmod_int",
   coq: "Z.rem"
 } : (int, int) -> nat
