@@ -142,6 +142,9 @@ end
 val to_axiomatic_model :
   string -> Type_check.Env.t -> Type_check.tannot defs -> unit
 
+val from_axiomatic_model :
+  string -> cdef list * ctx
+
 (** Generate SMT for all the $property and $counterexample pragmas in
    an AST, and write it to appropriately named files. *)
 val generate_smt :

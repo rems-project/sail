@@ -2032,13 +2032,20 @@ let compile env ast =
   let rmap = build_register_map CTMap.empty cdefs in
   cdefs, { (initial_ctx ()) with tc_env = env; register_map = rmap; ast = ast }
 
-let to_axiomatic_model name_file env ast =
-  let jib, ctx = compile env ast in
-  let out_chan = open_out name_file in
-  Marshal.to_channel out_chan jib [];
+let to_axiomatic_model file env ast =
+  let cdefs, ctx = compile env ast in
+  let out_chan = open_out file in
+  Marshal.to_channel out_chan cdefs [];
   Marshal.to_channel out_chan (Type_check.Env.set_prover None ctx.tc_env) [];
   Marshal.to_channel out_chan ctx.register_map [];
   close_out out_chan
+
+let from_axiomatic_model file =
+  let in_chan = open_in file in
+  let cdefs = (Marshal.from_channel in_chan : cdef list) in
+  let env = (Marshal.from_channel in_chan : Type_check.env) in
+  let rmap = (Marshal.from_channel in_chan : id list CTMap.t) in
+  cdefs, { (initial_ctx ()) with tc_env = env; register_map = rmap }
 
 let generate_smt props name_file env ast =
   try
