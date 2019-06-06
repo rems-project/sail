@@ -139,10 +139,10 @@ module Make_optimizer(S : Sequence) : sig
   val optimize : smt_def Stack.t -> smt_def S.t
 end
 
-val to_axiomatic_model :
+val serialize_smt_model :
   string -> Type_check.Env.t -> Type_check.tannot defs -> unit
 
-val from_axiomatic_model :
+val deserialize_smt_model :
   string -> cdef list * ctx
 
 (** Generate SMT for all the $property and $counterexample pragmas in

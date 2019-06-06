@@ -62,7 +62,7 @@ let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
 let opt_specialize_c = ref false
-let opt_smt_axiomatic = ref false
+let opt_smt_serialize = ref false
 let opt_smt_fuzz = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_coq = ref ([]:string list)
@@ -163,8 +163,8 @@ let options = Arg.align ([
   ( "-smt_vector_size",
     Arg.String (fun n -> Jib_smt.opt_default_vector_index := int_of_string n),
     "<n> set a bound of 2 ^ n for generic vectors in generated SMT (default 5)");
-  ( "-axiomatic",
-    Arg.Tuple [set_target "smt"; Arg.Set opt_smt_axiomatic],
+  ( "-smt_serialize",
+    Arg.Tuple [set_target "smt"; Arg.Set opt_smt_serialize],
     " compile Sail to IR suitable for sail-axiomatic tool");
   ( "-c",
     Arg.Tuple [set_target "c"; Arg.Set Initial_check.opt_undefined_gen],
@@ -490,17 +490,18 @@ let target name out_name ast type_envs =
   | Some "smt" when !opt_smt_fuzz ->
      Jib_smt_fuzz.fuzz 0 type_envs ast
 
-  | Some "smt" when !opt_smt_axiomatic ->
+  | Some "smt" when !opt_smt_serialize ->
      let ast_smt, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
      let ast_smt, type_envs = Specialize.(specialize_passes 2 int_specialization_with_externs type_envs ast_smt) in
      let jib, ctx = Jib_smt.compile type_envs ast_smt in
      let name_file =
        match !opt_file_out with
-       | Some f -> f ^ ".axiomatic_model"
-       | None -> "sail.axiomatic_model"
+       | Some f -> f ^ ".smt_model"
+       | None -> "sail.smt_model"
      in
      Reporting.opt_warnings := true;
-     Jib_smt.to_axiomatic_model name_file type_envs ast_smt
+     Jib_smt.serialize_smt_model name_file type_envs ast_smt
+
   | Some "smt" ->
      let open Ast_util in
      let props = Property.find_properties ast in
