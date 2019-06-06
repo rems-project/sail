@@ -30,10 +30,13 @@ Copyright (c) 2013-2018
 
 All rights reserved.
 
-This software was developed by the above within the Rigorous
-Engineering of Mainstream Systems (REMS) project, partly funded by
-EPSRC grant EP/K008528/1, at the Universities of Cambridge and
-Edinburgh.
+This software was developed within the Rigorous Engineering of
+Mainstream Systems (REMS) project, partly funded by EPSRC grant
+EP/K008528/1, at the Universities of Cambridge and Edinburgh.
+
+This software was developed by SRI International and the University of
+Cambridge Computer Laboratory (Department of Computer Science and
+Technology) under DARPA/AFRL contract FA8650-18-C-7809 ("CIFV").
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions

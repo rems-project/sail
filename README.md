@@ -115,3 +115,13 @@ The POWER model in power/ is distributed under the 2-clause BSD licence in
 the headers of those files.
 
 The models in separate repositories are licensed as described in each. 
+
+## Funding 
+
+This software was developed within the Rigorous Engineering of
+Mainstream Systems (REMS) project, partly funded by EPSRC grant
+EP/K008528/1, at the Universities of Cambridge and Edinburgh.
+
+This software was developed by SRI International and the University of
+Cambridge Computer Laboratory (Department of Computer Science and
+Technology) under DARPA/AFRL contract FA8650-18-C-7809 ("CIFV").
