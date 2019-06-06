@@ -62,6 +62,8 @@
 %token <AArch64HGenBase.token_TST> TST
 %token <AArch64HGenBase.token_MRS> MRS
 %token <AArch64HGenBase.token_MSR> MSR
+%token <AArch64HGenBase.token_DC> DC
+%token <AArch64HGenBase.token_IC> IC
 
 /*** instructions/operands ***/
 
@@ -75,4 +77,5 @@
 %token <AArch64HGenBase.token_PRFOP> PRFOP
 %token <AArch64HGenBase.token_SYSREG> SYSREG
 %token <AArch64HGenBase.token_PSTATEFIELD> PSTATEFIELD
-
+%token <AArch64HGenBase.token_DCOP> DCOP
+%token <AArch64HGenBase.token_ICOP> ICOP

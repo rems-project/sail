@@ -394,3 +394,9 @@
 
 | `AArch64MoveSystemImmediate (operand,field) ->
       sprintf "MSR %s,%s" (pp_pstatefield field) (pp_imm operand)
+
+| `AArch64DataCache (t, dc_op) ->
+      sprintf "DC %s,%s" (pp_dcop dc_op) (pp_regzr Set64 t)
+
+| `AArch64InstructionCache (t, ic_op) ->
+      sprintf "IC %s,%s" (pp_icop ic_op) (pp_regzr Set64 t)

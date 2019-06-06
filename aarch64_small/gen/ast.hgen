@@ -43,3 +43,5 @@
   | `AArch64TestBitAndBranch of inst_reg*reg_size*uinteger*bit*bit64 (* t,datasize,bit_pos,bit_val,offset *)
   | `AArch64MoveSystemRegister of inst_reg*uinteger*uinteger*uinteger*uinteger*uinteger*boolean (* t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,read *)
   | `AArch64MoveSystemImmediate of bit4*pSTATEField (* operand,field *)
+  | `AArch64DataCache of inst_reg*dCOp
+  | `AArch64InstructionCache of inst_reg*iCOp

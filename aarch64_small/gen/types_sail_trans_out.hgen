@@ -187,3 +187,22 @@ let translate_out_pSTATEField inst =
     | 1 -> PSTATEField_DAIFClr
     | 2 -> PSTATEField_SP
     | _ -> assert false
+
+let translate_out_dCOp inst =
+  match translate_out_enum inst with
+    | 0 -> IVAC
+    | 1 -> ISW
+    | 2 -> CSW
+    | 3 -> CISW
+    | 4 -> ZVA
+    | 5 -> CVAC
+    | 6 -> CVAU
+    | 7 -> CIVAC
+    | _ -> assert false
+
+let translate_out_iCOp inst =
+  match translate_out_enum inst with
+    | 0 -> IALLUIS
+    | 1 -> IALLU
+    | 2 -> IVAU
+    | _ -> assert false

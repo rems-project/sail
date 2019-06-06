@@ -154,3 +154,9 @@
 
 | `AArch64MoveSystemImmediate (_operand,_field) ->
       ([], [], [], [Next])
+
+| `AArch64DataCache (_t, _dc_op) ->
+      failwith "is anyone using this?"
+
+| `AArch64InstructionCache (_t, _ic_op) ->
+      failwith "is anyone using this?"
