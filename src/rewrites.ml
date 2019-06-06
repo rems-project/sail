@@ -5023,7 +5023,6 @@ let rewrites_target tgt =
   | "c" -> rewrites_c
   | "ir" -> rewrites_c @ [("properties", [])]
   | "smt" -> rewrites_c @ [("properties", [])]
-  | "smtfuzz" -> rewrites_c @ [("properties", [])]
   | "sail" -> []
   | "latex" -> []
   | "interpreter" -> rewrites_interpreter

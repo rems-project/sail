@@ -23,8 +23,8 @@ armV8.lem: $(SOURCES)
 # also generates armV8_embed_sequential.lem, armV8_embed_types.lem, armV8_toFromInterp.lem
 	$(SAIL) $(SAILFLAGS) -lem -lem_lib ArmV8_extras_embed -o armV8 $^
 
-smt: $(SOURCES)
-	$(SAIL) $(SAILFLAGS) -smt $^
+armV8.axiomatic_model: $(SOURCES)
+	$(SAIL) $(SAILFLAGS) -axiomatic $^
 
 for-rmem/armV8.lem: $(SOURCES)
 	mkdir -p $(dir $@)
