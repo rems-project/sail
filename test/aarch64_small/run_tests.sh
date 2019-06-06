@@ -52,7 +52,7 @@ else
     red "failed to build lem" "fail"
 fi
 
-if make -B -C ../../aarch64_small smt SAIL="$SAILDIR/sail"
+if make -B -C ../../aarch64_small armV8.smt_model SAIL="$SAILDIR/sail"
 then
     green "compiled aarch64_small for SMT generation" "ok"
 else
