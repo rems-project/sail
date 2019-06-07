@@ -3121,6 +3121,17 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           annot_pat (P_cons (hd_pat, tl_pat)) typ, env, hd_guards @ tl_guards
        | _ -> typ_error env l "Cannot match cons pattern against non-list type"
      end
+  | P_view (pat, f, exps) ->
+     let inferred_app = infer_funapp l env f exps None in
+     begin match typ_of inferred_app with
+     | Typ_aux (Typ_bidir (typ_left, typ_right), _) ->
+        if subtype_check env typ typ_left then
+          bind_pat env pat typ_right
+        else
+          typ_raise env l (Err_subtype (typ, typ_left, Env.get_constraints env, Env.get_typ_var_locs env))
+     | _ ->
+        typ_error env l "View pattern must have a bi-directional return type"
+     end
   | P_string_append pats ->
      begin
        match Env.expand_synonyms env typ with

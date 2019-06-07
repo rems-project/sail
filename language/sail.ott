@@ -384,8 +384,9 @@ pat :: 'P_' ::=
     {{ com identifier  }}
   | pat typ_pat :: :: var
     {{ com bind pattern to type variable }}
-  | id ( pat1 , .. , patn )                 :: :: app
+  | id ( pat1 , ... , patn )                 :: :: app
     {{ com union constructor pattern }}
+  | pat = id ( exp1 , ... , expn )          :: :: view
 
 % OR?  do we invent something ghastly including a union keyword?  Perhaps not...
 

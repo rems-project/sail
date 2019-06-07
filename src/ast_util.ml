@@ -576,6 +576,7 @@ and map_pat_annot_aux f = function
   | P_vector_concat pats -> P_vector_concat (List.map (map_pat_annot f) pats)
   | P_vector pats -> P_vector (List.map (map_pat_annot f) pats)
   | P_cons (pat1, pat2) -> P_cons (map_pat_annot f pat1, map_pat_annot f pat2)
+  | P_view (pat, id, exp) -> P_view (map_pat_annot f pat, id, List.map (map_exp_annot f) exp)
   | P_string_append pats -> P_string_append (List.map (map_pat_annot f) pats)
 
 and map_mpexp_annot f (MPat_aux (mpexp, annot)) = MPat_aux (map_mpexp_annot_aux f mpexp, f annot)
@@ -947,8 +948,8 @@ and string_of_fexp (FE_aux (FE_Fexp (field, exp), _)) =
   string_of_id field ^ " = " ^ string_of_exp exp
 and string_of_pexp (Pat_aux (pexp, _)) =
   match pexp with
-  | Pat_exp (pat, exp) -> string_of_pat pat ^ " -> " ^ string_of_exp exp
-  | Pat_when (pat, guard, exp) -> string_of_pat pat ^ " when " ^ string_of_exp guard ^ " -> " ^ string_of_exp exp
+  | Pat_exp (pat, exp) -> string_of_pat pat ^ " => " ^ string_of_exp exp
+  | Pat_when (pat, guard, exp) -> string_of_pat pat ^ " if " ^ string_of_exp guard ^ " => " ^ string_of_exp exp
 and string_of_typ_pat (TP_aux (tpat_aux, _)) =
   match tpat_aux with
   | TP_wild -> "_"
@@ -972,6 +973,8 @@ and string_of_pat (P_aux (pat, l)) =
   | P_vector pats -> "[" ^ string_of_list ", " string_of_pat pats ^ "]"
   | P_as (pat, id) -> "(" ^ string_of_pat pat ^ " as " ^ string_of_id id ^ ")"
   | P_string_append [] -> "\"\""
+  | P_view (pat, id, exps) ->
+     string_of_pat pat ^ " <- " ^ string_of_id id ^ "(" ^ Util.string_of_list ", " string_of_exp exps ^ ")"
   | P_string_append pats -> string_of_list " ^ " string_of_pat pats
   | P_record _ -> "PAT"
 
@@ -1028,6 +1031,7 @@ let rec pat_ids (P_aux (pat_aux, _)) =
      IdSet.union (pat_ids pat1) (pat_ids pat2)
   | P_record (fpats, _) ->
      List.fold_right IdSet.union (List.map fpat_ids fpats) IdSet.empty
+  | P_view (pat, _, _) -> pat_ids pat
   | P_string_append pats ->
      List.fold_right IdSet.union (List.map pat_ids pats) IdSet.empty
 
@@ -1739,6 +1743,7 @@ let rec locate_pat : 'a. (l -> l) -> 'a pat -> 'a pat = fun f (P_aux (p_aux, (l,
     | P_tup pats -> P_tup (List.map (locate_pat f) pats)
     | P_list pats -> P_list (List.map (locate_pat f) pats)
     | P_cons (hd_pat, tl_pat) -> P_cons (locate_pat f hd_pat, locate_pat f tl_pat)
+    | P_view (pat, id, exps) -> P_view (locate_pat f pat, locate_id f id, List.map (locate f) exps)
     | P_string_append pats -> P_string_append (List.map (locate_pat f) pats)
   in
   P_aux (p_aux, (f l, annot))
@@ -1746,7 +1751,7 @@ let rec locate_pat : 'a. (l -> l) -> 'a pat -> 'a pat = fun f (P_aux (p_aux, (l,
 and locate_fpat : 'a. (l -> l) -> 'a fpat -> 'a fpat = fun f (FP_aux (FP_Fpat (id, pat), (l, annot))) ->
   FP_aux (FP_Fpat (locate_id f id, locate_pat f pat), (f l, annot))
 
-let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp = fun f (E_aux (e_aux, (l, annot))) ->
+and locate : 'a. (l -> l) -> 'a exp -> 'a exp = fun f (E_aux (e_aux, (l, annot))) ->
   let e_aux = match e_aux with
     | E_block exps -> E_block (List.map (locate f) exps)
     | E_id id -> E_id (locate_id f id)

@@ -647,19 +647,23 @@ effect_set:
   | Pure
     { mk_typ (ATyp_set []) $startpos $endpos }
 
+typ_or_bidir:
+  | typ
+    { $1 }
+  | typ Bidir typ
+    { mk_typ (ATyp_bidir ($1, $3)) $startpos $endpos }
+
 typschm:
-  | typ MinusGt typ
-    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
-  | Forall typquant Dot typ MinusGt typ
-    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
-  | typ MinusGt typ Effect effect_set
-    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, $5)) s e) s e) $startpos $endpos }
-  | Forall typquant Dot typ MinusGt typ Effect effect_set
-    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, $8)) s e) s e) $startpos $endpos }
   | typ Bidir typ
     { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_bidir ($1, $3)) s e) s e) $startpos $endpos }
-  | Forall typquant Dot typ Bidir typ
-    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_bidir ($4, $6)) s e) s e) $startpos $endpos }
+  | typ MinusGt typ_or_bidir
+    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
+  | Forall typquant Dot typ MinusGt typ_or_bidir
+    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
+  | typ MinusGt typ_or_bidir Effect effect_set
+    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, $5)) s e) s e) $startpos $endpos }
+  | Forall typquant Dot typ MinusGt typ_or_bidir Effect effect_set
+    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, $8)) s e) s e) $startpos $endpos }
 
 typschm_eof:
   | typschm Eof
@@ -682,6 +686,8 @@ pat1:
     { mk_pat (P_cons ($1, $3)) $startpos $endpos }
   | atomic_pat Caret pat_string_append
     { mk_pat (P_string_append ($1 :: $3)) $startpos $endpos }
+  | atomic_pat LtMinus id Lparen exp_list Rparen
+    { mk_pat (P_view ($1, $3, $5)) $startpos $endpos }
 
 pat_concat:
   | atomic_pat

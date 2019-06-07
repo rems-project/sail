@@ -224,6 +224,7 @@ pat_aux =  (* Pattern *)
  | P_tup of (pat) list (* tuple pattern *)
  | P_list of (pat) list (* list pattern *)
  | P_cons of pat * pat (* cons pattern *)
+ | P_view of pat * id * exp list
  | P_string_append of pat list (* string append pattern, x ^^ y *)
 
 and pat = 
@@ -235,9 +236,9 @@ and fpat_aux =  (* Field pattern *)
 and fpat = 
    FP_aux of fpat_aux * l
 
-type loop = While | Until
+and loop = While | Until
 
-type measure_aux =  (* optional termination measure for a loop *)
+and measure_aux =  (* optional termination measure for a loop *)
  | Measure_none
  | Measure_some of exp
 

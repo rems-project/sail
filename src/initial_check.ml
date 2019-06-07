@@ -348,10 +348,11 @@ let rec to_ast_pat ctx (P.P_aux (pat, l)) =
           | P.P_tup(pats) -> P_tup(List.map (to_ast_pat ctx) pats)
           | P.P_list(pats) -> P_list(List.map (to_ast_pat ctx) pats)
           | P.P_cons(pat1, pat2) -> P_cons (to_ast_pat ctx pat1, to_ast_pat ctx pat2)
+          | P.P_view(pat, id, exps) -> P_view (to_ast_pat ctx pat, to_ast_id id, List.map (to_ast_exp ctx) exps)
           | P.P_string_append pats -> P_string_append (List.map (to_ast_pat ctx) pats)
          ), (l,()))
 
-let rec to_ast_letbind ctx (P.LB_aux(lb,l) : P.letbind) : unit letbind =
+and to_ast_letbind ctx (P.LB_aux(lb,l) : P.letbind) : unit letbind =
   LB_aux(
     (match lb with
     | P.LB_val(pat,exp) ->
