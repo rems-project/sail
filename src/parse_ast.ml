@@ -414,7 +414,7 @@ type mpexp =
 type mapcl_aux =  (* mapping clause (bidirectional pattern-match) *)
   | MCL_bidir of ( mpexp) * ( mpexp)
   | MCL_forwards of mpexp * exp
-  | MCL_backwards of mpexp * exp
+  | MCL_backwards of exp * mpexp
 
 type mapcl =
  | MCL_aux of ( mapcl_aux) * l

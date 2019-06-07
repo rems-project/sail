@@ -32,7 +32,7 @@
     "overload" "cast" "sizeof" "constant" "constraint" "default" "assert" "newtype" "from"
     "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to"
     "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"
-    "mapping" "where" "with" "implicit"))
+    "mapping" "where" "with" "implicit" "forwards" "backwards"))
 
 (defconst sail2-kinds
   '("Int" "Type" "Order" "Bool" "inc" "dec"
@@ -57,6 +57,8 @@
     ("\\(::\\)<" 1 font-lock-keyword-face)
     ("@" . font-lock-preprocessor-face)
     ("<->" . font-lock-negation-char-face)
+    ("-->" . font-lock-negation-char-face)
+    ("<--" . font-lock-negation-char-face)
     ("\'[a-zA-Z0-9_]+" . font-lock-variable-name-face)
     ("\\([a-zA-Z0-9_]+\\)(" 1 font-lock-function-name-face)
     ("function \\([a-zA-Z0-9_]+\\)" 1 font-lock-function-name-face)

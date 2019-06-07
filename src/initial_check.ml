@@ -708,7 +708,7 @@ let to_ast_mapcl ctx (P.MCL_aux(mapcl, l)) =
   match mapcl with
   | P.MCL_bidir (mpexp1, mpexp2) -> MCL_aux (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (l, ()))
   | P.MCL_forwards (mpexp, exp) -> MCL_aux (MCL_forwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (l, ()))
-  | P.MCL_backwards (mpexp, exp) -> MCL_aux (MCL_backwards (to_ast_mpexp ctx mpexp, to_ast_exp ctx exp), (l, ()))
+  | P.MCL_backwards (exp, mpexp) -> MCL_aux (MCL_backwards (to_ast_exp ctx exp, to_ast_mpexp ctx mpexp), (l, ()))
 
 let to_ast_mapdef ctx (P.MD_aux(md,l):P.mapdef) : unit mapdef =
   match md with

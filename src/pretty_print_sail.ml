@@ -592,12 +592,11 @@ let doc_mapcl (MCL_aux (cl, _)) =
   | MCL_forwards (mpexp, exp) ->
      let left = doc_mpexp mpexp in
      let right = doc_exp exp in
-     separate space [left; string "=>"; right]
-  | MCL_backwards (mpexp, exp) ->
-     let left = doc_mpexp mpexp in
-     let right = doc_exp exp in
-     separate space [left; string "<-"; right]
-
+     separate space [left; string "-->"; right]
+  | MCL_backwards (exp, mpexp) ->
+     let left = doc_exp exp in
+     let right = doc_mpexp mpexp in
+     separate space [left; string "<--"; right]
 
 let doc_mapdef (MD_aux (MD_mapping (id, args, typa, mapcls), _)) =
   match mapcls with

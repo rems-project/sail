@@ -2994,7 +2994,7 @@ and check_mpexp env mpexp typ =
           let checked_guard = check_exp env guard bool_typ in
           Some checked_guard, env
      in
-     construct_mpexp (mpat_of_pat env checked_pat, checked_guard, (l, None))
+     construct_mpexp (mpat_of_pat env checked_pat, checked_guard, (l, None)), env
 
 (* type_coercion env exp typ takes a fully annoted (i.e. already type
    checked) expression exp, and attempts to cast (coerce) it to the
@@ -4447,15 +4447,21 @@ let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
      end
   | _ -> typ_error env l ("Function clause must have function type: " ^ string_of_typ typ ^ " is not a function type")
 
-let check_mapcl env mapcl typ_left typ_right =
+let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
   let bidir = mk_typ (Typ_bidir (typ_left, typ_right)) in
-  match mapcl with
-  | MCL_aux (MCL_bidir (mpexp_left, mpexp_right), (l, _)) ->
-     let left = check_mpexp env mpexp_left typ_left in
-     let right = check_mpexp env mpexp_right typ_right in
+  match aux with
+  | MCL_bidir (mpexp_left, mpexp_right) ->
+     let left, _ = check_mpexp env mpexp_left typ_left in
+     let right, _ = check_mpexp env mpexp_right typ_right in
      MCL_aux (MCL_bidir (left, right), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
-  | _ ->
-     failwith "non MCL_bidir mapcl"
+  | MCL_forwards (mpexp, exp) ->
+     let mpexp, env = check_mpexp env mpexp typ_left in
+     let exp = crule check_exp env exp typ_right in
+     MCL_aux (MCL_forwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
+  | MCL_backwards (exp, mpexp) ->
+     let mpexp, env = check_mpexp env mpexp typ_right in
+     let exp = crule check_exp env exp typ_left in
+     MCL_aux (MCL_forwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
 
 let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pexp), (l, annot))) =
   match annot with

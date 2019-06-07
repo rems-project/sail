@@ -164,6 +164,8 @@ let kw_table =
      ("do",                      (fun _ -> Do));
      ("mutual",                  (fun _ -> Mutual));
      ("bitfield",                (fun _ -> Bitfield));
+     ("forwards",                (fun _ -> Forwards));
+     ("backwards",               (fun _ -> Backwards));
 
      ("barr",                    (fun x -> Barr));
      ("depend",                  (fun x -> Depend));
@@ -251,8 +253,10 @@ rule token = parse
   | "!="				{ (ExclEq(r"!=")) }
   | ">="				{ (GtEq(r">=")) }
   | "->"                                { MinusGt }
+  | "-->"                               { MinusMinusGt }
   | "<->"                               { Bidir }
   | "<-"                                { LtMinus }
+  | "<--"                               { LtMinusMinus }
   | "=>"                                { EqGt(r "=>") }
   | "<="				{ (LtEq(r"<=")) }
   | "/*!"       { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf) }
