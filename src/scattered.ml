@@ -113,7 +113,7 @@ let rec descatter' funcls mapcls = function
        | Some clauses -> List.rev (mapcl :: clauses)
        | None -> [mapcl]
      in
-     DEF_mapdef (MD_aux (MD_mapping (id, no_tannot_opt l, clauses),
+     DEF_mapdef (MD_aux (MD_mapping (id, [], no_tannot_opt l, clauses),
                          (gen_loc l, tannot)))
      :: descatter' funcls mapcls defs
 

@@ -97,15 +97,6 @@ let mk_lit l n m = L_aux (l, loc n m)
 let mk_lit_exp l n m = mk_exp (E_lit (mk_lit l n m)) n m
 let mk_typschm tq t n m = TypSchm_aux (TypSchm_ts (tq, t), loc n m)
 
-let mk_typschm_opt ts n m = TypSchm_opt_aux (
-                                  TypSchm_opt_some (
-                                      ts
-                                    ),
-                                  loc n m
-                                )
-
-let mk_typschm_opt_none = TypSchm_opt_aux (TypSchm_opt_none, Unknown)
-
 let mk_sd s n m = SD_aux (s, loc n m)
 let mk_sd_doc s str n m = SD_aux (s, Documented (str, loc n m))
 let mk_ir r n m = BF_aux (r, loc n m)
@@ -122,7 +113,7 @@ let mk_mpat mpat n m = MP_aux (mpat, loc n m)
 let mk_bidir_mapcl mpexp1 mpexp2 n m = MCL_aux (MCL_bidir (mpexp1, mpexp2), loc n m)
 let mk_forwards_mapcl mpexp exp n m = MCL_aux (MCL_forwards (mpexp, exp), loc n m)
 let mk_backwards_mapcl mpexp exp n m = MCL_aux (MCL_backwards (mpexp, exp), loc n m)
-let mk_map id tannot mapcls n m = MD_aux (MD_mapping (id, tannot, mapcls), loc n m)
+let mk_map id args tannot mapcls n m = MD_aux (MD_mapping (id, args, tannot, mapcls), loc n m)
 
 let doc_vs doc (VS_aux (v, l)) = VS_aux (v, Documented (doc, l))
 
@@ -653,17 +644,23 @@ typ_or_bidir:
   | typ Bidir typ
     { mk_typ (ATyp_bidir ($1, $3)) $startpos $endpos }
 
+%inline forall_opt:
+  |
+    { mk_typqn }
+  | Forall typquant Dot
+    { $2 }
+
+effect_opt:
+  |
+    { mk_typ (ATyp_set []) }
+  | Effect effect_set
+    { fun _ _ -> $2 }
+
 typschm:
   | typ Bidir typ
     { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_bidir ($1, $3)) s e) s e) $startpos $endpos }
-  | typ MinusGt typ_or_bidir
-    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
-  | Forall typquant Dot typ MinusGt typ_or_bidir
-    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
-  | typ MinusGt typ_or_bidir Effect effect_set
-    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, $5)) s e) s e) $startpos $endpos }
-  | Forall typquant Dot typ MinusGt typ_or_bidir Effect effect_set
-    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, $8)) s e) s e) $startpos $endpos }
+  | forall_opt typ MinusGt typ_or_bidir effect_opt
+    { (fun s e -> mk_typschm $1 (mk_typ (ATyp_fn ($2, $4, $5 s e)) s e) s e) $startpos $endpos }
 
 typschm_eof:
   | typschm Eof
@@ -1326,7 +1323,8 @@ atomic_mpat:
     { mk_mpat (MP_list $2) $startpos $endpos }
   | atomic_mpat Colon typ
     { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
-
+  | atomic_mpat LtMinus id Lparen exp_list Rparen
+    { mk_mpat (MP_view ($1, $3, $5)) $startpos $endpos }
 
 
 %inline mpexp:
@@ -1335,18 +1333,13 @@ atomic_mpat:
   | mpat If_ exp
     { mk_mpexp (MPat_when ($1, $3)) $startpos $endpos }
 
-
 mapcl:
   | mpexp Bidir mpexp
     { mk_bidir_mapcl $1 $3 $startpos $endpos }
-  | mpexp EqGt exp
-      { mk_forwards_mapcl $1 $3 $startpos $endpos }
+(*  | mpexp EqGt exp
+    { mk_forwards_mapcl $1 $3 $startpos $endpos }
   | mpexp LtMinus exp
-      { mk_backwards_mapcl $1 $3 $startpos $endpos }
-  (* | exp LtMinus pat
-   *   { mk_backwards_mapcl (mk_pexp (Pat_exp ($3, $1)) $startpos $endpos) $startpos $endpos }
-   * | exp LtMinus pat If_ exp
-   *   { mk_backwards_mapcl (mk_pexp (Pat_when ($3, $5, $1)) $startpos $endpos) $startpos $endpos } *)
+    { mk_backwards_mapcl $1 $3 $startpos $endpos } *)
 
 mapcl_list:
   | mapcl
@@ -1354,11 +1347,17 @@ mapcl_list:
   | mapcl Comma mapcl_list
     { $1 :: $3 }
 
+map_args:
+  |
+    { [], mk_tannotn }
+  | Colon typ Bidir typ
+    { [], (fun s e -> mk_tannot mk_typqn (mk_typ (ATyp_bidir ($2, $4)) s e) s e) $startpos($2) $endpos }
+  | forall_opt Lparen pat_list Rparen MinusGt typ Bidir typ
+    { $3, (fun s e -> mk_tannot $1 (mk_typ (ATyp_bidir ($6, $8)) s e) s e) $startpos($6) $endpos }
+
 map_def:
-  | Mapping id Eq Lcurly mapcl_list Rcurly
-    { mk_map $2 mk_typschm_opt_none $5 $startpos $endpos }
-  | Mapping id Colon typschm Eq Lcurly mapcl_list Rcurly
-    { mk_map $2 (mk_typschm_opt $4 $startpos($4) $endpos($4)) $7 $startpos $endpos }
+  | Mapping id map_args Eq Lcurly mapcl_list Rcurly
+    { mk_map $2 (fst $3) (snd $3) $6 $startpos $endpos }
 
 let_def:
   | Let_ letbind

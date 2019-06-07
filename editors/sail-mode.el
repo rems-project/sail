@@ -60,6 +60,7 @@
     ("\'[a-zA-Z0-9_]+" . font-lock-variable-name-face)
     ("\\([a-zA-Z0-9_]+\\)(" 1 font-lock-function-name-face)
     ("function \\([a-zA-Z0-9_]+\\)" 1 font-lock-function-name-face)
+    ("mapping \\([a-zA-Z0-9_]+\\)" 1 font-lock-function-name-face)
     ("val \\([a-zA-Z0-9_]+\\)" 1 font-lock-function-name-face)
     ("\\_<\\([0-9]+\\|0b[0-9_]+\\|0x[0-9a-fA-F_]+\\|true\\|false\\|bitone\\|bitzero\\)\\_>\\|()" . font-lock-constant-face)))
 

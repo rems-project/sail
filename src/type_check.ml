@@ -2974,17 +2974,17 @@ and check_case env pat_typ pexp typ =
         check_case env pat_typ (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), guard, case), annot)) typ
      | _ -> raise typ_exn
 
-and check_mpexp other_env env mpexp typ =
-  let mpat,guard,((l,_) as annot) = destruct_mpexp mpexp in
-  match bind_mpat false other_env env mpat typ with
-  | checked_mpat, env, guards ->
-     let guard = match guard, guards with
-       | None, h::t -> Some (h,t)
-       | Some x, l -> Some (x,l)
+and check_mpexp env mpexp typ =
+  let mpat, guard, ((l,_) as annot) = destruct_mpexp mpexp in
+  match bind_pat env (pat_of_mpat (strip_mpat mpat)) typ with
+  | checked_pat, env, guards ->
+     let guard = match guard, List.map strip_exp guards with
+       | None, h :: t -> Some (h, t)
+       | Some x, l -> Some (x, l)
        | None, [] -> None
      in
      let guard = match guard with
-       | Some (h,t) ->
+       | Some (h, t) ->
           Some (List.fold_left (fun acc guard -> mk_exp (E_app_infix (acc, mk_id "&", guard))) h t)
        | None -> None
      in
@@ -2994,7 +2994,7 @@ and check_mpexp other_env env mpexp typ =
           let checked_guard = check_exp env guard bool_typ in
           Some checked_guard, env
      in
-     construct_mpexp (checked_mpat, checked_guard, (l, None))
+     construct_mpexp (mpat_of_pat env checked_pat, checked_guard, (l, None))
 
 (* type_coercion env exp typ takes a fully annoted (i.e. already type
    checked) expression exp, and attempts to cast (coerce) it to the
@@ -4006,290 +4006,29 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
   typ_debug (lazy ("Returning: " ^ string_of_exp exp));
   exp
 
-and bind_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) (Typ_aux (typ_aux, _) as typ) =
-  let (Typ_aux (typ_aux, _) as typ), env = bind_existential l None typ env in
-  typ_print (lazy (Util.("Binding " |> yellow |> clear) ^ string_of_mpat mpat ^  " to " ^ string_of_typ typ));
-  let annot_mpat mpat typ' = MP_aux (mpat, (l, mk_expected_tannot env typ' no_effect (Some typ))) in
-  let switch_typ mpat typ = match mpat with
-    | MP_aux (pat_aux, (l, Some tannot)) -> MP_aux (pat_aux, (l, Some { tannot with typ = typ }))
-    | _ -> typ_error env l "Cannot switch type for unannotated mapping-pattern"
+and pat_of_mpat (MP_aux (aux, annot)) =
+  let aux = match aux with
+    | MP_lit lit -> P_lit lit
+    | MP_id id -> P_id id
+    | MP_app (id, mpats) -> P_app (id, List.map pat_of_mpat mpats)
+    | MP_view (mpat, id, exps) -> P_view (pat_of_mpat mpat, id, exps)
+    | MP_tup mpats -> P_tup (List.map pat_of_mpat mpats)
+    | MP_string_append mpats -> P_string_append (List.map pat_of_mpat mpats)
   in
-  let bind_tuple_mpat (tpats, env, guards) mpat typ =
-    let tpat, env, guards' = bind_mpat allow_unknown other_env env mpat typ in tpat :: tpats, env, guards' @ guards
-  in
-  match mpat_aux with
-  | MP_id v ->
-     begin
-       (* If the identifier we're matching on is also a constructor of
-          a union, that's probably a mistake, so warn about it. *)
-       if Env.is_union_constructor v env then
-         Reporting.warn (Printf.sprintf "Identifier %s found in mapping-pattern is also a union constructor at"
-                                        (string_of_id v))
-                        l ""
-       else ();
-       match Env.lookup_id v env with
-       | Local (Immutable, _) | Unbound -> annot_mpat (MP_id v) typ, Env.add_local v (Immutable, typ) env, []
-       | Local (Mutable, _) | Register _ ->
-          typ_error env l ("Cannot shadow mutable local or register in switch statement mapping-pattern " ^ string_of_mpat mpat)
-       | Enum enum -> subtyp l env enum typ; annot_mpat (MP_id v) typ, env, []
-     end
-  | MP_cons (hd_mpat, tl_mpat) ->
-     begin
-       match Env.expand_synonyms env typ with
-       | Typ_aux (Typ_app (f, [A_aux (A_typ ltyp, _)]), _) when Id.compare f (mk_id "list") = 0 ->
-          let hd_mpat, env, hd_guards = bind_mpat allow_unknown other_env env hd_mpat ltyp in
-          let tl_mpat, env, tl_guards = bind_mpat allow_unknown other_env env tl_mpat typ in
-          annot_mpat (MP_cons (hd_mpat, tl_mpat)) typ, env, hd_guards @ tl_guards
-       | _ -> typ_error env l "Cannot match cons mapping-pattern against non-list type"
-     end
-  | MP_string_append mpats ->
-     begin
-       match Env.expand_synonyms env typ with
-       | Typ_aux (Typ_id id, _) when Id.compare id (mk_id "string") = 0 ->
-          let rec process_mpats env = function
-            | [] -> [], env, []
-            | pat :: pats ->
-               let pat', env, guards = bind_mpat allow_unknown other_env env pat typ in
-               let pats', env, guards' = process_mpats env pats in
-               pat' :: pats', env, guards @ guards'
-          in
-          let pats, env, guards = process_mpats env mpats in
-          annot_mpat (MP_string_append pats) typ, env, guards
-       | _ -> typ_error env l "Cannot match string-append pattern against non-string type"
-     end
-  | MP_list mpats ->
-     begin
-       match Env.expand_synonyms env typ with
-       | Typ_aux (Typ_app (f, [A_aux (A_typ ltyp, _)]), _) when Id.compare f (mk_id "list") = 0 ->
-          let rec process_mpats env = function
-            | [] -> [], env, []
-            | (pat :: mpats) ->
-               let mpat', env, guards = bind_mpat allow_unknown other_env env mpat ltyp in
-               let mpats', env, guards' = process_mpats env mpats in
-               mpat' :: mpats', env, guards @ guards'
-          in
-          let mpats, env, guards = process_mpats env mpats in
-          annot_mpat (MP_list mpats) typ, env, guards
-       | _ -> typ_error env l ("Cannot match list mapping-pattern " ^ string_of_mpat mpat ^ "  against non-list type " ^ string_of_typ typ)
-     end
-  | MP_tup [] ->
-     begin
-       match Env.expand_synonyms env typ with
-       | Typ_aux (Typ_id typ_id, _) when string_of_id typ_id = "unit" ->
-          annot_mpat (MP_tup []) typ, env, []
-       | _ -> typ_error env l "Cannot match unit mapping-pattern against non-unit type"
-     end
-  | MP_tup mpats ->
-     begin
-       match Env.expand_synonyms env typ with
-       | Typ_aux (Typ_tup typs, _) ->
-          let tpats, env, guards =
-            try List.fold_left2 bind_tuple_mpat ([], env, []) mpats typs with
-            | Invalid_argument _ -> typ_error env l "Tuple mapping-pattern and tuple type have different length"
-          in
-          annot_mpat (MP_tup (List.rev tpats)) typ, env, guards
-       | _ -> typ_error env l "Cannot bind tuple mapping-pattern against non tuple type"
-     end
-  | MP_app (f, mpats) when Env.is_union_constructor f env ->
-     begin
-       let (typq, ctor_typ) = Env.get_val_spec f env in
-       let quants = quant_items typq in
-       let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
-         | Typ_tup typs -> typs
-         | _ -> [typ]
-       in
-       match Env.expand_synonyms env ctor_typ with
-       | Typ_aux (Typ_fn ([arg_typ], ret_typ, _), _) ->
-          begin
-            try
-              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
-              let unifiers = unify l env (tyvars_of_typ ret_typ) ret_typ typ in
-              let arg_typ' = subst_unifiers unifiers arg_typ in
-              let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
-              if (match quants' with [] -> false | _ -> true)
-              then typ_error env l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in mapping-pattern " ^ string_of_mpat mpat)
-              else ();
-              let ret_typ' = subst_unifiers unifiers ret_typ in
-              let tpats, env, guards =
-                try List.fold_left2 bind_tuple_mpat ([], env, []) mpats (untuple arg_typ') with
-                | Invalid_argument _ -> typ_error env l "Union constructor mapping-pattern arguments have incorrect length"
-              in
-              annot_mpat (MP_app (f, List.rev tpats)) typ, env, guards
-            with
-            | Unification_error (l, m) -> typ_error env l ("Unification error when mapping-pattern matching against union constructor: " ^ m)
-          end
-       | _ -> typ_error env l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
-     end
-  | MP_app (other, mpats) when Env.is_mapping other env ->
-     begin
-       let (typq, mapping_typ) = Env.get_val_spec other env in
-       let quants = quant_items typq in
-       let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
-         | Typ_tup typs -> typs
-         | _ -> [typ]
-       in
-       match Env.expand_synonyms env mapping_typ with
-       | Typ_aux (Typ_bidir (typ1, typ2), _) ->
-          begin
-            try
-              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
-              let unifiers = unify l env (tyvars_of_typ typ2) typ2 typ in
-              let arg_typ' = subst_unifiers unifiers typ1 in
-              let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
-              if (match quants' with [] -> false | _ -> true)
-              then typ_error env l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in mapping-pattern " ^ string_of_mpat mpat)
-              else ();
-              let ret_typ' = subst_unifiers unifiers typ2 in
-              let tpats, env, guards =
-                try List.fold_left2 bind_tuple_mpat ([], env, []) mpats (untuple arg_typ') with
-                | Invalid_argument _ -> typ_error env l "Mapping pattern arguments have incorrect length"
-              in
-              annot_mpat (MP_app (other, List.rev tpats)) typ, env, guards
-            with
-            | Unification_error (l, m) ->
-               try
-                 typ_debug (lazy "Unifying mapping forwards failed, trying backwards.");
-                 typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for mapping-pattern " ^ string_of_typ typ));
-                 let unifiers = unify l env (tyvars_of_typ typ1) typ1 typ in
-                 let arg_typ' = subst_unifiers unifiers typ2 in
-                 let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
-                 if (match quants' with [] -> false | _ -> true)
-                 then typ_error env l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in mapping-pattern " ^ string_of_mpat mpat)
-                 else ();
-                 let ret_typ' = subst_unifiers unifiers typ1 in
-                 let tpats, env, guards =
-                   try List.fold_left2 bind_tuple_mpat ([], env, []) mpats (untuple arg_typ') with
-                   | Invalid_argument _ -> typ_error env l "Mapping pattern arguments have incorrect length"
-                 in
-                 annot_mpat (MP_app (other, List.rev tpats)) typ, env, guards
-               with
-               | Unification_error (l, m) -> typ_error env l ("Unification error when pattern matching against mapping constructor: " ^ m)
-          end
-       | Typ_aux (typ, _) ->
-          typ_error env l ("unifying mapping type, expanded synonyms to non-mapping type??")
-     end
-  | MP_app (f, _) when not (Env.is_union_constructor f env || Env.is_mapping f env) ->
-     typ_error env l (string_of_id f ^ " is not a union constructor or mapping in mapping-pattern " ^ string_of_mpat mpat)
-  | MP_as (mpat, id) ->
-     let (typed_mpat, env, guards) = bind_mpat allow_unknown other_env env mpat typ in
-     (annot_mpat (MP_as (typed_mpat, id)) (typ_of_mpat typed_mpat),
-      Env.add_local id (Immutable, typ_of_mpat typed_mpat) env,
-      guards)
-  (* This is a special case for flow typing when we match a constant numeric literal. *)
-  | MP_lit (L_aux (L_num n, _) as lit) when is_atom typ ->
-     let nexp = match destruct_atom_nexp env typ with Some n -> n | None -> assert false in
-     annot_mpat (MP_lit lit) (atom_typ (nconstant n)), Env.add_constraint (nc_eq nexp (nconstant n)) env, []
-  (* Similarly, for boolean literals *)
-  | MP_lit (L_aux (L_true, _) as lit) when is_atom_bool typ ->
-     let nc = match destruct_atom_bool env typ with Some n -> n | None -> assert false in
-     annot_mpat (MP_lit lit) (atom_bool_typ nc_true), Env.add_constraint nc env, []
-  | MP_lit (L_aux (L_false, _) as lit) when is_atom_bool typ ->
-     let nc = match destruct_atom_bool env typ with Some n -> n | None -> assert false in
-     annot_mpat (MP_lit lit) (atom_bool_typ nc_false), Env.add_constraint (nc_not nc) env, []
-  | _ ->
-     let (inferred_mpat, env, guards) = infer_mpat allow_unknown other_env env mpat in
-     match subtyp l env typ (typ_of_mpat inferred_mpat) with
-     | () -> switch_typ inferred_mpat (typ_of_mpat inferred_mpat), env, guards
-     | exception (Type_error _ as typ_exn) ->
-        match mpat_aux with
-        | MP_lit lit ->
-           let var = fresh_var () in
-           let guard = mk_exp (E_app_infix (mk_exp (E_id var), mk_id "==", mk_exp (E_lit lit))) in
-           let (typed_mpat, env, guards) = bind_mpat allow_unknown other_env env (mk_mpat (MP_id var)) typ in
-           typed_mpat, env, guard::guards
-        | _ -> raise typ_exn
-and infer_mpat allow_unknown other_env env (MP_aux (mpat_aux, (l, ())) as mpat) =
-  let annot_mpat mpat typ = MP_aux (mpat, (l, mk_tannot env typ no_effect)) in
-  match mpat_aux with
-  | MP_id v ->
-     begin
-       match Env.lookup_id v env with
-       | Local (Immutable, _) | Unbound ->
-          begin match Env.lookup_id v other_env with
-          | Local (Immutable, typ) -> bind_mpat allow_unknown other_env env (mk_mpat (MP_typ (mk_mpat (MP_id v), typ))) typ
-          | Unbound ->
-             if allow_unknown then annot_mpat (MP_id v) unknown_typ, env, [] else
-               typ_error env l ("Cannot infer identifier in mapping-pattern " ^ string_of_mpat mpat ^ " - try adding a type annotation")
-          | _ -> assert false
-          end
-       | Local (Mutable, _) | Register _ ->
-          typ_error env l ("Cannot shadow mutable local or register in mapping-pattern " ^ string_of_mpat mpat)
-       | Enum enum -> annot_mpat (MP_id v) enum, env, []
-     end
-  | MP_app (f, mpats) when Env.is_union_constructor f env ->
-     begin
-       let (typq, ctor_typ) = Env.get_val_spec f env in
-       match Env.expand_synonyms env ctor_typ with
-       | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
-          bind_mpat allow_unknown other_env env mpat ret_typ
-       | _ -> typ_error env l ("Mal-formed constructor " ^ string_of_id f)
-     end
-  | MP_app (f, mpats) when Env.is_mapping f env ->
-     begin
-       let (typq, mapping_typ) = Env.get_val_spec f env in
-       match Env.expand_synonyms env mapping_typ with
-       | Typ_aux (Typ_bidir (typ1, typ2), _) ->
-          begin
-            try
-              bind_mpat allow_unknown other_env env mpat typ2
-            with
-            | Type_error _ ->
-               bind_mpat allow_unknown other_env env mpat typ1
-          end
-       | _ -> typ_error env l ("Malformed mapping type " ^ string_of_id f)
-     end
-  | MP_lit lit ->
-     annot_mpat (MP_lit lit) (infer_lit env lit), env, []
-  | MP_typ (mpat, typ_annot) ->
-     Env.wf_typ env typ_annot;
-     let (typed_mpat, env, guards) = bind_mpat allow_unknown other_env env mpat typ_annot in
-     annot_mpat (MP_typ (typed_mpat, typ_annot)) typ_annot, env, guards
-  | MP_vector (mpat :: mpats) ->
-     let fold_mpats (mpats, env, guards) mpat =
-       let typed_mpat, env, guards' = bind_mpat allow_unknown other_env env mpat bit_typ in
-       mpats @ [typed_mpat], env, guards' @ guards
-     in
-     let mpats, env, guards = List.fold_left fold_mpats ([], env, []) (mpat :: mpats) in
-     let len = nexp_simp (nint (List.length mpats)) in
-     let etyp = typ_of_mpat (List.hd mpats) in
-     List.iter (fun mpat -> typ_equality l env etyp (typ_of_mpat mpat)) mpats;
-     annot_mpat (MP_vector mpats) (dvector_typ env len etyp), env, guards
-  | MP_vector_concat (mpat :: mpats) ->
-     let fold_mpats (mpats, env, guards) mpat =
-       let inferred_mpat, env, guards' = infer_mpat allow_unknown other_env env mpat in
-       mpats @ [inferred_mpat], env, guards' @ guards
-     in
-     let inferred_mpats, env, guards =
-       List.fold_left fold_mpats ([], env, []) (mpat :: mpats) in
-     if allow_unknown && List.exists (fun mpat -> is_unknown_type (typ_of_mpat mpat)) inferred_mpats then
-       annot_mpat (MP_vector_concat inferred_mpats) unknown_typ, env, guards (* hack *)
-     else
-       let (len, _, vtyp) = destruct_vec_typ l env (typ_of_mpat (List.hd inferred_mpats)) in
-       let fold_len len mpat =
-         let (len', _, vtyp') = destruct_vec_typ l env (typ_of_mpat mpat) in
-         typ_equality l env vtyp vtyp';
-         nsum len len'
-       in
-       let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_mpats)) in
-       annot_mpat (MP_vector_concat inferred_mpats) (dvector_typ env len vtyp), env, guards
-  | MP_string_append mpats ->
-     let fold_pats (pats, env, guards) pat =
-       let inferred_pat, env, guards' = infer_mpat allow_unknown other_env env pat in
-       typ_equality l env (typ_of_mpat inferred_pat) string_typ;
-       pats @ [inferred_pat], env, guards' @ guards
-     in
-     let typed_mpats, env, guards =
-       List.fold_left fold_pats ([], env, []) mpats
-     in
-     annot_mpat (MP_string_append typed_mpats) string_typ, env, guards
-  | MP_as (mpat, id) ->
-     let (typed_mpat, env, guards) = infer_mpat allow_unknown other_env env mpat in
-     (annot_mpat (MP_as (typed_mpat, id)) (typ_of_mpat typed_mpat),
-      Env.add_local id (Immutable, typ_of_mpat typed_mpat) env,
-      guards)
+  P_aux (aux, annot)
 
-  | _ ->
-     typ_error env l ("Couldn't infer type of mapping-pattern " ^ string_of_mpat mpat)
+and mpat_of_pat env (P_aux (aux, ((l, _) as annot)) as pat) =
+  let aux = match aux with
+    | P_lit lit -> MP_lit lit
+    | P_id id -> MP_id id
+    | P_app (id, pats) -> MP_app (id, List.map (mpat_of_pat env) pats)
+    | P_view (pat, id, exps) -> MP_view (mpat_of_pat env pat, id, exps)
+    | P_tup pats -> MP_tup (List.map (mpat_of_pat env) pats)
+    | P_string_append pats -> MP_string_append (List.map (mpat_of_pat env) pats)
+    | _ ->
+       typ_error env l (string_of_pat pat)
+  in
+  MP_aux (aux, annot)
 
 (**************************************************************************)
 (* 6. Effect system                                                       *)
@@ -4708,41 +4447,15 @@ let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
      end
   | _ -> typ_error env l ("Function clause must have function type: " ^ string_of_typ typ ^ " is not a function type")
 
-
-let check_mapcl : 'a. Env.t -> 'a mapcl -> typ -> tannot mapcl =
-  fun env (MCL_aux (cl, (l, _))) typ ->
-    match typ with
-    | Typ_aux (Typ_bidir (typ1, typ2), _) -> begin
-        match cl with
-        | MCL_bidir (mpexp1, mpexp2) -> begin
-            let testing_env = Env.set_allow_unknowns true env in
-            let left_mpat, _, _ = destruct_mpexp mpexp1 in
-            let _, left_id_env, _ = bind_mpat true Env.empty testing_env (strip_mpat left_mpat) typ1 in
-            let right_mpat, _, _ = destruct_mpexp mpexp2 in
-            let _, right_id_env, _ = bind_mpat true Env.empty testing_env (strip_mpat right_mpat) typ2 in
-
-            let typed_mpexp1, prop_eff1 = propagate_mpexp_effect (check_mpexp right_id_env env (strip_mpexp mpexp1) typ1) in
-            let typed_mpexp2, prop_eff2 = propagate_mpexp_effect (check_mpexp left_id_env env (strip_mpexp mpexp2) typ2) in
-            MCL_aux (MCL_bidir (typed_mpexp1, typed_mpexp2), (l, mk_expected_tannot env typ (union_effects prop_eff1 prop_eff2) (Some typ)))
-          end
-        | MCL_forwards (mpexp, exp) -> begin
-            let mpat, _, _ = destruct_mpexp mpexp in
-            let _, mpat_env, _ = bind_mpat false Env.empty env (strip_mpat mpat) typ1 in
-            let typed_mpexp, prop_eff1 = propagate_mpexp_effect (check_mpexp Env.empty env (strip_mpexp mpexp) typ1) in
-            let typed_exp = propagate_exp_effect (check_exp mpat_env (strip_exp exp) typ2) in
-            let prop_effs = union_effects prop_eff1 (effect_of typed_exp) in
-            MCL_aux (MCL_forwards (typed_mpexp, typed_exp), (l, mk_expected_tannot env typ prop_effs (Some typ)))
-          end
-        | MCL_backwards (mpexp, exp) -> begin
-            let mpat, _, _ = destruct_mpexp mpexp in
-            let _, mpat_env, _ = bind_mpat false Env.empty env (strip_mpat mpat) typ2 in
-            let typed_mpexp, prop_eff1 = propagate_mpexp_effect (check_mpexp Env.empty env (strip_mpexp mpexp) typ2) in
-            let typed_exp = propagate_exp_effect (check_exp mpat_env (strip_exp exp) typ1) in
-            let prop_effs = union_effects prop_eff1 (effect_of typed_exp) in
-            MCL_aux (MCL_backwards (typed_mpexp, typed_exp), (l, mk_expected_tannot env typ prop_effs (Some typ)))
-          end
-      end
-    | _ -> typ_error env l ("Mapping clause must have mapping type: " ^ string_of_typ typ ^ " is not a mapping type")
+let check_mapcl env mapcl typ_left typ_right =
+  let bidir = mk_typ (Typ_bidir (typ_left, typ_right)) in
+  match mapcl with
+  | MCL_aux (MCL_bidir (mpexp_left, mpexp_right), (l, _)) ->
+     let left = check_mpexp env mpexp_left typ_left in
+     let right = check_mpexp env mpexp_right typ_right in
+     MCL_aux (MCL_bidir (left, right), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
+  | _ ->
+     failwith "non MCL_bidir mapcl"
 
 let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pexp), (l, annot))) =
   match annot with
@@ -4754,33 +4467,35 @@ let mapcl_effect (MCL_aux (_, (l, annot))) =
   | Some t -> t.effect
   | None -> no_effect (* Maybe could be assert false. This should never happen *)
 
-let infer_funtyp l env tannotopt funcls =
-  match tannotopt with
+let infer_tannot_opt l env tannot_opt pat =
+  match tannot_opt with
   | Typ_annot_opt_aux (Typ_annot_opt_some (quant, ret_typ), _) ->
-     begin
-       let rec typ_from_pat (P_aux (pat_aux, (l, _)) as pat) =
-         match pat_aux with
-         | P_lit lit -> infer_lit env lit
-         | P_typ (typ, _) -> typ
-         | P_tup pats -> mk_typ (Typ_tup (List.map typ_from_pat pats))
-         | _ -> typ_error env l ("Cannot infer type from pattern " ^ string_of_pat pat)
-       in
-       match funcls with
-       | [FCL_aux (FCL_Funcl (_, Pat_aux (pexp,_)), _)] ->
-          let pat = match pexp with Pat_exp (pat,_) | Pat_when (pat,_,_) -> pat in
-          (* The function syntax lets us bind multiple function
-             arguments with a single pattern, hence why we need to do
-             this. But perhaps we don't want to allow this? *)
-          let arg_typs =
-            match typ_from_pat pat with
-            | Typ_aux (Typ_tup arg_typs, _) -> arg_typs
-            | arg_typ -> [arg_typ]
-          in
-          let fn_typ = mk_typ (Typ_fn (arg_typs, ret_typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
-          (quant, fn_typ)
-       | _ -> typ_error env l "Cannot infer function type for function with multiple clauses"
-     end
-  | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> typ_error env l "Cannot infer function type for unannotated function"
+     let rec typ_from_pat (P_aux (pat_aux, (l, _)) as pat) =
+       match pat_aux with
+       | P_lit lit -> infer_lit env lit
+       | P_typ (typ, _) -> typ
+       | P_tup pats -> mk_typ (Typ_tup (List.map typ_from_pat pats))
+       | _ -> typ_error env l ("Cannot infer type from pattern " ^ string_of_pat pat)
+     in
+     (* The function syntax lets us bind multiple function arguments
+        with a single pattern, hence why we need to do this. But
+        perhaps we don't want to allow this? *)
+     let arg_typs =
+       match typ_from_pat pat with
+       | Typ_aux (Typ_tup arg_typs, _) -> arg_typs
+       | arg_typ -> [arg_typ]
+     in
+     let fn_typ = mk_typ (Typ_fn (arg_typs, ret_typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
+     (quant, fn_typ)
+  | Typ_annot_opt_aux (Typ_annot_opt_none, _) ->
+     typ_error env l "Cannot infer function or mapping type for unannotated pattern"
+
+let infer_funtyp l env tannot_opt funcls =
+  match funcls with
+  | [FCL_aux (FCL_Funcl (_, Pat_aux (pexp,_)), _)] ->
+     let pat = match pexp with Pat_exp (pat, _) | Pat_when (pat, _, _) -> pat in
+     infer_tannot_opt l env tannot_opt pat
+  | _ -> typ_error env l "Cannot infer function type for function with multiple clauses"
 
 let mk_val_spec env typq typ id =
   let eff =
@@ -4790,12 +4505,13 @@ let mk_val_spec env typq typ id =
   in
   DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), Parse_ast.Unknown), id, [], false), (Parse_ast.Unknown, mk_tannot env typ eff)))
 
-let check_tannotopt env typq ret_typ = function
+let check_tannot_opt def_type env typq ret_typ = function
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
   | Typ_annot_opt_aux (Typ_annot_opt_some (annot_typq, annot_ret_typ), l) ->
      if typ_identical env ret_typ annot_ret_typ
      then ()
-     else typ_error env l (string_of_bind (typq, ret_typ) ^ " and " ^ string_of_bind (annot_typq, annot_ret_typ) ^ " do not match between function and val spec")
+     else typ_error env l (string_of_bind (typq, ret_typ) ^ "\nand\n" ^ string_of_bind (annot_typq, annot_ret_typ)
+                           ^ "\ndo not match between " ^ def_type ^ " and val spec")
 
 let check_termination_measure env arg_typs pat exp =
   let typ = match arg_typs with [x] -> x | _ -> Typ_aux (Typ_tup arg_typs,Unknown) in
@@ -4838,7 +4554,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
        vtyp_args, vtyp_ret, declared_eff, vl
     | _ -> typ_error env l "Function val spec is not a function type"
   in
-  check_tannotopt env quant vtyp_ret tannotopt;
+  check_tannot_opt "function" env quant vtyp_ret tannotopt;
   typ_debug (lazy ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
   let funcl_env = add_typquant l quant env in
   let recopt =
@@ -4864,43 +4580,41 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
     vs_def @ [DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, None)))], env
   else typ_error env l ("Effects do not match: " ^ string_of_effect declared_eff ^ " declared and " ^ string_of_effect eff ^ " found")
 
-
-let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md_aux) =
-  typ_print (lazy ("\nChecking mapping " ^ string_of_id id));
-  let have_val_spec, (quant, typ), env =
-    try true, Env.get_val_spec id env, env with
+let check_mapdef env (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), (l, _)) as md_aux) =
+  typ_print (lazy ("\n" ^ Util.("Check mapping " |> cyan |> clear) ^ string_of_id id));
+  let args = List.map strip_pat args in
+  let have_val_spec, (quant, typ) =
+    try true, Env.get_val_spec id env with
     | Type_error (_, l, _) as err ->
-       match tannot_opt with
-       | Typ_annot_opt_aux (Typ_annot_opt_some (quant, typ), _) ->
-          false, (quant, typ), env
-       | Typ_annot_opt_aux (Typ_annot_opt_none, _) ->
-          raise err
+       false, infer_tannot_opt l env tannot_opt (mk_pat (P_tup args))
   in
-  let vtyp1, vtyp2, vl = match typ with
-    | Typ_aux (Typ_bidir (vtyp1, vtyp2), vl) -> vtyp1, vtyp2, vl
-    | _ -> typ_error env l "Mapping val spec was not a mapping type"
+  let checked_args, mapcl_env, left_typ, right_typ = match typ with
+    | Typ_aux (Typ_fn (arg_typs, (Typ_aux (Typ_bidir (left_typ, right_typ), _) as bidir), _), _) ->
+       check_tannot_opt "mapping" env quant bidir tannot_opt;
+       typ_print (lazy (Util.("Binding mapping family arguments " |> yellow |> clear) ^ Util.string_of_list ", " string_of_typ arg_typs));
+       let env = add_typquant l quant env in
+       let bind_arg (targs, env) arg typ =
+         let targ, env = bind_pat_no_guard env arg typ in
+         targs @ [targ], env
+       in
+       let checked_args, env = List.fold_left2 bind_arg ([], env) args arg_typs in
+       checked_args, env, left_typ, right_typ
+    | _ ->
+       typ_error env l "Mapping definition must have a bi-directional mapping type"
   in
-  begin match tannot_opt with
-  | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
-  | Typ_annot_opt_aux (Typ_annot_opt_some (annot_typq, annot_typ), l) ->
-     if typ_identical env typ annot_typ then ()
-     else typ_error env l (string_of_bind (quant, typ) ^ " and " ^ string_of_bind (annot_typq, annot_typ) ^ " do not match between mapping and val spec")
-  end;
-  typ_debug (lazy ("Checking mapdef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
   let vs_def, env =
     if not have_val_spec then
       [mk_val_spec env quant (Env.expand_synonyms env typ) id], Env.add_val_spec id (quant, typ) env
     else
       [], env
   in
-  let mapcl_env = add_typquant l quant env in
-  let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env mapcl typ) mapcls in
+  let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env (strip_mapcl mapcl) left_typ right_typ) mapcls in
   let eff = List.fold_left union_effects no_effect (List.map mapcl_effect mapcls) in
   let env = Env.define_val_spec id env in
   if equal_effects eff no_effect || equal_effects eff (mk_effect [BE_escape]) || !opt_no_effects then
-    vs_def @ [DEF_mapdef (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, None)))], env
+    vs_def @ [DEF_mapdef (MD_aux (MD_mapping (id, [], tannot_opt, mapcls), (l, None)))], env
   else
-    typ_error env l ("Mapping not pure (or escape only): " ^ string_of_effect eff ^ " found")
+    typ_error env l ("A maping may not have any effect other than {escape}: " ^ string_of_effect eff ^ " found")
 
 (* Checking a val spec simply adds the type as a binding in the
    context. We have to destructure the various kinds of val specs, but
@@ -5025,9 +4739,14 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
      [DEF_scattered (SD_aux (SD_funcl funcl, (l, None)))], env
   | SD_mapcl (id, mapcl) ->
      let typq, typ = Env.get_val_spec id env in
-     let mapcl_env = add_typquant l typq env in
-     let mapcl = check_mapcl mapcl_env mapcl typ in
-     [DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, None)))], env
+     begin match typ with
+     | Typ_aux (Typ_bidir (typ_left, typ_right), _) ->
+        let mapcl_env = add_typquant l typq env in
+        let mapcl = check_mapcl mapcl_env (strip_mapcl mapcl) typ_left typ_right in
+        [DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, None)))], env
+     | _ ->
+        typ_error env l "Scattered mapping clause must must have a monomorphic bi-directional type"
+     end
 
 and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
   fun env def ->

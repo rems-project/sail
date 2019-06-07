@@ -658,14 +658,6 @@ let to_ast_tannot_opt ctx (P.Typ_annot_opt_aux(tp,l)) : tannot_opt ctx_out =
     let typq, ctx = to_ast_typquant ctx tq in
     Typ_annot_opt_aux (Typ_annot_opt_some(typq,to_ast_typ ctx typ),l),ctx
 
-let to_ast_typschm_opt ctx (P.TypSchm_opt_aux(aux,l)) : tannot_opt ctx_out =
-  match aux with
-  | P.TypSchm_opt_none ->
-     Typ_annot_opt_aux (Typ_annot_opt_none, l), ctx
-  | P.TypSchm_opt_some (P.TypSchm_aux (P.TypSchm_ts (tq, typ), l)) ->
-     let typq, ctx = to_ast_typquant ctx tq in
-     Typ_annot_opt_aux (Typ_annot_opt_some (typq, to_ast_typ ctx typ), l), ctx
-
 let to_ast_effects_opt (P.Effect_opt_aux(e,l)) : effect_opt =
   match e with
   | P.Effect_opt_none -> Effect_opt_aux(Effect_opt_none,l)
@@ -704,6 +696,7 @@ let rec to_ast_mpat ctx (P.MP_aux(mpat,l)) =
     | P.MP_cons(pat1, pat2) -> MP_cons (to_ast_mpat ctx pat1, to_ast_mpat ctx pat2)
     | P.MP_string_append pats -> MP_string_append (List.map (to_ast_mpat ctx) pats)
     | P.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat ctx mpat, to_ast_typ ctx typ)
+    | P.MP_view (mpat, id, exps) -> MP_view (to_ast_mpat ctx mpat, to_ast_id id, List.map (to_ast_exp ctx) exps)
     ), (l,()))
 
 let to_ast_mpexp ctx (P.MPat_aux(mpexp, l)) =
@@ -719,9 +712,9 @@ let to_ast_mapcl ctx (P.MCL_aux(mapcl, l)) =
 
 let to_ast_mapdef ctx (P.MD_aux(md,l):P.mapdef) : unit mapdef =
   match md with
-  | P.MD_mapping(id, typschm_opt, mapcls) ->
-     let tannot_opt, ctx = to_ast_typschm_opt ctx typschm_opt in
-     MD_aux(MD_mapping(to_ast_id id, tannot_opt, List.map (to_ast_mapcl ctx) mapcls), (l,()))
+  | P.MD_mapping(id, pats, tannot_opt, mapcls) ->
+     let tannot_opt, ctx = to_ast_tannot_opt ctx tannot_opt in
+     MD_aux(MD_mapping(to_ast_id id, List.map (to_ast_pat ctx) pats, tannot_opt, List.map (to_ast_mapcl ctx) mapcls), (l,()))
 
 let to_ast_alias_spec ctx (P.E_aux(e, l)) =
   AL_aux((match e with

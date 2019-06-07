@@ -599,7 +599,7 @@ let doc_mapcl (MCL_aux (cl, _)) =
      separate space [left; string "<-"; right]
 
 
-let doc_mapdef (MD_aux (MD_mapping (id, typa, mapcls), _)) =
+let doc_mapdef (MD_aux (MD_mapping (id, args, typa, mapcls), _)) =
   match mapcls with
   | [] -> failwith "Empty mapping"
   | _ ->

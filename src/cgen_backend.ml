@@ -57,7 +57,7 @@ let to_string doc =
   ToBuffer.pretty 1. 120 b doc;
   Buffer.contents b
 
-let do_mapdef_thing (MD_aux (MD_mapping (_, _, clauses), _)) =
+let do_mapdef_thing (MD_aux (MD_mapping (_, _, _, clauses), _)) =
   print_endline ("Mapping has " ^ string_of_int (List.length clauses) ^ " clauses")
 
 let rec list_registers = function

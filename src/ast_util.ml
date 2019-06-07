@@ -606,6 +606,7 @@ and map_mpat_annot_aux f = function
   | MP_string_append mpats -> MP_string_append (List.map (map_mpat_annot f) mpats)
   | MP_typ (mpat, typ) -> MP_typ (map_mpat_annot f mpat, typ)
   | MP_as (mpat, id) -> MP_as (map_mpat_annot f mpat, id)
+  | MP_view (mpat, id, args) -> MP_view (map_mpat_annot f mpat, id, List.map (map_exp_annot f) args)
 
 and map_fpat_annot f (FP_aux (FP_Fpat (id, pat), annot)) = FP_aux (FP_Fpat (id, map_pat_annot f pat), f annot)
 and map_mfpat_annot f (MFP_aux (MFP_mpat (id, mpat), annot)) = MFP_aux (MFP_mpat (id, map_mpat_annot f mpat), f annot)
@@ -646,7 +647,8 @@ and map_recopt_annot_aux f = function
 and map_mapdef_annot f = function
   | MD_aux (md_aux, annot) -> MD_aux (map_mapdef_annot_aux f md_aux, f annot)
 and map_mapdef_annot_aux f = function
-  | MD_mapping (id, tannot_opt, mapcls) -> MD_mapping (id, tannot_opt, List.map (map_mapcl_annot f) mapcls)
+  | MD_mapping (id, args, tannot_opt, mapcls) ->
+     MD_mapping (id, List.map (map_pat_annot f) args, tannot_opt, List.map (map_mapcl_annot f) mapcls)
 
 and map_valspec_annot f = function
   | VS_aux (vs_aux, annot) -> VS_aux (vs_aux, f annot)

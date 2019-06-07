@@ -319,15 +319,6 @@ tannot_opt_aux =  (* Optional type annotation for functions *)
    Typ_annot_opt_none
  | Typ_annot_opt_some of typquant * atyp
 
-type
-typschm_opt_aux =
-  TypSchm_opt_none
-| TypSchm_opt_some of typschm
-
-type
-typschm_opt =
-  TypSchm_opt_aux of typschm_opt_aux * l
-
 type 
 effect_opt_aux =  (* Optional effect annotation for functions *)
    Effect_opt_none (* sugar for empty effect set *)
@@ -402,6 +393,7 @@ type mpat_aux =  (* Mapping pattern. Mostly the same as normal patterns but only
  | MP_string_append of mpat list
  | MP_typ of mpat * atyp
  | MP_as of mpat * id
+ | MP_view of mpat * id * exp list
 
 and mpat =
  | MP_aux of ( mpat_aux) * l
@@ -428,7 +420,7 @@ type mapcl =
  | MCL_aux of ( mapcl_aux) * l
 
 type mapdef_aux =  (* mapping definition (bidirectional pattern-match function) *)
- | MD_mapping of id * typschm_opt * ( mapcl) list
+ | MD_mapping of id * pat list * tannot_opt * mapcl list
 
 type mapdef =
  | MD_aux of ( mapdef_aux) * l
