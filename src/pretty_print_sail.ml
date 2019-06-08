@@ -88,7 +88,7 @@ let rec doc_typ_pat (TP_aux (tpat_aux, _)) =
   | TP_var kid -> doc_kid kid
   | TP_app (f, tpats) -> doc_id f ^^ parens (separate_map (comma ^^ space) doc_typ_pat tpats)
 
-let rec doc_nexp =
+let rec doc_nexp nexp =
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
     | Nexp_constant c -> string (Big_int.to_string c)
@@ -119,7 +119,7 @@ let rec doc_nexp =
     | Nexp_exp n -> separate space [string "2"; string "^"; atomic_nexp n]
     | _ -> atomic_nexp nexp
   in
-  nexp0
+  nexp0 nexp
 
 let doc_effect (Effect_aux (aux, _)) =
   match aux with
