@@ -253,10 +253,8 @@ rule token = parse
   | "!="				{ (ExclEq(r"!=")) }
   | ">="				{ (GtEq(r">=")) }
   | "->"                                { MinusGt }
-  | "-->"                               { MinusMinusGt }
   | "<->"                               { Bidir }
   | "<-"                                { LtMinus }
-  | "<--"                               { LtMinusMinus }
   | "=>"                                { EqGt(r "=>") }
   | "<="				{ (LtEq(r"<=")) }
   | "/*!"       { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf) }

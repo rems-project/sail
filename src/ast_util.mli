@@ -142,7 +142,6 @@ val mk_id_typ : id -> typ
 
 (** {2 Sail builtin types} *)
 
-val unknown_typ : typ
 val int_typ : typ
 val nat_typ : typ
 val atom_typ : nexp -> typ
@@ -161,6 +160,8 @@ val list_typ : typ -> typ
 val exc_typ : typ
 val tuple_typ : typ list -> typ
 val function_typ : typ list -> typ -> effect -> typ
+
+val mapping_family_typ : typ list -> typ -> typ -> typ
 
 val is_unit_typ : typ -> bool
 val is_number : typ -> bool

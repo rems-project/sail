@@ -243,7 +243,6 @@ let rec lem_nexps_of_typ (Typ_aux (t,l)) =
        NexpSet.empty tas
   | Typ_exist (kids,_,t) -> trec t
   | Typ_bidir _ -> raise (Reporting.err_unreachable l __POS__ "Lem doesn't support bidir types")
-  | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 and lem_nexps_of_typ_arg (A_aux (ta,_)) =
   match ta with
   | A_nexp nexp ->
@@ -336,7 +335,6 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | Typ_exist (_,_,Typ_aux(Typ_app(id,[_]),_)) when string_of_id id = "atom_bool" -> string "bool"
       | Typ_exist _ -> unreachable l __POS__ "Non-integer existentials currently unsupported in Lem" (* TODO *)
       | Typ_bidir _ -> unreachable l __POS__ "Lem doesn't support bidir types"
-      | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
     and doc_typ_arg_lem (A_aux(t,_)) = match t with
       | A_typ t -> app_typ true t
       | A_nexp n -> doc_nexp_lem (nexp_simp n)
@@ -464,7 +462,6 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
        List.fold_left add_arg_nexps NexpSet.empty args
     | Typ_exist (kids,_,t) -> NexpSet.empty (* todo *)
     | Typ_bidir _ -> unreachable l __POS__ "Lem doesn't support bidir types"
-    | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
   else NexpSet.empty
 
 let doc_typclasses_lem t =

@@ -72,8 +72,7 @@ let rec rewriteExistential (kids : kinded_id list) (Typ_aux (typ_aux, annot) as 
               (* List.exists (fun k -> string_of_kid (kopt_kid k) = string_of_kid kid) kids -> *)
      print_endline("*** rewriting to int - kid is '" ^ string_of_kid kid ^ "'" );
      Typ_aux (Typ_id (mk_id "int"), annot)
-  | Typ_internal_unknown
-    | Typ_id _
+  | Typ_id _
     | Typ_var _
     | Typ_fn _
     | Typ_bidir _
@@ -121,7 +120,6 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
                                           (List.mapi (fun i _ -> string (arg_name ^ "_tup" ^ string_of_int i)) typs)) ^^
                                   (string " -> ") ^^
                                     parens (separate comma_sp (List.mapi (fun i t -> fromValueTyp t (arg_name ^ "_tup" ^ string_of_int i)) typs)))
-    | Typ_internal_unknown -> failwith "escaped Typ_internal_unknown"
   in 
   let fromValueVals ((Typ_aux (typ_aux, l)) as typ) = match typ_aux with
     | Typ_tup typs -> parens (separate comma_sp (List.mapi (fun i typ -> fromValueTyp typ ("v" ^ (string_of_int i))) typs))
@@ -276,7 +274,6 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
                                   (string " -> V_tuple ") ^^
                                     brackets (separate (string ";" ^^ space)
                                           (List.mapi (fun i t -> toValueTyp t (arg_name ^ "_tup" ^ string_of_int i)) typs)))
-    | Typ_internal_unknown -> failwith "escaped Typ_internal_unknown"
   in
   let toValueVals ((Typ_aux (typ_aux, _)) as typ) = match typ_aux with
     | Typ_tup typs -> brackets (separate space [string "V_tuple"; brackets (separate (semi ^^ space) (List.mapi (fun i typ -> toValueTyp typ ("v" ^ (string_of_int i))) typs))])

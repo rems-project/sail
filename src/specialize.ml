@@ -93,7 +93,6 @@ let rec nexp_simp_typ (Typ_aux (typ_aux, l)) =
     | Typ_fn (arg_typs, ret_typ, effect) ->
        Typ_fn (List.map nexp_simp_typ arg_typs, nexp_simp_typ ret_typ, effect)
     | Typ_bidir (t1, t2) -> Typ_bidir (nexp_simp_typ t1, nexp_simp_typ t2)
-    | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   in
   Typ_aux (typ_aux, l)
 and nexp_simp_typ_arg (A_aux (typ_arg_aux, l)) =
@@ -174,7 +173,6 @@ let string_of_instantiation instantiation =
        string_of_typ t1 ^ " <-> " ^ string_of_typ t2
     | Typ_exist (kids, nc, typ) ->
        "exist " ^ Util.string_of_list " " kid_name kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ
-    | Typ_internal_unknown -> "UNKNOWN"
   and string_of_typ_arg = function
     | A_aux (typ_arg, l) -> string_of_typ_arg_aux typ_arg
   and string_of_typ_arg_aux = function
@@ -289,7 +287,6 @@ let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_fn (arg_typs, ret_typ, _) ->
      List.fold_left KidSet.union (typ_frees ~exs:exs ret_typ) (List.map (typ_frees ~exs:exs) arg_typs)
   | Typ_bidir (t1, t2) -> KidSet.union (typ_frees ~exs:exs t1) (typ_frees ~exs:exs t2)
-  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and typ_arg_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
   | A_nexp n -> KidSet.empty
@@ -307,7 +304,6 @@ let rec typ_int_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_fn (arg_typs, ret_typ, _) ->
      List.fold_left KidSet.union (typ_int_frees ~exs:exs ret_typ) (List.map (typ_int_frees ~exs:exs) arg_typs)
   | Typ_bidir (t1, t2) -> KidSet.union (typ_int_frees ~exs:exs t1) (typ_int_frees ~exs:exs t2)
-  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and typ_arg_int_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
   | A_nexp n -> KidSet.diff (tyvars_of_nexp n) exs
@@ -320,7 +316,6 @@ and typ_arg_int_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
    regular arguments. *)
 let rec remove_implicit (Typ_aux (aux, l) as t) =
   match aux with
-  | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
   | Typ_tup typs -> Typ_aux (Typ_tup (List.map remove_implicit typs), l)
   | Typ_fn (arg_typs, ret_typ, effs) -> Typ_aux (Typ_fn (List.map remove_implicit arg_typs, remove_implicit ret_typ, effs), l)
   | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (remove_implicit typ1, remove_implicit typ2), l)

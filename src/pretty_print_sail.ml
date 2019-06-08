@@ -189,6 +189,8 @@ and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
      enclose (string "{|") (string "|}") (separate_map (string ", ") doc_int ints)
   | Typ_exist (kopts, nc, typ) ->
      braces (separate_map space doc_kopt kopts ^^ comma ^^ space ^^ doc_nc nc ^^ dot ^^ space ^^ doc_typ typ)
+  | Typ_bidir (typ1, typ2) | Typ_fn ([], Typ_aux (Typ_bidir (typ1, typ2), _), _) ->
+     separate space [doc_typ typ1; string "<->"; doc_typ typ2]
   | Typ_fn (typs, typ, Effect_aux (Effect_set [], _)) ->
      separate space [doc_arg_typs typs; string "->"; doc_typ typ]
   | Typ_fn (typs, typ, Effect_aux (Effect_set effs, _)) ->
@@ -197,9 +199,6 @@ and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
        separate space [doc_arg_typs typs; string "->"; doc_typ ~simple:simple typ]
      else
        separate space [doc_arg_typs typs; string "->"; doc_typ typ; string "effect"; ocaml_eff]
-  | Typ_bidir (typ1, typ2) ->
-     separate space [doc_typ typ1; string "<->"; doc_typ typ2]
-  | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 and doc_typ_arg (A_aux (ta_aux, _)) =
   match ta_aux with
   | A_typ typ -> doc_typ typ
@@ -343,22 +342,24 @@ let rec doc_pat (P_aux (p_aux, (l, _)) as pat) =
   | P_string_append [] -> string "\"\""
   | P_string_append pats ->
      parens (separate_map (string " ^ ") doc_pat pats)
+  | P_view (pat, id, exps) ->
+     doc_pat pat ^^ string " <- " ^^ doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps) 
   | P_record _ -> raise (Reporting.err_unreachable l __POS__ "P_record passed to doc_pat")
 
 (* if_block_x is true if x should be printed like a block, i.e. with
    newlines. Blocks are automatically printed as blocks, so this
    returns false for them. *)
-let if_block_then (E_aux (e_aux, _)) =
+and if_block_then (E_aux (e_aux, _)) =
   match e_aux with
   | E_assign _ | E_if _ -> true
   | _ -> false
 
-let if_block_else (E_aux (e_aux, _)) =
+and if_block_else (E_aux (e_aux, _)) =
   match e_aux with
   | E_assign _ -> true
   | _ -> false
 
-let fixities =
+and fixities =
   let fixities' =
     List.fold_left
       (fun r (x, y) -> Bindings.add x y r)
@@ -382,7 +383,7 @@ let fixities =
   in
   ref (fixities' : (prec * int) Bindings.t)
 
-let rec doc_exp (E_aux (e_aux, _) as exp) =
+and doc_exp (E_aux (e_aux, _) as exp) =
   match e_aux with
   | E_block [] -> string "()"
   | E_block exps ->
@@ -575,9 +576,15 @@ let rec doc_mpat (MP_aux (mp_aux, _) as mpat) =
   | MP_vector_concat pats -> separate_map (space ^^ string "@" ^^ space) doc_mpat pats
   | MP_app (id, pats) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_mpat pats)
   | MP_list pats -> string "[|" ^^ separate_map (comma ^^ space) doc_mpat pats ^^ string "|]"
-  | _ -> string (string_of_mpat mpat)
-
-
+  | MP_view (pat, id, args) ->
+     doc_mpat pat ^^ string " <- " ^^ doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp args)
+  | MP_string_append pats ->
+     separate_map (space ^^ caret ^^ space) doc_mpat pats
+  | MP_typ (pat, typ) ->
+     parens (doc_mpat pat ^^ string " : " ^^ doc_typ typ)
+  | _ ->
+     string (string_of_mpat mpat)
+     
 let doc_mpexp (MPat_aux (mpexp, _)) =
   match mpexp with
   | MPat_pat mpat -> doc_mpat mpat
@@ -592,11 +599,11 @@ let doc_mapcl (MCL_aux (cl, _)) =
   | MCL_forwards (mpexp, exp) ->
      let left = doc_mpexp mpexp in
      let right = doc_exp exp in
-     separate space [left; string "-->"; right]
+     separate space [left; string "=>"; right]
   | MCL_backwards (exp, mpexp) ->
      let left = doc_exp exp in
      let right = doc_mpexp mpexp in
-     separate space [left; string "<--"; right]
+     separate space [right; string "=>"; left]
 
 let doc_mapdef (MD_aux (MD_mapping (id, args, typa, mapcls), _)) =
   match mapcls with

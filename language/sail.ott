@@ -225,7 +225,6 @@ effect :: 'Effect_' ::=
 typ :: 'Typ_' ::=
   {{ com type expressions, of kind Type }}
   {{ aux _ l }}
-  |                                               :: :: internal_unknown
   | id                                            :: :: id {{ com defined type }}
   | kid                                           :: :: var {{ com type variable }}
   | ( typ1 , ... , typn ) -> typ2 effectkw effect :: :: fn {{ com Function (first-order only) }}

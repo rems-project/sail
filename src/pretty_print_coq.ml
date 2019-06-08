@@ -343,7 +343,6 @@ let rec coq_nvars_of_typ (Typ_aux (t,l)) =
   (* TODO: remove appropriate bound variables *)
   | Typ_exist (_,_,t) -> trec t
   | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 and coq_nvars_of_typ_arg (A_aux (ta,_)) =
   match ta with
   | A_nexp nexp -> tyvars_of_nexp (orig_nexp nexp)
@@ -711,7 +710,6 @@ let rec doc_typ_fns ctx env =
            | _ -> List.fold_left add_tyvar (doc_arithfact ctx nc) kids
         end*)
       | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
-      | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
     and doc_typ_arg (A_aux(t,_)) = match t with
       | A_typ t -> app_typ true t
       | A_nexp n -> doc_nexp ctx n
@@ -1015,7 +1013,6 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
   | Typ_app _ -> NexpSet.empty
   | Typ_exist (kids,_,t) -> NexpSet.empty (* todo *)
   | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
-  | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
 
 let doc_typschm ctx env quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
   let pt = doc_typ ctx env t in

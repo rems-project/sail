@@ -202,7 +202,6 @@ let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
      | [] -> insts', t'
      | _ -> insts', Typ_aux (Typ_exist (kopts', nc', t'), l)
     end
-  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and inst_src_typ_arg insts (A_aux (ta,l) as tyarg) =
   match ta with
   | A_nexp _
@@ -223,7 +222,6 @@ let rec contains_exist (Typ_aux (ty,l)) =
   | Typ_tup ts -> List.exists contains_exist ts
   | Typ_app (_,args) -> List.exists contains_exist_arg args
   | Typ_exist _ -> true
-  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and contains_exist_arg (A_aux (arg,_)) =
   match arg with
   | A_nexp _
@@ -310,7 +308,6 @@ let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
        let tys = List.concat (List.map (fun instty -> List.map (ty_and_inst instty) insts) tys) in
        let free = List.fold_left (fun vars k -> KidSet.remove (kopt_kid k) vars) vars kopts in
        (free,tys)
-    | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   in
   let size_nvars_ty (Typ_aux (ty,l) as typ) =
     match ty with
@@ -1215,7 +1212,6 @@ let rec sizes_of_typ (Typ_aux (t,l)) =
      KidSet.of_list (size_nvars_nexp size)
   | Typ_app (_,tas) ->
      kidset_bigunion (List.map sizes_of_typarg tas)
-  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and sizes_of_typarg (A_aux (ta,_)) =
   match ta with
     A_nexp _
@@ -3467,7 +3463,6 @@ let replace_nexp_in_typ env typ orig new_nexp =
     | Typ_app (id, targs) ->
        let fs, targs = List.split (List.map aux_targ targs) in
        List.exists (fun x -> x) fs, Typ_aux (Typ_app (id, targs),l)
-    | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   and aux_targ (A_aux (ta,l) as typ_arg) =
     match ta with
     | A_nexp nexp ->

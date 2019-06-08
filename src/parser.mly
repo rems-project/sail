@@ -182,7 +182,7 @@ let rec desugar_rchain chain s e =
 
 %token Bar Comma Dot Eof Minus Semi Under DotDot
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar LsquareBar RsquareBar
-%token MinusGt Bidir LtMinus MinusMinusGt LtMinusMinus
+%token MinusGt Bidir LtMinus
 
 /*Terminals with content*/
 
@@ -685,6 +685,8 @@ pat1:
     { mk_pat (P_string_append ($1 :: $3)) $startpos $endpos }
   | atomic_pat LtMinus id Lparen exp_list Rparen
     { mk_pat (P_view ($1, $3, $5)) $startpos $endpos }
+  | atomic_pat LtMinus id Unit
+    { mk_pat (P_view ($1, $3, [])) $startpos $endpos }
 
 pat_concat:
   | atomic_pat
@@ -1325,7 +1327,8 @@ atomic_mpat:
     { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
   | atomic_mpat LtMinus id Lparen exp_list Rparen
     { mk_mpat (MP_view ($1, $3, $5)) $startpos $endpos }
-
+  | atomic_mpat LtMinus id Unit
+    { mk_mpat (MP_view ($1, $3, [])) $startpos $endpos }
 
 %inline mpexp:
   | mpat
@@ -1336,10 +1339,10 @@ atomic_mpat:
 mapcl:
   | mpexp Bidir mpexp
     { mk_bidir_mapcl $1 $3 $startpos $endpos }
-  | Forwards mpexp MinusMinusGt exp
+  | Forwards mpexp EqGt exp
     { mk_forwards_mapcl $2 $4 $startpos $endpos }
-  | Backwards exp LtMinusMinus mpexp
-    { mk_backwards_mapcl $2 $4 $startpos $endpos }
+  | Backwards mpexp EqGt exp
+    { mk_backwards_mapcl $4 $2 $startpos $endpos }
 
 mapcl_list:
   | mapcl

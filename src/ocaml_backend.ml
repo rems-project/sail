@@ -121,7 +121,6 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, l)) arg =
   | Typ_bidir (t1, t2) -> string "\"BIDIR\""
   | Typ_var kid -> string "\"VAR\""
   | Typ_exist _ -> assert false
-  | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 
 let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
@@ -147,7 +146,6 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   | Typ_bidir (t1, t2) -> raise (Reporting.err_general l "Ocaml doesn't support bidir types")
   | Typ_var kid -> zencode_kid kid
   | Typ_exist _ -> assert false
-  | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 and ocaml_typ_arg ctx (A_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | A_typ typ -> ocaml_typ ctx typ
@@ -710,7 +708,6 @@ let ocaml_pp_generators ctx defs orig_types required =
     | Typ_id id -> add_req_from_id required id
     | Typ_var _
       -> required
-    | Typ_internal_unknown
     | Typ_fn _
     | Typ_bidir _
       -> raise (Reporting.err_unreachable (typ_loc full_typ) __POS__

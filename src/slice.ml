@@ -124,7 +124,7 @@ and nexp_ids' (Nexp_aux (aux, _)) =
 
 and typ_ids' (Typ_aux (aux, _)) =
   match aux with
-  | Typ_var _ | Typ_internal_unknown -> IdSet.empty
+  | Typ_var _ -> IdSet.empty
   | Typ_id id -> IdSet.singleton id
   | Typ_app (id, args) ->
      IdSet.add id (List.fold_left IdSet.union IdSet.empty (List.map typ_arg_ids' args))

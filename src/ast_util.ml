@@ -369,7 +369,6 @@ let mk_kopt kind_aux id =
 
 let mk_ord ord_aux = Ord_aux (ord_aux, Parse_ast.Unknown)
 
-let unknown_typ = mk_typ Typ_internal_unknown
 let int_typ = mk_id_typ (mk_id "int")
 let nat_typ = mk_id_typ (mk_id "nat")
 let unit_typ = mk_id_typ (mk_id "unit")
@@ -391,6 +390,10 @@ let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (A_typ typ)]))
 let tuple_typ typs = mk_typ (Typ_tup typs)
 let function_typ arg_typs ret_typ eff = mk_typ (Typ_fn (arg_typs, ret_typ, eff))
 
+let mapping_family_typ arg_typs left_typ right_typ =
+  mk_typ (Typ_fn (arg_typs, mk_typ (Typ_bidir (left_typ, right_typ)),
+                  Effect_aux (Effect_set [], Parse_ast.Unknown)))
+                                      
 let vector_typ n ord typ =
   mk_typ (Typ_app (mk_id "vector",
                    [mk_typ_arg (A_nexp (nexp_simp n));
@@ -818,7 +821,6 @@ and string_of_nexp_aux = function
 let rec string_of_typ = function
   | Typ_aux (typ, l) -> string_of_typ_aux typ
 and string_of_typ_aux = function
-  | Typ_internal_unknown -> "<UNKNOWN TYPE>"
   | Typ_id id -> string_of_id id
   | Typ_var kid -> string_of_kid kid
   | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
@@ -987,14 +989,16 @@ and string_of_mpat (MP_aux (pat, l)) =
   | MP_tup pats -> "(" ^ string_of_list ", " string_of_mpat pats ^ ")"
   | MP_app (f, pats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_mpat pats ^ ")"
   | MP_cons (pat1, pat2) -> string_of_mpat pat1 ^ " :: " ^ string_of_mpat pat2
-  | MP_list pats -> "[||" ^ string_of_list "," string_of_mpat pats ^ "||]"
+  | MP_list pats -> "[|" ^ string_of_list "," string_of_mpat pats ^ "|]"
   | MP_vector_concat pats -> string_of_list " @ " string_of_mpat pats
   | MP_vector pats -> "[" ^ string_of_list ", " string_of_mpat pats ^ "]"
   | MP_string_append pats -> string_of_list " ^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
-  | _ -> "MPAT"
-
+  | MP_view (mpat, id, args) ->
+     string_of_mpat mpat ^ " <- " ^ string_of_id id ^ "(" ^ Util.string_of_list ", " string_of_exp args ^ ")"
+  | MP_record _ -> "MPAT"
+    
 and string_of_lexp (LEXP_aux (lexp, _)) =
   match lexp with
   | LEXP_id v -> string_of_id v
@@ -1147,7 +1151,6 @@ let rec nc_compare (NC_aux (nc1,_)) (NC_aux (nc2,_)) =
 
 and typ_compare (Typ_aux (t1,_)) (Typ_aux (t2,_)) =
   match t1,t2 with
-  | Typ_internal_unknown, Typ_internal_unknown -> 0
   | Typ_id id1, Typ_id id2 -> Id.compare id1 id2
   | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2
   | Typ_fn (ts1,t2,e1), Typ_fn (ts3,t4,e2) ->
@@ -1171,7 +1174,6 @@ and typ_compare (Typ_aux (t1,_)) (Typ_aux (t2,_)) =
      (match Id.compare id1 id2 with
      | 0 -> Util.compare_list typ_arg_compare ts1 ts2
      | n -> n)
-  | Typ_internal_unknown, _ -> -1 | _, Typ_internal_unknown -> 1
   | Typ_id _, _ -> -1    | _, Typ_id _ -> 1
   | Typ_var _, _ -> -1   | _, Typ_var _ -> 1
   | Typ_fn _, _ -> -1    | _, Typ_fn _ -> 1
@@ -1356,7 +1358,6 @@ let rec kopts_of_constraint (NC_aux (nc, _)) =
 
 and kopts_of_typ (Typ_aux (t,_)) =
   match t with
-  | Typ_internal_unknown -> KOptSet.empty
   | Typ_id _ -> KOptSet.empty
   | Typ_var kid -> KOptSet.singleton (mk_kopt K_type kid)
   | Typ_fn (ts, t, _) -> List.fold_left KOptSet.union (kopts_of_typ t) (List.map kopts_of_typ ts)
@@ -1414,7 +1415,6 @@ let rec tyvars_of_constraint (NC_aux (nc, _)) =
 
 and tyvars_of_typ (Typ_aux (t,_)) =
   match t with
-  | Typ_internal_unknown -> KidSet.empty
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
   | Typ_fn (ts, t, _) -> List.fold_left KidSet.union (tyvars_of_typ t) (List.map tyvars_of_typ ts)
@@ -1465,7 +1465,6 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
         initial_check.ml. i.e. the rewriter should only encounter this
         case when re-writing those functions. *)
      wrap (E_id (prepend_id "typ_" (id_of_kid kid))) typ
-  | Typ_internal_unknown -> assert false
   | Typ_bidir _ -> assert false
   | Typ_fn _ -> assert false
   | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
@@ -1699,7 +1698,6 @@ let rec locate_nc f (NC_aux (nc_aux, l)) =
 
 and locate_typ f (Typ_aux (typ_aux, l)) =
   let typ_aux = match typ_aux with
-    | Typ_internal_unknown -> Typ_internal_unknown
     | Typ_id id -> Typ_id (locate_id f id)
     | Typ_var kid -> Typ_var (locate_kid f kid)
     | Typ_fn (arg_typs, ret_typ, effect) ->
@@ -1911,7 +1909,6 @@ and constraint_subst_aux l sv subst = function
 
 and typ_subst sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_aux sv subst typ, l)
 and typ_subst_aux sv subst = function
-  | Typ_internal_unknown -> Typ_internal_unknown
   | Typ_id v -> Typ_id v
   | Typ_var kid ->
      begin match subst with
@@ -2022,7 +2019,6 @@ let subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
     | Typ_exist (kopts,nc,t) ->
        let substs = List.fold_left (fun sub kopt -> KBindings.remove (kopt_kid kopt) sub) substs kopts in
        re (Typ_exist (kopts,subst_kids_nc substs nc,s_styp substs t))
-    | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   and s_starg substs (A_aux (ta,l) as targ) =
     match ta with
     | A_nexp ne -> A_aux (A_nexp (subst_kids_nexp substs ne),l)

@@ -129,7 +129,7 @@ type env =
     ret_typ : typ option;
     poly_undefineds : bool;
     prove : (env -> n_constraint -> bool) option;
-    allow_unknowns : bool;
+    allow_mapping_builtins : bool;
   }
 
 exception Type_error of env * l * type_error;;
@@ -163,10 +163,6 @@ let is_list (Typ_aux (typ_aux, _)) =
   | Typ_app (f, [A_aux (A_typ typ, _)])
        when string_of_id f = "list" -> Some typ
   | _ -> None
-
-let is_unknown_type = function
-  | (Typ_aux (Typ_internal_unknown, _)) -> true
-  | _ -> false
 
 let is_atom (Typ_aux (typ_aux, _)) =
   match typ_aux with
@@ -227,7 +223,6 @@ and strip_order_aux = function
   | Ord_inc -> Ord_inc
   | Ord_dec -> Ord_dec
 and strip_typ_aux : typ_aux -> typ_aux = function
-  | Typ_internal_unknown -> Typ_internal_unknown
   | Typ_id id -> Typ_id (strip_id id)
   | Typ_var kid -> Typ_var (strip_kid kid)
   | Typ_fn (arg_typs, ret_typ, effect) -> Typ_fn (List.map strip_typ arg_typs, strip_typ ret_typ, strip_effect effect)
@@ -257,7 +252,6 @@ and strip_kind = function
 
 let rec typ_constraints (Typ_aux (typ_aux, l)) =
   match typ_aux with
-  | Typ_internal_unknown -> []
   | Typ_id v -> []
   | Typ_var kid -> []
   | Typ_tup typs -> List.concat (List.map typ_constraints typs)
@@ -276,7 +270,6 @@ and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
 
 let rec typ_nexps (Typ_aux (typ_aux, l)) =
   match typ_aux with
-  | Typ_internal_unknown -> []
   | Typ_id v -> []
   | Typ_var kid -> []
   | Typ_tup typs -> List.concat (List.map typ_nexps typs)
@@ -419,7 +412,6 @@ module Env : sig
   val add_scattered_variant : id -> typquant -> t -> t
   val add_variant_clause : id -> type_union -> t -> t
   val get_variant : id -> t -> typquant * type_union list
-  val add_mapping : id -> typquant * typ * typ -> t -> t
   val add_union_id : id -> typquant * typ -> t -> t
   val get_union_id  : id -> t -> typquant * typ
   val is_register : id -> t -> bool
@@ -462,9 +454,9 @@ module Env : sig
   val expand_nexp_synonyms : t -> nexp -> nexp
   val expand_constraint_synonyms : t -> n_constraint -> n_constraint
   val base_typ_of : t -> typ -> typ
-  val allow_unknowns : t -> bool
-  val set_allow_unknowns : bool -> t -> t
-
+  val allow_mapping_builtins : t -> bool
+  val set_allow_mapping_builtins : bool -> t -> t
+    
   val no_bindings : t -> t
 
   (* Well formedness-checks *)
@@ -513,14 +505,14 @@ end = struct
       ret_typ = None;
       poly_undefineds = false;
       prove = None;
-      allow_unknowns = false;
+      allow_mapping_builtins = false;
     }
 
   let set_prover f env = { env with prove = f }
 
-  let allow_unknowns env = env.allow_unknowns
-  let set_allow_unknowns b env = { env with allow_unknowns = b }
-
+  let allow_mapping_builtins env = env.allow_mapping_builtins
+  let set_allow_mapping_builtins b env = { env with allow_mapping_builtins = b }
+                                  
   let get_typ_var kid env =
     try snd (KBindings.find kid env.typ_vars) with
     | Not_found -> typ_error env (kid_loc kid) ("No type variable " ^ string_of_kid kid)
@@ -706,7 +698,6 @@ end = struct
 
   and expand_synonyms env (Typ_aux (typ, l) as t) =
     match typ with
-    | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
     | Typ_fn (arg_typs, ret_typ, effs) -> Typ_aux (Typ_fn (List.map (expand_synonyms env) arg_typs, expand_synonyms env ret_typ, effs), l)
     | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (expand_synonyms env typ1, expand_synonyms env typ2), l)
@@ -767,7 +758,6 @@ end = struct
   (** Map over all nexps in a type - excluding those in existential constraints **)
   let rec map_nexps f (Typ_aux (typ_aux, l) as typ) =
     match typ_aux with
-    | Typ_internal_unknown
     | Typ_id _ | Typ_var _ -> typ
     | Typ_fn (arg_typs, ret_typ, effect) -> Typ_aux (Typ_fn (List.map (map_nexps f) arg_typs, map_nexps f ret_typ, effect), l)
     | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (map_nexps f typ1, map_nexps f typ2), l)
@@ -818,7 +808,6 @@ end = struct
        wf_constraint ~exs:(KidSet.of_list (List.map kopt_kid kopts)) env nc;
        wf_typ ~exs:(KidSet.of_list (List.map kopt_kid kopts)) { env with constraints = nc :: env.constraints } typ
     | Typ_exist (_, _, _) -> typ_error env l ("Nested existentials are not allowed")
-    | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   and wf_typ_arg ?exs:(exs=KidSet.empty) env (A_aux (typ_arg_aux, _)) =
     match typ_arg_aux with
     | A_nexp nexp -> wf_nexp ~exs:exs env nexp
@@ -961,9 +950,8 @@ end = struct
        { env with top_val_specs = Bindings.add id (typq, typ) env.top_val_specs }
 
     | Typ_aux (Typ_bidir (typ1, typ2), l) ->
-       let env = add_mapping id (typq, typ1, typ2) env in
        typ_print (lazy (adding ^ "mapping " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
-       { env with top_val_specs = Bindings.add id (typq, typ) env.top_val_specs }
+       { env with top_val_specs = Bindings.add id (typq, mapping_family_typ [] typ1 typ2) env.top_val_specs }
 
     | _ -> typ_error env (id_loc id) "val definition must have a mapping or function type"
     end
@@ -971,44 +959,7 @@ end = struct
   and add_val_spec id (bind_typq, bind_typ) env =
     if not (Bindings.mem id env.top_val_specs)
     then update_val_spec id (bind_typq, bind_typ) env
-    else
-      env
-        (*
-      let (existing_typq, existing_typ) = Bindings.find id env.top_val_specs in
-      let existing_cmp = (strip_typq existing_typq, strip_typ existing_typ) in
-      let bind_cmp = (strip_typq bind_typq, strip_typ bind_typ) in
-      if existing_cmp <> bind_cmp then
-        typ_error env (id_loc id) ("Identifier " ^ string_of_id id ^ " is already bound as " ^ string_of_bind (existing_typq, existing_typ) ^ ", cannot rebind as " ^ string_of_bind (bind_typq, bind_typ))
-      else
-        env
-         *)
-
-  and add_mapping id (typq, typ1, typ2) env =
-    typ_print (lazy (adding ^ "mapping " ^ string_of_id id));
-    let forwards_id = mk_id (string_of_id id ^ "_forwards") in
-    let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
-    let backwards_id = mk_id (string_of_id id ^ "_backwards") in
-    let backwards_matches_id = mk_id (string_of_id id ^ "_backwards_matches") in
-    let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, no_effect), Parse_ast.Unknown) in
-    let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, no_effect), Parse_ast.Unknown) in
-    let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, no_effect), Parse_ast.Unknown) in
-    let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, no_effect), Parse_ast.Unknown) in
-    let env =
-      { env with mappings = Bindings.add id (typq, typ1, typ2) env.mappings }
-      |> add_val_spec forwards_id (typq, forwards_typ)
-      |> add_val_spec backwards_id (typq, backwards_typ)
-      |> add_val_spec forwards_matches_id (typq, forwards_matches_typ)
-      |> add_val_spec backwards_matches_id (typq, backwards_matches_typ)
-    in
-    let prefix_id = mk_id (string_of_id id ^ "_matches_prefix") in
-    if strip_typ typ1 = string_typ then
-      let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
-      add_val_spec prefix_id (typq, forwards_prefix_typ) env
-    else if strip_typ typ2 = string_typ then
-      let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
-      add_val_spec prefix_id (typq, backwards_prefix_typ) env
-    else
-      env
+    else env
 
   let define_val_spec id env =
     if IdSet.mem id env.defined_val_specs
@@ -1396,7 +1347,6 @@ let rec is_typ_monomorphic (Typ_aux (typ, l)) =
   | Typ_fn (arg_typs, ret_typ, _) -> List.for_all is_typ_monomorphic arg_typs && is_typ_monomorphic ret_typ
   | Typ_bidir (typ1, typ2) -> is_typ_monomorphic typ1 && is_typ_monomorphic typ2
   | Typ_exist _ | Typ_var _ -> false
-  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and is_typ_arg_monomorphic (A_aux (arg, _)) =
   match arg with
   | A_nexp _ -> true
@@ -1631,10 +1581,6 @@ let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as 
   typ_debug (lazy (Util.("Unify type " |> magenta |> clear) ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2
                    ^ " goals " ^ string_of_list ", " string_of_kid (KidSet.elements goals)));
   match aux1, aux2 with
-  | Typ_internal_unknown, _ | _, Typ_internal_unknown
-       when Env.allow_unknowns env ->
-     KBindings.empty
-
   | Typ_var v, _ when KidSet.mem v goals -> KBindings.singleton v (arg_typ typ2)
 
   (* We need special cases for unifying range(n, m), nat, and int vs atom('n) *)
@@ -1944,7 +1890,6 @@ let rec kid_order kind_map (Typ_aux (aux, l) as typ) =
   | Typ_app (_, args) ->
      List.fold_left (fun (ord, kids) arg -> let (ord', kids) = kid_order_arg kids arg in (ord @ ord', kids)) ([], kind_map) args
   | Typ_fn _ | Typ_bidir _ | Typ_exist _ -> typ_error Env.empty l ("Existential or function type cannot appear within existential type: " ^ string_of_typ typ)
-  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and kid_order_arg kind_map (A_aux (aux, l) as arg) =
   match aux with
   | A_typ typ -> kid_order kind_map typ
@@ -1976,7 +1921,6 @@ let rec alpha_equivalent env typ1 typ2 =
   let rec relabel (Typ_aux (aux, l) as typ) =
     let relabelled_aux =
       match aux with
-      | Typ_internal_unknown -> Typ_internal_unknown
       | Typ_id _ | Typ_var _ -> aux
       | Typ_fn (arg_typs, ret_typ, eff) -> Typ_fn (List.map relabel arg_typs, relabel ret_typ, eff)
       | Typ_bidir (typ1, typ2) -> Typ_bidir (relabel typ1, relabel typ2)
@@ -2025,7 +1969,6 @@ let canonicalize env typ =
   let rec canon (Typ_aux (aux, l)) =
     match aux with
     | Typ_var v -> Typ_aux (Typ_var v, l)
-    | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
     | Typ_id id when string_of_id id = "int" ->
        exist_typ (fun _ -> nc_true) (fun v -> atom_typ (nvar v))
     | Typ_id id -> Typ_aux (Typ_id id, l)
@@ -2090,8 +2033,6 @@ let rec subtyp l env typ1 typ2 =
      end
   | _, _ ->
   match typ_aux1, typ_aux2 with
-  | _, Typ_internal_unknown when Env.allow_unknowns env -> ()
-
   | Typ_app (id1, _), Typ_id id2 when string_of_id id1 = "atom_bool" && string_of_id id2 = "bool" ->
      typ_debug (lazy "Boolean subtype");
      ()
@@ -3122,11 +3063,27 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
        | _ -> typ_error env l "Cannot match cons pattern against non-list type"
      end
   | P_view (pat, f, exps) ->
-     let inferred_app = infer_funapp l env f exps None in
-     begin match typ_of inferred_app with
-     | Typ_aux (Typ_bidir (typ_left, typ_right), _) ->
+     let app_env, is_mapping_builtin =
+       if Env.allow_mapping_builtins env then
+         match string_of_id f with
+         | "__regex" ->
+            Env.add_val_spec (mk_id "__regex") (mk_typquant [], mapping_family_typ [string_typ] string_typ bool_typ) env, true
+         | ("__parse_hex" | "__parse_binary" | "__parse_decimal") as parse ->
+            let v = mk_kid "n" in
+            Env.add_val_spec
+              (mk_id parse)
+              (mk_typquant [mk_qi_id K_int v], mapping_family_typ [atom_typ (nvar v)] string_typ (dvector_typ env (nvar v) bit_typ))
+              env,
+            true
+         | _ -> env, false
+       else env, false
+     in
+     let inferred_app = infer_funapp l app_env f exps None in
+     begin match inferred_app, typ_of inferred_app with
+     | E_aux (E_app (_, exps), _), Typ_aux (Typ_bidir (typ_left, typ_right), _) ->
         if subtype_check env typ typ_left then
-          bind_pat env pat typ_right
+          let pat, env, guards = bind_pat env pat typ_right in
+          annot_pat (P_view (pat, f, exps)) typ, env, guards
         else
           typ_raise env l (Err_subtype (typ, typ_left, Env.get_constraints env, Env.get_typ_var_locs env))
      | _ ->
@@ -3206,64 +3163,13 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
         end
      | _ -> typ_error env l ("Mal-formed constructor " ^ string_of_id f ^ " with type " ^ string_of_typ ctor_typ)
      end
-
   | P_app (f, pats) when Env.is_union_constructor f env ->
      (* Treat Ctor(x, y) as Ctor((x, y)) *)
-     bind_pat env (P_aux (P_app (f, [mk_pat (P_tup pats)]),(l,()))) typ
-
-  | P_app (f, pats) when Env.is_mapping f env ->
-     begin
-       let (typq, mapping_typ) = Env.get_val_spec f env in
-       let quants = quant_items typq in
-       let untuple (Typ_aux (typ_aux, _) as typ) = match typ_aux with
-         | Typ_tup typs -> typs
-         | _ -> [typ]
-       in
-       match Env.expand_synonyms env mapping_typ with
-       | Typ_aux (Typ_bidir (typ1, typ2), _) ->
-          begin
-            try
-              typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
-
-              (* FIXME: There's no obvious goals here *)
-              let unifiers = unify l env (tyvars_of_typ typ2) typ2 typ in
-              let arg_typ' = subst_unifiers unifiers typ1 in
-              let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
-              if (match quants' with [] -> false | _ -> true)
-              then typ_error env l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in pattern " ^ string_of_pat pat)
-              else ();
-
-              let ret_typ' = subst_unifiers unifiers typ2 in
-              let tpats, env, guards =
-                try List.fold_left2 bind_tuple_pat ([], env, []) pats (untuple arg_typ') with
-                | Invalid_argument _ -> typ_error env l "Mapping pattern arguments have incorrect length"
-              in
-              annot_pat (P_app (f, List.rev tpats)) typ, env, guards
-            with
-            | Unification_error (l, m) ->
-               try
-                 typ_debug (lazy "Unifying mapping forwards failed, trying backwards.");
-                 typ_debug (lazy ("Unifying " ^ string_of_bind (typq, mapping_typ) ^ " for pattern " ^ string_of_typ typ));
-                 let unifiers = unify l env (tyvars_of_typ typ1) typ1 typ in
-                 let arg_typ' = subst_unifiers unifiers typ2 in
-                 let quants' = List.fold_left (instantiate_quants env) quants (KBindings.bindings unifiers) in
-                 if (match quants' with [] -> false | _ -> true)
-                 then typ_error env l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants' ^ " not resolved in pattern " ^ string_of_pat pat)
-                 else ();
-                 let ret_typ' = subst_unifiers unifiers typ1 in
-                 let tpats, env, guards =
-                   try List.fold_left2 bind_tuple_pat ([], env, []) pats (untuple arg_typ') with
-                   | Invalid_argument _ -> typ_error env l "Mapping pattern arguments have incorrect length"
-                 in
-                 annot_pat (P_app (f, List.rev tpats)) typ, env, guards
-               with
-               | Unification_error (l, m) -> typ_error env l ("Unification error when pattern matching against mapping constructor: " ^ m)
-          end
-       | _ -> typ_error env l ("Mal-formed mapping " ^ string_of_id f)
-     end
-
+     bind_pat env (P_aux (P_app (f, [mk_pat (P_tup pats)]), (l, ()))) typ
+  | P_app (f, [P_aux (P_lit (L_aux (L_unit, _)), _)]) ->
+     bind_pat env (P_aux (P_view (P_aux (P_lit (L_aux (L_unit, gen_loc l)), (gen_loc l, ())), f, []), (l, ()))) typ
   | P_app (f, _) when (not (Env.is_union_constructor f env) && not (Env.is_mapping f env)) ->
-     typ_error env l (string_of_id f ^ " is not a union constructor or mapping in pattern " ^ string_of_pat pat)
+     typ_error env l (string_of_id f ^ " is not a union constructor or valid mapping in pattern " ^ string_of_pat pat)
   | P_as (pat, id) ->
      let (typed_pat, env, guards) = bind_pat env pat typ in
      annot_pat (P_as (typed_pat, id)) (typ_of_pat typed_pat), Env.add_local id (Immutable, typ_of_pat typed_pat) env, guards
@@ -3301,28 +3207,6 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
        | Local (Mutable, _) | Register _ ->
           typ_error env l ("Cannot shadow mutable local or register in switch statement pattern " ^ string_of_pat pat)
        | Enum enum -> annot_pat (P_id v) enum, env, []
-     end
-  | P_app (f, mpats) when Env.is_union_constructor f env ->
-     begin
-       let (typq, ctor_typ) = Env.get_val_spec f env in
-       match Env.expand_synonyms env ctor_typ with
-       | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
-          bind_pat env pat ret_typ
-       | _ -> typ_error env l ("Mal-formed constructor " ^ string_of_id f)
-     end
-  | P_app (f, mpats) when Env.is_mapping f env ->
-     begin
-       let (typq, mapping_typ) = Env.get_val_spec f env in
-       match Env.expand_synonyms env mapping_typ with
-       | Typ_aux (Typ_bidir (typ1, typ2), _) ->
-          begin
-            try
-              bind_pat env pat typ2
-            with
-            | Type_error _ ->
-               bind_pat env pat typ1
-          end
-       | _ -> typ_error env l ("Malformed mapping type " ^ string_of_id f)
      end
   | P_typ (typ_annot, pat) ->
      Env.wf_typ env typ_annot;
@@ -4310,6 +4194,10 @@ and propagate_pat_effect_aux = function
   | P_vector pats ->
      let p_pats = List.map propagate_pat_effect pats in
      P_vector p_pats, collect_effects_pat p_pats
+  | P_view (pat, id, exps) ->
+     let p_pat = propagate_pat_effect pat in
+     let p_exps = List.map propagate_exp_effect exps in
+     P_view (p_pat, id, p_exps), union_effects (effect_of_pat p_pat) (collect_effects p_exps)
   | _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented: Cannot propagate effect in pat")
 
 and propagate_mpat_effect (MP_aux (mpat, annot)) =
@@ -4346,6 +4234,10 @@ and propagate_mpat_effect_aux = function
   | MP_as (mpat, id) ->
      let p_mpat = propagate_mpat_effect mpat in
      MP_as (p_mpat, id), effect_of_mpat mpat
+  | MP_view (mpat, id, exps) ->
+     let p_mpat = propagate_mpat_effect mpat in
+     let p_exps = List.map propagate_exp_effect exps in
+     MP_view (p_mpat, id, p_exps), union_effects (effect_of_mpat p_mpat) (collect_effects p_exps)
   | _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented: Cannot propagate effect in mpat")
 
 and propagate_letbind_effect (LB_aux (lb, (l, annot))) =
@@ -4455,12 +4347,12 @@ let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
      let right, _ = check_mpexp env mpexp_right typ_right in
      MCL_aux (MCL_bidir (left, right), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
   | MCL_forwards (mpexp, exp) ->
-     let mpexp, env = check_mpexp env mpexp typ_left in
-     let exp = crule check_exp env exp typ_right in
+     let mpexp, env = check_mpexp (Env.set_allow_mapping_builtins true env) mpexp typ_left in
+     let exp = crule check_exp (Env.set_allow_mapping_builtins false env) exp typ_right in
      MCL_aux (MCL_forwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
   | MCL_backwards (exp, mpexp) ->
-     let mpexp, env = check_mpexp env mpexp typ_right in
-     let exp = crule check_exp env exp typ_left in
+     let mpexp, env = check_mpexp (Env.set_allow_mapping_builtins true env) mpexp typ_right in
+     let exp = crule check_exp (Env.set_allow_mapping_builtins false env) exp typ_left in
      MCL_aux (MCL_forwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
 
 let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pexp), (l, annot))) =

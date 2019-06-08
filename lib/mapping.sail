@@ -1,84 +1,72 @@
 $ifndef _MAPPING
 $define _MAPPING
 
-$include <arith.sail>
-$include <option.sail>
-
-val string_take = "string_take" : (string, nat) -> string
-val string_drop = "string_drop" : (string, nat) -> string
-val string_length = "string_length" : string -> nat
-val string_append = {c: "concat_str", _: "string_append"} : (string, string) -> string
-val string_startswith = "string_startswith" : (string, string) -> bool
-
-val n_leading_spaces : string -> nat
-function n_leading_spaces s =
-  match s {
-    "" => 0,
-    _ => match string_take(s, 1) {
-      " " => 1 + n_leading_spaces(string_drop(s, 1)),
-      _ => 0
-    }
-  }
-
-val spc     : unit <-> string
-val opt_spc : unit <-> string
-val def_spc : unit <-> string
-
-val spc_forwards : unit -> string
-function spc_forwards () = " "
-val spc_backwards : string -> unit
-function spc_backwards s = ()
-val spc_matches_prefix : string -> option((unit, nat))
-function spc_matches_prefix s = {
-  let n = n_leading_spaces(s);
-  match n {
-    0 => None(),
-    _ => Some((), n)
-  }
+mapping sep : string <-> unit = {
+  forwards true <- __regex(", +") => (),
+  backwards () => ", "
 }
 
-val opt_spc_forwards : unit -> string
-function opt_spc_forwards () = ""
-val opt_spc_backwards : string -> unit
-function opt_spc_backwards s = ()
-val opt_spc_matches_prefix : string -> option((unit, nat))
-function opt_spc_matches_prefix s =
-  Some((), n_leading_spaces(s))
-
-val def_spc_forwards : unit -> string
-function def_spc_forwards () = " "
-val def_spc_backwards : string -> unit
-function def_spc_backwards s = ()
-val def_spc_matches_prefix : string -> option((unit, nat))
-function def_spc_matches_prefix s = opt_spc_matches_prefix(s)
-
-val sep : unit <-> string
-mapping sep : unit <-> string = {
-  ()     <-> opt_spc() ^ "," ^ def_spc()
+mapping spc : string <-> unit = {
+  forwards true <- __regex(" +") => (),
+  backwards () => " "
 }
+
+val "hex_string" : forall 'n ('ord : Order), 'n >= 0. vector('n, 'ord, bit) -> string
 
 $ifdef _DEFAULT_DEC
-$include <vector_dec.sail>
-
-val hex_bits_20 : bits(20) <-> string
-val hex_bits_20_forwards = "decimal_string_of_bits" : bits(20) -> string
-val hex_bits_20_forwards_matches : bits(20) -> bool
-function hex_bits_20_forwards_matches bv = true
-val "hex_bits_20_matches_prefix" : string -> option((bits(20), nat))
-val hex_bits_20_backwards_matches : string -> bool
-function hex_bits_20_backwards_matches s = match s {
-  s if match hex_bits_20_matches_prefix(s) {
-    Some (_, n) if n == string_length(s) => true,
-    _ => false
-  } => true,
-  _ => false
+mapping hex forall 'n, 'n >= 0. (n: int('n)) -> string <-> vector('n, dec, bit) = {
+  forwards x <- __parse_hex(n) => x,
+  backwards x => hex_string(x)
 }
-val hex_bits_20_backwards : string -> bits(20)
-function hex_bits_20_backwards s =
-  match hex_bits_20_matches_prefix(s) {
-      Some (bv, n) if n == string_length(s) => bv
-  }
+$else
+mapping hex forall 'n, 'n >= 0. (n: int('n)) -> string <-> vector('n, inc, bit) = {
+  forwards x <- __parse_hex(n) => x,
+  backwards x => hex_string(x)
+}
+$endif
 
+val "binary_string" : forall 'n ('ord : Order), 'n >= 0. vector('n, 'ord, bit) -> string
+
+$ifdef _DEFAULT_DEC
+mapping binary forall 'n, 'n >= 0. (n: int('n)) -> string <-> vector('n, dec, bit) = {
+  forwards x <- __parse_binary(n) => x,
+  backwards x => binary_string(x)
+}
+$else
+mapping binary forall 'n, 'n >= 0. (n: int('n)) -> string <-> vector('n, inc, bit) = {
+  forwards x <- __parse_binary(n) => x,
+  backwards x => binary_string(x)
+}
+$endif
+
+val "decimal_string" : forall 'n ('ord : Order), 'n >= 0. vector('n, 'ord, bit) -> string
+
+$ifdef _DEFAULT_DEC
+mapping decimal forall 'n, 'n >= 0. (n: int('n)) -> string <-> vector('n, dec, bit) = {
+  forwards x <- __parse_decimal(n) => x,
+  backwards x => decimal_string(x)
+}
+$else
+mapping decimal forall 'n, 'n >= 0. (n: int('n)) -> string <-> vector('n, inc, bit) = {
+  forwards x <- __parse_decimal(n) => x,
+  backwards x => decimal_string(x)
+}
+$endif
+
+$ifdef _DEFAULT_DEC
+mapping bits forall 'n, 'n >= 0. (n: int('n)) -> string <-> vector('n, dec, bit) = {
+  forwards x <- __parse_hex(n) => x,
+  forwards x <- __parse_binary(n) => x,
+  forwards x <- __parse_decimal(n) => x,
+  backwards x => hex_string(x)
+}
+$else
+mapping bits forall 'n, 'n >= 0. (n: int('n)) -> string <-> vector('n, dec, bit) = {
+  forwards x <- __parse_hex(n) => x,
+  forwards x <- __parse_binary(n) => x,
+  forwards x <- __parse_decimal(n) => x,
+  backwards x => hex_string(x)
+}
 $endif
 
 $endif
