@@ -3823,7 +3823,6 @@ let rec exp_of_mpat ((MP_aux (mpat, (l,annot))) as mp_aux) =
   | MP_lit lit                      -> E_aux (E_lit lit, (l,annot))
   | MP_id id                        -> E_aux (E_id id, (l,annot))
   | MP_app (id, args)               -> E_aux (E_app (id, (List.map exp_of_mpat args)), (l,annot))
-  | MP_record (mfpats, flag)        -> E_aux (E_record (fexps_of_mfpats mfpats flag (l,annot)), (l,annot))
   | MP_vector mpats                 -> E_aux (E_vector (List.map exp_of_mpat mpats), (l,annot))
   | MP_vector_concat mpats          -> List.fold_right concat_vectors (List.map (fun m -> strip_exp (exp_of_mpat m)) mpats) empty_vec
   | MP_tup mpats                    -> E_aux (E_tuple (List.map exp_of_mpat mpats), (l,annot))
@@ -3834,34 +3833,6 @@ let rec exp_of_mpat ((MP_aux (mpat, (l,annot))) as mp_aux) =
   | MP_as (mpat, id)                -> E_aux (E_case (E_aux (E_id id, (l,annot)), [
                                                     Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat mpat), (l,annot))
                                                 ]), (l,annot)) (* TODO FIXME location information? *)
-
-
-and fexps_of_mfpats mfpats flag annot =
-  let fexp_of_mfpat (MFP_aux (MFP_mpat (id, mpat), annot)) =
-    FE_aux (FE_Fexp (id, exp_of_mpat mpat), annot)
-  in
-  List.map fexp_of_mfpat mfpats
-
-and pat_of_mpat (MP_aux (mpat, annot)) =
-  match mpat with
-  | MP_lit lit                      -> P_aux (P_lit lit, annot)
-  | MP_id id                        -> P_aux (P_id id, annot)
-  | MP_app (id, args)               -> P_aux (P_app (id, (List.map pat_of_mpat args)), annot)
-  | MP_record (mfpats, flag)        -> P_aux (P_record ((fpats_of_mfpats mfpats), flag), annot)
-  | MP_vector mpats                 -> P_aux (P_vector (List.map pat_of_mpat mpats), annot)
-  | MP_vector_concat mpats          -> P_aux (P_vector_concat (List.map pat_of_mpat mpats), annot)
-  | MP_tup mpats                    -> P_aux (P_tup (List.map pat_of_mpat mpats), annot)
-  | MP_list mpats                   -> P_aux (P_list (List.map pat_of_mpat mpats), annot)
-  | MP_cons (mpat1, mpat2)          -> P_aux ((P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2), annot))
-  | MP_string_append (mpats)        -> P_aux ((P_string_append (List.map pat_of_mpat mpats), annot))
-  | MP_typ (mpat, typ)              -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
-  | MP_as (mpat, id)                -> P_aux (P_as (pat_of_mpat mpat, id), annot)
-
-and fpats_of_mfpats mfpats =
-  let fpat_of_mfpat (MFP_aux (MFP_mpat (id, mpat), annot)) =
-    FP_aux (FP_Fpat (id, pat_of_mpat mpat), annot)
-  in
-  List.map fpat_of_mfpat mfpats
 
 let rewrite_defs_realise_mappings _ (Defs defs) =
   let realise_mpexps forwards mpexp1 mpexp2 =

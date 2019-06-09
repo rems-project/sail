@@ -379,7 +379,7 @@ val add_effect_annot : tannot -> effect -> tannot
 val expected_typ_of : Ast.l * tannot -> typ option
 
 (** {2 Utilities } *)
-
+  
 (** Safely destructure an existential type. Returns None if the type
    is not existential. This function will pick a fresh name for the
    existential to ensure that no name-collisions occur, although we

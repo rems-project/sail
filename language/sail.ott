@@ -426,11 +426,6 @@ fpat :: 'FP_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}
   | id = pat                                            :: :: Fpat
 
-mfpat  :: 'MFP_' ::=
-  {{ com Mapping field pattern, why does this have to exist }}
-  {{ aux _ annot }} {{ auxparam 'a }}
-  | id = mpat                                           :: :: mpat
-
 parsing
 P_app <= P_app
 P_app <= P_as
@@ -754,7 +749,6 @@ mpat :: 'MP_' ::=
   | id                                 ::   :: id
   | id ( mpat1 , ... , mpatn )         ::   :: app
   | mpat <- id ( exp1 , ... , expn )   ::   :: view
-  | { mfpat1 ; ... ; mfpatn semi_opt } ::   :: record
   | [ mpat1 , ... , mpatn ]            ::   :: vector
   | mpat1 @ ... @ mpatn                ::   :: vector_concat
   | ( mpat1 , ... , mpatn )            ::   :: tup

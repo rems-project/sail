@@ -684,11 +684,6 @@ let rec to_ast_mpat ctx (P.MP_aux(mpat,l)) =
       if mpats = []
       then MP_id (to_ast_id id)
       else MP_app(to_ast_id id, List.map (to_ast_mpat ctx) mpats)
-    | P.MP_record(mfpats,_) ->
-      MP_record(List.map
-                 (fun (P.MFP_aux(P.MFP_mpat(id,mfp),l)) ->
-              MFP_aux(MFP_mpat(to_ast_id id, to_ast_mpat ctx mfp),(l,())))
-                 mfpats, false)
     | P.MP_vector(mpats) -> MP_vector(List.map (to_ast_mpat ctx) mpats)
     | P.MP_vector_concat(mpats) -> MP_vector_concat(List.map (to_ast_mpat ctx) mpats)
     | P.MP_tup(mpats) -> MP_tup(List.map (to_ast_mpat ctx) mpats)

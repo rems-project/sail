@@ -343,7 +343,6 @@ val map_pexp_annot : ('a annot -> 'b annot) -> 'a pexp -> 'b pexp
 val map_lexp_annot : ('a annot -> 'b annot) -> 'a lexp -> 'b lexp
 val map_letbind_annot : ('a annot -> 'b annot) -> 'a letbind -> 'b letbind
 val map_mpat_annot : ('a annot -> 'b annot) -> 'a mpat -> 'b mpat
-val map_mfpat_annot : ('a annot -> 'b annot) -> 'a mfpat -> 'b mfpat
 val map_mpexp_annot : ('a annot -> 'b annot) -> 'a mpexp -> 'b mpexp
 val map_mapcl_annot : ('a annot -> 'b annot) -> 'a mapcl -> 'b mapcl
 
@@ -414,6 +413,8 @@ val prepend_kid : string -> kid -> kid
 
 (** {2 Misc functions} *)
 
+val pat_of_mpat : 'a mpat -> 'a pat
+  
 val nexp_frees : nexp -> KidSet.t
 val nexp_identical : nexp -> nexp -> bool
 val is_nexp_constant : nexp -> bool

@@ -2360,6 +2360,25 @@ let destruct_vec_typ l env typ =
   in
   destruct_vec_typ' l (Env.expand_synonyms env typ)
 
+let rec mpat_of_pat : 'a. Env.t -> 'a pat -> 'a mpat =
+  fun env (P_aux (aux, ((l, _) as annot)) as pat) ->
+  let aux = match aux with
+    | P_lit lit -> MP_lit lit
+    | P_id id -> MP_id id
+    | P_app (id, pats) -> MP_app (id, List.map (mpat_of_pat env) pats)
+    | P_view (pat, id, exps) -> MP_view (mpat_of_pat env pat, id, exps)
+    | P_vector pats -> MP_vector (List.map (mpat_of_pat env) pats)
+    | P_vector_concat pats -> MP_vector_concat (List.map (mpat_of_pat env) pats)
+    | P_tup pats -> MP_tup (List.map (mpat_of_pat env) pats)
+    | P_list pats -> MP_list (List.map (mpat_of_pat env) pats)
+    | P_cons (pat1, pat2) -> MP_cons (mpat_of_pat env pat1, mpat_of_pat env pat2)
+    | P_string_append pats -> MP_string_append (List.map (mpat_of_pat env) pats)
+    | P_typ (typ, pat) -> MP_typ (mpat_of_pat env pat, typ)
+    | P_as (pat, id) -> MP_as (mpat_of_pat env pat, id)
+    | _ ->
+       typ_error env l (string_of_pat pat ^ " is not a valid mapping pattern")
+  in
+  MP_aux (aux, annot)
 
 let env_of_annot (l, tannot) = match tannot with
   | Some t -> t.env
@@ -2591,7 +2610,6 @@ let irule r env exp =
     inferred_exp
   with
   | Type_error (env, l, err) -> decr depth; typ_raise env l err
-
 
 (* This function adds useful assertion messages to asserts missing them *)
 let assert_msg = function
@@ -3889,30 +3907,6 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
   let exp = annot_exp (E_app (f, xs)) typ_ret eff !all_unifiers in
   typ_debug (lazy ("Returning: " ^ string_of_exp exp));
   exp
-
-and pat_of_mpat (MP_aux (aux, annot)) =
-  let aux = match aux with
-    | MP_lit lit -> P_lit lit
-    | MP_id id -> P_id id
-    | MP_app (id, mpats) -> P_app (id, List.map pat_of_mpat mpats)
-    | MP_view (mpat, id, exps) -> P_view (pat_of_mpat mpat, id, exps)
-    | MP_tup mpats -> P_tup (List.map pat_of_mpat mpats)
-    | MP_string_append mpats -> P_string_append (List.map pat_of_mpat mpats)
-  in
-  P_aux (aux, annot)
-
-and mpat_of_pat env (P_aux (aux, ((l, _) as annot)) as pat) =
-  let aux = match aux with
-    | P_lit lit -> MP_lit lit
-    | P_id id -> MP_id id
-    | P_app (id, pats) -> MP_app (id, List.map (mpat_of_pat env) pats)
-    | P_view (pat, id, exps) -> MP_view (mpat_of_pat env pat, id, exps)
-    | P_tup pats -> MP_tup (List.map (mpat_of_pat env) pats)
-    | P_string_append pats -> MP_string_append (List.map (mpat_of_pat env) pats)
-    | _ ->
-       typ_error env l (string_of_pat pat)
-  in
-  MP_aux (aux, annot)
 
 (**************************************************************************)
 (* 6. Effect system                                                       *)

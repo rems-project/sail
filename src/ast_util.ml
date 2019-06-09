@@ -94,6 +94,24 @@ let mk_pexp pexp_aux = Pat_aux (pexp_aux, no_annot)
 let mk_mpat mpat_aux = MP_aux (mpat_aux, no_annot)
 let mk_mpexp mpexp_aux = MPat_aux (mpexp_aux, no_annot)
 
+let rec pat_of_mpat : 'a. 'a mpat -> 'a pat =
+  fun (MP_aux (aux, annot)) ->
+  let aux = match aux with
+    | MP_lit lit -> P_lit lit
+    | MP_id id -> P_id id
+    | MP_app (id, mpats) -> P_app (id, List.map pat_of_mpat mpats)
+    | MP_view (mpat, id, exps) -> P_view (pat_of_mpat mpat, id, exps)
+    | MP_vector mpats -> P_vector (List.map pat_of_mpat mpats)
+    | MP_vector_concat mpats -> P_vector_concat (List.map pat_of_mpat mpats)
+    | MP_tup mpats -> P_tup (List.map pat_of_mpat mpats)
+    | MP_list mpats -> P_list (List.map pat_of_mpat mpats)
+    | MP_cons (mpat1, mpat2) -> P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2)
+    | MP_string_append mpats -> P_string_append (List.map pat_of_mpat mpats)
+    | MP_typ (mpat, typ) -> P_typ (typ, pat_of_mpat mpat)
+    | MP_as (mpat, id) -> P_as (pat_of_mpat mpat, id)
+  in
+  P_aux (aux, annot)
+                       
 let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
 
 let mk_typ_pat tpat_aux = TP_aux (tpat_aux, Parse_ast.Unknown)
@@ -600,7 +618,6 @@ and map_mpat_annot_aux f = function
   | MP_lit lit -> MP_lit lit
   | MP_id id -> MP_id id
   | MP_app (id, mpats) -> MP_app (id, List.map (map_mpat_annot f) mpats)
-  | MP_record (fmpats, b) -> MP_record (List.map (map_mfpat_annot f) fmpats, b)
   | MP_tup mpats -> MP_tup (List.map (map_mpat_annot f) mpats)
   | MP_list mpats -> MP_list (List.map (map_mpat_annot f) mpats)
   | MP_vector_concat mpats -> MP_vector_concat (List.map (map_mpat_annot f) mpats)
@@ -612,10 +629,11 @@ and map_mpat_annot_aux f = function
   | MP_view (mpat, id, args) -> MP_view (map_mpat_annot f mpat, id, List.map (map_exp_annot f) args)
 
 and map_fpat_annot f (FP_aux (FP_Fpat (id, pat), annot)) = FP_aux (FP_Fpat (id, map_pat_annot f pat), f annot)
-and map_mfpat_annot f (MFP_aux (MFP_mpat (id, mpat), annot)) = MFP_aux (MFP_mpat (id, map_mpat_annot f mpat), f annot)
+
 and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
 and map_letbind_annot_aux f = function
   | LB_val (pat, exp) -> LB_val (map_pat_annot f pat, map_exp_annot f exp)
+
 and map_lexp_annot f (LEXP_aux (lexp, annot)) = LEXP_aux (map_lexp_annot_aux f lexp, f annot)
 and map_lexp_annot_aux f = function
   | LEXP_id id -> LEXP_id id
@@ -997,7 +1015,6 @@ and string_of_mpat (MP_aux (pat, l)) =
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
   | MP_view (mpat, id, args) ->
      string_of_mpat mpat ^ " <- " ^ string_of_id id ^ "(" ^ Util.string_of_list ", " string_of_exp args ^ ")"
-  | MP_record _ -> "MPAT"
     
 and string_of_lexp (LEXP_aux (lexp, _)) =
   match lexp with
