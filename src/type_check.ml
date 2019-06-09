@@ -4232,7 +4232,6 @@ and propagate_mpat_effect_aux = function
      let p_mpat = propagate_mpat_effect mpat in
      let p_exps = List.map propagate_exp_effect exps in
      MP_view (p_mpat, id, p_exps), union_effects (effect_of_mpat p_mpat) (collect_effects p_exps)
-  | _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented: Cannot propagate effect in mpat")
 
 and propagate_letbind_effect (LB_aux (lb, (l, annot))) =
   let p_lb, eff = propagate_letbind_effect_aux lb in
@@ -4344,10 +4343,10 @@ let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
      let mpexp, env = check_mpexp (Env.set_allow_mapping_builtins true env) mpexp typ_left in
      let exp = crule check_exp (Env.set_allow_mapping_builtins false env) exp typ_right in
      MCL_aux (MCL_forwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
-  | MCL_backwards (exp, mpexp) ->
+  | MCL_backwards (mpexp, exp) ->
      let mpexp, env = check_mpexp (Env.set_allow_mapping_builtins true env) mpexp typ_right in
      let exp = crule check_exp (Env.set_allow_mapping_builtins false env) exp typ_left in
-     MCL_aux (MCL_forwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
+     MCL_aux (MCL_backwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
 
 let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pexp), (l, annot))) =
   match annot with
@@ -4483,13 +4482,19 @@ let check_mapdef env (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), (l, _))
   let checked_args, mapcl_env, left_typ, right_typ = match typ with
     | Typ_aux (Typ_fn (arg_typs, (Typ_aux (Typ_bidir (left_typ, right_typ), _) as bidir), _), _) ->
        check_tannot_opt "mapping" env quant bidir tannot_opt;
-       typ_print (lazy (Util.("Binding mapping family arguments " |> yellow |> clear) ^ Util.string_of_list ", " string_of_typ arg_typs));
+       typ_print (lazy (Util.("Binding mapping family arguments " |> yellow |> clear) ^ string_of_typ typ));
        let env = add_typquant l quant env in
        let bind_arg (targs, env) arg typ =
          let targ, env = bind_pat_no_guard env arg typ in
          targs @ [targ], env
        in
-       let checked_args, env = List.fold_left2 bind_arg ([], env) args arg_typs in
+       let checked_args, env =
+         try List.fold_left2 bind_arg ([], env) args arg_typs with
+         | Invalid_argument _ ->
+            typ_error env l
+              (Printf.sprintf "Mapping definition has %d arguments, expecting %d from types %s"
+                 (List.length args) (List.length arg_typs) (Util.string_of_list ", " string_of_typ arg_typs))
+       in  
        checked_args, env, left_typ, right_typ
     | _ ->
        typ_error env l "Mapping definition must have a bi-directional mapping type"
@@ -4504,7 +4509,7 @@ let check_mapdef env (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), (l, _))
   let eff = List.fold_left union_effects no_effect (List.map mapcl_effect mapcls) in
   let env = Env.define_val_spec id env in
   if equal_effects eff no_effect || equal_effects eff (mk_effect [BE_escape]) || !opt_no_effects then
-    vs_def @ [DEF_mapdef (MD_aux (MD_mapping (id, [], tannot_opt, mapcls), (l, None)))], env
+    vs_def @ [DEF_mapdef (MD_aux (MD_mapping (id, checked_args, tannot_opt, mapcls), (l, None)))], env
   else
     typ_error env l ("A maping may not have any effect other than {escape}: " ^ string_of_effect eff ^ " found")
 

@@ -1,0 +1,8 @@
+Type error:
+[[96mpoly_hex_forward_back/v2.sail[0m]:18:0-22:1
+18[96m |[0mmapping hex_twice(n) = {
+  [91m |[0m[91m^-----------------------[0m
+22[96m |[0m}
+  [91m |[0m[91m^[0m
+  [91m |[0m Mapping definition must have a bi-directional mapping type
+  [91m |[0m 

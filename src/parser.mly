@@ -112,7 +112,7 @@ let mk_mpexp mpexp n m = MPat_aux (mpexp, loc n m)
 let mk_mpat mpat n m = MP_aux (mpat, loc n m)
 let mk_bidir_mapcl mpexp1 mpexp2 n m = MCL_aux (MCL_bidir (mpexp1, mpexp2), loc n m)
 let mk_forwards_mapcl mpexp exp n m = MCL_aux (MCL_forwards (mpexp, exp), loc n m)
-let mk_backwards_mapcl exp mpexp n m = MCL_aux (MCL_backwards (exp, mpexp), loc n m)
+let mk_backwards_mapcl mpexp exp n m = MCL_aux (MCL_backwards (mpexp, exp), loc n m)
 let mk_map id args tannot mapcls n m = MD_aux (MD_mapping (id, args, tannot, mapcls), loc n m)
 
 let doc_vs doc (VS_aux (v, l)) = VS_aux (v, Documented (doc, l))
@@ -1342,7 +1342,7 @@ mapcl:
   | Forwards mpexp EqGt exp
     { mk_forwards_mapcl $2 $4 $startpos $endpos }
   | Backwards mpexp EqGt exp
-    { mk_backwards_mapcl $4 $2 $startpos $endpos }
+    { mk_backwards_mapcl $2 $4 $startpos $endpos }
 
 mapcl_list:
   | mapcl
@@ -1355,6 +1355,8 @@ map_args:
     { [], mk_tannotn }
   | Colon typ Bidir typ
     { [], (fun s e -> mk_tannot mk_typqn (mk_typ (ATyp_bidir ($2, $4)) s e) s e) $startpos($2) $endpos }
+  | Lparen pat_list Rparen
+    { $2, mk_tannotn }
   | forall_opt Lparen pat_list Rparen MinusGt typ Bidir typ
     { $3, (fun s e -> mk_tannot $1 (mk_typ (ATyp_bidir ($6, $8)) s e) s e) $startpos($6) $endpos }
 

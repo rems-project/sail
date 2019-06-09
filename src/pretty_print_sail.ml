@@ -599,11 +599,11 @@ let doc_mapcl (MCL_aux (cl, _)) =
   | MCL_forwards (mpexp, exp) ->
      let left = doc_mpexp mpexp in
      let right = doc_exp exp in
-     separate space [left; string "=>"; right]
-  | MCL_backwards (exp, mpexp) ->
+     separate space [string "forwards"; left; string "=>"; right]
+  | MCL_backwards (mpexp, exp) ->
      let left = doc_exp exp in
      let right = doc_mpexp mpexp in
-     separate space [right; string "=>"; left]
+     separate space [string "backwards"; right; string "=>"; left]
 
 let doc_mapdef (MD_aux (MD_mapping (id, args, typa, mapcls), _)) =
   match mapcls with
@@ -611,7 +611,12 @@ let doc_mapdef (MD_aux (MD_mapping (id, args, typa, mapcls), _)) =
   | _ ->
      let sep = string "," ^^ hardline in
      let clauses = separate_map sep doc_mapcl mapcls in
-     string "mapping" ^^ space ^^ doc_id id ^^ space ^^ string "=" ^^ space ^^ (surround 2 0 lbrace clauses rbrace)
+     let args_doc =
+       match args with
+       | [] -> empty
+       | _ -> parens (separate_map (comma ^^ space) doc_pat args)
+     in
+     string "mapping" ^^ space ^^ doc_id id ^^ args_doc ^^ space ^^ string "=" ^^ space ^^ (surround 2 0 lbrace clauses rbrace)
 
 let doc_dec (DEC_aux (reg,_)) =
   match reg with

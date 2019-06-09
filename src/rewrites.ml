@@ -3865,7 +3865,7 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
          [realise_single_mpexp mpexp exp]
        else
          []
-    | (MCL_aux (MCL_backwards (exp, mpexp), (l, ()))) ->
+    | (MCL_aux (MCL_backwards (mpexp, exp), (l, ()))) ->
        if forwards then
          []
        else
@@ -3881,7 +3881,7 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
          [realise_single_mpexp mpexp (mk_lit_exp L_true)]
        else
          []
-    | (MCL_aux (MCL_backwards (exp, mpexp), (l, ()))) ->
+    | (MCL_aux (MCL_backwards (mpexp, exp), (l, ()))) ->
        if forwards then
          []
        else
@@ -3925,7 +3925,7 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
         else
           []
       end
-    | (MCL_aux (MCL_backwards (exp, mpexp), (l, ()))) -> begin
+    | (MCL_aux (MCL_backwards (mpexp, exp), (l, ()))) -> begin
         if forwards then
           []
         else

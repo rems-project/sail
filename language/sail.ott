@@ -767,9 +767,9 @@ mpexp :: 'MPat_' ::=
 mapcl :: 'MCL_' ::=
   {{ com mapping clause (bidirectional pattern-match) }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | mpexp1 <-> mpexp2 :: :: bidir
-  | mpexp --> exp     :: :: forwards
-  | exp <-- mpexp     :: :: backwards
+  | mpexp1 <-> mpexp2      :: :: bidir
+  | forwards mpexp => exp  :: :: forwards
+  | backwards mpexp => exp :: :: backwards
 
 
 mapdef :: 'MD_' ::=
