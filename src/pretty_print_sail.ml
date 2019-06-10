@@ -172,6 +172,7 @@ and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> doc_id id
   | Typ_app (id, []) -> doc_id id
+  | Typ_regex regex -> string "regex" ^^ parens (dquotes (string regex))
   | Typ_app (Id_aux (Operator str, _), [x; y]) ->
      separate space [doc_typ_arg x; doc_typ_arg y]
   | Typ_app (id, typs) when Id.compare id (mk_id "atom") = 0 ->

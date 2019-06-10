@@ -154,6 +154,7 @@ val app_typ : id -> typ_arg list -> typ
 val register_typ : typ -> typ
 val unit_typ : typ
 val string_typ : typ
+val regex_typ : string -> typ
 val real_typ : typ
 val vector_typ : nexp -> order -> typ -> typ
 val list_typ : typ -> typ

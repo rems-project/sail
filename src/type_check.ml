@@ -229,6 +229,7 @@ and strip_typ_aux : typ_aux -> typ_aux = function
   | Typ_fn (arg_typs, ret_typ, effect) -> Typ_fn (List.map strip_typ arg_typs, strip_typ ret_typ, strip_effect effect)
   | Typ_bidir (typ1, typ2) -> Typ_bidir (strip_typ typ1, strip_typ typ2)
   | Typ_tup typs -> Typ_tup (List.map strip_typ typs)
+  | Typ_regex str -> Typ_regex str
   | Typ_exist (kopts, constr, typ) ->
      Typ_exist ((List.map strip_kinded_id kopts), strip_n_constraint constr, strip_typ typ)
   | Typ_app (id, args) -> Typ_app (strip_id id, List.map strip_typ_arg args)
@@ -253,8 +254,9 @@ and strip_kind = function
 
 let rec typ_constraints (Typ_aux (typ_aux, l)) =
   match typ_aux with
-  | Typ_id v -> []
-  | Typ_var kid -> []
+  | Typ_id _ -> []
+  | Typ_var _ -> []
+  | Typ_regex _ -> []
   | Typ_tup typs -> List.concat (List.map typ_constraints typs)
   | Typ_app (f, args) -> List.concat (List.map typ_arg_nexps args)
   | Typ_exist (kids, nc, typ) -> typ_constraints typ
@@ -271,8 +273,9 @@ and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
 
 let rec typ_nexps (Typ_aux (typ_aux, l)) =
   match typ_aux with
-  | Typ_id v -> []
-  | Typ_var kid -> []
+  | Typ_id _ -> []
+  | Typ_var _ -> []
+  | Typ_regex _ -> []
   | Typ_tup typs -> List.concat (List.map typ_nexps typs)
   | Typ_app (f, args) -> List.concat (List.map typ_arg_nexps args)
   | Typ_exist (kids, nc, typ) -> typ_nexps typ
@@ -748,6 +751,7 @@ end = struct
        let typ = List.fold_left (fun typ kid -> typ_subst kid (arg_nexp (nvar (prepend_kid "syn#" kid))) typ) typ !rebindings in
        let env = { env with constraints = nc :: env.constraints } in
        Typ_aux (Typ_exist (kopts, nc, expand_synonyms env typ), l)
+    | Typ_regex str -> Typ_aux (Typ_regex str, l)
     | Typ_var v -> Typ_aux (Typ_var v, l)
   and expand_synonyms_arg env (A_aux (typ_arg, l)) =
     match typ_arg with
@@ -759,7 +763,7 @@ end = struct
   (** Map over all nexps in a type - excluding those in existential constraints **)
   let rec map_nexps f (Typ_aux (typ_aux, l) as typ) =
     match typ_aux with
-    | Typ_id _ | Typ_var _ -> typ
+    | Typ_id _ | Typ_var _ | Typ_regex _ -> typ
     | Typ_fn (arg_typs, ret_typ, effect) -> Typ_aux (Typ_fn (List.map (map_nexps f) arg_typs, map_nexps f ret_typ, effect), l)
     | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (map_nexps f typ1, map_nexps f typ2), l)
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (map_nexps f) typs), l)
@@ -785,6 +789,7 @@ end = struct
        then typ_error env l ("Type constructor " ^ string_of_id id ^ " expected " ^ string_of_typquant typq)
        else ()
     | Typ_id id -> typ_error env l ("Undefined type " ^ string_of_id id)
+    | Typ_regex _ -> ()
     | Typ_var kid -> begin
       match KBindings.find kid env.typ_vars with
       | (_, K_type) -> ()
@@ -1349,7 +1354,7 @@ let destruct_vector env typ =
 
 let rec is_typ_monomorphic (Typ_aux (typ, l)) =
   match typ with
-  | Typ_id _ -> true
+  | Typ_id _ | Typ_regex _ -> true
   | Typ_tup typs -> List.for_all is_typ_monomorphic typs
   | Typ_app (id, args) -> List.for_all is_typ_arg_monomorphic args
   | Typ_fn (arg_typs, ret_typ, _) -> List.for_all is_typ_monomorphic arg_typs && is_typ_monomorphic ret_typ
@@ -1555,6 +1560,7 @@ let typ_identical env typ1 typ2 =
        end
     | Typ_exist (kopts1, nc1, typ1), Typ_exist (kopts2, nc2, typ2) when List.length kopts1 = List.length kopts2 ->
        List.for_all2 (fun k1 k2 -> KOpt.compare k1 k2 = 0) kopts1 kopts2 && nc_identical nc1 nc2 && typ_identical' typ1 typ2
+    | Typ_regex str1, Typ_regex str2 -> str1 = str2
     | _, _ -> false
   and typ_arg_identical (A_aux (arg1, _)) (A_aux (arg2, _)) =
     match arg1, arg2 with
@@ -1887,12 +1893,11 @@ let rec kid_order_nexp kind_map (Nexp_aux (aux, l) as nexp) =
   | Nexp_app (id, nexps) ->
      List.fold_left (fun (ord, kids) nexp -> let (ord', kids) = kid_order_nexp kids nexp in (ord @ ord', kids)) ([], kind_map) nexps
 
-
 let rec kid_order kind_map (Typ_aux (aux, l) as typ) =
   match aux with
   | Typ_var kid when KBindings.mem kid kind_map ->
      ([mk_kopt (unaux_kind (KBindings.find kid kind_map)) kid], KBindings.remove kid kind_map)
-  | Typ_id _ | Typ_var _ -> ([], kind_map)
+  | Typ_id _ | Typ_var _ | Typ_regex _ -> ([], kind_map)
   | Typ_tup typs ->
      List.fold_left (fun (ord, kids) typ -> let (ord', kids) = kid_order kids typ in (ord @ ord', kids)) ([], kind_map) typs
   | Typ_app (_, args) ->
@@ -1929,7 +1934,7 @@ let rec alpha_equivalent env typ1 typ2 =
   let rec relabel (Typ_aux (aux, l) as typ) =
     let relabelled_aux =
       match aux with
-      | Typ_id _ | Typ_var _ -> aux
+      | Typ_id _ | Typ_var _ | Typ_regex _ -> aux
       | Typ_fn (arg_typs, ret_typ, eff) -> Typ_fn (List.map relabel arg_typs, relabel ret_typ, eff)
       | Typ_bidir (typ1, typ2) -> Typ_bidir (relabel typ1, relabel typ2)
       | Typ_tup typs -> Typ_tup (List.map relabel typs)
@@ -1977,6 +1982,7 @@ let canonicalize env typ =
   let rec canon (Typ_aux (aux, l)) =
     match aux with
     | Typ_var v -> Typ_aux (Typ_var v, l)
+    | Typ_regex str -> Typ_aux (Typ_regex str, l)
     | Typ_id id when string_of_id id = "int" ->
        exist_typ (fun _ -> nc_true) (fun v -> atom_typ (nvar v))
     | Typ_id id -> Typ_aux (Typ_id id, l)
@@ -2054,6 +2060,8 @@ let rec subtyp l env typ1 typ2 =
   | Typ_id id1, Typ_id id2 when Id.compare id1 id2 = 0 -> ()
   | Typ_id id1, Typ_app (id2, []) when Id.compare id1 id2 = 0 -> ()
   | Typ_app (id1, []), Typ_id id2 when Id.compare id1 id2 = 0 -> ()
+
+  | Typ_regex _, Typ_id id when string_of_id id = "string" -> ()
 
   | _, _ ->
   match destruct_exist_plain typ1, destruct_exist (canonicalize env typ2) with
@@ -2857,6 +2865,10 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      if is_typ_monomorphic typ || Env.polymorphic_undefineds env
      then annot_exp_effect (E_lit lit) typ (mk_effect [BE_undef])
      else typ_error env l ("Type " ^ string_of_typ typ ^ " failed undefined monomorphism restriction")
+  | E_lit (L_aux (L_string str, _) as lit), Typ_regex regex ->
+     if Str.string_match (Str.regexp regex) str 0
+     then annot_exp (E_lit lit) typ
+     else typ_error env l (Printf.sprintf "String %s did not match regular expression type %s" str regex)
   | _, _ ->
      let inferred_exp = irule infer_exp env exp in
      type_coercion env inferred_exp typ
@@ -3076,48 +3088,6 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           annot_pat (P_cons (hd_pat, tl_pat)) typ, env, hd_guards @ tl_guards
        | _ -> typ_error env l "Cannot match cons pattern against non-list type"
      end
-  | P_view (pat, f, exps) ->
-     let app_env, is_mapping_builtin =
-       if Env.allow_mapping_builtins env then
-         match string_of_id f with
-         | "__regex" ->
-            Env.add_val_spec (mk_id "__regex") (mk_typquant [], mapping_family_typ [string_typ] string_typ bool_typ) env, true
-         | ("__parse_hex" | "__parse_binary" | "__parse_decimal") as parse ->
-            let v = mk_kid "n" in
-            Env.add_val_spec
-              (mk_id parse)
-              (mk_typquant [mk_qi_id K_int v], mapping_family_typ [atom_typ (nvar v)] string_typ (dvector_typ env (nvar v) bit_typ))
-              env,
-            true
-         | _ -> env, false
-       else env, false
-     in
-     let inferred_app = infer_funapp l app_env f exps None in
-     begin match inferred_app, typ_of inferred_app with
-     | E_aux (E_app (_, exps), _), Typ_aux (Typ_bidir (typ_left, typ_right), _) ->
-        if subtype_check env typ typ_left then
-          let pat, env, guards = bind_pat env pat typ_right in
-          annot_pat (P_view (pat, f, exps)) typ, env, guards
-        else
-          typ_raise env l (Err_subtype (typ, typ_left, Env.get_constraints env, Env.get_typ_var_locs env))
-     | _ ->
-        typ_error env l "View pattern must have a bi-directional return type"
-     end
-  | P_string_append pats ->
-     begin
-       match Env.expand_synonyms env typ with
-       | Typ_aux (Typ_id id, _) when Id.compare id (mk_id "string") = 0 ->
-          let rec process_pats env = function
-            | [] -> [], env, []
-            | pat :: pats ->
-               let pat', env, guards = bind_pat env pat typ in
-               let pats', env, guards' = process_pats env pats in
-               pat' :: pats', env, guards @ guards'
-          in
-          let pats, env, guards = process_pats env pats in
-          annot_pat (P_string_append pats) typ, env, guards
-       | _ -> typ_error env l "Cannot match string-append pattern against non-string type"
-     end
   | P_list pats ->
      begin
        match Env.expand_synonyms env typ with
@@ -3180,10 +3150,6 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
   | P_app (f, pats) when Env.is_union_constructor f env ->
      (* Treat Ctor(x, y) as Ctor((x, y)) *)
      bind_pat env (P_aux (P_app (f, [mk_pat (P_tup pats)]), (l, ()))) typ
-  | P_app (f, [P_aux (P_lit (L_aux (L_unit, _)), _)]) ->
-     bind_pat env (P_aux (P_view (P_aux (P_lit (L_aux (L_unit, gen_loc l)), (gen_loc l, ())), f, []), (l, ()))) typ
-  | P_app (f, _) when (not (Env.is_union_constructor f env) && not (Env.is_mapping f env)) ->
-     typ_error env l (string_of_id f ^ " is not a union constructor or valid mapping in pattern " ^ string_of_pat pat)
   | P_as (pat, id) ->
      let (typed_pat, env, guards) = bind_pat env pat typ in
      annot_pat (P_as (typed_pat, id)) (typ_of_pat typed_pat), Env.add_local id (Immutable, typ_of_pat typed_pat) env, guards
@@ -3253,10 +3219,34 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      in
      let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
      annot_pat (P_vector_concat inferred_pats) (dvector_typ env len vtyp), env, guards
+  | P_app (f, [P_aux (P_lit (L_aux (L_unit, _)), _)]) ->
+     infer_pat env (P_aux (P_view (P_aux (P_lit (L_aux (L_unit, gen_loc l)), (gen_loc l, ())), f, []), (l, ())))
+  | P_view (pat, f, exps) ->
+     let app_env, is_mapping_builtin =
+       if Env.allow_mapping_builtins env then
+         match string_of_id f with
+         | "regex" ->
+            begin match exps with
+            | [E_aux (E_lit (L_aux (L_string regex, _)), _)] ->
+               Env.add_val_spec (mk_id "regex") (mk_typquant [], mapping_family_typ [string_typ] string_typ (regex_typ regex)) env, true
+            | _ ->
+               typ_error env l "regex mapping builtin requires a string literal as an argument"
+            end
+         | _ -> env, false
+       else env, false
+     in
+     let inferred_app = infer_funapp l app_env f exps None in
+     begin match inferred_app, typ_of inferred_app with
+     | E_aux (E_app (_, exps), _), Typ_aux (Typ_bidir (typ_left, typ_right), _) ->
+        let pat, env, guards = bind_pat env pat typ_right in
+        annot_pat (P_view (pat, f, exps)) typ_left, env, guards
+     | _ ->
+        typ_error env l "View pattern must have a bi-directional return type"
+     end
   | P_string_append pats ->
      let fold_pats (pats, env, guards) pat =
        let inferred_pat, env, guards' = infer_pat env pat in
-       typ_equality l env (typ_of_pat inferred_pat) string_typ;
+       subtyp l env (typ_of_pat inferred_pat) string_typ;
        pats @ [inferred_pat], env, guards' @ guards
      in
      let typed_pats, env, guards =

@@ -143,6 +143,7 @@ let kw_table =
      ("Bool",                    (fun x -> Bool));
      ("pure",                    (fun x -> Pure));
      ("register",		 (fun x -> Register));
+     ("regex",                   (fun x -> Regex));
      ("return",                  (fun x -> Return));
      ("scattered",               (fun x -> Scattered));
      ("sizeof",                  (fun x -> Sizeof));

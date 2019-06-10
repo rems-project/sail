@@ -32,7 +32,7 @@
     "overload" "cast" "sizeof" "constant" "constraint" "default" "assert" "newtype" "from"
     "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to"
     "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"
-    "mapping" "where" "with" "implicit" "forwards" "backwards"))
+    "mapping" "where" "with" "implicit" "forwards" "backwards" "regex"))
 
 (defconst sail2-kinds
   '("Int" "Type" "Order" "Bool" "inc" "dec"

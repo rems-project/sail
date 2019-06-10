@@ -404,6 +404,7 @@ let range_typ nexp1 nexp2 =
 let bool_typ = mk_id_typ (mk_id "bool")
 let atom_bool_typ nc = mk_typ (Typ_app (mk_id "atom_bool", [mk_typ_arg (A_bool nc)]))
 let string_typ = mk_id_typ (mk_id "string")
+let regex_typ str = mk_typ (Typ_regex str)
 let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (A_typ typ)]))
 let tuple_typ typs = mk_typ (Typ_tup typs)
 let function_typ arg_typs ret_typ eff = mk_typ (Typ_fn (arg_typs, ret_typ, eff))
@@ -853,6 +854,7 @@ and string_of_typ_aux = function
   | Typ_bidir (typ1, typ2) -> string_of_typ typ1 ^ " <-> " ^ string_of_typ typ2
   | Typ_exist (kids, nc, typ) ->
      "{" ^ string_of_list " " string_of_kinded_id kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"
+  | Typ_regex str -> "regex(\"" ^ str ^ "\")"
 and string_of_typ_arg = function
   | A_aux (typ_arg, l) -> string_of_typ_arg_aux typ_arg
 and string_of_typ_arg_aux = function
@@ -1169,6 +1171,7 @@ let rec nc_compare (NC_aux (nc1,_)) (NC_aux (nc2,_)) =
 and typ_compare (Typ_aux (t1,_)) (Typ_aux (t2,_)) =
   match t1,t2 with
   | Typ_id id1, Typ_id id2 -> Id.compare id1 id2
+  | Typ_regex str1, Typ_regex str2 -> String.compare str1 str2
   | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2
   | Typ_fn (ts1,t2,e1), Typ_fn (ts3,t4,e2) ->
      (match Util.compare_list typ_compare ts1 ts3 with
@@ -1196,6 +1199,7 @@ and typ_compare (Typ_aux (t1,_)) (Typ_aux (t2,_)) =
   | Typ_fn _, _ -> -1    | _, Typ_fn _ -> 1
   | Typ_bidir _, _ -> -1 | _, Typ_bidir _ -> 1
   | Typ_tup _, _ -> -1   | _, Typ_tup _ -> 1
+  | Typ_regex _, _ -> -1 | _, Typ_regex _ -> 1
   | Typ_exist _, _ -> -1 | _, Typ_exist _ -> 1
 
 and typ_arg_compare (A_aux (ta1,_)) (A_aux (ta2,_)) =
@@ -1375,7 +1379,7 @@ let rec kopts_of_constraint (NC_aux (nc, _)) =
 
 and kopts_of_typ (Typ_aux (t,_)) =
   match t with
-  | Typ_id _ -> KOptSet.empty
+  | Typ_id _ | Typ_regex _ -> KOptSet.empty
   | Typ_var kid -> KOptSet.singleton (mk_kopt K_type kid)
   | Typ_fn (ts, t, _) -> List.fold_left KOptSet.union (kopts_of_typ t) (List.map kopts_of_typ ts)
   | Typ_bidir (t1, t2) -> KOptSet.union (kopts_of_typ t1) (kopts_of_typ t2)
@@ -1432,7 +1436,7 @@ let rec tyvars_of_constraint (NC_aux (nc, _)) =
 
 and tyvars_of_typ (Typ_aux (t,_)) =
   match t with
-  | Typ_id _ -> KidSet.empty
+  | Typ_id _ | Typ_regex _ -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
   | Typ_fn (ts, t, _) -> List.fold_left KidSet.union (tyvars_of_typ t) (List.map tyvars_of_typ ts)
   | Typ_bidir (t1, t2) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
@@ -1484,6 +1488,7 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
      wrap (E_id (prepend_id "typ_" (id_of_kid kid))) typ
   | Typ_bidir _ -> assert false
   | Typ_fn _ -> assert false
+  | Typ_regex _ -> assert false
   | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
 and undefined_of_typ_args mwords l annot (A_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
@@ -1716,6 +1721,7 @@ let rec locate_nc f (NC_aux (nc_aux, l)) =
 and locate_typ f (Typ_aux (typ_aux, l)) =
   let typ_aux = match typ_aux with
     | Typ_id id -> Typ_id (locate_id f id)
+    | Typ_regex str -> Typ_regex str
     | Typ_var kid -> Typ_var (locate_kid f kid)
     | Typ_fn (arg_typs, ret_typ, effect) ->
        Typ_fn (List.map (locate_typ f) arg_typs, locate_typ f ret_typ, locate_effect f effect)
@@ -1927,6 +1933,7 @@ and constraint_subst_aux l sv subst = function
 and typ_subst sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_aux sv subst typ, l)
 and typ_subst_aux sv subst = function
   | Typ_id v -> Typ_id v
+  | Typ_regex str -> Typ_regex str
   | Typ_var kid ->
      begin match subst with
      | A_aux (A_typ typ, _) when Kid.compare kid sv = 0 ->
@@ -2028,6 +2035,7 @@ let subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
     match t with
     | Typ_id _
     | Typ_var _
+    | Typ_regex _
       -> ty
     | Typ_fn (t1,t2,e) -> re (Typ_fn (List.map (s_styp substs) t1, s_styp substs t2,e))
     | Typ_bidir (t1, t2) -> re (Typ_bidir (s_styp substs t1, s_styp substs t2))

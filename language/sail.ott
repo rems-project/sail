@@ -231,6 +231,7 @@ typ :: 'Typ_' ::=
   | typ1 <-> typ2                                 :: :: bidir {{ com Mapping }}
   | ( typ1 , .... , typn )                        :: :: tup {{ com Tuple }}
   | id ( typ_arg1 , ... , typ_argn )              :: :: app {{ com type constructor application }}
+  | regex ( string )                              :: :: regex {{ com regular expression type }}
   | ( typ )                                       :: S :: paren {{ ichlo [[typ]] }} 
   | { kinded_id1 ...  kinded_idn , n_constraint . typ }
     :: :: exist

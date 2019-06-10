@@ -170,6 +170,7 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
        | Some kinds ->
           Typ_app (id, List.map2 (to_ast_typ_arg ctx) args kinds)
        end
+    | P.ATyp_regex str -> Typ_regex str
     | P.ATyp_exist (kopts, nc, atyp) ->
        let kopts, ctx =
          List.fold_right (fun kopt (kopts, ctx) ->

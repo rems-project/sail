@@ -171,7 +171,7 @@ let rec desugar_rchain chain s e =
 
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
-%token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
+%token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef Regex
 %token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield Constant
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Forwards Backwards
@@ -529,6 +529,8 @@ atomic_typ:
     { mk_typ ATyp_inc $startpos $endpos }
   | id tyarg
     { mk_typ (ATyp_app ($1, snd $2 @ fst $2)) $startpos $endpos }
+  | Regex Lparen String Rparen
+    { mk_typ (ATyp_regex $3) $startpos $endpos }
   | Register Lparen typ Rparen
     { let register_id = mk_id (Id "register") $startpos($1) $endpos($1) in
       mk_typ (ATyp_app (register_id, [$3])) $startpos $endpos }
@@ -683,6 +685,8 @@ pat1:
     { mk_pat (P_cons ($1, $3)) $startpos $endpos }
   | atomic_pat Caret pat_string_append
     { mk_pat (P_string_append ($1 :: $3)) $startpos $endpos }
+  | atomic_pat LtMinus Regex Lparen exp Rparen
+    { mk_pat (P_view ($1, mk_id (Id "regex") $startpos($3) $endpos($3), [$5])) $startpos $endpos }
   | atomic_pat LtMinus id Lparen exp_list Rparen
     { mk_pat (P_view ($1, $3, $5)) $startpos $endpos }
   | atomic_pat LtMinus id Unit
@@ -1325,6 +1329,8 @@ atomic_mpat:
     { mk_mpat (MP_list $2) $startpos $endpos }
   | atomic_mpat Colon typ
     { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
+  | atomic_mpat LtMinus Regex Lparen exp Rparen
+    { mk_mpat (MP_view ($1, mk_id (Id "regex") $startpos($3) $endpos($3), [$5])) $startpos $endpos }
   | atomic_mpat LtMinus id Lparen exp_list Rparen
     { mk_mpat (MP_view ($1, $3, $5)) $startpos $endpos }
   | atomic_mpat LtMinus id Unit
