@@ -825,10 +825,11 @@ end = struct
     | A_typ typ -> wf_typ ~exs:exs env typ
     | A_order ord -> wf_order env ord
     | A_bool nc -> wf_constraint ~exs:exs env nc
-  and wf_nexp ?exs:(exs=KidSet.empty) env (Nexp_aux (nexp_aux, l) as nexp) =
+  and wf_nexp ?exs:(exs=KidSet.empty) env nexp =
     wf_debug "nexp" string_of_nexp nexp exs;
+    let Nexp_aux (nexp_aux, l) = expand_nexp_synonyms env nexp in
     match nexp_aux with
-    | Nexp_id _ -> ()
+    | Nexp_id id -> typ_error env l ("Undefined synonym " ^ string_of_id id)
     | Nexp_var kid when KidSet.mem kid exs -> ()
     | Nexp_var kid ->
        begin match get_typ_var kid env with
@@ -1323,6 +1324,10 @@ let add_typquant l (quant : typquant) (env : Env.t) : Env.t =
 
 let expand_bind_synonyms l env (typq, typ) =
   typq, Env.expand_synonyms (add_typquant l typq env) typ
+
+let wf_typschm env (TypSchm_aux (TypSchm_ts (typq, typ), l)) =
+  let env = add_typquant l typq env in
+  Env.wf_typ env typ
 
 (* Create vectors with the default order from the environment *)
 
@@ -4899,6 +4904,7 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
   let vs, id, typq, typ, env = match vs with
     | VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l) as typschm, id, exts, is_cast) ->
        typ_print (lazy (Util.("Check val spec " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
+       wf_typschm env typschm;
        let env = Env.add_extern id exts env in
        let env = if is_cast then Env.add_cast id env else env in
        let typq', typ' = expand_bind_synonyms ts_l env (typq, typ) in

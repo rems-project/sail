@@ -1855,7 +1855,13 @@ let order_subst_aux sv subst = function
 
 let order_subst sv subst (Ord_aux (ord, l)) = Ord_aux (order_subst_aux sv subst ord, l)
 
-let rec nexp_subst sv subst (Nexp_aux (nexp, l)) = Nexp_aux (nexp_subst_aux sv subst nexp, l)
+let rec nexp_subst sv subst = function
+  | (Nexp_aux (Nexp_var kid, l)) as nexp ->
+     begin match subst with
+     | A_aux (A_nexp n, _) when Kid.compare kid sv = 0 -> n
+     | _ -> nexp
+     end
+  | Nexp_aux (nexp, l) -> Nexp_aux (nexp_subst_aux sv subst nexp, l)
 and nexp_subst_aux sv subst = function
   | Nexp_var kid ->
      begin match subst with

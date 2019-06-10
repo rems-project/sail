@@ -1440,7 +1440,7 @@ let rewrite_defs_exp_lift_assign env defs = rewrite_defs_base
      write_reg_ref (vector_access (GPR, i)) exp
  *)
 let rewrite_register_ref_writes (Defs defs) =
-  let (Defs write_reg_spec) = fst (Type_error.check Env.empty (Defs (List.map gen_vs
+  let (Defs write_reg_spec) = fst (Type_error.check initial_env (Defs (List.map gen_vs
     [("write_reg_ref", "forall ('a : Type). (register('a), 'a) -> unit effect {wreg}")]))) in
   let lexp_ref_exp (LEXP_aux (_, annot) as lexp) =
     try
@@ -1630,7 +1630,7 @@ let rewrite_defs_early_return env (Defs defs) =
     FD_aux (FD_function (rec_opt, tannot_opt, effect_opt,
       List.map (rewrite_funcl_early_return rewriters) funcls), a) in
 
-  let (Defs early_ret_spec) = fst (Type_error.check Env.empty (Defs [gen_vs
+  let (Defs early_ret_spec) = fst (Type_error.check initial_env (Defs [gen_vs
     ("early_return", "forall ('a : Type) ('b : Type). 'a -> 'b effect {escape}")])) in
 
   rewrite_defs_base
@@ -3771,7 +3771,7 @@ let rewrite_defs_remove_superfluous_returns env =
 
 
 let rewrite_defs_remove_e_assign env (Defs defs) =
-  let (Defs loop_specs) = fst (Type_error.check Env.empty (Defs (List.map gen_vs
+  let (Defs loop_specs) = fst (Type_error.check initial_env (Defs (List.map gen_vs
     [("foreach#", "forall ('vars : Type). (int, int, int, bool, 'vars, 'vars) -> 'vars");
      ("while#", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars");
      ("until#", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars");

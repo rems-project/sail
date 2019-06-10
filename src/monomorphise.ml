@@ -3439,7 +3439,7 @@ let add_bitvector_casts (Defs defs) =
       mk_val_spec (VS_val_spec (ts,name,[("_", "zeroExtend")],false))
     in
     let defs = List.map mkfn (IdSet.elements !specs_required) in
-    check Env.empty (Defs defs)
+    check initial_env (Defs defs)
   in Defs (cast_specs @ defs)
 end
 
