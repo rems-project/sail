@@ -499,6 +499,7 @@ let rec apat_ctyp ctx (AP_aux (apat, _, _)) =
   | AP_wild typ | AP_nil typ | AP_id (_, typ) -> ctyp_of_typ ctx typ
   | AP_app (_, _, typ) -> ctyp_of_typ ctx typ
   | AP_as (_, _, typ) -> ctyp_of_typ ctx typ
+  | AP_string_append _ -> CT_string
 
 let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   let ctx = { ctx with local_env = env } in
@@ -586,6 +587,33 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
      end
 
   | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_null, ctyp)])) case_label], [], ctx
+
+  | AP_string_append string_apats ->
+     let groups = ref 0 in
+     let to_regex = function
+       | APS_lit str -> str
+       | APS_pat _ -> incr groups; "(.*)"
+     in
+     let subpats = List.map (function APS_lit _ -> [] | APS_pat apat -> [apat]) string_apats |> List.concat in
+     let regex_string = Util.string_of_list "" to_regex string_apats in
+     let regex = ngensym () in
+     let matches = ngensym () in
+     let result = ngensym () in
+     [iinit (CT_regex !groups) regex (V_lit (VL_string regex_string, CT_string));
+      idecl (CT_match !groups) matches;
+      idecl CT_bool result;
+      iextern (CL_id (result, CT_bool)) (mk_id "sail_regmatch") [V_id (regex, CT_regex !groups); cval; V_id (matches, CT_match !groups)];
+      ijump (V_call (Bnot, [V_id (result, CT_bool)])) case_label]
+     @ (List.mapi
+          (fun i apat ->
+            let mat = ngensym () in
+            let submatch, _, _ = compile_match ctx apat (V_id (mat, CT_string)) case_label in
+            [idecl CT_string mat;
+             iextern (CL_id (mat, CT_string)) (mk_id "sail_getmatch") [cval; V_id (matches, CT_match !groups); V_lit (VL_int (Big_int.of_int (i + 1)), CT_fint 64)]]
+            @ submatch)
+          subpats
+        |> List.concat),
+     [iclear (CT_regex !groups) regex], ctx
 
 let unit_cval = V_lit (VL_unit, CT_unit)
 

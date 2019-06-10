@@ -200,6 +200,8 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_variant (_, ctors) -> false (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *) (* FIXME *)
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
   | CT_ref ctyp -> true
+  | CT_regex _ -> false
+  | CT_match _ -> true
   | CT_poly -> true
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
 
@@ -1043,6 +1045,8 @@ let rec sgen_ctyp = function
   | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
   | CT_string -> "sail_string"
   | CT_real -> "real"
+  | CT_regex _ -> "sail_regex"
+  | CT_match _ -> "sail_match"
   | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
   | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
@@ -1064,6 +1068,8 @@ let rec sgen_ctyp_name = function
   | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
   | CT_string -> "sail_string"
   | CT_real -> "real"
+  | CT_regex _ -> "sail_regex"
+  | CT_match _ -> "sail_match"
   | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
   | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
@@ -1108,6 +1114,11 @@ let rec sgen_cval = function
        (sgen_cval f)
        (Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers))
   | V_poly (f, _) -> sgen_cval f
+
+and sgen_arg_cval = function
+  | V_id (id, CT_match n) ->
+     string_of_name id ^ ", " ^ string_of_int n
+  | cval -> sgen_cval cval
 
 and sgen_call op cvals =
   let open Printf in
@@ -1273,6 +1284,8 @@ and sgen_call op cvals =
 
 let sgen_cval_param cval =
   match cval_ctyp cval with
+  | CT_regex groups ->
+     sgen_cval cval ^ ", " ^ string_of_int groups
   | CT_lbits direction ->
      sgen_cval cval ^ ", " ^ string_of_bool direction
   | CT_sbits (_, direction) ->
@@ -1346,6 +1359,8 @@ let rec codegen_conversion l clexp cval =
 let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
   let open Printf in
   match instr with
+  | I_decl (CT_match groups, id) ->
+     ksprintf string "  regmatch_t %s[%d];" (sgen_name id) (groups + 1)
   | I_decl (ctyp, id) when is_stack_ctyp ctyp ->
      ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_name id)
   | I_decl (ctyp, id) ->
@@ -1380,7 +1395,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      ^^ string "  }"
 
   | I_funcall (x, extern, f, args) ->
-     let c_args = Util.string_of_list ", " sgen_cval args in
+     let c_args = Util.string_of_list ", " sgen_arg_cval args in
      let ctyp = clexp_ctyp x in
      let is_extern = Env.is_extern f ctx.tc_env "c" || extern in
      let fname =
@@ -2082,7 +2097,8 @@ let rec ctyp_dependencies = function
   | CT_ref ctyp -> ctyp_dependencies ctyp
   | CT_struct (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
   | CT_variant (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
-  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string | CT_enum _ | CT_poly | CT_constant _ -> []
+  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real
+    | CT_bit | CT_string | CT_enum _ | CT_poly | CT_constant _ | CT_regex _ | CT_match _ -> []
 
 let codegen_ctg ctx = function
   | CTG_vector (direction, ctyp) -> codegen_vector ctx (direction, ctyp)
@@ -2173,7 +2189,8 @@ let compile_ast env output_chan c_includes ast =
     let docs = separate_map (hardline ^^ hardline) (codegen_def ctx) cdefs in
 
     let preamble = separate hardline
-                     ([ string "#include \"sail.h\"" ]
+                     ([ string "#include \"sail.h\"";
+                        string "#include \"sail_regex.h\"" ]
                       @ (if !opt_no_rts then [] else
                            [ string "#include \"rts.h\"";
                              string "#include \"elf.h\"" ])

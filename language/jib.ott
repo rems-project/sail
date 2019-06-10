@@ -152,6 +152,9 @@ ctyp :: 'CT_' ::=
 
   | ref ( ctyp )                   :: :: ref
 
+  | regex_t ( nat )                :: :: regex
+  | match_t ( nat )                :: :: match
+
 % We can still have a very limited amount of polymorphism in this IR
 % representation, as variants can have polymorphic constructors. The
 % reason is we can put more precise types into constructors and then

@@ -86,6 +86,10 @@ and sc_op = SC_and | SC_or
 
 and 'a apat = AP_aux of 'a apat_aux * Env.t * l
 
+and 'a apat_string =
+  | APS_lit of string
+  | APS_pat of 'a apat
+
 and 'a apat_aux =
   | AP_tup of ('a apat) list
   | AP_id of id * 'a
@@ -93,6 +97,7 @@ and 'a apat_aux =
   | AP_app of id * 'a apat * 'a
   | AP_cons of 'a apat * 'a apat
   | AP_as of 'a apat * id * 'a
+  | AP_string_append of ('a apat_string) list
   | AP_nil of 'a
   | AP_wild of 'a
 
@@ -116,8 +121,12 @@ let rec apat_bindings (AP_aux (apat_aux, _, _)) =
   | AP_app (id, apat, _) -> apat_bindings apat
   | AP_cons (apat1, apat2) -> IdSet.union (apat_bindings apat1) (apat_bindings apat2)
   | AP_as (apat, id, _) -> IdSet.add id (apat_bindings apat)
+  | AP_string_append apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_string_bindings apats)
   | AP_nil _ -> IdSet.empty
   | AP_wild _ -> IdSet.empty
+and apat_string_bindings = function
+  | APS_lit _ -> IdSet.empty
+  | APS_pat apat -> apat_bindings apat
 
 (** This function returns the types of all bound variables in a
    pattern. It ignores AP_global, apat_globals is used for that. *)
@@ -138,6 +147,11 @@ let rec apat_types (AP_aux (apat_aux, _, _)) =
   | AP_as (apat, id, typ) -> Bindings.add id typ (apat_types apat)
   | AP_nil _ -> Bindings.empty
   | AP_wild _ -> Bindings.empty
+  | AP_string_append apats -> List.fold_left (Bindings.merge merge) (Bindings.empty) (List.map apat_string_types apats)
+
+and apat_string_types = function
+  | APS_lit _ -> Bindings.empty
+  | APS_pat apat -> apat_types apat
 
 let rec apat_rename from_id to_id (AP_aux (apat_aux, env, l)) =
   let apat_aux = match apat_aux with
@@ -151,8 +165,13 @@ let rec apat_rename from_id to_id (AP_aux (apat_aux, env, l)) =
     | AP_as (apat, id, typ) -> AP_as (apat, id, typ)
     | AP_nil typ -> AP_nil typ
     | AP_wild typ -> AP_wild typ
+    | AP_string_append apats -> AP_string_append (List.map (apat_string_rename from_id to_id) apats)
   in
   AP_aux (apat_aux, env, l)
+
+and apat_string_rename from_id to_id = function
+  | APS_lit str -> APS_lit str
+  | APS_pat apat -> APS_pat (apat_rename from_id to_id apat)
 
 let rec aval_typ = function
   | AV_lit (_, typ) -> typ
@@ -512,9 +531,15 @@ let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   | P_list pats -> List.fold_right (fun pat apat -> mk_apat (AP_cons (anf_pat ~global:global pat, apat))) pats (mk_apat (AP_nil (typ_of_pat pat)))
   | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
   | P_as (pat, id) -> mk_apat (AP_as (anf_pat ~global:global pat, id, typ_of_pat pat))
+  | P_string_append pats -> mk_apat (AP_string_append (List.map (anf_string_pat ~global:global) pats))
   | _ ->
      raise (Reporting.err_unreachable (fst annot) __POS__
        ("Could not convert pattern to ANF: " ^ string_of_pat pat))
+
+and anf_string_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
+  match p_aux with
+  | P_lit (L_aux (L_string str, _)) -> APS_lit str
+  | _ -> APS_pat (anf_pat pat)
 
 let rec apat_globals (AP_aux (aux, _, _)) =
   match aux with

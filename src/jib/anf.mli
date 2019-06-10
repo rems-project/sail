@@ -104,6 +104,10 @@ and 'a aexp_aux =
 
 and sc_op = SC_and | SC_or
 
+and 'a apat_string =
+  | APS_lit of string
+  | APS_pat of 'a apat
+
 and 'a apat = AP_aux of 'a apat_aux * Env.t * l
 
 and 'a apat_aux =
@@ -113,6 +117,7 @@ and 'a apat_aux =
   | AP_app of id * 'a apat * 'a
   | AP_cons of 'a apat * 'a apat
   | AP_as of 'a apat * id * 'a
+  | AP_string_append of 'a apat_string list
   | AP_nil of 'a
   | AP_wild of 'a
 

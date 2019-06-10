@@ -3275,7 +3275,7 @@ let rewrite_lit_lem (L_aux (lit, _)) = match lit with
   | L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ -> true
   | _ -> false
 
-let rewrite_no_strings (L_aux (lit, _)) = match lit with
+let rewrite_lit_no_strings (L_aux (lit, _)) = match lit with
   | L_string _ -> false
   | _ -> true
 
@@ -4754,7 +4754,7 @@ let instantiate_rewrite rewriter args =
   let selector_function = function
     | "ocaml" -> rewrite_lit_ocaml
     | "lem" -> rewrite_lit_lem
-    | "all" -> (fun _ -> true)
+    | "no_strings" -> rewrite_lit_no_strings
     | arg ->
        raise (Reporting.err_general Parse_ast.Unknown ("No rewrite for literal target \"" ^ arg ^ "\", valid targets are ocaml/lem/all"))
   in
@@ -4958,7 +4958,7 @@ let rewrites_c = [
     ("undefined", [Bool_arg false]);
     ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);
-    ("pattern_literals", [Literal_arg "all"]);
+    ("pattern_literals", [Literal_arg "no_strings"]);
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);
     ("simple_assignments", []);
