@@ -110,6 +110,12 @@ let message_of_type_error =
             Line "This error occured because of a previous error:";
             Location (l', msg err')]
 
+    | Err_mapping (forwards_err, backwards_err) ->
+       Seq [Line "Forwards mapping failed because:";
+            With ((fun ppf -> { ppf with indent = ppf.indent ^ Util.("| " |> yellow |> clear) }), Seq [msg forwards_err]);
+            Line "Backwards mapping failed because:";
+            With ((fun ppf -> { ppf with indent = ppf.indent ^ Util.("| " |> yellow |> clear) }), Seq [msg backwards_err])]
+
     | Err_other str -> Line str
 
     | Err_no_overloading (id, errs) ->

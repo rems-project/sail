@@ -103,6 +103,7 @@ type type_error =
   | Err_no_num_ident of id
   | Err_other of string
   | Err_because of type_error * Parse_ast.l * type_error
+  | Err_mapping of type_error * type_error
 
 type env =
   { top_val_specs : (typquant * typ) Bindings.t;
@@ -112,7 +113,7 @@ type env =
     union_ids : (typquant * typ) Bindings.t;
     registers : (effect * effect * typ) Bindings.t;
     variants : (typquant * type_union list) Bindings.t;
-    mappings : (typquant * typ * typ) Bindings.t;
+    mappings : IdSet.t;
     typ_vars : (Ast.l * kind_aux) KBindings.t;
     shadow_vars : int KBindings.t;
     typ_synonyms : (typquant * typ_arg) Bindings.t;
@@ -456,7 +457,7 @@ module Env : sig
   val base_typ_of : t -> typ -> typ
   val allow_mapping_builtins : t -> bool
   val set_allow_mapping_builtins : bool -> t -> t
-    
+
   val no_bindings : t -> t
 
   (* Well formedness-checks *)
@@ -488,7 +489,7 @@ end = struct
       union_ids = Bindings.empty;
       registers = Bindings.empty;
       variants = Bindings.empty;
-      mappings = Bindings.empty;
+      mappings = IdSet.empty;
       typ_vars = KBindings.empty;
       shadow_vars = KBindings.empty;
       typ_synonyms = Bindings.empty;
@@ -512,7 +513,7 @@ end = struct
 
   let allow_mapping_builtins env = env.allow_mapping_builtins
   let set_allow_mapping_builtins b env = { env with allow_mapping_builtins = b }
-                                  
+
   let get_typ_var kid env =
     try snd (KBindings.find kid env.typ_vars) with
     | Not_found -> typ_error env (kid_loc kid) ("No type variable " ^ string_of_kid kid)
@@ -946,12 +947,19 @@ end = struct
        let typq = List.fold_left existential_arg typq base_args in
        let arg_typs = List.map2 (fun typ -> function Some (_, _, typ) -> typ | None -> typ) arg_typs base_args in
        let typ = Typ_aux (Typ_fn (arg_typs, ret_typ, effect), l) in
-       typ_print (lazy (adding ^ "val " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
-       { env with top_val_specs = Bindings.add id (typq, typ) env.top_val_specs }
+       let val_type, mappings =
+         match ret_typ with
+         | Typ_aux (Typ_bidir _, _) -> "mapping family", IdSet.add id env.mappings
+         | _ -> "val", env.mappings
+       in
+       typ_print (lazy (adding ^ val_type ^ " " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
+       { env with mappings = mappings; top_val_specs = Bindings.add id (typq, typ) env.top_val_specs }
 
     | Typ_aux (Typ_bidir (typ1, typ2), l) ->
        typ_print (lazy (adding ^ "mapping " ^ string_of_id id ^ " : " ^ string_of_bind (typq, typ)));
-       { env with top_val_specs = Bindings.add id (typq, mapping_family_typ [] typ1 typ2) env.top_val_specs }
+       { env with
+         mappings = IdSet.add id env.mappings;
+         top_val_specs = Bindings.add id (typq, mapping_family_typ [] typ1 typ2) env.top_val_specs }
 
     | _ -> typ_error env (id_loc id) "val definition must have a mapping or function type"
     end
@@ -984,7 +992,7 @@ end = struct
     | l -> List.length l = 1
     | exception Not_found -> false
 
-  let is_mapping id env = Bindings.mem id env.mappings
+  let is_mapping id env = IdSet.mem id env.mappings
 
   let add_enum id ids env =
     if bound_typ_id env id
@@ -2735,23 +2743,11 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      else typ_error env l (Printf.sprintf "Expected _not_check(%s : %s) to fail" (string_of_exp exp) (string_of_typ typ))
   (* All constructors and mappings are treated as having one argument
      so Ctor(x, y) is checked as Ctor((x, y)) *)
-  | E_app (f, x :: y :: zs), _ when Env.is_union_constructor f env || Env.is_mapping f env ->
-     typ_print (lazy ("Checking multiple argument constructor or mapping: " ^ string_of_id f));
+  | E_app (f, x :: y :: zs), _ when Env.is_union_constructor f env ->
+     typ_print (lazy ("Checking multiple argument constructor: " ^ string_of_id f));
      crule check_exp env (mk_exp ~loc:l (E_app (f, [mk_exp ~loc:l (E_tuple (x :: y :: zs))]))) typ
   | E_app (mapping, xs), _ when Env.is_mapping mapping env ->
-     let forwards_id = mk_id (string_of_id mapping ^ "_forwards") in
-     let backwards_id = mk_id (string_of_id mapping ^ "_backwards") in
-     typ_print (lazy("Trying forwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
-     begin try crule check_exp env (E_aux (E_app (forwards_id, xs), (l, ()))) typ with
-           | Type_error (_, _, err1) ->
-              (* typ_print (lazy ("Error in forwards direction: " ^ string_of_type_error err1)); *)
-              typ_print (lazy ("Trying backwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
-              begin try crule check_exp env (E_aux (E_app (backwards_id, xs), (l, ()))) typ with
-                    | Type_error (_, _, err2) ->
-                       (* typ_print (lazy ("Error in backwards direction: " ^ string_of_type_error err2)); *)
-                       typ_raise env l (Err_no_overloading (mapping, [(forwards_id, err1); (backwards_id, err2)]))
-              end
-     end
+     check_mapping (fun exp env -> crule check_exp exp env typ) l env mapping xs
   | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
        | (errs, []) -> typ_raise env l (Err_no_overloading (f, errs))
@@ -3534,6 +3530,33 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
      annot_lexp (LEXP_tup inferred_lexps) (tuple_typ (List.map lexp_typ_of inferred_lexps))
   | _ -> typ_error env l ("Could not infer the type of " ^ string_of_lexp lexp)
 
+and check_mapping recur l env mapping xs =
+  let forwards, backwards = match Env.get_val_spec mapping env with
+    | typq, Typ_aux (Typ_fn (arg_typs, Typ_aux (Typ_bidir (left_typ, right_typ), _), eff), _) ->
+       Env.add_val_spec (mk_id "mapping#") (typq, function_typ (arg_typs @ [left_typ]) right_typ eff) env,
+       Env.add_val_spec (mk_id "mapping#") (typq, function_typ (arg_typs @ [right_typ]) left_typ eff) env
+    | typq, Typ_aux (Typ_bidir (left_typ, right_typ), _) ->
+       Env.add_val_spec (mk_id "mapping#") (typq, function_typ [left_typ] right_typ no_effect) env,
+       Env.add_val_spec (mk_id "mapping#") (typq, function_typ [right_typ] left_typ no_effect) env
+    | _ -> Reporting.unreachable l __POS__ "Env.get_val_spec returned non function or mapping type"
+  in
+  let forwards_result =
+    try Ok (recur forwards (mk_exp ~loc:l (E_app (mk_id "mapping#", xs)))) with
+    | Type_error (_, _, err) -> Error err in
+  let backwards_result =
+    try Ok (recur backwards (mk_exp ~loc:l (E_app (mk_id "mapping#", xs)))) with
+    | Type_error (_, _, err) -> Error err in
+  match forwards_result, backwards_result with
+  | Ok exp, Error _ | Error _, Ok exp ->
+     begin match exp with
+     | E_aux (E_app (_, args), annot) -> E_aux (E_app (mapping, args), annot)
+     | _ -> Reporting.unreachable l __POS__ "Mapping application did not type-check as function application"
+     end
+  | Ok _, Ok _ ->
+     typ_error env l (Printf.sprintf "Mapping %s is ambiguous. Both directions can be applied" (string_of_id mapping))
+  | Error forwards_error, Error backwards_error ->
+     typ_raise env l (Err_mapping (forwards_error, backwards_error))
+
 and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   let annot_exp_effect exp typ eff = E_aux (exp, (l, mk_tannot env typ eff)) in
   let annot_exp exp typ = annot_exp_effect exp typ no_effect in
@@ -3607,19 +3630,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      typ_print (lazy ("Inferring multiple argument constructor: " ^ string_of_id ctor));
      irule infer_exp env (mk_exp ~loc:l (E_app (ctor, [mk_exp ~loc:l (E_tuple (x :: y :: zs))])))
   | E_app (mapping, xs) when Env.is_mapping mapping env ->
-     let forwards_id = mk_id (string_of_id mapping ^ "_forwards") in
-     let backwards_id = mk_id (string_of_id mapping ^ "_backwards") in
-     typ_print (lazy ("Trying forwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
-     begin try irule infer_exp env (E_aux (E_app (forwards_id, xs), (l, ()))) with
-           | Type_error (_, _, err1) ->
-              (* typ_print (lazy ("Error in forwards direction: " ^ string_of_type_error err1)); *)
-              typ_print (lazy ("Trying backwards direction for mapping " ^ string_of_id mapping ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"));
-              begin try irule infer_exp env (E_aux (E_app (backwards_id, xs), (l, ()))) with
-                    | Type_error (env, _, err2) ->
-                       (* typ_print (lazy ("Error in backwards direction: " ^ string_of_type_error err2)); *)
-                       typ_raise env l (Err_no_overloading (mapping, [(forwards_id, err1); (backwards_id, err2)]))
-              end
-     end
+     check_mapping (irule infer_exp) l env mapping xs
   | E_app (f, xs) when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
        | (errs, []) -> typ_raise env l (Err_no_overloading (f, errs))

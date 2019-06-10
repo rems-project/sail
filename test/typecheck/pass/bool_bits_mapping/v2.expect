@@ -1,0 +1,6 @@
+Type error:
+[[96mbool_bits_mapping/v2.sail[0m]:13:5-20
+13[96m |[0m  if bool_bool(true) then {
+  [91m |[0m     [91m^-------------^[0m
+  [91m |[0m Mapping bool_bool is ambiguous. Both directions can be applied
+  [91m |[0m 

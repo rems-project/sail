@@ -4949,10 +4949,6 @@ let rewrites_ocaml = [
 
 let rewrites_c = [
     ("no_effect_check", []);
-    ("realise_mappings", []);
-    ("toplevel_string_append", []);
-    ("pat_string_append", []);
-    ("mapping_builtins", []);
     ("mono_rewrites", [If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("toplevel_nexps", [If_mono_arg]);

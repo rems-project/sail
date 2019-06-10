@@ -10,12 +10,12 @@ mapping bool_bits : bool <-> bits(1) = {
 val "print_endline" : string -> unit
 
 function main((): unit) -> unit = {
-  if bool_bits(0b1) then {
+  if bool_bits(0b11) then {
     print_endline("ok")
   } else {
     print_endline("fail")
   };
-  if bool_bits(true) == 0b1 then {
+  if bool_bits(3) == 0b1 then {
     print_endline("ok")
   } else {
     print_endline("fail")
