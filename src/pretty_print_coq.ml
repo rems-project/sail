@@ -2358,14 +2358,15 @@ let rec doc_range ctxt (BF_aux(r,_)) = match r with
  *)
 
 (* TODO: check use of empty_ctxt below *)
-let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
+let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
+  match td with
   | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
      let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
      doc_op coloneq
        (separate space [string "Definition"; doc_id_type id;
                         doc_typquant_items empty_ctxt Env.empty parens typq;
                         colon; string "Type"])
-       (doc_typschm empty_ctxt Env.empty false typschm) ^^ dot
+       (doc_typschm empty_ctxt Env.empty false typschm) ^^ dot ^^ twice hardline
   | TD_abbrev(id,typq,A_aux (A_nexp nexp,_)) ->
      let idpp = doc_id_type id in
      doc_op coloneq
@@ -2373,7 +2374,8 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
                         doc_typquant_items empty_ctxt Env.empty parens typq;
                         colon; string "Z"])
        (doc_nexp empty_ctxt nexp) ^^ dot ^^ hardline ^^
-     separate space [string "Hint Unfold"; idpp; colon; string "sail."]
+     separate space [string "Hint Unfold"; idpp; colon; string "sail."] ^^
+     twice hardline
   | TD_abbrev _ -> empty (* TODO? *)
   | TD_bitfield _ -> empty (* TODO? *)
   | TD_record(id,typq,fs,_) ->
@@ -2395,13 +2397,18 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
     let doc_update_field (_,fid) =
       let idpp = fname fid in
       let otherfield (_,fid') =
-        if Id.compare fid fid' == 0 then empty else
+        if Id.compare fid fid' == 0 then None else
           let idpp = fname fid' in
-          separate space [semi; idpp; string ":="; idpp; string "r"]
+          Some (separate space [idpp; string ":="; idpp; string "r"])
       in
-      string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" := ({| " ^^
-        idpp ^^ string " := e" ^^ concat (List.map otherfield fs) ^^
-        space ^^ string "|})."
+      match fs with
+      | [_] ->
+         string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" :=" ^//^
+           string "{| " ^^ idpp ^^ string " := e |} (only parsing)."
+      | _   ->
+         string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" := {|" ^//^
+           idpp ^^ string " := e;" ^/^ separate (semi ^^ break 1) (Util.map_filter otherfield fs) ^/^
+             string "|}" ^^ dot
     in
     let updates_pp = separate hardline (List.map doc_update_field fs) in
     let id_pp = doc_id_type id in
@@ -2422,14 +2429,15 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
                                string ("cmp_record_field x" ^ ns ^ " y" ^ ns ^ "."))) ^^
         hardline ^^
         string "refine (Build_Decidable _ true _). subst. split; reflexivity." ^^ hardline ^^
-        string "Defined." ^^ hardline
+        string "Defined." ^^ twice hardline
       else empty
     in
     let reset_implicits_pp = doc_reset_implicits id_pp typq in
     doc_op coloneq
            (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt Env.empty braces typq])
            ((*doc_typquant typq*) (braces (space ^^ align fs_doc ^^ space))) ^^
-      dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ updates_pp
+      dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ updates_pp ^^
+        twice hardline
   | TD_variant(id,typq,ar,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
@@ -2444,13 +2452,13 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
       | _ ->
          let id_pp = doc_id_type id in
          let typ_nm = separate space [id_pp; doc_typquant_items empty_ctxt Env.empty braces typq] in
-         let ar_doc = group (separate_map (break 1 ^^ pipe ^^ space) (doc_type_union empty_ctxt id_pp) ar) in
+         let ar_doc = group (separate_map (break 1) (fun x -> pipe ^^ space ^^ doc_type_union empty_ctxt id_pp x) ar) in
          let typ_pp =
            (doc_op coloneq)
              (concat [string "Inductive"; space; typ_nm])
              ((*doc_typquant typq*) ar_doc) in
          let reset_implicits_pp = doc_reset_implicits id_pp typq in
-         typ_pp ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ hardline)
+         typ_pp ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ twice hardline)
   | TD_enum(id,enums,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
@@ -2471,7 +2479,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) = match td with
          let eq2_pp = string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon ^/^
            string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :=" ^/^
            string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec." in
-          typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ hardline)
+          typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ twice hardline)
 
 let args_of_typ l env typs =
   let arg i typ =
@@ -3046,7 +3054,7 @@ let rec doc_def unimplemented generic_eq_types def =
   | DEF_spec v_spec -> doc_val_spec unimplemented v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
-  | DEF_type t_def -> group (doc_typdef generic_eq_types t_def) ^/^ hardline
+  | DEF_type t_def -> doc_typdef generic_eq_types t_def
   | DEF_reg_dec dec -> group (doc_dec dec)
 
   | DEF_default df -> empty
