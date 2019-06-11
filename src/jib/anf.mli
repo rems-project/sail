@@ -142,6 +142,7 @@ val gensym : unit -> id
 
 val aval_typ : typ aval -> typ
 val aexp_typ : typ aexp -> typ
+val apat_typ : typ apat -> typ
 
 (** Map over all values in an ANF expression *)
 val map_aval : (Env.t -> Ast.l -> 'a aval -> 'a aval) -> 'a aexp -> 'a aexp

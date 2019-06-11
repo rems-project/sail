@@ -186,6 +186,8 @@ let rec ctyp_of_typ ctx typ =
      | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
      end
 
+  | Typ_regex _ -> CT_string
+    
   | Typ_var kid -> CT_poly
 
   | _ -> c_error ~loc:l ("No C type for type " ^ string_of_typ typ)

@@ -3244,10 +3244,15 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
         typ_error env l "View pattern must have a bi-directional return type"
      end
   | P_string_append pats ->
-     let fold_pats (pats, env, guards) pat =
-       let inferred_pat, env, guards' = infer_pat env pat in
-       subtyp l env (typ_of_pat inferred_pat) string_typ;
-       pats @ [inferred_pat], env, guards' @ guards
+     let fold_pats (pats, env, guards) (P_aux (aux, _) as pat) =
+       match aux with
+       | P_id _ | P_wild ->
+          let checked_pat, env, guards' = bind_pat env pat string_typ in
+          pats @ [checked_pat], env, guards' @ guards
+       | _ ->
+          let inferred_pat, env, guards' = infer_pat env pat in
+          subtyp l env (typ_of_pat inferred_pat) string_typ;
+          pats @ [inferred_pat], env, guards' @ guards
      in
      let typed_pats, env, guards =
        List.fold_left fold_pats ([], env, []) pats

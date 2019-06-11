@@ -87,6 +87,7 @@ let nameset_bigunion = List.fold_left Nameset.union mt
 let rec free_type_names_t consider_var (Typ_aux (t, l)) = match t with
   | Typ_var name -> if consider_var then Nameset.add (string_of_kid name) mt else mt
   | Typ_id name -> Nameset.add (string_of_id name) mt
+  | Typ_regex _ -> mt
   | Typ_fn (arg_typs,ret_typ,_) ->
      List.fold_left Nameset.union (free_type_names_t consider_var ret_typ) (List.map (free_type_names_t consider_var) arg_typs)
   | Typ_bidir (t1, t2) -> Nameset.union (free_type_names_t consider_var t1)

@@ -111,8 +111,15 @@ and 'a aval =
   | AV_record of ('a aval) Bindings.t * 'a
   | AV_cval of cval * 'a
 
-(* Renaming variables in ANF expressions *)
-
+let rec apat_typ (AP_aux (apat_aux, _ ,_)) =
+  match apat_aux with
+  | AP_tup apats -> tuple_typ (List.map apat_typ apats)
+  | AP_id (_, typ) | AP_global (_, typ) | AP_app (_, _, typ) -> typ
+  | AP_cons (apat, _) -> list_typ (apat_typ apat)
+  | AP_as (_, _, typ) -> typ
+  | AP_string_append _ -> string_typ
+  | AP_nil typ | AP_wild typ -> typ
+                       
 let rec apat_bindings (AP_aux (apat_aux, _, _)) =
   match apat_aux with
   | AP_tup apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_bindings apats)

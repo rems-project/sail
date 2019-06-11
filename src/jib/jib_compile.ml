@@ -501,6 +501,16 @@ let rec apat_ctyp ctx (AP_aux (apat, _, _)) =
   | AP_as (_, _, typ) -> ctyp_of_typ ctx typ
   | AP_string_append _ -> CT_string
 
+let escape_match_string str =
+  (* Backslash gets double-escaped by both OCaml and the C compiler, so it's 4 here for every one we want in the regex *)
+  let escape_char = function
+    | '\\' -> "\\\\\\\\"
+    | ('(' | ')' | '[' | ']' | '{' | '}' | '^' | '$' | '?' | '+' | '*' | '.' | '|' as c) ->
+       "\\\\" ^ String.make 1 c
+    | c -> String.make 1 c
+  in
+  String.concat "" (List.map escape_char (Util.string_to_list str))
+                        
 let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   let ctx = { ctx with local_env = env } in
   let ctyp = cval_ctyp cval in
@@ -589,31 +599,36 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_null, ctyp)])) case_label], [], ctx
 
   | AP_string_append string_apats ->
-     let groups = ref 0 in
      let to_regex = function
-       | APS_lit str -> str
-       | APS_pat _ -> incr groups; "(.*)"
+       | APS_lit str -> escape_match_string str
+       | APS_pat apat ->
+          match apat_typ apat with
+          | Typ_aux (Typ_regex regex, _) -> "(" ^ regex ^ ")"
+          | _ -> "(.*)"
      in
      let subpats = List.map (function APS_lit _ -> [] | APS_pat apat -> [apat]) string_apats |> List.concat in
+     let groups = List.length subpats in
      let regex_string = Util.string_of_list "" to_regex string_apats in
-     let regex = ngensym () in
-     let matches = ngensym () in
-     let result = ngensym () in
-     [iinit (CT_regex !groups) regex (V_lit (VL_string regex_string, CT_string));
-      idecl (CT_match !groups) matches;
+     let regex, matches, result = ngensym (), ngensym (), ngensym () in
+     let compile_subpat i apat =
+       let mat = ngensym () in
+       let submatch, submatch_cleanup, _ = compile_match ctx apat (V_id (mat, CT_string)) case_label in
+       [idecl CT_string mat;
+        iextern (CL_id (mat, CT_string)) (mk_id "sail_getmatch") [cval; V_id (matches, CT_match groups); V_lit (VL_int (Big_int.of_int (i + 1)), CT_fint 64)]]
+       @ submatch,
+       submatch_cleanup
+       @ [iclear CT_string mat]
+     in
+     let compiled_subpats = List.mapi compile_subpat subpats in
+     [iinit (CT_regex groups) regex (V_lit (VL_string regex_string, CT_string));
+      idecl (CT_match groups) matches;
       idecl CT_bool result;
-      iextern (CL_id (result, CT_bool)) (mk_id "sail_regmatch") [V_id (regex, CT_regex !groups); cval; V_id (matches, CT_match !groups)];
+      iextern (CL_id (result, CT_bool)) (mk_id "sail_regmatch") [V_id (regex, CT_regex groups); cval; V_id (matches, CT_match groups)];
       ijump (V_call (Bnot, [V_id (result, CT_bool)])) case_label]
-     @ (List.mapi
-          (fun i apat ->
-            let mat = ngensym () in
-            let submatch, _, _ = compile_match ctx apat (V_id (mat, CT_string)) case_label in
-            [idecl CT_string mat;
-             iextern (CL_id (mat, CT_string)) (mk_id "sail_getmatch") [cval; V_id (matches, CT_match !groups); V_lit (VL_int (Big_int.of_int (i + 1)), CT_fint 64)]]
-            @ submatch)
-          subpats
-        |> List.concat),
-     [iclear (CT_regex !groups) regex], ctx
+     @ List.concat (List.map fst compiled_subpats),
+     List.concat (List.map snd compiled_subpats)
+     @ [iclear (CT_regex groups) regex],
+     ctx
 
 let unit_cval = V_lit (VL_unit, CT_unit)
 
