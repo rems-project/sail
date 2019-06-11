@@ -787,9 +787,9 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   | E_internal_return _ | E_internal_plet _ ->
      raise (Reporting.err_unreachable l __POS__ "encountered unexpected internal node when converting to ANF")
 
-and anf_mpexp (MPat_aux (aux, _)) =
+and anf_pexp (Pat_aux (aux, _)) =
   match aux with
-  | MPat_when (mpat, guard) ->
-     (anf_pat (pat_of_mpat mpat), Some (anf guard))
-  | MPat_pat mpat ->
-     (anf_pat (pat_of_mpat mpat), None)
+  | Pat_when (pat, guard, body) ->
+     (anf_pat pat, Some (anf guard), anf body)
+  | Pat_exp (pat, body) ->
+     (anf_pat pat, None, anf body)

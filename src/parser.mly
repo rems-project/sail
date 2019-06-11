@@ -111,8 +111,8 @@ let mk_default d n m = DT_aux (d, loc n m)
 let mk_mpexp mpexp n m = MPat_aux (mpexp, loc n m)
 let mk_mpat mpat n m = MP_aux (mpat, loc n m)
 let mk_bidir_mapcl mpexp1 mpexp2 n m = MCL_aux (MCL_bidir (mpexp1, mpexp2), loc n m)
-let mk_forwards_mapcl mpexp exp n m = MCL_aux (MCL_forwards (mpexp, exp), loc n m)
-let mk_backwards_mapcl mpexp exp n m = MCL_aux (MCL_backwards (mpexp, exp), loc n m)
+let mk_forwards_mapcl pexp n m = MCL_aux (MCL_forwards pexp, loc n m)
+let mk_backwards_mapcl pexp n m = MCL_aux (MCL_backwards pexp, loc n m)
 let mk_map id args tannot mapcls n m = MD_aux (MD_mapping (id, args, tannot, mapcls), loc n m)
 
 let doc_vs doc (VS_aux (v, l)) = VS_aux (v, Documented (doc, l))
@@ -685,12 +685,6 @@ pat1:
     { mk_pat (P_cons ($1, $3)) $startpos $endpos }
   | atomic_pat Caret pat_string_append
     { mk_pat (P_string_append ($1 :: $3)) $startpos $endpos }
-  | atomic_pat LtMinus Regex Lparen exp Rparen
-    { mk_pat (P_view ($1, mk_id (Id "regex") $startpos($3) $endpos($3), [$5])) $startpos $endpos }
-  | atomic_pat LtMinus id Lparen exp_list Rparen
-    { mk_pat (P_view ($1, $3, $5)) $startpos $endpos }
-  | atomic_pat LtMinus id Unit
-    { mk_pat (P_view ($1, $3, [])) $startpos $endpos }
 
 pat_concat:
   | atomic_pat
@@ -738,6 +732,12 @@ atomic_pat:
     { mk_pat (P_list []) $startpos $endpos }
   | LsquareBar pat_list RsquareBar
     { mk_pat (P_list $2) $startpos $endpos }
+  | atomic_pat LtMinus Regex Lparen exp Rparen
+    { mk_pat (P_view ($1, mk_id (Id "regex") $startpos($3) $endpos($3), [$5])) $startpos $endpos }
+  | atomic_pat LtMinus id Lparen exp_list Rparen
+    { mk_pat (P_view ($1, $3, $5)) $startpos $endpos }
+  | atomic_pat LtMinus id Unit
+    { mk_pat (P_view ($1, $3, [])) $startpos $endpos }
 
 lit:
   | True
@@ -1345,10 +1345,10 @@ atomic_mpat:
 mapcl:
   | mpexp Bidir mpexp
     { mk_bidir_mapcl $1 $3 $startpos $endpos }
-  | Forwards mpexp EqGt exp
-    { mk_forwards_mapcl $2 $4 $startpos $endpos }
-  | Backwards mpexp EqGt exp
-    { mk_backwards_mapcl $2 $4 $startpos $endpos }
+  | Forwards case
+    { mk_forwards_mapcl $2 $startpos $endpos }
+  | Backwards case
+    { mk_backwards_mapcl $2 $startpos $endpos }
 
 mapcl_list:
   | mapcl

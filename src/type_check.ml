@@ -4363,6 +4363,13 @@ let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
                                       ]), (l,annot))
   | MP_view (mpat, id, args) -> E_aux (E_app (id, args @ [exp_of_mpat mpat]), (l, annot))
 
+let pexp_of_mpexp mpexp body =
+  match mpexp with
+  | MPat_aux (MPat_pat mpat, annot) ->
+     Pat_aux (Pat_exp (pat_of_mpat mpat, body), annot)
+  | MPat_aux (MPat_when (mpat, guard), annot) ->
+     Pat_aux (Pat_when (pat_of_mpat mpat, guard, body), annot) 
+    
 let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
   let bidir = mk_typ (Typ_bidir (typ_left, typ_right)) in
   match aux with
@@ -4375,16 +4382,14 @@ let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
      let right, right_env = check_mpexp env mpexp_right typ_right in
      let checked_left = crule check_exp right_env (exp_of_mpexp (strip_mpexp left)) typ_left in
      let checked_right = crule check_exp left_env (exp_of_mpexp (strip_mpexp right)) typ_right in
-     [MCL_aux (MCL_forwards (left, checked_right), (l, mk_expected_tannot env bidir no_effect (Some bidir)));
-      MCL_aux (MCL_backwards (right, checked_left), (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
-  | MCL_forwards (mpexp, exp) ->
-     let mpexp, env = check_mpexp (Env.set_allow_mapping_builtins true env) mpexp typ_left in
-     let exp = crule check_exp (Env.set_allow_mapping_builtins false env) exp typ_right in
-     [MCL_aux (MCL_forwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
-  | MCL_backwards (mpexp, exp) ->
-     let mpexp, env = check_mpexp (Env.set_allow_mapping_builtins true env) mpexp typ_right in
-     let exp = crule check_exp (Env.set_allow_mapping_builtins false env) exp typ_left in
-     [MCL_aux (MCL_backwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
+     [MCL_aux (MCL_forwards (pexp_of_mpexp left checked_right), (l, mk_expected_tannot env bidir no_effect (Some bidir)));
+      MCL_aux (MCL_backwards (pexp_of_mpexp right checked_left), (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
+  | MCL_forwards case ->
+     let case = check_case (Env.set_allow_mapping_builtins true env) typ_left case typ_right in
+     [MCL_aux (MCL_forwards case, (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
+  | MCL_backwards case ->
+     let case = check_case (Env.set_allow_mapping_builtins true env) typ_right case typ_left in
+     [MCL_aux (MCL_backwards case, (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
 
 let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pexp), (l, annot))) =
   match annot with

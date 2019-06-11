@@ -167,7 +167,7 @@ val is_dead_aexp : 'a aexp -> bool
 
 val anf_pat : ?global:bool -> tannot pat -> typ apat
 
-val anf_mpexp : tannot mpexp -> typ apat * typ aexp option
+val anf_pexp : tannot pexp -> typ apat * typ aexp option * typ aexp
 
 val anf : tannot exp -> typ aexp
 

@@ -620,15 +620,8 @@ opt_default :: 'Def_val_' ::=
 pexp :: 'Pat_' ::=
   {{ com pattern match }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | pat -> exp                          :: :: exp
-  | pat when exp1 -> exp                :: :: when
-% apparently could use -> or => for this.
-
-%% % psexp :: 'Pats' ::=
-%% %   {{ com Multi-pattern matches }}
-%% %   {{ aux _ l }}
-%% %   | pat1 ... patn -> exp                                :: :: exp
-
+  | pat => exp         :: :: exp
+  | pat if exp1 => exp :: :: when
 
 parsing
 
@@ -649,51 +642,11 @@ E_let <= E_field
 
 E_app left E_app
 
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Function definitions                                         %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%%% old Lem style %%%%%%
 grammar
-%% % lem_tannot_opt_aux :: 'LEM_Typ_annot_' ::=
-%% %   {{ com Optional type annotations }}
-%% %   |                                                     :: :: none
-%% %   | : typ                                               :: :: some 
-%% % 
-%% % lem_tannot_opt {{ tex \ottnt{tannot}^? }} :: 'LEM_Typ_annot_' ::=
-%% %   {{ com location-annotated optional type annotations }}
-%% %   | tannot_opt_aux l                                    :: :: aux
-%% % 
-%% % lem_funcl :: 'LEM_FCL' ::=
-%% %   {{ com Function clauses }}
-%% %   {{ aux _ l }}
-%% %   | id pat1 ... patn tannot_opt = exp                   :: :: Funcl
-%% % 
-%% % lem_letbind :: 'LEM_LB_' ::=
-%% %   {{ com Let bindings }}
-%% %   {{ aux _ l }}
-%% %   | pat tannot_opt = exp                                :: :: Let_val
-%% %     {{ com Value bindings }}
-%% %   | lem_funcl                                           :: :: Let_fun
-%% %     {{ com Function bindings }}
-%% % 
-%% % 
-%% % grammar
-%% % lem_val_def :: 'LEM_VD' ::= 
-%% %   {{ com Value definitions }}
-%% %   {{ aux _ l }}
-%% %   | let lem_letbind                                     :: :: Let_def
-%% %     {{ com Non-recursive value definitions }}
-%% %   | let rec  lem_funcl1 and ... and lem_funcln          :: :: Let_rec
-%% %     {{ com Recursive function definitions }}
-%% % 
-%% % lem_val_spec :: 'LEM_VS' ::=
-%% %   {{ com Value type specifications }} 
-%% %   {{ aux _ l }}
-%% %   | val x_l : typschm                                           :: :: Val_spec
-
-%%%%% C-ish style %%%%%%%%%%
 
 tannot_opt :: 'Typ_annot_opt_' ::=
   {{ com optional type annotation for functions}}
@@ -768,9 +721,9 @@ mpexp :: 'MPat_' ::=
 mapcl :: 'MCL_' ::=
   {{ com mapping clause (bidirectional pattern-match) }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | mpexp1 <-> mpexp2      :: :: bidir
-  | forwards mpexp => exp  :: :: forwards
-  | backwards mpexp => exp :: :: backwards
+  | mpexp1 <-> mpexp2 :: :: bidir
+  | forwards pexp     :: :: forwards
+  | backwards pexp    :: :: backwards
 
 
 mapdef :: 'MD_' ::=

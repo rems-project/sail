@@ -1345,12 +1345,12 @@ let compile_mapcls swap mk_cdef ctx id pats clauses =
     compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure mapdef_label
   in
 
-  let compile_clause (mpexp, exp) =
+  let compile_clause pexp =
     (* First, compile the clause to ANF *)
-    let apat, guard = anf_mpexp mpexp in
+    let apat, guard, body = anf_pexp pexp in
     let shadow_ids = IdSet.union (apat_bindings apat) shadow_ids in
     let guard = Util.option_map (fun g -> ctx.optimize_anf ctx (no_shadow shadow_ids g)) guard in
-    let body = ctx.optimize_anf ctx (no_shadow shadow_ids (anf exp)) in
+    let body = ctx.optimize_anf ctx (no_shadow shadow_ids body) in
     (* If the mapping clause fails, we'll jump to this label *)
     let clause_label = label "clause_" in
     let destructure, destructure_cleanup, ctx = compile_match ctx apat map_cval clause_label in
@@ -1448,12 +1448,12 @@ and compile_def' n total ctx = function
 
   | DEF_mapdef (MD_aux (MD_mapping (id, pats, _, mapcls), annot)) ->
      let rec forwards = function
-       | MCL_aux (MCL_forwards (mpexp, exp), _) :: clauses -> (mpexp, exp) :: forwards clauses
+       | MCL_aux (MCL_forwards pexp, _) :: clauses -> pexp :: forwards clauses
        | _ :: clauses -> forwards clauses
        | [] -> []
      in
      let rec backwards = function
-       | MCL_aux (MCL_backwards (mpexp, exp), _) :: clauses -> (mpexp, exp) :: backwards clauses
+       | MCL_aux (MCL_backwards pexp, _) :: clauses -> pexp :: backwards clauses
        | _ :: clauses -> backwards clauses
        | [] -> []
      in
