@@ -3809,15 +3809,14 @@ let merge_funcls env (Defs defs) =
     | d -> d
   in Defs (List.map merge_in_def defs)
 
-
-let rec exp_of_mpat ((MP_aux (mpat, (l,annot))) as mp_aux) =
+let rec exp_of_mpat ((MP_aux (mpat, (l, annot))) as mp_aux) =
   let empty_vec = E_aux (E_vector [], (l,())) in
   let concat_vectors vec1 vec2 =
     E_aux (E_vector_append (vec1, vec2), (l,()))
   in
   let empty_string = E_aux (E_lit (L_aux (L_string "", Parse_ast.Unknown)), (l,())) in
   let string_append str1 str2 =
-    E_aux (E_app (mk_id "string_append", [str1; str2]), (l,()))
+    E_aux (E_app (mk_id "concat_str", [str1; str2]), (l,()))
   in
   match mpat with
   | MP_lit lit                      -> E_aux (E_lit lit, (l,annot))
@@ -3832,7 +3831,8 @@ let rec exp_of_mpat ((MP_aux (mpat, (l,annot))) as mp_aux) =
   | MP_typ (mpat, typ)              -> E_aux (E_cast (typ, exp_of_mpat mpat), (l,annot))
   | MP_as (mpat, id)                -> E_aux (E_case (E_aux (E_id id, (l,annot)), [
                                                     Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat mpat), (l,annot))
-                                                ]), (l,annot)) (* TODO FIXME location information? *)
+                                                ]), (l,annot))
+  | MP_view (mpat, id, args) -> E_aux (E_app (id, args @ [exp_of_mpat mpat]), (l, annot))
 
 let rewrite_defs_realise_mappings _ (Defs defs) =
   let realise_mpexps forwards mpexp1 mpexp2 =

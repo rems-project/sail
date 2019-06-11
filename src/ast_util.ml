@@ -111,7 +111,7 @@ let rec pat_of_mpat : 'a. 'a mpat -> 'a pat =
     | MP_as (mpat, id) -> P_as (pat_of_mpat mpat, id)
   in
   P_aux (aux, annot)
-                       
+
 let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
 
 let mk_typ_pat tpat_aux = TP_aux (tpat_aux, Parse_ast.Unknown)

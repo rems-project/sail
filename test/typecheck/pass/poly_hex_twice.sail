@@ -1,6 +1,7 @@
 default Order dec
 
 $include <prelude.sail>
+$include <string.sail>
 
 val hex_bits : forall 'n, 'n >= 0. implicit('n) -> string <-> bits('n)
 

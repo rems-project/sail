@@ -4338,21 +4338,53 @@ let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
      end
   | _ -> typ_error env l ("Function clause must have function type: " ^ string_of_typ typ ^ " is not a function type")
 
+let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
+  let empty_vec = E_aux (E_vector [], (l, ())) in
+  let concat_vectors vec1 vec2 =
+    E_aux (E_vector_append (vec1, vec2), (l, ()))
+  in
+  let empty_string = E_aux (E_lit (L_aux (L_string "", gen_loc l)), (l, ())) in
+  let string_append str1 str2 =
+    E_aux (E_app (mk_id "concat_str", [str1; str2]), (l, ()))
+  in
+  match mpat with
+  | MP_lit lit -> E_aux (E_lit lit, (l,annot))
+  | MP_id id -> E_aux (E_id id, (l,annot))
+  | MP_app (id, args) -> E_aux (E_app (id, (List.map exp_of_mpat args)), (l,annot))
+  | MP_vector mpats -> E_aux (E_vector (List.map exp_of_mpat mpats), (l,annot))
+  | MP_vector_concat mpats -> List.fold_right concat_vectors (List.map (fun m -> strip_exp (exp_of_mpat m)) mpats) empty_vec
+  | MP_tup mpats -> E_aux (E_tuple (List.map exp_of_mpat mpats), (l,annot))
+  | MP_list mpats -> E_aux (E_list (List.map exp_of_mpat mpats), (l,annot))
+  | MP_cons (mpat1, mpat2) -> E_aux (E_cons (exp_of_mpat mpat1, exp_of_mpat mpat2), (l,annot))
+  | MP_string_append mpats -> List.fold_right string_append (List.map (fun m -> strip_exp (exp_of_mpat m)) mpats) empty_string
+  | MP_typ (mpat, typ) -> E_aux (E_cast (typ, exp_of_mpat mpat), (l,annot))
+  | MP_as (mpat, id) -> E_aux (E_case (E_aux (E_id id, (l,annot)), [
+                                         Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat mpat), (l,annot))
+                                      ]), (l,annot))
+  | MP_view (mpat, id, args) -> E_aux (E_app (id, args @ [exp_of_mpat mpat]), (l, annot))
+
 let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
   let bidir = mk_typ (Typ_bidir (typ_left, typ_right)) in
   match aux with
   | MCL_bidir (mpexp_left, mpexp_right) ->
-     let left, _ = check_mpexp env mpexp_left typ_left in
-     let right, _ = check_mpexp env mpexp_right typ_right in
-     MCL_aux (MCL_bidir (left, right), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
+     let exp_of_mpexp (MPat_aux (aux, _)) =
+       match aux with
+       | MPat_pat mpat | MPat_when (mpat, _) -> exp_of_mpat mpat
+     in
+     let left, left_env = check_mpexp env mpexp_left typ_left in
+     let right, right_env = check_mpexp env mpexp_right typ_right in
+     let checked_left = crule check_exp right_env (exp_of_mpexp (strip_mpexp left)) typ_left in
+     let checked_right = crule check_exp left_env (exp_of_mpexp (strip_mpexp right)) typ_right in
+     [MCL_aux (MCL_forwards (left, checked_right), (l, mk_expected_tannot env bidir no_effect (Some bidir)));
+      MCL_aux (MCL_backwards (right, checked_left), (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
   | MCL_forwards (mpexp, exp) ->
      let mpexp, env = check_mpexp (Env.set_allow_mapping_builtins true env) mpexp typ_left in
      let exp = crule check_exp (Env.set_allow_mapping_builtins false env) exp typ_right in
-     MCL_aux (MCL_forwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
+     [MCL_aux (MCL_forwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
   | MCL_backwards (mpexp, exp) ->
      let mpexp, env = check_mpexp (Env.set_allow_mapping_builtins true env) mpexp typ_right in
      let exp = crule check_exp (Env.set_allow_mapping_builtins false env) exp typ_left in
-     MCL_aux (MCL_backwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))
+     [MCL_aux (MCL_backwards (mpexp, exp), (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
 
 let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pexp), (l, annot))) =
   match annot with
@@ -4477,7 +4509,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
     vs_def @ [DEF_fundef (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, None)))], env
   else typ_error env l ("Effects do not match: " ^ string_of_effect declared_eff ^ " declared and " ^ string_of_effect eff ^ " found")
 
-let check_mapdef env (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), (l, _)) as md_aux) =
+let check_mapdef env (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), (l, _))) =
   typ_print (lazy ("\n" ^ Util.("Check mapping " |> cyan |> clear) ^ string_of_id id));
   let args = List.map strip_pat args in
   let have_val_spec, (quant, typ) =
@@ -4500,7 +4532,7 @@ let check_mapdef env (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), (l, _))
             typ_error env l
               (Printf.sprintf "Mapping definition has %d arguments, expecting %d from types %s"
                  (List.length args) (List.length arg_typs) (Util.string_of_list ", " string_of_typ arg_typs))
-       in  
+       in
        checked_args, env, left_typ, right_typ
     | _ ->
        typ_error env l "Mapping definition must have a bi-directional mapping type"
@@ -4511,7 +4543,7 @@ let check_mapdef env (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), (l, _))
     else
       [], env
   in
-  let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env (strip_mapcl mapcl) left_typ right_typ) mapcls in
+  let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env (strip_mapcl mapcl) left_typ right_typ) mapcls |> List.concat in
   let eff = List.fold_left union_effects no_effect (List.map mapcl_effect mapcls) in
   let env = Env.define_val_spec id env in
   if equal_effects eff no_effect || equal_effects eff (mk_effect [BE_escape]) || !opt_no_effects then
@@ -4645,8 +4677,8 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
      begin match typ with
      | Typ_aux (Typ_bidir (typ_left, typ_right), _) ->
         let mapcl_env = add_typquant l typq env in
-        let mapcl = check_mapcl mapcl_env (strip_mapcl mapcl) typ_left typ_right in
-        [DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, None)))], env
+        let mapcls = check_mapcl mapcl_env (strip_mapcl mapcl) typ_left typ_right in
+        List.map (fun mapcl -> DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, None)))) mapcls, env
      | _ ->
         typ_error env l "Scattered mapping clause must must have a monomorphic bi-directional type"
      end

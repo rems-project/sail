@@ -1,6 +1,8 @@
 $ifndef _MAPPING
 $define _MAPPING
 
+$include <string.sail>
+
 mapping sep : regex(", +") <-> unit = {
   forwards str <- regex(", +") => (),
   backwards () => ", "

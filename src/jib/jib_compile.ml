@@ -1359,15 +1359,22 @@ and compile_def' n total ctx = function
   | DEF_reg_dec (DEC_aux (_, (l, _))) ->
      raise (Reporting.err_general l "Cannot compile alias register declaration")
 
-  | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), _)) ->
+  | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), (l, _))) ->
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
        | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
        | _ -> assert false
      in
      let ctx' = { ctx with local_env = add_typquant (id_loc id) quant ctx.local_env } in
-     let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ in
-     [CDEF_spec (id, arg_ctyps, ret_ctyp)], ctx
+     let arg_ctyps = List.map (ctyp_of_typ ctx') arg_typs in
+     begin match ret_typ with
+     | Typ_aux (Typ_bidir (left_typ, right_typ), _) ->
+        let left_ctyp, right_ctyp = ctyp_of_typ ctx' left_typ, ctyp_of_typ ctx' right_typ in
+        [CDEF_mapping_spec (id, arg_ctyps, left_ctyp, right_ctyp)], ctx
+     | _ ->
+        let ret_ctyp = ctyp_of_typ ctx' ret_typ in
+        [CDEF_spec (id, arg_ctyps, ret_ctyp)], ctx
+     end
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      Util.progress "Compiling " (string_of_id id) n total;
@@ -1382,6 +1389,10 @@ and compile_def' n total ctx = function
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, _ :: _ :: _), (l, _))) ->
      raise (Reporting.err_general l "Encountered function with multiple clauses")
+
+  | DEF_mapdef (MD_aux (MD_mapping (id, pats, _, mapcls), annot)) ->
+     let env = env_of_annot annot in
+     failwith "mapdef"
 
   (* All abbreviations should expanded by the typechecker, so we don't
      need to translate type abbreviations into C typedefs. *)
@@ -1437,8 +1448,8 @@ and compile_def' n total ctx = function
      let defs = List.map (fun fdef -> DEF_fundef fdef) fundefs in
      List.fold_left (fun (cdefs, ctx) def -> let cdefs', ctx = compile_def n total ctx def in (cdefs @ cdefs', ctx)) ([], ctx) defs
 
-  (* Scattereds and mapdefs should be removed by this point *)
-  | (DEF_scattered _ | DEF_mapdef _) as def ->
+  (* Scattereds should be removed by this point *)
+  | (DEF_scattered _) as def ->
      raise (Reporting.err_general Parse_ast.Unknown ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def def)))
 
 let rec specialize_variants ctx prior =

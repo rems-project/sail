@@ -240,6 +240,8 @@ cdef :: 'CDEF_' ::=
 
   | val id ( ctyp0 , ... , ctypn ) -> ctyp :: :: spec
 
+  | val id ( ctyp0 , ... , ctypn ) -> ctyp1 <-> ctyp2 :: :: mapping_spec
+
 % If mid = Some id this indicates that the caller should allocate the
 % return type and passes a pointer to it as an extra argument id for
 % the function to fill in. This is only done via Jib->Jib rewrites
