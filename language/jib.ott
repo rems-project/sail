@@ -250,6 +250,14 @@ cdef :: 'CDEF_' ::=
       instr0 ; ... ; instrm
     } :: :: fundef
 
+  | mapping forwards id ( id0 , ... , idn ) id1 {
+      instr0 ; ... ; instrm
+    } :: :: mapping_forwards
+
+  | mapping backwards id ( id0 , ... , idn ) id1 {
+      instr0 ; ... ; instrm
+    } :: :: mapping_backwards
+
 % Each function can have custom global state. In CDEF_startup and
 % CDEF_finish all I_decl and I_init nodes are treated as global and no
 % nested-instructions (if/block) are allowed.

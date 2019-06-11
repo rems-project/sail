@@ -157,6 +157,7 @@ val no_shadow : IdSet.t -> 'a aexp -> 'a aexp
 
 val apat_globals : 'a apat -> (id * 'a) list
 val apat_types : 'a apat -> 'a Bindings.t
+val apat_bindings : 'a apat -> IdSet.t
 
 (** Returns true if an ANF expression is dead due to flow typing
    implying it is unreachable. Note: This function calls SMT. *)
@@ -165,6 +166,8 @@ val is_dead_aexp : 'a aexp -> bool
 (** {2 Compiling to ANF expressions} *)
 
 val anf_pat : ?global:bool -> tannot pat -> typ apat
+
+val anf_mpexp : tannot mpexp -> typ apat * typ aexp option
 
 val anf : tannot exp -> typ aexp
 

@@ -510,7 +510,7 @@ let escape_match_string str =
     | c -> String.make 1 c
   in
   String.concat "" (List.map escape_char (Util.string_to_list str))
-                        
+
 let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   let ctx = { ctx with local_env = env } in
   let ctyp = cval_ctyp cval in
@@ -1312,6 +1312,62 @@ let compile_funcl ctx id pat guard exp =
 
   [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], orig_ctx
 
+let compile_mapcls swap mk_cdef ctx id pats clauses =
+  let quant, Typ_aux (fn_typ, _) =
+    try Env.get_val_spec id ctx.local_env with Type_error _ -> Env.get_val_spec id ctx.tc_env
+  in
+  let arg_typs, (left_typ, right_typ) = match fn_typ with
+    | Typ_fn (arg_typs, Typ_aux (Typ_bidir (left_typ, right_typ), _), _) -> arg_typs, swap (left_typ, right_typ)
+    | _ -> assert false
+  in
+
+  let mapdef_label = label "mapdef_fail_" in
+  let ctx = { ctx with local_env = add_typquant (id_loc id) quant ctx.tc_env } in
+  let arg_ctyps =  List.map (ctyp_of_typ ctx) arg_typs in
+  let left_ctyp, right_ctyp = ctyp_of_typ ctx left_typ, ctyp_of_typ ctx right_typ in
+
+  let compiled_args = List.map2 (fun pat ctyp -> compile_arg_pat ctx mapdef_label pat ctyp) pats arg_ctyps in
+  let ctx =
+    (* We need the primop analyzer to be aware of the function argument types, so put them in ctx *)
+    List.fold_left2 (fun ctx (id, _) ctyp -> { ctx with locals = Bindings.add id (Immutable, ctyp) ctx.locals }) ctx compiled_args arg_ctyps
+  in
+  let map_id = gensym () in
+  let ctx = { ctx with locals = Bindings.add map_id (Immutable, left_ctyp) ctx.locals } in
+  let map_cval = V_id (name map_id, left_ctyp) in
+
+  let shadow_ids = IdSet.add map_id (List.fold_left IdSet.union IdSet.empty (List.map pat_ids pats)) in
+
+  (* We'll jump here after successfully applying a clause, with clause_return_id holding the mapping return value *)
+  let finish_clause_label = label "finish_clause_" in
+  let clause_return_id = ngensym () in
+
+  let destructure, destructure_cleanup =
+    compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure mapdef_label
+  in
+
+  let compile_clause (mpexp, exp) =
+    (* First, compile the clause to ANF *)
+    let apat, guard = anf_mpexp mpexp in
+    let shadow_ids = IdSet.union (apat_bindings apat) shadow_ids in
+    let guard = Util.option_map (fun g -> ctx.optimize_anf ctx (no_shadow shadow_ids g)) guard in
+    let body = ctx.optimize_anf ctx (no_shadow shadow_ids (anf exp)) in
+    (* If the mapping clause fails, we'll jump to this label *)
+    let clause_label = label "clause_" in
+    let destructure, destructure_cleanup, ctx = compile_match ctx apat map_cval clause_label in
+    (* let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in *)
+    let body_setup, body_call, body_cleanup = compile_aexp ctx body in
+    let case_instrs =
+      destructure
+      @ body_setup @ [body_call (CL_id (clause_return_id, right_ctyp))] @ body_cleanup @ destructure_cleanup
+      @ [igoto finish_clause_label]
+    in
+    [iblock case_instrs; ilabel clause_label]
+  in
+
+  let instrs = destructure @ List.concat (List.map compile_clause clauses) @ destructure_cleanup in
+
+  mk_cdef (List.map fst compiled_args) map_id instrs
+
 (** Compile a Sail toplevel definition into an IR definition **)
 let rec compile_def n total ctx def =
   match def with
@@ -1391,8 +1447,19 @@ and compile_def' n total ctx = function
      raise (Reporting.err_general l "Encountered function with multiple clauses")
 
   | DEF_mapdef (MD_aux (MD_mapping (id, pats, _, mapcls), annot)) ->
-     let env = env_of_annot annot in
-     failwith "mapdef"
+     let rec forwards = function
+       | MCL_aux (MCL_forwards (mpexp, exp), _) :: clauses -> (mpexp, exp) :: forwards clauses
+       | _ :: clauses -> forwards clauses
+       | [] -> []
+     in
+     let rec backwards = function
+       | MCL_aux (MCL_backwards (mpexp, exp), _) :: clauses -> (mpexp, exp) :: backwards clauses
+       | _ :: clauses -> backwards clauses
+       | [] -> []
+     in
+     [compile_mapcls (fun (l, r) -> l, r) (fun args arg instrs -> CDEF_mapping_forwards (id, args, arg, instrs)) ctx id pats (forwards mapcls);
+      compile_mapcls (fun (l, r) -> l, r) (fun args arg instrs -> CDEF_mapping_backwards (id, args, arg, instrs)) ctx id pats (backwards mapcls)],
+     ctx
 
   (* All abbreviations should expanded by the typechecker, so we don't
      need to translate type abbreviations into C typedefs. *)

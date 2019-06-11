@@ -119,7 +119,7 @@ let rec apat_typ (AP_aux (apat_aux, _ ,_)) =
   | AP_as (_, _, typ) -> typ
   | AP_string_append _ -> string_typ
   | AP_nil typ | AP_wild typ -> typ
-                       
+
 let rec apat_bindings (AP_aux (apat_aux, _, _)) =
   match apat_aux with
   | AP_tup apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_bindings apats)
@@ -786,3 +786,10 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
 
   | E_internal_return _ | E_internal_plet _ ->
      raise (Reporting.err_unreachable l __POS__ "encountered unexpected internal node when converting to ANF")
+
+and anf_mpexp (MPat_aux (aux, _)) =
+  match aux with
+  | MPat_when (mpat, guard) ->
+     (anf_pat (pat_of_mpat mpat), Some (anf guard))
+  | MPat_pat mpat ->
+     (anf_pat (pat_of_mpat mpat), None)
