@@ -2300,6 +2300,18 @@ simpl.
 auto with zarith.
 Qed.
 
+Definition vec_concat {T m n} (v : vec T m) (w : vec T n) : vec T (m + n).
+refine (existT _ (projT1 v ++ projT1 w) _).
+destruct v.
+destruct w.
+simpl.
+unfold length_list in *.
+rewrite <- e, <- e0.
+rewrite app_length.
+rewrite Nat2Z.inj_add.
+reflexivity.
+Defined.
+
 Lemma skipn_length {A n} {l: list A} : (n <= List.length l -> List.length (skipn n l) = List.length l - n)%nat.
 revert l.
 induction n.
