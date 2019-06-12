@@ -4680,7 +4680,8 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
   | SD_mapcl (id, mapcl) ->
      let typq, typ = Env.get_val_spec id env in
      begin match typ with
-     | Typ_aux (Typ_bidir (typ_left, typ_right), _) ->
+     | Typ_aux (Typ_bidir (typ_left, typ_right), _)
+       | Typ_aux (Typ_fn ([], Typ_aux (Typ_bidir (typ_left, typ_right), _), _), _) ->
         let mapcl_env = add_typquant l typq env in
         let mapcls = check_mapcl mapcl_env (strip_mapcl mapcl) typ_left typ_right in
         List.map (fun mapcl -> DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, None)))) mapcls, env
