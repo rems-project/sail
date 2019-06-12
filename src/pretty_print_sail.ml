@@ -58,10 +58,7 @@ module Big_int = Nat_big_num
 
 let doc_op symb a b = infix 2 1 symb a b
 
-let doc_id (Id_aux (id_aux, _)) =
-  string (match id_aux with
-          | Id v -> v
-          | Operator op -> "operator " ^ op)
+let doc_id id = string (string_of_id id)
 
 let doc_kid kid = string (Ast_util.string_of_kid kid)
 

@@ -40,6 +40,19 @@ bool sail_regmatch(sail_regex r, sail_string str, sail_match match, int groups)
   }
 }
 
+bool sail_regmatch0(sail_regex r, sail_string str)
+{
+  int err = regexec(r, str, 0, NULL, 0);
+  if (err == REG_ESPACE) {
+    fprintf(stderr, "regexec failed with REG_ESPACE");
+    exit(1);
+  } else if (err == REG_NOMATCH) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
 void sail_getmatch(sail_string *result, sail_string str, sail_match match, int groups, int group)
 {
   regmatch_t m = match[group];

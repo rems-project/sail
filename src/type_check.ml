@@ -2754,7 +2754,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_app (f, x :: y :: zs), _ when Env.is_union_constructor f env ->
      typ_print (lazy ("Checking multiple argument constructor: " ^ string_of_id f));
      crule check_exp env (mk_exp ~loc:l (E_app (f, [mk_exp ~loc:l (E_tuple (x :: y :: zs))]))) typ
-  | E_app (mapping, xs), _ when Env.is_mapping mapping env ->
+  | E_app (mapping, xs), _ when Env.is_mapping (strip_direction mapping) env ->
      check_mapping (fun exp env -> crule check_exp exp env typ) l env mapping xs
   | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
@@ -3526,7 +3526,7 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
   | _ -> typ_error env l ("Could not infer the type of " ^ string_of_lexp lexp)
 
 and check_mapping recur l env mapping xs =
-  let forwards, backwards = match Env.get_val_spec mapping env with
+  let forwards, backwards = match Env.get_val_spec (strip_direction mapping) env with
     | typq, Typ_aux (Typ_fn (arg_typs, Typ_aux (Typ_bidir (left_typ, right_typ), _), eff), _) ->
        Env.add_val_spec (mk_id "mapping#") (typq, function_typ (arg_typs @ [left_typ]) right_typ eff) env,
        Env.add_val_spec (mk_id "mapping#") (typq, function_typ (arg_typs @ [right_typ]) left_typ eff) env
@@ -3536,15 +3536,21 @@ and check_mapping recur l env mapping xs =
     | _ -> Reporting.unreachable l __POS__ "Env.get_val_spec returned non function or mapping type"
   in
   let forwards_result =
-    try Ok (recur forwards (mk_exp ~loc:l (E_app (mk_id "mapping#", xs)))) with
+    try match id_direction mapping with
+      | Some Backwards -> Error (Err_other "Mapping application specified as backwards only")
+      | _ -> Ok (Forwards, recur forwards (mk_exp ~loc:l (E_app (mk_id "mapping#", xs))))
+    with
     | Type_error (_, _, err) -> Error err in
   let backwards_result =
-    try Ok (recur backwards (mk_exp ~loc:l (E_app (mk_id "mapping#", xs)))) with
+    try match id_direction mapping with
+      | Some Forwards -> Error (Err_other "Mapping application specified as forwards only")
+      | _ -> Ok (Backwards, recur backwards (mk_exp ~loc:l (E_app (mk_id "mapping#", xs))))
+    with
     | Type_error (_, _, err) -> Error err in
   match forwards_result, backwards_result with
-  | Ok exp, Error _ | Error _, Ok exp ->
+  | Ok (direction, exp), Error _ | Error _, Ok (direction, exp) ->
      begin match exp with
-     | E_aux (E_app (_, args), annot) -> E_aux (E_app (mapping, args), annot)
+     | E_aux (E_app (_, args), annot) -> E_aux (E_app (set_id_direction direction mapping, args), annot)
      | _ -> Reporting.unreachable l __POS__ "Mapping application did not type-check as function application"
      end
   | Ok _, Ok _ ->
@@ -3624,7 +3630,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_app (ctor, x :: y :: zs) when Env.is_union_constructor ctor env ->
      typ_print (lazy ("Inferring multiple argument constructor: " ^ string_of_id ctor));
      irule infer_exp env (mk_exp ~loc:l (E_app (ctor, [mk_exp ~loc:l (E_tuple (x :: y :: zs))])))
-  | E_app (mapping, xs) when Env.is_mapping mapping env ->
+  | E_app (mapping, xs) when Env.is_mapping (strip_direction mapping) env ->
      check_mapping (irule infer_exp) l env mapping xs
   | E_app (f, xs) when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function

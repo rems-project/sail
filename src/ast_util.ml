@@ -198,8 +198,14 @@ module Id = struct
     match (id1, id2) with
     | Id_aux (Id x, _), Id_aux (Id y, _) -> String.compare x y
     | Id_aux (Operator x, _), Id_aux (Operator y, _) -> String.compare x y
-    | Id_aux (Id _, _), Id_aux (Operator _, _) -> -1
-    | Id_aux (Operator _, _), Id_aux (Id _, _) -> 1
+    | Id_aux (Direction (Forwards, x), _), Id_aux (Direction (Forwards, y), _) -> String.compare x y
+    | Id_aux (Direction (Backwards, x), _), Id_aux (Direction (Backwards, y), _) -> String.compare x y
+    | Id_aux (Id _, _), _ -> 1
+    | _, Id_aux (Id _, _) -> -1
+    | Id_aux (Operator _, _), _ -> 1
+    | _, Id_aux (Operator _, _) -> -1
+    | Id_aux (Direction (Forwards, _), _), _ -> 1
+    | _, Id_aux (Direction (Forwards, _), _) -> -1
 end
 
 module Nexp = struct
@@ -757,24 +763,45 @@ let def_loc = function
   | DEF_measure (id, _, _) -> id_loc id
   | DEF_loop_measures (id, _) -> id_loc id
 
+let string_of_direction = function
+  | Forwards -> "forwards"
+  | Backwards -> "backwards"
+
 let string_of_id = function
   | Id_aux (Id v, _) -> v
-  | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
+  | Id_aux (Operator v, _) -> "operator " ^ v
+  | Id_aux (Direction (d, v), _) -> string_of_direction d ^ " " ^ v
+
+let id_direction = function
+  | Id_aux (Direction (d, _), _) -> Some d
+  | _ -> None
+
+let strip_direction = function
+  | Id_aux (Direction (d, v), l) -> Id_aux (Id v, l)
+  | id -> id
+
+let set_id_direction d = function
+  | Id_aux (Id v, l) -> Id_aux (Direction (d, v), l)
+  | Id_aux (Direction (d', v), l) when d = d' -> Id_aux (Direction (d, v), l)
+  | Id_aux (_, l) as id ->
+     raise (Reporting.err_general l ("Cannot give identifier " ^ string_of_id id ^ " a mapping direction"))
 
 let id_of_kid = function
   | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
 let kid_of_id = function
   | Id_aux (Id v, l) -> Kid_aux (Var ("'" ^ v), l)
-  | Id_aux (Operator v, _) -> assert false
+  | _ -> assert false
 
 let prepend_id str = function
   | Id_aux (Id v, l) -> Id_aux (Id (str ^ v), l)
+  | Id_aux (Direction (d, v), l) -> Id_aux (Direction (d, str ^ v), l)
   | Id_aux (Operator v, l) -> Id_aux (Operator (str ^ v), l)
 
 let append_id id str =
   match id with
   | Id_aux (Id v, l) -> Id_aux (Id (v ^ str), l)
+  | Id_aux (Direction (d, v), l) -> Id_aux (Direction (d, v ^ str), l)
   | Id_aux (Operator v, l) -> Id_aux (Operator (v ^ str), l)
 
 let prepend_kid str = function

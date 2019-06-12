@@ -98,6 +98,7 @@ and 'a apat_aux =
   | AP_cons of 'a apat * 'a apat
   | AP_as of 'a apat * id * 'a
   | AP_string_append of ('a apat_string) list
+  | AP_view of 'a apat * id * 'a aexp list * 'a
   | AP_nil of 'a
   | AP_wild of 'a
 
@@ -118,17 +119,19 @@ let rec apat_typ (AP_aux (apat_aux, _ ,_)) =
   | AP_cons (apat, _) -> list_typ (apat_typ apat)
   | AP_as (_, _, typ) -> typ
   | AP_string_append _ -> string_typ
+  | AP_view (_, _, _, typ) -> typ
   | AP_nil typ | AP_wild typ -> typ
 
 let rec apat_bindings (AP_aux (apat_aux, _, _)) =
   match apat_aux with
   | AP_tup apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_bindings apats)
   | AP_id (id, _) -> IdSet.singleton id
-  | AP_global (id, _) -> IdSet.empty
-  | AP_app (id, apat, _) -> apat_bindings apat
+  | AP_global _ -> IdSet.empty
+  | AP_app (_, apat, _) -> apat_bindings apat
   | AP_cons (apat1, apat2) -> IdSet.union (apat_bindings apat1) (apat_bindings apat2)
   | AP_as (apat, id, _) -> IdSet.add id (apat_bindings apat)
   | AP_string_append apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_string_bindings apats)
+  | AP_view (apat, _, _, _) -> apat_bindings apat
   | AP_nil _ -> IdSet.empty
   | AP_wild _ -> IdSet.empty
 and apat_string_bindings = function
@@ -523,6 +526,15 @@ let rec split_block l = function
   | [] ->
      raise (Reporting.err_unreachable l __POS__ "empty block found when converting to ANF")
 
+let rec apat_globals (AP_aux (aux, _, _)) =
+  match aux with
+  | AP_nil _ | AP_wild _ | AP_id _ -> []
+  | AP_global (id, typ) -> [(id, typ)]
+  | AP_tup apats -> List.concat (List.map apat_globals apats)
+  | AP_app (_, apat, _) -> apat_globals apat
+  | AP_cons (hd_apat, tl_apat) -> apat_globals hd_apat @ apat_globals tl_apat
+  | AP_as (apat, _, _) -> apat_globals apat
+
 let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   let mk_apat aux = AP_aux (aux, env_of_annot annot, fst annot) in
   match p_aux with
@@ -539,6 +551,7 @@ let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
   | P_as (pat, id) -> mk_apat (AP_as (anf_pat ~global:global pat, id, typ_of_pat pat))
   | P_string_append pats -> mk_apat (AP_string_append (List.map (anf_string_pat ~global:global) pats))
+  | P_view (pat, id, args) -> mk_apat (AP_view (anf_pat ~global:global pat, id, List.map anf args, typ_of_pat pat))
   | _ ->
      raise (Reporting.err_unreachable (fst annot) __POS__
        ("Could not convert pattern to ANF: " ^ string_of_pat pat))
@@ -548,16 +561,7 @@ and anf_string_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   | P_lit (L_aux (L_string str, _)) -> APS_lit str
   | _ -> APS_pat (anf_pat pat)
 
-let rec apat_globals (AP_aux (aux, _, _)) =
-  match aux with
-  | AP_nil _ | AP_wild _ | AP_id _ -> []
-  | AP_global (id, typ) -> [(id, typ)]
-  | AP_tup apats -> List.concat (List.map apat_globals apats)
-  | AP_app (_, apat, _) -> apat_globals apat
-  | AP_cons (hd_apat, tl_apat) -> apat_globals hd_apat @ apat_globals tl_apat
-  | AP_as (apat, _, _) -> apat_globals apat
-
-let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
+and anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   let mk_aexp aexp = AE_aux (aexp, env_of_annot exp_annot, l) in
 
   let to_aval (AE_aux (aexp_aux, env, l) as aexp) =

@@ -149,11 +149,16 @@ annot :: '' ::=
   {{ lem annot 'a }}
   {{ hol unit }}
 
+direction :: '' ::=
+  | forwards  :: :: forwards
+  | backwards :: :: backwards
+
 id :: '' ::=
   {{ com Identifier }}
   {{ aux _ l }}
-  | x              :: :: id
-  | ( operator x ) :: D :: operator {{ com remove infix status }}
+  | x                :: :: id
+  | direction '::' x :: :: direction
+  | operator x       :: :: operator {{ com remove infix status }}
 
 kid :: '' ::=
   {{ com kinded IDs: Type, Int, and Order variables }}
@@ -516,8 +521,8 @@ grammar
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 loop :: loop ::= {{ phantom }}
-  | while ::   :: while 
-  | until ::  :: until 
+  | while :: :: while
+  | until :: :: until
 
 internal_loop_measure :: 'Measure_' ::=
   {{ com internal syntax for an optional termination measure for a loop }}

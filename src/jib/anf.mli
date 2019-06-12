@@ -118,6 +118,7 @@ and 'a apat_aux =
   | AP_cons of 'a apat * 'a apat
   | AP_as of 'a apat * id * 'a
   | AP_string_append of 'a apat_string list
+  | AP_view of 'a apat * id * 'a aexp list * 'a
   | AP_nil of 'a
   | AP_wild of 'a
 

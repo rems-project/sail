@@ -2,7 +2,7 @@ Type error:
 [[96mreg_32_64/v3.sail[0m]:29:15-21
 29[96m |[0m  reg_deref(R)['d - 1 .. 0]
   [91m |[0m               [91m^----^[0m
-  [91m |[0m No overloading for (operator -), tried:
+  [91m |[0m No overloading for operator -, tried:
   [91m |[0m [94m*[0m sub_atom
   [91m |[0m    Cannot re-write sizeof('d)
   [91m |[0m [94m*[0m sub_int

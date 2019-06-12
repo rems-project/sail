@@ -408,6 +408,13 @@ val id_of_dec_spec : 'a dec_spec -> id
 val id_of_kid : kid -> id
 val kid_of_id : id -> kid
 
+val id_direction : id -> direction option
+
+val strip_direction : id -> id
+
+(** Will fail with err_general if id is either an operator or already has a direction *)
+val set_id_direction : direction -> id -> id
+
 val prepend_id : string -> id -> id
 val append_id : id -> string -> id
 val prepend_kid : string -> kid -> kid
@@ -415,7 +422,7 @@ val prepend_kid : string -> kid -> kid
 (** {2 Misc functions} *)
 
 val pat_of_mpat : 'a mpat -> 'a pat
-  
+
 val nexp_frees : nexp -> KidSet.t
 val nexp_identical : nexp -> nexp -> bool
 val is_nexp_constant : nexp -> bool

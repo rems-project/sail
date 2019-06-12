@@ -105,10 +105,13 @@ type
 kid_aux =  (* identifiers with kind, ticked to differntiate from program variables *)
    Var of x
 
+type direction =
+ | Forwards
+ | Backwards
 
-type 
-id_aux =  (* Identifier *)
-   Id of x
+type id_aux =  (* Identifier *)
+ | Id of x
+ | Direction of direction * x
  | Operator of x (* remove infix status *)
 
 type

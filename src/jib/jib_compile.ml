@@ -499,6 +499,7 @@ let rec apat_ctyp ctx (AP_aux (apat, _, _)) =
   | AP_wild typ | AP_nil typ | AP_id (_, typ) -> ctyp_of_typ ctx typ
   | AP_app (_, _, typ) -> ctyp_of_typ ctx typ
   | AP_as (_, _, typ) -> ctyp_of_typ ctx typ
+  | AP_view (_, _, _, typ) -> ctyp_of_typ ctx typ
   | AP_string_append _ -> CT_string
 
 let escape_match_string str =
@@ -510,6 +511,8 @@ let escape_match_string str =
     | c -> String.make 1 c
   in
   String.concat "" (List.map escape_char (Util.string_to_list str))
+
+let unit_cval = V_lit (VL_unit, CT_unit)
 
 let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   let ctx = { ctx with local_env = env } in
@@ -598,6 +601,22 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
 
   | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_null, ctyp)])) case_label], [], ctx
 
+  | AP_view (apat, id, aexps, typ) ->
+     if string_of_id id = "regex" then (
+       match aexps with
+       | [AE_aux (AE_val (AV_lit (L_aux (L_string regex_string, _), _)), _, _)] ->
+          let regex, result = ngensym (), ngensym () in
+          [iinit (CT_regex 0) regex (V_lit (VL_string regex_string, CT_string));
+           idecl CT_bool result;
+           iextern (CL_id (result, CT_bool)) (mk_id "sail_regmatch0") [V_id (regex, CT_regex 0); cval];
+           ijump (V_call (Bnot, [V_id (result, CT_bool)])) case_label],
+          [iclear (CT_regex 0) regex],
+          ctx
+       | _ ->
+          Reporting.unreachable l __POS__ "Expected string literal inside regex builtin mapping"
+     ) else
+       [icomment "VIEW"], [], ctx
+
   | AP_string_append string_apats ->
      let to_regex = function
        | APS_lit str -> escape_match_string str
@@ -630,9 +649,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
      @ [iclear (CT_regex groups) regex],
      ctx
 
-let unit_cval = V_lit (VL_unit, CT_unit)
-
-let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
+and compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   let ctx = { ctx with local_env = env } in
   match aexp_aux with
   | AE_let (mut, id, binding_typ, binding, (AE_aux (_, body_env, _) as body), body_typ) ->
@@ -1364,7 +1381,15 @@ let compile_mapcls swap mk_cdef ctx id pats clauses =
     [iblock case_instrs; ilabel clause_label]
   in
 
-  let instrs = destructure @ List.concat (List.map compile_clause clauses) @ destructure_cleanup in
+  let instrs =
+    destructure @ List.concat (List.map compile_clause clauses) @ destructure_cleanup
+    @ [ilabel mapdef_label;
+       imatch_failure ();
+       ilabel finish_clause_label;
+       ireturn (V_id (clause_return_id, right_ctyp));
+       iend ()]
+
+  in
 
   mk_cdef (List.map fst compiled_args) map_id instrs
 
@@ -1428,6 +1453,7 @@ and compile_def' n total ctx = function
         let left_ctyp, right_ctyp = ctyp_of_typ ctx' left_typ, ctyp_of_typ ctx' right_typ in
         [CDEF_mapping_spec (id, arg_ctyps, left_ctyp, right_ctyp)], ctx
      | _ ->
+        prerr_endline (string_of_typ ret_typ);
         let ret_ctyp = ctyp_of_typ ctx' ret_typ in
         [CDEF_spec (id, arg_ctyps, ret_ctyp)], ctx
      end
@@ -1458,7 +1484,7 @@ and compile_def' n total ctx = function
        | [] -> []
      in
      [compile_mapcls (fun (l, r) -> l, r) (fun args arg instrs -> CDEF_mapping_forwards (id, args, arg, instrs)) ctx id pats (forwards mapcls);
-      compile_mapcls (fun (l, r) -> l, r) (fun args arg instrs -> CDEF_mapping_backwards (id, args, arg, instrs)) ctx id pats (backwards mapcls)],
+      compile_mapcls (fun (l, r) -> r, l) (fun args arg instrs -> CDEF_mapping_backwards (id, args, arg, instrs)) ctx id pats (backwards mapcls)],
      ctx
 
   (* All abbreviations should expanded by the typechecker, so we don't

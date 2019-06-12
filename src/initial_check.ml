@@ -71,6 +71,7 @@ type ctx = {
 let string_of_parse_id_aux = function
   | P.Id v -> v
   | P.Operator v -> v
+  | P.Direction (_, v) -> v
 
 let string_of_parse_id (P.Id_aux (id, l)) = string_of_parse_id_aux id
 
@@ -93,7 +94,9 @@ let to_ast_id (P.Id_aux(id, l)) =
   else
     Id_aux ((match id with
              | P.Id x -> Id x
-             | P.Operator x -> Operator x),
+             | P.Operator x -> Operator x
+             | P.Direction (P.Forwards, x) -> Direction (Forwards, x)
+             | P.Direction (P.Backwards, x) -> Direction (Backwards, x)),
             l)
 
 let to_ast_var (P.Kid_aux (P.Var v, l)) = Kid_aux (Var v, l)

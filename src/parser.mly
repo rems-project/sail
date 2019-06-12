@@ -67,10 +67,6 @@ let assoc_opt key (assocs, default) =
 
 let cons_fst h (t,x) = (h::t,x)
 
-let string_of_id = function
-  | Id_aux (Id str, _) -> str
-  | Id_aux (Operator str, _) -> str
-
 let prepend_id str1 = function
   | Id_aux (Id str2, loc) -> Id_aux (Id (str1 ^ str2), loc)
   | _ -> assert false
@@ -1035,6 +1031,14 @@ block:
   | pat Eq exp
     { LB_aux (LB_val ($1, $3), loc $startpos $endpos) }
 
+direction_id:
+  | id
+    { $1 }
+  | Forwards Id
+    { Id_aux (Direction (Forwards, $2), loc $startpos $endpos) }
+  | Backwards Id
+    { Id_aux (Direction (Backwards, $2), loc $startpos $endpos) }
+
 atomic_exp:
   | atomic_exp Colon atomic_typ
     { mk_exp (E_cast ($3, $1)) $startpos $endpos }
@@ -1056,9 +1060,9 @@ atomic_exp:
     { mk_exp (E_sizeof (mk_typ (ATyp_var $1) $startpos $endpos)) $startpos $endpos }
   | Ref id
     { mk_exp (E_ref $2) $startpos $endpos }
-  | id Unit
+  | direction_id Unit
     { mk_exp (E_app ($1, [mk_lit_exp L_unit $startpos($2) $endpos])) $startpos $endpos }
-  | id Lparen exp_list Rparen
+  | direction_id Lparen exp_list Rparen
     { mk_exp (E_app ($1, $3)) $startpos $endpos }
   | Exit Unit
     { mk_exp (E_exit (mk_lit_exp L_unit $startpos $endpos)) $startpos $endpos }
@@ -1375,12 +1379,12 @@ let_def:
     { $2 }
 
 externs:
-  | id Colon String
-    { [(string_of_id $1, $3)] }
+  | Id Colon String
+    { [($1, $3)] }
   | Under Colon String
     { [("_", $3)] }
-  | id Colon String Comma externs
-    { (string_of_id $1, $3) :: $5 }
+  | Id Colon String Comma externs
+    { ($1, $3) :: $5 }
 
 val_spec_def:
   | Doc val_spec_def
