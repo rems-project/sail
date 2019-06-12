@@ -202,7 +202,9 @@ and strip_nexp = function
 and strip_n_constraint_aux = function
   | NC_equal (nexp1, nexp2) -> NC_equal (strip_nexp nexp1, strip_nexp nexp2)
   | NC_bounded_ge (nexp1, nexp2) -> NC_bounded_ge (strip_nexp nexp1, strip_nexp nexp2)
+  | NC_bounded_gt (nexp1, nexp2) -> NC_bounded_gt (strip_nexp nexp1, strip_nexp nexp2)
   | NC_bounded_le (nexp1, nexp2) -> NC_bounded_le (strip_nexp nexp1, strip_nexp nexp2)
+  | NC_bounded_lt (nexp1, nexp2) -> NC_bounded_lt (strip_nexp nexp1, strip_nexp nexp2)
   | NC_not_equal (nexp1, nexp2) -> NC_not_equal (strip_nexp nexp1, strip_nexp nexp2)
   | NC_set (kid, nums) -> NC_set (strip_kid kid, nums)
   | NC_or (nc1, nc2) -> NC_or (strip_n_constraint nc1, strip_n_constraint nc2)
@@ -294,7 +296,7 @@ and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
   | A_order ord -> []
 and constraint_nexps (NC_aux (nc_aux, l)) =
   match nc_aux with
-  | NC_equal (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_le (n1, n2) | NC_not_equal (n1, n2) ->
+  | NC_equal (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_le (n1, n2) | NC_bounded_gt (n1, n2) | NC_bounded_lt (n1, n2) | NC_not_equal (n1, n2) ->
      [n1; n2]
   | NC_set _ | NC_true | NC_false | NC_var _ -> []
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2
@@ -668,7 +670,9 @@ end = struct
     | NC_equal (n1, n2) -> NC_aux (NC_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
     | NC_not_equal (n1, n2) -> NC_aux (NC_not_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
     | NC_bounded_le (n1, n2) -> NC_aux (NC_bounded_le (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_bounded_lt (n1, n2) -> NC_aux (NC_bounded_lt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
     | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_bounded_gt (n1, n2) -> NC_aux (NC_bounded_gt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
     | NC_app (id, args) ->
        (try
           begin match get_typ_synonym id env l env args with
@@ -862,7 +866,9 @@ end = struct
     | NC_equal (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
     | NC_not_equal (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
     | NC_bounded_ge (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
+    | NC_bounded_gt (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
     | NC_bounded_le (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
+    | NC_bounded_lt (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
     | NC_set (kid, _) when KidSet.mem kid exs -> ()
     | NC_set (kid, _) ->
        begin match get_typ_var kid env with
@@ -1567,7 +1573,9 @@ let rec nc_identical (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
   | NC_equal (n1a, n1b), NC_equal (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | NC_not_equal (n1a, n1b), NC_not_equal (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | NC_bounded_ge (n1a, n1b), NC_bounded_ge (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_bounded_gt (n1a, n1b), NC_bounded_gt (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | NC_bounded_le (n1a, n1b), NC_bounded_le (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_bounded_lt (n1a, n1b), NC_bounded_lt (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | NC_or (nc1a, nc1b), NC_or (nc2a, nc2b) -> nc_identical nc1a nc2a && nc_identical nc1b nc2b
   | NC_and (nc1a, nc1b), NC_and (nc2a, nc2b) -> nc_identical nc1a nc2a && nc_identical nc1b nc2b
   | NC_true, NC_true -> true
@@ -1706,7 +1714,11 @@ and unify_constraint l env goals (NC_aux (aux1, _) as nc1) (NC_aux (aux2, _) as 
      merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_bounded_ge (n1a, n2a), NC_bounded_ge (n1b, n2b) ->
      merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+  | NC_bounded_gt (n1a, n2a), NC_bounded_gt (n1b, n2b) ->
+     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_bounded_le (n1a, n2a), NC_bounded_le (n1b, n2b) ->
+     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+  | NC_bounded_lt (n1a, n2a), NC_bounded_lt (n1b, n2b) ->
      merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_true, NC_true -> KBindings.empty
   | NC_false, NC_false -> KBindings.empty
@@ -1878,7 +1890,9 @@ and ambiguous_nc_vars (NC_aux (aux, _)) =
   match aux with
   | NC_and (nc1, nc2) -> KidSet.union (tyvars_of_constraint nc1) (tyvars_of_constraint nc2)
   | NC_bounded_le (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
+  | NC_bounded_lt (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
   | NC_bounded_ge (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
+  | NC_bounded_gt (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
   | NC_equal (n1, n2) | NC_not_equal (n1, n2) ->
      KidSet.union (ambiguous_nexp_vars n1) (ambiguous_nexp_vars n2)
   | _ -> KidSet.empty
@@ -1962,7 +1976,9 @@ and kid_order_constraint kind_map (NC_aux (aux, l) as nc) =
      ([mk_kopt (unaux_kind (KBindings.find kid kind_map)) kid], KBindings.remove kid kind_map)
   | NC_var _ | NC_set _ -> ([], kind_map)
   | NC_true | NC_false -> ([], kind_map)
-  | NC_equal (n1, n2) | NC_not_equal (n1, n2) | NC_bounded_le (n1, n2) | NC_bounded_ge (n1, n2) ->
+  | NC_equal (n1, n2) | NC_not_equal (n1, n2)
+  | NC_bounded_le (n1, n2) | NC_bounded_ge (n1, n2)
+  | NC_bounded_lt (n1, n2) | NC_bounded_gt (n1, n2) ->
      let ord1, kind_map = kid_order_nexp kind_map n1 in
      let ord2, kind_map = kid_order_nexp kind_map n2 in
      (ord1 @ ord2, kind_map)
@@ -2251,7 +2267,9 @@ and rewrite_nc_aux l env =
   let mk_exp exp = mk_exp ~loc:l exp in
   function
   | NC_bounded_ge (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">=", mk_exp (E_sizeof n2))
+  | NC_bounded_gt (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">", mk_exp (E_sizeof n2))
   | NC_bounded_le (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "<=", mk_exp (E_sizeof n2))
+  | NC_bounded_lt (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "<", mk_exp (E_sizeof n2))
   | NC_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "==", mk_exp (E_sizeof n2))
   | NC_not_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "!=", mk_exp (E_sizeof n2))
   | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "&", rewrite_nc env nc2)

@@ -249,7 +249,9 @@ n_constraint :: 'NC_' ::=
   {{ aux _ l }}
   | nexp == nexp'                    :: :: equal
   | nexp >= nexp'                    :: :: bounded_ge
+  | nexp > nexp'                     :: :: bounded_gt
   | nexp '<=' nexp'                  :: :: bounded_le
+  | nexp '<' nexp'                   :: :: bounded_lt
   | nexp != nexp'                    :: :: not_equal
   | kid 'IN' { num1 , ... , numn }   :: :: set
   | n_constraint & n_constraint'     :: :: or

@@ -238,8 +238,8 @@ and to_ast_constraint ctx (P.ATyp_aux (aux, l) as atyp) =
        | "!=" -> NC_not_equal (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
        | ">=" -> NC_bounded_ge (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
        | "<=" -> NC_bounded_le (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
-       | ">" -> NC_bounded_ge (to_ast_nexp ctx t1, nsum (to_ast_nexp ctx t2) (nint 1))
-       | "<" -> NC_bounded_le (nsum (to_ast_nexp ctx t1) (nint 1), to_ast_nexp ctx t2)
+       | ">" -> NC_bounded_gt (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
+       | "<" -> NC_bounded_lt (to_ast_nexp ctx t1, to_ast_nexp ctx t2)
        | "&" -> NC_and (to_ast_constraint ctx t1, to_ast_constraint ctx t2)
        | "|" -> NC_or (to_ast_constraint ctx t1, to_ast_constraint ctx t2)
        | _ ->

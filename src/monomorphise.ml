@@ -1866,7 +1866,9 @@ let rec deps_of_nc kid_deps (NC_aux (nc,l)) =
   match nc with
   | NC_equal (nexp1,nexp2)
   | NC_bounded_ge (nexp1,nexp2)
+  | NC_bounded_gt (nexp1,nexp2)
   | NC_bounded_le (nexp1,nexp2)
+  | NC_bounded_lt (nexp1,nexp2)
   | NC_not_equal (nexp1,nexp2)
     -> dmerge (deps_of_nexp l kid_deps [] nexp1) (deps_of_nexp l kid_deps [] nexp2)
   | NC_set (kid,_) ->
@@ -3604,7 +3606,9 @@ let rewrite_toplevel_nexps (Defs defs) =
       match nc with
       | NC_equal (n1, n2) -> rewrap (NC_equal (aux_nexp n1, aux_nexp n2))
       | NC_bounded_ge (n1, n2) -> rewrap (NC_bounded_ge (aux_nexp n1, aux_nexp n2))
+      | NC_bounded_gt (n1, n2) -> rewrap (NC_bounded_gt (aux_nexp n1, aux_nexp n2))
       | NC_bounded_le (n1, n2) -> rewrap (NC_bounded_le (aux_nexp n1, aux_nexp n2))
+      | NC_bounded_lt (n1, n2) -> rewrap (NC_bounded_lt (aux_nexp n1, aux_nexp n2))
       | NC_not_equal (n1, n2) -> rewrap (NC_not_equal (aux_nexp n1, aux_nexp n2))
       | NC_or (nc1, nc2) -> rewrap (NC_or (aux_nconstraint nc1, aux_nconstraint nc2))
       | NC_and (nc1, nc2) -> rewrap (NC_and (aux_nconstraint nc1, aux_nconstraint nc2))

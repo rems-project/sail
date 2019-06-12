@@ -136,7 +136,9 @@ let rec doc_nc nc =
     | NC_equal (n1, n2) -> nc_op "==" n1 n2
     | NC_not_equal (n1, n2) -> nc_op "!=" n1 n2
     | NC_bounded_ge (n1, n2) -> nc_op ">=" n1 n2
+    | NC_bounded_gt (n1, n2) -> nc_op ">" n1 n2
     | NC_bounded_le (n1, n2) -> nc_op "<=" n1 n2
+    | NC_bounded_lt (n1, n2) -> nc_op "<" n1 n2
     | NC_set (kid, ints) ->
        separate space [doc_kid kid; string "in"; braces (separate_map (comma ^^ space) doc_int ints)]
     | NC_app (id, args) ->
