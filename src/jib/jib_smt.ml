@@ -697,6 +697,12 @@ let builtin_append ctx v1 v2 ret_ctyp =
      Fn ("Bits", [bvadd (bvint ctx.lbits_index (Big_int.of_int n)) (Fn ("len", [smt1]));
                   Extract (lbits_size ctx - 1, 0, Fn ("concat", [Fn ("contents", [smt1]); smt2]))])
 
+  | CT_fbits (n, _), CT_fbits (m, _), CT_lbits _ ->
+     let smt1 = smt_cval ctx v1 in
+     let smt2 = smt_cval ctx v2 in
+     Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int (n + m));
+                  unsigned_size ctx (lbits_size ctx) (n + m) (Fn ("concat", [smt1; smt2]))])
+
   | CT_lbits _, CT_lbits _, CT_lbits _ ->
      let smt1 = smt_cval ctx v1 in
      let smt2 = smt_cval ctx v2 in
