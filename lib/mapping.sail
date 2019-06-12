@@ -4,12 +4,12 @@ $define _MAPPING
 $include <string.sail>
 
 mapping sep : regex(", +") <-> unit = {
-  forwards str <- regex(", +") => (),
+  forwards _ <- regex(", +") => (),
   backwards () => ", "
 }
 
 mapping spc : regex(" +") <-> unit = {
-  forwards str <- regex(" +") => (),
+  forwards _ <- regex(" +") => (),
   backwards () => " "
 }
 
