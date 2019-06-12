@@ -873,7 +873,7 @@ let case_exp e t cs =
   strategy to ours: group *mutually exclusive* clauses, and try to merge them
   into a pattern match first instead of an if-then-else cascade.
 *)
-let rewrite_guarded_clauses l cs =
+let rewrite_guarded_clauses l env typ cs =
   let rec group fallthrough clauses =
     let add_clause (pat,cls,annot) c = (pat,cls @ [c],annot) in
     let rec group_aux current acc = (function
@@ -934,7 +934,18 @@ let rewrite_guarded_clauses l cs =
     | [] ->
         raise (Reporting.err_unreachable l __POS__
             "if_exp given empty list in rewrite_guarded_clauses")) in
-  group [] cs
+  let is_complete = Pattern_completeness.is_complete (Env.pattern_completeness_ctx env) (List.map construct_pexp cs) in
+  let fallthrough =
+    if not is_complete then
+      let p = P_aux (P_wild, (Parse_ast.Generated l, empty_tannot)) in
+      let msg = "Pattern match failure at " ^ Reporting.short_loc_to_string l in
+      let a = mk_exp (E_assert (mk_lit_exp L_false, mk_lit_exp (L_string msg))) in
+      let b = mk_exp (E_exit (mk_lit_exp L_unit)) in
+      let (E_aux (_, (_, ann)) as e) = check_exp env (mk_exp (E_block [a; b])) typ in
+      [(p,None,e,(Parse_ast.Generated l,ann))]
+    else []
+  in
+  group [] (cs @ fallthrough)
 
 let bitwise_and_exp exp1 exp2 =
   let (E_aux (_,(l,_))) = exp1 in
@@ -1316,7 +1327,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
       (pat, None, rewrite_rec body, annot)
     | Pat_aux (Pat_when (pat, guard, body), annot) ->
       (pat, Some (rewrite_rec guard), rewrite_rec body, annot) in
-    let clauses = rewrite_guarded_clauses l (List.map clause ps) in
+    let clauses = rewrite_guarded_clauses l (env_of full_exp) (typ_of full_exp) (List.map clause ps) in
     let e = rewrite_rec e in
     if (effectful e) then
       let (E_aux (_,(el,eannot))) = e in
@@ -1334,7 +1345,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
       (pat, None, rewrite_rec body, annot)
     | Pat_aux (Pat_when (pat, guard, body), annot) ->
       (pat, Some (rewrite_rec guard), rewrite_rec body, annot) in
-    let clauses = rewrite_guarded_clauses l (List.map clause ps) in
+    let clauses = rewrite_guarded_clauses l (env_of full_exp) (typ_of full_exp) (List.map clause ps) in
     let pexp (pat,body,annot) = Pat_aux (Pat_exp (pat,body),annot) in
     let ps = List.map pexp clauses in
     fix_eff_exp (annot_exp (E_try (e,ps)) l (env_of full_exp) (typ_of full_exp))
@@ -1342,12 +1353,12 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
 
 let rewrite_fun_guarded_pats rewriters (FD_aux (FD_function (r,t,e,funcls),(l,fdannot))) =
    let funcls = match funcls with
-    | (FCL_aux (FCL_Funcl(id,_),_) :: _) ->
+    | (FCL_aux (FCL_Funcl(id,_), fclannot) :: _) ->
        let clause (FCL_aux (FCL_Funcl(_,pexp),annot)) =
          let pat,guard,exp,_ = destruct_pexp pexp in
          let exp = rewriters.rewrite_exp rewriters exp in
          (pat,guard,exp,annot) in
-       let cs = rewrite_guarded_clauses l (List.map clause funcls) in
+       let cs = rewrite_guarded_clauses l (env_of_annot fclannot) (typ_of_annot fclannot) (List.map clause funcls) in
        List.map (fun (pat,exp,annot) ->
          FCL_aux (FCL_Funcl(id,construct_pexp (pat,None,exp,(Parse_ast.Unknown,empty_tannot))),annot)) cs
      | _ -> funcls (* TODO is the empty list possible here? *) in
