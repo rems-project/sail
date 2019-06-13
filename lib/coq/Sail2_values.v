@@ -385,6 +385,7 @@ Qed.
 Inductive bitU := B0 | B1 | BU.
 
 Scheme Equality for bitU.
+Definition eq_bit := bitU_beq.
 Instance Decidable_eq_bit : forall (x y : bitU), Decidable (x = y) :=
   Decidable_eq_from_dec bitU_eq_dec.
 
