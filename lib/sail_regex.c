@@ -61,3 +61,27 @@ void sail_getmatch(sail_string *result, sail_string str, sail_match match, int g
   strncpy(*result, str + m.rm_so, len);
   (*result)[len] = '\0';
 }
+
+void hex_parse(lbits *result, sail_int n, sail_string input)
+{
+}
+
+void hex_string(sail_string *result, lbits input)
+{
+}
+
+void decimal_parse(lbits *result, sail_int n, sail_string input)
+{
+}
+
+void decimal_string(sail_string *result, lbits input)
+{
+}
+
+void binary_parse(lbits *result, sail_int n, sail_string input)
+{
+}
+
+void binary_string(sail_string *result, lbits input)
+{
+}

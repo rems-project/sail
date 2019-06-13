@@ -297,7 +297,7 @@ let inline cdefs should_inline instrs =
   let rec inline_instr = function
     | I_aux (I_funcall (clexp, false, function_id, args), aux) as instr when should_inline function_id ->
        begin match find_function function_id cdefs with
-       | Some (None, ids, body) ->
+       | Some (CC_stack, ids, body) ->
           incr inlines;
           incr label_count;
           let inline_label = label "end_inline_" in
@@ -313,10 +313,10 @@ let inline cdefs should_inline instrs =
           let body = List.map (map_instr (replace_end inline_label)) body in
           let body = List.map (map_instr (replace_return clexp)) body in
           I_aux (I_block (body @ [ilabel inline_label]), aux)
-       | Some (Some _, ids, body) ->
-          (* Some _ is only introduced by C backend, so we don't
+       | Some (CC_heap _, ids, body) ->
+          (* CC_heap is only introduced by C backend, so we don't
              expect it at this point. *)
-          raise (Reporting.err_general (snd aux) "Unexpected return method in IR")
+          raise (Reporting.err_general (snd aux) "Unexpected calling convention in IR")
        | None -> instr
        end
     | instr -> instr

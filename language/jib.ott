@@ -226,6 +226,11 @@ instr :: 'I_' ::=
   | reset ctyp name                                :: :: reset
   | ctyp name = cval                               :: :: reinit
 
+calling_convention :: 'CC_' ::=
+  | stack :: :: stack
+  | heap id :: :: heap
+  | mapping :: :: mapping
+
 cdef :: 'CDEF_' ::=
   | register id : ctyp = {
       instr0 ; ... ; instrn
@@ -242,21 +247,9 @@ cdef :: 'CDEF_' ::=
 
   | val id ( ctyp0 , ... , ctypn ) -> ctyp1 <-> ctyp2 :: :: mapping_spec
 
-% If mid = Some id this indicates that the caller should allocate the
-% return type and passes a pointer to it as an extra argument id for
-% the function to fill in. This is only done via Jib->Jib rewrites
-% used when compiling to C.
-  | function id mid ( id0 , ... , idn ) {
+  | function id calling_convention ( id0 , ... , idn ) {
       instr0 ; ... ; instrm
     } :: :: fundef
-
-  | mapping forwards id ( id0 , ... , idn ) id1 {
-      instr0 ; ... ; instrm
-    } :: :: mapping_forwards
-
-  | mapping backwards id ( id0 , ... , idn ) id1 {
-      instr0 ; ... ; instrm
-    } :: :: mapping_backwards
 
 % Each function can have custom global state. In CDEF_startup and
 % CDEF_finish all I_decl and I_init nodes are treated as global and no

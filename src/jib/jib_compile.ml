@@ -465,9 +465,17 @@ let compile_funcall l ctx id args =
     (* If we can't find a function in local_env, fall back to the
        global env - this happens when representing assertions, exit,
        etc as functions in the IR. *)
+    let id = strip_direction id in
     try Env.get_val_spec id ctx.local_env with Type_error _ -> Env.get_val_spec id ctx.tc_env
   in
   let arg_typs, ret_typ = match fn_typ with
+    | Typ_fn (arg_typs, Typ_aux (Typ_bidir (left_typ, right_typ), _), _) ->
+       begin match id_direction id with
+       | Some Forwards -> arg_typs @ [left_typ], right_typ
+       | Some Backwards -> arg_typs @ [right_typ], left_typ
+       | None ->
+          raise (Reporting.err_general l "Jib IR: Found mapping application that was specified as neither forwards or backwards")
+       end
     | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
     | _ -> assert false
   in
@@ -606,11 +614,13 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
        match aexps with
        | [AE_aux (AE_val (AV_lit (L_aux (L_string regex_string, _), _)), _, _)] ->
           let regex, result = ngensym (), ngensym () in
+          let submatch, submatch_cleanup, _ = compile_match ctx apat cval case_label in
           [iinit (CT_regex 0) regex (V_lit (VL_string regex_string, CT_string));
            idecl CT_bool result;
            iextern (CL_id (result, CT_bool)) (mk_id "sail_regmatch0") [V_id (regex, CT_regex 0); cval];
-           ijump (V_call (Bnot, [V_id (result, CT_bool)])) case_label],
-          [iclear (CT_regex 0) regex],
+           ijump (V_call (Bnot, [V_id (result, CT_bool)])) case_label]
+          @ submatch,
+          submatch_cleanup @ [iclear (CT_regex 0) regex],
           ctx
        | _ ->
           Reporting.unreachable l __POS__ "Expected string literal inside regex builtin mapping"
@@ -1327,7 +1337,7 @@ let compile_funcl ctx id pat guard exp =
       close_out out_chan;
     end;
 
-  [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], orig_ctx
+  [CDEF_fundef (id, CC_stack, List.map fst compiled_args, instrs)], orig_ctx
 
 let compile_mapcls swap mk_cdef ctx id pats clauses =
   let quant, Typ_aux (fn_typ, _) =
@@ -1382,16 +1392,16 @@ let compile_mapcls swap mk_cdef ctx id pats clauses =
   in
 
   let instrs =
-    destructure @ List.concat (List.map compile_clause clauses) @ destructure_cleanup
+    destructure @ [idecl right_ctyp clause_return_id]
+    @ List.concat (List.map compile_clause clauses) @ destructure_cleanup
     @ [ilabel mapdef_label;
-       imatch_failure ();
+       ireturn (V_lit (VL_bool false, CT_bool));
        ilabel finish_clause_label;
-       ireturn (V_id (clause_return_id, right_ctyp));
-       iend ()]
+       icopy (gen_loc (id_loc id)) (CL_id (return, right_ctyp)) (V_id (clause_return_id, right_ctyp));
+       ireturn (V_lit (VL_bool true, CT_bool))]
 
   in
-
-  mk_cdef (List.map fst compiled_args) map_id instrs
+  mk_cdef (List.map fst compiled_args @ [map_id]) instrs
 
 (** Compile a Sail toplevel definition into an IR definition **)
 let rec compile_def n total ctx def =
@@ -1453,7 +1463,6 @@ and compile_def' n total ctx = function
         let left_ctyp, right_ctyp = ctyp_of_typ ctx' left_typ, ctyp_of_typ ctx' right_typ in
         [CDEF_mapping_spec (id, arg_ctyps, left_ctyp, right_ctyp)], ctx
      | _ ->
-        prerr_endline (string_of_typ ret_typ);
         let ret_ctyp = ctyp_of_typ ctx' ret_typ in
         [CDEF_spec (id, arg_ctyps, ret_ctyp)], ctx
      end
@@ -1473,6 +1482,7 @@ and compile_def' n total ctx = function
      raise (Reporting.err_general l "Encountered function with multiple clauses")
 
   | DEF_mapdef (MD_aux (MD_mapping (id, pats, _, mapcls), annot)) ->
+     Util.progress "Compiling " (string_of_id id) n total;
      let rec forwards = function
        | MCL_aux (MCL_forwards pexp, _) :: clauses -> pexp :: forwards clauses
        | _ :: clauses -> forwards clauses
@@ -1483,8 +1493,8 @@ and compile_def' n total ctx = function
        | _ :: clauses -> backwards clauses
        | [] -> []
      in
-     [compile_mapcls (fun (l, r) -> l, r) (fun args arg instrs -> CDEF_mapping_forwards (id, args, arg, instrs)) ctx id pats (forwards mapcls);
-      compile_mapcls (fun (l, r) -> r, l) (fun args arg instrs -> CDEF_mapping_backwards (id, args, arg, instrs)) ctx id pats (backwards mapcls)],
+     [compile_mapcls (fun (l, r) -> l, r) (fun args instrs -> CDEF_fundef (set_id_direction Forwards id, CC_mapping, args, instrs)) ctx id pats (forwards mapcls);
+      compile_mapcls (fun (l, r) -> r, l) (fun args instrs -> CDEF_fundef (set_id_direction Backwards id, CC_mapping, args, instrs)) ctx id pats (backwards mapcls)],
      ctx
 
   (* All abbreviations should expanded by the typechecker, so we don't
@@ -1715,27 +1725,31 @@ let sort_ctype_defs cdefs =
   ctype_defs @ cdefs
 
 let compile_ast ctx (Defs defs) =
-  let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
-  let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
-  let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
-
-  let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs; cons_vs])) } in
-
-  if !opt_memo_cache then
-    (try
-       if Sys.is_directory "_sbuild" then
-         ()
-       else
-         raise (Reporting.err_general Parse_ast.Unknown "_sbuild exists, but is a file not a directory!")
-     with
-     | Sys_error _ -> Unix.mkdir "_sbuild" 0o775)
-  else ();
-
-  let total = List.length defs in
-  let _, chunks, ctx =
-    List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) defs
-  in
-  let cdefs = List.concat (List.rev chunks) in
-  let cdefs, ctx = specialize_variants ctx [] cdefs in
-  let cdefs = sort_ctype_defs cdefs in
-  cdefs, ctx
+  try
+    let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
+    let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
+    let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
+    
+    let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs; cons_vs])) } in
+    
+    if !opt_memo_cache then
+      (try
+         if Sys.is_directory "_sbuild" then
+           ()
+         else
+           raise (Reporting.err_general Parse_ast.Unknown "_sbuild exists, but is a file not a directory!")
+       with
+       | Sys_error _ -> Unix.mkdir "_sbuild" 0o775)
+    else ();
+    
+    let total = List.length defs in
+    let _, chunks, ctx =
+      List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) defs
+    in
+    let cdefs = List.concat (List.rev chunks) in
+    let cdefs, ctx = specialize_variants ctx [] cdefs in
+    let cdefs = sort_ctype_defs cdefs in
+    cdefs, ctx
+  with
+  | Type_error (_, l, err) ->
+     raise (Reporting.err_typ l ("Unexpected type error when compiling to Jib IR:\n" ^ Type_error.string_of_type_error err))

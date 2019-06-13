@@ -269,10 +269,10 @@ let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
      (if zencode then Util.zencode_string (string_of_id id) else string_of_id id) ^ ssa_num n
   | Have_exception n ->
      "have_exception" ^ ssa_num n
-  | Return n ->
-     "return" ^ ssa_num n
   | Current_exception n when dce ->
      "(*current_exception)" ^ ssa_num n
+  | Return n ->
+     "sail_return" ^ ssa_num n
   | Current_exception n ->
      "current_exception" ^ ssa_num n
 
@@ -668,12 +668,13 @@ let pp_cdef = function
      pp_keyword "val" ^^ pp_id id ^^ string " : " ^^ parens (separate_map (comma ^^ space) pp_ctyp ctyps) ^^ string " -> "
      ^^ pp_ctyp ctyp_left ^^ string " <-> " ^^ pp_ctyp ctyp_right
      ^^ hardline
-  | CDEF_fundef (id, ret, args, instrs) ->
-     let ret = match ret with
-       | None -> empty
-       | Some id -> space ^^ pp_id id
+  | CDEF_fundef (id, calling_convention, args, instrs) ->
+     let cc = match calling_convention with
+       | CC_stack -> empty
+       | CC_heap id -> parens (pp_id id)
+       | CC_mapping -> parens (string "mapping")
      in
-     pp_keyword "function" ^^ pp_id id ^^ ret ^^ parens (separate_map (comma ^^ space) pp_id args) ^^ space
+     pp_keyword "function" ^^ pp_id id ^^ cc ^^ parens (separate_map (comma ^^ space) pp_id args) ^^ space
      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
      ^^ hardline
   | CDEF_reg_dec (id, ctyp, instrs) ->
@@ -694,8 +695,6 @@ let pp_cdef = function
      pp_keyword "finish" ^^ pp_id id ^^ space
      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
      ^^ hardline
-  | CDEF_mapping_forwards (id, args, arg, instrs) -> pp_mapping "forwards" id args arg instrs
-  | CDEF_mapping_backwards (id, args, arg, instrs) -> pp_mapping "backwards" id args arg instrs
 
 let rec cval_deps = function
   | V_id (id, _) | V_ref (id, _) -> NameSet.singleton id
@@ -842,8 +841,6 @@ let cdef_map_instr f = function
   | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, ctyp, List.map (map_instr f) instrs)
   | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, List.map (map_instr f) instrs)
   | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, List.map (map_instr f) instrs)
-  | CDEF_mapping_forwards (id, args, arg, instrs) -> CDEF_mapping_forwards (id, args, arg, List.map (map_instr f) instrs)
-  | CDEF_mapping_backwards (id, args, arg, instrs) -> CDEF_mapping_backwards (id, args, arg, List.map (map_instr f) instrs)
   | CDEF_startup (id, instrs) -> CDEF_startup (id, List.map (map_instr f) instrs)
   | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr f) instrs)
   | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, ctyps, ctyp)
@@ -863,6 +860,7 @@ let cdef_map_ctyp f = function
   | CDEF_startup (id, instrs) -> CDEF_startup (id, List.map (map_instr_ctyp f) instrs)
   | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr_ctyp f) instrs)
   | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, List.map f ctyps, f ctyp)
+  | CDEF_mapping_spec (id, ctyps, ctyp_left, ctyp_right) -> CDEF_mapping_spec (id, List.map f ctyps, f ctyp_left, f ctyp_right)
   | CDEF_type tdef -> CDEF_type (ctype_def_map_ctyp f tdef)
 
 (* Map over all sequences of instructions contained within an instruction *)
@@ -1065,8 +1063,7 @@ let cdef_ctyps = function
      CTSet.add ctyp (List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty ctyps)
   | CDEF_mapping_spec (_, ctyps, ctyp_left, ctyp_right) ->
      CTSet.add ctyp_right (CTSet.add ctyp_left (List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty ctyps))
-  | CDEF_fundef (_, _, _, instrs) | CDEF_mapping_forwards (_, _, _, instrs) | CDEF_mapping_backwards (_, _, _, instrs)
-    | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) ->
+  | CDEF_fundef (_, _, _, instrs) | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) ->
      instrs_ctyps instrs
   | CDEF_type tdef ->
      List.fold_right CTSet.add (ctype_def_ctyps tdef) CTSet.empty

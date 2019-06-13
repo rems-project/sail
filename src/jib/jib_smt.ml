@@ -1922,7 +1922,7 @@ let smt_instr_list name ctx all_cdefs instrs =
 let smt_cdef props lets name_file ctx all_cdefs = function
   | CDEF_spec (function_id, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
      begin match find_function [] function_id all_cdefs with
-     | intervening_lets, Some (None, args, instrs) ->
+     | intervening_lets, Some (CC_stack, args, instrs) ->
         let prop_type, prop_args, pragma_l, vs = Bindings.find function_id props in
 
         let pragma = parse_pragma pragma_l prop_args in

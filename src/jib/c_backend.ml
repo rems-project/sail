@@ -632,20 +632,20 @@ let rec insert_heap_returns ret_ctyps = function
   | (CDEF_spec (id, _, ret_ctyp) as cdef) :: cdefs ->
      cdef :: insert_heap_returns (Bindings.add id ret_ctyp ret_ctyps) cdefs
 
-  | CDEF_fundef (id, None, args, body) :: cdefs ->
+  | CDEF_fundef (id, CC_stack, args, body) :: cdefs ->
      let gs = gensym () in
      begin match Bindings.find_opt id ret_ctyps with
      | None ->
         raise (Reporting.err_general (id_loc id) ("Cannot find return type for function " ^ string_of_id id))
      | Some ret_ctyp when not (is_stack_ctyp ret_ctyp) ->
-        CDEF_fundef (id, Some gs, args, fix_early_heap_return (name gs) ret_ctyp body)
+        CDEF_fundef (id, CC_heap gs, args, fix_early_heap_return (name gs) ret_ctyp body)
         :: insert_heap_returns ret_ctyps cdefs
      | Some ret_ctyp ->
-        CDEF_fundef (id, None, args, fix_early_stack_return (name gs) ret_ctyp (idecl ret_ctyp (name gs) :: body))
+        CDEF_fundef (id, CC_stack, args, fix_early_stack_return (name gs) ret_ctyp (idecl ret_ctyp (name gs) :: body))
         :: insert_heap_returns ret_ctyps cdefs
      end
 
-  | CDEF_fundef (id, gs, _, _) :: _ ->
+  | CDEF_fundef (id, CC_heap gs, _, _) :: _ ->
      raise (Reporting.err_unreachable (id_loc id) __POS__ "Found function with return already re-written in insert_heap_returns")
 
   | cdef :: cdefs ->
@@ -1300,7 +1300,7 @@ let sgen_cval_param cval =
 let rec sgen_clexp = function
   | CL_id (Have_exception _, _) -> "have_exception"
   | CL_id (Current_exception _, _) -> "current_exception"
-  | CL_id (Return _, _) -> assert false
+  | CL_id (Return _, _) -> "sail_return"
   | CL_id (Name (id, _), _) -> "&" ^ sgen_id id
   | CL_field (clexp, field) -> "&((" ^ sgen_clexp clexp ^ ")->" ^ Util.zencode_string field ^ ")"
   | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp clexp ^ ")->ztup" ^ string_of_int n ^ ")"
@@ -1311,7 +1311,7 @@ let rec sgen_clexp = function
 let rec sgen_clexp_pure = function
   | CL_id (Have_exception _, _) -> "have_exception"
   | CL_id (Current_exception _, _) -> "current_exception"
-  | CL_id (Return _, _) -> assert false
+  | CL_id (Return _, _) -> "(*sail_return)"
   | CL_id (Name (id, _), _) -> sgen_id id
   | CL_field (clexp, field) -> sgen_clexp_pure clexp ^ "." ^ Util.zencode_string field
   | CL_tuple (clexp, n) -> sgen_clexp_pure clexp ^ ".ztup" ^ string_of_int n
@@ -2000,10 +2000,27 @@ let codegen_def' ctx = function
      else
        string (Printf.sprintf "%svoid %s(%s%s *rop, %s);" static (sgen_function_id id) (extra_params ()) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
 
-  | CDEF_fundef (id, ret_arg, args, instrs) as def ->
+  | CDEF_mapping_spec (id, arg_ctyps, left_ctyp, right_ctyp) ->
+     let static = if !opt_static then "static " else "" in
+     let codegen_mapping_spec d left_ctyp right_ctyp =
+       string (Printf.sprintf "%sbool %s%s(%s%s *rop, %s, %s);"
+                 static d (sgen_function_id id) (extra_params ()) (sgen_ctyp right_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps) (sgen_ctyp left_ctyp))
+     in
+     codegen_mapping_spec "forwards_" left_ctyp right_ctyp
+     ^^ twice hardline
+     ^^ codegen_mapping_spec "backwards_" right_ctyp left_ctyp
+     
+  | CDEF_fundef (id, calling_convention, args, instrs) as def ->
      (* Extract type information about the function from the environment. *)
-     let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
+     let quant, Typ_aux (fn_typ, _) = Env.get_val_spec (strip_direction id) ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
+       | Typ_fn (arg_typs, Typ_aux (Typ_bidir (left_typ, right_typ), _), _) ->
+          begin match id_direction id with
+          | Some Forwards -> arg_typs @ [left_typ], right_typ
+          | Some Backwards -> arg_typs @ [right_typ], left_typ
+          | None ->
+             raise (Reporting.err_general (id_loc id) "C: Found mapping application that was specified as neither forwards or backwards")
+          end
        | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
        | _ -> assert false
      in
@@ -2021,16 +2038,21 @@ let codegen_def' ctx = function
      let instrs = add_local_labels instrs in
      let args = Util.string_of_list ", " (fun x -> x) (List.map2 (fun ctyp arg -> sgen_ctyp ctyp ^ " " ^ sgen_id arg) arg_ctyps args) in
      let function_header =
-       match ret_arg with
-       | None ->
+       match calling_convention with
+       | CC_stack ->
           assert (is_stack_ctyp ret_ctyp);
           (if !opt_static then string "static " else empty)
           ^^ string (sgen_ctyp ret_ctyp) ^^ space ^^ codegen_function_id id ^^ parens (string (extra_params ()) ^^ string args) ^^ hardline
-       | Some gs ->
+       | CC_heap gs ->
           assert (not (is_stack_ctyp ret_ctyp));
           (if !opt_static then string "static " else empty)
           ^^ string "void" ^^ space ^^ codegen_function_id id
           ^^ parens (string (extra_params ()) ^^ string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_id gs ^ ", ") ^^ string args)
+          ^^ hardline
+       | CC_mapping ->
+          (if !opt_static then string "static " else empty)
+          ^^ string "bool" ^^ space ^^ codegen_function_id id
+          ^^ parens (string (extra_params ()) ^^ string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_name return ^ ", ") ^^ string args)
           ^^ hardline
      in
      function_header
