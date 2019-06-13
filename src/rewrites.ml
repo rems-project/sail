@@ -873,7 +873,7 @@ let case_exp e t cs =
   strategy to ours: group *mutually exclusive* clauses, and try to merge them
   into a pattern match first instead of an if-then-else cascade.
 *)
-let rewrite_guarded_clauses l env typ cs =
+let rewrite_guarded_clauses l env pat_typ typ cs =
   let rec group fallthrough clauses =
     let add_clause (pat,cls,annot) c = (pat,cls @ [c],annot) in
     let rec group_aux current acc = (function
@@ -937,12 +937,12 @@ let rewrite_guarded_clauses l env typ cs =
   let is_complete = Pattern_completeness.is_complete (Env.pattern_completeness_ctx env) (List.map construct_pexp cs) in
   let fallthrough =
     if not is_complete then
-      let p = P_aux (P_wild, (Parse_ast.Generated l, empty_tannot)) in
+      let p = P_aux (P_wild, (gen_loc l, mk_tannot env pat_typ no_effect)) in
       let msg = "Pattern match failure at " ^ Reporting.short_loc_to_string l in
-      let a = mk_exp (E_assert (mk_lit_exp L_false, mk_lit_exp (L_string msg))) in
-      let b = mk_exp (E_exit (mk_lit_exp L_unit)) in
-      let (E_aux (_, (_, ann)) as e) = check_exp env (mk_exp (E_block [a; b])) typ in
-      [(p,None,e,(Parse_ast.Generated l,ann))]
+      let a = mk_exp ~loc:(gen_loc l) (E_assert (mk_lit_exp L_false, mk_lit_exp (L_string msg))) in
+      let b = mk_exp ~loc:(gen_loc l) (E_exit (mk_lit_exp L_unit)) in
+      let (E_aux (_, (_, ann)) as e) = check_exp env (mk_exp ~loc:(gen_loc l) (E_block [a; b])) typ in
+      [(p,None,e,(gen_loc l,ann))]
     else []
   in
   group [] (cs @ fallthrough)
@@ -1327,7 +1327,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
       (pat, None, rewrite_rec body, annot)
     | Pat_aux (Pat_when (pat, guard, body), annot) ->
       (pat, Some (rewrite_rec guard), rewrite_rec body, annot) in
-    let clauses = rewrite_guarded_clauses l (env_of full_exp) (typ_of full_exp) (List.map clause ps) in
+    let clauses = rewrite_guarded_clauses l (env_of full_exp) (typ_of e) (typ_of full_exp) (List.map clause ps) in
     let e = rewrite_rec e in
     if (effectful e) then
       let (E_aux (_,(el,eannot))) = e in
@@ -1345,7 +1345,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
       (pat, None, rewrite_rec body, annot)
     | Pat_aux (Pat_when (pat, guard, body), annot) ->
       (pat, Some (rewrite_rec guard), rewrite_rec body, annot) in
-    let clauses = rewrite_guarded_clauses l (env_of full_exp) (typ_of full_exp) (List.map clause ps) in
+    let clauses = rewrite_guarded_clauses l (env_of full_exp) (typ_of e) (typ_of full_exp) (List.map clause ps) in
     let pexp (pat,body,annot) = Pat_aux (Pat_exp (pat,body),annot) in
     let ps = List.map pexp clauses in
     fix_eff_exp (annot_exp (E_try (e,ps)) l (env_of full_exp) (typ_of full_exp))
@@ -1353,12 +1353,21 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
 
 let rewrite_fun_guarded_pats rewriters (FD_aux (FD_function (r,t,e,funcls),(l,fdannot))) =
    let funcls = match funcls with
-    | (FCL_aux (FCL_Funcl(id,_), fclannot) :: _) ->
+    | (FCL_aux (FCL_Funcl(id,pexp), fclannot) :: _) ->
        let clause (FCL_aux (FCL_Funcl(_,pexp),annot)) =
          let pat,guard,exp,_ = destruct_pexp pexp in
          let exp = rewriters.rewrite_exp rewriters exp in
          (pat,guard,exp,annot) in
-       let cs = rewrite_guarded_clauses l (env_of_annot fclannot) (typ_of_annot fclannot) (List.map clause funcls) in
+       let pexp_pat_typ, pexp_ret_typ =
+         let pat, _, exp, _ = destruct_pexp pexp in
+         (typ_of_pat pat, typ_of exp)
+       in
+       let pat_typ, ret_typ = match Env.get_val_spec_orig id (env_of_annot fclannot) with
+         | (tq, Typ_aux (Typ_fn ([arg_typ], ret_typ, _), _)) -> (arg_typ, ret_typ)
+         | (tq, Typ_aux (Typ_fn (arg_typs, ret_typ, _), _)) -> (tuple_typ arg_typs, ret_typ)
+         | _ -> (pexp_pat_typ, pexp_ret_typ) | exception _ -> (pexp_pat_typ, pexp_ret_typ)
+       in
+       let cs = rewrite_guarded_clauses l (env_of_annot fclannot) pat_typ ret_typ (List.map clause funcls) in
        List.map (fun (pat,exp,annot) ->
          FCL_aux (FCL_Funcl(id,construct_pexp (pat,None,exp,(Parse_ast.Unknown,empty_tannot))),annot)) cs
      | _ -> funcls (* TODO is the empty list possible here? *) in
@@ -1881,10 +1890,9 @@ let rewrite_fix_val_specs env (Defs defs) =
          Rec_aux (Rec_rec, Parse_ast.Unknown)
       | _ -> recopt
     in
-    let tannotopt = match tannotopt, funcls with
-    | Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), l),
-      FCL_aux (FCL_Funcl (_, Pat_aux ((Pat_exp (_, exp) | Pat_when (_, _, exp)), _)), _) :: _ ->
-       Typ_annot_opt_aux (Typ_annot_opt_some (typq, Env.expand_synonyms (env_of exp) typ), l)
+    let tannotopt = match tannotopt with
+    | Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), l) ->
+       Typ_annot_opt_aux (Typ_annot_opt_none, l)
     | _ -> tannotopt in
     (val_specs, FD_aux (FD_function (recopt, tannotopt, effopt, funcls), a)) in
 
@@ -2468,7 +2476,8 @@ let rewrite_defs_letbind_effects env =
        rewrap (E_var (lexp,exp1,n_exp exp2 k))))
     | E_internal_return exp1 ->
        n_exp_name exp1 (fun exp1 ->
-       k (if effectful (propagate_exp_effect exp1) then exp1 else rewrap (E_internal_return exp1)))
+       let exp1 = fix_eff_exp (propagate_exp_effect exp1) in
+       k (if effectful exp1 then exp1 else rewrap (E_internal_return exp1)))
     | E_internal_value v ->
        k (rewrap (E_internal_value v))
     | E_return exp' ->
@@ -3637,7 +3646,8 @@ let remove_reference_types exp =
 let rewrite_defs_remove_superfluous_letbinds env =
 
   let e_aux (exp,annot) = match exp with
-    | E_let (LB_aux (LB_val (pat, exp1), _), exp2) ->
+    | E_let (LB_aux (LB_val (pat, exp1), _), exp2)
+    | E_internal_plet (pat, exp1, exp2) ->
        begin match untyp_pat pat, uncast_exp exp1, uncast_exp exp2 with
        (* 'let x = EXP1 in x' can be replaced with 'EXP1' *)
        | (P_aux (P_id id, _), _), _, (E_aux (E_id id', _), _)
@@ -3649,7 +3659,7 @@ let rewrite_defs_remove_superfluous_letbinds env =
        (* "let x = EXP1 in return x" can be replaced with 'return (EXP1)', at
           least when EXP1 is 'small' enough *)
        | (P_aux (P_id id, _), _), _, (E_aux (E_internal_return (E_aux (E_id id', _)), _), _)
-         when Id.compare id id' = 0 && small exp1 ->
+         when Id.compare id id' = 0 && small exp1 && not (effectful exp1) ->
           let (E_aux (_,e1annot)) = exp1 in
           E_aux (E_internal_return (exp1),e1annot)
        | _ -> E_aux (exp,annot)
@@ -3746,7 +3756,7 @@ let rewrite_defs_remove_superfluous_returns env =
          when lit = lit' ->
           add_opt_cast ptyp etyp a exp1
        | (P_aux (P_wild,pannot), ptyp),
-         (E_aux (E_internal_return (E_aux (E_lit (L_aux (L_unit,_)),_)), a), etyp)
+         (E_aux ((E_internal_return (E_aux (E_lit (L_aux (L_unit,_)),_)) | E_lit (L_aux (L_unit,_))), a), etyp)
          when is_unit_typ (typ_of exp1) ->
           add_opt_cast ptyp etyp a exp1
        | (P_aux (P_id id,_), ptyp),
