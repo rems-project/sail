@@ -99,6 +99,7 @@ let rec generalize ctx (P_aux (p_aux, (l, _)) as pat) =
   | P_or (pat1, pat2) -> GP_or (generalize ctx pat1, generalize ctx pat2)
   | P_not(pat)       -> GP_wild (* TODO: How to generalize negated patterns? *)
   | P_as (pat, _) -> generalize ctx pat
+  | P_view _ -> GP_wild
   | P_typ (_, pat) -> generalize ctx pat (* This will possibly overapproximate how general P_typ is *)
   | P_id id ->
      begin
