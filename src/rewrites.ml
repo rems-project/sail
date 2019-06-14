@@ -1216,6 +1216,30 @@ let rewrite_fun_remove_bitvector_pat
     | _ -> funcls in
   FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))
 
+let rewrite_mapping_remove_bitvector_pat
+      rewriters (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), (l, mdannot))) =
+  let _ = reset_fresh_name_counter () in
+  let rewrite_pexp pexp =
+    let pat,fguard,exp,pannot = destruct_pexp pexp in
+    let (pat,(guard,decls,_)) = remove_bitvector_pat pat in
+    let guard = match guard,fguard with
+      | None,e | e,None -> e
+      | Some g, Some wh ->
+         Some (bitwise_and_exp g (decls (rewriters.rewrite_exp rewriters wh)))
+    in
+    let exp = decls (rewriters.rewrite_exp rewriters exp) in
+    construct_pexp (pat,guard,exp,pannot)
+  in
+  let clause (MCL_aux (aux, annot)) =
+    match aux with
+    | MCL_forwards pexp -> MCL_aux (MCL_forwards (rewrite_pexp pexp), annot)
+    | MCL_backwards pexp -> MCL_aux (MCL_backwards (rewrite_pexp pexp), annot)
+    | MCL_bidir _ ->
+       Reporting.unreachable (fst annot) __POS__
+         "Bi-directional clause should have been removed before rewriting"
+  in
+  MD_aux (MD_mapping (id, args, tannot_opt, List.map clause mapcls), (l, mdannot))
+  
 let rewrite_defs_remove_bitvector_pats env (Defs defs) =
   let rewriters =
     {rewrite_exp = rewrite_exp_remove_bitvector_pat;
@@ -1223,7 +1247,7 @@ let rewrite_defs_remove_bitvector_pats env (Defs defs) =
      rewrite_let = rewrite_let;
      rewrite_lexp = rewrite_lexp;
      rewrite_fun = rewrite_fun_remove_bitvector_pat;
-     rewrite_mapping = rewrite_mapping;
+     rewrite_mapping = rewrite_mapping_remove_bitvector_pat;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base } in
   let rewrite_def d =
@@ -3293,7 +3317,7 @@ let rewrite_lit_ocaml (L_aux (lit, _)) = match lit with
   | L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ | L_unit -> false
   | _ -> true
 
-let rewrite_defs_pat_lits rewrite_lit env =
+let rewrite_defs_pat_lits rewrite_lit env (Defs defs) =
   let rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
     let guards = ref [] in
     let counter = ref 0 in
@@ -3332,9 +3356,22 @@ let rewrite_defs_pat_lits rewrite_lit env =
          Pat_aux (Pat_when (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_id "and_bool", [g; g']), guard_annot)) guard !guards, exp), annot)
        end
   in
-
+  let rewrite_mapping (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), annot)) =
+    let rewrite_mapcl (MCL_aux (aux, annot)) =
+      match aux with
+      | MCL_forwards pexp -> MCL_aux (MCL_forwards (rewrite_pexp pexp), annot)
+      | MCL_backwards pexp -> MCL_aux (MCL_backwards (rewrite_pexp pexp), annot)
+      | MCL_bidir _ -> Reporting.unreachable (fst annot) __POS__ "Unexpected MCL_bidir"
+    in
+    MD_aux (MD_mapping (id, args, tannot_opt, List.map rewrite_mapcl mapcls), annot)
+  in
+  let rec rewrite_mapdefs = function
+    | DEF_mapdef mdef :: defs -> DEF_mapdef (rewrite_mapping mdef) :: rewrite_mapdefs defs
+    | def :: defs -> def :: rewrite_mapdefs defs
+    | [] -> []
+  in
   let alg = { id_exp_alg with pat_aux = (fun (pexp_aux, annot) -> rewrite_pexp (Pat_aux (pexp_aux, annot))) } in
-  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) }
+  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) } (Defs (rewrite_mapdefs defs))
 
 
 (* Now all expressions have no blocks anymore, any term is a sequence of let-expressions,
@@ -4774,12 +4811,12 @@ let rewrites_c = [
     ("undefined", [Bool_arg false]);
     ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);
-    ("pattern_literals", [Literal_arg "no_strings"]);
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);
     ("simple_assignments", []);
     ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
+    ("pattern_literals", [Literal_arg "no_strings"]);
     ("exp_lift_assign", []);
     ("merge_function_clauses", []);
     ("optimize_recheck_defs", []);

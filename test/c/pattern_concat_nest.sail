@@ -1,26 +1,6 @@
 default Order dec
-type bits ('n : Int) = vector('n, dec, bit)
 
-union option ('a : Type) = {None : unit, Some : 'a}
-
-val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec", c: "vector_subrange"}
-		    : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm & 'm <= 'n.
-  (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
-
-val bitvector_access = {ocaml: "access", lem: "access_vec_dec", c: "vector_access"}
-		     : forall ('n : Int) ('m : Int), 0 <= 'm & 'm + 1 <= 'n.
-  (bits('n), atom('m)) -> bit
-
-overload vector_access = {bitvector_access}
-
-val eq_bit = {ocaml: "eq_bit", lem: "eq", interpreter: "eq_anything", c: "eq_bit"}: (bit, bit) -> bool
-
-overload operator == = {
-  eq_bit
-}
-
-val and_bool = {ocaml: "and_bool", lem: "and_bool", smt: "and_bool", interpreter: "and_bool", c: "and_bool"}: (bool, bool) -> bool
-
+$include <prelude.sail>
 
 ////////////////////////////////////////////////////////////
 

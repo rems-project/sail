@@ -1396,6 +1396,14 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      ^^ jump 2 2 (separate_map hardline (codegen_instr fid ctx) instrs) ^^ hardline
      ^^ string "  }"
 
+
+  (* f has some direction, so we are calling a mapping *)
+  | I_funcall (x, _, f, args) when (match id_direction f with Some _ -> true | _ -> false) ->
+     let c_args = Util.string_of_list ", " sgen_arg_cval args in
+     let gs = gensym () in
+     ksprintf string "  bool %s =  %s(%s, %s);" (sgen_id gs) (sgen_function_id f) (sgen_clexp x) c_args ^^ hardline
+     ^^ ksprintf string "  if (!%s) { sail_match_failure(\"%s\"); }" (sgen_id gs) (String.escaped (string_of_id fid))
+     
   | I_funcall (x, extern, f, args) ->
      let c_args = Util.string_of_list ", " sgen_arg_cval args in
      let ctyp = clexp_ctyp x in
@@ -1462,7 +1470,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
          string (Printf.sprintf "  %s = %s(%s%s);" (sgen_clexp_pure x) fname (extra_arguments is_extern) c_args)
        else
          string (Printf.sprintf "  %s(%s%s, %s);" fname (extra_arguments is_extern) (sgen_clexp x) c_args)
-
+     
   | I_clear (ctyp, id) when is_stack_ctyp ctyp ->
      empty
   | I_clear (ctyp, id) ->
