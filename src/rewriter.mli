@@ -54,13 +54,14 @@ module Big_int = Nat_big_num
 open Ast
 open Type_check
 
-type 'a rewriters = { rewrite_exp  : 'a rewriters -> 'a exp -> 'a exp;
-                      rewrite_lexp : 'a rewriters -> 'a lexp -> 'a lexp;
-                      rewrite_pat  : 'a rewriters -> 'a pat -> 'a pat;
-                      rewrite_let  : 'a rewriters -> 'a letbind -> 'a letbind;
-                      rewrite_fun  : 'a rewriters -> 'a fundef -> 'a fundef;
-                      rewrite_def  : 'a rewriters -> 'a def -> 'a def;
-                      rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
+type 'a rewriters = { rewrite_exp     : 'a rewriters -> 'a exp -> 'a exp;
+                      rewrite_lexp    : 'a rewriters -> 'a lexp -> 'a lexp;
+                      rewrite_pat     : 'a rewriters -> 'a pat -> 'a pat;
+                      rewrite_let     : 'a rewriters -> 'a letbind -> 'a letbind;
+                      rewrite_fun     : 'a rewriters -> 'a fundef -> 'a fundef;
+                      rewrite_mapping : 'a rewriters -> 'a mapdef -> 'a mapdef;
+                      rewrite_def     : 'a rewriters -> 'a def -> 'a def;
+                      rewrite_defs    : 'a rewriters -> 'a defs -> 'a defs;
                     }
 
 val rewrite_exp : tannot rewriters -> tannot exp -> tannot exp
@@ -89,6 +90,8 @@ val rewrite_def : tannot rewriters -> tannot def -> tannot def
 
 val rewrite_fun : tannot rewriters -> tannot fundef -> tannot fundef
 
+val rewrite_mapping : tannot rewriters -> tannot mapdef -> tannot mapdef
+  
 (* the type of interpretations of pattern-matching expressions *)
 type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux
@@ -107,6 +110,7 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_list           : 'pat list -> 'pat_aux
   ; p_cons           : 'pat * 'pat -> 'pat_aux
   ; p_string_append  : 'pat list -> 'pat_aux
+  ; p_view           : 'pat * id * 'a exp list -> 'pat_aux
   ; p_aux            : 'pat_aux * 'a annot -> 'pat
   ; fP_aux           : 'fpat_aux * 'a annot -> 'fpat
   ; fP_Fpat          : id * 'pat -> 'fpat_aux

@@ -424,6 +424,8 @@ unit sail_putchar(const sail_int op);
 
 void get_time_ns(sail_int*, const unit);
 
+void normalize_lbits(lbits *);
+
 /* ***** ARM optimisations ***** */
 
 void arm_align(lbits *, const lbits, const sail_int);

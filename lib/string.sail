@@ -7,6 +7,8 @@ overload operator == = {eq_string}
 
 val "print_endline" : string -> unit
 
+val "print_int" : (string, int) -> unit
+
 val concat_str = {lem: "stringAppend", _: "concat_str"} : (string, string) -> string
 
 $endif

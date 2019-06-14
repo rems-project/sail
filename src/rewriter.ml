@@ -54,13 +54,14 @@ open Ast_util
 open Type_check
 
 type 'a rewriters = {
-    rewrite_exp  : 'a rewriters -> 'a exp -> 'a exp;
-    rewrite_lexp : 'a rewriters -> 'a lexp -> 'a lexp;
-    rewrite_pat  : 'a rewriters -> 'a pat -> 'a pat;
-    rewrite_let  : 'a rewriters -> 'a letbind -> 'a letbind;
-    rewrite_fun  : 'a rewriters -> 'a fundef -> 'a fundef;
-    rewrite_def  : 'a rewriters -> 'a def -> 'a def;
-    rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
+    rewrite_exp     : 'a rewriters -> 'a exp -> 'a exp;
+    rewrite_lexp    : 'a rewriters -> 'a lexp -> 'a lexp;
+    rewrite_pat     : 'a rewriters -> 'a pat -> 'a pat;
+    rewrite_let     : 'a rewriters -> 'a letbind -> 'a letbind;
+    rewrite_fun     : 'a rewriters -> 'a fundef -> 'a fundef;
+    rewrite_mapping : 'a rewriters -> 'a mapdef -> 'a mapdef;
+    rewrite_def     : 'a rewriters -> 'a def -> 'a def;
+    rewrite_defs    : 'a rewriters -> 'a defs -> 'a defs;
   }
 
 let effect_of_fpat (FP_aux (_,(_,a))) = effect_of_annot a
@@ -264,6 +265,7 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot)) as orig_pat) =
   | P_list pats -> rewrap (P_list (List.map rewrite pats))
   | P_cons (pat1, pat2) -> rewrap (P_cons (rewrite pat1, rewrite pat2))
   | P_string_append pats -> rewrap (P_string_append (List.map rewrite pats))
+  | P_view (pat, id, exps) -> rewrap (P_view (rewrite pat, id, List.map (rewriters.rewrite_exp rewriters) exps))
 
 let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   let rewrap e = E_aux (e,(l,annot)) in
@@ -356,10 +358,21 @@ let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls
   in
   FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
+let rewrite_mapping rewriters (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), (l, annot)))  = 
+  let rewrite_mapcl (MCL_aux (aux, (l, annot))) =
+    match aux with
+    | MCL_forwards pexp -> MCL_aux (MCL_forwards (rewrite_pexp rewriters pexp), (l, annot))
+    | MCL_backwards pexp -> MCL_aux (MCL_backwards (rewrite_pexp rewriters pexp), (l, annot))
+    | MCL_bidir _ ->
+       Reporting.unreachable l __POS__ "Bi-directional mapping clause should have been removed by type checker"
+  in
+  MD_aux (MD_mapping (id, List.map (rewrite_pat rewriters) args, tannot_opt, List.map rewrite_mapcl mapcls), (l, annot))
+  
 let rewrite_def rewriters d = match d with
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), annot)) ->
      DEF_reg_dec (DEC_aux (DEC_config (id, typ, rewriters.rewrite_exp rewriters exp), annot))
-  | DEF_type _ | DEF_mapdef _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_overload _ | DEF_fixity _ -> d
+  | DEF_type _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_overload _ | DEF_fixity _ -> d
+  | DEF_mapdef mdef -> DEF_mapdef (rewriters.rewrite_mapping rewriters mdef)
   | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
@@ -449,6 +462,7 @@ let rewriters_base =
    rewrite_let = rewrite_let;
    rewrite_lexp = rewrite_lexp;
    rewrite_fun = rewrite_fun;
+   rewrite_mapping = rewrite_mapping;
    rewrite_def = rewrite_def;
    rewrite_defs = rewrite_defs_base}
 
@@ -471,6 +485,7 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_list           : 'pat list -> 'pat_aux
   ; p_cons           : 'pat * 'pat -> 'pat_aux
   ; p_string_append  : 'pat list -> 'pat_aux
+  ; p_view           : 'pat * id * 'a exp list -> 'pat_aux
   ; p_aux            : 'pat_aux * 'a annot -> 'pat
   ; fP_aux           : 'fpat_aux * 'a annot -> 'fpat
   ; fP_Fpat          : id * 'pat -> 'fpat_aux
@@ -494,6 +509,7 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat
   | P_list ps           -> alg.p_list (List.map (fold_pat alg) ps)
   | P_cons (ph,pt)      -> alg.p_cons (fold_pat alg ph, fold_pat alg pt)
   | P_string_append ps  -> alg.p_string_append (List.map (fold_pat alg) ps)
+  | P_view (p,id,exps)  -> alg.p_view (fold_pat alg p, id, exps)
 
 and fold_pat (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat -> 'pat =
   function
@@ -523,6 +539,7 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   ; p_list           = (fun ps -> P_list ps)
   ; p_cons           = (fun (ph,pt) -> P_cons (ph,pt))
   ; p_string_append  = (fun (ps) -> P_string_append (ps))
+  ; p_view           = (fun (pat,id,exps) -> P_view (pat,id,exps))
   ; p_aux            = (fun (pat,annot) -> P_aux (pat,annot))
   ; fP_aux           = (fun (fpat,annot) -> FP_aux (fpat,annot))
   ; fP_Fpat          = (fun (id,pat) -> FP_Fpat (id,pat))
@@ -761,6 +778,7 @@ let compute_pat_alg bot join =
   ; p_tup            = split_join (fun ps -> P_tup ps)
   ; p_list           = split_join (fun ps -> P_list ps)
   ; p_cons           = (fun ((vh,ph),(vt,pt)) -> (join vh vt, P_cons (ph,pt)))
+  ; p_view           = (fun ((v, pat), id, exps) -> (v, P_view (pat, id, exps)))
   ; p_string_append  = split_join (fun ps -> P_string_append ps)
   ; p_aux            = (fun ((v,pat),annot) -> (v, P_aux (pat,annot)))
   ; fP_aux           = (fun ((v,fpat),annot) -> (v, FP_aux (fpat,annot)))
@@ -868,6 +886,7 @@ let pure_pat_alg bot join =
   ; p_tup            = join_list
   ; p_list           = join_list
   ; p_string_append  = join_list
+  ; p_view           = (fun (v, _, _) -> v)
   ; p_cons           = (fun (vh,vt) -> join vh vt)
   ; p_aux            = (fun (v,annot) -> v)
   ; fP_aux           = (fun (v,annot) -> v)

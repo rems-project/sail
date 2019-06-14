@@ -118,6 +118,7 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
     if consider_var
     then conditional_add_typ bound used (Ast.Id_aux (Ast.Id v,l))
     else used
+  | Typ_regex _ -> used
   | Typ_id id -> conditional_add_typ bound used id
   | Typ_fn(arg,ret,_) ->
      fv_of_typ consider_var bound (List.fold_left Nameset.union Nameset.empty (List.map (fv_of_typ consider_var bound used) arg)) ret

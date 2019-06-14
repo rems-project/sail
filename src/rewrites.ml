@@ -377,6 +377,7 @@ let remove_vector_concat_pat pat =
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
     ; p_cons           = (fun (p,ps) -> P_cons (p false, ps false))
     ; p_string_append  = (fun (ps) -> P_string_append (List.map (fun p -> p false) ps))
+    ; p_view           = (fun (p,id,exps) -> P_view (p false, id, exps))
     ; p_aux =
         (fun (pat,((l,_) as annot)) contained_in_p_as ->
           match pat with
@@ -516,6 +517,7 @@ let remove_vector_concat_pat pat =
                                     (P_list ps,List.flatten decls))
     ; p_string_append  = (fun ps -> let (ps,decls) = List.split ps in
                                     (P_string_append ps,List.flatten decls))
+    ; p_view           = (fun ((p,decls),id,exps) -> P_view (p,id,exps), decls)
     ; p_cons           = (fun ((p,decls),(p',decls')) -> (P_cons (p,p'), decls @ decls'))
     ; p_aux            = (fun ((pat,decls),annot) -> p_aux ((pat,decls),annot))
     ; fP_aux           = (fun ((fpat,decls),annot) -> (FP_aux (fpat,annot),decls))
@@ -648,6 +650,7 @@ let rewrite_defs_remove_vector_concat env (Defs defs) =
      rewrite_let = rewrite_let;
      rewrite_lexp = rewrite_lexp;
      rewrite_fun = rewrite_fun_remove_vector_concat_pat;
+     rewrite_mapping = rewrite_mapping;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} in
   let rewrite_def d =
@@ -993,6 +996,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     ; p_tup            = (fun ps -> P_tup (List.map (fun p -> p false) ps))
     ; p_list           = (fun ps -> P_list (List.map (fun p -> p false) ps))
     ; p_cons           = (fun (p,ps) -> P_cons (p false, ps false))
+    ; p_view           = (fun (p,id,exps) -> P_view (p false,id,exps))
     ; p_aux =
         (fun (pat,annot) contained_in_p_as ->
           let env = env_of_annot annot in
@@ -1146,6 +1150,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
                                     (P_vector_concat ps, flatten_guards_decls gdls))
     ; p_string_append  = (fun ps -> let (ps,gdls) = List.split ps in
                                     (P_string_append ps, flatten_guards_decls gdls))
+    ; p_view           = (fun ((p,gdls),id,exps) -> P_view (p,id,exps), gdls)
     ; p_tup            = (fun ps -> let (ps,gdls) = List.split ps in
                                     (P_tup ps, flatten_guards_decls gdls))
     ; p_list           = (fun ps -> let (ps,gdls) = List.split ps in
@@ -1218,6 +1223,7 @@ let rewrite_defs_remove_bitvector_pats env (Defs defs) =
      rewrite_let = rewrite_let;
      rewrite_lexp = rewrite_lexp;
      rewrite_fun = rewrite_fun_remove_bitvector_pat;
+     rewrite_mapping = rewrite_mapping;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base } in
   let rewrite_def d =
@@ -1428,6 +1434,7 @@ let rewrite_defs_exp_lift_assign env defs = rewrite_defs_base
      rewrite_let = rewrite_let;
      rewrite_lexp = rewrite_lexp (*_lift_assign_intro*);
      rewrite_fun = rewrite_fun;
+     rewrite_mapping = rewrite_mapping;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} defs
 
@@ -2196,6 +2203,7 @@ let rewrite_defs_remove_blocks env =
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
     ; rewrite_fun = rewrite_fun
+    ; rewrite_mapping = rewrite_mapping
     ; rewrite_def = rewrite_def
     ; rewrite_defs = rewrite_defs_base
     }
@@ -2509,6 +2517,7 @@ let rewrite_defs_letbind_effects env =
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
     ; rewrite_fun = rewrite_fun
+    ; rewrite_mapping = rewrite_mapping
     ; rewrite_def = rewrite_def
     ; rewrite_defs = rewrite_defs_base
     }
@@ -2562,6 +2571,7 @@ let rewrite_defs_internal_lets env =
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
     ; rewrite_fun = rewrite_fun
+    ; rewrite_mapping = rewrite_mapping
     ; rewrite_def = rewrite_def
     ; rewrite_defs = rewrite_defs_base
     }
@@ -3663,6 +3673,7 @@ let rewrite_defs_remove_superfluous_letbinds env =
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
     ; rewrite_fun = rewrite_fun
+    ; rewrite_mapping = rewrite_mapping
     ; rewrite_def = rewrite_def
     ; rewrite_defs = rewrite_defs_base
     }
@@ -3765,6 +3776,7 @@ let rewrite_defs_remove_superfluous_returns env =
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
     ; rewrite_fun = rewrite_fun
+    ; rewrite_mapping = rewrite_mapping
     ; rewrite_def = rewrite_def
     ; rewrite_defs = rewrite_defs_base
     }
@@ -3785,6 +3797,7 @@ let rewrite_defs_remove_e_assign env (Defs defs) =
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
     ; rewrite_fun = rewrite_fun
+    ; rewrite_mapping = rewrite_mapping
     ; rewrite_def = rewrite_def
     ; rewrite_defs = rewrite_defs_base
     } (Defs (loop_specs @ defs))
@@ -4197,6 +4210,7 @@ let rewrite env =
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
     ; rewrite_fun = rewrite_fun
+    ; rewrite_mapping = rewrite_mapping
     ; rewrite_def = rewrite_def
     ; rewrite_defs = rewrite_defs_base
     }

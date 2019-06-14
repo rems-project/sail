@@ -64,10 +64,16 @@ void sail_getmatch(sail_string *result, sail_string str, sail_match match, int g
 
 void hex_parse(lbits *result, sail_int n, sail_string input)
 {
+  uint64_t len = mpz_get_ui(n);
+  result->len = len;
+  gmp_sscanf(input, "0x%Zx", *result->bits);
+  normalize_lbits(result);
 }
 
 void hex_string(sail_string *result, lbits input)
 {
+  free(*result);
+  gmp_asprintf(result, "0x%ZX", *input.bits);
 }
 
 void decimal_parse(lbits *result, sail_int n, sail_string input)
