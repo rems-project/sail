@@ -767,6 +767,16 @@ void length_lbits(sail_int *rop, const lbits op)
   mpz_set_ui(*rop, op.len);
 }
 
+void count_leading_zeros(sail_int *rop, const lbits op)
+{
+  if (mpz_cmp_ui(*op.bits, 0) == 0) {
+    mpz_set_ui(*rop, op.len);
+  } else {
+    size_t bits = mpz_sizeinbase(*op.bits, 2);
+    mpz_set_ui(*rop, op.len - bits);
+  }
+}
+
 bool eq_bits(const lbits op1, const lbits op2)
 {
   assert(op1.len == op2.len);

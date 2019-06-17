@@ -262,6 +262,7 @@ fbits fast_sign_extend(const fbits op, const uint64_t n, const uint64_t m);
 fbits fast_sign_extend2(const sbits op, const uint64_t m);
 
 void length_lbits(sail_int *rop, const lbits op);
+void count_leading_zeros(sail_int *rop, const lbits op);
 
 bool eq_bits(const lbits op1, const lbits op2);
 bool EQUAL(lbits)(const lbits op1, const lbits op2);
