@@ -38,6 +38,13 @@ val vector_length = {
 overload length = {bitvector_length, vector_length}
 
 val count_leading_zeros = "count_leading_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
+/*
+function count_leading_zeros x = {
+  foreach (i from ('N - 1) to 0 by 1 in dec)
+    if [x[i]] == 0b1 then return 'N - i - 1;
+  return 'N;
+}
+*/
 
 val "print_bits" : forall 'n. (string, bits('n)) -> unit
 
