@@ -656,6 +656,16 @@ let int_of_bit b =
   | _ -> failwith "int_of_bit saw unknown"
   end
 
+val count_leading_zero_bits : list bitU -> integer
+let rec count_leading_zero_bits v =
+  match v with
+  | B0 :: v' -> count_leading_zero_bits v' + 1
+  | _ -> 0
+  end
+
+val count_leading_zeros_bv : forall 'a. Bitvector 'a => 'a -> integer
+let count_leading_zeros_bv v = count_leading_zero_bits (bits_of v)
+
 val decimal_string_of_bv : forall 'a. Bitvector 'a => 'a -> string
 let decimal_string_of_bv bv =
   let place_values =
