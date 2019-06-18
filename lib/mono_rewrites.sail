@@ -133,6 +133,13 @@ function place_slice_signed(m,xs,i,l,shift) = {
   sail_shiftleft(sext_slice(m, xs, i, l), shift)
 }
 
+val place_subrange_signed : forall 'n 'm, 'n >= 0 & 'm >= 0.
+  (implicit('m), bits('n), int, int, int) -> bits('m) effect pure
+
+function place_subrange_signed(m,xs,i,j,shift) = {
+  place_slice_signed(m, xs, i, i-j+1, shift)
+}
+
 /* This has different names in the aarch64 prelude (UInt) and the other
    preludes (unsigned).  To avoid variable name clashes, we redeclare it
    here with a suitably awkward name. */
@@ -181,6 +188,18 @@ val zext_ones : forall 'n, 'n >= 0. (implicit('n), int) -> bits('n) effect pure
 function zext_ones(n, m) = {
   let v : bits('n) = extsv([bitone] : bits(1)) in
   sail_shiftright(v, n - m)
+}
+
+
+val vector_update_subrange_from_subrange : forall 'n1 's1 'e1 'n2 's2 'e2,
+    0 <= 'e1 <= 's1 < 'n1 & 0 <= 'e2 <= 's2 < 'n2 & 's1 - 'e1 == 's2 - 'e2.
+    (implicit('n1), bits('n1), int('s1), int('e1), bits('n2), int('s2), int('e2)) -> bits('n1)
+
+function vector_update_subrange_from_subrange(n,v1,s1,e1,v2,s2,e2) = {
+  let xs = sail_shiftright(v2 & slice_mask(e2,s2-e2+1), e2) in
+  let xs = sail_shiftleft(extzv(n, xs), e1) in
+  let ys = v1 & not_vec(slice_mask(e1,s1-e1+1)) in
+  xs | ys
 }
 
 $endif

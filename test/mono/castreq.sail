@@ -33,6 +33,14 @@ function foo(n, x) =
     64 => let z = y@y@y@y in let dfsf = 4 in z
   }
 
+val foo_if : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (implicit('n), bits('m)) -> bits('n) effect pure
+
+function foo_if(n, x) =
+  let y : bits(16) = extzv(x) in
+  if n == 32
+  then y@y
+  else /* 64 */ let z = y@y@y@y in let dfsf = 4 in z
+
 val use : bits(16) -> unit effect pure
 
 function use(x) = ()
@@ -44,6 +52,13 @@ function bar(x) =
     8 => use(x@x),
    16 => use(x)
   }
+
+val bar_if : forall 'n, 'n in {8,16}. bits('n) -> unit effect pure
+
+function bar_if(x) =
+  if 'n == 8
+  then use(x@x)
+  else /* 16 */ use(x)
 
 val ret : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (implicit('n), bits('m)) -> bits('n) effect {undef}
 
