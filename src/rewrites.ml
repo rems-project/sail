@@ -771,23 +771,23 @@ and subsumes_fpat (FP_aux (FP_Fpat (id1,pat1),_)) (FP_aux (FP_Fpat (id2,pat2),_)
 
 (* A simple check for pattern disjointness; used for optimisation in the
    guarded pattern rewrite step *)
-let rec disjoint_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
+let rec disjoint_pat env (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
   match p1, p2 with
-  | P_as (pat1, _), _ -> disjoint_pat pat1 pat2
-  | _, P_as (pat2, _) -> disjoint_pat pat1 pat2
-  | P_typ (_, pat1), _ -> disjoint_pat pat1 pat2
-  | _, P_typ (_, pat2) -> disjoint_pat pat1 pat2
-  | P_var (pat1, _), _ -> disjoint_pat pat1 pat2
-  | _, P_var (pat2, _) -> disjoint_pat pat1 pat2
-  | P_id id, _ when id_is_unbound id (env_of_annot annot1) -> false
-  | _, P_id id when id_is_unbound id (env_of_annot annot2) -> false
+  | P_as (pat1, _), _ -> disjoint_pat env pat1 pat2
+  | _, P_as (pat2, _) -> disjoint_pat env pat1 pat2
+  | P_typ (_, pat1), _ -> disjoint_pat env pat1 pat2
+  | _, P_typ (_, pat2) -> disjoint_pat env pat1 pat2
+  | P_var (pat1, _), _ -> disjoint_pat env pat1 pat2
+  | _, P_var (pat2, _) -> disjoint_pat env pat1 pat2
+  | P_id id, _ when id_is_unbound id env -> false
+  | _, P_id id when id_is_unbound id env -> false
   | P_id id1, P_id id2 -> Id.compare id1 id2 <> 0
   | P_app (id1, args1), P_app (id2, args2) ->
-     Id.compare id1 id2 <> 0 || List.exists2 disjoint_pat args1 args2
+     Id.compare id1 id2 <> 0 || List.exists2 (disjoint_pat env) args1 args2
   | P_vector pats1, P_vector pats2
   | P_tup pats1, P_tup pats2
   | P_list pats1, P_list pats2 ->
-     List.exists2 disjoint_pat pats1 pats2
+     List.exists2 (disjoint_pat env) pats1 pats2
   | _ -> false
 
 let equiv_pats pat1 pat2 =
@@ -846,6 +846,8 @@ let case_exp e t cs =
   let env = env_of e in
   let annot = (get_loc_exp e, Some (env_of e, t, no_effect)) in
   match cs with
+  | [(P_aux (P_wild, _), body, _)] ->
+    fix_eff_exp body
   | [(P_aux (P_id id, pannot) as pat, body, _)] ->
     fix_eff_exp (annot_exp (E_let (LB_aux (LB_val (pat, e), pannot), body)) l env t)
   | _ ->
@@ -889,10 +891,12 @@ let rewrite_guarded_clauses l env pat_typ typ cs =
                 let c' = (pat',guard',body',annot) in
                 group_aux (add_clause current c') acc cs
             | None ->
-                let pat = remove_wildcards "g__" pat in
+                let pat = match cs with _::_ -> remove_wildcards "g__" pat | _ -> pat in
                 group_aux (pat,[c],annot) (acc @ [current]) cs)
       | [] -> acc @ [current]) in
     let groups = match clauses with
+      | [(pat,guard,body,annot) as c] ->
+          [(pat, [c], annot)]
       | ((pat,guard,body,annot) as c) :: cs ->
           group_aux (remove_wildcards "g__" pat, [c], annot) [] cs
       | _ ->
@@ -924,7 +928,7 @@ let rewrite_guarded_clauses l env pat_typ typ cs =
         (* For singleton clauses with a guard, use fallthrough clauses if the
            guard is not satisfied, but only those fallthrough clauses that are
            not disjoint with the current pattern *)
-        let overlapping_clause (pat, _, _) = not (disjoint_pat current_pat pat) in
+        let overlapping_clause (pat, _, _) = not (disjoint_pat env current_pat pat) in
         let fallthrough = List.filter overlapping_clause fallthrough in
         (match guard, fallthrough with
           | Some exp, _ :: _ ->
@@ -4679,11 +4683,11 @@ let rewrite_loops_with_escape_effect env defs =
   in
   rewrite_defs_base { rewriters_base with rewrite_exp } defs
 
-let recheck_defs env defs = fst (Type_error.check initial_env defs)
+let recheck_defs env defs = Type_error.check initial_env defs
 let recheck_defs_without_effects env defs =
   let old = !opt_no_effects in
   let () = opt_no_effects := true in
-  let result,_ = Type_error.check initial_env defs in
+  let result = Type_error.check initial_env defs in
   let () = opt_no_effects := old in
   result
 
@@ -4783,12 +4787,20 @@ let if_mono f env defs =
   | [], false -> defs
   | _, _ -> f env defs
 
+let if_mono_env f env defs =
+  match !opt_mono_split, !opt_auto_mono with
+  | [], false -> defs, env
+  | _, _ -> f env defs
+
 (* Also turn mwords stages on when we're just trying out mono *)
 let if_mwords f env defs =
   if !Pretty_print_lem.opt_mwords then f env defs else if_mono f env defs
+let if_mwords_env f env defs =
+  if !Pretty_print_lem.opt_mwords then f env defs else if_mono_env f env defs
 
 type rewriter =
   | Basic_rewriter of (Env.t -> tannot defs -> tannot defs)
+  | Checking_rewriter of (Env.t -> tannot defs -> tannot defs * Env.t)
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
@@ -4812,6 +4824,8 @@ let instantiate_rewrite rewriter args =
     match rewriter, arg with
     | Basic_rewriter rw, If_mono_arg -> Basic_rewriter (if_mono rw)
     | Basic_rewriter rw, If_mwords_arg -> Basic_rewriter (if_mwords rw)
+    | Checking_rewriter rw, If_mono_arg -> Checking_rewriter (if_mono_env rw)
+    | Checking_rewriter rw, If_mwords_arg -> Checking_rewriter (if_mwords_env rw)
     | Bool_rewriter rw, Bool_arg b -> rw b
     | String_rewriter rw, String_arg str -> rw str
     | Literal_rewriter rw, Literal_arg selector -> rw (selector_function selector)
@@ -4819,14 +4833,15 @@ let instantiate_rewrite rewriter args =
        raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Invalid rewrite argument")
   in
   match List.fold_left instantiate rewriter args with
-  | Basic_rewriter rw -> rw
+  | Basic_rewriter rw -> fun env defs -> rw env defs, env
+  | Checking_rewriter rw -> rw
   | _ ->
      raise (Reporting.err_general Parse_ast.Unknown "Rewrite not fully instantiated")
 
 let all_rewrites = [
     ("no_effect_check", Basic_rewriter (fun _ defs -> opt_no_effects := true; defs));
-    ("recheck_defs", Basic_rewriter recheck_defs);
-    ("recheck_defs_without_effects", Basic_rewriter recheck_defs_without_effects);
+    ("recheck_defs", Checking_rewriter recheck_defs);
+    ("recheck_defs_without_effects", Checking_rewriter recheck_defs_without_effects);
     ("optimize_recheck_defs", Basic_rewriter (fun _ -> Optimize.recheck));
     ("realise_mappings", Basic_rewriter rewrite_defs_realise_mappings);
     ("remove_mapping_valspecs", Basic_rewriter remove_mapping_valspecs);
@@ -5083,5 +5098,5 @@ let rewrite_check_annot =
                                           rewrite_pat = (fun _ -> check_pat) }
 
 let rewrite_defs_check = [
-  ("check_annotations", fun _ -> rewrite_check_annot);
+  ("check_annotations", fun env defs -> rewrite_check_annot defs, env);
   ]
