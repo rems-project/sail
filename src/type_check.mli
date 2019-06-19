@@ -316,7 +316,7 @@ val infer_lexp : Env.t -> unit lexp -> tannot lexp
 
 val check_case : Env.t -> typ -> unit pexp -> typ -> tannot pexp
 
-val check_mpexp : Env.t -> unit mpexp -> typ -> tannot mpexp * Env.t
+val check_mpexp : direction -> Env.t -> unit mpexp -> typ -> tannot mpexp * Env.t
 
 val check_fundef : Env.t -> 'a fundef -> tannot def list * Env.t
 

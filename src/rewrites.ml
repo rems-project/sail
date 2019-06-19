@@ -3859,31 +3859,6 @@ let merge_funcls env (Defs defs) =
     | d -> d
   in Defs (List.map merge_in_def defs)
 
-let rec exp_of_mpat ((MP_aux (mpat, (l, annot))) as mp_aux) =
-  let empty_vec = E_aux (E_vector [], (l,())) in
-  let concat_vectors vec1 vec2 =
-    E_aux (E_vector_append (vec1, vec2), (l,()))
-  in
-  let empty_string = E_aux (E_lit (L_aux (L_string "", Parse_ast.Unknown)), (l,())) in
-  let string_append str1 str2 =
-    E_aux (E_app (mk_id "concat_str", [str1; str2]), (l,()))
-  in
-  match mpat with
-  | MP_lit lit                      -> E_aux (E_lit lit, (l,annot))
-  | MP_id id                        -> E_aux (E_id id, (l,annot))
-  | MP_app (id, args)               -> E_aux (E_app (id, (List.map exp_of_mpat args)), (l,annot))
-  | MP_vector mpats                 -> E_aux (E_vector (List.map exp_of_mpat mpats), (l,annot))
-  | MP_vector_concat mpats          -> List.fold_right concat_vectors (List.map (fun m -> strip_exp (exp_of_mpat m)) mpats) empty_vec
-  | MP_tup mpats                    -> E_aux (E_tuple (List.map exp_of_mpat mpats), (l,annot))
-  | MP_list mpats                   -> E_aux (E_list (List.map exp_of_mpat mpats), (l,annot))
-  | MP_cons (mpat1, mpat2)          -> E_aux (E_cons (exp_of_mpat mpat1, exp_of_mpat mpat2), (l,annot))
-  | MP_string_append mpats          -> List.fold_right string_append (List.map (fun m -> strip_exp (exp_of_mpat m)) mpats) empty_string
-  | MP_typ (mpat, typ)              -> E_aux (E_cast (typ, exp_of_mpat mpat), (l,annot))
-  | MP_as (mpat, id)                -> E_aux (E_case (E_aux (E_id id, (l,annot)), [
-                                                    Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat mpat), (l,annot))
-                                                ]), (l,annot))
-  | MP_view (mpat, id, args) -> E_aux (E_app (id, args @ [exp_of_mpat mpat]), (l, annot))
-
 (* Rewrite to make all pattern matches in Coq output exhaustive.
    Assumes that guards, vector patterns, etc have been rewritten already,
    and the scattered functions have been merged.

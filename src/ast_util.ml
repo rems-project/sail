@@ -94,24 +94,6 @@ let mk_pexp pexp_aux = Pat_aux (pexp_aux, no_annot)
 let mk_mpat mpat_aux = MP_aux (mpat_aux, no_annot)
 let mk_mpexp mpexp_aux = MPat_aux (mpexp_aux, no_annot)
 
-let rec pat_of_mpat : 'a. 'a mpat -> 'a pat =
-  fun (MP_aux (aux, annot)) ->
-  let aux = match aux with
-    | MP_lit lit -> P_lit lit
-    | MP_id id -> P_id id
-    | MP_app (id, mpats) -> P_app (id, List.map pat_of_mpat mpats)
-    | MP_view (mpat, id, exps) -> P_view (pat_of_mpat mpat, id, exps)
-    | MP_vector mpats -> P_vector (List.map pat_of_mpat mpats)
-    | MP_vector_concat mpats -> P_vector_concat (List.map pat_of_mpat mpats)
-    | MP_tup mpats -> P_tup (List.map pat_of_mpat mpats)
-    | MP_list mpats -> P_list (List.map pat_of_mpat mpats)
-    | MP_cons (mpat1, mpat2) -> P_cons (pat_of_mpat mpat1, pat_of_mpat mpat2)
-    | MP_string_append mpats -> P_string_append (List.map pat_of_mpat mpats)
-    | MP_typ (mpat, typ) -> P_typ (typ, pat_of_mpat mpat)
-    | MP_as (mpat, id) -> P_as (pat_of_mpat mpat, id)
-  in
-  P_aux (aux, annot)
-
 let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
 
 let mk_typ_pat tpat_aux = TP_aux (tpat_aux, Parse_ast.Unknown)
@@ -785,6 +767,24 @@ let set_id_direction d = function
   | Id_aux (Direction (d', v), l) when d = d' -> Id_aux (Direction (d, v), l)
   | Id_aux (_, l) as id ->
      raise (Reporting.err_general l ("Cannot give identifier " ^ string_of_id id ^ " a mapping direction"))
+
+let rec pat_of_mpat : 'a. direction -> 'a mpat -> 'a pat =
+  fun d (MP_aux (aux, annot)) ->
+  let aux = match aux with
+    | MP_lit lit -> P_lit lit
+    | MP_id id -> P_id id
+    | MP_app (id, mpats) -> P_app (id, List.map (pat_of_mpat d) mpats)
+    | MP_view (mpat, id, exps) -> P_view (pat_of_mpat d mpat, set_id_direction d id, exps)
+    | MP_vector mpats -> P_vector (List.map (pat_of_mpat d) mpats)
+    | MP_vector_concat mpats -> P_vector_concat (List.map (pat_of_mpat d) mpats)
+    | MP_tup mpats -> P_tup (List.map (pat_of_mpat d) mpats)
+    | MP_list mpats -> P_list (List.map (pat_of_mpat d) mpats)
+    | MP_cons (mpat1, mpat2) -> P_cons (pat_of_mpat d mpat1, pat_of_mpat d mpat2)
+    | MP_string_append mpats -> P_string_append (List.map (pat_of_mpat d) mpats)
+    | MP_typ (mpat, typ) -> P_typ (typ, pat_of_mpat d mpat)
+    | MP_as (mpat, id) -> P_as (pat_of_mpat d mpat, id)
+  in
+  P_aux (aux, annot)
 
 let id_of_kid = function
   | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)

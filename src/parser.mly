@@ -730,9 +730,9 @@ atomic_pat:
     { mk_pat (P_list $2) $startpos $endpos }
   | atomic_pat LtMinus Regex Lparen exp Rparen
     { mk_pat (P_view ($1, mk_id (Id "regex") $startpos($3) $endpos($3), [$5])) $startpos $endpos }
-  | atomic_pat LtMinus id Lparen exp_list Rparen
+  | atomic_pat LtMinus direction_id Lparen exp_list Rparen
     { mk_pat (P_view ($1, $3, $5)) $startpos $endpos }
-  | atomic_pat LtMinus id Unit
+  | atomic_pat LtMinus direction_id Unit
     { mk_pat (P_view ($1, $3, [])) $startpos $endpos }
 
 lit:

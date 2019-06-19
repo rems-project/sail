@@ -93,11 +93,7 @@ let c_debug str =
 
 let c_error ?loc:(l=Parse_ast.Unknown) message =
   raise (Reporting.err_general l ("\nC backend: " ^ message))
-
-let zencode_id = function
-  | Id_aux (Id str, l) -> Id_aux (Id (Util.zencode_string str), l)
-  | Id_aux (Operator str, l) -> Id_aux (Id (Util.zencode_string ("op " ^ str)), l)
-
+                              
 (**************************************************************************)
 (* 2. Converting sail types to C types                                    *)
 (**************************************************************************)
@@ -1403,6 +1399,10 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      let gs = gensym () in
      ksprintf string "  bool %s =  %s(%s, %s);" (sgen_id gs) (sgen_function_id f) (sgen_clexp x) c_args ^^ hardline
      ^^ ksprintf string "  if (!%s) { sail_match_failure(\"%s\"); }" (sgen_id gs) (String.escaped (string_of_id fid))
+
+  | I_mapcall (x, f, args, label) ->
+     let c_args = Util.string_of_list ", " sgen_arg_cval args in
+     ksprintf string "  if (!%s(%s, %s)) { goto %s; }" (sgen_function_id f) (sgen_clexp x) c_args label
      
   | I_funcall (x, extern, f, args) ->
      let c_args = Util.string_of_list ", " sgen_arg_cval args in
@@ -2011,12 +2011,12 @@ let codegen_def' ctx = function
   | CDEF_mapping_spec (id, arg_ctyps, left_ctyp, right_ctyp) ->
      let static = if !opt_static then "static " else "" in
      let codegen_mapping_spec d left_ctyp right_ctyp =
-       string (Printf.sprintf "%sbool %s%s(%s%s *rop, %s, %s);"
-                 static d (sgen_function_id id) (extra_params ()) (sgen_ctyp right_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps) (sgen_ctyp left_ctyp))
+       string (Printf.sprintf "%sbool %s(%s%s *rop, %s);"
+                 static (sgen_function_id (set_id_direction d id)) (extra_params ()) (sgen_ctyp right_ctyp) (Util.string_of_list ", " sgen_ctyp (arg_ctyps @ [left_ctyp])))
      in
-     codegen_mapping_spec "forwards_" left_ctyp right_ctyp
+     codegen_mapping_spec Forwards left_ctyp right_ctyp
      ^^ twice hardline
-     ^^ codegen_mapping_spec "backwards_" right_ctyp left_ctyp
+     ^^ codegen_mapping_spec Backwards right_ctyp left_ctyp
      
   | CDEF_fundef (id, calling_convention, args, instrs) as def ->
      (* Extract type information about the function from the environment. *)

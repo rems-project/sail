@@ -2389,7 +2389,7 @@ let rec mpat_of_pat : 'a. Env.t -> 'a pat -> 'a mpat =
     | P_lit lit -> MP_lit lit
     | P_id id -> MP_id id
     | P_app (id, pats) -> MP_app (id, List.map (mpat_of_pat env) pats)
-    | P_view (pat, id, exps) -> MP_view (mpat_of_pat env pat, id, exps)
+    | P_view (pat, id, exps) -> MP_view (mpat_of_pat env pat, strip_direction id, exps)
     | P_vector pats -> MP_vector (List.map (mpat_of_pat env) pats)
     | P_vector_concat pats -> MP_vector_concat (List.map (mpat_of_pat env) pats)
     | P_tup pats -> MP_tup (List.map (mpat_of_pat env) pats)
@@ -2948,9 +2948,9 @@ and check_case env pat_typ pexp typ =
         check_case env pat_typ (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), guard, case), annot)) typ
      | _ -> raise typ_exn
 
-and check_mpexp env mpexp typ =
+and check_mpexp direction env mpexp typ =
   let mpat, guard, ((l,_) as annot) = destruct_mpexp mpexp in
-  match bind_pat env (pat_of_mpat (strip_mpat mpat)) typ with
+  match bind_pat env (pat_of_mpat direction (strip_mpat mpat)) typ with
   | checked_pat, env, guards ->
      let guard = match guard, List.map strip_exp guards with
        | None, h :: t -> Some (h, t)
@@ -3227,7 +3227,7 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
      annot_pat (P_vector_concat inferred_pats) (dvector_typ env len vtyp), env, guards
   | P_app (f, [P_aux (P_lit (L_aux (L_unit, _)), _)]) ->
-     infer_pat env (P_aux (P_view (P_aux (P_lit (L_aux (L_unit, gen_loc l)), (gen_loc l, ())), f, []), (l, ())))
+     infer_pat env (P_aux (P_view (P_aux (P_lit (L_aux (L_unit, gen_loc l)), (gen_loc l, ())), f, [mk_lit_exp L_unit]), (l, ())))
   | P_view (pat, f, exps) ->
      let app_env, is_mapping_builtin =
        if Env.allow_mapping_builtins env then
@@ -3242,15 +3242,17 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
          | _ -> env, false
        else env, false
      in
-     let inferred_app = infer_funapp l app_env f exps None in
+     let inferred_app = infer_funapp l app_env (strip_direction f) exps None in
      begin match inferred_app, typ_of inferred_app with
      | E_aux (E_app (_, exps), _), Typ_aux (Typ_bidir (typ_left, typ_right), _) ->
-        if Env.is_backwards_mapping env && not is_mapping_builtin then
-          let pat, env, guards = bind_pat env pat typ_left in
-          annot_pat (P_view (pat, f, exps)) typ_right, env, guards
-        else
-          let pat, env, guards = bind_pat env pat typ_right in
-          annot_pat (P_view (pat, f, exps)) typ_left, env, guards
+        begin match id_direction f with
+        | Some Backwards ->
+           let pat, env, guards = bind_pat env pat typ_left in
+           annot_pat (P_view (pat, f, exps)) typ_right, env, guards
+        | Some Forwards | None ->
+           let pat, env, guards = bind_pat env pat typ_right in
+           annot_pat (P_view (pat, f, exps)) typ_left, env, guards
+        end
      | _ ->
         typ_error env l "View pattern must have a bi-directional return type"
      end
@@ -4376,16 +4378,16 @@ let rec exp_of_mpat d (MP_aux (mpat, (l, annot))) =
   | MP_string_append mpats -> List.fold_right string_append (List.map (fun m -> strip_exp (exp_of_mpat d m)) mpats) empty_string
   | MP_typ (mpat, typ) -> E_aux (E_cast (typ, exp_of_mpat d mpat), (l,annot))
   | MP_as (mpat, id) -> E_aux (E_case (E_aux (E_id id, (l,annot)), [
-                                         Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat d mpat), (l,annot))
+                                         Pat_aux (Pat_exp (pat_of_mpat d mpat, exp_of_mpat d mpat), (l,annot))
                                       ]), (l,annot))
   | MP_view (mpat, id, args) -> E_aux (E_app (set_id_direction d id, args @ [exp_of_mpat d mpat]), (l, annot))
 
-let pexp_of_mpexp mpexp body =
+let pexp_of_mpexp direction mpexp body =
   match mpexp with
   | MPat_aux (MPat_pat mpat, annot) ->
-     Pat_aux (Pat_exp (pat_of_mpat mpat, body), annot)
+     Pat_aux (Pat_exp (pat_of_mpat direction mpat, body), annot)
   | MPat_aux (MPat_when (mpat, guard), annot) ->
-     Pat_aux (Pat_when (pat_of_mpat mpat, guard, body), annot) 
+     Pat_aux (Pat_when (pat_of_mpat direction mpat, guard, body), annot) 
 
 let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
   let bidir = mk_typ (Typ_bidir (typ_left, typ_right)) in
@@ -4395,12 +4397,12 @@ let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
        match aux with
        | MPat_pat mpat | MPat_when (mpat, _) -> exp_of_mpat direction mpat
      in
-     let left, left_env = check_mpexp env mpexp_left typ_left in
-     let right, right_env = check_mpexp (Env.set_backwards_mapping env) mpexp_right typ_right in
+     let left, left_env = check_mpexp Forwards env mpexp_left typ_left in
+     let right, right_env = check_mpexp Backwards env mpexp_right typ_right in
      let checked_left = crule check_exp right_env (exp_of_mpexp Backwards (strip_mpexp left)) typ_left in
      let checked_right = crule check_exp left_env (exp_of_mpexp Forwards (strip_mpexp right)) typ_right in
-     [MCL_aux (MCL_forwards (pexp_of_mpexp left checked_right), (l, mk_expected_tannot env bidir no_effect (Some bidir)));
-      MCL_aux (MCL_backwards (pexp_of_mpexp right checked_left), (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
+     [MCL_aux (MCL_forwards (pexp_of_mpexp Forwards left checked_right), (l, mk_expected_tannot env bidir no_effect (Some bidir)));
+      MCL_aux (MCL_backwards (pexp_of_mpexp Backwards right checked_left), (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
   | MCL_forwards case ->
      let case = check_case (Env.set_allow_mapping_builtins true env) typ_left case typ_right in
      [MCL_aux (MCL_forwards case, (l, mk_expected_tannot env bidir no_effect (Some bidir)))]

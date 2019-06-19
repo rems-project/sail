@@ -194,6 +194,7 @@ instr :: 'I_' ::=
   | goto string                                    :: :: goto
   | string :                                       :: :: label
   | clexp = bool id ( cval0 , ... , cvaln )        :: :: funcall
+  | clexp = id ( cval0 , ... , cvaln ) string      :: :: mapcall
   | clexp = cval                                   :: :: copy
   | clear ctyp name                                :: :: clear
   | undefined ctyp                                 :: :: undefined

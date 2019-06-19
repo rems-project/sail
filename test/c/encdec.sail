@@ -8,9 +8,9 @@ enum pred = {
   P_true
 }
 
-mapping decenc_p : bits(2) <-> pred = {
-  0b00 <-> P_true,
-  0b01 <-> P_false
+mapping decenc_p : pred <-> bits(2) = {
+  P_true <-> 0b00,
+  P_false <-> 0b01
 }
 
 scattered union ast
@@ -20,7 +20,7 @@ val encdec : ast <-> bits(16)
 union clause ast = ABS : (pred, bits(10))
 
 mapping clause encdec =
-      ABS(decenc_p(0b0 @ p), rd @ rs)
+      ABS((0b0 @ p : bits(1)) <- decenc_p(), rd : bits(5) @ rs : bits(5))
   <-> 0b10011 @ p : bits(1) @ rd : bits(5) @ rs : bits(5)
 
 function fetch(_: unit) -> bits(16) = {

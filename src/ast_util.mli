@@ -421,7 +421,9 @@ val prepend_kid : string -> kid -> kid
 
 (** {2 Misc functions} *)
 
-val pat_of_mpat : 'a mpat -> 'a pat
+(** We need to give the correct direction so the pattern appears like
+   it appears on whatever side of a mapping it came from originally *)
+val pat_of_mpat : direction -> 'a mpat -> 'a pat
 
 val nexp_frees : nexp -> KidSet.t
 val nexp_identical : nexp -> nexp -> bool

@@ -514,7 +514,7 @@ let escape_match_string str =
   (* Backslash gets double-escaped by both OCaml and the C compiler, so it's 4 here for every one we want in the regex *)
   let escape_char = function
     | '\\' -> "\\\\\\\\"
-    | ((* '(' | ')' | *) '[' | ']' | '{' | '}' | '^' | '$' | '?' | '+' | '*' | '.' | '|' as c) ->
+    | ('(' | ')' | '[' | ']' | '{' | '}' | '^' | '$' | '?' | '+' | '*' | '.' | '|' as c) ->
        "\\\\" ^ String.make 1 c
     | c -> String.make 1 c
   in
@@ -624,16 +624,40 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
           ctx
        | _ ->
           Reporting.unreachable l __POS__ "Expected string literal inside regex builtin mapping"
-     ) else
-       [icomment "VIEW"], [], ctx
-
+     ) else (
+       let outer_ctyp = ctyp_of_typ ctx typ in
+       let inner_ctyp = ctyp_of_typ ctx (apat_typ apat) in
+       let result = ngensym () in
+       let compile_arg aexp =
+         let arg_ctyp = ctyp_of_typ ctx (aexp_typ aexp) in
+         let setup, call, cleanup = compile_aexp ctx aexp in
+         let gs = ngensym () in
+         setup @ [idecl arg_ctyp gs; call (CL_id (gs, arg_ctyp))],
+         V_id (gs, arg_ctyp),
+         [iclear arg_ctyp gs] @ cleanup
+       in
+       let args = List.map compile_arg aexps in
+       let setup = List.map (fun (s, _, _) -> s) args |> List.concat in
+       let cleanup = List.map (fun (_, _, c) -> c) args |> List.rev |> List.concat in
+       let args = List.map (fun (_, a, _) -> a) args in
+       let submatch, submatch_cleanup, _ = compile_match ctx apat (V_id (result, inner_ctyp)) case_label in
+       setup
+       @ [idecl inner_ctyp result;
+          imapcall (CL_id (result, inner_ctyp)) id (args @ [cval]) case_label]
+       @ submatch,
+       submatch_cleanup
+       @ [iclear inner_ctyp result]
+       @ cleanup,
+       ctx
+     )
+     
   | AP_string_append string_apats ->
      let to_regex = function
        | APS_lit str -> escape_match_string str
        | APS_pat apat ->
           match apat_typ apat with
-          | Typ_aux (Typ_regex regex, _) -> "\\(" ^ regex ^ "\\)"
-          | typ -> "\\(.*\\)"
+          | Typ_aux (Typ_regex regex, _) -> "(" ^ regex ^ ")"
+          | typ -> "(.*)"
      in
      let subpats = List.map (function APS_lit _ -> [] | APS_pat apat -> [apat]) string_apats |> List.concat in
      let groups = List.length subpats in
@@ -1143,7 +1167,7 @@ let rec map_try_block f (I_aux (instr, aux)) =
     | I_decl _ | I_reset _ | I_init _ | I_reinit _ -> instr
     | I_if (cval, instrs1, instrs2, ctyp) ->
        I_if (cval, List.map (map_try_block f) instrs1, List.map (map_try_block f) instrs2, ctyp)
-    | I_funcall _ | I_copy _ | I_clear _ | I_throw _ | I_return _ -> instr
+    | I_funcall _ | I_mapcall _ | I_copy _ | I_clear _ | I_throw _ | I_return _ -> instr
     | I_block instrs -> I_block (List.map (map_try_block f) instrs)
     | I_try_block instrs -> I_try_block (f (List.map (map_try_block f) instrs))
     | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_jump _ | I_match_failure | I_undefined _ | I_end _ -> instr
@@ -1396,10 +1420,11 @@ let compile_mapcls swap mk_cdef ctx id pats clauses =
     @ List.concat (List.map compile_clause clauses) @ destructure_cleanup
     @ [ilabel mapdef_label;
        ireturn (V_lit (VL_bool false, CT_bool));
+       iclear right_ctyp clause_return_id;
        ilabel finish_clause_label;
        icopy (gen_loc (id_loc id)) (CL_id (return, right_ctyp)) (V_id (clause_return_id, right_ctyp));
+       iclear right_ctyp clause_return_id;
        ireturn (V_lit (VL_bool true, CT_bool))]
-
   in
   mk_cdef (List.map fst compiled_args @ [map_id]) instrs
 

@@ -177,6 +177,7 @@ let rec smt_ctyp ctx = function
      | _ -> failwith ("No registers with ctyp: " ^ string_of_ctyp ctyp)
      end
   | CT_list _ -> raise (Reporting.err_todo ctx.pragma_l "Lists not yet supported in SMT generation")
+  | CT_regex _ | CT_match _ -> raise (Reporting.err_general ctx.pragma_l "String patterns are not supported in SMT generation")
   | CT_poly ->
      Reporting.unreachable ctx.pragma_l __POS__ "Found polymorphic type in SMT property"
 
