@@ -2186,7 +2186,7 @@ let compile_ast env output_chan c_includes ast =
            "  CREATE(zexception)(current_exception);" ],
          [ "  KILL(zexception)(current_exception);";
            "  free(current_exception);";
-           "  if (have_exception) fprintf(stderr, \"Exiting due to uncaught exception\\n\");" ])
+           "  if (have_exception) {fprintf(stderr, \"Exiting due to uncaught exception\\n\"); exit(EXIT_FAILURE);}" ])
     in
 
     let letbind_initializers =
@@ -2231,9 +2231,9 @@ let compile_ast env output_chan c_includes ast =
        @ letbind_finalizers
        @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
        @ finish cdefs
+       @ [ "  cleanup_rts();" ]
        @ snd exn_boilerplate
-       @ [ "  cleanup_rts();";
-           "}" ] ))
+       @ [ "}" ] ))
     in
 
     let model_default_main = separate hardline (List.map string
