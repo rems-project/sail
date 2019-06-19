@@ -4818,6 +4818,7 @@ let rewrites_c = [
     ("remove_bitvector_pats", []);
     ("pattern_literals", [Literal_arg "no_strings"]);
     ("exp_lift_assign", []);
+    ("split", [String_arg "execute"]);
     ("merge_function_clauses", []);
     ("optimize_recheck_defs", []);
     ("constant_fold", [])

@@ -550,8 +550,9 @@ let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   | P_list pats -> List.fold_right (fun pat apat -> mk_apat (AP_cons (anf_pat ~global:global pat, apat))) pats (mk_apat (AP_nil (typ_of_pat pat)))
   | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
   | P_as (pat, id) -> mk_apat (AP_as (anf_pat ~global:global pat, id, typ_of_pat pat))
+  | P_lit (L_aux (L_string str, _)) -> mk_apat (AP_string_append [APS_lit str])
   | P_string_append pats -> mk_apat (AP_string_append (List.map (anf_string_pat ~global:global) pats))
-  | P_view (pat, id, args) -> mk_apat (AP_view (anf_pat ~global:global pat, id, List.map anf args, typ_of_pat pat))
+  | P_view (vpat, id, args) -> mk_apat (AP_view (anf_pat ~global:global vpat, id, List.map anf args, typ_of_pat pat))
   | _ ->
      raise (Reporting.err_unreachable (fst annot) __POS__
        ("Could not convert pattern to ANF: " ^ string_of_pat pat))

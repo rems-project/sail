@@ -109,6 +109,8 @@ val initial_ctx :
 
 (** {2 Compilation functions} *)
 
+val compile_aexp : ctx -> typ Anf.aexp -> instr list * (clexp -> instr) * instr list
+
 (** Compile a Sail definition into a Jib definition. The first two
    arguments are is the current definition number and the total number
    of definitions, and can be used to drive a progress bar (see

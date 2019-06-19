@@ -247,7 +247,7 @@ let rec instr_rename from_id to_id (I_aux (instr, aux)) =
 (* 1. Instruction pretty printer                                          *)
 (**************************************************************************)
 
-let string_of_value = function
+let rec string_of_value = function
   | VL_bits ([], _) -> "UINT64_C(0)"
   | VL_bits (bs, true) -> "UINT64_C(" ^ Sail2_values.show_bitlist bs ^ ")"
   | VL_bits (bs, false) -> "UINT64_C(" ^ Sail2_values.show_bitlist (List.rev bs) ^ ")"
@@ -261,6 +261,8 @@ let string_of_value = function
   | VL_bit Sail2_values.BU -> failwith "Undefined bit found in value"
   | VL_real str -> str
   | VL_string str -> "\"" ^ str ^ "\""
+  | VL_matcher (n, uid) -> Printf.sprintf "matcher(%d, %d)" n uid
+  | VL_tuple values -> "(" ^ Util.string_of_list ", " string_of_value values ^ ")"
 
 let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
   let ssa_num n = if n = -1 then "" else ("/" ^ string_of_int n) in

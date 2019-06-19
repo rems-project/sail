@@ -131,6 +131,7 @@ type env =
     poly_undefineds : bool;
     prove : (env -> n_constraint -> bool) option;
     allow_mapping_builtins : bool;
+    backwards_mapping : bool;
   }
 
 exception Type_error of env * l * type_error;;
@@ -460,6 +461,8 @@ module Env : sig
   val base_typ_of : t -> typ -> typ
   val allow_mapping_builtins : t -> bool
   val set_allow_mapping_builtins : bool -> t -> t
+  val is_backwards_mapping : t -> bool
+  val set_backwards_mapping : t -> t
 
   val no_bindings : t -> t
 
@@ -510,12 +513,16 @@ end = struct
       poly_undefineds = false;
       prove = None;
       allow_mapping_builtins = false;
+      backwards_mapping = false;
     }
 
   let set_prover f env = { env with prove = f }
 
   let allow_mapping_builtins env = env.allow_mapping_builtins
   let set_allow_mapping_builtins b env = { env with allow_mapping_builtins = b }
+
+  let is_backwards_mapping env = env.backwards_mapping
+  let set_backwards_mapping env = { env with backwards_mapping = true }
 
   let get_typ_var kid env =
     try snd (KBindings.find kid env.typ_vars) with
@@ -3238,8 +3245,12 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      let inferred_app = infer_funapp l app_env f exps None in
      begin match inferred_app, typ_of inferred_app with
      | E_aux (E_app (_, exps), _), Typ_aux (Typ_bidir (typ_left, typ_right), _) ->
-        let pat, env, guards = bind_pat env pat typ_right in
-        annot_pat (P_view (pat, f, exps)) typ_left, env, guards
+        if Env.is_backwards_mapping env && not is_mapping_builtin then
+          let pat, env, guards = bind_pat env pat typ_left in
+          annot_pat (P_view (pat, f, exps)) typ_right, env, guards
+        else
+          let pat, env, guards = bind_pat env pat typ_right in
+          annot_pat (P_view (pat, f, exps)) typ_left, env, guards
      | _ ->
         typ_error env l "View pattern must have a bi-directional return type"
      end
@@ -3551,7 +3562,7 @@ and check_mapping recur l env mapping xs =
   | Ok (direction, exp), Error _ | Error _, Ok (direction, exp) ->
      begin match exp with
      | E_aux (E_app (_, args), annot) -> E_aux (E_app (set_id_direction direction mapping, args), annot)
-     | _ -> Reporting.unreachable l __POS__ "Mapping application did not type-check as function application"
+     | exp -> Reporting.unreachable l __POS__ ("Mapping application did not type-check as function application, got:\n" ^ string_of_exp exp)
      end
   | Ok _, Ok _ ->
      typ_error env l (Printf.sprintf "Mapping %s is ambiguous. Both directions can be applied" (string_of_id mapping))
@@ -4344,7 +4355,7 @@ let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
      end
   | _ -> typ_error env l ("Function clause must have function type: " ^ string_of_typ typ ^ " is not a function type")
 
-let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
+let rec exp_of_mpat d (MP_aux (mpat, (l, annot))) =
   let empty_vec = E_aux (E_vector [], (l, ())) in
   let concat_vectors vec1 vec2 =
     E_aux (E_vector_append (vec1, vec2), (l, ()))
@@ -4356,18 +4367,18 @@ let rec exp_of_mpat (MP_aux (mpat, (l, annot))) =
   match mpat with
   | MP_lit lit -> E_aux (E_lit lit, (l,annot))
   | MP_id id -> E_aux (E_id id, (l,annot))
-  | MP_app (id, args) -> E_aux (E_app (id, (List.map exp_of_mpat args)), (l,annot))
-  | MP_vector mpats -> E_aux (E_vector (List.map exp_of_mpat mpats), (l,annot))
-  | MP_vector_concat mpats -> List.fold_right concat_vectors (List.map (fun m -> strip_exp (exp_of_mpat m)) mpats) empty_vec
-  | MP_tup mpats -> E_aux (E_tuple (List.map exp_of_mpat mpats), (l,annot))
-  | MP_list mpats -> E_aux (E_list (List.map exp_of_mpat mpats), (l,annot))
-  | MP_cons (mpat1, mpat2) -> E_aux (E_cons (exp_of_mpat mpat1, exp_of_mpat mpat2), (l,annot))
-  | MP_string_append mpats -> List.fold_right string_append (List.map (fun m -> strip_exp (exp_of_mpat m)) mpats) empty_string
-  | MP_typ (mpat, typ) -> E_aux (E_cast (typ, exp_of_mpat mpat), (l,annot))
+  | MP_app (id, args) -> E_aux (E_app (id, (List.map (exp_of_mpat d) args)), (l,annot))
+  | MP_vector mpats -> E_aux (E_vector (List.map (exp_of_mpat d) mpats), (l,annot))
+  | MP_vector_concat mpats -> List.fold_right concat_vectors (List.map (fun m -> strip_exp (exp_of_mpat d m)) mpats) empty_vec
+  | MP_tup mpats -> E_aux (E_tuple (List.map (exp_of_mpat d) mpats), (l,annot))
+  | MP_list mpats -> E_aux (E_list (List.map (exp_of_mpat d) mpats), (l,annot))
+  | MP_cons (mpat1, mpat2) -> E_aux (E_cons (exp_of_mpat d mpat1, exp_of_mpat d mpat2), (l,annot))
+  | MP_string_append mpats -> List.fold_right string_append (List.map (fun m -> strip_exp (exp_of_mpat d m)) mpats) empty_string
+  | MP_typ (mpat, typ) -> E_aux (E_cast (typ, exp_of_mpat d mpat), (l,annot))
   | MP_as (mpat, id) -> E_aux (E_case (E_aux (E_id id, (l,annot)), [
-                                         Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat mpat), (l,annot))
+                                         Pat_aux (Pat_exp (pat_of_mpat mpat, exp_of_mpat d mpat), (l,annot))
                                       ]), (l,annot))
-  | MP_view (mpat, id, args) -> E_aux (E_app (id, args @ [exp_of_mpat mpat]), (l, annot))
+  | MP_view (mpat, id, args) -> E_aux (E_app (set_id_direction d id, args @ [exp_of_mpat d mpat]), (l, annot))
 
 let pexp_of_mpexp mpexp body =
   match mpexp with
@@ -4375,26 +4386,26 @@ let pexp_of_mpexp mpexp body =
      Pat_aux (Pat_exp (pat_of_mpat mpat, body), annot)
   | MPat_aux (MPat_when (mpat, guard), annot) ->
      Pat_aux (Pat_when (pat_of_mpat mpat, guard, body), annot) 
-    
+
 let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
   let bidir = mk_typ (Typ_bidir (typ_left, typ_right)) in
   match aux with
   | MCL_bidir (mpexp_left, mpexp_right) ->
-     let exp_of_mpexp (MPat_aux (aux, _)) =
+     let exp_of_mpexp direction (MPat_aux (aux, _)) =
        match aux with
-       | MPat_pat mpat | MPat_when (mpat, _) -> exp_of_mpat mpat
+       | MPat_pat mpat | MPat_when (mpat, _) -> exp_of_mpat direction mpat
      in
      let left, left_env = check_mpexp env mpexp_left typ_left in
-     let right, right_env = check_mpexp env mpexp_right typ_right in
-     let checked_left = crule check_exp right_env (exp_of_mpexp (strip_mpexp left)) typ_left in
-     let checked_right = crule check_exp left_env (exp_of_mpexp (strip_mpexp right)) typ_right in
+     let right, right_env = check_mpexp (Env.set_backwards_mapping env) mpexp_right typ_right in
+     let checked_left = crule check_exp right_env (exp_of_mpexp Backwards (strip_mpexp left)) typ_left in
+     let checked_right = crule check_exp left_env (exp_of_mpexp Forwards (strip_mpexp right)) typ_right in
      [MCL_aux (MCL_forwards (pexp_of_mpexp left checked_right), (l, mk_expected_tannot env bidir no_effect (Some bidir)));
       MCL_aux (MCL_backwards (pexp_of_mpexp right checked_left), (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
   | MCL_forwards case ->
      let case = check_case (Env.set_allow_mapping_builtins true env) typ_left case typ_right in
      [MCL_aux (MCL_forwards case, (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
   | MCL_backwards case ->
-     let case = check_case (Env.set_allow_mapping_builtins true env) typ_right case typ_left in
+     let case = check_case (Env.set_allow_mapping_builtins true (Env.set_backwards_mapping env)) typ_right case typ_left in
      [MCL_aux (MCL_backwards case, (l, mk_expected_tannot env bidir no_effect (Some bidir)))]
 
 let funcl_effect (FCL_aux (FCL_Funcl (id, typed_pexp), (l, annot))) =

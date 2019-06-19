@@ -110,7 +110,7 @@ type ctx = {
   }
 
 (** Compile an AST into Jib suitable for SMT generation, and initialise a context. *)
-val compile : Type_check.Env.t -> Type_check.tannot defs -> cdef list * ctx
+val compile : Type_check.Env.t -> Type_check.tannot defs -> cdef list * Jib_compile.ctx * ctx
 
 (* TODO: Currently we internally use mutable stacks and queues to
    avoid any issues with stack overflows caused by some non

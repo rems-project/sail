@@ -1263,6 +1263,8 @@ let rec ctyp_of_typ ctx typ =
      | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
      end
 
+  | Typ_regex _ -> CT_string
+
   | Typ_var kid -> CT_poly
 
   | _ -> raise (Reporting.err_unreachable l __POS__ ("No SMT type for type " ^ string_of_typ typ))
@@ -2015,7 +2017,7 @@ let rec build_register_map rmap = function
   | [] -> rmap
 
 let compile env ast =
-  let cdefs =
+  let cdefs, jib_ctx =
     let open Jib_compile in
     let ctx =
       initial_ctx
@@ -2026,14 +2028,14 @@ let compile env ast =
     let t = Profile.start () in
     let cdefs, ctx = compile_ast { ctx with specialize_calls = true; ignore_64 = true; struct_value = true; use_real = true } ast in
     Profile.finish "Compiling to Jib IR" t;
-    cdefs
+    cdefs, ctx
   in
   let cdefs = Jib_optimize.unique_per_function_ids cdefs in
   let rmap = build_register_map CTMap.empty cdefs in
-  cdefs, { (initial_ctx ()) with tc_env = env; register_map = rmap; ast = ast }
+  cdefs, jib_ctx, { (initial_ctx ()) with tc_env = env; register_map = rmap; ast = ast }
 
 let serialize_smt_model file env ast =
-  let cdefs, ctx = compile env ast in
+  let cdefs, _, ctx = compile env ast in
   let out_chan = open_out file in
   Marshal.to_channel out_chan cdefs [];
   Marshal.to_channel out_chan (Type_check.Env.set_prover None ctx.tc_env) [];
@@ -2050,7 +2052,7 @@ let deserialize_smt_model file =
 
 let generate_smt props name_file env ast =
   try
-    let cdefs, ctx = compile env ast in
+    let cdefs, _, ctx = compile env ast in
     smt_cdefs props [] name_file ctx cdefs cdefs
   with
   | Type_check.Type_error (_, l, err) ->

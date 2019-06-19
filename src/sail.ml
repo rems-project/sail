@@ -473,6 +473,7 @@ let target name out_name ast type_envs =
 
   | Some "ir" ->
      let ast_c, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
+     let ast_c, type_envs = Specialize.(specialize_passes 2 int_specialization_with_externs type_envs ast_c) in
      let close, output_chan =
        match !opt_file_out with
        | Some f -> Util.opt_colors := false; (true, open_out (f ^ ".ir.sail"))
@@ -492,7 +493,7 @@ let target name out_name ast type_envs =
   | Some "smt" when !opt_smt_serialize ->
      let ast_smt, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
      let ast_smt, type_envs = Specialize.(specialize_passes 2 int_specialization_with_externs type_envs ast_smt) in
-     let jib, ctx = Jib_smt.compile type_envs ast_smt in
+     let jib, _, ctx = Jib_smt.compile type_envs ast_smt in
      let name_file =
        match !opt_file_out with
        | Some f -> f ^ ".smt_model"

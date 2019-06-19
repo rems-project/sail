@@ -57,24 +57,28 @@ open Pretty_print_sail
 
 type mode =
   | Evaluation of frame
+  | Jib_evaluation of Jib_interpreter.step
   | Normal
   | Emacs
 
 let current_mode = ref Normal
 
+let jib_interpreter_state = ref Jib_interpreter.empty_global_state
+let jib_compilation_context = ref None
+
 let prompt () =
   match !current_mode with
   | Normal -> "sail> "
   | Evaluation _ -> "eval> "
+  | Jib_evaluation _ -> "jib> "
   | Emacs -> ""
 
 let eval_clear = ref true
 
 let mode_clear () =
   match !current_mode with
-  | Normal -> ()
-  | Evaluation _ -> if !eval_clear then LNoise.clear_screen () else ()
-  | Emacs -> ()
+  | Normal | Emacs -> ()
+  | Evaluation _ | Jib_evaluation _ -> if !eval_clear then LNoise.clear_screen () else ()
 
 let rec user_input callback =
   match LNoise.linenoise (prompt ()) with
@@ -108,7 +112,7 @@ let sail_logo =
 
 let vs_ids = ref (val_spec_ids !Interactive.ast)
 
-let interactive_state = ref (initial_state !Interactive.ast !Interactive.env Value.primops)
+let interactive_state = ref (initial_state ~registers:false !Interactive.ast !Interactive.env Value.primops)
 
 let interactive_bytecode = ref []
 
@@ -125,6 +129,8 @@ let print_program () =
   | Evaluation (Done (_, v)) ->
      print_endline (Value.string_of_value v |> Util.green |> Util.clear)
   | Evaluation _ -> ()
+  | Jib_evaluation (Step stack) -> Jib_interpreter.print_stack stack
+  | Jib_evaluation (Done _) -> print_endline "finish"
 
 let rec run () =
   match !current_mode with
@@ -611,6 +617,25 @@ let handle_input' input =
              | Some f -> f ^ ".sail"
            in
            target (Some arg) out_name !Interactive.ast !Interactive.env
+        | ":jib_compile" ->
+           let ast, env = Specialize.(specialize typ_ord_specialization !Interactive.env !Interactive.ast) in
+           let ast, env = Specialize.(specialize_passes 2 int_specialization_with_externs env ast) in
+           let cdefs, ctx, _ = Jib_smt.compile env ast in
+           jib_compilation_context := Some ctx;
+           jib_interpreter_state := Jib_interpreter.initialize_global_state cdefs
+        | ":jib" ->
+           let open Jib in
+           let exp = Type_check.infer_exp !Interactive.env (Initial_check.exp_of_string arg) in
+           let aexp = Anf.anf exp in
+           begin match !jib_compilation_context with
+           | Some ctx ->
+              let startup, call, cleanup = Jib_compile.compile_aexp ctx aexp in
+              let instrs = startup @ [call (CL_id (Return (-1), ctx.convert_typ ctx (Anf.aexp_typ aexp)))] @ cleanup in
+              current_mode := Jib_evaluation (Step (Jib_interpreter.initialize_stack instrs));
+              print_program ()
+           | None ->
+              failwith "No jib compilation context. Use :jib_compile"
+           end
         | _ -> unrecognised_command cmd
         end
      | Expression str ->
@@ -723,6 +748,16 @@ let handle_input' input =
              with
              | Failure str -> print_endline str; current_mode := Normal
            end
+        end
+     end
+
+  | Jib_evaluation step ->
+     begin match input with
+     | Empty ->
+        begin match step with
+        | Step step ->
+           current_mode := Jib_evaluation (Jib_interpreter.step !jib_interpreter_state step);
+           print_program ()
         end
      end
 

@@ -514,7 +514,7 @@ let escape_match_string str =
   (* Backslash gets double-escaped by both OCaml and the C compiler, so it's 4 here for every one we want in the regex *)
   let escape_char = function
     | '\\' -> "\\\\\\\\"
-    | ('(' | ')' | '[' | ']' | '{' | '}' | '^' | '$' | '?' | '+' | '*' | '.' | '|' as c) ->
+    | ((* '(' | ')' | *) '[' | ']' | '{' | '}' | '^' | '$' | '?' | '+' | '*' | '.' | '|' as c) ->
        "\\\\" ^ String.make 1 c
     | c -> String.make 1 c
   in
@@ -632,8 +632,8 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
        | APS_lit str -> escape_match_string str
        | APS_pat apat ->
           match apat_typ apat with
-          | Typ_aux (Typ_regex regex, _) -> "(" ^ regex ^ ")"
-          | _ -> "(.*)"
+          | Typ_aux (Typ_regex regex, _) -> "\\(" ^ regex ^ "\\)"
+          | typ -> "\\(.*\\)"
      in
      let subpats = List.map (function APS_lit _ -> [] | APS_pat apat -> [apat]) string_apats |> List.concat in
      let groups = List.length subpats in
@@ -1729,9 +1729,9 @@ let compile_ast ctx (Defs defs) =
     let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
     let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
     let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
-    
+
     let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs; cons_vs])) } in
-    
+
     if !opt_memo_cache then
       (try
          if Sys.is_directory "_sbuild" then
@@ -1741,7 +1741,7 @@ let compile_ast ctx (Defs defs) =
        with
        | Sys_error _ -> Unix.mkdir "_sbuild" 0o775)
     else ();
-    
+
     let total = List.length defs in
     let _, chunks, ctx =
       List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) defs

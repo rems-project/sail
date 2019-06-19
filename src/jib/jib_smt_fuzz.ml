@@ -250,6 +250,6 @@ let fuzz_cdef ctx all_cdefs = function
 let fuzz seed env ast =
   Random.init seed;
 
-  let cdefs, ctx = compile env ast in
+  let cdefs, _, ctx = compile env ast in
 
   List.iter (fuzz_cdef ctx cdefs) cdefs

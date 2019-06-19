@@ -87,6 +87,7 @@ let rec nexp_simp_typ (Typ_aux (typ_aux, l)) =
   let typ_aux = match typ_aux with
     | Typ_id v -> Typ_id v
     | Typ_var kid -> Typ_var kid
+    | Typ_regex s -> Typ_regex s
     | Typ_tup typs -> Typ_tup (List.map nexp_simp_typ typs)
     | Typ_app (f, args) -> Typ_app (f, List.map nexp_simp_typ_arg args)
     | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, nexp_simp_typ typ)
@@ -165,6 +166,7 @@ let string_of_instantiation instantiation =
   and string_of_typ_aux = function
     | Typ_id id -> string_of_id id
     | Typ_var kid -> kid_name (mk_kopt K_type kid)
+    | Typ_regex str -> "regex(\"" ^ str ^ "\")"
     | Typ_tup typs -> "(" ^ Util.string_of_list ", " string_of_typ typs ^ ")"
     | Typ_app (id, args) -> string_of_id id ^ "(" ^ Util.string_of_list "," string_of_typ_arg args ^ ")"
     | Typ_fn (arg_typs, ret_typ, eff) ->
@@ -279,6 +281,7 @@ let rec rewrite_polymorphic_calls spec id ast =
 let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id v -> KidSet.empty
+  | Typ_regex _ -> KidSet.empty
   | Typ_var kid when KidSet.mem kid exs -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
   | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_frees ~exs:exs) typs)
@@ -298,6 +301,7 @@ let rec typ_int_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id v -> KidSet.empty
   | Typ_var kid -> KidSet.empty
+  | Typ_regex _ -> KidSet.empty
   | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_int_frees ~exs:exs) typs)
   | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_int_frees ~exs:exs) args)
   | Typ_exist (kopts, nc, typ) -> typ_int_frees ~exs:(KidSet.of_list (List.map kopt_kid kopts)) typ
@@ -324,6 +328,7 @@ let rec remove_implicit (Typ_aux (aux, l) as t) =
   | Typ_id id -> Typ_aux (Typ_id id, l)
   | Typ_exist (kopts, nc, typ) -> Typ_aux (Typ_exist (kopts, nc, remove_implicit typ), l)
   | Typ_var v -> Typ_aux (Typ_var v, l)
+  | Typ_regex s -> Typ_aux (Typ_regex s, l)
 and remove_implicit_arg (A_aux (aux, l)) =
   match aux with
   | A_typ typ -> A_aux (A_typ (remove_implicit typ), l)
@@ -484,6 +489,7 @@ let initial_calls = ref (IdSet.of_list
     mk_id "__ListConfig";
     mk_id "execute";
     mk_id "decode";
+    mk_id "assembly";
     mk_id "initialize_registers";
     mk_id "prop";
     mk_id "append_64" (* used to construct bitvector literals in C backend *)
@@ -497,7 +503,7 @@ let remove_unused_valspecs env ast =
 
   let inspect_exp = function
     | E_aux (E_app (call, _), _) as exp ->
-       calls := IdSet.add call !calls;
+       calls := IdSet.add (strip_direction call) !calls;
        exp
     | exp -> exp
   in

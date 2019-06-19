@@ -48,9 +48,7 @@ mapping assembly(n: int, labels: labels) -> string <-> ast = {
   l ^ ":" <-> Label(l)
 }
 
-type tokens = list(string)
-
-val get_labels : (tokens, int, labels) -> labels
+val get_labels : (list(string), int, labels) -> labels
 
 function get_labels(instrs, n, labels) = {
   match instrs {
@@ -63,7 +61,7 @@ function get_labels(instrs, n, labels) = {
   }
 }
 
-val assemble_with_labels : (int, tokens, labels) -> list(ast)
+val assemble_with_labels : (int, list(string), labels) -> list(ast)
 
 function assemble_with_labels(n, toks, labels) = {
   match toks {
@@ -75,7 +73,7 @@ function assemble_with_labels(n, toks, labels) = {
   }
 }
 
-function assemble(toks: tokens) -> list(ast) = {
+function assemble(toks: list(string)) -> list(ast) = {
   let labels = get_labels(toks, 0, [||]);
   assemble_with_labels(0, toks, labels)
 }
