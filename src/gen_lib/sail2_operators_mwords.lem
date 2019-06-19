@@ -329,3 +329,6 @@ val eq_vec    : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 val neq_vec   : forall 'a. Size 'a => mword 'a -> mword 'a -> bool
 let inline eq_vec    = eq_mword
 let inline neq_vec   = neq_mword
+
+val count_leading_zeros : forall 'a. Size 'a => mword 'a -> integer
+let count_leading_zeros v = count_leading_zeros_bv v

@@ -49,9 +49,9 @@ mapping utype_mnemonic : uop <-> string = {
   RISCV_AUIPC <-> "auipc"
 }
 
-val assembly : ast <-> string
-
 scattered union ast
+
+val assembly : ast <-> string
 
 union clause ast = UTYPE : (bits(20), regbits, uop)
 

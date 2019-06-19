@@ -85,7 +85,7 @@ let rec doc_typ_pat (TP_aux (tpat_aux, _)) =
   | TP_var kid -> doc_kid kid
   | TP_app (f, tpats) -> doc_id f ^^ parens (separate_map (comma ^^ space) doc_typ_pat tpats)
 
-let rec doc_nexp =
+let rec doc_nexp nexp =
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
     | Nexp_constant c -> string (Big_int.to_string c)
@@ -116,7 +116,7 @@ let rec doc_nexp =
     | Nexp_exp n -> separate space [string "2"; string "^"; atomic_nexp n]
     | _ -> atomic_nexp nexp
   in
-  nexp0
+  nexp0 nexp
 
 let doc_effect (Effect_aux (aux, _)) =
   match aux with
@@ -133,7 +133,9 @@ let rec doc_nc nc =
     | NC_equal (n1, n2) -> nc_op "==" n1 n2
     | NC_not_equal (n1, n2) -> nc_op "!=" n1 n2
     | NC_bounded_ge (n1, n2) -> nc_op ">=" n1 n2
+    | NC_bounded_gt (n1, n2) -> nc_op ">" n1 n2
     | NC_bounded_le (n1, n2) -> nc_op "<=" n1 n2
+    | NC_bounded_lt (n1, n2) -> nc_op "<" n1 n2
     | NC_set (kid, ints) ->
        separate space [doc_kid kid; string "in"; braces (separate_map (comma ^^ space) doc_int ints)]
     | NC_app (id, args) ->

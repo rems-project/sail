@@ -341,12 +341,28 @@ let rec constraint_simp (NC_aux (nc_aux, l)) =
        | _, _ -> NC_bounded_ge (nexp1, nexp2)
        end
 
+    | NC_bounded_gt (nexp1, nexp2) ->
+       let nexp1, nexp2 = nexp_simp nexp1, nexp_simp nexp2 in
+       begin match nexp1, nexp2 with
+       | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
+          if Big_int.greater c1 c2 then NC_true else NC_false
+       | _, _ -> NC_bounded_gt (nexp1, nexp2)
+       end
+
     | NC_bounded_le (nexp1, nexp2) ->
        let nexp1, nexp2 = nexp_simp nexp1, nexp_simp nexp2 in
        begin match nexp1, nexp2 with
        | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
           if Big_int.less_equal c1 c2 then NC_true else NC_false
        | _, _ -> NC_bounded_le (nexp1, nexp2)
+       end
+
+    | NC_bounded_lt (nexp1, nexp2) ->
+       let nexp1, nexp2 = nexp_simp nexp1, nexp_simp nexp2 in
+       begin match nexp1, nexp2 with
+       | Nexp_aux (Nexp_constant c1, _), Nexp_aux (Nexp_constant c2, _) ->
+          if Big_int.less c1 c2 then NC_true else NC_false
+       | _, _ -> NC_bounded_lt (nexp1, nexp2)
        end
 
     | _ -> nc_aux
@@ -424,7 +440,9 @@ let nc_int_set kid ints = mk_nc (NC_set (kid, List.map Big_int.of_int ints))
 let nc_eq n1 n2 = mk_nc (NC_equal (n1, n2))
 let nc_neq n1 n2 = mk_nc (NC_not_equal (n1, n2))
 let nc_lteq n1 n2 = NC_aux (NC_bounded_le (n1, n2), Parse_ast.Unknown)
+let nc_lt n1 n2 = NC_aux (NC_bounded_lt (n1, n2), Parse_ast.Unknown)
 let nc_gteq n1 n2 = NC_aux (NC_bounded_ge (n1, n2), Parse_ast.Unknown)
+let nc_gt n1 n2 = NC_aux (NC_bounded_gt (n1, n2), Parse_ast.Unknown)
 let nc_lt n1 n2 = nc_lteq (nsum n1 (nint 1)) n2
 let nc_gt n1 n2 = nc_gteq n1 (nsum n2 (nint 1))
 let nc_var kid = mk_nc (NC_var kid)
@@ -893,7 +911,9 @@ and string_of_n_constraint = function
   | NC_aux (NC_equal (n1, n2), _) -> string_of_nexp n1 ^ " == " ^ string_of_nexp n2
   | NC_aux (NC_not_equal (n1, n2), _) -> string_of_nexp n1 ^ " != " ^ string_of_nexp n2
   | NC_aux (NC_bounded_ge (n1, n2), _) -> string_of_nexp n1 ^ " >= " ^ string_of_nexp n2
+  | NC_aux (NC_bounded_gt (n1, n2), _) -> string_of_nexp n1 ^ " > " ^ string_of_nexp n2
   | NC_aux (NC_bounded_le (n1, n2), _) -> string_of_nexp n1 ^ " <= " ^ string_of_nexp n2
+  | NC_aux (NC_bounded_lt (n1, n2), _) -> string_of_nexp n1 ^ " < " ^ string_of_nexp n2
   | NC_aux (NC_or (nc1, nc2), _) ->
      "(" ^ string_of_n_constraint nc1 ^ " | " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_and (nc1, nc2), _) ->
@@ -1169,7 +1189,9 @@ let rec nc_compare (NC_aux (nc1,_)) (NC_aux (nc2,_)) =
   match nc1, nc2 with
   | NC_equal (n1,n2), NC_equal (n3,n4)
   | NC_bounded_ge (n1,n2), NC_bounded_ge (n3,n4)
+  | NC_bounded_gt (n1,n2), NC_bounded_gt (n3,n4)
   | NC_bounded_le (n1,n2), NC_bounded_le (n3,n4)
+  | NC_bounded_lt (n1,n2), NC_bounded_lt (n3,n4)
   | NC_not_equal (n1,n2), NC_not_equal (n3,n4)
     -> lex_ord Nexp.compare Nexp.compare n1 n3 n2 n4
   | NC_set (k1,s1), NC_set (k2,s2) ->
@@ -1186,7 +1208,9 @@ let rec nc_compare (NC_aux (nc1,_)) (NC_aux (nc2,_)) =
     -> 0
   | NC_equal _, _ -> -1      | _, NC_equal _ -> 1
   | NC_bounded_ge _, _ -> -1 | _, NC_bounded_ge _ -> 1
+  | NC_bounded_gt _, _ -> -1 | _, NC_bounded_gt _ -> 1
   | NC_bounded_le _, _ -> -1 | _, NC_bounded_le _ -> 1
+  | NC_bounded_lt _, _ -> -1 | _, NC_bounded_lt _ -> 1
   | NC_not_equal _, _ -> -1  | _, NC_not_equal _ -> 1
   | NC_set _, _ -> -1        | _, NC_set _ -> 1
   | NC_or _, _ -> -1         | _, NC_or _ -> 1
@@ -1392,7 +1416,9 @@ let rec kopts_of_constraint (NC_aux (nc, _)) =
   match nc with
   | NC_equal (nexp1, nexp2)
   | NC_bounded_ge (nexp1, nexp2)
+  | NC_bounded_gt (nexp1, nexp2)
   | NC_bounded_le (nexp1, nexp2)
+  | NC_bounded_lt (nexp1, nexp2)
   | NC_not_equal (nexp1, nexp2) ->
      KOptSet.union (kopts_of_nexp nexp1) (kopts_of_nexp nexp2)
   | NC_set (kid, _) -> KOptSet.singleton (mk_kopt K_int kid)
@@ -1448,7 +1474,9 @@ let rec tyvars_of_constraint (NC_aux (nc, _)) =
   match nc with
   | NC_equal (nexp1, nexp2)
   | NC_bounded_ge (nexp1, nexp2)
+  | NC_bounded_gt (nexp1, nexp2)
   | NC_bounded_le (nexp1, nexp2)
+  | NC_bounded_lt (nexp1, nexp2)
   | NC_not_equal (nexp1, nexp2) ->
      KidSet.union (tyvars_of_nexp nexp1) (tyvars_of_nexp nexp2)
   | NC_set (kid, _) -> KidSet.singleton kid
@@ -1733,7 +1761,9 @@ let rec locate_nc f (NC_aux (nc_aux, l)) =
   let nc_aux = match nc_aux with
     | NC_equal (nexp1, nexp2) -> NC_equal (locate_nexp f nexp1, locate_nexp f nexp2)
     | NC_bounded_ge (nexp1, nexp2) -> NC_bounded_ge (locate_nexp f nexp1, locate_nexp f nexp2)
+    | NC_bounded_gt (nexp1, nexp2) -> NC_bounded_gt (locate_nexp f nexp1, locate_nexp f nexp2)
     | NC_bounded_le (nexp1, nexp2) -> NC_bounded_le (locate_nexp f nexp1, locate_nexp f nexp2)
+    | NC_bounded_lt (nexp1, nexp2) -> NC_bounded_lt (locate_nexp f nexp1, locate_nexp f nexp2)
     | NC_not_equal (nexp1, nexp2) -> NC_not_equal (locate_nexp f nexp1, locate_nexp f nexp2)
     | NC_set (kid, nums) -> NC_set (locate_kid f kid, nums)
     | NC_or (nc1, nc2) -> NC_or (locate_nc f nc1, locate_nc f nc2)
@@ -1910,7 +1940,13 @@ let order_subst_aux sv subst = function
 
 let order_subst sv subst (Ord_aux (ord, l)) = Ord_aux (order_subst_aux sv subst ord, l)
 
-let rec nexp_subst sv subst (Nexp_aux (nexp, l)) = Nexp_aux (nexp_subst_aux sv subst nexp, l)
+let rec nexp_subst sv subst = function
+  | (Nexp_aux (Nexp_var kid, l)) as nexp ->
+     begin match subst with
+     | A_aux (A_nexp n, _) when Kid.compare kid sv = 0 -> n
+     | _ -> nexp
+     end
+  | Nexp_aux (nexp, l) -> Nexp_aux (nexp_subst_aux sv subst nexp, l)
 and nexp_subst_aux sv subst = function
   | Nexp_var kid ->
      begin match subst with
@@ -1935,7 +1971,9 @@ let rec constraint_subst sv subst (NC_aux (nc, l)) = NC_aux (constraint_subst_au
 and constraint_subst_aux l sv subst = function
   | NC_equal (n1, n2) -> NC_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_bounded_ge (n1, n2) -> NC_bounded_ge (nexp_subst sv subst n1, nexp_subst sv subst n2)
+  | NC_bounded_gt (n1, n2) -> NC_bounded_gt (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_bounded_le (n1, n2) -> NC_bounded_le (nexp_subst sv subst n1, nexp_subst sv subst n2)
+  | NC_bounded_lt (n1, n2) -> NC_bounded_lt (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_not_equal (n1, n2) -> NC_not_equal (nexp_subst sv subst n1, nexp_subst sv subst n2)
   | NC_set (kid, ints) as set_nc ->
      begin match subst with
@@ -2036,7 +2074,9 @@ let subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
     match nc with
     | NC_equal (n1,n2) -> re (NC_equal (snexp n1, snexp n2))
     | NC_bounded_ge (n1,n2) -> re (NC_bounded_ge (snexp n1, snexp n2))
+    | NC_bounded_gt (n1,n2) -> re (NC_bounded_gt (snexp n1, snexp n2))
     | NC_bounded_le (n1,n2) -> re (NC_bounded_le (snexp n1, snexp n2))
+    | NC_bounded_lt (n1,n2) -> re (NC_bounded_lt (snexp n1, snexp n2))
     | NC_not_equal (n1,n2) -> re (NC_not_equal (snexp n1, snexp n2))
     | NC_set (kid,is) ->
        begin

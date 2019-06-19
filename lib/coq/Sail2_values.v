@@ -385,6 +385,7 @@ Qed.
 Inductive bitU := B0 | B1 | BU.
 
 Scheme Equality for bitU.
+Definition eq_bit := bitU_beq.
 Instance Decidable_eq_bit : forall (x y : bitU), Decidable (x = y) :=
   Decidable_eq_from_dec bitU_eq_dec.
 
@@ -2299,6 +2300,18 @@ unfold length_list.
 simpl.
 auto with zarith.
 Qed.
+
+Definition vec_concat {T m n} (v : vec T m) (w : vec T n) : vec T (m + n).
+refine (existT _ (projT1 v ++ projT1 w) _).
+destruct v.
+destruct w.
+simpl.
+unfold length_list in *.
+rewrite <- e, <- e0.
+rewrite app_length.
+rewrite Nat2Z.inj_add.
+reflexivity.
+Defined.
 
 Lemma skipn_length {A n} {l: list A} : (n <= List.length l -> List.length (skipn n l) = List.length l - n)%nat.
 revert l.

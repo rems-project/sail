@@ -876,7 +876,7 @@ let case_exp e t cs =
   strategy to ours: group *mutually exclusive* clauses, and try to merge them
   into a pattern match first instead of an if-then-else cascade.
 *)
-let rewrite_guarded_clauses l cs =
+let rewrite_guarded_clauses l env pat_typ typ cs =
   let rec group fallthrough clauses =
     let add_clause (pat,cls,annot) c = (pat,cls @ [c],annot) in
     let rec group_aux current acc = (function
@@ -937,7 +937,18 @@ let rewrite_guarded_clauses l cs =
     | [] ->
         raise (Reporting.err_unreachable l __POS__
             "if_exp given empty list in rewrite_guarded_clauses")) in
-  group [] cs
+  let is_complete = Pattern_completeness.is_complete (Env.pattern_completeness_ctx env) (List.map construct_pexp cs) in
+  let fallthrough =
+    if not is_complete then
+      let p = P_aux (P_wild, (gen_loc l, mk_tannot env pat_typ no_effect)) in
+      let msg = "Pattern match failure at " ^ Reporting.short_loc_to_string l in
+      let a = mk_exp ~loc:(gen_loc l) (E_assert (mk_lit_exp L_false, mk_lit_exp (L_string msg))) in
+      let b = mk_exp ~loc:(gen_loc l) (E_exit (mk_lit_exp L_unit)) in
+      let (E_aux (_, (_, ann)) as e) = check_exp env (mk_exp ~loc:(gen_loc l) (E_block [a; b])) typ in
+      [(p,None,e,(gen_loc l,ann))]
+    else []
+  in
+  group [] (cs @ fallthrough)
 
 let bitwise_and_exp exp1 exp2 =
   let (E_aux (_,(l,_))) = exp1 in
@@ -1346,7 +1357,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
       (pat, None, rewrite_rec body, annot)
     | Pat_aux (Pat_when (pat, guard, body), annot) ->
       (pat, Some (rewrite_rec guard), rewrite_rec body, annot) in
-    let clauses = rewrite_guarded_clauses l (List.map clause ps) in
+    let clauses = rewrite_guarded_clauses l (env_of full_exp) (typ_of e) (typ_of full_exp) (List.map clause ps) in
     let e = rewrite_rec e in
     if (effectful e) then
       let (E_aux (_,(el,eannot))) = e in
@@ -1364,7 +1375,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
       (pat, None, rewrite_rec body, annot)
     | Pat_aux (Pat_when (pat, guard, body), annot) ->
       (pat, Some (rewrite_rec guard), rewrite_rec body, annot) in
-    let clauses = rewrite_guarded_clauses l (List.map clause ps) in
+    let clauses = rewrite_guarded_clauses l (env_of full_exp) (typ_of e) (typ_of full_exp) (List.map clause ps) in
     let pexp (pat,body,annot) = Pat_aux (Pat_exp (pat,body),annot) in
     let ps = List.map pexp clauses in
     fix_eff_exp (annot_exp (E_try (e,ps)) l (env_of full_exp) (typ_of full_exp))
@@ -1372,12 +1383,21 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
 
 let rewrite_fun_guarded_pats rewriters (FD_aux (FD_function (r,t,e,funcls),(l,fdannot))) =
    let funcls = match funcls with
-    | (FCL_aux (FCL_Funcl(id,_),_) :: _) ->
+    | (FCL_aux (FCL_Funcl(id,pexp), fclannot) :: _) ->
        let clause (FCL_aux (FCL_Funcl(_,pexp),annot)) =
          let pat,guard,exp,_ = destruct_pexp pexp in
          let exp = rewriters.rewrite_exp rewriters exp in
          (pat,guard,exp,annot) in
-       let cs = rewrite_guarded_clauses l (List.map clause funcls) in
+       let pexp_pat_typ, pexp_ret_typ =
+         let pat, _, exp, _ = destruct_pexp pexp in
+         (typ_of_pat pat, typ_of exp)
+       in
+       let pat_typ, ret_typ = match Env.get_val_spec_orig id (env_of_annot fclannot) with
+         | (tq, Typ_aux (Typ_fn ([arg_typ], ret_typ, _), _)) -> (arg_typ, ret_typ)
+         | (tq, Typ_aux (Typ_fn (arg_typs, ret_typ, _), _)) -> (tuple_typ arg_typs, ret_typ)
+         | _ -> (pexp_pat_typ, pexp_ret_typ) | exception _ -> (pexp_pat_typ, pexp_ret_typ)
+       in
+       let cs = rewrite_guarded_clauses l (env_of_annot fclannot) pat_typ ret_typ (List.map clause funcls) in
        List.map (fun (pat,exp,annot) ->
          FCL_aux (FCL_Funcl(id,construct_pexp (pat,None,exp,(Parse_ast.Unknown,empty_tannot))),annot)) cs
      | _ -> funcls (* TODO is the empty list possible here? *) in
@@ -1471,7 +1491,7 @@ let rewrite_defs_exp_lift_assign env defs = rewrite_defs_base
      write_reg_ref (vector_access (GPR, i)) exp
  *)
 let rewrite_register_ref_writes (Defs defs) =
-  let (Defs write_reg_spec) = fst (Type_error.check Env.empty (Defs (List.map gen_vs
+  let (Defs write_reg_spec) = fst (Type_error.check initial_env (Defs (List.map gen_vs
     [("write_reg_ref", "forall ('a : Type). (register('a), 'a) -> unit effect {wreg}")]))) in
   let lexp_ref_exp (LEXP_aux (_, annot) as lexp) =
     try
@@ -1661,7 +1681,7 @@ let rewrite_defs_early_return env (Defs defs) =
     FD_aux (FD_function (rec_opt, tannot_opt, effect_opt,
       List.map (rewrite_funcl_early_return rewriters) funcls), a) in
 
-  let (Defs early_ret_spec) = fst (Type_error.check Env.empty (Defs [gen_vs
+  let (Defs early_ret_spec) = fst (Type_error.check initial_env (Defs [gen_vs
     ("early_return", "forall ('a : Type) ('b : Type). 'a -> 'b effect {escape}")])) in
 
   rewrite_defs_base
@@ -1901,10 +1921,9 @@ let rewrite_fix_val_specs env (Defs defs) =
          Rec_aux (Rec_rec, Parse_ast.Unknown)
       | _ -> recopt
     in
-    let tannotopt = match tannotopt, funcls with
-    | Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), l),
-      FCL_aux (FCL_Funcl (_, Pat_aux ((Pat_exp (_, exp) | Pat_when (_, _, exp)), _)), _) :: _ ->
-       Typ_annot_opt_aux (Typ_annot_opt_some (typq, Env.expand_synonyms (env_of exp) typ), l)
+    let tannotopt = match tannotopt with
+    | Typ_annot_opt_aux (Typ_annot_opt_some (typq, typ), l) ->
+       Typ_annot_opt_aux (Typ_annot_opt_none, l)
     | _ -> tannotopt in
     (val_specs, FD_aux (FD_function (recopt, tannotopt, effopt, funcls), a)) in
 
@@ -2489,7 +2508,8 @@ let rewrite_defs_letbind_effects env =
        rewrap (E_var (lexp,exp1,n_exp exp2 k))))
     | E_internal_return exp1 ->
        n_exp_name exp1 (fun exp1 ->
-       k (if effectful (propagate_exp_effect exp1) then exp1 else rewrap (E_internal_return exp1)))
+       let exp1 = fix_eff_exp (propagate_exp_effect exp1) in
+       k (if effectful exp1 then exp1 else rewrap (E_internal_return exp1)))
     | E_internal_value v ->
        k (rewrap (E_internal_value v))
     | E_return exp' ->
@@ -3673,7 +3693,8 @@ let remove_reference_types exp =
 let rewrite_defs_remove_superfluous_letbinds env =
 
   let e_aux (exp,annot) = match exp with
-    | E_let (LB_aux (LB_val (pat, exp1), _), exp2) ->
+    | E_let (LB_aux (LB_val (pat, exp1), _), exp2)
+    | E_internal_plet (pat, exp1, exp2) ->
        begin match untyp_pat pat, uncast_exp exp1, uncast_exp exp2 with
        (* 'let x = EXP1 in x' can be replaced with 'EXP1' *)
        | (P_aux (P_id id, _), _), _, (E_aux (E_id id', _), _)
@@ -3685,21 +3706,21 @@ let rewrite_defs_remove_superfluous_letbinds env =
        (* "let x = EXP1 in return x" can be replaced with 'return (EXP1)', at
           least when EXP1 is 'small' enough *)
        | (P_aux (P_id id, _), _), _, (E_aux (E_internal_return (E_aux (E_id id', _)), _), _)
-         when Id.compare id id' = 0 && small exp1 ->
+         when Id.compare id id' = 0 && small exp1 && not (effectful exp1) ->
           let (E_aux (_,e1annot)) = exp1 in
           E_aux (E_internal_return (exp1),e1annot)
+       | _, (E_aux (E_throw e, a), _), _ -> E_aux (E_throw e, a)
+       | (pat, _), (E_aux (E_assert (c, msg), a) as assert_exp, _), _ ->
+          begin match typ_of c with
+          | Typ_aux (Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool nc, _)]), _)
+            when prove __POS__ (env_of c) (nc_not nc) ->
+             (* Drop rest of block after an 'assert(false)' *)
+             let exit_exp = E_aux (E_exit (infer_exp (env_of c) (mk_lit_exp L_unit)), a) in
+             E_aux (E_internal_plet (pat, assert_exp, exit_exp), annot)
+          | _ ->
+             E_aux (exp, annot)
+          end
        | _ -> E_aux (exp,annot)
-       end
-    | E_internal_plet (_, E_aux (E_throw e, a), _) -> E_aux (E_throw e, a)
-    | E_internal_plet (pat, (E_aux (E_assert (c, msg), a) as assert_exp), _) ->
-       begin match typ_of c with
-       | Typ_aux (Typ_app (Id_aux (Id "atom_bool", _), [A_aux (A_bool nc, _)]), _)
-         when prove __POS__ (env_of c) (nc_not nc) ->
-          (* Drop rest of block after an 'assert(false)' *)
-          let exit_exp = E_aux (E_exit (infer_exp (env_of c) (mk_lit_exp L_unit)), a) in
-          E_aux (E_internal_plet (pat, assert_exp, exit_exp), annot)
-       | _ ->
-          E_aux (exp, annot)
        end
     | _ -> E_aux (exp,annot) in
 
@@ -3783,7 +3804,7 @@ let rewrite_defs_remove_superfluous_returns env =
          when lit = lit' ->
           add_opt_cast ptyp etyp a exp1
        | (P_aux (P_wild,pannot), ptyp),
-         (E_aux (E_internal_return (E_aux (E_lit (L_aux (L_unit,_)),_)), a), etyp)
+         (E_aux ((E_internal_return (E_aux (E_lit (L_aux (L_unit,_)),_)) | E_lit (L_aux (L_unit,_))), a), etyp)
          when is_unit_typ (typ_of exp1) ->
           add_opt_cast ptyp etyp a exp1
        | (P_aux (P_id id,_), ptyp),
@@ -3820,7 +3841,7 @@ let rewrite_defs_remove_superfluous_returns env =
 
 
 let rewrite_defs_remove_e_assign env (Defs defs) =
-  let (Defs loop_specs) = fst (Type_error.check Env.empty (Defs (List.map gen_vs
+  let (Defs loop_specs) = fst (Type_error.check initial_env (Defs (List.map gen_vs
     [("foreach#", "forall ('vars : Type). (int, int, int, bool, 'vars, 'vars) -> 'vars");
      ("while#", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars");
      ("until#", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars");

@@ -304,3 +304,5 @@ val eq_vec    : list bitU -> list bitU -> bool
 val neq_vec   : list bitU -> list bitU -> bool
 let eq_vec    = eq_bv
 let neq_vec   = neq_bv
+
+let inline count_leading_zeros v = count_leading_zero_bits v

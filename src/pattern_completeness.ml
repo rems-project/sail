@@ -287,6 +287,13 @@ let shrink_loc = function
      Lexing.(Parse_ast.Range (n, { n with pos_cnum = n.pos_cnum + 5 }))
   | l -> l
 
+let is_complete ctx cases =
+  match cases_to_pats cases with
+  | [] -> false
+  | (_, pat) :: pats ->
+     let top_pat = List.fold_left (combine ctx) (generalize ctx pat) pats in
+     is_wild top_pat
+
 let check l ctx cases =
   match cases_to_pats cases with
   | [] -> Reporting.warn "No non-guarded patterns at" (shrink_loc l) ""

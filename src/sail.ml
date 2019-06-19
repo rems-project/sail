@@ -69,6 +69,7 @@ let opt_libs_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
+let opt_splice = ref ([]:string list)
 
 let set_target name = Arg.Unit (fun _ -> opt_target := Some name)
 
@@ -275,6 +276,9 @@ let options = Arg.align ([
   ( "-memo",
     Arg.Tuple [Arg.Set opt_memo_z3; Arg.Set C_backend.opt_memo_cache],
     " memoize calls to z3, and intermediate compilation results");
+  ( "-splice",
+    Arg.String (fun s -> opt_splice := s :: !opt_splice),
+    "<filename> add functions from file, replacing existing definitions where necessary");
   ( "-undefined_gen",
     Arg.Set Initial_check.opt_undefined_gen,
     " generate undefined_type functions for types in the specification");
@@ -547,6 +551,10 @@ let main () =
   else
     begin
       let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
+      let ast, type_envs =
+        List.fold_right (fun file (ast,_) -> Splice.splice ast file)
+          (!opt_splice) (ast, type_envs)
+      in
       Reporting.opt_warnings := false; (* Don't show warnings during re-writing for now *)
 
       begin match !opt_process_elf, !opt_file_out with
