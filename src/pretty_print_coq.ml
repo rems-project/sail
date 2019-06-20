@@ -2641,26 +2641,33 @@ let mk_kid_renames ids_to_avoid kids =
   in snd (KidSet.fold check_kid kids (kids, KBindings.empty))
 
 let merge_kids_atoms pats =
-  let try_eliminate (gone,map,seen) = function
+  let try_eliminate (gone,map,seen) =
+    let tryon id env typ =
+      let merge kid l =
+        if KidSet.mem kid seen then
+          let () =
+            Reporting.print_err l "merge_kids_atoms"
+              ("want to merge tyvar and argument for " ^ string_of_kid kid ^
+                 " but rearranging arguments isn't supported yet") in
+          gone,map,seen
+        else
+          KidSet.add kid gone, KBindings.add kid id map, KidSet.add kid seen
+      in
+      match Type_check.destruct_atom_nexp env typ with
+      | Some (Nexp_aux (Nexp_var kid,l)) -> merge kid l
+      | _ ->
+         match Type_check.destruct_atom_bool env typ with
+         | Some (NC_aux (NC_var kid,l)) -> merge kid l
+         | _ -> gone,map,KidSet.union seen (tyvars_of_typ typ)
+    in
+    function
     | P_aux (P_id id, ann), typ
-    | P_aux (P_typ (_,P_aux (P_id id, ann)),_), typ -> begin
-        let merge kid l =
-          if KidSet.mem kid seen then
-            let () =
-              Reporting.print_err l "merge_kids_atoms"
-                ("want to merge tyvar and argument for " ^ string_of_kid kid ^
-                   " but rearranging arguments isn't supported yet") in
-            gone,map,seen
-          else
-            KidSet.add kid gone, KBindings.add kid (Some id) map, KidSet.add kid seen
-        in
-        match Type_check.destruct_atom_nexp (env_of_annot ann) typ with
-        | Some (Nexp_aux (Nexp_var kid,l)) -> merge kid l
-        | _ ->
-           match Type_check.destruct_atom_bool (env_of_annot ann) typ with
-           | Some (NC_aux (NC_var kid,l)) -> merge kid l
-           | _ -> gone,map,KidSet.union seen (tyvars_of_typ typ)
-      end
+    | P_aux (P_typ (_,P_aux (P_id id, ann)),_), typ ->
+       tryon (Some id) (env_of_annot ann) typ
+    | P_aux (P_wild, ann), typ ->
+       (* This won't allow any explicit use of the type variable, but we
+          could change the pattern to introduce a variable if necessary *)
+       tryon None (env_of_annot ann) typ
     | _, typ -> gone,map,KidSet.union seen (tyvars_of_typ typ)
   in
   let gone,map,_ = List.fold_left try_eliminate (KidSet.empty, KBindings.empty, KidSet.empty) pats in
@@ -2774,6 +2781,11 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
               parens (separate space [doc_id id; colon; doc_typ ctxt Env.empty typ])
          end
     | None ->
+       let typ =
+         match classify_ex_type ctxt env ~binding:id exp_typ with
+         | ExNone, _, typ' -> typ'
+       | ExGeneral, _, _ -> typ
+       in
        (used_a_pattern := true;
         squote ^^ parens (separate space [doc_pat ctxt true true (pat, exp_typ); colon; doc_typ ctxt Env.empty typ]))
   in
