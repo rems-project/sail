@@ -81,6 +81,7 @@ type ctx =
   { records : (ctyp Bindings.t) Bindings.t;
     enums : IdSet.t Bindings.t;
     variants : (ctyp Bindings.t) Bindings.t;
+    mappings : (ctyp list * ctyp * ctyp) Bindings.t;
     tc_env : Env.t;
     local_env : Env.t;
     locals : (mut * ctyp) Bindings.t;

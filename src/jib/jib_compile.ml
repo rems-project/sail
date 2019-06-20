@@ -151,6 +151,7 @@ type ctx =
   { records : (ctyp Bindings.t) Bindings.t;
     enums : IdSet.t Bindings.t;
     variants : (ctyp Bindings.t) Bindings.t;
+    mappings : (ctyp list * ctyp * ctyp) Bindings.t;
     tc_env : Env.t;
     local_env : Env.t;
     locals : (mut * ctyp) Bindings.t;
@@ -168,6 +169,7 @@ let initial_ctx ~convert_typ:convert_typ ~optimize_anf:optimize_anf env =
   { records = Bindings.empty;
     enums = Bindings.empty;
     variants = Bindings.empty;
+    mappings = Bindings.empty;
     tc_env = env;
     local_env = env;
     locals = Bindings.empty;
@@ -625,18 +627,23 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
        | _ ->
           Reporting.unreachable l __POS__ "Expected string literal inside regex builtin mapping"
      ) else (
-       let outer_ctyp = ctyp_of_typ ctx typ in
-       let inner_ctyp = ctyp_of_typ ctx (apat_typ apat) in
+       let arg_ctyps, outer_ctyp, inner_ctyp =
+         match Bindings.find_opt (strip_direction id) ctx.mappings, id_direction id with
+         | Some (arg_ctyps, left_ctyp, right_ctyp), (Some Forwards | None) -> arg_ctyps, left_ctyp, right_ctyp
+         | Some (arg_ctyps, left_ctyp, right_ctyp), Some Backwards -> arg_ctyps, right_ctyp, left_ctyp
+         | None, _  -> Reporting.unreachable l __POS__ "Mapping pattern did not have mapping type when compiling pattern"
+       in
        let result = ngensym () in
-       let compile_arg aexp =
-         let arg_ctyp = ctyp_of_typ ctx (aexp_typ aexp) in
+       let compile_arg aexp arg_ctyp =
          let setup, call, cleanup = compile_aexp ctx aexp in
          let gs = ngensym () in
          setup @ [idecl arg_ctyp gs; call (CL_id (gs, arg_ctyp))],
          V_id (gs, arg_ctyp),
          [iclear arg_ctyp gs] @ cleanup
        in
-       let args = List.map compile_arg aexps in
+       if not (List.length aexps = List.length arg_ctyps) then
+         Reporting.unreachable l __POS__ "Mapping pattern had incorrect number of arguments";
+       let args = List.map2 compile_arg aexps arg_ctyps in
        let setup = List.map (fun (s, _, _) -> s) args |> List.concat in
        let cleanup = List.map (fun (_, _, c) -> c) args |> List.rev |> List.concat in
        let args = List.map (fun (_, a, _) -> a) args in
@@ -1486,7 +1493,8 @@ and compile_def' n total ctx = function
      begin match ret_typ with
      | Typ_aux (Typ_bidir (left_typ, right_typ), _) ->
         let left_ctyp, right_ctyp = ctyp_of_typ ctx' left_typ, ctyp_of_typ ctx' right_typ in
-        [CDEF_mapping_spec (id, arg_ctyps, left_ctyp, right_ctyp)], ctx
+        [CDEF_mapping_spec (id, arg_ctyps, left_ctyp, right_ctyp)],
+        { ctx with mappings = Bindings.add id (arg_ctyps, left_ctyp, right_ctyp) ctx.mappings }
      | _ ->
         let ret_ctyp = ctyp_of_typ ctx' ret_typ in
         [CDEF_spec (id, arg_ctyps, ret_ctyp)], ctx
