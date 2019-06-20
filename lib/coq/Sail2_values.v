@@ -1636,6 +1636,8 @@ Lemma Z_compare_eq_gt : Eq = Gt -> False. congruence. Qed.
 Lemma Z_compare_gt_lt : Gt = Lt -> False. congruence. Qed.
 Lemma Z_compare_gt_eq : Gt = Eq -> False. congruence. Qed.
 Ltac z_comparisons :=
+  (* Don't try terms with variables - reduction may be expensive *)
+  match goal with |- context[?x] => is_var x; fail 1 | |- _ => idtac end;
   solve [
     exact eq_refl
   | exact Z_compare_lt_eq
@@ -1772,7 +1774,7 @@ Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
 intros; (* To solve implications for derive_m *)
-try (exact trivial_range);
+match goal with |- ArithFact (?x <= ?x <= ?x) => try (exact trivial_range) | _ => idtac end;
 try fill_in_evar_eq;
 try match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end;
 (* Trying reflexivity will fill in more complex metavariable examples than
