@@ -2703,7 +2703,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        | Some elem_typ ->
           let checked_xs = crule check_exp env xs typ in
           let checked_x = crule check_exp env x elem_typ in
-          annot_exp (E_cons (checked_x, checked_xs)) typ
+          annot_exp (E_app (mk_id "__cons", [checked_x; checked_xs])) typ
        | None -> typ_error env l ("Cons " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
      end
   | E_list xs, _ ->

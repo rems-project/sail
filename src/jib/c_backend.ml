@@ -1458,6 +1458,11 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | "undefined_vector", CT_lbits _ -> "UNDEFINED(lbits)"
        | "undefined_bit", _ -> "UNDEFINED(fbits)"
        | "undefined_vector", _ -> Printf.sprintf "UNDEFINED(vector_%s)" (sgen_ctyp_name ctyp)
+       | "sail_cons", _ ->
+          begin match args with
+          | cval :: _ -> sgen_function_id (mk_id ("cons#" ^ string_of_ctyp (cval_ctyp cval)))
+          | _ -> assert false
+          end
        | fname, _ -> fname
      in
      if fname = "reg_deref" then

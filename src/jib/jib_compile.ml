@@ -1753,9 +1753,8 @@ let compile_ast ctx (Defs defs) =
   try
     let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
     let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
-    let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
 
-    let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs; cons_vs])) } in
+    let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
 
     if !opt_memo_cache then
       (try

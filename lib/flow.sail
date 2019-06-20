@@ -66,4 +66,6 @@ val __deref = "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 /* Used to implement bitfield desugaring */
 val __bitfield_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a effect pure
 
+val __cons = "sail_cons" : forall ('a : Type). ('a, list('a)) -> list('a)
+
 $endif
