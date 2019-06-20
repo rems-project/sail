@@ -789,8 +789,11 @@ let builtin_unsigned ctx v ret_ctyp =
 
 let builtin_signed ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
-  | CT_fbits (n, _), CT_fint m when m > n ->
+  | CT_fbits (n, _), CT_fint m when m >= n ->
      SignExtend(m - n, smt_cval ctx v)
+
+  | CT_fbits (n, _), CT_lint ->
+     SignExtend(ctx.lint_size - n, smt_cval ctx v)
 
   | ctyp, _ -> builtin_type_error ctx "signed" [v] (Some ret_ctyp)
 
