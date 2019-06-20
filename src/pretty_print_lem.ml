@@ -552,6 +552,28 @@ let contains_early_return exp =
   { (Rewriter.compute_exp_alg false (||))
     with e_return = (fun (_, r) -> (true, E_return r)); e_app = e_app } exp)
 
+(* Does the expression have the form of a bitvector cast from the monomorphiser? *)
+type is_bitvector_cast = BVC_yes | BVC_allowed | BVC_not
+let is_bitvector_cast_out exp =
+  let merge x y = match x,y with
+    | BVC_allowed, _ -> y
+    | _, BVC_allowed -> x
+    | BVC_not, _ -> BVC_not
+    | _, BVC_not -> BVC_not
+    | _ -> BVC_yes
+  in
+  let rec aux (E_aux (e,_)) =
+    match e with
+    | E_tuple es -> List.fold_left merge BVC_allowed (List.map aux es)
+    | E_cast (_,e) -> aux e
+    | E_app (Id_aux (Id "bitvector_cast_out",_),_) -> BVC_yes
+    | E_id _ -> BVC_allowed
+    | _ -> BVC_not
+  in aux exp = BVC_yes
+
+let replace_env_for_cast_out new_env pat =
+  map_pat_annot (fun (l,a) -> (l,replace_env new_env a)) pat
+
 let find_e_ids exp =
   let e_id id = IdSet.singleton id, E_id id in
   fst (fold_exp
@@ -978,6 +1000,7 @@ let doc_exp_lem, doc_let_lem =
     else_pp
   and let_exp ctxt (LB_aux(lb,_)) = match lb with
     | LB_val(pat,e) ->
+       let pat = if is_bitvector_cast_out e then replace_env_for_cast_out ctxt.top_env pat else pat in
        prefix 2 1
               (separate space [string "let"; doc_pat_lem ctxt true pat; equals])
               (top_exp ctxt false e)

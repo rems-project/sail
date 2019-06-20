@@ -21,6 +21,13 @@ val bitvector_cast_out = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect p
 val bitvector_length = "length" : forall 'n. bits('n) -> atom('n)
 overload length = {bitvector_length}
 overload __size = {length}
+val add_bits = {ocaml: "add_vec", lem: "add_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+overload operator + = {add_bits}
+val vector_update_subrange = {
+  ocaml: "update_subrange",
+  lem: "update_subrange_vec_dec"
+} : forall 'n 'm 'o, 0 <= 'o <= 'm < 'n. (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
+
 
 /* Test generation of casts across case splits (e.g., going from bits('m) to bits(32)) */
 
@@ -69,11 +76,9 @@ function ret(n, x) =
     64 => let z = y@y@y@y in { dfsf = 4; return z; undefined }
   }
 
-/* TODO: Assignments need more plumbing
+val assign : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (implicit('n), bits('m)) -> bits('n) effect {undef}
 
-val assign : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. bits('m) -> bits('n) effect {undef}
-
-function assign(x) = {
+function assign(n, x) = {
   let y : bits(16) = extzv(x);
   r : bits('n) = undefined;
   match 'n {
@@ -82,7 +87,29 @@ function assign(x) = {
   };
   r
 }
-*/
+
+val assign2 : forall 'm, 'm in {8,16}. bits('m) -> bits(32)
+
+function assign2(x) = {
+  y : bits('m) = x;
+  r : bits(32) = 0x00000000;
+  match 'm {
+     8 => { y = y + 0x01; r = extzv(y) },
+    16 => r = extzv(y)
+  };
+  r
+}
+
+val assign3 : forall 'm, 'm in {8,16}. bits('m) -> bits('m)
+
+function assign3(x) = {
+  y : bits('m) = x;
+  match 'm {
+    8 => y = y + 0x01,
+   16 => y[7..0] = 0x89
+  };
+  y
+}
 
 /* Adding casts for top-level pattern matches */
 
@@ -123,10 +150,14 @@ function run () = {
     assert((ret(0x34) : bits(64)) == 0x0034003400340034);
     assert((ret(0x3456) : bits(32)) == 0x34563456);
     assert((ret(0x3456) : bits(64)) == 0x3456345634563456);
-/*    assert((assign(0x12) : bits(32)) == 0x00120012);
+    assert((assign(0x12) : bits(32)) == 0x00120012);
     assert((assign(0x1234) : bits(32)) == 0x12341234);
     assert((assign(0x12) : bits(64)) == 0x0012001200120012);
-    assert((assign(0x1234) : bits(64)) == 0x1234123412341234);*/
+    assert((assign(0x1234) : bits(64)) == 0x1234123412341234);
+    assert(assign2(0x12) == 0x00000013);
+    assert(assign2(0x1234) == 0x00001234);
+    assert(assign3(0x12) == 0x13);
+    assert(assign3(0x1234) == 0x1289);
     assert(foo2(32,0x12) == 0x00120012);
     assert(foo2(64,0x12) == 0x0012001200120012);
     assert(foo3(4,0x12) == 0x00120012);

@@ -3227,6 +3227,7 @@ let make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ 
     check_for_spec env cast_name;
     let src_ann = mk_tannot env src_typ no_effect in
     let tar_ann = mk_tannot env target_typ no_effect in
+    let asg_ann = mk_tannot env unit_typ no_effect in
     match src_typ' with
       (* Simple case with just the bitvector; don't need to pull apart value *)
     | Typ_aux (Typ_app _,_) ->
@@ -3236,9 +3237,15 @@ let make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ 
                                        E_aux (E_app (Id_aux (Id cast_name,genunk),
                                                      [E_aux (E_id var,(genunk,src_ann))]),(genunk,tar_ann))),(genunk,tar_ann)),
                        exp),(genunk,exp_ann))),
+       (fun var ->
+         [E_aux (E_assign (LEXP_aux (LEXP_cast (one_target_typ, var),(genunk,tar_ann)),
+                          E_aux (E_app (Id_aux (Id cast_name,genunk),
+                                        [E_aux (E_id var,(genunk,src_ann))]),(genunk,tar_ann)
+                  )),(genunk,asg_ann))]),
       (fun (E_aux (_,(exp_l,exp_ann)) as exp) ->
         E_aux (E_cast (one_target_typ,
                        E_aux (E_app (Id_aux (Id cast_name, genunk), [exp]), (Generated exp_l,tar_ann))),
+
                (Generated exp_l,tar_ann)))
     | _ ->
        (fun var exp ->
@@ -3246,17 +3253,58 @@ let make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ 
          E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id var,(genunk,src_ann))),(genunk,src_ann)),
                        E_aux (E_let (LB_aux (LB_val (P_aux (P_id var,(genunk,tar_ann)),e'),(genunk,tar_ann)),
                                      exp),(genunk,exp_ann))),(genunk,exp_ann))),
+       (fun var ->
+         [E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id var,(genunk,src_ann))),(genunk,src_ann)),
+                       E_aux (E_assign (LEXP_aux (LEXP_cast (one_target_typ, var),(genunk,tar_ann)),
+                                        e'),(genunk,asg_ann))),(genunk,asg_ann))]),
       (fun (E_aux (_,(exp_l,exp_ann)) as exp) ->
         E_aux (E_let (LB_aux (LB_val (pat, exp),(Generated exp_l,exp_ann)), e'),(Generated exp_l,tar_ann)))
   end
-  | None -> (fun _ e -> e),(fun e -> e)
+  | None -> (fun _ e -> e),(fun _ -> []),(fun e -> e)
+let make_bitvector_cast_let cast_name top_env env quant_kids src_typ target_typ =
+  let f,_,_ = make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ
+  in f
+let make_bitvector_cast_assign cast_name top_env env quant_kids src_typ target_typ =
+  let _,f,_ = make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ
+  in f
+let make_bitvector_cast_cast cast_name top_env env quant_kids src_typ target_typ =
+  let _,_,f = make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ
+  in f
 
-(* TODO: bound vars *)
+let ids_in_exp exp =
+  let open Rewriter in
+  fold_exp {
+      (pure_exp_alg IdSet.empty IdSet.union) with
+      e_id = IdSet.singleton;
+      lEXP_id = IdSet.singleton;
+      lEXP_memory = (fun (id,s) -> List.fold_left IdSet.union (IdSet.singleton id) s);
+      lEXP_cast = (fun (_,id) -> IdSet.singleton id)
+    } exp
+
 let make_bitvector_env_casts env quant_kids (kid,i) exp =
-  let mk_cast var typ exp = (fst (make_bitvector_cast_fns "bitvector_cast_in" env env quant_kids typ (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ))) var exp in
+  let mk_cast var typ exp = (make_bitvector_cast_let "bitvector_cast_in" env env quant_kids typ (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ)) var exp in
+  let mk_assign_in var typ =
+    make_bitvector_cast_assign "bitvector_cast_in" env env quant_kids typ
+      (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ) var
+  in
+  let mk_assign_out var typ =
+    make_bitvector_cast_assign "bitvector_cast_out" env env quant_kids
+      (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ) typ var
+  in
   let locals = Env.get_locals env in
+  let used_ids = ids_in_exp exp in
+  let locals = Bindings.filter (fun id _ -> IdSet.mem id used_ids) locals in
+  let immutables,mutables = Bindings.partition (fun _ (mut,_) -> mut = Immutable) locals in
+  let assigns_in = Bindings.fold (fun var (_,typ) acc -> mk_assign_in var typ @ acc) mutables [] in
+  let assigns_out = Bindings.fold (fun var (_,typ) acc -> mk_assign_out var typ @ acc) mutables [] in
+  let exp = match assigns_in, exp with
+    | [], _ -> exp
+    | _::_, E_aux (E_block es,ann) -> E_aux (E_block (assigns_in @ es @ assigns_out),ann)
+    | _::_, E_aux (_,(l,ann)) ->
+       E_aux (E_block (assigns_in @ [exp] @ assigns_out), (Generated l,ann))
+  in
   Bindings.fold (fun var (mut,typ) exp ->
-    if mut = Immutable then mk_cast var typ exp else exp) locals exp
+    if mut = Immutable then mk_cast var typ exp else exp) immutables exp
 
 let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
   if alpha_equivalent cast_env typ target_typ then exp else
@@ -3300,7 +3348,7 @@ let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
        let tgt_arg_typ = infer_arg_typ (env_of exp) f l target_typ in
        E_aux (E_app (f,[aux arg (src_arg_typ, tgt_arg_typ)]),(l,ann))
     | _ ->
-       (snd (make_bitvector_cast_fns cast_name cast_env (env_of exp) quant_kids typ target_typ)) exp
+       (make_bitvector_cast_cast cast_name cast_env (env_of exp) quant_kids typ target_typ) exp
   in
   aux exp (typ, target_typ)
 
@@ -3419,26 +3467,6 @@ let add_bitvector_casts (Defs defs) =
          E_aux (E_if (e1,e2',e3'), ann)
       | E_return e' ->
          E_aux (E_return (make_bitvector_cast_exp "bitvector_cast_out" top_env quant_kids (fill_in_type (env_of e') (typ_of e')) ret_typ e'),ann)
-      | E_assign (LEXP_aux (_,lexp_annot) as lexp,e') -> begin
-         (* The type in the lexp_annot might come from e' rather than being the
-            type of the storage, so ask the type checker what it really is. *)
-         match infer_lexp (env_of_annot lexp_annot) (strip_lexp lexp) with
-         | LEXP_aux (_,lexp_annot') ->
-            E_aux (E_assign (lexp,
-                             make_bitvector_cast_exp "bitvector_cast_out" top_env quant_kids (fill_in_type (env_of e') (typ_of e'))
-                               (typ_of_annot lexp_annot') e'),ann)
-         | exception _ -> E_aux (e,ann)
-        end
-      | E_id id -> begin
-        let env = env_of_annot ann in
-        match Env.lookup_id id env with
-        | Local (Mutable, vtyp) ->
-           make_bitvector_cast_exp "bitvector_cast_in" top_env quant_kids
-             (fill_in_type (env_of_annot ann) (typ_of_annot ann))
-             vtyp
-             (E_aux (e,ann))
-        | _ -> E_aux (e,ann)
-        end
       | E_block es ->
          let env = env_of_annot ann in
          let result_typ = Env.base_typ_of env (typ_of_annot ann) in
