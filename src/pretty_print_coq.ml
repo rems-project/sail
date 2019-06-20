@@ -2555,7 +2555,8 @@ let pat_is_plain_binder env (P_aux (p,_)) =
   match p with
   | P_id id
   | P_typ (_,P_aux (P_id id,_))
-  when not (is_enum env id) -> Some id
+  when not (is_enum env id) -> Some (Some id)
+  | P_wild -> Some None
   | _ -> None
 
 let demote_all_patterns env i (P_aux (p,p_annot) as pat,typ) =
@@ -2563,10 +2564,14 @@ let demote_all_patterns env i (P_aux (p,p_annot) as pat,typ) =
   | Some id ->
      if Util.is_none (is_auto_decomposed_exist empty_ctxt env typ)
      then (pat,typ), fun e -> e
-     else
-       (P_aux (P_id id, p_annot),typ),
-       fun (E_aux (_,e_ann) as e) ->
-       E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id id, p_annot)),p_annot),e),e_ann)
+     else begin
+       match id with
+       | Some id ->
+          (P_aux (P_id id, p_annot),typ),
+          fun (E_aux (_,e_ann) as e) ->
+          E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id id, p_annot)),p_annot),e),e_ann)
+       | None -> (P_aux (P_wild, p_annot),typ), fun e -> e
+       end
   | None ->
     let id = mk_id ("arg" ^ string_of_int i) in (* TODO: name conflicts *)
     (P_aux (P_id id, p_annot),typ),
@@ -2759,9 +2764,10 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     (* TODO: probably should provide partial environments to doc_typ *)
     match pat_is_plain_binder env pat with
     | Some id -> begin
-       match classify_ex_type ctxt env ~binding:id exp_typ with
+       let id_pp = match id with Some id -> doc_id id | None -> underscore in
+       match classify_ex_type ctxt env ?binding:id exp_typ with
        | ExNone, _, typ' ->
-         parens (separate space [doc_id id; colon; doc_typ ctxt Env.empty typ'])
+         parens (separate space [id_pp; colon; doc_typ ctxt Env.empty typ'])
        | ExGeneral, _, _ ->
            let full_typ = (expand_range_type exp_typ) in
            match destruct_exist_plain (Env.expand_synonyms env full_typ) with
@@ -2770,15 +2776,15 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
                                      [A_aux (A_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_))
                when Kid.compare (kopt_kid kopt) kid == 0 ->
               let coqty = if tyname = "atom" then "Z" else "bool" in
-              parens (separate space [doc_id id; colon; string coqty])
+              parens (separate space [id_pp; colon; string coqty])
            | Some ([kopt], nc,
                    Typ_aux (Typ_app (Id_aux (Id ("atom" | "atom_bool"),_),
                                      [A_aux (A_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_))
                when Kid.compare (kopt_kid kopt) kid == 0 && not is_measured ->
               (used_a_pattern := true;
-               squote ^^ parens (separate space [string "existT"; underscore; doc_id id; underscore; colon; doc_typ ctxt Env.empty typ]))
+               squote ^^ parens (separate space [string "existT"; underscore; id_pp; underscore; colon; doc_typ ctxt Env.empty typ]))
            | _ ->
-              parens (separate space [doc_id id; colon; doc_typ ctxt Env.empty typ])
+              parens (separate space [id_pp; colon; doc_typ ctxt Env.empty typ])
          end
     | None ->
        let typ =
@@ -2804,7 +2810,7 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
        let fixupspp =
          Util.map_filter (fun (pat,typ) ->
              match pat_is_plain_binder env pat with
-             | Some id -> begin
+             | Some (Some id) -> begin
                  match destruct_exist_plain (Env.expand_synonyms env (expand_range_type typ)) with
                  | Some (_, NC_aux (NC_true,_), _) -> None
                  | Some ([KOpt_aux (KOpt_kind (_, kid), _)], nc,
@@ -2814,7 +2820,7 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
                     Some (string "let " ^^ doc_id id ^^ string " := projT1 " ^^ doc_id id ^^ string " in")
                  | _ -> None
                end
-             | None -> None) pats
+             | _ -> None) pats
        in
        string "Fixpoint",
        [parens (string "_acc : Acc (Zwf 0) _reclimit")],
