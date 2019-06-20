@@ -691,6 +691,11 @@ let builtin_append ctx v1 v2 ret_ctyp =
      Fn ("Bits", [bvadd (bvint ctx.lbits_index (Big_int.of_int n)) (Fn ("len", [smt2]));
                   bvor (bvshl x shift) (Fn ("contents", [smt2]))])
 
+  | CT_lbits _, CT_fbits (n, _), CT_fbits (m, _) ->
+     let smt1 = smt_cval ctx v1 in
+     let smt2 = smt_cval ctx v2 in
+     Extract (m - 1, 0, Fn ("concat", [Fn ("contents", [smt1]); smt2]))
+
   | CT_lbits _, CT_fbits (n, _), CT_lbits _ ->
      let smt1 = smt_cval ctx v1 in
      let smt2 = smt_cval ctx v2 in
