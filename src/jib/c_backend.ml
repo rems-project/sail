@@ -1460,7 +1460,12 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | "undefined_vector", _ -> Printf.sprintf "UNDEFINED(vector_%s)" (sgen_ctyp_name ctyp)
        | "sail_cons", _ ->
           begin match args with
-          | cval :: _ -> sgen_function_id (mk_id ("cons#" ^ string_of_ctyp (cval_ctyp cval)))
+          | cval :: _ -> "cons_" ^ sgen_ctyp_name (cval_ctyp cval)
+          | _ -> assert false
+          end
+       | "internal_cons", _ ->
+          begin match args with
+          | cval :: _ -> "internal_cons_" ^ sgen_ctyp_name (cval_ctyp cval)
           | _ -> assert false
           end
        | fname, _ -> fname
@@ -1818,11 +1823,11 @@ let codegen_list_init id =
 
 let codegen_list_clear id ctyp =
   string (Printf.sprintf "static void KILL(%s)(%s *rop) {\n" (sgen_id id) (sgen_id id))
-  ^^ string (Printf.sprintf "  if (*rop == NULL) return;")
+  ^^ string (Printf.sprintf "  if (*rop == NULL) return;\n")
   ^^ (if is_stack_ctyp ctyp then empty
       else string (Printf.sprintf "  KILL(%s)(&(*rop)->hd);\n" (sgen_ctyp_name ctyp)))
   ^^ string (Printf.sprintf "  KILL(%s)(&(*rop)->tl);\n" (sgen_id id))
-  ^^ string "  free(*rop);"
+  ^^ string "  free(*rop);\n"
   ^^ string "}"
 
 let codegen_list_set id ctyp =
@@ -1843,8 +1848,20 @@ let codegen_list_set id ctyp =
   ^^ string "}"
 
 let codegen_cons id ctyp =
-  let cons_id = mk_id ("cons#" ^ string_of_ctyp ctyp) in
-  string (Printf.sprintf "static void %s(%s *rop, const %s x, const %s xs) {\n" (sgen_function_id cons_id) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
+  let cons_id = "cons_" ^ sgen_ctyp_name ctyp in
+  string (Printf.sprintf "static void %s(%s *rop, const %s x, const %s xs) {\n" cons_id (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
+  ^^ string (Printf.sprintf "  *rop = malloc(sizeof(struct node_%s));\n" (sgen_id id))
+  ^^ (if is_stack_ctyp ctyp then
+        string "  (*rop)->hd = x;\n"
+      else
+        string (Printf.sprintf "  CREATE(%s)(&(*rop)->hd);\n" (sgen_ctyp_name ctyp))
+        ^^ string (Printf.sprintf "  COPY(%s)(&(*rop)->hd, x);\n" (sgen_ctyp_name ctyp)))
+  ^^ string (Printf.sprintf "  internal_set_%s(&(*rop)->tl, xs);\n" (sgen_id id))
+  ^^ string "}"
+
+let codegen_internal_cons id ctyp =
+  let cons_id = "internal_cons_" ^ sgen_ctyp_name ctyp in
+  string (Printf.sprintf "static void %s(%s *rop, const %s x, const %s xs) {\n" cons_id (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
   ^^ string (Printf.sprintf "  *rop = malloc(sizeof(struct node_%s));\n" (sgen_id id))
   ^^ (if is_stack_ctyp ctyp then
         string "  (*rop)->hd = x;\n"
@@ -1853,7 +1870,7 @@ let codegen_cons id ctyp =
         ^^ string (Printf.sprintf "  COPY(%s)(&(*rop)->hd, x);\n" (sgen_ctyp_name ctyp)))
   ^^ string "  (*rop)->tl = xs;\n"
   ^^ string "}"
-
+  
 let codegen_pick id ctyp =
   if is_stack_ctyp ctyp then
     string (Printf.sprintf "static %s pick_%s(const %s xs) { return xs->hd; }" (sgen_ctyp ctyp) (sgen_ctyp_name ctyp) (sgen_id id))
@@ -1872,6 +1889,7 @@ let codegen_list ctx ctyp =
       ^^ codegen_list_clear id ctyp ^^ twice hardline
       ^^ codegen_list_set id ctyp ^^ twice hardline
       ^^ codegen_cons id ctyp ^^ twice hardline
+      ^^ codegen_internal_cons id ctyp ^^ twice hardline
       ^^ codegen_pick id ctyp ^^ twice hardline
     end
 

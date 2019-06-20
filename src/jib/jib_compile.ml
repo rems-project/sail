@@ -404,7 +404,7 @@ let rec compile_aval l ctx = function
      let gs = ngensym () in
      let mk_cons aval =
        let setup, cval, cleanup = compile_aval l ctx aval in
-       setup @ [ifuncall (CL_id (gs, CT_list ctyp)) (mk_id ("cons#" ^ string_of_ctyp ctyp)) [cval; V_id (gs, CT_list ctyp)]] @ cleanup
+       setup @ [iextern (CL_id (gs, CT_list ctyp)) (mk_id "internal_cons") [cval; V_id (gs, CT_list ctyp)]] @ cleanup
      in
      [idecl (CT_list ctyp) gs]
      @ List.concat (List.map mk_cons (List.rev avals)),
@@ -617,10 +617,17 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
        | [AE_aux (AE_val (AV_lit (L_aux (L_string regex_string, _), _)), _, _)] ->
           let regex, result = ngensym (), ngensym () in
           let submatch, submatch_cleanup, _ = compile_match ctx apat cval case_label in
+          let cleanup_label = label "regex_cleanup_" in
+          let skip_cleanup_label = label "skip_cleanup_" in
           [iinit (CT_regex 0) regex (V_lit (VL_string regex_string, CT_string));
            idecl CT_bool result;
            iextern (CL_id (result, CT_bool)) (mk_id "sail_regmatch0") [V_id (regex, CT_regex 0); cval];
-           ijump (V_call (Bnot, [V_id (result, CT_bool)])) case_label]
+           ijump (V_call (Bnot, [V_id (result, CT_bool)])) cleanup_label;
+           igoto skip_cleanup_label;
+           ilabel cleanup_label;
+           iclear (CT_regex 0) regex;
+           igoto case_label;
+           ilabel skip_cleanup_label]
           @ submatch,
           submatch_cleanup @ [iclear (CT_regex 0) regex],
           ctx
@@ -647,10 +654,18 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
        let setup = List.map (fun (s, _, _) -> s) args |> List.concat in
        let cleanup = List.map (fun (_, _, c) -> c) args |> List.rev |> List.concat in
        let args = List.map (fun (_, a, _) -> a) args in
-       let submatch, submatch_cleanup, _ = compile_match ctx apat (V_id (result, inner_ctyp)) case_label in
+       let cleanup_label = label "mapcall_cleanup_" in
+       let skip_cleanup_label = label "skip_cleanup_" in
+       let submatch, submatch_cleanup, _ = compile_match ctx apat (V_id (result, inner_ctyp)) cleanup_label in
        setup
        @ [idecl inner_ctyp result;
-          imapcall (CL_id (result, inner_ctyp)) id (args @ [cval]) case_label]
+          imapcall (CL_id (result, inner_ctyp)) id (args @ [cval]) cleanup_label;
+          igoto skip_cleanup_label;
+          ilabel cleanup_label;
+          iclear inner_ctyp result]
+       @ cleanup
+       @ [igoto case_label;
+          ilabel skip_cleanup_label]
        @ submatch,
        submatch_cleanup
        @ [iclear inner_ctyp result]
@@ -668,8 +683,10 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
      in
      let subpats = List.map (function APS_lit _ -> [] | APS_pat apat -> [apat]) string_apats |> List.concat in
      let groups = List.length subpats in
-     let regex_string = Util.string_of_list "" to_regex string_apats in
+     let regex_string = "^" ^ Util.string_of_list "" to_regex string_apats in
      let regex, matches, result = ngensym (), ngensym (), ngensym () in
+     let cleanup_label = label "regex_cleanup_" in
+     let skip_cleanup_label = label "skip_cleanup_" in
      let compile_subpat i apat =
        let mat = ngensym () in
        let submatch, submatch_cleanup, _ = compile_match ctx apat (V_id (mat, CT_string)) case_label in
@@ -684,7 +701,12 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
       idecl (CT_match groups) matches;
       idecl CT_bool result;
       iextern (CL_id (result, CT_bool)) (mk_id "sail_regmatch") [V_id (regex, CT_regex groups); cval; V_id (matches, CT_match groups)];
-      ijump (V_call (Bnot, [V_id (result, CT_bool)])) case_label]
+      ijump (V_call (Bnot, [V_id (result, CT_bool)])) cleanup_label;
+      igoto skip_cleanup_label;
+      ilabel cleanup_label;
+      iclear (CT_regex groups) regex;
+      igoto case_label;
+      ilabel skip_cleanup_label]
      @ List.concat (List.map fst compiled_subpats),
      List.concat (List.map snd compiled_subpats)
      @ [iclear (CT_regex groups) regex],
@@ -1426,8 +1448,8 @@ let compile_mapcls swap mk_cdef ctx id pats clauses =
     destructure @ [idecl right_ctyp clause_return_id]
     @ List.concat (List.map compile_clause clauses) @ destructure_cleanup
     @ [ilabel mapdef_label;
-       ireturn (V_lit (VL_bool false, CT_bool));
        iclear right_ctyp clause_return_id;
+       ireturn (V_lit (VL_bool false, CT_bool));
        ilabel finish_clause_label;
        icopy (gen_loc (id_loc id)) (CL_id (return, right_ctyp)) (V_id (clause_return_id, right_ctyp));
        iclear right_ctyp clause_return_id;
