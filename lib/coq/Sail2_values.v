@@ -1769,11 +1769,20 @@ Ltac simple_omega :=
   H := projT1 _ |- _ => clearbody H
   end; omega.
 
+Ltac solve_unknown :=
+  match goal with |- (ArithFact (?x ?y)) =>
+    is_evar x;
+    idtac "Warning: unknown constraint";
+    let t := type of y in
+    unify x (fun (_ : t) => True);
+    exact (Build_ArithFact _ I)
+  end.
+
 Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
 intros; (* To solve implications for derive_m *)
-try match goal with |- (ArithFact (?x ?y)) => is_evar x; idtac "Warning: unknown constraint"; simpl; exact (Build_ArithFact _ (I : (fun _ => True) y)) end;
+try solve_unknown;
 match goal with |- ArithFact (?x <= ?x <= ?x) => try (exact trivial_range) | _ => idtac end;
 try fill_in_evar_eq;
 try match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end;
