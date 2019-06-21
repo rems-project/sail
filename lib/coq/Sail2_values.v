@@ -1689,8 +1689,7 @@ Ltac sail_extra_tactic := fail.
 
 Ltac main_solver :=
  solve
- [ match goal with |- (?x ?y) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) y) end
- | apply ArithFact_mword; assumption
+ [ apply ArithFact_mword; assumption
  | z_comparisons
  | omega with Z
    (* Try sail hints before dropping the existential *)
@@ -1774,6 +1773,7 @@ Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
 intros; (* To solve implications for derive_m *)
+try match goal with |- (ArithFact (?x ?y)) => is_evar x; idtac "Warning: unknown constraint"; simpl; exact (Build_ArithFact _ (I : (fun _ => True) y)) end;
 match goal with |- ArithFact (?x <= ?x <= ?x) => try (exact trivial_range) | _ => idtac end;
 try fill_in_evar_eq;
 try match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end;
