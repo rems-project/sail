@@ -2646,37 +2646,42 @@ let mk_kid_renames ids_to_avoid kids =
   in snd (KidSet.fold check_kid kids (kids, KBindings.empty))
 
 let merge_kids_atoms pats =
-  let try_eliminate (gone,map,seen) =
-    let tryon id env typ =
+  let try_eliminate (acc,gone,map,seen) (pat,typ) =
+    let tryon maybe_id env typ =
       let merge kid l =
         if KidSet.mem kid seen then
           let () =
             Reporting.print_err l "merge_kids_atoms"
               ("want to merge tyvar and argument for " ^ string_of_kid kid ^
                  " but rearranging arguments isn't supported yet") in
-          gone,map,seen
+          (pat,typ)::acc,gone,map,seen
         else
-          KidSet.add kid gone, KBindings.add kid id map, KidSet.add kid seen
+          let pat,id = match maybe_id with
+            | Some id -> pat,id
+                       (* TODO: name clashes *)
+            | None -> let id = id_of_kid kid in
+                      P_aux (P_id id,match pat with P_aux (_,ann) -> ann), id
+          in
+          (pat,typ)::acc,
+          KidSet.add kid gone, KBindings.add kid (Some id) map, KidSet.add kid seen
       in
       match Type_check.destruct_atom_nexp env typ with
       | Some (Nexp_aux (Nexp_var kid,l)) -> merge kid l
       | _ ->
          match Type_check.destruct_atom_bool env typ with
          | Some (NC_aux (NC_var kid,l)) -> merge kid l
-         | _ -> gone,map,KidSet.union seen (tyvars_of_typ typ)
+         | _ -> (pat,typ)::acc,gone,map,KidSet.union seen (tyvars_of_typ typ)
     in
-    function
+    match pat,typ with
     | P_aux (P_id id, ann), typ
     | P_aux (P_typ (_,P_aux (P_id id, ann)),_), typ ->
        tryon (Some id) (env_of_annot ann) typ
     | P_aux (P_wild, ann), typ ->
-       (* This won't allow any explicit use of the type variable, but we
-          could change the pattern to introduce a variable if necessary *)
        tryon None (env_of_annot ann) typ
-    | _, typ -> gone,map,KidSet.union seen (tyvars_of_typ typ)
+    | _ -> (pat,typ)::acc,gone,map,KidSet.union seen (tyvars_of_typ typ)
   in
-  let gone,map,_ = List.fold_left try_eliminate (KidSet.empty, KBindings.empty, KidSet.empty) pats in
-  gone,map
+  let r_pats,gone,map,_ = List.fold_left try_eliminate ([],KidSet.empty, KBindings.empty, KidSet.empty) pats in
+  List.rev r_pats,gone,map
 
 
 let merge_var_patterns map pats =
@@ -2708,7 +2713,7 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     | _ -> demote_all_patterns env
   in
   let pats, binds = List.split (Util.list_mapi pattern_elim pats) in
-  let eliminated_kids, kid_to_arg_rename = merge_kids_atoms pats in
+  let pats, eliminated_kids, kid_to_arg_rename = merge_kids_atoms pats in
   let kid_to_arg_rename, pats = merge_var_patterns kid_to_arg_rename pats in
   let kids_used = KidSet.diff bound_kids eliminated_kids in
   let is_measured, recursive_ids = match rec_opt with
