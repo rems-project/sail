@@ -65,9 +65,10 @@ type vl =
   | VL_matcher of int * int
   | VL_list of list vl
   | VL_constructor of string * vl
+  | VL_enum of string
 
 let mk_bits = Maybe.map (fun x -> VL_bits x true)
-                    
+
 let primops name args =
   match (name, args) with
   (* lib/flow.sail *)
@@ -85,9 +86,10 @@ let primops name args =
   | ("eq_string", [VL_string s1; VL_string s2]) -> Just (VL_bool (s1 = s2))
   | ("concat_str", [VL_string s1; VL_string s2]) -> Just (VL_string (s1 ^ s2))
   | ("print_endline", [VL_string s]) -> let _ = print_endline s in Just VL_unit
-                           
+
   (* lib/mapping.sail *)
   | ("hex_parse", [VL_int n; VL_string hex]) -> mk_bits (hex_parse n hex)
   | ("hex_string", [VL_bits bv _]) -> Just (VL_string (show_bitlist bv))
+  | ("decimal_parse", [VL_int n; VL_string dec]) -> mk_bits (decimal_parse n dec)
   | (_, _) -> Nothing
   end

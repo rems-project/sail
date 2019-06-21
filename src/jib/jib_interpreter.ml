@@ -170,7 +170,7 @@ let rec evaluate_cval locals = function
   | V_id (name, _) ->
      begin match NameMap.find_opt name locals with
      | Some vl -> vl
-     | None -> failwith "Local variable not defined"
+     | None -> VL_enum (string_of_name ~zencode:false name)
      end
   | V_call (f, vls) -> evaluate_cval_call f (List.map (evaluate_cval locals) vls)
   | V_lit (vl, _) -> vl
@@ -246,12 +246,17 @@ let rec declaration = function
   | CT_tup ctyps -> VL_tuple (List.map declaration ctyps)
   | CT_match n -> VL_matcher (n, unique_number ())
   | CT_list _ -> VL_list []
-  | CT_variant (id, fields) ->
+  | CT_variant (_, fields) ->
      begin match fields with
      | (ctor, ctyp) :: _ -> VL_constructor (string_of_id ctor, declaration ctyp)
-     | _ -> failwith "Empty variant type"
+     | _ -> failwith "Empty union type"
      end
-  | ctyp -> failwith ("Unsupported declaration: " ^ string_of_ctyp ctyp)
+  | CT_enum (_, elements) ->
+     begin match elements with
+     | elem :: _ -> VL_enum (string_of_id elem)
+     | _ -> failwith "Empty enum type"
+     end
+  | ctyp -> failwith ("Unsupported declaration " ^ string_of_ctyp ctyp)
 
 let set_tuple tup n v =
   match tup with
@@ -276,7 +281,7 @@ let do_return stack v =
      match v with
      | Some v -> Done v
      | None -> failwith "Bad return"
-       
+
 let step env global_state stack =
   let pc = stack.pc in
   match stack.instrs.(pc) with
@@ -285,7 +290,7 @@ let step env global_state stack =
 
   | I_aux (I_clear (ctyp, id), _) ->
      Step { stack with locals = NameMap.remove id stack.locals; pc = pc + 1 }
-    
+
   | I_aux (I_init (ctyp, id, cval), _) ->
      let v = evaluate_cval stack.locals cval in
      Step { stack with locals = NameMap.add id v stack.locals; pc = pc + 1 }
@@ -308,7 +313,7 @@ let step env global_state stack =
           | Some v ->
              { (assignment clexp v stack) with pc = pc + 1 }
           | None -> failwith "Bad function return"
-        in        
+        in
         Step {
           pc = 0;
           locals = List.fold_left2 (fun locals param arg -> NameMap.add (name param) arg locals) NameMap.empty params args;
@@ -332,7 +337,7 @@ let step env global_state stack =
         else
           failwith (string_of_id id)
      end
-     
+
   | I_aux (I_mapcall (clexp, id, args, label), _) ->
      let args = List.map (evaluate_cval stack.locals) args in
      let cc, params, body, jump_table = Bindings.find id global_state.functions in
@@ -366,7 +371,6 @@ let step env global_state stack =
      | None -> failwith "Local variable not defined in I_end"
      end
 
-     
   | I_aux (I_funcall (clexp, true, id, args), _) ->
      let args = List.map (evaluate_cval stack.locals) args in
      let v, stack' = eval_extern (string_of_id id) args stack in
@@ -383,5 +387,5 @@ let step env global_state stack =
 
   | I_aux (I_label _, _) ->
      Step { stack with pc = pc + 1 }
-     
+
   | instr -> failwith ("Unimplemented instruction: " ^ Pretty_print_sail.to_string (pp_instr instr))

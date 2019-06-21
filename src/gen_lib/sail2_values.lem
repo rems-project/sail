@@ -456,7 +456,7 @@ let rec hex_parse' input = match input with
      end
   | [] -> Just []
   end
-    
+
 let hex_parse n input = match toCharList input with
   | #'0' :: #'x' :: digits ->
      match hex_parse' digits with

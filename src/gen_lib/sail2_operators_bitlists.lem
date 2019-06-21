@@ -306,3 +306,38 @@ let eq_vec    = eq_bv
 let neq_vec   = neq_bv
 
 let inline count_leading_zeros v = count_leading_zero_bits v
+
+val decimal_of_char : char -> maybe integer
+let decimal_of_char c = match c with
+  | #'0' -> Just 0
+  | #'1' -> Just 1
+  | #'2' -> Just 2
+  | #'3' -> Just 3
+  | #'4' -> Just 4
+  | #'5' -> Just 5
+  | #'6' -> Just 6
+  | #'7' -> Just 7
+  | #'8' -> Just 8
+  | #'9' -> Just 9
+  | _ -> Nothing
+  end
+
+val decimal_parse' : list char -> integer -> maybe integer
+let rec decimal_parse' input pos = match input with
+  | c :: rest ->
+     match decimal_of_char c with
+     | Just n ->
+        match decimal_parse' rest (pos * 10) with
+        | Just m -> Just (n * pos + m)
+        | Nothing -> Nothing
+        end
+     | Nothing -> Nothing
+     end
+  | [] -> Just 0
+  end
+
+let decimal_parse n input =
+  match decimal_parse' (reverse (toCharList input)) 1 with
+  | Just m -> Just (get_slice_int n m 0)
+  | Nothing -> Nothing
+  end

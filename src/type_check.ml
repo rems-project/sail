@@ -3250,8 +3250,10 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
      annot_pat (P_vector_concat inferred_pats) (dvector_typ env len vtyp), env, guards
   | P_app (f, [P_aux (P_lit (L_aux (L_unit, _)), _)]) ->
-     infer_pat env (P_aux (P_view (P_aux (P_lit (L_aux (L_unit, gen_loc l)), (gen_loc l, ())), f, [mk_lit_exp L_unit]), (l, ())))
+     let d = if Env.is_backwards_mapping env then Backwards else Forwards in
+     infer_pat env (P_aux (P_view (P_aux (P_lit (L_aux (L_unit, gen_loc l)), (gen_loc l, ())), set_id_direction d f, []), (l, ())))
   | P_view (pat, f, exps) ->
+     typ_print (lazy (string_of_pat pat ^ " <-" ^ Util.string_of_list ", " string_of_exp exps));
      let app_env, is_mapping_builtin =
        if Env.allow_mapping_builtins env then
          match string_of_id f with
@@ -4421,7 +4423,7 @@ let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
        | MPat_pat mpat | MPat_when (mpat, _) -> exp_of_mpat direction mpat
      in
      let left, left_env = check_mpexp Forwards env mpexp_left typ_left in
-     let right, right_env = check_mpexp Backwards env mpexp_right typ_right in
+     let right, right_env = check_mpexp Backwards (Env.set_backwards_mapping env) mpexp_right typ_right in
      let checked_left = crule check_exp right_env (exp_of_mpexp Backwards (strip_mpexp left)) typ_left in
      let checked_right = crule check_exp left_env (exp_of_mpexp Forwards (strip_mpexp right)) typ_right in
      [MCL_aux (MCL_forwards (pexp_of_mpexp Forwards left checked_right), (l, mk_expected_tannot env bidir no_effect (Some bidir)));

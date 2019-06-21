@@ -210,7 +210,7 @@ let rec instr_rename from_id to_id (I_aux (instr, aux)) =
 
     | I_mapcall (clexp, id, args, label) ->
        I_mapcall (clexp_rename from_id to_id clexp, id, List.map (cval_rename from_id to_id) args, label)
-      
+
     | I_copy (clexp, cval) -> I_copy (clexp_rename from_id to_id clexp, cval_rename from_id to_id cval)
 
     | I_clear (ctyp, id) when Name.compare id from_id = 0 -> I_clear (ctyp, to_id)
@@ -271,7 +271,8 @@ let rec string_of_value = function
   | VL_list [] -> "NULL"
   | VL_list values -> "[|" ^ Util.string_of_list ", " string_of_value values ^ "|]"
   | VL_constructor (ctor, vl) -> ctor ^ "(" ^ string_of_value vl ^ ")"
-                     
+  | VL_enum element -> element
+
 let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
   let ssa_num n = if n = -1 then "" else ("/" ^ string_of_int n) in
   function
