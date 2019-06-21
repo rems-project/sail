@@ -51,6 +51,7 @@
 open import Pervasives
 
 open import Sail2_values
+open import Sail2_operators_bitlists
 
 type vl =
   | VL_bits of list bitU * bool
@@ -60,6 +61,33 @@ type vl =
   | VL_int of integer
   | VL_string of string
   | VL_real of string
-  | VL_null (* Used for unitialized values and null pointers in C compilation *)
   | VL_tuple of list vl
   | VL_matcher of int * int
+  | VL_list of list vl
+  | VL_constructor of string * vl
+
+let mk_bits = Maybe.map (fun x -> VL_bits x true)
+                    
+let primops name args =
+  match (name, args) with
+  (* lib/flow.sail *)
+  | ("sail_cons", [v; VL_list vs]) -> Just (VL_list (v :: vs))
+
+  (* lib/arith.sail *)
+  | ("add_int", [VL_int n; VL_int m]) -> Just (VL_int (integerAdd n m))
+  | ("sub_int", [VL_int n; VL_int m]) -> Just (VL_int (integerMinus n m))
+
+  (* lib/vector_dec.sail *)
+  | ("zeros", [VL_int n]) -> Just (VL_bits (zeros n) true)
+  | ("get_slice_int", [VL_int len; VL_int n; VL_int lo]) -> Just (VL_bits (get_slice_int len n lo) true)
+
+  (* lib/string.sail *)
+  | ("eq_string", [VL_string s1; VL_string s2]) -> Just (VL_bool (s1 = s2))
+  | ("concat_str", [VL_string s1; VL_string s2]) -> Just (VL_string (s1 ^ s2))
+  | ("print_endline", [VL_string s]) -> let _ = print_endline s in Just VL_unit
+                           
+  (* lib/mapping.sail *)
+  | ("hex_parse", [VL_int n; VL_string hex]) -> mk_bits (hex_parse n hex)
+  | ("hex_string", [VL_bits bv _]) -> Just (VL_string (show_bitlist bv))
+  | (_, _) -> Nothing
+  end

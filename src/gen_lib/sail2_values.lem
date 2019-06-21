@@ -423,6 +423,50 @@ let char_of_nibble = function
   | _ -> Nothing
   end
 
+let nibble_of_char = function
+  | #'0' -> Just (B0, B0, B0, B0)
+  | #'1' -> Just (B0, B0, B0, B1)
+  | #'2' -> Just (B0, B0, B1, B0)
+  | #'3' -> Just (B0, B0, B1, B1)
+  | #'4' -> Just (B0, B1, B0, B0)
+  | #'5' -> Just (B0, B1, B0, B1)
+  | #'6' -> Just (B0, B1, B1, B0)
+  | #'7' -> Just (B0, B1, B1, B1)
+  | #'8' -> Just (B1, B0, B0, B0)
+  | #'9' -> Just (B1, B0, B0, B1)
+  | #'A' -> Just (B1, B0, B1, B0)
+  | #'B' -> Just (B1, B0, B1, B1)
+  | #'C' -> Just (B1, B1, B0, B0)
+  | #'D' -> Just (B1, B1, B0, B1)
+  | #'E' -> Just (B1, B1, B1, B0)
+  | #'F' -> Just (B1, B1, B1, B1)
+  | _ -> Nothing
+  end
+
+let rec hex_parse' input = match input with
+  | digit :: rest ->
+     match nibble_of_char digit with
+     | Just (b1, b2, b3, b4) ->
+        match hex_parse' rest with
+        | Just digits ->
+           Just (b1 :: b2 :: b3 :: b4 :: digits)
+        | Nothing -> Nothing
+        end
+     | Nothing -> Nothing
+     end
+  | [] -> Just []
+  end
+    
+let hex_parse n input = match toCharList input with
+  | #'0' :: #'x' :: digits ->
+     match hex_parse' digits with
+     | Just bits ->
+        Just (reverse (take (nat_of_int n) (reverse bits)))
+     | Nothing -> Nothing
+     end
+  | _ -> Nothing
+  end
+
 let rec hexstring_of_bits bs = match bs with
   | b1 :: b2 :: b3 :: b4 :: bs ->
      let n = char_of_nibble (b1, b2, b3, b4) in

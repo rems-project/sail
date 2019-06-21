@@ -171,34 +171,39 @@ let rec run_steps n =
   | _ when n <= 0 -> ()
   | Normal | Emacs -> ()
   | Evaluation frame ->
-     begin
-       match frame with
-       | Done (state, v) ->
-          interactive_state := state;
-          print_endline ("Result = " ^ Value.string_of_value v);
-          current_mode := Normal
-       | Fail (_, _, _, _, msg) ->
-          print_endline ("Error: " ^ msg);
-          current_mode := Normal
-       | Step (out, state, _, stack) ->
-          begin
-            try
-              current_mode := Evaluation (eval_frame frame)
-            with
-            | Failure str -> print_endline str; current_mode := Normal
-          end;
-          run_steps (n - 1)
-       | Break frame ->
-          print_endline "Breakpoint";
-          current_mode := Evaluation frame
-       | Effect_request (out, state, stack, eff) ->
-          begin
-            try
-              current_mode := Evaluation (Interpreter.default_effect_interp state eff)
-            with
-            | Failure str -> print_endline str; current_mode := Normal
-          end;
-          run_steps (n - 1)
+     begin match frame with
+     | Done (state, v) ->
+        interactive_state := state;
+        print_endline ("Result = " ^ Value.string_of_value v);
+        current_mode := Normal
+     | Fail (_, _, _, _, msg) ->
+        print_endline ("Error: " ^ msg);
+        current_mode := Normal
+     | Step (out, state, _, stack) ->
+        begin
+          try
+            current_mode := Evaluation (eval_frame frame)
+          with
+          | Failure str -> print_endline str; current_mode := Normal
+        end;
+        run_steps (n - 1)
+     | Break frame ->
+        print_endline "Breakpoint";
+        current_mode := Evaluation frame
+     | Effect_request (out, state, stack, eff) ->
+        begin
+          try
+            current_mode := Evaluation (Interpreter.default_effect_interp state eff)
+          with
+          | Failure str -> print_endline str; current_mode := Normal
+        end;
+        run_steps (n - 1)
+     end
+  | Jib_evaluation step ->
+     begin match step with
+     | Step step ->
+       current_mode := Jib_evaluation (Jib_interpreter.step !Interactive.env !jib_interpreter_state step);
+       run_steps (n - 1)
      end
 
 let help =
@@ -622,7 +627,8 @@ let handle_input' input =
            let ast, env = Specialize.(specialize_passes 2 int_specialization_with_externs env ast) in
            let cdefs, ctx, _ = Jib_smt.compile env ast in
            jib_compilation_context := Some ctx;
-           jib_interpreter_state := Jib_interpreter.initialize_global_state cdefs
+           jib_interpreter_state := Jib_interpreter.initialize_global_state cdefs;
+           Interactive.env := env
         | ":jib" ->
            let open Jib in
            let exp = Type_check.infer_exp !Interactive.env (Initial_check.exp_of_string arg) in
@@ -753,10 +759,21 @@ let handle_input' input =
 
   | Jib_evaluation step ->
      begin match input with
+     | Command (cmd, arg) ->
+        (* Jib evaluation mode commands *)
+        begin match cmd with
+        | ":r" | ":run" ->
+           run ()
+        | ":s" | ":step" ->
+           run_steps (int_of_string arg)
+        | _ -> unrecognised_command cmd
+        end
+     | Expression str ->
+        print_endline "Already evaluating expression"
      | Empty ->
         begin match step with
         | Step step ->
-           current_mode := Jib_evaluation (Jib_interpreter.step !jib_interpreter_state step);
+           current_mode := Jib_evaluation (Jib_interpreter.step !Interactive.env !jib_interpreter_state step);
            print_program ()
         end
      end

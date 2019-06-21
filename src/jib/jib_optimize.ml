@@ -205,6 +205,7 @@ let rec instrs_subst id subst =
        | I_goto label -> I_goto label
        | I_label label -> I_label label
        | I_funcall (clexp, extern, fid, args) -> I_funcall (clexp, extern, fid, List.map (cval_subst id subst) args)
+       | I_mapcall (clexp, mid, args, label) -> I_mapcall (clexp, mid, List.map (cval_subst id subst) args, label)
        | I_copy (clexp, cval) -> I_copy (clexp, cval_subst id subst cval)
        | I_clear (clexp, id') -> I_clear (clexp, id')
        | I_undefined ctyp -> I_undefined ctyp

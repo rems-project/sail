@@ -4677,7 +4677,6 @@ let all_rewrites = [
   ]
 
 let rewrites_lem = [
-    ("realise_mappings", []);
     ("remove_mapping_valspecs", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);

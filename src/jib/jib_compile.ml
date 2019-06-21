@@ -515,9 +515,9 @@ let rec apat_ctyp ctx (AP_aux (apat, _, _)) =
 let escape_match_string str =
   (* Backslash gets double-escaped by both OCaml and the C compiler, so it's 4 here for every one we want in the regex *)
   let escape_char = function
-    | '\\' -> "\\\\\\\\"
-    | ('(' | ')' | '[' | ']' | '{' | '}' | '^' | '$' | '?' | '+' | '*' | '.' | '|' as c) ->
-       "\\\\" ^ String.make 1 c
+    | '\\' -> "\\\\" (* "\\\\\\\\" *)
+    | ((* '(' | ')' | *) '[' | ']' | '{' | '}' | '^' | '$' | '?' | '+' | '*' | '.' | '|' as c) ->
+       (* "\\\\" *) "\\" ^ String.make 1 c
     | c -> String.make 1 c
   in
   String.concat "" (List.map escape_char (Util.string_to_list str))
@@ -604,12 +604,12 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
      | CT_list ctyp ->
         let hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_call (List_hd, [cval])) case_label in
         let tl_setup, tl_cleanup, ctx = compile_match ctx tl_apat (V_call (List_tl, [cval])) case_label in
-        [ijump (V_call (Eq, [cval; V_lit (VL_null, CT_list ctyp)])) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup, ctx
+        [ijump (V_call (Eq, [cval; V_lit (VL_list [], CT_list ctyp)])) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup, ctx
      | _ ->
         raise (Reporting.err_general l "Tried to pattern match cons on non list type")
      end
 
-  | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_null, ctyp)])) case_label], [], ctx
+  | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_list [], ctyp)])) case_label], [], ctx
 
   | AP_view (apat, id, aexps, typ) ->
      if string_of_id id = "regex" then (
@@ -678,8 +678,8 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
        | APS_lit str -> escape_match_string str
        | APS_pat apat ->
           match apat_typ apat with
-          | Typ_aux (Typ_regex regex, _) -> "(" ^ regex ^ ")"
-          | typ -> "(.*)"
+          | Typ_aux (Typ_regex regex, _) -> "\\(" ^ regex ^ "\\)"
+          | typ -> "\\(.*\\)"
      in
      let subpats = List.map (function APS_lit _ -> [] | APS_pat apat -> [apat]) string_apats |> List.concat in
      let groups = List.length subpats in

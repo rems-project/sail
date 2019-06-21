@@ -57,7 +57,7 @@ open Value2
 module StringMap = Map.Make(String)
 
 type global_state = {
-    functions : (calling_convention * id list * instr array * int StringMap.t) Bindings.t
+    functions : (calling_convention * id list * instr array * int StringMap.t) Bindings.t;
   }
 
 let empty_global_state = {
@@ -93,7 +93,7 @@ type stack = {
     instrs: instr array;
     jump_table: int StringMap.t;
     calls: string list;
-    pop: (vl -> stack) option
+    pop: (vl option -> stack) option
   }
 
 let initialize_stack instrs = {
@@ -143,6 +143,8 @@ let evaluate_cval_call f vls =
   | Bnot, [VL_bool b] -> VL_bool (not b)
   | Bor, [VL_bool a; VL_bool b] -> VL_bool (a || b)
   | Band, [VL_bool a; VL_bool b] -> VL_bool (a && b)
+  | List_hd, [VL_list (v :: _)] -> v
+  | List_tl, [VL_list (_ :: vs)] -> VL_list vs
   | Eq, [v1; v2] -> VL_bool (v1 = v2)
   | Neq, [v1; v2] -> VL_bool (not (v1 = v2))
   | Ilt, [VL_int x; VL_int y] -> VL_bool (x < y)
@@ -168,11 +170,31 @@ let rec evaluate_cval locals = function
   | V_id (name, _) ->
      begin match NameMap.find_opt name locals with
      | Some vl -> vl
-     | None -> VL_null
+     | None -> failwith "Local variable not defined"
      end
   | V_call (f, vls) -> evaluate_cval_call f (List.map (evaluate_cval locals) vls)
   | V_lit (vl, _) -> vl
-  | cval -> VL_null
+  | V_ctor_kind (cval, kind, [], _) ->
+     begin match evaluate_cval locals cval with
+     | VL_constructor (ctor, _) -> VL_bool (ctor <> string_of_id kind) 
+     | _ -> failwith "Bad ctor_kind call"
+     end
+  | V_ctor_kind (cval, kind, unifiers, _) ->
+     begin match evaluate_cval locals cval with
+     | VL_constructor (ctor, _) -> VL_bool (ctor <> (string_of_id kind ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers))
+     | _ -> failwith "Bad ctor_kind call"
+     end
+  | V_ctor_unwrap (_, cval, _, _) ->
+     begin match evaluate_cval locals cval with
+     | VL_constructor (_, value) -> value
+     | _ -> failwith "Bad ctor_unwrap call"
+     end
+  | V_tuple_member (cval, _, n) ->
+     begin match evaluate_cval locals cval with
+     | VL_tuple vs -> List.nth vs n
+     | _ -> failwith "Bad tuple_member call"
+     end
+  | cval -> failwith ("Unsupported cval " ^ string_of_cval cval)
 
 let eval_extern name args stack =
   match name, args with
@@ -184,12 +206,20 @@ let eval_extern name args stack =
      ) else (
        VL_bool false, stack
      )
+  | "sail_regmatch0", [VL_string regex; VL_string input] ->
+     let regex = Str.regexp regex in
+     if Str.string_match regex input 0 then (
+       VL_bool true, stack
+     ) else (
+       VL_bool false, stack
+     )
   | "sail_getmatch", [VL_string _ (* input *); VL_matcher (n, uid); VL_int m] ->
      let groups = IntMap.find uid stack.match_state in
      VL_string (List.assoc (Big_int.to_int m) groups), stack
-
+  | "internal_cons", [v; VL_list vs] ->
+     VL_list (v :: vs), stack
   | _ ->
-     failwith "Unknown extern call"
+     failwith ("Unknown extern call " ^ name)
 
 type step =
   | Step of stack
@@ -215,7 +245,13 @@ let rec declaration = function
   | CT_real -> VL_real "0.0"
   | CT_tup ctyps -> VL_tuple (List.map declaration ctyps)
   | CT_match n -> VL_matcher (n, unique_number ())
-  | _ -> VL_null
+  | CT_list _ -> VL_list []
+  | CT_variant (id, fields) ->
+     begin match fields with
+     | (ctor, ctyp) :: _ -> VL_constructor (string_of_id ctor, declaration ctyp)
+     | _ -> failwith "Empty variant type"
+     end
+  | ctyp -> failwith ("Unsupported declaration: " ^ string_of_ctyp ctyp)
 
 let set_tuple tup n v =
   match tup with
@@ -233,12 +269,23 @@ let assignment clexp v stack =
      { stack with locals = NameMap.add id (set_tuple tup n v) stack.locals }
   | _ -> failwith "Unhandled c-lexp"
 
-let step global_state stack =
+let do_return stack v =
+  match stack.pop with
+  | Some f -> Step (f v)
+  | None ->
+     match v with
+     | Some v -> Done v
+     | None -> failwith "Bad return"
+       
+let step env global_state stack =
   let pc = stack.pc in
   match stack.instrs.(pc) with
   | I_aux (I_decl (ctyp, id), _) ->
      Step { stack with locals = NameMap.add id (declaration ctyp) stack.locals; pc = pc + 1 }
 
+  | I_aux (I_clear (ctyp, id), _) ->
+     Step { stack with locals = NameMap.remove id stack.locals; pc = pc + 1 }
+    
   | I_aux (I_init (ctyp, id, cval), _) ->
      let v = evaluate_cval stack.locals cval in
      Step { stack with locals = NameMap.add id v stack.locals; pc = pc + 1 }
@@ -255,7 +302,46 @@ let step global_state stack =
 
   | I_aux (I_funcall (clexp, false, id, args), _) ->
      let args = List.map (evaluate_cval stack.locals) args in
+     begin match Bindings.find_opt id global_state.functions with
+     | Some (cc, params, body, jump_table) ->
+        let function_return = function
+          | Some v ->
+             { (assignment clexp v stack) with pc = pc + 1 }
+          | None -> failwith "Bad function return"
+        in        
+        Step {
+          pc = 0;
+          locals = List.fold_left2 (fun locals param arg -> NameMap.add (name param) arg locals) NameMap.empty params args;
+          match_state = IntMap.empty;
+          current_cc = cc;
+          instrs = body;
+          jump_table = jump_table;
+          calls = string_of_id id :: stack.calls;
+          pop = Some function_return
+          }
+     | None ->
+        let open Type_check in
+        if Env.is_extern id env "c" then
+          let extern = Env.get_extern id env "c" in
+          match primops extern args with
+          | Some result -> Step { (assignment clexp result stack) with pc = pc + 1 }
+          | None -> failwith ("primitive operation " ^ extern ^ "(" ^ Util.string_of_list ", " string_of_value args ^ ") failed")
+        else if List.length args = 1 then
+          let ctor = VL_constructor (string_of_id id, List.nth args 0) in
+          Step { (assignment clexp ctor stack) with pc = pc + 1 }
+        else
+          failwith (string_of_id id)
+     end
+     
+  | I_aux (I_mapcall (clexp, id, args, label), _) ->
+     let args = List.map (evaluate_cval stack.locals) args in
      let cc, params, body, jump_table = Bindings.find id global_state.functions in
+     let mapping_return = function
+       | Some v ->
+          { (assignment clexp v stack) with pc = pc + 1 }
+       | None ->
+          { stack with pc = StringMap.find label stack.jump_table }
+     in
      Step {
        pc = 0;
        locals = List.fold_left2 (fun locals param arg -> NameMap.add (name param) arg locals) NameMap.empty params args;
@@ -264,9 +350,23 @@ let step global_state stack =
        instrs = body;
        jump_table = jump_table;
        calls = string_of_id id :: stack.calls;
-       pop = Some (fun v -> assignment clexp v stack)
+       pop = Some mapping_return
      }
 
+  (* If we hit an I_return, we must be in a mapping*)
+  | I_aux (I_return _, _) ->
+     begin match NameMap.find_opt return stack.locals with
+     | Some return_value -> do_return stack (Some return_value)
+     | None -> do_return stack None
+     end
+
+  | I_aux (I_end name, _) ->
+     begin match NameMap.find_opt name stack.locals with
+     | Some return_value -> do_return stack (Some return_value)
+     | None -> failwith "Local variable not defined in I_end"
+     end
+
+     
   | I_aux (I_funcall (clexp, true, id, args), _) ->
      let args = List.map (evaluate_cval stack.locals) args in
      let v, stack' = eval_extern (string_of_id id) args stack in
@@ -281,4 +381,7 @@ let step global_state stack =
      let v = evaluate_cval stack.locals cval in
      Step { (assignment clexp v stack) with pc = pc + 1 }
 
-  | _ -> Step { stack with pc = pc + 1 }
+  | I_aux (I_label _, _) ->
+     Step { stack with pc = pc + 1 }
+     
+  | instr -> failwith ("Unimplemented instruction: " ^ Pretty_print_sail.to_string (pp_instr instr))

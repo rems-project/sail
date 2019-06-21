@@ -260,7 +260,6 @@ let rec string_of_value = function
   | VL_int i -> Big_int.to_string i ^ "l"
   | VL_bool true -> "true"
   | VL_bool false -> "false"
-  | VL_null -> "NULL"
   | VL_unit -> "UNIT"
   | VL_bit Sail2_values.B0 -> "UINT64_C(0)"
   | VL_bit Sail2_values.B1 -> "UINT64_C(1)"
@@ -269,7 +268,10 @@ let rec string_of_value = function
   | VL_string str -> "\"" ^ str ^ "\""
   | VL_matcher (n, uid) -> Printf.sprintf "matcher(%d, %d)" n uid
   | VL_tuple values -> "(" ^ Util.string_of_list ", " string_of_value values ^ ")"
-
+  | VL_list [] -> "NULL"
+  | VL_list values -> "[|" ^ Util.string_of_list ", " string_of_value values ^ "|]"
+  | VL_constructor (ctor, vl) -> ctor ^ "(" ^ string_of_value vl ^ ")"
+                     
 let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
   let ssa_num n = if n = -1 then "" else ("/" ^ string_of_int n) in
   function
