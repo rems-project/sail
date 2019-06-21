@@ -1961,6 +1961,10 @@ let doc_exp, doc_let =
          if effects then
            match cast_ex, outer_ex with
            | ExGeneral, ExNone -> string "projT1_m" ^/^ parens epp
+           | ExGeneral, ExGeneral ->
+              if alpha_equivalent env cast_typ outer_typ
+              then epp
+              else string "derive_m" ^/^ parens epp
            | _ -> epp
          else match cast_ex with
               | ExGeneral -> string "projT1" ^/^ parens epp
