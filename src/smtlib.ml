@@ -184,6 +184,7 @@ let simp_fn = function
   | Fn ("and", xs) -> simp_and xs
   | Fn ("=>", [Bool_lit true; y]) -> y
   | Fn ("=>", [Bool_lit false; y]) -> Bool_lit true
+  | Fn ("concat", [Bin b1; Bin b2]) -> Bin (b1 ^ b2)
   | Fn ("=", [x; y]) as exp ->
      begin match simp_equal x y with
      | Some b -> Bool_lit b

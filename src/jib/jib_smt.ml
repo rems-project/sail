@@ -251,6 +251,7 @@ let smt_value ctx vl ctyp =
        Fn ("-", [Real_lit (String.sub str 1 (String.length str - 1))])
      else
        Real_lit str
+  | VL_enum str, _ -> Enum (Util.zencode_string str)
   | vl, _ -> failwith ("Cannot translate literal to SMT: " ^ string_of_value vl)
 
 let zencode_ctor ctor_id unifiers =
