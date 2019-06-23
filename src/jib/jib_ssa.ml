@@ -716,6 +716,111 @@ let ssa instrs =
   place_pi_functions cfg start idom children;
   start, cfg
 
+let simplify_assignment clexp v locals on_failure =
+  match clexp with
+  | CL_id (Return n, ctyp) -> Some (icopy Parse_ast.Unknown (CL_id (Return n, ctyp)) (V_lit (v, ctyp))) 
+  | CL_id (id, _) -> locals := NameMap.add id v !locals; None
+  | _ -> on_failure
+  
+let simplify_instr env locals instr =
+  let open Jib_interpreter in
+  let open Value2 in
+  match instr with
+  | I_aux (I_copy (clexp, cval), aux) ->
+     begin match evaluate_cval !locals cval with
+     | Some v ->
+        let instr = I_aux (I_copy (clexp, V_lit (v, cval_ctyp cval)), aux) in
+        simplify_assignment clexp v locals (Some instr)
+     | None -> Some instr
+     end
+     
+  | I_aux (I_funcall (clexp, false, id, args), aux) ->
+     let simplified_args = List.map (evaluate_cval !locals) args in
+     let args = List.map2 (fun orig_arg simp_arg ->
+                    match simp_arg with None -> orig_arg | Some v -> V_lit (v, cval_ctyp orig_arg)
+                  ) args simplified_args in
+     let instr = I_aux (I_funcall (clexp, false, id, args), aux) in
+     begin match Util.option_all simplified_args with
+     | Some args ->
+        let open Type_check in
+        if Env.is_extern id env "c" then
+          let extern = Env.get_extern id env "c" in
+          match Value2.primops extern args with
+          | Some result ->
+             simplify_assignment clexp result locals (Some instr)
+          | None -> Some instr
+        else if List.length args = 1 then
+          let ctor = VL_constructor (string_of_id id, List.nth args 0) in
+          simplify_assignment clexp ctor locals (Some instr)
+        else
+          Some instr
+     | None -> Some instr
+     end
+  | instr -> Some instr
+
+let is_label cfg label n =
+  match get_vertex cfg n with
+  | Some ((_, CF_label label'), _, _) -> true
+  | _ -> false
+           
+let simplify_ssa env start cfg =
+  print_endline "Called simplify ssa";
+  match (try Some (topsort cfg) with Not_a_DAG _ -> None) with
+  | None -> ()
+  | Some visit_order ->
+     let locals = ref NameMap.empty in
+     (* First we simplify all basic blocks in topological order from the start node *)
+     List.iter (fun n ->
+         print_endline ("Simplify block " ^ string_of_int n);
+         match get_vertex cfg n with
+         | Some ((ssa_elems, CF_block (instrs, terminator)), preds, succs) ->
+            List.iter (fun i -> print_endline (Pretty_print_sail.to_string (pp_instr i))) instrs;
+            let instrs = Util.option_these (List.map (simplify_instr env locals) instrs) in
+            print_endline "Simplfied";
+            List.iter (fun i -> print_endline (Pretty_print_sail.to_string (pp_instr i))) instrs;
+            cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, terminator)), preds, succs)
+         | _ -> ()
+       ) visit_order;
+     (* Second, simplify all block conditionals *)
+     let simp_cval cval =
+       print_endline ("Conditional: " ^ string_of_cval cval);
+       match Jib_interpreter.evaluate_cval !locals cval with
+       | Some v ->
+          print_endline "Simplified!";
+          V_lit (v, cval_ctyp cval)
+       | None -> cval
+     in
+     cfg.conds <- IntMap.map simp_cval cfg.conds;
+     (* Now we can simplify conditional jump block terminators *)
+     List.iter (fun n ->
+         match get_vertex cfg n with
+         | Some ((ssa_elems, CF_block (instrs, terminator)), preds, succs) ->
+            begin match terminator with
+              | T_jump (cond_number, label) ->
+                 begin match IntMap.find cond_number cfg.conds with
+                 | V_lit (VL_bool true, _) ->
+                    print_endline ("Jump is always taken");
+                    let succs = IntSet.filter (is_label cfg label) succs in
+                    cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, T_goto label)), preds, succs)
+                 | V_lit (VL_bool false, _) ->
+                    print_endline ("Jump is never taken");
+                    let succs = IntSet.filter (fun n -> not (is_label cfg label n)) succs in
+                    cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, T_none)), preds, succs)  
+                 | _ ->
+                    cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, terminator)), preds, succs)  
+                 end
+              | _ ->
+                 cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, terminator)), preds, succs)
+            end
+         | _ -> ()
+       ) visit_order;
+     (* Now we have simplified the block terminators, we delete all
+        nodes that are now unreachable. *)
+     let visited = reachable (IntSet.singleton start) cfg in
+     (* TODO: patch up phi and pi nodes, probably need to prune just succs *)
+     prune visited cfg;
+     ()
+     
 (* Debugging utilities for outputing Graphviz files. *)
 
 let string_of_ssainstr = function

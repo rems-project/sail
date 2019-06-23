@@ -72,6 +72,11 @@ let mk_bits = Maybe.map (fun x -> VL_bits x true)
 let primops name args =
   match (name, args) with
   (* lib/flow.sail *)
+  | ("eq_int", [VL_int n; VL_int m]) -> Just (VL_bool (n = m))
+  | ("lt", [VL_int n; VL_int m]) -> Just (VL_bool (n < m))
+  | ("lteq", [VL_int n; VL_int m]) -> Just (VL_bool (n <= m))
+  | ("gt", [VL_int n; VL_int m]) -> Just (VL_bool (n > m))
+  | ("gteq", [VL_int n; VL_int m]) -> Just (VL_bool (n >= m))
   | ("sail_cons", [v; VL_list vs]) -> Just (VL_list (v :: vs))
 
   (* lib/arith.sail *)

@@ -1903,6 +1903,9 @@ let smt_instr_list name ctx all_cdefs instrs =
 
   let open Jib_ssa in
   let start, cfg = ssa instrs in
+
+  simplify_ssa ctx.tc_env start cfg;
+  
   let visit_order =
     try topsort cfg with
     | Not_a_DAG n ->
@@ -1914,7 +1917,7 @@ let smt_instr_list name ctx all_cdefs instrs =
     dump_graph name cfg;
 
   List.iter (fun n ->
-      begin match get_vertex cfg n with
+      match get_vertex cfg n with
       | None -> ()
       | Some ((ssa_elems, cfnode), preds, succs) ->
          let muxers =
@@ -1924,7 +1927,6 @@ let smt_instr_list name ctx all_cdefs instrs =
          let basic_block = smt_cfnode all_cdefs ctx ssa_elems cfnode in
          push_smt_defs stack muxers;
          push_smt_defs stack basic_block
-      end
     ) visit_order;
 
   stack, cfg
