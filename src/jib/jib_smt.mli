@@ -59,6 +59,7 @@ val opt_ignore_overflow : bool ref
 val opt_auto : bool ref
 val opt_debug_graphs : bool ref
 val opt_propagate_vars : bool ref
+val opt_simplify_ssa : bool ref
 
 val zencode_name : name -> string
 

@@ -71,6 +71,8 @@ let opt_debug_graphs = ref false
 
 let opt_propagate_vars = ref false
 
+let opt_simplify_ssa = ref false
+                       
 module EventMap = Map.Make(Event)
 
 (* Note that we have to use x : ty ref rather than mutable x : ty, to
@@ -1904,7 +1906,8 @@ let smt_instr_list name ctx all_cdefs instrs =
   let open Jib_ssa in
   let start, cfg = ssa instrs in
 
-  simplify_ssa ctx.tc_env start cfg;
+  if !opt_simplify_ssa then
+    simplify_ssa ctx.tc_env start cfg;
   
   let visit_order =
     try topsort cfg with
