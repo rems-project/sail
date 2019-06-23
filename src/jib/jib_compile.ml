@@ -200,16 +200,19 @@ let rec compile_aval l ctx = function
      else
        [], cval, []
 
-  | AV_id (id, typ) ->
-     begin
-       try
-         let _, ctyp = Bindings.find id ctx.locals in
-         [], V_id (name id, ctyp), []
-       with
-       | Not_found ->
-          [], V_id (name id, ctyp_of_typ ctx (lvar_typ typ)), []
+  | AV_id (id, lvar) ->
+     begin match lvar with
+     | Local (_, typ) | Register (_, _, typ) ->
+        begin match Bindings.find_opt id ctx.locals with
+        | Some (_, ctyp) -> [], V_id (name id, ctyp), []
+        | None -> [], V_id (name id, ctyp_of_typ ctx typ), []
+        end
+     | Enum typ ->
+        [], V_lit (VL_enum (string_of_id id), ctyp_of_typ ctx (lvar_typ lvar)), []
+     | Unbound ->
+        raise (Reporting.err_general l ("Unbound identifier found while converting from ANF to Jib IR"))
      end
-
+       
   | AV_ref (id, typ) ->
      [], V_ref (name id, ctyp_of_typ ctx (lvar_typ typ)), []
 
@@ -540,7 +543,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   | AP_id (pid, _) when is_ct_enum ctyp ->
      begin match Env.lookup_id pid ctx.tc_env with
      | Unbound -> [idecl ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx
-     | _ -> [ijump (V_call (Neq, [V_id (name pid, ctyp); cval])) case_label], [], ctx
+     | _ -> [ijump (V_call (Neq, [V_lit (VL_enum (string_of_id pid), ctyp); cval])) case_label], [], ctx
      end
 
   | AP_id (pid, typ) ->

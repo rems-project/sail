@@ -271,7 +271,7 @@ let rec string_of_value = function
   | VL_list [] -> "NULL"
   | VL_list values -> "[|" ^ Util.string_of_list ", " string_of_value values ^ "|]"
   | VL_constructor (ctor, vl) -> ctor ^ "(" ^ string_of_value vl ^ ")"
-  | VL_enum element -> element
+  | VL_enum element -> Util.zencode_string element
 
 let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
   let ssa_num n = if n = -1 then "" else ("/" ^ string_of_int n) in
