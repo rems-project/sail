@@ -1,5 +1,6 @@
 SAIL:=../sail -Ofast_undefined
 LEM:=../../lem/lem
+LEM_ISA_LIB?=$(shell opam config var lem:share)/isabelle-lib
 
 default: all
 
@@ -16,6 +17,9 @@ SOURCES=prelude.sail\
   armV8.sail\
   ../lib/regfp.sail\
   aarch64_regfp.sail
+
+MONO_SPLICES=$(wildcard mono-splices/*.sail)
+MONO_SPLICES_OPTS=$(foreach file,$(MONO_SPLICES),-splice $(file))
 
 all: armV8.lem for-rmem/armV8.lem for-rmem/armV8_toFromInterp2.ml for-rmem/armV8.defs
 
@@ -39,10 +43,24 @@ for-rmem/armV8.defs: $(SOURCES)
 	mkdir -p $(dir $@)
 	$(SAIL) -marshal -o $(basename $@) $^
 
+mono/armV8.lem mono/armV8_types.lem mono/ArmV8_lemmas.thy: $(SOURCES) $(MONO_SPLICES)
+	$(SAIL) $(SAILFLAGS) -lem -lem_mwords -auto_mono -mono_rewrites -lem_lib ArmV8_extras_embed -lem_output_dir $(dir $@) -isa_output_dir $(dir $@) -o armV8 ../lib/mono_rewrites.sail $(SOURCES) $(MONO_SPLICES_OPTS)
+
+mono/ArmV8.thy mono/ArmV8_mono.thy mono/ArmV8_extras_embed.thy: mono/armV8_types.lem mono/armV8.lem armV8_extras_embed.lem
+	cp armV8_extras_embed.lem mono/
+	$(LEM) -isa -lib Sail=../src/gen_lib -lib Sail=../src/lem_interp mono/armV8_types.lem mono/armV8.lem mono/armV8_extras_embed.lem
+
+.PHONY: mono-isa-build
+mono-isa-build: mono/ArmV8.thy
+	isabelle build -b -d $(LEM_ISA_LIB) -d ../lib/isabelle -D mono
+
 clean:
 	rm -f armV8.lem armV8.ml
 	rm -f armV8_embed*.lem armV8_toFromInterp.lem
 	rm -f for-rmem/*
+	rm -f mono/armV8_types.lem mono/armV8.lem mono/armV8_extras_embed.lem
+	rm -f mono/ArmV8_lemmas.thy mono/ArmV8_types_lemmas.thy
+	rm -f mono/ArmV8_types.thy mono/ArmV8.thy mono/ArmV8_extras_embed.thy
 
 ######################################################################
 ETCDIR=../etc
