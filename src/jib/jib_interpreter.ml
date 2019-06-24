@@ -267,7 +267,9 @@ let rec declaration = function
      | elem :: _ -> VL_enum (string_of_id elem)
      | _ -> failwith "Empty enum type"
      end
-  | ctyp -> failwith ("Unsupported declaration " ^ string_of_ctyp ctyp)
+  | CT_struct (_, fields) ->
+     VL_struct (List.map (fun (id, ctyp) -> string_of_id id, declaration ctyp) fields)
+  | ctyp -> failwith (" declaration " ^ string_of_ctyp ctyp)
 
 let set_tuple tup n v =
   match tup with

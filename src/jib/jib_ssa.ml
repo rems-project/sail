@@ -78,7 +78,7 @@ let get_cond graph n =
     IntMap.find n graph.conds
   else
     V_call (Bnot, [IntMap.find (abs n) graph.conds])
-     
+
 let get_vertex graph n = graph.nodes.(n)
 
 let iter_graph f graph =
@@ -201,16 +201,20 @@ let prune visited graph =
   done
 
 let prune_succs visited graph =
+  let removed = ref 0 in
   for i = 0 to graph.next - 1 do
     match graph.nodes.(i) with
     | Some (n, preds, succs) ->
-       if IntSet.mem i visited then
+       if IntSet.mem i visited then (
          graph.nodes.(i) <- Some (n, preds, IntSet.inter visited succs)
-       else
+       ) else (
+         incr removed;
          graph.nodes.(i) <- None
+       )
     | None -> ()
-  done
-  
+  done;
+  !removed
+
 (**************************************************************************)
 (* 2. Mutable control flow graph                                          *)
 (**************************************************************************)
@@ -741,16 +745,11 @@ let simplify_assignment clexp v locals instr =
         instr
      end
   | _ -> instr
-  
+
 let simplify_instr env locals instr =
   let open Jib_interpreter in
   let open Value2 in
   match instr with
-  | I_aux (I_decl (ctyp, id), _) ->
-     (* Is this ok to do? *)
-     locals := NameMap.add id (declaration ctyp) !locals;
-     instr
-    
   | I_aux (I_copy (clexp, cval), aux) ->
      begin match evaluate_cval !locals cval with
      | Some v ->
@@ -766,7 +765,7 @@ let simplify_instr env locals instr =
         I_aux (I_init (ctyp, name, V_lit (v, cval_ctyp cval)), aux)
      | None -> instr
      end
-    
+
   | I_aux (I_funcall (clexp, false, id, args), aux) ->
      let simplified_args = List.map (evaluate_cval !locals) args in
      let args = List.map2 (fun orig_arg simp_arg ->
@@ -802,32 +801,36 @@ let vertex_exists cfg n =
   | Some _ -> true
   | None -> false
 
+let propagate_ssa_elem locals = function
+  | Phi (id, _, [id']) ->
+     begin match NameMap.find_opt id' !locals with
+     | Some v -> locals := NameMap.add id v !locals
+     | None -> ()
+     end
+  | _ -> ()
+
 (* Simplification of SSA graphs *)
-          
-let simplify_ssa env start cfg =
-  print_endline "Called simplify ssa";
+
+let simplify_ssa_pass env start cfg =
   match (try Some (topsort cfg) with Not_a_DAG _ -> None) with
-  | None -> ()
+  | None -> 0
   | Some visit_order ->
      let locals = ref NameMap.empty in
      (* First we simplify all basic blocks in topological order from the start node *)
      List.iter (fun n ->
-         print_endline ("Simplify block " ^ string_of_int n);
          match get_vertex cfg n with
          | Some ((ssa_elems, CF_block (instrs, terminator)), preds, succs) ->
-            List.iter (fun i -> print_endline (Pretty_print_sail.to_string (pp_instr i))) instrs;
+            List.iter (propagate_ssa_elem locals) ssa_elems;
             let instrs = List.map (simplify_instr env locals) instrs in
-            print_endline "Simplfied";
-            List.iter (fun i -> print_endline (Pretty_print_sail.to_string (pp_instr i))) instrs;
             cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, terminator)), preds, succs)
-         | _ -> ()
+         | Some ((ssa_elems, _), _ , _) ->
+            List.iter (propagate_ssa_elem locals) ssa_elems;
+         | None -> ()
        ) visit_order;
      (* Second, simplify all block conditionals *)
      let simp_cval cval =
-       print_endline ("Conditional: " ^ string_of_cval cval);
        match Jib_interpreter.evaluate_cval !locals cval with
        | Some v ->
-          print_endline ("Simplified! " ^ string_of_value v);
           V_lit (v, cval_ctyp cval)
        | None -> cval
      in
@@ -840,19 +843,13 @@ let simplify_ssa env start cfg =
             | T_jump (cond_number, label) ->
                begin match IntMap.find cond_number cfg.conds with
                | V_lit (VL_bool true, _) ->
-                  print_endline ("Jump is always taken");
-                  print_endline (Util.string_of_list ", " string_of_int (IntSet.elements succs));
                   let succs = IntSet.filter (is_guard cfg cond_number) succs in
-                  print_endline (Util.string_of_list ", " string_of_int (IntSet.elements succs));
                   cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, T_goto label)), preds, succs)
                | V_lit (VL_bool false, _) ->
-                  print_endline ("Jump is never taken");
-                  print_endline (Util.string_of_list ", " string_of_int (IntSet.elements succs));
-                  let succs = IntSet.filter (fun n -> is_guard cfg (- cond_number) n) succs in
-                  print_endline (Util.string_of_list ", " string_of_int (IntSet.elements succs));                  
-                  cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, T_none)), preds, succs)  
+                  let succs = IntSet.filter (is_guard cfg (- cond_number)) succs in
+                  cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, T_none)), preds, succs)
                | _ ->
-                  cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, terminator)), preds, succs)  
+                  cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, terminator)), preds, succs)
                end
             | _ ->
                cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, terminator)), preds, succs)
@@ -864,10 +861,9 @@ let simplify_ssa env start cfg =
      let visited = reachable (IntSet.singleton start) cfg in
      (* Only prune away successor links, as we use the invalidated
         predecessor links to simplify the phi functions *)
-     prune_succs visited cfg;
+     let removed = prune_succs visited cfg in
      (* Finally, simplify the phi and pi functions in the reachable nodes *)
      IntSet.iter (fun n ->
-         print_endline ("Alive " ^ string_of_int n);
          match get_vertex cfg n with
          | Some ((ssa_elems, cfnode), preds, succs) ->
             let valid_preds = List.map (vertex_exists cfg) (IntSet.elements preds) in
@@ -879,8 +875,18 @@ let simplify_ssa env start cfg =
             in
             cfg.nodes.(n) <- Some ((List.map simp_ssa_elem ssa_elems, cfnode), IntSet.filter (vertex_exists cfg) preds, succs)
          | _ -> ()
-       ) visited
-     
+       ) visited;
+     removed
+
+(* Because each simplification pass may remove join points which then
+   allows more simplification to occur, we iterate simplification
+   until no more nodes can be removed *)
+let rec simplify_ssa env start cfg =
+  if simplify_ssa_pass env start cfg > 0 then
+    simplify_ssa env start cfg
+  else
+    ()
+
 (* Debugging utilities for outputing Graphviz files. *)
 
 let string_of_ssainstr = function

@@ -1480,11 +1480,15 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
          string (Printf.sprintf "  %s = %s(%s%s);" (sgen_clexp_pure x) fname (extra_arguments is_extern) c_args)
        else
          string (Printf.sprintf "  %s(%s%s, %s);" fname (extra_arguments is_extern) (sgen_clexp x) c_args)
-     
+
   | I_clear (ctyp, id) when is_stack_ctyp ctyp ->
      empty
   | I_clear (ctyp, id) ->
      string (Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name id))
+
+  (* This is a bit of a hack, as we know we only ever initialise tuples before setting all their fields *)
+  | I_init (ctyp, id, V_lit (VL_tuple _, _)) ->
+     codegen_instr fid ctx (idecl ctyp id)
 
   | I_init (ctyp, id, cval) ->
      codegen_instr fid ctx (idecl ctyp id) ^^ hardline
@@ -2040,7 +2044,7 @@ let codegen_def' ctx = function
      codegen_mapping_spec Forwards left_ctyp right_ctyp
      ^^ twice hardline
      ^^ codegen_mapping_spec Backwards right_ctyp left_ctyp
-     
+
   | CDEF_fundef (id, calling_convention, args, instrs) as def ->
      (* Extract type information about the function from the environment. *)
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec (strip_direction id) ctx.tc_env in

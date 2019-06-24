@@ -38,6 +38,7 @@ xml = '<testsuites>\n'
 
 if distutils.spawn.find_executable('cvc4'):
     xml += test_smt('cvc4', 'cvc4 --lang=smt2.6', '')
+    xml += test_smt('cvc4', 'cvc4 --lang=smt2.6', '-smt_simplify_ssa')
 else:
     print '{}Cannot find SMT solver cvc4 skipping tests{}'.format(color.WARNING, color.END)
 

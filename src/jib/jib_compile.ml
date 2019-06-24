@@ -212,7 +212,7 @@ let rec compile_aval l ctx = function
      | Unbound ->
         raise (Reporting.err_general l ("Unbound identifier found while converting from ANF to Jib IR"))
      end
-       
+
   | AV_ref (id, typ) ->
      [], V_ref (name id, ctyp_of_typ ctx (lvar_typ typ)), []
 
@@ -259,13 +259,16 @@ let rec compile_aval l ctx = function
      let cvals = List.map (fun (_, cval, _) -> cval) elements in
      let setup = List.concat (List.map (fun (setup, _, _) -> setup) elements) in
      let cleanup = List.concat (List.rev (List.map (fun (_, _, cleanup) -> cleanup) elements)) in
-     let tup_ctyp = CT_tup (List.map cval_ctyp cvals) in
+     let tuple_ctyps = List.map cval_ctyp cvals in
+     let tuple_ctyp = CT_tup tuple_ctyps in
      let gs = ngensym () in
      setup
-     @ [idecl tup_ctyp gs]
-     @ List.mapi (fun n cval -> icopy l (CL_tuple (CL_id (gs, tup_ctyp), n)) cval) cvals,
-     V_id (gs, CT_tup (List.map cval_ctyp cvals)),
-     [iclear tup_ctyp gs]
+     (* This is iinit rather than idecl to enable constant propagation
+        in SSA simplification. The C backend will however still use idecl. *)
+     @ [iinit tuple_ctyp gs (V_lit (VL_tuple (List.map Jib_interpreter.declaration tuple_ctyps), tuple_ctyp))]
+     @ List.mapi (fun n cval -> icopy l (CL_tuple (CL_id (gs, tuple_ctyp), n)) cval) cvals,
+     V_id (gs, tuple_ctyp),
+     [iclear tuple_ctyp gs]
      @ cleanup
 
   | AV_record (fields, typ) when ctx.struct_value ->

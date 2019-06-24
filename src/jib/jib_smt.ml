@@ -72,7 +72,7 @@ let opt_debug_graphs = ref false
 let opt_propagate_vars = ref false
 
 let opt_simplify_ssa = ref false
-                       
+
 module EventMap = Map.Make(Event)
 
 (* Note that we have to use x : ty ref rather than mutable x : ty, to
@@ -237,6 +237,13 @@ let rec smt_value ctx vl ctyp =
      | Some s -> Hex (Xstring.implode s)
      | None -> Bin (Xstring.implode (List.map Sail2_values.bitU_char (List.rev (Util.take n (List.rev bs)))))
      end
+  | VL_bits (bs, true), CT_lbits _ ->
+     let n = lbits_size ctx in
+     let bv = match Sail2_values.hexstring_of_bits (List.rev (Util.take n (List.rev bs))) with
+       | Some s -> Hex (Xstring.implode s)
+       | None -> Bin (Xstring.implode (List.map Sail2_values.bitU_char (List.rev (Util.take n (List.rev bs)))))
+     in
+     Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int (List.length bs)); bv])
   | VL_bool b, _ -> Bool_lit b
   | VL_int n, CT_constant m -> bvint (required_width n) n
   | VL_int n, CT_fint sz -> bvint sz n
@@ -262,7 +269,9 @@ let rec smt_value ctx vl ctyp =
      | None ->
         failwith ("Cannot translate constructor to SMT " ^ ctor)
      end
-  | vl, _ -> failwith ("Cannot translate literal to SMT: " ^ string_of_value vl)
+  | VL_tuple vls, CT_tup ctyps when List.length vls = List.length ctyps ->
+     Fn ("tup" ^ string_of_int (List.length vls), List.map2 (smt_value ctx) vls ctyps)
+  | _ -> failwith ("Cannot translate literal to SMT: " ^ string_of_value vl ^ " : " ^ string_of_ctyp ctyp)
 
 let zencode_ctor ctor_id unifiers =
   match unifiers with
@@ -1600,6 +1609,15 @@ let smt_instr ctx =
          end
        else if name = "sail_exit" then
          (add_event ctx Assertion (Bool_lit false); [])
+       else if name = "sail_assert" then
+         begin match args with
+         | [assertion; _] ->
+            let smt = smt_cval ctx assertion in
+            add_event ctx Assertion smt;
+            []
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for assertion"
+         end
        else
          let value = smt_builtin ctx name args ret_ctyp in
          [define_const ctx id ret_ctyp value]
@@ -1613,15 +1631,6 @@ let smt_instr ctx =
              (Fn ("store", [smt_cval ctx vec; force_size ~checked:false ctx ctx.vector_index sz (smt_cval ctx i); smt_cval ctx x]))]
        | _ ->
           Reporting.unreachable l __POS__ "Bad arguments for internal_vector_update"
-       end
-     else if string_of_id function_id = "sail_assert" then
-       begin match args with
-       | [assertion; _] ->
-          let smt = smt_cval ctx assertion in
-          add_event ctx Assertion smt;
-          []
-       | _ ->
-          Reporting.unreachable l __POS__ "Bad arguments for assertion"
        end
      else if string_of_id function_id = "sail_assume" then
        begin match args with
