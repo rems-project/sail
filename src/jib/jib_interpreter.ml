@@ -184,22 +184,26 @@ let rec evaluate_cval locals = function
   | V_ctor_kind (cval, kind, [], _) ->
      begin match evaluate_cval locals cval with
      | Some (VL_constructor (ctor, _)) -> Some (VL_bool (ctor <> string_of_id kind)) 
-     | _ -> failwith "Bad ctor_kind call"
+     | Some _ -> failwith ("Bad ctor_kind call on " ^ string_of_cval cval)
+     | None -> None
      end
   | V_ctor_kind (cval, kind, unifiers, _) ->
      begin match evaluate_cval locals cval with
      | Some (VL_constructor (ctor, _)) -> Some (VL_bool (ctor <> (string_of_id kind ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)))
-     | _ -> failwith "Bad ctor_kind call"
+     | Some _ -> failwith "Bad ctor_kind call"
+     | None -> None
      end
   | V_ctor_unwrap (_, cval, _, _) ->
      begin match evaluate_cval locals cval with
      | Some (VL_constructor (_, value)) -> Some value
-     | _ -> failwith "Bad ctor_unwrap call"
+     | Some _  -> failwith ("Bad ctor_unwrap call on " ^ string_of_cval cval)
+     | None -> None
      end
   | V_tuple_member (cval, _, n) ->
      begin match evaluate_cval locals cval with
      | Some (VL_tuple vs) -> Some (List.nth vs n)
-     | _ -> failwith "Bad tuple_member call"
+     | Some _ -> failwith "Bad tuple_member call"
+     | None -> None
      end
   | cval -> failwith ("Unsupported cval " ^ string_of_cval cval)
 

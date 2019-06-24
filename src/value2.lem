@@ -73,6 +73,7 @@ let primops name args =
   match (name, args) with
   (* lib/flow.sail *)
   | ("eq_int", [VL_int n; VL_int m]) -> Just (VL_bool (n = m))
+  | ("eq_bool", [VL_bool b1; VL_bool b2]) -> Just (VL_bool (b1 = b2))
   | ("lt", [VL_int n; VL_int m]) -> Just (VL_bool (n < m))
   | ("lteq", [VL_int n; VL_int m]) -> Just (VL_bool (n <= m))
   | ("gt", [VL_int n; VL_int m]) -> Just (VL_bool (n > m))
@@ -84,7 +85,13 @@ let primops name args =
   | ("sub_int", [VL_int n; VL_int m]) -> Just (VL_int (integerMinus n m))
 
   (* lib/vector_dec.sail *)
+  | ("eq_bits", [VL_bits bv1 _; VL_bits bv2 _]) -> Just (VL_bool (eq_vec bv1 bv2))
+  | ("sail_unsigned", [VL_bits bv _]) -> Just (VL_int (uint bv))
+  | ("sail_signed", [VL_bits bv _]) -> Just (VL_int (sint bv))
+  | ("zero_extend", [VL_bits bv d; VL_int n]) -> Just (VL_bits (zero_extend bv n) d)
+  | ("sign_extend", [VL_bits bv d; VL_int n]) -> Just (VL_bits (sign_extend bv n) d)
   | ("zeros", [VL_int n]) -> Just (VL_bits (zeros n) true)
+  | ("add_bits", [VL_bits bv1 d; VL_bits bv2 _]) -> Just (VL_bits (add_vec bv1 bv2) d)
   | ("get_slice_int", [VL_int len; VL_int n; VL_int lo]) -> Just (VL_bits (get_slice_int len n lo) true)
 
   (* lib/string.sail *)

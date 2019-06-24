@@ -732,12 +732,25 @@ let simplify_assignment clexp v locals instr =
   | CL_id (id, ctyp) ->
      locals := NameMap.add id v !locals;
      icopy Parse_ast.Unknown (CL_id (id, ctyp)) (V_lit (v, ctyp))
+  | CL_tuple (CL_rmw (read, write, ctyp), n) ->
+     begin match NameMap.find_opt read !locals with
+     | Some tup ->
+        locals := NameMap.add write (Jib_interpreter.set_tuple tup n v) !locals;
+        instr
+     | None ->
+        instr
+     end
   | _ -> instr
   
 let simplify_instr env locals instr =
   let open Jib_interpreter in
   let open Value2 in
   match instr with
+  | I_aux (I_decl (ctyp, id), _) ->
+     (* Is this ok to do? *)
+     locals := NameMap.add id (declaration ctyp) !locals;
+     instr
+    
   | I_aux (I_copy (clexp, cval), aux) ->
      begin match evaluate_cval !locals cval with
      | Some v ->
@@ -814,7 +827,7 @@ let simplify_ssa env start cfg =
        print_endline ("Conditional: " ^ string_of_cval cval);
        match Jib_interpreter.evaluate_cval !locals cval with
        | Some v ->
-          print_endline "Simplified!";
+          print_endline ("Simplified! " ^ string_of_value v);
           V_lit (v, cval_ctyp cval)
        | None -> cval
      in
@@ -834,7 +847,9 @@ let simplify_ssa env start cfg =
                   cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, T_goto label)), preds, succs)
                | V_lit (VL_bool false, _) ->
                   print_endline ("Jump is never taken");
-                  let succs = IntSet.filter (fun n -> not (is_guard cfg (- cond_number) n)) succs in
+                  print_endline (Util.string_of_list ", " string_of_int (IntSet.elements succs));
+                  let succs = IntSet.filter (fun n -> is_guard cfg (- cond_number) n) succs in
+                  print_endline (Util.string_of_list ", " string_of_int (IntSet.elements succs));                  
                   cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, T_none)), preds, succs)  
                | _ ->
                   cfg.nodes.(n) <- Some ((ssa_elems, CF_block (instrs, terminator)), preds, succs)  

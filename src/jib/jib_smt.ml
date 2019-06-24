@@ -228,7 +228,7 @@ let bvint sz x =
     bvpint sz x
 
 (* Translate Jib literals into SMT *)
-let smt_value ctx vl ctyp =
+let rec smt_value ctx vl ctyp =
   let open Value2 in
   match vl, ctyp with
   | VL_bits (bs, true), CT_fbits (n, _) ->
@@ -254,6 +254,14 @@ let smt_value ctx vl ctyp =
      else
        Real_lit str
   | VL_enum str, _ -> Enum (Util.zencode_string str)
+  | VL_constructor (ctor, vl), CT_variant (_, ctor_ctyps) ->
+     let ctor_ctyps = List.map (fun (ctor, ctyp) -> string_of_id ctor, ctyp) ctor_ctyps in
+     begin match List.assoc_opt ctor ctor_ctyps with
+     | Some ctor_ctyp ->
+        Fn (Util.zencode_string ctor, [smt_value ctx vl ctor_ctyp])
+     | None ->
+        failwith ("Cannot translate constructor to SMT " ^ ctor)
+     end
   | vl, _ -> failwith ("Cannot translate literal to SMT: " ^ string_of_value vl)
 
 let zencode_ctor ctor_id unifiers =
@@ -1590,6 +1598,8 @@ let smt_instr ctx =
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __excl_res"
          end
+       else if name = "sail_exit" then
+         (add_event ctx Assertion (Bool_lit false); [])
        else
          let value = smt_builtin ctx name args ret_ctyp in
          [define_const ctx id ret_ctyp value]
@@ -2045,7 +2055,7 @@ let compile env ast =
   in
   let cdefs = Jib_optimize.unique_per_function_ids cdefs in
   let rmap = build_register_map CTMap.empty cdefs in
-  cdefs, jib_ctx, { (initial_ctx ()) with tc_env = env; register_map = rmap; ast = ast }
+  cdefs, jib_ctx, { (initial_ctx ()) with tc_env = jib_ctx.tc_env; register_map = rmap; ast = ast }
 
 let serialize_smt_model file env ast =
   let cdefs, _, ctx = compile env ast in
