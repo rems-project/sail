@@ -94,6 +94,8 @@ type ctx = {
     arg_stack : (int * string) Stack.t;
     (** The fully type-checked ast *)
     ast : Type_check.tannot defs;
+    (** Shared variables. Used by sail-axiomatic *)
+    shared : ctyp Bindings.t;
     (** For every event type we have a stack of boolean SMT
        expressions for each occurance of that event. See
        src/property.ml for the event types *)
@@ -110,6 +112,8 @@ type ctx = {
     use_real : bool ref
   }
 
+val declare_const : ctx -> name -> ctyp -> smt_def
+  
 (** Compile an AST into Jib suitable for SMT generation, and initialise a context. *)
 val compile : Type_check.Env.t -> Type_check.tannot defs -> cdef list * Jib_compile.ctx * ctx
 

@@ -94,6 +94,7 @@ type smt_exp =
   | Real_lit of string
   | String_lit of string
   | Var of string
+  | Shared of string
   | Read_res of string
   | Enum of string
   | Fn of string * smt_exp list
@@ -110,7 +111,7 @@ let rec fold_smt_exp f = function
   | SignExtend (n, exp) -> f (SignExtend (n, fold_smt_exp f exp))
   | Extract (n, m, exp) -> f (Extract (n, m, fold_smt_exp f exp))
   | Tester (ctor, exp) -> f (Tester (ctor, fold_smt_exp f exp))
-  | (Bool_lit _ | Hex _ | Bin _ | Real_lit _ | String_lit _ | Var _ | Read_res _ | Enum _ as exp) -> f exp
+  | (Bool_lit _ | Hex _ | Bin _ | Real_lit _ | String_lit _ | Var _ | Shared _ | Read_res _ | Enum _ as exp) -> f exp
 
 let smt_conj = function
   | [] -> Bool_lit true
@@ -185,6 +186,8 @@ let simp_fn = function
   | Fn ("=>", [Bool_lit true; y]) -> y
   | Fn ("=>", [Bool_lit false; y]) -> Bool_lit true
   | Fn ("concat", [Bin b1; Bin b2]) -> Bin (b1 ^ b2)
+  | Fn ("bvadd", [x; (Hex str | Bin str)]) when str = String.make (String.length str) '0' -> x
+  | Fn ("bvadd", [(Hex str | Bin str); x]) when str = String.make (String.length str) '0' -> x
   | Fn ("=", [x; y]) as exp ->
      begin match simp_equal x y with
      | Some b -> Bool_lit b
@@ -206,7 +209,7 @@ let rec simp_smt_exp vars kinds = function
      | Some exp -> simp_smt_exp vars kinds exp
      | None -> Var v
      end
-  | (Read_res _ | Enum _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ as exp) -> exp
+  | (Read_res _ | Shared _ | Enum _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ as exp) -> exp
   | Fn (f, exps) ->
      let exps = List.map (simp_smt_exp vars kinds) exps in
      simp_fn (Fn (f, exps))
@@ -332,6 +335,7 @@ let rec pp_smt_exp =
   | Hex str -> string ("#x" ^ str)
   | Bin str -> string ("#b" ^ str)
   | Var str -> string str
+  | Shared str -> string str
   | Read_res str -> string (str ^ "_ret")
   | Enum str -> string str
   | Fn (str, exps) -> parens (string str ^^ space ^^ separate_map space pp_smt_exp exps)

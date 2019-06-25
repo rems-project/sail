@@ -89,6 +89,7 @@ type ctx = {
     pragma_l : Ast.l;
     arg_stack : (int * string) Stack.t;
     ast : Type_check.tannot defs;
+    shared : ctyp Bindings.t;
     events : smt_exp Stack.t EventMap.t ref;
     node : int;
     pathcond : smt_exp Lazy.t;
@@ -114,6 +115,7 @@ let initial_ctx () = {
     pragma_l = Parse_ast.Unknown;
     arg_stack = Stack.create ();
     ast = Defs [];
+    shared = Bindings.empty;
     events = ref EventMap.empty;
     node = -1;
     pathcond = lazy (Bool_lit true);
@@ -290,6 +292,7 @@ let rec smt_cval ctx cval =
      | V_id (Name (id, _) as ssa_id, _) ->
         begin match Type_check.Env.lookup_id id ctx.tc_env with
         | Enum _ -> Enum (zencode_id id)
+        | _ when Bindings.mem id ctx.shared -> Shared (zencode_id id)
         | _ -> Var (zencode_name ssa_id)
         end
      | V_id (ssa_id, _) -> Var (zencode_name ssa_id)
@@ -1729,7 +1732,7 @@ module Make_optimizer(S : Sequence) = struct
          | Some n -> Hashtbl.replace uses var (n + 1)
          | None -> Hashtbl.add uses var 1
          end
-      | Enum _ | Read_res _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
+      | Shared _ | Enum _ | Read_res _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
       | Fn (_, exps) | Ctor (_, exps) ->
          List.iter uses_in_exp exps
       | Ite (cond, t, e) ->
