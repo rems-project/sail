@@ -418,7 +418,7 @@ let unsigned_size ?checked:(checked=true) ctx n m smt =
   else if n > m then
     Fn ("concat", [bvzero (n - m); smt])
   else
-    failwith "bad arguments to unsigned_size"
+    Extract (n - 1, 0, smt)
 
 let int_size ctx = function
   | CT_constant n -> required_width n
@@ -714,6 +714,13 @@ let builtin_append ctx v1 v2 ret_ctyp =
      let x = Fn ("contents", [smt1]) in
      let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); Fn ("len", [smt2])]) in
      Fn ("Bits", [bvadd (Fn ("len", [smt1])) (Fn ("len", [smt2])); bvor (bvshl x shift) (Fn ("contents", [smt2]))])
+
+  | CT_lbits _, CT_lbits _, CT_fbits (n, _) ->
+     let smt1 = smt_cval ctx v1 in
+     let smt2 = smt_cval ctx v2 in
+     let x = Fn ("contents", [smt1]) in
+     let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); Fn ("len", [smt2])]) in
+     unsigned_size ctx n (lbits_size ctx) (bvor (bvshl x shift) (Fn ("contents", [smt2])))
 
   | _ -> builtin_type_error ctx "append" [v1; v2] (Some ret_ctyp)
 
