@@ -94,8 +94,19 @@ type ctx = {
     arg_stack : (int * string) Stack.t;
     (** The fully type-checked ast *)
     ast : Type_check.tannot defs;
-    (** Shared variables. Used by sail-axiomatic *)
+    (** Shared variables. These variables do not get renamed by
+       Smtlib.suffix_variables_def, and their SSA number is
+       omitted. They should therefore only ever be read and never
+       written. Used by sail-axiomatic for symbolic values in the
+       initial litmus state. *)
     shared : ctyp Bindings.t;
+    (** icopy instructions to an id in preserved will generated a
+       define-const (by using Smtlib.Preserved_const) that will not be
+       simplified away or renamed. It will also not get a SSA
+       number. Such variables can therefore only ever be written to
+       once, and never read. They are used by sail-axiomatic to
+       extract information from the generated SMT. *)
+    preserved : IdSet.t;
     (** For every event type we have a stack of boolean SMT
        expressions for each occurance of that event. See
        src/property.ml for the event types *)
@@ -123,6 +134,8 @@ val compile : Type_check.Env.t -> Type_check.tannot defs -> cdef list * Jib_comp
    long, especially without any optimization. Not clear that this is
    really better than just using lists. *)
 
+val smt_cval : ctx -> cval -> smt_exp
+  
 val smt_header : ctx -> cdef list -> smt_def list
 
 val smt_query : ctx -> Property.query -> smt_exp

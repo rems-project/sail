@@ -90,6 +90,7 @@ type ctx = {
     arg_stack : (int * string) Stack.t;
     ast : Type_check.tannot defs;
     shared : ctyp Bindings.t;
+    preserved : IdSet.t;
     events : smt_exp Stack.t EventMap.t ref;
     node : int;
     pathcond : smt_exp Lazy.t;
@@ -116,6 +117,7 @@ let initial_ctx () = {
     arg_stack = Stack.create ();
     ast = Defs [];
     shared = Bindings.empty;
+    preserved = IdSet.empty;
     events = ref EventMap.empty;
     node = -1;
     pathcond = lazy (Bool_lit true);
@@ -1204,6 +1206,7 @@ let rec smt_conversion ctx from_ctyp to_ctyp x =
   | _, _ -> failwith (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
 
 let define_const ctx id ctyp exp = Define_const (zencode_name id, smt_ctyp ctx ctyp, exp)
+let preserve_const ctx id ctyp exp = Preserve_const (string_of_id id, smt_ctyp ctx ctyp, exp)
 let declare_const ctx id ctyp = Declare_const (zencode_name id, smt_ctyp ctx ctyp)
 
 let smt_ctype_def ctx = function
@@ -1684,14 +1687,20 @@ let smt_instr ctx =
      Reporting.unreachable l __POS__ "Register reference write should be re-written by now"
 
   | I_aux (I_init (ctyp, id, cval), _) | I_aux (I_copy (CL_id (id, ctyp), cval), _) ->
-     [define_const ctx id ctyp
-        (smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval))]
+     begin match id with
+     | Name (id, _) when IdSet.mem id ctx.preserved ->
+        [preserve_const ctx id ctyp
+           (smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval))]
+     | _ ->
+        [define_const ctx id ctyp
+           (smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval))]
+     end
 
   | I_aux (I_copy (clexp, cval), _) ->
      let smt = smt_cval ctx cval in
      let write, ctyp = rmw_write clexp in
      [define_const ctx write ctyp (rmw_modify smt clexp)]
-
+ 
   | I_aux (I_decl (ctyp, id), (_, l)) ->
      (* Function arguments have unique locations defined from the
         $property pragma. We record how they will appear in the
@@ -1769,6 +1778,7 @@ module Make_optimizer(S : Sequence) = struct
          uses_in_exp cond; uses_in_exp t; uses_in_exp e
       | Extract (_, _, exp) | Tester (_, exp) | SignExtend (_, exp) ->
          uses_in_exp exp
+      | Forall _ -> assert false
     in
 
     let remove_unused () = function
@@ -1778,6 +1788,9 @@ module Make_optimizer(S : Sequence) = struct
          | Some _ ->
             Stack.push def stack'
          end
+      | Preserve_const (_, _, exp) as def ->
+         uses_in_exp exp;
+         Stack.push def stack'
       | Define_const (var, _, exp) as def ->
          begin match Hashtbl.find_opt uses var with
          | None -> ()
@@ -1816,6 +1829,8 @@ module Make_optimizer(S : Sequence) = struct
     let constant_propagate = function
       | Declare_const _ as def ->
          S.add def seq
+      | Preserve_const (var, typ, exp) ->
+         S.add (Preserve_const (var, typ, simp_smt_exp vars kinds exp)) seq
       | Define_const (var, typ, exp) ->
          let exp = simp_smt_exp vars kinds exp in
          begin match Hashtbl.find_opt uses var, simp_smt_exp vars kinds exp with
