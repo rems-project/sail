@@ -1139,8 +1139,16 @@ let writes = ref (-1)
 let builtin_write_mem ctx wk addr_size addr data_size data =
   incr writes;
   let name = "W" ^ string_of_int !writes in
-  [Write_mem (name, ctx.node, Lazy.force ctx.pathcond, smt_cval ctx wk,
-              smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr), smt_cval ctx data, smt_ctyp ctx (cval_ctyp data))],
+  [Write_mem {
+       name = name;
+       node = ctx.node;
+       active = Lazy.force ctx.pathcond;
+       kind = smt_cval ctx wk;
+       addr = smt_cval ctx addr;
+       addr_type = smt_ctyp ctx (cval_ctyp addr);
+       data = smt_cval ctx data;
+       data_type = smt_ctyp ctx (cval_ctyp data)
+  }],
   Var (name ^ "_ret")
 
 let ea_writes = ref (-1)
@@ -1157,8 +1165,15 @@ let reads = ref (-1)
 let builtin_read_mem ctx rk addr_size addr data_size ret_ctyp =
   incr reads;
   let name = "R" ^ string_of_int !reads in
-  [Read_mem (name, ctx.node, Lazy.force ctx.pathcond, smt_ctyp ctx ret_ctyp, smt_cval ctx rk,
-             smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr))],
+  [Read_mem {
+       name = name;
+       node = ctx.node;
+       active = Lazy.force ctx.pathcond;
+       ret_type = smt_ctyp ctx ret_ctyp;
+       kind = smt_cval ctx rk;
+       addr = smt_cval ctx addr;
+       addr_type = smt_ctyp ctx (cval_ctyp addr)
+  }],
   Read_res name
 
 let excl_results = ref (-1)
@@ -1772,14 +1787,14 @@ module Make_optimizer(S : Sequence) = struct
          end
       | (Declare_datatypes _ | Declare_tuple _) as def ->
          Stack.push def stack'
-      | Write_mem (_, _, active, wk, addr, _, data, _) as def ->
-         uses_in_exp active; uses_in_exp wk; uses_in_exp addr; uses_in_exp data;
+      | Write_mem w as def ->
+         uses_in_exp w.active; uses_in_exp w.kind; uses_in_exp w.addr; uses_in_exp w.data;
          Stack.push def stack'
       | Write_mem_ea (_, _, active, wk, addr, _, data_size, _) as def ->
          uses_in_exp active; uses_in_exp wk; uses_in_exp addr; uses_in_exp data_size;
          Stack.push def stack'
-      | Read_mem (_, _, active, _, rk, addr, _) as def ->
-         uses_in_exp active; uses_in_exp rk; uses_in_exp addr;
+      | Read_mem r as def ->
+         uses_in_exp r.active; uses_in_exp r.kind; uses_in_exp r.addr;
          Stack.push def stack'
       | Barrier (_, _, active, bk) as def ->
          uses_in_exp active; uses_in_exp bk;
@@ -1817,17 +1832,22 @@ module Make_optimizer(S : Sequence) = struct
             S.add (Define_const (var, typ, exp)) seq
          | None, _ -> assert false
          end
-      | Write_mem (name, node, active, wk, addr, addr_ty, data, data_ty) ->
-         S.add (Write_mem (name, node, simp_smt_exp vars kinds active, simp_smt_exp vars kinds wk,
-                           simp_smt_exp vars kinds addr, addr_ty, simp_smt_exp vars kinds data, data_ty))
+      | Write_mem w ->
+         S.add (Write_mem { w with active = simp_smt_exp vars kinds w.active;
+                                   kind = simp_smt_exp vars kinds w.kind;
+                                   addr = simp_smt_exp vars kinds w.addr;
+                                   data = simp_smt_exp vars kinds w.data
+                          })
                seq
       | Write_mem_ea (name, node, active, wk, addr, addr_ty, data_size, data_size_ty) ->
          S.add (Write_mem_ea (name, node, simp_smt_exp vars kinds active, simp_smt_exp vars kinds wk,
                               simp_smt_exp vars kinds addr, addr_ty, simp_smt_exp vars kinds data_size, data_size_ty))
                seq
-      | Read_mem (name, node, active, typ, rk, addr, addr_typ) ->
-         S.add (Read_mem (name, node, simp_smt_exp vars kinds active, typ, simp_smt_exp vars kinds rk,
-                          simp_smt_exp vars kinds addr, addr_typ))
+      | Read_mem r ->
+         S.add (Read_mem { r with active = simp_smt_exp vars kinds r.active;
+                                  kind = simp_smt_exp vars kinds r.kind;
+                                  addr = simp_smt_exp vars kinds r.addr
+                         })
                seq
       | Barrier (name, node, active, bk) ->
          S.add (Barrier (name, node, simp_smt_exp vars kinds active, simp_smt_exp vars kinds bk)) seq

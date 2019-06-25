@@ -73,6 +73,9 @@ val remove_duplicates : 'a list -> 'a list
 (** [remove_dups compare eq l] as remove_duplicates but with parameterised comparison and equality *)
 val remove_dups : ('a -> 'a -> int) -> ('a -> 'a -> bool) -> 'a list -> 'a list
 
+(** Perform a lexicographic comparison over a list *)
+val lex_ord_list : ('a -> 'a -> int) -> 'a list -> 'a list -> int
+
 (** [assoc_equal_opt] and [assoc_compare_opt] are like List.assoc_opt
    but take equality/comparison functions as arguments, rather than
    relying on OCaml's built in equality *)

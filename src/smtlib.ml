@@ -60,6 +60,30 @@ type smt_typ =
   | Tuple of smt_typ list
   | Array of smt_typ * smt_typ
 
+let rec smt_typ_compare t1 t2 =
+  match t1, t2 with
+  | Bitvec n, Bitvec m -> compare n m
+  | Bool, Bool -> 0
+  | String, String -> 0
+  | Real, Real -> 0
+  | Datatype (name1, _), Datatype (name2, _) -> String.compare name1 name2
+  | Tuple ts1, Tuple ts2 -> Util.lex_ord_list smt_typ_compare ts1 ts2
+  | Array (t11, t12), Array (t21, t22) ->
+     let c = smt_typ_compare t11 t21 in
+     if c = 0 then smt_typ_compare t12 t22 else c
+  | Bitvec _, _ -> 1
+  | _, Bitvec _ -> -1
+  | Bool, _ -> 1
+  | _, Bool -> -1
+  | String, _ -> 1
+  | _, String -> -1
+  | Real, _ -> 1
+  | _, Real -> -1
+  | Datatype _, _ -> 1
+  | _, Datatype _ -> -1
+  | Tuple _, _ -> 1
+  | _, Tuple _ -> -1
+
 let rec smt_typ_equal t1 t2 =
   match t1, t2 with
   | Bitvec n, Bitvec m -> n = m
@@ -103,6 +127,7 @@ type smt_exp =
   | SignExtend of int * smt_exp
   | Extract of int * int * smt_exp
   | Tester of string * smt_exp
+  | Forall of (string * smt_typ) list * smt_exp
 
 let rec fold_smt_exp f = function
   | Fn (name, args) -> f (Fn (name, List.map (fold_smt_exp f) args))
@@ -111,6 +136,7 @@ let rec fold_smt_exp f = function
   | SignExtend (n, exp) -> f (SignExtend (n, fold_smt_exp f exp))
   | Extract (n, m, exp) -> f (Extract (n, m, fold_smt_exp f exp))
   | Tester (ctor, exp) -> f (Tester (ctor, fold_smt_exp f exp))
+  | Forall (binders, exp) -> f (Forall (binders, fold_smt_exp f exp))
   | (Bool_lit _ | Hex _ | Bin _ | Real_lit _ | String_lit _ | Var _ | Shared _ | Read_res _ | Enum _ as exp) -> f exp
 
 let smt_conj = function
@@ -242,14 +268,36 @@ let rec simp_smt_exp vars kinds = function
   | SignExtend (i, exp) ->
      let exp = simp_smt_exp vars kinds exp in
      SignExtend (i, exp)
+  | Forall (binders, exp) -> Forall (binders, exp)
+
+type read_info = {
+    name : string;
+    node : int;
+    active : smt_exp;
+    kind : smt_exp;
+    addr_type : smt_typ;
+    addr : smt_exp;
+    ret_type : smt_typ
+  }
+
+type write_info = {
+    name : string;
+    node : int;
+    active  : smt_exp;
+    kind : smt_exp;
+    addr_type : smt_typ;
+    addr : smt_exp;
+    data_type : smt_typ;
+    data : smt_exp
+  }
 
 type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
   | Declare_const of string * smt_typ
   | Define_const of string * smt_typ * smt_exp
-  | Write_mem of string * int * smt_exp * smt_exp * smt_exp * smt_typ * smt_exp * smt_typ
+  | Write_mem of write_info
   | Write_mem_ea of string * int * smt_exp * smt_exp * smt_exp * smt_typ * smt_exp * smt_typ
-  | Read_mem of string * int * smt_exp * smt_typ * smt_exp * smt_exp * smt_typ
+  | Read_mem of read_info
   | Barrier of string * int * smt_exp * smt_exp
   | Excl_res of string * int * smt_exp
   | Declare_datatypes of string * (string * (string * smt_typ) list) list
@@ -260,8 +308,20 @@ let declare_datatypes = function
   | Datatype (name, ctors) -> Declare_datatypes (name, ctors)
   | _ -> assert false
 
+(** For generating SMT with multiple threads (i.e. for litmus tests),
+   we suffix all the variables in the generated SMT with a thread
+   identifier to avoid any name clashes between the two threads. *)
+
 let suffix_variables_exp sfx =
   fold_smt_exp (function Var v -> Var (v ^ sfx) | exp -> exp)
+
+let suffix_variables_read_info sfx (r : read_info) =
+  let suffix exp = suffix_variables_exp sfx exp in
+  { r with name = r.name ^ sfx; active = suffix r.active; kind = suffix r.kind; addr = suffix r.addr }
+
+let suffix_variables_write_info sfx (w : write_info) =
+  let suffix exp = suffix_variables_exp sfx exp in
+  { w with name = w.name ^ sfx; active = suffix w.active; kind = suffix w.kind; addr = suffix w.addr; data = suffix w.data }
 
 let suffix_variables_def sfx = function
   | Define_fun (name, args, ty, exp) ->
@@ -270,15 +330,11 @@ let suffix_variables_def sfx = function
      Declare_const (name ^ sfx, ty)
   | Define_const (name, ty, exp) ->
      Define_const (name ^ sfx, ty, suffix_variables_exp sfx exp)
-  | Write_mem (name, node, active, wk, addr, addr_ty, data, data_ty) ->
-     Write_mem (name ^ sfx, node, suffix_variables_exp sfx active, suffix_variables_exp sfx wk,
-                suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data, data_ty)
+  | Write_mem w -> Write_mem (suffix_variables_write_info sfx w)
   | Write_mem_ea (name, node, active , wk, addr, addr_ty, data_size, data_size_ty) ->
-     Write_mem (name ^ sfx, node, suffix_variables_exp sfx active, suffix_variables_exp sfx wk,
-                suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data_size, data_size_ty)
-  | Read_mem (name, node, active, ty, rk, addr, addr_ty) ->
-     Read_mem (name ^ sfx, node, suffix_variables_exp sfx active, ty, suffix_variables_exp sfx rk,
-               suffix_variables_exp sfx addr, addr_ty)
+     Write_mem_ea (name ^ sfx, node, suffix_variables_exp sfx active, suffix_variables_exp sfx wk,
+                   suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data_size, data_size_ty)
+  | Read_mem r -> Read_mem (suffix_variables_read_info sfx r)
   | Barrier (name, node, active, bk) ->
      Barrier (name ^ sfx, node, suffix_variables_exp sfx active, suffix_variables_exp sfx bk)
   | Excl_res (name, node, active) ->
@@ -326,6 +382,19 @@ let pp_sfun str docs =
   let open PPrint in
   parens (separate space (string str :: docs))
 
+let rec pp_smt_typ =
+  let open PPrint in
+  function
+  | Bool -> string "Bool"
+  | String -> string "String"
+  | Real -> string "Real"
+  | Bitvec n -> string (Printf.sprintf "(_ BitVec %d)" n)
+  | Datatype (name, _) -> string name
+  | Tuple tys -> pp_sfun ("Tup" ^ string_of_int (List.length tys)) (List.map pp_smt_typ tys)
+  | Array (ty1, ty2) -> pp_sfun "Array" [pp_smt_typ ty1; pp_smt_typ ty2]
+
+let pp_str_smt_typ (str, ty) = let open PPrint in parens (string str ^^ space ^^ pp_smt_typ ty)
+
 let rec pp_smt_exp =
   let open PPrint in
   function
@@ -348,19 +417,8 @@ let rec pp_smt_exp =
      parens (string (Printf.sprintf "(_ is %s)" kind) ^^ space ^^ pp_smt_exp exp)
   | SignExtend (i, exp) ->
      parens (string (Printf.sprintf "(_ sign_extend %d)" i) ^^ space ^^ pp_smt_exp exp)
-
-let rec pp_smt_typ =
-  let open PPrint in
-  function
-  | Bool -> string "Bool"
-  | String -> string "String"
-  | Real -> string "Real"
-  | Bitvec n -> string (Printf.sprintf "(_ BitVec %d)" n)
-  | Datatype (name, _) -> string name
-  | Tuple tys -> pp_sfun ("Tup" ^ string_of_int (List.length tys)) (List.map pp_smt_typ tys)
-  | Array (ty1, ty2) -> pp_sfun "Array" [pp_smt_typ ty1; pp_smt_typ ty2]
-
-let pp_str_smt_typ (str, ty) = let open PPrint in string str ^^ space ^^ pp_smt_typ ty
+  | Forall (binders, exp) ->
+     parens (string "forall" ^^ space ^^ parens (separate_map space pp_str_smt_typ binders) ^^ space ^^ pp_smt_exp exp)
 
 let pp_smt_def =
   let open PPrint in
@@ -378,12 +436,12 @@ let pp_smt_def =
   | Define_const (name, ty, exp) ->
      pp_sfun "define-const" [string name; pp_smt_typ ty; pp_smt_exp exp]
 
-  | Write_mem (name, _, active, wk, addr, addr_ty, data, data_ty) ->
-     pp_sfun "define-const" [string (name ^ "_kind"); string "Zwrite_kind"; pp_smt_exp wk] ^^ hardline
-     ^^ pp_sfun "define-const" [string (name ^ "_active"); pp_smt_typ Bool; pp_smt_exp active] ^^ hardline
-     ^^ pp_sfun "define-const" [string (name ^ "_data"); pp_smt_typ data_ty; pp_smt_exp data] ^^ hardline
-     ^^ pp_sfun "define-const" [string (name ^ "_addr"); pp_smt_typ addr_ty; pp_smt_exp addr] ^^ hardline
-     ^^ pp_sfun "declare-const" [string (name ^ "_ret"); pp_smt_typ Bool]
+  | Write_mem w ->
+     pp_sfun "define-const" [string (w.name ^ "_kind"); string "Zwrite_kind"; pp_smt_exp w.kind] ^^ hardline
+     ^^ pp_sfun "define-const" [string (w.name ^ "_active"); pp_smt_typ Bool; pp_smt_exp w.active] ^^ hardline
+     ^^ pp_sfun "define-const" [string (w.name ^ "_data"); pp_smt_typ w.data_type; pp_smt_exp w.data] ^^ hardline
+     ^^ pp_sfun "define-const" [string (w.name ^ "_addr"); pp_smt_typ w.addr_type; pp_smt_exp w.addr] ^^ hardline
+     ^^ pp_sfun "declare-const" [string (w.name ^ "_ret"); pp_smt_typ Bool]
 
   | Write_mem_ea (name, _, active, wk, addr, addr_ty, data_size, data_size_ty) ->
      pp_sfun "define-const" [string (name ^ "_kind"); string "Zwrite_kind"; pp_smt_exp wk] ^^ hardline
@@ -391,11 +449,11 @@ let pp_smt_def =
      ^^ pp_sfun "define-const" [string (name ^ "_size"); pp_smt_typ data_size_ty; pp_smt_exp data_size] ^^ hardline
      ^^ pp_sfun "define-const" [string (name ^ "_addr"); pp_smt_typ addr_ty; pp_smt_exp addr]
 
-  | Read_mem (name, _, active, ty, rk, addr, addr_ty) ->
-     pp_sfun "define-const" [string (name ^ "_kind"); string "Zread_kind"; pp_smt_exp rk] ^^ hardline
-     ^^ pp_sfun "define-const" [string (name ^ "_active"); pp_smt_typ Bool; pp_smt_exp active] ^^ hardline
-     ^^ pp_sfun "define-const" [string (name ^ "_addr"); pp_smt_typ addr_ty; pp_smt_exp addr] ^^ hardline
-     ^^ pp_sfun "declare-const" [string (name ^ "_ret"); pp_smt_typ ty]
+  | Read_mem r ->
+     pp_sfun "define-const" [string (r.name ^ "_kind"); string "Zread_kind"; pp_smt_exp r.kind] ^^ hardline
+     ^^ pp_sfun "define-const" [string (r.name ^ "_active"); pp_smt_typ Bool; pp_smt_exp r.active] ^^ hardline
+     ^^ pp_sfun "define-const" [string (r.name ^ "_addr"); pp_smt_typ r.addr_type; pp_smt_exp r.addr] ^^ hardline
+     ^^ pp_sfun "declare-const" [string (r.name ^ "_ret"); pp_smt_typ r.ret_type]
 
   | Barrier (name, _, active, bk) ->
      pp_sfun "define-const" [string (name ^ "_kind"); string "Zbarrier_kind"; pp_smt_exp bk] ^^ hardline
@@ -409,7 +467,7 @@ let pp_smt_def =
      let pp_ctor (ctor_name, fields) =
        match fields with
        | [] -> parens (string ctor_name)
-       | _ -> pp_sfun ctor_name (List.map (fun field -> parens (pp_str_smt_typ field)) fields)
+       | _ -> pp_sfun ctor_name (List.map pp_str_smt_typ fields)
      in
      pp_sfun "declare-datatypes"
        [Printf.ksprintf string "((%s 0))" name;

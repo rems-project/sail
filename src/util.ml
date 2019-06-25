@@ -143,6 +143,22 @@ let remove_dups compare eq l =
   in
   aux [] l'
 
+let lex_ord_list comparison xs ys =
+  let rec lex_lists xs ys =
+    match xs, ys with
+    | x :: xs, y :: ys ->
+       let c = comparison x y in
+       if c = 0 then lex_lists xs ys else c
+    | [], [] -> 0
+    | _, _ -> assert false
+  in
+  if List.length xs = List.length ys then
+    lex_lists xs ys
+  else if List.length xs < List.length ys then
+    -1
+  else
+    1
+
 let rec power i tothe =
   if tothe <= 0
   then 1
