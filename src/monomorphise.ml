@@ -436,7 +436,7 @@ type split =
   | VarSplit of (tannot pat *        (* pattern for this case *)
       (id * tannot Ast.exp) list *   (* substitutions for arguments *)
       pat_choice list * (* optional locations of constraints/case expressions to reduce *)
-      (kid * nexp) list)             (* substitutions for type variables *)
+      nexp KBindings.t)             (* substitutions for type variables *)
       list
   | ConstrSplit of (tannot pat * nexp KBindings.t) list
 
@@ -669,26 +669,26 @@ let split_defs all_errors splits env defs =
       in if all_errors
         then (no_errors_happened := false;
               print_error error;
-              [P_aux (P_id var,(pat_l,annot)),[],[],[]])
+              [P_aux (P_id var,(pat_l,annot)),[],[],KBindings.empty])
         else raise (Fatal_error error)
     in
     match ty with
     | Typ_id (Id_aux (Id "bool",_)) | Typ_app (Id_aux (Id "atom_bool", _), [_]) ->
-       [P_aux (P_lit (L_aux (L_true,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_true,new_l)),(new_l,annot))],[],[];
-        P_aux (P_lit (L_aux (L_false,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_false,new_l)),(new_l,annot))],[],[]]
+       [P_aux (P_lit (L_aux (L_true,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_true,new_l)),(new_l,annot))],[],KBindings.empty;
+        P_aux (P_lit (L_aux (L_false,new_l)),(l,annot)),[var, E_aux (E_lit (L_aux (L_false,new_l)),(new_l,annot))],[],KBindings.empty]
 
     | Typ_id id ->
        (try
          (* enumerations *)
          let ns = Env.get_enum id env in
          List.map (fun n -> (P_aux (P_id (renew_id n),(l,annot)),
-                             [var,E_aux (E_id (renew_id n),(new_l,annot))],[],[])) ns
+                             [var,E_aux (E_id (renew_id n),(new_l,annot))],[],KBindings.empty)) ns
        with Type_error _ ->
          match id with
          | Id_aux (Id "bit",_) ->
             List.map (fun b ->
               P_aux (P_lit (L_aux (b,new_l)),(l,annot)),
-              [var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))],[],[])
+              [var,E_aux (E_lit (L_aux (b,new_l)),(new_l, annot))],[],KBindings.empty)
               [L_zero; L_one]
          | _ -> cannot ("don't know about type " ^ string_of_id id))
 
@@ -702,7 +702,7 @@ let split_defs all_errors splits env defs =
             let lits = make_vectors sz in
             List.map (fun lit ->
               P_aux (P_lit lit,(l,annot)),
-              [var,E_aux (E_lit lit,(new_l,annot))],[],[]) lits
+              [var,E_aux (E_lit lit,(new_l,annot))],[],KBindings.empty) lits
           else
             cannot ("bitvector length outside limit, " ^ string_of_nexp len)
        | _ ->
@@ -715,7 +715,8 @@ let split_defs all_errors splits env defs =
             let lit = L_aux (L_num i,new_l) in
             P_aux (P_lit lit,(l,annot)),
             [var,E_aux (E_lit lit,(new_l,annot))],[],
-            match kid with None -> [] | Some k -> [(k,nconstant i)]
+            match kid with None -> KBindings.empty
+                         | Some k -> KBindings.singleton k (nconstant i)
          in
          match value with
          | Nexp_constant i -> [mk_lit None i]
@@ -758,18 +759,25 @@ let split_defs all_errors splits env defs =
         | h::t ->
            let t' =
              match list f t with
-             | None -> [t,[],[],[]]
+             | None -> [t,[],[],KBindings.empty]
              | Some t' -> t'
            in
            let h' =
              match f h with
-             | None -> [h,[],[],[]]
+             | None -> [h,[],[],KBindings.empty]
              | Some ps -> ps
            in
+           let merge (h,hsubs,hpchoices,hksubs) (t,tsubs,tpchoices,tksubs) =
+             if KBindings.for_all (fun kid nexp ->
+                    match KBindings.find_opt kid tksubs with
+                    | None -> true
+                    | Some nexp' -> Nexp.compare nexp nexp' == 0) hksubs
+             then Some (h::t, hsubs@tsubs, hpchoices@tpchoices,
+                        KBindings.union (fun k a _ -> Some a) hksubs tksubs)
+             else None
+           in
            Some (List.concat
-                   (List.map (fun (h,hsubs,hpchoices,hksubs) ->
-                     List.map (fun (t,tsubs,tpchoices,tksubs) ->
-                       (h::t, hsubs@tsubs, hpchoices@tpchoices, hksubs@tksubs)) t') h'))
+                   (List.map (fun h -> Util.map_filter (merge h) t') h'))
       in
       let rec spl (P_aux (p,(l,annot))) =
         let relist f ctx ps =
@@ -781,6 +789,12 @@ let split_defs all_errors splits env defs =
           optmap (spl p)
             (fun ps -> List.map (fun (p,sub,pchoices,ksub) -> (P_aux (f p,(l,annot)), sub, pchoices, ksub)) ps)
         in
+        let re2 f ctx p1 p2 =
+           (* Todo: I am not proud of this abuse of relist - but creating a special
+            * version of re just for two entries did not seem worth it
+            *)
+          relist f (fun [p1'; p2'] -> ctx p1' p2') [p1; p2]
+        in
         let fpat (FP_aux ((FP_Fpat (id,p),annot))) =
           optmap (spl p)
             (fun ps -> List.map (fun (p,sub,pchoices,ksub) -> FP_aux (FP_Fpat (id,p), annot), sub, pchoices, ksub) ps)
@@ -790,10 +804,7 @@ let split_defs all_errors splits env defs =
         | P_wild
           -> None
         | P_or (p1, p2) ->
-           (* Todo: I am not proud of this abuse of relist - but creating a special
-            * version of re just for two entries did not seem worth it
-            *)
-           relist spl (fun [p1'; p2'] -> P_or (p1', p2')) [p1; p2]
+           re2 spl (fun p1' p2' -> P_or (p1', p2')) p1 p2
         | P_not p ->
            (* todo: not sure that I can't split - but can't figure out how at
             * the moment *)
@@ -812,10 +823,10 @@ let split_defs all_errors splits env defs =
               let kids = Spec_analysis.equal_kids (env_of_pat p') kid in
               Some (List.map (fun (p,sub,pchoices,ksub) ->
                 P_aux (P_var (p,tp),(l,annot)), sub, pchoices,
-                List.concat
-                  (List.map
-                     (fun (k,nexp) -> if KidSet.mem k kids then [(kid,nexp);(k,nexp)] else [(k,nexp)])
-                     ksub)) ps))
+                match List.find_opt (fun k -> KBindings.mem k ksub) (KidSet.elements kids) with
+                | None -> ksub
+                | Some k -> KBindings.add kid (KBindings.find k ksub) ksub
+                ) ps))
         | P_var (p',tp) -> re (fun p -> P_var (p,tp)) p'
         | P_id id ->
            (match id_match id with
@@ -846,19 +857,19 @@ let split_defs all_errors splits env defs =
                          (Typ_app (Id_aux (Id "atom",_),
                                    [A_aux (A_nexp
                                                    (Nexp_aux (Nexp_var var,_)),_)]),_) ->
-                        [var,nconstant j]
-                     | _ -> []
+                        KBindings.singleton var (nconstant j)
+                     | _ -> KBindings.empty
                    in
                    p,[id,E_aux (E_lit lit,(Generated pl,pannot))],[l,(i,max,[])],kid_subst
                 | P_aux (p',(pl,pannot)) when lit_like p' ->
-                   p,[id,to_exp p],[l,(i,max,[])],[]
+                   p,[id,to_exp p],[l,(i,max,[])],KBindings.empty
                 | _ ->
                    let p',subst = freshen_pat_bindings p in
                    match p' with
                    | P_aux (P_wild,_) ->
-                      P_aux (P_id id,(l,annot)),[],[l,(i,max,subst)],[]
+                      P_aux (P_id id,(l,annot)),[],[l,(i,max,subst)],KBindings.empty
                    | _ ->
-                      P_aux (P_as (p',id),(l,annot)),[],[l,(i,max,subst)],[])
+                      P_aux (P_as (p',id),(l,annot)),[],[l,(i,max,subst)],KBindings.empty)
                       pats)
            )
         | P_app (id,ps) ->
@@ -876,14 +887,7 @@ let split_defs all_errors splits env defs =
         | P_list ps ->
            relist spl (fun ps -> P_list ps) ps
         | P_cons (p1,p2) ->
-           match spl p1, spl p2 with
-           | None, None -> None
-           | p1', p2' ->
-              let p1' = match p1' with None -> [p1,[],[],[]] | Some p1' -> p1' in
-              let p2' = match p2' with None -> [p2,[],[],[]] | Some p2' -> p2' in
-              let ps = List.map (fun (p1',subs1,pchoices1,ksub1) -> List.map (fun (p2',subs2,pchoices2,ksub2) ->
-                P_aux (P_cons (p1',p2'),(l,annot)),subs1@subs2,pchoices1@pchoices2,ksub1@ksub2) p2') p1' in
-              Some (List.concat ps)
+           re2 spl (fun p1' p2' -> P_cons (p1', p2')) p1 p2
       in spl p
     in
 
@@ -1025,7 +1029,6 @@ let split_defs all_errors splits env defs =
            | VarSplit patsubsts ->
               if check_split_size patsubsts (pat_loc p) then
                 List.map (fun (pat',substs,pchoices,ksubsts) ->
-                  let ksubsts = kbindings_from_list ksubsts in
                   let exp' = Spec_analysis.nexp_subst_exp ksubsts e in
                   let exp' = subst_exp ref_vars substs ksubsts exp' in
                   let exp' = apply_pat_choices pchoices exp' in
@@ -1046,7 +1049,6 @@ let split_defs all_errors splits env defs =
            | VarSplit patsubsts ->
               if check_split_size patsubsts (pat_loc p) then
                 List.map (fun (pat',substs,pchoices,ksubsts) ->
-                  let ksubsts = kbindings_from_list ksubsts in
                   let exp1' = Spec_analysis.nexp_subst_exp ksubsts e1 in
                   let exp1' = subst_exp ref_vars substs ksubsts exp1' in
                   let exp1' = apply_pat_choices pchoices exp1' in
@@ -1978,8 +1980,11 @@ let simplify_size_nexp env typ_env (Nexp_aux (ne,l) as nexp) =
      | Nexp_constant _ -> nexp
      | _ ->
         match List.find is_equal env.top_kids with
-        | kid -> Nexp_aux (Nexp_var kid,Generated l)
-        | exception Not_found -> nexp
+        | kid -> Nexp_aux (Nexp_var kid, Generated l)
+        | exception Not_found ->
+           match KBindings.find_first_opt is_equal (Env.get_typ_vars typ_env) with
+           | Some (kid,_) -> Nexp_aux (Nexp_var kid, Generated l)
+           | None -> nexp
 
 let simplify_size_typ_arg env typ_env = function
   | A_aux (A_nexp nexp, l) -> A_aux (A_nexp (simplify_size_nexp env typ_env nexp), l)
@@ -2511,14 +2516,11 @@ let rec sets_from_assert e =
        | None -> KBindings.empty)
     | _ -> KBindings.empty
   in
-  match destruct_atom_bool (env_of e) (typ_of e) with
-  | Some nc -> sets_from_nc nc
-  | None ->
-     match e with
-     | E_aux (E_app (Id_aux (Id "and_bool",_),[e1;e2]),_) ->
-        merge_set_asserts_by_kid (sets_from_assert e1) (sets_from_assert e2)
-     | E_aux (E_constraint nc,_) -> sets_from_nc nc
-     | _ -> set_from_or_exps e
+  match e with
+  | E_aux (E_app (Id_aux (Id "and_bool",_),[e1;e2]),_) ->
+     merge_set_asserts_by_kid (sets_from_assert e1) (sets_from_assert e2)
+  | E_aux (E_constraint nc,_) -> sets_from_nc nc
+  | _ -> set_from_or_exps e
 
 (* Find all the easily reached set assertions in a function body, to use as
    case splits.  Note that this should be mirrored in stop_at_false_assertions,
@@ -2543,7 +2545,7 @@ let print_set_assertions set_assertions =
   else begin
     print_endline "Top-level set assertions found:";
     KBindings.iter (fun k (l,is) ->
-      print_endline (string_of_kid k ^ " " ^
+      print_endline (string_of_kid k ^ " @ " ^ simple_string_of_loc l ^ " " ^
                        String.concat "," (List.map Big_int.to_string is)))
       set_assertions
   end
@@ -2969,13 +2971,17 @@ let rec rewrite_app env typ (id,args) =
     match List.filter (fun arg -> not (is_number (typ_of arg))) args with
     | [E_aux (E_app (append1,
                      [E_aux (E_app (subrange1, [vector1; start1; end1]), _);
-                      E_aux (E_app (zeros1, [len1]),_)]),_)]
+                      (E_aux (E_app (zeros1, [len1]),_) |
+                       E_aux (E_cast (_,E_aux (E_app (zeros1, [len1]),_)),_))
+                ]),_)]
         when is_subrange subrange1 && is_zeros zeros1 && is_append append1
       -> try_cast_to_typ (rewrap (E_app (mk_id "place_subrange", length_arg @ [vector1; start1; end1; len1])))
 
     | [E_aux (E_app (append1,
                      [vector1;
-                      E_aux (E_app (zeros1, [length2]),_)]),_)]
+                      (E_aux (E_app (zeros1, [length2]),_) |
+                       E_aux (E_cast (_, E_aux (E_app (zeros1, [length2]),_)),_))
+                ]),_)]
         when is_constant_vec_typ env (typ_of vector1) && is_zeros zeros1 && is_append append1
       -> let (vector1, start1, length1) =
            match vector1 with
@@ -3023,8 +3029,19 @@ let rec rewrite_app env typ (id,args) =
        try_cast_to_typ (rewrap (E_app (mk_id "sext_slice", length_arg @ [vector1; start1; length1])))
 
     | [E_aux (E_app (append,
+         [E_aux (E_app (subrange1, [vector1; start1; end1]), _);
+          (E_aux (E_app (zeros2, [len2]), _) |
+           E_aux (E_cast (_, E_aux (E_app (zeros2, [len2]), _)),_))
+                ]), _)]
+      when is_append append && is_subrange subrange1 && is_zeros zeros2 &&
+           not (is_constant len2) ->
+       E_app (mk_id "place_subrange_signed", length_arg @ [vector1; start1; end1; len2])
+
+    | [E_aux (E_app (append,
          [E_aux (E_app (slice1, [vector1; start1; len1]), _);
-          E_aux (E_app (zeros2, [len2]), _)]), _)]
+          (E_aux (E_app (zeros2, [len2]), _) |
+           E_aux (E_cast (_, E_aux (E_app (zeros2, [len2]), _)),_))
+                ]), _)]
       when is_append append && is_slice slice1 && is_zeros zeros2 &&
            not (is_constant len1 && is_constant len2) ->
        E_app (mk_id "place_slice_signed", length_arg @ [vector1; start1; len1; len2])
@@ -3083,6 +3100,18 @@ let rewrite_aux = function
         E_aux (rewrite_app env ty (id,args), (l, tannot))
      | None -> E_aux (E_app (id, args), (l, tannot))
      end
+  | E_assign (
+      LEXP_aux (LEXP_vector_range (LEXP_aux (LEXP_id id1,(l_id1,_)), start1, end1),_),
+      E_aux (E_app (subrange2, [vector2; start2; end2]),(l_assign,_))),
+    annot
+       when is_id (env_of_annot annot) (Id "vector_subrange") subrange2 &&
+              not (is_constant_range (start1, end1)) ->
+     E_aux (E_assign (LEXP_aux (LEXP_id id1,(l_id1,empty_tannot)),
+                      E_aux (E_app (mk_id "vector_update_subrange_from_subrange", [
+                                   E_aux (E_id id1,(Generated l_id1,empty_tannot));
+                                   start1; end1;
+                                   vector2; start2; end2]),(Unknown,empty_tannot))),
+            (l_assign, empty_tannot))
   | exp,annot -> E_aux (exp,annot)
 
 let mono_rewrite defs =
@@ -3194,6 +3223,7 @@ let make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ 
     check_for_spec env cast_name;
     let src_ann = mk_tannot env src_typ no_effect in
     let tar_ann = mk_tannot env target_typ no_effect in
+    let asg_ann = mk_tannot env unit_typ no_effect in
     match src_typ' with
       (* Simple case with just the bitvector; don't need to pull apart value *)
     | Typ_aux (Typ_app _,_) ->
@@ -3203,9 +3233,15 @@ let make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ 
                                        E_aux (E_app (Id_aux (Id cast_name,genunk),
                                                      [E_aux (E_id var,(genunk,src_ann))]),(genunk,tar_ann))),(genunk,tar_ann)),
                        exp),(genunk,exp_ann))),
+       (fun var ->
+         [E_aux (E_assign (LEXP_aux (LEXP_cast (one_target_typ, var),(genunk,tar_ann)),
+                          E_aux (E_app (Id_aux (Id cast_name,genunk),
+                                        [E_aux (E_id var,(genunk,src_ann))]),(genunk,tar_ann)
+                  )),(genunk,asg_ann))]),
       (fun (E_aux (_,(exp_l,exp_ann)) as exp) ->
         E_aux (E_cast (one_target_typ,
                        E_aux (E_app (Id_aux (Id cast_name, genunk), [exp]), (Generated exp_l,tar_ann))),
+
                (Generated exp_l,tar_ann)))
     | _ ->
        (fun var exp ->
@@ -3213,17 +3249,58 @@ let make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ 
          E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id var,(genunk,src_ann))),(genunk,src_ann)),
                        E_aux (E_let (LB_aux (LB_val (P_aux (P_id var,(genunk,tar_ann)),e'),(genunk,tar_ann)),
                                      exp),(genunk,exp_ann))),(genunk,exp_ann))),
+       (fun var ->
+         [E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id var,(genunk,src_ann))),(genunk,src_ann)),
+                       E_aux (E_assign (LEXP_aux (LEXP_cast (one_target_typ, var),(genunk,tar_ann)),
+                                        e'),(genunk,asg_ann))),(genunk,asg_ann))]),
       (fun (E_aux (_,(exp_l,exp_ann)) as exp) ->
         E_aux (E_let (LB_aux (LB_val (pat, exp),(Generated exp_l,exp_ann)), e'),(Generated exp_l,tar_ann)))
   end
-  | None -> (fun _ e -> e),(fun e -> e)
+  | None -> (fun _ e -> e),(fun _ -> []),(fun e -> e)
+let make_bitvector_cast_let cast_name top_env env quant_kids src_typ target_typ =
+  let f,_,_ = make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ
+  in f
+let make_bitvector_cast_assign cast_name top_env env quant_kids src_typ target_typ =
+  let _,f,_ = make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ
+  in f
+let make_bitvector_cast_cast cast_name top_env env quant_kids src_typ target_typ =
+  let _,_,f = make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ
+  in f
 
-(* TODO: bound vars *)
+let ids_in_exp exp =
+  let open Rewriter in
+  fold_exp {
+      (pure_exp_alg IdSet.empty IdSet.union) with
+      e_id = IdSet.singleton;
+      lEXP_id = IdSet.singleton;
+      lEXP_memory = (fun (id,s) -> List.fold_left IdSet.union (IdSet.singleton id) s);
+      lEXP_cast = (fun (_,id) -> IdSet.singleton id)
+    } exp
+
 let make_bitvector_env_casts env quant_kids (kid,i) exp =
-  let mk_cast var typ exp = (fst (make_bitvector_cast_fns "bitvector_cast_in" env env quant_kids typ (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ))) var exp in
+  let mk_cast var typ exp = (make_bitvector_cast_let "bitvector_cast_in" env env quant_kids typ (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ)) var exp in
+  let mk_assign_in var typ =
+    make_bitvector_cast_assign "bitvector_cast_in" env env quant_kids typ
+      (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ) var
+  in
+  let mk_assign_out var typ =
+    make_bitvector_cast_assign "bitvector_cast_out" env env quant_kids
+      (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ) typ var
+  in
   let locals = Env.get_locals env in
+  let used_ids = ids_in_exp exp in
+  let locals = Bindings.filter (fun id _ -> IdSet.mem id used_ids) locals in
+  let immutables,mutables = Bindings.partition (fun _ (mut,_) -> mut = Immutable) locals in
+  let assigns_in = Bindings.fold (fun var (_,typ) acc -> mk_assign_in var typ @ acc) mutables [] in
+  let assigns_out = Bindings.fold (fun var (_,typ) acc -> mk_assign_out var typ @ acc) mutables [] in
+  let exp = match assigns_in, exp with
+    | [], _ -> exp
+    | _::_, E_aux (E_block es,ann) -> E_aux (E_block (assigns_in @ es @ assigns_out),ann)
+    | _::_, E_aux (_,(l,ann)) ->
+       E_aux (E_block (assigns_in @ [exp] @ assigns_out), (Generated l,ann))
+  in
   Bindings.fold (fun var (mut,typ) exp ->
-    if mut = Immutable then mk_cast var typ exp else exp) locals exp
+    if mut = Immutable then mk_cast var typ exp else exp) immutables exp
 
 let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
   if alpha_equivalent cast_env typ target_typ then exp else
@@ -3267,7 +3344,7 @@ let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
        let tgt_arg_typ = infer_arg_typ (env_of exp) f l target_typ in
        E_aux (E_app (f,[aux arg (src_arg_typ, tgt_arg_typ)]),(l,ann))
     | _ ->
-       (snd (make_bitvector_cast_fns cast_name cast_env (env_of exp) quant_kids typ target_typ)) exp
+       (make_bitvector_cast_cast cast_name cast_env (env_of exp) quant_kids typ target_typ) exp
   in
   aux exp (typ, target_typ)
 
@@ -3295,6 +3372,27 @@ let fill_in_type env typ =
        | None -> subst
        | Some n -> KBindings.add kid (nconstant n) subst)) tyvars KBindings.empty in
   subst_kids_typ subst typ
+
+(* Extract the instantiations of kids resulting from an if or assert guard *)
+let rec extract (E_aux (e,_)) =
+  match e with
+  | E_app (op,
+           ([E_aux (E_sizeof (Nexp_aux (Nexp_var kid,_)),_); y] |
+              [y; E_aux (E_sizeof (Nexp_aux (Nexp_var kid,_)),_)]))
+       when string_of_id op = "eq_int" ->
+     (match destruct_atom_nexp (env_of y) (typ_of y) with
+      | Some (Nexp_aux (Nexp_constant i,_)) -> [(kid,i)]
+      | _ -> [])
+  | E_app (op,[x;y])
+       when string_of_id op = "eq_int" ->
+     (match destruct_atom_nexp (env_of x) (typ_of x), destruct_atom_nexp (env_of y) (typ_of y) with
+      | Some (Nexp_aux (Nexp_var kid,_)), Some (Nexp_aux (Nexp_constant i,_))
+        | Some (Nexp_aux (Nexp_constant i,_)), Some (Nexp_aux (Nexp_var kid,_))
+        -> [(kid,i)]
+      | _ -> [])
+  | E_app (op, [x;y]) when string_of_id op = "and_bool" ->
+     extract x @ extract y
+  | _ -> []
 
 (* TODO: top-level patterns *)
 (* TODO: proper environment tracking for variables.  Currently we pretend that
@@ -3340,26 +3438,6 @@ let add_bitvector_casts (Defs defs) =
       | E_if (e1,e2,e3) ->
          let env = env_of_annot ann in
          let result_typ = Env.base_typ_of env (typ_of_annot ann) in
-         let rec extract (E_aux (e,_)) =
-           match e with
-           | E_app (op,
-                    ([E_aux (E_sizeof (Nexp_aux (Nexp_var kid,_)),_); y] |
-                     [y; E_aux (E_sizeof (Nexp_aux (Nexp_var kid,_)),_)]))
-               when string_of_id op = "eq_int" ->
-              (match destruct_atom_nexp (env_of y) (typ_of y) with
-              | Some (Nexp_aux (Nexp_constant i,_)) -> [(kid,i)]
-              | _ -> [])
-           | E_app (op,[x;y])
-               when string_of_id op = "eq_int" ->
-              (match destruct_atom_nexp (env_of x) (typ_of x), destruct_atom_nexp (env_of y) (typ_of y) with
-              | Some (Nexp_aux (Nexp_var kid,_)), Some (Nexp_aux (Nexp_constant i,_))
-              | Some (Nexp_aux (Nexp_constant i,_)), Some (Nexp_aux (Nexp_var kid,_))
-                -> [(kid,i)]
-              | _ -> [])
-           | E_app (op, [x;y]) when string_of_id op = "and_bool" ->
-              extract x @ extract y
-           | _ -> []
-         in
          let insts = extract e1 in
          let e2' = List.fold_left (fun body inst ->
            make_bitvector_env_casts env quant_kids inst body) e2 insts in
@@ -3367,29 +3445,48 @@ let add_bitvector_casts (Defs defs) =
            KBindings.add kid (nconstant i) insts) KBindings.empty insts in
          let src_typ = subst_kids_typ insts result_typ in
          let e2' = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ e2' in
-         E_aux (E_if (e1,e2',e3), ann)
+         (* Ask the type checker if only one value remains for any of kids in
+            the else branch. *)
+         let env3 = env_of e3 in
+         let insts3 = KBindings.fold (fun kid _ i3 ->
+                          match Type_check.solve_unique env3 (nvar kid) with
+                          | None -> i3
+                          | Some c -> (kid, c)::i3)
+                        insts []
+         in
+         let e3' = List.fold_left (fun body inst ->
+           make_bitvector_env_casts env quant_kids inst body) e3 insts3 in
+         let insts3 = List.fold_left (fun insts (kid,i) ->
+           KBindings.add kid (nconstant i) insts) KBindings.empty insts3 in
+         let src_typ3 = subst_kids_typ insts3 result_typ in
+         let e3' = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ3 result_typ e3' in
+         E_aux (E_if (e1,e2',e3'), ann)
       | E_return e' ->
          E_aux (E_return (make_bitvector_cast_exp "bitvector_cast_out" top_env quant_kids (fill_in_type (env_of e') (typ_of e')) ret_typ e'),ann)
-      | E_assign (LEXP_aux (_,lexp_annot) as lexp,e') -> begin
-         (* The type in the lexp_annot might come from e' rather than being the
-            type of the storage, so ask the type checker what it really is. *)
-         match infer_lexp (env_of_annot lexp_annot) (strip_lexp lexp) with
-         | LEXP_aux (_,lexp_annot') ->
-            E_aux (E_assign (lexp,
-                             make_bitvector_cast_exp "bitvector_cast_out" top_env quant_kids (fill_in_type (env_of e') (typ_of e'))
-                               (typ_of_annot lexp_annot') e'),ann)
-         | exception _ -> E_aux (e,ann)
-        end
-      | E_id id -> begin
-        let env = env_of_annot ann in
-        match Env.lookup_id id env with
-        | Local (Mutable, vtyp) ->
-           make_bitvector_cast_exp "bitvector_cast_in" top_env quant_kids
-             (fill_in_type (env_of_annot ann) (typ_of_annot ann))
-             vtyp
-             (E_aux (e,ann))
-        | _ -> E_aux (e,ann)
-      end
+      | E_block es ->
+         let env = env_of_annot ann in
+         let result_typ = Env.base_typ_of env (typ_of_annot ann) in
+         let rec aux = function
+           | [] -> []
+           | (E_aux (E_assert (assert_exp,msg),ann) as h)::t ->
+              let insts = extract assert_exp in
+              begin match insts with
+              | [] -> h::(aux t)
+              | _ ->
+                 let t' = aux t in
+                 let et = E_aux (E_block t',ann) in
+                 let env = env_of h in
+                 let et = List.fold_left (fun body inst ->
+                              make_bitvector_env_casts env quant_kids inst body) et insts in
+                 let insts = List.fold_left (fun insts (kid,i) ->
+                                 KBindings.add kid (nconstant i) insts) KBindings.empty insts in
+                 let src_typ = subst_kids_typ insts result_typ in
+                 let et = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ et in
+
+                 [h; et]
+              end
+           | h::t -> h::(aux t)
+         in E_aux (E_block (aux es),ann)
       | _ -> E_aux (e,ann)
     in
     let open Rewriter in
@@ -3495,7 +3592,10 @@ let fresh_nexp_kid nexp =
     | Nexp_app (id,args) -> string_of_id id ^ "_" ^
        String.concat "_" (List.map mangle_nexp args)
   in
-  mk_kid (mangle_nexp nexp ^ "#")
+  (* TODO: I'd like to add a # to distinguish it from user-provided names, but
+     the rewriter currently uses them as a hint that they're not printable in
+     types, which these are explicitly supposed to be. *)
+  mk_kid (mangle_nexp nexp (*^ "#"*))
 
 let rewrite_toplevel_nexps (Defs defs) =
   let find_nexp env nexp_map nexp =

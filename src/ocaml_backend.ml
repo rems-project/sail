@@ -962,7 +962,7 @@ let ocaml_main spec sail_dir =
    @ [ "  zinitializze_registers ();";
        if !opt_trace_ocaml then "  Sail_lib.opt_trace := true;" else "  ();";
        "  Printexc.record_backtrace true;";
-       "  try zmain () with exn -> prerr_endline(\"Exiting due to uncaught exception:\\n\" ^ Printexc.to_string exn)\n";])
+       "  try zmain () with exn -> (prerr_endline(\"Exiting due to uncaught exception:\\n\" ^ Printexc.to_string exn); exit 1)\n";])
   |> String.concat "\n"
 
 let ocaml_pp_defs f defs generator_types =

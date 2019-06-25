@@ -799,7 +799,7 @@ function ExtendReg (N, _reg, etype, shift) = {
 
   let len = uMin(len, length(_val) - shift);
   assert( len >= 1 & 'S + len < 'N);
-  let a = (_val[(len - 1)..0]);
+/*  let a = (_val[(len - 1)..0]);*/
   /* Zeros() */
   Extend((_val[(len - 1)..0]) @ (Zeros() : bits('S)), _unsigned)
 }

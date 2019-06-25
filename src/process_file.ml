@@ -367,9 +367,9 @@ let output libpath out_arg files =
       output1 libpath out_arg f type_env defs)
     files
 
-let rewrite_step n total env defs (name, rewriter) =
+let rewrite_step n total (defs, env) (name, rewriter) =
   let t = Profile.start () in
-  let defs = rewriter env defs in
+  let defs, env = rewriter env defs in
   Profile.finish ("rewrite " ^ name) t;
   let _ = match !(opt_ddump_rewrite_ast) with
     | Some (f, i) ->
@@ -383,15 +383,15 @@ let rewrite_step n total env defs (name, rewriter) =
       end
     | _ -> () in
   Util.progress "Rewrite " name n total;
-  defs
+  defs, env
 
 let rewrite env rewriters defs =
   let total = List.length rewriters in
-  try snd (List.fold_left (fun (n, defs) rw -> n + 1, rewrite_step n total env defs rw) (1, defs) rewriters) with
+  try snd (List.fold_left (fun (n, defsenv) rw -> n + 1, rewrite_step n total defsenv rw) (1, (defs, env)) rewriters) with
   | Type_check.Type_error (_, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
-let rewrite_ast_initial env = rewrite env [("initial", fun _ -> Rewriter.rewrite_defs)]
+let rewrite_ast_initial env = rewrite env [("initial", fun env defs -> Rewriter.rewrite_defs defs, env)]
 
 let rewrite_ast_target tgt env = rewrite env (Rewrites.rewrite_defs_target tgt)
 

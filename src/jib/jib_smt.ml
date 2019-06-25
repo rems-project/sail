@@ -442,7 +442,7 @@ let unsigned_size ?checked:(checked=true) ctx n m smt =
   else if n > m then
     Fn ("concat", [bvzero (n - m); smt])
   else
-    failwith "bad arguments to unsigned_size"
+    Extract (n - 1, 0, smt)
 
 let int_size ctx = function
   | CT_constant n -> required_width n
@@ -715,6 +715,11 @@ let builtin_append ctx v1 v2 ret_ctyp =
      Fn ("Bits", [bvadd (bvint ctx.lbits_index (Big_int.of_int n)) (Fn ("len", [smt2]));
                   bvor (bvshl x shift) (Fn ("contents", [smt2]))])
 
+  | CT_lbits _, CT_fbits (n, _), CT_fbits (m, _) ->
+     let smt1 = smt_cval ctx v1 in
+     let smt2 = smt_cval ctx v2 in
+     Extract (m - 1, 0, Fn ("concat", [Fn ("contents", [smt1]); smt2]))
+
   | CT_lbits _, CT_fbits (n, _), CT_lbits _ ->
      let smt1 = smt_cval ctx v1 in
      let smt2 = smt_cval ctx v2 in
@@ -733,6 +738,13 @@ let builtin_append ctx v1 v2 ret_ctyp =
      let x = Fn ("contents", [smt1]) in
      let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); Fn ("len", [smt2])]) in
      Fn ("Bits", [bvadd (Fn ("len", [smt1])) (Fn ("len", [smt2])); bvor (bvshl x shift) (Fn ("contents", [smt2]))])
+
+  | CT_lbits _, CT_lbits _, CT_fbits (n, _) ->
+     let smt1 = smt_cval ctx v1 in
+     let smt2 = smt_cval ctx v2 in
+     let x = Fn ("contents", [smt1]) in
+     let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); Fn ("len", [smt2])]) in
+     unsigned_size ctx n (lbits_size ctx) (bvor (bvshl x shift) (Fn ("contents", [smt2])))
 
   | _ -> builtin_type_error ctx "append" [v1; v2] (Some ret_ctyp)
 
@@ -813,8 +825,11 @@ let builtin_unsigned ctx v ret_ctyp =
 
 let builtin_signed ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
-  | CT_fbits (n, _), CT_fint m when m > n ->
+  | CT_fbits (n, _), CT_fint m when m >= n ->
      SignExtend(m - n, smt_cval ctx v)
+
+  | CT_fbits (n, _), CT_lint ->
+     SignExtend(ctx.lint_size - n, smt_cval ctx v)
 
   | ctyp, _ -> builtin_type_error ctx "signed" [v] (Some ret_ctyp)
 

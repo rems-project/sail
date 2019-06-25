@@ -30,11 +30,11 @@ def chunks(filenames, cores):
     ys.append(list(chunk))
     return ys
 
-def step(string):
+def step(string, expected_status=0):
     p = subprocess.Popen(string, shell=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     out, err = p.communicate()
     status = p.wait()
-    if status != 0:
+    if status != expected_status:
         print("{}Failed{}: {}".format(color.FAIL, color.END, string))
         print('{}stdout{}:'.format(color.NOTICE, color.END))
         print(out)

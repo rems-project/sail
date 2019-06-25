@@ -412,7 +412,7 @@ let load_files ?check:(check=false) type_envs files =
     ("out.sail", ast, type_envs)
   else
     let ast = Scattered.descatter ast in
-    let ast = rewrite_ast_initial type_envs ast in
+    let ast, type_envs = rewrite_ast_initial type_envs ast in
 
     let out_name = match !opt_file_out with
       | None when parsed = [] -> "out.sail"
@@ -582,7 +582,7 @@ let main () =
       else ();
 
       let type_envs, ast = prover_regstate !opt_target ast type_envs in
-      let ast = match !opt_target with Some tgt -> rewrite_ast_target tgt type_envs ast | None -> ast in
+      let ast, type_envs = match !opt_target with Some tgt -> rewrite_ast_target tgt type_envs ast | None -> ast, type_envs in
       target !opt_target out_name ast type_envs;
 
       if !Interactive.opt_interactive then

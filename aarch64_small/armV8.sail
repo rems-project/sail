@@ -2142,10 +2142,12 @@ function clause execute ( Reverse((d,n,datasize as int('R),op)) ) = {
       assert (vsize > 0); /* FIXME: CP adding assertion to make typecheck */
       foreach (base from 0 to (datasize - 1) by (2 * vsize)) { /* ARM: while base < datasize do */
         assert (base+vsize*2 - 1 < datasize); /* FIXME: CP adding assertion to make typecheck */
-        let a = tmp[(base+(2*vsize) - 1)..(base+vsize)];
+/*        let a = tmp[(base+(2*vsize) - 1)..(base+vsize)];
         result[((base+vsize) - 1)..base] = a;
         let b = tmp[(base+vsize - 1)..base];
-        result[(base+(2*vsize) - 1)..(base+vsize)] = b;
+        result[(base+(2*vsize) - 1)..(base+vsize)] = b;*/
+        result[((base+vsize) - 1)..base] = tmp[(base+(2*vsize) - 1)..(base+vsize)];
+        result[(base+(2*vsize) - 1)..(base+vsize)] = tmp[(base+vsize - 1)..base];
         /* ARM: base = base + (2 * vsize); */
       };
     };

@@ -1958,6 +1958,10 @@ let doc_exp, doc_let =
          if effects then
            match cast_ex, outer_ex with
            | ExGeneral, ExNone -> string "projT1_m" ^/^ parens epp
+           | ExGeneral, ExGeneral ->
+              if alpha_equivalent env cast_typ outer_typ
+              then epp
+              else string "derive_m" ^/^ parens epp
            | _ -> epp
          else match cast_ex with
               | ExGeneral -> string "projT1" ^/^ parens epp
@@ -2552,7 +2556,8 @@ let pat_is_plain_binder env (P_aux (p,_)) =
   match p with
   | P_id id
   | P_typ (_,P_aux (P_id id,_))
-  when not (is_enum env id) -> Some id
+  when not (is_enum env id) -> Some (Some id)
+  | P_wild -> Some None
   | _ -> None
 
 let demote_all_patterns env i (P_aux (p,p_annot) as pat,typ) =
@@ -2560,10 +2565,14 @@ let demote_all_patterns env i (P_aux (p,p_annot) as pat,typ) =
   | Some id ->
      if Util.is_none (is_auto_decomposed_exist empty_ctxt env typ)
      then (pat,typ), fun e -> e
-     else
-       (P_aux (P_id id, p_annot),typ),
-       fun (E_aux (_,e_ann) as e) ->
-       E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id id, p_annot)),p_annot),e),e_ann)
+     else begin
+       match id with
+       | Some id ->
+          (P_aux (P_id id, p_annot),typ),
+          fun (E_aux (_,e_ann) as e) ->
+          E_aux (E_let (LB_aux (LB_val (pat, E_aux (E_id id, p_annot)),p_annot),e),e_ann)
+       | None -> (P_aux (P_wild, p_annot),typ), fun e -> e
+       end
   | None ->
     let id = mk_id ("arg" ^ string_of_int i) in (* TODO: name conflicts *)
     (P_aux (P_id id, p_annot),typ),
@@ -2638,30 +2647,42 @@ let mk_kid_renames ids_to_avoid kids =
   in snd (KidSet.fold check_kid kids (kids, KBindings.empty))
 
 let merge_kids_atoms pats =
-  let try_eliminate (gone,map,seen) = function
+  let try_eliminate (acc,gone,map,seen) (pat,typ) =
+    let tryon maybe_id env typ =
+      let merge kid l =
+        if KidSet.mem kid seen then
+          let () =
+            Reporting.print_err l "merge_kids_atoms"
+              ("want to merge tyvar and argument for " ^ string_of_kid kid ^
+                 " but rearranging arguments isn't supported yet") in
+          (pat,typ)::acc,gone,map,seen
+        else
+          let pat,id = match maybe_id with
+            | Some id -> pat,id
+                       (* TODO: name clashes *)
+            | None -> let id = id_of_kid kid in
+                      P_aux (P_id id,match pat with P_aux (_,ann) -> ann), id
+          in
+          (pat,typ)::acc,
+          KidSet.add kid gone, KBindings.add kid (Some id) map, KidSet.add kid seen
+      in
+      match Type_check.destruct_atom_nexp env typ with
+      | Some (Nexp_aux (Nexp_var kid,l)) -> merge kid l
+      | _ ->
+         match Type_check.destruct_atom_bool env typ with
+         | Some (NC_aux (NC_var kid,l)) -> merge kid l
+         | _ -> (pat,typ)::acc,gone,map,KidSet.union seen (tyvars_of_typ typ)
+    in
+    match pat,typ with
     | P_aux (P_id id, ann), typ
-    | P_aux (P_typ (_,P_aux (P_id id, ann)),_), typ -> begin
-        let merge kid l =
-          if KidSet.mem kid seen then
-            let () =
-              Reporting.print_err l "merge_kids_atoms"
-                ("want to merge tyvar and argument for " ^ string_of_kid kid ^
-                   " but rearranging arguments isn't supported yet") in
-            gone,map,seen
-          else
-            KidSet.add kid gone, KBindings.add kid (Some id) map, KidSet.add kid seen
-        in
-        match Type_check.destruct_atom_nexp (env_of_annot ann) typ with
-        | Some (Nexp_aux (Nexp_var kid,l)) -> merge kid l
-        | _ ->
-           match Type_check.destruct_atom_bool (env_of_annot ann) typ with
-           | Some (NC_aux (NC_var kid,l)) -> merge kid l
-           | _ -> gone,map,KidSet.union seen (tyvars_of_typ typ)
-      end
-    | _, typ -> gone,map,KidSet.union seen (tyvars_of_typ typ)
+    | P_aux (P_typ (_,P_aux (P_id id, ann)),_), typ ->
+       tryon (Some id) (env_of_annot ann) typ
+    | P_aux (P_wild, ann), typ ->
+       tryon None (env_of_annot ann) typ
+    | _ -> (pat,typ)::acc,gone,map,KidSet.union seen (tyvars_of_typ typ)
   in
-  let gone,map,_ = List.fold_left try_eliminate (KidSet.empty, KBindings.empty, KidSet.empty) pats in
-  gone,map
+  let r_pats,gone,map,_ = List.fold_left try_eliminate ([],KidSet.empty, KBindings.empty, KidSet.empty) pats in
+  List.rev r_pats,gone,map
 
 
 let merge_var_patterns map pats =
@@ -2693,7 +2714,7 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     | _ -> demote_all_patterns env
   in
   let pats, binds = List.split (Util.list_mapi pattern_elim pats) in
-  let eliminated_kids, kid_to_arg_rename = merge_kids_atoms pats in
+  let pats, eliminated_kids, kid_to_arg_rename = merge_kids_atoms pats in
   let kid_to_arg_rename, pats = merge_var_patterns kid_to_arg_rename pats in
   let kids_used = KidSet.diff bound_kids eliminated_kids in
   let is_measured, recursive_ids = match rec_opt with
@@ -2749,9 +2770,10 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     (* TODO: probably should provide partial environments to doc_typ *)
     match pat_is_plain_binder env pat with
     | Some id -> begin
-       match classify_ex_type ctxt env ~binding:id exp_typ with
+       let id_pp = match id with Some id -> doc_id id | None -> underscore in
+       match classify_ex_type ctxt env ?binding:id exp_typ with
        | ExNone, _, typ' ->
-         parens (separate space [doc_id id; colon; doc_typ ctxt Env.empty typ'])
+         parens (separate space [id_pp; colon; doc_typ ctxt Env.empty typ'])
        | ExGeneral, _, _ ->
            let full_typ = (expand_range_type exp_typ) in
            match destruct_exist_plain (Env.expand_synonyms env full_typ) with
@@ -2760,17 +2782,22 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
                                      [A_aux (A_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_))
                when Kid.compare (kopt_kid kopt) kid == 0 ->
               let coqty = if tyname = "atom" then "Z" else "bool" in
-              parens (separate space [doc_id id; colon; string coqty])
+              parens (separate space [id_pp; colon; string coqty])
            | Some ([kopt], nc,
                    Typ_aux (Typ_app (Id_aux (Id ("atom" | "atom_bool"),_),
                                      [A_aux (A_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_))
                when Kid.compare (kopt_kid kopt) kid == 0 && not is_measured ->
               (used_a_pattern := true;
-               squote ^^ parens (separate space [string "existT"; underscore; doc_id id; underscore; colon; doc_typ ctxt Env.empty typ]))
+               squote ^^ parens (separate space [string "existT"; underscore; id_pp; underscore; colon; doc_typ ctxt Env.empty typ]))
            | _ ->
-              parens (separate space [doc_id id; colon; doc_typ ctxt Env.empty typ])
+              parens (separate space [id_pp; colon; doc_typ ctxt Env.empty typ])
          end
     | None ->
+       let typ =
+         match classify_ex_type ctxt env ~binding:id exp_typ with
+         | ExNone, _, typ' -> typ'
+       | ExGeneral, _, _ -> typ
+       in
        (used_a_pattern := true;
         squote ^^ parens (separate space [doc_pat ctxt true true (pat, exp_typ); colon; doc_typ ctxt Env.empty typ]))
   in
@@ -2789,7 +2816,7 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
        let fixupspp =
          Util.map_filter (fun (pat,typ) ->
              match pat_is_plain_binder env pat with
-             | Some id -> begin
+             | Some (Some id) -> begin
                  match destruct_exist_plain (Env.expand_synonyms env (expand_range_type typ)) with
                  | Some (_, NC_aux (NC_true,_), _) -> None
                  | Some ([KOpt_aux (KOpt_kind (_, kid), _)], nc,
@@ -2799,7 +2826,7 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
                     Some (string "let " ^^ doc_id id ^^ string " := projT1 " ^^ doc_id id ^^ string " in")
                  | _ -> None
                end
-             | None -> None) pats
+             | _ -> None) pats
        in
        string "Fixpoint",
        [parens (string "_acc : Acc (Zwf 0) _reclimit")],

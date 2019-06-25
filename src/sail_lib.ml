@@ -139,11 +139,10 @@ let rec take n xs =
   | n, [] -> []
 
 let count_leading_zeros xs =
-  let rec clz = function
-    | [] -> 0
-    | (B1 :: xs') -> clz xs'
-    | (B0 :: xs') -> 1 + clz xs' in
-  Big_int.of_int (clz xs)
+  let rec aux bs acc = match bs with
+    | (B0 :: bs') -> aux bs' (acc + 1)
+    | _ -> acc in
+  Big_int.of_int (aux xs 0)
 
 let subrange (list, n, m) =
   let n = Big_int.to_int n in

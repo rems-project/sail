@@ -56,9 +56,9 @@ val clear_symbols : unit -> unit
 
 val preprocess_ast : (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.defs -> Parse_ast.defs
 val check_ast : Type_check.Env.t -> unit Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
-val rewrite_ast_initial : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_target : string -> Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
-val rewrite_ast_check : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast_initial : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
+val rewrite_ast_target : string -> Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
+val rewrite_ast_check : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
 
 val load_file_no_check : (Arg.key * Arg.spec * Arg.doc) list -> Ast.order -> string -> unit Ast.defs
 val load_file : (Arg.key * Arg.spec * Arg.doc) list -> Ast.order -> Type_check.Env.t -> string -> Type_check.tannot Ast.defs * Type_check.Env.t
