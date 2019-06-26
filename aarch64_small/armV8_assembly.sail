@@ -77,5 +77,13 @@ val assembly : (bits(64), labels) -> string <-> ast
 mapping assembly(offset, labels) = {
   "str" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
     <->
-  LoadRegister(n, t, 0, AccType_NORMAL, MemOp_STORE, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 64)
+  LoadRegister(n, t, 0, AccType_NORMAL, MemOp_STORE, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 64),
+
+  "ldr" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
+    <->
+  LoadRegister(n, t, 0, AccType_NORMAL, MemOp_LOAD, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 64),
+
+  "mov" ^ spc() ^ d <- wreg_name() ^ sep() ^ hash() ^ imm <- bits(64)
+    <->
+  LogicalImmediate(d, 0, 64, bitzero, LogicalOp_ORR, imm)
 }

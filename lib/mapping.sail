@@ -13,6 +13,11 @@ mapping spc : regex(" +") <-> unit = {
   backwards () => " "
 }
 
+mapping hash : regex("#") <-> unit = {
+  forwards _ <- regex("#") => (),
+  backwards () => "#"
+}
+
 val "hex_string" : forall 'n, 'n >= 0. vector('n, dec, bit) -> regex("0x[0-9a-f]+")
 
 val "hex_parse" : forall 'n, 'n >= 0. (int('n), string) -> vector('n, dec, bit)

@@ -210,7 +210,7 @@ let rec evaluate_cval locals = function
 let eval_special name args stack =
   match name, args with
   | "sail_regmatch", [VL_string regex; VL_string input; VL_matcher (n, uid)] ->
-     let regex = Str.regexp regex in
+     let regex = Str.regexp_case_fold regex in
      if Str.string_match regex input 0 then (
        let groups = List.init n (fun i -> (i + 1, Str.matched_group (i + 1) input)) in
        VL_bool true, { stack with match_state = IntMap.add uid groups stack.match_state }
@@ -218,7 +218,7 @@ let eval_special name args stack =
        VL_bool false, stack
      )
   | "sail_regmatch0", [VL_string regex; VL_string input] ->
-     let regex = Str.regexp regex in
+     let regex = Str.regexp_case_fold regex in
      if Str.string_match regex input 0 then (
        VL_bool true, stack
      ) else (
