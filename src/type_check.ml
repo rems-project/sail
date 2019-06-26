@@ -2977,18 +2977,8 @@ and check_case env pat_typ pexp typ =
 
 and check_mpexp direction env mpexp typ =
   let mpat, guard, ((l,_) as annot) = destruct_mpexp mpexp in
-  match bind_pat env (pat_of_mpat direction (strip_mpat mpat)) typ with
-  | checked_pat, env, guards ->
-     let guard = match guard, List.map strip_exp guards with
-       | None, h :: t -> Some (h, t)
-       | Some x, l -> Some (x, l)
-       | None, [] -> None
-     in
-     let guard = match guard with
-       | Some (h, t) ->
-          Some (List.fold_left (fun acc guard -> mk_exp (E_app_infix (acc, mk_id "&", guard))) h t)
-       | None -> None
-     in
+  match bind_pat_no_guard env (pat_of_mpat direction (strip_mpat mpat)) typ with
+  | checked_pat, env ->
      let checked_guard, env' = match guard with
        | None -> None, env
        | Some guard ->
@@ -3069,9 +3059,9 @@ and type_coercion_unify env goals (E_aux (_, (l, _)) as annotated_exp) typ =
        try_casts casts
   end
 
-and bind_pat_no_guard env (P_aux (_,(l,_)) as pat) typ =
+and bind_pat_no_guard env (P_aux (_, (l, _)) as pat) typ =
   match bind_pat env pat typ with
-  | _, _, _::_ -> typ_error env l "Literal patterns not supported here"
+  | _, _, _ :: _ -> typ_error env l ("Pattern " ^ string_of_pat pat ^ " would introduce a guard where one is not allowed")
   | tpat, env, [] -> tpat, env
 
 and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ) =
@@ -3257,7 +3247,6 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      let d = if Env.is_backwards_mapping env then Backwards else Forwards in
      infer_pat env (P_aux (P_view (P_aux (P_lit (L_aux (L_unit, gen_loc l)), (gen_loc l, ())), set_id_direction d f, []), (l, ())))
   | P_view (pat, f, exps) ->
-     typ_print (lazy (string_of_pat pat ^ " <-" ^ Util.string_of_list ", " string_of_exp exps));
      let app_env, is_mapping_builtin =
        if Env.allow_mapping_builtins env then
          match string_of_id f with
@@ -4416,7 +4405,7 @@ let pexp_of_mpexp direction mpexp body =
   | MPat_aux (MPat_pat mpat, annot) ->
      Pat_aux (Pat_exp (pat_of_mpat direction mpat, body), annot)
   | MPat_aux (MPat_when (mpat, guard), annot) ->
-     Pat_aux (Pat_when (pat_of_mpat direction mpat, guard, body), annot) 
+     Pat_aux (Pat_when (pat_of_mpat direction mpat, guard, body), annot)
 
 let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
   let bidir = mk_typ (Typ_bidir (typ_left, typ_right)) in

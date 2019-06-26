@@ -220,11 +220,17 @@ let rec variant_generic_typ id (Defs defs) =
    patterns. *)
 let rec instantiations_of spec id ast =
   let instantiations = ref [] in
+  let add_instantiation i =
+    if KBindings.is_empty i then
+      ()
+    else
+      instantiations := i :: !instantiations
+  in
 
   let inspect_exp = function
     | E_aux (E_app (id', _), _) as exp when Id.compare id id' = 0 ->
        let instantiation = fix_instantiation spec (Type_check.instantiation_of exp) in
-       instantiations := instantiation :: !instantiations;
+       add_instantiation instantiation;
        exp
     | exp -> exp
   in
@@ -241,7 +247,7 @@ let rec instantiations_of spec id ast =
                                 (variant_generic_typ variant_id ast)
                                 typ
           in
-          instantiations := fix_instantiation spec instantiation :: !instantiations;
+          add_instantiation (fix_instantiation spec instantiation);
           pat
        | Typ_aux (Typ_id variant_id, _) -> pat
        | _ -> failwith ("Union constructor " ^ string_of_pat pat ^ " has non-union type")
