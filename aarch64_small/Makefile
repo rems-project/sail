@@ -28,7 +28,7 @@ armV8.lem: $(SOURCES)
 	$(SAIL) $(SAILFLAGS) -lem -lem_lib ArmV8_extras_embed -o armV8 $^
 
 armV8.smt_model: $(SOURCES)
-	$(SAIL) $(SAILFLAGS) -smt_serialize -o armV8 $^
+	$(SAIL) $(SAILFLAGS) -smt_serialize -o armV8 $^ armV8_assembly.sail
 
 for-rmem/armV8.lem: $(SOURCES)
 	mkdir -p $(dir $@)
