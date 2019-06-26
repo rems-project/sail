@@ -1553,43 +1553,47 @@ let rec nc_identical (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
   | NC_set (kid1, ints1), NC_set (kid2, ints2) when List.length ints1 = List.length ints2 ->
      Kid.compare kid1 kid2 = 0 && List.for_all2 (fun i1 i2 -> i1 = i2) ints1 ints2
   | NC_var kid1, NC_var kid2 -> Kid.compare kid1 kid2 = 0
+  | NC_app (id1, args1), NC_app (id2, args2) when List.length args1 = List.length args2 ->
+     Id.compare id1 id2 = 0 && List.for_all2 typ_arg_identical args1 args2
   | _, _ -> false
 
-let typ_identical env typ1 typ2 =
-  let rec typ_identical' (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
-    match typ1, typ2 with
-    | Typ_id v1, Typ_id v2 -> Id.compare v1 v2 = 0
-    | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2 = 0
-    | Typ_fn (arg_typs1, ret_typ1, eff1), Typ_fn (arg_typs2, ret_typ2, eff2)
-         when List.length arg_typs1 = List.length arg_typs2 ->
-       List.for_all2 typ_identical' arg_typs1 arg_typs2
-       && typ_identical' ret_typ1 ret_typ2
-       && strip_effect eff1 = strip_effect eff2
-    | Typ_bidir (typ1, typ2), Typ_bidir (typ3, typ4) ->
-       typ_identical' typ1 typ3
-       && typ_identical' typ2 typ4
-    | Typ_tup typs1, Typ_tup typs2 ->
-       begin
-         try List.for_all2 typ_identical' typs1 typs2 with
-         | Invalid_argument _ -> false
-       end
-    | Typ_app (f1, args1), Typ_app (f2, args2) ->
-       begin
-         try Id.compare f1 f2 = 0 && List.for_all2 typ_arg_identical args1 args2 with
-         | Invalid_argument _ -> false
-       end
-    | Typ_exist (kopts1, nc1, typ1), Typ_exist (kopts2, nc2, typ2) when List.length kopts1 = List.length kopts2 ->
-       List.for_all2 (fun k1 k2 -> KOpt.compare k1 k2 = 0) kopts1 kopts2 && nc_identical nc1 nc2 && typ_identical' typ1 typ2
-    | Typ_regex str1, Typ_regex str2 -> str1 = str2
-    | _, _ -> false
-  and typ_arg_identical (A_aux (arg1, _)) (A_aux (arg2, _)) =
-    match arg1, arg2 with
-    | A_nexp n1, A_nexp n2 -> nexp_identical n1 n2
-    | A_typ typ1, A_typ typ2 -> typ_identical' typ1 typ2
-    | A_order ord1, A_order ord2 -> ord_identical ord1 ord2
-    | _, _ -> false
-  in
-  typ_identical' (Env.expand_synonyms env typ1) (Env.expand_synonyms env typ2)
+and typ_arg_identical (A_aux (arg1, _)) (A_aux (arg2, _)) =
+  match arg1, arg2 with
+  | A_nexp n1, A_nexp n2 -> nexp_identical n1 n2
+  | A_typ typ1, A_typ typ2 -> typ_identical typ1 typ2
+  | A_order ord1, A_order ord2 -> ord_identical ord1 ord2
+  | A_bool nc1, A_bool nc2 -> nc_identical nc1 nc2
+  | _, _ -> false
+
+and typ_identical (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
+  match typ1, typ2 with
+  | Typ_id v1, Typ_id v2 -> Id.compare v1 v2 = 0
+  | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2 = 0
+  | Typ_fn (arg_typs1, ret_typ1, eff1), Typ_fn (arg_typs2, ret_typ2, eff2)
+       when List.length arg_typs1 = List.length arg_typs2 ->
+     List.for_all2 typ_identical arg_typs1 arg_typs2
+     && typ_identical ret_typ1 ret_typ2
+     && strip_effect eff1 = strip_effect eff2
+  | Typ_bidir (typ1, typ2), Typ_bidir (typ3, typ4) ->
+     typ_identical typ1 typ3
+     && typ_identical typ2 typ4
+  | Typ_tup typs1, Typ_tup typs2 ->
+     begin
+       try List.for_all2 typ_identical typs1 typs2 with
+       | Invalid_argument _ -> false
+     end
+  | Typ_app (f1, args1), Typ_app (f2, args2) ->
+     begin
+       try Id.compare f1 f2 = 0 && List.for_all2 typ_arg_identical args1 args2 with
+       | Invalid_argument _ -> false
+     end
+  | Typ_exist (kopts1, nc1, typ1), Typ_exist (kopts2, nc2, typ2) when List.length kopts1 = List.length kopts2 ->
+     List.for_all2 (fun k1 k2 -> KOpt.compare k1 k2 = 0) kopts1 kopts2 && nc_identical nc1 nc2 && typ_identical typ1 typ2
+  | Typ_regex str1, Typ_regex str2 -> str1 = str2
+  | _, _ -> false
+
+let expanded_typ_identical env typ1 typ2 =
+  typ_identical (Env.expand_synonyms env typ1) (Env.expand_synonyms env typ2)
 
 exception Unification_error of l * string;;
 
@@ -1991,7 +1995,7 @@ let rec alpha_equivalent env typ1 typ2 =
   counter := 0;
   let typ2 = relabel (Env.expand_synonyms env typ2) in
   typ_debug (lazy ("Alpha equivalence for " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2));
-  if typ_identical env typ1 typ2
+  if expanded_typ_identical env typ1 typ2
   then (typ_debug (lazy "alpha-equivalent"); true)
   else (typ_debug (lazy "Not alpha-equivalent"); false)
 
@@ -4486,7 +4490,7 @@ let mk_val_spec env typq typ id =
 let check_tannot_opt def_type env typq ret_typ = function
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
   | Typ_annot_opt_aux (Typ_annot_opt_some (annot_typq, annot_ret_typ), l) ->
-     if typ_identical env ret_typ annot_ret_typ
+     if expanded_typ_identical env ret_typ annot_ret_typ
      then ()
      else typ_error env l (string_of_bind (typq, ret_typ) ^ "\nand\n" ^ string_of_bind (annot_typq, annot_ret_typ)
                            ^ "\ndo not match between " ^ def_type ^ " and val spec")
