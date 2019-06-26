@@ -1616,6 +1616,7 @@ let typ_identical env typ1 typ2 =
     | A_nexp n1, A_nexp n2 -> nexp_identical n1 n2
     | A_typ typ1, A_typ typ2 -> typ_identical' typ1 typ2
     | A_order ord1, A_order ord2 -> ord_identical ord1 ord2
+    | A_bool nc1, A_bool nc2 -> nc_identical nc1 nc2
     | _, _ -> false
   in
   typ_identical' (Env.expand_synonyms env typ1) (Env.expand_synonyms env typ2)
