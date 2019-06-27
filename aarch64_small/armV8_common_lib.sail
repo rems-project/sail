@@ -236,21 +236,10 @@ function Extend (n, x, _unsigned) =
 
 /** FUNCTION:integer HighestSetBit(bits(N) x) */
 
-/* val HighestSetBit : forall 'N, 'N >= 0. bits('N) -> option(range(0, 'N - 1)) */
-/* function HighestSetBit(x) = { */
-/*   let N = (length(x)) in { */
-/*   result : range(0,'N - 1) = 0; */
-/*   break : bool = false; */
-/*   foreach (i from (N - 1) downto 0) */
-/*     if ~(break) & (x[i] == b1) then { */
-/*       result = i; */
-/*       break = true; */
-/*     }; */
-
-/*   if break then Some(result) else None; */
-/* }} */
-
-function HighestSetBit(x) = {
+/* FIXME */
+function HighestSetBit(x) = None()
+/*
+{
   let N = length(x) in {
   foreach (i from (N - 1) downto 0)
     if x[i] == b1 then {
@@ -258,7 +247,7 @@ function HighestSetBit(x) = {
     };
   None();
 }}
-
+*/
 
 /** FUNCTION:integer Int(bits(N) x, boolean unsigned) */
 /* used to be called Int */
@@ -377,14 +366,10 @@ function ROR_C(x, shift) =
 /** FUNCTION:shared/functions/common/Replicate */
 
 function Replicate (N,x) = {
-  let M = length(x);
-  assert(mod(N, M) == 0);
-
-  result : bits('N) = Zeros();
-  zeros : bits('N-'M) = Zeros();
-  foreach (i from M to N by M) result = ((((result << M) : bits('N)) | ((zeros@x) : bits('N))) : bits('N));
-
-  result;
+  assert(mod(N, length(x)) == 0);
+  let times = N / length(x);
+  assert(length(x) * times == N);
+  replicate_bits(x, times)
 }
 
 /** FUNCTION:integer SInt(bits(N) x) */
@@ -442,8 +427,11 @@ function HaveCRCExt() -> boolean = IMPLEMENTATION_DEFINED.HaveCRCExt
 
 /** FUNCTION:bits(32) Poly32Mod2(bits(N) data, bits(32) poly) */
 
+/* FIXME */
 val Poly32Mod2 : forall 'N, 'N >= 0. (bits('N), bits(32)) -> bits(32) effect {escape}
-function Poly32Mod2(data, poly) = {
+function Poly32Mod2(data, poly) = poly
+/*
+{
   result : bits('N) = data;
   let N = (length(data)) in {
   assert(N > 32);
@@ -455,6 +443,7 @@ function Poly32Mod2(data, poly) = {
   };
   data'[31..0];
 }}
+*/
 
 /** FUNCTION:shared/functions/exclusive/ClearExclusiveByAddress */
 

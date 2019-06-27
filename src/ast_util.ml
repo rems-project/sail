@@ -416,7 +416,7 @@ let function_typ arg_typs ret_typ eff = mk_typ (Typ_fn (arg_typs, ret_typ, eff))
 let mapping_family_typ arg_typs left_typ right_typ =
   mk_typ (Typ_fn (arg_typs, mk_typ (Typ_bidir (left_typ, right_typ)),
                   Effect_aux (Effect_set [], Parse_ast.Unknown)))
-                                      
+
 let vector_typ n ord typ =
   mk_typ (Typ_app (mk_id "vector",
                    [mk_typ_arg (A_nexp (nexp_simp n));

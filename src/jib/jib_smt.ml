@@ -1980,7 +1980,7 @@ let smt_instr_list name ctx all_cdefs instrs =
 
   if !opt_simplify_ssa then
     simplify_ssa ctx.tc_env start cfg;
-  
+
   let visit_order =
     try topsort cfg with
     | Not_a_DAG n ->

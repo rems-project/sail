@@ -2121,7 +2121,10 @@ function clause decodeData1Source ([sf]@[b1]@[b0]@0b11010110@0b00000@0b0000@(opc
   Some(Reverse(d,n,datasize,op));
 }
 
-function clause execute ( Reverse((d,n,datasize as int('R),op)) ) = {
+/* FIXME */
+function clause execute ( Reverse((d,n,datasize as int('R),op)) ) = ()
+/*
+{
   result : (bits('R)) = Zeros(); /* ARM uninitialized */
   /* let V : (bits(6)) = Zeros(); /\* ARM uninitialized *\/ */
 
@@ -2154,6 +2157,7 @@ function clause execute ( Reverse((d,n,datasize as int('R),op)) ) = {
   };
   wX(d) = result;
 }
+*/
 
 /* CLS */
 /* CLZ */
