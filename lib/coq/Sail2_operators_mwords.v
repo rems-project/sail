@@ -499,5 +499,33 @@ Definition set_slice_int len n lo (v : mword len) : Z :=
     (int_of_mword true (update_subrange_vec_dec bs hi lo v))
   else n.
 
+(* Variant of bitvector slicing for the ARM model with few constraints *)
+Definition slice {m} (v : mword m) lo len `{ArithFact (0 <= len)} : mword len :=
+  if sumbool_of_bool (orb (len =? 0) (lo <? 0))
+  then zeros len
+  else
+    if sumbool_of_bool (lo + len - 1 >=? m)
+    then if sumbool_of_bool (lo <? m)
+         then zero_extend (subrange_vec_dec v (m - 1) lo) len
+         else zeros len
+    else autocast (subrange_vec_dec v (lo + len - 1) lo).
+
+(*
+Lemma slice_is_ok m (v : mword m) lo len
+                  (H1 : 0 <= lo) (H2 : 0 < len) (H3: lo + len < m) :
+  slice v lo len = autocast (subrange_vec_dec v (lo + len - 1) lo).
+unfold slice.
+destruct (sumbool_of_bool _).
+* exfalso.
+  unbool_comparisons.
+  omega.
+* destruct (sumbool_of_bool _).
+  + exfalso.
+    unbool_comparisons.  
+    omega.
+  + f_equal.
+    f_equal.
+*)
+
 Definition prerr_bits {a} (s : string) (bs : mword a) : unit := tt.
 Definition print_bits {a} (s : string) (bs : mword a) : unit := tt.
