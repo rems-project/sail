@@ -312,6 +312,10 @@ let rec smt_cval ctx cval =
         smt_conj (List.map (smt_cval ctx) cvals)
      | V_call (Bor, cvals) ->
         smt_disj (List.map (smt_cval ctx) cvals)
+     | V_call (Igt, [cval1; cval2]) ->
+        Fn ("bvsgt", [smt_cval ctx cval1; smt_cval ctx cval2])
+     | V_call (Iadd, [cval1; cval2]) ->
+        Fn ("bvadd", [smt_cval ctx cval1; smt_cval ctx cval2])
      | V_ctor_kind (union, ctor_id, unifiers, _) ->
         Fn ("not", [Tester (zencode_ctor ctor_id unifiers, smt_cval ctx union)])
      | V_ctor_unwrap (ctor_id, union, unifiers, _) ->
@@ -354,7 +358,7 @@ let rec smt_cval ctx cval =
 
 let add_event ctx ev smt =
   let stack = event_stack ctx ev in
-  Stack.push (Fn ("=>", [Lazy.force ctx.pathcond; smt])) stack
+  Stack.push (Fn ("and", [Lazy.force ctx.pathcond; smt])) stack
 
 let add_pathcond_event ctx ev =
   Stack.push (Lazy.force ctx.pathcond) (event_stack ctx ev)
@@ -1211,6 +1215,8 @@ let rec smt_conversion ctx from_ctyp to_ctyp x =
      bvint ctx.lint_size c
   | CT_fint sz, CT_lint ->
      force_size ctx ctx.lint_size sz x
+  | CT_lint, CT_fint sz ->
+     force_size ctx sz ctx.lint_size x
   | CT_lbits _, CT_fbits (n, _) ->
      unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [x]))
   | _, _ -> failwith (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
@@ -1390,7 +1396,10 @@ let c_literals ctx =
   in
   map_aval c_literal
 
-let unroll_foreach ctx = function
+(* If we know the loop variables exactly (especially after
+   specialization), we can unroll the exact number of times required,
+   and omit any comparisons. *)
+let unroll_static_foreach ctx = function
   | AE_aux (AE_for (id, from_aexp, to_aexp, by_aexp, order, body), env, l) as aexp ->
      begin match ctyp_of_typ ctx (aexp_typ from_aexp), ctyp_of_typ ctx (aexp_typ to_aexp), ctyp_of_typ ctx (aexp_typ by_aexp), order with
      | CT_constant f, CT_constant t, CT_constant b, Ord_aux (Ord_inc, _) ->
@@ -1410,7 +1419,7 @@ let unroll_foreach ctx = function
      | _ -> aexp
      end
   | aexp -> aexp
-
+                                 
 (**************************************************************************)
 (* 3. Generating SMT                                                      *)
 (**************************************************************************)
@@ -1659,7 +1668,7 @@ let smt_instr ctx =
          begin match args with
          | [assertion; _] ->
             let smt = smt_cval ctx assertion in
-            add_event ctx Assertion smt;
+            add_event ctx Assertion (Fn ("not", [smt]));
             []
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for assertion"
@@ -1994,7 +2003,6 @@ let smt_instr_list name ctx all_cdefs instrs =
   let visit_order =
     try topsort cfg with
     | Not_a_DAG n ->
-       dump_graph name cfg;
        raise (Reporting.err_general ctx.pragma_l
                (Printf.sprintf "%s: control flow graph is not acyclic (node %d is in cycle)\nWrote graph to %s.gv" name n name))
   in
@@ -2114,14 +2122,19 @@ let rec build_register_map rmap = function
 let compile env ast =
   let cdefs, jib_ctx =
     let open Jib_compile in
-    let ctx =
-      initial_ctx
-        ~convert_typ:ctyp_of_typ
-        ~optimize_anf:(fun ctx aexp -> fold_aexp (unroll_foreach ctx) (c_literals ctx aexp))
-        env
+    let optimize_anf ctx aexp =
+      aexp
+      |> c_literals ctx
+      |> fold_aexp (unroll_static_foreach ctx)
     in
+    let ctx = initial_ctx ~convert_typ:ctyp_of_typ ~optimize_anf:optimize_anf env in
     let t = Profile.start () in
-    let cdefs, ctx = compile_ast { ctx with specialize_calls = true; ignore_64 = true; struct_value = true; use_real = true } ast in
+    let cdefs, ctx =
+      compile_ast { ctx with specialize_calls = true;
+                             ignore_64 = true;
+                             unroll_loops = true;
+                             struct_value = true;
+                             use_real = true } ast in
     Profile.finish "Compiling to Jib IR" t;
     cdefs, ctx
   in

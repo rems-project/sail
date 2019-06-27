@@ -132,7 +132,7 @@ type query =
    | Q_or of query list
 
 let default_query =
-  Q_or [Q_and [Q_all Assertion; Q_all Return; Q_not (Q_exist Match)]; Q_exist Overflow; Q_not (Q_all Assumption)]
+  Q_or [Q_and [Q_not (Q_exist Assertion); Q_all Return; Q_not (Q_exist Match)]; Q_exist Overflow; Q_not (Q_all Assumption)]
 
 module Event = struct
   type t = event

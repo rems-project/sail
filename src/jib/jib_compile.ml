@@ -157,6 +157,7 @@ type ctx =
     locals : (mut * ctyp) Bindings.t;
     letbinds : int list;
     no_raw : bool;
+    unroll_loops : bool;
     convert_typ : ctx -> typ -> ctyp;
     optimize_anf : ctx -> typ aexp -> typ aexp;
     specialize_calls : bool;
@@ -175,6 +176,7 @@ let initial_ctx ~convert_typ:convert_typ ~optimize_anf:optimize_anf env =
     locals = Bindings.empty;
     letbinds = [];
     no_raw = false;
+    unroll_loops = false;
     convert_typ = convert_typ;
     optimize_anf = optimize_anf;
     specialize_calls = false;
@@ -1058,22 +1060,30 @@ and compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let body_gs = ngensym () in
 
      let loop_var = name loop_var in
-
+     
+     let loop_body prefix continue =
+       prefix
+       @ [iblock ([ijump (V_call ((if is_inc then Igt else Ilt), [V_id (loop_var, CT_fint 64); V_id (to_gs, CT_fint 64)])) loop_end_label]
+                  @ body_setup
+                  @ [body_call (CL_id (body_gs, CT_unit))]
+                  @ body_cleanup
+                  @ [icopy l (CL_id (loop_var, (CT_fint 64)))
+                       (V_call ((if is_inc then Iadd else Isub), [V_id (loop_var, CT_fint 64); V_id (step_gs, CT_fint 64)]))]
+                  @ continue ())]
+     in
+     (* We can either generate an actual loop body for C, or unroll the body for SMT *)
+     let actual = loop_body [ilabel loop_start_label] (fun () -> [igoto loop_start_label]) in
+     let rec unroll max n = loop_body [] (fun () -> if n < max then unroll max (n + 1) else [imatch_failure ()]) in
+     let body = if ctx.unroll_loops then unroll 100 0 else actual in
+     
      variable_init from_gs from_setup from_call from_cleanup
      @ variable_init to_gs to_setup to_call to_cleanup
      @ variable_init step_gs step_setup step_call step_cleanup
      @ [iblock ([idecl (CT_fint 64) loop_var;
                  icopy l (CL_id (loop_var, (CT_fint 64))) (V_id (from_gs, CT_fint 64));
-                 idecl CT_unit body_gs;
-                 iblock ([ilabel loop_start_label]
-                         @ [ijump (V_call ((if is_inc then Igt else Ilt), [V_id (loop_var, CT_fint 64); V_id (to_gs, CT_fint 64)])) loop_end_label]
-                         @ body_setup
-                         @ [body_call (CL_id (body_gs, CT_unit))]
-                         @ body_cleanup
-                         @ [icopy l (CL_id (loop_var, (CT_fint 64)))
-                                  (V_call ((if is_inc then Iadd else Isub), [V_id (loop_var, CT_fint 64); V_id (step_gs, CT_fint 64)]))]
-                         @ [igoto loop_start_label]);
-                 ilabel loop_end_label])],
+                 idecl CT_unit body_gs]
+                @ body
+                @ [ilabel loop_end_label])],
      (fun clexp -> icopy l clexp unit_cval),
      []
 
