@@ -225,7 +225,6 @@ let rec evaluate_cval locals = function
      | Some fields -> Some (VL_struct fields)
      | None -> None
      end
-  | V_ref _ -> None (* TODO We'll have to deal with this eventually *)
   | cval -> failwith ("Unsupported cval " ^ string_of_cval cval)
 
 let eval_special name args stack =
@@ -332,7 +331,7 @@ let step env global_state stack =
      | None ->
         failwith ("cval " ^ string_of_cval cval ^ " contains an unbound identifier")
      end
-       
+
   | I_aux (I_jump (cval, label), _) ->
      let v = evaluate_cval stack.locals cval in
      begin match v with
@@ -342,7 +341,7 @@ let step env global_state stack =
         Step { stack with pc = pc + 1 }
      | _ -> failwith "Jump argument did not evaluate to boolean"
      end
-     
+
   | I_aux (I_funcall (clexp, is_special, id, args), _) ->
      let args = Util.option_all (List.map (evaluate_cval stack.locals) args) in
      begin match args, Bindings.find_opt id global_state.functions, is_special with

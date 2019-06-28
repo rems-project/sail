@@ -160,8 +160,6 @@ let name id = Name (id, -1)
 let rec cval_rename from_id to_id = function
   | V_id (id, ctyp) when Name.compare id from_id = 0 -> V_id (to_id, ctyp)
   | V_id (id, ctyp) -> V_id (id, ctyp)
-  | V_ref (id, ctyp) when Name.compare id from_id = 0 -> V_ref (to_id, ctyp)
-  | V_ref (id, ctyp) -> V_ref (id, ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
   | V_call (call, cvals) -> V_call (call, List.map (cval_rename from_id to_id) cvals)
   | V_field (f, field) -> V_field (cval_rename from_id to_id f, field)
@@ -273,6 +271,8 @@ let rec string_of_value = function
   | VL_constructor (ctor, vl) -> ctor ^ "(" ^ string_of_value vl ^ ")"
   | VL_enum element -> Util.zencode_string element
   | VL_struct fields -> "{" ^ Util.string_of_list ", " (fun (field, vl) -> "." ^ field ^ " = " ^ string_of_value vl) fields ^ "}"
+  | VL_ref r -> "&" ^ Util.zencode_string r
+
 
 let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
   let ssa_num n = if n = -1 then "" else ("/" ^ string_of_int n) in
@@ -322,7 +322,6 @@ let string_of_op = function
 
 let rec string_of_cval = function
   | V_id (id, ctyp) -> string_of_name ~zencode:false id
-  | V_ref (id, _) -> "&" ^ string_of_name ~zencode:false id
   | V_lit (vl, ctyp) -> string_of_value vl
   | V_call (op, cvals) ->
      Printf.sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " string_of_cval cvals)
@@ -715,7 +714,7 @@ let pp_cdef = function
      ^^ hardline
 
 let rec cval_deps = function
-  | V_id (id, _) | V_ref (id, _) -> NameSet.singleton id
+  | V_id (id, _) -> NameSet.singleton id
   | V_lit _ -> NameSet.empty
   | V_field (cval, _) | V_poly (cval, _) | V_tuple_member (cval, _, _) -> cval_deps cval
   | V_call (_, cvals) -> List.fold_left NameSet.union NameSet.empty (List.map cval_deps cvals)
@@ -789,7 +788,6 @@ let rec map_clexp_ctyp f = function
 
 let rec map_cval_ctyp f = function
   | V_id (id, ctyp) -> V_id (id, f ctyp)
-  | V_ref (id, ctyp) -> V_ref (id, f ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, f ctyp)
   | V_ctor_kind (cval, id, unifiers, ctyp) ->
      V_ctor_kind (map_cval_ctyp f cval, id, List.map f unifiers, f ctyp)
@@ -996,7 +994,6 @@ let rec infer_call op vs =
 
 and cval_ctyp = function
   | V_id (_, ctyp) -> ctyp
-  | V_ref (_, ctyp) -> CT_ref ctyp
   | V_lit (vl, ctyp) -> ctyp
   | V_ctor_kind _ -> CT_bool
   | V_ctor_unwrap (ctor, cval, unifiers, ctyp) -> ctyp

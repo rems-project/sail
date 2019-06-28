@@ -1089,7 +1089,6 @@ let sgen_mask n =
 
 let rec sgen_cval = function
   | V_id (id, ctyp) -> string_of_name id
-  | V_ref (id, _) -> "&" ^ string_of_name id
   | V_lit (vl, ctyp) -> string_of_value vl
   | V_call (op, cvals) -> sgen_call op cvals
   | V_field (f, field) ->

@@ -133,6 +133,19 @@ let event_stack ctx ev =
      ctx.events := EventMap.add ev stack !(ctx.events);
      stack
 
+let add_event ctx ev smt =
+  let stack = event_stack ctx ev in
+  Stack.push (Fn ("and", [Lazy.force ctx.pathcond; smt])) stack
+
+let add_pathcond_event ctx ev =
+  Stack.push (Lazy.force ctx.pathcond) (event_stack ctx ev)
+
+let overflow_check ctx smt =
+  if not !opt_ignore_overflow then (
+    Reporting.warn "Overflow check in generated SMT for" ctx.pragma_l "";
+    add_event ctx Overflow smt
+  )
+
 let lbits_size ctx = Util.power 2 ctx.lbits_index
 
 let vector_index = ref 5
@@ -231,6 +244,51 @@ let bvint sz x =
   else
     bvpint sz x
 
+(** [force_size ctx n m exp] takes a smt expression assumed to be a
+   integer (signed bitvector) of length m and forces it to be length n
+   by either sign extending it or truncating it as required *)
+let force_size ?checked:(checked=true) ctx n m smt =
+  if n = m then
+    smt
+  else if n > m then
+    SignExtend (n - m, smt)
+  else
+    let check =
+      (* If the top bit of the truncated number is one *)
+      Ite (Fn ("=", [Extract (n - 1, n - 1, smt); Bin "1"]),
+           (* Then we have an overflow, unless all bits we truncated were also one *)
+           Fn ("not", [Fn ("=", [Extract (m - 1, n, smt); bvones (m - n)])]),
+           (* Otherwise, all the top bits must be zero *)
+           Fn ("not", [Fn ("=", [Extract (m - 1, n, smt); bvzero (m - n)])]))
+    in
+    if checked then overflow_check ctx check else ();
+    Extract (n - 1, 0, smt)
+
+(** [unsigned_size ctx n m exp] is much like force_size, but it
+   assumes that the bitvector is unsigned *)
+let unsigned_size ?checked:(checked=true) ctx n m smt =
+  if n = m then
+    smt
+  else if n > m then
+    Fn ("concat", [bvzero (n - m); smt])
+  else
+    Extract (n - 1, 0, smt)
+
+let rec smt_conversion ctx from_ctyp to_ctyp x =
+  match from_ctyp, to_ctyp with
+  | _, _ when ctyp_equal from_ctyp to_ctyp -> x
+  | CT_constant c, CT_fint sz ->
+     bvint sz c
+  | CT_constant c, CT_lint ->
+     bvint ctx.lint_size c
+  | CT_fint sz, CT_lint ->
+     force_size ctx ctx.lint_size sz x
+  | CT_lint, CT_fint sz ->
+     force_size ctx sz ctx.lint_size x
+  | CT_lbits _, CT_fbits (n, _) ->
+     unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [x]))
+  | _, _ -> failwith (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
+
 (* Translate Jib literals into SMT *)
 let rec smt_value ctx vl ctyp =
   let open Value2 in
@@ -275,6 +333,30 @@ let rec smt_value ctx vl ctyp =
      end
   | VL_tuple vls, CT_tup ctyps when List.length vls = List.length ctyps ->
      Fn ("tup" ^ string_of_int (List.length vls), List.map2 (smt_value ctx) vls ctyps)
+  | VL_struct fields, ctyp ->
+     begin match ctyp with
+     | CT_struct (struct_id, field_ctyps) ->
+        let set_field (field, vl) =
+          match Util.assoc_compare_opt Id.compare (mk_id field) field_ctyps with
+          | None -> failwith "Field type not found"
+          | Some ctyp -> smt_value ctx vl ctyp
+        in
+        Fn (zencode_upper_id struct_id, List.map set_field fields)
+     | _ -> failwith "Struct does not have struct type"
+     end
+  | VL_ref reg_name, _ ->
+     let id = mk_id reg_name in
+     let rmap = CTMap.filter (fun ctyp regs -> List.exists (fun reg -> Id.compare reg id = 0) regs) ctx.register_map in
+     assert (CTMap.cardinal rmap = 1);
+     begin match CTMap.min_binding_opt rmap with
+     | Some (ctyp, regs) ->
+        begin match Util.list_index (fun reg -> Id.compare reg id = 0) regs with
+        | Some i ->
+           bvint (required_width (Big_int.of_int (List.length regs))) (Big_int.of_int i)
+        | None -> assert false
+        end
+     | _ -> assert false
+     end
   | _ -> failwith ("Cannot translate literal to SMT: " ^ string_of_value vl ^ " : " ^ string_of_ctyp ctyp)
 
 let zencode_ctor ctor_id unifiers =
@@ -332,9 +414,8 @@ let rec smt_cval ctx cval =
            let set_field (field, cval) =
              match Util.assoc_compare_opt Id.compare field field_ctyps with
              | None -> failwith "Field type not found"
-             | Some ctyp when ctyp_equal (cval_ctyp cval) ctyp ->
-                smt_cval ctx cval
-             | _ -> failwith "Type mismatch when generating struct for SMT"
+             | Some ctyp ->
+                smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval)
            in
            Fn (zencode_upper_id struct_id, List.map set_field fields)
         | _ -> failwith "Struct does not have struct type"
@@ -342,43 +423,23 @@ let rec smt_cval ctx cval =
      | V_tuple_member (frag, len, n) ->
         ctx.tuple_sizes := IntSet.add len !(ctx.tuple_sizes);
         Fn (Printf.sprintf "tup_%d_%d" len n, [smt_cval ctx frag])
-     | V_ref (Name (id, _), _) ->
-        let rmap = CTMap.filter (fun ctyp regs -> List.exists (fun reg -> Id.compare reg id = 0) regs) ctx.register_map in
-        assert (CTMap.cardinal rmap = 1);
-        begin match CTMap.min_binding_opt rmap with
-        | Some (ctyp, regs) ->
-           begin match Util.list_index (fun reg -> Id.compare reg id = 0) regs with
-           | Some i ->
-              bvint (required_width (Big_int.of_int (List.length regs))) (Big_int.of_int i)
-           | None -> assert false
-           end
-        | _ -> assert false
-        end
      | cval -> failwith ("Unrecognised cval " ^ string_of_cval cval)
-
-let add_event ctx ev smt =
-  let stack = event_stack ctx ev in
-  Stack.push (Fn ("and", [Lazy.force ctx.pathcond; smt])) stack
-
-let add_pathcond_event ctx ev =
-  Stack.push (Lazy.force ctx.pathcond) (event_stack ctx ev)
-
-let overflow_check ctx smt =
-  if not !opt_ignore_overflow then (
-    Reporting.warn "Overflow check in generated SMT for" ctx.pragma_l "";
-    add_event ctx Overflow smt
-  )
 
 (**************************************************************************)
 (* 1. Generating SMT for Sail builtins                                    *)
 (**************************************************************************)
 
+let opt_continue_on_error = ref true
+
 let builtin_type_error ctx fn cvals =
   let args = Util.string_of_list ", " (fun cval -> string_of_ctyp (cval_ctyp cval)) cvals in
   function
   | Some ret_ctyp ->
-     raise (Reporting.err_todo ctx.pragma_l
-       (Printf.sprintf "%s : (%s) -> %s" fn args (string_of_ctyp ret_ctyp)))
+     let message = Printf.sprintf "%s : (%s) -> %s" fn args (string_of_ctyp ret_ctyp) in
+     if !opt_continue_on_error then (
+       Reporting.warn "Unimplemented case for builtin" ctx.pragma_l message;
+       smt_value ctx (Jib_interpreter.declaration ret_ctyp) ret_ctyp
+     ) else raise (Reporting.err_todo ctx.pragma_l message)
   | None ->
      raise (Reporting.err_todo ctx.pragma_l (Printf.sprintf "%s : (%s)" fn args))
 
@@ -419,36 +480,6 @@ let builtin_gt = builtin_int_comparison "bvsgt" Big_int.greater
 let builtin_gteq = builtin_int_comparison "bvsge" Big_int.greater_equal
 
 (* ***** Arithmetic operations: lib/arith.sail ***** *)
-
-(** [force_size ctx n m exp] takes a smt expression assumed to be a
-   integer (signed bitvector) of length m and forces it to be length n
-   by either sign extending it or truncating it as required *)
-let force_size ?checked:(checked=true) ctx n m smt =
-  if n = m then
-    smt
-  else if n > m then
-    SignExtend (n - m, smt)
-  else
-    let check =
-      (* If the top bit of the truncated number is one *)
-      Ite (Fn ("=", [Extract (n - 1, n - 1, smt); Bin "1"]),
-           (* Then we have an overflow, unless all bits we truncated were also one *)
-           Fn ("not", [Fn ("=", [Extract (m - 1, n, smt); bvones (m - n)])]),
-           (* Otherwise, all the top bits must be zero *)
-           Fn ("not", [Fn ("=", [Extract (m - 1, n, smt); bvzero (m - n)])]))
-    in
-    if checked then overflow_check ctx check else ();
-    Extract (n - 1, 0, smt)
-
-(** [unsigned_size ctx n m exp] is much like force_size, but it
-   assumes that the bitvector is unsigned *)
-let unsigned_size ?checked:(checked=true) ctx n m smt =
-  if n = m then
-    smt
-  else if n > m then
-    Fn ("concat", [bvzero (n - m); smt])
-  else
-    Extract (n - 1, 0, smt)
 
 let int_size ctx = function
   | CT_constant n -> required_width n
@@ -778,12 +809,16 @@ let builtin_length ctx v ret_ctyp =
   | _, _ -> builtin_type_error ctx "length" [v] (Some ret_ctyp)
 
 let builtin_vector_subrange ctx vec i j ret_ctyp =
-  match cval_ctyp vec, cval_ctyp i, cval_ctyp j with
-  | CT_fbits (n, _), CT_constant i, CT_constant j ->
+  match cval_ctyp vec, cval_ctyp i, cval_ctyp j, ret_ctyp with
+  | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits _ ->
      Extract (Big_int.to_int i, Big_int.to_int j, smt_cval ctx vec)
 
-  | CT_lbits _, CT_constant i, CT_constant j ->
+  | CT_lbits _, CT_constant i, CT_constant j, CT_fbits _ ->
      Extract (Big_int.to_int i, Big_int.to_int j, Fn ("contents", [smt_cval ctx vec]))
+
+  | CT_fbits (n, _), i_ctyp, CT_constant j, CT_lbits _ when Big_int.equal j Big_int.zero ->
+     let len = force_size ~checked:false ctx ctx.lbits_index (int_size ctx i_ctyp) (smt_cval ctx i) in
+     Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; unsigned_size ctx (lbits_size ctx) n (smt_cval ctx vec)])])
 
   | _ -> builtin_type_error ctx "vector_subrange" [vec; i; j] (Some ret_ctyp)
 
@@ -791,6 +826,12 @@ let builtin_vector_access ctx vec i ret_ctyp =
   match cval_ctyp vec, cval_ctyp i, ret_ctyp with
   | CT_fbits (n, _), CT_constant i, CT_bit ->
      Extract (Big_int.to_int i, Big_int.to_int i, smt_cval ctx vec)
+  | CT_lbits _, CT_constant i, CT_bit ->
+     Extract (Big_int.to_int i, Big_int.to_int i, Fn ("contents", [smt_cval ctx vec]))
+
+  | CT_lbits _, i_ctyp, CT_bit ->
+     let shift = force_size ~checked:false ctx (lbits_size ctx) (int_size ctx i_ctyp) (smt_cval ctx i) in
+     Extract (0, 0, Fn ("bvshr", [Fn ("contents", [smt_cval ctx vec]); shift]))
 
   | CT_vector _, CT_constant i, _ ->
      Fn ("select", [smt_cval ctx vec; bvint !vector_index i])
@@ -901,6 +942,13 @@ let builtin_replicate_bits ctx v1 v2 ret_ctyp =
      let c = m / n in
      Fn ("concat", List.init c (fun _ -> smt))
 
+  | CT_fbits (n, _), v2_ctyp, CT_lbits _ ->
+     let times = (lbits_size ctx / n) + 1 in
+     let len = force_size ~checked:false ctx ctx.lbits_index (int_size ctx v2_ctyp) (smt_cval ctx v2) in
+     let smt1 = smt_cval ctx v1 in
+     let contents = Extract (lbits_size ctx - 1, 0, Fn ("concat", List.init times (fun _ -> smt1))) in
+     Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; contents])])
+
   | _ -> builtin_type_error ctx "replicate_bits" [v1; v2] (Some ret_ctyp)
 
 let builtin_sail_truncate ctx v1 v2 ret_ctyp =
@@ -962,6 +1010,10 @@ let builtin_get_slice_int ctx v1 v2 v3 ret_ctyp =
          smt_cval ctx v2
      in
      Extract ((start + len) - 1, start, smt)
+
+             (*
+  | CT_lint, CT_lint, CT_constant start, CT_fbits (ret_sz, _) when Big_int.equal start Big_int.zero ->
+              *)
 
   | _ -> builtin_type_error ctx "get_slice_int" [v1; v2; v3] (Some ret_ctyp)
 
@@ -1145,7 +1197,10 @@ let smt_builtin ctx name args ret_ctyp =
   | "lteq_real", [v1; v2], CT_bool -> ctx.use_real := true; Fn ("<=", [smt_cval ctx v1; smt_cval ctx v2])
   | "gteq_real", [v1; v2], CT_bool -> ctx.use_real := true; Fn (">=", [smt_cval ctx v1; smt_cval ctx v2])
 
-  | _ -> failwith ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
+  | _ -> smt_value ctx (Jib_interpreter.declaration ret_ctyp) ret_ctyp
+
+
+     (* failwith ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp) *)
 
 (* Memory reads and writes as defined in lib/regfp.sail *)
 let writes = ref (-1)
@@ -1205,21 +1260,6 @@ let builtin_barrier ctx bk =
   let name = "B" ^ string_of_int !barriers in
   [Barrier (name, ctx.node, Lazy.force ctx.pathcond, smt_cval ctx bk)],
   Enum "unit"
-
-let rec smt_conversion ctx from_ctyp to_ctyp x =
-  match from_ctyp, to_ctyp with
-  | _, _ when ctyp_equal from_ctyp to_ctyp -> x
-  | CT_constant c, CT_fint sz ->
-     bvint sz c
-  | CT_constant c, CT_lint ->
-     bvint ctx.lint_size c
-  | CT_fint sz, CT_lint ->
-     force_size ctx ctx.lint_size sz x
-  | CT_lint, CT_fint sz ->
-     force_size ctx sz ctx.lint_size x
-  | CT_lbits _, CT_fbits (n, _) ->
-     unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [x]))
-  | _, _ -> failwith (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
 
 let define_const ctx id ctyp exp = Define_const (zencode_name id, smt_ctyp ctx ctyp, exp)
 let preserve_const ctx id ctyp exp = Preserve_const (string_of_id id, smt_ctyp ctx ctyp, exp)
@@ -1923,6 +1963,26 @@ let smt_header ctx cdefs =
    register if it is. We also do a similar thing for *r = x
 *)
 let expand_reg_deref env register_map = function
+  | I_aux (I_funcall (CL_addr (CL_id (id, ctyp)), false, function_id, args), (_, l)) ->
+     begin match ctyp with
+     | CT_ref reg_ctyp ->
+        begin match CTMap.find_opt reg_ctyp register_map with
+        | Some regs ->
+           let end_label = label "end_reg_write_" in
+           let try_reg r =
+             let next_label = label "next_reg_write_" in
+             [ijump (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); V_id (id, ctyp)])) next_label;
+              ifuncall (CL_id (name r, reg_ctyp)) function_id args;
+              igoto end_label;
+              ilabel next_label]
+           in
+           iblock (List.concat (List.map try_reg regs) @ [ilabel end_label])
+        | None ->
+           raise (Reporting.err_general l ("Could not find any registers with type " ^ string_of_ctyp reg_ctyp))
+        end
+     | _ ->
+        raise (Reporting.err_general l "Register reference assignment must take a register reference as an argument")
+     end
   | I_aux (I_funcall (clexp, false, function_id, [reg_ref]), (_, l)) as instr ->
      let open Type_check in
      begin match (if Env.is_extern function_id env "smt" then Some (Env.get_extern function_id env "smt") else None) with
@@ -1935,7 +1995,7 @@ let expand_reg_deref env register_map = function
               let end_label = label "end_reg_deref_" in
               let try_reg r =
                 let next_label = label "next_reg_deref_" in
-                [ijump (V_call (Neq, [V_ref (name r, reg_ctyp); reg_ref])) next_label;
+                [ijump (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); reg_ref])) next_label;
                  icopy l clexp (V_id (name r, reg_ctyp));
                  igoto end_label;
                  ilabel next_label]
@@ -1957,7 +2017,7 @@ let expand_reg_deref env register_map = function
            let end_label = label "end_reg_write_" in
            let try_reg r =
              let next_label = label "next_reg_write_" in
-             [ijump (V_call (Neq, [V_ref (name r, reg_ctyp); V_id (id, ctyp)])) next_label;
+             [ijump (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); V_id (id, ctyp)])) next_label;
               icopy l (CL_id (name r, reg_ctyp)) cval;
               igoto end_label;
               ilabel next_label]

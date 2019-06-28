@@ -216,13 +216,13 @@ let rec compile_aval l ctx = function
      end
 
   | AV_ref (id, typ) ->
-     [], V_ref (name id, ctyp_of_typ ctx (lvar_typ typ)), []
+     [], V_lit (VL_ref (string_of_id id), CT_ref (ctyp_of_typ ctx (lvar_typ typ))), []
 
   | AV_lit (L_aux (L_string str, _), typ) ->
-     [], V_lit ((VL_string (String.escaped str)), ctyp_of_typ ctx typ), []
+     [], V_lit (VL_string (String.escaped str), ctyp_of_typ ctx typ), []
 
   | AV_lit (L_aux (L_num n, _), typ) when ctx.ignore_64 ->
-     [], V_lit ((VL_int n), ctyp_of_typ ctx typ), []
+     [], V_lit (VL_int n, ctyp_of_typ ctx typ), []
 
   | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
      let gs = ngensym () in

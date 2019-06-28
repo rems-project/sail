@@ -67,6 +67,7 @@ type vl =
   | VL_constructor of string * vl
   | VL_enum of string
   | VL_struct of list (string * vl)
+  | VL_ref of string
 
 let mk_bits = Maybe.map (fun x -> VL_bits x true)
 

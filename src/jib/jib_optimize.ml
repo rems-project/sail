@@ -159,7 +159,6 @@ let unique_per_function_ids cdefs =
 
 let rec cval_subst id subst = function
   | V_id (id', ctyp) -> if Name.compare id id' = 0 then subst else V_id (id', ctyp)
-  | V_ref (reg_id, ctyp) -> V_ref (reg_id, ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
   | V_call (op, cvals) -> V_call (op, List.map (cval_subst id subst) cvals)
   | V_field (cval, field) -> V_field (cval_subst id subst cval, field)
@@ -171,7 +170,6 @@ let rec cval_subst id subst = function
 
 let rec cval_map_id f = function
   | V_id (id, ctyp) -> V_id (f id, ctyp)
-  | V_ref (id, ctyp) -> V_ref (f id, ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
   | V_call (call, cvals) -> V_call (call, List.map (cval_map_id f) cvals)
   | V_field (cval, field) -> V_field (cval_map_id f cval, field)
