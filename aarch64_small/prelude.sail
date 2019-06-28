@@ -65,11 +65,8 @@ overload pow2 = {pow2_atom, pow2_int}
 
 
 val cast cast_bool_bit : bool -> bit
-function cast_bool_bit(b) = 
-  match b {
-    true => b1,
-    false => b0
-  }
+function cast_bool_bit(b) =
+  if b then bitone else bitzero
 
 val cast cast_bit_bool : bit -> bool
 function cast_bit_bool (b) = 

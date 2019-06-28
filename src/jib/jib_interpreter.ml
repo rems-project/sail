@@ -205,6 +205,27 @@ let rec evaluate_cval locals = function
      | Some _ -> failwith "Bad tuple_member call"
      | None -> None
      end
+  | V_field (cval, field) ->
+     begin match evaluate_cval locals cval with
+     | Some (VL_struct fields) ->
+        begin match List.assoc_opt field fields with
+        | Some vl -> Some vl
+        | None -> failwith (Printf.sprintf "Field %s does not exist in struct %s" field (string_of_cval cval))
+        end
+     | Some _ -> failwith "Bad field access on non-struct cval"
+     | None -> None
+     end
+  | V_struct (fields, _) ->
+     let evaluate_field (field, cval) =
+       match evaluate_cval locals cval with
+       | Some vl -> Some (string_of_id field, vl)
+       | None -> None
+     in
+     begin match Util.option_all (List.map evaluate_field fields) with
+     | Some fields -> Some (VL_struct fields)
+     | None -> None
+     end
+  | V_ref _ -> None (* TODO We'll have to deal with this eventually *)
   | cval -> failwith ("Unsupported cval " ^ string_of_cval cval)
 
 let eval_special name args stack =

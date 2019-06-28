@@ -327,6 +327,7 @@ let inline cdefs should_inline instrs =
   let rec go instrs =
     if !inlines <> 0 then
       begin
+        prerr_endline ("Inlined " ^ string_of_int !inlines ^ " functions");
         inlines := 0;
         let instrs = List.map (map_instr inline_instr) instrs in
         go instrs

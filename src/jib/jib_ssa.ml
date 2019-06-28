@@ -99,6 +99,7 @@ let add_vertex data graph =
   let n = graph.next in
   if n >= Array.length graph.nodes then
     begin
+      prerr_endline ("Allocating more SSA graph nodes, reached " ^ string_of_int n);
       let new_nodes = Array.make (Array.length graph.nodes * 2) None in
       Array.blit graph.nodes 0 new_nodes 0 (Array.length graph.nodes);
       graph.nodes <- new_nodes
@@ -726,9 +727,11 @@ let ssa instrs =
   let idom = immediate_dominators cfg start in
   let children = dominator_children idom in
   let df = dominance_frontiers cfg start idom children in
+  prerr_endline "Placing phi functions";
   place_phi_functions cfg df;
   rename_variables cfg start children;
   place_pi_functions cfg start idom children;
+  prerr_endline "Generated SSA";
   start, cfg
 
 let simplify_assignment clexp v locals instr =

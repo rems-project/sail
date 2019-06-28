@@ -124,6 +124,10 @@ type ctx = {
   }
 
 val declare_const : ctx -> name -> ctyp -> smt_def
+
+val build_register_map : Ast.id list CTMap.t -> cdef list -> Ast.id list CTMap.t
+  
+val expand_reg_deref : Type_check.Env.t -> Ast.id list CTMap.t -> instr -> instr 
   
 (** Compile an AST into Jib suitable for SMT generation, and initialise a context. *)
 val compile : Type_check.Env.t -> Type_check.tannot defs -> cdef list * Jib_compile.ctx * ctx

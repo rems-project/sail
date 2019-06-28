@@ -537,18 +537,11 @@ function BigEndian() = {
 }
 
 /** FUNCTION:shared/functions/memory/BigEndianReverse */
-val BigEndianReverse : forall 'W, 'W in {8,16,32,64,128}. bits('W) -> bits('W) effect pure
-function BigEndianReverse (value) = {
-    let 'half = 'W / 2;
-    width : int('W) = length(value);
-    /* half : uinteger = width / 2; */
-    if width == 8 then value
-    else {
-      let a = BigEndianReverse(value[('half - 1)..0]);
-      let b = BigEndianReverse(value[(width - 1)..half]);
-      a @ b;
-    }
-}
+
+$include <reverse_endianness.sail>
+
+val BigEndianReverse : forall 'W, 'W in {8,16,32,64,128}. bits('W) -> bits('W)
+function BigEndianReverse(value) = reverse_endianness(value) 
 
 /** FUNCTION:shared/functions/memory/DataMemoryBarrier */
 
