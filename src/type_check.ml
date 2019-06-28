@@ -451,6 +451,7 @@ module Env : sig
   val set_default_order_dec : t -> t
   val add_enum : id -> id list -> t -> t
   val get_enum : id -> t -> id list
+  val is_enum : id -> t -> bool
   val get_casts : t -> id list
   val allow_casts : t -> bool
   val no_casts : t -> t
@@ -1056,6 +1057,8 @@ end = struct
     with
     | Not_found -> typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
+  let is_enum id env = Bindings.mem id env.enums
+                 
   let is_record id env = Bindings.mem id env.records
 
   let get_record id env = Bindings.find id env.records
@@ -4918,6 +4921,23 @@ let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md
   else
     typ_error env l ("Mapping not pure (or escape only): " ^ string_of_effect eff ^ " found")
 
+let rec warn_if_unsafe_cast l env = function
+  | Typ_aux (Typ_fn (arg_typs, ret_typ, _), _) ->
+     List.iter (warn_if_unsafe_cast l env) arg_typs;
+     warn_if_unsafe_cast l env ret_typ
+  | Typ_aux (Typ_id id, _) when string_of_id id = "bool" -> ()
+  | Typ_aux (Typ_id id, _) when Env.is_enum id env -> ()
+  | Typ_aux (Typ_id id, _) when string_of_id id = "string" ->
+     Reporting.warn "Unsafe string cast" l
+       "A cast X -> string is unsafe, as it can cause 'x : X == y : X' to be checked as 'eq_string(cast(x), cast(y))'"
+  (* If we have a cast to an existential, it's probably done on
+     purpose and we want to avoid false positives for warnings. *)
+  | Typ_aux (Typ_exist _, _) -> ()
+  | typ when is_bitvector_typ typ -> ()
+  | typ when is_bit_typ typ -> ()
+  | typ ->
+     Reporting.warn ("Potentially unsafe cast involving " ^ string_of_typ typ) l ""
+     
 (* Checking a val spec simply adds the type as a binding in the
    context. We have to destructure the various kinds of val specs, but
    the difference is irrelevant for the typechecker. *)
@@ -4928,7 +4948,7 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
        typ_print (lazy (Util.("Check val spec " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
        wf_typschm env typschm;
        let env = Env.add_extern id exts env in
-       let env = if is_cast then Env.add_cast id env else env in
+       let env = if is_cast then (warn_if_unsafe_cast l env (Env.expand_synonyms env typ); Env.add_cast id env) else env in
        let typq', typ' = expand_bind_synonyms ts_l env (typq, typ) in
        (* !opt_expand_valspec controls whether the actual valspec in
           the AST is expanded, the val_spec type stored in the
