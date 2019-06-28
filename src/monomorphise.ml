@@ -2750,11 +2750,12 @@ let rec rewrite_app env typ (id,args) =
     is_id env (Id "Zeros") id || is_id env (Id "zeros") id ||
     is_id env (Id "sail_zeros") id
   in
-  let is_ones = is_id env (Id "Ones") in
+  let is_ones id = is_id env (Id "Ones") id || is_id env (Id "ones") id ||
+    is_id env (Id "sail_ones") id in
   let is_zero_extend =
     is_id env (Id "ZeroExtend") id ||
     is_id env (Id "zero_extend") id || is_id env (Id "sail_zero_extend") id ||
-    is_id env (Id "mips_zero_extend") id
+    is_id env (Id "mips_zero_extend") id || is_id env (Id "EXTZ") id
   in
   let is_truncate = is_id env (Id "truncate") id in
   let mk_exp e = E_aux (e, (Unknown, empty_tannot)) in
