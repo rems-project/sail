@@ -121,7 +121,7 @@ overload operator - = {sub_int, sub_vec, sub_vec_int}
 /* function reg_index x = unsigned(x) */
 
 
-val quotient_nat = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv"} : 
+val quotient_nat = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv", c: "ediv_int"} : 
     forall 'M 'N, 'M >= 0 & 'N >= 0. (int('M), int('N)) -> int(div('M,'N))
 val quotient = {ocaml: "quotient", interpreter: "quotient", lem: "integerDiv"} : 
     forall 'M 'N. (int('M), int('N)) -> int(div('M,'N))

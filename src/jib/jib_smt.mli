@@ -60,7 +60,8 @@ val opt_auto : bool ref
 val opt_debug_graphs : bool ref
 val opt_propagate_vars : bool ref
 val opt_simplify_ssa : bool ref
-
+val opt_unroll_limit : int ref
+  
 val zencode_name : name -> string
 
 module IntSet : Set.S with type elt = int

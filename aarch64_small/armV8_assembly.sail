@@ -77,13 +77,47 @@ val assembly : (bits(64), labels) -> string <-> ast
 mapping assembly(offset, labels) = {
   "str" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
     <->
-  LoadRegister(n, t, 0, AccType_NORMAL, MemOp_STORE, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 64),
+  LoadRegister(n, t, 0, AccType_NORMAL, MemOp_STORE, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
 
   "ldr" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
     <->
-  LoadRegister(n, t, 0, AccType_NORMAL, MemOp_LOAD, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 64),
+  LoadRegister(n, t, 0, AccType_NORMAL, MemOp_LOAD, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
 
   "mov" ^ spc() ^ d <- wreg_name() ^ sep() ^ hash() ^ imm <- bits(64)
     <->
-  LogicalImmediate(d, 0, 64, bitzero, LogicalOp_ORR, imm)
+  LogicalImmediate(d, 31, 64, bitzero, LogicalOp_ORR, imm)
+}
+
+function litmus_start(_: unit) -> unit = {
+  R0 = 0x0000_0000_0000_0000;
+  R1 = 0x0000_0000_0000_0000;
+  R2 = 0x0000_0000_0000_0000;
+  R3 = 0x0000_0000_0000_0000;
+  R4 = 0x0000_0000_0000_0000;
+  R5 = 0x0000_0000_0000_0000;
+  R6 = 0x0000_0000_0000_0000;
+  R7 = 0x0000_0000_0000_0000;
+  R8 = 0x0000_0000_0000_0000;
+  R9 = 0x0000_0000_0000_0000;
+  R10 = 0x0000_0000_0000_0000;
+  R11 = 0x0000_0000_0000_0000;
+  R12 = 0x0000_0000_0000_0000;
+  R13 = 0x0000_0000_0000_0000;
+  R14 = 0x0000_0000_0000_0000;
+  R15 = 0x0000_0000_0000_0000;
+  R16 = 0x0000_0000_0000_0000;
+  R17 = 0x0000_0000_0000_0000;
+  R18 = 0x0000_0000_0000_0000;
+  R19 = 0x0000_0000_0000_0000;
+  R20 = 0x0000_0000_0000_0000;
+  R21 = 0x0000_0000_0000_0000;
+  R22 = 0x0000_0000_0000_0000;
+  R23 = 0x0000_0000_0000_0000;
+  R24 = 0x0000_0000_0000_0000;
+  R25 = 0x0000_0000_0000_0000;
+  R26 = 0x0000_0000_0000_0000;
+  R27 = 0x0000_0000_0000_0000;
+  R28 = 0x0000_0000_0000_0000;
+  R29 = 0x0000_0000_0000_0000;
+  R30 = 0x0000_0000_0000_0000
 }

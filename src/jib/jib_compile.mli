@@ -87,7 +87,7 @@ type ctx =
     locals : (mut * ctyp) Bindings.t;
     letbinds : int list;
     no_raw : bool;
-    unroll_loops : bool;
+    unroll_loops : int option;
     convert_typ : ctx -> typ -> ctyp;
     optimize_anf : ctx -> typ aexp -> typ aexp;
     (** If false (default), function arguments must match the function

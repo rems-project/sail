@@ -158,6 +158,9 @@ let options = Arg.align ([
   ( "-smt_simplify_ssa",
     Arg.Set Jib_smt.opt_simplify_ssa,
     " simplify the SSA control flow graph before generating SMT");
+  ( "-smt_unroll_limit",
+    Arg.Int (fun n -> Jib_smt.opt_unroll_limit := n),
+    " maximum bound for unrolling loops when generating SMT (default 10)");
   ( "-smt_int_size",
     Arg.String (fun n -> Jib_smt.opt_default_lint_size := int_of_string n),
     "<n> set a bound of n on the maximum integer bitwidth for generated SMT (default 128)");

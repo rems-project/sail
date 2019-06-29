@@ -118,6 +118,10 @@ val __read_mem
   = { ocaml: "Platform.read_mem", c: "platform_read_mem", _: "read_mem" }
   : forall 'n (constant 'addrsize : Int), 'n > 0 & 'addrsize in {32, 64}.
   (read_kind, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n) effect {rmem}
+val __mono_read_mem
+  = { ocaml: "Platform.read_mem", c: "platform_read_mem", _: "read_mem" }
+  : forall (constant 'n 'addrsize : Int), 'n > 0 & 'addrsize in {32, 64}.
+  (read_kind, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n) effect {rmem}
 val __write_mem_ea
   = { ocaml: "Platform.write_mem_ea", c: "platform_write_mem_ea", _: "write_mem_ea" }
   : forall 'n (constant 'addrsize : Int), 'n > 0 & 'addrsize in {32, 64}.

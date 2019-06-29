@@ -74,8 +74,11 @@ let mk_bits = Maybe.map (fun x -> VL_bits x true)
 let primops name args =
   match (name, args) with
   (* lib/flow.sail *)
+  | ("not", [VL_bool b]) -> Just (VL_bool (not b))
+  | ("eq_bit", [VL_bit b1; VL_bit b2]) -> Just (VL_bool (b1 = b2))
   | ("eq_int", [VL_int n; VL_int m]) -> Just (VL_bool (n = m))
   | ("eq_bool", [VL_bool b1; VL_bool b2]) -> Just (VL_bool (b1 = b2))
+  | ("eq_anything", [v1; v2]) -> Just (VL_bool (v1 = v2))
   | ("lt", [VL_int n; VL_int m]) -> Just (VL_bool (n < m))
   | ("lteq", [VL_int n; VL_int m]) -> Just (VL_bool (n <= m))
   | ("gt", [VL_int n; VL_int m]) -> Just (VL_bool (n > m))
@@ -85,16 +88,29 @@ let primops name args =
   (* lib/arith.sail *)
   | ("add_int", [VL_int n; VL_int m]) -> Just (VL_int (integerAdd n m))
   | ("sub_int", [VL_int n; VL_int m]) -> Just (VL_int (integerMinus n m))
+  | ("mult_int", [VL_int n; VL_int m]) -> Just (VL_int (integerMult n m))
+  | ("ediv_int", [VL_int n; VL_int m]) -> Just (VL_int (integerDiv n m))
 
   (* lib/vector_dec.sail *)
   | ("eq_bits", [VL_bits bv1 _; VL_bits bv2 _]) -> Just (VL_bool (eq_vec bv1 bv2))
+  | ("not_bits", [VL_bits bv d]) -> Just (VL_bits (not_vec bv) d)
+  | ("or_bits", [VL_bits bv1 d; VL_bits bv2 _]) -> Just (VL_bits (or_vec bv1 bv2) d)
+  | ("and_bits", [VL_bits bv1 d; VL_bits bv2 _]) -> Just (VL_bits (or_vec bv1 bv2) d)
   | ("sail_unsigned", [VL_bits bv _]) -> Just (VL_int (uint bv))
   | ("sail_signed", [VL_bits bv _]) -> Just (VL_int (sint bv))
   | ("zero_extend", [VL_bits bv d; VL_int n]) -> Just (VL_bits (zero_extend bv n) d)
   | ("sign_extend", [VL_bits bv d; VL_int n]) -> Just (VL_bits (sign_extend bv n) d)
   | ("zeros", [VL_int n]) -> Just (VL_bits (zeros n) true)
   | ("add_bits", [VL_bits bv1 d; VL_bits bv2 _]) -> Just (VL_bits (add_vec bv1 bv2) d)
+  | ("add_bits_int", [VL_bits bv d; VL_int n]) -> Just (VL_bits (add_vec_int bv n) d)
   | ("get_slice_int", [VL_int len; VL_int n; VL_int lo]) -> Just (VL_bits (get_slice_int len n lo) true)
+  | ("replicate_bits", [VL_bits bv d; VL_int n]) -> Just (VL_bits (replicate_bits bv n) d)
+  | ("length", [VL_bits bv _]) -> Just (VL_int (length bv))
+  | ("append", [VL_bits bv1 d; VL_bits bv2 _]) -> Just (VL_bits (concat_vec bv1 bv2) d)
+  | ("vector_subrange", [VL_bits bv d; VL_int n; VL_int m]) -> Just (VL_bits (subrange_vec_dec bv n m) d)
+  | ("vector_access", [VL_bits bv _; VL_int n]) -> Just (VL_bit (access_vec_dec bv n))
+  | ("sail_truncate", [VL_bits bv d; VL_int n]) -> Just (VL_bits (vector_truncate bv n) d)
+  | ("sail_truncateLSB", [VL_bits bv d; VL_int n]) -> Just (VL_bits (vector_truncateLSB bv n) d)
 
   (* lib/string.sail *)
   | ("eq_string", [VL_string s1; VL_string s2]) -> Just (VL_bool (s1 = s2))
@@ -105,5 +121,10 @@ let primops name args =
   | ("hex_parse", [VL_int n; VL_string hex]) -> mk_bits (hex_parse n hex)
   | ("hex_string", [VL_bits bv _]) -> Just (VL_string (show_bitlist bv))
   | ("decimal_parse", [VL_int n; VL_string dec]) -> mk_bits (decimal_parse n dec)
+
+  (* option -undefined_gen *)
+  | ("undefined_bit", [_]) -> Just (VL_bit B0)
+  | ("undefined_vector", [VL_int n; VL_bit b]) -> Just (VL_bits (replicate_bits [b] n) true)
+
   | (_, _) -> Nothing
   end

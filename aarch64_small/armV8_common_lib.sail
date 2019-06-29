@@ -604,7 +604,15 @@ function Hint_Prefetch(addr,hint,target,stream) = ()
 
 /* regular load */
 /* external */ val rMem_NORMAL : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
-function rMem_NORMAL (address, size) = __read_mem(Read_plain, 64, address, size)
+function rMem_NORMAL (address, size) = {
+  match size {
+    1 => let r = __mono_read_mem(Read_plain, 64, address, 1) in r,
+    2 => let r = __mono_read_mem(Read_plain, 64, address, 2) in r,
+    4 => let r = __mono_read_mem(Read_plain, 64, address, 4) in r,
+    8 => let r = __mono_read_mem(Read_plain, 64, address, 8) in r,
+    16 => let r = __mono_read_mem(Read_plain, 64, address, 16) in r   
+  }
+}
 /* non-temporal load (LDNP), see ARM ARM for special exception to normal memory ordering rules */
 /* external */ val rMem_STREAM : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
 function rMem_STREAM (address, size) = __read_mem(Read_stream, 64, address, size)

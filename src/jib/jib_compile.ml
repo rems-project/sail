@@ -157,7 +157,7 @@ type ctx =
     locals : (mut * ctyp) Bindings.t;
     letbinds : int list;
     no_raw : bool;
-    unroll_loops : bool;
+    unroll_loops : int option;
     convert_typ : ctx -> typ -> ctyp;
     optimize_anf : ctx -> typ aexp -> typ aexp;
     specialize_calls : bool;
@@ -176,7 +176,7 @@ let initial_ctx ~convert_typ:convert_typ ~optimize_anf:optimize_anf env =
     locals = Bindings.empty;
     letbinds = [];
     no_raw = false;
-    unroll_loops = false;
+    unroll_loops = None;
     convert_typ = convert_typ;
     optimize_anf = optimize_anf;
     specialize_calls = false;
@@ -1025,8 +1025,8 @@ and compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
          [], ctyp
      in
      let field_str = match unifiers with
-       | [] -> Util.zencode_string (string_of_id id)
-       | _ -> Util.zencode_string (string_of_id id ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
+       | [] -> string_of_id id
+       | _ -> string_of_id id ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers
      in
      setup,
      (fun clexp -> icopy l clexp (V_field (cval, field_str))),
@@ -1074,7 +1074,7 @@ and compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      (* We can either generate an actual loop body for C, or unroll the body for SMT *)
      let actual = loop_body [ilabel loop_start_label] (fun () -> [igoto loop_start_label]) in
      let rec unroll max n = loop_body [] (fun () -> if n < max then unroll max (n + 1) else [imatch_failure ()]) in
-     let body = if ctx.unroll_loops then unroll 10 0 else actual in
+     let body = match ctx.unroll_loops with Some times -> unroll times 0 | None -> actual in
      
      variable_init from_gs from_setup from_call from_cleanup
      @ variable_init to_gs to_setup to_call to_cleanup

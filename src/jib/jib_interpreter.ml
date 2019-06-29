@@ -164,7 +164,9 @@ let evaluate_cval_call f vls =
   | Concat, [VL_bits (bv1, ord1); VL_bits (bv2, ord2)] when ord1 = ord2 -> VL_bits (concat_vec bv1 bv2, ord1)
   | Zero_extend n, [VL_bits (bv, ord)] -> VL_bits (extz_vec (Big_int.of_int n) bv, ord)
   | Sign_extend n, [VL_bits (bv, ord)] -> VL_bits (exts_vec (Big_int.of_int n) bv, ord)
-  | _ -> failwith "Unsupported cval function"
+  | Bit_to_bool, [VL_bit Sail2_values.B0] -> VL_bool false
+  | Bit_to_bool, [VL_bit Sail2_values.B1] -> VL_bool false
+  | _ -> failwith ("Unsupported cval operator " ^ string_of_op f)
 
 (** [evaluate_cval locals cval] takes a NameMap.t of local variable
    bindings and reduces a cval to a single value. It returns None if
@@ -172,6 +174,7 @@ let evaluate_cval_call f vls =
    the local variable bindings. It raises [Failure msg] if the cval is
    badly formed. *)
 let rec evaluate_cval locals = function
+  | V_id (Have_exception _, _) -> Some (VL_bool false)
   | V_id (name, _) ->
      begin match NameMap.find_opt name locals with
      | Some vl -> Some vl
@@ -207,10 +210,11 @@ let rec evaluate_cval locals = function
      end
   | V_field (cval, field) ->
      begin match evaluate_cval locals cval with
-     | Some (VL_struct fields) ->
+     | Some (VL_struct fields as struct_vl)->
         begin match List.assoc_opt field fields with
         | Some vl -> Some vl
-        | None -> failwith (Printf.sprintf "Field %s does not exist in struct %s" field (string_of_cval cval))
+        | None -> failwith (Printf.sprintf "Field %s does not exist in struct %s with fields %s"
+                              field (string_of_cval cval) (string_of_value struct_vl))
         end
      | Some _ -> failwith "Bad field access on non-struct cval"
      | None -> None
@@ -296,6 +300,11 @@ let set_tuple tup n v =
   | VL_tuple vs -> VL_tuple (Util.take n vs @ [v] @ Util.drop (n + 1) vs)
   | _ -> failwith "Non tuple passed to set_tuple"
 
+let set_struct s field v =
+  match s with
+  | VL_struct fields -> VL_struct ((field, v) :: List.remove_assoc field fields)
+  | _ -> failwith "Non struct passed to set_struct"
+                      
 let assignment clexp v stack =
   match clexp with
   | CL_id (id, _) -> { stack with locals = NameMap.add id v stack.locals }

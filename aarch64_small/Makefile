@@ -1,4 +1,4 @@
-SAIL:=../sail -Ofast_undefined
+SAIL:=../sail -Ofast_undefined -memo_z3
 LEM:=../../lem/lem
 LEM_ISA_LIB?=$(shell opam config var lem:share)/isabelle-lib
 
@@ -15,8 +15,7 @@ SOURCES=prelude.sail\
   armV8_common_lib.sail\
   armV8_A64_lib.sail\
   armV8.sail\
-  ../lib/regfp.sail\
-  aarch64_regfp.sail
+  ../lib/regfp.sail
 
 MONO_SPLICES=$(wildcard mono-splices/*.sail)
 MONO_SPLICES_OPTS=$(foreach file,$(MONO_SPLICES),-splice $(file))
@@ -28,7 +27,10 @@ armV8.lem: $(SOURCES)
 	$(SAIL) $(SAILFLAGS) -lem -lem_lib ArmV8_extras_embed -o armV8 $^
 
 armV8.smt_model: $(SOURCES)
-	$(SAIL) $(SAILFLAGS) -smt_serialize -o armV8 $^ armV8_assembly.sail
+	$(SAIL) $(SAILFLAGS) -undefined_gen -smt_serialize -o armV8 $^ armV8_assembly.sail
+
+armV8.ir.sail: $(SOURCES)
+	$(SAIL) $(SAILFLAGS) -undefined_gen -ir -o armV8 $^ armV8_assembly.sail
 
 for-rmem/armV8.lem: $(SOURCES)
 	mkdir -p $(dir $@)

@@ -360,7 +360,8 @@ function rMem'(read_buffer, address, size, acctype, exclusive) =
   i : uinteger = 0; /* ARM: uninitialized */
   iswrite : boolean = false;
 
-  aligned : boolean = AArch64_CheckAlignment(address, size, acctype, iswrite);
+  /* FIXME alignment hack for Sail->SMT */
+  aligned : boolean = true; /* AArch64_CheckAlignment(address, size, acctype, iswrite); */
   atomic : boolean = ((aligned & ~(acctype == AccType_VEC | acctype == AccType_VECSTREAM)) | size == 1);
 
   if ~(atomic) then {
@@ -417,7 +418,8 @@ function wMem' (write_buffer, address, size, acctype, value, exclusive) = {
 
   if BigEndian() then
     value' = BigEndianReverse(value');
-  aligned : boolean = AArch64_CheckAlignment(address, size, acctype, iswrite);
+  /* Alignment hack for Sail->SMT */
+  aligned : boolean = true; /*AArch64_CheckAlignment(address, size, acctype, iswrite); */
   atomic : boolean = ((aligned & ~(acctype == AccType_VEC | acctype == AccType_VECSTREAM)) | size == 1);
 
   exclusiveSuccess : bool = false;
@@ -580,8 +582,41 @@ function wVpart(n, part, value) = {
 function wX(n, value) = {
   /*assert n >= 0 && n <= 31;*/
   /*assert width IN {32,64};*/
-  if n != 31 then
-    (* _R[n]) = ZeroExtend(value);
+  let value = sail_zero_extend(value, 64);
+  match n {
+    0 => R0 = value,
+    1 => R1 = value,
+    2 => R2 = value,
+    3 => R3 = value,
+    4 => R4 = value,
+    5 => R5 = value,
+    6 => R6 = value,
+    7 => R7 = value,
+    8 => R8 = value,
+    9 => R9 = value,
+    10 => R10 = value,
+    11 => R11 = value,
+    12 => R12 = value,
+    13 => R13 = value,
+    14 => R14 = value,
+    15 => R15 = value,
+    16 => R16 = value,
+    17 => R17 = value,
+    18 => R18 = value,
+    19 => R19 = value,
+    20 => R20 = value,
+    21 => R21 = value,
+    22 => R22 = value,
+    23 => R23 = value,
+    24 => R24 = value,
+    25 => R25 = value,
+    26 => R26 = value,
+    27 => R27 = value,
+    28 => R28 = value,
+    29 => R29 = value,
+    30 => R30 = value,
+    _ => ()
+  }
 }
 
 /** FUNCTION:// X[] - non-assignment form */
@@ -589,10 +624,40 @@ function wX(n, value) = {
 function rX(N,n) = {
   /*assert n >= 0 && n <= 31;*/
   /*assert width IN {8,16,32,64};*/
-  if n != 31 then
-    mask(reg_deref(_R[n]))
-  else
-    Zeros();
+  match n {
+    0 => mask(R0),
+    1 => mask(R1),
+    2 => mask(R2),
+    3 => mask(R3),
+    4 => mask(R4),
+    5 => mask(R5),
+    6 => mask(R6),
+    7 => mask(R7),
+    8 => mask(R8),
+    9 => mask(R9),
+    10 => mask(R10),
+    11 => mask(R11),
+    12 => mask(R12),
+    13 => mask(R13),
+    14 => mask(R14),
+    15 => mask(R15),
+    16 => mask(R16),
+    17 => mask(R17),
+    18 => mask(R18),
+    19 => mask(R19),
+    20 => mask(R20),
+    21 => mask(R21),
+    22 => mask(R22),
+    23 => mask(R23),
+    24 => mask(R24),
+    25 => mask(R25),
+    26 => mask(R26),
+    27 => mask(R27),
+    28 => mask(R28),
+    29 => mask(R29),
+    30 => mask(R30),
+    _ => Zeros()
+  }
 }
 
 /** FUNCTION:bits(64) ELR[bits(2) el] */
@@ -797,7 +862,7 @@ function ExtendReg (N, _reg, etype, shift) = {
     ExtendType_UXTX  => { _unsigned = true;  len = 64}
   };
 
-  let len = uMin(len, length(_val) - shift);
+  let len = uMin(len, N - shift);
   assert( len >= 1 & 'S + len < 'N);
 /*  let a = (_val[(len - 1)..0]);*/
   /* Zeros() */

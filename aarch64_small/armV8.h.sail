@@ -102,42 +102,6 @@ register R2 : bits(64)
 register R1 : bits(64)
 register R0 : bits(64)
 
-/* let _R : vector(32,dec,register(bits(64))) = */
-/*   [ref undefined */
-let _R : vector(31,dec,register(bits(64))) =
-  [ref R30
-  ,ref R29
-  ,ref R28
-  ,ref R27
-  ,ref R26
-  ,ref R25
-  ,ref R24
-  ,ref R23
-  ,ref R22
-  ,ref R21
-  ,ref R20
-  ,ref R19
-  ,ref R18
-  ,ref R17
-  ,ref R16
-  ,ref R15
-  ,ref R14
-  ,ref R13
-  ,ref R12
-  ,ref R11
-  ,ref R10
-  ,ref R9
-  ,ref R8
-  ,ref R7
-  ,ref R6
-  ,ref R5
-  ,ref R4
-  ,ref R3
-  ,ref R2
-  ,ref R1
-  ,ref R0
-  ]
-
 /* val reg_index : reg_size -> UInt_reg effect pure */
 /* function reg_index x = (x : (reg_index)) */
 

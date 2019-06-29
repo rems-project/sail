@@ -1008,7 +1008,7 @@ and cval_ctyp = function
      begin match cval_ctyp cval with
      | CT_struct (id, ctors) ->
         begin
-          try snd (List.find (fun (id, ctyp) -> Util.zencode_string (string_of_id id) = field) ctors) with
+          try snd (List.find (fun (id, ctyp) -> string_of_id id = field) ctors) with
           | Not_found -> failwith ("Struct type " ^ string_of_id id ^ " does not have a constructor " ^ field)
         end
      | ctyp -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Inavlid type for V_field " ^ full_string_of_ctyp ctyp)

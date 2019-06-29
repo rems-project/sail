@@ -728,9 +728,16 @@ let ssa instrs =
   place_phi_functions cfg df;
   rename_variables cfg start children;
   place_pi_functions cfg start idom children;
-  prerr_endline "Generated SSA";
+  prerr_endline ("Generated SSA graph with " ^ string_of_int (cfg.next - 1) ^ " nodes");
   start, cfg
 
+let simplify_constant_assignment clexp locals =
+  match clexp with
+  | CL_id (id, CT_constant c) ->
+     locals := NameMap.add id (Value2.VL_int c) !locals
+  | _ -> ()
+
+  
 let simplify_assignment clexp v locals instr =
   match clexp with
   | CL_id (id, ctyp) ->
@@ -744,18 +751,31 @@ let simplify_assignment clexp v locals instr =
      | None ->
         instr
      end
-  | _ -> instr
+  | CL_field (CL_rmw (read, write, ctyp), field) ->
+     prerr_endline ("FIELD: " ^ field);
+     begin match NameMap.find_opt read !locals with
+     | Some s ->
+        locals := NameMap.add write (Jib_interpreter.set_struct s field v) !locals;
+        instr
+     | None ->
+        instr
+     end
+  | _ ->
+     prerr_endline ("Assignment: " ^ Pretty_print_sail.to_string (pp_clexp clexp));
+     instr
 
 let simplify_instr env locals instr =
   let open Jib_interpreter in
   let open Value2 in
   match instr with
   | I_aux (I_copy (clexp, cval), aux) ->
-     begin match evaluate_cval !locals cval with
-     | Some v ->
+     begin match cval_ctyp cval, evaluate_cval !locals cval with
+     | _, Some v ->
         let instr = I_aux (I_copy (clexp, V_lit (v, cval_ctyp cval)), aux) in
         simplify_assignment clexp v locals instr
-     | None -> instr
+     | CT_constant c, None ->
+        simplify_assignment clexp (VL_int c) locals instr        
+     | _, None -> instr
      end
 
   | I_aux (I_init (ctyp, name, cval), aux) ->
@@ -780,14 +800,24 @@ let simplify_instr env locals instr =
           match Value2.primops extern args with
           | Some result ->
              simplify_assignment clexp result locals instr
-          | None -> instr
+          | None ->
+             prerr_endline ("primop: " ^ extern);
+             instr
         else if List.length args = 1 then
           let ctor = VL_constructor (string_of_id id, List.nth args 0) in
           simplify_assignment clexp ctor locals instr
-        else
+        else (
+          prerr_endline ("???: " ^ string_of_id id);
           instr
-     | None -> instr
+        )
+     | None ->
+        simplify_constant_assignment clexp locals;
+        instr
      end
+
+  | I_aux (I_funcall (clexp, true, id, args), aux) ->
+     prerr_endline ("!!!: " ^ string_of_id id ^ "(" ^ Util.string_of_list ", " string_of_cval args ^ ")");
+     instr
 
   | instr -> instr
 
@@ -802,9 +832,17 @@ let vertex_exists cfg n =
   | None -> false
 
 let propagate_ssa_elem locals = function
-  | Phi (id, _, [id']) ->
-     begin match NameMap.find_opt id' !locals with
-     | Some v -> locals := NameMap.add id v !locals
+  | Phi (phi_id, _, [id]) ->
+     begin match NameMap.find_opt id !locals with
+     | Some v -> locals := NameMap.add phi_id v !locals
+     | None -> ()
+     end
+  (* I don't think this should really occur, there's probably an issue
+     in phi insertion that causes it - but if it does happen we can
+     propagate. *)
+  | Phi (phi_id, _, id :: ids) when List.for_all (fun id' -> Name.compare id id' = 0) ids ->
+     begin match NameMap.find_opt id !locals with
+     | Some v -> locals := NameMap.add phi_id v !locals
      | None -> ()
      end
   | _ -> ()
@@ -882,10 +920,11 @@ let simplify_ssa_pass env start cfg =
    allows more simplification to occur, we iterate simplification
    until no more nodes can be removed *)
 let rec simplify_ssa env start cfg =
-  if simplify_ssa_pass env start cfg > 0 then
+  let removed = simplify_ssa_pass env start cfg in
+  if removed > 0 then (
+    prerr_endline ("Simplification removed " ^ string_of_int removed ^ " basic blocks"); 
     simplify_ssa env start cfg
-  else
-    ()
+  )
 
 (* Debugging utilities for outputing Graphviz files. *)
 

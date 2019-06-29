@@ -73,6 +73,8 @@ let opt_propagate_vars = ref false
 
 let opt_simplify_ssa = ref false
 
+let opt_unroll_limit = ref 10
+                     
 module EventMap = Map.Make(Event)
 
 (* Note that we have to use x : ty ref rather than mutable x : ty, to
@@ -287,6 +289,9 @@ let rec smt_conversion ctx from_ctyp to_ctyp x =
      force_size ctx sz ctx.lint_size x
   | CT_lbits _, CT_fbits (n, _) ->
      unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [x]))
+  | CT_fbits (n, _), CT_lbits _ ->
+     Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int n); unsigned_size ctx (lbits_size ctx) n x])
+
   | _, _ -> failwith (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
 
 (* Translate Jib literals into SMT *)
@@ -405,7 +410,7 @@ let rec smt_cval ctx cval =
      | V_field (union, field) ->
         begin match cval_ctyp union with
         | CT_struct (struct_id, _) ->
-           Fn (zencode_upper_id struct_id ^ "_" ^ field, [smt_cval ctx union])
+           Fn (zencode_upper_id struct_id ^ "_" ^ Util.zencode_string field, [smt_cval ctx union])
         | _ -> failwith "Field for non-struct type"
         end
      | V_struct (fields, ctyp) ->
@@ -1197,7 +1202,9 @@ let smt_builtin ctx name args ret_ctyp =
   | "lteq_real", [v1; v2], CT_bool -> ctx.use_real := true; Fn ("<=", [smt_cval ctx v1; smt_cval ctx v2])
   | "gteq_real", [v1; v2], CT_bool -> ctx.use_real := true; Fn (">=", [smt_cval ctx v1; smt_cval ctx v2])
 
-  | _ -> smt_value ctx (Jib_interpreter.declaration ret_ctyp) ret_ctyp
+  | _ ->
+     Reporting.warn ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp) ctx.pragma_l "";
+     smt_value ctx (Jib_interpreter.declaration ret_ctyp) ret_ctyp
 
 
      (* failwith ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp) *)
@@ -1620,7 +1627,7 @@ let rmw_modify smt = function
      begin match ctyp with
      | CT_struct (struct_id, fields) ->
         let set_field (field', _) =
-          if Util.zencode_string field = zencode_id field' then
+          if field = string_of_id field' then
             smt
           else
             Fn (zencode_upper_id struct_id ^ "_" ^ zencode_id field', [Var (rmw_read clexp)])
@@ -2059,7 +2066,7 @@ let smt_instr_list name ctx all_cdefs instrs =
 
   if !opt_simplify_ssa then
     simplify_ssa ctx.tc_env start cfg;
-
+  
   let visit_order =
     try topsort cfg with
     | Not_a_DAG n ->
@@ -2192,7 +2199,7 @@ let compile env ast =
     let cdefs, ctx =
       compile_ast { ctx with specialize_calls = true;
                              ignore_64 = true;
-                             unroll_loops = true;
+                             unroll_loops = Some !opt_unroll_limit;
                              struct_value = true;
                              use_real = true } ast in
     Profile.finish "Compiling to Jib IR" t;

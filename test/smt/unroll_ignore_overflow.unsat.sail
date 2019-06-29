@@ -1,6 +1,7 @@
 default Order dec
 
 $option -smt_ignore_overflow
+$option -smt_unroll_limit 100
 
 $include <prelude.sail>
 
