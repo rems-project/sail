@@ -203,6 +203,16 @@ let simp_or xs =
      else
        Fn ("or", xs)
 
+let rec all_bin = function
+  | Bin _ :: rest -> all_bin rest
+  | [] -> true
+  | _ :: _ -> false
+    
+let rec merge_bin = function
+  | Bin b :: rest -> b ^ merge_bin rest
+  | [] -> ""
+  | _ :: _ -> assert false
+                   
 let simp_fn = function
   | Fn ("not", [Fn ("not", [exp])]) -> exp
   | Fn ("not", [Bool_lit b]) -> Bool_lit (not b)
@@ -212,7 +222,7 @@ let simp_fn = function
   | Fn ("and", xs) -> simp_and xs
   | Fn ("=>", [Bool_lit true; y]) -> y
   | Fn ("=>", [Bool_lit false; y]) -> Bool_lit true
-  | Fn ("concat", [Bin b1; Bin b2]) -> Bin (b1 ^ b2)
+  | Fn ("concat", xs) when all_bin xs -> Bin (merge_bin xs)
   | Fn ("bvadd", [x; (Hex str | Bin str)]) when str = String.make (String.length str) '0' -> x
   | Fn ("bvadd", [(Hex str | Bin str); x]) when str = String.make (String.length str) '0' -> x
   | Fn ("=", [x; y]) as exp ->

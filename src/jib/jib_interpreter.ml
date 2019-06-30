@@ -213,8 +213,9 @@ let rec evaluate_cval locals = function
      | Some (VL_struct fields as struct_vl)->
         begin match List.assoc_opt field fields with
         | Some vl -> Some vl
-        | None -> failwith (Printf.sprintf "Field %s does not exist in struct %s with fields %s"
-                              field (string_of_cval cval) (string_of_value struct_vl))
+        | None -> None
+                    (* failwith (Printf.sprintf "Field %s does not exist in struct %s with fields %s"
+                              field (string_of_cval cval) (string_of_value struct_vl)) *)
         end
      | Some _ -> failwith "Bad field access on non-struct cval"
      | None -> None
@@ -225,10 +226,7 @@ let rec evaluate_cval locals = function
        | Some vl -> Some (string_of_id field, vl)
        | None -> None
      in
-     begin match Util.option_all (List.map evaluate_field fields) with
-     | Some fields -> Some (VL_struct fields)
-     | None -> None
-     end
+     Some (VL_struct (Util.option_these (List.map evaluate_field fields)))
   | cval -> failwith ("Unsupported cval " ^ string_of_cval cval)
 
 let eval_special name args stack =
