@@ -207,12 +207,12 @@ let rec all_bin = function
   | Bin _ :: rest -> all_bin rest
   | [] -> true
   | _ :: _ -> false
-    
+
 let rec merge_bin = function
   | Bin b :: rest -> b ^ merge_bin rest
   | [] -> ""
   | _ :: _ -> assert false
-                   
+
 let simp_fn = function
   | Fn ("not", [Fn ("not", [exp])]) -> exp
   | Fn ("not", [Bool_lit b]) -> Bool_lit (not b)
@@ -304,6 +304,7 @@ type write_info = {
 
 type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
+  | Declare_fun of string * (string * smt_typ) list * smt_typ
   | Declare_const of string * smt_typ
   | Define_const of string * smt_typ * smt_exp
   (* Same as Define_const, but it'll never be removed by simplification *)
@@ -339,6 +340,8 @@ let suffix_variables_write_info sfx (w : write_info) =
 let suffix_variables_def sfx = function
   | Define_fun (name, args, ty, exp) ->
      Define_fun (name ^ sfx, List.map (fun (arg, ty) -> sfx ^ arg, ty) args, ty, suffix_variables_exp sfx exp)
+  | Declare_fun (name, args, ty) ->
+     Declare_fun (name ^ sfx, List.map (fun (arg, ty) -> sfx ^ arg, ty) args, ty)
   | Declare_const (name, ty) ->
      Declare_const (name ^ sfx, ty)
   | Define_const (name, ty, exp) ->
@@ -444,6 +447,11 @@ let pp_smt_def =
              ^^ space ^^ parens (separate_map space pp_str_smt_typ args)
              ^^ space ^^ pp_smt_typ ty
              ^//^ pp_smt_exp exp)
+
+  | Declare_fun (name, args, ty) ->
+     parens (string "define-fun" ^^ space ^^ string name
+             ^^ space ^^ parens (separate_map space pp_str_smt_typ args)
+             ^^ space ^^ pp_smt_typ ty)
 
   | Declare_const (name, ty) ->
      pp_sfun "declare-const" [string name; pp_smt_typ ty]
