@@ -302,9 +302,16 @@ type write_info = {
     data : smt_exp
   }
 
+type barrier_info = {
+    name : string;
+    node : int;
+    active : smt_exp;
+    kind : smt_exp
+  }
+
 type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
-  | Declare_fun of string * (string * smt_typ) list * smt_typ
+  | Declare_fun of string * smt_typ list * smt_typ
   | Declare_const of string * smt_typ
   | Define_const of string * smt_typ * smt_exp
   (* Same as Define_const, but it'll never be removed by simplification *)
@@ -312,7 +319,7 @@ type smt_def =
   | Write_mem of write_info
   | Write_mem_ea of string * int * smt_exp * smt_exp * smt_exp * smt_typ * smt_exp * smt_typ
   | Read_mem of read_info
-  | Barrier of string * int * smt_exp * smt_exp
+  | Barrier of barrier_info
   | Excl_res of string * int * smt_exp
   | Declare_datatypes of string * (string * (string * smt_typ) list) list
   | Declare_tuple of int
@@ -337,11 +344,15 @@ let suffix_variables_write_info sfx (w : write_info) =
   let suffix exp = suffix_variables_exp sfx exp in
   { w with name = w.name ^ sfx; active = suffix w.active; kind = suffix w.kind; addr = suffix w.addr; data = suffix w.data }
 
+let suffix_variables_barrier_info sfx (w : barrier_info) =
+  let suffix exp = suffix_variables_exp sfx exp in
+  { w with name = w.name ^ sfx; active = suffix w.active; kind = suffix w.kind }
+
 let suffix_variables_def sfx = function
   | Define_fun (name, args, ty, exp) ->
      Define_fun (name ^ sfx, List.map (fun (arg, ty) -> sfx ^ arg, ty) args, ty, suffix_variables_exp sfx exp)
-  | Declare_fun (name, args, ty) ->
-     Declare_fun (name ^ sfx, List.map (fun (arg, ty) -> sfx ^ arg, ty) args, ty)
+  | Declare_fun (name, tys, ty) ->
+     Declare_fun (name ^ sfx, tys, ty)
   | Declare_const (name, ty) ->
      Declare_const (name ^ sfx, ty)
   | Define_const (name, ty, exp) ->
@@ -353,8 +364,7 @@ let suffix_variables_def sfx = function
      Write_mem_ea (name ^ sfx, node, suffix_variables_exp sfx active, suffix_variables_exp sfx wk,
                    suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data_size, data_size_ty)
   | Read_mem r -> Read_mem (suffix_variables_read_info sfx r)
-  | Barrier (name, node, active, bk) ->
-     Barrier (name ^ sfx, node, suffix_variables_exp sfx active, suffix_variables_exp sfx bk)
+  | Barrier b -> Barrier (suffix_variables_barrier_info sfx b)
   | Excl_res (name, node, active) ->
      Excl_res (name ^ sfx, node, suffix_variables_exp sfx active)
   | Declare_datatypes (name, ctors) ->
@@ -449,8 +459,8 @@ let pp_smt_def =
              ^//^ pp_smt_exp exp)
 
   | Declare_fun (name, args, ty) ->
-     parens (string "define-fun" ^^ space ^^ string name
-             ^^ space ^^ parens (separate_map space pp_str_smt_typ args)
+     parens (string "declare-fun" ^^ space ^^ string name
+             ^^ space ^^ parens (separate_map space pp_smt_typ args)
              ^^ space ^^ pp_smt_typ ty)
 
   | Declare_const (name, ty) ->
@@ -478,9 +488,9 @@ let pp_smt_def =
      ^^ pp_sfun "define-const" [string (r.name ^ "_addr"); pp_smt_typ r.addr_type; pp_smt_exp r.addr] ^^ hardline
      ^^ pp_sfun "declare-const" [string (r.name ^ "_ret"); pp_smt_typ r.ret_type]
 
-  | Barrier (name, _, active, bk) ->
-     pp_sfun "define-const" [string (name ^ "_kind"); string "Zbarrier_kind"; pp_smt_exp bk] ^^ hardline
-     ^^ pp_sfun "define-const" [string (name ^ "_active"); pp_smt_typ Bool; pp_smt_exp active]
+  | Barrier b ->
+     pp_sfun "define-const" [string (b.name ^ "_kind"); string "Zbarrier_kind"; pp_smt_exp b.kind] ^^ hardline
+     ^^ pp_sfun "define-const" [string (b.name ^ "_active"); pp_smt_typ Bool; pp_smt_exp b.active]
 
   | Excl_res (name, _, active) ->
      pp_sfun "declare-const" [string (name ^ "_res"); pp_smt_typ Bool] ^^ hardline

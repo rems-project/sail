@@ -737,12 +737,12 @@ let simplify_constant_assignment clexp locals =
      locals := NameMap.add id (Value2.VL_int c) !locals
   | _ -> ()
 
-  
 let simplify_assignment clexp v locals instr =
   match clexp with
   | CL_id (id, ctyp) ->
      locals := NameMap.add id v !locals;
-     icopy Parse_ast.Unknown (CL_id (id, ctyp)) (V_lit (v, ctyp))
+     (* icopy Parse_ast.Unknown (CL_id (id, ctyp)) (V_lit (v, ctyp)); *)
+     instr
   | CL_tuple (CL_rmw (read, write, ctyp), n) ->
      begin match NameMap.find_opt read !locals with
      | Some tup ->
@@ -771,10 +771,10 @@ let simplify_instr env locals instr =
   | I_aux (I_copy (clexp, cval), aux) ->
      begin match cval_ctyp cval, evaluate_cval !locals cval with
      | _, Some v ->
-        let instr = I_aux (I_copy (clexp, V_lit (v, cval_ctyp cval)), aux) in
+        (* let instr = I_aux (I_copy (clexp, V_lit (v, cval_ctyp cval)), aux) in *)
         simplify_assignment clexp v locals instr
      | CT_constant c, None ->
-        simplify_assignment clexp (VL_int c) locals instr        
+        simplify_assignment clexp (VL_int c) locals instr
      | _, None -> instr
      end
 
@@ -782,7 +782,8 @@ let simplify_instr env locals instr =
      begin match evaluate_cval !locals cval with
      | Some v ->
         locals := NameMap.add name v !locals;
-        I_aux (I_init (ctyp, name, V_lit (v, cval_ctyp cval)), aux)
+        (* I_aux (I_init (ctyp, name, V_lit (v, cval_ctyp cval)), aux); *)
+        instr
      | None -> instr
      end
 
@@ -791,7 +792,7 @@ let simplify_instr env locals instr =
      let args = List.map2 (fun orig_arg simp_arg ->
                     match simp_arg with None -> orig_arg | Some v -> V_lit (v, cval_ctyp orig_arg)
                   ) args simplified_args in
-     let instr = I_aux (I_funcall (clexp, false, id, args), aux) in
+     (* let instr = I_aux (I_funcall (clexp, false, id, args), aux) in *)
      begin match Util.option_all simplified_args with
      | Some args ->
         let open Type_check in

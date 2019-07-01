@@ -189,7 +189,7 @@ let fuzz_cdef ctx all_cdefs = function
                    @ [iend ()]
                  in
                  let smt_defs =
-                   try fst (smt_instr_list extern ctx all_cdefs jib) with
+                   try (fun (x, _, _) -> x) (smt_instr_list extern ctx all_cdefs jib) with
                    | _ ->
                       raise (Skip_iteration ("SMT error for: " ^ Util.string_of_list ", " string_of_exp (List.map fst values)))
                  in

@@ -74,7 +74,7 @@ let opt_propagate_vars = ref false
 let opt_simplify_ssa = ref false
 
 let opt_unroll_limit = ref 10
-                     
+
 module EventMap = Map.Make(Event)
 
 (* Note that we have to use x : ty ref rather than mutable x : ty, to
@@ -310,7 +310,12 @@ let rec smt_value ctx vl ctyp =
        | Some s -> Hex (Xstring.implode s)
        | None -> Bin (Xstring.implode (List.map Sail2_values.bitU_char (List.rev (Util.take n (List.rev bs)))))
      in
-     Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int (List.length bs)); bv])
+     let sz = match bv with
+       | Hex str -> String.length str * 4
+       | Bin str -> String.length str
+       | _ -> assert false
+     in
+     Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int (List.length bs)); unsigned_size ctx (lbits_size ctx) sz bv])
   | VL_bool b, _ -> Bool_lit b
   | VL_int n, CT_constant m -> bvint (required_width n) n
   | VL_int n, CT_fint sz -> bvint sz n
@@ -1265,7 +1270,12 @@ let barriers = ref (-1)
 let builtin_barrier ctx bk =
   incr barriers;
   let name = "B" ^ string_of_int !barriers in
-  [Barrier (name, ctx.node, Lazy.force ctx.pathcond, smt_cval ctx bk)],
+  [Barrier {
+       name = name;
+       node = ctx.node;
+       active = Lazy.force ctx.pathcond;
+       kind = smt_cval ctx bk
+  }],
   Enum "unit"
 
 let define_const ctx id ctyp exp = Define_const (zencode_name id, smt_ctyp ctx ctyp, exp)
@@ -1854,6 +1864,8 @@ module Make_optimizer(S : Sequence) = struct
          | Some _ ->
             Stack.push def stack'
          end
+      | Declare_fun _ as def ->
+         Stack.push def stack'
       | Preserve_const (_, _, exp) as def ->
          uses_in_exp exp;
          Stack.push def stack'
@@ -1875,8 +1887,8 @@ module Make_optimizer(S : Sequence) = struct
       | Read_mem r as def ->
          uses_in_exp r.active; uses_in_exp r.kind; uses_in_exp r.addr;
          Stack.push def stack'
-      | Barrier (_, _, active, bk) as def ->
-         uses_in_exp active; uses_in_exp bk;
+      | Barrier b as def ->
+         uses_in_exp b.active; uses_in_exp b.kind;
          Stack.push def stack'
       | Excl_res (_, _, active) as def ->
          uses_in_exp active;
@@ -1894,6 +1906,8 @@ module Make_optimizer(S : Sequence) = struct
 
     let constant_propagate = function
       | Declare_const _ as def ->
+         S.add def seq
+      | Declare_fun _ as def ->
          S.add def seq
       | Preserve_const (var, typ, exp) ->
          S.add (Preserve_const (var, typ, simp_smt_exp vars kinds exp)) seq
@@ -1930,8 +1944,8 @@ module Make_optimizer(S : Sequence) = struct
                                   addr = simp_smt_exp vars kinds r.addr
                          })
                seq
-      | Barrier (name, node, active, bk) ->
-         S.add (Barrier (name, node, simp_smt_exp vars kinds active, simp_smt_exp vars kinds bk)) seq
+      | Barrier b ->
+         S.add (Barrier { b with active = simp_smt_exp vars kinds b.active; kind = simp_smt_exp vars kinds b.kind }) seq
       | Excl_res (name, node, active) ->
          S.add (Excl_res (name, node, simp_smt_exp vars kinds active)) seq
       | Assert exp ->
@@ -2066,7 +2080,7 @@ let smt_instr_list name ctx all_cdefs instrs =
 
   if !opt_simplify_ssa then
     simplify_ssa ctx.tc_env start cfg;
-  
+
   let visit_order =
     try topsort cfg with
     | Not_a_DAG n ->
@@ -2089,7 +2103,7 @@ let smt_instr_list name ctx all_cdefs instrs =
          push_smt_defs stack basic_block
     ) visit_order;
 
-  stack, cfg
+  stack, start, cfg
 
 let smt_cdef props lets name_file ctx all_cdefs = function
   | CDEF_spec (function_id, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
@@ -2116,7 +2130,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           |> remove_pointless_goto
         in
 
-        let stack, _ = smt_instr_list (string_of_id function_id) ctx all_cdefs instrs in
+        let stack, _, _ = smt_instr_list (string_of_id function_id) ctx all_cdefs instrs in
 
         let query = smt_query ctx pragma.query in
         push_smt_defs stack [Assert (Fn ("not", [query]))];

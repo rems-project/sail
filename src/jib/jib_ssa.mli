@@ -66,6 +66,8 @@ val get_vertex : 'a array_graph -> int -> ('a * IntSet.t * IntSet.t) option
 
 val iter_graph : ('a -> IntSet.t -> IntSet.t -> unit) -> 'a array_graph -> unit
 
+val cardinal : 'a array_graph -> int
+
 (** Add a vertex to a graph, returning the index of the inserted
    vertex. If the number of vertices exceeds the size of the
    underlying array, then it is dynamically resized. *)
@@ -108,7 +110,7 @@ type ssa_elem =
 val ssa : Jib.instr list -> int * (ssa_elem list * cf_node) array_graph
 
 val simplify_ssa : Type_check.Env.t -> int -> (ssa_elem list * cf_node) array_graph -> unit
-  
+
 (** Output the control-flow graph in graphviz format for
    debugging. Can use 'dot -Tpng X.gv -o X.png' to generate a png
    image of the graph. *)

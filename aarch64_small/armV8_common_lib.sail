@@ -717,7 +717,35 @@ function wMem_Addr(address, size, acctype, excl) =
 
 /* regular store */
 /* external */ val wMem_Val_NORMAL : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*addr*/, int('N) /*size*/, bits('N*8) /*value*/) -> unit effect {wmv}
-function wMem_Val_NORMAL (address, size, value) = { let b = __write_mem(Write_plain, 64, address, size, value); () }
+function wMem_Val_NORMAL (address, size, value) = {
+  match size {
+    1 => {
+      let v: bits(8) = value;
+      let _ = __mono_write_mem(Write_plain, 64, address, 1, v);
+      ()
+    },
+    2 => {
+      let v: bits(16) = value;
+      let _ = __mono_write_mem(Write_plain, 64, address, 2, v);
+      ()
+    },
+    4 => {
+      let v: bits(32) = value;
+      let _ = __mono_write_mem(Write_plain, 64, address, 4, v);
+      ()
+    },
+    8 => {
+      let v: bits(64) = value;
+      let _ = __mono_write_mem(Write_plain, 64, address, 8, v);
+      ()
+    },
+    16 => {
+      let v: bits(128) = value;
+      let _ = __mono_write_mem(Write_plain, 64, address, 16, v);
+      ()
+    }
+  }
+}
 /* external */ val wMem_Val_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*addr*/, int('N) /*size*/, bits('N*8) /*value*/) -> unit effect {wmv}
 function wMem_Val_ORDERED (address, size, value) = { let b = __write_mem(Write_release, 64, address, size, value); () }
 /* store-exclusive */

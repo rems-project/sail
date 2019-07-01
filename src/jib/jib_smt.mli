@@ -127,9 +127,9 @@ type ctx = {
 val declare_const : ctx -> name -> ctyp -> smt_def
 
 val build_register_map : Ast.id list CTMap.t -> cdef list -> Ast.id list CTMap.t
-  
+
 val expand_reg_deref : Type_check.Env.t -> Ast.id list CTMap.t -> instr -> instr 
-  
+
 (** Compile an AST into Jib suitable for SMT generation, and initialise a context. *)
 val compile : Type_check.Env.t -> Type_check.tannot defs -> cdef list * Jib_compile.ctx * ctx
 
@@ -140,12 +140,12 @@ val compile : Type_check.Env.t -> Type_check.tannot defs -> cdef list * Jib_comp
    really better than just using lists. *)
 
 val smt_cval : ctx -> cval -> smt_exp
-  
+
 val smt_header : ctx -> cdef list -> smt_def list
 
 val smt_query : ctx -> Property.query -> smt_exp
 
-val smt_instr_list : string -> ctx -> cdef list -> instr list -> smt_def Stack.t * (ssa_elem list * cf_node) Jib_ssa.array_graph
+val smt_instr_list : string -> ctx -> cdef list -> instr list -> smt_def Stack.t * int * (ssa_elem list * cf_node) Jib_ssa.array_graph
 
 module type Sequence = sig
   type 'a t
