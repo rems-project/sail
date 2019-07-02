@@ -70,9 +70,29 @@ mapping xreg_name : regex("x[0-9]+") <-> reg_index = {
   "x31" <-> 31
 }
 
-type labels = list((string, bits(64)))
+type labels = list((string, int))
 
-val assembly : (bits(64), labels) -> string <-> ast
+val assoc : (list((string, int)), string) -> option(int)
+
+function assoc(map, key) = {
+  match map {
+    (key', value) :: map if key == key' => Some(value),
+    _ :: map => assoc(map, key),
+    [||] => None()
+  }
+}
+
+val label : (int, labels) -> string <-> bits(26)
+
+mapping label(n: int, labels: labels) -> string <-> bits(26) = {
+  x <- bits(26) <-> x,
+  forwards l => match assoc(labels, l) {
+    Some(offset) => get_slice_int(26, offset - n, 0),
+    None() => sail_zeros(26)
+  }
+}
+
+val assembly : (int, labels) -> string <-> ast
 
 mapping assembly(offset, labels) = {
   "str" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
@@ -83,9 +103,20 @@ mapping assembly(offset, labels) = {
     <->
   LoadRegister(n, t, 0, AccType_NORMAL, MemOp_LOAD, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
 
-  "mov" ^ spc() ^ d <- wreg_name() ^ sep() ^ hash() ^ imm <- bits(64)
+  "mov" ^ spc() ^ d <- wreg_name() ^ sep() ^ hash() ^ imm <- bits(32)
     <->
-  LogicalImmediate(d, 31, 64, bitzero, LogicalOp_ORR, imm)
+  LogicalImmediate(d, 31, 32, bitzero, LogicalOp_ORR, imm),
+
+  "mov" ^ spc() ^ d <- xreg_name() ^ sep() ^ hash() ^ imm <- bits(64)
+    <->
+  LogicalImmediate(d, 31, 64, bitzero, LogicalOp_ORR, imm),
+
+  "isb"
+    <->
+  Barrier(MemBarrierOp_ISB, MBReqDomain_FullSystem, MBReqTypes_All),
+
+  forwards "b" ^ spc() ^ imm26 <- label(offset, labels) => BranchImmediate(BranchType_JMP, SignExtend(imm26 @ 0b00)),
+  backwards BranchImmediate(BranchType_JMP, offset) => concat_str("b ", hex_string(offset[27 .. 2])) 
 }
 
 function litmus_start(_: unit) -> unit = {

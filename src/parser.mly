@@ -728,7 +728,7 @@ atomic_pat:
     { mk_pat (P_list []) $startpos $endpos }
   | LsquareBar pat_list RsquareBar
     { mk_pat (P_list $2) $startpos $endpos }
-  | atomic_pat LtMinus Regex Lparen exp Rparen
+  | atomic_pat LtMinus direction_regex Lparen exp Rparen
     { mk_pat (P_view ($1, mk_id (Id "regex") $startpos($3) $endpos($3), [$5])) $startpos $endpos }
   | atomic_pat LtMinus direction_id Lparen exp_list Rparen
     { mk_pat (P_view ($1, $3, $5)) $startpos $endpos }
@@ -1039,6 +1039,12 @@ direction_id:
   | Backwards Id
     { Id_aux (Direction (Backwards, $2), loc $startpos $endpos) }
 
+direction_regex:
+  | Regex
+    { $1 }
+  | Forwards Regex
+    { $2 }
+
 atomic_exp:
   | atomic_exp Colon atomic_typ
     { mk_exp (E_cast ($3, $1)) $startpos $endpos }
@@ -1333,7 +1339,7 @@ atomic_mpat:
     { mk_mpat (MP_list $2) $startpos $endpos }
   | atomic_mpat Colon typ
     { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
-  | atomic_mpat LtMinus Regex Lparen exp Rparen
+  | atomic_mpat LtMinus direction_regex Lparen exp Rparen
     { mk_mpat (MP_view ($1, mk_id (Id "regex") $startpos($3) $endpos($3), [$5])) $startpos $endpos }
   | atomic_mpat LtMinus id Lparen exp_list Rparen
     { mk_mpat (MP_view ($1, $3, $5)) $startpos $endpos }

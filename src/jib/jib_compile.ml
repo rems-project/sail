@@ -620,7 +620,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_list [], ctyp)])) case_label], [], ctx
 
   | AP_view (apat, id, aexps, typ) ->
-     if string_of_id id = "regex" then (
+     if string_of_id (strip_direction id) = "regex" then (
        match aexps with
        | [AE_aux (AE_val (AV_lit (L_aux (L_string regex_string, _), _)), _, _)] ->
           let regex, result = ngensym (), ngensym () in

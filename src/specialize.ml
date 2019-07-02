@@ -498,6 +498,7 @@ let initial_calls = ref (IdSet.of_list
     mk_id "execute";
     mk_id "decode";
     mk_id "assembly";
+    mk_id "label"; (* FIXME should be found via assembly *)
     mk_id "initialize_registers";
     mk_id "litmus_start";
     mk_id "prop";

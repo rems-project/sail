@@ -3250,7 +3250,7 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      let app_env, is_mapping_builtin =
        if Env.allow_mapping_builtins env then
          match string_of_id f with
-         | "regex" ->
+         | "regex" | "forwards regex" ->
             begin match exps with
             | [E_aux (E_lit (L_aux (L_string regex, _)), _)] ->
                Env.add_val_spec (mk_id "regex") (mk_typquant [], mapping_family_typ [string_typ] string_typ (regex_typ regex)) env, true
@@ -3269,7 +3269,7 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
            annot_pat (P_view (pat, f, exps)) typ_right, env, guards
         | Some Forwards | None ->
            let pat, env, guards = bind_pat env pat typ_right in
-           annot_pat (P_view (pat, f, exps)) typ_left, env, guards
+           annot_pat (P_view (pat, set_id_direction Forwards f, exps)) typ_left, env, guards
         end
      | _ ->
         typ_error env l "View pattern must have a bi-directional return type"

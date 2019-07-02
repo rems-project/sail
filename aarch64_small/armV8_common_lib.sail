@@ -386,11 +386,7 @@ function SInt(x) = {
 
 /** FUNCTION:bits(N) SignExtend(bits(M) x, integer N) */
 
-function SignExtend (N, x : bits('M)) = {
-  let M = length(x); /* necessary for the type system to rewrite sizeof */
-  let h = x[M - 1];
-  (Replicate([h]) : bits(('N - 'M))) @ x
-}
+function SignExtend (N, x : bits('M)) = sail_sign_extend(x, N)
 
 
 /** FUNCTION:integer UInt(bits(N) x) */
