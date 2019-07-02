@@ -113,8 +113,7 @@ let mk_variant name ctors =
 
 type smt_exp =
   | Bool_lit of bool
-  | Hex of string
-  | Bin of string
+  | Bitvec_lit of Sail2_values.bitU list
   | Real_lit of string
   | String_lit of string
   | Var of string
@@ -138,7 +137,7 @@ let rec fold_smt_exp f = function
   | Extract (n, m, exp) -> f (Extract (n, m, fold_smt_exp f exp))
   | Tester (ctor, exp) -> f (Tester (ctor, fold_smt_exp f exp))
   | Forall (binders, exp) -> f (Forall (binders, fold_smt_exp f exp))
-  | (Bool_lit _ | Hex _ | Bin _ | Real_lit _ | String_lit _ | Var _ | Shared _ | Read_res _ | Enum _ as exp) -> f exp
+  | (Bool_lit _ | Bitvec_lit  _ | Real_lit _ | String_lit _ | Var _ | Shared _ | Read_res _ | Enum _ as exp) -> f exp
 
 let smt_conj = function
   | [] -> Bool_lit true
@@ -164,21 +163,13 @@ let bvshl x y  = Fn ("bvshl", [x; y])
 let bvlshr x y = Fn ("bvlshr", [x; y])
 let bvult x y  = Fn ("bvult", [x; y])
 
-let bvzero n =
-  if n mod 4 = 0 then
-    Hex (String.concat "" (Util.list_init (n / 4) (fun _ -> "0")))
-  else
-    Bin (String.concat "" (Util.list_init n (fun _ -> "0")))
+let bvzero n = Bitvec_lit (Sail2_operators_bitlists.zeros (Big_int.of_int n))
 
-let bvones n =
-  if n mod 4 = 0 then
-    Hex (String.concat "" (Util.list_init (n / 4) (fun _ -> "F")))
-  else
-    Bin (String.concat "" (Util.list_init n (fun _ -> "1")))
+let bvones n = Bitvec_lit (Sail2_operators_bitlists.ones (Big_int.of_int n))
 
 let simp_equal x y =
   match x, y with
-  | Bin str1, Bin str2 -> Some (str1 = str2)
+  | Bitvec_lit bv1, Bitvec_lit bv2 -> Some (Sail2_operators_bitlists.eq_vec bv1 bv2)
   | _, _ -> None
 
 let simp_and xs =
@@ -203,14 +194,14 @@ let simp_or xs =
      else
        Fn ("or", xs)
 
-let rec all_bin = function
-  | Bin _ :: rest -> all_bin rest
+let rec all_bitvec_lit = function
+  | Bitvec_lit _ :: rest -> all_bitvec_lit rest
   | [] -> true
   | _ :: _ -> false
 
-let rec merge_bin = function
-  | Bin b :: rest -> b ^ merge_bin rest
-  | [] -> ""
+let rec merge_bitvec_lit = function
+  | Bitvec_lit b :: rest -> b @ merge_bitvec_lit rest
+  | [] -> []
   | _ :: _ -> assert false
 
 let simp_fn = function
@@ -222,9 +213,9 @@ let simp_fn = function
   | Fn ("and", xs) -> simp_and xs
   | Fn ("=>", [Bool_lit true; y]) -> y
   | Fn ("=>", [Bool_lit false; y]) -> Bool_lit true
-  | Fn ("concat", xs) when all_bin xs -> Bin (merge_bin xs)
-  | Fn ("bvadd", [x; (Hex str | Bin str)]) when str = String.make (String.length str) '0' -> x
-  | Fn ("bvadd", [(Hex str | Bin str); x]) when str = String.make (String.length str) '0' -> x
+  | Fn ("bvsub", [Bitvec_lit bv1; Bitvec_lit bv2]) -> Bitvec_lit (Sail2_operators_bitlists.sub_vec bv1 bv2)
+  | Fn ("bvadd", [Bitvec_lit bv1; Bitvec_lit bv2]) -> Bitvec_lit (Sail2_operators_bitlists.add_vec bv1 bv2)
+  | Fn ("concat", xs) when all_bitvec_lit xs -> Bitvec_lit (merge_bitvec_lit xs)
   | Fn ("=", [x; y]) as exp ->
      begin match simp_equal x y with
      | Some b -> Bool_lit b
@@ -246,7 +237,7 @@ let rec simp_smt_exp vars kinds = function
      | Some exp -> simp_smt_exp vars kinds exp
      | None -> Var v
      end
-  | (Read_res _ | Shared _ | Enum _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ as exp) -> exp
+  | (Read_res _ | Shared _ | Enum _ | Bitvec_lit _ | Bool_lit _ | String_lit _ | Real_lit _ as exp) -> exp
   | Fn (f, exps) ->
      let exps = List.map (simp_smt_exp vars kinds) exps in
      simp_fn (Fn (f, exps))
@@ -261,8 +252,8 @@ let rec simp_smt_exp vars kinds = function
   | Extract (i, j, exp) ->
      let exp = simp_smt_exp vars kinds exp in
      begin match exp with
-     | Bin str ->
-        Bin (String.sub str ((String.length str - 1) - i) ((i + 1) - j))
+     | Bitvec_lit bv ->
+        Bitvec_lit (Sail2_operators_bitlists.subrange_vec_dec bv (Big_int.of_int i) (Big_int.of_int j))
      | _ -> Extract (i, j, exp)
      end
   | Tester (str, exp) ->
@@ -278,7 +269,11 @@ let rec simp_smt_exp vars kinds = function
      end
   | SignExtend (i, exp) ->
      let exp = simp_smt_exp vars kinds exp in
-     SignExtend (i, exp)
+     begin match exp with
+     | Bitvec_lit bv ->
+        Bitvec_lit (Sail2_operators_bitlists.sign_extend bv (Big_int.of_int (i + List.length bv)))
+     | _ -> SignExtend (i, exp)
+     end
   | Forall (binders, exp) -> Forall (binders, exp)
 
 type read_info = {
@@ -309,6 +304,14 @@ type barrier_info = {
     kind : smt_exp
   }
 
+type branch_info = {
+    name : string;
+    node : int;
+    active : smt_exp;
+    addr_type : smt_typ;
+    addr : smt_exp
+  }
+
 type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
   | Declare_fun of string * smt_typ list * smt_typ
@@ -320,10 +323,42 @@ type smt_def =
   | Write_mem_ea of string * int * smt_exp * smt_exp * smt_exp * smt_typ * smt_exp * smt_typ
   | Read_mem of read_info
   | Barrier of barrier_info
+  | Branch_announce of branch_info
   | Excl_res of string * int * smt_exp
   | Declare_datatypes of string * (string * (string * smt_typ) list) list
   | Declare_tuple of int
   | Assert of smt_exp
+
+let smt_def_map_exp f = function
+  | Define_fun (name, args, ty, exp) -> Define_fun (name, args, ty, f exp)
+  | Declare_fun (name, args, ty) -> Declare_fun (name, args, ty)
+  | Declare_const (name, ty) -> Declare_const (name, ty)
+  | Define_const (name, ty, exp) -> Define_const (name, ty, f exp)
+  | Preserve_const (name, ty, exp) -> Preserve_const (name, ty, f exp)
+  | Write_mem w -> Write_mem { w with active = f w.active; kind = f w.kind; addr = f w.addr; data = f w.data }
+  | Write_mem_ea (name, node, active, wk, addr, addr_ty, data_size, data_size_ty) ->
+     Write_mem_ea (name, node, f active, f wk, f addr, addr_ty, f data_size, data_size_ty)
+  | Read_mem r -> Read_mem { r with active = f r.active; kind = f r.kind; addr = f r.addr }
+  | Barrier b -> Barrier { b with active = f b.active; kind = f b.kind }
+  | Branch_announce c -> Branch_announce { c with active = f c.active; addr = f c.addr }
+  | Excl_res (name, node, active) -> Excl_res (name, node, f active)
+  | Declare_datatypes (name, ctors) -> Declare_datatypes (name, ctors)
+  | Declare_tuple n -> Declare_tuple n
+  | Assert exp -> Assert (f exp)
+
+let smt_def_iter_exp f = function
+  | Define_fun (name, args, ty, exp) -> f exp
+  | Define_const (name, ty, exp) -> f exp
+  | Preserve_const (name, ty, exp) -> f exp
+  | Write_mem w -> f w.active; f w.kind; f w.addr; f w.data
+  | Write_mem_ea (name, node, active, wk, addr, addr_ty, data_size, data_size_ty) ->
+     f active; f wk; f addr; f data_size
+  | Read_mem r -> f r.active; f r.kind; f r.addr
+  | Barrier b -> f b.active; f b.kind
+  | Branch_announce c -> f c.active; f c.addr
+  | Excl_res (name, node, active) -> f active
+  | Assert exp -> f exp
+  | Declare_fun _ | Declare_const _ | Declare_tuple _ | Declare_datatypes _ -> ()
 
 let declare_datatypes = function
   | Datatype (name, ctors) -> Declare_datatypes (name, ctors)
@@ -344,9 +379,13 @@ let suffix_variables_write_info sfx (w : write_info) =
   let suffix exp = suffix_variables_exp sfx exp in
   { w with name = w.name ^ sfx; active = suffix w.active; kind = suffix w.kind; addr = suffix w.addr; data = suffix w.data }
 
-let suffix_variables_barrier_info sfx (w : barrier_info) =
+let suffix_variables_barrier_info sfx (b : barrier_info) =
   let suffix exp = suffix_variables_exp sfx exp in
-  { w with name = w.name ^ sfx; active = suffix w.active; kind = suffix w.kind }
+  { b with name = b.name ^ sfx; active = suffix b.active; kind = suffix b.kind }
+
+let suffix_variables_branch_info sfx (c : branch_info) =
+  let suffix exp = suffix_variables_exp sfx exp in
+  { c with name = c.name ^ sfx; active = suffix c.active; addr = suffix c.addr }
 
 let suffix_variables_def sfx = function
   | Define_fun (name, args, ty, exp) ->
@@ -365,6 +404,7 @@ let suffix_variables_def sfx = function
                    suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data_size, data_size_ty)
   | Read_mem r -> Read_mem (suffix_variables_read_info sfx r)
   | Barrier b -> Barrier (suffix_variables_barrier_info sfx b)
+  | Branch_announce c -> Branch_announce (suffix_variables_branch_info sfx c)
   | Excl_res (name, node, active) ->
      Excl_res (name ^ sfx, node, suffix_variables_exp sfx active)
   | Declare_datatypes (name, ctors) ->
@@ -373,38 +413,6 @@ let suffix_variables_def sfx = function
      Declare_tuple n
   | Assert exp ->
      Assert (suffix_variables_exp sfx exp)
-
-let merge_datatypes defs1 defs2 =
-  let module StringSet = Set.Make(String) in
-  let datatype_name = function
-    | Declare_datatypes (name, _) -> name
-    | _ -> assert false
-  in
-  let names = List.fold_left (fun set def -> StringSet.add (datatype_name def) set) StringSet.empty defs1 in
-  defs1 @ List.filter (fun def -> not (StringSet.mem (datatype_name def) names)) defs2
-
-let merge_tuples defs1 defs2 =
-  let tuple_size = function
-    | Declare_tuple size -> size
-    | _ -> assert false
-  in
-  let names = List.fold_left (fun set def -> Util.IntSet.add (tuple_size def) set) Util.IntSet.empty defs1 in
-  defs1 @ List.filter (fun def -> not (Util.IntSet.mem (tuple_size def) names)) defs2
-
-let merge_smt_defs defs1 defs2 =
-  let is_tuple = function
-    | Declare_datatypes _ | Declare_tuple _ -> true
-    | _ -> false
-  in
-  let is_datatype = function
-    | Declare_datatypes _ | Declare_tuple _ -> true
-    | _ -> false
-  in
-  let datatypes1, body1 = List.partition is_datatype defs1 in
-  let datatypes2, body2 = List.partition is_datatype defs2 in
-  let tuples1, datatypes1 = List.partition is_tuple datatypes1 in
-  let tuples2, datatypes2 = List.partition is_tuple datatypes2 in
-  merge_tuples tuples1 tuples2 @ merge_datatypes datatypes1 datatypes2 @ body1 @ body2
 
 let pp_sfun str docs =
   let open PPrint in
@@ -429,8 +437,7 @@ let rec pp_smt_exp =
   | Bool_lit b -> string (string_of_bool b)
   | Real_lit str -> string str
   | String_lit str -> string ("\"" ^ str ^ "\"")
-  | Hex str -> string ("#x" ^ str)
-  | Bin str -> string ("#b" ^ str)
+  | Bitvec_lit bv -> string (Sail2_values.show_bitlist_prefix '#' bv)
   | Var str -> string str
   | Shared str -> string str
   | Read_res str -> string (str ^ "_ret")
@@ -491,6 +498,10 @@ let pp_smt_def =
   | Barrier b ->
      pp_sfun "define-const" [string (b.name ^ "_kind"); string "Zbarrier_kind"; pp_smt_exp b.kind] ^^ hardline
      ^^ pp_sfun "define-const" [string (b.name ^ "_active"); pp_smt_typ Bool; pp_smt_exp b.active]
+
+  | Branch_announce c ->
+     pp_sfun "define-const" [string (c.name ^ "_active"); pp_smt_typ Bool; pp_smt_exp c.active] ^^ hardline
+     ^^ pp_sfun "define-const" [string (c.name ^ "_addr"); pp_smt_typ c.addr_type; pp_smt_exp c.addr]
 
   | Excl_res (name, _, active) ->
      pp_sfun "declare-const" [string (name ^ "_res"); pp_smt_typ Bool] ^^ hardline

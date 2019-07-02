@@ -38,6 +38,9 @@ let sign_extend bits len = exts_bits len bits
 val zeros : integer -> list bitU
 let zeros len = repeat [B0] len
 
+val ones : integer -> list bitU
+let ones len = repeat [B1] len
+
 val vector_truncate : list bitU -> integer -> list bitU
 let vector_truncate bs len = extz_bv len bs
 

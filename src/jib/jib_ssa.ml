@@ -588,6 +588,8 @@ let rename_variables graph root children =
          counts := NameMap.add id i !counts;
          push_stack id i;
          I_init (ctyp, ssa_name i id, cval)
+      | I_block _ | I_try_block _ | I_if _ ->
+         Reporting.unreachable (snd annot) __POS__ "Nested instructions found during SSA renaming"
       | instr -> instr
     in
     I_aux (aux, annot)

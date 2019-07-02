@@ -208,21 +208,17 @@ let rec smt_ctyp ctx = function
    don't have a very good way to get the binary representation of
    either an ocaml integer or a big integer. *)
 let bvpint sz x =
+  let open Sail2_values in
   if Big_int.less_equal Big_int.zero x && Big_int.less_equal x (Big_int.of_int max_int) then (
-    let open Sail_lib in
     let x = Big_int.to_int x in
-    if sz mod 4 = 0 then
-      let hex = Printf.sprintf "%X" x in
-      let padding = String.make (sz / 4 - String.length hex) '0' in
-      Hex (padding ^ hex)
-    else
-      let bin = Printf.sprintf "%X" x |> list_of_string |> List.map hex_char |> List.concat in
-      let _, bin = Util.take_drop (function B0 -> true | B1 -> false) bin in
-      let bin = String.concat "" (List.map string_of_bit bin) in
-      let padding = String.make (sz - String.length bin) '0' in
-      Bin (padding ^ bin)
+    match Printf.sprintf "%X" x |> Util.string_to_list |> List.map nibble_of_char |> Util.option_all with
+    | Some nibbles ->
+       let bin = List.map (fun (a, b, c, d) -> [a; b; c; d]) nibbles |> List.concat in
+       let _, bin = Util.take_drop (function B0 -> true | _ -> false) bin in
+       let padding = List.init (sz - List.length bin) (fun _ -> B0) in
+       Bitvec_lit (padding @ bin)
+    | None -> assert false
   ) else if Big_int.greater x (Big_int.of_int max_int) then (
-    let open Sail_lib in
     let y = ref x in
     let bin = ref [] in
     while (not (Big_int.equal !y Big_int.zero)) do
@@ -230,14 +226,13 @@ let bvpint sz x =
       bin := (if Big_int.equal m Big_int.zero then B0 else B1) :: !bin;
       y := q
     done;
-    let bin = String.concat "" (List.map string_of_bit !bin) in
-    let padding_size = sz - String.length bin in
+    let padding_size = sz - List.length !bin in
     if padding_size < 0 then
       raise (Reporting.err_general Parse_ast.Unknown
                (Printf.sprintf "Could not create a %d-bit integer with value %s.\nTry increasing the maximum integer size"
                   sz (Big_int.to_string x)));
-    let padding = String.make (sz - String.length bin) '0' in
-    Bin (padding ^ bin)
+    let padding = List.init padding_size (fun _ -> B0) in
+    Bitvec_lit (padding @ !bin)
   ) else failwith "Invalid bvpint"
 
 let bvint sz x =
@@ -257,7 +252,7 @@ let force_size ?checked:(checked=true) ctx n m smt =
   else
     let check =
       (* If the top bit of the truncated number is one *)
-      Ite (Fn ("=", [Extract (n - 1, n - 1, smt); Bin "1"]),
+      Ite (Fn ("=", [Extract (n - 1, n - 1, smt); Bitvec_lit [Sail2_values.B1]]),
            (* Then we have an overflow, unless all bits we truncated were also one *)
            Fn ("not", [Fn ("=", [Extract (m - 1, n, smt); bvones (m - n)])]),
            (* Otherwise, all the top bits must be zero *)
@@ -298,30 +293,16 @@ let rec smt_conversion ctx from_ctyp to_ctyp x =
 let rec smt_value ctx vl ctyp =
   let open Value2 in
   match vl, ctyp with
-  | VL_bits (bs, true), CT_fbits (n, _) ->
-     (* FIXME: Output the correct number of bits in Jib_compile *)
-     begin match Sail2_values.hexstring_of_bits (List.rev (Util.take n (List.rev bs))) with
-     | Some s -> Hex (Xstring.implode s)
-     | None -> Bin (Xstring.implode (List.map Sail2_values.bitU_char (List.rev (Util.take n (List.rev bs)))))
-     end
-  | VL_bits (bs, true), CT_lbits _ ->
-     let n = lbits_size ctx in
-     let bv = match Sail2_values.hexstring_of_bits (List.rev (Util.take n (List.rev bs))) with
-       | Some s -> Hex (Xstring.implode s)
-       | None -> Bin (Xstring.implode (List.map Sail2_values.bitU_char (List.rev (Util.take n (List.rev bs)))))
-     in
-     let sz = match bv with
-       | Hex str -> String.length str * 4
-       | Bin str -> String.length str
-       | _ -> assert false
-     in
-     Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int (List.length bs)); unsigned_size ctx (lbits_size ctx) sz bv])
+  | VL_bits (bv, true), CT_fbits (n, _) ->
+     unsigned_size ctx n (List.length bv) (Bitvec_lit bv)
+  | VL_bits (bv, true), CT_lbits _ ->
+     let sz = List.length bv in
+     Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int sz); unsigned_size ctx (lbits_size ctx) sz (Bitvec_lit bv)])
   | VL_bool b, _ -> Bool_lit b
   | VL_int n, CT_constant m -> bvint (required_width n) n
   | VL_int n, CT_fint sz -> bvint sz n
   | VL_int n, CT_lint -> bvint ctx.lint_size n
-  | VL_bit Sail2_values.B0, CT_bit -> Bin "0"
-  | VL_bit Sail2_values.B1, CT_bit -> Bin "1"
+  | VL_bit b, CT_bit -> Bitvec_lit [b]
   | VL_unit, _ -> Enum "unit"
   | VL_string str, _ ->
      ctx.use_string := true;
@@ -395,7 +376,7 @@ let rec smt_cval ctx cval =
      | V_call (Bvor, [cval1; cval2]) ->
         Fn ("bvor", [smt_cval ctx cval1; smt_cval ctx cval2])
      | V_call (Bit_to_bool, [cval]) ->
-        Fn ("=", [smt_cval ctx cval; Bin "1"])
+        Fn ("=", [smt_cval ctx cval; Bitvec_lit [Sail2_values.B1]])
      | V_call (Eq, [cval1; cval2]) ->
         Fn ("=", [smt_cval ctx cval1; smt_cval ctx cval2])
      | V_call (Bnot, [cval]) ->
@@ -533,8 +514,9 @@ let builtin_negate_int ctx v ret_ctyp =
   | CT_constant c, _ ->
      bvint (int_size ctx ret_ctyp) (Big_int.negate c)
   | ctyp, _ ->
+     let open Sail2_values in
      let smt = force_size ctx (int_size ctx ret_ctyp) (int_size ctx ctyp) (smt_cval ctx v) in
-     overflow_check ctx (Fn ("=", [smt; Bin ("1" ^ String.make (int_size ctx ret_ctyp - 1) '0')]));
+     overflow_check ctx (Fn ("=", [smt; Bitvec_lit (B1 :: List.init (int_size ctx ret_ctyp - 1) (fun _ -> B0))]));
      Fn ("bvneg", [smt])
 
 let builtin_shift_int fn big_int_fn ctx v1 v2 ret_ctyp =
@@ -570,7 +552,7 @@ let builtin_abs_int ctx v ret_ctyp =
   | ctyp, _ ->
      let sz = int_size ctx ctyp in
      let smt = smt_cval ctx v in
-     Ite (Fn ("=", [Extract (sz - 1, sz -1, smt); Bin "1"]),
+     Ite (Fn ("=", [Extract (sz - 1, sz -1, smt); Bitvec_lit [Sail2_values.B1]]),
           force_size ctx (int_size ctx ret_ctyp) sz (Fn ("bvneg", [smt])),
           force_size ctx (int_size ctx ret_ctyp) sz smt)
 
@@ -699,7 +681,7 @@ let builtin_sign_extend ctx vbits vlen ret_ctyp =
      smt_cval ctx vbits
   | CT_fbits (n, _), CT_fbits (m, _) ->
      let bv = smt_cval ctx vbits in
-     let top_bit_one = Fn ("=", [Extract (n - 1, n - 1, bv); Bin "1"]) in
+     let top_bit_one = Fn ("=", [Extract (n - 1, n - 1, bv); Bitvec_lit [Sail2_values.B1]]) in
      Ite (top_bit_one, Fn ("concat", [bvones (m - n); bv]), Fn ("concat", [bvzero (m - n); bv]))
 
   | _ -> builtin_type_error ctx "sign_extend" [vbits; vlen] (Some ret_ctyp)
@@ -873,6 +855,21 @@ let builtin_vector_update ctx vec i x ret_ctyp =
 
   | _ -> builtin_type_error ctx "vector_update" [vec; i; x] (Some ret_ctyp)
 
+let builtin_vector_update_subrange ctx vec i j x ret_ctyp =
+  match cval_ctyp vec, cval_ctyp i, cval_ctyp j, cval_ctyp x, ret_ctyp with
+  | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _) when n - 1 > Big_int.to_int i && Big_int.to_int j >= 0 ->
+     assert (n = m);
+     let top = Extract (n - 1, Big_int.to_int i + 1, smt_cval ctx vec) in
+     let bot = Extract (Big_int.to_int j - 1, 0, smt_cval ctx vec) in
+     Fn ("concat", [top; Fn ("concat", [smt_cval ctx x; bot])])
+
+  | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _) when n - 1 = Big_int.to_int i && Big_int.to_int j >= 0 ->
+     assert (n = m);
+     let bot = Extract (Big_int.to_int j - 1, 0, smt_cval ctx vec) in
+     Fn ("concat", [smt_cval ctx x; bot])
+
+  | _ -> builtin_type_error ctx "vector_update_subrange" [vec; i; j; x] (Some ret_ctyp)
+
 let builtin_unsigned ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
   | CT_fbits (n, _), CT_fint m when m > n ->
@@ -1031,7 +1028,7 @@ let builtin_count_leading_zeros ctx v ret_ctyp =
   let ret_sz = int_size ctx ret_ctyp in
   let rec lzcnt sz smt =
     if sz == 1 then
-      Ite (Fn ("=", [Extract (0, 0, smt); Bin "0"]),
+      Ite (Fn ("=", [Extract (0, 0, smt); Bitvec_lit [Sail2_values.B0]]),
            bvint ret_sz (Big_int.of_int 1),
            bvint ret_sz (Big_int.zero))
     else (
@@ -1181,6 +1178,7 @@ let smt_builtin ctx name args ret_ctyp =
   | "vector_access", [v1; v2], ret_ctyp -> builtin_vector_access ctx v1 v2 ret_ctyp
   | "vector_subrange", [v1; v2; v3], ret_ctyp -> builtin_vector_subrange ctx v1 v2 v3 ret_ctyp
   | "vector_update", [v1; v2; v3], ret_ctyp -> builtin_vector_update ctx v1 v2 v3 ret_ctyp
+  | "vector_update_subrange", [v1; v2; v3; v4], ret_ctyp -> builtin_vector_update_subrange ctx v1 v2 v3 v4 ret_ctyp
   | "sail_unsigned", [v], ret_ctyp -> builtin_unsigned ctx v ret_ctyp
   | "sail_signed", [v], ret_ctyp -> builtin_signed ctx v ret_ctyp
   | "replicate_bits", [v1; v2], ret_ctyp -> builtin_replicate_bits ctx v1 v2 ret_ctyp
@@ -1275,6 +1273,20 @@ let builtin_barrier ctx bk =
        node = ctx.node;
        active = Lazy.force ctx.pathcond;
        kind = smt_cval ctx bk
+  }],
+  Enum "unit"
+
+let branch_announces = ref (-1)
+
+let builtin_branch_announce ctx addr_size addr =
+  incr branch_announces;
+  let name = "C" ^ string_of_int !branch_announces in
+  [Branch_announce {
+       name = name;
+       node = ctx.node;
+       active = Lazy.force ctx.pathcond;
+       addr = smt_cval ctx addr;
+       addr_type = smt_ctyp ctx (cval_ctyp addr)
   }],
   Enum "unit"
 
@@ -1476,7 +1488,7 @@ let unroll_static_foreach ctx = function
      | _ -> aexp
      end
   | aexp -> aexp
-                                 
+
 (**************************************************************************)
 (* 3. Generating SMT                                                      *)
 (**************************************************************************)
@@ -1711,6 +1723,14 @@ let smt_instr ctx =
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __barrier"
          end
+       else if name = "platform_branch_announce" then
+         begin match args with
+         | [addr_size; addr] ->
+            let mem_event, var = builtin_branch_announce ctx addr_size addr in
+            mem_event @ [define_const ctx id ret_ctyp var]
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for __barrier"
+         end
        else if name = "platform_excl_res" then
          begin match args with
          | [_] ->
@@ -1776,7 +1796,7 @@ let smt_instr ctx =
      let smt = smt_cval ctx cval in
      let write, ctyp = rmw_write clexp in
      [define_const ctx write ctyp (rmw_modify smt clexp)]
- 
+
   | I_aux (I_decl (ctyp, id), (_, l)) ->
      (* Function arguments have unique locations defined from the
         $property pragma. We record how they will appear in the
@@ -1847,7 +1867,7 @@ module Make_optimizer(S : Sequence) = struct
          | Some n -> Hashtbl.replace uses var (n + 1)
          | None -> Hashtbl.add uses var 1
          end
-      | Shared _ | Enum _ | Read_res _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
+      | Shared _ | Enum _ | Read_res _ | Bitvec_lit _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
       | Fn (_, exps) | Ctor (_, exps) ->
          List.iter uses_in_exp exps
       | Ite (cond, t, e) ->
@@ -1890,6 +1910,9 @@ module Make_optimizer(S : Sequence) = struct
       | Barrier b as def ->
          uses_in_exp b.active; uses_in_exp b.kind;
          Stack.push def stack'
+      | Branch_announce c as def ->
+         uses_in_exp c.active; uses_in_exp c.addr;
+         Stack.push def stack'
       | Excl_res (_, _, active) as def ->
          uses_in_exp active;
          Stack.push def stack'
@@ -1914,7 +1937,7 @@ module Make_optimizer(S : Sequence) = struct
       | Define_const (var, typ, exp) ->
          let exp = simp_smt_exp vars kinds exp in
          begin match Hashtbl.find_opt uses var, simp_smt_exp vars kinds exp with
-         | _, (Bin _ | Bool_lit _) ->
+         | _, (Bitvec_lit _ | Bool_lit _) ->
             Hashtbl.add vars var exp
          | _, Var _ when !opt_propagate_vars ->
             Hashtbl.add vars var exp
@@ -1946,6 +1969,8 @@ module Make_optimizer(S : Sequence) = struct
                seq
       | Barrier b ->
          S.add (Barrier { b with active = simp_smt_exp vars kinds b.active; kind = simp_smt_exp vars kinds b.kind }) seq
+      | Branch_announce c ->
+         S.add (Branch_announce { c with active = simp_smt_exp vars kinds c.active; addr = simp_smt_exp vars kinds c.addr }) seq
       | Excl_res (name, node, active) ->
          S.add (Excl_res (name, node, simp_smt_exp vars kinds active)) seq
       | Assert exp ->

@@ -302,7 +302,7 @@ let set_struct s field v =
   match s with
   | VL_struct fields -> VL_struct ((field, v) :: List.remove_assoc field fields)
   | _ -> failwith "Non struct passed to set_struct"
-                      
+
 let assignment clexp v stack =
   match clexp with
   | CL_id (id, _) -> { stack with locals = NameMap.add id v stack.locals }

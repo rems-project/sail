@@ -115,6 +115,18 @@ mapping assembly(offset, labels) = {
     <->
   Barrier(MemBarrierOp_ISB, MBReqDomain_FullSystem, MBReqTypes_All),
 
+  "eor" ^ spc() ^ d <- wreg_name() ^ sep() ^ n <- wreg_name() ^ sep() ^ m <- wreg_name()
+    <->
+  LogicalShiftedRegister(d, n, m, 32, bitzero, LogicalOp_EOR, ShiftType_LSL, 0, bitzero),
+
+  "add" ^ spc() ^ d <- wreg_name() ^ sep() ^ n <- wreg_name() ^ sep() ^ m <- wreg_name()
+    <->
+  AddSubShiftedRegister(d, n, m, 32, bitzero, bitzero, ShiftType_LSL, 0),
+
+  "add" ^ spc() ^ d <- wreg_name() ^ sep() ^ n <- wreg_name() ^ sep() ^ hash() ^ imm <- bits(32)
+    <->
+  AddSubImmediate(d, n, 32, bitzero, bitzero, imm),
+
   forwards "b" ^ spc() ^ imm26 <- label(offset, labels) => BranchImmediate(BranchType_JMP, SignExtend(imm26 @ 0b00)),
   backwards BranchImmediate(BranchType_JMP, offset) => concat_str("b ", hex_string(offset[27 .. 2])) 
 }

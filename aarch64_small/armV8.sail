@@ -329,7 +329,7 @@ function clause decodeSystem (0b1101010100@0b0@0b00@(op1 : bits(3))@0b0100@(CRm 
 
 function clause execute ( MoveSystemImmediate(operand,field) ) = {
   match field {
-    PSTATEField_SP  => PSTATE_SP = operand[0],
+    PSTATEField_SP  => PSTATE_SP() = [operand[0]],
     PSTATEField_DAIFSet  => {
       PSTATE_D() = (PSTATE_D() | [operand[3]]);
       PSTATE_A() = (PSTATE_A() | [operand[2]]);
@@ -337,10 +337,10 @@ function clause execute ( MoveSystemImmediate(operand,field) ) = {
       PSTATE_F() = (PSTATE_F() | [operand[0]]);
     },
     PSTATEField_DAIFClr  => {
-      PSTATE_D = (PSTATE_D() & [NOT'(operand[3])]);
-      PSTATE_A = (PSTATE_A() & [NOT'(operand[2])]);
-      PSTATE_I = (PSTATE_I() & [NOT'(operand[1])]);
-      PSTATE_F = (PSTATE_F() & [NOT'(operand[0])]);
+      PSTATE_D() = (PSTATE_D() & [NOT'(operand[3])]);
+      PSTATE_A() = (PSTATE_A() & [NOT'(operand[2])]);
+      PSTATE_I() = (PSTATE_I() & [NOT'(operand[1])]);
+      PSTATE_F() = (PSTATE_F() & [NOT'(operand[0])]);
     }
   }
 }
@@ -1690,10 +1690,10 @@ function clause execute (AddSubImmediate((d,n,datasize as int('R),sub_op,setflag
     carry_in = b0;
 
   let (result,nzcv) = AddWithCarry (operand1, operand2, carry_in) in {
-
+    /*
     if setflags then
       wPSTATE_NZCV() = nzcv;
-
+    */
     if (d == 31 & ~(setflags)) then
       wSP() = result
     else
@@ -1812,10 +1812,10 @@ function clause execute (LogicalImmediate((d,n,datasize as int('R),setflags,op,i
     LogicalOp_ORR  => result = (operand1 | operand2),
     LogicalOp_EOR  => result = (operand1 ^ operand2)
   };
-
+/*
   if setflags then
     wPSTATE_NZCV() = ([result[length(result) - 1]]@[IsZeroBit(result)]@0b00);
-
+*/
   if d == 31 & ~(setflags) then
     wSP() = result
   else
@@ -2400,10 +2400,10 @@ function clause execute (LogicalShiftedRegister((d,n,m,datasize as int('R),setfl
     LogicalOp_ORR  => result = (operand1 | operand2),
     LogicalOp_EOR  => result = (operand1 ^ operand2)
   };
-
+/*
   if setflags then
     wPSTATE_NZCV() = ([result[datasize - 1]]@[IsZeroBit(result)]@0b00);
-
+*/
   wX(d) = result;
 }
 

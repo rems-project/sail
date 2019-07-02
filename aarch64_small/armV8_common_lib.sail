@@ -825,15 +825,16 @@ function flush_write_buffer_exclusive(write_buffer) = {
 
 val BranchTo : forall 'N, 'N in {32,64}. (bits('N), BranchType) -> unit effect {escape, rreg, wreg}
 function BranchTo(target, branch_type) = {
-  target' : bits('N) = target; /* Sail does not let you change parameter vector */
-
   Hint_Branch(branch_type);
   if length(target) == 32 then {
     assert( UsingAArch32());
+    __branch_announce(32, target : bits(32));
     _PC = ZeroExtend(target);
   } else {
     assert( length(target) == 64 & ~(UsingAArch32()) );
     /* Remove the tag bits from tagged target */
+    target' : bits(64) = target;
+
     let pstate_el = PSTATE_EL() in {
       if pstate_el == EL0 then {
         if target'[55] == b1 & TCR_EL1.TBI1() == 0b1 then
@@ -857,6 +858,7 @@ function BranchTo(target, branch_type) = {
       }
       else exit()
     };
+    __branch_announce(64, target');
     _PC = target';
   };
 }

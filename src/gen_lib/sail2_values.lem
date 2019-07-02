@@ -480,11 +480,13 @@ let rec hexstring_of_bits bs = match bs with
   end
 declare {isabelle; hol} termination_argument hexstring_of_bits = automatic
 
-let show_bitlist bs =
+let show_bitlist_prefix c bs =
   match hexstring_of_bits bs with
-  | Just s -> toString (#'0' :: #'x' :: s)
-  | Nothing -> toString (#'0' :: #'b' :: map bitU_char bs)
+  | Just s -> toString (c :: #'x' :: s)
+  | Nothing -> toString (c :: #'b' :: map bitU_char bs)
   end
+
+let show_bitlist bs = show_bitlist_prefix #'0' bs
 
 (*** List operations *)
 
