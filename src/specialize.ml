@@ -501,6 +501,8 @@ let initial_calls = ref (IdSet.of_list
     mk_id "label"; (* FIXME should be found via assembly *)
     mk_id "initialize_registers";
     mk_id "litmus_start";
+    mk_id "litmus_ifetch";
+    mk_id "litmus_execute_sm";
     mk_id "prop";
     mk_id "append_64" (* used to construct bitvector literals in C backend *)
   ])

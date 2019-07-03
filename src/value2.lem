@@ -115,7 +115,7 @@ let primops name args =
   (* lib/string.sail *)
   | ("eq_string", [VL_string s1; VL_string s2]) -> Just (VL_bool (s1 = s2))
   | ("concat_str", [VL_string s1; VL_string s2]) -> Just (VL_string (s1 ^ s2))
-  | ("print_endline", [VL_string s]) -> let _ = print_endline s in Just VL_unit
+  | ("print_endline", [VL_string s]) -> Just VL_unit
 
   (* lib/mapping.sail *)
   | ("hex_parse", [VL_int n; VL_string hex]) -> mk_bits (hex_parse n hex)

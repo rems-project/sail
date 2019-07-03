@@ -38,6 +38,7 @@ enum read_kind = {
   Read_exclusive,
   Read_exclusive_acquire,
   Read_stream,
+  Read_ifetch,
   Read_RISCV_acquire,
   Read_RISCV_strong_acquire,
   Read_RISCV_reserved,

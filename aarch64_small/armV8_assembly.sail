@@ -210,3 +210,18 @@ function litmus_start(_: unit) -> unit = {
   R29 = 0x0000_0000_0000_0000;
   R30 = 0x0000_0000_0000_0000
 }
+
+function litmus_ifetch(addr: bits(64)) -> bits(32) = {
+  __mono_read_mem(Read_ifetch, 64, addr, 4)
+}
+
+function litmus_execute_sm(instr: bits(32)) -> unit = {
+  match decodeUnconditionalBranchImmediate(instr) {
+    Some(BranchImmediate(branch_type, offset)) => {
+      if branch_type == BranchType_CALL then wX(30) = rPC() + 4;
+
+      BranchTo(rPC() + offset, branch_type);
+    },
+    _ => exit()
+  }
+}
