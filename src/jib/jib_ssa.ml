@@ -427,7 +427,8 @@ let immediate_dominators graph root =
         if semi.(y) = semi.(v) then
           idom.(v) <- p
         else
-          samedom.(n) <- y
+          (* TODO: Check this with book and paper *)
+          samedom.(v) <- y
       ) bucket.(p);
   done;
   for i = 1 to !count - 1 do
