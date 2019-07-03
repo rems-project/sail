@@ -191,15 +191,19 @@ let topsort graph =
   topsort' (); !list
 
 let prune visited graph =
+  let removed = ref 0 in
   for i = 0 to graph.next - 1 do
     match graph.nodes.(i) with
     | Some (n, preds, succs) ->
-       if IntSet.mem i visited then
+       if IntSet.mem i visited then (
          graph.nodes.(i) <- Some (n, IntSet.inter visited preds, IntSet.inter visited succs)
-       else
+       ) else (
+         incr removed;
          graph.nodes.(i) <- None
+       )
     | None -> ()
-  done
+  done;
+  !removed
 
 let prune_succs visited graph =
   let removed = ref 0 in
@@ -229,6 +233,15 @@ type terminator =
   | T_label of string
   | T_none
 
+let string_of_terminator = function
+  | T_undefined ctyp -> "undefined " ^ string_of_ctyp ctyp
+  | T_match_failure -> "match_failure"
+  | T_end name -> "end " ^ string_of_name name
+  | T_goto label -> "goto " ^ label
+  | T_jump (cond, label) -> "jump " ^ string_of_int cond ^ " " ^ label
+  | T_label label -> "label " ^ label
+  | T_none -> "none"
+                  
 type cf_node =
   | CF_label of string
   | CF_block of instr list * terminator
@@ -304,9 +317,9 @@ let control_flow_graph instrs =
   let finish = cfg [start] instrs in
 
   let visited = reachable (IntSet.singleton start) graph in
-  prune visited graph;
+  let removed = prune visited graph in
 
-  start, finish, graph
+  start, finish, graph, removed
 
 (**************************************************************************)
 (* 3. Computing dominators                                                *)
@@ -325,7 +338,7 @@ let immediate_dominators graph root =
   let idom     = Array.make (cardinal graph) none in
   let samedom  = Array.make (cardinal graph) none in
   let best     = Array.make (cardinal graph) none in
-  let dfnum    = Array.make (cardinal graph) 0 in
+  let dfnum    = Array.make (cardinal graph) (-1) in
   let bucket   = Array.make (cardinal graph) IntSet.empty in
 
   let rec ancestor_with_lowest_semi v =
@@ -337,7 +350,9 @@ let immediate_dominators graph root =
         best.(v) <- b
       else ();
     else ();
-    if best.(v) <> none then best.(v) else v
+    let ret = if best.(v) <> none then best.(v) else v in
+    assert (ret <> none);
+    ret
   in
 
   let link p n =
@@ -348,7 +363,7 @@ let immediate_dominators graph root =
   let count = ref 0 in
 
   let rec dfs p n =
-    if dfnum.(n) = 0 then
+    if dfnum.(n) = -1 then
       begin
         dfnum.(n) <- !count;
         vertex.(!count) <- n;
@@ -362,11 +377,23 @@ let immediate_dominators graph root =
   in
   dfs none root;
 
+  prerr_endline ("COUNT: " ^ string_of_int !count);
+  
   for i = !count - 1 downto 1 do
     let n = vertex.(i) in
     let p = parent.(n) in
     let s = ref p in
 
+    if i = 20768 then (
+      prerr_endline ("n = " ^ string_of_int n);
+      prerr_endline ("p = " ^ string_of_int p)
+    );
+
+    if n = 20768 then (
+      prerr_endline ("Vertex i = " ^ string_of_int i);
+      prerr_endline ("Vertex p = " ^ string_of_int p)
+    );
+        
     begin match graph.nodes.(n) with
     | Some (_, predecessors, _) ->
        IntSet.iter (fun v ->
@@ -380,10 +407,22 @@ let immediate_dominators graph root =
          ) predecessors
     | None -> assert false
     end;
+
+    if i = 20768 then (
+      prerr_endline ("s = " ^ string_of_int !s)
+    );
+
+    if n = 20768 then (
+      prerr_endline ("Vertex s = " ^ string_of_int !s)
+    );
+    
     semi.(n) <- !s;
     bucket.(!s) <- IntSet.add n bucket.(!s);
     link p n;
     IntSet.iter (fun v ->
+        if n = 20768 then (
+          prerr_endline ("Vertex v = " ^ string_of_int v)
+        );
         let y = ancestor_with_lowest_semi v in
         if semi.(y) = semi.(v) then
           idom.(v) <- p
@@ -393,8 +432,17 @@ let immediate_dominators graph root =
   done;
   for i = 1 to !count - 1 do
     let n = vertex.(i) in
+    
+    if n = 20768 then (
+      prerr_endline ("i = " ^ string_of_int i);
+      prerr_endline ("samedom.(n) = " ^ string_of_int (samedom.(n)));
+      prerr_endline ("idom.(n) = " ^ string_of_int (idom.(n)));
+      prerr_endline ("semi.(n) = " ^ string_of_int (semi.(n)))
+    );
+    
     if samedom.(n) <> none then
-      idom.(n) <- idom.(samedom.(n))
+      (prerr_endline (string_of_int n);
+       idom.(n) <- idom.(samedom.(n)))
   done;
   idom
 
@@ -523,6 +571,8 @@ let rename_variables graph root children =
     | Return _ -> Return i
   in
 
+  let maxc = ref 0 in
+  
   let get_count id =
     match NameMap.find_opt id !counts with Some n -> n | None -> 0
   in
@@ -639,10 +689,13 @@ let rename_variables graph root children =
     | Pi _ -> assert false (* Should not be introduced at this point *)
   in
 
+  let renamed = ref 0 in
+  
   let rec rename n =
     let old_stacks = !stacks in
     begin match graph.nodes.(n) with
     | Some ((ssa, cfnode), preds, succs) ->
+       incr renamed;
        let ssa = List.map ssa_ssanode ssa in
        graph.nodes.(n) <- Some ((ssa, ssa_cfnode cfnode), preds, succs);
        List.iter (fun succ ->
@@ -666,8 +719,10 @@ let rename_variables graph root children =
   rename root;
   match graph.nodes.(root) with
   | Some ((ssa, CF_start _), preds, succs) ->
-     graph.nodes.(root) <- Some ((ssa, CF_start !phi_zeros), preds, succs)
+     graph.nodes.(root) <- Some ((ssa, CF_start !phi_zeros), preds, succs);
+     !renamed
   | _ -> failwith "root node is not CF_start"
+         
 
 let place_pi_functions graph start idom children =
   let get_guard = function
@@ -722,15 +777,42 @@ let remove_nodes remove_cf graph =
   done
 
 let ssa instrs =
-  let start, finish, cfg = control_flow_graph instrs in
+  let start, finish, cfg, r = control_flow_graph instrs in
+  prerr_endline ("Have CFG with " ^ string_of_int (cfg.next - r) ^ " nodes");
+  prerr_endline ("Start " ^ string_of_int start);
   let idom = immediate_dominators cfg start in
+  for n = 0 to cfg.next - 1 do
+    if n <> start && idom.(n) = -1 then (
+      begin match get_vertex cfg n with
+      | Some ((ssa_elems, cfnode), preds, succs) ->
+         let open Printf in
+         prerr_endline ("Node " ^ string_of_int n ^ " has idom -1");
+         prerr_endline ("PREDS: " ^ Util.string_of_list ", " string_of_int (IntSet.elements preds));
+         prerr_endline ("SUCCS: " ^ Util.string_of_list ", " string_of_int (IntSet.elements succs));
+         begin match cfnode with
+         | CF_block (instrs, terminator) ->
+            List.iter (fun i -> prerr_endline (Pretty_print_sail.to_string (pp_instr i))) instrs;
+            prerr_endline (string_of_terminator terminator)
+         | CF_label l ->
+            prerr_endline ("LABEL: " ^ l)
+         | CF_guard n ->
+            prerr_endline ("GUARD: " ^ string_of_int n)
+         | CF_start _ -> assert false
+         end
+      | None -> ()
+      end
+    )
+  done;
   let children = dominator_children idom in
   let df = dominance_frontiers cfg start idom children in
   prerr_endline "Placing phi functions";
   place_phi_functions cfg df;
-  rename_variables cfg start children;
+
+  let renamed = rename_variables cfg start children in
+  prerr_endline ("Renamed " ^ string_of_int renamed ^ " nodes");
+  assert (cfg.next - r = renamed);
   place_pi_functions cfg start idom children;
-  prerr_endline ("Generated SSA graph with " ^ string_of_int (cfg.next - 1) ^ " nodes");
+  prerr_endline ("Generated SSA graph with " ^ string_of_int (cfg.next - r) ^ " nodes");
   start, cfg
 
 let simplify_constant_assignment clexp locals =
@@ -804,7 +886,7 @@ let simplify_instr env locals instr =
           | Some result ->
              simplify_assignment clexp result locals instr
           | None ->
-             prerr_endline ("primop: " ^ extern);
+             (* prerr_endline ("primop: " ^ extern); *)
              instr
         else if List.length args = 1 then
           let ctor = VL_constructor (string_of_id id, List.nth args 0) in
@@ -819,7 +901,7 @@ let simplify_instr env locals instr =
      end
 
   | I_aux (I_funcall (clexp, true, id, args), aux) ->
-     prerr_endline ("!!!: " ^ string_of_id id ^ "(" ^ Util.string_of_list ", " string_of_cval args ^ ")");
+     (* prerr_endline ("!!!: " ^ string_of_id id ^ "(" ^ Util.string_of_list ", " string_of_cval args ^ ")"); *)
      instr
 
   | instr -> instr

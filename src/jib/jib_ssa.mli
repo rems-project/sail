@@ -96,7 +96,7 @@ type cf_node =
   | CF_guard of int
   | CF_start of Jib.ctyp NameMap.t
 
-val control_flow_graph : Jib.instr list -> int * int list * ('a list * cf_node) array_graph
+val control_flow_graph : Jib.instr list -> int * int list * ('a list * cf_node) array_graph * int
 
 (** [immediate_dominators graph root] will calculate the immediate
    dominators for a control flow graph with a specified root node. *)
