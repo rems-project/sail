@@ -82,14 +82,41 @@ function assoc(map, key) = {
   }
 }
 
-val label : (int, labels) -> string <-> bits(26)
+val label : forall 'n, 'n >= 0. (int('n), int, labels) -> string <-> bits('n)
 
-mapping label(n: int, labels: labels) -> string <-> bits(26) = {
-  x <- bits(26) <-> x,
+mapping label(sz, n, labels) = {
+  x <- bits(sz) <-> x,
   forwards l => match assoc(labels, l) {
-    Some(offset) => get_slice_int(26, offset - n, 0),
-    None() => sail_zeros(26)
+    Some(offset) => get_slice_int(sz, offset - n, 0),
+    None() => sail_zeros(sz)
   }
+}
+
+mapping barrier_option : string <-> (MBReqDomain, MBReqTypes) = {
+  "sy" <-> (MBReqDomain_FullSystem, MBReqTypes_All),
+  "st" <-> (MBReqDomain_FullSystem, MBReqTypes_Writes),
+  "ish" <-> (MBReqDomain_InnerShareable, MBReqTypes_All),
+  "nsh" <-> (MBReqDomain_Nonshareable, MBReqTypes_All),
+  "nshst" <-> (MBReqDomain_Nonshareable, MBReqTypes_Writes),
+  "osh" <-> (MBReqDomain_OuterShareable, MBReqTypes_All),
+  "oshst" <-> (MBReqDomain_OuterShareable, MBReqTypes_Writes)
+}
+
+mapping ic_op : string <-> ICOp = {
+  "ivau" <-> IVAU,
+  "ialluis" <-> IALLUIS,
+  "iallu" <-> IALLU
+}
+
+mapping dc_op : string <-> DCOp = {
+  "ivac" <-> IVAC,
+  "isw" <-> ISW,
+  "csw" <-> CSW,
+  "cisw" <-> CISW,
+  "zva" <-> ZVA,
+  "cvac" <-> CVAC,
+  "cvau" <-> CVAU,
+  "civac" <-> CIVAC
 }
 
 val assembly : (int, labels) -> string <-> ast
@@ -115,6 +142,22 @@ mapping assembly(offset, labels) = {
     <->
   Barrier(MemBarrierOp_ISB, MBReqDomain_FullSystem, MBReqTypes_All),
 
+  "dsb" ^ spc() ^ (dom, ty) <- barrier_option()
+    <->
+  Barrier(MemBarrierOp_DSB, dom, ty),
+
+  "dmb" ^ spc() ^ (dom, ty) <- barrier_option()
+    <->
+  Barrier(MemBarrierOp_DMB, dom, ty),
+
+  "ic" ^ spc() ^ op <- ic_op() ^ sep() ^ t <- xreg_name()
+    <->
+  InstructionCache(t, op),
+
+  "dc" ^ spc() ^ op <- dc_op() ^ sep() ^ t <- xreg_name()
+    <->
+  DataCache(t, op),
+
   "eor" ^ spc() ^ d <- wreg_name() ^ sep() ^ n <- wreg_name() ^ sep() ^ m <- wreg_name()
     <->
   LogicalShiftedRegister(d, n, m, 32, bitzero, LogicalOp_EOR, ShiftType_LSL, 0, bitzero),
@@ -127,8 +170,11 @@ mapping assembly(offset, labels) = {
     <->
   AddSubImmediate(d, n, 32, bitzero, bitzero, imm),
 
-  forwards "b" ^ spc() ^ imm26 <- label(offset, labels) => BranchImmediate(BranchType_JMP, SignExtend(imm26 @ 0b00)),
-  backwards BranchImmediate(BranchType_JMP, offset) => concat_str("b ", hex_string(offset[27 .. 2])) 
+  forwards "cbz" ^ spc() ^ t <- wreg_name() ^ sep() ^ imm19 <- label(19, offset, labels) => CompareAndBranch(t, 32, bitzero, sail_sign_extend(imm19 @ 0b00, 64)),
+  backwards CompareAndBranch(t, 32, bitzero, offset) => concat_str("cbz ", concat_str(wreg_name(t), concat_str(", ", hex_string(offset[20 .. 2])))),
+
+  forwards "b" ^ spc() ^ imm26 <- label(26, offset, labels) => BranchImmediate(BranchType_JMP, sail_sign_extend(imm26 @ 0b00, 64)),
+  backwards BranchImmediate(BranchType_JMP, offset) => concat_str("b ", hex_string(offset[27 .. 2]))
 }
 
 function litmus_start(_: unit) -> unit = {
