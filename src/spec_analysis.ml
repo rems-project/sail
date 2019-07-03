@@ -186,7 +186,7 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   match e with
   | E_block es | Ast.E_tuple es | Ast.E_vector es | Ast.E_list es ->
     list_fv bound used set es
-  | E_id id ->
+  | E_id id | E_ref id ->
      let used = conditional_add_exp bound used id in
      let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
      bound,used,set
