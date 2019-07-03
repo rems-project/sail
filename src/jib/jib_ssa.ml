@@ -377,23 +377,11 @@ let immediate_dominators graph root =
   in
   dfs none root;
 
-  prerr_endline ("COUNT: " ^ string_of_int !count);
-  
   for i = !count - 1 downto 1 do
     let n = vertex.(i) in
     let p = parent.(n) in
     let s = ref p in
 
-    if i = 20768 then (
-      prerr_endline ("n = " ^ string_of_int n);
-      prerr_endline ("p = " ^ string_of_int p)
-    );
-
-    if n = 20768 then (
-      prerr_endline ("Vertex i = " ^ string_of_int i);
-      prerr_endline ("Vertex p = " ^ string_of_int p)
-    );
-        
     begin match graph.nodes.(n) with
     | Some (_, predecessors, _) ->
        IntSet.iter (fun v ->
@@ -408,42 +396,22 @@ let immediate_dominators graph root =
     | None -> assert false
     end;
 
-    if i = 20768 then (
-      prerr_endline ("s = " ^ string_of_int !s)
-    );
-
-    if n = 20768 then (
-      prerr_endline ("Vertex s = " ^ string_of_int !s)
-    );
-    
     semi.(n) <- !s;
     bucket.(!s) <- IntSet.add n bucket.(!s);
     link p n;
     IntSet.iter (fun v ->
-        if n = 20768 then (
-          prerr_endline ("Vertex v = " ^ string_of_int v)
-        );
         let y = ancestor_with_lowest_semi v in
         if semi.(y) = semi.(v) then
           idom.(v) <- p
         else
-          (* TODO: Check this with book and paper *)
           samedom.(v) <- y
       ) bucket.(p);
   done;
   for i = 1 to !count - 1 do
     let n = vertex.(i) in
-    
-    if n = 20768 then (
-      prerr_endline ("i = " ^ string_of_int i);
-      prerr_endline ("samedom.(n) = " ^ string_of_int (samedom.(n)));
-      prerr_endline ("idom.(n) = " ^ string_of_int (idom.(n)));
-      prerr_endline ("semi.(n) = " ^ string_of_int (semi.(n)))
-    );
-    
+
     if samedom.(n) <> none then
-      (prerr_endline (string_of_int n);
-       idom.(n) <- idom.(samedom.(n)))
+      idom.(n) <- idom.(samedom.(n))
   done;
   idom
 
@@ -572,8 +540,6 @@ let rename_variables graph root children =
     | Return _ -> Return i
   in
 
-  let maxc = ref 0 in
-  
   let get_count id =
     match NameMap.find_opt id !counts with Some n -> n | None -> 0
   in
@@ -691,7 +657,7 @@ let rename_variables graph root children =
   in
 
   let renamed = ref 0 in
-  
+
   let rec rename n =
     let old_stacks = !stacks in
     begin match graph.nodes.(n) with
@@ -723,7 +689,6 @@ let rename_variables graph root children =
      graph.nodes.(root) <- Some ((ssa, CF_start !phi_zeros), preds, succs);
      !renamed
   | _ -> failwith "root node is not CF_start"
-         
 
 let place_pi_functions graph start idom children =
   let get_guard = function
@@ -780,38 +745,17 @@ let remove_nodes remove_cf graph =
 let ssa instrs =
   let start, finish, cfg, r = control_flow_graph instrs in
   prerr_endline ("Have CFG with " ^ string_of_int (cfg.next - r) ^ " nodes");
-  prerr_endline ("Start " ^ string_of_int start);
   let idom = immediate_dominators cfg start in
-  for n = 0 to cfg.next - 1 do
-    if n <> start && idom.(n) = -1 then (
-      begin match get_vertex cfg n with
-      | Some ((ssa_elems, cfnode), preds, succs) ->
-         let open Printf in
-         prerr_endline ("Node " ^ string_of_int n ^ " has idom -1");
-         prerr_endline ("PREDS: " ^ Util.string_of_list ", " string_of_int (IntSet.elements preds));
-         prerr_endline ("SUCCS: " ^ Util.string_of_list ", " string_of_int (IntSet.elements succs));
-         begin match cfnode with
-         | CF_block (instrs, terminator) ->
-            List.iter (fun i -> prerr_endline (Pretty_print_sail.to_string (pp_instr i))) instrs;
-            prerr_endline (string_of_terminator terminator)
-         | CF_label l ->
-            prerr_endline ("LABEL: " ^ l)
-         | CF_guard n ->
-            prerr_endline ("GUARD: " ^ string_of_int n)
-         | CF_start _ -> assert false
-         end
-      | None -> ()
-      end
-    )
-  done;
   let children = dominator_children idom in
   let df = dominance_frontiers cfg start idom children in
+
   prerr_endline "Placing phi functions";
   place_phi_functions cfg df;
 
   let renamed = rename_variables cfg start children in
   prerr_endline ("Renamed " ^ string_of_int renamed ^ " nodes");
   assert (cfg.next - r = renamed);
+
   place_pi_functions cfg start idom children;
   prerr_endline ("Generated SSA graph with " ^ string_of_int (cfg.next - r) ^ " nodes");
   start, cfg
@@ -837,7 +781,7 @@ let simplify_assignment clexp v locals instr =
         instr
      end
   | CL_field (CL_rmw (read, write, ctyp), field) ->
-     prerr_endline ("FIELD: " ^ field);
+     (* prerr_endline ("FIELD: " ^ field); *)
      begin match NameMap.find_opt read !locals with
      | Some s ->
         locals := NameMap.add write (Jib_interpreter.set_struct s field v) !locals;

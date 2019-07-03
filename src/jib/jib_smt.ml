@@ -330,9 +330,11 @@ let rec smt_value ctx vl ctyp =
         let set_field (field, vl) =
           match Util.assoc_compare_opt Id.compare (mk_id field) field_ctyps with
           | None -> failwith "Field type not found"
-          | Some ctyp -> smt_value ctx vl ctyp
+          | Some ctyp ->
+             zencode_upper_id struct_id ^ "_" ^ Util.zencode_string field,
+             smt_value ctx vl ctyp
         in
-        Fn (zencode_upper_id struct_id, List.map set_field fields)
+        Struct (zencode_upper_id struct_id, List.map set_field fields)
      | _ -> failwith "Struct does not have struct type"
      end
   | VL_ref reg_name, _ ->
@@ -393,10 +395,10 @@ let rec smt_cval ctx cval =
         Fn ("not", [Tester (zencode_ctor ctor_id unifiers, smt_cval ctx union)])
      | V_ctor_unwrap (ctor_id, union, unifiers, _) ->
         Fn ("un" ^ zencode_ctor ctor_id unifiers, [smt_cval ctx union])
-     | V_field (union, field) ->
-        begin match cval_ctyp union with
+     | V_field (record, field) ->
+        begin match cval_ctyp record with
         | CT_struct (struct_id, _) ->
-           Fn (zencode_upper_id struct_id ^ "_" ^ Util.zencode_string field, [smt_cval ctx union])
+           Field (zencode_upper_id struct_id ^ "_" ^ Util.zencode_string field, smt_cval ctx record)
         | _ -> failwith "Field for non-struct type"
         end
      | V_struct (fields, ctyp) ->
@@ -406,9 +408,10 @@ let rec smt_cval ctx cval =
              match Util.assoc_compare_opt Id.compare field field_ctyps with
              | None -> failwith "Field type not found"
              | Some ctyp ->
+                zencode_upper_id struct_id ^ "_" ^ zencode_id field,
                 smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval)
            in
-           Fn (zencode_upper_id struct_id, List.map set_field fields)
+           Struct (zencode_upper_id struct_id, List.map set_field fields)
         | _ -> failwith "Struct does not have struct type"
         end
      | V_tuple_member (frag, len, n) ->
@@ -732,6 +735,7 @@ let builtin_bitwise fn ctx v1 v2 ret_ctyp =
 
 let builtin_and_bits = builtin_bitwise "bvand"
 let builtin_or_bits = builtin_bitwise "bvor"
+let builtin_xor_bits = builtin_bitwise "bvxor"
 
 let builtin_append ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
@@ -882,6 +886,9 @@ let builtin_unsigned ctx v ret_ctyp =
      else
        let smt = smt_cval ctx v in
        Fn ("concat", [bvzero (ctx.lint_size - n); smt])
+
+  | CT_lbits _, CT_lint ->
+     Extract (ctx.lint_size - 1, 0, Fn ("contents", [smt_cval ctx v]))
 
   | ctyp, _ -> builtin_type_error ctx "unsigned" [v] (Some ret_ctyp)
 
@@ -1166,8 +1173,9 @@ let smt_builtin ctx name args ret_ctyp =
   | "sail_truncateLSB", [v1; v2], _ -> builtin_sail_truncateLSB ctx v1 v2 ret_ctyp
   | "shiftl", [v1; v2], _ -> builtin_shift "bvshl" ctx v1 v2 ret_ctyp
   | "shiftr", [v1; v2], _ -> builtin_shift "bvlshr" ctx v1 v2 ret_ctyp
-  | "or_bits", [v1; v2], _ -> builtin_or_bits ctx v1 v2 ret_ctyp
   | "and_bits", [v1; v2], _ -> builtin_and_bits ctx v1 v2 ret_ctyp
+  | "or_bits", [v1; v2], _ -> builtin_or_bits ctx v1 v2 ret_ctyp
+  | "xor_bits", [v1; v2], _ -> builtin_xor_bits ctx v1 v2 ret_ctyp
   | "not_bits", [v], _ -> builtin_not_bits ctx v ret_ctyp
   | "add_bits", [v1; v2], _ -> builtin_add_bits ctx v1 v2 ret_ctyp
   | "add_bits_int", [v1; v2], _ -> builtin_add_bits_int ctx v1 v2 ret_ctyp
@@ -1649,12 +1657,13 @@ let rmw_modify smt = function
      begin match ctyp with
      | CT_struct (struct_id, fields) ->
         let set_field (field', _) =
+          let smt_field = zencode_upper_id struct_id ^ "_" ^ zencode_id field' in
           if field = string_of_id field' then
-            smt
+            smt_field, smt
           else
-            Fn (zencode_upper_id struct_id ^ "_" ^ zencode_id field', [Var (rmw_read clexp)])
+            smt_field, Field (smt_field, Var (rmw_read clexp))
         in
-        Fn (zencode_upper_id struct_id, List.map set_field fields)
+        Struct (zencode_upper_id struct_id, List.map set_field fields)
      | _ ->
         failwith "Struct modify does not have struct type"
      end
@@ -1752,7 +1761,7 @@ let smt_instr ctx =
          end
        else
          let value = smt_builtin ctx name args ret_ctyp in
-         [define_const ctx id ret_ctyp value]
+         [define_const ctx id ret_ctyp (Syntactic (value, List.map (smt_cval ctx) args))]
      else if extern && string_of_id function_id = "internal_vector_init" then
        [declare_const ctx id ret_ctyp]
      else if extern && string_of_id function_id = "internal_vector_update" then
@@ -1867,9 +1876,14 @@ module Make_optimizer(S : Sequence) = struct
          | Some n -> Hashtbl.replace uses var (n + 1)
          | None -> Hashtbl.add uses var 1
          end
+      | Syntactic (exp, _) -> uses_in_exp exp
       | Shared _ | Enum _ | Read_res _ | Bitvec_lit _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
       | Fn (_, exps) | Ctor (_, exps) ->
          List.iter uses_in_exp exps
+      | Field (_, exp) ->
+         uses_in_exp exp
+      | Struct (_, fields) ->
+         List.iter (fun (_, exp) -> uses_in_exp exp) fields
       | Ite (cond, t, e) ->
          uses_in_exp cond; uses_in_exp t; uses_in_exp e
       | Extract (_, _, exp) | Tester (_, exp) | SignExtend (_, exp) ->
