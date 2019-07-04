@@ -1284,6 +1284,21 @@ let builtin_barrier ctx bk =
   }],
   Enum "unit"
 
+let cache_maintenances = ref (-1)
+
+let builtin_cache_maintenance ctx cmk addr_size addr =
+  incr cache_maintenances;
+  let name = "M" ^ string_of_int !cache_maintenances in
+  [Cache_maintenance {
+       name = name;
+       node = ctx.node;
+       active = Lazy.force ctx.pathcond;
+       kind = smt_cval ctx cmk;
+       addr = smt_cval ctx addr;
+       addr_type = smt_ctyp ctx (cval_ctyp addr)
+  }],
+  Enum "unit"
+
 let branch_announces = ref (-1)
 
 let builtin_branch_announce ctx addr_size addr =
@@ -1732,6 +1747,14 @@ let smt_instr ctx =
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __barrier"
          end
+       else if name = "platform_cache_maintenance" then
+         begin match args with
+         | [cmk; addr_size; addr] ->
+            let mem_event, var = builtin_cache_maintenance ctx cmk addr_size addr in
+            mem_event @ [define_const ctx id ret_ctyp var]
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for __barrier"
+         end
        else if name = "platform_branch_announce" then
          begin match args with
          | [addr_size; addr] ->
@@ -1924,6 +1947,9 @@ module Make_optimizer(S : Sequence) = struct
       | Barrier b as def ->
          uses_in_exp b.active; uses_in_exp b.kind;
          Stack.push def stack'
+      | Cache_maintenance m as def ->
+         uses_in_exp m.active; uses_in_exp m.kind; uses_in_exp m.addr;
+         Stack.push def stack'
       | Branch_announce c as def ->
          uses_in_exp c.active; uses_in_exp c.addr;
          Stack.push def stack'
@@ -1968,8 +1994,7 @@ module Make_optimizer(S : Sequence) = struct
          S.add (Write_mem { w with active = simp_smt_exp vars kinds w.active;
                                    kind = simp_smt_exp vars kinds w.kind;
                                    addr = simp_smt_exp vars kinds w.addr;
-                                   data = simp_smt_exp vars kinds w.data
-                          })
+                                   data = simp_smt_exp vars kinds w.data })
                seq
       | Write_mem_ea (name, node, active, wk, addr, addr_ty, data_size, data_size_ty) ->
          S.add (Write_mem_ea (name, node, simp_smt_exp vars kinds active, simp_smt_exp vars kinds wk,
@@ -1978,11 +2003,15 @@ module Make_optimizer(S : Sequence) = struct
       | Read_mem r ->
          S.add (Read_mem { r with active = simp_smt_exp vars kinds r.active;
                                   kind = simp_smt_exp vars kinds r.kind;
-                                  addr = simp_smt_exp vars kinds r.addr
-                         })
+                                  addr = simp_smt_exp vars kinds r.addr })
                seq
       | Barrier b ->
          S.add (Barrier { b with active = simp_smt_exp vars kinds b.active; kind = simp_smt_exp vars kinds b.kind }) seq
+      | Cache_maintenance m ->
+         S.add (Cache_maintenance { m with active = simp_smt_exp vars kinds m.active;
+                                           kind = simp_smt_exp vars kinds m.kind;
+                                           addr = simp_smt_exp vars kinds m.addr })
+               seq
       | Branch_announce c ->
          S.add (Branch_announce { c with active = simp_smt_exp vars kinds c.active; addr = simp_smt_exp vars kinds c.addr }) seq
       | Excl_res (name, node, active) ->

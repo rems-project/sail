@@ -328,6 +328,15 @@ type branch_info = {
     addr : smt_exp
   }
 
+type cache_op_info = {
+    name : string;
+    node : int;
+    active : smt_exp;
+    kind : smt_exp;
+    addr_type : smt_typ;
+    addr : smt_exp
+  }
+
 type smt_def =
   | Define_fun of string * (string * smt_typ) list * smt_typ * smt_exp
   | Declare_fun of string * smt_typ list * smt_typ
@@ -340,6 +349,7 @@ type smt_def =
   | Read_mem of read_info
   | Barrier of barrier_info
   | Branch_announce of branch_info
+  | Cache_maintenance of cache_op_info
   | Excl_res of string * int * smt_exp
   | Declare_datatypes of string * (string * (string * smt_typ) list) list
   | Declare_tuple of int
@@ -356,6 +366,7 @@ let smt_def_map_exp f = function
      Write_mem_ea (name, node, f active, f wk, f addr, addr_ty, f data_size, data_size_ty)
   | Read_mem r -> Read_mem { r with active = f r.active; kind = f r.kind; addr = f r.addr }
   | Barrier b -> Barrier { b with active = f b.active; kind = f b.kind }
+  | Cache_maintenance m -> Cache_maintenance { m with active = f m.active; kind = f m.kind ; addr = f m.addr }
   | Branch_announce c -> Branch_announce { c with active = f c.active; addr = f c.addr }
   | Excl_res (name, node, active) -> Excl_res (name, node, f active)
   | Declare_datatypes (name, ctors) -> Declare_datatypes (name, ctors)
@@ -371,6 +382,7 @@ let smt_def_iter_exp f = function
      f active; f wk; f addr; f data_size
   | Read_mem r -> f r.active; f r.kind; f r.addr
   | Barrier b -> f b.active; f b.kind
+  | Cache_maintenance m -> f m.active; f m.kind; f m.addr
   | Branch_announce c -> f c.active; f c.addr
   | Excl_res (name, node, active) -> f active
   | Assert exp -> f exp
@@ -403,6 +415,10 @@ let suffix_variables_branch_info sfx (c : branch_info) =
   let suffix exp = suffix_variables_exp sfx exp in
   { c with name = c.name ^ sfx; active = suffix c.active; addr = suffix c.addr }
 
+let suffix_variables_cache_op_info sfx (m : cache_op_info) =
+  let suffix exp = suffix_variables_exp sfx exp in
+  { m with name = m.name ^ sfx; kind = suffix m.kind; active = suffix m.active; addr = suffix m.addr }
+
 let suffix_variables_def sfx = function
   | Define_fun (name, args, ty, exp) ->
      Define_fun (name ^ sfx, List.map (fun (arg, ty) -> sfx ^ arg, ty) args, ty, suffix_variables_exp sfx exp)
@@ -420,6 +436,7 @@ let suffix_variables_def sfx = function
                    suffix_variables_exp sfx addr, addr_ty, suffix_variables_exp sfx data_size, data_size_ty)
   | Read_mem r -> Read_mem (suffix_variables_read_info sfx r)
   | Barrier b -> Barrier (suffix_variables_barrier_info sfx b)
+  | Cache_maintenance m -> Cache_maintenance (suffix_variables_cache_op_info sfx m)
   | Branch_announce c -> Branch_announce (suffix_variables_branch_info sfx c)
   | Excl_res (name, node, active) ->
      Excl_res (name ^ sfx, node, suffix_variables_exp sfx active)
@@ -517,6 +534,11 @@ let pp_smt_def =
   | Barrier b ->
      pp_sfun "define-const" [string (b.name ^ "_kind"); string "Zbarrier_kind"; pp_smt_exp b.kind] ^^ hardline
      ^^ pp_sfun "define-const" [string (b.name ^ "_active"); pp_smt_typ Bool; pp_smt_exp b.active]
+
+  | Cache_maintenance m ->
+     pp_sfun "define-const" [string (m.name ^ "_active"); pp_smt_typ Bool; pp_smt_exp m.active] ^^ hardline
+     ^^ pp_sfun "define-const" [string (m.name ^ "_kind"); string "Zcache_op_kind"; pp_smt_exp m.kind] ^^ hardline
+     ^^ pp_sfun "define-const" [string (m.name ^ "_addr"); pp_smt_typ m.addr_type; pp_smt_exp m.addr]
 
   | Branch_announce c ->
      pp_sfun "define-const" [string (c.name ^ "_active"); pp_smt_typ Bool; pp_smt_exp c.active] ^^ hardline

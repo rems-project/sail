@@ -133,10 +133,16 @@ val __excl_res
 val __barrier
   = { ocaml: "Platform.barrier", c: "platform_barrier", _: "barrier" }
   : barrier_kind -> unit effect {barr}
+
 val __branch_announce
   = { ocaml: "Platform.branch_announce", c: "platform_branch_announce", _ : "branch_announce" }
   : forall (constant 'addrsize : Int), 'addrsize in {32, 64}.
   (int('addrsize), bits('addrsize)) -> unit
+
+val __cache_maintenance
+  = { ocaml: "Platform.cache_maintenance", c: "platform_cache_maintenance", _ : "cache_maintenance" }
+  : forall (constant 'addrsize : Int), 'addrsize in {32, 64}.
+  (cache_op_kind, int('addrsize), bits('addrsize)) -> unit
 
 /* Special read and write functions that guarantee that the arguments
 are monomorphic at the call site (and in particular, that any

@@ -517,7 +517,7 @@ function clause decodeSystem (0b1101010100@[L]@0b01@(op1 : bits(3))@(CRn : bits(
 }
 
 function clause execute ( DataCache(t,dc_op) ) = {
-  addr : bits(64) = rX(t);
+  let addr : bits(64) = rX(t);
 
   match dc_op {
     IVAC  => not_implemented("DC IVAC"),
@@ -526,18 +526,18 @@ function clause execute ( DataCache(t,dc_op) ) = {
     CISW  => not_implemented("DC CISW"),
     ZVA   => not_implemented("DC ZVA"),
     CVAC  => not_implemented("DC CVAC"),
-    CVAU  => data_cache_operation_CVAU = addr,
+    CVAU  => __cache_maintenance(Cache_op_D_CVAU, 64, addr),
     CIVAC => not_implemented("DC CIVAC")
   };
 }
 
 function clause execute ( InstructionCache(t,ic_op) ) = {
-  addr : bits(64) = rX(t);
+  let addr : bits(64) = rX(t);
 
   match ic_op {
     IALLUIS => not_implemented("IC IALLUIS"),
     IALLU   => not_implemented("IC IALLU"),
-    IVAU    => instruction_cache_operation_IVAU = addr
+    IVAU    => __cache_maintenance(Cache_op_I_IVAU, 64, addr)
   };
 }
 
