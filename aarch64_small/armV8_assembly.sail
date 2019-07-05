@@ -126,7 +126,15 @@ mapping assembly(offset, labels) = {
     <->
   LoadRegister(n, t, 31, AccType_NORMAL, MemOp_STORE, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
 
+  "str" ^ spc() ^ t <- xreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ sep() ^ m <- xreg_name() ^ "]"
+    <->
+  LoadRegister(n, t, m, AccType_NORMAL, MemOp_STORE, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
+
   "ldr" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
+    <->
+  LoadRegister(n, t, 31, AccType_NORMAL, MemOp_LOAD, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
+
+  "ldr" ^ spc() ^ t <- xreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
     <->
   LoadRegister(n, t, 31, AccType_NORMAL, MemOp_LOAD, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
 
@@ -158,9 +166,17 @@ mapping assembly(offset, labels) = {
     <->
   DataCache(t, op),
 
+  "nop"
+    <->
+  Hint(SystemHintOp_NOP),
+
   "eor" ^ spc() ^ d <- wreg_name() ^ sep() ^ n <- wreg_name() ^ sep() ^ m <- wreg_name()
     <->
   LogicalShiftedRegister(d, n, m, 32, bitzero, LogicalOp_EOR, ShiftType_LSL, 0, bitzero),
+
+  "eor" ^ spc() ^ d <- xreg_name() ^ sep() ^ n <- xreg_name() ^ sep() ^ m <- xreg_name()
+    <->
+  LogicalShiftedRegister(d, n, m, 64, bitzero, LogicalOp_EOR, ShiftType_LSL, 0, bitzero),
 
   "add" ^ spc() ^ d <- wreg_name() ^ sep() ^ n <- wreg_name() ^ sep() ^ m <- wreg_name()
     <->
