@@ -1217,13 +1217,14 @@ let smt_builtin ctx name args ret_ctyp =
      Reporting.warn ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp) ctx.pragma_l "";
      smt_value ctx (Jib_interpreter.declaration ret_ctyp) ret_ctyp
 
-
-     (* failwith ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp) *)
+let loc_doc = function
+  | Parse_ast.Documented (str, l) -> str
+  | _ -> "UNKNOWN"
 
 (* Memory reads and writes as defined in lib/regfp.sail *)
 let writes = ref (-1)
 
-let builtin_write_mem ctx wk addr_size addr data_size data =
+let builtin_write_mem l ctx wk addr_size addr data_size data =
   incr writes;
   let name = "W" ^ string_of_int !writes in
   [Write_mem {
@@ -1234,7 +1235,8 @@ let builtin_write_mem ctx wk addr_size addr data_size data =
        addr = smt_cval ctx addr;
        addr_type = smt_ctyp ctx (cval_ctyp addr);
        data = smt_cval ctx data;
-       data_type = smt_ctyp ctx (cval_ctyp data)
+       data_type = smt_ctyp ctx (cval_ctyp data);
+       doc = loc_doc l
   }],
   Var (name ^ "_ret")
 
@@ -1249,7 +1251,7 @@ let builtin_write_mem_ea ctx wk addr_size addr data_size =
 
 let reads = ref (-1)
 
-let builtin_read_mem ctx rk addr_size addr data_size ret_ctyp =
+let builtin_read_mem l ctx rk addr_size addr data_size ret_ctyp =
   incr reads;
   let name = "R" ^ string_of_int !reads in
   [Read_mem {
@@ -1259,7 +1261,8 @@ let builtin_read_mem ctx rk addr_size addr data_size ret_ctyp =
        ret_type = smt_ctyp ctx ret_ctyp;
        kind = smt_cval ctx rk;
        addr = smt_cval ctx addr;
-       addr_type = smt_ctyp ctx (cval_ctyp addr)
+       addr_type = smt_ctyp ctx (cval_ctyp addr);
+       doc = loc_doc l
   }],
   Read_res name
 
@@ -1273,20 +1276,21 @@ let builtin_excl_res ctx =
 
 let barriers = ref (-1)
 
-let builtin_barrier ctx bk =
+let builtin_barrier l ctx bk =
   incr barriers;
   let name = "B" ^ string_of_int !barriers in
   [Barrier {
        name = name;
        node = ctx.node;
        active = Lazy.force ctx.pathcond;
-       kind = smt_cval ctx bk
+       kind = smt_cval ctx bk;
+       doc = loc_doc l
   }],
   Enum "unit"
 
 let cache_maintenances = ref (-1)
 
-let builtin_cache_maintenance ctx cmk addr_size addr =
+let builtin_cache_maintenance l ctx cmk addr_size addr =
   incr cache_maintenances;
   let name = "M" ^ string_of_int !cache_maintenances in
   [Cache_maintenance {
@@ -1295,13 +1299,14 @@ let builtin_cache_maintenance ctx cmk addr_size addr =
        active = Lazy.force ctx.pathcond;
        kind = smt_cval ctx cmk;
        addr = smt_cval ctx addr;
-       addr_type = smt_ctyp ctx (cval_ctyp addr)
+       addr_type = smt_ctyp ctx (cval_ctyp addr);
+       doc = loc_doc l
   }],
   Enum "unit"
 
 let branch_announces = ref (-1)
 
-let builtin_branch_announce ctx addr_size addr =
+let builtin_branch_announce l ctx addr_size addr =
   incr branch_announces;
   let name = "C" ^ string_of_int !branch_announces in
   [Branch_announce {
@@ -1309,7 +1314,8 @@ let builtin_branch_announce ctx addr_size addr =
        node = ctx.node;
        active = Lazy.force ctx.pathcond;
        addr = smt_cval ctx addr;
-       addr_type = smt_ctyp ctx (cval_ctyp addr)
+       addr_type = smt_ctyp ctx (cval_ctyp addr);
+       doc = loc_doc l
   }],
   Enum "unit"
 
@@ -1718,7 +1724,7 @@ let smt_instr ctx =
        else if name = "platform_write_mem" then
          begin match args with
          | [wk; addr_size; addr; data_size; data] ->
-            let mem_event, var = builtin_write_mem ctx wk addr_size addr data_size data in
+            let mem_event, var = builtin_write_mem l ctx wk addr_size addr data_size data in
             mem_event @ [define_const ctx id ret_ctyp var]
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __write_mem"
@@ -1734,7 +1740,7 @@ let smt_instr ctx =
        else if name = "platform_read_mem" then
          begin match args with
          | [rk; addr_size; addr; data_size] ->
-            let mem_event, var = builtin_read_mem ctx rk addr_size addr data_size ret_ctyp in
+            let mem_event, var = builtin_read_mem l ctx rk addr_size addr data_size ret_ctyp in
             mem_event @ [define_const ctx id ret_ctyp var]
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __read_mem"
@@ -1742,7 +1748,7 @@ let smt_instr ctx =
        else if name = "platform_barrier" then
          begin match args with
          | [bk] ->
-            let mem_event, var = builtin_barrier ctx bk in
+            let mem_event, var = builtin_barrier l ctx bk in
             mem_event @ [define_const ctx id ret_ctyp var]
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __barrier"
@@ -1750,7 +1756,7 @@ let smt_instr ctx =
        else if name = "platform_cache_maintenance" then
          begin match args with
          | [cmk; addr_size; addr] ->
-            let mem_event, var = builtin_cache_maintenance ctx cmk addr_size addr in
+            let mem_event, var = builtin_cache_maintenance l ctx cmk addr_size addr in
             mem_event @ [define_const ctx id ret_ctyp var]
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __barrier"
@@ -1758,7 +1764,7 @@ let smt_instr ctx =
        else if name = "platform_branch_announce" then
          begin match args with
          | [addr_size; addr] ->
-            let mem_event, var = builtin_branch_announce ctx addr_size addr in
+            let mem_event, var = builtin_branch_announce l ctx addr_size addr in
             mem_event @ [define_const ctx id ret_ctyp var]
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __barrier"
@@ -2191,7 +2197,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         let instrs =
           let open Jib_optimize in
           (lets @ intervening_lets @ arg_decls @ instrs)
-          |> inline all_cdefs (fun _ -> true)
+          |> inline all_cdefs "inline" (fun _ -> true)
           |> List.map (map_instr (expand_reg_deref ctx.tc_env ctx.register_map))
           |> flatten_instrs
           |> remove_unused_labels

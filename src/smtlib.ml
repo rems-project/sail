@@ -299,7 +299,8 @@ type read_info = {
     kind : smt_exp;
     addr_type : smt_typ;
     addr : smt_exp;
-    ret_type : smt_typ
+    ret_type : smt_typ;
+    doc : string
   }
 
 type write_info = {
@@ -310,14 +311,16 @@ type write_info = {
     addr_type : smt_typ;
     addr : smt_exp;
     data_type : smt_typ;
-    data : smt_exp
+    data : smt_exp;
+    doc : string
   }
 
 type barrier_info = {
     name : string;
     node : int;
     active : smt_exp;
-    kind : smt_exp
+    kind : smt_exp;
+    doc : string
   }
 
 type branch_info = {
@@ -325,7 +328,8 @@ type branch_info = {
     node : int;
     active : smt_exp;
     addr_type : smt_typ;
-    addr : smt_exp
+    addr : smt_exp;
+    doc : string
   }
 
 type cache_op_info = {
@@ -334,7 +338,8 @@ type cache_op_info = {
     active : smt_exp;
     kind : smt_exp;
     addr_type : smt_typ;
-    addr : smt_exp
+    addr : smt_exp;
+    doc : string
   }
 
 type smt_def =

@@ -247,10 +247,10 @@ let ssa_name i = function
   | Current_exception _ -> Current_exception i
   | Return _ -> Return i
 
-let inline cdefs should_inline instrs =
+let inline cdefs prefix should_inline instrs =
   let inlines = ref (-1) in
   let label_count = ref (-1) in
-
+  
   let replace_return subst = function
     | I_aux (I_funcall (clexp, extern, fid, args), aux) ->
        I_aux (I_funcall (clexp_subst return subst clexp, extern, fid, args), aux)
@@ -266,7 +266,7 @@ let inline cdefs should_inline instrs =
   in
 
   let fix_labels =
-    let fix_label l = "inline" ^ string_of_int !label_count ^ "_" ^ l in
+    let fix_label l = prefix ^ string_of_int !label_count ^ "_" ^ l in
     function
     | I_aux (I_goto label, aux) -> I_aux (I_goto (fix_label label), aux)
     | I_aux (I_label label, aux) -> I_aux (I_label (fix_label label), aux)
@@ -325,7 +325,6 @@ let inline cdefs should_inline instrs =
   let rec go instrs =
     if !inlines <> 0 then
       begin
-        prerr_endline ("Inlined " ^ string_of_int !inlines ^ " functions");
         inlines := 0;
         let instrs = List.map (map_instr inline_instr) instrs in
         go instrs

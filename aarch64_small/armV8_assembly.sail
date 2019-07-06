@@ -92,6 +92,18 @@ mapping label(sz, n, labels) = {
   }
 }
 
+/* Axiomatic model only supports SY, so make everything equal to it for now. */
+mapping barrier_option : string <-> (MBReqDomain, MBReqTypes) = {
+  "sy"    <-> (MBReqDomain_FullSystem, MBReqTypes_All),
+  "st"    <-> (MBReqDomain_FullSystem, MBReqTypes_All),
+  "ish"   <-> (MBReqDomain_FullSystem, MBReqTypes_All),
+  "nsh"   <-> (MBReqDomain_FullSystem, MBReqTypes_All),
+  "nshst" <-> (MBReqDomain_FullSystem, MBReqTypes_All),
+  "osh"   <-> (MBReqDomain_FullSystem, MBReqTypes_All),
+  "oshst" <-> (MBReqDomain_FullSystem, MBReqTypes_All)
+}
+
+/*
 mapping barrier_option : string <-> (MBReqDomain, MBReqTypes) = {
   "sy" <-> (MBReqDomain_FullSystem, MBReqTypes_All),
   "st" <-> (MBReqDomain_FullSystem, MBReqTypes_Writes),
@@ -101,6 +113,7 @@ mapping barrier_option : string <-> (MBReqDomain, MBReqTypes) = {
   "osh" <-> (MBReqDomain_OuterShareable, MBReqTypes_All),
   "oshst" <-> (MBReqDomain_OuterShareable, MBReqTypes_Writes)
 }
+*/
 
 mapping ic_op : string <-> ICOp = {
   "ivau" <-> IVAU,

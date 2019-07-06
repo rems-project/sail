@@ -63,7 +63,7 @@ val flatten_cdef : cdef -> cdef
 
 val unique_per_function_ids : cdef list -> cdef list
 
-val inline : cdef list -> (Ast.id -> bool) -> instr list -> instr list
+val inline : cdef list -> string -> (Ast.id -> bool) -> instr list -> instr list
 
 val remove_clear : instr list -> instr list
 
