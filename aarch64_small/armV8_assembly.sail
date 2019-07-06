@@ -245,12 +245,13 @@ function litmus_ifetch(addr: bits(64)) -> bits(32) = {
 }
 
 function litmus_execute_sm(instr: bits(32)) -> unit = {
-  match decodeUnconditionalBranchImmediate(instr) {
+  match decodeBranchesExceptionSystem(instr) {
     Some(BranchImmediate(branch_type, offset)) => {
       if branch_type == BranchType_CALL then wX(30) = rPC() + 4;
 
       BranchTo(rPC() + offset, branch_type);
     },
+    Some(Hint(SystemHintOp_NOP)) => (),
     _ => exit()
   }
 }
