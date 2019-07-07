@@ -195,12 +195,19 @@ mapping assembly(offset, labels) = {
     <->
   AddSubShiftedRegister(d, n, m, 32, bitzero, bitzero, ShiftType_LSL, 0),
 
+  "sub" ^ spc() ^ d <- wreg_name() ^ sep() ^ n <- wreg_name() ^ sep() ^ m <- wreg_name()
+    <->
+  AddSubShiftedRegister(d, n, m, 32, bitone, bitzero, ShiftType_LSL, 0),
+
   "add" ^ spc() ^ d <- wreg_name() ^ sep() ^ n <- wreg_name() ^ sep() ^ hash() ^ imm <- bits(32)
     <->
   AddSubImmediate(d, n, 32, bitzero, bitzero, imm),
 
   forwards "cbz" ^ spc() ^ t <- wreg_name() ^ sep() ^ imm19 <- label(19, offset, labels) => CompareAndBranch(t, 32, bitzero, sail_sign_extend(imm19 @ 0b00, 64)),
   backwards CompareAndBranch(t, 32, bitzero, offset) => concat_str("cbz ", concat_str(wreg_name(t), concat_str(", ", hex_string(offset[20 .. 2])))),
+
+  forwards "cbnz" ^ spc() ^ t <- wreg_name() ^ sep() ^ imm19 <- label(19, offset, labels) => CompareAndBranch(t, 32, bitone, sail_sign_extend(imm19 @ 0b00, 64)),
+  backwards CompareAndBranch(t, 32, bitone, offset) => concat_str("cbz ", concat_str(wreg_name(t), concat_str(", ", hex_string(offset[20 .. 2])))),
 
   forwards "b" ^ spc() ^ imm26 <- label(26, offset, labels) => BranchImmediate(BranchType_JMP, sail_sign_extend(imm26 @ 0b00, 64)),
   backwards BranchImmediate(BranchType_JMP, offset) => concat_str("b ", hex_string(offset[27 .. 2]))
@@ -244,6 +251,7 @@ function litmus_ifetch(addr: bits(64)) -> bits(32) = {
   __mono_read_mem(Read_ifetch, 64, addr, 4)
 }
 
+/*
 function litmus_execute_sm(instr: bits(32)) -> unit = {
   match decodeBranchesExceptionSystem(instr) {
     Some(BranchImmediate(branch_type, offset)) => {
@@ -252,6 +260,18 @@ function litmus_execute_sm(instr: bits(32)) -> unit = {
       BranchTo(rPC() + offset, branch_type);
     },
     Some(Hint(SystemHintOp_NOP)) => (),
+    _ => exit()
+  }
+}
+*/
+
+function litmus_execute_sm(instr: bits(32)) -> unit = {
+  match decodeUnconditionalBranchImmediate(instr) {
+    Some(BranchImmediate(branch_type, offset)) => {
+      if branch_type == BranchType_CALL then wX(30) = rPC() + 4;
+
+      BranchTo(rPC() + offset, branch_type);
+    },
     _ => exit()
   }
 }

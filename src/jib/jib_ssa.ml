@@ -831,7 +831,7 @@ let simplify_instr env locals instr =
           | Some result ->
              simplify_assignment clexp result locals instr
           | None ->
-             (* prerr_endline ("primop: " ^ extern); *)
+             prerr_endline ("primop: " ^ extern); 
              instr
         else if List.length args = 1 then
           let ctor = VL_constructor (string_of_id id, List.nth args 0) in

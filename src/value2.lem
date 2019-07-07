@@ -109,6 +109,7 @@ let primops name args =
   | ("append", [VL_bits bv1 d; VL_bits bv2 _]) -> Just (VL_bits (concat_vec bv1 bv2) d)
   | ("vector_subrange", [VL_bits bv d; VL_int n; VL_int m]) -> Just (VL_bits (subrange_vec_dec bv n m) d)
   | ("vector_access", [VL_bits bv _; VL_int n]) -> Just (VL_bit (access_vec_dec bv n))
+  | ("vector_update_subrange", [VL_bits bv1 d; VL_int n; VL_int m; VL_bits bv2 _]) -> Just (VL_bits (update_subrange_vec_dec bv1 n m bv2) d)
   | ("sail_truncate", [VL_bits bv d; VL_int n]) -> Just (VL_bits (vector_truncate bv n) d)
   | ("sail_truncateLSB", [VL_bits bv d; VL_int n]) -> Just (VL_bits (vector_truncateLSB bv n) d)
 

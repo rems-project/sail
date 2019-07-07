@@ -611,16 +611,51 @@ function rMem_NORMAL (address, size) = {
 }
 /* non-temporal load (LDNP), see ARM ARM for special exception to normal memory ordering rules */
 /* external */ val rMem_STREAM : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
-function rMem_STREAM (address, size) = __read_mem(Read_stream, 64, address, size)
+function rMem_STREAM (address, size) = {
+  match size {
+    1 => let r = __mono_read_mem(Read_stream, 64, address, 1) in r,
+    2 => let r = __mono_read_mem(Read_stream, 64, address, 2) in r,
+    4 => let r = __mono_read_mem(Read_stream, 64, address, 4) in r,
+    8 => let r = __mono_read_mem(Read_stream, 64, address, 8) in r,
+    16 => let r = __mono_read_mem(Read_stream, 64, address, 16) in r   
+  }
+}
+
 /* load-acquire */
 /* external */ val rMem_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
-function rMem_ORDERED (address, size) = __read_mem(Read_acquire, 64, address, size)
+function rMem_ORDERED (address, size) = {
+  match size {
+    1 => let r = __mono_read_mem(Read_acquire, 64, address, 1) in r,
+    2 => let r = __mono_read_mem(Read_acquire, 64, address, 2) in r,
+    4 => let r = __mono_read_mem(Read_acquire, 64, address, 4) in r,
+    8 => let r = __mono_read_mem(Read_acquire, 64, address, 8) in r,
+    16 => let r = __mono_read_mem(Read_acquire, 64, address, 16) in r   
+  }
+}
+
 /* load-exclusive */
 /* external */ val rMem_ATOMIC : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
-function rMem_ATOMIC (address, size) = __read_mem(Read_exclusive, 64, address, size)
+function rMem_ATOMIC (address, size) = {
+  match size {
+    1 => let r = __mono_read_mem(Read_exclusive, 64, address, 1) in r,
+    2 => let r = __mono_read_mem(Read_exclusive, 64, address, 2) in r,
+    4 => let r = __mono_read_mem(Read_exclusive, 64, address, 4) in r,
+    8 => let r = __mono_read_mem(Read_exclusive, 64, address, 8) in r,
+    16 => let r = __mono_read_mem(Read_exclusive, 64, address, 16) in r   
+  }
+}
+
 /* load-exclusive+acquire */
 /* external */ val rMem_ATOMIC_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*address*/,int('N) /*size*/) -> bits('N*8) effect {rmem}
-function rMem_ATOMIC_ORDERED (address, size) = __read_mem(Read_exclusive_acquire, 64, address, size)
+function rMem_ATOMIC_ORDERED (address, size) = {
+  match size {
+    1 => let r = __mono_read_mem(Read_exclusive_acquire, 64, address, 1) in r,
+    2 => let r = __mono_read_mem(Read_exclusive_acquire, 64, address, 2) in r,
+    4 => let r = __mono_read_mem(Read_exclusive_acquire, 64, address, 4) in r,
+    8 => let r = __mono_read_mem(Read_exclusive_acquire, 64, address, 8) in r,
+    16 => let r = __mono_read_mem(Read_exclusive_acquire, 64, address, 16) in r   
+  }
+}
 
 struct read_buffer_type = {
   acctype : AccType,
@@ -746,14 +781,90 @@ function wMem_Val_NORMAL (address, size, value) = {
     }
   }
 }
+
 /* external */ val wMem_Val_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*addr*/, int('N) /*size*/, bits('N*8) /*value*/) -> unit effect {wmv}
-function wMem_Val_ORDERED (address, size, value) = { let b = __write_mem(Write_release, 64, address, size, value); () }
+function wMem_Val_ORDERED (address, size, value) = {
+  match size {
+    1 => {
+      let v: bits(8) = value;
+      let _ = __mono_write_mem(Write_release, 64, address, 1, v);
+      ()
+    },
+    2 => {
+      let v: bits(16) = value;
+      let _ = __mono_write_mem(Write_release, 64, address, 2, v);
+      ()
+    },
+    4 => {
+      let v: bits(32) = value;
+      let _ = __mono_write_mem(Write_release, 64, address, 4, v);
+      ()
+    },
+    8 => {
+      let v: bits(64) = value;
+      let _ = __mono_write_mem(Write_release, 64, address, 8, v);
+      ()
+    },
+    16 => {
+      let v: bits(128) = value;
+      let _ = __mono_write_mem(Write_release, 64, address, 16, v);
+      ()
+    }
+  }
+}
+
 /* store-exclusive */
 /* external */ val wMem_Val_ATOMIC : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*addr*/, int('N) /*size*/, bits('N*8) /*value*/) -> bool effect {wmv}
-function wMem_Val_ATOMIC (address, size, value) = __write_mem(Write_exclusive, 64, address, size, value)
-/* external */ val wMem_Val_ATOMIC_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*addr*/, int('N) /*size*/, bits('N*8) /*value*/) -> bool effect {wmv}
-function wMem_Val_ATOMIC_ORDERED (address, size, value) = __write_mem(Write_exclusive_release, 64, address, size, value)
+function wMem_Val_ATOMIC (address, size, value) = {
+  match size {
+    1 => {
+      let v: bits(8) = value;
+      __mono_write_mem(Write_exclusive, 64, address, 1, v)
+    },
+    2 => {
+      let v: bits(16) = value;
+      __mono_write_mem(Write_exclusive, 64, address, 2, v)
+    },
+    4 => {
+      let v: bits(32) = value;
+      __mono_write_mem(Write_exclusive, 64, address, 4, v)
+    },
+    8 => {
+      let v: bits(64) = value;
+      __mono_write_mem(Write_exclusive, 64, address, 8, v)
+    },
+    16 => {
+      let v: bits(128) = value;
+      __mono_write_mem(Write_exclusive, 64, address, 16, v)
+    }
+  }
+}
 
+/* external */ val wMem_Val_ATOMIC_ORDERED : forall 'N, 'N in {1,2,4,8,16}. (bits(64) /*addr*/, int('N) /*size*/, bits('N*8) /*value*/) -> bool effect {wmv}
+function wMem_Val_ATOMIC_ORDERED (address, size, value) = {
+  match size {
+    1 => {
+      let v: bits(8) = value;
+      __mono_write_mem(Write_exclusive_release, 64, address, 1, v)
+    },
+    2 => {
+      let v: bits(16) = value;
+      __mono_write_mem(Write_exclusive_release, 64, address, 2, v)
+    },
+    4 => {
+      let v: bits(32) = value;
+      __mono_write_mem(Write_exclusive_release, 64, address, 4, v)
+    },
+    8 => {
+      let v: bits(64) = value;
+      __mono_write_mem(Write_exclusive_release, 64, address, 8, v)
+    },
+    16 => {
+      let v: bits(128) = value;
+      __mono_write_mem(Write_exclusive_release, 64, address, 16, v)
+    }
+  }
+}
 
 struct write_buffer_type = {
   acctype : AccType,

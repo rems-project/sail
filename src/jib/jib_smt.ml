@@ -827,7 +827,7 @@ let builtin_vector_access ctx vec i ret_ctyp =
 
   | CT_lbits _, i_ctyp, CT_bit ->
      let shift = force_size ~checked:false ctx (lbits_size ctx) (int_size ctx i_ctyp) (smt_cval ctx i) in
-     Extract (0, 0, Fn ("bvshr", [Fn ("contents", [smt_cval ctx vec]); shift]))
+     Extract (0, 0, Fn ("bvlshr", [Fn ("contents", [smt_cval ctx vec]); shift]))
 
   | CT_vector _, CT_constant i, _ ->
      Fn ("select", [smt_cval ctx vec; bvint !vector_index i])
@@ -1572,7 +1572,7 @@ let smt_ssanode ctx cfg preds =
          pis ids None
      in
      match mux with
-     | None -> []
+     | None -> assert false
      | Some mux ->
         [Define_const (zencode_name id, smt_ctyp ctx ctyp, mux)]
 
