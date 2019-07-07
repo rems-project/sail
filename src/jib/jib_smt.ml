@@ -592,6 +592,25 @@ let builtin_min_int ctx v1 v2 ret_ctyp =
           smt1,
           smt2)
 
+let builtin_min_int ctx v1 v2 ret_ctyp =
+  match cval_ctyp v1, cval_ctyp v2 with
+  | CT_constant n, CT_constant m ->
+     bvint (int_size ctx ret_ctyp) (min n m)
+
+  | ctyp1, ctyp2 ->
+     let ret_sz = int_size ctx ret_ctyp in
+     let smt1 = force_size ctx ret_sz (int_size ctx ctyp1) (smt_cval ctx v1) in
+     let smt2 = force_size ctx ret_sz (int_size ctx ctyp2) (smt_cval ctx v2) in
+     Ite (Fn ("bvslt", [smt1; smt2]),
+          smt1,
+          smt2)
+
+let builtin_tdiv_int =
+  builtin_arith "bvudiv" (Sail2_values.tdiv_int) (fun x -> x)
+
+let builtin_tmod_int =
+  builtin_arith "bvurem" (Sail2_values.tmod_int) (fun x -> x)
+  
 let bvmask ctx len =
   let all_ones = bvones (lbits_size ctx) in
   let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); len]) in
@@ -899,7 +918,7 @@ let builtin_signed ctx v ret_ctyp =
 
   | CT_fbits (n, _), CT_lint ->
      SignExtend(ctx.lint_size - n, smt_cval ctx v)
-
+ 
   | ctyp, _ -> builtin_type_error ctx "signed" [v] (Some ret_ctyp)
 
 let builtin_add_bits ctx v1 v2 ret_ctyp =
@@ -1025,9 +1044,10 @@ let builtin_get_slice_int ctx v1 v2 v3 ret_ctyp =
      in
      Extract ((start + len) - 1, start, smt)
 
-             (*
-  | CT_lint, CT_lint, CT_constant start, CT_fbits (ret_sz, _) when Big_int.equal start Big_int.zero ->
-              *)
+  | CT_lint, CT_lint, CT_constant start, CT_lbits _ when Big_int.equal start Big_int.zero ->
+     let len = Extract (ctx.lbits_index - 1, 0, smt_cval ctx v1) in
+     let contents = unsigned_size ~checked:false ctx (lbits_size ctx) ctx.lint_size (smt_cval ctx v1) in
+     Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; contents])])
 
   | _ -> builtin_type_error ctx "get_slice_int" [v1; v2; v3] (Some ret_ctyp)
 
@@ -1151,6 +1171,8 @@ let smt_builtin ctx name args ret_ctyp =
   | "max_int", [v1; v2], _ -> builtin_max_int ctx v1 v2 ret_ctyp
   | "min_int", [v1; v2], _ -> builtin_min_int ctx v1 v2 ret_ctyp
 
+  | "ediv_int", [v1; v2], _ -> builtin_tdiv_int ctx v1 v2 ret_ctyp
+                            
   (* All signed and unsigned bitvector comparisons *)
   | "slt_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvslt" ctx v1 v2 ret_ctyp
   | "ult_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvult" ctx v1 v2 ret_ctyp
