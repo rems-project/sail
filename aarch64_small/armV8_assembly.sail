@@ -139,9 +139,13 @@ mapping assembly(offset, labels) = {
     <->
   LoadRegister(n, t, 31, AccType_NORMAL, MemOp_STORE, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
 
+  "str" ^ spc() ^ t <- xreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
+    <->
+  LoadRegister(n, t, 31, AccType_NORMAL, MemOp_STORE, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
+
   "str" ^ spc() ^ t <- xreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ sep() ^ m <- xreg_name() ^ "]"
     <->
-  LoadRegister(n, t, m, AccType_NORMAL, MemOp_STORE, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
+  LoadRegister(n, t, m, AccType_NORMAL, MemOp_STORE, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 64, 32),
 
   "ldr" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
     <->
@@ -149,7 +153,11 @@ mapping assembly(offset, labels) = {
 
   "ldr" ^ spc() ^ t <- xreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
     <->
-  LoadRegister(n, t, 31, AccType_NORMAL, MemOp_LOAD, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
+  LoadRegister(n, t, 31, AccType_NORMAL, MemOp_LOAD, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 64, 32),
+
+  "ldr" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ sep() ^ m <- xreg_name() ^ "]"
+    <->
+  LoadRegister(n, t, m, AccType_NORMAL, MemOp_LOAD, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
 
   "mov" ^ spc() ^ d <- wreg_name() ^ sep() ^ hash() ^ imm <- bits(32)
     <->
@@ -194,6 +202,10 @@ mapping assembly(offset, labels) = {
   "add" ^ spc() ^ d <- wreg_name() ^ sep() ^ n <- wreg_name() ^ sep() ^ m <- wreg_name()
     <->
   AddSubShiftedRegister(d, n, m, 32, bitzero, bitzero, ShiftType_LSL, 0),
+
+  "add" ^ spc() ^ d <- xreg_name() ^ sep() ^ n <- xreg_name() ^ sep() ^ m <- xreg_name()
+    <->
+  AddSubShiftedRegister(d, n, m, 64, bitzero, bitzero, ShiftType_LSL, 0),
 
   "sub" ^ spc() ^ d <- wreg_name() ^ sep() ^ n <- wreg_name() ^ sep() ^ m <- wreg_name()
     <->
