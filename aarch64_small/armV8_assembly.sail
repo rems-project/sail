@@ -92,7 +92,8 @@ mapping label(sz, n, labels) = {
   }
 }
 
-/* Axiomatic model only supports SY, so make everything equal to it for now. */
+/* Axiomatic model only supports SY for DSB, so make everything equal to it for now. */
+/*
 mapping barrier_option : string <-> (MBReqDomain, MBReqTypes) = {
   "sy"    <-> (MBReqDomain_FullSystem, MBReqTypes_All),
   "st"    <-> (MBReqDomain_FullSystem, MBReqTypes_All),
@@ -102,10 +103,11 @@ mapping barrier_option : string <-> (MBReqDomain, MBReqTypes) = {
   "osh"   <-> (MBReqDomain_FullSystem, MBReqTypes_All),
   "oshst" <-> (MBReqDomain_FullSystem, MBReqTypes_All)
 }
+*/
 
-/*
 mapping barrier_option : string <-> (MBReqDomain, MBReqTypes) = {
   "sy" <-> (MBReqDomain_FullSystem, MBReqTypes_All),
+  "ld" <-> (MBReqDomain_FullSystem, MBReqTypes_Reads),
   "st" <-> (MBReqDomain_FullSystem, MBReqTypes_Writes),
   "ish" <-> (MBReqDomain_InnerShareable, MBReqTypes_All),
   "nsh" <-> (MBReqDomain_Nonshareable, MBReqTypes_All),
@@ -113,12 +115,22 @@ mapping barrier_option : string <-> (MBReqDomain, MBReqTypes) = {
   "osh" <-> (MBReqDomain_OuterShareable, MBReqTypes_All),
   "oshst" <-> (MBReqDomain_OuterShareable, MBReqTypes_Writes)
 }
-*/
 
 mapping ic_op : string <-> ICOp = {
   "ivau" <-> IVAU,
   "ialluis" <-> IALLUIS,
   "iallu" <-> IALLU
+}
+
+mapping extend_type : string <-> ExtendType = {
+  "sxtb" <-> ExtendType_SXTB,
+  "sxth" <-> ExtendType_SXTH,
+  "sxtw" <-> ExtendType_SXTW,
+  "sxtx" <-> ExtendType_SXTX,
+  "uxtb" <-> ExtendType_UXTB,
+  "uxth" <-> ExtendType_UXTH,
+  "uxtw" <-> ExtendType_UXTW,
+  "uxtx" <-> ExtendType_UXTX
 }
 
 mapping dc_op : string <-> DCOp = {
@@ -135,6 +147,7 @@ mapping dc_op : string <-> DCOp = {
 val assembly : (int, labels) -> string <-> ast
 
 mapping assembly(offset, labels) = {
+  /* STR stores */
   "str" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
     <->
   LoadRegister(n, t, 31, AccType_NORMAL, MemOp_STORE, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
@@ -147,6 +160,12 @@ mapping assembly(offset, labels) = {
     <->
   LoadRegister(n, t, m, AccType_NORMAL, MemOp_STORE, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 64, 32),
 
+  /* STLR store-release register */
+  "stlr" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
+    <->
+  LoadStoreAcqExc(n, t, 31, 31, AccType_ORDERED, bitzero, bitzero, MemOp_STORE, 32, 32, 32),
+
+  /* LDR loads */
   "ldr" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
     <->
   LoadRegister(n, t, 31, AccType_NORMAL, MemOp_LOAD, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
@@ -158,6 +177,15 @@ mapping assembly(offset, labels) = {
   "ldr" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ sep() ^ m <- xreg_name() ^ "]"
     <->
   LoadRegister(n, t, m, AccType_NORMAL, MemOp_LOAD, bitzero, bitzero, bitzero, ExtendType_UXTB, 0, 32, 32),
+
+  "ldr" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ sep() ^ m <- wreg_name() ^ sep() ^ e <- extend_type() ^ "]"
+    <->
+  LoadRegister(n, t, m, AccType_NORMAL, MemOp_LOAD, bitzero, bitzero, bitzero, e, 0, 32, 32),
+
+  /* LDAR load aquire register */
+  "ldar" ^ spc() ^ t <- wreg_name() ^ sep() ^ "[" ^ n <- xreg_name() ^ "]"
+    <->
+  LoadStoreAcqExc(n, t, 31, 31, AccType_ORDERED, bitzero, bitzero, MemOp_STORE, 32, 32, 32),
 
   "mov" ^ spc() ^ d <- wreg_name() ^ sep() ^ hash() ^ imm <- bits(32)
     <->
@@ -210,6 +238,10 @@ mapping assembly(offset, labels) = {
   "sub" ^ spc() ^ d <- wreg_name() ^ sep() ^ n <- wreg_name() ^ sep() ^ m <- wreg_name()
     <->
   AddSubShiftedRegister(d, n, m, 32, bitone, bitzero, ShiftType_LSL, 0),
+
+  "add" ^ spc() ^ d <- xreg_name() ^ sep() ^ n <- xreg_name() ^ sep() ^ m <- wreg_name() ^ sep() ^ e <- extend_type()
+    <->
+  AddSubExtendRegister(d, n, m, 64, bitzero, bitzero, e, 0),
 
   "add" ^ spc() ^ d <- wreg_name() ^ sep() ^ n <- wreg_name() ^ sep() ^ hash() ^ imm <- bits(32)
     <->
