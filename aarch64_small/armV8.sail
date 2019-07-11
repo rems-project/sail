@@ -1685,19 +1685,22 @@ function clause execute (AddSubImmediate((d,n,datasize as int('R),sub_op,setflag
   if sub_op then {
     operand2 = NOT(operand2);
     carry_in = b1;
-  }
-  else
+  } else {
     carry_in = b0;
+  };
+  /*
+  let vec = AddWithCarry2(operand1, operand2, carry_in);
+  let result = vec['R + 3 .. 4];
+  let nzcv = vec[3 .. 0];
 
-  let (result,nzcv) = AddWithCarry (operand1, operand2, carry_in) in {
-
-    if setflags then
-      wPSTATE_NZCV() = nzcv;
-
-    if (d == 31 & ~(setflags)) then
-      wSP() = result
-    else
-      wX(d) = result;
+  if setflags then {
+    wPSTATE_NZCV() = nzcv
+  };
+  */
+  if (d == 31 & ~(setflags)) then {
+    wSP() = add_vec(operand1, operand2)
+  } else {
+    wX(d) = add_vec(operand1, operand2)
   }
 }
 
@@ -2395,6 +2398,7 @@ function clause execute (LogicalShiftedRegister((d,n,m,datasize as int('R),setfl
   if invert then operand2 = NOT(operand2);
 
   result : (bits('R)) = Zeros(); /* ARM: uninitialized */
+
   match op {
     LogicalOp_AND  => result = (operand1 & operand2),
     LogicalOp_ORR  => result = (operand1 | operand2),

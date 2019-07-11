@@ -738,14 +738,14 @@ let builtin_not_bits ctx v ret_ctyp =
   | _, _ -> builtin_type_error ctx "not_bits" [v] (Some ret_ctyp)
 
 let builtin_bitwise fn ctx v1 v2 ret_ctyp =
-  match cval_ctyp v1, cval_ctyp v2 with
-  | CT_fbits (n, _), CT_fbits (m, _) ->
-     assert (n = m);
+  match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
+  | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
+     assert (n = m & m = o);
      let smt1 = smt_cval ctx v1 in
      let smt2 = smt_cval ctx v2 in
      Fn (fn, [smt1; smt2])
 
-  | CT_lbits _, CT_lbits _ ->
+  | CT_lbits _, CT_lbits _, CT_lbits _ ->
      let smt1 = smt_cval ctx v1 in
      let smt2 = smt_cval ctx v2 in
      Fn ("Bits", [Fn ("len", [smt1]); Fn (fn, [Fn ("contents", [smt1]); Fn ("contents", [smt2])])])
@@ -918,7 +918,10 @@ let builtin_signed ctx v ret_ctyp =
 
   | CT_fbits (n, _), CT_lint ->
      SignExtend(ctx.lint_size - n, smt_cval ctx v)
- 
+
+  | CT_lbits _, CT_lint ->
+     Extract (ctx.lint_size - 1, 0, Fn ("contents", [smt_cval ctx v]))
+    
   | ctyp, _ -> builtin_type_error ctx "signed" [v] (Some ret_ctyp)
 
 let builtin_add_bits ctx v1 v2 ret_ctyp =
@@ -927,6 +930,11 @@ let builtin_add_bits ctx v1 v2 ret_ctyp =
      assert (n = m && m = o);
      Fn ("bvadd", [smt_cval ctx v1; smt_cval ctx v2])
 
+  | CT_lbits _, CT_lbits _, CT_lbits _ ->
+     let smt1 = smt_cval ctx v1 in
+     let smt2 = smt_cval ctx v2 in
+     Fn ("Bits", [Fn ("len", [smt1]); Fn ("bvadd", [Fn ("contents", [smt1]); Fn ("contents", [smt2])])])
+     
   | _ -> builtin_type_error ctx "add_bits" [v1; v2] (Some ret_ctyp)
 
 let builtin_sub_bits ctx v1 v2 ret_ctyp =
@@ -1046,7 +1054,7 @@ let builtin_get_slice_int ctx v1 v2 v3 ret_ctyp =
 
   | CT_lint, CT_lint, CT_constant start, CT_lbits _ when Big_int.equal start Big_int.zero ->
      let len = Extract (ctx.lbits_index - 1, 0, smt_cval ctx v1) in
-     let contents = unsigned_size ~checked:false ctx (lbits_size ctx) ctx.lint_size (smt_cval ctx v1) in
+     let contents = unsigned_size ~checked:false ctx (lbits_size ctx) ctx.lint_size (smt_cval ctx v2) in
      Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; contents])])
 
   | _ -> builtin_type_error ctx "get_slice_int" [v1; v2; v3] (Some ret_ctyp)

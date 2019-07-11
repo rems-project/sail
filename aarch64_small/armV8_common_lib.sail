@@ -504,6 +504,19 @@ function ProcessorID() -> int = 0
 
 /** FUNCTION:(bits(N), bits(4)) AddWithCarry(bits(N) x, bits(N) y, bit carry_in) */
 
+val AddWithCarry2 : forall 'N, 'N > 0. (bits('N), bits('N), bit) -> bits('N + 4) effect {escape}
+function AddWithCarry2 (x, y, carry_in) = {
+  unsigned_sum : uinteger = UInt(x) + UInt(y) + UInt([carry_in]);
+  signed_sum : integer = SInt(x) + SInt(y) + UInt([carry_in]);
+  result : bits('N) = __GetSlice_int('N, unsigned_sum, 0); /* same value as signed_sum<N-1:0> */
+  n : bit = result[(length(result)) - 1];
+  z : bit = if IsZero(result) then b1 else b0;
+  c : bit = if UInt(result) == unsigned_sum then b1 else b0;
+  v : bit = if SInt(result) == signed_sum then b1 else b0;
+  result @ [n,z,c,v]
+  /* (result,[n]:[z]:[c]:[v]) */
+}
+
 val AddWithCarry : forall 'N, 'N > 0. (bits('N), bits('N), bit) -> (bits('N), bits(4)) effect {escape}
 function AddWithCarry (x, y, carry_in) = {
   unsigned_sum : uinteger = UInt(x) + UInt(y) + UInt([carry_in]);
