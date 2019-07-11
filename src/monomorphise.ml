@@ -620,7 +620,7 @@ let apply_pat_choices choices =
     e_assert = rewrite_assert;
     e_case = rewrite_case }
 
-let split_defs all_errors splits env defs =
+let split_defs target all_errors splits env defs =
   let no_errors_happened = ref true in
   let error_opt = if all_errors then Some no_errors_happened else None in
   let split_constructors (Defs defs) =
@@ -651,7 +651,7 @@ let split_defs all_errors splits env defs =
 
   let subst_exp ref_vars substs ksubsts exp =
     let substs = bindings_from_list substs, ksubsts in
-    fst (Constant_propagation.const_prop defs ref_vars substs Bindings.empty exp)
+    fst (Constant_propagation.const_prop target defs ref_vars substs Bindings.empty exp)
   in
 
   (* Split a variable pattern into every possible value *)
@@ -3789,7 +3789,7 @@ let recheck defs =
 
 let mono_rewrites = MonoRewrites.mono_rewrite
 
-let monomorphise opts splits defs =
+let monomorphise target opts splits defs =
   let defs, env = Type_check.check Type_check.initial_env defs in
   let ok_analysis, new_splits, extra_splits =
     if opts.auto
@@ -3806,7 +3806,7 @@ let monomorphise opts splits defs =
       then ()
       else raise (Reporting.err_general Unknown "Unable to monomorphise program")
   in
-  let ok_split, defs = split_defs opts.all_split_errors splits env defs in
+  let ok_split, defs = split_defs target opts.all_split_errors splits env defs in
   let () = if (ok_analysis && ok_extras && ok_split) || opts.continue_anyway
       then ()
       else raise (Reporting.err_general Unknown "Unable to monomorphise program")

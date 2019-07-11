@@ -59,6 +59,7 @@ open Type_check
     (and hence we cannot reliably track). *)
 
 val const_prop :
+  string ->
   tannot defs ->
   IdSet.t ->
   tannot exp Bindings.t * nexp KBindings.t ->

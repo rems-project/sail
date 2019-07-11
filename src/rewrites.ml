@@ -4772,9 +4772,10 @@ let opt_auto_mono = ref false
 let opt_dall_split_errors = ref false
 let opt_dmono_continue = ref false
 
-let monomorphise env defs =
+let monomorphise target env defs =
   let open Monomorphise in
   monomorphise
+    target
     { auto = !opt_auto_mono;
       debug_analysis = !opt_dmono_analysis;
       all_split_errors = !opt_dall_split_errors;
@@ -4850,12 +4851,12 @@ let all_rewrites = [
     ("mapping_builtins", Basic_rewriter rewrite_defs_mapping_patterns);
     ("mono_rewrites", Basic_rewriter mono_rewrites);
     ("toplevel_nexps", Basic_rewriter rewrite_toplevel_nexps);
-    ("monomorphise", Basic_rewriter monomorphise);
+    ("monomorphise", String_rewriter (fun target -> Basic_rewriter (monomorphise target)));
     ("atoms_to_singletons", Basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons));
     ("add_bitvector_casts", Basic_rewriter (fun _ -> Monomorphise.add_bitvector_casts));
     ("atoms_to_singletons", Basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons));
     ("remove_impossible_int_cases", Basic_rewriter Constant_propagation.remove_impossible_int_cases);
-    ("const_prop_mutrec", Basic_rewriter Constant_propagation_mutrec.rewrite_defs);
+    ("const_prop_mutrec", String_rewriter (fun target -> Basic_rewriter (Constant_propagation_mutrec.rewrite_defs target)));
     ("make_cases_exhaustive", Basic_rewriter MakeExhaustive.rewrite);
     ("undefined", Bool_rewriter (fun b -> Basic_rewriter (rewrite_undefined_if_gen b)));
     ("vector_string_pats_to_bit_list", Basic_rewriter rewrite_defs_vector_string_pats_to_bit_list);
@@ -4887,7 +4888,7 @@ let all_rewrites = [
     ("simple_types", Basic_rewriter rewrite_simple_types);
     ("overload_cast", Basic_rewriter rewrite_overload_cast);
     ("top_sort_defs", Basic_rewriter (fun _ -> top_sort_defs));
-    ("constant_fold", Basic_rewriter (fun _ -> Constant_fold.rewrite_constant_function_calls));
+    ("constant_fold", String_rewriter (fun target -> Basic_rewriter (fun _ -> Constant_fold.rewrite_constant_function_calls target)));
     ("split", String_rewriter (fun str -> Basic_rewriter (rewrite_split_fun_ctor_pats str)));
     ("properties", Basic_rewriter (fun _ -> Property.rewrite));
   ]
@@ -4902,7 +4903,7 @@ let rewrites_lem = [
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
     ("toplevel_nexps", [If_mono_arg]);
-    ("monomorphise", [If_mono_arg]);
+    ("monomorphise", [String_arg "lem"; If_mono_arg]);
     ("recheck_defs", [If_mwords_arg]);
     ("add_bitvector_casts", [If_mwords_arg]);
     ("atoms_to_singletons", [If_mono_arg]);
@@ -4925,7 +4926,7 @@ let rewrites_lem = [
     ("split", [String_arg "execute"]);
     ("recheck_defs", []);
     ("top_sort_defs", []);
-    ("const_prop_mutrec", []);
+    ("const_prop_mutrec", [String_arg "lem"]);
     ("vector_string_pats_to_bit_list", []);
     ("exp_lift_assign", []);
     ("early_return", []);
@@ -5021,7 +5022,7 @@ let rewrites_c = [
     ("mono_rewrites", [If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("toplevel_nexps", [If_mono_arg]);
-    ("monomorphise", [If_mono_arg]);
+    ("monomorphise", [String_arg "c"; If_mono_arg]);
     ("atoms_to_singletons", [If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
@@ -5036,7 +5037,7 @@ let rewrites_c = [
     ("exp_lift_assign", []);
     ("merge_function_clauses", []);
     ("optimize_recheck_defs", []);
-    ("constant_fold", [])
+    ("constant_fold", [String_arg "c"])
   ]
 
 let rewrites_interpreter = [
