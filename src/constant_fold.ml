@@ -221,7 +221,12 @@ let rw_exp target ok not_ok istate =
 
     | E_app (id, args) when List.for_all is_constant args ->
        let env = env_of_annot annot in
-       if not (Env.is_extern id env target) then
+       (* We want to fold all primitive operations, but avoid folding
+          non-primitives that are defined in target-specific way. *)
+       let is_primop =
+         Env.is_extern id env "interpreter" && StringMap.mem (Env.get_extern id env "interpreter") safe_primops
+       in
+       if not (Env.is_extern id env target) || is_primop then
          evaluate e_aux annot
        else
          E_aux (e_aux, annot)
