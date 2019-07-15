@@ -9,4 +9,4 @@ S src/lem_interp/**
 S src/pprint/**
 S src/test/**
 B src/_build/**
-PKG num str unix uint zarith linksem lem omd linenoise base64 yojson
+PKG num str unix uint zarith linksem lem omd linenoise base64 yojson qcheck

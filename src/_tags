@@ -2,13 +2,13 @@ true: -traverse, debug, use_menhir
 <**/parser.ml>: bin_annot, annot
 <**/*.ml> and not <**/parser.ml>: bin_annot, annot
 
-<sail.{byte,native}>: package(zarith), package(linksem), package(lem), package(omd), package(base64), use_pprint
-<isail.{byte,native}>: package(zarith), package(linenoise), package(linksem), package(lem), package(omd), package(base64), package(yojson), use_pprint
+<sail.{byte,native}>: package(zarith), package(linksem), package(lem), package(omd), package(base64), package(qcheck), use_pprint
+<isail.{byte,native}>: package(zarith), package(linenoise), package(linksem), package(lem), package(omd), package(base64), package(yojson), package(qcheck), use_pprint
 
 <isail.ml>: package(linenoise), package(yojson)
 <elf_loader.ml>: package(linksem)
 <latex.ml>: package(omd)
-<**/*.m{l,li}>: package(lem), package(base64)
+<**/*.m{l,li}>: package(lem), package(base64), package(qcheck)
 
 <gen_lib>: include
 <jib>: include

@@ -740,7 +740,7 @@ let builtin_not_bits ctx v ret_ctyp =
 let builtin_bitwise fn ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
   | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
-     assert (n = m & m = o);
+     assert (n = m && m = o);
      let smt1 = smt_cval ctx v1 in
      let smt2 = smt_cval ctx v2 in
      Fn (fn, [smt1; smt2])

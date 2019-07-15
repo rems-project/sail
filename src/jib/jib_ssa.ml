@@ -73,6 +73,13 @@ let make ~initial_size () = {
     conds = IntMap.empty
   }
 
+let copy graph = {
+    next = graph.next;
+    nodes = Array.copy graph.nodes;
+    next_cond = graph.next_cond;
+    conds = graph.conds
+  }
+
 let get_cond graph n =
   if n >= 0 then
     IntMap.find n graph.conds
@@ -220,6 +227,69 @@ let prune_succs visited graph =
   done;
   !removed
 
+let graph_gen node_gen =
+  let fix_edges arr n =
+    for i = 0 to n - 1 do
+      match arr.(i) with
+      | Some (n, preds, succs) ->
+         IntSet.iter (fun j ->
+             match arr.(j) with
+             | Some (m, preds', succs') ->
+                arr.(j) <- Some (m, preds', IntSet.add i succs')
+             | None -> assert false
+           ) preds;
+         IntSet.iter (fun j ->
+             match arr.(j) with
+             | Some (m, preds', succs') ->
+                arr.(j) <- Some (m, IntSet.add i preds', succs')
+             | None -> assert false
+           ) succs
+      | None -> ()
+    done
+  in
+  QCheck.Gen.(
+    int_range 1 300 >>= fun n ->
+    let edge_gen =
+      list_size (int_range 1 5) (int_range 0 (n - 1)) >>= fun preds ->
+      list_size (int_range 1 5) (int_range 0 (n - 1)) >>= fun succs ->
+      node_gen >>= fun node ->
+      pure (Some (node, IntSet.of_list preds, IntSet.of_list succs))
+    in
+    array_repeat n edge_gen >>= fun nodes ->
+    int_range 0 (n - 1) >>= fun root ->
+    fix_edges nodes n;
+    let graph = {
+        next = n;
+        nodes = nodes;
+        next_cond = 1;
+        conds = IntMap.empty
+      } in
+    let visited = reachable (IntSet.singleton root) graph in
+    let _ = prune visited graph in
+    pure (root, graph)
+  )
+
+let string_of_graph string_of_node vertex_color graph =
+  Util.opt_colors := false;
+  let b = Buffer.create 2048 in
+  Buffer.add_string b "digraph DEPS {\n";
+  let make_node i n =
+    Buffer.add_string b (Printf.sprintf "  n%i [label=\"%i\\n%s\\l\";shape=box;style=filled;fillcolor=%s];\n" i i (string_of_node n) (vertex_color i n))
+  in
+  let make_line i s =
+    Buffer.add_string b (Printf.sprintf "  n%i -> n%i [color=black];\n" i s)
+  in
+  for i = 0 to graph.next - 1 do
+    match graph.nodes.(i) with
+    | Some (n, _, successors) ->
+       make_node i n;
+       IntSet.iter (fun s -> make_line i s) successors
+    | None -> ()
+  done;
+  Buffer.add_string b "}\n";
+  Util.opt_colors := true;
+  Buffer.contents b
+
 (**************************************************************************)
 (* 2. Mutable control flow graph                                          *)
 (**************************************************************************)
@@ -241,7 +311,7 @@ let string_of_terminator = function
   | T_jump (cond, label) -> "jump " ^ string_of_int cond ^ " " ^ label
   | T_label label -> "label " ^ label
   | T_none -> "none"
-                  
+
 type cf_node =
   | CF_label of string
   | CF_block of instr list * terminator
@@ -414,6 +484,42 @@ let immediate_dominators graph root =
       idom.(n) <- idom.(samedom.(n))
   done;
   idom
+
+(** Test that every immediate dominator returned by
+   immediate_dominators is actually a dominator by removing it from
+   the control flow graph and checking that the node it dominates is
+   now unreachable from the root node *)
+let prop_idom_is_dominator (root, graph) =
+  let idom = immediate_dominators graph root in
+  let ok = ref true in
+  for n = 0 to Array.length idom - 1 do
+    let d = idom.(n) in
+    if d <> -1 then (
+      let graph = copy graph in
+      graph.nodes.(d) <- None;
+      for m = 0 to graph.next - 1 do
+        match graph.nodes.(m) with
+        | Some (content, preds, succs) ->
+           graph.nodes.(m) <- Some (content, IntSet.remove d preds, IntSet.remove d succs)
+        | None -> ()
+      done;
+      let visited = reachable (IntSet.singleton root) graph in
+      if IntSet.mem n visited then
+        ok := false
+    ) else (
+      if n <> root && graph.nodes.(n) <> None then (
+        ok := false
+      )
+    )
+  done;
+  !ok
+
+let test_idom_is_dominator =
+  QCheck.Test.make ~count:100 ~name:"idom_is_dominator"
+    (QCheck.make (graph_gen (QCheck.Gen.pure ())) ~print:(fun (root, graph) -> string_of_graph (fun _ -> "") (fun i _ -> if i = root then "red" else "white") graph))
+    prop_idom_is_dominator
+
+let run_ssa_tests = QCheck_runner.run_tests [test_idom_is_dominator]
 
 (** [(dominator_children idoms).(n)] are the nodes whose immediate dominator
    (idom) is n. *)
