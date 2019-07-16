@@ -385,6 +385,7 @@ Qed.
 Inductive bitU := B0 | B1 | BU.
 
 Scheme Equality for bitU.
+Definition eq_bit := bitU_beq.
 Instance Decidable_eq_bit : forall (x y : bitU), Decidable (x = y) :=
   Decidable_eq_from_dec bitU_eq_dec.
 
@@ -1351,9 +1352,51 @@ end;
 (* We may have uncovered more conjunctions *)
 repeat match goal with H:and _ _ |- _ => destruct H end.
 
+Ltac generalize_embedded_proofs :=
+  repeat match goal with H:context [?X] |- _ =>
+    match type of X with ArithFact _ =>
+      generalize dependent X
+    end
+  end;
+  intros.
+
+Lemma iff_equal_l {T:Type} {P:Prop} {x:T} : (x = x <-> P) -> P.
+tauto.
+Qed.
+Lemma iff_equal_r {T:Type} {P:Prop} {x:T} : (P <-> x = x) -> P.
+tauto.
+Qed.
+
+Lemma iff_known_l {P Q : Prop} : P -> P <-> Q -> Q.
+tauto.
+Qed.
+Lemma iff_known_r {P Q : Prop} : P -> Q <-> P -> Q.
+tauto.
+Qed.
+
+Ltac clean_up_props :=
+  repeat match goal with
+  (* I did try phrasing these as rewrites, but Coq was oddly reluctant to use them *)
+  | H:?x = ?x <-> _ |- _ => apply iff_equal_l in H
+  | H:_ <-> ?x = ?x |- _ => apply iff_equal_r in H
+  | H:context[true = false] |- _ => rewrite truefalse in H
+  | H:context[false = true] |- _ => rewrite falsetrue in H
+  | H1:?P <-> False, H2:context[?Q] |- _ => constr_eq P Q; rewrite -> H1 in H2
+  | H1:False <-> ?P, H2:context[?Q] |- _ => constr_eq P Q; rewrite <- H1 in H2
+  | H1:?P, H2:?Q <-> ?R |- _ => constr_eq P Q; apply (iff_known_l H1) in H2
+  | H1:?P, H2:?R <-> ?Q |- _ => constr_eq P Q; apply (iff_known_r H1) in H2
+  | H:context[_ \/ False] |- _ => rewrite or_False_r in H
+  | H:context[False \/ _] |- _ => rewrite or_False_l in H
+ (* omega doesn't cope well with extra "True"s in the goal.
+    Check that they actually appear because setoid_rewrite can fill in evars. *)
+  | |- context[True /\ _] => setoid_rewrite True_left
+  | |- context[_ /\ True] => setoid_rewrite True_right
+  end;
+  remove_unnecessary_casesplit.
 
 Ltac prepare_for_solver :=
 (*dump_context;*)
+ generalize_embedded_proofs;
  clear_irrelevant_defns;
  clear_non_Z_bool_defns;
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
@@ -1372,10 +1415,8 @@ Ltac prepare_for_solver :=
  filter_disjunctions;
  Z_if_to_or;
  clear_irrelevant_bindings;
- (* omega doesn't cope well with extra "True"s in the goal.
-    Check that they actually appear because setoid_rewrite can fill in evars. *)
- repeat match goal with |- context[True /\ _] => setoid_rewrite True_left end;
- repeat match goal with |- context[_ /\ True] => setoid_rewrite True_right end.
+ subst;
+ clean_up_props.
 
 Lemma trivial_range {x : Z} : ArithFact (x <= x /\ x <= x).
 constructor.
@@ -1595,6 +1636,8 @@ Lemma Z_compare_eq_gt : Eq = Gt -> False. congruence. Qed.
 Lemma Z_compare_gt_lt : Gt = Lt -> False. congruence. Qed.
 Lemma Z_compare_gt_eq : Gt = Eq -> False. congruence. Qed.
 Ltac z_comparisons :=
+  (* Don't try terms with variables - reduction may be expensive *)
+  match goal with |- context[?x] => is_var x; fail 1 | |- _ => idtac end;
   solve [
     exact eq_refl
   | exact Z_compare_lt_eq
@@ -1605,14 +1648,48 @@ Ltac z_comparisons :=
   | exact Z_compare_gt_eq
   ].
 
+(* Try to get the linear arithmetic solver to do booleans. *)
+
+Lemma b2z_true x : x = true <-> Z.b2z x = 1.
+destruct x; compute; split; congruence.
+Qed.
+
+Lemma b2z_false x : x = false <-> Z.b2z x = 0.
+destruct x; compute; split; congruence.
+Qed.
+
+Lemma b2z_tf x : 0 <= Z.b2z x <= 1.
+destruct x; simpl; omega.
+Qed.
+
+Ltac solve_bool_with_Z :=
+  subst;
+  rewrite ?truefalse, ?falsetrue, ?or_False_l, ?or_False_r in *;
+  (* I did try phrasing these as rewrites, but Coq was oddly reluctant to use them *)
+  repeat match goal with
+  | H:?x = ?x <-> _ |- _ => apply iff_equal_l in H
+  | H:_ <-> ?x = ?x |- _ => apply iff_equal_r in H
+  end;
+  repeat match goal with
+  |  H:context [?v = true] |- _  => is_var v; rewrite (b2z_true v) in *
+  | |- context [?v = true]       => is_var v; rewrite (b2z_true v) in *
+  |  H:context [?v = false] |- _ => is_var v; rewrite (b2z_false v) in *
+  | |- context [?v = false]      => is_var v; rewrite (b2z_false v) in *
+  end;
+  repeat match goal with
+  | _:context [Z.b2z ?v] |- _ => generalize (b2z_tf v); generalize dependent (Z.b2z v)
+  | |- context [Z.b2z ?v]     => generalize (b2z_tf v); generalize dependent (Z.b2z v)
+  end;
+  intros;
+  lia.
+
 
 (* Redefine this to add extra solver tactics *)
 Ltac sail_extra_tactic := fail.
 
 Ltac main_solver :=
  solve
- [ match goal with |- (?x ?y) => is_evar x; idtac "Warning: unknown constraint"; exact (I : (fun _ => True) y) end
- | apply ArithFact_mword; assumption
+ [ apply ArithFact_mword; assumption
  | z_comparisons
  | omega with Z
    (* Try sail hints before dropping the existential *)
@@ -1639,6 +1716,7 @@ Ltac main_solver :=
    | _:(@eq Z ?x _) \/ (@eq Z ?x _) \/ _, _:@eq Z ?y (ZEuclid.div ?x _) |- context[?y] => is_var x; aux y
    end
  (* Booleans - and_boolMP *)
+ | solve_bool_with_Z
  | simple_ex_iff
  | ex_iff_solve
  | drop_bool_exists; solve [eauto using iff_refl, or_iff_cong, and_iff_cong | intuition]
@@ -1691,11 +1769,21 @@ Ltac simple_omega :=
   H := projT1 _ |- _ => clearbody H
   end; omega.
 
+Ltac solve_unknown :=
+  match goal with |- (ArithFact (?x ?y)) =>
+    is_evar x;
+    idtac "Warning: unknown constraint";
+    let t := type of y in
+    unify x (fun (_ : t) => True);
+    exact (Build_ArithFact _ I)
+  end.
+
 Ltac solve_arithfact :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
 intros; (* To solve implications for derive_m *)
-try (exact trivial_range);
+try solve_unknown;
+match goal with |- ArithFact (?x <= ?x <= ?x) => try (exact trivial_range) | _ => idtac end;
 try fill_in_evar_eq;
 try match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end;
 (* Trying reflexivity will fill in more complex metavariable examples than
@@ -2223,6 +2311,18 @@ unfold length_list.
 simpl.
 auto with zarith.
 Qed.
+
+Definition vec_concat {T m n} (v : vec T m) (w : vec T n) : vec T (m + n).
+refine (existT _ (projT1 v ++ projT1 w) _).
+destruct v.
+destruct w.
+simpl.
+unfold length_list in *.
+rewrite <- e, <- e0.
+rewrite app_length.
+rewrite Nat2Z.inj_add.
+reflexivity.
+Defined.
 
 Lemma skipn_length {A n} {l: list A} : (n <= List.length l -> List.length (skipn n l) = List.length l - n)%nat.
 revert l.

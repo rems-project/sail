@@ -326,3 +326,11 @@
 | "MoveSystemImmediate", [operand; field] ->
   `AArch64MoveSystemImmediate ( translate_out_int operand,
                                 translate_out_pSTATEField field)
+
+| "DataCache", [t; dc_op] ->
+  `AArch64DataCache ( translate_out_regzr Set64 t,
+                      translate_out_dCOp dc_op)
+
+| "InstructionCache", [t; ic_op] ->
+  `AArch64InstructionCache (translate_out_regzr Set64 t,
+                            translate_out_iCOp ic_op)

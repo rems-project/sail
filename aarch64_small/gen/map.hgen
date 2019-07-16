@@ -43,3 +43,5 @@
 | `AArch64TestBitAndBranch (t,datasize,bit_pos,bit_val,offset) -> `AArch64TestBitAndBranch (map_reg t,datasize,bit_pos,bit_val,offset)
 | `AArch64MoveSystemRegister (t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,read) -> `AArch64MoveSystemRegister (map_reg t,sys_op0,sys_op1,sys_op2,sys_crn,sys_crm,read)
 | `AArch64MoveSystemImmediate (operand,field) -> `AArch64MoveSystemImmediate (operand,field)
+| `AArch64DataCache (t, dc_op) -> `AArch64DataCache (map_reg t, dc_op)
+| `AArch64InstructionCache (t, ic_op) -> `AArch64InstructionCache (map_reg t, ic_op)

@@ -9,7 +9,7 @@ overload operator == = {eq_string}
 
 infixl 9 ^-^
 
-val concat_str = {lem: "stringAppend", _: "concat_str"} : (string, string) -> string
+val concat_str = {coq: "String.append", lem: "stringAppend", _: "concat_str"} : (string, string) -> string
 
 val "dec_str" : int -> string
 

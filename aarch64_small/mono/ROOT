@@ -1,0 +1,4 @@
+session "Sail-AArch64-small" = "Sail" +
+  options [document = false]
+  theories
+    ArmV8_lemmas

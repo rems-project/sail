@@ -104,20 +104,24 @@ let upper n = n
 
 (* Modulus operation corresponding to quot below -- result
    has sign of dividend. *)
-let hardware_mod (a: integer) (b:integer) : integer =
+let tmod_int (a: integer) (b:integer) : integer =
   let m = (abs a) mod (abs b) in
   if a < 0 then ~m else m
+
+let hardware_mod = tmod_int
 
 (* There are different possible answers for integer divide regarding
 rounding behaviour on negative operands. Positive operands always
 round down so derive the one we want (trucation towards zero) from
 that *)
-let hardware_quot (a:integer) (b:integer) : integer =
+let tdiv_int (a:integer) (b:integer) : integer =
   let q = (abs a) / (abs b) in
   if ((a<0) = (b<0)) then
     q  (* same sign -- result positive *)
   else
     ~q (* different sign -- result negative *)
+
+let hardware_quot = tdiv_int
 
 let max_64u = (integerPow 2 64) - 1
 let max_64  = (integerPow 2 63) - 1
@@ -651,6 +655,16 @@ let int_of_bit b =
   | B1 -> 1
   | _ -> failwith "int_of_bit saw unknown"
   end
+
+val count_leading_zero_bits : list bitU -> integer
+let rec count_leading_zero_bits v =
+  match v with
+  | B0 :: v' -> count_leading_zero_bits v' + 1
+  | _ -> 0
+  end
+
+val count_leading_zeros_bv : forall 'a. Bitvector 'a => 'a -> integer
+let count_leading_zeros_bv v = count_leading_zero_bits (bits_of v)
 
 val decimal_string_of_bv : forall 'a. Bitvector 'a => 'a -> string
 let decimal_string_of_bv bv =

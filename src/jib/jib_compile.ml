@@ -193,8 +193,10 @@ let rec compile_aval l ctx = function
      let ctyp = cval_ctyp cval in
      let ctyp' = ctyp_of_typ ctx typ in
      if not (ctyp_equal ctyp ctyp') then
-       raise (Reporting.err_unreachable l __POS__ (string_of_ctyp ctyp ^ " != " ^ string_of_ctyp ctyp'));
-     [], cval, []
+       let gs = ngensym () in
+       [iinit ctyp' gs cval], V_id (gs, ctyp'), [iclear ctyp' gs]
+     else
+       [], cval, []
 
   | AV_id (id, typ) ->
      begin
@@ -1568,8 +1570,9 @@ let sort_ctype_defs cdefs =
 let compile_ast ctx (Defs defs) =
   let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
   let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
+  let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
 
-  let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
+  let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs; cons_vs])) } in
 
   if !opt_memo_cache then
     (try

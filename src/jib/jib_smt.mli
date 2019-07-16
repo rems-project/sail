@@ -139,6 +139,12 @@ module Make_optimizer(S : Sequence) : sig
   val optimize : smt_def Stack.t -> smt_def S.t
 end
 
+val serialize_smt_model :
+  string -> Type_check.Env.t -> Type_check.tannot defs -> unit
+
+val deserialize_smt_model :
+  string -> cdef list * ctx
+
 (** Generate SMT for all the $property and $counterexample pragmas in
    an AST, and write it to appropriately named files. *)
 val generate_smt :

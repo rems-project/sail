@@ -2,7 +2,7 @@
 set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-SAILDIR="$DIR/../.."
+SAILDIR=${SAIL_DIR:-"$DIR/../.."}
 TESTSDIR="$DIR"
 OUTPUTDIR="$DIR/test-output"
 

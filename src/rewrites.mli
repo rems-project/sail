@@ -70,10 +70,11 @@ val move_loop_measures : 'a defs -> 'a defs
 val rewrite_undefined : bool -> Env.t -> tannot defs -> tannot defs
 
 (* Perform rewrites to create an AST supported for a specific target *)
-val rewrite_defs_target : string -> (string * (Env.t -> tannot defs -> tannot defs)) list
+val rewrite_defs_target : string -> (string * (Env.t -> tannot defs -> tannot defs * Env.t)) list
 
 type rewriter =
   | Basic_rewriter of (Env.t -> tannot defs -> tannot defs)
+  | Checking_rewriter of (Env.t -> tannot defs -> tannot defs * Env.t)
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
@@ -96,6 +97,6 @@ val opt_coq_warn_nonexhaustive : bool ref
 
 (* This is a special rewriter pass that checks AST invariants without
    actually doing any re-writing *)
-val rewrite_defs_check : (string * (Env.t -> tannot defs -> tannot defs)) list
+val rewrite_defs_check : (string * (Env.t -> tannot defs -> tannot defs * Env.t)) list
 
 val simple_typ : typ -> typ

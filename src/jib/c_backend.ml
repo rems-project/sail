@@ -397,14 +397,14 @@ let analyze_primop' ctx id args typ =
   c_debug (lazy ("Analyzing primop " ^ extern ^ "(" ^ Util.string_of_list ", " (fun aval -> Pretty_print_sail.to_string (pp_aval aval)) args ^ ")"));
 
   match extern, args with
-  | "eq_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+  | "eq_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
      begin match cval_ctyp v1 with
      | CT_fbits _ | CT_sbits _ ->
         AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
      | _ -> no_change
      end
 
-  | "neq_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+  | "neq_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
      begin match cval_ctyp v1 with
      | CT_fbits _ | CT_sbits _ ->
         AE_val (AV_cval (V_call (Neq, [v1; v2]), typ))
@@ -461,19 +461,19 @@ let analyze_primop' ctx id args typ =
   | "not_bits", [AV_cval (v, _)] ->
      AE_val (AV_cval (V_call (Bvnot, [v]), typ))
 
-  | "add_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+  | "add_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
      AE_val (AV_cval (V_call (Bvadd, [v1; v2]), typ))
 
-  | "sub_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+  | "sub_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
      AE_val (AV_cval (V_call (Bvsub, [v1; v2]), typ))
 
-  | "and_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+  | "and_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
      AE_val (AV_cval (V_call (Bvand, [v1; v2]), typ))
 
-  | "or_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+  | "or_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
      AE_val (AV_cval (V_call (Bvor, [v1; v2]), typ))
 
-  | "xor_bits", [AV_cval (v1, _); AV_cval (v2, _)] ->
+  | "xor_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
      AE_val (AV_cval (V_call (Bvxor, [v1; v2]), typ))
 
   | "vector_subrange", [AV_cval (vec, _); AV_cval (f, _); AV_cval (t, _)] ->
@@ -2185,7 +2185,7 @@ let compile_ast env output_chan c_includes ast =
            "  CREATE(zexception)(current_exception);" ],
          [ "  KILL(zexception)(current_exception);";
            "  free(current_exception);";
-           "  if (have_exception) fprintf(stderr, \"Exiting due to uncaught exception\\n\");" ])
+           "  if (have_exception) {fprintf(stderr, \"Exiting due to uncaught exception\\n\"); exit(EXIT_FAILURE);}" ])
     in
 
     let letbind_initializers =
@@ -2230,9 +2230,9 @@ let compile_ast env output_chan c_includes ast =
        @ letbind_finalizers
        @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
        @ finish cdefs
+       @ [ "  cleanup_rts();" ]
        @ snd exn_boilerplate
-       @ [ "  cleanup_rts();";
-           "}" ] ))
+       @ [ "}" ] ))
     in
 
     let model_default_main = separate hardline (List.map string

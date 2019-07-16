@@ -418,7 +418,7 @@ let unsigned_size ?checked:(checked=true) ctx n m smt =
   else if n > m then
     Fn ("concat", [bvzero (n - m); smt])
   else
-    failwith "bad arguments to unsigned_size"
+    Extract (n - 1, 0, smt)
 
 let int_size ctx = function
   | CT_constant n -> required_width n
@@ -536,6 +536,11 @@ let builtin_min_int ctx v1 v2 ret_ctyp =
           smt1,
           smt2)
 
+let bvmask ctx len =
+  let all_ones = bvones (lbits_size ctx) in
+  let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); len]) in
+  bvnot (bvshl all_ones shift)
+
 let builtin_eq_bits ctx v1 v2 =
   match cval_ctyp v1, cval_ctyp v2 with
   | CT_fbits (n, _), CT_fbits (m, _) ->
@@ -545,15 +550,20 @@ let builtin_eq_bits ctx v1 v2 =
      Fn ("=", [smt1; smt2])
 
   | CT_lbits _, CT_lbits _ ->
-     Fn ("=", [smt_cval ctx v1; smt_cval ctx v2])
+     let len1 = Fn ("len", [smt_cval ctx v1]) in
+     let contents1 = Fn ("contents", [smt_cval ctx v1]) in
+     let len2 = Fn ("len", [smt_cval ctx v1]) in
+     let contents2 = Fn ("contents", [smt_cval ctx v1]) in
+     Fn ("and", [Fn ("=", [len1; len2]);
+                 Fn ("=", [Fn ("bvand", [bvmask ctx len1; contents1]); Fn ("bvand", [bvmask ctx len2; contents2])])])
 
   | CT_lbits _, CT_fbits (n, _) ->
-     let smt2 = unsigned_size ctx (lbits_size ctx) n (smt_cval ctx v2) in
-     Fn ("=", [Fn ("contents", [smt_cval ctx v1]); smt2])
+     let smt1 = unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [smt_cval ctx v1])) in
+     Fn ("=", [smt1; smt_cval ctx v2])
 
   | CT_fbits (n, _), CT_lbits _ ->
-     let smt1 = unsigned_size ctx (lbits_size ctx) n (smt_cval ctx v1) in
-     Fn ("=", [smt1; Fn ("contents", [smt_cval ctx v2])])
+     let smt2 = unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [smt_cval ctx v2])) in
+     Fn ("=", [smt_cval ctx v1; smt2])
 
   | _ -> builtin_type_error ctx "eq_bits" [v1; v2] None
 
@@ -565,11 +575,6 @@ let builtin_zeros ctx v ret_ctyp =
   | ctyp, CT_lbits _ when int_size ctx ctyp >= ctx.lbits_index ->
      Fn ("Bits", [extract (ctx.lbits_index - 1) 0 (smt_cval ctx v); bvzero (lbits_size ctx)])
   | _ -> builtin_type_error ctx "zeros" [v] (Some ret_ctyp)
-
-let bvmask ctx len =
-  let all_ones = bvones (lbits_size ctx) in
-  let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); len]) in
-  bvnot (bvshl all_ones shift)
 
 let builtin_ones ctx cval = function
   | CT_fbits (n, _) -> bvones n
@@ -691,11 +696,22 @@ let builtin_append ctx v1 v2 ret_ctyp =
      Fn ("Bits", [bvadd (bvint ctx.lbits_index (Big_int.of_int n)) (Fn ("len", [smt2]));
                   bvor (bvshl x shift) (Fn ("contents", [smt2]))])
 
+  | CT_lbits _, CT_fbits (n, _), CT_fbits (m, _) ->
+     let smt1 = smt_cval ctx v1 in
+     let smt2 = smt_cval ctx v2 in
+     Extract (m - 1, 0, Fn ("concat", [Fn ("contents", [smt1]); smt2]))
+
   | CT_lbits _, CT_fbits (n, _), CT_lbits _ ->
      let smt1 = smt_cval ctx v1 in
      let smt2 = smt_cval ctx v2 in
      Fn ("Bits", [bvadd (bvint ctx.lbits_index (Big_int.of_int n)) (Fn ("len", [smt1]));
                   Extract (lbits_size ctx - 1, 0, Fn ("concat", [Fn ("contents", [smt1]); smt2]))])
+
+  | CT_fbits (n, _), CT_fbits (m, _), CT_lbits _ ->
+     let smt1 = smt_cval ctx v1 in
+     let smt2 = smt_cval ctx v2 in
+     Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int (n + m));
+                  unsigned_size ctx (lbits_size ctx) (n + m) (Fn ("concat", [smt1; smt2]))])
 
   | CT_lbits _, CT_lbits _, CT_lbits _ ->
      let smt1 = smt_cval ctx v1 in
@@ -703,6 +719,13 @@ let builtin_append ctx v1 v2 ret_ctyp =
      let x = Fn ("contents", [smt1]) in
      let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); Fn ("len", [smt2])]) in
      Fn ("Bits", [bvadd (Fn ("len", [smt1])) (Fn ("len", [smt2])); bvor (bvshl x shift) (Fn ("contents", [smt2]))])
+
+  | CT_lbits _, CT_lbits _, CT_fbits (n, _) ->
+     let smt1 = smt_cval ctx v1 in
+     let smt2 = smt_cval ctx v2 in
+     let x = Fn ("contents", [smt1]) in
+     let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); Fn ("len", [smt2])]) in
+     unsigned_size ctx n (lbits_size ctx) (bvor (bvshl x shift) (Fn ("contents", [smt2])))
 
   | _ -> builtin_type_error ctx "append" [v1; v2] (Some ret_ctyp)
 
@@ -728,6 +751,9 @@ let builtin_vector_subrange ctx vec i j ret_ctyp =
   match cval_ctyp vec, cval_ctyp i, cval_ctyp j with
   | CT_fbits (n, _), CT_constant i, CT_constant j ->
      Extract (Big_int.to_int i, Big_int.to_int j, smt_cval ctx vec)
+
+  | CT_lbits _, CT_constant i, CT_constant j ->
+     Extract (Big_int.to_int i, Big_int.to_int j, Fn ("contents", [smt_cval ctx vec]))
 
   | _ -> builtin_type_error ctx "vector_subrange" [vec; i; j] (Some ret_ctyp)
 
@@ -783,8 +809,11 @@ let builtin_unsigned ctx v ret_ctyp =
 
 let builtin_signed ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
-  | CT_fbits (n, _), CT_fint m when m > n ->
+  | CT_fbits (n, _), CT_fint m when m >= n ->
      SignExtend(m - n, smt_cval ctx v)
+
+  | CT_fbits (n, _), CT_lint ->
+     SignExtend(ctx.lint_size - n, smt_cval ctx v)
 
   | ctyp, _ -> builtin_type_error ctx "signed" [v] (Some ret_ctyp)
 
@@ -1141,6 +1170,8 @@ let rec smt_conversion ctx from_ctyp to_ctyp x =
      bvint ctx.lint_size c
   | CT_fint sz, CT_lint ->
      force_size ctx ctx.lint_size sz x
+  | CT_lbits _, CT_fbits (n, _) ->
+     unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [x]))
   | _, _ -> failwith (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
 
 let define_const ctx id ctyp exp = Define_const (zencode_name id, smt_ctyp ctx ctyp, exp)
@@ -2029,6 +2060,22 @@ let compile env ast =
   let cdefs = Jib_optimize.unique_per_function_ids cdefs in
   let rmap = build_register_map CTMap.empty cdefs in
   cdefs, { (initial_ctx ()) with tc_env = env; register_map = rmap; ast = ast }
+
+let serialize_smt_model file env ast =
+  let cdefs, ctx = compile env ast in
+  let out_chan = open_out file in
+  Marshal.to_channel out_chan cdefs [];
+  Marshal.to_channel out_chan (Type_check.Env.set_prover None ctx.tc_env) [];
+  Marshal.to_channel out_chan ctx.register_map [];
+  close_out out_chan
+
+let deserialize_smt_model file =
+  let in_chan = open_in file in
+  let cdefs = (Marshal.from_channel in_chan : cdef list) in
+  let env = (Marshal.from_channel in_chan : Type_check.env) in
+  let rmap = (Marshal.from_channel in_chan : id list CTMap.t) in
+  close_in in_chan;
+  (cdefs, { (initial_ctx ()) with tc_env = env; register_map = rmap })
 
 let generate_smt props name_file env ast =
   try

@@ -143,6 +143,12 @@ let rec take n xs =
   | n, (x :: xs) -> x :: take (n - 1) xs
   | n, [] -> []
 
+let count_leading_zeros xs =
+  let rec aux bs acc = match bs with
+    | (B0 :: bs') -> aux bs' (acc + 1)
+    | _ -> acc in
+  Big_int.of_int (aux xs 0)
+
 let subrange (list, n, m) =
   let n = Big_int.to_int n in
   let m = Big_int.to_int m in
@@ -744,6 +750,11 @@ let shift_bits_right_arith (x, y) =
 let shiftr (x, y) =
   let zeros = zeros y in
   let rbits = zeros @ x in
+  take (List.length x) rbits
+
+let arith_shiftr (x, y) =
+  let msbs = replicate_bits (take 1 x, y) in
+  let rbits = msbs @ x in
   take (List.length x) rbits
 
 let shift_bits_right (x, y) =

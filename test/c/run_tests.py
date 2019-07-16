@@ -22,10 +22,10 @@ def test_c(name, c_opts, sail_opts, valgrind):
             if tests[filename] == 0:
                 step('sail -no_warn -c {} {} 1> {}.c'.format(sail_opts, filename, basename))
                 step('gcc {} {}.c {}/lib/*.c -lgmp -lz -I {}/lib -o {}'.format(c_opts, basename, sail_dir, sail_dir, basename))
-                step('./{} 1> {}.result'.format(basename, basename))
+                step('./{} 1> {}.result'.format(basename, basename), expected_status = 1 if basename == "exception" else 0)
                 step('diff {}.result {}.expect'.format(basename, basename))
                 if valgrind:
-                    step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=1 ./{}".format(basename))
+                    step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}".format(basename), expected_status = 1 if basename == "exception" else 0)
                 print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
                 sys.exit()
         results.collect(tests)
@@ -57,7 +57,7 @@ def test_ocaml(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 step('sail -ocaml -ocaml_build_dir _sbuild_{} -o {} {}'.format(basename, basename, filename))
-                step('./{} 1> {}.oresult'.format(basename, basename))
+                step('./{} 1> {}.oresult'.format(basename, basename), expected_status = 1 if basename == "exception" else 0)
                 step('diff {}.oresult {}.expect'.format(basename, basename))
                 print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
                 sys.exit()

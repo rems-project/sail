@@ -302,7 +302,8 @@ let rec describe_rewrite =
   | String_rewriter rw -> "<string>" :: describe_rewrite (rw "")
   | Bool_rewriter rw -> "<bool>" :: describe_rewrite (rw false)
   | Literal_rewriter rw -> "(ocaml|lem|all)" :: describe_rewrite (rw (fun _ -> true))
-  | Basic_rewriter rw -> []
+  | Basic_rewriter _
+  | Checking_rewriter _ -> []
 
 type session = {
     id : string;
@@ -592,7 +593,9 @@ let handle_input' input =
               failwith "Must provide the name of a rewrite, use :list_rewrites for a list of possible rewrites"
            end
         | ":rewrites" ->
-           Interactive.ast := Process_file.rewrite_ast_target arg !Interactive.env !Interactive.ast;
+           let new_ast, new_env = Process_file.rewrite_ast_target arg !Interactive.env !Interactive.ast in
+           Interactive.ast := new_ast;
+           Interactive.env := new_env;
            interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops
         | ":prover_regstate" ->
            let env, ast = prover_regstate (Some arg) !Interactive.ast !Interactive.env in

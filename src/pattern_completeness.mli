@@ -57,4 +57,6 @@ type ctx =
     variants : IdSet.t Bindings.t
   }
 
+val is_complete : ctx -> 'a pexp list -> bool
+
 val check : Parse_ast.l -> ctx -> 'a pexp list -> unit

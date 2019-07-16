@@ -62,11 +62,14 @@ let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
 let opt_specialize_c = ref false
+let opt_smt_serialize = ref false
+let opt_smt_fuzz = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
+let opt_splice = ref ([]:string list)
 
 let set_target name = Arg.Unit (fun _ -> opt_target := Some name)
 
@@ -161,6 +164,9 @@ let options = Arg.align ([
   ( "-smt_vector_size",
     Arg.String (fun n -> Jib_smt.opt_default_vector_index := int_of_string n),
     "<n> set a bound of 2 ^ n for generic vectors in generated SMT (default 5)");
+  ( "-smt_serialize",
+    Arg.Tuple [set_target "smt"; Arg.Set opt_smt_serialize],
+    " compile Sail to IR suitable for sail-axiomatic tool");
   ( "-c",
     Arg.Tuple [set_target "c"; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
@@ -270,6 +276,9 @@ let options = Arg.align ([
   ( "-memo",
     Arg.Tuple [Arg.Set opt_memo_z3; Arg.Set C_backend.opt_memo_cache],
     " memoize calls to z3, and intermediate compilation results");
+  ( "-splice",
+    Arg.String (fun s -> opt_splice := s :: !opt_splice),
+    "<filename> add functions from file, replacing existing definitions where necessary");
   ( "-undefined_gen",
     Arg.Set Initial_check.opt_undefined_gen,
     " generate undefined_type functions for types in the specification");
@@ -349,7 +358,7 @@ let options = Arg.align ([
     Arg.Set Profile.opt_profile,
     " (debug) provide basic profiling information for rewriting passes within Sail");
   ( "-dsmtfuzz",
-    set_target "smtfuzz",
+    Arg.Tuple [set_target "smt"; Arg.Set opt_smt_fuzz],
     " (debug) fuzz sail SMT builtins");
   ( "-v",
     Arg.Set opt_print_version,
@@ -400,7 +409,7 @@ let load_files ?check:(check=false) type_envs files =
     ("out.sail", ast, type_envs)
   else
     let ast = Scattered.descatter ast in
-    let ast = rewrite_ast_initial type_envs ast in
+    let ast, type_envs = rewrite_ast_initial type_envs ast in
 
     let out_name = match !opt_file_out with
       | None when parsed = [] -> "out.sail"
@@ -482,8 +491,20 @@ let target name out_name ast type_envs =
      flush output_chan;
      if close then close_out output_chan else ()
 
-  | Some "smtfuzz" ->
+  | Some "smt" when !opt_smt_fuzz ->
      Jib_smt_fuzz.fuzz 0 type_envs ast
+
+  | Some "smt" when !opt_smt_serialize ->
+     let ast_smt, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
+     let ast_smt, type_envs = Specialize.(specialize_passes 2 int_specialization_with_externs type_envs ast_smt) in
+     let jib, ctx = Jib_smt.compile type_envs ast_smt in
+     let name_file =
+       match !opt_file_out with
+       | Some f -> f ^ ".smt_model"
+       | None -> "sail.smt_model"
+     in
+     Reporting.opt_warnings := true;
+     Jib_smt.serialize_smt_model name_file type_envs ast_smt
 
   | Some "smt" ->
      let open Ast_util in
@@ -530,6 +551,10 @@ let main () =
   else
     begin
       let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
+      let ast, type_envs =
+        List.fold_right (fun file (ast,_) -> Splice.splice ast file)
+          (!opt_splice) (ast, type_envs)
+      in
       Reporting.opt_warnings := false; (* Don't show warnings during re-writing for now *)
 
       begin match !opt_process_elf, !opt_file_out with
@@ -554,7 +579,7 @@ let main () =
       else ();
 
       let type_envs, ast = prover_regstate !opt_target ast type_envs in
-      let ast = match !opt_target with Some tgt -> rewrite_ast_target tgt type_envs ast | None -> ast in
+      let ast, type_envs = match !opt_target with Some tgt -> rewrite_ast_target tgt type_envs ast | None -> ast, type_envs in
       target !opt_target out_name ast type_envs;
 
       if !Interactive.opt_interactive then

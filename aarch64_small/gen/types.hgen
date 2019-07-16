@@ -88,3 +88,7 @@ type revOp = RevOp_RBIT | RevOp_REV16 | RevOp_REV32 | RevOp_REV64
 
 type pSTATEField = PSTATEField_DAIFSet | PSTATEField_DAIFClr |
                    PSTATEField_SP
+
+type dCOp = IVAC | ISW | CSW | CISW | ZVA | CVAC | CVAU | CIVAC
+
+type iCOp = IALLUIS | IALLU | IVAU

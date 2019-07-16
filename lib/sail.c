@@ -767,6 +767,16 @@ void length_lbits(sail_int *rop, const lbits op)
   mpz_set_ui(*rop, op.len);
 }
 
+void count_leading_zeros(sail_int *rop, const lbits op)
+{
+  if (mpz_cmp_ui(*op.bits, 0) == 0) {
+    mpz_set_ui(*rop, op.len);
+  } else {
+    size_t bits = mpz_sizeinbase(*op.bits, 2);
+    mpz_set_ui(*rop, op.len - bits);
+  }
+}
+
 bool eq_bits(const lbits op1, const lbits op2)
 {
   assert(op1.len == op2.len);
@@ -1081,6 +1091,20 @@ void shift_bits_right_arith(lbits *rop, const lbits op1, const lbits op2)
 {
   rop->len = op1.len;
   mp_bitcnt_t shift_amt = mpz_get_ui(*op2.bits);
+  mp_bitcnt_t sign_bit = op1.len - 1;
+  mpz_fdiv_q_2exp(*rop->bits, *op1.bits, shift_amt);
+  if(mpz_tstbit(*op1.bits, sign_bit) != 0) {
+    /* */
+    for(; shift_amt > 0; shift_amt--) {
+      mpz_setbit(*rop->bits, sign_bit - shift_amt + 1);
+    }
+  }
+}
+
+void arith_shiftr(lbits *rop, const lbits op1, const sail_int op2)
+{
+  rop->len = op1.len;
+  mp_bitcnt_t shift_amt = mpz_get_ui(op2);
   mp_bitcnt_t sign_bit = op1.len - 1;
   mpz_fdiv_q_2exp(*rop->bits, *op1.bits, shift_amt);
   if(mpz_tstbit(*op1.bits, sign_bit) != 0) {

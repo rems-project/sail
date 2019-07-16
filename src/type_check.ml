@@ -202,7 +202,9 @@ and strip_nexp = function
 and strip_n_constraint_aux = function
   | NC_equal (nexp1, nexp2) -> NC_equal (strip_nexp nexp1, strip_nexp nexp2)
   | NC_bounded_ge (nexp1, nexp2) -> NC_bounded_ge (strip_nexp nexp1, strip_nexp nexp2)
+  | NC_bounded_gt (nexp1, nexp2) -> NC_bounded_gt (strip_nexp nexp1, strip_nexp nexp2)
   | NC_bounded_le (nexp1, nexp2) -> NC_bounded_le (strip_nexp nexp1, strip_nexp nexp2)
+  | NC_bounded_lt (nexp1, nexp2) -> NC_bounded_lt (strip_nexp nexp1, strip_nexp nexp2)
   | NC_not_equal (nexp1, nexp2) -> NC_not_equal (strip_nexp nexp1, strip_nexp nexp2)
   | NC_set (kid, nums) -> NC_set (strip_kid kid, nums)
   | NC_or (nc1, nc2) -> NC_or (strip_n_constraint nc1, strip_n_constraint nc2)
@@ -294,7 +296,7 @@ and typ_arg_nexps (A_aux (typ_arg_aux, l)) =
   | A_order ord -> []
 and constraint_nexps (NC_aux (nc_aux, l)) =
   match nc_aux with
-  | NC_equal (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_le (n1, n2) | NC_not_equal (n1, n2) ->
+  | NC_equal (n1, n2) | NC_bounded_ge (n1, n2) | NC_bounded_le (n1, n2) | NC_bounded_gt (n1, n2) | NC_bounded_lt (n1, n2) | NC_not_equal (n1, n2) ->
      [n1; n2]
   | NC_set _ | NC_true | NC_false | NC_var _ -> []
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2
@@ -449,6 +451,7 @@ module Env : sig
   val set_default_order_dec : t -> t
   val add_enum : id -> id list -> t -> t
   val get_enum : id -> t -> id list
+  val is_enum : id -> t -> bool
   val get_casts : t -> id list
   val allow_casts : t -> bool
   val no_casts : t -> t
@@ -669,7 +672,9 @@ end = struct
     | NC_equal (n1, n2) -> NC_aux (NC_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
     | NC_not_equal (n1, n2) -> NC_aux (NC_not_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
     | NC_bounded_le (n1, n2) -> NC_aux (NC_bounded_le (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_bounded_lt (n1, n2) -> NC_aux (NC_bounded_lt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
     | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_bounded_gt (n1, n2) -> NC_aux (NC_bounded_gt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
     | NC_app (id, args) ->
        (try
           begin match get_typ_synonym id env l env args with
@@ -826,10 +831,11 @@ end = struct
     | A_typ typ -> wf_typ ~exs:exs env typ
     | A_order ord -> wf_order env ord
     | A_bool nc -> wf_constraint ~exs:exs env nc
-  and wf_nexp ?exs:(exs=KidSet.empty) env (Nexp_aux (nexp_aux, l) as nexp) =
+  and wf_nexp ?exs:(exs=KidSet.empty) env nexp =
     wf_debug "nexp" string_of_nexp nexp exs;
+    let Nexp_aux (nexp_aux, l) = expand_nexp_synonyms env nexp in
     match nexp_aux with
-    | Nexp_id _ -> ()
+    | Nexp_id id -> typ_error env l ("Undefined synonym " ^ string_of_id id)
     | Nexp_var kid when KidSet.mem kid exs -> ()
     | Nexp_var kid ->
        begin match get_typ_var kid env with
@@ -862,7 +868,9 @@ end = struct
     | NC_equal (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
     | NC_not_equal (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
     | NC_bounded_ge (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
+    | NC_bounded_gt (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
     | NC_bounded_le (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
+    | NC_bounded_lt (n1, n2) -> wf_nexp ~exs:exs env n1; wf_nexp ~exs:exs env n2
     | NC_set (kid, _) when KidSet.mem kid exs -> ()
     | NC_set (kid, _) ->
        begin match get_typ_var kid env with
@@ -1050,6 +1058,8 @@ end = struct
     with
     | Not_found -> typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
+  let is_enum id env = Bindings.mem id env.enums
+                 
   let is_record id env = Bindings.mem id env.records
 
   let get_record id env = Bindings.find id env.records
@@ -1325,6 +1335,10 @@ let add_typquant l (quant : typquant) (env : Env.t) : Env.t =
 let expand_bind_synonyms l env (typq, typ) =
   typq, Env.expand_synonyms (add_typquant l typq env) typ
 
+let wf_typschm env (TypSchm_aux (TypSchm_ts (typq, typ), l)) =
+  let env = add_typquant l typq env in
+  Env.wf_typ env typ
+
 (* Create vectors with the default order from the environment *)
 
 let default_order_error_string =
@@ -1573,7 +1587,9 @@ let rec nc_identical (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
   | NC_equal (n1a, n1b), NC_equal (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | NC_not_equal (n1a, n1b), NC_not_equal (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | NC_bounded_ge (n1a, n1b), NC_bounded_ge (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_bounded_gt (n1a, n1b), NC_bounded_gt (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | NC_bounded_le (n1a, n1b), NC_bounded_le (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
+  | NC_bounded_lt (n1a, n1b), NC_bounded_lt (n2a, n2b) -> nexp_identical n1a n2a && nexp_identical n1b n2b
   | NC_or (nc1a, nc1b), NC_or (nc2a, nc2b) -> nc_identical nc1a nc2a && nc_identical nc1b nc2b
   | NC_and (nc1a, nc1b), NC_and (nc2a, nc2b) -> nc_identical nc1a nc2a && nc_identical nc1b nc2b
   | NC_true, NC_true -> true
@@ -1581,42 +1597,46 @@ let rec nc_identical (NC_aux (nc1, _)) (NC_aux (nc2, _)) =
   | NC_set (kid1, ints1), NC_set (kid2, ints2) when List.length ints1 = List.length ints2 ->
      Kid.compare kid1 kid2 = 0 && List.for_all2 (fun i1 i2 -> i1 = i2) ints1 ints2
   | NC_var kid1, NC_var kid2 -> Kid.compare kid1 kid2 = 0
+  | NC_app (id1, args1), NC_app (id2, args2) when List.length args1 = List.length args2 ->
+     Id.compare id1 id2 = 0 && List.for_all2 typ_arg_identical args1 args2
   | _, _ -> false
 
-let typ_identical env typ1 typ2 =
-  let rec typ_identical' (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
-    match typ1, typ2 with
-    | Typ_id v1, Typ_id v2 -> Id.compare v1 v2 = 0
-    | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2 = 0
-    | Typ_fn (arg_typs1, ret_typ1, eff1), Typ_fn (arg_typs2, ret_typ2, eff2)
-         when List.length arg_typs1 = List.length arg_typs2 ->
-       List.for_all2 typ_identical' arg_typs1 arg_typs2
-       && typ_identical' ret_typ1 ret_typ2
-       && strip_effect eff1 = strip_effect eff2
-    | Typ_bidir (typ1, typ2), Typ_bidir (typ3, typ4) ->
-       typ_identical' typ1 typ3
-       && typ_identical' typ2 typ4
-    | Typ_tup typs1, Typ_tup typs2 ->
-       begin
-         try List.for_all2 typ_identical' typs1 typs2 with
-         | Invalid_argument _ -> false
-       end
-    | Typ_app (f1, args1), Typ_app (f2, args2) ->
-       begin
-         try Id.compare f1 f2 = 0 && List.for_all2 typ_arg_identical args1 args2 with
-         | Invalid_argument _ -> false
-       end
-    | Typ_exist (kopts1, nc1, typ1), Typ_exist (kopts2, nc2, typ2) when List.length kopts1 = List.length kopts2 ->
-       List.for_all2 (fun k1 k2 -> KOpt.compare k1 k2 = 0) kopts1 kopts2 && nc_identical nc1 nc2 && typ_identical' typ1 typ2
-    | _, _ -> false
-  and typ_arg_identical (A_aux (arg1, _)) (A_aux (arg2, _)) =
-    match arg1, arg2 with
-    | A_nexp n1, A_nexp n2 -> nexp_identical n1 n2
-    | A_typ typ1, A_typ typ2 -> typ_identical' typ1 typ2
-    | A_order ord1, A_order ord2 -> ord_identical ord1 ord2
-    | _, _ -> false
-  in
-  typ_identical' (Env.expand_synonyms env typ1) (Env.expand_synonyms env typ2)
+and typ_arg_identical (A_aux (arg1, _)) (A_aux (arg2, _)) =
+  match arg1, arg2 with
+  | A_nexp n1, A_nexp n2 -> nexp_identical n1 n2
+  | A_typ typ1, A_typ typ2 -> typ_identical typ1 typ2
+  | A_order ord1, A_order ord2 -> ord_identical ord1 ord2
+  | A_bool nc1, A_bool nc2 -> nc_identical nc1 nc2
+  | _, _ -> false
+
+and typ_identical (Typ_aux (typ1, _)) (Typ_aux (typ2, _)) =
+  match typ1, typ2 with
+  | Typ_id v1, Typ_id v2 -> Id.compare v1 v2 = 0
+  | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2 = 0
+  | Typ_fn (arg_typs1, ret_typ1, eff1), Typ_fn (arg_typs2, ret_typ2, eff2)
+       when List.length arg_typs1 = List.length arg_typs2 ->
+     List.for_all2 typ_identical arg_typs1 arg_typs2
+     && typ_identical ret_typ1 ret_typ2
+     && strip_effect eff1 = strip_effect eff2
+  | Typ_bidir (typ1, typ2), Typ_bidir (typ3, typ4) ->
+     typ_identical typ1 typ3
+     && typ_identical typ2 typ4
+  | Typ_tup typs1, Typ_tup typs2 ->
+     begin
+       try List.for_all2 typ_identical typs1 typs2 with
+       | Invalid_argument _ -> false
+     end
+  | Typ_app (f1, args1), Typ_app (f2, args2) ->
+     begin
+       try Id.compare f1 f2 = 0 && List.for_all2 typ_arg_identical args1 args2 with
+       | Invalid_argument _ -> false
+     end
+  | Typ_exist (kopts1, nc1, typ1), Typ_exist (kopts2, nc2, typ2) when List.length kopts1 = List.length kopts2 ->
+     List.for_all2 (fun k1 k2 -> KOpt.compare k1 k2 = 0) kopts1 kopts2 && nc_identical nc1 nc2 && typ_identical typ1 typ2
+  | _, _ -> false
+
+let expanded_typ_identical env typ1 typ2 =
+  typ_identical (Env.expand_synonyms env typ1) (Env.expand_synonyms env typ2)
 
 exception Unification_error of l * string;;
 
@@ -1712,7 +1732,11 @@ and unify_constraint l env goals (NC_aux (aux1, _) as nc1) (NC_aux (aux2, _) as 
      merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_bounded_ge (n1a, n2a), NC_bounded_ge (n1b, n2b) ->
      merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+  | NC_bounded_gt (n1a, n2a), NC_bounded_gt (n1b, n2b) ->
+     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_bounded_le (n1a, n2a), NC_bounded_le (n1b, n2b) ->
+     merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
+  | NC_bounded_lt (n1a, n2a), NC_bounded_lt (n1b, n2b) ->
      merge_uvars l (unify_nexp l env goals n1a n1b) (unify_nexp l env goals n2a n2b)
   | NC_true, NC_true -> KBindings.empty
   | NC_false, NC_false -> KBindings.empty
@@ -1884,7 +1908,9 @@ and ambiguous_nc_vars (NC_aux (aux, _)) =
   match aux with
   | NC_and (nc1, nc2) -> KidSet.union (tyvars_of_constraint nc1) (tyvars_of_constraint nc2)
   | NC_bounded_le (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
+  | NC_bounded_lt (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
   | NC_bounded_ge (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
+  | NC_bounded_gt (n1, n2) -> KidSet.union (tyvars_of_nexp n1) (tyvars_of_nexp n2)
   | NC_equal (n1, n2) | NC_not_equal (n1, n2) ->
      KidSet.union (ambiguous_nexp_vars n1) (ambiguous_nexp_vars n2)
   | _ -> KidSet.empty
@@ -1968,7 +1994,9 @@ and kid_order_constraint kind_map (NC_aux (aux, l) as nc) =
      ([mk_kopt (unaux_kind (KBindings.find kid kind_map)) kid], KBindings.remove kid kind_map)
   | NC_var _ | NC_set _ -> ([], kind_map)
   | NC_true | NC_false -> ([], kind_map)
-  | NC_equal (n1, n2) | NC_not_equal (n1, n2) | NC_bounded_le (n1, n2) | NC_bounded_ge (n1, n2) ->
+  | NC_equal (n1, n2) | NC_not_equal (n1, n2)
+  | NC_bounded_le (n1, n2) | NC_bounded_ge (n1, n2)
+  | NC_bounded_lt (n1, n2) | NC_bounded_gt (n1, n2) ->
      let ord1, kind_map = kid_order_nexp kind_map n1 in
      let ord2, kind_map = kid_order_nexp kind_map n2 in
      (ord1 @ ord2, kind_map)
@@ -2017,7 +2045,7 @@ let rec alpha_equivalent env typ1 typ2 =
   counter := 0;
   let typ2 = relabel (Env.expand_synonyms env typ2) in
   typ_debug (lazy ("Alpha equivalence for " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2));
-  if typ_identical env typ1 typ2
+  if typ_identical typ1 typ2
   then (typ_debug (lazy "alpha-equivalent"); true)
   else (typ_debug (lazy "Not alpha-equivalent"); false)
 
@@ -2257,7 +2285,9 @@ and rewrite_nc_aux l env =
   let mk_exp exp = mk_exp ~loc:l exp in
   function
   | NC_bounded_ge (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">=", mk_exp (E_sizeof n2))
+  | NC_bounded_gt (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id ">", mk_exp (E_sizeof n2))
   | NC_bounded_le (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "<=", mk_exp (E_sizeof n2))
+  | NC_bounded_lt (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "<", mk_exp (E_sizeof n2))
   | NC_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "==", mk_exp (E_sizeof n2))
   | NC_not_equal (n1, n2) -> E_app_infix (mk_exp (E_sizeof n1), mk_id "!=", mk_exp (E_sizeof n2))
   | NC_and (nc1, nc2) -> E_app_infix (rewrite_nc env nc1, mk_id "&", rewrite_nc env nc2)
@@ -4864,7 +4894,7 @@ let mk_val_spec env typq typ id =
 let check_tannotopt env typq ret_typ = function
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
   | Typ_annot_opt_aux (Typ_annot_opt_some (annot_typq, annot_ret_typ), l) ->
-     if typ_identical env ret_typ annot_ret_typ
+     if expanded_typ_identical env ret_typ annot_ret_typ
      then ()
      else typ_error env l (string_of_bind (typq, ret_typ) ^ " and " ^ string_of_bind (annot_typq, annot_ret_typ) ^ " do not match between function and val spec")
 
@@ -4954,7 +4984,7 @@ let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md
   begin match tannot_opt with
   | Typ_annot_opt_aux (Typ_annot_opt_none, _) -> ()
   | Typ_annot_opt_aux (Typ_annot_opt_some (annot_typq, annot_typ), l) ->
-     if typ_identical env typ annot_typ then ()
+     if expanded_typ_identical env typ annot_typ then ()
      else typ_error env l (string_of_bind (quant, typ) ^ " and " ^ string_of_bind (annot_typq, annot_typ) ^ " do not match between mapping and val spec")
   end;
   typ_debug (lazy ("Checking mapdef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
@@ -4973,6 +5003,23 @@ let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md
   else
     typ_error env l ("Mapping not pure (or escape only): " ^ string_of_effect eff ^ " found")
 
+let rec warn_if_unsafe_cast l env = function
+  | Typ_aux (Typ_fn (arg_typs, ret_typ, _), _) ->
+     List.iter (warn_if_unsafe_cast l env) arg_typs;
+     warn_if_unsafe_cast l env ret_typ
+  | Typ_aux (Typ_id id, _) when string_of_id id = "bool" -> ()
+  | Typ_aux (Typ_id id, _) when Env.is_enum id env -> ()
+  | Typ_aux (Typ_id id, _) when string_of_id id = "string" ->
+     Reporting.warn "Unsafe string cast" l
+       "A cast X -> string is unsafe, as it can cause 'x : X == y : X' to be checked as 'eq_string(cast(x), cast(y))'"
+  (* If we have a cast to an existential, it's probably done on
+     purpose and we want to avoid false positives for warnings. *)
+  | Typ_aux (Typ_exist _, _) -> ()
+  | typ when is_bitvector_typ typ -> ()
+  | typ when is_bit_typ typ -> ()
+  | typ ->
+     Reporting.warn ("Potentially unsafe cast involving " ^ string_of_typ typ) l ""
+     
 (* Checking a val spec simply adds the type as a binding in the
    context. We have to destructure the various kinds of val specs, but
    the difference is irrelevant for the typechecker. *)
@@ -4981,8 +5028,9 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
   let vs, id, typq, typ, env = match vs with
     | VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l) as typschm, id, exts, is_cast) ->
        typ_print (lazy (Util.("Check val spec " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
+       wf_typschm env typschm;
        let env = Env.add_extern id exts env in
-       let env = if is_cast then Env.add_cast id env else env in
+       let env = if is_cast then (warn_if_unsafe_cast l env (Env.expand_synonyms env typ); Env.add_cast id env) else env in
        let typq', typ' = expand_bind_synonyms ts_l env (typq, typ) in
        (* !opt_expand_valspec controls whether the actual valspec in
           the AST is expanded, the val_spec type stored in the

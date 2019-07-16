@@ -95,7 +95,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
     | _ -> string ("NEXP(" ^ string_of_nexp nexp ^ ")")
   in
   let rec fromValueTypArg (A_aux (a_aux, _)) = match a_aux with
-    | A_typ typ -> fromValueTyp typ ""
+    | A_typ typ -> parens ((string "fun v -> ") ^^ parens (fromValueTyp typ "v"))
     | A_nexp nexp -> fromValueNexp nexp
     | A_order order -> string ("Order_" ^ (string_of_order order))
     | A_bool _ -> parens (string "boolFromInterpValue")
@@ -250,7 +250,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
     | _ -> string ("NEXP(" ^ string_of_nexp nexp ^ ")")
   in
   let rec toValueTypArg (A_aux (a_aux, _)) = match a_aux with
-    | A_typ typ -> toValueTyp typ ""
+    | A_typ typ -> parens ((string "fun v -> ") ^^ parens (toValueTyp typ "v"))
     | A_nexp nexp -> toValueNexp nexp
     | A_order order -> string ("Order_" ^ (string_of_order order))
     | A_bool _ -> parens (string "boolToInterpValue") 

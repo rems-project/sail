@@ -223,6 +223,9 @@
   "MRS" , MRS {txt="MRS"} ;
   "MSR" , MSR {txt="MSR"} ;
 
+  "DC" , DC {txt="DC"} ;
+  "IC" , IC {txt="IC"} ;
+
 
 (*** instructions/operands ***)
 
@@ -307,3 +310,17 @@
   "SPSel"   , PSTATEFIELD (PSTATEField_SP) ;
   "DAIFSet" , PSTATEFIELD (PSTATEField_DAIFSet) ;
   "DAIFClr" , PSTATEFIELD (PSTATEField_DAIFClr) ;
+
+  "IVAC"  , DCOP (IVAC) ;
+  "ISW"   , DCOP (ISW) ;
+  "CSW"   , DCOP (CSW) ;
+  "CISW"  , DCOP (CISW) ;
+  "ZVA"   , DCOP (ZVA) ;
+  "CVAC"  , DCOP (CVAC) ;
+  "CVAU"  , DCOP (CVAU) ;
+  "CIVAC" , DCOP (CIVAC) ;
+
+  "IALLUIS" , ICOP (IALLUIS) ;
+  "IALLU"   , ICOP (IALLU) ;
+  "IVAU"    , ICOP (IVAU) ;
+

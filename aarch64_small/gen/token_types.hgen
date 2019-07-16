@@ -69,6 +69,8 @@ type token_RET = {txt : string}
 type token_TST = {txt : string}
 type token_MRS = {txt : string}
 type token_MSR = {txt : string}
+type token_DC  = {txt : string}
+type token_IC  = {txt : string}
 
 (*** instructions/operands ***)
 
@@ -83,3 +85,5 @@ type token_BARROP = {domain : mBReqDomain; types : mBReqTypes}
 type token_PRFOP = inst_reg (* this is an int that is encoded in a reg field *)
 type token_SYSREG = {sys_op0 : uinteger; sys_op1 : uinteger; sys_op2 : uinteger; sys_crn : uinteger; sys_crm : uinteger}
 type token_PSTATEFIELD = pSTATEField
+type token_DCOP = dCOp
+type token_ICOP = iCOp
