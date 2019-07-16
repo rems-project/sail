@@ -15,9 +15,9 @@ val "dec_str" : int -> string
 
 val "hex_str" : int -> string
 
-val bits_str = "string_of_bits" : forall 'n. vector('n, dec, bit) -> string
+val bits_str = "string_of_bits" : forall 'n. bitvector('n, dec) -> string
 
-val concat_str_bits : forall 'n. (string, vector('n, dec, bit)) -> string
+val concat_str_bits : forall 'n. (string, bitvector('n, dec)) -> string
 
 function concat_str_bits(str, x) = concat_str(str, bits_str(x))
 

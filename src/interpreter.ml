@@ -725,13 +725,20 @@ and pattern_match env (P_aux (p_aux, (l, _)) as pat) value =
         recursive call that has an empty_tannot we must not use the
         annotation in the whole vector_concat pattern. *)
      let open Type_check in
+     let vector_concat_match n =
+       let init, rest = Util.take (Big_int.to_int n) (coerce_gv value), Util.drop (Big_int.to_int n) (coerce_gv value) in
+       let init_match, init_bind = pattern_match env pat (V_vector init) in
+       let rest_match, rest_bind = pattern_match env (P_aux (P_vector_concat pats, (l, empty_tannot))) (V_vector rest) in
+       init_match && rest_match, Bindings.merge combine init_bind rest_bind
+     in
      begin match destruct_vector (env_of_pat pat) (typ_of_pat pat) with
-     | Some (Nexp_aux (Nexp_constant n, _), _, _) ->
-        let init, rest = Util.take (Big_int.to_int n) (coerce_gv value), Util.drop (Big_int.to_int n) (coerce_gv value) in
-        let init_match, init_bind = pattern_match env pat (V_vector init) in
-        let rest_match, rest_bind = pattern_match env (P_aux (P_vector_concat pats, (l, empty_tannot))) (V_vector rest) in
-        init_match && rest_match, Bindings.merge combine init_bind rest_bind
-     | _ -> failwith ("Bad vector annotation " ^ string_of_typ (Type_check.typ_of_pat pat))
+     | Some (Nexp_aux (Nexp_constant n, _), _, _) -> vector_concat_match n
+     | None ->
+        begin match destruct_bitvector (env_of_pat pat) (typ_of_pat pat) with
+        | Some (Nexp_aux (Nexp_constant n, _), _) -> vector_concat_match n
+        | _ -> failwith ("Bad bitvector annotation for bitvector concatenation pattern " ^ string_of_typ (Type_check.typ_of_pat pat))
+        end
+     | _ -> failwith ("Bad vector annotation for vector concatentation pattern " ^ string_of_typ (Type_check.typ_of_pat pat))
      end
   | P_tup [pat] -> pattern_match env pat value
   | P_tup pats | P_list pats ->

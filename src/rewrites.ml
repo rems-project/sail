@@ -2099,7 +2099,7 @@ let rewrite_vector_concat_assignments env defs =
          let (_, ord, etyp) = vector_typ_args_of typ in
          let len (LEXP_aux (le, lannot)) =
            let ltyp = Env.base_typ_of env (typ_of_annot lannot) in
-           if is_vector_typ ltyp then
+           if is_vector_typ ltyp || is_bitvector_typ ltyp then
              let (len, _, _) = vector_typ_args_of ltyp in
              match nexp_simp len with
              | Nexp_aux (Nexp_constant len, _) -> len

@@ -1,8 +1,7 @@
+default Order dec
+
 let b1 = bitone
 let b0 = bitzero
-
-
-/* default Order dec */
 
 val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 /* sneaky deref with no effect necessary for bitfield writes */
@@ -12,8 +11,6 @@ val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
    we get infinite loops caused by interaction with bool/bit casts */
 /* val eq_bit2 = "eq_bit" : (bit, bit) -> bool */
 /* overload operator == = {eq_bit2} */
-
-
 
 $include <smt.sail>
 $include <flow.sail>

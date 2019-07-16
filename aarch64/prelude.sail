@@ -2,9 +2,8 @@ default Order dec
 
 $include <smt.sail>
 $include <arith.sail>
-// $include <trace.sail>
 
-type bits ('n : Int) = vector('n, dec, bit)
+type bits ('n : Int) = bitvector('n, dec)
 
 val eq_vec = {ocaml: "eq_list", interpreter: "eq_list", lem: "eq_vec", c: "eq_bits", coq: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 

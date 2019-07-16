@@ -483,6 +483,10 @@ let value_undefined_vector = function
   | [v1; v2] -> V_vector (Sail_lib.undefined_vector (coerce_int v1, v2))
   | _ -> failwith "value undefined_vector"
 
+let value_undefined_bitvector = function
+  | [v] -> V_vector (Sail_lib.undefined_vector (coerce_int v, V_bit (Sail_lib.B0)))
+  | _ -> failwith "value undefined_bitvector"
+       
 let value_read_ram = function
   | [v1; v2; v3; v4] -> mk_vector (Sail_lib.read_ram (coerce_int v1, coerce_int v2, coerce_bv v3, coerce_bv v4))
   | _ -> failwith "value read_ram"
@@ -731,6 +735,7 @@ let primops =
       ("undefined_int", fun _ -> V_int Big_int.zero);
       ("undefined_nat", fun _ -> V_int Big_int.zero);
       ("undefined_bool", fun _ -> V_bool false);
+      ("undefined_bitvector", value_undefined_bitvector);
       ("undefined_vector", value_undefined_vector);
       ("undefined_string", fun _ -> V_string "");
       ("internal_pick", value_internal_pick);
