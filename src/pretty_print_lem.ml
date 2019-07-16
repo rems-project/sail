@@ -364,6 +364,21 @@ let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
 
 let replace_typ_size ctxt env (Typ_aux (t,a)) =
   match t with
+  | Typ_app (Id_aux (Id "bitvector",_) as id, [A_aux (A_nexp size,_);ord]) ->
+     begin
+       let mk_typ nexp =
+         Some (Typ_aux (Typ_app (id, [A_aux (A_nexp nexp,Parse_ast.Unknown);ord]),a))
+       in
+       match Type_check.solve_unique env size with
+       | Some n -> mk_typ (nconstant n)
+       | None ->
+          let is_equal nexp =
+            prove __POS__ env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
+          in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
+          | nexp -> mk_typ nexp
+          | exception Not_found -> None
+     end
+       (*
   | Typ_app (Id_aux (Id "vector",_) as id, [A_aux (A_nexp size,_);ord;typ']) ->
      begin
        let mk_typ nexp =
@@ -378,6 +393,7 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
           | nexp -> mk_typ nexp
           | exception Not_found -> None
      end
+        *)
   | _ -> None
 
 let make_printable_type ctxt env typ =
@@ -454,7 +470,7 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
     | Typ_fn (ts,t,_) -> List.fold_left NexpSet.union (typeclass_nexps t) (List.map typeclass_nexps ts)
     | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
     | Typ_app (Id_aux (Id "bitvector",_),
-               [A_aux (A_nexp size_nexp,_)])
+               [A_aux (A_nexp size_nexp,_); _])
     | Typ_app (Id_aux (Id "itself",_),
                [A_aux (A_nexp size_nexp,_)]) ->
        let size_nexp = nexp_simp size_nexp in
@@ -1467,7 +1483,7 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
     (* TODO Assumes normalised, decreasing bitvector slices; however, since
        start indices or indexing order do not appear in Lem type annotations,
        this does not matter. *)
-    let ftyp = vector_typ (nconstant fsize) dec_ord bit_typ in
+    let ftyp = bitvector_typ (nconstant fsize) dec_ord in
     let reftyp =
       mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
         [mk_typ_arg (A_typ (mk_id_typ (mk_id tname)));

@@ -2,7 +2,7 @@ $include <smt.sail>
 $include <flow.sail>
 $include <arith.sail>
 default Order dec
-type bits ('n : Int) = vector('n, dec, bit)
+type bits ('n : Int) = bitvector('n, dec)
 val operator & = "and_bool" : (bool, bool) -> bool
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 overload operator == = {eq_int, eq_vec}
@@ -10,8 +10,8 @@ val mult_int = {ocaml: "mult", lem: "integerMult"} : (int, int) -> int
 overload operator * = {mult_range, mult_int, mult_real}
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 overload operator < = {lt_atom, lt_int}
-val "extz_vec" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
-val extzv : forall 'n 'm. (implicit('m), vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+val "extz_vec" : forall 'n 'm. (atom('m),bitvector('n, dec)) -> bitvector('m, dec) effect pure
+val extzv : forall 'n 'm. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
 function extzv(m,v) = extz_vec(m,v)
 val bitvector_concat = {ocaml: "append", lem: "concat_vec", c: "append"} : forall ('n : Int) ('m : Int).
   (bits('n), bits('m)) -> bits('n + 'm)

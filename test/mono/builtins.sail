@@ -1,9 +1,10 @@
+default Order dec
+
 $include <smt.sail>
 $include <arith.sail>
 $include <flow.sail>
 $include <vector_dec.sail>
 
-default Order dec
 val neq_vec = {lem: "neq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 function neq_vec (x, y) = not_bool(x == y)
 overload operator != = {neq_vec}

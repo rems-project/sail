@@ -1,5 +1,5 @@
 default Order dec
-type bits ('n : Int) = vector('n, dec, bit)
+type bits ('n : Int) = bitvector('n, dec)
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
 overload operator == = {eq_int, eq_vec}
