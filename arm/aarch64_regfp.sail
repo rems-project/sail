@@ -221,22 +221,25 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) effect pure initia
       }
     case (ClearExclusiveMonitor(imm)) -> () (*ClearExclusiveLocal*)
     case (Barrier(op,domain,types)) -> {
+      let (dom, typ) =
+        (switch domain {
+          case MBReqDomain_Nonshareable   -> A64_NonShare
+          case MBReqDomain_InnerShareable -> A64_InnerShare
+          case MBReqDomain_OuterShareable -> A64_OuterShare
+          case MBReqDomain_FullSystem     -> A64_FullShare
+        },
+        switch types {
+          case MBReqTypes_Reads  -> A64_barrier_LD
+          case MBReqTypes_Writes -> A64_barrier_ST
+          case MBReqTypes_All    -> A64_barrier_all
+        })
+      in {
       ik := switch op {
-        case MemBarrierOp_DSB ->
-          switch types {
-            case MBReqTypes_Reads  -> IK_barrier(Barrier_DSB_LD)
-            case MBReqTypes_Writes -> IK_barrier(Barrier_DSB_ST)
-            case MBReqTypes_All    -> IK_barrier(Barrier_DSB)
-          }
-        case MemBarrierOp_DMB -> 
-          switch types {
-            case MBReqTypes_Reads  -> IK_barrier(Barrier_DMB_LD)
-            case MBReqTypes_Writes -> IK_barrier(Barrier_DMB_ST)
-            case MBReqTypes_All    -> IK_barrier(Barrier_DMB)
-          }
-        case MemBarrierOp_ISB ->
-          IK_barrier(Barrier_ISB)
-      };
+        case MemBarrierOp_DSB -> IK_barrier(Barrier_DSB (dom, typ))
+        case MemBarrierOp_DMB -> IK_barrier(Barrier_DMB (dom, typ))
+        case MemBarrierOp_ISB -> IK_barrier(Barrier_ISB)
+      }
+      }
     }
 
     case (DataCache(t,dc_op)) -> {

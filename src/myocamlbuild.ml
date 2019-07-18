@@ -73,6 +73,7 @@ let lem = lem_dir / "lem" ;;
 
 (* All -wl ignores should be removed if you want to see the pattern compilation, exhaustive, and unused var warnings *)
 let lem_opts = [A "-lib"; P "../lem_interp";
+                A "-lib"; P "../gen_lib";
                 A "-wl_pat_comp"; P "ign"; 
                 A "-wl_pat_exh";  P "ign"; 
                 A "-wl_pat_fail"; P "ign";

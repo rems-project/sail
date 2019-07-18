@@ -468,7 +468,7 @@ let instr_parm_to_string (name, typ, value) =
   match typ with
     | Other -> "Unrepresentable external value"
     | _ -> let intern_v = (Interp_inter_imp.intern_ifield_value D_increasing value) in
-	      match Interp_lib.to_num Interp_lib.Unsigned intern_v with
+	      match Interp_lib.value_to_num Interp_lib.Unsigned intern_v with
 		| Interp_ast.V_lit (L_aux(L_num n, _)) -> to_string n
 		| _ -> ifield_to_string value
 

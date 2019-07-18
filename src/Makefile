@@ -79,9 +79,9 @@ sail.native: sail
 sail.byte: 
 	ocamlbuild -use-ocamlfind -cflag -g sail.byte
 
-interpreter: 
-	ocamlbuild -use-ocamlfind lem_interp/extract.cmxa
-	ocamlbuild -use-ocamlfind lem_interp/extract.cma
+interpreter:
+	ocamlbuild -I gen_lib -use-ocamlfind lem_interp/extract.cmxa
+	ocamlbuild -I gen_lib -use-ocamlfind lem_interp/extract.cma
 
 test: sail interpreter
 	ocamlbuild -use-ocamlfind test/run_tests.native

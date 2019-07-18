@@ -507,37 +507,73 @@ function rec forall Nat 'W, 'W IN {8, 16, 32, 64, 128}. bit['W] BigEndianReverse
 
 (** FUNCTION:shared/functions/memory/DataMemoryBarrier *)
 
-val extern unit -> unit effect {barr} DataMemoryBarrier_Reads
-val extern unit -> unit effect {barr} DataMemoryBarrier_Writes
-val extern unit -> unit effect {barr} DataMemoryBarrier_All
+val extern unit -> unit effect {barr} DataMemoryBarrier_NonShReads
+val extern unit -> unit effect {barr} DataMemoryBarrier_NonShWrites
+val extern unit -> unit effect {barr} DataMemoryBarrier_NonShAll
+val extern unit -> unit effect {barr} DataMemoryBarrier_InnerShReads
+val extern unit -> unit effect {barr} DataMemoryBarrier_InnerShWrites
+val extern unit -> unit effect {barr} DataMemoryBarrier_InnerShAll
+val extern unit -> unit effect {barr} DataMemoryBarrier_OuterShReads
+val extern unit -> unit effect {barr} DataMemoryBarrier_OuterShWrites
+val extern unit -> unit effect {barr} DataMemoryBarrier_OuterShAll
+val extern unit -> unit effect {barr} DataMemoryBarrier_FullShReads
+val extern unit -> unit effect {barr} DataMemoryBarrier_FullShWrites
+val extern unit -> unit effect {barr} DataMemoryBarrier_FullShAll
 
 function unit effect {barr} DataMemoryBarrier((MBReqDomain) domain, (MBReqTypes) types) =
 {
-  if domain != MBReqDomain_FullSystem & domain != MBReqDomain_InnerShareable then
-    not_implemented("DataMemoryBarrier: not MBReqDomain_FullSystem or _InnerShareable");
+  switch (domain, types) {
+    case (MBReqDomain_Nonshareable, MBReqTypes_Reads)  -> DataMemoryBarrier_NonShReads()
+    case (MBReqDomain_Nonshareable, MBReqTypes_Writes) -> DataMemoryBarrier_NonShWrites()
+    case (MBReqDomain_Nonshareable, MBReqTypes_All)    -> DataMemoryBarrier_NonShAll()
 
-  switch types {
-    case MBReqTypes_Reads  -> DataMemoryBarrier_Reads()
-    case MBReqTypes_Writes -> DataMemoryBarrier_Writes()
-    case MBReqTypes_All    -> DataMemoryBarrier_All()
+    case (MBReqDomain_InnerShareable, MBReqTypes_Reads)  -> DataMemoryBarrier_InnerShReads()
+    case (MBReqDomain_InnerShareable, MBReqTypes_Writes) -> DataMemoryBarrier_InnerShWrites()
+    case (MBReqDomain_InnerShareable, MBReqTypes_All)    -> DataMemoryBarrier_InnerShAll()
+
+    case (MBReqDomain_OuterShareable, MBReqTypes_Reads)  -> DataMemoryBarrier_OuterShReads()
+    case (MBReqDomain_OuterShareable, MBReqTypes_Writes) -> DataMemoryBarrier_OuterShWrites()
+    case (MBReqDomain_OuterShareable, MBReqTypes_All)    -> DataMemoryBarrier_OuterShAll()
+
+    case (MBReqDomain_FullSystem, MBReqTypes_Reads)  -> DataMemoryBarrier_FullShReads()
+    case (MBReqDomain_FullSystem, MBReqTypes_Writes) -> DataMemoryBarrier_FullShWrites()
+    case (MBReqDomain_FullSystem, MBReqTypes_All)    -> DataMemoryBarrier_FullShAll()
   };
 }
 
 (** FUNCTION:shared/functions/memory/DataSynchronizationBarrier *)
 
-val extern unit -> unit effect {barr} DataSynchronizationBarrier_Reads
-val extern unit -> unit effect {barr} DataSynchronizationBarrier_Writes
-val extern unit -> unit effect {barr} DataSynchronizationBarrier_All
+val extern unit -> unit effect {barr} DataSynchronizationBarrier_NonShReads
+val extern unit -> unit effect {barr} DataSynchronizationBarrier_NonShWrites
+val extern unit -> unit effect {barr} DataSynchronizationBarrier_NonShAll
+val extern unit -> unit effect {barr} DataSynchronizationBarrier_InnerShReads
+val extern unit -> unit effect {barr} DataSynchronizationBarrier_InnerShWrites
+val extern unit -> unit effect {barr} DataSynchronizationBarrier_InnerShAll
+val extern unit -> unit effect {barr} DataSynchronizationBarrier_OuterShReads
+val extern unit -> unit effect {barr} DataSynchronizationBarrier_OuterShWrites
+val extern unit -> unit effect {barr} DataSynchronizationBarrier_OuterShAll
+val extern unit -> unit effect {barr} DataSynchronizationBarrier_FullShReads
+val extern unit -> unit effect {barr} DataSynchronizationBarrier_FullShWrites
+val extern unit -> unit effect {barr} DataSynchronizationBarrier_FullShAll
 
 function unit effect {barr} DataSynchronizationBarrier((MBReqDomain) domain, (MBReqTypes) types) =
 {
-  if domain != MBReqDomain_FullSystem then
-    not_implemented("DataSynchronizationBarrier: not MBReqDomain_FullSystem");
+  switch (domain, types) {
+    case (MBReqDomain_Nonshareable, MBReqTypes_Reads)  -> DataSynchronizationBarrier_NonShReads()
+    case (MBReqDomain_Nonshareable, MBReqTypes_Writes) -> DataSynchronizationBarrier_NonShWrites()
+    case (MBReqDomain_Nonshareable, MBReqTypes_All)    -> DataSynchronizationBarrier_NonShAll()
 
-  switch types {
-    case MBReqTypes_Reads  -> DataSynchronizationBarrier_Reads()
-    case MBReqTypes_Writes -> DataSynchronizationBarrier_Writes()
-    case MBReqTypes_All    -> DataSynchronizationBarrier_All()
+    case (MBReqDomain_InnerShareable, MBReqTypes_Reads)  -> DataSynchronizationBarrier_InnerShReads()
+    case (MBReqDomain_InnerShareable, MBReqTypes_Writes) -> DataSynchronizationBarrier_InnerShWrites()
+    case (MBReqDomain_InnerShareable, MBReqTypes_All)    -> DataSynchronizationBarrier_InnerShAll()
+
+    case (MBReqDomain_OuterShareable, MBReqTypes_Reads)  -> DataSynchronizationBarrier_OuterShReads()
+    case (MBReqDomain_OuterShareable, MBReqTypes_Writes) -> DataSynchronizationBarrier_OuterShWrites()
+    case (MBReqDomain_OuterShareable, MBReqTypes_All)    -> DataSynchronizationBarrier_OuterShAll()
+
+    case (MBReqDomain_FullSystem, MBReqTypes_Reads)  -> DataSynchronizationBarrier_FullShReads()
+    case (MBReqDomain_FullSystem, MBReqTypes_Writes) -> DataSynchronizationBarrier_FullShWrites()
+    case (MBReqDomain_FullSystem, MBReqTypes_All)    -> DataSynchronizationBarrier_FullShAll()
   };
 }
 

@@ -1,8 +1,8 @@
 open import Pervasives_extra
 open import Sail_impl_base
+open import Sail_values
 open import Interp
 open import Interp_ast
-open import Sail_values
 
 
 class (ToFromInterpValue 'a)
@@ -78,7 +78,7 @@ let rec fromInterpValueBitU v = match v with
   | Interp_ast.V_lit (L_aux (L_zero) _)  -> B0
   | Interp_ast.V_lit (L_aux (L_undef) _) -> BU
   | Interp_ast.V_lit (L_aux (L_true) _)   -> B1
-  | Interp_ast.V_lit (L_aux (L_false) _)  -> B0 
+  | Interp_ast.V_lit (L_aux (L_false) _)  -> B0
   | Interp_ast.V_tuple [v] -> fromInterpValueBitU v
   | v -> failwith ("fromInterpValue bitU: unexpected value. " ^
                      Interp.debug_print_value v)
@@ -472,45 +472,87 @@ instance (ToFromInterpValue write_kind)
   let fromInterpValue = write_kindFromInterpValue
 end
 
+let a64_barrier_domainToInterpValue = function
+  | A64_FullShare ->
+    V_ctor (Id_aux (Id "A64_FullShare") Unknown) (T_id "a64_barrier_domain") (C_Enum 0) (toInterpValue ())
+  | A64_InnerShare ->
+    V_ctor (Id_aux (Id "A64_InnerShare") Unknown) (T_id "a64_barrier_domain") (C_Enum 1) (toInterpValue ())
+  | A64_OuterShare ->
+    V_ctor (Id_aux (Id "A64_OuterShare") Unknown) (T_id "a64_barrier_domain") (C_Enum 2) (toInterpValue ())
+  | A64_NonShare ->
+    V_ctor (Id_aux (Id "A64_NonShare") Unknown) (T_id "a64_barrier_domain") (C_Enum 3) (toInterpValue ())
+end
+let rec a64_barrier_domainFromInterpValue v = match v with
+  | V_ctor (Id_aux (Id "A64_FullShare") _) _ _ v -> A64_FullShare
+  | V_ctor (Id_aux (Id "A64_InnerShare") _) _ _ v -> A64_InnerShare
+  | V_ctor (Id_aux (Id "A64_OuterShare") _) _ _ v -> A64_OuterShare
+  | V_ctor (Id_aux (Id "A64_NonShare") _) _ _ v -> A64_NonShare
+  | V_tuple [v] -> a64_barrier_domainFromInterpValue v
+  | v -> failwith ("fromInterpValue a64_barrier_domain: unexpected value. " ^
+                     Interp.debug_print_value v)
+  end
+instance (ToFromInterpValue a64_barrier_domain)
+  let toInterpValue = a64_barrier_domainToInterpValue
+  let fromInterpValue = a64_barrier_domainFromInterpValue
+end
+
+let a64_barrier_typeToInterpValue = function
+  | A64_barrier_all ->
+    V_ctor (Id_aux (Id "A64_barrier_all") Unknown) (T_id "a64_barrier_type") (C_Enum 0) (toInterpValue ())
+  | A64_barrier_LD ->
+    V_ctor (Id_aux (Id "A64_barrier_LD") Unknown) (T_id "a64_barrier_type") (C_Enum 1) (toInterpValue ())
+  | A64_barrier_ST ->
+    V_ctor (Id_aux (Id "A64_barrier_ST") Unknown) (T_id "a64_barrier_type") (C_Enum 2) (toInterpValue ())
+end
+let rec a64_barrier_typeFromInterpValue v = match v with
+  | V_ctor (Id_aux (Id "A64_barrier_all") _) _ _ v -> A64_barrier_all
+  | V_ctor (Id_aux (Id "A64_barrier_LD") _) _ _ v -> A64_barrier_LD
+  | V_ctor (Id_aux (Id "A64_barrier_ST") _) _ _ v -> A64_barrier_ST
+  | V_tuple [v] -> a64_barrier_typeFromInterpValue v
+  | v -> failwith ("fromInterpValue a64_barrier_type: unexpected value. " ^
+                     Interp.debug_print_value v)
+  end
+instance (ToFromInterpValue a64_barrier_type)
+  let toInterpValue = a64_barrier_typeToInterpValue
+  let fromInterpValue = a64_barrier_typeFromInterpValue
+end
 
 let barrier_kindToInterpValue = function
-  | Barrier_Sync -> V_ctor (Id_aux (Id "Barrier_Sync") Unknown) (T_id "barrier_kind") (C_Enum 0) (toInterpValue ())
-  | Barrier_LwSync -> V_ctor (Id_aux (Id "Barrier_LwSync") Unknown) (T_id "barrier_kind") (C_Enum 1) (toInterpValue ())
-  | Barrier_Eieio -> V_ctor (Id_aux (Id "Barrier_Eieio") Unknown) (T_id "barrier_kind") (C_Enum 2) (toInterpValue ())
-  | Barrier_Isync -> V_ctor (Id_aux (Id "Barrier_Isync") Unknown) (T_id "barrier_kind") (C_Enum 3) (toInterpValue ())
-  | Barrier_DMB -> V_ctor (Id_aux (Id "Barrier_DMB") Unknown) (T_id "barrier_kind") (C_Enum 4) (toInterpValue ())
-  | Barrier_DMB_ST -> V_ctor (Id_aux (Id "Barrier_DMB_ST") Unknown) (T_id "barrier_kind") (C_Enum 5) (toInterpValue ())
-  | Barrier_DMB_LD -> V_ctor (Id_aux (Id "Barrier_DMB_LD") Unknown) (T_id "barrier_kind") (C_Enum 6) (toInterpValue ())
-  | Barrier_DSB -> V_ctor (Id_aux (Id "Barrier_DSB") Unknown) (T_id "barrier_kind") (C_Enum 7) (toInterpValue ())
-  | Barrier_DSB_ST -> V_ctor (Id_aux (Id "Barrier_DSB_ST") Unknown) (T_id "barrier_kind") (C_Enum 8) (toInterpValue ())
-  | Barrier_DSB_LD -> V_ctor (Id_aux (Id "Barrier_DSB_LD") Unknown) (T_id "barrier_kind") (C_Enum 9) (toInterpValue ())
-  | Barrier_ISB -> V_ctor (Id_aux (Id "Barrier_ISB") Unknown) (T_id "barrier_kind") (C_Enum 10) (toInterpValue ())
-  | Barrier_TM_COMMIT -> V_ctor (Id_aux (Id "Barrier_TM_COMMIT") Unknown) (T_id "barrier_kind") (C_Enum 11) (toInterpValue ())
-  | Barrier_MIPS_SYNC -> V_ctor (Id_aux (Id "Barrier_MIPS_SYNC") Unknown) (T_id "barrier_kind") (C_Enum 12) (toInterpValue ())
-  | Barrier_RISCV_rw_rw -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_rw") Unknown) (T_id "barrier_kind") (C_Enum 13) (toInterpValue ())
-  | Barrier_RISCV_r_rw  -> V_ctor (Id_aux (Id "Barrier_RISCV_r_rw")  Unknown) (T_id "barrier_kind") (C_Enum 14) (toInterpValue ())
-  | Barrier_RISCV_w_rw  -> V_ctor (Id_aux (Id "Barrier_RISCV_w_rw")  Unknown) (T_id "barrier_kind") (C_Enum 15) (toInterpValue ())
-  | Barrier_RISCV_rw_r  -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_r")  Unknown) (T_id "barrier_kind") (C_Enum 16) (toInterpValue ())
-  | Barrier_RISCV_r_r   -> V_ctor (Id_aux (Id "Barrier_RISCV_r_r")   Unknown) (T_id "barrier_kind") (C_Enum 17) (toInterpValue ())
-  | Barrier_RISCV_w_r   -> V_ctor (Id_aux (Id "Barrier_RISCV_w_r")   Unknown) (T_id "barrier_kind") (C_Enum 18) (toInterpValue ())
-  | Barrier_RISCV_rw_w  -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_w")  Unknown) (T_id "barrier_kind") (C_Enum 19) (toInterpValue ())
-  | Barrier_RISCV_r_w   -> V_ctor (Id_aux (Id "Barrier_RISCV_r_w")   Unknown) (T_id "barrier_kind") (C_Enum 20) (toInterpValue ())
-  | Barrier_RISCV_w_w   -> V_ctor (Id_aux (Id "Barrier_RISCV_w_w")   Unknown) (T_id "barrier_kind") (C_Enum 21) (toInterpValue ())
-  | Barrier_RISCV_tso   -> V_ctor (Id_aux (Id "Barrier_RISCV_tso")   Unknown) (T_id "barrier_kind") (C_Enum 22) (toInterpValue ())
-  | Barrier_RISCV_i -> V_ctor (Id_aux (Id "Barrier_RISCV_i") Unknown) (T_id "barrier_kind") (C_Enum 23) (toInterpValue ())
-  | Barrier_x86_MFENCE -> V_ctor (Id_aux (Id "Barrier_x86_MFENCE") Unknown) (T_id "barrier_kind") (C_Enum 24) (toInterpValue ())
+  | Barrier_Sync -> V_ctor (Id_aux (Id "Barrier_Sync") Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_LwSync -> V_ctor (Id_aux (Id "Barrier_LwSync") Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_Eieio -> V_ctor (Id_aux (Id "Barrier_Eieio") Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_Isync -> V_ctor (Id_aux (Id "Barrier_Isync") Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_DMB (dom,typ) ->
+      V_ctor (Id_aux (Id "Barrier_DMB") Unknown) (T_id "barrier_kind") C_Union (toInterpValue (dom, typ))
+  | Barrier_DSB (dom,typ) ->
+      V_ctor (Id_aux (Id "Barrier_DSB") Unknown) (T_id "barrier_kind") C_Union (toInterpValue (dom, typ))
+  | Barrier_ISB -> V_ctor (Id_aux (Id "Barrier_ISB") Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_TM_COMMIT -> V_ctor (Id_aux (Id "Barrier_TM_COMMIT") Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_MIPS_SYNC -> V_ctor (Id_aux (Id "Barrier_MIPS_SYNC") Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_RISCV_rw_rw -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_rw") Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_RISCV_r_rw  -> V_ctor (Id_aux (Id "Barrier_RISCV_r_rw")  Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_RISCV_w_rw  -> V_ctor (Id_aux (Id "Barrier_RISCV_w_rw")  Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_RISCV_rw_r  -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_r")  Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_RISCV_r_r   -> V_ctor (Id_aux (Id "Barrier_RISCV_r_r")   Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_RISCV_w_r   -> V_ctor (Id_aux (Id "Barrier_RISCV_w_r")   Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_RISCV_rw_w  -> V_ctor (Id_aux (Id "Barrier_RISCV_rw_w")  Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_RISCV_r_w   -> V_ctor (Id_aux (Id "Barrier_RISCV_r_w")   Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_RISCV_w_w   -> V_ctor (Id_aux (Id "Barrier_RISCV_w_w")   Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_RISCV_tso   -> V_ctor (Id_aux (Id "Barrier_RISCV_tso")   Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_RISCV_i -> V_ctor (Id_aux (Id "Barrier_RISCV_i") Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
+  | Barrier_x86_MFENCE -> V_ctor (Id_aux (Id "Barrier_x86_MFENCE") Unknown) (T_id "barrier_kind") C_Union (toInterpValue ())
   end
 let rec barrier_kindFromInterpValue v = match v with
   | V_ctor (Id_aux (Id "Barrier_Sync") _) _ _ v -> Barrier_Sync
   | V_ctor (Id_aux (Id "Barrier_LwSync") _) _ _ v -> Barrier_LwSync
   | V_ctor (Id_aux (Id "Barrier_Eieio") _) _ _ v -> Barrier_Eieio
   | V_ctor (Id_aux (Id "Barrier_Isync") _) _ _ v -> Barrier_Isync
-  | V_ctor (Id_aux (Id "Barrier_DMB") _) _ _ v -> Barrier_DMB
-  | V_ctor (Id_aux (Id "Barrier_DMB_ST") _) _ _ v -> Barrier_DMB_ST
-  | V_ctor (Id_aux (Id "Barrier_DMB_LD") _) _ _ v -> Barrier_DMB_LD
-  | V_ctor (Id_aux (Id "Barrier_DSB") _) _ _ v -> Barrier_DSB
-  | V_ctor (Id_aux (Id "Barrier_DSB_ST") _) _ _ v -> Barrier_DSB_ST
-  | V_ctor (Id_aux (Id "Barrier_DSB_LD") _) _ _ v -> Barrier_DSB_LD
+  | V_ctor (Id_aux (Id "Barrier_DMB") _) _ _ v ->
+      let (dom, typ) = fromInterpValue v in
+      Barrier_DMB (dom,typ)
+  | V_ctor (Id_aux (Id "Barrier_DSB") _) _ _ v ->
+      let (dom, typ) = fromInterpValue v in
+      Barrier_DSB (dom,typ)
   | V_ctor (Id_aux (Id "Barrier_ISB") _) _ _ v -> Barrier_ISB
   | V_ctor (Id_aux (Id "Barrier_TM_COMMIT") _) _ _ v -> Barrier_TM_COMMIT
   | V_ctor (Id_aux (Id "Barrier_MIPS_SYNC") _) _ _ v -> Barrier_MIPS_SYNC

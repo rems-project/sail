@@ -35,20 +35,57 @@ let wMem_Val_ATOMIC (_,v) = write_mem_val v >>= fun b -> return (if b then B0 el
 
 let speculate_exclusive_success () = excl_result () >>= fun b -> return (if b then B1 else B0)
 
-val DataMemoryBarrier_Reads            : unit -> M unit
-val DataMemoryBarrier_Writes           : unit -> M unit
-val DataMemoryBarrier_All              : unit -> M unit
-val DataSynchronizationBarrier_Reads   : unit -> M unit
-val DataSynchronizationBarrier_Writes  : unit -> M unit
-val DataSynchronizationBarrier_All     : unit -> M unit
-val InstructionSynchronizationBarrier  : unit -> M unit
+val DataMemoryBarrier_NonShReads    : unit -> M unit
+val DataMemoryBarrier_NonShWrites   : unit -> M unit
+val DataMemoryBarrier_NonShAll      : unit -> M unit
+val DataMemoryBarrier_InnerShReads  : unit -> M unit
+val DataMemoryBarrier_InnerShWrites : unit -> M unit
+val DataMemoryBarrier_InnerShAll    : unit -> M unit
+val DataMemoryBarrier_OuterShReads  : unit -> M unit
+val DataMemoryBarrier_OuterShWrites : unit -> M unit
+val DataMemoryBarrier_OuterShAll    : unit -> M unit
+val DataMemoryBarrier_FullShReads   : unit -> M unit
+val DataMemoryBarrier_FullShWrites  : unit -> M unit
+val DataMemoryBarrier_FullShAll     : unit -> M unit
+let DataMemoryBarrier_NonShReads ()    = barrier (Barrier_DMB (A64_NonShare,   A64_barrier_LD))
+let DataMemoryBarrier_NonShWrites ()   = barrier (Barrier_DMB (A64_NonShare,   A64_barrier_ST))
+let DataMemoryBarrier_NonShAll ()      = barrier (Barrier_DMB (A64_NonShare,   A64_barrier_all))
+let DataMemoryBarrier_InnerShReads ()  = barrier (Barrier_DMB (A64_InnerShare, A64_barrier_LD))
+let DataMemoryBarrier_InnerShWrites () = barrier (Barrier_DMB (A64_InnerShare, A64_barrier_ST))
+let DataMemoryBarrier_InnerShAll ()    = barrier (Barrier_DMB (A64_InnerShare, A64_barrier_all))
+let DataMemoryBarrier_OuterShReads ()  = barrier (Barrier_DMB (A64_OuterShare, A64_barrier_LD))
+let DataMemoryBarrier_OuterShWrites () = barrier (Barrier_DMB (A64_OuterShare, A64_barrier_ST))
+let DataMemoryBarrier_OuterShAll ()    = barrier (Barrier_DMB (A64_OuterShare, A64_barrier_all))
+let DataMemoryBarrier_FullShReads ()   = barrier (Barrier_DMB (A64_FullShare,  A64_barrier_LD))
+let DataMemoryBarrier_FullShWrites ()  = barrier (Barrier_DMB (A64_FullShare,  A64_barrier_ST))
+let DataMemoryBarrier_FullShAll ()     = barrier (Barrier_DMB (A64_FullShare,  A64_barrier_all))
 
-let DataMemoryBarrier_Reads ()           = barrier Barrier_DMB_LD
-let DataMemoryBarrier_Writes ()          = barrier Barrier_DMB_ST
-let DataMemoryBarrier_All ()             = barrier Barrier_DMB
-let DataSynchronizationBarrier_Reads ()  = barrier Barrier_DSB_LD
-let DataSynchronizationBarrier_Writes () = barrier Barrier_DSB_ST
-let DataSynchronizationBarrier_All ()    = barrier Barrier_DSB
+val DataSynchronizationBarrier_NonShReads    : unit -> M unit
+val DataSynchronizationBarrier_NonShWrites   : unit -> M unit
+val DataSynchronizationBarrier_NonShAll      : unit -> M unit
+val DataSynchronizationBarrier_InnerShReads  : unit -> M unit
+val DataSynchronizationBarrier_InnerShWrites : unit -> M unit
+val DataSynchronizationBarrier_InnerShAll    : unit -> M unit
+val DataSynchronizationBarrier_OuterShReads  : unit -> M unit
+val DataSynchronizationBarrier_OuterShWrites : unit -> M unit
+val DataSynchronizationBarrier_OuterShAll    : unit -> M unit
+val DataSynchronizationBarrier_FullShReads   : unit -> M unit
+val DataSynchronizationBarrier_FullShWrites  : unit -> M unit
+val DataSynchronizationBarrier_FullShAll     : unit -> M unit
+let DataSynchronizationBarrier_NonShReads ()    = barrier (Barrier_DSB (A64_NonShare,   A64_barrier_LD))
+let DataSynchronizationBarrier_NonShWrites ()   = barrier (Barrier_DSB (A64_NonShare,   A64_barrier_ST))
+let DataSynchronizationBarrier_NonShAll ()      = barrier (Barrier_DSB (A64_NonShare,   A64_barrier_all))
+let DataSynchronizationBarrier_InnerShReads ()  = barrier (Barrier_DSB (A64_InnerShare, A64_barrier_LD))
+let DataSynchronizationBarrier_InnerShWrites () = barrier (Barrier_DSB (A64_InnerShare, A64_barrier_ST))
+let DataSynchronizationBarrier_InnerShAll ()    = barrier (Barrier_DSB (A64_InnerShare, A64_barrier_all))
+let DataSynchronizationBarrier_OuterShReads ()  = barrier (Barrier_DSB (A64_OuterShare, A64_barrier_LD))
+let DataSynchronizationBarrier_OuterShWrites () = barrier (Barrier_DSB (A64_OuterShare, A64_barrier_ST))
+let DataSynchronizationBarrier_OuterShAll ()    = barrier (Barrier_DSB (A64_OuterShare, A64_barrier_all))
+let DataSynchronizationBarrier_FullShReads ()   = barrier (Barrier_DSB (A64_FullShare,  A64_barrier_LD))
+let DataSynchronizationBarrier_FullShWrites ()  = barrier (Barrier_DSB (A64_FullShare,  A64_barrier_ST))
+let DataSynchronizationBarrier_FullShAll ()     = barrier (Barrier_DSB (A64_FullShare,  A64_barrier_all))
+
+val InstructionSynchronizationBarrier  : unit -> M unit
 let InstructionSynchronizationBarrier () = barrier Barrier_ISB
 
 val TMCommitEffect : unit -> M unit

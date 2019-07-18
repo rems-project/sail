@@ -61,17 +61,26 @@ typedef write_kind = enumerate {
   Write_X86_locked;
 }
 
-typedef barrier_kind = enumerate {
+typedef a64_barrier_domain = enumerate {
+  A64_FullShare;
+  A64_InnerShare;
+  A64_OuterShare;
+  A64_NonShare;
+}
+
+typedef a64_barrier_type = enumerate {
+  A64_barrier_all;
+  A64_barrier_LD;
+  A64_barrier_ST;
+}
+
+typedef barrier_kind = const union {
   Barrier_Sync;
   Barrier_LwSync;
   Barrier_Eieio;
   Barrier_Isync;
-  Barrier_DMB;
-  Barrier_DMB_ST;
-  Barrier_DMB_LD;
-  Barrier_DSB;
-  Barrier_DSB_ST;
-  Barrier_DSB_LD;
+  (a64_barrier_domain, a64_barrier_type) Barrier_DMB;
+  (a64_barrier_domain, a64_barrier_type) Barrier_DSB;
   Barrier_ISB;
   Barrier_MIPS_SYNC;
   Barrier_RISCV_rw_rw;

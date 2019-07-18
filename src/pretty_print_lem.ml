@@ -829,6 +829,8 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
      (match id with
       | Id_aux ((Id "read_kind"),_) -> (empty,empty)
       | Id_aux ((Id "write_kind"),_) -> (empty,empty)
+      | Id_aux ((Id "a64_barrier_domain"),_) -> (empty,empty)
+      | Id_aux ((Id "a64_barrier_type"),_) -> (empty,empty)
       | Id_aux ((Id "barrier_kind"),_) -> (empty,empty)
       | Id_aux ((Id "trans_kind"),_) -> (empty,empty)
       | Id_aux ((Id "instruction_kind"),_) -> (empty,empty)
@@ -916,6 +918,8 @@ let doc_typdef_lem regtypes (TD_aux(td,_)) = match td with
      (match id with
       | Id_aux ((Id "read_kind"),_) -> (empty,empty)
       | Id_aux ((Id "write_kind"),_) -> (empty,empty)
+      | Id_aux ((Id "a64_barrier_domain"),_) -> (empty,empty)
+      | Id_aux ((Id "a64_barrier_type"),_) -> (empty,empty)
       | Id_aux ((Id "barrier_kind"),_) -> (empty,empty)
       | Id_aux ((Id "trans_kind"),_) -> (empty,empty)
       | Id_aux ((Id "instruction_kind"),_) -> (empty,empty)
