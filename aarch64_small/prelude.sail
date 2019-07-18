@@ -20,6 +20,8 @@ $include <flow.sail>
 $include <arith.sail>
 $include <option.sail>
 $include <vector_dec.sail>
+
+$define AARCH64_SMALL
 $include <regfp.sail>
 
 infix 7 >>

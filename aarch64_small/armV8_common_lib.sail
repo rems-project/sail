@@ -576,37 +576,37 @@ function BigEndianReverse (value) = {
 /* external */ val DataMemoryBarrier_FullShWrites  : unit -> unit effect {barr}
 /* external */ val DataMemoryBarrier_FullShAll     : unit -> unit effect {barr}
 
-function DataMemoryBarrier_NonShReads    = __barrier(Barrier_DMB (A64_NonShare,   A64_barrier_LD))
-function DataMemoryBarrier_NonShWrites   = __barrier(Barrier_DMB (A64_NonShare,   A64_barrier_ST))
-function DataMemoryBarrier_NonShAll      = __barrier(Barrier_DMB (A64_NonShare,   A64_barrier_all))
-function DataMemoryBarrier_InnerShReads  = __barrier(Barrier_DMB (A64_InnerShare, A64_barrier_LD))
-function DataMemoryBarrier_InnerShWrites = __barrier(Barrier_DMB (A64_InnerShare, A64_barrier_ST))
-function DataMemoryBarrier_InnerShAll    = __barrier(Barrier_DMB (A64_InnerShare, A64_barrier_all))
-function DataMemoryBarrier_OuterShReads  = __barrier(Barrier_DMB (A64_OuterShare, A64_barrier_LD))
-function DataMemoryBarrier_OuterShWrites = __barrier(Barrier_DMB (A64_OuterShare, A64_barrier_ST))
-function DataMemoryBarrier_OuterShAll    = __barrier(Barrier_DMB (A64_OuterShare, A64_barrier_all))
-function DataMemoryBarrier_FullShReads   = __barrier(Barrier_DMB (A64_FullShare,  A64_barrier_LD))
-function DataMemoryBarrier_FullShWrites  = __barrier(Barrier_DMB (A64_FullShare,  A64_barrier_ST))
-function DataMemoryBarrier_FullShAll     = __barrier(Barrier_DMB (A64_FullShare,  A64_barrier_all))
+function DataMemoryBarrier_NonShReads()    = __barrier(Barrier_DMB (A64_NonShare,   A64_barrier_LD))
+function DataMemoryBarrier_NonShWrites()   = __barrier(Barrier_DMB (A64_NonShare,   A64_barrier_ST))
+function DataMemoryBarrier_NonShAll()      = __barrier(Barrier_DMB (A64_NonShare,   A64_barrier_all))
+function DataMemoryBarrier_InnerShReads()  = __barrier(Barrier_DMB (A64_InnerShare, A64_barrier_LD))
+function DataMemoryBarrier_InnerShWrites() = __barrier(Barrier_DMB (A64_InnerShare, A64_barrier_ST))
+function DataMemoryBarrier_InnerShAll()    = __barrier(Barrier_DMB (A64_InnerShare, A64_barrier_all))
+function DataMemoryBarrier_OuterShReads()  = __barrier(Barrier_DMB (A64_OuterShare, A64_barrier_LD))
+function DataMemoryBarrier_OuterShWrites() = __barrier(Barrier_DMB (A64_OuterShare, A64_barrier_ST))
+function DataMemoryBarrier_OuterShAll()    = __barrier(Barrier_DMB (A64_OuterShare, A64_barrier_all))
+function DataMemoryBarrier_FullShReads()   = __barrier(Barrier_DMB (A64_FullShare,  A64_barrier_LD))
+function DataMemoryBarrier_FullShWrites()  = __barrier(Barrier_DMB (A64_FullShare,  A64_barrier_ST))
+function DataMemoryBarrier_FullShAll()     = __barrier(Barrier_DMB (A64_FullShare,  A64_barrier_all))
 
 val DataMemoryBarrier : (MBReqDomain, MBReqTypes) -> unit effect {barr, escape}
 function DataMemoryBarrier(domain, types) =
 {
   match (domain, types) {
-    (MBReqDomain_Nonshareable, MBReqTypes_Reads)  => DataMemoryBarrier_NonShReads()
-    (MBReqDomain_Nonshareable, MBReqTypes_Writes) => DataMemoryBarrier_NonShWrites()
-    (MBReqDomain_Nonshareable, MBReqTypes_All)    => DataMemoryBarrier_NonShAll()
+    (MBReqDomain_Nonshareable, MBReqTypes_Reads)  => DataMemoryBarrier_NonShReads(),
+    (MBReqDomain_Nonshareable, MBReqTypes_Writes) => DataMemoryBarrier_NonShWrites(),
+    (MBReqDomain_Nonshareable, MBReqTypes_All)    => DataMemoryBarrier_NonShAll(),
 
-    (MBReqDomain_InnerShareable, MBReqTypes_Reads)  => DataMemoryBarrier_InnerShReads()
-    (MBReqDomain_InnerShareable, MBReqTypes_Writes) => DataMemoryBarrier_InnerShWrites()
-    (MBReqDomain_InnerShareable, MBReqTypes_All)    => DataMemoryBarrier_InnerShAll()
+    (MBReqDomain_InnerShareable, MBReqTypes_Reads)  => DataMemoryBarrier_InnerShReads(),
+    (MBReqDomain_InnerShareable, MBReqTypes_Writes) => DataMemoryBarrier_InnerShWrites(),
+    (MBReqDomain_InnerShareable, MBReqTypes_All)    => DataMemoryBarrier_InnerShAll(),
 
-    (MBReqDomain_OuterShareable, MBReqTypes_Reads)  => DataMemoryBarrier_OuterShReads()
-    (MBReqDomain_OuterShareable, MBReqTypes_Writes) => DataMemoryBarrier_OuterShWrites()
-    (MBReqDomain_OuterShareable, MBReqTypes_All)    => DataMemoryBarrier_OuterShAll()
+    (MBReqDomain_OuterShareable, MBReqTypes_Reads)  => DataMemoryBarrier_OuterShReads(),
+    (MBReqDomain_OuterShareable, MBReqTypes_Writes) => DataMemoryBarrier_OuterShWrites(),
+    (MBReqDomain_OuterShareable, MBReqTypes_All)    => DataMemoryBarrier_OuterShAll(),
 
-    (MBReqDomain_FullSystem, MBReqTypes_Reads)  => DataMemoryBarrier_FullShReads()
-    (MBReqDomain_FullSystem, MBReqTypes_Writes) => DataMemoryBarrier_FullShWrites()
+    (MBReqDomain_FullSystem, MBReqTypes_Reads)  => DataMemoryBarrier_FullShReads(),
+    (MBReqDomain_FullSystem, MBReqTypes_Writes) => DataMemoryBarrier_FullShWrites(),
     (MBReqDomain_FullSystem, MBReqTypes_All)    => DataMemoryBarrier_FullShAll()
   };
 }
@@ -626,37 +626,37 @@ function DataMemoryBarrier(domain, types) =
 /* external */ val DataSynchronizationBarrier_FullShWrites  : unit -> unit effect {barr}
 /* external */ val DataSynchronizationBarrier_FullShAll     : unit -> unit effect {barr}
 
-function DataSynchronizationBarrier_NonShReads    = __barrier(Barrier_DSB (A64_NonShare,   A64_barrier_LD))
-function DataSynchronizationBarrier_NonShWrites   = __barrier(Barrier_DSB (A64_NonShare,   A64_barrier_ST))
-function DataSynchronizationBarrier_NonShAll      = __barrier(Barrier_DSB (A64_NonShare,   A64_barrier_all))
-function DataSynchronizationBarrier_InnerShReads  = __barrier(Barrier_DSB (A64_InnerShare, A64_barrier_LD))
-function DataSynchronizationBarrier_InnerShWrites = __barrier(Barrier_DSB (A64_InnerShare, A64_barrier_ST))
-function DataSynchronizationBarrier_InnerShAll    = __barrier(Barrier_DSB (A64_InnerShare, A64_barrier_all))
-function DataSynchronizationBarrier_OuterShReads  = __barrier(Barrier_DSB (A64_OuterShare, A64_barrier_LD))
-function DataSynchronizationBarrier_OuterShWrites = __barrier(Barrier_DSB (A64_OuterShare, A64_barrier_ST))
-function DataSynchronizationBarrier_OuterShAll    = __barrier(Barrier_DSB (A64_OuterShare, A64_barrier_all))
-function DataSynchronizationBarrier_FullShReads   = __barrier(Barrier_DSB (A64_FullShare,  A64_barrier_LD))
-function DataSynchronizationBarrier_FullShWrites  = __barrier(Barrier_DSB (A64_FullShare,  A64_barrier_ST))
-function DataSynchronizationBarrier_FullShAll     = __barrier(Barrier_DSB (A64_FullShare,  A64_barrier_all))
+function DataSynchronizationBarrier_NonShReads()    = __barrier(Barrier_DSB (A64_NonShare,   A64_barrier_LD))
+function DataSynchronizationBarrier_NonShWrites()   = __barrier(Barrier_DSB (A64_NonShare,   A64_barrier_ST))
+function DataSynchronizationBarrier_NonShAll()      = __barrier(Barrier_DSB (A64_NonShare,   A64_barrier_all))
+function DataSynchronizationBarrier_InnerShReads()  = __barrier(Barrier_DSB (A64_InnerShare, A64_barrier_LD))
+function DataSynchronizationBarrier_InnerShWrites() = __barrier(Barrier_DSB (A64_InnerShare, A64_barrier_ST))
+function DataSynchronizationBarrier_InnerShAll()    = __barrier(Barrier_DSB (A64_InnerShare, A64_barrier_all))
+function DataSynchronizationBarrier_OuterShReads()  = __barrier(Barrier_DSB (A64_OuterShare, A64_barrier_LD))
+function DataSynchronizationBarrier_OuterShWrites() = __barrier(Barrier_DSB (A64_OuterShare, A64_barrier_ST))
+function DataSynchronizationBarrier_OuterShAll()    = __barrier(Barrier_DSB (A64_OuterShare, A64_barrier_all))
+function DataSynchronizationBarrier_FullShReads()   = __barrier(Barrier_DSB (A64_FullShare,  A64_barrier_LD))
+function DataSynchronizationBarrier_FullShWrites()  = __barrier(Barrier_DSB (A64_FullShare,  A64_barrier_ST))
+function DataSynchronizationBarrier_FullShAll()     = __barrier(Barrier_DSB (A64_FullShare,  A64_barrier_all))
 
 val DataSynchronizationBarrier : (MBReqDomain, MBReqTypes) -> unit effect {barr,escape}
 function DataSynchronizationBarrier(domain, types) =
 {
   match (domain, types) {
-    (MBReqDomain_Nonshareable, MBReqTypes_Reads)  => DataSynchronizationBarrier_NonShReads()
-    (MBReqDomain_Nonshareable, MBReqTypes_Writes) => DataSynchronizationBarrier_NonShWrites()
-    (MBReqDomain_Nonshareable, MBReqTypes_All)    => DataSynchronizationBarrier_NonShAll()
+    (MBReqDomain_Nonshareable, MBReqTypes_Reads)  => DataSynchronizationBarrier_NonShReads(),
+    (MBReqDomain_Nonshareable, MBReqTypes_Writes) => DataSynchronizationBarrier_NonShWrites(),
+    (MBReqDomain_Nonshareable, MBReqTypes_All)    => DataSynchronizationBarrier_NonShAll(),
 
-    (MBReqDomain_InnerShareable, MBReqTypes_Reads)  => DataSynchronizationBarrier_InnerShReads()
-    (MBReqDomain_InnerShareable, MBReqTypes_Writes) => DataSynchronizationBarrier_InnerShWrites()
-    (MBReqDomain_InnerShareable, MBReqTypes_All)    => DataSynchronizationBarrier_InnerShAll()
+    (MBReqDomain_InnerShareable, MBReqTypes_Reads)  => DataSynchronizationBarrier_InnerShReads(),
+    (MBReqDomain_InnerShareable, MBReqTypes_Writes) => DataSynchronizationBarrier_InnerShWrites(),
+    (MBReqDomain_InnerShareable, MBReqTypes_All)    => DataSynchronizationBarrier_InnerShAll(),
 
-    (MBReqDomain_OuterShareable, MBReqTypes_Reads)  => DataSynchronizationBarrier_OuterShReads()
-    (MBReqDomain_OuterShareable, MBReqTypes_Writes) => DataSynchronizationBarrier_OuterShWrites()
-    (MBReqDomain_OuterShareable, MBReqTypes_All)    => DataSynchronizationBarrier_OuterShAll()
+    (MBReqDomain_OuterShareable, MBReqTypes_Reads)  => DataSynchronizationBarrier_OuterShReads(),
+    (MBReqDomain_OuterShareable, MBReqTypes_Writes) => DataSynchronizationBarrier_OuterShWrites(),
+    (MBReqDomain_OuterShareable, MBReqTypes_All)    => DataSynchronizationBarrier_OuterShAll(),
 
-    (MBReqDomain_FullSystem, MBReqTypes_Reads)  => DataSynchronizationBarrier_FullShReads()
-    (MBReqDomain_FullSystem, MBReqTypes_Writes) => DataSynchronizationBarrier_FullShWrites()
+    (MBReqDomain_FullSystem, MBReqTypes_Reads)  => DataSynchronizationBarrier_FullShReads(),
+    (MBReqDomain_FullSystem, MBReqTypes_Writes) => DataSynchronizationBarrier_FullShWrites(),
     (MBReqDomain_FullSystem, MBReqTypes_All)    => DataSynchronizationBarrier_FullShAll()
   };
 }
@@ -1038,7 +1038,7 @@ function Hint_Yield() -> unit = ()
 
 /** FUNCTION:shared/functions/system/InstructionSynchronizationBarrier */
 /* external */ val InstructionSynchronizationBarrier : unit -> unit effect {barr}
-function InstructionSynchronizationBarrier () = __barrier(Barrier_ISB)
+function InstructionSynchronizationBarrier () = __barrier(Barrier_ISB())
 /** FUNCTION:shared/functions/system/InterruptPending */
 
 function InterruptPending () -> boolean = not_implemented_extern("InterruptPending")
