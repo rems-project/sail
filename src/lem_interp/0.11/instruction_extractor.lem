@@ -1,0 +1,163 @@
+(*========================================================================*)
+(*     Sail                                                               *)
+(*                                                                        *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
+(*                                                                        *)
+(*  All rights reserved.                                                  *)
+(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*     notice, this list of conditions and the following disclaimer.      *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
+(*========================================================================*)
+
+open import Interp_ast
+open import Interp_utilities
+open import Pervasives
+
+type instr_param_typ =
+| IBit
+| IBitvector of maybe nat
+| IRange of maybe nat
+| IEnum of string * nat
+| IOther
+
+type instruction_form =
+|  Instr_form of string * list (string * instr_param_typ) * list base_effect
+|  Skipped
+
+val extract_instructions : string -> defs tannot -> list instruction_form
+
+let rec extract_ityp t tag = match (t,tag) with
+(* AA: Hack
+  | (T_abbrev _ t,_) -> extract_ityp t tag
+  | (T_id "bit",_) -> IBit
+  | (T_id "bool",_) -> IBit
+  | (T_app "vector" (T_args [_; T_arg_nexp (Ne_const len); _; T_arg_typ (T_id "bit")]),_) ->
+    IBitvector (Just (natFromInteger len))
+  | (T_app "vector" (T_args [_;_;_;T_arg_typ (T_id "bit")]),_) -> IBitvector (Just 64)
+  | (T_app "atom" (T_args [T_arg_nexp (Ne_const num)]),_) ->
+    IRange (Just (natFromInteger num))
+  | (T_app "atom" _,_) -> IRange Nothing
+  | (T_app "range" (T_args [_;T_arg_nexp (Ne_const max)]),_) -> 
+    IRange (Just (natFromInteger max))
+  | (T_app "range" _,_) -> IRange Nothing
+  | (T_app i (T_args []),Tag_enum max) ->
+    IEnum i (natFromInteger max)
+  | (T_id i,Tag_enum max) ->
+    IEnum i (natFromInteger max)
+*)
+  | _ -> IOther
+end 
+
+let extract_parm (E_aux e (_,tannot)) =
+  match e with
+    | E_id (Id_aux (Id i) _) ->
+      match tannot with
+	| Just(t,tag,_,_,_) -> (i,(extract_ityp t tag))
+	| _ -> (i,IOther) end
+    | _ -> 
+      let i = "Unnamed" in
+      match tannot with
+	| Just(t,tag,_,_,_) -> (i,(extract_ityp t tag))
+	| _ -> (i,IOther) end
+end
+
+let rec extract_from_decode decoder = 
+  match decoder with
+    | [] -> []
+    | (FCL_aux (FCL_Funcl _ (Pat_aux pexp _)) _)::decoder ->
+      let exp = match pexp with Pat_exp _ exp -> exp | Pat_when _ _ exp -> exp end in
+      (match exp with
+	| E_aux (E_app (Id_aux(Id id) _) parms) (_,(Just (_,Tag_ctor,_,_,_))) ->
+	  Instr_form id (List.map extract_parm parms) []
+	| _ -> Skipped end)::(extract_from_decode decoder)
+end 
+
+let rec extract_effects_of_fcl id execute = match execute with
+  | [] -> []
+  | FCL_aux (FCL_Funcl _ (Pat_aux (Pat_exp (P_aux (P_app (Id_aux (Id i) _) _) _) _) _)) (_,(Just(_,_,_,Effect_aux(Effect_set efs) _,_))) :: executes ->
+    if i = id 
+    then efs
+    else extract_effects_of_fcl id executes
+  | _::executes -> extract_effects_of_fcl id executes
+end
+
+let rec extract_patt_parm (P_aux p (_,tannot)) = 
+  let t = match tannot with
+    | Just(t,tag,_,_,_) -> extract_ityp t tag
+    | _ -> IOther end in
+  match p with
+    | P_lit lit -> ("",t)
+    | P_wild -> ("Unnamed",t)
+    | P_as _ (Id_aux (Id id) _) -> (id,t)
+    | P_typ typ p -> extract_patt_parm p
+    | P_id (Id_aux (Id id) _) -> (id,t)
+    | P_app (Id_aux (Id id) _) [] -> (id,t)
+    | _ -> ("",t) end
+
+let rec extract_from_execute fcls = match fcls with
+  | [] -> []
+  | FCL_aux (FCL_Funcl _ (Pat_aux (Pat_exp (P_aux (P_app (Id_aux (Id i) _) parms) _) _) _)) (_,Just(_,_,_,Effect_aux(Effect_set efs) _,_))::fcls ->
+     (Instr_form i (List.map extract_patt_parm parms) efs)::extract_from_execute fcls
+  | _ :: fcls ->
+     (* AA: Find out what breaks this *)
+     extract_from_execute fcls
+end
+
+let rec extract_effects instrs execute = 
+  match instrs with
+    | [] -> []
+    | Skipped::instrs -> Skipped::(extract_effects instrs execute)
+    | (Instr_form id parms [])::instrs -> 
+      (Instr_form id parms (extract_effects_of_fcl id execute))::(extract_effects instrs execute)
+end
+
+let extract_instructions_old decode_name execute_name defs = 
+  let (Just decoder) = find_function defs (Id_aux (Id decode_name) Unknown) in
+  let (Just executer) = find_function defs (Id_aux (Id execute_name) Unknown) in
+  let instr_no_effects = extract_from_decode decoder in
+  let instructions = extract_effects instr_no_effects executer in
+  instructions
+
+let extract_instructions execute_name defs =
+  let (Just executer) = find_function defs (Id_aux (Id execute_name) Unknown) in
+  let instructions = extract_from_execute executer in
+  instructions

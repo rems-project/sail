@@ -1,0 +1,326 @@
+(*========================================================================*)
+(*     Sail                                                               *)
+(*                                                                        *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
+(*                                                                        *)
+(*  All rights reserved.                                                  *)
+(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*     notice, this list of conditions and the following disclaimer.      *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
+(*========================================================================*)
+
+(* PS NOTES FOR KATHY:
+
+pls also change:  
+
+  decode_to_istate
+  decode_to_instruction 
+
+to take an opcode as defined above, instead of a value 
+
+and change 
+
+*)
+
+
+open import Sail_impl_base
+import Interp
+open import Interp_ast
+open import Pervasives
+open import Num
+
+open import Assert_extra
+
+(*Type representing the constructor parameters in instruction, other is a type not representable externally*)
+type instr_parm_typ = 
+  | Bit (*A single bit, represented as a one element Bitvector as a value*)
+  | Bvector of maybe nat (* A bitvector type, with length when statically known *)
+  | Range of maybe nat (*Internally represented as a number, externally as a bitvector of length nat *)
+  | Enum of string * nat (*Internally represented as either a number or constructor, externally as a bitvector*)
+  | Other (*An unrepresentable type, will be represented as Unknown in instruciton form *)
+
+let {coq} instr_parm_typEqual ip1 ip2 = match (ip1,ip2) with
+  | (Bit,Bit) -> true
+  | (Bvector i1,Bvector i2) -> i1 = i2
+  | (Range i1,Range i2) -> i1 = i2
+  | (Enum s1 i1,Enum s2 i2) -> s1 = s2 && i1 = i2
+  | (Other,Other) -> true
+  | _ -> false
+end
+let inline ~{coq} instr_parm_typEqual = unsafe_structural_equality
+
+let {coq} instr_parm_typInequal ip1 ip2 = not (instr_parm_typEqual ip1 ip2)
+let inline ~{coq} instr_parm_typInequal = unsafe_structural_inequality
+
+instance (Eq instr_parm_typ) 
+  let (=) = instr_parm_typEqual
+  let (<>) ip1 ip2 = not (instr_parm_typEqual ip1 ip2)
+end 
+
+let instr_parm_typShow ip = match ip with
+  | Bit -> "Bit"
+  | Bvector i -> "Bvector " ^ show i
+  | Range i -> "Range " ^ show i
+  | Enum s i -> "Enum " ^ s ^ " " ^ show i
+  | Other -> "Other"
+ end
+
+instance (Show instr_parm_typ)
+let show = instr_parm_typShow
+end
+
+(*A representation of the AST node for each instruction in the spec, with concrete values from this call,
+  and the potential static effects from the funcl clause for this instruction 
+  Follows the form of the instruction in instruction_extractor, but populates the parameters with actual values
+*)
+
+
+type instruction_field_value = list bit
+
+type instruction = (string * list (string * instr_parm_typ * instruction_field_value))
+
+let {coq} instructionEqual i1 i2 = match (i1,i2) with
+  | ((i1,parms1,effects1),(i2,parms2,effects2)) -> i1=i2 && parms1 = parms2 && effects1 = effects2
+end
+let inline ~{coq} instructionEqual = unsafe_structural_equality
+
+let {coq} instructionInequal i1 i2 = not (instructionEqual i1 i2)
+let inline ~{coq} instructionInequal = unsafe_structural_inequality
+
+type v_kind = Bitv | Bytev
+
+type decode_error = 
+  | Unsupported_instruction_error of Interp_ast.value
+  | Not_an_instruction_error of opcode
+  | Internal_error of string
+
+
+let decode_error_compare e1 e2 =
+  match (e1, e2) with
+  | (Unsupported_instruction_error i1, Unsupported_instruction_error i2)
+      -> defaultCompare i1 i2
+  | (Unsupported_instruction_error _, _) -> LT
+  | (_, Unsupported_instruction_error _) -> GT
+
+  | (Not_an_instruction_error o1, Not_an_instruction_error o2) -> defaultCompare o1 o2
+  | (Not_an_instruction_error _, _) -> LT
+  | (_, Not_an_instruction_error _) -> GT
+
+  | (Internal_error s1, Internal_error s2) -> compare s1 s2
+  (* | (Internal_error _, _) -> LT *)
+  (* | (_, Internal_error _) -> GT *)
+  end
+
+let decode_error_less e1 e2       = decode_error_compare e1 e2 =  LT
+let decode_error_less_eq e1 e2    = decode_error_compare e1 e2 <> GT
+let decode_error_greater e1 e2    = decode_error_compare e1 e2 =  GT
+let decode_error_greater_eq e1 e2 = decode_error_compare e1 e2 <> LT
+
+instance (Ord decode_error)
+  let compare = decode_error_compare
+  let (<)  = decode_error_less
+  let (<=) = decode_error_less_eq
+  let (>)  = decode_error_greater
+  let (>=) = decode_error_greater_eq
+end
+
+let decode_error_equal e1 e2 = (decode_error_compare e1 e2) = EQ
+let decode_error_inequal e1 e2 = not (decode_error_equal e1 e2)
+
+instance  (Eq decode_error)
+  let (=)  = decode_error_equal
+  let (<>) = decode_error_inequal
+end
+
+
+type interpreter_state = Interp.stack (*Deem abstract*)
+(* Will come from a .lem file generated by Sail, bound to a 'defs' identifier *)
+type specification = Interp_ast.defs Interp_ast.tannot (*Deem abstract*)
+type interpreter_mode = Interp.interp_mode (*Deem abstract*)
+type interp_mode = <| internal_mode: interpreter_mode |>
+val make_mode : (*eager*) bool -> (*tracking*) bool -> interp_mode
+val tracking_dependencies : interp_mode -> bool
+
+
+
+(*Map between external functions as preceived from a Sail spec and the actual implementation of the function *)
+type external_functions = list (string * (Interp_ast.value -> Interp_ast.value))
+
+(*Maps between the memory functions as preceived from a Sail spec and the values needed for actions in the memory model*)
+type barriers = list (string * barrier_kind)
+type memory_parameter_transformer = interp_mode -> Interp_ast.value -> (memory_value * nat * maybe (list reg_name))
+type optional_memory_transformer = interp_mode -> Interp_ast.value -> maybe memory_value
+type memory_read = MR of read_kind * memory_parameter_transformer
+type memory_reads  = list (string * memory_read)
+type memory_read_tagged  = MRT of read_kind * memory_parameter_transformer
+type memory_read_taggeds = list (string * memory_read_tagged)
+type memory_write_ea = MEA of write_kind * memory_parameter_transformer
+type memory_write_eas = list (string * memory_write_ea)
+type memory_write = MW of write_kind * memory_parameter_transformer * (maybe (instruction_state -> bool -> instruction_state))
+and memory_writes = list (string * memory_write)
+and memory_write_val = MV of optional_memory_transformer * (maybe (instruction_state -> bool -> instruction_state))
+and memory_write_vals = list (string * memory_write_val)
+and excl_res_t = ER of maybe (instruction_state -> bool -> instruction_state)
+and excl_res = maybe (string * excl_res_t)
+and memory_write_val_tagged = MVT of optional_memory_transformer * (maybe (instruction_state -> bool -> instruction_state))
+and memory_write_vals_tagged = list (string * memory_write_val_tagged)
+
+(* Definition information needed to run an instruction *)
+and context =
+    Context of Interp.top_level * direction * 
+	memory_reads * memory_read_taggeds * memory_writes * memory_write_eas * memory_write_vals * memory_write_vals_tagged * barriers * excl_res * external_functions
+
+(* An instruction in flight *)
+and instruction_state = IState of interpreter_state * context
+
+
+type outcome =
+(* Request to read N bytes at address *)
+(* The register list, used when mode.track_values, is those that the address depended on *)
+| Read_mem of read_kind * address_lifted * nat * maybe (list reg_name) * (memory_value -> instruction_state)
+| Read_mem_tagged of read_kind * address_lifted * nat * maybe (list reg_name) * ((bit_lifted * memory_value) -> instruction_state)
+
+(* Request to write memory *)
+| Write_mem of write_kind * address_lifted * nat * maybe (list reg_name)
+  * memory_value * maybe (list reg_name)  * (bool -> instruction_state)
+
+(* Request the result of store-exclusive *)
+| Excl_res of (bool -> instruction_state)
+
+(* Tell the system a write is imminent, at address lifted tainted by register list, of size nat *)
+| Write_ea of write_kind * address_lifted * nat * maybe (list reg_name) * instruction_state
+
+(* Request to write memory at last signaled address. Memory value should be 8* the size given in Write_ea *)
+| Write_memv of maybe address_lifted * memory_value * maybe (list reg_name) * (bool -> instruction_state)
+| Write_memv_tagged of maybe address_lifted * (bit_lifted * memory_value) * maybe (list reg_name) * (bool -> instruction_state)
+
+(* Request a memory barrier *)
+| Barrier of barrier_kind * instruction_state
+
+(* Tell the system to dynamically recalculate dependency footprint *)
+| Footprint of instruction_state
+
+(* Request to read register, will track dependency when mode.track_values *)
+| Read_reg of reg_name * (register_value -> instruction_state) 
+
+(* Request to write register *)
+| Write_reg of reg_name * register_value * instruction_state
+
+(* List of instruciton states to be run in parallel, any order*)
+| Nondet_choice of list instruction_state * instruction_state
+
+(* Escape the current instruction, for traps, some sys calls, interrupts, etc. Can optionally 
+   provide a handler.  The non-optional instruction_state is what we would be doing if we're 
+   not escaping. This is for exhaustive interp *)
+| Escape of maybe instruction_state * instruction_state
+
+(*Result of a failed assert with possible error message to report*)
+| Fail of maybe string
+
+(* Stop for incremental stepping, function can be used to display function call data *)
+| Internal of maybe string * maybe (unit -> string) * instruction_state
+
+(* Analysis can lead to non_deterministic evaluation, represented with this outcome *)
+(*Note: this should not be externally visible *)
+| Analysis_non_det of list instruction_state * instruction_state
+
+(*Completed interpreter*)
+| Done
+
+(*Interpreter error*)
+| Error of string
+
+
+(* Functions to build up the initial state for interpretation *)
+val build_context : bool -> specification -> memory_reads -> memory_read_taggeds-> memory_writes -> memory_write_eas -> memory_write_vals -> memory_write_vals_tagged -> barriers -> excl_res -> external_functions -> context
+val initial_instruction_state : context -> string -> list register_value -> instruction_state 
+  (* string is a function name, list of value are the parameters to that function *)
+
+type instruction_or_decode_error =
+  | IDE_instr of Interp_ast.value
+  | IDE_decode_error of decode_error
+
+(** propose to remove the following type and use the above instead *)
+type i_state_or_error =
+  | Instr of Interp_ast.value * instruction_state
+  | Decode_error of decode_error
+
+
+(** PS:I agree. propose to remove this: Function to decode an instruction and build the state to run it*)
+val decode_to_istate : context -> maybe (list (reg_name * register_value)) -> opcode -> i_state_or_error
+
+(** propose to add this, and then use instruction_to_istate on the result: Function to decode an instruction and build the state to run it*)
+(** PS made a placeholder in interp_inter_imp.lem, but it just uses decode_to_istate and throws away the istate; surely it's easy to just do what's necessary to get the instruction.   This sort-of works, but it crashes on ioid 10 after 167 steps - maybe instruction_to_istate (which I wasn't using directly before) isn't quite right? *)
+val decode_to_instruction : context -> maybe (list (reg_name * register_value))-> opcode -> instruction_or_decode_error
+
+(*Function to generate the state to run from an instruction form; is always an Instr*)
+val instruction_to_istate : context -> instruction -> instruction_state (*i_state_or_error*)
+
+(* Slice a register value into a smaller vector, starting at first number (wrt the indices of the register value, not raw positions in its list of bits) and going to second (inclusive) according to order. *)
+val slice_reg_value : register_value -> nat -> nat -> register_value
+(*Create a new register value where the contents of nat to nat are replaced by the second register_value *)  
+val update_reg_value_slice : reg_name -> register_value -> nat -> nat -> register_value -> register_value
+
+
+(* Big step of the interpreter, to the next request for an external action *)
+(* When interp_mode has eager_eval false, interpreter is (close to) small step *)
+val interp : interp_mode -> instruction_state -> outcome
+
+(* Run the interpreter without external interaction, feeding in Unknown on all reads 
+except for those register values provided *)
+val interp_exhaustive : maybe (list (reg_name * register_value)) -> instruction_state -> list event
+
+(* As above, but will request register reads: outcome will only be rreg, done, or error *)
+val rr_interp_exhaustive : interp_mode -> instruction_state -> list event -> (outcome * (list event)) 
+
+val translate_address :
+  context -> end_flag -> string -> maybe (list (reg_name * register_value)) -> address
+  -> maybe address * maybe (list event)
+
+                      
+val instruction_analysis :
+  context -> end_flag -> string -> (string -> (nat * nat * direction * (nat * nat)))
+  -> maybe (list (reg_name * register_value)) -> instruction -> (list reg_name * list reg_name * list reg_name * list nia * dia * instruction_kind)
+
+
+val initial_outcome_s_of_instruction : (instruction_state -> unit -> (string * string)) -> context -> interp_mode -> instruction -> Sail_impl_base.outcome_s unit
+

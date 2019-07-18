@@ -60,6 +60,7 @@ enum write_kind = {
   Write_X86_locked
 }
 
+$ifdef AARCH64_SMALL
 enum a64_barrier_domain = {
   A64_FullShare,
   A64_InnerShare,
@@ -73,7 +74,6 @@ enum a64_barrier_type = {
   A64_barrier_ST
 }
 
-$ifdef AARCH64_SMALL
 union barrier_kind = {
   Barrier_Sync : unit,
   Barrier_LwSync : unit,
