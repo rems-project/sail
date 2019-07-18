@@ -73,7 +73,7 @@ enum a64_barrier_type = {
   A64_barrier_ST
 }
 
-$ifdef AARCH64_SMALL
+$ifdef FEATURE_UNION_BARRIER
 union barrier_kind = {
   Barrier_Sync : unit,
   Barrier_LwSync : unit,
