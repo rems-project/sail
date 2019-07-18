@@ -99,6 +99,9 @@ let default_symbols =
 
 let symbols = ref default_symbols
 
+let have_symbol symbol =
+  StringSet.mem symbol !symbols
+
 let clear_symbols () = symbols := default_symbols
 
 let cond_pragma l defs =

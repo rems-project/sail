@@ -53,6 +53,7 @@
 val parse_file : ?loc:Parse_ast.l -> string -> Parse_ast.defs
 
 val clear_symbols : unit -> unit
+val have_symbol : string -> bool
 
 val preprocess_ast : (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.defs -> Parse_ast.defs
 val check_ast : Type_check.Env.t -> unit Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
