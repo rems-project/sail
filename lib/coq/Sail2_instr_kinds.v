@@ -139,12 +139,25 @@ instance (Show write_kind)
   end
 end
 *)
+
+Inductive a64_barrier_domain :=
+  A64_FullShare
+  | A64_InnerShare
+  | A64_OuterShare
+  | A64_NonShare.
+
+Inductive a64_barrier_type :=
+  A64_barrier_all
+  | A64_barrier_LD
+  | A64_barrier_ST.
+
 Inductive barrier_kind :=
   (* Power barriers *)
   Barrier_Sync | Barrier_LwSync | Barrier_Eieio | Barrier_Isync
   (* AArch64 barriers *)
-  | Barrier_DMB | Barrier_DMB_ST | Barrier_DMB_LD | Barrier_DSB
-  | Barrier_DSB_ST | Barrier_DSB_LD | Barrier_ISB
+  | Barrier_DMB (*: a64_barrier_domain -> a64_barrier_type -> barrier_kind*)
+  | Barrier_DSB (*: a64_barrier_domain -> a64_barrier_type -> barrier_kind*)
+  | Barrier_ISB
  (* | Barrier_TM_COMMIT*)
   (* MIPS barriers *)
   | Barrier_MIPS_SYNC
