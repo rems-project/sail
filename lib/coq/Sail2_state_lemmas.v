@@ -474,8 +474,46 @@ proof (use assms in \<open>induction vars "liftState r \<circ> cond" "liftState 
     then show ?case by (auto simp: liftState_simp)
   qed auto
 qed
+*)
 
+Local Opaque _limit_reduces.
+Ltac gen_reduces :=
+  match goal with |- context[@_limit_reduces ?a ?b ?c] => generalize (@_limit_reduces a b c) end.
 
+Lemma liftState_whileM RV Vars E r limit vars cond (body : Vars -> monad RV Vars E) s :
+  liftState (Regs := RV) r (whileMT limit vars cond body) s = whileST limit vars (fun vars => liftState r (cond vars)) (fun vars => liftState r (body vars)) s.
+unfold whileMT, whileST.
+revert vars s.
+destruct (Z.le_decidable 0 limit).
+* generalize (Zwf_guarded limit) as acc.
+  apply Wf_Z.natlike_ind with (x := limit).
+  + intros [acc] *; simpl.
+    autorewrite with liftState.
+    apply bindS_ext_cong; auto.
+    intros. rewrite liftState_if_distrib.
+    destruct a; autorewrite with liftState; auto.
+    apply bindS_ext_cong; auto.
+    intros. destruct (_limit_reduces _). simpl.
+    reflexivity.
+  + clear limit H.
+    intros limit H IH [acc] vars s. simpl.
+    destruct (Z_ge_dec _ _); try omega.
+    autorewrite with liftState.
+    apply bindS_ext_cong; auto.
+    intros. rewrite liftState_if_distrib.
+    destruct a; autorewrite with liftState; auto.
+    apply bindS_ext_cong; auto.
+    intros.
+    gen_reduces.
+    replace (Z.succ limit - 1) with limit; try omega. intro acc'.
+    apply IH.
+  + assumption.
+* intros. simpl.
+  destruct (Z_ge_dec _ _); try omega.
+  reflexivity.
+Qed.
+
+(*
 lemma untilM_dom_step:
   assumes "untilM_dom (vars, cond, body)"
     and "Run (body vars) t vars'"
@@ -512,7 +550,43 @@ proof (use assms in \<open>induction vars "liftState r \<circ> cond" "liftState 
       then show ?case using k until IH by (auto simp: comp_def liftState_simp)
     qed auto
   qed auto
-qed
+qed*)
+
+Lemma liftState_untilM RV Vars E r limit vars cond (body : Vars -> monad RV Vars E) s :
+  liftState (Regs := RV) r (untilMT limit vars cond body) s = untilST limit vars (fun vars => liftState r (cond vars)) (fun vars => liftState r (body vars)) s.
+unfold untilMT, untilST.
+revert vars s.
+destruct (Z.le_decidable 0 limit).
+* generalize (Zwf_guarded limit) as acc.
+  apply Wf_Z.natlike_ind with (x := limit).
+  + intros [acc] *; simpl.
+    autorewrite with liftState.
+    apply bindS_ext_cong; auto.
+    intros. autorewrite with liftState.
+    apply bindS_ext_cong; auto.
+    intros. rewrite liftState_if_distrib.
+    destruct a0; auto.
+    destruct (_limit_reduces _). simpl.
+    reflexivity.
+  + clear limit H.
+    intros limit H IH [acc] vars s. simpl.
+    destruct (Z_ge_dec _ _); try omega.
+    autorewrite with liftState.
+    apply bindS_ext_cong; auto.
+    intros. autorewrite with liftState; auto.
+    apply bindS_ext_cong; auto.
+    intros. rewrite liftState_if_distrib.
+    destruct a0; autorewrite with liftState; auto.
+    gen_reduces.
+    replace (Z.succ limit - 1) with limit; try omega. intro acc'.
+    apply IH.
+  + assumption.
+* intros. simpl.
+  destruct (Z_ge_dec _ _); try omega.
+  reflexivity.
+Qed.
+
+(*
 
 text \<open>Simplification rules for monadic Boolean connectives\<close>
 

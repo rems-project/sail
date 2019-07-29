@@ -121,6 +121,31 @@ let rec untilS vars cond body s =
   (cond vars >>$= (fun cond_val s'' ->
   if cond_val then returnS vars s'' else untilS vars cond body s'')) s')) s
 *)
+
+Fixpoint whileST' {RV Vars E} limit (vars : Vars) (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) (acc : Acc (Zwf 0) limit) : monadS RV Vars E :=
+  if Z_ge_dec limit 0 then
+    cond vars >>$= fun cond_val =>
+    if cond_val then
+      body vars >>$= fun vars => whileST' (limit - 1) vars cond body (_limit_reduces acc)
+    else returnS vars
+  else failS "Termination limit reached".
+
+Definition whileST {RV Vars E} limit (vars : Vars) (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) : monadS RV Vars E :=
+  whileST' limit vars cond body (Zwf_guarded limit).
+
+(*val untilM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
+                ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e*)
+Fixpoint untilST' {RV Vars E} limit (vars : Vars) (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) (acc : Acc (Zwf 0) limit) : monadS RV Vars E :=
+  if Z_ge_dec limit 0 then
+    body vars >>$= fun vars =>
+    cond vars >>$= fun cond_val =>
+    if cond_val then returnS vars else untilST' (limit - 1) vars cond body (_limit_reduces acc)
+  else failS "Termination limit reached".
+
+Definition untilST {RV Vars E} limit (vars : Vars) (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) : monadS RV Vars E :=
+  untilST' limit vars cond body (Zwf_guarded limit).
+
+
 (*val choose_boolsS : forall 'rv 'e. nat -> monadS 'rv (list bool) 'e*)
 Definition choose_boolsS {RV E} n : monadS RV (list bool) E :=
  genlistS (fun _ => choose_boolS tt) n.
