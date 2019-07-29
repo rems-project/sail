@@ -410,6 +410,9 @@ let load_files ?check:(check=false) type_envs files =
   else
     let ast = Scattered.descatter ast in
     let ast, type_envs = rewrite_ast_initial type_envs ast in
+    (* Recheck after descattering so that the internal type environments always
+       have complete variant types *)
+    let ast, type_envs = Type_error.check Type_check.initial_env ast in
 
     let out_name = match !opt_file_out with
       | None when parsed = [] -> "out.sail"
