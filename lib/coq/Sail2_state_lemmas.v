@@ -480,9 +480,10 @@ Local Opaque _limit_reduces.
 Ltac gen_reduces :=
   match goal with |- context[@_limit_reduces ?a ?b ?c] => generalize (@_limit_reduces a b c) end.
 
-Lemma liftState_whileM RV Vars E r limit vars cond (body : Vars -> monad RV Vars E) s :
-  liftState (Regs := RV) r (whileMT limit vars cond body) s = whileST limit vars (fun vars => liftState r (cond vars)) (fun vars => liftState r (body vars)) s.
+Lemma liftState_whileM RV Vars E r measure vars cond (body : Vars -> monad RV Vars E) s :
+  liftState (Regs := RV) r (whileMT vars measure cond body) s = whileST vars measure (fun vars => liftState r (cond vars)) (fun vars => liftState r (body vars)) s.
 unfold whileMT, whileST.
+generalize (measure vars) as limit. intro.
 revert vars s.
 destruct (Z.le_decidable 0 limit).
 * generalize (Zwf_guarded limit) as acc.
@@ -552,9 +553,10 @@ proof (use assms in \<open>induction vars "liftState r \<circ> cond" "liftState 
   qed auto
 qed*)
 
-Lemma liftState_untilM RV Vars E r limit vars cond (body : Vars -> monad RV Vars E) s :
-  liftState (Regs := RV) r (untilMT limit vars cond body) s = untilST limit vars (fun vars => liftState r (cond vars)) (fun vars => liftState r (body vars)) s.
+Lemma liftState_untilM RV Vars E r measure vars cond (body : Vars -> monad RV Vars E) s :
+  liftState (Regs := RV) r (untilMT vars measure cond body) s = untilST vars measure (fun vars => liftState r (cond vars)) (fun vars => liftState r (body vars)) s.
 unfold untilMT, untilST.
+generalize (measure vars) as limit. intro.
 revert vars s.
 destruct (Z.le_decidable 0 limit).
 * generalize (Zwf_guarded limit) as acc.

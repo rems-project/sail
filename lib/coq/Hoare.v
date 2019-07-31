@@ -1,5 +1,5 @@
-Require Import String.
-Require Import Sail2_state_monad Sail2_state Sail2_state_monad_lemmas.
+Require Import String ZArith.
+Require Import Sail2_state_monad Sail2_prompt Sail2_state Sail2_state_monad_lemmas.
 Require Import Sail2_state_lemmas.
 
 (*adhoc_overloading
@@ -324,6 +324,13 @@ intros PP BC.
 eauto using PrePostE_consequence.
 Qed.
 
+Lemma PrePostE_weaken_Epost Regs Aty Ety (A : predS Regs) f (B : Aty -> predS Regs) (E F : ex Ety -> predS Regs) :
+  PrePostE A f B E ->
+  (forall v s, E v s -> F v s) ->
+  PrePostE A f B F.
+intros PP EF.
+eauto using PrePostE_consequence.
+Qed.
 (*named_theorems PrePostE_compositeI
 named_theorems PrePostE_atomI*)
 
@@ -605,47 +612,106 @@ intros H.
 apply PrePost_foreachS_invariant with (Q := fun v => match v with Value a => Q a | Ex e => E e end).
 auto.
 Qed.
+
+
+Lemma PrePostE_use_pre Regs A Ety m (P : predS Regs) (Q : A -> predS Regs) (E : ex Ety -> predS Regs) :
+  (forall s, P s -> PrePostE P m Q E) ->
+  PrePostE P m Q E.
+unfold PrePostE, PrePost.
+intros H s p r s' IN.
+eapply H; eauto.
+Qed.
+
+Local Open Scope Z.
+Local Opaque _limit_reduces.
+Ltac gen_reduces :=
+  match goal with |- context[@_limit_reduces ?a ?b ?c] => generalize (@_limit_reduces a b c) end.
+
+
+Lemma PrePostE_untilST Regs Vars Ety vars measure cond (body : Vars -> monadS Regs Vars Ety) Inv Inv' (Q : Vars -> predS Regs) E :
+  (forall vars, PrePostE (Inv' Q vars) (cond vars) (fun c s' => Inv Q vars s' /\ (c = true -> Q vars s')) E) ->
+  (forall vars, PrePostE (Inv Q vars) (body vars) (fun vars' s' => Inv' Q vars' s' /\ measure vars' < measure vars) E) ->
+  (forall vars s, Inv Q vars s -> measure vars >= 0) ->
+  PrePostE (Inv Q vars) (untilST vars measure cond body) Q E.
+
+intros Hcond Hvars Hmeasure.
+unfold untilST.
+apply PrePostE_use_pre. intros s0 Pre0.
+assert (measure vars >= 0) as Hlimit_0 by eauto. clear s0 Pre0.
+remember (measure vars) as limit eqn: Heqlimit in Hlimit_0 |- *.
+assert (measure vars <= limit) as Hlimit by omega. clear Heqlimit.
+generalize (Sail2_prompt.Zwf_guarded limit).
+revert vars Hlimit.
+apply Wf_Z.natlike_ind with (x := limit).
+* intros vars Hmeasure_limit [acc]. simpl.
+  eapply PrePostE_bindS with (R := (fun vars' s' => Inv' Q vars' s' /\ measure vars' < measure vars)).
+  + intros s vars' s' IN.
+    eapply PrePostE_bindS with (R := (fun c s' => (Inv Q vars' s' /\ (c = true -> Q vars' s')) /\ measure vars' < measure vars)).
+    2: {
+      apply PrePostE_weaken_Epost with (E := (fun e s' => E e s' /\ measure vars' < measure vars)). 2: tauto.
+      eapply PrePostE_conj_conds.
+      apply Hcond.
+      apply PrePostE_I; tauto.
+    }
+    intros.
+    destruct a.
+    - eapply PrePostE_strengthen_pre; try apply PrePostE_returnS.
+      intros ? [[? ?] ?]; auto.
+    - apply PrePostE_I.
+      intros ? ? ? [[? ?] ?] ?. exfalso.
+      specialize (Hmeasure _ _ H0). omega.
+      intros ? ? ? [[? ?] ?] ?. exfalso.
+      specialize (Hmeasure _ _ H0). omega.
+  + apply Hvars.
+* intros limit' Hlimit' IH vars Hmeasure_limit [acc].
+  simpl.
+  destruct (Z_ge_dec _ _); try omega.
+  eapply PrePostE_bindS; [ | apply Hvars].
+  intros s vars' s' IN.
+  eapply PrePostE_bindS with (R := (fun c s' => (Inv Q vars' s' /\ (c = true -> Q vars' s')) /\ measure vars' < measure vars)).
+  2: {
+    apply PrePostE_weaken_Epost with (E := (fun e s' => E e s' /\ measure vars' < measure vars)). 2: tauto.
+    eapply PrePostE_conj_conds.
+    apply Hcond.
+    apply PrePostE_I; tauto.
+  }
+  intros.
+  destruct a.
+  - eapply PrePostE_strengthen_pre; try apply PrePostE_returnS.
+    intros ? [[? ?] ?]; auto.
+  - gen_reduces.
+    replace (Z.succ limit' - 1) with limit'; [ | omega].
+    intro acc'.
+    apply PrePostE_use_pre. intros sx [[Pre _] Hreduces].
+    apply Hmeasure in Pre.
+    eapply PrePostE_strengthen_pre; [apply IH | ].
+    + omega.
+    + tauto.
+* omega.
+Qed.
+
+
+Lemma PrePostE_untilST_pure_cond Regs Vars Ety vars measure cond (body : Vars -> monadS Regs Vars Ety) Inv (Q : Vars -> predS Regs) E :
+  (forall vars, PrePostE (Inv Q vars) (body vars) (fun vars' s' => Inv Q vars' s' /\ measure vars' < measure vars /\ (cond vars' = true -> Q vars' s')) E) ->
+  (forall vars s, Inv Q vars s -> measure vars >= 0) ->
+  (PrePostE (Inv Q vars) (untilST vars measure (fun vars => returnS (cond vars)) body) Q E).
+intros.
+apply PrePostE_untilST with (Inv' := fun Q vars s => Inv Q vars s /\ (cond vars = true -> Q vars s)).
+* intro.
+  apply PrePostE_returnS with (P := fun c s' => Inv Q vars0 s' /\ (c = true -> Q vars0 s')).
+* intro.
+  eapply PrePost_weaken_post; [ apply H | ].
+  simpl. intros [a |e]; eauto. tauto.
+* apply H0.
+Qed.
+
+Local Close Scope Z.
+
 (*
-Lemma PrePostE_untilS:
-  assumes dom: (forall s, Inv Q vars s -> untilS_dom (vars, cond, body, s)"
-    and cond: (forall vars, PrePostE (Inv' Q vars) (cond vars) (fun c s' => Inv Q vars s' /\ (c \<longrightarrow> Q vars s')) E"
-    and body: (forall vars, PrePostE (Inv Q vars) (body vars) (Inv' Q) E"
-  shows "PrePostE (Inv Q vars) (untilS vars cond body) Q E"
-proof (unfold PrePostE_def, rule PrePostI)
-  fix s r s'
-  assume Inv_s: "Inv Q vars s" and r: "(r, s') \<in> untilS vars cond body s"
-  with dom[OF Inv_s] cond body
-  show "(case r of Value a => Q a | result.Ex e => E e) s'"
-  proof (induction vars cond body s rule: untilS.pinduct[case_names Step])
-    case (Step vars cond body s)
-    consider
-        (Value) vars' c sb sc where "(Value vars', sb) \<in> body vars s" and "(Value c, sc) \<in> cond vars' sb"
-                                and "if c then r = Value vars' /\ s' = sc else (r, s') \<in> untilS vars' cond body sc"
-      | (Ex) e where "(Ex e, s') \<in> bindS (body vars) cond s" and "r = Ex e"
-      using Step(1,6)
-      by (auto simp: untilS.psimps returnS_def Ex_bindS_iff elim!: bindS_cases split: if_splits; fastforce)
-    then show ?case
-    proof cases
-      case Value
-      then show ?thesis using Step.IH[OF Value(1,2) _ Step(3,4)] Step(3,4,5)
-        by (auto split: if_splits elim: PrePostE_elim)
-    next
-      case Ex
-      then show ?thesis using Step(3,4,5) by (auto elim!: bindS_cases PrePostE_elim)
-    qed
-  qed
-qed
-
-lemma PrePostE_untilS_pure_cond:
-  assumes dom: (forall s, Inv Q vars s -> untilS_dom (vars, returnS \<circ> cond, body, s)"
-    and body: (forall vars, PrePostE (Inv Q vars) (body vars) (fun vars' s' => Inv Q vars' s' /\ (cond vars' \<longrightarrow> Q vars' s')) E"
-  shows "PrePostE (Inv Q vars) (untilS vars (returnS \<circ> cond) body) Q E"
-  using assms by (intro PrePostE_untilS) (auto simp: comp_def)
-
 lemma PrePostE_liftState_untilM:
-  assumes dom: (forall s, Inv Q vars s -> untilM_dom (vars, cond, body)"
-    and cond: (forall vars, PrePostE (Inv' Q vars) (liftState r (cond vars)) (fun c s' => Inv Q vars s' /\ (c \<longrightarrow> Q vars s')) E"
-    and body: (forall vars, PrePostE (Inv Q vars) (liftState r (body vars)) (Inv' Q) E"
+  assumes dom: (forall s, Inv Q vars s -> untilM_dom (vars, cond, body))
+    and cond: (forall vars, PrePostE (Inv' Q vars) (liftState r (cond vars)) (fun c s' => Inv Q vars s' /\ (c \<longrightarrow> Q vars s')) E)
+    and body: (forall vars, PrePostE (Inv Q vars) (liftState r (body vars)) (Inv' Q) E)
   shows "PrePostE (Inv Q vars) (liftState r (untilM vars cond body)) Q E"
 proof -
   have domS: "untilS_dom (vars, liftState r \<circ> cond, liftState r \<circ> body, s)" if "Inv Q vars s" for s

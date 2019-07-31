@@ -130,7 +130,8 @@ Fixpoint whileST' {RV Vars E} limit (vars : Vars) (cond : Vars -> monadS RV bool
     else returnS vars
   else failS "Termination limit reached".
 
-Definition whileST {RV Vars E} limit (vars : Vars) (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) : monadS RV Vars E :=
+Definition whileST {RV Vars E} (vars : Vars) measure (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) : monadS RV Vars E :=
+  let limit := measure vars in
   whileST' limit vars cond body (Zwf_guarded limit).
 
 (*val untilM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
@@ -142,7 +143,8 @@ Fixpoint untilST' {RV Vars E} limit (vars : Vars) (cond : Vars -> monadS RV bool
     if cond_val then returnS vars else untilST' (limit - 1) vars cond body (_limit_reduces acc)
   else failS "Termination limit reached".
 
-Definition untilST {RV Vars E} limit (vars : Vars) (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) : monadS RV Vars E :=
+Definition untilST {RV Vars E} (vars : Vars) measure (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) : monadS RV Vars E :=
+  let limit := measure vars in
   untilST' limit vars cond body (Zwf_guarded limit).
 
 
