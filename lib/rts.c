@@ -333,7 +333,7 @@ bool platform_excl_res(const unit unit)
     return true;
 }
 
-unit platform_barrier(const int barrier_kind)
+unit platform_barrier()
 {
     return UNIT;
 }
