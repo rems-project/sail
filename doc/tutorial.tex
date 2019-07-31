@@ -85,6 +85,78 @@ can drop it and simply write: \mrbfn{my_replicate_bits_three}
 %included. If we use the wildcard key, then we cannot omit specific
 %backends to force them to use a definition in Sail.
 
+\subsection{Mappings}
+\label{sec:mappings}
+
+Mappings are a feature of Sail that allow concise expression of
+bidirectional relationships between values that are common in ISA
+specifications: for example, bit-representations of an enum type or
+assembly-language string representations of an instruction AST.
+
+They are defined similarly to functions, with a \verb|val|-spec and a
+definition. Currently, they only work for monomorphic types.
+
+\begin{center}
+  \ll{val} \textit{name} \ll{:}  \textit{type$_1$} \ll{<->} \textit{type$_2$}
+\end{center}
+
+\begin{center}
+  \ll{mapping} \textit{name} \ll{=} \verb|{|
+     \textit{pattern} \ll{<->} \textit{pattern} \ll{,}
+     \textit{pattern} \ll{<->} \textit{pattern} \ll{,}
+     $\ldots$
+  \verb|}|
+\end{center}
+
+All the functionality of pattern matching, described below, is
+available, including guarded patterns: but note that guards apply only
+to one side. This sometimes leads to unavoidable duplicated code.
+
+As a shorthand, you can also specify a mapping and its type
+simultaneously.
+
+\begin{center}
+   \ll{mapping} \textit{name} \ll{:} \textit{type$_1$} \ll{<->} \textit{type$_2$} \ll{=} \verb|{|
+     \textit{pattern} \ll{<->} \textit{pattern} \ll{,}
+     \textit{pattern} \ll{<->} \textit{pattern} \ll{,}
+     $\ldots$
+  \verb|}|
+\end{center}
+
+A simple example from our RISC-V model:
+
+\begin{lstlisting}
+mapping size_bits : word_width <-> bits(2) = {
+  BYTE   <-> 0b00,
+  HALF   <-> 0b01,
+  WORD   <-> 0b10,
+  DOUBLE <-> 0b11
+}
+\end{lstlisting}
+
+Mappings are used simply by calling them as if they were functions:
+type inference will determine in which direction the mapping
+runs. (This gives rise to the restriction that the types on either
+side of a mapping must be different.)
+
+\begin{lstlisting}
+  let width : word_width = size_bits(0b00);
+  let width : bits(2) = size_bits(BYTE);
+\end{lstlisting}
+
+Mappings are implemented by transforming them at compile time into a
+forwards and a backwards function, along with some auxiliary
+functions. Once a mapping is declared with a \verb|val|-spec, it can
+be implemented by defining these functions manually instead of
+defining the mapping as above. These functions and their types are:
+
+\begin{lstlisting}
+  val name_forwards : type_1 -> type_2
+  val name_backwards : type_2 -> type_1
+  val name_forwards_matches : type_1 -> bool
+  val name_backwards_matches : type_2 -> bool
+\end{lstlisting}
+
 \subsection{Numeric Types}
 \label{sec:numeric}
 
@@ -414,6 +486,44 @@ match ys {
   _           => print("wildcard")
 }
 \end{lstlisting}
+
+\paragraph{Matching on strings}
+
+Unusually, Sail allows strings and concatenations of strings to be
+used in pattern-matching. The match operates in a simple left-to-right
+fashion.
+
+\begin{lstlisting}
+  match s {
+    "hello" ^ " " ^ "world" => print("matched hello world"),
+    _ => print("wildcard")
+  }
+\end{lstlisting}
+
+Note that a string match is always greedy, so
+
+\begin{lstlisting}
+  match s {
+    "hello" ^ s ^ "world" => print("matched hello" ^ s ^ "world"),
+    "hello" ^ s => print("matched hello" ^ s),
+    _ => print("wildcard")
+  }
+\end{lstlisting}
+
+while syntactically valid, will never match the first case.
+
+String matching is most often used with \emph{mappings}, covered
+above, to allow parsing of strings containing, for example, integers:
+
+\begin{lstlisting}
+  match s {
+    "int=" ^ int(x) ^ ";" => x
+    _ => -1
+  }
+\end{lstlisting}
+
+This is intended to be used to parse assembly languages.
+
 
 \paragraph{As patterns}
 

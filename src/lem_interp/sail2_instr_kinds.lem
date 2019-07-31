@@ -136,86 +136,58 @@ instance (Show write_kind)
   end
 end
 
-type a64_barrier_domain =
-  A64_FullShare
-  | A64_InnerShare
-  | A64_OuterShare
-  | A64_NonShare
-
-type a64_barrier_type =
-  A64_barrier_all
-  | A64_barrier_LD
-  | A64_barrier_ST
-
 type barrier_kind =
   (* Power barriers *)
-  Barrier_Sync of unit | Barrier_LwSync of unit | Barrier_Eieio of unit | Barrier_Isync of unit
+  Barrier_Sync | Barrier_LwSync | Barrier_Eieio | Barrier_Isync
   (* AArch64 barriers *)
-  | Barrier_DMB of (a64_barrier_domain * a64_barrier_type)
-  | Barrier_DSB of (a64_barrier_domain * a64_barrier_type)
-  | Barrier_ISB of unit
-  | Barrier_TM_COMMIT of unit
+  | Barrier_DMB | Barrier_DMB_ST | Barrier_DMB_LD | Barrier_DSB
+  | Barrier_DSB_ST | Barrier_DSB_LD | Barrier_ISB
+  | Barrier_TM_COMMIT
   (* MIPS barriers *)
-  | Barrier_MIPS_SYNC of unit
+  | Barrier_MIPS_SYNC
   (* RISC-V barriers *)
-  | Barrier_RISCV_rw_rw of unit
-  | Barrier_RISCV_r_rw of unit
-  | Barrier_RISCV_r_r of unit
-  | Barrier_RISCV_rw_w of unit
-  | Barrier_RISCV_w_w of unit
-  | Barrier_RISCV_w_rw of unit
-  | Barrier_RISCV_rw_r of unit
-  | Barrier_RISCV_r_w of unit
-  | Barrier_RISCV_w_r of unit
-  | Barrier_RISCV_tso of unit
-  | Barrier_RISCV_i of unit
+  | Barrier_RISCV_rw_rw
+  | Barrier_RISCV_r_rw
+  | Barrier_RISCV_r_r
+  | Barrier_RISCV_rw_w
+  | Barrier_RISCV_w_w
+  | Barrier_RISCV_w_rw
+  | Barrier_RISCV_rw_r
+  | Barrier_RISCV_r_w
+  | Barrier_RISCV_w_r
+  | Barrier_RISCV_tso
+  | Barrier_RISCV_i
   (* X86 *)
-  | Barrier_x86_MFENCE of unit
+  | Barrier_x86_MFENCE
 
-let string_a64_barrier_domain = function
-  | A64_FullShare  -> "A64_FullShare"
-  | A64_InnerShare -> "A64_InnerShare"
-  | A64_OuterShare -> "A64_OuterShare"
-  | A64_NonShare   -> "A64_NonShare"
-end
-
-instance (Show a64_barrier_domain)
-  let show = string_a64_barrier_domain
-end
-
-let string_a64_barrier_type = function
-  | A64_barrier_all -> "A64_barrier_all"
-  | A64_barrier_LD  -> "A64_barrier_LD"
-  | A64_barrier_ST  -> "A64_barrier_ST"
-end
-
-instance (Show a64_barrier_type)
-  let show = string_a64_barrier_type
-end
 
 instance (Show barrier_kind)
   let show = function
-    | Barrier_Sync () -> "Barrier_Sync"
-    | Barrier_LwSync () -> "Barrier_LwSync"
-    | Barrier_Eieio () -> "Barrier_Eieio"
-    | Barrier_Isync () -> "Barrier_Isync"
-    | Barrier_DMB (dom,typ) -> "Barrier_DMB (" ^ (show dom) ^ ", " ^ (show typ) ^ ")"
-    | Barrier_DSB (dom,typ) -> "Barrier_DSB (" ^ (show dom) ^ ", " ^ (show typ) ^ ")"
-    | Barrier_ISB () -> "Barrier_ISB"
-    | Barrier_TM_COMMIT () -> "Barrier_TM_COMMIT"
-    | Barrier_MIPS_SYNC () -> "Barrier_MIPS_SYNC"
-    | Barrier_RISCV_rw_rw () -> "Barrier_RISCV_rw_rw"
-    | Barrier_RISCV_r_rw ()  -> "Barrier_RISCV_r_rw"
-    | Barrier_RISCV_r_r ()   -> "Barrier_RISCV_r_r"
-    | Barrier_RISCV_rw_w ()  -> "Barrier_RISCV_rw_w"
-    | Barrier_RISCV_w_w ()   -> "Barrier_RISCV_w_w"
-    | Barrier_RISCV_w_rw ()  -> "Barrier_RISCV_w_rw"
-    | Barrier_RISCV_rw_r ()  -> "Barrier_RISCV_rw_r"
-    | Barrier_RISCV_r_w ()   -> "Barrier_RISCV_r_w"
-    | Barrier_RISCV_w_r ()   -> "Barrier_RISCV_w_r"
-    | Barrier_RISCV_tso ()   -> "Barrier_RISCV_tso"
-    | Barrier_RISCV_i ()     -> "Barrier_RISCV_i"
-    | Barrier_x86_MFENCE ()  -> "Barrier_x86_MFENCE"
+    | Barrier_Sync -> "Barrier_Sync"
+    | Barrier_LwSync -> "Barrier_LwSync"
+    | Barrier_Eieio -> "Barrier_Eieio"
+    | Barrier_Isync -> "Barrier_Isync"
+    | Barrier_DMB -> "Barrier_DMB"
+    | Barrier_DMB_ST -> "Barrier_DMB_ST"
+    | Barrier_DMB_LD -> "Barrier_DMB_LD"
+    | Barrier_DSB -> "Barrier_DSB"
+    | Barrier_DSB_ST -> "Barrier_DSB_ST"
+    | Barrier_DSB_LD -> "Barrier_DSB_LD"
+    | Barrier_ISB -> "Barrier_ISB"
+    | Barrier_TM_COMMIT -> "Barrier_TM_COMMIT"
+    | Barrier_MIPS_SYNC -> "Barrier_MIPS_SYNC"
+    | Barrier_RISCV_rw_rw -> "Barrier_RISCV_rw_rw"
+    | Barrier_RISCV_r_rw  -> "Barrier_RISCV_r_rw"
+    | Barrier_RISCV_r_r   -> "Barrier_RISCV_r_r"
+    | Barrier_RISCV_rw_w  -> "Barrier_RISCV_rw_w"
+    | Barrier_RISCV_w_w   -> "Barrier_RISCV_w_w"
+    | Barrier_RISCV_w_rw  -> "Barrier_RISCV_w_rw"
+    | Barrier_RISCV_rw_r  -> "Barrier_RISCV_rw_r"
+    | Barrier_RISCV_r_w   -> "Barrier_RISCV_r_w"
+    | Barrier_RISCV_w_r   -> "Barrier_RISCV_w_r"
+    | Barrier_RISCV_tso   -> "Barrier_RISCV_tso"
+    | Barrier_RISCV_i     -> "Barrier_RISCV_i"
+    | Barrier_x86_MFENCE  -> "Barrier_x86_MFENCE"
   end
 end
 
@@ -332,45 +304,32 @@ instance (EnumerationType write_kind)
   end
 end
 
-instance (EnumerationType a64_barrier_domain)
-  let toNat = function
-    | A64_FullShare  -> 0
-    | A64_InnerShare -> 1
-    | A64_OuterShare -> 2
-    | A64_NonShare   -> 3
-  end
-end
-
-instance (EnumerationType a64_barrier_type)
-  let toNat = function
-    | A64_barrier_all -> 0
-    | A64_barrier_LD  -> 1
-    | A64_barrier_ST  -> 2
-  end
-end
-
 instance (EnumerationType barrier_kind)
   let toNat = function
-    | Barrier_Sync () -> 0
-    | Barrier_LwSync () -> 1
-    | Barrier_Eieio () -> 2
-    | Barrier_Isync () -> 3
-    | Barrier_DMB (dom,typ) -> 4  + (toNat dom) + (4 * (toNat typ)) (* 4-15 *)
-    | Barrier_DSB (dom,typ) -> 16 + (toNat dom) + (4 * (toNat typ)) (* 16-27 *)
-    | Barrier_ISB () -> 28
-    | Barrier_TM_COMMIT () -> 29
-    | Barrier_MIPS_SYNC () -> 30
-    | Barrier_RISCV_rw_rw () -> 31
-    | Barrier_RISCV_r_rw () -> 32
-    | Barrier_RISCV_r_r () -> 33
-    | Barrier_RISCV_rw_w () -> 34
-    | Barrier_RISCV_w_w () -> 35
-    | Barrier_RISCV_w_rw () -> 36
-    | Barrier_RISCV_rw_r () -> 37
-    | Barrier_RISCV_r_w () -> 38
-    | Barrier_RISCV_w_r () -> 39
-    | Barrier_RISCV_tso () -> 40
-    | Barrier_RISCV_i () -> 41
-    | Barrier_x86_MFENCE () -> 42
+    | Barrier_Sync -> 0
+    | Barrier_LwSync -> 1
+    | Barrier_Eieio ->2
+    | Barrier_Isync -> 3
+    | Barrier_DMB -> 4
+    | Barrier_DMB_ST -> 5
+    | Barrier_DMB_LD -> 6
+    | Barrier_DSB -> 7
+    | Barrier_DSB_ST -> 8
+    | Barrier_DSB_LD -> 9
+    | Barrier_ISB -> 10
+    | Barrier_TM_COMMIT -> 11
+    | Barrier_MIPS_SYNC -> 12
+    | Barrier_RISCV_rw_rw -> 13
+    | Barrier_RISCV_r_rw -> 14
+    | Barrier_RISCV_r_r -> 15
+    | Barrier_RISCV_rw_w -> 16
+    | Barrier_RISCV_w_w -> 17
+    | Barrier_RISCV_w_rw -> 18
+    | Barrier_RISCV_rw_r -> 19
+    | Barrier_RISCV_r_w -> 20
+    | Barrier_RISCV_w_r -> 21
+    | Barrier_RISCV_tso -> 22
+    | Barrier_RISCV_i -> 23
+    | Barrier_x86_MFENCE -> 24
   end
 end

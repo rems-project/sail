@@ -50,10 +50,10 @@ Definition returnS {Regs A E} (a:A) : monadS Regs A E := fun s => [(Value a,s)].
 (*val bindS : forall 'regs 'a 'b 'e. monadS 'regs 'a 'e -> ('a -> monadS 'regs 'b 'e) -> monadS 'regs 'b 'e*)
 Definition bindS {Regs A B E} (m : monadS Regs A E) (f : A -> monadS Regs B E) : monadS Regs B E :=
  fun (s : sequential_state Regs) =>
-  List.concat (List.map (fun v => match v with
-                | (Value a, s') => f a s'
-                | (Ex e, s') => [(Ex e, s')]
-                end) (m s)).
+  List.flat_map (fun v => match v with
+             | (Value a, s') => f a s'
+             | (Ex e, s') => [(Ex e, s')]
+             end) (m s).
 
 (*val seqS: forall 'regs 'b 'e. monadS 'regs unit 'e -> monadS 'regs 'b 'e -> monadS 'regs 'b 'e*)
 Definition seqS {Regs B E} (m : monadS Regs unit E) (n : monadS Regs B E) : monadS Regs B E :=
@@ -96,11 +96,11 @@ Definition throwS {Regs A E} (e : E) :monadS Regs A E :=
 (*val try_catchS : forall 'regs 'a 'e1 'e2. monadS 'regs 'a 'e1 -> ('e1 -> monadS 'regs 'a 'e2) ->  monadS 'regs 'a 'e2*)
 Definition try_catchS {Regs A E1 E2} (m : monadS Regs A E1) (h : E1 -> monadS Regs A E2) : monadS Regs A E2 :=
 fun s =>
-  List.concat (List.map (fun v => match v with
+  List.flat_map (fun v => match v with
                 | (Value a, s') => returnS a s'
                 | (Ex (Throw e), s') => h e s'
                 | (Ex (Failure msg), s') => [(Ex (Failure msg), s')]
-                end) (m s)).
+                end) (m s).
 
 (*val assert_expS : forall 'regs 'e. bool -> string -> monadS 'regs unit 'e*)
 Definition assert_expS {Regs E} (exp : bool) (msg : string) : monadS Regs unit E :=

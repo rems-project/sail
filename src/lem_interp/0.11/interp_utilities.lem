@@ -1,0 +1,212 @@
+(*========================================================================*)
+(*     Sail                                                               *)
+(*                                                                        *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
+(*                                                                        *)
+(*  All rights reserved.                                                  *)
+(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*     notice, this list of conditions and the following disclaimer.      *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
+(*========================================================================*)
+
+open import Interp_ast
+open import Pervasives
+open import Show_extra
+
+let rec power (a: integer) (b: integer) : integer =
+ if b <= 0 
+ then 1
+ else a * (power a (b-1))
+
+let foldr2 f x l l' = List.foldr (Tuple.uncurry f) x (List.zip l l')
+let map2 f l l' = List.map (Tuple.uncurry f) (List.zip l l')
+
+let get_exp_l (E_aux e (l,annot)) = l
+
+val pure : effect
+let pure = Effect_aux(Effect_set []) Unknown
+let unit_t = Typ_aux(Typ_app (Id_aux (Id "unit") Unknown) []) Unknown
+
+let mk_typ_app str args = Typ_aux (Typ_app (Id_aux (Id str) Unknown) (List.map (fun aux -> Typ_arg_aux aux Unknown) args)) Unknown
+let mk_typ_id str = Typ_aux (Typ_id (Id_aux (Id str) Unknown)) Unknown
+
+let mk_typ_var str = Typ_aux (Typ_var (Kid_aux (Var ("'" ^ str)) Unknown)) Unknown
+let mk_typ_tup typs = Typ_aux (Typ_tup typs) Unknown
+
+let nconstant n = Nexp_aux (Nexp_constant n) Unknown
+
+(* Workaround Lem's inability to scrap my (type classes) boilerplate.
+ * Implementing only Eq, and only for literals - hopefully this will
+ * be enough, but we should in principle implement ordering for everything in
+ * Interp_ast *)
+
+val lit_eq: lit -> lit -> bool
+let {ocaml;coq} lit_eq (L_aux left _) (L_aux right _) =
+   match (left, right) with
+   | (L_zero, L_zero) -> true
+   | (L_one, L_one) -> true
+   | (L_bin b, L_bin b') -> b = b'
+   | (L_hex h, L_hex h') -> h = h'
+   | (L_zero, L_num i) -> i = 0
+   | (L_num i,L_zero) -> i = 0
+   | (L_one, L_num i) -> i = 1
+   | (L_num i, L_one) -> i = 1
+   | (L_num n, L_num m) -> n = m
+   | (L_unit, L_unit) -> true
+   | (L_true, L_true) -> true
+   | (L_false, L_false) -> true
+   | (L_undef, L_undef) -> true
+   | (L_string s, L_string s') -> s = s'
+   | (_, _) -> false
+end
+let {isabelle;hol} lit_eq = unsafe_structural_equality
+
+let {ocaml;coq}    lit_ineq n1 n2 = not (lit_eq n1 n2)
+let {isabelle;hol} lit_ineq = unsafe_structural_inequality
+
+instance (Eq lit)
+  let (=)  = lit_eq
+  let (<>) = lit_ineq
+end
+
+let get_id id = match id with (Id_aux (Id s) _) -> s | (Id_aux (DeIid s) _ ) -> s end
+
+let rec {ocaml} list_to_string format sep lst = match lst with 
+  | [] -> ""
+  | [last] -> format last
+  | one::rest -> (format one) ^ sep ^ (list_to_string format sep rest)
+end
+let ~{ocaml} list_to_string format sep list = ""
+
+val has_rmem_effect : list base_effect -> bool
+val has_rmemt_effect : list base_effect -> bool
+val has_barr_effect : list base_effect -> bool
+val has_wmem_effect : list base_effect -> bool
+val has_depend_effect : list base_effect -> bool
+let rec has_effect which efcts =
+  match efcts with
+  | [] -> false
+  | (BE_aux e _)::efcts ->
+    match (which,e) with
+    | (BE_rreg,BE_rreg)     -> true 
+    | (BE_wreg,BE_wreg)     -> true 
+    | (BE_rmem,BE_rmem)     -> true 
+    | (BE_rmemt,BE_rmemt)   -> true 
+    | (BE_wmem,BE_wmem)     -> true 
+    | (BE_wmv,BE_wmv)       -> true
+    | (BE_wmvt,BE_wmvt)     -> true
+    | (BE_eamem,BE_eamem)   -> true
+    | (BE_exmem,BE_exmem)   -> true
+    | (BE_barr,BE_barr)     -> true 
+    | (BE_undef,BE_undef)   -> true 
+    | (BE_unspec,BE_unspec) -> true 
+    | (BE_nondet,BE_nondet) -> true
+    | (BE_depend,BE_depend) -> true 
+    | _ -> has_effect which efcts
+    end 
+  end
+let has_rmem_effect = has_effect BE_rmem
+let has_rmemt_effect = has_effect BE_rmemt
+let has_barr_effect = has_effect BE_barr
+let has_wmem_effect = has_effect BE_wmem
+let has_eamem_effect = has_effect BE_eamem
+let has_exmem_effect = has_effect BE_exmem
+let has_wmv_effect = has_effect BE_wmv
+let has_wmvt_effect = has_effect BE_wmvt
+let has_depend_effect = has_effect BE_depend
+
+let get_typ (TypSchm_aux (TypSchm_ts tq t) _) = t
+let get_effects (Typ_aux t _) =
+  match t with
+    | Typ_fn a r (Effect_aux (Effect_set eff) _) -> eff
+    | _ -> []
+  end
+
+let {ocaml} string_of_tag tag = match tag with
+  | Tag_empty -> "empty"
+  | Tag_global -> "global"
+  | Tag_ctor -> "ctor"
+  | Tag_extern (Just n) -> "extern " ^ n
+  | Tag_extern _ -> "extern"
+  | Tag_default -> "default"
+  | Tag_spec -> "spec"
+  | Tag_enum i -> "enum"
+  | Tag_alias -> "alias"
+end
+let ~{ocaml} string_of_tag tag = ""
+
+val find_type_def : defs tannot -> id -> maybe (type_def tannot)
+val find_function : defs tannot -> id -> maybe (list (funcl tannot))
+
+let get_funcls id (FD_aux (FD_function _ _ _ fcls) _) =
+  List.filter (fun (FCL_aux (FCL_Funcl name pexp) _) -> (get_id id) = (get_id name)) fcls
+
+let rec find_function (Defs defs) id =
+  match defs with 
+  | [] -> Nothing
+  | def::defs -> 
+    match def with
+    | DEF_fundef f -> match get_funcls id f with
+      | [] -> find_function (Defs defs) id
+      | funcs -> Just funcs end
+    | _ -> find_function (Defs defs) id
+    end end
+
+
+let rec get_first_index_range (BF_aux i _) = match i with
+  | BF_single i -> (natFromInteger i)
+  | BF_range i j -> (natFromInteger i)
+  | BF_concat s _ -> get_first_index_range s
+end 
+
+let rec get_index_range_size (BF_aux i _) = match i with
+  | BF_single _ -> 1
+  | BF_range i j -> (natFromInteger (abs (i-j))) + 1
+  | BF_concat i j -> (get_index_range_size i) + (get_index_range_size j)
+end
+
+let rec string_of_loc l = match l with
+  | Unknown -> "Unknown"
+  | Int s Nothing -> "Internal " ^ s
+  | Int s (Just l) -> "Internal " ^ s ^ " " ^ (string_of_loc l) 
+  | Range file n1 n2 n3 n4 -> "File " ^ file ^ ": " ^ (show n1) ^ ": " ^ (show (n2:nat)) ^ ": " ^ (show (n3:nat)) ^ ": " ^ (show (n4:nat))
+end
