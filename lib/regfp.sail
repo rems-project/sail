@@ -73,7 +73,6 @@ enum a64_barrier_type = {
   A64_barrier_ST
 }
 
-$ifdef FEATURE_UNION_BARRIER
 union barrier_kind = {
   Barrier_Sync : unit,
   Barrier_LwSync : unit,
@@ -96,30 +95,6 @@ union barrier_kind = {
   Barrier_RISCV_i : unit,
   Barrier_x86_MFENCE : unit
 }
-$else
-enum barrier_kind = {
-  Barrier_Sync,
-  Barrier_LwSync,
-  Barrier_Eieio,
-  Barrier_Isync,
-  Barrier_DMB,
-  Barrier_DSB,
-  Barrier_ISB,
-  Barrier_MIPS_SYNC,
-  Barrier_RISCV_rw_rw,
-  Barrier_RISCV_r_rw,
-  Barrier_RISCV_r_r,
-  Barrier_RISCV_rw_w,
-  Barrier_RISCV_w_w,
-  Barrier_RISCV_w_rw,
-  Barrier_RISCV_rw_r,
-  Barrier_RISCV_r_w,
-  Barrier_RISCV_w_r,
-  Barrier_RISCV_tso,
-  Barrier_RISCV_i,
-  Barrier_x86_MFENCE
-}
-$endif
 
 enum trans_kind = {
   Transaction_start,
