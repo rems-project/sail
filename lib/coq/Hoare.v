@@ -14,6 +14,9 @@ Definition predS regs := sequential_state regs -> Prop.
 Definition PrePost {Regs A E} (P : predS Regs) (f : monadS Regs A E) (Q : result A E -> predS Regs) : Prop :=
  (*"\<lbrace>_\<rbrace> _ \<lbrace>_\<rbrace>"*)
   forall s, P s -> (forall r s', List.In (r, s') (f s) -> Q r s').
+
+Notation "{{ P }} m {{ Q }}" := (PrePost P m Q).
+
 (*
 lemma PrePostI:
   assumes "\<And>s r s'. P s \<Longrightarrow> (r, s') \<in> f s \<Longrightarrow> Q r s'"
@@ -265,6 +268,8 @@ in Theorem Proving in Higher Order Logics, 2008, pp. 167–182.\<close>
 Definition PrePostE {Regs A Ety} (P : predS Regs) (f : monadS Regs A Ety) (Q : A -> predS Regs) (E : ex Ety -> predS Regs) : Prop :=
 (* ("\<lbrace>_\<rbrace> _ \<lbrace>_ \<bar> _\<rbrace>")*)
   PrePost P f (fun v => match v with Value a => Q a | Ex e => E e end).
+
+Notation "{{ P }} m {{ Q | X }}" := (PrePostE P m Q X).
 
 (*lemmas PrePost_defs = PrePost_def PrePostE_def*)
 
@@ -634,7 +639,7 @@ Lemma PrePostE_untilST Regs Vars Ety vars measure cond (body : Vars -> monadS Re
   (forall vars s, Inv Q vars s -> measure vars >= 0) ->
   PrePostE (Inv Q vars) (untilST vars measure cond body) Q E.
 
-intros Hcond Hvars Hmeasure.
+intros Hcond Hbody Hmeasure.
 unfold untilST.
 apply PrePostE_use_pre. intros s0 Pre0.
 assert (measure vars >= 0) as Hlimit_0 by eauto. clear s0 Pre0.
@@ -644,29 +649,26 @@ generalize (Sail2_prompt.Zwf_guarded limit).
 revert vars Hlimit.
 apply Wf_Z.natlike_ind with (x := limit).
 * intros vars Hmeasure_limit [acc]. simpl.
-  eapply PrePostE_bindS with (R := (fun vars' s' => Inv' Q vars' s' /\ measure vars' < measure vars)).
-  + intros s vars' s' IN.
-    eapply PrePostE_bindS with (R := (fun c s' => (Inv Q vars' s' /\ (c = true -> Q vars' s')) /\ measure vars' < measure vars)).
-    2: {
-      apply PrePostE_weaken_Epost with (E := (fun e s' => E e s' /\ measure vars' < measure vars)). 2: tauto.
-      eapply PrePostE_conj_conds.
-      apply Hcond.
-      apply PrePostE_I; tauto.
-    }
-    intros.
-    destruct a.
-    - eapply PrePostE_strengthen_pre; try apply PrePostE_returnS.
-      intros ? [[? ?] ?]; auto.
-    - apply PrePostE_I.
-      intros ? ? ? [[? ?] ?] ?. exfalso.
-      specialize (Hmeasure _ _ H0). omega.
-      intros ? ? ? [[? ?] ?] ?. exfalso.
-      specialize (Hmeasure _ _ H0). omega.
-  + apply Hvars.
+  eapply PrePostE_bindS; [ | apply Hbody ].
+  intros s vars' s' IN.
+  eapply PrePostE_bindS with (R := (fun c s' => (Inv Q vars' s' /\ (c = true -> Q vars' s')) /\ measure vars' < measure vars)).
+  2: {
+    apply PrePostE_weaken_Epost with (E := (fun e s' => E e s' /\ measure vars' < measure vars)). 2: tauto.
+    eapply PrePostE_conj_conds.
+    apply Hcond.
+    apply PrePostE_I; tauto.
+  }
+  intros.
+  destruct a.
+  - eapply PrePostE_strengthen_pre; try apply PrePostE_returnS.
+    intros ? [[? ?] ?]; auto.
+  - apply PrePostE_I;
+    intros ? ? ? [[Pre ?] ?] ?; exfalso;
+    specialize (Hmeasure _ _ Pre); omega.
 * intros limit' Hlimit' IH vars Hmeasure_limit [acc].
   simpl.
   destruct (Z_ge_dec _ _); try omega.
-  eapply PrePostE_bindS; [ | apply Hvars].
+  eapply PrePostE_bindS; [ | apply Hbody].
   intros s vars' s' IN.
   eapply PrePostE_bindS with (R := (fun c s' => (Inv Q vars' s' /\ (c = true -> Q vars' s')) /\ measure vars' < measure vars)).
   2: {
@@ -695,14 +697,14 @@ Lemma PrePostE_untilST_pure_cond Regs Vars Ety vars measure cond (body : Vars ->
   (forall vars, PrePostE (Inv Q vars) (body vars) (fun vars' s' => Inv Q vars' s' /\ measure vars' < measure vars /\ (cond vars' = true -> Q vars' s')) E) ->
   (forall vars s, Inv Q vars s -> measure vars >= 0) ->
   (PrePostE (Inv Q vars) (untilST vars measure (fun vars => returnS (cond vars)) body) Q E).
-intros.
+intros Hbody Hmeasure.
 apply PrePostE_untilST with (Inv' := fun Q vars s => Inv Q vars s /\ (cond vars = true -> Q vars s)).
 * intro.
   apply PrePostE_returnS with (P := fun c s' => Inv Q vars0 s' /\ (c = true -> Q vars0 s')).
 * intro.
-  eapply PrePost_weaken_post; [ apply H | ].
+  eapply PrePost_weaken_post; [ apply Hbody | ].
   simpl. intros [a |e]; eauto. tauto.
-* apply H0.
+* apply Hmeasure.
 Qed.
 
 Local Close Scope Z.
