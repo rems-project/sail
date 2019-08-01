@@ -1625,22 +1625,22 @@ let doc_exp, doc_let =
                          ,_),body'),_) -> body'
               | _ -> body
             in
-            let msuffix, measure_pp =
-              match measure with
-              | None -> "", []
-              | Some exp -> "T", [expY exp]
-            in
             let used_vars_body = find_e_ids body in
             let varstuple_pp, lambda =
               make_loop_vars [] varstuple
             in
+            let msuffix, measure_pp =
+              match measure with
+              | None -> "", []
+              | Some exp -> "T", [parens (prefix 2 1 (group lambda) (expN exp))]
+            in
             parens (
                 (prefix 2 1)
-                  ((separate space) (string (combinator ^ csuffix ^ msuffix)::
-                                       measure_pp@[varstuple_pp]))
-                  ((prefix 0 1)
-                     (parens (prefix 2 1 (group lambda) (expN cond)))
-                     (parens (prefix 2 1 (group lambda) (expN body))))
+                  (string (combinator ^ csuffix ^ msuffix))
+                  (separate (break 1)
+                     (varstuple_pp::measure_pp@
+                        [parens (prefix 2 1 (group lambda) (expN cond));
+                         parens (prefix 2 1 (group lambda) (expN body))]))
               )
           end
        | Id_aux (Id "early_return", _) ->

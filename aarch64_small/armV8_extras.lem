@@ -65,13 +65,33 @@ let aArch64_excl_res : excl_res =
   Just ("speculate_exclusive_success", (ER (Just f)))
 
 let aArch64_barrier_functions =
-  [ ("DataMemoryBarrier_Reads",           Barrier_DMB_LD);
-    ("DataMemoryBarrier_Writes",          Barrier_DMB_ST);
-    ("DataMemoryBarrier_All",             Barrier_DMB);
-    ("DataSynchronizationBarrier_Reads",  Barrier_DSB_LD);
-    ("DataSynchronizationBarrier_Writes", Barrier_DSB_ST);
-    ("DataSynchronizationBarrier_All",    Barrier_DSB);
-    ("InstructionSynchronizationBarrier", Barrier_ISB);
+  [ ("DataMemoryBarrier_NonShReads",    Barrier_DMB (A64_NonShare,   A64_barrier_LD));
+    ("DataMemoryBarrier_NonShWrites",   Barrier_DMB (A64_NonShare,   A64_barrier_ST));
+    ("DataMemoryBarrier_NonShAll",      Barrier_DMB (A64_NonShare,   A64_barrier_all));
+    ("DataMemoryBarrier_InnerShReads",  Barrier_DMB (A64_InnerShare, A64_barrier_LD));
+    ("DataMemoryBarrier_InnerShWrites", Barrier_DMB (A64_InnerShare, A64_barrier_ST));
+    ("DataMemoryBarrier_InnerShAll",    Barrier_DMB (A64_InnerShare, A64_barrier_all));
+    ("DataMemoryBarrier_OuterShReads",  Barrier_DMB (A64_OuterShare, A64_barrier_LD));
+    ("DataMemoryBarrier_OuterShWrites", Barrier_DMB (A64_OuterShare, A64_barrier_ST));
+    ("DataMemoryBarrier_OuterShAll",    Barrier_DMB (A64_OuterShare, A64_barrier_all));
+    ("DataMemoryBarrier_FullShReads",   Barrier_DMB (A64_FullShare,  A64_barrier_LD));
+    ("DataMemoryBarrier_FullShWrites",  Barrier_DMB (A64_FullShare,  A64_barrier_ST));
+    ("DataMemoryBarrier_FullShAll",     Barrier_DMB (A64_FullShare,  A64_barrier_all));
 
-    ("TMCommitEffect",                    Barrier_TM_COMMIT);
+    ("DataSynchronizationBarrier_NonShReads",    Barrier_DSB (A64_NonShare,   A64_barrier_LD));
+    ("DataSynchronizationBarrier_NonShWrites",   Barrier_DSB (A64_NonShare,   A64_barrier_ST));
+    ("DataSynchronizationBarrier_NonShAll",      Barrier_DSB (A64_NonShare,   A64_barrier_all));
+    ("DataSynchronizationBarrier_InnerShReads",  Barrier_DSB (A64_InnerShare, A64_barrier_LD));
+    ("DataSynchronizationBarrier_InnerShWrites", Barrier_DSB (A64_InnerShare, A64_barrier_ST));
+    ("DataSynchronizationBarrier_InnerShAll",    Barrier_DSB (A64_InnerShare, A64_barrier_all));
+    ("DataSynchronizationBarrier_OuterShReads",  Barrier_DSB (A64_OuterShare, A64_barrier_LD));
+    ("DataSynchronizationBarrier_OuterShWrites", Barrier_DSB (A64_OuterShare, A64_barrier_ST));
+    ("DataSynchronizationBarrier_OuterShAll",    Barrier_DSB (A64_OuterShare, A64_barrier_all));
+    ("DataSynchronizationBarrier_FullShReads",   Barrier_DSB (A64_FullShare,  A64_barrier_LD));
+    ("DataSynchronizationBarrier_FullShWrites",  Barrier_DSB (A64_FullShare,  A64_barrier_ST));
+    ("DataSynchronizationBarrier_FullShAll",     Barrier_DSB (A64_FullShare,  A64_barrier_all));
+
+    ("InstructionSynchronizationBarrier", Barrier_ISB ());
+
+    ("TMCommitEffect",                    Barrier_TM_COMMIT ());
   ]

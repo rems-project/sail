@@ -32,7 +32,7 @@ end.
 
 (*val genlistS : forall 'a 'rv 'e. (nat -> monadS 'rv 'a 'e) -> nat -> monadS 'rv (list 'a) 'e*)
 Definition genlistS {A RV E} (f : nat -> monadS RV A E) n : monadS RV (list A) E :=
-  let indices := genlist (fun n => n) n in
+  let indices := List.seq 0 n in
   foreachS indices [] (fun n xs => (f n >>$= (fun x => returnS (xs ++ [x])))).
 
 (*val and_boolS : forall 'rv 'e. monadS 'rv bool 'e -> monadS 'rv bool 'e -> monadS 'rv bool 'e*)
@@ -42,6 +42,31 @@ Definition and_boolS {RV E} (l r : monadS RV bool E) : monadS RV bool E :=
 (*val or_boolS : forall 'rv 'e. monadS 'rv bool 'e -> monadS 'rv bool 'e -> monadS 'rv bool 'e*)
 Definition or_boolS {RV E} (l r : monadS RV bool E) : monadS RV bool E :=
  l >>$= (fun l => if l then returnS true else r).
+
+Definition and_boolSP {rv E} {P Q R:bool->Prop} (x : monadS rv {b:bool & ArithFact (P b)} E) (y : monadS rv {b:bool & ArithFact (Q b)} E)
+  `{H:ArithFact (forall l r, P l -> (l = true -> Q r) -> R (andb l r))}
+  : monadS rv {b:bool & ArithFact (R b)} E.
+refine (
+  x >>$= fun '(existT _ x (Build_ArithFact _ p)) => (if x return P x -> _ then
+    fun p => y >>$= fun '(existT _ y _) => returnS (existT _ y _)
+  else fun p => returnS (existT _ false _)) p
+).
+* constructor. destruct H. destruct a0. change y with (andb true y). auto.
+* constructor. destruct H. change false with (andb false false). apply fact.
+  assumption.
+  congruence.
+Defined.
+Definition or_boolSP {rv E} {P Q R:bool -> Prop} (l : monadS rv {b : bool & ArithFact (P b)} E) (r : monadS rv {b : bool & ArithFact (Q b)} E)
+ `{ArithFact (forall l r, P l -> (l = false -> Q r) -> R (orb l r))}
+ : monadS rv {b : bool & ArithFact (R b)} E.
+refine (
+ l >>$= fun '(existT _ l (Build_ArithFact _ p)) =>
+  (if l return P l -> _ then fun p => returnS (existT _ true _)
+   else fun p => r >>$= fun '(existT _ r _) => returnS (existT _ r _)) p
+).
+* constructor. destruct H. change true with (orb true true). apply fact. assumption. congruence.
+* constructor. destruct H. destruct a0. change r with (orb false r). auto.
+Defined.
 
 (*val bool_of_bitU_fail : forall 'rv 'e. bitU -> monadS 'rv bool 'e*)
 Definition bool_of_bitU_fail {RV E} (b : bitU) : monadS RV bool E :=
@@ -96,21 +121,47 @@ let rec untilS vars cond body s =
   (cond vars >>$= (fun cond_val s'' ->
   if cond_val then returnS vars s'' else untilS vars cond body s'')) s')) s
 *)
+
+Fixpoint whileST' {RV Vars E} limit (vars : Vars) (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) (acc : Acc (Zwf 0) limit) : monadS RV Vars E :=
+  if Z_ge_dec limit 0 then
+    cond vars >>$= fun cond_val =>
+    if cond_val then
+      body vars >>$= fun vars => whileST' (limit - 1) vars cond body (_limit_reduces acc)
+    else returnS vars
+  else failS "Termination limit reached".
+
+Definition whileST {RV Vars E} (vars : Vars) measure (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) : monadS RV Vars E :=
+  let limit := measure vars in
+  whileST' limit vars cond body (Zwf_guarded limit).
+
+(*val untilM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
+                ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e*)
+Fixpoint untilST' {RV Vars E} limit (vars : Vars) (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) (acc : Acc (Zwf 0) limit) : monadS RV Vars E :=
+  if Z_ge_dec limit 0 then
+    body vars >>$= fun vars =>
+    cond vars >>$= fun cond_val =>
+    if cond_val then returnS vars else untilST' (limit - 1) vars cond body (_limit_reduces acc)
+  else failS "Termination limit reached".
+
+Definition untilST {RV Vars E} (vars : Vars) measure (cond : Vars -> monadS RV bool E) (body : Vars -> monadS RV Vars E) : monadS RV Vars E :=
+  let limit := measure vars in
+  untilST' limit vars cond body (Zwf_guarded limit).
+
+
 (*val choose_boolsS : forall 'rv 'e. nat -> monadS 'rv (list bool) 'e*)
 Definition choose_boolsS {RV E} n : monadS RV (list bool) E :=
  genlistS (fun _ => choose_boolS tt) n.
 
 (* TODO: Replace by chooseS and prove equivalence to prompt monad version *)
-(*val internal_pickS : forall 'rv 'a 'e. list 'a -> monadS 'rv 'a 'e
-let internal_pickS xs =
+(*val internal_pickS : forall 'rv 'a 'e. list 'a -> monadS 'rv 'a 'e*)
+Definition internal_pickS {RV A E} (xs : list A) : monadS RV A E :=
   (* Use sufficiently many nondeterministically chosen bits and convert into an
      index into the list *)
-  choose_boolsS (List.length xs) >>$= fun bs ->
-  let idx = (natFromNatural (nat_of_bools bs)) mod List.length xs in
-  match index xs idx with
-    | Just x -> returnS x
-    | Nothing -> failS "choose internal_pick"
-  end
+  choose_boolsS (List.length xs) >>$= fun bs =>
+  let idx := ((nat_of_bools bs) mod List.length xs)%nat in
+  match List.nth_error xs idx with
+    | Some x => returnS x
+    | None => failS "choose internal_pick"
+  end.
 
 
-*)

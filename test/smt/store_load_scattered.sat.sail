@@ -6,7 +6,7 @@ $include "test/arch.sail"
 
 scattered union ast
 
-val execute : ast -> bool
+val execute : ast -> bool effect {rmem, rreg, wmv, wreg}
 
 union clause ast = LOAD : (bits(2), bits(2))
 

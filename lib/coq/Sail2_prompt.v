@@ -53,6 +53,10 @@ Definition foreach_ZM_down {rv e Vars} from to step vars body `{ArithFact (0 < s
 
 (*declare {isabelle} termination_argument foreachM = automatic*)
 
+Definition genlistM {A RV E} (f : nat -> monad RV A E) (n : nat) : monad RV (list A) E :=
+  let indices := List.seq 0 n in
+  foreachM indices [] (fun n xs => (f n >>= (fun x => returnm (xs ++ [x])))).
+
 (*val and_boolM : forall 'rv 'e. monad 'rv bool 'e -> monad 'rv bool 'e -> monad 'rv bool 'e*)
 Definition and_boolM {rv E} (l : monad rv bool E) (r : monad rv bool E) : monad rv bool E :=
  l >>= (fun l => if l then r else returnm false).
@@ -145,7 +149,8 @@ Fixpoint whileMT' {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool 
     else returnm vars
   else Fail "Termination limit reached".
 
-Definition whileMT {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) : monad RV Vars E :=
+Definition whileMT {RV Vars E} (vars : Vars) (measure : Vars -> Z) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) : monad RV Vars E :=
+  let limit := measure vars in
   whileMT' limit vars cond body (Zwf_guarded limit).
 
 (*val untilM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
@@ -157,7 +162,8 @@ Fixpoint untilMT' {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool 
     if cond_val then returnm vars else untilMT' (limit - 1) vars cond body (_limit_reduces acc)
   else Fail "Termination limit reached".
 
-Definition untilMT {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) : monad RV Vars E :=
+Definition untilMT {RV Vars E} (vars : Vars) (measure : Vars -> Z) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) : monad RV Vars E :=
+  let limit := measure vars in
   untilMT' limit vars cond body (Zwf_guarded limit).
 
 (*let write_two_regs r1 r2 vec =
@@ -181,23 +187,21 @@ Definition untilMT {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool
     else slice vec (start_vec - size_r1) (start_vec - size_vec) in
   write_reg r1 r1_v >> write_reg r2 r2_v*)
 
-Fixpoint pick_bit_list {rv e} (n:nat) : monad rv (list bool) e :=
-  match n with
-  | O => returnm []
-  | S m => choose_bool "pick_bit_list" >>= fun b =>
-           pick_bit_list m >>= fun t =>
-           returnm (b::t)
-  end%list.
+Definition choose_bools {RV E} (descr : string) (n : nat) : monad RV (list bool) E :=
+  genlistM (fun _ => choose_bool descr) n.
+
+Definition choose {RV A E} (descr : string) (xs : list A) : monad RV A E :=
+  (* Use sufficiently many nondeterministically chosen bits and convert into an
+     index into the list *)
+  choose_bools descr (List.length xs) >>= fun bs =>
+  let idx := ((nat_of_bools bs) mod List.length xs)%nat in
+  match List.nth_error xs idx with
+    | Some x => returnm x
+    | None => Fail ("choose " ++ descr)
+  end.
 
 Definition internal_pick {rv a e} (xs : list a) : monad rv a e :=
-  let n := length xs in
-  match xs with
-  | h::_ =>
-    pick_bit_list (2 + n) >>= fun bs =>
-    let i := (Word.wordToNat (wordFromBitlist bs) mod n)%nat in
-    returnm (List.nth i xs h)
-  | [] => Fail "internal_pick called on empty list"
-  end.
+  choose "internal_pick" xs.
 
 Fixpoint undefined_word_nat {rv e} n : monad rv (Word.word n) e :=
   match n with
