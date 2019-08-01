@@ -3,7 +3,7 @@ default Order dec
 $include <exception_basic.sail>
 $include <vector_dec.sail>
 
-val flip_mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (vector('v, dec, bit), atom('len)) -> vector('len, dec, bit)
+val flip_mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (bitvector('v, dec), atom('len)) -> bitvector('len, dec)
 
 function flip_mask(v, len) = len ^ v
 

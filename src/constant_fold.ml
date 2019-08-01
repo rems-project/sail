@@ -191,7 +191,7 @@ let rec run frame =
 let initial_state ast env =
   Interpreter.initial_state ~registers:false ast env safe_primops
 
-let rw_exp ok not_ok istate =
+let rw_exp target ok not_ok istate =
   let evaluate e_aux annot =
     let initial_monad = Interpreter.return (E_aux (e_aux, annot)) in
     try
@@ -220,7 +220,16 @@ let rw_exp ok not_ok istate =
        ok (); E_aux (E_lit (L_aux (L_unit, fst annot)), annot)
 
     | E_app (id, args) when List.for_all is_constant args ->
-       evaluate e_aux annot
+       let env = env_of_annot annot in
+       (* We want to fold all primitive operations, but avoid folding
+          non-primitives that are defined in target-specific way. *)
+       let is_primop =
+         Env.is_extern id env "interpreter" && StringMap.mem (Env.get_extern id env "interpreter") safe_primops
+       in
+       if not (Env.is_extern id env target) || is_primop then
+         evaluate e_aux annot
+       else
+         E_aux (e_aux, annot)
 
     | E_cast (typ, (E_aux (E_lit _, _) as lit)) -> ok (); lit
 
@@ -243,9 +252,9 @@ let rw_exp ok not_ok istate =
   in
   fold_exp { id_exp_alg with e_aux = (fun (e_aux, annot) -> rw_funcall e_aux annot)}
 
-let rewrite_exp_once = rw_exp (fun _ -> ()) (fun _ -> ())
+let rewrite_exp_once target = rw_exp target (fun _ -> ()) (fun _ -> ())
 
-let rec rewrite_constant_function_calls' ast =
+let rec rewrite_constant_function_calls' target ast =
   let rewrite_count = ref 0 in
   let ok () = incr rewrite_count in
   let not_ok () = decr rewrite_count in
@@ -253,16 +262,16 @@ let rec rewrite_constant_function_calls' ast =
 
   let rw_defs = {
       rewriters_base with
-      rewrite_exp = (fun _ -> rw_exp ok not_ok istate)
+      rewrite_exp = (fun _ -> rw_exp target ok not_ok istate)
     } in
   let ast = rewrite_defs_base rw_defs ast in
   (* We keep iterating until we have no more re-writes to do *)
   if !rewrite_count > 0
-  then rewrite_constant_function_calls' ast
+  then rewrite_constant_function_calls' target ast
   else ast
 
-let rewrite_constant_function_calls ast =
+let rewrite_constant_function_calls target ast =
   if !optimize_constant_fold then
-    rewrite_constant_function_calls' ast
+    rewrite_constant_function_calls' target ast
   else
     ast

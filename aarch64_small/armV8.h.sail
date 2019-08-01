@@ -32,8 +32,6 @@
 /*  SUCH DAMAGE.                                                          */
 /*========================================================================*/
 
-default Order dec
-
 type boolean = bit
 type integer = int
 type uinteger = nat /* ARM ARM does not have nat/uint type */

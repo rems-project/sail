@@ -40,7 +40,7 @@
     "exmem" "undef" "unspec" "nondet" "escape" "configuration"))
 
 (defconst sail2-types
-  '("vector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string" "bits" "option"
+  '("vector" "bitvector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string" "bits" "option"
     "uint64_t" "int64_t" "bv_t" "mpz_t"))
 
 (defconst sail2-special

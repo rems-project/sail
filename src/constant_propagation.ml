@@ -301,7 +301,7 @@ let is_env_inconsistent env ksubsts =
 module StringSet = Set.Make(String)
 module StringMap = Map.Make(String)
 
-let const_props defs ref_vars =
+let const_props target defs ref_vars =
   let const_fold exp =
     (* Constant-fold function applications with constant arguments *)
     let interpreter_istate =
@@ -316,7 +316,7 @@ let const_props defs ref_vars =
     try
       strip_exp exp
       |> infer_exp (env_of exp)
-      |> Constant_fold.rewrite_exp_once interpreter_istate
+      |> Constant_fold.rewrite_exp_once target interpreter_istate
       |> keep_undef_typ
     with
     | _ -> exp
@@ -603,7 +603,7 @@ let const_props defs ref_vars =
     | E_assert (e1,e2) ->
        let e1',e2',assigns = non_det_exp_2 e1 e2 in
        re (E_assert (e1',e2')) assigns
-  
+
     | E_app_infix _
     | E_var _
     | E_internal_plet _
@@ -803,15 +803,15 @@ let const_props defs ref_vars =
          | DoesMatch (subst,ksubst) -> Some (exp,subst,ksubst)
          | GiveUp -> None
     in findpat_generic (string_of_exp exp0) assigns cases
-  
+
   and can_match exp =
     let env = Type_check.env_of exp in
     can_match_with_env env exp
 
 in (const_prop_exp, const_prop_pexp)
 
-let const_prop d r = fst (const_props d r)
-let const_prop_pexp d r = snd (const_props d r)
+let const_prop target d r = fst (const_props target d r)
+let const_prop_pexp target d r = snd (const_props target d r)
 
 let referenced_vars exp =
   let open Rewriter in

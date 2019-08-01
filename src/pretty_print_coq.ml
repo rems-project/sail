@@ -591,15 +591,18 @@ let rec doc_typ_fns ctx env =
          parens (separate_map (space ^^ star ^^ space) (app_typ false) typs)
       | _ -> app_typ atyp_needed ty
     and app_typ atyp_needed ((Typ_aux (t, l)) as ty) = match t with
+      | Typ_app(Id_aux (Id "bitvector", _), [
+          A_aux (A_nexp m, _);
+          A_aux (A_order ord, _)]) ->
+         (* TODO: remove duplication with exists, below *)
+         let tpp = string "mword " ^^ doc_nexp ctx m in
+         if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "vector", _), [
           A_aux (A_nexp m, _);
           A_aux (A_order ord, _);
           A_aux (A_typ elem_typ, _)]) ->
          (* TODO: remove duplication with exists, below *)
-         let tpp = match elem_typ with
-           | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) -> (* TODO: coq-compatible simplification *)
-             string "mword " ^^ doc_nexp ctx m
-           | _ -> string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ doc_nexp ctx m in
+         let tpp = string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ doc_nexp ctx m in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
          let tpp = string "register_ref regstate register_value " ^^ typ etyp in
@@ -661,6 +664,23 @@ let rec doc_typ_fns ctx env =
                 braces (separate space [doc_var ctx var; colon; string "Z";
                                         ampersand; doc_arithfact ctx env ~exists:(List.map kopt_kid kopts) nc])
              end
+          | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),
+                              [A_aux (A_nexp m, _);
+                               A_aux (A_order ord, _)]), _) ->
+             (* TODO: proper handling of m, complex elem type, dedup with above *)
+             let var = mk_kid "_vec" in (* TODO collision avoid *)
+             let kid_set = KidSet.of_list (List.map kopt_kid kopts) in
+             let m_pp = doc_nexp ctx ~skip_vars:kid_set m in
+             let tpp, len_pp = string "mword " ^^ m_pp, string "length_mword" in
+             let length_constraint_pp =
+               if KidSet.is_empty (KidSet.inter kid_set (nexp_frees m))
+               then None
+               else Some (separate space [len_pp; doc_var ctx var; equals; doc_nexp ctx m])
+             in
+             braces (separate space
+                       [doc_var ctx var; colon; tpp;
+                        ampersand;
+                        doc_arithfact ctx env ~exists:(List.map kopt_kid kopts) ?extra:length_constraint_pp nc])
           | Typ_aux (Typ_app (Id_aux (Id "vector",_),
                               [A_aux (A_nexp m, _);
                                A_aux (A_order ord, _);
@@ -669,11 +689,7 @@ let rec doc_typ_fns ctx env =
              let var = mk_kid "_vec" in (* TODO collision avoid *)
              let kid_set = KidSet.of_list (List.map kopt_kid kopts) in
              let m_pp = doc_nexp ctx ~skip_vars:kid_set m in
-             let tpp, len_pp = match elem_typ with
-               | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) ->
-                  string "mword " ^^ m_pp, string "length_mword"
-               | _ -> string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ m_pp,
-                      string "vec_length" in
+             let tpp, len_pp = string "vec" ^^ space ^^ typ elem_typ ^^ space ^^ m_pp, string "vec_length" in
              let length_constraint_pp =
                if KidSet.is_empty (KidSet.inter kid_set (nexp_frees m))
                then None
@@ -1018,9 +1034,8 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
     -> NexpSet.empty
   | Typ_fn (t1,t2,_) -> List.fold_left NexpSet.union (typeclass_nexps t2) (List.map typeclass_nexps t1)
   | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
-  | Typ_app (Id_aux (Id "vector",_),
-             [A_aux (A_nexp size_nexp,_);
-              _;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)])
+  | Typ_app (Id_aux (Id "bitvector",_),
+             [A_aux (A_nexp size_nexp,_); _])
   | Typ_app (Id_aux (Id "itself",_),
              [A_aux (A_nexp size_nexp,_)]) ->
      let size_nexp = nexp_simp size_nexp in
@@ -1607,22 +1622,22 @@ let doc_exp, doc_let =
                          ,_),body'),_) -> body'
               | _ -> body
             in
-            let msuffix, measure_pp =
-              match measure with
-              | None -> "", []
-              | Some exp -> "T", [expY exp]
-            in
             let used_vars_body = find_e_ids body in
             let varstuple_pp, lambda =
               make_loop_vars [] varstuple
             in
+            let msuffix, measure_pp =
+              match measure with
+              | None -> "", []
+              | Some exp -> "T", [parens (prefix 2 1 (group lambda) (expN exp))]
+            in
             parens (
                 (prefix 2 1)
-                  ((separate space) (string (combinator ^ csuffix ^ msuffix)::
-                                       measure_pp@[varstuple_pp]))
-                  ((prefix 0 1)
-                     (parens (prefix 2 1 (group lambda) (expN cond)))
-                     (parens (prefix 2 1 (group lambda) (expN body))))
+                  (string (combinator ^ csuffix ^ msuffix))
+                  (separate (break 1)
+                     (varstuple_pp::measure_pp@
+                        [parens (prefix 2 1 (group lambda) (expN cond));
+                         parens (prefix 2 1 (group lambda) (expN body))]))
               )
           end
        | Id_aux (Id "early_return", _) ->
@@ -2017,7 +2032,7 @@ let doc_exp, doc_let =
     | E_vector exps ->
        let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let start, (len, order, etyp) =
-         if is_vector_typ t then vector_start_index t, vector_typ_args_of t
+         if is_vector_typ t || is_bitvector_typ t then vector_start_index t, vector_typ_args_of t
          else raise (Reporting.err_unreachable l __POS__
            "E_vector of non-vector type") in
        let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in

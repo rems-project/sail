@@ -5,7 +5,7 @@ $include <vector_dec.sail>
 
 val "print_int" : (string, int) -> unit
 
-register R : vector(32, dec, vector(32, dec, bit))
+register R : vector(32, dec, bitvector(32, dec))
 
 register T : vector(32, dec, int)
 

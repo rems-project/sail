@@ -1,7 +1,7 @@
+default Order dec
+
 $include <arith.sail>
 $include <vector_dec.sail>
-
-default Order dec
 
 infix 1 >>
 infix 1 <<

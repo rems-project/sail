@@ -139,29 +139,45 @@ instance (Show write_kind)
   end
 end
 *)
+
+Inductive a64_barrier_domain :=
+  A64_FullShare
+  | A64_InnerShare
+  | A64_OuterShare
+  | A64_NonShare.
+
+Inductive a64_barrier_type :=
+  A64_barrier_all
+  | A64_barrier_LD
+  | A64_barrier_ST.
+
 Inductive barrier_kind :=
   (* Power barriers *)
-  Barrier_Sync | Barrier_LwSync | Barrier_Eieio | Barrier_Isync
+  | Barrier_Sync : unit -> barrier_kind
+  | Barrier_LwSync : unit -> barrier_kind
+  | Barrier_Eieio : unit -> barrier_kind
+  | Barrier_Isync : unit -> barrier_kind
   (* AArch64 barriers *)
-  | Barrier_DMB | Barrier_DMB_ST | Barrier_DMB_LD | Barrier_DSB
-  | Barrier_DSB_ST | Barrier_DSB_LD | Barrier_ISB
+  | Barrier_DMB : a64_barrier_domain -> a64_barrier_type -> barrier_kind
+  | Barrier_DSB : a64_barrier_domain -> a64_barrier_type -> barrier_kind
+  | Barrier_ISB : unit -> barrier_kind
  (* | Barrier_TM_COMMIT*)
   (* MIPS barriers *)
-  | Barrier_MIPS_SYNC
+  | Barrier_MIPS_SYNC : unit -> barrier_kind
   (* RISC-V barriers *)
-  | Barrier_RISCV_rw_rw
-  | Barrier_RISCV_r_rw
-  | Barrier_RISCV_r_r
-  | Barrier_RISCV_rw_w
-  | Barrier_RISCV_w_w
-  | Barrier_RISCV_w_rw
-  | Barrier_RISCV_rw_r
-  | Barrier_RISCV_r_w
-  | Barrier_RISCV_w_r
-  | Barrier_RISCV_tso
-  | Barrier_RISCV_i
+  | Barrier_RISCV_rw_rw : unit -> barrier_kind
+  | Barrier_RISCV_r_rw : unit -> barrier_kind
+  | Barrier_RISCV_r_r : unit -> barrier_kind
+  | Barrier_RISCV_rw_w : unit -> barrier_kind
+  | Barrier_RISCV_w_w : unit -> barrier_kind
+  | Barrier_RISCV_w_rw : unit -> barrier_kind
+  | Barrier_RISCV_rw_r : unit -> barrier_kind
+  | Barrier_RISCV_r_w : unit -> barrier_kind
+  | Barrier_RISCV_w_r : unit -> barrier_kind
+  | Barrier_RISCV_tso : unit -> barrier_kind
+  | Barrier_RISCV_i : unit -> barrier_kind
   (* X86 *)
-  | Barrier_x86_MFENCE.
+  | Barrier_x86_MFENCE : unit -> barrier_kind.
 Scheme Equality for barrier_kind.
 
 (*

@@ -17,7 +17,7 @@ function neq(x, y) = ~(eq(x, y))
 
 struct S = {
   field1: int,
-  field2: vector(8, dec, bit)
+  field2: bitvector(8, dec)
 }
 
 val "print" : string -> unit

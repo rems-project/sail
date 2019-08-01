@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-val decode : vector(16, dec, bit) -> unit
+val decode : bitvector(16, dec) -> unit
 
 scattered function decode
 
@@ -22,11 +22,11 @@ function clause decode 0x00 @ 0b001 @ [b : bit] @ 0x0 =
 
 end decode
 
-val decode2 : vector(16, dec, bit) -> unit
+val decode2 : bitvector(16, dec) -> unit
 
 function decode2 x =
   match x {
-    0x00 @ 0b000 @ [b : bit]  @ 0x0 =>
+    0x00 @ 0b000 @ [b : bit] @ 0x0 =>
       if b == bitone then {
         ()
       } else {

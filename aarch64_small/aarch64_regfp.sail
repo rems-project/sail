@@ -183,7 +183,7 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
     (GenerateExceptionEL1(imm))  => not_implemented("GenerateExceptionEL1"),
     (GenerateExceptionEL2(imm))  => not_implemented("GenerateExceptionEL2"),
     (GenerateExceptionEL3(imm))  => not_implemented("GenerateExceptionEL3"),
-    (DebugBreakpoint(comment))  => not_implemented("DebugBreakpoint"),
+    (DebugBreakpoint(comment))   => not_implemented("DebugBreakpoint"),
     (ExternalDebugBreakpoint())  => not_implemented("ExternalDebugBreakpoint"),
     (DebugSwitchToExceptionLevel(target_level))  => not_implemented("DebugSwitchToExceptionLevel"),
     (MoveSystemImmediate(operand,field))  =>
@@ -223,22 +223,25 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
       },
     (ClearExclusiveMonitor(imm))  => (), /*ClearExclusiveLocal*/
     (Barrier(op,domain,types))  => {
+      let (dom, typ) : (a64_barrier_domain, a64_barrier_type) =
+        (match domain {
+	  MBReqDomain_Nonshareable   => A64_NonShare,
+	  MBReqDomain_InnerShareable => A64_InnerShare,
+	  MBReqDomain_OuterShareable => A64_OuterShare,
+          MBReqDomain_FullSystem     => A64_FullShare
+        },
+        match types {
+	  MBReqTypes_Reads  => A64_barrier_LD,
+	  MBReqTypes_Writes => A64_barrier_ST,
+          MBReqTypes_All    => A64_barrier_all
+        })
+      in {
       ik = match op {
-        MemBarrierOp_DSB  =>
-          match types {
-            MBReqTypes_Reads   => IK_barrier(Barrier_DSB_LD),
-            MBReqTypes_Writes  => IK_barrier(Barrier_DSB_ST),
-            MBReqTypes_All     => IK_barrier(Barrier_DSB)
-          },
-        MemBarrierOp_DMB  => 
-          match types {
-            MBReqTypes_Reads   => IK_barrier(Barrier_DMB_LD),
-            MBReqTypes_Writes  => IK_barrier(Barrier_DMB_ST),
-            MBReqTypes_All     => IK_barrier(Barrier_DMB)
-          },
-        MemBarrierOp_ISB  =>
-          IK_barrier(Barrier_ISB)
+	MemBarrierOp_DSB => IK_barrier(Barrier_DSB(dom, typ)),
+	MemBarrierOp_DMB => IK_barrier(Barrier_DMB(dom, typ)),
+	MemBarrierOp_ISB => IK_barrier(Barrier_ISB())
       };
+      }
     },
 
     (DataCache(t,dc_op)) => {

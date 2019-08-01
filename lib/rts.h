@@ -86,7 +86,7 @@ bool platform_write_mem(const int write_kind,
                         const mpz_t n,
                         const lbits data);
 bool platform_excl_res(const unit unit);
-unit platform_barrier(const int barrier_kind);
+unit platform_barrier();
 
 
 

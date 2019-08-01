@@ -94,7 +94,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
     | _ -> string ("NEXP(" ^ string_of_nexp nexp ^ ")")
   in
   let rec fromValueTypArg (A_aux (a_aux, _)) = match a_aux with
-    | A_typ typ -> fromValueTyp typ ""
+    | A_typ typ -> parens ((string "fun v -> ") ^^ parens (fromValueTyp typ "v"))
     | A_nexp nexp -> fromValueNexp nexp
     | A_order order -> string ("Order_" ^ (string_of_order order))
     | A_bool _ -> parens (string "boolFromInterpValue")
@@ -139,6 +139,8 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
      begin match id with
      | Id_aux ((Id "read_kind"),_) -> empty
      | Id_aux ((Id "write_kind"),_) -> empty
+     | Id_aux ((Id "a64_barrier_domain"),_) -> empty
+     | Id_aux ((Id "a64_barrier_type"),_) -> empty
      | Id_aux ((Id "barrier_kind"),_) -> empty
      | Id_aux ((Id "trans_kind"),_) -> empty
      | Id_aux ((Id "instruction_kind"),_) -> empty
@@ -197,6 +199,8 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
      end
   | TD_enum (Id_aux (Id "read_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "write_kind", _), _, _) -> empty
+  | TD_enum (Id_aux (Id "a64_barrier_domain", _), _, _) -> empty
+  | TD_enum (Id_aux (Id "a64_barrier_type", _), _, _) -> empty
   | TD_enum (Id_aux (Id "barrier_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "trans_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "cache_op_kind", _), _, _) -> empty
@@ -248,7 +252,7 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
     | _ -> string ("NEXP(" ^ string_of_nexp nexp ^ ")")
   in
   let rec toValueTypArg (A_aux (a_aux, _)) = match a_aux with
-    | A_typ typ -> toValueTyp typ ""
+    | A_typ typ -> parens ((string "fun v -> ") ^^ parens (toValueTyp typ "v"))
     | A_nexp nexp -> toValueNexp nexp
     | A_order order -> string ("Order_" ^ (string_of_order order))
     | A_bool _ -> parens (string "boolToInterpValue") 
@@ -293,6 +297,8 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
      begin match id with
      | Id_aux ((Id "read_kind"),_) -> empty
      | Id_aux ((Id "write_kind"),_) -> empty
+     | Id_aux ((Id "a64_barrier_domain"),_) -> empty
+     | Id_aux ((Id "a64_barrier_type"),_) -> empty
      | Id_aux ((Id "barrier_kind"),_) -> empty
      | Id_aux ((Id "trans_kind"),_) -> empty
      | Id_aux ((Id "instruction_kind"),_) -> empty
@@ -346,6 +352,8 @@ let tointerp_typedef (TD_aux (td_aux, (l, _))) =
      end
   | TD_enum (Id_aux (Id "read_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "write_kind", _), _, _) -> empty
+  | TD_enum (Id_aux (Id "a64_barrier_domain", _), _, _) -> empty
+  | TD_enum (Id_aux (Id "a64_barrier_type", _), _, _) -> empty
   | TD_enum (Id_aux (Id "barrier_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "trans_kind", _), _, _) -> empty
   | TD_enum (Id_aux (Id "cache_op_kind", _), _, _) -> empty

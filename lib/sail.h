@@ -223,7 +223,7 @@ void CONVERT_OF(lbits, sbits)(lbits *, const sbits, const bool);
 sbits CONVERT_OF(sbits, fbits)(const fbits, const uint64_t, const bool);
 sbits CONVERT_OF(sbits, lbits)(const lbits, const bool);
 
-void UNDEFINED(lbits)(lbits *, const sail_int len, const fbits bit);
+void UNDEFINED(lbits)(lbits *, const sail_int len);
 fbits UNDEFINED(fbits)(const unit);
 
 sbits undefined_sbits(void);

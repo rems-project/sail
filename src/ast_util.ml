@@ -423,6 +423,11 @@ let vector_typ n ord typ =
                     mk_typ_arg (A_order ord);
                     mk_typ_arg (A_typ typ)]))
 
+let bitvector_typ n ord =
+  mk_typ (Typ_app (mk_id "bitvector",
+                   [mk_typ_arg (A_nexp (nexp_simp n));
+                    mk_typ_arg (A_order ord)]))
+
 let exc_typ = mk_id_typ (mk_id "exception")
 
 let nconstant c = Nexp_aux (Nexp_constant c, Parse_ast.Unknown)
@@ -1342,6 +1347,8 @@ let typ_app_args_of = function
 let rec vector_typ_args_of typ = match typ_app_args_of typ with
   | ("vector", [A_nexp len; A_order ord; A_typ etyp], l) ->
      (nexp_simp len, ord, etyp)
+  | ("bitvector", [A_nexp len; A_order ord], l) ->
+     (nexp_simp len, ord, bit_typ)
   | ("register", [A_typ rtyp], _) -> vector_typ_args_of rtyp
   | (_, _, l) ->
      raise (Reporting.err_typ l
@@ -1364,11 +1371,11 @@ let is_bit_typ = function
   | Typ_aux (Typ_id (Id_aux (Id "bit", _)), _) -> true
   | _ -> false
 
-let is_bitvector_typ typ =
-  if is_vector_typ typ then
-    let (_,_,etyp) = vector_typ_args_of typ in
-    is_bit_typ etyp
-  else false
+let rec is_bitvector_typ = function
+  | Typ_aux (Typ_app (Id_aux (Id "bitvector", _), [_;_]), _) -> true
+  | Typ_aux (Typ_app (Id_aux (Id "register",_), [A_aux (A_typ rtyp,_)]), _) ->
+    is_bitvector_typ rtyp
+  | _ -> false
 
 let has_effect (Effect_aux (eff,_)) searched_for = match eff with
   | Effect_set effs ->

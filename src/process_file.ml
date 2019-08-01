@@ -94,9 +94,14 @@ let default_symbols =
   List.fold_left (fun set str -> StringSet.add str set) StringSet.empty
     [ "FEATURE_IMPLICITS";
       "FEATURE_CONSTANT_TYPES";
+      "FEATURE_BITVECTOR_TYPE";
+      "FEATURE_UNION_BARRIER";
     ]
 
 let symbols = ref default_symbols
+
+let have_symbol symbol =
+  StringSet.mem symbol !symbols
 
 let clear_symbols () = symbols := default_symbols
 

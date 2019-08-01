@@ -106,6 +106,11 @@ let rec undefined_vector (len, item) =
   then []
   else item :: undefined_vector (Big_int.sub len (Big_int.of_int 1), item)
 
+let rec undefined_bitvector len =
+  if Big_int.equal len Big_int.zero
+  then []
+  else B0 :: undefined_vector (Big_int.sub len (Big_int.of_int 1), B0)
+
 let undefined_string () = ""
 
 let undefined_unit () = ()

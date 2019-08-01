@@ -1,11 +1,11 @@
 $include <smt.sail>
 $include <flow.sail>
 default Order dec
-type bits ('n : Int) = vector('n, dec, bit)
+type bits ('n : Int) = bitvector('n, dec)
 val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
 overload operator == = {eq_int, eq_vec}
-val "extz_vec" : forall 'n 'm. (atom('m),vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
-val extz : forall 'n 'm. (implicit('m), vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+val "extz_vec" : forall 'n 'm. (atom('m),bitvector('n, dec)) -> bitvector('m, dec) effect pure
+val extz : forall 'n 'm. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
 function extz(m,v) = extz_vec(m,v)
 val UInt = {
   ocaml: "uint",

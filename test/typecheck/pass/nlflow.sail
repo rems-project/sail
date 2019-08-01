@@ -7,7 +7,7 @@ $include <exception_basic.sail>
 
 val foo : forall 'n, 'n != 8. int('n) -> unit
 
-function test(xs: vector(4, dec, bit)) -> unit = {
+function test(xs: bitvector(4, dec)) -> unit = {
   if xs == 0b1000 then {
     throw(Exception())
   };

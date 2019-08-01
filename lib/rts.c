@@ -283,6 +283,13 @@ void platform_read_mem(lbits *data,
                        const sbits addr,
                        const mpz_t n)
 {
+  sbits sdata;
+  uint64_t len = mpz_get_ui(n); /* Sail type says always >0 */
+  if (len <= 8) {
+    /* fast path for small reads */
+    sdata = fast_read_ram(len, addr.bits);
+    RECREATE_OF(lbits, sbits)(data, sdata, true);
+  } else {
     mpz_t mpz_addr_size;
     mpz_init(mpz_addr_size);
     mpz_set_ui(mpz_addr_size, addr_size);
@@ -292,6 +299,7 @@ void platform_read_mem(lbits *data,
     read_ram(data, mpz_addr_size, n, (lbits){.len=0, .bits=NULL}, (lbits){.len=addr.len, .bits=&addr_bv});
     mpz_clear(mpz_addr_size);
     mpz_clear(addr_bv);
+  }
 }
 
 unit platform_write_mem_ea(const int write_kind,
@@ -325,7 +333,7 @@ bool platform_excl_res(const unit unit)
     return true;
 }
 
-unit platform_barrier(const int barrier_kind)
+unit platform_barrier()
 {
     return UNIT;
 }

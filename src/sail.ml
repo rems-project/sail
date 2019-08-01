@@ -70,6 +70,7 @@ let opt_file_arguments = ref ([]:string list)
 let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
 let opt_splice = ref ([]:string list)
+let opt_have_feature = ref None
 
 let set_target name = Arg.Unit (fun _ -> opt_target := Some name)
 
@@ -282,6 +283,9 @@ let options = Arg.align ([
   ( "-memo",
     Arg.Tuple [Arg.Set opt_memo_z3; Arg.Set C_backend.opt_memo_cache],
     " memoize calls to z3, and intermediate compilation results");
+  ( "-have_feature",
+    Arg.String (fun symbol -> opt_have_feature := Some symbol),
+    " check if a feature symbol is set by default");
   ( "-splice",
     Arg.String (fun s -> opt_splice := s :: !opt_splice),
     "<filename> add functions from file, replacing existing definitions where necessary");
@@ -416,6 +420,9 @@ let load_files ?check:(check=false) type_envs files =
   else
     let ast = Scattered.descatter ast in
     let ast, type_envs = rewrite_ast_initial type_envs ast in
+    (* Recheck after descattering so that the internal type environments always
+       have complete variant types *)
+    let ast, type_envs = Type_error.check Type_check.initial_env ast in
 
     let out_name = match !opt_file_out with
       | None when parsed = [] -> "out.sail"
@@ -551,7 +558,17 @@ let target name out_name ast type_envs =
   | Some t ->
      raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ ("Undefined target: " ^ t))
 
+let feature_check () =
+  match !opt_have_feature with
+  | None -> ()
+  | Some symbol ->
+     if Process_file.have_symbol symbol then
+       exit 0
+     else
+       exit 2
+
 let main () =
+  feature_check ();
   if !opt_print_version then
     print_endline version
   else

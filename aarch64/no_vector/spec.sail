@@ -742,21 +742,21 @@ val __UNKNOWN_MemOp : unit -> MemOp
 
 function __UNKNOWN_MemOp () = return(MemOp_LOAD)
 
-let MemHint_RWA : vector(2, dec, bit) = 0b11
+let MemHint_RWA : bits(2) = 0b11
 
-let MemHint_RA : vector(2, dec, bit) = 0b10
+let MemHint_RA : bits(2) = 0b10
 
-let MemHint_No : vector(2, dec, bit) = 0b00
+let MemHint_No : bits(2) = 0b00
 
 val __UNKNOWN_MemBarrierOp : unit -> MemBarrierOp
 
 function __UNKNOWN_MemBarrierOp () = return(MemBarrierOp_DSB)
 
-let MemAttr_WT : vector(2, dec, bit) = 0b10
+let MemAttr_WT : bits(2) = 0b10
 
-let MemAttr_WB : vector(2, dec, bit) = 0b11
+let MemAttr_WB : bits(2) = 0b11
 
-let MemAttr_NC : vector(2, dec, bit) = 0b00
+let MemAttr_NC : bits(2) = 0b00
 
 val __UNKNOWN_MemAtomicOp : unit -> MemAtomicOp
 
@@ -782,23 +782,23 @@ register MAIR_EL2 : bits(64)
 
 register MAIR_EL1 : bits(64)
 
-let M32_User : vector(5, dec, bit) = 0b10000
+let M32_User : bits(5) = 0b10000
 
-let M32_Undef : vector(5, dec, bit) = 0b11011
+let M32_Undef : bits(5) = 0b11011
 
-let M32_System : vector(5, dec, bit) = 0b11111
+let M32_System : bits(5) = 0b11111
 
-let M32_Svc : vector(5, dec, bit) = 0b10011
+let M32_Svc : bits(5) = 0b10011
 
-let M32_Monitor : vector(5, dec, bit) = 0b10110
+let M32_Monitor : bits(5) = 0b10110
 
-let M32_IRQ : vector(5, dec, bit) = 0b10010
+let M32_IRQ : bits(5) = 0b10010
 
-let M32_Hyp : vector(5, dec, bit) = 0b11010
+let M32_Hyp : bits(5) = 0b11010
 
-let M32_FIQ : vector(5, dec, bit) = 0b10001
+let M32_FIQ : bits(5) = 0b10001
 
-let M32_Abort : vector(5, dec, bit) = 0b10111
+let M32_Abort : bits(5) = 0b10111
 
 val __UNKNOWN_LogicalOp : unit -> LogicalOp
 
@@ -1113,13 +1113,13 @@ register ELR_EL2 : bits(64)
 
 register ELR_EL1 : bits(64)
 
-let EL3 : vector(2, dec, bit) = 0b11
+let EL3 : bits(2) = 0b11
 
-let EL2 : vector(2, dec, bit) = 0b10
+let EL2 : bits(2) = 0b10
 
-let EL1 : vector(2, dec, bit) = 0b01
+let EL1 : bits(2) = 0b01
 
-let EL0 : vector(2, dec, bit) = 0b00
+let EL0 : bits(2) = 0b00
 
 register EDSCR : bits(32)
 
@@ -1149,13 +1149,13 @@ function DecodeRegExtend op = match op {
   0b111 => return(ExtendType_SXTX)
 }
 
-let DebugHalt_Watchpoint : vector(6, dec, bit) = 0b101011
+let DebugHalt_Watchpoint : bits(6) = 0b101011
 
-let DebugHalt_HaltInstruction : vector(6, dec, bit) = 0b101111
+let DebugHalt_HaltInstruction : bits(6) = 0b101111
 
-let DebugHalt_Breakpoint : vector(6, dec, bit) = 0b000111
+let DebugHalt_Breakpoint : bits(6) = 0b000111
 
-let DebugException_VectorCatch : vector(4, dec, bit) = 0x5
+let DebugException_VectorCatch : bits(4) = 0x5
 
 val DataSynchronizationBarrier : (MBReqDomain, MBReqTypes) -> unit
 

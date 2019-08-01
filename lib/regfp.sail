@@ -61,31 +61,40 @@ enum write_kind = {
   Write_X86_locked
 }
 
-enum barrier_kind = {
-  Barrier_Sync,
-  Barrier_LwSync,
-  Barrier_Eieio,
-  Barrier_Isync,
-  Barrier_DMB,
-  Barrier_DMB_ST,
-  Barrier_DMB_LD,
-  Barrier_DSB,
-  Barrier_DSB_ST,
-  Barrier_DSB_LD,
-  Barrier_ISB,
-  Barrier_MIPS_SYNC,
-  Barrier_RISCV_rw_rw,
-  Barrier_RISCV_r_rw,
-  Barrier_RISCV_r_r,
-  Barrier_RISCV_rw_w,
-  Barrier_RISCV_w_w,
-  Barrier_RISCV_w_rw,
-  Barrier_RISCV_rw_r,
-  Barrier_RISCV_r_w,
-  Barrier_RISCV_w_r,
-  Barrier_RISCV_tso,
-  Barrier_RISCV_i,
-  Barrier_x86_MFENCE
+enum a64_barrier_domain = {
+  A64_FullShare,
+  A64_InnerShare,
+  A64_OuterShare,
+  A64_NonShare
+}
+
+enum a64_barrier_type = {
+  A64_barrier_all,
+  A64_barrier_LD,
+  A64_barrier_ST
+}
+
+union barrier_kind = {
+  Barrier_Sync : unit,
+  Barrier_LwSync : unit,
+  Barrier_Eieio : unit,
+  Barrier_Isync : unit,
+  Barrier_DMB : (a64_barrier_domain, a64_barrier_type),
+  Barrier_DSB : (a64_barrier_domain, a64_barrier_type),
+  Barrier_ISB : unit,
+  Barrier_MIPS_SYNC : unit,
+  Barrier_RISCV_rw_rw : unit,
+  Barrier_RISCV_r_rw : unit,
+  Barrier_RISCV_r_r : unit,
+  Barrier_RISCV_rw_w : unit,
+  Barrier_RISCV_w_w : unit,
+  Barrier_RISCV_w_rw : unit,
+  Barrier_RISCV_rw_r : unit,
+  Barrier_RISCV_r_w : unit,
+  Barrier_RISCV_w_r : unit,
+  Barrier_RISCV_tso : unit,
+  Barrier_RISCV_i : unit,
+  Barrier_x86_MFENCE : unit
 }
 
 enum trans_kind = {

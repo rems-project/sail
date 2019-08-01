@@ -1,10 +1,10 @@
 default Order dec
 
-val "print_bits" : forall 'n. (string, vector('n, dec, bit)) -> unit
+val "print_bits" : forall 'n. (string, bitvector('n, dec)) -> unit
 
 struct test = {
-  A : vector(4, dec, bit),
-  B : vector(2, dec, bit),
+  A : bitvector(4, dec),
+  B : bitvector(2, dec),
 }
 
 function main (() : unit) -> unit = {

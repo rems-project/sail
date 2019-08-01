@@ -1,8 +1,7 @@
+default Order dec
+
 let b1 = bitone
 let b0 = bitzero
-
-
-/* default Order dec */
 
 val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 /* sneaky deref with no effect necessary for bitfield writes */
@@ -13,13 +12,12 @@ val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 /* val eq_bit2 = "eq_bit" : (bit, bit) -> bool */
 /* overload operator == = {eq_bit2} */
 
-
-
 $include <smt.sail>
 $include <flow.sail>
 $include <arith.sail>
 $include <option.sail>
 $include <vector_dec.sail>
+
 $include <regfp.sail>
 
 infix 7 >>

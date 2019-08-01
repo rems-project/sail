@@ -448,6 +448,7 @@ module Env : sig
   val set_default_order_dec : t -> t
   val add_enum : id -> id list -> t -> t
   val get_enum : id -> t -> id list
+  val is_enum : id -> t -> bool
   val get_casts : t -> id list
   val allow_casts : t -> bool
   val no_casts : t -> t
@@ -548,6 +549,7 @@ end = struct
         ("atom", [K_int]);
         ("implicit", [K_int]);
         ("vector", [K_int; K_order; K_type]);
+        ("bitvector", [K_int; K_order]);
         ("register", [K_type]);
         ("bit", []);
         ("unit", []);
@@ -1027,6 +1029,8 @@ end = struct
     with
     | Not_found -> typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
+  let is_enum id env = Bindings.mem id env.enums
+                 
   let is_record id env = Bindings.mem id env.records
 
   let get_record id env = Bindings.find id env.records
@@ -1312,6 +1316,7 @@ let default_order_error_string =
   "No default Order (if you have set a default Order, move it earlier in the specification)"
 
 let dvector_typ env n typ = vector_typ n (Env.get_default_order env) typ
+let bits_typ env n = bitvector_typ n (Env.get_default_order env)
 
 let add_existential l kopts nc env =
   let env = List.fold_left (fun env kopt -> Env.add_typ_var l kopt env) env kopts in
@@ -1369,6 +1374,15 @@ let destruct_vector env typ =
     | typ -> None
   in
   destruct_vector' (Env.expand_synonyms env typ)
+
+let destruct_bitvector env typ =
+  let destruct_bitvector' = function
+    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _);
+                             A_aux (A_order o, _)]
+                       ), _) when string_of_id id = "bitvector" -> Some (nexp_simp n1, o)
+    | typ -> None
+  in
+  destruct_bitvector' (Env.expand_synonyms env typ)
 
 let rec is_typ_monomorphic (Typ_aux (typ, l)) =
   match typ with
@@ -2163,7 +2177,7 @@ let rec rewrite_sizeof' env (Nexp_aux (aux, l) as nexp) =
        | Typ_app (id, [A_aux (A_nexp n, _)]) when string_of_id id = "atom" ->
           prove __POS__ env (nc_eq (nvar v) n)
 
-       | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _); _; _]) when string_of_id id = "vector" ->
+       | Typ_app (id, [A_aux (A_nexp (Nexp_aux (Nexp_var v', _)), _); _]) when string_of_id id = "bitvector" ->
           Kid.compare v v' = 0
 
        | _ ->
@@ -2346,14 +2360,14 @@ let infer_lit env (L_aux (lit_aux, l) as lit) =
      begin
        match Env.get_default_order env with
        | Ord_aux (Ord_inc, _) | Ord_aux (Ord_dec, _) ->
-          dvector_typ env (nint (String.length str)) (mk_typ (Typ_id (mk_id "bit")))
+          bits_typ env (nint (String.length str))
        | Ord_aux (Ord_var _, _) -> typ_error env l default_order_error_string
      end
   | L_hex str ->
      begin
        match Env.get_default_order env with
        | Ord_aux (Ord_inc, _) | Ord_aux (Ord_dec, _) ->
-          dvector_typ env (nint (String.length str * 4)) (mk_typ (Typ_id (mk_id "bit")))
+          bits_typ env (nint (String.length str * 4))
        | Ord_aux (Ord_var _, _) -> typ_error env l default_order_error_string
      end
   | L_undef -> typ_error env l "Cannot infer the type of undefined"
@@ -2400,15 +2414,41 @@ let instantiate_simple_equations =
        inst_from_eq quants
 in inst_from_eq
 
-let destruct_vec_typ l env typ =
-  let destruct_vec_typ' l = function
+type destructed_vector =
+  | Destruct_vector of nexp * order * typ
+  | Destruct_bitvector of nexp * order
+
+let destruct_any_vector_typ l env typ =
+  let destruct_any_vector_typ' l = function
+    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _);
+                             A_aux (A_order o, _)]
+                       ), _) when string_of_id id = "bitvector" -> Destruct_bitvector (n1, o)
     | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _);
                              A_aux (A_order o, _);
                              A_aux (A_typ vtyp, _)]
-                       ), _) when string_of_id id = "vector" -> (n1, o, vtyp)
+                       ), _) when string_of_id id = "vector" -> Destruct_vector (n1, o, vtyp)
+    | typ -> typ_error env l ("Expected vector or bitvector type, got " ^ string_of_typ typ)
+  in
+  destruct_any_vector_typ' l (Env.expand_synonyms env typ)
+
+let destruct_vector_typ l env typ =
+  let destruct_vector_typ' l = function
+    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _);
+                             A_aux (A_order o, _);
+                             A_aux (A_typ vtyp, _)]
+                       ), _) when string_of_id id = "vector" -> n1, o, vtyp
     | typ -> typ_error env l ("Expected vector type, got " ^ string_of_typ typ)
   in
-  destruct_vec_typ' l (Env.expand_synonyms env typ)
+  destruct_vector_typ' l (Env.expand_synonyms env typ)
+
+let destruct_bitvector_typ l env typ =
+  let destruct_bitvector_typ' l = function
+    | Typ_aux (Typ_app (id, [A_aux (A_nexp n1, _);
+                             A_aux (A_order o, _)]
+                       ), _) when string_of_id id = "bitvector" -> n1, o
+    | typ -> typ_error env l ("Expected bitvector type, got " ^ string_of_typ typ)
+  in
+  destruct_bitvector_typ' l (Env.expand_synonyms env typ)
 
 let rec mpat_of_pat : 'a. Env.t -> 'a pat -> 'a mpat =
   fun env (P_aux (aux, ((l, _) as annot)) as pat) ->
@@ -2891,7 +2931,10 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let checked_body = crule check_exp env body typ in
      annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) typ
   | E_vector vec, _ ->
-     let (len, ord, vtyp) = destruct_vec_typ l env typ in
+     let len, ord, vtyp = match destruct_any_vector_typ l env typ with
+       | Destruct_vector (len, ord, vtyp) -> len, ord, vtyp
+       | Destruct_bitvector (len, ord) -> len, ord, bit_typ
+     in
      let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
      if prove __POS__ env (nc_eq (nint (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
      else typ_error env l "List length didn't match" (* FIXME: improve error message *)
@@ -3227,7 +3270,7 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      let len = nexp_simp (nint (List.length pats)) in
      let etyp = typ_of_pat (List.hd pats) in
      List.iter (fun pat -> typ_equality l env etyp (typ_of_pat pat)) pats;
-     annot_pat (P_vector pats) (dvector_typ env len etyp), env, guards
+     annot_pat (P_vector pats) (bits_typ env len), env, guards
   | P_vector_concat (pat :: pats) ->
      let fold_pats (pats, env, guards) pat =
        let inferred_pat, env, guards' = infer_pat env pat in
@@ -3235,14 +3278,23 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      in
      let inferred_pats, env, guards =
        List.fold_left fold_pats ([], env, []) (pat :: pats) in
-     let (len, _, vtyp) = destruct_vec_typ l env (typ_of_pat (List.hd inferred_pats)) in
-     let fold_len len pat =
-       let (len', _, vtyp') = destruct_vec_typ l env (typ_of_pat pat) in
-       typ_equality l env vtyp vtyp';
-       nsum len len'
-     in
-     let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
-     annot_pat (P_vector_concat inferred_pats) (dvector_typ env len vtyp), env, guards
+     begin match destruct_any_vector_typ l env (typ_of_pat (List.hd inferred_pats)) with
+     | Destruct_vector (len, _, vtyp) ->
+        let fold_len len pat =
+          let (len', _, vtyp') = destruct_vector_typ l env (typ_of_pat pat) in
+          typ_equality l env vtyp vtyp';
+          nsum len len'
+        in
+        let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
+        annot_pat (P_vector_concat inferred_pats) (dvector_typ env len vtyp), env, guards
+     | Destruct_bitvector (len, _) ->
+        let fold_len len pat =
+          let (len', _) = destruct_bitvector_typ l env (typ_of_pat pat) in
+          nsum len len'
+        in
+        let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
+        annot_pat (P_vector_concat inferred_pats) (bits_typ env len), env, guards
+     end
   | P_app (f, [P_aux (P_lit (L_aux (L_unit, _)), _)]) ->
      let d = if Env.is_backwards_mapping env then Backwards else Forwards in
      infer_pat env (P_aux (P_view (P_aux (P_lit (L_aux (L_unit, gen_loc l)), (gen_loc l, ())), set_id_direction d f, []), (l, ())))
@@ -3480,8 +3532,7 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
        let inferred_v_lexp = infer_lexp env v_lexp in
        let (Typ_aux (v_typ_aux, _) as v_typ) = Env.expand_synonyms env (lexp_typ_of inferred_v_lexp) in
        match v_typ_aux with
-       | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _); A_aux (A_typ elem_typ, _)])
-            when Id.compare id (mk_id "vector") = 0 ->
+       | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _)]) when Id.compare id (mk_id "bitvector") = 0 ->
           let inferred_exp1 = infer_exp env exp1 in
           let inferred_exp2 = infer_exp env exp2 in
           let nexp1, env = bind_numeric l (typ_of inferred_exp1) env in
@@ -3489,10 +3540,10 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
           begin match ord with
           | Ord_aux (Ord_inc, _) when !opt_no_lexp_bounds_check || prove __POS__ env (nc_lteq nexp1 nexp2) ->
              let len = nexp_simp (nsum (nminus nexp2 nexp1) (nint 1)) in
-             annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (vector_typ len ord elem_typ)
+             annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ len ord)
           | Ord_aux (Ord_dec, _) when !opt_no_lexp_bounds_check || prove __POS__ env (nc_gteq nexp1 nexp2) ->
              let len = nexp_simp (nsum (nminus nexp1 nexp2) (nint 1)) in
-             annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (vector_typ len ord elem_typ)
+             annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ len ord)
           | _ -> typ_error env l ("Could not infer length of vector slice assignment " ^ string_of_lexp lexp)
           end
        | _ -> typ_error env l "Cannot assign slice of non vector type"
@@ -3510,18 +3561,33 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
             annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) elem_typ
           else
             typ_error env l ("Vector assignment not provably in bounds " ^ string_of_lexp lexp)
+       | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _)])
+            when Id.compare id (mk_id "bitvector") = 0 ->
+          let inferred_exp = infer_exp env exp in
+          let nexp, env = bind_numeric l (typ_of inferred_exp) env in
+          if !opt_no_lexp_bounds_check || prove __POS__ env (nc_and (nc_lteq (nint 0) nexp) (nc_lteq nexp (nexp_simp (nminus len (nint 1))))) then
+            annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) bit_typ
+          else
+            typ_error env l ("Vector assignment not provably in bounds " ^ string_of_lexp lexp)
        | _ -> typ_error env l "Cannot assign vector element of non vector type"
      end
   | LEXP_vector_concat [] -> typ_error env l "Cannot have empty vector concatenation l-expression"
   | LEXP_vector_concat (v_lexp :: v_lexps) ->
      begin
-       let sum_lengths first_ord first_elem_typ acc (Typ_aux (v_typ_aux, _) as v_typ) =
+       let sum_vector_lengths first_ord first_elem_typ acc (Typ_aux (v_typ_aux, _) as v_typ) =
          match v_typ_aux with
          | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _); A_aux (A_typ elem_typ, _)])
               when Id.compare id (mk_id "vector") = 0 && ord_identical ord first_ord ->
             typ_equality l env elem_typ first_elem_typ;
             nsum acc len
          | _ -> typ_error env l "Vector concatentation l-expression must only contain vector types of the same order"
+       in
+       let sum_bitvector_lengths first_ord acc (Typ_aux (v_typ_aux, _) as v_typ) =
+         match v_typ_aux with
+         | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _)])
+              when Id.compare id (mk_id "bitvector") = 0 && ord_identical ord first_ord ->
+            nsum acc len
+         | _ -> typ_error env l "Bitvector concatentation l-expression must only contain bitvector types of the same order"
        in
        let inferred_v_lexp = infer_lexp env v_lexp in
        let inferred_v_lexps = List.map (infer_lexp env) v_lexps in
@@ -3530,9 +3596,13 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
        match v_typ_aux with
        | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _); A_aux (A_typ elem_typ, _)])
             when Id.compare id (mk_id "vector") = 0 ->
-          let len = List.fold_left (sum_lengths ord elem_typ) len v_typs in
+          let len = List.fold_left (sum_vector_lengths ord elem_typ) len v_typs in
           annot_lexp (LEXP_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (vector_typ (nexp_simp len) ord elem_typ)
-       | _ -> typ_error env l ("Vector concatentation l-expression must only contain vector types, found " ^ string_of_typ v_typ)
+       | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _)])
+            when Id.compare id (mk_id "bitvector") = 0 ->
+          let len = List.fold_left (sum_bitvector_lengths ord) len v_typs in
+          annot_lexp (LEXP_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (bitvector_typ (nexp_simp len) ord)
+       | _ -> typ_error env l ("Vector concatentation l-expression must only contain bitvector or vector types, found " ^ string_of_typ v_typ)
      end
   | LEXP_field (LEXP_aux (LEXP_id v, _), fid) ->
      (* FIXME: will only work for ASL *)
@@ -3749,8 +3819,14 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_vector ((item :: items) as vec) ->
      let inferred_item = irule infer_exp env item in
      let checked_items = List.map (fun i -> crule check_exp env i (typ_of inferred_item)) items in
-     let vec_typ = dvector_typ env (nint (List.length vec)) (typ_of inferred_item) in
-     annot_exp (E_vector (inferred_item :: checked_items)) vec_typ
+     begin match typ_of inferred_item with
+     | Typ_aux (Typ_id id, _) when string_of_id id = "bit" ->
+        let bitvec_typ = bits_typ env (nint (List.length vec)) in
+        annot_exp (E_vector (inferred_item :: checked_items)) bitvec_typ
+     | _ ->
+        let vec_typ = dvector_typ env (nint (List.length vec)) (typ_of inferred_item) in
+        annot_exp (E_vector (inferred_item :: checked_items)) vec_typ
+     end
   | E_assert (test, msg) ->
      let msg = assert_msg msg in
      let checked_test = crule check_exp env test bool_typ in
@@ -4593,6 +4669,23 @@ let check_mapdef env (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), (l, _))
   else
     typ_error env l ("A maping may not have any effect other than {escape}: " ^ string_of_effect eff ^ " found")
 
+let rec warn_if_unsafe_cast l env = function
+  | Typ_aux (Typ_fn (arg_typs, ret_typ, _), _) ->
+     List.iter (warn_if_unsafe_cast l env) arg_typs;
+     warn_if_unsafe_cast l env ret_typ
+  | Typ_aux (Typ_id id, _) when string_of_id id = "bool" -> ()
+  | Typ_aux (Typ_id id, _) when Env.is_enum id env -> ()
+  | Typ_aux (Typ_id id, _) when string_of_id id = "string" ->
+     Reporting.warn "Unsafe string cast" l
+       "A cast X -> string is unsafe, as it can cause 'x : X == y : X' to be checked as 'eq_string(cast(x), cast(y))'"
+  (* If we have a cast to an existential, it's probably done on
+     purpose and we want to avoid false positives for warnings. *)
+  | Typ_aux (Typ_exist _, _) -> ()
+  | typ when is_bitvector_typ typ -> ()
+  | typ when is_bit_typ typ -> ()
+  | typ ->
+     Reporting.warn ("Potentially unsafe cast involving " ^ string_of_typ typ) l ""
+     
 (* Checking a val spec simply adds the type as a binding in the
    context. We have to destructure the various kinds of val specs, but
    the difference is irrelevant for the typechecker. *)
@@ -4603,7 +4696,7 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
        typ_print (lazy (Util.("Check val spec " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
        wf_typschm env typschm;
        let env = Env.add_extern id exts env in
-       let env = if is_cast then Env.add_cast id env else env in
+       let env = if is_cast then (warn_if_unsafe_cast l env (Env.expand_synonyms env typ); Env.add_cast id env) else env in
        let typq', typ' = expand_bind_synonyms ts_l env (typq, typ) in
        (* !opt_expand_valspec controls whether the actual valspec in
           the AST is expanded, the val_spec type stored in the
@@ -4686,9 +4779,8 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
        match typ with
        (* The type of a bitfield must be a constant-width bitvector *)
        | Typ_aux (Typ_app (v, [A_aux (A_nexp (Nexp_aux (Nexp_constant size, _)), _);
-                               A_aux (A_order order, _);
-                               A_aux (A_typ (Typ_aux (Typ_id b, _)), _)]), _)
-            when string_of_id v = "vector" && string_of_id b = "bit" ->
+                               A_aux (A_order order, _)]), _)
+            when string_of_id v = "bitvector" ->
           let size = Big_int.to_int size in
           let eval_index_nexp env nexp =
             int_of_nexp_opt (nexp_simp (Env.expand_nexp_synonyms env nexp)) in

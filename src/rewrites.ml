@@ -572,7 +572,7 @@ let remove_vector_concat_pat pat =
         let eff = effect_of_annot (snd annot) in
         let (l,_) = annot in
         let wild _ = P_aux (P_wild,(gen_loc l, mk_tannot env bit_typ eff)) in
-        if is_vector_typ typ then
+        if is_vector_typ typ || is_bitvector_typ typ then
           match p, vector_typ_args_of typ with
           | P_vector ps,_ -> acc @ ps
           | _, (Nexp_aux (Nexp_constant length,_),_,_) ->
@@ -1038,7 +1038,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
   let mk_num_exp i = mk_lit_exp (L_num i) in
   let check_eq_exp l r =
     let exp = mk_exp (E_app_infix (l, Id_aux (Operator "==", Parse_ast.Unknown), r)) in
-    check_exp env exp bool_typ in
+    check_exp (Env.no_casts env) exp bool_typ in
 
   let access_bit_exp rootid l typ idx =
     let access_aux = E_vector_access (mk_exp (E_id rootid), mk_num_exp idx) in
@@ -2044,11 +2044,13 @@ let rewrite_undefined_if_gen always_bitvector env defs =
   then rewrite_undefined (always_bitvector || !Pretty_print_lem.opt_mwords) env defs
   else defs
 
-let rec simple_typ (Typ_aux (typ_aux, l) as typ) = Typ_aux (simple_typ_aux typ_aux, l)
-and simple_typ_aux = function
+let rec simple_typ (Typ_aux (typ_aux, l) as typ) = Typ_aux (simple_typ_aux l typ_aux, l)
+and simple_typ_aux l = function
   | Typ_id id -> Typ_id id
   | Typ_app (id, [_; _; A_aux (A_typ typ, l)]) when Id.compare id (mk_id "vector") = 0 ->
      Typ_app (mk_id "list", [A_aux (A_typ (simple_typ typ), l)])
+  | Typ_app (id, [_; _]) when Id.compare id (mk_id "bitvector") = 0 ->
+     Typ_app (mk_id "list", [A_aux (A_typ bit_typ, gen_loc l)])
   | Typ_app (id, [_]) when Id.compare id (mk_id "atom") = 0 ->
      Typ_id (mk_id "int")
   | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 ->
@@ -2058,7 +2060,7 @@ and simple_typ_aux = function
   | Typ_app (id, args) -> Typ_app (id, List.concat (List.map simple_typ_arg args))
   | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map simple_typ arg_typs, simple_typ ret_typ, effs)
   | Typ_tup typs -> Typ_tup (List.map simple_typ typs)
-  | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux typ
+  | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux l typ
   | typ_aux -> typ_aux
 and simple_typ_arg (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
@@ -2122,13 +2124,13 @@ let rewrite_vector_concat_assignments env defs =
     match e_aux with
     | E_assign (LEXP_aux (LEXP_vector_concat lexps, lannot), exp) ->
        let typ = Env.base_typ_of env (typ_of exp) in
-       if is_vector_typ typ then
+       if is_vector_typ typ || is_bitvector_typ typ then
          (* let _ = Pretty_print_common.print stderr (Pretty_print_sail.doc_exp (E_aux (e_aux, annot))) in *)
          let start = vector_start_index typ in
          let (_, ord, etyp) = vector_typ_args_of typ in
          let len (LEXP_aux (le, lannot)) =
            let ltyp = Env.base_typ_of env (typ_of_annot lannot) in
-           if is_vector_typ ltyp then
+           if is_vector_typ ltyp || is_bitvector_typ ltyp then
              let (len, _, _) = vector_typ_args_of ltyp in
              match nexp_simp len with
              | Nexp_aux (Nexp_constant len, _) -> len
@@ -4572,9 +4574,10 @@ let opt_auto_mono = ref false
 let opt_dall_split_errors = ref false
 let opt_dmono_continue = ref false
 
-let monomorphise env defs =
+let monomorphise target env defs =
   let open Monomorphise in
   monomorphise
+    target
     { auto = !opt_auto_mono;
       debug_analysis = !opt_dmono_analysis;
       all_split_errors = !opt_dall_split_errors;
@@ -4649,12 +4652,12 @@ let all_rewrites = [
     ("mapping_builtins", Basic_rewriter rewrite_defs_mapping_patterns);
     ("mono_rewrites", Basic_rewriter mono_rewrites);
     ("toplevel_nexps", Basic_rewriter rewrite_toplevel_nexps);
-    ("monomorphise", Basic_rewriter monomorphise);
+    ("monomorphise", String_rewriter (fun target -> Basic_rewriter (monomorphise target)));
     ("atoms_to_singletons", Basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons));
     ("add_bitvector_casts", Basic_rewriter (fun _ -> Monomorphise.add_bitvector_casts));
     ("atoms_to_singletons", Basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons));
     ("remove_impossible_int_cases", Basic_rewriter Constant_propagation.remove_impossible_int_cases);
-    ("const_prop_mutrec", Basic_rewriter Constant_propagation_mutrec.rewrite_defs);
+    ("const_prop_mutrec", String_rewriter (fun target -> Basic_rewriter (Constant_propagation_mutrec.rewrite_defs target)));
     ("make_cases_exhaustive", Basic_rewriter MakeExhaustive.rewrite);
     ("undefined", Bool_rewriter (fun b -> Basic_rewriter (rewrite_undefined_if_gen b)));
     ("vector_string_pats_to_bit_list", Basic_rewriter rewrite_defs_vector_string_pats_to_bit_list);
@@ -4686,7 +4689,7 @@ let all_rewrites = [
     ("simple_types", Basic_rewriter rewrite_simple_types);
     ("overload_cast", Basic_rewriter rewrite_overload_cast);
     ("top_sort_defs", Basic_rewriter (fun _ -> top_sort_defs));
-    ("constant_fold", Basic_rewriter (fun _ -> Constant_fold.rewrite_constant_function_calls));
+    ("constant_fold", String_rewriter (fun target -> Basic_rewriter (fun _ -> Constant_fold.rewrite_constant_function_calls target)));
     ("split", String_rewriter (fun str -> Basic_rewriter (rewrite_split_fun_ctor_pats str)));
     ("properties", Basic_rewriter (fun _ -> Property.rewrite));
   ]
@@ -4700,7 +4703,7 @@ let rewrites_lem = [
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
     ("toplevel_nexps", [If_mono_arg]);
-    ("monomorphise", [If_mono_arg]);
+    ("monomorphise", [String_arg "lem"; If_mono_arg]);
     ("recheck_defs", [If_mwords_arg]);
     ("add_bitvector_casts", [If_mwords_arg]);
     ("atoms_to_singletons", [If_mono_arg]);
@@ -4723,7 +4726,7 @@ let rewrites_lem = [
     ("split", [String_arg "execute"]);
     ("recheck_defs", []);
     ("top_sort_defs", []);
-    ("const_prop_mutrec", []);
+    ("const_prop_mutrec", [String_arg "lem"]);
     ("vector_string_pats_to_bit_list", []);
     ("exp_lift_assign", []);
     ("early_return", []);
@@ -4815,7 +4818,7 @@ let rewrites_c = [
     ("mono_rewrites", [If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("toplevel_nexps", [If_mono_arg]);
-    ("monomorphise", [If_mono_arg]);
+    ("monomorphise", [String_arg "c"; If_mono_arg]);
     ("atoms_to_singletons", [If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
@@ -4831,7 +4834,7 @@ let rewrites_c = [
     ("split", [String_arg "execute"]);
     ("merge_function_clauses", []);
     ("optimize_recheck_defs", []);
-    ("constant_fold", [])
+    ("constant_fold", [String_arg "c"])
   ]
 
 let rewrites_interpreter = [

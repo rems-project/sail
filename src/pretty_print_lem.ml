@@ -69,7 +69,7 @@ type context = {
   top_env : Env.t
 }
 let empty_ctxt = { early_ret = false; bound_nexps = NexpSet.empty; top_env = Env.empty }
-              
+
 let print_to_from_interp_value = ref false
 let langlebar = string "<|"
 let ranglebar = string "|>"
@@ -225,14 +225,18 @@ let rec lem_nexps_of_typ (Typ_aux (t,l)) =
   | Typ_tup ts ->
      List.fold_left (fun s t -> NexpSet.union s (trec t))
        NexpSet.empty ts
+  | Typ_app(Id_aux (Id "bitvector", _), [
+    A_aux (A_nexp m, _);
+    A_aux (A_order ord, _)]) ->
+     let m = nexp_simp m in
+     if !opt_mwords && not (is_nexp_constant m) then
+       NexpSet.singleton (orig_nexp m)
+     else trec bit_typ
   | Typ_app(Id_aux (Id "vector", _), [
     A_aux (A_nexp m, _);
     A_aux (A_order ord, _);
     A_aux (A_typ elem_typ, _)]) ->
-     let m = nexp_simp m in
-     if !opt_mwords && is_bit_typ elem_typ && not (is_nexp_constant m) then
-       NexpSet.singleton (orig_nexp m)
-     else trec elem_typ
+     trec elem_typ
   | Typ_app(Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
      trec etyp
   | Typ_app(Id_aux (Id "range", _),_)
@@ -281,15 +285,17 @@ let doc_typ_lem, doc_atomic_typ_lem =
           A_aux (A_nexp m, _);
           A_aux (A_order ord, _);
           A_aux (A_typ elem_typ, _)]) ->
-         let tpp = match elem_typ with
-           | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) when !opt_mwords ->
+         let tpp = string "list" ^^ space ^^ typ elem_typ in
+         if atyp_needed then parens tpp else tpp
+      | Typ_app(Id_aux (Id "bitvector", _), [
+          A_aux (A_nexp m, _);
+          A_aux (A_order ord, _)]) ->
+         let tpp =
+           if !opt_mwords then
              string "mword " ^^ doc_nexp_lem (nexp_simp m)
-             (* (match nexp_simp m with
-               | (Nexp_aux(Nexp_constant i,_)) -> string "bitvector ty" ^^ doc_int i
-               | (Nexp_aux(Nexp_var _, _)) -> separate space [string "bitvector"; doc_nexp m]
-               | _ -> raise (Reporting.err_unreachable l __POS__
-                "cannot pretty-print bitvector type with non-constant length")) *)
-           | _ -> string "list" ^^ space ^^ typ elem_typ in
+           else
+             string "list" ^^ space ^^ typ bit_typ
+         in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
          let tpp = string "register_ref regstate register_value " ^^ typ etyp in
@@ -356,6 +362,21 @@ let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
 
 let replace_typ_size ctxt env (Typ_aux (t,a)) =
   match t with
+  | Typ_app (Id_aux (Id "bitvector",_) as id, [A_aux (A_nexp size,_);ord]) ->
+     begin
+       let mk_typ nexp =
+         Some (Typ_aux (Typ_app (id, [A_aux (A_nexp nexp,Parse_ast.Unknown);ord]),a))
+       in
+       match Type_check.solve_unique env size with
+       | Some n -> mk_typ (nconstant n)
+       | None ->
+          let is_equal nexp =
+            prove __POS__ env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
+          in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
+          | nexp -> mk_typ nexp
+          | exception Not_found -> None
+     end
+       (*
   | Typ_app (Id_aux (Id "vector",_) as id, [A_aux (A_nexp size,_);ord;typ']) ->
      begin
        let mk_typ nexp =
@@ -370,6 +391,7 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
           | nexp -> mk_typ nexp
           | exception Not_found -> None
      end
+        *)
   | _ -> None
 
 let make_printable_type ctxt env typ =
@@ -445,9 +467,8 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
       -> NexpSet.empty
     | Typ_fn (ts,t,_) -> List.fold_left NexpSet.union (typeclass_nexps t) (List.map typeclass_nexps ts)
     | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
-    | Typ_app (Id_aux (Id "vector",_),
-               [A_aux (A_nexp size_nexp,_);
-                _;A_aux (A_typ (Typ_aux (Typ_id (Id_aux (Id "bit",_)),_)),_)])
+    | Typ_app (Id_aux (Id "bitvector",_),
+               [A_aux (A_nexp size_nexp,_); _])
     | Typ_app (Id_aux (Id "itself",_),
                [A_aux (A_nexp size_nexp,_)]) ->
        let size_nexp = nexp_simp size_nexp in
@@ -872,7 +893,7 @@ let doc_exp_lem, doc_let_lem =
     | E_vector exps ->
        let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let start, (len, order, etyp) =
-         if is_vector_typ t then vector_start_index t, vector_typ_args_of t
+         if is_vector_typ t || is_bitvector_typ t then vector_start_index t, vector_typ_args_of t
          else raise (Reporting.err_unreachable l __POS__
           "E_vector of non-vector type") in
        let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
@@ -1126,6 +1147,8 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
+      | Id_aux ((Id "a64_barrier_domain"),_) -> empty
+      | Id_aux ((Id "a64_barrier_type"),_) -> empty
       | Id_aux ((Id "barrier_kind"),_) -> empty
       | Id_aux ((Id "trans_kind"),_) -> empty
       | Id_aux ((Id "instruction_kind"),_) -> empty
@@ -1198,6 +1221,8 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
+      | Id_aux ((Id "a64_barrier_domain"),_) -> empty
+      | Id_aux ((Id "a64_barrier_type"),_) -> empty
       | Id_aux ((Id "barrier_kind"),_) -> empty
       | Id_aux ((Id "trans_kind"),_) -> empty
       | Id_aux ((Id "instruction_kind"),_) -> empty
@@ -1459,7 +1484,7 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
     (* TODO Assumes normalised, decreasing bitvector slices; however, since
        start indices or indexing order do not appear in Lem type annotations,
        this does not matter. *)
-    let ftyp = vector_typ (nconstant fsize) dec_ord bit_typ in
+    let ftyp = bitvector_typ (nconstant fsize) dec_ord in
     let reftyp =
       mk_typ (Typ_app (Id_aux (Id "field_ref", Parse_ast.Unknown),
         [mk_typ_arg (A_typ (mk_id_typ (mk_id tname)));

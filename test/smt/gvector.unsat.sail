@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-register R : vector(32, dec, vector(32, dec, bit))
+register R : vector(32, dec, bitvector(32, dec))
 
 type is_reg('n: Int) -> Bool = 0 <= 'n <= 31
 

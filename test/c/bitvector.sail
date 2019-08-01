@@ -2,7 +2,7 @@ default Order dec
 
 $include <vector_dec.sail>
 
-val test : (vector(16, dec, bit), vector(200, dec, bit)) -> bool
+val test : (bitvector(16, dec), bitvector(200, dec)) -> bool
 
 function test (x, y)  = {
   print_bits("x = ", x);

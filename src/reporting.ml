@@ -180,10 +180,10 @@ let warn str1 l str2 =
   if !opt_warnings then
     match simp_loc l with
     | None ->
-       prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ str1 ^ "\n" ^ str2)
+       prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ str1 ^ "\n" ^ str2 ^ "\n")
     | Some (p1, p2) when not (StringSet.mem p1.pos_fname !ignored_files) ->
        prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": "
-                      ^ str1 ^ (if str1 <> "" then " " else "") ^ loc_to_string l ^ str2)
+                      ^ str1 ^ (if str1 <> "" then " " else "") ^ loc_to_string l ^ str2 ^ "\n")
     | Some _ -> ()
   else
     ()
