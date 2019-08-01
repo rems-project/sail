@@ -5,7 +5,7 @@ Type error:
   [91m |[0m Forwards mapping failed because:
   [91m |[0m [93m| [0mNo valid casts resulted in unification
   [91m |[0m Backwards mapping failed because:
-  [91m |[0m [93m| [0mTried performing type coercion from vector(2, dec, bit) to vector(1, dec, bit) on 0b11
+  [91m |[0m [93m| [0mTried performing type coercion from bitvector(2, dec) to bitvector(1, dec) on 0b11
   [91m |[0m [93m| [0mCoercion failed because:
   [91m |[0m [93m| [0mMismatched argument types in subtype check
   [91m |[0m 

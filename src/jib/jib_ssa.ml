@@ -519,7 +519,7 @@ let test_idom_is_dominator =
     (QCheck.make (graph_gen (QCheck.Gen.pure ())) ~print:(fun (root, graph) -> string_of_graph (fun _ -> "") (fun i _ -> if i = root then "red" else "white") graph))
     prop_idom_is_dominator
 
-let run_ssa_tests = QCheck_runner.run_tests [test_idom_is_dominator]
+let run_ssa_tests () = QCheck_runner.run_tests [test_idom_is_dominator]
 
 (** [(dominator_children idoms).(n)] are the nodes whose immediate dominator
    (idom) is n. *)

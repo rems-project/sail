@@ -3343,7 +3343,7 @@ let rewrite_lit_ocaml (L_aux (lit, _)) = match lit with
   | L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ | L_unit -> false
   | _ -> true
 
-let rewrite_defs_pat_lits rewrite_lit env (Defs defs) =
+let rewrite_defs_pat_lits rewrite_lit env ast =
   let rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
     let guards = ref [] in
     let counter = ref 0 in
@@ -3382,6 +3382,7 @@ let rewrite_defs_pat_lits rewrite_lit env (Defs defs) =
          Pat_aux (Pat_when (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_id "and_bool", [g; g']), guard_annot)) guard !guards, exp), annot)
        end
   in
+
   let rewrite_mapping (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), annot)) =
     let rewrite_mapcl (MCL_aux (aux, annot)) =
       match aux with
@@ -3391,14 +3392,19 @@ let rewrite_defs_pat_lits rewrite_lit env (Defs defs) =
     in
     MD_aux (MD_mapping (id, args, tannot_opt, List.map rewrite_mapcl mapcls), annot)
   in
-  let rec rewrite_mapdefs = function
-    | DEF_mapdef mdef :: defs -> DEF_mapdef (rewrite_mapping mdef) :: rewrite_mapdefs defs
-    | def :: defs -> def :: rewrite_mapdefs defs
-    | [] -> []
+  let rewrite_funcl (FCL_aux (FCL_Funcl (id, pexp), (l, annot))) =
+    FCL_aux (FCL_Funcl (id, rewrite_pexp pexp), (l, annot)) in
+  let rewrite_fun (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls), (l, annot))) =
+    FD_aux (FD_function (recopt, tannotopt, effectopt, List.map rewrite_funcl funcls), (l, annot)) in
+  let rewrite_def = function
+    | DEF_fundef fdef -> DEF_fundef (rewrite_fun fdef)
+    | DEF_mapdef mdef -> DEF_mapdef (rewrite_mapping mdef)
+    | def -> def
   in
-  let alg = { id_exp_alg with pat_aux = (fun (pexp_aux, annot) -> rewrite_pexp (Pat_aux (pexp_aux, annot))) } in
-  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) } (Defs (rewrite_mapdefs defs))
 
+  let alg = { id_exp_alg with pat_aux = (fun (pexp_aux, annot) -> rewrite_pexp (Pat_aux (pexp_aux, annot))) } in
+  let Defs defs = rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) } ast in
+  Defs (List.map rewrite_def defs)
 
 (* Now all expressions have no blocks anymore, any term is a sequence of let-expressions,
  * internal let-expressions, or internal plet-expressions ended by a term that does not
@@ -4711,13 +4717,13 @@ let rewrites_lem = [
     ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);
     ("remove_impossible_int_cases", []);
-    ("pattern_literals", [Literal_arg "lem"]);
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);
     ("simple_assignments", []);
     ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
     ("remove_numeral_pats", []);
+    ("pattern_literals", [Literal_arg "lem"]);
     ("guarded_pats", []);
     ("bitvector_exps", []);
     (* ("register_ref_writes", rewrite_register_ref_writes); *)
@@ -4753,13 +4759,13 @@ let rewrites_coq = [
     ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);
     ("remove_impossible_int_cases", []);
-    ("pattern_literals", [Literal_arg "lem"]);
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);
     ("simple_assignments", []);
     ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
     ("remove_numeral_pats", []);
+    ("pattern_literals", [Literal_arg "lem"]);
     ("guarded_pats", []);
     ("bitvector_exps", []);
     (* ("register_ref_writes", rewrite_register_ref_writes); *)
@@ -4799,13 +4805,13 @@ let rewrites_ocaml = [
     ("mapping_builtins", []);
     ("undefined", [Bool_arg false]);
     ("vector_string_pats_to_bit_list", []);
-    ("pattern_literals", [Literal_arg "ocaml"]);
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);
     ("simple_assignments", []);
     ("remove_not_pats", []);
     ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
+    ("pattern_literals", [Literal_arg "ocaml"]);
     ("remove_numeral_pats", []);
     ("exp_lift_assign", []);
     ("top_sort_defs", []);
@@ -4824,12 +4830,12 @@ let rewrites_c = [
     ("undefined", [Bool_arg false]);
     ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);
-    ("vector_concat_assignments", []);
-    ("tuple_assignments", []);
-    ("simple_assignments", []);
     ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
     ("pattern_literals", [Literal_arg "no_strings"]);
+    ("vector_concat_assignments", []);
+    ("tuple_assignments", []);
+    ("simple_assignments", []);
     ("exp_lift_assign", []);
     ("split", [String_arg "execute"]);
     ("merge_function_clauses", []);

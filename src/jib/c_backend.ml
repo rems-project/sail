@@ -93,7 +93,7 @@ let c_debug str =
 
 let c_error ?loc:(l=Parse_ast.Unknown) message =
   raise (Reporting.err_general l ("\nC backend: " ^ message))
-                              
+
 (**************************************************************************)
 (* 2. Converting sail types to C types                                    *)
 (**************************************************************************)
@@ -182,7 +182,7 @@ let rec ctyp_of_typ ctx typ =
      end
 
   | Typ_regex _ -> CT_string
-    
+
   | Typ_var kid -> CT_poly
 
   | _ -> c_error ~loc:l ("No C type for type " ^ string_of_typ typ)
@@ -1091,7 +1091,7 @@ let rec sgen_cval = function
   | V_lit (vl, ctyp) -> string_of_value vl
   | V_call (op, cvals) -> sgen_call op cvals
   | V_field (f, field) ->
-     Printf.sprintf "%s.%s" (sgen_cval f) field
+     Printf.sprintf "%s.%s" (sgen_cval f) (Util.zencode_string field)
   | V_tuple_member (f, _, n) ->
      Printf.sprintf "%s.ztup%d" (sgen_cval f) n
   | V_ctor_kind (f, ctor, [], _) ->

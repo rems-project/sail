@@ -18,11 +18,11 @@ mapping hash : regex("#") <-> unit = {
   backwards () => "#"
 }
 
-val "hex_string" : forall 'n, 'n >= 0. vector('n, dec, bit) -> regex("0x[0-9a-f]+")
+val "hex_string" : forall 'n, 'n >= 0. bitvector('n, dec) -> regex("0x[0-9a-f]+")
 
-val "hex_parse" : forall 'n, 'n >= 0. (int('n), string) -> vector('n, dec, bit)
+val "hex_parse" : forall 'n, 'n >= 0. (int('n), string) -> bitvector('n, dec)
 
-mapping hex forall 'n, 'n >= 0. (n: int('n)) -> regex("0x[0-9a-f]+") <-> vector('n, dec, bit) = {
+mapping hex forall 'n, 'n >= 0. (n: int('n)) -> regex("0x[0-9a-f]+") <-> bitvector('n, dec) = {
   forwards x <- regex("0x[0-9a-f]+") => hex_parse(n, x),
   backwards x => hex_string(x)
 }
@@ -32,25 +32,25 @@ mapping opt_spc : regex(" *") <-> unit = {
   backwards () => ""
 }
 
-val "binary_string" : forall 'n, 'n >= 0. vector('n, dec, bit) -> regex("0b[0-1]+")
+val "binary_string" : forall 'n, 'n >= 0. bitvector('n, dec) -> regex("0b[0-1]+")
 
-val "binary_parse" : forall 'n, 'n >= 0. (int('n), string) -> vector('n, dec, bit)
+val "binary_parse" : forall 'n, 'n >= 0. (int('n), string) -> bitvector('n, dec)
 
-mapping binary forall 'n, 'n >= 0. (n: int('n)) -> regex("0b[0-1]+") <-> vector('n, dec, bit) = {
+mapping binary forall 'n, 'n >= 0. (n: int('n)) -> regex("0b[0-1]+") <-> bitvector('n, dec) = {
   forwards x <- regex("0b[0-1]+") => binary_parse(n, x),
   backwards x => binary_string(x)
 }
 
-val "decimal_string" : forall 'n, 'n >= 0. vector('n, dec, bit) -> regex("[0-9]+")
+val "decimal_string" : forall 'n, 'n >= 0. bitvector('n, dec) -> regex("[0-9]+")
 
-val "decimal_parse" : forall 'n, 'n >= 0. (int('n), string) -> vector('n, dec, bit)
+val "decimal_parse" : forall 'n, 'n >= 0. (int('n), string) -> bitvector('n, dec)
 
-mapping decimal forall 'n, 'n >= 0. (n: int('n)) -> regex("[0-9]+") <-> vector('n, dec, bit) = {
+mapping decimal forall 'n, 'n >= 0. (n: int('n)) -> regex("[0-9]+") <-> bitvector('n, dec) = {
   forwards x <- regex("[0-9]+") => decimal_parse(n, x),
   backwards x => decimal_string(x)
 }
 
-mapping bits forall 'n, 'n >= 0. (n: int('n)) -> string <-> vector('n, dec, bit) = {
+mapping bits forall 'n, 'n >= 0. (n: int('n)) -> string <-> bitvector('n, dec) = {
   forwards x <- regex("0x[0-9a-f]+") => hex_parse(n, x),
   forwards x <- regex("0b[0-1]+")    => binary_parse(n, x),
   forwards x <- regex("[0-9]+") => decimal_parse(n, x),
