@@ -3,7 +3,7 @@ default Order dec
 
 $include <flow.sail>
 
-type bits ('n : Int) = vector('n, dec, bit)
+type bits ('n : Int) = bitvector('n, dec)
 
 type xlen : Int       = 64
 type xlen_bytes : Int = 8
