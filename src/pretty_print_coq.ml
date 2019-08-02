@@ -1147,7 +1147,6 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
         "string append pattern found in Coq backend, should have been rewritten"
      | P_not _ -> unreachable l __POS__ "Coq backend doesn't support not patterns"
      | P_or _ -> unreachable l __POS__ "Coq backend doesn't support or patterns yet"
-     | P_record (_,_) -> empty (* TODO *)
 
 let contains_early_return exp =
   let e_app (f, args) =
@@ -1230,9 +1229,10 @@ let condition_produces_constraint ctxt exp =
    dependent pair with a proof that the result is the expected integer.  This
    is redundant for basic arithmetic functions and functions which we unfold
    in the constraint solver. *)
-let no_proof_fns = ["Z.add"; "Z.sub"; "Z.opp"; "Z.mul"; "Z.rem"; "length_mword"; "length";
-                      "negb"; "andb"; "orb";
-                      "Z.leb"; "Z.geb"; "Z.ltb"; "Z.gtb"; "Z.eqb"]
+let no_proof_fns = ["Z.add"; "Z.sub"; "Z.opp"; "Z.mul"; "Z.rem";
+                    "length_mword"; "length"; "vec_length";
+                    "negb"; "andb"; "orb";
+                    "Z.leb"; "Z.geb"; "Z.ltb"; "Z.gtb"; "Z.eqb"]
 
 let is_no_proof_fn env id =
   if Env.is_extern id env "coq"
@@ -1325,7 +1325,6 @@ let merge_new_tyvars ctxt old_env pat new_env =
     | P_list ps
     | P_string_append ps
       -> List.fold_left merge_pat m ps
-    | P_record (fps,_) -> unreachable l __POS__ "Coq backend doesn't support record patterns properly yet"
     | P_cons (p1,p2) -> merge_pat (merge_pat m p1) p2
   in
   let m,r = IdSet.fold remove_binding (pat_ids pat) (ctxt.kid_id_renames, ctxt.kid_id_renames_rev) in
@@ -1385,12 +1384,11 @@ let doc_exp, doc_let =
            let in_typ = match destruct_exist_plain in_typ with Some (_,_,t) -> t | None -> in_typ in
            let autocast =
              (* Avoid using helper functions which simplify the nexps *)
-             is_bitvector_typ in_typ && is_bitvector_typ out_typ &&
-               match in_typ, out_typ with
-               | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
-                 Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
-                  not (similar_nexps ctxt (env_of exp) n1 n2)
-               | _ -> false
+             match in_typ, out_typ with
+             | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
+               Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
+                not (similar_nexps ctxt (env_of exp) n1 n2)
+             | _ -> false
            in
            let exp_pp = expV (want_parens || autocast || Util.is_some build_ex) exp in
            let exp_pp =
@@ -1730,10 +1728,9 @@ let doc_exp, doc_let =
             let typ_from_fn' = match typ_from_fn with Typ_aux (Typ_exist (_,_,t),_) -> t  | t -> t in
             let autocast =
               (* Avoid using helper functions which simplify the nexps *)
-              is_bitvector_typ typ_of_arg' && is_bitvector_typ typ_from_fn' &&
               match typ_of_arg', typ_from_fn' with
-              | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
-                Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
+              | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
+                Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
                  not (similar_nexps ctxt env n1 n2)
               | _ -> false
             in
@@ -1804,10 +1801,9 @@ let doc_exp, doc_let =
             in
             let autocast =
               (* Avoid using helper functions which simplify the nexps *)
-              is_bitvector_typ in_typ && is_bitvector_typ out_typ &&
               match in_typ, out_typ with
-              | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
-                Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
+              | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
+                Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
                  not (similar_nexps ctxt env n1 n2)
               | _ -> false
             in pack,unpack,autocast
@@ -1874,12 +1870,11 @@ let doc_exp, doc_let =
             let ann_typ = expand_range_type (Env.expand_synonyms env ann_typ) in
             let autocast =
               (* Avoid using helper functions which simplify the nexps *)
-              is_bitvector_typ exp_typ && is_bitvector_typ ann_typ &&
-                match exp_typ, ann_typ with
-                | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
-                  Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
-                   not (similar_nexps ctxt env n1 n2)
-                | _ -> false
+              match exp_typ, ann_typ with
+              | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
+                Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
+                 not (similar_nexps ctxt env n1 n2)
+              | _ -> false
             in
             let () =
               debug ctxt (lazy ("Variable " ^ string_of_id id ^ " with type " ^ string_of_typ typ));
@@ -1911,19 +1906,17 @@ let doc_exp, doc_let =
        let inner_ex,_,inner_typ' = classify_ex_type ctxt env inner_typ in
        let autocast_out =
          (* Avoid using helper functions which simplify the nexps *)
-         is_bitvector_typ outer_typ' && is_bitvector_typ cast_typ' &&
-           match outer_typ', cast_typ' with
-           | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
-         Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
+         match outer_typ', cast_typ' with
+         | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
+           Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
               not (similar_nexps ctxt env n1 n2)
            | _ -> false
        in
        let autocast_in =
          (* Avoid using helper functions which simplify the nexps *)
-         is_bitvector_typ inner_typ' && is_bitvector_typ cast_typ' &&
-           match inner_typ', cast_typ' with
-           | Typ_aux (Typ_app (_,[A_aux (A_nexp n1,_);_;_]),_),
-         Typ_aux (Typ_app (_,[A_aux (A_nexp n2,_);_;_]),_) ->
+         match inner_typ', cast_typ' with
+         | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
+           Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
               not (similar_nexps ctxt env n1 n2)
            | _ -> false
        in
@@ -2050,7 +2043,7 @@ let doc_exp, doc_let =
             align (group expspp) in
        let epp = brackets expspp in
        let (epp,aexp_needed) =
-         if is_bit_typ etyp then
+         if is_bitvector_typ t then
            let bepp = string "vec_of_bits" ^^ space ^^ align epp in
            (align (group (prefix 0 1 bepp (doc_tannot ctxt (env_of full_exp) false t))), true)
          else

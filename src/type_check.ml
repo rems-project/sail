@@ -4311,7 +4311,6 @@ and propagate_pat_effect_aux = function
      let p_pat = propagate_pat_effect pat in
      let p_exps = List.map propagate_exp_effect exps in
      P_view (p_pat, id, p_exps), union_effects (effect_of_pat p_pat) (collect_effects p_exps)
-  | _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented: Cannot propagate effect in pat")
 
 and propagate_mpat_effect (MP_aux (mpat, annot)) =
   let p_mpat, eff = propagate_mpat_effect_aux mpat in

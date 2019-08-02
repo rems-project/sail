@@ -342,11 +342,6 @@ let rec to_ast_pat ctx (P.P_aux (pat, l)) =
              if List.length pats == 1 && string_of_parse_id id = "~"
              then P_not (to_ast_pat ctx (List.hd pats))
              else P_app (to_ast_id id, List.map (to_ast_pat ctx) pats)
-          | P.P_record(fpats,_) ->
-             P_record(List.map
-                        (fun (P.FP_aux(P.FP_Fpat(id,fp),l)) ->
-                          FP_aux(FP_Fpat(to_ast_id id, to_ast_pat ctx fp),(l,())))
-                        fpats, false)
           | P.P_vector(pats) -> P_vector(List.map (to_ast_pat ctx) pats)
           | P.P_vector_concat(pats) -> P_vector_concat(List.map (to_ast_pat ctx) pats)
           | P.P_tup(pats) -> P_tup(List.map (to_ast_pat ctx) pats)

@@ -714,7 +714,6 @@ and pattern_match env (P_aux (p_aux, (l, _)) as pat) value =
        List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches)
      else
        false, Bindings.empty
-  | P_record _ -> assert false (* TODO *)
   | P_vector pats ->
      let matches = List.map2 (pattern_match env) pats (coerce_gv value) in
      List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches)

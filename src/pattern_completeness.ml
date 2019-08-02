@@ -68,7 +68,6 @@ type gpat =
   | GP_cons of gpat * gpat
   | GP_or of gpat * gpat
   | GP_app of (gpat Bindings.t)
-  | GP_record of (gpat Bindings.t)
   | GP_string_append of gpat list
 
 let rec string_of_gpat = function
@@ -82,7 +81,6 @@ let rec string_of_gpat = function
   | GP_or (gpat1, gpat2) -> string_of_gpat gpat1 ^ " | " ^ string_of_gpat gpat2
   | GP_app app ->
      Util.string_of_list "|" (fun (id, gpat) -> string_of_id id ^ string_of_gpat gpat) (Bindings.bindings app)
-  | GP_record _ -> "GP RECORD"
   | GP_string_append gpats -> Util.string_of_list " ^^ " string_of_gpat gpats
 
 let is_wild = function
@@ -136,15 +134,6 @@ let rec generalize ctx (P_aux (p_aux, (l, _)) as pat) =
        GP_app (Bindings.singleton f GP_wild)
      else
        GP_app (Bindings.singleton f (GP_tup gpats))
-  | P_record (fpats, flag) ->
-     let gfpats = List.concat (List.map (generalize_fpat ctx) fpats) in
-     GP_record (List.fold_left (fun m (fid, gpat) -> Bindings.add fid gpat m) Bindings.empty gfpats)
-
-and generalize_fpat ctx (FP_aux (FP_Fpat (field_id, pat), annot)) =
-  let gpat = generalize ctx pat in
-  if is_wild gpat then []
-  else
-    [(field_id, gpat)]
 
 let vector_pat bits =
   let bit_pat = function

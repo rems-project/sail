@@ -60,7 +60,7 @@ let doc_op symb a b = infix 2 1 symb a b
 
 let doc_id id = string (string_of_id id)
 
-let doc_kid kid = string (Ast_util.string_of_kid kid)
+let doc_kid kid = string (string_of_kid kid)
 
 let doc_kopt = function
   | kopt when is_int_kopt kopt -> doc_kid (kopt_kid kopt)
@@ -344,7 +344,6 @@ let rec doc_pat (P_aux (p_aux, (l, _)) as pat) =
      parens (separate_map (string " ^ ") doc_pat pats)
   | P_view (pat, id, exps) ->
      doc_pat pat ^^ string " <- " ^^ doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps) 
-  | P_record _ -> raise (Reporting.err_unreachable l __POS__ "P_record passed to doc_pat")
 
 (* if_block_x is true if x should be printed like a block, i.e. with
    newlines. Blocks are automatically printed as blocks, so this

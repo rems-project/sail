@@ -1,10 +1,10 @@
 default Order inc
 
 val bv_add = {ocaml: "add_vec", lem: "add_vec", coq: "add_vec"}: forall ('n : Int).
-  (vector('n, inc, bit), vector('n, inc, bit)) -> vector('n, inc, bit)
+  (bitvector('n, inc), bitvector('n, inc)) -> bitvector('n, inc)
 
 overload operator + = {bv_add}
 
-val test : (vector(3, inc, bit), vector(3, inc, bit)) -> vector(3, inc, bit)
+val test : (bitvector(3, inc), bitvector(3, inc)) -> bitvector(3, inc)
 
 function test (x, y) = x + y

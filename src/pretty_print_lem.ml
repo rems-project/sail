@@ -546,6 +546,7 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
   | P_cons (p,p') -> doc_op (string "::") (doc_pat_lem ctxt true p) (doc_pat_lem ctxt true p')
   | P_string_append _ -> unreachable l __POS__ "Lem doesn't support string append patterns"
   | P_not _ -> unreachable l __POS__ "Lem doesn't support not patterns"
+  | P_or _ -> unreachable l __POS__ "Lem doesn't support or patterns"
 
 let rec typ_needs_printed (Typ_aux (t,_) as typ) = match t with
   | Typ_tup ts -> List.exists typ_needs_printed ts

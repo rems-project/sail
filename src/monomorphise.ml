@@ -472,9 +472,6 @@ let rec freshen_pat_bindings p =
     | P_app (id,args) ->
        let args',vs = List.split (List.map aux args) in
        mkp (P_app (id,args')),List.concat vs
-    | P_record (fpats,flag) ->
-       let fpats,vs = List.split (List.map auxr fpats) in
-       mkp (P_record (fpats,flag)),List.concat vs
     | P_vector ps ->
        let ps,vs = List.split (List.map aux ps) in
        mkp (P_vector ps),List.concat vs
@@ -494,9 +491,6 @@ let rec freshen_pat_bindings p =
        let p1,vs1 = aux p1 in
        let p2,vs2 = aux p2 in
        mkp (P_cons (p1, p2)), vs1@vs2
-  and auxr (FP_aux (FP_Fpat (id,p),(l,annot))) =
-    let p,vs = aux p in
-    FP_aux (FP_Fpat (id, p),(Generated l,annot)), vs
   in aux p
 
 (* This cuts off function bodies at false assertions that we may have produced
@@ -792,11 +786,7 @@ let split_defs target all_errors splits env defs =
            (* Todo: I am not proud of this abuse of relist - but creating a special
             * version of re just for two entries did not seem worth it
             *)
-          relist f (fun [p1'; p2'] -> ctx p1' p2') [p1; p2]
-        in
-        let fpat (FP_aux ((FP_Fpat (id,p),annot))) =
-          optmap (spl p)
-            (fun ps -> List.map (fun (p,sub,pchoices,ksub) -> FP_aux (FP_Fpat (id,p), annot), sub, pchoices, ksub) ps)
+          relist f (function [p1'; p2'] -> ctx p1' p2' | _ -> assert false) [p1; p2]
         in
         match p with
         | P_lit _
@@ -873,8 +863,6 @@ let split_defs target all_errors splits env defs =
            )
         | P_app (id,ps) ->
            relist spl (fun ps -> P_app (id,ps)) ps
-        | P_record (fps,flag) ->
-           relist fpat (fun fps -> P_record (fps,flag)) fps
         | P_vector ps ->
            relist spl (fun ps -> P_vector ps) ps
         | P_vector_concat ps ->
@@ -1524,17 +1512,12 @@ let rec pat_eq (P_aux (p1,_)) (P_aux (p2,_)) =
   | P_var (p1', tpat1), P_var (p2', tpat2) -> typ_pat_eq tpat1 tpat2 && pat_eq p1' p2'
   | P_app (id1,args1), P_app (id2,args2) ->
      Id.compare id1 id2 == 0 && forall2 pat_eq args1 args2
-  | P_record (fpats1, flag1), P_record (fpats2, flag2) ->
-     flag1 == flag2 && forall2 fpat_eq fpats1 fpats2
   | P_vector ps1, P_vector ps2
   | P_vector_concat ps1, P_vector_concat ps2
   | P_tup ps1, P_tup ps2
   | P_list ps1, P_list ps2 -> List.for_all2 pat_eq ps1 ps2
   | P_cons (p1',p1''), P_cons (p2',p2'') -> pat_eq p1' p2' && pat_eq p1'' p2''
   | _,_ -> false
-and fpat_eq (FP_aux (FP_Fpat (id1,p1),_)) (FP_aux (FP_Fpat (id2,p2),_)) =
-  Id.compare id1 id2 == 0 && pat_eq p1 p2
-
 
 
 module Analysis =
@@ -2019,6 +2002,8 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
          let env = add_arg_only_kids env typ_env typ new_deps in
          let t_deps, t_r, t_env = aux env (t,typs) in
          new_deps::t_deps, merge new_r t_r, t_env
+      | _ :: _, [] ->
+         Reporting.unreachable l __POS__ "Argument and type list in non_det_args had different lengths"
     in
     let deps, r, env = aux env (es,typs) in
     (deps, assigns, r, env)
@@ -2408,7 +2393,6 @@ let initial_env fn_id fn_l (TypQ_aux (tq,_)) pat body set_assertions globals =
            kids kids in
          s,v,KidSet.fold (fun kid k -> KBindings.add kid (Have (s, ExtraSplits.empty)) k) kids k
       | P_app (_,pats) -> of_list pats
-      | P_record (fpats,_) -> of_list (List.map (fun (FP_aux (FP_Fpat (_,p),_)) -> p) fpats)
       | P_vector pats
       | P_vector_concat pats
       | P_string_append pats

@@ -394,45 +394,20 @@ pat :: 'P_' ::=
   | id ( pat1 , ... , patn )                :: :: app
     {{ com union constructor pattern }}
   | pat <- id ( exp1 , ... , expn )         :: :: view
-
-% OR?  do we invent something ghastly including a union keyword?  Perhaps not...
-
-%  | <| fpat1 ; ... ; fpatn semi_opt |>                  :: :: record
-%    {{ com Record patterns }}
-% OR
-  | { fpat1 ; ... ; fpatn semi_opt }                  :: :: record
-    {{ com struct pattern }}
-
-%Patterns for vectors
-%Should these be the same since vector syntax has changed, and lists have also changed?
-
-  | [ pat1 , .. , patn  ]                     :: :: vector
-   {{ com vector pattern }}
-
-%  | [ num1 = pat1 , .. , numn = patn ]                     :: :: vector_indexed
-%   {{ com vector pattern (with explicit indices) }}
-
-% cf ntoes for this
-  |  pat1 : .... : patn                                   :: :: vector_concat
-  {{ com concatenated vector pattern }}
-
-  | ( pat1 , .... , patn )                              :: :: tup
+  | [ pat1 , ... , patn  ]                  :: :: vector
+    {{ com vector pattern }}
+  |  pat1 @ ... @ patn                      :: :: vector_concat
+    {{ com concatenated vector pattern }}
+  | ( pat1 , .... , patn )                  :: :: tup
     {{ com tuple pattern }}
-  | [|| pat1 , .. , patn ||]                            :: :: list
+  | [|| pat1 , .. , patn ||]                :: :: list
     {{ com list pattern }}
-  | ( pat )                                             :: S :: paren
+  | ( pat )                                 :: S :: paren
     {{ ichlo [[pat]] }}
-  | pat1 '::' pat2                                      :: :: cons
+  | pat1 '::' pat2                          :: :: cons
     {{ com Cons patterns }}
-
-  | pat1 ^^ ... ^^ patn                                 :: :: string_append
+  | pat1 ^^ ... ^^ patn                     :: :: string_append
     {{ com string append pattern, x ^^ y }}
-
-% XXX Is this still useful?
-fpat :: 'FP_' ::=
-  {{ com field pattern }}
-  {{ aux _ annot }} {{ auxparam 'a }}
-  | id = pat                                            :: :: Fpat
 
 parsing
 P_app <= P_app
@@ -552,11 +527,8 @@ exp :: 'E_' ::=
     {{ com tuple }}
   | if exp1 then exp2 else exp3                         :: :: if
     {{ com conditional }}
-  | if exp1 then exp2                                   :: S :: ifnoelse {{ ichlo [[ if exp1 then exp2 else ( ) ]] }}
   | loop internal_loop_measure exp1 exp2                    :: :: loop
-  | while internal_loop_measure exp1 do exp2                :: S :: while {{ ichlo [[ loop internal_loop_measure while exp1 exp2 ]] }}
-  | repeat internal_loop_measure exp1 until exp2            :: S :: until {{ ichlo [[ loop internal_loop_measure until exp2 exp1 ]] }}
-  | foreach ( id from exp1 to exp2 by exp3 in order ) exp4  ::   :: for   {{ com loop }}
+  | foreach ( id from exp1 to exp2 by exp3 in order ) exp4  :: :: for   {{ com for loop }}
 
   % vectors
   | [ exp1 , ... , expn ]                             :: :: vector {{ com vector (indexed from 0) }}
@@ -657,10 +629,10 @@ grammar
 
 tannot_opt :: 'Typ_annot_opt_' ::=
   {{ com optional type annotation for functions}}
-  {{ aux _ l }} 
+  {{ aux _ l }}
   |                                             :: :: none
 % Currently not optional; one issue, do the type parameters apply over the argument types, or should this be the type of the function and not just the return
-  | typquant typ                                :: :: some 
+  | typquant typ                                :: :: some
 
 rec_opt :: 'Rec_' ::=
   {{ com optional recursive annotation for functions }}
@@ -695,13 +667,9 @@ fundef :: 'FD_' ::=
   {{ com function definition}}
   {{ aux _ annot }} {{ auxparam 'a }}
   | function rec_opt tannot_opt effect_opt funcl1 and ... and funcln :: :: function {{ texlong }}  
-% {{ com function definition }}
-% TODO note that the typ in the tannot_opt is the *result* type, not
-%  the type of the whole function.  The argument type comes from the
-%  pattern in the funcl
-% TODO the above is ok for single functions, but not for mutually
-%  recursive functions - the tannot_opt scopes over all the funcli,
-%  which is ok for the typ_quant part but not for the typ part
+% Note that the typ in the tannot_opt is
+% the *result* type, not the type of the whole function.  The argument
+% type comes from the pattern in the funcl
 
 mpat :: 'MP_' ::=
   {{ com Mapping pattern. Mostly the same as normal patterns but only constructible parts }}

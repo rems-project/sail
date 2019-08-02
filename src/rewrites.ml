@@ -370,7 +370,6 @@ let remove_vector_concat_pat pat =
     ; p_id  = (fun id -> P_id id)
     ; p_var = (fun (pat,kid) -> P_var (pat true,kid))
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
-    ; p_record = (fun (fpats,b) -> P_record (fpats, b))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
     ; p_vector_concat  = (fun ps -> P_vector_concat (List.map (fun p -> p false) ps))
     ; p_tup            = (fun ps -> P_tup (List.map (fun p -> p false) ps))
@@ -387,8 +386,6 @@ let remove_vector_concat_pat pat =
               else P_aux (P_as (P_aux (pat,annot),fresh_id_v l),annot))
           | _ -> P_aux (pat,annot)
         )
-    ; fP_aux = (fun (fpat,annot) -> FP_aux (fpat,annot))
-    ; fP_Fpat = (fun (id,p) -> FP_Fpat (id,p false))
     } in
 
   let pat = (fold_pat name_vector_concat_roots pat) false in
@@ -505,8 +502,6 @@ let remove_vector_concat_pat pat =
     ; p_var            = (fun ((pat,decls),kid) -> (P_var (pat,kid),decls))
     ; p_app            = (fun (id,ps) -> let (ps,decls) = List.split ps in
                                          (P_app (id,ps),List.flatten decls))
-    ; p_record         = (fun (ps,b) -> let (ps,decls) = List.split ps in
-                                        (P_record (ps,b),List.flatten decls))
     ; p_vector         = (fun ps -> let (ps,decls) = List.split ps in
                                     (P_vector ps,List.flatten decls))
     ; p_vector_concat  = (fun ps -> let (ps,decls) = List.split ps in
@@ -520,8 +515,6 @@ let remove_vector_concat_pat pat =
     ; p_view           = (fun ((p,decls),id,exps) -> P_view (p,id,exps), decls)
     ; p_cons           = (fun ((p,decls),(p',decls')) -> (P_cons (p,p'), decls @ decls'))
     ; p_aux            = (fun ((pat,decls),annot) -> p_aux ((pat,decls),annot))
-    ; fP_aux           = (fun ((fpat,decls),annot) -> (FP_aux (fpat,annot),decls))
-    ; fP_Fpat          = (fun (id,(pat,decls)) -> (FP_Fpat (id,pat),decls))
     } in
 
   let (pat,decls) = fold_pat unname_vector_concat_elements pat in
@@ -700,8 +693,6 @@ let rec is_irrefutable_pattern (P_aux (p,ann)) =
   | P_app (f,args) ->
      Env.is_singleton_union_constructor f (env_of_annot ann) &&
        List.for_all is_irrefutable_pattern args
-  | P_record (fps,_) ->
-     List.for_all (fun (FP_aux (FP_Fpat (_,p),_)) -> is_irrefutable_pattern p) fps
   | P_vector ps
   | P_vector_concat ps
   | P_tup ps
@@ -752,8 +743,6 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
   | P_wild, _ -> Some []
   | P_app (Id_aux (id1,l1),args1), P_app (Id_aux (id2,_),args2) ->
     if id1 = id2 then subsumes_list subsumes_pat args1 args2 else None
-  | P_record (fps1,b1), P_record (fps2,b2) ->
-    if b1 = b2 then subsumes_list subsumes_fpat fps1 fps2 else None
   | P_vector pats1, P_vector pats2
   | P_vector_concat pats1, P_vector_concat pats2
   | P_tup pats1, P_tup pats2
@@ -769,8 +758,6 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
     | _ -> None)
   | _, P_wild -> if is_irrefutable_pattern pat1 then Some [] else None
   | _ -> None
-and subsumes_fpat (FP_aux (FP_Fpat (id1,pat1),_)) (FP_aux (FP_Fpat (id2,pat2),_)) =
-  if id1 = id2 then subsumes_pat pat1 pat2 else None
 
 (* A simple check for pattern disjointness; used for optimisation in the
    guarded pattern rewrite step *)
@@ -820,8 +807,6 @@ let rec pat_to_exp ((P_aux (pat,(l,annot))) as p_aux) =
   | P_typ (_,pat) -> pat_to_exp pat
   | P_id id -> rewrap (E_id id)
   | P_app (id,pats) -> rewrap (E_app (id, List.map pat_to_exp pats))
-  | P_record (fpats,b) ->
-      rewrap (E_record (List.map fpat_to_fexp fpats))
   | P_vector pats -> rewrap (E_vector (List.map pat_to_exp pats))
   | P_vector_concat pats -> begin
       let empty_vec = E_aux (E_vector [], (l,())) in
@@ -840,9 +825,6 @@ let rec pat_to_exp ((P_aux (pat,(l,annot))) as p_aux) =
       in
       (List.fold_right string_append (List.map pat_to_exp pats) empty_string)
     end
-
-and fpat_to_fexp (FP_aux (FP_Fpat (id,pat),(l,annot))) =
-  FE_aux (FE_Fexp (id, pat_to_exp pat),(l,annot))
 
 let case_exp e t cs =
   let l = get_loc_exp e in
@@ -977,8 +959,6 @@ let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with
     List.exists contains_bitvector_pat pats
 | P_cons (p,ps) -> contains_bitvector_pat p || contains_bitvector_pat ps
 | P_string_append (ps) -> List.exists contains_bitvector_pat ps
-| P_record (fpats,_) ->
-    List.exists (fun (FP_aux (FP_Fpat (_,pat),_)) -> contains_bitvector_pat pat) fpats
 
 let contains_bitvector_pexp = function
 | Pat_aux (Pat_exp (pat,_),_) | Pat_aux (Pat_when (pat,_,_),_) ->
@@ -1004,7 +984,6 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     ; p_id  = (fun id -> P_id id)
     ; p_var = (fun (pat,kid) -> P_var (pat true,kid))
     ; p_app = (fun (id,ps) -> P_app (id, List.map (fun p -> p false) ps))
-    ; p_record = (fun (fpats,b) -> P_record (fpats, b))
     ; p_vector = (fun ps -> P_vector (List.map (fun p -> p false) ps))
     ; p_vector_concat  = (fun ps -> P_vector_concat (List.map (fun p -> p false) ps))
     ; p_string_append  = (fun ps -> P_string_append (List.map (fun p -> p false) ps))
@@ -1022,8 +1001,6 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
             P_aux (P_as (P_aux (pat,annot),fresh_id "b__" l), annot)
           | _ -> P_aux (pat,annot)
         )
-    ; fP_aux = (fun (fpat,annot) -> FP_aux (fpat,annot))
-    ; fP_Fpat = (fun (id,p) -> FP_Fpat (id,p false))
     } in
   let pat, env = bind_pat_no_guard env
     (strip_pat ((fold_pat name_bitvector_roots pat) false))
@@ -1157,8 +1134,6 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
     ; p_var            = (fun ((pat,gdls),kid) -> (P_var (pat,kid), gdls))
     ; p_app            = (fun (id,ps) -> let (ps,gdls) = List.split ps in
                                          (P_app (id,ps), flatten_guards_decls gdls))
-    ; p_record         = (fun (ps,b) -> let (ps,gdls) = List.split ps in
-                                        (P_record (ps,b), flatten_guards_decls gdls))
     ; p_vector         = (fun ps -> let (ps,gdls) = List.split ps in
                                     (P_vector ps, flatten_guards_decls gdls))
     ; p_vector_concat  = (fun ps -> let (ps,gdls) = List.split ps in
@@ -1179,8 +1154,6 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
                            | P_as (P_aux (P_vector ps, _), id), true ->
                              (P_aux (P_id id, annot), collect_guards_decls ps id t)
                            | _, _ -> (P_aux (pat,annot), gdls)))
-    ; fP_aux           = (fun ((fpat,gdls),annot) -> (FP_aux (fpat,annot), gdls))
-    ; fP_Fpat          = (fun (id,(pat,gdls)) -> (FP_Fpat (id,pat), gdls))
     } in
   fold_pat guard_bitvector_pat pat
 
@@ -2691,7 +2664,6 @@ let rec bindings_of_pat (P_aux (p_aux, p_annot) as pat) =
   match p_aux with
   | P_lit _ | P_wild -> []
   | P_id id -> [pat]
-  | P_record _ -> failwith "record patterns not yet implemented"
   (* we assume the type-checker has already checked the two sides have the same bindings *)
   | P_or (left, right) -> bindings_of_pat left
   | P_as (p, id) -> [annot_pat (P_id id) unk (env_of_pat p) (typ_of_pat p)]
@@ -2711,7 +2683,6 @@ let rec binding_typs_of_pat (P_aux (p_aux, p_annot) as pat) =
   match p_aux with
   | P_lit _ | P_wild -> []
   | P_id id -> [typ_of_pat pat]
-  | P_record _ -> failwith "record patterns not yet implemented"
   (* we assume the type-checker has already checked the two sides have the same bindings *)
   | P_or (left, right) -> binding_typs_of_pat left
   | P_as (p, id) -> [typ_of_pat p]
@@ -3127,8 +3098,6 @@ let rec rewrite_defs_pat_string_append env =
     | P_aux (P_var (inner_pat, typ_pat), p_annot) ->
        let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
        P_aux (P_var (inner_pat, typ_pat), p_annot), guards, expr
-    | P_aux (P_record _, p_annot) ->
-       failwith "record patterns not yet implemented"
     | P_aux (P_vector pats, p_annot) ->
        let pats = List.map folder pats in
        P_aux (P_vector pats, p_annot), !guards_ref, !expr_ref
@@ -3269,8 +3238,6 @@ let rewrite_defs_mapping_patterns env =
     | P_aux (P_var (inner_pat, typ_pat), p_annot) ->
        let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
        P_aux (P_var (inner_pat, typ_pat), p_annot), guards, expr
-    | P_aux (P_record _, p_annot) ->
-       failwith "record patterns not yet implemented"
     | P_aux (P_vector pats, p_annot) ->
        let pats = List.map folder pats in
        P_aux (P_vector pats, p_annot), !guards_ref, !expr_ref
@@ -4106,8 +4073,6 @@ let rec remove_clause_from_pattern ctx (P_aux (rm_pat,ann)) res_pat =
         let res_pats = subpats [p1;p2] rps in
         rp' @ List.map (function [rp1;rp2] -> RP_cons (rp1,rp2) | _ -> assert false) res_pats
   end
-  | P_record _ ->
-     raise (Reporting.err_unreachable (fst ann) __POS__ "Record pattern not supported")
   | P_or _ ->
      raise (Reporting.err_unreachable (fst ann) __POS__ "Or pattern not supported")
   | P_not _ ->
