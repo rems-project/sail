@@ -345,7 +345,6 @@ let rec doc_pat (P_aux (p_aux, (l, _)) as pat) =
   | P_string_append [] -> string "\"\""
   | P_string_append pats ->
      parens (separate_map (string " ^ ") doc_pat pats)
-  | P_record _ -> raise (Reporting.err_unreachable l __POS__ "P_record passed to doc_pat")
 
 (* if_block_x is true if x should be printed like a block, i.e. with
    newlines. Blocks are automatically printed as blocks, so this

@@ -593,7 +593,6 @@ and map_pat_annot_aux f = function
   | P_id id -> P_id id
   | P_var (pat, tpat) -> P_var (map_pat_annot f pat, tpat)
   | P_app (id, pats) -> P_app (id, List.map (map_pat_annot f) pats)
-  | P_record (fpats, b) -> P_record (List.map (map_fpat_annot f) fpats, b)
   | P_tup pats -> P_tup (List.map (map_pat_annot f) pats)
   | P_list pats -> P_list (List.map (map_pat_annot f) pats)
   | P_vector_concat pats -> P_vector_concat (List.map (map_pat_annot f) pats)
@@ -619,7 +618,6 @@ and map_mpat_annot_aux f = function
   | MP_lit lit -> MP_lit lit
   | MP_id id -> MP_id id
   | MP_app (id, mpats) -> MP_app (id, List.map (map_mpat_annot f) mpats)
-  | MP_record (fmpats, b) -> MP_record (List.map (map_mfpat_annot f) fmpats, b)
   | MP_tup mpats -> MP_tup (List.map (map_mpat_annot f) mpats)
   | MP_list mpats -> MP_list (List.map (map_mpat_annot f) mpats)
   | MP_vector_concat mpats -> MP_vector_concat (List.map (map_mpat_annot f) mpats)
@@ -629,8 +627,6 @@ and map_mpat_annot_aux f = function
   | MP_typ (mpat, typ) -> MP_typ (map_mpat_annot f mpat, typ)
   | MP_as (mpat, id) -> MP_as (map_mpat_annot f mpat, id)
 
-and map_fpat_annot f (FP_aux (FP_Fpat (id, pat), annot)) = FP_aux (FP_Fpat (id, map_pat_annot f pat), f annot)
-and map_mfpat_annot f (MFP_aux (MFP_mpat (id, mpat), annot)) = MFP_aux (MFP_mpat (id, map_mpat_annot f mpat), f annot)
 and map_letbind_annot f (LB_aux (lb, annot)) = LB_aux (map_letbind_annot_aux f lb, f annot)
 and map_letbind_annot_aux f = function
   | LB_val (pat, exp) -> LB_val (map_pat_annot f pat, map_exp_annot f exp)
@@ -998,7 +994,6 @@ and string_of_pat (P_aux (pat, l)) =
   | P_as (pat, id) -> "(" ^ string_of_pat pat ^ " as " ^ string_of_id id ^ ")"
   | P_string_append [] -> "\"\""
   | P_string_append pats -> string_of_list " ^ " string_of_pat pats
-  | P_record _ -> "PAT"
 
 and string_of_mpat (MP_aux (pat, l)) =
   match pat with
@@ -1013,7 +1008,6 @@ and string_of_mpat (MP_aux (pat, l)) =
   | MP_string_append pats -> string_of_list " ^ " string_of_mpat pats
   | MP_typ (mpat, typ) -> "(" ^ string_of_mpat mpat ^ " : " ^ string_of_typ typ ^ ")"
   | MP_as (mpat, id) -> "((" ^ string_of_mpat mpat ^ ") as " ^ string_of_id id ^ ")"
-  | _ -> "MPAT"
 
 and string_of_lexp (LEXP_aux (lexp, _)) =
   match lexp with
@@ -1051,12 +1045,8 @@ let rec pat_ids (P_aux (pat_aux, _)) =
      List.fold_right IdSet.union (List.map pat_ids pats) IdSet.empty
   | P_cons (pat1, pat2) ->
      IdSet.union (pat_ids pat1) (pat_ids pat2)
-  | P_record (fpats, _) ->
-     List.fold_right IdSet.union (List.map fpat_ids fpats) IdSet.empty
   | P_string_append pats ->
      List.fold_right IdSet.union (List.map pat_ids pats) IdSet.empty
-
-and fpat_ids (FP_aux (FP_Fpat (_, pat), _)) = pat_ids pat
 
 let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =
   match (List.fold_right
@@ -1770,7 +1760,6 @@ let rec locate_pat : 'a. (l -> l) -> 'a pat -> 'a pat = fun f (P_aux (p_aux, (l,
     | P_id id -> P_id (locate_id f id)
     | P_var (pat, typ_pat) -> P_var (locate_pat f pat, locate_typ_pat f typ_pat)
     | P_app (id, pats) -> P_app (locate_id f id, List.map (locate_pat f) pats)
-    | P_record (fpats, semi) -> P_record (List.map (locate_fpat f) fpats, semi)
     | P_vector pats -> P_vector (List.map (locate_pat f) pats)
     | P_vector_concat pats -> P_vector_concat (List.map (locate_pat f) pats)
     | P_tup pats -> P_tup (List.map (locate_pat f) pats)
@@ -1779,9 +1768,6 @@ let rec locate_pat : 'a. (l -> l) -> 'a pat -> 'a pat = fun f (P_aux (p_aux, (l,
     | P_string_append pats -> P_string_append (List.map (locate_pat f) pats)
   in
   P_aux (p_aux, (f l, annot))
-
-and locate_fpat : 'a. (l -> l) -> 'a fpat -> 'a fpat = fun f (FP_aux (FP_Fpat (id, pat), (l, annot))) ->
-  FP_aux (FP_Fpat (locate_id f id, locate_pat f pat), (f l, annot))
 
 let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp = fun f (E_aux (e_aux, (l, annot))) ->
   let e_aux = match e_aux with

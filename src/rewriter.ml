@@ -63,7 +63,6 @@ type 'a rewriters = {
     rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
   }
 
-let effect_of_fpat (FP_aux (_,(_,a))) = effect_of_annot a
 let effect_of_lexp (LEXP_aux (_,(_,a))) = effect_of_annot a
 let effect_of_fexp (FE_aux (_,(_,a))) = effect_of_annot a
 let effect_of_fexps fexps =
@@ -255,9 +254,6 @@ let rewrite_pat rewriters (P_aux (pat,(l,annot)) as orig_pat) =
   | P_as(pat,id) -> rewrap (P_as(rewrite pat, id))
   | P_typ(typ,pat) -> rewrap (P_typ(typ, rewrite pat))
   | P_app(id ,pats) -> rewrap (P_app(id, List.map rewrite pats))
-  | P_record(fpats,_) ->
-    rewrap (P_record(List.map (fun (FP_aux(FP_Fpat(id,pat),pannot)) -> FP_aux(FP_Fpat(id, rewrite pat), pannot)) fpats,
-                     false))
   | P_vector pats -> rewrap (P_vector(List.map rewrite pats))
   | P_vector_concat pats -> rewrap (P_vector_concat (List.map rewrite pats))
   | P_tup pats -> rewrap (P_tup (List.map rewrite pats))
@@ -442,7 +438,7 @@ let rewrite_defs_base_parallel j rewriters (Defs defs) =
        exit 1
   done;
   Defs (List.concat !rewritten)
-  
+
 let rewriters_base =
   {rewrite_exp = rewrite_exp;
    rewrite_pat = rewrite_pat;
@@ -454,7 +450,7 @@ let rewriters_base =
 
 let rewrite_defs (Defs defs) = rewrite_defs_base rewriters_base (Defs defs)
 
-type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
+type ('a,'pat,'pat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux
   ; p_wild           : 'pat_aux
   ; p_or             : 'pat * 'pat -> 'pat_aux
@@ -464,7 +460,6 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_id             : id -> 'pat_aux
   ; p_var            : 'pat * typ_pat -> 'pat_aux
   ; p_app            : id * 'pat list -> 'pat_aux
-  ; p_record         : 'fpat list * bool -> 'pat_aux
   ; p_vector         : 'pat list -> 'pat_aux
   ; p_vector_concat  : 'pat list -> 'pat_aux
   ; p_tup            : 'pat list -> 'pat_aux
@@ -472,11 +467,9 @@ type ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg =
   ; p_cons           : 'pat * 'pat -> 'pat_aux
   ; p_string_append  : 'pat list -> 'pat_aux
   ; p_aux            : 'pat_aux * 'a annot -> 'pat
-  ; fP_aux           : 'fpat_aux * 'a annot -> 'fpat
-  ; fP_Fpat          : id * 'pat -> 'fpat_aux
   }
 
-let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat_aux -> 'pat_aux =
+let rec fold_pat_aux (alg : ('a,'pat,'pat_aux) pat_alg) : 'a pat_aux -> 'pat_aux =
   function
   | P_lit lit           -> alg.p_lit lit
   | P_wild              -> alg.p_wild
@@ -487,7 +480,6 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat
   | P_as (p,id)         -> alg.p_as (fold_pat alg p, id)
   | P_typ (typ,p)       -> alg.p_typ (typ,fold_pat alg p)
   | P_app (id,ps)       -> alg.p_app (id,List.map (fold_pat alg) ps)
-  | P_record (ps,b)     -> alg.p_record (List.map (fold_fpat alg) ps, b)
   | P_vector ps         -> alg.p_vector (List.map (fold_pat alg) ps)
   | P_vector_concat ps  -> alg.p_vector_concat (List.map (fold_pat alg) ps)
   | P_tup ps            -> alg.p_tup (List.map (fold_pat alg) ps)
@@ -495,18 +487,12 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat
   | P_cons (ph,pt)      -> alg.p_cons (fold_pat alg ph, fold_pat alg pt)
   | P_string_append ps  -> alg.p_string_append (List.map (fold_pat alg) ps)
 
-and fold_pat (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a pat -> 'pat =
+and fold_pat (alg : ('a,'pat,'pat_aux) pat_alg) : 'a pat -> 'pat =
   function
   | P_aux (pat,annot)   -> alg.p_aux (fold_pat_aux alg pat,annot)
-and fold_fpat_aux (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a fpat_aux -> 'fpat_aux =
-  function
-  | FP_Fpat (id,pat)    -> alg.fP_Fpat (id,fold_pat alg pat)
-and fold_fpat (alg : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg) : 'a fpat -> 'fpat =
-  function
-  | FP_aux (fpat,annot) -> alg.fP_aux (fold_fpat_aux alg fpat,annot)
 
 (* identity fold from term alg to term alg *)
-let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
+let id_pat_alg : ('a,'a pat, 'a pat_aux) pat_alg =
   { p_lit            = (fun lit -> P_lit lit)
   ; p_wild           = P_wild
   ; p_or             = (fun (pat1, pat2) -> P_or(pat1, pat2))
@@ -516,7 +502,6 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   ; p_id             = (fun id -> P_id id)
   ; p_var            = (fun (pat,tpat) -> P_var (pat,tpat))
   ; p_app            = (fun (id,ps) -> P_app (id,ps))
-  ; p_record         = (fun (ps,b) -> P_record (ps,b))
   ; p_vector         = (fun ps -> P_vector ps)
   ; p_vector_concat  = (fun ps -> P_vector_concat ps)
   ; p_tup            = (fun ps -> P_tup ps)
@@ -524,13 +509,11 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux, 'a fpat, 'a fpat_aux) pat_alg =
   ; p_cons           = (fun (ph,pt) -> P_cons (ph,pt))
   ; p_string_append  = (fun (ps) -> P_string_append (ps))
   ; p_aux            = (fun (pat,annot) -> P_aux (pat,annot))
-  ; fP_aux           = (fun (fpat,annot) -> FP_aux (fpat,annot))
-  ; fP_Fpat          = (fun (id,pat) -> FP_Fpat (id,pat))
   }
 
 type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
       'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
-      'pat,'pat_aux,'fpat,'fpat_aux) exp_alg =
+      'pat,'pat_aux) exp_alg =
   { e_block                  : 'exp list -> 'exp_aux
   ; e_id                     : id -> 'exp_aux
   ; e_ref                    : id -> 'exp_aux
@@ -588,7 +571,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
   ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
   ; lB_val                   : 'pat * 'exp -> 'letbind_aux
   ; lB_aux                   : 'letbind_aux * 'a annot -> 'letbind
-  ; pat_alg                  : ('a,'pat,'pat_aux,'fpat,'fpat_aux) pat_alg
+  ; pat_alg                  : ('a,'pat,'pat_aux) pat_alg
   }
 
 let rec fold_exp_aux alg = function
@@ -755,7 +738,6 @@ let compute_pat_alg bot join =
   ; p_id             = (fun id -> (bot, P_id id))
   ; p_var            = (fun ((v,pat),kid) -> (v, P_var (pat,kid)))
   ; p_app            = (fun (id,ps) -> split_join (fun ps -> P_app (id,ps)) ps)
-  ; p_record         = (fun (ps,b) -> split_join (fun ps -> P_record (ps,b)) ps)
   ; p_vector         = split_join (fun ps -> P_vector ps)
   ; p_vector_concat  = split_join (fun ps -> P_vector_concat ps)
   ; p_tup            = split_join (fun ps -> P_tup ps)
@@ -763,8 +745,6 @@ let compute_pat_alg bot join =
   ; p_cons           = (fun ((vh,ph),(vt,pt)) -> (join vh vt, P_cons (ph,pt)))
   ; p_string_append  = split_join (fun ps -> P_string_append ps)
   ; p_aux            = (fun ((v,pat),annot) -> (v, P_aux (pat,annot)))
-  ; fP_aux           = (fun ((v,fpat),annot) -> (v, FP_aux (fpat,annot)))
-  ; fP_Fpat          = (fun (id,(v,pat)) -> (v, FP_Fpat (id,pat)))
   }
 
 let compute_exp_alg bot join =
@@ -862,7 +842,6 @@ let pure_pat_alg bot join =
   ; p_id             = (fun id -> bot)
   ; p_var            = (fun (v,kid) -> v)
   ; p_app            = (fun (id,ps) -> join_list ps)
-  ; p_record         = (fun (ps,b) -> join_list ps)
   ; p_vector         = join_list
   ; p_vector_concat  = join_list
   ; p_tup            = join_list
@@ -870,8 +849,6 @@ let pure_pat_alg bot join =
   ; p_string_append  = join_list
   ; p_cons           = (fun (vh,vt) -> join vh vt)
   ; p_aux            = (fun (v,annot) -> v)
-  ; fP_aux           = (fun (v,annot) -> v)
-  ; fP_Fpat          = (fun (id,v) -> v)
   }
 
 let pure_exp_alg bot join =

@@ -1150,7 +1150,6 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
         "string append pattern found in Coq backend, should have been rewritten"
      | P_not _ -> unreachable l __POS__ "Coq backend doesn't support not patterns"
      | P_or _ -> unreachable l __POS__ "Coq backend doesn't support or patterns yet"
-     | P_record (_,_) -> empty (* TODO *)
 
 let contains_early_return exp =
   let e_app (f, args) =
@@ -1329,7 +1328,6 @@ let merge_new_tyvars ctxt old_env pat new_env =
     | P_list ps
     | P_string_append ps
       -> List.fold_left merge_pat m ps
-    | P_record (fps,_) -> unreachable l __POS__ "Coq backend doesn't support record patterns properly yet"
     | P_cons (p1,p2) -> merge_pat (merge_pat m p1) p2
   in
   let m,r = IdSet.fold remove_binding (pat_ids pat) (ctxt.kid_id_renames, ctxt.kid_id_renames_rev) in

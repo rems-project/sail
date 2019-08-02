@@ -4672,7 +4672,9 @@ and propagate_pat_effect_aux = function
   | P_vector pats ->
      let p_pats = List.map propagate_pat_effect pats in
      P_vector p_pats, collect_effects_pat p_pats
+                                          (*
   | _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented: Cannot propagate effect in pat")
+                                           *)
 
 and propagate_mpat_effect (MP_aux (mpat, annot)) =
   let p_mpat, eff = propagate_mpat_effect_aux mpat in
@@ -4708,7 +4710,6 @@ and propagate_mpat_effect_aux = function
   | MP_as (mpat, id) ->
      let p_mpat = propagate_mpat_effect mpat in
      MP_as (p_mpat, id), effect_of_mpat mpat
-  | _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented: Cannot propagate effect in mpat")
 
 and propagate_letbind_effect (LB_aux (lb, (l, annot))) =
   let p_lb, eff = propagate_letbind_effect_aux lb in
@@ -5019,7 +5020,7 @@ let rec warn_if_unsafe_cast l env = function
   | typ when is_bit_typ typ -> ()
   | typ ->
      Reporting.warn ("Potentially unsafe cast involving " ^ string_of_typ typ) l ""
-     
+
 (* Checking a val spec simply adds the type as a binding in the
    context. We have to destructure the various kinds of val specs, but
    the difference is irrelevant for the typechecker. *)

@@ -175,9 +175,6 @@ let rec pat_bindings consider_var bound used (P_aux(p,(_,tannot))) =
   | P_app(id,pats) ->
     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
     list_fv bound (Nameset.add (string_of_id id) used) pats
-  | P_record(fpats,_) ->
-    List.fold_right (fun (Ast.FP_aux(Ast.FP_Fpat(_,p),_)) (b,n) ->
-        pat_bindings consider_var bound used p) fpats (bound,used)
   | P_vector pats | Ast.P_vector_concat pats | Ast.P_tup pats | Ast.P_list pats -> list_fv bound used pats
   | _ -> bound,used
 
@@ -738,11 +735,8 @@ let bindings_from_pat p =
     | P_tup ps
     | P_list ps
       -> List.concat (List.map aux_pat ps)
-    | P_record (fps,_) -> List.concat (List.map aux_fpat fps)
     | P_cons (p1,p2) -> aux_pat p1 @ aux_pat p2
-  and aux_fpat (FP_aux (FP_Fpat (_,p), _)) = aux_pat p
   in aux_pat p
-
 
 (* TODO: replace the below with solutions that don't depend so much on the
    structure of the environment. *)
@@ -794,15 +788,12 @@ let nexp_subst_fns substs =
     | P_as (p',id) -> re (P_as (s_pat p', id))
     | P_typ (ty,p') -> re (P_typ (s_t ty,s_pat p'))
     | P_app (id,ps) -> re (P_app (id, List.map s_pat ps))
-    | P_record (fps,flag) -> re (P_record (List.map s_fpat fps, flag))
     | P_vector ps -> re (P_vector (List.map s_pat ps))
     | P_vector_concat ps -> re (P_vector_concat (List.map s_pat ps))
     | P_string_append ps -> re (P_string_append (List.map s_pat ps))
     | P_tup ps -> re (P_tup (List.map s_pat ps))
     | P_list ps -> re (P_list (List.map s_pat ps))
     | P_cons (p1,p2) -> re (P_cons (s_pat p1, s_pat p2))
-  and s_fpat (FP_aux (FP_Fpat (id, p), (l,annot))) =
-    FP_aux (FP_Fpat (id, s_pat p), (l,s_tannot annot))
   in
   let rec s_exp (E_aux (e,(l,annot))) =
     let re e = E_aux (e,(l,s_tannot annot)) in

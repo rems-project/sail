@@ -218,7 +218,6 @@ pat_aux =  (* Pattern *)
  | P_id of id (* identifier *)
  | P_var of pat * atyp (* bind pat to type variable *)
  | P_app of id * (pat) list (* union constructor pattern *)
- | P_record of (fpat) list * bool (* struct pattern *)
  | P_vector of (pat) list (* vector pattern *)
  | P_vector_concat of (pat) list (* concatenated vector pattern *)
  | P_tup of (pat) list (* tuple pattern *)
@@ -392,7 +391,6 @@ type mpat_aux =  (* Mapping pattern. Mostly the same as normal patterns but only
  | MP_lit of lit
  | MP_id of id
  | MP_app of id * ( mpat) list
- | MP_record of ( mfpat) list * bool
  | MP_vector of ( mpat) list
  | MP_vector_concat of ( mpat) list
  | MP_tup of ( mpat) list
@@ -404,12 +402,6 @@ type mpat_aux =  (* Mapping pattern. Mostly the same as normal patterns but only
 
 and mpat =
  | MP_aux of ( mpat_aux) * l
-
-and mfpat_aux =  (* Mapping field pattern, why does this have to exist *)
- | MFP_mpat of id * mpat
-
-and mfpat =
- | MFP_aux of mfpat_aux * l
 
 type mpexp_aux =
  | MPat_pat of ( mpat)
