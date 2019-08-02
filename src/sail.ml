@@ -48,8 +48,10 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Process_file
+open Regex_parser
 
+open Process_file
+   
 module Big_int = Nat_big_num
 
 let lib = ref ([] : string list)
