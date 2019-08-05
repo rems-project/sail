@@ -811,7 +811,8 @@ let string_of_base_effect = function
 let string_of_effect = function
   | Effect_aux (Effect_set [], _) -> "pure"
   | Effect_aux (Effect_set beffs, _) ->
-     "{" ^ string_of_list ", " string_of_base_effect beffs ^ "}"
+     let beffs = List.map string_of_base_effect beffs |> List.sort String.compare in
+     "{" ^ string_of_list ", " (fun x -> x) beffs ^ "}"
 
 let string_of_order = function
   | Ord_aux (Ord_var kid, _) -> string_of_kid kid
