@@ -4999,10 +4999,7 @@ let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md
   let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env mapcl typ) mapcls in
   let eff = List.fold_left union_effects no_effect (List.map mapcl_effect mapcls) in
   let env = Env.define_val_spec id env in
-  if equal_effects eff no_effect || equal_effects eff (mk_effect [BE_escape]) || !opt_no_effects then
-    vs_def @ [DEF_mapdef (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, None)))], env
-  else
-    typ_error env l ("Mapping not pure (or escape only): " ^ string_of_effect eff ^ " found")
+  vs_def @ [DEF_mapdef (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, None)))], env
 
 let rec warn_if_unsafe_cast l env = function
   | Typ_aux (Typ_fn (arg_typs, ret_typ, _), _) ->
