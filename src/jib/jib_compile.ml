@@ -1436,12 +1436,23 @@ let compile_mapcls swap mk_cdef ctx id pats clauses =
     (* If the mapping clause fails, we'll jump to this label *)
     let clause_label = label "clause_" in
     let destructure, destructure_cleanup, ctx = compile_match ctx apat map_cval clause_label in
-    (* let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in *)
     let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-    let case_instrs =
-      destructure
-      @ body_setup @ [body_call (CL_id (clause_return_id, right_ctyp))] @ body_cleanup @ destructure_cleanup
-      @ [igoto finish_clause_label]
+    let case_instrs = match guard with
+      | Some guard ->
+         let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
+         let gs = ngensym () in
+         destructure
+         @ guard_setup
+         @ [idecl CT_bool gs;
+            guard_call (CL_id (gs, CT_bool))]
+         @ guard_cleanup
+         @ [ijump (V_call (Bnot, [V_id (gs, CT_bool)])) clause_label]
+         @ body_setup @ [body_call (CL_id (clause_return_id, right_ctyp))] @ body_cleanup @ destructure_cleanup
+         @ [igoto finish_clause_label]
+      | None ->
+         destructure
+         @ body_setup @ [body_call (CL_id (clause_return_id, right_ctyp))] @ body_cleanup @ destructure_cleanup
+         @ [igoto finish_clause_label]
     in
     [iblock case_instrs; ilabel clause_label]
   in

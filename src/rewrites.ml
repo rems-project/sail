@@ -624,7 +624,7 @@ let rewrite_exp_remove_vector_concat_pat rewriters (E_aux (exp,(l,annot)) as ful
   | exp -> rewrite_base full_exp
 
 let rewrite_fun_remove_vector_concat_pat
-      rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
+      rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) =
   let rewrite_funcl (FCL_aux (FCL_Funcl(id,pexp),(l,annot))) =
     let pat,guard,exp,pannot = destruct_pexp pexp in
     let (pat',_,decls) = remove_vector_concat_pat pat in
@@ -636,6 +636,25 @@ let rewrite_fun_remove_vector_concat_pat
     (FCL_aux (FCL_Funcl (id,pexp'),(l,annot)))
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
+let rewrite_mapping_remove_vector_concat_pat
+      rewriters (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), (l, mdannot))) =
+  let rewrite_pexp pexp =
+    let pat,guard,exp,pannot = destruct_pexp pexp in
+    let (pat',_,decls) = remove_vector_concat_pat pat in
+    let guard' = match guard with
+      | Some exp -> Some (decls (rewriters.rewrite_exp rewriters exp))
+      | None -> None in
+    let exp' = decls (rewriters.rewrite_exp rewriters exp) in
+    construct_pexp (pat',guard',exp',pannot)
+  in
+  let rewrite_mapcl (MCL_aux (aux, (l, annot))) =
+    match aux with
+    | MCL_forwards pexp -> MCL_aux (MCL_forwards (rewrite_pexp pexp), (l, annot))
+    | MCL_backwards pexp -> MCL_aux (MCL_backwards (rewrite_pexp pexp), (l, annot))
+    | MCL_bidir _ -> Reporting.unreachable l __POS__ "Bi-directional mapping clauses should be re-written before removing vector concatentation patterns"
+  in
+  MD_aux (MD_mapping (id, args, tannot_opt, List.map rewrite_mapcl mapcls), (l, mdannot))
+
 let rewrite_defs_remove_vector_concat env (Defs defs) =
   let rewriters =
     {rewrite_exp = rewrite_exp_remove_vector_concat_pat;
@@ -643,7 +662,7 @@ let rewrite_defs_remove_vector_concat env (Defs defs) =
      rewrite_let = rewrite_let;
      rewrite_lexp = rewrite_lexp;
      rewrite_fun = rewrite_fun_remove_vector_concat_pat;
-     rewrite_mapping = rewrite_mapping;
+     rewrite_mapping = rewrite_mapping_remove_vector_concat_pat;
      rewrite_def = rewrite_def;
      rewrite_defs = rewrite_defs_base} in
   let rewrite_def d =
@@ -998,7 +1017,7 @@ let remove_bitvector_pat (P_aux (_, (l, _)) as pat) =
           let (l,_) = annot in
           match pat, is_bitvector_typ t, contained_in_p_as with
           | P_vector _, true, false ->
-            P_aux (P_as (P_aux (pat,annot),fresh_id "b__" l), annot)
+             P_aux (P_typ (t, P_aux (P_as (P_aux (pat, annot), fresh_id "b__" l), annot)), annot)
           | _ -> P_aux (pat,annot)
         )
     } in
