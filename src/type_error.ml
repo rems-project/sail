@@ -147,6 +147,9 @@ let message_of_type_error =
               Line "Possible reasons:" :: List.map msg reasons
             else
               [])
+
+  | Err_pattern_id id ->
+     Line ("Type of identifier " ^ string_of_id id ^ " could not be inferred in pattern")
   in
   msg
 

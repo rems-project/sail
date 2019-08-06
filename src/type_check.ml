@@ -104,11 +104,13 @@ type type_error =
   | Err_other of string
   | Err_because of type_error * Parse_ast.l * type_error
   | Err_mapping of type_error * type_error
+  | Err_pattern_id of id
 
 type env =
   { top_val_specs : (typquant * typ) Bindings.t;
     defined_val_specs : IdSet.t;
     locals : (mut * typ) Bindings.t;
+    mapping_ids : (mut * typ) Bindings.t;
     top_letbinds : IdSet.t;
     union_ids : (typquant * typ) Bindings.t;
     registers : (effect * effect * typ) Bindings.t;
@@ -413,6 +415,7 @@ module Env : sig
   val get_accessor : id -> id -> t -> typquant * typ * typ * effect
   val add_local : id -> mut * typ -> t -> t
   val get_locals : t -> (mut * typ) Bindings.t
+  val set_mapping_ids : (mut * typ) Bindings.t -> t -> t
   val add_toplevel_lets : IdSet.t -> t -> t
   val get_toplevel_lets : t -> IdSet.t
   val add_variant : id -> typquant * type_union list -> t -> t
@@ -457,6 +460,7 @@ module Env : sig
   val allow_polymorphic_undefineds : t -> t
   val polymorphic_undefineds : t -> bool
   val lookup_id : ?raw:bool -> id -> t -> typ lvar
+  val lookup_mapping_id : id -> t -> (mut * typ) option
   val fresh_kid : ?kid:kid -> t -> kid
   val expand_synonyms : t -> typ -> typ
   val expand_nexp_synonyms : t -> nexp -> nexp
@@ -494,6 +498,7 @@ end = struct
     { top_val_specs = Bindings.empty;
       defined_val_specs = IdSet.empty;
       locals = Bindings.empty;
+      mapping_ids = Bindings.empty;
       top_letbinds = IdSet.empty;
       union_ids = Bindings.empty;
       registers = Bindings.empty;
@@ -1034,7 +1039,7 @@ end = struct
     | Not_found -> typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
   let is_enum id env = Bindings.mem id env.enums
-                 
+
   let is_record id env = Bindings.mem id env.records
 
   let get_record id env = Bindings.find id env.records
@@ -1164,6 +1169,8 @@ end = struct
 
   let get_locals env = env.locals
 
+  let set_mapping_ids m env = { env with mapping_ids = m }
+
   let lookup_id ?raw:(raw=false) id env =
     try
       let (mut, typ) = Bindings.find id env.locals in
@@ -1180,6 +1187,8 @@ end = struct
       Enum (mk_typ (Typ_id enum))
     with
     | Not_found -> Unbound
+
+  let lookup_mapping_id id env = Bindings.find_opt id env.mapping_ids
 
   let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
     if KBindings.mem v env.typ_vars then begin
@@ -3254,7 +3263,10 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      begin
        match Env.lookup_id v env with
        | Local (Immutable, _) | Unbound ->
-          typ_error env l ("Cannot infer identifier in pattern " ^ string_of_pat pat ^ " - try adding a type annotation")
+          begin match Env.lookup_mapping_id v env with
+          | Some (Immutable, typ) -> annot_pat (P_typ (typ, annot_pat (P_id v) typ)) typ, Env.add_local v (Immutable, typ) env, []
+          | _ -> typ_raise env l (Err_pattern_id v)
+          end
        | Local (Mutable, _) | Register _ ->
           typ_error env l ("Cannot shadow mutable local or register in switch statement pattern " ^ string_of_pat pat)
        | Enum enum -> annot_pat (P_id v) enum, env, []
@@ -3299,9 +3311,9 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
         let len = nexp_simp (List.fold_left fold_len len (List.tl inferred_pats)) in
         annot_pat (P_vector_concat inferred_pats) (bits_typ env len), env, guards
      end
-  | P_app (f, [P_aux (P_lit (L_aux (L_unit, _)), _)]) ->
+  | P_app (f, [pat]) ->
      let d = if Env.is_backwards_mapping env then Backwards else Forwards in
-     infer_pat env (P_aux (P_view (P_aux (P_lit (L_aux (L_unit, gen_loc l)), (gen_loc l, ())), set_id_direction d f, []), (l, ())))
+     infer_pat env (P_aux (P_view (pat, set_id_direction d f, []), (l, ())))
   | P_view (pat, f, exps) ->
      let app_env, is_mapping_builtin =
        if Env.allow_mapping_builtins env then
@@ -4486,6 +4498,24 @@ let pexp_of_mpexp direction mpexp body =
   | MPat_aux (MPat_when (mpat, guard), annot) ->
      Pat_aux (Pat_when (pat_of_mpat direction mpat, guard, body), annot)
 
+let check_mpexp_pair l env mpexp_left typ_left mpexp_right typ_right =
+  let left_attempt = try Ok (check_mpexp Forwards env mpexp_left typ_left) with Type_error (_, _, Err_pattern_id id) -> Error id | err -> raise err in
+  let right_attempt = try Ok (check_mpexp Backwards (Env.set_backwards_mapping env) mpexp_right typ_right) with Type_error (_, _, Err_pattern_id id) -> Error id | err -> raise err in
+  match left_attempt, right_attempt with
+  | Ok (left, left_env), Ok (right, right_env) ->
+     left, left_env, right, right_env
+  | Ok (left, left_env), Error id ->
+     let env = env |> Env.set_mapping_ids (Env.get_locals left_env) |> Env.set_backwards_mapping in
+     let right, right_env = check_mpexp Backwards env mpexp_right typ_right in
+     left, left_env, right, right_env
+  | Error id, Ok (right, right_env) ->
+     let env = Env.set_mapping_ids (Env.get_locals right_env) env in
+     let left, left_env = check_mpexp Forwards env mpexp_left typ_left in
+     left, left_env, right, right_env
+  | Error id_left, Error id_right ->
+     typ_error env l ("Could not infer type of '" ^ string_of_id id_left ^ "' on left side of mapping and '" ^ string_of_id id_right ^ "' on right side of mapping\n"
+                      ^ "To infer the type of a mapping clause, at least one side must be unambiguous")
+
 let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
   let bidir = mk_typ (Typ_bidir (typ_left, typ_right)) in
   match aux with
@@ -4494,8 +4524,7 @@ let check_mapcl env (MCL_aux (aux, (l, _))) typ_left typ_right =
        match aux with
        | MPat_pat mpat | MPat_when (mpat, _) -> exp_of_mpat direction mpat
      in
-     let left, left_env = check_mpexp Forwards env mpexp_left typ_left in
-     let right, right_env = check_mpexp Backwards (Env.set_backwards_mapping env) mpexp_right typ_right in
+     let left, left_env, right, right_env = check_mpexp_pair l env mpexp_left typ_left mpexp_right typ_right in
      let checked_left = crule check_exp right_env (exp_of_mpexp Backwards (strip_mpexp left)) typ_left in
      let checked_right = crule check_exp left_env (exp_of_mpexp Forwards (strip_mpexp right)) typ_right in
      [MCL_aux (MCL_forwards (pexp_of_mpexp Forwards left checked_right), (l, mk_expected_tannot env bidir no_effect (Some bidir)));

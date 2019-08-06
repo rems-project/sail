@@ -91,6 +91,7 @@ type type_error =
   | Err_other of string
   | Err_because of type_error * Ast.l * type_error
   | Err_mapping of type_error * type_error
+  | Err_pattern_id of id
 
 type env
 
