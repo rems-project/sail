@@ -2249,3 +2249,8 @@ let rec simple_string_of_loc = function
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
   | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"
+
+let parse_regex str =
+  let lexbuf = Lexing.from_string str in
+  try Some (Regex_parser.regex_eof Regex_lexer.token lexbuf) with
+  | _ -> None

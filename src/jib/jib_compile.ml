@@ -520,16 +520,6 @@ let rec apat_ctyp ctx (AP_aux (apat, _, _)) =
   | AP_view (_, _, _, typ) -> ctyp_of_typ ctx typ
   | AP_string_append _ -> CT_string
 
-let escape_match_string str =
-  (* Backslash gets double-escaped by both OCaml and the C compiler, so it's 4 here for every one we want in the regex *)
-  let escape_char = function
-    | '\\' -> "\\\\" (* "\\\\\\\\" *)
-    | ((* '(' | ')' | *) '[' | ']' | '{' | '}' | '^' | '$' | '?' | '+' | '*' | '.' | '|' as c) ->
-       (* "\\\\" *) "\\" ^ String.make 1 c
-    | c -> String.make 1 c
-  in
-  String.concat "" (List.map escape_char (Util.string_to_list str))
-
 let unit_cval = V_lit (VL_unit, CT_unit)
 
 let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
@@ -680,18 +670,22 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
        @ cleanup,
        ctx
      )
-     
+
   | AP_string_append string_apats ->
      let to_regex = function
-       | APS_lit str -> escape_match_string str
+       | APS_lit str -> Regex.Seq (List.map (fun c -> Regex.Char c) (Util.string_to_list str))
        | APS_pat apat ->
           match apat_typ apat with
-          | Typ_aux (Typ_regex regex, _) -> "\\(" ^ regex ^ "\\)"
-          | typ -> "\\(.*\\)"
+          | Typ_aux (Typ_regex regex, _) ->
+             begin match parse_regex regex with
+             | Some regex -> Regex.Group regex
+             | None -> Reporting.unreachable l __POS__ ("Could not parse regular expression " ^ regex)
+             end
+          | typ -> Regex.(Group (Repeat (Dot, At_least 0)))
      in
      let subpats = List.map (function APS_lit _ -> [] | APS_pat apat -> [apat]) string_apats |> List.concat in
      let groups = List.length subpats in
-     let regex_string = "^" ^ Util.string_of_list "" to_regex string_apats in
+     let regex_lit = Regex.Seq (List.map to_regex string_apats) in
      let regex, matches, result = ngensym (), ngensym (), ngensym () in
      let cleanup_label = label "regex_cleanup_" in
      let skip_cleanup_label = label "skip_cleanup_" in
@@ -705,7 +699,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
        @ [iclear CT_string mat]
      in
      let compiled_subpats = List.mapi compile_subpat subpats in
-     [iinit (CT_regex groups) regex (V_lit (VL_string regex_string, CT_string));
+     [iinit (CT_regex groups) regex (V_lit (VL_regex regex_lit, CT_string));
       idecl (CT_match groups) matches;
       idecl CT_bool result;
       iextern (CL_id (result, CT_bool)) (mk_id "sail_regmatch") [V_id (regex, CT_regex groups); cval; V_id (matches, CT_match groups)];

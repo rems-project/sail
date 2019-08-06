@@ -44,6 +44,7 @@ embed
 {{ lem
 
 open import Ast
+open import Regex
 open import Value2
 
 }}

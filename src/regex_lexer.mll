@@ -49,13 +49,28 @@
 (**************************************************************************)
 
 {
-open Regex
+open Regex_parser
 }
 
-let ws = [' ''\t']+
-
 rule token = parse
-  | ws
-    { token lexbuf }
+  | '.' { Dot }
+  | '[' { Lsquare }
+  | '{' { Lcurly }
+  | '}' { Rcurly }
+  | '(' { Lparen }
+  | ')' { Rparen }
+  | '\\'{ Backslash }
+  | '*' { Star }
+  | '+' { Plus }
+  | '?' { Question }
+  | '|' { Bar }
+  | '^' { Caret }
+  | ',' { Comma }
+  | ']' { Rsquare }
+  | '-' { Dash }
+  | '\\'
+    { Backslash }
+  | _ as c
+    { Char c }
   | eof
     { Eof }

@@ -802,15 +802,19 @@ end = struct
        then typ_error env l ("Type constructor " ^ string_of_id id ^ " expected " ^ string_of_typquant typq)
        else ()
     | Typ_id id -> typ_error env l ("Undefined type " ^ string_of_id id)
-    | Typ_regex _ -> ()
-    | Typ_var kid -> begin
-      match KBindings.find kid env.typ_vars with
-      | (_, K_type) -> ()
-      | (_, k) -> typ_error env l ("Kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ
-                               ^ " is " ^ string_of_kind_aux k ^ " rather than Type")
-      | exception Not_found ->
-         typ_error env l ("Unbound kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
-    end
+    | Typ_regex r ->
+       begin match parse_regex r with
+       | Some _ -> ()
+       | None -> typ_error env l ("Could not parse regular expression \"" ^ r ^ "\"")
+       end
+    | Typ_var kid ->
+       begin match KBindings.find kid env.typ_vars with
+       | (_, K_type) -> ()
+       | (_, k) -> typ_error env l ("Kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ
+                                    ^ " is " ^ string_of_kind_aux k ^ " rather than Type")
+       | exception Not_found ->
+          typ_error env l ("Unbound kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
+       end
     | Typ_fn (arg_typs, ret_typ, effs) -> List.iter (wf_typ ~exs:exs env) arg_typs; wf_typ ~exs:exs env ret_typ
     | Typ_bidir (typ1, typ2) when strip_typ typ1 = strip_typ typ2 ->
        typ_error env l "Bidirectional types cannot be the same on both sides"

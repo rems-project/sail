@@ -56,19 +56,19 @@ open Regex
 
 /* POSIX extended regular expression special characters are .[{}()\*+?| */
 %token Dot Lsquare Lcurly Rcurly Lparen Rparen Backslash Star Plus Question Bar
-/* Tokens that are usually mapped to themselves, except in certain contexts */
-%token Comma Rsquare
+/* Tokens that are usually mapped to themselves, except in certain contexts ^,]- */
+%token Caret Comma Rsquare Dash
 %token Eof
 %token <char> Char
 %token <string> Int
 
 %start regex_eof
-%type <Regex.t> regex_eof
+%type <Regex.regex> regex_eof
 
 %%
 
 /* Precedence from lowest to highest:
-   - Alternation | 
+   - Alternation |
    - Anchoring ^$ (which we don't parse)
    - Concatenation
    - Repetition * + ? {n} {n,} {m,n}
@@ -86,7 +86,7 @@ regex_concat:
   | regex_repeat
     { $1 }
   | regex_repeat regex_concat
-    { Seq ($1, $2) }
+    { Seq [$1; $2] }
 
 regex_repeat:
 /* Quantifiers ? + and * */
@@ -105,6 +105,9 @@ regex_repeat:
   | regex_group Lcurly Int Comma Int Rcurly
     { Regex.Repeat ($1, Regex.Between (int_of_string $3, int_of_string $5)) }
 
+  | regex_group
+    { $1 }
+
 regex_group:
   | Lparen regex_alt Rparen
     { $2 }
@@ -116,8 +119,26 @@ regex_group:
     { Regex.Char ',' }
   | Rsquare
     { Regex.Char ']' }
+  | Dash
+    { Regex.Char '-' }
+  | Caret
+    { Regex.Char '^' }
+  | Lsquare cclass
+    { Regex.Class (true, $2) }
+  | Lsquare Caret cclass
+    { Regex.Class (false, $3) }
   | Backslash escaped
     { Regex.Char $2 }
+
+cclass:
+  | Char cclass
+    { Regex.Class_char $1 :: $2 }
+  | Char Dash Char cclass
+    { Regex.Class_range ($1, $3) :: $4 }
+  | Dash Rsquare
+    { [Regex.Class_char '-'] }
+  | Rsquare
+    { [] }
 
 escaped:
   | Dot { '.' }

@@ -251,6 +251,34 @@ let rec instr_rename from_id to_id (I_aux (instr, aux)) =
 (* 1. Instruction pretty printer                                          *)
 (**************************************************************************)
 
+let rec posix_regex =
+  let open Regex in
+  let posix_char = function
+    | ('.' | '[' | ']' | '{' | '}' | '(' | ')' | '\\' | '*' | '+' | '?' | '|' | '^' | '$') as c -> "\\\\" ^ String.make 1 c
+    | c -> String.make 1 c
+  in
+  let string_of_repeat = function
+    | At_least 0 -> "*"
+    | At_least 1 -> "+"
+    | At_least n -> Printf.sprintf "{,%d}" n
+    | Between (0, 1) -> "?"
+    | Between (n, m) -> Printf.sprintf "{%d,%d}" n m
+    | Exactly n -> Printf.sprintf "{%d}" n
+  in
+  let string_of_char_class = function
+    | Class_char c -> String.make 1 c
+    | Class_range (c1, c2) -> String.make 1 c1 ^ "-" ^ String.make 1 c2
+  in
+  function
+  | Group r -> "(" ^ posix_regex r ^ ")"
+  | Or (r1, r2) -> posix_regex r1 ^ "|" ^ posix_regex r2
+  | Seq rs -> Util.string_of_list "" posix_regex rs
+  | Repeat (r, repeat) -> posix_regex r ^ string_of_repeat repeat
+  | Dot -> "."
+  | Char c -> posix_char c
+  | Class (true, cc) -> "[" ^ Util.string_of_list "" string_of_char_class cc ^ "]"
+  | Class (false, cc) -> "[^" ^ Util.string_of_list "" string_of_char_class cc ^ "]"
+
 let rec string_of_value = function
   | VL_bits ([], _) -> "UINT64_C(0)"
   | VL_bits (bs, true) -> "UINT64_C(" ^ Sail2_values.show_bitlist bs ^ ")"
@@ -272,7 +300,7 @@ let rec string_of_value = function
   | VL_enum element -> Util.zencode_string element
   | VL_struct fields -> "{" ^ Util.string_of_list ", " (fun (field, vl) -> "." ^ field ^ " = " ^ string_of_value vl) fields ^ "}"
   | VL_ref r -> "&" ^ Util.zencode_string r
-
+  | VL_regex r -> "\"^" ^ posix_regex r ^ "$\""
 
 let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
   let ssa_num n = if n = -1 then "" else ("/" ^ string_of_int n) in

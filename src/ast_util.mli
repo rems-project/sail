@@ -538,3 +538,6 @@ val quant_item_subst_kid : kid -> kid -> quant_item -> quant_item
 val typquant_subst_kid : kid -> kid -> typquant -> typquant
 
 val simple_string_of_loc : Parse_ast.l -> string
+
+(* Regular expression parsing *)
+val parse_regex : string -> Regex.regex option
