@@ -87,7 +87,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
   in
   let fromValueKid (Kid_aux ((Var name), _)) =
     string ("typq_" ^ name)
-  in 
+  in
   let fromValueNexp ((Nexp_aux (nexp_aux, annot)) as nexp) = match nexp_aux with
     | Nexp_constant num -> parens (separate space [string "Big_int.of_string"; dquotes (string (Nat_big_num.to_string num))])
     | Nexp_var var -> fromValueKid var
@@ -122,7 +122,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
                                   (string " -> ") ^^
                                     parens (separate comma_sp (List.mapi (fun i t -> fromValueTyp t (arg_name ^ "_tup" ^ string_of_int i)) typs)))
     | Typ_internal_unknown -> failwith "escaped Typ_internal_unknown"
-  in 
+  in
   let fromValueVals ((Typ_aux (typ_aux, l)) as typ) = match typ_aux with
     | Typ_tup typs -> parens (separate comma_sp (List.mapi (fun i typ -> fromValueTyp typ ("v" ^ (string_of_int i))) typs))
     | _ -> fromValueTyp typ "v0"
