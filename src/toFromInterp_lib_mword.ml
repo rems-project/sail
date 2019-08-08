@@ -30,7 +30,7 @@ let zatomToInterpValue typq_'n v =
   V_int v
 
 let atomFromInterpValue = zatomFromInterpValue
-let atomToInterpValue = zatomToInterpValue 
+let atomToInterpValue = zatomToInterpValue
 
 let zintFromInterpValue v = match v with
   | V_int i -> i
@@ -39,7 +39,7 @@ let zintFromInterpValue v = match v with
 let zintToInterpValue v = V_int v
 
 let intFromInterpValue = zintFromInterpValue
-let intToInterpValue = zintToInterpValue 
+let intToInterpValue = zintToInterpValue
 
 let znatFromInterpValue v = match v with
   | V_int i when i >= Big_int.zero -> i
@@ -50,7 +50,7 @@ let znatToInterpValue v =
   V_int v
 
 let natFromInterpValue = znatFromInterpValue
-let natToInterpValue = znatToInterpValue 
+let natToInterpValue = znatToInterpValue
 
 let zrangeFromInterpValue low high v = match v with
   | V_int i when i >= low && i <= high -> i
@@ -71,7 +71,7 @@ let zboolFromInterpValue v = match v with
 let zboolToInterpValue v = V_bool v
 
 let boolFromInterpValue = zboolFromInterpValue
-let boolToInterpValue = zboolToInterpValue 
+let boolToInterpValue = zboolToInterpValue
 
 let zstringFromInterpValue v = match v with
   | V_string s -> s
@@ -80,7 +80,7 @@ let zstringFromInterpValue v = match v with
 let zstringToInterpValue v = V_string v
 
 let stringFromInterpValue = zstringFromInterpValue
-let stringToInterpValue = zstringToInterpValue 
+let stringToInterpValue = zstringToInterpValue
 
 let zlistFromInterpValue typq_'a v = match v with
   | V_list vs -> List.map typq_'a vs
@@ -89,7 +89,7 @@ let zlistFromInterpValue typq_'a v = match v with
 let zlistToInterpValue typq_'a v = V_list (List.map typq_'a v)
 
 let listFromInterpValue = zlistFromInterpValue
-let listToInterpValue = zlistToInterpValue 
+let listToInterpValue = zlistToInterpValue
 
 let zvectorFromInterpValue typq_'n typq_'ord typq_'a v = match v with
   | V_vector vs ->
@@ -102,7 +102,20 @@ let zvectorToInterpValue typq_'n typq_'ord typq_'a v =
   V_vector (List.map typq_'a v)
 
 let vectorFromInterpValue = zvectorFromInterpValue
-let vectorToInterpValue = zvectorToInterpValue 
+let vectorToInterpValue = zvectorToInterpValue
+
+let zbitvectorFromInterpValue typq_'n typq_'ord v = match v with
+  | V_vector vs ->
+     assert (Big_int.of_int (List.length vs) = typq_'n);
+     vs
+  | _ -> failwith "invalid interpreter value for vector"
+
+let zbitvectorToInterpValue typq_'n typq_'ord v =
+  assert (Big_int.of_int (List.length v) = typq_'n);
+  V_vector v
+
+let bitvectorFromInterpValue = zvectorFromInterpValue
+let bitvectorToInterpValue = zvectorToInterpValue
 
 let zbitFromInterpValue v = match v with
   | V_bit b -> b
