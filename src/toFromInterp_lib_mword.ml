@@ -116,12 +116,12 @@ let bitToInterpValue = zbitToInterpValue
 let zbitvectorFromInterpValue typq_'n typq_'ord v = match v with
   | V_vector vs ->
      assert (Big_int.of_int (List.length vs) = typq_'n);
-     List.map bitFromInterpValue vs
-  | _ -> failwith "invalid interpreter value for vector"
+     Lem.wordFromBitlist (List.map (fun b -> bitFromInterpValue b |> Sail_lib.bool_of_bit) vs)
+  | _ -> failwith "invalid interpreter value for bitvector"
 
 let zbitvectorToInterpValue typq_'n typq_'ord v =
-  assert (Big_int.of_int (List.length v) = typq_'n);
-  V_vector (List.map bitToInterpValue v)
+  let bs = Lem.bitlistFromWord v in
+  V_vector (List.map (fun b -> Sail_lib.bit_of_bool b |> bitToInterpValue) bs)
 
 let bitvectorFromInterpValue = zbitvectorFromInterpValue
 let bitvectorToInterpValue = zbitvectorToInterpValue
@@ -134,7 +134,6 @@ let optionFromInterpValue typq_'a v = match v with
 let optionToInterpValue typq_'a v = match v with
   | None -> V_ctor ("None", [(unitToInterpValue ())])
   | Some (v0) -> V_ctor ("Some", [(typq_'a v0)])
-
 
 let bitsFromInterpValue v = match v with
   | V_vector vs ->
