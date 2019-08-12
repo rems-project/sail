@@ -3314,6 +3314,8 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
   | P_app (f, [pat]) ->
      let d = if Env.is_backwards_mapping env then Backwards else Forwards in
      infer_pat env (P_aux (P_view (pat, set_id_direction d f, []), (l, ())))
+  | P_app (f, pats) ->
+     infer_pat env (P_aux (P_app (f, [mk_pat (P_tup pats)]), (l, ())))
   | P_view (pat, f, exps) ->
      let app_env, is_mapping_builtin =
        if Env.allow_mapping_builtins env then

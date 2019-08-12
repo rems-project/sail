@@ -673,6 +673,44 @@ let to_ast_fundef ctx (P.FD_aux(fd,l):P.fundef) : unit fundef =
     let tannot_opt, ctx = to_ast_tannot_opt ctx tannot_opt in
     FD_aux(FD_function(to_ast_rec ctx rec_opt, tannot_opt, to_ast_effects_opt effects_opt, List.map (to_ast_funcl ctx) funcls), (l,()))
 
+(* We share explicit type annotations between both sides of a mapping to improve type inference *)
+let rec collect_mpat_annotations (MP_aux (aux, _)) =
+  match aux with
+  | MP_typ (MP_aux (MP_id id, _), typ) -> Bindings.singleton id typ
+  | MP_lit _ | MP_id _ -> Bindings.empty
+  | MP_as (mpat, _) | MP_typ (mpat, _) | MP_view (mpat, _, _) -> collect_mpat_annotations mpat
+  | MP_cons (mpat1, mpat2) ->
+     Bindings.union (fun  _ _  typ -> Some typ) (collect_mpat_annotations mpat1) (collect_mpat_annotations mpat2)
+  | MP_app (_, mpats) | MP_tup mpats | MP_list mpats | MP_vector mpats | MP_vector_concat mpats | MP_string_append mpats ->
+     List.fold_left (Bindings.union (fun _ _ typ -> Some typ)) Bindings.empty (List.map collect_mpat_annotations mpats)
+
+let collect_mpexp_annotations (MPat_aux ((MPat_pat mpat | MPat_when (mpat, _)), l)) = collect_mpat_annotations mpat
+
+let rec share_mpat_annotations tannots (MP_aux (aux, annot) as mpat) =
+  match aux with
+  | MP_typ (MP_aux (MP_id _, _), _) -> mpat
+  | MP_id id ->
+     begin match Bindings.find_opt id tannots with
+     | Some typ -> MP_aux (MP_typ (mpat, typ), annot)
+     | None -> mpat
+     end
+  | MP_lit _ -> mpat
+  | MP_view (mpat, id, exps) -> MP_aux (MP_view (share_mpat_annotations tannots mpat, id, exps), annot)
+  | MP_as (mpat, id) -> MP_aux (MP_as (share_mpat_annotations tannots mpat, id), annot)
+  | MP_app (id, mpats) -> MP_aux (MP_app (id, List.map (share_mpat_annotations tannots) mpats), annot)
+  | MP_vector mpats -> MP_aux (MP_vector (List.map (share_mpat_annotations tannots) mpats), annot)
+  | MP_vector_concat mpats -> MP_aux (MP_vector_concat (List.map (share_mpat_annotations tannots) mpats), annot)
+  | MP_tup mpats -> MP_aux (MP_tup (List.map (share_mpat_annotations tannots) mpats), annot)
+  | MP_list mpats -> MP_aux (MP_list (List.map (share_mpat_annotations tannots) mpats), annot)
+  | MP_cons (mpat1, mpat2) -> MP_aux (MP_cons (share_mpat_annotations tannots mpat1, share_mpat_annotations tannots mpat2), annot)
+  | MP_string_append mpats -> MP_aux (MP_string_append (List.map (share_mpat_annotations tannots) mpats), annot)
+  | MP_typ (mpat, typ) -> MP_aux (MP_typ (share_mpat_annotations tannots mpat, typ), annot)
+
+let share_mpexp_annotations tannots (MPat_aux (aux, annot)) =
+  match aux with
+  | MPat_pat mpat -> MPat_aux (MPat_pat (share_mpat_annotations tannots mpat), annot)
+  | MPat_when (mpat, exp) -> MPat_aux (MPat_when (share_mpat_annotations tannots mpat, exp), annot)
+
 let rec to_ast_mpat ctx (P.MP_aux(mpat,l)) =
   MP_aux(
     (match mpat with
@@ -687,8 +725,8 @@ let rec to_ast_mpat ctx (P.MP_aux(mpat,l)) =
     | P.MP_vector_concat(mpats) -> MP_vector_concat(List.map (to_ast_mpat ctx) mpats)
     | P.MP_tup(mpats) -> MP_tup(List.map (to_ast_mpat ctx) mpats)
     | P.MP_list(mpats) -> MP_list(List.map (to_ast_mpat ctx) mpats)
-    | P.MP_cons(pat1, pat2) -> MP_cons (to_ast_mpat ctx pat1, to_ast_mpat ctx pat2)
-    | P.MP_string_append pats -> MP_string_append (List.map (to_ast_mpat ctx) pats)
+    | P.MP_cons(mpat1, mpat2) -> MP_cons (to_ast_mpat ctx mpat1, to_ast_mpat ctx mpat2)
+    | P.MP_string_append mpats -> MP_string_append (List.map (to_ast_mpat ctx) mpats)
     | P.MP_typ (mpat, typ) -> MP_typ (to_ast_mpat ctx mpat, to_ast_typ ctx typ)
     | P.MP_view (mpat, id, exps) -> MP_view (to_ast_mpat ctx mpat, to_ast_id id, List.map (to_ast_exp ctx) exps)
     ), (l,()))
@@ -700,7 +738,11 @@ let to_ast_mpexp ctx (P.MPat_aux(mpexp, l)) =
 
 let to_ast_mapcl ctx (P.MCL_aux(mapcl, l)) =
   match mapcl with
-  | P.MCL_bidir (mpexp1, mpexp2) -> MCL_aux (MCL_bidir (to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2), (l, ()))
+  | P.MCL_bidir (mpexp1, mpexp2) ->
+     let mpexp1, mpexp2 = to_ast_mpexp ctx mpexp1, to_ast_mpexp ctx mpexp2 in
+     let tannots = Bindings.union (fun _ _ typ -> Some typ) (collect_mpexp_annotations mpexp1) (collect_mpexp_annotations mpexp2) in
+     let mpexp1, mpexp2 = share_mpexp_annotations tannots mpexp1, share_mpexp_annotations tannots mpexp2 in
+     MCL_aux (MCL_bidir (mpexp1, mpexp2), (l, ()))
   | P.MCL_forwards pexp -> MCL_aux (MCL_forwards (to_ast_case ctx pexp), (l, ()))
   | P.MCL_backwards pexp -> MCL_aux (MCL_backwards (to_ast_case ctx pexp), (l, ()))
 

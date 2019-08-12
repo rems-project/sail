@@ -4734,7 +4734,6 @@ let rewrites_lem = [
   ]
 
 let rewrites_coq = [
-    ("realise_mappings", []);
     ("remove_mapping_valspecs", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
@@ -4783,7 +4782,6 @@ let rewrites_coq = [
 
 let rewrites_ocaml = [
     ("no_effect_check", []);
-    ("realise_mappings", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
     ("mapping_builtins", []);
@@ -4829,7 +4827,6 @@ let rewrites_c = [
 
 let rewrites_interpreter = [
     ("no_effect_check", []);
-    ("realise_mappings", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
     ("mapping_builtins", []);
