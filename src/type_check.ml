@@ -4719,7 +4719,7 @@ let rec warn_if_unsafe_cast l env = function
   | typ when is_bit_typ typ -> ()
   | typ ->
      Reporting.warn ("Potentially unsafe cast involving " ^ string_of_typ typ) l ""
-     
+
 (* Checking a val spec simply adds the type as a binding in the
    context. We have to destructure the various kinds of val specs, but
    the difference is irrelevant for the typechecker. *)

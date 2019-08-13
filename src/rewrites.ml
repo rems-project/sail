@@ -400,12 +400,13 @@ let remove_vector_concat_pat pat =
         | P_as (p,id) -> P_aux (P_as (p,id),a)
         | P_typ (typ, pat) -> P_aux (P_typ (typ, aux pat),a)
         | P_wild -> P_aux (P_wild,a)
-        | P_app (id, pats) when Env.is_mapping id (env_of_annot a) ->
-           P_aux (P_app (id, List.map aux pats), a)
+        | P_tup pats -> P_aux (P_tup (List.map aux pats), a)
+        | P_view (pat, id, exps) ->
+           P_aux (P_view (aux pat, id, exps), a)
         | _ ->
            raise
              (Reporting.err_unreachable
-                l __POS__ "name_vector_concat_elements: Non-vector in vector-concat pattern") in
+                l __POS__ ("name_vector_concat_elements: Non-vector in vector-concat pattern: " ^ string_of_pat pat)) in
       P_vector_concat (List.map aux pats) in
     {id_pat_alg with p_vector_concat = p_vector_concat} in
 
