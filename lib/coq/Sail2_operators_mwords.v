@@ -527,5 +527,18 @@ destruct (sumbool_of_bool _).
     f_equal.
 *)
 
+Import ListNotations.
+Definition count_leading_zeros {N : Z} (x : mword N) `{ArithFact (N >= 1)} 
+: {n : Z & ArithFact (0 <= n /\ n <= N)} :=
+  let r : {n : Z & ArithFact (0 <= n /\ n <= N)} := build_ex N in
+  foreach_Z_up 0 (N - 1) 1 r
+    (fun i _ r =>
+      (if ((eq_vec (vec_of_bits [access_vec_dec x i]  : mword 1) (vec_of_bits [B1]  : mword 1)))
+       then build_ex
+            (Z.sub (Z.sub (length_mword x) i) 1)
+             : {n : Z & ArithFact (0 <= n /\ n <= N)}
+       else r))
+   .
+
 Definition prerr_bits {a} (s : string) (bs : mword a) : unit := tt.
 Definition print_bits {a} (s : string) (bs : mword a) : unit := tt.

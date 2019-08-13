@@ -2288,9 +2288,9 @@ Definition negate_range {n m} (l : {l : Z & ArithFact (n <= l <= m)})
   : {x : Z & ArithFact ((- m) <= x <= (- n))} :=
   build_ex (- (projT1 l)).
 
-Definition min_atom (a : Z) (b : Z) : {c : Z & ArithFact (c = a \/ c = b /\ c <= a /\ c <= b)} :=
+Definition min_atom (a : Z) (b : Z) : {c : Z & ArithFact ((c = a \/ c = b) /\ c <= a /\ c <= b)} :=
   build_ex (Z.min a b).
-Definition max_atom (a : Z) (b : Z) : {c : Z & ArithFact (c = a \/ c = b /\ c >= a /\ c >= b)} :=
+Definition max_atom (a : Z) (b : Z) : {c : Z & ArithFact ((c = a \/ c = b) /\ c >= a /\ c >= b)} :=
   build_ex (Z.max a b).
 
 
