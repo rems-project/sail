@@ -2818,6 +2818,14 @@ let rec rewrite_app env typ (id,args) =
        try_cast_to_typ
          (mk_exp (E_app (mk_id "place_slice", [vector1; start1; len1; len2])))
 
+    (* ones @ zeros *)
+    | [E_aux (E_app (ones1, [len1]), _);
+       E_aux (E_app (zeros2, [len2]), _)]
+        when is_ones ones1 && is_zeros zeros2 &&
+          not (is_constant len1 && is_constant len2) ->
+      try_cast_to_typ
+        (mk_exp (E_app (mk_id "slice_mask", [len2; len1])))
+
     (* variable-range @ variable-range *)
     | [E_aux (E_app (subrange1,
                      [vector1; start1; end1]),_);
