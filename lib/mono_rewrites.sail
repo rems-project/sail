@@ -82,7 +82,7 @@ val subrange_subrange_concat : forall 'n 'o 'p 'm 'q 'r 's, 's >= 0 & 'n >= 0 & 
 
 function subrange_subrange_concat (s, xs, i, j, ys, i', j') = {
   let xs = sail_shiftright(xs & slice_mask(j,i-j+1), j) in
-  let ys = sail_shiftright(ys & slice_mask(j',i'-j'+1), j) in
+  let ys = sail_shiftright(ys & slice_mask(j',i'-j'+1), j') in
   sail_shiftleft(extzv(s, xs), i' - j' + 1) | extzv(s, ys)
 }
 
