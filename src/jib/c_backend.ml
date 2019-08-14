@@ -2212,7 +2212,7 @@ let rec get_recursive_functions (Defs defs) =
        | _ -> E_aux (e_aux, annot)
      in
      let map_exp = {
-         id_exp_alg with
+         id_algebra with
          e_aux = (fun (e_aux, annot) -> collect_funcalls e_aux annot)
        } in
      let map_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp map_exp) } in

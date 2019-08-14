@@ -1008,7 +1008,8 @@ let split_defs target all_errors splits env defs =
         | E_internal_return e -> re (E_internal_return (map_exp e))
       and map_fexp (FE_aux (FE_Fexp (id,e), annot)) =
         FE_aux (FE_Fexp (id,map_exp e),annot)
-      and map_pexp = function
+      and map_pexp = assert false
+                       (* FIXME function
         | Pat_aux (Pat_exp (p,e),l) ->
            let nosplit = lazy [Pat_aux (Pat_exp (p,map_exp e),l)] in
            (match map_pat p with
@@ -1052,7 +1053,7 @@ let split_defs target all_errors splits env defs =
                 let exp1' = Spec_analysis.nexp_subst_exp nsubst e1 in
                 let exp2' = Spec_analysis.nexp_subst_exp nsubst e2 in
                 Pat_aux (Pat_when (pat', map_exp exp1', map_exp exp2'),l)
-              ) patnsubsts)
+              ) patnsubsts) *)
       and map_letbind (LB_aux (lb,annot)) =
         match lb with
         | LB_val (p,e) -> LB_aux (LB_val (check_single_pat p,map_exp e), annot)
@@ -1178,7 +1179,7 @@ let tyvars_bound_in_pat pat =
   in
   let open Rewriter in
   fst (fold_pat
-         { (compute_pat_alg KidSet.empty KidSet.union) with
+         { (compute_algebra KidSet.empty KidSet.union) with
            p_var = (fun ((s,pat), tpat) ->
                      tp_kids s tpat, P_var (pat, tpat)) }
          pat)
@@ -1376,7 +1377,8 @@ in *)
 
   let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),(l,annot))) =
     let pat,guard,body,pl = destruct_pexp pexp in
-    let pat,guard,body, nexps =
+    let pat,guard,body, nexps = assert false
+                                  (* FIXME
       (* Update pattern and add itself -> nat wrapper to body *)
       match Bindings.find id fn_sizes with
       | to_change,nexps ->
@@ -1406,7 +1408,7 @@ in *)
               Some (List.fold_left merge_guards exp' gs)
          in
          pat,guard,body,nexps
-      | exception Not_found -> pat,guard,body,NexpSet.empty
+      | exception Not_found -> pat,guard,body,NexpSet.empty *)
     in
     (* Update function applications *)
     let funcl_typ = typ_of_annot (l,annot) in
@@ -1427,7 +1429,7 @@ in *)
     let guard = match guard with
       | None -> None
       | Some exp -> Some (fold_exp { id_algebra with e_app = rewrite_e_app } exp) in
-    FCL_aux (FCL_Funcl (id,construct_pexp (pat,guard,body,(pl,empty_tannot))),(l,empty_tannot))
+    FCL_aux (FCL_Funcl (id,construct_pexp (pat, [] (* FIXME *),body,pl)),(l,empty_tannot))
   in
   let rewrite_e_app (id,args) =
     match Bindings.find id fn_sizes with
@@ -1757,7 +1759,7 @@ let rec kids_bound_by_typ_pat (TP_aux (tp,_)) =
    generated kids from the typechecker. *)
 let kids_bound_by_pat pat =
   let open Rewriter in
-  fst (fold_pat ({ (compute_pat_alg KidSet.empty KidSet.union)
+  fst (fold_pat ({ (compute_algebra KidSet.empty KidSet.union)
     with p_aux =
       (function ((s,(P_var (P_aux (_, annot'),tpat) as p)), annot) when not (is_empty_tannot (snd annot')) ->
         let kids = tyvars_of_typ (typ_of_annot annot') in
@@ -1916,7 +1918,8 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
     match Bindings.find id env.var_deps with
     | Have (args,extras) -> begin
       match ArgSplits.bindings args, ExtraSplits.bindings extras with
-      | [(id',loc),Total], [] when Id.compare id id' == 0 ->
+      | [(id',loc),Total], [] when Id.compare id id' == 0 -> assert false
+                                                               (* FIXME
          (match Util.map_all (function
          | Pat_aux (Pat_exp (pat,_),_) -> Some (ctx pat)
          | Pat_aux (Pat_when (_,_,_),_) -> None) pexps
@@ -1930,7 +1933,7 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
              else
                Some (Have (ArgSplits.singleton (id,loc) (Partial (pats,l)),
                            ExtraSplits.empty))
-          | None -> None)
+          | None -> None) *)
       | _ -> None
     end
     | Unknown _ -> None
@@ -2136,7 +2139,8 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
          | Some deps -> deps
          | None -> deps
        in
-       let analyse_case (Pat_aux (pexp,_)) =
+       let analyse_case (Pat_aux (pexp,_)) = assert false
+                                               (* FIXME
          match pexp with
          | Pat_exp (pat,e1) ->
             let env = update_env env deps pat (env_of_annot (l,annot)) (env_of e1) in
@@ -2148,7 +2152,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
             let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
             let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
             let assigns = add_dep_to_assigned deps assigns [e1;e2] in
-            (dmerge d1 d2, assigns, merge r1 r2)
+            (dmerge d1 d2, assigns, merge r1 r2) *)
        in
        let ds,assigns,rs = split3 (List.map analyse_case cases) in
        (merge_deps (deps::ds),
@@ -2176,7 +2180,8 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     | E_try (e,cases) ->
        let deps,_,r = analyse_exp fn_id env assigns e in
        let assigns = remove_assigns [e] " assigned in try expression" in
-       let analyse_handler (Pat_aux (pexp,_)) =
+       let analyse_handler (Pat_aux (pexp,_)) = assert false
+                                                  (* FIXME
          match pexp with
          | Pat_exp (pat,e1) ->
             let env = update_env env (Unknown (l,"Exception")) pat (env_of_annot (l,annot)) (env_of e1) in
@@ -2188,7 +2193,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
             let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
             let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
             let assigns = add_dep_to_assigned deps assigns [e1;e2] in
-            (dmerge d1 d2, assigns, merge r1 r2)
+            (dmerge d1 d2, assigns, merge r1 r2) *)
        in
        let ds,assigns,rs = split3 (List.map analyse_handler cases) in
        (merge_deps (deps::ds),
@@ -2565,7 +2570,7 @@ let analyse_funcl debug tenv constants (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
   let _ = if debug > 2 then print_set_assertions set_assertions in
   let aenv = initial_env id l tq pat body set_assertions constants in
   let _,_,r = analyse_exp id aenv Bindings.empty body in
-  let r = match guard with
+  let r = assert false (* FIXME match guard with
     | None -> r
     | Some exp -> let _,_,r' = analyse_exp id aenv Bindings.empty exp in
                   let r' =
@@ -2575,7 +2580,7 @@ let analyse_funcl debug tenv constants (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
                         Failures.singleton l (StringSet.singleton
                                                 "Case splitting size tyvars in guards not supported") }
                   in
-                  merge r r'
+                  merge r r' *)
   in
   let _ = if debug > 2 then print_result r else ()
   in r
@@ -2673,7 +2678,7 @@ let add_extra_splits extras (Defs defs) =
                  "Internal error: bad location for added case";
                ("",0))
          in
-         let pexps = [Pat_aux (Pat_exp (P_aux (P_id var,(l,size_annot)),exp),(l',annot))] in
+         let pexps = [Pat_aux (Pat_case (P_aux (P_id var,(l,size_annot)), [], exp), l')] in
          E_aux (E_case (E_aux (E_sizeof nexp, (l',size_annot)), pexps),(l',annot)),
          ((loc, string_of_id var, Analysis.detail_to_split detail)::split_list)
     ) extras (e,[])
@@ -2681,10 +2686,11 @@ let add_extra_splits extras (Defs defs) =
   let add_to_funcl (FCL_aux (FCL_Funcl (id,Pat_aux (pexp,peannot)),(l,annot))) =
     let pexp, splits = 
       match Analysis.ExtraSplits.find (id,l) extras with
-      | extras ->
+      | extras -> assert false
+                    (* FIXME 
          (match pexp with
          | Pat_exp (p,e) -> let e',sp = add_to_body extras e in Pat_exp (p,e'), sp
-         | Pat_when (p,g,e) -> let e',sp = add_to_body extras e in Pat_when (p,g,e'), sp)
+         | Pat_when (p,g,e) -> let e',sp = add_to_body extras e in Pat_when (p,g,e'), sp) *)
       | exception Not_found -> pexp, []
     in FCL_aux (FCL_Funcl (id,Pat_aux (pexp,peannot)),(l,annot)), splits
   in
@@ -3101,7 +3107,7 @@ let mono_rewrite defs =
   let open Rewriter in
   rewrite_defs_base
     { rewriters_base with
-      rewrite_exp = fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux } }
+      rewrite_exp = fun _ -> fold_exp { id_algebra with e_aux = rewrite_aux } }
     defs
 end
 
@@ -3251,7 +3257,7 @@ let make_bitvector_cast_cast cast_name top_env env quant_kids src_typ target_typ
 let ids_in_exp exp =
   let open Rewriter in
   fold_exp {
-      (pure_exp_alg IdSet.empty IdSet.union) with
+      (pure_algebra IdSet.empty IdSet.union) with
       e_id = IdSet.singleton;
       lEXP_id = IdSet.singleton;
       lEXP_memory = (fun (id,s) -> List.fold_left IdSet.union (IdSet.singleton id) s);
@@ -3393,7 +3399,8 @@ let add_bitvector_casts (Defs defs) =
         match e',matched_typ with
         | E_sizeof (Nexp_aux (Nexp_var kid,_)), _
         | _, Typ_aux (Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_) ->
-           let map_case pexp =
+           let map_case pexp = assert false
+             (* FIXME
              let pat,guard,body,ann = destruct_pexp pexp in
              let body = match pat, guard with
                | P_aux (P_lit (L_aux (L_num i,_)),_), _ ->
@@ -3411,7 +3418,7 @@ let add_bitvector_casts (Defs defs) =
                | _ ->
                   body
              in
-             construct_pexp (pat, guard, body, ann)
+             construct_pexp (pat, guard, body, ann) *)
            in
            E_aux (E_case (exp', List.map map_case cases),ann)
         | _ -> E_aux (e,ann)
@@ -3471,9 +3478,7 @@ let add_bitvector_casts (Defs defs) =
       | _ -> E_aux (e,ann)
     in
     let open Rewriter in
-    fold_exp
-      { id_exp_alg with
-        e_aux = rewrite_aux } exp
+    fold_exp { id_algebra with e_aux = rewrite_aux } exp
   in
   let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),((l,_) as fcl_ann))) =
     let fcl_env = env_of_annot fcl_ann in
@@ -3714,10 +3719,10 @@ let rewrite_toplevel_nexps (Defs defs) =
   in
   let rewrite_body nexp_map pexp =
     let open Rewriter in
-    fold_pexp { id_exp_alg with
+    fold_pexp { id_algebra with
       e_aux = rewrite_one_exp nexp_map;
       lEXP_aux = rewrite_one_lexp nexp_map;
-      pat_alg = { id_pat_alg with p_aux = rewrite_one_pat nexp_map }
+      p_aux = rewrite_one_pat nexp_map
     } pexp
   in
   let rewrite_funcl spec_map (FCL_aux (FCL_Funcl (id,pexp),ann) as funcl) =

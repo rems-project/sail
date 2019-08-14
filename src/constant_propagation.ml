@@ -859,7 +859,7 @@ let remove_impossible_int_cases _ = assert false
     | _ -> E_if (cond, e_then, e_else)
   in
   let open Rewriter in
-  let rewrite_exp _ = fold_exp { id_exp_alg with e_case = e_case; e_if = e_if } in
+  let rewrite_exp _ = fold_exp { id_algebra with e_case = e_case; e_if = e_if } in
   rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp }
  *)
 

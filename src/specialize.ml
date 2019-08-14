@@ -255,11 +255,11 @@ let rec instantiations_of spec id ast =
     | pat -> pat
   in
 
-  let rewrite_pat = { id_pat_alg with p_aux = (fun (pat, annot) -> inspect_pat (P_aux (pat, annot))) } in
-  let rewrite_exp = { id_exp_alg with pat_alg = rewrite_pat;
-                                      e_aux = (fun (exp, annot) -> inspect_exp (E_aux (exp, annot))) } in
-  let _ = rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp);
-                                                  rewrite_pat = (fun _ -> fold_pat rewrite_pat)} ast in
+  let rewrite_alg = { id_algebra with
+                      p_aux = (fun (pat, annot) -> inspect_pat (P_aux (pat, annot)));
+                      e_aux = (fun (exp, annot) -> inspect_exp (E_aux (exp, annot))) } in
+  let _ = rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_alg);
+                                                  rewrite_pat = (fun _ -> fold_pat rewrite_alg)} ast in
 
   !instantiations
 
@@ -283,7 +283,7 @@ let rec rewrite_polymorphic_calls spec id ast =
     | exp -> exp
   in
 
-  let rewrite_exp = { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
+  let rewrite_exp = { id_algebra with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) } ast
 
 let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
@@ -429,21 +429,17 @@ let specialize_id_valspec spec instantiations id ast =
    because at this point we have that as a separate valspec.*)
 let specialize_annotations instantiation fdef =
   let open Type_check in
-  let rw_pat = {
-      id_pat_alg with
-      p_typ = (fun (typ, pat) -> P_typ (subst_unifiers instantiation typ, pat))
-    } in
-  let rw_exp = {
-      id_exp_alg with
+  let rw_alg = {
+      id_algebra with
       e_cast = (fun (typ, exp) -> E_cast (subst_unifiers instantiation typ, exp));
       lEXP_cast = (fun (typ, lexp) -> LEXP_cast (subst_unifiers instantiation typ, lexp));
-      pat_alg = rw_pat
+      p_typ = (fun (typ, pat) -> P_typ (subst_unifiers instantiation typ, pat))
     } in
   let fdef =
     rewrite_fun {
         rewriters_base with
-        rewrite_exp = (fun _ -> fold_exp rw_exp);
-        rewrite_pat = (fun _ -> fold_pat rw_pat)
+        rewrite_exp = (fun _ -> fold_exp rw_alg);
+        rewrite_pat = (fun _ -> fold_pat rw_alg)
       } fdef
   in
   match fdef with
@@ -520,7 +516,7 @@ let remove_unused_valspecs env ast =
     | exp -> exp
   in
 
-  let rewrite_exp = { id_exp_alg with e_aux = (fun (exp, annot) -> inspect_exp (E_aux (exp, annot))) } in
+  let rewrite_exp = { id_algebra with e_aux = (fun (exp, annot) -> inspect_exp (E_aux (exp, annot))) } in
   let _ = rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) } ast in
 
   let unused = IdSet.filter (fun vs_id -> not (IdSet.mem vs_id !calls)) vs_ids in

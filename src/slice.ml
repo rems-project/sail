@@ -164,7 +164,7 @@ let add_def_to_graph graph def =
     end;
     P_aux (p_aux, annot)
   in
-  let rw_pat self = { id_pat_alg with p_aux = (fun (p_aux, annot) -> scan_pat self p_aux annot) } in
+  let rw_alg self = { id_algebra with p_aux = (fun (p_aux, annot) -> scan_pat self p_aux annot) } in
 
   let scan_lexp self lexp_aux annot =
     let env = env_of_annot annot in
@@ -203,14 +203,14 @@ let add_def_to_graph graph def =
     end;
     E_aux (e_aux, annot)
   in
-  let rw_exp self = { id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp self e_aux annot);
-                                      pat_alg = rw_pat self } in
+  let rw_alg self = { id_algebra with e_aux = (fun (e_aux, annot) -> scan_exp self e_aux annot);
+                                      p_aux = (fun (p_aux, annot) -> scan_pat self p_aux annot) } in
 
   let rewriters self =
     { rewriters_base with
-      rewrite_exp = (fun _ -> fold_exp (rw_exp self));
-      rewrite_pat = (fun _ -> fold_pat (rw_pat self));
-      rewrite_let = (fun _ -> fold_letbind (rw_exp self));
+      rewrite_exp = (fun _ -> fold_exp (rw_alg self));
+      rewrite_pat = (fun _ -> fold_pat (rw_alg self));
+      rewrite_let = (fun _ -> fold_letbind (rw_alg self));
     }
   in
 
