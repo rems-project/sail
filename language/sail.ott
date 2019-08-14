@@ -590,17 +590,16 @@ fexp :: 'FE_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}
   | id = exp                  :: :: Fexp
 
-opt_default :: 'Def_val_' ::=
-  {{ com optional default value for indexed vector expressions }} %, to define a default value for any unspecified positions in a sparse map 
-  {{ aux _ annot }} {{ auxparam 'a }}
-  |                           :: :: empty
-  | ; default = exp           :: :: dec
+guard :: 'G_' ::=
+  {{ com guard expressions }}
+  {{ aux _ l }} {{ auxparam 'a }}
+  | if exp     :: :: if
+  | pat <- exp :: :: pattern
 
 pexp :: 'Pat_' ::=
   {{ com pattern match }}
-  {{ aux _ annot }} {{ auxparam 'a }}
-  | pat => exp         :: :: exp
-  | pat if exp1 => exp :: :: when
+  {{ aux _ l }} {{ auxparam 'a }}
+  | pat guard1 , ... , guardn => exp :: :: case
 
 parsing
 
@@ -648,20 +647,10 @@ effect_opt :: 'Effect_opt_' ::=
   |                                              :: :: none {{ com no effect annotation }}
   | effectkw effect                              :: :: effect
 
-% Generate a pexp, but from slightly different syntax (= rather than ->)
-pexp_funcl :: 'Pat_funcl_' ::=
-  {{ auxparam 'a }}
-  {{ ocaml ('a pexp) }}
-  {{ isa pexp }}
-  {{ lem (pexp 'a) }}
-  | pat = exp                       :: :: exp {{ ichlo (Pat_aux (Pat_exp [[pat]] [[exp]],Unknown)) }}
-  | ( pat when exp1 ) = exp         :: :: when {{ ichlo (Pat_aux (Pat_when [[pat]] [[exp1]] [[exp]],Unknown)) }}
-
 funcl :: 'FCL_' ::=
   {{ com function clause }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | id pexp_funcl                   :: :: Funcl
-
+  | id pexp :: :: Funcl
 
 fundef :: 'FD_' ::=
   {{ com function definition}}

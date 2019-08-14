@@ -84,6 +84,7 @@ val mk_nexp : nexp_aux -> nexp
 val mk_exp : ?loc:l -> unit exp_aux -> unit exp
 val mk_pat : unit pat_aux -> unit pat
 val mk_mpat : unit mpat_aux -> unit mpat
+val mk_guard : unit guard_aux -> unit guard
 val mk_pexp : unit pexp_aux -> unit pexp
 val mk_mpexp : unit mpexp_aux -> unit mpexp
 val mk_lexp : unit lexp_aux -> unit lexp
@@ -454,8 +455,8 @@ val is_kid_generated : kid -> bool
 
 val undefined_of_typ : bool -> Ast.l -> (typ -> 'annot) -> typ -> 'annot exp
 
-val destruct_pexp : 'a pexp -> 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a)
-val construct_pexp : 'a pat * ('a exp) option * 'a exp * (Ast.l * 'a) ->  'a pexp
+val destruct_pexp : 'a pexp -> 'a pat * 'a guard list * 'a exp * Ast.l
+val construct_pexp : 'a pat * 'a guard list * 'a exp * Ast.l ->  'a pexp
 
 val destruct_mpexp : 'a mpexp -> 'a mpat * ('a exp) option * (Ast.l * 'a)
 val construct_mpexp : 'a mpat * ('a exp) option * (Ast.l * 'a) ->  'a mpexp
@@ -494,12 +495,10 @@ val hex_to_bin : string -> string
    (gen_loc l) (mk_exp ...) where l is the location from which the
    code is being generated. *)
 val locate : (l -> l) -> 'a exp -> 'a exp
-
 val locate_pat : (l -> l) -> 'a pat -> 'a pat
-
 val locate_lexp : (l -> l) -> 'a lexp -> 'a lexp
-
 val locate_typ : (l -> l) -> typ -> typ
+val locate_guard : (l -> l) -> 'a guard -> 'a guard
 
 (** Make a unique location by giving it a Parse_ast.Unique wrapper with
    a generated number. *)

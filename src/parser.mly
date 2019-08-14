@@ -691,8 +691,6 @@ pat:
     { $1 }
   | pat1 As typ
     { mk_pat (P_var ($1, $3)) $startpos $endpos }
-  | pat1 Match typ
-    { mk_pat (P_var ($1, $3)) $startpos $endpos }
 
 pat_list:
   | pat
@@ -1001,11 +999,23 @@ exp9r:
   | atomic_exp op9r exp9r { mk_exp (E_app_infix ($1, $2, $3)) $startpos $endpos }
   | atomic_exp { $1 }
 
+%inline guard:
+  | If_ exp
+    { G_aux (G_if $2, loc $startpos $endpos) }
+  | Match pat Eq exp
+    { G_aux (G_pattern ($2, $4), loc $startpos $endpos) }
+
+guards:
+  | guard
+    { [$1] }
+  | guard Comma guards
+    { $1 :: $3 }
+
 case:
   | pat EqGt exp
-    { mk_pexp (Pat_exp ($1, $3)) $startpos $endpos }
-  | pat If_ exp EqGt exp
-    { mk_pexp (Pat_when ($1, $3, $5)) $startpos $endpos }
+    { mk_pexp (Pat_case ($1, [], $3)) $startpos $endpos }
+  | pat guards EqGt exp
+    { mk_pexp (Pat_case ($1, $2, $4)) $startpos $endpos }
 
 case_list:
   | case
@@ -1127,21 +1137,21 @@ exp_list:
 
 funcl_patexp:
   | pat Eq exp
-    { mk_pexp (Pat_exp ($1, $3)) $startpos $endpos }
-  | Lparen pat If_ exp Rparen Eq exp
-    { mk_pexp (Pat_when ($2, $4, $7)) $startpos $endpos }
+    { mk_pexp (Pat_case ($1, [], $3)) $startpos $endpos }
+  | Lparen pat guards Rparen Eq exp
+    { mk_pexp (Pat_case ($2, $3, $6)) $startpos $endpos }
 
 funcl_patexp_typ:
   | pat Eq exp
-    { (mk_pexp (Pat_exp ($1, $3)) $startpos $endpos, mk_tannotn) }
+    { (mk_pexp (Pat_case ($1, [], $3)) $startpos $endpos, mk_tannotn) }
   | pat MinusGt typ Eq exp
-    { (mk_pexp (Pat_exp ($1, $5)) $startpos $endpos, mk_tannot mk_typqn $3 $startpos $endpos($3)) }
+    { (mk_pexp (Pat_case ($1, [], $5)) $startpos $endpos, mk_tannot mk_typqn $3 $startpos $endpos($3)) }
   | Forall typquant Dot pat MinusGt typ Eq exp
-    { (mk_pexp (Pat_exp ($4, $8)) $startpos $endpos, mk_tannot $2 $6 $startpos $endpos($6)) }
-  | Lparen pat If_ exp Rparen Eq exp
-    { (mk_pexp (Pat_when ($2, $4, $7)) $startpos $endpos, mk_tannotn) }
-  | Forall typquant Dot Lparen pat If_ exp Rparen MinusGt typ Eq exp
-    { (mk_pexp (Pat_when ($5, $7, $12)) $startpos $endpos, mk_tannot $2 $10 $startpos $endpos($10)) }
+    { (mk_pexp (Pat_case ($4, [], $8)) $startpos $endpos, mk_tannot $2 $6 $startpos $endpos($6)) }
+  | Lparen pat guards Rparen Eq exp
+    { (mk_pexp (Pat_case ($2, $3, $6)) $startpos $endpos, mk_tannotn) }
+  | Forall typquant Dot Lparen pat guards Rparen MinusGt typ Eq exp
+    { (mk_pexp (Pat_case ($5, $6, $11)) $startpos $endpos, mk_tannot $2 $9 $startpos $endpos($9)) }
 
 funcl:
   | id funcl_patexp

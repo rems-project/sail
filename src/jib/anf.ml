@@ -714,23 +714,25 @@ and anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
 
   | E_case (match_exp, pexps) ->
      let match_aval, match_wrap = to_aval (anf match_exp) in
-     let anf_pexp (Pat_aux (pat_aux, _)) =
+     let anf_pexp (Pat_aux (pat_aux, _)) = assert false
+                                                  (* FIXME
        match pat_aux with
        | Pat_when (pat, guard, body) ->
           (anf_pat pat, anf guard, anf body)
        | Pat_exp (pat, body) ->
-          (anf_pat pat, mk_aexp (AE_val (AV_lit (mk_lit (L_true), bool_typ))), anf body)
+          (anf_pat pat, mk_aexp (AE_val (AV_lit (mk_lit (L_true), bool_typ))), anf body) *)
      in
      match_wrap (mk_aexp (AE_case (match_aval, List.map anf_pexp pexps, typ_of exp)))
 
   | E_try (match_exp, pexps) ->
      let match_aexp = anf match_exp in
-     let anf_pexp (Pat_aux (pat_aux, _)) =
+     let anf_pexp (Pat_aux (pat_aux, _)) = assert false
+                                                  (* FIXME
        match pat_aux with
        | Pat_when (pat, guard, body) ->
           (anf_pat pat, anf guard, anf body)
        | Pat_exp (pat, body) ->
-          (anf_pat pat, mk_aexp (AE_val (AV_lit (mk_lit (L_true), bool_typ))), anf body)
+          (anf_pat pat, mk_aexp (AE_val (AV_lit (mk_lit (L_true), bool_typ))), anf body) *)
      in
      mk_aexp (AE_try (match_aexp, List.map anf_pexp pexps, typ_of exp))
 
@@ -746,7 +748,7 @@ and anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
        ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF"))
 
   | E_let (LB_aux (LB_val (pat, binding), _), body) ->
-     anf (E_aux (E_case (binding, [Pat_aux (Pat_exp (pat, body), (Parse_ast.Unknown, empty_tannot))]), exp_annot))
+     anf (E_aux (E_case (binding, [Pat_aux (Pat_case (pat, [], body), Parse_ast.Unknown)]), exp_annot))
 
   | E_tuple exps ->
      let aexps = List.map anf exps in
@@ -785,9 +787,10 @@ and anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   | E_internal_return _ | E_internal_plet _ ->
      raise (Reporting.err_unreachable l __POS__ "encountered unexpected internal node when converting to ANF")
 
-and anf_pexp (Pat_aux (aux, _)) =
+and anf_pexp (Pat_aux (aux, _)) = assert false
+                                         (* FIXME
   match aux with
   | Pat_when (pat, guard, body) ->
      (anf_pat pat, Some (anf guard), anf body)
   | Pat_exp (pat, body) ->
-     (anf_pat pat, None, anf body)
+     (anf_pat pat, None, anf body) *)

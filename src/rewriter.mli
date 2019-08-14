@@ -91,33 +91,11 @@ val rewrite_def : tannot rewriters -> tannot def -> tannot def
 val rewrite_fun : tannot rewriters -> tannot fundef -> tannot fundef
 
 val rewrite_mapping : tannot rewriters -> tannot mapdef -> tannot mapdef
-  
-(* the type of interpretations of pattern-matching expressions *)
-type ('a,'pat,'pat_aux) pat_alg =
-  { p_lit            : lit -> 'pat_aux
-  ; p_wild           : 'pat_aux
-  ; p_or             : 'pat * 'pat -> 'pat_aux
-  ; p_not            : 'pat        -> 'pat_aux
-  ; p_as             : 'pat * id -> 'pat_aux
-  ; p_typ            : Ast.typ * 'pat -> 'pat_aux
-  ; p_id             : id -> 'pat_aux
-  ; p_var            : 'pat * typ_pat -> 'pat_aux
-  ; p_app            : id * 'pat list -> 'pat_aux
-  ; p_vector         : 'pat list -> 'pat_aux
-  ; p_vector_concat  : 'pat list -> 'pat_aux
-  ; p_tup            : 'pat list -> 'pat_aux
-  ; p_list           : 'pat list -> 'pat_aux
-  ; p_cons           : 'pat * 'pat -> 'pat_aux
-  ; p_string_append  : 'pat list -> 'pat_aux
-  ; p_view           : 'pat * id * 'a exp list -> 'pat_aux
-  ; p_aux            : 'pat_aux * 'a annot -> 'pat
-  }
-(* fold over pat_aux expressions *)
 
 (* the type of interpretations of expressions *)
 type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
-      'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
-      'pat,'pat_aux) exp_alg =
+      'guard,'guard_aux,'pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux) algebra =
  { e_block                  : 'exp list -> 'exp_aux
  ; e_id                     : id -> 'exp_aux
  ; e_ref                    : id -> 'exp_aux
@@ -167,79 +145,86 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
  ; lEXP_aux                 : 'lexp_aux * 'a annot -> 'lexp
  ; fE_Fexp                  : id * 'exp -> 'fexp_aux
  ; fE_aux                   : 'fexp_aux * 'a annot -> 'fexp
- ; def_val_empty            : 'opt_default_aux
- ; def_val_dec              : 'exp -> 'opt_default_aux
- ; def_val_aux              : 'opt_default_aux * 'a annot -> 'opt_default
- ; pat_exp                  : 'pat * 'exp -> 'pexp_aux
- ; pat_when                 : 'pat * 'exp * 'exp -> 'pexp_aux
- ; pat_aux                  : 'pexp_aux * 'a annot -> 'pexp
+ ; g_aux                    : 'guard_aux * l -> 'guard
+ ; g_if                     : 'exp -> 'guard_aux
+ ; g_pattern                : 'pat * 'exp -> 'guard_aux
+ ; pat_case                 : 'pat * 'guard list * 'exp -> 'pexp_aux
+ ; pat_aux                  : 'pexp_aux * l -> 'pexp
  ; lB_val                   : 'pat * 'exp -> 'letbind_aux
  ; lB_aux                   : 'letbind_aux * 'a annot -> 'letbind
- ; pat_alg                  : ('a,'pat,'pat_aux) pat_alg
+ ; p_lit                    : lit -> 'pat_aux
+ ; p_wild                   : 'pat_aux
+ ; p_or                     : 'pat * 'pat -> 'pat_aux
+ ; p_not                    : 'pat -> 'pat_aux
+ ; p_as                     : 'pat * id -> 'pat_aux
+ ; p_typ                    : Ast.typ * 'pat -> 'pat_aux
+ ; p_id                     : id -> 'pat_aux
+ ; p_var                    : 'pat * typ_pat -> 'pat_aux
+ ; p_app                    : id * 'pat list -> 'pat_aux
+ ; p_vector                 : 'pat list -> 'pat_aux
+ ; p_vector_concat          : 'pat list -> 'pat_aux
+ ; p_tup                    : 'pat list -> 'pat_aux
+ ; p_list                   : 'pat list -> 'pat_aux
+ ; p_cons                   : 'pat * 'pat -> 'pat_aux
+ ; p_string_append          : 'pat list -> 'pat_aux
+ ; p_view                   : 'pat * id * 'exp list -> 'pat_aux
+ ; p_aux                    : 'pat_aux * 'a annot -> 'pat
  }
 
 (* fold over patterns *)
-val fold_pat : ('a,'pat,'pat_aux) pat_alg -> 'a pat -> 'pat
+val fold_pat : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
+      'guard,'guard_aux,'pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux) algebra -> 'a pat -> 'pat
 
 (* fold over expressions *)
 val fold_exp : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
-      'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
-      'pat,'pat_aux) exp_alg -> 'a exp -> 'exp
+      'guard,'guard_aux,'pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux) algebra -> 'a exp -> 'exp
 
 val fold_letbind : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
-      'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
-      'pat,'pat_aux) exp_alg -> 'a letbind -> 'letbind
+      'guard,'guard_aux,'pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux) algebra -> 'a letbind -> 'letbind
 
 val fold_pexp : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
-      'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
-      'pat,'pat_aux) exp_alg -> 'a pexp -> 'pexp
-
-val fold_pexp : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
-      'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
-      'pat,'pat_aux) exp_alg -> 'a pexp -> 'pexp
+      'guard,'guard_aux,'pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux) algebra -> 'a pexp -> 'pexp
 
 val fold_funcl : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
-      'opt_default_aux,'opt_default,'a pexp,'pexp_aux,'letbind_aux,'letbind,
-      'pat,'pat_aux) exp_alg -> 'a funcl -> 'a funcl
+      'guard,'guard_aux,'a pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux) algebra -> 'a funcl -> 'a funcl
 
 val fold_function : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
-      'opt_default_aux,'opt_default, 'a pexp,'pexp_aux,'letbind_aux,'letbind,
-      'pat,'pat_aux) exp_alg -> 'a fundef -> 'a fundef
+      'guard,'guard_aux,'a pexp,'pexp_aux,'letbind_aux,'letbind,
+      'pat,'pat_aux) algebra -> 'a fundef -> 'a fundef
 
-val id_pat_alg : ('a,'a pat, 'a pat_aux) pat_alg
-val id_exp_alg :
-  ('a,'a exp,'a exp_aux,'a lexp,'a lexp_aux,'a fexp,
-  'a fexp_aux,
-  'a opt_default_aux,'a opt_default,'a pexp,'a pexp_aux,
-  'a letbind_aux,'a letbind,
-  'a pat,'a pat_aux) exp_alg
+val id_algebra :
+  ('a,
+   'a exp, 'a exp_aux,
+   'a lexp,'a lexp_aux,
+   'a fexp, 'a fexp_aux,
+   'a guard, 'a guard_aux,
+   'a pexp, 'a pexp_aux,
+   'a letbind_aux, 'a letbind,
+   'a pat, 'a pat_aux) algebra
 
-val compute_pat_alg : 'b -> ('b -> 'b -> 'b) ->
-  ('a,('b * 'a pat),('b * 'a pat_aux)) pat_alg
+val compute_algebra : 'b -> ('b -> 'b -> 'b) ->
+  ('a,
+   ('b * 'a exp), ('b * 'a exp_aux),
+   ('b * 'a lexp), ('b * 'a lexp_aux),
+   ('b * 'a fexp), ('b * 'a fexp_aux),
+   ('b * 'a guard), ('b * 'a guard_aux),
+   ('b * 'a pexp), ('b * 'a pexp_aux),
+   ('b * 'a letbind_aux), ('b * 'a letbind),
+   ('b * 'a pat), ('b * 'a pat_aux)) algebra
 
-val compute_exp_alg : 'b -> ('b -> 'b -> 'b) ->
-  ('a,('b * 'a exp),('b * 'a exp_aux),('b * 'a lexp),('b * 'a lexp_aux),('b * 'a fexp),
-  ('b * 'a fexp_aux),
-  ('b * 'a opt_default_aux),('b * 'a opt_default),('b * 'a pexp),('b * 'a pexp_aux),
-  ('b * 'a letbind_aux),('b * 'a letbind),
-  ('b * 'a pat),('b * 'a pat_aux)) exp_alg
-
-val pure_pat_alg : 'b -> ('b -> 'b -> 'b) -> ('a,'b,'b) pat_alg
-
-val pure_exp_alg : 'b -> ('b -> 'b -> 'b) ->
-  ('a,'b,'b,'b,'b,'b,
-  'b,'b,'b,
-  'b,'b,
-  'b,'b,
-  'b,'b) exp_alg
+val pure_algebra : 'b -> ('b -> 'b -> 'b) ->
+  ('a,'b,'b,'b,'b,'b,'b,'b,'b,'b,'b,'b,'b,'b,'b) algebra
 
 val simple_annot : Parse_ast.l -> typ -> Parse_ast.l * tannot
 
 val add_p_typ : typ -> tannot pat -> tannot pat
 
 val add_e_cast : typ -> tannot exp -> tannot exp
-
-val effect_of_pexp : tannot pexp -> effect
 
 val union_eff_exps : (tannot exp) list -> effect
 
@@ -249,11 +234,7 @@ val fix_eff_lexp : tannot lexp -> tannot lexp
 
 val fix_eff_lb : tannot letbind -> tannot letbind
 
-val fix_eff_pexp : tannot pexp -> tannot pexp
-
 val fix_eff_fexp : tannot fexp -> tannot fexp
-
-val fix_eff_opt_default : tannot opt_default -> tannot opt_default
 
 (* In-order fold over expressions *)
 val foldin_exp : (('a -> 'b exp -> 'a * 'b exp) -> 'a -> 'b exp -> 'a * 'b exp) -> 'a -> 'b exp -> 'a * 'b exp

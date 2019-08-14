@@ -1154,13 +1154,13 @@ let contains_early_return exp =
     (List.fold_left (||) (string_of_id f = "early_return") rets,
     E_app (f, args)) in
   fst (fold_exp
-  { (Rewriter.compute_exp_alg false (||))
+  { (Rewriter.compute_algebra false (||))
     with e_return = (fun (_, r) -> (true, E_return r)); e_app = e_app } exp)
 
 let find_e_ids exp =
   let e_id id = IdSet.singleton id, E_id id in
   fst (fold_exp
-    { (compute_exp_alg IdSet.empty IdSet.union) with e_id = e_id } exp)
+    { (compute_algebra IdSet.empty IdSet.union) with e_id = e_id } exp)
 
 let typ_id_of (Typ_aux (typ, l)) = match typ with
   | Typ_id id -> id
@@ -2279,11 +2279,11 @@ let doc_exp, doc_let =
     group (doc_op coloneq fname (top_exp ctxt true e))
 
   and doc_case ctxt old_env typ = function
-  | Pat_aux(Pat_exp(pat,e),_) ->
+  | Pat_aux(Pat_case(pat,[],e),_) ->
      let new_ctxt = merge_new_tyvars ctxt old_env pat (env_of e) in
      group (prefix 3 1 (separate space [pipe; doc_pat ctxt false false (pat,typ);bigarrow])
               (group (top_exp new_ctxt false e)))
-  | Pat_aux(Pat_when(_,_,_),(l,_)) ->
+  | Pat_aux(Pat_case(_,_,_),l) ->
     raise (Reporting.err_unreachable l __POS__
      "guarded pattern expression should have been rewritten before pretty-printing")
 
@@ -2315,7 +2315,7 @@ let types_used_with_generic_eq defs =
     | _ -> idset
   in
   let alg =
-    { (Rewriter.compute_exp_alg IdSet.empty IdSet.union) with
+    { (Rewriter.compute_algebra IdSet.empty IdSet.union) with
       Rewriter.e_aux = fun ((typs,exp),annot) ->
         let typs' =
           match exp with
@@ -2552,7 +2552,7 @@ let doc_fun_body ctxt exp =
    them over to the r.h.s. of the := *)
 let demote_as_pattern i (P_aux (_,p_annot) as pat,typ) =
   let open Rewriter in
-  if fst (fold_pat ({ (compute_pat_alg false (||)) with p_as = (fun ((_,p),id) -> true, P_as (p,id)) }) pat)
+  if fst (fold_pat ({ (compute_algebra false (||)) with p_as = (fun ((_,p),id) -> true, P_as (p,id)) }) pat)
   then
     let id = mk_id ("arg" ^ string_of_int i) in (* TODO: name conflicts *)
     (P_aux (P_id id, p_annot),typ),
@@ -2610,7 +2610,7 @@ let rec atom_constraint ctxt (pat, typ) =
 let all_ids pexp =
   let open Rewriter in
   fold_pexp (
-    { (pure_exp_alg IdSet.empty IdSet.union) with
+    { (pure_algebra IdSet.empty IdSet.union) with
       e_id = (fun id -> IdSet.singleton id);
       e_ref = (fun id -> IdSet.singleton id);
       e_app = (fun (id,ids) ->
@@ -2623,12 +2623,10 @@ let all_ids pexp =
       lEXP_memory = (fun (id,ids) ->
         List.fold_left IdSet.union (IdSet.singleton id) ids);
       lEXP_cast = (fun (_,id) -> IdSet.singleton id);
-      pat_alg = { (pure_pat_alg IdSet.empty IdSet.union) with
-        p_as = (fun (ids,id) -> IdSet.add id ids);
-        p_id = IdSet.singleton;
-        p_app = (fun (id,ids) ->
-          List.fold_left IdSet.union (IdSet.singleton id) ids);
-      }
+      p_as = (fun (ids,id) -> IdSet.add id ids);
+      p_id = IdSet.singleton;
+      p_app = (fun (id,ids) ->
+        List.fold_left IdSet.union (IdSet.singleton id) ids);
     }) pexp
 
 let tyvars_of_typquant (TypQ_aux (tq,_)) =
@@ -2712,7 +2710,7 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   in
   let ids_to_avoid = all_ids pexp in
   let bound_kids = tyvars_of_typquant tq in
-  let pat,guard,exp,(l,_) = destruct_pexp pexp in
+  let pat,guard,exp,l = destruct_pexp pexp in
   let pats, bind = untuple_args_pat arg_typs pat in
   (* Fixpoint definitions can only use simple binders, but even Definitions
      can't handle as patterns *)
@@ -2864,7 +2862,7 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     else empty
   in
   let _ = match guard with
-    | None -> ()
+    | [] -> ()
     | _ ->
        raise (Reporting.err_unreachable l __POS__
                "guarded pattern expression should have been rewritten before pretty-printing") in

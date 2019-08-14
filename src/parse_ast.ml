@@ -296,19 +296,18 @@ and fexp_aux =  (* Field-expression *)
 and fexp = 
    FE_aux of fexp_aux * l
 
-and opt_default_aux =  (* Optional default value for indexed vectors, to define a defualt value for any unspecified positions in a sparse map *)
-   Def_val_empty
- | Def_val_dec of exp
+and guard_aux =  (* guard expressions *)
+ | G_if of exp
+ | G_pattern of pat * exp
 
-and opt_default = 
-   Def_val_aux of opt_default_aux * l
+and guard =
+ | G_aux of guard_aux * l
 
-and pexp_aux =  (* Pattern match *)
-   Pat_exp of pat * exp
- | Pat_when of pat * exp * exp
+and pexp_aux =  (* pattern match *)
+ | Pat_case of pat * guard list * exp
 
-and pexp = 
-   Pat_aux of pexp_aux * l
+and pexp =
+ | Pat_aux of pexp_aux * l
 
 and letbind_aux =  (* Let binding *)
    LB_val of pat * exp (* value binding, implicit type (pat must be total) *)

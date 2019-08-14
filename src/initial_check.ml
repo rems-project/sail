@@ -90,7 +90,7 @@ let to_ast_kind (P.K_aux (k, l)) =
 
 let to_ast_id (P.Id_aux(id, l)) =
   if string_contains (string_of_parse_id_aux id) '#' && not (!opt_magic_hash) then
-    raise (Reporting.err_general l "Identifier contains hash character and -dmagic_hash is unset")
+    raise (Reporting.err_syntax_loc l "Identifier contains hash character and -dmagic_hash is unset")
   else
     Id_aux ((match id with
              | P.Id x -> Id x
@@ -479,11 +479,20 @@ and to_ast_lexp_vector_concat ctx (P.E_aux (exp_aux, l) as exp) =
      to_ast_lexp ctx exp1 :: to_ast_lexp_vector_concat ctx exp2
   | _ -> [to_ast_lexp ctx exp]
 
-and to_ast_case ctx (P.Pat_aux(pex,l) : P.pexp) : unit pexp =
-  match pex with
-  | P.Pat_exp(pat,exp) -> Pat_aux(Pat_exp(to_ast_pat ctx pat, to_ast_exp ctx exp),(l,()))
-  | P.Pat_when(pat,guard,exp) ->
-     Pat_aux (Pat_when (to_ast_pat ctx pat, to_ast_exp ctx guard, to_ast_exp ctx exp), (l, ()))
+and to_ast_guard ctx (P.G_aux (aux, l)) =
+  match aux with
+  | P.G_if exp -> G_aux (G_if (to_ast_exp ctx exp), l)
+  | P.G_pattern (pat, exp) -> G_aux (G_pattern (to_ast_pat ctx pat, to_ast_exp ctx exp), l)
+
+and to_ast_case ctx (P.Pat_aux (P.Pat_case (pat, guards, exp), l)) =
+  let simple_if_guard = function
+    | [P.G_aux (P.G_if _, _)] | [] -> true
+    | _ -> false
+  in
+  if not (simple_if_guard guards || !opt_magic_hash) then
+    raise (Reporting.err_syntax_loc l "Cases may only have a single if guard unless -dmagic_hash is set")
+  else
+    Pat_aux (Pat_case (to_ast_pat ctx pat, List.map (to_ast_guard ctx) guards, to_ast_exp ctx exp), l)
 
 and to_ast_fexps (fail_on_error:bool) ctx (exps : P.exp list) : unit fexp list option =
   match exps with
@@ -1090,7 +1099,7 @@ let generate_enum_functions vs_ids (Defs defs) =
              else
                mk_pat (P_lit (mk_lit (L_num (Big_int.of_int n))))
            in
-           mk_pexp (Pat_exp (pat, mk_exp (E_id id)))
+           mk_pexp (Pat_case (pat, [], mk_exp (E_id id)))
          in
          let funcl =
            mk_funcl name
@@ -1111,7 +1120,7 @@ let generate_enum_functions vs_ids (Defs defs) =
          let kid = mk_kid "e" in
          let to_typ = mk_typ (Typ_exist ([mk_kopt K_int kid], range_constraint kid, atom_typ (nvar kid))) in
          let name = prepend_id "num_of_" id in
-         let pexp n id = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Big_int.of_int n)))) in
+         let pexp n id = mk_pexp (Pat_case (mk_pat (P_id id), [], mk_lit_exp (L_num (Big_int.of_int n)))) in
          let funcl =
            mk_funcl name
              (mk_pat (P_id (mk_id "arg#")))

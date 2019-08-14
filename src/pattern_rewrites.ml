@@ -70,6 +70,10 @@ let rec irrefutable (P_aux (aux, annot)) =
   | P_vector pats | P_vector_concat pats | P_list pats | P_tup pats -> List.for_all irrefutable pats
   | P_or _ | P_not _ -> Reporting.unreachable (fst annot) __POS__ "Or or not pattern found in replace_views"
 
+type pattern_substitution =
+  | Rewrite of (id -> guard list)
+  | No_change
+
 (** [replace_views n p] removes all P_view nodes from a pattern p. It
    returns a triple (p', views, n') where p' is the updated pattern
    and views is a map (Bindings.t) from the identifiers that replaced

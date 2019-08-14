@@ -592,12 +592,12 @@ let apply_pat_choices choices =
     match List.assoc (exp_loc e) choices with
     | choice,max,subst ->
        (match List.nth cases choice with
-       | Pat_aux (Pat_exp (p,E_aux (e,_)),_) ->
+       | Pat_aux (Pat_case (p, [], E_aux (e, _)), _) ->
           let dummyannot = (Generated Unknown,empty_tannot) in
           (* TODO: use a proper substitution *)
           List.fold_left (fun e (id,e') ->
             E_let (LB_aux (LB_val (P_aux (P_id id, dummyannot),e'),dummyannot),E_aux (e,dummyannot))) e subst
-       | Pat_aux (Pat_when _,(l,_)) ->
+       | Pat_aux (Pat_case _, l) ->
           raise (Reporting.err_unreachable l __POS__
                    "Pattern acquired a guard after analysis!")
        | exception Not_found ->
@@ -606,7 +606,7 @@ let apply_pat_choices choices =
     | exception Not_found -> E_case (e,cases)
   in
   let open Rewriter in
-  fold_exp { id_exp_alg with
+  fold_exp { id_algebra with
     e_assert = rewrite_assert;
     e_case = rewrite_case }
 
@@ -1233,7 +1233,7 @@ let change_parameter_pat i = function
 let var_maybe_used_in_exp exp var =
   let open Rewriter in
   fst (fold_exp {
-    (compute_exp_alg false (||)) with
+    (compute_algebra false (||)) with
       e_id = fun id -> (Id.compare id var == 0, E_id id) } exp)
 
 (* We add code to change the itself('n) parameter into the corresponding
@@ -1356,7 +1356,7 @@ in *)
     in
     let parameters_to_rewrite =
       fst (fold_pexp
-             { (compute_exp_alg IntSet.empty IntSet.union) with
+             { (compute_algebra IntSet.empty IntSet.union) with
                e_aux = (fun ((s,e),(l,annot)) -> IntSet.union s (parameters_for annot),E_aux (e,(l,annot)))
              } pexp)
     in
@@ -1375,7 +1375,7 @@ in *)
   let fn_sizes = List.fold_left sizes_def Bindings.empty defs in
 
   let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),(l,annot))) =
-    let pat,guard,body,(pl,_) = destruct_pexp pexp in
+    let pat,guard,body,pl = destruct_pexp pexp in
     let pat,guard,body, nexps =
       (* Update pattern and add itself -> nat wrapper to body *)
       match Bindings.find id fn_sizes with
@@ -1423,10 +1423,10 @@ in *)
          E_app (id,args')
       | exception Not_found -> E_app (id,args)
     in
-    let body = fold_exp { id_exp_alg with e_app = rewrite_e_app } body in
+    let body = fold_exp { id_algebra with e_app = rewrite_e_app } body in
     let guard = match guard with
       | None -> None
-      | Some exp -> Some (fold_exp { id_exp_alg with e_app = rewrite_e_app } exp) in
+      | Some exp -> Some (fold_exp { id_algebra with e_app = rewrite_e_app } exp) in
     FCL_aux (FCL_Funcl (id,construct_pexp (pat,guard,body,(pl,empty_tannot))),(l,empty_tannot))
   in
   let rewrite_e_app (id,args) =
@@ -1436,8 +1436,8 @@ in *)
        E_app (id,args')
     | exception Not_found -> E_app (id,args)
   in
-  let rewrite_letbind = fold_letbind { id_exp_alg with e_app = rewrite_e_app } in
-  let rewrite_exp = fold_exp { id_exp_alg with e_app = rewrite_e_app } in
+  let rewrite_letbind = fold_letbind { id_algebra with e_app = rewrite_e_app } in
+  let rewrite_exp = fold_exp { id_algebra with e_app = rewrite_e_app } in
   let rewrite_def = function
     | DEF_fundef (FD_aux (FD_function (recopt,tannopt,effopt,funcls),(l,_))) ->
        (* TODO rewrite tannopt? *)

@@ -289,7 +289,7 @@ let keep_undef_typ value =
     | _ -> E_aux (e, ann)
   in
   let open Rewriter in
-  fold_exp { id_exp_alg with e_aux = e_aux } value
+  fold_exp { id_algebra with e_aux = e_aux } value
 
 (* Check whether the current environment with the given kid assignments is
    inconsistent (and hence whether the code is dead) *)
@@ -556,7 +556,7 @@ let const_props target defs ref_vars =
               re (E_let (LB_aux (LB_val (p,e'), annot),
                          e2')) assigns in
             if is_value e' then
-              match can_match e' [Pat_aux (Pat_exp (p,e2),(Unknown,empty_tannot))] substs assigns with
+              match can_match e' [Pat_aux (Pat_case (p,[],e2),Unknown)] substs assigns with
               | None -> plain ()
               | Some (e'',bindings,kbindings) ->
                  let e'' = nexp_subst_exp (kbindings_from_list kbindings) e'' in
@@ -615,13 +615,13 @@ let const_props target defs ref_vars =
     List.map (const_prop_fexp substs assigns) fes
   and const_prop_fexp substs assigns (FE_aux (FE_Fexp (id,e), annot)) =
     FE_aux (FE_Fexp (id,fst (const_prop_exp substs assigns e)),annot)
-  and const_prop_pexp substs assigns = function
+  and const_prop_pexp substs assigns = assert false (* FIXME function
     | (Pat_aux (Pat_exp (p,e),l)) ->
        Pat_aux (Pat_exp (p,fst (const_prop_exp (remove_bound substs p) assigns e)),l)
     | (Pat_aux (Pat_when (p,e1,e2),l)) ->
        let substs' = remove_bound substs p in
        let e1',assigns = const_prop_exp substs' assigns e1 in
-       Pat_aux (Pat_when (p, e1', fst (const_prop_exp substs' assigns e2)),l)
+       Pat_aux (Pat_when (p, e1', fst (const_prop_exp substs' assigns e2)),l) *)
   and const_prop_lexp substs assigns ((LEXP_aux (e,annot)) as le) =
     let re e = LEXP_aux (e,annot), None in
     match e with
@@ -781,7 +781,8 @@ let const_props target defs ref_vars =
     let check_pat = check_exp_pat exp0 in
     let rec findpat_generic description assigns = function
       | [] -> (Reporting.print_err l "Monomorphisation"
-                 ("Failed to find a case for " ^ description); None)
+                                   ("Failed to find a case for " ^ description); None)
+      (* FIXME
       | (Pat_aux (Pat_when (p,guard,exp),_))::tl -> begin
         match check_pat p with
         | DoesNotMatch -> findpat_generic description assigns tl
@@ -801,7 +802,7 @@ let const_props target defs ref_vars =
          match check_pat p with
          | DoesNotMatch -> findpat_generic description assigns tl
          | DoesMatch (subst,ksubst) -> Some (exp,subst,ksubst)
-         | GiveUp -> None
+         | GiveUp -> None *)
     in findpat_generic (string_of_exp exp0) assigns cases
 
   and can_match exp =
@@ -816,7 +817,7 @@ let const_prop_pexp target d r = snd (const_props target d r)
 let referenced_vars exp =
   let open Rewriter in
   fst (fold_exp
-         { (compute_exp_alg IdSet.empty IdSet.union) with
+         { (compute_algebra IdSet.empty IdSet.union) with
            e_ref = (fun id -> IdSet.singleton id, E_ref id) } exp)
 
 (* This is intended to remove impossible cases when a type-level constant has
@@ -836,8 +837,8 @@ let referenced_vars exp =
    thing too...
 *)
 
-let remove_impossible_int_cases _ =
-
+let remove_impossible_int_cases _ = assert false
+(* FIXME
   let must_keep_case exp (Pat_aux ((Pat_exp (p,_) | Pat_when (p,_,_)),_)) =
     let rec aux (E_aux (exp,_)) (P_aux (p,_)) =
       match exp, p with
@@ -860,3 +861,5 @@ let remove_impossible_int_cases _ =
   let open Rewriter in
   let rewrite_exp _ = fold_exp { id_exp_alg with e_case = e_case; e_if = e_if } in
   rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp }
+ *)
+

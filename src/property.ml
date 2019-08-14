@@ -100,10 +100,8 @@ let add_property_guards props (Defs defs) =
                in
                let mk_funcl p = FCL_aux (FCL_Funcl (id, Pat_aux (p, pexp_aux)), fcl_aux) in
                match pexp with
-               | Pat_exp (pat, exp) ->
-                  mk_funcl (Pat_exp (pat, add_guard exp))
-               | Pat_when (pat, guard, exp) ->
-                  mk_funcl (Pat_when (pat, guard, add_guard exp))
+               | Pat_case (pat, guards, exp) ->
+                  mk_funcl (Pat_case (pat, guards, add_guard exp))
              in
 
              let funcls = List.map add_constraints_to_funcl funcls in

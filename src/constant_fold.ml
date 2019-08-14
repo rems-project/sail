@@ -250,7 +250,7 @@ let rw_exp target ok not_ok istate =
 
     | _ -> E_aux (e_aux, annot)
   in
-  fold_exp { id_exp_alg with e_aux = (fun (e_aux, annot) -> rw_funcall e_aux annot)}
+  fold_exp { id_algebra with e_aux = (fun (e_aux, annot) -> rw_funcall e_aux annot)}
 
 let rewrite_exp_once target = rw_exp target (fun _ -> ()) (fun _ -> ())
 

@@ -211,7 +211,7 @@ let rewrite_defs target env (Defs defs) =
          match e with
          | E_app (id, args) -> e_app (id, args) (l, annot)
          | _ -> E_aux (e, (l, annot))
-       and rewrite_pexp pexp = fold_pexp { id_exp_alg with e_aux = e_aux } pexp
+       and rewrite_pexp pexp = fold_pexp { id_algebra with e_aux = e_aux } pexp
        and rewrite_funcl (FCL_aux (FCL_Funcl (id, pexp), a) as funcl) =
          let pexp' =
            if List.exists (fun id' -> Id.compare id id' = 0) !targets then

@@ -376,6 +376,7 @@ let latex_funcls def =
     let next funcls = twice hardline ^^ latex_funcls' def funcls in
     let funcl_command (FCL_Funcl (id, pexp)) =
       match pexp with
+        (*
       | Pat_aux (Pat_exp (P_aux (P_app (ctor, _), _), _), _) ->
          let n = try Bindings.find ctor !ctors with Not_found -> -1 in
          ctors := Bindings.add ctor (n + 1) !ctors;
@@ -385,6 +386,7 @@ let latex_funcls def =
          let n = try StringMap.find ac !app_codes with Not_found -> -1 in
          app_codes := StringMap.add ac (n + 1) !app_codes;
          FunclApp (ac ^ unique_postfix n), id
+         *)
       | _ -> incr counter; (FunclNum (!counter + 64), id)
     in
     function

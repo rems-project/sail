@@ -2509,10 +2509,6 @@ let typ_of_pat (P_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
 let env_of_pat (P_aux (_, (l, tannot))) = env_of_annot (l, tannot)
 
-let typ_of_pexp (Pat_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
-
-let env_of_pexp (Pat_aux (_, (l, tannot))) = env_of_annot (l, tannot)
-
 let typ_of_mpat (MP_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
 
 let env_of_mpat (MP_aux (_, (l, tannot))) = env_of_annot (l, tannot)
@@ -2997,39 +2993,24 @@ and check_block l env exps ret_typ =
      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
      texp :: check_block l env exps ret_typ
 
+and check_guards env = function
+  | [] -> [], env
+  | G_aux (G_if exp, l) :: guards ->
+     let exp = crule check_exp env exp bool_typ in
+     let guards, env = check_guards env guards in
+     G_aux (G_if exp, l) :: guards, env
+  | G_aux (G_pattern (pat, exp), l) :: guards ->
+     let exp = irule infer_exp env exp in
+     let pat, env = bind_pat_no_guard env pat (typ_of exp) in
+     let guards, env = check_guards env guards in
+     G_aux (G_pattern (pat, exp), l) :: guards, env
+
 and check_case env pat_typ pexp typ =
-  let pat,guard,case,((l,_) as annot) = destruct_pexp pexp in
-  match bind_pat env pat pat_typ with
-  | tpat, env, guards ->
-     let guard = match guard, guards with
-       | None, h::t -> Some (h,t)
-       | Some x, l -> Some (x,l)
-       | None, [] -> None
-     in
-     let guard = match guard with
-       | Some (h,t) ->
-          Some (List.fold_left (fun acc guard -> mk_exp (E_app_infix (acc, mk_id "&", guard))) h t)
-       | None -> None
-     in
-     let checked_guard, env' = match guard with
-       | None -> None, env
-       | Some guard ->
-          let checked_guard = check_exp env guard bool_typ in
-          Some checked_guard, add_opt_constraint (assert_constraint env true checked_guard) env
-     in
-     let checked_case = crule check_exp env' case typ in
-     construct_pexp (tpat, checked_guard, checked_case, (l, None))
-  (* AA: Not sure if we still need this *)
-  | exception (Type_error _ as typ_exn) ->
-     match pat with
-     | P_aux (P_lit lit, _) ->
-        let guard' = mk_exp (E_app_infix (mk_exp (E_id (mk_id "p#")), mk_id "==", mk_exp (E_lit lit))) in
-        let guard = match guard with
-          | None -> guard'
-          | Some guard -> mk_exp (E_app_infix (guard, mk_id "&", guard'))
-        in
-        check_case env pat_typ (Pat_aux (Pat_when (mk_pat (P_id (mk_id "p#")), guard, case), annot)) typ
-     | _ -> raise typ_exn
+  let pat, guards, body, l = destruct_pexp pexp in
+  let pat, env, guards' = bind_pat env pat pat_typ in
+  let guards, env = check_guards env (guards' @ guards) in
+  let body = crule check_exp env body typ in
+  construct_pexp (pat, guards, body, l)
 
 and check_mpexp direction env mpexp typ =
   let mpat, guard, ((l,_) as annot) = destruct_mpexp mpexp in
@@ -3251,7 +3232,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
         match pat_aux with
         | P_lit lit ->
            let var = fresh_var () in
-           let guard = locate (fun _ -> l) (mk_exp (E_app_infix (mk_exp (E_id var), mk_id "==", mk_exp (E_lit lit)))) in
+           let guard = locate_guard (fun _ -> l) (mk_guard (G_if (mk_exp (E_app_infix (mk_exp (E_id var), mk_id "==", mk_exp (E_lit lit)))))) in
            let (typed_pat, env, guards) = bind_pat env (mk_pat (P_id var)) typ in
            typed_pat, env, guard::guards
         | _ -> raise typ_exn
@@ -4229,32 +4210,24 @@ and propagate_fexp_effect (FE_aux (FE_Fexp (id, exp), (l, _))) =
   let p_exp = propagate_exp_effect exp in
   FE_aux (FE_Fexp (id, p_exp), (l, None)), effect_of p_exp
 
+and propagate_guard_effect (G_aux (aux, l)) =
+  match aux with
+  | G_if exp ->
+     let p_exp = propagate_exp_effect exp in
+     G_aux (G_if p_exp, l), effect_of p_exp
+  | G_pattern (pat, exp) ->
+     let p_pat = propagate_pat_effect pat in
+     let p_exp = propagate_exp_effect exp in
+     G_aux (G_pattern (p_pat, p_exp), l), union_effects (effect_of p_exp) (effect_of_pat p_pat)
+
 and propagate_pexp_effect = function
-  | Pat_aux (Pat_exp (pat, exp), (l, annot)) ->
-     begin
-       let p_pat = propagate_pat_effect pat in
-       let p_exp = propagate_exp_effect exp in
-       let p_eff = union_effects (effect_of_pat p_pat) (effect_of p_exp) in
-       match annot with
-       | Some tannot ->
-          Pat_aux (Pat_exp (p_pat, p_exp), (l, Some { tannot with effect = union_effects tannot.effect p_eff })),
-          union_effects tannot.effect p_eff
-       | None -> Pat_aux (Pat_exp (p_pat, p_exp), (l, None)), p_eff
-     end
-  | Pat_aux (Pat_when (pat, guard, exp), (l, annot)) ->
-     begin
-       let p_pat = propagate_pat_effect pat in
-       let p_guard = propagate_exp_effect guard in
-       let p_exp = propagate_exp_effect exp in
-       let p_eff = union_effects (effect_of_pat p_pat)
-                                          (union_effects (effect_of p_guard) (effect_of p_exp))
-       in
-       match annot with
-       | Some tannot ->
-          Pat_aux (Pat_when (p_pat, p_guard, p_exp), (l, Some { tannot with effect = union_effects tannot.effect p_eff })),
-          union_effects tannot.effect p_eff
-       | None -> Pat_aux (Pat_when (p_pat, p_guard, p_exp), (l, None)), p_eff
-     end
+  | Pat_aux (Pat_case (pat, guards, exp), l) ->
+     let p_pat = propagate_pat_effect pat in
+     let p_guards = List.map propagate_guard_effect guards in
+     let p_exp = propagate_exp_effect exp in
+     let p_eff = union_effects (effect_of_pat p_pat) (effect_of p_exp) in
+     Pat_aux (Pat_case (p_pat, List.map fst p_guards, p_exp), l),
+     List.fold_left union_effects no_effect (effect_of p_exp :: effect_of_pat p_pat :: List.map snd p_guards)
 
 and propagate_mpexp_effect = function
   | MPat_aux (MPat_pat mpat, (l, annot)) ->
@@ -4489,16 +4462,16 @@ let rec exp_of_mpat d (MP_aux (mpat, (l, annot))) =
   | MP_string_append mpats -> List.fold_right string_append (List.map (fun m -> strip_exp (exp_of_mpat d m)) mpats) empty_string
   | MP_typ (mpat, typ) -> E_aux (E_cast (typ, exp_of_mpat d mpat), (l,annot))
   | MP_as (mpat, id) -> E_aux (E_case (E_aux (E_id id, (l,annot)), [
-                                         Pat_aux (Pat_exp (pat_of_mpat d mpat, exp_of_mpat d mpat), (l,annot))
+                                         Pat_aux (Pat_case (pat_of_mpat d mpat, [], exp_of_mpat d mpat), l)
                                       ]), (l,annot))
   | MP_view (mpat, id, args) -> E_aux (E_app (set_id_direction d id, args @ [exp_of_mpat d mpat]), (l, annot))
 
 let pexp_of_mpexp direction mpexp body =
   match mpexp with
-  | MPat_aux (MPat_pat mpat, annot) ->
-     Pat_aux (Pat_exp (pat_of_mpat direction mpat, body), annot)
-  | MPat_aux (MPat_when (mpat, guard), annot) ->
-     Pat_aux (Pat_when (pat_of_mpat direction mpat, guard, body), annot)
+  | MPat_aux (MPat_pat mpat, (l, _)) ->
+     Pat_aux (Pat_case (pat_of_mpat direction mpat, [], body), l)
+  | MPat_aux (MPat_when (mpat, (E_aux (_, (g_l, _)) as guard)), (l, _)) ->
+     Pat_aux (Pat_case (pat_of_mpat direction mpat, [G_aux (G_if guard, g_l)], body), l)
 
 let check_mpexp_pair l env mpexp_left typ_left mpexp_right typ_right =
   let left_attempt = try Ok (check_mpexp Forwards env mpexp_left typ_left) with Type_error (_, _, Err_pattern_id id) -> Error id | err -> raise err in
@@ -4574,7 +4547,7 @@ let infer_tannot_opt l env tannot_opt pat =
 let infer_funtyp l env tannot_opt funcls =
   match funcls with
   | [FCL_aux (FCL_Funcl (_, Pat_aux (pexp,_)), _)] ->
-     let pat = match pexp with Pat_exp (pat, _) | Pat_when (pat, _, _) -> pat in
+     let pat = match pexp with Pat_case (pat, _, _) -> pat in
      infer_tannot_opt l env tannot_opt pat
   | _ -> typ_error env l "Cannot infer function type for function with multiple clauses"
 

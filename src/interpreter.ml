@@ -119,7 +119,7 @@ let fallthrough =
   let open Type_check in
   try
     let env = initial_env |> Env.add_scattered_variant (mk_id "exception") (mk_typquant []) in
-    check_case env exc_typ (mk_pexp (Pat_exp (mk_pat (P_id (mk_id "exn")), mk_exp (E_throw (mk_exp (E_id (mk_id "exn"))))))) unit_typ
+    check_case env exc_typ (mk_pexp (Pat_case (mk_pat (P_id (mk_id "exn")), [], mk_exp (E_throw (mk_exp (E_id (mk_id "exn"))))))) unit_typ
   with
   | Type_error (_, l, err) ->
      Reporting.unreachable l __POS__ (Type_error.string_of_type_error err);
@@ -456,6 +456,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_case (exp, pexps) when not (is_value exp) ->
      step exp >>= fun exp' -> wrap (E_case (exp', pexps))
   | E_case (_, []) -> fail "Pattern matching failed"
+                           (* FIXME
   | E_case (exp, Pat_aux (Pat_exp (pat, body), _) :: pexps) ->
      begin try
          let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
@@ -479,6 +480,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      end
   | E_case (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when is_true guard -> return body
   | E_case (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when is_false guard -> wrap (E_case (exp, pexps))
+                            *)
 
   | E_cast (typ, exp) -> return exp
 

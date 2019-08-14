@@ -1528,7 +1528,7 @@ and compile_def' n total ctx = function
         let ret_ctyp = ctyp_of_typ ctx' ret_typ in
         [CDEF_spec (id, arg_ctyps, ret_ctyp)], ctx
      end
-
+(* FIXME
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      Util.progress "Compiling " (string_of_id id) n total;
      compile_funcl ctx id pat None exp
@@ -1536,7 +1536,7 @@ and compile_def' n total ctx = function
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_when (pat, guard, exp), _)), _)]), _)) ->
      Util.progress "Compiling " (string_of_id id) n total;
      compile_funcl ctx id pat (Some guard) exp
-
+ *)
   | DEF_fundef (FD_aux (FD_function (_, _, _, []), (l, _))) ->
      raise (Reporting.err_general l "Encountered function with no clauses")
 

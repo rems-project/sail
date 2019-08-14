@@ -266,9 +266,9 @@ let combine ctx gpat (l, pat) =
 
 let rec cases_to_pats = function
   | [] -> []
-  | Pat_aux (Pat_exp (P_aux (_, (l, _)) as pat, _), _) :: cases -> (l, pat) :: cases_to_pats cases
+  | Pat_aux (Pat_case (P_aux (_, (l, _)) as pat, [], _), _) :: cases -> (l, pat) :: cases_to_pats cases
   (* We don't consider guarded cases *)
-  | Pat_aux (Pat_when _, _) :: cases -> cases_to_pats cases
+  | Pat_aux (Pat_case _, _) :: cases -> cases_to_pats cases
 
 (* Just highlight the match keyword and not the whole match block. *)
 let shrink_loc = function

@@ -568,7 +568,7 @@ let contains_early_return exp =
     (List.fold_left (||) (string_of_id f = "early_return") rets,
     E_app (f, args)) in
   fst (fold_exp
-  { (Rewriter.compute_exp_alg false (||))
+  { (Rewriter.compute_algebra false (||))
     with e_return = (fun (_, r) -> (true, E_return r)); e_app = e_app } exp)
 
 (* Does the expression have the form of a bitvector cast from the monomorphiser? *)
@@ -596,7 +596,7 @@ let replace_env_for_cast_out new_env pat =
 let find_e_ids exp =
   let e_id id = IdSet.singleton id, E_id id in
   fst (fold_exp
-    { (compute_exp_alg IdSet.empty IdSet.union) with e_id = e_id } exp)
+    { (compute_algebra IdSet.empty IdSet.union) with e_id = e_id } exp)
 
 let typ_id_of (Typ_aux (typ, l)) = match typ with
   | Typ_id id -> id
@@ -1032,10 +1032,10 @@ let doc_exp_lem, doc_let_lem =
     group (doc_op equals fname (top_exp ctxt true e))
 
   and doc_case ctxt = function
-  | Pat_aux(Pat_exp(pat,e),_) ->
+  | Pat_aux(Pat_case(pat,[],e),_) ->
     group (prefix 3 1 (separate space [pipe; doc_pat_lem ctxt false pat;arrow])
                   (group (top_exp ctxt false e)))
-  | Pat_aux(Pat_when(_,_,_),(l,_)) ->
+  | Pat_aux(Pat_case(_,_,_),l) ->
     raise (Reporting.err_unreachable l __POS__
      "guarded pattern expression should have been rewritten before pretty-printing")
 
@@ -1362,7 +1362,7 @@ let doc_funcl_lem (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     | Typ_aux (Typ_fn (arg_typs, typ_ret, _), _) -> arg_typs
     | Typ_aux (_, l) -> raise (unreachable l __POS__ "Non-function type for funcl")
   in
-  let pat,guard,exp,(l,_) = destruct_pexp pexp in
+  let pat,guard,exp,l = destruct_pexp pexp in
   let ctxt =
     { early_ret = contains_early_return exp;
       bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ);
@@ -1370,7 +1370,7 @@ let doc_funcl_lem (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let pats, bind = untuple_args_pat pat arg_typs in
   let patspp = separate_map space (doc_pat_lem ctxt true) pats in
   let _ = match guard with
-    | None -> ()
+    | [] -> ()
     | _ ->
        raise (Reporting.err_unreachable l __POS__
                "guarded pattern expression should have been rewritten before pretty-printing") in
@@ -1405,7 +1405,7 @@ let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
        functions are handled separately by doc_mutrec_lem. *)
     let is_funcl_rec =
       fold_pexp
-        { (pure_exp_alg false (||)) with
+        { (pure_algebra false (||)) with
           e_app = (fun (id', args) -> List.fold_left (||) (Id.compare id id' = 0) args);
           e_app_infix = (fun (l, id', r) -> l || (Id.compare id id' = 0) || r) }
         pexp

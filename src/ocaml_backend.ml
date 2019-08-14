@@ -311,12 +311,15 @@ and ocaml_pexps ctx = function
   | pexp :: pexps -> ocaml_pexp ctx pexp ^/^ ocaml_pexps ctx pexps
   | [] -> empty
 and ocaml_pexp ctx = function
+    (*
   | Pat_aux (Pat_exp (pat, exp), _) ->
      separate space [bar; ocaml_pat ctx pat; string "->"]
      ^//^ group (ocaml_exp ctx exp)
   | Pat_aux (Pat_when (pat, wh, exp), _) ->
      separate space [bar; ocaml_pat ctx pat; string "when"; ocaml_atomic_exp ctx wh; string "->"]
      ^//^ group (ocaml_exp ctx exp)
+     *)
+  | _ -> assert false
 and ocaml_block ctx = function
   | [exp] -> ocaml_exp ctx exp
   | exp :: exps -> ocaml_exp ctx exp ^^ semi ^/^ ocaml_block ctx exps
@@ -378,7 +381,7 @@ and ocaml_atomic_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
   | _ -> parens (ocaml_lexp ctx lexp)
 
 let rec get_initialize_registers = function
-  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)),_)), _)]), _)) :: defs
+  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_case (_, [], E_aux (E_block inits, _)),_)), _)]), _)) :: defs
        when Id.compare id (mk_id "initialize_registers") = 0 ->
      inits
   | _ :: defs -> get_initialize_registers defs
@@ -472,9 +475,12 @@ let ocaml_funcls ctx =
        let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
        let pat_sym = gensym () in
        let pat, guard, exp =
+         (* FIXME
          match pexp with
-         | Pat_aux (Pat_exp (pat, exp),_) -> pat, None, exp
-         | Pat_aux (Pat_when (pat, guard, exp),_) -> pat, Some guard, exp
+         | Pat_aux (Pat_exp (pat, [], exp),_) -> pat, None, exp
+         | Pat_aux (Pat_when (pat, [guard], exp),_) -> pat, Some guard, exp
+          *)
+         assert false
        in
        let ocaml_guarded_exp ctx exp = function
          | Some guard ->

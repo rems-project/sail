@@ -311,7 +311,7 @@ val check_exp : Env.t -> unit exp -> typ -> tannot exp
 
 val infer_exp : Env.t -> unit exp -> tannot exp
 
-val infer_pat : Env.t -> unit pat -> tannot pat * Env.t * unit exp list
+val infer_pat : Env.t -> unit pat -> tannot pat * Env.t * unit guard list
 
 val infer_lexp : Env.t -> unit lexp -> tannot lexp
 
@@ -339,7 +339,7 @@ val canonicalize : Env.t -> typ -> typ
 
 val subtype_check : Env.t -> typ -> typ -> bool
 
-val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp list
+val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.guard list
 
 (** Variant that doesn't introduce new guards for literal patterns,
    but raises a type error instead.  This should always be safe to use
@@ -363,9 +363,6 @@ val typ_of_tannot : tannot -> typ
 
 val typ_of_pat : tannot pat -> typ
 val env_of_pat : tannot pat -> Env.t
-
-val typ_of_pexp : tannot pexp -> typ
-val env_of_pexp : tannot pexp -> Env.t
 
 val typ_of_mpat : tannot mpat -> typ
 val env_of_mpat : tannot mpat -> Env.t

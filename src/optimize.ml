@@ -79,7 +79,7 @@ let recheck (Defs defs) =
              let rw_app subst (fn, args) =
                if Id.compare id fn = 0 then E_app (subst, args) else E_app (fn, args)
              in
-             let rw_exp subst = { id_exp_alg with e_app = rw_app subst } in
+             let rw_exp subst = { id_algebra with e_app = rw_app subst } in
              let rw_defs subst = { rewriters_base with rewrite_exp = (fun _ -> fold_exp (rw_exp subst)) } in
 
              let specs = ref [def1] in

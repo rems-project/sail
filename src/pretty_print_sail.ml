@@ -531,22 +531,17 @@ and doc_atomic_lexp (LEXP_aux (l_aux, _) as lexp) =
   | LEXP_memory (id, exps) -> doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps)
   | _ -> parens (doc_lexp lexp)
 and doc_pexps pexps = surround 2 0 lbrace (separate_map (comma ^^ hardline) doc_pexp pexps) rbrace
-and doc_pexp (Pat_aux (pat_aux, _)) =
-  match pat_aux with
-  | Pat_exp (pat, exp) -> separate space [doc_pat pat; string "=>"; doc_exp exp]
-  | Pat_when (pat, wh, exp) ->
-     separate space [doc_pat pat; string "if"; doc_exp wh; string "=>"; doc_exp exp]
-and doc_letbind (LB_aux (lb_aux, _)) =
-  match lb_aux with
-  | LB_val (pat, exp) ->
-     separate space [doc_pat pat; equals; doc_exp exp]
+and doc_guard (G_aux (aux, _)) =
+  match aux with
+  | G_if exp -> string "if" ^^ space ^^ doc_exp exp
+  | G_pattern (pat, exp) -> separate space [string "match"; doc_pat pat; equals; doc_exp exp]
+and doc_pexp (Pat_aux (Pat_case (pat, guards, exp), _)) =
+  separate space [doc_pat pat; separate_map (comma ^^ space) doc_guard guards; string "=>"; doc_exp exp]
+and doc_letbind (LB_aux (LB_val (pat, exp), _)) =
+  separate space [doc_pat pat; equals; doc_exp exp]
 
-let doc_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (pexp,_)), _)) =
-  match pexp with
-  | Pat_exp (pat,exp) ->
-     group (separate space [doc_id id; doc_pat pat; equals; doc_exp exp])
-  | Pat_when (pat,wh,exp) ->
-     group (separate space [doc_id id; parens (separate space [doc_pat pat; string "if"; doc_exp wh]); string "="; doc_exp exp])
+let doc_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (Pat_case (pat, guards, exp),_)), _)) =
+  group (separate space [doc_id id; parens (separate_map (comma ^^ space) doc_guard guards); string "="; doc_exp exp])
 
 let doc_default (DT_aux (DT_order ord, _)) = separate space [string "default"; string "Order"; doc_ord ord]
 

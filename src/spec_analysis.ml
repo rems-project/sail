@@ -241,6 +241,8 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
 and fv_of_pes consider_var bound used set pes =
   match pes with
   | [] -> bound,used,set
+  | _ -> assert false
+                (* FIXME
   | Pat_aux(Pat_exp (p,e),_)::pes ->
     let bound_p,us_p = pat_bindings consider_var bound used p in
     let bound_e,us_e,set_e = fv_of_exp consider_var bound_p us_p set e in
@@ -249,7 +251,7 @@ and fv_of_pes consider_var bound used set pes =
     let bound_p,us_p = pat_bindings consider_var bound used p in
     let bound_g,us_g,set_g = fv_of_exp consider_var bound_p us_p set g in
     let bound_e,us_e,set_e = fv_of_exp consider_var bound_g us_g set_g e in
-    fv_of_pes consider_var bound us_e set_e pes
+    fv_of_pes consider_var bound us_e set_e pes *)
 
 and fv_of_let consider_var bound used set (LB_aux(lebind,_)) = match lebind with
   | LB_val(pat,exp) ->
@@ -334,7 +336,8 @@ let fv_of_tannot_opt consider_var (Typ_annot_opt_aux (t,_)) =
     (mt, mt)
 
 (*Unlike the other fv, the bound returns are the names bound by the pattern for use in the exp*)
-let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pexp),l)) =
+let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pexp),l)) = assert false
+                                                                                  (* FIXME
   match pexp with
   | Pat_aux(Pat_exp (pat,exp),_) ->
      let pat_bs,pat_ns = pat_bindings consider_var base_bounds mt pat in
@@ -344,7 +347,7 @@ let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pexp),l)) =
      let pat_bs,pat_ns = pat_bindings consider_var base_bounds mt pat in
      let bound_g, exp_ns, exp_sets = fv_of_exp consider_var pat_bs pat_ns mt exp in
      let _, exp_ns, exp_sets = fv_of_exp consider_var bound_g exp_ns exp_sets exp in
-     (pat_bs,exp_ns,exp_sets)
+     (pat_bs,exp_ns,exp_sets) *)
 
 let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) as fd) =
   let fun_name = match funcls with
@@ -372,6 +375,8 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) 
        exp_ns
     | _ -> mt
   in
+  let ns = assert false in
+  (* FIXME
   let ns = List.fold_right (fun (FCL_aux(FCL_Funcl(_,pexp),_)) ns ->
     match pexp with
     | Pat_aux(Pat_exp (pat,exp),_) ->
@@ -383,7 +388,7 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) 
        let guard_bs, guard_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty guard in
        let _, exp_ns,_ = fv_of_exp consider_var guard_bs guard_ns Nameset.empty exp in
        exp_ns
-  ) funcls mt in
+  ) funcls mt in *)
   let ns_vs = init_env ("val:" ^ (string_of_id (id_of_fundef fd))) in
   (* let _ = Printf.eprintf "Function %s uses %s\n" fun_name (set_to_string (Nameset.union ns ns_r)) in *)
   init_env fun_name, Nameset.union ns_vs (Nameset.union ns (Nameset.union ns_r ns_measure))
@@ -414,7 +419,8 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
         | Typ_annot_opt_aux(Typ_annot_opt_none, _) ->
           mt, mt) in
     init_env (string_of_id id),ns
-  | SD_funcl (FCL_aux(FCL_Funcl(id,pexp),_)) ->
+  | SD_funcl (FCL_aux(FCL_Funcl(id,pexp),_)) -> assert false
+                                                       (* FIXME
      begin
        match pexp with
        | Pat_aux(Pat_exp (pat,exp),_) ->
@@ -432,7 +438,7 @@ let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd
             | P_aux(P_app(pid,_),_) -> init_env ((string_of_id id) ^ "/" ^ (string_of_id pid))
             | _ -> mt in
           scattered_binds, exp_ns
-     end
+     end *)
   | SD_variant (id,_) ->
     let name = string_of_id id in
     let uses =
@@ -507,7 +513,7 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
      let used = Nameset.of_list [i; "val:"^i] in
      ((fun (_,u,_) -> Nameset.singleton ("measure:"^i),u)
         (fv_of_pes consider_var mt used mt
-           [Pat_aux(Pat_exp (pat,exp),(Unknown,Type_check.empty_tannot))]))
+           [Pat_aux(Pat_case (pat,[],exp),Unknown)]))
   | DEF_loop_measures(id,_) ->
      Reporting.unreachable (id_loc id) __POS__ "Loop termination measures should be rewritten before now"
 
@@ -671,7 +677,7 @@ let top_sort_defs (Defs defs) =
 
 let assigned_vars exp =
   fst (Rewriter.fold_exp
-         { (Rewriter.compute_exp_alg IdSet.empty IdSet.union) with
+         { (Rewriter.compute_algebra IdSet.empty IdSet.union) with
            Rewriter.lEXP_id = (fun id -> IdSet.singleton id, LEXP_id id);
            Rewriter.lEXP_cast = (fun (ty,id) -> IdSet.singleton id, LEXP_cast (ty,id)) }
          exp)
@@ -682,10 +688,11 @@ let assigned_vars_in_fexps fes =
     IdSet.empty
     fes
 
-let assigned_vars_in_pexp (Pat_aux (p,_)) =
+let assigned_vars_in_pexp (Pat_aux (p,_)) = assert false
+                                                   (* FIXME
   match p with
   | Pat_exp (_,e) -> assigned_vars e
-  | Pat_when (p,e1,e2) -> IdSet.union (assigned_vars e1) (assigned_vars e2)
+  | Pat_when (p,e1,e2) -> IdSet.union (assigned_vars e1) (assigned_vars e2) *)
 
 let rec assigned_vars_in_lexp (LEXP_aux (le,_)) =
   match le with
@@ -848,11 +855,11 @@ let nexp_subst_fns substs =
       Measure_aux (m,l)
     and s_fexp (FE_aux (FE_Fexp (id,e), (l,annot))) =
       FE_aux (FE_Fexp (id,s_exp e),(l,s_tannot annot))
-    and s_pexp = function
+    and s_pexp = assert false (* FIXME function
       | (Pat_aux (Pat_exp (p,e),(l,annot))) ->
          Pat_aux (Pat_exp (s_pat p, s_exp e),(l,s_tannot annot))
       | (Pat_aux (Pat_when (p,e1,e2),(l,annot))) ->
-         Pat_aux (Pat_when (s_pat p, s_exp e1, s_exp e2),(l,s_tannot annot))
+         Pat_aux (Pat_when (s_pat p, s_exp e1, s_exp e2),(l,s_tannot annot)) *)
     and s_letbind (LB_aux (lb,(l,annot))) =
       match lb with
       | LB_val (p,e) -> LB_aux (LB_val (s_pat p,s_exp e), (l,s_tannot annot))

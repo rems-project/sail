@@ -89,7 +89,8 @@ let untyp_pat = function
   | P_aux (P_typ (typ, pat), _) -> pat, Some typ
   | pat -> pat, None
 
-let mk_pexp pexp_aux = Pat_aux (pexp_aux, no_annot)
+let mk_guard guard_aux = G_aux (guard_aux, Parse_ast.Unknown)
+let mk_pexp pexp_aux = Pat_aux (pexp_aux, Parse_ast.Unknown)
 
 let mk_mpat mpat_aux = MP_aux (mpat_aux, no_annot)
 let mk_mpexp mpexp_aux = MPat_aux (mpexp_aux, no_annot)
@@ -102,7 +103,7 @@ let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
 
 let mk_lit_exp lit_aux = mk_exp (E_lit (mk_lit lit_aux))
 
-let mk_funcl id pat body = FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, body),no_annot)), no_annot)
+let mk_funcl id pat body = FCL_aux (FCL_Funcl (id, Pat_aux (Pat_case (pat, [], body), Parse_ast.Unknown)), no_annot)
 
 let mk_qi_nc nc = QI_aux (QI_constraint nc, Parse_ast.Unknown)
 
@@ -583,15 +584,13 @@ and map_measure_annot f (Measure_aux (m, l)) = Measure_aux (map_measure_annot_au
 and map_measure_annot_aux f = function
   | Measure_none -> Measure_none
   | Measure_some exp -> Measure_some (map_exp_annot f exp)
-and map_opt_default_annot f (Def_val_aux (df, annot)) = Def_val_aux (map_opt_default_annot_aux f df, f annot)
-and map_opt_default_annot_aux f = function
-  | Def_val_empty -> Def_val_empty
-  | Def_val_dec exp -> Def_val_dec (map_exp_annot f exp)
 and map_fexp_annot f (FE_aux (FE_Fexp (id, exp), annot)) = FE_aux (FE_Fexp (id, map_exp_annot f exp), f annot)
-and map_pexp_annot f (Pat_aux (pexp, annot)) = Pat_aux (map_pexp_annot_aux f pexp, f annot)
-and map_pexp_annot_aux f = function
-  | Pat_exp (pat, exp) -> Pat_exp (map_pat_annot f pat, map_exp_annot f exp)
-  | Pat_when (pat, guard, exp) -> Pat_when (map_pat_annot f pat, map_exp_annot f guard, map_exp_annot f exp)
+and map_guard_annot f (G_aux (guard, l)) = G_aux (map_guard_annot_aux f guard, l)
+and map_guard_annot_aux f = function
+  | G_if exp -> G_if (map_exp_annot f exp)
+  | G_pattern (pat, exp) -> G_pattern (map_pat_annot f pat, map_exp_annot f exp)
+and map_pexp_annot f (Pat_aux (pexp, l)) = Pat_aux (map_pexp_annot_aux f pexp, l)
+and map_pexp_annot_aux f (Pat_case (pat, guards, exp)) = Pat_case (map_pat_annot f pat, List.map (map_guard_annot f) guards, map_exp_annot f exp)
 and map_pat_annot f (P_aux (pat, annot)) = P_aux (map_pat_annot_aux f pat, f annot)
 and map_pat_annot_aux f = function
   | P_lit lit -> P_lit lit
@@ -1021,8 +1020,11 @@ and string_of_fexp (FE_aux (FE_Fexp (field, exp), _)) =
   string_of_id field ^ " = " ^ string_of_exp exp
 and string_of_pexp (Pat_aux (pexp, _)) =
   match pexp with
-  | Pat_exp (pat, exp) -> string_of_pat pat ^ " => " ^ string_of_exp exp
-  | Pat_when (pat, guard, exp) -> string_of_pat pat ^ " if " ^ string_of_exp guard ^ " => " ^ string_of_exp exp
+  | Pat_case (pat, guards, exp) -> string_of_pat pat ^ Util.string_of_list ", " string_of_guard guards ^ " => " ^ string_of_exp exp
+and string_of_guard (G_aux (guard, _)) =
+  match guard with
+  | G_if exp -> "if " ^ string_of_exp exp
+  | G_pattern (pat, exp) -> "match " ^ string_of_pat pat ^ " = " ^ string_of_exp exp
 and string_of_typ_pat (TP_aux (tpat_aux, _)) =
   match tpat_aux with
   | TP_wild -> "_"
@@ -1551,15 +1553,9 @@ and undefined_of_typ_args mwords l annot (A_aux (typ_arg_aux, _) as typ_arg) =
   | A_bool nc -> [E_aux (E_constraint nc, (l, annot (atom_bool_typ nc)))]
   | A_order _ -> []
 
-let destruct_pexp (Pat_aux (pexp,ann)) =
-  match pexp with
-  | Pat_exp (pat,exp) -> pat,None,exp,ann
-  | Pat_when (pat,guard,exp) -> pat,Some guard,exp,ann
+let destruct_pexp (Pat_aux (Pat_case (pat, guards, exp), l)) = pat, guards, exp, l
 
-let construct_pexp (pat,guard,exp,ann) =
-  match guard with
-  | None -> Pat_aux (Pat_exp (pat,exp),ann)
-  | Some guard -> Pat_aux (Pat_when (pat,guard,exp),ann)
+let construct_pexp (pat, guards, exp, l) = Pat_aux (Pat_case (pat, guards, exp), l)
 
 let destruct_mpexp (MPat_aux (mpexp,ann)) =
   match mpexp with
@@ -1681,14 +1677,21 @@ and subst_measure id value (Measure_aux (m_aux, l)) =
   | Measure_none -> Measure_aux (Measure_none, l)
   | Measure_some exp -> Measure_aux (Measure_some (subst id value exp), l)
 
-and subst_pexp id value (Pat_aux (pexp_aux, annot)) =
+and subst_pexp id value (Pat_aux (pexp_aux, l)) =
   let pexp_aux = match pexp_aux with
-    | Pat_exp (pat, exp) when IdSet.mem id (pat_ids pat) -> Pat_exp (pat, exp)
-    | Pat_exp (pat, exp) -> Pat_exp (pat, subst id value exp)
-    | Pat_when (pat, guard, exp) when IdSet.mem id (pat_ids pat) -> Pat_when (pat, guard, exp)
-    | Pat_when (pat, guard, exp) -> Pat_when (pat, subst id value guard, subst id value exp)
+    | Pat_case (pat, guards, exp) when IdSet.mem id (pat_ids pat) -> Pat_case (pat, guards, exp)
+    | Pat_case (pat, guards, exp) -> Pat_case (pat, subst_guards id value guards, subst id value exp)
   in
-  Pat_aux (pexp_aux, annot)
+  Pat_aux (pexp_aux, l)
+
+and subst_guards id value = function
+  | [] -> []
+  | G_aux (G_if exp, l) :: guards ->
+     G_aux (G_if (subst id value exp), l) :: subst_guards id value guards
+  | G_aux (G_pattern (pat, exp), l) :: guards when IdSet.mem id (pat_ids pat) ->
+     G_aux (G_pattern (pat, subst id value exp), l) :: guards
+  | G_aux (G_pattern (pat, exp), l) :: guards ->
+     G_aux (G_pattern (pat, subst id value exp), l) :: subst_guards id value guards
 
 and subst_fexp id value (FE_aux (FE_Fexp (id', exp), annot)) =
   FE_aux (FE_Fexp (id', subst id value exp), annot)
@@ -1879,12 +1882,13 @@ and locate_measure : 'a. (l -> l) -> 'a internal_loop_measure -> 'a internal_loo
 and locate_letbind : 'a. (l -> l) -> 'a letbind -> 'a letbind = fun f (LB_aux (LB_val (pat, exp), (l, annot))) ->
   LB_aux (LB_val (locate_pat f pat, locate f exp), (f l, annot))
 
-and locate_pexp : 'a. (l -> l) -> 'a pexp -> 'a pexp = fun f (Pat_aux (pexp_aux, (l, annot))) ->
-  let pexp_aux = match pexp_aux with
-    | Pat_exp (pat, exp) -> Pat_exp (locate_pat f pat, locate f exp)
-    | Pat_when (pat, guard, exp) -> Pat_when (locate_pat f pat, locate f guard, locate f exp)
-  in
-  Pat_aux (pexp_aux, (f l, annot))
+and locate_guard : 'a. (l -> l) -> 'a guard -> 'a guard = fun f (G_aux (aux, l)) ->
+  match aux with
+  | G_if exp -> G_aux (G_if (locate f exp), f l)
+  | G_pattern (pat, exp) -> G_aux (G_pattern (locate_pat f pat, locate f exp), f l)
+
+and locate_pexp : 'a. (l -> l) -> 'a pexp -> 'a pexp = fun f (Pat_aux (Pat_case (pat, guards, exp), l)) ->
+  Pat_aux (Pat_case (locate_pat f pat, List.map (locate_guard f) guards, locate f exp), f l)
 
 and locate_lexp : 'a. (l -> l) -> 'a lexp -> 'a lexp = fun f (LEXP_aux (lexp_aux, (l, annot))) ->
   let lexp_aux = match lexp_aux with
@@ -2192,13 +2196,15 @@ and find_annot_pat sl (P_aux (aux, (l, annot))) =
     | None -> Some (l, annot)
     | _ -> result
 
-and find_annot_pexp sl (Pat_aux (aux, (l, annot))) =
+and find_annot_guard sl (G_aux (aux, l)) =
   if not (subloc sl l) then None else
     match aux with
-    | Pat_exp (pat, exp) ->
-       option_chain (find_annot_pat sl pat) (find_annot_exp sl exp)
-    | Pat_when (pat, guard, exp) ->
-       option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [guard; exp])
+    | G_if exp -> find_annot_exp sl exp
+    | G_pattern (pat, exp) -> option_chain (find_annot_pat sl pat) (find_annot_exp sl exp)
+
+and find_annot_pexp sl (Pat_aux (Pat_case (pat, guards, exp), l)) =
+  if not (subloc sl l) then None else
+    option_chain (find_annot_pat sl pat) (option_chain (option_mapm (find_annot_guard sl) guards) (find_annot_exp sl exp))
 
 let find_annot_funcl sl (FCL_aux (FCL_Funcl (id, pexp), (l, annot))) =
   if not (subloc sl l) then None else
