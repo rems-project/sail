@@ -2714,8 +2714,8 @@ let is_constant = function
 
 let is_constant_vec_typ env typ =
   let typ = Env.base_typ_of env typ in
-  match destruct_vector env typ with
-  | Some (size,_,_) ->
+  match destruct_bitvector env typ with
+  | Some (size,_) ->
      (match nexp_simp size with
      | Nexp_aux (Nexp_constant _,_) -> true
      | _ -> false)

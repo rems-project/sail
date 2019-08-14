@@ -8,9 +8,9 @@ $include <vector_dec.sail>
 
 /* External definitions not in the usual asl prelude */
 
-val extzv = "extz_vec" : forall 'n 'm. (implicit('m), vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+val extzv = "extz_vec" : forall 'n 'm. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
 
-val extsv = "exts_vec" : forall 'n 'm. (implicit('m), vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+val extsv = "exts_vec" : forall 'n 'm. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
 
 /* This is generated internally to deal with case splits which reveal the size
    of a bitvector */

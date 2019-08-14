@@ -41,7 +41,7 @@ val count_leading_zeros = "count_leading_zeros" : forall 'N , 'N >= 1. bits('N) 
 /*
 function count_leading_zeros x = {
   foreach (i from ('N - 1) to 0 by 1 in dec)
-    if [x[i]] == 0b1 then return 'N - i - 1;
+    if [x[i]] == [bitone] then return 'N - i - 1;
   return 'N;
 }
 */
@@ -217,7 +217,7 @@ function slice_mask(n,i,l) =
   if l >= n then {
     sail_shiftleft(sail_ones(n), i)
   } else {
-    let one : bits('n) = sail_mask(n, 0b1 : bits(1)) in
+    let one : bits('n) = sail_mask(n, [bitone] : bits(1)) in
     sail_shiftleft(sub_bits(sail_shiftleft(one, l), one), i)
   }
 
