@@ -1714,14 +1714,6 @@ let pexp_rewriters rewrite_pexp =
   let alg = { id_algebra with pat_aux = (fun (pexp_aux, annot) -> rewrite_pexp (Pat_aux (pexp_aux, annot))) } in
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) }
 
-
-let stringappend_counter = ref 0
-
-let fresh_stringappend_id () =
-  let id = mk_id ("_s" ^ (string_of_int !stringappend_counter) ^ "#") in
-  stringappend_counter := !stringappend_counter + 1;
-  id
-
 let unk = Parse_ast.Unknown
 let unkt = (Parse_ast.Unknown, empty_tannot)
 
@@ -3063,9 +3055,9 @@ let all_rewrites = [
 
 let rewrites_lem = [
     ("remove_mapping_valspecs", []);
-    ("toplevel_string_append", []);
-    ("pat_string_append", []);
-    ("mapping_builtins", []);
+    (*  ("toplevel_string_append", []); *)
+    (* ("pat_string_append", []); *)
+    (* ("mapping_builtins", []); *)
     ("mono_rewrites", []);
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
@@ -3076,16 +3068,16 @@ let rewrites_lem = [
     ("atoms_to_singletons", [If_mono_arg]);
     ("recheck_defs", [If_mwords_arg]);
     ("vector_string_pats_to_bit_list", []);
-    ("remove_not_pats", []);
+    (*  ("remove_not_pats", []); *)
     ("remove_impossible_int_cases", []);
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);
     ("simple_assignments", []);
-    ("remove_vector_concat", []);
-    ("remove_bitvector_pats", []);
-    ("remove_numeral_pats", []);
+    (* ("remove_vector_concat", []); *)
+    (* ("remove_bitvector_pats", []);  *)
+    (* ("remove_numeral_pats", []); *)
     ("pattern_literals", [Literal_arg "lem"]);
-    ("guarded_pats", []);
+    (* ("guarded_pats", []); *)
     ("bitvector_exps", []);
     (* ("register_ref_writes", rewrite_register_ref_writes); *)
     ("nexp_ids", []);
@@ -3230,8 +3222,13 @@ let rewrites_target tgt =
      raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ ("Invalid target for rewriting: " ^ tgt))
 
 let rewrite_defs_target tgt =
-  List.map (fun (name, args) -> (name, instantiate_rewrite (List.assoc name all_rewrites) args)) (rewrites_target tgt)
-
+  List.map (fun (name, args) ->
+      match List.assoc_opt name all_rewrites with
+      | Some rewrite ->
+         (name, instantiate_rewrite rewrite args)
+      | None -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Invalid rewrite " ^ name)
+    ) (rewrites_target tgt)
+  
 let rewrite_check_annot =
   let check_annot exp =
     try
