@@ -42,12 +42,12 @@ match e with
      if success then Some (put_mem_bytes addr sz v tag s) else None
   | E_read_reg r v =>
      let (read_reg, _) := ra in
-     option_bind (read_reg r s.(regstate)) (fun v' =>
+     option_bind (read_reg r s.(ss_regstate)) (fun v' =>
      if generic_eq v' v then Some s else None)
   | E_write_reg r v =>
      let (_, write_reg) := ra in
-     option_bind (write_reg r v s.(regstate)) (fun rs' =>
-     Some {| regstate := rs'; memstate := s.(memstate); tagstate := s.(tagstate) |})
+     option_bind (write_reg r v s.(ss_regstate)) (fun rs' =>
+     Some {| ss_regstate := rs'; ss_memstate := s.(ss_memstate); ss_tagstate := s.(ss_tagstate) |})
   | _ => Some s
 end.
 

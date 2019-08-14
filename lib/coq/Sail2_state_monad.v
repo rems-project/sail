@@ -14,17 +14,19 @@ Definition Memstate : Type := NatMap.t memory_byte.
 Definition Tagstate : Type := NatMap.t bitU.
 (* type regstate = map string (vector bitU) *)
 
+(* We deviate from the Lem library and prefix the fields with ss_ to avoid
+   name clashes. *)
 Record sequential_state {Regs} :=
-  { regstate : Regs;
-    memstate : Memstate;
-    tagstate : Tagstate }.
+  { ss_regstate : Regs;
+    ss_memstate : Memstate;
+    ss_tagstate : Tagstate }.
 Arguments sequential_state : clear implicits.
 
 (*val init_state : forall 'regs. 'regs -> sequential_state 'regs*)
 Definition init_state {Regs} regs : sequential_state Regs :=
-  {| regstate := regs;
-     memstate := NatMap.empty _;
-     tagstate := NatMap.empty _ |}.
+  {| ss_regstate := regs;
+     ss_memstate := NatMap.empty _;
+     ss_tagstate := NatMap.empty _ |}.
 
 Inductive ex E :=
   | Failure : string -> ex E
@@ -146,7 +148,7 @@ end.
 (*val read_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> monadS 'regs bitU 'e*)
 Definition read_tagS {Regs A E} (addr : mword A) : monadS Regs bitU E :=
   let addr := Word.wordToNat (get_word addr) in
-  readS (fun s => opt_def B0 (NatMap.find addr s.(tagstate))).
+  readS (fun s => opt_def B0 (NatMap.find addr s.(ss_tagstate))).
 
 Fixpoint genlist_acc {A:Type} (f : nat -> A) n acc : list A :=
   match n with
@@ -160,8 +162,8 @@ Definition genlist {A} f n := @genlist_acc A f n [].
 (*val get_mem_bytes : forall 'regs. nat -> nat -> sequential_state 'regs -> maybe (list memory_byte * bitU)*)
 Definition get_mem_bytes {Regs} addr sz (s : sequential_state Regs) : option (list memory_byte * bitU) :=
   let addrs := genlist (fun n => addr + n)%nat sz in
-  let read_byte s addr := NatMap.find addr s.(memstate) in
-  let read_tag s addr := opt_def B0 (NatMap.find addr s.(tagstate)) in
+  let read_byte s addr := NatMap.find addr s.(ss_memstate) in
+  let read_tag s addr := opt_def B0 (NatMap.find addr s.(ss_tagstate)) in
   option_map
     (fun mem_val => (mem_val, List.fold_left and_bit (List.map (read_tag s) addrs) B1))
     (just_list (List.map (read_byte s) addrs)).
@@ -203,9 +205,9 @@ Definition put_mem_bytes {Regs} addr sz (v : list memory_byte) (tag : bitU) (s :
   let a_v := List.combine addrs v in
   let write_byte mem '(addr, v) := NatMap.add addr v mem in
   let write_tag mem addr := NatMap.add addr tag mem in
-  {| regstate := s.(regstate);
-     memstate := List.fold_left write_byte a_v s.(memstate);
-     tagstate := List.fold_left write_tag addrs s.(tagstate) |}.
+  {| ss_regstate := s.(ss_regstate);
+     ss_memstate := List.fold_left write_byte a_v s.(ss_memstate);
+     ss_tagstate := List.fold_left write_tag addrs s.(ss_tagstate) |}.
 
 (*val write_memt_bytesS : forall 'regs 'e. write_kind -> nat -> nat -> list memory_byte -> bitU -> monadS 'regs bool 'e*)
 Definition write_memt_bytesS {Regs E} (_ : write_kind) addr sz (v : list memory_byte) (t : bitU) : monadS Regs bool E :=
@@ -231,7 +233,7 @@ Definition write_memS {Regs E A B} wk (addr : mword A) sz (v : mword B) : monadS
 
 (*val read_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> monadS 'regs 'a 'e*)
 Definition read_regS {Regs RV A E} (reg : register_ref Regs RV A) : monadS Regs A E :=
- readS (fun s => reg.(read_from) s.(regstate)).
+ readS (fun s => reg.(read_from) s.(ss_regstate)).
 
 (* TODO
 let read_reg_range reg i j state =
@@ -251,7 +253,7 @@ let read_reg_bitfield reg regfield =
   register_accessors 'regs 'rv -> string -> monadS 'regs 'rv 'e*)
 Definition read_regvalS {Regs RV E} (acc : register_accessors Regs RV) reg : monadS Regs RV E :=
   let '(read, _) := acc in
-  readS (fun s => read reg s.(regstate)) >>$= (fun v => match v with
+  readS (fun s => read reg s.(ss_regstate)) >>$= (fun v => match v with
       | Some v =>  returnS v
       | None => failS ("read_regvalS " ++ reg)
     end).
@@ -260,14 +262,14 @@ Definition read_regvalS {Regs RV E} (acc : register_accessors Regs RV) reg : mon
   register_accessors 'regs 'rv -> string -> 'rv -> monadS 'regs unit 'e*)
 Definition write_regvalS {Regs RV E} (acc : register_accessors Regs RV) reg (v : RV) : monadS Regs unit E :=
   let '(_, write) := acc in
-  readS (fun s => write reg v s.(regstate)) >>$= (fun x => match x with
-      | Some rs' => updateS (fun s => {| regstate := rs'; memstate := s.(memstate); tagstate := s.(tagstate) |})
+  readS (fun s => write reg v s.(ss_regstate)) >>$= (fun x => match x with
+      | Some rs' => updateS (fun s => {| ss_regstate := rs'; ss_memstate := s.(ss_memstate); ss_tagstate := s.(ss_tagstate) |})
       | None =>  failS ("write_regvalS " ++ reg)
     end).
 
 (*val write_regS : forall 'regs 'rv 'a 'e. register_ref 'regs 'rv 'a -> 'a -> monadS 'regs unit 'e*)
 Definition write_regS {Regs RV A E} (reg : register_ref Regs RV A) (v:A) : monadS Regs unit E :=
-  updateS (fun s => {| regstate := reg.(write_to) v s.(regstate); memstate := s.(memstate); tagstate := s.(tagstate) |}).
+  updateS (fun s => {| ss_regstate := reg.(write_to) v s.(ss_regstate); ss_memstate := s.(ss_memstate); ss_tagstate := s.(ss_tagstate) |}).
 
 (* TODO
 val update_reg : forall 'regs 'rv 'a 'b 'e. register_ref 'regs 'rv 'a -> ('a -> 'b -> 'a) -> 'b -> monadS 'regs unit 'e
