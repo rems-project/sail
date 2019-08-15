@@ -68,8 +68,12 @@ let effect_of_lexp (LEXP_aux (_,(_,a))) = effect_of_annot a
 let effect_of_fexp (FE_aux (_,(_,a))) = effect_of_annot a
 let effect_of_fexps fexps =
   List.fold_left union_effects no_effect (List.map effect_of_fexp fexps)
-let effect_of_pexp (Pat_aux (Pat_case (p, _, e), l)) =
-  union_effects (effect_of_pat p) (effect_of e)
+let effect_of_guard (G_aux (aux, _)) =
+  match aux with
+  | G_if exp -> effect_of exp
+  | G_pattern (pat, exp) -> union_effects (effect_of_pat pat) (effect_of exp)
+let effect_of_pexp (Pat_aux (Pat_case (p, gs, e), l)) =
+  List.fold_left union_effects no_effect (effect_of_pat p :: effect_of e :: List.map effect_of_guard gs)
 let effect_of_lb (LB_aux (_,(_,a))) = effect_of_annot a
 
 let simple_annot l typ = (gen_loc l, mk_tannot initial_env typ no_effect)

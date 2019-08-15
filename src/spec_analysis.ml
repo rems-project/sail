@@ -375,7 +375,7 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) 
        exp_ns
     | _ -> mt
   in
-  let ns = assert false in
+  let ns = Nameset.empty in
   (* FIXME
   let ns = List.fold_right (fun (FCL_aux(FCL_Funcl(_,pexp),_)) ns ->
     match pexp with

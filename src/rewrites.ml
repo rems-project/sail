@@ -104,7 +104,7 @@ let effectful_effs = function
       ) effs*)
 
 let effectful eaux = effectful_effs (effect_of eaux)
-let effectful_pexp pexp = assert false (* FIXME: effectful_effs (effect_of_pexp pexp) *)
+let effectful_pexp pexp = effectful_effs (effect_of_pexp pexp)
 
 let rec small (E_aux (exp,_)) = match exp with
   | E_id _
@@ -786,8 +786,11 @@ let swaptyp typ (l,tannot) = match destruct_tannot tannot with
 
 let is_funcl_rec (FCL_aux (FCL_Funcl (id, pexp), _)) =
   let pat,guard,exp,pannot = destruct_pexp pexp in
-  let exp = assert false (* FIXME match guard with None -> exp
-    | Some exp' -> E_aux (E_block [exp';exp],(Parse_ast.Unknown,empty_tannot)) *) in
+  let exp = match guard with
+    | [] -> exp
+    | [G_aux (G_if exp', l)] -> E_aux (E_block [exp';exp],(gen_loc l,empty_tannot))
+    | _ -> Reporting.unreachable (id_loc id) __POS__ "Complex guard found in is_funcl_rec"
+  in
   fst (fold_exp
     { (compute_algebra false (||) ) with
       e_app = (fun (f, es) ->
@@ -1390,13 +1393,16 @@ let rewrite_defs_letbind_effects env =
   and n_fexpL (fexps : 'a fexp list) (k : 'a fexp list -> 'a exp) : 'a exp =
     mapCont n_fexp fexps k
 
+  and n_guard : bool -> 'a guard -> 'a guard = fun newreturn guard ->
+    match guard with
+    | G_aux (G_if exp, l) ->
+       G_aux (G_if (n_exp_term newreturn exp), l)
+    | G_aux (G_pattern (pat, exp), l) ->
+       G_aux (G_pattern (pat, n_exp_term newreturn exp), l)
+
   and n_pexp : 'b. bool -> 'a pexp -> ('a pexp -> 'b) -> 'b = fun newreturn pexp k ->
-    assert false (* FIXME
-    match pexp with
-    | Pat_aux (Pat_exp (pat,exp),annot) ->
-      k (fix_eff_pexp (Pat_aux (Pat_exp (pat,n_exp_term newreturn exp), annot)))
-    | Pat_aux (Pat_when (pat,guard,exp),annot) ->
-      k (fix_eff_pexp (Pat_aux (Pat_when (pat,n_exp_term newreturn guard,n_exp_term newreturn exp), annot))) *)
+    let Pat_aux (Pat_case (pat, guards, exp), l) = pexp in
+    k (Pat_aux (Pat_case (pat, List.map (n_guard newreturn) guards, n_exp_term newreturn exp), l))
 
   and n_pexpL (newreturn : bool) (pexps : 'a pexp list) (k : 'a pexp list -> 'a exp) : 'a exp =
     mapCont (n_pexp newreturn) pexps k
@@ -1745,7 +1751,7 @@ let rewrite_lit_ocaml (L_aux (lit, _)) = match lit with
 
 let rewrite_defs_pat_lits rewrite_lit env ast =
   let rewrite_pexp (Pat_aux (pexp_aux, annot) as pexp) =
-    let guards = ref [] in
+    let new_guards = ref [] in
     let counter = ref 0 in
 
     let rewrite_pat = function
@@ -1757,30 +1763,17 @@ let rewrite_defs_pat_lits rewrite_lit env ast =
          let typ = typ_of_annot p_annot in
          let id = mk_id ("p" ^ string_of_int !counter ^ "#") in
          let guard = mk_exp (E_app_infix (mk_exp (E_id id), mk_id "==", mk_exp (E_lit lit))) in
-         let guard = check_exp (Env.add_local id (Immutable, typ) env) guard bool_typ in
-         guards := guard :: !guards;
+         let guard = G_aux (G_if (check_exp (Env.add_local id (Immutable, typ) env) guard bool_typ), gen_loc (fst p_annot)) in
+         new_guards := guard :: !new_guards;
          incr counter;
          P_aux (P_id id, p_annot)
       | p_aux, p_annot ->
          P_aux (p_aux, p_annot)
     in
-    assert false (* FIXME
     match pexp_aux with
-    | Pat_exp (pat, exp) ->
-       begin
-         let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat } pat in
-         match !guards with
-         | [] -> Pat_aux (Pat_exp (pat, exp), annot)
-         | (g :: gs) ->
-            let guard_annot = (fst annot, mk_tannot (env_of exp) bool_typ no_effect) in
-            Pat_aux (Pat_when (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_id "and_bool", [g; g']), guard_annot)) g gs, exp), annot)
-       end
-    | Pat_when (pat, guard, exp) ->
-       begin
-         let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat } pat in
-         let guard_annot = (fst annot, mk_tannot (env_of exp) bool_typ no_effect) in
-         Pat_aux (Pat_when (pat, List.fold_left (fun g g' -> E_aux (E_app (mk_id "and_bool", [g; g']), guard_annot)) guard !guards, exp), annot)
-       end *)
+    | Pat_case (pat, guards, exp) ->
+       let pat = fold_pat { id_algebra with p_aux = rewrite_pat } pat in
+       Pat_aux (Pat_case (pat, !new_guards @ guards, exp), annot)
   in
 
   let rewrite_mapping (MD_aux (MD_mapping (id, args, tannot_opt, mapcls), annot)) =
@@ -1980,33 +1973,29 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          |> List.fold_left IdSet.union IdSet.empty
          |> IdSet.inter used_vars
          |> mk_var_exps_pats pl env in
-       assert false
-         (* FIXME
        if vars = [] then
          let ps = List.map (function
-           | Pat_aux (Pat_exp (p,e),a) ->
-             Pat_aux (Pat_exp (p,rewrite_var_updates e),a)
-           | Pat_aux (Pat_when (p,g,e),a) ->
-             Pat_aux (Pat_when (p,g,rewrite_var_updates e),a)) ps in
+           | Pat_aux (Pat_case (p,gs,e),a) ->
+             Pat_aux (Pat_case (p,gs,rewrite_var_updates e),a)) ps in
          let expaux = if is_case then E_case (e1, ps) else E_try (e1, ps) in
          Same_vars (E_aux (expaux, annot))
        else
          let e1 = if is_case then e1 else rewrite_var_updates (add_vars overwrite e1 vars) in
-         let rewrite_pexp (Pat_aux (pexp, (l, _))) = match pexp with
-           | Pat_exp (pat, exp) ->
+         let rewrite_pexp (Pat_aux (pexp, l)) = match pexp with
+           | Pat_case (pat, [], exp) ->
              let exp = rewrite_var_updates (add_vars overwrite exp vars) in
              let pannot = (l, mk_tannot (env_of exp) (typ_of exp) (effect_of exp)) in
-             Pat_aux (Pat_exp (pat, exp), pannot)
-           | Pat_when _ ->
+             Pat_aux (Pat_case (pat, [], exp), l)
+           | Pat_case _ ->
              raise (Reporting.err_unreachable l __POS__
                "Guarded patterns should have been rewritten already") in
          let ps = List.map rewrite_pexp ps in
          let expaux = if is_case then E_case (e1, ps) else E_try (e1, ps) in
          let typ = match ps with
-           | Pat_aux ((Pat_exp (_,first)|Pat_when (_,_,first)),_) :: _ -> typ_of first
+           | Pat_aux (Pat_case (_,_,first),_) :: _ -> typ_of first
            | _ -> unit_typ in
          let v = fix_eff_exp (annot_exp expaux pl env typ) in
-         Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats)) *)
+         Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
     | E_assign (lexp,vexp) ->
        let mk_id_pat id =
          let typ = lvar_typ (Env.lookup_id id env) in
@@ -2233,12 +2222,11 @@ let merge_funcls env (Defs defs) =
        let l_g = Parse_ast.Generated l in
        let ann_g : _ * tannot = (l_g,empty_tannot) in
        let clauses = List.map (fun (FCL_aux (FCL_Funcl (_,pexp),_)) -> pexp) fcls in
-       assert false
-         (* FIXME
        FD_aux (FD_function (r,t,e,[
-         FCL_aux (FCL_Funcl (id,Pat_aux (Pat_exp (P_aux (P_id var,ann_g),
-                                                  E_aux (E_case (E_aux (E_id var,ann_g),clauses),ann_g)),ann_g)),
-                  (l,empty_tannot))]),ann) *)
+         FCL_aux (FCL_Funcl (id,Pat_aux (Pat_case (P_aux (P_id var,ann_g),
+                                                   [],
+                                                   E_aux (E_case (E_aux (E_id var,ann_g),clauses),ann_g)),l_g)),
+                  (l,empty_tannot))]),ann)
   in
   let merge_in_def = function
     | DEF_fundef f -> DEF_fundef (merge_function f)

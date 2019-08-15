@@ -228,6 +228,8 @@ val add_e_cast : typ -> tannot exp -> tannot exp
 
 val union_eff_exps : (tannot exp) list -> effect
 
+val effect_of_pexp : tannot pexp -> effect
+
 val fix_eff_exp : tannot exp -> tannot exp
 
 val fix_eff_lexp : tannot lexp -> tannot lexp

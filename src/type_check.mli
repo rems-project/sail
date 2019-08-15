@@ -315,6 +315,8 @@ val infer_pat : Env.t -> unit pat -> tannot pat * Env.t * unit guard list
 
 val infer_lexp : Env.t -> unit lexp -> tannot lexp
 
+val check_guards : Env.t -> unit guard list -> tannot guard list * Env.t
+
 val check_case : Env.t -> typ -> unit pexp -> typ -> tannot pexp
 
 val check_mpexp : direction -> Env.t -> unit mpexp -> typ -> tannot mpexp * Env.t

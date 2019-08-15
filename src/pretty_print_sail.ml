@@ -541,7 +541,11 @@ and doc_letbind (LB_aux (LB_val (pat, exp), _)) =
   separate space [doc_pat pat; equals; doc_exp exp]
 
 let doc_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (Pat_case (pat, guards, exp),_)), _)) =
-  group (separate space [doc_id id ^^ parens (doc_pat pat ^^ space ^^ separate_map (comma ^^ space) doc_guard guards); string "="; doc_exp exp])
+  match guards with
+  | [] ->
+     group (separate space [doc_id id ^^ parens (doc_pat pat); string "="; doc_exp exp])
+  | _ ->
+     group (separate space [doc_id id ^^ parens (doc_pat pat ^^ space ^^ separate_map (comma ^^ space) doc_guard guards); string "="; doc_exp exp])
 
 let doc_default (DT_aux (DT_order ord, _)) = separate space [string "default"; string "Order"; doc_ord ord]
 
@@ -578,7 +582,7 @@ let rec doc_mpat (MP_aux (mp_aux, _) as mpat) =
      parens (doc_mpat pat ^^ string " : " ^^ doc_typ typ)
   | _ ->
      string (string_of_mpat mpat)
-     
+
 let doc_mpexp (MPat_aux (mpexp, _)) =
   match mpexp with
   | MPat_pat mpat -> doc_mpat mpat

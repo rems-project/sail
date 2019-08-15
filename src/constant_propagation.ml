@@ -837,9 +837,8 @@ let referenced_vars exp =
    thing too...
 *)
 
-let remove_impossible_int_cases _ = assert false
-(* FIXME
-  let must_keep_case exp (Pat_aux ((Pat_exp (p,_) | Pat_when (p,_,_)),_)) =
+let remove_impossible_int_cases _ =
+  let must_keep_case exp (Pat_aux (Pat_case (p,_,_),_)) =
     let rec aux (E_aux (exp,_)) (P_aux (p,_)) =
       match exp, p with
       | E_tuple exps, P_tup ps -> List.for_all2 aux exps ps
@@ -861,5 +860,4 @@ let remove_impossible_int_cases _ = assert false
   let open Rewriter in
   let rewrite_exp _ = fold_exp { id_algebra with e_case = e_case; e_if = e_if } in
   rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp }
- *)
 
