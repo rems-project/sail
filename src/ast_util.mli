@@ -391,6 +391,7 @@ val string_of_typquant : typquant -> string
 val string_of_typschm : typschm -> string
 val string_of_lit : lit -> string
 val string_of_exp : 'a exp -> string
+val string_of_guard : 'a guard -> string
 val string_of_pexp : 'a pexp -> string
 val string_of_lexp : 'a lexp -> string
 val string_of_pat : 'a pat -> string

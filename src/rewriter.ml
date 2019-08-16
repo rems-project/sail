@@ -340,7 +340,7 @@ let rewrite_mapping rewriters (MD_aux (MD_mapping (id, args, tannot_opt, mapcls)
        Reporting.unreachable l __POS__ "Bi-directional mapping clause should have been removed by type checker"
   in
   MD_aux (MD_mapping (id, List.map (rewrite_pat rewriters) args, tannot_opt, List.map rewrite_mapcl mapcls), (l, annot))
-  
+
 let rewrite_def rewriters d = match d with
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), annot)) ->
      DEF_reg_dec (DEC_aux (DEC_config (id, typ, rewriters.rewrite_exp rewriters exp), annot))

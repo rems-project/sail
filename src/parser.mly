@@ -1002,7 +1002,7 @@ exp9r:
 %inline guard:
   | If_ exp
     { G_aux (G_if $2, loc $startpos $endpos) }
-  | Match pat Eq exp
+  | Let_ pat Eq exp
     { G_aux (G_pattern ($2, $4), loc $startpos $endpos) }
 
 guards:

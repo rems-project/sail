@@ -1020,11 +1020,11 @@ and string_of_fexp (FE_aux (FE_Fexp (field, exp), _)) =
   string_of_id field ^ " = " ^ string_of_exp exp
 and string_of_pexp (Pat_aux (pexp, _)) =
   match pexp with
-  | Pat_case (pat, guards, exp) -> string_of_pat pat ^ Util.string_of_list ", " string_of_guard guards ^ " => " ^ string_of_exp exp
+  | Pat_case (pat, guards, exp) -> string_of_pat pat ^ " " ^ Util.string_of_list ", " string_of_guard guards ^ " => " ^ string_of_exp exp
 and string_of_guard (G_aux (guard, _)) =
   match guard with
   | G_if exp -> "if " ^ string_of_exp exp
-  | G_pattern (pat, exp) -> "match " ^ string_of_pat pat ^ " = " ^ string_of_exp exp
+  | G_pattern (pat, exp) -> "let " ^ string_of_pat pat ^ " = " ^ string_of_exp exp
 and string_of_typ_pat (TP_aux (tpat_aux, _)) =
   match tpat_aux with
   | TP_wild -> "_"

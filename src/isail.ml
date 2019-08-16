@@ -608,6 +608,9 @@ let handle_input' input =
            Interactive.ast := new_ast;
            Interactive.env := new_env;
            interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops
+        | ":print_ast" ->
+           Pretty_print_sail.pp_defs stdout !Interactive.ast;
+           flush stdout
         | ":prover_regstate" ->
            let env, ast = prover_regstate (Some arg) !Interactive.ast !Interactive.env in
            Interactive.env := env;

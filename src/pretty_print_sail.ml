@@ -534,9 +534,13 @@ and doc_pexps pexps = surround 2 0 lbrace (separate_map (comma ^^ hardline) doc_
 and doc_guard (G_aux (aux, _)) =
   match aux with
   | G_if exp -> string "if" ^^ space ^^ doc_exp exp
-  | G_pattern (pat, exp) -> separate space [string "match"; doc_pat pat; equals; doc_exp exp]
+  | G_pattern (pat, exp) -> separate space [string "let"; doc_pat pat; equals; doc_exp exp]
 and doc_pexp (Pat_aux (Pat_case (pat, guards, exp), _)) =
-  separate space [doc_pat pat; separate_map (comma ^^ space) doc_guard guards; string "=>"; doc_exp exp]
+  match guards with
+  | [] ->
+     separate space [doc_pat pat; string "=>"; doc_exp exp]
+  | _ ->
+     separate space [doc_pat pat; separate_map (comma ^^ space) doc_guard guards; string "=>"; doc_exp exp]
 and doc_letbind (LB_aux (LB_val (pat, exp), _)) =
   separate space [doc_pat pat; equals; doc_exp exp]
 

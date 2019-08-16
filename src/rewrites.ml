@@ -3010,6 +3010,9 @@ let all_rewrites = [
     ("vector_string_pats_to_bit_list", Basic_rewriter rewrite_defs_vector_string_pats_to_bit_list);
     (*   ("remove_not_pats", Basic_rewriter rewrite_defs_not_pats); *)
     ("pattern_literals", Literal_rewriter (fun f -> Basic_rewriter (rewrite_defs_pat_lits f)));
+    ("bitvector_concat", Basic_rewriter (fun _ -> Pattern_rewrites.Bitvector_concat_rewriter.rewrite));
+    ("literals", Basic_rewriter (fun _ -> Pattern_rewrites.Literal_rewriter.rewrite));
+    ("swap_guards", Basic_rewriter (fun _ -> Pattern_rewrites.swap_guards));
     ("vector_concat_assignments", Basic_rewriter rewrite_vector_concat_assignments);
     ("tuple_assignments", Basic_rewriter rewrite_tuple_assignments);
     ("simple_assignments", Basic_rewriter rewrite_simple_assignments);
