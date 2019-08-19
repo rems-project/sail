@@ -198,12 +198,13 @@ apply try_catchS_cong; auto.
 intros [r' | e] s'; auto.
 Qed.
 Hint Rewrite liftState_try_catchR : liftState.
-(*
-Lemma liftState_bool_of_bitU_nondet Regs Regval :
-  "liftState r (bool_of_bitU_nondet b) = bool_of_bitU_nondetS b"
-  by (cases b; auto simp: bool_of_bitU_nondet_def bool_of_bitU_nondetS_def liftState_simp)
+
+Lemma liftState_bool_of_bitU_nondet Regs Regval E r b :
+  liftState (Regs := Regs) r (@bool_of_bitU_nondet Regval E b) = bool_of_bitU_nondetS b.
+destruct b; simpl; try reflexivity.
+Qed.
 Hint Rewrite liftState_bool_of_bitU_nondet : liftState.
-*)
+
 Lemma liftState_read_memt Regs Regval A B E H rk a sz r :
   liftState (Regs := Regs) r (@read_memt Regval A B E H rk a sz) === read_memtS rk a sz.
 unfold read_memt, read_memt_bytes, read_memtS, maybe_failS. simpl.
@@ -356,13 +357,13 @@ reflexivity.
 Qed.
 Hint Rewrite liftState_choose_bools : liftState.
 
-(*
-Lemma liftState_bools_of_bits_nondet[liftState_simp]:
-  "liftState r (bools_of_bits_nondet bs) = bools_of_bits_nondetS bs"
-  unfolding bools_of_bits_nondet_def bools_of_bits_nondetS_def
-  by (auto simp: liftState_simp comp_def)
-Hint Rewrite liftState_choose_bools : liftState.
-*)
+Lemma liftState_bools_of_bits_nondet Regs Regval E r bs :
+  liftState (Regs := Regs) r (@bools_of_bits_nondet Regval E bs) === bools_of_bits_nondetS bs.
+unfold bools_of_bits_nondet, bools_of_bits_nondetS.
+rewrite_liftState.
+reflexivity.
+Qed.
+Hint Rewrite liftState_bools_of_bits_nondet : liftState.
 
 Lemma liftState_internal_pick Regs Regval A E r (xs : list A) :
   liftState (Regs := Regs) (Regval := Regval) (E := E) r (internal_pick xs) === internal_pickS xs.
