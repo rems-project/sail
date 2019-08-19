@@ -52,13 +52,13 @@ val top_instruction_state_to_string : instruction_state -> string
 val local_variables_to_string : instruction_state -> string
 
 
-val instruction_to_string : instruction -> string
+val instruction_to_string : interp_instruction -> string
 
 (*Functions to take a print function and cause a print event for the above functions *)
 val print_exp : (string-> unit) -> Interp.lenv -> Interp.lmem -> bool -> tannot exp -> unit 
 val print_backtrace_compact : (string -> unit) -> instruction_state -> unit
 val print_continuation : (string -> unit) -> instruction_state -> unit
-val print_instruction : (string -> unit) -> instruction -> unit
+val print_instruction : (string -> unit) -> interp_instruction -> unit
 val print_stack : (string -> unit) -> instruction_state -> unit
 
 val register_value_to_string : register_value -> string

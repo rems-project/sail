@@ -116,7 +116,7 @@ end
 
 type instruction_field_value = list bit
 
-type instruction = (string * list (string * instr_parm_typ * instruction_field_value))
+type interp_instruction = (string * list (string * instr_parm_typ * instruction_field_value))
 
 let {coq} instructionEqual i1 i2 = match (i1,i2) with
   | ((i1,parms1,effects1),(i2,parms2,effects2)) -> i1=i2 && parms1 = parms2 && effects1 = effects2
@@ -293,7 +293,7 @@ val decode_to_istate : context -> maybe (list (reg_name * register_value)) -> op
 val decode_to_instruction : context -> maybe (list (reg_name * register_value))-> opcode -> instruction_or_decode_error
 
 (*Function to generate the state to run from an instruction form; is always an Instr*)
-val instruction_to_istate : context -> instruction -> instruction_state (*i_state_or_error*)
+val instruction_to_istate : context -> interp_instruction -> instruction_state (*i_state_or_error*)
 
 (* Slice a register value into a smaller vector, starting at first number (wrt the indices of the register value, not raw positions in its list of bits) and going to second (inclusive) according to order. *)
 val slice_reg_value : register_value -> nat -> nat -> register_value
@@ -319,8 +319,8 @@ val translate_address :
                       
 val instruction_analysis :
   context -> end_flag -> string -> (string -> (nat * nat * direction * (nat * nat)))
-  -> maybe (list (reg_name * register_value)) -> instruction -> (list reg_name * list reg_name * list reg_name * list nia * dia * instruction_kind)
+  -> maybe (list (reg_name * register_value)) -> interp_instruction -> (list reg_name * list reg_name * list reg_name * list nia * dia * instruction_kind)
 
 
-val initial_outcome_s_of_instruction : (instruction_state -> unit -> (string * string)) -> context -> interp_mode -> instruction -> Sail_impl_base.outcome_s unit
+val initial_outcome_s_of_instruction : (instruction_state -> unit -> (string * string)) -> context -> interp_mode -> interp_instruction -> Sail_impl_base.outcome_s unit
 

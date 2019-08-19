@@ -1275,7 +1275,7 @@ let interp_handwritten_instruction_analysis context endianness instruction analy
 
 val print_and_fail_of_inequal : forall 'a. Show 'a => 
                                   (string -> unit) -> 
-                                (instruction -> string) ->
+                                (interp_instruction -> string) ->
                                 (string * 'a) -> (string * 'a) -> unit
 let print_and_fail_if_inequal 
       (print_endline,instruction)
