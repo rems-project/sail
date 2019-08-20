@@ -66,7 +66,6 @@ let opt_smt_serialize = ref false
 let opt_smt_fuzz = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_coq = ref ([]:string list)
-let opt_alt_modules_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
