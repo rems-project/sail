@@ -101,13 +101,25 @@ match b with
   | BU => Fail "bool_of_bitU"
 end.
 
-(*val bool_of_bitU_oracle : forall 'rv 'e. bitU -> monad 'rv bool 'e*)
-Definition bool_of_bitU_oracle {rv E} (b : bitU) : monad rv bool E :=
+Definition bool_of_bitU_nondet {rv E} (b : bitU) : monad rv bool E :=
 match b with
   | B0 => returnm false
   | B1 => returnm true
-  | BU => undefined_bool tt
+  | BU => choose_bool "bool_of_bitU"
 end.
+
+Definition bools_of_bits_nondet {rv E} (bits : list bitU) : monad rv (list bool) E :=
+  foreachM bits []
+    (fun b bools =>
+      bool_of_bitU_nondet b >>= fun b => 
+      returnm (bools ++ [b])).
+
+Definition of_bits_nondet {rv A E} `{Bitvector A} (bits : list bitU) : monad rv A E :=
+  bools_of_bits_nondet bits >>= fun bs =>
+  returnm (of_bools bs).
+
+Definition of_bits_fail {rv A E} `{Bitvector A} (bits : list bitU) : monad rv A E :=
+  maybe_fail "of_bits" (of_bits bits).
 
 (* For termination of recursive functions.  We don't name assertions, so use
    the type class mechanism to find it. *)
