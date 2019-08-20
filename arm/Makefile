@@ -10,7 +10,9 @@ SOURCES=armV8.h.sail\
   armV8_lib.h.sail\
   armV8_common_lib.sail\
   armV8_A64_lib.sail\
-  armV8.sail
+  armV8.sail\
+   ../etc/regfp.sail\
+  aarch64_regfp.sail
 
 all: armV8.lem armV8.ml armV8_embed.lem
 
@@ -21,7 +23,7 @@ armV8.ml: armV8.lem ../src/lem_interp/interp_ast.lem
 	$(LEM) -ocaml -lib ../src/lem_interp/ $<
 
 
-armV8_embed.lem: $(SOURCES) ../etc/regfp.sail aarch64_regfp.sail
+armV8_embed.lem: $(SOURCES)
 # also generates armV8_embed_sequential.lem, armV8_embed_types.lem, armV8_toFromInterp.lem
 	$(SAIL) -lem -lem_lib ArmV8_extras_embed -o armV8 $^
 
