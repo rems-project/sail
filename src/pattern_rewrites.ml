@@ -86,8 +86,8 @@ let typ_gen = QCheck.Gen.(sized @@ fix
     | n ->
        frequency
          [16, base_typ;
-          (* 2, list_size (int_range 2 9) (self (n / 2)) >>= (fun typs -> return (tuple_typ typs)); *)
-          1, map list_typ (self (n / 2))]
+          4, list_size (int_range 2 9) (self (n / 2)) >>= (fun typs -> return (tuple_typ typs));
+          2, map list_typ (self (n / 2))]
   ))
 
 let rec sequence =
@@ -154,29 +154,39 @@ let rec pattern_gen infer n (Typ_aux (aux, _) as typ) =
               return (V_bit B0, mk_pat (P_lit (mk_lit L_zero)));
               oneofl [B0; B1] >>= fun bit -> return (V_bit bit, mk_pat P_wild)]
     | Typ_app (id, [A_aux (A_typ elem_typ, _)]) when string_of_id id = "list" ->
-       return (V_list [], mk_pat P_wild)
-(*
-              map2 (fun pat1 pat2 -> mk_pat (P_cons (pat1, pat2))) (pattern_gen infer (n - 1) elem_typ) (pattern_gen infer (n - 1) typ)
- *)
+       let empty_list =
+         oneofl [V_list [], mk_pat P_wild;
+                 V_list [], mk_pat (P_list [])]
+       in
+       let list_pattern =
+         int_range 1 6 >>= fun len ->
+         list_repeat len (pattern_gen infer (n - 1) elem_typ) >>= fun gens ->
+         return (V_list (List.map fst gens), mk_pat (P_list (List.map snd gens)))
+       in
+       let cons_pattern =
+         pattern_gen infer (n - 1) elem_typ >>= fun gen1 ->
+         pattern_gen infer (n - 1) typ >>= fun gen2 ->
+         return (V_list (fst gen1 :: coerce_list (fst gen2)), mk_pat (P_cons (snd gen1, snd gen2)))
+       in
+       frequency [1, empty_list;
+                  2, list_pattern;
+                  4, cons_pattern]
     | Typ_id id when string_of_id id = "int" ->
        frequency
          [4, map (fun n -> V_int (Big_int.of_int n), mk_pat (P_lit (mk_lit (L_num (Big_int.of_int n))))) small_nat;
           1, map (fun n -> V_int (Big_int.of_int n), mk_pat P_wild) small_nat]
     | Typ_tup typs ->
-       assert false
-              (*
+       sequence (List.map (pattern_gen infer (n - 1)) typs) >>= fun gens ->
        if n = 0 then
-         return (mk_pat P_wild)
+         return (V_tuple (List.map fst gens), mk_pat P_wild)
        else
-         frequency
-           [4, (List.map (pattern_gen infer (n - 1)) typs |> sequence) >>= (fun pats -> return (mk_pat (P_tup pats)));
-            1, return (mk_pat P_wild)]
-               *)
+         return (V_tuple (List.map fst gens), mk_pat (P_tup (List.map snd gens)))
     | Typ_id id when string_of_id id = "unit" ->
        oneofl [V_unit, mk_pat (P_lit (mk_lit L_unit));
                V_unit, mk_pat P_wild]
     | Typ_id id when string_of_id id = "string" ->
-       return (V_string "", mk_pat P_wild)
+       oneofl [V_string "", mk_pat P_wild;
+               V_string "test", mk_pat (P_lit (mk_lit (L_string "test")))]
     | _ ->
        print_endline ("Cannot generate type " ^ string_of_typ typ);
        assert false
