@@ -567,6 +567,11 @@ let feature_check () =
      else
        exit 2
 
+let self_test type_envs =
+  let _ = Pattern_rewrites.run_pattern_rewrite_tests type_envs in
+  let _ = Jib_ssa.run_ssa_tests () in
+  ()
+
 let main () =
   feature_check ();
   if !opt_print_version then
@@ -578,6 +583,9 @@ let main () =
         List.fold_right (fun file (ast,_) -> Splice.splice ast file)
           (!opt_splice) (ast, type_envs)
       in
+
+      self_test type_envs;
+
       Reporting.opt_warnings := false; (* Don't show warnings during re-writing for now *)
 
       begin match !opt_process_elf, !opt_file_out with

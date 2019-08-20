@@ -117,3 +117,5 @@ val simplify_ssa : Type_check.Env.t -> int -> (ssa_elem list * cf_node) array_gr
 val make_dot : out_channel -> (ssa_elem list * cf_node) array_graph -> unit
 
 val make_dominators_dot : out_channel -> int array -> (ssa_elem list * cf_node) array_graph -> unit
+
+val run_ssa_tests : unit -> int

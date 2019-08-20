@@ -54,6 +54,153 @@ open Ast
 open Ast_util
 open Rewriter
 
+let nexp_gen = QCheck.Gen.(sized @@ fix
+  (fun self n ->
+    match n with
+    | 0 -> map nint small_signed_int
+    | n -> frequency
+             [2, map nint small_signed_int;
+              1, map2 nminus (self (n / 2)) (self (n / 2));
+              1, map2 nsum (self (n / 2)) (self (n / 2));
+              1, map2 ntimes (self (n / 2)) (self (n / 2));
+              1, map (fun n -> npow2 (nint n)) small_nat]
+  ))
+
+let () =
+  QCheck.Gen.generate ~n:20 nexp_gen
+  |> List.iter (fun nexp -> prerr_endline (string_of_nexp nexp))
+
+let typ_gen = QCheck.Gen.(sized @@ fix
+  (fun self n ->
+    let base_typ =
+      frequency
+        [8, map2 bitvector_typ (map nint small_nat) (return dec_ord);
+         4, return bit_typ;
+         4, return int_typ;
+         2, return bool_typ;
+         1, return unit_typ;
+         1, return string_typ]
+    in
+    match n with
+    | 0 -> base_typ
+    | n ->
+       frequency
+         [16, base_typ;
+          (* 2, list_size (int_range 2 9) (self (n / 2)) >>= (fun typs -> return (tuple_typ typs)); *)
+          1, map list_typ (self (n / 2))]
+  ))
+
+let rec sequence =
+  QCheck.Gen.(function x :: xs -> x >>= fun y -> sequence xs >>= fun ys -> return (y :: ys) | [] -> return [])
+
+let rec split_length len depth =
+  let open QCheck.Gen in
+  if len = 0 || depth = 0 then (
+    return [len]
+  ) else (
+    int_range 0 (len - 1) >>= fun split ->
+    split_length split (depth - 1) >>= fun xs ->
+    split_length (len - split) (depth - 1) >>= fun ys ->
+    return (xs @ ys)
+  )
+
+let () =
+  QCheck.Gen.generate ~n:20 (split_length 10 2)
+  |> List.iter (fun nexp -> prerr_endline (Util.string_of_list ", " string_of_int nexp))
+
+let is_literal = function
+  | P_aux (P_lit _, _) -> true
+  | _ -> false
+
+let rec pattern_gen infer n (Typ_aux (aux, _) as typ) =
+  let open QCheck.Gen in
+  let open Value in
+  let open Sail_lib in
+  let gen_bits_literal len =
+    list_repeat len (oneofl [B0; B1])
+    |> map (fun bits -> mk_vector bits, mk_pat (P_lit (mk_lit (L_bin (String.concat "" (List.map string_of_bit bits))))))
+  in
+  let rec combine_vectors = function
+    | V_vector xs :: xxs -> xs @ combine_vectors xxs
+    | _ :: _ -> assert false
+    | [] -> []
+  in
+  let gen = match aux with
+    | Typ_app (id, [A_aux (A_nexp nexp, _); A_aux (A_order ord, _)]) when string_of_id id = "bitvector" ->
+       begin match nexp with
+       | Nexp_aux (Nexp_constant c, _) ->
+          let c = Big_int.to_int c in
+          if c = 0 then
+            return (V_vector [], mk_pat P_wild)
+          else if c < 10 then
+            frequency
+              [1, gen_bits_literal c;
+               1, list_repeat c (pattern_gen infer (n - 1) bit_typ) |> map (fun gens -> V_vector (List.map fst gens), mk_pat (P_vector (List.map snd gens)))]
+          else
+            frequency
+              [1, gen_bits_literal c;
+               1, int_range 2 5 >>= fun depth ->
+                  split_length c depth >>= fun splits ->
+                  sequence (List.map (fun len -> let typ = bitvector_typ (nint len) dec_ord in pattern_gen true (n - 1) typ) splits) >>= fun gens ->
+                  return (V_vector (combine_vectors (List.map fst gens)), mk_pat (P_vector_concat (List.map snd gens)))]
+       | _ -> assert false
+       end
+    | Typ_id id when string_of_id id = "bool" ->
+       oneof [return (V_bool true, mk_pat (P_lit (mk_lit L_true)));
+              return (V_bool false, mk_pat (P_lit (mk_lit L_false)));
+              oneofl [true; false] >>= fun bool -> return (V_bool bool, mk_pat P_wild)]
+    | Typ_id id when string_of_id id = "bit" ->
+       oneof [return (V_bit B1, mk_pat (P_lit (mk_lit L_one)));
+              return (V_bit B0, mk_pat (P_lit (mk_lit L_zero)));
+              oneofl [B0; B1] >>= fun bit -> return (V_bit bit, mk_pat P_wild)]
+    | Typ_app (id, [A_aux (A_typ elem_typ, _)]) when string_of_id id = "list" ->
+       return (V_list [], mk_pat P_wild)
+(*
+              map2 (fun pat1 pat2 -> mk_pat (P_cons (pat1, pat2))) (pattern_gen infer (n - 1) elem_typ) (pattern_gen infer (n - 1) typ)
+ *)
+    | Typ_id id when string_of_id id = "int" ->
+       frequency
+         [4, map (fun n -> V_int (Big_int.of_int n), mk_pat (P_lit (mk_lit (L_num (Big_int.of_int n))))) small_nat;
+          1, map (fun n -> V_int (Big_int.of_int n), mk_pat P_wild) small_nat]
+    | Typ_tup typs ->
+       assert false
+              (*
+       if n = 0 then
+         return (mk_pat P_wild)
+       else
+         frequency
+           [4, (List.map (pattern_gen infer (n - 1)) typs |> sequence) >>= (fun pats -> return (mk_pat (P_tup pats)));
+            1, return (mk_pat P_wild)]
+               *)
+    | Typ_id id when string_of_id id = "unit" ->
+       oneofl [V_unit, mk_pat (P_lit (mk_lit L_unit));
+               V_unit, mk_pat P_wild]
+    | Typ_id id when string_of_id id = "string" ->
+       return (V_string "", mk_pat P_wild)
+    | _ ->
+       print_endline ("Cannot generate type " ^ string_of_typ typ);
+       assert false
+  in
+  if infer then
+    map (fun (value, pat) -> if not (is_literal pat) then value, mk_pat (P_typ (typ, pat)) else value, pat) gen
+  else
+    frequency
+      [8, gen;
+       1, map (fun (value, pat) -> value, mk_pat (P_typ (typ, pat))) gen]
+
+let pattern_typ_gen = QCheck.Gen.(typ_gen >>= fun typ -> pattern_gen false 5 typ >>= fun pat -> return (pat, typ))
+
+let test_pattern_gen env =
+  QCheck.Test.make ~count:1000 ~name:"pattern_gen_type_checks"
+    (QCheck.make pattern_typ_gen ~print:(fun ((value, pat), typ) -> Value.string_of_value value ^ " , " ^ string_of_pat pat ^ " : " ^ string_of_typ typ))
+    Type_check.(fun ((_, pat), typ) -> try (let _, env, guards = bind_pat env pat typ in let _, _ = check_guards env guards in true) with Type_check.Type_error _ -> false)
+
+let () =
+  QCheck.Gen.generate ~n:30 pattern_typ_gen
+  |> List.iter (fun ((value, pat), typ) -> prerr_endline (Value.string_of_value value ^ " , " ^ string_of_pat pat ^ ", " ^ string_of_typ typ))
+
+let run_pattern_rewrite_tests env = QCheck_runner.run_tests [test_pattern_gen env]
+
 let rec irrefutable (P_aux (aux, annot)) =
   let open Type_check in
   match aux with
@@ -94,10 +241,8 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
   match p1, p2 with
   | P_lit (L_aux (lit1,_)), P_lit (L_aux (lit2,_)) ->
       if lit1 = lit2 then Some [] else None
-  | P_or(pat1, pat2), _ -> (* todo: possibly not the right answer *) None
-  | _, P_or(pat1, pat2) -> (* todo: possibly not the right answer *) None
-  | P_not(pat), _ -> (* todo: possibly not the right answer *) None
-  | _, P_not(pat) -> (* todo: possibly not the right answer *) None
+  | P_or (_, _), _ | _, P_or (_, _)  -> Reporting.unreachable (fst annot1) __POS__ "Or pattern found in subsumes_pat"
+  | P_not _, _ | _, P_not _ -> Reporting.unreachable (fst annot1) __POS__ "Not pattern found in subsumes_pat"
   | P_as (pat1,_), _ -> subsumes_pat pat1 pat2
   | _, P_as (pat2,_) -> subsumes_pat pat1 pat2
   | P_typ (_,pat1), _ -> subsumes_pat pat1 pat2
@@ -135,7 +280,7 @@ let id_is_unbound id env =
   match Type_check.Env.lookup_id id env with
   | Unbound -> true
   | _ -> false
-       
+
 (* A simple check for pattern disjointness; used for optimisation in the
    guarded pattern rewrite step *)
 let rec disjoint_pat env (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
@@ -495,7 +640,7 @@ let get_loc_exp (E_aux (_,(l,_))) = l
 
 let annot_exp_effect e_aux l env typ effect = E_aux (e_aux, (l, Type_check.mk_tannot env typ effect))
 let annot_exp e_aux l env typ = annot_exp_effect e_aux l env typ no_effect
-                            
+
 let rec pat_to_exp ((P_aux (pat,(l,annot))) as p_aux) =
   let open Type_check in
   let rewrap e = E_aux (e,(l,annot)) in
@@ -530,7 +675,7 @@ let rec pat_to_exp ((P_aux (pat,(l,annot))) as p_aux) =
       in
       (List.fold_right string_append (List.map pat_to_exp pats) empty_string)
     end
-                            
+
 let case_exp e t cs =
   let open Type_check in
   let l = get_loc_exp e in
@@ -545,7 +690,7 @@ let case_exp e t cs =
      let pexp (pat,body,annot) = Pat_aux (Pat_case (pat,[],body),annot) in
      let ps = List.map pexp cs in
      fix_eff_exp (annot_exp (E_case (e, ps)) l env t)
-                            
+
 (* Rewrite guarded patterns into a combination of if-expressions and
    unguarded pattern matches
 
