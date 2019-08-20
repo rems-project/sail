@@ -1,4 +1,4 @@
-SAIL:=../sail -Ofast_undefined
+SAIL:=sail -Ofast_undefined
 LEM:=../../lem/lem
 LEM_ISA_LIB?=$(shell opam config var lem:share)/isabelle-lib
 

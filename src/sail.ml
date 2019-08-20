@@ -66,6 +66,7 @@ let opt_smt_serialize = ref false
 let opt_smt_fuzz = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_coq = ref ([]:string list)
+let opt_alt_modules_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
 let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
@@ -251,6 +252,9 @@ let options = Arg.align ([
   ( "-coq_lib",
     Arg.String (fun l -> opt_libs_coq := l::!opt_libs_coq),
     "<filename> provide additional library to open in Coq output");
+  ( "-coq_alt_modules",
+    Arg.String (fun l -> opt_alt_modules_coq := l::!opt_alt_modules_coq),
+    "<filename> provide alternative modules to use in Coq output");
   ( "-dcoq_undef_axioms",
     Arg.Set Pretty_print_coq.opt_undef_axioms,
     " generate axioms for functions that are declared but not defined");
