@@ -261,7 +261,7 @@ type tannot
 val destruct_tannot : tannot -> (Env.t * typ * effect) option
 val mk_tannot : Env.t -> typ -> effect -> tannot
 
-val empty_tannot : tannot
+val empty_tannot : Env.t -> tannot
 val is_empty_tannot : tannot -> bool
 
 val destruct_tannot : tannot -> (Env.t * typ * effect) option
@@ -402,6 +402,12 @@ val destruct_numeric : ?name:string option -> typ -> (kid list * n_constraint * 
 
 val destruct_vector : Env.t -> typ -> (nexp * order * typ) option
 val destruct_bitvector : Env.t -> typ -> (nexp * order) option
+
+type destructed_vector =
+  | Destruct_vector of nexp * order * typ
+  | Destruct_bitvector of nexp * order
+
+val destruct_any_vector_typ : Ast.l -> Env.t -> typ -> destructed_vector
 
 (** Construct an existential type with a guaranteed fresh
    identifier. *)

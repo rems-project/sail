@@ -332,7 +332,7 @@ let subst_id_pat pat (id1,id2) =
 
 let subst_id_exp exp (id1,id2) =
   Ast_util.subst (Id_aux (id1, Parse_ast.Unknown))
-    (E_aux (E_id (Id_aux (id2, Parse_ast.Unknown)), (Parse_ast.Unknown, Type_check.empty_tannot)))
+    (E_aux (E_id (Id_aux (id2, Parse_ast.Unknown)), (Parse_ast.Unknown, Type_check.empty_tannot (Type_check.env_of exp))))
     exp
 
 let remove_wildcards pre (P_aux (_,(l,_)) as pat) =
@@ -342,7 +342,7 @@ let remove_wildcards pre (P_aux (_,(l,_)) as pat) =
               | (P_wild,(l,annot)) -> P_aux (P_id (mk_id "w__0") ,(l,annot))
               | (p,annot) -> P_aux (p,annot) }
     pat
-  
+
 (**************************************************************************)
 (* 1. Pattern rewrites                                                    *)
 (**************************************************************************)

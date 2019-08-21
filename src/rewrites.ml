@@ -55,6 +55,8 @@ open Type_check
 open Spec_analysis
 open Rewriter
 
+let dummy_tannot = empty_tannot initial_env
+
 let (>>) f g = fun x -> g(f(x))
 
 let fresh_name_counter = ref 0
@@ -277,7 +279,7 @@ let rewrite_defs_nexp_ids, rewrite_typ_nexp_ids =
   let rewrite_annot (l, tannot) =
     match destruct_tannot tannot with
     | Some (env, typ, eff) -> l, replace_typ (rewrite_typ env typ) tannot
-    | None -> l, empty_tannot
+    | None -> l, empty_tannot (env_of_tannot tannot)
   in
 
   let rewrite_typschm env (TypSchm_aux (TypSchm_ts (tq, typ), l)) =
@@ -461,7 +463,7 @@ let subst_id_pat pat (id1,id2) =
   fold_pat {id_algebra with p_id = p_id} pat
 
 let subst_id_exp exp (id1,id2) =
-  Ast_util.subst (Id_aux (id1,Parse_ast.Unknown)) (E_aux (E_id (Id_aux (id2,Parse_ast.Unknown)),(Parse_ast.Unknown,empty_tannot))) exp
+  Ast_util.subst (Id_aux (id1,Parse_ast.Unknown)) (E_aux (E_id (Id_aux (id2,Parse_ast.Unknown)),(Parse_ast.Unknown,dummy_tannot))) exp
 
 let rec contains_bitvector_pat (P_aux (pat,annot)) = match pat with
 | P_lit _ | P_wild | P_id _ -> false
@@ -518,7 +520,7 @@ let rec rewrite_lexp_to_rhs ((LEXP_aux(lexp,((l,_) as annot))) as le) =
        let env = env_of_annot lannot in
        match Env.expand_synonyms env (typ_of_annot lannot) with
        | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
-          let field_update exp = FE_aux (FE_Fexp (id, exp), annot) in
+          let field_update exp = FE_aux (FE_Fexp (id, exp), l) in
           (lhs, (fun exp -> rhs (E_aux (E_record_update (lexp_to_exp lexp, [field_update exp]), lannot))))
        | _ -> raise (Reporting.err_unreachable l __POS__ ("Unsupported lexp: " ^ string_of_lexp le))
      end
@@ -678,7 +680,7 @@ let rewrite_defs_early_return env (Defs defs) =
       | Pat_case (p, g, e) -> Pat_aux (Pat_case (p, g, get_return e), a) in
     let annot = match List.map get_return_pexp pes with
       | Pat_aux (Pat_case (_, _, E_aux (_, annot)), _) :: _ -> annot
-    | [] -> (Parse_ast.Unknown, empty_tannot) in
+    | [] -> (Parse_ast.Unknown, dummy_tannot) in
     if List.for_all is_return_pexp pes
     then E_return (E_aux (E_case (e, List.map get_return_pexp pes), annot))
     else E_case (e, pes) in
@@ -746,7 +748,7 @@ let rewrite_defs_early_return env (Defs defs) =
   in
 
   let rewrite_funcl_early_return _ (FCL_aux (FCL_Funcl (id, pexp), a)) =
-    let pat,guard,exp,pannot = destruct_pexp pexp in
+    let pat,guard,exp,l = destruct_pexp pexp in
     let exp =
       if contains_return exp then
         (* Try to pull out early returns as far as possible *)
@@ -766,7 +768,7 @@ let rewrite_defs_early_return env (Defs defs) =
       | Some (env, typ, eff) ->
          (fst a, mk_tannot env typ (union_effects eff (effect_of exp)))
       | _ -> a in
-    FCL_aux (FCL_Funcl (id, construct_pexp (pat, guard, exp, pannot)), a) in
+    FCL_aux (FCL_Funcl (id, construct_pexp (pat, guard, exp, l)), a) in
 
   let rewrite_fun_early_return rewriters
     (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), a)) =
@@ -788,7 +790,7 @@ let is_funcl_rec (FCL_aux (FCL_Funcl (id, pexp), _)) =
   let pat,guard,exp,pannot = destruct_pexp pexp in
   let exp = match guard with
     | [] -> exp
-    | [G_aux (G_if exp', l)] -> E_aux (E_block [exp';exp],(gen_loc l,empty_tannot))
+    | [G_aux (G_if exp', l)] -> E_aux (E_block [exp';exp],(gen_loc l,dummy_tannot))
     | _ -> Reporting.unreachable (id_loc id) __POS__ "Complex guard found in is_funcl_rec"
   in
   fst (fold_exp
@@ -919,7 +921,7 @@ let rewrite_split_fun_ctor_pats fun_name env (Defs defs) =
       let val_spec =
         VS_aux (VS_val_spec
           (mk_typschm (mk_typquant quants) fun_typ, id, [], false),
-          (Parse_ast.Unknown, empty_tannot))
+          (Parse_ast.Unknown, dummy_tannot))
       in
       let fundef = FD_aux (FD_function (r_o, t_o, e_o, funcls), fdannot) in
       [DEF_spec val_spec; DEF_fundef fundef] @ defs
@@ -1386,9 +1388,9 @@ let rewrite_defs_letbind_effects env =
     mapCont n_exp_name exps k
 
   and n_fexp (fexp : 'a fexp) (k : 'a fexp -> 'a exp) : 'a exp =
-    let (FE_aux (FE_Fexp (id,exp),annot)) = fexp in
+    let (FE_aux (FE_Fexp (id, exp), l)) = fexp in
     n_exp_name exp (fun exp ->
-    k (fix_eff_fexp (FE_aux (FE_Fexp (id,exp),annot))))
+    k (FE_aux (FE_Fexp (id, exp), l)))
 
   and n_fexpL (fexps : 'a fexp list) (k : 'a fexp list -> 'a exp) : 'a exp =
     mapCont n_fexp fexps k
@@ -1721,7 +1723,7 @@ let pexp_rewriters rewrite_pexp =
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) }
 
 let unk = Parse_ast.Unknown
-let unkt = (Parse_ast.Unknown, empty_tannot)
+let unkt = (Parse_ast.Unknown, dummy_tannot)
 
 let construct_bool_match env (match_on : tannot exp) (pexp : tannot pexp) : tannot exp =
   let true_exp = annot_exp (E_lit (mk_lit L_true)) unk env bool_typ in
@@ -2086,7 +2088,7 @@ let remove_reference_types exp =
 
   let rec rewrite_annot (l, tannot) =
     match destruct_tannot tannot with
-    | None -> l, empty_tannot
+    | None -> l, dummy_tannot
     | Some (_, typ, _) -> l, replace_typ (rewrite_t typ) tannot in
 
   map_exp_annot rewrite_annot exp
@@ -2220,13 +2222,13 @@ let merge_funcls env (Defs defs) =
     | (FCL_aux (FCL_Funcl (id,_),(l,_)))::_ ->
        let var = mk_id "merge#var" in
        let l_g = Parse_ast.Generated l in
-       let ann_g : _ * tannot = (l_g,empty_tannot) in
+       let ann_g : _ * tannot = (l_g,dummy_tannot) in
        let clauses = List.map (fun (FCL_aux (FCL_Funcl (_,pexp),_)) -> pexp) fcls in
        FD_aux (FD_function (r,t,e,[
          FCL_aux (FCL_Funcl (id,Pat_aux (Pat_case (P_aux (P_id var,ann_g),
                                                    [],
                                                    E_aux (E_case (E_aux (E_id var,ann_g),clauses),ann_g)),l_g)),
-                  (l,empty_tannot))]),ann)
+                  (l,dummy_tannot))]),ann)
   in
   let merge_in_def = function
     | DEF_fundef f -> DEF_fundef (merge_function f)
@@ -2530,11 +2532,11 @@ let rewrite_case (e,ann) = assert false
             (fst ann) "Non-exhaustive matching" ("Example: " ^ string_of_rp example) in
 
         let l = Parse_ast.Generated Parse_ast.Unknown in
-        let p = P_aux (P_wild, (l, empty_tannot)) in
+        let p = P_aux (P_wild, (l, dummy_tannot)) in
         let ann' = mk_tannot env (typ_of_annot ann) (mk_effect [BE_escape]) in
         (* TODO: use an expression that specifically indicates a failed pattern match *)
-        let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)),(l,empty_tannot))),(l,ann')) in
-        E_aux (rebuild (cases@[Pat_aux (Pat_exp (p,b),(l,empty_tannot))]),ann)
+        let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)),(l,dummy_tannot))),(l,ann')) in
+        E_aux (rebuild (cases@[Pat_aux (Pat_exp (p,b),(l,dummy_tannot))]),ann)
      end
   | E_let (LB_aux (LB_val (pat,e1),lb_ann),e2) ->
      begin
@@ -2549,12 +2551,12 @@ let rewrite_case (e,ann) = assert false
           then Reporting.print_err
             (fst ann) "Non-exhaustive let" ("Example: " ^ string_of_rp example) in
         let l = Parse_ast.Generated Parse_ast.Unknown in
-        let p = P_aux (P_wild, (l, empty_tannot)) in
+        let p = P_aux (P_wild, (l, dummy_tannot)) in
         let ann' = mk_tannot env (typ_of_annot ann) (mk_effect [BE_escape]) in
         (* TODO: use an expression that specifically indicates a failed pattern match *)
-        let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)),(l,empty_tannot))),(l,ann')) in
+        let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)),(l,dummy_tannot))),(l,ann')) in
         E_aux (E_case (e1,[Pat_aux (Pat_exp(pat,e2),ann);
-                           Pat_aux (Pat_exp (p,b),(l,empty_tannot))]),ann)
+                           Pat_aux (Pat_exp (p,b),(l,dummy_tannot))]),ann)
      end
   | _ -> E_aux (e,ann) *)
 
@@ -2580,10 +2582,10 @@ let rewrite_fun rewriters (FD_aux (FD_function (r,t,e,fcls),f_ann)) =
               (fst f_ann) "Non-exhaustive matching" ("Example: " ^ string_of_rp example) in
 
      let l = Parse_ast.Generated Parse_ast.Unknown in
-     let p = P_aux (P_wild, (l, empty_tannot)) in
+     let p = P_aux (P_wild, (l, dummy_tannot)) in
      let ann' = mk_tannot env (typ_of_annot fcl_ann) (mk_effect [BE_escape]) in
      (* TODO: use an expression that specifically indicates a failed pattern match *)
-     let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)),(l,empty_tannot))),(l,ann')) in
+     let b = E_aux (E_exit (E_aux (E_lit (L_aux (L_unit, l)),(l,dummy_tannot))),(l,ann')) in
      let default = FCL_aux (FCL_Funcl (id,Pat_aux (Pat_case (p,[],b),l)),fcl_ann) in
 
      FD_aux (FD_function (r,t,e,fcls'@[default]),f_ann)
@@ -2708,7 +2710,7 @@ let rewrite_explicit_measure env (Defs defs) =
   let rewrite_funcl recset (FCL_aux (FCL_Funcl (id,pexp),fcl_ann) as fcl) =
     let loc = Parse_ast.Generated (fst fcl_ann) in
     let P_aux (pat,pann),guard,body,ann = destruct_pexp pexp in
-    let extra_pat = P_aux (P_id limit,(loc,empty_tannot)) in
+    let extra_pat = P_aux (P_id limit,(loc,dummy_tannot)) in
     let pat = match pat with
       | P_tup pats -> P_tup (pats@[extra_pat])
       | p -> P_tup [P_aux (p,pann);extra_pat]
@@ -2716,17 +2718,17 @@ let rewrite_explicit_measure env (Defs defs) =
     let assert_exp =
       E_aux (E_assert
          (E_aux (E_app (mk_id "gteq_int",
-           [E_aux (E_id limit,(loc,empty_tannot));
-            E_aux (E_lit (L_aux (L_num Big_int.zero,loc)),(loc,empty_tannot))]),
-           (loc,empty_tannot)),
-          (E_aux (E_lit (L_aux (L_string "recursion limit reached",loc)),(loc,empty_tannot)))),
-              (loc,empty_tannot))
+           [E_aux (E_id limit,(loc,dummy_tannot));
+            E_aux (E_lit (L_aux (L_num Big_int.zero,loc)),(loc,dummy_tannot))]),
+           (loc,dummy_tannot)),
+          (E_aux (E_lit (L_aux (L_string "recursion limit reached",loc)),(loc,dummy_tannot)))),
+              (loc,dummy_tannot))
     in
     let tick =
       E_aux (E_app (mk_id "sub_int",
-        [E_aux (E_id limit,(loc,empty_tannot));
-         E_aux (E_lit (L_aux (L_num (Big_int.of_int 1),loc)),(loc,empty_tannot))]),
-             (loc,empty_tannot))
+        [E_aux (E_id limit,(loc,dummy_tannot));
+         E_aux (E_lit (L_aux (L_num (Big_int.of_int 1),loc)),(loc,dummy_tannot))]),
+             (loc,dummy_tannot))
     in
     let open Rewriter in
     let body =
@@ -2737,7 +2739,7 @@ let rewrite_explicit_measure env (Defs defs) =
           else E_app (f, args))
         } body
     in
-    let body = E_aux (E_block [assert_exp; body],(loc,empty_tannot)) in
+    let body = E_aux (E_block [assert_exp; body],(loc,dummy_tannot)) in
     FCL_aux (FCL_Funcl (rec_id id, construct_pexp (P_aux (pat,pann),guard,body,ann)),fcl_ann)
   in
   let rewrite_function recset (FD_aux (FD_function (r,t,e,fcls),ann) as fd) =
@@ -2773,21 +2775,21 @@ let rewrite_explicit_measure env (Defs defs) =
                   mk_id ("_arg" ^ string_of_int i)
                | _ -> raise (Reporting.err_todo l ("Measure patterns can only be identifiers or wildcards, not " ^ string_of_pat p_full))
              in
-             P_aux (P_id id,(loc,empty_tannot)),
-             E_aux (E_id id,(loc,empty_tannot))
+             P_aux (P_id id,(loc,dummy_tannot)),
+             E_aux (E_id id,(loc,dummy_tannot))
            in
            let wpats,wexps = List.split (Util.list_mapi mk_wrap measure_pats) in
            let wpat = match wpats with
              | [wpat] -> wpat
-             | _ -> P_aux (P_tup wpats,(loc,empty_tannot))
+             | _ -> P_aux (P_tup wpats,(loc,dummy_tannot))
            in
-           let measure_exp = E_aux (E_cast (int_typ, measure_exp),(loc,empty_tannot)) in
-           let wbody = E_aux (E_app (rec_id id,wexps@[measure_exp]),(loc,empty_tannot)) in
+           let measure_exp = E_aux (E_cast (int_typ, measure_exp),(loc,dummy_tannot)) in
+           let wbody = E_aux (E_app (rec_id id,wexps@[measure_exp]),(loc,dummy_tannot)) in
            let wrapper =
-             FCL_aux (FCL_Funcl (id, Pat_aux (Pat_case (wpat, [], wbody), loc)), (loc,empty_tannot))
+             FCL_aux (FCL_Funcl (id, Pat_aux (Pat_case (wpat, [], wbody), loc)), (loc,dummy_tannot))
            in
            let new_rec =
-             Rec_aux (Rec_measure (P_aux (P_tup (List.map (fun _ -> P_aux (P_wild,(loc,empty_tannot))) measure_pats @ [P_aux (P_id limit,(loc,empty_tannot))]),(loc,empty_tannot)), E_aux (E_id limit, (loc,empty_tannot))), loc)
+             Rec_aux (Rec_measure (P_aux (P_tup (List.map (fun _ -> P_aux (P_wild,(loc,dummy_tannot))) measure_pats @ [P_aux (P_id limit,(loc,dummy_tannot))]),(loc,dummy_tannot)), E_aux (E_id limit, (loc,dummy_tannot))), loc)
            in
            FD_aux (FD_function (new_rec,t,e,List.map (rewrite_funcl recset) fcls),ann),
            [FD_aux (FD_function (Rec_aux (Rec_nonrec,loc),t,e,[wrapper]),ann)]
@@ -2812,7 +2814,7 @@ let rewrite_explicit_measure env (Defs defs) =
 (* Add a dummy assert to loops for backends that require loops to be able to
    fail.  Note that the Coq backend will spot the assert and omit it. *)
 let rewrite_loops_with_escape_effect env defs =
-  let dummy_ann = Parse_ast.Unknown,empty_tannot in
+  let dummy_ann = Parse_ast.Unknown,dummy_tannot in
   let assert_exp =
     E_aux (E_assert (E_aux (E_lit (L_aux (L_true,Unknown)),dummy_ann),
                      E_aux (E_lit (L_aux (L_string "loop dummy assert",Unknown)),dummy_ann)),
@@ -3187,9 +3189,6 @@ let rewrites_c = [
 
 let rewrites_interpreter = [
     ("no_effect_check", []);
-    ("toplevel_string_append", []);
-    ("pat_string_append", []);
-    ("mapping_builtins", []);
     ("undefined", [Bool_arg false]);
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);
@@ -3219,7 +3218,7 @@ let rewrite_defs_target tgt =
          (name, instantiate_rewrite rewrite args)
       | None -> Reporting.unreachable Parse_ast.Unknown __POS__ ("Invalid rewrite " ^ name)
     ) (rewrites_target tgt)
-  
+
 let rewrite_check_annot =
   let check_annot exp =
     try

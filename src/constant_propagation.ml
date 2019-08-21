@@ -727,7 +727,7 @@ let const_props target defs ref_vars =
            | L_undef ->
               let nexp = fabricate_nexp l annot in
               let typ = subst_kids_typ (KBindings.singleton kid nexp) (typ_of_annot p_id_annot) in
-              DoesMatch ([id, E_aux (E_cast (typ,E_aux (e,(l,empty_tannot))),(l,empty_tannot))],
+              DoesMatch ([id, E_aux (E_cast (typ,E_aux (e,(l,empty_tannot env))),(l,empty_tannot env))],
                          [kid,nexp])
            | _ ->
               (Reporting.print_err lit_l "Monomorphisation"
@@ -770,7 +770,7 @@ let const_props target defs ref_vars =
          let kids = equal_kids (env_of_annot p_id_annot) kid in
          let ksubst = KidSet.fold (fun k b -> KBindings.add k nexp b) kids KBindings.empty in
          let typ = subst_kids_typ ksubst (typ_of_annot p_id_annot) in
-         DoesMatch ([id, E_aux (E_cast (typ,e_undef),(l,empty_tannot))],
+         DoesMatch ([id, E_aux (E_cast (typ,e_undef),(l,empty_tannot env))],
                     KBindings.bindings ksubst)
       | E_cast (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_) as e_undef)), _ ->
              (Reporting.print_err l' "Monomorphisation"

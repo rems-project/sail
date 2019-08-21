@@ -679,7 +679,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
           | Typ_aux (Typ_regex regex, _) ->
              begin match parse_regex regex with
              | Some regex -> Regex.Group regex
-             | None -> Reporting.unreachable l __POS__ ("Could not parse regular expression " ^ regex)
+             | None -> Reporting.unreachable l __POS__ ("Could not parse regular expression: " ^ regex)
              end
           | typ -> Regex.(Group (Repeat (Dot, At_least 0)))
      in

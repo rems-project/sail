@@ -16,7 +16,7 @@ function assoc(map, key) = {
 }
 
 mapping label forall 'size, 'size > 0. (n: int, labels: labels, size: int('size)) -> string <-> bits('size) = {
-  x <- bits(size) <-> x,
+  Some(x) <- option_bits(size) <-> x,
   forwards l =>
     match assoc(labels, l) {
       Some(offset) => get_slice_int(size, offset - n, 0),

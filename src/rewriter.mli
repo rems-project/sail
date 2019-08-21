@@ -144,7 +144,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
  ; lEXP_field               : 'lexp * id -> 'lexp_aux
  ; lEXP_aux                 : 'lexp_aux * 'a annot -> 'lexp
  ; fE_Fexp                  : id * 'exp -> 'fexp_aux
- ; fE_aux                   : 'fexp_aux * 'a annot -> 'fexp
+ ; fE_aux                   : 'fexp_aux * l -> 'fexp
  ; g_aux                    : 'guard_aux * l -> 'guard
  ; g_if                     : 'exp -> 'guard_aux
  ; g_pattern                : 'pat * 'exp -> 'guard_aux
@@ -235,8 +235,6 @@ val fix_eff_exp : tannot exp -> tannot exp
 val fix_eff_lexp : tannot lexp -> tannot lexp
 
 val fix_eff_lb : tannot letbind -> tannot letbind
-
-val fix_eff_fexp : tannot fexp -> tannot fexp
 
 (* In-order fold over expressions *)
 val foldin_exp : (('a -> 'b exp -> 'a * 'b exp) -> 'a -> 'b exp -> 'a * 'b exp) -> 'a -> 'b exp -> 'a * 'b exp

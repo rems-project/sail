@@ -53,8 +53,16 @@ mapping decimal forall 'n, 'n >= 0. (n: int('n)) -> regex("[0-9]+") <-> bitvecto
 mapping bits forall 'n, 'n >= 0. (n: int('n)) -> string <-> bitvector('n, dec) = {
   forwards x <- regex("0x[0-9a-f]+") => hex_parse(n, x),
   forwards x <- regex("0b[0-1]+")    => binary_parse(n, x),
-  forwards x <- regex("[0-9]+") => decimal_parse(n, x),
+  forwards x <- regex("[0-9]+")      => decimal_parse(n, x),
   backwards x => hex_string(x)
+}
+
+mapping option_bits forall 'n, 'n >= 0. (n: int('n)) -> string <-> option(bitvector('n, dec)) = {
+  forwards x <- regex("0x[0-9a-f]+") => Some(hex_parse(n, x)),
+  forwards x <- regex("0b[0-1]+")    => Some(binary_parse(n, x)),
+  forwards x <- regex("[0-9]+")      => Some(decimal_parse(n, x)),
+  forwards _                         => None(),
+  backwards Some(x) => hex_string(x)
 }
 
 $endif

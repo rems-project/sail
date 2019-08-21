@@ -542,3 +542,6 @@ val simple_string_of_loc : Parse_ast.l -> string
 
 (* Regular expression parsing *)
 val parse_regex : string -> Regex.regex option
+
+val ocaml_regex : Regex.regex -> Str.regexp
+

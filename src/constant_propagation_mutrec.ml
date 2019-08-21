@@ -149,7 +149,7 @@ let const_prop target defs substs ksubsts exp =
 
 (* Propagate constant arguments into function clause pexp *)
 let prop_args_pexp target defs ksubsts args pexp =
-  let pat, guard, exp, annot = destruct_pexp pexp in
+  let pat, guard, exp, l = destruct_pexp pexp in
   let pats = match pat with
     | P_aux (P_tup pats, _) -> pats
     | _ -> [pat]
@@ -168,9 +168,9 @@ let prop_args_pexp target defs ksubsts args pexp =
   let exp' = const_prop target defs substs ksubsts exp in
   let pat' = match pats with
     | [pat] -> pat
-    | _ -> P_aux (P_tup pats, (Parse_ast.Unknown, empty_tannot))
+    | _ -> P_aux (P_tup pats, (Parse_ast.Unknown, empty_tannot (env_of_pat pat)))
   in
-  construct_pexp (pat', guard, exp', annot)
+  construct_pexp (pat', guard, exp', l)
 
 let rewrite_defs target env (Defs defs) =
   let rec rewrite = function

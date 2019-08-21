@@ -587,7 +587,7 @@ lexp :: 'LEXP_' ::= {{ com lvalue expression }}
 
 fexp :: 'FE_' ::=
   {{ com field expression }}
-  {{ aux _ annot }} {{ auxparam 'a }}
+  {{ aux _ l }} {{ auxparam 'a }}
   | id = exp                  :: :: Fexp
 
 guard :: 'G_' ::=

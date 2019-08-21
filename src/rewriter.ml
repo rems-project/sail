@@ -65,7 +65,7 @@ type 'a rewriters = {
   }
 
 let effect_of_lexp (LEXP_aux (_,(_,a))) = effect_of_annot a
-let effect_of_fexp (FE_aux (_,(_,a))) = effect_of_annot a
+let effect_of_fexp (FE_aux (FE_Fexp (_, exp), _)) = effect_of exp
 let effect_of_fexps fexps =
   List.fold_left union_effects no_effect (List.map effect_of_fexp fexps)
 let effect_of_guard (G_aux (aux, _)) =
@@ -176,7 +176,7 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match destruct_tannot (snd annot)
   in
   E_aux (e, (l, mk_tannot env typ effsum))
 | None ->
-  E_aux (e, (l, empty_tannot))
+  E_aux (e, (l, empty_tannot (env_of_annot annot)))
 
 let fix_eff_lexp (LEXP_aux (lexp,((l,_) as annot))) = match destruct_tannot (snd annot) with
 | Some (env, typ, eff) ->
@@ -196,17 +196,7 @@ let fix_eff_lexp (LEXP_aux (lexp,((l,_) as annot))) = match destruct_tannot (snd
     | LEXP_field (lexp,_) -> effect_of_lexp lexp) in
   LEXP_aux (lexp, (l, mk_tannot env typ effsum))
 | None ->
-  LEXP_aux (lexp, (l, empty_tannot))
-
-let fix_eff_fexp (FE_aux (fexp,((l,_) as annot))) = match destruct_tannot (snd annot) with
-| Some (env, typ, eff) ->
-  let effsum = union_effects eff (match fexp with
-    | FE_Fexp (_,e) -> effect_of e) in
-  FE_aux (fexp, (l, mk_tannot env typ effsum))
-| None ->
-  FE_aux (fexp, (l, empty_tannot))
-
-let fix_eff_fexps fexps = fexps (* FES_aux have no effect information *)
+  LEXP_aux (lexp, (l, empty_tannot (env_of_annot annot)))
 
 let fix_eff_lb (LB_aux (lb,((l,_) as annot))) = match destruct_tannot (snd annot) with
 | Some (env, typ, eff) ->
@@ -214,7 +204,7 @@ let fix_eff_lb (LB_aux (lb,((l,_) as annot))) = match destruct_tannot (snd annot
     | LB_val (_,e) -> effect_of e in
   LB_aux (lb, (l, mk_tannot env typ effsum))
 | None ->
-  LB_aux (lb, (l, empty_tannot))
+  LB_aux (lb, (l, empty_tannot (env_of_annot annot)))
 
 let rewrite_pexp rewriters =
   let rewrite = rewriters.rewrite_exp rewriters in
@@ -272,12 +262,12 @@ let rewrite_exp rewriters (E_aux (exp,(l,annot)) as orig_exp) =
   | E_cons(h,t) -> rewrap (E_cons (rewrite h,rewrite t))
   | E_record fexps ->
     rewrap (E_record
-              (List.map (fun (FE_aux(FE_Fexp(id,e),fannot)) ->
-                   FE_aux(FE_Fexp(id,rewrite e),fannot)) fexps))
+              (List.map (fun (FE_aux(FE_Fexp(id,e),l)) ->
+                   FE_aux(FE_Fexp(id,rewrite e),l)) fexps))
   | E_record_update (re, fexps) ->
     rewrap (E_record_update ((rewrite re),
-                             (List.map (fun (FE_aux(FE_Fexp(id,e),fannot)) ->
-                                  FE_aux(FE_Fexp(id,rewrite e),fannot)) fexps)))
+                             (List.map (fun (FE_aux(FE_Fexp(id,e),l)) ->
+                                  FE_aux(FE_Fexp(id,rewrite e),l)) fexps)))
   | E_field(exp,id) -> rewrap (E_field(rewrite exp,id))
   | E_case (exp,pexps) ->
     rewrap (E_case (rewrite exp, List.map (rewrite_pexp rewriters) pexps))
@@ -497,7 +487,7 @@ type ('a,
  ; lEXP_field               : 'lexp * id -> 'lexp_aux
  ; lEXP_aux                 : 'lexp_aux * 'a annot -> 'lexp
  ; fE_Fexp                  : id * 'exp -> 'fexp_aux
- ; fE_aux                   : 'fexp_aux * 'a annot -> 'fexp
+ ; fE_aux                   : 'fexp_aux * l -> 'fexp
  ; g_aux                    : 'guard_aux * l -> 'guard
  ; g_if                     : 'exp -> 'guard_aux
  ; g_pattern                : 'pat * 'exp -> 'guard_aux
@@ -623,7 +613,7 @@ and fold_lexp alg (LEXP_aux (lexp_aux,annot)) =
   alg.lEXP_aux (fold_lexp_aux alg lexp_aux, annot)
 
 and fold_fexp_aux alg (FE_Fexp (id,e)) = alg.fE_Fexp (id, fold_exp alg e)
-and fold_fexp alg (FE_aux (fexp_aux,annot)) = alg.fE_aux (fold_fexp_aux alg fexp_aux,annot)
+and fold_fexp alg (FE_aux (fexp_aux, l)) = alg.fE_aux (fold_fexp_aux alg fexp_aux, l)
 
 and fold_guard_aux alg = function
   | G_if exp -> alg.g_if (fold_exp alg exp)
@@ -693,7 +683,7 @@ let id_algebra =
   ; lEXP_field = (fun (lexp,id) -> LEXP_field (lexp,id))
   ; lEXP_aux = (fun (lexp,annot) -> LEXP_aux (lexp,annot))
   ; fE_Fexp = (fun (id,e) -> FE_Fexp (id,e))
-  ; fE_aux = (fun (fexp,annot) -> FE_aux (fexp,annot))
+  ; fE_aux = (fun (fexp,l) -> FE_aux (fexp,l))
   ; g_if = (fun exp -> G_if exp)
   ; g_pattern = (fun (pat, exp) -> G_pattern (pat, exp))
   ; g_aux = (fun (guard,l) -> G_aux (guard, l))
@@ -796,7 +786,7 @@ let compute_algebra bot join =
   ; lEXP_field = (fun ((vl,lexp),id) -> (vl, LEXP_field (lexp,id)))
   ; lEXP_aux = (fun ((vl,lexp),annot) -> (vl, LEXP_aux (lexp,annot)))
   ; fE_Fexp = (fun (id,(v,e)) -> (v, FE_Fexp (id,e)))
-  ; fE_aux = (fun ((vf,fexp),annot) -> (vf, FE_aux (fexp,annot)))
+  ; fE_aux = (fun ((vf,fexp),l) -> (vf, FE_aux (fexp,l)))
   ; g_if = (fun (ve, e) -> (ve, G_if e))
   ; g_pattern = (fun ((vp, pat), (ve, e)) -> (join vp ve, G_pattern (pat, e)))
   ; g_aux = (fun ((v,guard),l) -> (v, G_aux (guard, l)))
@@ -874,7 +864,7 @@ let pure_algebra bot join =
   ; lEXP_field = (fun (vl,id) -> vl)
   ; lEXP_aux = (fun (vl,annot) -> vl)
   ; fE_Fexp = (fun (id,v) -> v)
-  ; fE_aux = (fun (vf,annot) -> vf)
+  ; fE_aux = (fun (vf,l) -> vf)
   ; g_if = (fun v -> v)
   ; g_pattern = (fun (vp, v) -> join vp v)
   ; g_aux = (fun (v, l) -> v)
@@ -901,9 +891,9 @@ let pure_algebra bot join =
   ; p_aux = (fun (v,annot) -> v)
   }
 
-let default_fold_fexp f x (FE_aux (FE_Fexp (id,e),annot)) =
+let default_fold_fexp f x (FE_aux (FE_Fexp (id,e),l)) =
   let x,e = f x e in
-  x, FE_aux (FE_Fexp (id,e),annot)
+  x, FE_aux (FE_Fexp (id,e),l)
 
 let default_fold_pexp f x (Pat_aux (pe,ann)) =
   let x,pe = match pe with

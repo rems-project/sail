@@ -486,7 +486,7 @@ let value_undefined_vector = function
 let value_undefined_bitvector = function
   | [v] -> V_vector (Sail_lib.undefined_vector (coerce_int v, V_bit (Sail_lib.B0)))
   | _ -> failwith "value undefined_bitvector"
-       
+
 let value_read_ram = function
   | [v1; v2; v3; v4] -> mk_vector (Sail_lib.read_ram (coerce_int v1, coerce_int v2, coerce_bv v3, coerce_bv v4))
   | _ -> failwith "value read_ram"
@@ -620,6 +620,14 @@ let value_decimal_string_of_bits = function
   | [v] -> V_string (Sail_lib.decimal_string_of_bits (coerce_bv v))
   | _ -> failwith "value decimal_string_of_bits"
 
+let value_hex_parse = function
+  | [v1; v2] -> mk_vector (Sail_lib.hex_parse (coerce_int v1, coerce_string v2))
+  | _ -> failwith "value hex_parse"
+
+let value_sail_cons = function
+  | [v1; v2] -> V_list (v1 :: coerce_list v2)
+  | _ -> failwith "value sail_cons"
+
 let primops =
   List.fold_left
     (fun r (x, y) -> StringMap.add x y r)
@@ -650,6 +658,7 @@ let primops =
       ("eq_list", value_eq_list);
       ("eq_bool", value_eq_bool);
       ("eq_string", value_eq_string);
+      ("sail_cons", value_sail_cons);
       ("string_startswith", value_string_startswith);
       ("string_drop", value_string_drop);
       ("string_take", value_string_take);
@@ -705,6 +714,8 @@ let primops =
       ("sub_vec", value_sub_vec);
       ("vector_truncate", value_vector_truncate);
       ("vector_truncateLSB", value_vector_truncateLSB);
+      ("hex_parse", value_hex_parse);
+      ("hex_string", (fun vs -> V_string (string_of_value (List.hd vs))));
       ("read_ram", value_read_ram);
       ("write_ram", value_write_ram);
       ("trace_memory_read", fun _ -> V_unit);

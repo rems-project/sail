@@ -782,7 +782,7 @@ let nexp_subst_fns substs =
   let s_typschm tsh = tsh in*)
   let s_tannot tannot =
     match Type_check.destruct_tannot tannot with
-    | None -> Type_check.empty_tannot
+    | None -> Type_check.empty_tannot (Type_check.env_of_tannot tannot)
     | Some (env,t,eff) -> Type_check.mk_tannot env (s_t t) eff (* TODO: what about env? *)
   in
   let rec s_pat (P_aux (p,(l,annot))) =
@@ -853,8 +853,8 @@ let nexp_subst_fns substs =
         | Measure_some exp -> Measure_some (s_exp exp)
       in
       Measure_aux (m,l)
-    and s_fexp (FE_aux (FE_Fexp (id,e), (l,annot))) =
-      FE_aux (FE_Fexp (id,s_exp e),(l,s_tannot annot))
+    and s_fexp (FE_aux (FE_Fexp (id,e), l)) =
+      FE_aux (FE_Fexp (id,s_exp e), l)
     and s_pexp = assert false (* FIXME function
       | (Pat_aux (Pat_exp (p,e),(l,annot))) ->
          Pat_aux (Pat_exp (s_pat p, s_exp e),(l,s_tannot annot))

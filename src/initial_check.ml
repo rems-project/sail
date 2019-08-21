@@ -514,7 +514,7 @@ and to_ast_record_try ctx (P.E_aux(exp,l):P.exp): unit fexp option * (l * string
   | P.E_app_infix(left,op,r) ->
     (match left, op with
     | P.E_aux(P.E_id(id),li), P.Id_aux(P.Id("="),leq) ->
-      Some(FE_aux(FE_Fexp(to_ast_id id, to_ast_exp ctx r), (l,()))),None
+      Some(FE_aux(FE_Fexp(to_ast_id id, to_ast_exp ctx r), l)),None
     | P.E_aux(_,li) , P.Id_aux(P.Id("="),leq) ->
       None,Some(li,"Expected an identifier to begin this field assignment")
     | P.E_aux(P.E_id(id),li), P.Id_aux(_,leq) ->

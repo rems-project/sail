@@ -438,7 +438,7 @@ let step env global_state stack =
      | Some v -> Step { (assignment clexp v stack) with pc = pc + 1 }
      | None -> failwith ("Cound not evaluate cval " ^ string_of_cval cval)
      end
-       
+
   | I_aux (I_label _, _) ->
      Step { stack with pc = pc + 1 }
 

@@ -108,7 +108,7 @@ let is_false = function
   | (E_aux (E_internal_value (V_bool b), _)) -> not b
   | _ -> false
 
-let exp_of_value v = (E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot)))
+let exp_of_value v = (E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot Type_check.initial_env)))
 let value_of_exp = function
   | (E_aux (E_internal_value v, _)) -> v
   | _ -> failwith "value_of_exp coerction failed"
@@ -194,6 +194,11 @@ type ('a, 'b) either =
   | Left of 'a
   | Right of 'b
 
+let rec all_rights = function
+  | Right x :: xs -> x :: all_rights xs
+  | Left _ :: xs -> all_rights xs
+  | [] -> []
+
 (* Support for interpreting exceptions *)
 
 let catch m =
@@ -206,7 +211,6 @@ let throw v = Yield (Exception v)
 
 let call (f : id) (args : value list) : return_value monad =
   Yield (Call (f, args, fun v -> Pure v))
-
 
 let read_mem rk addr len : value monad =
   Yield (Read_mem (rk, addr, len, (fun v -> Pure v)))
@@ -312,6 +316,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_block [] -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
   | E_block [exp] when is_value exp -> return exp
   | E_block (exp :: exps) when is_value exp -> wrap (E_block exps)
+  | E_block [E_aux (E_block exps, annot)] -> return (E_aux (E_block exps, annot))
   | E_block (exp :: exps) ->
      step exp >>= fun exp' -> wrap (E_block (exp' :: exps))
 
@@ -375,25 +380,37 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_let (LB_aux (LB_val (pat, bind), lb_annot), body) when not (is_value bind) ->
      step bind >>= fun bind' -> wrap (E_let (LB_aux (LB_val (pat, bind'), lb_annot), body))
   | E_let (LB_aux (LB_val (pat, bind), lb_annot), body) ->
-     assert false
-    (*
-     let matched, bindings = pattern_match (Type_check.env_of orig_exp) pat (value_of_exp bind) in
-     if matched then
-       return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
-     else
-       fail "Match failure"
-     *)
+     pattern_match (Type_check.env_of orig_exp) pat (value_of_exp bind) >>= fun result ->
+     begin match result with
+     | Match_result (matched, bindings) ->
+        if matched then
+          return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
+        else
+          fail "Match failure"
+     | Match_pattern pat' ->
+        wrap (E_let (LB_aux (LB_val (pat', bind), lb_annot), body))
+     | Match_exception v ->
+        wrap (E_throw (exp_of_value v))
+     end
 
   | E_vector_subrange (vec, n, m) ->
-     wrap (E_app (mk_id "vector_subrange_dec", [vec; n; m]))
+     wrap (E_app (mk_id "vector_subrange", [vec; n; m]))
   | E_vector_access (vec, n) ->
-     wrap (E_app (mk_id "vector_access_dec", [vec; n]))
-
+     begin match Type_check.(destruct_any_vector_typ (fst annot) (env_of vec) (typ_of vec)) with
+     | Destruct_vector _ ->
+        wrap (E_app (mk_id "plain_vector_access", [vec; n]))
+     | Destruct_bitvector _ ->
+        wrap (E_app (mk_id "bitvector_access", [vec; n]))
+     end
   | E_vector_update (vec, n, x) ->
-     wrap (E_app (mk_id "vector_update", [vec; n; x]))
+     begin match Type_check.(destruct_any_vector_typ (fst annot) (env_of vec) (typ_of vec)) with
+     | Destruct_vector _ ->
+        wrap (E_app (mk_id "plain_vector_update", [vec; n; x]))
+     | Destruct_bitvector _ ->
+        wrap (E_app (mk_id "bitvector_update", [vec; n; x]))
+     end
   | E_vector_update_subrange (vec, n, m, x) ->
-     (* FIXME: Currently not general enough *)
-     wrap (E_app (mk_id "vector_update_subrange_dec", [vec; n; m; x]))
+     wrap (E_app (mk_id "vector_update_subrange", [vec; n; m; x]))
 
   (* otherwise left-to-right evaluation order for function applications *)
   | E_app (id, exps) ->
@@ -586,7 +603,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      begin try
          let open Type_check in
          let lexp_exp = infer_exp (env_of_annot annot) (exp_of_lexp (strip_lexp lexp)) in
-         let exp' = E_aux (E_record_update (lexp_exp, [FE_aux (FE_Fexp (id, exp), ul)]), ul) in
+         let exp' = E_aux (E_record_update (lexp_exp, [FE_aux (FE_Fexp (id, exp), fst ul)]), ul) in
          wrap (E_assign (lexp, exp'))
        with Failure s -> fail ("Failure: " ^ s)
      end
@@ -628,10 +645,6 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      write_reg name (value_of_exp exp) >> wrap unit_exp
   | E_assign (LEXP_aux (LEXP_tup lexps, annot), exp) -> fail "Tuple assignment"
   | E_assign (LEXP_aux (LEXP_vector_concat lexps, annot), exp) -> fail "Vector concat assignment"
-     (*
-     let values = coerce_tuple (value_of_exp exp) in
-     wrap (E_block (List.map2 (fun lexp v -> E_aux (E_assign (lexp, exp_of_value v), (Parse_ast.Unknown, None))) lexps values))
-      *)
 
   | E_try (exp, pexps) when is_value exp -> return exp
   | E_try (exp, pexps) ->
@@ -700,7 +713,7 @@ and exp_of_lexp (LEXP_aux (lexp_aux, _) as lexp) =
   | LEXP_id id -> mk_exp (E_id id)
   | LEXP_memory (f, args) -> mk_exp (E_app (f, args))
   | LEXP_cast (typ, id) -> mk_exp (E_cast (typ, mk_exp (E_id id)))
-  | LEXP_deref exp -> mk_exp (E_app (mk_id "_reg_deref", [exp]))
+  | LEXP_deref exp -> mk_exp (E_app (mk_id "__deref", [exp]))
   | LEXP_tup lexps -> mk_exp (E_tuple (List.map exp_of_lexp lexps))
   | LEXP_vector (lexp, exp) -> mk_exp (E_vector_access (exp_of_lexp lexp, exp))
   | LEXP_vector_range (lexp, exp1, exp2) -> mk_exp (E_vector_subrange (exp_of_lexp lexp, exp1, exp2))
@@ -714,15 +727,29 @@ and pattern_match env (P_aux (aux, annot) as pat) value =
   match aux with
   | P_view (pat, id, [exp]) when string_of_id id = "__view" -> pattern_match env pat (value_of_exp exp)
   | P_view (pat, id, exps) ->
-   let evaluated, unevaluated = Util.take_drop is_value exps in
-   let open Type_check in
-   begin match unevaluated with
-   | exp :: exps ->
-      step exp >>= fun exp' -> wrap (P_view (pat, id, evaluated @ exp' :: exps))
+     let evaluated, unevaluated = Util.take_drop is_value exps in
+     let open Type_check in
+     begin match unevaluated with
+     | exp :: exps ->
+        step exp >>= fun exp' -> wrap (P_view (pat, id, evaluated @ exp' :: exps))
      | [] ->
-        call id (List.map value_of_exp evaluated @ [value]) >>=
-          (function Return_ok v -> wrap (P_view (pat, mk_id "__view", [exp_of_value v]))
-                  | Return_exception v -> return (Match_exception v))
+        if string_of_id id = "forwards regex" then (
+          match parse_regex (coerce_string (value_of_exp (List.hd exps))) with
+          | Some regex ->
+             let regex = ocaml_regex regex in
+             let string = coerce_string value in
+             if Str.string_match regex string 0 then (
+               pattern_match env pat value
+             ) else (
+               return (Match_result (false, Bindings.empty))
+             )
+          | None ->
+             fail "Could not parse regular expression in mapping"
+        ) else (
+          call id (List.map value_of_exp evaluated @ [value]) >>=
+            (function Return_ok v -> wrap (P_view (pat, mk_id "__view", [exp_of_value v]))
+                    | Return_exception v -> return (Match_exception v))
+        )
      end
   | P_lit lit ->
      return (Match_result (eq_value (value_of_lit lit) value, Bindings.empty))
@@ -741,17 +768,57 @@ and pattern_match env (P_aux (aux, annot) as pat) value =
   | P_wild ->
      return (Match_result (true, Bindings.empty))
   | P_tup pats ->
-     sequence (List.map2 (pattern_match env) pats (coerce_tuple value)) >>= fun matches ->
-     begin match first_match_exception matches with
-     | Some v -> return (Match_exception v)
-     | None ->
-        begin match Util.option_all (List.map is_match_result matches) with
-        | Some results ->
-           return (Match_result (List.for_all fst results, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd results)))
-        | None ->
-           wrap (P_tup (match_patterns matches pats))
+     pattern_match_sequence env pats (coerce_listlike value) (fun pats -> wrap (P_tup pats))
+  | P_list pats ->
+     let elems = coerce_list value in
+     if List.length elems = List.length pats then
+       pattern_match_sequence env pats elems (fun pats -> wrap (P_list pats))
+     else
+       return (Match_result (false, Bindings.empty))
+  | P_vector pats ->
+     pattern_match_sequence env pats (coerce_gv value) (fun pats -> wrap (P_vector pats))
+  | P_app (id, pats) ->
+     let ctor, vals = coerce_ctor value in
+     if Id.compare id (mk_id ctor) = 0 then
+       pattern_match_sequence env pats vals (fun pats -> wrap (P_app (id, pats)))
+     else
+       return (Match_result (false, Bindings.empty))
+  | P_cons (hd_pat, tl_pat) ->
+     begin match coerce_cons value with
+     | Some (x, xs) ->
+        pattern_match env hd_pat x >>= fun x_match ->
+        pattern_match env tl_pat (V_list xs) >>= fun xs_match ->
+        begin match x_match, xs_match with
+        | Match_exception v, _ -> return (Match_exception v)
+        | _, Match_exception v -> return (Match_exception v)
+        | Match_pattern hd_pat', Match_pattern tl_pat' ->
+           wrap (P_cons (hd_pat', tl_pat'))
+        | Match_pattern hd_pat', _ ->
+           wrap (P_cons (hd_pat', tl_pat))
+        | _, Match_pattern tl_pat' ->
+           wrap (P_cons (hd_pat, tl_pat'))
+        | Match_result (hd_matched, hd_bindings), Match_result (tl_matched, tl_bindings) ->
+           return (Match_result (hd_matched && tl_matched, Bindings.merge combine hd_bindings tl_bindings))
         end
+     | None ->
+        return (Match_result (false, Bindings.empty))
      end
+  | P_vector_concat pats ->
+     let subpattern_length pat =
+       let open Type_check in
+       match destruct_bitvector env (typ_of_pat pat) with
+       | Some (Nexp_aux (Nexp_constant c, _), _) -> Big_int.to_int c
+       | _ -> Reporting.unreachable (fst annot) __POS__ "Vector concat pattern element without constant length"
+     in
+     let rec vector_split vs = function
+       | n :: ns -> V_vector (Util.take n vs) :: vector_split (Util.drop n vs) ns
+       | [] -> []
+     in
+     let lengths = List.map subpattern_length pats in
+     let vector = coerce_gv value in
+     assert (List.fold_left (fun x y -> x + y) 0 lengths = List.length vector);
+     let subvectors = vector_split vector lengths in
+     pattern_match_sequence env pats subvectors (fun pats -> wrap (P_vector_concat pats))
   | P_or _ | P_not _ ->
      Reporting.unreachable (fst annot) __POS__ "Or and not patterns are not implemented"
   | P_as (pat, id) ->
@@ -762,69 +829,80 @@ and pattern_match env (P_aux (aux, annot) as pat) value =
      | Match_pattern pat' -> wrap (P_as (pat', id))
      end
   | P_typ (_, pat) | P_var (pat, _) -> pattern_match env pat value
-  | _ ->
-     prerr_endline (string_of_pat pat);
-     assert false
-
-    (*
-  | P_app (id, pats) ->
-     let (ctor, vals) = coerce_ctor value in
-     if Id.compare id (mk_id ctor) = 0 then
-       let matches = List.map2 (pattern_match env) pats vals in
-       List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches)
-     else
-       false, Bindings.empty
-  | P_vector pats ->
-     let matches = List.map2 (pattern_match env) pats (coerce_gv value) in
-     List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches)
-  | P_vector_concat [] -> eq_value (V_vector []) value, Bindings.empty
-  | P_vector_concat (pat :: pats) ->
-     (* We have to use the annotation on each member of the
-        vector_concat pattern to figure out it's length. Due to the
-        recursive call that has an empty_tannot we must not use the
-        annotation in the whole vector_concat pattern. *)
-     let open Type_check in
-     let vector_concat_match n =
-       let init, rest = Util.take (Big_int.to_int n) (coerce_gv value), Util.drop (Big_int.to_int n) (coerce_gv value) in
-       let init_match, init_bind = pattern_match env pat (V_vector init) in
-       let rest_match, rest_bind = pattern_match env (P_aux (P_vector_concat pats, (l, empty_tannot))) (V_vector rest) in
-       init_match && rest_match, Bindings.merge combine init_bind rest_bind
+  | P_string_append pats ->
+     let subpattern_regex pat =
+       let open Type_check in
+       match pat, typ_of_pat pat with
+       | P_aux (P_lit (L_aux (L_string str, _)), _), _ ->
+          Left pat, Regex.Seq (List.map (fun c -> Regex.Char c) (Util.string_to_list str))
+       | _, Typ_aux (Typ_regex regex, _) ->
+          begin match parse_regex regex with
+          | Some regex -> Right pat, Regex.Group regex
+          | None -> Reporting.unreachable (fst annot) __POS__ ("Could not parse regular expression: " ^ regex)
+          end
+       | _, Typ_aux (Typ_id id, _) when string_of_id id = "string" ->
+          Right pat, Regex.(Group (Repeat (Dot, At_least 0)))
+       | _, _ ->
+          Reporting.unreachable (fst annot) __POS__ ("Bad subpattern in string append pattern: " ^ string_of_pat pat)
      in
-     begin match destruct_vector (env_of_pat pat) (typ_of_pat pat) with
-     | Some (Nexp_aux (Nexp_constant n, _), _, _) -> vector_concat_match n
+     let subpattern_regexes = List.map subpattern_regex pats in
+     let tokenizer_regex = Regex.Seq (List.map snd subpattern_regexes) |> ocaml_regex in
+     let string = coerce_string value in
+     if Str.string_match tokenizer_regex string 0 then (
+       match all_rights (List.map fst subpattern_regexes) with
+       | [] ->
+          return (Match_result (true, Bindings.empty))
+       | group_pats ->
+          let groups = List.init (List.length group_pats) (fun i -> V_string (Str.matched_group (i + 1) string)) in
+          let rec interleave_literals orig_pats new_pats =
+            match orig_pats, new_pats with
+            | (Left pat, _) :: orig_pats, new_pats -> pat :: interleave_literals orig_pats new_pats
+            | (Right _, _) :: orig_pats, new_pat :: new_pats -> new_pat :: interleave_literals orig_pats new_pats
+            | [], [] -> []
+            | _, _ -> assert false
+          in
+          pattern_match_sequence env group_pats groups (fun new_pats -> wrap (P_string_append (interleave_literals subpattern_regexes new_pats)))
+     ) else (
+       return (Match_result (false, Bindings.empty))
+     )
+
+and pattern_match_sequence env pats vals f =
+  assert (List.length pats = List.length vals);
+  sequence (List.map2 (pattern_match env) pats vals) >>= fun matches ->
+  begin match first_match_exception matches with
+  | Some v -> return (Match_exception v)
+  | None ->
+     begin match Util.option_all (List.map is_match_result matches) with
+     | Some results ->
+        return (Match_result (List.for_all fst results, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd results)))
      | None ->
-        begin match destruct_bitvector (env_of_pat pat) (typ_of_pat pat) with
-        | Some (Nexp_aux (Nexp_constant n, _), _) -> vector_concat_match n
-        | _ -> failwith ("Bad bitvector annotation for bitvector concatenation pattern " ^ string_of_typ (Type_check.typ_of_pat pat))
-        end
-     | _ -> failwith ("Bad vector annotation for vector concatentation pattern " ^ string_of_typ (Type_check.typ_of_pat pat))
+        f (match_patterns matches pats)
      end
-  | P_tup [pat] -> pattern_match env pat value
-  | P_tup pats | P_list pats ->
-     let matches = List.map2 (pattern_match env) pats (coerce_listlike value) in
-     List.for_all fst matches, List.fold_left (Bindings.merge combine) Bindings.empty (List.map snd matches)
-  | P_cons (hd_pat, tl_pat) ->
-     begin match coerce_cons value with
-     | Some (hd_value, tl_values) ->
-        let hd_match, hd_bind = pattern_match env hd_pat hd_value in
-        let tl_match, tl_bind = pattern_match env tl_pat (V_list tl_values) in
-        hd_match && tl_match, Bindings.merge combine hd_bind tl_bind
-     | None -> failwith "Cannot match cons pattern against non-list"
-     end
-  | P_string_append _ -> assert false (* TODO *)
-     *)
+  end
 
 let exp_of_fundef (FD_aux (FD_function (_, _, _, funcls), annot)) value =
   let pexp_of_funcl (FCL_aux (FCL_Funcl (_, pexp), _)) = pexp in
   E_aux (E_case (exp_of_value value, List.map pexp_of_funcl funcls), annot)
 
-let exp_of_mapdef direction (MD_aux (MD_mapping (_, _, _, mapcls), annot)) value =
-  let pexp_of_mapcl = function
-    | MCL_aux (MCL_forwards pexp, _) when direction = Forwards -> Some pexp
-    | MCL_aux (MCL_backwards pexp, _) when direction = Backwards -> Some pexp
-    | _ -> None
-  in
-  E_aux (E_case (exp_of_value value, Util.option_these (List.map pexp_of_mapcl mapcls)), annot)
+let rec wrap_lets lbs (E_aux (_, annot) as exp) =
+  match lbs with
+  | [] -> exp
+  | lb :: lbs ->
+     let exp = E_aux (E_let (lb, exp), annot) in
+     wrap_lets lbs exp
+
+let exp_of_mapdef direction (MD_aux (MD_mapping (_, args, _, mapcls), annot)) values =
+  assert (List.length args = List.length values - 1);
+  match List.rev values with
+  | last :: values ->
+     let pexp_of_mapcl = function
+       | MCL_aux (MCL_forwards pexp, _) when direction = Forwards -> Some pexp
+       | MCL_aux (MCL_backwards pexp, _) when direction = Backwards -> Some pexp
+       | _ -> None
+     in
+     let letbinds = List.map2 (fun arg value -> LB_aux (LB_val (arg, exp_of_value value), annot)) args (List.rev values) in
+     wrap_lets letbinds (E_aux (E_case (exp_of_value last, Util.option_these (List.map pexp_of_mapcl mapcls)), annot))
+  | [] -> Reporting.unreachable (fst annot) __POS__ "Must be at least one value passed to exp_of_mapdef"
 
 let rec ast_letbinds (Defs defs) =
   match defs with
@@ -880,21 +958,21 @@ let rec eval_frame' = function
             Step (out, state, fail ("Fundef not found: " ^ string_of_id id), stack)
         end
      | Yield (Call(id, vals, cont)), _ ->
-        let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
         begin match id_direction id with
         | Some direction ->
            begin match Bindings.find_opt (strip_direction id) gstate.mapdefs with
            | Some body ->
-              Step (lazy "", (initial_lstate, gstate), return (exp_of_mapdef direction body arg), (out, lstate, cont) :: stack)
+              Step (lazy "", (initial_lstate, gstate), return (exp_of_mapdef direction body vals), (out, lstate, cont) :: stack)
            | None ->
-              Step (out, state, fail ("Fundef not found: " ^ string_of_id id), stack)
+              Step (out, state, fail ("Mapping definition not found: " ^ string_of_id id), stack)
            end
         | None ->
            begin match Bindings.find_opt id gstate.fundefs with
            | Some body ->
+              let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
               Step (lazy "", (initial_lstate, gstate), return (exp_of_fundef body arg), (out, lstate, cont) :: stack)
            | None ->
-              Step (out, state, fail ("Fundef not found: " ^ string_of_id id), stack)
+              Step (out, state, fail ("Function definition not found: " ^ string_of_id id), stack)
            end
         end
 

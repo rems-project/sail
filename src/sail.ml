@@ -465,7 +465,7 @@ let target name out_name ast type_envs =
      let f = open_out_bin (out_filename ^ ".defs") in
      let remove_prover (l, tannot) =
        if Type_check.is_empty_tannot tannot then
-         (l, Type_check.empty_tannot)
+         (l, Type_check.empty_tannot type_envs)
        else
          (l, Type_check.replace_env (Type_check.Env.set_prover None (Type_check.env_of_tannot tannot)) tannot)
      in
@@ -580,11 +580,11 @@ let main () =
     begin
       let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
       let ast, type_envs =
-        List.fold_right (fun file (ast,_) -> Splice.splice ast file)
+        List.fold_right (fun file (ast, type_envs) -> Splice.splice type_envs ast file)
           (!opt_splice) (ast, type_envs)
       in
 
-      self_test type_envs;
+      (* self_test type_envs; *)
 
       Reporting.opt_warnings := false; (* Don't show warnings during re-writing for now *)
 

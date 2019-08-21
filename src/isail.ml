@@ -112,7 +112,7 @@ let sail_logo =
 
 let vs_ids = ref (val_spec_ids !Interactive.ast)
 
-let interactive_state = ref (initial_state ~registers:false !Interactive.ast !Interactive.env Value.primops)
+let interactive_state = ref (initial_state ~registers:true !Interactive.ast !Interactive.env Value.primops)
 
 let interactive_bytecode = ref []
 

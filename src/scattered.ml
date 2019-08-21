@@ -89,14 +89,14 @@ let rec descatter' funcls mapcls = function
   (* For scattered functions we collect all the seperate function
      clauses until we find the last one, then we turn that function
      clause into a DEF_fundef containing all the clauses. *)
-  | DEF_scattered (SD_aux (SD_funcl funcl, (l, _))) :: defs
+  | DEF_scattered (SD_aux (SD_funcl funcl, (l, tannot))) :: defs
        when last_scattered_funcl (funcl_id funcl) defs ->
      let clauses = match Bindings.find_opt (funcl_id funcl) funcls with
        | Some clauses -> List.rev (funcl :: clauses)
        | None -> [funcl]
      in
      DEF_fundef (FD_aux (FD_function (fake_rec_opt l, no_tannot_opt l, no_effect_opt l, clauses),
-                         (gen_loc l, Type_check.empty_tannot)))
+                         (gen_loc l, Type_check.empty_tannot (Type_check.env_of_tannot tannot))))
      :: descatter' funcls mapcls defs
 
   | DEF_scattered (SD_aux (SD_funcl funcl, _)) :: defs ->
@@ -126,9 +126,9 @@ let rec descatter' funcls mapcls = function
   (* For scattered unions, when we find a union declaration we
      immediately grab all the future clauses and turn it into a
      regular union declaration. *)
-  | DEF_scattered (SD_aux (SD_variant (id, typq), (l, _))) :: defs ->
+  | DEF_scattered (SD_aux (SD_variant (id, typq), (l, tannot))) :: defs ->
      let tus = get_union_clauses id defs in
-     DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot)))
+     DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot (Type_check.env_of_tannot tannot))))
      :: descatter' funcls mapcls (filter_union_clauses id defs)
 
   (* Therefore we should never see SD_unioncl... *)

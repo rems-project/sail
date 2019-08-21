@@ -684,7 +684,7 @@ let check_counterexample ast env fname function_id args arg_ctyps arg_smt_names 
      List.iter (fun (id, v) -> prerr_endline ("  " ^ string_of_id id ^ " -> " ^ string_of_value v)) counterexample;
      let istate = initial_state ast env primops in
      let annot = (Parse_ast.Unknown, Type_check.mk_tannot env bool_typ no_effect) in
-     let call = E_aux (E_app (function_id, List.map (fun (_, v) -> E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot))) counterexample), annot) in
+     let call = E_aux (E_app (function_id, List.map (fun (_, v) -> E_aux (E_internal_value v, (Parse_ast.Unknown, Type_check.empty_tannot env))) counterexample), annot) in
      let result = run (Step (lazy "", istate, return call, [])) in
      begin match result with
      | Some (V_bool false) | None ->
