@@ -52,8 +52,6 @@ open Ast
 open Ast_util
 open Value
 
-
-
 type gstate =
   { registers : value Bindings.t;
     allow_registers : bool; (* For some uses we want to forbid touching any registers. *)
@@ -191,7 +189,7 @@ let ( >> ) m1 m2 = bind m1 (function () -> m2)
 let rec sequence = function
   | x :: xs -> x >>= fun y -> sequence xs >>= fun ys -> return (y :: ys)
   | [] -> return []
-                 
+
 type ('a, 'b) either =
   | Left of 'a
   | Right of 'b
@@ -307,7 +305,7 @@ let rec match_patterns matches pats =
      pat :: match_patterns matches pats
   | [], [] -> []
   | _, _ -> assert false
-    
+
 let rec step (E_aux (e_aux, annot) as orig_exp) =
   let wrap e_aux' = return (E_aux (e_aux', annot)) in
   match e_aux with
@@ -504,38 +502,13 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
           | G_aux (G_pattern (gpat, gexp), g_l) :: guards ->
              assert false
           | [] ->
-             return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))          
+             return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
           end
         else
           wrap (E_case (exp, pexps))
      | Match_exception v ->
         wrap (E_throw (exp_of_value v))
      end
-                           (* FIXME
-  | E_case (exp, Pat_aux (Pat_exp (pat, body), _) :: pexps) ->
-     begin try
-         let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
-         if matched then
-           return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
-         else
-           wrap (E_case (exp, pexps))
-       with Failure s -> fail ("Failure: " ^ s)
-     end
-  | E_case (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when not (is_value guard) ->
-     begin try
-         let matched, bindings = pattern_match (Type_check.env_of body) pat (value_of_exp exp) in
-         if matched then
-           let guard = List.fold_left (fun guard (id, v) -> subst id v guard) guard (Bindings.bindings bindings) in
-           let body = List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings) in
-           step guard >>= fun guard' ->
-           wrap (E_case (exp, Pat_aux (Pat_when (pat, guard', body), pat_annot) :: pexps))
-         else
-           wrap (E_case (exp, pexps))
-       with Failure s -> fail ("Failure: " ^ s)
-     end
-  | E_case (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when is_true guard -> return body
-  | E_case (exp, Pat_aux (Pat_when (pat, guard, body), pat_annot) :: pexps) when is_false guard -> wrap (E_case (exp, pexps))
-                            *)
 
   | E_cast (typ, exp) -> return exp
 
@@ -714,7 +687,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      step hd >>= fun hd' -> wrap (E_cons (hd', tl))
 
   | _ -> raise (Invalid_argument ("Unimplemented " ^ string_of_exp orig_exp))
-       
+
 and combine _ v1 v2 =
   match (v1, v2) with
   | None, None -> None
@@ -735,7 +708,7 @@ and exp_of_lexp (LEXP_aux (lexp_aux, _) as lexp) =
   | LEXP_vector_concat [lexp] -> exp_of_lexp lexp
   | LEXP_vector_concat (lexp :: lexps) -> mk_exp (E_vector_append (exp_of_lexp lexp, exp_of_lexp (mk_lexp (LEXP_vector_concat lexps))))
   | LEXP_field (lexp, id) -> mk_exp (E_field (exp_of_lexp lexp, id))
-                           
+
 and pattern_match env (P_aux (aux, annot) as pat) value =
   let wrap p_aux' = return (Match_pattern (P_aux (p_aux', annot))) in
   match aux with
@@ -779,37 +752,21 @@ and pattern_match env (P_aux (aux, annot) as pat) value =
            wrap (P_tup (match_patterns matches pats))
         end
      end
+  | P_or _ | P_not _ ->
+     Reporting.unreachable (fst annot) __POS__ "Or and not patterns are not implemented"
+  | P_as (pat, id) ->
+     pattern_match env pat value >>= fun result ->
+     begin match result with
+     | Match_exception v -> return (Match_exception v)
+     | Match_result (matched, bindings) -> return (Match_result (matched, Bindings.add id value bindings))
+     | Match_pattern pat' -> wrap (P_as (pat', id))
+     end
+  | P_typ (_, pat) | P_var (pat, _) -> pattern_match env pat value
   | _ ->
      prerr_endline (string_of_pat pat);
      assert false
-    
+
     (*
-  | P_lit lit -> eq_value (value_of_lit lit) value, Bindings.empty
-  | P_wild -> true, Bindings.empty
-  | P_or(pat1, pat2) ->
-     let (m1, b1) = pattern_match env pat1 value in
-     let (m2, b2) = pattern_match env pat2 value in
-     (* todo: maybe add assertion that bindings are consistent or empty? *)
-     (m1 || m2, Bindings.merge combine b1 b2)
-  | P_not(pat) ->
-     let (m, b) = pattern_match env pat value in
-     (* todo: maybe add assertion that binding is empty *)
-     (not m, b)
-  | P_as (pat, id) ->
-     let matched, bindings = pattern_match env pat value in
-     matched, Bindings.add id value bindings
-  | P_typ (_, pat) -> pattern_match env pat value
-  | P_id id ->
-     let open Type_check in
-     begin
-       match Env.lookup_id id env with
-       | Enum _ ->
-          if is_ctor value && string_of_id id = fst (coerce_ctor value)
-          then true, Bindings.empty
-          else false, Bindings.empty
-       | _ -> true, Bindings.singleton id value
-     end
-  | P_var (pat, _) -> pattern_match env pat value
   | P_app (id, pats) ->
      let (ctor, vals) = coerce_ctor value in
      if Id.compare id (mk_id ctor) = 0 then
@@ -868,7 +825,7 @@ let exp_of_mapdef direction (MD_aux (MD_mapping (_, _, _, mapcls), annot)) value
     | _ -> None
   in
   E_aux (E_case (exp_of_value value, Util.option_these (List.map pexp_of_mapcl mapcls)), annot)
-  
+
 let rec ast_letbinds (Defs defs) =
   match defs with
   | [] -> []
