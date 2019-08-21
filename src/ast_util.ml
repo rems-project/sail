@@ -1121,6 +1121,8 @@ let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =
   | Some id -> id
   | None -> raise (Reporting.err_typ l "funcl list is empty")
 
+let id_of_mapdef (MD_aux (MD_mapping (id, _, _, _), _)) = id
+          
 let id_of_type_def_aux = function
   | TD_abbrev (id, _, _)
   | TD_record (id, _, _, _)

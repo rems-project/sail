@@ -209,6 +209,15 @@ let () =
   QCheck.Gen.generate ~n:30 pattern_typ_gen
   |> List.iter (fun ((value, pat), typ) -> prerr_endline (Value.string_of_value value ^ " , " ^ string_of_pat pat ^ ", " ^ string_of_typ typ))
 
+let test_pattern_gen2 env =
+  let open Type_check in
+  let test ((value, pat), typ) =
+    let pat, env, guards = bind_pat env pat typ in
+    let guards, env = check_guards env guards in
+    ()
+  in
+  ()
+  
 let run_pattern_rewrite_tests env = QCheck_runner.run_tests [test_pattern_gen env]
 
 let rec irrefutable (P_aux (aux, annot)) =

@@ -342,6 +342,8 @@ let rec doc_pat (P_aux (p_aux, (l, _)) as pat) =
   | P_string_append [] -> string "\"\""
   | P_string_append pats ->
      parens (separate_map (string " ^ ") doc_pat pats)
+  | P_view (pat, id, [exp]) when string_of_id id = "__view" ->
+     doc_pat pat ^^ string " <- " ^^ doc_exp exp
   | P_view (pat, id, exps) ->
      doc_pat pat ^^ string " <- " ^^ doc_id id ^^ parens (separate_map (comma ^^ space) doc_exp exps) 
 
@@ -501,7 +503,7 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; equals; doc_exp exp3])
   | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; string ".."; doc_atomic_exp exp3; equals; doc_exp exp4])
-  | E_internal_value v -> string (Value.string_of_value v (* |> Util.green |> Util.clear *))
+  | E_internal_value v -> string (Value.string_of_value v |> Util.green |> Util.clear)
   | _ -> parens (doc_exp exp)
 and doc_fexps fexps =
   separate_map (comma ^^ space) doc_fexp fexps
