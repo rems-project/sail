@@ -624,6 +624,26 @@ let value_hex_parse = function
   | [v1; v2] -> mk_vector (Sail_lib.hex_parse (coerce_int v1, coerce_string v2))
   | _ -> failwith "value hex_parse"
 
+let value_hex_string = function
+  | [v] -> V_string (Sail_lib.hex_string (coerce_bv v))
+  | _ -> failwith "value hex_string"
+
+let value_binary_parse = function
+  | [v1; v2] -> mk_vector (Sail_lib.binary_parse (coerce_int v1, coerce_string v2))
+  | _ -> failwith "value binary_parse"
+
+let value_binary_string = function
+  | [v] -> V_string (Sail_lib.binary_string (coerce_bv v))
+  | _ -> failwith "value binary_string"
+
+let value_decimal_parse = function
+  | [v1; v2] -> mk_vector (Sail_lib.decimal_parse (coerce_int v1, coerce_string v2))
+  | _ -> failwith "value decimal_parse"
+
+let value_decimal_string = function
+  | [v] -> V_string (Sail_lib.decimal_string (coerce_bv v))
+  | _ -> failwith "value decimal_string"
+
 let value_sail_cons = function
   | [v1; v2] -> V_list (v1 :: coerce_list v2)
   | _ -> failwith "value sail_cons"
@@ -715,7 +735,11 @@ let primops =
       ("vector_truncate", value_vector_truncate);
       ("vector_truncateLSB", value_vector_truncateLSB);
       ("hex_parse", value_hex_parse);
-      ("hex_string", (fun vs -> V_string (string_of_value (List.hd vs))));
+      ("hex_string", value_hex_string);
+      ("binary_parse", value_binary_parse);
+      ("binary_string", value_binary_string);
+      ("decimal_parse", value_decimal_parse);
+      ("decimal_string", value_decimal_string);
       ("read_ram", value_read_ram);
       ("write_ram", value_write_ram);
       ("trace_memory_read", fun _ -> V_unit);

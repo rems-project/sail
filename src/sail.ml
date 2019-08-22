@@ -567,8 +567,8 @@ let feature_check () =
      else
        exit 2
 
-let self_test type_envs =
-  let _ = Pattern_rewrites.run_pattern_rewrite_tests type_envs in
+let self_test ast type_envs =
+  let _ = Pattern_rewrites.run_pattern_rewrite_tests ast type_envs in
   let _ = Jib_ssa.run_ssa_tests () in
   ()
 
@@ -584,7 +584,7 @@ let main () =
           (!opt_splice) (ast, type_envs)
       in
 
-      (* self_test type_envs; *)
+      (* self_test ast type_envs; *)
 
       Reporting.opt_warnings := false; (* Don't show warnings during re-writing for now *)
 

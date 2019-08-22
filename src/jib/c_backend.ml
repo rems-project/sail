@@ -369,22 +369,40 @@ let rec analyze_functions ctx f (AE_aux (aexp, env, l)) =
        AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
 
     | AE_case (aval, cases, typ) ->
-       let analyze_case (AP_aux (_, env, _) as pat, aexp1, aexp2) =
-         let pat_bindings = Bindings.bindings (apat_types pat) in
-         let ctx = { ctx with local_env = env } in
-         let ctx =
-           List.fold_left (fun ctx (id, typ) -> { ctx with locals = Bindings.add id (Immutable, ctyp_of_typ ctx typ) ctx.locals }) ctx pat_bindings
-         in
-         pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2
-       in
-       AE_case (aval, List.map analyze_case cases, typ)
+       AE_case (aval, List.map (analyze_case ctx f) cases, typ)
 
     | AE_try (aexp, cases, typ) ->
-       AE_try (analyze_functions ctx f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2) cases, typ)
+       AE_try (analyze_functions ctx f aexp, List.map (analyze_case ctx f) cases, typ)
 
     | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_throw _ as v -> v
   in
   AE_aux (aexp, env, l)
+
+and analyze_case ctx f (AP_aux (_, env, _) as pat, guards, exp) =
+  let pat_bindings = Bindings.bindings (apat_types pat) in
+  let ctx = { ctx with local_env = env } in
+  let ctx =
+    List.fold_left (fun ctx (id, typ) -> { ctx with locals = Bindings.add id (Immutable, ctyp_of_typ ctx typ) ctx.locals }) ctx pat_bindings
+  in
+  let ctx, guards = analyze_guards ctx f guards in
+  pat, guards, analyze_functions ctx f exp
+
+and analyze_guards ctx f = function
+  | AG_if exp :: guards ->
+     let exp = analyze_functions ctx f exp in
+     let ctx, guards = analyze_guards ctx f guards in
+     ctx, AG_if exp :: guards
+  | AG_pattern (AP_aux (_, env, _) as pat, exp) :: guards ->
+     let pat_bindings = Bindings.bindings (apat_types pat) in
+     let ctx = { ctx with local_env = env } in
+     let ctx =
+       List.fold_left (fun ctx (id, typ) -> { ctx with locals = Bindings.add id (Immutable, ctyp_of_typ ctx typ) ctx.locals }) ctx pat_bindings
+     in
+     let exp = analyze_functions ctx f exp in
+     let ctx, guards = analyze_guards ctx f guards in
+     ctx, AG_pattern (pat, exp) :: guards
+  | [] ->
+     ctx, []
 
 let analyze_primop' ctx id args typ =
   let no_change = AE_app (id, args, typ) in

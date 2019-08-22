@@ -3173,10 +3173,11 @@ let rewrites_c = [
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
     ("vector_string_pats_to_bit_list", []);
-    ("remove_not_pats", []);
-    ("remove_vector_concat", []);
+    ("bitvector_concat", []);
+    ("literals", []);
+    (* ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
-    ("pattern_literals", [Literal_arg "no_strings"]);
+    ("pattern_literals", [Literal_arg "no_strings"]); *)
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);
     ("simple_assignments", []);

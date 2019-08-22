@@ -54,27 +54,11 @@ open Ast
 open Ast_util
 open Rewriter
 
-let nexp_gen = QCheck.Gen.(sized @@ fix
-  (fun self n ->
-    match n with
-    | 0 -> map nint small_signed_int
-    | n -> frequency
-             [2, map nint small_signed_int;
-              1, map2 nminus (self (n / 2)) (self (n / 2));
-              1, map2 nsum (self (n / 2)) (self (n / 2));
-              1, map2 ntimes (self (n / 2)) (self (n / 2));
-              1, map (fun n -> npow2 (nint n)) small_nat]
-  ))
-
-let () =
-  QCheck.Gen.generate ~n:20 nexp_gen
-  |> List.iter (fun nexp -> prerr_endline (string_of_nexp nexp))
-
 let typ_gen = QCheck.Gen.(sized @@ fix
   (fun self n ->
     let base_typ =
       frequency
-        [8, map2 bitvector_typ (map nint small_nat) (return dec_ord);
+        [8, (int_range 0 32 >>= fun n -> return (bitvector_typ (nint n) dec_ord));
          4, return bit_typ;
          4, return int_typ;
          2, return bool_typ;
@@ -104,9 +88,11 @@ let rec split_length len depth =
     return (xs @ ys)
   )
 
+           (*
 let () =
   QCheck.Gen.generate ~n:20 (split_length 10 2)
   |> List.iter (fun nexp -> prerr_endline (Util.string_of_list ", " string_of_int nexp))
+            *)
 
 let is_literal = function
   | P_aux (P_lit _, _) -> true
@@ -139,7 +125,7 @@ let rec pattern_gen infer n (Typ_aux (aux, _) as typ) =
           else
             frequency
               [1, gen_bits_literal c;
-               1, int_range 2 5 >>= fun depth ->
+               1, int_range 2 4 >>= fun depth ->
                   split_length c depth >>= fun splits ->
                   sequence (List.map (fun len -> let typ = bitvector_typ (nint len) dec_ord in pattern_gen true (n - 1) typ) splits) >>= fun gens ->
                   return (V_vector (combine_vectors (List.map fst gens)), mk_pat (P_vector_concat (List.map snd gens)))]
@@ -198,16 +184,18 @@ let rec pattern_gen infer n (Typ_aux (aux, _) as typ) =
       [8, gen;
        1, map (fun (value, pat) -> value, mk_pat (P_typ (typ, pat))) gen]
 
-let pattern_typ_gen = QCheck.Gen.(typ_gen >>= fun typ -> pattern_gen false 5 typ >>= fun pat -> return (pat, typ))
+let pattern_typ_gen = QCheck.Gen.(typ_gen >>= fun typ -> pattern_gen false 3 typ >>= fun pat -> return (pat, typ))
 
 let test_pattern_gen env =
   QCheck.Test.make ~count:1000 ~name:"pattern_gen_type_checks"
     (QCheck.make pattern_typ_gen ~print:(fun ((value, pat), typ) -> Value.string_of_value value ^ " , " ^ string_of_pat pat ^ " : " ^ string_of_typ typ))
     Type_check.(fun ((_, pat), typ) -> try (let _, env, guards = bind_pat env pat typ in let _, _ = check_guards env guards in true) with Type_check.Type_error _ -> false)
 
+    (*
 let () =
   QCheck.Gen.generate ~n:30 pattern_typ_gen
   |> List.iter (fun ((value, pat), typ) -> prerr_endline (Value.string_of_value value ^ " , " ^ string_of_pat pat ^ ", " ^ string_of_typ typ))
+     *)
 
 let test_pattern_gen2 env =
   let open Type_check in
@@ -217,7 +205,7 @@ let test_pattern_gen2 env =
     ()
   in
   ()
-  
+
 let run_pattern_rewrite_tests env = QCheck_runner.run_tests [test_pattern_gen env]
 
 let rec irrefutable (P_aux (aux, annot)) =
@@ -363,6 +351,7 @@ module Pattern_rewriter = struct
 
   module Make (C : Config) : sig
     val rewrite : tannot defs -> tannot defs
+    val test_rewrite : Type_check.tannot defs -> Type_check.Env.t -> QCheck.Test.t
   end = struct
 
     let rec rewrite_pat n env (P_aux (aux, annot)) =
@@ -467,6 +456,43 @@ module Pattern_rewriter = struct
 
     let rewrite (Defs defs) = Defs (List.map rewrite_def defs)
 
+    (* Automatically derive a quickcheck test that uses the
+       interpreter to test that random patterns have the same behavior
+       before and after the re-write. *)
+    let test_rewrite ast env =
+      let open Type_check in
+      let open Interpreter in
+      let test ((value, pat), typ) =
+        try
+          let pat, env', guards = bind_pat env pat typ in
+          let guards, env'' = check_guards env' guards in
+          let wildcard, _, _ = bind_pat env (mk_pat P_wild) typ in
+          let test =
+            E_aux (E_case (exp_of_value value,
+                           [construct_pexp (pat, guards, check_exp env'' (mk_lit_exp L_true) bool_typ, Parse_ast.Unknown);
+                            construct_pexp (wildcard, [], check_exp env (mk_lit_exp L_false) bool_typ, Parse_ast.Unknown)]),
+                   (Parse_ast.Unknown, mk_tannot env bool_typ no_effect))
+          in
+          let state = initial_state ~registers:true ast env Value.primops in
+          let frame = Step (lazy (Pretty_print_sail.(to_string (doc_exp test))), state, return test, []) in
+          match run_frame_result frame with
+          | Ok (Value.V_bool true) ->
+             let test = rewrite_exp test in
+             let frame = Step (lazy (Pretty_print_sail.(to_string (doc_exp test))), state, return test, []) in
+             begin match run_frame_result frame with
+             | Ok (Value.V_bool true) -> true
+             | _ -> false
+             end
+          | _ -> false
+        with
+          Type_check.Type_error (_, _, err) ->
+          prerr_endline (Type_error.string_of_type_error err);
+          false
+      in
+      QCheck.Test.make ~count:100 ~name:("Pattern rewrite test: " ^ C.id_root)
+        (QCheck.make pattern_typ_gen ~print:(fun ((value, pat), typ) -> Value.string_of_value value ^ " , " ^ string_of_pat pat ^ " : " ^ string_of_typ typ))
+        test
+
   end
 end
 
@@ -509,10 +535,19 @@ module Bitvector_concat_config = struct
                          | Some (Nexp_aux (Nexp_constant n, _), _) -> n
                          | _ -> Reporting.unreachable l __POS__ "Non-constant width bitvector concat subpattern found in rewrite"
                        ) pats in
-       let _, ranges = List.fold_left (fun (lo, ranges) len -> let hi = Big_int.add lo len in (hi, (Big_int.pred hi, lo) :: ranges)) (Big_int.zero, []) (List.rev lengths) in
+       let _, ranges = List.fold_left (fun (lo, ranges) len ->
+                           if Big_int.equal len Big_int.zero then
+                             (lo, None :: ranges)
+                           else
+                             let hi = Big_int.add lo len in (hi, Some (Big_int.pred hi, lo) :: ranges)
+                         ) (Big_int.zero, []) (List.rev lengths) in
        let pats = List.map Type_check.strip_pat pats in
        Subst_id (fun s ->
-           List.map2 (fun pat (hi, lo) -> G_aux (G_pattern (pat, mk_exp ~loc:l (E_vector_subrange (mk_exp ~loc:l (E_id s), mk_lit_exp (L_num hi), mk_lit_exp (L_num lo)))), l)) pats ranges
+           List.map2 (fun pat range ->
+               match range with
+               | Some (hi, lo) -> G_aux (G_pattern (pat, mk_exp ~loc:l (E_vector_subrange (mk_exp ~loc:l (E_id s), mk_lit_exp (L_num hi), mk_lit_exp (L_num lo)))), l)
+               | None -> G_aux (G_pattern (pat, mk_exp ~loc:l (E_cast (bitvector_typ (nint 0) dec_ord, mk_exp ~loc:l (E_vector [])))), l)
+             ) pats ranges
          )
     | _ -> No_change
 end
@@ -547,6 +582,12 @@ module String_append_config = struct
 end
 
 module String_append_rewriter = Pattern_rewriter.Make(String_append_config)
+
+let run_pattern_rewrite_tests ast env =
+  QCheck_runner.run_tests [
+      test_pattern_gen env;
+      Bitvector_concat_rewriter.test_rewrite ast env
+    ]
 
 (**************************************************************************)
 (* 2. Guard removal                                                       *)

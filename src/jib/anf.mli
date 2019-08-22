@@ -95,12 +95,16 @@ and 'a aexp_aux =
   | AE_throw of 'a aval * 'a
   | AE_if of 'a aval * 'a aexp * 'a aexp * 'a
   | AE_field of 'a aval * id * 'a
-  | AE_case of 'a aval * ('a apat * 'a aexp * 'a aexp) list * 'a
-  | AE_try of 'a aexp * ('a apat * 'a aexp * 'a aexp) list * 'a
+  | AE_case of 'a aval * ('a apat * 'a aguard list * 'a aexp) list * 'a
+  | AE_try of 'a aexp * ('a apat * 'a aguard list * 'a aexp) list * 'a
   | AE_record_update of 'a aval * ('a aval) Bindings.t * 'a
   | AE_for of id * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
   | AE_loop of loop * 'a aexp * 'a aexp
   | AE_short_circuit of sc_op * 'a aval * 'a aexp
+
+and 'a aguard =
+  | AG_if of 'a aexp
+  | AG_pattern of 'a apat * 'a aexp
 
 and sc_op = SC_and | SC_or
 
@@ -117,8 +121,6 @@ and 'a apat_aux =
   | AP_app of id * 'a apat * 'a
   | AP_cons of 'a apat * 'a apat
   | AP_as of 'a apat * id * 'a
-  | AP_string_append of 'a apat_string list
-  | AP_view of 'a apat * id * 'a aexp list * 'a
   | AP_nil of 'a
   | AP_wild of 'a
 
@@ -168,7 +170,7 @@ val is_dead_aexp : 'a aexp -> bool
 
 val anf_pat : ?global:bool -> tannot pat -> typ apat
 
-val anf_pexp : tannot pexp -> typ apat * typ aexp option * typ aexp
+val anf_pexp : tannot pexp -> typ apat * typ aguard list * typ aexp
 
 val anf : tannot exp -> typ aexp
 

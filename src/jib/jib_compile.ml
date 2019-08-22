@@ -517,8 +517,6 @@ let rec apat_ctyp ctx (AP_aux (apat, _, _)) =
   | AP_wild typ | AP_nil typ | AP_id (_, typ) -> ctyp_of_typ ctx typ
   | AP_app (_, _, typ) -> ctyp_of_typ ctx typ
   | AP_as (_, _, typ) -> ctyp_of_typ ctx typ
-  | AP_view (_, _, _, typ) -> ctyp_of_typ ctx typ
-  | AP_string_append _ -> CT_string
 
 let unit_cval = V_lit (VL_unit, CT_unit)
 
@@ -609,111 +607,6 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
 
   | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_list [], ctyp)])) case_label], [], ctx
 
-  | AP_view (apat, id, aexps, typ) ->
-     if string_of_id (strip_direction id) = "regex" then (
-       match aexps with
-       | [AE_aux (AE_val (AV_lit (L_aux (L_string regex_string, _), _)), _, _)] ->
-          let regex, result = ngensym (), ngensym () in
-          let submatch, submatch_cleanup, _ = compile_match ctx apat cval case_label in
-          let cleanup_label = label "regex_cleanup_" in
-          let skip_cleanup_label = label "skip_cleanup_" in
-          [iinit (CT_regex 0) regex (V_lit (VL_string regex_string, CT_string));
-           idecl CT_bool result;
-           iextern (CL_id (result, CT_bool)) (mk_id "sail_regmatch0") [V_id (regex, CT_regex 0); cval];
-           ijump (V_call (Bnot, [V_id (result, CT_bool)])) cleanup_label;
-           igoto skip_cleanup_label;
-           ilabel cleanup_label;
-           iclear (CT_regex 0) regex;
-           igoto case_label;
-           ilabel skip_cleanup_label]
-          @ submatch,
-          submatch_cleanup @ [iclear (CT_regex 0) regex],
-          ctx
-       | _ ->
-          Reporting.unreachable l __POS__ "Expected string literal inside regex builtin mapping"
-     ) else (
-       let arg_ctyps, outer_ctyp, inner_ctyp =
-         match Bindings.find_opt (strip_direction id) ctx.mappings, id_direction id with
-         | Some (arg_ctyps, left_ctyp, right_ctyp), (Some Forwards | None) -> arg_ctyps, left_ctyp, right_ctyp
-         | Some (arg_ctyps, left_ctyp, right_ctyp), Some Backwards -> arg_ctyps, right_ctyp, left_ctyp
-         | None, _  -> Reporting.unreachable l __POS__ "Mapping pattern did not have mapping type when compiling pattern"
-       in
-       let result = ngensym () in
-       let compile_arg aexp arg_ctyp =
-         let setup, call, cleanup = compile_aexp ctx aexp in
-         let gs = ngensym () in
-         setup @ [idecl arg_ctyp gs; call (CL_id (gs, arg_ctyp))],
-         V_id (gs, arg_ctyp),
-         [iclear arg_ctyp gs] @ cleanup
-       in
-       if not (List.length aexps = List.length arg_ctyps) then
-         Reporting.unreachable l __POS__ "Mapping pattern had incorrect number of arguments";
-       let args = List.map2 compile_arg aexps arg_ctyps in
-       let setup = List.map (fun (s, _, _) -> s) args |> List.concat in
-       let cleanup = List.map (fun (_, _, c) -> c) args |> List.rev |> List.concat in
-       let args = List.map (fun (_, a, _) -> a) args in
-       let cleanup_label = label "mapcall_cleanup_" in
-       let skip_cleanup_label = label "skip_cleanup_" in
-       let submatch, submatch_cleanup, _ = compile_match ctx apat (V_id (result, inner_ctyp)) cleanup_label in
-       setup
-       @ [idecl inner_ctyp result;
-          imapcall (CL_id (result, inner_ctyp)) id (args @ [cval]) cleanup_label;
-          igoto skip_cleanup_label;
-          ilabel cleanup_label;
-          iclear inner_ctyp result]
-       @ cleanup
-       @ [igoto case_label;
-          ilabel skip_cleanup_label]
-       @ submatch,
-       submatch_cleanup
-       @ [iclear inner_ctyp result]
-       @ cleanup,
-       ctx
-     )
-
-  | AP_string_append string_apats ->
-     let to_regex = function
-       | APS_lit str -> Regex.Seq (List.map (fun c -> Regex.Char c) (Util.string_to_list str))
-       | APS_pat apat ->
-          match apat_typ apat with
-          | Typ_aux (Typ_regex regex, _) ->
-             begin match parse_regex regex with
-             | Some regex -> Regex.Group regex
-             | None -> Reporting.unreachable l __POS__ ("Could not parse regular expression: " ^ regex)
-             end
-          | typ -> Regex.(Group (Repeat (Dot, At_least 0)))
-     in
-     let subpats = List.map (function APS_lit _ -> [] | APS_pat apat -> [apat]) string_apats |> List.concat in
-     let groups = List.length subpats in
-     let regex_lit = Regex.Seq (List.map to_regex string_apats) in
-     let regex, matches, result = ngensym (), ngensym (), ngensym () in
-     let cleanup_label = label "regex_cleanup_" in
-     let skip_cleanup_label = label "skip_cleanup_" in
-     let compile_subpat i apat =
-       let mat = ngensym () in
-       let submatch, submatch_cleanup, _ = compile_match ctx apat (V_id (mat, CT_string)) case_label in
-       [idecl CT_string mat;
-        iextern (CL_id (mat, CT_string)) (mk_id "sail_getmatch") [cval; V_id (matches, CT_match groups); V_lit (VL_int (Big_int.of_int (i + 1)), CT_fint 64)]]
-       @ submatch,
-       submatch_cleanup
-       @ [iclear CT_string mat]
-     in
-     let compiled_subpats = List.mapi compile_subpat subpats in
-     [iinit (CT_regex groups) regex (V_lit (VL_regex regex_lit, CT_string));
-      idecl (CT_match groups) matches;
-      idecl CT_bool result;
-      iextern (CL_id (result, CT_bool)) (mk_id "sail_regmatch") [V_id (regex, CT_regex groups); cval; V_id (matches, CT_match groups)];
-      ijump (V_call (Bnot, [V_id (result, CT_bool)])) cleanup_label;
-      igoto skip_cleanup_label;
-      ilabel cleanup_label;
-      iclear (CT_regex groups) regex;
-      igoto case_label;
-      ilabel skip_cleanup_label]
-     @ List.concat (List.map fst compiled_subpats),
-     List.concat (List.map snd compiled_subpats)
-     @ [iclear (CT_regex groups) regex],
-     ctx
-
 and compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   let ctx = { ctx with local_env = env } in
   match aexp_aux with
@@ -742,7 +635,8 @@ and compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
      let case_return_id = ngensym () in
      let finish_match_label = label "finish_match_" in
-     let compile_case (apat, guard, body) =
+     (* FIXME *)
+     let compile_case (apat, [AG_if guard], body) =
        let trivial_guard = match guard with
          | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _, _)
            | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _, _) -> true
@@ -782,7 +676,7 @@ and compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let try_return_id = ngensym () in
      let handled_exception_label = label "handled_exception_" in
      let fallthrough_label = label "fallthrough_exception_" in
-     let compile_case (apat, guard, body) =
+     let compile_case (apat, [AG_if guard], body) =
        let trivial_guard = match guard with
          | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _, _)
          | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _, _) -> true
@@ -1423,16 +1317,16 @@ let compile_mapcls swap mk_cdef ctx id pats clauses =
 
   let compile_clause pexp =
     (* First, compile the clause to ANF *)
-    let apat, guard, body = anf_pexp pexp in
+    let apat, guards, body = anf_pexp pexp in
     let shadow_ids = IdSet.union (apat_bindings apat) shadow_ids in
-    let guard = Util.option_map (fun g -> ctx.optimize_anf ctx (no_shadow shadow_ids g)) guard in
+    let guards = List.map (function AG_if g -> AG_if (ctx.optimize_anf ctx (no_shadow shadow_ids g))) guards in
     let body = ctx.optimize_anf ctx (no_shadow shadow_ids body) in
     (* If the mapping clause fails, we'll jump to this label *)
     let clause_label = label "clause_" in
     let destructure, destructure_cleanup, ctx = compile_match ctx apat map_cval clause_label in
     let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-    let case_instrs = match guard with
-      | Some guard ->
+    let case_instrs = match guards with
+      | [AG_if guard] ->
          let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
          let gs = ngensym () in
          destructure
@@ -1443,7 +1337,7 @@ let compile_mapcls swap mk_cdef ctx id pats clauses =
          @ [ijump (V_call (Bnot, [V_id (gs, CT_bool)])) clause_label]
          @ body_setup @ [body_call (CL_id (clause_return_id, right_ctyp))] @ body_cleanup @ destructure_cleanup
          @ [igoto finish_clause_label]
-      | None ->
+      | [] ->
          destructure
          @ body_setup @ [body_call (CL_id (clause_return_id, right_ctyp))] @ body_cleanup @ destructure_cleanup
          @ [igoto finish_clause_label]
@@ -1528,15 +1422,16 @@ and compile_def' n total ctx = function
         let ret_ctyp = ctyp_of_typ ctx' ret_typ in
         [CDEF_spec (id, arg_ctyps, ret_ctyp)], ctx
      end
-(* FIXME
-  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
+
+  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_case (pat, [], exp), _)), _)]), _)) ->
      Util.progress "Compiling " (string_of_id id) n total;
      compile_funcl ctx id pat None exp
 
+(* FIXME
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_when (pat, guard, exp), _)), _)]), _)) ->
      Util.progress "Compiling " (string_of_id id) n total;
      compile_funcl ctx id pat (Some guard) exp
- *)
+*)
   | DEF_fundef (FD_aux (FD_function (_, _, _, []), (l, _))) ->
      raise (Reporting.err_general l "Encountered function with no clauses")
 

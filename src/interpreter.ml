@@ -257,6 +257,10 @@ let liftM2 f m1 m2 = m1 >>= fun x -> m2 >>= fun y -> return (f x y)
 let letbind_pat_ids (LB_aux (LB_val (pat, _), _)) = pat_ids pat
 
 let subst id value exp = Ast_util.subst id (exp_of_value value) exp
+let subst_guards id value guards = Ast_util.subst_guards id (exp_of_value value) guards
+let subst_guards_exp id value (guards, exp) =
+  let guards, bound = subst_guards id value guards in
+  guards, if bound then exp else subst id value exp
 
 let local_variable id lstate gstate =
   try
@@ -272,6 +276,19 @@ let unit_exp = E_lit (L_aux (L_unit, Parse_ast.Unknown))
 
 let is_value_fexp (FE_aux (FE_Fexp (id, exp), _)) = is_value exp
 let value_of_fexp (FE_aux (FE_Fexp (id, exp), _)) = (string_of_id id, value_of_exp exp)
+
+let rec is_value_pat (P_aux (aux, _)) =
+  match aux with
+  | P_view (pat, _, exps) -> is_value_pat pat && List.for_all is_value exps
+  | P_app (_, pats) | P_tup pats | P_vector pats | P_list pats | P_vector_concat pats | P_string_append pats -> List.for_all is_value_pat pats
+  | P_cons (pat1, pat2) | P_or (pat1, pat2) -> is_value_pat pat1 && is_value_pat pat2
+  | P_var (pat, _) | P_not pat | P_as (pat, _) | P_typ (_, pat) -> is_value_pat pat
+  | P_wild | P_lit _ | P_id _ -> true
+
+let is_value_guard (G_aux (aux, _)) =
+  match aux with
+  | G_if exp -> is_value exp
+  | G_pattern (pat, exp) -> is_value_pat pat && is_value exp
 
 let rec build_letchain id lbs (E_aux (_, annot) as exp) =
   match lbs with
@@ -499,13 +516,14 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_case (exp, pexps) when not (is_value exp) ->
      step exp >>= fun exp' -> wrap (E_case (exp', pexps))
   | E_case (_, []) -> fail "Pattern matching failed"
-  | E_case (exp, Pat_aux (Pat_case (pat, guards, body), l) :: pexps) ->
+  | E_case (exp, (Pat_aux (Pat_case (pat, guards, body), l) as pexp) :: pexps) ->
      pattern_match (Type_check.env_of_pat pat) pat (value_of_exp exp) >>= fun result ->
      begin match result with
      | Match_pattern pat' ->
         wrap (E_case (exp, Pat_aux (Pat_case (pat', guards, body), l) :: pexps))
      | Match_result (matched, bindings) ->
         if matched then
+          let guards, body = List.fold_left (fun ge (id, v) -> subst_guards_exp id v ge) (guards, body) (Bindings.bindings bindings) in
           begin match guards with
           | G_aux (G_if guard, g_l) :: guards ->
              if is_true guard then
@@ -517,9 +535,24 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
                step guard >>= fun guard' ->
                wrap (E_case (exp, Pat_aux (Pat_case (pat, G_aux (G_if guard', g_l) :: guards, body), l) :: pexps))
           | G_aux (G_pattern (gpat, gexp), g_l) :: guards ->
-             assert false
+             if is_value gexp then
+               pattern_match (Type_check.env_of_pat gpat) gpat (value_of_exp gexp) >>= fun result ->
+               match result with
+               | Match_pattern gpat' ->
+                  wrap (E_case (exp, Pat_aux (Pat_case (pat, G_aux (G_pattern (gpat', gexp), g_l) :: guards, body), l) :: pexps))
+               | Match_result (matched, bindings) ->
+                  if matched then (
+                    let guards, body = List.fold_left (fun ge (id, v) -> subst_guards_exp id v ge) (guards, body) (Bindings.bindings bindings) in
+                    wrap (E_case (exp, Pat_aux (Pat_case (pat, guards, body), l) :: pexps))
+                  ) else
+                    wrap (E_case (exp, pexps))
+               | Match_exception v ->
+                  wrap (E_throw (exp_of_value v))
+             else
+               step gexp >>= fun gexp' ->
+               wrap (E_case (exp, Pat_aux (Pat_case (pat, G_aux (G_pattern (gpat, gexp'), g_l) :: guards, body), l) :: pexps))
           | [] ->
-             return  (List.fold_left (fun body (id, v) -> subst id v body) body (Bindings.bindings bindings))
+             return body
           end
         else
           wrap (E_case (exp, pexps))
@@ -1084,9 +1117,6 @@ let default_effect_interp state eff =
          failwith ("Register write disallowed by allow_registers setting: " ^ name)
      end
 
-
-
-
 let rec run_frame frame =
   match frame with
   | Done (state, v) -> v
@@ -1097,6 +1127,17 @@ let rec run_frame frame =
      run_frame (eval_frame frame)
   | Effect_request (out, state, stack, eff) ->
      run_frame (default_effect_interp state eff)
+
+let rec run_frame_result frame =
+  match frame with
+  | Done (state, v) -> Ok v
+  | Fail (_, _, _, _, msg) -> Error msg
+  | Step (lazy_str, _, _, _) ->
+     run_frame_result (eval_frame frame)
+  | Break frame ->
+     run_frame_result (eval_frame frame)
+  | Effect_request (out, state, stack, eff) ->
+     run_frame_result (default_effect_interp state eff)
 
 let eval_exp state exp =
   run_frame (Step (lazy "", state, return exp, []))

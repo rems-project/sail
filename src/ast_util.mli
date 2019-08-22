@@ -485,6 +485,7 @@ val val_spec_ids : 'a defs -> IdSet.t
 val pat_ids : 'a pat -> IdSet.t
 
 val subst : id -> 'a exp -> 'a exp -> 'a exp
+val subst_guards : id -> 'a exp -> 'a guard list -> 'a guard list * bool
 
 val hex_to_bin : string -> string
 

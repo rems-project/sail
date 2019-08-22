@@ -75,12 +75,16 @@ and 'a aexp_aux =
   | AE_throw of 'a aval * 'a
   | AE_if of 'a aval * 'a aexp * 'a aexp * 'a
   | AE_field of 'a aval * id * 'a
-  | AE_case of 'a aval * ('a apat * 'a aexp * 'a aexp) list * 'a
-  | AE_try of 'a aexp * ('a apat * 'a aexp * 'a aexp) list * 'a
+  | AE_case of 'a aval * ('a apat * 'a aguard list * 'a aexp) list * 'a
+  | AE_try of 'a aexp * ('a apat * 'a aguard list * 'a aexp) list * 'a
   | AE_record_update of 'a aval * ('a aval) Bindings.t * 'a
   | AE_for of id * 'a aexp * 'a aexp * 'a aexp * order * 'a aexp
   | AE_loop of loop * 'a aexp * 'a aexp
   | AE_short_circuit of sc_op * 'a aval * 'a aexp
+
+and 'a aguard =
+  | AG_if of 'a aexp
+  | AG_pattern of 'a apat * 'a aexp
 
 and sc_op = SC_and | SC_or
 
@@ -97,8 +101,6 @@ and 'a apat_aux =
   | AP_app of id * 'a apat * 'a
   | AP_cons of 'a apat * 'a apat
   | AP_as of 'a apat * id * 'a
-  | AP_string_append of ('a apat_string) list
-  | AP_view of 'a apat * id * 'a aexp list * 'a
   | AP_nil of 'a
   | AP_wild of 'a
 
@@ -118,8 +120,6 @@ let rec apat_typ (AP_aux (apat_aux, _ ,_)) =
   | AP_id (_, typ) | AP_global (_, typ) | AP_app (_, _, typ) -> typ
   | AP_cons (apat, _) -> list_typ (apat_typ apat)
   | AP_as (_, _, typ) -> typ
-  | AP_string_append _ -> string_typ
-  | AP_view (_, _, _, typ) -> typ
   | AP_nil typ | AP_wild typ -> typ
 
 let rec apat_bindings (AP_aux (apat_aux, _, _)) =
@@ -130,8 +130,6 @@ let rec apat_bindings (AP_aux (apat_aux, _, _)) =
   | AP_app (_, apat, _) -> apat_bindings apat
   | AP_cons (apat1, apat2) -> IdSet.union (apat_bindings apat1) (apat_bindings apat2)
   | AP_as (apat, id, _) -> IdSet.add id (apat_bindings apat)
-  | AP_string_append apats -> List.fold_left IdSet.union IdSet.empty (List.map apat_string_bindings apats)
-  | AP_view (apat, _, _, _) -> apat_bindings apat
   | AP_nil _ -> IdSet.empty
   | AP_wild _ -> IdSet.empty
 and apat_string_bindings = function
@@ -157,7 +155,6 @@ let rec apat_types (AP_aux (apat_aux, _, _)) =
   | AP_as (apat, id, typ) -> Bindings.add id typ (apat_types apat)
   | AP_nil _ -> Bindings.empty
   | AP_wild _ -> Bindings.empty
-  | AP_string_append apats -> List.fold_left (Bindings.merge merge) (Bindings.empty) (List.map apat_string_types apats)
 
 and apat_string_types = function
   | APS_lit _ -> Bindings.empty
@@ -175,7 +172,6 @@ let rec apat_rename from_id to_id (AP_aux (apat_aux, env, l)) =
     | AP_as (apat, id, typ) -> AP_as (apat, id, typ)
     | AP_nil typ -> AP_nil typ
     | AP_wild typ -> AP_wild typ
-    | AP_string_append apats -> AP_string_append (List.map (apat_string_rename from_id to_id) apats)
   in
   AP_aux (apat_aux, env, l)
 
@@ -252,11 +248,15 @@ let rec aexp_rename from_id to_id (AE_aux (aexp, env, l)) =
   in
   AE_aux (aexp, env, l)
 
-and apexp_rename from_id to_id (apat, aexp1, aexp2) =
+and aguard_rename from_id to_id = function
+  | AG_if aexp -> AG_if (aexp_rename from_id to_id aexp)
+  | AG_pattern (apat, aexp) -> AG_pattern (apat_rename from_id to_id apat, aexp_rename from_id to_id aexp)
+
+and apexp_rename from_id to_id (apat, aguards, aexp) =
   if IdSet.mem from_id (apat_bindings apat) then
-    (apat, aexp1, aexp2)
+    (apat, aguards, aexp)
   else
-    (apat, aexp_rename from_id to_id aexp1, aexp_rename from_id to_id aexp2)
+    (apat, List.map (aguard_rename from_id to_id) aguards, aexp_rename from_id to_id aexp)
 
 let shadow_counter = ref 0
 
@@ -308,7 +308,7 @@ and no_shadow_apexp ids (apat, aexp1, aexp2) =
   let rename aexp = List.fold_left (fun aexp (from_id, to_id) -> aexp_rename from_id to_id aexp) aexp shadows in
   let rename_apat apat = List.fold_left (fun apat (from_id, to_id) -> apat_rename from_id to_id apat) apat shadows in
   let ids = IdSet.union (apat_bindings apat) (IdSet.union ids (IdSet.of_list (List.map snd shadows))) in
-  (rename_apat apat, no_shadow ids (rename aexp1), no_shadow ids (rename aexp2))
+  (rename_apat apat, [] (* FIXME no_shadow ids (rename aexp1) *), no_shadow ids (rename aexp2))
 
 (* Map over all the avals in an aexp. *)
 let rec map_aval f (AE_aux (aexp, env, l)) =
@@ -333,12 +333,16 @@ let rec map_aval f (AE_aux (aexp, env, l)) =
     | AE_field (aval, field, typ) ->
        AE_field (f env l aval, field, typ)
     | AE_case (aval, cases, typ) ->
-       AE_case (f env l aval, List.map (fun (pat, aexp1, aexp2) -> pat, map_aval f aexp1, map_aval f aexp2) cases, typ)
+       AE_case (f env l aval, List.map (fun (pat, guards, exp) -> pat, List.map (map_aguard_aval f) guards, map_aval f exp) cases, typ)
     | AE_try (aexp, cases, typ) ->
-       AE_try (map_aval f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, map_aval f aexp1, map_aval f aexp2) cases, typ)
+       AE_try (map_aval f aexp, List.map (fun (pat, guards, exp) -> pat, List.map (map_aguard_aval f) guards, map_aval f exp) cases, typ)
     | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, f env l aval, map_aval f aexp)
   in
   AE_aux (aexp, env, l)
+
+and map_aguard_aval f = function
+  | AG_if aexp -> AG_if (map_aval f aexp)
+  | AG_pattern (apat, aexp) -> AG_pattern (apat, map_aval f aexp)
 
 (* Map over all the functions in an aexp. *)
 let rec map_functions f (AE_aux (aexp, env, l)) =
@@ -356,12 +360,16 @@ let rec map_functions f (AE_aux (aexp, env, l)) =
     | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
        AE_for (id, map_functions f aexp1, map_functions f aexp2, map_functions f aexp3, order, map_functions f aexp4)
     | AE_case (aval, cases, typ) ->
-       AE_case (aval, List.map (fun (pat, aexp1, aexp2) -> pat, map_functions f aexp1, map_functions f aexp2) cases, typ)
+       AE_case (aval, List.map (fun (pat, guards, exp) -> pat, List.map (map_aguard_functions f) guards, map_functions f exp) cases, typ)
     | AE_try (aexp, cases, typ) ->
-       AE_try (map_functions f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, map_functions f aexp1, map_functions f aexp2) cases, typ)
+       AE_try (map_functions f aexp, List.map (fun (pat, guards, exp) -> pat, List.map (map_aguard_functions f) guards, map_functions f exp) cases, typ)
     | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_throw _ as v -> v
   in
   AE_aux (aexp, env, l)
+
+and map_aguard_functions f = function
+  | AG_if aexp -> AG_if (map_functions f aexp)
+  | AG_pattern (apat, aexp) -> AG_pattern (apat, map_functions f aexp)
 
 let rec fold_aexp f (AE_aux (aexp, env, l)) =
   let aexp = match aexp with
@@ -378,12 +386,16 @@ let rec fold_aexp f (AE_aux (aexp, env, l)) =
     | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
        AE_for (id, fold_aexp f aexp1, fold_aexp f aexp2, fold_aexp f aexp3, order, fold_aexp f aexp4)
     | AE_case (aval, cases, typ) ->
-       AE_case (aval, List.map (fun (pat, aexp1, aexp2) -> pat, fold_aexp f aexp1, fold_aexp f aexp2) cases, typ)
+       AE_case (aval, List.map (fun (pat, guards, exp) -> pat, List.map (fold_aguard f) guards, fold_aexp f exp) cases, typ)
     | AE_try (aexp, cases, typ) ->
-       AE_try (fold_aexp f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, fold_aexp f aexp1, fold_aexp f aexp2) cases, typ)
+       AE_try (fold_aexp f aexp, List.map (fun (pat, guards, exp) -> pat, List.map (fold_aguard f) guards, fold_aexp f exp) cases, typ)
     | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_throw _ as v -> v
   in
   f (AE_aux (aexp, env, l))
+
+and fold_aguard f = function
+  | AG_if aexp -> AG_if (fold_aexp f aexp)
+  | AG_pattern (apat, aexp) -> AG_pattern (apat, fold_aexp f aexp)
 
 (* For debugging we provide a pretty printer for ANF expressions. *)
 
@@ -480,8 +492,16 @@ and pp_apat (AP_aux (apat_aux, _, _)) =
 
 and pp_cases cases = surround 2 0 lbrace (separate_map (comma ^^ hardline) pp_case cases) rbrace
 
-and pp_case (apat, guard, body) =
-  separate space [pp_apat apat; string "if"; pp_aexp guard; string "=>"; pp_aexp body]
+and pp_guard = function
+  | AG_if aexp -> string "if" ^^ space ^^ pp_aexp aexp
+  | AG_pattern (apat, aexp) -> pp_apat apat ^^ string " <- " ^^ pp_aexp aexp
+
+and pp_case (apat, guards, body) =
+  match guards with
+  | [] ->
+     separate space [pp_apat apat; string "=>"; pp_aexp body]
+  | _ ->
+     separate space [pp_apat apat; separate_map (comma ^^ space) pp_guard guards; string "=>"; pp_aexp body]
 
 and pp_block = function
   | [] -> string "()"
@@ -550,9 +570,6 @@ let rec anf_pat ?global:(global=false) (P_aux (p_aux, annot) as pat) =
   | P_list pats -> List.fold_right (fun pat apat -> mk_apat (AP_cons (anf_pat ~global:global pat, apat))) pats (mk_apat (AP_nil (typ_of_pat pat)))
   | P_lit (L_aux (L_unit, _)) -> mk_apat (AP_wild (typ_of_pat pat))
   | P_as (pat, id) -> mk_apat (AP_as (anf_pat ~global:global pat, id, typ_of_pat pat))
-  | P_lit (L_aux (L_string str, _)) -> mk_apat (AP_string_append [APS_lit str])
-  | P_string_append pats -> mk_apat (AP_string_append (List.map (anf_string_pat ~global:global) pats))
-  | P_view (vpat, id, args) -> mk_apat (AP_view (anf_pat ~global:global vpat, id, List.map anf args, typ_of_pat pat))
   | _ ->
      raise (Reporting.err_unreachable (fst annot) __POS__
        ("Could not convert pattern to ANF: " ^ string_of_pat pat))
@@ -714,26 +731,10 @@ and anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
 
   | E_case (match_exp, pexps) ->
      let match_aval, match_wrap = to_aval (anf match_exp) in
-     let anf_pexp (Pat_aux (pat_aux, _)) = assert false
-                                                  (* FIXME
-       match pat_aux with
-       | Pat_when (pat, guard, body) ->
-          (anf_pat pat, anf guard, anf body)
-       | Pat_exp (pat, body) ->
-          (anf_pat pat, mk_aexp (AE_val (AV_lit (mk_lit (L_true), bool_typ))), anf body) *)
-     in
      match_wrap (mk_aexp (AE_case (match_aval, List.map anf_pexp pexps, typ_of exp)))
 
   | E_try (match_exp, pexps) ->
      let match_aexp = anf match_exp in
-     let anf_pexp (Pat_aux (pat_aux, _)) = assert false
-                                                  (* FIXME
-       match pat_aux with
-       | Pat_when (pat, guard, body) ->
-          (anf_pat pat, anf guard, anf body)
-       | Pat_exp (pat, body) ->
-          (anf_pat pat, mk_aexp (AE_val (AV_lit (mk_lit (L_true), bool_typ))), anf body) *)
-     in
      mk_aexp (AE_try (match_aexp, List.map anf_pexp pexps, typ_of exp))
 
   | E_var (LEXP_aux (LEXP_id id, _), binding, body)
@@ -768,7 +769,7 @@ and anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
 
   | E_cast (typ, exp) -> mk_aexp (AE_cast (anf exp, typ))
 
-  | E_vector_access _ | E_vector_subrange _ | E_vector_update _ | E_vector_update_subrange _ | E_vector_append _ | E_cons _ ->
+  | E_vector_access _ | E_vector_subrange _ | E_vector_update _ | E_vector_update_subrange _ | E_vector_append _ | E_cons _ | E_app_infix _ ->
      (* Should be re-written by type checker *)
      raise (Reporting.err_unreachable l __POS__ "encountered raw vector operation when converting to ANF")
 
@@ -787,10 +788,10 @@ and anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   | E_internal_return _ | E_internal_plet _ ->
      raise (Reporting.err_unreachable l __POS__ "encountered unexpected internal node when converting to ANF")
 
-and anf_pexp (Pat_aux (aux, _)) = assert false
-                                         (* FIXME
+and anf_pexp (Pat_aux (Pat_case (pat, guards, body), _)) =
+  (anf_pat pat, List.map anf_guard guards, anf body)
+
+and anf_guard (G_aux (aux, _)) =
   match aux with
-  | Pat_when (pat, guard, body) ->
-     (anf_pat pat, Some (anf guard), anf body)
-  | Pat_exp (pat, body) ->
-     (anf_pat pat, None, anf body) *)
+  | G_if exp -> AG_if (anf exp)
+  | G_pattern (pat, exp) -> AG_pattern (anf_pat pat, anf exp)

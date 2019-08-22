@@ -1682,18 +1682,22 @@ and subst_measure id value (Measure_aux (m_aux, l)) =
 and subst_pexp id value (Pat_aux (pexp_aux, l)) =
   let pexp_aux = match pexp_aux with
     | Pat_case (pat, guards, exp) when IdSet.mem id (pat_ids pat) -> Pat_case (subst_pat id value pat, guards, exp)
-    | Pat_case (pat, guards, exp) -> Pat_case (subst_pat id value pat, subst_guards id value guards, subst id value exp)
+    | Pat_case (pat, guards, exp) ->
+       let guards, bound = subst_guards id value guards in
+       Pat_case (subst_pat id value pat, guards, if bound then exp else subst id value exp)
   in
   Pat_aux (pexp_aux, l)
 
 and subst_guards id value = function
-  | [] -> []
+  | [] -> [], false
   | G_aux (G_if exp, l) :: guards ->
-     G_aux (G_if (subst id value exp), l) :: subst_guards id value guards
+     let guards, bound = subst_guards id value guards in
+     G_aux (G_if (subst id value exp), l) :: guards, bound
   | G_aux (G_pattern (pat, exp), l) :: guards when IdSet.mem id (pat_ids pat) ->
-     G_aux (G_pattern (subst_pat id value pat, subst id value exp), l) :: guards
+     G_aux (G_pattern (subst_pat id value pat, subst id value exp), l) :: guards, true
   | G_aux (G_pattern (pat, exp), l) :: guards ->
-     G_aux (G_pattern (subst_pat id value pat, subst id value exp), l) :: subst_guards id value guards
+     let guards, bound = subst_guards id value guards in
+     G_aux (G_pattern (subst_pat id value pat, subst id value exp), l) :: guards, bound
 
 and subst_fexp id value (FE_aux (FE_Fexp (id', exp), annot)) =
   FE_aux (FE_Fexp (id', subst id value exp), annot)

@@ -274,9 +274,7 @@ let rec replicate_bits (bits, n) =
 
 let identity x = x
 
-
-
-(* 
+(*
 Returns list of n bits of integer m starting from offset o >= 0 (bits numbered from least significant). 
 Uses twos-complement representation for m<0 and pads most significant bits in sign-extended way. 
 Most significant bit is head of returned list.
@@ -778,6 +776,27 @@ let hex_parse (n, str) =
   match list_of_string str with
   | '0' :: 'x' :: digits -> List.concat (List.map hex_char digits)
   | _ -> zeros n
+
+let rec hex_string = function
+  | [] -> "0x0"
+  | B0 :: B0 :: B0 :: B0 :: bits -> hex_string bits
+  | bits -> string_of_bits bits
+
+let decimal_parse (n, str) =
+  let m = Big_int.of_string str in
+  get_slice_int (n, m, Big_int.zero)
+
+let decimal_string bits = Big_int.to_string (uint bits)
+
+let binary_parse (n, str) =
+  match list_of_string str with
+  | '0' :: 'b' :: digits -> List.map bin_char digits
+  | _ -> zeros n
+
+let rec binary_string = function
+  | [] -> "0b0"
+  | B0 :: bits -> binary_string bits
+  | bits -> "0b" ^ String.concat "" (List.map string_of_bit bits)
 
 let string_of_bool = function
   | true -> "true"
