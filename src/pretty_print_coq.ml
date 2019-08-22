@@ -3149,7 +3149,7 @@ let find_unimplemented defs =
   in
   List.fold_left adjust_def IdSet.empty defs
 
-let pp_defs_coq (types_file,types_modules) (defs_file,defs_modules) (Defs defs) top_line =
+let pp_defs_coq (types_file,types_modules) (defs_file,defs_modules) (Defs defs) top_line suppress_MR_M =
 try
   (* let regtypes = find_regtypes d in *)
   let state_ids =
@@ -3189,10 +3189,10 @@ try
         separate empty (List.map doc_def statedefs); hardline;
         hardline;
         register_refs; hardline;
-        concat [
+        (if suppress_MR_M then empty else concat [
           string ("Definition MR a r := monadR register_value a r " ^ exc_typ ^ "."); hardline;
           string ("Definition M a := monad register_value a " ^ exc_typ ^ "."); hardline
-        ]
+        ])
         ]);
   (print defs_file)
     (concat

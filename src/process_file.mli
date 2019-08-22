@@ -73,6 +73,7 @@ val opt_lem_output_dir : (string option) ref
 val opt_isa_output_dir : (string option) ref
 val opt_coq_output_dir : (string option) ref
 val opt_alt_modules_coq : (string list) ref
+val opt_alt_modules2_coq : (string list) ref
 
 type out_type =
   | Lem_out of string list (* If present, the strings are files to open in the lem backend*)

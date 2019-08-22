@@ -55,6 +55,7 @@ let opt_lem_output_dir = ref None
 let opt_isa_output_dir = ref None
 let opt_coq_output_dir = ref None
 let opt_alt_modules_coq = ref ([]:string list)
+let opt_alt_modules2_coq = ref ([]:string list)
 
 type out_type =
   | Lem_out of string list
@@ -331,7 +332,7 @@ let output_lem filename libs type_env defs =
   print ol isa_lemmas;
   close_output_with_check ext_ol
 
-let output_coq opt_dir filename alt_modules libs defs =
+let output_coq opt_dir filename alt_modules alt_modules2 libs defs =
   let generated_line = generated_line filename in
   let types_module = (filename ^ "_types") in
   let monad_modules = ["Sail2_prompt_monad"; "Sail2_prompt"; "Sail2_state"] in
@@ -349,14 +350,20 @@ let output_coq opt_dir filename alt_modules libs defs =
     | [] -> base_imports_default
     | _ -> Str.split (Str.regexp "[ \t]+") (String.concat " " alt_modules)
     ) in  
+  let alt_modules2_imports =
+    (match alt_modules2 with
+    | [] -> []
+    | _ -> Str.split (Str.regexp "[ \t]+") (String.concat " " alt_modules2)
+    ) in  
   let ((ot,_,_,_) as ext_ot) =
     open_output_with_check_unformatted opt_dir (filename ^ "_types" ^ ".v") in
   let ((o,_,_,_) as ext_o) =
     open_output_with_check_unformatted opt_dir (filename ^ ".v") in
   (Pretty_print_coq.pp_defs_coq
      (ot, base_imports)
-     (o, base_imports @ (types_module :: libs))
-     defs generated_line);
+     (o, base_imports @ (types_module :: libs) @ alt_modules2)
+     defs generated_line)
+     (alt_modules2 <> []); (* suppress MR and M defns if alt_modules2 present*)
   close_output_with_check ext_ot;
   close_output_with_check ext_o
 
@@ -370,7 +377,7 @@ let output1 libpath out_arg filename type_env defs  =
   | Lem_out libs ->
      output_lem f' libs type_env defs
   | Coq_out libs ->
-     output_coq !opt_coq_output_dir f' !opt_alt_modules_coq libs defs
+     output_coq !opt_coq_output_dir f' !opt_alt_modules_coq !opt_alt_modules2_coq libs defs
 
 let output libpath out_arg files =
   List.iter
