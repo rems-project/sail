@@ -3,6 +3,13 @@ Require Import Sail2_state_monad.
 Require Export Setoid.
 Require Export Morphisms Equivalence.
 
+(* Basic results for reasoning about definitions which use the state monad.
+
+   Note that rewriting results are put into both a rewriting hint database and
+   a normal automation one.  The former can be used with autorewrite and friends,
+   but the latter can be used with the rewriting under congruence tactics, such as
+   statecong in Sail2_state_lemmas, and PrePostE_rewrite in Hoare. *)
+
 (* Ensure that pointwise equality on states is the preferred notion of
    equivalence for the state monad. *)
 Local Open Scope equiv_scope.
@@ -17,6 +24,8 @@ Qed.
 
 Hint Extern 4 (_ === _) => reflexivity.
 Hint Extern 4 (_ === _) => symmetry.
+
+
 
 Lemma bindS_ext_cong (*[fundef_cong]:*) {Regs A B E}
   {m1 m2 : monadS Regs A E} {f1 f2 : A -> monadS Regs B E} s :
@@ -55,6 +64,7 @@ simpl.
 auto using List.app_nil_r.
 Qed.
 Hint Rewrite bindS_returnS_left : state.
+Hint Resolve bindS_returnS_left : state.
 
 Lemma bindS_returnS_right Regs A E {m : monadS Regs A E} :
  bindS m returnS === m.
@@ -66,6 +76,7 @@ rewrite IHt;
 reflexivity.
 Qed.
 Hint Rewrite bindS_returnS_right : state.
+Hint Resolve bindS_returnS_right : state.
 
 Lemma bindS_readS {Regs A E} {f} {m : A -> monadS Regs A E} {s} :
   bindS (readS f) m s = m (f s) s.
@@ -90,6 +101,7 @@ simpl.
 auto using List.app_nil_r.
 Qed.
 Hint Rewrite bindS_assertS_true : state.
+Hint Resolve bindS_assertS_true : state.
 
 Lemma bindS_chooseS_returnS (*[simp]:*) Regs A B E {xs : list A} {f : A -> B} :
   bindS (Regs := Regs) (E := E) (chooseS xs) (fun x => returnS (f x)) === chooseS (List.map f xs).
@@ -100,6 +112,7 @@ simpl. rewrite IHxs.
 reflexivity.
 Qed.
 Hint Rewrite bindS_chooseS_returnS : state.
+Hint Resolve bindS_chooseS_returnS : state.
 
 Lemma result_cases : forall (A E : Type) (P : result A E -> Prop),
   (forall a, P (Value a)) ->
@@ -191,18 +204,21 @@ induction (m s) as [ | [[a | e] t]].
 * simpl. rewrite IHl. reflexivity.
 Qed.
 Hint Rewrite bindS_assoc : state.
+Hint Resolve bindS_assoc : state.
 
 Lemma bindS_failS Regs A B E {msg} {f : A -> monadS Regs B E} :
   bindS (failS msg) f = failS msg.
 reflexivity.
 Qed.
 Hint Rewrite bindS_failS : state.
+Hint Resolve bindS_failS : state.
 
 Lemma bindS_throwS Regs A B E {e} {f : A -> monadS Regs B E} :
   bindS (throwS e) f = throwS e.
 reflexivity.
 Qed.
 Hint Rewrite bindS_throwS : state.
+Hint Resolve bindS_throwS : state.
 
 (*declare seqS_def[simp]*)
 Lemma seqS_def Regs A E m (m' : monadS Regs A E) :
@@ -210,6 +226,7 @@ Lemma seqS_def Regs A E m (m' : monadS Regs A E) :
 reflexivity.
 Qed.
 Hint Rewrite seqS_def : state.
+Hint Resolve seqS_def : state.
 
 Lemma Value_bindS_elim {Regs A B E} {a m} {f : A -> monadS Regs B E} {s s'} :
   List.In (Value a, s') (bindS m f s) ->
@@ -235,11 +252,13 @@ Lemma try_catchS_returnS Regs A E1 E2 {a} {h : E1 -> monadS Regs A E2}:
 reflexivity.
 Qed.
 Hint Rewrite try_catchS_returnS : state.
+Hint Resolve try_catchS_returnS : state.
 Lemma try_catchS_failS Regs A E1 E2 {msg} {h : E1 -> monadS Regs A E2}:
   try_catchS (failS msg) h = failS msg.
 reflexivity.
 Qed.
 Hint Rewrite try_catchS_failS : state.
+Hint Resolve try_catchS_failS : state.
 Lemma try_catchS_throwS Regs A E1 E2 {e} {h : E1 -> monadS Regs A E2}:
   try_catchS (throwS e) h === h e.
 intro s.
@@ -248,6 +267,7 @@ simpl.
 auto using List.app_nil_r.
 Qed.
 Hint Rewrite try_catchS_throwS : state.
+Hint Resolve try_catchS_throwS : state.
 
 Lemma try_catchS_cong (*[cong]:*) {Regs A E1 E2 m1 m2} {h1 h2 : E1 -> monadS Regs A E2} :
   m1 === m2 ->
@@ -385,6 +405,7 @@ induction (m s) as [ | [[a | [e | msg]] t]].
 * simpl. apply IHl.
 Qed.
 Hint Rewrite ignore_throw_bindS : ignore_throw.
+Hint Resolve ignore_throw_bindS : ignore_throw.
 
 Lemma try_catchS_bindS_no_throw {Regs A B E1 E2} {m1 : monadS Regs A E1} {m2 : monadS Regs A E2} {f : A -> monadS Regs B _} {h} :
   ignore_throw m1 === m1 ->
@@ -445,6 +466,10 @@ Hint Rewrite no_throw_basic_builtins_1 no_throw_basic_builtins_2
              no_throw_basic_builtins_3 no_throw_basic_builtins_4
              no_throw_basic_builtins_5 no_throw_basic_builtins_6
              no_throw_basic_builtins_7 : ignore_throw.
+Hint Resolve no_throw_basic_builtins_1 no_throw_basic_builtins_2
+             no_throw_basic_builtins_3 no_throw_basic_builtins_4
+             no_throw_basic_builtins_5 no_throw_basic_builtins_6
+             no_throw_basic_builtins_7 : ignore_throw.
 
 Lemma ignore_throw_option_case_distrib_1 Regs B C E1 E2 (c : sequential_state Regs -> option B) s (n : monadS Regs C E1) (f : B -> monadS Regs C E1) :
   ignore_throw (E2 := E2) (match c s with None => n | Some b => f b end) s =
@@ -468,6 +493,7 @@ unfold read_memt_bytesS. autorewrite with ignore_throw.
 apply bindS_cong; auto. intros.  autorewrite with ignore_throw. reflexivity.
 Qed.
 Hint Rewrite no_throw_mem_builtins_1 : ignore_throw.
+Hint Resolve no_throw_mem_builtins_1 : ignore_throw.
 Lemma no_throw_mem_builtins_2 Regs E1 E2 rk a sz :
   ignore_throw (E2 := E2) (@read_mem_bytesS Regs E1 rk a sz) === read_mem_bytesS rk a sz.
 unfold read_mem_bytesS. autorewrite with ignore_throw.
@@ -475,10 +501,12 @@ apply bindS_cong; intros; autorewrite with ignore_throw; auto.
 destruct a0; reflexivity.
 Qed.
 Hint Rewrite no_throw_mem_builtins_2 : ignore_throw.
+Hint Resolve no_throw_mem_builtins_2 : ignore_throw.
 Lemma no_throw_mem_builtins_3 Regs A E1 E2 a :
   ignore_throw (E2 := E2) (@read_tagS Regs A E1 a) === read_tagS a.
 reflexivity. Qed.
 Hint Rewrite no_throw_mem_builtins_3 : ignore_throw.
+Hint Resolve no_throw_mem_builtins_3 : ignore_throw.
 Lemma no_throw_mem_builtins_4 Regs A V E1 E2 rk a sz H :
   ignore_throw (E2 := E2) (@read_memtS Regs E1 A V rk a sz H) === read_memtS rk a sz.
 unfold read_memtS. autorewrite with ignore_throw.
@@ -487,6 +515,7 @@ reflexivity. destruct a0; simpl. autorewrite with ignore_throw.
 reflexivity.
 Qed.
 Hint Rewrite no_throw_mem_builtins_4 : ignore_throw.
+Hint Resolve no_throw_mem_builtins_4 : ignore_throw.
 Lemma no_throw_mem_builtins_5 Regs A V E1 E2 rk a sz H :
   ignore_throw (E2 := E2) (@read_memS Regs E1 A V rk a sz H) === read_memS rk a sz.
 unfold read_memS. autorewrite with ignore_throw.
@@ -494,36 +523,43 @@ apply bindS_cong; intros; autorewrite with ignore_throw; auto.
 destruct a0; auto.
 Qed.
 Hint Rewrite no_throw_mem_builtins_5 : ignore_throw.
+Hint Resolve no_throw_mem_builtins_5 : ignore_throw.
 Lemma no_throw_mem_builtins_6 Regs E1 E2 wk addr sz v t :
   ignore_throw (E2 := E2) (@write_memt_bytesS Regs E1 wk addr sz v t) === write_memt_bytesS wk addr sz v t.
 unfold write_memt_bytesS. unfold seqS. autorewrite with ignore_throw.
 reflexivity.
 Qed.
 Hint Rewrite no_throw_mem_builtins_6 : ignore_throw.
+Hint Resolve no_throw_mem_builtins_6 : ignore_throw.
 Lemma no_throw_mem_builtins_7 Regs E1 E2 wk addr sz v :
   ignore_throw (E2 := E2) (@write_mem_bytesS Regs E1 wk addr sz v) === write_mem_bytesS wk addr sz v.
 unfold write_mem_bytesS. autorewrite with ignore_throw. reflexivity.
 Qed.
 Hint Rewrite no_throw_mem_builtins_7 : ignore_throw.
+Hint Resolve no_throw_mem_builtins_7 : ignore_throw.
 Lemma no_throw_mem_builtins_8 Regs E1 E2 A B wk addr sz v t :
   ignore_throw (E2 := E2) (@write_memtS Regs E1 A B wk addr sz v t) === write_memtS wk addr sz v t.
 unfold write_memtS. rewrite ignore_throw_option_case_distrib_2.
 destruct (Sail2_values.mem_bytes_of_bits v); autorewrite with ignore_throw; auto.
 Qed.
 Hint Rewrite no_throw_mem_builtins_8 : ignore_throw.
+Hint Resolve no_throw_mem_builtins_8 : ignore_throw.
 Lemma no_throw_mem_builtins_9 Regs E1 E2 A B wk addr sz v :
   ignore_throw (E2 := E2) (@write_memS Regs E1 A B wk addr sz v) === write_memS wk addr sz v.
 unfold write_memS. autorewrite with ignore_throw; auto.
 Qed.
 Hint Rewrite no_throw_mem_builtins_9 : ignore_throw.
+Hint Resolve no_throw_mem_builtins_9 : ignore_throw.
 Lemma no_throw_mem_builtins_10 Regs E1 E2 :
   ignore_throw (E2 := E2) (@excl_resultS Regs E1 tt) === excl_resultS tt.
 reflexivity. Qed.
 Hint Rewrite no_throw_mem_builtins_10 : ignore_throw.
+Hint Resolve no_throw_mem_builtins_10 : ignore_throw.
 Lemma no_throw_mem_builtins_11 Regs E1 E2 :
   ignore_throw (E2 := E2) (@undefined_boolS Regs E1 tt) === undefined_boolS tt.
 reflexivity. Qed.
 Hint Rewrite no_throw_mem_builtins_11 : ignore_throw.
+Hint Resolve no_throw_mem_builtins_11 : ignore_throw.
 
 Lemma no_throw_read_regvalS Regs RV E1 E2 r reg_name :
   ignore_throw (E2 := E2) (@read_regvalS Regs RV E1 r reg_name) === read_regvalS r reg_name.
@@ -532,6 +568,7 @@ apply bindS_cong; intros; auto. rewrite ignore_throw_option_case_distrib_2.
 autorewrite with ignore_throw. reflexivity.
 Qed.
 Hint Rewrite no_throw_read_regvalS : ignore_throw.
+Hint Resolve no_throw_read_regvalS : ignore_throw.
 
 Lemma no_throw_write_regvalS Regs RV E1 E2 r reg_name v :
   ignore_throw (E2 := E2) (@write_regvalS Regs RV E1 r reg_name v) === write_regvalS r reg_name v.
@@ -540,3 +577,5 @@ apply bindS_cong; intros; auto. rewrite ignore_throw_option_case_distrib_2.
 autorewrite with ignore_throw. reflexivity.
 Qed.
 Hint Rewrite no_throw_write_regvalS : ignore_throw.
+Hint Resolve no_throw_write_regvalS : ignore_throw.
+

@@ -1,4 +1,4 @@
-Require Import String ZArith.
+Require Import String ZArith Setoid Morphisms Equivalence.
 Require Import Sail2_state_monad Sail2_prompt Sail2_state Sail2_state_monad_lemmas.
 Require Import Sail2_state_lemmas.
 
@@ -425,7 +425,7 @@ Lemma PrePostE_bindS_unit Regs A Ety (P : predS Regs) (m : monadS Regs unit Ety)
 apply PrePost_bindS_unit.
 Qed.
 
-Lemma PrePostE_readS (*[PrePostE_atomI, intro]:*) Regs A Ety (P : predS Regs) f (Q : result A Ety -> predS Regs) E :
+Lemma PrePostE_readS (*[PrePostE_atomI, intro]:*) Regs A Ety f (Q : A -> predS Regs) E :
   PrePostE (Ety := Ety) (fun s => Q (f s) s) (readS f) Q E.
 unfold PrePostE, PrePost, readS.
 intros s Pre [a | e] s' [[= <- <-] | []].
@@ -443,6 +443,16 @@ Lemma PrePostE_if_branch (*[PrePostE_compositeI]:*) Regs A Ety (b : bool) (f g :
   (b = false -> PrePostE Pg g Q E) ->
   PrePostE (if b then Pf else Pg) (if b then f else g) Q E.
 destruct b; auto.
+Qed.
+
+Lemma PrePostE_if_sum_branch (*[PrePostE_compositeI]:*) Regs A Ety X Y (b : sumbool X Y) (f g : monadS Regs A Ety) Pf Pg Q E :
+  (forall H : X, b = left H  -> PrePostE Pf f Q E) ->
+  (forall H : Y, b = right H -> PrePostE Pg g Q E) ->
+  PrePostE (if b then Pf else Pg) (if b then f else g) Q E.
+intros HX HY.
+destruct b as [H | H].
+* apply (HX H). reflexivity. 
+* apply (HY H). reflexivity. 
 Qed.
 
 Lemma PrePostE_if Regs A Ety (b : bool) (f g : monadS Regs A Ety) P Q E :
@@ -808,3 +818,60 @@ eapply PrePostE_bindS with (R := fun _ s => forall x, List.In x xs -> Q x s).
   apply PrePostE_choose_boolsS_any.
   intuition.
 Qed.
+
+(* Setoid rewriting *)
+
+Local Open Scope equiv_scope.
+
+Add Parametric Morphism {Regs A Ety} : (@PrePost Regs A Ety)
+  with signature eq ==> equiv ==> eq ==> iff
+  as PrePost_morphism.
+intros.
+unfold PrePost.
+split; intros H' s.
+* rewrite <- (H s). apply H'.
+* rewrite -> (H s). apply H'.
+Qed.
+
+Add Parametric Morphism {Regs A Ety} : (@PrePostE Regs A Ety)
+  with signature eq ==> equiv ==> eq ==> eq ==> iff
+  as PrePostE_morphism.
+intros.
+unfold PrePostE.
+rewrite H.
+reflexivity.
+Qed.
+
+(* Applying rewrites in a Hoare quadruple.  For example, [PrePostE_rewrite liftState]
+   will push liftState through all of the monad operations. *)
+
+Lemma PrePostE_code_rw {Regs A Ety} P {Q : A -> predS Regs} {E : ex Ety -> predS Regs} {m m'} :
+  m === m' ->
+  PrePostE P m' Q E ->
+  PrePostE P m  Q E.
+intro H.
+rewrite H.
+auto.
+Qed.
+
+Ltac PrePostE_rewrite db := (eapply PrePostE_code_rw; [ statecong db | ]).
+Tactic Notation "PrePostE_rewrite" ident(db) := PrePostE_rewrite db.
+
+(* Attempt to do a weakest precondition calculation step.  Assumes that goal has
+   a metavariable for the precondition. *)
+
+Ltac PrePostE_step :=
+  match goal with
+  | |- PrePostE _ (bindS _ _) _ _ => eapply PrePostE_bindS; intros
+  (* The precondition will often have the form (?R x), and Coq's higher-order
+     unification will try to unify x and a if we don't explicitly tell it to
+     use Q to form the precondition to unify with P. *)
+  | |- PrePostE ?P (returnS ?a) ?Q _ => apply (PrePostE_returnS _ _ _ Q)
+  | |- PrePostE _ (if _ then _ else _) _ _ =>
+    first
+    [ eapply PrePostE_if_branch; intros
+    | eapply PrePostE_if_sum_branch; intros
+    ]
+  | |- PrePostE _ (readS _) _ _ => apply PrePostE_readS
+  | |- PrePostE _ (assert_expS _ _) _ _ => apply PrePostE_assert_expS
+  end.
