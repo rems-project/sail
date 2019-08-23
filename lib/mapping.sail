@@ -65,4 +65,12 @@ mapping option_bits forall 'n, 'n >= 0. (n: int('n)) -> string <-> option(bitvec
   backwards Some(x) => hex_string(x)
 }
 
+val __split = {
+  _: "__split"
+} : (string, string) -> (bool, __match)
+
+val __group = {
+  _: "__group"
+} : (int, __match) -> string
+
 $endif

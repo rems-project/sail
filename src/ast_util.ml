@@ -99,9 +99,9 @@ let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
 
 let mk_typ_pat tpat_aux = TP_aux (tpat_aux, Parse_ast.Unknown)
 
-let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
-
-let mk_lit_exp lit_aux = mk_exp (E_lit (mk_lit lit_aux))
+let mk_lit ?loc:(l=Parse_ast.Unknown) lit_aux = L_aux (lit_aux, l)
+let mk_lit_exp ?loc:(l=Parse_ast.Unknown) lit_aux = mk_exp ~loc:l (E_lit (mk_lit ~loc:l lit_aux))
+let mk_lit_pat ?loc:(l=Parse_ast.Unknown) lit_aux = mk_pat (P_lit (mk_lit ~loc:l lit_aux))
 
 let mk_funcl id pat body = FCL_aux (FCL_Funcl (id, Pat_aux (Pat_case (pat, [], body), Parse_ast.Unknown)), no_annot)
 
@@ -2287,6 +2287,34 @@ let parse_regex str =
   let lexbuf = Lexing.from_string str in
   try Some (Regex_parser.regex_eof Regex_lexer.token lexbuf) with
   | _ -> None
+
+let rec string_of_regex =
+  let open Regex in
+  let posix_char = function
+    | ('.' | '[' | ']' | '{' | '}' | '(' | ')' | '\\' | '*' | '+' | '?' | '|' | '^' | '$') as c -> "\\\\" ^ String.make 1 c
+    | c -> String.make 1 c
+  in
+  let string_of_repeat = function
+    | At_least 0 -> "*"
+    | At_least 1 -> "+"
+    | At_least n -> Printf.sprintf "{,%d}" n
+    | Between (0, 1) -> "?"
+    | Between (n, m) -> Printf.sprintf "{%d,%d}" n m
+    | Exactly n -> Printf.sprintf "{%d}" n
+  in
+  let string_of_char_class = function
+    | Class_char c -> String.make 1 c
+    | Class_range (c1, c2) -> String.make 1 c1 ^ "-" ^ String.make 1 c2
+  in
+  function
+  | Group r -> "(" ^ string_of_regex r ^ ")"
+  | Or (r1, r2) -> string_of_regex r1 ^ "|" ^ string_of_regex r2
+  | Seq rs -> Util.string_of_list "" string_of_regex rs
+  | Repeat (r, repeat) -> string_of_regex r ^ string_of_repeat repeat
+  | Dot -> "."
+  | Char c -> posix_char c
+  | Class (true, cc) -> "[" ^ Util.string_of_list "" string_of_char_class cc ^ "]"
+  | Class (false, cc) -> "[^" ^ Util.string_of_list "" string_of_char_class cc ^ "]"
 
 let rec ocaml_regex' =
   let open Regex in

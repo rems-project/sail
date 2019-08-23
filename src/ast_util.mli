@@ -88,8 +88,9 @@ val mk_guard : unit guard_aux -> unit guard
 val mk_pexp : unit pexp_aux -> unit pexp
 val mk_mpexp : unit mpexp_aux -> unit mpexp
 val mk_lexp : unit lexp_aux -> unit lexp
-val mk_lit : lit_aux -> lit
-val mk_lit_exp : lit_aux -> unit exp
+val mk_lit : ?loc:l -> lit_aux -> lit
+val mk_lit_exp : ?loc:l -> lit_aux -> unit exp
+val mk_lit_pat : ?loc:l -> lit_aux -> unit pat
 val mk_typ_pat : typ_pat_aux -> typ_pat
 val mk_funcl : id -> unit pat -> unit exp -> unit funcl
 val mk_fundef : (unit funcl) list -> unit def
@@ -540,9 +541,3 @@ val quant_item_subst_kid : kid -> kid -> quant_item -> quant_item
 val typquant_subst_kid : kid -> kid -> typquant -> typquant
 
 val simple_string_of_loc : Parse_ast.l -> string
-
-(* Regular expression parsing *)
-val parse_regex : string -> Regex.regex option
-
-val ocaml_regex : Regex.regex -> Str.regexp
-

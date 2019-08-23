@@ -323,6 +323,11 @@ let subst_id_exp exp (id1,id2) =
     (E_aux (E_id (Id_aux (id2, Parse_ast.Unknown)), (Parse_ast.Unknown, Type_check.empty_tannot (Type_check.env_of exp))))
     exp
 
+let subst_id_guards guards (id1,id2) =
+  Ast_util.subst_guards (Id_aux (id1, Parse_ast.Unknown))
+    (E_aux (E_id (Id_aux (id2, Parse_ast.Unknown)), (Parse_ast.Unknown, Type_check.empty_tannot Type_check.initial_env)))
+    guards
+
 let remove_wildcards pre (P_aux (_,(l,_)) as pat) =
   fold_pat
     { id_algebra with
@@ -572,13 +577,46 @@ module Literal_rewriter = Pattern_rewriter.Make(Literal_config)
 
    s_1 ^ ... ^ s_n => ...
    into
-   id let (g_1, ... , g_n) = split(), let s_1 = g_1, ... , let s_n = g_n => ...
+   id let (true, m) = __split(T, id), let s_1 = __group(m, 1), ... , let s_n = __group(m, 2) => ...
 
-   where g_1 to g_n are the groups described by the regular expression that splits the string pattern, performed by split() *)
+   where split(T) tokenizes the string append using the regex T derived from the subpattern types. *)
 module String_append_config = struct
   let id_root = "s"
 
-  let action _ _ = No_change
+  let action l = function
+    | P_aux (P_string_append pats, annot) ->
+       let subpattern_regex pat =
+         let open Type_check in
+         match pat, typ_of_pat pat with
+         | P_aux (P_lit (L_aux (L_string str, _)), _), _ ->
+            None, Regex.Seq (List.map (fun c -> Regex.Char c) (Util.string_to_list str))
+         | _, Typ_aux (Typ_regex regex, _) ->
+            begin match Regex_util.parse_regex regex with
+            | Some regex -> Some pat, Regex.Group regex
+            | None -> Reporting.unreachable (fst annot) __POS__ ("Could not parse regular expression: " ^ regex)
+            end
+         | _, Typ_aux (Typ_id id, _) when string_of_id id = "string" ->
+            Some pat, Regex.(Group (Repeat (Dot, At_least 0)))
+         | _, _ ->
+            Reporting.unreachable (fst annot) __POS__ ("Bad subpattern in string append pattern: " ^ string_of_pat pat)
+       in
+       let subpattern_regexes = List.map subpattern_regex pats in
+       let tokenization = Regex_util.string_of_regex (Regex.Seq (List.map snd subpattern_regexes)) in
+       Subst_id (fun s ->
+           [G_aux (G_pattern (locate_pat (fun _ -> l) (mk_pat (P_tup [mk_lit_pat L_true; mk_pat (P_id (mk_id "m"))])),
+                              locate (fun _ -> l) (mk_exp (E_app (mk_id "__split", [mk_lit_exp (L_string tokenization); mk_exp (E_id s)])))), l)]
+           @ (List.fold_left (fun (group, guards) (subpattern, regex) ->
+                  match subpattern with
+                  | None -> (group, guards)
+                  | Some pat ->
+                     (group + 1,
+                      G_aux (G_pattern (Type_check.strip_pat pat,
+                                        locate (fun _ -> l) (mk_exp (E_app (mk_id "__group", [mk_lit_exp (L_num (Big_int.of_int group)); mk_exp (E_id (mk_id "m"))])))), l)
+                      :: guards)
+                ) (1, []) subpattern_regexes
+              |> snd)
+         )
+    | _ -> No_change
 end
 
 module String_append_rewriter = Pattern_rewriter.Make(String_append_config)
@@ -696,150 +734,18 @@ let rewrite_def = function
 
 let swap_guards (Defs defs) = Defs (List.map rewrite_def defs)
 
-let get_loc_exp (E_aux (_,(l,_))) = l
-
-let annot_exp_effect e_aux l env typ effect = E_aux (e_aux, (l, Type_check.mk_tannot env typ effect))
-let annot_exp e_aux l env typ = annot_exp_effect e_aux l env typ no_effect
-
-let rec pat_to_exp ((P_aux (pat,(l,annot))) as p_aux) =
-  let open Type_check in
-  let rewrap e = E_aux (e,(l,annot)) in
-  let env = env_of_pat p_aux in
-  let typ = typ_of_pat p_aux in
-  match pat with
-  | P_lit lit -> rewrap (E_lit lit)
-  | P_wild -> raise (Reporting.err_unreachable l __POS__
-      "pat_to_exp given wildcard pattern")
-  | P_or(pat1, pat2) -> (* todo: insert boolean or *) pat_to_exp pat1 
-  | P_not(pat) -> (* todo: insert boolean not *) pat_to_exp pat
-  | P_as (pat,id) -> rewrap (E_id id)
-  | P_var (pat, _) -> pat_to_exp pat
-  | P_typ (_,pat) -> pat_to_exp pat
-  | P_id id -> rewrap (E_id id)
-  | P_app (id,pats) -> rewrap (E_app (id, List.map pat_to_exp pats))
-  | P_vector pats -> rewrap (E_vector (List.map pat_to_exp pats))
-  | P_vector_concat pats -> begin
-      let empty_vec = E_aux (E_vector [], (l,())) in
-      let concat_vectors vec1 vec2 =
-        E_aux (E_vector_append (vec1, vec2), (l, ()))
-      in
-      check_exp env (List.fold_right concat_vectors (List.map (fun p -> strip_exp (pat_to_exp p)) pats) empty_vec) typ
-    end
-  | P_tup pats -> rewrap (E_tuple (List.map pat_to_exp pats))
-  | P_list pats -> rewrap (E_list (List.map pat_to_exp pats))
-  | P_cons (p,ps) -> rewrap (E_cons (pat_to_exp p, pat_to_exp ps))
-  | P_string_append (pats) -> begin
-      let empty_string = annot_exp (E_lit (L_aux (L_string "", l))) l env string_typ in
-      let string_append str1 str2 =
-        annot_exp (E_app (mk_id "string_append", [str1; str2])) l env string_typ
-      in
-      (List.fold_right string_append (List.map pat_to_exp pats) empty_string)
-    end
-
-let case_exp e t cs =
-  let open Type_check in
-  let l = get_loc_exp e in
-  let env = env_of e in
-  let annot = (get_loc_exp e, Some (env_of e, t, no_effect)) in
-  match cs with
-  | [(P_aux (P_wild, _), body, _)] ->
-     fix_eff_exp body
-  | [(P_aux (P_id id, pannot) as pat, body, _)] ->
-     fix_eff_exp (annot_exp (E_let (LB_aux (LB_val (pat, e), pannot), body)) l env t)
-  | _ ->
-     let pexp (pat,body,annot) = Pat_aux (Pat_case (pat,[],body),annot) in
-     let ps = List.map pexp cs in
-     fix_eff_exp (annot_exp (E_case (e, ps)) l env t)
-
-(* Rewrite guarded patterns into a combination of if-expressions and
-   unguarded pattern matches
-
-   Strategy:
-   - Split clauses into groups where the first pattern subsumes all the
-     following ones
-   - Translate the groups in reverse order, using the next group as a
-     fall-through target, if there is one
-   - Within a group,
-     - translate the sequence of clauses to an if-then-else cascade using the
-       guards as long as the patterns are equivalent modulo substitution, or
-     - recursively translate the remaining clauses to a pattern match if
-       there is a difference in the patterns.
-
-  TODO: Compare this more closely with the algorithm in the CPP'18 paper of
-  Spector-Zabusky et al, who seem to use the opposite grouping and merging
-  strategy to ours: group *mutually exclusive* clauses, and try to merge them
-  into a pattern match first instead of an if-then-else cascade.
+(*
+let rec rewrite_case fallthrough (guards, exp) =
+  match guards with
+  | [] -> exp
+  | G_aux (G_if cond, g_l) :: guards ->
+     let (E_aux (_, (_, tannot)) as exp) = rewrite_case fallthrough (guards, exp) in
+     E_aux (E_if (cond, exp, fallthrough), (gen_loc g_l, tannot))
+  | G_aux (G_pattern (pat, exp'), g_l) :: guards ->
+     let open Type_check in
+     let (E_aux (_, (_, tannot)) as exp) = rewrite_case fallthrough (guards, exp) in
+     let wildcard, _, _ = bind_pat (env_of_pat pat) (mk_pat P_wild) (typ_of_pat pat) in
+     E_aux (E_case (exp', [Pat_aux (Pat_case (pat, [], exp), gen_loc g_l);
+                           Pat_aux (Pat_case (wildcard, [], fallthrough), gen_loc g_l)]),
+            (gen_loc g_l, tannot))
 *)
-let rewrite_guarded_clauses l env pat_typ typ cs =
-  let open Type_check in
-  let rec group fallthrough clauses =
-    let add_clause (pat,cls,annot) c = (pat,cls @ [c],annot) in
-    let rec group_aux current acc = (function
-      | ((pat,guard,body,annot) as c) :: cs ->
-          let (current_pat,_,_) = current in
-          (match subsumes_pat current_pat pat with
-            | Some substs ->
-                let pat' = List.fold_left subst_id_pat pat substs in
-                let guard' = (match guard with
-                  | [G_aux (G_if exp, l)] -> [G_aux (G_if (List.fold_left subst_id_exp exp substs), l)]
-                  | _ -> []) in
-                let body' = List.fold_left subst_id_exp body substs in
-                let c' = (pat',guard',body',annot) in
-                group_aux (add_clause current c') acc cs
-            | None ->
-                let pat = match cs with _::_ -> remove_wildcards "g__" pat | _ -> pat in
-                group_aux (pat,[c],annot) (acc @ [current]) cs)
-      | [] -> acc @ [current]) in
-    let groups = match clauses with
-      | [(pat,guard,body,annot) as c] ->
-          [(pat, [c], annot)]
-      | ((pat,guard,body,annot) as c) :: cs ->
-          group_aux (remove_wildcards "g__" pat, [c], annot) [] cs
-      | _ ->
-          raise (Reporting.err_unreachable l __POS__
-            "group given empty list in rewrite_guarded_clauses") in
-    let add_group cs groups = (if_pexp (groups @ fallthrough) cs) :: groups in
-    List.fold_right add_group groups []
-  and if_pexp fallthrough (pat,cs,annot) = (match cs with
-    | c :: _ ->
-        let body = if_exp fallthrough pat cs in
-        (pat, body, annot)
-    | [] ->
-        raise (Reporting.err_unreachable l __POS__
-            "if_pexp given empty list in rewrite_guarded_clauses"))
-  and if_exp fallthrough current_pat = (function
-    | (pat,guard,body,l) :: ((pat',guard',body',l') as c') :: cs ->
-        (match guard with
-          | [G_aux (G_if exp, l)] ->
-              let else_exp =
-                if equiv_pats current_pat pat'
-                then if_exp fallthrough current_pat (c' :: cs)
-                else case_exp (pat_to_exp current_pat) (typ_of body') (group fallthrough (c' :: cs)) in
-              fix_eff_exp (annot_exp (E_if (exp,body,else_exp)) l (env_of exp) (typ_of body))
-          | _ -> body)
-    | [(pat,guard,body,l)] ->
-        (* For singleton clauses with a guard, use fallthrough clauses if the
-           guard is not satisfied, but only those fallthrough clauses that are
-           not disjoint with the current pattern *)
-        let overlapping_clause (pat, _, _) = not (disjoint_pat env current_pat pat) in
-        let fallthrough = List.filter overlapping_clause fallthrough in
-        (match guard, fallthrough with
-          | [G_aux (G_if exp, l)], _ :: _ ->
-              let else_exp = case_exp (pat_to_exp current_pat) (typ_of body) fallthrough in
-              fix_eff_exp (annot_exp (E_if (exp,body,else_exp)) l (env_of exp) (typ_of body))
-          | _, _ -> body)
-    | [] ->
-        raise (Reporting.err_unreachable l __POS__
-            "if_exp given empty list in rewrite_guarded_clauses")) in
-  let is_complete = Pattern_completeness.is_complete (Env.pattern_completeness_ctx env) (List.map construct_pexp cs) in
-  let fallthrough =
-    if not is_complete then
-      let p = P_aux (P_wild, (gen_loc l, mk_tannot env pat_typ no_effect)) in
-      let msg = "Pattern match failure at " ^ Reporting.short_loc_to_string l in
-      let a = mk_exp ~loc:(gen_loc l) (E_assert (mk_lit_exp L_false, mk_lit_exp (L_string msg))) in
-      let b = mk_exp ~loc:(gen_loc l) (E_exit (mk_lit_exp L_unit)) in
-      let e = check_exp env (mk_exp ~loc:(gen_loc l) (E_block [a; b])) typ in
-      [(p,[],e,l)]
-    else []
-  in
-  group [] (cs @ fallthrough)

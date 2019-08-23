@@ -516,7 +516,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   | E_case (exp, pexps) when not (is_value exp) ->
      step exp >>= fun exp' -> wrap (E_case (exp', pexps))
   | E_case (_, []) -> fail "Pattern matching failed"
-  | E_case (exp, (Pat_aux (Pat_case (pat, guards, body), l) as pexp) :: pexps) ->
+  | E_case (exp, Pat_aux (Pat_case (pat, guards, body), l) :: pexps) ->
      pattern_match (Type_check.env_of_pat pat) pat (value_of_exp exp) >>= fun result ->
      begin match result with
      | Match_pattern pat' ->
@@ -767,9 +767,9 @@ and pattern_match env (P_aux (aux, annot) as pat) value =
         step exp >>= fun exp' -> wrap (P_view (pat, id, evaluated @ exp' :: exps))
      | [] ->
         if string_of_id id = "forwards regex" then (
-          match parse_regex (coerce_string (value_of_exp (List.hd exps))) with
+          match Regex_util.parse_regex (coerce_string (value_of_exp (List.hd exps))) with
           | Some regex ->
-             let regex = ocaml_regex regex in
+             let regex = Regex_util.ocaml_regex regex in
              let string = coerce_string value in
              if Str.string_match regex string 0 then (
                pattern_match env pat value
@@ -869,7 +869,7 @@ and pattern_match env (P_aux (aux, annot) as pat) value =
        | P_aux (P_lit (L_aux (L_string str, _)), _), _ ->
           Left pat, Regex.Seq (List.map (fun c -> Regex.Char c) (Util.string_to_list str))
        | _, Typ_aux (Typ_regex regex, _) ->
-          begin match parse_regex regex with
+          begin match Regex_util.parse_regex regex with
           | Some regex -> Right pat, Regex.Group regex
           | None -> Reporting.unreachable (fst annot) __POS__ ("Could not parse regular expression: " ^ regex)
           end
@@ -879,7 +879,7 @@ and pattern_match env (P_aux (aux, annot) as pat) value =
           Reporting.unreachable (fst annot) __POS__ ("Bad subpattern in string append pattern: " ^ string_of_pat pat)
      in
      let subpattern_regexes = List.map subpattern_regex pats in
-     let tokenizer_regex = Regex.Seq (List.map snd subpattern_regexes) |> ocaml_regex in
+     let tokenizer_regex = Regex.Seq (List.map snd subpattern_regexes) |> Regex_util.ocaml_regex in
      let string = coerce_string value in
      if Str.string_match tokenizer_regex string 0 then (
        match all_rights (List.map fst subpattern_regexes) with

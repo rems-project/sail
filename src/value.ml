@@ -648,6 +648,28 @@ let value_sail_cons = function
   | [v1; v2] -> V_list (v1 :: coerce_list v2)
   | _ -> failwith "value sail_cons"
 
+let value_split = function
+  | [v1; v2] ->
+     let open Regex_util in
+     begin match parse_regex (coerce_string v1) with
+     | Some regex ->
+        prerr_endline (coerce_string v1);
+        prerr_endline (ocaml_regex' regex);
+        let regex = ocaml_regex regex in
+        let str = coerce_string v2 in
+        if Str.string_match regex str 0 then
+          V_tuple [V_bool true; V_string str]
+        else
+          V_tuple [V_bool false; V_string str]
+     | None ->
+        failwith "value split (regex parse)"
+     end
+  | _ -> failwith "value split"
+
+let value_group = function
+  | [v1; v2] -> V_string (Str.matched_group (Big_int.to_int (coerce_int v1)) (coerce_string v2))
+  | _ -> failwith "value group"
+
 let primops =
   List.fold_left
     (fun r (x, y) -> StringMap.add x y r)
@@ -734,18 +756,27 @@ let primops =
       ("sub_vec", value_sub_vec);
       ("vector_truncate", value_vector_truncate);
       ("vector_truncateLSB", value_vector_truncateLSB);
+
+      (* Mapping helpers *)
       ("hex_parse", value_hex_parse);
       ("hex_string", value_hex_string);
       ("binary_parse", value_binary_parse);
       ("binary_string", value_binary_string);
       ("decimal_parse", value_decimal_parse);
       ("decimal_string", value_decimal_string);
+      ("__split", value_split);
+      ("__group", value_group);
+
+      (* Memory functions *)
       ("read_ram", value_read_ram);
       ("write_ram", value_write_ram);
       ("trace_memory_read", fun _ -> V_unit);
       ("trace_memory_write", fun _ -> V_unit);
+
       ("get_time_ns", fun _ -> V_int (Sail_lib.get_time_ns()));
       ("load_raw", value_load_raw);
+
+      (* Real/rational numbers *)
       ("to_real", value_to_real);
       ("eq_real", value_eq_real);
       ("lt_real", value_lt_real);
@@ -765,6 +796,7 @@ let primops =
       ("sqrt_real", value_sqrt_real);
       ("print_real", value_print_real);
       ("random_real", value_random_real);
+
       ("undefined_unit", fun _ -> V_unit);
       ("undefined_bit", fun _ -> V_bit Sail_lib.B0);
       ("undefined_int", fun _ -> V_int Big_int.zero);

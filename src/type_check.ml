@@ -552,6 +552,7 @@ end = struct
     List.fold_left (fun m (name, kinds) -> Bindings.add (mk_id name) (kinds_typq kinds) m) Bindings.empty
       [ ("range", [K_int; K_int]);
         ("atom", [K_int]);
+        ("atom_bool", [K_bool]);
         ("implicit", [K_int]);
         ("vector", [K_int; K_order; K_type]);
         ("bitvector", [K_int; K_order]);
@@ -565,7 +566,7 @@ end = struct
         ("list", [K_type]);
         ("string", []);
         ("itself", [K_int]);
-        ("atom_bool", [K_bool])
+        ("__match", [])
       ]
 
   let builtin_mappings =
@@ -808,7 +809,7 @@ end = struct
        else ()
     | Typ_id id -> typ_error env l ("Undefined type " ^ string_of_id id)
     | Typ_regex r ->
-       begin match parse_regex r with
+       begin match Regex_util.parse_regex r with
        | Some _ -> ()
        | None -> typ_error env l ("Could not parse regular expression \"" ^ r ^ "\"")
        end
@@ -2120,6 +2121,7 @@ let rec subtyp l env typ1 typ2 =
   | Typ_id id1, Typ_app (id2, []) when Id.compare id1 id2 = 0 -> ()
   | Typ_app (id1, []), Typ_id id2 when Id.compare id1 id2 = 0 -> ()
 
+  | Typ_id id, Typ_regex _ when string_of_id id = "string" -> ()
   | Typ_regex _, Typ_id id when string_of_id id = "string" -> ()
 
   | _, _ ->

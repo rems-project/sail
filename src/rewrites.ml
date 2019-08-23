@@ -3014,6 +3014,7 @@ let all_rewrites = [
     ("pattern_literals", Literal_rewriter (fun f -> Basic_rewriter (rewrite_defs_pat_lits f)));
     ("bitvector_concat", Basic_rewriter (fun _ -> Pattern_rewrites.Bitvector_concat_rewriter.rewrite));
     ("literals", Basic_rewriter (fun _ -> Pattern_rewrites.Literal_rewriter.rewrite));
+    ("string_append", Basic_rewriter (fun _ -> Pattern_rewrites.String_append_rewriter.rewrite));
     ("swap_guards", Basic_rewriter (fun _ -> Pattern_rewrites.swap_guards));
     ("vector_concat_assignments", Basic_rewriter rewrite_vector_concat_assignments);
     ("tuple_assignments", Basic_rewriter rewrite_tuple_assignments);

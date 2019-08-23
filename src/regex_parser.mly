@@ -110,7 +110,7 @@ regex_repeat:
 
 regex_group:
   | Lparen regex_alt Rparen
-    { $2 }
+    { Regex.Group $2 }
   | Dot
     { Regex.Dot }
   | Char
