@@ -3015,6 +3015,7 @@ let all_rewrites = [
     ("bitvector_concat", Basic_rewriter (fun _ -> Pattern_rewrites.Bitvector_concat_rewriter.rewrite));
     ("literals", Basic_rewriter (fun _ -> Pattern_rewrites.Literal_rewriter.rewrite));
     ("string_append", Basic_rewriter (fun _ -> Pattern_rewrites.String_append_rewriter.rewrite));
+    ("views", Basic_rewriter (fun _ -> Pattern_rewrites.View_rewriter.rewrite));
     ("swap_guards", Basic_rewriter (fun _ -> Pattern_rewrites.Swap_guards_rewriter.rewrite));
     ("guards", Basic_rewriter (fun _ -> Pattern_rewrites.rewrite_guarded_patterns));
     ("vector_concat_assignments", Basic_rewriter rewrite_vector_concat_assignments);
@@ -3176,12 +3177,11 @@ let rewrites_c = [
     ("atoms_to_singletons", [If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
-    ("vector_string_pats_to_bit_list", []);
     ("bitvector_concat", []);
     ("literals", []);
-    (* ("remove_vector_concat", []);
-    ("remove_bitvector_pats", []);
-    ("pattern_literals", [Literal_arg "no_strings"]); *)
+    ("string_append", []);
+    ("views", []);
+    ("vector_string_pats_to_bit_list", []);
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);
     ("simple_assignments", []);

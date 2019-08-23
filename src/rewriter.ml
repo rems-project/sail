@@ -210,11 +210,17 @@ let fix_eff_lb (LB_aux (lb,((l,_) as annot))) = match destruct_tannot (snd annot
 | None ->
   LB_aux (lb, (l, empty_tannot (env_of_annot annot)))
 
+let rewrite_guard rewriters = function
+  | G_aux (G_if exp, l) ->
+     G_aux (G_if (rewriters.rewrite_exp rewriters exp), l)
+  | G_aux (G_pattern (pat, exp), l) ->
+     G_aux (G_pattern (rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp), l)
+           
 let rewrite_pexp rewriters =
   let rewrite = rewriters.rewrite_exp rewriters in
   function
   | Pat_aux (Pat_case(p, gs, e), pannot) ->
-     Pat_aux (Pat_case(rewriters.rewrite_pat rewriters p, gs, rewrite e), pannot)
+     Pat_aux (Pat_case(rewriters.rewrite_pat rewriters p, List.map (rewrite_guard rewriters) gs, rewrite e), pannot)
 
 let rewrite_pat rewriters (P_aux (pat,(l,annot)) as orig_pat) =
   let rewrap p = P_aux (p,(l,annot)) in

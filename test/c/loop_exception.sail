@@ -137,10 +137,10 @@ function main() =
     catch {
       /* Exception in catch guard will throw to outer handler */
       Exception() if { throw Exception(); false } => {
-        assert(false, "Unreachable");
+        assert(false, "Unreachable A");
 	throw Exception()
       },
-      _ => assert(false, "Unreachable")
+      _ => assert(false, "Unreachable B")
     }
   } catch {
     Exception() => print_endline("Outer handler")

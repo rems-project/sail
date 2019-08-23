@@ -390,31 +390,6 @@ let step env global_state stack =
         failwith "Function arguments could not be evaluated"
      end
 
-  | I_aux (I_mapcall (clexp, id, args, label), _) ->
-     let args = Util.option_all (List.map (evaluate_cval stack.locals) args) in
-     begin match args with
-     | Some args ->
-        let cc, params, body, jump_table = Bindings.find id global_state.functions in
-        let mapping_return = function
-          | Some v ->
-             { (assignment clexp v stack) with pc = pc + 1 }
-          | None ->
-             { stack with pc = StringMap.find label stack.jump_table }
-        in
-        Step {
-          pc = 0;
-          locals = List.fold_left2 (fun locals param arg -> NameMap.add (name param) arg locals) NameMap.empty params args;
-          match_state = IntMap.empty;
-          current_cc = cc;
-          instrs = body;
-          jump_table = jump_table;
-          calls = string_of_id id :: stack.calls;
-          pop = Some mapping_return
-        }
-     | None ->
-        failwith "Mapping arguments could not be evaluated"
-     end
-
   (* If we hit an I_return, we must be in a mapping*)
   | I_aux (I_return _, _) ->
      begin match NameMap.find_opt return stack.locals with

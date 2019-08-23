@@ -3005,9 +3005,22 @@ and check_block l env exps ret_typ =
 and check_guards env = function
   | [] -> [], env
   | G_aux (G_if exp, l) :: guards ->
-     let exp = crule check_exp env exp bool_typ in
-     let guards, env = check_guards env guards in
-     G_aux (G_if exp, l) :: guards, env
+     (* First, we try to infer a boolean type with a constraint
+        (atom_bool) for flow typing, and fall back to checking against
+        any bool if that fails *)
+     let exp = try irule infer_exp env exp with
+               | Type_error _ -> crule check_exp env exp bool_typ in
+     begin match typ_of exp with
+     | Typ_aux (Typ_app (id, [A_aux (A_bool nc, _)]), _) when string_of_id id = "atom_bool" ->
+        let env = Env.add_constraint nc env in
+        let guards, env = check_guards env guards in
+        G_aux (G_if exp, l) :: guards, env
+     | Typ_aux (Typ_id id, _) when string_of_id id = "bool" ->
+        let guards, env = check_guards env guards in
+        G_aux (G_if exp, l) :: guards, env
+     | typ ->
+        typ_error env l ("Guard inferred as non-boolean type " ^ string_of_typ typ)
+     end
   | G_aux (G_pattern (pat, exp), l) :: guards ->
      let exp = irule infer_exp env exp in
      let pat, env = bind_pat_no_guard env pat (typ_of exp) in
@@ -3739,6 +3752,9 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_app (ctor, x :: y :: zs) when Env.is_union_constructor ctor env ->
      typ_print (lazy ("Inferring multiple argument constructor: " ^ string_of_id ctor));
      irule infer_exp env (mk_exp ~loc:l (E_app (ctor, [mk_exp ~loc:l (E_tuple (x :: y :: zs))])))
+  | E_app (mapping, ([E_aux (E_lit (L_aux (L_string regex, _)), _); _] as xs)) when string_of_id mapping = "forwards regex" ->
+     let env = Env.add_val_spec (mk_id "regex") (mk_typquant [], mapping_family_typ [string_typ] string_typ (regex_typ regex)) env in
+     check_mapping (irule infer_exp) l env mapping xs
   | E_app (mapping, xs) when Env.is_mapping (strip_direction mapping) env ->
      check_mapping (irule infer_exp) l env mapping xs
   | E_app (f, xs) when List.length (Env.get_overloads f env) > 0 ->

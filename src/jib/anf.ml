@@ -302,13 +302,13 @@ let rec no_shadow ids (AE_aux (aexp, env, l)) =
   in
   AE_aux (aexp, env, l)
 
-and no_shadow_apexp ids (apat, aexp1, aexp2) =
+and no_shadow_apexp ids (apat, aguards, aexp) =
   let shadows = IdSet.inter (apat_bindings apat) ids in
   let shadows = List.map (fun id -> id, new_shadow id) (IdSet.elements shadows) in
   let rename aexp = List.fold_left (fun aexp (from_id, to_id) -> aexp_rename from_id to_id aexp) aexp shadows in
   let rename_apat apat = List.fold_left (fun apat (from_id, to_id) -> apat_rename from_id to_id apat) apat shadows in
   let ids = IdSet.union (apat_bindings apat) (IdSet.union ids (IdSet.of_list (List.map snd shadows))) in
-  (rename_apat apat, [] (* FIXME no_shadow ids (rename aexp1) *), no_shadow ids (rename aexp2))
+  (rename_apat apat, aguards (* FIXME *), no_shadow ids (rename aexp))
 
 (* Map over all the avals in an aexp. *)
 let rec map_aval f (AE_aux (aexp, env, l)) =

@@ -1416,10 +1416,6 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      ksprintf string "  bool %s =  %s(%s, %s);" (sgen_id gs) (sgen_function_id f) (sgen_clexp x) c_args ^^ hardline
      ^^ ksprintf string "  if (!%s) { sail_match_failure(\"%s\"); }" (sgen_id gs) (String.escaped (string_of_id fid))
 
-  | I_mapcall (x, f, args, label) ->
-     let c_args = Util.string_of_list ", " sgen_arg_cval args in
-     ksprintf string "  if (!%s(%s, %s)) { goto %s; }" (sgen_function_id f) (sgen_clexp x) c_args label
-
   | I_funcall (x, extern, f, args) ->
      let c_args = Util.string_of_list ", " sgen_arg_cval args in
      let ctyp = clexp_ctyp x in

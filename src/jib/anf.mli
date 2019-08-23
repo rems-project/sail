@@ -172,6 +172,8 @@ val anf_pat : ?global:bool -> tannot pat -> typ apat
 
 val anf_pexp : tannot pexp -> typ apat * typ aguard list * typ aexp
 
+val anf_guard : tannot guard -> typ aguard
+                                                               
 val anf : tannot exp -> typ aexp
 
 (** {2 Pretty printing ANF expressions} *)

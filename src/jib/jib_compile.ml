@@ -607,6 +607,56 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
 
   | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_list [], ctyp)])) case_label], [], ctx
 
+and compile_aguard ctx aguard cleanup case_label =
+  match aguard with
+  | AG_if cond ->
+     let cond_setup, cond_call, cond_cleanup = compile_aexp ctx cond in
+     let gs = ngensym () in
+     cond_setup
+     @ [idecl CT_bool gs;
+        cond_call (CL_id (gs, CT_bool))]
+     @ cond_cleanup
+     @ [iif (V_call (Bnot, [V_id (gs, CT_bool)])) (cleanup @ [igoto case_label]) [] CT_unit],
+     cleanup,
+     ctx
+  | AG_pattern (gpat, gexp) ->
+     let ctyp = ctyp_of_typ ctx (apat_typ gpat) in
+     let gexp_setup, gexp_call, gexp_cleanup = compile_aexp ctx gexp in
+     let gs = ngensym () in
+     let destructure, destructure_cleanup, ctx = compile_match ctx gpat (V_id (gs, ctyp)) case_label in
+     gexp_setup
+     @ [gexp_call (CL_id (gs, ctyp))]
+     @ gexp_cleanup
+     @ destructure,
+     cleanup @ destructure_cleanup,
+     ctx
+
+and compile_case ctx clexp cval finish_match_label (apat, aguards, body) =
+  let case_label = label "case_" in
+  let destructure, destructure_cleanup, ctx = compile_match ctx apat cval case_label in
+  let rec compile_aguards ctx cleanup = function
+    | aguard :: aguards ->
+       let guard, cleanup', ctx = compile_aguard ctx aguard cleanup case_label in
+       let guards, cleanup'', ctx = compile_aguards ctx cleanup' aguards in                   
+       [icomment "guard"] @ guard @ guards, cleanup'', ctx
+    | [] -> [icomment "end guards"], cleanup, ctx
+  in
+  let guards, cleanup, ctx = compile_aguards ctx destructure_cleanup aguards in
+  let body_setup, body_call, body_cleanup = compile_aexp ctx body in
+  let case_instrs =
+    destructure
+    @ guards
+    @ body_setup
+    @ [body_call clexp]
+    @ body_cleanup
+    @ cleanup
+    @ [igoto finish_match_label]
+  in
+  if is_dead_aexp body then
+    [ilabel case_label]
+  else
+    [iblock case_instrs; ilabel case_label]
+  
 and compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   let ctx = { ctx with local_env = env } in
   match aexp_aux with
@@ -635,34 +685,8 @@ and compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
      let case_return_id = ngensym () in
      let finish_match_label = label "finish_match_" in
-     (* FIXME *)
-     let compile_case (apat, [AG_if guard], body) =
-       let trivial_guard = match guard with
-         | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _, _)
-           | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _, _) -> true
-         | _ -> false
-       in
-       let case_label = label "case_" in
-       let destructure, destructure_cleanup, ctx = compile_match ctx apat cval case_label in
-       let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
-       let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-       let gs = ngensym () in
-       let case_instrs =
-         destructure
-         @ (if not trivial_guard then
-              guard_setup @ [idecl CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
-              @ [iif (V_call (Bnot, [V_id (gs, CT_bool)])) (destructure_cleanup @ [igoto case_label]) [] CT_unit]
-            else [])
-         @ body_setup @ [body_call (CL_id (case_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
-         @ [igoto finish_match_label]
-       in
-       if is_dead_aexp body then
-         [ilabel case_label]
-       else
-         [iblock case_instrs; ilabel case_label]
-     in
      aval_setup @ [idecl ctyp case_return_id]
-     @ List.concat (List.map compile_case cases)
+     @ List.concat (List.map (compile_case ctx (CL_id (case_return_id, ctyp)) cval finish_match_label) cases)
      @ [imatch_failure ()]
      @ [ilabel finish_match_label],
      (fun clexp -> icopy l clexp (V_id (case_return_id, ctyp))),
@@ -676,35 +700,12 @@ and compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let try_return_id = ngensym () in
      let handled_exception_label = label "handled_exception_" in
      let fallthrough_label = label "fallthrough_exception_" in
-     let compile_case (apat, [AG_if guard], body) =
-       let trivial_guard = match guard with
-         | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _, _)
-         | AE_aux (AE_val (AV_cval (V_lit (VL_bool true, CT_bool), _)), _, _) -> true
-         | _ -> false
-       in
-       let try_label = label "try_" in
-       let exn_cval = V_id (current_exception, ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
-       let destructure, destructure_cleanup, ctx = compile_match ctx apat exn_cval try_label in
-       let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
-       let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-       let gs = ngensym () in
-       let case_instrs =
-         destructure @ [icomment "end destructuring"]
-         @ (if not trivial_guard then
-              guard_setup @ [idecl CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
-              @ [ijump (V_call (Bnot, [V_id (gs, CT_bool)])) try_label]
-              @ [icomment "end guard"]
-            else [])
-         @ body_setup @ [body_call (CL_id (try_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
-         @ [igoto handled_exception_label]
-       in
-       [iblock case_instrs; ilabel try_label]
-     in
+     let exn_cval = V_id (current_exception, ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
      assert (ctyp_equal ctyp (ctyp_of_typ ctx typ));
      [idecl ctyp try_return_id;
       itry_block (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
       ijump (V_call (Bnot, [V_id (have_exception, CT_bool)])) handled_exception_label]
-     @ List.concat (List.map compile_case cases)
+     @ List.concat (List.map (compile_case ctx (CL_id (try_return_id, ctyp)) exn_cval handled_exception_label) cases)
      @ [igoto fallthrough_label;
         ilabel handled_exception_label;
         icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool false, CT_bool));
@@ -1100,7 +1101,7 @@ let rec map_try_block f (I_aux (instr, aux)) =
     | I_decl _ | I_reset _ | I_init _ | I_reinit _ -> instr
     | I_if (cval, instrs1, instrs2, ctyp) ->
        I_if (cval, List.map (map_try_block f) instrs1, List.map (map_try_block f) instrs2, ctyp)
-    | I_funcall _ | I_mapcall _ | I_copy _ | I_clear _ | I_throw _ | I_return _ -> instr
+    | I_funcall _ | I_copy _ | I_clear _ | I_throw _ | I_return _ -> instr
     | I_block instrs -> I_block (List.map (map_try_block f) instrs)
     | I_try_block instrs -> I_try_block (f (List.map (map_try_block f) instrs))
     | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_jump _ | I_match_failure | I_undefined _ | I_end _ -> instr
@@ -1213,7 +1214,7 @@ let fix_early_return ret instrs =
 
 let letdef_count = ref 0
 
-let compile_funcl ctx id pat guard exp =
+let compile_funcl ctx id pat guards exp =
   (* Find the function's type. *)
   let quant, Typ_aux (fn_typ, _) =
     try Env.get_val_spec id ctx.local_env with Type_error _ -> Env.get_val_spec id ctx.tc_env
@@ -1239,6 +1240,24 @@ let compile_funcl ctx id pat guard exp =
     List.fold_left2 (fun ctx (id, _) ctyp -> { ctx with locals = Bindings.add id (Immutable, ctyp) ctx.locals }) ctx compiled_args arg_ctyps
   in
 
+  let guard_label = label "guard_" in
+  let rec compile_guards ctx cleanup = function
+    | guard :: guards ->
+       (* FIXME shadowing *)
+       let aguard =
+         match anf_guard guard with
+         | AG_if cond ->
+            AG_if (ctx.optimize_anf ctx cond)
+         | AG_pattern (apat, aexp) ->
+            AG_pattern (apat, ctx.optimize_anf ctx aexp) 
+       in
+       let guard_instrs, cleanup', ctx = compile_aguard ctx aguard cleanup guard_label in
+       let guards_instrs, ctx = compile_guards ctx cleanup' guards in
+       guard_instrs @ guards_instrs, ctx
+    | [] -> [ilabel guard_label], ctx
+  in
+  let guard_instrs, ctx = compile_guards ctx [] guards in
+  (*
   let guard_instrs = match guard with
     | Some guard ->
        let guard_aexp = ctx.optimize_anf ctx (no_shadow (pat_ids pat) (anf guard)) in
@@ -1256,6 +1275,7 @@ let compile_funcl ctx id pat guard exp =
        )]
     | None -> []
   in
+   *)
 
   (* Optimize and compile the expression to ANF. *)
   let aexp = ctx.optimize_anf ctx (no_shadow (pat_ids pat) (anf exp)) in
@@ -1423,15 +1443,10 @@ and compile_def' n total ctx = function
         [CDEF_spec (id, arg_ctyps, ret_ctyp)], ctx
      end
 
-  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_case (pat, [], exp), _)), _)]), _)) ->
+  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_case (pat, guards, exp), _)), _)]), _)) ->
      Util.progress "Compiling " (string_of_id id) n total;
-     compile_funcl ctx id pat None exp
+     compile_funcl ctx id pat guards exp
 
-(* FIXME
-  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_when (pat, guard, exp), _)), _)]), _)) ->
-     Util.progress "Compiling " (string_of_id id) n total;
-     compile_funcl ctx id pat (Some guard) exp
-*)
   | DEF_fundef (FD_aux (FD_function (_, _, _, []), (l, _))) ->
      raise (Reporting.err_general l "Encountered function with no clauses")
 

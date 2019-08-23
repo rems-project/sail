@@ -82,9 +82,6 @@ let ifuncall ?loc:(l=Parse_ast.Unknown) clexp id cvals =
 let iextern ?loc:(l=Parse_ast.Unknown) clexp id cvals =
   I_aux (I_funcall (clexp, true, id, cvals), (instr_number (), l))
 
-let imapcall ?loc:(l=Parse_ast.Unknown) clexp id cvals label =
-  I_aux (I_mapcall (clexp, id, cvals, label), (instr_number (), l))
-
 let icall ?loc:(l=Parse_ast.Unknown) clexp extern id cvals =
   I_aux (I_funcall (clexp, extern, id, cvals), (instr_number (), l))
 
@@ -205,9 +202,6 @@ let rec instr_rename from_id to_id (I_aux (instr, aux)) =
 
     | I_funcall (clexp, extern, id, args) ->
        I_funcall (clexp_rename from_id to_id clexp, extern, id, List.map (cval_rename from_id to_id) args)
-
-    | I_mapcall (clexp, id, args, label) ->
-       I_mapcall (clexp_rename from_id to_id clexp, id, List.map (cval_rename from_id to_id) args, label)
 
     | I_copy (clexp, cval) -> I_copy (clexp_rename from_id to_id clexp, cval_rename from_id to_id cval)
 
@@ -659,12 +653,6 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
   | I_funcall (x, _, f, args) ->
      separate space [ pp_clexp x; string "=";
                       string (string_of_id f |> Util.green |> Util.clear) ^^ parens (separate_map (string ", ") pp_cval args) ]
-  | I_mapcall (x, f, args, label) ->
-     separate space [
-         pp_keyword "mapcall" ^^ pp_clexp x; string "=";
-         string (string_of_id f |> Util.green |> Util.clear) ^^ parens (separate_map (string ", ") pp_cval args);
-         string (label |> Util.blue |> Util.clear)
-       ]
   | I_copy (clexp, cval) ->
      separate space [pp_clexp clexp; string "="; pp_cval cval]
   | I_clear (ctyp, id) ->
@@ -765,7 +753,7 @@ let instr_deps = function
   | I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval) -> cval_deps cval, NameSet.singleton id
   | I_if (cval, _, _, _) -> cval_deps cval, NameSet.empty
   | I_jump (cval, label) -> cval_deps cval, NameSet.empty
-  | I_funcall (clexp, _, _, cvals) | I_mapcall (clexp, _, cvals, _) ->
+  | I_funcall (clexp, _, _, cvals) ->
      let reads, writes = clexp_deps clexp in
      List.fold_left NameSet.union reads (List.map cval_deps cvals), writes
   | I_copy (clexp, cval) ->
@@ -837,8 +825,6 @@ let rec map_instr_ctyp f (I_aux (instr, aux)) =
     | I_if (cval, then_instrs, else_instrs, ctyp) ->
        I_if (map_cval_ctyp f cval, List.map (map_instr_ctyp f) then_instrs, List.map (map_instr_ctyp f) else_instrs, f ctyp)
     | I_jump (cval, label) -> I_jump (map_cval_ctyp f cval, label)
-    | I_mapcall (clexp, id, cvals, label) ->
-       I_mapcall (map_clexp_ctyp f clexp, id, List.map (map_cval_ctyp f) cvals, label)
     | I_funcall (clexp, extern, id, cvals) ->
        I_funcall (map_clexp_ctyp f clexp, extern, id, List.map (map_cval_ctyp f) cvals)
     | I_copy (clexp, cval) -> I_copy (map_clexp_ctyp f clexp, map_cval_ctyp f cval)
@@ -858,7 +844,7 @@ let rec map_instr_ctyp f (I_aux (instr, aux)) =
 (** Map over each instruction within an instruction, bottom-up *)
 let rec map_instr f (I_aux (instr, aux)) =
   let instr = match instr with
-    | I_decl _ | I_init _ | I_reset _ | I_reinit _ | I_mapcall _
+    | I_decl _ | I_init _ | I_reset _ | I_reinit _
       | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _
       | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ | I_end _ -> instr
     | I_if (cval, instrs1, instrs2, ctyp) ->
@@ -874,7 +860,7 @@ let rec map_instr f (I_aux (instr, aux)) =
 let rec iter_instr f (I_aux (instr, aux)) =
   match instr with
   | I_decl _ | I_init _ | I_reset _ | I_reinit _
-    | I_funcall _ | I_mapcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _
+    | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _
     | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ | I_end _ -> f (I_aux (instr, aux))
   | I_if (cval, instrs1, instrs2, ctyp) ->
      List.iter (iter_instr f) instrs1;
@@ -915,7 +901,7 @@ let rec map_instrs f (I_aux (instr, aux)) =
     | I_decl _ | I_init _ | I_reset _ | I_reinit _ -> instr
     | I_if (cval, instrs1, instrs2, ctyp) ->
        I_if (cval, f (List.map (map_instrs f) instrs1), f (List.map (map_instrs f) instrs2), ctyp)
-    | I_funcall _ | I_mapcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _ -> instr
+    | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _ -> instr
     | I_block instrs -> I_block (f (List.map (map_instrs f) instrs))
     | I_try_block instrs -> I_try_block (f (List.map (map_instrs f) instrs))
     | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _  | I_end _ -> instr
@@ -1082,7 +1068,7 @@ let rec instr_ctyps (I_aux (instr, aux)) =
      CTSet.union (instrs_ctyps instrs1) (instrs_ctyps instrs2)
      |> CTSet.add (cval_ctyp cval)
      |> CTSet.add ctyp
-  | I_funcall (clexp, _, _, cvals) | I_mapcall (clexp, _, cvals, _) ->
+  | I_funcall (clexp, _, _, cvals) ->
      List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty (List.map cval_ctyp cvals)
      |> CTSet.add (clexp_ctyp clexp)
   | I_copy (clexp, cval)  ->
@@ -1145,8 +1131,6 @@ let rec instrs_rename from_id to_id =
   | I_aux (I_jump (cval, label), aux) :: instrs -> I_aux (I_jump (crename cval, label), aux) :: irename instrs
   | I_aux (I_funcall (clexp, extern, function_id, cvals), aux) :: instrs ->
      I_aux (I_funcall (lrename clexp, extern, function_id, List.map crename cvals), aux) :: irename instrs
-  | I_aux (I_mapcall (clexp, function_id, cvals, label), aux) :: instrs ->
-     I_aux (I_mapcall (lrename clexp, function_id, List.map crename cvals, label), aux) :: irename instrs
   | I_aux (I_copy (clexp, cval), aux) :: instrs -> I_aux (I_copy (lrename clexp, crename cval), aux) :: irename instrs
   | I_aux (I_clear (ctyp, id), aux) :: instrs -> I_aux (I_clear (ctyp, rename id), aux) :: irename instrs
   | I_aux (I_return cval, aux) :: instrs -> I_aux (I_return (crename cval), aux) :: irename instrs
