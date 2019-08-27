@@ -12,7 +12,7 @@ let translate_rtype_op op x = match op with
   | MIPSROpDSUBU  -> DSUBU x
   | MIPSROpMOVN   -> MOVN x
   | MIPSROpMOVZ   -> MOVZ x
-  | MIPSROpMUL    -> MUL x
+  | MIPSROpMUL    -> MUL0 x
   | MIPSROpNOR    -> NOR x
   | MIPSROpOR     -> OR x
   | MIPSROpSLT    -> SLT x 
@@ -54,7 +54,7 @@ let translate_shiftv_op op x = match op with
 let translate_muldiv_op op x = match op with
   | MIPSDDIV   -> DDIV x  
   | MIPSDDIVU  -> DDIVU x 
-  | MIPSDIV    -> DIV x   
+  | MIPSDIV    -> DIV0 x   
   | MIPSDIVU   -> DIVU x  
   | MIPSDMULT  -> DMULT x 
   | MIPSDMULTU -> DMULTU x

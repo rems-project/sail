@@ -8,7 +8,7 @@
 | (DSUBU  (rs, rt, rd)) -> `MIPSRType (MIPSROpDSUBU , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))
 | (MOVN   (rs, rt, rd)) -> `MIPSRType (MIPSROpMOVN  , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))
 | (MOVZ   (rs, rt, rd)) -> `MIPSRType (MIPSROpMOVZ  , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))
-| (MUL    (rs, rt, rd)) -> `MIPSRType (MIPSROpMUL   , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))
+| (MUL0    (rs, rt, rd)) -> `MIPSRType (MIPSROpMUL   , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))
 | (NOR    (rs, rt, rd)) -> `MIPSRType (MIPSROpNOR   , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))
 | (OR     (rs, rt, rd)) -> `MIPSRType (MIPSROpOR    , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))
 | (SLT    (rs, rt, rd)) -> `MIPSRType (MIPSROpSLT   , (translate_out_ireg rd), (translate_out_ireg rs), (translate_out_ireg rt))
@@ -46,7 +46,7 @@
 
 | DDIV   (rs, rt) -> `MIPSMulDiv (MIPSDDIV   , (translate_out_ireg rs), (translate_out_ireg rt))
 | DDIVU  (rs, rt) -> `MIPSMulDiv (MIPSDDIVU  , (translate_out_ireg rs), (translate_out_ireg rt))
-| DIV    (rs, rt) -> `MIPSMulDiv (MIPSDIV    , (translate_out_ireg rs), (translate_out_ireg rt))
+| DIV0    (rs, rt) -> `MIPSMulDiv (MIPSDIV    , (translate_out_ireg rs), (translate_out_ireg rt))
 | DIVU   (rs, rt) -> `MIPSMulDiv (MIPSDIVU   , (translate_out_ireg rs), (translate_out_ireg rt))
 | DMULT  (rs, rt) -> `MIPSMulDiv (MIPSDMULT  , (translate_out_ireg rs), (translate_out_ireg rt))
 | DMULTU (rs, rt) -> `MIPSMulDiv (MIPSDMULTU , (translate_out_ireg rs), (translate_out_ireg rt))

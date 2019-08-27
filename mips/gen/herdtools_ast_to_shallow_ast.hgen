@@ -2,7 +2,7 @@
     SYSCALL_THREAD_START
 
 | `MIPSStopFetching ->
-    ImplementationDefinedStopFetching
+    ImplementationDefinedStopFetching0
 
 (* Note different argument order, which reflects difference
    between instruction encoding and asm format  *)
