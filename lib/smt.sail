@@ -20,13 +20,15 @@ val emod_int = {
   coq: "emod_with_eq"
 } : forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))
 
-val abs_int = {
+val abs_int_atom = {
   ocaml: "abs_int",
   interpreter: "abs_int",
   lem: "abs_int",
   c: "abs_int",
   coq: "abs_with_eq"
 } : forall 'n. int('n) -> int(abs('n))
+
+overload abs_int = {abs_int_atom}
 
 $ifdef TEST
 
