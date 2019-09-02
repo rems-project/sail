@@ -133,12 +133,47 @@ Definition subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <= m)} `{ArithF
 Parameter dummy_vector : forall {n} `{ArithFact (n >= 0)}, mword n.
 
 (*val update_subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a*)
-Definition update_subrange_vec_inc {a b} (v : mword a) i j (w : mword b) : mword a :=
+Definition update_subrange_vec_inc_unchecked {a b} (v : mword a) i j (w : mword b) : mword a :=
   opt_def dummy_vector (of_bits (update_subrange_bv_inc v i j w)).
 
 (*val update_subrange_vec_dec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a*)
-Definition update_subrange_vec_dec {a b} (v : mword a) i j (w : mword b) : mword a :=
+Definition update_subrange_vec_dec_unchecked {a b} (v : mword a) i j (w : mword b) : mword a :=
   opt_def dummy_vector (of_bits (update_subrange_bv_dec v i j w)).
+
+Lemma update_subrange_vec_dec_pf {o m n} :
+ArithFact (0 <= o) ->
+ArithFact (o <= m < n) ->
+Z.of_nat (Z.to_nat o + (Z.to_nat (m - o + 1) + (Z.to_nat n - (Z.to_nat m + 1)))) = n.
+intros [H1] [H2].
+rewrite <- subrange_lemma3.
+rewrite !Nat2Z.inj_add.
+rewrite !Nat2Z.inj_sub.
+rewrite Nat2Z.inj_add.
+repeat rewrite Z2Nat.id; try omega.
+rewrite Nat.add_1_r.
+apply Z2Nat.inj_lt; omega.
+apply Z2Nat.inj_le; omega.
+Qed.
+
+Definition update_subrange_vec_dec {n} (v : mword n) m o `{ArithFact (0 <= o)} `{ArithFact (o <= m < n)} (w : mword (m - o + 1)) : mword n.
+refine (
+  let n := Z.to_nat n in
+  let m := Z.to_nat m in
+  let o := Z.to_nat o in
+  let prf : (o <= m < n)%nat := subrange_lemma0 in
+  let v' := get_word v in
+  let w' := get_word w in
+  let x :=
+    split1 o (m-o+1)
+      (cast_word (split1 (m+1) (n-(m+1)) (cast_word v' (subrange_lemma1 prf)))
+        (subrange_lemma2 prf)) in
+  let y :=
+      split2 (m+1) (n-(m+1)) (cast_word v' (subrange_lemma1 prf)) in
+  let z := combine x (combine w' y) in
+  cast_to_mword z (update_subrange_vec_dec_pf _ _)).
+Defined.
+
+Definition update_subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <= m)} `{ArithFact (m <= o < n)} (w : mword (o - m + 1)) : mword n := update_subrange_vec_dec v (n-1-m) (n-1-o) (autocast w).
 
 Lemma mword_nonneg {a} : mword a -> a >= 0.
 destruct a;
@@ -488,7 +523,7 @@ Definition reverse_endianness {n} (bits : mword n) := with_word (P := id) revers
 Definition get_slice_int {a} `{ArithFact (a >= 0)} : Z -> Z -> Z -> mword a := get_slice_int_bv.
 
 Definition set_slice n m (v : mword n) x (w : mword m) : mword n :=
-  update_subrange_vec_dec v (x + m - 1) x w.
+  update_subrange_vec_dec_unchecked v (x + m - 1) x w.
 
 Definition set_slice_int len n lo (v : mword len) : Z :=
   let hi := lo + len - 1 in
@@ -496,7 +531,7 @@ Definition set_slice_int len n lo (v : mword len) : Z :=
      avoid one here. *)
   if sumbool_of_bool (Z.gtb hi 0) then
     let bs : mword (hi + 1) := mword_of_int n in
-    (int_of_mword true (update_subrange_vec_dec bs hi lo v))
+    (int_of_mword true (update_subrange_vec_dec_unchecked bs hi lo v))
   else n.
 
 (* Variant of bitvector slicing for the ARM model with few constraints *)

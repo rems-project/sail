@@ -10,7 +10,7 @@ Require Export Sumbool.
 Require Export DecidableClass.
 Require Import Eqdep_dec.
 Require Export Zeuclid.
-Require Import Psatz.
+Require Import Lia.
 Import ListNotations.
 
 Open Scope Z.
