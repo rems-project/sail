@@ -45,28 +45,20 @@ Definition or_boolS {RV E} (l r : monadS RV bool E) : monadS RV bool E :=
 
 Definition and_boolSP {rv E} {P Q R:bool->Prop} (x : monadS rv {b:bool & ArithFact (P b)} E) (y : monadS rv {b:bool & ArithFact (Q b)} E)
   `{H:ArithFact (forall l r, P l -> (l = true -> Q r) -> R (andb l r))}
-  : monadS rv {b:bool & ArithFact (R b)} E.
-refine (
-  x >>$= fun '(existT _ x (Build_ArithFact _ p)) => (if x return P x -> _ then
-    fun p => y >>$= fun '(existT _ y _) => returnS (existT _ y _)
-  else fun p => returnS (existT _ false _)) p
-).
-* constructor. destruct H. destruct a0. change y with (andb true y). auto.
-* constructor. destruct H. change false with (andb false false). apply fact.
-  assumption.
-  congruence.
-Defined.
+  : monadS rv {b:bool & ArithFact (R b)} E :=
+  x >>$= fun '(existT _ x p) => (if x return ArithFact (P x) -> _ then
+    fun p => y >>$= fun '(existT _ y q) => returnS (existT _ y (and_bool_full_proof p q H))
+  else fun p => returnS (existT _ false (and_bool_left_proof p H))) p.
+
 Definition or_boolSP {rv E} {P Q R:bool -> Prop} (l : monadS rv {b : bool & ArithFact (P b)} E) (r : monadS rv {b : bool & ArithFact (Q b)} E)
  `{ArithFact (forall l r, P l -> (l = false -> Q r) -> R (orb l r))}
- : monadS rv {b : bool & ArithFact (R b)} E.
-refine (
- l >>$= fun '(existT _ l (Build_ArithFact _ p)) =>
-  (if l return P l -> _ then fun p => returnS (existT _ true _)
-   else fun p => r >>$= fun '(existT _ r _) => returnS (existT _ r _)) p
-).
-* constructor. destruct H. change true with (orb true true). apply fact. assumption. congruence.
-* constructor. destruct H. destruct a0. change r with (orb false r). auto.
-Defined.
+ : monadS rv {b : bool & ArithFact (R b)} E :=
+ l >>$= fun '(existT _ l p) =>
+  (if l return ArithFact (P l) -> _ then fun p => returnS (existT _ true (or_bool_left_proof p H))
+   else fun p => r >>$= fun '(existT _ r q) => returnS (existT _ r (or_bool_full_proof p q H))) p.
+
+Definition build_trivial_exS {rv E} {T:Type} (x : monadS rv T E) : monadS rv {x : T & ArithFact True} E :=
+ x >>$= fun x => returnS (existT _ x (Build_ArithFact _ I)).
 
 (*val bool_of_bitU_fail : forall 'rv 'e. bitU -> monadS 'rv bool 'e*)
 Definition bool_of_bitU_fail {RV E} (b : bitU) : monadS RV bool E :=
@@ -163,5 +155,18 @@ Definition internal_pickS {RV A E} (xs : list A) : monadS RV A E :=
     | Some x => returnS x
     | None => failS "choose internal_pick"
   end.
+
+Fixpoint undefined_word_natS {rv e} n : monadS rv (Word.word n) e :=
+  match n with
+  | O => returnS Word.WO
+  | S m =>
+    choose_boolS tt >>$= fun b =>
+    undefined_word_natS m >>$= fun t =>
+    returnS (Word.WS b t)
+  end.
+
+Definition undefined_bitvectorS {rv e} n `{ArithFact (n >= 0)} : monadS rv (mword n) e :=
+  undefined_word_natS (Z.to_nat n) >>$= fun w =>
+  returnS (word_to_mword w).
 
 

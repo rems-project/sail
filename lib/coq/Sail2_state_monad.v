@@ -108,6 +108,9 @@ fun s =>
 Definition assert_expS {Regs E} (exp : bool) (msg : string) : monadS Regs unit E :=
  if exp then returnS tt else failS msg.
 
+Definition assert_expS' {Regs E} (exp : bool) (msg : string) : monadS Regs (exp = true) E :=
+ if exp return monadS Regs (exp = true) E then returnS eq_refl else failS msg.
+
 (* For early return, we abuse exceptions by throwing and catching
    the return value. The exception type is "either 'r 'e", where "Right e"
    represents a proper exception and "Left r" an early return of value "r". *)

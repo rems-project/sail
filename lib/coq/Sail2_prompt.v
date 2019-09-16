@@ -61,34 +61,71 @@ Definition genlistM {A RV E} (f : nat -> monad RV A E) (n : nat) : monad RV (lis
 Definition and_boolM {rv E} (l : monad rv bool E) (r : monad rv bool E) : monad rv bool E :=
  l >>= (fun l => if l then r else returnm false).
 
+(* We introduce explicit definitions for these proofs so that they can be used in
+   the state monad and program logic rules.  They are not currently used in the proof
+   rules because it was more convenient to quantify over them instead. *)
+Definition and_bool_left_proof {P Q R:bool -> Prop} :
+  ArithFact (P false) ->
+  ArithFact (forall l r, P l -> (l = true -> Q r) -> R (andb l r)) ->
+  ArithFact (R false).
+intros [p] [h].
+constructor.
+change false with (andb false false).
+apply h; auto.
+congruence.
+Qed.
+
+Definition and_bool_full_proof {P Q R:bool -> Prop} {r} :
+  ArithFact (P true) ->
+  ArithFact (Q r) ->
+  ArithFact (forall l r, P l -> (l = true -> Q r) -> R (andb l r)) ->
+  ArithFact (R r).
+intros [p] [q] [h].
+constructor.
+change r with (andb true r).
+apply h; auto.
+Qed.
+
 Definition and_boolMP {rv E} {P Q R:bool->Prop} (x : monad rv {b:bool & ArithFact (P b)} E) (y : monad rv {b:bool & ArithFact (Q b)} E)
   `{H:ArithFact (forall l r, P l -> (l = true -> Q r) -> R (andb l r))}
-  : monad rv {b:bool & ArithFact (R b)} E.
-refine (
-  x >>= fun '(existT _ x (Build_ArithFact _ p)) => (if x return P x -> _ then
-    fun p => y >>= fun '(existT _ y _) => returnm (existT _ y _)
-  else fun p => returnm (existT _ false _)) p
-).
-* constructor. destruct H. destruct a0. change y with (andb true y). auto.
-* constructor. destruct H. change false with (andb false false). apply fact.
-  assumption.
-  congruence.
-Defined.
+  : monad rv {b:bool & ArithFact (R b)} E :=
+  x >>= fun '(existT _ x p) => (if x return ArithFact (P x) -> _ then
+    fun p => y >>= fun '(existT _ y q) => returnm (existT _ y (and_bool_full_proof p q H))
+  else fun p => returnm (existT _ false (and_bool_left_proof p H))) p.
 
 (*val or_boolM : forall 'rv 'e. monad 'rv bool 'e -> monad 'rv bool 'e -> monad 'rv bool 'e*)
 Definition or_boolM {rv E} (l : monad rv bool E) (r : monad rv bool E) : monad rv bool E :=
  l >>= (fun l => if l then returnm true else r).
+
+
+Definition or_bool_left_proof {P Q R:bool -> Prop} :
+  ArithFact (P true) ->
+  ArithFact (forall l r, P l -> (l = false -> Q r) -> R (orb l r)) ->
+  ArithFact (R true).
+intros [p] [h].
+constructor.
+change true with (orb true false).
+apply h; auto.
+congruence.
+Qed.
+
+Definition or_bool_full_proof {P Q R:bool -> Prop} {r} :
+  ArithFact (P false) ->
+  ArithFact (Q r) ->
+  ArithFact (forall l r, P l -> (l = false -> Q r) -> R (orb l r)) ->
+  ArithFact (R r).
+intros [p] [q] [h].
+constructor.
+change r with (orb false r).
+apply h; auto.
+Qed.
+
 Definition or_boolMP {rv E} {P Q R:bool -> Prop} (l : monad rv {b : bool & ArithFact (P b)} E) (r : monad rv {b : bool & ArithFact (Q b)} E)
  `{ArithFact (forall l r, P l -> (l = false -> Q r) -> R (orb l r))}
- : monad rv {b : bool & ArithFact (R b)} E.
-refine (
- l >>= fun '(existT _ l (Build_ArithFact _ p)) =>
-  (if l return P l -> _ then fun p => returnm (existT _ true _)
-   else fun p => r >>= fun '(existT _ r _) => returnm (existT _ r _)) p
-).
-* constructor. destruct H. change true with (orb true true). apply fact. assumption. congruence.
-* constructor. destruct H. destruct a0. change r with (orb false r). auto.
-Defined.
+ : monad rv {b : bool & ArithFact (R b)} E :=
+ l >>= fun '(existT _ l p) =>
+  (if l return ArithFact (P l) -> _ then fun p => returnm (existT _ true (or_bool_left_proof p H))
+   else fun p => r >>= fun '(existT _ r q) => returnm (existT _ r (or_bool_full_proof p q H))) p.
 
 Definition build_trivial_ex {rv E} {T:Type} (x:monad rv T E) : monad rv {x : T & ArithFact True} E :=
   x >>= fun x => returnm (existT _ x (Build_ArithFact _ I)).
