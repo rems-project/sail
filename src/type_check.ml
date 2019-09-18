@@ -2714,6 +2714,11 @@ let assert_msg = function
 
 let strip_exp : 'a exp -> unit exp = function exp -> map_exp_annot (fun (l, _) -> (l, ())) exp
 let strip_pat : 'a pat -> unit pat = function pat -> map_pat_annot (fun (l, _) -> (l, ())) pat
+let strip_guard : 'a guard -> unit guard = function
+  | G_aux (G_pattern (pat, exp), l) ->
+     G_aux (G_pattern (strip_pat pat, strip_exp exp), l)
+  | G_aux (G_if exp, l) ->
+     G_aux (G_if (strip_exp exp), l)
 let strip_pexp : 'a pexp -> unit pexp = function pexp -> map_pexp_annot (fun (l, _) -> (l, ())) pexp
 let strip_lexp : 'a lexp -> unit lexp = function lexp -> map_lexp_annot (fun (l, _) -> (l, ())) lexp
 
@@ -2742,6 +2747,15 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let inferred_exp = irule infer_exp env exp in
      let inferred_typ = typ_of inferred_exp in
      annot_exp (E_case (inferred_exp, List.map (fun case -> check_case env inferred_typ case typ) cases)) typ
+  | E_internal_cascade (exp, fallthroughs, cases), _ ->
+     let inferred_exp = irule infer_exp env exp in
+     let inferred_typ = typ_of inferred_exp in
+     let check_fallthrough (id, Fallthrough cases) (previous, env) =
+       let cases = List.map (fun case -> check_case env inferred_typ case typ) cases in
+       (id, Fallthrough cases) :: previous, Env.add_local id (Immutable, typ) env
+     in
+     let fallthroughs, env = List.fold_right check_fallthrough fallthroughs ([], env) in
+     annot_exp (E_internal_cascade (inferred_exp, List.rev fallthroughs, List.map (fun case -> check_case env inferred_typ case typ) cases)) typ
   | E_try (exp, cases), _ ->
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_try (checked_exp, List.map (fun case -> check_case env exc_typ case typ) cases)) typ

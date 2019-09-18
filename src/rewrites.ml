@@ -3015,7 +3015,8 @@ let all_rewrites = [
     ("bitvector_concat", Basic_rewriter (fun _ -> Pattern_rewrites.Bitvector_concat_rewriter.rewrite));
     ("literals", Basic_rewriter (fun _ -> Pattern_rewrites.Literal_rewriter.rewrite));
     ("string_append", Basic_rewriter (fun _ -> Pattern_rewrites.String_append_rewriter.rewrite));
-    ("swap_guards", Basic_rewriter (fun _ -> Pattern_rewrites.swap_guards));
+    ("swap_guards", Basic_rewriter (fun _ -> Pattern_rewrites.Swap_guards_rewriter.rewrite));
+    ("guards", Basic_rewriter (fun _ -> Pattern_rewrites.rewrite_guarded_patterns));
     ("vector_concat_assignments", Basic_rewriter rewrite_vector_concat_assignments);
     ("tuple_assignments", Basic_rewriter rewrite_tuple_assignments);
     ("simple_assignments", Basic_rewriter rewrite_simple_assignments);
@@ -3145,19 +3146,21 @@ let rewrites_coq = [
 
 let rewrites_ocaml = [
     ("no_effect_check", []);
-    ("toplevel_string_append", []);
-    ("pat_string_append", []);
-    ("mapping_builtins", []);
     ("undefined", [Bool_arg false]);
     ("vector_string_pats_to_bit_list", []);
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);
     ("simple_assignments", []);
-    ("remove_not_pats", []);
+    ("bitvector_concat", []);
+    ("literals", []);
+    ("string_append", []);
+    ("guards", []);
+    (*
     ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
     ("pattern_literals", [Literal_arg "ocaml"]);
     ("remove_numeral_pats", []);
+     *)
     ("exp_lift_assign", []);
     ("top_sort_defs", []);
     ("simple_types", []);

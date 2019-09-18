@@ -277,6 +277,9 @@ val strip_exp : 'a exp -> unit exp
 (** Strip the type annotations from a pattern *)
 val strip_pat : 'a pat -> unit pat
 
+(** Strip the type annotations from a guard *)
+val strip_guard : 'a guard -> unit guard
+
 (** Strip the type annotations from a pattern-expression *)
 val strip_pexp : 'a pexp -> unit pexp
 
@@ -454,9 +457,8 @@ Some invariants that will hold of a fully checked AST are:
    calls E_app to vector access functions. This is different to the
    old type checker.
 
- - Every expressions type annotation [tannot] will be Some (typ, env).
-
- - Also every pattern will be annotated with the type it matches.
+ - Every expression and pattern type annotation [tannot] will contain
+   a type.
 
  - Toplevel expressions such as typedefs and some subexpressions such
    as letbinds may have None as their tannots if it doesn't make sense

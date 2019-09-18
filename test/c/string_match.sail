@@ -1,7 +1,7 @@
 default Order dec
 
 $include <prelude.sail>
-$include <string.sail>
+$include <mapping.sail>
 
 function main() -> unit =
   match "Hello,_World" {

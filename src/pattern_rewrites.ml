@@ -54,6 +54,30 @@ open Ast
 open Ast_util
 open Rewriter
 
+let rec irrefutable (P_aux (aux, annot)) =
+  let open Type_check in
+  match aux with
+  | P_id id ->
+     let open Type_check in
+     let env = env_of_annot annot in
+     begin match Env.lookup_id id env with
+     | Enum (Typ_aux (Typ_id enum_id, _)) ->
+        List.compare_length_with (Env.get_enum enum_id env) 1 = 0
+     | _ -> true
+     end
+  | P_app (ctor, args) ->
+     Env.is_singleton_union_constructor ctor (env_of_annot annot) && List.for_all irrefutable args
+  | P_wild -> true
+  | P_lit _ | P_string_append _ | P_cons _ -> false
+  | P_as (pat, _) | P_typ (_, pat) | P_var (pat, _) | P_view (pat, _, _) -> irrefutable pat
+  | P_vector pats | P_vector_concat pats | P_list pats | P_tup pats -> List.for_all irrefutable pats
+  | P_or _ | P_not _ -> Reporting.unreachable (fst annot) __POS__ "Or or not pattern found in replace_views"
+
+
+(**************************************************************************)
+(* 1. Random pattern generation                                           *)
+(**************************************************************************)
+
 let typ_gen = QCheck.Gen.(sized @@ fix
   (fun self n ->
     let base_typ =
@@ -197,152 +221,55 @@ let () =
   |> List.iter (fun ((value, pat), typ) -> prerr_endline (Value.string_of_value value ^ " , " ^ string_of_pat pat ^ ", " ^ string_of_typ typ))
      *)
 
-let test_pattern_gen2 env =
-  let open Type_check in
-  let test ((value, pat), typ) =
-    let pat, env, guards = bind_pat env pat typ in
-    let guards, env = check_guards env guards in
-    ()
-  in
-  ()
-
 let run_pattern_rewrite_tests env = QCheck_runner.run_tests [test_pattern_gen env]
 
-let rec irrefutable (P_aux (aux, annot)) =
-  let open Type_check in
-  match aux with
-  | P_id id ->
-     let open Type_check in
-     let env = env_of_annot annot in
-     begin match Env.lookup_id id env with
-     | Enum (Typ_aux (Typ_id enum_id, _)) ->
-        List.compare_length_with (Env.get_enum enum_id env) 1 = 0
-     | _ -> true
-     end
-  | P_app (ctor, args) ->
-     Env.is_singleton_union_constructor ctor (env_of_annot annot) && List.for_all irrefutable args
-  | P_wild -> true
-  | P_lit _ | P_string_append _ | P_cons _ -> false
-  | P_as (pat, _) | P_typ (_, pat) | P_var (pat, _) | P_view (pat, _, _) -> irrefutable pat
-  | P_vector pats | P_vector_concat pats | P_list pats | P_tup pats -> List.for_all irrefutable pats
-  | P_or _ | P_not _ -> Reporting.unreachable (fst annot) __POS__ "Or or not pattern found in replace_views"
-
-(* Check if one pattern subsumes the other, and if so, calculate a
-   substitution of variables that are used in the same position.
-   TODO: Check somewhere that there are no variable clashes (the same variable
-   name used in different positions of the patterns)
- *)
-let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
-  let open Type_check in
-  let rewrap p = P_aux (p,annot1) in
-  let subsumes_list s pats1 pats2 =
-    if List.length pats1 = List.length pats2
-    then
-      let subs = List.map2 s pats1 pats2 in
-      List.fold_right
-        (fun p acc -> match p, acc with
-          | Some subst, Some substs -> Some (subst @ substs)
-          | _ -> None)
-        subs (Some [])
-    else None in
-  match p1, p2 with
-  | P_lit (L_aux (lit1,_)), P_lit (L_aux (lit2,_)) ->
-      if lit1 = lit2 then Some [] else None
-  | P_or (_, _), _ | _, P_or (_, _)  -> Reporting.unreachable (fst annot1) __POS__ "Or pattern found in subsumes_pat"
-  | P_not _, _ | _, P_not _ -> Reporting.unreachable (fst annot1) __POS__ "Not pattern found in subsumes_pat"
-  | P_as (pat1,_), _ -> subsumes_pat pat1 pat2
-  | _, P_as (pat2,_) -> subsumes_pat pat1 pat2
-  | P_typ (_,pat1), _ -> subsumes_pat pat1 pat2
-  | _, P_typ (_,pat2) -> subsumes_pat pat1 pat2
-  | P_id (Id_aux (id1,_) as aid1), P_id (Id_aux (id2,_) as aid2) ->
-    if id1 = id2 then Some []
-    else if Env.lookup_id aid1 (env_of_annot annot1) = Unbound
-    then if Env.lookup_id aid2 (env_of_annot annot2) = Unbound
-      then Some [(id2,id1)]
-      else Some []
-    else None
-  | P_id id1, _ ->
-    if Env.lookup_id id1 (env_of_annot annot1) = Unbound then Some [] else None
-  | P_var (pat1,_), P_var (pat2,_) -> subsumes_pat pat1 pat2
-  | P_wild, _ -> Some []
-  | P_app (Id_aux (id1,l1),args1), P_app (Id_aux (id2,_),args2) ->
-    if id1 = id2 then subsumes_list subsumes_pat args1 args2 else None
-  | P_vector pats1, P_vector pats2
-  | P_vector_concat pats1, P_vector_concat pats2
-  | P_tup pats1, P_tup pats2
-  | P_list pats1, P_list pats2 ->
-    subsumes_list subsumes_pat pats1 pats2
-  | P_list (pat1 :: pats1), P_cons _ ->
-    subsumes_pat (rewrap (P_cons (pat1, rewrap (P_list pats1)))) pat2
-  | P_cons _, P_list (pat2 :: pats2)->
-    subsumes_pat pat1 (rewrap (P_cons (pat2, rewrap (P_list pats2))))
-  | P_cons (pat1, pats1), P_cons (pat2, pats2) ->
-    (match subsumes_pat pat1 pat2, subsumes_pat pats1 pats2 with
-    | Some substs1, Some substs2 -> Some (substs1 @ substs2)
-    | _ -> None)
-  | _, P_wild -> if irrefutable pat1 then Some [] else None
-  | _ -> None
-
-let id_is_unbound id env =
-  match Type_check.Env.lookup_id id env with
-  | Unbound -> true
-  | _ -> false
-
-(* A simple check for pattern disjointness; used for optimisation in the
-   guarded pattern rewrite step *)
-let rec disjoint_pat env (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
-  match p1, p2 with
-  | P_as (pat1, _), _ -> disjoint_pat env pat1 pat2
-  | _, P_as (pat2, _) -> disjoint_pat env pat1 pat2
-  | P_typ (_, pat1), _ -> disjoint_pat env pat1 pat2
-  | _, P_typ (_, pat2) -> disjoint_pat env pat1 pat2
-  | P_var (pat1, _), _ -> disjoint_pat env pat1 pat2
-  | _, P_var (pat2, _) -> disjoint_pat env pat1 pat2
-  | P_id id, _ when id_is_unbound id env -> false
-  | _, P_id id when id_is_unbound id env -> false
-  | P_id id1, P_id id2 -> Id.compare id1 id2 <> 0
-  | P_app (id1, args1), P_app (id2, args2) ->
-     Id.compare id1 id2 <> 0 || List.exists2 (disjoint_pat env) args1 args2
-  | P_vector pats1, P_vector pats2
-  | P_tup pats1, P_tup pats2
-  | P_list pats1, P_list pats2 ->
-     List.exists2 (disjoint_pat env) pats1 pats2
-  | _ -> false
-
-let equiv_pats pat1 pat2 =
-  match subsumes_pat pat1 pat2, subsumes_pat pat2 pat1 with
-  | Some _, Some _ -> true
-  | _, _ -> false
-
-let subst_id_pat pat (id1,id2) =
-  let p_id (Id_aux (id,l)) = (if id = id1 then P_id (Id_aux (id2,l)) else P_id (Id_aux (id,l))) in
-  fold_pat { id_algebra with p_id = p_id } pat
-
-let subst_id_exp exp (id1,id2) =
-  Ast_util.subst (Id_aux (id1, Parse_ast.Unknown))
-    (E_aux (E_id (Id_aux (id2, Parse_ast.Unknown)), (Parse_ast.Unknown, Type_check.empty_tannot (Type_check.env_of exp))))
-    exp
-
-let subst_id_guards guards (id1,id2) =
-  Ast_util.subst_guards (Id_aux (id1, Parse_ast.Unknown))
-    (E_aux (E_id (Id_aux (id2, Parse_ast.Unknown)), (Parse_ast.Unknown, Type_check.empty_tannot Type_check.initial_env)))
-    guards
-
-let remove_wildcards pre (P_aux (_,(l,_)) as pat) =
-  fold_pat
-    { id_algebra with
-      p_aux = function
-              | (P_wild,(l,annot)) -> P_aux (P_id (mk_id "w__0") ,(l,annot))
-              | (p,annot) -> P_aux (p,annot) }
-    pat
-
 (**************************************************************************)
-(* 1. Pattern rewrites                                                    *)
+(* 2. Pattern rewrites                                                    *)
 (**************************************************************************)
 
 type action =
   | Subst_id of (id -> unit guard list)
   | No_change
+
+module Case_rewriter = struct
+  module type Config = sig
+    val rewrite_case : Type_check.tannot pat * Type_check.tannot guard list * Type_check.tannot exp -> Type_check.tannot pexp_aux
+  end
+
+  module Make (C : Config) : sig
+    val rewrite : Type_check.tannot defs -> Type_check.tannot defs
+    val rewrite_exp : Type_check.tannot exp -> Type_check.tannot exp
+  end = struct
+
+    let rewrite_exp = fold_exp { id_algebra with pat_case = C.rewrite_case }
+
+    let rewrite_funcl (FCL_aux (FCL_Funcl (f, Pat_aux (Pat_case (pat, guards, exp), p_l)), annot)) =
+      FCL_aux (FCL_Funcl (f, Pat_aux (C.rewrite_case (pat, guards, rewrite_exp exp), p_l)), annot)
+
+    let rewrite_fundef (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), annot)) =
+      FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, List.map rewrite_funcl funcls), annot)
+
+    let rewrite_mapcl (MCL_aux (aux, annot)) =
+      match aux with
+      | MCL_forwards (Pat_aux (Pat_case (pat, guards, exp), p_l)) ->
+         MCL_aux (MCL_forwards (Pat_aux (C.rewrite_case (pat, guards, rewrite_exp exp), p_l)), annot)
+      | MCL_backwards (Pat_aux (Pat_case (pat, guards, exp), p_l)) ->
+         MCL_aux (MCL_backwards (Pat_aux (C.rewrite_case (pat, guards, rewrite_exp exp), p_l)), annot)
+      | MCL_bidir _ ->
+         Reporting.unreachable (fst annot) __POS__ "Bi-directional mapping clauses should have been removed before pattern rewriting"
+
+    let rewrite_mapdef (MD_aux (MD_mapping (m, args, tannot_opt, mapcls), annot)) =
+      MD_aux (MD_mapping (m, args, tannot_opt, List.map rewrite_mapcl mapcls), annot)
+
+    let rewrite_def = function
+      | DEF_fundef fdef -> DEF_fundef (rewrite_fundef fdef)
+      | DEF_mapdef mdef -> DEF_mapdef (rewrite_mapdef mdef)
+      | def -> def
+
+    let rewrite (Defs defs) = Defs (List.map rewrite_def defs)
+
+  end
+end
 
 (** The Pattern_rewriter module implements a bottom up traversal of
    all patterns with the AST, applying actions at each pattern. *)
@@ -428,38 +355,14 @@ module Pattern_rewriter = struct
       | G_aux (G_if exp, _) :: _ -> env_of exp
       | G_aux (G_pattern (pat, _), _) :: _ -> env_of_pat pat
 
-    let rewrite_case (pat, guards, exp) =
-      let n = ref 0 in
-      let pat, guards' = rewrite_pat n (first_guard_environment guards exp) pat in
-      let rewritten_guards = List.map (rewrite_guard n (env_of exp)) guards in
-      Pat_case (pat, guards' @ List.map fst rewritten_guards @ List.concat (List.map snd rewritten_guards), exp)
-
-    let rewrite_exp = fold_exp { id_algebra with pat_case = rewrite_case }
-
-    let rewrite_funcl (FCL_aux (FCL_Funcl (f, Pat_aux (Pat_case (pat, guards, exp), p_l)), annot)) =
-      FCL_aux (FCL_Funcl (f, Pat_aux (rewrite_case (pat, guards, rewrite_exp exp), p_l)), annot)
-
-    let rewrite_fundef (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), annot)) =
-      FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, List.map rewrite_funcl funcls), annot)
-
-    let rewrite_mapcl (MCL_aux (aux, annot)) =
-      match aux with
-      | MCL_forwards (Pat_aux (Pat_case (pat, guards, exp), p_l)) ->
-         MCL_aux (MCL_forwards (Pat_aux (rewrite_case (pat, guards, rewrite_exp exp), p_l)), annot)
-      | MCL_backwards (Pat_aux (Pat_case (pat, guards, exp), p_l)) ->
-         MCL_aux (MCL_backwards (Pat_aux (rewrite_case (pat, guards, rewrite_exp exp), p_l)), annot)
-      | MCL_bidir _ ->
-         Reporting.unreachable (fst annot) __POS__ "Bi-directional mapping clauses should have been removed before pattern rewriting"
-
-    let rewrite_mapdef (MD_aux (MD_mapping (m, args, tannot_opt, mapcls), annot)) =
-      MD_aux (MD_mapping (m, args, tannot_opt, List.map rewrite_mapcl mapcls), annot)
-
-    let rewrite_def = function
-      | DEF_fundef fdef -> DEF_fundef (rewrite_fundef fdef)
-      | DEF_mapdef mdef -> DEF_mapdef (rewrite_mapdef mdef)
-      | def -> def
-
-    let rewrite (Defs defs) = Defs (List.map rewrite_def defs)
+    module Rewrite = struct
+      let rewrite_case (pat, guards, exp) =
+        let n = ref 0 in
+        let pat, guards' = rewrite_pat n (first_guard_environment guards exp) pat in
+        let rewritten_guards = List.map (rewrite_guard n (env_of exp)) guards in
+        Pat_case (pat, guards' @ List.map fst rewritten_guards @ List.concat (List.map snd rewritten_guards), exp)
+    end
+    include Case_rewriter.Make(Rewrite)
 
     (* Automatically derive a quickcheck test that uses the
        interpreter to test that random patterns have the same behavior
@@ -628,7 +531,7 @@ let run_pattern_rewrite_tests ast env =
     ]
 
 (**************************************************************************)
-(* 2. Guard removal                                                       *)
+(* 3. Guard removal                                                       *)
 (**************************************************************************)
 
 let trivially_pure_functions =
@@ -704,48 +607,84 @@ let swap_guards guards =
   let guards = None :: List.rev_map (fun x -> Some x) guards in
   List.rev (Util.option_these (apply_swaps guards))
 
-let rewrite_case (pat, guards, exp) =
-  Pat_case (pat, swap_guards guards, exp)
+module Swap_guards_config = struct
+  let rewrite_case (pat, guards, exp) = Pat_case (pat, swap_guards guards, exp)
+end
 
-let rewrite_exp = fold_exp { id_algebra with pat_case = rewrite_case }
+module Swap_guards_rewriter = Case_rewriter.Make(Swap_guards_config)
 
-let rewrite_funcl (FCL_aux (FCL_Funcl (f, Pat_aux (Pat_case (pat, guards, exp), p_l)), annot)) =
-  FCL_aux (FCL_Funcl (f, Pat_aux (rewrite_case (pat, guards, rewrite_exp exp), p_l)), annot)
+type 'a split_cases =
+  | Unguarded of 'a pat * 'a exp * Parse_ast.l * 'a split_cases
+  | Guarded of 'a pat * 'a guard list * 'a exp * Parse_ast.l
+  | Empty
 
-let rewrite_fundef (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), annot)) =
-  FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, List.map rewrite_funcl funcls), annot)
+let rec string_of_split_cases = function
+  | Unguarded (pat, exp, l, cases) ->
+     "Unguarded: " ^ string_of_pat pat ^ " => " ^ string_of_exp exp ^ "\n" ^ string_of_split_cases cases
+  | Guarded (pat, guards, exp, l) ->
+     "Guarded: " ^ string_of_pat pat ^ " " ^ Util.string_of_list ", " string_of_guard guards ^ " => " ^ string_of_exp exp
+  | Empty ->
+     "Empty"
 
-let rewrite_mapcl (MCL_aux (aux, annot)) =
-  match aux with
-  | MCL_forwards (Pat_aux (Pat_case (pat, guards, exp), p_l)) ->
-     MCL_aux (MCL_forwards (Pat_aux (rewrite_case (pat, guards, rewrite_exp exp), p_l)), annot)
-  | MCL_backwards (Pat_aux (Pat_case (pat, guards, exp), p_l)) ->
-     MCL_aux (MCL_backwards (Pat_aux (rewrite_case (pat, guards, rewrite_exp exp), p_l)), annot)
-  | MCL_bidir _ ->
-     Reporting.unreachable (fst annot) __POS__ "Bi-directional mapping clauses should have been removed before pattern rewriting"
+let rec split_guarded_cases acc = function
+  | (Pat_aux (Pat_case (pat, [], exp), l)) :: pexps ->
+     split_guarded_cases (fun cases -> acc (Unguarded (pat, exp, l, cases))) pexps
+  | Pat_aux (Pat_case (pat, guards, exp), l) :: pexps ->
+     acc (Guarded (pat, guards, exp, l)) :: split_guarded_cases (fun cases -> cases) pexps
+  | [] -> [acc Empty]
 
-let rewrite_mapdef (MD_aux (MD_mapping (m, args, tannot_opt, mapcls), annot)) =
-  MD_aux (MD_mapping (m, args, tannot_opt, List.map rewrite_mapcl mapcls), annot)
-
-let rewrite_def = function
-  | DEF_fundef fdef -> DEF_fundef (rewrite_fundef fdef)
-  | DEF_mapdef mdef -> DEF_mapdef (rewrite_mapdef mdef)
-  | def -> def
-
-let swap_guards (Defs defs) = Defs (List.map rewrite_def defs)
-
-(*
-let rec rewrite_case fallthrough (guards, exp) =
-  match guards with
-  | [] -> exp
+let rec rewrite_guards fallthrough annot body = function
   | G_aux (G_if cond, g_l) :: guards ->
-     let (E_aux (_, (_, tannot)) as exp) = rewrite_case fallthrough (guards, exp) in
-     E_aux (E_if (cond, exp, fallthrough), (gen_loc g_l, tannot))
-  | G_aux (G_pattern (pat, exp'), g_l) :: guards ->
-     let open Type_check in
-     let (E_aux (_, (_, tannot)) as exp) = rewrite_case fallthrough (guards, exp) in
-     let wildcard, _, _ = bind_pat (env_of_pat pat) (mk_pat P_wild) (typ_of_pat pat) in
-     E_aux (E_case (exp', [Pat_aux (Pat_case (pat, [], exp), gen_loc g_l);
-                           Pat_aux (Pat_case (wildcard, [], fallthrough), gen_loc g_l)]),
-            (gen_loc g_l, tannot))
-*)
+     E_aux (E_if (cond, rewrite_guards fallthrough annot body guards, fallthrough), annot)
+  | G_aux (G_pattern ((P_aux (_, pannot) as pat), (E_aux (_, eannot) as exp)), g_l) :: guards ->
+     E_aux (E_case (exp,
+                    [Pat_aux (Pat_case (pat, [], rewrite_guards fallthrough eannot body guards), gen_loc g_l);
+                     Pat_aux (Pat_case (P_aux (P_wild, pannot), [], fallthrough), gen_loc g_l)]),
+            annot)
+  | [] -> body
+
+let rec is_guarded_group = function
+  | Unguarded (_, _, _, cases) -> is_guarded_group cases
+  | Guarded _ -> true
+  | Empty -> false
+
+let rewrite_match_exp (aux, annot) =
+  let open Type_check in
+  match aux with
+  | E_case (exp, cases) ->
+     let groups = List.rev (split_guarded_cases (fun cases -> cases) cases) in
+     print_endline "=== REWRITING GUARDS ===";
+     List.iter (fun cases -> print_endline (string_of_split_cases cases ^ "\n")) groups;
+
+     let rec build_unguarded_pexps fallthrough = function
+       | Unguarded (pat, exp, l, cases) ->
+          Pat_aux (Pat_case (strip_pat pat, [], strip_exp exp), l) :: build_unguarded_pexps fallthrough cases
+       | Guarded (pat, guards, exp, l) ->
+          let exp = rewrite_guards fallthrough (l, ()) (strip_exp exp) (List.map strip_guard guards) in
+          [Pat_aux (Pat_case (strip_pat pat, [], exp), l)]
+       | Empty -> []
+     in
+
+     let make_fallthrough previous_fallthrough group =
+       (fun rest ->
+         mk_exp (E_let (mk_letbind (mk_pat (P_typ (typ_of_annot annot, mk_pat (P_id (mk_id "fallthrough")))))
+                                   (mk_exp (E_case (strip_exp exp, build_unguarded_pexps previous_fallthrough group))),
+                        rest))),
+       mk_exp (E_id (mk_id "fallthrough"))
+     in
+
+     let rec process_groups fallthrough = function
+       | [] -> assert false
+       | [group] ->
+          mk_exp (E_case (strip_exp exp, build_unguarded_pexps fallthrough group))
+       | group :: groups ->
+          let wrapper, fallthrough = make_fallthrough fallthrough group in
+          print_endline "= END GROUP =\n";
+          wrapper (process_groups fallthrough groups)
+     in
+     check_exp (env_of_annot annot) (process_groups (mk_exp (E_exit (mk_lit_exp L_unit))) groups) (typ_of_annot annot)
+  | _ -> E_aux (aux, annot)
+
+let rewrite_guarded_patterns defs =
+  let rewrite_exp = fold_exp { id_algebra with e_aux = rewrite_match_exp } in
+  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> rewrite_exp) } defs
