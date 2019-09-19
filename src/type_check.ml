@@ -4212,6 +4212,21 @@ and propagate_exp_effect_aux l = function
   | E_internal_return exp ->
      let p_exp = propagate_exp_effect exp in
      E_internal_return p_exp, effect_of p_exp
+  | E_internal_cascade (exp, fallthroughs, cases) ->
+     let p_exp = propagate_exp_effect exp in
+     let fallthroughs_eff = ref no_effect in
+     let p_fallthroughs =
+       List.map (fun (id, Fallthrough cases) ->
+           let p_cases = List.map propagate_pexp_effect cases in
+           let case_eff = List.fold_left union_effects no_effect (List.map snd p_cases) in
+           fallthroughs_eff := union_effects case_eff !fallthroughs_eff;
+           id, Fallthrough (List.map fst p_cases)
+         ) fallthroughs
+     in
+     let p_cases = List.map propagate_pexp_effect cases in
+     let case_eff = List.fold_left union_effects no_effect (List.map snd p_cases) in
+     E_internal_cascade (p_exp, p_fallthroughs, List.map fst p_cases),
+     union_effects (effect_of p_exp) (union_effects case_eff !fallthroughs_eff)
   | exp_aux -> Reporting.unreachable l __POS__ "Unimplemented: Cannot propagate effect in expression"
 
 and propagate_fexp_effect (FE_aux (FE_Fexp (id, exp), l)) =

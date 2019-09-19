@@ -57,7 +57,7 @@ let parse_regex str =
 
 let rec string_of_regex =
   let posix_char = function
-    | ('.' | '[' | ']' | '{' | '}' | '(' | ')' | '\\' | '*' | '+' | '?' | '|' | '^' | '$') as c -> "\\\\" ^ String.make 1 c
+    | ('.' | '[' | ']' | '{' | '}' | '(' | ')' | '\\' | '*' | '+' | '?' | '|' | '^' | '$') as c -> "\\" ^ String.make 1 c
     | c -> String.make 1 c
   in
   let string_of_repeat = function

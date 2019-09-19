@@ -66,13 +66,15 @@ let opt_ocaml_build_dir = ref "_sbuild"
 type ctx =
   { register_inits : tannot exp list;
     externs : id Bindings.t;
-    val_specs : typ Bindings.t
+    val_specs : typ Bindings.t;
+    fallthrough_ids : IdSet.t
   }
 
 let empty_ctx =
   { register_inits = [];
     externs = Bindings.empty;
-    val_specs = Bindings.empty
+    val_specs = Bindings.empty;
+    fallthrough_ids = IdSet.empty
   }
 
 let gensym_counter = ref 0
@@ -83,8 +85,11 @@ let gensym () =
   string gs
 
 let zencode ctx id =
-  try string (string_of_id (Bindings.find id ctx.externs)) with
-  | Not_found -> string (zencode_string (string_of_id id))
+  if IdSet.mem id ctx.fallthrough_ids then
+    string (zencode_string (string_of_id id) ^ " cascade")
+  else
+    try string (string_of_id (Bindings.find id ctx.externs)) with
+    | Not_found -> string (zencode_string (string_of_id id))
 
 let zencode_upper ctx id =
   try string (string_of_id (Bindings.find id ctx.externs)) with
@@ -211,7 +216,7 @@ let is_passed_by_name = function
   | (Typ_aux (Typ_app (tid, _), _)) -> string_of_id tid = "register"
   | _ -> false
 
-let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
+let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
   match exp_aux with
   | E_app (f, [x]) when Env.is_union_constructor f (env_of exp) -> zencode_upper ctx f ^^ space ^^ ocaml_atomic_exp ctx x
   | E_app (f, [x]) -> zencode ctx f ^^ space ^^ ocaml_atomic_exp ctx x
@@ -222,6 +227,14 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      separate space [ocaml_atomic_exp ctx x; string "&&"; ocaml_atomic_exp ctx y]
   | E_app (f, [x; y]) when string_of_id f = "or_bool" ->
      separate space [ocaml_atomic_exp ctx x; string "||"; ocaml_atomic_exp ctx y]
+  | E_app (f, [E_aux (E_lit (L_aux (L_string r, _)), _); str]) when string_of_id f = "__split" ->
+     let open Regex_util in
+     begin match parse_regex r with
+     | Some r ->
+        string "__split " ^^ parens (string "Str.regexp " ^^ dquotes (string ("^" ^ ocaml_regex' r ^ "$")) ^^ comma ^^  space ^^ ocaml_atomic_exp ctx str)
+     | None ->
+        Reporting.unreachable l __POS__ "Could not parse regular expression in OCaml backend for __split"
+     end
   | E_app (f, xs) ->
      zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
   | E_vector_subrange (exp1, exp2, exp3) -> string "subrange" ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) [exp1; exp2; exp3])
@@ -302,6 +315,17 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
      ^/^ string "in"
      ^/^ (string "loop" ^^ space ^^ ocaml_atomic_exp ctx exp_from)
   | E_cons (x, xs) -> ocaml_exp ctx x ^^ string " :: " ^^ ocaml_exp ctx xs
+  | E_internal_cascade (exp, fallthroughs, pexps) ->
+     let fallthrough_ids = IdSet.of_list (List.map fst fallthroughs) in
+     let fctx = { ctx with fallthrough_ids = fallthrough_ids } in
+     separate space [string "let cascade ="; ocaml_exp ctx exp; string "in"]
+     ^/^ separate hardline (List.map (fun (id, Fallthrough cases) ->
+                                (separate space [string "let"; zencode ctx id; equals; string "function"]
+                                 ^//^ ocaml_pexps fctx cases)
+                                ^/^ string "in") fallthroughs)
+
+     ^/^ begin_end (string "match cascade with" ^/^ ocaml_pexps fctx pexps)
+
   | _ -> string ("EXP(" ^ string_of_exp exp ^ ")")
 and ocaml_letbind ctx (LB_aux (lb_aux, _)) =
   match lb_aux with
@@ -311,10 +335,10 @@ and ocaml_pexps ctx = function
   | pexp :: pexps -> ocaml_pexp ctx pexp ^/^ ocaml_pexps ctx pexps
   | [] -> empty
 and ocaml_pexp ctx = function
-    (*
-  | Pat_aux (Pat_exp (pat, exp), _) ->
+  | Pat_aux (Pat_case (pat, [], exp), _) ->
      separate space [bar; ocaml_pat ctx pat; string "->"]
      ^//^ group (ocaml_exp ctx exp)
+(*
   | Pat_aux (Pat_when (pat, wh, exp), _) ->
      separate space [bar; ocaml_pat ctx pat; string "when"; ocaml_atomic_exp ctx wh; string "->"]
      ^//^ group (ocaml_exp ctx exp)
@@ -475,12 +499,9 @@ let ocaml_funcls ctx =
        let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
        let pat_sym = gensym () in
        let pat, guard, exp =
-         (* FIXME
          match pexp with
-         | Pat_aux (Pat_exp (pat, [], exp),_) -> pat, None, exp
-         | Pat_aux (Pat_when (pat, [guard], exp),_) -> pat, Some guard, exp
-          *)
-         assert false
+         | Pat_aux (Pat_case (pat, [], exp),_) -> pat, None, exp
+                                                               (* | Pat_aux (Pat_case (pat, [guard], exp),_) -> pat, Some guard, exp *)
        in
        let ocaml_guarded_exp ctx exp = function
          | Some guard ->
@@ -931,7 +952,8 @@ let ocaml_pp_generators ctx defs orig_types required =
 let ocaml_defs (Defs defs) generator_info =
   let ctx = { register_inits = get_initialize_registers defs;
               externs = get_externs (Defs defs);
-              val_specs = val_spec_typs (Defs defs)
+              val_specs = val_spec_typs (Defs defs);
+              fallthrough_ids = IdSet.empty
             }
   in
   let empty_reg_init =

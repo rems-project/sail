@@ -580,6 +580,10 @@ and map_exp_annot_aux f = function
   | E_var (lexp, exp1, exp2) -> E_var (map_lexp_annot f lexp, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_plet (pat, exp1, exp2) -> E_internal_plet (map_pat_annot f pat, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_return exp -> E_internal_return (map_exp_annot f exp)
+  | E_internal_cascade (exp, fallthroughs, cases) ->
+     E_internal_cascade (map_exp_annot f exp,
+                         List.map (fun (id, Fallthrough cases) -> id, Fallthrough (List.map (map_pexp_annot f) cases)) fallthroughs,
+                         List.map (map_pexp_annot f) cases)
 and map_measure_annot f (Measure_aux (m, l)) = Measure_aux (map_measure_annot_aux f m, l)
 and map_measure_annot_aux f = function
   | Measure_none -> Measure_none
@@ -976,7 +980,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_case (exp, cases) ->
      "match " ^ string_of_exp exp ^ " { " ^ string_of_list ", " string_of_pexp cases ^ " }"
   | E_try (exp, cases) ->
-     "try " ^ string_of_exp exp ^ " catch { case " ^ string_of_list " case " string_of_pexp cases ^ "}"
+     "try " ^ string_of_exp exp ^ " catch { " ^ string_of_list ", " string_of_pexp cases ^ "}"
   | E_let (letbind, exp) -> "let " ^ string_of_letbind letbind ^ " in " ^ string_of_exp exp
   | E_assign (lexp, bind) -> string_of_lexp lexp ^ " = " ^ string_of_exp bind
   | E_cast (typ, exp) -> string_of_exp exp ^ " : " ^ string_of_typ typ
@@ -1010,6 +1014,12 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_internal_return exp -> "internal_return (" ^ string_of_exp exp ^ ")"
   | E_internal_plet (pat, exp, body) -> "internal_plet " ^ string_of_pat pat ^ " = " ^ string_of_exp exp ^ " in " ^ string_of_exp body
   | E_internal_value v -> "INTERNAL_VALUE(" ^ Value.string_of_value v ^ ")"
+  | E_internal_cascade (exp, fallthroughs, cases) ->
+     "internal_cascade " ^ string_of_exp exp ^ " { "
+     ^ Util.string_of_list ", " (fun (id, Fallthrough cases) -> string_of_id id ^ " = { " ^ string_of_list ", " string_of_pexp cases ^ "}") fallthroughs
+     ^ " } in { "
+     ^ string_of_list ", " string_of_pexp cases
+     ^ " }"
 
 and string_of_measure (Measure_aux (m,_)) =
   match m with
@@ -2282,66 +2292,3 @@ let rec simple_string_of_loc = function
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
   | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"
-
-let parse_regex str =
-  let lexbuf = Lexing.from_string str in
-  try Some (Regex_parser.regex_eof Regex_lexer.token lexbuf) with
-  | _ -> None
-
-let rec string_of_regex =
-  let open Regex in
-  let posix_char = function
-    | ('.' | '[' | ']' | '{' | '}' | '(' | ')' | '\\' | '*' | '+' | '?' | '|' | '^' | '$') as c -> "\\\\" ^ String.make 1 c
-    | c -> String.make 1 c
-  in
-  let string_of_repeat = function
-    | At_least 0 -> "*"
-    | At_least 1 -> "+"
-    | At_least n -> Printf.sprintf "{,%d}" n
-    | Between (0, 1) -> "?"
-    | Between (n, m) -> Printf.sprintf "{%d,%d}" n m
-    | Exactly n -> Printf.sprintf "{%d}" n
-  in
-  let string_of_char_class = function
-    | Class_char c -> String.make 1 c
-    | Class_range (c1, c2) -> String.make 1 c1 ^ "-" ^ String.make 1 c2
-  in
-  function
-  | Group r -> "(" ^ string_of_regex r ^ ")"
-  | Or (r1, r2) -> string_of_regex r1 ^ "|" ^ string_of_regex r2
-  | Seq rs -> Util.string_of_list "" string_of_regex rs
-  | Repeat (r, repeat) -> string_of_regex r ^ string_of_repeat repeat
-  | Dot -> "."
-  | Char c -> posix_char c
-  | Class (true, cc) -> "[" ^ Util.string_of_list "" string_of_char_class cc ^ "]"
-  | Class (false, cc) -> "[^" ^ Util.string_of_list "" string_of_char_class cc ^ "]"
-
-let rec ocaml_regex' =
-  let open Regex in
-  let posix_char = function
-    | ('.' | '[' | ']' | '{' | '}' | '\\' | '*' | '+' | '?' | '|' | '^' | '$') as c -> "\\" ^ String.make 1 c
-    | c -> String.make 1 c
-  in
-  let string_of_repeat = function
-    | At_least 0 -> "*"
-    | At_least 1 -> "+"
-    | At_least n -> Printf.sprintf "{,%d}" n
-    | Between (0, 1) -> "?"
-    | Between (n, m) -> Printf.sprintf "{%d,%d}" n m
-    | Exactly n -> Printf.sprintf "{%d}" n
-  in
-  let string_of_char_class = function
-    | Class_char c -> String.make 1 c
-    | Class_range (c1, c2) -> String.make 1 c1 ^ "-" ^ String.make 1 c2
-  in
-  function
-  | Group r -> "\\(" ^ ocaml_regex' r ^ "\\)"
-  | Or (r1, r2) -> ocaml_regex' r1 ^ "|" ^ ocaml_regex' r2
-  | Seq rs -> Util.string_of_list "" ocaml_regex' rs
-  | Repeat (r, repeat) -> ocaml_regex' r ^ string_of_repeat repeat
-  | Dot -> "."
-  | Char c -> posix_char c
-  | Class (true, cc) -> "[" ^ Util.string_of_list "" string_of_char_class cc ^ "]"
-  | Class (false, cc) -> "[^" ^ Util.string_of_list "" string_of_char_class cc ^ "]"
-
-let ocaml_regex r = "^" ^ ocaml_regex' r ^ "$" |> Str.regexp_case_fold

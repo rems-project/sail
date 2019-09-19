@@ -171,7 +171,7 @@ let rec desugar_rchain chain s e =
 %token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield Constant
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Forwards Backwards
-%token InternalPLet InternalReturn
+%token InternalPLet InternalReturn InternalCascade
 
 %nonassoc Then
 %nonassoc Else
@@ -830,6 +830,12 @@ exp:
     { mk_exp (E_internal_plet ($2,$4,$6)) $startpos $endpos }
   | InternalReturn exp
     { mk_exp (E_internal_return($2)) $startpos $endpos }
+  | InternalCascade e=exp Lcurly fs=separated_nonempty_list(Comma, fallthrough) Rcurly In Lcurly cases=case_list Rcurly
+    { mk_exp (E_internal_cascade (e, fs, cases)) $startpos $endpos }
+
+fallthrough:
+  | id Eq Lcurly case_list Rcurly
+    { ($1, $4) }
 
 /* The following implements all nine levels of user-defined precedence for
 operators in expressions, with both left, right and non-associative operators */

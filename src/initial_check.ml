@@ -414,6 +414,13 @@ and to_ast_exp ctx (P.E_aux(exp,l) : P.exp) =
     | P.E_throw exp -> E_throw (to_ast_exp ctx exp)
     | P.E_return exp -> E_return(to_ast_exp ctx exp)
     | P.E_assert(cond,msg) -> E_assert(to_ast_exp ctx cond, to_ast_exp ctx msg)
+    | P.E_internal_cascade(exp,fallthroughs,cases) ->
+       if !opt_magic_hash then
+         E_internal_cascade(to_ast_exp ctx exp,
+                            List.map (fun (id, cases) -> to_ast_id id, Fallthrough (List.map (to_ast_case ctx) cases)) fallthroughs,
+                            List.map (to_ast_case ctx) cases)
+       else
+         raise (Reporting.err_general l "Internal cascade found without -dmagic_hash")
     | P.E_internal_plet(pat,exp1,exp2) ->
        if !opt_magic_hash then
          E_internal_plet(to_ast_pat ctx pat, to_ast_exp ctx exp1, to_ast_exp ctx exp2)

@@ -297,7 +297,7 @@ module Pattern_rewriter = struct
            let env = Env.add_local replaced_id (Immutable, typ) env in
            (* Make sure casts don't interfere with re-writing *)
            let gs', _ = check_guards (Env.no_casts env) (to_guards replaced_id) in
-           P_aux (P_typ (typ, P_aux (P_id replaced_id, annot)), annot), gs' @ gs
+           P_aux (P_id replaced_id, annot), gs' @ gs
       in
       match aux with
       | P_view (pat, id, args) ->
@@ -648,41 +648,57 @@ let rec is_guarded_group = function
   | Guarded _ -> true
   | Empty -> false
 
+type 'a rewritten_match =
+  | Into_match of 'a pexp list
+  | Into_cascade of id * 'a fallthrough * 'a rewritten_match
+
 let rewrite_match_exp (aux, annot) =
   let open Type_check in
   match aux with
   | E_case (exp, cases) ->
+     let count = ref 0 in
      let groups = List.rev (split_guarded_cases (fun cases -> cases) cases) in
      print_endline "=== REWRITING GUARDS ===";
      List.iter (fun cases -> print_endline (string_of_split_cases cases ^ "\n")) groups;
 
-     let rec build_unguarded_pexps fallthrough = function
+     let rec build_unguarded_pexps fallthrough annot = function
        | Unguarded (pat, exp, l, cases) ->
-          Pat_aux (Pat_case (strip_pat pat, [], strip_exp exp), l) :: build_unguarded_pexps fallthrough cases
+          Pat_aux (Pat_case (pat, [], exp), l) :: build_unguarded_pexps fallthrough annot cases
        | Guarded (pat, guards, exp, l) ->
-          let exp = rewrite_guards fallthrough (l, ()) (strip_exp exp) (List.map strip_guard guards) in
-          [Pat_aux (Pat_case (strip_pat pat, [], exp), l)]
+          let exp = rewrite_guards fallthrough annot exp guards in
+          [Pat_aux (Pat_case (pat, [], exp), l)]
        | Empty -> []
      in
 
-     let make_fallthrough previous_fallthrough group =
-       (fun rest ->
-         mk_exp (E_let (mk_letbind (mk_pat (P_typ (typ_of_annot annot, mk_pat (P_id (mk_id "fallthrough")))))
-                                   (mk_exp (E_case (strip_exp exp, build_unguarded_pexps previous_fallthrough group))),
-                        rest))),
-       mk_exp (E_id (mk_id "fallthrough"))
+     let make_fallthrough previous_fallthrough annot group =
+       let id = mk_id ("fallthrough__" ^ string_of_int !count) in
+       incr count;
+       id, Fallthrough (build_unguarded_pexps previous_fallthrough annot group)
      in
 
-     let rec process_groups fallthrough = function
+     let rec process_groups fallthrough annot = function
        | [] -> assert false
        | [group] ->
-          mk_exp (E_case (strip_exp exp, build_unguarded_pexps fallthrough group))
+          Into_match (build_unguarded_pexps fallthrough annot group)
        | group :: groups ->
-          let wrapper, fallthrough = make_fallthrough fallthrough group in
+          let id, cases = make_fallthrough fallthrough annot group in
           print_endline "= END GROUP =\n";
-          wrapper (process_groups fallthrough groups)
+          Into_cascade (id, cases, process_groups (E_aux (E_id id, annot)) annot groups)
      in
-     check_exp (env_of_annot annot) (process_groups (mk_exp (E_exit (mk_lit_exp L_unit))) groups) (typ_of_annot annot)
+     begin match process_groups (E_aux (E_exit (E_aux (E_lit (mk_lit L_unit), annot)), annot)) annot groups with
+     | Into_match cases -> E_aux (E_case (exp, cases), annot)
+     | processed ->
+        let rec to_cascade = function
+          | Into_cascade (id, fallthrough, rest) ->
+             let fallthroughs, cases = to_cascade rest in
+             (id, fallthrough) :: fallthroughs, cases
+          | Into_match cases ->
+             [], cases
+        in
+        let fallthroughs, cases = to_cascade processed in
+        E_aux (E_internal_cascade (exp, fallthroughs, cases), annot)
+     end
+
   | _ -> E_aux (aux, annot)
 
 let rewrite_guarded_patterns defs =

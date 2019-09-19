@@ -286,6 +286,8 @@ exp_aux =  (* Expression *)
  | E_var of exp * exp * exp
  | E_internal_plet of pat * exp * exp
  | E_internal_return of exp
+ | E_internal_cascade of exp * (id * pexp list) list * pexp list (* Used to rewrite guarded clauses into a 'cascade' of fallthroughs before a match expression *)
+
 
 and exp = 
    E_aux of exp_aux * l

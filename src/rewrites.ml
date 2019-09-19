@@ -3152,8 +3152,8 @@ let rewrites_ocaml = [
     ("tuple_assignments", []);
     ("simple_assignments", []);
     ("bitvector_concat", []);
-    ("literals", []);
     ("string_append", []);
+    ("literals", []);
     ("guards", []);
     (*
     ("remove_vector_concat", []);

@@ -842,3 +842,12 @@ let rand_zunit (g : 'generators) : unit = ()
 let rand_choice l =
   let n = List.length l in
   List.nth l (Random.int n)
+
+let __split (regexp, str) =
+  print_endline ("Matched " ^ string_of_bool (Str.string_match regexp str 0));
+  (Str.string_match regexp str 0, str)
+
+let __group (n, str) =
+  try Str.matched_group (Big_int.to_int n) str with
+  | Not_found -> ""
+  | Invalid_argument _ -> ""
