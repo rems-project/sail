@@ -658,8 +658,6 @@ let rewrite_match_exp (aux, annot) =
   | E_case (exp, cases) ->
      let count = ref 0 in
      let groups = List.rev (split_guarded_cases (fun cases -> cases) cases) in
-     print_endline "=== REWRITING GUARDS ===";
-     List.iter (fun cases -> print_endline (string_of_split_cases cases ^ "\n")) groups;
 
      let rec build_unguarded_pexps fallthrough annot = function
        | Unguarded (pat, exp, l, cases) ->
@@ -682,7 +680,6 @@ let rewrite_match_exp (aux, annot) =
           Into_match (build_unguarded_pexps fallthrough annot group)
        | group :: groups ->
           let id, cases = make_fallthrough fallthrough annot group in
-          print_endline "= END GROUP =\n";
           Into_cascade (id, cases, process_groups (E_aux (E_id id, annot)) annot groups)
      in
      begin match process_groups (E_aux (E_exit (E_aux (E_lit (mk_lit L_unit), annot)), annot)) annot groups with

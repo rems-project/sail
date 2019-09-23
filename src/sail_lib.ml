@@ -843,6 +843,9 @@ let rand_choice l =
   let n = List.length l in
   List.nth l (Random.int n)
 
+let string_match (regexp, str) =
+  Str.string_match regexp str 0
+
 let __split (regexp, str) =
   print_endline ("Matched " ^ string_of_bool (Str.string_match regexp str 0));
   (Str.string_match regexp str 0, str)

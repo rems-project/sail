@@ -705,7 +705,6 @@ let pp_cdef = function
      let cc = match calling_convention with
        | CC_stack -> empty
        | CC_heap id -> parens (pp_id id)
-       | CC_mapping -> parens (string "mapping")
      in
      pp_keyword "function" ^^ pp_id id ^^ cc ^^ parens (separate_map (comma ^^ space) pp_id args) ^^ space
      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace

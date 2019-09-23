@@ -3,6 +3,32 @@
 
 #include"sail_regex.h"
 
+bool string_match(sail_string regex_str, sail_string str)
+{
+  regex_t r;
+  int err = regcomp(&r, regex_str, REG_ICASE | REG_EXTENDED);
+
+  if (err) {
+    size_t length = regerror(err, &r, NULL, 0);
+    char *buffer = malloc(length);
+    regerror(err, &r, buffer, length);
+    fprintf(stderr, "Failed to compile regular expression: %s\n", buffer);
+    free(buffer);
+    exit(1);
+  }
+
+  err = regexec(&r, str, 0, NULL, 0);
+  if (err == REG_ESPACE) {
+    fprintf(stderr, "regexec failed with REG_ESPACE");
+    exit(1);
+  } else if (err == REG_NOMATCH) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
+/*
 void CREATE(sail_regex)(sail_regex *r)
 {
   *r = (regex_t *) malloc(sizeof(regex_t));
@@ -61,6 +87,7 @@ void sail_getmatch(sail_string *result, sail_string str, sail_match match, int g
   strncpy(*result, str + m.rm_so, len);
   (*result)[len] = '\0';
 }
+*/
 
 void hex_parse(lbits *result, sail_int n, sail_string input)
 {

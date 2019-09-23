@@ -231,7 +231,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
      let open Regex_util in
      begin match parse_regex r with
      | Some r ->
-        string "__split " ^^ parens (string "Str.regexp " ^^ dquotes (string ("^" ^ ocaml_regex' r ^ "$")) ^^ comma ^^  space ^^ ocaml_atomic_exp ctx str)
+        string "__split " ^^ parens (string "Str.regexp_case_fold " ^^ dquotes (string ("^" ^ ocaml_regex' r ^ "$")) ^^ comma ^^  space ^^ ocaml_atomic_exp ctx str)
      | None ->
         Reporting.unreachable l __POS__ "Could not parse regular expression in OCaml backend for __split"
      end
@@ -566,6 +566,24 @@ let ocaml_funcls ctx =
 let ocaml_fundef ctx (FD_aux (FD_function (_, _, _, funcls), _)) =
   ocaml_funcls ctx funcls
 
+let ocaml_mapdef ctx (MD_aux (MD_mapping (id, args, _, mapcls), _)) =
+  let forwards, backwards = split_mapping_clauses mapcls in
+  let map_args = match args with
+    | [] -> equals
+    | args -> parens (separate_map (comma ^^ space) (ocaml_pat ctx) args) ^^ space ^^ equals
+  in
+  let ocaml_mapcls direction clauses =
+    let call_header = function_header () in
+    separate space [call_header; zencode ctx (set_id_direction direction id);
+                    map_args;
+                    string "sail_call"; lparen ^^ string "fun r ->"]
+    ^//^ (string "function" ^^ hardline ^^ ocaml_pexps ctx clauses)
+    ^^ rparen
+  in
+  ocaml_mapcls Forwards forwards
+  ^^ hardline
+  ^^ ocaml_mapcls Backwards backwards
+
 let rec ocaml_fields ctx =
   let ocaml_field typ id =
     separate space [zencode ctx id; colon; ocaml_typ ctx typ]
@@ -679,6 +697,7 @@ let nf_group doc =
 let ocaml_def ctx def = match def with
   | DEF_reg_dec ds -> nf_group (ocaml_dec_spec ctx ds) ^^ ocaml_def_end
   | DEF_fundef fd -> group (ocaml_fundef ctx fd) ^^ twice hardline
+  | DEF_mapdef md -> group (ocaml_mapdef ctx md) ^^ twice hardline
   | DEF_internal_mutrec fds ->
      separate_map (twice hardline) (fun fd -> group (ocaml_fundef ctx fd)) fds ^^ twice hardline
   | DEF_type td -> nf_group (ocaml_typedef ctx td)

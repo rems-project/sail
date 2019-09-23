@@ -1588,6 +1588,10 @@ let is_fundef id = function
   | DEF_fundef (FD_aux (FD_function (_, _, _, FCL_aux (FCL_Funcl (id', _), _) :: _), _)) when Id.compare id' id = 0 -> true
   | _ -> false
 
+let is_mapdef id = function
+  | DEF_mapdef (MD_aux (MD_mapping (id', _, _, _), _)) when Id.compare id' id = 0 -> true
+  | _ -> false
+
 let rename_valspec id (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot)) =
   VS_aux (VS_val_spec (typschm, id, externs, is_cast), annot)
 
@@ -2292,3 +2296,12 @@ let rec simple_string_of_loc = function
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
   | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"
+
+let rec split_mapping_clauses' (fs, bs) = function
+  | [] -> List.rev fs, List.rev bs
+  | MCL_aux (MCL_forwards pexp, _) :: clauses -> split_mapping_clauses' (pexp :: fs, bs) clauses
+  | MCL_aux (MCL_backwards pexp, _) :: clauses -> split_mapping_clauses' (fs, pexp :: bs) clauses
+  | MCL_aux (MCL_bidir _, (l, _)) :: _ -> Reporting.unreachable l __POS__"split_mapping_clauses called on bidir clause"
+
+let split_mapping_clauses clauses = split_mapping_clauses' ([], []) clauses
+

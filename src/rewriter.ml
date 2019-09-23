@@ -215,7 +215,7 @@ let rewrite_guard rewriters = function
      G_aux (G_if (rewriters.rewrite_exp rewriters exp), l)
   | G_aux (G_pattern (pat, exp), l) ->
      G_aux (G_pattern (rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp), l)
-           
+
 let rewrite_pexp rewriters =
   let rewrite = rewriters.rewrite_exp rewriters in
   function

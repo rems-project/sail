@@ -645,12 +645,21 @@ let rec insert_heap_returns ret_ctyps = function
   | (CDEF_spec (id, _, ret_ctyp) as cdef) :: cdefs ->
      cdef :: insert_heap_returns (Bindings.add id ret_ctyp ret_ctyps) cdefs
 
+  | (CDEF_mapping_spec (id, _, left_ctyp, right_ctyp) as cdef) :: cdefs ->
+     let ret_ctyps =
+       ret_ctyps
+       |> Bindings.add (set_id_direction Forwards id) right_ctyp
+       |> Bindings.add (set_id_direction Backwards id) left_ctyp
+     in
+     cdef :: insert_heap_returns ret_ctyps cdefs
+
   | CDEF_fundef (id, CC_stack, args, body) :: cdefs ->
      let gs = gensym () in
      begin match Bindings.find_opt id ret_ctyps with
      | None ->
         raise (Reporting.err_general (id_loc id) ("Cannot find return type for function " ^ string_of_id id))
      | Some ret_ctyp when not (is_stack_ctyp ret_ctyp) ->
+        let gs = gensym () in
         CDEF_fundef (id, CC_heap gs, args, fix_early_heap_return (name gs) ret_ctyp body)
         :: insert_heap_returns ret_ctyps cdefs
      | Some ret_ctyp ->
@@ -1408,14 +1417,6 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      ^^ jump 2 2 (separate_map hardline (codegen_instr fid ctx) instrs) ^^ hardline
      ^^ string "  }"
 
-
-  (* f has some direction, so we are calling a mapping *)
-  | I_funcall (x, _, f, args) when (match id_direction f with Some _ -> true | _ -> false) ->
-     let c_args = Util.string_of_list ", " sgen_arg_cval args in
-     let gs = gensym () in
-     ksprintf string "  bool %s =  %s(%s, %s);" (sgen_id gs) (sgen_function_id f) (sgen_clexp x) c_args ^^ hardline
-     ^^ ksprintf string "  if (!%s) { sail_match_failure(\"%s\"); }" (sgen_id gs) (String.escaped (string_of_id fid))
-
   | I_funcall (x, extern, f, args) ->
      let c_args = Util.string_of_list ", " sgen_arg_cval args in
      let ctyp = clexp_ctyp x in
@@ -2050,8 +2051,11 @@ let codegen_def' ctx = function
   | CDEF_mapping_spec (id, arg_ctyps, left_ctyp, right_ctyp) ->
      let static = if !opt_static then "static " else "" in
      let codegen_mapping_spec d left_ctyp right_ctyp =
-       string (Printf.sprintf "%sbool %s(%s%s *rop, %s);"
-                 static (sgen_function_id (set_id_direction d id)) (extra_params ()) (sgen_ctyp right_ctyp) (Util.string_of_list ", " sgen_ctyp (arg_ctyps @ [left_ctyp])))
+       let id = set_id_direction d id in
+       if is_stack_ctyp right_ctyp then
+         string (Printf.sprintf "%s%s %s(%s%s);" static (sgen_ctyp right_ctyp) (sgen_function_id id) (extra_params ()) (Util.string_of_list ", " sgen_ctyp (arg_ctyps @ [left_ctyp])))
+       else
+         string (Printf.sprintf "%svoid %s(%s%s *rop, %s);" static (sgen_function_id id) (extra_params ()) (sgen_ctyp right_ctyp) (Util.string_of_list ", " sgen_ctyp (arg_ctyps @ [left_ctyp])))
      in
      codegen_mapping_spec Forwards left_ctyp right_ctyp
      ^^ twice hardline
@@ -2095,11 +2099,6 @@ let codegen_def' ctx = function
           (if !opt_static then string "static " else empty)
           ^^ string "void" ^^ space ^^ codegen_function_id id
           ^^ parens (string (extra_params ()) ^^ string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_id gs ^ ", ") ^^ string args)
-          ^^ hardline
-       | CC_mapping ->
-          (if !opt_static then string "static " else empty)
-          ^^ string "bool" ^^ space ^^ codegen_function_id id
-          ^^ parens (string (extra_params ()) ^^ string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_name return ^ ", ") ^^ string args)
           ^^ hardline
      in
      function_header

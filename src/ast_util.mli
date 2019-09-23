@@ -430,6 +430,8 @@ val prepend_kid : string -> kid -> kid
    it appears on whatever side of a mapping it came from originally *)
 val pat_of_mpat : direction -> 'a mpat -> 'a pat
 
+val split_mapping_clauses : 'a mapcl list -> 'a pexp list * 'a pexp list
+
 val nexp_frees : nexp -> KidSet.t
 val nexp_identical : nexp -> nexp -> bool
 val is_nexp_constant : nexp -> bool
@@ -466,6 +468,7 @@ val construct_mpexp : 'a mpat * ('a exp) option * (Ast.l * 'a) ->  'a mpexp
 
 val is_valspec : id -> 'a def -> bool
 val is_fundef : id -> 'a def -> bool
+val is_mapdef : id -> 'a def -> bool
 
 val rename_valspec : id -> 'a val_spec -> 'a val_spec
 

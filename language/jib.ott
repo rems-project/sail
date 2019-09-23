@@ -229,7 +229,6 @@ instr :: 'I_' ::=
 calling_convention :: 'CC_' ::=
   | stack :: :: stack
   | heap id :: :: heap
-  | mapping :: :: mapping
 
 cdef :: 'CDEF_' ::=
   | register id : ctyp = {

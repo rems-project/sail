@@ -616,6 +616,17 @@ let value_string_append = function
   | [v1; v2] -> V_string (Sail_lib.string_append (coerce_string v1, coerce_string v2))
   | _ -> failwith "value string_append"
 
+let value_string_match = function
+  | [v1; v2] ->
+     let open Regex_util in
+     begin match parse_regex (coerce_string v1) with
+     | Some r ->
+        V_bool (Sail_lib.string_match (Str.regexp_case_fold ("^" ^ ocaml_regex' r ^ "$"), coerce_string v2))
+     | None ->
+        failwith "value string_match (parse_regex)"
+     end
+  | _ -> failwith "value string_match"
+
 let value_decimal_string_of_bits = function
   | [v] -> V_string (Sail_lib.decimal_string_of_bits (coerce_bv v))
   | _ -> failwith "value decimal_string_of_bits"
@@ -764,6 +775,7 @@ let primops =
       ("binary_string", value_binary_string);
       ("decimal_parse", value_decimal_parse);
       ("decimal_string", value_decimal_string);
+      ("string_match", value_string_match);
       ("__split", value_split);
       ("__group", value_group);
 

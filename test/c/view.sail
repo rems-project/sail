@@ -5,7 +5,7 @@ $include <mapping.sail>
 
 enum E = A | B | C
 
-mapping test : regex("[ABC]") <-> E = {
+mapping test : token("[ABC]") <-> E = {
   "A" <-> A,
   "B" <-> B,
   "C" <-> C

@@ -167,7 +167,7 @@ let rec desugar_rchain chain s e =
 
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
-%token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef Regex
+%token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef Token
 %token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield Constant
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Forwards Backwards
@@ -525,7 +525,7 @@ atomic_typ:
     { mk_typ ATyp_inc $startpos $endpos }
   | id tyarg
     { mk_typ (ATyp_app ($1, snd $2 @ fst $2)) $startpos $endpos }
-  | Regex Lparen String Rparen
+  | Token Lparen String Rparen
     { mk_typ (ATyp_regex $3) $startpos $endpos }
   | Register Lparen typ Rparen
     { let register_id = mk_id (Id "register") $startpos($1) $endpos($1) in
@@ -724,8 +724,6 @@ atomic_pat:
     { mk_pat (P_list []) $startpos $endpos }
   | LsquareBar pat_list RsquareBar
     { mk_pat (P_list $2) $startpos $endpos }
-  | atomic_pat LtMinus direction_regex Lparen exp Rparen
-    { mk_pat (P_view ($1, mk_id (Id "regex") $startpos($3) $endpos($3), [$5])) $startpos $endpos }
   | atomic_pat LtMinus direction_id Lparen exp_list Rparen
     { mk_pat (P_view ($1, $3, $5)) $startpos $endpos }
   | atomic_pat LtMinus direction_id Unit
@@ -1053,12 +1051,6 @@ direction_id:
   | Backwards Id
     { Id_aux (Direction (Backwards, $2), loc $startpos $endpos) }
 
-direction_regex:
-  | Regex
-    { $1 }
-  | Forwards Regex
-    { $2 }
-
 atomic_exp:
   | atomic_exp Colon atomic_typ
     { mk_exp (E_cast ($3, $1)) $startpos $endpos }
@@ -1353,8 +1345,6 @@ atomic_mpat:
     { mk_mpat (MP_list $2) $startpos $endpos }
   | atomic_mpat Colon typ
     { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
-  | atomic_mpat LtMinus direction_regex Lparen exp Rparen
-    { mk_mpat (MP_view ($1, mk_id (Id "regex") $startpos($3) $endpos($3), [$5])) $startpos $endpos }
   | atomic_mpat LtMinus id Lparen exp_list Rparen
     { mk_mpat (MP_view ($1, $3, $5)) $startpos $endpos }
   | atomic_mpat LtMinus id Unit

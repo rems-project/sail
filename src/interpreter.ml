@@ -766,23 +766,9 @@ and pattern_match env (P_aux (aux, annot) as pat) value =
      | exp :: exps ->
         step exp >>= fun exp' -> wrap (P_view (pat, id, evaluated @ exp' :: exps))
      | [] ->
-        if string_of_id id = "forwards regex" then (
-          match Regex_util.parse_regex (coerce_string (value_of_exp (List.hd exps))) with
-          | Some regex ->
-             let regex = Regex_util.ocaml_regex regex in
-             let string = coerce_string value in
-             if Str.string_match regex string 0 then (
-               pattern_match env pat value
-             ) else (
-               return (Match_result (false, Bindings.empty))
-             )
-          | None ->
-             fail "Could not parse regular expression in mapping"
-        ) else (
-          call id (List.map value_of_exp evaluated @ [value]) >>=
-            (function Return_ok v -> wrap (P_view (pat, mk_id "__view", [exp_of_value v]))
-                    | Return_exception v -> return (Match_exception v))
-        )
+        call id (List.map value_of_exp evaluated @ [value]) >>=
+          (function Return_ok v -> wrap (P_view (pat, mk_id "__view", [exp_of_value v]))
+                  | Return_exception v -> return (Match_exception v))
      end
   | P_lit lit ->
      return (Match_result (eq_value (value_of_lit lit) value, Bindings.empty))

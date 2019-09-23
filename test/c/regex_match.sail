@@ -1,12 +1,13 @@
 default Order dec
 
 $include <prelude.sail>
+$include <mapping.sail>
 
 val "print_endline" : string -> unit
 
 function main() -> unit =
   match "He^l[lo]X,   !YWorld" {
-    "He^l[lo]" ^ x ^ y : regex(", +!") ^ z ^ "World" => {
+    "He^l[lo]" ^ x ^ y : token(", +!") ^ z ^ "World" => {
       print_endline("matched");
       print_endline(x);
       print_endline(y);

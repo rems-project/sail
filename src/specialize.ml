@@ -525,6 +525,8 @@ let remove_unused_valspecs env ast =
     match defs with
     | def :: defs when is_fundef id def ->
        remove_unused (Defs defs) id
+    | def :: defs when is_mapdef id def ->
+       remove_unused (Defs defs) id
     | def :: defs when is_valspec id def ->
        remove_unused (Defs defs) id
     | DEF_overload (overload_id, overloads) :: defs ->

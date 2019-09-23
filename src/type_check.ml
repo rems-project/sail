@@ -344,7 +344,7 @@ let destruct_exist_plain ?name:(name=None) typ =
      let typ = typ_subst kid (arg_kopt fresh) typ in
      Some ([fresh], nc, typ)
   | Typ_aux (Typ_exist (kopts, nc, typ), _) ->
-     let add_num i = match name with Some n -> Some (n ^ string_of_int i) | None -> None in 
+     let add_num i = match name with Some n -> Some (n ^ string_of_int i) | None -> None in
      let fresh_kopts =
        List.mapi (fun i kopt -> (kopt_kid kopt, named_existential (unaux_kind (kopt_kind kopt)) (add_num i))) kopts
      in
@@ -2397,7 +2397,7 @@ let is_typ_kid kid = function
   | _ -> false
 
 let instantiate_simple_equations =
-  let rec find_eqs kid (NC_aux (nc,_)) = 
+  let rec find_eqs kid (NC_aux (nc,_)) =
     match nc with
     | NC_equal (Nexp_aux (Nexp_var kid',_), nexp)
         when Kid.compare kid kid' == 0 &&
@@ -3320,20 +3320,7 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
   | P_app (f, pats) ->
      infer_pat env (P_aux (P_app (f, [mk_pat (P_tup pats)]), (l, ())))
   | P_view (pat, f, exps) ->
-     let app_env, is_mapping_builtin =
-       if Env.allow_mapping_builtins env then
-         match string_of_id f with
-         | "regex" | "forwards regex" ->
-            begin match exps with
-            | [E_aux (E_lit (L_aux (L_string regex, _)), _)] ->
-               Env.add_val_spec (mk_id "regex") (mk_typquant [], mapping_family_typ [string_typ] string_typ (regex_typ regex)) env, true
-            | _ ->
-               typ_error env l "regex mapping builtin requires a string literal as an argument"
-            end
-         | _ -> env, false
-       else env, false
-     in
-     let inferred_app = infer_funapp l app_env (strip_direction f) exps None in
+     let inferred_app = infer_funapp l env (strip_direction f) exps None in
      begin match inferred_app, typ_of inferred_app with
      | E_aux (E_app (_, exps), _), Typ_aux (Typ_bidir (typ_left, typ_right), _) ->
         begin match id_direction f with
@@ -3752,9 +3739,6 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_app (ctor, x :: y :: zs) when Env.is_union_constructor ctor env ->
      typ_print (lazy ("Inferring multiple argument constructor: " ^ string_of_id ctor));
      irule infer_exp env (mk_exp ~loc:l (E_app (ctor, [mk_exp ~loc:l (E_tuple (x :: y :: zs))])))
-  | E_app (mapping, ([E_aux (E_lit (L_aux (L_string regex, _)), _); _] as xs)) when string_of_id mapping = "forwards regex" ->
-     let env = Env.add_val_spec (mk_id "regex") (mk_typquant [], mapping_family_typ [string_typ] string_typ (regex_typ regex)) env in
-     check_mapping (irule infer_exp) l env mapping xs
   | E_app (mapping, xs) when Env.is_mapping (strip_direction mapping) env ->
      check_mapping (irule infer_exp) l env mapping xs
   | E_app (f, xs) when List.length (Env.get_overloads f env) > 0 ->

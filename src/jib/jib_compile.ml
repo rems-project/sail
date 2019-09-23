@@ -625,10 +625,11 @@ and compile_aguard ctx aguard cleanup case_label =
      let gs = ngensym () in
      let destructure, destructure_cleanup, ctx = compile_match ctx gpat (V_id (gs, ctyp)) case_label in
      gexp_setup
-     @ [gexp_call (CL_id (gs, ctyp))]
+     @ [idecl ctyp gs;
+        gexp_call (CL_id (gs, ctyp))]
      @ gexp_cleanup
      @ destructure,
-     cleanup @ destructure_cleanup,
+     cleanup @ destructure_cleanup @ [iclear ctyp gs],
      ctx
 
 and compile_case ctx clexp cval finish_match_label (apat, aguards, body) =
@@ -637,7 +638,7 @@ and compile_case ctx clexp cval finish_match_label (apat, aguards, body) =
   let rec compile_aguards ctx cleanup = function
     | aguard :: aguards ->
        let guard, cleanup', ctx = compile_aguard ctx aguard cleanup case_label in
-       let guards, cleanup'', ctx = compile_aguards ctx cleanup' aguards in                   
+       let guards, cleanup'', ctx = compile_aguards ctx cleanup' aguards in
        [icomment "guard"] @ guard @ guards, cleanup'', ctx
     | [] -> [icomment "end guards"], cleanup, ctx
   in
@@ -656,7 +657,7 @@ and compile_case ctx clexp cval finish_match_label (apat, aguards, body) =
     [ilabel case_label]
   else
     [iblock case_instrs; ilabel case_label]
-  
+
 and compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   let ctx = { ctx with local_env = env } in
   match aexp_aux with
@@ -1338,31 +1339,7 @@ let compile_mapcls swap mk_cdef ctx id pats clauses =
   let compile_clause pexp =
     (* First, compile the clause to ANF *)
     let apat, guards, body = anf_pexp pexp in
-    let shadow_ids = IdSet.union (apat_bindings apat) shadow_ids in
-    let guards = List.map (function AG_if g -> AG_if (ctx.optimize_anf ctx (no_shadow shadow_ids g))) guards in
-    let body = ctx.optimize_anf ctx (no_shadow shadow_ids body) in
-    (* If the mapping clause fails, we'll jump to this label *)
-    let clause_label = label "clause_" in
-    let destructure, destructure_cleanup, ctx = compile_match ctx apat map_cval clause_label in
-    let body_setup, body_call, body_cleanup = compile_aexp ctx body in
-    let case_instrs = match guards with
-      | [AG_if guard] ->
-         let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard in
-         let gs = ngensym () in
-         destructure
-         @ guard_setup
-         @ [idecl CT_bool gs;
-            guard_call (CL_id (gs, CT_bool))]
-         @ guard_cleanup
-         @ [ijump (V_call (Bnot, [V_id (gs, CT_bool)])) clause_label]
-         @ body_setup @ [body_call (CL_id (clause_return_id, right_ctyp))] @ body_cleanup @ destructure_cleanup
-         @ [igoto finish_clause_label]
-      | [] ->
-         destructure
-         @ body_setup @ [body_call (CL_id (clause_return_id, right_ctyp))] @ body_cleanup @ destructure_cleanup
-         @ [igoto finish_clause_label]
-    in
-    [iblock case_instrs; ilabel clause_label]
+    compile_case ctx (CL_id (clause_return_id, right_ctyp)) map_cval finish_clause_label (apat, guards, body)
   in
 
   let instrs =
@@ -1465,8 +1442,8 @@ and compile_def' n total ctx = function
        | _ :: clauses -> backwards clauses
        | [] -> []
      in
-     [compile_mapcls (fun (l, r) -> l, r) (fun args instrs -> CDEF_fundef (set_id_direction Forwards id, CC_mapping, args, instrs)) ctx id pats (forwards mapcls);
-      compile_mapcls (fun (l, r) -> r, l) (fun args instrs -> CDEF_fundef (set_id_direction Backwards id, CC_mapping, args, instrs)) ctx id pats (backwards mapcls)],
+     [compile_mapcls (fun (l, r) -> l, r) (fun args instrs -> CDEF_fundef (set_id_direction Forwards id, CC_stack, args, instrs)) ctx id pats (forwards mapcls);
+      compile_mapcls (fun (l, r) -> r, l) (fun args instrs -> CDEF_fundef (set_id_direction Backwards id, CC_stack, args, instrs)) ctx id pats (backwards mapcls)],
      ctx
 
   (* All abbreviations should expanded by the typechecker, so we don't
