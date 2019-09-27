@@ -1258,25 +1258,6 @@ let compile_funcl ctx id pat guards exp =
     | [] -> [ilabel guard_label], ctx
   in
   let guard_instrs, ctx = compile_guards ctx [] guards in
-  (*
-  let guard_instrs = match guard with
-    | Some guard ->
-       let guard_aexp = ctx.optimize_anf ctx (no_shadow (pat_ids pat) (anf guard)) in
-       let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard_aexp in
-       let guard_label = label "guard_" in
-       let gs = ngensym () in
-       [iblock (
-            [idecl CT_bool gs]
-            @ guard_setup
-            @ [guard_call (CL_id (gs, CT_bool))]
-            @ guard_cleanup
-            @ [ijump (V_id (gs, CT_bool)) guard_label;
-               imatch_failure ();
-               ilabel guard_label]
-       )]
-    | None -> []
-  in
-   *)
 
   (* Optimize and compile the expression to ANF. *)
   let aexp = ctx.optimize_anf ctx (no_shadow (pat_ids pat) (anf exp)) in
@@ -1347,11 +1328,10 @@ let compile_mapcls swap mk_cdef ctx id pats clauses =
     @ List.concat (List.map compile_clause clauses) @ destructure_cleanup
     @ [ilabel mapdef_label;
        iclear right_ctyp clause_return_id;
-       ireturn (V_lit (VL_bool false, CT_bool));
+       imatch_failure ();
        ilabel finish_clause_label;
        icopy (gen_loc (id_loc id)) (CL_id (return, right_ctyp)) (V_id (clause_return_id, right_ctyp));
-       iclear right_ctyp clause_return_id;
-       ireturn (V_lit (VL_bool true, CT_bool))]
+       iclear right_ctyp clause_return_id]
   in
   mk_cdef (List.map fst compiled_args @ [map_id]) instrs
 
