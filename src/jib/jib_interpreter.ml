@@ -277,7 +277,7 @@ let rec declaration = function
   | CT_string -> VL_string ""
   | CT_real -> VL_real "0.0"
   | CT_tup ctyps -> VL_tuple (List.map declaration ctyps)
-  | CT_match n -> VL_matcher (n, unique_number ())
+  | CT_match -> VL_matcher (0, unique_number ())
   | CT_list _ -> VL_list []
   | CT_variant (_, fields) ->
      begin match fields with

@@ -71,7 +71,11 @@ mapping option_bits forall 'n, 'n >= 0. (n: int('n)) -> string <-> option(bitvec
 
 val __split = {
   _: "__split"
-} : (string, string) -> (bool, __match)
+} : (string, string, int) -> __match
+
+val __matched = {
+  _: "__matched"
+} : __match -> bool
 
 val __group = {
   _: "__group"

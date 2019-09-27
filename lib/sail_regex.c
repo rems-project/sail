@@ -28,66 +28,65 @@ bool string_match(sail_string regex_str, sail_string str)
   }
 }
 
-/*
-void CREATE(sail_regex)(sail_regex *r)
+/**************************************************************************
+ * __split for string append patterns (lib/mapping.sail)                  *
+ **************************************************************************/
+
+void CREATE(sail_match)(sail_match *m)
 {
-  *r = (regex_t *) malloc(sizeof(regex_t));
+  return;
 }
 
-void CONVERT_OF(sail_regex, sail_string)(sail_regex *r, sail_string str)
+void KILL(sail_match)(sail_match *m)
 {
-  int err = regcomp(*r, str, REG_ICASE | REG_EXTENDED);
+  return;
+}
+
+void COPY(sail_match)(sail_match *m1, const sail_match m2)
+{
+  return;
+}
+
+void __split(sail_match *result,  sail_string regex_str, sail_string str, sail_int n)
+{
+  regex_t r;
+  int err = regcomp(&r, regex_str, REG_ICASE | REG_EXTENDED);
+
   if (err) {
-    size_t length = regerror(err, *r, NULL, 0);
+    size_t length = regerror(err, &r, NULL, 0);
     char *buffer = malloc(length);
-    regerror(err, *r, buffer, length);
+    regerror(err, &r, buffer, length);
     fprintf(stderr, "Failed to compile regular expression: %s\n", buffer);
     free(buffer);
     exit(1);
   }
-}
 
-void KILL(sail_regex)(sail_regex *r)
-{
-  regfree(*r);
-  free(*r);
-}
+  size_t nmatches = mpz_get_ui(n);
 
-bool sail_regmatch(sail_regex r, sail_string str, sail_match match, int groups)
-{
-  int err = regexec(r, str, groups + 1, match, 0);
+  err = regexec(&r, str, 0, NULL, 0);
   if (err == REG_ESPACE) {
     fprintf(stderr, "regexec failed with REG_ESPACE");
     exit(1);
   } else if (err == REG_NOMATCH) {
-    return false;
+    return;
   } else {
-    return true;
+    return;
   }
 }
 
-bool sail_regmatch0(sail_regex r, sail_string str)
+bool __matched(sail_match m)
 {
-  int err = regexec(r, str, 0, NULL, 0);
-  if (err == REG_ESPACE) {
-    fprintf(stderr, "regexec failed with REG_ESPACE");
-    exit(1);
-  } else if (err == REG_NOMATCH) {
-    return false;
-  } else {
-    return true;
-  }
+  return true;
 }
 
-void sail_getmatch(sail_string *result, sail_string str, sail_match match, int groups, int group)
+void __group(sail_string *result, sail_int group, sail_match m)
 {
-  regmatch_t m = match[group];
-  size_t len = m.rm_eo - m.rm_so;
-  *result = realloc(*result, len + 1);
-  strncpy(*result, str + m.rm_so, len);
-  (*result)[len] = '\0';
+  return;
 }
-*/
+
+/**************************************************************************
+ * Functions for parsing and pretty printing bitvectors                   *
+ **************************************************************************/
 
 void hex_parse(lbits *result, sail_int n, sail_string input)
 {
