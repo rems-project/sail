@@ -205,10 +205,16 @@ void binary_string(sail_string *result, lbits input)
   char hex_f = (*hex)[0];
   unsigned int c = hex_f < 58 ? hex_f - 48 : hex_f - 55;
 
-  // clz will return length - 1 (i.e. 31 for the 32-bit integer 0)
-  // when it's input is zero, which is actually good for us because we
-  // want to print 0b0 for an empty bitvector.
-  unsigned int leading_zeros = __builtin_clz(c) - (sizeof(unsigned int) - sizeof(char)) * 8 - 4;
+  // We want leading zeros of the empty bitvector to be 3 not 4, so
+  // zero-length bitvectors are printed as 0b0 ensuring they are still
+  // parseable as a binary string. Note that __builtin_clz is
+  // undefined for c == 0.
+  unsigned int leading_zeros;
+  if (c == 0) {
+    leading_zeros = 3;
+  } else {
+    leading_zeros = __builtin_clz(c) - (sizeof(unsigned int) - sizeof(char)) * 8 - 4;
+  }
   *result = (sail_string) malloc((4 * hex_len + 3 - leading_zeros) * sizeof(char));
 
   (*result)[0] = '0';
