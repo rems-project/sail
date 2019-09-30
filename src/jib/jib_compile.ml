@@ -623,12 +623,19 @@ and compile_aguard ctx aguard cleanup case_label =
      let ctyp = ctyp_of_typ ctx (apat_typ gpat) in
      let gexp_setup, gexp_call, gexp_cleanup = compile_aexp ctx gexp in
      let gs = ngensym () in
-     let destructure, destructure_cleanup, ctx = compile_match ctx gpat (V_id (gs, ctyp)) case_label in
+     let guard_failure_label = label "guard_failure_" in
+     let guard_success_label = label "guard_success_" in
+     let destructure, destructure_cleanup, ctx = compile_match ctx gpat (V_id (gs, ctyp)) guard_failure_label in
      gexp_setup
      @ [idecl ctyp gs;
         gexp_call (CL_id (gs, ctyp))]
      @ gexp_cleanup
-     @ destructure,
+     @ destructure
+     @ [igoto guard_success_label]
+     @ [ilabel guard_failure_label]
+     @ cleanup
+     @ [igoto case_label;
+        ilabel guard_success_label],
      cleanup @ destructure_cleanup @ [iclear ctyp gs],
      ctx
 
@@ -639,8 +646,8 @@ and compile_case ctx clexp cval finish_match_label (apat, aguards, body) =
     | aguard :: aguards ->
        let guard, cleanup', ctx = compile_aguard ctx aguard cleanup case_label in
        let guards, cleanup'', ctx = compile_aguards ctx cleanup' aguards in
-       [icomment "guard"] @ guard @ guards, cleanup'', ctx
-    | [] -> [icomment "end guards"], cleanup, ctx
+       guard @ guards, cleanup'', ctx
+    | [] -> [], cleanup, ctx
   in
   let guards, cleanup, ctx = compile_aguards ctx destructure_cleanup aguards in
   let body_setup, body_call, body_cleanup = compile_aexp ctx body in
@@ -653,8 +660,9 @@ and compile_case ctx clexp cval finish_match_label (apat, aguards, body) =
     @ cleanup
     @ [igoto finish_match_label]
   in
+  (* TODO: Consider what happens if an intermediate pattern guard is dead? *)
   if is_dead_aexp body then
-    [ilabel case_label]
+    [iblock (destructure @ guards @ cleanup); ilabel case_label]
   else
     [iblock case_instrs; ilabel case_label]
 
@@ -701,7 +709,7 @@ and compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let try_return_id = ngensym () in
      let handled_exception_label = label "handled_exception_" in
      let fallthrough_label = label "fallthrough_exception_" in
-     let exn_cval = V_id (current_exception, ctyp_of_typ ctx (mk_typ (Typ_id (mk_id "exception")))) in
+     let exn_cval = V_id (current_exception, ctyp_of_typ ctx exc_typ) in
      assert (ctyp_equal ctyp (ctyp_of_typ ctx typ));
      [idecl ctyp try_return_id;
       itry_block (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
