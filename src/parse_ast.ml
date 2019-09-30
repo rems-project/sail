@@ -76,6 +76,9 @@ kind_aux =  (* base kind *)
  | K_order (* kind of vector order specifications *)
  | K_bool (* kind of constraints *)
 
+type cascade_type = 
+ | Cascade_match
+ | Cascade_try
 
 type 
 kind =
@@ -286,7 +289,7 @@ exp_aux =  (* Expression *)
  | E_var of exp * exp * exp
  | E_internal_plet of pat * exp * exp
  | E_internal_return of exp
- | E_internal_cascade of exp * (id * pexp list) list * pexp list (* Used to rewrite guarded clauses into a 'cascade' of fallthroughs before a match expression *)
+ | E_internal_cascade of cascade_type * exp * (id * pexp list) list * pexp list (* Used to rewrite guarded clauses into a 'cascade' of fallthroughs before a match expression *)
 
 
 and exp = 

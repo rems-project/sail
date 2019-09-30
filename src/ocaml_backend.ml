@@ -315,7 +315,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
      ^/^ string "in"
      ^/^ (string "loop" ^^ space ^^ ocaml_atomic_exp ctx exp_from)
   | E_cons (x, xs) -> ocaml_exp ctx x ^^ string " :: " ^^ ocaml_exp ctx xs
-  | E_internal_cascade (exp, fallthroughs, pexps) ->
+  | E_internal_cascade (Cascade_match, exp, fallthroughs, pexps) ->
      let fallthrough_ids = IdSet.of_list (List.map fst fallthroughs) in
      let fctx = { ctx with fallthrough_ids = fallthrough_ids } in
      separate space [string "let cascade ="; ocaml_exp ctx exp; string "in"]

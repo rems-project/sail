@@ -172,7 +172,7 @@ let fix_eff_exp (E_aux (e,((l,_) as annot))) = match destruct_tannot (snd annot)
         (union_effects (effect_of e1) (effect_of e2))
     | E_internal_plet (_,e1,e2) -> union_effects (effect_of e1) (effect_of e2)
     | E_internal_return e1 -> effect_of e1
-    | E_internal_cascade (e,fs,pexps) ->
+    | E_internal_cascade (_,e,fs,pexps) ->
        union_effects (List.fold_left union_effects no_effect (List.map (fun (id, Fallthrough pexps) ->
                                                                   List.fold_left union_effects no_effect (List.map effect_of_pexp pexps)) fs))
                      (List.fold_left union_effects (effect_of e) (List.map effect_of_pexp pexps))
@@ -484,7 +484,7 @@ type ('a,
  ; e_var                    : 'lexp * 'exp * 'exp -> 'exp_aux
  ; e_internal_plet          : 'pat * 'exp * 'exp -> 'exp_aux
  ; e_internal_return        : 'exp -> 'exp_aux
- ; e_internal_cascade       : 'exp * (id * 'pexp list) list * 'pexp list -> 'exp_aux
+ ; e_internal_cascade       : cascade_type * 'exp * (id * 'pexp list) list * 'pexp list -> 'exp_aux
  ; e_internal_value         : Value.value -> 'exp_aux
  ; e_aux                    : 'exp_aux * 'a annot -> 'exp
  ; lEXP_id                  : id -> 'lexp_aux
@@ -602,7 +602,8 @@ and fold_exp_aux (alg : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
   | E_internal_plet (pat,e1,e2) ->
      alg.e_internal_plet (fold_pat alg pat, fold_exp alg e1, fold_exp alg e2)
   | E_internal_return e -> alg.e_internal_return (fold_exp alg e)
-  | E_internal_cascade (e,fs,pexps) -> alg.e_internal_cascade (fold_exp alg e, List.map (fun (id, Fallthrough f) -> id, List.map (fold_pexp alg) f) fs, List.map (fold_pexp alg) pexps)
+  | E_internal_cascade (ct,e,fs,pexps) ->
+     alg.e_internal_cascade (ct, fold_exp alg e, List.map (fun (id, Fallthrough f) -> id, List.map (fold_pexp alg) f) fs, List.map (fold_pexp alg) pexps)
   | E_internal_value v -> alg.e_internal_value v
 
 and fold_exp (alg : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
@@ -682,7 +683,7 @@ let id_algebra =
   ; e_var = (fun (lexp, e2, e3) -> E_var (lexp,e2,e3))
   ; e_internal_plet = (fun (pat, e1, e2) -> E_internal_plet (pat,e1,e2))
   ; e_internal_return = (fun e -> E_internal_return e)
-  ; e_internal_cascade = (fun (e, fs, pexps) -> E_internal_cascade (e, List.map (fun (id, pexps) -> id, Fallthrough pexps) fs, pexps))
+  ; e_internal_cascade = (fun (ct, e, fs, pexps) -> E_internal_cascade (ct, e, List.map (fun (id, pexps) -> id, Fallthrough pexps) fs, pexps))
   ; e_internal_value = (fun v -> E_internal_value v)
   ; e_aux = (fun (e,annot) -> E_aux (e,annot))
   ; lEXP_id = (fun id -> LEXP_id id)
@@ -781,11 +782,11 @@ let compute_algebra bot join =
   ; e_internal_plet = (fun ((vp,pat), (v1,e1), (v2,e2)) ->
     (join_list [vp;v1;v2], E_internal_plet (pat,e1,e2)))
   ; e_internal_return = (fun (v,e) -> (v, E_internal_return e))
-  ; e_internal_cascade = (fun ((v,e),fs,pexps) ->
+  ; e_internal_cascade = (fun (ct,(v,e),fs,pexps) ->
     let acc = ref v in
     let fs = List.map (fun (id, pexps) -> id, Fallthrough (List.map (fun (v, pexp) -> acc := join !acc v; pexp) pexps)) fs in
     let pexps = List.map (fun (v, pexp) -> acc := join !acc v; pexp) pexps in
-    !acc, E_internal_cascade (e,fs,pexps)
+    !acc, E_internal_cascade (ct,e,fs,pexps)
   )
   ; e_internal_value = (fun v -> (bot, E_internal_value v))
   ; e_aux = (fun ((v,e),annot) -> (v, E_aux (e,annot)))
@@ -870,7 +871,7 @@ let pure_algebra bot join =
   ; e_var = (fun (vl, v2, v3) -> join_list [vl;v2;v3])
   ; e_internal_plet = (fun (vp, v1, v2) -> join_list [vp;v1;v2])
   ; e_internal_return = (fun v -> v)
-  ; e_internal_cascade = (fun (v,fs,vs) -> join_list (v :: List.concat (List.map snd fs) @ vs))
+  ; e_internal_cascade = (fun (ct,v,fs,vs) -> join_list (v :: List.concat (List.map snd fs) @ vs))
   ; e_internal_value = (fun v -> bot)
   ; e_aux = (fun (v,annot) -> v)
   ; lEXP_id = (fun id -> bot)

@@ -828,8 +828,10 @@ exp:
     { mk_exp (E_internal_plet ($2,$4,$6)) $startpos $endpos }
   | InternalReturn exp
     { mk_exp (E_internal_return($2)) $startpos $endpos }
-  | InternalCascade e=exp Lcurly fs=separated_nonempty_list(Comma, fallthrough) Rcurly In Lcurly cases=case_list Rcurly
-    { mk_exp (E_internal_cascade (e, fs, cases)) $startpos $endpos }
+  | InternalCascade Match e=exp Lcurly fs=separated_nonempty_list(Comma, fallthrough) Rcurly In Lcurly cases=case_list Rcurly
+    { mk_exp (E_internal_cascade (Cascade_match, e, fs, cases)) $startpos $endpos }
+  | InternalCascade Try e=exp Lcurly fs=separated_nonempty_list(Comma, fallthrough) Rcurly In Lcurly cases=case_list Rcurly
+    { mk_exp (E_internal_cascade (Cascade_try, e, fs, cases)) $startpos $endpos }
 
 fallthrough:
   | id Eq Lcurly case_list Rcurly

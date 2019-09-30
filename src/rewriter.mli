@@ -131,7 +131,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
  ; e_var                    : 'lexp * 'exp * 'exp -> 'exp_aux
  ; e_internal_plet          : 'pat * 'exp * 'exp -> 'exp_aux
  ; e_internal_return        : 'exp -> 'exp_aux
- ; e_internal_cascade       : 'exp * (id * 'pexp list) list * 'pexp list -> 'exp_aux
+ ; e_internal_cascade       : cascade_type * 'exp * (id * 'pexp list) list * 'pexp list -> 'exp_aux
  ; e_internal_value         : Value.value -> 'exp_aux
  ; e_aux                    : 'exp_aux * 'a annot -> 'exp
  ; lEXP_id                  : id -> 'lexp_aux

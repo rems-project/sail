@@ -580,8 +580,9 @@ and map_exp_annot_aux f = function
   | E_var (lexp, exp1, exp2) -> E_var (map_lexp_annot f lexp, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_plet (pat, exp1, exp2) -> E_internal_plet (map_pat_annot f pat, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_return exp -> E_internal_return (map_exp_annot f exp)
-  | E_internal_cascade (exp, fallthroughs, cases) ->
-     E_internal_cascade (map_exp_annot f exp,
+  | E_internal_cascade (cascade_type, exp, fallthroughs, cases) ->
+     E_internal_cascade (cascade_type,
+                         map_exp_annot f exp,
                          List.map (fun (id, Fallthrough cases) -> id, Fallthrough (List.map (map_pexp_annot f) cases)) fallthroughs,
                          List.map (map_pexp_annot f) cases)
 and map_measure_annot f (Measure_aux (m, l)) = Measure_aux (map_measure_annot_aux f m, l)
@@ -1014,13 +1015,17 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_internal_return exp -> "internal_return (" ^ string_of_exp exp ^ ")"
   | E_internal_plet (pat, exp, body) -> "internal_plet " ^ string_of_pat pat ^ " = " ^ string_of_exp exp ^ " in " ^ string_of_exp body
   | E_internal_value v -> "INTERNAL_VALUE(" ^ Value.string_of_value v ^ ")"
-  | E_internal_cascade (exp, fallthroughs, cases) ->
+  | E_internal_cascade (cascade_type, exp, fallthroughs, cases) ->
      "internal_cascade " ^ string_of_exp exp ^ " { "
      ^ Util.string_of_list ", " (fun (id, Fallthrough cases) -> string_of_id id ^ " = { " ^ string_of_list ", " string_of_pexp cases ^ "}") fallthroughs
      ^ " } in { "
      ^ string_of_list ", " string_of_pexp cases
      ^ " }"
 
+and string_of_cascade_type = function
+  | Cascade_try -> "try"
+  | Cascade_match -> "match"
+    
 and string_of_measure (Measure_aux (m,_)) =
   match m with
   | Measure_none -> ""

@@ -570,9 +570,13 @@ exp :: 'E_' ::=
   | var lexp = exp in exp'  :: I :: var {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
   | let pat = exp in exp'   :: I :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
   | return_int ( exp )      ::  :: internal_return {{ com For internal use to embed into monad definition }}
-  | cascade exp' { id0 = fallthrough0 , ... , idn = fallthroughn } in { pexp1 , ... , pexpm } :: :: internal_cascade {{ com Used to rewrite guarded clauses into a 'cascade' of fallthroughs before a match expression }}
+  | cascade cascade_type exp' { id0 = fallthrough0 , ... , idn = fallthroughn } in { pexp1 , ... , pexpm } :: :: internal_cascade {{ com Used to rewrite guarded clauses into a 'cascade' of fallthroughs before a match expression }}
   | value :: I :: internal_value {{ com For internal use in interpreter to wrap pre-evaluated values when returning an action }}
   | constraint n_constraint :: :: constraint
+
+cascade_type :: 'Cascade_' ::=
+  | match :: :: match
+  | try  :: :: try
 
 fallthrough :: '' ::=
   {{ auxparam 'a }}

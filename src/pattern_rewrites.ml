@@ -719,7 +719,7 @@ let rewrite_match_exp (aux, annot) =
              [], cases
         in
         let fallthroughs, cases = to_cascade processed in
-        E_aux (E_internal_cascade (exp, fallthroughs, cases), annot)
+        E_aux (E_internal_cascade (Cascade_match, exp, fallthroughs, cases), annot)
      end
 
   | _ -> E_aux (aux, annot)

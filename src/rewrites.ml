@@ -3157,12 +3157,6 @@ let rewrites_ocaml = [
     ("string_append", []);
     ("literals", []);
     ("guards", []);
-    (*
-    ("remove_vector_concat", []);
-    ("remove_bitvector_pats", []);
-    ("pattern_literals", [Literal_arg "ocaml"]);
-    ("remove_numeral_pats", []);
-     *)
     ("exp_lift_assign", []);
     ("top_sort_defs", []);
     ("simple_types", []);

@@ -2747,7 +2747,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let inferred_exp = irule infer_exp env exp in
      let inferred_typ = typ_of inferred_exp in
      annot_exp (E_case (inferred_exp, List.map (fun case -> check_case env inferred_typ case typ) cases)) typ
-  | E_internal_cascade (exp, fallthroughs, cases), _ ->
+  | E_internal_cascade (Cascade_match, exp, fallthroughs, cases), _ ->
      let inferred_exp = irule infer_exp env exp in
      let inferred_typ = typ_of inferred_exp in
      let check_fallthrough (id, Fallthrough cases) (previous, env) =
@@ -2755,10 +2755,18 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        (id, Fallthrough cases) :: previous, Env.add_local id (Immutable, typ) env
      in
      let fallthroughs, env = List.fold_right check_fallthrough fallthroughs ([], env) in
-     annot_exp (E_internal_cascade (inferred_exp, List.rev fallthroughs, List.map (fun case -> check_case env inferred_typ case typ) cases)) typ
+     annot_exp (E_internal_cascade (Cascade_match, inferred_exp, List.rev fallthroughs, List.map (fun case -> check_case env inferred_typ case typ) cases)) typ
   | E_try (exp, cases), _ ->
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_try (checked_exp, List.map (fun case -> check_case env exc_typ case typ) cases)) typ
+  | E_internal_cascade (Cascade_try, exp, fallthroughs, cases), _ ->
+     let checked_exp = crule check_exp env exp typ in
+     let check_fallthrough (id, Fallthrough cases) (previous, env) =
+       let cases = List.map (fun case -> check_case env exc_typ case typ) cases in
+       (id, Fallthrough cases) :: previous, Env.add_local id (Immutable, typ) env
+     in
+     let fallthroughs, env = List.fold_right check_fallthrough fallthroughs ([], env) in
+     annot_exp (E_internal_cascade (Cascade_try, checked_exp, List.rev fallthroughs, List.map (fun case -> check_case env exc_typ case typ) cases)) typ
   | E_cons (x, xs), _ ->
      begin
        match is_list (Env.expand_synonyms env typ) with
@@ -4212,7 +4220,7 @@ and propagate_exp_effect_aux l = function
   | E_internal_return exp ->
      let p_exp = propagate_exp_effect exp in
      E_internal_return p_exp, effect_of p_exp
-  | E_internal_cascade (exp, fallthroughs, cases) ->
+  | E_internal_cascade (cascade_type, exp, fallthroughs, cases) ->
      let p_exp = propagate_exp_effect exp in
      let fallthroughs_eff = ref no_effect in
      let p_fallthroughs =
@@ -4225,7 +4233,7 @@ and propagate_exp_effect_aux l = function
      in
      let p_cases = List.map propagate_pexp_effect cases in
      let case_eff = List.fold_left union_effects no_effect (List.map snd p_cases) in
-     E_internal_cascade (p_exp, p_fallthroughs, List.map fst p_cases),
+     E_internal_cascade (cascade_type, p_exp, p_fallthroughs, List.map fst p_cases),
      union_effects (effect_of p_exp) (union_effects case_eff !fallthroughs_eff)
   | exp_aux -> Reporting.unreachable l __POS__ "Unimplemented: Cannot propagate effect in expression"
 

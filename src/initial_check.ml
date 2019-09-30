@@ -414,9 +414,13 @@ and to_ast_exp ctx (P.E_aux(exp,l) : P.exp) =
     | P.E_throw exp -> E_throw (to_ast_exp ctx exp)
     | P.E_return exp -> E_return(to_ast_exp ctx exp)
     | P.E_assert(cond,msg) -> E_assert(to_ast_exp ctx cond, to_ast_exp ctx msg)
-    | P.E_internal_cascade(exp,fallthroughs,cases) ->
+    | P.E_internal_cascade(cascade_type,exp,fallthroughs,cases) ->
+       let to_ast_cascade_type = function
+         | P.Cascade_match -> Cascade_match
+         | P.Cascade_try -> Cascade_try in
        if !opt_magic_hash then
-         E_internal_cascade(to_ast_exp ctx exp,
+         E_internal_cascade(to_ast_cascade_type cascade_type,
+                            to_ast_exp ctx exp,
                             List.map (fun (id, cases) -> to_ast_id id, Fallthrough (List.map (to_ast_case ctx) cases)) fallthroughs,
                             List.map (to_ast_case ctx) cases)
        else
