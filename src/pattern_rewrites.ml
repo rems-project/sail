@@ -449,7 +449,7 @@ module Bitvector_concat_config = struct
                            else
                              let hi = Big_int.add lo len in (hi, Some (Big_int.pred hi, lo) :: ranges)
                          ) (Big_int.zero, []) (List.rev lengths) in
-       let pats = List.map Type_check.strip_pat pats in
+       let pats = List.map strip_pat pats in
        Subst_id (fun s ->
            List.map2 (fun pat range ->
                match range with
@@ -476,6 +476,29 @@ end
 
 module Literal_rewriter = Pattern_rewriter.Make(Literal_config)
 
+(* Rewrite P_vector patterns of the form
+
+   [p_0, ..., p_n]
+   into
+   vec let p_1 = vec[0], ..., let p_n = vec[n] *)
+module Vector_config = struct
+  let id_root = "vec"
+
+  let action l = function
+    | P_aux (P_vector pats, annot) ->
+       Subst_id (fun s ->
+           List.mapi (fun n pat ->
+               G_aux (G_pattern (Type_check.strip_pat pat,
+                                 locate (fun _ -> l) (mk_exp (E_vector_access (mk_exp (E_id s),
+                                                                               mk_lit_exp (L_num (Big_int.of_int n)))))),
+                      l)
+             ) pats
+         )
+    | _ -> No_change
+end
+
+module Vector_rewriter = Pattern_rewriter.Make(Vector_config)
+                        
 (* Rewrite a string append pattern of the form
 
    s_1 ^ ... ^ s_n => ...

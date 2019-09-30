@@ -1341,6 +1341,9 @@ let compile_mapcls swap mk_cdef ctx id pats clauses =
        icopy (gen_loc (id_loc id)) (CL_id (return, right_ctyp)) (V_id (clause_return_id, right_ctyp));
        iclear right_ctyp clause_return_id]
   in
+  let instrs = fix_early_return (CL_id (return, right_ctyp)) instrs in
+  let instrs = fix_exception ~return:(Some right_ctyp) ctx instrs in
+  
   mk_cdef (List.map fst compiled_args @ [map_id]) instrs
 
 (** Compile a Sail toplevel definition into an IR definition **)
