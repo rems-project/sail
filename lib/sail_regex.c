@@ -18,6 +18,8 @@ bool string_match(sail_string regex_str, sail_string str)
   }
 
   err = regexec(&r, str, 0, NULL, 0);
+  regfree(&r);
+
   if (err == REG_ESPACE) {
     fprintf(stderr, "regexec failed with REG_ESPACE");
     exit(1);
@@ -32,25 +34,51 @@ bool string_match(sail_string regex_str, sail_string str)
  * __split for string append patterns (lib/mapping.sail)                  *
  **************************************************************************/
 
+/* sail_match types are allocated by __split, and copying afterwards
+   is handled by refcounting, so CREATE for sail_match just sets the
+   pointer to the underlying match structure to NULL. This ensures
+   that CREATE followed immediately by COPY does no allocation. */
 void CREATE(sail_match)(sail_match *m)
 {
-  return;
+  *m = NULL;
 }
 
 void KILL(sail_match)(sail_match *m)
 {
-  return;
+  if ((*m)->ref_count == 0) {
+    free((*m)->str);
+    free((*m)->matches);
+    free(*m);
+  } else {
+    (*m)->ref_count--;
+  }
 }
 
-void COPY(sail_match)(sail_match *m1, const sail_match m2)
+void COPY(sail_match)(sail_match *m1, sail_match m2)
 {
-  return;
+  m2->ref_count++;
+  *m1 = m2;
 }
 
-void __split(sail_match *result,  sail_string regex_str, sail_string str, sail_int n)
+void __split(sail_match *result, sail_string regex_str, sail_string str, sail_int nmatches_mpz)
 {
+  *result = malloc(sizeof(sail_match_t));
+  (*result)->ref_count = 0;
+
+  /* Sail string-append patterns match entire strings, so we need to add start and end anchors */
+  sail_string regex_anchored;
+  regex_anchored = malloc(strlen(regex_str) + 3);
+  regex_anchored[0] = '^';
+  int i = 0;
+  while (i <= strlen(regex_str)) {
+    regex_anchored[i + 1] = regex_str[i];
+    ++i;
+  }
+  regex_anchored[i] = '$';
+  regex_anchored[i + 1] = '\0';
+
   regex_t r;
-  int err = regcomp(&r, regex_str, REG_ICASE | REG_EXTENDED);
+  int err = regcomp(&r, regex_anchored, REG_ICASE | REG_EXTENDED);
 
   if (err) {
     size_t length = regerror(err, &r, NULL, 0);
@@ -61,27 +89,45 @@ void __split(sail_match *result,  sail_string regex_str, sail_string str, sail_i
     exit(1);
   }
 
-  size_t nmatches = mpz_get_ui(n);
+  size_t nmatches = mpz_get_ui(nmatches_mpz);
+  (*result)->nmatches = nmatches;
+  (*result)->matches = malloc(sizeof(regmatch_t) * nmatches);
 
-  err = regexec(&r, str, 0, NULL, 0);
+  err = regexec(&r, str, nmatches, (*result)->matches, 0);
   if (err == REG_ESPACE) {
     fprintf(stderr, "regexec failed with REG_ESPACE");
     exit(1);
   } else if (err == REG_NOMATCH) {
-    return;
+    (*result)->matched = false;
   } else {
-    return;
-  }
+    (*result)->matched = true;
+  };
+
+  CREATE(sail_string)(&(*result)->str);
+  COPY(sail_string)(&(*result)->str, str);
+
+  regfree(&r);
+  free(regex_anchored);
 }
 
 bool __matched(sail_match m)
 {
-  return true;
+  return m->matched;
 }
 
-void __group(sail_string *result, sail_int group, sail_match m)
+void __group(sail_string *result, sail_int group_mpz, sail_match m)
 {
-  return;
+  size_t group = mpz_get_ui(group_mpz);
+
+  size_t start = m->matches[group].rm_so;
+  size_t end = m->matches[group].rm_eo;
+
+  *result = realloc(*result, ((end - start) + 1) * sizeof(char));
+
+  for (size_t i = start; i < end; i++) {
+    (*result)[i - start] = m->str[i];
+  }
+  (*result)[end - start] = '\0';
 }
 
 /**************************************************************************

@@ -3178,8 +3178,8 @@ let rewrites_c = [
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
     ("bitvector_concat", []);
-    ("literals", []);
     ("string_append", []);
+    ("literals", []);
     ("views", []);
     ("vector_string_pats_to_bit_list", []);
     ("vector_concat_assignments", []);

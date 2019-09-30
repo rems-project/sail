@@ -7,8 +7,14 @@
 bool string_match(sail_string, sail_string);
 
 typedef struct {
+  unsigned int ref_count;
   bool matched;
-} sail_match;
+  sail_string str;
+  size_t nmatches;
+  regmatch_t *matches;
+} sail_match_t;
+
+typedef sail_match_t *sail_match;
 
 SAIL_BUILTIN_TYPE(sail_match);
 
