@@ -865,7 +865,7 @@ and pattern_match env (P_aux (aux, annot) as pat) value =
           Reporting.unreachable (fst annot) __POS__ ("Bad subpattern in string append pattern: " ^ string_of_pat pat)
      in
      let subpattern_regexes = List.map subpattern_regex pats in
-     let tokenizer_regex = Regex.Seq (List.map snd subpattern_regexes) |> Regex_util.ocaml_regex in
+     let tokenizer_regex = Regex.Seq (List.map snd subpattern_regexes) |> Regex_util.ocaml_regex 1 in
      let string = coerce_string value in
      if Str.string_match tokenizer_regex string 0 then (
        match all_rights (List.map fst subpattern_regexes) with

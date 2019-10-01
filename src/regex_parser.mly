@@ -54,8 +54,8 @@ open Regex
 
 %}
 
-/* POSIX extended regular expression special characters are .[{}()\*+?| */
-%token Dot Lsquare Lcurly Rcurly Lparen Rparen Backslash Star Plus Question Bar
+/* POSIX extended regular expression special characters are .[{}()\*+?|$ */
+%token Dot Lsquare Lcurly Rcurly Lparen Rparen Backslash Star Plus Question Bar Dollar
 /* Tokens that are usually mapped to themselves, except in certain contexts ^,]- */
 %token Caret Comma Rsquare Dash
 %token Eof
@@ -119,8 +119,6 @@ regex_group:
     { Regex.Char ',' }
   | Dash
     { Regex.Char '-' }
-  | Caret
-    { Regex.Char '^' }
   | Lsquare cclass
     { Regex.Class (true, $2) }
   | Lsquare Caret cclass
@@ -146,6 +144,8 @@ escaped:
   | Rcurly { '}' }
   | Lparen { '(' }
   | Rparen { ')' }
+  | Caret { '^' }
+  | Dollar { '$' }
   | Backslash { '\\' }
   | Star { '*' }
   | Plus { '+' }

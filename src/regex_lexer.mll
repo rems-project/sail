@@ -65,6 +65,7 @@ rule token = parse
   | '?' { Question }
   | '|' { Bar }
   | '^' { Caret }
+  | '$' { Dollar }
   | ',' { Comma }
   | ']' { Rsquare }
   | '-' { Dash }

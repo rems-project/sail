@@ -57,7 +57,7 @@ let parse_regex str =
 
 let rec string_of_regex =
   let posix_char = function
-    | ('.' | '[' | ']' | '{' | '}' | '(' | ')' | '\\' | '*' | '+' | '?' | '|') as c -> "\\" ^ String.make 1 c
+    | ('.' | '[' | ']' | '{' | '}' | '(' | ')' | '\\' | '*' | '+' | '?' | '|' | '^' | '$') as c -> "\\" ^ String.make 1 c
     | c -> String.make 1 c
   in
   let string_of_repeat = function
@@ -82,9 +82,10 @@ let rec string_of_regex =
   | Class (true, cc) -> "[" ^ Util.string_of_list "" string_of_char_class cc ^ "]"
   | Class (false, cc) -> "[^" ^ Util.string_of_list "" string_of_char_class cc ^ "]"
 
-let rec ocaml_regex' =
+let rec ocaml_regex' q =
+  let escaped_quote = String.make q '\\' in
   let posix_char = function
-    | ('.' | '[' | ']' | '{' | '}' | '\\' | '*' | '+' | '?' | '|' | '^' | '$') as c -> "\\" ^ String.make 1 c
+    | ('.' | '[' | ']' | '{' | '}' | '\\' | '*' | '+' | '?' | '|' | '^' | '$') as c -> escaped_quote ^ String.make 1 c
     | c -> String.make 1 c
   in
   let string_of_repeat = function
@@ -100,13 +101,13 @@ let rec ocaml_regex' =
     | Class_range (c1, c2) -> String.make 1 c1 ^ "-" ^ String.make 1 c2
   in
   function
-  | Group r -> "\\\\(" ^ ocaml_regex' r ^ "\\\\)"
-  | Or (r1, r2) -> ocaml_regex' r1 ^ "|" ^ ocaml_regex' r2
-  | Seq rs -> Util.string_of_list "" ocaml_regex' rs
-  | Repeat (r, repeat) -> ocaml_regex' r ^ string_of_repeat repeat
+  | Group r -> escaped_quote ^ "(" ^ ocaml_regex' q r ^ escaped_quote ^ ")"
+  | Or (r1, r2) -> ocaml_regex' q r1 ^ "|" ^ ocaml_regex' q r2
+  | Seq rs -> Util.string_of_list "" (ocaml_regex' q) rs
+  | Repeat (r, repeat) -> ocaml_regex' q r ^ string_of_repeat repeat
   | Dot -> "."
   | Char c -> posix_char c
   | Class (true, cc) -> "[" ^ Util.string_of_list "" string_of_char_class cc ^ "]"
   | Class (false, cc) -> "[^" ^ Util.string_of_list "" string_of_char_class cc ^ "]"
 
-let ocaml_regex r = "^" ^ ocaml_regex' r ^ "$" |> Str.regexp_case_fold
+let ocaml_regex q r = "^" ^ ocaml_regex' q r ^ "$" |> Str.regexp_case_fold

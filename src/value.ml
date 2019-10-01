@@ -621,7 +621,7 @@ let value_string_match = function
      let open Regex_util in
      begin match parse_regex (coerce_string v1) with
      | Some r ->
-        V_bool (Sail_lib.string_match (Str.regexp_case_fold ("^" ^ ocaml_regex' r ^ "$"), coerce_string v2))
+        V_bool (Sail_lib.string_match (Str.regexp_case_fold ("^" ^ ocaml_regex' 1 r ^ "$"), coerce_string v2))
      | None ->
         failwith "value string_match (parse_regex)"
      end
@@ -660,26 +660,29 @@ let value_sail_cons = function
   | _ -> failwith "value sail_cons"
 
 let value_split = function
-  | [v1; v2] ->
+  | [v1; v2; _] ->
      let open Regex_util in
      begin match parse_regex (coerce_string v1) with
      | Some regex ->
-        prerr_endline (coerce_string v1);
-        prerr_endline (ocaml_regex' regex);
-        let regex = ocaml_regex regex in
+        let regex = ocaml_regex 1 regex in
         let str = coerce_string v2 in
         if Str.string_match regex str 0 then
           V_tuple [V_bool true; V_string str]
-        else
+        else (
           V_tuple [V_bool false; V_string str]
+        )
      | None ->
-        failwith "value split (regex parse)"
+        failwith "value __split (regex parse)"
      end
-  | _ -> failwith "value split"
+  | _ -> failwith "value __split"
 
 let value_group = function
-  | [v1; v2] -> V_string (Str.matched_group (Big_int.to_int (coerce_int v1)) (coerce_string v2))
-  | _ -> failwith "value group"
+  | [v1; V_tuple [_; v2]] -> V_string (Str.matched_group (Big_int.to_int (coerce_int v1)) (coerce_string v2))
+  | _ -> failwith "value __group"
+
+let value_matched = function
+  | [V_tuple [matched; _]] -> matched
+  | _ -> failwith "value __matched"
 
 let primops =
   List.fold_left
@@ -778,6 +781,7 @@ let primops =
       ("string_match", value_string_match);
       ("__split", value_split);
       ("__group", value_group);
+      ("__matched", value_matched);
 
       (* Memory functions *)
       ("read_ram", value_read_ram);

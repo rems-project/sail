@@ -48,9 +48,17 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-(* Regular expression parsing *)
+(** Regular expression parsing *)
+
+(** We parse and pretty print regular expressions which are a strict
+   subset of POSIX extended regular expressions. i.e. roughly regular
+   expressions as Kleene intended without any horrible Perlisms. *)
 val parse_regex : string -> Regex.regex option
 val string_of_regex : Regex.regex -> string
 
-val ocaml_regex' : Regex. regex -> string
-val ocaml_regex : Regex.regex -> Str.regexp
+(** int parameter is the number of backslashes needed to quote
+   something, which differs when we are directly calling Str.regexp in
+   Sail, or passing to ocamlc, where we need an additional level of
+   quotation for the ocaml parser. *)
+val ocaml_regex' : int -> Regex. regex -> string
+val ocaml_regex : int -> Regex.regex -> Str.regexp

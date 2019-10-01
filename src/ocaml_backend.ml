@@ -233,7 +233,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
      let open Regex_util in
      begin match parse_regex r with
      | Some r ->
-        string "string_match " ^^ parens (string "Str.regexp_case_fold " ^^ dquotes (string ("^" ^ ocaml_regex' r ^ "$")) ^^ comma ^^  space ^^ ocaml_atomic_exp ctx str)
+        string "string_match " ^^ parens (string "Str.regexp_case_fold " ^^ dquotes (string ("^" ^ ocaml_regex' 2 r ^ "$")) ^^ comma ^^  space ^^ ocaml_atomic_exp ctx str)
      | None ->
         Reporting.unreachable l __POS__ "Could not parse regular expression in OCaml backend for string_match"
      end
@@ -241,7 +241,7 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
      let open Regex_util in
      begin match parse_regex r with
      | Some r ->
-        string "__split " ^^ parens (string "Str.regexp_case_fold " ^^ dquotes (string ("^" ^ ocaml_regex' r ^ "$")) ^^ comma ^^  space ^^ ocaml_atomic_exp ctx str)
+        string "__split " ^^ parens (string "Str.regexp_case_fold " ^^ dquotes (string ("^" ^ ocaml_regex' 2 r ^ "$")) ^^ comma ^^  space ^^ ocaml_atomic_exp ctx str)
      | None ->
         prerr_endline r;
         Reporting.unreachable l __POS__ "Could not parse regular expression in OCaml backend for __split"
