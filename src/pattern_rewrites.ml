@@ -681,8 +681,30 @@ type 'a rewritten_match =
 let rewrite_match_exp (aux, annot) =
   let open Type_check in
   match aux with
-  | E_case (exp, cases) ->
-     let count = ref 0 in
+  | E_case (exp, cases) | E_try (exp, cases) as orig_exp ->
+     (* Depending on whether we are re-writing a match statement or try/catch statement, we need to process some things slightly differently *)
+     let cascade_type = match orig_exp with E_case _ -> Cascade_match | E_try _ -> Cascade_try | _ -> assert false in
+     let unchanged exp cases =
+       match orig_exp with
+       | E_case _ -> E_case (exp, cases)
+       | E_try _ -> E_try (exp, cases)
+       | _ -> assert false
+     in
+     let exit_clause = match orig_exp with
+       | E_case _ ->
+          Pat_aux (Pat_case (P_aux (P_wild, annot),
+                             [],
+                             E_aux (E_exit (E_aux (E_lit (mk_lit L_unit), annot)), annot)),
+                   Parse_ast.Unknown)
+       (* For a try block, we re-throw the exception *)
+       | E_try _ ->
+          Pat_aux (Pat_case (P_aux (P_id (mk_id "exn"), annot),
+                             [],
+                             E_aux (E_throw (E_aux (E_id (mk_id "exn"), annot)), annot)),
+                   Parse_ast.Unknown)
+       | _ -> assert false
+     in
+
      let groups = List.rev (split_guarded_cases (fun cases -> cases) cases) in
 
      let rec build_unguarded_pexps fallthrough annot = function
@@ -692,12 +714,17 @@ let rewrite_match_exp (aux, annot) =
           let exp = rewrite_guards fallthrough annot exp guards in
           [Pat_aux (Pat_case (pat, [], exp), l)]
        | Empty ->
-          [Pat_aux (Pat_case (P_aux (P_wild, annot), [], fallthrough), Parse_ast.Unknown)]
+          [exit_clause]
      in
 
+     let last_fallthrough =
+       let id = mk_id "fallthrough__0" in
+       id, Fallthrough [exit_clause]
+     in
+     let count = ref 0 in
      let make_fallthrough previous_fallthrough annot group =
-       let id = mk_id ("fallthrough__" ^ string_of_int !count) in
        incr count;
+       let id = mk_id ("fallthrough__" ^ string_of_int !count) in
        id, Fallthrough (build_unguarded_pexps previous_fallthrough annot group)
      in
 
@@ -709,9 +736,8 @@ let rewrite_match_exp (aux, annot) =
           let id, cases = make_fallthrough fallthrough annot group in
           Into_cascade (id, cases, process_groups (E_aux (E_id id, annot)) annot groups)
      in
-     let exit_exp = E_aux (E_exit (E_aux (E_lit (mk_lit L_unit), annot)), annot) in
-     begin match process_groups exit_exp annot groups with
-     | Into_match cases -> E_aux (E_case (exp, cases), annot)
+     begin match process_groups (E_aux (E_id (fst last_fallthrough), annot)) annot groups with
+     | Into_match cases -> E_aux (unchanged exp cases, annot)
      | processed ->
         let rec to_cascade = function
           | Into_cascade (id, fallthrough, rest) ->
@@ -722,11 +748,11 @@ let rewrite_match_exp (aux, annot) =
         in
         let fallthroughs, cases = to_cascade processed in
         let first_fallthrough =
-          match List.rev fallthroughs with
+          match List.rev (last_fallthrough :: fallthroughs) with
           | (id, _) :: _ -> Pat_aux (Pat_case (P_aux (P_wild, annot), [], E_aux (E_id id, annot)), Parse_ast.Unknown)
-          | [] -> Pat_aux (Pat_case (P_aux (P_wild, annot), [], exit_exp), Parse_ast.Unknown)
+          | _ -> assert false
         in
-        E_aux (E_internal_cascade (Cascade_match, exp, fallthroughs, cases @ [first_fallthrough]), annot)
+        E_aux (E_internal_cascade (cascade_type, exp, last_fallthrough :: fallthroughs, cases @ [first_fallthrough]), annot)
      end
 
   | _ -> E_aux (aux, annot)

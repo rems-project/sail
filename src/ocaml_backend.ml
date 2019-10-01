@@ -336,6 +336,17 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
                                 ^/^ string "in") fallthroughs)
 
      ^/^ begin_end (string "match cascade with" ^/^ ocaml_pexps fctx pexps)
+  | E_internal_cascade (Cascade_try, exp, fallthroughs, pexps) ->
+     let fallthrough_ids = IdSet.of_list (List.map fst fallthroughs) in
+     let fctx = { ctx with fallthrough_ids = fallthrough_ids } in
+     separate space [string "try"; ocaml_atomic_exp ctx exp; string "with cascade -> ("]
+     ^//^ (separate hardline (List.map (fun (id, Fallthrough cases) ->
+                                  (separate space [string "let"; zencode ctx id; equals; string "function"]
+                                   ^//^ ocaml_pexps fctx cases)
+                                  ^/^ string "in") fallthroughs)
+
+           ^/^ begin_end (string "match cascade with" ^/^ ocaml_pexps fctx pexps)
+           ^^ string ")")
 
   | _ -> string ("EXP(" ^ string_of_exp exp ^ ")")
 and ocaml_letbind ctx (LB_aux (lb_aux, _)) =
