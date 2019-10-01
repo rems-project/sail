@@ -790,7 +790,14 @@ let decimal_string bits = Big_int.to_string (uint bits)
 
 let binary_parse (n, str) =
   match list_of_string str with
-  | '0' :: 'b' :: digits -> List.map bin_char digits
+  | '0' :: 'b' :: digits ->
+     let n = Big_int.to_int n in
+     let trailing = List.map bin_char digits in
+     let trailing_len = List.length trailing in
+     if trailing_len < n then
+       List.init (n - trailing_len) (fun _ -> B0) @ trailing
+     else
+       trailing
   | _ -> zeros n
 
 let rec binary_string = function
@@ -824,6 +831,8 @@ let load_raw (paddr, file) =
   with
   | End_of_file -> ()
 
+let sail_cons (x, xs) = x :: xs
+
 (* XXX this could count cycles and exit after given limit *)
 let cycle_count () = ()
 
@@ -846,11 +855,11 @@ let rand_choice l =
 let string_match (regexp, str) =
   Str.string_match regexp str 0
 
-let __split (regexp, str) =
-  print_endline ("Matched " ^ string_of_bool (Str.string_match regexp str 0));
-  (Str.string_match regexp str 0, str)
+let __split (regexp, str) = (Str.string_match regexp str 0, str)
 
-let __group (n, str) =
+let __matched (matched, _) = matched
+
+let __group (n, (_, str)) =
   try Str.matched_group (Big_int.to_int n) str with
   | Not_found -> ""
   | Invalid_argument _ -> ""

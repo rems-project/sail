@@ -425,6 +425,8 @@ and doc_exp (E_aux (e_aux, _) as exp) =
   | E_vector_append (exp1, exp2) -> separate space [doc_atomic_exp exp1; string "@"; doc_atomic_exp exp2]
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp exp; doc_pexps pexps]
+  | E_internal_cascade _ ->
+     string "CASCADE"
   | E_let (LB_aux (LB_val (pat, binding), _), exp) ->
      separate space [string "let"; doc_pat pat; equals; doc_exp binding; string "in"; doc_exp exp]
   | E_internal_plet (pat, exp1, exp2) ->

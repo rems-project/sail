@@ -155,7 +155,7 @@ let typq_bindings (TypQ_aux(tq,_)) = match tq with
           (match k with
            | KOpt_kind (_, Kid_aux (Var s,_)) -> Nameset.add s bounds)
         | _ -> bounds) quants mt
-  | TypQ_no_forall -> mt  
+  | TypQ_no_forall -> mt
 
 let fv_of_typschm consider_var bound used (Ast.TypSchm_aux ((Ast.TypSchm_ts(typq,typ)),_)) =
   let ts_bound = if consider_var then typq_bindings typq else mt in
@@ -219,7 +219,7 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
     List.fold_right
       (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (b,u,s)
   | E_field(e,_) -> fv_of_exp consider_var bound used set e
-  | E_case(e,pes) ->
+  | E_case(e,pes) | E_try (e,pes) ->
     let b,u,s = fv_of_exp consider_var bound used set e in
     fv_of_pes consider_var b u s pes
   | E_let(lebind,e) ->
@@ -236,22 +236,20 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   | E_exit e -> fv_of_exp consider_var bound used set e
   | E_assert(c,m) -> list_fv bound used set [c;m]
   | E_return e -> fv_of_exp consider_var bound used set e
+  | E_internal_cascade (_, e, fs, pes) ->
+    let b,u,s = List.fold_right (fun (_, Fallthrough pes) (b,u,s) -> fv_of_pes consider_var b u s pes) fs (bound,used,set) in
+    let b,u,s = fv_of_exp consider_var b u s e in
+    fv_of_pes consider_var b u s pes
   | _ -> bound,used,set
 
 and fv_of_pes consider_var bound used set pes =
   match pes with
   | [] -> bound,used,set
-  | _ -> assert false
-                (* FIXME
-  | Pat_aux(Pat_exp (p,e),_)::pes ->
+  (* FIXME *)
+  | Pat_aux(Pat_case (p,_,e),_)::pes ->
     let bound_p,us_p = pat_bindings consider_var bound used p in
     let bound_e,us_e,set_e = fv_of_exp consider_var bound_p us_p set e in
     fv_of_pes consider_var bound us_e set_e pes
-  | Pat_aux(Pat_when (p,g,e),_)::pes ->
-    let bound_p,us_p = pat_bindings consider_var bound used p in
-    let bound_g,us_g,set_g = fv_of_exp consider_var bound_p us_p set g in
-    let bound_e,us_e,set_e = fv_of_exp consider_var bound_g us_g set_g e in
-    fv_of_pes consider_var bound us_e set_e pes *)
 
 and fv_of_let consider_var bound used set (LB_aux(lebind,_)) = match lebind with
   | LB_val(pat,exp) ->
@@ -336,18 +334,13 @@ let fv_of_tannot_opt consider_var (Typ_annot_opt_aux (t,_)) =
     (mt, mt)
 
 (*Unlike the other fv, the bound returns are the names bound by the pattern for use in the exp*)
-let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pexp),l)) = assert false
-                                                                                  (* FIXME
+let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pexp),l)) =
   match pexp with
-  | Pat_aux(Pat_exp (pat,exp),_) ->
+  (* FIXME *)
+  | Pat_aux(Pat_case (pat,_,exp),_) ->
      let pat_bs,pat_ns = pat_bindings consider_var base_bounds mt pat in
      let _, exp_ns, exp_sets = fv_of_exp consider_var pat_bs pat_ns mt exp in
      (pat_bs,exp_ns,exp_sets)
-  | Pat_aux(Pat_when (pat,guard,exp),_) ->
-     let pat_bs,pat_ns = pat_bindings consider_var base_bounds mt pat in
-     let bound_g, exp_ns, exp_sets = fv_of_exp consider_var pat_bs pat_ns mt exp in
-     let _, exp_ns, exp_sets = fv_of_exp consider_var bound_g exp_ns exp_sets exp in
-     (pat_bs,exp_ns,exp_sets) *)
 
 let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) as fd) =
   let fun_name = match funcls with
@@ -376,19 +369,14 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) 
     | _ -> mt
   in
   let ns = Nameset.empty in
-  (* FIXME
   let ns = List.fold_right (fun (FCL_aux(FCL_Funcl(_,pexp),_)) ns ->
     match pexp with
-    | Pat_aux(Pat_exp (pat,exp),_) ->
+    (* FIXME *)
+    | Pat_aux(Pat_case (pat,_,exp),_) ->
        let pat_bs,pat_ns = pat_bindings consider_var base_bounds ns pat in
        let _, exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty exp in
        exp_ns
-    | Pat_aux(Pat_when (pat,guard,exp),_) ->
-       let pat_bs,pat_ns = pat_bindings consider_var base_bounds ns pat in
-       let guard_bs, guard_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty guard in
-       let _, exp_ns,_ = fv_of_exp consider_var guard_bs guard_ns Nameset.empty exp in
-       exp_ns
-  ) funcls mt in *)
+  ) funcls mt in
   let ns_vs = init_env ("val:" ^ (string_of_id (id_of_fundef fd))) in
   (* let _ = Printf.eprintf "Function %s uses %s\n" fun_name (set_to_string (Nameset.union ns ns_r)) in *)
   init_env fun_name, Nameset.union ns_vs (Nameset.union ns (Nameset.union ns_r ns_measure))

@@ -117,8 +117,6 @@ regex_group:
     { Regex.Char $1 }
   | Comma
     { Regex.Char ',' }
-  | Rsquare
-    { Regex.Char ']' }
   | Dash
     { Regex.Char '-' }
   | Caret
@@ -143,6 +141,7 @@ cclass:
 escaped:
   | Dot { '.' }
   | Lsquare { '[' }
+  | Rsquare { ']' }
   | Lcurly { '{' }
   | Rcurly { '}' }
   | Lparen { '(' }

@@ -691,7 +691,8 @@ let rewrite_match_exp (aux, annot) =
        | Guarded (pat, guards, exp, l) ->
           let exp = rewrite_guards fallthrough annot exp guards in
           [Pat_aux (Pat_case (pat, [], exp), l)]
-       | Empty -> []
+       | Empty ->
+          [Pat_aux (Pat_case (P_aux (P_wild, annot), [], fallthrough), Parse_ast.Unknown)]
      in
 
      let make_fallthrough previous_fallthrough annot group =
@@ -708,7 +709,8 @@ let rewrite_match_exp (aux, annot) =
           let id, cases = make_fallthrough fallthrough annot group in
           Into_cascade (id, cases, process_groups (E_aux (E_id id, annot)) annot groups)
      in
-     begin match process_groups (E_aux (E_exit (E_aux (E_lit (mk_lit L_unit), annot)), annot)) annot groups with
+     let exit_exp = E_aux (E_exit (E_aux (E_lit (mk_lit L_unit), annot)), annot) in
+     begin match process_groups exit_exp annot groups with
      | Into_match cases -> E_aux (E_case (exp, cases), annot)
      | processed ->
         let rec to_cascade = function
@@ -719,7 +721,12 @@ let rewrite_match_exp (aux, annot) =
              [], cases
         in
         let fallthroughs, cases = to_cascade processed in
-        E_aux (E_internal_cascade (Cascade_match, exp, fallthroughs, cases), annot)
+        let first_fallthrough =
+          match List.rev fallthroughs with
+          | (id, _) :: _ -> Pat_aux (Pat_case (P_aux (P_wild, annot), [], E_aux (E_id id, annot)), Parse_ast.Unknown)
+          | [] -> Pat_aux (Pat_case (P_aux (P_wild, annot), [], exit_exp), Parse_ast.Unknown)
+        in
+        E_aux (E_internal_cascade (Cascade_match, exp, fallthroughs, cases @ [first_fallthrough]), annot)
      end
 
   | _ -> E_aux (aux, annot)
@@ -727,3 +734,55 @@ let rewrite_match_exp (aux, annot) =
 let rewrite_guarded_patterns defs =
   let rewrite_exp = fold_exp { id_algebra with e_aux = rewrite_match_exp } in
   rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> rewrite_exp) } defs
+
+let rec rewrite_realize_mappings' env acc =
+  let open Type_check in
+  function
+  | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), l), id, externs, is_cast), vs_annot)) :: defs
+       when Env.is_mapping id env ->
+     let swap left right = function
+       | Forwards -> left, right
+       | Backwards -> right, left
+     in
+     let set_typ_direction d =
+       match Env.expand_synonyms env typ with
+       | Typ_aux (Typ_fn (args, Typ_aux (Typ_bidir (left, right), _), effect), l) ->
+          let left, right = swap left right d in
+          Typ_aux (Typ_fn (args @ [left], right, effect), l)
+       | Typ_aux (Typ_bidir (left, right), l) ->
+          let left, right = swap left right d in
+          Typ_aux (Typ_fn ([left], right, no_effect), l)
+       | Typ_aux (_, l) as typ ->
+          Reporting.unreachable l __POS__ ("Got invalid mapping type of " ^ string_of_typ typ ^ " when splitting mapping into separate functions")
+     in
+     let mk_valspec d =
+       DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, set_typ_direction d), l), set_id_direction d id, externs, is_cast), vs_annot))
+     in
+     rewrite_realize_mappings' env (mk_valspec Forwards :: mk_valspec Backwards :: acc) defs
+
+  | DEF_mapdef (MD_aux (MD_mapping (id, args, _, mapcls), md_annot)) :: defs ->
+     let rec_opt = Rec_aux (Rec_nonrec, Parse_ast.Unknown) in
+     let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown) in
+     let effect_opt = Effect_opt_aux (Effect_opt_none, Parse_ast.Unknown) in
+     let forwards, backwards = split_mapping_clauses mapcls in
+     let clause_id = mk_id "clause#var" in
+     let mk_case_exp pexps =
+       E_aux (E_case (E_aux (E_id clause_id, md_annot),
+                      pexps),
+              md_annot) in
+     let mk_funcl_pexp pexps =
+       Pat_aux (Pat_case (P_aux (P_tup (args @ [P_aux (P_id clause_id, md_annot)]), md_annot),
+                          [],
+                          mk_case_exp pexps),
+                Parse_ast.Unknown) in
+     let mk_fundef d pexps =
+       DEF_fundef (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, [FCL_aux (FCL_Funcl (set_id_direction d id, mk_funcl_pexp pexps), md_annot)]), md_annot))
+     in
+     rewrite_realize_mappings' env (mk_fundef Forwards forwards :: mk_fundef Backwards backwards :: acc) defs
+
+  | def :: defs ->
+     rewrite_realize_mappings' env (def :: acc) defs
+
+  | [] -> List.rev acc
+
+let rewrite_realize_mappings env (Defs defs) = Defs (rewrite_realize_mappings' env [] defs)

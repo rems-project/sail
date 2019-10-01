@@ -2218,7 +2218,8 @@ let rewrite_defs_remove_e_assign env (Defs defs) =
 let merge_funcls env (Defs defs) =
   let merge_function (FD_aux (FD_function (r,t,e,fcls),ann) as f) =
     match fcls with
-    | [] | [_] -> f
+    (* We also want to put any function with a toplevel guard into an E_case expression for the guarded pattern rewrite. *)
+    | [] | [FCL_aux (FCL_Funcl (_, Pat_aux (Pat_case (_, [], _), _)), _)] -> f
     | (FCL_aux (FCL_Funcl (id,_),(l,_)))::_ ->
        let var = mk_id "merge#var" in
        let l_g = Parse_ast.Generated l in
@@ -2842,15 +2843,6 @@ let recheck_defs_without_effects env defs =
   let () = opt_no_effects := old in
   result
 
-let remove_mapping_valspecs env (Defs defs) =
-  let allowed_def def =
-    match def with
-    | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (_, Typ_aux (Typ_bidir _, _)), _), _, _, _), _)) -> false
-    | _ -> true
-  in
-  Defs (List.filter allowed_def defs)
-
-
 (* Move loop termination measures into loop AST nodes.  This is used before
    type checking so that we avoid the complexity of type checking separate
    measures. *)
@@ -2995,10 +2987,6 @@ let all_rewrites = [
     ("recheck_defs", Checking_rewriter recheck_defs);
     ("recheck_defs_without_effects", Checking_rewriter recheck_defs_without_effects);
     ("optimize_recheck_defs", Basic_rewriter (fun _ -> Optimize.recheck));
-    ("remove_mapping_valspecs", Basic_rewriter remove_mapping_valspecs);
-(*    ("toplevel_string_append", Basic_rewriter rewrite_defs_toplevel_string_append);
-    ("pat_string_append", Basic_rewriter rewrite_defs_pat_string_append);
-    ("mapping_builtins", Basic_rewriter rewrite_defs_mapping_patterns); *)
     ("mono_rewrites", Basic_rewriter mono_rewrites);
     ("toplevel_nexps", Basic_rewriter rewrite_toplevel_nexps);
     ("monomorphise", String_rewriter (fun target -> Basic_rewriter (monomorphise target)));
@@ -3010,7 +2998,6 @@ let all_rewrites = [
     ("make_cases_exhaustive", Basic_rewriter MakeExhaustive.rewrite);
     ("undefined", Bool_rewriter (fun b -> Basic_rewriter (rewrite_undefined_if_gen b)));
     ("vector_string_pats_to_bit_list", Basic_rewriter rewrite_defs_vector_string_pats_to_bit_list);
-    (*   ("remove_not_pats", Basic_rewriter rewrite_defs_not_pats); *)
     ("pattern_literals", Literal_rewriter (fun f -> Basic_rewriter (rewrite_defs_pat_lits f)));
     ("bitvector_concat", Basic_rewriter (fun _ -> Pattern_rewrites.Bitvector_concat_rewriter.rewrite));
     ("literals", Basic_rewriter (fun _ -> Pattern_rewrites.Literal_rewriter.rewrite));
@@ -3019,13 +3006,10 @@ let all_rewrites = [
     ("views", Basic_rewriter (fun _ -> Pattern_rewrites.View_rewriter.rewrite));
     ("swap_guards", Basic_rewriter (fun _ -> Pattern_rewrites.Swap_guards_rewriter.rewrite));
     ("guards", Basic_rewriter (fun _ -> Pattern_rewrites.rewrite_guarded_patterns));
+    ("realize_mappings", Basic_rewriter (fun env -> Pattern_rewrites.rewrite_realize_mappings env));
     ("vector_concat_assignments", Basic_rewriter rewrite_vector_concat_assignments);
     ("tuple_assignments", Basic_rewriter rewrite_tuple_assignments);
     ("simple_assignments", Basic_rewriter rewrite_simple_assignments);
-(*   ("remove_vector_concat", Basic_rewriter rewrite_defs_remove_vector_concat);
-    ("remove_bitvector_pats", Basic_rewriter rewrite_defs_remove_bitvector_pats);
-    ("remove_numeral_pats", Basic_rewriter rewrite_defs_remove_numeral_pats);
-    ("guarded_pats", Basic_rewriter rewrite_defs_guarded_pats); *)
     ("bitvector_exps", Basic_rewriter rewrite_bitvector_exps);
     ("exp_lift_assign", Basic_rewriter rewrite_defs_exp_lift_assign);
     ("early_return", Basic_rewriter rewrite_defs_early_return);
@@ -3051,10 +3035,6 @@ let all_rewrites = [
   ]
 
 let rewrites_lem = [
-    ("remove_mapping_valspecs", []);
-    (*  ("toplevel_string_append", []); *)
-    (* ("pat_string_append", []); *)
-    (* ("mapping_builtins", []); *)
     ("mono_rewrites", []);
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
@@ -3100,10 +3080,6 @@ let rewrites_lem = [
   ]
 
 let rewrites_coq = [
-    ("remove_mapping_valspecs", []);
-    ("toplevel_string_append", []);
-    ("pat_string_append", []);
-    ("mapping_builtins", []);
     ("undefined", [Bool_arg true]);
     ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);
@@ -3156,6 +3132,9 @@ let rewrites_ocaml = [
     ("bitvector_concat", []);
     ("string_append", []);
     ("literals", []);
+    ("views", []);
+    ("realize_mappings", []);
+    ("merge_function_clauses", []);
     ("guards", []);
     ("exp_lift_assign", []);
     ("top_sort_defs", []);

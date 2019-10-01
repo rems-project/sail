@@ -126,6 +126,7 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, l)) arg =
   | Typ_bidir (t1, t2) -> string "\"BIDIR\""
   | Typ_var kid -> string "\"VAR\""
   | Typ_exist _ -> assert false
+  | Typ_regex _ -> string "\"REGEX\""
 
 let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "string") = 0 -> string "string"
@@ -150,6 +151,7 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   | Typ_fn (typs, typ, _) -> separate space [ocaml_typ ctx (Typ_aux (Typ_tup typs, l)); string "->"; ocaml_typ ctx typ]
   | Typ_bidir (t1, t2) -> raise (Reporting.err_general l "Ocaml doesn't support bidir types")
   | Typ_var kid -> zencode_kid kid
+  | Typ_regex _ -> string "string"
   | Typ_exist _ -> assert false
 and ocaml_typ_arg ctx (A_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
@@ -227,12 +229,21 @@ let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
      separate space [ocaml_atomic_exp ctx x; string "&&"; ocaml_atomic_exp ctx y]
   | E_app (f, [x; y]) when string_of_id f = "or_bool" ->
      separate space [ocaml_atomic_exp ctx x; string "||"; ocaml_atomic_exp ctx y]
-  | E_app (f, [E_aux (E_lit (L_aux (L_string r, _)), _); str]) when string_of_id f = "__split" ->
+  | E_app (f, [E_aux (E_lit (L_aux (L_string r, _)), _); str]) when string_of_id f = "string_match" ->
+     let open Regex_util in
+     begin match parse_regex r with
+     | Some r ->
+        string "string_match " ^^ parens (string "Str.regexp_case_fold " ^^ dquotes (string ("^" ^ ocaml_regex' r ^ "$")) ^^ comma ^^  space ^^ ocaml_atomic_exp ctx str)
+     | None ->
+        Reporting.unreachable l __POS__ "Could not parse regular expression in OCaml backend for string_match"
+     end
+  | E_app (f, [E_aux (E_lit (L_aux (L_string r, _)), _); str; _]) when string_of_id f = "__split" ->
      let open Regex_util in
      begin match parse_regex r with
      | Some r ->
         string "__split " ^^ parens (string "Str.regexp_case_fold " ^^ dquotes (string ("^" ^ ocaml_regex' r ^ "$")) ^^ comma ^^  space ^^ ocaml_atomic_exp ctx str)
      | None ->
+        prerr_endline r;
         Reporting.unreachable l __POS__ "Could not parse regular expression in OCaml backend for __split"
      end
   | E_app (f, xs) ->
@@ -338,12 +349,7 @@ and ocaml_pexp ctx = function
   | Pat_aux (Pat_case (pat, [], exp), _) ->
      separate space [bar; ocaml_pat ctx pat; string "->"]
      ^//^ group (ocaml_exp ctx exp)
-(*
-  | Pat_aux (Pat_when (pat, wh, exp), _) ->
-     separate space [bar; ocaml_pat ctx pat; string "when"; ocaml_atomic_exp ctx wh; string "->"]
-     ^//^ group (ocaml_exp ctx exp)
-     *)
-  | _ -> assert false
+  | Pat_aux (_, l) -> Reporting.unreachable l __POS__ "Found a match clause with guards in OCaml backend"
 and ocaml_block ctx = function
   | [exp] -> ocaml_exp ctx exp
   | exp :: exps -> ocaml_exp ctx exp ^^ semi ^/^ ocaml_block ctx exps
