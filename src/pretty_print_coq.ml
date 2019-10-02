@@ -2611,7 +2611,28 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
              (concat [string "Inductive"; space; typ_nm])
              ((*doc_typquant typq*) ar_doc) in
          let reset_implicits_pp = doc_reset_implicits id_pp typq in
-         typ_pp ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ twice hardline)
+         let doc_dec_eq_req = function
+           | QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_type,_),kid),_)),_) ->
+              (* TODO: collision avoidance for x y *)
+              Some (string "`{forall x y : " ^^ doc_var empty_ctxt kid ^^ string ", Decidable (x = y)}")
+           | _ -> None
+         in
+         let eq_pp =
+           if IdSet.mem id generic_eq_types then
+             let typ_use_pp =
+               separate space (id_pp::Util.map_filter (quant_item_id_name empty_ctxt) (quant_items typq))
+             in
+             let eq_reqs_pp =
+               separate (break 1) (Util.map_filter doc_dec_eq_req (quant_items typq))
+             in
+             string "Instance Decidable_eq_" ^^ typ_nm ^^ space ^^ eq_reqs_pp ^^ colon ^/^
+               string "forall (x y : " ^^ typ_use_pp ^^ string "), Decidable (x = y)." ^^ hardline ^^
+                 string "refine (Decidable_eq_from_dec (fun x y => _))." ^^ hardline ^^
+                   string "decide equality; refine (generic_dec _ _)." ^^ hardline ^^
+                     string "Defined." ^^ hardline
+           else empty
+         in
+         typ_pp ^^ dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ hardline)
   | TD_enum(id,enums,_) ->
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty

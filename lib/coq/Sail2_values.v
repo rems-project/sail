@@ -81,6 +81,11 @@ Instance Decidable_eq_from_dec {T:Type} (eqdec: forall x y : T, {x = y} + {x <> 
 destruct (eqdec x y); simpl; split; congruence.
 Defined.
 
+Instance Decidable_eq_unit : forall (x y : unit), Decidable (x = y) :=
+  { Decidable_witness := true }.
+destruct x, y; split; auto.
+Defined.
+
 Instance Decidable_eq_string : forall (x y : string), Decidable (x = y) :=
   Decidable_eq_from_dec String.string_dec.
 
