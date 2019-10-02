@@ -46,6 +46,8 @@ End Morphism.
 Definition build_ex {T:Type} (n:T) {P:T -> Prop} `{H:ArithFact (P n)} : {x : T & ArithFact (P x)} :=
   existT _ n H.
 
+Definition build_ex2 {T:Type} {T':T -> Type} (n:T) (m:T' n) {P:T -> Prop} `{H:ArithFact (P n)} : {x : T & T' x & ArithFact (P x)} :=
+  existT2 _ _ n m H.
 
 Definition generic_eq {T:Type} (x y:T) `{Decidable (x = y)} := Decidable_witness.
 Definition generic_neq {T:Type} (x y:T) `{Decidable (x = y)} := negb Decidable_witness.

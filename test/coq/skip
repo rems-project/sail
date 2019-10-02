@@ -1,21 +1,11 @@
-XXXXX tests with full generic equality
-decode_patterns.sail
 XXXXX tests with deliberate redundant pattern match clause
 option_tuple.sail
 pat_completeness.sail
 XXXXX tests which need inline extern definitions adjusted
 patternrefinement.sail
 vector_subrange_gen.sail
-XXXXX currently unsupported use of a bitvector in a parametric vector type
-pure_record.sail
-pure_record2.sail
-pure_record3.sail
-vector_access_dec.sail
-vector_access.sail
 XXXXX unsupported existential quantification of a vector length
 bind_typ_var.sail
-XXXXX needs impliciation in constraints fixed
-bool_constraint.sail
 XXXXX needs some smart existential instantiation
 complex_exist_sat.sail
 XXXXX needs name collision avoidance due to type/constructor punning
@@ -23,14 +13,12 @@ constraint_ctor.sail
 XXXXX Complex existential type - probably going to need this for ARM instruction ASTs
 execute_decode_hard.sail
 existential_ast.sail
-existential_ast2.sail
 existential_ast3.sail
 XXXXX Needs an existential witness
 exist1.sail
 exist2.sail
 XXXXX Needs a type synonym expanded - awkward because we don't attach environments everywhere
 exist_synonym.sail
-reg_32_64.sail
 XXXXX Examples where int(...) should be expanded internally, but not yet supported
 exit1.sail
 exit2.sail

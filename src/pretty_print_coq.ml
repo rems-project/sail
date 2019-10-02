@@ -391,7 +391,7 @@ match nc1, nc2 with
 let doc_nc_fn_prop id =
   match string_of_id id with
   | "not" -> string "not"
-  | s -> string s
+  | _ -> doc_id_type id
 
 (* n_constraint functions are currently just Z3 functions *)
 let doc_nc_fn id =
@@ -711,6 +711,39 @@ let rec doc_typ_fns ctx env =
                            ampersand;
                            doc_arithfact ctx env ~exists:(List.map kopt_kid kopts) nc])
             end
+          | Typ_aux (Typ_tup tys,l) -> begin
+              (* TODO: boolean existentials *)
+              let kid_set = KidSet.of_list (List.map kopt_kid kopts) in
+              let should_keep (Typ_aux (ty,_)) =
+                match ty with
+                | Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp (Nexp_aux (Nexp_var var,_)),_)]) ->
+                   not (KidSet.mem var kid_set)
+                | _ -> true
+              in
+              let out_tys = List.filter should_keep tys in
+              let binding_of_tyvar (KOpt_aux (KOpt_kind (K_aux (kind,_) as kaux,kid),_)) =
+                let kind_pp = match kind with
+                  | K_int -> string "Z"
+                  | _ ->
+                     raise (Reporting.err_todo l
+                              ("Non-atom existential type over " ^ string_of_kind kaux ^ " not yet supported in Coq: " ^
+                                 string_of_typ ty))
+                in doc_var ctx kid, kind_pp
+              in
+              let exvars_pp = List.map binding_of_tyvar kopts in
+              let pat = match exvars_pp with
+                | [v,k] -> v ^^ space ^^ colon ^^ space ^^ k
+                | _ ->
+                   let vars, types = List.split exvars_pp in
+                   squote ^^ parens (separate (string ", ") vars) ^/^
+                     colon ^/^ parens (separate (string " * ") types)
+              in
+              group (braces (group (pat ^^ space ^^ ampersand) ^/^
+                               group (tup_typ true (Typ_aux (Typ_tup out_tys,l)) ^^
+                                        string "%type ") ^^
+                                 ampersand ^/^
+                                   doc_arithfact ctx env nc))
+            end
           | _ ->
              raise (Reporting.err_todo l
                   ("Non-atom existential type not yet supported in Coq: " ^
@@ -736,18 +769,18 @@ let rec doc_typ_fns ctx env =
         end*)
       | Typ_bidir _ -> unreachable l __POS__ "Coq doesn't support bidir types"
       | Typ_internal_unknown -> unreachable l __POS__ "escaped Typ_internal_unknown"
-    and doc_typ_arg (A_aux(t,_)) = match t with
+    and doc_typ_arg ?(prop_vars = false) (A_aux(t,_)) = match t with
       | A_typ t -> app_typ true t
       | A_nexp n -> doc_nexp ctx n
       | A_order o -> empty
-      | A_bool nc -> doc_nc_prop ~top:false ctx env nc
+      | A_bool nc -> doc_nc_prop ~prop_vars ~top:false ctx env nc
   in typ', atomic_typ, doc_typ_arg
 and doc_typ ctx env = let f,_,_ = doc_typ_fns ctx env in f
 and doc_atomic_typ ctx env = let _,f,_ = doc_typ_fns ctx env in f
 and doc_typ_arg ctx env = let _,_,f = doc_typ_fns ctx env in f
 
-and doc_arithfact ctxt env ?(exists = []) ?extra nc =
-  let prop = doc_nc_prop ctxt env nc in
+and doc_arithfact ?(prop_vars=false) ctxt env ?(exists = []) ?extra nc =
+  let prop = doc_nc_prop ~prop_vars ctxt env nc in
   let prop = match extra with
     | None -> prop
     | Some pp -> separate space [pp; string "/\\"; parens prop]
@@ -760,9 +793,12 @@ and doc_arithfact ctxt env ?(exists = []) ?extra nc =
   string "ArithFact" ^^ space ^^ parens prop
 
 (* Follows Coq precedence levels *)
-and doc_nc_prop ?(top = true) ctx env nc =
+and doc_nc_prop ?(top = true) ?(prop_vars = false) ctx env nc =
   let locals = Env.get_locals env |> Bindings.bindings in
   let nc = Env.expand_constraint_synonyms env nc in
+  let doc_nc_var varpp =
+    if prop_vars then varpp else doc_op equals varpp (string "true")
+  in
   let nc_id_map =
     List.fold_left
       (fun m (v,(_,Typ_aux (typ,_))) ->
@@ -777,8 +813,8 @@ and doc_nc_prop ?(top = true) ctx env nc =
       Util.map_filter (fun (ncs',id) -> Util.option_map (fun x -> x,id) (list_contains NC.compare ncs ncs')) nc_id_map
     in
     match List.sort (fun (l,_) (l',_) -> compare l l') candidates with
-    | ([],id)::_ -> parens (doc_op equals (doc_id id) (string "true"))
-    | ((h::t),id)::_ -> parens (doc_op (string "/\\") (doc_op equals (doc_id id) (string "true")) (l80 (List.fold_left nc_and h t)))
+    | ([],id)::_ -> parens (doc_nc_var (doc_id id))
+    | ((h::t),id)::_ -> parens (doc_op (string "/\\") (parens (doc_nc_var (doc_id id))) (l80 (List.fold_left nc_and h t)))
     | [] -> f nc
   and l85 (NC_aux (nc,_) as nc_full) =
   match nc with
@@ -791,7 +827,7 @@ and doc_nc_prop ?(top = true) ctx env nc =
   and l70 (NC_aux (nc,_) as nc_full) =
   match nc with
   | NC_equal (ne1, ne2) -> doc_op equals (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_var kid -> doc_op equals (doc_nexp ctx (nvar kid)) (string "true")
+  | NC_var kid -> doc_nc_var (doc_nexp ctx (nvar kid))
   | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
   | NC_bounded_gt (ne1, ne2) -> doc_op (string ">") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
   | NC_bounded_le (ne1, ne2) -> doc_op (string "<=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
@@ -804,7 +840,7 @@ and doc_nc_prop ?(top = true) ctx env nc =
      separate space [string "In"; doc_var ctx kid;
                      brackets (separate (string "; ")
                                  (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
-  | NC_app (f,args) -> separate space (doc_nc_fn_prop f::List.map (doc_typ_arg ctx env) args)
+  | NC_app (f,args) -> separate space (doc_nc_fn_prop f::List.map (doc_typ_arg ~prop_vars ctx env) args)
   | _ -> l0 nc_full
   and l0 (NC_aux (nc,_) as nc_full) =
   match nc with
@@ -957,7 +993,7 @@ let doc_lit (L_aux(lit,l)) =
     parens (separate space (List.map string [
       "realFromFrac"; Big_int.to_string num; Big_int.to_string denom]))
 
-let doc_quant_item_id ctx delimit (QI_aux (qi,_)) =
+let doc_quant_item_id ?(prop_vars=false) ctx delimit (QI_aux (qi,_)) =
   match qi with
   | QI_id (KOpt_aux (KOpt_kind (K_aux (kind,_),kid),_)) -> begin
     if KBindings.mem kid ctx.kid_id_renames then None else
@@ -965,7 +1001,8 @@ let doc_quant_item_id ctx delimit (QI_aux (qi,_)) =
     | K_type -> Some (delimit (separate space [doc_var ctx kid; colon; string "Type"]))
     | K_int -> Some (delimit (separate space [doc_var ctx kid; colon; string "Z"]))
     | K_order -> None
-    | K_bool -> Some (delimit (separate space [doc_var ctx kid; colon; string "bool"]))
+    | K_bool -> Some (delimit (separate space [doc_var ctx kid; colon;
+                                               string (if prop_vars then "Prop" else "bool")]))
   end
   | QI_constraint nc -> None
   | QI_constant _ -> None
@@ -983,11 +1020,11 @@ let quant_item_id_name ctx (QI_aux (qi,_)) =
   | QI_constraint nc -> None
   | QI_constant _ -> None
 
-let doc_quant_item_constr ctx env delimit (QI_aux (qi,_)) =
+let doc_quant_item_constr ?(prop_vars=false) ctx env delimit (QI_aux (qi,_)) =
   match qi with
   | QI_id  _ -> None
   | QI_constant _ -> None
-  | QI_constraint nc -> Some (bquote ^^ braces (doc_arithfact ctx env nc))
+  | QI_constraint nc -> Some (bquote ^^ braces (doc_arithfact ~prop_vars ctx env nc))
 
 (* At the moment these are all anonymous - when used we rely on Coq to fill
    them in. *)
@@ -997,11 +1034,11 @@ let quant_item_constr_name ctx (QI_aux (qi,_)) =
   | QI_constant _ -> None
   | QI_constraint nc -> Some underscore
 
-let doc_typquant_items ctx env delimit (TypQ_aux (tq,_)) =
+let doc_typquant_items ?(prop_vars=false) ctx env delimit (TypQ_aux (tq,_)) =
   match tq with
   | TypQ_tq qis ->
-     separate_opt space (doc_quant_item_id ctx delimit) qis ^^
-     separate_opt space (doc_quant_item_constr ctx env delimit) qis
+     separate_opt space (doc_quant_item_id ~prop_vars ctx delimit) qis ^^
+     separate_opt space (doc_quant_item_constr ~prop_vars ctx env delimit) qis
   | TypQ_no_forall -> empty
 
 let doc_typquant_items_separate ctx env delimit (TypQ_aux (tq,_)) =
@@ -1062,6 +1099,50 @@ let is_auto_decomposed_exist ctxt env ?(rawbools=false) typ =
   | ExGeneral, kopts, typ' -> Some (kopts, typ')
   | ExNone, _, _ -> None
 
+(* Partition a list of 'a-type pairs according to whether the types match one of
+   the type variables in kopts.  Used for removing redundant parts of tuples
+   with existentially bound type variables.  The first part of the returned pair
+   has an 'a-type option for each tyvar in kopts, in order, and the second is the
+   remaining 'a-type pairs. *)
+let filter_dep_tuple kopts vals_typs =
+  let kid_set = KidSet.of_list (List.map kopt_kid kopts) in
+  let should_keep (_,Typ_aux (ty,_)) =
+    match ty with
+    | Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp (Nexp_aux (Nexp_var var,_)),_)]) ->
+       not (KidSet.mem var kid_set)
+    | _ -> true
+  in
+  let tup_val_typs, ex_val_typs = List.partition should_keep vals_typs in
+  let is_kid kid (Typ_aux (t,_)) =
+    match t with
+    | Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp (Nexp_aux (Nexp_var var,_)),_)]) -> Kid.compare kid var == 0
+    | _ -> false
+  in
+  let find_val kopt = List.find_opt (fun (_,ty) -> is_kid (kopt_kid kopt) ty) ex_val_typs in
+  List.map find_val kopts, tup_val_typs
+
+let filter_dep_pattern_tuple kopts (P_aux (p,ann) as pat) typ =
+  match p, typ with
+  | P_tup ps, Typ_aux (Typ_tup ts,l) ->
+     let ex_pat_typs, tup_pat_typs = filter_dep_tuple kopts (List.combine ps ts) in
+     let map_ex_pat x =
+       match x with
+       | Some (P_aux (P_wild,_),_) -> string "_"
+       | Some (P_aux (P_id id,_),_) -> doc_id id
+       | Some (p,t) -> raise (Reporting.err_unreachable l __POS__ ("inconsistent type " ^ string_of_typ t ^ " and pattern " ^ string_of_pat p))
+       | None -> string "_"
+     in
+     let coq_typats = List.map map_ex_pat ex_pat_typs in
+     let coq_typat =
+       match coq_typats with
+       | [p] -> p
+       | _ -> parens (separate (string ", ") coq_typats)
+     in
+     let coq_pat = P_tup (List.map fst tup_pat_typs) in
+     let coq_typ = Typ_aux (Typ_tup (List.map snd tup_pat_typs), l) in
+     Some coq_typat, P_aux (coq_pat,ann), coq_typ
+  | _ -> None, pat, typ
+
 (*Note: vector concatenation, literal vectors, indexed vectors, and record should
   be removed prior to pp. The latter two have never yet been seen
 *)
@@ -1072,8 +1153,13 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
   | true, Some (kopts,typ') ->
      debug ctxt (lazy ("decomposing for pattern " ^ string_of_pat pat ^ " at type " ^ string_of_typ typ ^ " with internal type " ^ string_of_typ typ'));
      let ctxt' = { ctxt with bound_nvars = List.fold_left (fun s kopt -> KidSet.add (kopt_kid kopt) s) ctxt.bound_nvars kopts } in
+     let typat, pat, typ' = filter_dep_pattern_tuple kopts pat typ' in
      let pat_pp = doc_pat ctxt' true true (pat, typ') in
-     let pat_pp = separate space [string "existT"; underscore; pat_pp; underscore] in
+     let pat_pp =
+       match typat with
+       | None -> separate space [string "existT"; underscore; pat_pp; underscore]
+       | Some typat -> separate space [string "existT2"; underscore; underscore; typat; pat_pp; underscore]
+     in
      if apat_needed then parens pat_pp else pat_pp
   | _ ->
      match p with
@@ -1082,7 +1168,7 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
      | P_app(id, ((_ :: _) as pats)) -> begin
         (* Following the type checker to get the subpattern types, TODO perhaps ought
            to persuade the type checker to output these somehow. *)
-       let (typq, ctor_typ) = Env.get_val_spec id env in
+       let (typq, ctor_typ) = Env.get_union_id id env in
        let arg_typs =
          match Env.expand_synonyms env ctor_typ with
          | Typ_aux (Typ_fn (arg_typs, ret_typ, _), _) ->
@@ -1090,6 +1176,10 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
             List.map (subst_unifiers unifiers) arg_typs
          | _ -> assert false
        in
+       debug ctxt (lazy ("constructor " ^ string_of_id id ^ " with type " ^
+                           string_of_typ ctor_typ ^
+                             " gives types for subpatterns of " ^
+                               String.concat ", " (List.map string_of_typ arg_typs)));
        (* Constructors that were specified without a return type might get
           an extra tuple in their type; expand that here if necessary.
           TODO: this should go away if we enforce proper arities. *)
@@ -1126,6 +1216,8 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
      | P_tup pats  ->
         let typs = match typ with
           | Typ_aux (Typ_tup typs, _) -> typs
+          | Typ_aux (Typ_exist _,_) ->
+             raise (Reporting.err_todo l "existential types not yet supported here")
           | _ -> raise (Reporting.err_unreachable l __POS__ "tuple pattern doesn't have tuple type")
         in
         (match pats, typs with
@@ -1334,6 +1426,11 @@ let merge_new_tyvars ctxt old_env pat new_env =
   let m,r = merge_pat (m, r) pat in
   { ctxt with kid_id_renames = m; kid_id_renames_rev = r }
 
+let maybe_parens_comma_list f ls =
+  match ls with
+  | [x] -> f true x
+  | xs -> parens (separate (string ", ") (List.map (f false) xs))
+
 let prefix_recordtype = true
 let report = Reporting.err_unreachable
 let doc_exp, doc_let =
@@ -1372,9 +1469,22 @@ let doc_exp, doc_let =
         match e with
         | E_tuple exps
         | E_cast (_, E_aux (E_tuple exps,_))
-          ->
-           let typs = List.map general_typ_of exps in
-           parens (separate (string ", ") (List.map2 (aux false) exps typs))
+          -> begin
+            match typ with
+            | Typ_aux (Typ_exist (kopts,nc,Typ_aux (Typ_tup typs,_)),_) ->
+               debug ctxt (lazy ("Constructing dependent tuple " ^
+                                   String.concat ", " (List.map string_of_exp exps) ^
+                                     " of type " ^ string_of_typ typ));
+               let ex_exp_typs, tup_exp_typs = filter_dep_tuple kopts (List.combine exps typs) in
+               let ex_exps = Util.map_filter (function Some x -> Some x | None -> None) ex_exp_typs in
+               let ex_pp = maybe_parens_comma_list (fun want_parens (exp,typ) -> aux want_parens exp typ) ex_exps in
+               let tup_pp = maybe_parens_comma_list (fun want_parens (exp,typ) -> aux want_parens exp typ) tup_exp_typs in
+               let pp = group (string "build_ex2" ^/^ ex_pp ^/^ tup_pp) in
+               if want_parens then parens pp else pp
+            | _ ->
+               let typs = List.map general_typ_of exps in
+               parens (separate (string ", ") (List.map2 (aux false) exps typs))
+          end
         | _ ->
            let typ' = expand_range_type (Env.expand_synonyms (env_of exp) typ) in
            debug ctxt (lazy ("Constructing " ^ string_of_exp exp ^ " at type " ^ string_of_typ typ));
@@ -1669,7 +1779,9 @@ let doc_exp, doc_let =
             else if IdSet.mem f ctxt.recursive_ids
             then doc_id f, false, false, true
             else doc_id f, false, false, false in
-          let (tqs,fn_ty) = Env.get_val_spec f env in
+          let (tqs,fn_ty) =
+            if is_ctor then Env.get_union_id f env else Env.get_val_spec f env
+          in
           (* Calculate the renaming *)
           let tqs_map = List.fold_left
                           (fun m k ->
@@ -1712,7 +1824,11 @@ let doc_exp, doc_let =
                (debug ctxt (lazy (" unable to infer function instantiation without return type " ^ string_of_typ (typ_of full_exp)));
                 instantiation_of full_exp)
           in
-          let inst = KBindings.fold (fun k u m -> KBindings.add (KBindings.find (orig_kid k) tqs_map) u m) inst KBindings.empty in
+          let () = debug ctxt (lazy (" instantiations pre-rename: " ^ String.concat ", " (List.map (fun (kid,tyarg) -> string_of_kid kid ^ " => " ^ string_of_typ_arg tyarg) (KBindings.bindings inst)))) in
+          let inst = KBindings.fold (fun k u m ->
+                         match KBindings.find_opt (orig_kid k) tqs_map with
+                         | Some k' -> KBindings.add k' u m
+                         | None -> m (* must have been an existential *) ) inst KBindings.empty in
           let () = debug ctxt (lazy (" instantiations: " ^ String.concat ", " (List.map (fun (kid,tyarg) -> string_of_kid kid ^ " => " ^ string_of_typ_arg tyarg) (KBindings.bindings inst)))) in
 
           (* Insert existential packing of arguments where necessary *)
@@ -1762,7 +1878,7 @@ let doc_exp, doc_let =
           in
           let epp =
             if is_ctor
-            then hang 2 (call ^^ break 1 ^^ parens (flow (comma ^^ break 1) (List.map2 (doc_arg false) args arg_typs)))
+            then group (hang 2 (call ^^ break 1 ^^ parens (flow (comma ^^ break 1) (List.map2 (doc_arg false) args arg_typs))))
             else
               let main_call = call :: List.map2 (doc_arg true) args arg_typs in
               let all =
@@ -2402,6 +2518,15 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
                         doc_typquant_items empty_ctxt Env.empty parens typq;
                         colon; string "Z"])
        (doc_nexp empty_ctxt nexp) ^^ dot ^^ hardline ^^
+     separate space [string "Hint Unfold"; idpp; colon; string "sail."] ^^
+     twice hardline
+  | TD_abbrev(id,typq,A_aux (A_bool nc,_)) ->
+     let idpp = doc_id_type id in
+     doc_op coloneq
+       (separate space [string "Definition"; idpp;
+                        doc_typquant_items ~prop_vars:true empty_ctxt Env.empty parens typq;
+                        colon; string "Prop"])
+       (doc_nc_prop ~prop_vars:true empty_ctxt Env.empty nc) ^^ dot ^^ hardline ^^
      separate space [string "Hint Unfold"; idpp; colon; string "sail."] ^^
      twice hardline
   | TD_abbrev _ -> empty (* TODO? *)
