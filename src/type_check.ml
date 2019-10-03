@@ -4055,7 +4055,9 @@ let effect_of (E_aux (exp, (l, annot))) = effect_of_annot annot
 
 let add_effect_annot annot eff = match annot with
   | (env, Some tannot) -> (env, Some { tannot with effect = union_effects eff tannot.effect })
-  | (env, None) -> (env, None)
+  | (env, None) ->
+     Reporting.warn "Failed to add effect" Parse_ast.Unknown "";
+     (env, None)
 
 let add_effect (E_aux (exp, (l, annot))) eff =
   E_aux (exp, (l, add_effect_annot annot eff))
@@ -4217,8 +4219,8 @@ and propagate_exp_effect_aux l id_effs = function
      E_field (p_exp, id), effect_of p_exp
   | E_internal_plet (pat, exp, body) ->
      let p_pat = propagate_pat_effect id_effs pat in
-     let p_exp = (propagate_exp_effect id_effs) exp in
-     let p_body = (propagate_exp_effect id_effs) body in
+     let p_exp = propagate_exp_effect id_effs exp in
+     let p_body = propagate_exp_effect id_effs body in
      E_internal_plet (p_pat, p_exp, p_body),
      union_effects (effect_of_pat p_pat) (collect_effects [p_exp; p_body])
   | E_internal_return exp ->

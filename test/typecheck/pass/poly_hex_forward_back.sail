@@ -1,10 +1,9 @@
 default Order dec
 
 $include <prelude.sail>
+$include <mapping.sail>
 
 val hex_bits : forall 'n, 'n >= 0. implicit('n) -> string <-> bits('n)
-
-val sep : string <-> unit
 
 val any_string : string <-> unit
 

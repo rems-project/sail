@@ -1404,7 +1404,10 @@ let rewrite_defs_letbind_effects env =
     mapCont (n_pexp newreturn) pexps k
 
   and n_fallthroughL (newreturn : bool) (fallthroughs : (id * 'a fallthrough) list) (k : (id * 'a fallthrough) list -> 'a exp) : 'a exp =
-    k (List.map (fun (id, Fallthrough pexps) -> (id, Fallthrough (List.map (fun pexp -> n_pexp newreturn pexp (fun x -> x)) pexps))) fallthroughs)
+    k (List.map (fun (id, Fallthrough pexps) ->
+           let newreturn = List.exists effectful_pexp pexps && newreturn in
+           (id, Fallthrough (List.map (fun pexp -> n_pexp newreturn pexp (fun x -> x)) pexps)))
+         fallthroughs)
 
   and n_lb (lb : 'a letbind) (k : 'a letbind -> 'a exp) : 'a exp =
     let (LB_aux (lb,annot)) = lb in
@@ -3137,6 +3140,7 @@ let rewrites_ocaml = [
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);
     ("simple_assignments", []);
+    ("exp_lift_assign", []);
     ("bitvector_concat", []);
     ("string_append", []);
     ("literals", []);
@@ -3144,7 +3148,6 @@ let rewrites_ocaml = [
     ("realize_mappings", []);
     ("merge_function_clauses", []);
     ("guards", []);
-    ("exp_lift_assign", []);
     ("top_sort_defs", []);
     ("simple_types", []);
     ("overload_cast", [])

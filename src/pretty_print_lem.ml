@@ -699,7 +699,7 @@ let doc_exp_lem, doc_let_lem =
        begin match f with
        | Id_aux (Id "__cons", _) ->
           begin match args with
-          | [arg1; arg2] -> expY arg1 ^^ string " :: " ^^ expY arg2
+          | [arg1; arg2] -> wrap_parens (expY arg1 ^^ string " :: " ^^ expY arg2)
           | _ -> Reporting.unreachable l __POS__ "Call to __cons with more than two arguments when generating lem"
           end
        | Id_aux (Id "None", _) as none -> doc_id_lem_ctor none

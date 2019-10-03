@@ -57,16 +57,6 @@ open Parse_ast
 
 let loc n m = Range (n, m)
 
-let default_opt x = function
-  | None -> x
-  | Some y -> y
-
-let assoc_opt key (assocs, default) =
-  try Some (List.assoc key assocs) with
-  | Not_found -> default
-
-let cons_fst h (t,x) = (h::t,x)
-
 let prepend_id str1 = function
   | Id_aux (Id str2, loc) -> Id_aux (Id (str1 ^ str2), loc)
   | _ -> assert false
