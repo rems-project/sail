@@ -3018,7 +3018,8 @@ and check_guards env = function
         any bool if that fails *)
      let exp = try irule infer_exp env exp with
                | Type_error _ -> crule check_exp env exp bool_typ in
-     begin match typ_of exp with
+     let typ, env = bind_existential l None (typ_of exp) env in
+     begin match typ with
      | Typ_aux (Typ_app (id, [A_aux (A_bool nc, _)]), _) when string_of_id id = "atom_bool" ->
         let env = Env.add_constraint nc env in
         let guards, env = check_guards env guards in
@@ -3026,7 +3027,7 @@ and check_guards env = function
      | Typ_aux (Typ_id id, _) when string_of_id id = "bool" ->
         let guards, env = check_guards env guards in
         G_aux (G_if exp, l) :: guards, env
-     | typ ->
+     | _ ->
         typ_error env l ("Guard inferred as non-boolean type " ^ string_of_typ typ)
      end
   | G_aux (G_pattern (pat, exp), l) :: guards ->

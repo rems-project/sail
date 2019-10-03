@@ -90,12 +90,12 @@ def test_lem(name):
 
 xml = '<testsuites>\n'
 
-#xml += test_c('unoptimized C', '-g', '', True)
-#xml += test_c('optimized C', '-O2', '-O', True)
-#xml += test_c('constant folding', '', '-Oconstant_fold', True)
+xml += test_c('unoptimized C', '-g', '', True)
+xml += test_c('optimized C', '-O2', '-O', True)
+xml += test_c('constant folding', '', '-Oconstant_fold', True)
 #xml += test_c('monomorphised C', '-O2', '-O -Oconstant_fold -auto_mono', True)
-#xml += test_c('specialization', '-O1', '-O -c_specialize', True)
-#xml += test_c('undefined behavior sanitised', '-O2 -fsanitize=undefined', '-O', False)
+xml += test_c('specialization', '-O1', '-O -c_specialize', True)
+xml += test_c('undefined behavior sanitised', '-O2 -fsanitize=undefined', '-O', False)
 
 xml += test_interpreter('interpreter')
 
