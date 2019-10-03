@@ -530,18 +530,18 @@ module String_append_config = struct
        let subpattern_regexes = List.map subpattern_regex pats in
        let tokenization = Regex_util.string_of_regex (Regex.Seq (List.map snd subpattern_regexes)) in
        Subst_id (fun s ->
-           [G_aux (G_pattern (locate_pat (fun _ -> l) (mk_pat (P_id (mk_id "m"))),
+           [G_aux (G_pattern (locate_pat (fun _ -> l) (mk_pat (P_id (mk_id "m#"))),
                               locate (fun _ -> l) (mk_exp (E_app (mk_id "__split", [mk_lit_exp (L_string tokenization);
                                                                                     mk_exp (E_id s);
                                                                                     mk_lit_exp (L_num (Big_int.of_int (List.length subpattern_regexes)))])))), l);
-            G_aux (G_if (locate (fun _ -> l) (mk_exp (E_app (mk_id "__matched", [mk_exp (E_id (mk_id "m"))])))), l)]
+            G_aux (G_if (locate (fun _ -> l) (mk_exp (E_app (mk_id "__matched", [mk_exp (E_id (mk_id "m#"))])))), l)]
            @ (List.fold_left (fun (group, guards) (subpattern, regex) ->
                   match subpattern with
                   | None -> (group, guards)
                   | Some pat ->
                      (group + 1,
                       G_aux (G_pattern (Type_check.strip_pat pat,
-                                        locate (fun _ -> l) (mk_exp (E_app (mk_id "__group", [mk_lit_exp (L_num (Big_int.of_int group)); mk_exp (E_id (mk_id "m"))])))), l)
+                                        locate (fun _ -> l) (mk_exp (E_app (mk_id "__group", [mk_lit_exp (L_num (Big_int.of_int group)); mk_exp (E_id (mk_id "m#"))])))), l)
                       :: guards)
                 ) (1, []) subpattern_regexes
               |> snd)

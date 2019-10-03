@@ -1,6 +1,6 @@
 $include <mapping.sail>
 
-mapping wreg_name : regex("w[0-9]+") <-> reg_index = {
+mapping wreg_name : token("w[0-9]+") <-> reg_index = {
   "w0" <-> 0,
   "w1" <-> 1,
   "w2" <-> 2,
@@ -35,7 +35,7 @@ mapping wreg_name : regex("w[0-9]+") <-> reg_index = {
   "w31" <-> 31
 }
 
-mapping xreg_name : regex("x[0-9]+") <-> reg_index = {
+mapping xreg_name : token("x[0-9]+") <-> reg_index = {
   "x0" <-> 0,
   "x1" <-> 1,
   "x2" <-> 2,

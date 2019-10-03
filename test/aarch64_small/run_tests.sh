@@ -45,14 +45,14 @@ function finish_suite {
 
 printf "<testsuites>\n" >> $DIR/tests.xml
 
-if make -B -C ../../aarch64_small armV8.lem SAIL="$SAILDIR/sail"
+if make -B -C ../../aarch64_small armV8.lem SAIL="$SAILDIR/sail" SAILFLAGS="-no_warn"
 then
     green "built aarch64_small to lem" "ok"
 else
     red "failed to build lem" "fail"
 fi
 
-if make -B -C ../../aarch64_small armV8.smt_model SAIL="$SAILDIR/sail"
+if make -B -C ../../aarch64_small armV8.smt_model SAIL="$SAILDIR/sail" SAILFLAGS="-no_warn"
 then
     green "compiled aarch64_small for SMT generation" "ok"
 else

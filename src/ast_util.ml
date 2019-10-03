@@ -1562,7 +1562,7 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
   | Typ_bidir _ -> assert false
   | Typ_fn _ -> assert false
   | Typ_regex _ -> assert false
-  | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
+  | Typ_exist _ -> Reporting.unreachable l __POS__ "Attempted to generate an undefined value for a quantified type"
 and undefined_of_typ_args mwords l annot (A_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | A_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]

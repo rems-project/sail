@@ -1403,6 +1403,7 @@ let rec ctyp_of_typ ctx typ =
   | Typ_id id when string_of_id id = "unit"   -> CT_unit
   | Typ_id id when string_of_id id = "string" -> CT_string
   | Typ_id id when string_of_id id = "real"   -> CT_real
+  | Typ_id id when string_of_id id = "__match" -> CT_match
 
   | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
 

@@ -1,4 +1,4 @@
-SAIL:=../sail -Ofast_undefined -memo_z3
+SAIL:=../sail -memo_z3
 LEM:=../../lem/lem
 LEM_ISA_LIB?=$(shell opam config var lem:share)/isabelle-lib
 
@@ -27,7 +27,7 @@ armV8.lem: $(SOURCES)
 	$(SAIL) $(SAILFLAGS) -lem -lem_lib ArmV8_extras_embed -o armV8 $^
 
 armV8.smt_model: $(SOURCES)
-	$(SAIL) $(SAILFLAGS) -undefined_gen -smt_serialize -o armV8 $^ armV8_assembly.sail
+	$(SAIL) $(SAILFLAGS) -Ofast_undefined -undefined_gen -smt_serialize -o armV8 $^ armV8_assembly.sail
 
 armV8.ir.sail: $(SOURCES)
 	$(SAIL) $(SAILFLAGS) -undefined_gen -ir -o armV8 $^ armV8_assembly.sail
