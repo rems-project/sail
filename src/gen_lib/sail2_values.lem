@@ -443,30 +443,6 @@ let nibble_of_char = function
   | _ -> Nothing
   end
 
-let rec hex_parse' input = match input with
-  | digit :: rest ->
-     match nibble_of_char digit with
-     | Just (b1, b2, b3, b4) ->
-        match hex_parse' rest with
-        | Just digits ->
-           Just (b1 :: b2 :: b3 :: b4 :: digits)
-        | Nothing -> Nothing
-        end
-     | Nothing -> Nothing
-     end
-  | [] -> Just []
-  end
-
-let hex_parse n input = match toCharList input with
-  | #'0' :: #'x' :: digits ->
-     match hex_parse' digits with
-     | Just bits ->
-        Just (reverse (take (nat_of_int n) (reverse bits)))
-     | Nothing -> Nothing
-     end
-  | _ -> Nothing
-  end
-
 let rec hexstring_of_bits bs = match bs with
   | b1 :: b2 :: b3 :: b4 :: bs ->
      let n = char_of_nibble (b1, b2, b3, b4) in

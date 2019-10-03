@@ -439,9 +439,9 @@ val instantiation_of_without_type : tannot exp -> typ_arg KBindings.t
 (* Type variable instantiations that inference will extract from constraints *)
 val instantiate_simple_equations : quant_item list -> typ_arg KBindings.t
 
-val propagate_exp_effect : tannot exp -> tannot exp
+val propagate_exp_effect : effect Bindings.t -> tannot exp -> tannot exp
 
-val propagate_pexp_effect : tannot pexp -> tannot pexp * effect
+val propagate_pexp_effect : effect Bindings.t -> tannot pexp -> tannot pexp * effect
 
 val big_int_of_nexp : nexp -> Big_int.num option
 

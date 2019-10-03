@@ -121,6 +121,15 @@ let int_of_vec sign v = maybe_failwith (int_of_vec_maybe sign v)
 val string_of_bits : list bitU -> string
 let string_of_bits = string_of_bv
 
+val hex_string : list bitU -> string
+val hex_parse : integer -> string -> list bitU
+
+val decimal_string : list bitU -> string
+val decimal_parse : integer -> string -> list bitU
+
+val binary_string : list bitU -> string
+val binary_parse : integer -> string -> list bitU
+
 val decimal_string_of_bits : list bitU -> string
 let decimal_string_of_bits = decimal_string_of_bv
 
@@ -323,24 +332,4 @@ let decimal_of_char c = match c with
   | #'8' -> Just 8
   | #'9' -> Just 9
   | _ -> Nothing
-  end
-
-val decimal_parse' : list char -> integer -> maybe integer
-let rec decimal_parse' input pos = match input with
-  | c :: rest ->
-     match decimal_of_char c with
-     | Just n ->
-        match decimal_parse' rest (pos * 10) with
-        | Just m -> Just (n * pos + m)
-        | Nothing -> Nothing
-        end
-     | Nothing -> Nothing
-     end
-  | [] -> Just 0
-  end
-
-let decimal_parse n input =
-  match decimal_parse' (reverse (toCharList input)) 1 with
-  | Just m -> Just (get_slice_int n m 0)
-  | Nothing -> Nothing
   end

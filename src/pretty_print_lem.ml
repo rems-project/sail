@@ -66,9 +66,10 @@ let opt_mwords = ref false
 type context = {
   early_ret : bool;
   bound_nexps : NexpSet.t;
-  top_env : Env.t
+  top_env : Env.t;
+  fallthrough_ids : IdSet.t
 }
-let empty_ctxt = { early_ret = false; bound_nexps = NexpSet.empty; top_env = Env.empty }
+let empty_ctxt = { early_ret = false; bound_nexps = NexpSet.empty; top_env = Env.empty; fallthrough_ids = IdSet.empty }
 
 let print_to_from_interp_value = ref false
 let langlebar = string "<|"
@@ -115,6 +116,7 @@ let rec fix_id remove_tick name = match name with
 let doc_id_lem (Id_aux(i,_)) =
   match i with
   | Id i -> string (fix_id false i)
+  | Direction (d, i) -> string (string_of_direction d ^ "_" ^ fix_id false i)
   | Operator x -> string (Util.zencode_string ("op " ^ x))
 
 let doc_id_lem_type (Id_aux(i,_)) =
@@ -220,6 +222,7 @@ let rec lem_nexps_of_typ (Typ_aux (t,l)) =
   let trec = lem_nexps_of_typ in
   match t with
   | Typ_id _ -> NexpSet.empty
+  | Typ_regex _ -> NexpSet.empty
   | Typ_var kid -> NexpSet.singleton (orig_nexp (nvar kid))
   | Typ_fn (t1,t2,_) -> List.fold_left NexpSet.union (trec t2) (List.map trec t1)
   | Typ_tup ts ->
@@ -336,6 +339,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
                                String.concat ", " (List.map string_of_kid bad) ^
                                " escape into Lem"))
         end
+      | Typ_regex _ -> string "string"
       (* AA: I think the correct thing is likely to filter out
          non-integer kinded_id's, then use the above code. *)
       | Typ_exist (_,_,Typ_aux(Typ_app(id,[_]),_)) when string_of_id id = "atom_bool" -> string "bool"
@@ -693,6 +697,11 @@ let doc_exp_lem, doc_let_lem =
        wrap_parens (let_exp ctxt leb ^^ space ^^ string "in" ^^ hardline ^^ expN e)
     | E_app(f,args) ->
        begin match f with
+       | Id_aux (Id "__cons", _) ->
+          begin match args with
+          | [arg1; arg2] -> expY arg1 ^^ string " :: " ^^ expY arg2
+          | _ -> Reporting.unreachable l __POS__ "Call to __cons with more than two arguments when generating lem"
+          end
        | Id_aux (Id "None", _) as none -> doc_id_lem_ctor none
        | Id_aux (Id "and_bool", _) | Id_aux (Id "or_bool", _)
          when effectful (effect_of full_exp) ->
@@ -868,6 +877,7 @@ let doc_exp_lem, doc_let_lem =
          else liftR epp
        else if Env.is_register id env && is_regtyp (typ_of full_exp) env then doc_id_lem (append_id id "_ref")
        else if is_ctor env id then doc_id_lem_ctor id
+       else if IdSet.mem id ctxt.fallthrough_ids then doc_id_lem id ^^ space ^^ string "cascade"
        else doc_id_lem id
     | E_lit lit -> doc_lit_lem lit
     | E_cast(typ,e) -> expV aexp_needed e
@@ -934,7 +944,7 @@ let doc_exp_lem, doc_let_lem =
        wrap_parens
          (group ((separate space [string "match"; only_integers e; string "with"]) ^/^
                  (separate_map (break 1) (doc_case ctxt) pexps) ^/^
-                 (string "end")))
+                   (string "end")))
     | E_try (e, pexps) ->
        if effectful (effect_of e) then
          let try_catch = if ctxt.early_ret then "try_catchR" else "try_catch" in
@@ -944,6 +954,22 @@ let doc_exp_lem, doc_let_lem =
                    (string "end)")))
        else
          raise (Reporting.err_todo l "Warning: try-block around pure expression")
+    | E_internal_cascade (Cascade_match, e, fallthroughs, pexps) ->
+       let fallthrough_ids = IdSet.of_list (List.map fst fallthroughs) in
+       let fctxt = { ctxt with fallthrough_ids = fallthrough_ids } in
+       let doc_fallthrough (id, Fallthrough pexps) =
+         separate space [string "let"; doc_id_lem id; equals; string "function"]
+         ^//^ (separate_map (break 1) (doc_case fctxt) pexps
+               ^/^ string "end in")
+       in
+       wrap_parens
+         (separate space [string "let cascade"; equals; expY e; string "in"]
+          ^/^ separate_map (break 1) doc_fallthrough fallthroughs
+          ^/^ (group (string "match cascade with"
+                      ^/^ separate_map (break 1) (doc_case fctxt) pexps
+                      ^/^ string "end")))
+    | E_internal_cascade (Cascade_try, e, fallthroughs, pexps) ->
+       raise (Reporting.err_todo l "E_internal_cascade try")
     | E_throw e ->
        align (liftR (separate space [string "throw"; expY e]))
     | E_exit e -> liftR (separate space [string "exit"; expY e])
@@ -1366,7 +1392,8 @@ let doc_funcl_lem (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let ctxt =
     { early_ret = contains_early_return exp;
       bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ);
-      top_env = env_of_annot annot } in
+      top_env = env_of_annot annot;
+      fallthrough_ids = IdSet.empty } in
   let pats, bind = untuple_args_pat pat arg_typs in
   let patspp = separate_map space (doc_pat_lem ctxt true) pats in
   let _ = match guard with

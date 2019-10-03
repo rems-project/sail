@@ -413,8 +413,8 @@ val id_of_dec_spec : 'a dec_spec -> id
 val id_of_kid : kid -> id
 val kid_of_id : id -> kid
 
+val string_of_direction : direction -> string
 val id_direction : id -> direction option
-
 val strip_direction : id -> id
 
 (** Will fail with err_general if id is either an operator or already has a direction *)

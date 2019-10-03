@@ -122,11 +122,6 @@ let primops name args =
   | ("concat_str", [VL_string s1; VL_string s2]) -> Just (VL_string (s1 ^ s2))
   | ("print_endline", [VL_string s]) -> Just VL_unit
 
-  (* lib/mapping.sail *)
-  | ("hex_parse", [VL_int n; VL_string hex]) -> mk_bits (hex_parse n hex)
-  | ("hex_string", [VL_bits bv _]) -> Just (VL_string (show_bitlist bv))
-  | ("decimal_parse", [VL_int n; VL_string dec]) -> mk_bits (decimal_parse n dec)
-
   (* option -undefined_gen *)
   | ("undefined_bit", [_]) -> Just (VL_bit B0)
   | ("undefined_vector", [VL_int n; VL_bit b]) -> Just (VL_bits (replicate_bits [b] n) true)

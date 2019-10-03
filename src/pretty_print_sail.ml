@@ -425,8 +425,16 @@ and doc_exp (E_aux (e_aux, _) as exp) =
   | E_vector_append (exp1, exp2) -> separate space [doc_atomic_exp exp1; string "@"; doc_atomic_exp exp2]
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp exp; doc_pexps pexps]
-  | E_internal_cascade _ ->
-     string "CASCADE"
+  | E_internal_cascade (cascade_type, exp, fallthroughs, cases) ->
+     let doc_fallthrough (id, Fallthrough pexps) =
+       separate space [doc_id id; equals; doc_pexps pexps]
+     in
+     let doc_fallthroughs =
+       surround 2 0 lbrace (separate_map (comma ^^ hardline) doc_fallthrough fallthroughs) rbrace
+     in
+     separate space [string "internal_cascade"; string (match cascade_type with Cascade_match -> "match" | Cascade_try -> "try");
+                     doc_exp exp;
+                     doc_fallthroughs; string "in"; doc_pexps cases]
   | E_let (LB_aux (LB_val (pat, binding), _), exp) ->
      separate space [string "let"; doc_pat pat; equals; doc_exp binding; string "in"; doc_exp exp]
   | E_internal_plet (pat, exp1, exp2) ->

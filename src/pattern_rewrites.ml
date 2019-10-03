@@ -70,7 +70,8 @@ let rec irrefutable (P_aux (aux, annot)) =
   | P_wild -> true
   | P_lit _ | P_string_append _ | P_cons _ -> false
   | P_as (pat, _) | P_typ (_, pat) | P_var (pat, _) | P_view (pat, _, _) -> irrefutable pat
-  | P_vector pats | P_vector_concat pats | P_list pats | P_tup pats -> List.for_all irrefutable pats
+  | P_vector pats | P_vector_concat pats | P_tup pats -> List.for_all irrefutable pats
+  | P_list _ -> false
   | P_or _ | P_not _ -> Reporting.unreachable (fst annot) __POS__ "Or or not pattern found in replace_views"
 
 
@@ -498,7 +499,7 @@ module Vector_config = struct
 end
 
 module Vector_rewriter = Pattern_rewriter.Make(Vector_config)
-                        
+
 (* Rewrite a string append pattern of the form
 
    s_1 ^ ... ^ s_n => ...
@@ -640,24 +641,18 @@ end
 module Swap_guards_rewriter = Case_rewriter.Make(Swap_guards_config)
 
 type 'a split_cases =
+  | Final_unguarded of 'a pat * 'a exp * Parse_ast.l
   | Unguarded of 'a pat * 'a exp * Parse_ast.l * 'a split_cases
   | Guarded of 'a pat * 'a guard list * 'a exp * Parse_ast.l
-  | Empty
-
-let rec string_of_split_cases = function
-  | Unguarded (pat, exp, l, cases) ->
-     "Unguarded: " ^ string_of_pat pat ^ " => " ^ string_of_exp exp ^ "\n" ^ string_of_split_cases cases
-  | Guarded (pat, guards, exp, l) ->
-     "Guarded: " ^ string_of_pat pat ^ " " ^ Util.string_of_list ", " string_of_guard guards ^ " => " ^ string_of_exp exp
-  | Empty ->
-     "Empty"
 
 let rec split_guarded_cases acc = function
+  | [Pat_aux (Pat_case (pat, [], exp), l)] ->
+     [acc (Final_unguarded (pat, exp, l))]
   | (Pat_aux (Pat_case (pat, [], exp), l)) :: pexps ->
      split_guarded_cases (fun cases -> acc (Unguarded (pat, exp, l, cases))) pexps
   | Pat_aux (Pat_case (pat, guards, exp), l) :: pexps ->
      acc (Guarded (pat, guards, exp, l)) :: split_guarded_cases (fun cases -> cases) pexps
-  | [] -> [acc Empty]
+  | [] -> []
 
 let rec rewrite_guards fallthrough annot body = function
   | G_aux (G_if cond, g_l) :: guards ->
@@ -671,8 +666,8 @@ let rec rewrite_guards fallthrough annot body = function
 
 let rec is_guarded_group = function
   | Unguarded (_, _, _, cases) -> is_guarded_group cases
+  | Final_unguarded _ -> false
   | Guarded _ -> true
-  | Empty -> false
 
 type 'a rewritten_match =
   | Into_match of 'a pexp list
@@ -690,18 +685,10 @@ let rewrite_match_exp (aux, annot) =
        | E_try _ -> E_try (exp, cases)
        | _ -> assert false
      in
-     let exit_clause = match orig_exp with
-       | E_case _ ->
-          Pat_aux (Pat_case (P_aux (P_wild, annot),
-                             [],
-                             E_aux (E_exit (E_aux (E_lit (mk_lit L_unit), annot)), annot)),
-                   Parse_ast.Unknown)
+     let exit_exp = match orig_exp with
+       | E_case _ -> E_aux (E_exit (E_aux (E_lit (mk_lit L_unit), annot)), (fst annot, add_effect_annot (snd annot) (mk_effect [BE_escape])))
        (* For a try block, we re-throw the exception *)
-       | E_try _ ->
-          Pat_aux (Pat_case (P_aux (P_id (mk_id "exn"), annot),
-                             [],
-                             E_aux (E_throw (E_aux (E_id (mk_id "exn"), annot)), annot)),
-                   Parse_ast.Unknown)
+       | E_try _ -> E_aux (E_throw (E_aux (E_id (mk_id "exn"), annot)), (fst annot, add_effect_annot (snd annot) (mk_effect [BE_escape])))
        | _ -> assert false
      in
 
@@ -710,17 +697,16 @@ let rewrite_match_exp (aux, annot) =
      let rec build_unguarded_pexps fallthrough annot = function
        | Unguarded (pat, exp, l, cases) ->
           Pat_aux (Pat_case (pat, [], exp), l) :: build_unguarded_pexps fallthrough annot cases
+       | Final_unguarded (pat, exp, l) ->
+          [Pat_aux (Pat_case (pat, [], exp), l)]
        | Guarded (pat, guards, exp, l) ->
           let exp = rewrite_guards fallthrough annot exp guards in
-          [Pat_aux (Pat_case (pat, [], exp), l)]
-       | Empty ->
-          [exit_clause]
+          if irrefutable pat then
+            [Pat_aux (Pat_case (pat, [], exp), l)]
+          else
+            [Pat_aux (Pat_case (pat, [], exp), l); Pat_aux (Pat_case (P_aux (P_wild, annot), [], fallthrough), l)]
      in
 
-     let last_fallthrough =
-       let id = mk_id "fallthrough__0" in
-       id, Fallthrough [exit_clause]
-     in
      let count = ref 0 in
      let make_fallthrough previous_fallthrough annot group =
        incr count;
@@ -736,7 +722,7 @@ let rewrite_match_exp (aux, annot) =
           let id, cases = make_fallthrough fallthrough annot group in
           Into_cascade (id, cases, process_groups (E_aux (E_id id, annot)) annot groups)
      in
-     begin match process_groups (E_aux (E_id (fst last_fallthrough), annot)) annot groups with
+     begin match process_groups exit_exp annot groups with
      | Into_match cases -> E_aux (unchanged exp cases, annot)
      | processed ->
         let rec to_cascade = function
@@ -747,12 +733,7 @@ let rewrite_match_exp (aux, annot) =
              [], cases
         in
         let fallthroughs, cases = to_cascade processed in
-        let first_fallthrough =
-          match List.rev (last_fallthrough :: fallthroughs) with
-          | (id, _) :: _ -> Pat_aux (Pat_case (P_aux (P_wild, annot), [], E_aux (E_id id, annot)), Parse_ast.Unknown)
-          | _ -> assert false
-        in
-        E_aux (E_internal_cascade (cascade_type, exp, last_fallthrough :: fallthroughs, cases @ [first_fallthrough]), annot)
+        E_aux (E_internal_cascade (cascade_type, exp, fallthroughs, cases), annot)
      end
 
   | _ -> E_aux (aux, annot)
@@ -797,10 +778,16 @@ let rec rewrite_realize_mappings' env acc =
                       pexps),
               md_annot) in
      let mk_funcl_pexp pexps =
-       Pat_aux (Pat_case (P_aux (P_tup (args @ [P_aux (P_id clause_id, md_annot)]), md_annot),
-                          [],
-                          mk_case_exp pexps),
-                Parse_ast.Unknown) in
+       if List.length args = 0 then
+         Pat_aux (Pat_case (P_aux (P_id clause_id, md_annot),
+                            [],
+                            mk_case_exp pexps),
+                  Parse_ast.Unknown)
+       else
+         Pat_aux (Pat_case (P_aux (P_tup (args @ [P_aux (P_id clause_id, md_annot)]), md_annot),
+                            [],
+                            mk_case_exp pexps),
+                  Parse_ast.Unknown) in
      let mk_fundef d pexps =
        DEF_fundef (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, [FCL_aux (FCL_Funcl (set_id_direction d id, mk_funcl_pexp pexps), md_annot)]), md_annot))
      in

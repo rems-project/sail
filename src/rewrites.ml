@@ -703,7 +703,7 @@ let rewrite_defs_early_return env (Defs defs) =
   in
 
   let e_aux (exp, (l, annot)) =
-    let full_exp = propagate_exp_effect (E_aux (exp, (l, annot))) in
+    let full_exp = propagate_exp_effect Bindings.empty (E_aux (exp, (l, annot))) in
     let env = env_of full_exp in
     match full_exp with
     | E_aux (E_return exp, (l, tannot)) when not (is_empty_tannot tannot) ->
@@ -787,13 +787,7 @@ let swaptyp typ (l,tannot) = match destruct_tannot tannot with
   | _ -> raise (Reporting.err_unreachable l __POS__ "swaptyp called with empty type annotation")
 
 let is_funcl_rec (FCL_aux (FCL_Funcl (id, pexp), _)) =
-  let pat,guard,exp,pannot = destruct_pexp pexp in
-  let exp = match guard with
-    | [] -> exp
-    | [G_aux (G_if exp', l)] -> E_aux (E_block [exp';exp],(gen_loc l,dummy_tannot))
-    | _ -> Reporting.unreachable (id_loc id) __POS__ "Complex guard found in is_funcl_rec"
-  in
-  fst (fold_exp
+  fst (fold_pexp
     { (compute_algebra false (||) ) with
       e_app = (fun (f, es) ->
         let (rs, es) = List.split es in
@@ -802,7 +796,7 @@ let is_funcl_rec (FCL_aux (FCL_Funcl (id, pexp), _)) =
       e_app_infix = (fun ((r1,e1), f, (r2,e2)) ->
         (r1 || r2 || (string_of_id f = string_of_id id),
          E_app_infix (e1, f, e2))) }
-    exp)
+    pexp)
 
 let pat_var (P_aux (paux, a)) =
   let env = env_of_annot a in
@@ -987,7 +981,7 @@ let rewrite_fix_val_specs env (Defs defs) =
   let rewrite_funcl (val_specs, funcls) (FCL_aux (FCL_Funcl (id, pexp), (l, annot))) =
     let pat,guard,exp,pannot = destruct_pexp pexp in
     (* Assumes there are no effects in guards *)
-    let exp = propagate_exp_effect (rewrite_exp val_specs exp) in
+    let exp = propagate_exp_effect Bindings.empty (rewrite_exp val_specs exp) in
     let vs, eff = match find_vs (env_of_annot (l, annot)) val_specs id with
       | (tq, Typ_aux (Typ_fn (args_t, ret_t, eff), a)) ->
          let eff' = union_effects eff (effect_of exp) in
@@ -1409,11 +1403,14 @@ let rewrite_defs_letbind_effects env =
   and n_pexpL (newreturn : bool) (pexps : 'a pexp list) (k : 'a pexp list -> 'a exp) : 'a exp =
     mapCont (n_pexp newreturn) pexps k
 
+  and n_fallthroughL (newreturn : bool) (fallthroughs : (id * 'a fallthrough) list) (k : (id * 'a fallthrough) list -> 'a exp) : 'a exp =
+    k (List.map (fun (id, Fallthrough pexps) -> (id, Fallthrough (List.map (fun pexp -> n_pexp newreturn pexp (fun x -> x)) pexps))) fallthroughs)
+
   and n_lb (lb : 'a letbind) (k : 'a letbind -> 'a exp) : 'a exp =
     let (LB_aux (lb,annot)) = lb in
     match lb with
     | LB_val (pat,exp1) ->
-       n_exp exp1 (fun exp1 -> 
+       n_exp exp1 (fun exp1 ->
        k (fix_eff_lb (LB_aux (LB_val (pat,exp1),annot))))
 
   and n_lexp (lexp : 'a lexp) (k : 'a lexp -> 'a exp) : 'a exp =
@@ -1424,7 +1421,7 @@ let rewrite_defs_letbind_effects env =
        n_exp_name exp (fun exp ->
        k (fix_eff_lexp (LEXP_aux (LEXP_deref exp, annot))))
     | LEXP_memory (id,es) ->
-       n_exp_nameL es (fun es -> 
+       n_exp_nameL es (fun es ->
        k (fix_eff_lexp (LEXP_aux (LEXP_memory (id,es),annot))))
     | LEXP_tup es ->
        n_lexpL es (fun es ->
@@ -1432,8 +1429,8 @@ let rewrite_defs_letbind_effects env =
     | LEXP_cast (typ,id) -> 
        k (fix_eff_lexp (LEXP_aux (LEXP_cast (typ,id),annot)))
     | LEXP_vector (lexp,e) ->
-       n_lexp lexp (fun lexp -> 
-       n_exp_name e (fun e -> 
+       n_lexp lexp (fun lexp ->
+       n_exp_name e (fun e ->
        k (fix_eff_lexp (LEXP_aux (LEXP_vector (lexp,e),annot)))))
     | LEXP_vector_range (lexp,e1,e2) ->
        n_lexp lexp (fun lexp ->
@@ -1454,17 +1451,16 @@ let rewrite_defs_letbind_effects env =
     let (E_aux (_,(l,tannot))) = exp in
     let exp =
       if newreturn then
-        (* let typ = try typ_of exp with _ -> unit_typ in *)
         let exp = add_e_cast (typ_of exp) exp in
         annot_exp (E_internal_return exp) l (env_of exp) (typ_of exp)
       else
         exp in
-    (* n_exp_term forces an expression to be translated into a form 
+    (* n_exp_term forces an expression to be translated into a form
        "let .. let .. let .. in EXP" where EXP has no effect and does not update
        variables *)
     n_exp_pure exp (fun exp -> exp)
 
-  and n_exp (E_aux (exp_aux,annot) as exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp = 
+  and n_exp (E_aux (exp_aux,annot) as exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
 
     let rewrap e = fix_eff_exp (E_aux (e,annot)) in
 
@@ -1572,6 +1568,14 @@ let rewrite_defs_letbind_effects env =
        let exp1 = n_exp_term newreturn exp1 in
        n_pexpL newreturn pexps (fun pexps ->
        k (rewrap (E_try (exp1,pexps))))
+    | E_internal_cascade (cascade_type, exp, fallthroughs, pexps) ->
+       let newreturn =
+         List.exists effectful_pexp pexps
+         || List.exists (fun (_, Fallthrough pexps) -> List.exists effectful_pexp pexps) fallthroughs in
+       n_exp_name exp (fun exp ->
+       n_fallthroughL newreturn fallthroughs (fun fallthroughs ->
+       n_pexpL newreturn pexps (fun pexps ->
+       k (rewrap (E_internal_cascade (cascade_type, exp, fallthroughs, pexps))))))
     | E_let (lb,body) ->
        n_lb lb (fun lb ->
        rewrap (E_let (lb,n_exp body k)))
@@ -1594,7 +1598,7 @@ let rewrite_defs_letbind_effects env =
        rewrap (E_var (lexp,exp1,n_exp exp2 k))))
     | E_internal_return exp1 ->
        n_exp_name exp1 (fun exp1 ->
-       let exp1 = fix_eff_exp (propagate_exp_effect exp1) in
+       let exp1 = fix_eff_exp (propagate_exp_effect Bindings.empty exp1) in
        k (if effectful exp1 then exp1 else rewrap (E_internal_return exp1)))
     | E_internal_value v ->
        k (rewrap (E_internal_value v))
@@ -1696,7 +1700,7 @@ let rewrite_defs_internal_lets env =
 
   let alg = { id_algebra with e_let = e_let; e_var = e_var } in
   rewrite_defs_base
-    { rewrite_exp = (fun _ exp -> fold_exp alg (propagate_exp_effect exp))
+    { rewrite_exp = (fun _ exp -> fold_exp alg (propagate_exp_effect Bindings.empty exp))
     ; rewrite_pat = rewrite_pat
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
@@ -3034,50 +3038,54 @@ let all_rewrites = [
     ("properties", Basic_rewriter (fun _ -> Property.rewrite));
   ]
 
-let rewrites_lem = [
-    ("mono_rewrites", []);
+let rewrite_sequence_mono target = [
+    ("mono_rewrites", [If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
-    ("undefined", [Bool_arg false]);
     ("toplevel_nexps", [If_mono_arg]);
-    ("monomorphise", [String_arg "lem"; If_mono_arg]);
-    ("recheck_defs", [If_mwords_arg]);
-    ("add_bitvector_casts", [If_mwords_arg]);
+    ("monomorphise", [String_arg "c"; If_mono_arg]);
     ("atoms_to_singletons", [If_mono_arg]);
-    ("recheck_defs", [If_mwords_arg]);
-    ("vector_string_pats_to_bit_list", []);
-    (*  ("remove_not_pats", []); *)
-    ("remove_impossible_int_cases", []);
-    ("vector_concat_assignments", []);
-    ("tuple_assignments", []);
-    ("simple_assignments", []);
-    (* ("remove_vector_concat", []); *)
-    (* ("remove_bitvector_pats", []);  *)
-    (* ("remove_numeral_pats", []); *)
-    ("pattern_literals", [Literal_arg "lem"]);
-    (* ("guarded_pats", []); *)
-    ("bitvector_exps", []);
-    (* ("register_ref_writes", rewrite_register_ref_writes); *)
-    ("nexp_ids", []);
-    ("fix_val_specs", []);
-    ("split", [String_arg "execute"]);
-    ("recheck_defs", []);
-    ("top_sort_defs", []);
-    ("const_prop_mutrec", [String_arg "lem"]);
-    ("vector_string_pats_to_bit_list", []);
-    ("exp_lift_assign", []);
-    ("early_return", []);
-    ("fix_val_specs", []);
-    (* early_return currently breaks the types *)
-    ("recheck_defs", []);
-    ("remove_blocks", []);
-    ("letbind_effects", []);
-    ("remove_e_assign", []);
-    ("internal_lets", []);
-    ("remove_superfluous_letbinds", []);
-    ("remove_superfluous_returns", []);
-    ("merge_function_clauses", []);
-    ("recheck_defs", [])
+    ("recheck_defs", [If_mono_arg]);
   ]
+
+let rewrites_lem =
+  rewrite_sequence_mono "lem"
+  @ [ ("vector_string_pats_to_bit_list", []);
+      ("remove_impossible_int_cases", []);
+      ("vector_concat_assignments", []);
+      ("tuple_assignments", []);
+      ("simple_assignments", []);
+      ("bitvector_concat", []);
+      ("string_append", []);
+      ("literals", []);
+      ("views", []);
+      ("realize_mappings", []);
+      ("bitvector_exps", []);
+      (* ("register_ref_writes", rewrite_register_ref_writes); *)
+      ("nexp_ids", []);
+      ("fix_val_specs", []);
+      ("split", [String_arg "execute"]);
+      ("recheck_defs", []);
+      ("top_sort_defs", []);
+      ("const_prop_mutrec", [String_arg "lem"]);
+      ("vector_string_pats_to_bit_list", []);
+      ("exp_lift_assign", []);
+      ("early_return", []);
+      ("fix_val_specs", []);
+      (* early_return currently breaks the types *)
+      ("recheck_defs", []);
+      ("merge_function_clauses", []);
+      ("recheck_defs", []);
+      ("guards", []);
+      ("fix_val_specs", []);
+      ("recheck_defs", []);
+      ("remove_blocks", []);
+      ("letbind_effects", []);
+      ("remove_e_assign", []);
+      ("internal_lets", []);
+      ("remove_superfluous_letbinds", []);
+      ("remove_superfluous_returns", []);
+      ("recheck_defs", [])
+    ]
 
 let rewrites_coq = [
     ("undefined", [Bool_arg true]);

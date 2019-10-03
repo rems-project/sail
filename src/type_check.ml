@@ -2750,22 +2750,22 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_internal_cascade (Cascade_match, exp, fallthroughs, cases), _ ->
      let inferred_exp = irule infer_exp env exp in
      let inferred_typ = typ_of inferred_exp in
-     let check_fallthrough (id, Fallthrough cases) (previous, env) =
+     let check_fallthrough (previous, env) (id, Fallthrough cases) =
        let cases = List.map (fun case -> check_case env inferred_typ case typ) cases in
        (id, Fallthrough cases) :: previous, Env.add_local id (Immutable, typ) env
      in
-     let fallthroughs, env = List.fold_right check_fallthrough fallthroughs ([], env) in
+     let fallthroughs, env = List.fold_left check_fallthrough ([], env) fallthroughs in
      annot_exp (E_internal_cascade (Cascade_match, inferred_exp, List.rev fallthroughs, List.map (fun case -> check_case env inferred_typ case typ) cases)) typ
   | E_try (exp, cases), _ ->
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_try (checked_exp, List.map (fun case -> check_case env exc_typ case typ) cases)) typ
   | E_internal_cascade (Cascade_try, exp, fallthroughs, cases), _ ->
      let checked_exp = crule check_exp env exp typ in
-     let check_fallthrough (id, Fallthrough cases) (previous, env) =
+     let check_fallthrough (previous, env) (id, Fallthrough cases) =
        let cases = List.map (fun case -> check_case env exc_typ case typ) cases in
        (id, Fallthrough cases) :: previous, Env.add_local id (Immutable, typ) env
      in
-     let fallthroughs, env = List.fold_right check_fallthrough fallthroughs ([], env) in
+     let fallthroughs, env = List.fold_left check_fallthrough ([], env) fallthroughs in
      annot_exp (E_internal_cascade (Cascade_try, checked_exp, List.rev fallthroughs, List.map (fun case -> check_case env exc_typ case typ) cases)) typ
   | E_cons (x, xs), _ ->
      begin
@@ -4083,187 +4083,196 @@ let collect_effects_mpat xs = List.fold_left union_effects no_effect (List.map e
 
 (* Traversal that propagates effects upwards through expressions *)
 
-let rec propagate_exp_effect (E_aux (exp, annot)) =
-  let p_exp, eff = propagate_exp_effect_aux (fst annot) exp in
+let rec propagate_exp_effect id_effs (E_aux (exp, annot)) =
+  let p_exp, eff = propagate_exp_effect_aux (fst annot) id_effs exp in
   add_effect (E_aux (p_exp, annot)) eff
-and propagate_exp_effect_aux l = function
+and propagate_exp_effect_aux l id_effs = function
   | E_block xs ->
-     let p_xs = List.map propagate_exp_effect xs in
+     let p_xs = List.map (propagate_exp_effect id_effs) xs in
      E_block p_xs, collect_effects p_xs
-  | E_id id -> E_id id, no_effect
+  | E_id id ->
+     begin match Bindings.find_opt id id_effs with
+     | Some eff -> E_id id, eff
+     | None -> E_id id, no_effect
+     end
   | E_ref id -> E_ref id, no_effect
   | E_lit lit -> E_lit lit, no_effect
   | E_cast (typ, exp) ->
-     let p_exp = propagate_exp_effect exp in
+     let p_exp = propagate_exp_effect id_effs exp in
      E_cast (typ, p_exp), effect_of p_exp
   | E_app (id, xs) ->
-     let p_xs = List.map propagate_exp_effect xs in
+     let p_xs = List.map (propagate_exp_effect id_effs) xs in
      E_app (id, p_xs), collect_effects p_xs
   | E_vector xs ->
-     let p_xs = List.map propagate_exp_effect xs in
+     let p_xs = List.map (propagate_exp_effect id_effs) xs in
      E_vector p_xs, collect_effects p_xs
   | E_vector_access (v, i) ->
-     let p_v = propagate_exp_effect v in
-     let p_i = propagate_exp_effect i in
+     let p_v = (propagate_exp_effect id_effs) v in
+     let p_i = (propagate_exp_effect id_effs) i in
      E_vector_access (p_v, p_i), collect_effects [p_v; p_i]
   | E_vector_subrange (v, i, j) ->
-     let p_v = propagate_exp_effect v in
-     let p_i = propagate_exp_effect i in
-     let p_j = propagate_exp_effect j in
+     let p_v = (propagate_exp_effect id_effs) v in
+     let p_i = (propagate_exp_effect id_effs) i in
+     let p_j = (propagate_exp_effect id_effs) j in
      E_vector_subrange (p_v, p_i, p_j), collect_effects [p_v; p_i; p_j]
   | E_vector_update (v, i, x) ->
-     let p_v = propagate_exp_effect v in
-     let p_i = propagate_exp_effect i in
-     let p_x = propagate_exp_effect x in
+     let p_v = (propagate_exp_effect id_effs) v in
+     let p_i = (propagate_exp_effect id_effs) i in
+     let p_x = (propagate_exp_effect id_effs) x in
      E_vector_update (p_v, p_i, p_x), collect_effects [p_v; p_i; p_x]
   | E_vector_update_subrange (v, i, j, v') ->
-     let p_v = propagate_exp_effect v in
-     let p_i = propagate_exp_effect i in
-     let p_j = propagate_exp_effect j in
-     let p_v' = propagate_exp_effect v' in
+     let p_v = (propagate_exp_effect id_effs) v in
+     let p_i = (propagate_exp_effect id_effs) i in
+     let p_j = (propagate_exp_effect id_effs) j in
+     let p_v' = (propagate_exp_effect id_effs) v' in
      E_vector_update_subrange (p_v, p_i, p_j, p_v'), collect_effects [p_v; p_i; p_j; p_v']
   | E_vector_append (v1, v2) ->
-     let p_v1 = propagate_exp_effect v1 in
-     let p_v2 = propagate_exp_effect v2 in
+     let p_v1 = (propagate_exp_effect id_effs) v1 in
+     let p_v2 = (propagate_exp_effect id_effs) v2 in
      E_vector_append (p_v1, p_v2), collect_effects [p_v1; p_v2]
   | E_tuple xs ->
-     let p_xs = List.map propagate_exp_effect xs in
+     let p_xs = List.map (propagate_exp_effect id_effs) xs in
      E_tuple p_xs, collect_effects p_xs
   | E_if (cond, t, e) ->
-     let p_cond = propagate_exp_effect cond in
-     let p_t = propagate_exp_effect t in
-     let p_e =  propagate_exp_effect e in
+     let p_cond = (propagate_exp_effect id_effs) cond in
+     let p_t = (propagate_exp_effect id_effs) t in
+     let p_e =  (propagate_exp_effect id_effs) e in
      E_if (p_cond, p_t, p_e), collect_effects [p_cond; p_t; p_e]
   | E_case (exp, cases) ->
-     let p_exp = propagate_exp_effect exp in
-     let p_cases = List.map propagate_pexp_effect cases in
+     let p_exp = (propagate_exp_effect id_effs) exp in
+     let p_cases = List.map (propagate_pexp_effect id_effs) cases in
      let case_eff = List.fold_left union_effects no_effect (List.map snd p_cases) in
      E_case (p_exp, List.map fst p_cases), union_effects (effect_of p_exp) case_eff
   | E_record_update (exp, fexps) ->
-     let p_exp = propagate_exp_effect exp in
-     let p_fexps = List.map propagate_fexp_effect fexps in
+     let p_exp = propagate_exp_effect id_effs exp in
+     let p_fexps = List.map (propagate_fexp_effect id_effs) fexps in
      E_record_update (p_exp, List.map fst p_fexps),
      List.fold_left union_effects no_effect (effect_of p_exp :: List.map snd p_fexps)
   | E_record fexps ->
-     let p_fexps = List.map propagate_fexp_effect fexps in
+     let p_fexps = List.map (propagate_fexp_effect id_effs) fexps in
      E_record (List.map fst p_fexps),
      List.fold_left union_effects no_effect (List.map snd p_fexps)
   | E_try (exp, cases) ->
-     let p_exp = propagate_exp_effect exp in
-     let p_cases = List.map propagate_pexp_effect cases in
+     let p_exp = (propagate_exp_effect id_effs) exp in
+     let p_cases = List.map (propagate_pexp_effect id_effs) cases in
      let case_eff = List.fold_left union_effects no_effect (List.map snd p_cases) in
      E_try (p_exp, List.map fst p_cases), union_effects (effect_of p_exp) case_eff
   | E_for (v, f, t, step, ord, body) ->
-     let p_f = propagate_exp_effect f in
-     let p_t = propagate_exp_effect t in
-     let p_step = propagate_exp_effect step in
-     let p_body = propagate_exp_effect body in
+     let p_f = (propagate_exp_effect id_effs) f in
+     let p_t = (propagate_exp_effect id_effs) t in
+     let p_step = (propagate_exp_effect id_effs) step in
+     let p_body = (propagate_exp_effect id_effs) body in
      E_for (v, p_f, p_t, p_step, ord, p_body),
      collect_effects [p_f; p_t; p_step; p_body]
   | E_loop (loop_type, measure, cond, body) ->
-     let p_cond = propagate_exp_effect cond in
+     let p_cond = (propagate_exp_effect id_effs) cond in
      let () = match measure with
        | Measure_aux (Measure_some exp,l) ->
-          let eff = effect_of (propagate_exp_effect exp) in
+          let eff = effect_of ((propagate_exp_effect id_effs) exp) in
           if (BESet.is_empty (effect_set eff) || !opt_no_effects)
           then ()
           else typ_error (env_of exp) l ("Loop termination measure with effects " ^ string_of_effect eff)
        | _ -> ()
      in
-     let p_body = propagate_exp_effect body in
+     let p_body = (propagate_exp_effect id_effs) body in
      E_loop (loop_type, measure, p_cond, p_body),
      union_effects (effect_of p_cond) (effect_of p_body)
   | E_let (letbind, exp) ->
-     let p_lb, eff = propagate_letbind_effect letbind in
-     let p_exp = propagate_exp_effect exp in
+     let p_lb, eff = propagate_letbind_effect id_effs letbind in
+     let p_exp = (propagate_exp_effect id_effs) exp in
      E_let (p_lb, p_exp), union_effects (effect_of p_exp) eff
   | E_cons (x, xs) ->
-     let p_x = propagate_exp_effect x in
-     let p_xs = propagate_exp_effect xs in
+     let p_x = (propagate_exp_effect id_effs) x in
+     let p_xs = (propagate_exp_effect id_effs) xs in
      E_cons (p_x, p_xs), union_effects (effect_of p_x) (effect_of p_xs)
   | E_list xs ->
-     let p_xs = List.map propagate_exp_effect xs in
+     let p_xs = List.map (propagate_exp_effect id_effs) xs in
      E_list p_xs, collect_effects p_xs
   | E_assign (lexp, exp) ->
-     let p_lexp = propagate_lexp_effect lexp in
-     let p_exp = propagate_exp_effect exp in
+     let p_lexp = propagate_lexp_effect id_effs lexp in
+     let p_exp = propagate_exp_effect id_effs exp in
      E_assign (p_lexp, p_exp), union_effects (effect_of p_exp) (effect_of_lexp p_lexp)
   | E_var (lexp, bind, exp) ->
-     let p_lexp = propagate_lexp_effect lexp in
-     let p_bind = propagate_exp_effect bind in
-     let p_exp = propagate_exp_effect exp in
+     let p_lexp = propagate_lexp_effect id_effs lexp in
+     let p_bind = propagate_exp_effect id_effs bind in
+     let p_exp = (propagate_exp_effect id_effs) exp in
      E_var (p_lexp, p_bind, p_exp), union_effects (effect_of_lexp p_lexp) (collect_effects [p_bind; p_exp])
   | E_sizeof nexp -> E_sizeof nexp, no_effect
   | E_constraint nc -> E_constraint nc, no_effect
   | E_exit exp ->
-     let p_exp = propagate_exp_effect exp in
+     let p_exp = (propagate_exp_effect id_effs) exp in
      E_exit p_exp, effect_of p_exp
   | E_throw exp ->
-     let p_exp = propagate_exp_effect exp in
+     let p_exp = (propagate_exp_effect id_effs) exp in
      E_throw p_exp, effect_of p_exp
   | E_return exp ->
-     let p_exp = propagate_exp_effect exp in
+     let p_exp = (propagate_exp_effect id_effs) exp in
      E_return p_exp, effect_of p_exp
   | E_assert (test, msg) ->
-     let p_test = propagate_exp_effect test in
-     let p_msg = propagate_exp_effect msg in
+     let p_test = (propagate_exp_effect id_effs) test in
+     let p_msg = (propagate_exp_effect id_effs) msg in
      E_assert (p_test, p_msg), collect_effects [p_test; p_msg]
   | E_field (exp, id) ->
-     let p_exp = propagate_exp_effect exp in
+     let p_exp = (propagate_exp_effect id_effs) exp in
      E_field (p_exp, id), effect_of p_exp
   | E_internal_plet (pat, exp, body) ->
-     let p_pat = propagate_pat_effect pat in
-     let p_exp = propagate_exp_effect exp in
-     let p_body = propagate_exp_effect body in
+     let p_pat = propagate_pat_effect id_effs pat in
+     let p_exp = (propagate_exp_effect id_effs) exp in
+     let p_body = (propagate_exp_effect id_effs) body in
      E_internal_plet (p_pat, p_exp, p_body),
      union_effects (effect_of_pat p_pat) (collect_effects [p_exp; p_body])
   | E_internal_return exp ->
-     let p_exp = propagate_exp_effect exp in
+     let p_exp = (propagate_exp_effect id_effs) exp in
      E_internal_return p_exp, effect_of p_exp
   | E_internal_cascade (cascade_type, exp, fallthroughs, cases) ->
-     let p_exp = propagate_exp_effect exp in
+     let p_exp = (propagate_exp_effect id_effs) exp in
+     (* As we iterate through the fallthrough cases in the cascade,
+        each fallthrough will accumulate the effects of any previous
+        fallthroughs it can fall into. *)
      let fallthroughs_eff = ref no_effect in
+     let fall_id_effs = ref id_effs in
      let p_fallthroughs =
        List.map (fun (id, Fallthrough cases) ->
-           let p_cases = List.map propagate_pexp_effect cases in
+           let p_cases = List.map (propagate_pexp_effect !fall_id_effs) cases in
            let case_eff = List.fold_left union_effects no_effect (List.map snd p_cases) in
            fallthroughs_eff := union_effects case_eff !fallthroughs_eff;
+           fall_id_effs := Bindings.add id !fallthroughs_eff !fall_id_effs;
            id, Fallthrough (List.map fst p_cases)
          ) fallthroughs
      in
-     let p_cases = List.map propagate_pexp_effect cases in
+     let p_cases = List.map (propagate_pexp_effect !fall_id_effs) cases in
      let case_eff = List.fold_left union_effects no_effect (List.map snd p_cases) in
      E_internal_cascade (cascade_type, p_exp, p_fallthroughs, List.map fst p_cases),
      union_effects (effect_of p_exp) (union_effects case_eff !fallthroughs_eff)
   | exp_aux -> Reporting.unreachable l __POS__ "Unimplemented: Cannot propagate effect in expression"
 
-and propagate_fexp_effect (FE_aux (FE_Fexp (id, exp), l)) =
-  let p_exp = propagate_exp_effect exp in
+and propagate_fexp_effect id_effs (FE_aux (FE_Fexp (id, exp), l)) =
+  let p_exp = propagate_exp_effect id_effs exp in
   FE_aux (FE_Fexp (id, p_exp), l), effect_of p_exp
 
-and propagate_guard_effect (G_aux (aux, l)) =
+and propagate_guard_effect id_effs (G_aux (aux, l)) =
   match aux with
   | G_if exp ->
-     let p_exp = propagate_exp_effect exp in
+     let p_exp = propagate_exp_effect id_effs exp in
      G_aux (G_if p_exp, l), effect_of p_exp
   | G_pattern (pat, exp) ->
-     let p_pat = propagate_pat_effect pat in
-     let p_exp = propagate_exp_effect exp in
+     let p_pat = propagate_pat_effect id_effs pat in
+     let p_exp = propagate_exp_effect id_effs exp in
      G_aux (G_pattern (p_pat, p_exp), l), union_effects (effect_of p_exp) (effect_of_pat p_pat)
 
-and propagate_pexp_effect = function
+and propagate_pexp_effect id_effs = function
   | Pat_aux (Pat_case (pat, guards, exp), l) ->
-     let p_pat = propagate_pat_effect pat in
-     let p_guards = List.map propagate_guard_effect guards in
-     let p_exp = propagate_exp_effect exp in
+     let p_pat = propagate_pat_effect id_effs pat in
+     let p_guards = List.map (propagate_guard_effect id_effs) guards in
+     let p_exp = propagate_exp_effect id_effs exp in
      let p_eff = union_effects (effect_of_pat p_pat) (effect_of p_exp) in
      Pat_aux (Pat_case (p_pat, List.map fst p_guards, p_exp), l),
      List.fold_left union_effects no_effect (effect_of p_exp :: effect_of_pat p_pat :: List.map snd p_guards)
 
-and propagate_mpexp_effect = function
+and propagate_mpexp_effect id_effs = function
   | MPat_aux (MPat_pat mpat, (l, annot)) ->
      begin
-       let p_mpat = propagate_mpat_effect mpat in
+       let p_mpat = propagate_mpat_effect id_effs mpat in
        let p_eff = effect_of_mpat p_mpat in
        match annot with
        | (env, Some tannot) ->
@@ -4273,8 +4282,8 @@ and propagate_mpexp_effect = function
      end
   | MPat_aux (MPat_when (mpat, guard), (l, annot)) ->
      begin
-       let p_mpat = propagate_mpat_effect mpat in
-       let p_guard = propagate_exp_effect guard in
+       let p_mpat = propagate_mpat_effect id_effs mpat in
+       let p_guard = propagate_exp_effect id_effs guard in
        let p_eff = union_effects (effect_of_mpat p_mpat) (effect_of p_guard)
        in
        match annot with
@@ -4284,137 +4293,137 @@ and propagate_mpexp_effect = function
        | (env, None) -> MPat_aux (MPat_when (p_mpat, p_guard), (l, (env, None))), p_eff
      end
 
-and propagate_pat_effect (P_aux (pat, annot)) =
-  let p_pat, eff = propagate_pat_effect_aux pat in
+and propagate_pat_effect id_effs (P_aux (pat, annot)) =
+  let p_pat, eff = propagate_pat_effect_aux id_effs pat in
   add_effect_pat (P_aux (p_pat, annot)) eff
-and propagate_pat_effect_aux = function
+and propagate_pat_effect_aux id_effs = function
   | P_lit lit -> P_lit lit, no_effect
   | P_wild -> P_wild, no_effect
   | P_or(pat1, pat2) ->
-     let pat1' = propagate_pat_effect pat1 in
-     let pat2' = propagate_pat_effect pat2 in
+     let pat1' = propagate_pat_effect id_effs pat1 in
+     let pat2' = propagate_pat_effect id_effs pat2 in
      (P_or (pat1', pat2'), union_effects (effect_of_pat pat1') (effect_of_pat pat2'))
   | P_not(pat) ->
-     let pat' = propagate_pat_effect pat in
+     let pat' = propagate_pat_effect id_effs pat in
      (P_not(pat'), effect_of_pat pat')
   | P_cons (pat1, pat2) ->
-     let p_pat1 = propagate_pat_effect pat1 in
-     let p_pat2 = propagate_pat_effect pat2 in
+     let p_pat1 = propagate_pat_effect id_effs pat1 in
+     let p_pat2 = propagate_pat_effect id_effs pat2 in
      P_cons (p_pat1, p_pat2), union_effects (effect_of_pat p_pat1) (effect_of_pat p_pat2)
   | P_string_append pats ->
-     let p_pats = List.map propagate_pat_effect pats in
+     let p_pats = List.map (propagate_pat_effect id_effs) pats in
      P_string_append p_pats, collect_effects_pat p_pats
   | P_as (pat, id) ->
-     let p_pat = propagate_pat_effect pat in
+     let p_pat = propagate_pat_effect id_effs pat in
      P_as (p_pat, id), effect_of_pat p_pat
   | P_typ (typ, pat) ->
-     let p_pat = propagate_pat_effect pat in
+     let p_pat = propagate_pat_effect id_effs pat in
      P_typ (typ, p_pat), effect_of_pat p_pat
   | P_id id -> P_id id, no_effect
   | P_var (pat, kid) ->
-     let p_pat = propagate_pat_effect pat in
+     let p_pat = propagate_pat_effect id_effs pat in
      P_var (p_pat, kid), effect_of_pat p_pat
   | P_app (id, pats) ->
-     let p_pats = List.map propagate_pat_effect pats in
+     let p_pats = List.map (propagate_pat_effect id_effs) pats in
      P_app (id, p_pats), collect_effects_pat p_pats
   | P_tup pats ->
-     let p_pats = List.map propagate_pat_effect pats in
+     let p_pats = List.map (propagate_pat_effect id_effs) pats in
      P_tup p_pats, collect_effects_pat p_pats
   | P_list pats ->
-     let p_pats = List.map propagate_pat_effect pats in
+     let p_pats = List.map (propagate_pat_effect id_effs) pats in
      P_list p_pats, collect_effects_pat p_pats
   | P_vector_concat pats ->
-     let p_pats = List.map propagate_pat_effect pats in
+     let p_pats = List.map (propagate_pat_effect id_effs) pats in
      P_vector_concat p_pats, collect_effects_pat p_pats
   | P_vector pats ->
-     let p_pats = List.map propagate_pat_effect pats in
+     let p_pats = List.map (propagate_pat_effect id_effs) pats in
      P_vector p_pats, collect_effects_pat p_pats
   | P_view (pat, id, exps) ->
-     let p_pat = propagate_pat_effect pat in
-     let p_exps = List.map propagate_exp_effect exps in
+     let p_pat = propagate_pat_effect id_effs pat in
+     let p_exps = List.map (propagate_exp_effect id_effs) exps in
      P_view (p_pat, id, p_exps), union_effects (effect_of_pat p_pat) (collect_effects p_exps)
 
-and propagate_mpat_effect (MP_aux (mpat, annot)) =
-  let p_mpat, eff = propagate_mpat_effect_aux mpat in
+and propagate_mpat_effect id_effs (MP_aux (mpat, annot)) =
+  let p_mpat, eff = propagate_mpat_effect_aux id_effs mpat in
   add_effect_mpat (MP_aux (p_mpat, annot)) eff
-and propagate_mpat_effect_aux = function
+and propagate_mpat_effect_aux id_effs = function
   | MP_lit lit -> MP_lit lit, no_effect
   | MP_cons (mpat1, mpat2) ->
-     let p_mpat1 = propagate_mpat_effect mpat1 in
-     let p_mpat2 = propagate_mpat_effect mpat2 in
+     let p_mpat1 = propagate_mpat_effect id_effs mpat1 in
+     let p_mpat2 = propagate_mpat_effect id_effs mpat2 in
      MP_cons (p_mpat1, p_mpat2), union_effects (effect_of_mpat p_mpat1) (effect_of_mpat p_mpat2)
   | MP_string_append mpats ->
-     let p_mpats = List.map propagate_mpat_effect mpats in
+     let p_mpats = List.map (propagate_mpat_effect id_effs) mpats in
      MP_string_append p_mpats, collect_effects_mpat p_mpats
   | MP_id id -> MP_id id, no_effect
   | MP_app (id, mpats) ->
-     let p_mpats = List.map propagate_mpat_effect mpats in
+     let p_mpats = List.map (propagate_mpat_effect id_effs) mpats in
      MP_app (id, p_mpats), collect_effects_mpat p_mpats
   | MP_tup mpats ->
-     let p_mpats = List.map propagate_mpat_effect mpats in
+     let p_mpats = List.map (propagate_mpat_effect id_effs) mpats in
      MP_tup p_mpats, collect_effects_mpat p_mpats
   | MP_list mpats ->
-     let p_mpats = List.map propagate_mpat_effect mpats in
+     let p_mpats = List.map (propagate_mpat_effect id_effs) mpats in
      MP_list p_mpats, collect_effects_mpat p_mpats
   | MP_vector_concat mpats ->
-     let p_mpats = List.map propagate_mpat_effect mpats in
+     let p_mpats = List.map (propagate_mpat_effect id_effs) mpats in
      MP_vector_concat p_mpats, collect_effects_mpat p_mpats
   | MP_vector mpats ->
-     let p_mpats = List.map propagate_mpat_effect mpats in
+     let p_mpats = List.map (propagate_mpat_effect id_effs) mpats in
      MP_vector p_mpats, collect_effects_mpat p_mpats
   | MP_typ (mpat, typ) ->
-     let p_mpat = propagate_mpat_effect mpat in
+     let p_mpat = propagate_mpat_effect id_effs mpat in
      MP_typ (p_mpat, typ), effect_of_mpat mpat
   | MP_as (mpat, id) ->
-     let p_mpat = propagate_mpat_effect mpat in
+     let p_mpat = propagate_mpat_effect id_effs mpat in
      MP_as (p_mpat, id), effect_of_mpat mpat
   | MP_view (mpat, id, exps) ->
-     let p_mpat = propagate_mpat_effect mpat in
-     let p_exps = List.map propagate_exp_effect exps in
+     let p_mpat = propagate_mpat_effect id_effs mpat in
+     let p_exps = List.map (propagate_exp_effect id_effs) exps in
      MP_view (p_mpat, id, p_exps), union_effects (effect_of_mpat p_mpat) (collect_effects p_exps)
 
-and propagate_letbind_effect (LB_aux (lb, (l, annot))) =
-  let p_lb, eff = propagate_letbind_effect_aux lb in
+and propagate_letbind_effect id_effs (LB_aux (lb, (l, annot))) =
+  let p_lb, eff = propagate_letbind_effect_aux id_effs lb in
   match annot with
   | (env, Some tannot) -> LB_aux (p_lb, (l, (env, Some { tannot with effect = eff }))), eff
   | (env, None) -> LB_aux (p_lb, (l, (env, None))), eff
-and propagate_letbind_effect_aux = function
+and propagate_letbind_effect_aux id_effs = function
   | LB_val (pat, exp) ->
-     let p_pat = propagate_pat_effect pat in
-     let p_exp = propagate_exp_effect exp in
+     let p_pat = propagate_pat_effect id_effs pat in
+     let p_exp = propagate_exp_effect id_effs exp in
      LB_val (p_pat, p_exp),
      union_effects (effect_of_pat p_pat) (effect_of p_exp)
 
-and propagate_lexp_effect (LEXP_aux (lexp, annot)) =
-  let p_lexp, eff = propagate_lexp_effect_aux lexp in
+and propagate_lexp_effect id_effs (LEXP_aux (lexp, annot)) =
+  let p_lexp, eff = propagate_lexp_effect_aux id_effs lexp in
   add_effect_lexp (LEXP_aux (p_lexp, annot)) eff
-and propagate_lexp_effect_aux = function
+and propagate_lexp_effect_aux id_effs = function
   | LEXP_id id -> LEXP_id id, no_effect
   | LEXP_deref exp ->
-     let p_exp = propagate_exp_effect exp in
+     let p_exp = propagate_exp_effect id_effs exp in
      LEXP_deref p_exp, effect_of p_exp
   | LEXP_memory (id, exps) ->
-     let p_exps = List.map propagate_exp_effect exps in
+     let p_exps = List.map (propagate_exp_effect id_effs) exps in
      LEXP_memory (id, p_exps), collect_effects p_exps
   | LEXP_cast (typ, id) -> LEXP_cast (typ, id), no_effect
   | LEXP_tup lexps ->
-     let p_lexps = List.map propagate_lexp_effect lexps in
+     let p_lexps = List.map (propagate_lexp_effect id_effs) lexps in
      LEXP_tup p_lexps, collect_effects_lexp p_lexps
   | LEXP_vector (lexp, exp) ->
-     let p_lexp = propagate_lexp_effect lexp in
-     let p_exp = propagate_exp_effect exp in
+     let p_lexp = propagate_lexp_effect id_effs lexp in
+     let p_exp = propagate_exp_effect id_effs exp in
      LEXP_vector (p_lexp, p_exp), union_effects (effect_of p_exp) (effect_of_lexp p_lexp)
   | LEXP_vector_range (lexp, exp1, exp2) ->
-     let p_lexp = propagate_lexp_effect lexp in
-     let p_exp1 = propagate_exp_effect exp1 in
-     let p_exp2 = propagate_exp_effect exp2 in
+     let p_lexp = propagate_lexp_effect id_effs lexp in
+     let p_exp1 = propagate_exp_effect id_effs exp1 in
+     let p_exp2 = propagate_exp_effect id_effs exp2 in
      LEXP_vector_range (p_lexp, p_exp1, p_exp2),
      union_effects (collect_effects [p_exp1; p_exp2]) (effect_of_lexp p_lexp)
   | LEXP_vector_concat lexps ->
-     let p_lexps = List.map propagate_lexp_effect lexps in
+     let p_lexps = List.map (propagate_lexp_effect id_effs) lexps in
      LEXP_vector_concat p_lexps, collect_effects_lexp p_lexps
   | LEXP_field (lexp, id) ->
-     let p_lexp = propagate_lexp_effect lexp in
+     let p_lexp = propagate_lexp_effect id_effs lexp in
      LEXP_field (p_lexp, id),effect_of_lexp p_lexp
 
 (**************************************************************************)
@@ -4426,14 +4435,14 @@ let check_letdef orig_env (LB_aux (letbind, (l, _))) =
   begin
     match letbind with
     | LB_val (P_aux (P_typ (typ_annot, _), _) as pat, bind) ->
-       let checked_bind = propagate_exp_effect (crule check_exp orig_env (strip_exp bind) typ_annot) in
+       let checked_bind = propagate_exp_effect Bindings.empty (crule check_exp orig_env (strip_exp bind) typ_annot) in
        let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) typ_annot in
        if (BESet.is_empty (effect_set (effect_of checked_bind)) || !opt_no_effects)
        then
          [DEF_val (LB_aux (LB_val (tpat, checked_bind), (l, (orig_env, None))))], Env.add_toplevel_lets (pat_ids tpat) env
        else typ_error env l ("Top-level definition with effects " ^ string_of_effect (effect_of checked_bind))
     | LB_val (pat, bind) ->
-       let inferred_bind = propagate_exp_effect (irule infer_exp orig_env (strip_exp bind)) in
+       let inferred_bind = propagate_exp_effect Bindings.empty (irule infer_exp orig_env (strip_exp bind)) in
        let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) (typ_of inferred_bind) in
        if (BESet.is_empty (effect_set (effect_of inferred_bind)) || !opt_no_effects)
        then
@@ -4464,9 +4473,9 @@ let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
        let typed_pexp, prop_eff =
          match List.map implicit_to_int typ_args with
          | [typ_arg] ->
-            propagate_pexp_effect (check_case env typ_arg (strip_pexp pexp) typ_ret)
+            propagate_pexp_effect Bindings.empty (check_case env typ_arg (strip_pexp pexp) typ_ret)
          | typ_args ->
-            propagate_pexp_effect (check_case env (Typ_aux (Typ_tup typ_args, l)) (strip_pexp pexp) typ_ret)
+            propagate_pexp_effect Bindings.empty (check_case env (Typ_aux (Typ_tup typ_args, l)) (strip_pexp pexp) typ_ret)
        in
        FCL_aux (FCL_Funcl (id, typed_pexp), (l, mk_expected_tannot env typ prop_eff (Some typ)))
      end
