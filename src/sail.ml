@@ -257,6 +257,12 @@ let options = Arg.align ([
   ( "-coq_lib",
     Arg.String (fun l -> opt_libs_coq := l::!opt_libs_coq),
     "<filename> provide additional library to open in Coq output");
+  ( "-coq_alt_modules",
+    Arg.String (fun l -> opt_alt_modules_coq := l::!opt_alt_modules_coq),
+    "<filename> provide alternative modules to open in Coq output");
+  ( "-coq_alt_modules2",
+    Arg.String (fun l -> opt_alt_modules2_coq := l::!opt_alt_modules2_coq),
+    "<filename> provide additional alternative modules to open only in main (non-_types) Coq output, and suppress default definitions of MR and M monads");
   ( "-dcoq_undef_axioms",
     Arg.Set Pretty_print_coq.opt_undef_axioms,
     " generate axioms for functions that are declared but not defined");

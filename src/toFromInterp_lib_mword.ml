@@ -30,7 +30,7 @@ let zatomToInterpValue typq_'n v =
   V_int v
 
 let atomFromInterpValue = zatomFromInterpValue
-let atomToInterpValue = zatomToInterpValue 
+let atomToInterpValue = zatomToInterpValue
 
 let zintFromInterpValue v = match v with
   | V_int i -> i
@@ -39,7 +39,7 @@ let zintFromInterpValue v = match v with
 let zintToInterpValue v = V_int v
 
 let intFromInterpValue = zintFromInterpValue
-let intToInterpValue = zintToInterpValue 
+let intToInterpValue = zintToInterpValue
 
 let znatFromInterpValue v = match v with
   | V_int i when i >= Big_int.zero -> i
@@ -50,7 +50,7 @@ let znatToInterpValue v =
   V_int v
 
 let natFromInterpValue = znatFromInterpValue
-let natToInterpValue = znatToInterpValue 
+let natToInterpValue = znatToInterpValue
 
 let zrangeFromInterpValue low high v = match v with
   | V_int i when i >= low && i <= high -> i
@@ -71,7 +71,7 @@ let zboolFromInterpValue v = match v with
 let zboolToInterpValue v = V_bool v
 
 let boolFromInterpValue = zboolFromInterpValue
-let boolToInterpValue = zboolToInterpValue 
+let boolToInterpValue = zboolToInterpValue
 
 let zstringFromInterpValue v = match v with
   | V_string s -> s
@@ -80,7 +80,7 @@ let zstringFromInterpValue v = match v with
 let zstringToInterpValue v = V_string v
 
 let stringFromInterpValue = zstringFromInterpValue
-let stringToInterpValue = zstringToInterpValue 
+let stringToInterpValue = zstringToInterpValue
 
 let zlistFromInterpValue typq_'a v = match v with
   | V_list vs -> List.map typq_'a vs
@@ -89,7 +89,7 @@ let zlistFromInterpValue typq_'a v = match v with
 let zlistToInterpValue typq_'a v = V_list (List.map typq_'a v)
 
 let listFromInterpValue = zlistFromInterpValue
-let listToInterpValue = zlistToInterpValue 
+let listToInterpValue = zlistToInterpValue
 
 let zvectorFromInterpValue typq_'n typq_'ord typq_'a v = match v with
   | V_vector vs ->
@@ -102,7 +102,7 @@ let zvectorToInterpValue typq_'n typq_'ord typq_'a v =
   V_vector (List.map typq_'a v)
 
 let vectorFromInterpValue = zvectorFromInterpValue
-let vectorToInterpValue = zvectorToInterpValue 
+let vectorToInterpValue = zvectorToInterpValue
 
 let zbitFromInterpValue v = match v with
   | V_bit b -> b
@@ -113,6 +113,19 @@ let zbitToInterpValue v = V_bit v
 let bitFromInterpValue = zbitFromInterpValue
 let bitToInterpValue = zbitToInterpValue
 
+let zbitvectorFromInterpValue typq_'n typq_'ord v = match v with
+  | V_vector vs ->
+     assert (Big_int.of_int (List.length vs) = typq_'n);
+     Lem.wordFromBitlist (List.map (fun b -> bitFromInterpValue b |> Sail_lib.bool_of_bit) vs)
+  | _ -> failwith "invalid interpreter value for bitvector"
+
+let zbitvectorToInterpValue typq_'n typq_'ord v =
+  let bs = Lem.bitlistFromWord v in
+  V_vector (List.map (fun b -> Sail_lib.bit_of_bool b |> bitToInterpValue) bs)
+
+let bitvectorFromInterpValue = zbitvectorFromInterpValue
+let bitvectorToInterpValue = zbitvectorToInterpValue
+
 let optionFromInterpValue typq_'a v = match v with
   | V_ctor ("None", [v0]) -> None
   | V_ctor ("Some", [v0]) -> Some (typq_'a v0)
@@ -121,7 +134,6 @@ let optionFromInterpValue typq_'a v = match v with
 let optionToInterpValue typq_'a v = match v with
   | None -> V_ctor ("None", [(unitToInterpValue ())])
   | Some (v0) -> V_ctor ("Some", [(typq_'a v0)])
-
 
 let bitsFromInterpValue v = match v with
   | V_vector vs ->

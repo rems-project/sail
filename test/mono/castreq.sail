@@ -1,32 +1,14 @@
-$include <smt.sail>
-$include <flow.sail>
-$include <arith.sail>
 default Order dec
-type bits ('n : Int) = bitvector('n, dec)
-val operator & = "and_bool" : (bool, bool) -> bool
-val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
-overload operator == = {eq_int, eq_vec}
-val mult_int = {ocaml: "mult", lem: "integerMult"} : (int, int) -> int
-overload operator * = {mult_range, mult_int, mult_real}
-val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
-overload operator < = {lt_atom, lt_int}
+$include <prelude.sail>
+$include <smt.sail>
 val "extz_vec" : forall 'n 'm. (atom('m),bitvector('n, dec)) -> bitvector('m, dec) effect pure
 val extzv : forall 'n 'm. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
 function extzv(m, v) = extz_vec(m,v)
-val bitvector_concat = {ocaml: "append", lem: "concat_vec", c: "append"} : forall ('n : Int) ('m : Int).
-  (bits('n), bits('m)) -> bits('n + 'm)
-overload append = {bitvector_concat}
 val bitvector_cast_in = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
 val bitvector_cast_out = "zeroExtend" : forall 'n. bits('n) -> bits('n) effect pure
 val bitvector_length = "length" : forall 'n. bits('n) -> atom('n)
 overload length = {bitvector_length}
 overload __size = {length}
-val add_bits = {ocaml: "add_vec", lem: "add_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
-overload operator + = {add_bits}
-val vector_update_subrange = {
-  ocaml: "update_subrange",
-  lem: "update_subrange_vec_dec"
-} : forall 'n 'm 'o, 0 <= 'o <= 'm < 'n. (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
 
 
 /* Test generation of casts across case splits (e.g., going from bits('m) to bits(32)) */

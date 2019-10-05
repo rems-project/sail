@@ -2718,8 +2718,8 @@ let is_constant = function
 
 let is_constant_vec_typ env typ =
   let typ = Env.base_typ_of env typ in
-  match destruct_vector env typ with
-  | Some (size,_,_) ->
+  match destruct_bitvector env typ with
+  | Some (size,_) ->
      (match nexp_simp size with
      | Nexp_aux (Nexp_constant _,_) -> true
      | _ -> false)
@@ -2821,6 +2821,14 @@ let rec rewrite_app env typ (id,args) =
           not (is_constant start1 && is_constant len1 && is_constant len2) ->
        try_cast_to_typ
          (mk_exp (E_app (mk_id "place_slice", [vector1; start1; len1; len2])))
+
+    (* ones @ zeros *)
+    | [E_aux (E_app (ones1, [len1]), _);
+       E_aux (E_app (zeros2, [len2]), _)]
+        when is_ones ones1 && is_zeros zeros2 &&
+          not (is_constant len1 && is_constant len2) ->
+      try_cast_to_typ
+        (mk_exp (E_app (mk_id "slice_mask", [len2; len1])))
 
     (* variable-range @ variable-range *)
     | [E_aux (E_app (subrange1,

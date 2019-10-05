@@ -235,7 +235,7 @@ let read_reg_bitfield reg regfield =
   read_reg_aux (external_reg_field_whole reg regfield) >>= fun v ->
   return (extract_only_element v)*)
 
-let reg_deref = read_reg
+let inline reg_deref = read_reg
 
 val write_reg : forall 's 'rv 'a 'e. register_ref 's 'rv 'a -> 'a -> monad 'rv unit 'e
 let write_reg reg v = Write_reg reg.name (reg.regval_of v) (Done ())

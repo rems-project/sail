@@ -120,6 +120,19 @@ let zbitToInterpValue v = V_bit (match v with
 let bitFromInterpValue = zbitFromInterpValue
 let bitToInterpValue = zbitToInterpValue
 
+let zbitvectorFromInterpValue typq_'n typq_'ord v = match v with
+  | V_vector vs ->
+     assert (Big_int.of_int (List.length vs) = typq_'n);
+     List.map bitFromInterpValue vs
+  | _ -> failwith "invalid interpreter value for vector"
+
+let zbitvectorToInterpValue typq_'n typq_'ord v =
+  assert (Big_int.of_int (List.length v) = typq_'n);
+  V_vector (List.map bitToInterpValue v)
+
+let bitvectorFromInterpValue = zbitvectorFromInterpValue
+let bitvectorToInterpValue = zbitvectorToInterpValue
+
 let optionFromInterpValue typq_'a v = match v with
   | V_ctor ("None", [v0]) -> None
   | V_ctor ("Some", [v0]) -> Some (typq_'a v0)

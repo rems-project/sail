@@ -86,7 +86,7 @@ let frominterp_typedef (TD_aux (td_aux, (l, _))) =
   in
   let fromValueKid (Kid_aux ((Var name), _)) =
     string ("typq_" ^ name)
-  in 
+  in
   let fromValueNexp ((Nexp_aux (nexp_aux, annot)) as nexp) = match nexp_aux with
     | Nexp_constant num -> parens (separate space [string "Big_int.of_string"; dquotes (string (Nat_big_num.to_string num))])
     | Nexp_var var -> fromValueKid var

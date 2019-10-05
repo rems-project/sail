@@ -10,7 +10,7 @@ Require Export Sumbool.
 Require Export DecidableClass.
 Require Import Eqdep_dec.
 Require Export Zeuclid.
-Require Import Psatz.
+Require Import Lia.
 Import ListNotations.
 
 Open Scope Z.
@@ -46,6 +46,8 @@ End Morphism.
 Definition build_ex {T:Type} (n:T) {P:T -> Prop} `{H:ArithFact (P n)} : {x : T & ArithFact (P x)} :=
   existT _ n H.
 
+Definition build_ex2 {T:Type} {T':T -> Type} (n:T) (m:T' n) {P:T -> Prop} `{H:ArithFact (P n)} : {x : T & T' x & ArithFact (P x)} :=
+  existT2 _ _ n m H.
 
 Definition generic_eq {T:Type} (x y:T) `{Decidable (x = y)} := Decidable_witness.
 Definition generic_neq {T:Type} (x y:T) `{Decidable (x = y)} := negb Decidable_witness.
@@ -77,6 +79,11 @@ Instance Decidable_eq_from_dec {T:Type} (eqdec: forall x y : T, {x = y} + {x <> 
   Decidable_witness := proj1_sig (bool_of_sumbool (eqdec x y))
 }.
 destruct (eqdec x y); simpl; split; congruence.
+Defined.
+
+Instance Decidable_eq_unit : forall (x y : unit), Decidable (x = y) :=
+  { Decidable_witness := true }.
+destruct x, y; split; auto.
 Defined.
 
 Instance Decidable_eq_string : forall (x y : string), Decidable (x = y) :=
@@ -2288,9 +2295,9 @@ Definition negate_range {n m} (l : {l : Z & ArithFact (n <= l <= m)})
   : {x : Z & ArithFact ((- m) <= x <= (- n))} :=
   build_ex (- (projT1 l)).
 
-Definition min_atom (a : Z) (b : Z) : {c : Z & ArithFact (c = a \/ c = b /\ c <= a /\ c <= b)} :=
+Definition min_atom (a : Z) (b : Z) : {c : Z & ArithFact ((c = a \/ c = b) /\ c <= a /\ c <= b)} :=
   build_ex (Z.min a b).
-Definition max_atom (a : Z) (b : Z) : {c : Z & ArithFact (c = a \/ c = b /\ c >= a /\ c >= b)} :=
+Definition max_atom (a : Z) (b : Z) : {c : Z & ArithFact ((c = a \/ c = b) /\ c >= a /\ c >= b)} :=
   build_ex (Z.max a b).
 
 

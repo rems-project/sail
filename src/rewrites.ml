@@ -3113,11 +3113,14 @@ let rewrites_coq = [
     ("move_termination_measures", []);
     ("top_sort_defs", []);
     ("early_return", []);
+    (* We need to do the exhaustiveness check before merging, because it may
+       introduce new wildcard clauses *)
+    ("recheck_defs_without_effects", []);
+    ("make_cases_exhaustive", []);
     (* merge funcls before adding the measure argument so that it doesn't
      disappear into an internal pattern match *)
     ("merge_function_clauses", []);
     ("recheck_defs_without_effects", []);
-    ("make_cases_exhaustive", []);
     ("rewrite_explicit_measure", []);
     ("rewrite_loops_with_escape_effect", []);
     ("recheck_defs_without_effects", []);

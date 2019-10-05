@@ -8,9 +8,9 @@ $include <vector_dec.sail>
 
 /* External definitions not in the usual asl prelude */
 
-val extzv = "extz_vec" : forall 'n 'm. (implicit('m), vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+val extzv = "extz_vec" : forall 'n 'm. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
 
-val extsv = "exts_vec" : forall 'n 'm. (implicit('m), vector('n, dec, bit)) -> vector('m, dec, bit) effect pure
+val extsv = "exts_vec" : forall 'n 'm. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
 
 /* This is generated internally to deal with case splits which reveal the size
    of a bitvector */
@@ -82,7 +82,7 @@ val subrange_subrange_concat : forall 'n 'o 'p 'm 'q 'r 's, 's >= 0 & 'n >= 0 & 
 
 function subrange_subrange_concat (s, xs, i, j, ys, i', j') = {
   let xs = sail_shiftright(xs & slice_mask(j,i-j+1), j) in
-  let ys = sail_shiftright(ys & slice_mask(j',i'-j'+1), j) in
+  let ys = sail_shiftright(ys & slice_mask(j',i'-j'+1), j') in
   sail_shiftleft(extzv(s, xs), i' - j' + 1) | extzv(s, ys)
 }
 

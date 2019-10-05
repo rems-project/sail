@@ -19,7 +19,6 @@ function f(x,p,q) = {
   a + b + c + d
 }
 
-/* FIXME
 val two : forall ('t : Type). 't -> int
 
 function two _ = 2
@@ -33,7 +32,6 @@ function f'(x,p,q) = {
   let d : int = match (x,q) { (x,B) if x > 0 => 1, z => two(z) };
   a + b + c + d
 }
-also commented out in test... */
 
 union unionsingle = { D : int }
 union uniondouble = { E : int, F : int }
@@ -63,10 +61,10 @@ function test () =
   f(1,A,B) == 4 &
   f(0,A,C) == 8 &
   f(1,A,C) == 5 &
-/*  f'(0,A,B) == 8 &
+  f'(0,A,B) == 8 &
   f'(1,A,B) == 4 &
   f'(0,A,C) == 8 &
-  f'(1,A,C) == 5 &*/
+  f'(1,A,C) == 5 &
   g(0,D(0)) == 6 &
   g(0,D(5)) == 6 &
   g(1,D(0)) == 4 &

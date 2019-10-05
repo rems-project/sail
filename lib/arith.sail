@@ -96,7 +96,7 @@ val tmod_int = {
   coq: "Z.rem"
 } : (int, int) -> nat
 
-val abs_int = {
+val abs_int_plain = {
   smt : "abs",
   ocaml: "abs_int",
   interpreter: "abs_int",
@@ -104,5 +104,7 @@ val abs_int = {
   c: "abs_int",
   coq: "Z.abs"
 } : int -> int
+
+overload abs_int = {abs_int_plain}
 
 $endif

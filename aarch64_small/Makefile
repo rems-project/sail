@@ -15,7 +15,8 @@ SOURCES=prelude.sail\
   armV8_common_lib.sail\
   armV8_A64_lib.sail\
   armV8.sail\
-  ../lib/regfp.sail
+  ../lib/regfp.sail\
+  aarch64_regfp.sail
 
 MONO_SPLICES=$(wildcard mono-splices/*.sail)
 MONO_SPLICES_OPTS=$(foreach file,$(MONO_SPLICES),-splice $(file))
