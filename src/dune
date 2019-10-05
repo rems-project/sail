@@ -1,6 +1,6 @@
 (env
  (dev
-  (flags (:standard -w -33 -w -27 -w -8 -w -32 -w -26 -w -20))))
+  (flags (:standard -warn-error -a))))
 
 (ocamllex
   (modules lexer regex_lexer))

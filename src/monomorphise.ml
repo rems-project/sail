@@ -1010,10 +1010,9 @@ let split_defs target all_errors splits env defs =
         | E_internal_return e -> re (E_internal_return (map_exp e))
       and map_fexp (FE_aux (FE_Fexp (id,e), l)) =
         FE_aux (FE_Fexp (id,map_exp e), l)
-      and map_pexp = assert false
-                       (* FIXME function
-        | Pat_aux (Pat_exp (p,e),l) ->
-           let nosplit = lazy [Pat_aux (Pat_exp (p,map_exp e),l)] in
+      and map_pexp = function
+        | Pat_aux (Pat_case (p,[],e),l) ->
+           let nosplit = lazy [Pat_aux (Pat_case (p,[],map_exp e),l)] in
            (match map_pat p with
            | NoSplit -> Lazy.force nosplit
            | VarSplit patsubsts ->
@@ -1023,17 +1022,17 @@ let split_defs target all_errors splits env defs =
                   let exp' = subst_exp ref_vars substs ksubsts exp' in
                   let exp' = apply_pat_choices pchoices exp' in
                   let exp' = stop_at_false_assertions exp' in
-                  Pat_aux (Pat_exp (pat', map_exp exp'),l))
+                  Pat_aux (Pat_case (pat',[],map_exp exp'),l))
                   patsubsts
               else Lazy.force nosplit
            | ConstrSplit patnsubsts ->
               List.map (fun (pat',nsubst) ->
                 let pat' = Spec_analysis.nexp_subst_pat nsubst pat' in
                 let exp' = Spec_analysis.nexp_subst_exp nsubst e in
-                Pat_aux (Pat_exp (pat', map_exp exp'),l)
+                Pat_aux (Pat_case (pat',[],map_exp exp'),l)
               ) patnsubsts)
-        | Pat_aux (Pat_when (p,e1,e2),l) ->
-           let nosplit = lazy [Pat_aux (Pat_when (p,map_exp e1,map_exp e2),l)] in
+        | Pat_aux (Pat_case (p,[G_aux(G_if e1,g_l)],e2),l) ->
+           let nosplit = lazy [Pat_aux (Pat_case (p,[G_aux(G_if(map_exp e1),g_l)],map_exp e2),l)] in
            (match map_pat p with
            | NoSplit -> Lazy.force nosplit
            | VarSplit patsubsts ->
@@ -1046,7 +1045,7 @@ let split_defs target all_errors splits env defs =
                   let exp2' = subst_exp ref_vars substs ksubsts exp2' in
                   let exp2' = apply_pat_choices pchoices exp2' in
                   let exp2' = stop_at_false_assertions exp2' in
-                  Pat_aux (Pat_when (pat', map_exp exp1', map_exp exp2'),l))
+                  Pat_aux (Pat_case (pat', [G_aux (G_if (map_exp exp1'), g_l)], map_exp exp2'),l))
                   patsubsts
               else Lazy.force nosplit
            | ConstrSplit patnsubsts ->
@@ -1054,8 +1053,8 @@ let split_defs target all_errors splits env defs =
                 let pat' = Spec_analysis.nexp_subst_pat nsubst pat' in
                 let exp1' = Spec_analysis.nexp_subst_exp nsubst e1 in
                 let exp2' = Spec_analysis.nexp_subst_exp nsubst e2 in
-                Pat_aux (Pat_when (pat', map_exp exp1', map_exp exp2'),l)
-              ) patnsubsts) *)
+                Pat_aux (Pat_case (pat', [G_aux (G_if (map_exp exp1'), g_l)], map_exp exp2'),l)
+              ) patnsubsts)
       and map_letbind (LB_aux (lb,annot)) =
         match lb with
         | LB_val (p,e) -> LB_aux (LB_val (check_single_pat p,map_exp e), annot)
@@ -1379,8 +1378,7 @@ in *)
 
   let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),(l,annot))) =
     let pat,guard,body,pl = destruct_pexp pexp in
-    let pat,guard,body, nexps = assert false
-                                  (* FIXME
+    let pat,guard,body, nexps =
       (* Update pattern and add itself -> nat wrapper to body *)
       match Bindings.find id fn_sizes with
       | to_change,nexps ->
@@ -1403,14 +1401,15 @@ in *)
          let merge_guards g1 g2 : tannot exp =
            E_aux (E_app_infix (g1, mk_id "&", g2),(Generated Unknown,dummy_tannot)) in
          let guard = match guard, new_guards with
-           | None, [] -> None
-           | None, (h::t) -> Some (List.fold_left merge_guards h t)
-           | Some exp, gs ->
+           | [], [] -> []
+           | [], (h::t) -> [G_aux (G_if (List.fold_left merge_guards h t), gen_loc l)]
+           | [G_aux (G_if exp, g_l)], gs ->
               let exp' = List.fold_left (add_var_rebind false) exp vars in
-              Some (List.fold_left merge_guards exp' gs)
+              [G_aux (G_if (List.fold_left merge_guards exp' gs), g_l)]
+           | _ -> Reporting.unreachable l __POS__ "Complex guards should not be introduced prior to monomorphisation"
          in
          pat,guard,body,nexps
-      | exception Not_found -> pat,guard,body,NexpSet.empty *)
+      | exception Not_found -> pat,guard,body,NexpSet.empty
     in
     (* Update function applications *)
     let funcl_typ = typ_of_annot (l,annot) in
@@ -1429,9 +1428,11 @@ in *)
     in
     let body = fold_exp { id_algebra with e_app = rewrite_e_app } body in
     let guard = match guard with
-      | None -> None
-      | Some exp -> Some (fold_exp { id_algebra with e_app = rewrite_e_app } exp) in
-    FCL_aux (FCL_Funcl (id,construct_pexp (pat, [] (* FIXME *),body,pl)),(l,empty_tannot env))
+      | [] -> []
+      | [G_aux (G_if exp, g_l)] -> [G_aux (G_if (fold_exp { id_algebra with e_app = rewrite_e_app } exp), g_l)]
+      | _ -> Reporting.unreachable l __POS__ "Complex guards should not be introduced prior to monomorphisation"
+    in
+    FCL_aux (FCL_Funcl (id,construct_pexp (pat,guard,body,pl)),(l,empty_tannot env))
   in
   let rewrite_e_app (id,args) =
     match Bindings.find id fn_sizes with
@@ -1920,11 +1921,10 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
     match Bindings.find id env.var_deps with
     | Have (args,extras) -> begin
       match ArgSplits.bindings args, ExtraSplits.bindings extras with
-      | [(id',loc),Total], [] when Id.compare id id' == 0 -> assert false
-                                                               (* FIXME
+      | [(id',loc),Total], [] when Id.compare id id' == 0 ->
          (match Util.map_all (function
-         | Pat_aux (Pat_exp (pat,_),_) -> Some (ctx pat)
-         | Pat_aux (Pat_when (_,_,_),_) -> None) pexps
+         | Pat_aux (Pat_case (pat,[],_),_) -> Some (ctx pat)
+         | Pat_aux (Pat_case (_,_,_),_) -> None) pexps
           with
           | Some pats ->
              if l = Parse_ast.Unknown then
@@ -1935,7 +1935,7 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
              else
                Some (Have (ArgSplits.singleton (id,loc) (Partial (pats,l)),
                            ExtraSplits.empty))
-          | None -> None) *)
+          | None -> None)
       | _ -> None
     end
     | Unknown _ -> None
@@ -2141,20 +2141,20 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
          | Some deps -> deps
          | None -> deps
        in
-       let analyse_case (Pat_aux (pexp,_)) = assert false
-                                               (* FIXME
+       let analyse_case (Pat_aux (pexp,_)) =
          match pexp with
-         | Pat_exp (pat,e1) ->
+         | Pat_case (pat,[],e1) ->
             let env = update_env env deps pat (env_of_annot (l,annot)) (env_of e1) in
             let d,assigns,r = analyse_exp fn_id env assigns e1 in
             let assigns = add_dep_to_assigned deps assigns [e1] in
             (d,assigns,r)
-         | Pat_when (pat,e1,e2) ->
+         | Pat_case (pat,[G_aux(G_if e1,_)],e2) ->
             let env = update_env env deps pat (env_of_annot (l,annot)) (env_of e2) in
             let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
             let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
             let assigns = add_dep_to_assigned deps assigns [e1;e2] in
-            (dmerge d1 d2, assigns, merge r1 r2) *)
+            (dmerge d1 d2, assigns, merge r1 r2)
+         | _ -> Reporting.unreachable l __POS__ "Complex guards should not be introduced prior to monomorphisation"
        in
        let ds,assigns,rs = split3 (List.map analyse_case cases) in
        (merge_deps (deps::ds),
@@ -2572,17 +2572,20 @@ let analyse_funcl debug tenv constants (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
   let _ = if debug > 2 then print_set_assertions set_assertions in
   let aenv = initial_env id l tq pat body set_assertions constants in
   let _,_,r = analyse_exp id aenv Bindings.empty body in
-  let r = assert false (* FIXME match guard with
-    | None -> r
-    | Some exp -> let _,_,r' = analyse_exp id aenv Bindings.empty exp in
-                  let r' =
-                    if ExtraSplits.is_empty r'.extra_splits
-                    then r'
-                    else merge r' { empty with failures =
-                        Failures.singleton l (StringSet.singleton
-                                                "Case splitting size tyvars in guards not supported") }
-                  in
-                  merge r r' *)
+  let r = match guard with
+    | [] -> r
+    | [G_aux (G_if exp, _)] ->
+       let _,_,r' = analyse_exp id aenv Bindings.empty exp in
+       let r' =
+         if ExtraSplits.is_empty r'.extra_splits then
+           r'
+         else
+           merge r' { empty with
+               failures = Failures.singleton l (StringSet.singleton "Case splitting size tyvars in guards not supported")
+             }
+       in
+       merge r r'
+    | _ -> Reporting.unreachable l __POS__ "Complex guards should not be introduced prior to monomorphisation"
   in
   let _ = if debug > 2 then print_result r else ()
   in r
@@ -3409,8 +3412,7 @@ let add_bitvector_casts (Defs defs) =
         match e',matched_typ with
         | E_sizeof (Nexp_aux (Nexp_var kid,_)), _
         | _, Typ_aux (Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp (Nexp_aux (Nexp_var kid,_)),_)]),_) ->
-           let map_case pexp = assert false
-             (* FIXME
+           let map_case pexp =
              let pat,guard,body,ann = destruct_pexp pexp in
              let body = match pat, guard with
                | P_aux (P_lit (L_aux (L_num i,_)),_), _ ->
@@ -3418,7 +3420,7 @@ let add_bitvector_casts (Defs defs) =
                   let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) (nconstant i)) env) result_typ in
                   make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
                     (make_bitvector_env_casts env quant_kids (kid,i) body)
-               | P_aux (P_id var,_), Some guard ->
+               | P_aux (P_id var,_), [G_aux (G_if guard, _)] ->
                   (match extract_value_from_guard var guard with
                   | Some i ->
                      let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) (nconstant i)) env) result_typ in
@@ -3428,7 +3430,7 @@ let add_bitvector_casts (Defs defs) =
                | _ ->
                   body
              in
-             construct_pexp (pat, guard, body, ann) *)
+             construct_pexp (pat, guard, body, ann)
            in
            E_aux (E_case (exp', List.map map_case cases),ann)
         | _ -> E_aux (e,ann)

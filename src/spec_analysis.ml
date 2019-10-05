@@ -243,12 +243,23 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
 and fv_of_pes consider_var bound used set pes =
   match pes with
   | [] -> bound,used,set
-  (* FIXME *)
-  | Pat_aux(Pat_case (p,_,e),_)::pes ->
-    let bound_p,us_p = pat_bindings consider_var bound used p in
-    let bound_e,us_e,set_e = fv_of_exp consider_var bound_p us_p set e in
-    fv_of_pes consider_var bound us_e set_e pes
+  | Pat_aux(Pat_case (p,gs,e),_)::pes ->
+     let bound_p,us_p = pat_bindings consider_var bound used p in
+     let bound_g,us_g,set_g = fv_of_guards consider_var bound_p us_p set gs in
+     let bound_e,us_e,set_e = fv_of_exp consider_var bound_g us_g set_g e in
+     fv_of_pes consider_var bound us_e set_e pes
 
+and fv_of_guard consider_var bound used set = function
+  | G_aux (G_if exp, _) ->
+     fv_of_exp consider_var bound used set exp
+  | G_aux (G_pattern (pat, exp), _) ->
+    let bound_p, used_p = pat_bindings consider_var bound used pat in
+    let _, used_e, set_e = fv_of_exp consider_var bound used set exp in
+    bound_p, Nameset.union used_p used_e, set_e
+
+and fv_of_guards consider_var bound used set guards =
+  List.fold_left (fun (b, u, s) g -> fv_of_guard consider_var b u s g) (bound, used, set) guards
+    
 and fv_of_let consider_var bound used set (LB_aux(lebind,_)) = match lebind with
   | LB_val(pat,exp) ->
     let bound_p, us_p = pat_bindings consider_var bound used pat in
@@ -334,10 +345,10 @@ let fv_of_tannot_opt consider_var (Typ_annot_opt_aux (t,_)) =
 (*Unlike the other fv, the bound returns are the names bound by the pattern for use in the exp*)
 let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pexp),l)) =
   match pexp with
-  (* FIXME *)
-  | Pat_aux(Pat_case (pat,_,exp),_) ->
-     let pat_bs,pat_ns = pat_bindings consider_var base_bounds mt pat in
-     let _, exp_ns, exp_sets = fv_of_exp consider_var pat_bs pat_ns mt exp in
+  | Pat_aux(Pat_case (pat, guards, exp), _) ->
+     let pat_bs, pat_ns = pat_bindings consider_var base_bounds mt pat in
+     let guards_bs, guards_ns, guards_sets = fv_of_guards consider_var pat_bs pat_ns mt guards in
+     let _, exp_ns, exp_sets = fv_of_exp consider_var pat_bs pat_ns guards_sets exp in
      (pat_bs,exp_ns,exp_sets)
 
 let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) as fd) =
@@ -369,10 +380,10 @@ let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) 
   let ns = Nameset.empty in
   let ns = List.fold_right (fun (FCL_aux(FCL_Funcl(_,pexp),_)) ns ->
     match pexp with
-    (* FIXME *)
-    | Pat_aux(Pat_case (pat,_,exp),_) ->
+    | Pat_aux(Pat_case (pat,guards,exp),_) ->
        let pat_bs,pat_ns = pat_bindings consider_var base_bounds ns pat in
-       let _, exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns Nameset.empty exp in
+       let guards_gs,guards_ns,guards_sets = fv_of_guards consider_var pat_bs pat_ns Nameset.empty guards in
+       let _, exp_ns,_ = fv_of_exp consider_var pat_bs pat_ns guards_sets exp in
        exp_ns
   ) funcls mt in
   let ns_vs = init_env ("val:" ^ (string_of_id (id_of_fundef fd))) in
@@ -841,11 +852,11 @@ let nexp_subst_fns substs =
       Measure_aux (m,l)
     and s_fexp (FE_aux (FE_Fexp (id,e), l)) =
       FE_aux (FE_Fexp (id,s_exp e), l)
-    and s_pexp = assert false (* FIXME function
-      | (Pat_aux (Pat_exp (p,e),(l,annot))) ->
-         Pat_aux (Pat_exp (s_pat p, s_exp e),(l,s_tannot annot))
-      | (Pat_aux (Pat_when (p,e1,e2),(l,annot))) ->
-         Pat_aux (Pat_when (s_pat p, s_exp e1, s_exp e2),(l,s_tannot annot)) *)
+    and s_pexp (Pat_aux (Pat_case (p,gs,e),l)) =
+      Pat_aux (Pat_case (s_pat p, List.map s_guard gs, s_exp e),l)
+    and s_guard = function
+      | G_aux (G_if exp, l) -> G_aux (G_if (s_exp exp), l)
+      | G_aux (G_pattern (pat, exp), l) -> G_aux (G_pattern (s_pat pat, s_exp exp), l)
     and s_letbind (LB_aux (lb,(l,annot))) =
       match lb with
       | LB_val (p,e) -> LB_aux (LB_val (s_pat p,s_exp e), (l,s_tannot annot))

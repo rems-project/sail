@@ -962,7 +962,7 @@ let doc_exp_lem, doc_let_lem =
          ^//^ (separate_map (break 1) (doc_case fctxt) pexps
                ^/^ string "end in")
        in
-       wrap_parens
+       parens
          (separate space [string "let cascade"; equals; expY e; string "in"]
           ^/^ separate_map (break 1) doc_fallthrough fallthroughs
           ^/^ (group (string "match cascade with"

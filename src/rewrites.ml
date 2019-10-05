@@ -1993,7 +1993,6 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          let rewrite_pexp (Pat_aux (pexp, l)) = match pexp with
            | Pat_case (pat, [], exp) ->
              let exp = rewrite_var_updates (add_vars overwrite exp vars) in
-             let pannot = (l, mk_tannot (env_of exp) (typ_of exp) (effect_of exp)) in
              Pat_aux (Pat_case (pat, [], exp), l)
            | Pat_case _ ->
              raise (Reporting.err_unreachable l __POS__
@@ -2005,6 +2004,8 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
            | _ -> unit_typ in
          let v = fix_eff_exp (annot_exp expaux pl env typ) in
          Added_vars (v, tuple_pat (if overwrite then varpats else pat :: varpats))
+    | E_internal_cascade (cascade_type, exp, fallthroughs, ps) ->
+       assert false
     | E_assign (lexp,vexp) ->
        let mk_id_pat id =
          let typ = lvar_typ (Env.lookup_id id env) in
@@ -3043,13 +3044,16 @@ let rewrite_sequence_mono target = [
     ("mono_rewrites", [If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("toplevel_nexps", [If_mono_arg]);
-    ("monomorphise", [String_arg "c"; If_mono_arg]);
+    ("monomorphise", [String_arg target; If_mono_arg]);
+    ("recheck_defs", [If_mwords_arg]);
+    ("add_bitvector_casts", [If_mwords_arg]);
     ("atoms_to_singletons", [If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
   ]
 
 let rewrites_lem =
-  rewrite_sequence_mono "lem"
+  [ ("undefined", [Bool_arg true]); ]
+  @ rewrite_sequence_mono "lem"
   @ [ ("vector_string_pats_to_bit_list", []);
       ("remove_impossible_int_cases", []);
       ("vector_concat_assignments", []);
