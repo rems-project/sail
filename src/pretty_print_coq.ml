@@ -2335,7 +2335,7 @@ let types_used_with_generic_eq defs =
   let typs_req_fundef (FD_aux (FD_function (_,_,_,fcls),_)) =
     List.fold_left IdSet.union IdSet.empty (List.map typs_req_funcl fcls)
   in
-  let rec typs_req_def = function
+  let typs_req_def = function
     | DEF_type _
     | DEF_spec _
     | DEF_fixity _
@@ -2641,7 +2641,7 @@ let mk_kid_renames ids_to_avoid kids =
     | Id_aux (Operator _, _) -> None
   in
   let ids = StringSet.of_list (Util.map_filter map_id (IdSet.elements ids_to_avoid)) in
-  let rec check_kid kid (newkids,rebindings) =
+  let check_kid kid (newkids,rebindings) =
     let rec check kid1 =
       let kid_string = fix_id true (string_of_kid kid1) in
       if StringSet.mem kid_string ids
@@ -2893,7 +2893,7 @@ let doc_mutrec rec_set = function
      doc_fundef_rhs ~mutrec:FirstFn rec_set fundef ^^ hardline ^^
      separate_map hardline (doc_fundef_rhs ~mutrec:LaterFn rec_set) fundefs ^^ dot
 
-let rec doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
+let doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [FCL_aux (FCL_Funcl(id,_),annot) as funcl]
@@ -3094,7 +3094,7 @@ let doc_val pat exp =
   group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp) ^^ hardline ^^
   group (separate space [string "Hint Unfold"; idpp; colon; string "sail."]) ^^ hardline
 
-let rec doc_def unimplemented generic_eq_types def =
+let doc_def unimplemented generic_eq_types def =
   (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
   | DEF_spec v_spec -> doc_val_spec unimplemented v_spec

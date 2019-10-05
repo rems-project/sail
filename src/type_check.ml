@@ -592,7 +592,7 @@ end = struct
     let existing = try Bindings.find id env.overloads with Not_found -> [] in
     { env with overloads = Bindings.add id (existing @ ids) env.overloads }
 
-  let rec infer_kind env id =
+  let infer_kind env id =
     if Bindings.mem id builtin_typs then
       Bindings.find id builtin_typs
     else if Bindings.mem id env.variants then
@@ -1987,7 +1987,7 @@ and kid_order_constraint kind_map (NC_aux (aux, l) as nc) =
      let ord2, kind_map = kid_order_constraint kind_map nc2 in
      (ord1 @ ord2, kind_map)
 
-let rec alpha_equivalent env typ1 typ2 =
+let alpha_equivalent env typ1 typ2 =
   let counter = ref 0 in
   let new_kid () = let kid = mk_kid ("alpha#" ^ string_of_int !counter) in (incr counter; kid) in
 
@@ -2407,7 +2407,7 @@ let instantiate_simple_equations =
        find_eqs kid nexp1 @ find_eqs kid nexp2
     | _ -> []
   in
-  let rec find_eqs_quant kid (QI_aux (qi,_)) =
+  let find_eqs_quant kid (QI_aux (qi,_)) =
     match qi with
     | QI_id _ | QI_constant _ -> []
     | QI_constraint nc -> find_eqs kid nc
@@ -2580,11 +2580,9 @@ let destruct_atom (Typ_aux (typ_aux, _)) =
      end
   | _ -> None
 
-exception Not_a_constraint;;
+let assert_nexp env exp = destruct_atom_nexp env (typ_of exp)
 
-let rec assert_nexp env exp = destruct_atom_nexp env (typ_of exp)
-
-let rec combine_constraint b f x y = match b, x, y with
+let combine_constraint b f x y = match b, x, y with
   | true,  Some x, Some y -> Some (f x y)
   | true,  Some x, None   -> Some x
   | true,  None,   Some y -> Some y
@@ -2623,12 +2621,12 @@ let rec assert_constraint env b (E_aux (exp_aux, _) as exp) =
   | _ ->
      None
 
-let rec add_opt_constraint constr env =
+let add_opt_constraint constr env =
   match constr with
   | None -> env
   | Some constr -> Env.add_constraint constr env
 
-let rec add_constraints constrs env =
+let add_constraints constrs env =
   List.fold_left (fun env constr -> Env.add_constraint constr env) env constrs
 
 let solve_quant env = function

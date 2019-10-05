@@ -218,7 +218,7 @@ let rec variant_generic_typ id (Defs defs) =
 (* Returns a list of all the instantiations of a function id in an
    ast. Also works with union constructors, and searches for them in
    patterns. *)
-let rec instantiations_of spec id ast =
+let instantiations_of spec id ast =
   let instantiations = ref [] in
   let add_instantiation i =
     if KBindings.is_empty i then
@@ -263,7 +263,7 @@ let rec instantiations_of spec id ast =
 
   !instantiations
 
-let rec rewrite_polymorphic_calls spec id ast =
+let rewrite_polymorphic_calls spec id ast =
   let vs_ids = val_spec_ids ast in
 
   let rewrite_e_aux = function

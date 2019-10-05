@@ -233,7 +233,7 @@ module KOptMap = Map.Make(KOpt)
 module NexpSet = Set.Make(Nexp)
 module NexpMap = Map.Make(Nexp)
 
-let rec nexp_identical nexp1 nexp2 = (Nexp.compare nexp1 nexp2 = 0)
+let nexp_identical nexp1 nexp2 = (Nexp.compare nexp1 nexp2 = 0)
 
 let rec is_nexp_constant (Nexp_aux (nexp, _)) = match nexp with
   | Nexp_id _ | Nexp_var _ -> false
@@ -1329,7 +1329,7 @@ let is_unit_typ = function
   | Typ_aux (Typ_id u, _) -> string_of_id u = "unit"
   | _ -> false
 
-let rec is_number (Typ_aux (t,_)) =
+let is_number (Typ_aux (t,_)) =
   match t with
   | Typ_id (Id_aux (Id "int", _))
   | Typ_id (Id_aux (Id "nat", _))
@@ -2289,7 +2289,7 @@ let rec find_annot_defs sl = function
      find_annot_defs sl defs
   | [] -> None
 
-let rec find_annot_ast sl (Defs defs) = find_annot_defs sl defs
+let find_annot_ast sl (Defs defs) = find_annot_defs sl defs
 
 let string_of_lx lx =
   let open Lexing in

@@ -912,14 +912,14 @@ let map_instr_list f instrs =
 let map_instrs_list f instrs =
   f (List.map (map_instrs f) instrs)
 
-let rec instr_ids (I_aux (instr, _)) =
+let instr_ids (I_aux (instr, _)) =
   let reads, writes = instr_deps instr in
   NameSet.union reads writes
 
-let rec instr_reads (I_aux (instr, _)) =
+let instr_reads (I_aux (instr, _)) =
   fst (instr_deps instr)
 
-let rec instr_writes (I_aux (instr, _)) =
+let instr_writes (I_aux (instr, _)) =
   snd (instr_deps instr)
 
 let rec filter_instrs f instrs =

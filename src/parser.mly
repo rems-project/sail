@@ -103,7 +103,7 @@ let mk_map id args tannot mapcls n m = MD_aux (MD_mapping (id, args, tannot, map
 
 let doc_vs doc (VS_aux (v, l)) = VS_aux (v, Documented (doc, l))
 
-let qi_id_of_kopt (KOpt_aux (kopt_aux, l) as kopt) = QI_aux (QI_id kopt, l)
+let qi_id_of_kopt (KOpt_aux (_, l) as kopt) = QI_aux (QI_id kopt, l)
 
 let mk_recr r n m = (Rec_aux(r, loc n m))
 
@@ -534,8 +534,6 @@ atomic_typ:
     { mk_typ (ATyp_exist ($2, ATyp_aux (ATyp_lit (L_aux (L_true, loc $startpos $endpos)), loc $startpos $endpos), $4)) $startpos $endpos }
   | Lcurly kopt_list Comma typ Dot typ Rcurly
     { mk_typ (ATyp_exist ($2, $4, $6)) $startpos $endpos }
-  | Lcurly id Colon typ Dot typ Rcurly
-    { mk_typ (ATyp_base ($2, $4, $6)) $startpos $endpos }
 
 typ_list:
   | typ

@@ -293,7 +293,7 @@ let inline cdefs prefix should_inline instrs =
     | instr -> instr
   in
 
-  let rec inline_instr = function
+  let inline_instr = function
     | I_aux (I_funcall (clexp, false, function_id, args), aux) as instr when should_inline function_id ->
        begin match find_function function_id cdefs with
        | Some (CC_stack, ids, body) ->

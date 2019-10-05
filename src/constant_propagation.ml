@@ -691,7 +691,7 @@ let const_props target defs ref_vars =
          let kbindings = Util.map_filter is_nexp (KBindings.bindings unifiers) in
          DoesMatch ([id',exp],kbindings)
       | E_tuple es, P_tup ps ->
-         let rec check = function
+         let check = function
            | DoesNotMatch -> fun _ -> DoesNotMatch
            | GiveUp -> fun _ -> GiveUp
            | DoesMatch (s,ns) ->
@@ -782,8 +782,7 @@ let const_props target defs ref_vars =
     let rec findpat_generic description assigns = function
       | [] -> (Reporting.print_err l "Monomorphisation"
                                    ("Failed to find a case for " ^ description); None)
-      (* FIXME
-      | (Pat_aux (Pat_when (p,guard,exp),_))::tl -> begin
+      | (Pat_aux (Pat_case (p,[G_aux(G_if guard,g_l)],exp),_))::tl -> begin
         match check_pat p with
         | DoesNotMatch -> findpat_generic description assigns tl
         | DoesMatch (vsubst,ksubst) -> begin
@@ -798,11 +797,14 @@ let const_props target defs ref_vars =
         end
         | GiveUp -> None
       end
-      | (Pat_aux (Pat_exp (p,exp),_))::tl ->
-         match check_pat p with
+      | (Pat_aux (Pat_case (p,[],exp),_))::tl ->
+         begin match check_pat p with
          | DoesNotMatch -> findpat_generic description assigns tl
          | DoesMatch (subst,ksubst) -> Some (exp,subst,ksubst)
-         | GiveUp -> None *)
+         | GiveUp -> None
+         end
+      | (Pat_aux (_, l))::_ ->
+         Reporting.unreachable l __POS__ "Complex guards should not be introduced prior to monomorphisation"
     in findpat_generic (string_of_exp exp0) assigns cases
 
   and can_match exp =

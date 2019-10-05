@@ -1,0 +1,29 @@
+(env
+ (dev
+  (flags (:standard -w -33 -w -27 -w -8 -w -32 -w -26 -w -20))))
+
+(ocamllex
+  (modules lexer regex_lexer))
+
+(menhir
+  (modules parser regex_parser))
+
+(include_subdirs unqualified)
+(data_only_dirs gen_lib)
+
+(rule
+ (targets
+   value2.ml
+   regex.ml
+   sail2_values.ml
+   sail2_operators.ml
+   sail2_operators_bitlists.ml
+   sail2_prompt.ml
+   sail2_prompt_monad.ml
+   sail2_instr_kinds.ml)
+ (deps regex.lem value2.lem (glob_files gen_lib/*.lem))
+ (action (system "lem -wl_pat_comp ign -wl_pat_exh ign -wl_pat_fail ign -wl_rename ign -wl_comp_message ign -wl_unused_vars ign -ocaml %{deps} -outdir %{project_root}")))
+
+(executable
+  (name isail)
+  (libraries lem linksem linenoise yojson omd qcheck base64))

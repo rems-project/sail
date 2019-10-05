@@ -454,7 +454,7 @@ let freshen_id =
     | Id_aux (Operator x, l) -> Id_aux (Operator (x ^ "#m" ^ string_of_int n),Generated l)
 
 (* TODO: only freshen bindings that might be shadowed *)
-let rec freshen_pat_bindings p =
+let freshen_pat_bindings p =
   let rec aux (P_aux (p,(l,annot)) as pat) =
     let mkp p = P_aux (p,(Generated l, annot)) in
     match p with

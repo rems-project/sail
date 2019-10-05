@@ -1172,7 +1172,7 @@ let rewrite_simple_types env (Defs defs) =
     match vs_aux with
     | VS_val_spec (typschm, id, ext, is_cast) -> VS_aux (VS_val_spec (simple_typschm typschm, id, ext, is_cast), annot)
   in
-  let rec simple_lit (L_aux (lit_aux, l) as lit) =
+  let simple_lit (L_aux (lit_aux, l) as lit) =
     match lit_aux with
     | L_bin _ | L_hex _ ->
        E_list (List.map (fun b -> E_aux (E_lit b, simple_annot l bit_typ)) (vector_string_to_bit_list l lit_aux))
@@ -2093,7 +2093,7 @@ let remove_reference_types exp =
     | A_aux (A_typ t, a) -> A_aux (A_typ (rewrite_t t), a)
     | _ -> t_arg in
 
-  let rec rewrite_annot (l, tannot) =
+  let rewrite_annot (l, tannot) =
     match destruct_tannot tannot with
     | None -> l, dummy_tannot
     | Some (_, typ, _) -> l, replace_typ (rewrite_t typ) tannot in
@@ -2266,17 +2266,15 @@ struct
 type rlit =
   | RL_unit
   (* TODO: zero and one are currently replaced by RL_inf to deal with BU;
-     needs more careful thought about semantics of BU *)
+     needs more careful thought about semantics of BU
   | RL_zero
-  | RL_one
+  | RL_one *)
   | RL_true
   | RL_false
   | RL_inf
 
 let string_of_rlit = function
   | RL_unit -> "()"
-  | RL_zero -> "bitzero"
-  | RL_one -> "bitone"
   | RL_true -> "true"
   | RL_false -> "false"
   | RL_inf -> "..."
@@ -2680,7 +2678,7 @@ let rewrite_explicit_measure env (Defs defs) =
        Bindings.add id (mpat,mexp) measures
     | _ -> measures
   in
-  let rec scan_def measures = function
+  let scan_def measures = function
     | DEF_fundef fd -> scan_function measures fd
     | DEF_internal_mutrec fds -> List.fold_left scan_function measures fds
     | _ -> measures
@@ -2853,7 +2851,7 @@ let recheck_defs_without_effects env defs =
 (* Move loop termination measures into loop AST nodes.  This is used before
    type checking so that we avoid the complexity of type checking separate
    measures. *)
-let rec move_loop_measures (Defs defs) =
+let move_loop_measures (Defs defs) =
   let loop_measures =
     List.fold_left
       (fun m d ->

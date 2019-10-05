@@ -85,7 +85,7 @@ let rec doc_typ_pat (TP_aux (tpat_aux, _)) =
   | TP_var kid -> doc_kid kid
   | TP_app (f, tpats) -> doc_id f ^^ parens (separate_map (comma ^^ space) doc_typ_pat tpats)
 
-let rec doc_nexp nexp =
+let doc_nexp nexp =
   let rec atomic_nexp (Nexp_aux (n_aux, _) as nexp) =
     match n_aux with
     | Nexp_constant c -> string (Big_int.to_string c)
@@ -700,7 +700,7 @@ let doc_loop_measures l =
          space ^^ doc_exp e)
     l
 
-let rec doc_scattered (SD_aux (sd_aux, _)) =
+let doc_scattered (SD_aux (sd_aux, _)) =
   match sd_aux with
   | SD_function (_, _, _, id) ->
      string "scattered" ^^ space ^^ string "function" ^^ space ^^ doc_id id
@@ -721,7 +721,7 @@ let rec doc_scattered (SD_aux (sd_aux, _)) =
   | SD_unioncl (id, tu) ->
      separate space [string "union clause"; doc_id id; equals; doc_union tu]
 
-let rec doc_def def = group (match def with
+let doc_def def = group (match def with
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def

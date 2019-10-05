@@ -84,15 +84,15 @@ val print_err : Parse_ast.l -> string -> string -> unit
 (** Errors stop execution and print a message; they typically have a location and message.
 *)
 type error =
-  (** General errors, used for multi purpose. If you are unsure, use this one. *)
   | Err_general of Parse_ast.l * string
+  (** General errors, used for multi purpose. If you are unsure, use this one. *)
 
+  | Err_unreachable of Parse_ast.l * (string * int * int * int) * string
   (** Unreachable errors should never be thrown. It means that some
       code was excuted that the programmer thought of as unreachable *)
-  | Err_unreachable of Parse_ast.l * (string * int * int * int) * string
 
-  (** [Err_todo] indicates that some feature is unimplemented; it should be built using [err_todo]. *)
   | Err_todo of Parse_ast.l * string
+  (** [Err_todo] indicates that some feature is unimplemented; it should be built using [err_todo]. *)
 
   | Err_syntax of Lexing.position * string
   | Err_syntax_loc of Parse_ast.l * string

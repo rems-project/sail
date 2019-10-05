@@ -1099,4 +1099,4 @@ let default_fold_exp f x (E_aux (e,ann) as exp) =
   | E_internal_value _ -> x,exp
 
 let rec foldin_exp f x e = f (default_fold_exp (foldin_exp f)) x e
-let rec foldin_pexp f x e = default_fold_pexp (foldin_exp f) x e
+let foldin_pexp f x e = default_fold_pexp (foldin_exp f) x e

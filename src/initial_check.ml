@@ -186,8 +186,6 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
            ) kopts ([], ctx)
        in
        Typ_exist (kopts, to_ast_constraint ctx nc, to_ast_typ ctx atyp)
-    | P.ATyp_base (id, kind, nc) ->
-       raise (Reporting.err_unreachable l __POS__ "TODO")
     | _ -> raise (Reporting.err_typ l "Invalid type")
   in
   Typ_aux (aux, l)
@@ -580,7 +578,7 @@ let add_constructor id typq ctx =
 let anon_rec_constructor_typ record_id = function
   | P.TypQ_aux (P.TypQ_no_forall, l) -> P.ATyp_aux (P.ATyp_id record_id, Generated l)
   | P.TypQ_aux (P.TypQ_tq quants, l) ->
-     let rec quant_arg = function
+     let quant_arg = function
        | P.QI_aux (P.QI_id (P.KOpt_aux (P.KOpt_kind (_, vs, _), l)), _) ->
           List.map (fun v -> P.ATyp_aux (P.ATyp_var v, Generated l)) vs
        | P.QI_aux (P.QI_constraint _, _) -> []

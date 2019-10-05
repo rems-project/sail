@@ -151,7 +151,7 @@ let arith_shiftr_mword w n = Machine_word.arithShiftRight w (nat_of_int n)
 let rotl_mword w n = Machine_word.rotateLeft (nat_of_int n) w
 let rotr_mword w n = Machine_word.rotateRight (nat_of_int n) w
 
-let rec arith_op_no0 (op : integer -> integer -> integer) l r =
+let arith_op_no0 (op : integer -> integer -> integer) l r =
   if r = 0
   then Nothing
   else Just (op l r)

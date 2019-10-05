@@ -1423,7 +1423,7 @@ let doc_mutrec_lem = function
      string "let rec " ^^
      separate_map (hardline ^^ string "and ") doc_fundef_rhs_lem fundefs
 
-let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
+let doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | FCL_aux (FCL_Funcl(id, pexp),annot) :: _
@@ -1529,7 +1529,7 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   in
   separate_map hardline doc_field fields
 
-let rec doc_def_lem type_env def =
+let doc_def_lem type_env def =
   (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
   | DEF_spec v_spec -> doc_spec_lem type_env v_spec

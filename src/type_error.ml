@@ -57,7 +57,7 @@ type suggestion =
   | Suggest_add_constraint of n_constraint
   | Suggest_none
 
-let rec analyze_unresolved_quant locals ncs = function
+let analyze_unresolved_quant locals ncs = function
   | QI_aux (QI_constraint nc, _) ->
      let gen_kids = List.filter is_kid_generated (KidSet.elements (tyvars_of_constraint nc)) in
      if gen_kids = [] then
@@ -153,7 +153,7 @@ let message_of_type_error =
   in
   msg
 
-let rec string_of_type_error err =
+let string_of_type_error err =
   let open Error_format in
   let b = Buffer.create 20 in
   format_message (message_of_type_error err) (buffer_formatter b);

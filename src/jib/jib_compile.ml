@@ -101,7 +101,7 @@ let rec is_bitvector = function
   | AV_lit (L_aux (L_one, _), _) :: avals -> is_bitvector avals
   | _ :: _ -> false
 
-let rec value_of_aval_bit = function
+let value_of_aval_bit = function
   | AV_lit (L_aux (L_zero, _), _) -> Sail2_values.B0
   | AV_lit (L_aux (L_one, _), _) -> Sail2_values.B1
   | _ -> assert false

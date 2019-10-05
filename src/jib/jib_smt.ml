@@ -271,7 +271,7 @@ let unsigned_size ?checked:(checked=true) ctx n m smt =
   else
     Extract (n - 1, 0, smt)
 
-let rec smt_conversion ctx from_ctyp to_ctyp x =
+let smt_conversion ctx from_ctyp to_ctyp x =
   match from_ctyp, to_ctyp with
   | _, _ when ctyp_equal from_ctyp to_ctyp -> x
   | CT_constant c, CT_fint sz ->

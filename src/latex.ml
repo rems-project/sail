@@ -327,7 +327,7 @@ let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext, is_cast), _)) =
   ^^ colon ^^ space
   ^^ Pretty_print_sail.doc_typschm ~simple:true ts
 
-let rec latex_command cat id no_loc ((l, _) as annot) =
+let latex_command cat id no_loc ((l, _) as annot) =
   state.this <- Some id;
   let labelling = match cat with
     | Val -> sprintf "\\label{%s}" (refcode_id id)

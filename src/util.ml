@@ -244,7 +244,7 @@ let option_bind f = function
   | None -> None
   | Some(o) -> f o
 
-let rec option_binop f x y = match x, y with
+let option_binop f x y = match x, y with
   | Some x, Some y -> Some (f x y)
   | _ -> None
 
