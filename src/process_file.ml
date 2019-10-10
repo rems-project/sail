@@ -250,10 +250,18 @@ let opt_ddump_tc_ast = ref false
 let opt_ddump_rewrite_ast = ref None
 let opt_dno_cast = ref false
 
+let opt_ddump_tc_raw_ast = ref false
+      
 let check_ast (env : Type_check.Env.t) (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.Env.t =
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
   let ast, env = Type_error.check env defs in
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_defs stdout ast else () in
+  let _ = if !opt_ddump_tc_raw_ast then  
+            Printf.printf "%s\n" (Ast.show_defs (fun fmt _ -> Format.pp_print_text fmt "(.)" ) ast)
+          else () in 
+  let () = match !(Minisail.opt_dmsp_check) with
+    | Some vrb -> Minisail.check_ast vrb ast 
+    | None -> () in
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)
 

@@ -370,6 +370,12 @@ let options = Arg.align ([
   ( "-dsmtfuzz",
     Arg.Tuple [set_target "smt"; Arg.Set opt_smt_fuzz],
     " (debug) fuzz sail SMT builtins");
+  ( "-dmsp_check",
+      Arg.Int (fun vrb -> Minisail.opt_dmsp_check := Some vrb ),
+      "(debug) pass type checked AST to MiniSail type checker");
+  ( "-ddump_tc_raw_ast",
+    Arg.Set opt_ddump_tc_raw_ast,
+    "(debug) dump the typechecked raw ast to stdout");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");

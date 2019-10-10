@@ -1,0 +1,32 @@
+Notes on conversion from Sail to MiniSail.
+
+* General Principles
+MiniSail is more structural / Sail nominal?
+We have B_id for base type and structural for tau
+
+Target is prelude and sail-riscv.
+
+N/S - Raises exception
+
+First list of top level AST nodes and what happens:
+
+DEF_kind
+DEF_type
+	TD_variant
+	TD_record
+	TD_abbrev
+	TD_enum
+	TD_bitfield  N/S
+DEF_fundef
+DEF_val
+DEF_overload
+DEF_fixity
+DEF_spec
+DEF_default
+DEF_scattered
+DEF_reg_dec
+DEF_mapdef    N/S
+DEF_pragma    N/S
+DEF_measure
+DEF_loop_measures
+DEF_internal_mutrec

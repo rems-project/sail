@@ -68,6 +68,7 @@ val opt_just_check : bool ref
 val opt_ddump_tc_ast : bool ref
 val opt_ddump_rewrite_ast : ((string * int) option) ref
 val opt_dno_cast : bool ref
+val opt_ddump_tc_raw_ast : bool ref
 
 val opt_lem_output_dir : (string option) ref
 val opt_isa_output_dir : (string option) ref
