@@ -239,23 +239,23 @@ and strip_typ_aux : typ_aux -> typ_aux = function
      Typ_exist ((List.map strip_kinded_id kopts), strip_n_constraint constr, strip_typ typ)
   | Typ_app (id, args) -> Typ_app (strip_id id, List.map strip_typ_arg args)
 and strip_typ : typ -> typ = function
-  | Typ_aux (typ_aux, _) -> Typ_aux (strip_typ_aux typ_aux, Parse_ast.Unknown)
-and strip_typq = function TypQ_aux (typq_aux, l) -> TypQ_aux (strip_typq_aux typq_aux, Parse_ast.Unknown)
+  | Typ_aux (typ_aux, l) -> Typ_aux (strip_typ_aux typ_aux, l)
+and strip_typq = function TypQ_aux (typq_aux, l) -> TypQ_aux (strip_typq_aux typq_aux, l)
 and strip_typq_aux = function
   | TypQ_no_forall -> TypQ_no_forall
   | TypQ_tq quants -> TypQ_tq (List.map strip_quant_item quants)
 and strip_quant_item = function
-  | QI_aux (qi_aux, _) -> QI_aux (strip_qi_aux qi_aux, Parse_ast.Unknown)
+  | QI_aux (qi_aux, l) -> QI_aux (strip_qi_aux qi_aux, l)
 and strip_qi_aux = function
   | QI_id kinded_id -> QI_id (strip_kinded_id kinded_id)
   | QI_constant kopts -> QI_constant (List.map strip_kinded_id kopts)
   | QI_constraint constr -> QI_constraint (strip_n_constraint constr)
 and strip_kinded_id = function
-  | KOpt_aux (kinded_id_aux, _) -> KOpt_aux (strip_kinded_id_aux kinded_id_aux, Parse_ast.Unknown)
+  | KOpt_aux (kinded_id_aux, l) -> KOpt_aux (strip_kinded_id_aux kinded_id_aux, l)
 and strip_kinded_id_aux = function
   | KOpt_kind (kind, kid) -> KOpt_kind (strip_kind kind, strip_kid kid)
 and strip_kind = function
-  | K_aux (k_aux, _) -> K_aux (k_aux, Parse_ast.Unknown)
+  | K_aux (k_aux, l) -> K_aux (k_aux, l)
 
 let rec typ_constraints (Typ_aux (typ_aux, l)) =
   match typ_aux with

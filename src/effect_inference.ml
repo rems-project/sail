@@ -48,74 +48,16 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-(** Generic graph type based on OCaml Set and Map *)
+open Slice
 
-module type OrderedType =
-  sig
-    type t
-    val compare : t -> t -> int
-  end
+module NG = Graph.Make(Node)
+module NodeSet = NG.NS
 
-module type S =
-  sig
-    type graph
-    type node
-    type node_set
-
-    (** Re-export some of the underlying set operations. This is
-       needed to keep the OCaml type checker happy when we need to
-       work with node sets. *)
-    module NS : sig
-      type elt = node
-      type t = node_set
-
-      val empty : t
-      val is_empty : t -> bool
-      val elements : t -> elt list
-      val compare : t -> t -> int
-      val singleton : elt -> t
-      val map : (elt -> elt) -> t -> t
-      val union : t -> t -> t
-      val inter : t -> t -> t
-    end
-
-    val leaves : graph -> node_set
-
-    val empty : graph
-
-    (** Add an edge from the first node to the second node, creating
-       the nodes if they do not exist. *)
-    val add_edge : node -> node -> graph -> graph
-    val add_edges : node -> node list -> graph -> graph
-
-    val children : graph -> node -> node list
-
-    val iter : (node -> node_set -> unit) -> graph -> unit
-
-    (** Return the set of nodes that are reachable from the first set
-       of nodes (roots), without passing through the second set of
-       nodes (cuts). *)
-    val reachable : node_set -> node_set -> graph -> node_set
-
-    (** Prune a graph from roots to cuts. *)
-    val prune : node_set -> node_set -> graph -> graph
-
-    val remove_self_loops : graph -> graph
-
-    val reverse : graph -> graph
-
-    exception Not_a_DAG of node * graph;;
-
-    (** Topologically sort a graph. Throws Not_a_DAG if the graph is
-       not directed acyclic. *)
-    val topsort : graph -> node list
-
-    val topsort_condensed : graph -> node_set list
-
-    val make_dot : (node -> string) -> (node -> node -> string) -> (node -> string) -> out_channel -> graph -> unit
-  end
-
-module Make(Ord: OrderedType) : S
-       with type node = Ord.t
-        and type node_set = Set.Make(Ord).t
-        and type graph = Set.Make(Ord).t Map.Make(Ord).t
+let global_effect_order ast =
+  let callgraph = graph_of_ast ast in
+  let effect_order = NG.topsort_condensed (NG.reverse callgraph) in
+  List.map (fun scc ->
+      List.fold_left (fun deps node_in_scc ->
+          NodeSet.union deps (NG.reachable (NodeSet.singleton node_in_scc) NodeSet.empty callgraph)
+        ) NodeSet.empty (NodeSet.elements scc)
+    ) effect_order

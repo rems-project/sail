@@ -1249,7 +1249,7 @@ and typ_compare (Typ_aux (t1,_)) (Typ_aux (t2,_)) =
      | n -> n)
   | Typ_bidir (t1,t2), Typ_bidir (t3,t4) ->
      (match typ_compare t1 t3 with
-     | 0 -> typ_compare t2 t3
+     | 0 -> typ_compare t2 t4
      | n -> n)
   | Typ_tup ts1, Typ_tup ts2 -> Util.compare_list typ_compare ts1 ts2
   | Typ_exist (ks1,nc1,t1), Typ_exist (ks2,nc2,t2) ->

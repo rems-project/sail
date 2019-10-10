@@ -56,9 +56,23 @@ module type OrderedType =
 
 module type S =
   sig
-    type node
     type graph
+    type node
     type node_set
+
+    module NS : sig
+      type elt = node
+      type t = node_set
+
+      val empty : t
+      val is_empty : t -> bool
+      val elements : t -> elt list
+      val compare : t -> t -> int
+      val singleton : elt -> t
+      val map : (elt -> elt) -> t -> t
+      val union : t -> t -> t
+      val inter : t -> t -> t
+    end
 
     val leaves : graph -> node_set
 
@@ -70,6 +84,8 @@ module type S =
     val add_edges : node -> node list -> graph -> graph
 
     val children : graph -> node -> node list
+
+    val iter : (node -> node_set -> unit) -> graph -> unit
 
     (** Return the set of nodes that are reachable from the first set
        of nodes (roots), without passing through the second set of
@@ -88,6 +104,8 @@ module type S =
     (** Topologically sort a graph. Throws Not_a_DAG if the graph is
        not directed acyclic. *)
     val topsort : graph -> node list
+
+    val topsort_condensed : graph -> node_set list
 
     val make_dot : (node -> string) -> (node -> node -> string) -> (node -> string) -> out_channel -> graph -> unit
   end
@@ -115,6 +133,8 @@ module Make(Ord: OrderedType) = struct
       NS.elements (NM.find caller cg)
     with
     | Not_found -> []
+
+  let iter f cg = NM.iter f cg
 
   let fix_some_leaves cg nodes =
     NS.fold (fun leaf cg -> if NM.mem leaf cg then cg else NM.add leaf NS.empty cg) nodes cg
@@ -210,8 +230,54 @@ module Make(Ord: OrderedType) = struct
         visit unmarked; topsort' ()
       with
       | Not_found -> ()
-
     in topsort' (); !list
+
+  let topsort_condensed cg =
+    let marked = ref NS.empty in
+    let temp_marked = ref NS.empty in
+    let list = ref [] in
+    let keys = NM.bindings cg |> List.map fst in
+    let find_unmarked keys = List.find (fun node -> not (NS.mem node !marked)) keys in
+
+    let rec visit node =
+      if NS.mem node !temp_marked then
+        let scc = prune_loop node cg in
+        let scc_nodes = ref NS.empty in
+        NM.iter (fun node _ -> scc_nodes := NS.add node !scc_nodes) scc;
+        let scc_children =
+          List.fold_left (fun acc children -> NS.union acc (NS.diff children !scc_nodes)) NS.empty
+            (List.map (fun n -> NM.find n cg) (NS.elements !scc_nodes))
+        in
+        NS.iter (fun child -> visit child) scc_children;
+        NS.iter (fun node -> marked := NS.add node !marked) !scc_nodes;
+        list := !scc_nodes :: !list
+      else if NS.mem node !marked then
+        ()
+      else
+        let children =
+          try NM.find node cg with
+          | Not_found -> NS.empty
+        in
+        temp_marked := NS.add node !temp_marked;
+        NS.iter (fun child -> visit child) children;
+        marked := NS.add node !marked;
+        temp_marked := NS.remove node !temp_marked;
+        list := NS.singleton node :: !list
+    in
+
+    let rec topsort' () =
+      try
+        let unmarked = find_unmarked keys in
+        visit unmarked; topsort' ()
+      with
+      | Not_found -> ()
+
+    in
+    topsort' ();
+    List.rev !list
+    |> List.fold_left (fun (acc, seen) ns -> (NS.diff ns seen :: acc, NS.union ns seen)) ([], NS.empty)
+    |> fst
+    |> List.filter (fun ns -> not (NS.is_empty ns))
 
   let make_dot node_color edge_color string_of_node out_chan graph =
     Util.opt_colors := false;
