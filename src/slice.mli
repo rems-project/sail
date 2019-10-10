@@ -59,6 +59,8 @@ type node =
   | Overload of id
   | Constructor of id
 
+val node_id : node -> id
+                 
 module Node : sig
   type t = node
   val compare : node -> node -> int

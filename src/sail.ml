@@ -590,6 +590,11 @@ let main () =
           (!opt_splice) (ast, type_envs)
       in
 
+      let effs = Effect_inference.global_effect_inference ast in
+      Ast_util.(
+        List.iter (fun (id, eff) -> prerr_endline (string_of_id id ^ ": " ^ string_of_effect eff)) (Bindings.bindings effs)
+      );
+      
       (* self_test ast type_envs; *)
 
       Reporting.opt_warnings := false; (* Don't show warnings during re-writing for now *)
