@@ -47,9 +47,13 @@ open Minisailplus_ast.Contexts
 open Minisailplus_pp
 
 open Convert_typ
+
+exception NotSupported of string;;
        
 let add_abbrev ctx id tq typ (mods : mods ) (ceks : ceks) = { ctx with types = TBindings.add id (CtxType (tq,typ,mods,ceks)) ctx.types }
-                    
+
+let add_kind ctx id tq ce (mods : mods) ( ceks : ceks ) = { ctx with kind_abbrev = KABindings.add id (CtxKind (tq,ce, mods, ceks)) ctx.kind_abbrev }
+                                                              
 (*val to_ms_e : ctx -> unit A.exp -> e
 val to_ms_e_aux : ctx -> unit A.exp -> P.l -> e*)
 
@@ -160,7 +164,7 @@ and  to_ms_typquant ctx ( (A.TypQ_aux (tq,loc)) : A.typquant) =
   let rec convert_qis qis kids = match qis with
       [] -> kids
      | (x::xs) -> match x with
-                    (A.QI_aux (QI_constraint nc,_)) -> let c = to_ms_constraint nc in
+                    (A.QI_aux (QI_constraint nc,_)) -> let c = to_ms_constraint ctx nc in
                                                   let fv = fvs_cp c in
                                                   let kd = List.map fst kids in 
                                                   let fv = List.filter (fun v -> not (List.mem v kd)) fv in
@@ -171,7 +175,11 @@ and  to_ms_typquant ctx ( (A.TypQ_aux (tq,loc)) : A.typquant) =
                                                   | [] -> raise (Failure "to_ms_typquant Constraint with no kid"))
                   | (QI_aux (QI_id kid,_)) -> let (k,b) = to_ms_kind kid in
                                               convert_qis xs ((VNamed (convert_to_isa k),
-                                                                (b, C_true)) :: kids)
+                                                               (b, C_true)) :: kids)
+                  | (QI_aux (QI_constant [kid],_)) -> let (k,b) = to_ms_kind kid in
+                                              convert_qis xs ((VNamed (convert_to_isa k),
+                                                               (b, C_true)) :: kids)
+                  | _ -> raise (Failure ("to_ms_typquant. pattern fail loc=" ^ (pp_location loc)))
 
   in match tq with
        TypQ_no_forall -> (ctx,[])
@@ -226,7 +234,8 @@ let convert_tq_typ ctx loc tq typ = match typ with
      *)
      let (b,c,tout,ceks) = to_ms_fun loc ctx kids tin tout in
      ([],b,c,tout)
-         
+  | A.Typ_aux (Typ_bidir _, _) ->
+     raise (NotSupported ("Typ_bidir loc=" ^ (pp_location loc)))
   | _ -> Printf.eprintf "Unknown type scheme pattern %s\n" (pp_location loc);
          Printf.eprintf "%s\n"  (Ast.show_typ typ);
          raise (Failure "Unknown type scheme")
@@ -312,7 +321,7 @@ and  to_ms_pat ctx (A.P_aux (pat,(loc,_)) as full_pat) : patp = match pat with
   | P_id (Id_aux (Id id,_)) ->
      Printf.eprintf "Got a P_id %s\n" id;
      Pp_id (convert_loc loc, (convert_to_isa id))
-  | P_var (parg,typ) -> raise (Failure ("P_var fixme")) (*to_ms_pat_as_typ ctx parg typ*)
+  | P_var (parg,typ) -> raise (Failure ("P_var fixme" ^ (pp_location loc))) (*to_ms_pat_as_typ ctx parg typ*)
 (*  | (P_app (Id_aux (Id id,_), [parg] )) -> let p = to_ms_pat ctx parg in
                                            Pp_app (convert_loc loc, id, p)*)
   | (P_app (Id_aux (Id id,_), pargs )) -> let ps = List.map (to_ms_pat ctx) pargs  in
@@ -391,8 +400,8 @@ and  to_ms_e_aux ( ctx : 'a ctx ) ( exp : 'a A.exp_aux) ( loc : P.l )  =
   | E_cast (typ,exp) -> Ep_cast (lc, to_ms_typ ctx typ, to_ms_e ctx exp)
   | E_list es -> Ep_list (lc, List.map (fun e -> to_ms_e ctx e ) es)
   | E_cons (e1,e2) -> Ep_cons (lc, to_ms_e ctx e1, to_ms_e ctx e2)
-  | E_constraint ncons -> Ep_constraint(lc, to_ms_constraint ncons)
-  | E_sizeof nexp -> Ep_sizeof( lc, to_ms_ce nexp)
+  | E_constraint ncons -> Ep_constraint(lc, to_ms_constraint ctx ncons)
+  | E_sizeof nexp -> Ep_sizeof( lc, to_ms_ce ctx nexp)
   | E_record_update (e1,es) -> Ep_record_update(lc, to_ms_e ctx e1, List.map (convert_fexp_e ctx loc) es)
   | E_let (lb, exp_s ) -> let (pat,exp,loc,tid) = to_ms_letbind ctx lb in
                           Ep_let(lc, LBp_val (lc, pat, exp), to_ms_e ctx exp_s)
@@ -474,9 +483,6 @@ let to_ms_funcl_pexp ctx (A.Pat_aux (Pat_exp ( pat,exp), (loc,_))) =
       let lc = convert_loc loc in 
       PEXPp_exp (to_ms_pat ctx pat, to_ms_e ctx exp)
 
-let to_ms_funcl ctx funcl = match funcl with
-    A.FCL_aux (A.FCL_Funcl ((Id_aux (Id s,_)), pexp ), (loc,_)) ->
-       FCLp_funcl (convert_loc loc, convert_to_isa s, to_ms_funcl_pexp ctx pexp)
 
 
 (* FIXME Use filter_map or similar ?*)
@@ -486,6 +492,12 @@ let pick_some (xs : ('a option) list) : 'a option = List.fold_left (fun y x  -> 
 
 let function_name funcl = match funcl with                                                                    
     (A.FCL_aux (FCL_Funcl (Id_aux (Id f,_), _),_)) -> f
+  | (A.FCL_aux (FCL_Funcl (Id_aux (Operator f,_), _),_)) -> f
+
+                                                              
+let to_ms_funcl ctx funcl = match funcl with
+    A.FCL_aux (A.FCL_Funcl ((Id_aux (_,_)), pexp ), (loc,_)) ->
+       FCLp_funcl (convert_loc loc, convert_to_isa (function_name funcl), to_ms_funcl_pexp ctx pexp)
 
 
 let to_ms_variant_typ name t : tau = let ls = TBindings.fold (fun k v l -> ( (convert_to_isa k,v)::l) ) t []
@@ -666,13 +678,22 @@ let to_ms_typedef ctx  (A.TD_aux (aux,(l,_)) : 'a A.type_def) =
      let ctx = add_abbrev ctx id typq record [] [] in
      (ctx, Some (DEFp_typedef (lc,convert_to_isa id, typq, record )))
                                                               
-  | A.TD_abbrev ( Id_aux (Id id, _), tq , A_aux( A_typ typ, _)) -> (* FIXME Now has kind included. USe for what? *)
-     Printf.eprintf "type abbrev %s\n" (id);
+  | A.TD_abbrev ( Id_aux (Id id, loc), tq , A_aux( A_typ typ, _)) -> (* FIXME Now has kind included. USe for what? *)
+     Printf.eprintf "type abbrev %s loc=%s\n" (id) (pp_location loc);
      let (ctx,tq) = to_ms_typquant ctx tq in
      let (mods,ceks,_) = convert_invert_typ ctx (List.map (fun (VNamed k,(_,_)) -> k ) tq) (CE_val (V_var xvar) ) typ in
      let typ = to_ms_typ ctx typ in 
      let kvars = List.map (fun (x,y) -> x) tq in
      (add_abbrev ctx id tq typ mods ceks, Some (DEFp_typedef (lc, convert_to_isa id, tq,typ)))
+       
+  | A.TD_abbrev ( Id_aux (Id id, _), tq , A_aux( A_nexp nexp, _)) -> (* FIXME. Only assuming kind = Int *)
+     Printf.eprintf "type abbrev kind %s\n" (id);
+     let (ctx,tq) = to_ms_typquant ctx tq in
+     let (mods,ceks,_) = ([],[],[]) in
+     let ce = to_ms_ce ctx nexp in
+     let kvars = List.map (fun (x,y) -> x) tq in
+     (add_kind ctx id tq ce mods ceks, None )
+
        
   | A.TD_enum (Id_aux (Id id,_), id_list , _) ->
      let variant = List.fold_left (fun var x -> TBindings.add (up_id x) (to_ms_typ ctx (Typ_aux (Typ_id (mk_id "unit"),l ))) var) TBindings.empty id_list in
@@ -692,7 +713,7 @@ let add_kids ctx loc kids = List.fold_left (fun ctx (VNamed x,(b,c)) ->
                             | B_var _ -> { ctx with kinds = KBindings.add x (A.K_aux (K_type, loc)) ctx.kinds }
                             | B_bool -> { ctx with kinds = KBindings.add x (A.K_aux (K_order, loc)) ctx.kinds }) ctx kids
                 
-let to_ms_def ctx d  =
+let to_ms_def_aux ctx d  =
   let lc = Loc_unknown in
 
   match d with
@@ -732,8 +753,10 @@ let to_ms_def ctx d  =
       
  | DEF_fixity _ -> (ctx,None)
 
- | DEF_spec (VS_aux (VS_val_spec (ts,Id_aux(Id id,_) , _ ,_),(loc,_))) ->
-    (try 
+ | DEF_spec (VS_aux (VS_val_spec (ts,Id_aux( id ,_) , _ ,_),(loc,_))) ->
+    
+    (try
+      let id = (match id with Id x -> x | Operator x -> x) in
       let ((kids,b,c,t) as ftype) = to_ms_typschm ctx ts in 
       let ctx = { ctx with funs = FBindings.add id ftype ctx.funs } in
       (ctx, Some (DEFp_spec (convert_loc loc,  (convert_to_isa id),
@@ -764,6 +787,13 @@ let to_ms_def ctx d  =
                                    
  | DEF_internal_mutrec _ -> raise (Failure "Mutrec not supported")
 
+let to_ms_def ctx def =
+  try
+    to_ms_def_aux ctx def
+  with NotSupported s ->
+    Printf.eprintf "DEF form not supported (%s) \n" (Ast.show_def (fun fmt _ -> Format.pp_print_text fmt "(.)" ) def);
+    (ctx,None)
+                                  
 let append_some xs x = match x with
   | Some x -> xs @ [x]
   | None -> xs
@@ -774,7 +804,7 @@ let convert_ast ((A.Defs sail_defs) : 'a A.defs ) : progp =
   (* Process type defs first. Some may be scattered *)
   let (ctx,defs) = List.fold_left (fun (ctx,y) x ->
                               match x with
-                              (*                              | A.DEF_type _ -> let (ctx,x) = to_ms_def ctx x in (ctx, append_some y x )*)
+                              | A.DEF_type _ -> let (ctx,x) = to_ms_def ctx x in (ctx, append_some y x )
                               | A.DEF_scattered (SD_aux (sd,(loc,_))) when is_union_sd sd -> let (ctx,x) = to_ms_scattered ctx sd loc  in (ctx,append_some y x)
                               | _ -> (ctx,y))
                             (initial_ctx,[]) sail_defs in
@@ -782,9 +812,9 @@ let convert_ast ((A.Defs sail_defs) : 'a A.defs ) : progp =
   
   let (ctx,defs) = List.fold_left (fun (ctx,y) x ->
                               match x with
-                              | A.DEF_type _ -> let (ctx,x) = to_ms_def ctx x in (ctx, append_some y x )
+                              (*                              | A.DEF_type _ -> let (ctx,x) = to_ms_def ctx x in (ctx, append_some y x )*)
                               | A.DEF_scattered (SD_aux (sd,(loc,_))) when is_fun_sd sd -> let (ctx,x) = to_ms_scattered ctx sd loc  in (ctx,append_some y x)
-                              | A.DEF_scattered (SD_aux (sd,(loc,_))) when is_union_sd sd -> let (_,x) = to_ms_scattered ctx sd loc  in (ctx,append_some y x)
+                              | A.DEF_scattered (SD_aux (sd,(loc,_))) when is_union_sd sd -> let (_,x) = to_ms_scattered ctx sd loc  in (ctx,append_some y x) (* Why is this repeated? *)
                               | _ -> let (ctx,x) = to_ms_def ctx x in (ctx,append_some y x))
                             ( { initial_ctx with types = ctx.types; ended = ctx.ended },[]) sail_defs in
   

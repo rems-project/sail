@@ -81,6 +81,7 @@ and pp_raw_uop x = match x with
 | Exp -> string "Exp"
 | Neg -> string "Neg"
 | Not -> string "Not"
+| Abs -> string "Abs"
 
 and pp_raw_cep x = match x with
 | CE_val(vp) -> string "CE_val" ^^ string "(" ^^ pp_raw_vp vp ^^ string ")"
@@ -283,6 +284,7 @@ and pp_uop x = match x with
 | Exp -> string "exp"
 | Neg -> string "neg"
 | Not -> string "not"
+| Abs -> string "abs"
 
 and pp_cep x = match x with
 | CE_val(vp) -> pp_vp vp

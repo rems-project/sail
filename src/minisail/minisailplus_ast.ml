@@ -1329,7 +1329,7 @@ module SyntaxVCT : sig
   type order = Ord_inc | Ord_dec | Ord_def
   val equal_order : order -> order -> bool
   type xp = VNamed of string | VIndex
-  type uop = Len | Exp | Neg | Not
+  type uop = Len | Exp | Neg | Not | Abs
   type bop = Plus | Minus | Times | Div | Mod | LEq | LT | GT | GEq | Eq | And |
     Or | NEq
   type lit = L_unit | L_zero | L_one | L_true | L_false | L_num of Z.t |
@@ -1402,7 +1402,7 @@ let rec equal_order x0 x1 = match x0, x1 with Ord_dec, Ord_def -> false
 
 type xp = VNamed of string | VIndex;;
 
-type uop = Len | Exp | Neg | Not;;
+type uop = Len | Exp | Neg | Not | Abs;;
 
 type bop = Plus | Minus | Times | Div | Mod | LEq | LT | GT | GEq | Eq | And |
   Or | NEq;;

@@ -1,32 +1,78 @@
 Notes on conversion from Sail to MiniSail.
 
 * General Principles
-MiniSail is more structural / Sail nominal?
-We have B_id for base type and structural for tau
+
+- Distinguish between what MiniSail actually supports and can be done on paper and what has been implemented in
+convert_ast.ml
+
+* Highlights
+- Conversion of S-types to MS-types partially support in convert code but possible on paper (95% certain)
+- Mapping constructs desugared to pair functions with matching
+- Registers - if type maps to a MS type. Vector register - unconstrained element
+
+
 
 Target is prelude and sail-riscv.
 
-N/S - Raises exception
+The information below tracks in a AST-hierarchical way what parts of Sail are supported in
+MiniSailPlus. It is more complex than simple yes/no as for some constructs, it depends.
+Furthermore, types in Sail and MiniSail are manifestly different and there are some restrictions
+on what types can be mapped (along the lines of the constraints). This is not included in the information
+below. TODO: Summarise what this is.
+
+The thing to consider are:
+- Is it currently being translated in MiniSail. Maybe just convert_ast.ml needs fixing.
+- Does it require and easy/difficult extension to MiniSail
+
+
+* Key 
+--- Not supported. Raises exception or ignores
+++ Fully supported at this level at below in the AST (taking into account typ mapping restrictions)
++- Partial support at this level or down. To see full support, you need to go down the AST.
 
 First list of top level AST nodes and what happens:
 
-DEF_kind
+DEF_kind             -- (none in riscv)
 DEF_type
-	TD_variant
-	TD_record
-	TD_abbrev
-	TD_enum
-	TD_bitfield  N/S
-DEF_fundef
-DEF_val
-DEF_overload
-DEF_fixity
-DEF_spec
-DEF_default
-DEF_scattered
-DEF_reg_dec
-DEF_mapdef    N/S
-DEF_pragma    N/S
-DEF_measure
-DEF_loop_measures
-DEF_internal_mutrec
+	TD_variant  +-
+	TD_record   +-
+	TD_abbrev   -+ prelude: bits, regfps = list, type xlen : Int = 64, mem_meta=unit, Int : constraint...
+	TD_enum     +-
+	TD_bitfield  -- none in riscv
+DEF_fundef            +-
+DEF_val               +-
+DEF_overload          ++
+DEF_fixity            --  Seen in model/prelude for new operators but ok as only relevant to parsing Sail
+DEF_spec              +-
+DEF_default           +-  Only for order. ok for riscv
+DEF_scattered         +-
+DEF_reg_dec           +-  effects are ignored. Not sure there are typing rules for registers
+                          single register ok; vector registers - won't be able to spec. constraint on elements?
+DEF_mapdef            --  Some in model/riscv_insts_base.sail. Desugar to pair of functions with matches
+DEF_pragma            --  (none in riscv)
+DEF_measure           --  (none in riscv)
+DEF_loop_measures     --  (none in riscv)
+DEF_internal_mutrec   --  (none in riscv)
+
+
+Registers
+
+Effects - None
+
+Expressions -
+  * Surface mapping between the two ok
+  * Vector. Only have vec and concat.
+            Missing access, subrange, update, update_subrange, append
+    Only uses E_vector (access)	    BUT the others are builtins in prelude.
+
+Patterns
+  * Missing not, or
+  For RISCV:  Ok.
+
+
+LValue -
+  Very simple in MSP: mutable, cast, tuple,field
+  Sail: id, deref, app, case, tup, vector concat, vector access, range and field
+  In RISCV these are used:  id, field, deref, vector_range[a few, writeCSR], cast
+
+
