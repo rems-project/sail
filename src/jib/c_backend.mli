@@ -89,7 +89,7 @@ val opt_extra_arguments : string option ref
    definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
    of the original function to be compiled. Enabled using the -memo
    flag. Uses Marshal so it's quite picky about the exact version of
-b   the Sail version. This cache can obviously become stale if the C
+   the Sail version. This cache can obviously become stale if the C
    backend changes - it'll load an old version compiled without said
    changes. *)
 val opt_memo_cache : bool ref
@@ -100,7 +100,8 @@ val optimize_primops : bool ref
 val optimize_hoist_allocations : bool ref
 val optimize_struct_updates : bool ref
 val optimize_alias : bool ref
-val optimize_int128 : bool ref
+val optimize_fixed_int : bool ref
+val optimize_fixed_bits : bool ref
 
 (** Convert a typ to a IR ctyp *)
 val ctyp_of_typ : Jib_compile.ctx -> Ast.typ -> ctyp

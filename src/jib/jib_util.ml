@@ -919,7 +919,7 @@ let rec infer_call op vs =
   | (Unsigned n | Signed n), _ -> CT_fint n
   | (Zero_extend n | Sign_extend n), [v] ->
      begin match cval_ctyp v with
-     | CT_fbits (_, ord) | CT_sbits (_, ord) | CT_lbits ord ->
+     | CT_fbits (_, ord) | CT_sbits (_, ord) ->
         CT_fbits (n, ord)
      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for zero/sign_extend argument"
      end

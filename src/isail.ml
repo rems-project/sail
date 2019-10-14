@@ -608,6 +608,11 @@ let handle_input' input =
            Interactive.ast := ast;
            interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
            vs_ids := val_spec_ids !Interactive.ast
+        | ":recheck_types" ->
+           let ast, env = Type_check.check Type_check.initial_env !Interactive.ast in
+           Interactive.env := env;
+           Interactive.ast := ast;
+           vs_ids := val_spec_ids !Interactive.ast
         | ":compile" ->
            let out_name = match !opt_file_out with
              | None -> "out.sail"

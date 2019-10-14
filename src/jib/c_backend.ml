@@ -86,7 +86,8 @@ let optimize_primops = ref false
 let optimize_hoist_allocations = ref false
 let optimize_struct_updates = ref false
 let optimize_alias = ref false
-let optimize_int128 = ref false
+let optimize_fixed_int = ref false
+let optimize_fixed_bits = ref false
 
 let c_debug str =
   if !c_verbosity > 0 then prerr_endline (Lazy.force str) else ()
@@ -192,9 +193,11 @@ let rec ctyp_of_typ ctx typ =
 let rec is_stack_ctyp ctyp = match ctyp with
   | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_enum _ -> true
   | CT_fint n -> n <= 64
-  | CT_lint when !optimize_int128 -> true
+  | CT_lint when !optimize_fixed_int -> true
   | CT_lint -> false
-  | CT_lbits _ | CT_real | CT_string | CT_list _ | CT_vector _ -> false
+  | CT_lbits _ when !optimize_fixed_int -> true
+  | CT_lbits _ -> false
+  | CT_real | CT_string | CT_list _ | CT_vector _ -> false
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) fields
   | CT_variant (_, ctors) -> false (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *) (* FIXME *)
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
@@ -279,6 +282,12 @@ let rec value_of_aval_bit = function
   | AV_lit (L_aux (L_one, _), _) -> Sail2_values.B1
   | _ -> assert false
 
+(** Used to make sure the -Ofixed_int and -Ofixed_bits don't interfere
+   with assumptions made about optimizations in the common case. *)
+let rec never_optimize = function
+  | CT_lbits _ | CT_lint -> true
+  | _ -> false
+
 let rec c_aval ctx = function
   | AV_lit (lit, typ) as v ->
      begin
@@ -294,7 +303,7 @@ let rec c_aval ctx = function
        match lvar with
        | Local (_, typ) ->
           let ctyp = ctyp_of_typ ctx typ in
-          if is_stack_ctyp ctyp then
+          if is_stack_ctyp ctyp && not (never_optimize ctyp) then
             begin
               try
                 (* We need to check that id's type hasn't changed due to flow typing *)
@@ -311,9 +320,9 @@ let rec c_aval ctx = function
             end
           else
             v
-       | Register (_, _, typ) when is_stack_typ ctx typ ->
+       | Register (_, _, typ) ->
           let ctyp = ctyp_of_typ ctx typ in
-          if is_stack_ctyp ctyp then
+          if is_stack_ctyp ctyp && not (never_optimize ctyp) then
             AV_cval (V_id (name id, ctyp), typ)
           else
             v
@@ -1475,11 +1484,12 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | CT_unit -> "UNIT", []
        | CT_bit -> "UINT64_C(0)", []
        | CT_fint _ -> "INT64_C(0xdeadc0de)", []
-       | CT_lint when !optimize_int128 -> "((sail_int) 0xdeadc0de)", []
+       | CT_lint when !optimize_fixed_int -> "((sail_int) 0xdeadc0de)", []
        | CT_fbits _ -> "UINT64_C(0xdeadc0de)", []
        | CT_sbits _ -> "undefined_sbits()", []
+       | CT_lbits _ when !optimize_fixed_bits -> "undefined_lbits()", []
        | CT_bool -> "false", []
-       | CT_enum (_, ctor :: _) -> sgen_id ctor, [] 
+       | CT_enum (_, ctor :: _) -> sgen_id ctor, []
        | CT_tup ctyps when is_stack_ctyp ctyp ->
           let gs = ngensym () in
           let fold (inits, prev) (n, ctyp) =
@@ -1791,13 +1801,13 @@ let codegen_list_clear id ctyp =
   ^^ (if is_stack_ctyp ctyp then empty
       else string (Printf.sprintf "  KILL(%s)(&(*rop)->hd);\n" (sgen_ctyp_name ctyp)))
   ^^ string (Printf.sprintf "  KILL(%s)(&(*rop)->tl);\n" (sgen_id id))
-  ^^ string "  free(*rop);"
+  ^^ string "  sail_free(*rop);"
   ^^ string "}"
 
 let codegen_list_set id ctyp =
   string (Printf.sprintf "static void internal_set_%s(%s *rop, const %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
   ^^ string "  if (op == NULL) { *rop = NULL; return; };\n"
-  ^^ string (Printf.sprintf "  *rop = malloc(sizeof(struct node_%s));\n" (sgen_id id))
+  ^^ string (Printf.sprintf "  *rop = sail_malloc(sizeof(struct node_%s));\n" (sgen_id id))
   ^^ (if is_stack_ctyp ctyp then
         string "  (*rop)->hd = op->hd;\n"
       else
@@ -1814,7 +1824,7 @@ let codegen_list_set id ctyp =
 let codegen_cons id ctyp =
   let cons_id = mk_id ("cons#" ^ string_of_ctyp ctyp) in
   string (Printf.sprintf "static void %s(%s *rop, const %s x, const %s xs) {\n" (sgen_function_id cons_id) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
-  ^^ string (Printf.sprintf "  *rop = malloc(sizeof(struct node_%s));\n" (sgen_id id))
+  ^^ string (Printf.sprintf "  *rop = sail_malloc(sizeof(struct node_%s));\n" (sgen_id id))
   ^^ (if is_stack_ctyp ctyp then
         string "  (*rop)->hd = x;\n"
       else
@@ -1861,7 +1871,7 @@ let codegen_vector ctx (direction, ctyp) =
       string (Printf.sprintf "static void COPY(%s)(%s *rop, %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
       ^^ string (Printf.sprintf "  KILL(%s)(rop);\n" (sgen_id id))
       ^^ string "  rop->len = op.len;\n"
-      ^^ string (Printf.sprintf "  rop->data = malloc((rop->len) * sizeof(%s));\n" (sgen_ctyp ctyp))
+      ^^ string (Printf.sprintf "  rop->data = sail_malloc((rop->len) * sizeof(%s));\n" (sgen_ctyp ctyp))
       ^^ string "  for (int i = 0; i < op.len; i++) {\n"
       ^^ string (if is_stack_ctyp ctyp then
                    "    (rop->data)[i] = op.data[i];\n"
@@ -1877,7 +1887,7 @@ let codegen_vector ctx (direction, ctyp) =
            string "  for (int i = 0; i < (rop->len); i++) {\n"
            ^^ string (Printf.sprintf "    KILL(%s)((rop->data) + i);\n" (sgen_ctyp_name ctyp))
            ^^ string "  }\n")
-      ^^ string "  if (rop->data != NULL) free(rop->data);\n"
+      ^^ string "  if (rop->data != NULL) sail_free(rop->data);\n"
       ^^ string "}"
     in
     let vector_update =
@@ -1920,7 +1930,7 @@ let codegen_vector ctx (direction, ctyp) =
     let internal_vector_init =
       string (Printf.sprintf "static void internal_vector_init_%s(%s *rop, const int64_t len) {\n" (sgen_id id) (sgen_id id))
       ^^ string "  rop->len = len;\n"
-      ^^ string (Printf.sprintf "  rop->data = malloc(len * sizeof(%s));\n" (sgen_ctyp ctyp))
+      ^^ string (Printf.sprintf "  rop->data = sail_malloc(len * sizeof(%s));\n" (sgen_ctyp ctyp))
       ^^ (if not (is_stack_ctyp ctyp) then
             string "  for (int i = 0; i < len; i++) {\n"
             ^^ string (Printf.sprintf "    CREATE(%s)((rop->data) + i);\n" (sgen_ctyp_name ctyp))
@@ -1931,7 +1941,7 @@ let codegen_vector ctx (direction, ctyp) =
     let vector_undefined =
       string (Printf.sprintf "static void undefined_vector_%s(%s *rop, sail_int len, %s elem) {\n" (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
       ^^ string (Printf.sprintf "  rop->len = sail_int_get_ui(len);\n")
-      ^^ string (Printf.sprintf "  rop->data = malloc((rop->len) * sizeof(%s));\n" (sgen_ctyp ctyp))
+      ^^ string (Printf.sprintf "  rop->data = sail_malloc((rop->len) * sizeof(%s));\n" (sgen_ctyp ctyp))
       ^^ string "  for (int i = 0; i < (rop->len); i++) {\n"
       ^^ string (if is_stack_ctyp ctyp then
                    "    (rop->data)[i] = elem;\n"
@@ -2181,10 +2191,10 @@ let compile_ast env output_chan c_includes ast =
 
     let exn_boilerplate =
       if not (Bindings.mem (mk_id "exception") ctx.variants) then ([], []) else
-        ([ "  current_exception = malloc(sizeof(struct zexception));";
+        ([ "  current_exception = sail_malloc(sizeof(struct zexception));";
            "  CREATE(zexception)(current_exception);" ],
          [ "  KILL(zexception)(current_exception);";
-           "  free(current_exception);";
+           "  sail_free(current_exception);";
            "  if (have_exception) {fprintf(stderr, \"Exiting due to uncaught exception\\n\"); exit(EXIT_FAILURE);}" ])
     in
 
