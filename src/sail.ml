@@ -192,6 +192,9 @@ let options = Arg.align ([
   ( "-c_specialize",
     Arg.Set opt_specialize_c,
     " specialize integer arguments in C output");
+  ( "-c_preserve",
+    Arg.String (fun str -> Specialize.add_initial_calls (Ast_util.IdSet.singleton (Ast_util.mk_id str))),
+    " make sure the provided function identifier is preserved in C output");
   ( "-c_fold_unit",
     Arg.String (fun str -> Constant_fold.opt_fold_to_unit := Util.split_on_char ',' str),
     " remove comma separated list of functions from C output, replacing them with unit");

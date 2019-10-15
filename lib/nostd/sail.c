@@ -1,0 +1,255 @@
+
+#ifndef SAIL_INT64
+#define SAIL_INT64
+#endif
+
+#ifndef SAIL_BITS64
+#define SAIL_BITS64
+#endif
+
+#include <sail_alloc.h>
+#include <sail_failure.h>
+#include <sail.h>
+
+/* ********************************************************************** */
+/* Sail integers                                                          */
+/* ********************************************************************** */
+
+#if defined(SAIL_INT64) || defined(SAIL_INT128)
+
+sail_int CREATE_OF(sail_int, mach_int)(const mach_int op)
+{
+     return (sail_int) op;
+}
+
+mach_int CREATE_OF(mach_int, sail_int)(const sail_int op)
+{
+     if (MACH_INT_MIN < op && op < MACH_INT_MAX) {
+          return (mach_int) op;
+     } else {
+          sail_failure("Lost precision when converting from sail integer to machine integer");
+          return -1;
+     }
+}
+
+mach_int CONVERT_OF(mach_int, sail_int)(const sail_int op)
+{
+     if (MACH_INT_MIN < op && op < MACH_INT_MAX) {
+          return (mach_int) op;
+     } else {
+          sail_failure("Lost precision when converting from sail integer to machine integer");
+          return -1;
+     }
+}
+
+sail_int CONVERT_OF(sail_int, mach_int)(const mach_int op)
+{
+     return (sail_int) op;
+}
+
+bool eq_int(const sail_int op1, const sail_int op2)
+{
+     return op1 == op2;
+}
+
+bool EQUAL(sail_int)(const sail_int op1, const sail_int op2)
+{
+     return op1 == op2;
+}
+
+bool lt(const sail_int op1, const sail_int op2)
+{
+     return op1 < op2;
+}
+
+bool gt(const sail_int op1, const sail_int op2)
+{
+     return op1 > op2;
+}
+
+bool lteq(const sail_int op1, const sail_int op2)
+{
+     return op1 <= op2;
+}
+
+bool gteq(const sail_int op1, const sail_int op2)
+{
+     return op1 >= op2;
+}
+
+// FIXME: Add overflow checks
+sail_int shl_int(const sail_int op1, const sail_int op2)
+{
+     return op1 << op2;
+}
+
+mach_int shl_mach_int(const mach_int op1, const mach_int op2)
+{
+     return op1 << op2;
+}
+
+sail_int shr_int(const sail_int op1, const sail_int op2)
+{
+     return op1 >> op2;
+}
+
+mach_int shr_mach_int(const mach_int op1, const mach_int op2)
+{
+     return op1 >> op2;
+}
+
+sail_int undefined_int(const int n)
+{
+     return (sail_int) n;
+}
+
+sail_int undefined_range(const sail_int lower, const sail_int upper)
+{
+     return lower;
+}
+
+sail_int add_int(const sail_int op1, const sail_int op2)
+{
+     if ((op2 > 0) && (op1 > SAIL_INT_MAX - op2)) {
+          sail_failure("Sail integer addition would overflow");
+          return -1;
+     } else if ((op2 < 0) && (op1 < SAIL_INT_MIN - op2)) {
+          sail_failure("Sail integer addition would underflow");
+          return -1;
+     } else {
+          return op1 + op2;
+     }
+}
+
+sail_int sub_int(const sail_int op1, const sail_int op2)
+{
+     if ((op2 < 0) && (op1 > SAIL_INT_MAX + op2)) {
+          sail_failure("Sail integer subtraction would overflow");
+          return -1;
+     } else if ((op2 > 0) && (op1 < SAIL_INT_MIN + op2)) {
+          sail_failure("Sail integer subtraction would underflow");
+          return -1;
+     } else {
+          return op1 - op2;
+     }
+}
+
+sail_int sub_nat(const sail_int op1, const sail_int op2)
+{
+     sail_int rop = sub_int(op1, op2);
+     if (rop < 0) {
+          return (sail_int) 0;
+     } else {
+          return rop;
+     }
+}
+
+sail_int mult_int(const sail_int op1, const sail_int op2)
+{
+     if (op1 > SAIL_INT_MAX / op2) {
+          sail_failure("Sail integer multiplication would overflow");
+          return -1;
+     } else if (op1 < SAIL_INT_MIN / op2) {
+          sail_failure("Sail integer multiplication would underflow");
+          return -1;
+     } else {
+          return op1 * op2;
+     }
+}
+
+// FIXME: Make all division operators do the right thing with rounding
+sail_int ediv_int(const sail_int op1, const sail_int op2)
+{
+     return op1 / op2;
+}
+
+sail_int emod_int(const sail_int op1, const sail_int op2)
+{
+     return op1 % op2;
+}
+
+sail_int tdiv_int(const sail_int op1, const sail_int op2)
+{
+     return op1 / op2;
+}
+
+sail_int tmod_int(const sail_int op1, const sail_int op2)
+{
+     return op1 % op2;
+}
+
+sail_int fdiv_int(const sail_int op1, const sail_int op2)
+{
+     return op1 / op2;
+}
+
+sail_int fmod_int(const sail_int op1, const sail_int op2)
+{
+     return op1 % op2;
+}
+
+sail_int max_int(const sail_int op1, const sail_int op2)
+{
+     if (op1 < op2) {
+          return op2;
+     } else {
+          return op1;
+     }
+}
+
+sail_int min_int(const sail_int op1, const sail_int op2)
+{
+     if (op1 > op2) {
+          return op2;
+     } else {
+          return op1;
+     }
+}
+
+sail_int neg_int(const sail_int op)
+{
+     if (op == SAIL_INT_MIN) {
+          sail_failure("Sail integer negation would overflow");
+          return -1;
+     }
+     return -op;
+}
+
+sail_int abs_int(const sail_int op)
+{
+     if (op < 0) {
+          return neg_int(op);
+     } else {
+          return op;
+     }
+}
+
+sail_int pow_int(sail_int base, sail_int exp)
+{
+     sail_int result = 1;
+     while (true)
+     {
+          if (exp & 1) {
+               result *= base;
+          }
+          exp >>= 1;
+          if (!exp) {
+               break;
+          }
+          base *= base;
+     }
+     return result;
+}
+
+sail_int pow2(const sail_int exp)
+{
+     return pow_int(2, exp);
+}
+
+#else
+
+#endif
+
+/* ********************************************************************** */
+/* Sail bitvectors                                                        */
+/* ********************************************************************** */

@@ -1487,7 +1487,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | CT_lint when !optimize_fixed_int -> "((sail_int) 0xdeadc0de)", []
        | CT_fbits _ -> "UINT64_C(0xdeadc0de)", []
        | CT_sbits _ -> "undefined_sbits()", []
-       | CT_lbits _ when !optimize_fixed_bits -> "undefined_lbits()", []
+       | CT_lbits _ when !optimize_fixed_bits -> "undefined_lbits(false)", []
        | CT_bool -> "false", []
        | CT_enum (_, ctor :: _) -> sgen_id ctor, []
        | CT_tup ctyps when is_stack_ctyp ctyp ->
