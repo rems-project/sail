@@ -7,14 +7,14 @@
 static unsigned char *sail_arena_buffer;
 static size_t sail_arena_length;
 static size_t sail_arena_offset;
-static volatile int sail_arena_lock;
+static struct sail_spinlock sail_arena_lock;
 
 void sail_arena_init(void *buffer, size_t length)
 {
      sail_arena_buffer = buffer;
      sail_arena_length = length;
      sail_arena_offset = 0;
-     sail_arena_lock = 1;
+     sail_spin_init(&sail_arena_lock);
 }
 
 void sail_arena_reset(void)

@@ -2,6 +2,7 @@
 #include <sail_failure.h>
 #include <sail.h>
 
+
 /* ********************************************************************** */
 /* Sail strings                                                           */
 /* ********************************************************************** */
@@ -338,3 +339,222 @@ sail_int pow2(const sail_int exp)
 /* ********************************************************************** */
 /* Sail bitvectors                                                        */
 /* ********************************************************************** */
+
+lbits CONVERT_OF(lbits, fbits)(const fbits op, const uint64_t len, const bool order)
+{
+     lbits rop;
+     rop.len = len;
+     rop.bits = op;
+     return rop;
+}
+
+fbits CONVERT_OF(fbits, lbits)(const lbits op, const bool direction)
+{
+     return op.bits;
+}
+
+sbits CONVERT_OF(sbits, lbits)(const lbits op, const bool order)
+{
+     return op;
+}
+
+lbits CONVERT_OF(lbits, sbits)(const sbits op, const bool order)
+{
+     return op;
+}
+
+lbits UNDEFINED(lbits)(const sail_int len)
+{
+     lbits rop;
+     rop.bits = 0;
+     rop.len = (uint64_t) len;
+     return rop;
+}
+
+bool eq_bits(const lbits op1, const lbits op2)
+{
+     return op1.bits == op2.bits;
+}
+
+bool EQUAL(lbits)(const lbits op1, const lbits op2)
+{
+     return op1.bits == op2.bits;
+}
+
+bool neq_bits(const lbits op1, const lbits op2)
+{
+     return op1.bits != op2.bits;
+}
+
+lbits not_bits(const lbits op)
+{
+     lbits rop;
+     rop.bits = (~op.bits) & sail_bzhi_u64(UINT64_MAX, op.len);
+     rop.len = op.len;
+     return rop;
+}
+
+lbits and_bits(const lbits op1, const lbits op2)
+{
+     lbits rop;
+     rop.bits = op1.bits & op2.bits;
+     rop.len = op1.len;
+     return rop;
+}
+
+lbits or_bits(const lbits op1, const lbits op2)
+{
+     lbits rop;
+     rop.bits = op1.bits | op2.bits;
+     rop.len = op1.len;
+     return rop;
+}
+
+lbits xor_bits(const lbits op1, const lbits op2)
+{
+     lbits rop;
+     rop.bits = op1.bits ^ op2.bits;
+     rop.len = op1.len;
+     return rop;
+}
+
+lbits add_bits(const lbits op1, const lbits op2)
+{
+     lbits rop;
+     rop.bits = (op1.bits + op2.bits) & sail_bzhi_u64(UINT64_MAX, op1.len);
+     rop.len = op1.len;
+     return rop;
+}
+
+lbits sub_bits(const lbits op1, const lbits op2)
+{
+     lbits rop;
+     rop.bits = (op1.bits - op2.bits) & sail_bzhi_u64(UINT64_MAX, op1.len);
+     rop.len = op1.len;
+     return rop;
+}
+
+lbits add_bits_int(const lbits op1, const sail_int op2)
+{
+     lbits rop;
+     rop.bits = (op1.bits + ((uint64_t) op2)) & sail_bzhi_u64(UINT64_MAX, op1.len);
+     rop.len = op1.len;
+     return rop;
+}
+
+
+lbits sub_bits_int(const lbits op1, const sail_int op2)
+{
+     lbits rop;
+     rop.bits = (op1.bits - ((uint64_t) op2)) & sail_bzhi_u64(UINT64_MAX, op1.len);
+     rop.len = op1.len;
+     return rop;
+}
+
+sail_int sail_unsigned(const lbits op)
+{
+     return (sail_int) op.bits;
+}
+
+sail_int sail_signed(const lbits op)
+{
+     return (sail_int) ((int64_t) op.bits);
+}
+
+fbits bitvector_access(const lbits bv, const sail_int n)
+{
+     return 1 & (bv.bits >> ((uint64_t) n));
+}
+
+lbits slice(const lbits op, const sail_int start, const sail_int len)
+{
+     uint64_t l = len;
+     lbits rop;
+     rop.bits = sail_bzhi_u64(op.bits >> ((uint64_t) start), l);
+     rop.len = l;
+     return rop;
+}
+
+lbits set_slice(const sail_int len,
+                const sail_int slen,
+                const lbits op,
+                const sail_int start,
+                const lbits slice)
+{
+     uint64_t s = start;
+     uint64_t mask = (1 << (uint64_t) slen) - 1;
+     lbits rop;
+     rop.len = op.len;
+     rop.bits = op.bits;
+     rop.bits &= ~(mask << s);
+     rop.bits |= slice.bits << s;
+     return rop;
+}
+
+lbits append(const lbits op1, const lbits op2)
+{
+     lbits rop;
+     rop.bits = (op1.bits << op2.len) | op2.bits;
+     rop.len = op1.len + op2.len;
+     return rop;
+}
+
+sail_int length_lbits(const lbits op)
+{
+     return (sail_int) op.len;
+}
+
+lbits zeros(const sail_int len)
+{
+     lbits rop;
+     rop.bits = 0;
+     rop.len = (uint64_t) len;
+     return rop;
+}
+
+lbits replicate_bits(const lbits op, const sail_int n)
+{
+     return op;
+}
+
+lbits get_slice_int(const sail_int len, const sail_int n, const sail_int start)
+{
+     return zeros(len);
+}
+
+sail_int set_slice_int(const sail_int len, const sail_int n, const sail_int start, const lbits slice)
+{
+     return n;
+}
+
+lbits vector_subrange_lbits(const lbits op, const sail_int n, const sail_int m)
+{
+     return op;
+}
+
+lbits vector_update_subrange_lbits(const lbits op, const sail_int n, const sail_int m, const lbits slice)
+{
+     return op;
+}
+
+/* ********************************************************************** */
+/* Sail reals                                                             */
+/* ********************************************************************** */
+
+void CREATE(real)(double *r) {}
+void KILL(real)(double *r) {}
+
+void to_real(real *rop, const sail_int op)
+{
+     *rop = (double) op;
+}
+
+void div_real(real *rop, const real op1, const real op2)
+{
+     *rop = op1 / op2;
+}
+
+sail_int round_up(const real op)
+{
+     return (sail_int) op;
+}
