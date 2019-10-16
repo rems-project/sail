@@ -415,7 +415,7 @@ module Z3 : sig
     Z3E_plus of z3_expr * z3_expr | Z3E_times of z3_expr * z3_expr |
     Z3E_div of z3_expr * z3_expr | Z3E_mod of z3_expr * z3_expr |
     Z3E_minus of z3_expr * z3_expr | Z3E_eq of z3_expr * z3_expr |
-    Z3E_not of z3_expr | Z3E_and of z3_expr * z3_expr |
+    Z3E_not of z3_expr | Z3E_exp of z3_expr | Z3E_and of z3_expr * z3_expr |
     Z3E_or of z3_expr * z3_expr | Z3E_neq of z3_expr * z3_expr |
     Z3E_bitvec of string | Z3E_constr of string * z3_expr list |
     Z3E_concat of z3_expr list | Z3E_proj of string * z3_expr |
@@ -442,7 +442,7 @@ type z3_expr = Z3E_num of Z.t | Z3E_var of string | Z3E_true | Z3E_false |
   Z3E_plus of z3_expr * z3_expr | Z3E_times of z3_expr * z3_expr |
   Z3E_div of z3_expr * z3_expr | Z3E_mod of z3_expr * z3_expr |
   Z3E_minus of z3_expr * z3_expr | Z3E_eq of z3_expr * z3_expr |
-  Z3E_not of z3_expr | Z3E_and of z3_expr * z3_expr |
+  Z3E_not of z3_expr | Z3E_exp of z3_expr | Z3E_and of z3_expr * z3_expr |
   Z3E_or of z3_expr * z3_expr | Z3E_neq of z3_expr * z3_expr |
   Z3E_bitvec of string | Z3E_constr of string * z3_expr list |
   Z3E_concat of z3_expr list | Z3E_proj of string * z3_expr |
@@ -450,154 +450,180 @@ type z3_expr = Z3E_num of Z.t | Z3E_var of string | Z3E_true | Z3E_false |
 
 let rec equal_z3_expr () = ({HOL.equal = equal_z3_expra} : z3_expr HOL.equal)
 and equal_z3_expra
-  x0 x1 = match x0, x1 with Z3E_proj (x241, x242), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_proj (x241, x242) -> false
-    | Z3E_concat x23, Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_concat x23 -> false
-    | Z3E_constr (x221, x222), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_constr (x221, x222) -> false
-    | Z3E_bitvec x21, Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_bitvec x21 -> false
-    | Z3E_neq (x201, x202), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_neq (x201, x202) -> false
-    | Z3E_or (x191, x192), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_or (x191, x192) -> false
-    | Z3E_and (x181, x182), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_and (x181, x182) -> false
-    | Z3E_not x17, Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_not x17 -> false
-    | Z3E_not x17, Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_not x17 -> false
-    | Z3E_not x17, Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_not x17 -> false
-    | Z3E_not x17, Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_not x17 -> false
-    | Z3E_not x17, Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_not x17 -> false
-    | Z3E_not x17, Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_not x17 -> false
-    | Z3E_not x17, Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_not x17 -> false
-    | Z3E_not x17, Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_not x17 -> false
-    | Z3E_eq (x161, x162), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_eq (x161, x162) -> false
-    | Z3E_eq (x161, x162), Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_eq (x161, x162) -> false
-    | Z3E_eq (x161, x162), Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_eq (x161, x162) -> false
-    | Z3E_eq (x161, x162), Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_eq (x161, x162) -> false
-    | Z3E_eq (x161, x162), Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_eq (x161, x162) -> false
-    | Z3E_eq (x161, x162), Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_eq (x161, x162) -> false
-    | Z3E_eq (x161, x162), Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_eq (x161, x162) -> false
-    | Z3E_eq (x161, x162), Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_eq (x161, x162) -> false
+  x0 x1 = match x0, x1 with Z3E_proj (x251, x252), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_proj (x251, x252) -> false
+    | Z3E_concat x24, Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_concat x24 -> false
+    | Z3E_constr (x231, x232), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_constr (x231, x232) -> false
+    | Z3E_bitvec x22, Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_bitvec x22 -> false
+    | Z3E_neq (x211, x212), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_neq (x211, x212) -> false
+    | Z3E_or (x201, x202), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_or (x201, x202) -> false
+    | Z3E_and (x191, x192), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_and (x191, x192) -> false
+    | Z3E_exp x18, Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_exp x18 -> false
+    | Z3E_not x17, Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_not x17 -> false
+    | Z3E_not x17, Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_not x17 -> false
+    | Z3E_not x17, Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_not x17 -> false
+    | Z3E_not x17, Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_not x17 -> false
+    | Z3E_not x17, Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_not x17 -> false
+    | Z3E_not x17, Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_not x17 -> false
+    | Z3E_not x17, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_not x17 -> false
+    | Z3E_not x17, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_not x17 -> false
+    | Z3E_not x17, Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_not x17 -> false
+    | Z3E_eq (x161, x162), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_eq (x161, x162) -> false
+    | Z3E_eq (x161, x162), Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_eq (x161, x162) -> false
+    | Z3E_eq (x161, x162), Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_eq (x161, x162) -> false
+    | Z3E_eq (x161, x162), Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_eq (x161, x162) -> false
+    | Z3E_eq (x161, x162), Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_eq (x161, x162) -> false
+    | Z3E_eq (x161, x162), Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_eq (x161, x162) -> false
+    | Z3E_eq (x161, x162), Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_eq (x161, x162) -> false
+    | Z3E_eq (x161, x162), Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_eq (x161, x162) -> false
+    | Z3E_eq (x161, x162), Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_eq (x161, x162) -> false
     | Z3E_eq (x161, x162), Z3E_not x17 -> false
     | Z3E_not x17, Z3E_eq (x161, x162) -> false
-    | Z3E_minus (x151, x152), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_minus (x151, x152) -> false
-    | Z3E_minus (x151, x152), Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_minus (x151, x152) -> false
-    | Z3E_minus (x151, x152), Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_minus (x151, x152) -> false
-    | Z3E_minus (x151, x152), Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_minus (x151, x152) -> false
-    | Z3E_minus (x151, x152), Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_minus (x151, x152) -> false
-    | Z3E_minus (x151, x152), Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_minus (x151, x152) -> false
-    | Z3E_minus (x151, x152), Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_minus (x151, x152) -> false
-    | Z3E_minus (x151, x152), Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_minus (x151, x152) -> false
+    | Z3E_minus (x151, x152), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_minus (x151, x152) -> false
+    | Z3E_minus (x151, x152), Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_minus (x151, x152) -> false
+    | Z3E_minus (x151, x152), Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_minus (x151, x152) -> false
+    | Z3E_minus (x151, x152), Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_minus (x151, x152) -> false
+    | Z3E_minus (x151, x152), Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_minus (x151, x152) -> false
+    | Z3E_minus (x151, x152), Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_minus (x151, x152) -> false
+    | Z3E_minus (x151, x152), Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_minus (x151, x152) -> false
+    | Z3E_minus (x151, x152), Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_minus (x151, x152) -> false
+    | Z3E_minus (x151, x152), Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_minus (x151, x152) -> false
     | Z3E_minus (x151, x152), Z3E_not x17 -> false
     | Z3E_not x17, Z3E_minus (x151, x152) -> false
     | Z3E_minus (x151, x152), Z3E_eq (x161, x162) -> false
     | Z3E_eq (x161, x162), Z3E_minus (x151, x152) -> false
-    | Z3E_mod (x141, x142), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_mod (x141, x142) -> false
-    | Z3E_mod (x141, x142), Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_mod (x141, x142) -> false
-    | Z3E_mod (x141, x142), Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_mod (x141, x142) -> false
-    | Z3E_mod (x141, x142), Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_mod (x141, x142) -> false
-    | Z3E_mod (x141, x142), Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_mod (x141, x142) -> false
-    | Z3E_mod (x141, x142), Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_mod (x141, x142) -> false
-    | Z3E_mod (x141, x142), Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_mod (x141, x142) -> false
-    | Z3E_mod (x141, x142), Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_mod (x141, x142) -> false
+    | Z3E_mod (x141, x142), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_mod (x141, x142) -> false
+    | Z3E_mod (x141, x142), Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_mod (x141, x142) -> false
+    | Z3E_mod (x141, x142), Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_mod (x141, x142) -> false
+    | Z3E_mod (x141, x142), Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_mod (x141, x142) -> false
+    | Z3E_mod (x141, x142), Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_mod (x141, x142) -> false
+    | Z3E_mod (x141, x142), Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_mod (x141, x142) -> false
+    | Z3E_mod (x141, x142), Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_mod (x141, x142) -> false
+    | Z3E_mod (x141, x142), Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_mod (x141, x142) -> false
+    | Z3E_mod (x141, x142), Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_mod (x141, x142) -> false
     | Z3E_mod (x141, x142), Z3E_not x17 -> false
     | Z3E_not x17, Z3E_mod (x141, x142) -> false
     | Z3E_mod (x141, x142), Z3E_eq (x161, x162) -> false
     | Z3E_eq (x161, x162), Z3E_mod (x141, x142) -> false
     | Z3E_mod (x141, x142), Z3E_minus (x151, x152) -> false
     | Z3E_minus (x151, x152), Z3E_mod (x141, x142) -> false
-    | Z3E_div (x131, x132), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_div (x131, x132) -> false
-    | Z3E_div (x131, x132), Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_div (x131, x132) -> false
-    | Z3E_div (x131, x132), Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_div (x131, x132) -> false
-    | Z3E_div (x131, x132), Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_div (x131, x132) -> false
-    | Z3E_div (x131, x132), Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_div (x131, x132) -> false
-    | Z3E_div (x131, x132), Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_div (x131, x132) -> false
-    | Z3E_div (x131, x132), Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_div (x131, x132) -> false
-    | Z3E_div (x131, x132), Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_div (x131, x132) -> false
+    | Z3E_div (x131, x132), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_div (x131, x132) -> false
+    | Z3E_div (x131, x132), Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_div (x131, x132) -> false
+    | Z3E_div (x131, x132), Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_div (x131, x132) -> false
+    | Z3E_div (x131, x132), Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_div (x131, x132) -> false
+    | Z3E_div (x131, x132), Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_div (x131, x132) -> false
+    | Z3E_div (x131, x132), Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_div (x131, x132) -> false
+    | Z3E_div (x131, x132), Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_div (x131, x132) -> false
+    | Z3E_div (x131, x132), Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_div (x131, x132) -> false
+    | Z3E_div (x131, x132), Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_div (x131, x132) -> false
     | Z3E_div (x131, x132), Z3E_not x17 -> false
     | Z3E_not x17, Z3E_div (x131, x132) -> false
     | Z3E_div (x131, x132), Z3E_eq (x161, x162) -> false
@@ -606,22 +632,24 @@ and equal_z3_expra
     | Z3E_minus (x151, x152), Z3E_div (x131, x132) -> false
     | Z3E_div (x131, x132), Z3E_mod (x141, x142) -> false
     | Z3E_mod (x141, x142), Z3E_div (x131, x132) -> false
-    | Z3E_times (x121, x122), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_times (x121, x122) -> false
-    | Z3E_times (x121, x122), Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_times (x121, x122) -> false
-    | Z3E_times (x121, x122), Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_times (x121, x122) -> false
-    | Z3E_times (x121, x122), Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_times (x121, x122) -> false
-    | Z3E_times (x121, x122), Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_times (x121, x122) -> false
-    | Z3E_times (x121, x122), Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_times (x121, x122) -> false
-    | Z3E_times (x121, x122), Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_times (x121, x122) -> false
-    | Z3E_times (x121, x122), Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_times (x121, x122) -> false
+    | Z3E_times (x121, x122), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_times (x121, x122) -> false
+    | Z3E_times (x121, x122), Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_times (x121, x122) -> false
+    | Z3E_times (x121, x122), Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_times (x121, x122) -> false
+    | Z3E_times (x121, x122), Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_times (x121, x122) -> false
+    | Z3E_times (x121, x122), Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_times (x121, x122) -> false
+    | Z3E_times (x121, x122), Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_times (x121, x122) -> false
+    | Z3E_times (x121, x122), Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_times (x121, x122) -> false
+    | Z3E_times (x121, x122), Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_times (x121, x122) -> false
+    | Z3E_times (x121, x122), Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_times (x121, x122) -> false
     | Z3E_times (x121, x122), Z3E_not x17 -> false
     | Z3E_not x17, Z3E_times (x121, x122) -> false
     | Z3E_times (x121, x122), Z3E_eq (x161, x162) -> false
@@ -632,22 +660,24 @@ and equal_z3_expra
     | Z3E_mod (x141, x142), Z3E_times (x121, x122) -> false
     | Z3E_times (x121, x122), Z3E_div (x131, x132) -> false
     | Z3E_div (x131, x132), Z3E_times (x121, x122) -> false
-    | Z3E_plus (x111, x112), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_plus (x111, x112) -> false
-    | Z3E_plus (x111, x112), Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_plus (x111, x112) -> false
-    | Z3E_plus (x111, x112), Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_plus (x111, x112) -> false
-    | Z3E_plus (x111, x112), Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_plus (x111, x112) -> false
-    | Z3E_plus (x111, x112), Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_plus (x111, x112) -> false
-    | Z3E_plus (x111, x112), Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_plus (x111, x112) -> false
-    | Z3E_plus (x111, x112), Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_plus (x111, x112) -> false
-    | Z3E_plus (x111, x112), Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_plus (x111, x112) -> false
+    | Z3E_plus (x111, x112), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_plus (x111, x112) -> false
+    | Z3E_plus (x111, x112), Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_plus (x111, x112) -> false
+    | Z3E_plus (x111, x112), Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_plus (x111, x112) -> false
+    | Z3E_plus (x111, x112), Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_plus (x111, x112) -> false
+    | Z3E_plus (x111, x112), Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_plus (x111, x112) -> false
+    | Z3E_plus (x111, x112), Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_plus (x111, x112) -> false
+    | Z3E_plus (x111, x112), Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_plus (x111, x112) -> false
+    | Z3E_plus (x111, x112), Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_plus (x111, x112) -> false
+    | Z3E_plus (x111, x112), Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_plus (x111, x112) -> false
     | Z3E_plus (x111, x112), Z3E_not x17 -> false
     | Z3E_not x17, Z3E_plus (x111, x112) -> false
     | Z3E_plus (x111, x112), Z3E_eq (x161, x162) -> false
@@ -660,22 +690,24 @@ and equal_z3_expra
     | Z3E_div (x131, x132), Z3E_plus (x111, x112) -> false
     | Z3E_plus (x111, x112), Z3E_times (x121, x122) -> false
     | Z3E_times (x121, x122), Z3E_plus (x111, x112) -> false
-    | Z3E_geq (x101, x102), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_geq (x101, x102) -> false
-    | Z3E_geq (x101, x102), Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_geq (x101, x102) -> false
-    | Z3E_geq (x101, x102), Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_geq (x101, x102) -> false
-    | Z3E_geq (x101, x102), Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_geq (x101, x102) -> false
-    | Z3E_geq (x101, x102), Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_geq (x101, x102) -> false
-    | Z3E_geq (x101, x102), Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_geq (x101, x102) -> false
-    | Z3E_geq (x101, x102), Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_geq (x101, x102) -> false
-    | Z3E_geq (x101, x102), Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_geq (x101, x102) -> false
+    | Z3E_geq (x101, x102), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_geq (x101, x102) -> false
+    | Z3E_geq (x101, x102), Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_geq (x101, x102) -> false
+    | Z3E_geq (x101, x102), Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_geq (x101, x102) -> false
+    | Z3E_geq (x101, x102), Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_geq (x101, x102) -> false
+    | Z3E_geq (x101, x102), Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_geq (x101, x102) -> false
+    | Z3E_geq (x101, x102), Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_geq (x101, x102) -> false
+    | Z3E_geq (x101, x102), Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_geq (x101, x102) -> false
+    | Z3E_geq (x101, x102), Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_geq (x101, x102) -> false
+    | Z3E_geq (x101, x102), Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_geq (x101, x102) -> false
     | Z3E_geq (x101, x102), Z3E_not x17 -> false
     | Z3E_not x17, Z3E_geq (x101, x102) -> false
     | Z3E_geq (x101, x102), Z3E_eq (x161, x162) -> false
@@ -690,22 +722,24 @@ and equal_z3_expra
     | Z3E_times (x121, x122), Z3E_geq (x101, x102) -> false
     | Z3E_geq (x101, x102), Z3E_plus (x111, x112) -> false
     | Z3E_plus (x111, x112), Z3E_geq (x101, x102) -> false
-    | Z3E_leq (x91, x92), Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_leq (x91, x92) -> false
-    | Z3E_leq (x91, x92), Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_leq (x91, x92) -> false
-    | Z3E_leq (x91, x92), Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_leq (x91, x92) -> false
-    | Z3E_leq (x91, x92), Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_leq (x91, x92) -> false
-    | Z3E_leq (x91, x92), Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_leq (x91, x92) -> false
-    | Z3E_leq (x91, x92), Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_leq (x91, x92) -> false
-    | Z3E_leq (x91, x92), Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_leq (x91, x92) -> false
-    | Z3E_leq (x91, x92), Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_leq (x91, x92) -> false
+    | Z3E_leq (x91, x92), Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_leq (x91, x92) -> false
+    | Z3E_leq (x91, x92), Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_leq (x91, x92) -> false
+    | Z3E_leq (x91, x92), Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_leq (x91, x92) -> false
+    | Z3E_leq (x91, x92), Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_leq (x91, x92) -> false
+    | Z3E_leq (x91, x92), Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_leq (x91, x92) -> false
+    | Z3E_leq (x91, x92), Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_leq (x91, x92) -> false
+    | Z3E_leq (x91, x92), Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_leq (x91, x92) -> false
+    | Z3E_leq (x91, x92), Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_leq (x91, x92) -> false
+    | Z3E_leq (x91, x92), Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_leq (x91, x92) -> false
     | Z3E_leq (x91, x92), Z3E_not x17 -> false
     | Z3E_not x17, Z3E_leq (x91, x92) -> false
     | Z3E_leq (x91, x92), Z3E_eq (x161, x162) -> false
@@ -722,22 +756,24 @@ and equal_z3_expra
     | Z3E_plus (x111, x112), Z3E_leq (x91, x92) -> false
     | Z3E_leq (x91, x92), Z3E_geq (x101, x102) -> false
     | Z3E_geq (x101, x102), Z3E_leq (x91, x92) -> false
-    | Z3E_len x8, Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_len x8 -> false
-    | Z3E_len x8, Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_len x8 -> false
-    | Z3E_len x8, Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_len x8 -> false
-    | Z3E_len x8, Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_len x8 -> false
-    | Z3E_len x8, Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_len x8 -> false
-    | Z3E_len x8, Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_len x8 -> false
-    | Z3E_len x8, Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_len x8 -> false
-    | Z3E_len x8, Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_len x8 -> false
+    | Z3E_len x8, Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_len x8 -> false
+    | Z3E_len x8, Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_len x8 -> false
+    | Z3E_len x8, Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_len x8 -> false
+    | Z3E_len x8, Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_len x8 -> false
+    | Z3E_len x8, Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_len x8 -> false
+    | Z3E_len x8, Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_len x8 -> false
+    | Z3E_len x8, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_len x8 -> false
+    | Z3E_len x8, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_len x8 -> false
+    | Z3E_len x8, Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_len x8 -> false
     | Z3E_len x8, Z3E_not x17 -> false
     | Z3E_not x17, Z3E_len x8 -> false
     | Z3E_len x8, Z3E_eq (x161, x162) -> false
@@ -756,22 +792,24 @@ and equal_z3_expra
     | Z3E_geq (x101, x102), Z3E_len x8 -> false
     | Z3E_len x8, Z3E_leq (x91, x92) -> false
     | Z3E_leq (x91, x92), Z3E_len x8 -> false
-    | Z3E_bitzero, Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_bitzero -> false
-    | Z3E_bitzero, Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_bitzero -> false
-    | Z3E_bitzero, Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_bitzero -> false
-    | Z3E_bitzero, Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_bitzero -> false
-    | Z3E_bitzero, Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_bitzero -> false
-    | Z3E_bitzero, Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_bitzero -> false
-    | Z3E_bitzero, Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_bitzero -> false
-    | Z3E_bitzero, Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_bitzero -> false
+    | Z3E_bitzero, Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_bitzero -> false
+    | Z3E_bitzero, Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_bitzero -> false
+    | Z3E_bitzero, Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_bitzero -> false
+    | Z3E_bitzero, Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_bitzero -> false
+    | Z3E_bitzero, Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_bitzero -> false
+    | Z3E_bitzero, Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_bitzero -> false
+    | Z3E_bitzero, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_bitzero -> false
+    | Z3E_bitzero, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_bitzero -> false
+    | Z3E_bitzero, Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_bitzero -> false
     | Z3E_bitzero, Z3E_not x17 -> false
     | Z3E_not x17, Z3E_bitzero -> false
     | Z3E_bitzero, Z3E_eq (x161, x162) -> false
@@ -792,22 +830,24 @@ and equal_z3_expra
     | Z3E_leq (x91, x92), Z3E_bitzero -> false
     | Z3E_bitzero, Z3E_len x8 -> false
     | Z3E_len x8, Z3E_bitzero -> false
-    | Z3E_bitone, Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_bitone -> false
-    | Z3E_bitone, Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_bitone -> false
-    | Z3E_bitone, Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_bitone -> false
-    | Z3E_bitone, Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_bitone -> false
-    | Z3E_bitone, Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_bitone -> false
-    | Z3E_bitone, Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_bitone -> false
-    | Z3E_bitone, Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_bitone -> false
-    | Z3E_bitone, Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_bitone -> false
+    | Z3E_bitone, Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_bitone -> false
+    | Z3E_bitone, Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_bitone -> false
+    | Z3E_bitone, Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_bitone -> false
+    | Z3E_bitone, Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_bitone -> false
+    | Z3E_bitone, Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_bitone -> false
+    | Z3E_bitone, Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_bitone -> false
+    | Z3E_bitone, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_bitone -> false
+    | Z3E_bitone, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_bitone -> false
+    | Z3E_bitone, Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_bitone -> false
     | Z3E_bitone, Z3E_not x17 -> false
     | Z3E_not x17, Z3E_bitone -> false
     | Z3E_bitone, Z3E_eq (x161, x162) -> false
@@ -830,22 +870,24 @@ and equal_z3_expra
     | Z3E_len x8, Z3E_bitone -> false
     | Z3E_bitone, Z3E_bitzero -> false
     | Z3E_bitzero, Z3E_bitone -> false
-    | Z3E_unit, Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_unit -> false
-    | Z3E_unit, Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_unit -> false
-    | Z3E_unit, Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_unit -> false
-    | Z3E_unit, Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_unit -> false
-    | Z3E_unit, Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_unit -> false
-    | Z3E_unit, Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_unit -> false
-    | Z3E_unit, Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_unit -> false
-    | Z3E_unit, Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_unit -> false
+    | Z3E_unit, Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_unit -> false
+    | Z3E_unit, Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_unit -> false
+    | Z3E_unit, Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_unit -> false
+    | Z3E_unit, Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_unit -> false
+    | Z3E_unit, Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_unit -> false
+    | Z3E_unit, Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_unit -> false
+    | Z3E_unit, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_unit -> false
+    | Z3E_unit, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_unit -> false
+    | Z3E_unit, Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_unit -> false
     | Z3E_unit, Z3E_not x17 -> false
     | Z3E_not x17, Z3E_unit -> false
     | Z3E_unit, Z3E_eq (x161, x162) -> false
@@ -870,22 +912,24 @@ and equal_z3_expra
     | Z3E_bitzero, Z3E_unit -> false
     | Z3E_unit, Z3E_bitone -> false
     | Z3E_bitone, Z3E_unit -> false
-    | Z3E_false, Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_false -> false
-    | Z3E_false, Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_false -> false
-    | Z3E_false, Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_false -> false
-    | Z3E_false, Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_false -> false
-    | Z3E_false, Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_false -> false
-    | Z3E_false, Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_false -> false
-    | Z3E_false, Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_false -> false
-    | Z3E_false, Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_false -> false
+    | Z3E_false, Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_false -> false
+    | Z3E_false, Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_false -> false
+    | Z3E_false, Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_false -> false
+    | Z3E_false, Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_false -> false
+    | Z3E_false, Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_false -> false
+    | Z3E_false, Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_false -> false
+    | Z3E_false, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_false -> false
+    | Z3E_false, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_false -> false
+    | Z3E_false, Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_false -> false
     | Z3E_false, Z3E_not x17 -> false
     | Z3E_not x17, Z3E_false -> false
     | Z3E_false, Z3E_eq (x161, x162) -> false
@@ -912,22 +956,24 @@ and equal_z3_expra
     | Z3E_bitone, Z3E_false -> false
     | Z3E_false, Z3E_unit -> false
     | Z3E_unit, Z3E_false -> false
-    | Z3E_true, Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_true -> false
-    | Z3E_true, Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_true -> false
-    | Z3E_true, Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_true -> false
-    | Z3E_true, Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_true -> false
-    | Z3E_true, Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_true -> false
-    | Z3E_true, Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_true -> false
-    | Z3E_true, Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_true -> false
-    | Z3E_true, Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_true -> false
+    | Z3E_true, Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_true -> false
+    | Z3E_true, Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_true -> false
+    | Z3E_true, Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_true -> false
+    | Z3E_true, Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_true -> false
+    | Z3E_true, Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_true -> false
+    | Z3E_true, Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_true -> false
+    | Z3E_true, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_true -> false
+    | Z3E_true, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_true -> false
+    | Z3E_true, Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_true -> false
     | Z3E_true, Z3E_not x17 -> false
     | Z3E_not x17, Z3E_true -> false
     | Z3E_true, Z3E_eq (x161, x162) -> false
@@ -956,22 +1002,24 @@ and equal_z3_expra
     | Z3E_unit, Z3E_true -> false
     | Z3E_true, Z3E_false -> false
     | Z3E_false, Z3E_true -> false
-    | Z3E_var x2, Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_var x2 -> false
-    | Z3E_var x2, Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_var x2 -> false
-    | Z3E_var x2, Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_var x2 -> false
-    | Z3E_var x2, Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_var x2 -> false
-    | Z3E_var x2, Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_var x2 -> false
-    | Z3E_var x2, Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_var x2 -> false
-    | Z3E_var x2, Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_var x2 -> false
-    | Z3E_var x2, Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_var x2 -> false
+    | Z3E_var x2, Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_var x2 -> false
+    | Z3E_var x2, Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_var x2 -> false
+    | Z3E_var x2, Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_var x2 -> false
+    | Z3E_var x2, Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_var x2 -> false
+    | Z3E_var x2, Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_var x2 -> false
+    | Z3E_var x2, Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_var x2 -> false
+    | Z3E_var x2, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_var x2 -> false
+    | Z3E_var x2, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_var x2 -> false
+    | Z3E_var x2, Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_var x2 -> false
     | Z3E_var x2, Z3E_not x17 -> false
     | Z3E_not x17, Z3E_var x2 -> false
     | Z3E_var x2, Z3E_eq (x161, x162) -> false
@@ -1002,22 +1050,24 @@ and equal_z3_expra
     | Z3E_false, Z3E_var x2 -> false
     | Z3E_var x2, Z3E_true -> false
     | Z3E_true, Z3E_var x2 -> false
-    | Z3E_num x1, Z3E_string x25 -> false
-    | Z3E_string x25, Z3E_num x1 -> false
-    | Z3E_num x1, Z3E_proj (x241, x242) -> false
-    | Z3E_proj (x241, x242), Z3E_num x1 -> false
-    | Z3E_num x1, Z3E_concat x23 -> false
-    | Z3E_concat x23, Z3E_num x1 -> false
-    | Z3E_num x1, Z3E_constr (x221, x222) -> false
-    | Z3E_constr (x221, x222), Z3E_num x1 -> false
-    | Z3E_num x1, Z3E_bitvec x21 -> false
-    | Z3E_bitvec x21, Z3E_num x1 -> false
-    | Z3E_num x1, Z3E_neq (x201, x202) -> false
-    | Z3E_neq (x201, x202), Z3E_num x1 -> false
-    | Z3E_num x1, Z3E_or (x191, x192) -> false
-    | Z3E_or (x191, x192), Z3E_num x1 -> false
-    | Z3E_num x1, Z3E_and (x181, x182) -> false
-    | Z3E_and (x181, x182), Z3E_num x1 -> false
+    | Z3E_num x1, Z3E_string x26 -> false
+    | Z3E_string x26, Z3E_num x1 -> false
+    | Z3E_num x1, Z3E_proj (x251, x252) -> false
+    | Z3E_proj (x251, x252), Z3E_num x1 -> false
+    | Z3E_num x1, Z3E_concat x24 -> false
+    | Z3E_concat x24, Z3E_num x1 -> false
+    | Z3E_num x1, Z3E_constr (x231, x232) -> false
+    | Z3E_constr (x231, x232), Z3E_num x1 -> false
+    | Z3E_num x1, Z3E_bitvec x22 -> false
+    | Z3E_bitvec x22, Z3E_num x1 -> false
+    | Z3E_num x1, Z3E_neq (x211, x212) -> false
+    | Z3E_neq (x211, x212), Z3E_num x1 -> false
+    | Z3E_num x1, Z3E_or (x201, x202) -> false
+    | Z3E_or (x201, x202), Z3E_num x1 -> false
+    | Z3E_num x1, Z3E_and (x191, x192) -> false
+    | Z3E_and (x191, x192), Z3E_num x1 -> false
+    | Z3E_num x1, Z3E_exp x18 -> false
+    | Z3E_exp x18, Z3E_num x1 -> false
     | Z3E_num x1, Z3E_not x17 -> false
     | Z3E_not x17, Z3E_num x1 -> false
     | Z3E_num x1, Z3E_eq (x161, x162) -> false
@@ -1050,21 +1100,22 @@ and equal_z3_expra
     | Z3E_true, Z3E_num x1 -> false
     | Z3E_num x1, Z3E_var x2 -> false
     | Z3E_var x2, Z3E_num x1 -> false
-    | Z3E_string x25, Z3E_string y25 -> ((x25 : string) = y25)
-    | Z3E_proj (x241, x242), Z3E_proj (y241, y242) ->
-        ((x241 : string) = y241) && equal_z3_expra x242 y242
-    | Z3E_concat x23, Z3E_concat y23 ->
-        Lista.equal_list (equal_z3_expr ()) x23 y23
-    | Z3E_constr (x221, x222), Z3E_constr (y221, y222) ->
-        ((x221 : string) = y221) &&
-          Lista.equal_list (equal_z3_expr ()) x222 y222
-    | Z3E_bitvec x21, Z3E_bitvec y21 -> ((x21 : string) = y21)
-    | Z3E_neq (x201, x202), Z3E_neq (y201, y202) ->
+    | Z3E_string x26, Z3E_string y26 -> ((x26 : string) = y26)
+    | Z3E_proj (x251, x252), Z3E_proj (y251, y252) ->
+        ((x251 : string) = y251) && equal_z3_expra x252 y252
+    | Z3E_concat x24, Z3E_concat y24 ->
+        Lista.equal_list (equal_z3_expr ()) x24 y24
+    | Z3E_constr (x231, x232), Z3E_constr (y231, y232) ->
+        ((x231 : string) = y231) &&
+          Lista.equal_list (equal_z3_expr ()) x232 y232
+    | Z3E_bitvec x22, Z3E_bitvec y22 -> ((x22 : string) = y22)
+    | Z3E_neq (x211, x212), Z3E_neq (y211, y212) ->
+        equal_z3_expra x211 y211 && equal_z3_expra x212 y212
+    | Z3E_or (x201, x202), Z3E_or (y201, y202) ->
         equal_z3_expra x201 y201 && equal_z3_expra x202 y202
-    | Z3E_or (x191, x192), Z3E_or (y191, y192) ->
+    | Z3E_and (x191, x192), Z3E_and (y191, y192) ->
         equal_z3_expra x191 y191 && equal_z3_expra x192 y192
-    | Z3E_and (x181, x182), Z3E_and (y181, y182) ->
-        equal_z3_expra x181 y181 && equal_z3_expra x182 y182
+    | Z3E_exp x18, Z3E_exp y18 -> equal_z3_expra x18 y18
     | Z3E_not x17, Z3E_not y17 -> equal_z3_expra x17 y17
     | Z3E_eq (x161, x162), Z3E_eq (y161, y162) ->
         equal_z3_expra x161 y161 && equal_z3_expra x162 y162
@@ -1333,7 +1384,7 @@ module SyntaxVCT : sig
   type bop = Plus | Minus | Times | Div | Mod | LEq | LT | GT | GEq | Eq | And |
     Or | NEq
   type lit = L_unit | L_zero | L_one | L_true | L_false | L_num of Z.t |
-    L_string of string | L_undef | L_real of string
+    L_string of string | L_undef | L_bitvec of lit list | L_real of string
   type vp = V_lit of lit | V_var of xp | V_vec of vp list | V_list of vp list |
     V_cons of vp * vp | V_constr of string * vp | V_record of (string * vp) list
     | V_tuple of vp list | V_proj of string * vp
@@ -1352,6 +1403,7 @@ module SyntaxVCT : sig
   val equal_uop : uop -> uop -> bool
   val equal_bop : bop -> bop -> bool
   val equal_lita : lit -> lit -> bool
+  val equal_lit : lit HOL.equal
   val equal_vpa : vp -> vp -> bool
   val equal_vp : vp HOL.equal
   val equal_cepa : cep -> cep -> bool
@@ -1363,7 +1415,6 @@ module SyntaxVCT : sig
   val equal_taua : tau -> tau -> bool
   val equal_tau : tau HOL.equal
   val equal_xp : xp HOL.equal
-  val equal_lit : lit HOL.equal
   type ap = A_monotype of tau | A_function of xp * bp * cp * tau
   type bsub = BS_empty | BS_cons of bsub * bp * string
   val subst_vp : vp -> xp -> vp -> vp
@@ -1408,7 +1459,7 @@ type bop = Plus | Minus | Times | Div | Mod | LEq | LT | GT | GEq | Eq | And |
   Or | NEq;;
 
 type lit = L_unit | L_zero | L_one | L_true | L_false | L_num of Z.t |
-  L_string of string | L_undef | L_real of string;;
+  L_string of string | L_undef | L_bitvec of lit list | L_real of string;;
 
 type vp = V_lit of lit | V_var of xp | V_vec of vp list | V_list of vp list |
   V_cons of vp * vp | V_constr of string * vp | V_record of (string * vp) list |
@@ -1433,18 +1484,27 @@ let rec equal_xpa x0 x1 = match x0, x1 with VNamed x1, VIndex -> false
                     | VNamed x1, VNamed y1 -> ((x1 : string) = y1)
                     | VIndex, VIndex -> true;;
 
-let rec equal_uop x0 x1 = match x0, x1 with Neg, Not -> false
+let rec equal_uop x0 x1 = match x0, x1 with Not, Abs -> false
+                    | Abs, Not -> false
+                    | Neg, Abs -> false
+                    | Abs, Neg -> false
+                    | Neg, Not -> false
                     | Not, Neg -> false
+                    | Exp, Abs -> false
+                    | Abs, Exp -> false
                     | Exp, Not -> false
                     | Not, Exp -> false
                     | Exp, Neg -> false
                     | Neg, Exp -> false
+                    | Len, Abs -> false
+                    | Abs, Len -> false
                     | Len, Not -> false
                     | Not, Len -> false
                     | Len, Neg -> false
                     | Neg, Len -> false
                     | Len, Exp -> false
                     | Exp, Len -> false
+                    | Abs, Abs -> true
                     | Not, Not -> true
                     | Neg, Neg -> true
                     | Exp, Exp -> true
@@ -1620,87 +1680,109 @@ let rec equal_bop x0 x1 = match x0, x1 with Or, NEq -> false
                     | Minus, Minus -> true
                     | Plus, Plus -> true;;
 
-let rec equal_lita x0 x1 = match x0, x1 with L_undef, L_real x9 -> false
-                     | L_real x9, L_undef -> false
-                     | L_string x7, L_real x9 -> false
-                     | L_real x9, L_string x7 -> false
-                     | L_string x7, L_undef -> false
-                     | L_undef, L_string x7 -> false
-                     | L_num x6, L_real x9 -> false
-                     | L_real x9, L_num x6 -> false
-                     | L_num x6, L_undef -> false
-                     | L_undef, L_num x6 -> false
-                     | L_num x6, L_string x7 -> false
-                     | L_string x7, L_num x6 -> false
-                     | L_false, L_real x9 -> false
-                     | L_real x9, L_false -> false
-                     | L_false, L_undef -> false
-                     | L_undef, L_false -> false
-                     | L_false, L_string x7 -> false
-                     | L_string x7, L_false -> false
-                     | L_false, L_num x6 -> false
-                     | L_num x6, L_false -> false
-                     | L_true, L_real x9 -> false
-                     | L_real x9, L_true -> false
-                     | L_true, L_undef -> false
-                     | L_undef, L_true -> false
-                     | L_true, L_string x7 -> false
-                     | L_string x7, L_true -> false
-                     | L_true, L_num x6 -> false
-                     | L_num x6, L_true -> false
-                     | L_true, L_false -> false
-                     | L_false, L_true -> false
-                     | L_one, L_real x9 -> false
-                     | L_real x9, L_one -> false
-                     | L_one, L_undef -> false
-                     | L_undef, L_one -> false
-                     | L_one, L_string x7 -> false
-                     | L_string x7, L_one -> false
-                     | L_one, L_num x6 -> false
-                     | L_num x6, L_one -> false
-                     | L_one, L_false -> false
-                     | L_false, L_one -> false
-                     | L_one, L_true -> false
-                     | L_true, L_one -> false
-                     | L_zero, L_real x9 -> false
-                     | L_real x9, L_zero -> false
-                     | L_zero, L_undef -> false
-                     | L_undef, L_zero -> false
-                     | L_zero, L_string x7 -> false
-                     | L_string x7, L_zero -> false
-                     | L_zero, L_num x6 -> false
-                     | L_num x6, L_zero -> false
-                     | L_zero, L_false -> false
-                     | L_false, L_zero -> false
-                     | L_zero, L_true -> false
-                     | L_true, L_zero -> false
-                     | L_zero, L_one -> false
-                     | L_one, L_zero -> false
-                     | L_unit, L_real x9 -> false
-                     | L_real x9, L_unit -> false
-                     | L_unit, L_undef -> false
-                     | L_undef, L_unit -> false
-                     | L_unit, L_string x7 -> false
-                     | L_string x7, L_unit -> false
-                     | L_unit, L_num x6 -> false
-                     | L_num x6, L_unit -> false
-                     | L_unit, L_false -> false
-                     | L_false, L_unit -> false
-                     | L_unit, L_true -> false
-                     | L_true, L_unit -> false
-                     | L_unit, L_one -> false
-                     | L_one, L_unit -> false
-                     | L_unit, L_zero -> false
-                     | L_zero, L_unit -> false
-                     | L_real x9, L_real y9 -> ((x9 : string) = y9)
-                     | L_string x7, L_string y7 -> ((x7 : string) = y7)
-                     | L_num x6, L_num y6 -> Z.equal x6 y6
-                     | L_undef, L_undef -> true
-                     | L_false, L_false -> true
-                     | L_true, L_true -> true
-                     | L_one, L_one -> true
-                     | L_zero, L_zero -> true
-                     | L_unit, L_unit -> true;;
+let rec equal_lita
+  x0 x1 = match x0, x1 with L_bitvec x9, L_real x10 -> false
+    | L_real x10, L_bitvec x9 -> false
+    | L_undef, L_real x10 -> false
+    | L_real x10, L_undef -> false
+    | L_undef, L_bitvec x9 -> false
+    | L_bitvec x9, L_undef -> false
+    | L_string x7, L_real x10 -> false
+    | L_real x10, L_string x7 -> false
+    | L_string x7, L_bitvec x9 -> false
+    | L_bitvec x9, L_string x7 -> false
+    | L_string x7, L_undef -> false
+    | L_undef, L_string x7 -> false
+    | L_num x6, L_real x10 -> false
+    | L_real x10, L_num x6 -> false
+    | L_num x6, L_bitvec x9 -> false
+    | L_bitvec x9, L_num x6 -> false
+    | L_num x6, L_undef -> false
+    | L_undef, L_num x6 -> false
+    | L_num x6, L_string x7 -> false
+    | L_string x7, L_num x6 -> false
+    | L_false, L_real x10 -> false
+    | L_real x10, L_false -> false
+    | L_false, L_bitvec x9 -> false
+    | L_bitvec x9, L_false -> false
+    | L_false, L_undef -> false
+    | L_undef, L_false -> false
+    | L_false, L_string x7 -> false
+    | L_string x7, L_false -> false
+    | L_false, L_num x6 -> false
+    | L_num x6, L_false -> false
+    | L_true, L_real x10 -> false
+    | L_real x10, L_true -> false
+    | L_true, L_bitvec x9 -> false
+    | L_bitvec x9, L_true -> false
+    | L_true, L_undef -> false
+    | L_undef, L_true -> false
+    | L_true, L_string x7 -> false
+    | L_string x7, L_true -> false
+    | L_true, L_num x6 -> false
+    | L_num x6, L_true -> false
+    | L_true, L_false -> false
+    | L_false, L_true -> false
+    | L_one, L_real x10 -> false
+    | L_real x10, L_one -> false
+    | L_one, L_bitvec x9 -> false
+    | L_bitvec x9, L_one -> false
+    | L_one, L_undef -> false
+    | L_undef, L_one -> false
+    | L_one, L_string x7 -> false
+    | L_string x7, L_one -> false
+    | L_one, L_num x6 -> false
+    | L_num x6, L_one -> false
+    | L_one, L_false -> false
+    | L_false, L_one -> false
+    | L_one, L_true -> false
+    | L_true, L_one -> false
+    | L_zero, L_real x10 -> false
+    | L_real x10, L_zero -> false
+    | L_zero, L_bitvec x9 -> false
+    | L_bitvec x9, L_zero -> false
+    | L_zero, L_undef -> false
+    | L_undef, L_zero -> false
+    | L_zero, L_string x7 -> false
+    | L_string x7, L_zero -> false
+    | L_zero, L_num x6 -> false
+    | L_num x6, L_zero -> false
+    | L_zero, L_false -> false
+    | L_false, L_zero -> false
+    | L_zero, L_true -> false
+    | L_true, L_zero -> false
+    | L_zero, L_one -> false
+    | L_one, L_zero -> false
+    | L_unit, L_real x10 -> false
+    | L_real x10, L_unit -> false
+    | L_unit, L_bitvec x9 -> false
+    | L_bitvec x9, L_unit -> false
+    | L_unit, L_undef -> false
+    | L_undef, L_unit -> false
+    | L_unit, L_string x7 -> false
+    | L_string x7, L_unit -> false
+    | L_unit, L_num x6 -> false
+    | L_num x6, L_unit -> false
+    | L_unit, L_false -> false
+    | L_false, L_unit -> false
+    | L_unit, L_true -> false
+    | L_true, L_unit -> false
+    | L_unit, L_one -> false
+    | L_one, L_unit -> false
+    | L_unit, L_zero -> false
+    | L_zero, L_unit -> false
+    | L_real x10, L_real y10 -> ((x10 : string) = y10)
+    | L_bitvec x9, L_bitvec y9 -> Lista.equal_list (equal_lit ()) x9 y9
+    | L_string x7, L_string y7 -> ((x7 : string) = y7)
+    | L_num x6, L_num y6 -> Z.equal x6 y6
+    | L_undef, L_undef -> true
+    | L_false, L_false -> true
+    | L_true, L_true -> true
+    | L_one, L_one -> true
+    | L_zero, L_zero -> true
+    | L_unit, L_unit -> true
+and equal_lit () = ({HOL.equal = equal_lita} : lit HOL.equal);;
+let equal_lit = equal_lit ();;
 
 let rec equal_vpa
   x0 x1 = match x0, x1 with V_tuple x8, V_proj (x91, x92) -> false
@@ -2235,8 +2317,6 @@ let equal_tau = equal_tau ();;
 
 let equal_xp = ({HOL.equal = equal_xpa} : xp HOL.equal);;
 
-let equal_lit = ({HOL.equal = equal_lita} : lit HOL.equal);;
-
 type ap = A_monotype of tau | A_function of xp * bp * cp * tau;;
 
 type bsub = BS_empty | BS_cons of bsub * bp * string;;
@@ -2455,7 +2535,7 @@ module Contexts : sig
         (SyntaxVCT.xp * SyntaxVCT.tau) list *
         (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap *
         (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap * SyntaxVCT.xp list *
-        SyntaxVCT.order option * SyntaxVCT.tau option * 'b
+        SyntaxVCT.tau option * 'b
   val b_of : SyntaxVCT.tau -> SyntaxVCT.bp
   val c_of : SyntaxVCT.tau -> SyntaxVCT.cp
   val conj : SyntaxVCT.cp list -> SyntaxVCT.cp
@@ -2511,7 +2591,10 @@ module Contexts : sig
   val convert_to_st : SyntaxVCT.tau list -> SyntaxVCT.bp list * SyntaxVCT.cp
   val tsubst_b_list :
     SyntaxVCT.bp -> (string * SyntaxVCT.bp) list -> SyntaxVCT.bp
+  val mk_vec_len_eq_c : SyntaxVCT.xp -> 'a list -> SyntaxVCT.cp
   val mk_x_eq_c_tuple : SyntaxVCT.xp -> SyntaxVCT.xp list -> SyntaxVCT.cp
+  val add_type_to_scope :
+    ('a, unit) gamma_ext -> SyntaxVCT.tau -> ('a, unit) gamma_ext
   val gamma_f :
     ('a, 'b) gamma_ext ->
       (SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
@@ -2529,7 +2612,7 @@ type ('a, 'b) gamma_ext =
       (SyntaxVCT.xp * SyntaxVCT.tau) list *
       (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap *
       (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap * SyntaxVCT.xp list *
-      SyntaxVCT.order option * SyntaxVCT.tau option * 'b;;
+      SyntaxVCT.tau option * 'b;;
 
 let rec b_of (SyntaxVCT.T_refined_type (uu, b, uv)) = b;;
 
@@ -2550,8 +2633,8 @@ let rec mapi
 
 let rec gamma_x
   (Gamma_ext
-    (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_d,
-      gamma_e, more))
+    (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_e,
+      more))
     = gamma_x;;
 
 let rec x_of (SyntaxVCT.VNamed x) = x;;
@@ -2579,11 +2662,11 @@ let rec update _A
 let rec gamma_x_update
   gamma_xa
     (Gamma_ext
-      (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_d,
-        gamma_e, more))
+      (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_e,
+        more))
     = Gamma_ext
         (gamma_f, gamma_xa gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s,
-          gamma_d, gamma_e, more);;
+          gamma_e, more);;
 
 let rec add_var
   gamma (x, t) = gamma_x_update (fun _ -> (x, t) :: gamma_x gamma) gamma;;
@@ -2888,12 +2971,59 @@ let rec add_vars gamma bs = gamma_x_update (fun _ -> bs @ gamma_x gamma) gamma;;
 let emptyEnv : ('a, unit) gamma_ext
   = Gamma_ext
       (Finite_Map.fmempty, [], [], [], Finite_Map.fmempty, Finite_Map.fmempty,
-        [], None, None, ());;
+        [], None, ());;
 
 let rec mk_l_eq_c
-  x l = SyntaxVCT.C_eq
+  x xa1 = match x, xa1 with
+    x, SyntaxVCT.L_bitvec bs ->
+      SyntaxVCT.C_conj
+        (SyntaxVCT.C_eq
+           (SyntaxVCT.CE_uop
+              (SyntaxVCT.Len, SyntaxVCT.CE_val (SyntaxVCT.V_var x)),
+             SyntaxVCT.CE_val
+               (SyntaxVCT.V_lit
+                 (SyntaxVCT.L_num
+                   (Arith.integer_of_int
+                     (Arith.int_of_nat (Lista.size_list bs)))))),
+          SyntaxVCT.C_eq
+            (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+              SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_bitvec bs))))
+    | x, SyntaxVCT.L_unit ->
+        SyntaxVCT.C_eq
           (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit l));;
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_unit))
+    | x, SyntaxVCT.L_zero ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_zero))
+    | x, SyntaxVCT.L_one ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_one))
+    | x, SyntaxVCT.L_true ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_true))
+    | x, SyntaxVCT.L_false ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_false))
+    | x, SyntaxVCT.L_num v ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_num v)))
+    | x, SyntaxVCT.L_string v ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_string v)))
+    | x, SyntaxVCT.L_undef ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_undef))
+    | x, SyntaxVCT.L_real v ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_real v)));;
 
 let rec literal_type = function SyntaxVCT.L_true -> SyntaxVCT.B_bool
                        | SyntaxVCT.L_false -> SyntaxVCT.B_bool
@@ -2966,16 +3096,16 @@ let rec remove_tick
 let rec gamma_s_update
   gamma_sa
     (Gamma_ext
-      (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_d,
-        gamma_e, more))
+      (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_e,
+        more))
     = Gamma_ext
         (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_sa gamma_s,
-          gamma_d, gamma_e, more);;
+          gamma_e, more);;
 
 let rec gamma_s
   (Gamma_ext
-    (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_d,
-      gamma_e, more))
+    (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_e,
+      more))
     = gamma_s;;
 
 let rec add_to_scope
@@ -3006,6 +3136,16 @@ let rec tsubst_b_list
   b x1 = match b, x1 with b, [] -> b
     | ba, (x, b) :: xvs -> tsubst_b_list (SyntaxVCT.tsubst_bp b x ba) xvs;;
 
+let rec mk_vec_len_eq_c
+  x bs =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_uop (SyntaxVCT.Len, SyntaxVCT.CE_val (SyntaxVCT.V_var x)),
+        SyntaxVCT.CE_val
+          (SyntaxVCT.V_lit
+            (SyntaxVCT.L_num
+              (Arith.integer_of_int
+                (Arith.int_of_nat (Lista.size_list bs))))));;
+
 let rec mk_x_eq_c_tuple
   x xs =
     SyntaxVCT.C_eq
@@ -3013,16 +3153,40 @@ let rec mk_x_eq_c_tuple
         SyntaxVCT.CE_val
           (SyntaxVCT.V_tuple (Lista.map (fun a -> SyntaxVCT.V_var a) xs)));;
 
+let rec add_type_to_scope
+  gamma x1 = match gamma, x1 with
+    gamma,
+      SyntaxVCT.T_refined_type (zvar, SyntaxVCT.B_union (uname, variants), c)
+      -> add_to_scope gamma
+           (Lista.map (fun s -> SyntaxVCT.VNamed (Product_Type.fst s)) variants)
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_var vc, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid vc, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (vc, vd), vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list vc, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tuple vc, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_record vc, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_undef, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, vb) -> gamma
+    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set vc, vb) ->
+        gamma;;
+
 let rec gamma_f
   (Gamma_ext
-    (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_d,
-      gamma_e, more))
+    (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_e,
+      more))
     = gamma_f;;
 
 let rec gamma_u
   (Gamma_ext
-    (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_d,
-      gamma_e, more))
+    (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_e,
+      more))
     = gamma_u;;
 
 end;; (*struct Contexts*)
@@ -4156,7 +4320,18 @@ and tsubst_field_bp_list
 
 let rec ce_subst_cep
   cep_5 zp5 x2 = match cep_5, zp5, x2 with
-    cep_5, zp5, SyntaxVCT.CE_val vp -> SyntaxVCT.CE_val vp
+    cep_5, zp5, SyntaxVCT.CE_val v ->
+      (match v with SyntaxVCT.V_lit _ -> SyntaxVCT.CE_val v
+        | SyntaxVCT.V_var x ->
+          (if SyntaxVCT.equal_xpa x zp5 then cep_5
+            else SyntaxVCT.CE_val (SyntaxVCT.V_var x))
+        | SyntaxVCT.V_vec _ -> SyntaxVCT.CE_val v
+        | SyntaxVCT.V_list _ -> SyntaxVCT.CE_val v
+        | SyntaxVCT.V_cons (_, _) -> SyntaxVCT.CE_val v
+        | SyntaxVCT.V_constr (_, _) -> SyntaxVCT.CE_val v
+        | SyntaxVCT.V_record _ -> SyntaxVCT.CE_val v
+        | SyntaxVCT.V_tuple _ -> SyntaxVCT.CE_val v
+        | SyntaxVCT.V_proj (_, _) -> SyntaxVCT.CE_val v)
     | cep_5, zp5, SyntaxVCT.CE_bop (bop, cep1, cep2) ->
         SyntaxVCT.CE_bop
           (bop, ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)

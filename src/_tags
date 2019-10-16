@@ -16,4 +16,4 @@ true: -traverse, debug, use_menhir
 <minisail>: include
 
 # disable partial match and unused variable warnings
-<**/*.ml>: warn_y
+<**/*.ml>: warn_y, debug

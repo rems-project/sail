@@ -48,7 +48,7 @@ let pp_ge e = match e with
     Ctx.GEPair (b,c) -> (pp_bp b) ^^ string " " ^^ (pp_cp c)
   | GETyp t -> pp_tp t
 
-let pp_g (Minisailplus_ast.Contexts.Gamma_ext (_,g1,g2,_,_,_,scope,_,_,_)) xbc c =
+let pp_g (Minisailplus_ast.Contexts.Gamma_ext (_,g1,g2,_,_,_,scope,_,_)) xbc c =
   let g = g1@g2 in
   PPrintEngine.ToChannel.compact stderr ( string "Evars" ^^  (separate (string " ") (List.map
            (fun (MAST.VNamed x, e) ->
@@ -62,7 +62,7 @@ let pp_g (Minisailplus_ast.Contexts.Gamma_ext (_,g1,g2,_,_,_,scope,_,_,_)) xbc c
                                  
                                
 let traceG (s : string) g xbc c =
-  if !Tracing.opt_verbosity > 0 then 
+  if !Util.opt_verbosity > 0 then 
     (*    let s = convert_isa_string s in *)
     let _ = pp_g g xbc c in
     true
@@ -76,8 +76,8 @@ let rec satisfiable (label : string) loc ( str_list : string list ) ( def : bool
   let str_list = List.map convert_isa_string str_list in *)
   let z3_file = Util_ms.string_of_list "\n" (fun x -> x) str_list in
   let z3_file = !opt_solver.header ^ "\n" ^ z3_file ^ "\n" ^ !opt_solver.footer in
-  Printf.eprintf "CALLZ3\n";
-  if !Tracing.opt_verbosity > 1 then 
+  Printf.eprintf "CALLZ3 %d\n" (!Util.opt_verbosity);
+  if !Util.opt_verbosity > 1 then 
     (prerr_endline (Printf.sprintf "Label: %s" label);
      PPrintEngine.ToChannel.compact stderr (string "Location: " ^^ (pp_loc loc));
      prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file)); 
@@ -114,7 +114,7 @@ let rec satisfiable (label : string) loc ( str_list : string list ) ( def : bool
     let z3_output = List.combine problems [input_lines z3_chan 20] in
     let _ = Unix.close_process_in z3_chan in
     let _ = 
-      if !Tracing.opt_verbosity > 1 then 
+      if !Util.opt_verbosity > 1 then 
         let _ = List.iter (fun (_, result) -> Printf.eprintf "Z3 Result: %s\n" result) z3_output in
         let vals = get_values z3_output in
         let _ = List.iter (fun (x,y) -> Printf.eprintf "Val %s=%s\n" x y) vals in ()
@@ -134,7 +134,7 @@ let rec satisfiable (label : string) loc ( str_list : string list ) ( def : bool
 
   
 let trace2 s es g =
-  if !Tracing.opt_verbosity > 0 then (
+  if !Util.opt_verbosity > 0 then (
     Printf.eprintf "Trace: %s\n" (convert_isa_string s);
     List.iter (fun e ->   PPrintEngine.ToChannel.compact stderr (Minisailplus_pp.pp_ep e)) es;
     PPrintEngine.ToChannel.compact stderr

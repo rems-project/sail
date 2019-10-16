@@ -10,7 +10,8 @@ convert_ast.ml
 - Mapping constructs desugared to pair functions with matching
 - Registers - if type maps to a MS type. Vector register - unconstrained element
 
-
+The following we are currently skipping over (raising NotSupported)
+  deref, ref
 
 Target is prelude and sail-riscv.
 

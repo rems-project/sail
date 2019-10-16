@@ -120,8 +120,8 @@ let to_ms_lit (A.L_aux (l,loc)) = match l with
   | L_true -> L_true
   | L_false -> L_false
   | L_num n -> L_num ( n ) (*(Nat_big_num.to_int n)))*)
-(*  | L_hex s -> L_bitvec (hex_to_bv (explode s))
-  | L_bin bs -> (L_bitvec (List.map (fun b -> if b = '0' then L_zero else L_one) (explode bs)))*)
+  | L_hex s -> L_bitvec (hex_to_bv (explode s))
+  | L_bin bs -> (L_bitvec (List.map (fun b -> if b = '0' then L_zero else L_one) (explode bs)))
   | L_undef -> L_undef
   | L_string s -> L_string (convert_to_isa s)
   | L_real r -> L_real (convert_to_isa r)
@@ -261,11 +261,13 @@ let to_ms_op op = match op with
 (*let rec convert_fexp (loc : A.l) (A.E_aux (exp, _)) = match exp with
    A.E_app_infix (E_aux (E_id (Id_aux (Id id, _ )),_), Id_aux (Id "=",_) , E_aux (arg2,_)) -> (convert_to_isa id , to_ms_v arg2 loc )*)
 
-let rec convert_fexp (loc : A.l) (A.FE_aux (FE_Fexp ( Id_aux (Id id,_) , E_aux( exp, _ ) ), _)) =  (convert_to_isa id , to_ms_v exp loc )
+let rec convert_fexp (loc : A.l) (A.FE_aux (FE_Fexp ( Id_aux (Id id,_) , E_aux( exp, _ ) ), _)) =
+  Printf.eprintf "convert_fexp loc= %s\n" (pp_location loc);
+  (convert_to_isa id , to_ms_v exp loc )
 
              
 
-(* FIXME - WE like things as values. Attempt to convert E to a value *)                                                                          
+(* FIXME - Attempt to convert E to a value *)                                                                          
 and  to_ms_v ( exp : Type_check.tannot  A.exp_aux) loc : vp =
   match exp with
   | A.E_lit l -> to_ms_lit_v l
@@ -279,7 +281,7 @@ and  to_ms_v ( exp : Type_check.tannot  A.exp_aux) loc : vp =
 (*  | E_block [E_aux (exp1,_); E_aux (exp2,_) ] -> let v1 = to_ms_v exp1 loc in  (* Terrible hack. Seems like record constructors are not E_record *)
                                                  let v2 = to_ms_v exp2 loc in
                                                     V_pair (v1,v2)*)
-  | E_app _ -> raise (Failure "Trying to process an App  as a value")
+  (*  | E_app _ -> raise (Failure ("Trying to process an App  as a value loc=" ^ (pp_location loc)))*)
                                                                        
 (*  | E_internal_let  _ -> raise (Failure "Let")*)
 
@@ -289,9 +291,8 @@ and  to_ms_v ( exp : Type_check.tannot  A.exp_aux) loc : vp =
   | E_assign _ -> raise (Failure ("Assign " ^ (pp_location loc)))
   | E_field (E_aux (exp,_), Id_aux(fname,_)) -> raise (Failure "E_field")
   | E_var _ -> raise (Failure ("Expression not handled Sail E_var " ^ (pp_location loc))) (* Internal node *)
-  | E_ref _ -> raise (Failure ("Expression not handled Sail E_ref" ^ (pp_location loc)))
+  | E_ref _ -> raise (NotSupported ("Expression not handled Sail E_ref" ^ (pp_location loc)))
   (*  | E_deref _ -> raise (Failure ("Expression not handled Sail E_deref" ^ (pp_location loc)))*)
-  | E_app _ -> raise (Failure ("Expression not handled Sail E_appf" ^ (pp_location loc)))
   | E_constraint _ -> raise (Failure ("Expression not handled Sail E_constraint" ^ (pp_location loc)))
   | _ -> raise (Failure ("Expression not handled Sail unknown form" ^ (pp_location loc)))
 
@@ -321,7 +322,9 @@ and  to_ms_pat ctx (A.P_aux (pat,(loc,_)) as full_pat) : patp = match pat with
   | P_id (Id_aux (Id id,_)) ->
      Printf.eprintf "Got a P_id %s\n" id;
      Pp_id (convert_loc loc, (convert_to_isa id))
-  | P_var (parg,typ) -> raise (Failure ("P_var fixme" ^ (pp_location loc))) (*to_ms_pat_as_typ ctx parg typ*)
+  | P_var ( P_aux ( P_id (Id_aux (Id id,_ )),_) , typ) ->
+     Printf.eprintf "Got a P_var. Treating as id %s\n" id;
+     Pp_id (convert_loc loc, (convert_to_isa id))
 (*  | (P_app (Id_aux (Id id,_), [parg] )) -> let p = to_ms_pat ctx parg in
                                            Pp_app (convert_loc loc, id, p)*)
   | (P_app (Id_aux (Id id,_), pargs )) -> let ps = List.map (to_ms_pat ctx) pargs  in
@@ -373,8 +376,16 @@ and convert_lexp ctx (A.LEXP_aux (lexp, (loc1,_))) =
   | LEXP_id x -> ([ convert_id x ], LEXPp_mvar (loc, convert_id x))
   | LEXP_tup es -> let (mvars,lexps) = unzip (List.map (convert_lexp ctx) es) in
                    (List.concat mvars, LEXPp_tup (loc, lexps))
+  | LEXP_field(lexp, Id_aux (Id id , _)) ->
+     let (mvars, lexp) = convert_lexp ctx lexp in (mvars,LEXPp_field (loc, lexp, id))
+  | LEXP_deref _ -> raise (NotSupported ("convert_lexp unhandled form - deref " ^ (pp_location loc1)))
+  | LEXP_memory _ -> raise (Failure ("convert_lexp unhandled form - memory " ^ (pp_location loc1)))
+  | LEXP_vector _ -> raise (Failure ("convert_lexp unhandled form - vec " ^ (pp_location loc1)))
+  | LEXP_vector_concat _ -> raise (Failure ("convert_lexp unhandled form - vec c" ^ (pp_location loc1)))
+  | LEXP_vector_range _ -> raise (Failure ("convert_lexp unhandled form - vec r " ^ (pp_location loc1)))
   (*  | LEXP_vector_concat es -> LEXP_vector_concat (loc, List.map (convert_lexp ctx) es)*)
-  | _ -> raise (Failure ("convert_lexp unhandled form " ^ (pp_location loc1)))
+                                                    
+
 
                
 and  to_ms_e_aux ( ctx : 'a ctx ) ( exp : 'a A.exp_aux) ( loc : P.l )  = 
@@ -386,7 +397,7 @@ and  to_ms_e_aux ( ctx : 'a ctx ) ( exp : 'a A.exp_aux) ( loc : P.l )  =
   | E_app (Id_aux (Id "leq_int",_), [ E_aux (arg1,_); E_aux (arg2,_)]) ->  (Ep_bop (lc,LEq, to_ms_e_aux ctx arg1 loc, to_ms_e_aux ctx arg2 loc))
   | E_app_infix (E_aux (e1,_), Id_aux (Id op,_), E_aux (e2,_)) -> Ep_app (lc,VNamed (convert_to_isa op), Ep_tuple (lc,[ to_ms_e_aux ctx e1 loc; to_ms_e_aux ctx e2 loc]))
   | E_app (Id_aux (Id f,_), [ E_aux (exp,_) ]) -> (Ep_app (lc, VNamed (convert_to_isa f), to_ms_e_aux ctx  exp loc))
-  | E_app (Id_aux (Id f,_), e_list ) -> let e = Ep_tuple (lc,List.map (fun (A.E_aux (exp,_)) -> to_ms_e_aux ctx exp loc) e_list) in
+  | E_app (Id_aux (Id f,_), e_list ) | E_app (Id_aux (Operator f,_), e_list ) -> let e = Ep_tuple (lc,List.map (fun (A.E_aux (exp,_)) -> to_ms_e_aux ctx exp loc) e_list) in
                                         Ep_app (lc,VNamed (convert_to_isa f), e )
   | E_tuple es  -> Ep_tuple (lc, List.map (to_ms_e ctx) es)
   | E_vector es -> Ep_vec (lc, List.map (to_ms_e ctx) es)
@@ -406,9 +417,11 @@ and  to_ms_e_aux ( ctx : 'a ctx ) ( exp : 'a A.exp_aux) ( loc : P.l )  =
   | E_let (lb, exp_s ) -> let (pat,exp,loc,tid) = to_ms_letbind ctx lb in
                           Ep_let(lc, LBp_val (lc, pat, exp), to_ms_e ctx exp_s)
   | E_if ( (A.E_aux (e1,_)) , e2 ,e3 ) -> (Ep_if (lc,to_ms_e_aux ctx  e1 loc, to_ms_e ctx e2, to_ms_e ctx e3))
-  | E_case (e,pexp_list) -> Ep_case (lc,to_ms_e ctx e , List.map (fun pexp -> convert_pexp ctx pexp) pexp_list)
+  | E_case (e,pexp_list) -> Ep_case (lc,to_ms_e ctx e , List.map (fun pexp -> to_ms_pexp ctx pexp) pexp_list)
   | E_assign ( lexp, e ) -> let (_, lexp ) = convert_lexp ctx lexp in
                             Ep_assign (lc, lexp , to_ms_e ctx e , Ep_val (lc,V_lit L_unit))
+  | E_throw exp -> Ep_throw (lc,to_ms_e ctx exp)
+
 (*  | E_assign (LEXP_aux (LEXP_cast (typ, x) , _), e2) ->
      Printf.eprintf "Assign with cast\n";
      E_assign_t ( lc, convert_id_e ctx lc (VNamed (convert_id x)), to_ms_typ ctx typ, to_ms_e ctx e2  )
@@ -443,18 +456,20 @@ and  to_ms_e_aux ( ctx : 'a ctx ) ( exp : 'a A.exp_aux) ( loc : P.l )  =
   | E_id (Id_aux (Id x, loc)) -> if ESet.mem (convert_to_isa x) ctx.mvars then
                                    Ep_mvar (convert_loc loc, convert_to_isa x)
                                  else (Ep_val (lc,to_ms_v exp loc))
+  | E_try (exp, pexps) -> Ep_try (convert_loc loc, to_ms_e ctx exp , List.map (to_ms_pexp ctx) pexps  )
   | _ -> (Ep_val (lc,to_ms_v exp loc))
 
                                                              
 
 
 
-and convert_pexp ctx (Pat_aux (p,loc)) =
+and to_ms_pexp ctx (Pat_aux (p,loc)) =
   match p with
     Pat_exp (pat,exp) -> PEXPp_exp( to_ms_pat ctx pat, to_ms_e ctx exp)
   | Pat_when (pat,exp1,exp2) -> PEXPp_exp ( to_ms_pat ctx pat, to_ms_e ctx exp1)
                                    
 and check_record ctx es =
+  Printf.eprintf "check_record\n";
   try 
     let fids_expr = List.map (fun (A.E_aux (E_app_infix (E_aux (E_id (Id_aux (Id fid,_)),_),  Id_aux (Id "=",_), E_aux (e,(loc,_))) , _ )) -> (convert_to_isa fid, to_ms_v e loc)) es
     in  Some (Ep_val (Loc_unknown,V_record (fids_expr)))
@@ -654,8 +669,14 @@ let to_ms_scattered_aux ctx ( sd : 'a A.scattered_def_aux) loc   =
  | SD_mapping _  -> raise (Failure ("to_ms_scattered SD_mapping " ^ (pp_location loc)))
  | SD_mapcl _  -> raise (Failure ("to_ms_scattered SD_mapcl " ^ (pp_location loc)))
 
-let to_ms_scattered ctx ( sd : 'a A.scattered_def_aux) loc = let (ctx,sd) = to_ms_scattered_aux ctx sd loc
-                                 in (ctx, Some (DEFp_scattered (convert_loc loc, sd)))
+let to_ms_scattered ctx ( sd : 'a A.scattered_def_aux) loc =
+  try 
+    let (ctx,sd) = to_ms_scattered_aux ctx sd loc
+    in (ctx, Some (DEFp_scattered (convert_loc loc, sd)))
+  with NotSupported s ->
+    Printf.eprintf "Not supported (%s) \n" s;
+    (ctx,None)
+
 
                                       
 let to_ms_typedef ctx  (A.TD_aux (aux,(l,_)) : 'a A.type_def) =
@@ -720,17 +741,21 @@ let to_ms_def_aux ctx d  =
   (*    A.DEF_kind (KD_aux (_, (loc,_))) -> raise (Failure ("Kind def not supported" ^ (pp_location loc)))*)
 
   | A.DEF_type aux -> to_ms_typedef ctx aux
-                                    
-  | A.DEF_fundef (FD_aux ( FD_function (rc,Typ_annot_opt_aux(Typ_annot_opt_none,_), eff, (( funcl::_) as funcls)) ,(loc,_))) ->
+
+  | A.DEF_fundef (FD_aux ( FD_function (rc, _ , eff, (( funcl::_) as funcls)) ,(loc,_))) ->
+     (*  | A.DEF_fundef (FD_aux ( FD_function (rc,Typ_annot_opt_aux(Typ_annot_opt_none,_), eff, (( funcl::_) as funcls)) ,(loc,_))) ->*)
+     Printf.eprintf "to_ms_def DEF_fundef none %s\n" (pp_location loc);
      let fname = function_name funcl in
      let (local_ctx,kids, fun_t) = (match (FBindings.find_opt fname ctx.funs ) with
            | Some (kids,b,c,tret) -> (add_kids ctx loc kids ,kids, A_function(xvar,b,c,tret))
            | None ->  raise (Failure "to_ms_def DEF_fundef. Cannot find type for function")) in
      let funcls = List.map (to_ms_funcl local_ctx) funcls in
      (ctx, Some (DEFp_fundef  (convert_loc loc, fun_t ,funcls)))
-      
+
+(* Some confusion on why this needed. Sail TC seems put the correct type as a val spec so no need to try and work
+it out here       
   | A.DEF_fundef (FD_aux ( FD_function (rc,Typ_annot_opt_aux(Typ_annot_opt_some (tq,typ_out),_), eff, (( funcl::_) as funcls)) ,(loc,_))) ->
-     Printf.eprintf "to_ms_def DEF_fundef %s\n" (pp_location loc);
+     Printf.eprintf "to_ms_def DEF_fundef some %s\n" (pp_location loc);
      let (ctx,kids) = to_ms_typquant ctx tq in
      let args_pat_typ _ _ = typ_out in
      let typ_in = args_pat_typ ctx funcl in 
@@ -738,10 +763,10 @@ let to_ms_def_aux ctx d  =
      let funcls = List.map (to_ms_funcl ctx) funcls in (* local_ctx might be needed - need to subst kids for ... *)
      let funcls = List.map (replace_ks_in_funcl ceks) funcls in
      (ctx, Some (DEFp_fundef  (convert_loc loc, A_function(xvar,b,c,tout),funcls)))
-
+ *)
   | DEF_fundef _ -> raise (Failure "Unknown fundef form")
                           
-  | DEF_mapdef _ -> raise (Failure "Mapdef not supported")
+  | DEF_mapdef _ -> (ctx,None) (* FIXME. Print warning ? *)
                          
   | DEF_val lb  ->
      let (pat,exp,(loc,_),_) = to_ms_letbind ctx lb in (ctx, Some (

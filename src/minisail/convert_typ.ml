@@ -108,7 +108,7 @@ let contains_var ce k = List.mem k (fvs_cep ce)
 let convert_order ((A.A_aux (A_order (Ord_aux (ord,_)),_)) : A.typ_arg) : order = match ord with
   | A.Ord_dec -> Ord_dec
   | A.Ord_inc -> Ord_inc
-  | _ -> Ord_inc (* FIXPE *)
+  | _ -> Printf.eprintf "Warning: Picking Ord_dec\n"; Ord_dec (* FIXME HAndling Ord_var *)
 
                                  
 (* Extract from the Sail typ its MiniSail base type *)
@@ -267,12 +267,12 @@ let rec to_ms_constraint (A.Typ_aux (aux,l) as atyp) = match aux with
 
                       
 and  to_ms_constraint ctx ( A.NC_aux(nc,_)  : A.n_constraint) : cp = match nc with
-  | A.NC_equal (n1,n2) -> c_eq  (to_ms_ce ctx n2) (to_ms_ce ctx n1)
-  | A.NC_bounded_ge (n1,n2) -> c_ge  (to_ms_ce ctx n2) (to_ms_ce ctx n1)
+  | A.NC_equal (n1,n2) -> c_eq  (to_ms_ce ctx n1) (to_ms_ce ctx n2)
+  | A.NC_bounded_ge (n1,n2) -> c_ge  (to_ms_ce ctx n1) (to_ms_ce ctx n2)
   | A.NC_bounded_le (n1,n2) -> c_le  (to_ms_ce ctx n1) (to_ms_ce ctx n2)
-  | A.NC_bounded_gt (n1,n2) -> c_gt  (to_ms_ce ctx n2) (to_ms_ce ctx n1)
+  | A.NC_bounded_gt (n1,n2) -> c_gt  (to_ms_ce ctx n1) (to_ms_ce ctx n2)
   | A.NC_bounded_lt (n1,n2) -> c_lt  (to_ms_ce ctx n1) (to_ms_ce ctx n2)
-  | A.NC_not_equal (n1,n2) -> C_not (c_eq (to_ms_ce ctx n2) (to_ms_ce ctx n1))
+  | A.NC_not_equal (n1,n2) -> C_not (c_eq (to_ms_ce ctx n1) (to_ms_ce ctx n2))
   | A.NC_set (kid, numlist ) ->
      let rec convert_eet ns = match ns with
          [] -> C_false
@@ -439,7 +439,9 @@ let rec extract_pp ctx ( kids : (xp*bp) list ) ( typ : A.typ) : ( xp * cep ) lis
   List.iter ( fun (ce1,ce2) -> pp_line (pp_raw_cep ce1 ^^ (string " = ") ^^ (pp_raw_cep ce2))) ces;  
   List.iter ( fun (c) -> pp_line (pp_raw_cp c)) cs;
   Printf.eprintf "#kids=%d\n" (List.length kids);
-  if kids = [] & ces = [] then (ceks', cs) else
+  if kids = [] & ces = [] then
+       (Printf.eprintf "No need to run solver\n";
+       (ceks', cs)) else
   match solve_ce_ce kids ces with
   | Some (ces,mods) -> List.iter ( fun ce1 -> pp_line (pp_cep ce1 )) ces;
                 if List.length kids > List.length ces then raise (Failure "Mising equalities")
@@ -549,6 +551,16 @@ and to_ms_exist_one_rec loc ctx kid b c typ =
      T_refined_type ([],zvar,B_tuple bs, c)
  *)
 
+
+(* Sometimes we might have more than one MS c-expression for a Sail type-variable so we need
+   to create a constraint that will link of these together *)
+and find_c_eq ( ceks : ( xp * cep) list ) : cp =
+  let ceks = List.map (fun (VNamed x, ce) -> (x,ce)) ceks in 
+  let ceks = merge_assoc ceks in
+  let ceks = List.filter (fun (_,l) -> List.length l > 1) ceks in
+  C_conj_many (List.concat (List.map (fun (x,ce::ces) -> List.map (fun ce' -> C_eq (ce ,ce')) ces) ceks))
+                         
+               
 and to_ms_exist_many loc ctx (kids : A.kinded_id list) (cons : A.n_constraint) (typ : A.typ) : tau =
   Printf.eprintf "to_ms_exist_many %s\n" (pp_location loc);
   let c = to_ms_constraint ctx cons in
@@ -579,6 +591,7 @@ and to_ms_exist_many_aux ctx loc (kids : (xp*bp) list) (c : cp) (typ : A.typ)  =
                            | VNamed k -> Printf.eprintf "k=%s\n" k; pp_line (pp_cep e1)
     ) ceks;
   let cs = replace_ks_in_c ceks c in
+  let c_eq = find_c_eq ceks in 
  (* 
   let mods = List.map (fun (x,y) -> C_eq ( CE_bop (Mod , x,y), CE_val (V_lit (L_num (int_of_int 0))))) mods in
   let c_z_eq = [] (*map_concat (fun (k,e) -> match k with
@@ -594,7 +607,7 @@ and to_ms_exist_many_aux ctx loc (kids : (xp*bp) list) (c : cp) (typ : A.typ)  =
                                 | None -> raise (Failure ("No equation for type variable " ^ k ))
                             ) kids) in 
   let t =   T_refined_type( zvar, to_ms_base ctx typ, C_conj_many (cs :: mods @ c_eq @ c_z_eq @ cs2)) in *)
-  let t =   T_refined_type( zvar, to_ms_base ctx typ, C_conj_many (cs::cs1) ) in 
+  let t =   T_refined_type( zvar, to_ms_base ctx typ, C_conj_many (c_eq::cs::cs1) ) in 
   PPrintEngine.ToChannel.compact stderr ((string "to_ms_exist_many result=\n") ^^ Minisailplus_pp.pp_tp t ^^ (string "\n"));
   (t,ceks)
                                  

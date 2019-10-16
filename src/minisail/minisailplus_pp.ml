@@ -16,6 +16,7 @@ let rec pp_raw_lit x = match x with
 | L_string(string_val) -> string "L_string" ^^ string "(" ^^  string "\"" ^^ string string_val ^^ string "\"" ^^ string ")"
 | L_undef -> string "L_undef"
 | L_real(real_val) -> string "L_real" ^^ string "(" ^^  string "\"" ^^ string real_val ^^ string "\"" ^^ string ")"
+| _ -> string "some lit"
 
 and pp_raw_order x = match x with
 | Ord_inc -> string "Ord_inc"
@@ -216,6 +217,7 @@ let rec pp_lit x = match x with
 | L_string(string_val) -> string string_val
 | L_undef -> string "undefined"
 | L_real(real_val) -> string real_val
+| _ -> string "some lit"
 
 and pp_order x = match x with
 | Ord_inc -> string "inc"
