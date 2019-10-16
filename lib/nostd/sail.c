@@ -1,21 +1,110 @@
-
-#ifndef SAIL_INT64
-#define SAIL_INT64
-#endif
-
-#ifndef SAIL_BITS64
-#define SAIL_BITS64
-#endif
-
 #include <sail_alloc.h>
 #include <sail_failure.h>
 #include <sail.h>
 
 /* ********************************************************************** */
-/* Sail integers                                                          */
+/* Sail strings                                                           */
 /* ********************************************************************** */
 
-#if defined(SAIL_INT64) || defined(SAIL_INT128)
+/*
+ * Implementation is /incredibly/ inefficient... but we don't use
+ * strings that much anyway. A better implementation would not use
+ * char* due to immutability requirements, but that would make
+ * inter-operating with the C world harder.
+ */
+
+void CREATE(sail_string)(sail_string *str)
+{
+     char *istr = (char *) sail_malloc(1 * sizeof(char));
+     istr[0] = '\0';
+     *str = istr;
+}
+
+void RECREATE(sail_string)(sail_string *str)
+{
+     sail_free(*str);
+     char *istr = (char *) sail_malloc(1 * sizeof(char));
+     istr[0] = '\0';
+     *str = istr;
+}
+
+size_t sail_strlen(const sail_string str)
+{
+     size_t i = 0;
+     while (true) {
+	  if (str[i] == '\0') {
+	       return i;
+	  }
+	  i++;
+     }
+}
+
+char *sail_strcpy(char *dest, const char *src)
+{
+     size_t i;
+     for (i = 0; src[i] != '\0'; i++) {
+	  dest[i] = src[i];
+     }
+     dest[i] = '\0';
+     return dest;
+}
+
+int sail_strcmp(const char *str1, const char *str2)
+{
+     size_t i = 0;
+     while (true) {
+	  if (str1[i] == str2[i]) {
+	       i++;
+	  } else {
+	       return str1[i] - str2[i];
+	  }
+     }
+}
+
+char *sail_strcat(char *dest, const char *src)
+{
+     size_t i = 0;
+     while (dest[i] != '\0') {
+	  i++;
+     }
+     return sail_strcpy(dest + i, src);
+}
+
+void COPY(sail_string)(sail_string *str1, const sail_string str2)
+{
+     size_t len = sail_strlen(str2);
+     *str1 = sail_realloc(*str1, len + 1);
+     *str1 = sail_strcpy(*str1, str2);
+}
+
+void KILL(sail_string)(sail_string *str)
+{
+     sail_free(*str);
+}
+
+bool eq_string(const sail_string str1, const sail_string str2)
+{
+     return sail_strcmp(str1, str2) == 0;
+}
+
+bool EQUAL(sail_string)(const sail_string str1, const sail_string str2)
+{
+     return sail_strcmp(str1, str2) == 0;
+}
+
+void undefined_string(sail_string *str, const unit u) {}
+
+void concat_str(sail_string *stro, const sail_string str1, const sail_string str2)
+{
+     *stro = sail_realloc(*stro, sail_strlen(str1) + sail_strlen(str2) + 1);
+     (*stro)[0] = '\0';
+     sail_strcat(*stro, str1);
+     sail_strcat(*stro, str2);
+}
+
+/* ********************************************************************** */
+/* Sail integers                                                          */
+/* ********************************************************************** */
 
 sail_int CREATE_OF(sail_int, mach_int)(const mach_int op)
 {
@@ -24,7 +113,7 @@ sail_int CREATE_OF(sail_int, mach_int)(const mach_int op)
 
 mach_int CREATE_OF(mach_int, sail_int)(const sail_int op)
 {
-     if (MACH_INT_MIN < op && op < MACH_INT_MAX) {
+     if (MACH_INT_MIN <= op && op <= MACH_INT_MAX) {
           return (mach_int) op;
      } else {
           sail_failure("Lost precision when converting from sail integer to machine integer");
@@ -34,7 +123,7 @@ mach_int CREATE_OF(mach_int, sail_int)(const sail_int op)
 
 mach_int CONVERT_OF(mach_int, sail_int)(const sail_int op)
 {
-     if (MACH_INT_MIN < op && op < MACH_INT_MAX) {
+     if (MACH_INT_MIN <= op && op <= MACH_INT_MAX) {
           return (mach_int) op;
      } else {
           sail_failure("Lost precision when converting from sail integer to machine integer");
@@ -245,10 +334,6 @@ sail_int pow2(const sail_int exp)
 {
      return pow_int(2, exp);
 }
-
-#else
-
-#endif
 
 /* ********************************************************************** */
 /* Sail bitvectors                                                        */

@@ -119,15 +119,15 @@ static inline bool EQUAL(mach_int)(const mach_int a, const mach_int b)
  * but MUCH faster. the SAIL_INT_FUNCTION macro allows defining
  * function prototypes that work for either case.
  */
-#if defined(SAIL_INT64) || defined(SAIL_INT64)
+#if defined(SAIL_INT64) || defined(SAIL_INT128)
 #ifdef SAIL_INT64
 typedef int64_t sail_int;
 #define SAIL_INT_MAX INT64_MAX
 #define SAIL_INT_MIN INT64_MIN
 #else
 typedef __int128 sail_int;
-#define SAIL_INT_MAX INT128_MAX
-#define SAIL_INT_MIN INT128_MIN
+#define SAIL_INT_MAX (((__int128) 0x7FFFFFFFFFFFFFFF << 64) | (__int128) 0xFFFFFFFFFFFFFFFF)
+#define SAIL_INT_MIN (~SAIL_INT_MAX)
 #endif
 #define SAIL_INT_FUNCTION(fname, ...) sail_int fname(__VA_ARGS__)
 #else
@@ -136,7 +136,7 @@ typedef mpz_t sail_int;
 #endif
 
 SAIL_INT_FUNCTION(CREATE_OF(sail_int, mach_int), const mach_int);
-SAIL_INT_FUNCTION(CREATE_OF(sail_int, sail_string, const sail_string);
+SAIL_INT_FUNCTION(CREATE_OF(sail_int, sail_string), const sail_string);
 mach_int CREATE_OF(mach_int, sail_int)(const sail_int);
 
 SAIL_INT_FUNCTION(CONVERT_OF(sail_int, mach_int), const mach_int);
@@ -192,7 +192,7 @@ SAIL_INT_FUNCTION(min_int, const sail_int, const sail_int);
 SAIL_INT_FUNCTION(neg_int, const sail_int);
 SAIL_INT_FUNCTION(abs_int, const sail_int);
 SAIL_INT_FUNCTION(pow_int, const sail_int, const sail_int);
-SAIL_INT_FUNCTION(pow2, sail_int, const sail_int);
+SAIL_INT_FUNCTION(pow2, const sail_int);
 
 /* ********************************************************************** */
 /* Sail bitvectors                                                        */
@@ -229,7 +229,7 @@ typedef struct {
   mpz_t *bits;
 } lbits;
 #define SAIL_BITS_FUNCTION(fname, ...) void fname(lbits*, __VA_ARGS__)
-SAIL_BUILTIN_TYPE(lbits);
+SAIL_BUILTIN_TYPE(lbits)
 #endif
 
 SAIL_BITS_FUNCTION(CREATE_OF(lbits, fbits), const fbits, const uint64_t, const bool);

@@ -5,6 +5,8 @@
 
 void *sail_malloc(size_t size);
 
+void *sail_realloc(void *ptr, size_t new_size);
+
 void sail_free(void *ptr);
 
 #endif

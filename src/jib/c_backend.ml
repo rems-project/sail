@@ -195,7 +195,7 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_fint n -> n <= 64
   | CT_lint when !optimize_fixed_int -> true
   | CT_lint -> false
-  | CT_lbits _ when !optimize_fixed_int -> true
+  | CT_lbits _ when !optimize_fixed_bits -> true
   | CT_lbits _ -> false
   | CT_real | CT_string | CT_list _ | CT_vector _ -> false
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) fields
