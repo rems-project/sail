@@ -180,6 +180,9 @@ let options = Arg.align ([
   ( "-c_no_rts",
     Arg.Set C_backend.opt_no_rts,
     " do not include the Sail runtime" );
+  ( "-c_no_lib",
+    Arg.Tuple [Arg.Set C_backend.opt_no_lib; Arg.Set C_backend.opt_no_rts],
+    " do not include the Sail runtime or library" );
   ( "-c_prefix",
     Arg.String (fun prefix -> C_backend.opt_prefix := prefix),
     "<prefix> prefix generated C functions" );

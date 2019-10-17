@@ -66,6 +66,7 @@ let c_verbosity = ref 0
 let opt_static = ref false
 let opt_no_main = ref false
 let opt_memo_cache = ref false
+let opt_no_lib = ref false
 let opt_no_rts = ref false
 let opt_prefix = ref "z"
 let opt_extra_params = ref None
@@ -2182,7 +2183,7 @@ let compile_ast env output_chan c_includes ast =
     let docs = separate_map (hardline ^^ hardline) (codegen_def ctx) cdefs in
 
     let preamble = separate hardline
-                     ([ string "#include \"sail.h\"" ]
+                     ((if !opt_no_lib then [] else [string "#include \"sail.h\""])
                       @ (if !opt_no_rts then [] else
                            [ string "#include \"rts.h\"";
                              string "#include \"elf.h\"" ])

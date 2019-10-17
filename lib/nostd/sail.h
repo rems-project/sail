@@ -357,7 +357,7 @@ typedef double real;
 typedef mpq_t real;
 #endif
 
-SAIL_BUILTIN_TYPE(real);
+SAIL_BUILTIN_TYPE(real)
 
 void CREATE_OF(real, sail_string)(real *rop, const sail_string op);
 void CONVERT_OF(real, sail_string)(real *rop, const sail_string op);

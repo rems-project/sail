@@ -64,6 +64,9 @@ val opt_no_main : bool ref
    before executing any instruction semantics. *)
 val opt_no_rts : bool ref
 
+(** Do not include sail.h by default *)
+val opt_no_lib : bool ref
+
 (** Ordinarily we use plain z-encoding to name-mangle generated Sail
    identifiers into a form suitable for C. If opt_prefix is set, then
    the "z" which is added on the front of each generated C function
