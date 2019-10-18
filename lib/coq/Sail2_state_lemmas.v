@@ -306,8 +306,15 @@ destruct c; reflexivity.
 Qed.
 Hint Resolve liftState_if_distrib_sumbool : liftState.
 (* As above, but simple apply doesn't seem to work (again, due to unification problems
-   with the M alias for monad *)
-Hint Extern 0 (liftState _ _ = _) => apply liftState_if_distrib_sumbool : liftState.
+   with the M alias for monad).  Be careful about only applying to a suitable goal to
+   avoid slowing down proofs. *)
+Hint Extern 0 (liftState _ ?t = _) =>
+  match t with
+  | match ?x with _ => _ end =>
+    match type of x with
+    | sumbool _ _ => apply liftState_if_distrib_sumbool
+    end
+  end : liftState.
 
 Lemma liftState_let_pair Regs RegVal A B C E r (x : B * C) M :
   @liftState Regs RegVal A E r (let '(y, z) := x in M y z) =
