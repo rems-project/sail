@@ -1,0 +1,250 @@
+%% MiniSailPlus
+%% Syntax for patterns, expressions and definition.
+%%
+
+embed {{ isa-import "SyntaxVCT" "Location" }}
+
+embed {{ coq-preamble
+Require Import SyntaxVCT.
+
+Inductive loc : Set :=
+  | Unknown.
+
+Inductive xbc : Set :=
+ | XBC_triple (xp5:xp) (bp5:bp) (cp5:cp).
+
+(*Definition klist : Set := list_xp_bp_cp.*)
+
+Definition klist : Set := list xbc.
+
+}}
+
+embed {{ isa
+datatype loop = While | Until
+
+hide_const id
+hide_const SyntaxVCT.uop.Not
+
+record position =
+  pos_fname :: string
+   pos_lnum :: integer
+   pos_bol :: integer
+   pos_cnum :: integer
+
+function (sequential)
+list_minus :: "'a list => 'a list => 'a list"
+where
+"list_minus Nil ys = Nil"
+| "list_minus (Cons x xs) ys = (if Not(x : set ys) then Cons x (list_minus xs ys) else list_minus xs ys)"
+by pat_completeness auto
+termination by size_change
+
+}}
+
+
+
+embed {{ ocaml
+
+ type position = {
+        	pos_fname : string;
+		pos_lnum : int;
+		pos_bol : int;
+		pos_cnum : int
+ }
+
+}}
+
+metavar pos::= {{ com Source file position }}
+   {{ isa position  }} {{ ocaml position }}
+   {{ ocamllex [a-z]+ }}
+   {{ coq nat }} {{ coq-equality }}
+
+metavar up {{ tex u }}  ::=
+  {{ com Mutable Variables }}
+  {{ isa string }}
+  {{ ocaml string }}
+  {{ ocamllex [a-z]+ }}
+  {{ coq nat }} {{ coq-equality }}
+
+grammar
+
+
+loc :: 'Loc_' ::= {{ phantom }} {{ pp pp_loc }} {{ pp-raw pp_raw_loc }} {{ com Source file location }}
+  | unknown :: :: unknown {{ ocaml Loc_unknown }} {{ isa Loc_unknown }}
+  | range pos1 pos2 ::  :: range {{ ocaml Loc_range of [[pos1]]*[[pos2]] }}
+                                 {{ isa Loc_range [[pos1]] [[pos2]] }}
+
+% Having this makes some of the typing rules easier to manage
+% Use phantom as for Isabelle this is convenient as a list of triples
+klist {{ tex \gamma^p }} :: 'K_' ::= {{ phantom }} {{ isa (xp*bp*cp) list }}  {{ coq klist }} {{ com List of $x : b [ \phi ]$ triples }}
+  {{ pp pp_klist }} {{ pp-raw pp_raw_klist }}
+  {{ ocaml (xp*bp*cp) list }}
+
+  | empty :: S :: empty  {{ isa [] }} {{ tex \epsilon }} {{ coq nil }}
+  | </ kpi : bpi [ cpi ] // i /> :: S :: list
+       {{ ichlo ([[ </ kpi : bpi [ cpi ] // i /> ]]) }} {{ isa ([[ </ kpi : bpi [ cpi ] // i /> ]]) }}
+  | ( klist1 .. klistn ) :: S :: append {{ isa ( List.concat ([[klist1 .. klistn]])) }} {{ coq (klist_concat ([[klist1 .. klistn]])) }}
+
+  | ( klist1 , klist2 ) :: S :: pair {{ isa (List.concat ([ [[klist1]], [[klist2]] ])) }} {{ coq ( [[klist1]] ++ [[klist2]]) }}
+  | xp : bp [ cp ] , klist :: :: cons {{ isa (( [[xp]], [[bp]], [[cp]]) # [[klist]]) }} {{ ocaml (( [[xp]], [[bp]], [[cp]]) :: [[klist]]) }}
+                                      {{ coq (cons (XBC_triple [[xp]] [[bp]] [[cp]]) ([[klist]])) }}
+%                   {{ coq (Cons_list_xbc (XBC_triple [[xp]] [[bp]] [[cp]]) ([[klist]]) )}}
+  | xp : bp [ cp ]   :: :: singleton  {{ isa [( [[xp]], [[bp]], [[cp]])] }} {{ coq ((XBC_triple [[xp]] [[bp]] [[cp]]) :: nil) }}
+
+
+% Not included from Sail are or and not patterns
+patp {{ tex pat^p }} :: 'Pp_' ::= {{ com Patterns }} {{ aux loc _ }}
+  | lit     :: :: lit
+  | _ :: :: wild
+  | ( patp as xp )           :: :: as_var  {{ com pattern as an immutable variable }}
+  | ( tp ) patp          :: :: typ           {{ com pattern cast }}
+  | id :: :: id
+  | patp as tp          :: :: as_typ   {{ com pattern as a type-variable }}
+  | id ( patp1 , ... , patpn )   :: :: app
+  | [ patp1 , .. , patpn ] :: :: vector          {{ com vector pattern }}
+  | patp1 : .... : patpn   :: :: vector_concat  {{ com concatenated vector pattern }}
+  | ( patp1 , .. , patpn ) :: :: tup      {{ com tuple pattern }}
+  | [|| patp1 , .. , patpn ||] :: :: list {{ com list pattern }}
+  | ( patp )              :: S :: paren {{ ichlo [[patp]] }}
+  | patp1 '::' patp2     :: :: cons {{ com cons pattern }}
+  | patp1 ^^ ... ^^ patpn :: :: string_append {{ com string append pattern }}
+  | patp [ vp / xp ] :: M :: subst {{ icho (subst_patp  [[vp]] [[xp]] [[patp]] ) }}
+
+
+
+pexpp{{ tex pexp^p }}  :: 'PEXPp_' ::= {{ com Pattern Expressions }}
+  | patp => ep :: :: exp {{ tex [[patp]] \Rightarrow [[ep]] }}
+  | patp when ep1 => ep2 :: :: when {{ tex [[patp]] \textbf{ when }  [[ep1]] \Rightarrow [[ep2]] }} {{ com guarded pattern expression }}
+  | pexpp [ vp / xp ] :: M :: subst {{ icho (subst_pexpp [[vp]] [[xp]] [[pexpp]] ) }}
+
+% The sail comment, copied below, makes it clear why a separate nt for letbind
+% is useful
+letbindp {{ tex letbind }} {{ isa letbind }} :: 'LBp_' ::= {{ aux loc _ }}
+  | let patp = ep :: :: val
+      {{ com let, implicit type ($[[patp]]$ must be total)}}
+
+
+lexpp {{ tex lexp^p }} :: 'LEXPp_' ::= {{ aux loc _ }} {{ com L-value expressions. Subset of Sail's but much of Sail's lexp is sugar }}
+    | up                        :: :: mvar {{ com mutable variable }}
+    | ( tp ) up	                :: :: cast {{ com cast }}
+    | ( lexpp0 , .. , lexppn )  :: :: tup {{ com multiple (non-memory) assignment }}
+    | lexpp . id                :: :: field {{ com struct field }}
+
+
+ep {{ tex e^p }} :: 'Ep_' ::= {{ com Expressions }} {{ aux loc _ }}
+  | vp                   :: :: val   {{ com value }}
+  | up                   :: :: mvar {{ com mutable variable }}
+  | [ ep1 ; .. ; epn ]   :: :: concat {{ com vector concatenation }}
+  | ( ep1 , .. , epn )   :: :: tuple {{ com tuple }}
+  | fp ep                :: :: app  {{ com function application }}
+  | bop ep1 ep2          :: :: bop  {{ com binary operation }}
+  | uop ep               :: :: uop {{ com unary operation }}
+  | proj p ep            :: :: proj {{ tex \pi_1 [[ep]] }} {{ com projection from a tuple }}
+  | ctor ep              :: :: constr {{ com constructor application }}
+  | ep . field           :: :: field_access {{ com field access }}
+  | ep [ vp / xp ]       :: M :: subst      {{ com Value variable substitution }}  {{ icho (subst_e [[vp]] [[xp]] [[ep]] )}}
+  | ( ep )               :: S :: parens {{ ichlo [[ep]] }}
+  | sizeof cep           :: :: sizeof {{ com progmram level expression from t. Note this deliberately diverges from sail.ott AST }}
+  | cast tp ep           :: :: cast {{ com type cast }}
+  | { field0 = ep0 , ... , fieldn = epn }         :: :: record  {{ com record }}
+  | { ep with field0 = ep0 ; ... ; fieldn = epn } :: :: record_update {{ com record update }}
+  | letbindp in ep2                               :: :: let  {{ com let binding }} 
+  | let2 xp : tp = ep1 in ep2                     :: :: let2 (+ bind xp in ep2 +) {{ tex \textbf{let}\ [[xp]] : [[tp]] = [[ep1]] \textbf{ in } [[ep2]] }} {{ com let binding with type annotation }}
+  | if ep1 then ep2 else ep3                      :: :: if  {{ com if statement }}
+  | { ep1 ; ... ; epn }                           :: :: block {{ com sequential block }}
+  | match ep { pexpp1 , ... ,  pexppn }           :: :: case {{ com case/match statement }}
+  | lexpp := ep1 in ep2                           :: :: assign {{ com mutable variable assignment and scoping }}   % FIXME Scope of binders in lexp is e2
+  | exit ep                                 :: :: exit {{ com program exit }}
+  | return ep                               :: :: return {{ com function return }}
+  | throw ep                                :: :: throw {{ com exception throw }}
+  | try ep catch pexpp1 .. pexppn           :: :: try  {{ com try block }}
+  | constraint cp                           :: :: constraint {{ com constraint }}
+  | loop ep1 ep2                            :: :: loop   {{ com general loop }}
+  | while ep1 do ep2                        :: S :: while  {{ ichlo [[ loop while ep1 ep2 ]] }}  {{ com while loop }}
+  | repeat ep1 until ep2                    :: S :: until      {{ ichlo [[ loop until ep2 ep1 ]] }} {{ com repeat loop }}
+  | for ( id from ep1 to ep2 by ep3 in order ) ep4 :: :: for  % Add the others from sail.ott {{ com for loop }}
+  | assert ep1 ep2                                 :: :: assert {{ com assert }}
+  | [ ep1 , ... , epn ]                            :: :: vec {{ com vector }}
+  | [|| ep1 , .. , epn ||]                         :: :: list {{ com list }}          
+  | ep1 '::' ep2                                   :: :: cons {{ com list cons }}
+
+funclp {{ tex funcl }}  :: 'FCLp_' ::= {{ aux loc _ }} {{ com Function clause }}
+  | id pexpp :: :: funcl
+
+
+tannot_opt_p {{ tex tannot\_opt }} :: 'Typ_annot_opt_p' ::= {{ aux loc _ }} {{ com Function type annotation }}
+  |                    :: :: none
+  | klist tp :: :: some
+  | ap :: :: some_fn
+
+scattered_defp {{ tex scattered\_def }} :: 'SDp_' ::= {{ aux loc _ }} {{ com Scattered definition }}
+  | scattered function tannot_opt_p id :: :: function
+  | scattered union id </ kpi : bpi [ cpi ] // i /> :: :: variant
+  | union clause id1 = id2 : tp :: :: unioncl
+  | function clause funclp :: :: funclp
+  | end id :: :: end
+
+defp {{ isa def }} {{ tex \text{def}^p }} :: 'DEFp_' ::= {{ com Definitions }}  {{ aux loc _ }}
+  | function ap funclp1 and ... and funclpn   :: :: fundef               {{ com function }}
+  | typedef id = ALL </ kpi : bpi [ cpi ] // i /> tp :: :: typedef       {{ com type }}
+  | val id : ap :: :: spec                                               {{ com val type spec }}
+  | letbindp :: :: val                                                   {{ com let binding }}
+  | register tp xp  :: :: reg                                            {{ com register }}
+  | overload id [ id1 ; .. ; idn ] :: :: overload                        {{ com operator overloading }}
+  | scattered_defp :: :: scattered                                       {{ com scattered definition }}
+  | default order :: :: default                                          {{ com default order spec }}  
+
+progp :: 'Pp_' ::= {{ com program }} {{ menhir-start }} {{ com Program }}
+  | defp1 .. defpn  :: :: prog  {{ com program is just a list of definitions }}
+
+
+terminals :: '' ::=
+  | |-v                                  :: :: vvdash
+    {{ tex \ensuremath{\vdash_v} }} {{ isa \<turnstile>\<^sub>v }}
+  | |-l                                  :: :: vvdash_l
+    {{ tex \ensuremath{\vdash} }} {{ isa \<turnstile> }}
+  | -|                                  :: :: dashv
+    {{ tex \ensuremath{\dashv} }}
+  | |=                                  :: :: models
+    {{ tex \ensuremath{\models} }}
+  | <<=                                  :: :: check_type
+    {{ tex \ensuremath{\Leftarrow} }} {{ isa \<Leftarrow> }}
+  | =>>                                  :: :: infer_type
+    {{ tex \ensuremath{\Rightarrow} }} {{ isa \<Rightarrow> }}
+  | \/                                  :: :: disjunction
+    {{ tex \vee }}
+  | /\                                  :: :: conjunction
+    {{ tex \wedge }}
+  | ~<                                  :: :: subtype_sym
+    {{ tex \lesssim }} {{ isa \<preceq> }}
+  | exists                              :: :: exist
+    {{ tex \exists }}
+  | ==>                                 :: :: implies
+    {{ tex \Longrightarrow }}
+  | -->                                :: :: reduce_arrow
+    {{ tex \longrightarrow }}
+  | ~>                                    :: :: squiggle
+    {{ tex \rightsquigarrow }} {{ isa \<leadsto> }}
+  | ~~>                                    :: :: longsquiggle
+    {{ tex \rightsquigarrow }}
+  | < :: :: langle {{ tex \langle }}
+  | > :: :: rangle {{ tex \rangle }}
+  | EX :: :: exists {{ tex \exists }}
+  | ALL :: :: forall {{ tex \forall }}
+  | INN :: :: in {{ tex \in }}
+  | INN_MANY :: :: inn {{ tex \in }}
+  | NOTINN :: :: notin {{ tex \notin }}
+  | |-     :: :: vdashp {{ tex \vdash }}
+  | SUBSET :: :: subset {{ tex \subseteq }}
+  | ^^ :: :: string_append {{ tex \ ^{\wedge\wedge} }}
+  
+% The subst_b and co family needs to be a function and using size_change for termination proof
+substitutions
+  single vp xp :: subst
+  single bp tvar :: tsubst
+  single cep xp :: ce_subst
+
+
+% This had {{ isa-set }} but was being consistently applied to fvs working on lists
+freevars
+  vp xp :: fvs

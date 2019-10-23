@@ -1,0 +1,938 @@
+%% Mini-Sail in let-normal form
+
+indexvar n , m , i , j ::=
+  {{ phantom }}
+  {{ com Index variables for meta-lists }}
+
+metavar num ::=  {{ phantom }}
+  {{ com Numeric literals }}
+  {{ lex numeric }}
+  {{ isa num }}
+  {{ ocaml int }}
+  {{ ocamllex [0-9]+ }}
+
+metavar x , y , z , w , f  , a {{ tex \hat{[[a]]} }}  ::=
+  {{ com Identifier }}
+  {{ isa string }}
+  {{ ocaml string }}
+  {{ ocamllex [a-z]+ }}
+
+metavar u  ::=
+  {{ com Mutable Variables }}
+  {{ isa string }}
+  {{ ocaml string }}
+  {{ ocamllex [a-z]+ }}
+
+
+metavar tid ::= {{ com Type ID }} {{ isa string }} {{ ocaml string }} {{ ocamllex [a-z]+ }}
+
+metavar C ::= {{ com Data Constructor }} {{ isa string }} {{ ocaml string }} {{ ocamllex [a-z]+ }}
+
+%metavar q ::= {{ com Predicate }} {{ isa string }} {{ ocaml string }} {{ ocamllex [a-z]+ }}
+  
+
+grammar
+
+b :: 'B_' ::= {{ com Base Type }}
+  | int :: :: int
+  | bool :: :: bool
+  | tid :: :: id     {{ com Type ID }}
+  | unit :: :: unit
+%  | bit :: :: bit 
+%  | bvec :: :: bvec  {{ com Bit vectors }}
+  | b1 * b2 :: :: pair
+
+l {{ tex \tau }} :: 'L_' ::= {{ com Refined Type }}
+  | { x : b | c } :: :: refined_type (+ bind x in c +)
+  | x : b [ c ]     :: :: type       (+ bind x in c +)
+  | l [ v / x ]   :: M :: subst {{ icho (subst_l [[v]] [[x]] [[l]])}}
+  | ( l ) :: S :: parens
+%  | l1 * l2     :: :: pair
+
+A :: 'A_' ::= {{ com Dependent Function Type }}
+  |  l                    :: :: monotype
+  | x : b [ c ] -> l2      :: :: function 
+
+
+c {{ tex \phi }} :: 'C_' ::= {{ com Refinement Constraints - Quantifier free logic of uninterpreted functions and linear arithmetic}} 
+  | Top :: :: true {{ tex \top }}
+  | c1 /\ c2 :: :: conj 
+  | ~ c   :: :: not {{ tex \neg [[c]] }}
+  | e1 = e2 :: :: eq
+  | e1 <= e2 :: :: leq
+  | ( c ) :: S :: parens {{ ichlo [[c]] }}
+  | c [ e / x ] :: M :: subst {{ icho (subst_c [[v]] [[x]] [[c]])}}
+  | c1 ==> c2 ::    :: implies 
+  
+v :: 'V_' ::= {{ com Values }}
+  | x :: :: var                  {{ com Immutable variable }}
+  | num  :: :: num  {{ tex n }}  {{ com Numeric literal }}
+  | True :: :: true {{ tex \textbf{T} }}  {{ com True boolean literal }}
+  | False :: :: false {{ tex \textbf{F} }} {{ com False boolean literal }}
+  | v1 [ v2 / x ]   :: M :: subst      {{ com Substitution }}  {{ icho (subst_v [[v2]] [[x]] [[v1]])}}
+  | ( v ) :: S :: parens {{ ichlo [[v]] }}
+  | ( v1 , v2 )   :: :: pair {{ com Value pair }}
+  | C v        :: :: cons {{ com Data constructor }}
+  | ()            :: :: unit {{ com Unit value }}
+
+e :: 'E_' ::= {{ com Expressions }}
+  | v            :: :: val {{ com Value }}
+  | u            :: :: mvar {{ com Mutable Variable }}
+  | f v          :: :: app  {{ com Function Application }}
+  | v1 + v2      :: :: plus  {{ com Addition }}
+  | v1 <= v2     :: :: leq {{ tex [[v1]] \le [[v2]] }} {{ com Less than or equal }}
+  | fst v        :: :: fst  {{ com Project first part of pair }}
+  | snd v        :: :: snd  {{ com Project second part of pair }}
+  | e [ v / x ]  :: M :: subst      {{ com Substitution }} {{ icho (subst_e [[v]] [[x]] [[e]])}}
+
+
+s :: 'S_' ::= {{ com Statement  }}
+  | v                     :: :: val
+  | let x = e in s        :: :: let (+ bind x in s +)   {{ com Let binding }}
+  | let2 x : l = s1 in s2 :: :: let2 (+ bind x in s2 +) {{ tex \textbf{let}\ [[x]] : [[l]] = [[s1]] \textbf{ in } [[s2]] }} {{ com Let binding with type annotation }}
+  | if v then s1 else s2  :: :: if1  {{ com If-then-else  }}
+  | s [ v / x ]           :: M :: subst      {{ com Substitution }} {{ icho (subst_s [[v]] [[x]] [[s]])}} 
+  | match v of x1 , .. , xn :: :: match {{ com Match statement }}
+  | var u : l := v in s   :: :: mvardecl (+ bind u in s +) {{ com Declaration and scoping of mutable variable }}
+  | u := v                :: :: mvarassign {{ com Assignment to mutable variable }}
+  | while ( e ) do { s }   :: :: while    {{ com While loop }}
+  | s1 ; s2               :: :: seq    {{ com Statement sequence }}
+  | ( s )                 :: S :: parens
+
+def :: 'DEF_' ::= {{ com Definitions }}
+  | val f : ( x : b [ c ] ) -> l :: :: valspec (+ bind x in l +) (+ bind x in c +)
+  | function f ( x ) = s :: :: fundef (+ bind x in s +)
+  | union tid = { C1 : l1 , ... , Cn : ln } :: :: union
+
+p :: 'P_' ::= {{ com Program }}
+  | def1 ; .. ; defn ; s :: :: prog
+
+
+G {{tex \Gamma }} :: 'G_' ::= {{ com Variable type context }} {{ isa (x*A) list }}
+  | empty     :: :: empty {{ tex \cdot }} {{ com Empty context }} {{ isa ([]) }}
+  | G , x : b [ c ] :: :: cons
+  | ( G ) :: S :: parens {{ icho [[G]] }} 
+  | G1 , G2 :: :: union {{ tex [[G1]] , [[G2]] }}
+  | G [ v / x ]  :: M :: subst
+
+
+P {{tex \Pi }} :: 'P_' ::= {{ com Function and definitions context }}
+  | empty :: :: empty {{ tex \epsilon }}
+  | P , def :: :: cons
+
+D {{tex \Delta }} :: 'D_' ::= {{ com Mutable variables context }}
+  | empty ::  :: empty {{ tex \epsilon }}
+  | D1 , D2 :: :: union {{ tex [[D1]] , [[D2]] }}
+  | ( D ) :: S :: parens {{ icho [[D]] }}
+  | D , u : l :: :: cons
+
+
+H {{tex \pi }} :: 'H_' ::= {{ com Reduction Function Body Context }}
+  | empty :: :: empty {{ tex \epsilon }}
+  | H , f : s :: :: cons
+
+d {{tex \delta }} :: 'D_' ::= {{ com Reduction Local Store }}
+  | d [ u <- v ] :: :: update
+
+terminals :: '' ::=
+  | << :: :: extension {{ tex \sqsubseteq }}
+  | ->                                  :: :: arrow
+   {{ tex \ensuremath{\rightarrow} }}
+  | |-                                  :: :: vdash
+    {{ tex \ensuremath{\vdash} }}
+  | |^-                                  :: :: vdash_minus
+%%    {{ tex \ensuremath{\vdash^-} }}
+    {{ tex \ensuremath{\vdash^{\mkern-10mu\scriptscriptstyle\rule[-.9ex]{0pt}{0pt}\phi} } }}
+  | |a-                                  :: :: vdash_anf
+    {{ tex \ensuremath{\vdash}_a }}
+  | |v-                                  :: :: vdash_v
+    {{ tex \ensuremath{\vdash} }}
+  | -|                                  :: :: dashv
+    {{ tex \ensuremath{\dashv} }}
+  | |=                                  :: :: models
+    {{ tex \ensuremath{\models} }}
+  | =>                                  :: :: Rightarrow
+    {{ tex \ensuremath{\Rightarrow} }}
+  | <=                                  :: :: Leftarrow
+    {{ tex \ensuremath{\Leftarrow} }}
+  | \/                                  :: :: disjunction
+    {{ tex \vee }}     
+  | /\                                  :: :: conjunction
+    {{ tex \wedge }}     
+  | ~<                                  :: :: subtype_sym
+    {{ tex \lesssim }}
+  | u+                                  :: :: uplus
+    {{ tex \ensuremath{\uplus} }}
+  | forall                              :: :: forall
+    {{ tex \forall }}
+  | exists                              :: :: exist
+    {{ tex \exists }}
+  | ==>                                 :: :: implies
+    {{ tex \Longrightarrow }}
+  | -->                                :: :: reduce_arrow
+    {{ tex \longrightarrow }}
+  | ~>                                    :: :: squiggle
+    {{ tex \rightsquigarrow }}      
+  | INN                   :: :: member_of
+    {{ tex \in }}
+  | NOTIN                 :: :: not_member_of
+    {{ tex \notin }}
+  | <-  :: :: mapsto
+    {{ tex \mapsto }}
+  
+formula :: formula_ ::=
+  | judgement                               :: :: judgement
+  | formula1 .. formulan                    :: :: dots
+  | P ; G |= c                              :: :: cons_sat2 {{ tex [[P]] ; [[G]] \models [[c]] }}
+  | x : b [ c ] INN G                       :: :: lookup_var {{ tex [[x]] : [[b]] [ [[c]] ] \in [[G]] }}
+  | u : l INN D                             :: :: lookup_mvar {{ tex [[u]] : [[l]] \in [[D]] }}
+  | union  tid = { C1 : l1 , .. , Cn : ln } INN P :: :: lookup_tdef
+  | x  IND G                                      :: :: in_domain_g {{ tex [[x]]  \in \text{dom}([[G]]) }}
+  | val f : ( x : b [ c ] ) -> l NOTIN P          :: :: valspec_not_in
+  | val f : ( x : b [ c ] ) -> l INN P            :: :: valspec_in
+  | function f ( x ) = s  NOTIN P                 :: :: fundef_not_in
+  | function f ( x ) = s  INN P                   :: :: fundef_in
+  | f  IND P                             :: :: in_domain_d_fun {{ tex [[f]] \in \text{dom}([[P]]) }}
+  | u  IND D                             :: :: in_domain_delta {{ tex [[u]] \in \text{dom}([[D]]) }}
+  | tid NOTIN P                         :: :: tid_not_in_p {{ tex [[tid]] \notin [[P]] }}
+  | C NOTIN P                         :: :: cons_not_in_p {{ tex [[C]] \notin [[P]] }}
+  | f NOTIN P                         :: :: f_not_in_p {{ tex [[f]] \notin [[P]] }}
+  | u NOTIN dom ( d )                    :: :: u_not_ind {{ tex [[u]] \notin \text{dom}([[d]]) }}
+  | u NOTIN dom ( D )                    :: :: u_not_D {{ tex [[u]] \notin \text{dom}([[D]]) }}	
+  | x NOTIN dom ( G )                    :: :: x_not_G {{ tex [[x]] \notin \text{dom}([[G]]) }}
+  | v1 + v2 = v                          :: :: plus_reduction
+  | v1 <= v2 = v                          :: :: leq_reduction {{ tex [[v1]] \le [[v2]] = v }}
+  | f x = e                              :: :: fundef
+  | x1 = x2 :: :: var_eq
+  | x1 <> x2 :: :: var_neq  {{ tex [[x1]] \neq [[x2]] }}
+  | x # e  :: :: x_fresh_in_e
+  | x fresh :: :: fresh_x
+  | v = d ( u ) :: :: lookup_mvar_val
+  | d' = d [ u <- v ] :: :: update_mvar {{ tex [[d']] = [[d]] [ [[u]] \mapsto [[v]] ] }}
+  | d = u1 -> v1 , .. , un -> vn  :: :: store_equals
+  | D = u1 : l1 , .. , un : ln  :: :: mvars_equals
+
+parsing 
+C_conj left C_conj
+G_cons left G_cons
+
+substitutions
+  single v x :: subst
+
+freevars
+    v x  :: ftv
+    
+
+
+defns
+wellformedness :: '' ::=
+
+defn
+P |- b ws :: :: b_ws :: b_ws_  {{ com Base $[[b]]$ is wellformed in context $[[P]]$ }}
+by
+
+P ws
+------------- :: bool
+P |- bool ws
+
+P ws
+------------- :: int
+P |- int ws
+
+
+P ws
+------------- :: unit
+P |- unit ws
+
+
+P |- b1 ws
+P |- b2 ws
+-------------- :: pair
+P |- b1 * b2 ws
+
+
+P ws
+union  tid = { C1 : l1 , .. , Cn : ln } INN P 
+------------- :: tid
+P |- tid ws
+
+
+
+defn
+P |- G ws :: :: g_ws :: g_ws_ {{ com Context $[[G]]$ is wellformed in context $[[P]]$ }}
+by
+
+P ws
+----------------- :: empty
+P |- empty ws
+
+
+P |- G ws
+P |- b ws
+P ; G , x : b [Top] |- c ws
+x NOTIN dom ( G )
+--------------------------- :: cons
+P |- G, x : b [c] ws
+
+
+defn
+P |- def ws :: :: def_ws :: def_ws_  {{ com Definition $[[def]]$ is wellformed in context $[[P]]$ }}
+by
+
+% li are closed, tid and cons are not already mentionned in P - either as in another typedef for function
+</ P ; empty |- li ws // i />
+tid NOTIN P
+</ Ci NOTIN P  // i />
+--------------------------------------------------------- :: uniondef
+P |- union  tid = { </ Ci : li // i /> } ws
+
+
+P ; empty ,  x : b [ Top ]  |- c ws
+P ; empty ,  x : b [ c ]  |- l ws
+val f : ( x : b [ c ] ) -> l NOTIN P
+-------------------------------------- :: valspec
+P |- val f : ( x : b [ c ] ) -> l  ws
+
+
+val f : ( x : b [ c ] ) -> l INN P
+P ; empty ,  x : b [ c ] ; D |- s ws
+function f ( x ) = s  NOTIN P
+------------------------------ :: fundef
+P |- function f ( x ) = s ws
+
+defn
+P ws :: :: p_ws :: p_ws_ {{ com Context $[[P]]$ is wellformed }}
+by
+
+------------------ :: empty
+empty ws
+
+
+P |- def ws
+------------- :: cons
+P , def ws
+
+
+
+
+defn
+P ; G |- D ws :: :: d_ws :: d_ws_  {{ com Context $[[D]]$ is wellformed in contexts $[[P]]$ and $[[G]]$ }}
+by
+
+P |- G ws
+------------- :: empty
+P ; G |- empty ws
+
+
+P ; G |- D ws
+P ; G  |- l ws
+------------------------ :: cons
+P ; G |- D , u : l ws
+
+
+
+defn
+P ; G |- v ws :: :: v_ws :: v_ws_ {{ com Value $[[v]]$ is wellformed in contexts $[[P]]$ and $[[G]]$ }}
+{{ tex [[P]] ; [[G]] \vdash [[v]]\ \text{ws} }}
+by
+
+P |- G ws
+x IND G
+------------------- :: var
+P ; G |- x ws 
+
+P |- G ws
+---------------- :: num
+P ; G |- num ws
+
+P |- G ws
+---------------- :: true
+P ; G |- True ws
+
+P |- G ws
+---------------- :: false
+P ; G |- False ws
+
+P |- G ws
+-------------------- :: unit
+P ; G |- () ws
+
+
+P ; G |- v ws
+union  tid = { </ Ci : li // i />  } INN P
+------------------- :: cons
+P ; G |- Cj v ws
+
+P ; G |- v1 ws
+P ; G |- v2 ws
+----------------- :: pair
+P ; G |- (v1,v2) ws
+
+
+defn
+P ; G  |^- e ws :: :: ec_ws :: ec_ws_    {{ com Constraint expression $[[e]]$ is wellformed in context $[[P]]$ and $[[G]]$ }}
+by
+
+P ; G |- v ws
+------------------ :: var
+P ; G |^- v ws
+
+P ; G |- v1 ws
+P ; G |- v2 ws
+---------------- :: plus
+P ; G |^- v1 + v2 ws
+
+P ; G |- v1 ws
+P ; G |- v2 ws
+---------------- :: leq
+P ; G |^- v1 <= v2 ws
+
+
+P ; G |- v ws
+---------------------- :: fst
+P ; G |^- fst v ws
+
+P ; G |- v ws
+---------------------- :: snd
+P ; G |^- snd v ws
+
+
+
+
+defn
+P ; G ;  D |- e ws :: :: e_ws :: e_ws_ {{ com Expression $[[e]]$ is wellformed in context $[[P]]$ and $[[G]]$ }}
+by
+
+P ; G |- D ws
+P ; G |- v ws
+val f : ( x : b [ c ] ) -> l INN P
+------------------- :: app
+P ; G ; D |- f v ws
+
+P ; G |- D ws
+P ; G |- v1 ws
+P ; G |- v2 ws
+---------------- :: plus
+P ; G ; D |- v1 + v2 ws
+
+P ; G |- D ws
+P ; G |- v1 ws
+P ; G |- v2 ws
+---------------- :: leq
+P ; G ; D |- v1 <= v2 ws
+
+
+P ; G |- D ws
+P ; G |- v ws
+---------------------- :: fst
+P ; G ; D |- fst v ws
+
+P ; G |- D ws
+P ; G |- v ws
+---------------------- :: snd
+P ; G ; D |- snd v ws
+
+
+P ; G |- D ws
+u  IND D
+------------------ :: mvar
+P ; G ; D |- u ws
+
+
+defn
+P ; G ; D |- s ws :: :: s_ws :: s_ws_
+{{ com Expression $[[s]]$ is wellformed in contexts $[[P]]$, $[[D]]$ and $[[G]]$ }}
+by
+
+
+P ; G |- D ws
+P ; G |- v ws
+-------------------- :: val
+P ; G ; D |- v ws
+
+P ; G |- v ws
+P ; G ; D , u : l |- s ws
+P ; G |- l ws
+----------------------------- :: var
+P ; G ; D |- var u : l  := v in s ws
+
+P ; G |- v ws
+P ; G |- l ws
+P ; G ; D |- u ws
+----------------------------- :: assign
+P ; G ; D |- u := v ws
+
+
+P ; G |- v ws
+P ; G ; D |- s1 ws
+P ; G ; D |- s2 ws
+-------------------------------------- :: if
+P ; G ; D |- if v then s1 else s2   ws
+
+
+P ; G ; D |- e ws
+P ; G , x : b [c] ; D  |- s ws
+------------------- :: let
+P ; G ; D |- let x = e in s ws
+
+P ; G ; D |- s1 ws
+P ; G , x : b [c] ; D  |- s2 ws
+P ; G |- l ws
+------------------- :: let2
+P ; G ; D |- let2 x : { x : b | c } = s1  in s2 ws
+
+
+
+union tid = { </ Ci : { zi : bi | ci } // i /> }  INN P
+P ; G |- v ws
+</ P ; G , xi : bi [ci] ; D |- si ws // i /> 
+--------------------------------- :: match
+P ; G ; D  |- match v of </ Ci xi => si // i />  ws
+
+P ; G ; D |- e ws
+P ; G ; D |- s ws
+-------------------- :: while
+P ; G ; D |- while (e) do { s } ws
+
+
+P ; G ; D |- s1  ws
+P ; G ; D |- s2  ws
+-------------------------- :: seq
+P ; G ; D |- s1 ; s2  ws
+
+
+
+
+defn
+P ; G |- c ws :: :: cons_ws :: cons_ws_
+{{ com Constraint $[[c]]$ is wellformed in contexts $[[P]]$ and $[[G]]$ }}
+by
+
+---------------------- :: top
+P ; G |- Top ws
+
+P ; G |- c1 ws
+P ; G |- c2 ws
+-------------------- :: conj
+P ; G |- (c1 /\ c2) ws
+
+P ; G |- c ws
+------------------- :: not
+P ; G |- ~ c ws
+
+P ; G |^- e1 ws
+P ; G |^- e2 ws
+------------------------------ :: eq
+P ; G |- e1 = e2 ws
+
+%P ; G |- v1 ws
+%P ; G |- v2 ws
+%------------------------------ :: leq
+%P ; G |- v1 <= v2 ws
+
+P ; G |- c1 ws
+P ; G |- c2 ws
+-------------------- :: imp
+P ; G |- (c1 ==> c2) ws
+
+
+defn
+P ; G |- l ws :: :: type_ws :: type_ws_
+{{ com Type $[[l]]$ is wellformed in context $[[P]]$, $[[G]]$ and $[[D]]$ }}
+by
+
+P ; G , z : b[Top] |- c ws
+---------------------- :: type
+P ; G |- { z : b | c } ws
+
+
+defns extension :: '' ::=
+
+defn
+P |- G << G' :: :: extend_g :: extend_g_
+{{ com $[[G']]$ is an extension of $[[G]]$ }}
+by
+
+P |- G ws
+-------------- :: refl
+P |- G << G
+
+
+P |- G'' << G , G'
+x NOTIN dom (G,G')
+P |- G , x : b [c]  ws
+------------------- :: insert
+P |- G'' << G , x : b [c] , G'
+
+
+defn
+P ; G |- D << D' :: :: extend_d :: extend_d_
+{{ com $[[D']]$ is an extension of $[[D]]$ }}
+by
+
+P ; G |- D ws
+---------------  :: refl
+P ; G |- D << D
+
+
+P ; G |- D'' << D , D'
+u NOTIN dom (D,D')
+P ; G |-  l ws
+------------------- :: insert
+P ; G |- D'' << D , u : l , D'
+
+
+
+defns subtype :: '' ::=
+defn
+P ; G |- l1 ~< l2 :: :: subtype :: subtype_
+by
+
+P ; G |- { z1 : b | c1 } ws
+P ; G |- { z2 : b | c2 } ws
+P ; G , z1 : b [c1] |= c2[z1/z1]
+------------------------------------------------ :: subtype
+P ; G |- { z1 : b | c1 } ~< { z2 : b | c2 }
+
+
+defns typing :: '' ::=
+defn
+P ; G |v- v => l :: :: infer_v :: infer_v_
+{{ com Infer that type of $[[v]]$ is $[[l]]$ }}
+by
+
+P |- G ws
+x : b [ c ] INN G
+------------------------------------------  :: var
+P ; G |v- x => { z : b |  z = x }
+
+P |- G ws
+--------------------------------------- :: unit
+P ; G |v- () => { z : unit | z = () }
+% Not sure about z = () bit - this will need to be  handled in SMT logic - which is good as
+% we then encode the uniticity of unit.
+
+P |- G ws
+------------------------ :: true
+P ; G |v- True =>  { z : bool |  z = True }
+
+P |- G ws
+------------------------ :: false
+P ; G |v- False => { z : bool | z = False }
+
+P |- G ws
+------------------------ :: num
+P ; G |v- num =>  { z : int | z = num }
+
+
+P ; G |v- v1 => { z1 : b1 | c1 }
+P ; G |v- v2 => { z2 : b2 | c2 }
+------------------------------------------------- :: pair
+P ; G |v- (v1,v2) =>  { z : b1*b2 | z = (v1,v2) }
+%(c1[:E_proj1: pi1 z/z1]) /\ (c2[:E_proj2: pi2 z/z2]) }
+
+
+
+union tid = { </ Ci : li // i /> } INN P
+P ; G |v- v <= l
+---------------------------------------------------------------------- :: data_cons
+P ; G |v- Cj v => { z : tid | z = Cj v }
+
+%union tid = { C1 : l1 , .. , Cj : lj , C : l , C'1 : l'1 , .. , C'n : l'n } INN P
+%P ; G |v- v <= l
+%---------------------------------------------------------------------- :: data_cons
+%P ; G |v- C v => { z : tid | z = C v }
+
+
+
+% Need |v- form to disambiguate
+defn
+P ; G |v- v <= l :: :: check_v :: check_v_
+{{ com Check that type of $[[v]]$ is $[[l]]$ }}
+by
+
+
+P ; G |v- v => { z2: b | c2 }
+P ; G |- { z2 : b | c2 } ~< { z1 : b | c1 }
+-------------------------------------------- :: val
+P ; G |v- v <= { z1 : b | c1 }
+
+defn
+P ; G ; D |- e => l :: :: infer_e :: infer_e_
+{{ com Infer that type of $[[e]]$ is $[[l]]$ }}
+by
+
+P ; G |- D ws
+P ; G |v- v1 => { z1 : int | c1 }
+P ; G |v-  v2 => { z2 : int | c2 }
+------------------------ :: plus
+P ; G ; D |- v1 + v2 => { z3 : int | z3 = v1 + v2 }
+
+P ; G |- D ws
+P ; G |v- v1 => { z1 : int | c1 }
+P ; G |v- v2 => { z2 : int | c2 }
+------------------------ :: leq
+P ; G ; D |- v1 <= v2 => { z3 : bool | z3 = v1 <= v2  }
+
+
+P ; G |- D ws
+val f : ( x : b [ c ] ) -> l  INN P
+P ; G |v- v <= { z : b | c }
+---------------------------- :: app
+P ; G ; D |- f v => l [ v/x ]
+
+
+P ; G |- D ws
+P ; G |v- v =>  { z : b1*b2 | c }
+------------------------------------------------- :: fst
+P ; G ; D |- fst v => { z : b1 | z = fst v }
+
+P ; G |- D ws
+P ; G |v- v =>  { z : b1*b2 | c }
+------------------------------------------------- :: snd
+P ; G ; D |- snd v => { z : b2 | z = snd v }
+
+
+P ; G |- D ws
+u : l INN D
+--------------------------------  :: mvar
+P ; G ; D |- u => l
+
+
+defn
+P ; G ; D |- e <= l :: :: check_e :: check_e_
+{{ com Check that type of $[[e]]$ is $[[l]]$ }}
+by
+
+P ; G ; D |- e => { z2: b | c2 }
+P ; G |- { z2 : b | c2 } ~< { z1 : b | c1 }
+-------------------------------------------- :: expr
+P ; G ; D  |- e <= { z1 : b | c1 }
+
+
+
+defn
+P ; G ; D  |- s <= l :: :: check_s :: check_s_
+{{com Check that type of $[[s]]$ is $[[l]]$ }}
+by
+
+
+P ; G |- D ws
+P ; G |v- v <= l
+------------------------------ :: val
+P ; G ; D  |- v <= l
+
+u NOTIN dom(d)
+P ; G |v- v <= l
+P ; G ; D , u : l  |- s <= l2
+------------------------------ :: var
+P ; G ; D |- var u : l := v in s  <= l2
+
+
+P ; G |- D ws
+u : l INN D
+P ; G |v- v <= l
+------------------------------ :: assign
+P ; G ; D |- u := v  <= { z : unit | Top }
+
+
+P ; G |v- v => { x : bool | c1 }
+P ; G ; D |- s1 <= { z1 : b | ( v = True /\ (c1[v/x]) ) ==> (c[z1/z]) }
+P ; G ; D |- s2 <= { z2 : b | ( v = False /\ (c1[v/x]) ) ==> (c[z2/z]) }
+------------------------------------------------------- :: if
+P ; G ; D |- if v then s1 else s2  <= { z : b | c }
+
+
+P ; G ; D |- e => { z : b | c }
+P ; G , x : b [ c[x/z] ] ; D |- s <= l
+------------------------------ :: let
+P ; G ; D  |- let x = e in s <= l
+
+P ; G ; D |- s1 <= { z : b | c }
+P ; G , x : b [ c[x/z] ] ; D |- s2 <= l
+------------------------------ :: let2
+P ; G ; D  |- let2 x : { z : b | c } = s1 in s2 <= l
+
+
+%union tid = { C1 : { z1:b1|c1} , ... , Cn : {zn:bn|cn} } INN P
+%P ; G |v- v => { z : tid | c }
+%P ; G , x1 : b1[c1[x1/zn] /\ v = C1 x1 /\ (c[v/z])] ; D |- s1 <= l ... P ;  G , xn : bn[cn[xn/zn] /\ v = Cn xn /\ (c[v/z]) ] ; D |- sn <= l
+%---------------------------------------------------------------- :: match
+% P ; G ; D |- match v of C1 x1 => s1 , ... , Cn xn => sn <= l
+
+union tid = { </ Ci : { zi:bi|ci} // i /> } INN P
+P ; G |v- v => { z : tid | c }
+</ P ; G , xi : bi[ci [xi/zi] /\ v = Ci xi /\ (c[v/z]) ] ; D |- si <= l  // i />
+---------------------------------------------------------------- :: match
+P ; G ; D |- match v of </ Ci xi => si // i /> <= l 
+
+
+P ; G ; D |- e <= { z : bool | Top }
+P ; G ; D |- s <= { z : unit | Top }
+--------------------------------- :: while
+P ; G ; D |- while ( e ) do { s } <= { z : unit | Top }
+
+
+P ; G ; D |- s1 <= { z : unit | Top }
+P ; G ; D |- s2 <= l
+--------------------------------- :: seq
+P ; G ; D |- s1 ; s2  <= l
+
+
+
+
+
+
+defn 
+P ; G |- def1 .. defn ~> P' :: :: check_defs :: check_defs_
+by
+
+val f : ( x : b [ c ] ) -> l INN P
+P ; G , x : b [c] ; empty |- s <= l
+------------------------------------------------------------------ :: fundef
+P ; G |- function f ( x ) = s ~> P, function f ( x  )  = s
+
+
+------------------------------------------------- :: valspec
+P ; G |- val f : ( x : b [ c ] ) -> l ~> P , val f : ( x : b [ c ] ) -> l
+
+----------------------------------------------------- :: uniondef
+P ; G |- union tid = { </ Ci : li // i /> } ~> P , union tid = { </ Ci : li // i />  }
+
+P  ; G |- def ~> P'
+P' ; G |- def1 .. defn ~> P''
+----------------------------- :: defs
+P ; G |- def  def1 .. defn ~> P''
+
+
+defn 
+P ; G |- p :: :: check_program :: check_program_
+by
+
+
+P ; G |- def1 .. defn ~> P'
+P' ; G ; empty |- s <= { z:int| Top }
+--------------------------------- :: prog
+P ; G |- def1 ; .. ; defn ; s
+
+
+defn
+P |- D ~ d  :: :: dsim :: dsim_
+{{ tex [[P]] \vdash [[D]] \sim [[d]] }}
+by
+
+
+d = u1 -> v1 , .. , un -> vn 
+D = u1 : l1 , .. , un : ln
+P ; empty |v- v1 <= l1 .. P ; empty |v- vn <= ln
+----------------------------  :: dsim
+P |- D ~ d
+
+
+defn
+P ; D |- ( d , s  ) <= l :: :: check_redex :: check_redex_ {{ com Program state typing judgement }}
+by
+
+
+P |- D ~ d
+P ; empty ; D |- s  <= l
+----------------------------  :: stmt
+P ; D |- ( d , s ) <= l
+
+defns reduction :: '' ::=
+
+defn
+P |- ( d , s ) --> ( d' , s' ) :: :: reduce :: reduce_ {{ com One step reduction }}
+{{tex [[P]] \vdash \langle [[d]] , [[s]] \rangle \rightarrow \langle [[d']] , [[s']] \rangle }}
+by
+
+-------------------------------- :: if_true
+P |- (d,if True then s1 else s2) --> (d,s1)
+
+-------------------------------- :: if_false
+P |- (d,if False then s1 else s2) --> (d,s2)
+
+
+--------------------------- :: let_value
+P |- (d,let x = v in s) --> (d,s[v/x])
+
+
+v1 + v2 = v
+--------------------------- :: let_plus
+P |- (d,let x = v1 + v2 in s) --> (d,let x = v in s)
+
+v1 <= v2 = v
+--------------------------- :: let_leq
+P |- (d,let x = v1 <= v2 in s) --> (d,let x = v in s)
+
+
+val f : ( x : b [ c ] ) -> l INN P
+function f ( x ) = s1  INN P
+-------------------------------------------- :: let_app
+P |- (d,let y = f v in s2) --> (d,let2 y : l[v/x] = s1[v/x] in s2)
+
+
+-------------------------------------------- :: let_fst
+P |- (d,let x = fst (v1,v2) in s) --> (d,let x = v1 in s)
+
+-------------------------------------------- :: let_snd
+P |- (d,let x = snd (v1,v2) in s) --> (d,let x = v2 in s)
+
+
+v = d(u)
+------------------     :: let_mvar
+P |- (d,let x = u in s) --> (d,let x = v in s)
+
+
+u NOTIN dom(d)
+--------------------------------------------- :: mvar_decl
+P |- (d,var u : l := v in s ) --> (d[u <- v],s)
+
+d' = d[u <- v]
+----------------------- :: mvar_assign
+P |- (d, u := v  )   --> (d', () )
+
+
+P |- (d,s1) --> (d',s1')
+---------------------------- :: seq1
+P |- (d,s1;s) --> (d',s1';s)
+
+
+---------------------------- :: seq2
+P |- (d, ();s) --> (d,s)
+
+
+
+--------------------------------------------------- :: let2_val
+P |- (d,let2 x : l = v in s2) --> (d,s2[v/x])
+
+
+P |- (d,s1) --> (d',s1')
+--------------------------------------------------- :: let2_stmt
+P |- (d,let2 x : l = s1 in s2) --> (d',let2 x : l = s1' in s2)
+
+
+------------------------------------------------------------------ :: match
+P |- (d,match (Cj v) of </ Ci xi => si // i /> ) --> (d,sj[v/xj])
+%P |- (d,match (C v) of C1 x1 => s1 , .. , Ci xi => si ,  C x => s , C'1 x'1 => s'n , .. , C'n x'n => s'n)  --> (d,s[v/x])
+
+
+x fresh
+------------------------------------ :: while
+P |- (d, while ( e )  do { s } ) --> (d, let x = e in  if x then ( s ; while ( e ) do { s } ) else () )
+
+
+defn
+P |- ( d1 , s1 ) -->* ( d2 , s2  ) :: :: reduce_many :: reduce_many_ {{ com Multi-step reduction }}
+{{tex [[P]] \vdash \langle [[d1]] , [[s1]] \rangle \xrightarrow{*} \langle [[d2]] , [[s2]] \rangle }}
+by
+
+P |- (d1,s1) --> (d2,s2)
+----------------------------- :: single_step
+P |- (d1,s1) -->* (d2,s2)
+
+
+P |- (d1,s1) --> (d2,s2)
+P |- (d2,s2) -->* (d3,s3)
+----------------------------- :: many_step
+P |- (d1,s1) -->* (d3,s3)

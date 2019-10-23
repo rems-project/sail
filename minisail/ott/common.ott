@@ -1,0 +1,152 @@
+%
+% This contains meta and nonterms that we need for MiniSail that
+% are defined in Sail.ott and for when we want to process
+% the former when not not with the latter
+%
+
+% Do not include k as its used for kid variables
+indexvar n , k , i, j , q, m ::=
+  {{ phantom }}
+  {{ com Index variables for meta-lists }}
+
+metavar num,numZero,numOne ::=
+  {{ phantom }}
+  {{ lex numeric }}
+  {{ ocaml big_int }}
+  {{ hol num }}
+  {{ lem integer }}
+  {{ isa integer }}
+  {{ com Numeric literals }}
+  {{ ocamllex ['0'-'9']+ }}
+  {{ coq nat }} {{ coq-equality }}
+  
+metavar nat ::= {{ com Natural numbers }}
+  {{ phantom }}
+  {{ ocaml int }}
+  {{ lex numeric }}
+  {{ lem nat }}
+  {{ isa integer }}  % Would like to use uint32 but problems with this in isa proof
+  {{ ocamllex ['0'-'9']+ }}
+  {{ coq nat }} {{ coq-equality }}
+  
+metavar hex ::=
+  {{ phantom }}
+  {{ lex numeric }}
+  {{ ocaml string }}
+  {{ lem string }}
+  {{ isa string }}
+  {{ com Bit vector literal, specified by C-style hex number }}
+  {{ ocamllex ['0'-'9' 'A'-'F']+ }}
+  {{ coq nat }} {{ coq-equality }}
+
+metavar binary ::=
+  {{ phantom }}
+  {{ lex numeric }}
+  {{ ocaml string }}
+  {{ lem string }}
+  {{ isa string }}
+  {{ com Bit vector literal, specified by C-style binary number }}
+  {{ ocamllex ['0'-'1']+ }}
+  {{ coq nat }} {{ coq-equality }}
+
+% Projection index
+%metavar p ::=
+%  {{ phantom }}
+%  {{ ocaml string }}
+%  {{ lem string }}
+%  {{ hol string }}
+%  {{ isa string }}
+%  {{ com String literals }}
+%  {{ ocamllex ['a'-'z' 'A'-'Z']+ }}
+
+
+metavar regexp ::=
+  {{ phantom }}
+  {{ ocaml string }}
+  {{ lem string }}
+  {{ hol string }}
+  {{ isa string }}
+  {{ com Regular expresions, as a string literal }}
+  {{ ocamllex ['a'-'z' 'A'-'Z']+ }}
+  {{ coq nat }} {{ coq-equality }}
+
+
+metavar id ::= {{ com Identifiers }}
+  {{ isa string }}
+  {{ ocaml string }}
+  {{ ocamllex [a-z]+ }}
+  {{ coq nat }} {{ coq-equality }}
+  
+%metavar x , z , k , y , w , f , a, bvar {{ tex \hat{[[a]]} }}  ::=
+%  {{ com Identifier }}
+%  {{ ocaml string }}
+%  {{ ocamllex [a-z]+ }}
+
+%metavar ctor {{ tex \dot{[[ctor]]} }} ::= {{ com Constructor }}
+%  {{ isa string }}
+%  {{ ocaml string }}
+%  {{ ocamllex [a-z]+ }}
+
+%metavar field  ::= {{ com Record Field }}
+%  {{ isa string }}
+%  {{ ocaml string }}
+%  {{ ocamllex [a-z]+ }}
+
+metavar string_val ::=
+  {{ phantom }}
+  {{ ocaml string }}
+  {{ lem string }}
+  {{ hol string }}
+  {{ isa string }}
+  {{ com String literals }}
+  {{ ocamllex ['a'-'z' 'A'-'Z']+ }}
+  {{ coq nat }} {{ coq-equality }}
+
+
+metavar real_val ::=
+  {{ phantom }}
+  {{ ocaml string }}
+  {{ lem string }}
+  {{ hol string }}
+  {{ isa string }}
+  {{ com Real number literal }}
+  {{ ocamllex ['0'-'9' '.']+ }}
+  {{ coq nat }} {{ coq-equality }}
+
+%metavar kid ::= {{ com Type variable (for now Nat kind only)}}
+
+%metavar q ::= {{ com Predicate }} {{ isa string }} {{ ocaml string }} {{ ocamllex [a-z]+ }}
+
+
+grammar
+
+% Variables - mix of nameless and named. Convention below is that z's are nameless/bound variables.
+% Should this distinction be explicit in the Ott grammar
+%x ,  z , k , f   :: 'V' ::=
+%  | id :: :: Named   {{ isa (VNamed [[id]]) }}
+%  | #0  :: :: Index  {{ isa VIndex }} {{ tex z }}
+%  | EX id :: :: Ex {{ isa VEx }} {{ com Existential/internal variable
+% FIXME - The homs are wrong
+%  | EX z   :: M :: existential {{ tex \widehat{[[x]]} }} {{ com Existential variable }} {{ isa [[z]] }} {{ ocaml [[z]] }}
+
+lit :: 'L_' ::= {{ com Literal constant }}
+  | ( )                                                 :: :: unit  
+  | bitzero                                             :: :: zero  
+  | bitone                                              :: :: one 
+  | true                                                :: :: true  
+  | false                                               :: :: false 
+  | num                                         :: :: num  {{ com natural number constant }}
+%  | [ lit1 , .. , litn ]                                         :: :: bitvec  {{ com Vector constant, C-style }}
+  | string_val                                      :: :: string {{ com string constant }}
+  | undefined					:: :: undef {{ com undefined-value constant }}
+  | real_val                                        :: :: real
+
+order :: 'Ord_' ::= {{ com Vector order specification }}
+  | inc :: :: inc
+  | dec :: :: dec
+  | def_order :: :: def {{ com default order }}
+
+loop :: loop ::=  {{ com Loop variant }}
+ {{ pp lop = string "while|until" }} {{ pp-raw lop = string "while|until" }}
+  | while ::   :: While 
+  | until ::  :: Until 

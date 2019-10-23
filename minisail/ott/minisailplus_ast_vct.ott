@@ -1,0 +1,156 @@
+%%
+%% MiniSailPlus
+%% Syntax for values, contraints and types.
+%%
+
+embed {{ isa
+
+type_synonym num_nat = nat
+hide_const id
+
+}}
+
+
+metavar tvar ::= {{ com Base-type variable }}
+  {{ isa string }}
+  {{ ocaml string }}
+  {{ ocamllex [a-z]+ }}
+  {{ coq nat }} {{ coq-equality }}
+
+metavar ctor {{ tex \dot{[[ctor]]} }} ::= {{ com Constructor }}
+  {{ isa string }}
+  {{ ocaml string }}
+  {{ ocamllex [a-z]+ }}
+  {{ coq nat }} {{ coq-equality }}
+
+metavar field  ::= {{ com Record Field }}
+  {{ isa string }}
+  {{ ocaml string }}
+  {{ ocamllex [a-z]+ }}
+  {{ coq nat }} {{ coq-equality }}
+
+% Projection index
+metavar p ::= {{ com Projection index }}
+  {{ phantom }}
+  {{ ocaml string }}
+  {{ lem string }}
+  {{ hol string }}
+  {{ isa string }}
+  {{ ocamllex ['a'-'z' 'A'-'Z']+ }}
+  {{ coq nat }} {{ coq-equality }}
+
+grammar
+
+% Order and Lit come from common.ott or sail.ott
+
+xp {{ tex x }} ,  zp {{ tex z }} , yp {{ tex y }} , kp , fp   :: 'V' ::= {{ com Immutable variables incl. function names }}
+{{ coq-equality }}
+  | id :: :: Named   {{ isa (VNamed [[id]]) }}    {{ com general variable }}
+  | #0  :: :: Index  {{ isa VIndex }} {{ tex z }} {{ com value variable bound in refinement type }}
+
+
+bsub {{ tex \sigma }}  :: 'BS_' ::= {{ com Substitution for base types}}
+%{{ phantom }}
+{{ pp l = pp_l l }}
+{{ pp-raw l = pp_l l }}
+  | empty :: :: empty              {{ ocaml Nil }}
+  | bsub , bp / tvar :: :: cons    {{ ocaml Cons }}
+
+
+bp {{ tex b^p }} :: 'B_' ::= {{ com Base Type }}
+  | tvar   :: :: var     {{ com type variable }}
+  | tid id :: :: tid   {{ com type identifier }}
+  | int    :: :: int
+  | bool :: :: bool
+  | bit :: :: bit
+  | unit :: :: unit
+  | real :: :: real
+  | vec order bp :: :: vec  {{ com vector (length is part of constraint) }}
+  | list bp :: :: list {{ com list }}
+  | ( bp1 , .. ,  bpn ) :: :: tuple {{ com tuple }}
+  | id < ctor1 : tp1 , ... , ctorn : tpn > :: :: union {{ com union  }}
+  | { field1 : bp1 , ... , fieldn : bpn } :: :: record {{ com record }}
+  | undef :: :: undef
+  | reg t :: :: reg      {{ com register }}
+  | 'string' :: :: string
+  | bp1 [ bp2 / tvar ] :: M :: tsubst {{ icho tsubst_bp [[bp2]] [[tvar]] [[bp1]] }}
+  | bp1 [ bsub ] :: M :: tsubst_many {{ icho (tsubst_bp_many [[bp1]] [[bsub]]) }}
+  | exception :: :: exception
+  | { num1 , .. , numn } :: :: finite_set   {{ com finite set of integers }}
+
+
+
+
+tp {{ tex \tau^p }} {{ isa \<tau> }}  :: 'T_' ::= {{ com Refinement type }}
+  | { zp : bp | cp } :: :: refined_type
+                          {{ isasyn \<lbrace> [[zp]] : [[bp]] | [[cp]]  \<rbrace> }}
+  | tp [ vp / zp ] :: M :: subst {{ icho (subst_tp  [[vp]] [[zp]] [[tp]]) }} {{ com substitution of value variables }}
+  | tp [ bp / zp ] :: M :: tsubst {{ icho (tsubst_tp  [[bp]] [[zp]] [[tp]]) }} {{ com substitition of base-type variables }}
+
+ap {{ tex a^p }}:: 'A_' ::= {{ com Dependent Function and Monotype Type. Unlike Sail we distinguish in the syntax
+function type from monotypes }}
+  | tp                    :: :: monotype
+  | xp : bp [ cp ] -> tp  :: :: function
+
+
+bop :: '' ::=  {{ com Binary operators }}
+  | + :: :: Plus
+  | - :: :: Minus
+  | * :: :: Times
+  | div :: :: Div
+  | mod :: :: Mod
+  | <= :: :: LEq  {{ tex \le }}
+  | < :: :: LT    {{ tex < }}
+  | > :: :: GT    {{ tex > }}
+  | >= :: :: GEq  {{ tex \ge }}
+  | = :: :: Eq 
+  | & :: :: And
+  | || :: :: Or
+  | != :: :: NEq {{ tex \neq }}
+
+
+uop :: '' ::= {{ com Unary operators }}
+  | len :: :: Len {{ com vector length }}
+  | exp :: :: Exp {{ com base 2 exponent }}
+  | neg :: :: Neg  {{ com negation }}
+  | not :: :: Not {{ isa NNot }} {{ com boolean not }}
+
+cep {{ tex ce^p }} :: 'CE_' ::= {{ com Constraint expression }}
+   | vp :: :: val
+   | cep1 bop cep2 :: :: bop  % Change to infix and use a hom
+   | sum ( cep1 ... cepn ) :: :: many_plus
+   | uop cep      :: :: uop
+   | proj p cep     :: :: proj {{ tex \pi_i [[cep]] }} {{ com tuple projection }}
+   | xp . field     :: :: field_access {{ com field access }}
+   | ( cep ) :: S :: parens {{ ichlo [[cep]] }}
+   | cep [ vp / xp ] :: M :: subst {{ icho (subst_cep [[vp]] [[xp]] [[cep]] }}
+
+cp {{ tex \phi^p }} :: 'C_' ::= {{ com Refinement Constraints - Quantifier free logic of uninterpreted functions and linear arithmetic}}
+  | true :: :: true {{ tex \top }}
+  | false :: :: false {{ tex \bot }}
+  | cp1 /\ cp2 :: :: conj
+  | cp1 /\ .. /\ cpn :: :: conj_many
+  | cp1 \/ cp2 :: :: disj
+  | ~ cp   :: :: not {{ tex \neg [[cp]] }}
+  | cep1 = cep2 :: :: eq
+  | cep1 <= cep2 :: :: leq {{ tex [[cep1]] \le [[cep2]] }}
+  | ( cp ) :: S :: parens {{ ichlo [[cp]] }}
+  | cp [ vp / xp ] :: M :: subst {{ icho (subst_cp [[vp]] [[xp]] [[cp]] ) }}
+  | cp [ cep1 / xp1 .. cepn / xpn ] :: M :: ce_subst_c_list {{ icho (ce_subst_c_list [[cep1 / xp1 .. cepn / xpn ]] cp }}
+  | cp1 ==> cp2 ::    :: imp
+
+
+
+% List can be empty, record has to have a least one field, tuple has to have at least 2 elements
+vp {{ tex v^p }} :: 'V_' ::= {{ com Values }}
+  | lit :: :: lit
+  | xp :: :: var
+  | [ vp1 , ... , vpn ] :: :: vec {{ com vector }}
+  | [| vp1 , .. , vpn |] :: :: list
+  | cons vp1 vp2 :: :: cons {{ com list cons }}
+  | ctor vp :: :: constr {{ com union constructor }}
+  | { field1 = vp1 , ... , fieldn = vpn } :: :: record {{ com record }}
+  | ( vp1 , .... , vpn ) :: :: tuple {{ com tuple }}
+  | vp1 [ vp2 / xp ]   :: M :: subst      {{ com substitution }}  {{ icho (subst_v  [[vp2]] [[xp]] [[vp1]])}}
+  | ( vp ) :: S :: parens {{ ichlo [[vp]] }}
+  | proj p vp :: :: proj {{ com tuple projection }}

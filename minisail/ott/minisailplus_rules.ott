@@ -1,0 +1,1360 @@
+%% MiniSailPlus
+%% Subtyping and typing rules
+%%
+%% Note: The rules are still being experimented with.
+%%
+
+embed {{ isa-import TypingDeclUtils Satis ContextsPiDelta }}
+
+embed {{ isa
+
+hide_const List.ctor_list
+hide_const id
+type_synonym fun_body = pexpp
+type_synonym p = string
+type_synonym klist = "(xp*bp*cp) list"
+type_synonym xlist = "xp list"
+type_synonym Γ = "fun_body Contexts.Γ"
+type_synonym \<Phi> = "fun_body ContextsPiDelta.\<Phi>"
+type_synonym bsub = "(tvar*bp) list"
+
+type_synonym tp = \<tau>
+type_synonym G = \<Gamma>
+
+
+}}
+
+embed {{ coq-preamble
+Require Import SyntaxVCT.
+Require Import SyntaxPED.
+
+
+
+}}
+
+
+embed {{  coq
+
+
+Inductive Gamma : Set :=
+    | G_empty
+    | G_cons (G : Gamma ) (xp:xp) (bp:bp) (cp:cp).
+
+Definition xlist : Set := list xp.
+
+(** Not sure why this is needed. We mapped num to nat in common and it works in other Ott files *)
+Definition num : Set := nat.
+
+Inductive Theta : Set :=
+   | TEmpty
+   | TCons ( T : Theta ) (defp : defp ).
+
+Inductive Phi : Set :=
+   | PEmpty
+   | PCons ( P : Phi ) ( defp : defp ).
+
+Inductive Delta : Set :=
+   | DEmpty
+   | DCons ( D : Delta ) ( up : up ) ( tp : tp ).
+
+
+
+(** Stubs but should be easy to implement. Decisions will need to be made as to how to handle
+    entries with the same key *)
+
+(* IMPORTANT: This is the gateway to the SMT checker. A mechanisation will need to handle this *)
+Inductive valid : Theta -> Gamma -> cp -> Prop :=
+  | valid_true : forall (T:Theta) (G:Gamma) , valid T G C_true .
+
+
+Fixpoint unify_b ( bp1 : bp ) (bp2 : bp ) : option bsub := Some BS_empty.
+
+Inductive sublist : list nat -> list nat -> Prop :=
+  | sublist_eq : forall (num_list1 : list nat ) (num_list2 : list nat ) , num_list1 = num_list1 -> sublist num_list1 num_list2.
+
+
+Fixpoint mk_fresh ( G : Gamma ) : xp := VIndex .
+
+Fixpoint single_base ( b : list bp ) : option bp := None .
+
+Fixpoint mk_ctor_v ( _ : nat ) ( _ : list xp ) : option vp := None .
+
+Fixpoint b_of_many ( tp_list : list tp ) : list bp := nil .
+
+Fixpoint tsubst_bp_many ( bp : bp ) (bsub : bsub ) := bp .
+
+Fixpoint add_vars_many ( G : Gamma ) (list_klist : list klist) := G.
+
+Fixpoint mk_proj_vars ( _ : xp ) ( _ : list bp ) : (list xp * klist ) := ( nil , nil ) .
+
+Fixpoint klist_concat (l : list klist) : klist :=
+   match l with
+     | nil => nil
+       | cons x l => x ++ klist_concat l
+         end.
+
+Fixpoint lookup_types_for ( _ : bp ) ( _ : list field ) : option (list bp) := None .
+
+Inductive  check_vars : Gamma -> list xp  -> Prop :=  | check_varsI : forall ( G : Gamma ) (xp_list : list xp ), check_vars G xp_list . 
+
+
+(* Functions for getting and setting things in the various contexts *)
+
+
+
+(* Theta. Type definitions *)
+
+Fixpoint lookup_ctor_base ( T : Theta) (c : ctor) : option (tp*bp) := None .
+
+Fixpoint lookup_constr_union_type ( T : Theta) (c : ctor) : option (tp*tp) := None .
+
+Fixpoint add_type ( T : Theta ) ( _ : xp ) ( _ : tp ) : Theta := T .
+
+Fixpoint lookup_field_record_type ( _ : Theta ) ( _ : nat ) : option (bp*tp) := None .
+
+Fixpoint lookup_field_and_record_type ( _ : Theta ) ( _ : up ) : option (tp*tp) := None .
+
+Fixpoint lookup_fields ( _ : Theta ) ( _ : list field ) : option tp := None .
+
+Fixpoint lookup_fun_type ( _ : Theta ) ( _ : Phi ) ( _ : xp ) : option (list ap) := None .
+
+Fixpoint default_order ( T : Theta ) : option order := None .
+
+Fixpoint set_order ( T : Theta ) ( _ : order ) : Theta := T .
+
+
+(* Phi. Function definitions *)
+
+Fixpoint lookup_fun  ( _ : Phi ) ( _ : xp ) : option (list ap) := None .
+
+Fixpoint add_fun ( P : Phi ) ( _ : (xp*ap*(option funclp)))  : Phi := P . 
+
+Fixpoint add_fun_all ( P : Phi ) ( _ : ap ) ( _ : list funclp ) : Phi := P . 
+
+Fixpoint add_to_overload ( P : Phi ) ( _ : xp ) ( _ : list xp  ) : Phi := P . 
+
+
+(* Gamma. Immutable variable context *)
+
+Fixpoint lookup_var ( G : Gamma) (xp : xp) : option (bp*cp) := None .
+
+(* return type of the function body that is being checked *)
+Fixpoint add_return ( G : Gamma ) ( _ : tp ) : Gamma := G . 
+
+Fixpoint lookup_return  ( _ : Gamma )  : option tp := None .
+
+
+
+(* Delta. Mutable variable context *)
+
+Fixpoint lookup_mvar ( _ : Delta ) ( _ : up ) : option tp := None .
+
+Fixpoint add_mvar ( D : Delta ) ( _ : up*tp ) : Delta := D .
+
+Fixpoint update_mvar ( D : Delta ) ( _ : up*tp ) : Delta := D .
+
+
+
+}}
+
+
+grammar
+
+
+T {{tex \Theta }} {{ isa \<Theta> }} :: 'Theta_' ::= {{ com Type definition context }} {{ phantom }} {{ coq Theta }}
+  | empty :: :: empty {{ tex \epsilon }}
+  | T , defp :: :: cons
+  | T , id  : ALL </ kpi : bpi [ cpi ] // i /> tp :: :: add_type  {{ ichlo (add_type [[T]] (VNamed [[id]]) [[tp]]) }}
+  | T , order :: :: order {{ isa ([[T]] \<lparr> \<Theta>\<^sub>d := Some [[order]] \<rparr>) }} {{ coq (set_order [[T]] [[order]]) }}
+
+P {{tex \Phi }} {{ isa \<Phi> }} :: 'Phi_' ::= {{ com Function context }} {{ phantom }} {{ coq Phi }}
+    | empty :: :: empty {{ tex \epsilon }} {{ com empty context }}
+%    | P , defp :: :: cons  {{ com append a definition }}
+    | P , id : ap  :: :: cons_fn2  {{ ichlo (add_fun [[P]] ( VNamed [[id]], [[ap]] , None)) }} {{ com add a function definition }}
+    | P , id [ id1 .. idn ] :: :: overload {{ ichlo ( add_to_overload [[P]] (VNamed [[id]]) (List.map VNamed [[id1 .. idn ]]) ) }}
+                                           {{ com add overload spec }}
+
+
+G  {{tex \Gamma }}  {{ isa \<Gamma> }} {{ coq Gamma }} :: 'G_' ::= {{ com Immutable variable context }}  {{ phantom }}
+  | empty     :: :: empty {{ tex \epsilon }}  {{ com empty context }} {{ isa (emptyepnv) }} {{ coq Empty }}
+  | G , xp : bp [ cp ] :: :: cons             {{ isa (add_var [[G]]  ([[xp]],GEPair [[bp]] [[cp]]))   }} {{ com add immutable variable }}
+  | ( G ) :: S :: parepns                     {{ icho [[G]] }}
+  | G1 , G2 :: :: union                       {{ isa (gconcat [ [[G1]] , [[G2]] ]) }} {{ com append }}
+  | G1 , .. , Gn :: :: concat                 {{ isa ( gconcat [[G1 .. Gn]] ) }} {{ com append many }}
+%  | G , id : ( xp : bp [ cp ] ) : t :: :: cons_fn  {{ isa (add_fun [[G]] ( [[id]], (A_function [] [[xp]] [[bp]] [[cp]] [[tp]] ), None)) }}
+  | G ,  klist  , xp : bp [ cp ] :: :: cons2  {{ isa (add_vars_var [[G]] [[klist]] [[xp]] [[bp]] [[cp]]) }}
+                                              {{ coq (add_vars_var [[G]] [[klist]] [[xp]] [[bp]] [[cp]]) }}
+					      {{ com add list of immutable variables and single one }}
+  | G , klist1 , .. , klistn :: :: cons3 {{ isa (add_vars_many [[G]] [[klist1 .. klistn]])}}
+                                        {{ coq (add_vars_many [[G]] [[klist1 .. klistn]])}}
+					{{ com add many immutable variables }}
+
+
+D {{tex \Delta }} {{ isa \<Delta> }} :: 'D_' ::= {{ com Mutable variable context }} {{ phantom }} {{ coq Delta }}
+  | empty ::  :: empty             {{ tex \epsilon }} {{ isa emptyDEnv }} {{ coq DEmpty }} {{ com empty context }}
+  | D1 , D2 :: :: union            {{ tex [[D1]] , [[D2]] }} {{ com append }}
+  | ( D ) :: S :: parepns          {{ ichlo [[D]] }}
+  | D + up : tp :: :: add_mvar     {{ ichlo (add_mvar [[D]] ([[up]],[[tp]])) }}  {{ com add mutable variable }}
+  | D + ( up1 : tp1 , .. , upn : tpn ) :: :: add_mvars {{ com add list of mutable variables }}
+  | D ++ up : tp :: :: update_mvar {{ ichlo (update_mvar [[D]] ([[up]],[[tp]])) }} {{ com update mutable variable }}
+
+
+% Having this makes some of the typing rules easier to specify 
+xlist :: 'X_' ::= {{ isa (xp list) }} {{ phantom }} {{ com Mutable variable lists }}
+  | empty :: :: empty {{ isa [] }} {{ coq [] }}  {{ tex \epsilon }}
+  | xp1 , .. , xpn :: :: list {{ isa [[xp1..xpn]] }} {{ coq [[xp1 .. xpn]] }}
+  | [ xlist1 , .. , xlistn ] :: :: concat
+
+%err_reason :: 'ER_' ::=
+%  | unbound_variable :: :: unbound_variable
+
+%error_infer_v :: 'EIV_' ::=
+%  | Ok x D :: :: Ok
+%  | Error err_reason :: :: Error
+
+
+formula :: formula_ ::=
+  | judgement                               :: :: judgement
+  | formula1 .. formulan                    :: :: dots
+  | [ G ] =>> cp valid                        :: :: cons_sat  {{ isa check_constraints([[G]] , [[cp]] }}
+    	      	    				              {{ tex [ [[G]] ] \Rightarrow [[cp]] valid }}
+  | T ; G |= cp :: :: exist_valid
+          {{ isa valid (STR ''check_valid'') (Loc_unknown) [[T]] [[G]] [] [[cp]] }}
+          {{ coq valid [[T]] [[G]] [[cp]] }}
+
+% Context lookup
+
+  | xp : bp [ cp ] INN G                             :: :: lookup_var
+         {{ tex [[xp]] : [[bp]] [ [[cp]] ] \in [[G]] }}
+         {{ isa (Some (GEPair [[bp]] [[cp]]) = lookup_var [[G]] [[xp]]) }}
+         {{ coq (Some ([[bp]], [[cp]]) = lookup_var [[G]] [[xp]]) }}
+  | xp NOTIN G :: :: lookup_var_notin
+         {{ tex [[xp]] \notin [[G]] }}
+         {{ isa (var_not_in_g [[G]] [[xp]]) }}
+  | up NOTIN D :: :: lookup_mvar_notin
+         {{ tex [[up]] \notin [[D]] }}
+         {{ isa (mvar_not_in_d [[D]] [[up]]) }}
+	 {{ coq ( None = lookup_mvar [[D]] [[up]] ) }}
+  | up : tp  INN D                             :: :: lookup_mvar
+         {{ tex [[up]] : [[tp]] \in [[D]] }}
+         {{ isa ((Some [[tp]]) = lookup_mvar [[D]] [[up]]) }}
+	 {{ coq ((Some [[tp]]) = lookup_mvar [[D]] [[up]]) }}
+  | id : ap NOTIN P :: :: lookup_type_notin
+         {{ tex [[id]] : [[ap]] \notin [[P]] }}
+         {{ isa None = (\<Phi>\<^sub>f [[P]]) (VNamed [[id]])  }}
+         {{ coq (None = lookup_fun [[P]] (VNamed [[id]]) ) }}
+  | xp  IND G                            :: :: in_domain_g
+         {{ tex [[xp]]  \in \text{dom}([[G]]) }}
+  | f  IND P                             :: :: in_domain_d_fun
+         {{ tex [[f]] \in \text{dom}([[P]]) }}
+  | p ( f ) = ep                         :: :: lookup_fun_body
+  | vars( cp ) SUBSET dom( G ) u { xp } :: :: vars_dom
+      {{ tex \text{vars}([[cp]]) \subseteq \text{dom}([[G]]) \cup \{ [[xp]] \} }}
+  | f : ( xp : bp [ cp ] ) : tp = ep  INN P  :: :: lookup_fun_def
+      {{ tex [[f]] : ( [[xp]] : [[bp]] [ [[cp]] ] ) : [[tp]] = [[ep]] \in [[P]] }}
+  |    l = { zp : bp | cp }  :: :: type_def
+  | tp = lookup ctor < ctor1 : tp1 , .. , ctorn : tpn > :: :: lookup_ctor_record
+                   {{ isa (Some [[tp]] = formula_lookup_ctor_record ctor ctor_t_list) }}
+  | tp1 tp2 = lookup T ctor :: :: lookup_ctor {{ com Returns union type and type of ctor args }}
+                                            {{ tex [[T]]( [[ctor]] \mapsto ([[tp1]],[[tp2]] ) ) }}
+                                            {{ isa (Some ([[tp1]],[[tp2]]) = lookup_constr_union_type [[T]] [[ctor]]) }}
+  | tp1 tp2 = lookup_ctor T id :: :: lookup_ctor2 {{ com Returns union type and type of ctor args }}
+                                            {{ tex [[T]] ( [[id]] \mapsto [[tp1]] , [[tp2]] ) }}
+                                            {{ isa (Some ([[tp1]],[[tp2]]) = lookup_constr_union_type [[T]] [[id]]) }}
+					    {{ coq (Some ([[tp1]],[[tp2]]) = lookup_constr_union_type [[T]] [[id]]) }}
+  | bp tp = lookup_ctor_base T ctor :: :: lookup_ctor_base
+                                            {{ tex [[T]] ( [[ctor]] \mapsto [[bp]] [[tp]] ) }}
+                                            {{ isa Some ([[tp]], [[bp]]) = lookup_ctor_base [[T]] [[ctor]] }}
+                                            {{ coq Some ([[tp]], [[bp]]) = lookup_ctor_base [[T]] [[ctor]] }}
+  | xp1 : bp1 [ cp1 ] , .. , xpn : bpn [ cpn ] INN_MANY G :: :: all_vars
+                         {{ isa ( (x_list,b_list,c_list) = unzip3 (Gx G) ) }}
+  | default order INN T :: :: default_order   {{ isa (Some [[order]] = \<Theta>\<^sub>d [[T]] ) }}
+               {{ tex \textbf{default} [[order]] \in [[T]] }}
+	       {{ coq (Some [[order]] = default_order [[T]]) }}
+  | tp = lookup_return G :: :: lookup_return {{ isa (Some [[tp]] = (\<Gamma>\<^sub>e [[G]] )) }} {{ coq (Some [[tp]] = lookup_return [[G]]) }}
+  | D = add_mvar G xp tp :: :: add_mvar {{ isa ([[D]] = add_mvar2 [[G]] [[xp]] [[tp]]) }}
+  | G1 = add_return G2 tp :: :: add_return {{ isa ([[G1]] = ( [[G2]] \<lparr> \<Gamma>\<^sub>e := Some [[tp]] \<rparr> ))  }}
+                                           {{ coq ([[G1]] = add_return [[G1]] [[tp]]) }}
+  | bp tp = lookup_field_record_type T id :: :: lookup_field_record_type   {{ ichlo (Some ([[bp]],[[tp]]) = lookup_field_record_type [[T]] [[id]]) }}
+  | tp1 tp2 = lookup_field_and_record_type T up :: :: lookup_field_and_record_type   {{ ichlo (Some ([[tp1]],[[tp2]]) = lookup_field_and_record_type [[T]] [[up]]) }}
+%  | bp t2 = lookup_field_record_type P u :: :: lookup_field_record_type_mvar  {{ isa (Some ([[bp]],[[t2]]) = lookup_field_record_type_mvar [[P]] [[u]]) }}
+  | bp tp2 = lookup_field_record_type T field :: :: lookup_field_record_typep2   {{ ichlo (Some ([[bp]],[[tp2]]) = lookup_field_record_type [[T]] [[field]]) }}
+  | tp = lookup_fields T field1 .. fieldn :: :: lookup_fields {{ ichlo (Some [[tp]] = lookup_fields [[T]] [[field1 .. fieldn ]] )}}
+  | bp1 .. bpn = lookup_types_for bp field1 .. fieldm :: :: lookup_types_for {{ ichlo ((Some [[bp1..bpn]]) = lookup_types_for [[bp]] [[field1 .. fieldm]]) }}
+  | P' = add_fun P xp bp cp tp2 funclp1 ... funclpn :: :: add_fun {{ ichlo [[P']] = add_fun_all [[P]] (A_function [[xp]] [[bp]] [[cp]] [[tp2]]) [[funclp1 ... funclpn]] }}
+  | G1 = G2 , xp : bp [ cp ] :: :: add_var {{  isa [[G1]] = (add_var [[G2]]  ([[xp]],GEPair [[bp]] [[cp]]))   }}
+  | ap1 , .. , apn = lookup_fun_type T P fp  :: :: lookup_fun_type {{ ichlo (Some [[ap1 .. apn]] = lookup_fun_type [[T]] [[P]] [[fp]] ) }}
+  |  G' = G , D :: :: g_append {{ isa [[G']] = g_append [[G]] [[D]] }}
+  | xp1 .. xpn NOTINN G :: :: not_in_scope {{ ichlo (check_vars [[G]] [[xp1..xpn]]) }}
+
+
+
+% Reduction
+
+  | ep1 + ep2 = vp                       :: :: plus_reduction
+  | ep1 <= ep2 = vp                      :: :: leq_reduction {{ tex [[ep1]] \le [[ep2]] = [[vp]] }}
+
+% Misc
+
+  | x1 = ep2 :: :: var_eq
+  | ep1 <> ep2 :: :: var_neq  {{ tex [[ep1]] \neq [[ep2]] }}
+  | xp # ep  :: :: x_fresh_in_e
+
+
+  | cp1 .. cpn = constraints tp1 .. tpm :: :: constraints_of {{ isa (c_list = constraints_of t_list)  }}
+  | cp1 .. cpn = constraints_with_proj tp1 .. tpm :: :: constraints_of_proj {{ isa (c_list = constraints_of_with_proj t_list )  }}
+  | cp1 .. cpn = constraints_with_field_proj field1 : tp1 .. fieldm : tpm :: ::   constraints_of_field_proj {{ isa (c_list = constraints_of_with_field_proj t_list field_list )  }}
+% FIXEME Deliberate hardcode id_list t_list and field_list
+  | Z2 , ( id1 .. idn ) = fresh Z1 :: :: fresh_z3 {{ com Construct locally fresh variables for datatype declaration eg T1 .. Tn }} {{ isa ( ( [[Z2]] , id_list ) = fresh_z3 [[Z1]] ) }}
+  | Z2 , id = fresh_for_tuple Z1 tp1 .. tpn :: :: fresh_for_tuple {{ com Construct globally fresh type name 'Tuplepn' }}
+                                                                {{ isa ( ([[Z2]], [[id]]) = fresh_for_tuple [[Z1]] t_list ) }}
+  | Z2 , id = fresh_for_record Z1 field1 .. fieldn :: :: fresh_for_record {{ com Construct globally fresh type name for record from fields  }}
+                                                                          {{ isa ( ([[Z2]],[[id]]) = fresh_for_record [[Z1]] field_list  ) }}
+  | unsatisfiable = check_sat Z :: :: check_sat
+  | xp , G' = fresh G  :: :: fresh  {{ isa ( ( [[xp]], [[G']] )  = fresh [[G]] ) }}
+  | xp  = fresh G  :: :: freshsingle  {{ isa ( [[xp]] = mk_fresh [[G]] ) }}
+                                      {{ coq ( [[xp]] = mk_fresh [[G]] ) }}
+  | cp = proj_c_conj cp1 .. cpn :: :: proj_c_conj {{ com Replaces all zi in ci with proj i z }}
+  | bsub = ( bp1 ~ bp2 ) :: :: base_equal {{ isa (Some [[bsub]] = unify_b  [[bp1]] [[bp2]]) }} {{ coq (Some [[bsub]] = unify_b [[bp1]] [[bp2]]) }}
+  | { num1 , .. , numn } SUBSET { num'1 , .. , num'm } :: :: finite_set_SUBSET
+          {{ isa  (set [[num1 .. numn]]) \<subseteq> (set [[num'1 .. num'm]]) }}
+	  {{ coq  sublist [[num1 .. numn]] [[num'1 .. num'm]] }}
+% This causes problems with isa rewriting
+%  | xlist =  [ xlist1 , .. , xlistn ] :: :: list_concat {{ isa [[xlist]] = List.concat [[xlist1 .. xlistn]] }}
+  | num = list_lepn [ vp1 , .. , vpn ] :: :: lst_lepn {{ isa [[num]] = integer_of_nat ( List.lepngth [[vp1 .. vpn]]) }}
+  | xp1 .. xpm , klist = mk_proj_vars xp bp1 , .. , bpn :: :: mk_proj_vars
+        {{ isa (( [[xp1 .. xpm]] , [[klist]] ) = mk_proj_vars [[xp]] [[bp1 .. bpn]] ) }}
+        {{ coq (( [[xp1 .. xpm]] , [[klist]] ) = mk_proj_vars [[xp]] [[bp1 .. bpn]] ) }}
+  | SATIS G :: :: satis {{ isa (satisfiable (STR ''check_satis'') (Loc_unknown) [[G]] [] C_true) }}
+  | bp = single_base bp1 .. bpn :: :: single_base {{ ichlo (Some [[bp]] = single_base [[bp1 .. bpn]]) }}
+  | vp = mk_ctor_v id xlist :: :: mk_ctor_v  {{ ichlo (Some [[vp]] = mk_ctor_v [[id]] [[xlist]]) }}
+  | xp : bp [ cp ] -> { #0 : bp2  | cp2 } = match_arg tp1 ( ap1 , .. , apn ) :: :: match_arg {{ isa match_arg [[xp]] [[bp]] [[cp]] [[bp2]] [[cp2]] [[tp1]] [[ap1 .. apn]] }}
+  | bsub = UNIFY bp1 bp2 :: :: unify_bp {{ isa Some [[bsub]] = unify_b  [[bp1]] [[bp2]] }}  {{ coq Some [[bsub]] = unify_b  [[bp1]] [[bp2]] }}
+  | bp1 .. bpn = b_of ( tp1 .. tpm ) :: :: base_of_many {{ com Extract bases from types }}
+                  {{ isa ([[bp1 .. bpn ]] = List.map b_of [[tp1 .. tpm ]]) }}
+		  {{ coq ([[bp1 .. bpn ]] = b_of_many [[tp1 .. tpm ]]) }}
+
+parsing
+G_cons left G_cons
+G_cons3 left G_cons3
+G_concat left G_cons
+G_concat left G_concat
+
+
+defns subtyping :: '' ::=
+
+
+defn
+T |- bp1 ~< bp2 :: :: subtype_base :: subtype_base_
+{{ com Subtyping of base types }}
+{{ tex [[T]] \vdash [[bp1]] \lesssim [[bp2]]  }}
+by
+
+bsub = (bp1 ~ bp2)
+---------------------------------- :: refl
+T |- bp1 ~< bp2
+
+
+{ num1 , .. , numn } SUBSET { num'1 , .. , num'm }
+----------------- :: finite_set_SUBSET
+T |- { num1 , .. , numn } ~< { num'1 , .. , num'm }
+
+----------------- :: finite_set_int
+T |- { num1 , .. , numn } ~< int
+
+
+
+defn
+T ; G |- tp1 ~< tp2 :: :: subtype :: subtype_
+{{ com Subtyping }}
+{{ tex [[T]] ; [[G]] \vdash [[tp1]] \lesssim [[tp2]] }}
+by
+
+%:G_cons: G , z1 : int [cp1] |= cp2 [ z1 / z2 ]
+%------------------------------------ :: int
+%G |- { z1 : int | cp1 } ~< { z2 : int | cp2 }
+
+%:G_cons: G , z1 : bool [cp1] |= cp2[z1/z2]
+%------------------------------------ :: bool
+%G |- { z1 : bool | cp1 } ~< { z2 : bool | cp2 }
+
+%:G_cons: G , z1 : bit [cp1] |= cp2[z1/z2]
+%------------------------------------ :: bit
+%G |- { z1 : bit | cp1 } ~< { z2 : bit | cp2 }
+
+%:G_cons: G , z1 : unit [cp1]  |= cp2[z1/z2]
+%------------------------------------ :: unit
+%G |- { z1 : unit | cp1 } ~< { z2 : unit | cp2 }
+
+%:G_cons: G , z1 : bitvec [cp1] |= cp2[z1/z2]
+%------------------------------------ :: bitvec
+%G |- { z1 : bitvec | cp1 } ~< { z2 : bitvec | cp2 }
+
+%G |- t1 ~< t1' .. G |- tn ~< tn'
+%cp1 .. cn = constraints_with_field_proj field1 : t1 .. fieldn : tn
+%G |= cp1[ projr field1 z / z1]  ..  cn[projr fieldn z/zn] /\ c =>> c'[z/z']
+%G |= cp1  ..  cn /\ c =>> c'[z/z']
+%------------------------------------------------------------------------------------------- :: record
+%G |- { z : { field1 : b1 , .. , fieldn : bn } | cp } ~< { z' : { field1 : b1 , .. , fieldn : bn } | c' }
+
+%G |- t1 ~< t1' .. G |- tn ~< tn'
+%cp1 .. cn = constraints_with_proj t1 .. tn
+%G |= cp1 ..  cn /\ c =>> c'[z/z']
+%--------------------------------------------------------------- :: tuple
+%G |- { z : (b1 , .. , bn ) | cp } ~< { z' : (b1' , .. , bn' ) | c' }
+
+
+%G |- t1 ~< t1' .. G |- tn ~< tn'
+%---------------------------------------------------------------------------------- :: union
+%G |- { z : < ctor1 : b1 , .. , ctorn : bn > | true } ~< { z' : < ctor1 : b1' , .. , ctorn : bn' > | true }
+
+
+% FIXME
+T |- bp1 ~< bp2
+xp = fresh G
+T ; :G_cons: G , xp : bp1 [ :C_subst: cp1[xp/zp1]]  |= :C_subst: cp2 [xp/zp2]
+---------------------------------------------------------------------------------------------------- :: subtype
+T ; G |- { zp1 : bp1 | cp1 } ~< { zp2 : bp2 | cp2 }
+
+defns typing_v :: '' ::=
+
+% Need to use |-v to disambiguite. More tidy than using :infer_v:
+% Could return a G rather than klist but design principal is to pass out the minimup needed later
+defn
+T ; G |-v vp =>> tp  :: :: infer_v :: infer_v_
+{{ com Type synthesis for values }}
+{{ tex [[T]] ; [[G]] \vdash_{v} [[vp]] \Rightarrow [[tp]] }}
+
+
+%{{ isasyn [[G]]  \<turnstile> [[vp]] \<Rightarrow> [[tp]] \<leadsto> [[xp]] ; [[klist]] }}
+by
+
+{{ com \\ \noindent Infer that type of $v$ is $\tau$ where $x$ is a fresh variable representing
+$v$ and $\gamma$ a list of new bindings that will include the one for $x$ }}
+
+xp : bp [ cp ] INN G
+------------------------------------------  :: var
+% Return c and not #0 = x
+T ; G |-v xp =>> { #0 : bp |  :C_subst: cp [ #0 / xp ] }
+
+
+xp = fresh G
+------------------------ :: true
+T ; G |-v true =>>   { #0 : bool |  #0 = true }
+
+
+xp = fresh G
+------------------------ :: false
+T ; G |-v false =>>  {  #0 : bool | #0 = false }
+
+
+xp = fresh G
+------------------------ :: num
+T ; G |-v num =>>  {  #0 : int | #0 = num }
+
+xp = fresh G
+-------------------------------------------- :: bitone
+T ; G |-v bitone =>>  {  #0 : bit | #0 = bitone }
+
+xp = fresh G
+-------------------------------------------- :: bitzero
+T ; G |-v bitzero =>>  { #0 : bit | #0 = bitzero }
+
+xp = fresh G
+-------------------------------------------- :: unit
+T ; G |-v :L_unit: () =>>  { #0 : unit | #0 = :L_unit: () }
+
+
+
+% FIXME. Using sail literal now
+% Could be more precise and have a bitvec literal in constraints or constraint that says ith element of #0 is li
+T ; G |-v vp1 =>> { zp1 : bp1 | cp1 }  .. T ; G |-v vpn =>> { zpn : bpn | cpn }
+bp = single_base bp1 .. bpn
+default order INN T
+---------------------------------------------------------------------- :: bitvec
+T ; G |-v [ vp1 , .. , vpn ]  =>> { #0 : vec order bp | #0 = [ vp1 , .. , vpn ] }
+
+
+% Do not have inferepnce for record - Sail doesn't have it.
+%x = fresh G
+%G |-v vp1 <<=  { z1 : b1 | true } ~> x1 ; klist1   .. G |-v vpn <<=  { zn : bn | true } ~> xn ; klistn
+%{ z : { field1 : b1 .. fieldn : bn } : cp }  = lookup_fields G field1 .. fieldn
+%G , (klist1 .. klistn ) |- { #0 : { field1 : b1, .. , fieldn : bn } | #0 = { field1 = vp1 , .. , fieldn = vpn } } ~< { z : { field1 : b1 .. fieldn : bn } : cp }
+%-------------------------------------------------------------------------------------------- :: record
+%G |-v { field1 = vp1, .. , fieldn = vpn } =>>  { #0 : { field1 : b1, .. , fieldn : bn } | #0 = { field1 = vp1 , .. , fieldn = vpn } } ~> x ; xp : { field1 : b1, .. , fieldn : bn } [ x = { field1 = vp1, .. , fieldn = vpn } ]
+
+
+%xp = fresh G , (klist1 .. klistn)
+%xp = fresh G
+T ; G |-v vp1 =>>  tp1  .. T ; G |-v vpn =>>  tpn
+bp1 .. bpn = b_of ( tp1 .. tpn )
+-------------------------------------------------------------------------------------------- :: tuple
+T ; G |-v ( vp1, .. , vpn ) =>>  {  #0 : ( bp1, .. , bpn ) | #0 = ( vp1, .. , vpn ) }
+
+
+%x = fresh
+%--------------------------------------------------- :: vec_empty
+%G |-v :V_vec: [] =>>   { EX </ ki : bi [ ci ] // i /> . z : vec def_order tvar | lepn z = bitzero  } ~> x ; xp : ( vec def_order tvar ) [ lepn x = bitzero ]
+
+
+xp = fresh G
+T ; G |-v vp1 =>>  { zp : bp | cp1 }
+T ; G |-v vp2 =>>  { zp : list bp | cp2 }
+----------------------------------------- :: list_cons
+T ; G |-v cons vp1 vp2 =>>  { #0 : list bp | #0 = cons vp1 vp2  }
+
+
+bp { zp : bp2 | cp2 } = lookup_ctor_base T ctor
+T ; G |-v vp =>> { zp : bp1 | cp1 }
+bsub = UNIFY bp1 bp2
+T ; G |- { zp : bp1[bsub] | cp1 } ~< { zp : bp2[bsub] | cp2}
+----------------------------------------------------------------------------- :: constr
+T ; G |-v ctor vp =>> { zp : bp [ bsub ] | zp = ctor vp }
+
+defn
+T ; G |- vp <<= tp  :: :: check_v :: check_v_
+{{ tex [[T]] ; [[G]] \vdash_v [[vp]] \Leftarrow [[tp]]  }}
+{{com Type check $[[vp]]$ is $[[tp]]$ where $[[G]]$ is an updated context. }}
+%{{ isasyn [[G]]  \<turnstile> [[vp]] \<Leftarrow> [[t[]] \<leadsto> [[G]] }}
+by
+
+T ; G |-v vp =>>  tp1
+T ; G , klist |- tp1 ~< tp2
+------------------------------------ :: v
+T ; G |- vp <<= tp2
+
+embed {{ isa
+code_pred   (modes: i ⇒ i ⇒ i ⇒ i ⇒ bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] subtype .
+code_pred   (modes: i ⇒ i ⇒ i ⇒ o ⇒ o ⇒ o ⇒ bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] infer_v_T_G_vm_list_xm_list_bm_list_cm_list .
+code_pred   (modes: i ⇒ i ⇒ i ⇒ o ⇒ bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] infer_v .
+}}
+
+defns typing_pat :: '' ::=
+
+defn
+T ; G |- patp =>> tp ~> xp ; klist ; xlist :: :: infer_patp :: infer_patm_
+{{ tex [[T]] ; [[G]] \vdash [[patp]] \Rightarrow [[tp]] \rightsquigarrow [[xp]] ; [[klist]] ; [[xlist]] }}
+{{ com Infer type of patmtern $[[patp]]$. $[[xlist]]$ is the list of pattern variables in the pattern. }}
+%{{ isasyn [[G]]  \<turnstile> [[patp]] \<Rightarrow> [[t]] \<leadsto> [[xp]] ; [[klist]] ; [[xlist]] }}
+by
+
+xp = fresh G
+T ; :G_cons: G , xp : bp [ :C_subst: cp [xp/zp] ] |- patp <<= { zp : bp | cp } ~> xp ; klist ; xp1 , .. , xpn
+----------------------------------- :: typ
+T ; G |-  ( { zp : bp | cp } ) patp =>> { zp : bp | cp } ~> xp ; :K_cons: xp : bp [ :C_subst: cp [xp/zp] ] , klist ; xp1 , .. , xpn
+
+
+%:infer_v: G |- hex  =>> xp ; xp : vec def_order bit [ cp ] ; { zp : vec def_order bit | cp }
+%------------------------------------------------- :: bitvec
+%G |- hex  =>> { z : vec def_order bit | cp } ~> empty
+
+
+defn
+T ; G |- patp1 .. patpn <<= bp1 , .. , bpm ~> klist ; xp1 .. xpj :: :: check_patms :: check_patms_
+{{ com Type check of list of patterns }}
+%{{ tex [[P]] ; [[G]] \vdash [[patp1 .. patpn]] \Leftarrow [[bp1 .. bpm]] \rightsquigarrow [[klist]] ; [[xp1 .. xpj]] }}
+by
+
+---------------------- ::nil
+T ; G |- <<=  ~> ;
+
+
+T ; G |- patp <<= { #0 : bp | true } ~> xp ; klist ; xlist
+T ; G , klist |- patp1  .. patpn <<= bp1 , .. , bpn ~> klist2 ; xp1 .. xpn
+------------------------------------------------------------- :: cons
+T ; G |- patp  patp1 .. patpn <<= bp , bp1 , .. , bpn ~> :K_pair: (klist , klist2) ; xp xp1 .. xpn
+
+
+defn
+T ; G |- patp <<= tp ~> xp ; klist ; xlist :: :: check_patp :: check_patm_
+{{ com Type check pattern $[[patp]]$ is $[[tp]]$. $[[xlist]]$ is the list of pattern variables in the pattern. }}
+by
+
+% The xp passed in already has an entry in the context
+
+------------------------ :: wild
+T ; G |- _ <<= {  zp : bp | cp } ~>  xp ; ;
+% :K_singleton: xp  : bp [ :C_subst: c[x/z] ] ;  xm
+
+%G |- x =>> t ~> x ; D
+%G |- t ~< { EX </ ki : bi [ ci ] // i /> . z : bp | cp }
+--------------------------------------------------- :: id
+%G |- id <<= {  z : bp | cp } ~>  x ; :K_cons: x  : bp [ :C_subst: c[x/z] ] , :K_singleton: id : b [ xp = id ] ;
+T ; G |- id <<= {  zp : bp | cp } ~>  xp ; :K_singleton: id : bp [ xp = id ] ; id
+
+% DONOT Satis check. Only in letbind situation do we want pattern to be complete
+% FIXME Sometimes add xm' as dummy; just to have a constraint
+%:check_v: G |- lit <<= {  z : bp | cp } ~>
+xp2 = fresh G
+%SATIS (:G_cons: G , xm' : bp [ xm' = lit ] )
+------------------------------------------------------- :: lit
+T ; G |- lit <<= {  zp : bp | cp } ~> xp1 ; :K_singleton: xp2 : bp [ xp1 = lit ] ; xp1
+
+% xm' is the type of the whole pattern; xp2 is the type of the argumepnts for the constructor app
+tp1 { zp : bp | cp } = lookup_ctor T id
+xp2 = fresh G
+T ; :G_cons: G , xp2 : bp [ :C_subst: cp [xp2/zp] ] |- (patp1 , .. , patpn ) <<= { zp : bp | cp } ~> xp2 ; klist ; xlist
+vp = mk_ctor_v id xlist
+T ; G |- tp2 ~< tp1
+------------------------------------------------- :: ctor
+T ; G |- id ( patp1 , .. , patpn ) <<= tp2 ~> xp2 ; xp2 : bp [ :C_conj: :C_subst: cp [xp2/zp] /\ xp2 = vp] , klist ; xlist
+
+% FIXME Should rationalise this and the one above. SAil->MS should spit out one style
+tp1 { zp : bp | cp } = lookup_ctor T id
+xp2 = fresh G
+T ; :G_cons: G , xp2 : bp [ :C_subst: cp [xp2/zp] ] |- patp <<= { zp : bp | cp } ~> xp2 ; klist ; xlist
+vp = mk_ctor_v id xlist
+T ; G |- tp2 ~< tp1
+------------------------------------------------- :: ctor_single
+T ; G |- id ( patp ) <<= tp2 ~> xp2 ; xp2 : bp [ :C_conj: :C_subst: cp [xp2/zp] /\ xp2 = vp] , klist ; xlist
+
+
+%G |- {  zp : bp1 | true }  ~> x1 ; klist1 ; xlist1   ..  G |- patpn <<= {  z : bpn | true }  ~> xn ; klistn ; xlistn
+xp1 .. xpn , klist1 = mk_proj_vars xp bp1 , .. , bpn
+T ; G , klist1 |- patp1 .. patpn <<= bp1 , .. , bpn ~> klist2 ; xp1 .. xpn
+% Is this subtype check the right way round. Needs a discussion. No needed now
+%G , klist1 , .. , klistn |-  { z : ( b1 , .. , bn ) | c  } ~< {  z : (b1 , .. , bn ) | z = ( xp1 , .. , xpn ) }
+%xlist = [ xlist1 , .. , xlistn ]
+---------------------------------------------------------------------------------- :: tuple
+T ; G |- ( patp1 , .. , patpn ) <<=  { zp : ( bp1 , .. , bpn ) | cp  } ~> xp ; ( klist1 , klist2 ) ; xp
+
+T ; G |- patp <<= tp1 ~> xp ; klist ;xlist
+T ; G , klist |- tp1 ~< tp2
+----------------------------------- :: typ
+T ; G |- ( tp1 ) patp <<= tp2 ~> xp ; klist ; xlist
+
+
+%G |- patp1 =>> { z : vec order b | cp1 } ~> D1  .... G |- patpn =>> { z : vec order b | cn } ~> Dn
+%------------------------------------------------------------------------------------------ :: concat
+%G |- patp1 : .... : patpn  <<= t ~> D1 , .... , Dn
+
+embed {{ isa
+code_pred   (modes: i ⇒ i ⇒ i ⇒ i ⇒ i => o => o ⇒  bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] check_patp .
+code_pred  (modes: i ⇒ i ⇒ i ⇒ i ⇒ o ⇒ i ⇒  bool )  check_patms .
+code_pred   (modes: i ⇒ i ⇒ i ⇒ o ⇒ o => o => o ⇒  bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] infer_patp .
+
+}}
+
+
+defns typing_lexp :: '' ::=
+
+defn
+T ; G ; D |- lexpp =>>  tp ~> D' :: :: infer_lexp :: infer_lexp_
+{{ tex [[T]] ; [[G]] ; [[D]] \vdash [[lexpp]] \Rightarrow [[tp]]  \rightsquigarrow [[D']] }}
+{{ com Type synthesis for l-value expression $[[lexpp]]$ }}
+by
+
+% FIXME - This could be a ivar or an mvar. The former is a problem
+% but needed for records
+up : tp INN D
+----------------------------------------------------- :: var_bound
+T ; G ; D |- up =>> tp ~> D
+
+
+up NOTIN D
+------------------------------------------------- :: cast_not_bound
+T ; G ; D |- ( tp ) up =>> tp ~> D + up : tp
+
+up : tp1  INN D
+T ; G |- tp2 ~< tp1
+----------------------------------------------------- :: cast_bound
+T ; G ; D |- ( tp2 ) up =>> tp2 ~> D ++ up : tp2
+
+
+
+T ; G ; D |- ( lexpp1 .. lexppn ) =>> ( { zp1 : bp1 | cp1 } ..  { zpn : bpn | cpn } ) ~> D'
+------------------------------------------------------------------------------------------------ :: tup
+T ; G ; D |- ( lexpp1 , .. , lexppn ) =>> { #0 : ( bp1 , .. , bpn ) | :C_subst: cp1[ :V_parens: (proj p1  zp ) / zp1] /\ .. /\ :C_subst: cpn[ ( proj pn zp ) / zpn] } ~> D'
+
+
+% The lexp inferepnce here epnsures that we have an id that is bound
+bp tp1 = lookup_field_record_type T id
+T ; G ; D |- lexpp =>> tp2 ~> D'
+T ; G  |- tp2 ~< tp1
+--------------------------------  :: field
+T ; G ; D |- lexpp . id =>> { #0 : bp | true }  ~> D'
+
+defn
+T ; G ; D |- ( lexpp1  ..  lexppn ) =>> ( tp1 .. tpm ) ~> D' :: :: infer_lexps_ :: infer_lexps_
+{{ com Type synthesis for a list of l-value expressions with threading of the $[[G]]$ }}
+by
+
+
+-------------------------------- :: nil
+T ; G ; D|- ( ) =>> () ~> D
+
+
+T ; G ; D |- lexpp =>> tp ~> D'
+T ; G ; D' |- (lexpp1 .. lexppn) =>> (tp1 .. tpn ) ~> D''
+-------------------------------- :: cons
+T ; G ; D |- ( lexpp lexpp1 .. lexppn ) =>> (tp tp1 .. tpn ) ~> D''
+
+
+
+defn
+T ; G ; D |- ( lexpp1  ..  lexppn ) <<= ( bp1 .. bpm ) ~> D' :: :: check_lexps_ :: check_lexps_
+{{ com Type check for a list l-value expressions with threading of the $[[G]]$ }}
+by
+
+
+-------------------------------- :: nil
+T ; G ; D |- ( ) <<= () ~> D
+
+
+T ; G ; D |- lexpp <<= { #0 : bp | true } ~> D'
+T ; G ; D' |- (lexpp1 .. lexppn) <<= (bp1 .. bpn ) ~> D''
+-------------------------------- :: cons
+T ; G ; D |- ( lexpp lexpp1 .. lexppn ) <<= (bp bp1 .. bpn ) ~> D''
+
+
+
+% FIXME - Apart from var_not_bound, check is just infer with subtype check
+defn
+T ; G ; D |- lexpp <<= tp ~> D' :: :: check_lexp :: check_lexp_
+{{ com Type check l-value expression $[[lexpp]]$ }}
+by
+
+
+%id : b' [ c' ] INN G
+%G |- { z : bp | cp } ~< { #0 : b' | :C_subst: c'[#0/id] }
+%-------------------------------------------- :: var_bound
+%G |- id <<=  { z : bp | cp } ~> G + id : b [ :C_subst: c[z/id] ]
+
+up  NOTIN D
+-------------------------------------------- :: var_not_bound
+T ; G ; D |- up <<=  tp ~> D + up : tp
+
+
+% Note that subtype check is reverse of subtype checking when going
+% from check to infer for expressions etc.
+T ; G ; D |- lexpp =>> tp2 ~> D'
+T ; G  |- tp1 ~< tp2
+------------------------------------------- :: subtype_infer
+T ; G ; D |- lexpp <<= tp1 ~> D'
+
+%id : b' [ c' ] INN G
+%G |- t ~< { z : bp | c  }
+%G |- { z : bp | c  } ~< { #0 : b' | :C_subst: c'[#0/id] }
+%---------------------------------------- :: cast_bound
+%G |- ( { z : bp | cp } ) id <<= t  ~> G + id : b [ :C_subst: c[id/z] ]
+
+%id NOTINN G
+%G |- t ~< { z : bp | c  }
+%---------------------------------------- :: cast_not_bound
+%G |- ( { z : bp | cp } ) id <<= t  ~> G + id : b [ :C_subst: c[id/z] ]
+
+% FIXME We are going to lose the parts of c that refer to differepnt lexp and so give too big a type to each lexp
+T ; G ; D |- ( lexpp1  .. lexppn ) <<= ( bp1 .. bpn )  ~> D'
+%G' |-  { z : ( b1 , .. , bn ) | c  } ~< { #0 : (b1 , .. , bn ) | :C_subst: c[ :V_parepns: (:V_proj: proj p1 #0)/z1] /\ .. /\ :C_subst: c[ :V_parepns: (:V_proj: proj pn #0)/zn] }
+------------------------------------------------------------------------------------------------ :: tuple
+T ; G ; D |- (lexpp1 , .. , lexppn ) <<= { zp : ( bp1 , .. , bpn ) | cp  } ~> D'
+
+% FIXME Should use the c off t2 when doing subtype ?
+%b t2 = lookup_field_record_type G id
+%G |- lexp <<= t2 ~> G'
+%G |- t ~< { z : bp | true }
+%--------------------------------  :: field
+%G |- lexp . id <<= t ~> G'
+
+embed {{ isa
+code_pred   (modes: i ⇒ i ⇒ i ⇒ i ⇒ o ⇒ o ⇒  bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] infer_lexp .
+code_pred   (modes: i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ o ⇒  bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] check_lexp .
+code_pred   (modes: i ⇒ i ⇒ i ⇒ o ⇒ o ⇒  bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] infer_lexps .
+
+}}
+
+defns typing_e :: '' ::=
+
+%defn
+%P ; G |- pexpp <<= xp : bp [ cp ] , t2 ~> G' :: :: check_pexp2 :: check_pexp2_
+%{{ com Type check pattern expression $[[pexpp]]$ is $[[t]]$. }}
+%by
+
+% FIXME We hope that inside the klist are constraints that we can use
+% for flow typing e. It isn't obvious from this form of the rule that there is
+%xm' = fresh G
+%G' = G , xm' : bp [ :C_subst: c [xp'/xp] ]
+%P ; G' |- patm[xp'/xp] <<= { #0 : bp | :C_subst: c[#0/xp] } ~> xm' ; klist;xlist
+%P ; G' , klist ; empty |- e <<= { #0 : bp | :C_subst: c[#0/xp] }
+%--------------------------------------- :: pexp
+%P ; G |- patp =>> e <<= xp : bp [ cp ] , t ~> G' , klist
+
+
+%defn
+%G |- pexp <<= x , t2 ~> G' :: :: check_pexp3 :: check_pexp3_
+%{{ com Check that type of pattern expression $[[pexp]]$ is $[[t]]$. }}
+%by
+
+%G |- patp =>> { z : bp | cp } ; xm' ; klist
+%x'' = mk_fresh (G , klist)
+%G , klist , x'' : b [ x' = x ] |- e <<= t ~> G'
+%--------------------------------------------- :: exp
+%G |- patp =>> e <<= x , t ~> G'
+
+
+defn
+T ; P ; G ; D |- pexpp <<= tp1 , tp2 ~> G' :: :: check_pexp :: check_pexp_
+{{ com Type check pattern is $[[tp1]]$ and the expression is $[[tp2]]$. }}
+by
+
+xp = fresh G
+T ; :G_cons: G , xp : bp [ :C_subst: cp[xp/zp] ]  |- patp <<= { zp : bp | cp } ~> xp ; klist ; xp1 , .. , xpn
+T ; P ; :G_cons: G , xp : bp   [ :C_subst: cp[xp/zp] ] , klist ; D |- ep <<= tp
+--------------------------------------------------------------  :: exp
+T ; P ; G ; D |- patp => ep <<= { zp : bp | cp } , tp ~> :G_cons: G , xp : bp [ :C_subst: cp[xp/zp] ] , klist
+
+xp = fresh G
+T ; G |- patp <<=  tp2 ~> xp ; klist ; xp1 , .. , xpn
+T ; P ; G , klist ; D |- ep1 =>> {  #0 : bool | cp } ~> xp' ; klist2
+T ; P ; ( G , klist ) , klist2 ; D  |- ep2 <<= tp1
+---------------------------  :: when
+T ; P ; G ; D |- patp when ep1 => ep2 <<= tp2 , tp1 ~> ( G , klist ) , klist2
+
+
+% From type_check.ml
+% sizeof, constraint, field, tuple, assign, record_update, cast, app, loop, for, if,
+% vector access, update , update_subrange, appepnd, appepnd_subrange, empty vector
+% assert, (internal return), (internal_plet)
+% let, ref
+
+defn
+match_overload T G { zp2 : bp2 | cp2 } ( ap1 , ... , apn ) ( ap ) bsub
+:: :: match_arg :: match_arg_
+{{ com Find list of functions having input types that unify with provided type }}
+by
+
+bsub = UNIFY bp1 bp2
+T ; G  |- { zp2 : bp2[bsub]  | cp2 } ~< { xp1 : bp1[bsub] | cp1 }
+--------------------------------------------------------------------------- :: head
+match_overload T G { zp2 : bp2 | cp2 } ( xp1 : bp1 [ cp1 ] -> { zp3 : bp3  | cp3 } , ap1 , .. , apn ) ( xp1 : bp1 [ cp1 ] -> { zp3 : bp3  | cp3 } ) bsub
+
+match_overload T G { zp2 : bp2 | cp2 } ( ap1 , .. , apn ) ( xp1 : bp1 [ cp1 ] -> { zp3 : bp3  | cp3 } ) bsub
+--------------------------------------------------------------------------------------------------------------- :: tail
+match_overload T G { zp2 : bp2 | cp2 } ( ap , ap1 , .. , apn ) ( xp1 : bp1 [ cp1 ] -> { zp3 : bp3  | cp3 } ) bsub
+
+
+
+%G |- ( xp : b [ cp ] -> t ) e =>> t' ~> xm' ; klist :: :: infer_app :: infer_app_
+defn
+T ; P ; G ; D |- ( ap1 , ... , apn  ) ep =>> tp ~> xp ; klist :: :: infer_app :: infer_app_
+{{ com Type synthesis for overloaded function application }}
+by
+
+T ; P ; G ; D |- ep =>> { zp2 : bp2 | cp2} ~> xp2 ; klist
+match_overload T G , klist { zp2 : bp2 | cp2 } ( ap1, ... , apn ) ( xp1 : bp1 [ cp1 ] -> { zp3 : bp3  | cp3 } ) bsub
+%T ; G , klist |- { zp2 : bp2[bsub]  | cp2 } ~< { xp1 : bp1[bsub] | cp1 }
+xp3 = fresh G , klist
+--------------------------------------------------------------------------------------- :: app_head
+% We don't need to include details of arg type in return type as this information is attached to a var in klist
+T ; P ; G ; D |- ( ap1 , ... , apn ) ep =>>  { zp3 : bp3 [ bsub ] | :C_subst: cp3[xp1/xp2] } ~> xp3 ; xp3 : bp3 [bsub] [ :C_subst: ( :C_subst: cp3[xp3/zp3])[xp1/xp2]  ]  , klist
+
+%T ; P ; G ; D |- (a1 , ... , an ) e =>> t' ~> xm' ; klist
+%---------------------------------------------------- :: app_tail
+%T ; P ; G ; D |- ( a , a1 , ... , an ) e =>>  t' ~> xm' ; klist
+
+defn
+T ; P ; G ; D |-l ep1 .. epm =>> tp1 .. tpn ~> xp1 .. xpj ; klist :: :: infer_e_list :: infer_e_list_
+{{ com Type synthesis for expressions types. }}
+by
+
+
+---------------- :: nil
+T ; P ; G ; D |-l =>> ~>  ; empty
+
+
+T ; P ; G ; D |- ep =>> tp ~> xp ; klist1
+T ; P ; G , klist1 ; D |-l ep1 .. epn =>> tp1 .. tpn ~> xp1 .. xpn ; klist2
+----------------------------------------- :: cons
+T ; P ; G ; D |-l ep ep1 .. epn =>> tp tp1 .. tpn ~> xp xp1 .. xpn ; ( klist1 , klist2 )
+
+defn
+T ; P ; G ; D |- letbindp ~> klist :: :: letbind :: letbind_
+{{ com Bindings $\gamma$ for a let-bind }}
+by
+{{ com
+\noindent Either infer type of expression and then check pattern has the type or
+if pattern is type-pattern, check pattern and check expression.
+}}
+% Check non-determinism
+
+T ; P ; G ; D |- ep =>> tp ~> xp1 ; klist1
+T ; G , klist1 |- patp <<= tp ~> xp1 ; klist2 ; yp1 , .. , ypn
+yp1 .. ypn NOTINN G
+------------------------------------------------------------ :: infer
+T ; P ; G ; D |- let patp = ep ~> ( klist1 , klist2 )
+
+
+T ; P ; G ; empty |- ep <<= { zp : bp | cp }
+xp = fresh G
+T ; :G_cons: G , xp : bp [ :C_subst: cp[xp/zp] ] |- patp <<= { zp : bp | cp } ~> xp ; klist ; xp1 , .. , xpn
+xp1 .. xpn NOTINN G
+---------------------------------- :: check
+T ; P ; G ; D |- let ( { zp : bp | cp } ) patp = ep ~> klist
+
+defn
+T ; P ; G ; D  |- ep =>> tp ~> xp ; klist   :: :: infer_e :: infer_e_
+{{ tex [[T]] ; [[P]] ; [[G]] \vdash_e [[ep]] \Rightarrow  [[tp]] \rightsquigarrow [[xp]] ; [[klist]]  }}
+{{ com Infer that type of $[[ep]]$ is $[[tp]]$. $[[klist]]$ are new fresh variables to capture types of subterms of $[[ep]]$ }}
+by
+
+xp = fresh G
+T ; G |-v vp =>> {  zp : bp | cp }
+------------------------------------------------------     :: val
+T ; P ; G ; D |- vp =>>  {  zp : bp | cp }  ~> xp ; :K_singleton: xp : bp [ :C_subst: cp[ xp / zp ] ]
+
+xp = fresh G
+up : { zp : bp | cp }  INN D
+-------------------------------------------------------- :: mvar
+T ; P ; G ; D  |- up =>> { zp : bp | cp } ~> xp ; :K_singleton: xp : bp [ :C_subst: cp[xp/zp ] ]
+
+
+xp = fresh G
+------------------------------- :: sizeof
+T ; P ; G ; D |- sizeof cep  =>> {  #0 : int | #0 = cep }  ~> xp ;  :K_singleton: xp : int [ xp = cep ]
+
+
+xp = fresh G
+--------------------------------------------------------------------- :: constraint
+T ; P ; G ; D |- constraint cp =>> {  #0 : bool | cp } ~> xp ;  :K_singleton: xp : bool [ cp ]
+
+
+%
+%G |- e <<= {  z : bp | cp } ~> G'
+%x = fresh
+%----------------------------- :: cast
+%G |- cast {  z : bp  | cp } e =>> {  z : bp  | cp } ~> x ; :K_singleton: xp : b [ :C_subst: c[x/z]]
+
+
+% Whepn adding to vars need also to add constraint that fixes ep1 to true
+%G |- ep1 <<= {  z : bmool | true } ~> D1
+%G |- ep2 <<= {  z : string | true } ~> D2
+%x = fresh
+%------------------------------ :: assert
+%G |- assert ep1 ep2 =>> {  z : unit | true } ~>  x ; xp : unit[true], D1, D2
+
+% FIXME. Not longer have an argument x that may appear in return type as in MiniSail
+% but can this be handled by something in klist; in which case this is not right ??
+%f : xp : b [ cp ] -> t  INN G
+ap1 , ... , apn = lookup_fun_type T P fp
+T ; P ; G ; D  |- ( ap1 , ... , apn ) ep =>> tp1 ~> xp1 ; klist
+------------------------------------------------- :: app
+T ; P ; G ; D |- fp ep =>> tp1 ~> xp1 ; klist
+
+xp = fresh G , klist
+%G |- ep1 =>>  { zp1 : bp1 | cp1 } ~> xp1 ; klist1  .. G |- epn =>>  { zpn : bpn | cn } ~> xpn ; klistn
+T ; P ; G ; D |-l ep1 .. epn =>>  tp1 .. tpn  ~> xp1 .. xpn  ; klist
+bp1 .. bpn = b_of ( tp1 .. tpn )
+-------------------------------------------------------------------------------------------- :: tuple
+T ; P ; G ; D |- ( ep1, .. , epn ) =>>  { #0 : ( bp1, .. , bpn ) | #0 = ( xp1, .. , xpn ) } ~> xp ; xp : (bp1, .. , bpn ) [ xp = ( xp1, .. , xpn ) ] , klist
+
+
+T ; P ; G ; D |- ep1 =>>  { zp : vec order bp | cp1 } ~> xp1 ; klist1  ... T ; P ; G ; D |- epn =>> { zp : vec order bp | cpn } ~> xpn ; klistn
+xp = fresh G , (klist1 ... klistn)
+----------------------------------------------------- :: vec_concat
+T ; P ; G ; D |- [ ep1 ; ... ; epn ] =>>  { #0 : vec order bp  | len #0 = sum ( xp1 ...  xpn )  } ~> xp ; xp : vec order bp [ len xp = sum (xp1 ... xpn) ] , (klist1 ... klistn)
+
+
+% We could have gone fully structural and had a line like below rather than lookup
+% G |- e =>>  {  xp : { field1 : b1 , .. , fieldn : bn , field : b , field'1 : b'1 , .. , field'm : b'm } | cp } ~> x ; D
+bp tp1 = lookup_field_record_type T field
+T ; P ; G ; D  |- ep =>>  tp2 ~> xp1 ; klist
+T ; G, klist |- tp2 ~< tp1
+xp2 = fresh G , klist
+------------------------------------------------------------ :: field_access
+T ; P ; G ; D |- ep . field =>>  {  #0 : bp | xp1 . field = #0 } ~> xp2 ; xp2: bp [xp1.field=xp2] , klist
+
+% proj
+% field access
+
+%G |- :E_val: v =>>  { z : bp1*b2 | cp1 /\ cp2 }
+%------------------------------------------------- :: proj1
+%G |- :E_proj1: pi1 v =>> { #0 : b1 | cp1 }
+
+%G |- :E_val: v =>>  { z : bp1*b2 | cp1 /\ cp2 }
+%------------------------------------------------- :: proj2
+%G |- :E_proj2: pi2 v =>> { z : bp2 | cp2 }
+
+%x = fresh
+%---------------------------------------  :: if
+%G |- if ep1 then ep2 else e3 =>> {  z : unit | true } ~> x ; xp : unit [ true ]
+
+
+% FIXME. NEed to return D1 and D2 in something
+xp = fresh G , klist1
+T ; P ; G ; D |- ep1 =>> {  #0 : bool | cp } ~> xp1 ; klist1
+T ; P ; G , klist1 ; D  |- ep2  <<= {  #0 : unit | true }
+------------------------------------------------------------------------  :: loop
+T ; P ; G ; D |- loop ep1 ep2 =>> {  #0 : unit | true } ~> xp ; :K_singleton: xp : unit [ true ]
+
+% Types for records are not 'precise' meaning that build a record constant will not
+% use the types of the field expressions; similarly for record update. So we can follow
+% Sail typing
+T ; P ; G ; D |- ep =>> { zp : bp | cp }  ~> xp ; klist
+bp1 .. bpn = lookup_types_for bp field1 .. fieldn
+T ; P ; G , klist ; D  |-l ep1 .. epn <<= { #0 : bp1 | true} .. { #0 : bpn | true } ~> G'
+--------------------------------------------------------------------------- :: record_update
+T ; P ; G ; D |- { ep with field1 = ep1 ; .. ; fieldn = epn } =>> { zp : bp | cp }  ~> xp ; xp : bp [ :C_subst: cp[xp/zp] ] , klist
+
+
+%G |- ep1 =>>  {  z : bm' | c' } ~> x ; D
+%G , D |- patp <<= {  z : bm' | c' } ~> G'
+%G'  |- ep2 =>> {  z : bp | cp } ~> x ; G'
+%%-----------------------------------------------------------------------  :: let
+%G |- let patp = ep1 in ep2 =>> {  z : bp | cp } ~> x ;  xp : b [ cp ] , G'
+
+
+%xp = fresh
+%G |- lexp =>>  t ~> xp ; D
+%G |- ep1 <<= t ~> G'
+%---------------------------------------------------------------------------- :: assign1
+%G |- lexp := e =>> {  z : unit | true } ~> xp ; xp : unit [ true ]
+
+
+%x = fresh
+%G |- e =>> t ~> x ; D
+%G |- lexp <<=  t ~> G'
+%----------------------------------------------- ::assign2
+%G |- lexp := e =>> {  z : unit | true } ~> x ; xp : unit [ true ]
+
+
+%defn
+%G |- e <<= l :: :: check_expr_anf :: check_expr_anf_
+%{{com Check that type of $[[e]]$ is $[[l]]$ }}
+%by
+%
+%G |-  v =>> { xp : b | cp1 }
+%G |= cp1[ =>> (cp2 [ x/z ])
+%------------------------------------ :: expr
+%G |- e <<= { z : bp | cp2 }
+
+
+
+
+% From type_check.ml
+% block, case, try, cons, list, record_update, record, let, app, return, tuple, if
+% exit, throw, var, (internal return), (internal plet), vector, lit,
+% OTHERWISE infer type and subtype check
+
+% try, return exit, throw
+
+
+defn
+T ; P ; G ; D |- lexpp = ep ~> D' ; klist :: :: typing_lexp :: typing_lexp_
+{{ com Assignment expression type checking. }}
+by
+
+up NOTIN D
+T ; P ; G ; D |- ep =>> tp ~> xp ; klist
+------------------------------------------------- :: mvar_not_bound
+T ; P ; G ; D |- up = ep ~> D + up : tp ; klist
+
+
+up : tp INN D
+T ; P ; G ; D |- ep <<= tp
+------------------------- :: mvar_bound
+T ; P ; G ; D |- up = ep ~> D ;
+
+up NOTIN D
+T ; P ; G ; D |- ep <<= tp
+------------------------------------------------- :: cast_not_bound
+T ; P ; G ; D |- ( tp ) up = ep ~> D + up : tp ;
+
+up : tp1  INN D
+T ; G |- tp2 ~< tp1
+T ; P ; G ; D |- ep <<= tp2
+----------------------------------------------------- :: cast_bound
+T ; P ; G ; D |- ( tp2 ) up = ep  ~> D ++ up : tp2 ;
+
+
+tp1 tp2 = lookup_field_and_record_type T up
+up : tp INN D
+T ; G |- tp ~< tp2
+T ; P ; G ; D |- ep <<= tp1
+--------------------------------------- :: field
+T ; P ; G ; D |- up . id = ep ~> D ;
+
+T ; P ; G ; D  |- lexpp = ep ~> D' ; klist
+----------------------------------- :: tuple_single
+T ; P ; G ; D |-  ( lexpp ) = :Ep_tuple: ( ep ) ~> D ; klist
+
+T ; P ; G ; D  |- lexpp = ep ~> D' ; klist1
+T ; P ; G ; D' |- ( lexpp1 , .. , lexppn ) = ( ep1 , .. , epn ) ~> D'' ; klist2
+------------------------------------------------------------------- :: tuple_cons
+T ; P ; G ; D |- (lexpp , lexpp1 , .. , lexppn ) = (ep , ep1 , .. , epn ) ~> D'' ; ( klist1 , klist2 )
+
+
+% FIXME Why is this returning a G ?
+defn
+T ; P ; G ; D |-l ep1 .. epn <<= tp1 .. tpm ~> G' :: :: check_e_list :: check_e_list_
+%{{ tex [[G]] ; [[G]] ; [[D]] \vdash [[ep1 .. epn]] \Leftarrow [[t1 .. tm]] \rightsquigarrow [[G']] }}
+{{ com Type check list of expressions with context threaded through }}
+by
+
+---------------- :: nil
+T ; P ; G ; D |-l <<= ~> G
+
+
+T ; P ; G ; D |- ep <<= tp
+T ; P ; G ; D |-l ep1 .. epn <<= tp1 .. tpn ~> G''
+----------------------------------------- :: cons
+T ; P ; G ; D |-l ep ep1 .. epn <<= tp tp1 .. tpn ~> G''
+
+
+defn
+T ; P ; G ; D |- ep <<= tp :: :: check_e :: check_e_
+%{{ tex [[G]] \vdash_e [[ep]] \Leftarrow [[tp]]  }}
+{{com Type check of $[[ep]]$ against $[[tp]]$ }}
+by
+
+
+%G |- e <<= t ~> D0
+%G |- pexp1 <<= t ~> D1 .. G |- pexpn <<= t ~> Dn
+%D = D0 , D1 , .. , Dn
+%-------------------------------------------- :: try
+%G |- try e catch pexp1 .. pexpn <<= t ~> D
+
+
+% Get return typ from context. In implemepntation handled this with special return function
+% Ignores t. t should be unit?
+tp1 = lookup_return G
+T ; P ; G ; D |- ep <<= tp1
+----------------------------------------- :: return
+T ; P ; G ; D |- return ep <<= tp2
+
+
+% Sail checks e is a unit. Why not int?
+T ; P ; G ; D |- ep <<= {  #0 : unit | true }
+------------------------------- :: exit
+T ; P ; G ; D |- exit ep <<= tp
+
+
+% Check e is of 'exception' typ, ignore t
+%G |- e <<= {  z : exception | true }  ~> D
+%---------------------------- :: throw
+%G |- throw e <<= t ~> D
+
+
+% We want synthesis so that we can use cp1 in the branches
+% Do we combine D1 and D2 somehow to make return context for this?
+T ; P ; G ; D  |- ep =>>  { zp3 : bool | cp1 } ~> xp ; klist
+xp3 = fresh  G , klist
+% FIXME Why not have this? xp : bool [ cp1 ] is in klist
+T ; P ; G , ( klist ) ; D |- ep1 <<= {  zp : bp | xp = true ==> cp }
+T ; P ; G , ( klist ) ; D |- ep2 <<= {  zp : bp | xp = false ==> cp }
+%P ; G , ( klist  , :K_singleton: xp3 : bool[ :C_conj: xp = xp3 /\ xp3 = true  ] ) ; D |- ep1 <<= {  zp : bp | cp }
+%P ; G , ( klist  , :K_singleton: xp3 : bool[ :C_conj: xp = xp3 /\ xp3 = false  ] ) ; D |- ep2 <<= {  zp : bp | cp }
+------------------------------------------------------- :: if
+T ; P ; G ; D |- if ep then ep1 else ep2  <<= {  zp : bp | cp }
+
+
+T ; P ; G ; D |- let patp = ep1 ~> klist
+%P ; G ; D |- ep1 =>>  {  zp : bp | cp } ~> xp ; klist
+%x' = fresh  G , klist
+%P ; G , klist |- patp <<= {  zp : bp | cp } ~> xp ; klist' ; xp1 , .. , xpn
+% xp1 .. xpn NOTINN G FIXME - where are xp1 .. xpn coming from?
+T ; P ; G , klist ; D  |- ep2 <<= tp
+------------------------------------------------ :: let
+T ; P ; G ; D  |- let patp = ep1 in ep2 <<= tp
+
+
+%P ; G |- patp =>> {  zp : bp | cp } ~> xp ; klist ; xp1 , .. , xpn
+%P ; G , klist ; D |- ep1 <<= {  zp : bp | cp }
+%xp1 .. xpn NOTINN G
+%P ; G , klist ; D |- ep2 <<= t
+%------------------------------ :: let2
+%P ; G ; D  |- let patp = ep1 in ep2 <<= t
+
+
+% Using check_pexp for each part of match is wrong; needs to infer type of patp1, equate the x' returned to x
+% in context and check ep1
+T ; P ; G ; D |- ep =>>  tp  ~> xp ; klist1
+T ; P ; G , klist1 ; D |- patp1 => ep1 <<= tp , {  zp : bp | cp } ~> G1 ... T ; P ; G , klist1 ; D |- patpn => epn <<= tp , {  zp : bp | cp } ~> Gn
+----------------------------------------------------------------------- :: case
+T ; P ; G ; D |- match ep { patp1 => ep1 , ... , patpn => epn }  <<= {  zp : bp | cp }
+
+% FIXME These two result on non-det. Is is possible to add guards to prevepnt this?
+% The guard will need to be recursive over lexp and check to see if var in pattern is in G and
+% if is type annotated. Sufficiepnt?
+
+% Replace assign1 and assign2 with assign that uses the better
+% assign and avoids nondet
+% This is for whepn lexp is type annotated or in epnvironmepnt
+%P ; G ; D |- lexpp =>>  t ~> D'
+%P ; G ; D |- ep1 <<= t
+%P ; G ; D' |- ep2 <<= { zp : bp | cp }
+%----------------------------------------------- :: assign1
+%P ; G ; D |- lexpp := ep1 in ep2 <<= { zp : bp | cp }
+
+% Whepn lexp is not type annotated and not in epnvironmepnt
+%P ; G ; D |- ep1 =>> t ~> xp ; klist
+%P ; G , klist ; D  |- lexpp <<=  t ~> D'
+%P ; G ; D' |- ep2 <<= { zp : bp | cp }
+%----------------------------------------------- :: assign2
+%P ; G ; D |- lexpp := ep1 in ep2  <<= { zp : bp | c  }
+
+
+T ; P ; G ; D |- lexpp = ep1 ~> D' ; klist
+T ; P ; G , klist ; D' |- ep2 <<= { zp : bp | cp }
+--------------------------------------- :: assign
+T ; P ; G ; D |- lexpp := ep1 in ep2  <<= { zp : bp | cp  }
+
+
+T ; P ; G ; D |- ep <<= tp
+------------------------------------------------------------------------------------------- :: seq_single
+T ; P ; G ; D |- { ep } <<= tp
+
+
+% FIXME - isa rewrite not handling elist form
+T ; P ; G ; D |- ep <<= {  #0 : unit | true }
+T ; P ; G ; D |- { ep1 ; .. ; epn } <<= tp
+------------------------------------------------------------------------------------------- :: seq_cons
+T ; P ; G ; D |- { ep ; ep1 ; .. ; epn } <<= tp
+
+
+%G |- ep1 <<= {  z : bmool | true } ~> D'
+%D' |- ep2  <<= {  z : unit | true } ~> D''
+%-------------------------------------------------- :: loop
+%G |- loop ep1 ep2  <<= { z : unit | true } ~> D''
+
+
+% Fields need to be total and in correct order
+% FIXME cardinality correct?
+{ #0 : { field'1 : bp1 , ..  , field'n : bpn } | cp2 }  = lookup_fields T field1 .. fieldn
+%G |- ep1 <<= { #0 : b1 | true } ~> G1 .. G |- epn <<= { #0 : bn | true } ~> Gn
+T ; P ; G ; D |-l ep1 .. epn  <<= { #0 : bp1 | true }  ..  { #0 : bpn | true } ~> G'
+T ; G |- { zp : bp | cp } ~< { zp2 : { field1 : bp1 , ..  , fieldn : bpn } | cp2 }
+------------------------------------------------------------------ :: record
+T ; P ; G ; D |- { field1 = ep1 , .. , fieldn = epn } <<= { zp : bp | cp }
+
+
+T ; P ; G ; D |- ep =>>  tp1 ~> xp ; klist
+T ; G , klist  |- tp1 ~< tp2
+------------------------------------ :: subtype
+T ; P ; G ; D |- ep <<= tp2
+
+
+
+embed {{ isa
+code_pred   (modes:  subtype: i ⇒ i ⇒ i ⇒  bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] subtype .
+code_pred   (modes: check_pexp_T_P_G_klist_D_patm_list_em_list_tm_xm_bm_cm_G_list : i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ o ⇒  bool and
+                    infer_app : i⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ o ⇒ o ⇒ o ⇒  bool and
+                    infer_e : i ⇒ i ⇒ i ⇒ i ⇒  i ⇒ o ⇒ o ⇒ o ⇒  bool and
+                    typing_e_mapI_patm_ep :  i ⇒ o ⇒ o ⇒  bool and
+                    check_e : i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒  bool and
+                    check_pexp : i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ o ⇒  bool and
+                    check_e_list : i  ⇒ i ⇒ i ⇒ i ⇒  i ⇒ i ⇒ o ⇒ bool  and
+                    infer_e_list : i ⇒ i ⇒ i ⇒ i ⇒  i ⇒ o ⇒ o ⇒ o ⇒  bool and
+                    infer_e_T_P_G_D_em_list_xm_order_bm_cm_list_xm_list klist_list : i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ o ⇒ o ⇒ o ⇒ o ⇒ o ⇒ o ⇒ bool and
+ 	            typing_lexp : i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ o ⇒ o ⇒ bool and
+                    match_arg : i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ o ⇒ o ⇒ bool   and
+                    letbind : i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ o ⇒ bool
+ ) [show_steps,  show_mode_inference,  show_invalid_clauses]  check_pexp_T_P_G_klist_D_patm_list_em_list_tm_xm_bm_cm_G_list .
+}}
+
+
+
+defns def_checking :: '' ::=
+
+
+defn
+T ; P ; G |- funclp1 .. funclpn <<= xp : bp [ cp ] , tp2 ~> P' ; G' :: :: check_funcls :: check_funcls
+by
+
+-------------------------------- :: nil
+T ; P ; G |- <<= xp : bp [ cp ] , tp2 ~> P ; G
+
+% We ignore G'. It only contains bindings from the checking of pexp
+% FIXME - Need b and c for x'
+xp2 = fresh G
+G' = add_return G tp2
+T ; P ; G' ; empty |- pexpp[xp2/xp] <<= { #0 : bp | :C_subst: cp[#0/xp] } , tp2[xp2/xp] ~> G''
+P'' = add_fun P  xp bp cp tp2 id pexpp
+T ; P'' ; G |- funclp1 ... funclpn <<= xp : bp [ cp ] , tp2 ~> P''' ; G'''
+--------------------------------------------- :: cons
+T ; P ; G |- id pexpp  funclp1 ... funclpn  <<=  xp : bp [ cp ] , tp2 ~> P'''  ; G
+
+% We want to thread the context through the checking of definitions and so have to make this
+% explicit and have a defn with this for checking list of defs and a defn for single defs
+defn
+T ; P ; G |-d defp ~> T' ; P' ; G' :: :: check_def :: check_def_
+{{ tex [[T]] ; [[P]] ; [[G]] \vdash [[defp]] \rightsquigarrow [[P']] ; [[G']] }}
+by
+
+% What happens if there is a val for the function as well
+% check some sort of match. See what Sail does.
+% managing names spaces and types needs to be thought about
+
+
+T ; P ; G |- funclp1 .. funclpn <<= xp : bp [ cp ] , tp2 ~> P' ; G'
+------------------------------------------------------------------------------ :: fundef
+T ; P ; G |-d function xp : bp [ cp ] ->  tp2  funclp1 and .. and funclpn ~> T ; P' ; G'
+
+% FIXME. Not good as klist is needed for t but klist might include vars from patm
+% and so allow let x = x to check
+%P ; G |- patp =>> t ~> xp ; klist ; xlist
+%P ; G , klist ; empty |- e <<= t
+%------------------------------------------ :: let1
+%P ; G  |-d let patp = e ~> P ; G , klist
+
+T ; P ; G ; empty |- let patp = ep ~> klist
+%P ; G ; empty |- e =>> t ~> xp1 ; klist1
+%P ; G , klist1 |- patp <<= t ~> xp1 ; klist2 ; xlist
+------------------------------------------ :: let
+T ; P ; G  |-d let patp = ep ~> T ; P ; G , klist
+
+
+id : ap NOTIN P
+------------------------------------- :: val
+T ; P ; G |-d val id : ap ~> T ; P , id : ap ; G
+
+
+------------------------------ :: overload
+T ; P ; G |-d overload id [ id1 ; ... ; idn ] ~> T ; P , id  [ id1 ... idn ] ;  G
+
+
+------------------------------- :: default
+T ; P ; G |-d default order ~> T , order ; P ; G
+
+--------------------------------------------------------------------------------------------- :: typedef
+T ; P ; G |-d typedef id = ALL </ kpi : bpi [ cpi ] // i /> tp ~> T , id  : ALL </ kpi : bpi [ cpi ] // i /> tp ; P ; G
+
+%:G_cons3: G , </ ki : bi [ ci ] // i />  |- pexp1 <<= t1 , t2 ~> D1 .. :G_cons3: G , </ ki : bi [ ci ] // i />  |- pexpn <<= t1 , t2 ~> Dn
+%------------------------------------------------------------------------------ :: fundef
+%G |-d function ALL </ ki : bi [ ci ] // i /> . t1 -> t2  funclp1 and .. and funclpn ~> D , D1 , .. , Dn
+
+
+defn
+T ; P ; G |- defp1 ... defpn ~> T' ; P' ; G' :: :: check_defs :: check_defs_
+by
+
+T ; P ; G |-d defp ~> T' ; P' ; G'
+--------------------- :: nil
+T ; P ; G |- defp ~> T' ; P' ; G'
+
+T ; P ; G |-d defp ~> T' ; P' ; G'
+T' ; P' ; G' |- defp1 .. defpn ~> T'' ; P'' ; G''
+----------------------------- :: cons
+T ; P ; G |- defp defp1 .. defpn ~> T'' ; P'' ; G''
+
+
+
+%defn
+%G |- p :: :: check_program:: check_program_
+%by
+
+
+%G |- defp1 .. defpn ~> D'
+%--------------------------------- :: prog
+%G |- defp1 .. defpn
+
+
+embed {{ isa
+code_pred   (modes: i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ i ⇒ o ⇒ o ⇒ bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] check_funcls .
+code_pred   (modes: i ⇒ i ⇒ i ⇒ o ⇒ o ⇒ bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] check_def .
+code_pred   (modes: i ⇒ i ⇒ i ⇒ o ⇒ o ⇒ bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] check_defs .
+
+export_code open Predicate.set_of_pred check_defs_i_i_i_o_o  in OCaml    file "/cygdrive/e/Mark/PhD/VMBoxShare/minisailplusdecl.ml"
+
+
+
+}}
