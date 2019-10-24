@@ -1,2 +1,3 @@
-val opt_dmsp_check : (int option) ref
-val check_ast : int -> Type_check.tannot Convert_typ.A.defs -> unit
+val opt_dmsp_check_before : (int option) ref
+val opt_dmsp_check_after : (int option) ref
+val check_ast : int -> 'a  Convert_typ.A.defs -> unit

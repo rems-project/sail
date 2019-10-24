@@ -3,9 +3,10 @@ open PPrintEngine
 open PPrintCombinators
 open Minisailplus_pp
 open Convert_pp
-       
-module MAST = Minisailplus_ast.SyntaxVCT
-module Ctx = Minisailplus_ast.Contexts
+
+module AST = Msp_ast
+module MAST = Msp_ast.SyntaxVCT
+module Ctx = Msp_ast.Contexts
 
 type solver = {
     command : string;
@@ -27,7 +28,8 @@ let z3_solver = {
     command = "z3 -t:1000 -T:10";
     (* Using push and pop is much faster, I believe because
        incremental mode uses a different solver. *)
-    header = "(push)\n" ; (*"(set-logic QF_AUFLIA)\n(push)\n";*)
+    (*    header = "(set-logic QF_AUFDTLIA)\n(push)\n";  (* Quantifier free, arrays, free sort and function symbols, linear integer arithmetic *) Z3 does't let me specify this*)
+    header = "(push)\n";  (* Quantifier free, arrays, free sort and function symbols, linear integer arithmetic *)
     footer = "(pop)\n";
     negative_literals = true;
     uninterpret_power = false;
@@ -42,13 +44,13 @@ let set_solver = function
   | "z3" -> opt_solver := z3_solver
   | "cvc4" -> opt_solver := cvc4_solver
                      
-let convert_isa_string ( x : Minisailplus_ast.Stringa.char list) :string =  (Minisailplus_ast.Stringa.implode x)
+let convert_isa_string ( x : AST.Stringa.char list) :string =  ( AST.Stringa.implode x)
 
 let pp_ge e = match e with
     Ctx.GEPair (b,c) -> (pp_bp b) ^^ string " " ^^ (pp_cp c)
   | GETyp t -> pp_tp t
 
-let pp_g (Minisailplus_ast.Contexts.Gamma_ext (_,g1,g2,_,_,_,scope,_,_)) xbc c =
+let pp_g (Ctx.Gamma_ext (_,g1,g2,_,_,_,scope,_,_)) xbc c =
   let g = g1@g2 in
   PPrintEngine.ToChannel.compact stderr ( string "Evars" ^^  (separate (string " ") (List.map
            (fun (MAST.VNamed x, e) ->
@@ -61,9 +63,8 @@ let pp_g (Minisailplus_ast.Contexts.Gamma_ext (_,g1,g2,_,_,_,scope,_,_)) xbc c =
     )
                                  
                                
-let traceG (s : string) g xbc c =
-  if !Util.opt_verbosity > 0 then 
-    (*    let s = convert_isa_string s in *)
+let traceG (s : string) g xbc c = 
+  if !Util.opt_verbosity > 1 then 
     let _ = pp_g g xbc c in
     true
   else

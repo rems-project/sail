@@ -1,8 +1,8 @@
 (* Code for doing local rewrites of AST *)
 
-open Minisailplus_ast
-open Minisailplus_ast.SyntaxVCT
-open Minisailplus_ast.SyntaxPED
+open Msp_ast
+open Msp_ast.SyntaxVCT
+open Msp_ast.SyntaxPED
 
 type 'a walker = {
     visit_def : (def -> 'a * def) option;

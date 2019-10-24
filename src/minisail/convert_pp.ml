@@ -1,8 +1,8 @@
 open PPrintEngine
 open PPrintCombinators
-open Minisailplus_ast
-open Minisailplus_ast.SyntaxVCT
-open Minisailplus_ast.Location
+open Msp_ast
+open Msp_ast.SyntaxVCT
+open Msp_ast.Location
        
        
 (*let int_of_nat (Arith.Nat n) = Big_int.int_of_big_int n
@@ -16,7 +16,7 @@ let int_of_int (Arith.Int_of_integer n) = Z.to_int n
 let str_num n = Pervasives.string_of_int (int_of_nat n)
 let str_int n = Pervasives.string_of_int (Z.to_int n)
 
-let cis s = Minisailplus_ast.Stringa.implode s
+let cis s = Msp_ast.Stringa.implode s
 
 let pp_pos (Pos_ext (f1,l1,b1,c1,_)) = f1 ^ ":" ^ (Pervasives.string_of_int (Z.to_int l1)) ^ ":" ^ (Pervasives.string_of_int (Z.to_int c1-  Z.to_int b1))
 

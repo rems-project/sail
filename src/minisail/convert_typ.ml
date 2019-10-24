@@ -10,11 +10,11 @@ module A = Ast
 module P = Parse_ast
 open Util_ms
        
-open Minisailplus_ast.SyntaxVCT  (* Mini Sail AST as obtain from Isabelle *)
-open Minisailplus_ast.SyntaxPED  (* Mini Sail AST as obtain from Isabelle *)
-open Minisailplus_ast.Location
-open Minisailplus_ast.Contexts
-open Minisailplus_core.ConvertTypes
+open Msp_ast.SyntaxVCT  (* Mini Sail AST as obtain from Isabelle *)
+open Msp_ast.SyntaxPED  (* Mini Sail AST as obtain from Isabelle *)
+open Msp_ast.Location
+open Msp_ast.Contexts
+open Msp_ast.ConvertTypes
 open Minisailplus_pp
 
 module KBindings = Map.Make(String)
@@ -40,7 +40,7 @@ type 'a ctx = {
     kinds : A.kind KBindings.t;
     kind_abbrev : ctx_kind KABindings.t;
     types : ctx_type  TBindings.t;
-    funs : ( ((xp* (bp*cp)) list) *  bp * cp * tau) FBindings.t;
+    funs : ( ((xp* (bp*cp)) list) *  bp * cp * tau * ceks) FBindings.t;
     scattereds : (tau * ( ( ('a A.pat)* ('a A.exp)) list)) SBindings.t;
     ended : ESet.t;
     mvars : ESet.t;
@@ -111,47 +111,6 @@ let convert_order ((A.A_aux (A_order (Ord_aux (ord,_)),_)) : A.typ_arg) : order 
   | _ -> Printf.eprintf "Warning: Picking Ord_dec\n"; Ord_dec (* FIXME HAndling Ord_var *)
 
                                  
-(* Extract from the Sail typ its MiniSail base type *)
-let rec to_ms_base ctx (A.Typ_aux (typ,loc)) : bp = 
-  match typ with
-       | A.Typ_id (Id_aux (Id id,loc2)) -> (match id with
-            | "int" -> B_int
-            | "bool"|"boolean" -> B_bool
-            | "reg_size" ->       B_int
-            | "unit" ->           B_unit
-            | "bit" ->            B_bit
-            | "real" ->           B_real
-            | "string" ->         B_string
-            | "nat" ->            B_int
-            | "register" ->       B_reg
-            | "bitvector" ->      B_vec (Ord_def,B_bit)
-            | _  ->
-               (match TBindings.find_opt id ctx.types with
-                | Some  (CtxType (ks, target_t,mods,ceks)) -> b_of target_t
-                | None -> raise (Failure ("to_ms_base: Typ_app. Not found " ^ id )))
-       )
-       | Typ_app (Id_aux (Id "atom",_), [ typ_arg ] ) -> B_int
-       | Typ_app (Id_aux (Id "range",loc), typ_args ) -> B_int
-       | Typ_app (Id_aux (Id "vector_sugar_r",_), [_; len; odr ; A_aux (A_typ typ,_) ]) ->
-          B_vec ( convert_order odr , to_ms_base ctx typ)
-       | Typ_app (Id_aux (Id "vector",_), [ len; odr ; A_aux (A_typ typ,_) ]) ->
-          B_vec ( convert_order odr , to_ms_base ctx typ)
-       | Typ_app (Id_aux (Id "int",_), [typ_arg]) ->  B_int
-       | Typ_app (Id_aux (Id "atom_bool",_), [typ_arg]) ->   B_bool
-       | Typ_app (Id_aux (Id "list",_), [ A_aux (A_typ typ,_)] ) -> B_list (to_ms_base ctx typ)
-       | Typ_app (Id_aux (Id "implicit", _), _) -> B_int (* FIXPE *)
-       | Typ_app (Id_aux (Id "register",_), [typ_arg]) ->   B_int
-       | Typ_app (Id_aux (Id "bitvector",_), [len ; odr]) ->   B_vec ( convert_order odr, B_bit)
-       | Typ_app (Id_aux (Id s,_), _ ) -> 
-          (match TBindings.find_opt s ctx.types with
-           | Some (CtxType (ks,t,_,_)) -> b_of t
-           | None -> raise (Failure ("Lookup tid " ^ s)))
-       | Typ_tup ts ->
-          let bs = List.map (fun t -> to_ms_base ctx t) ts in
-          B_tuple bs
-       | Typ_exist (kids, cons, typ ) -> to_ms_base ctx typ
-       | Typ_var (Kid_aux (Var x,_)) -> B_var x
-       | _ -> raise (Failure ( "Unhandled typ " ^ (pp_location loc)))
 
 let lookup_kind_id ctx id = match KABindings.find_opt id ctx.kind_abbrev with
                                     Some (CtxKind (_,ce,_,_)) -> Some ce
@@ -266,7 +225,7 @@ let rec to_ms_constraint (A.Typ_aux (aux,l) as atyp) = match aux with
 
 
                       
-and  to_ms_constraint ctx ( A.NC_aux(nc,_)  : A.n_constraint) : cp = match nc with
+and  to_ms_constraint ( ctx : 'a ctx ) ( A.NC_aux(nc,_)  : A.n_constraint) : cp = match nc with
   | A.NC_equal (n1,n2) -> c_eq  (to_ms_ce ctx n1) (to_ms_ce ctx n2)
   | A.NC_bounded_ge (n1,n2) -> c_ge  (to_ms_ce ctx n1) (to_ms_ce ctx n2)
   | A.NC_bounded_le (n1,n2) -> c_le  (to_ms_ce ctx n1) (to_ms_ce ctx n2)
@@ -289,7 +248,7 @@ and  to_ms_constraint ctx ( A.NC_aux(nc,_)  : A.n_constraint) : cp = match nc wi
 let normalise_record_type fd_type =
   let (f_b,cs) = unzip (List.map (fun (f, T_refined_type(_,b,c)) -> ((f,b),
                      subst_c_v0 c (V_proj (f, V_var (zvar))))) fd_type) in
-  let c = Minisailplus_ast.Contexts.conj cs in
+  let c = Msp_ast.Contexts.conj cs in
   T_refined_type (zvar , B_record f_b , c)
 
                                                                                                               
@@ -318,7 +277,7 @@ let normalise_tlist ts = let (bs,cs) =  unzip  (List.mapi (fun i (T_refined_type
                                                     (b, subst_c_v0 c
                                                           (V_proj (convert_to_isa ((string_of_int (List.length ts)) ^ "X" ^ (string_of_int (i+1))),
                                                                    (V_var (zvar) ))))) ts)
-                         in (bs,Minisailplus_ast.Contexts.conj cs)
+                         in (bs,Msp_ast.Contexts.conj cs)
 
 
        
@@ -338,7 +297,7 @@ and to_ms_ce_bool ctx ( A.NC_aux(nc,loc)  : A.n_constraint)  = match nc with
   | A.NC_and (nc1,nc2) -> CE_bop (And, to_ms_ce_bool ctx nc1, to_ms_ce_bool ctx nc2)
   | A.NC_true -> CE_val (V_lit L_true)
   | A.NC_false -> CE_val (V_lit L_false)
-  | A.NC_app (Id_aux (Id "not", loc), [ A.A_aux (A_bool nc, _ ) ]) -> CE_uop (Not , to_ms_ce_bool ctx nc)
+  | A.NC_app (Id_aux (Id "not", loc), [ A.A_aux (A_bool nc, _ ) ]) -> CE_uop (Nott , to_ms_ce_bool ctx nc)
   | A.NC_var kid -> CE_val (V_var (VNamed (convert_kid kid)))
   | A.NC_set _  -> raise (Failure ("to_ms_ce_bool ctx unknown case NC_set " ^ (pp_location loc) ))
                         
@@ -658,8 +617,51 @@ and to_ms_typ_app ctx loc id typ_args =
               tsubst_t_list target_t ksb
            | None -> raise (Failure "to_ms_typ"))
 
+(* Extract from the Sail typ its MiniSail base type *)
+and  to_ms_base ctx (A.Typ_aux (typ,loc)) : bp = 
+  match typ with
+       | A.Typ_id (Id_aux (Id id,loc2)) -> (match id with
+            | "int" -> B_int
+            | "bool"|"boolean" -> B_bool
+            | "reg_size" ->       B_int
+            | "unit" ->           B_unit
+            | "bit" ->            B_bit
+            | "real" ->           B_real
+            | "string" ->         B_string
+            | "nat" ->            B_int
+            | "bitvector" ->      B_vec (Ord_def,B_bit)
+            | _  ->
+               (match TBindings.find_opt id ctx.types with
+                | Some  (CtxType (ks, target_t,mods,ceks)) -> b_of target_t
+                | None -> raise (Failure ("to_ms_base: Typ_app. Not found " ^ id )))
+                                           )
+       | Typ_app (Id_aux (Id "atom",_), [ typ_arg ] ) -> B_int
+       | Typ_app (Id_aux (Id "range",loc), typ_args ) -> B_int
+       | Typ_app (Id_aux (Id "vector_sugar_r",_), [_; len; odr ; A_aux (A_typ typ,_) ]) ->
+          B_vec ( convert_order odr , to_ms_base ctx typ)
+       | Typ_app (Id_aux (Id "vector",_), [ len; odr ; A_aux (A_typ typ,_) ]) ->
+          B_vec ( convert_order odr , to_ms_base ctx typ)
+       | Typ_app (Id_aux (Id "int",_), [typ_arg]) ->  B_int
+       | Typ_app (Id_aux (Id "atom_bool",_), [typ_arg]) ->   B_bool
+       | Typ_app (Id_aux (Id "list",_), [ A_aux (A_typ typ,_)] ) -> B_list (to_ms_base ctx typ)
+       | Typ_app (Id_aux (Id "implicit", _), _) -> B_int (* FIXPE *)
+       | Typ_app (Id_aux (Id "register",_), [A_aux (A_typ typ,_)]) ->
+          let typ = to_ms_typ ctx typ in
+          B_reg typ
+       | Typ_app (Id_aux (Id "bitvector",_), [len ; odr]) ->   B_vec ( convert_order odr, B_bit)
+       | Typ_app (Id_aux (Id s,_), _ ) -> 
+          (match TBindings.find_opt s ctx.types with
+           | Some (CtxType (ks,t,_,_)) -> b_of t
+           | None -> raise (Failure ("Lookup tid " ^ s)))
+       | Typ_tup ts ->
+          let bs = List.map (fun t -> to_ms_base ctx t) ts in
+          B_tuple bs
+       | Typ_exist (kids, cons, typ ) -> to_ms_base ctx typ
+       | Typ_var (Kid_aux (Var x,_)) -> B_var x
+       | _ -> raise (Failure ( "Unhandled typ " ^ (pp_location loc)))
+
                                             
-and  to_ms_typ ctx (A.Typ_aux (typ,loc)) : tau =
+and  to_ms_typ (ctx : 'a ctx ) (A.Typ_aux (typ,loc)) : tau =
   Printf.eprintf "to_ms_typ %s\n" (pp_location loc);
   match typ with
        | A.Typ_id (Id_aux (Id s,loc2)) -> (match s with
@@ -736,7 +738,7 @@ and  to_ms_typ ctx (A.Typ_aux (typ,loc)) : tau =
 (*       | Typ_with ( atyp, cons ) ->
           let c =to_ms_constraint ctx cons in
           let T_refined_type (_,_,b,c_typ) = to_ms_typ ctx atyp in
-          let kids = Minisailplus_ast.Syntax.fvs_c(c) in (* FIXPE Need to take away forall quantified ? *)
+          let kids = Msp_ast.Syntax.fvs_c(c) in (* FIXPE Need to take away forall quantified ? *)
           let kids = List.map (fun x -> (x,(B_int,C_true))) kids in
           let kids = match kids with
               [] -> []

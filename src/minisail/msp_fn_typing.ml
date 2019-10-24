@@ -1,5 +1,6 @@
-open Minisailplus_ast
+open Msp_ast
 module Satis : sig
+  val upto : Arith.nat -> Arith.nat list
   val z3eq : Z3.z3_expr -> Z3.z3_expr -> Z3.z3_bool_expr
   val convert_x : SyntaxVCT.xp -> string
   val convert_l : SyntaxVCT.lit -> Z3.z3_expr
@@ -15,38 +16,48 @@ module Satis : sig
       (string * SyntaxVCT.tau) list -> (string * SyntaxVCT.bp) list
   val type_app_t :
     unit ContextsPiDelta.theta_ext ->
-      ('a, unit) Contexts.gamma_ext ->
-        SyntaxVCT.bp -> (string * SyntaxVCT.bp) list
+      SyntaxVCT.bp -> (string * SyntaxVCT.bp) list
   val convert_b :
     unit ContextsPiDelta.theta_ext ->
-      ('a, unit) Contexts.gamma_ext ->
-        SyntaxVCT.vp -> SyntaxVCT.bp -> Z3.z3_type * Z3.z3_bool_expr
+      SyntaxVCT.vp -> SyntaxVCT.bp -> Z3.z3_type * Z3.z3_bool_expr
   val convert_blist :
     unit ContextsPiDelta.theta_ext ->
-      ('a, unit) Contexts.gamma_ext ->
-        SyntaxVCT.vp ->
-          SyntaxVCT.bp list -> Z3.z3_type list * Z3.z3_bool_expr list
+      SyntaxVCT.vp ->
+        SyntaxVCT.bp list -> Z3.z3_type list * Z3.z3_bool_expr list
   val convert_xbc :
     unit ContextsPiDelta.theta_ext ->
-      ('a, unit) Contexts.gamma_ext ->
-        SyntaxVCT.xp ->
-          SyntaxVCT.bp -> SyntaxVCT.cp -> Z3.z3_decl list * Z3.z3_bool_expr
+      SyntaxVCT.xp ->
+        SyntaxVCT.bp -> SyntaxVCT.cp -> Z3.z3_decl list * Z3.z3_bool_expr
   val subst_c_z : SyntaxVCT.xp -> SyntaxVCT.cp -> SyntaxVCT.cp
   val convert_g_aux :
     unit ContextsPiDelta.theta_ext ->
-      ('a, unit) Contexts.gamma_ext ->
-        (SyntaxVCT.xp * Contexts.g_entry) list ->
-          Z3.z3_decl list * Z3.z3_bool_expr list
-  val convert_g :
-    unit ContextsPiDelta.theta_ext ->
-      ('a, unit) Contexts.gamma_ext -> Z3.z3_decl list * Z3.z3_bool_expr list
+      (SyntaxVCT.xp * Contexts.g_entry) list ->
+        Z3.z3_decl list * Z3.z3_bool_expr list
   val convert_smt_problem_valid :
     unit ContextsPiDelta.theta_ext ->
       ('a, unit) Contexts.gamma_ext ->
         (SyntaxVCT.xp * Contexts.g_entry) list ->
-          SyntaxVCT.cp -> Z3.z3_decl list * (Z3.z3_decl list * Z3.z3_bool_expr)
+          SyntaxVCT.cp ->
+            (SyntaxVCT.xp * Contexts.g_entry) list *
+              (Z3.z3_decl list * (Z3.z3_decl list * Z3.z3_bool_expr))
   val pp_z3_expr : Z3.z3_expr -> string
   val pp_z3_bool_expr : Z3.z3_bool_expr -> string
+  val lin_ze :
+    Arith.nat ->
+      Z3.z3_expr -> Arith.nat * (Z3.z3_expr * (Z3.z3_expr * Z3.z3_expr) list)
+  val lin_ze_pair :
+    Arith.nat ->
+      Z3.z3_expr ->
+        Z3.z3_expr ->
+          (Z3.z3_expr -> Z3.z3_expr -> Z3.z3_expr) ->
+            Arith.nat * (Z3.z3_expr * (Z3.z3_expr * Z3.z3_expr) list)
+  val lin_zb :
+    Arith.nat ->
+      Z3.z3_bool_expr ->
+        Arith.nat * (Z3.z3_bool_expr * (Z3.z3_expr * Z3.z3_expr) list)
+  val rewrite_passes :
+    'a -> 'b -> Z3.z3_decl list ->
+                  Z3.z3_bool_expr -> Z3.z3_decl list * Z3.z3_bool_expr
   val z3_vector_sort : string
   val pp_bv_concats : Arith.int -> string list
   val t_t_vars : SyntaxVCT.tau -> string list
@@ -60,11 +71,14 @@ module Satis : sig
   val c_of_e : Contexts.g_entry -> SyntaxVCT.cp
   val bv_consts_aux :
     (SyntaxVCT.xp * Contexts.g_entry) list -> SyntaxVCT.lit list
+  val z3_vector_lookup : string
+  val convert_bitvec : SyntaxVCT.lit list -> string
   val pp_bitvec : SyntaxVCT.lit -> string list
   val pp_bv_consts :
     ('a, unit) Contexts.gamma_ext ->
       (SyntaxVCT.xp * Contexts.g_entry) list -> SyntaxVCT.cp -> string list
   val pp_z3_vector_funs : string
+  val pp_z3_exp_pred : Arith.nat -> string
   val pp_z3_type : Z3.z3_type -> string
   val pp_z3_type_var : Z3.z3_type_var -> string
   val pp_z3_fields : (string * Z3.z3_type_var) list -> string
@@ -73,18 +87,26 @@ module Satis : sig
   val z3_declare_tuple : Arith.int -> Z3.z3_decl
   val pp_tuples : Arith.int -> string list
   val pp_builtins : Arith.int -> string list
+  val freshen_type : Z3.z3_type -> Z3.z3_type
+  val freshen_type_var : Z3.z3_type_var -> Z3.z3_type_var
+  val freshen_constr : Z3.z3_constr -> Z3.z3_constr
+  val freshen_decl : Z3.z3_decl -> Z3.z3_decl
   val convert_t :
     unit ContextsPiDelta.theta_ext ->
-      ('a, unit) Contexts.gamma_ext ->
-        SyntaxVCT.vp -> SyntaxVCT.tau -> Z3.z3_type * Z3.z3_bool_expr
+      SyntaxVCT.vp -> SyntaxVCT.tau -> Z3.z3_type * Z3.z3_bool_expr
   val convert_typedef :
     unit ContextsPiDelta.theta_ext ->
-      ('a, unit) Contexts.gamma_ext ->
-        SyntaxVCT.xp * SyntaxVCT.tau -> Z3.z3_decl option
+      SyntaxVCT.xp * SyntaxVCT.tau -> Z3.z3_decl option
   val pp_typedef :
-    unit ContextsPiDelta.theta_ext ->
-      ('a, unit) Contexts.gamma_ext -> SyntaxVCT.xp * SyntaxVCT.tau -> string
+    unit ContextsPiDelta.theta_ext -> SyntaxVCT.xp * SyntaxVCT.tau -> string
   val max_tuples : Arith.int
+  val convert_smt_problem_final :
+    unit ContextsPiDelta.theta_ext ->
+      ('a, unit) Contexts.gamma_ext ->
+        (SyntaxVCT.xp * Contexts.g_entry) list ->
+          SyntaxVCT.cp ->
+            (SyntaxVCT.xp * Contexts.g_entry) list ->
+              Z3.z3_decl list -> 'b list -> Z3.z3_bool_expr -> string list
   val pp_smt_problem_valid :
     unit ContextsPiDelta.theta_ext ->
       ('a, unit) Contexts.gamma_ext ->
@@ -102,6 +124,11 @@ module Satis : sig
           ('a, unit) Contexts.gamma_ext ->
             (SyntaxVCT.xp * Contexts.g_entry) list -> SyntaxVCT.cp -> bool
 end = struct
+
+let rec upto
+  i = (if Arith.equal_nat i Arith.zero_nat then [Arith.zero_nat]
+        else Arith.suc (Arith.minus_nat i Arith.one_nat) ::
+               upto (Arith.minus_nat i Arith.one_nat));;
 
 let rec z3eq
   e1 e2 = match e1, e2 with
@@ -124,6 +151,7 @@ let rec z3eq
     | Z3.Z3E_eq (v, va), e2 -> Z3.Z3BE_eq (Z3.Z3E_eq (v, va), e2)
     | Z3.Z3E_not v, e2 -> Z3.Z3BE_eq (Z3.Z3E_not v, e2)
     | Z3.Z3E_exp v, e2 -> Z3.Z3BE_eq (Z3.Z3E_exp v, e2)
+    | Z3.Z3E_abs v, e2 -> Z3.Z3BE_eq (Z3.Z3E_abs v, e2)
     | Z3.Z3E_and (v, va), e2 -> Z3.Z3BE_eq (Z3.Z3E_and (v, va), e2)
     | Z3.Z3E_or (v, va), e2 -> Z3.Z3BE_eq (Z3.Z3E_or (v, va), e2)
     | Z3.Z3E_neq (v, va), e2 -> Z3.Z3BE_eq (Z3.Z3E_neq (v, va), e2)
@@ -148,6 +176,7 @@ let rec z3eq
     | e1, Z3.Z3E_minus (v, va) -> Z3.Z3BE_eq (e1, Z3.Z3E_minus (v, va))
     | e1, Z3.Z3E_not v -> Z3.Z3BE_eq (e1, Z3.Z3E_not v)
     | e1, Z3.Z3E_exp v -> Z3.Z3BE_eq (e1, Z3.Z3E_exp v)
+    | e1, Z3.Z3E_abs v -> Z3.Z3BE_eq (e1, Z3.Z3E_abs v)
     | e1, Z3.Z3E_and (v, va) -> Z3.Z3BE_eq (e1, Z3.Z3E_and (v, va))
     | e1, Z3.Z3E_or (v, va) -> Z3.Z3BE_eq (e1, Z3.Z3E_or (v, va))
     | e1, Z3.Z3E_neq (v, va) -> Z3.Z3BE_eq (e1, Z3.Z3E_neq (v, va))
@@ -167,6 +196,19 @@ let rec convert_l
     | SyntaxVCT.L_zero -> Z3.Z3E_bitzero
     | SyntaxVCT.L_one -> Z3.Z3E_bitone
     | SyntaxVCT.L_unit -> Z3.Z3E_unit
+    | SyntaxVCT.L_bitvec va ->
+        Z3.Z3E_bitvec
+          (Stringa.implode
+            (Lista.maps
+              (fun b ->
+                (if SyntaxVCT.equal_lita b SyntaxVCT.L_zero
+                  then [Stringa.Chara
+                          (false, false, false, false, true, true, false,
+                            false)]
+                  else [Stringa.Chara
+                          (true, false, false, false, true, true, false,
+                            false)]))
+              va))
     | SyntaxVCT.L_real s -> Z3.Z3E_string s
     | SyntaxVCT.L_string s -> Z3.Z3E_string s
     | SyntaxVCT.L_undef -> Z3.Z3E_constr ("unexpected undef", []);;
@@ -223,7 +265,8 @@ let rec convert_ce
     | SyntaxVCT.CE_bop (SyntaxVCT.GT, e1, e2) ->
         Z3.Z3E_not (Z3.Z3E_leq (convert_ce e1, convert_ce e2))
     | SyntaxVCT.CE_uop (SyntaxVCT.Len, e) -> Z3.Z3E_len (convert_ce e)
-    | SyntaxVCT.CE_uop (SyntaxVCT.Not, e) -> Z3.Z3E_not (convert_ce e)
+    | SyntaxVCT.CE_uop (SyntaxVCT.Nott, e) -> Z3.Z3E_not (convert_ce e)
+    | SyntaxVCT.CE_uop (SyntaxVCT.Abs, e) -> Z3.Z3E_abs (convert_ce e)
     | SyntaxVCT.CE_many_plus v -> failwith "undefined"
     | SyntaxVCT.CE_uop (SyntaxVCT.Exp, va) -> Z3.Z3E_exp (convert_ce va)
     | SyntaxVCT.CE_uop (SyntaxVCT.Neg, va) ->
@@ -273,7 +316,7 @@ let rec type_app
     | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_union (vb, vc) -> []
     | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_record vb -> []
     | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_undef -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_reg -> []
+    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_reg vb -> []
     | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_string -> []
     | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_exception -> []
     | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_finite_set vb -> []
@@ -290,7 +333,7 @@ let rec type_app
     | SyntaxVCT.B_tuple v, SyntaxVCT.B_union (va, vb) -> []
     | SyntaxVCT.B_tuple v, SyntaxVCT.B_record va -> []
     | SyntaxVCT.B_tuple v, SyntaxVCT.B_undef -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_reg -> []
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_reg va -> []
     | SyntaxVCT.B_tuple v, SyntaxVCT.B_string -> []
     | SyntaxVCT.B_tuple v, SyntaxVCT.B_exception -> []
     | SyntaxVCT.B_tuple v, SyntaxVCT.B_finite_set va -> []
@@ -306,13 +349,13 @@ let rec type_app
     | SyntaxVCT.B_union (v, va), SyntaxVCT.B_tuple vb -> []
     | SyntaxVCT.B_union (v, va), SyntaxVCT.B_record vb -> []
     | SyntaxVCT.B_union (v, va), SyntaxVCT.B_undef -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_reg -> []
+    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_reg vb -> []
     | SyntaxVCT.B_union (v, va), SyntaxVCT.B_string -> []
     | SyntaxVCT.B_union (v, va), SyntaxVCT.B_exception -> []
     | SyntaxVCT.B_union (v, va), SyntaxVCT.B_finite_set vb -> []
     | SyntaxVCT.B_record v, uz -> []
     | SyntaxVCT.B_undef, uz -> []
-    | SyntaxVCT.B_reg, uz -> []
+    | SyntaxVCT.B_reg v, uz -> []
     | SyntaxVCT.B_string, uz -> []
     | SyntaxVCT.B_exception, uz -> []
     | SyntaxVCT.B_finite_set v, uz -> []
@@ -329,7 +372,7 @@ and type_app_tlists
     | ve, [] -> [];;
 
 let rec type_app_t
-  pi gamma (SyntaxVCT.B_union (s, cs)) =
+  pi (SyntaxVCT.B_union (s, cs)) =
     (match
       Contexts.lookup SyntaxVCT.equal_xp (ContextsPiDelta.theta_T pi)
         (SyntaxVCT.VNamed s)
@@ -338,74 +381,68 @@ let rec type_app_t
         type_app (Contexts.b_of tdef) (SyntaxVCT.B_union (s, cs)));;
 
 let rec convert_b
-  uu uv uw x3 = match uu, uv, uw, x3 with
-    uu, uv, uw, SyntaxVCT.B_int -> (Z3.Z3T_int, Z3.Z3BE_true)
-    | ux, uy, uz, SyntaxVCT.B_bool -> (Z3.Z3T_bool, Z3.Z3BE_true)
-    | p, g, v, SyntaxVCT.B_tuple blist ->
-        (let (blist2, clist) = convert_blist p g v blist in
+  uu uv x2 = match uu, uv, x2 with
+    uu, uv, SyntaxVCT.B_int -> (Z3.Z3T_int, Z3.Z3BE_true)
+    | uw, ux, SyntaxVCT.B_bool -> (Z3.Z3T_bool, Z3.Z3BE_true)
+    | p, v, SyntaxVCT.B_tuple blist ->
+        (let (blist2, clist) = convert_blist p v blist in
           (Z3.Z3T_dt
              ("Tuple" ^ Utils.string_lit_of_nat (Lista.size_list blist),
                blist2),
             z3and clist))
-    | p, g, va, SyntaxVCT.B_record ((fid, vb) :: xs) ->
+    | p, uy, SyntaxVCT.B_record ((fid, uz) :: xs) ->
         (match ContextsPiDelta.lookup_record_name p fid
           with None -> (Z3.Z3T_dt ("unknownrecord", []), Z3.Z3BE_true)
           | Some s -> (Z3.Z3T_dt (s, []), Z3.Z3BE_true))
-    | p, g, vc, SyntaxVCT.B_record [] ->
+    | p, va, SyntaxVCT.B_record [] ->
         (Z3.Z3T_dt ("unknownrecord", []), Z3.Z3BE_true)
-    | vd, ve, vf, SyntaxVCT.B_bit -> (Z3.Z3T_bool, Z3.Z3BE_true)
-    | p, g, v, SyntaxVCT.B_vec (vg, b) ->
-        (let (t, _) = convert_b p g v b in
+    | vb, vc, SyntaxVCT.B_bit -> (Z3.Z3T_bool, Z3.Z3BE_true)
+    | p, v, SyntaxVCT.B_vec (vd, b) ->
+        (let (t, _) = convert_b p v b in
           (Z3.Z3T_array (Z3.Z3T_int, t), Z3.Z3BE_true))
-    | p, vh, vi, SyntaxVCT.B_string -> (Z3.Z3T_string, Z3.Z3BE_true)
-    | p, vj, vk, SyntaxVCT.B_unit -> (Z3.Z3T_dt ("Unit", []), Z3.Z3BE_true)
-    | p, g, v, SyntaxVCT.B_union (s, cs) ->
+    | p, ve, SyntaxVCT.B_string -> (Z3.Z3T_string, Z3.Z3BE_true)
+    | p, vf, SyntaxVCT.B_unit -> (Z3.Z3T_dt ("Unit", []), Z3.Z3BE_true)
+    | p, v, SyntaxVCT.B_union (s, cs) ->
         (Z3.Z3T_dt
-           (s, Lista.map (fun b -> Product_Type.fst (convert_b p g v b))
+           (s, Lista.map (fun b -> Product_Type.fst (convert_b p v b))
                  (Lista.map Product_Type.snd
-                   (type_app_t p g (SyntaxVCT.B_union (s, cs))))),
+                   (type_app_t p (SyntaxVCT.B_union (s, cs))))),
           Z3.Z3BE_true)
-    | vl, vm, vn, SyntaxVCT.B_reg -> (Z3.Z3T_dt ("reg", []), Z3.Z3BE_true)
-    | vo, vp, vq, SyntaxVCT.B_var v -> (Z3.Z3T_sort v, Z3.Z3BE_true)
-    | vr, vs, vt, SyntaxVCT.B_tid v -> (Z3.Z3T_dt (v, []), Z3.Z3BE_true)
-    | p, g, v, SyntaxVCT.B_list b ->
-        (Z3.Z3T_dt ("List", [Product_Type.fst (convert_b p g v b)]),
-          Z3.Z3BE_true)
-    | vu, a, b, SyntaxVCT.B_real -> (Z3.Z3T_string, Z3.Z3BE_true)
-and convert_blist
-  p g v blist = Contexts.unzip (Lista.map (convert_b p g v) blist);;
+    | vg, vh, SyntaxVCT.B_reg vi -> (Z3.Z3T_dt ("reg", []), Z3.Z3BE_true)
+    | vj, vk, SyntaxVCT.B_var v -> (Z3.Z3T_sort v, Z3.Z3BE_true)
+    | vl, vm, SyntaxVCT.B_tid v -> (Z3.Z3T_dt (v, []), Z3.Z3BE_true)
+    | p, v, SyntaxVCT.B_list b ->
+        (Z3.Z3T_dt ("List", [Product_Type.fst (convert_b p v b)]), Z3.Z3BE_true)
+    | vn, b, SyntaxVCT.B_real -> (Z3.Z3T_string, Z3.Z3BE_true)
+and convert_blist p v blist = Contexts.unzip (Lista.map (convert_b p v) blist);;
 
 let rec convert_xbc
-  p g x b c =
-    (let (t1, c1) = convert_b p g (SyntaxVCT.V_var x) b in
+  p x b c =
+    (let (t1, c1) = convert_b p (SyntaxVCT.V_var x) b in
       ([Z3.Z3D_decl_const (convert_x x, t1)], z3and [c1; convert_c c]));;
 
 let rec subst_c_z
-  x c = SyntaxVCT.subst_cp (SyntaxVCT.V_var x) SyntaxVCT.VIndex c;;
+  x c = SyntaxPED.subst_cp (SyntaxVCT.V_var x) SyntaxVCT.VIndex c;;
 
 let rec convert_g_aux
-  p g x2 = match p, g, x2 with p, g, [] -> ([], [])
-    | p, g, (x, Contexts.GEPair (b, c)) :: gamma ->
-        (let (ds, es) = convert_g_aux p g gamma in
-         let (d, e) = convert_xbc p g x b c in
+  p x1 = match p, x1 with p, [] -> ([], [])
+    | p, (x, Contexts.GEPair (b, c)) :: gamma ->
+        (let (ds, es) = convert_g_aux p gamma in
+         let (d, e) = convert_xbc p x b c in
           (d @ ds, e :: es))
-    | p, g, (x, Contexts.GETyp t) :: gamma ->
-        (let (ds, es) = convert_g_aux p g gamma in
+    | p, (x, Contexts.GETyp t) :: gamma ->
+        (let (ds, es) = convert_g_aux p gamma in
          let (d, e) =
-           convert_xbc p g x (Contexts.b_of t) (subst_c_z x (Contexts.c_of t))
-           in
+           convert_xbc p x (Contexts.b_of t) (subst_c_z x (Contexts.c_of t)) in
           (d @ ds, e :: es));;
-
-let rec convert_g
-  p gamma =
-    convert_g_aux p gamma (Contexts.gamma_x gamma @ Contexts.gamma_u gamma);;
 
 let rec convert_smt_problem_valid
   p g ev c =
-    (let (d1, e1) = convert_g p g in
-     let (d2, e2) = convert_g_aux p g ev in
+    (let ga = Contexts.gamma_x g @ Contexts.gamma_u g in
+     let (d1, e1) = convert_g_aux p ga in
+     let (d2, e2) = convert_g_aux p ev in
      let ca = convert_c c in
-      (d1, (d2, z3and (e1 @ [Z3.Z3BE_not (z3and (ca :: e2))]))));;
+      (ga, (d1, (d2, z3and (e1 @ [Z3.Z3BE_not (z3and (ca :: e2))])))));;
 
 let rec pp_z3_expr
   = function Z3.Z3E_var s -> s
@@ -453,7 +490,7 @@ let rec pp_z3_expr
     | Z3.Z3E_proj (s, v) -> ((("(proj" ^ s) ^ " ") ^ pp_z3_expr v) ^ ")"
     | Z3.Z3E_len e -> ("(llen " ^ pp_z3_expr e) ^ " )"
     | Z3.Z3E_not e -> ("(not " ^ pp_z3_expr e) ^ " )"
-    | Z3.Z3E_exp e -> ("(^ 2" ^ pp_z3_expr e) ^ " )"
+    | Z3.Z3E_exp e -> ("(^ 2 " ^ pp_z3_expr e) ^ " )"
     | Z3.Z3E_string s -> ("\034" ^ s) ^ "\034";;
 
 let rec pp_z3_bool_expr
@@ -475,7 +512,137 @@ let rec pp_z3_bool_expr
     | Z3.Z3BE_leq (e1, e2) ->
         ((("(<= " ^ pp_z3_expr e1) ^ " ") ^ pp_z3_expr e2) ^ ")"
     | Z3.Z3BE_implies (c1, c2) ->
-        ((("( => " ^ pp_z3_bool_expr c1) ^ " ") ^ pp_z3_bool_expr c2) ^ ")";;
+        ((("( => " ^ pp_z3_bool_expr c1) ^ " ") ^ pp_z3_bool_expr c2) ^ ")"
+    | Z3.Z3BE_pred (s, elist) ->
+        ((("( " ^ s) ^ " ") ^
+          Lista.foldr (fun t -> (fun a -> (pp_z3_expr t ^ " ") ^ a)) elist
+            " ") ^
+          ")";;
+
+let rec lin_ze
+  i x1 = match i, x1 with
+    i, Z3.Z3E_exp e ->
+      (let new_var = "exp_" ^ Stringa.implode (Utils.string_of_nat i) in
+        (Arith.plus_nat i Arith.one_nat,
+          (Z3.Z3E_var new_var, [(Z3.Z3E_var new_var, e)])))
+    | i, Z3.Z3E_var s -> (i, (Z3.Z3E_var s, []))
+    | i, Z3.Z3E_len e ->
+        (let (ia, (ea, b)) = lin_ze i e in (ia, (Z3.Z3E_len ea, b)))
+    | i, Z3.Z3E_num n -> (i, (Z3.Z3E_num n, []))
+    | i, Z3.Z3E_true -> (i, (Z3.Z3E_true, []))
+    | i, Z3.Z3E_false -> (i, (Z3.Z3E_false, []))
+    | i, Z3.Z3E_bitone -> (i, (Z3.Z3E_bitone, []))
+    | i, Z3.Z3E_bitzero -> (i, (Z3.Z3E_bitzero, []))
+    | i, Z3.Z3E_unit -> (i, (Z3.Z3E_unit, []))
+    | i, Z3.Z3E_plus (e1, e2) ->
+        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_plus (a, b))
+    | i, Z3.Z3E_leq (e1, e2) ->
+        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_leq (a, b))
+    | i, Z3.Z3E_geq (e1, e2) ->
+        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_geq (a, b))
+    | i, Z3.Z3E_times (e1, e2) ->
+        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_times (a, b))
+    | i, Z3.Z3E_div (e1, e2) ->
+        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_div (a, b))
+    | i, Z3.Z3E_mod (e1, e2) ->
+        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_mod (a, b))
+    | i, Z3.Z3E_minus (e1, e2) ->
+        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_minus (a, b))
+    | i, Z3.Z3E_eq (e1, e2) -> lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_eq (a, b))
+    | i, Z3.Z3E_bitvec s -> (i, (Z3.Z3E_bitvec s, []))
+    | i, Z3.Z3E_proj (s, e) ->
+        (let (ia, (ea, b)) = lin_ze i e in (ia, (Z3.Z3E_proj (s, ea), b)))
+    | i, Z3.Z3E_not e ->
+        (let (ia, (ea, b)) = lin_ze i e in (ia, (Z3.Z3E_not ea, b)))
+    | i, Z3.Z3E_and (e1, e2) ->
+        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_and (a, b))
+    | i, Z3.Z3E_or (e1, e2) -> lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_or (a, b))
+    | i, Z3.Z3E_constr (s, elist) ->
+        (let (ia, (elista, bs)) =
+           Lista.foldr
+             (fun sa (ia, (es, bs)) ->
+               (let (ib, (e, b)) = lin_ze ia sa in (ib, (e :: es, b @ bs))))
+             elist (i, ([], []))
+           in
+          (ia, (Z3.Z3E_constr (s, elista), bs)))
+    | i, Z3.Z3E_neq (e1, e2) ->
+        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_neq (a, b))
+    | i, Z3.Z3E_abs e ->
+        (let (ia, (ea, b)) = lin_ze i e in (ia, (Z3.Z3E_abs ea, b)))
+    | i, Z3.Z3E_concat elist ->
+        (let (ia, (elista, bs)) =
+           Lista.foldr
+             (fun s (ia, (es, bs)) ->
+               (let (ib, (e, b)) = lin_ze ia s in (ib, (e :: es, b @ bs))))
+             elist (i, ([], []))
+           in
+          (ia, (Z3.Z3E_concat elista, bs)))
+    | i, Z3.Z3E_string v -> (i, (Z3.Z3E_string v, []))
+and lin_ze_pair
+  i e1 e2 ctor =
+    (let (i1, (e1a, bs1)) = lin_ze i e1 in
+     let (i2, (e2a, bs2)) = lin_ze i1 e2 in
+      (i2, (ctor e1a e2a, bs1 @ bs2)));;
+
+let rec lin_zb
+  i x1 = match i, x1 with
+    i, Z3.Z3BE_eq (e1, e2) ->
+      (let (i1, (e1a, bs1)) = lin_ze i e1 in
+       let (i2, (e2a, bs2)) = lin_ze i1 e2 in
+        (i2, (Z3.Z3BE_eq (e1a, e2a), bs1 @ bs2)))
+    | i, Z3.Z3BE_leq (e1, e2) ->
+        (let (i1, (e1a, bs1)) = lin_ze i e1 in
+         let (i2, (e2a, bs2)) = lin_ze i1 e2 in
+          (i2, (Z3.Z3BE_leq (e1a, e2a), bs1 @ bs2)))
+    | i, Z3.Z3BE_true -> (i, (Z3.Z3BE_true, []))
+    | i, Z3.Z3BE_false -> (i, (Z3.Z3BE_false, []))
+    | i, Z3.Z3BE_and elist ->
+        (let (ia, (elista, bs)) =
+           Lista.foldr
+             (fun s (ia, (es, bs)) ->
+               (let (ib, (e, b)) = lin_zb ia s in (ib, (e :: es, b @ bs))))
+             elist (i, ([], []))
+           in
+          (ia, (Z3.Z3BE_and elista, bs)))
+    | i, Z3.Z3BE_or elist ->
+        (let (ia, (elista, bs)) =
+           Lista.foldr
+             (fun s (ia, (es, bs)) ->
+               (let (ib, (e, b)) = lin_zb ia s in (ib, (e :: es, b @ bs))))
+             elist (i, ([], []))
+           in
+          (ia, (Z3.Z3BE_or elista, bs)))
+    | i, Z3.Z3BE_implies (e1, e2) ->
+        (let (i1, (e1a, bs1)) = lin_zb i e1 in
+         let (i2, (e2a, bs2)) = lin_zb i1 e2 in
+          (i2, (Z3.Z3BE_implies (e1a, e2a), bs1 @ bs2)))
+    | i, Z3.Z3BE_not e1 ->
+        (let (i1, (e1a, bs1)) = lin_zb i e1 in (i1, (Z3.Z3BE_not e1a, bs1)))
+    | i, Z3.Z3BE_pred (s, elist) ->
+        (let (ia, (elista, bs)) =
+           Lista.foldr
+             (fun sa (ia, (es, bs)) ->
+               (let (ib, (e, b)) = lin_ze ia sa in (ib, (e :: es, b @ bs))))
+             elist (i, ([], []))
+           in
+          (ia, (Z3.Z3BE_pred (s, elista), bs)));;
+
+let rec rewrite_passes
+  p g d1 e1 =
+    (let x = lin_zb Arith.zero_nat e1 in
+     let (i, (e1a, bs)) = (let (xa, a) = x in (Arith.int_of_nat xa, a)) in
+     let var_decls =
+       Lista.map
+         (fun ia ->
+           Z3.Z3D_decl_const
+             ("exp_" ^ Stringa.implode (Utils.string_of_int ia), Z3.Z3T_int))
+         (Lista.upto Arith.zero_int i)
+       in
+     let exp_eqs =
+       Lista.map (fun (e1b, e2) -> Z3.Z3BE_pred ("exp_constraint", [e1b; e2]))
+         bs
+       in
+      (d1 @ var_decls, Z3.Z3BE_and (e1a :: exp_eqs)));;
 
 let z3_vector_sort : string = "(Array Int Bool)";;
 
@@ -484,11 +651,11 @@ let rec pp_bv_concats
         (fun i ->
           [((((("(declare-fun concat" ^ Utils.string_lit_of_int i) ^ " (") ^
                Utils.string_lit_map " " (fun _ -> z3_vector_sort)
-                 (Lista.upto Arith.one_int i)) ^
+                 (Lista.upto Arith.one_inta i)) ^
               ") ") ^
              z3_vector_sort) ^
              ")"])
-        (Lista.upto Arith.one_int n);;
+        (Lista.upto Arith.one_inta n);;
 
 let rec t_t_vars (SyntaxVCT.T_refined_type (vIndex0, b, c)) = b_t_vars b
 and b_t_vars
@@ -510,22 +677,32 @@ and b_t_vars
     | SyntaxVCT.B_unit -> []
     | SyntaxVCT.B_real -> []
     | SyntaxVCT.B_undef -> []
-    | SyntaxVCT.B_reg -> []
+    | SyntaxVCT.B_reg v -> []
     | SyntaxVCT.B_string -> []
     | SyntaxVCT.B_exception -> []
     | SyntaxVCT.B_finite_set v -> [];;
 
 let rec pp_sort_decl
-  p g = Lista.maps
-          (fun (_, t) ->
-            Lista.map
-              (fun s -> ("(declare-sort " ^ Contexts.remove_tick s) ^ ")")
-              (t_t_vars t))
-          (ContextsPiDelta.theta_T p);;
+  p g = Lista.remdups Stringa.equal_literal
+          (Lista.maps
+            (fun (_, t) ->
+              Lista.map
+                (fun s -> ("(declare-sort " ^ Contexts.remove_tick s) ^ ")")
+                (Lista.remdups Stringa.equal_literal (t_t_vars t)))
+            (ContextsPiDelta.theta_T p));;
 
 let rec bv_consts_v
-  = function SyntaxVCT.V_tuple vs -> Lista.maps bv_consts_v vs
-    | SyntaxVCT.V_lit v -> []
+  = function SyntaxVCT.V_lit (SyntaxVCT.L_bitvec l) -> [SyntaxVCT.L_bitvec l]
+    | SyntaxVCT.V_tuple vs -> Lista.maps bv_consts_v vs
+    | SyntaxVCT.V_lit SyntaxVCT.L_unit -> []
+    | SyntaxVCT.V_lit SyntaxVCT.L_zero -> []
+    | SyntaxVCT.V_lit SyntaxVCT.L_one -> []
+    | SyntaxVCT.V_lit SyntaxVCT.L_true -> []
+    | SyntaxVCT.V_lit SyntaxVCT.L_false -> []
+    | SyntaxVCT.V_lit (SyntaxVCT.L_num va) -> []
+    | SyntaxVCT.V_lit (SyntaxVCT.L_string va) -> []
+    | SyntaxVCT.V_lit SyntaxVCT.L_undef -> []
+    | SyntaxVCT.V_lit (SyntaxVCT.L_real va) -> []
     | SyntaxVCT.V_var v -> []
     | SyntaxVCT.V_vec v -> []
     | SyntaxVCT.V_list v -> []
@@ -559,7 +736,43 @@ let rec c_of_e = function Contexts.GEPair (uu, c) -> c
 let rec bv_consts_aux
   xbc = Lista.maps (fun (_, e) -> bv_consts_c (c_of_e e)) xbc;;
 
-let rec pp_bitvec uu = [];;
+let z3_vector_lookup : string = " select ";;
+
+let rec convert_bitvec = function [] -> ""
+                         | SyntaxVCT.L_one :: bv -> "1" ^ convert_bitvec bv
+                         | SyntaxVCT.L_zero :: bv -> "0" ^ convert_bitvec bv;;
+
+let rec pp_bitvec
+  = function
+    SyntaxVCT.L_bitvec s ->
+      [((("(declare-const bitvec" ^ convert_bitvec s) ^ " ") ^ z3_vector_sort) ^
+         " )";
+        (((((("(assert (and " ^ "( = (llen bitvec") ^ convert_bitvec s) ^
+             ") ") ^
+            Utils.string_lit_of_nat (Lista.size_list s)) ^
+           " ) ") ^
+          Utils.string_lit_concat
+            (Lista.map
+              (fun (i, x) ->
+                ((((((("( = ( " ^ z3_vector_lookup) ^ "  bitvec") ^
+                      convert_bitvec s) ^
+                     " ") ^
+                    Utils.string_lit_of_nat i) ^
+                   ") ") ^
+                  (match x with SyntaxVCT.L_zero -> " false "
+                    | SyntaxVCT.L_one -> " true ")) ^
+                  " ) ")
+              (Lista.enumerate Arith.zero_nat s))) ^
+          " )) "]
+    | SyntaxVCT.L_unit -> []
+    | SyntaxVCT.L_zero -> []
+    | SyntaxVCT.L_one -> []
+    | SyntaxVCT.L_true -> []
+    | SyntaxVCT.L_false -> []
+    | SyntaxVCT.L_num v -> []
+    | SyntaxVCT.L_string v -> []
+    | SyntaxVCT.L_undef -> []
+    | SyntaxVCT.L_real v -> [];;
 
 let rec pp_bv_consts
   g ev c =
@@ -568,6 +781,23 @@ let rec pp_bv_consts
       Lista.maps pp_bitvec (Lista.remdups SyntaxVCT.equal_lit bvs));;
 
 let pp_z3_vector_funs : string = "";;
+
+let rec pp_z3_exp_pred
+  maxx =
+    ("(define-fun exp_constraint ((x Int ) (y Int )) Bool (or " ^
+      Utils.string_lit_map " "
+        (fun i ->
+          ((((("( and " ^ " ( = x ") ^
+               Stringa.implode
+                 (Utils.string_of_int
+                   (Arith.power Arith.power_int
+                     (Arith.Int_of_integer (Z.of_int 2)) i))) ^
+              " ) ") ^
+             "( = y ") ^
+            Stringa.implode (Utils.string_of_int (Arith.int_of_nat i))) ^
+            " ))")
+        (upto maxx)) ^
+      ")) ";;
 
 let rec pp_z3_type
   = function Z3.Z3T_int -> "Int"
@@ -615,7 +845,7 @@ let rec z3_declare_tuple
   n = Z3.Z3D_decl_datatype
         ("Tuple" ^ Utils.string_lit_of_int n,
           Lista.map (fun i -> Z3.Z3TV_tv_var (Arith.integer_of_int i))
-            (Lista.upto Arith.one_int n),
+            (Lista.upto Arith.one_inta n),
           [Z3.Z3C_ty_constr
              ("mk-tuple" ^ Utils.string_lit_of_int n,
                Lista.map
@@ -623,97 +853,131 @@ let rec z3_declare_tuple
                    ((("proj" ^ Utils.string_lit_of_int n) ^ "X") ^
                       Utils.string_lit_of_int i,
                      Z3.Z3TV_tv_var (Arith.integer_of_int i)))
-                 (Lista.upto Arith.one_int n))]);;
+                 (Lista.upto Arith.one_inta n))]);;
 
 let rec pp_tuples
   n = Lista.map (fun i -> pp_z3_decl (z3_declare_tuple i))
-        (Lista.upto Arith.one_int n);;
+        (Lista.upto Arith.one_inta n);;
 
 let rec pp_builtins
-  n = pp_z3_vector_funs ::
-        (("(declare-fun llen (" ^ z3_vector_sort) ^ ") Int)") ::
-          pp_z3_decl
-            (Z3.Z3D_decl_datatype
-              ("Unit", [], [Z3.Z3C_ty_constr ("unit", [])])) ::
-            pp_tuples n;;
+  n = pp_z3_exp_pred (Arith.nat_of_integer (Z.of_int 16)) ::
+        pp_z3_vector_funs ::
+          (("(declare-fun llen (" ^ z3_vector_sort) ^ ") Int)") ::
+            pp_z3_decl
+              (Z3.Z3D_decl_datatype
+                ("Unit", [], [Z3.Z3C_ty_constr ("unit", [])])) ::
+              pp_tuples n;;
+
+let rec freshen_type
+  = function Z3.Z3T_int -> Z3.Z3T_int
+    | Z3.Z3T_bool -> Z3.Z3T_bool
+    | Z3.Z3T_unit -> Z3.Z3T_unit
+    | Z3.Z3T_array (t1, t2) -> Z3.Z3T_array (freshen_type t1, freshen_type t2)
+    | Z3.Z3T_dt (s, zts) -> Z3.Z3T_dt (s, Lista.map freshen_type zts)
+    | Z3.Z3T_sort s -> Z3.Z3T_sort (s ^ "T")
+    | Z3.Z3T_string -> Z3.Z3T_string;;
+
+let rec freshen_type_var
+  = function Z3.Z3TV_tv_type t -> Z3.Z3TV_tv_type (freshen_type t)
+    | Z3.Z3TV_tv_var i -> Z3.Z3TV_tv_var i;;
+
+let rec freshen_constr
+  (Z3.Z3C_ty_constr (s, stvs)) =
+    Z3.Z3C_ty_constr
+      (s, Lista.map (fun (sa, t) -> (sa, freshen_type_var t)) stvs);;
+
+let rec freshen_decl
+  = function Z3.Z3D_decl_fun -> Z3.Z3D_decl_fun
+    | Z3.Z3D_decl_const (s, t) -> Z3.Z3D_decl_const (s, freshen_type t)
+    | Z3.Z3D_decl_datatype (s, vs, cs) ->
+        Z3.Z3D_decl_datatype
+          (s, Lista.map freshen_type_var vs, Lista.map freshen_constr cs);;
 
 let rec convert_t
-  p g v (SyntaxVCT.T_refined_type (vIndex0, b, c)) =
-    (let (t, e) = convert_b p g v b in
-      (t, z3and [e; convert_c (SyntaxVCT.subst_cp v SyntaxVCT.VIndex c)]));;
+  p v (SyntaxVCT.T_refined_type (vIndex0, b, c)) =
+    (let (t, e) = convert_b p v b in
+      (t, z3and [e; convert_c (SyntaxPED.subst_cp v SyntaxVCT.VIndex c)]));;
 
 let rec convert_typedef
-  p g x2 = match p, g, x2 with
-    p, g, (SyntaxVCT.VNamed x,
-            SyntaxVCT.T_refined_type (uu, SyntaxVCT.B_union (s, clist), uv))
-      -> Some (Z3.Z3D_decl_datatype
+  p x1 = match p, x1 with
+    p, (SyntaxVCT.VNamed x,
+         SyntaxVCT.T_refined_type (uu, SyntaxVCT.B_union (s, clist), uv))
+      -> (let decl =
+            Z3.Z3D_decl_datatype
+              (x, Lista.map (fun v -> Z3.Z3TV_tv_type (Z3.Z3T_sort v))
+                    (Lista.maps (fun (_, a) -> t_t_vars a) clist),
+                Lista.map
+                  (fun (sa, t) ->
+                    (let (zt, _) =
+                       convert_t p (SyntaxVCT.V_var SyntaxVCT.VIndex) t in
+                      Z3.Z3C_ty_constr
+                        (sa, [((("proj" ^ x) ^ "x") ^ sa,
+                                Z3.Z3TV_tv_type zt)])))
+                  clist)
+            in
+           Some (freshen_decl decl))
+    | p, (SyntaxVCT.VNamed x,
+           SyntaxVCT.T_refined_type (uw, SyntaxVCT.B_record clist, ux))
+        -> (let decl =
+              Z3.Z3D_decl_datatype
                 (x, Lista.map (fun v -> Z3.Z3TV_tv_type (Z3.Z3T_sort v))
-                      (Lista.maps (fun (_, a) -> t_t_vars a) clist),
-                  Lista.map
-                    (fun (sa, t) ->
-                      (let (zt, _) =
-                         convert_t p g (SyntaxVCT.V_var SyntaxVCT.VIndex) t in
-                        Z3.Z3C_ty_constr
-                          (sa, [((("proj" ^ x) ^ "x") ^ sa,
-                                  Z3.Z3TV_tv_type zt)])))
-                    clist))
-    | p, g, (SyntaxVCT.VNamed x,
-              SyntaxVCT.T_refined_type (uw, SyntaxVCT.B_record clist, ux))
-        -> Some (Z3.Z3D_decl_datatype
-                  (x, Lista.map (fun v -> Z3.Z3TV_tv_type (Z3.Z3T_sort v))
-                        (Lista.maps (fun (_, a) -> b_t_vars a) clist),
-                    [Z3.Z3C_ty_constr
-                       ("mk-" ^ x,
-                         Lista.map
-                           (fun (s, t) ->
-                             (let (zt, _) =
-                                convert_b p g (SyntaxVCT.V_var SyntaxVCT.VIndex)
-                                  t
-                                in
-                               ("proj" ^ s, Z3.Z3TV_tv_type zt)))
-                           clist)]))
-    | uy, uz, (SyntaxVCT.VIndex, vb) -> None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_var vf, ve)) -> None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_tid vf, ve)) -> None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_int, ve)) -> None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_bool, ve)) -> None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_bit, ve)) -> None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_unit, ve)) -> None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_real, ve)) -> None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_vec (vf, vg), ve))
-        -> None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_list vf, ve)) ->
+                      (Lista.maps (fun (_, a) -> b_t_vars a) clist),
+                  [Z3.Z3C_ty_constr
+                     ("mk-" ^ x,
+                       Lista.map
+                         (fun (s, t) ->
+                           (let (zt, _) =
+                              convert_b p (SyntaxVCT.V_var SyntaxVCT.VIndex) t
+                              in
+                             ("proj" ^ s, Z3.Z3TV_tv_type zt)))
+                         clist)])
+              in
+             Some (freshen_decl decl))
+    | uy, (SyntaxVCT.VIndex, va) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_var ve, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_tid ve, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_int, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_bool, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_bit, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_unit, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_real, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_vec (ve, vf), vd)) ->
         None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_tuple vf, ve)) ->
-        None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_undef, ve)) -> None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_reg, ve)) -> None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_string, ve)) -> None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_exception, ve)) ->
-        None
-    | uy, uz, (v, SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_finite_set vf, ve))
-        -> None;;
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_list ve, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_tuple ve, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_undef, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_reg ve, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_string, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_exception, vd)) -> None
+    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_finite_set ve, vd)) ->
+        None;;
 
 let rec pp_typedef
-  p g td =
-    (match convert_typedef p g td with None -> "" | Some a -> pp_z3_decl a);;
+  p td = (match convert_typedef p td with None -> "" | Some a -> pp_z3_decl a);;
 
-let max_tuples : Arith.int = Arith.Int_of_integer (Z.of_int 6);;
+let max_tuples : Arith.int = Arith.Int_of_integer (Z.of_int 10);;
 
-let rec pp_smt_problem_valid
-  p g ev c =
-    (let (d1, (d2, e1)) = convert_smt_problem_valid p g ev c in
+let rec convert_smt_problem_final
+  p ga ev c g d1 d2 e1 =
+    (let (d1a, e1a) = rewrite_passes p ga d1 e1 in
       pp_bv_concats (Arith.Int_of_integer (Z.of_int 3)) @
         pp_builtins max_tuples @
-          pp_bv_consts g ev c @
-            pp_sort_decl p g @
-              Lista.map (pp_typedef p g)
-                (Lista.rev (ContextsPiDelta.theta_T p)) @
-                Lista.map pp_z3_decl d1 @
-                  [("(define-fun constraint () Bool " ^ pp_z3_bool_expr e1) ^
+          pp_bv_consts ga ev c @
+            pp_sort_decl p ga @
+              Lista.map (pp_typedef p) (ContextsPiDelta.minimise_td p g) @
+                Lista.map pp_z3_decl d1a @
+                  [("(define-fun constraint () Bool " ^ pp_z3_bool_expr e1a) ^
                      (if Arith.equal_nat (Lista.size_list d2) Arith.zero_nat
                        then ")" else "))")] @
                     ["(assert constraint)"; "(check-sat)"]);;
+
+let rec pp_smt_problem_valid
+  p g ev c =
+    (let a = convert_smt_problem_valid p g ev c in
+     let (ga, aa) = a in
+     let (d1, ab) = aa in
+     let (ac, b) = ab in
+      convert_smt_problem_final p g ev c ga d1 ac b);;
 
 let rec has_no_t_var_b
   = function SyntaxVCT.B_var uu -> false
@@ -729,7 +993,7 @@ let rec has_no_t_var_b
     | SyntaxVCT.B_union (v, va) -> true
     | SyntaxVCT.B_record v -> true
     | SyntaxVCT.B_undef -> true
-    | SyntaxVCT.B_reg -> true
+    | SyntaxVCT.B_reg v -> true
     | SyntaxVCT.B_string -> true
     | SyntaxVCT.B_exception -> true
     | SyntaxVCT.B_finite_set v -> true;;
@@ -754,311 +1018,6 @@ let rec valid
           not (Smt2.satisfiable s loc (pp_smt_problem_valid p g xbc c) false));;
 
 end;; (*struct Satis*)
-
-module ConvertTypes : sig
-  val elim :
-    Arith.nat ->
-      Z.t list * SyntaxVCT.cep ->
-        Z.t list * SyntaxVCT.cep -> Z.t list * SyntaxVCT.cep
-  val swap :
-    Arith.nat ->
-      Arith.nat ->
-        (Z.t list * SyntaxVCT.cep) list -> (Z.t list * SyntaxVCT.cep) list
-  val zipi : 'a list -> (Arith.nat * 'a) list
-  val nonZeroElement :
-    Arith.nat -> (Z.t list * SyntaxVCT.cep) list -> Arith.nat option
-  val swap_if_0 :
-    Arith.nat ->
-      (Z.t list * SyntaxVCT.cep) list ->
-        ((Z.t list * SyntaxVCT.cep) list) option
-  val solve_jth :
-    Arith.nat ->
-      (Z.t list * SyntaxVCT.cep) list -> (Z.t list * SyntaxVCT.cep) list
-  val solve : (Z.t list * SyntaxVCT.cep) list -> (Z.t list * SyntaxVCT.cep) list
-  val is_const : Z.t list -> bool
-  val extract_ce :
-    Z.t -> Z.t -> SyntaxVCT.cep -> SyntaxVCT.cep * SyntaxVCT.cp list
-  val solve_ce :
-    (Z.t list * SyntaxVCT.cep) list -> SyntaxVCT.cep list * SyntaxVCT.cp list
-  val coeff_mult_constant : Z.t -> (Z.t list) option -> (Z.t list) option
-  val coeff_times : (Z.t list) option -> (Z.t list) option -> (Z.t list) option
-  val coeff_plus : (Z.t list) option -> (Z.t list) option -> (Z.t list) option
-  val linearise : SyntaxVCT.xp list -> SyntaxVCT.cep -> (Z.t list) option
-  val linearise_A :
-    SyntaxVCT.xp list ->
-      (SyntaxVCT.cep * SyntaxVCT.cep) list ->
-        ((Z.t list * SyntaxVCT.cep) list) option
-  val solve_ce_ce :
-    SyntaxVCT.xp list ->
-      (SyntaxVCT.cep * SyntaxVCT.cep) list ->
-        (SyntaxVCT.cep list * SyntaxVCT.cp list) option
-end = struct
-
-let rec elim
-  j (cs1, ce1) (cs2, ce2) =
-    (let cs1a =
-       (if Z.equal (Lista.nth cs2 j) (Z.of_int 1) then cs1
-         else Lista.map (fun x -> Z.mul x (Lista.nth cs2 j)) cs1)
-       in
-     let cs2a =
-       (if Z.equal (Lista.nth cs1 j) (Z.of_int 1) then cs2
-         else Lista.map (fun x -> Z.mul x (Lista.nth cs1 j)) cs2)
-       in
-     let ce1a =
-       (if Z.equal (Lista.nth cs2 j) (Z.of_int 1) then ce1
-         else SyntaxVCT.CE_bop
-                (SyntaxVCT.Times, ce1,
-                  SyntaxVCT.CE_val
-                    (SyntaxVCT.V_lit (SyntaxVCT.L_num (Lista.nth cs2 j)))))
-       in
-     let ce2a =
-       (if Z.equal (Lista.nth cs1 j) (Z.of_int 1) then ce2
-         else SyntaxVCT.CE_bop
-                (SyntaxVCT.Times, ce2,
-                  SyntaxVCT.CE_val
-                    (SyntaxVCT.V_lit (SyntaxVCT.L_num (Lista.nth cs1 j)))))
-       in
-     let cs2b = Lista.map (fun (a, b) -> Z.sub a b) (Lista.zip cs2a cs1a) in
-     let a = SyntaxVCT.CE_bop (SyntaxVCT.Minus, ce2a, ce1a) in
-      (cs2b, a));;
-
-let rec swap
-  i j a =
-    (let b = Lista.nth a i in
-      Lista.list_update (Lista.list_update a i (Lista.nth a j)) j b);;
-
-let rec zipi xs = Lista.zip (Lista.upt Arith.zero_nat (Lista.size_list xs)) xs;;
-
-let rec nonZeroElement
-  j xs =
-    (match
-      Lista.filter
-        (fun (i, (r, _)) ->
-          Arith.less_eq_nat j i && not (Z.equal (Lista.nth r j) Z.zero))
-        (zipi xs)
-      with [] -> None | (x, _) :: _ -> Some x);;
-
-let rec swap_if_0
-  j a = (if Z.equal (Lista.nth (Product_Type.fst (Lista.nth a j)) j) Z.zero
-          then (match nonZeroElement j a with None -> None
-                 | Some i -> Some (swap i j a))
-          else Some a);;
-
-let rec solve_jth
-  j a = (match swap_if_0 j a with None -> a
-          | Some aa ->
-            Lista.map
-              (fun (i, (r, _)) ->
-                (if Arith.equal_nat i j || Z.equal (Lista.nth r j) Z.zero
-                  then Lista.nth aa i
-                  else elim j (Lista.nth aa j) (Lista.nth aa i)))
-              (zipi aa));;
-
-let rec solve
-  a = Lista.fold solve_jth
-        (Lista.upt Arith.zero_nat
-          (Arith.minus_nat
-            (Lista.size_list (Product_Type.fst (Lista.nth a Arith.zero_nat)))
-            Arith.one_nat))
-        a;;
-
-let rec is_const = function [x] -> true
-                   | x :: v :: va -> Z.equal x Z.zero && is_const (v :: va);;
-
-let rec extract_ce
-  m n ce =
-    (let cea =
-       (if Z.equal m Z.zero then ce
-         else SyntaxVCT.CE_bop
-                (SyntaxVCT.Minus, ce,
-                  SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_num m))))
-       in
-      (if Z.equal n (Z.of_int 1) then (cea, [])
-        else (SyntaxVCT.CE_bop
-                (SyntaxVCT.Div, cea,
-                  SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_num n))),
-               [SyntaxVCT.C_eq
-                  (SyntaxVCT.CE_bop
-                     (SyntaxVCT.Mod, cea,
-                       SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_num n))),
-                    SyntaxVCT.CE_val
-                      (SyntaxVCT.V_lit (SyntaxVCT.L_num Z.zero)))])));;
-
-let rec solve_ce
-  a = (let aa = solve a in
-       let (xs, ys) =
-         Utils.unzip
-           (Lista.map
-             (fun (i, (ces, ce)) ->
-               (if Arith.less_eq_nat
-                     (Arith.minus_nat (Lista.size_list ces) Arith.one_nat) i
-                 then extract_ce
-                        (Lista.nth ces
-                          (Arith.minus_nat (Lista.size_list ces) Arith.one_nat))
-                        (Z.of_int 1) ce
-                 else extract_ce
-                        (Lista.nth ces
-                          (Arith.minus_nat (Lista.size_list ces) Arith.one_nat))
-                        (Lista.nth ces i) ce))
-             (zipi aa))
-         in
-        (xs, Lista.concat ys));;
-
-let rec coeff_mult_constant
-  i x1 = match i, x1 with i, Some xs -> Some (Lista.map (fun x -> Z.mul x i) xs)
-    | i, None -> None;;
-
-let rec coeff_times
-  x0 uu = match x0, uu with
-    Some xs, Some ys ->
-      (if is_const xs then coeff_mult_constant (Lista.last xs) (Some ys)
-        else (if is_const ys then coeff_mult_constant (Lista.last ys) (Some xs)
-               else None))
-    | None, uu -> None
-    | Some v, None -> None;;
-
-let rec coeff_plus
-  x0 uu = match x0, uu with
-    Some xs, Some ys ->
-      Some (Lista.map (fun (a, b) -> Z.add a b) (Lista.zip xs ys))
-    | None, uu -> None
-    | Some v, None -> None;;
-
-let rec linearise
-  ks x1 = match ks, x1 with
-    ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_num i)) ->
-      Some (Lista.map (fun _ -> Z.zero) ks @ [i])
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_var x) ->
-        Some (Lista.map
-                (fun y ->
-                  (if SyntaxVCT.equal_xpa x y then (Z.of_int 1) else Z.zero))
-                ks @
-               [Z.zero])
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.Plus, ce1, ce2) ->
-        coeff_plus (linearise ks ce1) (linearise ks ce2)
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.Minus, ce1, ce2) ->
-        coeff_plus (linearise ks ce1)
-          (coeff_mult_constant (Z.neg (Z.of_int 1)) (linearise ks ce2))
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.Times, ce1, ce2) ->
-        coeff_times (linearise ks ce1) (linearise ks ce2)
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_unit) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_zero) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_one) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_true) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_false) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_string vb)) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_undef) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_bitvec vb)) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_real vb)) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_vec va) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_list va) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_cons (va, vb)) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_constr (va, vb)) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_record va) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_tuple va) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_proj (va, vb)) -> Some []
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.Div, va, vb) -> Some []
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.Mod, va, vb) -> Some []
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.LEq, va, vb) -> Some []
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.LT, va, vb) -> Some []
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.GT, va, vb) -> Some []
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.GEq, va, vb) -> Some []
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.Eq, va, vb) -> Some []
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.And, va, vb) -> Some []
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.Or, va, vb) -> Some []
-    | ks, SyntaxVCT.CE_bop (SyntaxVCT.NEq, va, vb) -> Some []
-    | ks, SyntaxVCT.CE_many_plus v -> Some []
-    | ks, SyntaxVCT.CE_uop (v, va) -> Some []
-    | ks, SyntaxVCT.CE_proj (v, va) -> Some []
-    | ks, SyntaxVCT.CE_field_access (v, va) -> Some [];;
-
-let rec linearise_A
-  ks x1 = match ks, x1 with ks, [] -> Some []
-    | ks, (ce1, ce2) :: ces ->
-        (match (linearise ks ce1, linearise_A ks ces) with (None, _) -> None
-          | (Some _, None) -> None
-          | (Some ce1a, Some cesa) -> Some ((ce1a, ce2) :: cesa));;
-
-let rec solve_ce_ce
-  ks ces =
-    (match linearise_A ks ces with None -> None | Some a -> Some (solve_ce a));;
-
-end;; (*struct ConvertTypes*)
-
-module SyntaxPEDDecl : sig
-  val tsubst_bp : SyntaxVCT.bp -> string -> SyntaxVCT.bp -> SyntaxVCT.bp
-  val tsubst_tp : SyntaxVCT.bp -> string -> SyntaxVCT.tau -> SyntaxVCT.tau
-  val tsubst_ctor_tau :
-    SyntaxVCT.bp -> string -> string * SyntaxVCT.tau -> string * SyntaxVCT.tau
-  val tsubst_ctor_tau_list :
-    SyntaxVCT.bp ->
-      string -> (string * SyntaxVCT.tau) list -> (string * SyntaxVCT.tau) list
-  val tsubst_bp_list :
-    SyntaxVCT.bp -> string -> SyntaxVCT.bp list -> SyntaxVCT.bp list
-  val tsubst_field_bp :
-    SyntaxVCT.bp -> string -> string * SyntaxVCT.bp -> string * SyntaxVCT.bp
-  val tsubst_field_bp_list :
-    SyntaxVCT.bp ->
-      string -> (string * SyntaxVCT.bp) list -> (string * SyntaxVCT.bp) list
-  val tsubst_bsub : SyntaxVCT.bp -> string -> SyntaxVCT.bsub -> SyntaxVCT.bsub
-end = struct
-
-let rec tsubst_bp
-  bp_5 tvar5 x2 = match bp_5, tvar5, x2 with
-    bp_5, tvar5, SyntaxVCT.B_var tvar ->
-      (if ((tvar : string) = tvar5) then bp_5 else SyntaxVCT.B_var tvar)
-    | bp_5, tvar5, SyntaxVCT.B_tid id -> SyntaxVCT.B_tid id
-    | bp_5, tvar5, SyntaxVCT.B_int -> SyntaxVCT.B_int
-    | bp_5, tvar5, SyntaxVCT.B_bool -> SyntaxVCT.B_bool
-    | bp_5, tvar5, SyntaxVCT.B_bit -> SyntaxVCT.B_bit
-    | bp_5, tvar5, SyntaxVCT.B_unit -> SyntaxVCT.B_unit
-    | bp_5, tvar5, SyntaxVCT.B_real -> SyntaxVCT.B_real
-    | bp_5, tvar5, SyntaxVCT.B_vec (order, bp) ->
-        SyntaxVCT.B_vec (order, tsubst_bp bp_5 tvar5 bp)
-    | bp_5, tvar5, SyntaxVCT.B_list bp ->
-        SyntaxVCT.B_list (tsubst_bp bp_5 tvar5 bp)
-    | bp_5, tvar5, SyntaxVCT.B_tuple bp_list ->
-        SyntaxVCT.B_tuple (tsubst_bp_list bp_5 tvar5 bp_list)
-    | bp_5, tvar5, SyntaxVCT.B_union (id, ctor_tau_list) ->
-        SyntaxVCT.B_union (id, tsubst_ctor_tau_list bp_5 tvar5 ctor_tau_list)
-    | bp_5, tvar5, SyntaxVCT.B_record field_bp_list ->
-        SyntaxVCT.B_record (tsubst_field_bp_list bp_5 tvar5 field_bp_list)
-    | bp_5, tvar5, SyntaxVCT.B_undef -> SyntaxVCT.B_undef
-    | bp_5, tvar5, SyntaxVCT.B_reg -> SyntaxVCT.B_reg
-    | bp_5, tvar5, SyntaxVCT.B_string -> SyntaxVCT.B_string
-    | bp_5, tvar5, SyntaxVCT.B_exception -> SyntaxVCT.B_exception
-    | bp_5, tvar5, SyntaxVCT.B_finite_set num_list ->
-        SyntaxVCT.B_finite_set num_list
-and tsubst_tp
-  bp5 tvar5 (SyntaxVCT.T_refined_type (zp, bp, cp)) =
-    SyntaxVCT.T_refined_type (zp, tsubst_bp bp5 tvar5 bp, cp)
-and tsubst_ctor_tau bp_5 tvar5 (ctor1, tp1) = (ctor1, tsubst_tp bp_5 tvar5 tp1)
-and tsubst_ctor_tau_list
-  bp_5 tvar5 x2 = match bp_5, tvar5, x2 with bp_5, tvar5, [] -> []
-    | bp_5, tvar5, ctor_tau_XXX :: ctor_tau_list_XXX ->
-        tsubst_ctor_tau bp_5 tvar5 ctor_tau_XXX ::
-          tsubst_ctor_tau_list bp_5 tvar5 ctor_tau_list_XXX
-and tsubst_bp_list
-  bp_5 tvar5 x2 = match bp_5, tvar5, x2 with bp_5, tvar5, [] -> []
-    | bp_5, tvar5, bp_XXX :: bp_list_XXX ->
-        tsubst_bp bp_5 tvar5 bp_XXX :: tsubst_bp_list bp_5 tvar5 bp_list_XXX
-and tsubst_field_bp
-  bp_5 tvar5 (field1, bp1) = (field1, tsubst_bp bp_5 tvar5 bp1)
-and tsubst_field_bp_list
-  bp_5 tvar5 x2 = match bp_5, tvar5, x2 with bp_5, tvar5, [] -> []
-    | bp_5, tvar5, field_bp_XXX :: field_bp_list_XXX ->
-        tsubst_field_bp bp_5 tvar5 field_bp_XXX ::
-          tsubst_field_bp_list bp_5 tvar5 field_bp_list_XXX;;
-
-let rec tsubst_bsub
-  bp5 tvar5 x2 = match bp5, tvar5, x2 with
-    bp5, tvar5, SyntaxVCT.BS_empty -> SyntaxVCT.BS_empty
-    | bp5, tvar5, SyntaxVCT.BS_cons (bsub, bp, tvar) ->
-        SyntaxVCT.BS_cons
-          (tsubst_bsub bp5 tvar5 bsub, tsubst_bp bp5 tvar5 bp, tvar);;
-
-end;; (*struct SyntaxPEDDecl*)
-
 module TypingMonadFunction : sig
   val pp_b : SyntaxVCT.bp -> string
   val id_of : SyntaxVCT.xp -> string
@@ -1071,14 +1030,23 @@ module TypingMonadFunction : sig
             ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
               (SyntaxVCT.tau option * SyntaxVCT.xp list)))
             Monad.checkM
+  val tsubst_t_many :
+    SyntaxVCT.tau -> (string * SyntaxVCT.bp) list -> SyntaxVCT.tau
   val kvars_of :
     SyntaxVCT.tau -> (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list
-  val tsubst_b_bs : SyntaxVCT.bp -> (string * SyntaxVCT.bp) list -> SyntaxVCT.bp
+  val tsubst_bp_many :
+    SyntaxVCT.bp -> (string * SyntaxVCT.bp) list -> SyntaxVCT.bp
   val subtype :
     Location.loc ->
       unit ContextsPiDelta.theta_ext ->
         (SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
           SyntaxVCT.tau -> SyntaxVCT.tau -> bool Monad.checkM
+  val infer_l :
+    unit ContextsPiDelta.theta_ext ->
+      SyntaxVCT.lit ->
+        (SyntaxVCT.xp *
+          ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list * SyntaxVCT.tau))
+          Monad.checkM
   val check_pat :
     bool ->
       unit ContextsPiDelta.theta_ext ->
@@ -1123,13 +1091,13 @@ module TypingMonadFunction : sig
       ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
         (SyntaxVCT.bp list * SyntaxVCT.cp))
         Monad.checkM
+  val single_base : SyntaxVCT.tau list -> SyntaxVCT.bp option
   val check_varM :
     (SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
       Location.loc -> SyntaxVCT.xp -> bool Monad.checkM
   val check_varsM :
     (SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
       Location.loc -> SyntaxVCT.xp list -> bool Monad.checkM
-  val check_bases : SyntaxVCT.tau list -> SyntaxVCT.bp option
   val mk_eq_proj :
     Location.loc -> SyntaxVCT.xp -> Arith.nat -> Arith.nat -> SyntaxVCT.cp
   val loc_lexp : SyntaxPED.lexpp -> Location.loc
@@ -1162,6 +1130,15 @@ module TypingMonadFunction : sig
             SyntaxPED.ep ->
               SyntaxVCT.tau ->
                 (SyntaxPED.pexpp, unit) Contexts.gamma_ext Monad.checkM
+  val check_pexp :
+    unit ContextsPiDelta.theta_ext ->
+      (SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
+        (SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+          unit ContextsPiDelta.delta_ext ->
+            SyntaxPED.pexpp ->
+              SyntaxVCT.tau ->
+                SyntaxVCT.tau ->
+                  (SyntaxPED.pexpp, unit) Contexts.gamma_ext Monad.checkM
   val infer_e_lbind :
     Location.loc ->
       unit ContextsPiDelta.theta_ext ->
@@ -1259,7 +1236,7 @@ let rec pp_b = function SyntaxVCT.B_int -> " int "
                | SyntaxVCT.B_tuple v -> "(unknown)"
                | SyntaxVCT.B_record v -> "(unknown)"
                | SyntaxVCT.B_undef -> "(unknown)"
-               | SyntaxVCT.B_reg -> "(unknown)"
+               | SyntaxVCT.B_reg v -> "(unknown)"
                | SyntaxVCT.B_string -> "(unknown)"
                | SyntaxVCT.B_exception -> "(unknown)"
                | SyntaxVCT.B_finite_set v -> "(unknown)";;
@@ -1295,62 +1272,62 @@ let rec infer_pat
               (x, ([(x, (Contexts.b_of t,
                           Contexts.subst_c_x (Contexts.c_of t) x))],
                     (Some t, [x]))))
-    | g, loc, SyntaxPED.Pp_id (v, va) ->
+    | g, loc, SyntaxPED.Pp_lit (v, va) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
     | g, loc, SyntaxPED.Pp_wild v ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_lit (v, va) ->
+    | g, loc, SyntaxPED.Pp_as_var (v, va, vb) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
     | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_lit (vc, vd)) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
+    | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_as_var (vc, vd, ve)) ->
+        Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
     | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_typ (vc, vd, ve)) ->
+        Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
+    | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_as_typ (vc, vd, ve)) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
     | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_app (vc, vd, ve)) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_tup (vc, vd)) ->
+    | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_vector (vc, vd)) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
     | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_vector_concat (vc, vd)) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_as_var (vc, vd, ve)) ->
+    | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_tup (vc, vd)) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_as_typ (vc, vd, ve)) ->
+    | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_list (vc, vd)) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
     | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_cons (vc, vd, ve)) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
     | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_string_append (vc, vd)) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_vector (vc, vd)) ->
+    | g, loc, SyntaxPED.Pp_id (v, va) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_list (vc, vd)) ->
-        Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_typ (v, va, SyntaxPED.Pp_record (vc, vd)) ->
+    | g, loc, SyntaxPED.Pp_as_typ (v, va, vb) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
     | g, loc, SyntaxPED.Pp_app (v, va, vb) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_tup (v, va) ->
+    | g, loc, SyntaxPED.Pp_vector (v, va) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
     | g, loc, SyntaxPED.Pp_vector_concat (v, va) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_as_var (v, va, vb) ->
+    | g, loc, SyntaxPED.Pp_tup (v, va) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_as_typ (v, va, vb) ->
+    | g, loc, SyntaxPED.Pp_list (v, va) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
     | g, loc, SyntaxPED.Pp_cons (v, va, vb) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
     | g, loc, SyntaxPED.Pp_string_append (v, va) ->
-        Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_vector (v, va) ->
-        Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_list (v, va) ->
-        Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
-    | g, loc, SyntaxPED.Pp_record (v, va) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])));;
+
+let rec tsubst_t_many
+  b x1 = match b, x1 with b, [] -> b
+    | ba, (bv, b) :: bsub -> SyntaxPED.tsubst_tp b bv (tsubst_t_many ba bsub);;
 
 let rec kvars_of uu = [];;
 
-let rec tsubst_b_bs
+let rec tsubst_bp_many
   b x1 = match b, x1 with b, [] -> b
-    | ba, (x, b) :: bs -> SyntaxPED.tsubst_bp b x (tsubst_b_bs ba bs);;
+    | ba, (bv, b) :: bsub -> SyntaxPED.tsubst_bp b bv (tsubst_bp_many ba bsub);;
 
 let rec subtype
   uu p g x3 ux = match uu, p, g, x3, ux with
@@ -1392,7 +1369,7 @@ let rec subtype
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
@@ -1434,7 +1411,7 @@ let rec subtype
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
@@ -1475,7 +1452,7 @@ let rec subtype
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
@@ -1516,7 +1493,7 @@ let rec subtype
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
@@ -1557,7 +1534,7 @@ let rec subtype
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
@@ -1598,7 +1575,7 @@ let rec subtype
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
@@ -1639,7 +1616,7 @@ let rec subtype
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
@@ -1682,7 +1659,7 @@ let rec subtype
                            Monad.return
                              (Satis.valid "Subtype check / Bases match" loc p
                                (Contexts.add_vars_ge g
-                                 [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                                 [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
 Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                                (Contexts.convert_ge [])
                                (Contexts.subst_c_v0 (Contexts.c_of t2a)
@@ -1723,7 +1700,7 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
@@ -1765,7 +1742,7 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
@@ -1809,7 +1786,7 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                            Monad.return
                              (Satis.valid "Subtype check / Bases match" loc p
                                (Contexts.add_vars_ge g
-                                 [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                                 [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
 Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                                (Contexts.convert_ge [])
                                (Contexts.subst_c_v0 (Contexts.c_of t2a)
@@ -1850,15 +1827,16 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
                             (Contexts.subst_c_v0 (Contexts.c_of t2a)
                               (Monad.mk_var z)))))))
-    | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg, vb), t2 ->
+    | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vc, vb), t2 ->
         Monad.check_bind
-          (Monad.freshen_t (SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg, vb)))
+          (Monad.freshen_t
+            (SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vc, vb)))
           (fun t1 ->
             Monad.check_bind (Monad.freshen_t t2)
               (fun t2a ->
@@ -1891,7 +1869,7 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
@@ -1933,7 +1911,7 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
@@ -1975,7 +1953,7 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
                                      Contexts.subst_c_v0 (Contexts.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
@@ -2018,11 +1996,147 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                            Monad.return
                              (Satis.valid "Subtype check / Bases match" loc p
                                (Contexts.add_vars_ge g
-                                 [(z, (tsubst_b_bs (Contexts.b_of t1) bp,
+                                 [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
 Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                                (Contexts.convert_ge [])
                                (Contexts.subst_c_v0 (Contexts.c_of t2a)
                                  (Monad.mk_var z)))))));;
+
+let rec infer_l
+  t x1 = match t, x1 with
+    t, SyntaxVCT.L_bitvec bs ->
+      (match ContextsPiDelta.theta_d t
+        with None ->
+          Monad.fail
+            (Monad.TypeError (Location.Loc_unknown, "Default order not set"))
+        | Some dord ->
+          Monad.check_bind (Monad.trace Monad.LitI)
+            (fun _ ->
+              Monad.check_bind
+                (Monad.mk_fresh
+                  [Stringa.Chara
+                     (false, false, true, true, false, true, true, false);
+                    Stringa.Chara
+                      (true, false, false, true, false, true, true, false);
+                    Stringa.Chara
+                      (false, false, true, false, true, true, true, false)])
+                (fun x ->
+                  Monad.return
+                    (x, ([(x, (SyntaxVCT.B_vec (dord, SyntaxVCT.B_bit),
+                                Contexts.mk_l_eq_c x (SyntaxVCT.L_bitvec bs)))],
+                          SyntaxVCT.T_refined_type
+                            (SyntaxVCT.VIndex,
+                              SyntaxVCT.B_vec (dord, SyntaxVCT.B_bit),
+                              Contexts.mk_l_eq_c SyntaxVCT.VIndex
+                                (SyntaxVCT.L_bitvec bs)))))))
+    | t, SyntaxVCT.L_undef ->
+        Monad.fail
+          (Monad.TypeError
+            (Location.Loc_unknown, "Cannot infer type of undefined"))
+    | t, SyntaxVCT.L_unit ->
+        Monad.check_bind
+          (Monad.mk_fresh
+            [Stringa.Chara (false, false, true, true, false, true, true, false);
+              Stringa.Chara
+                (true, false, false, true, false, true, true, false);
+              Stringa.Chara
+                (false, false, true, false, true, true, true, false)])
+          (fun x ->
+            Monad.return
+              (x, ([(x, (Contexts.b_of_lit SyntaxVCT.L_unit,
+                          Contexts.mk_l_eq_c x SyntaxVCT.L_unit))],
+                    Contexts.mk_l_eq_t SyntaxVCT.L_unit)))
+    | t, SyntaxVCT.L_zero ->
+        Monad.check_bind
+          (Monad.mk_fresh
+            [Stringa.Chara (false, false, true, true, false, true, true, false);
+              Stringa.Chara
+                (true, false, false, true, false, true, true, false);
+              Stringa.Chara
+                (false, false, true, false, true, true, true, false)])
+          (fun x ->
+            Monad.return
+              (x, ([(x, (Contexts.b_of_lit SyntaxVCT.L_zero,
+                          Contexts.mk_l_eq_c x SyntaxVCT.L_zero))],
+                    Contexts.mk_l_eq_t SyntaxVCT.L_zero)))
+    | t, SyntaxVCT.L_one ->
+        Monad.check_bind
+          (Monad.mk_fresh
+            [Stringa.Chara (false, false, true, true, false, true, true, false);
+              Stringa.Chara
+                (true, false, false, true, false, true, true, false);
+              Stringa.Chara
+                (false, false, true, false, true, true, true, false)])
+          (fun x ->
+            Monad.return
+              (x, ([(x, (Contexts.b_of_lit SyntaxVCT.L_one,
+                          Contexts.mk_l_eq_c x SyntaxVCT.L_one))],
+                    Contexts.mk_l_eq_t SyntaxVCT.L_one)))
+    | t, SyntaxVCT.L_true ->
+        Monad.check_bind
+          (Monad.mk_fresh
+            [Stringa.Chara (false, false, true, true, false, true, true, false);
+              Stringa.Chara
+                (true, false, false, true, false, true, true, false);
+              Stringa.Chara
+                (false, false, true, false, true, true, true, false)])
+          (fun x ->
+            Monad.return
+              (x, ([(x, (Contexts.b_of_lit SyntaxVCT.L_true,
+                          Contexts.mk_l_eq_c x SyntaxVCT.L_true))],
+                    Contexts.mk_l_eq_t SyntaxVCT.L_true)))
+    | t, SyntaxVCT.L_false ->
+        Monad.check_bind
+          (Monad.mk_fresh
+            [Stringa.Chara (false, false, true, true, false, true, true, false);
+              Stringa.Chara
+                (true, false, false, true, false, true, true, false);
+              Stringa.Chara
+                (false, false, true, false, true, true, true, false)])
+          (fun x ->
+            Monad.return
+              (x, ([(x, (Contexts.b_of_lit SyntaxVCT.L_false,
+                          Contexts.mk_l_eq_c x SyntaxVCT.L_false))],
+                    Contexts.mk_l_eq_t SyntaxVCT.L_false)))
+    | t, SyntaxVCT.L_num v ->
+        Monad.check_bind
+          (Monad.mk_fresh
+            [Stringa.Chara (false, false, true, true, false, true, true, false);
+              Stringa.Chara
+                (true, false, false, true, false, true, true, false);
+              Stringa.Chara
+                (false, false, true, false, true, true, true, false)])
+          (fun x ->
+            Monad.return
+              (x, ([(x, (Contexts.b_of_lit (SyntaxVCT.L_num v),
+                          Contexts.mk_l_eq_c x (SyntaxVCT.L_num v)))],
+                    Contexts.mk_l_eq_t (SyntaxVCT.L_num v))))
+    | t, SyntaxVCT.L_string v ->
+        Monad.check_bind
+          (Monad.mk_fresh
+            [Stringa.Chara (false, false, true, true, false, true, true, false);
+              Stringa.Chara
+                (true, false, false, true, false, true, true, false);
+              Stringa.Chara
+                (false, false, true, false, true, true, true, false)])
+          (fun x ->
+            Monad.return
+              (x, ([(x, (Contexts.b_of_lit (SyntaxVCT.L_string v),
+                          Contexts.mk_l_eq_c x (SyntaxVCT.L_string v)))],
+                    Contexts.mk_l_eq_t (SyntaxVCT.L_string v))))
+    | t, SyntaxVCT.L_real v ->
+        Monad.check_bind
+          (Monad.mk_fresh
+            [Stringa.Chara (false, false, true, true, false, true, true, false);
+              Stringa.Chara
+                (true, false, false, true, false, true, true, false);
+              Stringa.Chara
+                (false, false, true, false, true, true, true, false)])
+          (fun x ->
+            Monad.return
+              (x, ([(x, (Contexts.b_of_lit (SyntaxVCT.L_real v),
+                          Contexts.mk_l_eq_c x (SyntaxVCT.L_real v)))],
+                    Contexts.mk_l_eq_t (SyntaxVCT.L_real v))));;
 
 let rec check_pat
   uu ta p gamma x4 t = match uu, ta, p, gamma, x4, t with
@@ -2122,10 +2236,12 @@ true, false);
                              (fun tup_c2 ->
                                Monad.check_bind
                                  (subtype loc t
-                                   (Contexts.add_var
-                                     (Contexts.add_vars_ge gamma gs)
-                                     (z, Contexts.GEPair
+                                   (Contexts.add_vars_ge
+                                     (Contexts.add_var gamma
+                                       (z,
+ Contexts.GEPair
    (SyntaxVCT.B_tuple bs, Contexts.subst_c_v0 c (SyntaxVCT.V_var z))))
+                                     gs)
                                    (SyntaxVCT.T_refined_type
                                      (SyntaxVCT.VIndex, SyntaxVCT.B_tuple bs,
                                        tup_c2))
@@ -2133,83 +2249,156 @@ true, false);
                                      (zvarin, SyntaxVCT.B_tuple bs, c)))
                                  (fun b ->
                                    (if b then Monad.return
-        (z, ((z, (SyntaxVCT.B_tuple bs, tup_c)) :: gs @ [], vars))
+        (z, (gs @ [(z, (SyntaxVCT.B_tuple bs, tup_c))], vars))
                                      else Monad.fail
     (Monad.CheckFail
       (loc, gamma, "check_pat Tuple",
         SyntaxVCT.T_refined_type
           (SyntaxVCT.VIndex, SyntaxVCT.B_tuple bs, tup_c2),
         SyntaxVCT.T_refined_type (zvarin, SyntaxVCT.B_tuple bs, c))))))))))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_var ve, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid ve, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (ve, vf), vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list ve, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_union (ve, vf), vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_record ve, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_undef, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
-    | ux, uy, uz, va, SyntaxPED.Pp_tup (loc, vb),
-        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set ve, vd)
-        -> Monad.fail (Monad.TypeError (loc, "check_pat Pp_tup"))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_var vd, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_var vd, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_var vd, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid vd, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid vd, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid vd, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (vd, ve), vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (vd, ve), vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (vd, ve), vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list vd, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list vd, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list vd, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_union (vd, ve), vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_union (vd, ve), vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_union (vd, ve), vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_record vd, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_record vd, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_record vd, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_undef, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_undef, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_undef, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vd, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vd, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vd, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, vc)))
+    | ux, uy, uz, gamma, SyntaxPED.Pp_tup (loc, va),
+        SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set vd, vc)
+        -> Monad.fail
+             (Monad.CheckFail
+               (loc, gamma, "check_pat Pp_tup. type unexpected",
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set vd, vc),
+                 SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set vd, vc)))
     | litok, ta, p, gamma, SyntaxPED.Pp_lit (loc, l), t ->
-        (if SyntaxVCT.equal_bpa (Contexts.b_of t) (Contexts.literal_type l)
-          then Monad.check_bind
-                 (Monad.mk_fresh
-                   [Stringa.Chara
-                      (false, false, false, false, true, true, true, false);
-                     Stringa.Chara
-                       (true, false, false, false, false, true, true, false);
-                     Stringa.Chara
-                       (false, false, true, false, true, true, true, false)])
-                 (fun z ->
-                   Monad.return
-                     (z, ([(z, (Contexts.b_of t, Contexts.mk_l_eq_c z l))],
-                           [])))
-          else Monad.fail
-                 (Monad.TypeError
-                   (loc, (("Literal base type mismatched. Expected " ^
-                            pp_b (Contexts.b_of t)) ^
-                           " Found: ") ^
-                           pp_b (Contexts.literal_type l))))
+        Monad.check_bind (infer_l ta l)
+          (fun (_, (_, taa)) ->
+            (if SyntaxVCT.equal_bpa (Contexts.b_of t) (Contexts.b_of taa)
+              then Monad.check_bind
+                     (Monad.mk_fresh
+                       [Stringa.Chara
+                          (false, false, false, false, true, true, true, false);
+                         Stringa.Chara
+                           (true, false, false, false, false, true, true,
+                             false);
+                         Stringa.Chara
+                           (false, false, true, false, true, true, true, false);
+                         Stringa.Chara
+                           (false, false, true, true, false, true, true,
+                             false)])
+                     (fun z ->
+                       Monad.return
+                         (z, ([(z, (Contexts.b_of t,
+                                     SyntaxVCT.C_conj
+                                       (Contexts.subst_c_x (Contexts.c_of t) z,
+ Contexts.mk_l_eq_c z l)))],
+                               [])))
+              else Monad.fail
+                     (Monad.TypeError
+                       (loc, (("Literal base type mismatched. Expected " ^
+                                pp_b (Contexts.b_of t)) ^
+                               " Found: ") ^
+                               pp_b (Contexts.b_of_lit l)))))
     | litok, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (vc, SyntaxVCT.B_vec (odr, b), c)
+        SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_vec (odr, b), c)
         -> Monad.check_bind (check_pat_vec_list litok t p gamma loc vs odr b)
              (fun (_, (gs, vars)) ->
                Monad.check_bind
@@ -2225,91 +2414,102 @@ true, false);
                      (z, ((z, (SyntaxVCT.B_vec (odr, b), SyntaxVCT.C_true)) ::
                             gs,
                            vars))))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_var v, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_var v, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_tid v, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_tid v, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_int, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_int, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_bool, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_bool, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_bit, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_bit, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_unit, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_unit, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_real, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_real, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_list v, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_list v, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_tuple v, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_tuple v, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_union (v, va), c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_union (v, va), c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_record v, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_record v, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_undef, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_undef, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_reg, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_reg v, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_string, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_string, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_exception, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_exception, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
-    | vd, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
-        SyntaxVCT.T_refined_type (ve, SyntaxVCT.B_finite_set v, c)
+    | vc, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
+        SyntaxVCT.T_refined_type (vd, SyntaxVCT.B_finite_set v, c)
         -> Monad.fail (Monad.TypeError (loc, "Pp_vec_concat"))
     | litok, tb, pa, gamma, SyntaxPED.Pp_typ (loc, ta, p), t ->
-        check_pat litok tb pa gamma p t
+        Monad.check_bind (check_pat litok tb pa gamma p ta)
+          (fun (_, (_, _)) -> check_pat litok tb pa gamma p t)
     | litok, ta, pa, gamma, SyntaxPED.Pp_app (loc, ctor, [p]), t ->
         (match ContextsPiDelta.lookup_constr_union_type ta ctor
           with None -> Monad.fail (Monad.TypeError (loc, "Pp_constr"))
           | Some (t1, t2) ->
-            Monad.check_bind (check_pat litok ta pa gamma p t2)
-              (fun (x, (g, vars)) ->
+            (match Contexts.unify_b (Contexts.b_of t) (Contexts.b_of t1)
+              with None ->
+                Monad.fail
+                  (Monad.CheckFail
+                    (loc, gamma, "Pp_constr (outside types; not unifying)", t1,
+                      t))
+              | Some bsub ->
                 Monad.check_bind
-                  (Monad.mk_fresh
-                    [Stringa.Chara
-                       (false, false, false, false, true, true, true, false);
-                      Stringa.Chara
-                        (true, false, false, false, false, true, true, false);
-                      Stringa.Chara
-                        (false, false, true, false, true, true, true, false)])
-                  (fun z ->
-                    Monad.check_bind (Monad.return true)
-                      (fun st ->
-                        (if st
-                          then Monad.return
-                                 (z, ((z,
-(Contexts.b_of t1,
-  Contexts.mk_v_eq_c z (SyntaxVCT.V_constr (ctor, SyntaxVCT.V_var x)))) ::
-g,
-                                       vars))
-                          else Monad.fail
-                                 (Monad.CheckFail
-                                   (loc, gamma, "Pp_constr", t1, t)))))))
-    | vg, ta, p, gamma, SyntaxPED.Pp_as_var (loc, vh, vi), t ->
+                  (check_pat litok ta pa gamma p (tsubst_t_many t2 bsub))
+                  (fun (x, (g, vars)) ->
+                    Monad.check_bind
+                      (Monad.mk_fresh
+                        [Stringa.Chara
+                           (false, false, false, false, true, true, true,
+                             false);
+                          Stringa.Chara
+                            (true, false, false, false, false, true, true,
+                              false);
+                          Stringa.Chara
+                            (false, false, true, false, true, true, true,
+                              false)])
+                      (fun z ->
+                        Monad.check_bind (subtype loc ta gamma t1 t)
+                          (fun st ->
+                            (if st
+                              then Monad.return
+                                     (z, ((z,
+    (Contexts.b_of t,
+      Contexts.mk_v_eq_c z (SyntaxVCT.V_constr (ctor, SyntaxVCT.V_var x)))) ::
+    g,
+   vars))
+                              else Monad.fail
+                                     (Monad.CheckFail
+                                       (loc, gamma, "Pp_constr (outside types)",
+ t1, t))))))))
+    | vf, ta, p, gamma, SyntaxPED.Pp_as_var (loc, vg, vh), t ->
         Monad.fail (Monad.TypeError (loc, "Pp_as_var"))
-    | vj, ta, p, gamma, SyntaxPED.Pp_as_typ (loc, vk, vl), t ->
+    | vi, ta, p, gamma, SyntaxPED.Pp_as_typ (loc, vj, vk), t ->
         Monad.fail (Monad.TypeError (loc, "Pp_as_var"))
-    | vm, ta, p, gamma, SyntaxPED.Pp_vector (loc, vs), t ->
+    | vl, ta, p, gamma, SyntaxPED.Pp_vector (loc, vs), t ->
         Monad.fail (Monad.TypeError (loc, "Pp_vector"))
-    | vn, ta, p, gamma, SyntaxPED.Pp_record (loc, vs), t ->
-        Monad.fail (Monad.TypeError (loc, "Pp_record"))
     | litok, ta, p, gamma, SyntaxPED.Pp_cons (loc, p1, p2), t ->
         (match t
           with SyntaxVCT.T_refined_type (_, SyntaxVCT.B_var _, _) ->
@@ -2345,7 +2545,7 @@ g,
             Monad.fail (Monad.TypeError (loc, "Pp_cons"))
           | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_undef, _) ->
             Monad.fail (Monad.TypeError (loc, "Pp_cons"))
-          | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_reg, _) ->
+          | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_reg _, _) ->
             Monad.fail (Monad.TypeError (loc, "Pp_cons"))
           | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_string, _) ->
             Monad.fail (Monad.TypeError (loc, "Pp_cons"))
@@ -2433,7 +2633,7 @@ g,
             Monad.fail (Monad.TypeError (loc, "Pp_list"))
           | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_undef, _) ->
             Monad.fail (Monad.TypeError (loc, "Pp_list"))
-          | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_reg, _) ->
+          | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_reg _, _) ->
             Monad.fail (Monad.TypeError (loc, "Pp_list"))
           | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_string, _) ->
             Monad.fail (Monad.TypeError (loc, "Pp_list"))
@@ -2442,21 +2642,21 @@ g,
           | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_finite_set _, _) ->
             Monad.fail (Monad.TypeError (loc, "Pp_list")))
 and check_pat_list
-  vp t p g loc x5 x6 = match vp, t, p, g, loc, x5, x6 with
-    vp, t, p, g, loc, [], [] -> Monad.return ([], ([], []))
+  vn t p g loc x5 x6 = match vn, t, p, g, loc, x5, x6 with
+    vn, t, p, g, loc, [], [] -> Monad.return ([], ([], []))
     | litok, ta, pa, g, loc, p :: ps, t :: ts ->
         Monad.check_bind (check_pat litok ta pa g p t)
           (fun (x, (ga, vars1)) ->
             Monad.check_bind (check_pat_list litok ta pa g loc ps ts)
               (fun (xs, (gs, vars2)) ->
                 Monad.return (x :: xs, (ga @ gs, vars1 @ vars2))))
-    | vq, vr, vt, g, loc, v :: va, [] ->
+    | vo, vp, vq, g, loc, v :: va, [] ->
         Monad.fail (Monad.TypeError (loc, "pat list"))
-    | vq, vr, vt, g, loc, [], v :: va ->
+    | vo, vp, vq, g, loc, [], v :: va ->
         Monad.fail (Monad.TypeError (loc, "pat list"))
 and check_pat_vec_list
-  vo t p g loc x5 odr b = match vo, t, p, g, loc, x5, odr, b with
-    vo, t, p, g, loc, [], odr, b -> Monad.return ([], ([], []))
+  vm t p g loc x5 odr b = match vm, t, p, g, loc, x5, odr, b with
+    vm, t, p, g, loc, [], odr, b -> Monad.return ([], ([], []))
     | litok, t, pa, g, loc, p :: ps, odr, b ->
         Monad.check_bind
           (check_pat litok t pa g p
@@ -2494,6 +2694,10 @@ let rec convert_to_stM
                     in
                    (Lista.concat kvars, (blist, Contexts.conj clist)))));;
 
+let rec single_base
+  ts = (match Lista.remdups SyntaxVCT.equal_bp (Lista.map Contexts.b_of ts)
+         with [] -> None | [b] -> Some b | _ :: _ :: _ -> None);;
+
 let rec check_varM
   g loc x =
     (match Finite_Map.fmlookup SyntaxVCT.equal_xp (Contexts.gamma_f g) x
@@ -2507,15 +2711,6 @@ let rec check_varsM
   g loc xs =
     Monad.check_bind (Monad.mapM (check_varM g loc) xs)
       (fun _ -> Monad.return true);;
-
-let rec check_bases
-  = function [] -> None
-    | [t] -> Some (Contexts.b_of t)
-    | t :: v :: va ->
-        (match check_bases (v :: va) with None -> None
-          | Some b ->
-            (if SyntaxVCT.equal_bpa b (Contexts.b_of t) then Some b
-              else None));;
 
 let rec mk_eq_proj
   l x i n =
@@ -2665,7 +2860,7 @@ let rec check_lexp
              (Monad.NotImplemented
                (loc_lexp (SyntaxPED.LEXPp_tup (v, va)), "check_lexp"))
     | t, p, g, d, SyntaxPED.LEXPp_tup (v, va),
-        SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_reg, vd)
+        SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_reg ve, vd)
         -> Monad.fail
              (Monad.NotImplemented
                (loc_lexp (SyntaxPED.LEXPp_tup (v, va)), "check_lexp"))
@@ -2691,163 +2886,7 @@ let rec check_lexp
 
 let rec infer_v
   t p g d x4 = match t, p, g, d, x4 with
-    t, p, g, d, SyntaxVCT.V_lit (SyntaxVCT.L_bitvec bs) ->
-      (match ContextsPiDelta.theta_d t
-        with None ->
-          Monad.fail
-            (Monad.TypeError (Location.Loc_unknown, "Default order not set"))
-        | Some dord ->
-          Monad.check_bind (Monad.trace Monad.LitI)
-            (fun _ ->
-              Monad.check_bind
-                (Monad.mk_fresh
-                  [Stringa.Chara
-                     (false, false, true, true, false, true, true, false);
-                    Stringa.Chara
-                      (true, false, false, true, false, true, true, false);
-                    Stringa.Chara
-                      (false, false, true, false, true, true, true, false)])
-                (fun x ->
-                  Monad.return
-                    (x, ([(x, (SyntaxVCT.B_vec (dord, SyntaxVCT.B_bit),
-                                Contexts.mk_l_eq_c x (SyntaxVCT.L_bitvec bs)))],
-                          SyntaxVCT.T_refined_type
-                            (SyntaxVCT.VIndex,
-                              SyntaxVCT.B_vec (dord, SyntaxVCT.B_bit),
-                              Contexts.mk_l_eq_c SyntaxVCT.VIndex
-                                (SyntaxVCT.L_bitvec bs)))))))
-    | t, p, g, d, SyntaxVCT.V_lit SyntaxVCT.L_undef ->
-        Monad.fail
-          (Monad.TypeError
-            (Location.Loc_unknown, "Cannot infer type of undefined"))
-    | t, p, g, d, SyntaxVCT.V_lit SyntaxVCT.L_unit ->
-        Monad.check_bind (Monad.trace Monad.LitI)
-          (fun _ ->
-            Monad.check_bind
-              (Monad.mk_fresh
-                [Stringa.Chara
-                   (false, false, true, true, false, true, true, false);
-                  Stringa.Chara
-                    (true, false, false, true, false, true, true, false);
-                  Stringa.Chara
-                    (false, false, true, false, true, true, true, false)])
-              (fun x ->
-                Monad.return
-                  (x, ([(x, (Contexts.literal_type SyntaxVCT.L_unit,
-                              Contexts.mk_l_eq_c x SyntaxVCT.L_unit))],
-                        Contexts.mk_l_eq_t SyntaxVCT.L_unit))))
-    | t, p, g, d, SyntaxVCT.V_lit SyntaxVCT.L_zero ->
-        Monad.check_bind (Monad.trace Monad.LitI)
-          (fun _ ->
-            Monad.check_bind
-              (Monad.mk_fresh
-                [Stringa.Chara
-                   (false, false, true, true, false, true, true, false);
-                  Stringa.Chara
-                    (true, false, false, true, false, true, true, false);
-                  Stringa.Chara
-                    (false, false, true, false, true, true, true, false)])
-              (fun x ->
-                Monad.return
-                  (x, ([(x, (Contexts.literal_type SyntaxVCT.L_zero,
-                              Contexts.mk_l_eq_c x SyntaxVCT.L_zero))],
-                        Contexts.mk_l_eq_t SyntaxVCT.L_zero))))
-    | t, p, g, d, SyntaxVCT.V_lit SyntaxVCT.L_one ->
-        Monad.check_bind (Monad.trace Monad.LitI)
-          (fun _ ->
-            Monad.check_bind
-              (Monad.mk_fresh
-                [Stringa.Chara
-                   (false, false, true, true, false, true, true, false);
-                  Stringa.Chara
-                    (true, false, false, true, false, true, true, false);
-                  Stringa.Chara
-                    (false, false, true, false, true, true, true, false)])
-              (fun x ->
-                Monad.return
-                  (x, ([(x, (Contexts.literal_type SyntaxVCT.L_one,
-                              Contexts.mk_l_eq_c x SyntaxVCT.L_one))],
-                        Contexts.mk_l_eq_t SyntaxVCT.L_one))))
-    | t, p, g, d, SyntaxVCT.V_lit SyntaxVCT.L_true ->
-        Monad.check_bind (Monad.trace Monad.LitI)
-          (fun _ ->
-            Monad.check_bind
-              (Monad.mk_fresh
-                [Stringa.Chara
-                   (false, false, true, true, false, true, true, false);
-                  Stringa.Chara
-                    (true, false, false, true, false, true, true, false);
-                  Stringa.Chara
-                    (false, false, true, false, true, true, true, false)])
-              (fun x ->
-                Monad.return
-                  (x, ([(x, (Contexts.literal_type SyntaxVCT.L_true,
-                              Contexts.mk_l_eq_c x SyntaxVCT.L_true))],
-                        Contexts.mk_l_eq_t SyntaxVCT.L_true))))
-    | t, p, g, d, SyntaxVCT.V_lit SyntaxVCT.L_false ->
-        Monad.check_bind (Monad.trace Monad.LitI)
-          (fun _ ->
-            Monad.check_bind
-              (Monad.mk_fresh
-                [Stringa.Chara
-                   (false, false, true, true, false, true, true, false);
-                  Stringa.Chara
-                    (true, false, false, true, false, true, true, false);
-                  Stringa.Chara
-                    (false, false, true, false, true, true, true, false)])
-              (fun x ->
-                Monad.return
-                  (x, ([(x, (Contexts.literal_type SyntaxVCT.L_false,
-                              Contexts.mk_l_eq_c x SyntaxVCT.L_false))],
-                        Contexts.mk_l_eq_t SyntaxVCT.L_false))))
-    | t, p, g, d, SyntaxVCT.V_lit (SyntaxVCT.L_num v) ->
-        Monad.check_bind (Monad.trace Monad.LitI)
-          (fun _ ->
-            Monad.check_bind
-              (Monad.mk_fresh
-                [Stringa.Chara
-                   (false, false, true, true, false, true, true, false);
-                  Stringa.Chara
-                    (true, false, false, true, false, true, true, false);
-                  Stringa.Chara
-                    (false, false, true, false, true, true, true, false)])
-              (fun x ->
-                Monad.return
-                  (x, ([(x, (Contexts.literal_type (SyntaxVCT.L_num v),
-                              Contexts.mk_l_eq_c x (SyntaxVCT.L_num v)))],
-                        Contexts.mk_l_eq_t (SyntaxVCT.L_num v)))))
-    | t, p, g, d, SyntaxVCT.V_lit (SyntaxVCT.L_string v) ->
-        Monad.check_bind (Monad.trace Monad.LitI)
-          (fun _ ->
-            Monad.check_bind
-              (Monad.mk_fresh
-                [Stringa.Chara
-                   (false, false, true, true, false, true, true, false);
-                  Stringa.Chara
-                    (true, false, false, true, false, true, true, false);
-                  Stringa.Chara
-                    (false, false, true, false, true, true, true, false)])
-              (fun x ->
-                Monad.return
-                  (x, ([(x, (Contexts.literal_type (SyntaxVCT.L_string v),
-                              Contexts.mk_l_eq_c x (SyntaxVCT.L_string v)))],
-                        Contexts.mk_l_eq_t (SyntaxVCT.L_string v)))))
-    | t, p, g, d, SyntaxVCT.V_lit (SyntaxVCT.L_real v) ->
-        Monad.check_bind (Monad.trace Monad.LitI)
-          (fun _ ->
-            Monad.check_bind
-              (Monad.mk_fresh
-                [Stringa.Chara
-                   (false, false, true, true, false, true, true, false);
-                  Stringa.Chara
-                    (true, false, false, true, false, true, true, false);
-                  Stringa.Chara
-                    (false, false, true, false, true, true, true, false)])
-              (fun x ->
-                Monad.return
-                  (x, ([(x, (Contexts.literal_type (SyntaxVCT.L_real v),
-                              Contexts.mk_l_eq_c x (SyntaxVCT.L_real v)))],
-                        Contexts.mk_l_eq_t (SyntaxVCT.L_real v)))))
+    t, p, g, d, SyntaxVCT.V_lit l -> infer_l t l
     | t, p, g, d, SyntaxVCT.V_var x ->
         (if Contexts.lookup_scope g x
           then (match Contexts.lookup_ivar g x
@@ -2856,8 +2895,11 @@ let rec infer_v
                      with None ->
                        (match ContextsPiDelta.lookup_constr_union_x t x
                          with None ->
-                           Monad.fail
-                             (Monad.VarUnknown (Location.Loc_unknown, x))
+                           (match ContextsPiDelta.lookup_register t x
+                             with None ->
+                               Monad.fail
+                                 (Monad.VarUnknown (Location.Loc_unknown, x))
+                             | Some ta -> Monad.return (x, ([], ta)))
                          | Some ta -> Monad.return (x, ([], ta)))
                      | Some ta ->
                        Monad.check_bind (Monad.trace Monad.VarI)
@@ -2902,16 +2944,13 @@ let rec infer_v
 (SyntaxVCT.B_tuple bs, Contexts.subst_c_x cs x))],
                                       SyntaxVCT.T_refined_type
 (SyntaxVCT.VIndex, SyntaxVCT.B_tuple bs, cs)))))))))
-    | t, p, g, d, SyntaxVCT.V_vec [] ->
-        Monad.fail
-          (Monad.NotImplemented (Location.Loc_unknown, "infer empty vector"))
-    | t, p, g, d, SyntaxVCT.V_vec (v :: va) ->
+    | t, p, g, d, SyntaxVCT.V_vec vs ->
         (match ContextsPiDelta.theta_d t
           with None ->
             Monad.fail
               (Monad.TypeError (Location.Loc_unknown, "Default order not set"))
           | Some dord ->
-            Monad.check_bind (Monad.mapM (infer_v t p g d) (v :: va))
+            Monad.check_bind (Monad.mapM (infer_v t p g d) vs)
               (fun xx ->
                 Monad.check_bind (Monad.return (unzip3 xx))
                   (fun (_, (ga, ts)) ->
@@ -2937,11 +2976,10 @@ let rec infer_v
                                     Arith.one_nat
                                 then Monad.return
                                        (x,
- ([(x, (SyntaxVCT.B_vec (dord, Lista.hd bs),
-         Contexts.mk_vec_len_eq_c x (v :: va)))],
+ ([(x, (SyntaxVCT.B_vec (dord, Lista.hd bs), Contexts.mk_vec_len_eq_c x vs))],
    SyntaxVCT.T_refined_type
      (SyntaxVCT.VIndex, SyntaxVCT.B_vec (dord, Lista.hd bs),
-       Contexts.mk_vec_len_eq_c SyntaxVCT.VIndex (v :: va))))
+       Contexts.mk_vec_len_eq_c SyntaxVCT.VIndex vs)))
                                 else Monad.fail
                                        Monad.VectorElementsDiffType)))))))
     | t, p, g, d, SyntaxVCT.V_constr (s, v) ->
@@ -3112,7 +3150,7 @@ SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_false)),
                    Monad.fail (Monad.IfCondType (l, ta))
                  | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_undef, _) ->
                    Monad.fail (Monad.IfCondType (l, ta))
-                 | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_reg, _) ->
+                 | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_reg _, _) ->
                    Monad.fail (Monad.IfCondType (l, ta))
                  | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_string, _) ->
                    Monad.fail (Monad.IfCondType (l, ta))
@@ -3128,23 +3166,29 @@ SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_false)),
               (SyntaxVCT.VIndex, SyntaxVCT.B_unit, SyntaxVCT.C_true)))
           (fun ga -> check_s ta p ga d (SyntaxPED.Ep_block (loc, v :: va)) t)
     | ta, p, g, d, SyntaxPED.Ep_assign (loc, e1, e2, e3), t ->
+        Monad.check_bind (infer_e ta p g d e2)
+          (fun (_, (g1, t2)) ->
+            Monad.check_bind
+              (check_lexp ta p (Contexts.add_vars_ge g g1) d e1 t2)
+              (fun (_, (ga, _)) ->
+                Monad.check_bind
+                  (check_s ta p (Contexts.add_vars_ge g ga) d e3 t)
+                  (fun _ -> Monad.return g)))
+    | t, p, g, d, SyntaxPED.Ep_record (loc, fes), t1 ->
         Monad.check_bind
-          (subtype loc ta g t
-            (SyntaxVCT.T_refined_type
-              (SyntaxVCT.VIndex, SyntaxVCT.B_unit, SyntaxVCT.C_true)))
-          (fun b ->
-            (if b then Monad.check_bind (infer_e ta p g d e2)
-                         (fun (_, (g1, t2)) ->
-                           Monad.check_bind
-                             (check_lexp ta p (Contexts.add_vars_ge g g1) d e1
-                               t2)
-                             (fun (_, (_, _)) -> Monad.return g))
-              else Monad.fail
-                     (Monad.CheckFail
-                       (loc, g, "assign unit type", t,
-                         SyntaxVCT.T_refined_type
-                           (SyntaxVCT.VIndex, SyntaxVCT.B_unit,
-                             SyntaxVCT.C_true)))))
+          (Monad.mapM
+            (fun (f, e) ->
+              (match ContextsPiDelta.lookup_field_in_type t1 f
+                with None ->
+                  Monad.fail (Monad.CheckFail (loc, g, "missing field", t1, t1))
+                | Some b ->
+                  Monad.check_bind
+                    (Monad.return
+                      (SyntaxVCT.T_refined_type
+                        (SyntaxVCT.VIndex, b, SyntaxVCT.C_true)))
+                    (check_s t p g d e)))
+            fes)
+          (fun _ -> Monad.return g)
     | t, p, g, d, SyntaxPED.Ep_record_update (loc, e, fes), t1 ->
         Monad.check_bind (infer_e t p g d e)
           (fun (_, (_, t2)) ->
@@ -3197,7 +3241,7 @@ Stringa.Chara (false, true, false, true, false, true, true, false)])
          (SyntaxVCT.VIndex, b, Contexts.mk_proj_eq z f)))))
                             | SyntaxVCT.B_undef ->
                               Monad.fail (Monad.UnknownErrorLoc loc)
-                            | SyntaxVCT.B_reg ->
+                            | SyntaxVCT.B_reg _ ->
                               Monad.fail (Monad.UnknownErrorLoc loc)
                             | SyntaxVCT.B_string ->
                               Monad.fail (Monad.UnknownErrorLoc loc)
@@ -3219,39 +3263,7 @@ Stringa.Chara (false, true, false, true, false, true, true, false)])
         Monad.check_bind (infer_e ta p g d e)
           (fun (_, (_, t1)) ->
             Monad.check_bind
-              (Monad.mapM
-                (fun (SyntaxPED.PEXPp_exp (pa, s)) ->
-                  Monad.check_bind (check_pat true ta p g pa t1)
-                    (fun (z, (bs, vars)) ->
-                      Monad.check_bind (check_varsM g Location.Loc_unknown vars)
-                        (fun _ ->
-                          Monad.check_bind (Monad.freshen_t t1)
-                            (fun t1a ->
-                              Monad.check_bind
-                                (Monad.mk_fresh
-                                  [Stringa.Chara
-                                     (false, false, false, false, true, true,
-                                       true, false);
-                                    Stringa.Chara
-                                      (true, false, false, false, false, true,
-true, false);
-                                    Stringa.Chara
-                                      (false, false, true, false, true, true,
-true, false)])
-                                (fun za ->
-                                  Monad.check_bind
-                                    (Monad.return
-                                      (Contexts.add_vars_ge g
-((za, (Contexts.b_of t1a,
-        SyntaxVCT.C_conj
-          (mk_c_eq z za,
-            Contexts.subst_c_v0 (Contexts.c_of t1a) (Monad.mk_var z)))) ::
-  bs)))
-                                    (fun ga ->
-                                      Monad.check_bind
-(check_s ta p (Contexts.add_to_scope ga vars) d s t)
-(fun _ -> Monad.return g)))))))
-                pes)
+              (Monad.mapM (fun pat -> check_pexp ta p g d pat t1 t) pes)
               (fun _ -> Monad.return g))
     | ta, p, g, d, SyntaxPED.Ep_return (loc, e), t ->
         Monad.check_bind
@@ -3291,7 +3303,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_val (v, va)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_mvar (v, va), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_mvar (v, va)))
           (fun (_, (ga, t2)) ->
@@ -3303,7 +3315,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_mvar (v, va)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_concat (v, va), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_concat (v, va)))
           (fun (_, (ga, t2)) ->
@@ -3315,7 +3327,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_concat (v, va)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_tuple (v, va), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_tuple (v, va)))
           (fun (_, (ga, t2)) ->
@@ -3327,7 +3339,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_tuple (v, va)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_app (v, va, vb), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_app (v, va, vb)))
           (fun (_, (ga, t2)) ->
@@ -3339,7 +3351,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_app (v, va, vb)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_bop (v, va, vb, vc), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_bop (v, va, vb, vc)))
           (fun (_, (ga, t2)) ->
@@ -3351,7 +3363,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_bop (v, va, vb, vc)),
-                             g, "expr", t2, t1)))))
+                             g, "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_uop (v, va, vb), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_uop (v, va, vb)))
           (fun (_, (ga, t2)) ->
@@ -3363,7 +3375,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_uop (v, va, vb)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_proj (v, va, vb), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_proj (v, va, vb)))
           (fun (_, (ga, t2)) ->
@@ -3375,7 +3387,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_proj (v, va, vb)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_constr (v, va, vb), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_constr (v, va, vb)))
           (fun (_, (ga, t2)) ->
@@ -3387,7 +3399,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_constr (v, va, vb)),
-                             g, "expr", t2, t1)))))
+                             g, "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_field_access (v, va, vb), t1 ->
         Monad.check_bind
           (infer_e t p g d (SyntaxPED.Ep_field_access (v, va, vb)))
@@ -3401,7 +3413,7 @@ true, false)])
                          (Monad.CheckFail
                            (SyntaxPED.loc_e
                               (SyntaxPED.Ep_field_access (v, va, vb)),
-                             g, "expr", t2, t1)))))
+                             g, "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_sizeof (v, va), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_sizeof (v, va)))
           (fun (_, (ga, t2)) ->
@@ -3413,7 +3425,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_sizeof (v, va)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_cast (v, va, vb), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_cast (v, va, vb)))
           (fun (_, (ga, t2)) ->
@@ -3425,19 +3437,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_cast (v, va, vb)), g,
-                             "expr", t2, t1)))))
-    | t, p, g, d, SyntaxPED.Ep_record (v, va), t1 ->
-        Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_record (v, va)))
-          (fun (_, (ga, t2)) ->
-            Monad.check_bind
-              (subtype (SyntaxPED.loc_e (SyntaxPED.Ep_record (v, va))) t
-                (Contexts.add_vars_ge g ga) t2 t1)
-              (fun st ->
-                (if st then Monad.return g
-                  else Monad.fail
-                         (Monad.CheckFail
-                           (SyntaxPED.loc_e (SyntaxPED.Ep_record (v, va)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_let2 (v, va, vb, vc, vd), t1 ->
         Monad.check_bind
           (infer_e t p g d (SyntaxPED.Ep_let2 (v, va, vb, vc, vd)))
@@ -3451,7 +3451,7 @@ true, false)])
                          (Monad.CheckFail
                            (SyntaxPED.loc_e
                               (SyntaxPED.Ep_let2 (v, va, vb, vc, vd)),
-                             g, "expr", t2, t1)))))
+                             g, "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_block (v, []), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_block (v, [])))
           (fun (_, (ga, t2)) ->
@@ -3463,7 +3463,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_block (v, [])), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_exit (v, va), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_exit (v, va)))
           (fun (_, (ga, t2)) ->
@@ -3475,7 +3475,19 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_exit (v, va)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
+    | t, p, g, d, SyntaxPED.Ep_ref (v, va), t1 ->
+        Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_ref (v, va)))
+          (fun (_, (ga, t2)) ->
+            Monad.check_bind
+              (subtype (SyntaxPED.loc_e (SyntaxPED.Ep_ref (v, va))) t
+                (Contexts.add_vars_ge g ga) t2 t1)
+              (fun st ->
+                (if st then Monad.return g
+                  else Monad.fail
+                         (Monad.CheckFail
+                           (SyntaxPED.loc_e (SyntaxPED.Ep_ref (v, va)), g,
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_throw (v, va), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_throw (v, va)))
           (fun (_, (ga, t2)) ->
@@ -3487,7 +3499,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_throw (v, va)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_try (v, va, vb), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_try (v, va, vb)))
           (fun (_, (ga, t2)) ->
@@ -3499,7 +3511,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_try (v, va, vb)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_constraint (v, va), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_constraint (v, va)))
           (fun (_, (ga, t2)) ->
@@ -3511,7 +3523,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_constraint (v, va)),
-                             g, "expr", t2, t1)))))
+                             g, "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_for (v, va, vb, vc, vd, ve, vf), t1 ->
         Monad.check_bind
           (infer_e t p g d (SyntaxPED.Ep_for (v, va, vb, vc, vd, ve, vf)))
@@ -3526,7 +3538,7 @@ true, false)])
                          (Monad.CheckFail
                            (SyntaxPED.loc_e
                               (SyntaxPED.Ep_for (v, va, vb, vc, vd, ve, vf)),
-                             g, "expr", t2, t1)))))
+                             g, "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_vec (v, va), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_vec (v, va)))
           (fun (_, (ga, t2)) ->
@@ -3538,7 +3550,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_vec (v, va)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_list (v, va), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_list (v, va)))
           (fun (_, (ga, t2)) ->
@@ -3550,7 +3562,7 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_list (v, va)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
     | t, p, g, d, SyntaxPED.Ep_cons (v, va, vb), t1 ->
         Monad.check_bind (infer_e t p g d (SyntaxPED.Ep_cons (v, va, vb)))
           (fun (_, (ga, t2)) ->
@@ -3562,7 +3574,73 @@ true, false)])
                   else Monad.fail
                          (Monad.CheckFail
                            (SyntaxPED.loc_e (SyntaxPED.Ep_cons (v, va, vb)), g,
-                             "expr", t2, t1)))))
+                             "general check expr", t2, t1)))))
+and check_pexp
+  ta pa g d x4 t1 t = match ta, pa, g, d, x4, t1, t with
+    ta, pa, g, d, SyntaxPED.PEXPp_exp (p, s), t1, t ->
+      Monad.check_bind (check_pat true ta pa g p t1)
+        (fun (z, (bs, vars)) ->
+          Monad.check_bind (check_varsM g Location.Loc_unknown vars)
+            (fun _ ->
+              Monad.check_bind (Monad.freshen_t t1)
+                (fun t1a ->
+                  Monad.check_bind
+                    (Monad.mk_fresh
+                      [Stringa.Chara
+                         (false, false, false, false, true, true, true, false);
+                        Stringa.Chara
+                          (true, false, false, false, false, true, true, false);
+                        Stringa.Chara
+                          (false, false, true, false, true, true, true, false)])
+                    (fun za ->
+                      Monad.check_bind
+                        (Monad.return
+                          (Contexts.add_vars_ge g
+                            ((za, (Contexts.b_of t1a,
+                                    SyntaxVCT.C_conj
+                                      (mk_c_eq z za,
+Contexts.subst_c_v0 (Contexts.c_of t1a) (Monad.mk_var z)))) ::
+                              bs)))
+                        (fun ga ->
+                          Monad.check_bind
+                            (check_s ta pa (Contexts.add_to_scope ga vars) d s
+                              t)
+                            (fun _ -> Monad.return g))))))
+    | ta, pa, g, d, SyntaxPED.PEXPp_when (p, s_guard, s), t1, t ->
+        Monad.check_bind (check_pat true ta pa g p t1)
+          (fun (z, (bs, vars)) ->
+            Monad.check_bind (check_varsM g Location.Loc_unknown vars)
+              (fun _ ->
+                Monad.check_bind (Monad.freshen_t t1)
+                  (fun t1a ->
+                    Monad.check_bind
+                      (Monad.mk_fresh
+                        [Stringa.Chara
+                           (false, false, false, false, true, true, true,
+                             false);
+                          Stringa.Chara
+                            (true, false, false, false, false, true, true,
+                              false);
+                          Stringa.Chara
+                            (false, false, true, false, true, true, true,
+                              false)])
+                      (fun za ->
+                        Monad.check_bind
+                          (Monad.return
+                            (Contexts.add_to_scope
+                              (Contexts.add_vars_ge g
+                                ((za, (Contexts.b_of t1a,
+SyntaxVCT.C_conj
+  (mk_c_eq z za, Contexts.subst_c_v0 (Contexts.c_of t1a) (Monad.mk_var z)))) ::
+                                  bs))
+                              vars))
+                          (fun ga ->
+                            Monad.check_bind
+                              (check_s ta pa ga d s_guard
+                                (SyntaxVCT.T_refined_type
+                                  (SyntaxVCT.VIndex, SyntaxVCT.B_bool,
+                                    SyntaxVCT.C_true)))
+                              (fun _ -> Monad.return g))))))
 and infer_e_lbind
   loc t pa g d p e =
     Monad.check_bind (infer_pat g loc p)
@@ -3652,7 +3730,7 @@ and infer_e
                                    (SyntaxVCT.VIndex, b,
                                      Contexts.mk_proj_eq z fid)))))
               | SyntaxVCT.B_undef -> Monad.fail (Monad.UnknownErrorLoc loc)
-              | SyntaxVCT.B_reg -> Monad.fail (Monad.UnknownErrorLoc loc)
+              | SyntaxVCT.B_reg _ -> Monad.fail (Monad.UnknownErrorLoc loc)
               | SyntaxVCT.B_string -> Monad.fail (Monad.UnknownErrorLoc loc)
               | SyntaxVCT.B_exception -> Monad.fail (Monad.UnknownErrorLoc loc)
               | SyntaxVCT.B_finite_set _ ->
@@ -3661,6 +3739,24 @@ and infer_e
         Monad.fail (Monad.NotImplemented (loc, "bop"))
     | vk, vl, vm, vn, SyntaxPED.Ep_uop (loc, vo, vp) ->
         Monad.fail (Monad.NotImplemented (loc, "uop"))
+    | t, p, g, d, SyntaxPED.Ep_ref (loc, idd) ->
+        (match ContextsPiDelta.lookup_register t (SyntaxVCT.VNamed idd)
+          with None -> Monad.fail (Monad.UnknownErrorLoc loc)
+          | Some ta ->
+            Monad.check_bind
+              (Monad.mk_fresh
+                [Stringa.Chara
+                   (false, true, false, false, true, true, true, false);
+                  Stringa.Chara
+                    (true, false, true, false, false, true, true, false);
+                  Stringa.Chara
+                    (false, true, true, false, false, true, true, false)])
+              (fun z ->
+                Monad.return
+                  (z, ([(z, (SyntaxVCT.B_reg ta, SyntaxVCT.C_true))],
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_reg ta,
+                            SyntaxVCT.C_true)))))
     | t, p, g, d, SyntaxPED.Ep_tuple (loc, es) ->
         Monad.check_bind (Monad.mapM (infer_e t p g d) es)
           (fun xx ->
@@ -3730,7 +3826,7 @@ cs))))))))
                             (false, false, false, false, true, true, true,
                               false)])
                       (fun z ->
-                        (match check_bases ts
+                        (match single_base ts
                           with None ->
                             Monad.fail
                               (Monad.TypeError (loc, "Incompatible elements"))
@@ -3864,7 +3960,7 @@ SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_true)),
                 Monad.fail (Monad.IfCondType (loc, ta))
               | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_undef, _) ->
                 Monad.fail (Monad.IfCondType (loc, ta))
-              | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_reg, _) ->
+              | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_reg _, _) ->
                 Monad.fail (Monad.IfCondType (loc, ta))
               | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_string, _) ->
                 Monad.fail (Monad.IfCondType (loc, ta))
@@ -3891,8 +3987,24 @@ SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_true)),
                   (fun (x, (g2, t2)) -> Monad.return (x, (g2 @ ga, t2)))))
     | t, p, g, d, SyntaxPED.Ep_field_access (loc, va, vb) ->
         Monad.fail (Monad.NotImplemented (loc, " field access expr "))
-    | t, p, g, d, SyntaxPED.Ep_record_update (loc, va, vb) ->
-        Monad.fail (Monad.NotImplemented (loc, " record update "))
+    | t, p, g, d, SyntaxPED.Ep_record_update (loc, va, fes) ->
+        Monad.check_bind (infer_e t p g d va)
+          (fun (z2, (g2, t2)) ->
+            Monad.check_bind
+              (Monad.mapM
+                (fun (f, e) ->
+                  (match ContextsPiDelta.lookup_field_in_type t2 f
+                    with None ->
+                      Monad.fail
+                        (Monad.CheckFail
+                          (SyntaxPED.loc_e e, g, "record update invalid field",
+                            t2, t2))
+                    | Some b ->
+                      check_s t p g d e
+                        (SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, b, SyntaxVCT.C_true))))
+                fes)
+              (fun _ -> Monad.return (z2, (g2, t2))))
     | t, p, g, d, SyntaxPED.Ep_let2 (loc, va, vb, vc, vd) ->
         Monad.fail (Monad.NotImplemented (loc, " let2 expr "))
     | t, p, g, d, SyntaxPED.Ep_case (loc, va, vb) ->
@@ -3968,19 +4080,19 @@ and infer_app
     | t, p, g, d, (uv, (SyntaxVCT.A_function (z2, b2, c2, tau), uw)) :: asa, e
         -> Monad.check_bind (infer_e t p g d e)
              (fun (_, (ga, ta)) ->
-               Monad.check_bind (Monad.freshen_t ta)
-                 (fun taa ->
+               Monad.check_bind (Monad.freshen_t tau)
+                 (fun taua ->
                    Monad.check_bind
                      (subtype (SyntaxPED.loc_e e) t (Contexts.add_vars_ge g ga)
-                       taa (SyntaxVCT.T_refined_type
-                             (SyntaxVCT.VIndex, b2,
-                               SyntaxPED.subst_cp
-                                 (SyntaxVCT.V_var SyntaxVCT.VIndex) z2 c2)))
+                       ta (SyntaxVCT.T_refined_type
+                            (SyntaxVCT.VIndex, b2,
+                              SyntaxPED.subst_cp
+                                (SyntaxVCT.V_var SyntaxVCT.VIndex) z2 c2)))
                      (fun st ->
                        (if st
                          then Monad.check_bind
                                 (Monad.return
-                                  (Satis.type_app b2 (Contexts.b_of taa)))
+                                  (Satis.type_app b2 (Contexts.b_of ta)))
                                 (fun sub ->
                                   Monad.check_bind
                                     (Monad.mk_fresh
@@ -3992,25 +4104,26 @@ Stringa.Chara (false, false, false, false, true, true, true, false)])
                                       Monad.check_bind
 (Monad.return
   (SyntaxVCT.T_refined_type
-    (SyntaxVCT.VIndex, tsubst_b_bs (Contexts.b_of tau) sub, Contexts.c_of tau)))
-(fun taua ->
+    (SyntaxVCT.VIndex, tsubst_bp_many (Contexts.b_of taua) sub,
+      Contexts.c_of taua)))
+(fun taub ->
   (let kv =
-     (z, (Contexts.b_of taua,
+     (z, (Contexts.b_of taub,
            SyntaxVCT.C_conj_many
-             [Contexts.subst_c_v0 (Contexts.c_of taa) (Monad.mk_var z2);
-               Contexts.subst_c_v0 (Contexts.c_of taua) (Monad.mk_var z)]))
+             [Contexts.subst_c_v0 (Contexts.c_of ta) (Monad.mk_var z2);
+               Contexts.subst_c_v0 (Contexts.c_of taub) (Monad.mk_var z)]))
      in
     Monad.check_bind (Monad.trace (Monad.AppI Monad.VarI))
       (fun _ ->
         Monad.return
-          (z, (kv :: [] @ ga @ [] @ [(z2, (tsubst_b_bs b2 sub, c2))],
-                taua)))))))
+          (z, (kv :: [] @ ga @ [] @ [(z2, (tsubst_bp_many b2 sub, c2))],
+                taub)))))))
                          else (if Arith.less_nat Arith.zero_nat
                                     (Lista.size_list asa)
                                 then infer_app t p g d asa e
                                 else Monad.fail
                                        (Monad.FunctionArgWrongType
- (SyntaxPED.loc_e e, taa,
+ (SyntaxPED.loc_e e, ta,
    SyntaxVCT.T_refined_type
      (SyntaxVCT.VIndex, b2,
        SyntaxPED.subst_cp (SyntaxVCT.V_var SyntaxVCT.VIndex) z2 c2))))))))
@@ -4196,7 +4309,11 @@ let rec check_def
     | t, p, g, SyntaxPED.DEFp_default (loc, order) ->
         Monad.return
           (ContextsPiDelta.theta_d_update (fun _ -> Some order) t, (p, g))
-    | t, p, g, SyntaxPED.DEFp_scattered (ux, sd) -> check_scattered t p g sd;;
+    | t, p, g, SyntaxPED.DEFp_scattered (ux, sd) -> check_scattered t p g sd
+    | ta, p, g, SyntaxPED.DEFp_reg (uy, t, x) ->
+        Monad.return
+          (ContextsPiDelta.add_register ta x t,
+            (p, Contexts.add_to_scope g [x]));;
 
 let rec check_defs
   t p g x3 = match t, p, g, x3 with t, p, g, [] -> Monad.return g
