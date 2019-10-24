@@ -1785,18 +1785,9 @@ Ltac solve_unknown :=
     exact (Build_ArithFact _ I)
   end.
 
-Ltac solve_arithfact :=
+Ltac run_main_solver_impl :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
-intros; (* To solve implications for derive_m *)
-try solve_unknown;
-match goal with |- ArithFact (?x <= ?x <= ?x) => try (exact trivial_range) | _ => idtac end;
-try fill_in_evar_eq;
-try match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end;
-(* Trying reflexivity will fill in more complex metavariable examples than
-   fill_in_evar_eq above, e.g., 8 * n = 8 * ?Goal3 *)
-try (constructor; reflexivity);
-try (constructor; repeat match goal with |- and _ _ => split end; z_comparisons);
 try (constructor; simple_omega);
 prepare_for_solver;
 (*dump_context;*)
@@ -1804,9 +1795,31 @@ constructor;
 repeat match goal with |- and _ _ => split end;
 main_solver.
 
+(* This can be redefined to remove the abstract. *)
+Ltac run_main_solver :=
+  solve
+    [ abstract run_main_solver_impl
+    | run_main_solver_impl (* for cases where there's an evar in the goal *)
+    ].
+
+Ltac solve_arithfact :=
+  intros; (* To solve implications for derive_m *)
+  solve
+    [ solve_unknown
+    | match goal with |- ArithFact (?x <= ?x <= ?x) => exact trivial_range end
+    | fill_in_evar_eq
+    | match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end
+    (* Trying reflexivity will fill in more complex metavariable examples than
+       fill_in_evar_eq above, e.g., 8 * n = 8 * ?Goal3 *)
+    | constructor; reflexivity
+    | constructor; repeat match goal with |- and _ _ => split end; z_comparisons
+    | run_main_solver
+    ].
+
 (* Add an indirection so that you can redefine run_solver to fail to get
    slow running constraints into proof mode. *)
 Ltac run_solver := solve_arithfact.
+
 Hint Extern 0 (ArithFact _) => run_solver : typeclass_instances.
 
 Hint Unfold length_mword : sail.

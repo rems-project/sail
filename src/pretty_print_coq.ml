@@ -98,7 +98,7 @@ type context = {
   kid_id_renames_rev : kid Bindings.t; (* reverse of kid_id_renames *)
   bound_nvars : KidSet.t;
   build_at_return : string option;
-  recursive_ids : IdSet.t;
+  recursive_fns : (int * int) Bindings.t; (* Number of implicit arguments and constraints for (mutually) recursive definitions *)
   debug : bool;
 }
 let empty_ctxt = {
@@ -108,7 +108,7 @@ let empty_ctxt = {
   kid_id_renames_rev = Bindings.empty;
   bound_nvars = KidSet.empty;
   build_at_return = None;
-  recursive_ids = IdSet.empty;
+  recursive_fns = Bindings.empty;
   debug = false;
 }
 
@@ -1773,12 +1773,11 @@ let doc_exp, doc_let =
           let env = env_of_annot (l,annot) in
           let () = debug ctxt (lazy ("Function application " ^ string_of_id f)) in
           let call, is_extern, is_ctor, is_rec =
-            if Env.is_union_constructor f env then doc_id_ctor f, false, true, false else
+            if Env.is_union_constructor f env then doc_id_ctor f, false, true, None else
             if Env.is_extern f env "coq"
-            then string (Env.get_extern f env "coq"), true, false, false
-            else if IdSet.mem f ctxt.recursive_ids
-            then doc_id f, false, false, true
-            else doc_id f, false, false, false in
+            then string (Env.get_extern f env "coq"), true, false, None
+            else doc_id f, false, false, Bindings.find_opt f ctxt.recursive_fns
+          in
           let (tqs,fn_ty) =
             if is_ctor then Env.get_union_id f env else Env.get_val_spec f env
           in
@@ -1880,14 +1879,17 @@ let doc_exp, doc_let =
             if is_ctor
             then group (hang 2 (call ^^ break 1 ^^ parens (flow (comma ^^ break 1) (List.map2 (doc_arg false) args arg_typs))))
             else
-              let main_call = call :: List.map2 (doc_arg true) args arg_typs in
+              let argspp = List.map2 (doc_arg true) args arg_typs in
               let all =
-                if is_rec then main_call @
-                                 [parens (string "_limit_reduces _acc")]
-                else match f with
-                     | Id_aux (Id x,_) when is_prefix "#rec#" x ->
-                        main_call @ [parens (string "Zwf_guarded _")]
-                     | _ ->  main_call
+                match is_rec with
+                | Some (pre,post) -> call :: List.init pre (fun _ -> underscore) @ argspp @
+                                       List.init post (fun _ -> underscore) @
+                                         [parens (string "_limit_reduces _acc")]
+                | None -> 
+                   match f with
+                   | Id_aux (Id x,_) when is_prefix "#rec#" x ->
+                      call :: argspp @ [parens (string "Zwf_guarded _")]
+                   | _ -> call :: argspp
               in hang 2 (flow (break 1) all) in
 
           (* Decide whether to unpack an existential result, pack one, or cast.
@@ -2852,7 +2854,7 @@ let merge_var_patterns map pats =
 
 type mutrec_pos = NotMutrec | FirstFn | LaterFn
 
-let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
+let doc_funcl_init mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let env = env_of_annot annot in
   let (tq,typ) = Env.get_val_spec_orig id env in
   let (arg_typs, ret_typ, eff) = match typ with
@@ -2874,10 +2876,9 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let pats, eliminated_kids, kid_to_arg_rename = merge_kids_atoms pats in
   let kid_to_arg_rename, pats = merge_var_patterns kid_to_arg_rename pats in
   let kids_used = KidSet.diff bound_kids eliminated_kids in
-  let is_measured, recursive_ids = match rec_opt with
-    | Rec_aux (Rec_measure _,_) ->
-       true, (match rec_set with None -> IdSet.singleton id | Some s -> s)
-    | _ -> false, IdSet.empty
+  let is_measured = match rec_opt with
+    | Rec_aux (Rec_measure _,_) -> true
+    | _ -> false
   in
   let kir_rev =
     KBindings.fold
@@ -2891,7 +2892,7 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
       kid_id_renames_rev = kir_rev;
       bound_nvars = bound_kids;
       build_at_return = None; (* filled in below *)
-      recursive_ids = recursive_ids;
+      recursive_fns = Bindings.empty; (* filled in later *)
       debug = List.mem (string_of_id id) (!opt_debug_on)
     } in
   let build_ex, ret_typ = replace_atom_return_type ret_typ in
@@ -2960,7 +2961,6 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   in
   let patspp = flow_map (break 1) doc_binder pats in
   let atom_constrs = Util.map_filter (atom_constraint ctxt) pats in
-  let atom_constr_pp = separate space atom_constrs in
   let retpp =
     (* TODO: again, probably should provide proper environment *)
     if effectful eff
@@ -3012,18 +3012,29 @@ let doc_funcl mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
       ^^ dot
     else empty
   in
+  let ctxt =
+    if is_measured then
+      { ctxt with recursive_fns =
+                    Bindings.singleton id
+                      (List.length quantspp, List.length constrspp + List.length atom_constrs) }
+    else ctxt in
   let _ = match guard with
     | None -> ()
     | _ ->
        raise (Reporting.err_unreachable l __POS__
                "guarded pattern expression should have been rewritten before pretty-printing") in
+  ((group (flow (break 1) ([intropp; idpp] @ quantspp @ [patspp] @ constrspp @ atom_constrs @ accpp) ^/^
+      flow (break 1) (measurepp @ [colon; retpp])),
+    implicitargs),
+   ctxt,
+   (exp, eff, build_ex, fixupspp))
+
+
+let doc_funcl_body ctxt (exp, eff, build_ex, fixupspp) =
   let bodypp = doc_fun_body ctxt exp in
   let bodypp = if effectful eff then bodypp else match build_ex with Some s -> string s ^^ parens bodypp | None -> bodypp in
   let bodypp = separate (break 1) fixupspp ^/^ bodypp in
-  group (prefix 3 1
-    (flow (break 1) ([intropp; idpp] @ quantspp @ [patspp] @ constrspp @ [atom_constr_pp] @ accpp) ^/^
-       flow (break 1) (measurepp @ [colon; retpp; coloneq]))
-    (bodypp ^^ terminalpp)) ^^ implicitargs
+  group bodypp
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
@@ -3035,22 +3046,45 @@ let get_id = function
 let doc_fundef_rhs ?(mutrec=NotMutrec) rec_set (FD_aux(FD_function(r, typa, efa, funcls),(l,_))) =
   match funcls with
   | [] -> unreachable l __POS__ "function with no clauses"
-  | [funcl] -> doc_funcl mutrec r ~rec_set funcl
+  | [funcl] -> doc_funcl_init mutrec r ~rec_set funcl
   | (FCL_aux (FCL_Funcl (id,_),_))::_ -> unreachable l __POS__ ("function " ^ string_of_id id ^ " has multiple clauses in backend")
 
 let doc_mutrec rec_set = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
   | fundef::fundefs ->
-     doc_fundef_rhs ~mutrec:FirstFn rec_set fundef ^^ hardline ^^
-     separate_map hardline (doc_fundef_rhs ~mutrec:LaterFn rec_set) fundefs ^^ dot
+     let prepost1,ctxt1,details1 = doc_fundef_rhs ~mutrec:FirstFn rec_set fundef in
+     let prepostn,ctxtn,detailsn = Util.split3 (List.map (doc_fundef_rhs ~mutrec:LaterFn rec_set) fundefs) in
+     let recursive_fns = List.fold_left (fun m c -> Bindings.union (fun _ x _ -> Some x) m c.recursive_fns) ctxt1.recursive_fns ctxtn in
+     let ctxts = List.map (fun c -> { c with recursive_fns }) (ctxt1::ctxtn) in
+     let bodies = List.map2 doc_funcl_body ctxts (details1::detailsn) in
+     let bodies = List.map (fun b -> string "exact (" ^/^ b ^/^ string ").") bodies in
+     let pres, posts = List.split (prepost1::prepostn) in
+     separate hardline pres ^^ dot ^^ hardline ^^
+       separate hardline bodies ^^
+         break 1 ^^ string "Defined." ^^ hardline ^^
+           separate hardline posts
+
+let doc_funcl mutrec r funcl =
+  let (pre,post),ctxt,details = doc_funcl_init mutrec r funcl in
+  let body = doc_funcl_body ctxt details in
+  pre,body,post
 
 let rec doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [FCL_aux (FCL_Funcl(id,_),annot) as funcl]
     when not (Env.is_extern id (env_of_annot annot) "coq") ->
-     doc_funcl NotMutrec r funcl
-  | [_] -> empty (* extern *)
+     begin
+       let pre,body,post = doc_funcl NotMutrec r funcl in
+       match r with
+       | Rec_aux (Rec_measure _,_) ->
+          group (pre ^^ dot ^^ hardline ^^
+                   string "exact (" ^^ hardline ^^
+                     body ^^
+                       string ")." ^^ hardline ^^ string "Defined.") ^^ hardline ^^ post
+       | _ -> group (prefix 3 1 (pre ^^ space ^^ coloneq) (body ^^ dot)) ^^ post
+     end
+   | [_] -> empty (* extern *)
   | _ -> failwith "FD_function with more than one clause"
 
 
@@ -3349,14 +3383,10 @@ try
         hardline;
         string "Open Scope string."; hardline;
         string "Open Scope bool."; hardline;
-        (* Put the body into a Section so that we can define some values with
-           Let to put them into the local context, where tactics can see them *)
-        string "Section Content.";
         hardline;
         hardline;
         separate empty (List.map doc_def defs);
         hardline;
-        string "End Content.";
         hardline])
 with Type_check.Type_error (env,l,err) ->
   let extra =

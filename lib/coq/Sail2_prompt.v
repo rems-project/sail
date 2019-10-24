@@ -30,21 +30,25 @@ match l with
   foreachM xs vars body
 end.
 
-Fixpoint foreach_ZM_up' {rv e Vars} from to step off n `{ArithFact (0 < step)} `{ArithFact (0 <= off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <= z <= to)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e :=
+Fixpoint foreach_ZM_up' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 < step)} `{ArithFact (0 <= off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <= z <= to)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e.
+exact (
   if sumbool_of_bool (from + off <=? to) then
     match n with
     | O => returnm vars
-    | S n => body (from + off) _ vars >>= fun vars => foreach_ZM_up' from to step (off + step) n vars body
+    | S n => body (from + off) _ vars >>= fun vars => foreach_ZM_up' rv e Vars from to step (off + step) n _ _ vars body
     end
-  else returnm vars.
+  else returnm vars).
+Defined.
 
-Fixpoint foreach_ZM_down' {rv e Vars} from to step off n `{ArithFact (0 < step)} `{ArithFact (off <= 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <= z <= from)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e :=
+Fixpoint foreach_ZM_down' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 < step)} `{ArithFact (off <= 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <= z <= from)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e.
+exact (
   if sumbool_of_bool (to <=? from + off) then
     match n with
     | O => returnm vars
-    | S n => body (from + off) _ vars >>= fun vars => foreach_ZM_down' from to step (off - step) n vars body
+    | S n => body (from + off) _ vars >>= fun vars => foreach_ZM_down' _ _ _ from to step (off - step) n _ _ vars body
     end
-  else returnm vars.
+  else returnm vars).
+Defined.
 
 Definition foreach_ZM_up {rv e Vars} from to step vars body `{ArithFact (0 < step)} :=
     foreach_ZM_up' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
@@ -190,13 +194,15 @@ Definition Zwf_guarded (z:Z) : Acc (Zwf 0) z :=
 
 (*val whileM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
                 ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e*)
-Fixpoint whileMT' {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) (acc : Acc (Zwf 0) limit) : monad RV Vars E :=
+Fixpoint whileMT' {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) (acc : Acc (Zwf 0) limit) : monad RV Vars E.
+exact (
   if Z_ge_dec limit 0 then
     cond vars >>= fun cond_val =>
     if cond_val then
-      body vars >>= fun vars => whileMT' (limit - 1) vars cond body (_limit_reduces acc)
+      body vars >>= fun vars => whileMT' _ _ _ (limit - 1) vars cond body (_limit_reduces acc)
     else returnm vars
-  else Fail "Termination limit reached".
+  else Fail "Termination limit reached").
+Defined.
 
 Definition whileMT {RV Vars E} (vars : Vars) (measure : Vars -> Z) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) : monad RV Vars E :=
   let limit := measure vars in
@@ -204,12 +210,14 @@ Definition whileMT {RV Vars E} (vars : Vars) (measure : Vars -> Z) (cond : Vars 
 
 (*val untilM : forall 'rv 'vars 'e. 'vars -> ('vars -> monad 'rv bool 'e) ->
                 ('vars -> monad 'rv 'vars 'e) -> monad 'rv 'vars 'e*)
-Fixpoint untilMT' {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) (acc : Acc (Zwf 0) limit) : monad RV Vars E :=
+Fixpoint untilMT' {RV Vars E} limit (vars : Vars) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) (acc : Acc (Zwf 0) limit) : monad RV Vars E.
+exact (
   if Z_ge_dec limit 0 then
     body vars >>= fun vars =>
     cond vars >>= fun cond_val =>
-    if cond_val then returnm vars else untilMT' (limit - 1) vars cond body (_limit_reduces acc)
-  else Fail "Termination limit reached".
+    if cond_val then returnm vars else untilMT' _ _ _ (limit - 1) vars cond body (_limit_reduces acc)
+  else Fail "Termination limit reached").
+Defined.
 
 Definition untilMT {RV Vars E} (vars : Vars) (measure : Vars -> Z) (cond : Vars -> monad RV bool E) (body : Vars -> monad RV Vars E) : monad RV Vars E :=
   let limit := measure vars in

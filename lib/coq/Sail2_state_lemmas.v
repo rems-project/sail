@@ -839,26 +839,26 @@ unfold whileMT, whileST.
 generalize (measure vars) as limit. intro.
 revert vars.
 destruct (Z.le_decidable 0 limit).
-* generalize (Zwf_guarded limit) as acc.
+* generalize (Zwf_guarded limit) at 1 as acc1.
+  generalize (Zwf_guarded limit) at 1 as acc2.
   apply Wf_Z.natlike_ind with (x := limit).
-  + intros [acc] *; simpl.
-    match goal with |- context [Build_ArithFact _ ?prf] => generalize prf; intros ?Proof end.
+  + intros [acc1] [acc2] *; simpl.
     rewrite_liftState.
     apply bindS_cong; auto.
     intros [|]; auto.
     apply bindS_cong; auto.
-    intros. destruct (_limit_reduces _). simpl.
+    intros. repeat destruct (_limit_reduces _). simpl.
     reflexivity.
   + clear limit H.
-    intros limit H IH [acc] vars s. simpl.
+    intros limit H IH [acc1] [acc2] vars s. simpl.
     destruct (Z_ge_dec _ _); try omega.
     rewrite_liftState.
     apply bindS_cong; auto.
     intros [|]; auto.
     apply bindS_cong; auto.
     intros.
-    gen_reduces.
-    replace (Z.succ limit - 1) with limit; try omega. intro acc'.
+    repeat gen_reduces.
+    replace (Z.succ limit - 1) with limit; try omega. intros acc1' acc2'.
     apply IH.
   + assumption.
 * intros. simpl.
@@ -912,24 +912,25 @@ unfold untilMT, untilST.
 generalize (measure vars) as limit. intro.
 revert vars.
 destruct (Z.le_decidable 0 limit).
-* generalize (Zwf_guarded limit) as acc.
+* generalize (Zwf_guarded limit) at 1 as acc1.
+  generalize (Zwf_guarded limit) at 1 as acc2.
   apply Wf_Z.natlike_ind with (x := limit).
-  + intros [acc] * s; simpl.
+  + intros [acc1] [acc2] * s; simpl.
     rewrite_liftState.
     apply bindS_cong; auto.
     intros. apply bindS_cong; auto.
     intros [|]; auto.
-    destruct (_limit_reduces _). simpl.
+    repeat destruct (_limit_reduces _). simpl.
     reflexivity.
   + clear limit H.
-    intros limit H IH [acc] vars s. simpl.
+    intros limit H IH [acc1] [acc2] vars s. simpl.
     destruct (Z_ge_dec _ _); try omega.
     rewrite_liftState.
     apply bindS_cong; auto.
     intros. apply bindS_cong; auto.
     intros [|]; auto.
-    gen_reduces.
-    replace (Z.succ limit - 1) with limit; try omega. intro acc'.
+    repeat gen_reduces.
+    replace (Z.succ limit - 1) with limit; try omega. intros acc1' acc2'.
     apply IH.
   + assumption.
 * intros. simpl.

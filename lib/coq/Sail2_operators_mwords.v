@@ -107,7 +107,7 @@ Qed.
 Lemma subrange_lemma2 {n m o} : (o <= m < n -> m+1 = o+(m-o+1))%nat.
 omega.
 Qed.
-Lemma subrange_lemma3 {n m o} `{ArithFact (0 <= o)} `{ArithFact (o <= m < n)} :
+Lemma subrange_lemma3 {m o} `{ArithFact (0 <= o)} `{ArithFact (o <= m)} :
   Z.of_nat (Z.to_nat m - Z.to_nat o + 1)%nat = m - o + 1.
 unwrap_ArithFacts.
 rewrite Nat2Z.inj_add.
