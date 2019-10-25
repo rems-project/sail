@@ -534,7 +534,7 @@ defns typing_pat :: '' ::=
 defn
 T ; G |- patp =>> tp ~> xp ; klist ; xlist :: :: infer_patp :: infer_patm_
 {{ tex [[T]] ; [[G]] \vdash [[patp]] \Rightarrow [[tp]] \rightsquigarrow [[xp]] ; [[klist]] ; [[xlist]] }}
-{{ com Infer type of patmtern $[[patp]]$. $[[xlist]]$ is the list of pattern variables in the pattern. }}
+{{ com Infer type of pattern $[[patp]]$. $[[xlist]]$ is the list of pattern variables in the pattern. }}
 %{{ isasyn [[G]]  \<turnstile> [[patp]] \<Rightarrow> [[t]] \<leadsto> [[xp]] ; [[klist]] ; [[xlist]] }}
 by
 
