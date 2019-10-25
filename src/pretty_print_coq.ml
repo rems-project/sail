@@ -2150,18 +2150,7 @@ let doc_exp, doc_let =
          else raise (Reporting.err_unreachable l __POS__
            "E_vector of non-vector type") in
        let dir,dir_out = if is_order_inc order then (true,"true") else (false, "false") in
-       let expspp =
-         match exps with
-         | [] -> empty
-         | e :: es ->
-            let (expspp,_) =
-              List.fold_left
-                (fun (pp,count) e ->
-                  (pp ^^ semi ^^ (if count = 20 then break 0 else empty) ^^
-                     expN e),
-                  if count = 20 then 0 else count + 1)
-                (expN e,0) es in
-            align (group expspp) in
+       let expspp = align (group (flow_map (semi ^^ break 0) expN exps)) in
        let epp = brackets expspp in
        let (epp,aexp_needed) =
          if is_bitvector_typ t then
@@ -2178,7 +2167,7 @@ let doc_exp, doc_let =
        raise (Reporting.err_unreachable l __POS__
         "E_vector_update should have been rewritten before pretty-printing")
     | E_list exps ->
-       brackets (separate_map semi (expN) exps)
+       brackets (separate_map (semi ^^ break 1) (expN) exps)
     | E_case(e,pexps) ->
        let only_integers e = expY e in
        let epp =
@@ -2316,7 +2305,7 @@ let doc_exp, doc_let =
          let env = env_of e1 in
          construct_dep_pairs env true e1 ret_typ ~rawbools:true
        in
-       wrap_parens (align (separate space [string "returnm"; valpp]))
+       wrap_parens (group (align (separate space [string "returnm"; valpp])))
     | E_sizeof nexp ->
       (match nexp_simp nexp with
         | Nexp_aux (Nexp_constant i, _) -> doc_lit (L_aux (L_num i, l))
@@ -3033,7 +3022,7 @@ let doc_funcl_init mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot))
 let doc_funcl_body ctxt (exp, eff, build_ex, fixupspp) =
   let bodypp = doc_fun_body ctxt exp in
   let bodypp = if effectful eff then bodypp else match build_ex with Some s -> string s ^^ parens bodypp | None -> bodypp in
-  let bodypp = separate (break 1) fixupspp ^/^ bodypp in
+  let bodypp = separate (break 1) (fixupspp @ [bodypp]) in
   group bodypp
 
 let get_id = function
@@ -3057,7 +3046,7 @@ let doc_mutrec rec_set = function
      let recursive_fns = List.fold_left (fun m c -> Bindings.union (fun _ x _ -> Some x) m c.recursive_fns) ctxt1.recursive_fns ctxtn in
      let ctxts = List.map (fun c -> { c with recursive_fns }) (ctxt1::ctxtn) in
      let bodies = List.map2 doc_funcl_body ctxts (details1::detailsn) in
-     let bodies = List.map (fun b -> string "exact (" ^/^ b ^/^ string ").") bodies in
+     let bodies = List.map (fun b -> surround 3 0 (string "exact (") b (string ").")) bodies in
      let pres, posts = List.split (prepost1::prepostn) in
      separate hardline pres ^^ dot ^^ hardline ^^
        separate hardline bodies ^^
@@ -3079,9 +3068,8 @@ let rec doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
        match r with
        | Rec_aux (Rec_measure _,_) ->
           group (pre ^^ dot ^^ hardline ^^
-                   string "exact (" ^^ hardline ^^
-                     body ^^
-                       string ")." ^^ hardline ^^ string "Defined.") ^^ hardline ^^ post
+                   surround 3 0 (string "exact (") body (string ").") ^^
+                     hardline ^^ string "Defined.") ^^ hardline ^^ post
        | _ -> group (prefix 3 1 (pre ^^ space ^^ coloneq) (body ^^ dot)) ^^ post
      end
    | [_] -> empty (* extern *)
