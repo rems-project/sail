@@ -60,9 +60,6 @@ open Type_check
    (dot) format. *)
 val opt_debug_flow_graphs : bool ref
 
-(** Print the IR representation of a specific function. *)
-val opt_debug_function : string ref
-
 (** This forces all integer struct fields to be represented as
    int64_t. Specifically intended for the various TLB structs in the
    ARM v8.5 spec. *)

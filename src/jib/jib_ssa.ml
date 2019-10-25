@@ -722,7 +722,7 @@ let string_of_ssainstr = function
   | Phi (id, ctyp, args) ->
      string_of_name id ^ " : " ^ string_of_ctyp ctyp ^ " = &phi;(" ^ Util.string_of_list ", " string_of_name args ^ ")"
   | Pi cvals ->
-     "&pi;(" ^ Util.string_of_list ", " (fun v -> String.escaped (string_of_cval v)) cvals ^ ")"
+     "&pi;(" ^ Util.string_of_list ", " (fun v -> String.escaped (Jib_ir.string_of_cval v)) cvals ^ ")"
 
 let string_of_phis = function
   | [] -> ""
@@ -730,7 +730,13 @@ let string_of_phis = function
 
 let string_of_node = function
   | (phis, CF_label label) -> string_of_phis phis ^ label
-  | (phis, CF_block (instrs, terminator)) -> string_of_phis phis ^ Util.string_of_list "\\l" (fun instr -> String.escaped (Pretty_print_sail.to_string (pp_instr ~short:true instr))) instrs
+  | (phis, CF_block (instrs, terminator)) ->
+     let string_of_instr instr =
+       let buf = Buffer.create 128 in
+       Jib_ir.Flat_ir_formatter.output_instr 0 buf 0 Jib_ir.StringMap.empty instr;
+       Buffer.contents buf
+     in
+     string_of_phis phis ^ Util.string_of_list "\\l" (fun instr -> String.escaped (string_of_instr instr)) instrs
   | (phis, CF_start inits) -> string_of_phis phis ^ "START"
   | (phis, CF_guard cval) -> string_of_phis phis ^ string_of_int cval
 

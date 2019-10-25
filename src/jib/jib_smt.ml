@@ -324,7 +324,7 @@ let rec smt_cval ctx cval =
            end
         | _ -> assert false
         end
-     | cval -> failwith ("Unrecognised cval " ^ string_of_cval cval)
+     | cval -> failwith ("Unrecognised cval " ^ Jib_ir.string_of_cval cval)
 
 let add_event ctx ev smt =
   let stack = event_stack ctx ev in
@@ -1497,8 +1497,7 @@ let rec rmw_write = function
   | CL_id _ -> assert false
   | CL_tuple (clexp, _) -> rmw_write clexp
   | CL_field (clexp, _) -> rmw_write clexp
-  | clexp ->
-     failwith (Pretty_print_sail.to_string (pp_clexp clexp))
+  | clexp -> assert false
 
 let rmw_read = function
   | CL_rmw (read, _, _) -> zencode_name read
@@ -1674,8 +1673,8 @@ let smt_instr ctx =
   | I_aux ((I_jump _ | I_goto _ | I_end _ | I_match_failure | I_undefined _), (_, l)) ->
      Reporting.unreachable l __POS__ "SMT: Instruction should only appear as block terminator"
 
-  | instr ->
-     failwith ("Cannot translate: " ^ Pretty_print_sail.to_string (pp_instr instr))
+  | I_aux (_, (_, l)) ->
+     Reporting.unreachable l __POS__ "Cannot translate instruction"
 
 let smt_cfnode all_cdefs ctx ssa_elems =
   let open Jib_ssa in

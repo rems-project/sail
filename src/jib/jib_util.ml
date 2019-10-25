@@ -308,56 +308,27 @@ let string_of_op = function
   | Set_slice -> "@set_slice"
   | Concat -> "@concat"
 
-let rec string_of_cval = function
-  | V_id (id, ctyp) -> string_of_name ~zencode:false id
-  | V_ref (id, _) -> "&" ^ string_of_name ~zencode:false id
-  | V_lit (vl, ctyp) -> string_of_value vl
-  | V_call (op, cvals) ->
-     Printf.sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " string_of_cval cvals)
-  | V_field (f, field) ->
-     Printf.sprintf "%s.%s" (string_of_cval f) field
-  | V_tuple_member (f, _, n) ->
-     Printf.sprintf "%s.ztup%d" (string_of_cval f) n
-  | V_ctor_kind (f, ctor, [], _) ->
-     string_of_cval f ^ ".kind"
-     ^ " != Kind_" ^ Util.zencode_string (string_of_id ctor)
-  | V_ctor_kind (f, ctor, unifiers, _) ->
-     string_of_cval f ^ ".kind"
-     ^ " != Kind_" ^ Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
-  | V_ctor_unwrap (ctor, f, [], _) ->
-     Printf.sprintf "%s.%s" (string_of_cval f) (string_of_id ctor)
-  | V_struct (fields, _) ->
-     Printf.sprintf "{%s}"
-       (Util.string_of_list ", " (fun (field, cval) -> string_of_id field ^ " = " ^ string_of_cval cval) fields)
-  | V_ctor_unwrap (ctor, f, unifiers, _) ->
-     Printf.sprintf "%s.%s"
-       (string_of_cval f)
-       (Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers))
-  | V_poly (f, _) -> string_of_cval f
-
 (* String representation of ctyps here is only for debugging and
    intermediate language pretty-printer. *)
-and string_of_ctyp = function
-  | CT_lint -> "int"
-  | CT_lbits true -> "lbits(dec)"
-  | CT_lbits false -> "lbits(inc)"
-  | CT_fbits (n, true) -> "fbits(" ^ string_of_int n ^ ", dec)"
-  | CT_fbits (n, false) -> "fbits(" ^ string_of_int n ^ ", int)"
-  | CT_sbits (n, true) -> "sbits(" ^ string_of_int n ^ ", dec)"
-  | CT_sbits (n, false) -> "sbits(" ^ string_of_int n ^ ", inc)"
-  | CT_fint n -> "int(" ^ string_of_int n ^ ")"
-  | CT_constant n -> "constant(" ^ Big_int.to_string n ^ ")"
-  | CT_bit -> "bit"
-  | CT_unit -> "unit"
-  | CT_bool -> "bool"
-  | CT_real -> "real"
+let rec string_of_ctyp = function
+  | CT_lint -> "%i"
+  | CT_fint n -> "%i" ^ string_of_int n
+  | CT_lbits _ -> "%lb"
+  | CT_sbits (n, _) -> "%sb" ^ string_of_int n
+  | CT_fbits (n, _) -> "%fb" ^ string_of_int n
+  | CT_constant n -> Big_int.to_string n
+  | CT_bit -> "%bit"
+  | CT_unit -> "%unit"
+  | CT_bool -> "%bool"
+  | CT_real -> "%real"
+  | CT_string -> "%string"
   | CT_tup ctyps -> "(" ^ Util.string_of_list ", " string_of_ctyp ctyps ^ ")"
-  | CT_struct (id, _) | CT_enum (id, _) | CT_variant (id, _) -> string_of_id id
-  | CT_string -> "string"
-  | CT_vector (true, ctyp) -> "vector(dec, " ^ string_of_ctyp ctyp ^ ")"
-  | CT_vector (false, ctyp) -> "vector(inc, " ^ string_of_ctyp ctyp ^ ")"
-  | CT_list ctyp -> "list(" ^ string_of_ctyp ctyp ^ ")"
-  | CT_ref ctyp -> "ref(" ^ string_of_ctyp ctyp ^ ")"
+  | CT_struct (id, _) -> "%struct " ^ Util.zencode_string (string_of_id id)
+  | CT_enum (id, _) -> "%enum " ^ Util.zencode_string (string_of_id id)
+  | CT_variant (id, _) -> "%union " ^ Util.zencode_string (string_of_id id)
+  | CT_vector (_, ctyp) -> "%vec(" ^ string_of_ctyp ctyp ^ ")"
+  | CT_list ctyp -> "%list(" ^ string_of_ctyp ctyp ^ ")"
+  | CT_ref ctyp -> "&(" ^ string_of_ctyp ctyp ^ ")"
   | CT_poly -> "*"
 
 (** This function is like string_of_ctyp, but recursively prints all
@@ -559,126 +530,6 @@ let rec is_polymorphic = function
   | CT_struct (_, ctors) | CT_variant (_, ctors) -> List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors
   | CT_vector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> is_polymorphic ctyp
   | CT_poly -> true
-
-let pp_id id =
-  string (string_of_id id)
-
-let pp_name id =
-  string (string_of_name ~zencode:false id)
-
-let pp_ctyp ctyp =
-  string (string_of_ctyp ctyp |> Util.yellow |> Util.clear)
-
-let pp_keyword str =
-  string ((str |> Util.red |> Util.clear) ^ " ")
-
-let pp_cval cval =
-  string (string_of_cval cval)
-
-let rec pp_clexp = function
-  | CL_id (id, ctyp) -> pp_name id ^^ string " : " ^^ pp_ctyp ctyp
-  | CL_rmw (read, write, ctyp) ->
-     string "rmw" ^^ parens (pp_name read ^^ comma ^^ space ^^ pp_name write) ^^ string " : " ^^ pp_ctyp ctyp
-  | CL_field (clexp, field) -> parens (pp_clexp clexp) ^^ string "." ^^ string field
-  | CL_tuple (clexp, n) -> parens (pp_clexp clexp) ^^ string "." ^^ string (string_of_int n)
-  | CL_addr clexp -> string "*" ^^ pp_clexp clexp
-  | CL_void -> string "void"
-
-let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
-  match instr with
-  | I_decl (ctyp, id) ->
-     pp_keyword "var" ^^ pp_name id ^^ string " : " ^^ pp_ctyp ctyp
-  | I_if (cval, then_instrs, else_instrs, ctyp) ->
-     let pp_if_block = function
-       | [] -> string "{}"
-       | instrs -> surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
-     in
-     parens (pp_ctyp ctyp) ^^ space
-     ^^ pp_keyword "if" ^^ pp_cval cval
-     ^^ if short then
-          empty
-        else
-          pp_keyword " then" ^^ pp_if_block then_instrs
-          ^^ pp_keyword " else" ^^ pp_if_block else_instrs
-  | I_jump (cval, label) ->
-     pp_keyword "jump" ^^ pp_cval cval ^^ space ^^ string (label |> Util.blue |> Util.clear)
-  | I_block instrs ->
-     surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
-  | I_try_block instrs ->
-     pp_keyword "try" ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
-  | I_reset (ctyp, id) ->
-     pp_keyword "recreate" ^^ pp_name id ^^ string " : " ^^ pp_ctyp ctyp
-  | I_init (ctyp, id, cval) ->
-     pp_keyword "create" ^^ pp_name id ^^ string " : " ^^ pp_ctyp ctyp ^^ string " = " ^^ pp_cval cval
-  | I_reinit (ctyp, id, cval) ->
-     pp_keyword "recreate" ^^ pp_name id ^^ string " : " ^^ pp_ctyp ctyp ^^ string " = " ^^ pp_cval cval
-  | I_funcall (x, _, f, args) ->
-     separate space [ pp_clexp x; string "=";
-                      string (string_of_id f |> Util.green |> Util.clear) ^^ parens (separate_map (string ", ") pp_cval args) ]
-  | I_copy (clexp, cval) ->
-     separate space [pp_clexp clexp; string "="; pp_cval cval]
-  | I_clear (ctyp, id) ->
-     pp_keyword "kill" ^^ pp_name id ^^ string " : " ^^ pp_ctyp ctyp
-  | I_return cval ->
-     pp_keyword "return" ^^ pp_cval cval
-  | I_throw cval ->
-     pp_keyword "throw" ^^ pp_cval cval
-  | I_comment str ->
-     string ("// " ^ str |> Util.magenta |> Util.clear)
-  | I_label str ->
-     string (str |> Util.blue |> Util.clear) ^^ string ":"
-  | I_goto str ->
-     pp_keyword "goto" ^^ string (str |> Util.blue |> Util.clear)
-  | I_match_failure ->
-     pp_keyword "match_failure"
-  | I_end _ ->
-     pp_keyword "end"
-  | I_undefined ctyp ->
-     pp_keyword "undefined" ^^ pp_ctyp ctyp
-  | I_raw str ->
-     pp_keyword "C" ^^ string (str |> Util.cyan |> Util.clear)
-
-let pp_ctype_def = function
-  | CTD_enum (id, ids) ->
-     pp_keyword "enum" ^^ pp_id id ^^ string " = "
-     ^^ separate_map (string " | ") pp_id ids
-  | CTD_struct (id, fields) ->
-     pp_keyword "struct" ^^ pp_id id ^^ string " = "
-     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) (fun (id, ctyp) -> pp_id id ^^ string " : " ^^ pp_ctyp ctyp) fields) rbrace
-  | CTD_variant (id, ctors) ->
-     pp_keyword "union" ^^ pp_id id ^^ string " = "
-     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) (fun (id, ctyp) -> pp_id id ^^ string " : " ^^ pp_ctyp ctyp) ctors) rbrace
-
-let pp_cdef = function
-  | CDEF_spec (id, ctyps, ctyp) ->
-     pp_keyword "val" ^^ pp_id id ^^ string " : " ^^ parens (separate_map (comma ^^ space) pp_ctyp ctyps) ^^ string " -> " ^^ pp_ctyp ctyp
-     ^^ hardline
-  | CDEF_fundef (id, ret, args, instrs) ->
-     let ret = match ret with
-       | None -> empty
-       | Some id -> space ^^ pp_id id
-     in
-     pp_keyword "function" ^^ pp_id id ^^ ret ^^ parens (separate_map (comma ^^ space) pp_id args) ^^ space
-     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
-     ^^ hardline
-  | CDEF_reg_dec (id, ctyp, instrs) ->
-     pp_keyword "register" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp ^^ space
-     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
-     ^^ hardline
-  | CDEF_type tdef -> pp_ctype_def tdef ^^ hardline
-  | CDEF_let (n, bindings, instrs) ->
-     let pp_binding (id, ctyp) = pp_id id ^^ string " : " ^^ pp_ctyp ctyp in
-     pp_keyword "let" ^^ string (string_of_int n) ^^ parens (separate_map (comma ^^ space) pp_binding bindings) ^^ space
-     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace ^^ space
-     ^^ hardline
-  | CDEF_startup (id, instrs)->
-     pp_keyword "startup" ^^ pp_id id ^^ space
-     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
-     ^^ hardline
-  | CDEF_finish (id, instrs)->
-     pp_keyword "finish" ^^ pp_id id ^^ space
-     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
-     ^^ hardline
 
 let rec cval_deps = function
   | V_id (id, _) | V_ref (id, _) -> NameSet.singleton id

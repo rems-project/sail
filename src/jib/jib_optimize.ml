@@ -360,6 +360,28 @@ let remove_unused_labels instrs =
   in
   go [] instrs
 
+
+let remove_dead_after_goto instrs =
+  let rec go acc = function
+    | (I_aux (I_goto _, _) as instr) :: instrs -> go_dead (instr :: acc) instrs
+    | instr :: instrs -> go (instr :: acc) instrs
+    | [] -> acc
+  and go_dead acc = function
+    | (I_aux (I_label _, _) as instr) :: instrs -> go (instr :: acc) instrs
+    | instr :: instrs -> go acc instrs
+    | [] -> acc
+  in
+  List.rev (go [] instrs)
+
+let rec remove_dead_code instrs =
+  let instrs' =
+    instrs |> remove_unused_labels |> remove_pointless_goto |> remove_dead_after_goto
+  in
+  if List.length instrs' < List.length instrs then
+    remove_dead_code instrs'
+  else
+    instrs'
+
 let rec remove_clear = function
   | I_aux (I_clear _, _) :: instrs -> remove_clear instrs
   | instr :: instrs -> instr :: remove_clear instrs

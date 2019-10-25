@@ -71,3 +71,7 @@ val remove_clear : instr list -> instr list
 val remove_pointless_goto : instr list -> instr list
 
 val remove_unused_labels : instr list -> instr list
+
+val remove_dead_after_goto : instr list -> instr list
+
+val remove_dead_code : instr list -> instr list

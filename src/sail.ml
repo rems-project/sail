@@ -370,9 +370,6 @@ let options = Arg.align ([
   ( "-dmagic_hash",
     Arg.Set Initial_check.opt_magic_hash,
     " (debug) allow special character # in identifiers");
-  ( "-dfunction",
-    Arg.String (fun f -> Jib_compile.opt_debug_function := f),
-    " (debug) print debugging output for a single function");
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
     " (debug) provide basic profiling information for rewriting passes within Sail");
@@ -502,14 +499,14 @@ let target name out_name ast type_envs =
      (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in *)
      let close, output_chan =
        match !opt_file_out with
-       | Some f -> Util.opt_colors := false; (true, open_out (f ^ ".ir.sail"))
+       | Some f -> Util.opt_colors := false; (true, open_out (f ^ ".ir"))
        | None -> false, stdout
      in
      Reporting.opt_warnings := true;
      let cdefs, _ = C_backend.jib_of_ast type_envs ast_c in
-     (* let cdefs = List.map Jib_optimize.flatten_cdef cdefs in *)
-     let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_cdef cdefs) in
-     output_string output_chan (str ^ "\n");
+     let buf = Buffer.create 256 in
+     Jib_ir.Flat_ir_formatter.output_defs buf cdefs;
+     output_string output_chan (Buffer.contents buf);
      flush output_chan;
      if close then close_out output_chan else ()
 

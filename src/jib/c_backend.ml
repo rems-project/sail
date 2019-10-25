@@ -2106,7 +2106,6 @@ let codegen_def ctx def =
   (* We should have erased any polymorphism introduced by variants at this point! *)
   if List.exists is_polymorphic ctyps then
     let polymorphic_ctyps = List.filter is_polymorphic ctyps in
-    prerr_endline (Pretty_print_sail.to_string (pp_cdef def));
     c_error (Printf.sprintf "Found polymorphic types:\n%s\nwhile generating definition."
                             (Util.string_of_list "\n" string_of_ctyp polymorphic_ctyps))
   else
@@ -2177,6 +2176,7 @@ let compile_ast env output_chan c_includes ast =
     let recursive_functions = Spec_analysis.top_sort_defs ast |> get_recursive_functions in
 
     let cdefs, ctx = jib_of_ast env ast in
+    Interactive.ir := cdefs;
     let cdefs = insert_heap_returns Bindings.empty cdefs in
     let cdefs = optimize recursive_functions cdefs in
 

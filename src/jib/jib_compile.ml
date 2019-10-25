@@ -57,7 +57,6 @@ open Value2
 
 open Anf
 
-let opt_debug_function = ref ""
 let opt_debug_flow_graphs = ref false
 let opt_memo_cache = ref false
 
@@ -569,7 +568,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
         raise (Reporting.err_general l (Printf.sprintf "Variant constructor %s : %s matching against non-variant type %s : %s"
                                                        (string_of_id ctor)
                                                        (string_of_typ variant_typ)
-                                                       (string_of_cval cval)
+                                                       (Jib_ir.string_of_cval cval)
                                                        (string_of_ctyp ctyp)))
      end
 
@@ -1241,17 +1240,6 @@ let compile_funcl ctx id pat guard exp =
   let instrs = arg_setup @ destructure @ guard_instrs @ setup @ [call (CL_id (return, ret_ctyp))] @ cleanup @ destructure_cleanup @ arg_cleanup in
   let instrs = fix_early_return (CL_id (return, ret_ctyp)) instrs in
   let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
-
-  if Id.compare (mk_id !opt_debug_function) id = 0 then
-    let header =
-      Printf.sprintf "Sail IR for %s %s(%s) : (%s) -> %s" Util.("function" |> red |> clear) (string_of_id id)
-                     (Util.string_of_list ", " string_of_id (List.map fst compiled_args))
-                     (Util.string_of_list ", " (fun ctyp -> Util.(string_of_ctyp ctyp |> yellow |> clear)) arg_ctyps)
-                     Util.(string_of_ctyp ret_ctyp |> yellow |> clear)
-    in
-    prerr_endline (Util.header header (List.length arg_ctyps + 2));
-    prerr_endline (Pretty_print_sail.to_string PPrint.(separate_map hardline pp_instr instrs))
-  else ();
 
   if !opt_debug_flow_graphs then
     begin

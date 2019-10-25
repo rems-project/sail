@@ -378,6 +378,9 @@ let pp_order = function
   | Ord_aux (Ord_dec, _) -> string "dec"
   | _ -> assert false (* Order types have been specialised, so no polymorphism in C backend. *)
 
+let pp_id id =
+  string (string_of_id id)
+
 let rec pp_aexp (AE_aux (aexp, _, _)) =
   match aexp with
   | AE_val v -> pp_aval v
@@ -465,7 +468,7 @@ and pp_aval = function
   | AV_tuple avals -> parens (separate_map (comma ^^ space) pp_aval avals)
   | AV_ref (id, lvar) -> string "ref" ^^ space ^^ pp_lvar lvar (pp_id id)
   | AV_cval (cval, typ) ->
-     pp_annot typ (string (string_of_cval cval |> Util.cyan |> Util.clear))
+     pp_annot typ (string (Jib_ir.string_of_cval cval |> Util.cyan |> Util.clear))
   | AV_vector (avals, typ) ->
      pp_annot typ (string "[" ^^ separate_map (comma ^^ space) pp_aval avals ^^ string "]")
   | AV_list (avals, typ) ->
