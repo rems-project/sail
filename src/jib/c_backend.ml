@@ -90,6 +90,9 @@ let optimize_alias = ref false
 let optimize_fixed_int = ref false
 let optimize_fixed_bits = ref false
 
+let (gensym, _) = symbol_generator "cb"
+let ngensym () = name (gensym ())
+
 let c_debug str =
   if !c_verbosity > 0 then prerr_endline (Lazy.force str) else ()
 

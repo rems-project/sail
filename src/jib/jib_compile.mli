@@ -65,8 +65,6 @@ val opt_debug_flow_graphs : bool ref
    ARM v8.5 spec. *)
 val optimize_aarch64_fast_struct : bool ref
 
-val ngensym : unit -> name
-
 (** {2 Jib context} *)
 
 (** Context for compiling Sail to Jib. We need to pass a (global)

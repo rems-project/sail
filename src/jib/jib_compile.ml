@@ -62,6 +62,7 @@ let opt_memo_cache = ref false
 
 let optimize_aarch64_fast_struct = ref false
 
+let (gensym, reset_gensym_counter) = symbol_generator "gs"
 let ngensym () = name (gensym ())
 
 (**************************************************************************)
@@ -1259,6 +1260,7 @@ let compile_funcl ctx id pat guard exp =
 
 (** Compile a Sail toplevel definition into an IR definition **)
 let rec compile_def n total ctx def =
+  reset_gensym_counter ();
   match def with
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, _), _)]), _))
        when !opt_memo_cache ->

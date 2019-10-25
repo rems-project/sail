@@ -54,6 +54,16 @@ open Jib
 open Value2
 open PPrint
 
+let symbol_generator str =
+  let counter = ref 0 in
+  let gensym () =
+    let id = mk_id (str ^ "#" ^ string_of_int !counter) in
+    incr counter;
+    id
+  in
+  let reset () = counter := 0 in
+  (gensym, reset)
+
 (* Define wrappers for creating bytecode instructions. Each function
    uses a counter to assign each instruction a unique identifier. *)
 

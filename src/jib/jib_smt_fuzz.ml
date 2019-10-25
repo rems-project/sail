@@ -55,6 +55,9 @@ open Jib_smt
 open Jib_util
 open Smtlib
 
+let (gensym, _) = symbol_generator "fuzz"
+let ngensym () = name (gensym ())
+
 let gen_value (Typ_aux (aux, _) as typ) =
   match aux with
   | Typ_id id when string_of_id id = "bit" ->
@@ -183,7 +186,7 @@ let fuzz_cdef ctx all_cdefs = function
                  in
 
                  let jib =
-                   let gs = Jib_compile.ngensym () in
+                   let gs = ngensym () in
                    [ifuncall (CL_id (gs, ret_ctyp)) id (List.map snd values)]
                    @ gen_assertion ret_ctyp result gs
                    @ [iend ()]
