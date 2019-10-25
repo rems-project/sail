@@ -110,7 +110,7 @@ let sail_logo =
 
 let vs_ids = ref (val_spec_ids !Interactive.ast)
 
-let interactive_state = ref (initial_state !Interactive.ast !Interactive.env Value.primops)
+let interactive_state = ref (initial_state ~registers:false !Interactive.ast !Interactive.env Value.primops)
 
 let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear
 
@@ -440,11 +440,6 @@ let handle_input' input =
           with
           | Arg.Bad message | Arg.Help message -> print_endline message
         end;
-     | ":spec" ->
-        let ast, env = Specialize.(specialize_passes 1 int_specialization !Interactive.env !Interactive.ast) in
-        Interactive.ast := ast;
-        Interactive.env := env;
-        interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops
      | ":pretty" ->
         print_endline (Pretty_print_sail.to_string (Latex.defs !Interactive.ast))
      | ":ast" ->
