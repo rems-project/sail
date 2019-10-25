@@ -1802,8 +1802,21 @@ Ltac run_main_solver :=
     | run_main_solver_impl (* for cases where there's an evar in the goal *)
     ].
 
+Ltac is_fixpoint ty :=
+  match ty with
+  | forall _reclimit, Acc _ _reclimit -> _ => idtac
+  | _ -> ?res => is_fixpoint res
+  end.
+
+Ltac clear_fixpoints :=
+  repeat
+    match goal with
+    | H:_ -> ?res |- _ => is_fixpoint res; clear H
+    end.
+
 Ltac solve_arithfact :=
   intros; (* To solve implications for derive_m *)
+  clear_fixpoints; (* Avoid using recursive calls *)
   solve
     [ solve_unknown
     | match goal with |- ArithFact (?x <= ?x <= ?x) => exact trivial_range end
