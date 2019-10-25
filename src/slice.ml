@@ -354,3 +354,73 @@ let dot_of_ast out_chan ast =
   let module NodeSet = Set.Make(Node) in
   let g = graph_of_ast ast in
   G.make_dot (node_color NodeSet.empty) edge_color node_string out_chan g
+
+let () =
+  let open Printf in
+  let open Interactive in
+  let slice_roots = ref IdSet.empty in
+  let slice_cuts = ref IdSet.empty in
+
+  (fun arg ->
+    let args = Str.split (Str.regexp " +") arg in
+    let ids = List.map mk_id args |> IdSet.of_list in
+    Specialize.add_initial_calls ids;
+    slice_roots := IdSet.union ids !slice_roots
+  ) |> register_command
+         ~name:"slice_roots"
+         ~help:(sprintf ":slice_roots %s - Set the roots for %s" (arg "identifiers") (command "slice"));
+
+  (fun arg ->
+    let args = Str.split (Str.regexp " +") arg in
+    let ids = List.map mk_id args |> IdSet.of_list in
+    slice_cuts := IdSet.union ids !slice_cuts
+  ) |> register_command
+         ~name:"slice_cuts"
+         ~help:(sprintf ":slice_cuts %s - Set the roots for %s" (arg "identifiers") (command "slice"));
+
+  (fun arg ->
+    let module NodeSet = Set.Make(Node) in
+    let module G = Graph.Make(Node) in
+    let g = graph_of_ast !ast in
+    let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
+    let cuts = !slice_cuts |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
+    let g = G.prune roots cuts g in
+    ast := filter_ast cuts g !ast
+  ) |> register_command
+         ~name:"slice"
+         ~help:(sprintf ":slice - Slice AST to the definitions which the functions given by %s depend on, up to the functions given by %s"
+                        (command "slice_roots") (command "slice_cuts"));
+
+  (fun arg ->
+    let module NodeSet = Set.Make(Node) in
+    let module NodeMap = Map.Make(Node) in
+    let module G = Graph.Make(Node) in
+    let g = graph_of_ast !ast in
+    let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
+    let keep = function
+      | (Function id,_) when IdSet.mem id (!slice_roots) -> None
+      | (Function id,_) -> Some (Function id)
+      | _ -> None
+    in
+    let cuts = NodeMap.bindings g |> Util.map_filter keep |> NodeSet.of_list in
+    let g = G.prune roots cuts g in
+    ast := filter_ast cuts g !ast
+  ) |> register_command
+         ~name:"thin_slice"
+         ~help:(sprintf ":thin_slice - Slice AST to the function definitions given with %s" (command "slice_roots"));
+
+  (fun arg ->
+    let format = if arg = "" then "svg" else arg in
+    let dotfile, out_chan = Filename.open_temp_file "sail_graph_" ".gz" in
+    let image = Filename.temp_file "sail_graph_" ("." ^ format) in
+    dot_of_ast out_chan !ast;
+    close_out out_chan;
+    let _ = Unix.system (Printf.sprintf "dot -T%s %s -o %s" format dotfile image) in
+    let _ = Unix.system (Printf.sprintf "xdg-open %s" image) in
+    ()
+  ) |> register_command
+         ~name:"graph"
+         ~help:(sprintf ":graph %s - Draw a callgraph using dot in %s (default svg if none provided), and open with xdg-open"
+                        (arg "format") (arg "format"));
+
+

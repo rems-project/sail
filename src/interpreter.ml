@@ -52,8 +52,6 @@ open Ast
 open Ast_util
 open Value
 
-
-
 type gstate =
   { registers : value Bindings.t;
     allow_registers : bool; (* For some uses we want to forbid touching any registers. *)

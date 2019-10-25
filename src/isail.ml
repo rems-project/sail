@@ -55,6 +55,8 @@ open Ast_util
 open Interpreter
 open Pretty_print_sail
 
+module Slice = Slice
+
 type mode =
   | Evaluation of frame
   | Normal
@@ -110,9 +112,23 @@ let vs_ids = ref (val_spec_ids !Interactive.ast)
 
 let interactive_state = ref (initial_state !Interactive.ast !Interactive.env Value.primops)
 
-let interactive_bytecode = ref []
-
 let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear
+
+let () =
+  let open Interactive in
+  let open Elf_loader in
+  let open Printf in
+
+  register_command ~name:"elf" ~help:(sprintf ":elf %s - Load an elf file" (arg "file")) load_elf;
+
+  (fun iarg ->
+    match Util.split_on_char ' ' iarg with
+    | [addr_s; filename] ->
+       let addr = Big_int.of_string addr_s in
+       load_binary addr filename
+    | _ ->
+       printf "Invalid argument for :bin, expected %s %s" (arg "addr") (arg "file")
+  ) |> register_command ~name:"bin" ~help:(sprintf ":bin %s %s - Load a binary file at a given address" (arg "addr") (arg "file"))
 
 let print_program () =
   match !current_mode with
@@ -230,11 +246,6 @@ let help =
   | ":help" ->
      sprintf ":help %s - Get a description of <command>. Commands are prefixed with a colon, e.g. %s."
              (color yellow "<command>") (color green ":help :type")
-  | ":elf" ->
-     sprintf ":elf %s - Load an ELF file."
-       (color yellow "<file>")
-  | ":bin" ->
-     ":bin <address> <file> - Load a binary file at the given address."
   | ":r" | ":run" ->
      "(:r | :run) - Completely evaluate the currently evaluating expression."
   | ":s" | ":step" ->
@@ -266,16 +277,15 @@ let help =
   | ":compile" ->
      sprintf ":compile %s - Compile AST to a specified target, valid targets are lem, coq, ocaml, c, and ir (intermediate representation)"
              (color yellow "<target>")
-  | ":slice" ->
-     ":slice - Slice AST to the definitions which the functions given by :slice_roots depend on, up to the functions given by :slice_cuts"
-  | ":thin_slice" ->
-     ":thin_slice - Slice AST to the function definitions given with :slice_roots"
   | "" ->
      sprintf "Type %s for a list of commands, and %s %s for information about a specific command"
              (color green ":commands") (color green ":help") (color yellow "<command>")
   | cmd ->
-     sprintf "Either invalid command passed to help, or no documentation for %s. Try %s."
-             (color green cmd) (color green ":help :help")
+     match List.assoc_opt cmd !Interactive.commands with
+     | Some (help, _) -> help
+     | None ->
+        sprintf "Either invalid command passed to help, or no documentation for %s. Try %s."
+                (color green cmd) (color green ":help :help")
 
 let format_pos_emacs p1 p2 contents =
   let open Lexing in
@@ -409,9 +419,10 @@ let handle_input' input =
           eval_clear := false
         else print_endline "Invalid argument for :clear, expected either :clear on or :clear off"
      | ":commands" ->
+        let more_commands = Util.string_of_list " " fst !Interactive.commands in
         let commands =
           [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help :output :option";
-            "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :rewrite :rewrites :list_rewrites :compile";
+            "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :rewrite :rewrites :list_rewrites :compile " ^ more_commands;
             "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
             "";
             ":(c)ommand can be called as either :c or :command." ]
@@ -436,18 +447,6 @@ let handle_input' input =
         interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops
      | ":pretty" ->
         print_endline (Pretty_print_sail.to_string (Latex.defs !Interactive.ast))
-     | ":ir" ->
-        print_endline arg;
-        let open Jib in
-        let open Jib_util in
-        let open PPrint in
-        let is_cdef = function
-          | CDEF_fundef (id, _, _, _) when Id.compare id (mk_id arg) = 0 -> true
-          | CDEF_spec (id, _, _) when Id.compare id (mk_id arg) = 0 -> true
-          | _ -> false
-        in
-        let cdefs = List.filter is_cdef !interactive_bytecode in
-        print_endline (Pretty_print_sail.to_string (separate_map hardline pp_cdef cdefs))
      | ":ast" ->
         let chan = open_out arg in
         Pretty_print_sail.pp_defs chan !Interactive.ast;
@@ -467,7 +466,6 @@ let handle_input' input =
      | Command (cmd, arg) ->
         (* Normal mode commands *)
         begin match cmd with
-        | ":elf" -> Elf_loader.load_elf arg
         | ":l" | ":load" ->
            let files = Util.split_on_char ' ' arg in
            let (_, ast, env) = load_files !Interactive.env files in
@@ -475,16 +473,6 @@ let handle_input' input =
            interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
            Interactive.env := env;
            vs_ids := val_spec_ids !Interactive.ast
-        | ":bin" ->
-           begin
-             let args = Util.split_on_char ' ' arg in
-             match args with
-             | [addr_s; filename] ->
-                let addr = Big_int.of_string addr_s in
-                Elf_loader.load_binary addr filename
-             | _ ->
-                print_endline "Invalid argument for :bin, expected <addr> <filename>"
-           end
         | ":u" | ":unload" ->
            Interactive.ast := Ast.Defs [];
            Interactive.env := Type_check.initial_env;
@@ -519,48 +507,6 @@ let handle_input' input =
            Interactive.ast := append_ast !Interactive.ast ast;
            Interactive.env := env;
            interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
-        | ":graph" ->
-           let format = if arg = "" then "svg" else arg in
-           let dotfile, out_chan = Filename.open_temp_file "sail_graph_" ".gz" in
-           let image = Filename.temp_file "sail_graph_" ("." ^ format) in
-           Slice.dot_of_ast out_chan !Interactive.ast;
-           close_out out_chan;
-           let _ = Unix.system (Printf.sprintf "dot -T%s %s -o %s" format dotfile image) in
-           let _ = Unix.system (Printf.sprintf "xdg-open %s" image) in
-           ()
-        | ":slice_roots" ->
-           let args = Str.split (Str.regexp " +") arg in
-           let ids = List.map mk_id args |> IdSet.of_list in
-           Specialize.add_initial_calls ids;
-           slice_roots := IdSet.union ids !slice_roots
-        | ":slice_cuts" ->
-           let args = Str.split (Str.regexp " +") arg in
-           let ids = List.map mk_id args |> IdSet.of_list in
-           slice_cuts := IdSet.union ids !slice_cuts
-        | ":slice" ->
-           let open Slice in
-           let module SliceNodeSet = Set.Make(Slice.Node) in
-           let module G = Graph.Make(Slice.Node) in
-           let g = Slice.graph_of_ast !Interactive.ast in
-           let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> SliceNodeSet.of_list in
-           let cuts = !slice_cuts |> IdSet.elements |> List.map (fun id -> Function id) |> SliceNodeSet.of_list in
-           let g = G.prune roots cuts g in
-           Interactive.ast := Slice.filter_ast cuts g !Interactive.ast
-        | ":thin_slice" ->
-           let open Slice in
-           let module SliceNodeSet = Set.Make(Slice.Node) in
-           let module SliceNodeMap = Map.Make(Slice.Node) in
-           let module G = Graph.Make(Slice.Node) in
-           let g = Slice.graph_of_ast !Interactive.ast in
-           let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> SliceNodeSet.of_list in
-           let keep = function
-             | (Function id,_) when IdSet.mem id (!slice_roots) -> None
-             | (Function id,_) -> Some (Function id)
-             | _ -> None
-           in
-           let cuts = SliceNodeMap.bindings g |> Util.map_filter keep |> SliceNodeSet.of_list in
-           let g = G.prune roots cuts g in
-           Interactive.ast := Slice.filter_ast cuts g !Interactive.ast
         | ":list_rewrites" ->
            let print_rewrite (name, rw) =
              print_endline (name ^ " " ^ Util.(String.concat " " (describe_rewrite rw) |> yellow |> clear))
@@ -619,7 +565,10 @@ let handle_input' input =
              | Some f -> f ^ ".sail"
            in
            target (Some arg) out_name !Interactive.ast !Interactive.env
-        | _ -> unrecognised_command cmd
+        | _ ->
+           match List.assoc_opt cmd !Interactive.commands with
+           | Some (_, action) -> action arg
+           | None -> unrecognised_command cmd
         end
      | Expression str ->
         (* An expression in normal mode is type checked, then puts
