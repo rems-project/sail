@@ -129,6 +129,10 @@ and 'a aval =
   | AV_record of ('a aval) Bindings.t * 'a
   | AV_cval of cval * 'a
 
+(** When ANF translation has to introduce new bindings it uses a
+counter to ensure uniqueness. This function resets that counter. *)
+val reset_anf_counter : unit -> unit
+
 (** {2 Functions for transforming ANF expressions} *)
 
 val aval_typ : typ aval -> typ

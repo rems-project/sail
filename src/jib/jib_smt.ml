@@ -62,7 +62,9 @@ module IntMap = Map.Make(struct type t = int let compare = compare end)
 let zencode_upper_id id = Util.zencode_upper_string (string_of_id id)
 let zencode_id id = Util.zencode_string (string_of_id id)
 let zencode_name id = string_of_name ~deref_current_exception:false ~zencode:true id
-
+let zencode_uid (id, ctyps) =
+  Util.zencode_string (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
+                    
 let opt_ignore_overflow = ref false
 
 let opt_auto = ref false
@@ -158,9 +160,9 @@ let rec smt_ctyp ctx = function
   | CT_enum (id, elems) ->
      mk_enum (zencode_upper_id id) (List.map zencode_id elems)
   | CT_struct (id, fields) ->
-     mk_record (zencode_upper_id id) (List.map (fun (id, ctyp) -> (zencode_id id, smt_ctyp ctx ctyp)) fields)
+     mk_record (zencode_upper_id id) (List.map (fun (uid, ctyp) -> (zencode_uid uid, smt_ctyp ctx ctyp)) fields)
   | CT_variant (id, ctors) ->
-     mk_variant (zencode_upper_id id) (List.map (fun (id, ctyp) -> (zencode_id id, smt_ctyp ctx ctyp)) ctors)
+     mk_variant (zencode_upper_id id) (List.map (fun (uid, ctyp) -> (zencode_uid uid, smt_ctyp ctx ctyp)) ctors)
   | CT_tup ctyps ->
      ctx.tuple_sizes := IntSet.add (List.length ctyps) !(ctx.tuple_sizes);
      Tuple (List.map (smt_ctyp ctx) ctyps)
@@ -293,14 +295,14 @@ let rec smt_cval ctx cval =
      | V_field (union, field) ->
         begin match cval_ctyp union with
         | CT_struct (struct_id, _) ->
-           Fn (zencode_upper_id struct_id ^ "_" ^ field, [smt_cval ctx union])
+           Fn (zencode_upper_id struct_id ^ "_" ^ zencode_uid field, [smt_cval ctx union])
         | _ -> failwith "Field for non-struct type"
         end
      | V_struct (fields, ctyp) ->
         begin match ctyp with
         | CT_struct (struct_id, field_ctyps) ->
            let set_field (field, cval) =
-             match Util.assoc_compare_opt Id.compare field field_ctyps with
+             match Util.assoc_compare_opt UId.compare field field_ctyps with
              | None -> failwith "Field type not found"
              | Some ctyp when ctyp_equal (cval_ctyp cval) ctyp ->
                 smt_cval ctx cval
@@ -324,7 +326,7 @@ let rec smt_cval ctx cval =
            end
         | _ -> assert false
         end
-     | cval -> failwith ("Unrecognised cval " ^ Jib_ir.string_of_cval cval)
+     | cval -> failwith ("Unrecognised cval " ^ string_of_cval cval)
 
 let add_event ctx ev smt =
   let stack = event_stack ctx ev in
@@ -1184,12 +1186,12 @@ let smt_ctype_def ctx = function
   | CTD_struct (id, fields) ->
      [declare_datatypes
        (mk_record (zencode_upper_id id)
-          (List.map (fun (field, ctyp) -> zencode_upper_id id ^ "_" ^ zencode_id field, smt_ctyp ctx ctyp) fields))]
+          (List.map (fun (field, ctyp) -> zencode_upper_id id ^ "_" ^ zencode_uid field, smt_ctyp ctx ctyp) fields))]
 
   | CTD_variant (id, ctors) ->
      [declare_datatypes
        (mk_variant (zencode_upper_id id)
-         (List.map (fun (ctor, ctyp) -> zencode_id ctor, smt_ctyp ctx ctyp) ctors))]
+         (List.map (fun (ctor, ctyp) -> zencode_uid ctor, smt_ctyp ctx ctyp) ctors))]
 
 let rec generate_ctype_defs ctx = function
   | CDEF_type ctd :: cdefs -> smt_ctype_def ctx ctd :: generate_ctype_defs ctx cdefs
@@ -1274,8 +1276,8 @@ let rec ctyp_of_typ ctx typ =
   | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
      CT_ref (ctyp_of_typ ctx typ)
 
-  | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records  -> CT_struct (id, Bindings.find id ctx.records |> Bindings.bindings)
-  | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> Bindings.bindings)
+  | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records  -> CT_struct (id, Bindings.find id ctx.records |> UBindings.bindings)
+  | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> UBindings.bindings)
   | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
 
   | Typ_tup typs -> CT_tup (List.map (ctyp_of_typ ctx) typs)
@@ -1524,10 +1526,10 @@ let rmw_modify smt = function
      begin match ctyp with
      | CT_struct (struct_id, fields) ->
         let set_field (field', _) =
-          if Util.zencode_string field = zencode_id field' then
+          if UId.compare field field' = 0 then
             smt
           else
-            Fn (zencode_upper_id struct_id ^ "_" ^ zencode_id field', [Var (rmw_read clexp)])
+            Fn (zencode_upper_id struct_id ^ "_" ^ zencode_uid field', [Var (rmw_read clexp)])
         in
         Fn (zencode_upper_id struct_id, List.map set_field fields)
      | _ ->
@@ -1557,8 +1559,8 @@ let smt_instr ctx =
   let open Type_check in
   function
   | I_aux (I_funcall (CL_id (id, ret_ctyp), extern, function_id, args), (_, l)) ->
-     if Env.is_extern function_id ctx.tc_env "c" && not extern then
-       let name = Env.get_extern function_id ctx.tc_env "c" in
+     if Env.is_extern (fst function_id) ctx.tc_env "c" && not extern then
+       let name = Env.get_extern (fst function_id) ctx.tc_env "c" in
        if name = "sqrt_real" then
          begin match args with
          | [v] -> builtin_sqrt_real ctx (zencode_name id) v
@@ -1609,9 +1611,9 @@ let smt_instr ctx =
        else
          let value = smt_builtin ctx name args ret_ctyp in
          [define_const ctx id ret_ctyp value]
-     else if extern && string_of_id function_id = "internal_vector_init" then
+     else if extern && string_of_id (fst function_id) = "internal_vector_init" then
        [declare_const ctx id ret_ctyp]
-     else if extern && string_of_id function_id = "internal_vector_update" then
+     else if extern && string_of_id (fst function_id) = "internal_vector_update" then
        begin match args with
        | [vec; i; x] ->
           let sz = int_size ctx (cval_ctyp i) in
@@ -1620,7 +1622,7 @@ let smt_instr ctx =
        | _ ->
           Reporting.unreachable l __POS__ "Bad arguments for internal_vector_update"
        end
-     else if string_of_id function_id = "sail_assert" then
+     else if string_of_id (fst function_id) = "sail_assert" then
        begin match args with
        | [assertion; _] ->
           let smt = smt_cval ctx assertion in
@@ -1629,7 +1631,7 @@ let smt_instr ctx =
        | _ ->
           Reporting.unreachable l __POS__ "Bad arguments for assertion"
        end
-     else if string_of_id function_id = "sail_assume" then
+     else if string_of_id (fst function_id) = "sail_assume" then
        begin match args with
        | [assumption] ->
           let smt = smt_cval ctx assumption in
@@ -1640,9 +1642,9 @@ let smt_instr ctx =
        end
      else if not extern then
        let smt_args = List.map (smt_cval ctx) args in
-       [define_const ctx id ret_ctyp (Ctor (zencode_id function_id, smt_args))]
+       [define_const ctx id ret_ctyp (Ctor (zencode_id (fst function_id), smt_args))]
      else
-       failwith ("Unrecognised function " ^ string_of_id function_id)
+       failwith ("Unrecognised function " ^ string_of_id (fst function_id))
 
   | I_aux (I_copy (CL_addr (CL_id (_, _)), _), (_, l)) ->
      Reporting.unreachable l __POS__ "Register reference write should be re-written by now"
@@ -1850,7 +1852,7 @@ let smt_header ctx cdefs =
 let expand_reg_deref env register_map = function
   | I_aux (I_funcall (clexp, false, function_id, [reg_ref]), (_, l)) as instr ->
      let open Type_check in
-     begin match (if Env.is_extern function_id env "smt" then Some (Env.get_extern function_id env "smt") else None) with
+     begin match (if Env.is_extern (fst function_id) env "smt" then Some (Env.get_extern (fst function_id) env "smt") else None) with
      | Some "reg_deref" ->
         begin match cval_ctyp reg_ref with
         | CT_ref reg_ctyp ->

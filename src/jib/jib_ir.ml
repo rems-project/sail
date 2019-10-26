@@ -70,49 +70,9 @@ let string_of_name =
   | Current_exception n ->
      "current_exception" ^ ssa_num n
 
-let string_of_value = function
-  | VL_bits ([], _) -> "empty"
-  | VL_bits (bs, true) -> Sail2_values.show_bitlist bs
-  | VL_bits (bs, false) -> Sail2_values.show_bitlist (List.rev bs)
-  | VL_int i -> Big_int.to_string i
-  | VL_bool true -> "true"
-  | VL_bool false -> "false"
-  | VL_null -> "NULL"
-  | VL_unit -> "()"
-  | VL_bit Sail2_values.B0 -> "bitzero"
-  | VL_bit Sail2_values.B1 -> "bitone"
-  | VL_bit Sail2_values.BU -> "bitundef"
-  | VL_real str -> str
-  | VL_string str -> "\"" ^ str ^ "\""
-
-let rec string_of_cval = function
-  | V_id (id, ctyp) -> string_of_name id
-  | V_ref (id, _) -> "&" ^ string_of_name id
-  | V_lit (vl, ctyp) -> string_of_value vl
-  | V_call (op, cvals) ->
-     Printf.sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " string_of_cval cvals)
-  | V_field (f, field) ->
-     Printf.sprintf "%s.%s" (string_of_cval f) field
-  | V_tuple_member (f, _, n) ->
-     Printf.sprintf "%s.ztup%d" (string_of_cval f) n
-  | V_ctor_kind (f, ctor, [], _) ->
-     string_of_cval f ^ " is " ^ Util.zencode_string (string_of_id ctor)
-  | V_ctor_kind (f, ctor, unifiers, _) ->
-     string_of_cval f ^ " is " ^ Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
-  | V_ctor_unwrap (ctor, f, [], _) ->
-     Printf.sprintf "%s as %s" (string_of_cval f) (string_of_id ctor)
-  | V_ctor_unwrap (ctor, f, unifiers, _) ->
-     Printf.sprintf "%s as %s"
-       (string_of_cval f)
-       (Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers))
-  | V_struct (fields, _) ->
-     Printf.sprintf "{%s}"
-       (Util.string_of_list ", " (fun (field, cval) -> zencode_id field ^ " = " ^ string_of_cval cval) fields)
-  | V_poly (f, _) -> string_of_cval f
-
 let rec string_of_clexp = function
   | CL_id (id, ctyp) -> string_of_name id
-  | CL_field (clexp, field) -> string_of_clexp clexp ^ "." ^ field
+  | CL_field (clexp, field) -> string_of_clexp clexp ^ "." ^ string_of_uid field
   | CL_addr clexp -> string_of_clexp clexp ^ "*"
   | CL_tuple (clexp, n) -> string_of_clexp clexp ^ "." ^ string_of_int n
   | CL_void -> "void"
@@ -159,9 +119,9 @@ module Ir_formatter = struct
       | I_copy (clexp, cval) ->
          add_instr n buf indent (string_of_clexp clexp ^ " = " ^ C.value cval)
       | I_funcall (clexp, false, id, args) ->
-         add_instr n buf indent (string_of_clexp clexp ^ " = " ^ zencode_id id ^ "(" ^ Util.string_of_list ", " C.value args ^ ")")
+         add_instr n buf indent (string_of_clexp clexp ^ " = " ^ string_of_uid id ^ "(" ^ Util.string_of_list ", " C.value args ^ ")")
       | I_funcall (clexp, true, id, args) ->
-         add_instr n buf indent (string_of_clexp clexp ^ " = $" ^ zencode_id id ^ "(" ^ Util.string_of_list ", " C.value args ^ ")")
+         add_instr n buf indent (string_of_clexp clexp ^ " = $" ^ string_of_uid id ^ "(" ^ Util.string_of_list ", " C.value args ^ ")")
       | I_return cval ->
          add_instr n buf indent (C.keyword "return" ^ " " ^ C.value cval)
       | I_comment str ->
@@ -185,6 +145,9 @@ module Ir_formatter = struct
     let id_ctyp (id, ctyp) =
       sprintf "%s: %s" (zencode_id id) (C.typ ctyp)
 
+    let uid_ctyp (uid, ctyp) =
+      sprintf "%s: %s" (string_of_uid uid) (C.typ ctyp)
+
     let output_def buf = function
       | CDEF_reg_dec (id, ctyp, _) ->
          Buffer.add_string buf (sprintf "%s %s : %s" (C.keyword "register") (zencode_id id) (C.typ ctyp))
@@ -203,9 +166,9 @@ module Ir_formatter = struct
       | CDEF_type (CTD_enum (id, ids)) ->
          Buffer.add_string buf (sprintf "%s %s {\n  %s\n}" (C.keyword "enum") (zencode_id id) (Util.string_of_list ",\n  " zencode_id ids))
       | CDEF_type (CTD_struct (id, ids)) ->
-         Buffer.add_string buf (sprintf "%s %s {\n  %s\n}" (C.keyword "struct") (zencode_id id) (Util.string_of_list ",\n  " id_ctyp ids))
+         Buffer.add_string buf (sprintf "%s %s {\n  %s\n}" (C.keyword "struct") (zencode_id id) (Util.string_of_list ",\n  " uid_ctyp ids))
       | CDEF_type (CTD_variant (id, ids)) ->
-         Buffer.add_string buf (sprintf "%s %s {\n  %s\n}" (C.keyword "union") (zencode_id id) (Util.string_of_list ",\n  " id_ctyp ids))
+         Buffer.add_string buf (sprintf "%s %s {\n  %s\n}" (C.keyword "union") (zencode_id id) (Util.string_of_list ",\n  " uid_ctyp ids))
       | CDEF_let (_, bindings, instrs) ->
          let instrs = C.modify_instrs instrs in
          let label_map = C.make_label_map instrs in
@@ -220,8 +183,7 @@ module Ir_formatter = struct
          output_def buf def;
          Buffer.add_string buf "\n\n";
          output_defs buf defs
-      | [] ->
-         Buffer.add_char buf '\n'
+      | [] -> ()
 
   end
 end
@@ -249,6 +211,7 @@ module Flat_ir_config : Ir_formatter.Config = struct
 
   let modify_instrs instrs =
     let open Jib_optimize in
+    reset_flat_counter ();
     instrs
     |> flatten_instrs
     |> remove_clear

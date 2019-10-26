@@ -349,9 +349,6 @@ let options = Arg.align ([
   ( "-ddump_rewrite_ast",
     Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0); Specialize.opt_ddump_spec_ast := Some (l, 0)),
     "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
-  ( "-ddump_flow_graphs",
-    Arg.Set Jib_compile.opt_debug_flow_graphs,
-    " (debug) dump flow analysis for Sail functions when compiling to C");
   ( "-ddump_smt_graphs",
     Arg.Set Jib_smt.opt_debug_graphs,
     " (debug) dump flow analysis for properties when generating SMT");

@@ -106,6 +106,10 @@ cval :: 'V_' ::=
 
 %%% IR types
 
+uid :: 'UId_' ::=
+  {{ lem id * list ctyp }}
+  {{ ocaml id * ctyp list }}
+
 ctyp :: 'CT_' ::=
   {{ com C type }}
 % Integer types
@@ -144,7 +148,7 @@ ctyp :: 'CT_' ::=
 % need to be encoded.
   | enum id ( id0 , ... , idn )                    :: :: enum
   | struct id ( id0 * ctyp0 , ... , idn * ctypn )  :: :: struct
-  | variant id ( id0 * ctyp0 , ... , idn * ctypn ) :: :: variant
+  | variant id ( uid0 * ctyp0 , ... , uidn * ctypn ) :: :: variant
 
 % A vector type for non-bit vectors, and a (linked) list type.
   | vector ( bool , ctyp )         :: :: vector
@@ -175,9 +179,9 @@ ctype_def :: 'CTD_' ::=
   {{ com C type definition }}
   | enum id = id0 '|' ... '|' idn                     :: :: enum
   | struct id = { id0 : ctyp0 , ... , idn : ctypn }   :: :: struct
-  | variant id  = { id0 : ctyp0 , ... , idn : ctypn } :: :: variant
+  | variant id  = { uid0 : ctyp0 , ... , uidn : ctypn } :: :: variant
 
-iannot :: 'IA_' ::=
+iannot :: '' ::=
   {{ lem nat * nat * nat }}
   {{ ocaml int * int * int }}
 

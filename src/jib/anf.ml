@@ -468,7 +468,7 @@ and pp_aval = function
   | AV_tuple avals -> parens (separate_map (comma ^^ space) pp_aval avals)
   | AV_ref (id, lvar) -> string "ref" ^^ space ^^ pp_lvar lvar (pp_id id)
   | AV_cval (cval, typ) ->
-     pp_annot typ (string (Jib_ir.string_of_cval cval |> Util.cyan |> Util.clear))
+     pp_annot typ (string (string_of_cval cval |> Util.cyan |> Util.clear))
   | AV_vector (avals, typ) ->
      pp_annot typ (string "[" ^^ separate_map (comma ^^ space) pp_aval avals ^^ string "]")
   | AV_list (avals, typ) ->
@@ -482,7 +482,7 @@ let ae_lit lit typ = AE_val (AV_lit (lit, typ))
 
 let is_dead_aexp (AE_aux (_, env, _)) = prove __POS__ env nc_false
 
-let (gensym, _) = symbol_generator "anf"
+let (gensym, reset_anf_counter) = symbol_generator "ga"
 
 let rec split_block l = function
   | [exp] -> [], exp

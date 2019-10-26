@@ -56,10 +56,6 @@ open Ast_util
 open Jib
 open Type_check
 
-(** Output a dataflow graph for each generated function in Graphviz
-   (dot) format. *)
-val opt_debug_flow_graphs : bool ref
-
 (** This forces all integer struct fields to be represented as
    int64_t. Specifically intended for the various TLB structs in the
    ARM v8.5 spec. *)
@@ -73,9 +69,10 @@ val optimize_aarch64_fast_struct : bool ref
    well as a function that optimizes ANF expressions (which can just
    be the identity function) *)
 type ctx =
-  { records : (ctyp Bindings.t) Bindings.t;
+  { records : (ctyp Jib_util.UBindings.t) Bindings.t;
     enums : IdSet.t Bindings.t;
-    variants : (ctyp Bindings.t) Bindings.t;
+    variants : (ctyp Jib_util.UBindings.t) Bindings.t;
+    valspecs : (ctyp list * ctyp) Bindings.t;
     tc_env : Env.t;
     local_env : Env.t;
     locals : (mut * ctyp) Bindings.t;
