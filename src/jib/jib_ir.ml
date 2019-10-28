@@ -242,6 +242,7 @@ module Flat_ir_formatter = Ir_formatter.Make(Flat_ir_config)
 
 let () =
   let open Interactive in
+  let open Jib_interactive in
 
   (fun arg ->
     let is_def id = function

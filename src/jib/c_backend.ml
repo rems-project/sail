@@ -2182,7 +2182,7 @@ let compile_ast env output_chan c_includes ast =
     let recursive_functions = Spec_analysis.top_sort_defs ast |> get_recursive_functions in
 
     let cdefs, ctx = jib_of_ast env ast in
-    Interactive.ir := cdefs;
+    Jib_interactive.ir := cdefs;
     let cdefs = insert_heap_returns Bindings.empty cdefs in
     let cdefs = optimize recursive_functions cdefs in
 

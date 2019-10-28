@@ -48,21 +48,4 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-let opt_interactive = ref false
-let opt_emacs_mode = ref false
-let opt_suppress_banner = ref false
-
-let env = ref Type_check.initial_env
-
-let ast = ref (Ast.Defs [])
-
-let arg str =
-  ("<" ^ str ^ ">") |> Util.yellow |> Util.clear
-
-let command str =
-  (":" ^ str) |> Util.green |> Util.clear
-
-let commands = ref []
-
-let register_command ~name:name ~help:help action =
-  commands := (":" ^ name, (help, action)) :: !commands
+let ir = ref []

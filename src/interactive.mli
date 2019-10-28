@@ -59,8 +59,6 @@ val ast : tannot defs ref
 
 val env : Env.t ref
 
-val ir : Jib.cdef list ref
-
 val arg : string -> string
 val command : string -> string
 
