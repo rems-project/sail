@@ -64,7 +64,7 @@ let zencode_id id = Util.zencode_string (string_of_id id)
 let zencode_name id = string_of_name ~deref_current_exception:false ~zencode:true id
 let zencode_uid (id, ctyps) =
   Util.zencode_string (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
-                    
+
 let opt_ignore_overflow = ref false
 
 let opt_auto = ref false
@@ -254,13 +254,6 @@ let smt_value ctx vl ctyp =
        Real_lit str
   | vl, _ -> failwith ("Cannot translate literal to SMT: " ^ string_of_value vl)
 
-let zencode_ctor ctor_id unifiers =
-  match unifiers with
-  | [] ->
-     zencode_id ctor_id
-  | _ ->
-     Util.zencode_string (string_of_id ctor_id ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
-
 let rec smt_cval ctx cval =
   match cval_ctyp cval with
   | CT_constant n ->
@@ -289,9 +282,9 @@ let rec smt_cval ctx cval =
      | V_call (Bor, cvals) ->
         smt_disj (List.map (smt_cval ctx) cvals)
      | V_ctor_kind (union, ctor_id, unifiers, _) ->
-        Fn ("not", [Tester (zencode_ctor ctor_id unifiers, smt_cval ctx union)])
+        Fn ("not", [Tester (zencode_uid (ctor_id, unifiers), smt_cval ctx union)])
      | V_ctor_unwrap (ctor_id, union, unifiers, _) ->
-        Fn ("un" ^ zencode_ctor ctor_id unifiers, [smt_cval ctx union])
+        Fn ("un" ^ zencode_uid (ctor_id, unifiers), [smt_cval ctx union])
      | V_field (union, field) ->
         begin match cval_ctyp union with
         | CT_struct (struct_id, _) ->
@@ -1642,9 +1635,9 @@ let smt_instr ctx =
        end
      else if not extern then
        let smt_args = List.map (smt_cval ctx) args in
-       [define_const ctx id ret_ctyp (Ctor (zencode_id (fst function_id), smt_args))]
+       [define_const ctx id ret_ctyp (Ctor (zencode_uid function_id, smt_args))]
      else
-       failwith ("Unrecognised function " ^ string_of_id (fst function_id))
+       failwith ("Unrecognised function " ^ string_of_uid function_id)
 
   | I_aux (I_copy (CL_addr (CL_id (_, _)), _), (_, l)) ->
      Reporting.unreachable l __POS__ "Register reference write should be re-written by now"

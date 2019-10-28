@@ -1243,8 +1243,6 @@ let compile_funcl ctx id pat guard exp =
 
 (** Compile a Sail toplevel definition into an IR definition **)
 let rec compile_def n total ctx def =
-  reset_anf_counter ();
-  reset_gensym_counter ();
   match def with
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, _), _)]), _))
        when !opt_memo_cache ->

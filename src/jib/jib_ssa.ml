@@ -78,7 +78,7 @@ let get_cond graph n =
     IntMap.find n graph.conds
   else
     V_call (Bnot, [IntMap.find (abs n) graph.conds])
-     
+
 let get_vertex graph n = graph.nodes.(n)
 
 let iter_graph f graph =
@@ -309,7 +309,7 @@ let immediate_dominators graph root =
   let idom     = Array.make (cardinal graph) none in
   let samedom  = Array.make (cardinal graph) none in
   let best     = Array.make (cardinal graph) none in
-  let dfnum    = Array.make (cardinal graph) 0 in
+  let dfnum    = Array.make (cardinal graph) (-1) in
   let bucket   = Array.make (cardinal graph) IntSet.empty in
 
   let rec ancestor_with_lowest_semi v =
@@ -332,7 +332,7 @@ let immediate_dominators graph root =
   let count = ref 0 in
 
   let rec dfs p n =
-    if dfnum.(n) = 0 then
+    if dfnum.(n) = -1 then
       begin
         dfnum.(n) <- !count;
         vertex.(!count) <- n;
@@ -372,7 +372,7 @@ let immediate_dominators graph root =
         if semi.(y) = semi.(v) then
           idom.(v) <- p
         else
-          samedom.(n) <- y
+          samedom.(v) <- y
       ) bucket.(p);
   done;
   for i = 1 to !count - 1 do

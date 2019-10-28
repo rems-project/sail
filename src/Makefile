@@ -74,6 +74,9 @@ full: sail lib doc
 ast.lem: ../language/sail.ott
 	ott -sort false -generate_aux_rules true -o ast.lem -picky_multiple_parses true ../language/sail.ott
 
+jib.lem: ../language/jib.ott ast.lem
+	ott -sort false -generate_aux_rules true -o jib.lem -picky_multiple_parses true ../language/jib.ott
+
 ast.ml: ast.lem
 	lem -ocaml ast.lem
 	sed -i.bak -f ast.sed ast.ml
@@ -134,6 +137,7 @@ clean:
 	-rm -f ast.lem
 	-rm -f ast.ml.bak
 	-rm -f jib.ml
+	-rm -f jib.lem
 	-rm -f jib.ml.bak
 	-rm -f manifest.ml
 

@@ -331,7 +331,7 @@ and string_of_uid (id, ctyps) =
   match ctyps with
   | [] -> Util.zencode_string (string_of_id id)
   | _ -> Util.zencode_string (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
- 
+
 (** This function is like string_of_ctyp, but recursively prints all
    constructors in variants and structs. Used for debug output. *)
 and full_string_of_ctyp = function
@@ -391,7 +391,7 @@ let rec string_of_cval = function
      Printf.sprintf "{%s}"
        (Util.string_of_list ", " (fun (field, cval) -> string_of_uid field ^ " = " ^ string_of_cval cval) fields)
   | V_poly (f, _) -> string_of_cval f
-          
+
 let rec map_ctyp f = function
   | (CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _
      | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_poly | CT_enum _) as ctyp -> f ctyp
@@ -503,7 +503,7 @@ module CTSet = Set.Make(CT)
 module CTMap = Map.Make(CT)
 
 module UId = struct
-  type t = uid
+  type t = (id * ctyp list)
   let lex_ord c1 c2 = if c1 = 0 then c2 else c1
   let rec compare_ctyps ctyps1 ctyps2 =
     match ctyps1, ctyps2 with
@@ -516,9 +516,9 @@ module UId = struct
     let lex_ord c1 c2 = if c1 = 0 then c2 else c1 in
     lex_ord (Id.compare id1 id2) (compare_ctyps ctyps1 ctyps2)
 end
-    
+
 module UBindings = Map.Make(UId)
-             
+
 let rec ctyp_unify ctyp1 ctyp2 =
   match ctyp1, ctyp2 with
   | CT_tup ctyps1, CT_tup ctyps2 when List.length ctyps1 = List.length ctyps2 ->
@@ -771,7 +771,7 @@ let cdef_concatmap_instr f = function
      CDEF_finish (id, List.concat (List.map (concatmap_instr f) instrs))
   | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, ctyps, ctyp)
   | CDEF_type tdef -> CDEF_type tdef
-                    
+
 let ctype_def_map_ctyp f = function
   | CTD_enum (id, ids) -> CTD_enum (id, ids)
   | CTD_struct (id, ctors) -> CTD_struct (id, List.map (fun ((id, ctyps), ctyp) -> ((id, List.map f ctyps), f ctyp)) ctors)
