@@ -3021,7 +3021,12 @@ let doc_funcl_init mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot))
 
 let doc_funcl_body ctxt (exp, eff, build_ex, fixupspp) =
   let bodypp = doc_fun_body ctxt exp in
-  let bodypp = if effectful eff then bodypp else match build_ex with Some s -> string s ^^ parens bodypp | None -> bodypp in
+  let bodypp =
+    if effectful eff
+    then bodypp
+    else match build_ex with
+         | Some s -> surround 3 0 (string (s ^ " (")) bodypp (string ")")
+         | None -> bodypp in
   let bodypp = separate (break 1) (fixupspp @ [bodypp]) in
   group bodypp
 
@@ -3046,7 +3051,8 @@ let doc_mutrec rec_set = function
      let recursive_fns = List.fold_left (fun m c -> Bindings.union (fun _ x _ -> Some x) m c.recursive_fns) ctxt1.recursive_fns ctxtn in
      let ctxts = List.map (fun c -> { c with recursive_fns }) (ctxt1::ctxtn) in
      let bodies = List.map2 doc_funcl_body ctxts (details1::detailsn) in
-     let bodies = List.map (fun b -> surround 3 0 (string "exact (") b (string ").")) bodies in
+     let idpps = List.map (fun fd -> string (string_of_id (id_of_fundef fd))) (fundef::fundefs) in
+     let bodies = List.map2 (fun idpp b -> surround 3 0 (string "(*" ^^ idpp ^^ string "*) exact (") b (string ").")) idpps bodies in
      let pres, posts = List.split (prepost1::prepostn) in
      separate hardline pres ^^ dot ^^ hardline ^^
        separate hardline bodies ^^
