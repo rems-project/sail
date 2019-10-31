@@ -62,6 +62,17 @@ val env : Env.t ref
 val arg : string -> string
 val command : string -> string
 
-val commands : (string * (string * (string -> unit))) list ref
+type action =
+  | ArgString of string * (string -> action)
+  | ArgInt of string * (int -> action)
+  | Action of (unit -> unit)
 
-val register_command : name:string -> help:string -> (string -> unit) -> unit
+val reflect_typ : action -> typ
+
+val commands : (string * (string * action)) list ref
+
+val register_command : name:string -> help:string -> action -> unit
+
+val generate_help : string -> string -> action -> string
+
+val run_action : string -> string -> action -> unit

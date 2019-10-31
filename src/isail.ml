@@ -109,28 +109,73 @@ let sail_logo =
   in
   List.map banner logo @ [""] @ help @ [""]
 
+let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear
+  
 let vs_ids = ref (val_spec_ids !Interactive.ast)
 
-let interactive_state = ref (initial_state ~registers:false !Interactive.ast !Interactive.env Value.primops)
+let interactive_state = ref (initial_state ~registers:false !Interactive.ast !Interactive.env !Value.primops)
 
-let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear
-
+(* We can't set up the elf commands in elf_loader.ml because it's used
+   by Sail OCaml emulators at runtime, so set them up here. *)
 let () =
   let open Interactive in
   let open Elf_loader in
-  let open Printf in
 
-  register_command ~name:"elf" ~help:(sprintf ":elf %s - Load an elf file" (arg "file")) load_elf;
+  ArgString ("file", fun file -> Action (fun () -> load_elf file))
+  |> register_command ~name:"elf" ~help:"Load an elf file";
 
-  (fun iarg ->
-    match Util.split_on_char ' ' iarg with
-    | [addr_s; filename] ->
-       let addr = Big_int.of_string addr_s in
-       load_binary addr filename
-    | _ ->
-       printf "Invalid argument for :bin, expected %s %s" (arg "addr") (arg "file")
-  ) |> register_command ~name:"bin" ~help:(sprintf ":bin %s %s - Load a binary file at a given address" (arg "addr") (arg "file"))
+  ArgString ("addr", fun addr_s -> ArgString ("file", fun filename -> Action (fun () ->
+    let addr = Big_int.of_string addr_s in
+    load_binary addr filename
+  ))) |> register_command ~name:"bin" ~help:"Load a raw binary file at :0. Use :elf to load an ELF"
 
+(* This is a feature that lets us take interpreter commands like :foo
+   x, y and turn the into functions that can be called by sail as
+   foo(x, y), which lets us use sail to script itself. The
+   sail_scripting_primops_once variable ensures we only add the
+   commands to the interpreter primops list once, although we may have
+   to reset the AST and env changes when we :load and :unload
+   files by calling this function multiple times. *)
+let sail_scripting_primops_once = ref true
+
+let setup_sail_scripting () =
+  let open Interactive in
+
+  let sail_command_name cmd = "sail_" ^ String.sub cmd 1 (String.length cmd - 1) in
+  
+  let val_specs =
+    List.map (fun (cmd, (_, action)) ->
+        let name = sail_command_name cmd in
+        let typschm = mk_typschm (mk_typquant []) (reflect_typ action) in
+        mk_val_spec (VS_val_spec (typschm, mk_id name, [("_", name)], false))
+      ) !commands in
+  let val_specs, env' = Type_check.check !env (Defs val_specs) in
+  ast := append_ast !ast val_specs;
+  env := env';
+
+  if !sail_scripting_primops_once then (
+    List.iter (fun (cmd, (help, action)) ->
+        let open Value in
+        let name = sail_command_name cmd in
+        let impl values =
+          let rec call values action =
+            match values, action with
+            | (v :: vs), ArgString (_, next) ->
+               call vs (next (coerce_string v))
+            | (v :: vs), ArgInt (_, next) ->
+               call vs (next (Big_int.to_int (coerce_int v)))
+            | _, Action act ->
+               act (); V_unit
+            | _, _ ->
+               failwith help
+          in
+          call values action
+        in
+        Value.add_primop name impl
+      ) !commands;
+    sail_scripting_primops_once := false
+  )
+ 
 let print_program () =
   match !current_mode with
   | Normal | Emacs -> ()
@@ -283,7 +328,7 @@ let help =
              (color green ":commands") (color green ":help") (color yellow "<command>")
   | cmd ->
      match List.assoc_opt cmd !Interactive.commands with
-     | Some (help, _) -> help
+     | Some (help_message, action) -> Interactive.generate_help cmd help_message action
      | None ->
         sprintf "Either invalid command passed to help, or no documentation for %s. Try %s."
                 (color green cmd) (color green ":help :help")
@@ -466,13 +511,13 @@ let handle_input' input =
            let files = Util.split_on_char ' ' arg in
            let (_, ast, env) = load_files !Interactive.env files in
            Interactive.ast := append_ast !Interactive.ast ast;
-           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
+           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
            Interactive.env := env;
            vs_ids := val_spec_ids !Interactive.ast
         | ":u" | ":unload" ->
            Interactive.ast := Ast.Defs [];
            Interactive.env := Type_check.initial_env;
-           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
+           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
            vs_ids := val_spec_ids !Interactive.ast;
            (* See initial_check.mli for an explanation of why we need this. *)
            Initial_check.have_undefined_builtins := false;
@@ -494,7 +539,7 @@ let handle_input' input =
               let ast, env = Type_check.check !Interactive.env (Defs [DEF_val (mk_letbind (mk_pat (P_id (mk_id v))) exp)]) in
               Interactive.ast := append_ast !Interactive.ast ast;
               Interactive.env := env;
-              interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
+              interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
            | _ -> print_endline "Invalid arguments for :let"
            end
         | ":def" ->
@@ -502,7 +547,7 @@ let handle_input' input =
            let ast, env = Type_check.check !Interactive.env ast in
            Interactive.ast := append_ast !Interactive.ast ast;
            Interactive.env := env;
-           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
+           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
         | ":list_rewrites" ->
            let print_rewrite (name, rw) =
              print_endline (name ^ " " ^ Util.(String.concat " " (describe_rewrite rw) |> yellow |> clear))
@@ -538,17 +583,17 @@ let handle_input' input =
            let new_ast, new_env = Process_file.rewrite_ast_target arg !Interactive.env !Interactive.ast in
            Interactive.ast := new_ast;
            Interactive.env := new_env;
-           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops
+           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops
         | ":prover_regstate" ->
            let env, ast = prover_regstate (Some arg) !Interactive.ast !Interactive.env in
            Interactive.env := env;
            Interactive.ast := ast;
-           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops
+           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops
         | ":recheck" ->
            let ast, env = Type_check.check Type_check.initial_env !Interactive.ast in
            Interactive.env := env;
            Interactive.ast := ast;
-           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
+           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
            vs_ids := val_spec_ids !Interactive.ast
         | ":recheck_types" ->
            let ast, env = Type_check.check Type_check.initial_env !Interactive.ast in
@@ -563,7 +608,7 @@ let handle_input' input =
            target (Some arg) out_name !Interactive.ast !Interactive.env
         | _ ->
            match List.assoc_opt cmd !Interactive.commands with
-           | Some (_, action) -> action arg
+           | Some (_, action) -> Interactive.run_action cmd arg action
            | None -> unrecognised_command cmd
         end
      | Expression str ->
@@ -585,7 +630,7 @@ let handle_input' input =
                load_into_session arg;
                let (_, ast, env) = load_files ~check:true !Interactive.env [arg] in
                Interactive.ast := append_ast !Interactive.ast ast;
-               interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
+               interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
                Interactive.env := env;
                vs_ids := val_spec_ids !Interactive.ast;
                print_endline ("(message \"Checked " ^ arg ^ " done\")\n");
@@ -596,7 +641,7 @@ let handle_input' input =
         | ":unload" ->
            Interactive.ast := Ast.Defs [];
            Interactive.env := Type_check.initial_env;
-           interactive_state := initial_state !Interactive.ast !Interactive.env Value.primops;
+           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
            vs_ids := val_spec_ids !Interactive.ast;
            Initial_check.have_undefined_builtins := false;
            Process_file.clear_symbols ()
@@ -775,28 +820,26 @@ let () =
     );
 
   (* Read the script file if it is set with the -is option, and excute them *)
-  begin
-    match !opt_interactive_script with
-    | None -> ()
-    | Some file ->
-       let chan = open_in file in
-       try
-         while true do
-           let line = input_line chan in
-           handle_input line;
-         done;
-       with
-       | End_of_file -> ()
+  begin match !opt_interactive_script with
+  | None -> ()
+  | Some file ->
+     let chan = open_in file in
+     try
+       while true do
+         let line = input_line chan in
+         handle_input line;
+       done;
+     with
+     | End_of_file -> ()
   end;
 
   LNoise.history_load ~filename:"sail_history" |> ignore;
   LNoise.history_set ~max_length:100 |> ignore;
 
-  if !Interactive.opt_interactive then
-    begin
-      if not !Interactive.opt_emacs_mode then
-        List.iter print_endline sail_logo
-      else (current_mode := Emacs; Util.opt_colors := false);
-      user_input handle_input
-    end
-  else ()
+  if !Interactive.opt_interactive then (
+    if not !Interactive.opt_emacs_mode then
+      List.iter print_endline sail_logo
+    else (current_mode := Emacs; Util.opt_colors := false);
+    setup_sail_scripting ();
+    user_input handle_input
+  )

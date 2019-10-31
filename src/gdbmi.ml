@@ -108,32 +108,27 @@ let () =
 
   register_command
     ~name:"gdb_command"
-    ~help:(sprintf ":gdb_command %s - Use specified gdb. Default is \
-                    gdb-multiarch. This is the correct version on \
-                    Ubuntu, but other Linux distros and operating \
-                    systems may differ in how they package gdb with \
-                    support for multiple architectures."
-                   (arg "gdb"))
-    (fun arg -> gdb_command := arg);
+    ~help:"Use specified gdb. Default is gdb-multiarch. This is the \
+           correct version on Ubuntu, but other Linux distros and \
+           operating systems may differ in how they package gdb with \
+           support for multiple architectures."
+    (ArgString ("gdb", fun arg -> Action (fun () -> gdb_command := arg)));
 
   register_command
     ~name:"gdb_start"
-    ~help:(sprintf ":gdb_start %s? - Start a child GDB process sending %s as the first command, waiting for it to complete"
-                   (arg "command") (arg "command"))
-    gdb_start;
+    ~help:"Start a child GDB process sending :0 as the first command, waiting for it to complete"
+    (ArgString ("command", fun cmd -> Action (fun () -> gdb_start cmd)));
 
-  (fun port ->
+  (ArgString ("port", fun port -> Action (fun () ->
     if port = "" then
       gdb_start "target-select remote localhost:1234"
     else
       gdb_start ("target-select remote localhost:" ^ port)
-  ) |> register_command
-         ~name:"gdb_qemu"
-         ~help:(sprintf ":gdb_qemu %s? - Connect GDB to a remote QEMU target on localhost:%s (default is 1234, as per -s option for QEMU)"
-                        (arg "port") (arg "port"));
+  ))) |> register_command
+           ~name:"gdb_qemu"
+           ~help:"Connect GDB to a remote QEMU target on localhost port :0 (default is 1234, as per -s option for QEMU)";
 
   register_command
     ~name:"gdb_send"
-    ~help:(sprintf ":gdb_send %s? - Send a GDB/MI command to a child GDB process and wait for it to complete"
-                   (arg "command"))
-    gdb_send;
+    ~help:"Send a GDB/MI command to a child GDB process and wait for it to complete"
+    (ArgString ("command", fun cmd -> Action (fun () -> gdb_send cmd)));

@@ -1022,7 +1022,7 @@ let optimize recursive_functions cdefs =
 
 let sgen_id id = Util.zencode_string (string_of_id id)
 let sgen_uid uid = zencode_uid uid
-let sgen_name id = string_of_name id
+let sgen_name id = string_of_name ~deref_current_exception:true ~zencode:true id
 let codegen_id id = string (sgen_id id)
 let codegen_uid id = string (sgen_uid id)
 
@@ -1110,8 +1110,8 @@ let sgen_value = function
   | VL_string str -> "\"" ^ str ^ "\""
   
 let rec sgen_cval = function
-  | V_id (id, ctyp) -> string_of_name id
-  | V_ref (id, _) -> "&" ^ string_of_name id
+  | V_id (id, ctyp) -> sgen_name id
+  | V_ref (id, _) -> "&" ^ sgen_name id
   | V_lit (vl, ctyp) -> sgen_value vl
   | V_call (op, cvals) -> sgen_call op cvals
   | V_field (f, field) ->
@@ -2182,7 +2182,8 @@ let compile_ast env output_chan c_includes ast =
     let recursive_functions = Spec_analysis.top_sort_defs ast |> get_recursive_functions in
 
     let cdefs, ctx = jib_of_ast env ast in
-    Jib_interactive.ir := cdefs;
+    let cdefs', _ = Jib_optimize.remove_tuples cdefs ctx in
+    Jib_interactive.ir := cdefs';
     let cdefs = insert_heap_returns Bindings.empty cdefs in
     let cdefs = optimize recursive_functions cdefs in
 

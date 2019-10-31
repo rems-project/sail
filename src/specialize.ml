@@ -602,11 +602,9 @@ let rec specialize_passes n spec env ast =
 let specialize = specialize_passes (-1)
 
 let () =
-  let open Printf in
   let open Interactive in
-
-  (fun _ ->
+  Action (fun () ->
     let ast', env' = specialize typ_ord_specialization !env !ast in
     ast := ast';
-    env := env')
-  |> register_command ~name:"specialize" ~help:":specialize - Specialize Type and Order type variables in the AST"
+    env := env'
+  ) |> register_command ~name:"specialize" ~help:"Specialize Type and Order type variables in the AST"

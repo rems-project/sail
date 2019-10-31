@@ -257,8 +257,7 @@ let rec instr_rename from_id to_id (I_aux (instr, aux)) =
 (* 1. Instruction pretty printer                                          *)
 (**************************************************************************)
 
-
-let string_of_name ?deref_current_exception:(dce=true) ?zencode:(zencode=true) =
+let string_of_name ?deref_current_exception:(dce=false) ?zencode:(zencode=true) =
   let ssa_num n = if n = -1 then "" else ("/" ^ string_of_int n) in
   function
   | Name (id, n) ->
@@ -377,16 +376,10 @@ let rec string_of_cval = function
      Printf.sprintf "%s.%s" (string_of_cval f) (string_of_uid field)
   | V_tuple_member (f, _, n) ->
      Printf.sprintf "%s.ztup%d" (string_of_cval f) n
-  | V_ctor_kind (f, ctor, [], _) ->
-     string_of_cval f ^ " is " ^ Util.zencode_string (string_of_id ctor)
   | V_ctor_kind (f, ctor, unifiers, _) ->
-     string_of_cval f ^ " is " ^ Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers)
-  | V_ctor_unwrap (ctor, f, [], _) ->
-     Printf.sprintf "%s as %s" (string_of_cval f) (string_of_id ctor)
+     string_of_cval f ^ " is " ^ string_of_uid (ctor, unifiers)
   | V_ctor_unwrap (ctor, f, unifiers, _) ->
-     Printf.sprintf "%s as %s"
-       (string_of_cval f)
-       (Util.zencode_string (string_of_id ctor ^ "_" ^ Util.string_of_list "_" string_of_ctyp unifiers))
+     string_of_cval f ^ " as " ^ string_of_uid (ctor, unifiers)
   | V_struct (fields, _) ->
      Printf.sprintf "{%s}"
        (Util.string_of_list ", " (fun (field, cval) -> string_of_uid field ^ " = " ^ string_of_cval cval) fields)

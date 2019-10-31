@@ -91,7 +91,7 @@ and exp_of_value =
 let safe_primops =
   List.fold_left
     (fun m k -> StringMap.remove k m)
-    Value.primops
+    !Value.primops
     [ "print_endline";
       "prerr_endline";
       "putchar";

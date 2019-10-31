@@ -158,7 +158,7 @@ let fuzz_cdef ctx all_cdefs = function
      if Env.is_extern id ctx.tc_env "smt" then (
        let extern = Env.get_extern id ctx.tc_env "smt" in
        let typq, (Typ_aux (aux, _) as typ) = Env.get_val_spec id ctx.tc_env in
-       let istate = initial_state ctx.ast ctx.tc_env Value.primops in
+       let istate = initial_state ctx.ast ctx.tc_env !Value.primops in
        let header = smt_header ctx all_cdefs in
        prerr_endline (Util.("Fuzz: " |> cyan |> clear) ^ string_of_id id ^ " = \"" ^ extern ^ "\" : " ^ string_of_typ typ);
 

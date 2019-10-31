@@ -418,21 +418,19 @@ let load_files ?check:(check=false) type_envs files =
 
   if !opt_memo_z3 then Constraint.save_digests () else ();
 
-  if check then
-    ("out.sail", ast, type_envs)
-  else
-    let ast = Scattered.descatter ast in
-    let ast, type_envs = rewrite_ast_initial type_envs ast in
-    (* Recheck after descattering so that the internal type environments always
-       have complete variant types *)
-    let ast, type_envs = Type_error.check Type_check.initial_env ast in
+  let out_name = match !opt_file_out with
+    | None when parsed = [] -> "out.sail"
+    | None -> fst (List.hd parsed)
+    | Some f -> f ^ ".sail" in
 
-    let out_name = match !opt_file_out with
-      | None when parsed = [] -> "out.sail"
-      | None -> fst (List.hd parsed)
-      | Some f -> f ^ ".sail" in
+  (out_name, ast, type_envs)
 
-    (out_name, ast, type_envs)
+let descatter type_envs ast =
+  let ast = Scattered.descatter ast in
+  let ast, type_envs = rewrite_ast_initial type_envs ast in
+  (* Recheck after descattering so that the internal type environments
+     always have complete variant types *)
+  Type_error.check Type_check.initial_env ast
 
 let prover_regstate tgt ast type_envs =
   match tgt with
@@ -577,6 +575,7 @@ let main () =
   else
     begin
       let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
+      let ast, type_envs = descatter type_envs ast in
       let ast, type_envs =
         List.fold_right (fun file (ast,_) -> Splice.splice ast file)
           (!opt_splice) (ast, type_envs)
