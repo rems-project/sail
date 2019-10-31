@@ -56,6 +56,7 @@ open Interpreter
 open Pretty_print_sail
 
 module Slice = Slice
+module Gdbmi = Gdbmi
 
 type mode =
   | Evaluation of frame

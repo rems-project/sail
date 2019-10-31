@@ -418,6 +418,7 @@ let termcode n =
   else ""
 
 let bold str = termcode 1 ^ str
+let dim str = termcode 2 ^ str
 
 let darkgray str = termcode 90 ^ str
 let red str = termcode 91 ^ str

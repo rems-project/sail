@@ -237,6 +237,7 @@ val split_on_char : char -> string -> string list
 
 val termcode : int -> string
 val bold : string -> string
+val dim : string -> string
 val darkgray : string -> string
 val green : string -> string
 val red : string -> string
