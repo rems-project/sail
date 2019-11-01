@@ -82,6 +82,18 @@ let spc_matches_prefix s =
   (* | n -> *) Just ((), n)
   (* end *)
 
+let hex_bits_of_prefix bits s =
+  let (n, len) =
+    match maybe_int_of_prefix s with
+    | Nothing -> (0, 0)
+    | Just (n, len) ->
+      if 0 <= n && n < (2 ** (natFromInteger bits)) then
+        (n, len)
+      else
+        (0, 0)
+    end
+  in (of_int bits n, len)
+
 (* Python:
 f = """let hex_bits_{0}_matches_prefix s =
   match maybe_int_of_prefix s with

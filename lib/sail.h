@@ -400,6 +400,8 @@ void string_length(sail_int *len, sail_string s);
 void string_drop(sail_string *dst, sail_string s, sail_int len);
 void string_take(sail_string *dst, sail_string s, sail_int len);
 
+struct ztuple_z8z5lbzCz0z5iz9;
+void hex_bits_of_prefix(struct ztuple_z8z5lbzCz0z5iz9 *tuple, sail_int bits, const sail_string str);
 
 /* ***** Printing ***** */
 

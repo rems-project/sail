@@ -774,6 +774,19 @@ let speculate_conditional_success () = true
 (* Return nanoseconds since epoch. Truncates to ocaml int but will be OK for next 100 years or so... *)
 let get_time_ns () = Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ()))
 
+let hex_bits_of_prefix (bits, s) =
+  let bits = Big_int.to_int bits in
+  let n, len =
+    match maybe_int_of_prefix s with
+    | ZNone () -> (Big_int.zero, Big_int.zero)
+    | ZSome (n, len) ->
+       if Big_int.less_equal Big_int.zero n
+          && Big_int.less n (Big_int.pow_int_positive 2 bits) then
+         (n, len)
+       else
+         (Big_int.zero, Big_int.zero)
+  in (bits_of_big_int bits n, len)
+
 (* Python:
 f = """let hex_bits_{0}_matches_prefix s =
   match maybe_int_of_prefix s with

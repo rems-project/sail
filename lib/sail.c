@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include<assert.h>
+#include<ctype.h>
 #include<inttypes.h>
 #include<stdbool.h>
 #include<stdio.h>
@@ -172,6 +173,42 @@ void string_take(sail_string *dst, sail_string s, sail_int ns)
   *dst = realloc(*dst, to_copy + 1);
   memcpy(*dst, s, to_copy);
   *dst[to_copy] = '\0';
+}
+
+// struct tuple_(%lb, %i)
+struct ztuple_z8z5lbzCz0z5iz9 {
+  lbits ztup0;
+  sail_int ztup1;
+};
+
+void hex_bits_of_prefix(struct ztuple_z8z5lbzCz0z5iz9 *tuple, sail_int bits, const sail_string str)
+{
+  /*
+   * Stop at whitespace, not just NUL, since mpz_set_str frustratingly ignores
+   * all whitespace within a string.
+   */
+  mach_int len = 0;
+  while (str[len] && !isspace(str[len]))
+    ++len;
+
+  char *substr = (char *) sail_malloc(len + 1);
+  memcpy(substr, str, len);
+
+  for (; len > 0; --len) {
+    substr[len] = '\0';
+    if (mpz_set_str(*tuple->ztup0.bits, substr, 0) == 0)
+      break;
+  }
+
+  sail_free(substr);
+  tuple->ztup0.len = CONVERT_OF(mach_int, sail_int)(bits);
+  if (len > 0 && mpz_sgn(*tuple->ztup0.bits) >= 0 &&
+      mpz_sizeinbase(*tuple->ztup0.bits, 2) <= tuple->ztup0.len) {
+    CONVERT_OF(sail_int, mach_int)(&tuple->ztup1, len);
+  } else {
+    mpz_set_ui(*tuple->ztup0.bits, 0);
+    CONVERT_OF(sail_int, mach_int)(&tuple->ztup1, 0);
+  }
 }
 
 /* ***** Sail integers ***** */
