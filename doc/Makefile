@@ -58,8 +58,8 @@ all: manual.pdf
 
 .PHONY: clean
 
-code_riscv.tex: ${SAIL_RISCV}/model/prelude.sail ${SAIL_RISCV}/model/riscv_duopod.sail
-	sail -o code_riscv -latex -latex_full_valspecs ${SAIL_RISCV}/model/prelude.sail ${SAIL_RISCV}/model/riscv_duopod.sail
+code_riscv.tex: ${SAIL_RISCV}/model/riscv_duopod.sail
+	sail -o code_riscv -latex -latex_full_valspecs $^
 	cp code_riscv/commands.tex code_riscv.tex
 
 code_myreplicatebits.tex: examples/my_replicate_bits.sail
