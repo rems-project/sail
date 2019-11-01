@@ -1335,9 +1335,11 @@ let add_typquant l (quant : typquant) (env : Env.t) : Env.t =
 let expand_bind_synonyms l env (typq, typ) =
   typq, Env.expand_synonyms (add_typquant l typq env) typ
 
-let wf_typschm env (TypSchm_aux (TypSchm_ts (typq, typ), l)) =
+let wf_binding l env (typq, typ) =
   let env = add_typquant l typq env in
   Env.wf_typ env typ
+
+let wf_typschm env (TypSchm_aux (TypSchm_ts (typq, typ), l)) = wf_binding l env (typq, typ)
 
 (* Create vectors with the default order from the environment *)
 
@@ -5077,11 +5079,13 @@ let check_type_union env variant typq (Tu_aux (tu, l)) =
   match tu with
   | Tu_ty_id (Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) as typ, v) ->
      let typq = mk_typquant (List.map (mk_qi_id K_type) (KidSet.elements (tyvars_of_typ typ))) in
+     wf_binding l env (typq, typ);
      env
      |> Env.add_union_id v (typq, typ)
      |> Env.add_val_spec v (typq, typ)
   | Tu_ty_id (arg_typ, v) ->
      let typ' = mk_typ (Typ_fn ([arg_typ], ret_typ, no_effect)) in
+     wf_binding l env (typq, typ');
      env
      |> Env.add_union_id v (typq, typ')
      |> Env.add_val_spec v (typq, typ')
