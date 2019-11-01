@@ -502,7 +502,11 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; equals; doc_exp exp3])
   | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; string ".."; doc_atomic_exp exp3; equals; doc_exp exp4])
-  | E_internal_value v -> string (Value.string_of_value v (* |> Util.green |> Util.clear *))
+  | E_internal_value v ->
+     if !Interactive.opt_interactive then
+       string (Value.string_of_value v |> Util.green |> Util.clear)
+     else
+       string (Value.string_of_value v)
   | _ -> parens (doc_exp exp)
 and doc_fexps fexps =
   separate_map (comma ^^ space) doc_fexp fexps

@@ -48,121 +48,54 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Printf
-open Gdbmi_types
+{
 
-let parse_gdb_response str =
-  let lexbuf = Lexing.from_string str in
-  Gdbmi_parser.response_eof Gdbmi_lexer.token lexbuf
+open Gdbmi_parser
 
-type gdb_session = (in_channel * out_channel * in_channel) option
+let unescaped s = Scanf.sscanf ("\"" ^ s ^ "\"") "%S%!" (fun x -> x)
 
-let gdb_command = ref "gdb-multiarch"
+}
 
-let gdb_token_counter = ref 0
+let ws = [' ''\t']+
+let letter = ['a'-'z''A'-'Z''?']
+let digit = ['0'-'9']
+let hexdigit = ['0'-'9''A'-'F''a'-'f']
+let alphanum = letter|digit
+let startident = letter
+let ident = alphanum|['-']
+let escape_sequence = ('\\' ['\\''\"''\'''n''t''b''r']) | ('\\' digit digit digit) | ('\\' 'x' hexdigit hexdigit)
 
-let gdb_token () =
-  incr gdb_token_counter;
-  !gdb_token_counter
+rule token = parse
+  | ws
+    { token lexbuf }
+  | "\n"
+    { Lexing.new_line lexbuf;
+      token lexbuf }
+  | "="					{ Eq }
+  | "["                                 { Lsquare }
+  | "]"                                 { Rsquare }
+  | "{"                                 { Lcurly }
+  | "}"                                 { Rcurly }
+  | ","                                 { Comma }
+  | "^"                                 { Caret }
+  | digit+ as i                         { Num (int_of_string i) }
+  | startident ident* as i              { Id i }
+  | '"'                                 { String (string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf) }
+  | eof                                 { Eof }
 
-let not_connected = Reporting.err_general Parse_ast.Unknown "Not connected to gdb"
-
-let rec wait_for' regexp stdout =
-  let line = input_line stdout in
-  if Str.string_match regexp line 0 then (
-    line
-  ) else (
-    print_endline Util.(line |> dim |> clear);
-    wait_for' regexp stdout
-  )
-
-let wait_for token stdout =
-  let regexp = Str.regexp (sprintf "^%i\\^" token) in
-  wait_for' regexp stdout
-
-let wait_for_gdb stdout =
-  let regexp = Str.regexp_string "(gdb)" in
-  wait_for' regexp stdout
-
-let send_sync session cmd =
-  match session with
-  | None -> raise not_connected
-  | Some (stdout, stdin, _) ->
-     let token = gdb_token () in
-     let cmd = sprintf "%i-%s\n" token cmd in
-     print_string Util.(cmd |> yellow |> clear);
-     flush stdin;
-     output_string stdin cmd;
-     flush stdin;
-     wait_for token stdout
-
-let send_regular session cmd =
-  match session with
-  | None -> raise not_connected
-  | Some (stdout, stdin, _) ->
-     let token = gdb_token () in
-     print_endline Util.(cmd |> yellow |> clear);
-     flush stdin;
-     output_string stdin (cmd ^ "\n");
-     flush stdin;
-     ignore (wait_for_gdb stdout)
-
-let gdb_sync session ast =
-  let gdb_register_names = parse_gdb_response (send_sync session "data-list-register-names") in
-  let gdb_register_values = parse_gdb_response (send_sync session "data-list-register-values x") in
-  print_endline (send_sync session "data-list-register-values x");
-  ()
-
-
-let () =
-  let open Interactive in
-  let session = ref None in
-
-  let gdb_start arg =
-    let stdout, stdin, stderr = Unix.open_process_full (sprintf "%s --interpreter=mi" !gdb_command) [||] in
-    session := Some (stdout, stdin, stderr);
-    wait_for_gdb stdout |> ignore;
-    if arg = "" then () else print_endline (send_sync !session arg)
-  in
-
-  let gdb_send arg =
-    if arg = "" then () else print_endline (send_sync !session arg)
-  in
-
-  register_command
-    ~name:"gdb_command"
-    ~help:"Use specified gdb. Default is gdb-multiarch. This is the \
-           correct version on Ubuntu, but other Linux distros and \
-           operating systems may differ in how they package gdb with \
-           support for multiple architectures."
-    (ArgString ("gdb", fun arg -> Action (fun () -> gdb_command := arg)));
-
-  register_command
-    ~name:"gdb_start"
-    ~help:"Start a child GDB process sending :0 as the first command, waiting for it to complete"
-    (ArgString ("command", fun cmd -> Action (fun () -> gdb_start cmd)));
-
-  (ArgString ("port", fun port -> Action (fun () ->
-    if port = "" then
-      gdb_start "target-select remote localhost:1234"
-    else
-      gdb_start ("target-select remote localhost:" ^ port)
-  ))) |> register_command
-           ~name:"gdb_qemu"
-           ~help:"Connect GDB to a remote QEMU target on localhost port :0 (default is 1234, as per -s option for QEMU)";
-
-  register_command
-    ~name:"gdb_send"
-    ~help:"Send a GDB/MI command to a child GDB process and wait for it to complete"
-    (ArgString ("command", fun cmd -> Action (fun () -> gdb_send cmd)));
-
-  register_command
-    ~name:"gdb_sync"
-    ~help:"Sync sail registers with GDB"
-    (Action (fun () -> gdb_sync !session !ast));
-
-  (ArgString ("symbol_file", fun file -> Action (fun () ->
-    send_regular !session ("symbol-file " ^ file)
-  ))) |> register_command
-           ~name:"gdb_symbol_file"
-           ~help:"Load debugging symbols into GDB";
+and string pos b = parse
+  | ([^'"''\n''\\']*'\n' as i)          { Lexing.new_line lexbuf;
+                                          Buffer.add_string b i;
+                                          string pos b lexbuf }
+  | ([^'"''\n''\\']* as i)              { Buffer.add_string b i; string pos b lexbuf }
+  | escape_sequence as i                { Buffer.add_string b i; string pos b lexbuf }
+  | '\\' '\n' ws                        { Lexing.new_line lexbuf; string pos b lexbuf }
+  | '\\'                                { assert false (*raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
+                                            "illegal backslash escape in string"*) }
+  | '"'                                 { let s = unescaped(Buffer.contents b) in
+                                          (*try Ulib.UTF8.validate s; s
+                                          with Ulib.UTF8.Malformed_code ->
+                                            raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
+                                              "String literal is not valid utf8"))) *) s }
+  | eof                                 { assert false (*raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
+                                            "String literal not terminated")))*) }

@@ -10,7 +10,7 @@ by [Lem](https://github.com/rems-project/lem), which allows the Sail
 OCaml source to seamlessly interoperate with parts written in
 Lem. Although we do not make much use of this, in principle it allows
 us to implement parts of Sail in Lem, which would enable them to be
-verified in Isabelle or HOL.
+verified in Isabelle or HOL4.
 
 The Sail AST looks something like:
 
@@ -35,13 +35,13 @@ which attaches an annotation to each node in the AST, consisting of an
 arbitrary type that parameterises the AST, and a location identifying
 the position of the AST node in the source code:
 
-```
+```OCaml
 type 'a annot = l * 'a
 ```
 
 There are various types of locations:
 
-```
+```OCaml
 type l =
   | Unknown
   | Unique of int * l
@@ -184,7 +184,7 @@ which invokes the backend for each target, e.g. for OCaml:
 ```
 
 There is also a `Sail.prover_regstate` function that allows the
-register state to be Set up in a prover-agnostic way for each of the
+register state to be set up in a prover-agnostic way for each of the
 theorem-prover targets.
 
 ## Type Checker

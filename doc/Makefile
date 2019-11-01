@@ -69,8 +69,12 @@ code_myreplicatebits.tex: examples/my_replicate_bits.sail
 grammar.tex: ../language/sail.ott
 	ott -pp_grammar -tex_wrap false -tex_suppress_category I -tex_suppress_category D -tex_suppress_ntr terminals -tex_suppress_ntr formula -tex_suppress_ntr judgement -tex_suppress_ntr user_syntax -tex_suppress_ntr dec_comm -sort false -generate_aux_rules false  -picky_multiple_parses true -i ../language/sail.ott -o grammar.tex
 
+internals.tex: internals.md
+	pandoc $< -f markdown -t latex --listings -o $@
+	sed -i.bak -f pandocfix.sed $@
+
 LATEXARG=manual.tex
-manual.pdf: grammar.tex introduction.tex usage.tex types.tex code_riscv.tex riscv.tex manual.tex manual.bib tutorial.tex code_myreplicatebits.tex
+manual.pdf: grammar.tex introduction.tex usage.tex types.tex code_riscv.tex riscv.tex manual.tex manual.bib tutorial.tex internals.tex code_myreplicatebits.tex
 	pdflatex ${LATEXARG}
 	bibtex manual
 	pdflatex ${LATEXARG}
@@ -83,6 +87,7 @@ clean:
 	-rm manual.pdf
 	-rm -rf code_riscv/
 	-rm -f code_riscv.tex
+	-rm -f internals.tex
 	-rm -rf code_myreplicatebits/
 	-rm -f code_myreplicatebits.tex
 	-rm -f *.aux

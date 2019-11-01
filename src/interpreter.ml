@@ -286,6 +286,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   match e_aux with
   | E_block [] -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
   | E_block [exp] when is_value exp -> return exp
+  | E_block [E_aux (E_block _, _) as exp] -> return exp
   | E_block (exp :: exps) when is_value exp -> wrap (E_block exps)
   | E_block (exp :: exps) ->
      step exp >>= fun exp' -> wrap (E_block (exp' :: exps))
