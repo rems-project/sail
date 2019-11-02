@@ -75,23 +75,25 @@ destruct Decidable_witness; simpl in *;
 congruence.
 Qed.
 Instance Decidable_eq_from_dec {T:Type} (eqdec: forall x y : T, {x = y} + {x <> y}) : 
-  forall (x y : T), Decidable (eq x y) := {
+  forall (x y : T), Decidable (eq x y).
+refine (fun x y => {|
   Decidable_witness := proj1_sig (bool_of_sumbool (eqdec x y))
-}.
+|}).
 destruct (eqdec x y); simpl; split; congruence.
 Defined.
 
-Instance Decidable_eq_unit : forall (x y : unit), Decidable (x = y) :=
-  { Decidable_witness := true }.
+Instance Decidable_eq_unit : forall (x y : unit), Decidable (x = y).
+refine (fun x y => {| Decidable_witness := true |}).
 destruct x, y; split; auto.
 Defined.
 
 Instance Decidable_eq_string : forall (x y : string), Decidable (x = y) :=
   Decidable_eq_from_dec String.string_dec.
 
-Instance Decidable_eq_pair {A B : Type} `(DA : forall x y : A, Decidable (x = y), DB : forall x y : B, Decidable (x = y)) : forall x y : A*B, Decidable (x = y) :=
-{ Decidable_witness := andb (@Decidable_witness _ (DA (fst x) (fst y)))
-(@Decidable_witness _ (DB (snd x) (snd y))) }.
+Instance Decidable_eq_pair {A B : Type} `(DA : forall x y : A, Decidable (x = y), DB : forall x y : B, Decidable (x = y)) : forall x y : A*B, Decidable (x = y).
+refine (fun x y =>
+{| Decidable_witness := andb (@Decidable_witness _ (DA (fst x) (fst y)))
+     (@Decidable_witness _ (DB (snd x) (snd y))) |}).
 destruct x as [x1 x2].
 destruct y as [y1 y2].
 simpl.
@@ -2436,9 +2438,10 @@ refine (if List.list_eq_dec D (projT1 x) (projT1 y) then left _ else right _).
 Defined.
 
 Instance Decidable_eq_vec {T : Type} {n} `(DT : forall x y : T, Decidable (x = y)) :
-  forall x y : vec T n, Decidable (x = y) := {
+  forall x y : vec T n, Decidable (x = y).
+refine (fun x y => {|
   Decidable_witness := proj1_sig (bool_of_sumbool (vec_eq_dec (fun x y => generic_dec x y) x y))
-}.
+|}).
 destruct (vec_eq_dec _ x y); simpl; split; congruence.
 Defined.
 

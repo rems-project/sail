@@ -22,8 +22,8 @@ Global Instance refl_eq_subrelation {A : Type} {R : A -> A -> Prop} `{Reflexive 
 intros x y EQ. subst. reflexivity.
 Qed.
 
-Hint Extern 4 (_ === _) => reflexivity.
-Hint Extern 4 (_ === _) => symmetry.
+Hint Extern 4 (_ === _) => reflexivity : core.
+Hint Extern 4 (_ === _) => symmetry : core.
 
 
 
