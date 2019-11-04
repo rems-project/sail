@@ -53,5 +53,17 @@ type output =
   | Seq of output list
   | String of string
 
+let gdb_seq = function
+  | Seq xs -> xs
+  | _ -> failwith "Expected GDB sequence"
+
+let gdb_string = function
+  | String xs -> xs
+  | _ -> failwith "Expected GDB string"
+
+let gdb_assoc = function
+  | Assoc xs -> xs
+  | _ -> failwith "Expected GDB associative list"
+
 type response =
   | Result of int * string * (string * output) list

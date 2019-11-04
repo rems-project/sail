@@ -51,7 +51,7 @@
 open Ast
 open Ast_util
 open Printf
-   
+
 let opt_interactive = ref false
 let opt_emacs_mode = ref false
 let opt_suppress_banner = ref false
@@ -72,7 +72,7 @@ type action =
   | Action of (unit -> unit)
 
 let commands = ref []
-            
+
 let reflect_typ action =
   let open Type_check in
   let rec arg_typs = function

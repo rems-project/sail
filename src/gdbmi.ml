@@ -48,6 +48,8 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+open Ast
+open Ast_util
 open Printf
 open Gdbmi_types
 
@@ -107,12 +109,82 @@ let send_regular session cmd =
      flush stdin;
      ignore (wait_for_gdb stdout)
 
-let gdb_sync session ast =
+let synced_registers = ref []
+
+let gdb_sync session =
   let gdb_register_names = parse_gdb_response (send_sync session "data-list-register-names") in
   let gdb_register_values = parse_gdb_response (send_sync session "data-list-register-values x") in
-  print_endline (send_sync session "data-list-register-values x");
-  ()
+  let names = match gdb_register_names with
+    | Result (_, "done", output) ->
+       List.assoc "register-names" output |> gdb_seq |> List.map gdb_string
+    | _ -> failwith "GDB could not get register names"
+  in
+  let values = match gdb_register_values with
+    | Result (_, "done", output) ->
+       List.assoc "register-values" output
+       |> gdb_seq
+       |> List.map gdb_assoc
+       |> List.map (List.assoc "value")
+       |> List.map gdb_string
+    | _ -> failwith "GDB could not get register names"
+  in
+  synced_registers := List.combine names values
 
+let gdb_list_registers session =
+  gdb_sync session;
+  List.iter (fun (name, value) ->
+      print_endline (sprintf "%s: %s" name value)
+    ) !synced_registers
+
+let gdb_read_mem session addr data_size =
+  let open Value in
+  let cmd = sprintf "data-read-memory %s x 1 1 %i" (Sail_lib.string_of_bits addr) (Big_int.to_int data_size) in
+  (* An example response looks something like:
+
+     7^done,addr="0x0000000040009e64",nr-bytes="4",total-bytes="4",next-row="0x0000000040009e68",
+     prev-row="0x0000000040009e60",next-page="0x0000000040009e68",prev-page="0x0000000040009e60",
+     memory=[{addr="0x0000000040009e64",data=["0x03","0xfc","0x5a","0xd3"]}]
+     *)
+  match parse_gdb_response (send_sync session cmd) with
+  | Result (_, "done", output) ->
+     List.assoc "memory" output |> gdb_seq
+     |> List.hd |> gdb_assoc
+     |> List.assoc "data" |> gdb_seq
+     |> List.rev_map (fun byte -> Sail_lib.byte_of_int (int_of_string (gdb_string byte)))
+     |> List.concat
+
+  | _ -> failwith "Unexpected response from GDB"
+
+let value_gdb_read_ram session =
+  let open Value in
+  function
+  | [addr_size; data_size; _; addr] ->
+     mk_vector (gdb_read_mem session (coerce_bv addr) (coerce_int data_size))
+
+  | _ -> failwith "gdb_read_ram"
+
+let gdb_effect_interp session state eff =
+  let open Value in
+  let open Interpreter in
+  let lstate, gstate = state in
+  match eff with
+  | Read_mem (rk, addr, len, cont) ->
+     let result = mk_vector (gdb_read_mem session (coerce_bv addr) (coerce_int len)) in
+     cont result state
+  | Read_reg (name, cont) ->
+     begin match List.assoc_opt name !synced_registers with
+     | Some value ->
+        let value = mk_vector (Sail_lib.to_bits' (64, Big_int.of_string value)) in
+        cont value state
+     | None ->
+        cont (Bindings.find (mk_id name) gstate.registers) state
+     end
+  | _ ->
+     failwith "Unsupported in GDB state"
+
+let gdb_hooks session =
+  Value.add_primop "read_ram" (value_gdb_read_ram session);
+  Interpreter.set_effect_interp (gdb_effect_interp session)
 
 let () =
   let open Interactive in
@@ -159,7 +231,17 @@ let () =
   register_command
     ~name:"gdb_sync"
     ~help:"Sync sail registers with GDB"
-    (Action (fun () -> gdb_sync !session !ast));
+    (Action (fun () -> gdb_sync !session));
+
+  register_command
+    ~name:"gdb_list_registers"
+    ~help:"Sync sail registers with GDB and list them"
+    (Action (fun () -> gdb_list_registers !session));
+
+  register_command
+    ~name:"gdb_hooks"
+    ~help:"Make reading and writing memory go via GDB"
+    (Action (fun () -> gdb_hooks !session));
 
   (ArgString ("symbol_file", fun file -> Action (fun () ->
     send_regular !session ("symbol-file " ^ file)

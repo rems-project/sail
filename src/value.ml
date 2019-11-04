@@ -486,7 +486,7 @@ let value_undefined_vector = function
 let value_undefined_bitvector = function
   | [v] -> V_vector (Sail_lib.undefined_vector (coerce_int v, V_bit (Sail_lib.B0)))
   | _ -> failwith "value undefined_bitvector"
-       
+
 let value_read_ram = function
   | [v1; v2; v3; v4] -> mk_vector (Sail_lib.read_ram (coerce_int v1, coerce_int v2, coerce_bv v3, coerce_bv v4))
   | _ -> failwith "value read_ram"
@@ -751,5 +751,3 @@ let primops = ref
 
 let add_primop name impl =
   primops := StringMap.add name impl !primops
-  
-       

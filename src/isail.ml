@@ -175,7 +175,7 @@ let setup_sail_scripting () =
       ) !commands;
     sail_scripting_primops_once := false
   )
- 
+
 let print_program () =
   match !current_mode with
   | Normal | Emacs -> ()
@@ -215,7 +215,7 @@ let rec run () =
        | Effect_request (out, state, stack, eff) ->
           begin
             try
-              current_mode := Evaluation (Interpreter.default_effect_interp state eff)
+              current_mode := Evaluation (!Interpreter.effect_interp state eff)
             with
             | Failure str -> print_endline str; current_mode := Normal
           end;
@@ -250,7 +250,7 @@ let rec run_steps n =
        | Effect_request (out, state, stack, eff) ->
           begin
             try
-              current_mode := Evaluation (Interpreter.default_effect_interp state eff)
+              current_mode := Evaluation (!Interpreter.effect_interp state eff)
             with
             | Failure str -> print_endline str; current_mode := Normal
           end;
@@ -716,7 +716,7 @@ let handle_input' input =
            begin
              try
                interactive_state := state;
-               current_mode := Evaluation (Interpreter.default_effect_interp state eff);
+               current_mode := Evaluation (!Interpreter.effect_interp state eff);
                print_program ()
              with
              | Failure str -> print_endline str; current_mode := Normal

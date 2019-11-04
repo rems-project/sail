@@ -274,9 +274,7 @@ let rec replicate_bits (bits, n) =
 
 let identity x = x
 
-
-
-(* 
+(*
 Returns list of n bits of integer m starting from offset o >= 0 (bits numbered from least significant). 
 Uses twos-complement representation for m<0 and pads most significant bits in sign-extended way. 
 Most significant bit is head of returned list.
@@ -529,7 +527,7 @@ let fast_read_ram (data_size, addr) =
   !vector
 
 let tag_ram = (ref Mem.empty : (bool Mem.t) ref);;
-  
+
 let write_tag_bool (addr, tag) =
   let addri = uint addr in
   tag_ram := Mem.add addri tag !tag_ram
@@ -550,7 +548,6 @@ let shr_int (n, m) = Big_int.shift_right n (Big_int.to_int m)
 let lor_int (n, m) = Big_int.bitwise_or n m
 let land_int (n, m) = Big_int.bitwise_and n m
 let lxor_int (n, m) = Big_int.bitwise_xor n m
-
 
 let debug (str1, n, str2, v) = prerr_endline (str1 ^ Big_int.to_string n ^ str2 ^ string_of_bits v)
 
