@@ -112,6 +112,7 @@ type env =
     union_ids : (typquant * typ) Bindings.t;
     registers : (effect * effect * typ) Bindings.t;
     variants : (typquant * type_union list) Bindings.t;
+    scattered_variant_envs : env Bindings.t;
     mappings : (typquant * typ * typ) Bindings.t;
     typ_vars : (Ast.l * kind_aux) KBindings.t;
     shadow_vars : int KBindings.t;
@@ -421,6 +422,7 @@ module Env : sig
   val add_scattered_variant : id -> typquant -> t -> t
   val add_variant_clause : id -> type_union -> t -> t
   val get_variant : id -> t -> typquant * type_union list
+  val get_scattered_variant_env : id -> t -> t
   val add_mapping : id -> typquant * typ * typ -> t -> t
   val add_union_id : id -> typquant * typ -> t -> t
   val get_union_id  : id -> t -> typquant * typ
@@ -499,6 +501,7 @@ end = struct
       union_ids = Bindings.empty;
       registers = Bindings.empty;
       variants = Bindings.empty;
+      scattered_variant_envs = Bindings.empty;
       mappings = Bindings.empty;
       typ_vars = KBindings.empty;
       shadow_vars = KBindings.empty;
@@ -1140,7 +1143,10 @@ end = struct
 
   let add_scattered_variant id typq env =
     typ_print (lazy (adding ^ "scattered variant " ^ string_of_id id));
-    { env with variants = Bindings.add id (typq, []) env.variants }
+    { env with
+      variants = Bindings.add id (typq, []) env.variants;
+      scattered_variant_envs = Bindings.add id env env.scattered_variant_envs
+    }
 
   let add_variant_clause id tu env =
     match Bindings.find_opt id env.variants with
@@ -1152,6 +1158,11 @@ end = struct
     | Some (typq, tus) -> typq, tus
     | None -> typ_error env (id_loc id) ("union " ^ string_of_id id ^ " not found")
 
+  let get_scattered_variant_env id env =
+    match Bindings.find_opt id env.scattered_variant_envs with
+    | Some env' -> env'
+    | None -> typ_error env (id_loc id) ("scattered union " ^ string_of_id id ^ " has not been declared")
+            
   let is_register id env =
     Bindings.mem id env.registers
 
@@ -5155,7 +5166,13 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
      [DEF_scattered (SD_aux (SD_unioncl (id, tu), (l, None)))],
      let env = Env.add_variant_clause id tu env in
      let typq, _ = Env.get_variant id env in
-     check_type_union l env env id typq tu
+     let definition_env = Env.get_scattered_variant_env id env in
+     (try check_type_union l definition_env env id typq tu with
+      | Type_error (env, l', err) ->
+         let msg = "As this is a scattered union clause, this could \
+                    also be caused by using a type defined after the \
+                    'scattered union' declaration" in
+         raise (Type_error (env, l', Err_because (err, id_loc id, Err_other msg))))
   | SD_funcl (FCL_aux (FCL_Funcl (id, _), (l, _)) as funcl) ->
      let typq, typ = Env.get_val_spec id env in
      let funcl_env = add_typquant l typq env in
