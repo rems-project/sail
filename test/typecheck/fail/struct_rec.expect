@@ -9,5 +9,5 @@ Type error:
  [91m |[0m  [91m |[0m[91m^-----------[0m
  [91m |[0m 4[96m |[0m}
  [91m |[0m  [91m |[0m[91m^[0m
- [91m |[0m  [91m |[0m Recursive types are not allowed
+ [91m |[0m  [91m |[0m Types are not well-formed within this type definition. Note that recursive types are forbidden.
  [91m |[0m 

@@ -803,10 +803,10 @@ end = struct
     | Typ_var kid -> begin
       match KBindings.find kid env.typ_vars with
       | (_, K_type) -> ()
-      | (_, k) -> typ_error env l ("Kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ
+      | (_, k) -> typ_error env l ("Type variable " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ
                                ^ " is " ^ string_of_kind_aux k ^ " rather than Type")
       | exception Not_found ->
-         typ_error env l ("Unbound kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
+         typ_error env l ("Unbound type variable " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
     end
     | Typ_fn (arg_typs, ret_typ, effs) -> List.iter (wf_typ ~exs:exs env) arg_typs; wf_typ ~exs:exs env ret_typ
     | Typ_bidir (typ1, typ2) when strip_typ typ1 = strip_typ typ2 ->
@@ -5080,15 +5080,16 @@ let fold_union_quant quants (QI_aux (qi, l)) =
 let forbid_recursive_types type_l f =
   try f () with
   | Type_error (env, l, err) ->
-     raise (Type_error (env, l, Err_because (err, type_l, Err_other "Recursive types are not allowed")))
+     let msg = "Types are not well-formed within this type definition. Note that recursive types are forbidden." in
+     raise (Type_error (env, l, Err_because (err, type_l, Err_other msg)))
 
 let check_type_union u_l non_rec_env env variant typq (Tu_aux (tu, l)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
   match tu with
   | Tu_ty_id (Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) as typ, v) ->
      let typq = mk_typquant (List.map (mk_qi_id K_type) (KidSet.elements (tyvars_of_typ typ))) in
-     forbid_recursive_types u_l (fun () -> wf_binding l non_rec_env (typq, tuple_typ arg_typ));
      wf_binding l env (typq, typ);
+     forbid_recursive_types u_l (fun () -> wf_binding l non_rec_env (typq, tuple_typ arg_typ));
      env
      |> Env.add_union_id v (typq, typ)
      |> Env.add_val_spec v (typq, typ)

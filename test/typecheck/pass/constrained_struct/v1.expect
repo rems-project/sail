@@ -7,5 +7,5 @@ Type error:
   [91m |[0m [[96mconstrained_struct/v1.sail[0m]:10:0-30
   [91m |[0m 10[96m |[0mtype MyStruct64 = MyStruct(65)
   [91m |[0m   [91m |[0m[91m^----------------------------^[0m
-  [91m |[0m   [91m |[0m Recursive types are not allowed
+  [91m |[0m   [91m |[0m Types are not well-formed within this type definition. Note that recursive types are forbidden.
   [91m |[0m 
