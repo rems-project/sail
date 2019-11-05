@@ -1059,7 +1059,7 @@ end = struct
     | Not_found -> typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
   let is_enum id env = Bindings.mem id env.enums
-                 
+
   let is_record id env = Bindings.mem id env.records
 
   let get_record id env = Bindings.find id env.records
@@ -5074,37 +5074,54 @@ let fold_union_quant quants (QI_aux (qi, l)) =
   | QI_id kind_id -> quants @ [kinded_id_arg kind_id]
   | _ -> quants
 
-let check_type_union env variant typq (Tu_aux (tu, l)) =
+(* We wrap this around wf_binding checks that aim to forbid recursive
+   types to explain any error messages raised if the well-formedness
+   check fails. *)
+let forbid_recursive_types type_l f =
+  try f () with
+  | Type_error (env, l, err) ->
+     raise (Type_error (env, l, Err_because (err, type_l, Err_other "Recursive types are not allowed")))
+
+let check_type_union u_l non_rec_env env variant typq (Tu_aux (tu, l)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
   match tu with
   | Tu_ty_id (Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) as typ, v) ->
      let typq = mk_typquant (List.map (mk_qi_id K_type) (KidSet.elements (tyvars_of_typ typ))) in
+     forbid_recursive_types u_l (fun () -> wf_binding l non_rec_env (typq, tuple_typ arg_typ));
      wf_binding l env (typq, typ);
      env
      |> Env.add_union_id v (typq, typ)
      |> Env.add_val_spec v (typq, typ)
   | Tu_ty_id (arg_typ, v) ->
      let typ' = mk_typ (Typ_fn ([arg_typ], ret_typ, no_effect)) in
+     forbid_recursive_types u_l (fun () -> wf_binding l non_rec_env (typq, arg_typ));
      wf_binding l env (typq, typ');
      env
      |> Env.add_union_id v (typq, typ')
      |> Env.add_val_spec v (typq, typ')
-
-(* FIXME: This code is duplicated with general kind-checking code in environment, can they be merged? *)
 
 let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
   fun env (TD_aux (tdef, (l, _))) ->
   let td_err () = raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented Typedef") in
   match tdef with
   | TD_abbrev (id, typq, typ_arg) ->
+     begin match typ_arg with
+     | A_aux (A_typ typ, a_l) ->
+        forbid_recursive_types l (fun () -> wf_binding a_l env (typq, typ));
+     | _ -> ()
+     end;
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_typ_synonym id typq typ_arg env
   | TD_record (id, typq, fields, _) ->
+     forbid_recursive_types l (fun () -> List.iter (fun (Typ_aux (_, l) as field, _) -> wf_binding l env (typq, field)) fields);
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_record id typq fields env
   | TD_variant (id, typq, arms, _) ->
+     let rec_env = Env.add_variant id (typq, arms) env in
+     (* register_value is a special type used by theorem prover
+        backends that we allow to be recursive. *)
+     let non_rec_env = if string_of_id id = "register_value" then rec_env else env in
      let env =
-       env
-       |> Env.add_variant id (typq, arms)
-       |> (fun env -> List.fold_left (fun env tu -> check_type_union env id typq tu) env arms)
+       rec_env
+       |> (fun env -> List.fold_left (fun env tu -> check_type_union l non_rec_env env id typq tu) env arms)
      in
      [DEF_type (TD_aux (tdef, (l, None)))], env
   | TD_enum (id, ids, _) ->
@@ -5137,7 +5154,7 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
      [DEF_scattered (SD_aux (SD_unioncl (id, tu), (l, None)))],
      let env = Env.add_variant_clause id tu env in
      let typq, _ = Env.get_variant id env in
-     check_type_union env id typq tu
+     check_type_union l env env id typq tu
   | SD_funcl (FCL_aux (FCL_Funcl (id, _), (l, _)) as funcl) ->
      let typq, typ = Env.get_val_spec id env in
      let funcl_env = add_typquant l typq env in

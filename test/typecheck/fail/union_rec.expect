@@ -1,0 +1,13 @@
+Type error:
+[[96munion_rec.sail[0m]:3:9-10
+3[96m |[0m  Ctor : U
+ [91m |[0m         [91m^[0m
+ [91m |[0m Undefined type U
+ [91m |[0m This error was caused by:
+ [91m |[0m [[96munion_rec.sail[0m]:2:0-4:1
+ [91m |[0m 2[96m |[0munion U = {
+ [91m |[0m  [91m |[0m[91m^----------[0m
+ [91m |[0m 4[96m |[0m}
+ [91m |[0m  [91m |[0m[91m^[0m
+ [91m |[0m  [91m |[0m Recursive types are not allowed
+ [91m |[0m 

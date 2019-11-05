@@ -1,0 +1,4 @@
+
+struct S = {
+  field : S
+}

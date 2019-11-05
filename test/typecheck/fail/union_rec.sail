@@ -1,0 +1,4 @@
+
+union U = {
+  Ctor : U
+}

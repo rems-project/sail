@@ -179,6 +179,13 @@ let gdb_effect_interp session state eff =
      | None ->
         cont (Bindings.find (mk_id name) gstate.registers) state
      end
+  | Write_reg (name, v, cont) ->
+     let id = mk_id name in
+     if Bindings.mem id gstate.registers then
+       let state' = (lstate, { gstate with registers = Bindings.add id v gstate.registers }) in
+       cont () state'
+     else
+       failwith ("Write of nonexistent register: " ^ name)
   | _ ->
      failwith "Unsupported in GDB state"
 
