@@ -4850,7 +4850,7 @@ let all_rewrites = [
     ("simple_types", Basic_rewriter rewrite_simple_types);
     ("overload_cast", Basic_rewriter rewrite_overload_cast);
     ("top_sort_defs", Basic_rewriter (fun _ -> top_sort_defs));
-    ("constant_fold", String_rewriter (fun target -> Basic_rewriter (fun _ -> Constant_fold.rewrite_constant_function_calls target)));
+    ("constant_fold", String_rewriter (fun target -> Basic_rewriter (fun _ -> Constant_fold.rewrite_constant_function_calls Bindings.empty target)));
     ("split", String_rewriter (fun str -> Basic_rewriter (rewrite_split_fun_ctor_pats str)));
     ("properties", Basic_rewriter (fun _ -> Property.rewrite));
   ]

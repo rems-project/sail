@@ -110,7 +110,7 @@ let sail_logo =
   List.map banner logo @ [""] @ help @ [""]
 
 let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear
-  
+
 let vs_ids = ref (val_spec_ids !Interactive.ast)
 
 let interactive_state = ref (initial_state ~registers:false !Interactive.ast !Interactive.env !Value.primops)
@@ -142,7 +142,7 @@ let setup_sail_scripting () =
   let open Interactive in
 
   let sail_command_name cmd = "sail_" ^ String.sub cmd 1 (String.length cmd - 1) in
-  
+
   let val_specs =
     List.map (fun (cmd, (_, action)) ->
         let name = sail_command_name cmd in
