@@ -156,6 +156,7 @@ type ctx =
     locals : (mut * ctyp) Bindings.t;
     letbinds : int list;
     no_raw : bool;
+    unroll_loops : int option;
     convert_typ : ctx -> typ -> ctyp;
     optimize_anf : ctx -> typ aexp -> typ aexp;
     specialize_calls : bool;
@@ -174,6 +175,7 @@ let initial_ctx ~convert_typ:convert_typ ~optimize_anf:optimize_anf env =
     locals = Bindings.empty;
     letbinds = [];
     no_raw = false;
+    unroll_loops = None;
     convert_typ = convert_typ;
     optimize_anf = optimize_anf;
     specialize_calls = false;
@@ -210,7 +212,7 @@ let rec compile_aval l ctx = function
      end
 
   | AV_ref (id, typ) ->
-     [], V_ref (name id, ctyp_of_typ ctx (lvar_typ typ)), []
+     [], V_lit (VL_ref (string_of_id id), CT_ref (ctyp_of_typ ctx (lvar_typ typ))), []
 
   | AV_lit (L_aux (L_string str, _), typ) ->
      [], V_lit ((VL_string (String.escaped str)), ctyp_of_typ ctx typ), []
@@ -581,12 +583,12 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
      | CT_list ctyp ->
         let hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_call (List_hd, [cval])) case_label in
         let tl_setup, tl_cleanup, ctx = compile_match ctx tl_apat (V_call (List_tl, [cval])) case_label in
-        [ijump (V_call (Eq, [cval; V_lit (VL_null, CT_list ctyp)])) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup, ctx
+        [ijump (V_call (Eq, [cval; V_lit (VL_list [], CT_list ctyp)])) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup, ctx
      | _ ->
         raise (Reporting.err_general l "Tried to pattern match cons on non list type")
      end
 
-  | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_null, ctyp)])) case_label], [], ctx
+  | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_list [], ctyp)])) case_label], [], ctx
 
 let unit_cval = V_lit (VL_unit, CT_unit)
 
@@ -927,21 +929,29 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
 
      let loop_var = name loop_var in
 
+     let loop_body prefix continue =
+       prefix
+       @ [iblock ([ijump (V_call ((if is_inc then Igt else Ilt), [V_id (loop_var, CT_fint 64); V_id (to_gs, CT_fint 64)])) loop_end_label]
+                  @ body_setup
+                  @ [body_call (CL_id (body_gs, CT_unit))]
+                  @ body_cleanup
+                  @ [icopy l (CL_id (loop_var, (CT_fint 64)))
+                       (V_call ((if is_inc then Iadd else Isub), [V_id (loop_var, CT_fint 64); V_id (step_gs, CT_fint 64)]))]
+                  @ continue ())]
+     in
+     (* We can either generate an actual loop body for C, or unroll the body for SMT *)
+     let actual = loop_body [ilabel loop_start_label] (fun () -> [igoto loop_start_label]) in
+     let rec unroll max n = loop_body [] (fun () -> if n < max then unroll max (n + 1) else [imatch_failure ()]) in
+     let body = match ctx.unroll_loops with Some times -> unroll times 0 | None -> actual in
+
      variable_init from_gs from_setup from_call from_cleanup
      @ variable_init to_gs to_setup to_call to_cleanup
      @ variable_init step_gs step_setup step_call step_cleanup
      @ [iblock ([idecl (CT_fint 64) loop_var;
                  icopy l (CL_id (loop_var, (CT_fint 64))) (V_id (from_gs, CT_fint 64));
-                 idecl CT_unit body_gs;
-                 iblock ([ilabel loop_start_label]
-                         @ [ijump (V_call ((if is_inc then Igt else Ilt), [V_id (loop_var, CT_fint 64); V_id (to_gs, CT_fint 64)])) loop_end_label]
-                         @ body_setup
-                         @ [body_call (CL_id (body_gs, CT_unit))]
-                         @ body_cleanup
-                         @ [icopy l (CL_id (loop_var, (CT_fint 64)))
-                                  (V_call ((if is_inc then Iadd else Isub), [V_id (loop_var, CT_fint 64); V_id (step_gs, CT_fint 64)]))]
-                         @ [igoto loop_start_label]);
-                 ilabel loop_end_label])],
+                 idecl CT_unit body_gs]
+                @ body
+                @ [ilabel loop_end_label])],
      (fun clexp -> icopy l clexp unit_cval),
      []
 

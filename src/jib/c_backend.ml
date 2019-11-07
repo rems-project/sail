@@ -100,7 +100,7 @@ let zencode_uid (id, ctyps) =
   match ctyps with
   | [] -> Util.zencode_string (string_of_id id)
   | _ -> Util.zencode_string (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
-                              
+
 (**************************************************************************)
 (* 2. Converting sail types to C types                                    *)
 (**************************************************************************)
@@ -1094,24 +1094,28 @@ let sgen_mask n =
   else
     failwith "Tried to create a mask literal for a vector greater than 64 bits."
 
-let sgen_value = function
+let rec sgen_value = function
   | VL_bits ([], _) -> "UINT64_C(0)"
   | VL_bits (bs, true) -> "UINT64_C(" ^ Sail2_values.show_bitlist bs ^ ")"
   | VL_bits (bs, false) -> "UINT64_C(" ^ Sail2_values.show_bitlist (List.rev bs) ^ ")"
   | VL_int i -> Big_int.to_string i ^ "l"
   | VL_bool true -> "true"
   | VL_bool false -> "false"
-  | VL_null -> "NULL"
   | VL_unit -> "UNIT"
   | VL_bit Sail2_values.B0 -> "UINT64_C(0)"
   | VL_bit Sail2_values.B1 -> "UINT64_C(1)"
   | VL_bit Sail2_values.BU -> failwith "Undefined bit found in value"
   | VL_real str -> str
   | VL_string str -> "\"" ^ str ^ "\""
-  
+  | VL_matcher (n, uid) -> Printf.sprintf "matcher(%d, %d)" n uid
+  | VL_tuple values -> "(" ^ Util.string_of_list ", " string_of_value values ^ ")"
+  | VL_list [] -> "NULL"
+  | VL_list values -> "[|" ^ Util.string_of_list ", " string_of_value values ^ "|]"
+  | VL_enum element -> Util.zencode_string element
+  | VL_ref r -> "&" ^ Util.zencode_string r
+
 let rec sgen_cval = function
   | V_id (id, ctyp) -> sgen_name id
-  | V_ref (id, _) -> "&" ^ sgen_name id
   | V_lit (vl, ctyp) -> sgen_value vl
   | V_call (op, cvals) -> sgen_call op cvals
   | V_field (f, field) ->

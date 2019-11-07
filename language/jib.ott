@@ -92,7 +92,6 @@ op :: '' ::=
 
 cval :: 'V_' ::=
   | name : ctyp                                       :: :: id
-  | '&' name : ctyp                                   :: :: ref
   | value : ctyp                                      :: :: lit
   | struct { uid0 = cval0 , ... , uidn = cvaln } ctyp :: :: struct
   | cval != kind id ( ctyp0 , ... , ctypn ) ctyp      :: :: ctor_kind
