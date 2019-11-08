@@ -153,7 +153,7 @@ let unique_per_function_ids cdefs =
     | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, ctyp, unique_instrs i instrs)
     | CDEF_type ctd -> CDEF_type ctd
     | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, unique_instrs i instrs)
-    | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, ctyps, ctyp)
+    | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, ctyps, ctyp)
     | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, unique_instrs i instrs)
     | CDEF_startup (id, instrs) -> CDEF_startup (id, unique_instrs i instrs)
     | CDEF_finish (id, instrs) -> CDEF_finish (id, unique_instrs i instrs)

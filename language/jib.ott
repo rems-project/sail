@@ -26,6 +26,11 @@ metavar string ::=
   {{ ocaml string }}
   {{ lem string }}
 
+metavar mstring ::=
+  {{ phantom }}
+  {{ ocaml string option }}
+  {{ lem maybe string }}
+
 metavar bool ::=
   {{ phantom }}
   {{ ocaml bool }}
@@ -239,7 +244,7 @@ cdef :: 'CDEF_' ::=
       instr0 ; ... ; instrm
     } :: :: let
 
-  | val id ( ctyp0 , ... , ctypn ) -> ctyp :: :: spec
+  | val id = mstring ( ctyp0 , ... , ctypn ) -> ctyp :: :: spec
 
 % If mid = Some id this indicates that the caller should allocate the
 % return type and passes a pointer to it as an extra argument id for

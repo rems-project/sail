@@ -101,6 +101,8 @@ let zencode_uid (id, ctyps) =
   | [] -> Util.zencode_string (string_of_id id)
   | _ -> Util.zencode_string (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
 
+let ctor_bindings = List.fold_left (fun map (id, ctyp) -> UBindings.add id ctyp map) UBindings.empty
+
 (**************************************************************************)
 (* 2. Converting sail types to C types                                    *)
 (**************************************************************************)
@@ -108,90 +110,9 @@ let zencode_uid (id, ctyps) =
 let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
 let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
 
-(** Convert a sail type into a C-type. This function can be quite
-   slow, because it uses ctx.local_env and SMT to analyse the Sail
-   types and attempts to fit them into the smallest possible C
-   types, provided ctx.optimize_smt is true (default) **)
-let rec ctyp_of_typ ctx typ =
-  let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
-  match typ_aux with
-  | Typ_id id when string_of_id id = "bit"    -> CT_bit
-  | Typ_id id when string_of_id id = "bool"   -> CT_bool
-  | Typ_id id when string_of_id id = "int"    -> CT_lint
-  | Typ_id id when string_of_id id = "nat"    -> CT_lint
-  | Typ_id id when string_of_id id = "unit"   -> CT_unit
-  | Typ_id id when string_of_id id = "string" -> CT_string
-  | Typ_id id when string_of_id id = "real"   -> CT_real
-
-  | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
-
-  | Typ_app (id, args) when string_of_id id = "itself" ->
-     ctyp_of_typ ctx (Typ_aux (Typ_app (mk_id "atom", args), l))
-  | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" ->
-     begin match destruct_range Env.empty typ with
-     | None -> assert false (* Checked if range type in guard *)
-     | Some (kids, constr, n, m) ->
-        let ctx = { ctx with local_env = add_existential Parse_ast.Unknown (List.map (mk_kopt K_int) kids) constr ctx.local_env }in
-        match nexp_simp n, nexp_simp m with
-        | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-             when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
-           CT_fint 64
-        | n, m ->
-           if prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) then
-             CT_fint 64
-           else
-             CT_lint
-     end
-
-  | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
-     CT_list (ctyp_of_typ ctx typ)
-
-  (* When converting a sail bitvector type into C, we have three options in order of efficiency:
-     - If the length is obviously static and smaller than 64, use the fixed bits type (aka uint64_t), fbits.
-     - If the length is less than 64, then use a small bits type, sbits.
-     - If the length may be larger than 64, use a large bits type lbits. *)
-  | Typ_app (id, [A_aux (A_nexp n, _);
-                  A_aux (A_order ord, _)])
-       when string_of_id id = "bitvector" ->
-     let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
-     begin match nexp_simp n with
-     | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_fbits (Big_int.to_int n, direction)
-     | n when prove __POS__ ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits (64, direction)
-     | _ -> CT_lbits direction
-     end
-
-  | Typ_app (id, [A_aux (A_nexp n, _);
-                  A_aux (A_order ord, _);
-                  A_aux (A_typ typ, _)])
-       when string_of_id id = "vector" ->
-     let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
-     CT_vector (direction, ctyp_of_typ ctx typ)
-
-  | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
-     CT_ref (ctyp_of_typ ctx typ)
-
-  | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records  -> CT_struct (id, Bindings.find id ctx.records |> UBindings.bindings)
-  | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> UBindings.bindings)
-  | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
-
-  | Typ_tup typs -> CT_tup (List.map (ctyp_of_typ ctx) typs)
-
-  | Typ_exist _ ->
-     (* Use Type_check.destruct_exist when optimising with SMT, to
-        ensure that we don't cause any type variable clashes in
-        local_env, and that we can optimize the existential based upon
-        it's constraints. *)
-     begin match destruct_exist (Env.expand_synonyms ctx.local_env typ) with
-     | Some (kids, nc, typ) ->
-        let env = add_existential l kids nc ctx.local_env in
-        ctyp_of_typ { ctx with local_env = env } typ
-     | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
-     end
-
-  | Typ_var kid -> CT_poly
-
-  | _ -> c_error ~loc:l ("No C type for type " ^ string_of_typ typ)
-
+(** This function is used to split types into those we allocate on the
+   stack, versus those which need to live on the heap, or otherwise
+   require some additional memory management *)
 let rec is_stack_ctyp ctyp = match ctyp with
   | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit | CT_bool | CT_enum _ -> true
   | CT_fint n -> n <= 64
@@ -207,346 +128,442 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_poly -> true
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
 
-let is_stack_typ ctx typ = is_stack_ctyp (ctyp_of_typ ctx typ)
+let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1), true), CT_fbits (i, true))
 
-let is_fbits_typ ctx typ =
-  match ctyp_of_typ ctx typ with
-  | CT_fbits _ -> true
-  | _ -> false
+module C_config : Config = struct
 
-let is_sbits_typ ctx typ =
-  match ctyp_of_typ ctx typ with
-  | CT_sbits _ -> true
-  | _ -> false
+(** Convert a sail type into a C-type. This function can be quite
+   slow, because it uses ctx.local_env and SMT to analyse the Sail
+   types and attempts to fit them into the smallest possible C
+   types, provided ctx.optimize_smt is true (default) **)
+  let rec convert_typ ctx typ =
+    let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
+    match typ_aux with
+    | Typ_id id when string_of_id id = "bit"    -> CT_bit
+    | Typ_id id when string_of_id id = "bool"   -> CT_bool
+    | Typ_id id when string_of_id id = "int"    -> CT_lint
+    | Typ_id id when string_of_id id = "nat"    -> CT_lint
+    | Typ_id id when string_of_id id = "unit"   -> CT_unit
+    | Typ_id id when string_of_id id = "string" -> CT_string
+    | Typ_id id when string_of_id id = "real"   -> CT_real
 
-let ctor_bindings = List.fold_left (fun map (id, ctyp) -> UBindings.add id ctyp map) UBindings.empty
+    | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
 
-(**************************************************************************)
-(* 3. Optimization of primitives and literals                             *)
-(**************************************************************************)
+    | Typ_app (id, args) when string_of_id id = "itself" ->
+       convert_typ ctx (Typ_aux (Typ_app (mk_id "atom", args), l))
+    | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" ->
+       begin match destruct_range Env.empty typ with
+       | None -> assert false (* Checked if range type in guard *)
+       | Some (kids, constr, n, m) ->
+          let ctx = { ctx with local_env = add_existential Parse_ast.Unknown (List.map (mk_kopt K_int) kids) constr ctx.local_env }in
+          match nexp_simp n, nexp_simp m with
+          | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
+               when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
+             CT_fint 64
+          | n, m ->
+             if prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) then
+               CT_fint 64
+             else
+               CT_lint
+       end
 
-let hex_char =
-  let open Sail2_values in
-  function
-  | '0' -> [B0; B0; B0; B0]
-  | '1' -> [B0; B0; B0; B1]
-  | '2' -> [B0; B0; B1; B0]
-  | '3' -> [B0; B0; B1; B1]
-  | '4' -> [B0; B1; B0; B0]
-  | '5' -> [B0; B1; B0; B1]
-  | '6' -> [B0; B1; B1; B0]
-  | '7' -> [B0; B1; B1; B1]
-  | '8' -> [B1; B0; B0; B0]
-  | '9' -> [B1; B0; B0; B1]
-  | 'A' | 'a' -> [B1; B0; B1; B0]
-  | 'B' | 'b' -> [B1; B0; B1; B1]
-  | 'C' | 'c' -> [B1; B1; B0; B0]
-  | 'D' | 'd' -> [B1; B1; B0; B1]
-  | 'E' | 'e' -> [B1; B1; B1; B0]
-  | 'F' | 'f' -> [B1; B1; B1; B1]
-  | _ -> failwith "Invalid hex character"
+    | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
+       CT_list (convert_typ ctx typ)
 
-let literal_to_fragment (L_aux (l_aux, _) as lit) =
-  match l_aux with
-  | L_num n when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
-     Some (V_lit (VL_int n, CT_fint 64))
-  | L_hex str when String.length str <= 16 ->
-     let padding = 16 - String.length str in
-     let padding = Util.list_init padding (fun _ -> Sail2_values.B0) in
-     let content = Util.string_to_list str |> List.map hex_char |> List.concat in
-     Some (V_lit (VL_bits (padding @ content, true), CT_fbits (String.length str * 4, true)))
-  | L_unit -> Some (V_lit (VL_unit, CT_unit))
-  | L_true -> Some (V_lit (VL_bool true, CT_bool))
-  | L_false -> Some (V_lit (VL_bool false, CT_bool))
-  | _ -> None
+    (* When converting a sail bitvector type into C, we have three options in order of efficiency:
+       - If the length is obviously static and smaller than 64, use the fixed bits type (aka uint64_t), fbits.
+       - If the length is less than 64, then use a small bits type, sbits.
+       - If the length may be larger than 64, use a large bits type lbits. *)
+    | Typ_app (id, [A_aux (A_nexp n, _);
+                    A_aux (A_order ord, _)])
+         when string_of_id id = "bitvector" ->
+       let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
+       begin match nexp_simp n with
+       | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_fbits (Big_int.to_int n, direction)
+       | n when prove __POS__ ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits (64, direction)
+       | _ -> CT_lbits direction
+       end
 
-let c_literals ctx =
-  let rec c_literal env l = function
-    | AV_lit (lit, typ) as v when is_stack_ctyp (ctyp_of_typ { ctx with local_env = env } typ) ->
+    | Typ_app (id, [A_aux (A_nexp n, _);
+                    A_aux (A_order ord, _);
+                    A_aux (A_typ typ, _)])
+         when string_of_id id = "vector" ->
+       let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
+       CT_vector (direction, convert_typ ctx typ)
+
+    | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
+       CT_ref (convert_typ ctx typ)
+
+    | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records  -> CT_struct (id, Bindings.find id ctx.records |> UBindings.bindings)
+    | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> UBindings.bindings)
+    | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
+
+    | Typ_tup typs -> CT_tup (List.map (convert_typ ctx) typs)
+
+    | Typ_exist _ ->
+       (* Use Type_check.destruct_exist when optimising with SMT, to
+          ensure that we don't cause any type variable clashes in
+          local_env, and that we can optimize the existential based
+          upon it's constraints. *)
+       begin match destruct_exist (Env.expand_synonyms ctx.local_env typ) with
+       | Some (kids, nc, typ) ->
+          let env = add_existential l kids nc ctx.local_env in
+          convert_typ { ctx with local_env = env } typ
+       | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
+       end
+
+    | Typ_var kid -> CT_poly
+
+    | _ -> c_error ~loc:l ("No C type for type " ^ string_of_typ typ)
+
+  let is_stack_typ ctx typ = is_stack_ctyp (convert_typ ctx typ)
+
+  let is_fbits_typ ctx typ =
+    match convert_typ ctx typ with
+    | CT_fbits _ -> true
+    | _ -> false
+
+  let is_sbits_typ ctx typ =
+    match convert_typ ctx typ with
+    | CT_sbits _ -> true
+    | _ -> false
+
+  (**************************************************************************)
+  (* 3. Optimization of primitives and literals                             *)
+  (**************************************************************************)
+
+  let hex_char =
+    let open Sail2_values in
+    function
+    | '0' -> [B0; B0; B0; B0]
+    | '1' -> [B0; B0; B0; B1]
+    | '2' -> [B0; B0; B1; B0]
+    | '3' -> [B0; B0; B1; B1]
+    | '4' -> [B0; B1; B0; B0]
+    | '5' -> [B0; B1; B0; B1]
+    | '6' -> [B0; B1; B1; B0]
+    | '7' -> [B0; B1; B1; B1]
+    | '8' -> [B1; B0; B0; B0]
+    | '9' -> [B1; B0; B0; B1]
+    | 'A' | 'a' -> [B1; B0; B1; B0]
+    | 'B' | 'b' -> [B1; B0; B1; B1]
+    | 'C' | 'c' -> [B1; B1; B0; B0]
+    | 'D' | 'd' -> [B1; B1; B0; B1]
+    | 'E' | 'e' -> [B1; B1; B1; B0]
+    | 'F' | 'f' -> [B1; B1; B1; B1]
+    | _ -> failwith "Invalid hex character"
+
+  let literal_to_fragment (L_aux (l_aux, _) as lit) =
+    match l_aux with
+    | L_num n when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
+       Some (V_lit (VL_int n, CT_fint 64))
+    | L_hex str when String.length str <= 16 ->
+       let padding = 16 - String.length str in
+       let padding = Util.list_init padding (fun _ -> Sail2_values.B0) in
+       let content = Util.string_to_list str |> List.map hex_char |> List.concat in
+       Some (V_lit (VL_bits (padding @ content, true), CT_fbits (String.length str * 4, true)))
+    | L_unit -> Some (V_lit (VL_unit, CT_unit))
+    | L_true -> Some (V_lit (VL_bool true, CT_bool))
+    | L_false -> Some (V_lit (VL_bool false, CT_bool))
+    | _ -> None
+
+  let c_literals ctx =
+    let rec c_literal env l = function
+      | AV_lit (lit, typ) as v when is_stack_ctyp (convert_typ { ctx with local_env = env } typ) ->
+         begin
+           match literal_to_fragment lit with
+           | Some cval -> AV_cval (cval, typ)
+           | None -> v
+         end
+      | AV_tuple avals -> AV_tuple (List.map (c_literal env l) avals)
+      | v -> v
+    in
+    map_aval c_literal
+
+  let rec is_bitvector = function
+    | [] -> true
+    | AV_lit (L_aux (L_zero, _), _) :: avals -> is_bitvector avals
+    | AV_lit (L_aux (L_one, _), _) :: avals -> is_bitvector avals
+    | _ :: _ -> false
+
+  let rec value_of_aval_bit = function
+    | AV_lit (L_aux (L_zero, _), _) -> Sail2_values.B0
+    | AV_lit (L_aux (L_one, _), _) -> Sail2_values.B1
+    | _ -> assert false
+
+  (** Used to make sure the -Ofixed_int and -Ofixed_bits don't
+     interfere with assumptions made about optimizations in the common
+     case. *)
+  let rec never_optimize = function
+    | CT_lbits _ | CT_lint -> true
+    | _ -> false
+
+  let rec c_aval ctx = function
+    | AV_lit (lit, typ) as v ->
        begin
          match literal_to_fragment lit with
          | Some cval -> AV_cval (cval, typ)
          | None -> v
        end
-    | AV_tuple avals -> AV_tuple (List.map (c_literal env l) avals)
-    | v -> v
-  in
-  map_aval c_literal
-
-let rec is_bitvector = function
-  | [] -> true
-  | AV_lit (L_aux (L_zero, _), _) :: avals -> is_bitvector avals
-  | AV_lit (L_aux (L_one, _), _) :: avals -> is_bitvector avals
-  | _ :: _ -> false
-
-let rec value_of_aval_bit = function
-  | AV_lit (L_aux (L_zero, _), _) -> Sail2_values.B0
-  | AV_lit (L_aux (L_one, _), _) -> Sail2_values.B1
-  | _ -> assert false
-
-(** Used to make sure the -Ofixed_int and -Ofixed_bits don't interfere
-   with assumptions made about optimizations in the common case. *)
-let rec never_optimize = function
-  | CT_lbits _ | CT_lint -> true
-  | _ -> false
-
-let rec c_aval ctx = function
-  | AV_lit (lit, typ) as v ->
-     begin
-       match literal_to_fragment lit with
-       | Some cval -> AV_cval (cval, typ)
-       | None -> v
-     end
-  | AV_cval (cval, typ) -> AV_cval (cval, typ)
-  (* An id can be converted to a C fragment if it's type can be
+    | AV_cval (cval, typ) -> AV_cval (cval, typ)
+    (* An id can be converted to a C fragment if it's type can be
      stack-allocated. *)
-  | AV_id (id, lvar) as v ->
-     begin
-       match lvar with
-       | Local (_, typ) ->
-          let ctyp = ctyp_of_typ ctx typ in
-          if is_stack_ctyp ctyp && not (never_optimize ctyp) then
-            begin
-              try
-                (* We need to check that id's type hasn't changed due to flow typing *)
-                let _, ctyp' = Bindings.find id ctx.locals in
-                if ctyp_equal ctyp ctyp' then
-                  AV_cval (V_id (name id, ctyp), typ)
-                else
-                  (* id's type changed due to flow
-                     typing, so it's really still heap allocated!  *)
-                  v
-              with
-                (* Hack: Assuming global letbindings don't change from flow typing... *)
-                Not_found -> AV_cval (V_id (name id, ctyp), typ)
-            end
-          else
-            v
-       | Register (_, _, typ) ->
-          let ctyp = ctyp_of_typ ctx typ in
-          if is_stack_ctyp ctyp && not (never_optimize ctyp) then
-            AV_cval (V_id (name id, ctyp), typ)
-          else
-            v
-       | _ -> v
-     end
-  | AV_vector (v, typ) when is_bitvector v && List.length v <= 64 ->
-     let bitstring = VL_bits (List.map value_of_aval_bit v, true) in
-     AV_cval (V_lit (bitstring, CT_fbits (List.length v, true)), typ)
-  | AV_tuple avals -> AV_tuple (List.map (c_aval ctx) avals)
-  | aval -> aval
+    | AV_id (id, lvar) as v ->
+       begin
+         match lvar with
+         | Local (_, typ) ->
+            let ctyp = convert_typ ctx typ in
+            if is_stack_ctyp ctyp && not (never_optimize ctyp) then
+              begin
+                try
+                  (* We need to check that id's type hasn't changed due to flow typing *)
+                  let _, ctyp' = Bindings.find id ctx.locals in
+                  if ctyp_equal ctyp ctyp' then
+                    AV_cval (V_id (name id, ctyp), typ)
+                  else
+                    (* id's type changed due to flow typing, so it's
+                       really still heap allocated!  *)
+                    v
+                with
+                  (* Hack: Assuming global letbindings don't change from flow typing... *)
+                  Not_found -> AV_cval (V_id (name id, ctyp), typ)
+              end
+            else
+              v
+         | Register (_, _, typ) ->
+            let ctyp = convert_typ ctx typ in
+            if is_stack_ctyp ctyp && not (never_optimize ctyp) then
+              AV_cval (V_id (name id, ctyp), typ)
+            else
+              v
+         | _ -> v
+       end
+    | AV_vector (v, typ) when is_bitvector v && List.length v <= 64 ->
+       let bitstring = VL_bits (List.map value_of_aval_bit v, true) in
+       AV_cval (V_lit (bitstring, CT_fbits (List.length v, true)), typ)
+    | AV_tuple avals -> AV_tuple (List.map (c_aval ctx) avals)
+    | aval -> aval
 
-let c_fragment = function
-  | AV_cval (cval, _) -> cval
-  | _ -> assert false
+  let c_fragment = function
+    | AV_cval (cval, _) -> cval
+    | _ -> assert false
 
-let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1), true), CT_fbits (i, true))
+  (* Map over all the functions in an aexp. *)
+  let rec analyze_functions ctx f (AE_aux (aexp, env, l)) =
+    let ctx = { ctx with local_env = env } in
+    let aexp = match aexp with
+      | AE_app (id, vs, typ) -> f ctx id vs typ
 
-(* Map over all the functions in an aexp. *)
-let rec analyze_functions ctx f (AE_aux (aexp, env, l)) =
-  let ctx = { ctx with local_env = env } in
-  let aexp = match aexp with
-    | AE_app (id, vs, typ) -> f ctx id vs typ
+      | AE_cast (aexp, typ) -> AE_cast (analyze_functions ctx f aexp, typ)
 
-    | AE_cast (aexp, typ) -> AE_cast (analyze_functions ctx f aexp, typ)
+      | AE_assign (id, typ, aexp) -> AE_assign (id, typ, analyze_functions ctx f aexp)
 
-    | AE_assign (id, typ, aexp) -> AE_assign (id, typ, analyze_functions ctx f aexp)
+      | AE_write_ref (id, typ, aexp) -> AE_write_ref (id, typ, analyze_functions ctx f aexp)
 
-    | AE_write_ref (id, typ, aexp) -> AE_write_ref (id, typ, analyze_functions ctx f aexp)
+      | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, analyze_functions ctx f aexp)
 
-    | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, analyze_functions ctx f aexp)
+      | AE_let (mut, id, typ1, aexp1, (AE_aux (_, env2, _) as aexp2), typ2) ->
+         let aexp1 = analyze_functions ctx f aexp1 in
+         (* Use aexp2's environment because it will contain constraints for id *)
+         let ctyp1 = convert_typ { ctx with local_env = env2 } typ1 in
+         let ctx = { ctx with locals = Bindings.add id (mut, ctyp1) ctx.locals } in
+         AE_let (mut, id, typ1, aexp1, analyze_functions ctx f aexp2, typ2)
 
-    | AE_let (mut, id, typ1, aexp1, (AE_aux (_, env2, _) as aexp2), typ2) ->
-       let aexp1 = analyze_functions ctx f aexp1 in
-       (* Use aexp2's environment because it will contain constraints for id *)
-       let ctyp1 = ctyp_of_typ { ctx with local_env = env2 } typ1 in
-       let ctx = { ctx with locals = Bindings.add id (mut, ctyp1) ctx.locals } in
-       AE_let (mut, id, typ1, aexp1, analyze_functions ctx f aexp2, typ2)
+      | AE_block (aexps, aexp, typ) -> AE_block (List.map (analyze_functions ctx f) aexps, analyze_functions ctx f aexp, typ)
 
-    | AE_block (aexps, aexp, typ) -> AE_block (List.map (analyze_functions ctx f) aexps, analyze_functions ctx f aexp, typ)
+      | AE_if (aval, aexp1, aexp2, typ) ->
+         AE_if (aval, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2, typ)
 
-    | AE_if (aval, aexp1, aexp2, typ) ->
-       AE_if (aval, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2, typ)
+      | AE_loop (loop_typ, aexp1, aexp2) -> AE_loop (loop_typ, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2)
 
-    | AE_loop (loop_typ, aexp1, aexp2) -> AE_loop (loop_typ, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2)
+      | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
+         let aexp1 = analyze_functions ctx f aexp1 in
+         let aexp2 = analyze_functions ctx f aexp2 in
+         let aexp3 = analyze_functions ctx f aexp3 in
+         let aexp4 = analyze_functions ctx f aexp4 in
+         (* Currently we assume that loop indexes are always safe to put into an int64 *)
+         let ctx = { ctx with locals = Bindings.add id (Immutable, CT_fint 64) ctx.locals } in
+         AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
 
-    | AE_for (id, aexp1, aexp2, aexp3, order, aexp4) ->
-       let aexp1 = analyze_functions ctx f aexp1 in
-       let aexp2 = analyze_functions ctx f aexp2 in
-       let aexp3 = analyze_functions ctx f aexp3 in
-       let aexp4 = analyze_functions ctx f aexp4 in
-       (* Currently we assume that loop indexes are always safe to put into an int64 *)
-       let ctx = { ctx with locals = Bindings.add id (Immutable, CT_fint 64) ctx.locals } in
-       AE_for (id, aexp1, aexp2, aexp3, order, aexp4)
-
-    | AE_case (aval, cases, typ) ->
-       let analyze_case (AP_aux (_, env, _) as pat, aexp1, aexp2) =
-         let pat_bindings = Bindings.bindings (apat_types pat) in
-         let ctx = { ctx with local_env = env } in
-         let ctx =
-           List.fold_left (fun ctx (id, typ) -> { ctx with locals = Bindings.add id (Immutable, ctyp_of_typ ctx typ) ctx.locals }) ctx pat_bindings
+      | AE_case (aval, cases, typ) ->
+         let analyze_case (AP_aux (_, env, _) as pat, aexp1, aexp2) =
+           let pat_bindings = Bindings.bindings (apat_types pat) in
+           let ctx = { ctx with local_env = env } in
+           let ctx =
+             List.fold_left (fun ctx (id, typ) -> { ctx with locals = Bindings.add id (Immutable, convert_typ ctx typ) ctx.locals }) ctx pat_bindings
+           in
+           pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2
          in
-         pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2
-       in
-       AE_case (aval, List.map analyze_case cases, typ)
+         AE_case (aval, List.map analyze_case cases, typ)
 
-    | AE_try (aexp, cases, typ) ->
-       AE_try (analyze_functions ctx f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2) cases, typ)
+      | AE_try (aexp, cases, typ) ->
+         AE_try (analyze_functions ctx f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2) cases, typ)
 
-    | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_throw _ as v -> v
-  in
-  AE_aux (aexp, env, l)
+      | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_throw _ as v -> v
+    in
+    AE_aux (aexp, env, l)
 
-let analyze_primop' ctx id args typ =
-  let no_change = AE_app (id, args, typ) in
-  let args = List.map (c_aval ctx) args in
-  let extern = if Env.is_extern id ctx.tc_env "c" then Env.get_extern id ctx.tc_env "c" else failwith "Not extern" in
+  let analyze_primop' ctx id args typ =
+    let no_change = AE_app (id, args, typ) in
+    let args = List.map (c_aval ctx) args in
+    let extern = if Env.is_extern id ctx.tc_env "c" then Env.get_extern id ctx.tc_env "c" else failwith "Not extern" in
 
-  let v_one = V_lit (VL_int (Big_int.of_int 1), CT_fint 64) in
-  let v_int n = V_lit (VL_int (Big_int.of_int n), CT_fint 64) in
+    let v_one = V_lit (VL_int (Big_int.of_int 1), CT_fint 64) in
+    let v_int n = V_lit (VL_int (Big_int.of_int n), CT_fint 64) in
 
-  match extern, args with
-  | "eq_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
-     begin match cval_ctyp v1 with
-     | CT_fbits _ | CT_sbits _ ->
+    match extern, args with
+    | "eq_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
+       begin match cval_ctyp v1 with
+       | CT_fbits _ | CT_sbits _ ->
         AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
-     | _ -> no_change
-     end
+       | _ -> no_change
+       end
 
-  | "neq_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
-     begin match cval_ctyp v1 with
-     | CT_fbits _ | CT_sbits _ ->
-        AE_val (AV_cval (V_call (Neq, [v1; v2]), typ))
-     | _ -> no_change
-     end
+    | "neq_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
+       begin match cval_ctyp v1 with
+       | CT_fbits _ | CT_sbits _ ->
+          AE_val (AV_cval (V_call (Neq, [v1; v2]), typ))
+       | _ -> no_change
+       end
 
-  | "eq_int", [AV_cval (v1, _); AV_cval (v2, _)] ->
-     AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
+    | "eq_int", [AV_cval (v1, _); AV_cval (v2, _)] ->
+       AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
 
-  | "eq_bit", [AV_cval (v1, _); AV_cval (v2, _)] ->
-     AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
+    | "eq_bit", [AV_cval (v1, _); AV_cval (v2, _)] ->
+       AE_val (AV_cval (V_call (Eq, [v1; v2]), typ))
 
-  | "zeros", [_] ->
-     begin match destruct_vector ctx.tc_env typ with
-     | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
-          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
-        let n = Big_int.to_int n in
-        AE_val (AV_cval (V_lit (VL_bits (Util.list_init n (fun _ -> Sail2_values.B0), true), CT_fbits (n, true)), typ))
-     | _ -> no_change
-     end
+    | "zeros", [_] ->
+       begin match destruct_vector ctx.tc_env typ with
+       | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
+            when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
+          let n = Big_int.to_int n in
+          AE_val (AV_cval (V_lit (VL_bits (Util.list_init n (fun _ -> Sail2_values.B0), true), CT_fbits (n, true)), typ))
+       | _ -> no_change
+       end
 
-  | "zero_extend", [AV_cval (v, _); _] ->
-     begin match destruct_vector ctx.tc_env typ with
-     | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
-          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
-        AE_val (AV_cval (V_call (Zero_extend (Big_int.to_int n), [v]), typ))
-     | _ -> no_change
-     end
+    | "zero_extend", [AV_cval (v, _); _] ->
+       begin match destruct_vector ctx.tc_env typ with
+       | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
+            when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
+          AE_val (AV_cval (V_call (Zero_extend (Big_int.to_int n), [v]), typ))
+       | _ -> no_change
+       end
 
-  | "sign_extend", [AV_cval (v, _); _] ->
-     begin match destruct_vector ctx.tc_env typ with
-     | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
-          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
-        AE_val (AV_cval (V_call (Sign_extend (Big_int.to_int n), [v]), typ))
-     | _ -> no_change
-     end
+    | "sign_extend", [AV_cval (v, _); _] ->
+       begin match destruct_vector ctx.tc_env typ with
+       | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
+            when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
+          AE_val (AV_cval (V_call (Sign_extend (Big_int.to_int n), [v]), typ))
+       | _ -> no_change
+       end
 
-  | "lteq", [AV_cval (v1, _); AV_cval (v2, _)] ->
-     AE_val (AV_cval (V_call (Ilteq, [v1; v2]), typ))
-  | "gteq", [AV_cval (v1, _); AV_cval (v2, _)] ->
-     AE_val (AV_cval (V_call (Igteq, [v1; v2]), typ))
-  | "lt", [AV_cval (v1, _); AV_cval (v2, _)] ->
-     AE_val (AV_cval (V_call (Ilt, [v1; v2]), typ))
-  | "gt", [AV_cval (v1, _); AV_cval (v2, _)] ->
-     AE_val (AV_cval (V_call (Igt, [v1; v2]), typ))
+    | "lteq", [AV_cval (v1, _); AV_cval (v2, _)] ->
+       AE_val (AV_cval (V_call (Ilteq, [v1; v2]), typ))
+    | "gteq", [AV_cval (v1, _); AV_cval (v2, _)] ->
+       AE_val (AV_cval (V_call (Igteq, [v1; v2]), typ))
+    | "lt", [AV_cval (v1, _); AV_cval (v2, _)] ->
+       AE_val (AV_cval (V_call (Ilt, [v1; v2]), typ))
+    | "gt", [AV_cval (v1, _); AV_cval (v2, _)] ->
+       AE_val (AV_cval (V_call (Igt, [v1; v2]), typ))
 
-  | "append", [AV_cval (v1, _); AV_cval (v2, _)] ->
-     begin match ctyp_of_typ ctx typ with
-     | CT_fbits _ | CT_sbits _ ->
-        AE_val (AV_cval (V_call (Concat, [v1; v2]), typ))
-     | _ -> no_change
-     end
+    | "append", [AV_cval (v1, _); AV_cval (v2, _)] ->
+       begin match convert_typ ctx typ with
+       | CT_fbits _ | CT_sbits _ ->
+          AE_val (AV_cval (V_call (Concat, [v1; v2]), typ))
+       | _ -> no_change
+       end
 
-  | "not_bits", [AV_cval (v, _)] ->
-     AE_val (AV_cval (V_call (Bvnot, [v]), typ))
+    | "not_bits", [AV_cval (v, _)] ->
+       AE_val (AV_cval (V_call (Bvnot, [v]), typ))
 
-  | "add_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
-     AE_val (AV_cval (V_call (Bvadd, [v1; v2]), typ))
+    | "add_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
+       AE_val (AV_cval (V_call (Bvadd, [v1; v2]), typ))
 
-  | "sub_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
-     AE_val (AV_cval (V_call (Bvsub, [v1; v2]), typ))
+    | "sub_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
+       AE_val (AV_cval (V_call (Bvsub, [v1; v2]), typ))
 
-  | "and_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
-     AE_val (AV_cval (V_call (Bvand, [v1; v2]), typ))
+    | "and_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
+       AE_val (AV_cval (V_call (Bvand, [v1; v2]), typ))
 
-  | "or_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
-     AE_val (AV_cval (V_call (Bvor, [v1; v2]), typ))
+    | "or_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
+       AE_val (AV_cval (V_call (Bvor, [v1; v2]), typ))
 
-  | "xor_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
-     AE_val (AV_cval (V_call (Bvxor, [v1; v2]), typ))
+    | "xor_bits", [AV_cval (v1, _); AV_cval (v2, _)] when ctyp_equal (cval_ctyp v1) (cval_ctyp v2) ->
+       AE_val (AV_cval (V_call (Bvxor, [v1; v2]), typ))
 
-  | "vector_subrange", [AV_cval (vec, _); AV_cval (f, _); AV_cval (t, _)] ->
-     begin match ctyp_of_typ ctx typ with
-     | CT_fbits (n, true) ->
-        AE_val (AV_cval (V_call (Slice n, [vec; t]), typ))
-     | _ -> no_change
-     end
+    | "vector_subrange", [AV_cval (vec, _); AV_cval (f, _); AV_cval (t, _)] ->
+       begin match convert_typ ctx typ with
+       | CT_fbits (n, true) ->
+          AE_val (AV_cval (V_call (Slice n, [vec; t]), typ))
+       | _ -> no_change
+       end
 
-  | "slice", [AV_cval (vec, _); AV_cval (start, _); AV_cval (len, _)] ->
-     begin match ctyp_of_typ ctx typ with
-     | CT_fbits (n, _) ->
-        AE_val (AV_cval (V_call (Slice n, [vec; start]), typ))
-     | CT_sbits (64, _) ->
-        AE_val (AV_cval (V_call (Sslice 64, [vec; start; len]), typ))
-     | _ -> no_change
-     end
+    | "slice", [AV_cval (vec, _); AV_cval (start, _); AV_cval (len, _)] ->
+       begin match convert_typ ctx typ with
+       | CT_fbits (n, _) ->
+          AE_val (AV_cval (V_call (Slice n, [vec; start]), typ))
+       | CT_sbits (64, _) ->
+          AE_val (AV_cval (V_call (Sslice 64, [vec; start; len]), typ))
+       | _ -> no_change
+       end
 
-  | "vector_access", [AV_cval (vec, _); AV_cval (n, _)] ->
-     AE_val (AV_cval (V_call (Bvaccess, [vec; n]), typ))
+    | "vector_access", [AV_cval (vec, _); AV_cval (n, _)] ->
+       AE_val (AV_cval (V_call (Bvaccess, [vec; n]), typ))
 
-  | "add_int", [AV_cval (op1, _); AV_cval (op2, _)] ->
-     begin match destruct_range Env.empty typ with
-     | None -> no_change
-     | Some (kids, constr, n, m) ->
-        match nexp_simp n, nexp_simp m with
-        | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
+    | "add_int", [AV_cval (op1, _); AV_cval (op2, _)] ->
+       begin match destruct_range Env.empty typ with
+       | None -> no_change
+       | Some (kids, constr, n, m) ->
+          match nexp_simp n, nexp_simp m with
+          | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
                when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
-           AE_val (AV_cval (V_call (Iadd, [op1; op2]), typ))
-        | n, m when prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) ->
-           AE_val (AV_cval (V_call (Iadd, [op1; op2]), typ))
-        | _ -> no_change
-     end
+             AE_val (AV_cval (V_call (Iadd, [op1; op2]), typ))
+          | n, m when prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) ->
+             AE_val (AV_cval (V_call (Iadd, [op1; op2]), typ))
+          | _ -> no_change
+       end
 
-  | "replicate_bits", [AV_cval (vec, vtyp); _] ->
-     begin match destruct_vector ctx.tc_env typ, destruct_vector ctx.tc_env vtyp with
-     | Some (Nexp_aux (Nexp_constant n, _), _, _), Some (Nexp_aux (Nexp_constant m, _), _, _)
-          when Big_int.less_equal n (Big_int.of_int 64) ->
-        let times = Big_int.div n m in
-        if Big_int.equal (Big_int.mul m times) n then
-          AE_val (AV_cval (V_call (Replicate (Big_int.to_int times), [vec]), typ))
-        else
+    | "replicate_bits", [AV_cval (vec, vtyp); _] ->
+       begin match destruct_vector ctx.tc_env typ, destruct_vector ctx.tc_env vtyp with
+       | Some (Nexp_aux (Nexp_constant n, _), _, _), Some (Nexp_aux (Nexp_constant m, _), _, _)
+            when Big_int.less_equal n (Big_int.of_int 64) ->
+          let times = Big_int.div n m in
+          if Big_int.equal (Big_int.mul m times) n then
+            AE_val (AV_cval (V_call (Replicate (Big_int.to_int times), [vec]), typ))
+          else
+            no_change
+       | _, _ ->
           no_change
-     | _, _ ->
-        no_change
-     end
+       end
 
-  | "undefined_bit", _ ->
-     AE_val (AV_cval (V_lit (VL_bit Sail2_values.B0, CT_bit), typ))
+    | "undefined_bit", _ ->
+       AE_val (AV_cval (V_lit (VL_bit Sail2_values.B0, CT_bit), typ))
 
-  | "undefined_bool", _ ->
-     AE_val (AV_cval (V_lit (VL_bool false, CT_bool), typ))
+    | "undefined_bool", _ ->
+       AE_val (AV_cval (V_lit (VL_bool false, CT_bool), typ))
 
-  | _, _ ->
-     no_change
-
-let analyze_primop ctx id args typ =
-  let no_change = AE_app (id, args, typ) in
-  if !optimize_primops then
-    try analyze_primop' ctx id args typ with
-    | Failure str ->
+    | _, _ ->
        no_change
-  else
-    no_change
+
+  let analyze_primop ctx id args typ =
+    let no_change = AE_app (id, args, typ) in
+    if !optimize_primops then
+      try analyze_primop' ctx id args typ with
+      | Failure str ->
+         no_change
+    else
+      no_change
+
+  let optimize_anf ctx aexp =
+    analyze_functions ctx analyze_primop (c_literals ctx aexp)
+
+
+  let unroll_loops () = None
+  let specialize_calls = false
+  let ignore_64 = false
+  let struct_value = false
+  let use_real = false
+end
 
 (** Functions that have heap-allocated return types are implemented by
    passing a pointer a location where the return value should be
@@ -631,7 +648,7 @@ let fix_early_stack_return ret ret_ctyp instrs =
   rewrite_return instrs
 
 let rec insert_heap_returns ret_ctyps = function
-  | (CDEF_spec (id, _, ret_ctyp) as cdef) :: cdefs ->
+  | (CDEF_spec (id, _, _, ret_ctyp) as cdef) :: cdefs ->
      cdef :: insert_heap_returns (Bindings.add id ret_ctyp ret_ctyps) cdefs
 
   | CDEF_fundef (id, None, args, body) :: cdefs ->
@@ -1107,10 +1124,9 @@ let rec sgen_value = function
   | VL_bit Sail2_values.BU -> failwith "Undefined bit found in value"
   | VL_real str -> str
   | VL_string str -> "\"" ^ str ^ "\""
-  | VL_matcher (n, uid) -> Printf.sprintf "matcher(%d, %d)" n uid
-  | VL_tuple values -> "(" ^ Util.string_of_list ", " string_of_value values ^ ")"
+  | VL_tuple values -> "(" ^ Util.string_of_list ", " sgen_value values ^ ")"
   | VL_list [] -> "NULL"
-  | VL_list values -> "[|" ^ Util.string_of_list ", " string_of_value values ^ "|]"
+  | VL_list values -> "[|" ^ Util.string_of_list ", " sgen_value values ^ "|]"
   | VL_enum element -> Util.zencode_string element
   | VL_ref r -> "&" ^ Util.zencode_string r
 
@@ -1998,7 +2014,7 @@ let codegen_def' ctx = function
      string (Printf.sprintf "// register %s" (string_of_id id)) ^^ hardline
      ^^ string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
 
-  | CDEF_spec (id, arg_ctyps, ret_ctyp) ->
+  | CDEF_spec (id, _, arg_ctyps, ret_ctyp) ->
      let static = if !opt_static then "static " else "" in
      if Env.is_extern id ctx.tc_env "c" then
        empty
@@ -2173,13 +2189,9 @@ let rec get_recursive_functions (Defs defs) =
   | [] -> IdSet.empty
 
 let jib_of_ast env ast =
-  let ctx =
-    initial_ctx
-      ~convert_typ:ctyp_of_typ
-      ~optimize_anf:(fun ctx aexp -> analyze_functions ctx analyze_primop (c_literals ctx aexp))
-      env
-  in
-  Jib_compile.compile_ast ctx ast
+  let module Jibc = Make(C_config) in
+  let ctx = initial_ctx (add_special_functions env) in
+  Jibc.compile_ast ctx ast
 
 let compile_ast env output_chan c_includes ast =
   try

@@ -58,54 +58,65 @@ open Type_check
 
 (** This forces all integer struct fields to be represented as
    int64_t. Specifically intended for the various TLB structs in the
-   ARM v8.5 spec. *)
+   ARM v8.5 spec. It is unsound in general. *)
 val optimize_aarch64_fast_struct : bool ref
 
 (** {2 Jib context} *)
 
-(** Context for compiling Sail to Jib. We need to pass a (global)
-   typechecking environment given by checking the full AST. We have to
-   provide a conversion function from Sail types into Jib types, as
-   well as a function that optimizes ANF expressions (which can just
-   be the identity function) *)
+(** Dynamic context for compiling Sail to Jib. We need to pass a
+   (global) typechecking environment given by checking the full
+   AST. *)
 type ctx =
   { records : (ctyp Jib_util.UBindings.t) Bindings.t;
     enums : IdSet.t Bindings.t;
     variants : (ctyp Jib_util.UBindings.t) Bindings.t;
     valspecs : (ctyp list * ctyp) Bindings.t;
-    tc_env : Env.t;
     local_env : Env.t;
+    tc_env : Env.t;
     locals : (mut * ctyp) Bindings.t;
     letbinds : int list;
     no_raw : bool;
-    unroll_loops : int option;
-    convert_typ : ctx -> typ -> ctyp;
-    optimize_anf : ctx -> typ aexp -> typ aexp;
-    (** If false (default), function arguments must match the function
-       type exactly. If true, they can be more specific. *)
-    specialize_calls : bool;
-    (** If false (default), will ensure that fixed size bitvectors are
-       specifically less that 64-bits. If true this restriction will
-       be ignored. *)
-    ignore_64 : bool;
-    (** If false (default) we won't generate any V_struct values *)
-    struct_value : bool;
-    (** Allow real literals *)
-    use_real : bool;
   }
 
-val initial_ctx :
-  convert_typ:(ctx -> typ -> ctyp) ->
-  optimize_anf:(ctx -> typ aexp -> typ aexp) ->
-  Env.t ->
-  ctx
+val initial_ctx : Env.t -> ctx
 
 (** {2 Compilation functions} *)
 
-(** Compile a Sail definition into a Jib definition. The first two
-   arguments are is the current definition number and the total number
-   of definitions, and can be used to drive a progress bar (see
-   Util.progress). *)
-val compile_def : int -> int -> ctx -> tannot def -> cdef list * ctx
+(** The Config module specifies static configuration for compiling
+   Sail into Jib.  We have to provide a conversion
+   function from Sail types into Jib types, as well as a function that
+   optimizes ANF expressions (which can just be the identity function)
+   *)
+module type Config = sig
+  val convert_typ : ctx -> typ -> ctyp
+  val optimize_anf : ctx -> typ aexp -> typ aexp
+  (** Unroll all for loops a bounded number of times. Used for SMT
+       generation. *)
+  val unroll_loops : unit -> int option
+  (** If false, function arguments must match the function
+       type exactly. If true, they can be more specific. *)
+  val specialize_calls : bool
+  (** If false, will ensure that fixed size bitvectors are
+       specifically less that 64-bits. If true this restriction will
+       be ignored. *)
+  val ignore_64 : bool
+  (** If false we won't generate any V_struct values *)
+  val struct_value : bool
+  (** Allow real literals *)
+  val use_real : bool
+end
 
-val compile_ast : ctx -> tannot defs -> cdef list * ctx
+module Make(C: Config) : sig
+  (** Compile a Sail definition into a Jib definition. The first two
+       arguments are is the current definition number and the total
+       number of definitions, and can be used to drive a progress bar
+       (see Util.progress). *)
+  val compile_def : int -> int -> ctx -> tannot def -> cdef list * ctx
+
+  val compile_ast : ctx -> tannot defs -> cdef list * ctx
+end
+
+(** Adds some special functions to the environment that are used to
+   convert several Sail language features, these are sail_assert,
+   sail_exit, and sail_cons. *)
+val add_special_functions : Env.t -> Env.t

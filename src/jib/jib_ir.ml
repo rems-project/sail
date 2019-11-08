@@ -151,8 +151,10 @@ module Ir_formatter = struct
     let output_def buf = function
       | CDEF_reg_dec (id, ctyp, _) ->
          Buffer.add_string buf (sprintf "%s %s : %s" (C.keyword "register") (zencode_id id) (C.typ ctyp))
-      | CDEF_spec (id, ctyps, ctyp) ->
+      | CDEF_spec (id, None, ctyps, ctyp) ->
          Buffer.add_string buf (sprintf "%s %s : (%s) ->  %s" (C.keyword "val") (zencode_id id) (Util.string_of_list ", " C.typ ctyps) (C.typ ctyp));
+      | CDEF_spec (id, Some extern, ctyps, ctyp) ->
+         Buffer.add_string buf (sprintf "%s %s = \"%s\" : (%s) ->  %s" (C.keyword "val") (zencode_id id) extern (Util.string_of_list ", " C.typ ctyps) (C.typ ctyp));
       | CDEF_fundef (id, ret, args, instrs) ->
          let instrs = C.modify_instrs instrs in
          let label_map = C.make_label_map instrs in
@@ -247,7 +249,7 @@ let () =
   ArgString ("(val|register)? identifier", fun arg -> Action (fun () ->
     let is_def id = function
       | CDEF_fundef (id', _, _, _) -> Id.compare id id' = 0
-      | CDEF_spec (id', _, _) -> Id.compare id (prepend_id "val " id') = 0
+      | CDEF_spec (id', _, _, _) -> Id.compare id (prepend_id "val " id') = 0
       | CDEF_reg_dec (id', _, _) -> Id.compare id (prepend_id "register " id') = 0
       | _ -> false
     in

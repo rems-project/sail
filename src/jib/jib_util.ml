@@ -356,13 +356,12 @@ let rec string_of_value = function
   | VL_int i -> Big_int.to_string i ^ "l"
   | VL_bool true -> "true"
   | VL_bool false -> "false"
-  | VL_unit -> "UNIT"
-  | VL_bit Sail2_values.B0 -> "UINT64_C(0)"
-  | VL_bit Sail2_values.B1 -> "UINT64_C(1)"
+  | VL_unit -> "()"
+  | VL_bit Sail2_values.B0 -> "bitzero"
+  | VL_bit Sail2_values.B1 -> "bitone"
   | VL_bit Sail2_values.BU -> failwith "Undefined bit found in value"
   | VL_real str -> str
   | VL_string str -> "\"" ^ str ^ "\""
-  | VL_matcher (n, uid) -> Printf.sprintf "matcher(%d, %d)" n uid
   | VL_tuple values -> "(" ^ Util.string_of_list ", " string_of_value values ^ ")"
   | VL_list [] -> "NULL"
   | VL_list values -> "[|" ^ Util.string_of_list ", " string_of_value values ^ "|]"
@@ -728,7 +727,7 @@ let rec concatmap_instr f (I_aux (instr, aux)) =
        I_try_block (List.concat (List.map (concatmap_instr f) instrs))
   in
   f (I_aux (instr, aux))
-  
+
 (** Iterate over each instruction within an instruction, bottom-up *)
 let rec iter_instr f (I_aux (instr, aux)) =
   match instr with
@@ -748,7 +747,7 @@ let cdef_map_instr f = function
   | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, List.map (map_instr f) instrs)
   | CDEF_startup (id, instrs) -> CDEF_startup (id, List.map (map_instr f) instrs)
   | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr f) instrs)
-  | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, ctyps, ctyp)
+  | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, ctyps, ctyp)
   | CDEF_type tdef -> CDEF_type tdef
 
 (** Map over each instruction in a cdef using concatmap_instr *)
@@ -763,7 +762,7 @@ let cdef_concatmap_instr f = function
      CDEF_startup (id, List.concat (List.map (concatmap_instr f) instrs))
   | CDEF_finish (id, instrs) ->
      CDEF_finish (id, List.concat (List.map (concatmap_instr f) instrs))
-  | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, ctyps, ctyp)
+  | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, ctyps, ctyp)
   | CDEF_type tdef -> CDEF_type tdef
 
 let ctype_def_map_ctyp f = function
@@ -778,7 +777,7 @@ let cdef_map_ctyp f = function
   | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, List.map (map_instr_ctyp f) instrs)
   | CDEF_startup (id, instrs) -> CDEF_startup (id, List.map (map_instr_ctyp f) instrs)
   | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr_ctyp f) instrs)
-  | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, List.map f ctyps, f ctyp)
+  | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, List.map f ctyps, f ctyp)
   | CDEF_type tdef -> CDEF_type (ctype_def_map_ctyp f tdef)
 
 (* Map over all sequences of instructions contained within an instruction *)
@@ -977,7 +976,7 @@ let ctype_def_ctyps = function
 let cdef_ctyps = function
   | CDEF_reg_dec (_, ctyp, instrs) ->
      CTSet.add ctyp (instrs_ctyps instrs)
-  | CDEF_spec (_, ctyps, ctyp) ->
+  | CDEF_spec (_, _, ctyps, ctyp) ->
      CTSet.add ctyp (List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty ctyps)
   | CDEF_fundef (_, _, _, instrs) | CDEF_startup (_, instrs) | CDEF_finish (_, instrs) ->
      instrs_ctyps instrs

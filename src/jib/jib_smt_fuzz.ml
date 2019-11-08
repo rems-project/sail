@@ -152,7 +152,7 @@ let rec run frame =
 exception Skip_iteration of string;;
 
 let fuzz_cdef ctx all_cdefs = function
-  | CDEF_spec (id, arg_ctyps, ret_ctyp) when not (string_of_id id = "and_bool" || string_of_id id = "or_bool") ->
+  | CDEF_spec (id, _, arg_ctyps, ret_ctyp) when not (string_of_id id = "and_bool" || string_of_id id = "or_bool") ->
      let open Type_check in
      let open Interpreter in
      if Env.is_extern id ctx.tc_env "smt" then (

@@ -1146,7 +1146,7 @@ let smt_builtin ctx name args ret_ctyp =
   | "min_int", [v1; v2], _ -> builtin_min_int ctx v1 v2 ret_ctyp
 
   | "ediv_int", [v1; v2], _ -> builtin_tdiv_int ctx v1 v2 ret_ctyp
-                            
+
   (* All signed and unsigned bitvector comparisons *)
   | "slt_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvslt" ctx v1 v2 ret_ctyp
   | "ult_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvult" ctx v1 v2 ret_ctyp
@@ -1351,146 +1351,144 @@ let rec generate_reg_decs ctx inits = function
 let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
 let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
 
-(** Convert a sail type into a C-type. This function can be quite
-   slow, because it uses ctx.local_env and SMT to analyse the Sail
-   types and attempts to fit them into the smallest possible C
-   types, provided ctx.optimize_smt is true (default) **)
-let rec ctyp_of_typ ctx typ =
-  let open Ast in
-  let open Type_check in
-  let open Jib_compile in
-  let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
-  match typ_aux with
-  | Typ_id id when string_of_id id = "bit"    -> CT_bit
-  | Typ_id id when string_of_id id = "bool"   -> CT_bool
-  | Typ_id id when string_of_id id = "int"    -> CT_lint
-  | Typ_id id when string_of_id id = "nat"    -> CT_lint
-  | Typ_id id when string_of_id id = "unit"   -> CT_unit
-  | Typ_id id when string_of_id id = "string" -> CT_string
-  | Typ_id id when string_of_id id = "real"   -> CT_real
+module SMT_config : Jib_compile.Config = struct
+  open Jib_compile
 
-  | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
+  (** Convert a sail type into a C-type. This function can be quite
+     slow, because it uses ctx.local_env and SMT to analyse the Sail
+     types and attempts to fit them into the smallest possible C
+     types, provided ctx.optimize_smt is true (default) **)
+  let rec convert_typ ctx typ =
+    let open Ast in
+    let open Type_check in
+    let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
+    match typ_aux with
+    | Typ_id id when string_of_id id = "bit"    -> CT_bit
+    | Typ_id id when string_of_id id = "bool"   -> CT_bool
+    | Typ_id id when string_of_id id = "int"    -> CT_lint
+    | Typ_id id when string_of_id id = "nat"    -> CT_lint
+    | Typ_id id when string_of_id id = "unit"   -> CT_unit
+    | Typ_id id when string_of_id id = "string" -> CT_string
+    | Typ_id id when string_of_id id = "real"   -> CT_real
 
-  | Typ_app (id, args) when string_of_id id = "itself" ->
-     ctyp_of_typ ctx (Typ_aux (Typ_app (mk_id "atom", args), l))
-  | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" ->
-     begin match destruct_range Env.empty typ with
-     | None -> assert false (* Checked if range type in guard *)
-     | Some (kids, constr, n, m) ->
-        let ctx = { ctx with local_env = add_existential Parse_ast.Unknown (List.map (mk_kopt K_int) kids) constr ctx.local_env } in
-        match nexp_simp n, nexp_simp m with
-        | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-             when n = m ->
-           CT_constant n
-        | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-             when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
-           CT_fint 64
-        | n, m ->
-           if prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) then
+    | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
+
+    | Typ_app (id, args) when string_of_id id = "itself" ->
+       convert_typ ctx (Typ_aux (Typ_app (mk_id "atom", args), l))
+    | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" ->
+       begin match destruct_range Env.empty typ with
+       | None -> assert false (* Checked if range type in guard *)
+       | Some (kids, constr, n, m) ->
+          let ctx = { ctx with local_env = add_existential Parse_ast.Unknown (List.map (mk_kopt K_int) kids) constr ctx.local_env } in
+          match nexp_simp n, nexp_simp m with
+          | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
+               when n = m ->
+             CT_constant n
+          | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
+               when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
              CT_fint 64
-           else
-             CT_lint
-     end
-
-  | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
-     CT_list (ctyp_of_typ ctx typ)
-
-  (* Note that we have to use lbits for zero-length bitvectors because they are not allowed by SMTLIB *)
-  | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_order ord, _)])
-       when string_of_id id = "bitvector"  ->
-     let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
-     begin match nexp_simp n with
-     | Nexp_aux (Nexp_constant n, _) when Big_int.equal n Big_int.zero -> CT_lbits direction
-     | Nexp_aux (Nexp_constant n, _) -> CT_fbits (Big_int.to_int n, direction)
-     | _ -> CT_lbits direction
-     end
-
-  | Typ_app (id, [A_aux (A_nexp n, _);
-                  A_aux (A_order ord, _);
-                  A_aux (A_typ typ, _)])
-       when string_of_id id = "vector" ->
-     let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
-     CT_vector (direction, ctyp_of_typ ctx typ)
-
-  | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
-     CT_ref (ctyp_of_typ ctx typ)
-
-  | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records  -> CT_struct (id, Bindings.find id ctx.records |> UBindings.bindings)
-  | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> UBindings.bindings)
-  | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
-
-  | Typ_tup typs -> CT_tup (List.map (ctyp_of_typ ctx) typs)
-
-  | Typ_exist _ ->
-     (* Use Type_check.destruct_exist when optimising with SMT, to
-        ensure that we don't cause any type variable clashes in
-        local_env, and that we can optimize the existential based upon
-        it's constraints. *)
-     begin match destruct_exist (Env.expand_synonyms ctx.local_env typ) with
-     | Some (kids, nc, typ) ->
-        let env = add_existential l kids nc ctx.local_env in
-        ctyp_of_typ { ctx with local_env = env } typ
-     | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
-     end
-
-  | Typ_var kid -> CT_poly
-
-  | _ -> raise (Reporting.err_unreachable l __POS__ ("No SMT type for type " ^ string_of_typ typ))
-
-(**************************************************************************)
-(* 3. Optimization of primitives and literals                             *)
-(**************************************************************************)
-
-let hex_char =
-  let open Sail2_values in
-  function
-  | '0' -> [B0; B0; B0; B0]
-  | '1' -> [B0; B0; B0; B1]
-  | '2' -> [B0; B0; B1; B0]
-  | '3' -> [B0; B0; B1; B1]
-  | '4' -> [B0; B1; B0; B0]
-  | '5' -> [B0; B1; B0; B1]
-  | '6' -> [B0; B1; B1; B0]
-  | '7' -> [B0; B1; B1; B1]
-  | '8' -> [B1; B0; B0; B0]
-  | '9' -> [B1; B0; B0; B1]
-  | 'A' | 'a' -> [B1; B0; B1; B0]
-  | 'B' | 'b' -> [B1; B0; B1; B1]
-  | 'C' | 'c' -> [B1; B1; B0; B0]
-  | 'D' | 'd' -> [B1; B1; B0; B1]
-  | 'E' | 'e' -> [B1; B1; B1; B0]
-  | 'F' | 'f' -> [B1; B1; B1; B1]
-  | _ -> failwith "Invalid hex character"
-
-let literal_to_cval (L_aux (l_aux, _) as lit) =
-  match l_aux with
-  | L_num n -> Some (V_lit (VL_int n, CT_constant n))
-  | L_hex str when String.length str <= 16 ->
-     let content = Util.string_to_list str |> List.map hex_char |> List.concat in
-     Some (V_lit (VL_bits (content, true), CT_fbits (String.length str * 4, true)))
-  | L_unit -> Some (V_lit (VL_unit, CT_unit))
-  | L_true -> Some (V_lit (VL_bool true, CT_bool))
-  | L_false -> Some (V_lit (VL_bool false, CT_bool))
-  | _ -> None
-
-let c_literals ctx =
-  let rec c_literal env l = function
-    | AV_lit (lit, typ) as v ->
-       begin match literal_to_cval lit with
-       | Some cval -> AV_cval (cval, typ)
-       | None -> v
+          | n, m ->
+             if prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) then
+               CT_fint 64
+             else
+               CT_lint
        end
-    | AV_tuple avals -> AV_tuple (List.map (c_literal env l) avals)
-    | v -> v
-  in
-  map_aval c_literal
+
+    | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
+       CT_list (convert_typ ctx typ)
+
+    (* Note that we have to use lbits for zero-length bitvectors because they are not allowed by SMTLIB *)
+    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_order ord, _)])
+         when string_of_id id = "bitvector"  ->
+       let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
+       begin match nexp_simp n with
+       | Nexp_aux (Nexp_constant n, _) when Big_int.equal n Big_int.zero -> CT_lbits direction
+       | Nexp_aux (Nexp_constant n, _) -> CT_fbits (Big_int.to_int n, direction)
+       | _ -> CT_lbits direction
+       end
+
+    | Typ_app (id, [A_aux (A_nexp n, _);
+                    A_aux (A_order ord, _);
+                    A_aux (A_typ typ, _)])
+         when string_of_id id = "vector" ->
+       let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
+       CT_vector (direction, convert_typ ctx typ)
+
+    | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
+       CT_ref (convert_typ ctx typ)
+
+    | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records  -> CT_struct (id, Bindings.find id ctx.records |> UBindings.bindings)
+    | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> UBindings.bindings)
+    | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
+
+    | Typ_tup typs -> CT_tup (List.map (convert_typ ctx) typs)
+
+    | Typ_exist _ ->
+       (* Use Type_check.destruct_exist when optimising with SMT, to
+          ensure that we don't cause any type variable clashes in
+          local_env, and that we can optimize the existential based
+          upon it's constraints. *)
+       begin match destruct_exist (Env.expand_synonyms ctx.local_env typ) with
+       | Some (kids, nc, typ) ->
+          let env = add_existential l kids nc ctx.local_env in
+          convert_typ { ctx with local_env = env } typ
+       | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
+       end
+
+    | Typ_var kid -> CT_poly
+
+    | _ -> raise (Reporting.err_unreachable l __POS__ ("No SMT type for type " ^ string_of_typ typ))
+
+  let hex_char =
+    let open Sail2_values in
+    function
+    | '0' -> [B0; B0; B0; B0]
+    | '1' -> [B0; B0; B0; B1]
+    | '2' -> [B0; B0; B1; B0]
+    | '3' -> [B0; B0; B1; B1]
+    | '4' -> [B0; B1; B0; B0]
+    | '5' -> [B0; B1; B0; B1]
+    | '6' -> [B0; B1; B1; B0]
+    | '7' -> [B0; B1; B1; B1]
+    | '8' -> [B1; B0; B0; B0]
+    | '9' -> [B1; B0; B0; B1]
+    | 'A' | 'a' -> [B1; B0; B1; B0]
+    | 'B' | 'b' -> [B1; B0; B1; B1]
+    | 'C' | 'c' -> [B1; B1; B0; B0]
+    | 'D' | 'd' -> [B1; B1; B0; B1]
+    | 'E' | 'e' -> [B1; B1; B1; B0]
+    | 'F' | 'f' -> [B1; B1; B1; B1]
+    | _ -> failwith "Invalid hex character"
+
+  let literal_to_cval (L_aux (l_aux, _) as lit) =
+    match l_aux with
+    | L_num n -> Some (V_lit (VL_int n, CT_constant n))
+    | L_hex str when String.length str <= 16 ->
+       let content = Util.string_to_list str |> List.map hex_char |> List.concat in
+       Some (V_lit (VL_bits (content, true), CT_fbits (String.length str * 4, true)))
+    | L_unit -> Some (V_lit (VL_unit, CT_unit))
+    | L_true -> Some (V_lit (VL_bool true, CT_bool))
+    | L_false -> Some (V_lit (VL_bool false, CT_bool))
+    | _ -> None
+
+  let c_literals ctx =
+    let rec c_literal env l = function
+      | AV_lit (lit, typ) as v ->
+         begin match literal_to_cval lit with
+         | Some cval -> AV_cval (cval, typ)
+         | None -> v
+         end
+      | AV_tuple avals -> AV_tuple (List.map (c_literal env l) avals)
+      | v -> v
+    in
+    map_aval c_literal
 
 (* If we know the loop variables exactly (especially after
    specialization), we can unroll the exact number of times required,
    and omit any comparisons. *)
 let unroll_static_foreach ctx = function
   | AE_aux (AE_for (id, from_aexp, to_aexp, by_aexp, order, body), env, l) as aexp ->
-     begin match ctyp_of_typ ctx (aexp_typ from_aexp), ctyp_of_typ ctx (aexp_typ to_aexp), ctyp_of_typ ctx (aexp_typ by_aexp), order with
+     begin match convert_typ ctx (aexp_typ from_aexp), convert_typ ctx (aexp_typ to_aexp), convert_typ ctx (aexp_typ by_aexp), order with
      | CT_constant f, CT_constant t, CT_constant b, Ord_aux (Ord_inc, _) ->
         let i = ref f in
         let unrolled = ref [] in
@@ -1508,6 +1506,19 @@ let unroll_static_foreach ctx = function
      | _ -> aexp
      end
   | aexp -> aexp
+
+  let optimize_anf ctx aexp =
+    aexp
+    |> c_literals ctx
+    |> fold_aexp (unroll_static_foreach ctx)
+
+  let specialize_calls = true
+  let ignore_64 = true
+  let unroll_loops () = Some !opt_unroll_limit
+  let struct_value = true
+  let use_real = true
+end
+
 
 (**************************************************************************)
 (* 3. Generating SMT                                                      *)
@@ -2166,7 +2177,7 @@ let smt_instr_list name ctx all_cdefs instrs =
   stack, start, cfg
 
 let smt_cdef props lets name_file ctx all_cdefs = function
-  | CDEF_spec (function_id, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
+  | CDEF_spec (function_id, _, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
      begin match find_function [] function_id all_cdefs with
      | intervening_lets, Some (None, args, instrs) ->
         let prop_type, prop_args, pragma_l, vs = Bindings.find function_id props in
@@ -2262,20 +2273,10 @@ let rec build_register_map rmap = function
 
 let compile env ast =
   let cdefs, jib_ctx =
-    let open Jib_compile in
-    let optimize_anf ctx aexp =
-      aexp
-      |> c_literals ctx
-      |> fold_aexp (unroll_static_foreach ctx)
-    in
-    let ctx = initial_ctx ~convert_typ:ctyp_of_typ ~optimize_anf:optimize_anf env in
+    let module Jibc = Jib_compile.Make(SMT_config) in
+    let ctx = Jib_compile.(initial_ctx (add_special_functions env)) in
     let t = Profile.start () in
-    let cdefs, ctx =
-      compile_ast { ctx with specialize_calls = true;
-                             ignore_64 = true;
-                             unroll_loops = Some !opt_unroll_limit;
-                             struct_value = true;
-                             use_real = true } ast in
+    let cdefs, ctx = Jibc.compile_ast ctx ast in
     Profile.finish "Compiling to Jib IR" t;
     cdefs, ctx
   in

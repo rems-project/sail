@@ -151,40 +151,38 @@ type ctx =
     enums : IdSet.t Bindings.t;
     variants : (ctyp UBindings.t) Bindings.t;
     valspecs : (ctyp list * ctyp) Bindings.t;
-    tc_env : Env.t;
     local_env : Env.t;
+    tc_env : Env.t;
     locals : (mut * ctyp) Bindings.t;
     letbinds : int list;
     no_raw : bool;
-    unroll_loops : int option;
-    convert_typ : ctx -> typ -> ctyp;
-    optimize_anf : ctx -> typ aexp -> typ aexp;
-    specialize_calls : bool;
-    ignore_64 : bool;
-    struct_value : bool;
-    use_real : bool;
   }
 
-let initial_ctx ~convert_typ:convert_typ ~optimize_anf:optimize_anf env =
+let initial_ctx env =
   { records = Bindings.empty;
     enums = Bindings.empty;
     variants = Bindings.empty;
     valspecs = Bindings.empty;
-    tc_env = env;
     local_env = env;
+    tc_env = env;
     locals = Bindings.empty;
     letbinds = [];
     no_raw = false;
-    unroll_loops = None;
-    convert_typ = convert_typ;
-    optimize_anf = optimize_anf;
-    specialize_calls = false;
-    ignore_64 = false;
-    struct_value = false;
-    use_real = false;
   }
 
-let ctyp_of_typ ctx typ = ctx.convert_typ ctx typ
+module type Config = sig
+  val convert_typ : ctx -> typ -> ctyp
+  val optimize_anf : ctx -> typ aexp -> typ aexp
+  val unroll_loops : unit -> int option
+  val specialize_calls : bool
+  val ignore_64 : bool
+  val struct_value : bool
+  val use_real : bool
+end
+
+module Make(C: Config) = struct
+
+let ctyp_of_typ ctx typ = C.convert_typ ctx typ
 
 let rec chunkify n xs =
   match Util.take n xs, Util.drop n xs with
@@ -217,7 +215,7 @@ let rec compile_aval l ctx = function
   | AV_lit (L_aux (L_string str, _), typ) ->
      [], V_lit ((VL_string (String.escaped str)), ctyp_of_typ ctx typ), []
 
-  | AV_lit (L_aux (L_num n, _), typ) when ctx.ignore_64 ->
+  | AV_lit (L_aux (L_num n, _), typ) when C.ignore_64 ->
      [], V_lit ((VL_int n), ctyp_of_typ ctx typ), []
 
   | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
@@ -239,7 +237,7 @@ let rec compile_aval l ctx = function
   | AV_lit (L_aux (L_false, _), _) -> [], V_lit (VL_bool false, CT_bool), []
 
   | AV_lit (L_aux (L_real str, _), _) ->
-     if ctx.use_real then
+     if C.use_real then
        [], V_lit (VL_real str, CT_real), []
      else
        let gs = ngensym () in
@@ -266,7 +264,7 @@ let rec compile_aval l ctx = function
      [iclear tup_ctyp gs]
      @ cleanup
 
-  | AV_record (fields, typ) when ctx.struct_value ->
+  | AV_record (fields, typ) when C.struct_value ->
      let ctyp = ctyp_of_typ ctx typ in
      let gs = ngensym () in
      let compile_fields (id, aval) =
@@ -311,7 +309,7 @@ let rec compile_aval l ctx = function
      end
 
   (* Convert a small bitvector to a uint64_t literal. *)
-  | AV_vector (avals, typ) when is_bitvector avals && (List.length avals <= 64 || ctx.ignore_64) ->
+  | AV_vector (avals, typ) when is_bitvector avals && (List.length avals <= 64 || C.ignore_64) ->
      begin
        let bitstring = List.map value_of_aval_bit avals in
        let len = List.length avals in
@@ -422,7 +420,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
           let have_ctyp = cval_ctyp cval in
           if is_polymorphic ctyp then
             V_poly (cval, have_ctyp)
-          else if ctx.specialize_calls || ctyp_equal ctyp have_ctyp then
+          else if C.specialize_calls || ctyp_equal ctyp have_ctyp then
             cval
           else
             let gs = ngensym () in
@@ -431,7 +429,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
             V_id (gs, ctyp))
         arg_ctyps args
     in
-    if ctx.specialize_calls || ctyp_equal (clexp_ctyp clexp) ret_ctyp then
+    if C.specialize_calls || ctyp_equal (clexp_ctyp clexp) ret_ctyp then
       !setup @ [ifuncall clexp id cast_args] @ !cleanup
     else
       let gs = ngensym () in
@@ -442,7 +440,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
          iclear ret_ctyp gs]
       @ !cleanup
   in
-  if not ctx.specialize_calls && Env.is_extern (fst id) ctx.tc_env "c" then
+  if not C.specialize_calls && Env.is_extern (fst id) ctx.tc_env "c" then
     let extern = Env.get_extern (fst id) ctx.tc_env "c" in
     begin match extern, List.map cval_ctyp args, clexp_ctyp clexp with
     | "slice", [CT_fbits _; CT_lint; _], CT_fbits (n, _) ->
@@ -942,7 +940,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      (* We can either generate an actual loop body for C, or unroll the body for SMT *)
      let actual = loop_body [ilabel loop_start_label] (fun () -> [igoto loop_start_label]) in
      let rec unroll max n = loop_body [] (fun () -> if n < max then unroll max (n + 1) else [imatch_failure ()]) in
-     let body = match ctx.unroll_loops with Some times -> unroll times 0 | None -> actual in
+     let body = match C.unroll_loops () with Some times -> unroll times 0 | None -> actual in
 
      variable_init from_gs from_setup from_call from_cleanup
      @ variable_init to_gs to_setup to_call to_cleanup
@@ -1221,7 +1219,7 @@ let compile_funcl ctx id pat guard exp =
 
   let guard_instrs = match guard with
     | Some guard ->
-       let guard_aexp = ctx.optimize_anf ctx (no_shadow (pat_ids pat) (anf guard)) in
+       let guard_aexp = C.optimize_anf ctx (no_shadow (pat_ids pat) (anf guard)) in
        let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard_aexp in
        let guard_label = label "guard_" in
        let gs = ngensym () in
@@ -1238,7 +1236,7 @@ let compile_funcl ctx id pat guard exp =
   in
 
   (* Optimize and compile the expression to ANF. *)
-  let aexp = ctx.optimize_anf ctx (no_shadow (pat_ids pat) (anf exp)) in
+  let aexp = C.optimize_anf ctx (no_shadow (pat_ids pat) (anf exp)) in
 
   let setup, call, cleanup = compile_aexp ctx aexp in
   let destructure, destructure_cleanup =
@@ -1290,7 +1288,7 @@ and compile_def' n total ctx = function
   | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) ->
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, [])], ctx
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
-     let aexp = ctx.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
+     let aexp = C.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
      let instrs = setup @ [call (CL_id (name id, ctyp_of_typ ctx typ))] @ cleanup in
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, instrs)], ctx
@@ -1300,13 +1298,19 @@ and compile_def' n total ctx = function
 
   | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), _)) ->
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
+     let extern =
+       if Env.is_extern id ctx.tc_env "c" then
+         Some (Env.get_extern id ctx.tc_env "c")
+       else
+         None
+     in
      let arg_typs, ret_typ = match fn_typ with
        | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
        | _ -> assert false
      in
      let ctx' = { ctx with local_env = add_typquant (id_loc id) quant ctx.local_env } in
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ in
-     [CDEF_spec (id, arg_ctyps, ret_ctyp)],
+     [CDEF_spec (id, extern, arg_ctyps, ret_ctyp)],
      { ctx with valspecs = Bindings.add id (arg_ctyps, ret_ctyp) ctx.valspecs }
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
@@ -1333,7 +1337,7 @@ and compile_def' n total ctx = function
 
   | DEF_val (LB_aux (LB_val (pat, exp), _)) ->
      let ctyp = ctyp_of_typ ctx (typ_of_pat pat) in
-     let aexp = ctx.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
+     let aexp = C.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
      let apat = anf_pat ~global:true pat in
      let gs = ngensym () in
@@ -1554,12 +1558,6 @@ let sort_ctype_defs cdefs =
   ctype_defs @ cdefs
 
 let compile_ast ctx (Defs defs) =
-  let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
-  let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
-  let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
-
-  let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs; cons_vs])) } in
-
   if !opt_memo_cache then
     (try
        if Sys.is_directory "_sbuild" then
@@ -1578,3 +1576,12 @@ let compile_ast ctx (Defs defs) =
   let cdefs, ctx = specialize_variants ctx [] cdefs in
   let cdefs = sort_ctype_defs cdefs in
   cdefs, ctx
+
+end
+
+let add_special_functions env =
+  let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
+  let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
+  let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
+
+  snd (Type_error.check env (Defs [assert_vs; exit_vs; cons_vs]))

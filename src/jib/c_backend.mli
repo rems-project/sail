@@ -106,8 +106,5 @@ val optimize_alias : bool ref
 val optimize_fixed_int : bool ref
 val optimize_fixed_bits : bool ref
 
-(** Convert a typ to a IR ctyp *)
-val ctyp_of_typ : Jib_compile.ctx -> Ast.typ -> ctyp
-
 val jib_of_ast : Env.t -> tannot Ast.defs -> cdef list * Jib_compile.ctx
 val compile_ast : Env.t -> out_channel -> string list -> tannot Ast.defs -> unit
