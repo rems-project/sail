@@ -14,13 +14,14 @@ Graph
 Initial_check
 Interactive
 Interpreter
-Isail
 Jib
 Jib_compile
 Jib_optimize
 Jib_ssa
 Jib_smt
 Jib_util
+Jib_interactive
+Jib_ir
 Latex
 Lexer
 Manifest
@@ -48,7 +49,6 @@ Property
 Reporting
 Rewriter
 Rewrites
-Sail
 Sail2_values
 Sail_lib
 Scattered

@@ -56,6 +56,8 @@ let opt_isa_output_dir = ref None
 let opt_coq_output_dir = ref None
 let opt_alt_modules_coq = ref ([]:string list)
 let opt_alt_modules2_coq = ref ([]:string list)
+let opt_memo_z3 = ref false
+let opt_file_out : string option ref = ref None
 
 type out_type =
   | Lem_out of string list
@@ -238,12 +240,6 @@ let rec preprocess opts = function
 
 let preprocess_ast opts (Parse_ast.Defs defs) = Parse_ast.Defs (preprocess opts defs)
 
-let load_file_no_check opts order f = Initial_check.process_ast (preprocess_ast opts (parse_file f))
-
-let load_file opts order env f =
-  let ast = Initial_check.process_ast (preprocess_ast opts (parse_file f)) in
-  Type_error.check env ast
-
 let opt_just_check = ref false
 let opt_ddump_tc_ast = ref false
 let opt_ddump_rewrite_ast = ref None
@@ -256,6 +252,33 @@ let check_ast (env : Type_check.Env.t) (defs : unit Ast.defs) : Type_check.tanno
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)
 
+let load_files ?check:(check=false) options type_envs files =
+  if !opt_memo_z3 then Constraint.load_digests () else ();
+
+  let t = Profile.start () in
+  let parsed = List.map (fun f -> (f, parse_file f)) files in
+  let ast =
+    List.fold_right (fun (_, Parse_ast.Defs ast_nodes) (Parse_ast.Defs later_nodes)
+                     -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
+  let ast = preprocess_ast options ast in
+  let ast = Initial_check.process_ast ~generate:(not check) ast in
+  (* The separate loop measures declarations would be awkward to type check, so
+     move them into the definitions beforehand. *)
+  let ast = Rewrites.move_loop_measures ast in
+  Profile.finish "parsing" t;
+
+  let t = Profile.start () in
+  let (ast, type_envs) = check_ast type_envs ast in
+  Profile.finish "type checking" t;
+
+  if !opt_memo_z3 then Constraint.save_digests () else ();
+
+  let out_name = match !opt_file_out with
+    | None when parsed = [] -> "out.sail"
+    | None -> fst (List.hd parsed)
+    | Some f -> f ^ ".sail" in
+
+  (out_name, ast, type_envs)
 
 let open_output_with_check opt_dir file_name =
   let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in
@@ -348,12 +371,12 @@ let output_coq opt_dir filename alt_modules alt_modules2 libs defs =
     (match alt_modules with
     | [] -> base_imports_default
     | _ -> Str.split (Str.regexp "[ \t]+") (String.concat " " alt_modules)
-    ) in  
+    ) in
   let alt_modules2_imports =
     (match alt_modules2 with
     | [] -> []
     | _ -> Str.split (Str.regexp "[ \t]+") (String.concat " " alt_modules2)
-    ) in  
+    ) in
   let ((ot,_,_,_) as ext_ot) =
     open_output_with_check_unformatted opt_dir (filename ^ "_types" ^ ".v") in
   let ((o,_,_,_) as ext_o) =
@@ -413,3 +436,10 @@ let rewrite_ast_initial env = rewrite env [("initial", fun env defs -> Rewriter.
 let rewrite_ast_target tgt env = rewrite env (Rewrites.rewrite_defs_target tgt)
 
 let rewrite_ast_check env = rewrite env Rewrites.rewrite_defs_check
+
+let descatter type_envs ast =
+  let ast = Scattered.descatter ast in
+  let ast, type_envs = rewrite_ast_initial type_envs ast in
+  (* Recheck after descattering so that the internal type environments
+     always have complete variant types *)
+  Type_error.check Type_check.initial_env ast

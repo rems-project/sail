@@ -393,7 +393,7 @@ let load_session upto file =
   | Some upto_file when Filename.basename upto_file = file -> None
   | Some upto_file ->
      let (_, ast, env) =
-       load_files ~check:true !Interactive.env [Filename.concat (Filename.dirname upto_file) file]
+       Process_file.load_files ~check:true options !Interactive.env [Filename.concat (Filename.dirname upto_file) file]
      in
      Interactive.ast := append_ast !Interactive.ast ast;
      Interactive.env := env;
@@ -509,7 +509,7 @@ let handle_input' input =
         begin match cmd with
         | ":l" | ":load" ->
            let files = Util.split_on_char ' ' arg in
-           let (_, ast, env) = load_files !Interactive.env files in
+           let (_, ast, env) = Process_file.load_files options !Interactive.env files in
            Interactive.ast := append_ast !Interactive.ast ast;
            interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
            Interactive.env := env;
@@ -601,7 +601,7 @@ let handle_input' input =
            Interactive.ast := ast;
            vs_ids := val_spec_ids !Interactive.ast
         | ":compile" ->
-           let out_name = match !opt_file_out with
+           let out_name = match !Process_file.opt_file_out with
              | None -> "out.sail"
              | Some f -> f ^ ".sail"
            in
@@ -628,7 +628,7 @@ let handle_input' input =
            begin
              try
                load_into_session arg;
-               let (_, ast, env) = load_files ~check:true !Interactive.env [arg] in
+               let (_, ast, env) = Process_file.load_files ~check:true options !Interactive.env [arg] in
                Interactive.ast := append_ast !Interactive.ast ast;
                interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
                Interactive.env := env;
