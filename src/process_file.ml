@@ -71,7 +71,6 @@ let get_lexbuf f =
   lexbuf, in_chan
 
 let parse_file ?loc:(l=Parse_ast.Unknown) (f : string) : Parse_ast.defs =
-  let open Reporting in
   try
     let lexbuf, in_chan = get_lexbuf f in
     begin
@@ -82,12 +81,12 @@ let parse_file ?loc:(l=Parse_ast.Unknown) (f : string) : Parse_ast.defs =
       | Parser.Error ->
          let pos = Lexing.lexeme_start_p lexbuf in
          let tok = Lexing.lexeme lexbuf in
-         raise (Fatal_error (Err_syntax (pos, "current token: " ^ tok)))
-      | Lexer.LexError(s,p) ->
-         raise (Fatal_error (Err_lex (p, s)))
+         raise (Reporting.err_syntax pos ("current token: " ^ tok))
+      | Lexer.LexError (s, p) ->
+         raise (Reporting.err_lex p s)
     end
   with
-  | Sys_error err -> raise (err_general l err)
+  | Sys_error err -> raise (Reporting.err_general l err)
 
 (* Simple preprocessor features for conditional file loading *)
 module StringSet = Set.Make(String)

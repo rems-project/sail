@@ -169,13 +169,23 @@ let add_def_to_graph graph def =
   let scan_lexp self lexp_aux annot =
     let env = env_of_annot annot in
     begin match lexp_aux with
-    | LEXP_cast (typ, _) ->
-       IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
+    | LEXP_cast (typ, id) ->
+       IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ);
+       begin match Env.lookup_id id env with
+       | Register _ ->
+          graph := G.add_edge self (Register id) !graph
+       | Enum _ -> graph := G.add_edge self (Constructor id) !graph
+       | _ ->
+          if IdSet.mem id (Env.get_toplevel_lets env) then
+            graph := G.add_edge self (Letbind id) !graph
+          else ()
+       end
     | LEXP_memory (id, _) ->
        graph := G.add_edge self (Function id) !graph
     | LEXP_id id ->
        begin match Env.lookup_id id env with
-       | Register _ -> graph := G.add_edge self (Register id) !graph
+       | Register _ ->
+          graph := G.add_edge self (Register id) !graph
        | Enum _ -> graph := G.add_edge self (Constructor id) !graph
        | _ ->
           if IdSet.mem id (Env.get_toplevel_lets env) then

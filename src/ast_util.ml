@@ -60,7 +60,7 @@ let lvar_typ = function
   | Local (_, typ) -> typ
   | Register (_, _, typ) -> typ
   | Enum typ -> typ
-  | Unbound -> failwith "No type for unbound variable"
+  | Unbound -> Reporting.unreachable Parse_ast.Unknown __POS__ "No type for unbound variable"
 
 let no_annot = (Parse_ast.Unknown, ())
 

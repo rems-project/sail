@@ -345,6 +345,15 @@ let rec remove_pointless_goto = function
      instr :: remove_pointless_goto instrs
   | [] -> []
 
+let rec remove_pointless_exit = function
+  | I_aux (I_end id, aux) :: I_aux (I_end _, _) :: instrs  ->
+     I_aux (I_end id, aux) :: remove_pointless_exit instrs
+  | I_aux (I_end id, aux) :: I_aux (I_undefined _, _) :: instrs  ->
+     I_aux (I_end id, aux) :: remove_pointless_exit instrs
+  | instr :: instrs ->
+     instr :: remove_pointless_exit instrs
+  | [] -> []
+
 module StringSet = Set.Make(String)
 
 let rec get_used_labels set = function
@@ -362,7 +371,6 @@ let remove_unused_labels instrs =
   in
   go [] instrs
 
-
 let remove_dead_after_goto instrs =
   let rec go acc = function
     | (I_aux (I_goto _, _) as instr) :: instrs -> go_dead (instr :: acc) instrs
@@ -377,7 +385,7 @@ let remove_dead_after_goto instrs =
 
 let rec remove_dead_code instrs =
   let instrs' =
-    instrs |> remove_unused_labels |> remove_pointless_goto |> remove_dead_after_goto
+    instrs |> remove_unused_labels |> remove_pointless_goto |> remove_dead_after_goto |> remove_pointless_exit
   in
   if List.length instrs' < List.length instrs then
     remove_dead_code instrs'

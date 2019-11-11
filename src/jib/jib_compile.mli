@@ -83,10 +83,9 @@ val initial_ctx : Env.t -> ctx
 (** {2 Compilation functions} *)
 
 (** The Config module specifies static configuration for compiling
-   Sail into Jib.  We have to provide a conversion
-   function from Sail types into Jib types, as well as a function that
-   optimizes ANF expressions (which can just be the identity function)
-   *)
+   Sail into Jib.  We have to provide a conversion function from Sail
+   types into Jib types, as well as a function that optimizes ANF
+   expressions (which can just be the identity function) *)
 module type Config = sig
   val convert_typ : ctx -> typ -> ctyp
   val optimize_anf : ctx -> typ aexp -> typ aexp

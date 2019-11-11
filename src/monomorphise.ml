@@ -252,12 +252,11 @@ let rec size_nvars_nexp (Nexp_aux (ne,_)) =
 let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
   let cannot l msg default =
     let open Reporting in
-    let error = Err_general (l, msg) in
     match all_errors with
-    | None -> raise (Fatal_error error)
+    | None -> raise (err_general l msg)
     | Some flag -> begin
         flag := false;
-        print_error error;
+        print_err l "Error" msg;
         default
       end
   in
@@ -659,14 +658,12 @@ let split_defs target all_errors splits env defs =
     let renew_id (Id_aux (id,l)) = Id_aux (id,new_l) in
     let cannot msg =
       let open Reporting in
-      let error =
-        Err_general (pat_l,
-                     ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v ^ ": " ^ msg))
-      in if all_errors
+      let error_msg = "Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v ^ ": " ^ msg in
+      if all_errors
         then (no_errors_happened := false;
-              print_error error;
+              print_err pat_l "" error_msg;
               [P_aux (P_id var,(pat_l,annot)),[],[],KBindings.empty])
-        else raise (Fatal_error error)
+        else raise (err_general pat_l error_msg)
     in
     match ty with
     | Typ_id (Id_aux (Id "bool",_)) | Typ_app (Id_aux (Id "atom_bool", _), [_]) ->
@@ -951,13 +948,11 @@ let split_defs target all_errors splits env defs =
       let size = List.length lst in
       if size > size_set_limit then
         let open Reporting in
-        let error =
-          Err_general (l, "Case split is too large (" ^ string_of_int size ^
-            " > limit " ^ string_of_int size_set_limit ^ ")")
-        in if all_errors
-          then (no_errors_happened := false;
-                print_error error; false)
-          else raise (Fatal_error error)
+        let error_msg = "Case split is too large (" ^ string_of_int size ^ " > limit " ^ string_of_int size_set_limit ^ ")" in
+        if all_errors
+        then (no_errors_happened := false;
+              print_err l "" error_msg; false)
+        else raise (err_general l error_msg)
       else true
     in
 
@@ -1927,9 +1922,7 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
           with
           | Some pats ->
              if l = Parse_ast.Unknown then
-               (Reporting.print_error
-                  (Reporting.Err_general
-                     (l, "No location for pattern match: " ^ string_of_exp exp));
+               (Reporting.print_err l "" ("No location for pattern match: " ^ string_of_exp exp);
                 None)
              else
                Some (Have (ArgSplits.singleton (id,loc) (Partial (pats,l)),
