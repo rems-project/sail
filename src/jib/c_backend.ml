@@ -2029,7 +2029,7 @@ let codegen_def' ctx = function
        | None ->
           c_error ~loc:(id_loc id) ("No valspec found for " ^ string_of_id id)
      in
- 
+
      (* Check that the function has the correct arity at this point. *)
      if List.length arg_ctyps <> List.length args then
        c_error ~loc:(id_loc id) ("function arguments "
