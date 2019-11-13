@@ -30,6 +30,36 @@ Fixpoint foreachS {A RV Vars E} (xs : list A) (vars : Vars) (body : A -> Vars ->
      foreachS xs vars body
 end.
 
+(* This uses the same subproof as the prompt version to get around proof relevance issues
+   in Sail2_state_lemmas.  TODO: if we switch to boolean properties this shouldn't be
+   necessary. *)
+Fixpoint foreach_ZS_up' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 < step)} `{ArithFact (0 <= off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <= z <= to)), Vars -> monadS rv Vars e) {struct n} : monadS rv Vars e.
+exact (
+  match sumbool_of_bool (from + off <=? to) with left LE =>
+    match n with
+    | O => returnS vars
+    | S n => body (from + off) (foreach_ZM_up'_subproof _ _ _ _ _ _ LE) vars >>$= fun vars => foreach_ZS_up' rv e Vars from to step (off + step) n _ (foreach_ZM_up'_subproof0 _ _ _ _) vars body
+    end
+  | right _ => returnS vars
+  end).
+Defined.
+
+Fixpoint foreach_ZS_down' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 < step)} `{ArithFact (off <= 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <= z <= from)), Vars -> monadS rv Vars e) {struct n} : monadS rv Vars e.
+exact (
+  match sumbool_of_bool (to <=? from + off) with left LE =>
+    match n with
+    | O => returnS vars
+    | S n => body (from + off) (foreach_ZM_down'_subproof _ _ _ _ _ _ LE) vars >>$= fun vars => foreach_ZS_down' _ _ _ from to step (off - step) n _ (foreach_ZM_down'_subproof0 _ _ _ _) vars body
+    end
+  | right _ => returnS vars
+  end).
+Defined.
+
+Definition foreach_ZS_up {rv e Vars} from to step vars body `{ArithFact (0 < step)} :=
+    foreach_ZS_up' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
+Definition foreach_ZS_down {rv e Vars} from to step vars body `{ArithFact (0 < step)} :=
+    foreach_ZS_down' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
+
 (*val genlistS : forall 'a 'rv 'e. (nat -> monadS 'rv 'a 'e) -> nat -> monadS 'rv (list 'a) 'e*)
 Definition genlistS {A RV E} (f : nat -> monadS RV A E) n : monadS RV (list A) E :=
   let indices := List.seq 0 n in

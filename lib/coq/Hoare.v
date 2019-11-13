@@ -530,6 +530,16 @@ destruct b as [H | H].
 * apply (HY H). reflexivity. 
 Qed.
 
+Lemma PrePostE_match_sum_branch (*[PrePostE_compositeI]:*) Regs A Ety X Y (b : sumbool X Y) (f : X -> monadS Regs A Ety) (g : Y -> monadS Regs A Ety) Pf Pg Q E :
+  (forall H : X, b = left H  -> PrePostE (Pf H) (f H) Q E) ->
+  (forall H : Y, b = right H -> PrePostE (Pg H) (g H) Q E) ->
+  PrePostE (fun s => match b with left H => Pf H s | right H => Pg H s end) (match b with left H => f H | right H => g H end) Q E.
+intros HX HY.
+destruct b as [H | H].
+* apply (HX H). reflexivity. 
+* apply (HY H). reflexivity. 
+Qed.
+
 Lemma PrePostE_if Regs A Ety (b : bool) (f g : monadS Regs A Ety) P Q E :
   (b = true  -> PrePostE P f Q E) ->
   (b = false -> PrePostE P g Q E) ->
@@ -764,6 +774,43 @@ apply PrePost_foreachS_invariant with (Q := fun v => match v with Value a => Q a
 auto.
 Qed.
 
+Lemma PrePostE_foreach_ZS_up_invariant Regs Vars Ety from to step (H : Sail2_values.ArithFact (0 < step)%Z) vars body (Q : Vars -> predS Regs) (E : ex Ety -> predS Regs) :
+  (forall i range vars, PrePostE (Q vars) (body i range vars) Q E) ->
+  PrePostE (Q vars) (foreach_ZS_up from to step vars body) Q E.
+intro INV.
+unfold foreach_ZS_up.
+match goal with
+| |- context[@foreach_ZS_up' _ _ _ _ _ _ _ _ _ ?pf _ _] => generalize pf
+end.
+generalize 0%Z at 2 3 as off.
+revert vars.
+induction (S (Z.abs_nat (from - to))); intros.
+* simpl. destruct (Sumbool.sumbool_of_bool (from + off <=? to)%Z); apply PrePostE_returnS.
+* simpl. destruct (Sumbool.sumbool_of_bool (from + off <=? to)%Z). 
+  + eapply PrePostE_bindS.
+    - intro. apply IHn.
+    - apply INV.
+  + apply PrePostE_returnS.
+Qed.
+
+Lemma PrePostE_foreach_ZS_down_invariant Regs Vars Ety from to step (H : Sail2_values.ArithFact (0 < step)%Z) vars body (Q : Vars -> predS Regs) (E : ex Ety -> predS Regs) :
+  (forall i range vars, PrePostE (Q vars) (body i range vars) Q E) ->
+  PrePostE (Q vars) (foreach_ZS_down from to step vars body) Q E.
+intro INV.
+unfold foreach_ZS_down.
+match goal with
+| |- context[@foreach_ZS_down' _ _ _ _ _ _ _ _ _ ?pf _ _] => generalize pf
+end.
+generalize 0%Z at 1 3 as off.
+revert vars.
+induction (S (Z.abs_nat (from - to))); intros.
+* simpl. destruct (Sumbool.sumbool_of_bool (to <=? from + off)%Z); apply PrePostE_returnS.
+* simpl. destruct (Sumbool.sumbool_of_bool (to <=? from + off)%Z). 
+  + eapply PrePostE_bindS.
+    - intro. apply IHn.
+    - apply INV.
+  + apply PrePostE_returnS.
+Qed.
 
 Lemma PrePostE_use_pre Regs A Ety m (P : predS Regs) (Q : A -> predS Regs) (E : ex Ety -> predS Regs) :
   (forall s, P s -> PrePostE P m Q E) ->
@@ -1077,9 +1124,12 @@ Ltac PrePostE_step :=
     [ eapply PrePostE_if_branch; intros
     | eapply PrePostE_if_sum_branch; intros
     ]
+  | |- PrePostE _ (match _ with left _ => _ | right _ => _ end) _ _ =>
+    eapply PrePostE_match_sum_branch; intros
   | |- PrePostE _ (readS _) ?ppeQ ?ppeE => apply PrePostE_readS with (Q := ppeQ) (E := ppeE)
   | |- PrePostE _ (assert_expS _ _) _ _ => apply PrePostE_assert_expS
   | |- PrePostE _ (assert_expS' _ _) _ _ => apply PrePostE_assert_expS'
+  | |- PrePostE _ (maybe_failS _ _) _ _ => apply PrePostE_maybe_failS
   | |- PrePostE _ (exitS _) _ ?E => apply (PrePostE_exitS _ _ _ _ _ E)
   | |- PrePostE _ (and_boolS _ _) _ _ => eapply PrePostE_and_boolS
   | |- PrePostE _ (or_boolS _ _) _ _ => eapply PrePostE_or_boolS

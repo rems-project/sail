@@ -28,6 +28,42 @@ Add Parametric Morphism {Regs A Vars E : Type} : (@foreachS A Regs Vars E)
 apply foreachS_cong.
 Qed.
 
+Lemma foreach_ZS_up_cong rv e Vars from to step vars body body' H :
+  (forall a pf vars, body a pf vars === body' a pf vars) ->
+  @foreach_ZS_up rv e Vars from to step vars body H === foreach_ZS_up from to step vars body'.
+intro EQ.
+unfold foreach_ZS_up.
+match goal with
+| |- @foreach_ZS_up' _ _ _ _ _ _ _ _ _ ?pf _ _ === _ => generalize pf
+end.
+generalize 0 at 2 3 4 as off.
+revert vars.
+induction (S (Z.abs_nat (from - to))); intros; simpl.
+* reflexivity.
+* destruct (sumbool_of_bool (from + off <=? to)); auto.
+  rewrite EQ.
+  setoid_rewrite IHn.
+  reflexivity.
+Qed.
+
+Lemma foreach_ZS_down_cong rv e Vars from to step vars body body' H :
+  (forall a pf vars, body a pf vars === body' a pf vars) ->
+  @foreach_ZS_down rv e Vars from to step vars body H === foreach_ZS_down from to step vars body'.
+intro EQ.
+unfold foreach_ZS_down.
+match goal with
+| |- @foreach_ZS_down' _ _ _ _ _ _ _ _ _ ?pf _ _ === _ => generalize pf
+end.
+generalize 0 at 1 3 4 as off.
+revert vars.
+induction (S (Z.abs_nat (from - to))); intros; simpl.
+* reflexivity.
+* destruct (sumbool_of_bool (to <=? from + off)); auto.
+  rewrite EQ.
+  setoid_rewrite IHn.
+  reflexivity.
+Qed.
+
 Local Opaque _limit_reduces.
 Ltac gen_reduces :=
   match goal with |- context[@_limit_reduces ?a ?b ?c] => generalize (@_limit_reduces a b c) end.
@@ -227,11 +263,15 @@ Ltac statecong db :=
        let ty := type of x in
        match ty with
        | bool => eapply if_bool_cong; statecong db
-       | sumbool _ _ => eapply if_sumbool_cong; statecong db
+       | sumbool _ _ => eapply if_sumbool_cong; statecong db (* There's also a dependent case below *)
        | _ => apply equiv_reflexive
        end
   | |- (foreachS _ _ _) === _ =>
        solve [ eapply foreachS_cong; intros; statecong db ]
+  | |- (foreach_ZS_up _ _ _ _ _) === _ =>
+       solve [ eapply foreach_ZS_up_cong; intros; statecong db ]
+  | |- (foreach_ZS_down _ _ _ _ _) === _ =>
+       solve [ eapply foreach_ZS_down_cong; intros; statecong db ]
   | |- (genlistS _ _) === _ =>
        solve [ eapply genlistS_cong; intros; statecong db ]
   | |- (whileST _ _ _ _) === _ =>
@@ -258,6 +298,10 @@ Ltac statecong db :=
        | apply equiv_reflexive ]
   | |- (match ?e1 with None => _ | Some _ => _ end) === _ =>
        eapply (@equiv_transitive _ _ _ _ (match e1 with None => _ | Some _ => _ end) _);
+       [ destruct e1; [> etransitivity; [> statecong db | apply equiv_reflexive ] ..]
+       | apply equiv_reflexive ]
+  | |- (match ?e1 with left _ => _ | right _ => _ end) === _ =>
+       eapply (@equiv_transitive _ _ _ _ (match e1 with left _ => _ | right _ => _ end) _);
        [ destruct e1; [> etransitivity; [> statecong db | apply equiv_reflexive ] ..]
        | apply equiv_reflexive ]
   | |- ?X =>
@@ -313,6 +357,19 @@ Hint Extern 0 (liftState _ ?t = _) =>
   | match ?x with _ => _ end =>
     match type of x with
     | sumbool _ _ => apply liftState_if_distrib_sumbool
+    end
+  end : liftState.
+
+Lemma liftState_match_distrib_sumbool {Regs Regval A E P Q r x y} {c : sumbool P Q} :
+  @liftState Regs Regval A E r (match c with left H => x H | right H => y H end) = match c with left H => liftState r (x H) | right H => liftState r (y H) end.
+destruct c; reflexivity.
+Qed.
+(* As above, but also need to beta reduce H into x and y. *)
+Hint Extern 0 (liftState _ ?t = _) =>
+  match t with
+  | match ?x with _ => _ end =>
+    match type of x with
+    | sumbool _ _ => etransitivity; [apply liftState_match_distrib_sumbool | cbv beta; reflexivity ]
     end
   end : liftState.
 
@@ -655,6 +712,48 @@ induction xs as [ | h t].
 Qed.
 Hint Rewrite liftState_foreachM : liftState.
 Hint Resolve liftState_foreachM : liftState.
+
+Lemma liftState_foreach_ZM_up Regs Regval Vars E from to step vars body H r :
+  liftState (Regs := Regs) r
+    (@foreach_ZM_up Regval E Vars from to step vars body H) ===
+     foreach_ZS_up from to step vars (fun z H' a => liftState r (body z H' a)).
+unfold foreach_ZM_up, foreach_ZS_up.
+match goal with
+| |- liftState _ (@foreach_ZM_up' _ _ _ _ _ _ _ _ _ ?pf _ _) === _ => generalize pf
+end.
+generalize 0 at 2 3 4 as off.
+revert vars.
+induction (S (Z.abs_nat (from - to))); intros.
+* simpl.
+  rewrite_liftState.
+  reflexivity.
+* simpl.
+  rewrite_liftState.
+  reflexivity.
+Qed.
+Hint Rewrite liftState_foreach_ZM_up : liftState.
+Hint Resolve liftState_foreach_ZM_up : liftState.
+
+Lemma liftState_foreach_ZM_down Regs Regval Vars E from to step vars body H r :
+  liftState (Regs := Regs) r
+    (@foreach_ZM_down Regval E Vars from to step vars body H) ===
+     foreach_ZS_down from to step vars (fun z H' a => liftState r (body z H' a)).
+unfold foreach_ZM_down, foreach_ZS_down.
+match goal with
+| |- liftState _ (@foreach_ZM_down' _ _ _ _ _ _ _ _ _ ?pf _ _) === _ => generalize pf
+end.
+generalize 0 at 1 3 4 as off.
+revert vars.
+induction (S (Z.abs_nat (from - to))); intros.
+* simpl.
+  rewrite_liftState.
+  reflexivity.
+* simpl.
+  rewrite_liftState.
+  reflexivity.
+Qed.
+Hint Rewrite liftState_foreach_ZM_down : liftState.
+Hint Resolve liftState_foreach_ZM_down : liftState.
 
 Lemma liftState_genlistM Regs Regval A E r f n :
   liftState (Regs := Regs) r (@genlistM A Regval E f n) === genlistS (fun x => liftState r (f x)) n.
