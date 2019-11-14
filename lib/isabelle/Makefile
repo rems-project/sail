@@ -18,10 +18,10 @@ all: thys
 thys: $(THYS)
 
 heap-img: thys $(EXTRA_THYS) ROOT
-ifeq ($(wildcard $(LEM_ISA_LIB)/ROOT),)
-	$(error isabelle-lib directory of Lem not found. Please set the LEM_ISA_LIB environment variable)
-endif
-	isabelle build -b -d $(LEM_ISA_LIB) -D .
+	if [ -z "$(wildcard $(LEM_ISA_LIB)/ROOT)" ]; \
+	then echo isabelle-lib directory of Lem not found. Please set the LEM_ISA_LIB environment variable; false; \
+	else isabelle build -b -d $(LEM_ISA_LIB) -D . ; \
+	fi
 
 manual: heap-img manual/Manual.thy manual/ROOT manual/document/root.tex
 	cp output/document/session_graph.pdf manual/document/Sail_session_graph.pdf
