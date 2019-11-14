@@ -306,9 +306,9 @@ let string_of_op = function
 let rec string_of_ctyp = function
   | CT_lint -> "%i"
   | CT_fint n -> "%i" ^ string_of_int n
-  | CT_lbits _ -> "%lb"
-  | CT_sbits (n, _) -> "%sb" ^ string_of_int n
-  | CT_fbits (n, _) -> "%fb" ^ string_of_int n
+  | CT_lbits _ -> "%bv"
+  | CT_sbits (n, _) -> "%sbv" ^ string_of_int n
+  | CT_fbits (n, _) -> "%bv" ^ string_of_int n
   | CT_constant n -> Big_int.to_string n
   | CT_bit -> "%bit"
   | CT_unit -> "%unit"
@@ -351,9 +351,9 @@ and full_string_of_ctyp = function
 
 let rec string_of_value = function
   | VL_bits ([], _) -> "UINT64_C(0)"
-  | VL_bits (bs, true) -> "UINT64_C(" ^ Sail2_values.show_bitlist bs ^ ")"
-  | VL_bits (bs, false) -> "UINT64_C(" ^ Sail2_values.show_bitlist (List.rev bs) ^ ")"
-  | VL_int i -> Big_int.to_string i ^ "l"
+  | VL_bits (bs, true) -> Sail2_values.show_bitlist bs
+  | VL_bits (bs, false) -> Sail2_values.show_bitlist (List.rev bs)
+  | VL_int i -> Big_int.to_string i
   | VL_bool true -> "true"
   | VL_bool false -> "false"
   | VL_unit -> "()"

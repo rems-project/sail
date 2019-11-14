@@ -254,7 +254,7 @@ let rw_exp fixed target ok not_ok istate =
     | E_app (id, [(E_aux (E_lit (L_aux (L_false, _)), _) as false_exp); _]) when string_of_id id = "and_bool" ->
        ok (); false_exp
 
-    | E_app (id, [(E_aux (E_lit (L_aux (L_false, _)), _) as true_exp); _]) when string_of_id id = "or_bool" ->
+    | E_app (id, [(E_aux (E_lit (L_aux (L_true, _)), _) as true_exp); _]) when string_of_id id = "or_bool" ->
        ok (); true_exp
 
     | E_app (id, args) when List.for_all is_constant args ->
