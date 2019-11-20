@@ -1050,7 +1050,7 @@ let sgen_function_id id =
 let sgen_function_uid uid =
   let str = zencode_uid uid in
   !opt_prefix ^ String.sub str 1 (String.length str - 1)
-  
+
 let codegen_function_id id = string (sgen_function_id id)
 
 let rec sgen_ctyp = function
@@ -1124,11 +1124,11 @@ let rec sgen_value = function
   | VL_bit Sail2_values.BU -> failwith "Undefined bit found in value"
   | VL_real str -> str
   | VL_string str -> "\"" ^ str ^ "\""
-  | VL_tuple values -> "(" ^ Util.string_of_list ", " sgen_value values ^ ")"
-  | VL_list [] -> "NULL"
-  | VL_list values -> "[|" ^ Util.string_of_list ", " sgen_value values ^ "|]"
+  | VL_empty_list -> "NULL"
   | VL_enum element -> Util.zencode_string element
   | VL_ref r -> "&" ^ Util.zencode_string r
+  | VL_undefined ->
+     Reporting.unreachable Parse_ast.Unknown __POS__ "Cannot generate C value for an undefined literal"
 
 let rec sgen_cval = function
   | V_id (id, ctyp) -> sgen_name id

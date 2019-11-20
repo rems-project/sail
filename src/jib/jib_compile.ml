@@ -247,6 +247,10 @@ let rec compile_aval l ctx = function
 
   | AV_lit (L_aux (L_unit, _), _) -> [], V_lit (VL_unit, CT_unit), []
 
+  | AV_lit (L_aux (L_undef, _), typ) ->
+     let ctyp = ctyp_of_typ ctx typ in
+     [], V_lit (VL_undefined, ctyp), []
+
   | AV_lit (L_aux (_, l) as lit, _) ->
      raise (Reporting.err_general l ("Encountered unexpected literal " ^ string_of_lit lit ^ " when converting ANF represention into IR"))
 
@@ -581,12 +585,12 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
      | CT_list ctyp ->
         let hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_call (List_hd, [cval])) case_label in
         let tl_setup, tl_cleanup, ctx = compile_match ctx tl_apat (V_call (List_tl, [cval])) case_label in
-        [ijump (V_call (Eq, [cval; V_lit (VL_list [], CT_list ctyp)])) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup, ctx
+        [ijump (V_call (Eq, [cval; V_lit (VL_empty_list, CT_list ctyp)])) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup, ctx
      | _ ->
         raise (Reporting.err_general l "Tried to pattern match cons on non list type")
      end
 
-  | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_list [], ctyp)])) case_label], [], ctx
+  | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_empty_list, ctyp)])) case_label], [], ctx
 
 let unit_cval = V_lit (VL_unit, CT_unit)
 

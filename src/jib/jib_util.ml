@@ -362,14 +362,14 @@ let rec string_of_value = function
   | VL_bit Sail2_values.BU -> failwith "Undefined bit found in value"
   | VL_real str -> str
   | VL_string str -> "\"" ^ str ^ "\""
-  | VL_tuple values -> "(" ^ Util.string_of_list ", " string_of_value values ^ ")"
-  | VL_list [] -> "NULL"
-  | VL_list values -> "[|" ^ Util.string_of_list ", " string_of_value values ^ "|]"
+  | VL_empty_list -> "NULL"
   | VL_enum element -> Util.zencode_string element
   | VL_ref r -> "&" ^ Util.zencode_string r
+  | VL_undefined -> "undefined"
 
 let rec string_of_cval = function
   | V_id (id, ctyp) -> string_of_name id
+  | V_lit (VL_undefined, ctyp) -> string_of_value VL_undefined ^ " : " ^ string_of_ctyp ctyp
   | V_lit (vl, ctyp) -> string_of_value vl
   | V_call (op, cvals) ->
      Printf.sprintf "%s(%s)" (string_of_op op) (Util.string_of_list ", " string_of_cval cvals)

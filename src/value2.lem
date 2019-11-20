@@ -60,7 +60,7 @@ type vl =
   | VL_int of integer
   | VL_string of string
   | VL_real of string
-  | VL_tuple of list vl
-  | VL_list of list vl
+  | VL_empty_list
   | VL_enum of string
   | VL_ref of string
+  | VL_undefined

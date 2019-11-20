@@ -313,8 +313,6 @@ let rec smt_value ctx vl ctyp =
      else
        Real_lit str
   | VL_enum str, _ -> Enum (Util.zencode_string str)
-  | VL_tuple vls, CT_tup ctyps when List.length vls = List.length ctyps ->
-     Fn ("tup" ^ string_of_int (List.length vls), List.map2 (smt_value ctx) vls ctyps)
   | VL_ref reg_name, _ ->
      let id = mk_id reg_name in
      let rmap = CTMap.filter (fun ctyp regs -> List.exists (fun reg -> Id.compare reg id = 0) regs) ctx.register_map in
