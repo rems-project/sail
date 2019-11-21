@@ -17,6 +17,14 @@ let opt_trace = ref false
 let trace_depth = ref 0
 let random = ref false
 
+
+let opt_cycle_limit = ref 0
+let cycle_count = ref 0
+
+let cycle_limit_reached () = 
+  cycle_count := !cycle_count + 1;
+  !opt_cycle_limit != 0 && !cycle_count >= !opt_cycle_limit
+
 let sail_call (type t) (f : _ -> t) =
   let module M =
     struct exception Return of t end
