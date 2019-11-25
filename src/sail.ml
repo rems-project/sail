@@ -299,6 +299,9 @@ let options = Arg.align ([
   ( "-undefined_gen",
     Arg.Set Initial_check.opt_undefined_gen,
     " generate undefined_type functions for types in the specification");
+  ( "-grouped_regstate",
+    Arg.Set State.opt_type_grouped_regstate,
+    " group registers with same type together in generated register state record");
   ( "-enum_casts",
     Arg.Set Initial_check.opt_enum_casts,
     " allow enumerations to be automatically casted to numeric range types");

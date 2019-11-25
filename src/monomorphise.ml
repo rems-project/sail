@@ -3263,15 +3263,15 @@ let ids_in_exp exp =
       lEXP_cast = (fun (_,id) -> IdSet.singleton id)
     } exp
 
-let make_bitvector_env_casts env quant_kids (kid,i) exp =
-  let mk_cast var typ exp = (make_bitvector_cast_let "bitvector_cast_in" env env quant_kids typ (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ)) var exp in
+let make_bitvector_env_casts top_env env quant_kids insts exp =
+  let mk_cast var typ exp = (make_bitvector_cast_let "bitvector_cast_in" env top_env quant_kids typ (subst_kids_typ insts typ)) var exp in
   let mk_assign_in var typ =
-    make_bitvector_cast_assign "bitvector_cast_in" env env quant_kids typ
-      (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ) var
+    make_bitvector_cast_assign "bitvector_cast_in" env top_env quant_kids typ
+      (subst_kids_typ insts typ) var
   in
   let mk_assign_out var typ =
-    make_bitvector_cast_assign "bitvector_cast_out" env env quant_kids
-      (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ) typ var
+    make_bitvector_cast_assign "bitvector_cast_out" top_env env quant_kids
+      (subst_kids_typ insts typ) typ var
   in
   let locals = Env.get_locals env in
   let used_ids = ids_in_exp exp in
@@ -3405,13 +3405,13 @@ let add_bitvector_casts (Defs defs) =
                   (* We used to just substitute kid, but fill_in_type also catches other kids defined by it *)
                   let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) (nconstant i)) env) result_typ in
                   make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
-                    (make_bitvector_env_casts env quant_kids (kid,i) body)
+                    (make_bitvector_env_casts env (env_of body) quant_kids (KBindings.singleton kid (nconstant i)) body)
                | P_aux (P_id var,_), Some guard ->
                   (match extract_value_from_guard var guard with
                   | Some i ->
                      let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) (nconstant i)) env) result_typ in
                      make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
-                       (make_bitvector_env_casts env quant_kids (kid,i) body)
+                       (make_bitvector_env_casts env (env_of body) quant_kids (KBindings.singleton kid (nconstant i)) body)
                   | None -> body)
                | _ ->
                   body
@@ -3425,10 +3425,9 @@ let add_bitvector_casts (Defs defs) =
          let env = env_of_annot ann in
          let result_typ = Env.base_typ_of env (typ_of_annot ann) in
          let insts = extract e1 in
-         let e2' = List.fold_left (fun body inst ->
-           make_bitvector_env_casts env quant_kids inst body) e2 insts in
          let insts = List.fold_left (fun insts (kid,i) ->
            KBindings.add kid (nconstant i) insts) KBindings.empty insts in
+         let e2' = make_bitvector_env_casts env (env_of e2) quant_kids insts e2 in
          let src_typ = subst_kids_typ insts result_typ in
          let e2' = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ e2' in
          (* Ask the type checker if only one value remains for any of kids in
@@ -3437,13 +3436,10 @@ let add_bitvector_casts (Defs defs) =
          let insts3 = KBindings.fold (fun kid _ i3 ->
                           match Type_check.solve_unique env3 (nvar kid) with
                           | None -> i3
-                          | Some c -> (kid, c)::i3)
-                        insts []
+                          | Some c -> KBindings.add kid (nconstant c) i3)
+                        insts KBindings.empty
          in
-         let e3' = List.fold_left (fun body inst ->
-           make_bitvector_env_casts env quant_kids inst body) e3 insts3 in
-         let insts3 = List.fold_left (fun insts (kid,i) ->
-           KBindings.add kid (nconstant i) insts) KBindings.empty insts3 in
+         let e3' = make_bitvector_env_casts env (env_of e3) quant_kids insts3 e3 in
          let src_typ3 = subst_kids_typ insts3 result_typ in
          let e3' = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ3 result_typ e3' in
          E_aux (E_if (e1,e2',e3'), ann)
@@ -3462,10 +3458,9 @@ let add_bitvector_casts (Defs defs) =
                  let t' = aux t in
                  let et = E_aux (E_block t',ann) in
                  let env = env_of h in
-                 let et = List.fold_left (fun body inst ->
-                              make_bitvector_env_casts env quant_kids inst body) et insts in
                  let insts = List.fold_left (fun insts (kid,i) ->
                                  KBindings.add kid (nconstant i) insts) KBindings.empty insts in
+                 let et = make_bitvector_env_casts env (env_of et) quant_kids insts et in
                  let src_typ = subst_kids_typ insts result_typ in
                  let et = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ et in
 
