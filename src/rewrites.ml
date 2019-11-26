@@ -4031,16 +4031,17 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
                 []
       end
     in
+    let has_def id = IdSet.mem id (ids_of_defs (Defs defs)) in
 
       forwards_spec
-    @ forwards_fun
     @ backwards_spec
-    @ backwards_fun
     @ forwards_matches_spec
-    @ forwards_matches_fun
     @ backwards_matches_spec
-    @ backwards_matches_fun
-    @ string_defs
+    @ (if has_def forwards_id then [] else forwards_fun)
+    @ (if has_def backwards_id then [] else backwards_fun)
+    @ (if has_def forwards_matches_id then [] else forwards_matches_fun)
+    @ (if has_def backwards_matches_id then [] else backwards_matches_fun)
+    @ (if has_def prefix_id then [] else string_defs)
   in
   let rewrite_def def =
     match def with
