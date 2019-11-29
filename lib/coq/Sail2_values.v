@@ -14,6 +14,7 @@ Require Import Lia.
 Import ListNotations.
 
 Open Scope Z.
+Open Scope bool.
 
 Module Z_eq_dec.
 Definition U := Z.
@@ -26,8 +27,14 @@ Module ZEqdep := DecidableEqDep (Z_eq_dec).
    can be added to, and a typeclass to wrap constraint arguments in to
    trigger automatic solving. *)
 Create HintDb sail.
-Class ArithFact (P : Prop) := { fact : P }.
-Lemma use_ArithFact {P} `(ArithFact P) : P.
+(* Facts translated from Sail's type system are wrapped in ArithFactP or
+   ArithFact so that the solver can be invoked automatically by Coq's
+   typeclass mechanism.  Most properties are boolean, which enjoys proof
+   irrelevance by UIP. *)
+Class ArithFactP (P : Prop) := { fact : P }.
+Class ArithFact (P : bool) := ArithFactClass : ArithFactP (P = true).
+Lemma use_ArithFact {P} `(ArithFact P) : P = true.
+unfold ArithFact in *.
 apply fact.
 Defined.
 
@@ -35,18 +42,17 @@ Defined.
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Program.Basics.
 Require Import Coq.Program.Tactics.
+
 Section Morphism.
 Local Obligation Tactic := try solve [simpl_relation | firstorder auto].
-
-Global Program Instance ArithFact_iff_morphism :
-  Proper (iff ==> iff) ArithFact.
+Global Program Instance ArithFactP_iff_morphism :
+  Proper (iff ==> iff) ArithFactP.
 End Morphism.
 
-
-Definition build_ex {T:Type} (n:T) {P:T -> Prop} `{H:ArithFact (P n)} : {x : T & ArithFact (P x)} :=
+Definition build_ex {T:Type} (n:T) {P:T -> Prop} `{H:ArithFactP (P n)} : {x : T & ArithFactP (P x)} :=
   existT _ n H.
 
-Definition build_ex2 {T:Type} {T':T -> Type} (n:T) (m:T' n) {P:T -> Prop} `{H:ArithFact (P n)} : {x : T & T' x & ArithFact (P x)} :=
+Definition build_ex2 {T:Type} {T':T -> Type} (n:T) (m:T' n) {P:T -> Prop} `{H:ArithFactP (P n)} : {x : T & T' x & ArithFactP (P x)} :=
   existT2 _ _ n m H.
 
 Definition generic_eq {T:Type} (x y:T) `{Decidable (x = y)} := Decidable_witness.
@@ -132,16 +138,20 @@ Ltac cmp_record_field x y :=
   ].
 
 
+Notation "x <=? y <=? z" := ((x <=? y) && (y <=? z)) (at level 70, y at next level) : Z_scope.
+Notation "x <=? y <? z" := ((x <=? y) && (y <? z)) (at level 70, y at next level) : Z_scope.
+Notation "x <? y <? z" := ((x <? y) && (y <? z)) (at level 70, y at next level) : Z_scope.
+Notation "x <? y <=? z" := ((x <? y) && (y <=? z)) (at level 70, y at next level) : Z_scope.
 
 (* Project away range constraints in comparisons *)
-Definition ltb_range_l {lo hi} (l : {x & ArithFact (lo <= x /\ x <= hi)}) r := Z.ltb (projT1 l) r.
-Definition leb_range_l {lo hi} (l : {x & ArithFact (lo <= x /\ x <= hi)}) r := Z.leb (projT1 l) r.
-Definition gtb_range_l {lo hi} (l : {x & ArithFact (lo <= x /\ x <= hi)}) r := Z.gtb (projT1 l) r.
-Definition geb_range_l {lo hi} (l : {x & ArithFact (lo <= x /\ x <= hi)}) r := Z.geb (projT1 l) r.
-Definition ltb_range_r {lo hi} l (r : {x & ArithFact (lo <= x /\ x <= hi)}) := Z.ltb l (projT1 r).
-Definition leb_range_r {lo hi} l (r : {x & ArithFact (lo <= x /\ x <= hi)}) := Z.leb l (projT1 r).
-Definition gtb_range_r {lo hi} l (r : {x & ArithFact (lo <= x /\ x <= hi)}) := Z.gtb l (projT1 r).
-Definition geb_range_r {lo hi} l (r : {x & ArithFact (lo <= x /\ x <= hi)}) := Z.geb l (projT1 r).
+Definition ltb_range_l {lo hi} (l : {x & ArithFact (lo <=? x <=? hi)}) r := Z.ltb (projT1 l) r.
+Definition leb_range_l {lo hi} (l : {x & ArithFact (lo <=? x <=? hi)}) r := Z.leb (projT1 l) r.
+Definition gtb_range_l {lo hi} (l : {x & ArithFact (lo <=? x <=? hi)}) r := Z.gtb (projT1 l) r.
+Definition geb_range_l {lo hi} (l : {x & ArithFact (lo <=? x <=? hi)}) r := Z.geb (projT1 l) r.
+Definition ltb_range_r {lo hi} l (r : {x & ArithFact (lo <=? x <=? hi)}) := Z.ltb l (projT1 r).
+Definition leb_range_r {lo hi} l (r : {x & ArithFact (lo <=? x <=? hi)}) := Z.leb l (projT1 r).
+Definition gtb_range_r {lo hi} l (r : {x & ArithFact (lo <=? x <=? hi)}) := Z.gtb l (projT1 r).
+Definition geb_range_r {lo hi} l (r : {x & ArithFact (lo <=? x <=? hi)}) := Z.geb l (projT1 r).
 
 Definition ii := Z.
 Definition nn := nat.
@@ -149,11 +159,11 @@ Definition nn := nat.
 (*val pow : Z -> Z -> Z*)
 Definition pow m n := m ^ n.
 
-Program Definition pow2 n : {z : Z & ArithFact (2 ^ n <= z <= 2 ^ n)} := existT _ (pow 2 n) _.
+Program Definition pow2 n : {z : Z & ArithFact (2 ^ n <=? z <=? 2 ^ n)} := existT _ (pow 2 n) _.
 Next Obligation.
 constructor.
 unfold pow.
-auto using Z.le_refl.
+auto using Z.leb_refl with bool.
 Qed.
 
 Lemma ZEuclid_div_pos : forall x y, y > 0 -> x >= 0 -> ZEuclid.div x y >= 0.
@@ -205,6 +215,13 @@ assumption.
 Qed.
 
 Hint Resolve ZEuclid_div_pos ZEuclid_pos_div ZEuclid_div_ge ZEuclid_div_mod0 : sail.
+
+Lemma Z_geb_ge n m : (n >=? m) = true <-> n >= m.
+rewrite Z.geb_leb.
+split.
+* intro. apply Z.le_ge, Z.leb_le. assumption.
+* intro. apply Z.ge_le in H. apply Z.leb_le. assumption.
+Qed.
 
 
 (*
@@ -817,19 +834,25 @@ apply Z2Nat.inj_lt.
 Close Scope nat.
 
 (*val access_list_inc : forall a. list a -> Z -> a*)
-Definition access_list_inc {A} (xs : list A) n `{ArithFact (0 <= n)} `{ArithFact (n < length_list xs)} := nth_in_range (Z.to_nat n) xs (nth_Z_nat (use_ArithFact _) (use_ArithFact _)).
+Definition access_list_inc {A} (xs : list A) n `{ArithFact (0 <=? n)} `{ArithFact (n <? length_list xs)} : A.
+refine (nth_in_range (Z.to_nat n) xs (nth_Z_nat _ _)).
+* apply Z.leb_le.
+  auto using use_ArithFact.
+* apply Z.ltb_lt.
+  auto using use_ArithFact.
+Defined.
 
 (*val access_list_dec : forall a. list a -> Z -> a*)
-Definition access_list_dec {A} (xs : list A) n `{ArithFact (0 <= n)} `{ArithFact (n < length_list xs)} : A.
+Definition access_list_dec {A} (xs : list A) n `{H1:ArithFact (0 <=? n)} `{H2:ArithFact (n <? length_list xs)} : A.
 refine (
   let top := (length_list xs) - 1 in
   @access_list_inc A xs (top - n) _ _).
-constructor. apply use_ArithFact in H. apply use_ArithFact in H0. omega.
-constructor. apply use_ArithFact in H. apply use_ArithFact in H0. omega.
+abstract (constructor; apply use_ArithFact, Z.leb_le in H1; apply use_ArithFact, Z.ltb_lt in H2; apply Z.leb_le; omega).
+abstract (constructor; apply use_ArithFact, Z.leb_le in H1; apply use_ArithFact, Z.ltb_lt in H2; apply Z.ltb_lt; omega).
 Defined.
 
 (*val access_list : forall a. bool -> list a -> Z -> a*)
-Definition access_list {A} (is_inc : bool) (xs : list A) n `{ArithFact (0 <= n)} `{ArithFact (n < length_list xs)} :=
+Definition access_list {A} (is_inc : bool) (xs : list A) n `{ArithFact (0 <=? n)} `{ArithFact (n <? length_list xs)} :=
   if is_inc then access_list_inc xs n else access_list_dec xs n.
 
 Definition access_list_opt_inc {A} (xs : list A) n := nth_error xs (Z.to_nat n).
@@ -886,15 +909,15 @@ match n with
 | Zpos _ => fun f w => f w
 end.
 
-Program Definition to_word {n} : n >= 0 -> word (Z.to_nat n) -> mword n :=
+Program Definition to_word {n} : n >=? 0 = true -> word (Z.to_nat n) -> mword n :=
   match n with
   | Zneg _ => fun H _ => _
   | Z0 => fun _ w => w
   | Zpos _ => fun _ w => w
   end.
 
-Definition word_to_mword {n} (w : word (Z.to_nat n)) `{H:ArithFact (n >= 0)} : mword n :=
-  to_word (match H with Build_ArithFact _ H' => H' end) w.
+Definition word_to_mword {n} (w : word (Z.to_nat n)) `{H:ArithFact (n >=? 0)} : mword n :=
+  to_word (use_ArithFact H) w.
 
 (*val length_mword : forall a. mword a -> Z*)
 Definition length_mword {n} (w : mword n) := n.
@@ -970,7 +993,7 @@ Definition update_mword {a} (is_inc : bool) (w : mword a) n b :=
   if is_inc then update_mword_inc w n b else update_mword_dec w n b.
 
 (*val int_of_mword : forall 'a. bool -> mword 'a -> integer*)
-Definition int_of_mword {a} `{ArithFact (a >= 0)} (sign : bool) (w : mword a) :=
+Definition int_of_mword {a} `{ArithFact (a >=? 0)} (sign : bool) (w : mword a) :=
   if sign then wordToZ (get_word w) else Z.of_N (wordToN (get_word w)).
 
 
@@ -979,16 +1002,18 @@ Definition mword_of_int len n :=
   let w := wordFromInteger n in
   if (length_mword w = len) then w else failwith "unexpected word length"
 *)
-Program Definition mword_of_int {len} `{H:ArithFact (len >= 0)} n : mword len :=
+Program Definition mword_of_int {len} `{H:ArithFact (len >=? 0)} n : mword len :=
 match len with
 | Zneg _ => _
 | Z0 => ZToWord 0 n
 | Zpos p => ZToWord (Pos.to_nat p) n
 end.
 Next Obligation.
-destruct H.
-auto.
+destruct H as [H].
+unfold Z.geb, Z.compare in H.
+discriminate.
 Defined.
+
 (*
 (* Translating between a type level number (itself n) and an integer *)
 
@@ -1057,7 +1082,7 @@ Instance bitlist_Bitvector {a : Type} `{BitU a} : (Bitvector (list a)) := {
 }.
 
 Class ReasonableSize (a : Z) : Prop := {
-  isPositive : a >= 0
+  isPositive : a >=? 0 = true
 }.
 
 (* Omega doesn't know about In, but can handle disjunctions. *)
@@ -1083,7 +1108,7 @@ repeat match goal with X := _ |- _ =>
   match goal with _ : context[X] |- _ => idtac end || clear X
 end.
 
-Lemma ArithFact_mword (a : Z) (w : mword a) : ArithFact (a >= 0).
+Lemma ArithFact_mword (a : Z) (w : mword a) : ArithFact (a >=? 0).
 constructor.
 destruct a.
 auto with zarith.
@@ -1091,9 +1116,16 @@ auto using Z.le_ge, Zle_0_pos.
 destruct w.
 Qed.
 Ltac unwrap_ArithFacts :=
-  repeat match goal with H:(ArithFact _) |- _ => let H' := fresh H in case H as [H']; clear H end.
+  repeat match goal with
+  | H:(ArithFact _) |- _ => let H' := fresh H in case H as [H']; clear H
+  | H:(ArithFactP _) |- _ => let H' := fresh H in case H as [H']; clear H
+  end.
 Ltac unbool_comparisons :=
   repeat match goal with
+  | H:?v = true |- _ => is_var v; subst v
+  | H:?v = false |- _ => is_var v; subst v
+  | H:true = ?v |- _ => is_var v; subst v
+  | H:false = ?v |- _ => is_var v; subst v
   | H:context [Z.geb _ _] |- _ => rewrite Z.geb_leb in H
   | H:context [Z.gtb _ _] |- _ => rewrite Z.gtb_ltb in H
   | H:context [Z.leb _ _ = true] |- _ => rewrite Z.leb_le in H
@@ -1108,6 +1140,8 @@ Ltac unbool_comparisons :=
   | H:context [andb _ _ = false] |- _ => rewrite Bool.andb_false_iff in H
   | H:context [negb _ = true] |- _ => rewrite Bool.negb_true_iff in H
   | H:context [negb _ = false] |- _ => rewrite Bool.negb_false_iff in H
+  | H:context [Bool.eqb _ _ = true] |- _ => rewrite Bool.eqb_true_iff in H
+  | H:context [Bool.eqb _ _ = false] |- _ => rewrite Bool.eqb_false_iff in H
   | H:context [generic_eq _ _ = true] |- _ => apply generic_eq_true in H
   | H:context [generic_eq _ _ = false] |- _ => apply generic_eq_false in H
   | H:context [generic_neq _ _ = true] |- _ => apply generic_neq_true in H
@@ -1131,6 +1165,8 @@ Ltac unbool_comparisons_goal :=
   | |- context [andb _ _ = false] => setoid_rewrite Bool.andb_false_iff
   | |- context [negb _ = true] => setoid_rewrite Bool.negb_true_iff
   | |- context [negb _ = false] => setoid_rewrite Bool.negb_false_iff
+  | |- context [Bool.eqb _ _ = true] => setoid_rewrite Bool.eqb_true_iff
+  | |- context [Bool.eqb _ _ = false] => setoid_rewrite Bool.eqb_false_iff
   | |- context [generic_eq _ _ = true] => apply generic_eq_true
   | |- context [generic_eq _ _ = false] => apply generic_eq_false
   | |- context [generic_neq _ _ = true] => apply generic_neq_true
@@ -1361,10 +1397,16 @@ end;
 (* We may have uncovered more conjunctions *)
 repeat match goal with H:and _ _ |- _ => destruct H end.
 
+(* Remove details of embedded proofs and provide a copy that nothing
+   depends upon so that rewrites on it will work. *)
 Ltac generalize_embedded_proofs :=
+  let gen X :=
+    let Y := fresh "Y" in pose X as Y; generalize Y; generalize dependent X
+  in
   repeat match goal with H:context [?X] |- _ =>
-    match type of X with ArithFact _ =>
-      generalize dependent X
+    match type of X with
+    | ArithFact _ => gen X
+    | ArithFactP _ => gen X
     end
   end;
   intros.
@@ -1427,9 +1469,9 @@ Ltac prepare_for_solver :=
  subst;
  clean_up_props.
 
-Lemma trivial_range {x : Z} : ArithFact (x <= x /\ x <= x).
+Lemma trivial_range {x : Z} : ArithFact ((x <=? x <=? x)).
 constructor.
-auto with zarith.
+auto using Z.leb_refl with bool.
 Qed.
 
 Lemma ArithFact_self_proof {P} : forall x : {y : Z & ArithFact (P y)}, ArithFact (P (projT1 x)).
@@ -1437,14 +1479,19 @@ intros [x H].
 exact H.
 Qed.
 
+Lemma ArithFactP_self_proof {P} : forall x : {y : Z & ArithFactP (P y)}, ArithFactP (P (projT1 x)).
+intros [x H].
+exact H.
+Qed.
+
 Ltac fill_in_evar_eq :=
- match goal with |- ArithFact (?x = ?y) =>
+ match goal with |- ArithFact (?x =? ?y) =>
    (is_evar x || is_evar y);
    (* compute to allow projections to remove proofs that might not be allowed in the evar *)
 (* Disabled because cbn may reduce definitions, even after clearbody
    let x := eval cbn in x in
    let y := eval cbn in y in*)
-   idtac "Warning: unknown equality constraint"; constructor; exact (eq_refl _ : x = y) end.
+   idtac "Warning: unknown equality constraint"; constructor; exact (Z.eqb_refl _ : x =? y = true) end.
 
 Ltac bruteforce_bool_exists :=
 match goal with
@@ -1479,6 +1526,61 @@ repeat match goal with
   intros
 end;
 nia.
+(* Try to get the linear arithmetic solver to do booleans. *)
+
+Lemma b2z_true x : x = true <-> Z.b2z x = 1.
+destruct x; compute; split; congruence.
+Qed.
+
+Lemma b2z_false x : x = false <-> Z.b2z x = 0.
+destruct x; compute; split; congruence.
+Qed.
+
+Lemma b2z_tf x : 0 <= Z.b2z x <= 1.
+destruct x; simpl; omega.
+Qed.
+
+Lemma b2z_andb a b :
+  Z.b2z (a && b) = Z.min (Z.b2z a) (Z.b2z b).
+destruct a,b; reflexivity.
+Qed.
+Lemma b2z_orb a b :
+  Z.b2z (a || b) = Z.max (Z.b2z a) (Z.b2z b).
+destruct a,b; reflexivity.
+Qed.
+
+Lemma b2z_eq : forall a b, Z.b2z a = Z.b2z b <-> a = b.
+intros [|] [|];
+simpl;
+intuition try congruence.
+Qed.
+
+Ltac solve_bool_with_Z :=
+  subst;
+  rewrite ?truefalse, ?falsetrue, ?or_False_l, ?or_False_r in *;
+  (* I did try phrasing these as rewrites, but Coq was oddly reluctant to use them *)
+  repeat match goal with
+  | H:?x = ?x <-> _ |- _ => apply iff_equal_l in H
+  | H:_ <-> ?x = ?x |- _ => apply iff_equal_r in H
+  end;
+  repeat match goal with
+  |  H:context [?v = true] |- _  => is_var v; rewrite (b2z_true v) in *
+  | |- context [?v = true]       => is_var v; rewrite (b2z_true v) in *
+  |  H:context [?v = false] |- _ => is_var v; rewrite (b2z_false v) in *
+  | |- context [?v = false]      => is_var v; rewrite (b2z_false v) in *
+  | H:context [?v = ?w] |- _ => rewrite <- (b2z_eq v w) in H
+  | |- context [?v = ?w]     => rewrite <- (b2z_eq v w)
+  | H:context [Z.b2z (?v && ?w)] |- _ => rewrite (b2z_andb v w) in H
+  | |- context [Z.b2z (?v && ?w)]     => rewrite (b2z_andb v w)
+  | H:context [Z.b2z (?v || ?w)] |- _ => rewrite (b2z_orb v w) in H
+  | |- context [Z.b2z (?v || ?w)]     => rewrite (b2z_orb v w)
+  end;
+  repeat match goal with
+  | _:context [Z.b2z ?v] |- _ => generalize (b2z_tf v); generalize dependent (Z.b2z v)
+  | |- context [Z.b2z ?v]     => generalize (b2z_tf v); generalize dependent (Z.b2z v)
+  end;
+  intros;
+  lia.
 
 (* A more ambitious brute force existential solver. *)
 
@@ -1497,8 +1599,8 @@ Ltac guess_ex_solver :=
     guess_ex_solver*)
   | |- @ex bool _ => exists true; guess_ex_solver
   | |- @ex bool _ => exists false; guess_ex_solver
-  | x : Z |- @ex Z _ => exists x; guess_ex_solver
-  | _ => solve [tauto | eauto 3 with zarith sail | omega | intuition]
+  | x : ?ty |- @ex ?ty _ => exists x; guess_ex_solver
+  | _ => solve [tauto | eauto 3 with zarith sail | solve_bool_with_Z | omega | intuition]
   end.
 
 (* A straightforward solver for simple problems like
@@ -1657,40 +1759,6 @@ Ltac z_comparisons :=
   | exact Z_compare_gt_eq
   ].
 
-(* Try to get the linear arithmetic solver to do booleans. *)
-
-Lemma b2z_true x : x = true <-> Z.b2z x = 1.
-destruct x; compute; split; congruence.
-Qed.
-
-Lemma b2z_false x : x = false <-> Z.b2z x = 0.
-destruct x; compute; split; congruence.
-Qed.
-
-Lemma b2z_tf x : 0 <= Z.b2z x <= 1.
-destruct x; simpl; omega.
-Qed.
-
-Ltac solve_bool_with_Z :=
-  subst;
-  rewrite ?truefalse, ?falsetrue, ?or_False_l, ?or_False_r in *;
-  (* I did try phrasing these as rewrites, but Coq was oddly reluctant to use them *)
-  repeat match goal with
-  | H:?x = ?x <-> _ |- _ => apply iff_equal_l in H
-  | H:_ <-> ?x = ?x |- _ => apply iff_equal_r in H
-  end;
-  repeat match goal with
-  |  H:context [?v = true] |- _  => is_var v; rewrite (b2z_true v) in *
-  | |- context [?v = true]       => is_var v; rewrite (b2z_true v) in *
-  |  H:context [?v = false] |- _ => is_var v; rewrite (b2z_false v) in *
-  | |- context [?v = false]      => is_var v; rewrite (b2z_false v) in *
-  end;
-  repeat match goal with
-  | _:context [Z.b2z ?v] |- _ => generalize (b2z_tf v); generalize dependent (Z.b2z v)
-  | |- context [Z.b2z ?v]     => generalize (b2z_tf v); generalize dependent (Z.b2z v)
-  end;
-  intros;
-  lia.
 
 
 (* Redefine this to add extra solver tactics *)
@@ -1779,21 +1847,29 @@ Ltac simple_omega :=
   end; omega.
 
 Ltac solve_unknown :=
-  match goal with |- (ArithFact (?x ?y)) =>
+  match goal with
+  | |- (ArithFact (?x ?y)) =>
+    is_evar x;
+    idtac "Warning: unknown constraint";
+    let t := type of y in
+    unify x (fun (_ : t) => true);
+    exact (Build_ArithFactP _ eq_refl : ArithFact true)
+  | |- (ArithFactP (?x ?y)) =>
     is_evar x;
     idtac "Warning: unknown constraint";
     let t := type of y in
     unify x (fun (_ : t) => True);
-    exact (Build_ArithFact _ I)
+    exact (Build_ArithFactP _ I : ArithFactP True)
   end.
 
 Ltac run_main_solver_impl :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
-try (constructor; simple_omega);
+constructor;
+try simple_omega;
 prepare_for_solver;
 (*dump_context;*)
-constructor;
+unbool_comparisons_goal; (* Applying the ArithFact constructor will reveal an = true, so this might do more than it did in prepare_for_solver *)
 repeat match goal with |- and _ _ => split end;
 main_solver.
 
@@ -1819,14 +1895,17 @@ Ltac clear_fixpoints :=
 Ltac solve_arithfact :=
   intros; (* To solve implications for derive_m *)
   clear_fixpoints; (* Avoid using recursive calls *)
+  cbv beta; (* Goal might be eta-expanded *)
   solve
     [ solve_unknown
-    | match goal with |- ArithFact (?x <= ?x <= ?x) => exact trivial_range end
+    | assumption
+    | match goal with |- ArithFact ((?x <=? ?x <=? ?x)) => exact trivial_range end
     | fill_in_evar_eq
     | match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end
+    | match goal with |- context [projT1 ?X] => apply (ArithFactP_self_proof X) end
     (* Trying reflexivity will fill in more complex metavariable examples than
-       fill_in_evar_eq above, e.g., 8 * n = 8 * ?Goal3 *)
-    | constructor; reflexivity
+       fill_in_evar_eq above, e.g., 8 * n =? 8 * ?Goal3 *)
+    | constructor; unbool_comparisons_goal; reflexivity
     | constructor; repeat match goal with |- and _ _ => split end; z_comparisons
     | run_main_solver
     ].
@@ -1836,6 +1915,7 @@ Ltac solve_arithfact :=
 Ltac run_solver := solve_arithfact.
 
 Hint Extern 0 (ArithFact _) => run_solver : typeclass_instances.
+Hint Extern 0 (ArithFactP _) => run_solver : typeclass_instances.
 
 Hint Unfold length_mword : sail.
 
@@ -1855,13 +1935,11 @@ auto using Z.le_ge, Zle_0_pos.
 destruct w.
 Qed.
 
-Hint Extern 0 (ReasonableSize ?A) => (unwrap_ArithFacts; solve [apply ReasonableSize_witness; assumption | constructor; omega]) : typeclass_instances.
+Hint Extern 0 (ReasonableSize ?A) => (unwrap_ArithFacts; solve [apply ReasonableSize_witness; assumption | constructor; auto with zarith]) : typeclass_instances.
 
-Definition to_range (x : Z) : {y : Z & ArithFact (x <= y <= x)} := build_ex x.
+Definition to_range (x : Z) : {y : Z & ArithFact ((x <=? y <=? x))} := build_ex x.
 
-
-
-Instance mword_Bitvector {a : Z} `{ArithFact (a >= 0)} : (Bitvector (mword a)) := {
+Instance mword_Bitvector {a : Z} `{ArithFact (a >=? 0)} : (Bitvector (mword a)) := {
   bits_of v := List.map bitU_of_bool (bitlistFromWord (get_word v));
   of_bits v := option_map (fun bl => to_word isPositive (fit_bbv_word (wordFromBitlist bl))) (just_list (List.map bool_of_bitU v));
   of_bools v := to_word isPositive (fit_bbv_word (wordFromBitlist v));
@@ -2194,7 +2272,7 @@ Fixpoint foreach_Z' {Vars} from to step n (vars : Vars) (body : Z -> Vars -> Var
 Definition foreach_Z {Vars} from to step vars body :=
   foreach_Z' (Vars := Vars) from to step (S (Z.abs_nat (from - to))) vars body.
 
-Fixpoint foreach_Z_up' {Vars} from to step off n `{ArithFact (0 < step)} `{ArithFact (0 <= off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <= z <= to)), Vars -> Vars) {struct n} : Vars :=
+Fixpoint foreach_Z_up' {Vars} (from to step off : Z) (n:nat) `{ArithFact (0 <? step)} `{ArithFact (0 <=? off)} (vars : Vars) (body : forall (z : Z) `(ArithFact ((from <=? z <=? to))), Vars -> Vars) {struct n} : Vars :=
   if sumbool_of_bool (from + off <=? to) then
     match n with
     | O => vars
@@ -2202,7 +2280,7 @@ Fixpoint foreach_Z_up' {Vars} from to step off n `{ArithFact (0 < step)} `{Arith
     end
   else vars.
 
-Fixpoint foreach_Z_down' {Vars} from to step off n `{ArithFact (0 < step)} `{ArithFact (off <= 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <= z <= from)), Vars -> Vars) {struct n} : Vars :=
+Fixpoint foreach_Z_down' {Vars} from to step off n `{ArithFact (0 <? step)} `{ArithFact (off <=? 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact ((to <=? z <=? from))), Vars -> Vars) {struct n} : Vars :=
   if sumbool_of_bool (to <=? from + off) then
     match n with
     | O => vars
@@ -2210,9 +2288,9 @@ Fixpoint foreach_Z_down' {Vars} from to step off n `{ArithFact (0 < step)} `{Ari
     end
   else vars.
 
-Definition foreach_Z_up {Vars} from to step vars body `{ArithFact (0 < step)} :=
+Definition foreach_Z_up {Vars} from to step vars body `{ArithFact (0 <? step)} :=
     foreach_Z_up' (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
-Definition foreach_Z_down {Vars} from to step vars body `{ArithFact (0 < step)} :=
+Definition foreach_Z_down {Vars} from to step vars body `{ArithFact (0 <? step)} :=
     foreach_Z_down' (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
 
 (*val while : forall vars. vars -> (vars -> bool) -> (vars -> vars) -> vars
@@ -2305,27 +2383,27 @@ end
 (* Arithmetic functions which return proofs that match the expected Sail
    types in smt.sail. *)
 
-Definition ediv_with_eq n m : {o : Z & ArithFact (o = ZEuclid.div n m)} := build_ex (ZEuclid.div n m).
-Definition emod_with_eq n m : {o : Z & ArithFact (o = ZEuclid.modulo n m)} := build_ex (ZEuclid.modulo n m).
-Definition abs_with_eq n   : {o : Z & ArithFact (o = Z.abs n)} := build_ex (Z.abs n).
+Definition ediv_with_eq n m : {o : Z & ArithFact (o =? ZEuclid.div n m)} := build_ex (ZEuclid.div n m).
+Definition emod_with_eq n m : {o : Z & ArithFact (o =? ZEuclid.modulo n m)} := build_ex (ZEuclid.modulo n m).
+Definition abs_with_eq n   : {o : Z & ArithFact (o =? Z.abs n)} := build_ex (Z.abs n).
 
 (* Similarly, for ranges (currently in MIPS) *)
 
-Definition eq_range {n m o p} (l : {l & ArithFact (n <= l <= m)}) (r : {r & ArithFact (o <= r <= p)}) : bool :=
+Definition eq_range {n m o p} (l : {l & ArithFact (n <=? l <=? m)}) (r : {r & ArithFact (o <=? r <=? p)}) : bool :=
   (projT1 l) =? (projT1 r).
-Definition add_range {n m o p} (l : {l & ArithFact (n <= l <= m)}) (r : {r & ArithFact (o <= r <= p)})
-  : {x & ArithFact (n+o <= x <= m+p)} :=
+Definition add_range {n m o p} (l : {l & ArithFact (n <=? l <=? m)}) (r : {r & ArithFact (o <=? r <=? p)})
+  : {x & ArithFact (n+o <=? x <=? m+p)} :=
   build_ex ((projT1 l) + (projT1 r)).
-Definition sub_range {n m o p} (l : {l & ArithFact (n <= l <= m)}) (r : {r & ArithFact (o <= r <= p)})
-  : {x & ArithFact (n-p <= x <= m-o)} :=
+Definition sub_range {n m o p} (l : {l & ArithFact (n <=? l <=? m)}) (r : {r & ArithFact (o <=? r <=? p)})
+  : {x & ArithFact (n-p <=? x <=? m-o)} :=
   build_ex ((projT1 l) - (projT1 r)).
-Definition negate_range {n m} (l : {l : Z & ArithFact (n <= l <= m)})
-  : {x : Z & ArithFact ((- m) <= x <= (- n))} :=
+Definition negate_range {n m} (l : {l : Z & ArithFact (n <=? l <=? m)})
+  : {x : Z & ArithFact ((- m) <=? x <=? (- n))} :=
   build_ex (- (projT1 l)).
 
-Definition min_atom (a : Z) (b : Z) : {c : Z & ArithFact ((c = a \/ c = b) /\ c <= a /\ c <= b)} :=
+Definition min_atom (a : Z) (b : Z) : {c : Z & ArithFact (((c =? a) || (c =? b)) && (c <=? a) && (c <=? b))} :=
   build_ex (Z.min a b).
-Definition max_atom (a : Z) (b : Z) : {c : Z & ArithFact ((c = a \/ c = b) /\ c >= a /\ c >= b)} :=
+Definition max_atom (a : Z) (b : Z) : {c : Z & ArithFact (((c =? a) || (c =? b)) && (c >=? a) && (c >=? b))} :=
   build_ex (Z.max a b).
 
 
@@ -2333,15 +2411,18 @@ Definition max_atom (a : Z) (b : Z) : {c : Z & ArithFact ((c = a \/ c = b) /\ c 
 
 Definition vec (T:Type) (n:Z) := { l : list T & length_list l = n }.
 Definition vec_length {T n} (v : vec T n) := n.
-Definition vec_access_dec {T n} (v : vec T n) m `{ArithFact (0 <= m < n)} : T :=
+Definition vec_access_dec {T n} (v : vec T n) m `{ArithFact ((0 <=? m <? n))} : T :=
   access_list_dec (projT1 v) m.
-Definition vec_access_inc {T n} (v : vec T n) m `{ArithFact (0 <= m < n)} : T :=
+
+Definition vec_access_inc {T n} (v : vec T n) m `{ArithFact (0 <=? m <? n)} : T :=
   access_list_inc (projT1 v) m.
 
-Program Definition vec_init {T} (t : T) (n : Z) `{ArithFact (n >= 0)} : vec T n :=
+Program Definition vec_init {T} (t : T) (n : Z) `{ArithFact (n >=? 0)} : vec T n :=
   existT _ (repeat [t] n) _.
 Next Obligation.
-rewrite repeat_length; auto using fact.
+intros.
+cbv beta.
+rewrite repeat_length. 2: apply Z_geb_ge, fact.
 unfold length_list.
 simpl.
 auto with zarith.
@@ -2389,21 +2470,25 @@ rewrite skipn_length;
 omega.
 Qed.
 
-Program Definition vec_update_dec {T n} (v : vec T n) m t `{ArithFact (0 <= m < n)} : vec T n := existT _ (update_list_dec (projT1 v) m t) _.
+Program Definition vec_update_dec {T n} (v : vec T n) m t `{ArithFact (0 <=? m <? n)} : vec T n := existT _ (update_list_dec (projT1 v) m t) _.
 Next Obligation.
+intros; cbv beta.
 unfold update_list_dec.
 rewrite update_list_inc_length.
 + destruct v. apply e.
-+ destruct H.
++ destruct H as [H].
+  unbool_comparisons.
   destruct v. simpl (projT1 _). rewrite e.
   omega.
 Qed.
 
-Program Definition vec_update_inc {T n} (v : vec T n) m t `{ArithFact (0 <= m < n)} : vec T n := existT _ (update_list_inc (projT1 v) m t) _.
+Program Definition vec_update_inc {T n} (v : vec T n) m t `{ArithFact (0 <=? m <? n)} : vec T n := existT _ (update_list_inc (projT1 v) m t) _.
 Next Obligation.
+intros; cbv beta.
 rewrite update_list_inc_length.
 + destruct v. apply e.
 + destruct H.
+  unbool_comparisons.
   destruct v. simpl (projT1 _). rewrite e.
   omega.
 Qed.
@@ -2423,6 +2508,7 @@ Program Definition just_vec {A n} (v : vec (option A) n) : option (vec A n) :=
   | Some v' => Some (existT _ v' _)
   end.
 Next Obligation.
+intros; cbv beta.
 rewrite <- (just_list_length_Z _ _ Heq_anonymous).
 destruct v.
 assumption.
@@ -2461,51 +2547,59 @@ match a with
 | None => None
 end.
 
-Definition sub_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
-  {z : Z & ArithFact (z >= 0)} :=
+Definition sub_nat (x : Z) `{ArithFact (x >=? 0)} (y : Z) `{ArithFact (y >=? 0)} :
+  {z : Z & ArithFact (z >=? 0)} :=
   let z := x - y in
   if sumbool_of_bool (z >=? 0) then build_ex z else build_ex 0.
 
-Definition min_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
-  {z : Z & ArithFact (z >= 0)} :=
+Definition min_nat (x : Z) `{ArithFact (x >=? 0)} (y : Z) `{ArithFact (y >=? 0)} :
+  {z : Z & ArithFact (z >=? 0)} :=
   build_ex (Z.min x y).
 
-Definition max_nat (x : Z) `{ArithFact (x >= 0)} (y : Z) `{ArithFact (y >= 0)} :
-  {z : Z & ArithFact (z >= 0)} :=
+Definition max_nat (x : Z) `{ArithFact (x >=? 0)} (y : Z) `{ArithFact (y >=? 0)} :
+  {z : Z & ArithFact (z >=? 0)} :=
   build_ex (Z.max x y).
 
-Definition shl_int_8 (x y : Z) `{HE:ArithFact (x = 8)} `{HR:ArithFact (0 <= y <= 3)}: {z : Z & ArithFact (In z [8;16;32;64])}.
+Definition shl_int_8 (x y : Z) `{HE:ArithFact (x =? 8)} `{HR:ArithFact (0 <=? y <=? 3)}: {z : Z & ArithFact (member_Z_list z [8;16;32;64])}.
 refine (existT _ (shl_int x y) _).
 destruct HE as [HE].
 destruct HR as [HR].
+unbool_comparisons.
 assert (H : y = 0 \/ y = 1 \/ y = 2 \/ y = 3) by omega.
 constructor.
 intuition (subst; compute; auto).
 Defined.
 
-Definition shl_int_32 (x y : Z) `{HE:ArithFact (x = 32)} `{HR:ArithFact (In y [0;1])}: {z : Z & ArithFact (In z [32;64])}.
+Definition shl_int_32 (x y : Z) `{HE:ArithFact (x =? 32)} `{HR:ArithFact (member_Z_list y [0;1])}: {z : Z & ArithFact (member_Z_list z [32;64])}.
 refine (existT _ (shl_int x y) _).
 destruct HE as [HE].
-destruct HR as [[HR1 | [HR2 | []]]];
+destruct HR as [HR].
+constructor.
+unbool_comparisons.
+apply member_Z_list_In in HR.
+destruct HR as [HR | [HR | []]];
 subst; compute;
-auto using Build_ArithFact.
+auto.
 Defined.
 
-Definition shr_int_32 (x y : Z) `{HE:ArithFact (0 <= x <= 31)} `{HR:ArithFact (y = 1)}: {z : Z & ArithFact (0 <= z <= 15)}.
+Definition shr_int_32 (x y : Z) `{HE:ArithFact (0 <=? x <=? 31)} `{HR:ArithFact (y =? 1)}: {z : Z & ArithFact (0 <=? z <=? 15)}.
 refine (existT _ (shr_int x y) _).
-destruct HE as [HE].
-destruct HR as [HR];
-subst.
-unfold shr_int.
-rewrite <- Z.div2_spec.
-constructor.
-rewrite Z.div2_div.
-specialize (Z.div_mod x 2).
-specialize (Z.mod_pos_bound x 2).
-generalize (Z.div x 2).
-generalize (x mod 2).
-intros.
-nia.
+abstract (
+  destruct HE as [HE];
+  destruct HR as [HR];
+  unbool_comparisons;
+  subst;
+  constructor;
+  unbool_comparisons_goal;
+  unfold shr_int;
+  rewrite <- Z.div2_spec;
+  rewrite Z.div2_div;
+  specialize (Z.div_mod x 2);
+  specialize (Z.mod_pos_bound x 2);
+  generalize (Z.div x 2);
+  generalize (x mod 2);
+  intros;
+  nia).
 Defined.
 
 Lemma shl_8_ge_0 {n} : shl_int 8 n >= 0.

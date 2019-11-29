@@ -196,8 +196,7 @@ Lemma build_trivial_exS_cong {RV T E} x x' :
   @build_trivial_exS RV T E x === build_trivial_exS x'.
 intros E1.
 unfold build_trivial_exS.
-rewrite E1.
-reflexivity.
+apply bindS_cong; auto.
 Qed.
 
 (* Monad lifting *)
@@ -513,6 +512,8 @@ Lemma liftState_build_trivial_ex Regs Regval E T r m :
   @liftState Regs Regval _ E r (@build_trivial_ex _ _ T m) ===
     build_trivial_exS (liftState r m).
 unfold build_trivial_ex, build_trivial_exS.
+unfold ArithFact.
+intro.
 rewrite liftState_bind.
 reflexivity.
 Qed.
@@ -805,7 +806,7 @@ Qed.
 Hint Rewrite liftState_undefined_word_nat : liftState.
 Hint Resolve liftState_undefined_word_nat : liftState.
 
-Lemma liftState_undefined_bitvector Regs Regval E r n `{ArithFact (n >= 0)} :
+Lemma liftState_undefined_bitvector Regs Regval E r n `{ArithFact (n >=? 0)} :
   liftState (Regs := Regs) (Regval := Regval) (E := E) r (undefined_bitvector n) === undefined_bitvectorS n.
 unfold undefined_bitvector, undefined_bitvectorS.
 rewrite_liftState.

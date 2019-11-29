@@ -394,10 +394,12 @@ let doc_nc_fn_prop id =
   | _ -> doc_id_type id
 
 (* n_constraint functions are currently just Z3 functions *)
-let doc_nc_fn id =
-  match string_of_id id with
-  | "not" -> string "negb"
-  | s -> string s
+let doc_nc_fn (Id_aux (id,_) as full_id) =
+  match id with
+  | Id "not" -> string "negb"
+  | Operator "-->" -> string "implb"
+  | Id "iff" -> string "Bool.eqb"
+  | _ -> doc_id full_id
 
 let merge_kid_count = KBindings.union (fun _ m n -> Some (m+n))
 
@@ -622,7 +624,7 @@ let rec doc_typ_fns ctx env =
          | Bool_boring -> string "bool"
          | Bool_complex (_,_,atom_nc) -> (* simplify won't introduce new kopts *)
             let var = mk_kid "_bool" in (* TODO collision avoid *)
-            let nc = nice_iff (nc_var var) atom_nc in
+            let nc = nice_iff atom_nc (nc_var var) in
             braces (separate space
                       [doc_var ctx var; colon; string "bool";
                        ampersand;
@@ -676,7 +678,7 @@ let rec doc_typ_fns ctx env =
              let length_constraint_pp =
                if KidSet.is_empty (KidSet.inter kid_set (nexp_frees m))
                then None
-               else Some (separate space [len_pp; doc_var ctx var; equals; doc_nexp ctx m])
+               else Some (separate space [len_pp; doc_var ctx var; string "=?"; doc_nexp ctx m])
              in
              braces (separate space
                        [doc_var ctx var; colon; tpp;
@@ -694,7 +696,7 @@ let rec doc_typ_fns ctx env =
              let length_constraint_pp =
                if KidSet.is_empty (KidSet.inter kid_set (nexp_frees m))
                then None
-               else Some (separate space [len_pp; doc_var ctx var; equals; doc_nexp ctx m])
+               else Some (separate space [len_pp; doc_var ctx var; string "=?"; doc_nexp ctx m])
              in
              braces (separate space
                        [doc_var ctx var; colon; tpp;
@@ -705,7 +707,7 @@ let rec doc_typ_fns ctx env =
              | Bool_boring -> string "bool"
              | Bool_complex (kopts,nc,atom_nc) ->
                 let var = mk_kid "_bool" in (* TODO collision avoid *)
-                let nc = nice_and (nice_iff (nc_var var) atom_nc) nc in
+                let nc = nice_and (nice_iff atom_nc (nc_var var)) nc in
                 braces (separate space
                           [doc_var ctx var; colon; string "bool";
                            ampersand;
@@ -779,18 +781,17 @@ and doc_typ ctx env = let f,_,_ = doc_typ_fns ctx env in f
 and doc_atomic_typ ctx env = let _,f,_ = doc_typ_fns ctx env in f
 and doc_typ_arg ctx env = let _,_,f = doc_typ_fns ctx env in f
 
-and doc_arithfact ?(prop_vars=false) ctxt env ?(exists = []) ?extra nc =
-  let prop = doc_nc_prop ~prop_vars ctxt env nc in
+and doc_arithfact ctxt env ?(exists = []) ?extra nc =
+  let prop = doc_nc_exp ctxt env nc in
   let prop = match extra with
     | None -> prop
-    | Some pp -> separate space [pp; string "/\\"; parens prop]
+    | Some pp -> separate space [parens pp; string "&&"; parens prop]
   in
-  let prop =
-    match exists with
-    | [] -> prop
-    | _ -> separate space ([string "exists"]@(List.map (doc_var ctxt) exists)@[comma; prop])
-  in
-  string "ArithFact" ^^ space ^^ parens prop
+  let prop = prop in
+  match exists with
+  | [] -> string "ArithFact" ^^ space ^^ parens prop
+  | _ -> string "ArithFactP" ^^ space ^^
+           parens (separate space ([string "exists"]@(List.map (doc_var ctxt) exists)@[comma; prop; equals; string "true"]))
 
 (* Follows Coq precedence levels *)
 and doc_nc_prop ?(top = true) ?(prop_vars = false) ctx env nc =
@@ -860,7 +861,7 @@ and doc_nc_prop ?(top = true) ?(prop_vars = false) ctx env nc =
   in if top then newnc l85 nc else newnc l0 nc
 
 (* Follows Coq precedence levels *)
-let rec doc_nc_exp ctx env nc =
+and doc_nc_exp ctx env nc =
   let locals = Env.get_locals env |> Bindings.bindings in
   let nc = Env.expand_constraint_synonyms env nc in
   let nc_id_map =
@@ -871,6 +872,9 @@ let rec doc_nc_exp ctx env nc =
            (flatten_nc nc, v)::m
         | _ -> m) [] locals
   in
+  (* Look for variables in the environment which exactly express the nc, and use
+     them instead.  As well as often being shorter, this avoids unbound type
+     variables added by Sail's type checker. *)
   let rec newnc f nc =
     let ncs = flatten_nc nc in
     let candidates =
@@ -903,10 +907,16 @@ let rec doc_nc_exp ctx env nc =
        separate space [string "member_Z_list"; doc_var ctx kid;
                        brackets (separate (string "; ")
                                    (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
+    | NC_app (f,args) -> separate space (doc_nc_fn f::List.map doc_typ_arg_exp args)
+    | _ -> l0 nc_full
+  and l0 (NC_aux (nc,_) as nc_full) =
+    match nc with
     | NC_true -> string "true"
     | NC_false -> string "false"
-    | NC_app (f,args) -> separate space (doc_nc_fn f::List.map (doc_typ_arg_exp ctx env) args)
     | NC_var kid -> doc_nexp ctx (nvar kid)
+    | NC_not_equal _
+    | NC_set _
+    | NC_app _
     | NC_equal _
     | NC_bounded_ge _
     | NC_bounded_gt _
@@ -914,13 +924,13 @@ let rec doc_nc_exp ctx env nc =
     | NC_bounded_lt _
     | NC_or _
     | NC_and _ -> parens (l70 nc_full)
-  in newnc l70 nc
-and doc_typ_arg_exp ctx env (A_aux (arg,l)) =
-  match arg with
-  | A_nexp nexp -> doc_nexp ctx nexp
-  | A_bool nc -> doc_nc_exp ctx env nc
-  | A_order _ | A_typ _ ->
+  and doc_typ_arg_exp (A_aux (arg,l)) =
+    match arg with
+    | A_nexp nexp -> doc_nexp ctx nexp
+    | A_bool nc -> newnc l0 nc
+    | A_order _ | A_typ _ ->
        raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
+  in newnc l70 nc
 
 (* Check for variables in types that would be pretty-printed and are not
    bound in the val spec of the function. *)
@@ -1024,7 +1034,7 @@ let doc_quant_item_constr ?(prop_vars=false) ctx env delimit (QI_aux (qi,_)) =
   match qi with
   | QI_id  _ -> None
   | QI_constant _ -> None
-  | QI_constraint nc -> Some (bquote ^^ braces (doc_arithfact ~prop_vars ctx env nc))
+  | QI_constraint nc -> Some (bquote ^^ braces (doc_arithfact ctx env nc))
 
 (* At the moment these are all anonymous - when used we rely on Coq to fill
    them in. *)
@@ -2515,9 +2525,9 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
      let idpp = doc_id_type id in
      doc_op coloneq
        (separate space [string "Definition"; idpp;
-                        doc_typquant_items ~prop_vars:true empty_ctxt Env.empty parens typq;
-                        colon; string "Prop"])
-       (doc_nc_prop ~prop_vars:true empty_ctxt Env.empty nc) ^^ dot ^^ hardline ^^
+                        doc_typquant_items empty_ctxt Env.empty parens typq;
+                        colon; string "bool"])
+       (doc_nc_exp empty_ctxt Env.empty nc) ^^ dot ^^ hardline ^^
      separate space [string "Hint Unfold"; idpp; colon; string "sail."] ^^
      twice hardline
   | TD_abbrev _ -> empty (* TODO? *)
@@ -2743,7 +2753,7 @@ let rec atom_constraint ctxt (pat, typ) =
            None
      | _ ->
         Some (bquote ^^ braces (string "ArithFact" ^^ space ^^
-                                  parens (doc_op equals (doc_id id) (doc_nexp ctxt nexp)))))
+                                  parens (doc_op (string "=?") (doc_id id) (doc_nexp ctxt nexp)))))
   | P_aux (P_typ (_,p),_), _ -> atom_constraint ctxt (p, typ)
   | _ -> None
 
@@ -3205,7 +3215,7 @@ let doc_axiom_typschm typ_env l (tqs,typ) =
           let v = fresh_var () in
           parens (v ^^ string " : Z") ^/^
             bquote ^^ braces (string "ArithFact " ^^
-                                parens (v ^^ string " = " ^^ string (Big_int.to_string n)))
+                                parens (v ^^ string " =? " ^^ string (Big_int.to_string n)))
        | _ ->
           match Type_check.destruct_atom_bool typ_env typ with
           | Some (NC_aux (NC_var kid,_)) when KidSet.mem kid args ->
@@ -3377,6 +3387,7 @@ try
         hardline;
         string "Open Scope string."; hardline;
         string "Open Scope bool."; hardline;
+        string "Open Scope Z."; hardline;
         hardline;
         hardline;
         separate empty (List.map doc_def defs);

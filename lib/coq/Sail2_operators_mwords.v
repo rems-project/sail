@@ -43,11 +43,17 @@ destruct m.
 * simpl. rewrite cast_positive_refl. reflexivity.
 Qed.
 
-Definition autocast {T : Z -> Type} {m n} (x : T m) `{H:ArithFact (m = n)} : T n :=
-  cast_T x (use_ArithFact H).
+Definition autocast {T : Z -> Type} {m n} (x : T m) `{H:ArithFact (m =? n)} : T n.
+refine (cast_T x _).
+apply Z.eqb_eq.
+apply (use_ArithFact H).
+Defined.
 
-Definition autocast_m {rv e m n} (x : monad rv (mword m) e) `{H:ArithFact (m = n)} : monad rv (mword n) e :=
-  x >>= fun x => returnm (cast_T x (use_ArithFact H)).
+Definition autocast_m {rv e m n} (x : monad rv (mword m) e) `{H:ArithFact (m =? n)} : monad rv (mword n) e.
+refine (x >>= fun x => returnm (cast_T x _)).
+apply Z.eqb_eq.
+apply (use_ArithFact H).
+Defined.
 
 Definition cast_word {m n} (x : Word.word m) (eq : m = n) : Word.word n :=
   DepEqNat.nat_cast _ eq x.
@@ -94,9 +100,10 @@ Definition update_vec_inc {a} (w : mword a) i b : mword a :=
 (*val update_vec_dec : forall 'a. Size 'a => mword 'a -> integer -> bitU -> mword 'a*)
 Definition update_vec_dec {a} (w : mword a) i b : mword a := opt_def w (update_mword_dec w i b).
 
-Lemma subrange_lemma0 {n m o} `{ArithFact (0 <= o)} `{ArithFact (o <= m < n)} : (Z.to_nat o <= Z.to_nat m < Z.to_nat n)%nat.
+Lemma subrange_lemma0 {n m o} `{ArithFact (0 <=? o)} `{ArithFact (o <=? m <? n)} : (Z.to_nat o <= Z.to_nat m < Z.to_nat n)%nat.
 intros.
 unwrap_ArithFacts.
+unbool_comparisons.
 split.
 + apply Z2Nat.inj_le; omega.
 + apply Z2Nat.inj_lt; omega.
@@ -107,9 +114,10 @@ Qed.
 Lemma subrange_lemma2 {n m o} : (o <= m < n -> m+1 = o+(m-o+1))%nat.
 omega.
 Qed.
-Lemma subrange_lemma3 {m o} `{ArithFact (0 <= o)} `{ArithFact (o <= m)} :
+Lemma subrange_lemma3 {m o} `{ArithFact (0 <=? o)} `{ArithFact (o <=? m)} :
   Z.of_nat (Z.to_nat m - Z.to_nat o + 1)%nat = m - o + 1.
 unwrap_ArithFacts.
+unbool_comparisons.
 rewrite Nat2Z.inj_add.
 rewrite Nat2Z.inj_sub.
 repeat rewrite Z2Nat.id; try omega.
@@ -117,7 +125,7 @@ reflexivity.
 apply Z2Nat.inj_le; omega.
 Qed.
 
-Definition subrange_vec_dec {n} (v : mword n) m o `{ArithFact (0 <= o)} `{ArithFact (o <= m < n)} : mword (m - o + 1) :=
+Definition subrange_vec_dec {n} (v : mword n) m o `{ArithFact (0 <=? o)} `{ArithFact (o <=? m <? n)} : mword (m - o + 1) :=
   let n := Z.to_nat n in
   let m := Z.to_nat m in
   let o := Z.to_nat o in
@@ -127,10 +135,10 @@ Definition subrange_vec_dec {n} (v : mword n) m o `{ArithFact (0 <= o)} `{ArithF
                         (cast_word (split1 (m+1) (n-(m+1)) (cast_word w (subrange_lemma1 prf)))
                                    (subrange_lemma2 prf))) subrange_lemma3.
 
-Definition subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <= m)} `{ArithFact (m <= o < n)} : mword (o - m + 1) := autocast (subrange_vec_dec v (n-1-m) (n-1-o)).
+Definition subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <=? m)} `{ArithFact (m <=? o <? n)} : mword (o - m + 1) := autocast (subrange_vec_dec v (n-1-m) (n-1-o)).
 
 (* TODO: get rid of bogus default *)
-Parameter dummy_vector : forall {n} `{ArithFact (n >= 0)}, mword n.
+Parameter dummy_vector : forall {n} `{ArithFact (n >=? 0)}, mword n.
 
 (*val update_subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a*)
 Definition update_subrange_vec_inc_unchecked {a b} (v : mword a) i j (w : mword b) : mword a :=
@@ -141,10 +149,11 @@ Definition update_subrange_vec_dec_unchecked {a b} (v : mword a) i j (w : mword 
   opt_def dummy_vector (of_bits (update_subrange_bv_dec v i j w)).
 
 Lemma update_subrange_vec_dec_pf {o m n} :
-ArithFact (0 <= o) ->
-ArithFact (o <= m < n) ->
+ArithFact (0 <=? o) ->
+ArithFact (o <=? m <? n) ->
 Z.of_nat (Z.to_nat o + (Z.to_nat (m - o + 1) + (Z.to_nat n - (Z.to_nat m + 1)))) = n.
 intros [H1] [H2].
+unbool_comparisons.
 rewrite <- subrange_lemma3.
 rewrite !Nat2Z.inj_add.
 rewrite !Nat2Z.inj_sub.
@@ -155,7 +164,7 @@ apply Z2Nat.inj_lt; omega.
 apply Z2Nat.inj_le; omega.
 Qed.
 
-Definition update_subrange_vec_dec {n} (v : mword n) m o `{ArithFact (0 <= o)} `{ArithFact (o <= m < n)} (w : mword (m - o + 1)) : mword n.
+Definition update_subrange_vec_dec {n} (v : mword n) m o `{ArithFact (0 <=? o)} `{ArithFact (o <=? m <? n)} (w : mword (m - o + 1)) : mword n.
 refine (
   let n := Z.to_nat n in
   let m := Z.to_nat m in
@@ -173,7 +182,7 @@ refine (
   cast_to_mword z (update_subrange_vec_dec_pf _ _)).
 Defined.
 
-Definition update_subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <= m)} `{ArithFact (m <= o < n)} (w : mword (o - m + 1)) : mword n := update_subrange_vec_dec v (n-1-m) (n-1-o) (autocast w).
+Definition update_subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <=? m)} `{ArithFact (m <=? o <? n)} (w : mword (o - m + 1)) : mword n := update_subrange_vec_dec v (n-1-m) (n-1-o) (autocast w).
 
 Lemma mword_nonneg {a} : mword a -> a >= 0.
 destruct a;
@@ -182,9 +191,10 @@ destruct 1.
 Qed.
 
 (*val extz_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
-Definition extz_vec {a b} `{ArithFact (b >= a)} (n : Z) (v : mword a) : mword b.
+Definition extz_vec {a b} `{ArithFact (b >=? a)} (n : Z) (v : mword a) : mword b.
 refine (cast_to_mword (Word.zext (get_word v) (Z.to_nat (b - a))) _).
 unwrap_ArithFacts.
+unbool_comparisons.
 assert (a >= 0). { apply mword_nonneg. assumption. }
 rewrite <- Z2Nat.inj_add; try omega.
 rewrite Zplus_minus.
@@ -193,9 +203,10 @@ auto with zarith.
 Defined.
 
 (*val exts_vec : forall 'a 'b. Size 'a, Size 'b => integer -> mword 'a -> mword 'b*)
-Definition exts_vec {a b} `{ArithFact (b >= a)} (n : Z) (v : mword a) : mword b.
+Definition exts_vec {a b} `{ArithFact (b >=? a)} (n : Z) (v : mword a) : mword b.
 refine (cast_to_mword (Word.sext (get_word v) (Z.to_nat (b - a))) _).
 unwrap_ArithFacts.
+unbool_comparisons.
 assert (a >= 0). { apply mword_nonneg. assumption. }
 rewrite <- Z2Nat.inj_add; try omega.
 rewrite Zplus_minus.
@@ -203,13 +214,14 @@ apply Z2Nat.id.
 auto with zarith.
 Defined.
 
-Definition zero_extend {a} (v : mword a) (n : Z) `{ArithFact (n >= a)} : mword n := extz_vec n v.
+Definition zero_extend {a} (v : mword a) (n : Z) `{ArithFact (n >=? a)} : mword n := extz_vec n v.
 
-Definition sign_extend {a} (v : mword a) (n : Z) `{ArithFact (n >= a)} : mword n := exts_vec n v.
+Definition sign_extend {a} (v : mword a) (n : Z) `{ArithFact (n >=? a)} : mword n := exts_vec n v.
 
-Definition zeros (n : Z) `{ArithFact (n >= 0)} : mword n.
+Definition zeros (n : Z) `{ArithFact (n >=? 0)} : mword n.
 refine (cast_to_mword (Word.wzero (Z.to_nat n)) _).
 unwrap_ArithFacts.
+unbool_comparisons.
 apply Z2Nat.id.
 auto with zarith.
 Defined.
@@ -227,11 +239,17 @@ assert ((Z.to_nat m <= Z.to_nat n)%nat).
 omega.
 Qed.
 
-Definition vector_truncate {n} (v : mword n) (m : Z) `{ArithFact (m >= 0)} `{ArithFact (m <= n)} : mword m :=
-  cast_to_mword (Word.split1 _ _ (cast_word (get_word v) (ltac:(unwrap_ArithFacts; apply truncate_eq; auto) : Z.to_nat n = Z.to_nat m + (Z.to_nat n - Z.to_nat m))%nat)) (ltac:(unwrap_ArithFacts; apply Z2Nat.id; omega) : Z.of_nat (Z.to_nat m) = m).
+Definition vector_truncate {n} (v : mword n) (m : Z) `{ArithFact (m >=? 0)} `{ArithFact (m <=? n)} : mword m.
+refine (cast_to_mword (Word.split1 _ _ (cast_word (get_word v) (_ : Z.to_nat n = Z.to_nat m + (Z.to_nat n - Z.to_nat m))%nat)) (_ : Z.of_nat (Z.to_nat m) = m)).
+abstract (unwrap_ArithFacts; unbool_comparisons; apply truncate_eq; auto with zarith).
+abstract (unwrap_ArithFacts; unbool_comparisons; apply Z2Nat.id; omega).
+Defined.
 
-Definition vector_truncateLSB {n} (v : mword n) (m : Z) `{ArithFact (m >= 0)} `{ArithFact (m <= n)} : mword m :=
-  cast_to_mword (Word.split2 _ _ (cast_word (get_word v) (ltac:(unwrap_ArithFacts; apply truncateLSB_eq; auto) : Z.to_nat n = (Z.to_nat n - Z.to_nat m) + Z.to_nat m)%nat)) (ltac:(unwrap_ArithFacts; apply Z2Nat.id; omega) : Z.of_nat (Z.to_nat m) = m).
+Definition vector_truncateLSB {n} (v : mword n) (m : Z) `{ArithFact (m >=? 0)} `{ArithFact (m <=? n)} : mword m.
+refine (cast_to_mword (Word.split2 _ _ (cast_word (get_word v) (_ : Z.to_nat n = (Z.to_nat n - Z.to_nat m) + Z.to_nat m)%nat)) (_ : Z.of_nat (Z.to_nat m) = m)).
+abstract (unwrap_ArithFacts; unbool_comparisons; apply truncateLSB_eq; auto with zarith).
+abstract (unwrap_ArithFacts; unbool_comparisons; apply Z2Nat.id; omega).
+Defined.
 
 Lemma concat_eq {a b} : a >= 0 -> b >= 0 -> Z.of_nat (Z.to_nat b + Z.to_nat a)%nat = a + b.
 intros.
@@ -270,13 +288,15 @@ induction n.
   reflexivity.
 Qed.
 
-Program Definition uint {a} (x : mword a) : {z : Z & ArithFact (0 <= z /\ z <= 2 ^ a - 1)} :=
+Program Definition uint {a} (x : mword a) : {z : Z & ArithFact (0 <=? z <=? 2 ^ a - 1)} :=
  existT _ (Z.of_N (Word.wordToN (get_word x))) _.
 Next Obligation.
 constructor.
+apply Bool.andb_true_iff.
 constructor.
-* apply N2Z.is_nonneg.
-* assert (2 ^ a - 1 = Z.of_N (2 ^ (Z.to_N a) - 1)). {
+* apply Z.leb_le. apply N2Z.is_nonneg.
+* apply Z.leb_le.
+  assert (2 ^ a - 1 = Z.of_N (2 ^ (Z.to_N a) - 1)). {
     rewrite N2Z.inj_sub.
     * rewrite N2Z.inj_pow.
       rewrite Z2N.id; auto.
@@ -303,12 +323,14 @@ induction n.
   rewrite Z.pow_succ_r; auto with zarith.
 Qed.
 
-Program Definition sint {a} `{ArithFact (a > 0)} (x : mword a) : {z : Z & ArithFact (-(2^(a-1)) <= z /\ z <= 2 ^ (a-1) - 1)} :=
+Program Definition sint {a} `{ArithFact (a >? 0)} (x : mword a) : {z : Z & ArithFact (-(2^(a-1)) <=? z <=? 2 ^ (a-1) - 1)} :=
   existT _ (Word.wordToZ (get_word x)) _.
 Next Obligation.
 destruct H.
+unbool_comparisons.
 destruct a; try inversion fact.
 constructor.
+unbool_comparisons_goal.
 generalize (get_word x).
 rewrite <- positive_nat_Z.
 destruct (Pos2Nat.is_succ p) as [n eq].
@@ -326,10 +348,10 @@ rewrite <- Z.lt_le_pred.
 auto.
 Defined.
 
-Definition sint0 {a} `{ArithFact (a >= 0)} (x : mword a) : Z :=
+Definition sint0 {a} `{ArithFact (a >=? 0)} (x : mword a) : Z :=
   if sumbool_of_bool (Z.eqb a 0) then 0 else projT1 (sint x).
 
-Lemma length_list_pos : forall {A} {l:list A}, length_list l >= 0.
+Lemma length_list_pos : forall {A} {l:list A}, 0 <= Z.of_nat (List.length l).
 unfold length_list.
 auto with zarith.
 Qed.
@@ -369,9 +391,9 @@ val smult_vec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> mword 'a -> mword 
 Definition add_vec   {n} : mword n -> mword n -> mword n := word_binop Word.wplus.
 (*Definition sadd_vec  {n} : mword n -> mword n -> mword n := sadd_bv w.*)
 Definition sub_vec   {n} : mword n -> mword n -> mword n := word_binop Word.wminus.
-Definition mult_vec  {n m} `{ArithFact (m >= n)} (l : mword n) (r : mword n) : mword m :=
+Definition mult_vec  {n m} `{ArithFact (m >=? n)} (l : mword n) (r : mword n) : mword m :=
   word_binop Word.wmult (zero_extend l _) (zero_extend r _).
-Definition mults_vec  {n m} `{ArithFact (m >= n)} (l : mword n) (r : mword n) : mword m :=
+Definition mults_vec  {n m} `{ArithFact (m >=? n)} (l : mword n) (r : mword n) : mword m :=
   word_binop Word.wmult (sign_extend l _) (sign_extend r _).
 
 (*val add_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
@@ -456,14 +478,14 @@ match n with
 | O => Word.WO
 | S m => Word.combine w (replicate_bits_aux w m)
 end.
-Lemma replicate_ok {n a} `{ArithFact (n >= 0)} `{ArithFact (a >= 0)} :
+Lemma replicate_ok {n a} `{ArithFact (n >=? 0)} `{ArithFact (a >=? 0)} :
    Z.of_nat (Z.to_nat n * Z.to_nat a) = a * n.
-destruct H. destruct H0.
+destruct H. destruct H0. unbool_comparisons.
 rewrite <- Z2Nat.id; auto with zarith.
 rewrite Z2Nat.inj_mul; auto with zarith.
 rewrite Nat.mul_comm. reflexivity.
 Qed.
-Definition replicate_bits {a} (w : mword a) (n : Z) `{ArithFact (n >= 0)} : mword (a * n) :=
+Definition replicate_bits {a} (w : mword a) (n : Z) `{ArithFact (n >=? 0)} : mword (a * n) :=
  cast_to_mword (replicate_bits_aux (get_word w) (Z.to_nat n)) replicate_ok.
 
 (*val duplicate : forall 'a. Size 'a => bitU -> integer -> mword 'a
@@ -520,7 +542,7 @@ Qed.
 
 Definition reverse_endianness {n} (bits : mword n) := with_word (P := id) reverse_endianness_word bits.
 
-Definition get_slice_int {a} `{ArithFact (a >= 0)} : Z -> Z -> Z -> mword a := get_slice_int_bv.
+Definition get_slice_int {a} `{ArithFact (a >=? 0)} : Z -> Z -> Z -> mword a := get_slice_int_bv.
 
 Definition set_slice n m (v : mword n) x (w : mword m) : mword n :=
   update_subrange_vec_dec_unchecked v (x + m - 1) x w.
@@ -535,7 +557,7 @@ Definition set_slice_int len n lo (v : mword len) : Z :=
   else n.
 
 (* Variant of bitvector slicing for the ARM model with few constraints *)
-Definition slice {m} (v : mword m) lo len `{ArithFact (0 <= len)} : mword len :=
+Definition slice {m} (v : mword m) lo len `{ArithFact (0 <=? len)} : mword len :=
   if sumbool_of_bool (orb (len =? 0) (lo <? 0))
   then zeros len
   else
@@ -563,15 +585,15 @@ destruct (sumbool_of_bool _).
 *)
 
 Import ListNotations.
-Definition count_leading_zeros {N : Z} (x : mword N) `{ArithFact (N >= 1)} 
-: {n : Z & ArithFact (0 <= n /\ n <= N)} :=
-  let r : {n : Z & ArithFact (0 <= n /\ n <= N)} := build_ex N in
+Definition count_leading_zeros {N : Z} (x : mword N) `{ArithFact (N >=? 1)} 
+: {n : Z & ArithFact (0 <=? n <=? N)} :=
+  let r : {n : Z & ArithFact (0 <=? n <=? N)} := build_ex N in
   foreach_Z_up 0 (N - 1) 1 r
     (fun i _ r =>
       (if ((eq_vec (vec_of_bits [access_vec_dec x i]  : mword 1) (vec_of_bits [B1]  : mword 1)))
        then build_ex
             (Z.sub (Z.sub (length_mword x) i) 1)
-             : {n : Z & ArithFact (0 <= n /\ n <= N)}
+             : {n : Z & ArithFact (0 <=? n <=? N)}
        else r))
    .
 
