@@ -93,7 +93,7 @@ type context = {
   kid_renames : kid KBindings.t; (* Plain tyvar -> tyvar renames,
                                     used to avoid variable/type variable name clashes *)
   (* Note that as well as these kid renames, we also attempt to replace entire
-     n_constraints with equivalent variables in doc_nc_prop and doc_nc_exp. *)
+     n_constraints with equivalent variables in doc_nc_exp. *)
   kid_id_renames : (id option) KBindings.t; (* tyvar -> argument renames *)
   kid_id_renames_rev : kid Bindings.t; (* reverse of kid_id_renames *)
   bound_nvars : KidSet.t;
@@ -386,12 +386,6 @@ match nc1, nc2 with
 | _, NC_aux (NC_false,_) -> nc_not nc1
  (* TODO: replace this hacky iff with a proper NC_ constructor *)
 | _,_ -> mk_nc (NC_app (mk_id "iff",[arg_bool nc1; arg_bool nc2]))
-
-(* n_constraint functions are currently just Z3 functions *)
-let doc_nc_fn_prop id =
-  match string_of_id id with
-  | "not" -> string "not"
-  | _ -> doc_id_type id
 
 (* n_constraint functions are currently just Z3 functions *)
 let doc_nc_fn (Id_aux (id,_) as full_id) =
@@ -775,7 +769,7 @@ let rec doc_typ_fns ctx env =
       | A_typ t -> app_typ true t
       | A_nexp n -> doc_nexp ctx n
       | A_order o -> empty
-      | A_bool nc -> doc_nc_prop ~prop_vars ~top:false ctx env nc
+      | A_bool nc -> parens (doc_nc_exp ctx env nc)
   in typ', atomic_typ, doc_typ_arg
 and doc_typ ctx env = let f,_,_ = doc_typ_fns ctx env in f
 and doc_atomic_typ ctx env = let _,f,_ = doc_typ_fns ctx env in f
@@ -792,73 +786,6 @@ and doc_arithfact ctxt env ?(exists = []) ?extra nc =
   | [] -> string "ArithFact" ^^ space ^^ parens prop
   | _ -> string "ArithFactP" ^^ space ^^
            parens (separate space ([string "exists"]@(List.map (doc_var ctxt) exists)@[comma; prop; equals; string "true"]))
-
-(* Follows Coq precedence levels *)
-and doc_nc_prop ?(top = true) ?(prop_vars = false) ctx env nc =
-  let locals = Env.get_locals env |> Bindings.bindings in
-  let nc = Env.expand_constraint_synonyms env nc in
-  let doc_nc_var varpp =
-    if prop_vars then varpp else doc_op equals varpp (string "true")
-  in
-  let nc_id_map =
-    List.fold_left
-      (fun m (v,(_,Typ_aux (typ,_))) ->
-        match typ with
-        | Typ_app (id, [A_aux (A_bool nc,_)]) when string_of_id id = "atom_bool" ->
-           (flatten_nc nc, v)::m
-        | _ -> m) [] locals
-  in
-  let rec newnc f nc =
-    let ncs = flatten_nc nc in
-    let candidates =
-      Util.map_filter (fun (ncs',id) -> Util.option_map (fun x -> x,id) (list_contains NC.compare ncs ncs')) nc_id_map
-    in
-    match List.sort (fun (l,_) (l',_) -> compare l l') candidates with
-    | ([],id)::_ -> parens (doc_nc_var (doc_id id))
-    | ((h::t),id)::_ -> parens (doc_op (string "/\\") (parens (doc_nc_var (doc_id id))) (l80 (List.fold_left nc_and h t)))
-    | [] -> f nc
-  and l85 (NC_aux (nc,_) as nc_full) =
-  match nc with
-  | NC_or (nc1, nc2) -> doc_op (string "\\/") (newnc l80 nc1) (newnc l85 nc2)
-  | _ -> l80 nc_full
-  and l80 (NC_aux (nc,_) as nc_full) =
-  match nc with
-  | NC_and (nc1, nc2) -> doc_op (string "/\\") (newnc l70 nc1) (newnc l80 nc2)
-  | _ -> l70 nc_full
-  and l70 (NC_aux (nc,_) as nc_full) =
-  match nc with
-  | NC_equal (ne1, ne2) -> doc_op equals (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_var kid -> doc_nc_var (doc_nexp ctx (nvar kid))
-  | NC_bounded_ge (ne1, ne2) -> doc_op (string ">=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_bounded_gt (ne1, ne2) -> doc_op (string ">") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_bounded_le (ne1, ne2) -> doc_op (string "<=") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_bounded_lt (ne1, ne2) -> doc_op (string "<") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | NC_not_equal (ne1, ne2) -> doc_op (string "<>") (doc_nexp ctx ne1) (doc_nexp ctx ne2)
-  | _ -> l10 nc_full
-  and l10 (NC_aux (nc,_) as nc_full) =
-  match nc with
-  | NC_set (kid, is) ->
-     separate space [string "In"; doc_var ctx kid;
-                     brackets (separate (string "; ")
-                                 (List.map (fun i -> string (Nat_big_num.to_string i)) is))]
-  | NC_app (f,args) -> separate space (doc_nc_fn_prop f::List.map (doc_typ_arg ~prop_vars ctx env) args)
-  | _ -> l0 nc_full
-  and l0 (NC_aux (nc,_) as nc_full) =
-  match nc with
-  | NC_true -> string "True"
-  | NC_false -> string "False"
-  | NC_set _
-  | NC_app _
-  | NC_var _
-  | NC_or _
-  | NC_and _
-  | NC_equal _
-  | NC_bounded_ge _
-  | NC_bounded_gt _
-  | NC_bounded_le _
-  | NC_bounded_lt _
-  | NC_not_equal _ -> parens (l85 nc_full)
-  in if top then newnc l85 nc else newnc l0 nc
 
 (* Follows Coq precedence levels *)
 and doc_nc_exp ctx env nc =
