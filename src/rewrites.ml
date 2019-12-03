@@ -257,11 +257,22 @@ let rewrite_defs_nexp_ids, rewrite_typ_nexp_ids =
        DEF_spec (VS_aux (VS_val_spec (typschm, id, exts, b), a))
     | DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), a)) ->
        DEF_type (TD_aux (TD_abbrev (id, typq, rewrite_typ_arg env typ_arg), a))
+    | DEF_type (TD_aux (TD_record (id, typq, fields, b), a)) ->
+       let fields' = List.map (fun (t, id) -> (rewrite_typ env t, id)) fields in
+       DEF_type (TD_aux (TD_record (id, typq, fields', b), a))
+    | DEF_type (TD_aux (TD_variant (id, typq, constrs, b), a)) ->
+       let constrs' =
+         List.map (fun (Tu_aux (Tu_ty_id (t, id), l)) ->
+                        Tu_aux (Tu_ty_id (rewrite_typ env t, id), l))
+                  constrs
+       in
+       DEF_type (TD_aux (TD_variant (id, typq, constrs', b), a))
     | d -> Rewriter.rewrite_def rewriters d
   in
 
   (fun env defs -> rewrite_defs_base { rewriters_base with
-    rewrite_exp = (fun _ -> map_exp_annot rewrite_annot); rewrite_def = rewrite_def env
+    rewrite_exp = (fun _ -> map_exp_annot rewrite_annot);
+    rewrite_def = rewrite_def env
     } defs),
   rewrite_typ
 
