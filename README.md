@@ -81,7 +81,7 @@ to get install Sail using opam (recommended).
 Building
 ========
 
-See [BUILDING.md](BUILDING.md)) for full details of how to build Sail from source
+See [BUILDING.md](BUILDING.md) for full details of how to build Sail from source
 with all the required dependencies.
 
 Emacs Mode

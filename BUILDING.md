@@ -8,7 +8,7 @@ virtual machine and on macOS Sierra 10.12.6, so they should
 work. Hopefully this will be useful as a reference.
 
 For most users, installing and building the dependencies using OPAM is
-likely easier than building everything manually, see [INSTALL.md].
+likely easier than building everything manually, see [INSTALL.md](INSTALL.md).
 
 Basics
 ------
