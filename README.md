@@ -76,7 +76,7 @@ OPAM Installation
 =================
 
 See [INSTALL.md](INSTALL.md) for how
-to get install Sail using opam (recommended).
+to install Sail using opam (recommended).
 
 Building
 ========
