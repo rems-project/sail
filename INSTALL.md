@@ -63,4 +63,4 @@ To remove the pin and revert to the latest released opam package type:
 opam pin remove sail
 ```
 
-Alternatively you could follow the instructions to [build Sail manually](https://github.com/rems-project/sail/wiki/Building-from-Source), optionally skipping the steps to install ott, lem and linksem if they were already installed via opam.
+Alternatively you could follow the instructions to [build Sail manually](BUILDING.md), optionally skipping the steps to install ott, lem and linksem if they were already installed via opam.
