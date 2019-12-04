@@ -41,7 +41,7 @@ If all goes well then you'll have sail in your path:
 which sail
 sail --help
 ```
-Some source files that sail uses are found in at ``opam config var sail:share`` (e.g. for ``$include <foo.sail>``) but sail should find those when it needs them.
+Some source files that sail uses are found at ``opam config var sail:share`` (e.g. for ``$include <foo.sail>``) but sail should find those when it needs them.
 
 ### Installing development versions of Sail
 Released Sail packages lag behind the latest development in the repository. If you find you need a recently added feature or bug fix you can use opam pin to install the latest version of Sail from the repository. Assuming you have previously followed the above instructions (required to install dependencies):
