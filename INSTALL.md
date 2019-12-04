@@ -1,6 +1,6 @@
-# How to install Sail using opam (OCaml package manager)
+# How to install Sail using opam
 
-First, install opam if you haven't already. You can use your system's package
+First, install opam (the OCaml package manager) if you haven't already. You can use your system's package
 manager e.g. `sudo apt-get install opam` or follow the [instructions
 from the opam website](https://opam.ocaml.org/doc/Install.html).
 Depending on your system and how you installed opam you may get either

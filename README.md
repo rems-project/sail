@@ -75,14 +75,13 @@ on Github.  These and the RISC-V model are integrated with our [RMEM](http://www
 OPAM Installation
 =================
 
-See the following Sail [wiki
-page](https://github.com/rems-project/sail/wiki/OPAMInstall) for how
-to get pre-built binaries of Sail using OPAM.
+See [INSTALL.md](INSTALL.md) for how
+to get install Sail using opam (recommended).
 
 Building
 ========
 
-See [INSTALL.md](INSTALL.md) for full details of how to build Sail from source
+See [BUILDING.md](BUILDING.md)) for full details of how to build Sail from source
 with all the required dependencies.
 
 Emacs Mode
