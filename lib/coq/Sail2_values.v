@@ -166,16 +166,16 @@ unfold pow.
 auto using Z.leb_refl with bool.
 Qed.
 
-Lemma ZEuclid_div_pos : forall x y, y > 0 -> x >= 0 -> ZEuclid.div x y >= 0.
+Lemma ZEuclid_div_pos : forall x y, 0 < y -> 0 <= x -> 0 <= ZEuclid.div x y.
 intros.
 unfold ZEuclid.div.
 change 0 with (0 * 0).
-apply Zmult_ge_compat; auto with zarith.
-* apply Z.le_ge. apply Z.sgn_nonneg. apply Z.ge_le. auto with zarith.
-* apply Z_div_ge0; auto. apply Z.lt_gt. apply Z.abs_pos. auto with zarith.
+apply Zmult_le_compat; auto with zarith.
+* apply Z.sgn_nonneg. auto with zarith.
+* apply Z_div_pos; auto. apply Z.lt_gt. apply Z.abs_pos. auto with zarith.
 Qed.
 
-Lemma ZEuclid_pos_div : forall x y, y > 0 -> ZEuclid.div x y >= 0 -> x >= 0.
+Lemma ZEuclid_pos_div : forall x y, 0 < y -> 0 <= ZEuclid.div x y -> 0 <= x.
 intros x y GT.
   specialize (ZEuclid.div_mod x y);
   specialize (ZEuclid.mod_always_pos x y);
@@ -1085,17 +1085,6 @@ Class ReasonableSize (a : Z) : Prop := {
   isPositive : a >=? 0 = true
 }.
 
-(* Omega doesn't know about In, but can handle disjunctions. *)
-Ltac unfold_In :=
-repeat match goal with
-| H:context [member_Z_list _ _ = true] |- _ => rewrite member_Z_list_In in H
-| H:context [In ?x (?y :: ?t)] |- _ => change (In x (y :: t)) with (y = x \/ In x t) in H
-| H:context [In ?x []] |- _ => change (In x []) with False in H
-| |- context [member_Z_list _ _ = true] => rewrite member_Z_list_In
-| |- context [In ?x (?y :: ?t)] => change (In x (y :: t)) with (y = x \/ In x t) 
-| |- context [In ?x []] => change (In x []) with False
-end.
-
 (* Definitions in the context that involve proof for other constraints can
    break some of the constraint solving tactics, so prune definition bodies
    down to integer types. *)
@@ -1108,6 +1097,15 @@ repeat match goal with X := _ |- _ =>
   match goal with _ : context[X] |- _ => idtac end || clear X
 end.
 
+Lemma lift_bool_exists (l r : bool) (P : bool -> Prop) :
+  (l = r -> exists x, P x) ->
+  (exists x, l = r -> P x).
+intro H.
+destruct (Bool.bool_dec l r) as [e | ne].
+* destruct (H e) as [x H']; eauto.
+* exists true; tauto.
+Qed.
+
 Lemma ArithFact_mword (a : Z) (w : mword a) : ArithFact (a >=? 0).
 constructor.
 destruct a.
@@ -1115,13 +1113,32 @@ auto with zarith.
 auto using Z.le_ge, Zle_0_pos.
 destruct w.
 Qed.
+(* Remove constructor from ArithFact(P)s and if they're used elsewhere
+   in the context create a copy that rewrites will work on. *)
 Ltac unwrap_ArithFacts :=
+  let gen X :=
+    let Y := fresh "Y" in pose X as Y; generalize Y
+  in
+  let unwrap H :=
+      let H' := fresh H in case H as [H']; clear H;
+      match goal with
+      | _ :  context[H'] |- _ => gen H'
+      | _ := context[H'] |- _ => gen H'
+      |   |- context[H']      => gen H'
+      | _ => idtac
+      end
+  in
   repeat match goal with
-  | H:(ArithFact _) |- _ => let H' := fresh H in case H as [H']; clear H
-  | H:(ArithFactP _) |- _ => let H' := fresh H in case H as [H']; clear H
+  | H:(ArithFact _) |- _ => unwrap H
+  | H:(ArithFactP _) |- _ => unwrap H
   end.
 Ltac unbool_comparisons :=
   repeat match goal with
+  | H:@eq bool _ _ -> @ex bool _ |- _ => apply lift_bool_exists in H; destruct H
+  (* Omega doesn't know about In, but can handle disjunctions. *)
+  | H:context [member_Z_list _ _ = true] |- _ => rewrite member_Z_list_In in H
+  | H:context [In ?x (?y :: ?t)] |- _ => change (In x (y :: t)) with (y = x \/ In x t) in H
+  | H:context [In ?x []] |- _ => change (In x []) with False in H
   | H:?v = true |- _ => is_var v; subst v
   | H:?v = false |- _ => is_var v; subst v
   | H:true = ?v |- _ => is_var v; subst v
@@ -1151,6 +1168,11 @@ Ltac unbool_comparisons :=
   end.
 Ltac unbool_comparisons_goal :=
   repeat match goal with
+  (* Important to have these early in the list - setoid_rewrite can
+     unfold member_Z_list. *)
+  | |- context [member_Z_list _ _ = true] => rewrite member_Z_list_In
+  | |- context [In ?x (?y :: ?t)] => change (In x (y :: t)) with (y = x \/ In x t) 
+  | |- context [In ?x []] => change (In x []) with False
   | |- context [Z.geb _ _] => setoid_rewrite Z.geb_leb
   | |- context [Z.gtb _ _] => setoid_rewrite Z.gtb_ltb
   | |- context [Z.leb _ _ = true] => setoid_rewrite Z.leb_le
@@ -1397,16 +1419,12 @@ end;
 (* We may have uncovered more conjunctions *)
 repeat match goal with H:and _ _ |- _ => destruct H end.
 
-(* Remove details of embedded proofs and provide a copy that nothing
-   depends upon so that rewrites on it will work. *)
+(* Remove details of embedded proofs. *)
 Ltac generalize_embedded_proofs :=
-  let gen X :=
-    let Y := fresh "Y" in pose X as Y; generalize Y; generalize dependent X
-  in
   repeat match goal with H:context [?X] |- _ =>
     match type of X with
-    | ArithFact _ => gen X
-    | ArithFactP _ => gen X
+    | ArithFact  _ => generalize dependent X
+    | ArithFactP _ => generalize dependent X
     end
   end;
   intros.
@@ -1460,7 +1478,6 @@ Ltac prepare_for_solver :=
  unbool_comparisons_goal;
  repeat match goal with H:and _ _ |- _ => destruct H end;
  remove_unnecessary_casesplit;
- unfold_In; (* after unbool_comparisons to deal with && and || *)
  reduce_list_lengths;
  reduce_pow;
  filter_disjunctions;
@@ -1555,7 +1572,11 @@ simpl;
 intuition try congruence.
 Qed.
 
-Ltac solve_bool_with_Z :=
+Lemma b2z_negb x : Z.b2z (negb x) = 1 - Z.b2z x.
+  destruct x ; reflexivity.
+Qed.
+
+Ltac bool_to_Z :=
   subst;
   rewrite ?truefalse, ?falsetrue, ?or_False_l, ?or_False_r in *;
   (* I did try phrasing these as rewrites, but Coq was oddly reluctant to use them *)
@@ -1564,6 +1585,8 @@ Ltac solve_bool_with_Z :=
   | H:_ <-> ?x = ?x |- _ => apply iff_equal_r in H
   end;
   repeat match goal with
+  | H:context [negb ?v] |- _ => rewrite b2z_negb in H
+  | |- context [negb ?v]     => rewrite b2z_negb 
   |  H:context [?v = true] |- _  => is_var v; rewrite (b2z_true v) in *
   | |- context [?v = true]       => is_var v; rewrite (b2z_true v) in *
   |  H:context [?v = false] |- _ => is_var v; rewrite (b2z_false v) in *
@@ -1575,10 +1598,14 @@ Ltac solve_bool_with_Z :=
   | H:context [Z.b2z (?v || ?w)] |- _ => rewrite (b2z_orb v w) in H
   | |- context [Z.b2z (?v || ?w)]     => rewrite (b2z_orb v w)
   end;
+  change (Z.b2z true) with 1 in *;
+  change (Z.b2z false) with 0 in *;
   repeat match goal with
   | _:context [Z.b2z ?v] |- _ => generalize (b2z_tf v); generalize dependent (Z.b2z v)
   | |- context [Z.b2z ?v]     => generalize (b2z_tf v); generalize dependent (Z.b2z v)
-  end;
+  end.
+Ltac solve_bool_with_Z :=
+  bool_to_Z;
   intros;
   lia.
 
@@ -1758,6 +1785,66 @@ Ltac z_comparisons :=
   | exact Z_compare_gt_lt
   | exact Z_compare_gt_eq
   ].
+                                                                                   
+Ltac bool_ex_solve :=
+match goal with H : ?l = ?v -> @ex _ _ |- @ex _ _ =>
+     match v with true => idtac | false => idtac end;
+     destruct l;
+     repeat match goal with H:?X = ?X -> _ |- _ => specialize (H eq_refl) end;
+     repeat match goal with H:@ex _ _ |- _ => destruct H end;
+     unbool_comparisons;
+     guess_ex_solver
+end.
+
+(* Solve a boolean equality goal which is just rearranged clauses (e.g, at the
+   end of the clause_matching_bool_solver, below. *)
+Ltac bruteforce_bool_eq :=
+  lazymatch goal with
+  | |- _ && ?l1 = _ => idtac l1; destruct l1; rewrite ?Bool.andb_true_l, ?Bool.andb_true_r, ?Bool.andb_false_l, ?Bool.andb_false_r; bruteforce_bool_eq
+  | |- ?l = _ => reflexivity
+  end.
+
+Ltac clause_matching_bool_solver :=
+(* Do the left hand and right hand clauses have the same shape? *)
+let rec check l r :=
+    lazymatch l with
+    | ?l1 || ?l2 =>
+      lazymatch r with ?r1 || ?r2 => check l1 r1; check l2 r2 end
+    | _ => is_evar l + constr_eq l r
+    end
+in
+(* Rebuild remaining rhs, dropping extra "true"s. *)
+let rec add_clause l r :=
+  match l with
+  | true => r
+  | _ => match r with true => l | _ => constr:(l && r) end
+  end
+in
+(* Find a clause in r matching l, use unify to instantiate evars, return rest of r *)
+let rec find l r :=
+    lazymatch r with
+    | ?r1 && ?r2 =>
+      match l with
+      | _ => let r1' := find l r1 in add_clause r1' r2
+      | _ => let r2' := find l r2 in add_clause r1 r2'
+      end
+    | _ => constr:(ltac:(check l r; unify l r; exact true))
+    end
+in
+(* For each clause in the lhs, find a matching clause in rhs, fill in
+   remaining evar with left over.  TODO: apply to goals without an evar clause *)
+match goal with
+  | |- @ex _ _ => eexists; clause_matching_bool_solver
+  | |- ?l = ?r =>
+  let rec clause l r :=
+      match l with
+      | ?l1 && ?l2 =>
+        let r2 := clause l1 r in clause l2 r2
+      | _ => constr:(ltac:(is_evar l; exact r))
+      | _ => find l r
+      end
+  in let r' := clause l r in instantiate (1 := r'); bruteforce_bool_eq
+end.
 
 
 
@@ -1826,7 +1913,6 @@ Ltac main_solver :=
      repeat match goal with H:@ex _ _ |- _ => destruct H end;
      guess_ex_solver
    end
- | match goal with |- @ex _ _ => guess_ex_solver end
 (* While firstorder was quite effective at dealing with existentially quantified
    goals from boolean expressions, it attempts lazy normalization of terms,
    which blows up on integer comparisons with large constants.
@@ -1834,6 +1920,9 @@ Ltac main_solver :=
      (* Don't use auto for the fallback to keep runtime down *)
      firstorder fail
    end*)
+ | bool_ex_solve
+ | clause_matching_bool_solver
+ | match goal with |- @ex _ _ => guess_ex_solver end
  | sail_extra_tactic
  | idtac "Unable to solve constraint"; dump_context; fail
  ].
@@ -1862,9 +1951,93 @@ Ltac solve_unknown :=
     exact (Build_ArithFactP _ I : ArithFactP True)
   end.
 
+(* Solving straightforward and_boolMP / or_boolMP goals *)
+
+Lemma default_and_proof l r r' :
+  (l = true -> r' = r) ->
+  l && r' = l && r.
+  intro H.
+destruct l; [specialize (H eq_refl) | clear H ]; auto.
+Qed.
+
+Lemma default_and_proof2 l l' r r' :
+  l' = l ->
+  (l = true -> r' = r) ->
+  l' && r' = l && r.
+intros; subst.
+auto using default_and_proof.
+Qed.
+
+Lemma default_or_proof l r r' :
+  (l = false -> r' = r) ->
+  l || r' = l || r.
+  intro H.
+destruct l; [clear H | specialize (H eq_refl) ]; auto.
+Qed.
+
+Lemma default_or_proof2 l l' r r' :
+  l' = l ->
+  (l = false -> r' = r) ->
+  l' || r' = l || r.
+intros; subst.
+auto using default_or_proof.
+Qed.
+
+Ltac default_andor :=
+  intros; constructor; intros;
+repeat match goal with H:@ex _ _ |- _ => destruct H end;
+unbool_comparisons; unbool_comparisons_goal;
+repeat eexists;
+match goal with
+| H:?v = true -> _ |- _ = ?v && _ => eapply default_and_proof; eauto
+| H:?v = true -> _ |- _ = ?v && _ => eapply default_and_proof2; eauto
+| H:?v = false -> _ |- _ = ?v || _ => eapply default_or_proof; eauto
+| H:?v = false -> _ |- _ = ?v || _ => eapply default_or_proof2; eauto
+end.
+
+(* Solving simple and_boolMP / or_boolMP goals where unknown booleans
+   have been merged together. *)
+
+Ltac squashed_andor_solver :=
+  clear;
+  match goal with |- forall l r : bool, ArithFactP (_ -> _ -> _) => idtac end;
+  intros l r; constructor; intros;
+  let func := match goal with |- context[?f l r] => f end in
+  match goal with
+  | H : l = true -> @ex _ _ |- _ =>
+    let x := fresh "x" in
+    let H' := fresh "H" in
+    apply lift_bool_exists in H;
+    destruct H as [x H'];
+    exists (func x l)
+  | H : @ex _ _ |- _ =>
+    let x := fresh "x" in
+    let H' := fresh "H" in
+    destruct H as [x H'];
+    exists (func x r)
+  end;
+  repeat match goal with
+  | H : l = true -> @ex _ _ |- _ =>
+    let x := fresh "x" in
+    let H' := fresh "H" in
+    apply lift_bool_exists in H;
+    destruct H as [x H'];
+    exists x
+  | H : @ex _ _ |- _ =>
+    let x := fresh "x" in
+    let H' := fresh "H" in
+    destruct H as [x H'];
+    exists x
+  end;
+  unbool_comparisons; unbool_comparisons_goal;
+  (* Attempt to shrink size of problem *)
+  try match goal with _ : l = true -> ?v = r |- _ => generalize dependent v; intros end;
+  solve_bool_with_Z.
+
 Ltac run_main_solver_impl :=
 (* Attempt a simple proof first to avoid lengthy preparation steps (especially
    as the large proof terms can upset subsequent proofs). *)
+try solve [default_andor];
 constructor;
 try simple_omega;
 prepare_for_solver;
@@ -1893,6 +2066,7 @@ Ltac clear_fixpoints :=
     end.
 
 Ltac solve_arithfact :=
+  try solve [squashed_andor_solver]; (* Do this first so that it can name the intros *)
   intros; (* To solve implications for derive_m *)
   clear_fixpoints; (* Avoid using recursive calls *)
   cbv beta; (* Goal might be eta-expanded *)
@@ -2576,7 +2750,6 @@ destruct HE as [HE].
 destruct HR as [HR].
 constructor.
 unbool_comparisons.
-apply member_Z_list_In in HR.
 destruct HR as [HR | [HR | []]];
 subst; compute;
 auto.
