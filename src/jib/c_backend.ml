@@ -1153,8 +1153,6 @@ let rec sgen_cval = function
 and sgen_call op cvals =
   let open Printf in
   match op, cvals with
-  | Bit_to_bool, [v] ->
-     sprintf "((bool) %s)" (sgen_cval v)
   | Bnot, [v] -> "!(" ^ sgen_cval v ^ ")"
   | List_hd, [v] ->
      sprintf "(%s).hd" ("*" ^ sgen_cval v)

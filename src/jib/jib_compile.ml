@@ -362,8 +362,11 @@ let rec compile_aval l ctx = function
        | V_lit (VL_bit Sail2_values.B1, _) ->
           [icopy l (CL_id (gs, ctyp)) (V_call (Bvor, [V_id (gs, ctyp); V_lit (mask i, ctyp)]))]
        | _ ->
-          (* FIXME: Make this work in C *)
-          setup @ [iif (V_call (Bit_to_bool, [cval])) [icopy l (CL_id (gs, ctyp)) (V_call (Bvor, [V_id (gs, ctyp); V_lit (mask i, ctyp)]))] [] CT_unit] @ cleanup
+          setup
+          @ [iextern (CL_id (gs, ctyp))
+                     (mk_id "update_fbits", [])
+                     [V_id (gs, ctyp); V_lit (VL_int (Big_int.of_int i), CT_fint 64); cval]]
+          @ cleanup
      in
      [idecl ctyp gs;
       icopy l (CL_id (gs, ctyp)) (V_lit (VL_bits (Util.list_init 64 (fun _ -> Sail2_values.B0), direction), ctyp))]

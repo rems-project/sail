@@ -346,8 +346,6 @@ let rec smt_cval ctx cval =
         Fn ("not", [Fn ("=", [smt_cval ctx cval1; smt_cval ctx cval2])])
      | V_call (Bvor, [cval1; cval2]) ->
         Fn ("bvor", [smt_cval ctx cval1; smt_cval ctx cval2])
-     | V_call (Bit_to_bool, [cval]) ->
-        Fn ("=", [smt_cval ctx cval; Bitvec_lit [Sail2_values.B1]])
      | V_call (Eq, [cval1; cval2]) ->
         Fn ("=", [smt_cval ctx cval1; smt_cval ctx cval2])
      | V_call (Bnot, [cval]) ->

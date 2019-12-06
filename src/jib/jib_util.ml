@@ -275,7 +275,6 @@ let string_of_op = function
   | Bor -> "@or"
   | List_hd -> "@hd"
   | List_tl -> "@tl"
-  | Bit_to_bool -> "@bit_to_bool"
   | Eq -> "@eq"
   | Neq -> "@neq"
   | Bvnot -> "@bvnot"
@@ -831,7 +830,6 @@ let label str =
 
 let rec infer_call op vs =
   match op, vs with
-  | Bit_to_bool, _ -> CT_bool
   | Bnot, _ -> CT_bool
   | Band, _ -> CT_bool
   | Bor, _ -> CT_bool

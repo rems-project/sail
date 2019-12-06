@@ -288,6 +288,8 @@ void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len);
 
 fbits bitvector_access(const lbits op, const sail_int n_mpz);
 
+fbits update_fbits(const fbits op, const uint64_t n, const fbits bit);
+
 void sail_unsigned(sail_int *rop, const lbits op);
 void sail_signed(sail_int *rop, const lbits op);
 
