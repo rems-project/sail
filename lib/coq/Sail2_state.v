@@ -30,15 +30,12 @@ Fixpoint foreachS {A RV Vars E} (xs : list A) (vars : Vars) (body : A -> Vars ->
      foreachS xs vars body
 end.
 
-(* This uses the same subproof as the prompt version to get around proof relevance issues
-   in Sail2_state_lemmas.  TODO: if we switch to boolean properties this shouldn't be
-   necessary. *)
 Fixpoint foreach_ZS_up' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 <? step)} `{ArithFact (0 <=? off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <=? z <=? to)), Vars -> monadS rv Vars e) {struct n} : monadS rv Vars e.
 exact (
   match sumbool_of_bool (from + off <=? to) with left LE =>
     match n with
     | O => returnS vars
-    | S n => body (from + off) (foreach_ZM_up'_subproof _ _ _ _ _ _ LE) vars >>$= fun vars => foreach_ZS_up' rv e Vars from to step (off + step) n _ (foreach_ZM_up'_subproof0 _ _ _ _) vars body
+    | S n => body (from + off) _ vars >>$= fun vars => foreach_ZS_up' rv e Vars from to step (off + step) n _ _ vars body
     end
   | right _ => returnS vars
   end).
@@ -49,7 +46,7 @@ exact (
   match sumbool_of_bool (to <=? from + off) with left LE =>
     match n with
     | O => returnS vars
-    | S n => body (from + off) (foreach_ZM_down'_subproof _ _ _ _ _ _ LE) vars >>$= fun vars => foreach_ZS_down' _ _ _ from to step (off - step) n _ (foreach_ZM_down'_subproof0 _ _ _ _) vars body
+    | S n => body (from + off) _ vars >>$= fun vars => foreach_ZS_down' _ _ _ from to step (off - step) n _ _ vars body
     end
   | right _ => returnS vars
   end).

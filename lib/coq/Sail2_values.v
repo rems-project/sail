@@ -38,6 +38,33 @@ unfold ArithFact in *.
 apply fact.
 Defined.
 
+Lemma ArithFact_irrelevant (P : bool) (p q : ArithFact P) : p = q.
+destruct p,q.
+f_equal.
+apply Eqdep_dec.UIP_dec.
+apply Bool.bool_dec.
+Qed.
+
+Ltac replace_ArithFact_proof :=
+  match goal with |- context[?x] =>
+    match tt with
+    | _ => is_var x; fail 1
+    | _ =>
+      match type of x with ArithFact ?P =>
+        let pf := fresh "pf" in
+        generalize x as pf; intro pf;
+        repeat multimatch goal with |- context[?y] =>
+          match type of y with ArithFact P =>
+            match y with
+            | pf => idtac
+            | _ => rewrite <- (ArithFact_irrelevant P pf y)
+            end
+          end
+        end
+      end
+    end
+  end.
+
 (* Allow setoid rewriting through ArithFact *)
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Program.Basics.

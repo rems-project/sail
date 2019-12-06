@@ -730,6 +730,8 @@ induction (S (Z.abs_nat (from - to))); intros.
   reflexivity.
 * simpl.
   rewrite_liftState.
+  destruct (sumbool_of_bool (from + off <=? to)); auto.
+  repeat replace_ArithFact_proof.
   reflexivity.
 Qed.
 Hint Rewrite liftState_foreach_ZM_up : liftState.
@@ -751,6 +753,8 @@ induction (S (Z.abs_nat (from - to))); intros.
   reflexivity.
 * simpl.
   rewrite_liftState.
+  destruct (sumbool_of_bool (to <=? from + off)); auto.
+  repeat replace_ArithFact_proof.
   reflexivity.
 Qed.
 Hint Rewrite liftState_foreach_ZM_down : liftState.

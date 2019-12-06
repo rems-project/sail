@@ -567,7 +567,6 @@ Definition slice {m} (v : mword m) lo len `{ArithFact (0 <=? len)} : mword len :
          else zeros len
     else autocast (subrange_vec_dec v (lo + len - 1) lo).
 
-(*
 Lemma slice_is_ok m (v : mword m) lo len
                   (H1 : 0 <= lo) (H2 : 0 < len) (H3: lo + len < m) :
   slice v lo len = autocast (subrange_vec_dec v (lo + len - 1) lo).
@@ -580,9 +579,9 @@ destruct (sumbool_of_bool _).
   + exfalso.
     unbool_comparisons.  
     omega.
-  + f_equal.
-    f_equal.
-*)
+  + repeat replace_ArithFact_proof.
+    reflexivity.
+Qed.
 
 Import ListNotations.
 Definition count_leading_zeros {N : Z} (x : mword N) `{ArithFact (N >=? 1)} 
