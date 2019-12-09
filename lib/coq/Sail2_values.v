@@ -1162,6 +1162,7 @@ Ltac unwrap_ArithFacts :=
 Ltac unbool_comparisons :=
   repeat match goal with
   | H:@eq bool _ _ -> @ex bool _ |- _ => apply lift_bool_exists in H; destruct H
+  | H:@ex Z _ |- _ => destruct H
   (* Omega doesn't know about In, but can handle disjunctions. *)
   | H:context [member_Z_list _ _ = true] |- _ => rewrite member_Z_list_In in H
   | H:context [In ?x (?y :: ?t)] |- _ => change (In x (y :: t)) with (y = x \/ In x t) in H
@@ -1170,6 +1171,7 @@ Ltac unbool_comparisons :=
   | H:?v = false |- _ => is_var v; subst v
   | H:true = ?v |- _ => is_var v; subst v
   | H:false = ?v |- _ => is_var v; subst v
+  | H:_ /\ _ |- _ => destruct H
   | H:context [Z.geb _ _] |- _ => rewrite Z.geb_leb in H
   | H:context [Z.gtb _ _] |- _ => rewrite Z.gtb_ltb in H
   | H:context [Z.leb _ _ = true] |- _ => rewrite Z.leb_le in H
@@ -1184,7 +1186,8 @@ Ltac unbool_comparisons :=
   | H:context [andb _ _ = false] |- _ => rewrite Bool.andb_false_iff in H
   | H:context [negb _ = true] |- _ => rewrite Bool.negb_true_iff in H
   | H:context [negb _ = false] |- _ => rewrite Bool.negb_false_iff in H
-  | H:context [Bool.eqb _ _ = true] |- _ => rewrite Bool.eqb_true_iff in H
+  | H:context [Bool.eqb _ ?r = true] |- _ => rewrite Bool.eqb_true_iff in H;
+                                             try (is_var r; subst r)
   | H:context [Bool.eqb _ _ = false] |- _ => rewrite Bool.eqb_false_iff in H
   | H:context [generic_eq _ _ = true] |- _ => apply generic_eq_true in H
   | H:context [generic_eq _ _ = false] |- _ => apply generic_eq_false in H
@@ -1192,6 +1195,12 @@ Ltac unbool_comparisons :=
   | H:context [generic_neq _ _ = false] |- _ => apply generic_neq_false in H
   | H:context [_ <> true] |- _ => rewrite Bool.not_true_iff_false in H
   | H:context [_ <> false] |- _ => rewrite Bool.not_false_iff_true in H
+  | H:context [@eq bool ?l ?r] |- _ =>
+    lazymatch r with
+    | true => fail
+    | false => fail
+    | _ => rewrite (Bool.eq_iff_eq_true l r) in H
+    end
   end.
 Ltac unbool_comparisons_goal :=
   repeat match goal with
@@ -1222,6 +1231,12 @@ Ltac unbool_comparisons_goal :=
   | |- context [generic_neq _ _ = false] => apply generic_neq_false
   | |- context [_ <> true] => setoid_rewrite Bool.not_true_iff_false
   | |- context [_ <> false] => setoid_rewrite Bool.not_false_iff_true
+  | |- context [@eq bool _ ?r] =>
+    lazymatch r with
+    | true => fail
+    | false => fail
+    | _ => setoid_rewrite Bool.eq_iff_eq_true
+    end
   end.
 
 (* Split up dependent pairs to get at proofs of properties *)
@@ -1654,7 +1669,7 @@ Ltac guess_ex_solver :=
   | |- @ex bool _ => exists true; guess_ex_solver
   | |- @ex bool _ => exists false; guess_ex_solver
   | x : ?ty |- @ex ?ty _ => exists x; guess_ex_solver
-  | _ => solve [tauto | eauto 3 with zarith sail | solve_bool_with_Z | omega | intuition]
+  | _ => solve [tauto | eauto 3 with zarith sail | solve_bool_with_Z | omega]
   end.
 
 (* A straightforward solver for simple problems like
@@ -1685,6 +1700,7 @@ Ltac simple_ex_iff :=
   match goal with
   | |- @ex _ _ => eexists; simple_ex_iff
   | |- _ <-> _ =>
+    symmetry;
     simple_split_iff;
     form_iff_true;
     solve [apply iff_refl | eassumption]
@@ -1783,7 +1799,7 @@ Ltac ex_iff_solve :=
   | |- @ex _ _ => eexists; ex_iff_solve
   (* Range constraints are attached to the right *)
   | |- _ /\ _ => split; [ex_iff_solve | omega]
-  | |- _ <-> _ => conjuncts_iff_solve
+  | |- _ <-> _ => conjuncts_iff_solve || (symmetry; conjuncts_iff_solve)
   end.
 
 
@@ -1837,6 +1853,8 @@ let rec check l r :=
     lazymatch l with
     | ?l1 || ?l2 =>
       lazymatch r with ?r1 || ?r2 => check l1 r1; check l2 r2 end
+    | ?l1 =? ?l2 =>
+      lazymatch r with ?r1 =? ?r2 => check l1 r1; check l2 r2 end
     | _ => is_evar l + constr_eq l r
     end
 in
@@ -1862,6 +1880,7 @@ in
    remaining evar with left over.  TODO: apply to goals without an evar clause *)
 match goal with
   | |- @ex _ _ => eexists; clause_matching_bool_solver
+  | |- _ = _ /\ _ <= _ <= _ => split; [clause_matching_bool_solver | omega]
   | |- ?l = ?r =>
   let rec clause l r :=
       match l with
@@ -1870,7 +1889,10 @@ match goal with
       | _ => constr:(ltac:(is_evar l; exact r))
       | _ => find l r
       end
-  in let r' := clause l r in instantiate (1 := r'); bruteforce_bool_eq
+  in let r' := clause l r in
+     instantiate (1 := r');
+     rewrite ?Bool.andb_true_l, ?Bool.andb_assoc;
+     bruteforce_bool_eq
 end.
 
 
@@ -2012,15 +2034,18 @@ Qed.
 
 Ltac default_andor :=
   intros; constructor; intros;
-repeat match goal with H:@ex _ _ |- _ => destruct H end;
-unbool_comparisons; unbool_comparisons_goal;
-repeat eexists;
-match goal with
-| H:?v = true -> _ |- _ = ?v && _ => eapply default_and_proof; eauto
-| H:?v = true -> _ |- _ = ?v && _ => eapply default_and_proof2; eauto
-| H:?v = false -> _ |- _ = ?v || _ => eapply default_or_proof; eauto
-| H:?v = false -> _ |- _ = ?v || _ => eapply default_or_proof2; eauto
-end.
+  repeat match goal with
+  | H:@ex _ _ |- _ => destruct H
+  | H:@eq bool _ _ -> @ex bool _ |- _ => apply lift_bool_exists in H
+   end;
+  repeat match goal with |- @ex _ _ => eexists end;
+  rewrite ?Bool.eqb_true_iff, ?Bool.eqb_false_iff in *;
+  match goal with
+  | H:?v = true -> _ |- _ = ?v && _ => eapply default_and_proof; eauto
+  | H:?v = true -> _ |- _ = ?v && _ => eapply default_and_proof2; eauto
+  | H:?v = false -> _ |- _ = ?v || _ => eapply default_or_proof; eauto
+  | H:?v = false -> _ |- _ = ?v || _ => eapply default_or_proof2; eauto
+  end.
 
 (* Solving simple and_boolMP / or_boolMP goals where unknown booleans
    have been merged together. *)
@@ -2031,7 +2056,15 @@ Ltac squashed_andor_solver :=
   intros l r; constructor; intros;
   let func := match goal with |- context[?f l r] => f end in
   match goal with
-  | H : l = true -> @ex _ _ |- _ =>
+  | H1 : @ex _ _, H2 : l = _ -> @ex _ _ |- _ =>
+    let x1 := fresh "x1" in
+    let x2 := fresh "x2" in
+    let H1' := fresh "H1" in
+    let H2' := fresh "H2" in
+    apply lift_bool_exists in H2;
+    destruct H1 as [x1 H1']; destruct H2 as [x2 H2'];
+    exists x1, x2
+  | H : l = _ -> @ex _ _ |- _ =>
     let x := fresh "x" in
     let H' := fresh "H" in
     apply lift_bool_exists in H;
@@ -2044,7 +2077,7 @@ Ltac squashed_andor_solver :=
     exists (func x r)
   end;
   repeat match goal with
-  | H : l = true -> @ex _ _ |- _ =>
+  | H : l = _ -> @ex _ _ |- _ =>
     let x := fresh "x" in
     let H' := fresh "H" in
     apply lift_bool_exists in H;
@@ -2056,9 +2089,19 @@ Ltac squashed_andor_solver :=
     destruct H as [x H'];
     exists x
   end;
-  unbool_comparisons; unbool_comparisons_goal;
   (* Attempt to shrink size of problem *)
-  try match goal with _ : l = true -> ?v = r |- _ => generalize dependent v; intros end;
+  try match goal with
+      | _ : l = _ -> ?v = r |- context[?v] => generalize dependent v; intros
+      | _ : l = _ -> Bool.eqb ?v r = true |- context[?v] => generalize dependent v; intros
+      end;
+  unbool_comparisons; unbool_comparisons_goal;
+  repeat match goal with
+  | _ : context[?li =? ?ri] |- _ =>
+    specialize (Z.eqb_eq li ri); generalize dependent (li =? ri); intros
+  | |- context[?li =? ?ri] =>
+    specialize (Z.eqb_eq li ri); generalize (li =? ri); intros
+  end;
+  rewrite <- ?Z.eqb_eq in *;
   solve_bool_with_Z.
 
 Ltac run_main_solver_impl :=
@@ -2106,7 +2149,7 @@ Ltac solve_arithfact :=
     | match goal with |- context [projT1 ?X] => apply (ArithFactP_self_proof X) end
     (* Trying reflexivity will fill in more complex metavariable examples than
        fill_in_evar_eq above, e.g., 8 * n =? 8 * ?Goal3 *)
-    | constructor; unbool_comparisons_goal; reflexivity
+    | constructor; apply Z.eqb_eq; reflexivity
     | constructor; repeat match goal with |- and _ _ => split end; z_comparisons
     | run_main_solver
     ].
@@ -2766,7 +2809,7 @@ refine (existT _ (shl_int x y) _).
 destruct HE as [HE].
 destruct HR as [HR].
 unbool_comparisons.
-assert (H : y = 0 \/ y = 1 \/ y = 2 \/ y = 3) by omega.
+assert (y = 0 \/ y = 1 \/ y = 2 \/ y = 3) by omega.
 constructor.
 intuition (subst; compute; auto).
 Defined.
