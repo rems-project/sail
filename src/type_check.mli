@@ -80,6 +80,9 @@ val opt_smt_linearize : bool ref
 (** Allow use of div and mod when rewriting nexps *)
 val opt_smt_div : bool ref
 
+(** Use new bitfield syntax, more compatible with ASL *)
+val opt_new_bitfields : bool ref
+
 (** {2 Type errors} *)
 
 type type_error =

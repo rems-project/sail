@@ -79,6 +79,9 @@ let opt_smt_linearize = ref false
 (* Allow use of div and mod when rewriting nexps *)
 let opt_smt_div = ref false
 
+(* Use new bitfield syntax, more compatible with ASL *)
+let opt_new_bitfields = ref false
+
 let depth = ref 0
 
 let rec indent n = match n with
@@ -131,6 +134,7 @@ type env =
     poly_undefineds : bool;
     prove : (env -> n_constraint -> bool) option;
     allow_unknowns : bool;
+    bitfields : (Big_int.num * Big_int.num) Bindings.t Bindings.t;
   }
 
 exception Type_error of env * l * type_error;;
@@ -469,6 +473,8 @@ module Env : sig
   val base_typ_of : t -> typ -> typ
   val allow_unknowns : t -> bool
   val set_allow_unknowns : bool -> t -> t
+  val add_bitfield : id -> (Big_int.num * Big_int.num) Bindings.t -> t -> t
+  val get_bitfield_range : l -> id -> id -> t -> (Big_int.num * Big_int.num)
 
   val no_bindings : t -> t
 
@@ -520,6 +526,7 @@ end = struct
       poly_undefineds = false;
       prove = None;
       allow_unknowns = false;
+      bitfields = Bindings.empty;
     }
 
   let set_prover f env = { env with prove = f }
@@ -1162,7 +1169,7 @@ end = struct
     match Bindings.find_opt id env.scattered_variant_envs with
     | Some env' -> env'
     | None -> typ_error env (id_loc id) ("scattered union " ^ string_of_id id ^ " has not been declared")
-            
+
   let is_register id env =
     Bindings.mem id env.registers
 
@@ -1318,6 +1325,18 @@ end = struct
       | A_typ typ -> rewrap (A_typ (aux typ))
       | targ -> rewrap targ in
     aux (expand_synonyms env typ)
+
+  let get_bitfield_range l id field env =
+    match Bindings.find_opt id env.bitfields with
+    | Some ranges ->
+       begin match Bindings.find_opt field ranges with
+       | Some range -> range
+       | None -> typ_error env l (Printf.sprintf "Field %s does not exist in the bitfield %s" (string_of_id field) (string_of_id id))
+       end
+    | None -> typ_error env l (Printf.sprintf "%s is not a bitfield" (string_of_id id))
+
+  let add_bitfield id ranges env =
+    { env with bitfields = Bindings.add id ranges env.bitfields }
 
   let allow_polymorphic_undefineds env =
     { env with poly_undefineds = true }
@@ -3674,7 +3693,16 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
             annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) bit_typ
           else
             typ_error env l ("Vector assignment not provably in bounds " ^ string_of_lexp lexp)
-       | _ -> typ_error env l "Cannot assign vector element of non vector type"
+       | Typ_id id when !opt_new_bitfields ->
+          begin match exp with
+          | E_aux (E_id field, _) ->
+             let (hi, lo) = Env.get_bitfield_range l id field env in
+             let hi, lo = mk_exp ~loc:l (E_lit (L_aux (L_num hi, l))), mk_exp ~loc:l (E_lit (L_aux (L_num lo, l))) in
+             infer_lexp env (LEXP_aux (LEXP_vector_range (LEXP_aux (LEXP_field (v_lexp, Id_aux (Id "bits", l)), (l, ())), hi, lo), (l, ())))
+          | _ ->
+             typ_error env l (string_of_exp exp ^ " is not a bitfield accessor")
+          end
+       | _ -> typ_error env l "Cannot assign vector element of non vector or bitfield type"
      end
   | LEXP_vector_concat [] -> typ_error env l "Cannot have empty vector concatenation l-expression"
   | LEXP_vector_concat (v_lexp :: v_lexps) ->
@@ -3893,7 +3921,25 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
            annot_exp (E_if (cond', then_branch', else_branch')) (typ_of then_branch')
         end
      end
-  | E_vector_access (v, n) -> infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, ())))
+  | E_vector_access (v, n) ->
+     begin
+       try infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, ()))) with
+       | Type_error (err_env, err_l, err) when !opt_new_bitfields ->
+          (try (
+             let inferred_v = infer_exp env v in
+             begin match typ_of inferred_v, n with
+             | Typ_aux (Typ_id id, _), E_aux (E_id field, (f_l, _)) ->
+                let (hi, lo) = Env.get_bitfield_range f_l id field env in
+                let hi, lo = mk_exp ~loc:l (E_lit (L_aux (L_num hi, l))), mk_exp ~loc:l (E_lit (L_aux (L_num lo, l))) in
+                infer_exp env (E_aux (E_vector_subrange (E_aux (E_field (v, Id_aux (Id "bits", f_l)), (l, ())), hi, lo), (l, ())))
+             | _, _ ->
+                typ_error env l "Vector access could not be interpreted as a bitfield access"
+             end
+           ) with
+           | Type_error (_, err_l', err') ->
+              typ_raise err_env err_l (Err_because (err, err_l', err')))
+       | exn -> raise exn
+     end
   | E_vector_update (v, n, exp) -> infer_exp env (E_aux (E_app (mk_id "vector_update", [v; n; exp]), (l, ())))
   | E_vector_update_subrange (v, n, m, exp) -> infer_exp env (E_aux (E_app (mk_id "vector_update_subrange", [v; n; m; exp]), (l, ())))
   | E_vector_append (v1, E_aux (E_vector [], _)) -> infer_exp env v1
@@ -5138,22 +5184,55 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
      [DEF_type (TD_aux (tdef, (l, None)))], env
   | TD_enum (id, ids, _) ->
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_enum id ids env
+  | TD_bitfield (id, typ, ranges) when !opt_new_bitfields ->
+     let typ = Env.expand_synonyms env typ in
+     begin match typ with
+     (* The type of a bitfield must be a constant-width bitvector *)
+     | Typ_aux (Typ_app (v, [A_aux (A_nexp (Nexp_aux (Nexp_constant size, _)), _);
+                             A_aux (A_order order, _)]), _)
+          when string_of_id v = "bitvector" ->
+        let size = Big_int.to_int size in
+        let eval_index_nexp l nexp =
+          match int_of_nexp_opt (nexp_simp (Env.expand_nexp_synonyms env nexp)) with
+          | Some i -> i
+          | None -> typ_error env l ("This numeric expression must evaluate to a constant: " ^ string_of_nexp nexp)
+        in
+        let record_tdef = TD_record (id, mk_typquant [], [(typ, mk_id "bits")], false) in
+        let ranges =
+          List.fold_left (fun ranges (field, range) ->
+              match range with
+              | BF_aux (BF_single nexp, l) ->
+                 let n = eval_index_nexp l nexp in
+                 Bindings.add field (n, n) ranges
+              | BF_aux (BF_range (hi, lo), l) ->
+                 let hi, lo = eval_index_nexp l hi, eval_index_nexp l lo in
+                 Bindings.add field (hi, lo) ranges
+              | BF_aux (BF_concat _, _) ->
+                 typ_error env l "Bitfield concatenation ranges are not supported"
+            ) Bindings.empty ranges
+        in
+        [DEF_type (TD_aux (record_tdef, (l, None)))],
+        env
+        |> Env.add_record id (mk_typquant []) [(typ, mk_id "bits")]
+        |> Env.add_bitfield id ranges
+     | _ ->
+        typ_error env l "Underlying bitfield type must be a constant-width bitvector"
+     end
   | TD_bitfield (id, typ, ranges) ->
      let typ = Env.expand_synonyms env typ in
-     begin
-       match typ with
-       (* The type of a bitfield must be a constant-width bitvector *)
-       | Typ_aux (Typ_app (v, [A_aux (A_nexp (Nexp_aux (Nexp_constant size, _)), _);
-                               A_aux (A_order order, _)]), _)
-            when string_of_id v = "bitvector" ->
-          let size = Big_int.to_int size in
-          let eval_index_nexp env nexp =
-            int_of_nexp_opt (nexp_simp (Env.expand_nexp_synonyms env nexp)) in
-          let (Defs defs), env =
-            check env (Bitfield.macro (eval_index_nexp env, (typ_error env)) id size order ranges) in
-          defs, env
-       | _ ->
-          typ_error env l "Bad bitfield type"
+     begin match typ with
+     (* The type of a bitfield must be a constant-width bitvector *)
+     | Typ_aux (Typ_app (v, [A_aux (A_nexp (Nexp_aux (Nexp_constant size, _)), _);
+                             A_aux (A_order order, _)]), _)
+          when string_of_id v = "bitvector" ->
+        let size = Big_int.to_int size in
+        let eval_index_nexp env nexp =
+          int_of_nexp_opt (nexp_simp (Env.expand_nexp_synonyms env nexp)) in
+        let (Defs defs), env =
+          check env (Bitfield.macro (eval_index_nexp env, (typ_error env)) id size order ranges) in
+        defs, env
+     | _ ->
+        typ_error env l "Underlying bitfield type must be a constant-width bitvector"
      end
 
 and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t =
