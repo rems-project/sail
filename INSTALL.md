@@ -30,7 +30,7 @@ sudo apt-get install build-essential libgmp-dev z3
 ```
 or MacOS homebrew:
 ```
-brew install gmp z3
+brew install gmp z3 pkg-config
 ```
 Finally, install sail and its dependencies:
 ```
