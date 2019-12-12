@@ -108,6 +108,9 @@ let options = Arg.align ([
     " output an OCaml translated version of the input");
   ( "-ocaml-nobuild",
     Arg.Set Ocaml_backend.opt_ocaml_nobuild,
+    "");
+  ( "-ocaml_nobuild",
+    Arg.Set Ocaml_backend.opt_ocaml_nobuild,
     " do not build generated OCaml");
   ( "-ocaml_trace",
     Arg.Tuple [set_target "ocaml"; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
@@ -116,6 +119,9 @@ let options = Arg.align ([
     Arg.String (fun dir -> Ocaml_backend.opt_ocaml_build_dir := dir),
     " set a custom directory to build generated OCaml");
   ( "-ocaml-coverage",
+    Arg.Set Ocaml_backend.opt_ocaml_coverage,
+    "");
+  ( "-ocaml_coverage",
     Arg.Set Ocaml_backend.opt_ocaml_coverage,
     " build OCaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx).");
   ( "-ocaml_generators",
