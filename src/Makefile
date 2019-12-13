@@ -71,8 +71,8 @@ all: sail lib doc
 
 full: sail lib doc
 
-ast.lem: ../language/sail.ott
-	ott -sort false -generate_aux_rules true -o ast.lem -picky_multiple_parses true ../language/sail.ott
+ast.lem sail_pp.ml: ../language/sail.ott
+	ott -sort false -generate_aux_rules true -o ast.lem -picky_multiple_parses true -ocaml_pp sail_pp.ml ../language/sail.ott
 
 jib.lem: ../language/jib.ott ast.lem
 	ott -sort false -generate_aux_rules true -o jib.lem -picky_multiple_parses true ../language/jib.ott
