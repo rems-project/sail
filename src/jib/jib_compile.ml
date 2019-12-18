@@ -369,7 +369,7 @@ let rec compile_aval l ctx = function
           @ cleanup
      in
      [idecl ctyp gs;
-      icopy l (CL_id (gs, ctyp)) (V_lit (VL_bits (Util.list_init 64 (fun _ -> Sail2_values.B0), direction), ctyp))]
+      icopy l (CL_id (gs, ctyp)) (V_lit (VL_bits (Util.list_init len (fun _ -> Sail2_values.B0), direction), ctyp))]
      @ List.concat (List.mapi aval_mask (List.rev avals)),
      V_id (gs, ctyp),
      []
