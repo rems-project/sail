@@ -16,9 +16,9 @@ OR, if you are using opam >=2.0, the syntax of the switch command changed slight
 opam switch create 4.06.1
 ```
 
-Then set up the environment for the OCaml we just installed:
+Then set up the environment for the OCaml we just installed (note that older versions of opam suggest backticks instead of `$(...)`, but it makes no difference):
 ```
-eval `opam config env` 
+eval $(opam config env)
 ```
 Add our local opam repo:
 ```
@@ -28,8 +28,9 @@ Install system dependencies, on Ubuntu:
 ```
 sudo apt-get install build-essential libgmp-dev z3
 ```
-or MacOS homebrew:
+or [MacOS homebrew](https://brew.sh/):
 ```
+xcode-select --install # if you haven't already
 brew install gmp z3 pkg-config
 ```
 Finally, install sail and its dependencies:
