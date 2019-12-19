@@ -288,8 +288,11 @@ induction n.
   reflexivity.
 Qed.
 
+Definition uint_plain {a} (x : mword a) : Z :=
+  Z.of_N (Word.wordToN (get_word x)).
+
 Program Definition uint {a} (x : mword a) : {z : Z & ArithFact (0 <=? z <=? 2 ^ a - 1)} :=
- existT _ (Z.of_N (Word.wordToN (get_word x))) _.
+ existT _ (uint_plain x) _.
 Next Obligation.
 constructor.
 apply Bool.andb_true_iff.
@@ -323,9 +326,13 @@ induction n.
   rewrite Z.pow_succ_r; auto with zarith.
 Qed.
 
+Definition sint_plain {a} (x : mword a) : Z :=
+  Word.wordToZ (get_word x).
+
 Program Definition sint {a} `{ArithFact (a >? 0)} (x : mword a) : {z : Z & ArithFact (-(2^(a-1)) <=? z <=? 2 ^ (a-1) - 1)} :=
-  existT _ (Word.wordToZ (get_word x)) _.
+  existT _ (sint_plain x) _.
 Next Obligation.
+unfold sint_plain.
 destruct H.
 unbool_comparisons.
 destruct a; try inversion fact.
@@ -513,6 +520,28 @@ Definition ugteq_vec := ugteq_bv.
 Definition sgteq_vec := sgteq_bv.
 
 *)
+Lemma eq_vec_true_iff {n} (v w : mword n) :
+  eq_vec v w = true <-> v = w.
+unfold eq_vec.
+destruct n.
+* simpl in v,w. shatter_word v. shatter_word w.
+  compute. intuition.
+* simpl in *. destruct (weq v w).
+  + subst. rewrite weqb_eq; tauto.
+  + rewrite weqb_ne; auto. intuition.
+* destruct v.
+Qed.
+
+Lemma eq_vec_false_iff {n} (v w : mword n) :
+  eq_vec v w = false <-> v <> w.
+specialize (eq_vec_true_iff v w).
+destruct (eq_vec v w).
+intuition.
+intros [H1 H2].
+split.
+* intros _ EQ. intuition.
+* auto.
+Qed.
 
 Definition eq_vec_dec {n} : forall (x y : mword n), {x = y} + {x <> y}.
 refine (match n with

@@ -199,6 +199,14 @@ unfold build_trivial_exS.
 apply bindS_cong; auto.
 Qed.
 
+Lemma liftRS_cong {A R Regs E} m m' :
+  m === m' ->
+  @liftRS A R Regs E m === liftRS m'.
+intros E1.
+unfold liftRS.
+apply try_catchS_cong; auto.
+Qed.
+
 (* Monad lifting *)
 
 Lemma liftState_bind Regval Regs A B E {r : Sail2_values.register_accessors Regs Regval} {m : monad Regval A E} {f : A -> monad Regval B E} :
@@ -287,6 +295,8 @@ Ltac statecong db :=
        solve [ eapply or_boolSP_cong; intros; statecong db ]
   | |- (build_trivial_exS _) === _ =>
        solve [ eapply build_trivial_exS_cong; intros; statecong db ]
+  | |- (liftRS _) === _ =>
+       solve [ eapply liftRS_cong; intros; statecong db ]
   | |- (let '(matchvar1, matchvar2) := ?e1 in _) === _ =>
        eapply (@equiv_transitive _ _ _ _ (let '(matchvar1,matchvar2) := e1 in _) _);
        [ destruct e1; etransitivity; [ statecong db | apply equiv_reflexive ]

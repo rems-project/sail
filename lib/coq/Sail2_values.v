@@ -65,6 +65,21 @@ Ltac replace_ArithFact_proof :=
     end
   end.
 
+Ltac generalize_ArithFact_proof_in H :=
+  match type of H with context f [?x] =>
+    match type of x with ArithFactP (?P = true) =>
+      let pf := fresh "pf" in
+      cut (forall (pf : ArithFact P), ltac:(let t := context f[pf] in exact t));
+      [ clear H; intro H
+      | intro pf; rewrite <- (ArithFact_irrelevant P x pf); apply H ]
+    | ArithFact ?P =>
+      let pf := fresh "pf" in
+      cut (forall (pf : ArithFact P), ltac:(let t := context f[pf] in exact t));
+      [ clear H; intro H
+      | intro pf; rewrite <- (ArithFact_irrelevant P x pf); apply H ]
+    end
+  end.
+
 (* Allow setoid rewriting through ArithFact *)
 Require Import Coq.Classes.Morphisms.
 Require Import Coq.Program.Basics.
@@ -2134,8 +2149,16 @@ Ltac clear_fixpoints :=
     match goal with
     | H:_ -> ?res |- _ => is_fixpoint res; clear H
     end.
+Ltac clear_proof_bodies :=
+  repeat match goal with
+  | H := _ : ?ty |- _ =>
+    match type of ty with
+    | Prop => clearbody H
+    end
+  end.
 
 Ltac solve_arithfact :=
+  clear_proof_bodies;
   try solve [squashed_andor_solver]; (* Do this first so that it can name the intros *)
   intros; (* To solve implications for derive_m *)
   clear_fixpoints; (* Avoid using recursive calls *)
@@ -2144,6 +2167,7 @@ Ltac solve_arithfact :=
     [ solve_unknown
     | assumption
     | match goal with |- ArithFact ((?x <=? ?x <=? ?x)) => exact trivial_range end
+    | eauto 2 with sail (* the low search bound might not be necessary *)
     | fill_in_evar_eq
     | match goal with |- context [projT1 ?X] => apply (ArithFact_self_proof X) end
     | match goal with |- context [projT1 ?X] => apply (ArithFactP_self_proof X) end

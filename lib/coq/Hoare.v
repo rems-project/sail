@@ -1152,6 +1152,8 @@ Ltac PrePostE_step :=
   | |- PrePostE _ (undefined_bitvectorS _) ?ppeQ ?ppeE =>
          apply PrePostE_undefined_bitvectorS_any with (Q := ppeQ) (E := ppeE)
   | |- PrePostE _ (build_trivial_exS _) _ _ => eapply PrePostE_build_trivial_exS; intros
+  | |- PrePostE _ (liftRS _) ?ppeQ ?ppeE =>
+         apply PrePostE_liftRS with (Q := ppeQ) (E := ppeE); intros
   | |- PrePostE _ (let '(_,_) := ?x in _) _ _ =>
          is_var x;
          let PAIR := fresh "PAIR" in
