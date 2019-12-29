@@ -65,6 +65,8 @@ val opt_file_out : string option ref
 val opt_memo_z3 : bool ref
 val opt_just_check : bool ref
 val opt_ddump_tc_ast : bool ref
+val opt_ddump_tc_ast_ott_raw : bool ref
+val opt_ddump_tc_ast_ott_pp : bool ref
 val opt_ddump_rewrite_ast : ((string * int) option) ref
 val opt_dno_cast : bool ref
 

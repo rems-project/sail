@@ -356,6 +356,12 @@ let options = Arg.align ([
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
+  ( "-ddump_tc_ast_ott_raw",
+    Arg.Set opt_ddump_tc_ast_ott_raw,
+    " (debug) dump the typechecked ast to stdout using Ott raw pp");
+  ( "-ddump_tc_ast_ott_pp",
+    Arg.Set opt_ddump_tc_ast_ott_pp,
+    " (debug) dump the typechecked ast to stdout using Ott pp");
   ( "-ddump_rewrite_ast",
     Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0); Specialize.opt_ddump_spec_ast := Some (l, 0)),
     "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");

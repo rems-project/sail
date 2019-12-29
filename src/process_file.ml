@@ -242,6 +242,8 @@ let preprocess_ast opts (Parse_ast.Defs defs) = Parse_ast.Defs (preprocess opts 
 
 let opt_just_check = ref false
 let opt_ddump_tc_ast = ref false
+let opt_ddump_tc_ast_ott_raw = ref false
+let opt_ddump_tc_ast_ott_pp = ref false
 let opt_ddump_rewrite_ast = ref None
 let opt_dno_cast = ref false
 
@@ -249,6 +251,8 @@ let check_ast (env : Type_check.Env.t) (defs : unit Ast.defs) : Type_check.tanno
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
   let ast, env = Type_error.check env defs in
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_defs stdout ast else () in
+  let () = if !opt_ddump_tc_ast_ott_raw then Pretty_print_sail.pp_defs_ott_raw stdout ast else () in
+  let () = if !opt_ddump_tc_ast_ott_pp then Pretty_print_sail.pp_defs_ott_pp stdout ast else () in
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)
 

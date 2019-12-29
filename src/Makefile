@@ -67,19 +67,22 @@ endif
 # set to -p on command line to enable gprof profiling
 OCAML_OPTS?=
 
+# use experimental version of Ott
+OTT=../../ott/bin/ott
+
 all: sail lib doc
 
 full: sail lib doc
 
 ast.lem: ../language/sail.ott
-	ott -sort false -generate_aux_rules true -o ast.lem -picky_multiple_parses true  ../language/sail.ott
+	$(OTT) -sort false -generate_aux_rules true -o ast.lem -picky_multiple_parses true  ../language/sail.ott
 
-sail_pp.ml: ../language/sail.ott
-	ott -sort false -generate_aux_rules true  -picky_multiple_parses true -ocaml_pp sail_pp.ml ../language/sail.ott
+sail_pp.ml: ../language/sail.ott ../../ott/bin/ott
+	$(OTT) -sort false -generate_aux_rules true  -picky_multiple_parses true -ocaml_pp sail_pp.ml -ocaml_pp_ast_module Ast ../language/sail.ott
 
 
 jib.lem: ../language/jib.ott ast.lem
-	ott -sort false -generate_aux_rules true -o jib.lem -picky_multiple_parses true ../language/jib.ott
+	$(OTT) -sort false -generate_aux_rules true -o jib.lem -picky_multiple_parses true ../language/jib.ott
 
 ast.ml: ast.lem
 	lem -ocaml ast.lem
@@ -103,10 +106,10 @@ else
 	echo let version=\"$(shell grep '^version:' ../opam | grep -o -E '"[^"]+"')\" >> manifest.ml
 endif
 
-sail: ast.ml jib.ml manifest.ml
+sail: ast.ml jib.ml manifest.ml sail_pp.ml
 	ocamlbuild -use-ocamlfind sail.native sail_lib.cma sail_lib.cmxa
 
-isail: ast.ml jib.ml manifest.ml
+isail: ast.ml jib.ml manifest.ml sail_pp.ml
 	ocamlbuild -use-ocamlfind isail.native sail_lib.cma sail_lib.cmxa libsail.cma libsail.cmxa
 
 

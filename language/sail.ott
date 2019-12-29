@@ -9,7 +9,11 @@ indexvar n , m , i , j ::=
 metavar num,numZero,numOne ::=
   {{ phantom }}
   {{ lex numeric }}
-  {{ ocaml big_int }}
+%% change to match lem - which is the only Ott target actually used in sail build?
+%%  {{ ocaml big_int }}
+  {{ ocaml Nat_big_num.num }}
+  {{ pp-raw x = string (Nat_big_num.to_string x) }}
+  {{ pp x = string (Nat_big_num.to_string x) }}
   {{ hol num }}
   {{ lem integer }}
   {{ isa int }}
@@ -17,7 +21,10 @@ metavar num,numZero,numOne ::=
 
 metavar nat ::=
   {{ phantom }}
-  {{ ocaml int }}
+%%  {{ ocaml int }}
+  {{ ocaml Nat_big_num.num }}
+  {{ pp-raw x = string (Nat_big_num.to_string x) }}
+  {{ pp x = string (Nat_big_num.to_string x) }}
   {{ lex numeric }}
   {{ lem nat }}
   {{ isa nat }}
@@ -65,6 +72,8 @@ metavar real ::=
 metavar value ::=
   {{ phantom }}
   {{ ocaml value }}
+  {{ pp-raw x = string "TODO:pp-raw value" }}
+  {{ pp x = string "TODO: pp value" }}
   {{ lem value }}
   {{ isa value }}
 
@@ -112,6 +121,8 @@ type_synonym "annot" = l
 
 metavar x , y , z ::=
   {{ ocaml text }}
+  {{ pp-raw x = string "\"" ^^ string x ^^ string "\"" }}
+  {{ pp x = string x }}
   {{ lem string }}
   {{ hol string }}
   {{ isa string }}
@@ -123,6 +134,8 @@ metavar x , y , z ::=
 metavar ix ::=
   {{ lex alphanum }}
   {{ ocaml text }}
+  {{ pp-raw x = string "\"" ^^ string x ^^ string "\"" }}
+  {{ pp x = string x }}
   {{ lem string }}
   {{ hol string }}
   {{ isa string }}
@@ -135,9 +148,11 @@ grammar
 
 l :: '' ::=                                     {{ phantom }}
                                                 {{ ocaml Parse_ast.l }}
+                                                {{ pp-raw x = string "TODO: pp-raw l" }}
+                                                {{ pp x = string "TODO: pp l" }}
                                                 {{ lem l }}
                                                 {{ hol unit }}
-  {{ com source location }}
+                                                {{ com source location }}
   |                                             :: :: Unknown
     {{ ocaml Unknown }}
     {{ lem Unknown }}
@@ -146,8 +161,12 @@ l :: '' ::=                                     {{ phantom }}
 annot :: '' ::=
   {{ phantom }}
   {{ ocaml 'a annot }}
+  {{ pp-raw x = string "TODO: pp-raw annot" }}
+  {{ pp x = string "TODO: pp annot" }}
   {{ lem annot 'a }}
   {{ hol unit }}
+%% workaround to make Ott generate a pp_raw_annot function - shouldn't be needed
+| :: :: Foo {{ lem foo }}
 
 id :: '' ::=
   {{ com Identifier }}
@@ -294,7 +313,10 @@ grammar
 type_def {{ ocaml 'a type_def }} {{ lem type_def 'a }} :: 'TD_' ::=
   {{ ocaml TD_aux of type_def_aux * 'a annot }}
   {{ lem TD_aux of type_def_aux * annot 'a }}
-  | type_def_aux  :: :: aux
+| type_def_aux  :: :: aux
+  {{ pp-raw (x,y) -> string "TODO:pp-raw type_def" }}
+  {{ pp (x,y) -> string "TODO:pp type_def" }}
+
 
 type_def_aux  :: 'TD_' ::=
   {{ com type definition body }}
@@ -335,12 +357,14 @@ lit :: 'L_' ::=
   | num       :: :: num {{ com natural number constant }}
   | hex       :: :: hex {{ com bit vector constant, C-style }}
   | bin       :: :: bin  {{ com bit vector constant, C-style }}
-  | string    :: :: string {{ com string constant }}
+  | string1   :: :: string {{ com string constant }}
   | undefined :: :: undef {{ com undefined-value constant }}
   | real      :: :: real
 
 semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
                                                         {{ ocaml bool }}
+                                                        {{ pp-raw _ = string "semi_opt" }}
+                                                        {{ pp _ = string "semi_opt" }}
                                                         {{ lem bool }}
                                                         {{ hol bool }}
 							{{ isa bool }}
@@ -492,6 +516,8 @@ grammar
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 loop :: loop ::= {{ phantom }}
+                 {{ pp-raw _ = string "loop" }}
+                 {{ pp _ = string "loop" }}
   | while ::   :: while 
   | until ::  :: until 
 
@@ -695,8 +721,11 @@ pexp_funcl :: 'Pat_funcl_' ::=
   {{ ocaml ('a pexp) }}
   {{ isa pexp }}
   {{ lem (pexp 'a) }}
+  {{ pp-raw x = string "TODO:pexp_funcl" }}
+  {{ pp x = string "TODO:pexp_funcl" }}
   | pat = exp                       :: :: exp {{ ichlo (Pat_aux (Pat_exp [[pat]] [[exp]],Unknown)) }}
   | ( pat when exp1 ) = exp         :: :: when {{ ichlo (Pat_aux (Pat_when [[pat]] [[exp1]] [[exp]],Unknown)) }}
+
 
 funcl :: 'FCL_' ::=
   {{ com function clause }}
@@ -754,12 +783,16 @@ letbind :: 'LB_' ::=
 
 val_spec {{ ocaml 'a val_spec }} {{ lem val_spec 'a }} :: 'VS_' ::=
    {{ ocaml VS_aux of val_spec_aux * 'a annot }}
+   {{ pp-raw _ = string "val_spec" }}
+   {{ pp _ = string "val_spec" }}
    {{ lem VS_aux of val_spec_aux * annot 'a }}
   | val_spec_aux ::  :: aux
 
 val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
   {{ ocaml  VS_val_spec of typschm * id * (string * string) list * bool }}
+  {{ pp-raw x = pp_raw_val_spec x }}
+  {{ pp x = pp_val_spec x }}
   {{ lem VS_val_spec of typschm * id * list (string * string) * bool }}
   {{ isa  typschm * id  * (string => string option) * bool }}
   | val typschm id                                  :: S :: val_spec

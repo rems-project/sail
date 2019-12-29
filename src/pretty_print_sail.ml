@@ -736,6 +736,10 @@ let doc_defs (Defs(defs)) =
 
 let pp_defs f d = ToChannel.pretty 1. 80 f (doc_defs d)
 
+let pp_defs_ott_raw f d = ToChannel.pretty 1. 80 f (Sail_pp.pp_raw_defs d)
+                
+let pp_defs_ott_pp f d = ToChannel.pretty 1. 80 f (Sail_pp.pp_defs d)
+                
 let pretty_sail f doc = ToChannel.pretty 1. 120 f doc
 
 let to_string doc =
