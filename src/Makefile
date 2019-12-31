@@ -80,6 +80,13 @@ ast.lem: ../language/sail.ott
 sail_pp.ml: ../language/sail.ott ../../ott/bin/ott
 	$(OTT) -sort false -generate_aux_rules true  -picky_multiple_parses true -ocaml_pp sail_pp.ml -ocaml_pp_ast_module Ast ../language/sail.ott
 
+# test sail_pp on risc-v
+test-sail-pp-riscv:
+	cd ../../sail-cheri-mips && export SAIL_DIR="../sail" && export SAIL_FLAGS="-ddump_tc_ast_ott_raw generated_definitions/ast/riscv-ast-raw.txt" && make 
+
+# test sail_pp on cheri-mips 128
+test-sail-pp-cheri128:
+	cd ../../sail-cheri-mips/cheri  && make cheri128_ast
 
 jib.lem: ../language/jib.ott ast.lem
 	$(OTT) -sort false -generate_aux_rules true -o jib.lem -picky_multiple_parses true ../language/jib.ott
