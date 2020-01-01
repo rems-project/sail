@@ -252,7 +252,7 @@ let check_ast (env : Type_check.Env.t) (defs : unit Ast.defs) : Type_check.tanno
   let ast, env = Type_error.check env defs in
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_defs stdout ast else () in
   let () = match !opt_ddump_tc_ast_ott_raw with None -> () | Some file -> (let c = open_out file in Pretty_print_sail.pp_defs_ott_raw c ast; close_out c) in
-  let () = match !opt_ddump_tc_ast_ott_pp with None -> () | Some file -> (let c = open_out file in Pretty_print_sail.pp_defs_ott_pp stdout ast; close_out c) in
+  let () = match !opt_ddump_tc_ast_ott_pp with None -> () | Some file -> (let c = open_out file in Pretty_print_sail.pp_defs_ott_pp c ast; close_out c) in
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)
 

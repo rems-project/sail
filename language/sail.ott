@@ -72,8 +72,8 @@ metavar real ::=
 metavar value ::=
   {{ phantom }}
   {{ ocaml value }}
-  {{ pp-raw x = string "TODO:pp-raw value" }}
-  {{ pp x = string "TODO: pp value" }}
+  {{ pp-raw x = string "..value" }}
+  {{ pp x = string "..value" }}
   {{ lem value }}
   {{ isa value }}
 
@@ -148,8 +148,8 @@ grammar
 
 l :: '' ::=                                     {{ phantom }}
                                                 {{ ocaml Parse_ast.l }}
-                                                {{ pp-raw x = string "TODO: pp-raw l" }}
-                                                {{ pp x = string "TODO: pp l" }}
+                                                {{ pp-raw x = string "..l" }}
+                                                {{ pp x = string "" }}
                                                 {{ lem l }}
                                                 {{ hol unit }}
                                                 {{ com source location }}
@@ -161,8 +161,8 @@ l :: '' ::=                                     {{ phantom }}
 annot :: '' ::=
   {{ phantom }}
   {{ ocaml 'a annot }}
-  {{ pp-raw x = string "TODO: pp-raw annot" }}
-  {{ pp x = string "TODO: pp annot" }}
+  {{ pp-raw x = string "..annot" }}
+  {{ pp x = string "annot" }}
   {{ lem annot 'a }}
   {{ hol unit }}
 %% workaround to make Ott generate a pp_raw_annot function - shouldn't be needed
@@ -314,8 +314,8 @@ type_def {{ ocaml 'a type_def }} {{ lem type_def 'a }} :: 'TD_' ::=
   {{ ocaml TD_aux of type_def_aux * 'a annot }}
   {{ lem TD_aux of type_def_aux * annot 'a }}
 | type_def_aux  :: :: aux
-  {{ pp-raw (x,y) -> string "TODO:pp-raw type_def" }}
-  {{ pp (x,y) -> string "TODO:pp type_def" }}
+  {{ pp-raw (x,y) -> string "..type_def" }}
+  {{ pp (x,y) -> string "..type_def" }}
 
 
 type_def_aux  :: 'TD_' ::=
@@ -721,8 +721,8 @@ pexp_funcl :: 'Pat_funcl_' ::=
   {{ ocaml ('a pexp) }}
   {{ isa pexp }}
   {{ lem (pexp 'a) }}
-  {{ pp-raw x = string "TODO:pexp_funcl" }}
-  {{ pp x = string "TODO:pexp_funcl" }}
+  {{ pp-raw x = string "..pexp_funcl" }}
+  {{ pp x = string "..pexp_funcl" }}
   | pat = exp                       :: :: exp {{ ichlo (Pat_aux (Pat_exp [[pat]] [[exp]],Unknown)) }}
   | ( pat when exp1 ) = exp         :: :: when {{ ichlo (Pat_aux (Pat_when [[pat]] [[exp1]] [[exp]],Unknown)) }}
 
