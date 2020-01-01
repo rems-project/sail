@@ -72,8 +72,8 @@ metavar real ::=
 metavar value ::=
   {{ phantom }}
   {{ ocaml value }}
-  {{ pp-raw x = string "..value" }}
-  {{ pp x = string "..value" }}
+  {{ pp-raw x = string "TODO:value" }}
+  {{ pp x = string "TODO:value" }}
   {{ lem value }}
   {{ isa value }}
 
@@ -90,6 +90,7 @@ type l = Parse_ast.l
 type 'a annot = l * 'a
 
 type loop = While | Until
+
 
 }}
 
@@ -148,7 +149,7 @@ grammar
 
 l :: '' ::=                                     {{ phantom }}
                                                 {{ ocaml Parse_ast.l }}
-                                                {{ pp-raw x = string "..l" }}
+                                                {{ pp-raw x = string (Ast_util.short_string_of_loc x) }}
                                                 {{ pp x = string "" }}
                                                 {{ lem l }}
                                                 {{ hol unit }}
@@ -161,7 +162,7 @@ l :: '' ::=                                     {{ phantom }}
 annot :: '' ::=
   {{ phantom }}
   {{ ocaml 'a annot }}
-  {{ pp-raw x = string "..annot" }}
+  {{ pp-raw x = (match x with (_,tannot) -> match Type_check.destruct_tannot tannot with None -> string "None" | Some (_,t,_) -> pp_raw_typ t) }}
   {{ pp x = string "annot" }}
   {{ lem annot 'a }}
   {{ hol unit }}
@@ -721,8 +722,8 @@ pexp_funcl :: 'Pat_funcl_' ::=
   {{ ocaml ('a pexp) }}
   {{ isa pexp }}
   {{ lem (pexp 'a) }}
-  {{ pp-raw x = string "..pexp_funcl" }}
-  {{ pp x = string "..pexp_funcl" }}
+  {{ pp-raw x = pp_raw_pexp x }}
+  {{ pp x = pp_pexp x }}
   | pat = exp                       :: :: exp {{ ichlo (Pat_aux (Pat_exp [[pat]] [[exp]],Unknown)) }}
   | ( pat when exp1 ) = exp         :: :: when {{ ichlo (Pat_aux (Pat_when [[pat]] [[exp1]] [[exp]],Unknown)) }}
 

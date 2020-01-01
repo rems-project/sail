@@ -23,9 +23,9 @@ and pp_raw_x x = string "\"" ^^ string x ^^ string "\""
 
 and pp_raw_ix x = string "\"" ^^ string x ^^ string "\""
 
-and pp_raw_l x = string "..l"
+and pp_raw_l x = string (Ast_util.short_string_of_loc x)
 
-and pp_raw_annot x = string "..annot"
+and pp_raw_annot x = (match x with (_,tannot) -> match Type_check.destruct_tannot tannot with None -> string "None" | Some (_,t,_) -> pp_raw_typ t)
 
 and pp_raw_id_aux x = match x with
 | Id(x) -> string "Id" ^^ string "(" ^^ pp_raw_x x ^^ string ")"
@@ -341,7 +341,7 @@ and pp_raw_effect_opt_aux x = match x with
 and pp_raw_effect_opt x = match x with
 | Effect_opt_aux(effect_opt_aux,l) -> string "Effect_opt_aux" ^^ string "(" ^^ pp_raw_effect_opt_aux effect_opt_aux ^^ string "," ^^ pp_raw_l l ^^ string ")"
 
-and pp_raw_pexp_funcl x = string "..pexp_funcl"
+and pp_raw_pexp_funcl x = pp_raw_pexp x
 
 and pp_raw_funcl_aux x = match x with
 | FCL_Funcl(id,pexp_funcl) -> string "FCL_Funcl" ^^ string "(" ^^ pp_raw_id id ^^ string "," ^^ pp_raw_pexp_funcl pexp_funcl ^^ string ")"
@@ -810,7 +810,7 @@ and pp_effect_opt_aux x = match x with
 and pp_effect_opt x = match x with
 | Effect_opt_aux(effect_opt_aux,l) -> group(string "(" ^^ nest 2 (pp_effect_opt_aux effect_opt_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string ")")
 
-and pp_pexp_funcl x = string "..pexp_funcl"
+and pp_pexp_funcl x = pp_pexp x
 
 and pp_funcl_aux x = match x with
 | FCL_Funcl(id,pexp_funcl) -> group(string "(" ^^ nest 2 (pp_id id) ^^ break 1 ^^ nest 2 (pp_pexp_funcl pexp_funcl) ^^ string ")")

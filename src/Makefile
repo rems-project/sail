@@ -88,7 +88,7 @@ test-sail-pp-riscv:
 
 # test sail_pp on cheri-mips 128
 test-sail-pp-cheri128:
-	cd ../../sail-cheri-mips/cheri  && make cheri128_ast
+	cd ../../sail-cheri-mips/cheri  && $(MAKE) clean && rm -f ../generated_definitions/ast/cheri128-ast-raw.txt && make cheri128_ast
 
 jib.lem: ../language/jib.ott ast.lem
 	$(OTT) -sort false -generate_aux_rules true -o jib.lem -picky_multiple_parses true ../language/jib.ott
