@@ -163,7 +163,7 @@ annot :: '' ::=
   {{ phantom }}
   {{ ocaml 'a annot }}
   {{ pp-raw x = (match x with (_,tannot) -> match Type_check.destruct_tannot tannot with None -> string "None" | Some (_,t,_) -> pp_raw_typ t) }}
-  {{ pp x = string "annot" }}
+  {{ pp x = string "" (*annot*)}}
   {{ lem annot 'a }}
   {{ hol unit }}
 %% workaround to make Ott generate a pp_raw_annot function - shouldn't be needed
@@ -784,16 +784,44 @@ letbind :: 'LB_' ::=
 
 val_spec {{ ocaml 'a val_spec }} {{ lem val_spec 'a }} :: 'VS_' ::=
    {{ ocaml VS_aux of val_spec_aux * 'a annot }}
-   {{ pp-raw _ = string "val_spec" }}
-   {{ pp _ = string "val_spec" }}
+   {{ pp-raw x = match x with VS_aux(vs,annot) -> pp_raw_val_spec_aux vs }}
+   {{ pp x = match x with VS_aux(vs,annot) -> pp_val_spec_aux vs }}
    {{ lem VS_aux of val_spec_aux * annot 'a }}
   | val_spec_aux ::  :: aux
 
 val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
   {{ ocaml  VS_val_spec of typschm * id * (string * string) list * bool }}
-  {{ pp-raw x = pp_raw_val_spec x }}
-  {{ pp x = pp_val_spec x }}
+  {{ pp-raw x =
+match x with 
+| VS_val_spec(ts,id,ext,is_cast) ->
+  let doc_extern ext =
+    let docs = List.map (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\"")) ext in
+    (if docs = [] then string "[]" else  brackets (separate comma docs))
+    in
+  string "VS_val_spec("
+(*     if comment then docstring annot else empty*) 
+     ^^ (if is_cast then (string "cast_true") else (string "cast_false")) ^^ comma
+     ^^ pp_raw_id id ^^ comma
+     ^^ doc_extern ext ^^ comma
+     ^^ pp_raw_typschm ts
+     ^^ string ")"
+}}
+  {{ pp x = (* based on pretty_print_sail.ml doc_spec *)
+match x with 
+| VS_val_spec(ts,id,ext,is_cast) ->
+  let doc_extern ext =
+    let docs = List.map (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\"")) ext in
+    if docs = [] then empty else equals ^^ space ^^ braces (separate (comma ^^ space) docs)
+    in
+     empty (*     if comment then docstring annot else*) 
+     ^^ string "val" ^^ space
+     ^^ (if is_cast then (string "cast" ^^ space) else empty)
+     ^^ pp_id id ^^ space
+     ^^ doc_extern ext
+     ^^ colon ^^ space
+     ^^ pp_typschm ts
+}}
   {{ lem VS_val_spec of typschm * id * list (string * string) * bool }}
   {{ isa  typschm * id  * (string => string option) * bool }}
   | val typschm id                                  :: S :: val_spec
