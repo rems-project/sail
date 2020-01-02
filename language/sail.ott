@@ -5,6 +5,7 @@
 indexvar n , m , i , j ::=
   {{ phantom }}
   {{ com Index variables for meta-lists }}
+  {{ pp x = string (string_of_int x) }}
 
 metavar num,numZero,numOne ::=
   {{ phantom }}
@@ -150,7 +151,7 @@ grammar
 l :: '' ::=                                     {{ phantom }}
                                                 {{ ocaml Parse_ast.l }}
                                                 {{ pp-raw x = string (Ast_util.short_string_of_loc x) }}
-                                                {{ pp x = string "" }}
+                                                {{ pp-suppress }}
                                                 {{ lem l }}
                                                 {{ hol unit }}
                                                 {{ com source location }}
@@ -163,7 +164,7 @@ annot :: '' ::=
   {{ phantom }}
   {{ ocaml 'a annot }}
   {{ pp-raw x = (match x with (_,tannot) -> match Type_check.destruct_tannot tannot with None -> string "None" | Some (_,t,_) -> pp_raw_typ t) }}
-  {{ pp x = string "" (*annot*)}}
+  {{ pp-suppress }}
   {{ lem annot 'a }}
   {{ hol unit }}
 %% workaround to make Ott generate a pp_raw_annot function - shouldn't be needed

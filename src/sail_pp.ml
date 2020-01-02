@@ -485,7 +485,9 @@ and pp_raw_defs x = match x with
 | Defs(def0) -> string "Defs" ^^ string "(" ^^ string "[" ^^ separate  (string ";") (List.map (function (def0) -> string "(" ^^ pp_raw_def def0 ^^ string ")") def0) ^^ string "]" ^^ string ")"
 
 
-let rec pp_num x = string (Nat_big_num.to_string x)
+let rec pp_n x = string (string_of_int x)
+
+and pp_num x = string (Nat_big_num.to_string x)
 
 and pp_nat x = string (Nat_big_num.to_string x)
 
@@ -505,22 +507,18 @@ and pp_x x = string x
 
 and pp_ix x = string x
 
-and pp_l x = string ""
-
-and pp_annot x = string "" (*annot*)
-
 and pp_id_aux x = match x with
 | Id(x) -> pp_x x
 | Operator(x) -> group(string "" ^^ string "(" ^^ break 1 ^^ string "operator" ^^ break 1 ^^ pp_x x ^^ break 1 ^^ string ")" ^^ string "")
 
 and pp_id x = match x with
-| Id_aux(id_aux,l) -> group(string "" ^^ nest 2 (pp_id_aux id_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| Id_aux(id_aux,l) -> pp_id_aux id_aux
 
 and pp_kid_aux x = match x with
 | Var(x) -> group(string "" ^^ string "'" ^^ break 1 ^^ pp_x x ^^ string "")
 
 and pp_kid x = match x with
-| Kid_aux(kid_aux,l) -> group(string "" ^^ nest 2 (pp_kid_aux kid_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| Kid_aux(kid_aux,l) -> pp_kid_aux kid_aux
 
 and pp_kind_aux x = match x with
 | K_type -> string "Type"
@@ -529,13 +527,13 @@ and pp_kind_aux x = match x with
 | K_bool -> string "Bool"
 
 and pp_kind x = match x with
-| K_aux(kind_aux,l) -> group(string "" ^^ nest 2 (pp_kind_aux kind_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| K_aux(kind_aux,l) -> pp_kind_aux kind_aux
 
 and pp_nexp_aux x = match x with
-| Nexp_id(id) -> nest 2 (pp_id id)
-| Nexp_var(kid) -> nest 2 (pp_kid kid)
+| Nexp_id(id) -> pp_id id
+| Nexp_var(kid) -> pp_kid kid
 | Nexp_constant(num) -> pp_num num
-| Nexp_app(id,nexp0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (nexp0) -> nest 2 (pp_nexp nexp0)) nexp0) ^^ break 1 ^^ string ")" ^^ string "")
+| Nexp_app(id,nexp0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (nexp0) -> nest 2 (pp_nexp nexp0)) nexp0)) ^^ break 1 ^^ string ")" ^^ string "")
 | Nexp_times(nexp1,nexp2) -> group(string "" ^^ nest 2 (pp_nexp nexp1) ^^ break 1 ^^ string "*" ^^ break 1 ^^ nest 2 (pp_nexp nexp2) ^^ string "")
 | Nexp_sum(nexp1,nexp2) -> group(string "" ^^ nest 2 (pp_nexp nexp1) ^^ break 1 ^^ string "+" ^^ break 1 ^^ nest 2 (pp_nexp nexp2) ^^ string "")
 | Nexp_minus(nexp1,nexp2) -> group(string "" ^^ nest 2 (pp_nexp nexp1) ^^ break 1 ^^ string "-" ^^ break 1 ^^ nest 2 (pp_nexp nexp2) ^^ string "")
@@ -543,15 +541,15 @@ and pp_nexp_aux x = match x with
 | Nexp_neg(nexp) -> group(string "" ^^ string "-" ^^ break 1 ^^ nest 2 (pp_nexp nexp) ^^ string "")
 
 and pp_nexp x = match x with
-| Nexp_aux(nexp_aux,l) -> group(string "" ^^ nest 2 (pp_nexp_aux nexp_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| Nexp_aux(nexp_aux,l) -> pp_nexp_aux nexp_aux
 
 and pp_order_aux x = match x with
-| Ord_var(kid) -> nest 2 (pp_kid kid)
+| Ord_var(kid) -> pp_kid kid
 | Ord_inc -> string "inc"
 | Ord_dec -> string "dec"
 
 and pp_order x = match x with
-| Ord_aux(order_aux,l) -> group(string "" ^^ nest 2 (pp_order_aux order_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| Ord_aux(order_aux,l) -> pp_order_aux order_aux
 
 and pp_base_effect_aux x = match x with
 | BE_rreg -> string "rreg"
@@ -572,35 +570,35 @@ and pp_base_effect_aux x = match x with
 | BE_config -> string "config"
 
 and pp_base_effect x = match x with
-| BE_aux(base_effect_aux,l) -> group(string "" ^^ nest 2 (pp_base_effect_aux base_effect_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| BE_aux(base_effect_aux,l) -> pp_base_effect_aux base_effect_aux
 
 and pp_effect_aux x = match x with
-| Effect_set(base_effect0) -> group(string "" ^^ string "{" ^^ break 1 ^^ separate (string ",") (List.map (function (base_effect0) -> nest 2 (pp_base_effect base_effect0)) base_effect0) ^^ break 1 ^^ string "}" ^^ string "")
+| Effect_set(base_effect0) -> group(string "" ^^ string "{" ^^ break 1 ^^ group(separate (string ",") (List.map (function (base_effect0) -> nest 2 (pp_base_effect base_effect0)) base_effect0)) ^^ break 1 ^^ string "}" ^^ string "")
 
 and pp_effect x = match x with
-| Effect_aux(effect_aux,l) -> group(string "" ^^ nest 2 (pp_effect_aux effect_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| Effect_aux(effect_aux,l) -> pp_effect_aux effect_aux
 
 and pp_typ_aux x = match x with
 | Typ_internal_unknown -> string ""
-| Typ_id(id) -> nest 2 (pp_id id)
-| Typ_var(kid) -> nest 2 (pp_kid kid)
-| Typ_fn(typ0,typ2,effect) -> group(string "" ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (typ0) -> nest 2 (pp_typ typ0)) typ0) ^^ break 1 ^^ string ")" ^^ break 1 ^^ string "->" ^^ break 1 ^^ nest 2 (pp_typ typ2) ^^ break 1 ^^ string "effectkw" ^^ break 1 ^^ nest 2 (pp_effect effect) ^^ string "")
+| Typ_id(id) -> pp_id id
+| Typ_var(kid) -> pp_kid kid
+| Typ_fn(typ0,typ2,effect) -> group(string "" ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (typ0) -> nest 2 (pp_typ typ0)) typ0)) ^^ break 1 ^^ string ")" ^^ break 1 ^^ string "->" ^^ break 1 ^^ nest 2 (pp_typ typ2) ^^ break 1 ^^ string "effectkw" ^^ break 1 ^^ nest 2 (pp_effect effect) ^^ string "")
 | Typ_bidir(typ1,typ2) -> group(string "" ^^ nest 2 (pp_typ typ1) ^^ break 1 ^^ string "<->" ^^ break 1 ^^ nest 2 (pp_typ typ2) ^^ string "")
-| Typ_tup(typ0) -> group(string "" ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (typ0) -> nest 2 (pp_typ typ0)) typ0) ^^ break 1 ^^ string ")" ^^ string "")
-| Typ_app(id,typ_arg0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (typ_arg0) -> nest 2 (pp_typ_arg typ_arg0)) typ_arg0) ^^ break 1 ^^ string ")" ^^ string "")
-| Typ_exist(kinded_id0,n_constraint,typ) -> group(string "" ^^ string "{" ^^ break 1 ^^ separate (string " ") (List.map (function (kinded_id0) -> nest 2 (pp_kinded_id kinded_id0)) kinded_id0) ^^ break 1 ^^ string "," ^^ break 1 ^^ nest 2 (pp_n_constraint n_constraint) ^^ break 1 ^^ string "." ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ break 1 ^^ string "}" ^^ string "")
+| Typ_tup(typ0) -> group(string "" ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (typ0) -> nest 2 (pp_typ typ0)) typ0)) ^^ break 1 ^^ string ")" ^^ string "")
+| Typ_app(id,typ_arg0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (typ_arg0) -> nest 2 (pp_typ_arg typ_arg0)) typ_arg0)) ^^ break 1 ^^ string ")" ^^ string "")
+| Typ_exist(kinded_id0,n_constraint,typ) -> group(string "" ^^ string "{" ^^ break 1 ^^ group(separate (break 1) (List.map (function (kinded_id0) -> nest 2 (pp_kinded_id kinded_id0)) kinded_id0)) ^^ break 1 ^^ string "," ^^ break 1 ^^ nest 2 (pp_n_constraint n_constraint) ^^ break 1 ^^ string "." ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ break 1 ^^ string "}" ^^ string "")
 
 and pp_typ x = match x with
-| Typ_aux(typ_aux,l) -> group(string "" ^^ nest 2 (pp_typ_aux typ_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| Typ_aux(typ_aux,l) -> pp_typ_aux typ_aux
 
 and pp_typ_arg_aux x = match x with
-| A_nexp(nexp) -> nest 2 (pp_nexp nexp)
-| A_typ(typ) -> nest 2 (pp_typ typ)
-| A_order(order) -> nest 2 (pp_order order)
-| A_bool(n_constraint) -> nest 2 (pp_n_constraint n_constraint)
+| A_nexp(nexp) -> pp_nexp nexp
+| A_typ(typ) -> pp_typ typ
+| A_order(order) -> pp_order order
+| A_bool(n_constraint) -> pp_n_constraint n_constraint
 
 and pp_typ_arg x = match x with
-| A_aux(typ_arg_aux,l) -> group(string "" ^^ nest 2 (pp_typ_arg_aux typ_arg_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| A_aux(typ_arg_aux,l) -> pp_typ_arg_aux typ_arg_aux
 
 and pp_n_constraint_aux x = match x with
 | NC_equal(nexp,nexp_prime) -> group(string "" ^^ nest 2 (pp_nexp nexp) ^^ break 1 ^^ string "==" ^^ break 1 ^^ nest 2 (pp_nexp nexp_prime) ^^ string "")
@@ -609,67 +607,67 @@ and pp_n_constraint_aux x = match x with
 | NC_bounded_le(nexp,nexp_prime) -> group(string "" ^^ nest 2 (pp_nexp nexp) ^^ break 1 ^^ string "<=" ^^ break 1 ^^ nest 2 (pp_nexp nexp_prime) ^^ string "")
 | NC_bounded_lt(nexp,nexp_prime) -> group(string "" ^^ nest 2 (pp_nexp nexp) ^^ break 1 ^^ string "<" ^^ break 1 ^^ nest 2 (pp_nexp nexp_prime) ^^ string "")
 | NC_not_equal(nexp,nexp_prime) -> group(string "" ^^ nest 2 (pp_nexp nexp) ^^ break 1 ^^ string "!=" ^^ break 1 ^^ nest 2 (pp_nexp nexp_prime) ^^ string "")
-| NC_set(kid,num0) -> group(string "" ^^ nest 2 (pp_kid kid) ^^ break 1 ^^ string "IN" ^^ break 1 ^^ string "{" ^^ break 1 ^^ separate (string ",") (List.map (function (num0) -> pp_num num0) num0) ^^ break 1 ^^ string "}" ^^ string "")
+| NC_set(kid,num0) -> group(string "" ^^ nest 2 (pp_kid kid) ^^ break 1 ^^ string "IN" ^^ break 1 ^^ string "{" ^^ break 1 ^^ group(separate (string ",") (List.map (function (num0) -> pp_num num0) num0)) ^^ break 1 ^^ string "}" ^^ string "")
 | NC_or(n_constraint,n_constraint_prime) -> group(string "" ^^ nest 2 (pp_n_constraint n_constraint) ^^ break 1 ^^ string "&" ^^ break 1 ^^ nest 2 (pp_n_constraint n_constraint_prime) ^^ string "")
 | NC_and(n_constraint,n_constraint_prime) -> group(string "" ^^ nest 2 (pp_n_constraint n_constraint) ^^ break 1 ^^ string "|" ^^ break 1 ^^ nest 2 (pp_n_constraint n_constraint_prime) ^^ string "")
-| NC_app(id,typ_arg0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (typ_arg0) -> nest 2 (pp_typ_arg typ_arg0)) typ_arg0) ^^ break 1 ^^ string ")" ^^ string "")
-| NC_var(kid) -> nest 2 (pp_kid kid)
+| NC_app(id,typ_arg0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (typ_arg0) -> nest 2 (pp_typ_arg typ_arg0)) typ_arg0)) ^^ break 1 ^^ string ")" ^^ string "")
+| NC_var(kid) -> pp_kid kid
 | NC_true -> string "true"
 | NC_false -> string "false"
 
 and pp_n_constraint x = match x with
-| NC_aux(n_constraint_aux,l) -> group(string "" ^^ nest 2 (pp_n_constraint_aux n_constraint_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| NC_aux(n_constraint_aux,l) -> pp_n_constraint_aux n_constraint_aux
 
 and pp_kinded_id_aux x = match x with
-| KOpt_kind(kind,kid) -> group(string "" ^^ nest 2 (pp_kind kind) ^^ break 1 ^^ nest 2 (pp_kid kid) ^^ string "")
+| KOpt_kind(kind,kid) -> group(string "" ^^ pp_kind kind ^^ break 1 ^^ pp_kid kid ^^ string "")
 
 and pp_kinded_id x = match x with
-| KOpt_aux(kinded_id_aux,l) -> group(string "" ^^ nest 2 (pp_kinded_id_aux kinded_id_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| KOpt_aux(kinded_id_aux,l) -> pp_kinded_id_aux kinded_id_aux
 
 and pp_quant_item_aux x = match x with
-| QI_id(kinded_id) -> nest 2 (pp_kinded_id kinded_id)
-| QI_constraint(n_constraint) -> nest 2 (pp_n_constraint n_constraint)
-| QI_constant(kinded_id0) -> separate (string " ") (List.map (function (kinded_id0) -> nest 2 (pp_kinded_id kinded_id0)) kinded_id0)
+| QI_id(kinded_id) -> pp_kinded_id kinded_id
+| QI_constraint(n_constraint) -> pp_n_constraint n_constraint
+| QI_constant(kinded_id0) -> group(separate (break 1) (List.map (function (kinded_id0) -> pp_kinded_id kinded_id0) kinded_id0))
 
 and pp_quant_item x = match x with
-| QI_aux(quant_item_aux,l) -> group(string "" ^^ nest 2 (pp_quant_item_aux quant_item_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| QI_aux(quant_item_aux,l) -> pp_quant_item_aux quant_item_aux
 
 and pp_typquant_aux x = match x with
-| TypQ_tq(quant_item0) -> group(string "" ^^ string "forall" ^^ break 1 ^^ separate (string ",") (List.map (function (quant_item0) -> nest 2 (pp_quant_item quant_item0)) quant_item0) ^^ break 1 ^^ string "." ^^ string "")
+| TypQ_tq(quant_item0) -> group(string "" ^^ string "forall" ^^ break 1 ^^ group(separate (string ",") (List.map (function (quant_item0) -> nest 2 (pp_quant_item quant_item0)) quant_item0)) ^^ break 1 ^^ string "." ^^ string "")
 | TypQ_no_forall -> string ""
 
 and pp_typquant x = match x with
-| TypQ_aux(typquant_aux,l) -> group(string "" ^^ nest 2 (pp_typquant_aux typquant_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| TypQ_aux(typquant_aux,l) -> pp_typquant_aux typquant_aux
 
 and pp_typschm_aux x = match x with
-| TypSchm_ts(typquant,typ) -> group(string "" ^^ nest 2 (pp_typquant typquant) ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ string "")
+| TypSchm_ts(typquant,typ) -> group(string "" ^^ pp_typquant typquant ^^ break 1 ^^ pp_typ typ ^^ string "")
 
 and pp_typschm x = match x with
-| TypSchm_aux(typschm_aux,l) -> group(string "" ^^ nest 2 (pp_typschm_aux typschm_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| TypSchm_aux(typschm_aux,l) -> pp_typschm_aux typschm_aux
 
 and pp_type_def x = match x with
 | TD_aux (x,y) -> string "..type_def"
 
 and pp_type_def_aux x = match x with
 | TD_abbrev(id,typquant,typ_arg) -> group(string "" ^^ string "type" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ nest 2 (pp_typquant typquant) ^^ break 1 ^^ string "=" ^^ break 1 ^^ nest 2 (pp_typ_arg typ_arg) ^^ string "")
-| TD_record(id,typquant,typ0_id0,semi_opt) -> group(string "" ^^ string "typedef" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "=" ^^ break 1 ^^ string "const" ^^ break 1 ^^ string "struct" ^^ break 1 ^^ nest 2 (pp_typquant typquant) ^^ break 1 ^^ string "{" ^^ break 1 ^^ separate (string ";") (List.map (function (typ0,id0) -> nest 2 (pp_typ typ0) ^^ string " " ^^ nest 2 (pp_id id0)) typ0_id0) ^^ break 1 ^^ nest 2 (pp_semi_opt semi_opt) ^^ break 1 ^^ string "}" ^^ string "")
-| TD_variant(id,typquant,type_union0,semi_opt) -> group(string "" ^^ string "typedef" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "=" ^^ break 1 ^^ string "const" ^^ break 1 ^^ string "union" ^^ break 1 ^^ nest 2 (pp_typquant typquant) ^^ break 1 ^^ string "{" ^^ break 1 ^^ separate (string ";") (List.map (function (type_union0) -> nest 2 (pp_type_union type_union0)) type_union0) ^^ break 1 ^^ nest 2 (pp_semi_opt semi_opt) ^^ break 1 ^^ string "}" ^^ string "")
-| TD_enum(id,id0,semi_opt) -> group(string "" ^^ string "typedef" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "=" ^^ break 1 ^^ string "enumerate" ^^ break 1 ^^ string "{" ^^ break 1 ^^ separate (string ";") (List.map (function (id0) -> nest 2 (pp_id id0)) id0) ^^ break 1 ^^ nest 2 (pp_semi_opt semi_opt) ^^ break 1 ^^ string "}" ^^ string "")
-| TD_bitfield(id,typ,id0_index_range0) -> group(string "" ^^ string "bitfield" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string ":" ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ break 1 ^^ string "=" ^^ break 1 ^^ string "{" ^^ break 1 ^^ separate (string ",") (List.map (function (id0,index_range0) -> nest 2 (pp_id id0) ^^ string " " ^^ string ":" ^^ string " " ^^ nest 2 (pp_index_range index_range0)) id0_index_range0) ^^ break 1 ^^ string "}" ^^ string "")
+| TD_record(id,typquant,typ0_id0,semi_opt) -> group(string "" ^^ string "typedef" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "=" ^^ break 1 ^^ string "const" ^^ break 1 ^^ string "struct" ^^ break 1 ^^ nest 2 (pp_typquant typquant) ^^ break 1 ^^ string "{" ^^ break 1 ^^ group(separate (string ";") (List.map (function (typ0,id0) -> nest 2 (pp_typ typ0) ^^ string " " ^^ nest 2 (pp_id id0)) typ0_id0)) ^^ break 1 ^^ nest 2 (pp_semi_opt semi_opt) ^^ break 1 ^^ string "}" ^^ string "")
+| TD_variant(id,typquant,type_union0,semi_opt) -> group(string "" ^^ string "typedef" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "=" ^^ break 1 ^^ string "const" ^^ break 1 ^^ string "union" ^^ break 1 ^^ nest 2 (pp_typquant typquant) ^^ break 1 ^^ string "{" ^^ break 1 ^^ group(separate (string ";") (List.map (function (type_union0) -> nest 2 (pp_type_union type_union0)) type_union0)) ^^ break 1 ^^ nest 2 (pp_semi_opt semi_opt) ^^ break 1 ^^ string "}" ^^ string "")
+| TD_enum(id,id0,semi_opt) -> group(string "" ^^ string "typedef" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "=" ^^ break 1 ^^ string "enumerate" ^^ break 1 ^^ string "{" ^^ break 1 ^^ group(separate (string ";") (List.map (function (id0) -> nest 2 (pp_id id0)) id0)) ^^ break 1 ^^ nest 2 (pp_semi_opt semi_opt) ^^ break 1 ^^ string "}" ^^ string "")
+| TD_bitfield(id,typ,id0_index_range0) -> group(string "" ^^ string "bitfield" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string ":" ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ break 1 ^^ string "=" ^^ break 1 ^^ string "{" ^^ break 1 ^^ group(separate (string ",") (List.map (function (id0,index_range0) -> nest 2 (pp_id id0) ^^ string " " ^^ string ":" ^^ string " " ^^ nest 2 (pp_index_range index_range0)) id0_index_range0)) ^^ break 1 ^^ string "}" ^^ string "")
 
 and pp_type_union_aux x = match x with
-| Tu_ty_id(typ,id) -> group(string "" ^^ nest 2 (pp_typ typ) ^^ break 1 ^^ nest 2 (pp_id id) ^^ string "")
+| Tu_ty_id(typ,id) -> group(string "" ^^ pp_typ typ ^^ break 1 ^^ pp_id id ^^ string "")
 
 and pp_type_union x = match x with
-| Tu_aux(type_union_aux,l) -> group(string "" ^^ nest 2 (pp_type_union_aux type_union_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| Tu_aux(type_union_aux,l) -> pp_type_union_aux type_union_aux
 
 and pp_index_range_aux x = match x with
-| BF_single(nexp) -> nest 2 (pp_nexp nexp)
+| BF_single(nexp) -> pp_nexp nexp
 | BF_range(nexp1,nexp2) -> group(string "" ^^ nest 2 (pp_nexp nexp1) ^^ break 1 ^^ string ".." ^^ break 1 ^^ nest 2 (pp_nexp nexp2) ^^ string "")
 | BF_concat(index_range1,index_range2) -> group(string "" ^^ nest 2 (pp_index_range index_range1) ^^ break 1 ^^ string "," ^^ break 1 ^^ nest 2 (pp_index_range index_range2) ^^ string "")
 
 and pp_index_range x = match x with
-| BF_aux(index_range_aux,l) -> group(string "" ^^ nest 2 (pp_index_range_aux index_range_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| BF_aux(index_range_aux,l) -> pp_index_range_aux index_range_aux
 
 and pp_lit_aux x = match x with
 | L_unit -> group(string "" ^^ string "(" ^^ break 1 ^^ string ")" ^^ string "")
@@ -685,37 +683,37 @@ and pp_lit_aux x = match x with
 | L_real(real) -> pp_real real
 
 and pp_lit x = match x with
-| L_aux(lit_aux,l) -> group(string "" ^^ nest 2 (pp_lit_aux lit_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| L_aux(lit_aux,l) -> pp_lit_aux lit_aux
 
 and pp_semi_opt _ = string "semi_opt"
 
 and pp_typ_pat_aux x = match x with
 | TP_wild -> string "_"
-| TP_var(kid) -> nest 2 (pp_kid kid)
-| TP_app(id,typ_pat0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (typ_pat0) -> nest 2 (pp_typ_pat typ_pat0)) typ_pat0) ^^ break 1 ^^ string ")" ^^ string "")
+| TP_var(kid) -> pp_kid kid
+| TP_app(id,typ_pat0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (typ_pat0) -> nest 2 (pp_typ_pat typ_pat0)) typ_pat0)) ^^ break 1 ^^ string ")" ^^ string "")
 
 and pp_typ_pat x = match x with
-| TP_aux(typ_pat_aux,l) -> group(string "" ^^ nest 2 (pp_typ_pat_aux typ_pat_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| TP_aux(typ_pat_aux,l) -> pp_typ_pat_aux typ_pat_aux
 
 and pp_pat_aux x = match x with
-| P_lit(lit) -> nest 2 (pp_lit lit)
+| P_lit(lit) -> pp_lit lit
 | P_wild -> string "_"
 | P_or(pat1,pat2) -> group(string "" ^^ nest 2 (pp_pat pat1) ^^ break 1 ^^ string "|" ^^ break 1 ^^ nest 2 (pp_pat pat2) ^^ string "")
 | P_not(pat) -> group(string "" ^^ string "~" ^^ break 1 ^^ nest 2 (pp_pat pat) ^^ string "")
 | P_as(pat,id) -> group(string "" ^^ string "(" ^^ break 1 ^^ nest 2 (pp_pat pat) ^^ break 1 ^^ string "as" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string ")" ^^ string "")
 | P_typ(typ,pat) -> group(string "" ^^ string "(" ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ break 1 ^^ string ")" ^^ break 1 ^^ nest 2 (pp_pat pat) ^^ string "")
-| P_id(id) -> nest 2 (pp_id id)
-| P_var(pat,typ_pat) -> group(string "" ^^ nest 2 (pp_pat pat) ^^ break 1 ^^ nest 2 (pp_typ_pat typ_pat) ^^ string "")
-| P_app(id,pat0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (pat0) -> nest 2 (pp_pat pat0)) pat0) ^^ break 1 ^^ string ")" ^^ string "")
-| P_vector(pat0) -> group(string "" ^^ string "[" ^^ break 1 ^^ separate (string ",") (List.map (function (pat0) -> nest 2 (pp_pat pat0)) pat0) ^^ break 1 ^^ string "]" ^^ string "")
-| P_vector_concat(pat0) -> separate (string "@") (List.map (function (pat0) -> nest 2 (pp_pat pat0)) pat0)
-| P_tup(pat0) -> group(string "" ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (pat0) -> nest 2 (pp_pat pat0)) pat0) ^^ break 1 ^^ string ")" ^^ string "")
-| P_list(pat0) -> group(string "" ^^ string "[||" ^^ break 1 ^^ separate (string ",") (List.map (function (pat0) -> nest 2 (pp_pat pat0)) pat0) ^^ break 1 ^^ string "||]" ^^ string "")
+| P_id(id) -> pp_id id
+| P_var(pat,typ_pat) -> group(string "" ^^ pp_pat pat ^^ break 1 ^^ pp_typ_pat typ_pat ^^ string "")
+| P_app(id,pat0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (pat0) -> nest 2 (pp_pat pat0)) pat0)) ^^ break 1 ^^ string ")" ^^ string "")
+| P_vector(pat0) -> group(string "" ^^ string "[" ^^ break 1 ^^ group(separate (string ",") (List.map (function (pat0) -> nest 2 (pp_pat pat0)) pat0)) ^^ break 1 ^^ string "]" ^^ string "")
+| P_vector_concat(pat0) -> group(separate (string "@") (List.map (function (pat0) -> pp_pat pat0) pat0))
+| P_tup(pat0) -> group(string "" ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (pat0) -> nest 2 (pp_pat pat0)) pat0)) ^^ break 1 ^^ string ")" ^^ string "")
+| P_list(pat0) -> group(string "" ^^ string "[||" ^^ break 1 ^^ group(separate (string ",") (List.map (function (pat0) -> nest 2 (pp_pat pat0)) pat0)) ^^ break 1 ^^ string "||]" ^^ string "")
 | P_cons(pat1,pat2) -> group(string "" ^^ nest 2 (pp_pat pat1) ^^ break 1 ^^ string "::" ^^ break 1 ^^ nest 2 (pp_pat pat2) ^^ string "")
-| P_string_append(pat0) -> separate (string "^^") (List.map (function (pat0) -> nest 2 (pp_pat pat0)) pat0)
+| P_string_append(pat0) -> group(separate (string "^^") (List.map (function (pat0) -> pp_pat pat0) pat0))
 
 and pp_pat x = match x with
-| P_aux(pat_aux,annot) -> group(string "" ^^ nest 2 (pp_pat_aux pat_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| P_aux(pat_aux,annot) -> pp_pat_aux pat_aux
 
 and pp_loop _ = string "loop"
 
@@ -724,31 +722,31 @@ and pp_internal_loop_measure_aux x = match x with
 | Measure_some(exp) -> group(string "" ^^ string "termination_measure" ^^ break 1 ^^ string "{" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "}" ^^ string "")
 
 and pp_internal_loop_measure x = match x with
-| Measure_aux(internal_loop_measure_aux,l) -> group(string "" ^^ nest 2 (pp_internal_loop_measure_aux internal_loop_measure_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| Measure_aux(internal_loop_measure_aux,l) -> pp_internal_loop_measure_aux internal_loop_measure_aux
 
 and pp_exp_aux x = match x with
-| E_block(exp0) -> group(string "" ^^ string "{" ^^ break 1 ^^ separate (string ";") (List.map (function (exp0) -> nest 2 (pp_exp exp0)) exp0) ^^ break 1 ^^ string "}" ^^ string "")
-| E_id(id) -> nest 2 (pp_id id)
-| E_lit(lit) -> nest 2 (pp_lit lit)
+| E_block(exp0) -> group(string "" ^^ string "{" ^^ break 1 ^^ group(separate (string ";") (List.map (function (exp0) -> nest 2 (pp_exp exp0)) exp0)) ^^ break 1 ^^ string "}" ^^ string "")
+| E_id(id) -> pp_id id
+| E_lit(lit) -> pp_lit lit
 | E_cast(typ,exp) -> group(string "" ^^ string "(" ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ break 1 ^^ string ")" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
-| E_app(id,exp0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (exp0) -> nest 2 (pp_exp exp0)) exp0) ^^ break 1 ^^ string ")" ^^ string "")
-| E_app_infix(exp1,id,exp2) -> group(string "" ^^ nest 2 (pp_exp exp1) ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ nest 2 (pp_exp exp2) ^^ string "")
-| E_tuple(exp0) -> group(string "" ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (exp0) -> nest 2 (pp_exp exp0)) exp0) ^^ break 1 ^^ string ")" ^^ string "")
+| E_app(id,exp0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (exp0) -> nest 2 (pp_exp exp0)) exp0)) ^^ break 1 ^^ string ")" ^^ string "")
+| E_app_infix(exp1,id,exp2) -> group(string "" ^^ pp_exp exp1 ^^ break 1 ^^ pp_id id ^^ break 1 ^^ pp_exp exp2 ^^ string "")
+| E_tuple(exp0) -> group(string "" ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (exp0) -> nest 2 (pp_exp exp0)) exp0)) ^^ break 1 ^^ string ")" ^^ string "")
 | E_if(exp1,exp2,exp3) -> group(string "" ^^ string "if" ^^ break 1 ^^ nest 2 (pp_exp exp1) ^^ break 1 ^^ string "then" ^^ break 1 ^^ nest 2 (pp_exp exp2) ^^ break 1 ^^ string "else" ^^ break 1 ^^ nest 2 (pp_exp exp3) ^^ string "")
-| E_loop(loop,internal_loop_measure,exp1,exp2) -> group(string "" ^^ nest 2 (pp_loop loop) ^^ break 1 ^^ nest 2 (pp_internal_loop_measure internal_loop_measure) ^^ break 1 ^^ nest 2 (pp_exp exp1) ^^ break 1 ^^ nest 2 (pp_exp exp2) ^^ string "")
+| E_loop(loop,internal_loop_measure,exp1,exp2) -> group(string "" ^^ pp_loop loop ^^ break 1 ^^ pp_internal_loop_measure internal_loop_measure ^^ break 1 ^^ pp_exp exp1 ^^ break 1 ^^ pp_exp exp2 ^^ string "")
 | E_for(id,exp1,exp2,exp3,order,exp4) -> group(string "" ^^ string "foreach" ^^ break 1 ^^ string "(" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "from" ^^ break 1 ^^ nest 2 (pp_exp exp1) ^^ break 1 ^^ string "to" ^^ break 1 ^^ nest 2 (pp_exp exp2) ^^ break 1 ^^ string "by" ^^ break 1 ^^ nest 2 (pp_exp exp3) ^^ break 1 ^^ string "in" ^^ break 1 ^^ nest 2 (pp_order order) ^^ break 1 ^^ string ")" ^^ break 1 ^^ nest 2 (pp_exp exp4) ^^ string "")
-| E_vector(exp0) -> group(string "" ^^ string "[" ^^ break 1 ^^ separate (string ",") (List.map (function (exp0) -> nest 2 (pp_exp exp0)) exp0) ^^ break 1 ^^ string "]" ^^ string "")
+| E_vector(exp0) -> group(string "" ^^ string "[" ^^ break 1 ^^ group(separate (string ",") (List.map (function (exp0) -> nest 2 (pp_exp exp0)) exp0)) ^^ break 1 ^^ string "]" ^^ string "")
 | E_vector_access(exp,exp_prime) -> group(string "" ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "[" ^^ break 1 ^^ nest 2 (pp_exp exp_prime) ^^ break 1 ^^ string "]" ^^ string "")
 | E_vector_subrange(exp,exp1,exp2) -> group(string "" ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "[" ^^ break 1 ^^ nest 2 (pp_exp exp1) ^^ break 1 ^^ string ".." ^^ break 1 ^^ nest 2 (pp_exp exp2) ^^ break 1 ^^ string "]" ^^ string "")
 | E_vector_update(exp,exp1,exp2) -> group(string "" ^^ string "[" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "with" ^^ break 1 ^^ nest 2 (pp_exp exp1) ^^ break 1 ^^ string "=" ^^ break 1 ^^ nest 2 (pp_exp exp2) ^^ break 1 ^^ string "]" ^^ string "")
 | E_vector_update_subrange(exp,exp1,exp2,exp3) -> group(string "" ^^ string "[" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "with" ^^ break 1 ^^ nest 2 (pp_exp exp1) ^^ break 1 ^^ string ".." ^^ break 1 ^^ nest 2 (pp_exp exp2) ^^ break 1 ^^ string "=" ^^ break 1 ^^ nest 2 (pp_exp exp3) ^^ break 1 ^^ string "]" ^^ string "")
 | E_vector_append(exp1,exp2) -> group(string "" ^^ nest 2 (pp_exp exp1) ^^ break 1 ^^ string "@" ^^ break 1 ^^ nest 2 (pp_exp exp2) ^^ string "")
-| E_list(exp0) -> group(string "" ^^ string "[|" ^^ break 1 ^^ separate (string ",") (List.map (function (exp0) -> nest 2 (pp_exp exp0)) exp0) ^^ break 1 ^^ string "|]" ^^ string "")
+| E_list(exp0) -> group(string "" ^^ string "[|" ^^ break 1 ^^ group(separate (string ",") (List.map (function (exp0) -> nest 2 (pp_exp exp0)) exp0)) ^^ break 1 ^^ string "|]" ^^ string "")
 | E_cons(exp1,exp2) -> group(string "" ^^ nest 2 (pp_exp exp1) ^^ break 1 ^^ string "::" ^^ break 1 ^^ nest 2 (pp_exp exp2) ^^ string "")
-| E_record(fexp0) -> group(string "" ^^ string "struct" ^^ break 1 ^^ string "{" ^^ break 1 ^^ separate (string ",") (List.map (function (fexp0) -> nest 2 (pp_fexp fexp0)) fexp0) ^^ break 1 ^^ string "}" ^^ string "")
-| E_record_update(exp,fexp0) -> group(string "" ^^ string "{" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "with" ^^ break 1 ^^ separate (string ",") (List.map (function (fexp0) -> nest 2 (pp_fexp fexp0)) fexp0) ^^ break 1 ^^ string "}" ^^ string "")
+| E_record(fexp0) -> group(string "" ^^ string "struct" ^^ break 1 ^^ string "{" ^^ break 1 ^^ group(separate (string ",") (List.map (function (fexp0) -> nest 2 (pp_fexp fexp0)) fexp0)) ^^ break 1 ^^ string "}" ^^ string "")
+| E_record_update(exp,fexp0) -> group(string "" ^^ string "{" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "with" ^^ break 1 ^^ group(separate (string ",") (List.map (function (fexp0) -> nest 2 (pp_fexp fexp0)) fexp0)) ^^ break 1 ^^ string "}" ^^ string "")
 | E_field(exp,id) -> group(string "" ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "." ^^ break 1 ^^ nest 2 (pp_id id) ^^ string "")
-| E_case(exp,pexp0) -> group(string "" ^^ string "match" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "{" ^^ break 1 ^^ separate (string ",") (List.map (function (pexp0) -> nest 2 (pp_pexp pexp0)) pexp0) ^^ break 1 ^^ string "}" ^^ string "")
+| E_case(exp,pexp0) -> group(string "" ^^ string "match" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "{" ^^ break 1 ^^ group(separate (string ",") (List.map (function (pexp0) -> nest 2 (pp_pexp pexp0)) pexp0)) ^^ break 1 ^^ string "}" ^^ string "")
 | E_let(letbind,exp) -> group(string "" ^^ nest 2 (pp_letbind letbind) ^^ break 1 ^^ string "in" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
 | E_assign(lexp,exp) -> group(string "" ^^ nest 2 (pp_lexp lexp) ^^ break 1 ^^ string "=" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
 | E_sizeof(nexp) -> group(string "" ^^ string "sizeof" ^^ break 1 ^^ nest 2 (pp_nexp nexp) ^^ string "")
@@ -756,7 +754,7 @@ and pp_exp_aux x = match x with
 | E_exit(exp) -> group(string "" ^^ string "exit" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
 | E_ref(id) -> group(string "" ^^ string "ref" ^^ break 1 ^^ nest 2 (pp_id id) ^^ string "")
 | E_throw(exp) -> group(string "" ^^ string "throw" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
-| E_try(exp,pexp0) -> group(string "" ^^ string "try" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "catch" ^^ break 1 ^^ string "{" ^^ break 1 ^^ separate (string ",") (List.map (function (pexp0) -> nest 2 (pp_pexp pexp0)) pexp0) ^^ break 1 ^^ string "}" ^^ string "")
+| E_try(exp,pexp0) -> group(string "" ^^ string "try" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "catch" ^^ break 1 ^^ string "{" ^^ break 1 ^^ group(separate (string ",") (List.map (function (pexp0) -> nest 2 (pp_pexp pexp0)) pexp0)) ^^ break 1 ^^ string "}" ^^ string "")
 | E_assert(exp,exp_prime) -> group(string "" ^^ string "assert" ^^ break 1 ^^ string "(" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "," ^^ break 1 ^^ nest 2 (pp_exp exp_prime) ^^ break 1 ^^ string ")" ^^ string "")
 | E_var(lexp,exp,exp_prime) -> group(string "" ^^ string "var" ^^ break 1 ^^ nest 2 (pp_lexp lexp) ^^ break 1 ^^ string "=" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "in" ^^ break 1 ^^ nest 2 (pp_exp exp_prime) ^^ string "")
 | E_internal_plet(pat,exp,exp_prime) -> group(string "" ^^ string "let" ^^ break 1 ^^ nest 2 (pp_pat pat) ^^ break 1 ^^ string "=" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "in" ^^ break 1 ^^ nest 2 (pp_exp exp_prime) ^^ string "")
@@ -765,48 +763,48 @@ and pp_exp_aux x = match x with
 | E_constraint(n_constraint) -> group(string "" ^^ string "constraint" ^^ break 1 ^^ nest 2 (pp_n_constraint n_constraint) ^^ string "")
 
 and pp_exp x = match x with
-| E_aux(exp_aux,annot) -> group(string "" ^^ nest 2 (pp_exp_aux exp_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| E_aux(exp_aux,annot) -> pp_exp_aux exp_aux
 
 and pp_lexp_aux x = match x with
-| LEXP_id(id) -> nest 2 (pp_id id)
+| LEXP_id(id) -> pp_id id
 | LEXP_deref(exp) -> group(string "" ^^ string "deref" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
-| LEXP_memory(id,exp0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (exp0) -> nest 2 (pp_exp exp0)) exp0) ^^ break 1 ^^ string ")" ^^ string "")
+| LEXP_memory(id,exp0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (exp0) -> nest 2 (pp_exp exp0)) exp0)) ^^ break 1 ^^ string ")" ^^ string "")
 | LEXP_cast(typ,id) -> group(string "" ^^ string "(" ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ break 1 ^^ string ")" ^^ break 1 ^^ nest 2 (pp_id id) ^^ string "")
-| LEXP_tup(lexp0) -> group(string "" ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (lexp0) -> nest 2 (pp_lexp lexp0)) lexp0) ^^ break 1 ^^ string ")" ^^ string "")
-| LEXP_vector_concat(lexp0) -> separate (string "@") (List.map (function (lexp0) -> nest 2 (pp_lexp lexp0)) lexp0)
+| LEXP_tup(lexp0) -> group(string "" ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (lexp0) -> nest 2 (pp_lexp lexp0)) lexp0)) ^^ break 1 ^^ string ")" ^^ string "")
+| LEXP_vector_concat(lexp0) -> group(separate (string "@") (List.map (function (lexp0) -> pp_lexp lexp0) lexp0))
 | LEXP_vector(lexp,exp) -> group(string "" ^^ nest 2 (pp_lexp lexp) ^^ break 1 ^^ string "[" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "]" ^^ string "")
 | LEXP_vector_range(lexp,exp1,exp2) -> group(string "" ^^ nest 2 (pp_lexp lexp) ^^ break 1 ^^ string "[" ^^ break 1 ^^ nest 2 (pp_exp exp1) ^^ break 1 ^^ string ".." ^^ break 1 ^^ nest 2 (pp_exp exp2) ^^ break 1 ^^ string "]" ^^ string "")
 | LEXP_field(lexp,id) -> group(string "" ^^ nest 2 (pp_lexp lexp) ^^ break 1 ^^ string "." ^^ break 1 ^^ nest 2 (pp_id id) ^^ string "")
 
 and pp_lexp x = match x with
-| LEXP_aux(lexp_aux,annot) -> group(string "" ^^ nest 2 (pp_lexp_aux lexp_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| LEXP_aux(lexp_aux,annot) -> pp_lexp_aux lexp_aux
 
 and pp_fexp_aux x = match x with
 | FE_Fexp(id,exp) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "=" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
 
 and pp_fexp x = match x with
-| FE_aux(fexp_aux,annot) -> group(string "" ^^ nest 2 (pp_fexp_aux fexp_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| FE_aux(fexp_aux,annot) -> pp_fexp_aux fexp_aux
 
 and pp_opt_default_aux x = match x with
 | Def_val_empty -> string ""
 | Def_val_dec(exp) -> group(string "" ^^ string ";" ^^ break 1 ^^ string "default" ^^ break 1 ^^ string "=" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
 
 and pp_opt_default x = match x with
-| Def_val_aux(opt_default_aux,annot) -> group(string "" ^^ nest 2 (pp_opt_default_aux opt_default_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| Def_val_aux(opt_default_aux,annot) -> pp_opt_default_aux opt_default_aux
 
 and pp_pexp_aux x = match x with
 | Pat_exp(pat,exp) -> group(string "" ^^ nest 2 (pp_pat pat) ^^ break 1 ^^ string "->" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
 | Pat_when(pat,exp1,exp) -> group(string "" ^^ nest 2 (pp_pat pat) ^^ break 1 ^^ string "when" ^^ break 1 ^^ nest 2 (pp_exp exp1) ^^ break 1 ^^ string "->" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
 
 and pp_pexp x = match x with
-| Pat_aux(pexp_aux,annot) -> group(string "" ^^ nest 2 (pp_pexp_aux pexp_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| Pat_aux(pexp_aux,annot) -> pp_pexp_aux pexp_aux
 
 and pp_tannot_opt_aux x = match x with
 | Typ_annot_opt_none -> string ""
-| Typ_annot_opt_some(typquant,typ) -> group(string "" ^^ nest 2 (pp_typquant typquant) ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ string "")
+| Typ_annot_opt_some(typquant,typ) -> group(string "" ^^ pp_typquant typquant ^^ break 1 ^^ pp_typ typ ^^ string "")
 
 and pp_tannot_opt x = match x with
-| Typ_annot_opt_aux(tannot_opt_aux,l) -> group(string "" ^^ nest 2 (pp_tannot_opt_aux tannot_opt_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| Typ_annot_opt_aux(tannot_opt_aux,l) -> pp_tannot_opt_aux tannot_opt_aux
 
 and pp_rec_opt_aux x = match x with
 | Rec_nonrec -> string ""
@@ -814,51 +812,51 @@ and pp_rec_opt_aux x = match x with
 | Rec_measure(pat,exp) -> group(string "" ^^ string "{" ^^ break 1 ^^ nest 2 (pp_pat pat) ^^ break 1 ^^ string "->" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ break 1 ^^ string "}" ^^ string "")
 
 and pp_rec_opt x = match x with
-| Rec_aux(rec_opt_aux,l) -> group(string "" ^^ nest 2 (pp_rec_opt_aux rec_opt_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| Rec_aux(rec_opt_aux,l) -> pp_rec_opt_aux rec_opt_aux
 
 and pp_effect_opt_aux x = match x with
 | Effect_opt_none -> string ""
 | Effect_opt_effect(effect) -> group(string "" ^^ string "effectkw" ^^ break 1 ^^ nest 2 (pp_effect effect) ^^ string "")
 
 and pp_effect_opt x = match x with
-| Effect_opt_aux(effect_opt_aux,l) -> group(string "" ^^ nest 2 (pp_effect_opt_aux effect_opt_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| Effect_opt_aux(effect_opt_aux,l) -> pp_effect_opt_aux effect_opt_aux
 
 and pp_pexp_funcl x = pp_pexp x
 
 and pp_funcl_aux x = match x with
-| FCL_Funcl(id,pexp_funcl) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ nest 2 (pp_pexp_funcl pexp_funcl) ^^ string "")
+| FCL_Funcl(id,pexp_funcl) -> group(string "" ^^ pp_id id ^^ break 1 ^^ pp_pexp_funcl pexp_funcl ^^ string "")
 
 and pp_funcl x = match x with
-| FCL_aux(funcl_aux,annot) -> group(string "" ^^ nest 2 (pp_funcl_aux funcl_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| FCL_aux(funcl_aux,annot) -> pp_funcl_aux funcl_aux
 
 and pp_fundef_aux x = match x with
-| FD_function(rec_opt,tannot_opt,effect_opt,funcl0) -> group(string "" ^^ string "function" ^^ break 1 ^^ nest 2 (pp_rec_opt rec_opt) ^^ break 1 ^^ nest 2 (pp_tannot_opt tannot_opt) ^^ break 1 ^^ nest 2 (pp_effect_opt effect_opt) ^^ break 1 ^^ separate (string "and") (List.map (function (funcl0) -> nest 2 (pp_funcl funcl0)) funcl0) ^^ string "")
+| FD_function(rec_opt,tannot_opt,effect_opt,funcl0) -> group(string "" ^^ string "function" ^^ break 1 ^^ nest 2 (pp_rec_opt rec_opt) ^^ break 1 ^^ nest 2 (pp_tannot_opt tannot_opt) ^^ break 1 ^^ nest 2 (pp_effect_opt effect_opt) ^^ break 1 ^^ group(separate (string "and") (List.map (function (funcl0) -> nest 2 (pp_funcl funcl0)) funcl0)) ^^ string "")
 
 and pp_fundef x = match x with
-| FD_aux(fundef_aux,annot) -> group(string "" ^^ nest 2 (pp_fundef_aux fundef_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| FD_aux(fundef_aux,annot) -> pp_fundef_aux fundef_aux
 
 and pp_mpat_aux x = match x with
-| MP_lit(lit) -> nest 2 (pp_lit lit)
-| MP_id(id) -> nest 2 (pp_id id)
-| MP_app(id,mpat0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (mpat0) -> nest 2 (pp_mpat mpat0)) mpat0) ^^ break 1 ^^ string ")" ^^ string "")
-| MP_vector(mpat0) -> group(string "" ^^ string "[" ^^ break 1 ^^ separate (string ",") (List.map (function (mpat0) -> nest 2 (pp_mpat mpat0)) mpat0) ^^ break 1 ^^ string "]" ^^ string "")
-| MP_vector_concat(mpat0) -> separate (string "@") (List.map (function (mpat0) -> nest 2 (pp_mpat mpat0)) mpat0)
-| MP_tup(mpat0) -> group(string "" ^^ string "(" ^^ break 1 ^^ separate (string ",") (List.map (function (mpat0) -> nest 2 (pp_mpat mpat0)) mpat0) ^^ break 1 ^^ string ")" ^^ string "")
-| MP_list(mpat0) -> group(string "" ^^ string "[||" ^^ break 1 ^^ separate (string ",") (List.map (function (mpat0) -> nest 2 (pp_mpat mpat0)) mpat0) ^^ break 1 ^^ string "||]" ^^ string "")
+| MP_lit(lit) -> pp_lit lit
+| MP_id(id) -> pp_id id
+| MP_app(id,mpat0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (mpat0) -> nest 2 (pp_mpat mpat0)) mpat0)) ^^ break 1 ^^ string ")" ^^ string "")
+| MP_vector(mpat0) -> group(string "" ^^ string "[" ^^ break 1 ^^ group(separate (string ",") (List.map (function (mpat0) -> nest 2 (pp_mpat mpat0)) mpat0)) ^^ break 1 ^^ string "]" ^^ string "")
+| MP_vector_concat(mpat0) -> group(separate (string "@") (List.map (function (mpat0) -> pp_mpat mpat0) mpat0))
+| MP_tup(mpat0) -> group(string "" ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (mpat0) -> nest 2 (pp_mpat mpat0)) mpat0)) ^^ break 1 ^^ string ")" ^^ string "")
+| MP_list(mpat0) -> group(string "" ^^ string "[||" ^^ break 1 ^^ group(separate (string ",") (List.map (function (mpat0) -> nest 2 (pp_mpat mpat0)) mpat0)) ^^ break 1 ^^ string "||]" ^^ string "")
 | MP_cons(mpat1,mpat2) -> group(string "" ^^ nest 2 (pp_mpat mpat1) ^^ break 1 ^^ string "::" ^^ break 1 ^^ nest 2 (pp_mpat mpat2) ^^ string "")
-| MP_string_append(mpat0) -> separate (string "^^") (List.map (function (mpat0) -> nest 2 (pp_mpat mpat0)) mpat0)
+| MP_string_append(mpat0) -> group(separate (string "^^") (List.map (function (mpat0) -> pp_mpat mpat0) mpat0))
 | MP_typ(mpat,typ) -> group(string "" ^^ nest 2 (pp_mpat mpat) ^^ break 1 ^^ string ":" ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ string "")
 | MP_as(mpat,id) -> group(string "" ^^ nest 2 (pp_mpat mpat) ^^ break 1 ^^ string "as" ^^ break 1 ^^ nest 2 (pp_id id) ^^ string "")
 
 and pp_mpat x = match x with
-| MP_aux(mpat_aux,annot) -> group(string "" ^^ nest 2 (pp_mpat_aux mpat_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| MP_aux(mpat_aux,annot) -> pp_mpat_aux mpat_aux
 
 and pp_mpexp_aux x = match x with
-| MPat_pat(mpat) -> nest 2 (pp_mpat mpat)
+| MPat_pat(mpat) -> pp_mpat mpat
 | MPat_when(mpat,exp) -> group(string "" ^^ nest 2 (pp_mpat mpat) ^^ break 1 ^^ string "when" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
 
 and pp_mpexp x = match x with
-| MPat_aux(mpexp_aux,annot) -> group(string "" ^^ nest 2 (pp_mpexp_aux mpexp_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| MPat_aux(mpexp_aux,annot) -> pp_mpexp_aux mpexp_aux
 
 and pp_mapcl_aux x = match x with
 | MCL_bidir(mpexp1,mpexp2) -> group(string "" ^^ nest 2 (pp_mpexp mpexp1) ^^ break 1 ^^ string "<->" ^^ break 1 ^^ nest 2 (pp_mpexp mpexp2) ^^ string "")
@@ -866,19 +864,19 @@ and pp_mapcl_aux x = match x with
 | MCL_backwards(mpexp,exp) -> group(string "" ^^ nest 2 (pp_mpexp mpexp) ^^ break 1 ^^ string "<-" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
 
 and pp_mapcl x = match x with
-| MCL_aux(mapcl_aux,annot) -> group(string "" ^^ nest 2 (pp_mapcl_aux mapcl_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| MCL_aux(mapcl_aux,annot) -> pp_mapcl_aux mapcl_aux
 
 and pp_mapdef_aux x = match x with
-| MD_mapping(id,tannot_opt,mapcl0) -> group(string "" ^^ string "mapping" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ nest 2 (pp_tannot_opt tannot_opt) ^^ break 1 ^^ string "=" ^^ break 1 ^^ string "{" ^^ break 1 ^^ separate (string ",") (List.map (function (mapcl0) -> nest 2 (pp_mapcl mapcl0)) mapcl0) ^^ break 1 ^^ string "}" ^^ string "")
+| MD_mapping(id,tannot_opt,mapcl0) -> group(string "" ^^ string "mapping" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ nest 2 (pp_tannot_opt tannot_opt) ^^ break 1 ^^ string "=" ^^ break 1 ^^ string "{" ^^ break 1 ^^ group(separate (string ",") (List.map (function (mapcl0) -> nest 2 (pp_mapcl mapcl0)) mapcl0)) ^^ break 1 ^^ string "}" ^^ string "")
 
 and pp_mapdef x = match x with
-| MD_aux(mapdef_aux,annot) -> group(string "" ^^ nest 2 (pp_mapdef_aux mapdef_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| MD_aux(mapdef_aux,annot) -> pp_mapdef_aux mapdef_aux
 
 and pp_letbind_aux x = match x with
 | LB_val(pat,exp) -> group(string "" ^^ string "let" ^^ break 1 ^^ nest 2 (pp_pat pat) ^^ break 1 ^^ string "=" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
 
 and pp_letbind x = match x with
-| LB_aux(letbind_aux,annot) -> group(string "" ^^ nest 2 (pp_letbind_aux letbind_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| LB_aux(letbind_aux,annot) -> pp_letbind_aux letbind_aux
 
 and pp_val_spec x = match x with VS_aux(vs,annot) -> pp_val_spec_aux vs
 
@@ -901,7 +899,7 @@ and pp_default_spec_aux x = match x with
 | DT_order(order) -> group(string "" ^^ string "default" ^^ break 1 ^^ string "Order" ^^ break 1 ^^ nest 2 (pp_order order) ^^ string "")
 
 and pp_default_spec x = match x with
-| DT_aux(default_spec_aux,l) -> group(string "" ^^ nest 2 (pp_default_spec_aux default_spec_aux) ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| DT_aux(default_spec_aux,l) -> pp_default_spec_aux default_spec_aux
 
 and pp_scattered_def_aux x = match x with
 | SD_function(rec_opt,tannot_opt,effect_opt,id) -> group(string "" ^^ string "scattered" ^^ break 1 ^^ string "function" ^^ break 1 ^^ nest 2 (pp_rec_opt rec_opt) ^^ break 1 ^^ nest 2 (pp_tannot_opt tannot_opt) ^^ break 1 ^^ nest 2 (pp_effect_opt effect_opt) ^^ break 1 ^^ nest 2 (pp_id id) ^^ string "")
@@ -913,13 +911,13 @@ and pp_scattered_def_aux x = match x with
 | SD_end(id) -> group(string "" ^^ string "end" ^^ break 1 ^^ nest 2 (pp_id id) ^^ string "")
 
 and pp_scattered_def x = match x with
-| SD_aux(scattered_def_aux,annot) -> group(string "" ^^ nest 2 (pp_scattered_def_aux scattered_def_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| SD_aux(scattered_def_aux,annot) -> pp_scattered_def_aux scattered_def_aux
 
 and pp_reg_id_aux x = match x with
-| RI_id(id) -> nest 2 (pp_id id)
+| RI_id(id) -> pp_id id
 
 and pp_reg_id x = match x with
-| RI_aux(reg_id_aux,annot) -> group(string "" ^^ nest 2 (pp_reg_id_aux reg_id_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| RI_aux(reg_id_aux,annot) -> pp_reg_id_aux reg_id_aux
 
 and pp_alias_spec_aux x = match x with
 | AL_subreg(reg_id,id) -> group(string "" ^^ nest 2 (pp_reg_id reg_id) ^^ break 1 ^^ string "." ^^ break 1 ^^ nest 2 (pp_id id) ^^ string "")
@@ -928,7 +926,7 @@ and pp_alias_spec_aux x = match x with
 | AL_concat(reg_id,reg_id_prime) -> group(string "" ^^ nest 2 (pp_reg_id reg_id) ^^ break 1 ^^ string ":" ^^ break 1 ^^ nest 2 (pp_reg_id reg_id_prime) ^^ string "")
 
 and pp_alias_spec x = match x with
-| AL_aux(alias_spec_aux,annot) -> group(string "" ^^ nest 2 (pp_alias_spec_aux alias_spec_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| AL_aux(alias_spec_aux,annot) -> pp_alias_spec_aux alias_spec_aux
 
 and pp_dec_spec_aux x = match x with
 | DEC_reg(effect,effect_prime,typ,id) -> group(string "" ^^ string "register" ^^ break 1 ^^ nest 2 (pp_effect effect) ^^ break 1 ^^ nest 2 (pp_effect effect_prime) ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ break 1 ^^ nest 2 (pp_id id) ^^ string "")
@@ -937,7 +935,7 @@ and pp_dec_spec_aux x = match x with
 | DEC_typ_alias(typ,id,alias_spec) -> group(string "" ^^ string "register" ^^ break 1 ^^ string "alias" ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "=" ^^ break 1 ^^ nest 2 (pp_alias_spec alias_spec) ^^ string "")
 
 and pp_dec_spec x = match x with
-| DEC_aux(dec_spec_aux,annot) -> group(string "" ^^ nest 2 (pp_dec_spec_aux dec_spec_aux) ^^ break 1 ^^ nest 2 (pp_annot annot) ^^ string "")
+| DEC_aux(dec_spec_aux,annot) -> pp_dec_spec_aux dec_spec_aux
 
 and pp_prec x = match x with
 | Infix -> string "infix"
@@ -945,24 +943,24 @@ and pp_prec x = match x with
 | InfixR -> string "infixr"
 
 and pp_loop_measure x = match x with
-| Loop(loop,exp) -> group(string "" ^^ nest 2 (pp_loop loop) ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
+| Loop(loop,exp) -> group(string "" ^^ pp_loop loop ^^ break 1 ^^ pp_exp exp ^^ string "")
 
 and pp_def x = match x with
-| DEF_type(type_def) -> nest 2 (pp_type_def type_def)
-| DEF_fundef(fundef) -> nest 2 (pp_fundef fundef)
-| DEF_mapdef(mapdef) -> nest 2 (pp_mapdef mapdef)
-| DEF_val(letbind) -> nest 2 (pp_letbind letbind)
-| DEF_spec(val_spec) -> nest 2 (pp_val_spec val_spec)
+| DEF_type(type_def) -> pp_type_def type_def
+| DEF_fundef(fundef) -> pp_fundef fundef
+| DEF_mapdef(mapdef) -> pp_mapdef mapdef
+| DEF_val(letbind) -> pp_letbind letbind
+| DEF_spec(val_spec) -> pp_val_spec val_spec
 | DEF_fixity(prec,num,id) -> group(string "" ^^ string "fix" ^^ break 1 ^^ nest 2 (pp_prec prec) ^^ break 1 ^^ pp_num num ^^ break 1 ^^ nest 2 (pp_id id) ^^ string "")
-| DEF_overload(id,id0) -> group(string "" ^^ string "overload" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "[" ^^ break 1 ^^ separate (string ";") (List.map (function (id0) -> nest 2 (pp_id id0)) id0) ^^ break 1 ^^ string "]" ^^ string "")
-| DEF_default(default_spec) -> nest 2 (pp_default_spec default_spec)
-| DEF_scattered(scattered_def) -> nest 2 (pp_scattered_def scattered_def)
+| DEF_overload(id,id0) -> group(string "" ^^ string "overload" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "[" ^^ break 1 ^^ group(separate (string ";") (List.map (function (id0) -> nest 2 (pp_id id0)) id0)) ^^ break 1 ^^ string "]" ^^ string "")
+| DEF_default(default_spec) -> pp_default_spec default_spec
+| DEF_scattered(scattered_def) -> pp_scattered_def scattered_def
 | DEF_measure(id,pat,exp) -> group(string "" ^^ string "termination_measure" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ nest 2 (pp_pat pat) ^^ break 1 ^^ string "=" ^^ break 1 ^^ nest 2 (pp_exp exp) ^^ string "")
-| DEF_loop_measures(id,loop_measure0) -> group(string "" ^^ string "termination_measure" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ separate (string ",") (List.map (function (loop_measure0) -> nest 2 (pp_loop_measure loop_measure0)) loop_measure0) ^^ string "")
-| DEF_reg_dec(dec_spec) -> nest 2 (pp_dec_spec dec_spec)
-| DEF_internal_mutrec(fundef0) -> separate (string " ") (List.map (function (fundef0) -> nest 2 (pp_fundef fundef0)) fundef0)
-| DEF_pragma(string1,string2,l) -> group(string "" ^^ string "$" ^^ break 1 ^^ pp_string string1 ^^ break 1 ^^ pp_string string2 ^^ break 1 ^^ nest 2 (pp_l l) ^^ string "")
+| DEF_loop_measures(id,loop_measure0) -> group(string "" ^^ string "termination_measure" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ group(separate (string ",") (List.map (function (loop_measure0) -> nest 2 (pp_loop_measure loop_measure0)) loop_measure0)) ^^ string "")
+| DEF_reg_dec(dec_spec) -> pp_dec_spec dec_spec
+| DEF_internal_mutrec(fundef0) -> group(separate (break 1) (List.map (function (fundef0) -> pp_fundef fundef0) fundef0))
+| DEF_pragma(string1,string2,l) -> group(string "" ^^ string "$" ^^ break 1 ^^ pp_string string1 ^^ break 1 ^^ pp_string string2 ^^ string "")
 
 and pp_defs x = match x with
-| Defs(def0) -> separate (string " ") (List.map (function (def0) -> nest 2 (pp_def def0)) def0)
+| Defs(def0) -> group(separate (break 1) (List.map (function (def0) -> pp_def def0) def0))
 
