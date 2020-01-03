@@ -627,6 +627,12 @@ let doc_field (typ, id) =
 
 let doc_union (Tu_aux (Tu_ty_id (typ, id), l)) = separate space [doc_id id; colon; doc_typ typ]
 
+let rec doc_index_range (BF_aux (ir, _)) =
+  match ir with
+  | BF_single i -> doc_nexp i
+  | BF_range (i, j) -> doc_nexp i ^^ string ".." ^^ doc_nexp j
+  | BF_concat (i, j) -> doc_index_range i ^^ comma ^^ space ^^ doc_index_range j
+
 let doc_typ_arg_kind sep (A_aux (aux, _)) =
   match aux with
   | A_nexp _ -> space ^^ string sep ^^ space ^^string "Int"
@@ -655,7 +661,10 @@ let doc_typdef (TD_aux(td,_)) = match td with
   | TD_variant (id, TypQ_aux (TypQ_tq qs, _), unions, _) ->
      separate space [string "union"; doc_id id; doc_param_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
-  | TD_bitfield _ -> string "BITFIELD" (* should be rewritten *)
+  | TD_bitfield (id, typ, fields) ->
+     let doc_field (id, range) = separate space [doc_id id; colon; doc_index_range range] in
+     doc_op equals (separate space [string "bitfield"; doc_id id; colon; doc_typ typ])
+                   (surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace)
 
 let doc_spec ?comment:(comment=false) (VS_aux (v, annot)) =
   let doc_extern ext =
