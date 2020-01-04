@@ -2475,24 +2475,31 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
         mk_typ (Typ_app (id, targs))
       | TypQ_aux (TypQ_no_forall, _) -> mk_id_typ id in
     let fs_doc = group (separate_map (break 1) f_pp fs) in
+    let type_id_pp = doc_id_type id in
+    let match_parameters =
+      let (kopts,_) = quant_split typq in
+      match kopts with
+      | [] -> empty
+      | _ -> space ^^ separate_map space (fun _ -> underscore) kopts
+    in
     let doc_update_field (_,fid) =
       let idpp = fname fid in
-      let otherfield (_,fid') =
-        if Id.compare fid fid' == 0 then None else
-          let idpp = fname fid' in
-          Some (separate space [idpp; string ":="; idpp; string "r"])
+      let pp_field alt i (_,fid') =
+        if Id.compare fid fid' == 0 then string alt else
+          let id = "f" ^ string_of_int i in
+          string id
       in
       match fs with
       | [_] ->
          string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" :=" ^//^
            string "{| " ^^ idpp ^^ string " := e |} (only parsing)."
       | _   ->
-         string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" := {|" ^//^
-           idpp ^^ string " := e;" ^/^ separate (semi ^^ break 1) (Util.map_filter otherfield fs) ^/^
-             string "|}" ^^ dot
+         string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" :=" ^//^
+           string "match r with Build_" ^^ type_id_pp ^^ match_parameters ^^ space ^^ separate space (List.mapi (pp_field "_") fs) ^^ string " =>" ^//^
+           string "Build_" ^^ type_id_pp ^^ match_parameters ^^ space ^^ separate space (List.mapi (pp_field "e") fs) ^//^
+             string "end" ^^ dot
     in
     let updates_pp = separate hardline (List.map doc_update_field fs) in
-    let id_pp = doc_id_type id in
     let numfields = List.length fs in
     let intros_pp s =
       string " intros [" ^^
@@ -2501,8 +2508,8 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
     in
     let eq_pp =
       if IdSet.mem id generic_eq_types then
-        string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon ^/^
-        string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y)." ^^
+        string "Instance Decidable_eq_" ^^ type_id_pp ^^ space ^^ colon ^/^
+        string "forall (x y : " ^^ type_id_pp ^^ string "), Decidable (x = y)." ^^
         hardline ^^ intros_pp "x" ^^ intros_pp "y" ^^
         separate hardline (list_init numfields
                              (fun n ->
@@ -2513,9 +2520,9 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
         string "Defined." ^^ twice hardline
       else empty
     in
-    let reset_implicits_pp = doc_reset_implicits id_pp typq in
+    let reset_implicits_pp = doc_reset_implicits type_id_pp typq in
     doc_op coloneq
-           (separate space [string "Record"; id_pp; doc_typquant_items empty_ctxt Env.empty braces typq])
+           (separate space [string "Record"; type_id_pp; doc_typquant_items empty_ctxt Env.empty braces typq])
            ((*doc_typquant typq*) (braces (space ^^ align fs_doc ^^ space))) ^^
       dot ^^ hardline ^^ reset_implicits_pp ^^ hardline ^^ eq_pp ^^ updates_pp ^^
         twice hardline
