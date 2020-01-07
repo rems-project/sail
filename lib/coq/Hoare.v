@@ -1111,7 +1111,6 @@ Create HintDb PrePostE_specs.
 
 Ltac PrePostE_step :=
   match goal with
-  | |- _ => solve [ clear; eauto with nocore PrePostE_specs ]
   | |- PrePostE _ (bindS _ (fun _ => ?f)) _ _ => eapply PrePostE_bindS_ignore
   | |- PrePostE _ (bindS _ _) _ _ => eapply PrePostE_bindS; intros
   | |- PrePostE _ (seqS _ _) _ _ => eapply PrePostE_seqS; intros
@@ -1166,4 +1165,19 @@ Ltac PrePostE_step :=
          assert (PAIR : x = existT _ (projT1 x) (projT2 x)) by (destruct x; reflexivity);
          rewrite PAIR at - 1;
          clear PAIR
+  (* Applying specifications from the hintdb.  For performance,
+     * don't use hypotheses from the context (if we need to and it's
+       not good enough, consider using a separate hintdb)
+
+     * use auto rather than eauto - when eauto is applied to a goal
+       with an evar Coq falls back to trying all of the specs rather
+       than picking out one which matches (at least, with 8.9).
+   *)
+  | |- PrePostE ?pre _ _ _ =>
+    clear;
+    solve [ tryif is_evar pre then auto with nocore PrePostE_specs
+            else (eapply PrePostE_strengthen_pre;
+                  [ auto with nocore PrePostE_specs
+                  | exact (fun s p => p) ])
+          ]
   end.
