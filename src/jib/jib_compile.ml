@@ -410,7 +410,7 @@ let rec compile_aval l ctx = function
      let gs = ngensym () in
      let mk_cons aval =
        let setup, cval, cleanup = compile_aval l ctx aval in
-       setup @ [ifuncall (CL_id (gs, CT_list ctyp)) (mk_id ("cons#" ^ string_of_ctyp ctyp), []) [cval; V_id (gs, CT_list ctyp)]] @ cleanup
+       setup @ [iextern (CL_id (gs, CT_list ctyp)) (mk_id "cons", [ctyp]) [cval; V_id (gs, CT_list ctyp)]] @ cleanup
      in
      [idecl (CT_list ctyp) gs]
      @ List.concat (List.map mk_cons (List.rev avals)),

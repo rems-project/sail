@@ -1418,21 +1418,26 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      ^^ jump 2 2 (separate_map hardline (codegen_instr fid ctx) instrs) ^^ hardline
      ^^ string "  }"
 
-  | I_funcall (x, extern, f, args) ->
+  | I_funcall (x, special_extern, f, args) ->
      let c_args = Util.string_of_list ", " sgen_cval args in
      let ctyp = clexp_ctyp x in
-     let is_extern = Env.is_extern (fst f) ctx.tc_env "c" || extern in
+     let is_extern = Env.is_extern (fst f) ctx.tc_env "c" || special_extern in
      let fname =
-       if Env.is_extern (fst f) ctx.tc_env "c" then
-         Env.get_extern (fst f) ctx.tc_env "c"
-       else if extern then
+       if special_extern then
          string_of_id (fst f)
+       else if Env.is_extern (fst f) ctx.tc_env "c" then
+         Env.get_extern (fst f) ctx.tc_env "c"
        else
          sgen_function_uid f
      in
      let fname =
        match fname, ctyp with
        | "internal_pick", _ -> Printf.sprintf "pick_%s" (sgen_ctyp_name ctyp)
+       | "cons", _ ->
+          begin match snd f with
+          | [ctyp] -> Util.zencode_string ("cons#" ^ string_of_ctyp ctyp)
+          | _ -> c_error "cons without specified type"
+          end
        | "eq_anything", _ ->
           begin match args with
           | cval :: _ -> Printf.sprintf "eq_%s" (sgen_ctyp_name (cval_ctyp cval))
