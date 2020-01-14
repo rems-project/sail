@@ -149,10 +149,10 @@ let options = Arg.align ([
     set_target "ir",
     " print intermediate representation");
   ( "-smt",
-    set_target "smt",
+    Arg.Tuple [set_target "smt"; Arg.Clear Jib_compile.opt_track_throw],
     " print SMT translated version of input");
   ( "-smt_auto",
-    Arg.Tuple [set_target "smt"; Arg.Set Jib_smt.opt_auto],
+    Arg.Tuple [set_target "smt"; Arg.Clear Jib_compile.opt_track_throw; Arg.Set Jib_smt.opt_auto],
     " generate SMT and automatically call the solver (implies -smt)");
   ( "-smt_ignore_overflow",
     Arg.Set Jib_smt.opt_ignore_overflow,

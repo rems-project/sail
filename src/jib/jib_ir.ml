@@ -69,7 +69,9 @@ let string_of_name =
      "return" ^ ssa_num n
   | Current_exception n ->
      "current_exception" ^ ssa_num n
-
+  | Throw_location n ->
+     "throw_location" ^ ssa_num n
+    
 let rec string_of_clexp = function
   | CL_id (id, ctyp) -> string_of_name id
   | CL_field (clexp, field) -> string_of_clexp clexp ^ "." ^ string_of_uid field

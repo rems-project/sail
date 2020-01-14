@@ -61,6 +61,11 @@ open Type_check
    ARM v8.5 spec. It is unsound in general. *)
 val optimize_aarch64_fast_struct : bool ref
 
+(** If true (default) track the location of the last exception thrown,
+   useful for debugging C but we want to turn it off for SMT generation
+   where we can't use strings *)
+val opt_track_throw : bool ref
+ 
 (** {2 Jib context} *)
 
 (** Dynamic context for compiling Sail to Jib. We need to pass a

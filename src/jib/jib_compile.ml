@@ -58,6 +58,7 @@ open Value2
 open Anf
 
 let opt_memo_cache = ref false
+let opt_track_throw = ref true
 
 let optimize_aarch64_fast_struct = ref false
 
@@ -876,7 +877,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   | AE_throw (aval, typ) ->
      (* Cleanup info will be handled by fix_exceptions *)
      let throw_setup, cval, _ = compile_aval l ctx aval in
-     throw_setup @ [ithrow cval],
+     throw_setup @ [ithrow l cval],
      (fun clexp -> icomment "unreachable after throw"),
      []
 
@@ -1056,6 +1057,10 @@ let fix_exception_block ?return:(return=None) ctx instrs =
        before
        @ [icopy l (CL_id (current_exception, cval_ctyp cval)) cval;
           icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool true, CT_bool))]
+       @ (if !opt_track_throw then
+            let loc_string = Reporting.short_loc_to_string l in
+            [icopy l (CL_id (throw_location, CT_string)) (V_lit (VL_string loc_string, CT_string))]
+          else [])
        @ generate_cleanup (historic @ before)
        @ [igoto end_block_label]
        @ rewrite_exception (historic @ before) after

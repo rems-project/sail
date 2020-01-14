@@ -113,7 +113,7 @@ let iblock ?loc:(l=Parse_ast.Unknown) instrs =
 let itry_block ?loc:(l=Parse_ast.Unknown) instrs =
   I_aux (I_try_block instrs, (instr_number (), l))
 
-let ithrow ?loc:(l=Parse_ast.Unknown) cval =
+let ithrow l cval =
   I_aux (I_throw cval, (instr_number (), l))
 
 let icomment ?loc:(l=Parse_ast.Unknown) str =
@@ -153,6 +153,8 @@ module Name = struct
     | _, Have_exception _ -> -1
     | Current_exception _, _ -> 1
     | _, Current_exception _ -> -1
+    | Throw_location _, _ -> 1
+    | _, Throw_location _ -> -1
 end
 
 module NameSet = Set.Make(Name)
@@ -160,6 +162,7 @@ module NameMap = Map.Make(Name)
 
 let current_exception = Current_exception (-1)
 let have_exception = Have_exception (-1)
+let throw_location = Throw_location (-1)
 let return = Return (-1)
 
 let name id = Name (id, -1)
@@ -268,6 +271,8 @@ let string_of_name ?deref_current_exception:(dce=false) ?zencode:(zencode=true) 
      "(*current_exception)" ^ ssa_num n
   | Current_exception n ->
      "current_exception" ^ ssa_num n
+  | Throw_location n ->
+     "throw_location" ^ ssa_num n
 
 let string_of_op = function
   | Bnot -> "@not"

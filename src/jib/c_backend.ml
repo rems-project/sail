@@ -1324,6 +1324,7 @@ let sgen_cval_param cval =
 let rec sgen_clexp = function
   | CL_id (Have_exception _, _) -> "have_exception"
   | CL_id (Current_exception _, _) -> "current_exception"
+  | CL_id (Throw_location _, _) -> "throw_location"
   | CL_id (Return _, _) -> assert false
   | CL_id (Name (id, _), _) -> "&" ^ sgen_id id
   | CL_field (clexp, field) -> "&((" ^ sgen_clexp clexp ^ ")->" ^ zencode_uid field ^ ")"
@@ -1335,6 +1336,7 @@ let rec sgen_clexp = function
 let rec sgen_clexp_pure = function
   | CL_id (Have_exception _, _) -> "have_exception"
   | CL_id (Current_exception _, _) -> "current_exception"
+  | CL_id (Throw_location _, _) -> "throw_location"
   | CL_id (Return _, _) -> assert false
   | CL_id (Name (id, _), _) -> sgen_id id
   | CL_field (clexp, field) -> sgen_clexp_pure clexp ^ "." ^ zencode_uid field
@@ -1788,6 +1790,8 @@ let codegen_type_def ctx = function
           ^^ string "struct zexception *current_exception = NULL;"
           ^^ hardline
           ^^ string "bool have_exception = false;"
+          ^^ hardline
+          ^^ string "sail_string *throw_location = NULL;"
         else
           empty
 
@@ -2219,10 +2223,15 @@ let compile_ast env output_chan c_includes ast =
     let exn_boilerplate =
       if not (Bindings.mem (mk_id "exception") ctx.variants) then ([], []) else
         ([ "  current_exception = sail_malloc(sizeof(struct zexception));";
-           "  CREATE(zexception)(current_exception);" ],
-         [ "  KILL(zexception)(current_exception);";
+           "  CREATE(zexception)(current_exception);";
+           "  throw_location = sail_malloc(sizeof(sail_string));";
+           "  CREATE(sail_string)(throw_location);" ],
+         [ "  if (have_exception) {fprintf(stderr, \"Exiting due to uncaught exception: %s\\n\", *throw_location);}";
+           "  KILL(zexception)(current_exception);";
            "  sail_free(current_exception);";
-           "  if (have_exception) {fprintf(stderr, \"Exiting due to uncaught exception\\n\"); exit(EXIT_FAILURE);}" ])
+           "  KILL(sail_string)(throw_location);";
+           "  sail_free(throw_location);";
+           "  if (have_exception) {exit(EXIT_FAILURE);}" ])
     in
 
     let letbind_initializers =

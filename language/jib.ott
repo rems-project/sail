@@ -59,6 +59,7 @@ name :: '' ::=
   | id nat                :: :: name
   | have_exception nat    :: :: have_exception
   | current_exception nat :: :: current_exception
+  | throw_location nat    :: :: throw_location
   | return nat            :: :: return
 
 op :: '' ::=

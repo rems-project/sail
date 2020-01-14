@@ -504,6 +504,7 @@ let rename_variables graph root children =
     | Name (id, _) -> Name (id, i)
     | Have_exception _ -> Have_exception i
     | Current_exception _ -> Current_exception i
+    | Throw_location _ -> Throw_location i
     | Return _ -> Return i
   in
 
