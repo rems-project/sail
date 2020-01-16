@@ -404,7 +404,7 @@ let remove_tuples cdefs ctx =
        CTSet.add ctyp (List.fold_left CTSet.union CTSet.empty (List.map all_tuples ctyps))
     | CT_struct (_, id_ctyps) | CT_variant (_, id_ctyps) ->
        List.fold_left (fun cts (_, ctyp) -> CTSet.union (all_tuples ctyp) cts) CTSet.empty id_ctyps
-    | CT_list ctyp | CT_vector (_, ctyp) | CT_ref ctyp ->
+    | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp ->
        all_tuples ctyp
     | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
       | CT_unit | CT_bool | CT_real | CT_bit | CT_poly | CT_string | CT_enum _ ->
@@ -415,7 +415,7 @@ let remove_tuples cdefs ctx =
        1 + List.fold_left (fun d ctyp -> max d (tuple_depth ctyp)) 0 ctyps
     | CT_struct (_, id_ctyps) | CT_variant (_, id_ctyps) ->
        List.fold_left (fun d (_, ctyp) -> max (tuple_depth ctyp) d) 0 id_ctyps
-    | CT_list ctyp | CT_vector (_, ctyp) | CT_ref ctyp ->
+    | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp ->
        tuple_depth ctyp
     | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
       | CT_unit | CT_bool | CT_real | CT_bit | CT_poly | CT_string | CT_enum _ ->
@@ -432,6 +432,7 @@ let remove_tuples cdefs ctx =
        CT_variant (id, List.map (fun (id, ctyp) -> id, fix_tuples ctyp) id_ctyps)
     | CT_list ctyp -> CT_list (fix_tuples ctyp)
     | CT_vector (d, ctyp) -> CT_vector (d, fix_tuples ctyp)
+    | CT_fvector (n, d, ctyp) -> CT_fvector (n, d, fix_tuples ctyp)
     | CT_ref ctyp -> CT_ref (fix_tuples ctyp)
     | (CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
        | CT_unit | CT_bool | CT_real | CT_bit | CT_poly | CT_string | CT_enum _) as ctyp ->

@@ -120,7 +120,7 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_lint -> false
   | CT_lbits _ when !optimize_fixed_bits -> true
   | CT_lbits _ -> false
-  | CT_real | CT_string | CT_list _ | CT_vector _ -> false
+  | CT_real | CT_string | CT_list _ | CT_vector _ | CT_fvector _ -> false
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) fields
   | CT_variant (_, ctors) -> false (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *) (* FIXME *)
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
@@ -1069,6 +1069,7 @@ let rec sgen_ctyp = function
   | CT_variant (id, _) -> "struct " ^ sgen_id id
   | CT_list _ as l -> Util.zencode_string (string_of_ctyp l)
   | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
+  | CT_fvector (_, ord, typ) -> sgen_ctyp (CT_vector (ord, typ))
   | CT_string -> "sail_string"
   | CT_real -> "real"
   | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
@@ -1090,6 +1091,7 @@ let rec sgen_ctyp_name = function
   | CT_variant (id, _) -> sgen_id id
   | CT_list _ as l -> Util.zencode_string (string_of_ctyp l)
   | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
+  | CT_fvector (_, ord, typ) -> sgen_ctyp_name (CT_vector (ord, typ))
   | CT_string -> "sail_string"
   | CT_real -> "real"
   | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
@@ -2122,7 +2124,7 @@ type c_gen_typ =
 let rec ctyp_dependencies = function
   | CT_tup ctyps -> List.concat (List.map ctyp_dependencies ctyps) @ [CTG_tup ctyps]
   | CT_list ctyp -> ctyp_dependencies ctyp @ [CTG_list ctyp]
-  | CT_vector (direction, ctyp) -> ctyp_dependencies ctyp @ [CTG_vector (direction, ctyp)]
+  | CT_vector (direction, ctyp) | CT_fvector (_, direction, ctyp) -> ctyp_dependencies ctyp @ [CTG_vector (direction, ctyp)]
   | CT_ref ctyp -> ctyp_dependencies ctyp
   | CT_struct (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
   | CT_variant (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)

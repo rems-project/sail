@@ -198,6 +198,8 @@ let rec smt_ctyp ctx = function
      | _ -> failwith ("No registers with ctyp: " ^ string_of_ctyp ctyp)
      end
   | CT_list _ -> raise (Reporting.err_todo ctx.pragma_l "Lists not yet supported in SMT generation")
+  | CT_fvector _ ->
+     Reporting.unreachable ctx.pragma_l __POS__ "Found CT_fvector in SMT property"
   | CT_poly ->
      Reporting.unreachable ctx.pragma_l __POS__ "Found polymorphic type in SMT property"
 

@@ -156,6 +156,7 @@ ctyp :: 'CT_' ::=
   | variant id ( uid0 * ctyp0 , ... , uidn * ctypn ) :: :: variant
 
 % A vector type for non-bit vectors, and a (linked) list type.
+  | fvector ( nat , bool , ctyp )  :: :: fvector
   | vector ( bool , ctyp )         :: :: vector
   | list ( ctyp )                  :: :: list
 

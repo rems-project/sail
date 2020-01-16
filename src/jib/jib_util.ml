@@ -324,6 +324,7 @@ let rec string_of_ctyp = function
   | CT_enum (id, _) -> "%enum " ^ Util.zencode_string (string_of_id id)
   | CT_variant (id, _) -> "%union " ^ Util.zencode_string (string_of_id id)
   | CT_vector (_, ctyp) -> "%vec(" ^ string_of_ctyp ctyp ^ ")"
+  | CT_fvector (n, _, ctyp) -> "%fvec(" ^ string_of_int n ^ ", " ^ string_of_ctyp ctyp ^ ")"
   | CT_list ctyp -> "%list(" ^ string_of_ctyp ctyp ^ ")"
   | CT_ref ctyp -> "&(" ^ string_of_ctyp ctyp ^ ")"
   | CT_poly -> "*"
@@ -396,6 +397,7 @@ let rec map_ctyp f = function
   | CT_tup ctyps -> f (CT_tup (List.map (map_ctyp f) ctyps))
   | CT_ref ctyp -> f (CT_ref (map_ctyp f ctyp))
   | CT_vector (direction, ctyp) -> f (CT_vector (direction, map_ctyp f ctyp))
+  | CT_fvector (n, direction, ctyp) -> f (CT_fvector (n, direction, map_ctyp f ctyp))
   | CT_list ctyp -> f (CT_list (map_ctyp f ctyp))
   | CT_struct (id, ctors) ->
      f (CT_struct (id, List.map (fun ((id, ctyps), ctyp) -> (id, List.map (map_ctyp f) ctyps), map_ctyp f ctyp) ctors))
@@ -421,6 +423,7 @@ let rec ctyp_equal ctyp1 ctyp2 =
   | CT_string, CT_string -> true
   | CT_real, CT_real -> true
   | CT_vector (d1, ctyp1), CT_vector (d2, ctyp2) -> d1 = d2 && ctyp_equal ctyp1 ctyp2
+  | CT_fvector (n1, d1, ctyp1), CT_fvector (n2, d2, ctyp2) -> n1 = n2 && d1 = d2 && ctyp_equal ctyp1 ctyp2
   | CT_list ctyp1, CT_list ctyp2 -> ctyp_equal ctyp1 ctyp2
   | CT_ref ctyp1, CT_ref ctyp2 -> ctyp_equal ctyp1 ctyp2
   | CT_poly, CT_poly -> true
@@ -489,6 +492,11 @@ let rec ctyp_compare ctyp1 ctyp2 =
      lex_ord (ctyp_compare ctyp1 ctyp2) (compare d1 d2)
   | CT_vector _, _ -> 1
   | _, CT_vector _ -> -1
+
+  | CT_fvector (n1, d1, ctyp1), CT_fvector (n2, d2, ctyp2) ->
+     lex_ord (compare n1 n2) (lex_ord (ctyp_compare ctyp1 ctyp2) (compare d1 d2))
+  | CT_fvector _, _ -> 1
+  | _, CT_fvector _ -> -1
 
   | ctyp1, ctyp2 -> String.compare (full_string_of_ctyp ctyp1) (full_string_of_ctyp ctyp2)
 
@@ -562,6 +570,7 @@ let rec ctyp_suprema = function
   | CT_struct (id, ctors) -> CT_struct (id, ctors)
   | CT_variant (id, ctors) -> CT_variant (id, ctors)
   | CT_vector (d, ctyp) -> CT_vector (d, ctyp_suprema ctyp)
+  | CT_fvector (n, d, ctyp) -> CT_fvector (n, d, ctyp_suprema ctyp)
   | CT_list ctyp -> CT_list (ctyp_suprema ctyp)
   | CT_ref ctyp -> CT_ref (ctyp_suprema ctyp)
   | CT_poly -> CT_poly
@@ -571,7 +580,7 @@ let rec ctyp_ids = function
   | CT_struct (id, ctors) | CT_variant (id, ctors) ->
      IdSet.add id (List.fold_left (fun ids (_, ctyp) -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctors)
   | CT_tup ctyps -> List.fold_left (fun ids ctyp -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctyps
-  | CT_vector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> ctyp_ids ctyp
+  | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_list ctyp | CT_ref ctyp -> ctyp_ids ctyp
   | CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit
     | CT_bool | CT_real | CT_bit | CT_string | CT_poly -> IdSet.empty
 
@@ -586,7 +595,7 @@ let rec is_polymorphic = function
   | CT_tup ctyps -> List.exists is_polymorphic ctyps
   | CT_enum _ -> false
   | CT_struct (_, ctors) | CT_variant (_, ctors) -> List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors
-  | CT_vector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> is_polymorphic ctyp
+  | CT_fvector (_, _, ctyp) | CT_vector (_, ctyp) | CT_list ctyp | CT_ref ctyp -> is_polymorphic ctyp
   | CT_poly -> true
 
 let rec cval_deps = function
