@@ -3516,46 +3516,6 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
     | _ -> false
   in
   match lexp_aux with
-  | LEXP_field (LEXP_aux (flexp, _), field) ->
-     begin
-       let infer_flexp = function
-         | LEXP_id v ->
-            begin match Env.lookup_id v env with
-            | Register (_, _, typ) -> typ, LEXP_id v, true
-            | Local (Mutable, typ) -> typ, LEXP_id v, false
-            | _ -> typ_error env l "l-expression field is not a register or a local mutable type"
-            end
-         | LEXP_vector (LEXP_aux (LEXP_id v, _), exp) ->
-            begin
-              (* Check: is this ok if the vector is immutable? *)
-              let is_immutable, vtyp, is_register = match Env.lookup_id v env with
-                | Unbound -> typ_error env l "Cannot assign to element of unbound vector"
-                | Enum _ -> typ_error env l "Cannot vector assign to enumeration element"
-                | Local (Immutable, vtyp) -> true, vtyp, false
-                | Local (Mutable, vtyp) -> false, vtyp, false
-                | Register (_, _, vtyp) -> false, vtyp, true
-              in
-              let access = infer_exp (Env.enable_casts env) (E_aux (E_app (mk_id "vector_access", [E_aux (E_id v, (l, ())); exp]), (l, ()))) in
-              let inferred_exp = match access with
-                | E_aux (E_app (_, [_; inferred_exp]), _) -> inferred_exp
-                | _ -> assert false
-              in
-              typ_of access, LEXP_vector (annot_lexp (LEXP_id v) vtyp, inferred_exp), is_register
-            end
-         | _ -> typ_error env l "Field l-expression must be either a vector or an identifier"
-       in
-       let regtyp, inferred_flexp, is_register = infer_flexp flexp in
-       typ_debug (lazy ("REGTYP: " ^ string_of_typ regtyp ^ " / " ^ string_of_typ (Env.expand_synonyms env regtyp)));
-       match Env.expand_synonyms env regtyp with
-       | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
-          let eff = if is_register then mk_effect [BE_wreg] else no_effect in
-          let (typq, rectyp_q, field_typ, _) = Env.get_accessor rectyp_id field env in
-          let unifiers = try unify l env (tyvars_of_typ rectyp_q) rectyp_q regtyp with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m) in
-          let field_typ' = subst_unifiers unifiers field_typ in
-          let checked_exp = crule check_exp env exp field_typ' in
-          annot_assign (annot_lexp (LEXP_field (annot_lexp_effect inferred_flexp regtyp eff, field)) field_typ') checked_exp, env
-       | _ ->  typ_error env l "Field l-expression has invalid type"
-     end
   | LEXP_memory (f, xs) ->
      check_exp env (E_aux (E_app (f, xs @ [exp]), (l, ()))) unit_typ, env
   | LEXP_cast (typ_annot, v) ->
@@ -3737,15 +3697,17 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
           annot_lexp (LEXP_vector_concat (inferred_v_lexp :: inferred_v_lexps)) (bitvector_typ (nexp_simp len) ord)
        | _ -> typ_error env l ("Vector concatentation l-expression must only contain bitvector or vector types, found " ^ string_of_typ v_typ)
      end
-  | LEXP_field (LEXP_aux (LEXP_id v, _), fid) ->
-     (* FIXME: will only work for ASL *)
-     let rec_id, weff =
-       match Env.lookup_id v env with
-       | Register (_, weff, Typ_aux (Typ_id rec_id, _)) -> rec_id, weff
-       | _ -> typ_error env l (string_of_lexp lexp ^ " must be a record register here")
-     in
-     let typq, _, ret_typ, _ = Env.get_accessor rec_id fid env in
-     annot_lexp_effect (LEXP_field (annot_lexp (LEXP_id v) (mk_id_typ rec_id), fid)) ret_typ weff
+  | LEXP_field ((LEXP_aux (_, (l, ())) as lexp), field_id) ->
+     let inferred_lexp = infer_lexp env lexp in
+     let rectyp = lexp_typ_of inferred_lexp in
+     begin match lexp_typ_of inferred_lexp with
+     | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
+        let (typq, rectyp_q, field_typ, _) = Env.get_accessor rectyp_id field_id env in
+        let unifiers = try unify l env (tyvars_of_typ rectyp_q) rectyp_q rectyp with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m) in
+        let field_typ' = subst_unifiers unifiers field_typ in
+        annot_lexp (LEXP_field (inferred_lexp, field_id)) field_typ'
+     | _ -> typ_error env l "Field l-expression has invalid type"
+     end
   | LEXP_deref exp ->
      let inferred_exp = infer_exp env exp in
      begin match typ_of inferred_exp with
