@@ -219,7 +219,7 @@ let rec contains_exist (Typ_aux (ty,l)) =
   | Typ_var _
     -> false
   | Typ_fn (t1,t2,_) -> List.exists contains_exist t1 || contains_exist t2
-  | Typ_bidir (t1, t2) -> contains_exist t1 || contains_exist t2
+  | Typ_bidir (t1, t2, _) -> contains_exist t1 || contains_exist t2
   | Typ_tup ts -> List.exists contains_exist ts
   | Typ_app (_,args) -> List.exists contains_exist_arg args
   | Typ_exist _ -> true
@@ -3530,10 +3530,10 @@ let replace_nexp_in_typ env typ orig new_nexp =
        let f1 = List.exists fst arg' in
        let f2, res = aux res in
        f1 || f2, Typ_aux (Typ_fn (List.map snd arg', res, eff),l)
-    | Typ_bidir (t1, t2) ->
+    | Typ_bidir (t1, t2, eff) ->
        let f1, t1 = aux t1 in
        let f2, t2 = aux t2 in
-       f1 || f2, Typ_aux (Typ_bidir (t1, t2), l)
+       f1 || f2, Typ_aux (Typ_bidir (t1, t2, eff), l)
     | Typ_tup typs ->
        let fs, typs = List.split (List.map aux typs) in
        List.exists (fun x -> x) fs, Typ_aux (Typ_tup typs,l)

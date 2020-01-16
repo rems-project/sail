@@ -130,7 +130,7 @@ and typ_ids' (Typ_aux (aux, _)) =
      IdSet.add id (List.fold_left IdSet.union IdSet.empty (List.map typ_arg_ids' args))
   | Typ_fn (typs, typ, _) ->
      IdSet.union (typ_ids' typ) (List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs))
-  | Typ_bidir (typ1, typ2) ->
+  | Typ_bidir (typ1, typ2, _) ->
      IdSet.union (typ_ids' typ1) (typ_ids' typ2)
   | Typ_tup typs ->
      List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs)

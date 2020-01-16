@@ -3133,7 +3133,7 @@ let rewrite_defs_mapping_patterns env =
        let x = Env.get_val_spec mapping_id env in
 
        let typ1, typ2 = match x with
-         | (_, Typ_aux(Typ_bidir(typ1, typ2), _)) -> typ1, typ2
+         | (_, Typ_aux(Typ_bidir(typ1, typ2, _), _)) -> typ1, typ2
          | (_, typ) -> raise (Reporting.err_unreachable (fst p_annot) __POS__ ("Must be bi-directional mapping: " ^ string_of_typ typ))
        in
 
@@ -3951,7 +3951,7 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
     in
     let (typq, bidir_typ) = Env.get_val_spec id env in
     let (typ1, typ2, l) = match bidir_typ with
-      | Typ_aux (Typ_bidir (typ1, typ2), l) -> typ1, typ2, l
+      | Typ_aux (Typ_bidir (typ1, typ2, _), l) -> typ1, typ2, l
       | _ -> raise (Reporting.err_unreachable l __POS__ "non-bidir type of mapping?")
     in
     let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, no_effect), l) in

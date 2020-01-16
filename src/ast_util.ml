@@ -847,7 +847,7 @@ and string_of_typ_aux = function
   | Typ_fn (typ_args, typ_ret, eff) ->
      "(" ^ string_of_list ", " string_of_typ typ_args ^ ") -> "
      ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
-  | Typ_bidir (typ1, typ2) -> string_of_typ typ1 ^ " <-> " ^ string_of_typ typ2
+  | Typ_bidir (typ1, typ2, eff) -> string_of_typ typ1 ^ " <-> " ^ string_of_typ typ2 ^ " effect " ^ string_of_effect eff
   | Typ_exist (kids, nc, typ) ->
      "{" ^ string_of_list " " string_of_kinded_id kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"
 and string_of_typ_arg = function
@@ -1170,10 +1170,12 @@ and typ_compare (Typ_aux (t1,_)) (Typ_aux (t2,_)) =
        | 0 -> effect_compare e1 e2
        | n -> n)
      | n -> n)
-  | Typ_bidir (t1,t2), Typ_bidir (t3,t4) ->
+  | Typ_bidir (t1,t2,e1), Typ_bidir (t3,t4,e2) ->
      (match typ_compare t1 t3 with
-     | 0 -> typ_compare t2 t3
-     | n -> n)
+      | 0 -> (match typ_compare t2 t4 with
+              | 0 -> effect_compare e1 e2
+              | n -> n)
+      | n -> n)
   | Typ_tup ts1, Typ_tup ts2 -> Util.compare_list typ_compare ts1 ts2
   | Typ_exist (ks1,nc1,t1), Typ_exist (ks2,nc2,t2) ->
      (match Util.compare_list KOpt.compare ks1 ks2 with
@@ -1378,7 +1380,7 @@ and kopts_of_typ (Typ_aux (t,_)) =
   | Typ_id _ -> KOptSet.empty
   | Typ_var kid -> KOptSet.singleton (mk_kopt K_type kid)
   | Typ_fn (ts, t, _) -> List.fold_left KOptSet.union (kopts_of_typ t) (List.map kopts_of_typ ts)
-  | Typ_bidir (t1, t2) -> KOptSet.union (kopts_of_typ t1) (kopts_of_typ t2)
+  | Typ_bidir (t1, t2, _) -> KOptSet.union (kopts_of_typ t1) (kopts_of_typ t2)
   | Typ_tup ts ->
      List.fold_left (fun s t -> KOptSet.union s (kopts_of_typ t))
        KOptSet.empty ts
@@ -1438,11 +1440,11 @@ and tyvars_of_typ (Typ_aux (t,_)) =
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
   | Typ_fn (ts, t, _) -> List.fold_left KidSet.union (tyvars_of_typ t) (List.map tyvars_of_typ ts)
-  | Typ_bidir (t1, t2) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
+  | Typ_bidir (t1, t2, _) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
   | Typ_tup ts ->
      List.fold_left (fun s t -> KidSet.union s (tyvars_of_typ t))
        KidSet.empty ts
-  | Typ_app (_,tas) -> 
+  | Typ_app (_,tas) ->
      List.fold_left (fun s ta -> KidSet.union s (tyvars_of_typ_arg ta))
        KidSet.empty tas
   | Typ_exist (kids, nc, t) ->
@@ -1761,7 +1763,7 @@ and locate_typ f (Typ_aux (typ_aux, l)) =
     | Typ_var kid -> Typ_var (locate_kid f kid)
     | Typ_fn (arg_typs, ret_typ, effect) ->
        Typ_fn (List.map (locate_typ f) arg_typs, locate_typ f ret_typ, locate_effect f effect)
-    | Typ_bidir (typ1, typ2) -> Typ_bidir (locate_typ f typ1, locate_typ f typ2)
+    | Typ_bidir (typ1, typ2, effect) -> Typ_bidir (locate_typ f typ1, locate_typ f typ2, locate_effect f effect)
     | Typ_tup typs -> Typ_tup (List.map (locate_typ f) typs)
     | Typ_exist (kopts, constr, typ) -> Typ_exist (List.map (locate_kinded_id f) kopts, locate_nc f constr, locate_typ f typ)
     | Typ_app (id, typ_args) -> Typ_app (locate_id f id, List.map (locate_typ_arg f) typ_args)
@@ -1980,7 +1982,7 @@ and typ_subst_aux sv subst = function
      | _ -> Typ_var kid
      end
   | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map (typ_subst sv subst) arg_typs, typ_subst sv subst ret_typ, effs)
-  | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst sv subst typ1, typ_subst sv subst typ2)
+  | Typ_bidir (typ1, typ2, effs) -> Typ_bidir (typ_subst sv subst typ1, typ_subst sv subst typ2, effs)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_arg_subst sv subst) args)
   | Typ_exist (kopts, nc, typ) when KidSet.mem sv (KidSet.of_list (List.map kopt_kid kopts)) ->
@@ -2078,7 +2080,7 @@ let subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
     | Typ_var _
       -> ty
     | Typ_fn (t1,t2,e) -> re (Typ_fn (List.map (s_styp substs) t1, s_styp substs t2,e))
-    | Typ_bidir (t1, t2) -> re (Typ_bidir (s_styp substs t1, s_styp substs t2))
+    | Typ_bidir (t1,t2,e) -> re (Typ_bidir (s_styp substs t1, s_styp substs t2,e))
     | Typ_tup ts -> re (Typ_tup (List.map (s_styp substs) ts))
     | Typ_app (id,tas) -> re (Typ_app (id,List.map (s_starg substs) tas))
     | Typ_exist (kopts,nc,t) ->

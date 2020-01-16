@@ -657,9 +657,13 @@ typschm:
   | Forall typquant Dot typ MinusGt typ Effect effect_set
     { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, $8)) s e) s e) $startpos $endpos }
   | typ Bidir typ
-    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_bidir ($1, $3)) s e) s e) $startpos $endpos }
+    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_bidir ($1, $3, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
   | Forall typquant Dot typ Bidir typ
-    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_bidir ($4, $6)) s e) s e) $startpos $endpos }
+    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_bidir ($4, $6, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
+  | typ Bidir typ Effect effect_set
+    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_bidir ($1, $3, $5)) s e) s e) $startpos $endpos }
+  | Forall typquant Dot typ Bidir typ Effect effect_set
+    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_bidir ($4, $6, $8)) s e) s e) $startpos $endpos }
 
 typschm_eof:
   | typschm Eof

@@ -170,6 +170,8 @@ let rec doc_nc nc =
   in
   atomic_nc (constraint_simp nc)
 
+and doc_effects effs = braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs))
+
 and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> doc_id id
@@ -194,13 +196,14 @@ and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   | Typ_fn (typs, typ, Effect_aux (Effect_set [], _)) ->
      separate space [doc_arg_typs typs; string "->"; doc_typ typ]
   | Typ_fn (typs, typ, Effect_aux (Effect_set effs, _)) ->
-     let ocaml_eff = braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs)) in
      if simple then
        separate space [doc_arg_typs typs; string "->"; doc_typ ~simple:simple typ]
      else
-       separate space [doc_arg_typs typs; string "->"; doc_typ typ; string "effect"; ocaml_eff]
-  | Typ_bidir (typ1, typ2) ->
+       separate space [doc_arg_typs typs; string "->"; doc_typ typ; string "effect"; doc_effects effs]
+  | Typ_bidir (typ1, typ2, Effect_aux (Effect_set [], _)) ->
      separate space [doc_typ typ1; string "<->"; doc_typ typ2]
+  | Typ_bidir (typ1, typ2, Effect_aux (Effect_set effs, _)) ->
+     separate space [doc_typ typ1; string "<->"; doc_typ typ2; string "effect"; doc_effects effs]
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 and doc_typ_arg (A_aux (ta_aux, _)) =
   match ta_aux with

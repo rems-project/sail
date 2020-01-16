@@ -229,7 +229,7 @@ typ :: 'Typ_' ::=
   | id                                            :: :: id {{ com defined type }}
   | kid                                           :: :: var {{ com type variable }}
   | ( typ1 , ... , typn ) -> typ2 effectkw effect :: :: fn {{ com Function (first-order only) }}
-  | typ1 <-> typ2                                 :: :: bidir {{ com Mapping }}
+  | typ1 <-> typ2 effectkw effect                 :: :: bidir {{ com Mapping }}
   | ( typ1 , .... , typn )                        :: :: tup {{ com Tuple }}
   | id ( typ_arg1 , ... , typ_argn )              :: :: app {{ com type constructor application }}
   | ( typ )                                       :: S :: paren {{ ichlo [[typ]] }} 
