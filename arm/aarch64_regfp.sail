@@ -200,23 +200,27 @@ function (regfps,regfps,regfps,niafps,diafp,instruction_kind) effect pure initia
       switch op {
         case SystemHintOp_YIELD -> ()
         case SystemHintOp_WFE -> {
+          ()
+          (* FIXME: implement events?
           if EventRegistered() then () (* ClearEventRegister *)
           else {
             (* the execute code for this case always fails because of
                WaitForEvent, declared as extern but not defined *)
             not_implemented("Hint(SystemHintOp_WFE);") 
           }
+          *)
         }
         case SystemHintOp_WFI -> {
             (* the execute code for this case always fails because of
                InterruptPending, declared as extern but not defined *)
             not_implemented("Hint(SystemHintOp_WFI);") 
         }
-        case SystemHintOp_SEV -> () (*SendEvent*)
+        case SystemHintOp_SEV ->
+          ()
+          (* FIXME: implement events? *)
         case SystemHintOp_SEVL ->
-            (* the execute code for this case always fails because of
-               EventRegisterSet, declared as extern but not defined *)
-            not_implemented("Hint(SystemHintOp_SEVL);")
+          ()
+          (* FIXME: implement events? *)
         case _ -> () (* do nothing *) 
       }
     case (ClearExclusiveMonitor(imm)) -> () (*ClearExclusiveLocal*)

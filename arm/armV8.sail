@@ -389,6 +389,8 @@ function clause execute ( Hint(op) ) = {
       Hint_Yield()
 
     case SystemHintOp_WFE -> {
+      ()
+      (* FIXME: implement events?
       if EventRegistered() then
         ClearEventRegister()
       else {
@@ -400,6 +402,7 @@ function clause execute ( Hint(op) ) = {
           AArch64_CheckForWFxTrap(EL3, true);
         WaitForEvent();
       }
+      *)
     }
 
     case SystemHintOp_WFI -> {
@@ -415,10 +418,16 @@ function clause execute ( Hint(op) ) = {
     }
 
     case SystemHintOp_SEV ->
+      ()
+      (* FIXME: implement events?
       SendEvent()
+      *)
 
     case SystemHintOp_SEVL ->
+      ()
+      (* FIXME: implement events?
       EventRegisterSet()
+      *)
 
     case _ -> () (* do nothing *)
   }
