@@ -102,10 +102,10 @@ let rec flatten_instrs = function
   | I_aux ((I_block block | I_try_block block), _) :: instrs ->
      flatten_instrs block @ flatten_instrs instrs
 
-  | I_aux (I_if (cval, then_instrs, else_instrs, _), _) :: instrs ->
+  | I_aux (I_if (cval, then_instrs, else_instrs, _), (_, l)) :: instrs ->
      let then_label = label "then_" in
      let endif_label = label "endif_" in
-     [ijump cval then_label]
+     [ijump l cval then_label]
      @ flatten_instrs else_instrs
      @ [igoto endif_label]
      @ [ilabel then_label]

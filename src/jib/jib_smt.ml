@@ -2064,7 +2064,7 @@ let expand_reg_deref env register_map = function
            let end_label = label "end_reg_write_" in
            let try_reg r =
              let next_label = label "next_reg_write_" in
-             [ijump (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); V_id (id, ctyp)])) next_label;
+             [ijump l (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); V_id (id, ctyp)])) next_label;
               ifuncall (CL_id (name r, reg_ctyp)) function_id args;
               igoto end_label;
               ilabel next_label]
@@ -2088,7 +2088,7 @@ let expand_reg_deref env register_map = function
               let end_label = label "end_reg_deref_" in
               let try_reg r =
                 let next_label = label "next_reg_deref_" in
-                [ijump (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); reg_ref])) next_label;
+                [ijump l (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); reg_ref])) next_label;
                  icopy l clexp (V_id (name r, reg_ctyp));
                  igoto end_label;
                  ilabel next_label]
@@ -2110,7 +2110,7 @@ let expand_reg_deref env register_map = function
            let end_label = label "end_reg_write_" in
            let try_reg r =
              let next_label = label "next_reg_write_" in
-             [ijump (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); V_id (id, ctyp)])) next_label;
+             [ijump l (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); V_id (id, ctyp)])) next_label;
               icopy l (CL_id (name r, reg_ctyp)) cval;
               igoto end_label;
               ilabel next_label]

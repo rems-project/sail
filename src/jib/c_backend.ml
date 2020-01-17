@@ -588,9 +588,9 @@ let fix_early_heap_return ret ret_ctyp instrs =
        before
        @ [iblock (rewrite_return instrs)]
        @ rewrite_return after
-    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), _) :: after ->
+    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
        before
-       @ [iif cval (rewrite_return then_instrs) (rewrite_return else_instrs) ctyp]
+       @ [iif l cval (rewrite_return then_instrs) (rewrite_return else_instrs) ctyp]
        @ rewrite_return after
     | before, I_aux (I_funcall (CL_id (Return _, ctyp), extern, fid, args), aux) :: after ->
        before
@@ -625,9 +625,9 @@ let fix_early_stack_return ret ret_ctyp instrs =
        before
        @ [iblock (rewrite_return instrs)]
        @ rewrite_return after
-    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), _) :: after ->
+    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
        before
-       @ [iif cval (rewrite_return then_instrs) (rewrite_return else_instrs) ctyp]
+       @ [iif l cval (rewrite_return then_instrs) (rewrite_return else_instrs) ctyp]
        @ rewrite_return after
     | before, I_aux (I_funcall (CL_id (Return _, ctyp), extern, fid, args), aux) :: after ->
        before

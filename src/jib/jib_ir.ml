@@ -109,7 +109,9 @@ module Ir_formatter = struct
       | I_label label ->
          C.output_label_instr buf label_map label
       | I_jump (cval, label) ->
-         add_instr n buf indent (C.keyword "jump" ^ " " ^ C.value cval ^ " " ^ C.keyword "goto" ^ " " ^ C.string_of_label (StringMap.find label label_map))
+         add_instr n buf indent (C.keyword "jump" ^ " " ^ C.value cval ^ " "
+                                 ^ C.keyword "goto" ^ " " ^ C.string_of_label (StringMap.find label label_map)
+                                 ^ " ` \"" ^ Reporting.short_loc_to_string l ^ "\"")
       | I_goto label ->
          add_instr n buf indent (C.keyword "goto" ^ " " ^ C.string_of_label (StringMap.find label label_map))
       | I_match_failure ->

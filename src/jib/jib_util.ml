@@ -83,7 +83,7 @@ let ireset ?loc:(l=Parse_ast.Unknown) ctyp id =
 let iinit ?loc:(l=Parse_ast.Unknown) ctyp id cval =
   I_aux (I_init (ctyp, id, cval), (instr_number (), l))
 
-let iif ?loc:(l=Parse_ast.Unknown) cval then_instrs else_instrs ctyp =
+let iif l cval then_instrs else_instrs ctyp =
   I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (instr_number (), l))
 
 let ifuncall ?loc:(l=Parse_ast.Unknown) clexp id cvals =
@@ -134,7 +134,7 @@ let imatch_failure ?loc:(l=Parse_ast.Unknown) () =
 let iraw ?loc:(l=Parse_ast.Unknown) str =
   I_aux (I_raw str, (instr_number (), l))
 
-let ijump ?loc:(l=Parse_ast.Unknown) cval label =
+let ijump l cval label =
   I_aux (I_jump (cval, label), (instr_number (), l))
 
 module Name = struct
