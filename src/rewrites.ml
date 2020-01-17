@@ -3936,6 +3936,54 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
           [realise_single_mpexp (append_placeholder mpexp) (mk_exp (E_app ((mk_id "Some"), [mk_exp (E_tuple [exp; exp_of_mpat strlen])])))]
       end
   in
+  let realise_val_spec = function
+    | (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, Typ_aux (Typ_bidir (typ1, typ2, _), l)), _), id, _, _), ((_, (tannot:tannot)) as annot))) ->
+      let forwards_id = mk_id (string_of_id id ^ "_forwards") in
+      let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
+      let backwards_id = mk_id (string_of_id id ^ "_backwards") in
+      let backwards_matches_id = mk_id (string_of_id id ^ "_backwards_matches") in
+
+      let env = env_of_annot annot in
+      let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, no_effect), l) in
+      let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, no_effect), l) in
+      let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, no_effect), l) in
+      let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, no_effect), l) in
+
+      let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, [], false), (Parse_ast.Unknown,())) in
+      let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, [], false), (Parse_ast.Unknown,())) in
+      let forwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_matches_typ, forwards_matches_id, [], false), (Parse_ast.Unknown,())) in
+      let backwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_matches_typ, backwards_matches_id, [], false), (Parse_ast.Unknown,())) in
+
+      let forwards_spec, env = Type_check.check_val_spec env forwards_spec in
+      let backwards_spec, env = Type_check.check_val_spec env backwards_spec in
+      let forwards_matches_spec, env = Type_check.check_val_spec env forwards_matches_spec in
+      let backwards_matches_spec, env = Type_check.check_val_spec env backwards_matches_spec in
+
+      let prefix_id = mk_id (string_of_id id ^ "_matches_prefix") in
+      let string_defs =
+        begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then
+                let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+                let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, [], false), (Parse_ast.Unknown,())) in
+                let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
+                forwards_prefix_spec
+              else
+                if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then
+                  let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+                  let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, [], false), (Parse_ast.Unknown,())) in
+                  let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
+                  backwards_prefix_spec
+                else
+                  []
+        end
+      in
+
+        forwards_spec
+      @ backwards_spec
+      @ forwards_matches_spec
+      @ backwards_matches_spec
+      @ string_defs
+    | vs -> [DEF_spec vs]
+  in
   let realise_mapdef (MD_aux (MD_mapping (id, _, mapcls), ((l, (tannot:tannot)) as annot))) =
     let forwards_id = mk_id (string_of_id id ^ "_forwards") in
     let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
@@ -3958,16 +4006,6 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
     let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, no_effect), l) in
     let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, no_effect), l) in
     let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, no_effect), l) in
-
-    let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, [], false), (Parse_ast.Unknown,())) in
-    let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, [], false), (Parse_ast.Unknown,())) in
-    let forwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_matches_typ, forwards_matches_id, [], false), (Parse_ast.Unknown,())) in
-    let backwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_matches_typ, backwards_matches_id, [], false), (Parse_ast.Unknown,())) in
-
-    let forwards_spec, env = Type_check.check_val_spec env forwards_spec in
-    let backwards_spec, env = Type_check.check_val_spec env backwards_spec in
-    let forwards_matches_spec, env = Type_check.check_val_spec env forwards_matches_spec in
-    let backwards_matches_spec, env = Type_check.check_val_spec env backwards_matches_spec in
 
     let no_tannot = (Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)) in
     let forwards_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl true forwards_id) mapcls) |> List.flatten))) in
@@ -3996,34 +4034,26 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
     let string_defs =
       begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then
               let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
-              let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, [], false), (Parse_ast.Unknown,())) in
-              let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
               let forwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl true prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
               let forwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_none, [mk_funcl prefix_id arg_pat forwards_prefix_match]), (l, ()))) in
               typ_debug (lazy (Printf.sprintf "forwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_prefix_fun |> Pretty_print_sail.to_string)));
               let forwards_prefix_fun, _ = Type_check.check_fundef env forwards_prefix_fun in
-              forwards_prefix_spec @ forwards_prefix_fun
+              forwards_prefix_fun
             else
               if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then
                 let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
-                let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, [], false), (Parse_ast.Unknown,())) in
-                let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
                 let backwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl false prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
                 let backwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_none, [mk_funcl prefix_id arg_pat backwards_prefix_match]), (l, ()))) in
                 typ_debug (lazy (Printf.sprintf "backwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_prefix_fun |> Pretty_print_sail.to_string)));
                 let backwards_prefix_fun, _ = Type_check.check_fundef env backwards_prefix_fun in
-                backwards_prefix_spec @ backwards_prefix_fun
+                backwards_prefix_fun
               else
                 []
       end
     in
     let has_def id = IdSet.mem id (ids_of_defs (Defs defs)) in
 
-      forwards_spec
-    @ backwards_spec
-    @ forwards_matches_spec
-    @ backwards_matches_spec
-    @ (if has_def forwards_id then [] else forwards_fun)
+    (if has_def forwards_id then [] else forwards_fun)
     @ (if has_def backwards_id then [] else backwards_fun)
     @ (if has_def forwards_matches_id then [] else forwards_matches_fun)
     @ (if has_def backwards_matches_id then [] else backwards_matches_fun)
@@ -4031,6 +4061,7 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
   in
   let rewrite_def def =
     match def with
+    | DEF_spec spec -> realise_val_spec spec
     | DEF_mapdef mdef -> realise_mapdef mdef
     | d -> [d]
   in
@@ -4640,13 +4671,30 @@ let recheck_defs_without_effects env defs =
   let () = opt_no_effects := old in
   result
 
-let remove_mapping_valspecs env (Defs defs) =
-  let allowed_def def =
-    match def with
-    | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (_, Typ_aux (Typ_bidir _, _)), _), _, _, _), _)) -> false
-    | _ -> true
+(* In realise_mappings we may have duplicated a user-supplied val spec, which
+   causes problems for some targets. Keep the first one, except use the externs
+   from the last one, as subsequent redefinitions override earlier ones. *)
+let remove_duplicate_valspecs env (Defs defs) =
+  let last_externs =
+    List.fold_left
+      (fun last_externs def ->
+        match def with
+        | DEF_spec (VS_aux (VS_val_spec (_, id, externs, _), _)) ->
+            Bindings.add id externs last_externs
+        | _ -> last_externs) Bindings.empty defs
   in
-  Defs (List.filter allowed_def defs)
+  let (_, rev_defs) =
+    List.fold_left
+      (fun (set, defs) def ->
+        match def with
+        | DEF_spec (VS_aux (VS_val_spec (typschm, id, _, cast), l)) ->
+            if IdSet.mem id set then (set, defs)
+            else
+              let externs = Bindings.find id last_externs in
+              let vs = VS_aux (VS_val_spec (typschm, id, externs, cast), l) in
+              (IdSet.add id set, (DEF_spec vs)::defs)
+        | _ -> (set, def::defs)) (IdSet.empty, []) defs
+  in Defs (List.rev rev_defs)
 
 
 (* Move loop termination measures into loop AST nodes.  This is used before
@@ -4794,7 +4842,7 @@ let all_rewrites = [
     ("recheck_defs_without_effects", Checking_rewriter recheck_defs_without_effects);
     ("optimize_recheck_defs", Basic_rewriter (fun _ -> Optimize.recheck));
     ("realise_mappings", Basic_rewriter rewrite_defs_realise_mappings);
-    ("remove_mapping_valspecs", Basic_rewriter remove_mapping_valspecs);
+    ("remove_duplicate_valspecs", Basic_rewriter remove_duplicate_valspecs);
     ("toplevel_string_append", Basic_rewriter rewrite_defs_toplevel_string_append);
     ("pat_string_append", Basic_rewriter rewrite_defs_pat_string_append);
     ("mapping_builtins", Basic_rewriter rewrite_defs_mapping_patterns);
@@ -4844,7 +4892,7 @@ let all_rewrites = [
 
 let rewrites_lem = [
     ("realise_mappings", []);
-    ("remove_mapping_valspecs", []);
+    ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
     ("mapping_builtins", []);
@@ -4894,7 +4942,7 @@ let rewrites_lem = [
 
 let rewrites_coq = [
     ("realise_mappings", []);
-    ("remove_mapping_valspecs", []);
+    ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
     ("mapping_builtins", []);
