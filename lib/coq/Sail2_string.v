@@ -180,6 +180,23 @@ match z with
 | Zneg p => String "-" (string_of_N (pos_limit p) (Npos p) "")
 end.
 
+Local Definition asciiA : N := Ascii.N_of_ascii "A".
+Local Fixpoint hex_string_of_N (limit : nat) (n : N) (acc : string) : string :=
+match limit with
+| O => acc
+| S limit' =>
+  let (d,m) := N.div_eucl n 16 in
+  let digit := if 10 <=? m then m - 10 + asciiA else m + zero in
+  let acc := String (Ascii.ascii_of_N digit) acc in
+  if N.ltb 0 d then hex_string_of_N limit' d acc else acc
+end%N.
+Definition hex_string_of_int (z : Z) : string :=
+match z with
+| Z0 => "0"
+| Zpos p => hex_string_of_N (pos_limit p) (Npos p) ""
+| Zneg p => String "-" (hex_string_of_N (pos_limit p) (Npos p) "")
+end.
+
 Definition decimal_string_of_bv {a} `{Bitvector a} (bv : a) : string :=
   match unsigned bv with
   | None => "?"
@@ -191,4 +208,5 @@ Definition decimal_string_of_bits {n} (bv : mword n) : string := decimal_string_
 
 (* Some aliases for compatibility. *)
 Definition dec_str := string_of_int.
+Definition hex_str := hex_string_of_int.
 Definition concat_str := String.append.
