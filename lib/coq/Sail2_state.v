@@ -30,34 +30,31 @@ Fixpoint foreachS {A RV Vars E} (xs : list A) (vars : Vars) (body : A -> Vars ->
      foreachS xs vars body
 end.
 
-(* This uses the same subproof as the prompt version to get around proof relevance issues
-   in Sail2_state_lemmas.  TODO: if we switch to boolean properties this shouldn't be
-   necessary. *)
-Fixpoint foreach_ZS_up' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 < step)} `{ArithFact (0 <= off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <= z <= to)), Vars -> monadS rv Vars e) {struct n} : monadS rv Vars e.
+Fixpoint foreach_ZS_up' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 <? step)} `{ArithFact (0 <=? off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <=? z <=? to)), Vars -> monadS rv Vars e) {struct n} : monadS rv Vars e.
 exact (
   match sumbool_of_bool (from + off <=? to) with left LE =>
     match n with
     | O => returnS vars
-    | S n => body (from + off) (foreach_ZM_up'_subproof _ _ _ _ _ _ LE) vars >>$= fun vars => foreach_ZS_up' rv e Vars from to step (off + step) n _ (foreach_ZM_up'_subproof0 _ _ _ _) vars body
+    | S n => body (from + off) _ vars >>$= fun vars => foreach_ZS_up' rv e Vars from to step (off + step) n _ _ vars body
     end
   | right _ => returnS vars
   end).
 Defined.
 
-Fixpoint foreach_ZS_down' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 < step)} `{ArithFact (off <= 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <= z <= from)), Vars -> monadS rv Vars e) {struct n} : monadS rv Vars e.
+Fixpoint foreach_ZS_down' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 <? step)} `{ArithFact (off <=? 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <=? z <=? from)), Vars -> monadS rv Vars e) {struct n} : monadS rv Vars e.
 exact (
   match sumbool_of_bool (to <=? from + off) with left LE =>
     match n with
     | O => returnS vars
-    | S n => body (from + off) (foreach_ZM_down'_subproof _ _ _ _ _ _ LE) vars >>$= fun vars => foreach_ZS_down' _ _ _ from to step (off - step) n _ (foreach_ZM_down'_subproof0 _ _ _ _) vars body
+    | S n => body (from + off) _ vars >>$= fun vars => foreach_ZS_down' _ _ _ from to step (off - step) n _ _ vars body
     end
   | right _ => returnS vars
   end).
 Defined.
 
-Definition foreach_ZS_up {rv e Vars} from to step vars body `{ArithFact (0 < step)} :=
+Definition foreach_ZS_up {rv e Vars} from to step vars body `{ArithFact (0 <? step)} :=
     foreach_ZS_up' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
-Definition foreach_ZS_down {rv e Vars} from to step vars body `{ArithFact (0 < step)} :=
+Definition foreach_ZS_down {rv e Vars} from to step vars body `{ArithFact (0 <? step)} :=
     foreach_ZS_down' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
 
 (*val genlistS : forall 'a 'rv 'e. (nat -> monadS 'rv 'a 'e) -> nat -> monadS 'rv (list 'a) 'e*)
@@ -73,22 +70,22 @@ Definition and_boolS {RV E} (l r : monadS RV bool E) : monadS RV bool E :=
 Definition or_boolS {RV E} (l r : monadS RV bool E) : monadS RV bool E :=
  l >>$= (fun l => if l then returnS true else r).
 
-Definition and_boolSP {rv E} {P Q R:bool->Prop} (x : monadS rv {b:bool & ArithFact (P b)} E) (y : monadS rv {b:bool & ArithFact (Q b)} E)
-  `{H:ArithFact (forall l r, P l -> (l = true -> Q r) -> R (andb l r))}
-  : monadS rv {b:bool & ArithFact (R b)} E :=
-  x >>$= fun '(existT _ x p) => (if x return ArithFact (P x) -> _ then
+Definition and_boolSP {rv E} {P Q R:bool->Prop} (x : monadS rv {b:bool & ArithFactP (P b)} E) (y : monadS rv {b:bool & ArithFactP (Q b)} E)
+  `{H:forall l r, ArithFactP ((P l) -> ((l = true -> (Q r)) -> (R (andb l r))))}
+  : monadS rv {b:bool & ArithFactP (R b)} E :=
+  x >>$= fun '(existT _ x p) => (if x return ArithFactP (P x) -> _ then
     fun p => y >>$= fun '(existT _ y q) => returnS (existT _ y (and_bool_full_proof p q H))
   else fun p => returnS (existT _ false (and_bool_left_proof p H))) p.
 
-Definition or_boolSP {rv E} {P Q R:bool -> Prop} (l : monadS rv {b : bool & ArithFact (P b)} E) (r : monadS rv {b : bool & ArithFact (Q b)} E)
- `{ArithFact (forall l r, P l -> (l = false -> Q r) -> R (orb l r))}
- : monadS rv {b : bool & ArithFact (R b)} E :=
+Definition or_boolSP {rv E} {P Q R:bool -> Prop} (l : monadS rv {b : bool & ArithFactP (P b)} E) (r : monadS rv {b : bool & ArithFactP (Q b)} E)
+ `{forall l r, ArithFactP ((P l) -> (((l = false) -> (Q r)) -> (R (orb l r))))}
+ : monadS rv {b : bool & ArithFactP (R b)} E :=
  l >>$= fun '(existT _ l p) =>
-  (if l return ArithFact (P l) -> _ then fun p => returnS (existT _ true (or_bool_left_proof p H))
+  (if l return ArithFactP (P l) -> _ then fun p => returnS (existT _ true (or_bool_left_proof p H))
    else fun p => r >>$= fun '(existT _ r q) => returnS (existT _ r (or_bool_full_proof p q H))) p.
 
-Definition build_trivial_exS {rv E} {T:Type} (x : monadS rv T E) : monadS rv {x : T & ArithFact True} E :=
- x >>$= fun x => returnS (existT _ x (Build_ArithFact _ I)).
+Definition build_trivial_exS {rv E} {T:Type} (x : monadS rv T E) : monadS rv {x : T & ArithFact true} E :=
+ x >>$= fun x => returnS (existT _ x (Build_ArithFactP _ eq_refl)).
 
 (*val bool_of_bitU_fail : forall 'rv 'e. bitU -> monadS 'rv bool 'e*)
 Definition bool_of_bitU_fail {RV E} (b : bitU) : monadS RV bool E :=
@@ -114,12 +111,12 @@ Definition bools_of_bits_nondetS {RV E} bits : monadS RV (list bool) E :=
       returnS (bools ++ [b]))).
 
 (*val of_bits_nondetS : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monadS 'rv 'a 'e*)
-Definition of_bits_nondetS {RV A E} bits `{ArithFact (A >= 0)} : monadS RV (mword A) E :=
+Definition of_bits_nondetS {RV A E} bits `{ArithFact (A >=? 0)} : monadS RV (mword A) E :=
   bools_of_bits_nondetS bits >>$= (fun bs =>
   returnS (of_bools bs)).
 
 (*val of_bits_failS : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monadS 'rv 'a 'e*)
-Definition of_bits_failS {RV A E} bits `{ArithFact (A >= 0)} : monadS RV (mword A) E :=
+Definition of_bits_failS {RV A E} bits `{ArithFact (A >=? 0)} : monadS RV (mword A) E :=
  maybe_failS "of_bits" (of_bits bits).
 
 (*val mword_nondetS : forall 'rv 'a 'e. Size 'a => unit -> monadS 'rv (mword 'a) 'e
@@ -199,7 +196,7 @@ Fixpoint undefined_word_natS {rv e} n : monadS rv (Word.word n) e :=
     returnS (Word.WS b t)
   end.
 
-Definition undefined_bitvectorS {rv e} n `{ArithFact (n >= 0)} : monadS rv (mword n) e :=
+Definition undefined_bitvectorS {rv e} n `{ArithFact (n >=? 0)} : monadS rv (mword n) e :=
   undefined_word_natS (Z.to_nat n) >>$= fun w =>
   returnS (word_to_mword w).
 

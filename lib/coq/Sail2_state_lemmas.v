@@ -196,8 +196,15 @@ Lemma build_trivial_exS_cong {RV T E} x x' :
   @build_trivial_exS RV T E x === build_trivial_exS x'.
 intros E1.
 unfold build_trivial_exS.
-rewrite E1.
-reflexivity.
+apply bindS_cong; auto.
+Qed.
+
+Lemma liftRS_cong {A R Regs E} m m' :
+  m === m' ->
+  @liftRS A R Regs E m === liftRS m'.
+intros E1.
+unfold liftRS.
+apply try_catchS_cong; auto.
 Qed.
 
 (* Monad lifting *)
@@ -288,6 +295,8 @@ Ltac statecong db :=
        solve [ eapply or_boolSP_cong; intros; statecong db ]
   | |- (build_trivial_exS _) === _ =>
        solve [ eapply build_trivial_exS_cong; intros; statecong db ]
+  | |- (liftRS _) === _ =>
+       solve [ eapply liftRS_cong; intros; statecong db ]
   | |- (let '(matchvar1, matchvar2) := ?e1 in _) === _ =>
        eapply (@equiv_transitive _ _ _ _ (let '(matchvar1,matchvar2) := e1 in _) _);
        [ destruct e1; etransitivity; [ statecong db | apply equiv_reflexive ]
@@ -513,6 +522,8 @@ Lemma liftState_build_trivial_ex Regs Regval E T r m :
   @liftState Regs Regval _ E r (@build_trivial_ex _ _ T m) ===
     build_trivial_exS (liftState r m).
 unfold build_trivial_ex, build_trivial_exS.
+unfold ArithFact.
+intro.
 rewrite liftState_bind.
 reflexivity.
 Qed.
@@ -729,6 +740,8 @@ induction (S (Z.abs_nat (from - to))); intros.
   reflexivity.
 * simpl.
   rewrite_liftState.
+  destruct (sumbool_of_bool (from + off <=? to)); auto.
+  repeat replace_ArithFact_proof.
   reflexivity.
 Qed.
 Hint Rewrite liftState_foreach_ZM_up : liftState.
@@ -750,6 +763,8 @@ induction (S (Z.abs_nat (from - to))); intros.
   reflexivity.
 * simpl.
   rewrite_liftState.
+  destruct (sumbool_of_bool (to <=? from + off)); auto.
+  repeat replace_ArithFact_proof.
   reflexivity.
 Qed.
 Hint Rewrite liftState_foreach_ZM_down : liftState.
@@ -805,7 +820,7 @@ Qed.
 Hint Rewrite liftState_undefined_word_nat : liftState.
 Hint Resolve liftState_undefined_word_nat : liftState.
 
-Lemma liftState_undefined_bitvector Regs Regval E r n `{ArithFact (n >= 0)} :
+Lemma liftState_undefined_bitvector Regs Regval E r n `{ArithFact (n >=? 0)} :
   liftState (Regs := Regs) (Regval := Regval) (E := E) r (undefined_bitvector n) === undefined_bitvectorS n.
 unfold undefined_bitvector, undefined_bitvectorS.
 rewrite_liftState.
