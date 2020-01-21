@@ -1125,8 +1125,9 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
          | _::_::_, [Typ_aux (Typ_tup typs,_)] -> typs
          | _,_ -> arg_typs
        in
-       let ppp = doc_unop (doc_id_ctor id)
-         (parens (separate_map comma (doc_pat ctxt true true) (List.combine pats arg_typs))) in
+       let pats_pp = separate_map comma (doc_pat ctxt true true) (List.combine pats arg_typs) in
+       let pats_pp = match pats with [_] -> pats_pp | _ -> parens pats_pp in
+       let ppp = doc_unop (doc_id_ctor id) pats_pp in
        if apat_needed then parens ppp else ppp
      end
      | P_app(id, []) -> doc_id_ctor id
@@ -1815,7 +1816,11 @@ let doc_exp, doc_let =
           in
           let epp =
             if is_ctor
-            then group (hang 2 (call ^^ break 1 ^^ parens (flow (comma ^^ break 1) (List.map2 (doc_arg false) args arg_typs))))
+            then
+              let argspp = match args, arg_typs with
+                | [arg], [arg_typ] -> doc_arg true arg arg_typ
+                | _, _ -> parens (flow (comma ^^ break 1) (List.map2 (doc_arg false) args arg_typs))
+              in group (hang 2 (call ^^ break 1 ^^ argspp))
             else
               let argspp = List.map2 (doc_arg true) args arg_typs in
               let all =
@@ -2271,7 +2276,8 @@ let doc_exp, doc_let =
         "unsupported internal expression encountered while pretty-printing")
   and if_exp ctxt (elseif : bool) c t e =
     let if_pp = string (if elseif then "else if" else "if") in
-    let c_pp = top_exp ctxt true c in
+    let use_sumbool = condition_produces_constraint ctxt c in
+    let c_pp = top_exp ctxt use_sumbool c in
     let t_pp = top_exp ctxt false t in
     let else_pp = match e with
       | E_aux (E_if (c', t', e'), _)
@@ -2285,8 +2291,8 @@ let doc_exp, doc_let =
     in
     (prefix 2 1
       (soft_surround 2 1 if_pp
-         ((if condition_produces_constraint ctxt c then string "sumbool_of_bool" ^^ space else empty)
-          ^^ parens c_pp) (string "then"))
+         (if use_sumbool then string "sumbool_of_bool" ^/^ c_pp else c_pp)
+         (string "then"))
       t_pp) ^^
     break 1 ^^
     else_pp
