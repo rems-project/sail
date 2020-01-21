@@ -4987,6 +4987,7 @@ let rewrites_coq = [
     ("internal_lets", []);
     ("remove_superfluous_letbinds", []);
     ("remove_superfluous_returns", []);
+    ("bit_lists_to_lits", []);
     ("recheck_defs", [])
   ]
 

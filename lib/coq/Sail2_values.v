@@ -5,6 +5,7 @@ Require Export ZArith.
 Require Import Ascii.
 Require Export String.
 Require Import bbv.Word.
+Require Export bbv.HexNotationWord.
 Require Export List.
 Require Export Sumbool.
 Require Export DecidableClass.

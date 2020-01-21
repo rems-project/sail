@@ -908,8 +908,9 @@ let doc_lit (L_aux(lit,l)) =
      let s = Big_int.to_string i in
      let ipp = utf8string s in
      if Big_int.less i Big_int.zero then parens ipp else ipp
-  | L_hex n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0x" ^ n) ^ ")" (*shouldn't happen*)*)
-  | L_bin n -> failwith "Shouldn't happen" (*"(num_to_vec " ^ ("0b" ^ n) ^ ")" (*shouldn't happen*)*)
+  (* Not a typo, the bbv hex notation uses the letter O *)
+  | L_hex n -> utf8string ("Ox\"" ^ n ^ "\"")
+  | L_bin n -> utf8string ("'b\"" ^ n ^ "\"")
   | L_undef ->
      utf8string "(Fail \"undefined value of unsupported type\")"
   | L_string s -> utf8string ("\"" ^ (coq_escape_string s) ^ "\"")
@@ -2303,7 +2304,9 @@ let doc_exp, doc_let =
        prefix 2 1
               (separate space [string "let"; doc_id id; colon; doc_typ ctxt (env_of e) typ; coloneq])
               (top_exp ctxt false e)
-    | LB_val(P_aux (P_typ (typ,P_aux (P_id id,_)),_),e)
+    | (LB_val(P_aux (P_typ (_,P_aux (P_id id,_)),_),e)
+       | LB_val(P_aux (P_var (P_aux (P_id id,_),_),_), e)
+       | LB_val(P_aux (P_typ (_,P_aux (P_var (P_aux (P_id id,_),_),_)),_), e))
       when (* is auto decomposed *)
            not (is_enum (env_of e) id) ->
        prefix 2 1
