@@ -3937,17 +3937,17 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
       end
   in
   let realise_val_spec = function
-    | (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, Typ_aux (Typ_bidir (typ1, typ2, _), l)), _), id, _, _), ((_, (tannot:tannot)) as annot))) ->
+    | (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, Typ_aux (Typ_bidir (typ1, typ2, eff), l)), _), id, _, _), ((_, (tannot:tannot)) as annot))) ->
       let forwards_id = mk_id (string_of_id id ^ "_forwards") in
       let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
       let backwards_id = mk_id (string_of_id id ^ "_backwards") in
       let backwards_matches_id = mk_id (string_of_id id ^ "_backwards_matches") in
 
       let env = env_of_annot annot in
-      let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, no_effect), l) in
-      let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, no_effect), l) in
-      let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, no_effect), l) in
-      let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, no_effect), l) in
+      let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, eff), l) in
+      let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, eff), l) in
+      let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, eff), l) in
+      let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, eff), l) in
 
       let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, [], false), (Parse_ast.Unknown,())) in
       let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, [], false), (Parse_ast.Unknown,())) in
@@ -3998,14 +3998,14 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
       | _ -> raise (Reporting.err_unreachable l __POS__ "mapping with no clauses?")
     in
     let (typq, bidir_typ) = Env.get_val_spec id env in
-    let (typ1, typ2, l) = match bidir_typ with
-      | Typ_aux (Typ_bidir (typ1, typ2, _), l) -> typ1, typ2, l
+    let (typ1, typ2, eff, l) = match bidir_typ with
+      | Typ_aux (Typ_bidir (typ1, typ2, eff), l) -> typ1, typ2, eff, l
       | _ -> raise (Reporting.err_unreachable l __POS__ "non-bidir type of mapping?")
     in
-    let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, no_effect), l) in
-    let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, no_effect), l) in
-    let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, no_effect), l) in
-    let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, no_effect), l) in
+    let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, eff), l) in
+    let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, eff), l) in
+    let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, eff), l) in
+    let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, eff), l) in
 
     let no_tannot = (Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)) in
     let forwards_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl true forwards_id) mapcls) |> List.flatten))) in
