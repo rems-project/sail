@@ -33,11 +33,6 @@ Parse_ast
 Parser
 Parser_combinators
 Pattern_completeness
-PPrint
-PPrintCombinators
-PPrintEngine
-PPrintRenderer
-PPrintOCaml
 Pretty_print
 Pretty_print_common
 Pretty_print_coq

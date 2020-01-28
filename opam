@@ -37,5 +37,6 @@ depends: [
   "conf-zlib"
   "base64" {< "3.0.0"}
   "yojson"
+  "pprint"
 ]
 available: [ocaml-version >= "4.06.1"]

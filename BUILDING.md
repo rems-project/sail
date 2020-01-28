@@ -67,6 +67,7 @@ depends: [
   "conf-zlib"
   "base64" {< "3.0.0"}
   "yojson"
+  "pprint"
 ]
 ```
 each of which can be installed using `opam install`. The `opam pin` command can be used to select a specific version of a dependency.

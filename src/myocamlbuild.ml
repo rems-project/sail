@@ -82,7 +82,6 @@ dispatch begin function
     (* Bisect_ppx_plugin.handle_coverage (); *)
 
     (* ocaml_lib "lem_interp/interp"; *)
-    ocaml_lib ~extern:false ~dir:"pprint/src" ~tag_name:"use_pprint" "pprint/src/PPrintLib";
 
     rule "lem -> ml"
     ~prod: "%.ml"

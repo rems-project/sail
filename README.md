@@ -99,9 +99,7 @@ Licensing
 
 The Sail implementation, in src/, as well as its tests in test/ and
 other supporting files in lib/ and language/, is distributed under the
-2-clause BSD licence in the headers of those files and in src/LICENCE,
-with the exception of the library src/pprint, which is distributed
-under the CeCILL-C free software licence in src/pprint/LICENSE.
+2-clause BSD licence in the headers of those files and in src/LICENCE.
 
 The generated parts of the ASL-derived ARMv8.3 model in aarch64/ are
 copyright ARM Ltd. See https://github.com/meriac/archex, and the
