@@ -1249,7 +1249,7 @@ let rec lexp_to_exp (LEXP_aux (lexp_aux, annot) as le) =
   | LEXP_vector_concat [] -> rewrap (E_vector [])
   | LEXP_vector_concat (lexp :: lexps) ->
      List.fold_left (fun exp lexp -> rewrap (E_vector_append (exp, lexp_to_exp lexp))) (lexp_to_exp lexp) lexps
-  | LEXP_deref exp -> rewrap (E_app (mk_id "reg_deref", [exp]))
+  | LEXP_deref exp -> rewrap (E_app (mk_id "__deref", [exp]))
 
 let is_unit_typ = function
   | Typ_aux (Typ_id u, _) -> string_of_id u = "unit"
