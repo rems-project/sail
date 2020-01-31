@@ -440,6 +440,7 @@ module Env : sig
   val get_typ_var_loc : kid -> t -> Ast.l
   val get_typ_vars : t -> kind_aux KBindings.t
   val get_typ_var_locs : t -> Ast.l KBindings.t
+  val shadows : kid -> t -> int
   val add_typ_var_shadow : l -> kinded_id -> t -> t * kid option
   val add_typ_var : l -> kinded_id -> t -> t
   val get_ret_typ : t -> typ option
@@ -1224,6 +1225,8 @@ end = struct
     with
     | Not_found -> Unbound
 
+  let shadows v env = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0
+                 
   let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
     if KBindings.mem v env.typ_vars then begin
         let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
@@ -1399,6 +1402,16 @@ let bind_numeric l typ env =
      nexp, add_existential l (List.map (mk_kopt K_int) kids) nc env
   | None -> typ_error env l ("Expected " ^ string_of_typ typ ^ " to be numeric")
 
+let rec check_shadow_leaks l inner_env outer_env typ =
+  let vars = tyvars_of_typ typ in
+  List.iter (fun var ->
+      if Env.shadows var inner_env > Env.shadows var outer_env then
+        typ_error outer_env l
+          ("Type variable " ^ string_of_kid var ^ " would leak into a scope where it is shadowed")
+      else ())
+    (KidSet.elements vars);
+  typ
+   
 (** Pull an (potentially)-existentially qualified type into the global
    typing environment **)
 let bind_existential l name typ env =
@@ -2845,12 +2858,14 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        | LB_val (P_aux (P_typ (ptyp, _), _) as pat, bind) ->
           Env.wf_typ env ptyp;
           let checked_bind = crule check_exp env bind ptyp in
-          let tpat, env = bind_pat_no_guard env pat ptyp in
-          annot_exp (E_let (LB_aux (LB_val (tpat, checked_bind), (let_loc, None)), crule check_exp env exp typ)) typ
+          let tpat, inner_env = bind_pat_no_guard env pat ptyp in
+          annot_exp (E_let (LB_aux (LB_val (tpat, checked_bind), (let_loc, None)), crule check_exp inner_env exp typ))
+            (check_shadow_leaks l inner_env env typ)
        | LB_val (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
-          let tpat, env = bind_pat_no_guard env pat (typ_of inferred_bind) in
-          annot_exp (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, None)), crule check_exp env exp typ)) typ
+          let tpat, inner_env = bind_pat_no_guard env pat (typ_of inferred_bind) in
+          annot_exp (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, None)), crule check_exp inner_env exp typ))
+            (check_shadow_leaks l inner_env env typ)
      end
   | E_app_infix (x, op, y), _ ->
      check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ()))) typ
@@ -3960,9 +3975,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | LB_val (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
           inferred_bind, pat, typ_of inferred_bind in
-     let tpat, env = bind_pat_no_guard env pat ptyp in
-     let inferred_exp = irule infer_exp env exp in
-     annot_exp (E_let (LB_aux (LB_val (tpat, bind_exp), (let_loc, None)), inferred_exp)) (typ_of inferred_exp)
+     let tpat, inner_env = bind_pat_no_guard env pat ptyp in
+     let inferred_exp = irule infer_exp inner_env exp in
+     annot_exp (E_let (LB_aux (LB_val (tpat, bind_exp), (let_loc, None)), inferred_exp))
+       (check_shadow_leaks l inner_env env (typ_of inferred_exp))
   | E_ref id when Env.is_register id env ->
      let _, _, typ = Env.get_register id env in
      annot_exp (E_ref id) (register_typ typ)
