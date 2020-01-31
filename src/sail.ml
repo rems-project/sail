@@ -53,12 +53,10 @@ open Process_file
 module Big_int = Nat_big_num
 
 let lib = ref ([] : string list)
-let opt_file_out : string option ref = ref None
 let opt_interactive_script : string option ref = ref None
 let opt_print_version = ref false
 let opt_target = ref None
 let opt_tofrominterp_output_dir : string option ref = ref None
-let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
 let opt_specialize_c = ref false
@@ -110,6 +108,9 @@ let options = Arg.align ([
     " output an OCaml translated version of the input");
   ( "-ocaml-nobuild",
     Arg.Set Ocaml_backend.opt_ocaml_nobuild,
+    "");
+  ( "-ocaml_nobuild",
+    Arg.Set Ocaml_backend.opt_ocaml_nobuild,
     " do not build generated OCaml");
   ( "-ocaml_trace",
     Arg.Tuple [set_target "ocaml"; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
@@ -118,6 +119,9 @@ let options = Arg.align ([
     Arg.String (fun dir -> Ocaml_backend.opt_ocaml_build_dir := dir),
     " set a custom directory to build generated OCaml");
   ( "-ocaml-coverage",
+    Arg.Set Ocaml_backend.opt_ocaml_coverage,
+    "");
+  ( "-ocaml_coverage",
     Arg.Set Ocaml_backend.opt_ocaml_coverage,
     " build OCaml with bisect_ppx coverage reporting (requires opam packages bisect_ppx-ocamlbuild and bisect_ppx).");
   ( "-ocaml_generators",
@@ -145,10 +149,10 @@ let options = Arg.align ([
     set_target "ir",
     " print intermediate representation");
   ( "-smt",
-    set_target "smt",
+    Arg.Tuple [set_target "smt"; Arg.Clear Jib_compile.opt_track_throw],
     " print SMT translated version of input");
   ( "-smt_auto",
-    Arg.Tuple [set_target "smt"; Arg.Set Jib_smt.opt_auto],
+    Arg.Tuple [set_target "smt"; Arg.Clear Jib_compile.opt_track_throw; Arg.Set Jib_smt.opt_auto],
     " generate SMT and automatically call the solver (implies -smt)");
   ( "-smt_ignore_overflow",
     Arg.Set Jib_smt.opt_ignore_overflow,
@@ -180,6 +184,9 @@ let options = Arg.align ([
   ( "-c_no_rts",
     Arg.Set C_backend.opt_no_rts,
     " do not include the Sail runtime" );
+  ( "-c_no_lib",
+    Arg.Tuple [Arg.Set C_backend.opt_no_lib; Arg.Set C_backend.opt_no_rts],
+    " do not include the Sail runtime or library" );
   ( "-c_prefix",
     Arg.String (fun prefix -> C_backend.opt_prefix := prefix),
     "<prefix> prefix generated C functions" );
@@ -192,6 +199,9 @@ let options = Arg.align ([
   ( "-c_specialize",
     Arg.Set opt_specialize_c,
     " specialize integer arguments in C output");
+  ( "-c_preserve",
+    Arg.String (fun str -> Specialize.add_initial_calls (Ast_util.IdSet.singleton (Ast_util.mk_id str))),
+    " make sure the provided function identifier is preserved in C output");
   ( "-c_fold_unit",
     Arg.String (fun str -> Constant_fold.opt_fold_to_unit := Util.split_on_char ',' str),
     " remove comma separated list of functions from C output, replacing them with unit");
@@ -209,9 +219,12 @@ let options = Arg.align ([
   ( "-Oconstant_fold",
     Arg.Set Constant_fold.optimize_constant_fold,
     " apply constant folding optimizations");
-  ( "-Oint128",
-    Arg.Set C_backend.optimize_int128,
-    " use 128-bit integers rather than GMP arbitrary precision integers");
+  ( "-Ofixed_int",
+    Arg.Set C_backend.optimize_fixed_int,
+    " assume fixed size integers rather than GMP arbitrary precision integers");
+  ( "-Ofixed_bits",
+    Arg.Set C_backend.optimize_fixed_bits,
+    " assume fixed size bitvectors rather than arbitrary precision bitvectors");
   ( "-Oaarch64_fast",
     Arg.Set Jib_compile.optimize_aarch64_fast_struct,
     " apply ARMv8.5 specific optimizations (potentially unsound in general)");
@@ -292,9 +305,15 @@ let options = Arg.align ([
   ( "-undefined_gen",
     Arg.Set Initial_check.opt_undefined_gen,
     " generate undefined_type functions for types in the specification");
+  ( "-grouped_regstate",
+    Arg.Set State.opt_type_grouped_regstate,
+    " group registers with same type together in generated register state record");
   ( "-enum_casts",
     Arg.Set Initial_check.opt_enum_casts,
     " allow enumerations to be automatically casted to numeric range types");
+  ( "-new_bitfields",
+    Arg.Set Type_check.opt_new_bitfields,
+    " use new bitfield syntax");
   ( "-non_lexical_flow",
     Arg.Set Nl_flow.opt_nl_flow,
     " allow non-lexical flow typing");
@@ -340,9 +359,6 @@ let options = Arg.align ([
   ( "-ddump_rewrite_ast",
     Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0); Specialize.opt_ddump_spec_ast := Some (l, 0)),
     "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
-  ( "-ddump_flow_graphs",
-    Arg.Set Jib_compile.opt_debug_flow_graphs,
-    " (debug) dump flow analysis for Sail functions when compiling to C");
   ( "-ddump_smt_graphs",
     Arg.Set Jib_smt.opt_debug_graphs,
     " (debug) dump flow analysis for properties when generating SMT");
@@ -361,9 +377,6 @@ let options = Arg.align ([
   ( "-dmagic_hash",
     Arg.Set Initial_check.opt_magic_hash,
     " (debug) allow special character # in identifiers");
-  ( "-dfunction",
-    Arg.String (fun f -> Jib_compile.opt_debug_function := f),
-    " (debug) print debugging output for a single function");
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
     " (debug) provide basic profiling information for rewriting passes within Sail");
@@ -402,43 +415,6 @@ let _ =
     (fun s ->
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg
-
-let load_files ?check:(check=false) type_envs files =
-  if !opt_memo_z3 then Constraint.load_digests () else ();
-
-  let t = Profile.start () in
-  let parsed = List.map (fun f -> (f, parse_file f)) files in
-  let ast =
-    List.fold_right (fun (_, Parse_ast.Defs ast_nodes) (Parse_ast.Defs later_nodes)
-                     -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
-  let ast = Process_file.preprocess_ast options ast in
-  let ast = Initial_check.process_ast ~generate:(not check) ast in
-  (* The separate loop measures declarations would be awkward to type check, so
-     move them into the definitions beforehand. *)
-  let ast = Rewrites.move_loop_measures ast in
-  Profile.finish "parsing" t;
-
-  let t = Profile.start () in
-  let (ast, type_envs) = check_ast type_envs ast in
-  Profile.finish "type checking" t;
-
-  if !opt_memo_z3 then Constraint.save_digests () else ();
-
-  if check then
-    ("out.sail", ast, type_envs)
-  else
-    let ast = Scattered.descatter ast in
-    let ast, type_envs = rewrite_ast_initial type_envs ast in
-    (* Recheck after descattering so that the internal type environments always
-       have complete variant types *)
-    let ast, type_envs = Type_error.check Type_check.initial_env ast in
-
-    let out_name = match !opt_file_out with
-      | None when parsed = [] -> "out.sail"
-      | None -> fst (List.hd parsed)
-      | Some f -> f ^ ".sail" in
-
-    (out_name, ast, type_envs)
 
 let prover_regstate tgt ast type_envs =
   match tgt with
@@ -502,14 +478,14 @@ let target name out_name ast type_envs =
      (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in *)
      let close, output_chan =
        match !opt_file_out with
-       | Some f -> Util.opt_colors := false; (true, open_out (f ^ ".ir.sail"))
+       | Some f -> Util.opt_colors := false; (true, open_out (f ^ ".ir"))
        | None -> false, stdout
      in
      Reporting.opt_warnings := true;
      let cdefs, _ = C_backend.jib_of_ast type_envs ast_c in
-     (* let cdefs = List.map Jib_optimize.flatten_cdef cdefs in *)
-     let str = Pretty_print_sail.to_string PPrint.(separate_map hardline Jib_util.pp_cdef cdefs) in
-     output_string output_chan (str ^ "\n");
+     let buf = Buffer.create 256 in
+     Jib_ir.Flat_ir_formatter.output_defs buf cdefs;
+     output_string output_chan (Buffer.contents buf);
      flush output_chan;
      if close then close_out output_chan else ()
 
@@ -519,7 +495,7 @@ let target name out_name ast type_envs =
   | Some "smt" when !opt_smt_serialize ->
      let ast_smt, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
      let ast_smt, type_envs = Specialize.(specialize_passes 2 int_specialization_with_externs type_envs ast_smt) in
-     let jib, ctx = Jib_smt.compile type_envs ast_smt in
+     let jib, _, ctx = Jib_smt.compile type_envs ast_smt in
      let name_file =
        match !opt_file_out with
        | Some f -> f ^ ".smt_model"
@@ -582,7 +558,8 @@ let main () =
     print_endline version
   else
     begin
-      let out_name, ast, type_envs = load_files Type_check.initial_env !opt_file_arguments in
+      let out_name, ast, type_envs = load_files options Type_check.initial_env !opt_file_arguments in
+      let ast, type_envs = descatter type_envs ast in
       let ast, type_envs =
         List.fold_right (fun file (ast,_) -> Splice.splice ast file)
           (!opt_splice) (ast, type_envs)

@@ -1,7 +1,7 @@
 LEM_DIR?=$(shell opam config var lem:share)
 
 LEMSRC =  \
-  ../../src/lem_interp/sail2_instr_kinds.lem \
+  ../../src/gen_lib/sail2_instr_kinds.lem \
   ../../src/gen_lib/sail2_values.lem \
   ../../src/gen_lib/sail2_operators.lem \
   ../../src/gen_lib/sail2_operators_mwords.lem \

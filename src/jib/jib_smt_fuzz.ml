@@ -55,6 +55,9 @@ open Jib_smt
 open Jib_util
 open Smtlib
 
+let (gensym, _) = symbol_generator "fuzz"
+let ngensym () = name (gensym ())
+
 let gen_value (Typ_aux (aux, _) as typ) =
   match aux with
   | Typ_id id when string_of_id id = "bit" ->
@@ -149,13 +152,13 @@ let rec run frame =
 exception Skip_iteration of string;;
 
 let fuzz_cdef ctx all_cdefs = function
-  | CDEF_spec (id, arg_ctyps, ret_ctyp) when not (string_of_id id = "and_bool" || string_of_id id = "or_bool") ->
+  | CDEF_spec (id, _, arg_ctyps, ret_ctyp) when not (string_of_id id = "and_bool" || string_of_id id = "or_bool") ->
      let open Type_check in
      let open Interpreter in
      if Env.is_extern id ctx.tc_env "smt" then (
        let extern = Env.get_extern id ctx.tc_env "smt" in
        let typq, (Typ_aux (aux, _) as typ) = Env.get_val_spec id ctx.tc_env in
-       let istate = initial_state ctx.ast ctx.tc_env Value.primops in
+       let istate = initial_state ctx.ast ctx.tc_env !Value.primops in
        let header = smt_header ctx all_cdefs in
        prerr_endline (Util.("Fuzz: " |> cyan |> clear) ^ string_of_id id ^ " = \"" ^ extern ^ "\" : " ^ string_of_typ typ);
 
@@ -183,13 +186,13 @@ let fuzz_cdef ctx all_cdefs = function
                  in
 
                  let jib =
-                   let gs = Jib_compile.ngensym () in
-                   [ifuncall (CL_id (gs, ret_ctyp)) id (List.map snd values)]
+                   let gs = ngensym () in
+                   [ifuncall (CL_id (gs, ret_ctyp)) (id, []) (List.map snd values)]
                    @ gen_assertion ret_ctyp result gs
                    @ [iend ()]
                  in
                  let smt_defs =
-                   try fst (smt_instr_list extern ctx all_cdefs jib) with
+                   try (fun (x, _, _) -> x) (smt_instr_list extern ctx all_cdefs jib) with
                    | _ ->
                       raise (Skip_iteration ("SMT error for: " ^ Util.string_of_list ", " string_of_exp (List.map fst values)))
                  in
@@ -250,6 +253,6 @@ let fuzz_cdef ctx all_cdefs = function
 let fuzz seed env ast =
   Random.init seed;
 
-  let cdefs, ctx = compile env ast in
+  let cdefs, _, ctx = compile env ast in
 
   List.iter (fuzz_cdef ctx cdefs) cdefs

@@ -72,7 +72,7 @@ do
                "$SAILDIR/src/gen_lib/sail2_values.lem" \
                "$SAILDIR/src/gen_lib/sail2_operators.lem" \
                "$SAILDIR/src/gen_lib/sail2_operators_mwords.lem" \
-               "$SAILDIR/src/lem_interp/sail2_instr_kinds.lem" \
+               "$SAILDIR/src/gen_lib/sail2_instr_kinds.lem" \
                "$SAILDIR/src/gen_lib/sail2_prompt.lem" \
                "$SAILDIR/src/gen_lib/sail2_state_monad.lem" \
                "$SAILDIR/src/gen_lib/sail2_state.lem" \

@@ -378,6 +378,9 @@ let pp_order = function
   | Ord_aux (Ord_dec, _) -> string "dec"
   | _ -> assert false (* Order types have been specialised, so no polymorphism in C backend. *)
 
+let pp_id id =
+  string (string_of_id id)
+
 let rec pp_aexp (AE_aux (aexp, _, _)) =
   match aexp with
   | AE_val v -> pp_aval v
@@ -479,15 +482,7 @@ let ae_lit lit typ = AE_val (AV_lit (lit, typ))
 
 let is_dead_aexp (AE_aux (_, env, _)) = prove __POS__ env nc_false
 
-(** GLOBAL: gensym_counter is used to generate fresh identifiers where
-   needed. It should be safe to reset between top level
-   definitions. **)
-let gensym_counter = ref 0
-
-let gensym () =
-  let id = mk_id ("gs#" ^ string_of_int !gensym_counter) in
-  incr gensym_counter;
-  id
+let (gensym, reset_anf_counter) = symbol_generator "ga"
 
 let rec split_block l = function
   | [exp] -> [], exp

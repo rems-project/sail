@@ -118,7 +118,7 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, l)) arg =
      parens (separate space [string "fun"; parens (separate (comma ^^ space) args); string "->"; body])
      ^^ space ^^ arg
   | Typ_fn (typ1, typ2, _) -> string "\"FN\""
-  | Typ_bidir (t1, t2) -> string "\"BIDIR\""
+  | Typ_bidir (t1, t2, _) -> string "\"BIDIR\""
   | Typ_var kid -> string "\"VAR\""
   | Typ_exist _ -> assert false
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
@@ -144,7 +144,7 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   | Typ_app (id, typs) -> parens (separate_map (string ", ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
   | Typ_tup typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
   | Typ_fn (typs, typ, _) -> separate space [ocaml_typ ctx (Typ_aux (Typ_tup typs, l)); string "->"; ocaml_typ ctx typ]
-  | Typ_bidir (t1, t2) -> raise (Reporting.err_general l "Ocaml doesn't support bidir types")
+  | Typ_bidir _ -> raise (Reporting.err_general l "Ocaml doesn't support bidir types")
   | Typ_var kid -> zencode_kid kid
   | Typ_exist _ -> assert false
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")

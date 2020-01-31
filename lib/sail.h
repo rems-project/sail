@@ -8,6 +8,16 @@
 
 #include<time.h>
 
+static inline void *sail_malloc(size_t size)
+{
+  return malloc(size);
+}
+
+static inline void sail_free(void *ptr)
+{
+  free(ptr);
+}
+
 /*
  * Called by the RTS to initialise and clear any library state.
  */
@@ -277,6 +287,8 @@ void sail_truncate(lbits *rop, const lbits op, const sail_int len);
 void sail_truncateLSB(lbits *rop, const lbits op, const sail_int len);
 
 fbits bitvector_access(const lbits op, const sail_int n_mpz);
+
+fbits update_fbits(const fbits op, const uint64_t n, const fbits bit);
 
 void sail_unsigned(sail_int *rop, const lbits op);
 void sail_signed(sail_int *rop, const lbits op);

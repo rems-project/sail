@@ -78,15 +78,15 @@ bool UNDEFINED(bool)(const unit u) {
 
 void CREATE(sail_string)(sail_string *str)
 {
-  char *istr = (char *) malloc(1 * sizeof(char));
+  char *istr = (char *) sail_malloc(1 * sizeof(char));
   istr[0] = '\0';
   *str = istr;
 }
 
 void RECREATE(sail_string)(sail_string *str)
 {
-  free(*str);
-  char *istr = (char *) malloc(1 * sizeof(char));
+  sail_free(*str);
+  char *istr = (char *) sail_malloc(1 * sizeof(char));
   istr[0] = '\0';
   *str = istr;
 }
@@ -100,18 +100,18 @@ void COPY(sail_string)(sail_string *str1, const sail_string str2)
 
 void KILL(sail_string)(sail_string *str)
 {
-  free(*str);
+  sail_free(*str);
 }
 
 void dec_str(sail_string *str, const mpz_t n)
 {
-  free(*str);
+  sail_free(*str);
   gmp_asprintf(str, "%Zd", n);
 }
 
 void hex_str(sail_string *str, const mpz_t n)
 {
-  free(*str);
+  sail_free(*str);
   gmp_asprintf(str, "0x%Zx", n);
 }
 
@@ -463,7 +463,7 @@ bool EQUAL(fbits)(const fbits op1, const fbits op2)
 
 void CREATE(lbits)(lbits *rop)
 {
-  rop->bits = malloc(sizeof(mpz_t));
+  rop->bits = sail_malloc(sizeof(mpz_t));
   rop->len = 0;
   mpz_init(*rop->bits);
 }
@@ -483,12 +483,12 @@ void COPY(lbits)(lbits *rop, const lbits op)
 void KILL(lbits)(lbits *rop)
 {
   mpz_clear(*rop->bits);
-  free(rop->bits);
+  sail_free(rop->bits);
 }
 
 void CREATE_OF(lbits, fbits)(lbits *rop, const uint64_t op, const uint64_t len, const bool direction)
 {
-  rop->bits = malloc(sizeof(mpz_t));
+  rop->bits = sail_malloc(sizeof(mpz_t));
   rop->len = len;
   mpz_init_set_ui(*rop->bits, op);
 }
@@ -522,7 +522,7 @@ void RECREATE_OF(lbits, fbits)(lbits *rop, const uint64_t op, const uint64_t len
 
 void CREATE_OF(lbits, sbits)(lbits *rop, const sbits op, const bool direction)
 {
-  rop->bits = malloc(sizeof(mpz_t));
+  rop->bits = sail_malloc(sizeof(mpz_t));
   rop->len = op.len;
   mpz_init_set_ui(*rop->bits, op.bits);
 }
@@ -835,6 +835,15 @@ fbits bitvector_access(const lbits op, const sail_int n_mpz)
 {
   uint64_t n = mpz_get_ui(n_mpz);
   return (fbits) mpz_tstbit(*op.bits, n);
+}
+
+fbits update_fbits(const fbits op, const uint64_t n, const fbits bit)
+{
+     if ((bit & 1) == 1) {
+          return op | (bit << n);
+     } else {
+          return op & ~(bit << n);
+     }
 }
 
 void sail_unsigned(sail_int *rop, const lbits op)
@@ -1477,14 +1486,14 @@ void random_real(real *rop, const unit u)
 
 void string_of_int(sail_string *str, const sail_int i)
 {
-  free(*str);
+  sail_free(*str);
   gmp_asprintf(str, "%Zd", i);
 }
 
 /* asprintf is a GNU extension, but it should exist on BSD */
 void string_of_fbits(sail_string *str, const fbits op)
 {
-  free(*str);
+  sail_free(*str);
   int bytes = asprintf(str, "0x%" PRIx64, op);
   if (bytes == -1) {
     fprintf(stderr, "Could not print bits 0x%" PRIx64 "\n", op);
@@ -1493,11 +1502,11 @@ void string_of_fbits(sail_string *str, const fbits op)
 
 void string_of_lbits(sail_string *str, const lbits op)
 {
-  free(*str);
+  sail_free(*str);
   if ((op.len % 4) == 0) {
     gmp_asprintf(str, "0x%*0ZX", op.len / 4, *op.bits);
   } else {
-    *str = (char *) malloc((op.len + 3) * sizeof(char));
+    *str = (char *) sail_malloc((op.len + 3) * sizeof(char));
     (*str)[0] = '0';
     (*str)[1] = 'b';
     for (int i = 1; i <= op.len; ++i) {
@@ -1509,7 +1518,7 @@ void string_of_lbits(sail_string *str, const lbits op)
 
 void decimal_string_of_fbits(sail_string *str, const fbits op)
 {
-  free(*str);
+  sail_free(*str);
   int bytes = asprintf(str, "%" PRId64, op);
   if (bytes == -1) {
     fprintf(stderr, "Could not print bits %" PRId64 "\n", op);
@@ -1518,7 +1527,7 @@ void decimal_string_of_fbits(sail_string *str, const fbits op)
 
 void decimal_string_of_lbits(sail_string *str, const lbits op)
 {
-  free(*str);
+  sail_free(*str);
   gmp_asprintf(str, "%Z", *op.bits);
 }
 
@@ -1534,7 +1543,7 @@ void fprint_bits(const sail_string pre,
     mpz_t buf;
     mpz_init_set(buf, *op.bits);
 
-    char *hex = malloc((op.len / 4) * sizeof(char));
+    char *hex = sail_malloc((op.len / 4) * sizeof(char));
 
     for (int i = 0; i < op.len / 4; ++i) {
       char c = (char) ((0xF & mpz_get_ui(buf)) + 0x30);
@@ -1546,7 +1555,7 @@ void fprint_bits(const sail_string pre,
       fputc(hex[i - 1], stream);
     }
 
-    free(hex);
+    sail_free(hex);
     mpz_clear(buf);
   } else {
     fputs("0b", stream);

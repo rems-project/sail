@@ -60,6 +60,7 @@ val optimize_unit : instr list -> instr list
    instructions, prodcing a flat list of instructions. *)
 val flatten_instrs : instr list -> instr list
 val flatten_cdef : cdef -> cdef
+val reset_flat_counter : unit -> unit
 
 val unique_per_function_ids : cdef list -> cdef list
 
@@ -71,3 +72,9 @@ val remove_clear : instr list -> instr list
 val remove_pointless_goto : instr list -> instr list
 
 val remove_unused_labels : instr list -> instr list
+
+val remove_dead_after_goto : instr list -> instr list
+
+val remove_dead_code : instr list -> instr list
+
+val remove_tuples : cdef list -> Jib_compile.ctx -> cdef list * Jib_compile.ctx

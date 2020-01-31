@@ -170,6 +170,8 @@ let rec doc_nc nc =
   in
   atomic_nc (constraint_simp nc)
 
+and doc_effects effs = braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs))
+
 and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> doc_id id
@@ -194,13 +196,14 @@ and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   | Typ_fn (typs, typ, Effect_aux (Effect_set [], _)) ->
      separate space [doc_arg_typs typs; string "->"; doc_typ typ]
   | Typ_fn (typs, typ, Effect_aux (Effect_set effs, _)) ->
-     let ocaml_eff = braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs)) in
      if simple then
        separate space [doc_arg_typs typs; string "->"; doc_typ ~simple:simple typ]
      else
-       separate space [doc_arg_typs typs; string "->"; doc_typ typ; string "effect"; ocaml_eff]
-  | Typ_bidir (typ1, typ2) ->
+       separate space [doc_arg_typs typs; string "->"; doc_typ typ; string "effect"; doc_effects effs]
+  | Typ_bidir (typ1, typ2, Effect_aux (Effect_set [], _)) ->
      separate space [doc_typ typ1; string "<->"; doc_typ typ2]
+  | Typ_bidir (typ1, typ2, Effect_aux (Effect_set effs, _)) ->
+     separate space [doc_typ typ1; string "<->"; doc_typ typ2; string "effect"; doc_effects effs]
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 and doc_typ_arg (A_aux (ta_aux, _)) =
   match ta_aux with
@@ -502,7 +505,11 @@ and doc_atomic_exp (E_aux (e_aux, _) as exp) =
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; equals; doc_exp exp3])
   | E_vector_update_subrange (exp1, exp2, exp3, exp4) ->
      brackets (separate space [doc_exp exp1; string "with"; doc_atomic_exp exp2; string ".."; doc_atomic_exp exp3; equals; doc_exp exp4])
-  | E_internal_value v -> string (Value.string_of_value v (* |> Util.green |> Util.clear *))
+  | E_internal_value v ->
+     if !Interactive.opt_interactive then
+       string (Value.string_of_value v |> Util.green |> Util.clear)
+     else
+       string (Value.string_of_value v)
   | _ -> parens (doc_exp exp)
 and doc_fexps fexps =
   separate_map (comma ^^ space) doc_fexp fexps
@@ -623,6 +630,12 @@ let doc_field (typ, id) =
 
 let doc_union (Tu_aux (Tu_ty_id (typ, id), l)) = separate space [doc_id id; colon; doc_typ typ]
 
+let rec doc_index_range (BF_aux (ir, _)) =
+  match ir with
+  | BF_single i -> doc_nexp i
+  | BF_range (i, j) -> doc_nexp i ^^ string ".." ^^ doc_nexp j
+  | BF_concat (i, j) -> doc_index_range i ^^ comma ^^ space ^^ doc_index_range j
+
 let doc_typ_arg_kind sep (A_aux (aux, _)) =
   match aux with
   | A_nexp _ -> space ^^ string sep ^^ space ^^string "Int"
@@ -651,7 +664,10 @@ let doc_typdef (TD_aux(td,_)) = match td with
   | TD_variant (id, TypQ_aux (TypQ_tq qs, _), unions, _) ->
      separate space [string "union"; doc_id id; doc_param_quants qs; equals;
                      surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_union unions) rbrace]
-  | TD_bitfield _ -> string "BITFIELD" (* should be rewritten *)
+  | TD_bitfield (id, typ, fields) ->
+     let doc_field (id, range) = separate space [doc_id id; colon; doc_index_range range] in
+     doc_op equals (separate space [string "bitfield"; doc_id id; colon; doc_typ typ])
+                   (surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_field fields) rbrace)
 
 let doc_spec ?comment:(comment=false) (VS_aux (v, annot)) =
   let doc_extern ext =

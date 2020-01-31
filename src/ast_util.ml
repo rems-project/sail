@@ -60,7 +60,7 @@ let lvar_typ = function
   | Local (_, typ) -> typ
   | Register (_, _, typ) -> typ
   | Enum typ -> typ
-  | Unbound -> failwith "No type for unbound variable"
+  | Unbound -> Reporting.unreachable Parse_ast.Unknown __POS__ "No type for unbound variable"
 
 let no_annot = (Parse_ast.Unknown, ())
 
@@ -847,7 +847,7 @@ and string_of_typ_aux = function
   | Typ_fn (typ_args, typ_ret, eff) ->
      "(" ^ string_of_list ", " string_of_typ typ_args ^ ") -> "
      ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
-  | Typ_bidir (typ1, typ2) -> string_of_typ typ1 ^ " <-> " ^ string_of_typ typ2
+  | Typ_bidir (typ1, typ2, eff) -> string_of_typ typ1 ^ " <-> " ^ string_of_typ typ2 ^ " effect " ^ string_of_effect eff
   | Typ_exist (kids, nc, typ) ->
      "{" ^ string_of_list " " string_of_kinded_id kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"
 and string_of_typ_arg = function
@@ -1170,10 +1170,12 @@ and typ_compare (Typ_aux (t1,_)) (Typ_aux (t2,_)) =
        | 0 -> effect_compare e1 e2
        | n -> n)
      | n -> n)
-  | Typ_bidir (t1,t2), Typ_bidir (t3,t4) ->
+  | Typ_bidir (t1,t2,e1), Typ_bidir (t3,t4,e2) ->
      (match typ_compare t1 t3 with
-     | 0 -> typ_compare t2 t3
-     | n -> n)
+      | 0 -> (match typ_compare t2 t4 with
+              | 0 -> effect_compare e1 e2
+              | n -> n)
+      | n -> n)
   | Typ_tup ts1, Typ_tup ts2 -> Util.compare_list typ_compare ts1 ts2
   | Typ_exist (ks1,nc1,t1), Typ_exist (ks2,nc2,t2) ->
      (match Util.compare_list KOpt.compare ks1 ks2 with
@@ -1247,7 +1249,7 @@ let rec lexp_to_exp (LEXP_aux (lexp_aux, annot) as le) =
   | LEXP_vector_concat [] -> rewrap (E_vector [])
   | LEXP_vector_concat (lexp :: lexps) ->
      List.fold_left (fun exp lexp -> rewrap (E_vector_append (exp, lexp_to_exp lexp))) (lexp_to_exp lexp) lexps
-  | LEXP_deref exp -> rewrap (E_app (mk_id "reg_deref", [exp]))
+  | LEXP_deref exp -> rewrap (E_app (mk_id "__deref", [exp]))
 
 let is_unit_typ = function
   | Typ_aux (Typ_id u, _) -> string_of_id u = "unit"
@@ -1378,7 +1380,7 @@ and kopts_of_typ (Typ_aux (t,_)) =
   | Typ_id _ -> KOptSet.empty
   | Typ_var kid -> KOptSet.singleton (mk_kopt K_type kid)
   | Typ_fn (ts, t, _) -> List.fold_left KOptSet.union (kopts_of_typ t) (List.map kopts_of_typ ts)
-  | Typ_bidir (t1, t2) -> KOptSet.union (kopts_of_typ t1) (kopts_of_typ t2)
+  | Typ_bidir (t1, t2, _) -> KOptSet.union (kopts_of_typ t1) (kopts_of_typ t2)
   | Typ_tup ts ->
      List.fold_left (fun s t -> KOptSet.union s (kopts_of_typ t))
        KOptSet.empty ts
@@ -1438,11 +1440,11 @@ and tyvars_of_typ (Typ_aux (t,_)) =
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
   | Typ_fn (ts, t, _) -> List.fold_left KidSet.union (tyvars_of_typ t) (List.map tyvars_of_typ ts)
-  | Typ_bidir (t1, t2) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
+  | Typ_bidir (t1, t2, _) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
   | Typ_tup ts ->
      List.fold_left (fun s t -> KidSet.union s (tyvars_of_typ t))
        KidSet.empty ts
-  | Typ_app (_,tas) -> 
+  | Typ_app (_,tas) ->
      List.fold_left (fun s ta -> KidSet.union s (tyvars_of_typ_arg ta))
        KidSet.empty tas
   | Typ_exist (kids, nc, t) ->
@@ -1661,6 +1663,41 @@ let hex_to_bin hex =
   |> List.map Sail_lib.char_of_bit
   |> (fun bits -> String.init (List.length bits) (List.nth bits))
 
+let explode s =
+  let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
+  exp (String.length s - 1) []
+
+let vector_string_to_bit_list (L_aux (lit, l)) =
+
+  let hexchar_to_binlist = function
+    | '0' -> ['0';'0';'0';'0']
+    | '1' -> ['0';'0';'0';'1']
+    | '2' -> ['0';'0';'1';'0']
+    | '3' -> ['0';'0';'1';'1']
+    | '4' -> ['0';'1';'0';'0']
+    | '5' -> ['0';'1';'0';'1']
+    | '6' -> ['0';'1';'1';'0']
+    | '7' -> ['0';'1';'1';'1']
+    | '8' -> ['1';'0';'0';'0']
+    | '9' -> ['1';'0';'0';'1']
+    | 'A' -> ['1';'0';'1';'0']
+    | 'B' -> ['1';'0';'1';'1']
+    | 'C' -> ['1';'1';'0';'0']
+    | 'D' -> ['1';'1';'0';'1']
+    | 'E' -> ['1';'1';'1';'0']
+    | 'F' -> ['1';'1';'1';'1']
+    | _ -> raise (Reporting.err_unreachable l __POS__ "hexchar_to_binlist given unrecognized character") in
+
+  let s_bin = match lit with
+    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode (String.uppercase_ascii s_hex)))
+    | L_bin s_bin -> explode s_bin
+    | _ -> raise (Reporting.err_unreachable l __POS__ "s_bin given non vector literal") in
+
+  List.map (function '0' -> L_aux (L_zero, gen_loc l)
+                   | '1' -> L_aux (L_one, gen_loc l)
+                   | _ -> raise (Reporting.err_unreachable (gen_loc l) __POS__ "binary had non-zero or one")) s_bin
+
+
 (* Functions for working with locations *)
 
 let locate_id f (Id_aux (name, l)) = Id_aux (name, f l)
@@ -1726,7 +1763,7 @@ and locate_typ f (Typ_aux (typ_aux, l)) =
     | Typ_var kid -> Typ_var (locate_kid f kid)
     | Typ_fn (arg_typs, ret_typ, effect) ->
        Typ_fn (List.map (locate_typ f) arg_typs, locate_typ f ret_typ, locate_effect f effect)
-    | Typ_bidir (typ1, typ2) -> Typ_bidir (locate_typ f typ1, locate_typ f typ2)
+    | Typ_bidir (typ1, typ2, effect) -> Typ_bidir (locate_typ f typ1, locate_typ f typ2, locate_effect f effect)
     | Typ_tup typs -> Typ_tup (List.map (locate_typ f) typs)
     | Typ_exist (kopts, constr, typ) -> Typ_exist (List.map (locate_kinded_id f) kopts, locate_nc f constr, locate_typ f typ)
     | Typ_app (id, typ_args) -> Typ_app (locate_id f id, List.map (locate_typ_arg f) typ_args)
@@ -1945,7 +1982,7 @@ and typ_subst_aux sv subst = function
      | _ -> Typ_var kid
      end
   | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map (typ_subst sv subst) arg_typs, typ_subst sv subst ret_typ, effs)
-  | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst sv subst typ1, typ_subst sv subst typ2)
+  | Typ_bidir (typ1, typ2, effs) -> Typ_bidir (typ_subst sv subst typ1, typ_subst sv subst typ2, effs)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_arg_subst sv subst) args)
   | Typ_exist (kopts, nc, typ) when KidSet.mem sv (KidSet.of_list (List.map kopt_kid kopts)) ->
@@ -2043,7 +2080,7 @@ let subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
     | Typ_var _
       -> ty
     | Typ_fn (t1,t2,e) -> re (Typ_fn (List.map (s_styp substs) t1, s_styp substs t2,e))
-    | Typ_bidir (t1, t2) -> re (Typ_bidir (s_styp substs t1, s_styp substs t2))
+    | Typ_bidir (t1,t2,e) -> re (Typ_bidir (s_styp substs t1, s_styp substs t2,e))
     | Typ_tup ts -> re (Typ_tup (List.map (s_styp substs) ts))
     | Typ_app (id,tas) -> re (Typ_app (id,List.map (s_starg substs) tas))
     | Typ_exist (kopts,nc,t) ->

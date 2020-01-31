@@ -153,7 +153,7 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
          | _ -> [to_ast_typ ctx from_typ]
        in
        Typ_fn (from_typs, to_ast_typ ctx to_typ, to_ast_effects effects)
-    | P.ATyp_bidir (typ1, typ2) -> Typ_bidir (to_ast_typ ctx typ1, to_ast_typ ctx typ2)
+    | P.ATyp_bidir (typ1, typ2, effects) -> Typ_bidir (to_ast_typ ctx typ1, to_ast_typ ctx typ2, to_ast_effects effects)
     | P.ATyp_tup typs -> Typ_tup (List.map (to_ast_typ ctx) typs)
     | P.ATyp_app (P.Id_aux (P.Id "int", il), [n]) ->
        Typ_app (Id_aux (Id "atom", il), [to_ast_typ_arg ctx n K_int])
@@ -931,8 +931,8 @@ let generate_undefineds vs_ids (Defs defs) =
   in
   let undefined_tu = function
     | Tu_aux (Tu_ty_id (Typ_aux (Typ_tup typs, _), id), _) ->
-       mk_exp (E_app (id, List.map (fun _ -> mk_lit_exp L_undef) typs))
-    | Tu_aux (Tu_ty_id (typ, id), _) -> mk_exp (E_app (id, [mk_lit_exp L_undef]))
+       mk_exp (E_app (id, List.map (fun typ -> mk_exp (E_cast (typ, mk_lit_exp L_undef))) typs))
+    | Tu_aux (Tu_ty_id (typ, id), _) -> mk_exp (E_app (id, [mk_exp (E_cast (typ, mk_lit_exp L_undef))]))
   in
   let p_tup = function
     | [pat] -> pat

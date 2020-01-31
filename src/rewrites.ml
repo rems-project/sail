@@ -145,40 +145,6 @@ let lexp_is_effectful (LEXP_aux (_, (_, annot))) = match destruct_tannot annot w
   | Some (_, _, eff) -> effectful_effs eff
   | _ -> false
 
-let explode s =
-  let rec exp i l = if i < 0 then l else exp (i - 1) (s.[i] :: l) in
-  exp (String.length s - 1) []
-
-let vector_string_to_bit_list l lit =
-
-  let hexchar_to_binlist = function
-    | '0' -> ['0';'0';'0';'0']
-    | '1' -> ['0';'0';'0';'1']
-    | '2' -> ['0';'0';'1';'0']
-    | '3' -> ['0';'0';'1';'1']
-    | '4' -> ['0';'1';'0';'0']
-    | '5' -> ['0';'1';'0';'1']
-    | '6' -> ['0';'1';'1';'0']
-    | '7' -> ['0';'1';'1';'1']
-    | '8' -> ['1';'0';'0';'0']
-    | '9' -> ['1';'0';'0';'1']
-    | 'A' -> ['1';'0';'1';'0']
-    | 'B' -> ['1';'0';'1';'1']
-    | 'C' -> ['1';'1';'0';'0']
-    | 'D' -> ['1';'1';'0';'1']
-    | 'E' -> ['1';'1';'1';'0']
-    | 'F' -> ['1';'1';'1';'1']
-    | _ -> raise (Reporting.err_unreachable l __POS__ "hexchar_to_binlist given unrecognized character") in
-
-  let s_bin = match lit with
-    | L_hex s_hex -> List.flatten (List.map hexchar_to_binlist (explode (String.uppercase_ascii s_hex)))
-    | L_bin s_bin -> explode s_bin
-    | _ -> raise (Reporting.err_unreachable l __POS__ "s_bin given non vector literal") in
-
-  List.map (function '0' -> L_aux (L_zero, gen_loc l)
-                   | '1' -> L_aux (L_one, gen_loc l)
-                   | _ -> raise (Reporting.err_unreachable (gen_loc l) __POS__ "binary had non-zero or one")) s_bin
-
 let find_used_vars exp =
   (* Overapproximates the set of used identifiers, but for the use cases below
      this is acceptable. *)
@@ -291,37 +257,24 @@ let rewrite_defs_nexp_ids, rewrite_typ_nexp_ids =
        DEF_spec (VS_aux (VS_val_spec (typschm, id, exts, b), a))
     | DEF_type (TD_aux (TD_abbrev (id, typq, typ_arg), a)) ->
        DEF_type (TD_aux (TD_abbrev (id, typq, rewrite_typ_arg env typ_arg), a))
+    | DEF_type (TD_aux (TD_record (id, typq, fields, b), a)) ->
+       let fields' = List.map (fun (t, id) -> (rewrite_typ env t, id)) fields in
+       DEF_type (TD_aux (TD_record (id, typq, fields', b), a))
+    | DEF_type (TD_aux (TD_variant (id, typq, constrs, b), a)) ->
+       let constrs' =
+         List.map (fun (Tu_aux (Tu_ty_id (t, id), l)) ->
+                        Tu_aux (Tu_ty_id (rewrite_typ env t, id), l))
+                  constrs
+       in
+       DEF_type (TD_aux (TD_variant (id, typq, constrs', b), a))
     | d -> Rewriter.rewrite_def rewriters d
   in
 
   (fun env defs -> rewrite_defs_base { rewriters_base with
-    rewrite_exp = (fun _ -> map_exp_annot rewrite_annot); rewrite_def = rewrite_def env
+    rewrite_exp = (fun _ -> map_exp_annot rewrite_annot);
+    rewrite_def = rewrite_def env
     } defs),
   rewrite_typ
-
-
-let rewrite_bitvector_exps env defs =
-  let e_aux = function
-    | (E_vector es, ((l, tannot) as a)) when not (is_empty_tannot tannot) ->
-       let env = env_of_annot (l, tannot) in
-       let typ = typ_of_annot (l, tannot) in
-       let eff = effect_of_annot tannot in
-       if is_bitvector_typ typ then
-         try
-           let len = mk_lit_exp (L_num (Big_int.of_int (List.length es))) in
-           let es = mk_exp (E_list (List.map strip_exp es)) in
-           let exp = mk_exp (E_app (mk_id "bitvector_of_bitlist", [len; es])) in
-           check_exp env exp typ
-         with
-         | _ -> E_aux (E_vector es, a)
-       else
-         E_aux (E_vector es, a)
-    | (e_aux, a) -> E_aux (e_aux, a)
-  in
-  let rewrite_exp _ = fold_exp { id_exp_alg with e_aux = e_aux } in
-  if IdSet.mem (mk_id "bitvector_of_bitlist") (val_spec_ids defs) then
-    rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp } defs
-  else defs
 
 
 let rewrite_defs_remove_assert defs =
@@ -1263,7 +1216,7 @@ let rewrite_defs_vector_string_pats_to_bit_list env =
     match pat with
     | P_lit (L_aux (lit, l) as l_aux) ->
        begin match lit with
-       | L_hex _ | L_bin _ -> P_aux (P_vector (List.map (fun p -> P_aux (P_lit p, (l, mk_tannot env bit_typ no_effect))) (vector_string_to_bit_list l lit)), annot)
+       | L_hex _ | L_bin _ -> P_aux (P_vector (List.map (fun p -> P_aux (P_lit p, (l, mk_tannot env bit_typ no_effect))) (vector_string_to_bit_list l_aux)), annot)
        | lit -> P_aux (P_lit l_aux, annot)
        end
     | pat -> (P_aux (pat, annot))
@@ -1273,7 +1226,7 @@ let rewrite_defs_vector_string_pats_to_bit_list env =
     match exp with
     | E_lit (L_aux (lit, l) as l_aux) ->
        begin match lit with
-       | L_hex _ | L_bin _ -> E_aux (E_vector (List.map (fun e -> E_aux (E_lit e, (l, mk_tannot env bit_typ no_effect))) (vector_string_to_bit_list l lit)), annot)
+       | L_hex _ | L_bin _ -> E_aux (E_vector (List.map (fun e -> E_aux (E_lit e, (l, mk_tannot env bit_typ no_effect))) (vector_string_to_bit_list l_aux)), annot)
        | lit -> E_aux (E_lit l_aux, annot)
        end
     | exp -> (E_aux (exp, annot))
@@ -1286,6 +1239,39 @@ let rewrite_defs_vector_string_pats_to_bit_list env =
     fold_exp { id_exp_alg with e_aux = rewrite_e_aux; pat_alg = pat_alg } exp
   in
   rewrite_defs_base { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp }
+
+let rewrite_bit_lists_to_lits env =
+  (* TODO Make all rewriting passes support bitvector literals instead of
+     converting back and forth *)
+  let open Sail2_values in
+  let bit_of_lit = function
+    | L_aux (L_zero, _) -> Some B0
+    | L_aux (L_one, _)  -> Some B1
+    | _ -> None
+  in
+  let bit_of_exp = function E_aux (E_lit lit, _) -> bit_of_lit lit | _ -> None in
+  let string_of_chars cs = String.concat "" (List.map (String.make 1) cs) in
+  let lit_of_bits bits = match hexstring_of_bits bits with
+    | Some h -> L_hex (string_of_chars h)
+    | None -> L_bin (string_of_chars (List.map bitU_char bits))
+  in
+  let e_aux (e, (l, annot)) =
+    let rewrap e = E_aux (e, (l, annot)) in
+    try
+      let env = env_of_annot (l, annot) in
+      let typ = typ_of_annot (l, annot) in
+      match e with
+      | E_vector es when is_bitvector_typ typ ->
+         (match just_list (List.map bit_of_exp es) with
+          | Some bits ->
+             check_exp env (mk_exp (E_cast (typ, mk_lit_exp (lit_of_bits bits)))) typ
+          | None -> rewrap e)
+      | E_cast (typ', E_aux (E_cast (_, e'), _)) -> rewrap (E_cast (typ', e'))
+      | _ -> rewrap e
+    with _ -> rewrap e
+  in
+  let rewrite_exp rw = fold_exp { id_exp_alg with e_aux = e_aux; } in
+  rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp }
 
 (* Remove pattern guards by rewriting them to if-expressions within the
    pattern expression. *)
@@ -2030,7 +2016,7 @@ let rewrite_simple_types env (Defs defs) =
   let rec simple_lit (L_aux (lit_aux, l) as lit) =
     match lit_aux with
     | L_bin _ | L_hex _ ->
-       E_list (List.map (fun b -> E_aux (E_lit b, simple_annot l bit_typ)) (vector_string_to_bit_list l lit_aux))
+       E_list (List.map (fun b -> E_aux (E_lit b, simple_annot l bit_typ)) (vector_string_to_bit_list lit))
     | _ -> E_lit lit
   in
   let simple_def = function
@@ -3147,7 +3133,7 @@ let rewrite_defs_mapping_patterns env =
        let x = Env.get_val_spec mapping_id env in
 
        let typ1, typ2 = match x with
-         | (_, Typ_aux(Typ_bidir(typ1, typ2), _)) -> typ1, typ2
+         | (_, Typ_aux(Typ_bidir(typ1, typ2, _), _)) -> typ1, typ2
          | (_, typ) -> raise (Reporting.err_unreachable (fst p_annot) __POS__ ("Must be bi-directional mapping: " ^ string_of_typ typ))
        in
 
@@ -3950,6 +3936,54 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
           [realise_single_mpexp (append_placeholder mpexp) (mk_exp (E_app ((mk_id "Some"), [mk_exp (E_tuple [exp; exp_of_mpat strlen])])))]
       end
   in
+  let realise_val_spec = function
+    | (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, Typ_aux (Typ_bidir (typ1, typ2, eff), l)), _), id, _, _), ((_, (tannot:tannot)) as annot))) ->
+      let forwards_id = mk_id (string_of_id id ^ "_forwards") in
+      let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
+      let backwards_id = mk_id (string_of_id id ^ "_backwards") in
+      let backwards_matches_id = mk_id (string_of_id id ^ "_backwards_matches") in
+
+      let env = env_of_annot annot in
+      let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, eff), l) in
+      let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, eff), l) in
+      let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, eff), l) in
+      let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, eff), l) in
+
+      let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, [], false), (Parse_ast.Unknown,())) in
+      let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, [], false), (Parse_ast.Unknown,())) in
+      let forwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_matches_typ, forwards_matches_id, [], false), (Parse_ast.Unknown,())) in
+      let backwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_matches_typ, backwards_matches_id, [], false), (Parse_ast.Unknown,())) in
+
+      let forwards_spec, env = Type_check.check_val_spec env forwards_spec in
+      let backwards_spec, env = Type_check.check_val_spec env backwards_spec in
+      let forwards_matches_spec, env = Type_check.check_val_spec env forwards_matches_spec in
+      let backwards_matches_spec, env = Type_check.check_val_spec env backwards_matches_spec in
+
+      let prefix_id = mk_id (string_of_id id ^ "_matches_prefix") in
+      let string_defs =
+        begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then
+                let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+                let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, [], false), (Parse_ast.Unknown,())) in
+                let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
+                forwards_prefix_spec
+              else
+                if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then
+                  let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
+                  let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, [], false), (Parse_ast.Unknown,())) in
+                  let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
+                  backwards_prefix_spec
+                else
+                  []
+        end
+      in
+
+        forwards_spec
+      @ backwards_spec
+      @ forwards_matches_spec
+      @ backwards_matches_spec
+      @ string_defs
+    | vs -> [DEF_spec vs]
+  in
   let realise_mapdef (MD_aux (MD_mapping (id, _, mapcls), ((l, (tannot:tannot)) as annot))) =
     let forwards_id = mk_id (string_of_id id ^ "_forwards") in
     let forwards_matches_id = mk_id (string_of_id id ^ "_forwards_matches") in
@@ -3964,24 +3998,14 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
       | _ -> raise (Reporting.err_unreachable l __POS__ "mapping with no clauses?")
     in
     let (typq, bidir_typ) = Env.get_val_spec id env in
-    let (typ1, typ2, l) = match bidir_typ with
-      | Typ_aux (Typ_bidir (typ1, typ2), l) -> typ1, typ2, l
+    let (typ1, typ2, eff, l) = match bidir_typ with
+      | Typ_aux (Typ_bidir (typ1, typ2, eff), l) -> typ1, typ2, eff, l
       | _ -> raise (Reporting.err_unreachable l __POS__ "non-bidir type of mapping?")
     in
-    let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, no_effect), l) in
-    let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, no_effect), l) in
-    let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, no_effect), l) in
-    let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, no_effect), l) in
-
-    let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, [], false), (Parse_ast.Unknown,())) in
-    let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, [], false), (Parse_ast.Unknown,())) in
-    let forwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_matches_typ, forwards_matches_id, [], false), (Parse_ast.Unknown,())) in
-    let backwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_matches_typ, backwards_matches_id, [], false), (Parse_ast.Unknown,())) in
-
-    let forwards_spec, env = Type_check.check_val_spec env forwards_spec in
-    let backwards_spec, env = Type_check.check_val_spec env backwards_spec in
-    let forwards_matches_spec, env = Type_check.check_val_spec env forwards_matches_spec in
-    let backwards_matches_spec, env = Type_check.check_val_spec env backwards_matches_spec in
+    let forwards_typ = Typ_aux (Typ_fn ([typ1], typ2, eff), l) in
+    let forwards_matches_typ = Typ_aux (Typ_fn ([typ1], bool_typ, eff), l) in
+    let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1, eff), l) in
+    let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ, eff), l) in
 
     let no_tannot = (Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)) in
     let forwards_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_mapcl true forwards_id) mapcls) |> List.flatten))) in
@@ -4010,40 +4034,34 @@ let rewrite_defs_realise_mappings _ (Defs defs) =
     let string_defs =
       begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then
               let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
-              let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, [], false), (Parse_ast.Unknown,())) in
-              let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
               let forwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl true prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
               let forwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_none, [mk_funcl prefix_id arg_pat forwards_prefix_match]), (l, ()))) in
               typ_debug (lazy (Printf.sprintf "forwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_prefix_fun |> Pretty_print_sail.to_string)));
               let forwards_prefix_fun, _ = Type_check.check_fundef env forwards_prefix_fun in
-              forwards_prefix_spec @ forwards_prefix_fun
+              forwards_prefix_fun
             else
               if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then
                 let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)], no_effect), Parse_ast.Unknown) in
-                let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, [], false), (Parse_ast.Unknown,())) in
-                let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
                 let backwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realise_prefix_mapcl false prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
                 let backwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, effect_none, [mk_funcl prefix_id arg_pat backwards_prefix_match]), (l, ()))) in
                 typ_debug (lazy (Printf.sprintf "backwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_prefix_fun |> Pretty_print_sail.to_string)));
                 let backwards_prefix_fun, _ = Type_check.check_fundef env backwards_prefix_fun in
-                backwards_prefix_spec @ backwards_prefix_fun
+                backwards_prefix_fun
               else
                 []
       end
     in
+    let has_def id = IdSet.mem id (ids_of_defs (Defs defs)) in
 
-      forwards_spec
-    @ forwards_fun
-    @ backwards_spec
-    @ backwards_fun
-    @ forwards_matches_spec
-    @ forwards_matches_fun
-    @ backwards_matches_spec
-    @ backwards_matches_fun
-    @ string_defs
+    (if has_def forwards_id then [] else forwards_fun)
+    @ (if has_def backwards_id then [] else backwards_fun)
+    @ (if has_def forwards_matches_id then [] else forwards_matches_fun)
+    @ (if has_def backwards_matches_id then [] else backwards_matches_fun)
+    @ (if has_def prefix_id then [] else string_defs)
   in
   let rewrite_def def =
     match def with
+    | DEF_spec spec -> realise_val_spec spec
     | DEF_mapdef mdef -> realise_mapdef mdef
     | d -> [d]
   in
@@ -4653,13 +4671,30 @@ let recheck_defs_without_effects env defs =
   let () = opt_no_effects := old in
   result
 
-let remove_mapping_valspecs env (Defs defs) =
-  let allowed_def def =
-    match def with
-    | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (_, Typ_aux (Typ_bidir _, _)), _), _, _, _), _)) -> false
-    | _ -> true
+(* In realise_mappings we may have duplicated a user-supplied val spec, which
+   causes problems for some targets. Keep the first one, except use the externs
+   from the last one, as subsequent redefinitions override earlier ones. *)
+let remove_duplicate_valspecs env (Defs defs) =
+  let last_externs =
+    List.fold_left
+      (fun last_externs def ->
+        match def with
+        | DEF_spec (VS_aux (VS_val_spec (_, id, externs, _), _)) ->
+            Bindings.add id externs last_externs
+        | _ -> last_externs) Bindings.empty defs
   in
-  Defs (List.filter allowed_def defs)
+  let (_, rev_defs) =
+    List.fold_left
+      (fun (set, defs) def ->
+        match def with
+        | DEF_spec (VS_aux (VS_val_spec (typschm, id, _, cast), l)) ->
+            if IdSet.mem id set then (set, defs)
+            else
+              let externs = Bindings.find id last_externs in
+              let vs = VS_aux (VS_val_spec (typschm, id, externs, cast), l) in
+              (IdSet.add id set, (DEF_spec vs)::defs)
+        | _ -> (set, def::defs)) (IdSet.empty, []) defs
+  in Defs (List.rev rev_defs)
 
 
 (* Move loop termination measures into loop AST nodes.  This is used before
@@ -4807,7 +4842,7 @@ let all_rewrites = [
     ("recheck_defs_without_effects", Checking_rewriter recheck_defs_without_effects);
     ("optimize_recheck_defs", Basic_rewriter (fun _ -> Optimize.recheck));
     ("realise_mappings", Basic_rewriter rewrite_defs_realise_mappings);
-    ("remove_mapping_valspecs", Basic_rewriter remove_mapping_valspecs);
+    ("remove_duplicate_valspecs", Basic_rewriter remove_duplicate_valspecs);
     ("toplevel_string_append", Basic_rewriter rewrite_defs_toplevel_string_append);
     ("pat_string_append", Basic_rewriter rewrite_defs_pat_string_append);
     ("mapping_builtins", Basic_rewriter rewrite_defs_mapping_patterns);
@@ -4831,7 +4866,7 @@ let all_rewrites = [
     ("remove_bitvector_pats", Basic_rewriter rewrite_defs_remove_bitvector_pats);
     ("remove_numeral_pats", Basic_rewriter rewrite_defs_remove_numeral_pats);
     ("guarded_pats", Basic_rewriter rewrite_defs_guarded_pats);
-    ("bitvector_exps", Basic_rewriter rewrite_bitvector_exps);
+    ("bit_lists_to_lits", Basic_rewriter rewrite_bit_lists_to_lits);
     ("exp_lift_assign", Basic_rewriter rewrite_defs_exp_lift_assign);
     ("early_return", Basic_rewriter rewrite_defs_early_return);
     ("nexp_ids", Basic_rewriter rewrite_defs_nexp_ids);
@@ -4850,14 +4885,14 @@ let all_rewrites = [
     ("simple_types", Basic_rewriter rewrite_simple_types);
     ("overload_cast", Basic_rewriter rewrite_overload_cast);
     ("top_sort_defs", Basic_rewriter (fun _ -> top_sort_defs));
-    ("constant_fold", String_rewriter (fun target -> Basic_rewriter (fun _ -> Constant_fold.rewrite_constant_function_calls target)));
+    ("constant_fold", String_rewriter (fun target -> Basic_rewriter (fun _ -> Constant_fold.(rewrite_constant_function_calls no_fixed target))));
     ("split", String_rewriter (fun str -> Basic_rewriter (rewrite_split_fun_ctor_pats str)));
     ("properties", Basic_rewriter (fun _ -> Property.rewrite));
   ]
 
 let rewrites_lem = [
     ("realise_mappings", []);
-    ("remove_mapping_valspecs", []);
+    ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
     ("mapping_builtins", []);
@@ -4881,7 +4916,6 @@ let rewrites_lem = [
     ("remove_numeral_pats", []);
     ("pattern_literals", [Literal_arg "lem"]);
     ("guarded_pats", []);
-    ("bitvector_exps", []);
     (* ("register_ref_writes", rewrite_register_ref_writes); *)
     ("nexp_ids", []);
     ("fix_val_specs", []);
@@ -4902,12 +4936,13 @@ let rewrites_lem = [
     ("remove_superfluous_letbinds", []);
     ("remove_superfluous_returns", []);
     ("merge_function_clauses", []);
+    ("bit_lists_to_lits", []);
     ("recheck_defs", [])
   ]
 
 let rewrites_coq = [
     ("realise_mappings", []);
-    ("remove_mapping_valspecs", []);
+    ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
     ("mapping_builtins", []);
@@ -4923,7 +4958,6 @@ let rewrites_coq = [
     ("remove_numeral_pats", []);
     ("pattern_literals", [Literal_arg "lem"]);
     ("guarded_pats", []);
-    ("bitvector_exps", []);
     (* ("register_ref_writes", rewrite_register_ref_writes); *)
     ("nexp_ids", []);
     ("fix_val_specs", []);
@@ -4953,6 +4987,7 @@ let rewrites_coq = [
     ("internal_lets", []);
     ("remove_superfluous_letbinds", []);
     ("remove_superfluous_returns", []);
+    ("bit_lists_to_lits", []);
     ("recheck_defs", [])
   ]
 

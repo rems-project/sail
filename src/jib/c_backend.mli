@@ -64,6 +64,9 @@ val opt_no_main : bool ref
    before executing any instruction semantics. *)
 val opt_no_rts : bool ref
 
+(** Do not include sail.h by default *)
+val opt_no_lib : bool ref
+
 (** Ordinarily we use plain z-encoding to name-mangle generated Sail
    identifiers into a form suitable for C. If opt_prefix is set, then
    the "z" which is added on the front of each generated C function
@@ -89,7 +92,7 @@ val opt_extra_arguments : string option ref
    definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
    of the original function to be compiled. Enabled using the -memo
    flag. Uses Marshal so it's quite picky about the exact version of
-b   the Sail version. This cache can obviously become stale if the C
+   the Sail version. This cache can obviously become stale if the C
    backend changes - it'll load an old version compiled without said
    changes. *)
 val opt_memo_cache : bool ref
@@ -100,10 +103,8 @@ val optimize_primops : bool ref
 val optimize_hoist_allocations : bool ref
 val optimize_struct_updates : bool ref
 val optimize_alias : bool ref
-val optimize_int128 : bool ref
-
-(** Convert a typ to a IR ctyp *)
-val ctyp_of_typ : Jib_compile.ctx -> Ast.typ -> ctyp
+val optimize_fixed_int : bool ref
+val optimize_fixed_bits : bool ref
 
 val jib_of_ast : Env.t -> tannot Ast.defs -> cdef list * Jib_compile.ctx
 val compile_ast : Env.t -> out_channel -> string list -> tannot Ast.defs -> unit

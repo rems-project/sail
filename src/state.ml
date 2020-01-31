@@ -58,6 +58,8 @@ open PPrint
 open Pretty_print_common
 open Pretty_print_sail
 
+let opt_type_grouped_regstate = ref false
+
 let defs_of_string = ast_of_def_string
 
 let is_defined defs name = IdSet.mem (mk_id name) (ids_of_defs (Defs defs))
@@ -78,11 +80,48 @@ let find_registers defs =
       | _ -> acc
     ) [] defs
 
-let generate_regstate = function
-  | [] -> ["type regstate = unit"]
+let generate_register_id_enum = function
+  | [] -> ["type register_id = unit"]
   | registers ->
-     let reg (typ, id) = Printf.sprintf "%s : %s" (string_of_id id) (to_string (doc_typ typ)) in
-     ["struct regstate = { " ^ (String.concat ", " (List.map reg registers)) ^ " }"]
+     let reg (typ, id) = string_of_id id in
+     ["type register_id = " ^ String.concat " | " (List.map reg registers)]
+
+let rec id_of_regtyp builtins mwords (Typ_aux (t, l) as typ) = match t with
+  | Typ_id id -> id
+  | Typ_app (id, args) ->
+     let name_arg (A_aux (targ, _)) = match targ with
+       | A_typ targ -> string_of_id (id_of_regtyp builtins mwords targ)
+       | A_nexp nexp when is_nexp_constant (nexp_simp nexp) ->
+          string_of_nexp (nexp_simp nexp)
+       | A_order (Ord_aux (Ord_inc, _)) -> "inc"
+       | A_order (Ord_aux (Ord_dec, _)) -> "dec"
+       | _ ->
+          raise (Reporting.err_typ l "Unsupported register type")
+     in
+     if IdSet.mem id builtins && not (mwords && is_bitvector_typ typ) then id else
+     append_id id (String.concat "_" ("" :: List.map name_arg args))
+  | _ -> raise (Reporting.err_typ l "Unsupported register type")
+
+let regstate_field typ = append_id (id_of_regtyp IdSet.empty false typ) "_reg"
+
+let generate_regstate registers =
+  let regstate_def =
+    if registers = [] then
+      TD_abbrev (mk_id "regstate", mk_typquant [], mk_typ_arg (A_typ unit_typ))
+    else
+      let fields =
+        if !opt_type_grouped_regstate then
+          List.map
+            (fun (typ, id) ->
+                 (function_typ [string_typ] typ no_effect,
+                  regstate_field typ))
+            registers
+          |> List.sort_uniq (fun (typ1, id1) (typ2, id2) -> Id.compare id1 id2)
+        else registers
+      in
+      TD_record (mk_id "regstate", mk_typquant [], fields, false)
+  in
+  Defs [DEF_type (TD_aux (regstate_def, (Unknown, ())))]
 
 let generate_initial_regstate defs =
   let registers = find_registers defs in
@@ -181,27 +220,15 @@ let generate_initial_regstate defs =
       | _ -> inits) ([], Bindings.empty) defs
     in
     let init_reg (typ, id) = string_of_id id ^ " = " ^ lookup_init_val init_vals typ in
-    init_defs @
-    ["let initial_regstate : regstate = struct { " ^ (String.concat ", " (List.map init_reg registers)) ^ " }"]
+    List.map defs_of_string
+      (init_defs @
+       ["let initial_regstate : regstate = struct { " ^
+        (String.concat ", " (List.map init_reg registers)) ^
+        " }"])
   with
   | _ -> [] (* Do not generate an initial register state if anything goes wrong *)
 
-let rec regval_constr_id mwords (Typ_aux (t, l) as typ) = match t with
-  | Typ_id id -> id
-  | Typ_app (id, args) ->
-     let name_arg (A_aux (targ, _)) = match targ with
-       | A_typ targ -> string_of_id (regval_constr_id mwords targ)
-       | A_nexp nexp when is_nexp_constant (nexp_simp nexp) ->
-          string_of_nexp (nexp_simp nexp)
-       | A_order (Ord_aux (Ord_inc, _)) -> "inc"
-       | A_order (Ord_aux (Ord_dec, _)) -> "dec"
-       | _ ->
-          raise (Reporting.err_typ l "Unsupported register type")
-     in
-     let builtins = IdSet.of_list (List.map mk_id ["vector"; "bitvector"; "list"; "option"]) in
-     if IdSet.mem id builtins && not (mwords && is_bitvector_typ typ) then id else
-     append_id id (String.concat "_" ("" :: List.map name_arg args))
-  | _ -> raise (Reporting.err_typ l "Unsupported register type")
+let regval_constr_id = id_of_regtyp (IdSet.of_list (List.map mk_id ["vector"; "bitvector"; "list"; "option"]))
 
 let register_base_types mwords typs =
   let rec add_base_typs typs (Typ_aux (t, _) as typ) =
@@ -211,8 +238,8 @@ let register_base_types mwords typs =
         when IdSet.mem id builtins && not (mwords && is_bitvector_typ typ) ->
          let add_typ_arg base_typs (A_aux (targ, _)) =
            match targ with
-             | A_typ typ -> add_base_typs typs typ
-             | _ -> typs
+             | A_typ typ -> add_base_typs base_typs typ
+             | _ -> base_typs
          in
          List.fold_left add_typ_arg typs args
       | _ -> Bindings.add (regval_constr_id mwords typ) typ typs
@@ -223,13 +250,14 @@ let generate_regval_typ typs =
   let constr (constr_id, typ) =
     Printf.sprintf "Regval_%s : %s" (string_of_id constr_id) (to_string (doc_typ typ)) in
   let builtins =
-    "Regval_vector : (int, bool, list(register_value)), " ^
+    "Regval_vector : list(register_value), " ^
     "Regval_list : list(register_value), " ^
     "Regval_option : option(register_value)"
   in
-  ["union register_value = { " ^
-  (String.concat ", " (builtins :: List.map constr (Bindings.bindings typs))) ^
-  " }"]
+  [defs_of_string
+    ("union register_value = { " ^
+     (String.concat ", " (builtins :: List.map constr (Bindings.bindings typs))) ^
+     " }")]
 
 let add_regval_conv id typ (Defs defs) =
   let id = string_of_id id in
@@ -253,11 +281,9 @@ let add_regval_conv id typ (Defs defs) =
 let rec regval_convs_lem mwords (Typ_aux (t, _) as typ) = match t with
   | Typ_app _ when (is_vector_typ typ || is_bitvector_typ typ) && not (mwords && is_bitvector_typ typ) ->
      let size, ord, etyp = vector_typ_args_of typ in
-     let size = string_of_nexp (nexp_simp size) in
-     let is_inc = if is_order_inc ord then "true" else "false" in
      let etyp_of, of_etyp = regval_convs_lem mwords etyp in
      "(fun v -> vector_of_regval " ^ etyp_of ^ " v)",
-     "(fun v -> regval_of_vector " ^ of_etyp ^ " " ^ size ^ " " ^ is_inc ^ " v)"
+     "(fun v -> regval_of_vector " ^ of_etyp ^ " v)"
   | Typ_app (id, [A_aux (A_typ etyp, _)])
     when string_of_id id = "list" ->
      let etyp_of, of_etyp = regval_convs_lem mwords etyp in
@@ -277,12 +303,12 @@ let register_refs_lem mwords registers =
     separate_map hardline string [
       "val vector_of_regval : forall 'a. (register_value -> maybe 'a) -> register_value -> maybe (list 'a)";
       "let vector_of_regval of_regval = function";
-      "  | Regval_vector (_, _, v) -> just_list (List.map of_regval v)";
+      "  | Regval_vector v -> just_list (List.map of_regval v)";
       "  | _ -> Nothing";
       "end";
       "";
-      "val regval_of_vector : forall 'a. ('a -> register_value) -> integer -> bool -> list 'a -> register_value";
-      "let regval_of_vector regval_of size is_inc xs = Regval_vector (size, is_inc, List.map regval_of xs)";
+      "val regval_of_vector : forall 'a. ('a -> register_value) -> list 'a -> register_value";
+      "let regval_of_vector regval_of xs = Regval_vector (List.map regval_of xs)";
       "";
       "val list_of_regval : forall 'a. (register_value -> maybe 'a) -> register_value -> maybe (list 'a)";
       "let list_of_regval of_regval = function";
@@ -307,12 +333,20 @@ let register_refs_lem mwords registers =
   in
   let register_ref (typ, id) =
     let idd = string (string_of_id id) in
+    let (read_from, write_to) =
+      if !opt_type_grouped_regstate then
+        let field_idd = string (string_of_id (regstate_field typ)) in
+        (field_idd ^^ space ^^ dquotes idd,
+         doc_op equals field_idd (string "(fun reg -> if reg = \"" ^^ idd ^^ string "\" then v else s." ^^ field_idd ^^ string " reg)"))
+      else
+        (idd, doc_op equals idd (string "v"))
+    in
     (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
     let of_regval, regval_of = regval_convs_lem mwords typ in
     concat [string "let "; idd; string "_ref = <|"; hardline;
       string "  name = \""; idd; string "\";"; hardline;
-      string "  read_from = (fun s -> s."; idd; string ");"; hardline;
-      string "  write_to = (fun v s -> (<| s with "; idd; string " = v |>));"; hardline;
+      string "  read_from = (fun s -> s."; read_from; string ");"; hardline;
+      string "  write_to = (fun v s -> (<| s with "; write_to; string " |>));"; hardline;
       string "  of_regval = "; string of_regval; string ";"; hardline;
       string "  regval_of = "; string regval_of; string " |>"; hardline]
   in
@@ -393,7 +427,7 @@ let generate_isa_lemmas mwords (Defs defs : tannot defs) =
   separate_map hardline string [
     "lemma vector_of_rv_rv_of_vector[simp]:";
     "  assumes \"\\<And>v. of_rv (rv_of v) = Some v\"";
-    "  shows \"vector_of_regval of_rv (regval_of_vector rv_of len is_inc v) = Some v\"";
+    "  shows \"vector_of_regval of_rv (regval_of_vector rv_of v) = Some v\"";
     "proof -";
     "  from assms have \"of_rv \\<circ> rv_of = Some\" by auto";
     "  then show ?thesis by (auto simp: vector_of_regval_def regval_of_vector_def)";
@@ -421,7 +455,7 @@ let rec regval_convs_coq (Typ_aux (t, _) as typ) = match t with
      let is_inc = if is_order_inc ord then "true" else "false" in
      let etyp_of, of_etyp = regval_convs_coq etyp in
      "(fun v => vector_of_regval " ^ size ^ " " ^ etyp_of ^ " v)",
-     "(fun v => regval_of_vector " ^ of_etyp ^ " " ^ size ^ " " ^ is_inc ^ " v)"
+     "(fun v => regval_of_vector " ^ of_etyp ^ " v)"
   | Typ_app (id, [A_aux (A_typ etyp, _)])
     when string_of_id id = "list" ->
      let etyp_of, of_etyp = regval_convs_coq etyp in
@@ -440,11 +474,11 @@ let register_refs_coq registers =
   let generic_convs =
     separate_map hardline string [
       "Definition vector_of_regval {a} n (of_regval : register_value -> option a) (rv : register_value) : option (vec a n) := match rv with";
-      "  | Regval_vector (n', _, v) => if n =? n' then map_bind (vec_of_list n) (just_list (List.map of_regval v)) else None";
+      "  | Regval_vector v => if n =? length_list v then map_bind (vec_of_list n) (just_list (List.map of_regval v)) else None";
       "  | _ => None";
       "end.";
       "";
-      "Definition regval_of_vector {a} (regval_of : a -> register_value) (size : Z) (is_inc : bool) (xs : vec a size) : register_value := Regval_vector (size, is_inc, List.map regval_of (list_of_vec xs)).";
+      "Definition regval_of_vector {a size} (regval_of : a -> register_value) (xs : vec a size) : register_value := Regval_vector (List.map regval_of (list_of_vec xs)).";
       "";
       "Definition list_of_regval {a} (of_regval : register_value -> option a) (rv : register_value) : option (list a) := match rv with";
       "  | Regval_list v => just_list (List.map of_regval v)";
@@ -504,14 +538,20 @@ let generate_regstate_defs mwords defs =
   let regtyps = register_base_types mwords (List.map fst registers) in
   let option_typ =
     if is_defined defs "option" then [] else
-      ["union option ('a : Type) = {None : unit, Some : 'a}"]
+      [defs_of_string "union option ('a : Type) = {None : unit, Some : 'a}"]
   in
   let regval_typ = if is_defined defs "register_value" then [] else generate_regval_typ regtyps in
-  let regstate_typ = if is_defined defs "regstate" then [] else generate_regstate registers in
-  let initregstate = if is_defined defs "initial_regstate" then [] else generate_initial_regstate defs in
+  let regstate_typ = if is_defined defs "regstate" then [] else [generate_regstate registers] in
+  let initregstate =
+    (* Don't create initial regstate if it is already defined or if we generated
+       a regstate record with registers grouped per type; the latter would
+       require record fields storing functions, which is not supported in
+       Sail. *)
+    if is_defined defs "initial_regstate" || !opt_type_grouped_regstate then [] else
+    generate_initial_regstate defs
+  in
   let defs =
     option_typ @ regval_typ @ regstate_typ @ initregstate
-    |> List.map defs_of_string
     |> concat_ast
     |> Bindings.fold add_regval_conv regtyps
   in

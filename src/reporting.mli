@@ -74,8 +74,7 @@ val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
 val short_loc_to_string : Parse_ast.l -> string
 
 (** [print_err fatal print_loc_source l head mes] prints an error / warning message to
-    std-err. It starts with printing location information stored in [l]
-    It then prints "head: mes". If [fatal] is set, the program exists with error-code 1 afterwards.
+    std-err.
 *)
 val print_err : Parse_ast.l -> string -> string -> unit
 
@@ -83,13 +82,13 @@ val print_err : Parse_ast.l -> string -> string -> unit
 
 (** Errors stop execution and print a message; they typically have a location and message.
 *)
-type error =
+type error = private
   (** General errors, used for multi purpose. If you are unsure, use this one. *)
   | Err_general of Parse_ast.l * string
 
   (** Unreachable errors should never be thrown. It means that some
       code was excuted that the programmer thought of as unreachable *)
-  | Err_unreachable of Parse_ast.l * (string * int * int * int) * string
+  | Err_unreachable of Parse_ast.l * (string * int * int * int) * Printexc.raw_backtrace * string
 
   (** [Err_todo] indicates that some feature is unimplemented; it should be built using [err_todo]. *)
   | Err_todo of Parse_ast.l * string
@@ -101,20 +100,13 @@ type error =
 
 exception Fatal_error of error
 
-(** [err_todo l m] is an abreviatiation for [Fatal_error (Err_todo (l, m))] *)
 val err_todo : Parse_ast.l -> string -> exn
-
-(** [err_general l m] is an abreviatiation for [Fatal_error (Err_general (b, l, m))] *)
 val err_general : Parse_ast.l -> string -> exn
-
-(** [err_unreachable l __POS__ m] is an abreviatiation for [Fatal_error (Err_unreachable (l, __POS__, m))] *)
 val err_unreachable : Parse_ast.l -> (string * int * int * int) -> string -> exn
-
-(** [err_typ l m] is an abreviatiation for [Fatal_error (Err_type (l, m))] *)
 val err_typ : Parse_ast.l -> string -> exn
-
-(** [err_syntax_loc] is an abbreviation for [Fatal_error (Err_syntax_loc (l, m))] *)
+val err_syntax : Lexing.position -> string -> exn
 val err_syntax_loc : Parse_ast.l -> string -> exn
+val err_lex : Lexing.position -> string -> exn
 
 val unreachable : Parse_ast.l -> (string * int * int * int) -> string -> 'a
 

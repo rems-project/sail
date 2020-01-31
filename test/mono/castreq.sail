@@ -93,6 +93,33 @@ function assign3(x) = {
   y
 }
 
+/* Test that matching on a variable which happens to fix a bitvector variable's
+   size updates the environment properly. */
+
+val assign4 : forall 'm, 'm in {1,2}. (implicit('m),bits(8*'m)) -> bits(8*'m)
+
+function assign4(m,x) = {
+  y : bits(8*'m) = x;
+  match m {
+    1 => y = y + 0x01,
+    2 => y[7..0] = 0x89
+  };
+  y
+}
+
+/* The same as assign4, except with a distinct type variable. */
+
+val assign5 : forall 'm 'n, 'm in {1,2} & 'n == 8 * 'm. (implicit('m),bits('n)) -> bits('n)
+
+function assign5(m,x) = {
+  y : bits('n) = x;
+  match m {
+    1 => y = y + 0x01,
+    2 => y[7..0] = 0x89
+  };
+  y
+}
+
 /* Adding casts for top-level pattern matches */
 
 val foo2 : forall 'm 'n, 'm in {8,16} & 'n in {32,64}. (atom('n), bits('m)) -> bits('n) effect pure
@@ -140,6 +167,10 @@ function run () = {
     assert(assign2(0x1234) == 0x00001234);
     assert(assign3(0x12) == 0x13);
     assert(assign3(0x1234) == 0x1289);
+    assert(assign4(0x12) == 0x13);
+    assert(assign4(0x1234) == 0x1289);
+    assert(assign5(0x12) == 0x13);
+    assert(assign5(0x1234) == 0x1289);
     assert(foo2(32,0x12) == 0x00120012);
     assert(foo2(64,0x12) == 0x0012001200120012);
     assert(foo3(4,0x12) == 0x00120012);

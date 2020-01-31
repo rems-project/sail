@@ -78,7 +78,7 @@ let get_cond graph n =
     IntMap.find n graph.conds
   else
     V_call (Bnot, [IntMap.find (abs n) graph.conds])
-     
+
 let get_vertex graph n = graph.nodes.(n)
 
 let iter_graph f graph =
@@ -309,7 +309,7 @@ let immediate_dominators graph root =
   let idom     = Array.make (cardinal graph) none in
   let samedom  = Array.make (cardinal graph) none in
   let best     = Array.make (cardinal graph) none in
-  let dfnum    = Array.make (cardinal graph) 0 in
+  let dfnum    = Array.make (cardinal graph) (-1) in
   let bucket   = Array.make (cardinal graph) IntSet.empty in
 
   let rec ancestor_with_lowest_semi v =
@@ -332,7 +332,7 @@ let immediate_dominators graph root =
   let count = ref 0 in
 
   let rec dfs p n =
-    if dfnum.(n) = 0 then
+    if dfnum.(n) = -1 then
       begin
         dfnum.(n) <- !count;
         vertex.(!count) <- n;
@@ -372,7 +372,7 @@ let immediate_dominators graph root =
         if semi.(y) = semi.(v) then
           idom.(v) <- p
         else
-          samedom.(n) <- y
+          samedom.(v) <- y
       ) bucket.(p);
   done;
   for i = 1 to !count - 1 do
@@ -504,6 +504,7 @@ let rename_variables graph root children =
     | Name (id, _) -> Name (id, i)
     | Have_exception _ -> Have_exception i
     | Current_exception _ -> Current_exception i
+    | Throw_location _ -> Throw_location i
     | Return _ -> Return i
   in
 
@@ -524,9 +525,6 @@ let rename_variables graph root children =
     | V_id (id, ctyp) ->
        let i = top_stack id in
        V_id (ssa_name i id, ctyp)
-    | V_ref (id, ctyp) ->
-       let i = top_stack id in
-       V_ref (ssa_name i id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
     | V_call (id, fs) -> V_call (id, List.map fold_cval fs)
     | V_field (f, field) -> V_field (fold_cval f, field)
@@ -730,7 +728,13 @@ let string_of_phis = function
 
 let string_of_node = function
   | (phis, CF_label label) -> string_of_phis phis ^ label
-  | (phis, CF_block (instrs, terminator)) -> string_of_phis phis ^ Util.string_of_list "\\l" (fun instr -> String.escaped (Pretty_print_sail.to_string (pp_instr ~short:true instr))) instrs
+  | (phis, CF_block (instrs, terminator)) ->
+     let string_of_instr instr =
+       let buf = Buffer.create 128 in
+       Jib_ir.Flat_ir_formatter.output_instr 0 buf 0 Jib_ir.StringMap.empty instr;
+       Buffer.contents buf
+     in
+     string_of_phis phis ^ Util.string_of_list "\\l" (fun instr -> String.escaped (string_of_instr instr)) instrs
   | (phis, CF_start inits) -> string_of_phis phis ^ "START"
   | (phis, CF_guard cval) -> string_of_phis phis ^ string_of_int cval
 

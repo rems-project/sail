@@ -61,9 +61,8 @@ val rewrite_ast_initial : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type
 val rewrite_ast_target : string -> Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
 val rewrite_ast_check : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
 
-val load_file_no_check : (Arg.key * Arg.spec * Arg.doc) list -> Ast.order -> string -> unit Ast.defs
-val load_file : (Arg.key * Arg.spec * Arg.doc) list -> Ast.order -> Type_check.Env.t -> string -> Type_check.tannot Ast.defs * Type_check.Env.t
-
+val opt_file_out : string option ref
+val opt_memo_z3 : bool ref
 val opt_just_check : bool ref
 val opt_ddump_tc_ast : bool ref
 val opt_ddump_rewrite_ast : ((string * int) option) ref
@@ -91,3 +90,7 @@ val output :
     files existed before. If it is set to [false] and an output file already exists,
     the output file is only updated, if its content really changes. *)
 val always_replace_files : bool ref
+
+val load_files : ?check:bool -> (Arg.key * Arg.spec * Arg.doc) list -> Type_check.Env.t -> string list -> (string * Type_check.tannot Ast.defs * Type_check.Env.t)
+
+val descatter : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t

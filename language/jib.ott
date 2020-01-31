@@ -26,6 +26,11 @@ metavar string ::=
   {{ ocaml string }}
   {{ lem string }}
 
+metavar mstring ::=
+  {{ phantom }}
+  {{ ocaml string option }}
+  {{ lem maybe string }}
+
 metavar bool ::=
   {{ phantom }}
   {{ ocaml bool }}
@@ -54,6 +59,7 @@ name :: '' ::=
   | id nat                :: :: name
   | have_exception nat    :: :: have_exception
   | current_exception nat :: :: current_exception
+  | throw_location nat    :: :: throw_location
   | return nat            :: :: return
 
 op :: '' ::=
@@ -62,7 +68,6 @@ op :: '' ::=
   | and               :: :: band
   | hd                :: :: list_hd
   | tl                :: :: list_tl
-  | bit_to_bool       :: :: bit_to_bool
   | eq                :: :: eq
   | neq               :: :: neq
 % Integer ops
@@ -91,20 +96,24 @@ op :: '' ::=
   | replicate nat     :: :: replicate
 
 cval :: 'V_' ::=
-  | name : ctyp                                     :: :: id
-  | '&' name : ctyp                                 :: :: ref
-  | value : ctyp                                    :: :: lit
-  | struct { id0 = cval0 , ... , idn = cvaln } ctyp :: :: struct
-  | cval != kind id ( ctyp0 , ... , ctypn ) ctyp    :: :: ctor_kind
-  | unwrap id cval ( ctyp0 , ... , ctypn ) ctyp     :: :: ctor_unwrap
-  | cval nat0 nat1                                  :: :: tuple_member
-  | op ( cval0 , ... , cvaln )                      :: :: call
-  | cval . string                                   :: :: field
-  | poly cval ctyp                                  :: :: poly
+  | name : ctyp                                       :: :: id
+  | value : ctyp                                      :: :: lit
+  | struct { uid0 = cval0 , ... , uidn = cvaln } ctyp :: :: struct
+  | cval != kind id ( ctyp0 , ... , ctypn ) ctyp      :: :: ctor_kind
+  | unwrap id cval ( ctyp0 , ... , ctypn ) ctyp       :: :: ctor_unwrap
+  | cval nat0 nat1                                    :: :: tuple_member
+  | op ( cval0 , ... , cvaln )                        :: :: call
+  | cval . uid                                        :: :: field
+  | poly cval ctyp                                    :: :: poly
 
 % Note that init / clear are sometimes refered to as create / kill
 
 %%% IR types
+
+uid :: 'UId_' ::=
+  {{ phantom }}
+  {{ lem (id * list ctyp) }}
+  {{ ocaml (id * ctyp list) }}
 
 ctyp :: 'CT_' ::=
   {{ com C type }}
@@ -142,11 +151,12 @@ ctyp :: 'CT_' ::=
 % into C. We don't fully worry about precise implementation details at
 % this point, as C doesn't have variants or tuples natively, but these
 % need to be encoded.
-  | enum id ( id0 , ... , idn )                    :: :: enum
-  | struct id ( id0 * ctyp0 , ... , idn * ctypn )  :: :: struct
-  | variant id ( id0 * ctyp0 , ... , idn * ctypn ) :: :: variant
+  | enum id ( id0 , ... , idn )                      :: :: enum
+  | struct id ( uid0 * ctyp0 , ... , uidn * ctypn )  :: :: struct
+  | variant id ( uid0 * ctyp0 , ... , uidn * ctypn ) :: :: variant
 
 % A vector type for non-bit vectors, and a (linked) list type.
+  | fvector ( nat , bool , ctyp )  :: :: fvector
   | vector ( bool , ctyp )         :: :: vector
   | list ( ctyp )                  :: :: list
 
@@ -166,18 +176,18 @@ ctyp :: 'CT_' ::=
 clexp :: 'CL_' ::=
   | name : ctyp              :: :: id
   | name0 rmw name1 : ctyp   :: :: rmw
-  | clexp . string           :: :: field
+  | clexp . uid              :: :: field
   | * clexp                  :: :: addr
   | clexp . nat              :: :: tuple
   | void                     :: :: void
 
 ctype_def :: 'CTD_' ::=
   {{ com C type definition }}
-  | enum id = id0 '|' ... '|' idn                     :: :: enum
-  | struct id = { id0 : ctyp0 , ... , idn : ctypn }   :: :: struct
-  | variant id  = { id0 : ctyp0 , ... , idn : ctypn } :: :: variant
+  | enum id = id0 '|' ... '|' idn                       :: :: enum
+  | struct id = { uid0 : ctyp0 , ... , uidn : ctypn }   :: :: struct
+  | variant id  = { uid0 : ctyp0 , ... , uidn : ctypn } :: :: variant
 
-iannot :: 'IA_' ::=
+iannot :: '' ::=
   {{ lem nat * nat * nat }}
   {{ ocaml int * int * int }}
 
@@ -190,7 +200,7 @@ instr :: 'I_' ::=
   | jump ( cval ) string                           :: :: jump
   | goto string                                    :: :: goto
   | string :                                       :: :: label
-  | clexp = bool id ( cval0 , ... , cvaln )        :: :: funcall
+  | clexp = bool uid ( cval0 , ... , cvaln )       :: :: funcall
   | clexp = cval                                   :: :: copy
   | clear ctyp name                                :: :: clear
   | undefined ctyp                                 :: :: undefined
@@ -235,7 +245,7 @@ cdef :: 'CDEF_' ::=
       instr0 ; ... ; instrm
     } :: :: let
 
-  | val id ( ctyp0 , ... , ctypn ) -> ctyp :: :: spec
+  | val id = mstring ( ctyp0 , ... , ctypn ) -> ctyp :: :: spec
 
 % If mid = Some id this indicates that the caller should allocate the
 % return type and passes a pointer to it as an extra argument id for

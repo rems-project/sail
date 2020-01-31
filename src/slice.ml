@@ -130,7 +130,7 @@ and typ_ids' (Typ_aux (aux, _)) =
      IdSet.add id (List.fold_left IdSet.union IdSet.empty (List.map typ_arg_ids' args))
   | Typ_fn (typs, typ, _) ->
      IdSet.union (typ_ids' typ) (List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs))
-  | Typ_bidir (typ1, typ2) ->
+  | Typ_bidir (typ1, typ2, _) ->
      IdSet.union (typ_ids' typ1) (typ_ids' typ2)
   | Typ_tup typs ->
      List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs)
@@ -169,10 +169,29 @@ let add_def_to_graph graph def =
   let scan_lexp self lexp_aux annot =
     let env = env_of_annot annot in
     begin match lexp_aux with
-    | LEXP_cast (typ, _) ->
-       IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
+    | LEXP_cast (typ, id) ->
+       IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ);
+       begin match Env.lookup_id id env with
+       | Register _ ->
+          graph := G.add_edge self (Register id) !graph
+       | Enum _ -> graph := G.add_edge self (Constructor id) !graph
+       | _ ->
+          if IdSet.mem id (Env.get_toplevel_lets env) then
+            graph := G.add_edge self (Letbind id) !graph
+          else ()
+       end
     | LEXP_memory (id, _) ->
        graph := G.add_edge self (Function id) !graph
+    | LEXP_id id ->
+       begin match Env.lookup_id id env with
+       | Register _ ->
+          graph := G.add_edge self (Register id) !graph
+       | Enum _ -> graph := G.add_edge self (Constructor id) !graph
+       | _ ->
+          if IdSet.mem id (Env.get_toplevel_lets env) then
+            graph := G.add_edge self (Letbind id) !graph
+          else ()
+       end
     | _ -> ()
     end;
     LEXP_aux (lexp_aux, annot)
@@ -204,6 +223,7 @@ let add_def_to_graph graph def =
     E_aux (e_aux, annot)
   in
   let rw_exp self = { id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp self e_aux annot);
+                                      lEXP_aux = (fun (l_aux, annot) -> scan_lexp self l_aux annot);
                                       pat_alg = rw_pat self } in
 
   let rewriters self =
@@ -344,3 +364,69 @@ let dot_of_ast out_chan ast =
   let module NodeSet = Set.Make(Node) in
   let g = graph_of_ast ast in
   G.make_dot (node_color NodeSet.empty) edge_color node_string out_chan g
+
+let () =
+  let open Printf in
+  let open Interactive in
+  let slice_roots = ref IdSet.empty in
+  let slice_cuts = ref IdSet.empty in
+
+  ArgString ("identifiers", fun arg -> Action (fun () ->
+    let args = Str.split (Str.regexp " +") arg in
+    let ids = List.map mk_id args |> IdSet.of_list in
+    Specialize.add_initial_calls ids;
+    slice_roots := IdSet.union ids !slice_roots
+  )) |> register_command ~name:"slice_roots" ~help:"Set the roots for :slice";
+
+  ArgString ("identifiers", fun arg -> Action (fun () ->
+    let args = Str.split (Str.regexp " +") arg in
+    let ids = List.map mk_id args |> IdSet.of_list in
+    slice_cuts := IdSet.union ids !slice_cuts
+  )) |> register_command ~name:"slice_cuts" ~help:"Set the cuts for :slice";
+
+  Action (fun () ->
+    let module NodeSet = Set.Make(Node) in
+    let module G = Graph.Make(Node) in
+    let g = graph_of_ast !ast in
+    let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
+    let cuts = !slice_cuts |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
+    let g = G.prune roots cuts g in
+    ast := filter_ast cuts g !ast
+  ) |> register_command
+         ~name:"slice"
+         ~help:"Slice AST to the definitions which the functions given \
+                by :slice_roots depend on, up to the functions given \
+                by :slice_cuts";
+
+  Action (fun () ->
+    let module NodeSet = Set.Make(Node) in
+    let module NodeMap = Map.Make(Node) in
+    let module G = Graph.Make(Node) in
+    let g = graph_of_ast !ast in
+    let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
+    let keep = function
+      | (Function id,_) when IdSet.mem id (!slice_roots) -> None
+      | (Function id,_) -> Some (Function id)
+      | _ -> None
+    in
+    let cuts = NodeMap.bindings g |> Util.map_filter keep |> NodeSet.of_list in
+    let g = G.prune roots cuts g in
+    ast := filter_ast cuts g !ast
+  ) |> register_command
+         ~name:"thin_slice"
+         ~help:(sprintf ":thin_slice - Slice AST to the function definitions given with %s" (command "slice_roots"));
+
+  ArgString ("format", fun arg -> Action (fun () ->
+    let format = if arg = "" then "svg" else arg in
+    let dotfile, out_chan = Filename.open_temp_file "sail_graph_" ".gz" in
+    let image = Filename.temp_file "sail_graph_" ("." ^ format) in
+    dot_of_ast out_chan !ast;
+    close_out out_chan;
+    let _ = Unix.system (Printf.sprintf "dot -T%s %s -o %s" format dotfile image) in
+    let _ = Unix.system (Printf.sprintf "xdg-open %s" image) in
+    ()
+  )) |> register_command
+          ~name:"graph"
+          ~help:"Draw a callgraph using dot in :0 (e.g. svg), and open with xdg-open"
+
+

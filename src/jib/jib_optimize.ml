@@ -50,6 +50,7 @@
 
 open Ast_util
 open Jib
+open Jib_compile
 open Jib_util
 
 let optimize_unit instrs =
@@ -81,6 +82,9 @@ let optimize_unit instrs =
   filter_instrs non_pointless_copy (map_instr_list unit_instr instrs)
 
 let flat_counter = ref 0
+
+let reset_flat_counter () = flat_counter := 0
+
 let flat_id orig_id =
   let id = mk_id (string_of_name ~zencode:false orig_id ^ "_l#" ^ string_of_int !flat_counter) in
   incr flat_counter;
@@ -98,10 +102,10 @@ let rec flatten_instrs = function
   | I_aux ((I_block block | I_try_block block), _) :: instrs ->
      flatten_instrs block @ flatten_instrs instrs
 
-  | I_aux (I_if (cval, then_instrs, else_instrs, _), _) :: instrs ->
+  | I_aux (I_if (cval, then_instrs, else_instrs, _), (_, l)) :: instrs ->
      let then_label = label "then_" in
      let endif_label = label "endif_" in
-     [ijump cval then_label]
+     [ijump l cval then_label]
      @ flatten_instrs else_instrs
      @ [igoto endif_label]
      @ [ilabel then_label]
@@ -149,7 +153,7 @@ let unique_per_function_ids cdefs =
     | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, ctyp, unique_instrs i instrs)
     | CDEF_type ctd -> CDEF_type ctd
     | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, unique_instrs i instrs)
-    | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, ctyps, ctyp)
+    | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, ctyps, ctyp)
     | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, unique_instrs i instrs)
     | CDEF_startup (id, instrs) -> CDEF_startup (id, unique_instrs i instrs)
     | CDEF_finish (id, instrs) -> CDEF_finish (id, unique_instrs i instrs)
@@ -158,7 +162,6 @@ let unique_per_function_ids cdefs =
 
 let rec cval_subst id subst = function
   | V_id (id', ctyp) -> if Name.compare id id' = 0 then subst else V_id (id', ctyp)
-  | V_ref (reg_id, ctyp) -> V_ref (reg_id, ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
   | V_call (op, cvals) -> V_call (op, List.map (cval_subst id subst) cvals)
   | V_field (cval, field) -> V_field (cval_subst id subst cval, field)
@@ -170,7 +173,6 @@ let rec cval_subst id subst = function
 
 let rec cval_map_id f = function
   | V_id (id, ctyp) -> V_id (f id, ctyp)
-  | V_ref (id, ctyp) -> V_ref (f id, ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
   | V_call (call, cvals) -> V_call (call, List.map (cval_map_id f) cvals)
   | V_field (cval, field) -> V_field (cval_map_id f cval, field)
@@ -245,6 +247,7 @@ let ssa_name i = function
   | Name (id, _) -> Name (id, i)
   | Have_exception _ -> Have_exception i
   | Current_exception _ -> Current_exception i
+  | Throw_location _ -> Throw_location i
   | Return _ -> Return i
 
 let inline cdefs should_inline instrs =
@@ -295,8 +298,8 @@ let inline cdefs should_inline instrs =
   in
 
   let rec inline_instr = function
-    | I_aux (I_funcall (clexp, false, function_id, args), aux) as instr when should_inline function_id ->
-       begin match find_function function_id cdefs with
+    | I_aux (I_funcall (clexp, false, function_id, args), aux) as instr when should_inline (fst function_id) ->
+       begin match find_function (fst function_id) cdefs with
        | Some (None, ids, body) ->
           incr inlines;
           incr label_count;
@@ -343,6 +346,15 @@ let rec remove_pointless_goto = function
      instr :: remove_pointless_goto instrs
   | [] -> []
 
+let rec remove_pointless_exit = function
+  | I_aux (I_end id, aux) :: I_aux (I_end _, _) :: instrs  ->
+     I_aux (I_end id, aux) :: remove_pointless_exit instrs
+  | I_aux (I_end id, aux) :: I_aux (I_undefined _, _) :: instrs  ->
+     I_aux (I_end id, aux) :: remove_pointless_exit instrs
+  | instr :: instrs ->
+     instr :: remove_pointless_exit instrs
+  | [] -> []
+
 module StringSet = Set.Make(String)
 
 let rec get_used_labels set = function
@@ -360,7 +372,180 @@ let remove_unused_labels instrs =
   in
   go [] instrs
 
+let remove_dead_after_goto instrs =
+  let rec go acc = function
+    | (I_aux (I_goto _, _) as instr) :: instrs -> go_dead (instr :: acc) instrs
+    | instr :: instrs -> go (instr :: acc) instrs
+    | [] -> acc
+  and go_dead acc = function
+    | (I_aux (I_label _, _) as instr) :: instrs -> go (instr :: acc) instrs
+    | instr :: instrs -> go acc instrs
+    | [] -> acc
+  in
+  List.rev (go [] instrs)
+
+let rec remove_dead_code instrs =
+  let instrs' =
+    instrs |> remove_unused_labels |> remove_pointless_goto |> remove_dead_after_goto |> remove_pointless_exit
+  in
+  if List.length instrs' < List.length instrs then
+    remove_dead_code instrs'
+  else
+    instrs'
+
 let rec remove_clear = function
   | I_aux (I_clear _, _) :: instrs -> remove_clear instrs
   | instr :: instrs -> instr :: remove_clear instrs
   | [] -> []
+
+let remove_tuples cdefs ctx =
+  let already_removed = ref CTSet.empty in
+  let rec all_tuples = function
+    | CT_tup ctyps as ctyp ->
+       CTSet.add ctyp (List.fold_left CTSet.union CTSet.empty (List.map all_tuples ctyps))
+    | CT_struct (_, id_ctyps) | CT_variant (_, id_ctyps) ->
+       List.fold_left (fun cts (_, ctyp) -> CTSet.union (all_tuples ctyp) cts) CTSet.empty id_ctyps
+    | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp ->
+       all_tuples ctyp
+    | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
+      | CT_unit | CT_bool | CT_real | CT_bit | CT_poly | CT_string | CT_enum _ ->
+       CTSet.empty
+  in
+  let rec tuple_depth = function
+    | CT_tup ctyps as ctyp ->
+       1 + List.fold_left (fun d ctyp -> max d (tuple_depth ctyp)) 0 ctyps
+    | CT_struct (_, id_ctyps) | CT_variant (_, id_ctyps) ->
+       List.fold_left (fun d (_, ctyp) -> max (tuple_depth ctyp) d) 0 id_ctyps
+    | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp ->
+       tuple_depth ctyp
+    | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
+      | CT_unit | CT_bool | CT_real | CT_bit | CT_poly | CT_string | CT_enum _ ->
+       0
+  in
+  let rec fix_tuples = function
+    | CT_tup ctyps ->
+       let ctyps = List.map fix_tuples ctyps in
+       let name = "tuple#" ^ Util.string_of_list "_" string_of_ctyp ctyps in
+       CT_struct (mk_id name, List.mapi (fun n ctyp -> (mk_id (name ^ string_of_int n), []), ctyp) ctyps)
+    | CT_struct (id, id_ctyps) ->
+       CT_struct (id, List.map (fun (id, ctyp) -> id, fix_tuples ctyp) id_ctyps)
+    | CT_variant (id, id_ctyps) ->
+       CT_variant (id, List.map (fun (id, ctyp) -> id, fix_tuples ctyp) id_ctyps)
+    | CT_list ctyp -> CT_list (fix_tuples ctyp)
+    | CT_vector (d, ctyp) -> CT_vector (d, fix_tuples ctyp)
+    | CT_fvector (n, d, ctyp) -> CT_fvector (n, d, fix_tuples ctyp)
+    | CT_ref ctyp -> CT_ref (fix_tuples ctyp)
+    | (CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
+       | CT_unit | CT_bool | CT_real | CT_bit | CT_poly | CT_string | CT_enum _) as ctyp ->
+       ctyp
+  in
+  let rec fix_cval = function
+    | V_id (id, ctyp) -> V_id (id, ctyp)
+    | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
+    | V_ctor_kind (cval, id, unifiers, ctyp) ->
+       V_ctor_kind (fix_cval cval, id, unifiers, ctyp)
+    | V_ctor_unwrap (id, cval, unifiers, ctyp) ->
+       V_ctor_unwrap (id, fix_cval cval, unifiers, ctyp)
+    | V_tuple_member (cval, _, n) ->
+       let ctyp = fix_tuples (cval_ctyp cval) in
+       let cval = fix_cval cval in
+       let field = match ctyp with
+         | CT_struct (id, _) ->
+            mk_id (string_of_id id ^ string_of_int n)
+         | _ -> assert false
+       in
+       V_field (cval, (field, []))
+    | V_call (op, cvals) ->
+       V_call (op, List.map (fix_cval) cvals)
+    | V_field (cval, field) ->
+       V_field (fix_cval cval, field)
+    | V_struct (fields, ctyp) -> V_struct (List.map (fun (id, cval) -> id, fix_cval cval) fields, ctyp)
+    | V_poly (cval, ctyp) -> V_poly (fix_cval cval, ctyp)
+  in
+  let rec fix_clexp = function
+    | CL_id (id, ctyp) -> CL_id (id, ctyp)
+    | CL_addr clexp -> CL_addr (fix_clexp clexp)
+    | CL_tuple (clexp, n) ->
+       let ctyp = fix_tuples (clexp_ctyp clexp) in
+       let clexp = fix_clexp clexp in
+       let field = match ctyp with
+         | CT_struct (id, _) ->
+            mk_id (string_of_id id ^ string_of_int n)
+         | _ -> assert false
+       in
+       CL_field (clexp, (field, []))
+    | CL_field (clexp, field) -> CL_field (fix_clexp clexp, field)
+    | CL_void -> CL_void
+    | CL_rmw (read, write, ctyp) -> CL_rmw (read, write, ctyp)
+  in
+  let rec fix_instr_aux = function
+    | I_funcall (clexp, extern, id, args) ->
+       I_funcall (fix_clexp clexp, extern, id, List.map fix_cval args)
+    | I_copy (clexp, cval) -> I_copy (fix_clexp clexp, fix_cval cval)
+    | I_init (ctyp, id, cval) -> I_init (ctyp, id, fix_cval cval)
+    | I_reinit (ctyp, id, cval) -> I_reinit (ctyp, id, fix_cval cval)
+    | I_jump (cval, label) -> I_jump (fix_cval cval, label)
+    | I_throw cval -> I_throw (fix_cval cval)
+    | I_return cval -> I_return (fix_cval cval)
+    | I_if (cval, then_instrs, else_instrs, ctyp) ->
+       I_if (fix_cval cval, List.map fix_instr then_instrs, List.map fix_instr else_instrs, ctyp)
+    | I_block instrs -> I_block (List.map fix_instr instrs)
+    | I_try_block instrs -> I_try_block (List.map fix_instr instrs)
+    | (I_goto _ | I_label _ | I_decl _ | I_clear _ | I_end _ | I_comment _
+       | I_reset _ | I_undefined _ | I_match_failure | I_raw _) as instr -> instr
+  and fix_instr (I_aux (instr, aux)) = I_aux (fix_instr_aux instr, aux)
+  in
+  let fix_conversions = function
+    | I_aux (I_copy (clexp, cval), ((_, l) as aux)) as instr ->
+       begin match clexp_ctyp clexp, cval_ctyp cval with
+       | CT_tup lhs_ctyps, CT_tup rhs_ctyps when List.length lhs_ctyps = List.length rhs_ctyps ->
+          let elems = List.length lhs_ctyps in
+          if List.for_all2 ctyp_equal lhs_ctyps rhs_ctyps then
+            [instr]
+          else
+            List.mapi (fun n _ -> icopy l (CL_tuple (clexp, n)) (V_tuple_member (cval, elems, n))) lhs_ctyps
+       | _ -> [instr]
+       end
+    | instr -> [instr]
+  in
+  let fix_ctx ctx =
+    { ctx with
+      records = Bindings.map (UBindings.map fix_tuples) ctx.records;
+      variants = Bindings.map (UBindings.map fix_tuples) ctx.variants;
+      valspecs = Bindings.map (fun (ctyps, ctyp) -> List.map fix_tuples ctyps, fix_tuples ctyp) ctx.valspecs;
+      locals = Bindings.map (fun (mut, ctyp) -> mut, fix_tuples ctyp) ctx.locals
+    }
+  in
+  let to_struct = function
+    | CT_tup ctyps ->
+       let ctyps = List.map fix_tuples ctyps in
+       let name = "tuple#" ^ Util.string_of_list "_" string_of_ctyp ctyps in
+       CDEF_type (CTD_struct (mk_id name, List.mapi (fun n ctyp -> (mk_id (name ^ string_of_int n), []), ctyp) ctyps))
+    | _ -> assert false
+  in
+  let rec go acc = function
+    | cdef :: cdefs ->
+       let tuples = CTSet.fold (fun ctyp -> CTSet.union (all_tuples ctyp)) (cdef_ctyps cdef) CTSet.empty in
+       let tuples = CTSet.diff tuples !already_removed in
+       (* In the case where we have ((x, y), z) and (x, y) we need to
+          generate (x, y) first, so we sort by the depth of nesting in
+          the tuples (note we build acc in reverse order) *)
+       let sorted_tuples =
+         CTSet.elements tuples
+         |> List.map (fun ctyp -> tuple_depth ctyp, ctyp)
+         |> List.sort (fun (d1, _) (d2, _) -> compare d2 d1)
+         |> List.map snd
+       in
+       let structs = List.map to_struct sorted_tuples in
+       already_removed := CTSet.union tuples !already_removed;
+       let cdef =
+         cdef
+         |> cdef_concatmap_instr fix_conversions
+         |> cdef_map_instr fix_instr
+         |> cdef_map_ctyp fix_tuples
+       in
+       go (cdef :: structs @ acc) cdefs
+    | [] -> List.rev acc
+  in
+  go [] cdefs,
+  fix_ctx ctx

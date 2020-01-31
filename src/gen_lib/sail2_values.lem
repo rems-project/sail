@@ -423,6 +423,26 @@ let char_of_nibble = function
   | _ -> Nothing
   end
 
+let nibble_of_char = function
+  | #'0' -> Just (B0, B0, B0, B0)
+  | #'1' -> Just (B0, B0, B0, B1)
+  | #'2' -> Just (B0, B0, B1, B0)
+  | #'3' -> Just (B0, B0, B1, B1)
+  | #'4' -> Just (B0, B1, B0, B0)
+  | #'5' -> Just (B0, B1, B0, B1)
+  | #'6' -> Just (B0, B1, B1, B0)
+  | #'7' -> Just (B0, B1, B1, B1)
+  | #'8' -> Just (B1, B0, B0, B0)
+  | #'9' -> Just (B1, B0, B0, B1)
+  | #'A' -> Just (B1, B0, B1, B0)
+  | #'B' -> Just (B1, B0, B1, B1)
+  | #'C' -> Just (B1, B1, B0, B0)
+  | #'D' -> Just (B1, B1, B0, B1)
+  | #'E' -> Just (B1, B1, B1, B0)
+  | #'F' -> Just (B1, B1, B1, B1)
+  | _ -> Nothing
+  end
+
 let rec hexstring_of_bits bs = match bs with
   | b1 :: b2 :: b3 :: b4 :: bs ->
      let n = char_of_nibble (b1, b2, b3, b4) in
@@ -436,11 +456,13 @@ let rec hexstring_of_bits bs = match bs with
   end
 declare {isabelle; hol} termination_argument hexstring_of_bits = automatic
 
-let show_bitlist bs =
+let show_bitlist_prefix c bs =
   match hexstring_of_bits bs with
-  | Just s -> toString (#'0' :: #'x' :: s)
-  | Nothing -> toString (#'0' :: #'b' :: map bitU_char bs)
+  | Just s -> toString (c :: #'x' :: s)
+  | Nothing -> toString (c :: #'b' :: map bitU_char bs)
   end
+
+let show_bitlist bs = show_bitlist_prefix #'0' bs
 
 (*** List operations *)
 

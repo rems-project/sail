@@ -8,15 +8,15 @@ Definition string_startswith s expected :=
   let prefix := String.substring 0 (String.length expected) s in
   generic_eq prefix expected.
 
-Definition string_drop s (n : Z) `{ArithFact (n >= 0)} :=
+Definition string_drop s (n : Z) `{ArithFact (n >=? 0)} :=
   let n := Z.to_nat n in
   String.substring n (String.length s - n) s.
 
-Definition string_take s (n : Z) `{ArithFact (n >= 0)} :=
+Definition string_take s (n : Z) `{ArithFact (n >=? 0)} :=
   let n := Z.to_nat n in
   String.substring 0 n s.
 
-Definition string_length s : {n : Z & ArithFact (n >= 0)} :=
+Definition string_length s : {n : Z & ArithFact (n >=? 0)} :=
  build_ex (Z.of_nat (String.length s)).
 
 Definition string_append := String.append.
@@ -56,7 +56,7 @@ match s with
     else (acc, len)
   end
 end.
-Local Definition int_of (s : string) (base : Z) (len : nat) : option (Z * {n : Z & ArithFact (n >= 0)}) :=
+Local Definition int_of (s : string) (base : Z) (len : nat) : option (Z * {n : Z & ArithFact (n >=? 0)}) :=
 match s with
 | EmptyString => None
 | String h t =>
@@ -74,7 +74,7 @@ end.
 (* I've stuck closely to OCaml's int_of_string, because that's what's currently
    used elsewhere. *)
 
-Definition maybe_int_of_prefix (s : string) : option (Z * {n : Z & ArithFact (n >= 0)}) :=
+Definition maybe_int_of_prefix (s : string) : option (Z * {n : Z & ArithFact (n >=? 0)}) :=
 match s with
 | EmptyString => None
 | String "0" (String ("x"|"X") t) => int_of t 16 2
@@ -105,16 +105,16 @@ Fixpoint n_leading_spaces (s:string) : nat :=
   | _ => 0
   end.
 
-Definition opt_spc_matches_prefix s : option (unit * {n : Z & ArithFact (n >= 0)}) :=
+Definition opt_spc_matches_prefix s : option (unit * {n : Z & ArithFact (n >=? 0)}) :=
   Some (tt, build_ex (Z.of_nat (n_leading_spaces s))).
 
-Definition spc_matches_prefix s : option (unit * {n : Z & ArithFact (n >= 0)}) :=
+Definition spc_matches_prefix s : option (unit * {n : Z & ArithFact (n >=? 0)}) :=
   match n_leading_spaces s with
   | O => None
   | S n => Some (tt, build_ex (Z.of_nat (S n)))
   end.
 
-Definition hex_bits_n_matches_prefix sz `{ArithFact (sz >= 0)} s : option (mword sz * {n : Z & ArithFact (n >= 0)}) :=
+Definition hex_bits_n_matches_prefix sz `{ArithFact (sz >=? 0)} s : option (mword sz * {n : Z & ArithFact (n >=? 0)}) :=
   match maybe_int_of_prefix s with
   | None => None
   | Some (n, len) =>
@@ -180,6 +180,23 @@ match z with
 | Zneg p => String "-" (string_of_N (pos_limit p) (Npos p) "")
 end.
 
+Local Definition asciiA : N := Ascii.N_of_ascii "A".
+Local Fixpoint hex_string_of_N (limit : nat) (n : N) (acc : string) : string :=
+match limit with
+| O => acc
+| S limit' =>
+  let (d,m) := N.div_eucl n 16 in
+  let digit := if 10 <=? m then m - 10 + asciiA else m + zero in
+  let acc := String (Ascii.ascii_of_N digit) acc in
+  if N.ltb 0 d then hex_string_of_N limit' d acc else acc
+end%N.
+Definition hex_string_of_int (z : Z) : string :=
+match z with
+| Z0 => "0"
+| Zpos p => hex_string_of_N (pos_limit p) (Npos p) ""
+| Zneg p => String "-" (hex_string_of_N (pos_limit p) (Npos p) "")
+end.
+
 Definition decimal_string_of_bv {a} `{Bitvector a} (bv : a) : string :=
   match unsigned bv with
   | None => "?"
@@ -191,4 +208,5 @@ Definition decimal_string_of_bits {n} (bv : mword n) : string := decimal_string_
 
 (* Some aliases for compatibility. *)
 Definition dec_str := string_of_int.
+Definition hex_str := hex_string_of_int.
 Definition concat_str := String.append.

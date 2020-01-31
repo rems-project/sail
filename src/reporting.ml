@@ -132,19 +132,19 @@ let print_err l m1 m2 =
 
 type error =
   | Err_general of Parse_ast.l * string
-  | Err_unreachable of Parse_ast.l * (string * int * int * int) * string
+  | Err_unreachable of Parse_ast.l * (string * int * int * int) * Printexc.raw_backtrace * string
   | Err_todo of Parse_ast.l * string
   | Err_syntax of Lexing.position * string
   | Err_syntax_loc of Parse_ast.l * string
   | Err_lex of Lexing.position * string
   | Err_type of Parse_ast.l * string
 
-let issues = "\n\nPlease report this as an issue on GitHub at https://github.com/rems-project/sail/issues"
+let issues = "\nPlease report this as an issue on GitHub at https://github.com/rems-project/sail/issues"
 
 let dest_err = function
   | Err_general (l, m) -> ("Error", Loc l, m)
-  | Err_unreachable (l, (file, line, _, _), m) ->
-     (Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line, Loc l, m ^ issues)
+  | Err_unreachable (l, (file, line, _, _), backtrace, m) ->
+     (Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line, Loc l, m ^ "\n\n" ^ Printexc.raw_backtrace_to_string backtrace ^ issues)
   | Err_todo (l, m) -> ("Todo", Loc l, m)
   | Err_syntax (p, m) -> ("Syntax error", Pos p, m)
   | Err_syntax_loc (l, m) -> ("Syntax error", Loc l, m)
@@ -155,10 +155,14 @@ exception Fatal_error of error
 
 (* Abbreviations for the very common cases *)
 let err_todo l m = Fatal_error (Err_todo (l, m))
-let err_unreachable l ocaml_pos m = Fatal_error (Err_unreachable (l, ocaml_pos, m))
+let err_unreachable l ocaml_pos m =
+  let backtrace = Printexc.get_callstack 10 in
+  Fatal_error (Err_unreachable (l, ocaml_pos, backtrace, m))
 let err_general l m = Fatal_error (Err_general (l, m))
-let err_typ l m = Fatal_error (Err_type (l,m))
+let err_typ l m = Fatal_error (Err_type (l, m))
+let err_syntax p m = Fatal_error (Err_syntax (p, m))
 let err_syntax_loc l m = Fatal_error (Err_syntax_loc (l, m))
+let err_lex p m = Fatal_error (Err_lex (p, m))
 
 let unreachable l pos msg =
   raise (err_unreachable l pos msg)

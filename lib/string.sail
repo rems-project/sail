@@ -7,8 +7,6 @@ val eq_string = {lem: "eq", coq: "generic_eq", _: "eq_string"} : (string, string
 
 overload operator == = {eq_string}
 
-infixl 9 ^-^
-
 val concat_str = {coq: "String.append", lem: "stringAppend", _: "concat_str"} : (string, string) -> string
 
 val "dec_str" : int -> string
@@ -24,8 +22,6 @@ function concat_str_bits(str, x) = concat_str(str, bits_str(x))
 val concat_str_dec : (string, int) -> string
 
 function concat_str_dec(str, x) = concat_str(str, dec_str(x))
-
-overload operator ^-^ = {concat_str, concat_str_bits, concat_str_dec}
 
 val print_endline = "print_endline" : string -> unit
 
