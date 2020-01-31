@@ -242,6 +242,8 @@ let preprocess_ast opts (Parse_ast.Defs defs) = Parse_ast.Defs (preprocess opts 
 
 let opt_just_check = ref false
 let opt_ddump_tc_ast = ref false
+let opt_ddump_tc_ast_ott_raw = ref (None:string option)
+let opt_ddump_tc_ast_ott_pp = ref (None:string option)
 let opt_ddump_rewrite_ast = ref None
 let opt_dno_cast = ref false
 
@@ -256,14 +258,14 @@ let check_ast (env : Type_check.Env.t) (defs : unit Ast.defs) : Type_check.tanno
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
   let ast, env = Type_error.check env defs in
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_defs stdout ast else () in
-  let _ = if !opt_ddump_tc_raw_ast then  
-            Printf.printf "%s\n" (Ast.show_defs (fun fmt _ -> Format.pp_print_text fmt "(.)" ) ast)
-          else () in
-  
+
+  let () = match !opt_ddump_tc_ast_ott_raw with None -> () | Some file -> (let c = open_out file in Pretty_print_sail.pp_defs_ott_raw c ast; close_out c) in
+  let () = match !opt_ddump_tc_ast_ott_pp with None -> () | Some file -> (let c = open_out file in Pretty_print_sail.pp_defs_ott_pp c ast; close_out c) in
+
   let () = match !(Minisail.opt_dmsp_check_after) with
     | Some vrb -> Minisail.check_ast vrb ast 
     | None -> () in
-  
+
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)
 

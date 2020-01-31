@@ -5,11 +5,16 @@
 indexvar n , m , i , j ::=
   {{ phantom }}
   {{ com Index variables for meta-lists }}
+  {{ pp x = string (string_of_int x) }}
 
 metavar num,numZero,numOne ::=
   {{ phantom }}
   {{ lex numeric }}
-  {{ ocaml big_int }}
+%% change to match lem - which is the only Ott target actually used in sail build?
+%%  {{ ocaml big_int }}
+  {{ ocaml Nat_big_num.num }}
+  {{ pp-raw x = string (Nat_big_num.to_string x) }}
+  {{ pp x = string (Nat_big_num.to_string x) }}
   {{ hol num }}
   {{ lem integer }}
   {{ isa int }}
@@ -17,7 +22,10 @@ metavar num,numZero,numOne ::=
 
 metavar nat ::=
   {{ phantom }}
-  {{ ocaml int }}
+%%  {{ ocaml int }}
+  {{ ocaml Nat_big_num.num }}
+  {{ pp-raw x = string (Nat_big_num.to_string x) }}
+  {{ pp x = string (Nat_big_num.to_string x) }}
   {{ lex numeric }}
   {{ lem nat }}
   {{ isa nat }}
@@ -65,6 +73,8 @@ metavar real ::=
 metavar value ::=
   {{ phantom }}
   {{ ocaml value }}
+  {{ pp-raw x = string "TODO:value" }}
+  {{ pp x = string "TODO:value" }}
   {{ lem value }}
   {{ isa value }}
 
@@ -81,6 +91,7 @@ type l = Parse_ast.l
 type 'a annot = l * 'a
 
 type loop = While | Until
+
 
 }}
 
@@ -112,6 +123,8 @@ type_synonym "annot" = l
 
 metavar x , y , z ::=
   {{ ocaml text }}
+  {{ pp-raw x = string "\"" ^^ string x ^^ string "\"" }}
+  {{ pp x = string x }}
   {{ lem string }}
   {{ hol string }}
   {{ isa string }}
@@ -123,6 +136,8 @@ metavar x , y , z ::=
 metavar ix ::=
   {{ lex alphanum }}
   {{ ocaml text }}
+  {{ pp-raw x = string "\"" ^^ string x ^^ string "\"" }}
+  {{ pp x = string x }}
   {{ lem string }}
   {{ hol string }}
   {{ isa string }}
@@ -135,9 +150,11 @@ grammar
 
 l :: '' ::=                                     {{ phantom }}
                                                 {{ ocaml Parse_ast.l }}
+                                                {{ pp-raw x = string (Ast_util.short_string_of_loc x) }}
+                                                {{ pp-suppress }}
                                                 {{ lem l }}
                                                 {{ hol unit }}
-  {{ com source location }}
+                                                {{ com source location }}
   |                                             :: :: Unknown
     {{ ocaml Unknown }}
     {{ lem Unknown }}
@@ -146,8 +163,12 @@ l :: '' ::=                                     {{ phantom }}
 annot :: '' ::=
   {{ phantom }}
   {{ ocaml 'a annot }}
+  {{ pp-raw x = (match x with (_,tannot) -> match Type_check.destruct_tannot tannot with None -> string "None" | Some (_,t,_) -> pp_raw_typ t) }}
+  {{ pp-suppress }}
   {{ lem annot 'a }}
   {{ hol unit }}
+%% workaround to make Ott generate a pp_raw_annot function - shouldn't be needed
+| :: :: Foo {{ lem foo }}
 
 id :: '' ::=
   {{ com Identifier }}
@@ -294,7 +315,10 @@ grammar
 type_def {{ ocaml 'a type_def }} {{ lem type_def 'a }} :: 'TD_' ::=
   {{ ocaml TD_aux of type_def_aux * 'a annot }}
   {{ lem TD_aux of type_def_aux * annot 'a }}
-  | type_def_aux  :: :: aux
+| type_def_aux  :: :: aux
+  {{ pp-raw (x,y) -> string "..type_def" }}
+  {{ pp (x,y) -> string "..type_def" }}
+
 
 type_def_aux  :: 'TD_' ::=
   {{ com type definition body }}
@@ -335,12 +359,14 @@ lit :: 'L_' ::=
   | num       :: :: num {{ com natural number constant }}
   | hex       :: :: hex {{ com bit vector constant, C-style }}
   | bin       :: :: bin  {{ com bit vector constant, C-style }}
-  | string    :: :: string {{ com string constant }}
+  | string1   :: :: string {{ com string constant }}
   | undefined :: :: undef {{ com undefined-value constant }}
   | real      :: :: real
 
 semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
                                                         {{ ocaml bool }}
+                                                        {{ pp-raw _ = string "semi_opt" }}
+                                                        {{ pp _ = string "semi_opt" }}
                                                         {{ lem bool }}
                                                         {{ hol bool }}
 							{{ isa bool }}
@@ -492,6 +518,8 @@ grammar
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 loop :: loop ::= {{ phantom }}
+                 {{ pp-raw _ = string "loop" }}
+                 {{ pp _ = string "loop" }}
   | while ::   :: while 
   | until ::  :: until 
 
@@ -695,8 +723,11 @@ pexp_funcl :: 'Pat_funcl_' ::=
   {{ ocaml ('a pexp) }}
   {{ isa pexp }}
   {{ lem (pexp 'a) }}
+  {{ pp-raw x = pp_raw_pexp x }}
+  {{ pp x = pp_pexp x }}
   | pat = exp                       :: :: exp {{ ichlo (Pat_aux (Pat_exp [[pat]] [[exp]],Unknown)) }}
   | ( pat when exp1 ) = exp         :: :: when {{ ichlo (Pat_aux (Pat_when [[pat]] [[exp1]] [[exp]],Unknown)) }}
+
 
 funcl :: 'FCL_' ::=
   {{ com function clause }}
@@ -754,12 +785,44 @@ letbind :: 'LB_' ::=
 
 val_spec {{ ocaml 'a val_spec }} {{ lem val_spec 'a }} :: 'VS_' ::=
    {{ ocaml VS_aux of val_spec_aux * 'a annot }}
+   {{ pp-raw x = match x with VS_aux(vs,annot) -> pp_raw_val_spec_aux vs }}
+   {{ pp x = match x with VS_aux(vs,annot) -> pp_val_spec_aux vs }}
    {{ lem VS_aux of val_spec_aux * annot 'a }}
   | val_spec_aux ::  :: aux
 
 val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
   {{ ocaml  VS_val_spec of typschm * id * (string * string) list * bool }}
+  {{ pp-raw x =
+match x with 
+| VS_val_spec(ts,id,ext,is_cast) ->
+  let doc_extern ext =
+    let docs = List.map (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\"")) ext in
+    (if docs = [] then string "[]" else  brackets (separate comma docs))
+    in
+  string "VS_val_spec("
+(*     if comment then docstring annot else empty*) 
+     ^^ (if is_cast then (string "cast_true") else (string "cast_false")) ^^ comma
+     ^^ pp_raw_id id ^^ comma
+     ^^ doc_extern ext ^^ comma
+     ^^ pp_raw_typschm ts
+     ^^ string ")"
+}}
+  {{ pp x = (* based on pretty_print_sail.ml doc_spec *)
+match x with 
+| VS_val_spec(ts,id,ext,is_cast) ->
+  let doc_extern ext =
+    let docs = List.map (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\"")) ext in
+    if docs = [] then empty else equals ^^ space ^^ braces (separate (comma ^^ space) docs)
+    in
+     empty (*     if comment then docstring annot else*) 
+     ^^ string "val" ^^ space
+     ^^ (if is_cast then (string "cast" ^^ space) else empty)
+     ^^ pp_id id ^^ space
+     ^^ doc_extern ext
+     ^^ colon ^^ space
+     ^^ pp_typschm ts
+}}
   {{ lem VS_val_spec of typschm * id * list (string * string) * bool }}
   {{ isa  typschm * id  * (string => string option) * bool }}
   | val typschm id                                  :: S :: val_spec

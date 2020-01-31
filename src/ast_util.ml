@@ -2230,3 +2230,20 @@ let rec simple_string_of_loc = function
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
   | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"
+
+let rec short_string_of_loc = function
+  | Parse_ast.Unknown -> "Unknown"
+  | Parse_ast.Unique (n, l) -> short_string_of_loc l 
+  | Parse_ast.Generated l -> short_string_of_loc l 
+  | Parse_ast.Range (lx1,lx2) ->
+    let open Lexing in
+      if lx1.pos_fname = lx2.pos_fname then
+        (if lx1.pos_lnum=lx2.pos_lnum then 
+          Printf.sprintf "%s:%d" lx1.pos_fname lx1.pos_lnum 
+        else
+          Printf.sprintf "%s:%d-%d" lx1.pos_fname lx1.pos_lnum lx2.pos_lnum)
+      else
+          Printf.sprintf "%s:%d-%s:%d" lx1.pos_fname lx1.pos_lnum lx2.pos_fname lx2.pos_lnum
+  | Parse_ast.Documented (_,l) -> short_string_of_loc l
+                                                                               
+
