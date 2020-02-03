@@ -170,6 +170,11 @@ val __cache_maintenance
   : forall (constant 'addrsize : Int), 'addrsize in {32, 64}.
   (cache_op_kind, int('addrsize), bits('addrsize)) -> unit
 
+val __instr_announce
+  = { ocaml: "Platform.instr_announce", c: "platform_instr_announce", _: "instr_announce" }
+  : forall 'n, 'n > 0.
+  bits('n) -> unit
+
 /*
 val __write : forall 'n, 'n > 0. (write_kind, bits(64), int('n), bits(8 * 'n)) -> bool effect {eamem,wmv}
 function __write (wk, addr, len, value) = {
