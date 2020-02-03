@@ -31,6 +31,23 @@ union diafp = {
   DIAFP_reg : regfp
 }
 
+$ifdef ARM_SPEC
+enum read_kind = {
+  Read_plain,
+  Read_reserve,
+  Read_acquire,
+  Read_exclusive,
+  Read_exclusive_acquire,
+  Read_stream,
+  Read_ifetch,
+  Read_RISCV_acquire,
+  Read_RISCV_strong_acquire,
+  Read_RISCV_reserved,
+  Read_RISCV_reserved_acquire,
+  Read_RISCV_reserved_strong_acquire,
+  Read_X86_locked
+}
+$else
 enum read_kind = {
   Read_plain,
   Read_reserve,
@@ -45,6 +62,7 @@ enum read_kind = {
   Read_RISCV_reserved_strong_acquire,
   Read_X86_locked
 }
+$endif
 
 enum write_kind = {
   Write_plain,
@@ -142,6 +160,15 @@ val __barrier
   = { ocaml: "Platform.barrier", c: "platform_barrier", _: "barrier" }
   : barrier_kind -> unit effect {barr}
 
+val __branch_announce
+  = { ocaml: "Platform.branch_announce", c: "platform_branch_announce", _ : "branch_announce" }
+  : forall (constant 'addrsize : Int), 'addrsize in {32, 64}.
+  (int('addrsize), bits('addrsize)) -> unit
+
+val __cache_maintenance
+  = { ocaml: "Platform.cache_maintenance", c: "platform_cache_maintenance", _ : "cache_maintenance" }
+  : forall (constant 'addrsize : Int), 'addrsize in {32, 64}.
+  (cache_op_kind, int('addrsize), bits('addrsize)) -> unit
 
 /*
 val __write : forall 'n, 'n > 0. (write_kind, bits(64), int('n), bits(8 * 'n)) -> bool effect {eamem,wmv}
