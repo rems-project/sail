@@ -369,6 +369,14 @@ let value_mult = function
   | [v1; v2] -> V_int (Sail_lib.mult (coerce_int v1, coerce_int v2))
   | _ -> failwith "value mult"
 
+let value_tdiv_int = function
+  | [v1; v2] -> V_int (Sail_lib.tdiv_int (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value tdiv_int"
+
+let value_tmod_int = function
+  | [v1; v2] -> V_int (Sail_lib.tmod_int (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value tmod_int"
+
 let value_quotient = function
   | [v1; v2] -> V_int (Sail_lib.quotient (coerce_int v1, coerce_int v2))
   | _ -> failwith "value quotient"
@@ -687,6 +695,8 @@ let primops = ref
        ("sub_int", value_sub_int);
        ("sub_nat", value_sub_nat);
        ("div_int", value_quotient);
+       ("tdiv_int", value_tdiv_int);
+       ("tmod_int", value_tmod_int);
        ("mult_int", value_mult);
        ("mult", value_mult);
        ("quotient", value_quotient);
