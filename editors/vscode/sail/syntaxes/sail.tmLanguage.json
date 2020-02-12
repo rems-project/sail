@@ -1,0 +1,163 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Sail",
+	"patterns": [
+		{
+			"include": "#keywords"
+		},
+		{
+			"include": "#operators"
+		},
+		{
+			"include": "#strings"
+		},
+		{
+			"include": "#numbers"
+		}
+	],
+	"repository": {
+		"keywords": {
+			"patterns": [{
+				"name": "keyword.control.sail",
+				"match": "\\b(if|then|while|for|return|match)\\b"
+			},{
+				"name": "keyword.other.sail",
+				"match": "\\b(type|val|let|in|function|scattered|enum|union|clause|default|order|dec|register|vector)\\b"
+			},{
+				"name": "keyword.other.sail",
+				"match": "\\b(effect)\\b"
+			},{
+				"name": "keyword.other.sail",
+				"match": "\\b(infix|overload|operator)\\b"
+			},{
+				"name": "keyword.other.sail",
+				"match": "\\b(\\$include)\\b"
+			},{
+				"name": "keyword.other.sail",
+				"match": "(=>|=|->|:|,|\\+|\\*)"
+			},{
+				"name": "keyword.other.sail",
+				"match": "\\b_\\b"
+			},{
+				"begin": "/\\*",
+				"beginCaptures": {
+				  "0": {
+					"name": "punctuation.definition.comment.begin.sail"
+				  }
+				},
+				"end": "\\*/",
+				"endCaptures": {
+				  "0": {
+					"name": "punctuation.definition.comment.end.sail"
+				  }
+				},
+				"name": "comment.block.sail"
+			},{
+				"begin": "\\(",
+				"beginCaptures": {
+				  "0": {
+					"name": "punctuation.paren.open"
+				  }
+				},
+				"end": "\\)",
+				"endCaptures": {
+				  "0": {
+					"name": "punctuation.paren.close"
+				  }
+				},
+				"patterns": [{
+					"include": "$self"
+				}]
+			},{
+				"begin": "{",
+				"beginCaptures": {
+				  "0": {
+					"name": "punctuation.curly.open"
+				  }
+				},
+				"end": "}",
+				"endCaptures": {
+				  "0": {
+					"name": "punctuation.close.open"
+				  }
+				},
+				"patterns": [
+					{
+					"include": "$self"
+					}
+				]
+			},
+
+			{
+				"begin": "^\\s*((\\$)\\s*(include|import))\\b\\s*",
+				"beginCaptures": {
+					"1": {
+						"name": "keyword.control.directive.$3.c"
+					},
+					"2": {
+						"name": "punctuation.definition.directive.c"
+					}
+				},
+				"end": "(?=(?://|/\\*))|(?<!\\\\)(?=\\n)",
+				"name": "meta.preprocessor.include.c",
+				"patterns": [
+					{
+						"include": "#line_continuation_character"
+					},
+					{
+						"begin": "\"",
+						"beginCaptures": {
+							"0": {
+								"name": "punctuation.definition.string.begin.c"
+							}
+						},
+						"end": "\"",
+						"endCaptures": {
+							"0": {
+								"name": "punctuation.definition.string.end.c"
+							}
+						},
+						"name": "string.quoted.double.include.c"
+					},
+					{
+						"begin": "<",
+						"beginCaptures": {
+							"0": {
+								"name": "punctuation.definition.string.begin.c"
+							}
+						},
+						"end": ">",
+						"endCaptures": {
+							"0": {
+								"name": "punctuation.definition.string.end.c"
+							}
+						},
+						"name": "string.quoted.other.lt-gt.include.c"
+					}
+				]
+			}
+
+			]
+		},
+		"strings": {
+			"name": "string.quoted.double.sail",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape.sail",
+					"match": "\\\\."
+				}
+			]
+		},
+		"numbers": {
+			"patterns": [
+				{
+					"match": "\\b((0(x|X)[0-9a-fA-F]*)|(0(b|B)[01]*)|(([0-9]+\\.?[0-9]*)|(\\.[0-9]+))((e|E)(\\+|-)?[0-9]+)?)(L|l|UL|ul|u|U|F|f|ll|LL|ull|ULL)?\\b",
+					"name": "constant.numeric.c"
+				}
+			]
+		}
+	},
+	"scopeName": "source.sail"
+}

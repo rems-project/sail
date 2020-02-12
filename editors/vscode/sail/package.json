@@ -1,0 +1,25 @@
+{
+    "name": "sail",
+    "displayName": "sail",
+    "description": "Sail ISA specification language",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.42.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "sail",
+            "aliases": ["Sail", "sail"],
+            "extensions": [".sail"],
+            "configuration": "./language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "sail",
+            "scopeName": "source.sail",
+            "path": "./syntaxes/sail.tmLanguage.json"
+        }]
+    }
+}
