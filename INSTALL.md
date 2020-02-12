@@ -26,7 +26,7 @@ opam repository add rems https://github.com/rems-project/opam-repository.git
 ```
 Install system dependencies, on Ubuntu:
 ```
-sudo apt-get install build-essential libgmp-dev z3
+sudo apt-get install build-essential libgmp-dev z3 pkg-config zlib1g-dev
 ```
 or [MacOS homebrew](https://brew.sh/):
 ```
