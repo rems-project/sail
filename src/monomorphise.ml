@@ -219,7 +219,7 @@ let rec contains_exist (Typ_aux (ty,l)) =
   | Typ_var _
     -> false
   | Typ_fn (t1,t2,_) -> List.exists contains_exist t1 || contains_exist t2
-  | Typ_bidir (t1, t2) -> contains_exist t1 || contains_exist t2
+  | Typ_bidir (t1, t2, _) -> contains_exist t1 || contains_exist t2
   | Typ_tup ts -> List.exists contains_exist ts
   | Typ_app (_,args) -> List.exists contains_exist_arg args
   | Typ_exist _ -> true
@@ -252,12 +252,11 @@ let rec size_nvars_nexp (Nexp_aux (ne,_)) =
 let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
   let cannot l msg default =
     let open Reporting in
-    let error = Err_general (l, msg) in
     match all_errors with
-    | None -> raise (Fatal_error error)
+    | None -> raise (err_general l msg)
     | Some flag -> begin
         flag := false;
-        print_error error;
+        print_err l "Error" msg;
         default
       end
   in
@@ -659,14 +658,12 @@ let split_defs target all_errors splits env defs =
     let renew_id (Id_aux (id,l)) = Id_aux (id,new_l) in
     let cannot msg =
       let open Reporting in
-      let error =
-        Err_general (pat_l,
-                     ("Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v ^ ": " ^ msg))
-      in if all_errors
+      let error_msg = "Cannot split type " ^ string_of_typ typ ^ " for variable " ^ v ^ ": " ^ msg in
+      if all_errors
         then (no_errors_happened := false;
-              print_error error;
+              print_err pat_l "" error_msg;
               [P_aux (P_id var,(pat_l,annot)),[],[],KBindings.empty])
-        else raise (Fatal_error error)
+        else raise (err_general pat_l error_msg)
     in
     match ty with
     | Typ_id (Id_aux (Id "bool",_)) | Typ_app (Id_aux (Id "atom_bool", _), [_]) ->
@@ -951,13 +948,11 @@ let split_defs target all_errors splits env defs =
       let size = List.length lst in
       if size > size_set_limit then
         let open Reporting in
-        let error =
-          Err_general (l, "Case split is too large (" ^ string_of_int size ^
-            " > limit " ^ string_of_int size_set_limit ^ ")")
-        in if all_errors
-          then (no_errors_happened := false;
-                print_error error; false)
-          else raise (Fatal_error error)
+        let error_msg = "Case split is too large (" ^ string_of_int size ^ " > limit " ^ string_of_int size_set_limit ^ ")" in
+        if all_errors
+        then (no_errors_happened := false;
+              print_err l "" error_msg; false)
+        else raise (err_general l error_msg)
       else true
     in
 
@@ -1927,9 +1922,7 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
           with
           | Some pats ->
              if l = Parse_ast.Unknown then
-               (Reporting.print_error
-                  (Reporting.Err_general
-                     (l, "No location for pattern match: " ^ string_of_exp exp));
+               (Reporting.print_err l "" ("No location for pattern match: " ^ string_of_exp exp);
                 None)
              else
                Some (Have (ArgSplits.singleton (id,loc) (Partial (pats,l)),
@@ -3270,15 +3263,15 @@ let ids_in_exp exp =
       lEXP_cast = (fun (_,id) -> IdSet.singleton id)
     } exp
 
-let make_bitvector_env_casts env quant_kids (kid,i) exp =
-  let mk_cast var typ exp = (make_bitvector_cast_let "bitvector_cast_in" env env quant_kids typ (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ)) var exp in
+let make_bitvector_env_casts top_env env quant_kids insts exp =
+  let mk_cast var typ exp = (make_bitvector_cast_let "bitvector_cast_in" env top_env quant_kids typ (subst_kids_typ insts typ)) var exp in
   let mk_assign_in var typ =
-    make_bitvector_cast_assign "bitvector_cast_in" env env quant_kids typ
-      (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ) var
+    make_bitvector_cast_assign "bitvector_cast_in" env top_env quant_kids typ
+      (subst_kids_typ insts typ) var
   in
   let mk_assign_out var typ =
-    make_bitvector_cast_assign "bitvector_cast_out" env env quant_kids
-      (subst_kids_typ (KBindings.singleton kid (nconstant i)) typ) typ var
+    make_bitvector_cast_assign "bitvector_cast_out" top_env env quant_kids
+      (subst_kids_typ insts typ) typ var
   in
   let locals = Env.get_locals env in
   let used_ids = ids_in_exp exp in
@@ -3412,13 +3405,13 @@ let add_bitvector_casts (Defs defs) =
                   (* We used to just substitute kid, but fill_in_type also catches other kids defined by it *)
                   let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) (nconstant i)) env) result_typ in
                   make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
-                    (make_bitvector_env_casts env quant_kids (kid,i) body)
+                    (make_bitvector_env_casts env (env_of body) quant_kids (KBindings.singleton kid (nconstant i)) body)
                | P_aux (P_id var,_), Some guard ->
                   (match extract_value_from_guard var guard with
                   | Some i ->
                      let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) (nconstant i)) env) result_typ in
                      make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
-                       (make_bitvector_env_casts env quant_kids (kid,i) body)
+                       (make_bitvector_env_casts env (env_of body) quant_kids (KBindings.singleton kid (nconstant i)) body)
                   | None -> body)
                | _ ->
                   body
@@ -3432,10 +3425,9 @@ let add_bitvector_casts (Defs defs) =
          let env = env_of_annot ann in
          let result_typ = Env.base_typ_of env (typ_of_annot ann) in
          let insts = extract e1 in
-         let e2' = List.fold_left (fun body inst ->
-           make_bitvector_env_casts env quant_kids inst body) e2 insts in
          let insts = List.fold_left (fun insts (kid,i) ->
            KBindings.add kid (nconstant i) insts) KBindings.empty insts in
+         let e2' = make_bitvector_env_casts env (env_of e2) quant_kids insts e2 in
          let src_typ = subst_kids_typ insts result_typ in
          let e2' = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ e2' in
          (* Ask the type checker if only one value remains for any of kids in
@@ -3444,13 +3436,10 @@ let add_bitvector_casts (Defs defs) =
          let insts3 = KBindings.fold (fun kid _ i3 ->
                           match Type_check.solve_unique env3 (nvar kid) with
                           | None -> i3
-                          | Some c -> (kid, c)::i3)
-                        insts []
+                          | Some c -> KBindings.add kid (nconstant c) i3)
+                        insts KBindings.empty
          in
-         let e3' = List.fold_left (fun body inst ->
-           make_bitvector_env_casts env quant_kids inst body) e3 insts3 in
-         let insts3 = List.fold_left (fun insts (kid,i) ->
-           KBindings.add kid (nconstant i) insts) KBindings.empty insts3 in
+         let e3' = make_bitvector_env_casts env (env_of e3) quant_kids insts3 e3 in
          let src_typ3 = subst_kids_typ insts3 result_typ in
          let e3' = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ3 result_typ e3' in
          E_aux (E_if (e1,e2',e3'), ann)
@@ -3469,10 +3458,9 @@ let add_bitvector_casts (Defs defs) =
                  let t' = aux t in
                  let et = E_aux (E_block t',ann) in
                  let env = env_of h in
-                 let et = List.fold_left (fun body inst ->
-                              make_bitvector_env_casts env quant_kids inst body) et insts in
                  let insts = List.fold_left (fun insts (kid,i) ->
                                  KBindings.add kid (nconstant i) insts) KBindings.empty insts in
+                 let et = make_bitvector_env_casts env (env_of et) quant_kids insts et in
                  let src_typ = subst_kids_typ insts result_typ in
                  let et = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ et in
 
@@ -3542,10 +3530,10 @@ let replace_nexp_in_typ env typ orig new_nexp =
        let f1 = List.exists fst arg' in
        let f2, res = aux res in
        f1 || f2, Typ_aux (Typ_fn (List.map snd arg', res, eff),l)
-    | Typ_bidir (t1, t2) ->
+    | Typ_bidir (t1, t2, eff) ->
        let f1, t1 = aux t1 in
        let f2, t2 = aux t2 in
-       f1 || f2, Typ_aux (Typ_bidir (t1, t2), l)
+       f1 || f2, Typ_aux (Typ_bidir (t1, t2, eff), l)
     | Typ_tup typs ->
        let fs, typs = List.split (List.map aux typs) in
        List.exists (fun x -> x) fs, Typ_aux (Typ_tup typs,l)

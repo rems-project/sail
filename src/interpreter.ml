@@ -203,7 +203,6 @@ let throw v = Yield (Exception v)
 let call (f : id) (args : value list) : return_value monad =
   Yield (Call (f, args, fun v -> Pure v))
 
-
 let read_mem rk addr len : value monad =
   Yield (Read_mem (rk, addr, len, (fun v -> Pure v)))
 
@@ -286,6 +285,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
   match e_aux with
   | E_block [] -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
   | E_block [exp] when is_value exp -> return exp
+  | E_block [E_aux (E_block _, _) as exp] -> return exp
   | E_block (exp :: exps) when is_value exp -> wrap (E_block exps)
   | E_block (exp :: exps) ->
      step exp >>= fun exp' -> wrap (E_block (exp' :: exps))
@@ -825,7 +825,8 @@ let rec eval_frame' = function
      | Yield (Get_primop (name, cont)), _ ->
         begin
           try
-            let op = StringMap.find name gstate.primops in
+            (* If we are in the toplevel interactive interpreter allow the set of primops to be changed dynamically *)
+            let op = StringMap.find name (if !Interactive.opt_interactive then !Value.primops else gstate.primops) in
             eval_frame' (Step (out, state, cont op, stack))
           with Not_found ->
             eval_frame' (Step (out, state, fail ("No such primop: " ^ name), stack))
@@ -926,8 +927,9 @@ let default_effect_interp state eff =
          failwith ("Register write disallowed by allow_registers setting: " ^ name)
      end
 
+let effect_interp = ref default_effect_interp
 
-
+let set_effect_interp interp = effect_interp := interp
 
 let rec run_frame frame =
   match frame with
@@ -938,7 +940,7 @@ let rec run_frame frame =
   | Break frame ->
      run_frame (eval_frame frame)
   | Effect_request (out, state, stack, eff) ->
-     run_frame (default_effect_interp state eff)
+     run_frame (!effect_interp state eff)
 
 let eval_exp state exp =
   run_frame (Step (lazy "", state, return exp, []))

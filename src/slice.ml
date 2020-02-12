@@ -130,7 +130,7 @@ and typ_ids' (Typ_aux (aux, _)) =
      IdSet.add id (List.fold_left IdSet.union IdSet.empty (List.map typ_arg_ids' args))
   | Typ_fn (typs, typ, _) ->
      IdSet.union (typ_ids' typ) (List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs))
-  | Typ_bidir (typ1, typ2) ->
+  | Typ_bidir (typ1, typ2, _) ->
      IdSet.union (typ_ids' typ1) (typ_ids' typ2)
   | Typ_tup typs ->
      List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs)
@@ -169,13 +169,23 @@ let add_def_to_graph graph def =
   let scan_lexp self lexp_aux annot =
     let env = env_of_annot annot in
     begin match lexp_aux with
-    | LEXP_cast (typ, _) ->
-       IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ)
+    | LEXP_cast (typ, id) ->
+       IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (typ_ids typ);
+       begin match Env.lookup_id id env with
+       | Register _ ->
+          graph := G.add_edge self (Register id) !graph
+       | Enum _ -> graph := G.add_edge self (Constructor id) !graph
+       | _ ->
+          if IdSet.mem id (Env.get_toplevel_lets env) then
+            graph := G.add_edge self (Letbind id) !graph
+          else ()
+       end
     | LEXP_memory (id, _) ->
        graph := G.add_edge self (Function id) !graph
     | LEXP_id id ->
        begin match Env.lookup_id id env with
-       | Register _ -> graph := G.add_edge self (Register id) !graph
+       | Register _ ->
+          graph := G.add_edge self (Register id) !graph
        | Enum _ -> graph := G.add_edge self (Constructor id) !graph
        | _ ->
           if IdSet.mem id (Env.get_toplevel_lets env) then
@@ -361,24 +371,20 @@ let () =
   let slice_roots = ref IdSet.empty in
   let slice_cuts = ref IdSet.empty in
 
-  (fun arg ->
+  ArgString ("identifiers", fun arg -> Action (fun () ->
     let args = Str.split (Str.regexp " +") arg in
     let ids = List.map mk_id args |> IdSet.of_list in
     Specialize.add_initial_calls ids;
     slice_roots := IdSet.union ids !slice_roots
-  ) |> register_command
-         ~name:"slice_roots"
-         ~help:(sprintf ":slice_roots %s - Set the roots for %s" (arg "identifiers") (command "slice"));
+  )) |> register_command ~name:"slice_roots" ~help:"Set the roots for :slice";
 
-  (fun arg ->
+  ArgString ("identifiers", fun arg -> Action (fun () ->
     let args = Str.split (Str.regexp " +") arg in
     let ids = List.map mk_id args |> IdSet.of_list in
     slice_cuts := IdSet.union ids !slice_cuts
-  ) |> register_command
-         ~name:"slice_cuts"
-         ~help:(sprintf ":slice_cuts %s - Set the roots for %s" (arg "identifiers") (command "slice"));
+  )) |> register_command ~name:"slice_cuts" ~help:"Set the cuts for :slice";
 
-  (fun arg ->
+  Action (fun () ->
     let module NodeSet = Set.Make(Node) in
     let module G = Graph.Make(Node) in
     let g = graph_of_ast !ast in
@@ -388,10 +394,11 @@ let () =
     ast := filter_ast cuts g !ast
   ) |> register_command
          ~name:"slice"
-         ~help:(sprintf ":slice - Slice AST to the definitions which the functions given by %s depend on, up to the functions given by %s"
-                        (command "slice_roots") (command "slice_cuts"));
+         ~help:"Slice AST to the definitions which the functions given \
+                by :slice_roots depend on, up to the functions given \
+                by :slice_cuts";
 
-  (fun arg ->
+  Action (fun () ->
     let module NodeSet = Set.Make(Node) in
     let module NodeMap = Map.Make(Node) in
     let module G = Graph.Make(Node) in
@@ -409,7 +416,7 @@ let () =
          ~name:"thin_slice"
          ~help:(sprintf ":thin_slice - Slice AST to the function definitions given with %s" (command "slice_roots"));
 
-  (fun arg ->
+  ArgString ("format", fun arg -> Action (fun () ->
     let format = if arg = "" then "svg" else arg in
     let dotfile, out_chan = Filename.open_temp_file "sail_graph_" ".gz" in
     let image = Filename.temp_file "sail_graph_" ("." ^ format) in
@@ -418,9 +425,8 @@ let () =
     let _ = Unix.system (Printf.sprintf "dot -T%s %s -o %s" format dotfile image) in
     let _ = Unix.system (Printf.sprintf "xdg-open %s" image) in
     ()
-  ) |> register_command
-         ~name:"graph"
-         ~help:(sprintf ":graph %s - Draw a callgraph using dot in %s (default svg if none provided), and open with xdg-open"
-                        (arg "format") (arg "format"));
+  )) |> register_command
+          ~name:"graph"
+          ~help:"Draw a callgraph using dot in :0 (e.g. svg), and open with xdg-open"
 
 

@@ -26,6 +26,11 @@ metavar string ::=
   {{ ocaml string }}
   {{ lem string }}
 
+metavar mstring ::=
+  {{ phantom }}
+  {{ ocaml string option }}
+  {{ lem maybe string }}
+
 metavar bool ::=
   {{ phantom }}
   {{ ocaml bool }}
@@ -54,6 +59,7 @@ name :: '' ::=
   | id nat                :: :: name
   | have_exception nat    :: :: have_exception
   | current_exception nat :: :: current_exception
+  | throw_location nat    :: :: throw_location
   | return nat            :: :: return
 
 op :: '' ::=
@@ -62,7 +68,6 @@ op :: '' ::=
   | and               :: :: band
   | hd                :: :: list_hd
   | tl                :: :: list_tl
-  | bit_to_bool       :: :: bit_to_bool
   | eq                :: :: eq
   | neq               :: :: neq
 % Integer ops
@@ -92,7 +97,6 @@ op :: '' ::=
 
 cval :: 'V_' ::=
   | name : ctyp                                       :: :: id
-  | '&' name : ctyp                                   :: :: ref
   | value : ctyp                                      :: :: lit
   | struct { uid0 = cval0 , ... , uidn = cvaln } ctyp :: :: struct
   | cval != kind id ( ctyp0 , ... , ctypn ) ctyp      :: :: ctor_kind
@@ -152,6 +156,7 @@ ctyp :: 'CT_' ::=
   | variant id ( uid0 * ctyp0 , ... , uidn * ctypn ) :: :: variant
 
 % A vector type for non-bit vectors, and a (linked) list type.
+  | fvector ( nat , bool , ctyp )  :: :: fvector
   | vector ( bool , ctyp )         :: :: vector
   | list ( ctyp )                  :: :: list
 
@@ -240,7 +245,7 @@ cdef :: 'CDEF_' ::=
       instr0 ; ... ; instrm
     } :: :: let
 
-  | val id ( ctyp0 , ... , ctypn ) -> ctyp :: :: spec
+  | val id = mstring ( ctyp0 , ... , ctypn ) -> ctyp :: :: spec
 
 % If mid = Some id this indicates that the caller should allocate the
 % return type and passes a pointer to it as an extra argument id for

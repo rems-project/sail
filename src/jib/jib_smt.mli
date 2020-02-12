@@ -73,44 +73,57 @@ val opt_default_lbits_index : int ref
 val opt_default_vector_index : int ref
 
 type ctx = {
-    (** Arbitrary-precision bitvectors are represented as a (BitVec lbits_index, BitVec (2 ^ lbits_index)) pair. *)
     lbits_index : int;
-    (** The size we use for integers where we don't know how large they are statically. *)
+    (** Arbitrary-precision bitvectors are represented as a (BitVec lbits_index, BitVec (2 ^ lbits_index)) pair. *)
     lint_size : int;
+    (** The size we use for integers where we don't know how large they are statically. *)
+    vector_index : int;
     (** A generic vector, vector('a) becomes Array (BitVec vector_index) 'a.
        We need to take care that vector_index is large enough for all generic vectors. *)
-    vector_index : int;
-    (** A map from each ctyp to a list of registers of that ctyp *)
     register_map : id list CTMap.t;
-    (** A set to keep track of all the tuple sizes we need to generate types for *)
+    (** A map from each ctyp to a list of registers of that ctyp *)
     tuple_sizes : IntSet.t ref;
-    (** tc_env is the global type-checking environment *)
+    (** A set to keep track of all the tuple sizes we need to generate types for *)
     tc_env : Type_check.Env.t;
+    (** tc_env is the global type-checking environment *)
+    pragma_l : Ast.l;
     (** A location, usually the $counterexample or $property we are
        generating the SMT for. Used for error messages. *)
-    pragma_l : Ast.l;
-    (** Used internally to keep track of function argument names *)
     arg_stack : (int * string) Stack.t;
-    (** The fully type-checked ast *)
+    (** Used internally to keep track of function argument names *)
     ast : Type_check.tannot defs;
+    (** The fully type-checked ast *)
+    shared : ctyp Bindings.t;
+    (** Shared variables. These variables do not get renamed by
+       Smtlib.suffix_variables_def, and their SSA number is
+       omitted. They should therefore only ever be read and never
+       written. Used by sail-axiomatic for symbolic values in the
+       initial litmus state. *)
+    preserved : IdSet.t;
+    (** icopy instructions to an id in preserved will generated a
+       define-const (by using Smtlib.Preserved_const) that will not be
+       simplified away or renamed. It will also not get a SSA
+       number. Such variables can therefore only ever be written to
+       once, and never read. They are used by sail-axiomatic to
+       extract information from the generated SMT. *)
+    events : smt_exp Stack.t EventMap.t ref;
     (** For every event type we have a stack of boolean SMT
        expressions for each occurance of that event. See
        src/property.ml for the event types *)
-    events : smt_exp Stack.t EventMap.t ref;
+    node : int;
+    pathcond : smt_exp Lazy.t;
     (** When generating SMT for an instruction pathcond will contain
        the global path conditional of the containing block/node in the
        control flow graph *)
-    node : int;
-    pathcond : smt_exp Lazy.t;
+    use_string : bool ref;
+    use_real : bool ref
     (** Set if we need to use strings or real numbers in the generated
        SMT, which then requires set-logic ALL or similar depending on
        the solver *)
-    use_string : bool ref;
-    use_real : bool ref
   }
 
 (** Compile an AST into Jib suitable for SMT generation, and initialise a context. *)
-val compile : Type_check.Env.t -> Type_check.tannot defs -> cdef list * ctx
+val compile : Type_check.Env.t -> Type_check.tannot defs -> cdef list * Jib_compile.ctx * ctx
 
 (* TODO: Currently we internally use mutable stacks and queues to
    avoid any issues with stack overflows caused by some non
@@ -122,7 +135,7 @@ val smt_header : ctx -> cdef list -> smt_def list
 
 val smt_query : ctx -> Property.query -> smt_exp
 
-val smt_instr_list : string -> ctx -> cdef list -> instr list -> smt_def Stack.t * (ssa_elem list * cf_node) Jib_ssa.array_graph
+val smt_instr_list : string -> ctx -> cdef list -> instr list -> smt_def Stack.t * int * (ssa_elem list * cf_node) Jib_ssa.array_graph
 
 module type Sequence = sig
   type 'a t

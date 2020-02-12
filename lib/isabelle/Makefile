@@ -18,17 +18,17 @@ all: thys
 thys: $(THYS)
 
 heap-img: thys $(EXTRA_THYS) ROOT
-ifeq ($(wildcard $(LEM_ISA_LIB)/ROOT),)
-	$(error isabelle-lib directory of Lem not found. Please set the LEM_ISA_LIB environment variable)
-endif
-	isabelle build -b -d $(LEM_ISA_LIB) -D .
+	if [ -z "$(wildcard $(LEM_ISA_LIB)/ROOT)" ]; \
+	then echo isabelle-lib directory of Lem not found. Please set the LEM_ISA_LIB environment variable; false; \
+	else isabelle build -b -d $(LEM_ISA_LIB) -D . ; \
+	fi
 
 manual: heap-img manual/Manual.thy manual/ROOT manual/document/root.tex
 	cp output/document/session_graph.pdf manual/document/Sail_session_graph.pdf
 	make -C $(SAIL_RISCV) riscv_duopod
 	isabelle build -d $(LEM_ISA_LIB) -d . -d $(SAIL_RISCV)/generated_definitions/isabelle -D manual
 
-Sail2_instr_kinds.thy: ../../src/lem_interp/sail2_instr_kinds.lem
+Sail2_instr_kinds.thy: ../../src/gen_lib/sail2_instr_kinds.lem
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
 Sail2_values.thy: ../../src/gen_lib/sail2_values.lem Sail2_instr_kinds.thy

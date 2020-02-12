@@ -60,7 +60,8 @@ let options = Arg.align [
         | [fname;addr] -> (fname, Nat_big_num.of_string addr)
         | _ -> raise (Arg.Bad (s ^ " not of form <filename>@<addr>")) in
       opt_raw_files := (file, addr) :: !opt_raw_files),
-    "<file@0xADDR> load a raw binary in memory at given address.")]
+      "<file@0xADDR> load a raw binary in memory at given address.");
+    ("-cycle-limit", Arg.Set_int (Sail_lib.opt_cycle_limit), "<int> exit after given number of instructions executed.")]
 
 let usage_msg = "Sail OCaml RTS options:"
 

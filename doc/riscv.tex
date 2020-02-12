@@ -3,38 +3,35 @@
 
 We introduce the basic features of Sail via a small example from our
 \riscv\ model that includes just two instructions: add immediate and
-load double.
+load double. We start by including two files from the main sail-riscv
+development:
 
-We start with some basic type synonyms. We create a type \ll{xlen_t}
-for bitvectors of length 64, then we define a type \ll{regno}, which
-is a type synonym for the builtin type \ll{atom}. The type
-\ll{atom('n)} is a number which is exactly equal to the type variable
-\ll{atom('n)}. Type variables are syntactically marked with single
-quotes, as in ML. A \emph{constraint} can be attached to this type
-synonym---ensuring that it is only used where we can guarantee that
-its value will be between 0 and 31. Sail supports a rich variety of
-numeric types, including range types, which are statically checked. We
-then define a synonym \ll{regbits} for \ll{bits(5)}. We don't want to
-manually convert between \ll{regbits} and \ll{regno} all the time, so
-we define a function that maps between them and declare it as a
-\emph{cast}, which allows the type-checker to insert it where
-needed. By default, we do not do any automatic casting (except between
-basic numeric types when safe), but to allow idioms in ISA vendor
-description documents we support flexible user defined casts. To ensure
-that the constraint on the \ll{regno} type synonym is satisfied, we
-return an existentially quantified type \ll{\{'n, 0 <= 'n <
-  32. regno('n)\}}.
+\begin{lstlisting}
+$include "prelude.sail"
+$include "riscv_xlen64.sail"
+\end{lstlisting}
 
-\sailtype{xlen_t}
-\sailtype{regno}
+The prelude sets up basic definitions we will use, it can vary on a
+per-architecture basis to account for stylistic differences in ISA
+specifications. \texttt{riscv\_xlen64.sail} introduces some type
+synonyms. It creates a integer type xlen, which is 64. Sail supports
+definitions which are generic over both regular types, and integers
+(think const generics in C++, but more expressive). We also create a
+type \ll{xlenbits} for bitvectors of length \ll{xlen}.
+
+\sailtype{xlen}
+\sailtype{xlen_bytes}
+\sailtype{xlenbits}
+
+For the purpose of this example, we also introduce a type synonym for
+bitvectors of length 5, which represent registers.
+
 \sailtype{regbits}
-\sailval{regbits_to_regno}
-\sailfn{regbits_to_regno}
 
 We now set up some basic architectural state. First creating a
-register of type \ll{xlen_t} for both the program counter \ll{PC}, and
+register of type \ll{xlenbits} for both the program counter \ll{PC}, and
 the next program counter, \ll{nextPC}. We define the general purpose
-registers as a vector of 32 \ll{xlen_t} bitvectors. The \ll{dec}
+registers as a vector of 32 \ll{xlenbits} bitvectors. The \ll{dec}
 keyword isn't important in this example, but Sail supports two
 different numbering schemes for (bit)vectors \ll{inc}, for most
 significant bit is zero, and \ll{dec} for least significant bit is
@@ -48,20 +45,18 @@ overloading, and has an expressive l-value language in assignments,
 with the aim of allowing pseudo-code like definitions.
 
 \begin{lstlisting}
-register PC : xlen_t
-register nextPC : xlen_t
+register PC : xlenbits
+register nextPC : xlenbits
 
-register Xs : vector(32, dec, xlen_t)
+register Xs : vector(32, dec, xlenbits)
 \end{lstlisting}
 
 \sailval{rX}
-% TODO: Fix funcl commands
-\sailfclrX
-\sailfclMMMrX
+\sailfn{rX}
 
 \sailval{wX}
 \sailfn{wX}
-\sailoverloadIIX
+\sailoverloadUUX
 
 We also give a function \ll{MEMr} for reading memory, this function
 just points at a builtin we have defined elsewhere. Note that
@@ -83,8 +78,7 @@ desirable to group the relevant parts of these functions and datatypes
 together in one place, as they would usually be found in an
 architecture reference manual. To support this Sail supports
 \emph{scattered} definitions. First we give types for the execute and
-decode functions, and declare them as scattered functions, as well as
-the \ll{ast} union.
+decode functions, as well as the \ll{ast} union.
 
 \sailtype{iop}
 
@@ -92,10 +86,8 @@ the \ll{ast} union.
 scattered union ast
 
 val decode : bits(32) -> option(ast) effect pure
-scattered function decode
 
 val execute : ast -> unit effect {rmem, rreg, wreg}
-scattered function execute
 \end{lstlisting}
 
 Now we provide the clauses for the add-immediate \ll{ast} type, as
@@ -111,8 +103,8 @@ its argument.
 union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
 \end{lstlisting}
 
-%\sailfndecodeSomeITYPE
-%\sailfnexecuteITYPE
+\sailfclITYPEdecode
+\sailfclITYPEexecute
 
 \noindent Now we do the same thing for the load-double instruction:
 
@@ -120,22 +112,11 @@ union clause ast = ITYPE : (bits(12), regbits, regbits, iop)
 union clause ast = LOAD : (bits(12), regbits, regbits)
 \end{lstlisting}
 
-%\sailfndecodeSomeLOAD
-%\sailfnexecuteLOAD
+\sailfclLOADdecode
+\sailfclLOADexecute
 
-Finally we define the fallthrough case for the decode function, and
-end all our scattered definitions. Note that the clauses in a
-scattered function will be matched in the order they appear in the
-file.
-
-%\sailfndecodeNone
-
-\begin{lstlisting}
-end ast
-end decode
-end execute
-\end{lstlisting}
-
-The actual code for this example, as well as our more complete
-\riscv\ specification can be found on our github at
+Finally we define the fallthrough case for the decode function. Note
+that the clauses in a scattered function will be matched in the order
+they appear in the file. The actual code for this example, as well as
+our more complete \riscv\ specification can be found on our github at
 \anonymise{\url{https://github.com/rems-project/sail-riscv/blob/master/model/riscv_duopod.sail}}.

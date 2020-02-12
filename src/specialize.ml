@@ -92,7 +92,7 @@ let rec nexp_simp_typ (Typ_aux (typ_aux, l)) =
     | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, nexp_simp_typ typ)
     | Typ_fn (arg_typs, ret_typ, effect) ->
        Typ_fn (List.map nexp_simp_typ arg_typs, nexp_simp_typ ret_typ, effect)
-    | Typ_bidir (t1, t2) -> Typ_bidir (nexp_simp_typ t1, nexp_simp_typ t2)
+    | Typ_bidir (t1, t2, effect) -> Typ_bidir (nexp_simp_typ t1, nexp_simp_typ t2, effect)
     | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   in
   Typ_aux (typ_aux, l)
@@ -170,8 +170,8 @@ let string_of_instantiation instantiation =
     | Typ_app (id, args) -> string_of_id id ^ "(" ^ Util.string_of_list "," string_of_typ_arg args ^ ")"
     | Typ_fn (arg_typs, ret_typ, eff) ->
        "(" ^ Util.string_of_list ", " string_of_typ arg_typs ^ ") -> " ^ string_of_typ ret_typ ^ " effect " ^ string_of_effect eff
-    | Typ_bidir (t1, t2) ->
-       string_of_typ t1 ^ " <-> " ^ string_of_typ t2
+    | Typ_bidir (t1, t2, eff) ->
+       string_of_typ t1 ^ " <-> " ^ string_of_typ t2 ^ " effect " ^ string_of_effect eff
     | Typ_exist (kids, nc, typ) ->
        "exist " ^ Util.string_of_list " " kid_name kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ
     | Typ_internal_unknown -> "UNKNOWN"
@@ -290,7 +290,7 @@ let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_exist (kopts, nc, typ) -> typ_frees ~exs:(KidSet.of_list (List.map kopt_kid kopts)) typ
   | Typ_fn (arg_typs, ret_typ, _) ->
      List.fold_left KidSet.union (typ_frees ~exs:exs ret_typ) (List.map (typ_frees ~exs:exs) arg_typs)
-  | Typ_bidir (t1, t2) -> KidSet.union (typ_frees ~exs:exs t1) (typ_frees ~exs:exs t2)
+  | Typ_bidir (t1, t2, _) -> KidSet.union (typ_frees ~exs:exs t1) (typ_frees ~exs:exs t2)
   | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and typ_arg_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
@@ -308,7 +308,7 @@ let rec typ_int_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_exist (kopts, nc, typ) -> typ_int_frees ~exs:(KidSet.of_list (List.map kopt_kid kopts)) typ
   | Typ_fn (arg_typs, ret_typ, _) ->
      List.fold_left KidSet.union (typ_int_frees ~exs:exs ret_typ) (List.map (typ_int_frees ~exs:exs) arg_typs)
-  | Typ_bidir (t1, t2) -> KidSet.union (typ_int_frees ~exs:exs t1) (typ_int_frees ~exs:exs t2)
+  | Typ_bidir (t1, t2, _) -> KidSet.union (typ_int_frees ~exs:exs t1) (typ_int_frees ~exs:exs t2)
   | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
 and typ_arg_int_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
@@ -325,7 +325,7 @@ let rec remove_implicit (Typ_aux (aux, l) as t) =
   | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
   | Typ_tup typs -> Typ_aux (Typ_tup (List.map remove_implicit typs), l)
   | Typ_fn (arg_typs, ret_typ, effs) -> Typ_aux (Typ_fn (List.map remove_implicit arg_typs, remove_implicit ret_typ, effs), l)
-  | Typ_bidir (typ1, typ2) -> Typ_aux (Typ_bidir (remove_implicit typ1, remove_implicit typ2), l)
+  | Typ_bidir (typ1, typ2, effs) -> Typ_aux (Typ_bidir (remove_implicit typ1, remove_implicit typ2, effs), l)
   | Typ_app (Id_aux (Id "implicit", _), args) -> Typ_aux (Typ_app (mk_id "atom", List.map remove_implicit_arg args), l)
   | Typ_app (id, args) -> Typ_aux (Typ_app (id, List.map remove_implicit_arg args), l)
   | Typ_id id -> Typ_aux (Typ_id id, l)
@@ -602,11 +602,9 @@ let rec specialize_passes n spec env ast =
 let specialize = specialize_passes (-1)
 
 let () =
-  let open Printf in
   let open Interactive in
-
-  (fun _ ->
+  Action (fun () ->
     let ast', env' = specialize typ_ord_specialization !env !ast in
     ast := ast';
-    env := env')
-  |> register_command ~name:"specialize" ~help:":specialize - Specialize Type and Order type variables in the AST"
+    env := env'
+  ) |> register_command ~name:"specialize" ~help:"Specialize Type and Order type variables in the AST"

@@ -30,7 +30,7 @@ match l with
   foreachM xs vars body
 end.
 
-Fixpoint foreach_ZM_up' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 < step)} `{ArithFact (0 <= off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <= z <= to)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e.
+Fixpoint foreach_ZM_up' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 <? step)} `{ArithFact (0 <=? off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <=? z <=? to)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e.
 exact (
   if sumbool_of_bool (from + off <=? to) then
     match n with
@@ -40,7 +40,7 @@ exact (
   else returnm vars).
 Defined.
 
-Fixpoint foreach_ZM_down' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 < step)} `{ArithFact (off <= 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <= z <= from)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e.
+Fixpoint foreach_ZM_down' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 <? step)} `{ArithFact (off <=? 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <=? z <=? from)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e.
 exact (
   if sumbool_of_bool (to <=? from + off) then
     match n with
@@ -50,9 +50,9 @@ exact (
   else returnm vars).
 Defined.
 
-Definition foreach_ZM_up {rv e Vars} from to step vars body `{ArithFact (0 < step)} :=
+Definition foreach_ZM_up {rv e Vars} from to step vars body `{ArithFact (0 <? step)} :=
     foreach_ZM_up' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
-Definition foreach_ZM_down {rv e Vars} from to step vars body `{ArithFact (0 < step)} :=
+Definition foreach_ZM_down {rv e Vars} from to step vars body `{ArithFact (0 <? step)} :=
     foreach_ZM_down' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
 
 (*declare {isabelle} termination_argument foreachM = automatic*)
@@ -69,9 +69,9 @@ Definition and_boolM {rv E} (l : monad rv bool E) (r : monad rv bool E) : monad 
    the state monad and program logic rules.  They are not currently used in the proof
    rules because it was more convenient to quantify over them instead. *)
 Definition and_bool_left_proof {P Q R:bool -> Prop} :
-  ArithFact (P false) ->
-  ArithFact (forall l r, P l -> (l = true -> Q r) -> R (andb l r)) ->
-  ArithFact (R false).
+  ArithFactP (P false) ->
+  (forall l r, ArithFactP (P l -> ((l = true -> (Q r)) -> (R (andb l r))))) ->
+  ArithFactP (R false).
 intros [p] [h].
 constructor.
 change false with (andb false false).
@@ -80,20 +80,20 @@ congruence.
 Qed.
 
 Definition and_bool_full_proof {P Q R:bool -> Prop} {r} :
-  ArithFact (P true) ->
-  ArithFact (Q r) ->
-  ArithFact (forall l r, P l -> (l = true -> Q r) -> R (andb l r)) ->
-  ArithFact (R r).
+  ArithFactP (P true) ->
+  ArithFactP (Q r) ->
+  (forall l r, ArithFactP ((P l) -> ((l = true -> (Q r)) -> (R (andb l r))))) ->
+  ArithFactP (R r).
 intros [p] [q] [h].
 constructor.
 change r with (andb true r).
 apply h; auto.
 Qed.
 
-Definition and_boolMP {rv E} {P Q R:bool->Prop} (x : monad rv {b:bool & ArithFact (P b)} E) (y : monad rv {b:bool & ArithFact (Q b)} E)
-  `{H:ArithFact (forall l r, P l -> (l = true -> Q r) -> R (andb l r))}
-  : monad rv {b:bool & ArithFact (R b)} E :=
-  x >>= fun '(existT _ x p) => (if x return ArithFact (P x) -> _ then
+Definition and_boolMP {rv E} {P Q R:bool->Prop} (x : monad rv {b:bool & ArithFactP (P b)} E) (y : monad rv {b:bool & ArithFactP (Q b)} E)
+  `{H:forall l r, ArithFactP ((P l) -> ((l = true -> (Q r)) -> (R (andb l r))))}
+  : monad rv {b:bool & ArithFactP (R b)} E :=
+  x >>= fun '(existT _ x p) => (if x return ArithFactP (P x) -> _ then
     fun p => y >>= fun '(existT _ y q) => returnm (existT _ y (and_bool_full_proof p q H))
   else fun p => returnm (existT _ false (and_bool_left_proof p H))) p.
 
@@ -103,9 +103,9 @@ Definition or_boolM {rv E} (l : monad rv bool E) (r : monad rv bool E) : monad r
 
 
 Definition or_bool_left_proof {P Q R:bool -> Prop} :
-  ArithFact (P true) ->
-  ArithFact (forall l r, P l -> (l = false -> Q r) -> R (orb l r)) ->
-  ArithFact (R true).
+  ArithFactP (P true) ->
+  (forall l r, ArithFactP ((P l) -> (((l = false) -> (Q r)) -> (R (orb l r))))) ->
+  ArithFactP (R true).
 intros [p] [h].
 constructor.
 change true with (orb true false).
@@ -114,25 +114,25 @@ congruence.
 Qed.
 
 Definition or_bool_full_proof {P Q R:bool -> Prop} {r} :
-  ArithFact (P false) ->
-  ArithFact (Q r) ->
-  ArithFact (forall l r, P l -> (l = false -> Q r) -> R (orb l r)) ->
-  ArithFact (R r).
+  ArithFactP (P false) ->
+  ArithFactP (Q r) ->
+  (forall l r, ArithFactP ((P l) -> (((l = false) -> (Q r)) -> (R (orb l r))))) ->
+  ArithFactP (R r).
 intros [p] [q] [h].
 constructor.
 change r with (orb false r).
 apply h; auto.
 Qed.
 
-Definition or_boolMP {rv E} {P Q R:bool -> Prop} (l : monad rv {b : bool & ArithFact (P b)} E) (r : monad rv {b : bool & ArithFact (Q b)} E)
- `{ArithFact (forall l r, P l -> (l = false -> Q r) -> R (orb l r))}
- : monad rv {b : bool & ArithFact (R b)} E :=
+Definition or_boolMP {rv E} {P Q R:bool -> Prop} (l : monad rv {b : bool & ArithFactP (P b)} E) (r : monad rv {b : bool & ArithFactP (Q b)} E)
+ `{forall l r, ArithFactP ((P l) -> (((l = false) -> (Q r)) -> (R (orb l r))))}
+ : monad rv {b : bool & ArithFactP (R b)} E :=
  l >>= fun '(existT _ l p) =>
-  (if l return ArithFact (P l) -> _ then fun p => returnm (existT _ true (or_bool_left_proof p H))
+  (if l return ArithFactP (P l) -> _ then fun p => returnm (existT _ true (or_bool_left_proof p H))
    else fun p => r >>= fun '(existT _ r q) => returnm (existT _ r (or_bool_full_proof p q H))) p.
 
-Definition build_trivial_ex {rv E} {T:Type} (x:monad rv T E) : monad rv {x : T & ArithFact True} E :=
-  x >>= fun x => returnm (existT _ x (Build_ArithFact _ I)).
+Definition build_trivial_ex {rv E} {T:Type} (x:monad rv T E) : monad rv {x : T & ArithFact true} E :=
+  x >>= fun x => returnm (existT _ x (Build_ArithFactP _ eq_refl)).
 
 (*val bool_of_bitU_fail : forall 'rv 'e. bitU -> monad 'rv bool 'e*)
 Definition bool_of_bitU_fail {rv E} (b : bitU) : monad rv bool E :=
@@ -164,9 +164,10 @@ Definition of_bits_fail {rv A E} `{Bitvector A} (bits : list bitU) : monad rv A 
 
 (* For termination of recursive functions.  We don't name assertions, so use
    the type class mechanism to find it. *)
-Definition _limit_reduces {_limit} (_acc:Acc (Zwf 0) _limit) `{ArithFact (_limit >= 0)} : Acc (Zwf 0) (_limit - 1).
+Definition _limit_reduces {_limit} (_acc:Acc (Zwf 0) _limit) `{ArithFact (_limit >=? 0)} : Acc (Zwf 0) (_limit - 1).
 refine (Acc_inv _acc _).
 destruct H.
+unbool_comparisons.
 red.
 omega.
 Defined.
@@ -269,18 +270,18 @@ Fixpoint undefined_word_nat {rv e} n : monad rv (Word.word n) e :=
     returnm (Word.WS b t)
   end.
 
-Definition undefined_bitvector {rv e} n `{ArithFact (n >= 0)} : monad rv (mword n) e :=
+Definition undefined_bitvector {rv e} n `{ArithFact (n >=? 0)} : monad rv (mword n) e :=
   undefined_word_nat (Z.to_nat n) >>= fun w =>
   returnm (word_to_mword w).
 
 (* If we need to build an existential after a monadic operation, assume that
    we can do it entirely from the type. *)
 
-Definition build_ex_m {rv e} {T:Type} (x:monad rv T e) {P:T -> Prop} `{H:forall x, ArithFact (P x)} : monad rv {x : T & ArithFact (P x)} e :=
+Definition build_ex_m {rv e} {T:Type} (x:monad rv T e) {P:T -> Prop} `{H:forall x, ArithFactP (P x)} : monad rv {x : T & ArithFactP (P x)} e :=
   x >>= fun y => returnm (existT _ y (H y)).
 
 Definition projT1_m {rv e} {T:Type} {P:T -> Prop} (x: monad rv {x : T & P x} e) : monad rv T e :=
   x >>= fun y => returnm (projT1 y).
 
-Definition derive_m {rv e} {T:Type} {P Q:T -> Prop} (x : monad rv {x : T & P x} e) `{forall x, ArithFact (P x) -> ArithFact (Q x)} : monad rv {x : T & (ArithFact (Q x))} e :=
+Definition derive_m {rv e} {T:Type} {P Q:T -> Prop} (x : monad rv {x : T & ArithFactP (P x)} e) `{forall x, ArithFactP (P x) -> ArithFactP (Q x)} : monad rv {x : T & (ArithFactP (Q x))} e :=
   x >>= fun y => returnm (build_ex (projT1 y)).

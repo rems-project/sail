@@ -89,8 +89,8 @@ let rec free_type_names_t consider_var (Typ_aux (t, l)) = match t with
   | Typ_id name -> Nameset.add (string_of_id name) mt
   | Typ_fn (arg_typs,ret_typ,_) ->
      List.fold_left Nameset.union (free_type_names_t consider_var ret_typ) (List.map (free_type_names_t consider_var) arg_typs)
-  | Typ_bidir (t1, t2) -> Nameset.union (free_type_names_t consider_var t1)
-                                        (free_type_names_t consider_var t2)
+  | Typ_bidir (t1,t2,_) -> Nameset.union (free_type_names_t consider_var t1)
+                                         (free_type_names_t consider_var t2)
   | Typ_tup ts -> free_type_names_ts consider_var ts
   | Typ_app (name,targs) -> Nameset.add (string_of_id name) (free_type_names_t_args consider_var targs)
   | Typ_exist (kopts,_,t') -> List.fold_left (fun s kopt -> Nameset.remove (string_of_kid (kopt_kid kopt)) s) (free_type_names_t consider_var t') kopts
@@ -121,7 +121,7 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
   | Typ_id id -> conditional_add_typ bound used id
   | Typ_fn(arg,ret,_) ->
      fv_of_typ consider_var bound (List.fold_left Nameset.union Nameset.empty (List.map (fv_of_typ consider_var bound used) arg)) ret
-  | Typ_bidir(t1, t2) -> fv_of_typ consider_var bound (fv_of_typ consider_var bound used t1) t2 (* TODO FIXME? *)
+  | Typ_bidir(t1,t2,_) -> fv_of_typ consider_var bound (fv_of_typ consider_var bound used t1) t2 (* TODO FIXME? *)
   | Typ_tup ts -> List.fold_right (fun t n -> fv_of_typ consider_var bound n t) ts used
   | Typ_app(id,targs) ->
      List.fold_right (fun ta n -> fv_of_targ consider_var bound n ta) targs (conditional_add_typ bound used id)

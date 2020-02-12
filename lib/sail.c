@@ -837,6 +837,15 @@ fbits bitvector_access(const lbits op, const sail_int n_mpz)
   return (fbits) mpz_tstbit(*op.bits, n);
 }
 
+fbits update_fbits(const fbits op, const uint64_t n, const fbits bit)
+{
+     if ((bit & 1) == 1) {
+          return op | (bit << n);
+     } else {
+          return op & ~(bit << n);
+     }
+}
+
 void sail_unsigned(sail_int *rop, const lbits op)
 {
   /* Normal form of bv_t is always positive so just return the bits. */

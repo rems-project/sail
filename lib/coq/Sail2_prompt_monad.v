@@ -189,7 +189,7 @@ Definition read_memt_bytes {rv A E} rk (addr : mword A) sz : monad rv (list memo
   Read_memt rk (Word.wordToNat (get_word addr)) (Z.to_nat sz) returnm.
 
 (*val read_memt : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv ('b * bitU) 'e*)
-Definition read_memt {rv A B E} `{ArithFact (B >= 0)} rk (addr : mword A) sz : monad rv (mword B * bitU) E :=
+Definition read_memt {rv A B E} `{ArithFact (B >=? 0)} rk (addr : mword A) sz : monad rv (mword B * bitU) E :=
   bind
     (read_memt_bytes rk addr sz)
     (fun '(bytes, tag) =>
@@ -203,7 +203,7 @@ Definition read_mem_bytes {rv A E} rk (addr : mword A) sz : monad rv (list memor
   Read_mem rk (Word.wordToNat (get_word addr)) (Z.to_nat sz) returnm.
 
 (*val read_mem : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv 'b 'e*)
-Definition read_mem {rv A B E} `{ArithFact (B >= 0)} rk (addrsz : Z) (addr : mword A) sz : monad rv (mword B) E :=
+Definition read_mem {rv A B E} `{ArithFact (B >=? 0)} rk (addrsz : Z) (addr : mword A) sz : monad rv (mword B) E :=
   bind
     (read_mem_bytes rk addr sz)
     (fun bytes =>

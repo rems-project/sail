@@ -1,28 +1,24 @@
-These are instructions for installing Sail via opam, the ocaml package manager.
-The most up-to-date version of this document can be found on the Sail wiki
+# How to install Sail using opam
 
-https://github.com/rems-project/sail/wiki/OPAMInstall
+First, install opam (the OCaml package manager) if you haven't already. You can use your system's package
+manager e.g. `sudo apt-get install opam` or follow the [instructions
+from the opam website](https://opam.ocaml.org/doc/Install.html).
+Depending on your system and how you installed opam you may get either
+opam version 1 or 2. Opam 1 is no longer officially supported but our
+packages should work with either.
 
-To build everything from source, instructions can be found here:
-
-https://github.com/rems-project/sail/wiki/Building-from-Source
-
-# How to install Sail from opam
-
-Install opam if you haven't already: https://opam.ocaml.org/doc/Install.html
-
-Use opam to install a version of ocaml we know works for us:
+Use `ocaml -version` to check your OCaml version. If you do not have OCaml 4.06.1 or newer then use `opam switch` to install it e.g.:
 ```
 opam switch 4.06.1
 ```
 OR, if you are using opam >=2.0, the syntax of the switch command changed slightly:
 ```
-opam switch create ocaml-base-compiler.4.06.1
+opam switch create 4.06.1
 ```
 
-Then set up the environment for the ocaml we just installed:
+Then set up the environment for the OCaml we just installed (note that older versions of opam suggest backticks instead of `$(...)`, but it makes no difference):
 ```
-eval `opam config env` 
+eval $(opam config env)
 ```
 Add our local opam repo:
 ```
@@ -32,11 +28,12 @@ Install system dependencies, on Ubuntu:
 ```
 sudo apt-get install build-essential libgmp-dev z3
 ```
-or homebrew:
+or [MacOS homebrew](https://brew.sh/):
 ```
-brew install gmp z3
+xcode-select --install # if you haven't already
+brew install gmp z3 pkg-config
 ```
-Install sail and its dependencies:
+Finally, install sail and its dependencies:
 ```
 opam install sail
 ```
@@ -45,7 +42,7 @@ If all goes well then you'll have sail in your path:
 which sail
 sail --help
 ```
-Some source files that sail uses are found in at ``opam config var sail:share`` (e.g. for ``$include <foo.sail>``) but sail should find those when it needs them.
+Some source files that sail uses are found at ``opam config var sail:share`` (e.g. for ``$include <foo.sail>``) but sail should find those when it needs them.
 
 ### Installing development versions of Sail
 Released Sail packages lag behind the latest development in the repository. If you find you need a recently added feature or bug fix you can use opam pin to install the latest version of Sail from the repository. Assuming you have previously followed the above instructions (required to install dependencies):
@@ -67,4 +64,4 @@ To remove the pin and revert to the latest released opam package type:
 opam pin remove sail
 ```
 
-Alternatively you could follow the instructions to [build Sail manually](https://github.com/rems-project/sail/wiki/Building-from-Source), optionally skipping the steps to install ott, lem and linksem if they were already installed via opam.
+Alternatively you could follow the instructions to [build Sail manually](BUILDING.md), optionally skipping the steps to install ott, lem and linksem if they were already installed via opam.

@@ -1,6 +1,6 @@
 opam-version: "1.2"
 name: "sail"
-version: "0.10"
+version: "0.12"
 maintainer: "Sail Devs <cl-sail-dev@lists.cam.ac.uk>"
 authors: [
   "Alasdair Armstrong"
@@ -37,5 +37,6 @@ depends: [
   "conf-zlib"
   "base64" {< "3.0.0"}
   "yojson"
+  "pprint"
 ]
 available: [ocaml-version >= "4.06.1"]

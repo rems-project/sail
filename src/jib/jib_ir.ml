@@ -69,7 +69,9 @@ let string_of_name =
      "return" ^ ssa_num n
   | Current_exception n ->
      "current_exception" ^ ssa_num n
-
+  | Throw_location n ->
+     "throw_location" ^ ssa_num n
+    
 let rec string_of_clexp = function
   | CL_id (id, ctyp) -> string_of_name id
   | CL_field (clexp, field) -> string_of_clexp clexp ^ "." ^ string_of_uid field
@@ -107,7 +109,9 @@ module Ir_formatter = struct
       | I_label label ->
          C.output_label_instr buf label_map label
       | I_jump (cval, label) ->
-         add_instr n buf indent (C.keyword "jump" ^ " " ^ C.value cval ^ " " ^ C.string_of_label (StringMap.find label label_map))
+         add_instr n buf indent (C.keyword "jump" ^ " " ^ C.value cval ^ " "
+                                 ^ C.keyword "goto" ^ " " ^ C.string_of_label (StringMap.find label label_map)
+                                 ^ " ` \"" ^ Reporting.short_loc_to_string l ^ "\"")
       | I_goto label ->
          add_instr n buf indent (C.keyword "goto" ^ " " ^ C.string_of_label (StringMap.find label label_map))
       | I_match_failure ->
@@ -151,8 +155,10 @@ module Ir_formatter = struct
     let output_def buf = function
       | CDEF_reg_dec (id, ctyp, _) ->
          Buffer.add_string buf (sprintf "%s %s : %s" (C.keyword "register") (zencode_id id) (C.typ ctyp))
-      | CDEF_spec (id, ctyps, ctyp) ->
+      | CDEF_spec (id, None, ctyps, ctyp) ->
          Buffer.add_string buf (sprintf "%s %s : (%s) ->  %s" (C.keyword "val") (zencode_id id) (Util.string_of_list ", " C.typ ctyps) (C.typ ctyp));
+      | CDEF_spec (id, Some extern, ctyps, ctyp) ->
+         Buffer.add_string buf (sprintf "%s %s = \"%s\" : (%s) ->  %s" (C.keyword "val") (zencode_id id) extern (Util.string_of_list ", " C.typ ctyps) (C.typ ctyp));
       | CDEF_fundef (id, ret, args, instrs) ->
          let instrs = C.modify_instrs instrs in
          let label_map = C.make_label_map instrs in
@@ -244,10 +250,10 @@ let () =
   let open Interactive in
   let open Jib_interactive in
 
-  (fun arg ->
+  ArgString ("(val|register)? identifier", fun arg -> Action (fun () ->
     let is_def id = function
       | CDEF_fundef (id', _, _, _) -> Id.compare id id' = 0
-      | CDEF_spec (id', _, _) -> Id.compare id (prepend_id "val " id') = 0
+      | CDEF_spec (id', _, _, _) -> Id.compare id (prepend_id "val " id') = 0
       | CDEF_reg_dec (id', _, _) -> Id.compare id (prepend_id "register " id') = 0
       | _ -> false
     in
@@ -258,12 +264,12 @@ let () =
        let buf = Buffer.create 256 in
        with_colors (fun () -> Flat_ir_formatter.output_def buf cdef);
        print_endline (Buffer.contents buf)
-  ) |> Interactive.(register_command ~name:"ir" ~help:(sprintf ":ir %s - Print the ir representation of a toplevel definition" (arg "(val|register)? identifier")));
+  )) |> Interactive.register_command ~name:"ir" ~help:"Print the ir representation of a toplevel definition";
 
-  (fun file ->
+  ArgString ("file", fun file -> Action (fun () ->
     let buf = Buffer.create 256 in
     let out_chan = open_out file in
     Flat_ir_formatter.output_defs buf !ir;
     output_string out_chan (Buffer.contents buf);
     close_out out_chan
-  ) |> Interactive.(register_command ~name:"dump_ir" ~help:(sprintf ":dump_ir %s - Dump the ir to a file" (arg "file")))
+  )) |> Interactive.register_command ~name:"dump_ir" ~help:"Dump the ir to a file"

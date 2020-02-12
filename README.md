@@ -1,6 +1,9 @@
 The Sail ISA specification language
 ===================================
 
+![](https://github.com/rems-project/sail/workflows/CI%20ubuntu-latest/badge.svg)
+![](https://github.com/rems-project/sail/workflows/CI%20macOS-latest/badge.svg)
+
 Overview
 ========
 
@@ -75,14 +78,13 @@ on Github.  These and the RISC-V model are integrated with our [RMEM](http://www
 OPAM Installation
 =================
 
-See the following Sail [wiki
-page](https://github.com/rems-project/sail/wiki/OPAMInstall) for how
-to get pre-built binaries of Sail using OPAM.
+See [INSTALL.md](INSTALL.md) for how
+to install Sail using opam (recommended).
 
 Building
 ========
 
-See [INSTALL.md](INSTALL.md) for full details of how to build Sail from source
+See [BUILDING.md](BUILDING.md) for full details of how to build Sail from source
 with all the required dependencies.
 
 Emacs Mode
@@ -97,9 +99,7 @@ Licensing
 
 The Sail implementation, in src/, as well as its tests in test/ and
 other supporting files in lib/ and language/, is distributed under the
-2-clause BSD licence in the headers of those files and in src/LICENCE,
-with the exception of the library src/pprint, which is distributed
-under the CeCILL-C free software licence in src/pprint/LICENSE.
+2-clause BSD licence in the headers of those files and in src/LICENCE.
 
 The generated parts of the ASL-derived ARMv8.3 model in aarch64/ are
 copyright ARM Ltd. See https://github.com/meriac/archex, and the

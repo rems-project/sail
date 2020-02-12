@@ -58,6 +58,7 @@ open Value2
 open Anf
 
 let opt_memo_cache = ref false
+let opt_track_throw = ref true
 
 let optimize_aarch64_fast_struct = ref false
 
@@ -151,38 +152,38 @@ type ctx =
     enums : IdSet.t Bindings.t;
     variants : (ctyp UBindings.t) Bindings.t;
     valspecs : (ctyp list * ctyp) Bindings.t;
-    tc_env : Env.t;
     local_env : Env.t;
+    tc_env : Env.t;
     locals : (mut * ctyp) Bindings.t;
     letbinds : int list;
     no_raw : bool;
-    convert_typ : ctx -> typ -> ctyp;
-    optimize_anf : ctx -> typ aexp -> typ aexp;
-    specialize_calls : bool;
-    ignore_64 : bool;
-    struct_value : bool;
-    use_real : bool;
   }
 
-let initial_ctx ~convert_typ:convert_typ ~optimize_anf:optimize_anf env =
+let initial_ctx env =
   { records = Bindings.empty;
     enums = Bindings.empty;
     variants = Bindings.empty;
     valspecs = Bindings.empty;
-    tc_env = env;
     local_env = env;
+    tc_env = env;
     locals = Bindings.empty;
     letbinds = [];
     no_raw = false;
-    convert_typ = convert_typ;
-    optimize_anf = optimize_anf;
-    specialize_calls = false;
-    ignore_64 = false;
-    struct_value = false;
-    use_real = false;
   }
 
-let ctyp_of_typ ctx typ = ctx.convert_typ ctx typ
+module type Config = sig
+  val convert_typ : ctx -> typ -> ctyp
+  val optimize_anf : ctx -> typ aexp -> typ aexp
+  val unroll_loops : unit -> int option
+  val specialize_calls : bool
+  val ignore_64 : bool
+  val struct_value : bool
+  val use_real : bool
+end
+
+module Make(C: Config) = struct
+
+let ctyp_of_typ ctx typ = C.convert_typ ctx typ
 
 let rec chunkify n xs =
   match Util.take n xs, Util.drop n xs with
@@ -210,12 +211,12 @@ let rec compile_aval l ctx = function
      end
 
   | AV_ref (id, typ) ->
-     [], V_ref (name id, ctyp_of_typ ctx (lvar_typ typ)), []
+     [], V_lit (VL_ref (string_of_id id), CT_ref (ctyp_of_typ ctx (lvar_typ typ))), []
 
   | AV_lit (L_aux (L_string str, _), typ) ->
      [], V_lit ((VL_string (String.escaped str)), ctyp_of_typ ctx typ), []
 
-  | AV_lit (L_aux (L_num n, _), typ) when ctx.ignore_64 ->
+  | AV_lit (L_aux (L_num n, _), typ) when C.ignore_64 ->
      [], V_lit ((VL_int n), ctyp_of_typ ctx typ), []
 
   | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
@@ -237,7 +238,7 @@ let rec compile_aval l ctx = function
   | AV_lit (L_aux (L_false, _), _) -> [], V_lit (VL_bool false, CT_bool), []
 
   | AV_lit (L_aux (L_real str, _), _) ->
-     if ctx.use_real then
+     if C.use_real then
        [], V_lit (VL_real str, CT_real), []
      else
        let gs = ngensym () in
@@ -246,6 +247,10 @@ let rec compile_aval l ctx = function
        [iclear CT_real gs]
 
   | AV_lit (L_aux (L_unit, _), _) -> [], V_lit (VL_unit, CT_unit), []
+
+  | AV_lit (L_aux (L_undef, _), typ) ->
+     let ctyp = ctyp_of_typ ctx typ in
+     [], V_lit (VL_undefined, ctyp), []
 
   | AV_lit (L_aux (_, l) as lit, _) ->
      raise (Reporting.err_general l ("Encountered unexpected literal " ^ string_of_lit lit ^ " when converting ANF represention into IR"))
@@ -264,7 +269,7 @@ let rec compile_aval l ctx = function
      [iclear tup_ctyp gs]
      @ cleanup
 
-  | AV_record (fields, typ) when ctx.struct_value ->
+  | AV_record (fields, typ) when C.struct_value ->
      let ctyp = ctyp_of_typ ctx typ in
      let gs = ngensym () in
      let compile_fields (id, aval) =
@@ -309,7 +314,7 @@ let rec compile_aval l ctx = function
      end
 
   (* Convert a small bitvector to a uint64_t literal. *)
-  | AV_vector (avals, typ) when is_bitvector avals && (List.length avals <= 64 || ctx.ignore_64) ->
+  | AV_vector (avals, typ) when is_bitvector avals && (List.length avals <= 64 || C.ignore_64) ->
      begin
        let bitstring = List.map value_of_aval_bit avals in
        let len = List.length avals in
@@ -358,11 +363,14 @@ let rec compile_aval l ctx = function
        | V_lit (VL_bit Sail2_values.B1, _) ->
           [icopy l (CL_id (gs, ctyp)) (V_call (Bvor, [V_id (gs, ctyp); V_lit (mask i, ctyp)]))]
        | _ ->
-          (* FIXME: Make this work in C *)
-          setup @ [iif (V_call (Bit_to_bool, [cval])) [icopy l (CL_id (gs, ctyp)) (V_call (Bvor, [V_id (gs, ctyp); V_lit (mask i, ctyp)]))] [] CT_unit] @ cleanup
+          setup
+          @ [iextern (CL_id (gs, ctyp))
+                     (mk_id "update_fbits", [])
+                     [V_id (gs, ctyp); V_lit (VL_int (Big_int.of_int i), CT_fint 64); cval]]
+          @ cleanup
      in
      [idecl ctyp gs;
-      icopy l (CL_id (gs, ctyp)) (V_lit (VL_bits (Util.list_init 64 (fun _ -> Sail2_values.B0), direction), ctyp))]
+      icopy l (CL_id (gs, ctyp)) (V_lit (VL_bits (Util.list_init len (fun _ -> Sail2_values.B0), direction), ctyp))]
      @ List.concat (List.mapi aval_mask (List.rev avals)),
      V_id (gs, ctyp),
      []
@@ -403,7 +411,7 @@ let rec compile_aval l ctx = function
      let gs = ngensym () in
      let mk_cons aval =
        let setup, cval, cleanup = compile_aval l ctx aval in
-       setup @ [ifuncall (CL_id (gs, CT_list ctyp)) (mk_id ("cons#" ^ string_of_ctyp ctyp), []) [cval; V_id (gs, CT_list ctyp)]] @ cleanup
+       setup @ [iextern (CL_id (gs, CT_list ctyp)) (mk_id "cons", [ctyp]) [cval; V_id (gs, CT_list ctyp)]] @ cleanup
      in
      [idecl (CT_list ctyp) gs]
      @ List.concat (List.map mk_cons (List.rev avals)),
@@ -420,7 +428,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
           let have_ctyp = cval_ctyp cval in
           if is_polymorphic ctyp then
             V_poly (cval, have_ctyp)
-          else if ctx.specialize_calls || ctyp_equal ctyp have_ctyp then
+          else if C.specialize_calls || ctyp_equal ctyp have_ctyp then
             cval
           else
             let gs = ngensym () in
@@ -429,7 +437,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
             V_id (gs, ctyp))
         arg_ctyps args
     in
-    if ctx.specialize_calls || ctyp_equal (clexp_ctyp clexp) ret_ctyp then
+    if C.specialize_calls || ctyp_equal (clexp_ctyp clexp) ret_ctyp then
       !setup @ [ifuncall clexp id cast_args] @ !cleanup
     else
       let gs = ngensym () in
@@ -440,7 +448,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
          iclear ret_ctyp gs]
       @ !cleanup
   in
-  if not ctx.specialize_calls && Env.is_extern (fst id) ctx.tc_env "c" then
+  if not C.specialize_calls && Env.is_extern (fst id) ctx.tc_env "c" then
     let extern = Env.get_extern (fst id) ctx.tc_env "c" in
     begin match extern, List.map cval_ctyp args, clexp_ctyp clexp with
     | "slice", [CT_fbits _; CT_lint; _], CT_fbits (n, _) ->
@@ -506,7 +514,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   let ctyp = cval_ctyp cval in
   match apat_aux with
   | AP_id (pid, _) when Env.is_union_constructor pid ctx.tc_env ->
-     [ijump (V_ctor_kind (cval, pid, [], cval_ctyp cval)) case_label],
+     [ijump l (V_ctor_kind (cval, pid, [], cval_ctyp cval)) case_label],
      [],
      ctx
 
@@ -517,7 +525,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
   | AP_id (pid, _) when is_ct_enum ctyp ->
      begin match Env.lookup_id pid ctx.tc_env with
      | Unbound -> [idecl ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx
-     | _ -> [ijump (V_call (Neq, [V_id (name pid, ctyp); cval])) case_label], [], ctx
+     | _ -> [ijump l (V_call (Neq, [V_id (name pid, ctyp); cval])) case_label], [], ctx
      end
 
   | AP_id (pid, typ) ->
@@ -562,7 +570,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
             [], ctor_ctyp
         in
         let instrs, cleanup, ctx = compile_match ctx apat (V_ctor_unwrap (ctor, cval, unifiers, ctor_ctyp)) case_label in
-        [ijump (V_ctor_kind (cval, ctor, unifiers, pat_ctyp)) case_label]
+        [ijump l (V_ctor_kind (cval, ctor, unifiers, pat_ctyp)) case_label]
         @ instrs,
         cleanup,
         ctx
@@ -581,12 +589,12 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
      | CT_list ctyp ->
         let hd_setup, hd_cleanup, ctx = compile_match ctx hd_apat (V_call (List_hd, [cval])) case_label in
         let tl_setup, tl_cleanup, ctx = compile_match ctx tl_apat (V_call (List_tl, [cval])) case_label in
-        [ijump (V_call (Eq, [cval; V_lit (VL_null, CT_list ctyp)])) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup, ctx
+        [ijump l (V_call (Eq, [cval; V_lit (VL_empty_list, CT_list ctyp)])) case_label] @ hd_setup @ tl_setup, tl_cleanup @ hd_cleanup, ctx
      | _ ->
         raise (Reporting.err_general l "Tried to pattern match cons on non list type")
      end
 
-  | AP_nil _ -> [ijump (V_call (Neq, [cval; V_lit (VL_null, ctyp)])) case_label], [], ctx
+  | AP_nil _ -> [ijump l (V_call (Neq, [cval; V_lit (VL_empty_list, ctyp)])) case_label], [], ctx
 
 let unit_cval = V_lit (VL_unit, CT_unit)
 
@@ -633,7 +641,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
          destructure
          @ (if not trivial_guard then
               guard_setup @ [idecl CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
-              @ [iif (V_call (Bnot, [V_id (gs, CT_bool)])) (destructure_cleanup @ [igoto case_label]) [] CT_unit]
+              @ [iif l (V_call (Bnot, [V_id (gs, CT_bool)])) (destructure_cleanup @ [igoto case_label]) [] CT_unit]
             else [])
          @ body_setup @ [body_call (CL_id (case_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
          @ [igoto finish_match_label]
@@ -674,7 +682,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
          destructure @ [icomment "end destructuring"]
          @ (if not trivial_guard then
               guard_setup @ [idecl CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
-              @ [ijump (V_call (Bnot, [V_id (gs, CT_bool)])) try_label]
+              @ [ijump l (V_call (Bnot, [V_id (gs, CT_bool)])) try_label]
               @ [icomment "end guard"]
             else [])
          @ body_setup @ [body_call (CL_id (try_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
@@ -685,7 +693,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      assert (ctyp_equal ctyp (ctyp_of_typ ctx typ));
      [idecl ctyp try_return_id;
       itry_block (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
-      ijump (V_call (Bnot, [V_id (have_exception, CT_bool)])) handled_exception_label]
+      ijump l (V_call (Bnot, [V_id (have_exception, CT_bool)])) handled_exception_label]
      @ List.concat (List.map compile_case cases)
      @ [igoto fallthrough_label;
         ilabel handled_exception_label;
@@ -707,7 +715,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        in
        let setup, cval, cleanup = compile_aval l ctx aval in
        setup,
-       (fun clexp -> iif cval
+       (fun clexp -> iif l cval
                          (compile_branch then_aexp clexp)
                          (compile_branch else_aexp clexp)
                          if_ctyp),
@@ -742,7 +750,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let gs = ngensym () in
      left_setup
      @ [ idecl CT_bool gs;
-         iif cval
+         iif l cval
              (right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
              [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool false, CT_bool))]
              CT_bool ]
@@ -755,7 +763,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let gs = ngensym () in
      left_setup
      @ [ idecl CT_bool gs;
-         iif cval
+         iif l cval
              [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool true, CT_bool))]
              (right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
              CT_bool ]
@@ -813,7 +821,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      @ [iblock (cond_setup
                 @ [cond_call (CL_id (gs, CT_bool))]
                 @ cond_cleanup
-                @ [ijump loop_test loop_end_label]
+                @ [ijump l loop_test loop_end_label]
                 @ body_setup
                 @ [body_call (CL_id (unit_gs, CT_unit))]
                 @ body_cleanup
@@ -838,7 +846,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
                 @ cond_setup
                 @ [cond_call (CL_id (gs, CT_bool))]
                 @ cond_cleanup
-                @ [ijump loop_test loop_end_label]
+                @ [ijump l loop_test loop_end_label]
                 @ [igoto loop_start_label])]
      @ [ilabel loop_end_label],
      (fun clexp -> icopy l clexp unit_cval),
@@ -869,7 +877,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   | AE_throw (aval, typ) ->
      (* Cleanup info will be handled by fix_exceptions *)
      let throw_setup, cval, _ = compile_aval l ctx aval in
-     throw_setup @ [ithrow cval],
+     throw_setup @ [ithrow l cval],
      (fun clexp -> icomment "unreachable after throw"),
      []
 
@@ -927,21 +935,29 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
 
      let loop_var = name loop_var in
 
+     let loop_body prefix continue =
+       prefix
+       @ [iblock ([ijump l (V_call ((if is_inc then Igt else Ilt), [V_id (loop_var, CT_fint 64); V_id (to_gs, CT_fint 64)])) loop_end_label]
+                  @ body_setup
+                  @ [body_call (CL_id (body_gs, CT_unit))]
+                  @ body_cleanup
+                  @ [icopy l (CL_id (loop_var, (CT_fint 64)))
+                       (V_call ((if is_inc then Iadd else Isub), [V_id (loop_var, CT_fint 64); V_id (step_gs, CT_fint 64)]))]
+                  @ continue ())]
+     in
+     (* We can either generate an actual loop body for C, or unroll the body for SMT *)
+     let actual = loop_body [ilabel loop_start_label] (fun () -> [igoto loop_start_label]) in
+     let rec unroll max n = loop_body [] (fun () -> if n < max then unroll max (n + 1) else [imatch_failure ()]) in
+     let body = match C.unroll_loops () with Some times -> unroll times 0 | None -> actual in
+
      variable_init from_gs from_setup from_call from_cleanup
      @ variable_init to_gs to_setup to_call to_cleanup
      @ variable_init step_gs step_setup step_call step_cleanup
      @ [iblock ([idecl (CT_fint 64) loop_var;
                  icopy l (CL_id (loop_var, (CT_fint 64))) (V_id (from_gs, CT_fint 64));
-                 idecl CT_unit body_gs;
-                 iblock ([ilabel loop_start_label]
-                         @ [ijump (V_call ((if is_inc then Igt else Ilt), [V_id (loop_var, CT_fint 64); V_id (to_gs, CT_fint 64)])) loop_end_label]
-                         @ body_setup
-                         @ [body_call (CL_id (body_gs, CT_unit))]
-                         @ body_cleanup
-                         @ [icopy l (CL_id (loop_var, (CT_fint 64)))
-                                  (V_call ((if is_inc then Iadd else Isub), [V_id (loop_var, CT_fint 64); V_id (step_gs, CT_fint 64)]))]
-                         @ [igoto loop_start_label]);
-                 ilabel loop_end_label])],
+                 idecl CT_unit body_gs]
+                @ body
+                @ [ilabel loop_end_label])],
      (fun clexp -> icopy l clexp unit_cval),
      []
 
@@ -1032,19 +1048,23 @@ let fix_exception_block ?return:(return=None) ctx instrs =
        before
        @ [iblock (rewrite_exception (historic @ before) instrs)]
        @ rewrite_exception (historic @ before) after
-    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), _) :: after ->
+    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
        let historic = historic @ before in
        before
-       @ [iif cval (rewrite_exception historic then_instrs) (rewrite_exception historic else_instrs) ctyp]
+       @ [iif l cval (rewrite_exception historic then_instrs) (rewrite_exception historic else_instrs) ctyp]
        @ rewrite_exception historic after
     | before, I_aux (I_throw cval, (_, l)) :: after ->
        before
        @ [icopy l (CL_id (current_exception, cval_ctyp cval)) cval;
           icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool true, CT_bool))]
+       @ (if !opt_track_throw then
+            let loc_string = Reporting.short_loc_to_string l in
+            [icopy l (CL_id (throw_location, CT_string)) (V_lit (VL_string loc_string, CT_string))]
+          else [])
        @ generate_cleanup (historic @ before)
        @ [igoto end_block_label]
        @ rewrite_exception (historic @ before) after
-    | before, (I_aux (I_funcall (x, _, f, args), _) as funcall) :: after ->
+    | before, (I_aux (I_funcall (x, _, f, args), (_, l)) as funcall) :: after ->
        let effects = match Env.get_val_spec (fst f) ctx.tc_env with
          | _, Typ_aux (Typ_fn (_, _, effects), _) -> effects
          | exception (Type_error _) -> no_effect (* nullary union constructor, so no val spec *)
@@ -1053,7 +1073,7 @@ let fix_exception_block ?return:(return=None) ctx instrs =
        if has_effect effects BE_escape then
          before
          @ [funcall;
-            iif (V_id (have_exception, CT_bool)) (generate_cleanup (historic @ before) @ [igoto end_block_label]) [] CT_unit]
+            iif l (V_id (have_exception, CT_bool)) (generate_cleanup (historic @ before) @ [igoto end_block_label]) [] CT_unit]
          @ rewrite_exception (historic @ before) after
        else
          before @ funcall :: rewrite_exception (historic @ before) after
@@ -1147,10 +1167,10 @@ let fix_early_return ret instrs =
        before
        @ [iblock (rewrite_return (historic @ before) instrs)]
        @ rewrite_return (historic @ before) after
-    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), _) :: after ->
+    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
        let historic = historic @ before in
        before
-       @ [iif cval (rewrite_return historic then_instrs) (rewrite_return historic else_instrs) ctyp]
+       @ [iif l cval (rewrite_return historic then_instrs) (rewrite_return historic else_instrs) ctyp]
        @ rewrite_return historic after
     | before, I_aux (I_return cval, (_, l)) :: after ->
        let cleanup_label = label "cleanup_" in
@@ -1211,7 +1231,7 @@ let compile_funcl ctx id pat guard exp =
 
   let guard_instrs = match guard with
     | Some guard ->
-       let guard_aexp = ctx.optimize_anf ctx (no_shadow (pat_ids pat) (anf guard)) in
+       let guard_aexp = C.optimize_anf ctx (no_shadow (pat_ids pat) (anf guard)) in
        let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard_aexp in
        let guard_label = label "guard_" in
        let gs = ngensym () in
@@ -1220,7 +1240,7 @@ let compile_funcl ctx id pat guard exp =
             @ guard_setup
             @ [guard_call (CL_id (gs, CT_bool))]
             @ guard_cleanup
-            @ [ijump (V_id (gs, CT_bool)) guard_label;
+            @ [ijump (id_loc id) (V_id (gs, CT_bool)) guard_label;
                imatch_failure ();
                ilabel guard_label]
        )]
@@ -1228,7 +1248,7 @@ let compile_funcl ctx id pat guard exp =
   in
 
   (* Optimize and compile the expression to ANF. *)
-  let aexp = ctx.optimize_anf ctx (no_shadow (pat_ids pat) (anf exp)) in
+  let aexp = C.optimize_anf ctx (no_shadow (pat_ids pat) (anf exp)) in
 
   let setup, call, cleanup = compile_aexp ctx aexp in
   let destructure, destructure_cleanup =
@@ -1280,7 +1300,7 @@ and compile_def' n total ctx = function
   | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) ->
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, [])], ctx
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
-     let aexp = ctx.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
+     let aexp = C.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
      let instrs = setup @ [call (CL_id (name id, ctyp_of_typ ctx typ))] @ cleanup in
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, instrs)], ctx
@@ -1290,13 +1310,19 @@ and compile_def' n total ctx = function
 
   | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), _)) ->
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
+     let extern =
+       if Env.is_extern id ctx.tc_env "c" then
+         Some (Env.get_extern id ctx.tc_env "c")
+       else
+         None
+     in
      let arg_typs, ret_typ = match fn_typ with
        | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
        | _ -> assert false
      in
      let ctx' = { ctx with local_env = add_typquant (id_loc id) quant ctx.local_env } in
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ in
-     [CDEF_spec (id, arg_ctyps, ret_ctyp)],
+     [CDEF_spec (id, extern, arg_ctyps, ret_ctyp)],
      { ctx with valspecs = Bindings.add id (arg_ctyps, ret_ctyp) ctx.valspecs }
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
@@ -1323,7 +1349,7 @@ and compile_def' n total ctx = function
 
   | DEF_val (LB_aux (LB_val (pat, exp), _)) ->
      let ctyp = ctyp_of_typ ctx (typ_of_pat pat) in
-     let aexp = ctx.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
+     let aexp = C.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
      let apat = anf_pat ~global:true pat in
      let gs = ngensym () in
@@ -1544,12 +1570,6 @@ let sort_ctype_defs cdefs =
   ctype_defs @ cdefs
 
 let compile_ast ctx (Defs defs) =
-  let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
-  let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
-  let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
-
-  let ctx = { ctx with tc_env = snd (Type_error.check ctx.tc_env (Defs [assert_vs; exit_vs; cons_vs])) } in
-
   if !opt_memo_cache then
     (try
        if Sys.is_directory "_sbuild" then
@@ -1568,3 +1588,12 @@ let compile_ast ctx (Defs defs) =
   let cdefs, ctx = specialize_variants ctx [] cdefs in
   let cdefs = sort_ctype_defs cdefs in
   cdefs, ctx
+
+end
+
+let add_special_functions env =
+  let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
+  let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
+  let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
+
+  snd (Type_error.check env (Defs [assert_vs; exit_vs; cons_vs]))

@@ -504,6 +504,7 @@ let rename_variables graph root children =
     | Name (id, _) -> Name (id, i)
     | Have_exception _ -> Have_exception i
     | Current_exception _ -> Current_exception i
+    | Throw_location _ -> Throw_location i
     | Return _ -> Return i
   in
 
@@ -524,9 +525,6 @@ let rename_variables graph root children =
     | V_id (id, ctyp) ->
        let i = top_stack id in
        V_id (ssa_name i id, ctyp)
-    | V_ref (id, ctyp) ->
-       let i = top_stack id in
-       V_ref (ssa_name i id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
     | V_call (id, fs) -> V_call (id, List.map fold_cval fs)
     | V_field (f, field) -> V_field (fold_cval f, field)

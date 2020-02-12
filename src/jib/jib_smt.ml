@@ -73,6 +73,8 @@ let opt_debug_graphs = ref false
 
 let opt_propagate_vars = ref false
 
+let opt_unroll_limit = ref 10
+
 module EventMap = Map.Make(Event)
 
 (* Note that we have to use x : ty ref rather than mutable x : ty, to
@@ -89,6 +91,8 @@ type ctx = {
     pragma_l : Ast.l;
     arg_stack : (int * string) Stack.t;
     ast : Type_check.tannot defs;
+    shared : ctyp Bindings.t;
+    preserved : IdSet.t;
     events : smt_exp Stack.t EventMap.t ref;
     node : int;
     pathcond : smt_exp Lazy.t;
@@ -114,6 +118,8 @@ let initial_ctx () = {
     pragma_l = Parse_ast.Unknown;
     arg_stack = Stack.create ();
     ast = Defs [];
+    shared = Bindings.empty;
+    preserved = IdSet.empty;
     events = ref EventMap.empty;
     node = -1;
     pathcond = lazy (Bool_lit true);
@@ -128,6 +134,19 @@ let event_stack ctx ev =
      let stack = Stack.create () in
      ctx.events := EventMap.add ev stack !(ctx.events);
      stack
+
+let add_event ctx ev smt =
+  let stack = event_stack ctx ev in
+  Stack.push (Fn ("and", [Lazy.force ctx.pathcond; smt])) stack
+
+let add_pathcond_event ctx ev =
+  Stack.push (Lazy.force ctx.pathcond) (event_stack ctx ev)
+
+let overflow_check ctx smt =
+  if not !opt_ignore_overflow then (
+    Reporting.warn "Overflow check in generated SMT for" ctx.pragma_l "";
+    add_event ctx Overflow smt
+  )
 
 let lbits_size ctx = Util.power 2 ctx.lbits_index
 
@@ -179,6 +198,8 @@ let rec smt_ctyp ctx = function
      | _ -> failwith ("No registers with ctyp: " ^ string_of_ctyp ctyp)
      end
   | CT_list _ -> raise (Reporting.err_todo ctx.pragma_l "Lists not yet supported in SMT generation")
+  | CT_fvector _ ->
+     Reporting.unreachable ctx.pragma_l __POS__ "Found CT_fvector in SMT property"
   | CT_poly ->
      Reporting.unreachable ctx.pragma_l __POS__ "Found polymorphic type in SMT property"
 
@@ -188,21 +209,17 @@ let rec smt_ctyp ctx = function
    don't have a very good way to get the binary representation of
    either an ocaml integer or a big integer. *)
 let bvpint sz x =
+  let open Sail2_values in
   if Big_int.less_equal Big_int.zero x && Big_int.less_equal x (Big_int.of_int max_int) then (
-    let open Sail_lib in
     let x = Big_int.to_int x in
-    if sz mod 4 = 0 then
-      let hex = Printf.sprintf "%X" x in
-      let padding = String.make (sz / 4 - String.length hex) '0' in
-      Hex (padding ^ hex)
-    else
-      let bin = Printf.sprintf "%X" x |> list_of_string |> List.map hex_char |> List.concat in
-      let _, bin = Util.take_drop (function B0 -> true | B1 -> false) bin in
-      let bin = String.concat "" (List.map string_of_bit bin) in
-      let padding = String.make (sz - String.length bin) '0' in
-      Bin (padding ^ bin)
+    match Printf.sprintf "%X" x |> Util.string_to_list |> List.map nibble_of_char |> Util.option_all with
+    | Some nibbles ->
+       let bin = List.map (fun (a, b, c, d) -> [a; b; c; d]) nibbles |> List.concat in
+       let _, bin = Util.take_drop (function B0 -> true | _ -> false) bin in
+       let padding = List.init (sz - List.length bin) (fun _ -> B0) in
+       Bitvec_lit (padding @ bin)
+    | None -> assert false
   ) else if Big_int.greater x (Big_int.of_int max_int) then (
-    let open Sail_lib in
     let y = ref x in
     let bin = ref [] in
     while (not (Big_int.equal !y Big_int.zero)) do
@@ -210,14 +227,13 @@ let bvpint sz x =
       bin := (if Big_int.equal m Big_int.zero then B0 else B1) :: !bin;
       y := q
     done;
-    let bin = String.concat "" (List.map string_of_bit !bin) in
-    let padding_size = sz - String.length bin in
+    let padding_size = sz - List.length !bin in
     if padding_size < 0 then
       raise (Reporting.err_general Parse_ast.Unknown
                (Printf.sprintf "Could not create a %d-bit integer with value %s.\nTry increasing the maximum integer size"
                   sz (Big_int.to_string x)));
-    let padding = String.make (sz - String.length bin) '0' in
-    Bin (padding ^ bin)
+    let padding = List.init padding_size (fun _ -> B0) in
+    Bitvec_lit (padding @ !bin)
   ) else failwith "Invalid bvpint"
 
 let bvint sz x =
@@ -226,22 +242,68 @@ let bvint sz x =
   else
     bvpint sz x
 
+(** [force_size ctx n m exp] takes a smt expression assumed to be a
+   integer (signed bitvector) of length m and forces it to be length n
+   by either sign extending it or truncating it as required *)
+let force_size ?checked:(checked=true) ctx n m smt =
+  if n = m then
+    smt
+  else if n > m then
+    SignExtend (n - m, smt)
+  else
+    let check =
+      (* If the top bit of the truncated number is one *)
+      Ite (Fn ("=", [Extract (n - 1, n - 1, smt); Bitvec_lit [Sail2_values.B1]]),
+           (* Then we have an overflow, unless all bits we truncated were also one *)
+           Fn ("not", [Fn ("=", [Extract (m - 1, n, smt); bvones (m - n)])]),
+           (* Otherwise, all the top bits must be zero *)
+           Fn ("not", [Fn ("=", [Extract (m - 1, n, smt); bvzero (m - n)])]))
+    in
+    if checked then overflow_check ctx check else ();
+    Extract (n - 1, 0, smt)
+
+(** [unsigned_size ctx n m exp] is much like force_size, but it
+   assumes that the bitvector is unsigned *)
+let unsigned_size ?checked:(checked=true) ctx n m smt =
+  if n = m then
+    smt
+  else if n > m then
+    Fn ("concat", [bvzero (n - m); smt])
+  else
+    Extract (n - 1, 0, smt)
+
+let smt_conversion ctx from_ctyp to_ctyp x =
+  match from_ctyp, to_ctyp with
+  | _, _ when ctyp_equal from_ctyp to_ctyp -> x
+  | CT_constant c, CT_fint sz ->
+     bvint sz c
+  | CT_constant c, CT_lint ->
+     bvint ctx.lint_size c
+  | CT_fint sz, CT_lint ->
+     force_size ctx ctx.lint_size sz x
+  | CT_lint, CT_fint sz ->
+     force_size ctx sz ctx.lint_size x
+  | CT_lbits _, CT_fbits (n, _) ->
+     unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [x]))
+  | CT_fbits (n, _), CT_lbits _ ->
+     Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int n); unsigned_size ctx (lbits_size ctx) n x])
+
+  | _, _ -> failwith (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
+
 (* Translate Jib literals into SMT *)
-let smt_value ctx vl ctyp =
+let rec smt_value ctx vl ctyp =
   let open Value2 in
   match vl, ctyp with
-  | VL_bits (bs, true), CT_fbits (n, _) ->
-     (* FIXME: Output the correct number of bits in Jib_compile *)
-     begin match Sail2_values.hexstring_of_bits (List.rev (Util.take n (List.rev bs))) with
-     | Some s -> Hex (Xstring.implode s)
-     | None -> Bin (Xstring.implode (List.map Sail2_values.bitU_char (List.rev (Util.take n (List.rev bs)))))
-     end
+  | VL_bits (bv, true), CT_fbits (n, _) ->
+     unsigned_size ctx n (List.length bv) (Bitvec_lit bv)
+  | VL_bits (bv, true), CT_lbits _ ->
+     let sz = List.length bv in
+     Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int sz); unsigned_size ctx (lbits_size ctx) sz (Bitvec_lit bv)])
   | VL_bool b, _ -> Bool_lit b
   | VL_int n, CT_constant m -> bvint (required_width n) n
   | VL_int n, CT_fint sz -> bvint sz n
   | VL_int n, CT_lint -> bvint ctx.lint_size n
-  | VL_bit Sail2_values.B0, CT_bit -> Bin "0"
-  | VL_bit Sail2_values.B1, CT_bit -> Bin "1"
+  | VL_bit b, CT_bit -> Bitvec_lit [b]
   | VL_unit, _ -> Enum "unit"
   | VL_string str, _ ->
      ctx.use_string := true;
@@ -252,7 +314,21 @@ let smt_value ctx vl ctyp =
        Fn ("-", [Real_lit (String.sub str 1 (String.length str - 1))])
      else
        Real_lit str
-  | vl, _ -> failwith ("Cannot translate literal to SMT: " ^ string_of_value vl)
+  | VL_enum str, _ -> Enum (Util.zencode_string str)
+  | VL_ref reg_name, _ ->
+     let id = mk_id reg_name in
+     let rmap = CTMap.filter (fun ctyp regs -> List.exists (fun reg -> Id.compare reg id = 0) regs) ctx.register_map in
+     assert (CTMap.cardinal rmap = 1);
+     begin match CTMap.min_binding_opt rmap with
+     | Some (ctyp, regs) ->
+        begin match Util.list_index (fun reg -> Id.compare reg id = 0) regs with
+        | Some i ->
+           bvint (required_width (Big_int.of_int (List.length regs))) (Big_int.of_int i)
+        | None -> assert false
+        end
+     | _ -> assert false
+     end
+  | _ -> failwith ("Cannot translate literal to SMT: " ^ string_of_value vl ^ " : " ^ string_of_ctyp ctyp)
 
 let rec smt_cval ctx cval =
   match cval_ctyp cval with
@@ -264,6 +340,7 @@ let rec smt_cval ctx cval =
      | V_id (Name (id, _) as ssa_id, _) ->
         begin match Type_check.Env.lookup_id id ctx.tc_env with
         | Enum _ -> Enum (zencode_id id)
+        | _ when Bindings.mem id ctx.shared -> Shared (zencode_id id)
         | _ -> Var (zencode_name ssa_id)
         end
      | V_id (ssa_id, _) -> Var (zencode_name ssa_id)
@@ -271,8 +348,6 @@ let rec smt_cval ctx cval =
         Fn ("not", [Fn ("=", [smt_cval ctx cval1; smt_cval ctx cval2])])
      | V_call (Bvor, [cval1; cval2]) ->
         Fn ("bvor", [smt_cval ctx cval1; smt_cval ctx cval2])
-     | V_call (Bit_to_bool, [cval]) ->
-        Fn ("=", [smt_cval ctx cval; Bin "1"])
      | V_call (Eq, [cval1; cval2]) ->
         Fn ("=", [smt_cval ctx cval1; smt_cval ctx cval2])
      | V_call (Bnot, [cval]) ->
@@ -281,14 +356,18 @@ let rec smt_cval ctx cval =
         smt_conj (List.map (smt_cval ctx) cvals)
      | V_call (Bor, cvals) ->
         smt_disj (List.map (smt_cval ctx) cvals)
+     | V_call (Igt, [cval1; cval2]) ->
+        Fn ("bvsgt", [smt_cval ctx cval1; smt_cval ctx cval2])
+     | V_call (Iadd, [cval1; cval2]) ->
+        Fn ("bvadd", [smt_cval ctx cval1; smt_cval ctx cval2])
      | V_ctor_kind (union, ctor_id, unifiers, _) ->
         Fn ("not", [Tester (zencode_uid (ctor_id, unifiers), smt_cval ctx union)])
      | V_ctor_unwrap (ctor_id, union, unifiers, _) ->
         Fn ("un" ^ zencode_uid (ctor_id, unifiers), [smt_cval ctx union])
-     | V_field (union, field) ->
-        begin match cval_ctyp union with
+     | V_field (record, field) ->
+        begin match cval_ctyp record with
         | CT_struct (struct_id, _) ->
-           Fn (zencode_upper_id struct_id ^ "_" ^ zencode_uid field, [smt_cval ctx union])
+           Field (zencode_upper_id struct_id ^ "_" ^ zencode_uid field, smt_cval ctx record)
         | _ -> failwith "Field for non-struct type"
         end
      | V_struct (fields, ctyp) ->
@@ -297,42 +376,17 @@ let rec smt_cval ctx cval =
            let set_field (field, cval) =
              match Util.assoc_compare_opt UId.compare field field_ctyps with
              | None -> failwith "Field type not found"
-             | Some ctyp when ctyp_equal (cval_ctyp cval) ctyp ->
-                smt_cval ctx cval
-             | _ -> failwith "Type mismatch when generating struct for SMT"
+             | Some ctyp ->
+                zencode_upper_id struct_id ^ "_" ^ zencode_uid field,
+                smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval)
            in
-           Fn (zencode_upper_id struct_id, List.map set_field fields)
+           Struct (zencode_upper_id struct_id, List.map set_field fields)
         | _ -> failwith "Struct does not have struct type"
         end
      | V_tuple_member (frag, len, n) ->
         ctx.tuple_sizes := IntSet.add len !(ctx.tuple_sizes);
         Fn (Printf.sprintf "tup_%d_%d" len n, [smt_cval ctx frag])
-     | V_ref (Name (id, _), _) ->
-        let rmap = CTMap.filter (fun ctyp regs -> List.exists (fun reg -> Id.compare reg id = 0) regs) ctx.register_map in
-        assert (CTMap.cardinal rmap = 1);
-        begin match CTMap.min_binding_opt rmap with
-        | Some (ctyp, regs) ->
-           begin match Util.list_index (fun reg -> Id.compare reg id = 0) regs with
-           | Some i ->
-              bvint (required_width (Big_int.of_int (List.length regs))) (Big_int.of_int i)
-           | None -> assert false
-           end
-        | _ -> assert false
-        end
      | cval -> failwith ("Unrecognised cval " ^ string_of_cval cval)
-
-let add_event ctx ev smt =
-  let stack = event_stack ctx ev in
-  Stack.push (Fn ("=>", [Lazy.force ctx.pathcond; smt])) stack
-
-let add_pathcond_event ctx ev =
-  Stack.push (Lazy.force ctx.pathcond) (event_stack ctx ev)
-
-let overflow_check ctx smt =
-  if not !opt_ignore_overflow then (
-    Reporting.warn "Overflow check in generated SMT for" ctx.pragma_l "";
-    add_event ctx Overflow smt
-  )
 
 (**************************************************************************)
 (* 1. Generating SMT for Sail builtins                                    *)
@@ -342,8 +396,8 @@ let builtin_type_error ctx fn cvals =
   let args = Util.string_of_list ", " (fun cval -> string_of_ctyp (cval_ctyp cval)) cvals in
   function
   | Some ret_ctyp ->
-     raise (Reporting.err_todo ctx.pragma_l
-       (Printf.sprintf "%s : (%s) -> %s" fn args (string_of_ctyp ret_ctyp)))
+     let message = Printf.sprintf "%s : (%s) -> %s" fn args (string_of_ctyp ret_ctyp) in
+     raise (Reporting.err_todo ctx.pragma_l message)
   | None ->
      raise (Reporting.err_todo ctx.pragma_l (Printf.sprintf "%s : (%s)" fn args))
 
@@ -384,36 +438,6 @@ let builtin_gt = builtin_int_comparison "bvsgt" Big_int.greater
 let builtin_gteq = builtin_int_comparison "bvsge" Big_int.greater_equal
 
 (* ***** Arithmetic operations: lib/arith.sail ***** *)
-
-(** [force_size ctx n m exp] takes a smt expression assumed to be a
-   integer (signed bitvector) of length m and forces it to be length n
-   by either sign extending it or truncating it as required *)
-let force_size ?checked:(checked=true) ctx n m smt =
-  if n = m then
-    smt
-  else if n > m then
-    SignExtend (n - m, smt)
-  else
-    let check =
-      (* If the top bit of the truncated number is one *)
-      Ite (Fn ("=", [Extract (n - 1, n - 1, smt); Bin "1"]),
-           (* Then we have an overflow, unless all bits we truncated were also one *)
-           Fn ("not", [Fn ("=", [Extract (m - 1, n, smt); bvones (m - n)])]),
-           (* Otherwise, all the top bits must be zero *)
-           Fn ("not", [Fn ("=", [Extract (m - 1, n, smt); bvzero (m - n)])]))
-    in
-    if checked then overflow_check ctx check else ();
-    Extract (n - 1, 0, smt)
-
-(** [unsigned_size ctx n m exp] is much like force_size, but it
-   assumes that the bitvector is unsigned *)
-let unsigned_size ?checked:(checked=true) ctx n m smt =
-  if n = m then
-    smt
-  else if n > m then
-    Fn ("concat", [bvzero (n - m); smt])
-  else
-    Extract (n - 1, 0, smt)
 
 let int_size ctx = function
   | CT_constant n -> required_width n
@@ -457,8 +481,9 @@ let builtin_negate_int ctx v ret_ctyp =
   | CT_constant c, _ ->
      bvint (int_size ctx ret_ctyp) (Big_int.negate c)
   | ctyp, _ ->
+     let open Sail2_values in
      let smt = force_size ctx (int_size ctx ret_ctyp) (int_size ctx ctyp) (smt_cval ctx v) in
-     overflow_check ctx (Fn ("=", [smt; Bin ("1" ^ String.make (int_size ctx ret_ctyp - 1) '0')]));
+     overflow_check ctx (Fn ("=", [smt; Bitvec_lit (B1 :: List.init (int_size ctx ret_ctyp - 1) (fun _ -> B0))]));
      Fn ("bvneg", [smt])
 
 let builtin_shift_int fn big_int_fn ctx v1 v2 ret_ctyp =
@@ -494,7 +519,7 @@ let builtin_abs_int ctx v ret_ctyp =
   | ctyp, _ ->
      let sz = int_size ctx ctyp in
      let smt = smt_cval ctx v in
-     Ite (Fn ("=", [Extract (sz - 1, sz -1, smt); Bin "1"]),
+     Ite (Fn ("=", [Extract (sz - 1, sz -1, smt); Bitvec_lit [Sail2_values.B1]]),
           force_size ctx (int_size ctx ret_ctyp) sz (Fn ("bvneg", [smt])),
           force_size ctx (int_size ctx ret_ctyp) sz smt)
 
@@ -531,6 +556,25 @@ let builtin_min_int ctx v1 v2 ret_ctyp =
           smt1,
           smt2)
 
+let builtin_min_int ctx v1 v2 ret_ctyp =
+  match cval_ctyp v1, cval_ctyp v2 with
+  | CT_constant n, CT_constant m ->
+     bvint (int_size ctx ret_ctyp) (min n m)
+
+  | ctyp1, ctyp2 ->
+     let ret_sz = int_size ctx ret_ctyp in
+     let smt1 = force_size ctx ret_sz (int_size ctx ctyp1) (smt_cval ctx v1) in
+     let smt2 = force_size ctx ret_sz (int_size ctx ctyp2) (smt_cval ctx v2) in
+     Ite (Fn ("bvslt", [smt1; smt2]),
+          smt1,
+          smt2)
+
+let builtin_tdiv_int =
+  builtin_arith "bvudiv" (Sail2_values.tdiv_int) (fun x -> x)
+
+let builtin_tmod_int =
+  builtin_arith "bvurem" (Sail2_values.tmod_int) (fun x -> x)
+  
 let bvmask ctx len =
   let all_ones = bvones (lbits_size ctx) in
   let shift = Fn ("concat", [bvzero (lbits_size ctx - ctx.lbits_index); len]) in
@@ -623,7 +667,7 @@ let builtin_sign_extend ctx vbits vlen ret_ctyp =
      smt_cval ctx vbits
   | CT_fbits (n, _), CT_fbits (m, _) ->
      let bv = smt_cval ctx vbits in
-     let top_bit_one = Fn ("=", [Extract (n - 1, n - 1, bv); Bin "1"]) in
+     let top_bit_one = Fn ("=", [Extract (n - 1, n - 1, bv); Bitvec_lit [Sail2_values.B1]]) in
      Ite (top_bit_one, Fn ("concat", [bvones (m - n); bv]), Fn ("concat", [bvzero (m - n); bv]))
 
   | _ -> builtin_type_error ctx "sign_extend" [vbits; vlen] (Some ret_ctyp)
@@ -658,14 +702,14 @@ let builtin_not_bits ctx v ret_ctyp =
   | _, _ -> builtin_type_error ctx "not_bits" [v] (Some ret_ctyp)
 
 let builtin_bitwise fn ctx v1 v2 ret_ctyp =
-  match cval_ctyp v1, cval_ctyp v2 with
-  | CT_fbits (n, _), CT_fbits (m, _) ->
-     assert (n = m);
+  match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
+  | CT_fbits (n, _), CT_fbits (m, _), CT_fbits (o, _) ->
+     assert (n = m && m = o);
      let smt1 = smt_cval ctx v1 in
      let smt2 = smt_cval ctx v2 in
      Fn (fn, [smt1; smt2])
 
-  | CT_lbits _, CT_lbits _ ->
+  | CT_lbits _, CT_lbits _, CT_lbits _ ->
      let smt1 = smt_cval ctx v1 in
      let smt2 = smt_cval ctx v2 in
      Fn ("Bits", [Fn ("len", [smt1]); Fn (fn, [Fn ("contents", [smt1]); Fn ("contents", [smt2])])])
@@ -674,6 +718,7 @@ let builtin_bitwise fn ctx v1 v2 ret_ctyp =
 
 let builtin_and_bits = builtin_bitwise "bvand"
 let builtin_or_bits = builtin_bitwise "bvor"
+let builtin_xor_bits = builtin_bitwise "bvxor"
 
 let builtin_append ctx v1 v2 ret_ctyp =
   match cval_ctyp v1, cval_ctyp v2, ret_ctyp with
@@ -743,12 +788,16 @@ let builtin_length ctx v ret_ctyp =
   | _, _ -> builtin_type_error ctx "length" [v] (Some ret_ctyp)
 
 let builtin_vector_subrange ctx vec i j ret_ctyp =
-  match cval_ctyp vec, cval_ctyp i, cval_ctyp j with
-  | CT_fbits (n, _), CT_constant i, CT_constant j ->
+  match cval_ctyp vec, cval_ctyp i, cval_ctyp j, ret_ctyp with
+  | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits _ ->
      Extract (Big_int.to_int i, Big_int.to_int j, smt_cval ctx vec)
 
-  | CT_lbits _, CT_constant i, CT_constant j ->
+  | CT_lbits _, CT_constant i, CT_constant j, CT_fbits _ ->
      Extract (Big_int.to_int i, Big_int.to_int j, Fn ("contents", [smt_cval ctx vec]))
+
+  | CT_fbits (n, _), i_ctyp, CT_constant j, CT_lbits _ when Big_int.equal j Big_int.zero ->
+     let len = force_size ~checked:false ctx ctx.lbits_index (int_size ctx i_ctyp) (smt_cval ctx i) in
+     Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; unsigned_size ctx (lbits_size ctx) n (smt_cval ctx vec)])])
 
   | _ -> builtin_type_error ctx "vector_subrange" [vec; i; j] (Some ret_ctyp)
 
@@ -756,6 +805,12 @@ let builtin_vector_access ctx vec i ret_ctyp =
   match cval_ctyp vec, cval_ctyp i, ret_ctyp with
   | CT_fbits (n, _), CT_constant i, CT_bit ->
      Extract (Big_int.to_int i, Big_int.to_int i, smt_cval ctx vec)
+  | CT_lbits _, CT_constant i, CT_bit ->
+     Extract (Big_int.to_int i, Big_int.to_int i, Fn ("contents", [smt_cval ctx vec]))
+
+  | CT_lbits _, i_ctyp, CT_bit ->
+     let shift = force_size ~checked:false ctx (lbits_size ctx) (int_size ctx i_ctyp) (smt_cval ctx i) in
+     Extract (0, 0, Fn ("bvlshr", [Fn ("contents", [smt_cval ctx vec]); shift]))
 
   | CT_vector _, CT_constant i, _ ->
      Fn ("select", [smt_cval ctx vec; bvint !vector_index i])
@@ -787,6 +842,21 @@ let builtin_vector_update ctx vec i x ret_ctyp =
 
   | _ -> builtin_type_error ctx "vector_update" [vec; i; x] (Some ret_ctyp)
 
+let builtin_vector_update_subrange ctx vec i j x ret_ctyp =
+  match cval_ctyp vec, cval_ctyp i, cval_ctyp j, cval_ctyp x, ret_ctyp with
+  | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _) when n - 1 > Big_int.to_int i && Big_int.to_int j >= 0 ->
+     assert (n = m);
+     let top = Extract (n - 1, Big_int.to_int i + 1, smt_cval ctx vec) in
+     let bot = Extract (Big_int.to_int j - 1, 0, smt_cval ctx vec) in
+     Fn ("concat", [top; Fn ("concat", [smt_cval ctx x; bot])])
+
+  | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _) when n - 1 = Big_int.to_int i && Big_int.to_int j >= 0 ->
+     assert (n = m);
+     let bot = Extract (Big_int.to_int j - 1, 0, smt_cval ctx vec) in
+     Fn ("concat", [smt_cval ctx x; bot])
+
+  | _ -> builtin_type_error ctx "vector_update_subrange" [vec; i; j; x] (Some ret_ctyp)
+
 let builtin_unsigned ctx v ret_ctyp =
   match cval_ctyp v, ret_ctyp with
   | CT_fbits (n, _), CT_fint m when m > n ->
@@ -800,6 +870,9 @@ let builtin_unsigned ctx v ret_ctyp =
        let smt = smt_cval ctx v in
        Fn ("concat", [bvzero (ctx.lint_size - n); smt])
 
+  | CT_lbits _, CT_lint ->
+     Extract (ctx.lint_size - 1, 0, Fn ("contents", [smt_cval ctx v]))
+
   | ctyp, _ -> builtin_type_error ctx "unsigned" [v] (Some ret_ctyp)
 
 let builtin_signed ctx v ret_ctyp =
@@ -810,6 +883,9 @@ let builtin_signed ctx v ret_ctyp =
   | CT_fbits (n, _), CT_lint ->
      SignExtend(ctx.lint_size - n, smt_cval ctx v)
 
+  | CT_lbits _, CT_lint ->
+     Extract (ctx.lint_size - 1, 0, Fn ("contents", [smt_cval ctx v]))
+    
   | ctyp, _ -> builtin_type_error ctx "signed" [v] (Some ret_ctyp)
 
 let builtin_add_bits ctx v1 v2 ret_ctyp =
@@ -818,6 +894,11 @@ let builtin_add_bits ctx v1 v2 ret_ctyp =
      assert (n = m && m = o);
      Fn ("bvadd", [smt_cval ctx v1; smt_cval ctx v2])
 
+  | CT_lbits _, CT_lbits _, CT_lbits _ ->
+     let smt1 = smt_cval ctx v1 in
+     let smt2 = smt_cval ctx v2 in
+     Fn ("Bits", [Fn ("len", [smt1]); Fn ("bvadd", [Fn ("contents", [smt1]); Fn ("contents", [smt2])])])
+     
   | _ -> builtin_type_error ctx "add_bits" [v1; v2] (Some ret_ctyp)
 
 let builtin_sub_bits ctx v1 v2 ret_ctyp =
@@ -865,6 +946,13 @@ let builtin_replicate_bits ctx v1 v2 ret_ctyp =
      let smt = smt_cval ctx v1 in
      let c = m / n in
      Fn ("concat", List.init c (fun _ -> smt))
+
+  | CT_fbits (n, _), v2_ctyp, CT_lbits _ ->
+     let times = (lbits_size ctx / n) + 1 in
+     let len = force_size ~checked:false ctx ctx.lbits_index (int_size ctx v2_ctyp) (smt_cval ctx v2) in
+     let smt1 = smt_cval ctx v1 in
+     let contents = Extract (lbits_size ctx - 1, 0, Fn ("concat", List.init times (fun _ -> smt1))) in
+     Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; contents])])
 
   | _ -> builtin_type_error ctx "replicate_bits" [v1; v2] (Some ret_ctyp)
 
@@ -928,13 +1016,18 @@ let builtin_get_slice_int ctx v1 v2 v3 ret_ctyp =
      in
      Extract ((start + len) - 1, start, smt)
 
+  | CT_lint, CT_lint, CT_constant start, CT_lbits _ when Big_int.equal start Big_int.zero ->
+     let len = Extract (ctx.lbits_index - 1, 0, smt_cval ctx v1) in
+     let contents = unsigned_size ~checked:false ctx (lbits_size ctx) ctx.lint_size (smt_cval ctx v2) in
+     Fn ("Bits", [len; Fn ("bvand", [bvmask ctx len; contents])])
+
   | _ -> builtin_type_error ctx "get_slice_int" [v1; v2; v3] (Some ret_ctyp)
 
 let builtin_count_leading_zeros ctx v ret_ctyp =
   let ret_sz = int_size ctx ret_ctyp in
   let rec lzcnt sz smt =
     if sz == 1 then
-      Ite (Fn ("=", [Extract (0, 0, smt); Bin "0"]),
+      Ite (Fn ("=", [Extract (0, 0, smt); Bitvec_lit [Sail2_values.B0]]),
            bvint ret_sz (Big_int.of_int 1),
            bvint ret_sz (Big_int.zero))
     else (
@@ -1050,6 +1143,8 @@ let smt_builtin ctx name args ret_ctyp =
   | "max_int", [v1; v2], _ -> builtin_max_int ctx v1 v2 ret_ctyp
   | "min_int", [v1; v2], _ -> builtin_min_int ctx v1 v2 ret_ctyp
 
+  | "ediv_int", [v1; v2], _ -> builtin_tdiv_int ctx v1 v2 ret_ctyp
+
   (* All signed and unsigned bitvector comparisons *)
   | "slt_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvslt" ctx v1 v2 ret_ctyp
   | "ult_bits", [v1; v2], CT_bool -> builtin_compare_bits "bvult" ctx v1 v2 ret_ctyp
@@ -1072,8 +1167,9 @@ let smt_builtin ctx name args ret_ctyp =
   | "sail_truncateLSB", [v1; v2], _ -> builtin_sail_truncateLSB ctx v1 v2 ret_ctyp
   | "shiftl", [v1; v2], _ -> builtin_shift "bvshl" ctx v1 v2 ret_ctyp
   | "shiftr", [v1; v2], _ -> builtin_shift "bvlshr" ctx v1 v2 ret_ctyp
-  | "or_bits", [v1; v2], _ -> builtin_or_bits ctx v1 v2 ret_ctyp
   | "and_bits", [v1; v2], _ -> builtin_and_bits ctx v1 v2 ret_ctyp
+  | "or_bits", [v1; v2], _ -> builtin_or_bits ctx v1 v2 ret_ctyp
+  | "xor_bits", [v1; v2], _ -> builtin_xor_bits ctx v1 v2 ret_ctyp
   | "not_bits", [v], _ -> builtin_not_bits ctx v ret_ctyp
   | "add_bits", [v1; v2], _ -> builtin_add_bits ctx v1 v2 ret_ctyp
   | "add_bits_int", [v1; v2], _ -> builtin_add_bits_int ctx v1 v2 ret_ctyp
@@ -1084,6 +1180,7 @@ let smt_builtin ctx name args ret_ctyp =
   | "vector_access", [v1; v2], ret_ctyp -> builtin_vector_access ctx v1 v2 ret_ctyp
   | "vector_subrange", [v1; v2; v3], ret_ctyp -> builtin_vector_subrange ctx v1 v2 v3 ret_ctyp
   | "vector_update", [v1; v2; v3], ret_ctyp -> builtin_vector_update ctx v1 v2 v3 ret_ctyp
+  | "vector_update_subrange", [v1; v2; v3; v4], ret_ctyp -> builtin_vector_update_subrange ctx v1 v2 v3 v4 ret_ctyp
   | "sail_unsigned", [v], ret_ctyp -> builtin_unsigned ctx v ret_ctyp
   | "sail_signed", [v], ret_ctyp -> builtin_signed ctx v ret_ctyp
   | "replicate_bits", [v1; v2], ret_ctyp -> builtin_replicate_bits ctx v1 v2 ret_ctyp
@@ -1110,16 +1207,30 @@ let smt_builtin ctx name args ret_ctyp =
   | "lteq_real", [v1; v2], CT_bool -> ctx.use_real := true; Fn ("<=", [smt_cval ctx v1; smt_cval ctx v2])
   | "gteq_real", [v1; v2], CT_bool -> ctx.use_real := true; Fn (">=", [smt_cval ctx v1; smt_cval ctx v2])
 
-  | _ -> failwith ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
+  | _ ->
+     Reporting.unreachable ctx.pragma_l __POS__ ("Unknown builtin " ^ name ^ " " ^ Util.string_of_list ", " string_of_ctyp (List.map cval_ctyp args) ^ " -> " ^ string_of_ctyp ret_ctyp)
+
+let loc_doc = function
+  | Parse_ast.Documented (str, l) -> str
+  | _ -> "UNKNOWN"
 
 (* Memory reads and writes as defined in lib/regfp.sail *)
 let writes = ref (-1)
 
-let builtin_write_mem ctx wk addr_size addr data_size data =
+let builtin_write_mem l ctx wk addr_size addr data_size data =
   incr writes;
   let name = "W" ^ string_of_int !writes in
-  [Write_mem (name, ctx.node, Lazy.force ctx.pathcond, smt_cval ctx wk,
-              smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr), smt_cval ctx data, smt_ctyp ctx (cval_ctyp data))],
+  [Write_mem {
+       name = name;
+       node = ctx.node;
+       active = Lazy.force ctx.pathcond;
+       kind = smt_cval ctx wk;
+       addr = smt_cval ctx addr;
+       addr_type = smt_ctyp ctx (cval_ctyp addr);
+       data = smt_cval ctx data;
+       data_type = smt_ctyp ctx (cval_ctyp data);
+       doc = loc_doc l
+  }],
   Var (name ^ "_ret")
 
 let ea_writes = ref (-1)
@@ -1133,11 +1244,19 @@ let builtin_write_mem_ea ctx wk addr_size addr data_size =
 
 let reads = ref (-1)
 
-let builtin_read_mem ctx rk addr_size addr data_size ret_ctyp =
+let builtin_read_mem l ctx rk addr_size addr data_size ret_ctyp =
   incr reads;
   let name = "R" ^ string_of_int !reads in
-  [Read_mem (name, ctx.node, Lazy.force ctx.pathcond, smt_ctyp ctx ret_ctyp, smt_cval ctx rk,
-             smt_cval ctx addr, smt_ctyp ctx (cval_ctyp addr))],
+  [Read_mem {
+       name = name;
+       node = ctx.node;
+       active = Lazy.force ctx.pathcond;
+       ret_type = smt_ctyp ctx ret_ctyp;
+       kind = smt_cval ctx rk;
+       addr = smt_cval ctx addr;
+       addr_type = smt_ctyp ctx (cval_ctyp addr);
+       doc = loc_doc l
+  }],
   Read_res name
 
 let excl_results = ref (-1)
@@ -1150,26 +1269,51 @@ let builtin_excl_res ctx =
 
 let barriers = ref (-1)
 
-let builtin_barrier ctx bk =
+let builtin_barrier l ctx bk =
   incr barriers;
   let name = "B" ^ string_of_int !barriers in
-  [Barrier (name, ctx.node, Lazy.force ctx.pathcond, smt_cval ctx bk)],
+  [Barrier {
+       name = name;
+       node = ctx.node;
+       active = Lazy.force ctx.pathcond;
+       kind = smt_cval ctx bk;
+       doc = loc_doc l
+  }],
   Enum "unit"
 
-let rec smt_conversion ctx from_ctyp to_ctyp x =
-  match from_ctyp, to_ctyp with
-  | _, _ when ctyp_equal from_ctyp to_ctyp -> x
-  | CT_constant c, CT_fint sz ->
-     bvint sz c
-  | CT_constant c, CT_lint ->
-     bvint ctx.lint_size c
-  | CT_fint sz, CT_lint ->
-     force_size ctx ctx.lint_size sz x
-  | CT_lbits _, CT_fbits (n, _) ->
-     unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [x]))
-  | _, _ -> failwith (Printf.sprintf "Cannot perform conversion from %s to %s" (string_of_ctyp from_ctyp) (string_of_ctyp to_ctyp))
+let cache_maintenances = ref (-1)
+
+let builtin_cache_maintenance l ctx cmk addr_size addr =
+  incr cache_maintenances;
+  let name = "M" ^ string_of_int !cache_maintenances in
+  [Cache_maintenance {
+       name = name;
+       node = ctx.node;
+       active = Lazy.force ctx.pathcond;
+       kind = smt_cval ctx cmk;
+       addr = smt_cval ctx addr;
+       addr_type = smt_ctyp ctx (cval_ctyp addr);
+       doc = loc_doc l
+  }],
+  Enum "unit"
+
+let branch_announces = ref (-1)
+
+let builtin_branch_announce l ctx addr_size addr =
+  incr branch_announces;
+  let name = "C" ^ string_of_int !branch_announces in
+  [Branch_announce {
+       name = name;
+       node = ctx.node;
+       active = Lazy.force ctx.pathcond;
+       addr = smt_cval ctx addr;
+       addr_type = smt_ctyp ctx (cval_ctyp addr);
+       doc = loc_doc l
+  }],
+  Enum "unit"
 
 let define_const ctx id ctyp exp = Define_const (zencode_name id, smt_ctyp ctx ctyp, exp)
+let preserve_const ctx id ctyp exp = Preserve_const (string_of_id id, smt_ctyp ctx ctyp, exp)
 let declare_const ctx id ctyp = Declare_const (zencode_name id, smt_ctyp ctx ctyp)
 
 let smt_ctype_def ctx = function
@@ -1205,143 +1349,144 @@ let rec generate_reg_decs ctx inits = function
 let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
 let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
 
-(** Convert a sail type into a C-type. This function can be quite
-   slow, because it uses ctx.local_env and SMT to analyse the Sail
-   types and attempts to fit them into the smallest possible C
-   types, provided ctx.optimize_smt is true (default) **)
-let rec ctyp_of_typ ctx typ =
-  let open Ast in
-  let open Type_check in
-  let open Jib_compile in
-  let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
-  match typ_aux with
-  | Typ_id id when string_of_id id = "bit"    -> CT_bit
-  | Typ_id id when string_of_id id = "bool"   -> CT_bool
-  | Typ_id id when string_of_id id = "int"    -> CT_lint
-  | Typ_id id when string_of_id id = "nat"    -> CT_lint
-  | Typ_id id when string_of_id id = "unit"   -> CT_unit
-  | Typ_id id when string_of_id id = "string" -> CT_string
-  | Typ_id id when string_of_id id = "real"   -> CT_real
+module SMT_config : Jib_compile.Config = struct
+  open Jib_compile
 
-  | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
+  (** Convert a sail type into a C-type. This function can be quite
+     slow, because it uses ctx.local_env and SMT to analyse the Sail
+     types and attempts to fit them into the smallest possible C
+     types, provided ctx.optimize_smt is true (default) **)
+  let rec convert_typ ctx typ =
+    let open Ast in
+    let open Type_check in
+    let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
+    match typ_aux with
+    | Typ_id id when string_of_id id = "bit"    -> CT_bit
+    | Typ_id id when string_of_id id = "bool"   -> CT_bool
+    | Typ_id id when string_of_id id = "int"    -> CT_lint
+    | Typ_id id when string_of_id id = "nat"    -> CT_lint
+    | Typ_id id when string_of_id id = "unit"   -> CT_unit
+    | Typ_id id when string_of_id id = "string" -> CT_string
+    | Typ_id id when string_of_id id = "real"   -> CT_real
 
-  | Typ_app (id, args) when string_of_id id = "itself" ->
-     ctyp_of_typ ctx (Typ_aux (Typ_app (mk_id "atom", args), l))
-  | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" ->
-     begin match destruct_range Env.empty typ with
-     | None -> assert false (* Checked if range type in guard *)
-     | Some (kids, constr, n, m) ->
-        let ctx = { ctx with local_env = add_existential Parse_ast.Unknown (List.map (mk_kopt K_int) kids) constr ctx.local_env } in
-        match nexp_simp n, nexp_simp m with
-        | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-             when n = m ->
-           CT_constant n
-        | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-             when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
-           CT_fint 64
-        | n, m ->
-           if prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) then
+    | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
+
+    | Typ_app (id, args) when string_of_id id = "itself" ->
+       convert_typ ctx (Typ_aux (Typ_app (mk_id "atom", args), l))
+    | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" ->
+       begin match destruct_range Env.empty typ with
+       | None -> assert false (* Checked if range type in guard *)
+       | Some (kids, constr, n, m) ->
+          let ctx = { ctx with local_env = add_existential Parse_ast.Unknown (List.map (mk_kopt K_int) kids) constr ctx.local_env } in
+          match nexp_simp n, nexp_simp m with
+          | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
+               when n = m ->
+             CT_constant n
+          | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
+               when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
              CT_fint 64
-           else
-             CT_lint
-     end
-
-  | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
-     CT_list (ctyp_of_typ ctx typ)
-
-  (* Note that we have to use lbits for zero-length bitvectors because they are not allowed by SMTLIB *)
-  | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_order ord, _)])
-       when string_of_id id = "bitvector"  ->
-     let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
-     begin match nexp_simp n with
-     | Nexp_aux (Nexp_constant n, _) when Big_int.equal n Big_int.zero -> CT_lbits direction
-     | Nexp_aux (Nexp_constant n, _) -> CT_fbits (Big_int.to_int n, direction)
-     | _ -> CT_lbits direction
-     end
-
-  | Typ_app (id, [A_aux (A_nexp n, _);
-                  A_aux (A_order ord, _);
-                  A_aux (A_typ typ, _)])
-       when string_of_id id = "vector" ->
-     let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
-     CT_vector (direction, ctyp_of_typ ctx typ)
-
-  | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
-     CT_ref (ctyp_of_typ ctx typ)
-
-  | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records  -> CT_struct (id, Bindings.find id ctx.records |> UBindings.bindings)
-  | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> UBindings.bindings)
-  | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
-
-  | Typ_tup typs -> CT_tup (List.map (ctyp_of_typ ctx) typs)
-
-  | Typ_exist _ ->
-     (* Use Type_check.destruct_exist when optimising with SMT, to
-        ensure that we don't cause any type variable clashes in
-        local_env, and that we can optimize the existential based upon
-        it's constraints. *)
-     begin match destruct_exist (Env.expand_synonyms ctx.local_env typ) with
-     | Some (kids, nc, typ) ->
-        let env = add_existential l kids nc ctx.local_env in
-        ctyp_of_typ { ctx with local_env = env } typ
-     | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
-     end
-
-  | Typ_var kid -> CT_poly
-
-  | _ -> raise (Reporting.err_unreachable l __POS__ ("No SMT type for type " ^ string_of_typ typ))
-
-(**************************************************************************)
-(* 3. Optimization of primitives and literals                             *)
-(**************************************************************************)
-
-let hex_char =
-  let open Sail2_values in
-  function
-  | '0' -> [B0; B0; B0; B0]
-  | '1' -> [B0; B0; B0; B1]
-  | '2' -> [B0; B0; B1; B0]
-  | '3' -> [B0; B0; B1; B1]
-  | '4' -> [B0; B1; B0; B0]
-  | '5' -> [B0; B1; B0; B1]
-  | '6' -> [B0; B1; B1; B0]
-  | '7' -> [B0; B1; B1; B1]
-  | '8' -> [B1; B0; B0; B0]
-  | '9' -> [B1; B0; B0; B1]
-  | 'A' | 'a' -> [B1; B0; B1; B0]
-  | 'B' | 'b' -> [B1; B0; B1; B1]
-  | 'C' | 'c' -> [B1; B1; B0; B0]
-  | 'D' | 'd' -> [B1; B1; B0; B1]
-  | 'E' | 'e' -> [B1; B1; B1; B0]
-  | 'F' | 'f' -> [B1; B1; B1; B1]
-  | _ -> failwith "Invalid hex character"
-
-let literal_to_cval (L_aux (l_aux, _) as lit) =
-  match l_aux with
-  | L_num n -> Some (V_lit (VL_int n, CT_constant n))
-  | L_hex str when String.length str <= 16 ->
-     let content = Util.string_to_list str |> List.map hex_char |> List.concat in
-     Some (V_lit (VL_bits (content, true), CT_fbits (String.length str * 4, true)))
-  | L_unit -> Some (V_lit (VL_unit, CT_unit))
-  | L_true -> Some (V_lit (VL_bool true, CT_bool))
-  | L_false -> Some (V_lit (VL_bool false, CT_bool))
-  | _ -> None
-
-let c_literals ctx =
-  let rec c_literal env l = function
-    | AV_lit (lit, typ) as v ->
-       begin match literal_to_cval lit with
-       | Some cval -> AV_cval (cval, typ)
-       | None -> v
+          | n, m ->
+             if prove __POS__ ctx.local_env (nc_lteq (nconstant (min_int 64)) n) && prove __POS__ ctx.local_env (nc_lteq m (nconstant (max_int 64))) then
+               CT_fint 64
+             else
+               CT_lint
        end
-    | AV_tuple avals -> AV_tuple (List.map (c_literal env l) avals)
-    | v -> v
-  in
-  map_aval c_literal
 
-let unroll_foreach ctx = function
+    | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
+       CT_list (convert_typ ctx typ)
+
+    (* Note that we have to use lbits for zero-length bitvectors because they are not allowed by SMTLIB *)
+    | Typ_app (id, [A_aux (A_nexp n, _); A_aux (A_order ord, _)])
+         when string_of_id id = "bitvector"  ->
+       let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
+       begin match nexp_simp n with
+       | Nexp_aux (Nexp_constant n, _) when Big_int.equal n Big_int.zero -> CT_lbits direction
+       | Nexp_aux (Nexp_constant n, _) -> CT_fbits (Big_int.to_int n, direction)
+       | _ -> CT_lbits direction
+       end
+
+    | Typ_app (id, [A_aux (A_nexp n, _);
+                    A_aux (A_order ord, _);
+                    A_aux (A_typ typ, _)])
+         when string_of_id id = "vector" ->
+       let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
+       CT_vector (direction, convert_typ ctx typ)
+
+    | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
+       CT_ref (convert_typ ctx typ)
+
+    | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records  -> CT_struct (id, Bindings.find id ctx.records |> UBindings.bindings)
+    | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> UBindings.bindings)
+    | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
+
+    | Typ_tup typs -> CT_tup (List.map (convert_typ ctx) typs)
+
+    | Typ_exist _ ->
+       (* Use Type_check.destruct_exist when optimising with SMT, to
+          ensure that we don't cause any type variable clashes in
+          local_env, and that we can optimize the existential based
+          upon it's constraints. *)
+       begin match destruct_exist (Env.expand_synonyms ctx.local_env typ) with
+       | Some (kids, nc, typ) ->
+          let env = add_existential l kids nc ctx.local_env in
+          convert_typ { ctx with local_env = env } typ
+       | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
+       end
+
+    | Typ_var kid -> CT_poly
+
+    | _ -> raise (Reporting.err_unreachable l __POS__ ("No SMT type for type " ^ string_of_typ typ))
+
+  let hex_char =
+    let open Sail2_values in
+    function
+    | '0' -> [B0; B0; B0; B0]
+    | '1' -> [B0; B0; B0; B1]
+    | '2' -> [B0; B0; B1; B0]
+    | '3' -> [B0; B0; B1; B1]
+    | '4' -> [B0; B1; B0; B0]
+    | '5' -> [B0; B1; B0; B1]
+    | '6' -> [B0; B1; B1; B0]
+    | '7' -> [B0; B1; B1; B1]
+    | '8' -> [B1; B0; B0; B0]
+    | '9' -> [B1; B0; B0; B1]
+    | 'A' | 'a' -> [B1; B0; B1; B0]
+    | 'B' | 'b' -> [B1; B0; B1; B1]
+    | 'C' | 'c' -> [B1; B1; B0; B0]
+    | 'D' | 'd' -> [B1; B1; B0; B1]
+    | 'E' | 'e' -> [B1; B1; B1; B0]
+    | 'F' | 'f' -> [B1; B1; B1; B1]
+    | _ -> failwith "Invalid hex character"
+
+  let literal_to_cval (L_aux (l_aux, _) as lit) =
+    match l_aux with
+    | L_num n -> Some (V_lit (VL_int n, CT_constant n))
+    | L_hex str when String.length str <= 16 ->
+       let content = Util.string_to_list str |> List.map hex_char |> List.concat in
+       Some (V_lit (VL_bits (content, true), CT_fbits (String.length str * 4, true)))
+    | L_unit -> Some (V_lit (VL_unit, CT_unit))
+    | L_true -> Some (V_lit (VL_bool true, CT_bool))
+    | L_false -> Some (V_lit (VL_bool false, CT_bool))
+    | _ -> None
+
+  let c_literals ctx =
+    let rec c_literal env l = function
+      | AV_lit (lit, typ) as v ->
+         begin match literal_to_cval lit with
+         | Some cval -> AV_cval (cval, typ)
+         | None -> v
+         end
+      | AV_tuple avals -> AV_tuple (List.map (c_literal env l) avals)
+      | v -> v
+    in
+    map_aval c_literal
+
+(* If we know the loop variables exactly (especially after
+   specialization), we can unroll the exact number of times required,
+   and omit any comparisons. *)
+let unroll_static_foreach ctx = function
   | AE_aux (AE_for (id, from_aexp, to_aexp, by_aexp, order, body), env, l) as aexp ->
-     begin match ctyp_of_typ ctx (aexp_typ from_aexp), ctyp_of_typ ctx (aexp_typ to_aexp), ctyp_of_typ ctx (aexp_typ by_aexp), order with
+     begin match convert_typ ctx (aexp_typ from_aexp), convert_typ ctx (aexp_typ to_aexp), convert_typ ctx (aexp_typ by_aexp), order with
      | CT_constant f, CT_constant t, CT_constant b, Ord_aux (Ord_inc, _) ->
         let i = ref f in
         let unrolled = ref [] in
@@ -1359,6 +1504,19 @@ let unroll_foreach ctx = function
      | _ -> aexp
      end
   | aexp -> aexp
+
+  let optimize_anf ctx aexp =
+    aexp
+    |> c_literals ctx
+    |> fold_aexp (unroll_static_foreach ctx)
+
+  let specialize_calls = true
+  let ignore_64 = true
+  let unroll_loops () = Some !opt_unroll_limit
+  let struct_value = true
+  let use_real = true
+end
+
 
 (**************************************************************************)
 (* 3. Generating SMT                                                      *)
@@ -1414,7 +1572,7 @@ let smt_ssanode ctx cfg preds =
          pis ids None
      in
      match mux with
-     | None -> []
+     | None -> assert false
      | Some mux ->
         [Define_const (zencode_name id, smt_ctyp ctx ctyp, mux)]
 
@@ -1492,7 +1650,7 @@ let rec rmw_write = function
   | CL_id _ -> assert false
   | CL_tuple (clexp, _) -> rmw_write clexp
   | CL_field (clexp, _) -> rmw_write clexp
-  | clexp -> assert false
+  | clexp -> failwith "Could not understand l-expression"
 
 let rmw_read = function
   | CL_rmw (read, _, _) -> zencode_name read
@@ -1522,7 +1680,7 @@ let rmw_modify smt = function
           if UId.compare field field' = 0 then
             smt
           else
-            Fn (zencode_upper_id struct_id ^ "_" ^ zencode_uid field', [Var (rmw_read clexp)])
+            Field (zencode_upper_id struct_id ^ "_" ^ zencode_uid field', Var (rmw_read clexp))
         in
         Fn (zencode_upper_id struct_id, List.map set_field fields)
      | _ ->
@@ -1564,7 +1722,7 @@ let smt_instr ctx =
        else if name = "platform_write_mem" then
          begin match args with
          | [wk; addr_size; addr; data_size; data] ->
-            let mem_event, var = builtin_write_mem ctx wk addr_size addr data_size data in
+            let mem_event, var = builtin_write_mem l ctx wk addr_size addr data_size data in
             mem_event @ [define_const ctx id ret_ctyp var]
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __write_mem"
@@ -1580,7 +1738,7 @@ let smt_instr ctx =
        else if name = "platform_read_mem" then
          begin match args with
          | [rk; addr_size; addr; data_size] ->
-            let mem_event, var = builtin_read_mem ctx rk addr_size addr data_size ret_ctyp in
+            let mem_event, var = builtin_read_mem l ctx rk addr_size addr data_size ret_ctyp in
             mem_event @ [define_const ctx id ret_ctyp var]
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __read_mem"
@@ -1588,7 +1746,23 @@ let smt_instr ctx =
        else if name = "platform_barrier" then
          begin match args with
          | [bk] ->
-            let mem_event, var = builtin_barrier ctx bk in
+            let mem_event, var = builtin_barrier l ctx bk in
+            mem_event @ [define_const ctx id ret_ctyp var]
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for __barrier"
+         end
+       else if name = "platform_cache_maintenance" then
+         begin match args with
+         | [cmk; addr_size; addr] ->
+            let mem_event, var = builtin_cache_maintenance l ctx cmk addr_size addr in
+            mem_event @ [define_const ctx id ret_ctyp var]
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for __barrier"
+         end
+       else if name = "platform_branch_announce" then
+         begin match args with
+         | [addr_size; addr] ->
+            let mem_event, var = builtin_branch_announce l ctx addr_size addr in
             mem_event @ [define_const ctx id ret_ctyp var]
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __barrier"
@@ -1601,9 +1775,20 @@ let smt_instr ctx =
          | _ ->
             Reporting.unreachable l __POS__ "Bad arguments for __excl_res"
          end
+       else if name = "sail_exit" then
+         (add_event ctx Assertion (Bool_lit false); [])
+       else if name = "sail_assert" then
+         begin match args with
+         | [assertion; _] ->
+            let smt = smt_cval ctx assertion in
+            add_event ctx Assertion (Fn ("not", [smt]));
+            []
+         | _ ->
+            Reporting.unreachable l __POS__ "Bad arguments for assertion"
+         end
        else
          let value = smt_builtin ctx name args ret_ctyp in
-         [define_const ctx id ret_ctyp value]
+         [define_const ctx id ret_ctyp (Syntactic (value, List.map (smt_cval ctx) args))]
      else if extern && string_of_id (fst function_id) = "internal_vector_init" then
        [declare_const ctx id ret_ctyp]
      else if extern && string_of_id (fst function_id) = "internal_vector_update" then
@@ -1614,15 +1799,6 @@ let smt_instr ctx =
              (Fn ("store", [smt_cval ctx vec; force_size ~checked:false ctx ctx.vector_index sz (smt_cval ctx i); smt_cval ctx x]))]
        | _ ->
           Reporting.unreachable l __POS__ "Bad arguments for internal_vector_update"
-       end
-     else if string_of_id (fst function_id) = "sail_assert" then
-       begin match args with
-       | [assertion; _] ->
-          let smt = smt_cval ctx assertion in
-          add_event ctx Assertion smt;
-          []
-       | _ ->
-          Reporting.unreachable l __POS__ "Bad arguments for assertion"
        end
      else if string_of_id (fst function_id) = "sail_assume" then
        begin match args with
@@ -1643,8 +1819,14 @@ let smt_instr ctx =
      Reporting.unreachable l __POS__ "Register reference write should be re-written by now"
 
   | I_aux (I_init (ctyp, id, cval), _) | I_aux (I_copy (CL_id (id, ctyp), cval), _) ->
-     [define_const ctx id ctyp
-        (smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval))]
+     begin match id with
+     | Name (id, _) when IdSet.mem id ctx.preserved ->
+        [preserve_const ctx id ctyp
+           (smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval))]
+     | _ ->
+        [define_const ctx id ctyp
+           (smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval))]
+     end
 
   | I_aux (I_copy (clexp, cval), _) ->
      let smt = smt_cval ctx cval in
@@ -1721,13 +1903,19 @@ module Make_optimizer(S : Sequence) = struct
          | Some n -> Hashtbl.replace uses var (n + 1)
          | None -> Hashtbl.add uses var 1
          end
-      | Enum _ | Read_res _ | Hex _ | Bin _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
+      | Syntactic (exp, _) -> uses_in_exp exp
+      | Shared _ | Enum _ | Read_res _ | Bitvec_lit _ | Bool_lit _ | String_lit _ | Real_lit _ -> ()
       | Fn (_, exps) | Ctor (_, exps) ->
          List.iter uses_in_exp exps
+      | Field (_, exp) ->
+         uses_in_exp exp
+      | Struct (_, fields) ->
+         List.iter (fun (_, exp) -> uses_in_exp exp) fields
       | Ite (cond, t, e) ->
          uses_in_exp cond; uses_in_exp t; uses_in_exp e
       | Extract (_, _, exp) | Tester (_, exp) | SignExtend (_, exp) ->
          uses_in_exp exp
+      | Forall _ -> assert false
     in
 
     let remove_unused () = function
@@ -1737,6 +1925,11 @@ module Make_optimizer(S : Sequence) = struct
          | Some _ ->
             Stack.push def stack'
          end
+      | Declare_fun _ as def ->
+         Stack.push def stack'
+      | Preserve_const (_, _, exp) as def ->
+         uses_in_exp exp;
+         Stack.push def stack'
       | Define_const (var, _, exp) as def ->
          begin match Hashtbl.find_opt uses var with
          | None -> ()
@@ -1746,17 +1939,23 @@ module Make_optimizer(S : Sequence) = struct
          end
       | (Declare_datatypes _ | Declare_tuple _) as def ->
          Stack.push def stack'
-      | Write_mem (_, _, active, wk, addr, _, data, _) as def ->
-         uses_in_exp active; uses_in_exp wk; uses_in_exp addr; uses_in_exp data;
+      | Write_mem w as def ->
+         uses_in_exp w.active; uses_in_exp w.kind; uses_in_exp w.addr; uses_in_exp w.data;
          Stack.push def stack'
       | Write_mem_ea (_, _, active, wk, addr, _, data_size, _) as def ->
          uses_in_exp active; uses_in_exp wk; uses_in_exp addr; uses_in_exp data_size;
          Stack.push def stack'
-      | Read_mem (_, _, active, _, rk, addr, _) as def ->
-         uses_in_exp active; uses_in_exp rk; uses_in_exp addr;
+      | Read_mem r as def ->
+         uses_in_exp r.active; uses_in_exp r.kind; uses_in_exp r.addr;
          Stack.push def stack'
-      | Barrier (_, _, active, bk) as def ->
-         uses_in_exp active; uses_in_exp bk;
+      | Barrier b as def ->
+         uses_in_exp b.active; uses_in_exp b.kind;
+         Stack.push def stack'
+      | Cache_maintenance m as def ->
+         uses_in_exp m.active; uses_in_exp m.kind; uses_in_exp m.addr;
+         Stack.push def stack'
+      | Branch_announce c as def ->
+         uses_in_exp c.active; uses_in_exp c.addr;
          Stack.push def stack'
       | Excl_res (_, _, active) as def ->
          uses_in_exp active;
@@ -1775,10 +1974,14 @@ module Make_optimizer(S : Sequence) = struct
     let constant_propagate = function
       | Declare_const _ as def ->
          S.add def seq
+      | Declare_fun _ as def ->
+         S.add def seq
+      | Preserve_const (var, typ, exp) ->
+         S.add (Preserve_const (var, typ, simp_smt_exp vars kinds exp)) seq
       | Define_const (var, typ, exp) ->
          let exp = simp_smt_exp vars kinds exp in
          begin match Hashtbl.find_opt uses var, simp_smt_exp vars kinds exp with
-         | _, (Bin _ | Bool_lit _) ->
+         | _, (Bitvec_lit _ | Bool_lit _) ->
             Hashtbl.add vars var exp
          | _, Var _ when !opt_propagate_vars ->
             Hashtbl.add vars var exp
@@ -1791,20 +1994,30 @@ module Make_optimizer(S : Sequence) = struct
             S.add (Define_const (var, typ, exp)) seq
          | None, _ -> assert false
          end
-      | Write_mem (name, node, active, wk, addr, addr_ty, data, data_ty) ->
-         S.add (Write_mem (name, node, simp_smt_exp vars kinds active, simp_smt_exp vars kinds wk,
-                           simp_smt_exp vars kinds addr, addr_ty, simp_smt_exp vars kinds data, data_ty))
+      | Write_mem w ->
+         S.add (Write_mem { w with active = simp_smt_exp vars kinds w.active;
+                                   kind = simp_smt_exp vars kinds w.kind;
+                                   addr = simp_smt_exp vars kinds w.addr;
+                                   data = simp_smt_exp vars kinds w.data })
                seq
       | Write_mem_ea (name, node, active, wk, addr, addr_ty, data_size, data_size_ty) ->
          S.add (Write_mem_ea (name, node, simp_smt_exp vars kinds active, simp_smt_exp vars kinds wk,
                               simp_smt_exp vars kinds addr, addr_ty, simp_smt_exp vars kinds data_size, data_size_ty))
                seq
-      | Read_mem (name, node, active, typ, rk, addr, addr_typ) ->
-         S.add (Read_mem (name, node, simp_smt_exp vars kinds active, typ, simp_smt_exp vars kinds rk,
-                          simp_smt_exp vars kinds addr, addr_typ))
+      | Read_mem r ->
+         S.add (Read_mem { r with active = simp_smt_exp vars kinds r.active;
+                                  kind = simp_smt_exp vars kinds r.kind;
+                                  addr = simp_smt_exp vars kinds r.addr })
                seq
-      | Barrier (name, node, active, bk) ->
-         S.add (Barrier (name, node, simp_smt_exp vars kinds active, simp_smt_exp vars kinds bk)) seq
+      | Barrier b ->
+         S.add (Barrier { b with active = simp_smt_exp vars kinds b.active; kind = simp_smt_exp vars kinds b.kind }) seq
+      | Cache_maintenance m ->
+         S.add (Cache_maintenance { m with active = simp_smt_exp vars kinds m.active;
+                                           kind = simp_smt_exp vars kinds m.kind;
+                                           addr = simp_smt_exp vars kinds m.addr })
+               seq
+      | Branch_announce c ->
+         S.add (Branch_announce { c with active = simp_smt_exp vars kinds c.active; addr = simp_smt_exp vars kinds c.addr }) seq
       | Excl_res (name, node, active) ->
          S.add (Excl_res (name, node, simp_smt_exp vars kinds active)) seq
       | Assert exp ->
@@ -1843,6 +2056,26 @@ let smt_header ctx cdefs =
    register if it is. We also do a similar thing for *r = x
 *)
 let expand_reg_deref env register_map = function
+  | I_aux (I_funcall (CL_addr (CL_id (id, ctyp)), false, function_id, args), (_, l)) ->
+     begin match ctyp with
+     | CT_ref reg_ctyp ->
+        begin match CTMap.find_opt reg_ctyp register_map with
+        | Some regs ->
+           let end_label = label "end_reg_write_" in
+           let try_reg r =
+             let next_label = label "next_reg_write_" in
+             [ijump l (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); V_id (id, ctyp)])) next_label;
+              ifuncall (CL_id (name r, reg_ctyp)) function_id args;
+              igoto end_label;
+              ilabel next_label]
+           in
+           iblock (List.concat (List.map try_reg regs) @ [ilabel end_label])
+        | None ->
+           raise (Reporting.err_general l ("Could not find any registers with type " ^ string_of_ctyp reg_ctyp))
+        end
+     | _ ->
+        raise (Reporting.err_general l "Register reference assignment must take a register reference as an argument")
+     end
   | I_aux (I_funcall (clexp, false, function_id, [reg_ref]), (_, l)) as instr ->
      let open Type_check in
      begin match (if Env.is_extern (fst function_id) env "smt" then Some (Env.get_extern (fst function_id) env "smt") else None) with
@@ -1855,7 +2088,7 @@ let expand_reg_deref env register_map = function
               let end_label = label "end_reg_deref_" in
               let try_reg r =
                 let next_label = label "next_reg_deref_" in
-                [ijump (V_call (Neq, [V_ref (name r, reg_ctyp); reg_ref])) next_label;
+                [ijump l (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); reg_ref])) next_label;
                  icopy l clexp (V_id (name r, reg_ctyp));
                  igoto end_label;
                  ilabel next_label]
@@ -1877,7 +2110,7 @@ let expand_reg_deref env register_map = function
            let end_label = label "end_reg_write_" in
            let try_reg r =
              let next_label = label "next_reg_write_" in
-             [ijump (V_call (Neq, [V_ref (name r, reg_ctyp); V_id (id, ctyp)])) next_label;
+             [ijump l (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); V_id (id, ctyp)])) next_label;
               icopy l (CL_id (name r, reg_ctyp)) cval;
               igoto end_label;
               ilabel next_label]
@@ -1927,7 +2160,7 @@ let smt_instr_list name ctx all_cdefs instrs =
     dump_graph name cfg;
 
   List.iter (fun n ->
-      begin match get_vertex cfg n with
+      match get_vertex cfg n with
       | None -> ()
       | Some ((ssa_elems, cfnode), preds, succs) ->
          let muxers =
@@ -1937,13 +2170,12 @@ let smt_instr_list name ctx all_cdefs instrs =
          let basic_block = smt_cfnode all_cdefs ctx ssa_elems cfnode in
          push_smt_defs stack muxers;
          push_smt_defs stack basic_block
-      end
     ) visit_order;
 
-  stack, cfg
+  stack, start, cfg
 
 let smt_cdef props lets name_file ctx all_cdefs = function
-  | CDEF_spec (function_id, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
+  | CDEF_spec (function_id, _, arg_ctyps, ret_ctyp) when Bindings.mem function_id props ->
      begin match find_function [] function_id all_cdefs with
      | intervening_lets, Some (None, args, instrs) ->
         let prop_type, prop_args, pragma_l, vs = Bindings.find function_id props in
@@ -1967,7 +2199,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
           |> remove_pointless_goto
         in
 
-        let stack, _ = smt_instr_list (string_of_id function_id) ctx all_cdefs instrs in
+        let stack, _, _ = smt_instr_list (string_of_id function_id) ctx all_cdefs instrs in
 
         let query = smt_query ctx pragma.query in
         push_smt_defs stack [Assert (Fn ("not", [query]))];
@@ -2038,25 +2270,20 @@ let rec build_register_map rmap = function
   | [] -> rmap
 
 let compile env ast =
-  let cdefs =
-    let open Jib_compile in
-    let ctx =
-      initial_ctx
-        ~convert_typ:ctyp_of_typ
-        ~optimize_anf:(fun ctx aexp -> fold_aexp (unroll_foreach ctx) (c_literals ctx aexp))
-        env
-    in
+  let cdefs, jib_ctx =
+    let module Jibc = Jib_compile.Make(SMT_config) in
+    let ctx = Jib_compile.(initial_ctx (add_special_functions env)) in
     let t = Profile.start () in
-    let cdefs, ctx = compile_ast { ctx with specialize_calls = true; ignore_64 = true; struct_value = true; use_real = true } ast in
+    let cdefs, ctx = Jibc.compile_ast ctx ast in
     Profile.finish "Compiling to Jib IR" t;
-    cdefs
+    cdefs, ctx
   in
   let cdefs = Jib_optimize.unique_per_function_ids cdefs in
   let rmap = build_register_map CTMap.empty cdefs in
-  cdefs, { (initial_ctx ()) with tc_env = env; register_map = rmap; ast = ast }
+  cdefs, jib_ctx, { (initial_ctx ()) with tc_env = jib_ctx.tc_env; register_map = rmap; ast = ast }
 
 let serialize_smt_model file env ast =
-  let cdefs, ctx = compile env ast in
+  let cdefs, _, ctx = compile env ast in
   let out_chan = open_out file in
   Marshal.to_channel out_chan cdefs [];
   Marshal.to_channel out_chan (Type_check.Env.set_prover None ctx.tc_env) [];
@@ -2073,7 +2300,7 @@ let deserialize_smt_model file =
 
 let generate_smt props name_file env ast =
   try
-    let cdefs, ctx = compile env ast in
+    let cdefs, _, ctx = compile env ast in
     smt_cdefs props [] name_file ctx cdefs cdefs
   with
   | Type_check.Type_error (_, l, err) ->

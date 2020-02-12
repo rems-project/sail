@@ -107,7 +107,7 @@ let message_of_type_error =
   let rec msg = function
     | Err_because (err, l', err') ->
        Seq [msg err;
-            Line "This error occured because of a previous error:";
+            Line "This error was caused by:";
             Location (l', msg err')]
 
     | Err_other str -> Line str

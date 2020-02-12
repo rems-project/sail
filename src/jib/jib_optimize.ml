@@ -102,10 +102,10 @@ let rec flatten_instrs = function
   | I_aux ((I_block block | I_try_block block), _) :: instrs ->
      flatten_instrs block @ flatten_instrs instrs
 
-  | I_aux (I_if (cval, then_instrs, else_instrs, _), _) :: instrs ->
+  | I_aux (I_if (cval, then_instrs, else_instrs, _), (_, l)) :: instrs ->
      let then_label = label "then_" in
      let endif_label = label "endif_" in
-     [ijump cval then_label]
+     [ijump l cval then_label]
      @ flatten_instrs else_instrs
      @ [igoto endif_label]
      @ [ilabel then_label]
@@ -153,7 +153,7 @@ let unique_per_function_ids cdefs =
     | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, ctyp, unique_instrs i instrs)
     | CDEF_type ctd -> CDEF_type ctd
     | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, unique_instrs i instrs)
-    | CDEF_spec (id, ctyps, ctyp) -> CDEF_spec (id, ctyps, ctyp)
+    | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, ctyps, ctyp)
     | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, unique_instrs i instrs)
     | CDEF_startup (id, instrs) -> CDEF_startup (id, unique_instrs i instrs)
     | CDEF_finish (id, instrs) -> CDEF_finish (id, unique_instrs i instrs)
@@ -162,7 +162,6 @@ let unique_per_function_ids cdefs =
 
 let rec cval_subst id subst = function
   | V_id (id', ctyp) -> if Name.compare id id' = 0 then subst else V_id (id', ctyp)
-  | V_ref (reg_id, ctyp) -> V_ref (reg_id, ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
   | V_call (op, cvals) -> V_call (op, List.map (cval_subst id subst) cvals)
   | V_field (cval, field) -> V_field (cval_subst id subst cval, field)
@@ -174,7 +173,6 @@ let rec cval_subst id subst = function
 
 let rec cval_map_id f = function
   | V_id (id, ctyp) -> V_id (f id, ctyp)
-  | V_ref (id, ctyp) -> V_ref (f id, ctyp)
   | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
   | V_call (call, cvals) -> V_call (call, List.map (cval_map_id f) cvals)
   | V_field (cval, field) -> V_field (cval_map_id f cval, field)
@@ -249,6 +247,7 @@ let ssa_name i = function
   | Name (id, _) -> Name (id, i)
   | Have_exception _ -> Have_exception i
   | Current_exception _ -> Current_exception i
+  | Throw_location _ -> Throw_location i
   | Return _ -> Return i
 
 let inline cdefs should_inline instrs =
@@ -347,6 +346,15 @@ let rec remove_pointless_goto = function
      instr :: remove_pointless_goto instrs
   | [] -> []
 
+let rec remove_pointless_exit = function
+  | I_aux (I_end id, aux) :: I_aux (I_end _, _) :: instrs  ->
+     I_aux (I_end id, aux) :: remove_pointless_exit instrs
+  | I_aux (I_end id, aux) :: I_aux (I_undefined _, _) :: instrs  ->
+     I_aux (I_end id, aux) :: remove_pointless_exit instrs
+  | instr :: instrs ->
+     instr :: remove_pointless_exit instrs
+  | [] -> []
+
 module StringSet = Set.Make(String)
 
 let rec get_used_labels set = function
@@ -364,7 +372,6 @@ let remove_unused_labels instrs =
   in
   go [] instrs
 
-
 let remove_dead_after_goto instrs =
   let rec go acc = function
     | (I_aux (I_goto _, _) as instr) :: instrs -> go_dead (instr :: acc) instrs
@@ -379,7 +386,7 @@ let remove_dead_after_goto instrs =
 
 let rec remove_dead_code instrs =
   let instrs' =
-    instrs |> remove_unused_labels |> remove_pointless_goto |> remove_dead_after_goto
+    instrs |> remove_unused_labels |> remove_pointless_goto |> remove_dead_after_goto |> remove_pointless_exit
   in
   if List.length instrs' < List.length instrs then
     remove_dead_code instrs'
@@ -398,7 +405,7 @@ let remove_tuples cdefs ctx =
        CTSet.add ctyp (List.fold_left CTSet.union CTSet.empty (List.map all_tuples ctyps))
     | CT_struct (_, id_ctyps) | CT_variant (_, id_ctyps) ->
        List.fold_left (fun cts (_, ctyp) -> CTSet.union (all_tuples ctyp) cts) CTSet.empty id_ctyps
-    | CT_list ctyp | CT_vector (_, ctyp) | CT_ref ctyp ->
+    | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp ->
        all_tuples ctyp
     | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
       | CT_unit | CT_bool | CT_real | CT_bit | CT_poly | CT_string | CT_enum _ ->
@@ -409,7 +416,7 @@ let remove_tuples cdefs ctx =
        1 + List.fold_left (fun d ctyp -> max d (tuple_depth ctyp)) 0 ctyps
     | CT_struct (_, id_ctyps) | CT_variant (_, id_ctyps) ->
        List.fold_left (fun d (_, ctyp) -> max (tuple_depth ctyp) d) 0 id_ctyps
-    | CT_list ctyp | CT_vector (_, ctyp) | CT_ref ctyp ->
+    | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp ->
        tuple_depth ctyp
     | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
       | CT_unit | CT_bool | CT_real | CT_bit | CT_poly | CT_string | CT_enum _ ->
@@ -426,6 +433,7 @@ let remove_tuples cdefs ctx =
        CT_variant (id, List.map (fun (id, ctyp) -> id, fix_tuples ctyp) id_ctyps)
     | CT_list ctyp -> CT_list (fix_tuples ctyp)
     | CT_vector (d, ctyp) -> CT_vector (d, fix_tuples ctyp)
+    | CT_fvector (n, d, ctyp) -> CT_fvector (n, d, fix_tuples ctyp)
     | CT_ref ctyp -> CT_ref (fix_tuples ctyp)
     | (CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
        | CT_unit | CT_bool | CT_real | CT_bit | CT_poly | CT_string | CT_enum _) as ctyp ->
@@ -433,7 +441,6 @@ let remove_tuples cdefs ctx =
   in
   let rec fix_cval = function
     | V_id (id, ctyp) -> V_id (id, ctyp)
-    | V_ref (id, ctyp) -> V_ref (id, ctyp)
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
     | V_ctor_kind (cval, id, unifiers, ctyp) ->
        V_ctor_kind (fix_cval cval, id, unifiers, ctyp)

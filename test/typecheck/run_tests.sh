@@ -87,6 +87,24 @@ do
     done
 done
 
+for file in $DIR/fail/*.sail;
+do
+    pushd $DIR/fail > /dev/null;
+    if $SAILDIR/sail -no_memo_z3 $(basename $file) 2> result
+    then
+        red "Expected failure, but $i $(basename $file) passed" "fail"
+    else
+        if diff ${file%.sail}.expect result;
+        then
+            green "failing $i $(basename $file)" "pass"
+        else
+            yellow "failing $i $(basename $file)" "unexpected error"
+        fi
+    fi;
+    rm -f result;
+    popd > /dev/null
+done
+
 finish_suite "Typechecking tests"
 
 printf "</testsuites>\n" >> $DIR/tests.xml
