@@ -94,6 +94,12 @@ Emacs Mode
 for the most recent version of Sail which provides some basic syntax
 highlighting.
 
+VSCode Mode
+===========
+
+[editors/vscode](editors/vscode) contains a Visual Studio Code mode
+which provides some basic syntax highlighting.
+
 Licensing
 =========
 
