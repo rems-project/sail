@@ -123,7 +123,7 @@ let rec string_of_value = function
 let rec eq_value v1 v2 =
   match v1, v2 with
   | V_vector v1s, V_vector v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
-  | V_list v1s, V_vector v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
+  | V_list v1s, V_list v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_int n, V_int m -> Big_int.equal n m
   | V_real n, V_real m -> Rational.equal n m
   | V_bool b1, V_bool b2 -> b1 = b2

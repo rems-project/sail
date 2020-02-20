@@ -1844,6 +1844,9 @@ let codegen_list_clear id ctyp =
   ^^ string "  sail_free(*rop);"
   ^^ string "}"
 
+let codegen_list_recreate id =
+  string (Printf.sprintf "static void RECREATE(%s)(%s *rop) { KILL(%s)(rop); *rop = NULL; }" (sgen_id id) (sgen_id id) (sgen_id id))
+
 let codegen_list_set id ctyp =
   string (Printf.sprintf "static void internal_set_%s(%s *rop, const %s op) {\n" (sgen_id id) (sgen_id id) (sgen_id id))
   ^^ string "  if (op == NULL) { *rop = NULL; return; };\n"
@@ -1879,6 +1882,14 @@ let codegen_pick id ctyp =
   else
     string (Printf.sprintf "static void pick_%s(%s *x, const %s xs) { COPY(%s)(x, xs->hd); }" (sgen_ctyp_name ctyp) (sgen_ctyp ctyp) (sgen_id id) (sgen_ctyp_name ctyp))
 
+let codegen_list_equal id ctyp =
+  let open Printf in
+  ksprintf string "static bool EQUAL(%s)(const %s op1, const %s op2) {\n" (sgen_id id) (sgen_id id) (sgen_id id)
+  ^^ ksprintf string "  if (op1 == NULL && op2 == NULL) { return true; };\n"
+  ^^ ksprintf string "  if (op1 == NULL || op2 == NULL) { return false; };\n"
+  ^^ ksprintf string "  return EQUAL(%s)(op1->hd, op2->hd) && EQUAL(%s)(op1->tl, op2->tl);\n" (sgen_ctyp_name ctyp) (sgen_id id)
+  ^^ string "}"
+
 let codegen_list ctx ctyp =
   let id = mk_id (string_of_ctyp (CT_list ctyp)) in
   if IdSet.mem id !generated then
@@ -1889,9 +1900,11 @@ let codegen_list ctx ctyp =
       codegen_node id ctyp ^^ twice hardline
       ^^ codegen_list_init id ^^ twice hardline
       ^^ codegen_list_clear id ctyp ^^ twice hardline
+      ^^ codegen_list_recreate id ^^ twice hardline
       ^^ codegen_list_set id ctyp ^^ twice hardline
       ^^ codegen_cons id ctyp ^^ twice hardline
       ^^ codegen_pick id ctyp ^^ twice hardline
+      ^^ codegen_list_equal id ctyp ^^ twice hardline
     end
 
 (* Generate functions for working with non-bit vectors of some specific type. *)
