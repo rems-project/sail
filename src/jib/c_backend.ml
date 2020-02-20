@@ -1481,6 +1481,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | "undefined_bitvector", CT_lbits _ -> "UNDEFINED(lbits)"
        | "undefined_bit", _ -> "UNDEFINED(fbits)"
        | "undefined_vector", _ -> Printf.sprintf "UNDEFINED(vector_%s)" (sgen_ctyp_name ctyp)
+       | "undefined_list", _ -> Printf.sprintf "UNDEFINED(%s)" (sgen_ctyp_name ctyp)
        | fname, _ -> fname
      in
      if fname = "reg_deref" then
@@ -1890,6 +1891,12 @@ let codegen_list_equal id ctyp =
   ^^ ksprintf string "  return EQUAL(%s)(op1->hd, op2->hd) && EQUAL(%s)(op1->tl, op2->tl);\n" (sgen_ctyp_name ctyp) (sgen_id id)
   ^^ string "}"
 
+let codegen_list_undefined id ctyp =
+  let open Printf in
+  ksprintf string "static void UNDEFINED(%s)(%s *rop, %s u) {\n" (sgen_id id) (sgen_id id) (sgen_ctyp ctyp)
+  ^^ ksprintf string "  *rop = NULL;\n"
+  ^^ string "}"
+
 let codegen_list ctx ctyp =
   let id = mk_id (string_of_ctyp (CT_list ctyp)) in
   if IdSet.mem id !generated then
@@ -1905,6 +1912,7 @@ let codegen_list ctx ctyp =
       ^^ codegen_cons id ctyp ^^ twice hardline
       ^^ codegen_pick id ctyp ^^ twice hardline
       ^^ codegen_list_equal id ctyp ^^ twice hardline
+      ^^ codegen_list_undefined id ctyp ^^ twice hardline
     end
 
 (* Generate functions for working with non-bit vectors of some specific type. *)

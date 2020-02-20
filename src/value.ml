@@ -491,6 +491,10 @@ let value_undefined_vector = function
   | [v1; v2] -> V_vector (Sail_lib.undefined_vector (coerce_int v1, v2))
   | _ -> failwith "value undefined_vector"
 
+let value_undefined_list = function
+  | [_] -> V_list []
+  | _ -> failwith "value undefined_list"
+
 let value_undefined_bitvector = function
   | [v] -> V_vector (Sail_lib.undefined_vector (coerce_int v, V_bit (Sail_lib.B0)))
   | _ -> failwith "value undefined_bitvector"
@@ -747,6 +751,7 @@ let primops = ref
        ("undefined_bool", fun _ -> V_bool false);
        ("undefined_bitvector", value_undefined_bitvector);
        ("undefined_vector", value_undefined_vector);
+       ("undefined_list", value_undefined_list);
        ("undefined_string", fun _ -> V_string "");
        ("internal_pick", value_internal_pick);
        ("replicate_bits", value_replicate_bits);
