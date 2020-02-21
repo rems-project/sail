@@ -550,7 +550,7 @@ let add_def_to_graph (prelude, original_order, defset, graph) d =
     let id = Nameset.choose bound in
     let other_ids = Nameset.elements (Nameset.remove id bound) in
     let graph' =
-      NameGraph.add_edges id other_ids graph
+      NameGraph.add_edges id (other_ids @ Nameset.elements used) graph
       |> List.fold_right (fun id' g -> NameGraph.add_edge id' id g) other_ids
     in
     prelude,
