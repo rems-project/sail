@@ -89,6 +89,11 @@ module type S =
        not directed acyclic. *)
     val topsort : graph -> node list
 
+    (** Find strongly connected components using Tarjan's algorithm.
+        This algorithm also returns a topological sorting of the graph
+        components. *)
+    val scc : ?original_order:(node list) -> graph -> node list list
+
     val make_dot : (node -> string) -> (node -> node -> string) -> (node -> string) -> out_channel -> graph -> unit
   end
 
@@ -212,6 +217,63 @@ module Make(Ord: OrderedType) = struct
       | Not_found -> ()
 
     in topsort' (); !list
+
+  type node_idx = { index : int; root : int }
+
+  let scc ?(original_order : node list option) (cg : graph) =
+    let components = ref [] in
+    let index = ref 0 in
+
+    let stack = ref [] in
+    let push v = (stack := v :: !stack) in
+    let pop () =
+      begin
+        let v = List.hd !stack in
+        stack := List.tl !stack;
+        v
+      end
+    in
+
+    let node_indices = Hashtbl.create (NM.cardinal cg) in
+    let get_index v = (Hashtbl.find node_indices v).index in
+    let get_root v = (Hashtbl.find node_indices v).root in
+    let set_root v r =
+      Hashtbl.replace node_indices v { (Hashtbl.find node_indices v) with root = r } in
+
+    let rec visit_node v =
+      begin
+        Hashtbl.add node_indices v { index = !index; root = !index };
+        index := !index + 1;
+        push v;
+        if NM.mem v cg then NS.iter (visit_edge v) (NM.find v cg);
+        if get_root v = get_index v then (* v is the root of a SCC *)
+          begin
+            let component = ref [] in
+            let finished = ref false in
+            while not !finished do
+              let w = pop () in
+              component := w :: !component;
+              if Ord.compare v w = 0 then finished := true;
+            done;
+            components := !component :: !components;
+          end
+      end
+    and visit_edge v w =
+      if not (Hashtbl.mem node_indices w) then
+        begin
+          visit_node w;
+          if Hashtbl.mem node_indices w then set_root v (min (get_root v) (get_root w));
+        end else begin
+          if List.mem w !stack then set_root v (min (get_root v) (get_index w))
+        end
+    in
+
+    let nodes = match original_order with
+      | Some nodes -> nodes
+      | None -> List.map fst (NM.bindings cg)
+    in
+    List.iter (fun v -> if not (Hashtbl.mem node_indices v) then visit_node v) nodes;
+    List.rev !components
 
   let make_dot node_color edge_color string_of_node out_chan graph =
     Util.opt_colors := false;

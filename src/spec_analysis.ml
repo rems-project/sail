@@ -521,67 +521,8 @@ let group_defs consider_scatter_as_one (Ast.Defs defs) =
  *)
 
 module Namemap = Map.Make(String)
-(* Nodes are labeled with strings.  A graph is represented as a map associating
-   each node with its sucessors *)
-type graph = Nameset.t Namemap.t
+module NameGraph = Graph.Make(String)
 type node_idx = { index : int; root : int }
-
-(* Find strongly connected components using Tarjan's algorithm.
-   This algorithm also returns a topological sorting of the graph components. *)
-let scc ?(original_order : string list option) (g : graph) =
-  let components = ref [] in
-  let index = ref 0 in
-
-  let stack = ref [] in
-  let push v = (stack := v :: !stack) in
-  let pop () =
-    begin
-      let v = List.hd !stack in
-      stack := List.tl !stack;
-      v
-    end
-  in
-
-  let node_indices = Hashtbl.create (Namemap.cardinal g) in
-  let get_index v = (Hashtbl.find node_indices v).index in
-  let get_root v = (Hashtbl.find node_indices v).root in
-  let set_root v r =
-    Hashtbl.replace node_indices v { (Hashtbl.find node_indices v) with root = r } in
-
-  let rec visit_node v =
-    begin
-      Hashtbl.add node_indices v { index = !index; root = !index };
-      index := !index + 1;
-      push v;
-      if Namemap.mem v g then Nameset.iter (visit_edge v) (Namemap.find v g);
-      if get_root v = get_index v then (* v is the root of a SCC *)
-        begin
-          let component = ref [] in
-          let finished = ref false in
-          while not !finished do
-            let w = pop () in
-            component := w :: !component;
-            if String.compare v w = 0 then finished := true;
-          done;
-          components := !component :: !components;
-        end
-    end
-  and visit_edge v w =
-    if not (Hashtbl.mem node_indices w) then
-      begin
-        visit_node w;
-        if Hashtbl.mem node_indices w then set_root v (min (get_root v) (get_root w));
-      end else begin
-        if List.mem w !stack then set_root v (min (get_root v) (get_index w))
-      end
-  in
-
-  let nodes = match original_order with
-    | Some nodes -> nodes
-    | None -> List.map fst (Namemap.bindings g)
-  in
-  List.iter (fun v -> if not (Hashtbl.mem node_indices v) then visit_node v) nodes;
-  List.rev !components
 
 let add_def_to_map id d defset =
   Namemap.add id
@@ -607,13 +548,15 @@ let add_def_to_graph (prelude, original_order, defset, graph) d =
        definition is attached to only one of the identifiers, so it will not
        be duplicated in the final output. *)
     let id = Nameset.choose bound in
-    let other_ids = Nameset.remove id bound in
-    let graph_id = Namemap.add id (Nameset.union used other_ids) graph in
-    let add_other_node id' g = Namemap.add id' (Nameset.singleton id) g in
+    let other_ids = Nameset.elements (Nameset.remove id bound) in
+    let graph' =
+      NameGraph.add_edges id other_ids graph
+      |> List.fold_right (fun id' g -> NameGraph.add_edge id' id g) other_ids
+    in
     prelude,
     original_order @ [id],
     add_def_to_map id d defset,
-    Nameset.fold add_other_node other_ids graph_id
+    graph'
   with
   | Not_found ->
      (* Some definitions do not bind any identifiers at all.  This *should*
@@ -626,19 +569,6 @@ let add_def_to_graph (prelude, original_order, defset, graph) d =
         currently have to assume those declarations are moved to the
         beginning when using a backend that requires topological sorting. *)
      prelude @ [d], original_order, defset, graph
-
-let print_dot graph component : unit =
-  match component with
-  | root :: _ ->
-     prerr_endline ("// Dependency cycle including " ^ root);
-     prerr_endline ("digraph cycle_" ^ root ^ " {");
-     List.iter (fun caller ->
-       let print_edge callee = prerr_endline ("  \"" ^ caller ^ "\" -> \"" ^ callee ^ "\";") in
-       Namemap.find caller graph
-       |> Nameset.filter (fun id -> List.mem id component)
-       |> Nameset.iter print_edge) component;
-     prerr_endline "}"
-  | [] -> ()
 
 let def_of_component graph defset comp =
   let get_def id = if Namemap.mem id defset then Namemap.find id defset else [] in
@@ -653,7 +583,7 @@ let def_of_component graph defset comp =
           raise (Reporting.err_unreachable (def_loc def) __POS__
             "Trying to merge non-function definition with mutually recursive functions") in
      let fundefs = List.concat (List.map get_fundefs defs) in
-     print_dot graph (List.map (fun fd -> string_of_id (id_of_fundef fd)) fundefs);
+     (* print_dot graph (List.map (fun fd -> string_of_id (id_of_fundef fd)) fundefs); *)
      [DEF_internal_mutrec fundefs]
   (* We could merge other stuff, in particular overloads, but don't need to just now *)
   | defs -> defs
@@ -661,7 +591,7 @@ let def_of_component graph defset comp =
 let top_sort_defs (Defs defs) =
   let prelude, original_order, defset, graph =
     List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) defs in
-  let components = scc ~original_order:original_order graph in
+  let components = NameGraph.scc ~original_order:original_order graph in
   Defs (prelude @ List.concat (List.map (def_of_component graph defset) components))
 
 
