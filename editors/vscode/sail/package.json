@@ -3,6 +3,11 @@
     "displayName": "sail",
     "description": "Sail ISA specification language",
     "version": "0.0.1",
+    "publisher": "rems-project",
+    "repository": {
+      "type": "git",
+      "url": "https://github.com/rems-project/sail"
+    },
     "engines": {
         "vscode": "^1.42.0"
     },
@@ -10,16 +15,28 @@
         "Programming Languages"
     ],
     "contributes": {
-        "languages": [{
-            "id": "sail",
-            "aliases": ["Sail", "sail"],
-            "extensions": [".sail"],
-            "configuration": "./language-configuration.json"
-        }],
-        "grammars": [{
-            "language": "sail",
-            "scopeName": "source.sail",
-            "path": "./syntaxes/sail.tmLanguage.json"
-        }]
+        "languages": [
+            {
+                "id": "sail",
+                "aliases": [
+                    "Sail",
+                    "sail"
+                ],
+                "extensions": [
+                    ".sail"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "sail",
+                "scopeName": "source.sail",
+                "path": "./syntaxes/sail.tmLanguage.json"
+            }
+        ]
+    },
+    "dependencies": {
+        "vsce": "^1.73.0"
     }
 }

@@ -98,7 +98,8 @@ VSCode Mode
 ===========
 
 [editors/vscode](editors/vscode) contains a Visual Studio Code mode
-which provides some basic syntax highlighting.
+which provides some basic syntax highlighting. It is also available
+on the VSCode Marketplace.
 
 Licensing
 =========
