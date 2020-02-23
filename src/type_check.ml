@@ -2838,20 +2838,25 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      in
      annot_exp (E_record_update (checked_exp, List.map check_fexp fexps)) typ
   | E_record fexps, _ ->
-     (* TODO: check record fields are total *)
      let rectyp_id = match Env.expand_synonyms env typ with
        | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
           rectyp_id
        | _ -> typ_error env l ("The type " ^ string_of_typ typ ^ " is not a record")
      in
+     let record_fields = ref (Env.get_record rectyp_id env |> snd |> List.map snd |> IdSet.of_list) in
      let check_fexp (FE_aux (FE_Fexp (field, exp), (l, ()))) =
+       record_fields := IdSet.remove field !record_fields;
        let (typq, rectyp_q, field_typ, _) = Env.get_accessor rectyp_id field env in
        let unifiers = try unify l env (tyvars_of_typ rectyp_q) rectyp_q typ with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m) in
        let field_typ' = subst_unifiers unifiers field_typ in
        let checked_exp = crule check_exp env exp field_typ' in
        FE_aux (FE_Fexp (field, checked_exp), (l, None))
      in
-     annot_exp (E_record (List.map check_fexp fexps)) typ
+     let fexps = List.map check_fexp fexps in
+     if IdSet.is_empty !record_fields then
+       annot_exp (E_record fexps) typ
+     else
+       typ_error env l ("struct literal missing fields: " ^ string_of_list ", " string_of_id (IdSet.elements !record_fields))
   | E_let (LB_aux (letbind, (let_loc, _)), exp), _ ->
      begin
        match letbind with

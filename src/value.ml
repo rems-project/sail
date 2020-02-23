@@ -123,7 +123,7 @@ let rec string_of_value = function
 let rec eq_value v1 v2 =
   match v1, v2 with
   | V_vector v1s, V_vector v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
-  | V_list v1s, V_vector v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
+  | V_list v1s, V_list v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_int n, V_int m -> Big_int.equal n m
   | V_real n, V_real m -> Rational.equal n m
   | V_bool b1, V_bool b2 -> b1 = b2
@@ -491,6 +491,10 @@ let value_undefined_vector = function
   | [v1; v2] -> V_vector (Sail_lib.undefined_vector (coerce_int v1, v2))
   | _ -> failwith "value undefined_vector"
 
+let value_undefined_list = function
+  | [_] -> V_list []
+  | _ -> failwith "value undefined_list"
+
 let value_undefined_bitvector = function
   | [v] -> V_vector (Sail_lib.undefined_vector (coerce_int v, V_bit (Sail_lib.B0)))
   | _ -> failwith "value undefined_bitvector"
@@ -747,6 +751,7 @@ let primops = ref
        ("undefined_bool", fun _ -> V_bool false);
        ("undefined_bitvector", value_undefined_bitvector);
        ("undefined_vector", value_undefined_vector);
+       ("undefined_list", value_undefined_list);
        ("undefined_string", fun _ -> V_string "");
        ("internal_pick", value_internal_pick);
        ("replicate_bits", value_replicate_bits);

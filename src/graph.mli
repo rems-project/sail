@@ -91,6 +91,11 @@ module type S =
        not directed acyclic. *)
     val topsort : graph -> node list
 
+    (** Find strongly connected components using Tarjan's algorithm.
+        This algorithm also returns a topological sorting of the graph
+        components. *)
+    val scc : ?original_order:(node list) -> graph -> node list list
+
     val make_dot : (node -> string) -> (node -> node -> string) -> (node -> string) -> out_channel -> graph -> unit
   end
 
