@@ -173,7 +173,7 @@ val or_vec = {
 
 overload operator | = {or_vec}
 
-val vector_subrange = {
+val subrange_bits = {
   ocaml: "subrange",
   interpreter: "subrange",
   lem: "subrange_vec_dec",
@@ -182,13 +182,17 @@ val vector_subrange = {
 } : forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'o <= 'm < 'n.
   (bits('n), int('m), int('o)) -> bits('m - 'o + 1)
 
-val vector_update_subrange = {
+overload vector_subrange = {subrange_bits}
+
+val update_subrange_bits = {
   ocaml: "update_subrange",
   interpreter: "update_subrange",
   lem: "update_subrange_vec_dec",
   c: "vector_update_subrange",
   coq: "update_subrange_vec_dec"
 } : forall 'n 'm 'o, 0 <= 'o <= 'm < 'n. (bits('n), int('m), int('o), bits('m - ('o - 1))) -> bits('n)
+
+overload vector_update_subrange = {update_subrange_bits}
 
 val sail_shiftleft = "shiftl" : forall 'n ('ord : Order).
     (bitvector('n, 'ord), int) -> bitvector('n, 'ord) effect pure
