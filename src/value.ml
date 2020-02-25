@@ -425,6 +425,10 @@ let value_replicate_bits = function
   | [v1; v2] -> mk_vector (Sail_lib.replicate_bits (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value replicate_bits"
 
+let value_count_leading_zeros = function
+  | [v1] -> V_int (Sail_lib.count_leading_zeros (coerce_bv v1))
+  | _ -> failwith "value count_leading_zeros"
+
 let is_ctor = function
   | V_ctor _ -> true
   | _ -> false
@@ -755,6 +759,7 @@ let primops = ref
        ("undefined_string", fun _ -> V_string "");
        ("internal_pick", value_internal_pick);
        ("replicate_bits", value_replicate_bits);
+       ("count_leading_zeros", value_count_leading_zeros);
        ("Elf_loader.elf_entry", fun _ -> V_int (!Elf_loader.opt_elf_entry));
        ("Elf_loader.elf_tohost", fun _ -> V_int (!Elf_loader.opt_elf_tohost));
        ("string_append", value_string_append);
