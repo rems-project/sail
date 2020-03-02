@@ -457,6 +457,10 @@ let value_shiftr = function
   | [v1; v2] -> mk_vector (Sail_lib.shiftr (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value shiftr"
 
+let value_arith_shiftr = function
+  | [v1; v2] -> mk_vector (Sail_lib.arith_shiftr (coerce_bv v1, coerce_int v2))
+  | _ -> failwith "value arith_shiftr"
+
 let value_shift_bits_left = function
   | [v1; v2] -> mk_vector (Sail_lib.shift_bits_left (coerce_bv v1, coerce_bv v2))
   | _ -> failwith "value shift_bits_left"
@@ -697,6 +701,7 @@ let primops = ref
        ("ones", value_ones);
        ("shiftr", value_shiftr);
        ("shiftl", value_shiftl);
+       ("arith_shiftr", value_shiftr);
        ("shift_bits_left", value_shift_bits_left);
        ("shift_bits_right", value_shift_bits_right);
        ("add_int", value_add_int);

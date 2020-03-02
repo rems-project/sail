@@ -1208,6 +1208,7 @@ let smt_builtin ctx name args ret_ctyp =
   | "sail_truncateLSB", [v1; v2], _ -> builtin_sail_truncateLSB ctx v1 v2 ret_ctyp
   | "shiftl", [v1; v2], _ -> builtin_shift "bvshl" ctx v1 v2 ret_ctyp
   | "shiftr", [v1; v2], _ -> builtin_shift "bvlshr" ctx v1 v2 ret_ctyp
+  | "arith_shiftr", [v1; v2], _ -> builtin_shift "bvashr" ctx v1 v2 ret_ctyp
   | "and_bits", [v1; v2], _ -> builtin_and_bits ctx v1 v2 ret_ctyp
   | "or_bits", [v1; v2], _ -> builtin_or_bits ctx v1 v2 ret_ctyp
   | "xor_bits", [v1; v2], _ -> builtin_xor_bits ctx v1 v2 ret_ctyp
