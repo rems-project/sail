@@ -701,7 +701,7 @@ let primops = ref
        ("ones", value_ones);
        ("shiftr", value_shiftr);
        ("shiftl", value_shiftl);
-       ("arith_shiftr", value_shiftr);
+       ("arith_shiftr", value_arith_shiftr);
        ("shift_bits_left", value_shift_bits_left);
        ("shift_bits_right", value_shift_bits_right);
        ("add_int", value_add_int);
