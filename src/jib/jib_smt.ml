@@ -843,13 +843,16 @@ let builtin_vector_update ctx vec i x ret_ctyp =
      let bot = Extract (Big_int.to_int i - 1, 0, smt_cval ctx vec) in
      Fn ("concat", [top; Fn ("concat", [smt_cval ctx x; bot])])
 
-  | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 = Big_int.to_int i ->
+  | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 = Big_int.to_int i && Big_int.to_int i > 0 ->
      let bot = Extract (Big_int.to_int i - 1, 0, smt_cval ctx vec) in
      Fn ("concat", [smt_cval ctx x; bot])
 
-  | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when Big_int.to_int i = 0 ->
+  | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 > Big_int.to_int i && Big_int.to_int i = 0 ->
      let top = Extract (n - 1, 1, smt_cval ctx vec) in
      Fn ("concat", [top; smt_cval ctx x])
+
+  | CT_fbits (n, _), CT_constant i, CT_bit, CT_fbits (m, _) when n - 1 = 0 && Big_int.to_int i = 0 ->
+     smt_cval ctx x
 
   | CT_vector _, CT_constant i, ctyp, CT_vector _ ->
      Fn ("store", [smt_cval ctx vec; bvint !vector_index i; smt_cval ctx x])
@@ -875,6 +878,9 @@ let builtin_vector_update_subrange ctx vec i j x ret_ctyp =
      assert (n = m);
      let top = Extract (n - 1, Big_int.to_int i + 1, smt_cval ctx vec) in
      Fn ("concat", [top; smt_cval ctx x])
+
+  | CT_fbits (n, _), CT_constant i, CT_constant j, CT_fbits (sz, _), CT_fbits (m, _) when n - 1 = Big_int.to_int i && Big_int.to_int j = 0 ->
+     smt_cval ctx x
 
   | CT_fbits (n, b), ctyp_i, ctyp_j, ctyp_x, CT_fbits (m, _) ->
      assert (n = m);
@@ -1841,6 +1847,14 @@ let smt_instr ctx =
              (Fn ("store", [smt_cval ctx vec; force_size ~checked:false ctx ctx.vector_index sz (smt_cval ctx i); smt_cval ctx x]))]
        | _ ->
           Reporting.unreachable l __POS__ "Bad arguments for internal_vector_update"
+       end
+     else if (string_of_id (fst function_id) = "update_fbits"
+              || string_of_id (fst function_id) = "update_lbits") && extern then
+       begin match args with
+       | [vec; i; x] ->
+          [define_const ctx id ret_ctyp (builtin_vector_update ctx vec i x ret_ctyp)]
+       | _ ->
+          Reporting.unreachable l __POS__ "Bad arguments for update_{f,l}bits"
        end
      else if string_of_id (fst function_id) = "sail_assume" then
        begin match args with

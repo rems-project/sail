@@ -366,7 +366,7 @@ let rec compile_aval l ctx = function
           setup
           @ [iextern (CL_id (gs, ctyp))
                      (mk_id "update_fbits", [])
-                     [V_id (gs, ctyp); V_lit (VL_int (Big_int.of_int i), CT_fint 64); cval]]
+                     [V_id (gs, ctyp); V_lit (VL_int (Big_int.of_int i), CT_constant (Big_int.of_int i)); cval]]
           @ cleanup
      in
      [idecl ctyp gs;
