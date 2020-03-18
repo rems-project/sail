@@ -101,6 +101,19 @@ VSCode Mode
 which provides some basic syntax highlighting. It is also available
 on the VSCode Marketplace.
 
+CLion/PyCharm Syntax highlighting
+===========
+
+[editors/vscode/sail](editors/vscode/sail) contains a Visual Studio Code
+mode which provides some basic syntax highlighting. CLion/PyCharm can also
+parse the [editors/vscode/sail/syntax/sail.tmLanguage.json](sail.tmLanguage.json)
+file and use it to provide basic syntax highlighting.
+To install open `Preferences > Editor > TextMate Bundles`. On that settings
+page press the `+` icon and locate the [editors/vscode/sail](editors/vscode/sail)
+directory.
+
+This requires the [TextMate Bundles plugin](https://plugins.jetbrains.com/plugin/7221-textmate-bundles).
+
 Licensing
 =========
 
