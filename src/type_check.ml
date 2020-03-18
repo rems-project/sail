@@ -102,6 +102,7 @@ type type_error =
   | Err_no_casts of unit exp * typ * typ * type_error * type_error list
   | Err_no_overloading of id * (id * type_error) list
   | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * n_constraint list
+  | Err_lexp_bounds of n_constraint * (mut * typ) Bindings.t * n_constraint list
   | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
@@ -3642,15 +3643,20 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
           let inferred_exp2 = infer_exp env exp2 in
           let nexp1, env = bind_numeric l (typ_of inferred_exp1) env in
           let nexp2, env = bind_numeric l (typ_of inferred_exp2) env in
-          begin match ord with
-          | Ord_aux (Ord_inc, _) when !opt_no_lexp_bounds_check || prove __POS__ env (nc_lteq nexp1 nexp2) ->
-             let len = nexp_simp (nsum (nminus nexp2 nexp1) (nint 1)) in
-             annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ len ord)
-          | Ord_aux (Ord_dec, _) when !opt_no_lexp_bounds_check || prove __POS__ env (nc_gteq nexp1 nexp2) ->
-             let len = nexp_simp (nsum (nminus nexp1 nexp2) (nint 1)) in
-             annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ len ord)
-          | _ -> typ_error env l ("Could not infer length of vector slice assignment " ^ string_of_lexp lexp)
-          end
+          let (len, check) = match ord with
+            | Ord_aux (Ord_inc, _) ->
+               (nexp_simp (nsum (nminus nexp2 nexp1) (nint 1)),
+                nc_lteq nexp1 nexp2)
+            | Ord_aux (Ord_dec, _) ->
+               (nexp_simp (nsum (nminus nexp1 nexp2) (nint 1)),
+                nc_gteq nexp1 nexp2)
+            | Ord_aux (Ord_var _, _) ->
+               typ_error env l "Slice assignment to bitvector with variable indexing order unsupported"
+          in
+          if !opt_no_lexp_bounds_check || prove __POS__ env check then
+            annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ len ord)
+          else
+            typ_raise env l (Err_lexp_bounds (check, Env.get_locals env, Env.get_constraints env))
        | _ -> typ_error env l "Cannot assign slice of non vector type"
      end
   | LEXP_vector (v_lexp, exp) ->
@@ -3662,18 +3668,20 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
             when Id.compare id (mk_id "vector") = 0 ->
           let inferred_exp = infer_exp env exp in
           let nexp, env = bind_numeric l (typ_of inferred_exp) env in
-          if !opt_no_lexp_bounds_check || prove __POS__ env (nc_and (nc_lteq (nint 0) nexp) (nc_lteq nexp (nexp_simp (nminus len (nint 1))))) then
+          let bounds_check = nc_and (nc_lteq (nint 0) nexp) (nc_lt nexp len) in
+          if !opt_no_lexp_bounds_check || prove __POS__ env bounds_check then
             annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) elem_typ
           else
-            typ_error env l ("Vector assignment not provably in bounds " ^ string_of_lexp lexp)
+            typ_raise env l (Err_lexp_bounds (bounds_check, Env.get_locals env, Env.get_constraints env))
        | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _)])
             when Id.compare id (mk_id "bitvector") = 0 ->
           let inferred_exp = infer_exp env exp in
           let nexp, env = bind_numeric l (typ_of inferred_exp) env in
-          if !opt_no_lexp_bounds_check || prove __POS__ env (nc_and (nc_lteq (nint 0) nexp) (nc_lteq nexp (nexp_simp (nminus len (nint 1))))) then
+          let bounds_check = nc_and (nc_lteq (nint 0) nexp) (nc_lt nexp len) in
+          if !opt_no_lexp_bounds_check || prove __POS__ env bounds_check then
             annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) bit_typ
           else
-            typ_error env l ("Vector assignment not provably in bounds " ^ string_of_lexp lexp)
+            typ_raise env l (Err_lexp_bounds (bounds_check, Env.get_locals env, Env.get_constraints env))
        | Typ_id id when !opt_new_bitfields ->
           begin match exp with
           | E_aux (E_id field, _) ->

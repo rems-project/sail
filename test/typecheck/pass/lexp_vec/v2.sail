@@ -13,5 +13,5 @@ function write_V(i, v) = {
 }
 
 function main() : unit -> unit = {
-  write_V(0, zeros())
+  write_V(16, zeros())
 }
