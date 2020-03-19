@@ -439,6 +439,7 @@ module Env : sig
   val add_constraint : n_constraint -> t -> t
   val get_typ_var : kid -> t -> kind_aux
   val get_typ_var_loc : kid -> t -> Ast.l
+  val get_typ_var_loc_opt : kid -> t -> Ast.l option
   val get_typ_vars : t -> kind_aux KBindings.t
   val get_typ_var_locs : t -> Ast.l KBindings.t
   val shadows : kid -> t -> int
@@ -536,6 +537,11 @@ end = struct
   let allow_unknowns env = env.allow_unknowns
   let set_allow_unknowns b env = { env with allow_unknowns = b }
 
+  let get_typ_var_loc_opt kid env =
+    match KBindings.find_opt kid env.typ_vars with
+    | Some (l, _) -> Some l
+    | None -> None
+                               
   let get_typ_var kid env =
     try snd (KBindings.find kid env.typ_vars) with
     | Not_found -> typ_error env (kid_loc kid) ("No type variable " ^ string_of_kid kid)
@@ -1404,12 +1410,26 @@ let bind_numeric l typ env =
   | None -> typ_error env l ("Expected " ^ string_of_typ typ ^ " to be numeric")
 
 let rec check_shadow_leaks l inner_env outer_env typ =
+  typ_debug (lazy ("Shadow leaks: " ^ string_of_typ typ));
   let vars = tyvars_of_typ typ in
   List.iter (fun var ->
       if Env.shadows var inner_env > Env.shadows var outer_env then
         typ_error outer_env l
           ("Type variable " ^ string_of_kid var ^ " would leak into a scope where it is shadowed")
-      else ())
+      else
+        match Env.get_typ_var_loc_opt var outer_env with
+        | Some _ -> ()
+        | None ->
+           match Env.get_typ_var_loc_opt var inner_env with
+           | Some leak_l ->
+              typ_raise outer_env l
+                (Err_because
+                   (Err_other ("The type variable " ^ string_of_kid var
+                               ^ " would leak into an outer scope.\n\nTry adding a type annotation to this expression."),
+                    leak_l,
+                    Err_other ("Type variable " ^ string_of_kid var ^ " was introduced here")))
+           | None -> Reporting.unreachable l __POS__ "Found a type with an unknown type variable"
+    )
     (KidSet.elements vars);
   typ
    
