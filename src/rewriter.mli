@@ -231,9 +231,11 @@ val pure_exp_alg : 'b -> ('b -> 'b -> 'b) ->
 
 val simple_annot : Parse_ast.l -> typ -> Parse_ast.l * tannot
 
-val add_p_typ : typ -> tannot pat -> tannot pat
+val add_p_typ : Env.t -> typ -> 'a pat -> 'a pat
 
-val add_e_cast : typ -> tannot exp -> tannot exp
+val add_e_cast : Env.t -> typ -> 'a exp -> 'a exp
+
+val add_typs_let : Env.t -> typ -> typ -> 'a exp -> 'a exp
 
 val effect_of_pexp : tannot pexp -> effect
 

@@ -385,7 +385,7 @@ let remove_vector_concat_pat pat =
 
       let id_pat =
         match typ_opt with
-        | Some typ -> add_p_typ typ (P_aux (P_id child,cannot))
+        | Some typ -> add_p_typ env typ (P_aux (P_id child,cannot))
         | None -> P_aux (P_id child,cannot) in
       let letbind = fix_eff_lb (LB_aux (LB_val (id_pat,subv),cannot)) in
       (letbind,
@@ -1552,7 +1552,7 @@ let rewrite_defs_early_return env (Defs defs) =
        let eff = effect_of_annot tannot in
        let tannot' = mk_tannot env typ (union_effects eff (mk_effect [BE_escape])) in
        let exp' = match Env.get_ret_typ env with
-         | Some typ -> add_e_cast typ exp
+         | Some typ -> add_e_cast env typ exp
          | None -> exp in
        E_aux (E_app (mk_id "early_return", [exp']), (l, tannot'))
     | _ -> full_exp in
@@ -2110,15 +2110,12 @@ let rewrite_tuple_assignments env defs =
     let env = env_of_annot annot in
     match e_aux with
     | E_assign (LEXP_aux (LEXP_tup lexps, _), exp) ->
-       (* let _ = Pretty_print_common.print stderr (Pretty_print_sail.doc_exp (E_aux (e_aux, annot))) in *)
        let (_, ids) = List.fold_left (fun (n, ids) _ -> (n + 1, ids @ [mk_id ("tup__" ^ string_of_int n)])) (0, []) lexps in
        let block_assign i lexp = mk_exp (E_assign (strip_lexp lexp, mk_exp (E_id (mk_id ("tup__" ^ string_of_int i))))) in
        let block = mk_exp (E_block (List.mapi block_assign lexps)) in
-       let letbind = mk_letbind (mk_pat (P_typ (Type_check.typ_of exp,
-                                                mk_pat (P_tup (List.map (fun id -> mk_pat (P_id id)) ids)))))
-                                (strip_exp exp)
-       in
-       let let_exp = mk_exp (E_let (letbind, block)) in
+       let pat = mk_pat (P_tup (List.map (fun id -> mk_pat (P_id id)) ids)) in
+       let exp' = add_e_cast env (typ_of exp) exp in
+       let let_exp = mk_exp (E_let (mk_letbind pat (strip_exp exp'), block)) in
        begin
          try check_exp env let_exp unit_typ with
          | Type_error (_, l, err) ->
@@ -2159,9 +2156,11 @@ let rewrite_defs_remove_blocks env =
     let l = get_loc_exp v in
     let env = env_of v in
     let typ = typ_of v in
-    let wild = add_p_typ typ (annot_pat P_wild l env typ) in
+    let wild = annot_pat P_wild l env typ in
     let e_aux = E_let (annot_letbind (unaux_pat wild, v) l env typ, body) in
-    fix_eff_exp (annot_exp e_aux l env (typ_of body)) in
+    fix_eff_exp (annot_exp e_aux l env (typ_of body))
+    |> add_typs_let env typ (typ_of body)
+  in
 
   let rec f l = function
     | [] -> E_aux (E_lit (L_aux (L_unit,gen_loc l)), (simple_annot l unit_typ))
@@ -2192,18 +2191,19 @@ let letbind (v : 'a exp) (body : 'a exp -> 'a exp) : 'a exp =
   | Some (env, typ, eff) when is_unit_typ typ ->
      let body = body (annot_exp (E_lit (mk_lit L_unit)) l env unit_typ) in
      let body_typ = try typ_of body with _ -> unit_typ in
-     let wild = add_p_typ (typ_of v) (annot_pat P_wild l env (typ_of v)) in
+     let wild = annot_pat P_wild l env typ in
      let lb = fix_eff_lb (annot_letbind (unaux_pat wild, v) l env unit_typ) in
      fix_eff_exp (annot_exp (E_let (lb, body)) l env body_typ)
+     |> add_typs_let env typ body_typ
   | Some (env, typ, eff) ->
      let id = fresh_id "w__" l in
-     let pat = add_p_typ (typ_of v) (annot_pat (P_id id) l env (typ_of v)) in
+     let pat = annot_pat (P_id id) l env typ in
      let lb = fix_eff_lb (annot_letbind (unaux_pat pat, v) l env typ) in
      let body = body (annot_exp (E_id id) l env typ) in
      fix_eff_exp (annot_exp (E_let (lb, body)) l env (typ_of body))
+     |> add_typs_let env typ (typ_of body)
   | None ->
      raise (Reporting.err_unreachable l __POS__ "no type information")
-
 
 let rec mapCont (f : 'b -> ('b -> 'a exp) -> 'a exp) (l : 'b list) (k : 'b list -> 'a exp) : 'a exp = 
   match l with
@@ -2241,9 +2241,9 @@ let rewrite_defs_letbind_effects env =
   and n_pexp : 'b. bool -> 'a pexp -> ('a pexp -> 'b) -> 'b = fun newreturn pexp k ->
     match pexp with
     | Pat_aux (Pat_exp (pat,exp),annot) ->
-      k (fix_eff_pexp (Pat_aux (Pat_exp (pat,n_exp_term newreturn exp), annot)))
+       k (fix_eff_pexp (Pat_aux (Pat_exp (pat, n_exp_term newreturn exp), annot)))
     | Pat_aux (Pat_when (pat,guard,exp),annot) ->
-      k (fix_eff_pexp (Pat_aux (Pat_when (pat,n_exp_term newreturn guard,n_exp_term newreturn exp), annot)))
+       k (fix_eff_pexp (Pat_aux (Pat_when (pat, n_exp_term newreturn guard, n_exp_term newreturn exp), annot)))
 
   and n_pexpL (newreturn : bool) (pexps : 'a pexp list) (k : 'a pexp list -> 'a exp) : 'a exp =
     mapCont (n_pexp newreturn) pexps k
@@ -2297,15 +2297,15 @@ let rewrite_defs_letbind_effects env =
   and n_lexpL (lexps : 'a lexp list) (k : 'a lexp list -> 'a exp) : 'a exp =
     mapCont n_lexp lexps k
 
-  and n_exp_term (newreturn : bool) (exp : 'a exp) : 'a exp =
+  and n_exp_term ?cast:(cast=false) (newreturn : bool) (exp : 'a exp) : 'a exp =
     let (E_aux (_,(l,tannot))) = exp in
     let exp =
       if newreturn then
         (* let typ = try typ_of exp with _ -> unit_typ in *)
-        let exp = add_e_cast (typ_of exp) exp in
+        let exp = if cast then add_e_cast (env_of exp) (typ_of exp) exp else exp in
         annot_exp (E_internal_return exp) l (env_of exp) (typ_of exp)
-      else
-        exp in
+      else exp
+    in
     (* n_exp_term forces an expression to be translated into a form 
        "let .. let .. let .. in EXP" where EXP has no effect and does not update
        variables *)
@@ -2328,8 +2328,8 @@ let rewrite_defs_letbind_effects env =
        (* Leave effectful operands of Boolean "and"/"or" in place to allow
           short-circuiting. *)
        let newreturn = effectful l || effectful r in
-       let l = n_exp_term newreturn l in
-       let r = n_exp_term newreturn r in
+       let l = n_exp_term ~cast:true newreturn l in
+       let r = n_exp_term ~cast:true newreturn r in
        k (rewrap (E_app (op_bool, [l; r])))
     | E_app (id,exps) ->
        n_exp_nameL exps (fun exps ->
@@ -2348,7 +2348,8 @@ let rewrite_defs_letbind_effects env =
          let newreturn = effectful exp2 || effectful exp3 in
          let exp2 = n_exp_term newreturn exp2 in
          let exp3 = n_exp_term newreturn exp3 in
-         k (rewrap (E_if (exp1,exp2,exp3))) in
+         k (rewrap (E_if (exp1,exp2,exp3)))
+       in
        if value exp1 then e_if (n_exp_term false exp1) else n_exp_name exp1 e_if
     | E_for (id,start,stop,by,dir,body) ->
        n_exp_name start (fun start ->
@@ -2362,7 +2363,7 @@ let rewrite_defs_letbind_effects env =
          | Measure_aux (Measure_some exp,l) ->
             Measure_aux (Measure_some (n_exp_term false exp),l)
        in
-       let cond = n_exp_term (effectful cond) cond in
+       let cond = n_exp_term ~cast:true (effectful cond) cond in
        let body = n_exp_term (effectful body) body in
        k (rewrap (E_loop (loop,measure,cond,body)))
     | E_vector exps ->
@@ -2434,7 +2435,7 @@ let rewrite_defs_letbind_effects env =
     | E_assert (exp1,exp2) ->
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->
-       k (rewrap (E_assert (exp1,exp2)))))
+       k (rewrap (E_assert (exp1, exp2)))))
     | E_var (lexp,exp1,exp2) ->
        n_lexp lexp (fun lexp ->
        n_exp exp1 (fun exp1 ->
@@ -2502,7 +2503,7 @@ let rewrite_defs_internal_lets env =
 
   let rec pat_of_local_lexp (LEXP_aux (lexp, ((l, _) as annot))) = match lexp with
     | LEXP_id id -> P_aux (P_id id, annot)
-    | LEXP_cast (typ, id) -> add_p_typ typ (P_aux (P_id id, annot))
+    | LEXP_cast (typ, id) -> add_p_typ (env_of_annot annot) typ (P_aux (P_id id, annot))
     | LEXP_tup lexps -> P_aux (P_tup (List.map pat_of_local_lexp lexps), annot)
     | _ -> raise (Reporting.err_unreachable l __POS__ "unexpected local lexp") in
 
@@ -2521,7 +2522,7 @@ let rewrite_defs_internal_lets env =
          | LEXP_aux (_,lexp_annot') -> lexp_annot'
          | exception _ -> lannot)
        in
-       let rhs = add_e_cast ltyp (rhs exp) in
+       let rhs = add_e_cast (env_of exp) ltyp (rhs exp) in
        E_let (LB_aux (LB_val (pat_of_local_lexp lhs, rhs), annot), body)
     | LB_aux (LB_val (pat,exp'),annot') ->
        if effectful exp'
@@ -2533,7 +2534,7 @@ let rewrite_defs_internal_lets env =
     | LEXP_aux (LEXP_id id, annot) ->
        (P_id id, annot)
     | LEXP_aux (LEXP_cast (typ, id), annot) ->
-       (unaux_pat (add_p_typ typ (P_aux (P_id id, annot))), annot)
+       (unaux_pat (add_p_typ (env_of_annot annot) typ (P_aux (P_id id, annot))), annot)
     | _ -> failwith "E_var with unexpected lexp" in
     if effectful exp1 then
       E_internal_plet (P_aux (paux, annot), exp1, exp2)
@@ -3331,22 +3332,24 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
   let tuple_exp = function
     | [] -> annot_exp (E_lit (mk_lit L_unit)) l env unit_typ
     | [e] -> e
-    | es -> annot_exp (E_tuple es) l env (tuple_typ (List.map typ_of es)) in
+    | es -> annot_exp (E_tuple es) l env (tuple_typ (List.map typ_of es))
+  in
 
   let tuple_pat = function
     | [] -> annot_pat P_wild l env unit_typ
     | [pat] ->
        let typ = typ_of_pat pat in
-       add_p_typ typ pat
+       add_p_typ env typ pat
     | pats ->
        let typ = tuple_typ (List.map typ_of_pat pats) in
-       add_p_typ typ (annot_pat (P_tup pats) l env typ) in
+       add_p_typ env typ (annot_pat (P_tup pats) l env typ)
+  in
 
   let rec add_vars overwrite ((E_aux (expaux,annot)) as exp) vars =
     match expaux with
     | E_let (lb,exp) ->
        let exp = add_vars overwrite exp vars in
-       E_aux (E_let (lb,exp),swaptyp (typ_of exp) annot)
+       E_aux (E_let (lb,exp), swaptyp (typ_of exp) annot)
     | E_var (lexp,exp1,exp2) ->
        let exp2 = add_vars overwrite exp2 vars in
        E_aux (E_var (lexp,exp1,exp2), swaptyp (typ_of exp2) annot)
@@ -3355,7 +3358,11 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        E_aux (E_internal_plet (pat,exp1,exp2), swaptyp (typ_of exp2) annot)
     | E_internal_return exp2 ->
        let exp2 = add_vars overwrite exp2 vars in
-       E_aux (E_internal_return exp2,swaptyp (typ_of exp2) annot)
+       E_aux (E_internal_return exp2, swaptyp (typ_of exp2) annot)
+    | E_cast (typ, exp) ->
+       let (E_aux (expaux, annot) as exp) = add_vars overwrite exp vars in
+       let typ' = typ_of exp in
+       add_e_cast (env_of exp) typ' (E_aux (expaux, swaptyp typ' annot))
     | _ ->
        (* after rewrite_defs_letbind_effects there cannot be terms that have
           effects/update local variables in "tail-position": check n_exp_term
@@ -3364,6 +3371,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          let lb = LB_aux (LB_val (P_aux (P_wild, annot), exp), annot) in
          let exp' = tuple_exp vars in
          E_aux (E_let (lb, exp'), swaptyp (typ_of exp') annot)
+         |> add_typs_let env (typ_of exp) (typ_of exp')
        else tuple_exp (exp :: vars) in
 
   let mk_var_exps_pats l env ids =
@@ -3375,7 +3383,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
           exp, P_aux (P_id id, a))
     |> List.split in
 
-  let rewrite used_vars (E_aux (expaux,((el,_) as annot)) as full_exp) (P_aux (paux,(pl,pannot)) as pat) =
+  let rec rewrite used_vars (E_aux (expaux,((el,_) as annot)) as full_exp) (P_aux (paux,(pl,pannot)) as pat) =
     let env = env_of_annot annot in
     let overwrite = match paux with
       | P_wild | P_typ (_, P_aux (P_wild, _)) -> true
@@ -3414,11 +3422,15 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        in
        let lvar_nc = nc_and (nc_lteq (nvar lower_kid) (nvar lvar_kid)) (nc_lteq (nvar lvar_kid) (nvar upper_kid)) in
        let lvar_typ = mk_typ (Typ_exist (List.map (mk_kopt K_int) [lvar_kid], lvar_nc, atom_typ (nvar lvar_kid))) in
-       let lvar_pat = unaux_pat (add_p_typ lvar_typ (annot_pat (P_var (
+       let lvar_pat = unaux_pat (annot_pat (P_var (
          annot_pat (P_id id) el env (atom_typ (nvar lvar_kid)),
-         TP_aux (TP_var lvar_kid, gen_loc el))) el env lvar_typ)) in
+         TP_aux (TP_var lvar_kid, gen_loc el))) el env lvar_typ)
+       in
        let lb = fix_eff_lb (annot_letbind (lvar_pat, exp1) el env lvar_typ) in
-       let body = fix_eff_exp (annot_exp (E_let (lb, exp4)) el env (typ_of exp4)) in
+       let body =
+         fix_eff_exp (annot_exp (E_let (lb, exp4)) el env (typ_of exp4))
+         |> add_typs_let env lvar_typ (typ_of exp4)
+       in
        (* If lower > upper, the loop body never gets executed, and the type
           checker might not be able to prove that the initial value exp1
           satisfies the constraints on the loop variable.
@@ -3518,7 +3530,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
     | E_assign (lexp,vexp) ->
        let mk_id_pat id =
          let typ = lvar_typ (Env.lookup_id id env) in
-         add_p_typ typ (annot_pat (P_id id) pl env typ)
+         add_p_typ env typ (annot_pat (P_id id) pl env typ)
        in
        if effectful exp then
          Same_vars (E_aux (E_assign (lexp,vexp),annot))
@@ -3528,7 +3540,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
              let pat = annot_pat (P_id id) pl env (typ_of vexp) in
              Added_vars (vexp, mk_id_pat id)
           | LEXP_aux (LEXP_cast (typ,id),annot) ->
-             let pat = add_p_typ typ (annot_pat (P_id id) pl env (typ_of vexp)) in
+             let pat = add_p_typ env typ (annot_pat (P_id id) pl env (typ_of vexp)) in
              Added_vars (vexp,pat)
           | LEXP_aux (LEXP_vector (LEXP_aux (LEXP_id id,((l2,_) as annot2)),i),((l1,_) as annot)) ->
              let eid = annot_exp (E_id id) l2 env (typ_of_annot annot2) in
@@ -3542,6 +3554,13 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
              let pat = annot_pat (P_id id) pl env (typ_of vexp) in
              Added_vars (vexp,pat)
           | _ -> Same_vars (E_aux (E_assign (lexp,vexp),annot)))
+    | E_cast (typ, exp) ->
+       begin match rewrite used_vars exp pat with
+         | Added_vars (exp', pat') ->
+            Added_vars (add_e_cast (env_of exp') (typ_of exp') exp', pat')
+         | Same_vars (exp') ->
+            Same_vars (E_aux (E_cast (typ, exp'), annot))
+       end
     | _ ->
        (* after rewrite_defs_letbind_effects this expression is pure and updates
        no variables: check n_exp_term and where it's used. *)
@@ -3562,7 +3581,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        | LEXP_aux (LEXP_id id, _) ->
           P_id id, typ_of v
        | LEXP_aux (LEXP_cast (typ, id), _) ->
-          unaux_pat (add_p_typ typ (annot_pat (P_id id) l env (typ_of v))), typ
+          unaux_pat (add_p_typ env typ (annot_pat (P_id id) l env (typ_of v))), typ
        | _ ->
          raise (Reporting.err_unreachable l __POS__
            "E_var with a lexp that is not a variable") in
@@ -3576,6 +3595,9 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
      rewrite_var_updates exp'
   | E_internal_plet (pat,v,body) ->
      failwith "rewrite_var_updates: E_internal_plet shouldn't be introduced yet"
+  | E_cast (typ, exp) ->
+     let exp' = rewrite_var_updates exp in
+     E_aux (E_cast (typ, exp'), annot)
   (* There are no other expressions that have effects or variable updates in
      "tail-position": check the definition nexp_term and where it is used. *)
   | _ -> exp
@@ -3711,7 +3733,7 @@ let rewrite_defs_remove_superfluous_returns env =
 
   let add_opt_cast typopt1 typopt2 annot exp =
     match typopt1, typopt2 with
-    | Some typ, _ | _, Some typ -> add_e_cast typ exp
+    | Some typ, _ | _, Some typ -> add_e_cast (env_of exp) typ exp
     | None, None -> exp
   in
 
