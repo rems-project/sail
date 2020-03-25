@@ -408,7 +408,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
             | "write_mem" ->
                begin match evaluated with
                | [wk; addrsize; addr; len; v] ->
-                  write_mem (value_of_exp wk) (value_of_exp v) (value_of_exp len) (value_of_exp v) >>= fun b -> return (exp_of_value (V_bool b))
+                  write_mem (value_of_exp wk) (value_of_exp addr) (value_of_exp len) (value_of_exp v) >>= fun b -> return (exp_of_value (V_bool b))
                | _ ->
                   fail "Wrong number of parameters to write_memv intrinsic"
                end
