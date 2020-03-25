@@ -901,7 +901,7 @@ let doc_exp_lem, doc_let_lem =
            when Env.is_record tid env ->
            tid
          | _ ->  raise (report l __POS__ ("cannot get record type from annot " ^ string_of_tannot annot ^ " of exp " ^ string_of_exp full_exp)) in
-       anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps))
+       anglebars (space ^^ doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps)  ^^ space)
     | E_vector exps ->
        let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let start, (len, order, etyp) =
