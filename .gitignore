@@ -28,8 +28,15 @@ lib/hol/sail-heap
 # Coq
 
 *.vo
+*.vok
+*.vos
 *.glob
 .*.aux
+/lib/coq/.nia.cache
+
+# Isabelle
+
+/lib/isabelle/output
 
 # location specific things
 
@@ -42,6 +49,7 @@ lib/hol/sail-heap
 /src/jib.ml
 /src/manifest.ml
 
+/test/sailtest.pyc
 /test/typecheck/rtpass*/
 /test/typecheck/tests.xml
 /test/lem/Out_lemmas.thy
@@ -49,6 +57,19 @@ lib/hol/sail-heap
 /test/lem/out_types.lem
 /test/*/tests.xml
 /test/riscv/tests/*.iout
+/test/smt/*.out
+/test/smt/*.smt2
+/test/c/*.c
+/test/c/*.result
+/test/c/*.iresult
+/test/c/*.oresult
+/test/c/*.bin
+/test/c/*_ocaml
+/test/c/_sbuild*
+/test/mono/Out_lemmas.thy
+/test/mono/log
+/test/mono/test.cmi
+/test/mono/test.cmo
 
 /language/*.pdf
 /language/*.uo
@@ -61,6 +82,11 @@ lib/hol/sail-heap
 /language/*.log
 /language/*.dvi
 /language/*.ps
+
+/aarch64_small/ArmV8_lemmas.thy
+/aarch64_small/armV8.lem
+/aarch64_small/armV8.smt_model
+/aarch64_small/armV8_types.lem
 
 /aarch64/Aarch64.thy
 /aarch64/Aarch64Auxiliary.thy
