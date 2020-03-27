@@ -3882,7 +3882,11 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | Measure_aux (Measure_some exp,l) ->
           Measure_aux (Measure_some (crule check_exp env exp int_typ),l)
      in
-     let checked_body = crule check_exp (add_opt_constraint (assert_constraint env true checked_cond) env) body unit_typ in
+     let nc = match loop_type with
+       | While -> assert_constraint env true checked_cond
+       | Until -> None
+     in
+     let checked_body = crule check_exp (add_opt_constraint nc env) body unit_typ in
      annot_exp (E_loop (loop_type, checked_measure, checked_cond, checked_body)) unit_typ
   | E_for (v, f, t, step, ord, body) ->
      begin
