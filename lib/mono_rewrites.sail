@@ -66,6 +66,12 @@ function slice_zeros_concat (xs, i, l, l') = {
   sail_shiftleft(extzv(l + l', xs), l')
 }
 
+val subrange_zeros_concat : forall 'n 'hi 'lo 'q, 'n >= 0 & 'hi - 'lo + 1 + 'q >= 0.
+  (bits('n), atom('hi), atom('lo), atom('q)) -> bits('hi - 'lo + 1 + 'q) effect pure
+
+function subrange_zeros_concat (xs, hi, lo, l') =
+  slice_zeros_concat(xs, lo, hi - lo + 1, l')
+
 /* Assumes initial vectors are of equal size */
 
 val subrange_subrange_eq : forall 'n, 'n >= 0.
@@ -103,12 +109,18 @@ function place_slice(m,xs,i,l,shift) = {
 }
 
 val set_slice_zeros : forall 'n, 'n >= 0.
-  (atom('n), bits('n), int, int) -> bits('n) effect pure
+  (implicit('n), bits('n), int, int) -> bits('n) effect pure
 
 function set_slice_zeros(n, xs, i, l) = {
   let ys : bits('n) = slice_mask(n, i, l) in
   xs & not_vec(ys)
 }
+
+val set_subrange_zeros : forall 'n, 'n >= 0.
+  (implicit('n), bits('n), int, int) -> bits('n) effect pure
+
+function set_subrange_zeros(n, xs, hi, lo) =
+  set_slice_zeros(n, xs, lo, hi - lo + 1)
 
 val zext_slice : forall 'n 'm, 'n >= 0 & 'm >= 0.
   (implicit('m), bits('n), int, int) -> bits('m) effect pure
@@ -118,6 +130,11 @@ function zext_slice(m,xs,i,l) = {
   extzv(m, xs)
 }
 
+val zext_subrange : forall 'n 'm, 'n >= 0 & 'm >= 0.
+  (implicit('m), bits('n), int, int) -> bits('m) effect pure
+
+function zext_subrange(m, xs, i, j) = zext_slice(m, xs, j, i - j + 1)
+
 val sext_slice : forall 'n 'm, 'n >= 0 & 'm >= 0.
   (implicit('m), bits('n), int, int) -> bits('m) effect pure
 
@@ -125,6 +142,11 @@ function sext_slice(m,xs,i,l) = {
   let xs = sail_arith_shiftright(sail_shiftleft((xs & slice_mask(i,l)), ('n - i - l)), 'n - l) in
   extsv(m, xs)
 }
+
+val sext_subrange : forall 'n 'm, 'n >= 0 & 'm >= 0.
+  (implicit('m), bits('n), int, int) -> bits('m) effect pure
+
+function sext_subrange(m, xs, i, j) = sext_slice(m, xs, j, i - j + 1)
 
 val place_slice_signed : forall 'n 'm, 'n >= 0 & 'm >= 0.
   (implicit('m), bits('n), int, int, int) -> bits('m) effect pure

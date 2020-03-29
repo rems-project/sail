@@ -2705,14 +2705,20 @@ let is_constant = function
   | E_aux (E_lit _,_) -> true
   | _ -> false
 
-let is_constant_vec_typ env typ =
+let get_constant_vec_len env typ =
   let typ = Env.base_typ_of env typ in
   match destruct_bitvector env typ with
   | Some (size,_) ->
      (match nexp_simp size with
-     | Nexp_aux (Nexp_constant _,_) -> true
-     | _ -> false)
-  | _ -> false
+     | Nexp_aux (Nexp_constant i,_) -> Some i
+     | _ -> None)
+  | _ -> None
+
+let is_constant_vec_typ env typ = (get_constant_vec_len env typ <> None)
+
+let is_zeros env id =
+  is_id env (Id "Zeros") id || is_id env (Id "zeros") id ||
+  is_id env (Id "sail_zeros") id
 
 (* We have to add casts in here with appropriate length information so that the
    type checker knows the expected return types. *)
@@ -2721,10 +2727,7 @@ let rec rewrite_app env typ (id,args) =
   let is_append = is_id env (Id "append") in
   let is_subrange = is_id env (Id "vector_subrange") in
   let is_slice = is_id env (Id "slice") in
-  let is_zeros id =
-    is_id env (Id "Zeros") id || is_id env (Id "zeros") id ||
-    is_id env (Id "sail_zeros") id
-  in
+  let is_zeros id = is_zeros env id in
   let is_ones id = is_id env (Id "Ones") id || is_id env (Id "ones") id ||
     is_id env (Id "sail_ones") id in
   let is_zero_extend =
@@ -2734,6 +2737,21 @@ let rec rewrite_app env typ (id,args) =
   in
   let is_truncate = is_id env (Id "truncate") id in
   let mk_exp e = E_aux (e, (Unknown, empty_tannot)) in
+  let rec is_zeros_exp e = match unaux_exp e with
+    | E_app (zeros, [_]) when is_zeros zeros -> true
+    | E_lit (L_aux ((L_bin s | L_hex s), _)) ->
+       List.for_all (fun c -> c = '0') (Util.string_to_list s)
+    | E_cast (_, e) -> is_zeros_exp e
+    | _ -> false
+  in
+  let rec get_zeros_exp_len e = match unaux_exp e with
+    | E_app (zeros, [len]) when is_zeros zeros -> Some len
+    | E_cast (_, e) -> get_zeros_exp_len e
+    | _ ->
+       match get_constant_vec_len (env_of e) (typ_of e) with
+       | Some i -> Some (mk_exp (E_lit (L_aux (L_num i, Unknown))))
+       | None -> None
+  in
   let try_cast_to_typ (E_aux (e,(l, _)) as exp) =
     let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
     match size with
@@ -2806,20 +2824,24 @@ let rec rewrite_app env typ (id,args) =
        end
 
     (* variable-slice @ zeros *)
-    | [E_aux (E_app (slice1, [vector1; start1; len1]),_);
-       E_aux (E_app (zeros2, [len2]),_)]
-        when is_slice slice1 && is_zeros zeros2 && is_bitvector_typ (typ_of vector1) &&
-          not (is_constant start1 && is_constant len1 && is_constant len2) ->
-       try_cast_to_typ
-         (mk_exp (E_app (mk_id "place_slice", [vector1; start1; len1; len2])))
+    | [E_aux (E_app (op, [vector1; start1; len1]),_); zeros_exp]
+        when (is_slice op || is_subrange op) && is_zeros_exp zeros_exp
+          && is_bitvector_typ (typ_of vector1)
+          && not (is_constant start1 && is_constant len1 && is_constant_vec_typ env (typ_of zeros_exp)) ->
+       let op' = if is_subrange op then "place_subrange" else "place_slice" in
+       begin match get_zeros_exp_len zeros_exp with
+         | Some zlen -> try_cast_to_typ (mk_exp (E_app (mk_id op', [vector1; start1; len1; zlen])))
+         | None -> E_app (id, args)
+       end
 
     (* ones @ zeros *)
-    | [E_aux (E_app (ones1, [len1]), _);
-       E_aux (E_app (zeros2, [len2]), _)]
-        when is_ones ones1 && is_zeros zeros2 &&
-          not (is_constant len1 && is_constant len2) ->
-      try_cast_to_typ
-        (mk_exp (E_app (mk_id "slice_mask", [len2; len1])))
+    | [E_aux (E_app (ones1, [len1]), _); zeros_exp]
+        when is_ones ones1 && is_zeros_exp zeros_exp &&
+          not (is_constant len1 && is_constant_vec_typ env (typ_of zeros_exp)) ->
+      begin match get_zeros_exp_len zeros_exp with
+        | Some zlen -> try_cast_to_typ (mk_exp (E_app (mk_id "slice_mask", [zlen; len1])))
+        | None -> E_app (id, args)
+      end
 
     (* variable-range @ variable-range *)
     | [E_aux (E_app (subrange1,
@@ -2847,24 +2869,33 @@ let rec rewrite_app env typ (id,args) =
                         [vector1; start1; length1; vector2; start2; length2]),(Unknown,empty_tannot)))
 
     (* variable-slice @ local-var *)
-    | [E_aux (E_app (slice1,
+    | [E_aux (E_app (op,
                      [vector1; start1; length1]),_);
        (E_aux (E_id _,_) as vector2)]
-        when is_slice slice1 && is_bitvector_typ (typ_of vector1) &&
+        when (is_slice op || is_subrange op) && is_bitvector_typ (typ_of vector1) &&
              not (is_constant length1) ->
-       let start2 = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
+       let op' = if is_subrange op then "subrange_subrange_concat" else "slice_slice_concat" in
+       let zero = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
+       let one = mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1)))) in
        let length2 = mk_exp (E_app (mk_id "length", [vector2])) in
+       let indices2 =
+         if is_subrange op then
+           [mk_exp (E_app_infix (length2, mk_id "-", one)); zero]
+         else
+           [zero; length2]
+       in
        try_cast_to_typ
-         (E_aux (E_app (mk_id "slice_slice_concat",
-                        [vector1; start1; length1; vector2; start2; length2]),(Unknown,empty_tannot)))
+         (E_aux (E_app (mk_id op',
+                        [vector1; start1; length1; vector2] @ indices2),(Unknown,empty_tannot)))
 
     | [E_aux (E_app (append1,
                      [e1;
-                      E_aux (E_app (slice1, [vector1; start1; length1]),_)]),_);
+                      E_aux (E_app (op, [vector1; start1; length1]),_)]),_);
        E_aux (E_app (zeros1, [length2]),_)]
-        when is_append append1 && is_slice slice1 && is_zeros zeros1 &&
+        when is_append append1 && (is_slice op || is_subrange op) && is_zeros zeros1 &&
           is_constant_vec_typ env (typ_of e1) && is_bitvector_typ (typ_of vector1) &&
           not (is_constant length1 || is_constant length2) ->
+       let op' = mk_id (if is_subrange op then "subrange_zeros_concat" else "slice_zeros_concat") in
        let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
        let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
        let midsize = nminus size size1 in begin
@@ -2875,14 +2906,14 @@ let rec rewrite_app env typ (id,args) =
               (E_aux (E_app (mk_id "append",
                              [e1;
                               E_aux (E_cast (midtyp,
-                                             E_aux (E_app (mk_id "slice_zeros_concat",
+                                             E_aux (E_app (op',
                                                            [vector1; start1; length1; length2]),(Unknown,empty_tannot))),(Unknown,empty_tannot))]),
                       (Unknown,empty_tannot)))
          | _ ->
             try_cast_to_typ
               (E_aux (E_app (mk_id "append",
                              [e1;
-                              E_aux (E_app (mk_id "slice_zeros_concat",
+                              E_aux (E_app (op',
                                             [vector1; start1; length1; length2]),(Unknown,empty_tannot))]),
                       (Unknown,empty_tannot)))
        end
@@ -2899,6 +2930,22 @@ let rec rewrite_app env typ (id,args) =
        E_app (id, [E_aux (E_app (append1, [e1; e2]), (Unknown, tannot12)); e3])
 
     | _ -> E_app (id,args)
+
+  else if is_id env (Id "vector_update_subrange") id then
+    match args with
+    | [vec1; start1; end1; (E_aux (E_app (subrange2, [vec2; start2; end2]), _) as e2)]
+      when is_subrange subrange2 && not (is_constant_vec_typ env (typ_of e2)) ->
+       let op =
+         if is_number (typ_of vec2) then "vector_update_subrange_from_integer_subrange" else
+         "vector_update_subrange_from_subrange"
+       in
+       try_cast_to_typ (E_aux (E_app (mk_id op, [vec1; start1; end1; vec2; start2; end2]), (Unknown, empty_tannot)))
+
+    | [vec1; start1; end1; (E_aux (E_app (zeros, _), _) as e2)]
+      when is_zeros zeros && not (is_constant_vec_typ env (typ_of e2)) ->
+       try_cast_to_typ (E_aux (E_app (mk_id "set_subrange_zeros", [vec1; start1; end1]), (Unknown, empty_tannot)))
+
+    | _ -> E_app (id, args)
 
   else if is_id env (Id "eq_bits") id || is_id env (Id "neq_bits") id then
     (* variable-range == variable_range *)
@@ -2931,11 +2978,12 @@ let rec rewrite_app env typ (id,args) =
        in
        wrap (E_app (mk_id "subrange_subrange_eq",
               [vector1; upper start1 len1; start1; vector2; upper start2 len2; start2]))
-    | [E_aux (E_app (slice1, [vector1; start1; len1]), _);
+    | [(E_aux (E_app (op, [vector1; start1; len1]), _) as e1);
        E_aux (E_app (zeros2, _), _)]
-      when is_slice slice1 && is_zeros zeros2 && not (is_constant len1) &&
-           is_bitvector_typ (typ_of vector1) ->
-       wrap (E_app (mk_id "is_zeros_slice", [vector1; start1; len1]))
+      when (is_slice op || is_subrange op) && is_zeros zeros2
+        && not (is_constant_vec_typ env (typ_of e1)) && is_bitvector_typ (typ_of vector1) ->
+       let op' = if is_subrange op then "is_zero_subrange" else "is_zeros_slice" in
+       wrap (E_app (mk_id op', [vector1; start1; len1]))
     | _ -> E_app (id,args)
 
   else if is_id env (Id "IsZero") id then
@@ -2965,42 +3013,46 @@ let rec rewrite_app env typ (id,args) =
   else if is_zero_extend || is_truncate then
     let length_arg = List.filter (fun arg -> is_number (typ_of arg)) args in
     match List.filter (fun arg -> not (is_number (typ_of arg))) args with
-    | [E_aux (E_app (append1,
-                     [E_aux (E_app (subrange1, [vector1; start1; end1]), _);
-                      (E_aux (E_app (zeros1, [len1]),_) |
-                       E_aux (E_cast (_,E_aux (E_app (zeros1, [len1]),_)),_))
-                ]),_)]
-        when is_subrange subrange1 && is_zeros zeros1 && is_append append1 && is_bitvector_typ (typ_of vector1)
-      -> try_cast_to_typ (rewrap (E_app (mk_id "place_subrange", length_arg @ [vector1; start1; end1; len1])))
+    | [E_aux (E_app (append1, [E_aux (E_app (subrange1, [vector1; start1; end1]), _); zeros_exp]),_)]
+        when is_subrange subrange1 && is_zeros_exp zeros_exp && is_append append1 && is_bitvector_typ (typ_of vector1) ->
+         begin match get_zeros_exp_len zeros_exp with
+           | Some zlen ->
+              try_cast_to_typ (rewrap (E_app (mk_id "place_subrange", length_arg @ [vector1; start1; end1; zlen])))
+           | None -> E_app (id, args)
+         end
 
-    | [E_aux (E_app (append1,
-                     [vector1;
-                      (E_aux (E_app (zeros1, [length2]),_) |
-                       E_aux (E_cast (_, E_aux (E_app (zeros1, [length2]),_)),_))
-                ]),_)]
-        when is_constant_vec_typ env (typ_of vector1) && is_zeros zeros1 && is_append append1
-      -> let (vector1, start1, length1) =
-           match vector1 with
-           | E_aux (E_app (slice1, [vector1; start1; length1]), _) ->
-              (vector1, start1, length1)
-           | _ ->
-              let (length1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of vector1)) in
-              (vector1, mk_exp (E_lit (mk_lit (L_num (Big_int.zero)))), mk_exp (E_sizeof length1))
-         in
-         try_cast_to_typ (rewrap (E_app (mk_id "place_slice", length_arg @ [vector1; start1; length1; length2])))
+    | [E_aux (E_app (append1, [vector1; zeros_exp]),_)]
+        when is_constant_vec_typ env (typ_of vector1) && is_zeros_exp zeros_exp && is_append append1 ->
+         begin match get_zeros_exp_len zeros_exp with
+           | Some zlen ->
+              let (vector1, start1, length1) =
+                match vector1 with
+                | E_aux (E_app (slice1, [vector1; start1; length1]), _) ->
+                   (vector1, start1, length1)
+                | _ ->
+                   let (length1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of vector1)) in
+                   (vector1, mk_exp (E_lit (mk_lit (L_num (Big_int.zero)))), mk_exp (E_sizeof length1))
+              in
+              try_cast_to_typ (rewrap (E_app (mk_id "place_slice", length_arg @ [vector1; start1; length1; zlen])))
+           | None -> E_app (id, args)
+        end
 
     (* If we've already rewritten to slice_slice_concat or subrange_subrange_concat,
        we can just drop the zero extension because those functions can do it
        themselves *)
-    | [E_aux (E_cast (_, (E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat" | Id "place_slice"),_) as op, args),_))),_)]
+    | [E_aux (E_cast (_, (E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat" | Id "place_slice" | Id "place_subrange"),_) as op, args),_))),_)]
       -> try_cast_to_typ (rewrap (E_app (op, length_arg @ args)))
 
-    | [E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat" | Id "place_slice"),_) as op, args),_)]
+    | [E_aux (E_app (Id_aux ((Id "slice_slice_concat" | Id "subrange_subrange_concat" | Id "place_slice" | Id "place_subrange"),_) as op, args),_)]
       -> try_cast_to_typ (rewrap (E_app (op, length_arg @ args)))
 
     | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
-        when is_slice slice1 && not (is_constant length1) ->
+        when is_slice slice1 && not (is_constant length1) && is_bitvector_typ (typ_of vector1) ->
        try_cast_to_typ (rewrap (E_app (mk_id "zext_slice", length_arg @ [vector1; start1; length1])))
+
+    | [E_aux (E_app (subrange1, [vector1; hi1; lo1]),_)]
+        when is_subrange subrange1 && not (is_constant hi1 && is_constant lo1) && is_bitvector_typ (typ_of vector1) ->
+       try_cast_to_typ (rewrap (E_app (mk_id "zext_subrange", length_arg @ [vector1; hi1; lo1])))
 
     | [E_aux (E_app (ones, [len1]),_)] when is_ones ones ->
        try_cast_to_typ (rewrap (E_app (mk_id "zext_ones", length_arg @ [len1])))
@@ -3013,7 +3065,7 @@ let rec rewrite_app env typ (id,args) =
     | [E_aux (E_app (zeros, [len1]),_)]
     | [E_aux (E_cast (_, E_aux (E_app (zeros, [len1]),_)), _)]
       when is_zeros zeros ->
-       try_cast_to_typ (rewrap (E_app (id, length_arg)))
+       try_cast_to_typ (rewrap (E_app (zeros, length_arg)))
 
     | _ -> E_app (id,args)
 
@@ -3024,27 +3076,27 @@ let rec rewrite_app env typ (id,args) =
         when is_slice slice1 && not (is_constant length1) && is_bitvector_typ (typ_of vector1) ->
        try_cast_to_typ (rewrap (E_app (mk_id "sext_slice", length_arg @ [vector1; start1; length1])))
 
-    | [E_aux (E_app (append,
-         [E_aux (E_app (subrange1, [vector1; start1; end1]), _);
-          (E_aux (E_app (zeros2, [len2]), _) |
-           E_aux (E_cast (_, E_aux (E_app (zeros2, [len2]), _)),_))
-                ]), _)]
-      when is_append append && is_subrange subrange1 && is_zeros zeros2 &&
-           not (is_constant len2) && is_bitvector_typ (typ_of vector1) ->
-       E_app (mk_id "place_subrange_signed", length_arg @ [vector1; start1; end1; len2])
+    | [E_aux (E_app (subrange1, [vector1; hi1; lo1]),_)]
+        when is_subrange subrange1 && not (is_constant hi1 && is_constant lo1) && is_bitvector_typ (typ_of vector1) ->
+       try_cast_to_typ (rewrap (E_app (mk_id "sext_subrange", length_arg @ [vector1; hi1; lo1])))
 
-    | [E_aux (E_app (append,
-         [E_aux (E_app (slice1, [vector1; start1; len1]), _);
-          (E_aux (E_app (zeros2, [len2]), _) |
-           E_aux (E_cast (_, E_aux (E_app (zeros2, [len2]), _)),_))
-                ]), _)]
-      when is_append append && is_slice slice1 && is_zeros zeros2 && is_bitvector_typ (typ_of vector1) &&
-           not (is_constant len1 && is_constant len2) ->
-       E_app (mk_id "place_slice_signed", length_arg @ [vector1; start1; len1; len2])
+    | [E_aux (E_app (append, [E_aux (E_app (op, [vector1; start1; len1]), _); zeros_exp]), _)]
+      when is_append append && (is_slice op || is_subrange op) && is_zeros_exp zeros_exp
+        && is_bitvector_typ (typ_of vector1)
+        && not (is_constant len1 && is_constant_vec_typ env (typ_of zeros_exp)) ->
+       let op' = if is_subrange op then "place_subrange_signed" else "place_slice_signed" in
+       begin match get_zeros_exp_len zeros_exp with
+         | Some zlen -> E_app (mk_id op', length_arg @ [vector1; start1; len1; zlen])
+         | None -> E_app (id, args)
+       end
 
     | [E_aux (E_cast (_, (E_aux (E_app (Id_aux ((Id "place_slice"),_), args),_))),_)]
     | [E_aux (E_app (Id_aux ((Id "place_slice"),_), args),_)]
       -> try_cast_to_typ (rewrap (E_app (mk_id "place_slice_signed", length_arg @ args)))
+
+    | [E_aux (E_cast (_, (E_aux (E_app (Id_aux ((Id "place_subrange"),_), args),_))),_)]
+    | [E_aux (E_app (Id_aux ((Id "place_subrange"),_), args),_)]
+      -> try_cast_to_typ (rewrap (E_app (mk_id "place_subrange_signed", length_arg @ args)))
 
       (* If the original had a length, keep it *)
     (* | [E_aux (E_app (slice1, [vector1; start1; length1]),_);length2]
@@ -3078,6 +3130,14 @@ let rec rewrite_app env typ (id,args) =
         when is_subrange subrange1 && not (is_constant_range (start1,end1)) && is_bitvector_typ (typ_of vector1) ->
        E_app (mk_id "unsigned_subrange", [vector1; start1; end1])
 
+    | [E_aux (E_app (append, [vector1; zeros2]), _)]
+      when is_append append && is_zeros_exp zeros2 && not (is_constant_vec_typ env (typ_of zeros2)) ->
+       begin match get_zeros_exp_len zeros2 with
+         | Some len ->
+            E_app (mk_id "shl_int", [E_aux (E_app (id, [vector1]), (Unknown, empty_tannot)); len])
+         | None -> E_app (id, args)
+       end
+
     | _ -> E_app (id,args)
 
   else if is_id env (Id "__SetSlice_bits") id then
@@ -3085,6 +3145,15 @@ let rec rewrite_app env typ (id,args) =
     | [len; slice_len; vector; start; E_aux (E_app (zeros, _), _)]
       when is_zeros zeros && is_bitvector_typ (typ_of vector) ->
        E_app (mk_id "set_slice_zeros", [len; vector; start; slice_len])
+    | _ -> E_app (id, args)
+
+  else if is_id env (Id "Replicate") id then
+    let length_arg = List.filter (fun arg -> is_number (typ_of arg)) args in
+    match List.filter (fun arg -> not (is_number (typ_of arg))) args with
+    | [E_aux (E_lit (L_aux (L_bin "0", _)), _)] ->
+       E_app (mk_id "sail_zeros", length_arg)
+    | [E_aux (E_lit (L_aux (L_bin "1", _)), _)] ->
+       E_app (mk_id "sail_ones", length_arg)
     | _ -> E_app (id, args)
 
   else E_app (id,args)
@@ -3108,6 +3177,12 @@ let rewrite_aux = function
                                    start1; end1;
                                    vector2; start2; end2]),(Unknown,empty_tannot))),
             (l_assign, empty_tannot))
+  | E_assign (LEXP_aux (LEXP_vector_range (LEXP_aux (LEXP_id id1, annot1), start1, end1), _),
+              E_aux (E_app (zeros, _), _)), annot
+    when is_zeros (env_of_annot annot) zeros ->
+     let lhs = LEXP_aux (LEXP_id id1, annot1) in
+     let rhs = E_aux (E_app (mk_id "set_subrange_zeros", [E_aux (E_id id1, annot1); start1; end1]), annot1) in
+     E_aux (E_assign (lhs, rhs), annot)
   | exp,annot -> E_aux (exp,annot)
 
 let mono_rewrite defs =
