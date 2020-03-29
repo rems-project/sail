@@ -605,7 +605,12 @@ let set_slice (out_len, slice_len, out, n, slice) =
   assert (List.length out = Big_int.to_int out_len);
   out
 
-let set_slice_int (_, _, _, _) = assert false
+(* Set slice_len bits in the integer m, starting from index n *)
+let set_slice_int (slice_len, m, n, slice) =
+  assert (Big_int.to_int slice_len == List.length slice);
+  let shifted_slice = Big_int.shift_left (uint slice) (Big_int.to_int n) in
+  let mask = uint (replicate_bits ([B1], slice_len) @ replicate_bits ([B0], n)) in
+  Big_int.bitwise_or (Big_int.bitwise_xor (Big_int.bitwise_or mask m) mask) shifted_slice
 
 let eq_real (x, y) = Rational.equal x y
 let lt_real (x, y) = Rational.lt x y
