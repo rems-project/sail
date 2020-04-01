@@ -288,6 +288,12 @@ let call_smt' l constraints : smt_result =
        l :: ls
   in
 
+  let rec input_all chan =
+    match input_line chan with
+    | l -> l::(input_all chan)
+    | exception End_of_file -> []
+  in
+
   let digest = Digest.string smt_file in
 
   match DigestMap.find_opt digest !known_problems with
@@ -299,15 +305,16 @@ let call_smt' l constraints : smt_result =
      in
      output_string tmp_chan smt_file;
      close_out tmp_chan;
-     let status, smt_output =
+     let status, smt_output, smt_errors =
        try
          let smt_out, smt_in, smt_err = Unix.open_process_full (!opt_solver.command ^ " " ^ input_file) (Unix.environment ()) in
          let smt_output =
            try List.combine problems (input_lines smt_out (List.length problems)) with
            | End_of_file -> List.combine problems ["unknown"]
          in
+         let smt_errors = input_all smt_err in
          let status = Unix.close_process_full (smt_out, smt_in, smt_err) in
-         status, smt_output
+         status, smt_output, smt_errors
        with
        | exn ->
           raise (Reporting.err_general l ("Error when calling smt: " ^ Printexc.to_string exn))
@@ -315,7 +322,7 @@ let call_smt' l constraints : smt_result =
      let _ = match status with
        | Unix.WEXITED 0 -> ()
        | Unix.WEXITED n ->
-          raise (Reporting.err_general l ("SMT solver returned unexpected status " ^ string_of_int n))
+          raise (Reporting.err_general l ("SMT solver returned unexpected status " ^ string_of_int n ^ "\n" ^ String.concat "\n" smt_errors))
        | Unix.WSIGNALED n | Unix.WSTOPPED n ->
           raise (Reporting.err_general l ("SMT solver killed by signal " ^ string_of_int n))
      in
