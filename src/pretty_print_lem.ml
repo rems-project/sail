@@ -1367,7 +1367,7 @@ let doc_fun_body_lem ctxt exp =
   then align (string "catch_early_return" ^//^ parens (doc_exp))
   else doc_exp
 
-let doc_funcl_lem (FCL_aux(FCL_Funcl(id, pexp), annot)) =
+let doc_funcl_lem type_env (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let typ = typ_of_annot annot in
   let arg_typs = match typ with
     | Typ_aux (Typ_fn (arg_typs, typ_ret, _), _) -> arg_typs
@@ -1377,7 +1377,7 @@ let doc_funcl_lem (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let ctxt =
     { early_ret = contains_early_return exp;
       bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ);
-      top_env = env_of_annot annot } in
+      top_env = type_env } in
   let pats, bind = untuple_args_pat pat arg_typs in
   let patspp = separate_map space (doc_pat_lem ctxt true) pats in
   let _ = match guard with
@@ -1398,16 +1398,16 @@ module StringSet = Set.Make(String)
 (* Strictly speaking, Lem doesn't support multiple clauses for a single function
    joined by "and", although it has worked for Isabelle before.  However, all
    the funcls should have been merged by the merge_funcls rewrite now. *)   
-let doc_fundef_rhs_lem (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
-  separate_map (hardline ^^ string "and ") doc_funcl_lem funcls
+let doc_fundef_rhs_lem type_env (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
+  separate_map (hardline ^^ string "and ") (doc_funcl_lem type_env) funcls
 
-let doc_mutrec_lem = function
+let doc_mutrec_lem type_env = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
   | fundefs ->
      string "let rec " ^^
-     separate_map (hardline ^^ string "and ") doc_fundef_rhs_lem fundefs
+     separate_map (hardline ^^ string "and ") (doc_fundef_rhs_lem type_env) fundefs
 
-let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
+let rec doc_fundef_lem type_env (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | FCL_aux (FCL_Funcl(id, pexp),annot) :: _
@@ -1422,7 +1422,7 @@ let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
         pexp
     in
     let doc_rec = if is_funcl_rec then [string "rec"] else [] in
-    separate space ([string "let"] @ doc_rec @ [doc_fundef_rhs_lem fd])
+    separate space ([string "let"] @ doc_rec @ [doc_fundef_rhs_lem type_env fd])
   | _ -> empty
 
 
@@ -1523,8 +1523,8 @@ let rec doc_def_lem type_env def =
   | DEF_reg_dec dec -> group (doc_dec_lem dec)
 
   | DEF_default df -> empty
-  | DEF_fundef fdef -> group (doc_fundef_lem fdef) ^/^ hardline
-  | DEF_internal_mutrec fundefs -> doc_mutrec_lem fundefs ^/^ hardline
+  | DEF_fundef fdef -> group (doc_fundef_lem type_env fdef) ^/^ hardline
+  | DEF_internal_mutrec fundefs -> doc_mutrec_lem type_env fundefs ^/^ hardline
   | DEF_val (LB_aux (LB_val (pat, _), _) as lbind) ->
      group (doc_let_lem empty_ctxt lbind) ^/^ hardline
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"

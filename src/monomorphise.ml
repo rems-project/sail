@@ -3479,7 +3479,7 @@ let rec extract (E_aux (e,_)) =
    provide some way for the Lem pretty printer to know what to use; currently
    we just use two names for the cast, bitvector_cast_in and bitvector_cast_out,
    to let the pretty printer know whether to use the top-level environment. *)
-let add_bitvector_casts (Defs defs) =
+let add_bitvector_casts global_env (Defs defs) =
   let rewrite_body id quant_kids top_env ret_typ exp =
     let rewrite_aux (e,ann) =
       match e with
@@ -3568,9 +3568,8 @@ let add_bitvector_casts (Defs defs) =
         e_aux = rewrite_aux } exp
   in
   let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),((l,_) as fcl_ann))) =
-    let fcl_env = env_of_annot fcl_ann in
-    let (tq,typ) = Env.get_val_spec_orig id fcl_env in
-    let fun_env = add_typquant l tq fcl_env in
+    let (tq,typ) = Env.get_val_spec_orig id global_env in
+    let fun_env = List.fold_right (Env.add_typ_var l) (quant_kopts tq) global_env in
     let quant_kids = List.map kopt_kid (List.filter is_int_kopt (quant_kopts tq)) in
     let ret_typ =
       match typ with
@@ -3582,6 +3581,13 @@ let add_bitvector_casts (Defs defs) =
     in
     let pat,guard,body,annot = destruct_pexp pexp in
     let body = rewrite_body id quant_kids fun_env ret_typ body in
+    (* Cast function arguments, if necessary *)
+    let add_constraint insts = function
+      | NC_aux (NC_equal (Nexp_aux (Nexp_var kid,_), nexp), _) -> KBindings.add kid nexp insts
+      | _ -> insts
+    in
+    let insts = List.fold_left add_constraint KBindings.empty (Env.get_constraints (env_of body)) in
+    let body = make_bitvector_env_casts fun_env (env_of body) quant_kids insts body in
     (* Also add a cast around the entire function clause body, if necessary *)
     let body =
       make_bitvector_cast_exp "bitvector_cast_out" fun_env quant_kids (fill_in_type (env_of body) (typ_of body)) ret_typ body
