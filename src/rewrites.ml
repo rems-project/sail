@@ -3785,11 +3785,11 @@ let rewrite_defs_remove_superfluous_returns env =
 
 let rewrite_defs_remove_e_assign env (Defs defs) =
   let (Defs loop_specs) = fst (Type_error.check initial_env (Defs (List.map gen_vs
-    [("foreach#", "forall ('vars : Type). (int, int, int, bool, 'vars, 'vars) -> 'vars");
-     ("while#", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars");
-     ("until#", "forall ('vars : Type). (bool, 'vars, 'vars) -> 'vars");
-     ("while#t", "forall ('vars : Type). (bool, 'vars, 'vars, int) -> 'vars");
-     ("until#t", "forall ('vars : Type). (bool, 'vars, 'vars, int) -> 'vars")]))) in
+    [("foreach#", "forall ('vars_in 'vars_out : Type). (int, int, int, bool, 'vars_in, 'vars_out) -> 'vars_out");
+     ("while#", "forall ('vars_in 'vars_out : Type). (bool, 'vars_in, 'vars_out) -> 'vars_out");
+     ("until#", "forall ('vars_in 'vars_out : Type). (bool, 'vars_in, 'vars_out) -> 'vars_out");
+     ("while#t", "forall ('vars_in 'vars_out : Type). (bool, 'vars_in, 'vars_out, int) -> 'vars_out");
+     ("until#t", "forall ('vars_in 'vars_out : Type). (bool, 'vars_in, 'vars_out, int) -> 'vars_out")]))) in
  let rewrite_exp _ e =
     replace_memwrite_e_assign (remove_reference_types (rewrite_var_updates e)) in
   rewrite_defs_base
