@@ -232,6 +232,10 @@ and contains_exist_arg (A_aux (arg,_)) =
       -> false
   | A_typ typ -> contains_exist typ
 
+let is_number typ = match destruct_numeric typ with
+  | Some _ -> true
+  | None -> false
+
 let rec size_nvars_nexp (Nexp_aux (ne,_)) =
   match ne with
   | Nexp_var v -> [v]
@@ -3171,8 +3175,13 @@ let rewrite_aux = function
     annot
        when is_id (env_of_annot annot) (Id "vector_subrange") subrange2 &&
               not (is_constant_range (start1, end1)) ->
+     let typ2 = Env.base_typ_of (env_of_annot annot) (typ_of vector2) in
+     let op =
+       if is_number typ2 then "vector_update_subrange_from_integer_subrange" else
+       "vector_update_subrange_from_subrange"
+     in
      E_aux (E_assign (LEXP_aux (LEXP_id id1,(l_id1,empty_tannot)),
-                      E_aux (E_app (mk_id "vector_update_subrange_from_subrange", [
+                      E_aux (E_app (mk_id op, [
                                    E_aux (E_id id1,(Generated l_id1,empty_tannot));
                                    start1; end1;
                                    vector2; start2; end2]),(Unknown,empty_tannot))),

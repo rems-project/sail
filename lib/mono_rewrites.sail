@@ -224,4 +224,13 @@ function vector_update_subrange_from_subrange(n,v1,s1,e1,v2,s2,e2) = {
   xs | ys
 }
 
+val vector_update_subrange_from_integer_subrange : forall 'n1 's1 'e1 's2 'e2,
+    0 <= 'e1 <= 's1 < 'n1 & 0 <= 'e2 <= 's2 & 's1 - 'e1 == 's2 - 'e2.
+    (implicit('n1), bits('n1), int('s1), int('e1), int, int('s2), int('e2)) -> bits('n1)
+
+function vector_update_subrange_from_integer_subrange(n1, v1, s1, e1, i, s2, e2) = {
+  let v2 : bits('n1) = get_slice_int(n1, i, e2) in
+  vector_update_subrange_from_subrange(n1, v1, s1, e1, v2, s2 - e2, 0)
+}
+
 $endif
