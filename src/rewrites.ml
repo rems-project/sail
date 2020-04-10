@@ -709,6 +709,26 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
   | _, P_wild -> if is_irrefutable_pattern pat1 then Some [] else None
   | _ -> None
 
+let vector_string_to_bits_pat (L_aux (lit, _) as l_aux) (l, tannot) =
+  let bit_annot = match destruct_tannot tannot with
+    | Some (env, _, _) -> mk_tannot env bit_typ no_effect
+    | None -> empty_tannot
+  in
+  begin match lit with
+  | L_hex _ | L_bin _ -> P_aux (P_vector (List.map (fun p -> P_aux (P_lit p, (l, bit_annot))) (vector_string_to_bit_list l_aux)), (l, tannot))
+  | lit -> P_aux (P_lit l_aux, (l, tannot))
+  end
+
+let vector_string_to_bits_exp (L_aux (lit, _) as l_aux) (l, tannot) =
+  let bit_annot = match destruct_tannot tannot with
+    | Some (env, _, _) -> mk_tannot env bit_typ no_effect
+    | None -> empty_tannot
+  in
+  begin match lit with
+  | L_hex _ | L_bin _ -> E_aux (E_vector (List.map (fun p -> E_aux (E_lit p, (l, bit_annot))) (vector_string_to_bit_list l_aux)), (l, tannot))
+  | lit -> E_aux (E_lit l_aux, (l, tannot))
+  end
+
 (* A simple check for pattern disjointness; used for optimisation in the
    guarded pattern rewrite step *)
 let rec disjoint_pat env (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
@@ -722,6 +742,14 @@ let rec disjoint_pat env (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2)
   | P_id id, _ when id_is_unbound id env -> false
   | _, P_id id when id_is_unbound id env -> false
   | P_id id1, P_id id2 -> Id.compare id1 id2 <> 0
+  | P_lit (L_aux ((L_bin _ | L_hex _), _) as lit), _ ->
+     disjoint_pat env (vector_string_to_bits_pat lit (Unknown, empty_tannot)) pat2
+  | _, P_lit (L_aux ((L_bin _ | L_hex _), _) as lit) ->
+     disjoint_pat env pat1 (vector_string_to_bits_pat lit (Unknown, empty_tannot))
+  | P_lit (L_aux (L_num n1, _)), P_lit (L_aux (L_num n2, _)) ->
+     not (Big_int.equal n1 n2)
+  | P_lit (L_aux (l1, _)), P_lit (L_aux (l2, _)) ->
+     l1 <> l2
   | P_app (id1, args1), P_app (id2, args2) ->
      Id.compare id1 id2 <> 0 || List.exists2 (disjoint_pat env) args1 args2
   | P_vector pats1, P_vector pats2
@@ -1214,21 +1242,13 @@ let rewrite_defs_vector_string_pats_to_bit_list env =
   let rewrite_p_aux (pat, (annot : tannot annot)) =
     let env = env_of_annot annot in
     match pat with
-    | P_lit (L_aux (lit, l) as l_aux) ->
-       begin match lit with
-       | L_hex _ | L_bin _ -> P_aux (P_vector (List.map (fun p -> P_aux (P_lit p, (l, mk_tannot env bit_typ no_effect))) (vector_string_to_bit_list l_aux)), annot)
-       | lit -> P_aux (P_lit l_aux, annot)
-       end
+    | P_lit lit -> vector_string_to_bits_pat lit annot
     | pat -> (P_aux (pat, annot))
   in
   let rewrite_e_aux (exp, (annot : tannot annot)) =
     let env = env_of_annot annot in
     match exp with
-    | E_lit (L_aux (lit, l) as l_aux) ->
-       begin match lit with
-       | L_hex _ | L_bin _ -> E_aux (E_vector (List.map (fun e -> E_aux (E_lit e, (l, mk_tannot env bit_typ no_effect))) (vector_string_to_bit_list l_aux)), annot)
-       | lit -> E_aux (E_lit l_aux, annot)
-       end
+    | E_lit lit -> vector_string_to_bits_exp lit annot
     | exp -> (E_aux (exp, annot))
   in
   let pat_alg = { id_pat_alg with p_aux = rewrite_p_aux } in
