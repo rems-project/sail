@@ -1044,8 +1044,8 @@ let split_defs target all_errors splits env defs =
               if check_split_size patsubsts (pat_loc p) then
                 List.map (fun (pat',substs,pchoices,ksubsts) ->
                   let exp' = Spec_analysis.nexp_subst_exp ksubsts e in
-                  let exp' = subst_exp ref_vars substs ksubsts exp' in
                   let exp' = apply_pat_choices pchoices exp' in
+                  let exp' = subst_exp ref_vars substs ksubsts exp' in
                   let exp' = stop_at_false_assertions exp' in
                   Pat_aux (Pat_exp (pat', map_exp exp'),l))
                   patsubsts
@@ -1064,11 +1064,11 @@ let split_defs target all_errors splits env defs =
               if check_split_size patsubsts (pat_loc p) then
                 List.map (fun (pat',substs,pchoices,ksubsts) ->
                   let exp1' = Spec_analysis.nexp_subst_exp ksubsts e1 in
-                  let exp1' = subst_exp ref_vars substs ksubsts exp1' in
                   let exp1' = apply_pat_choices pchoices exp1' in
+                  let exp1' = subst_exp ref_vars substs ksubsts exp1' in
                   let exp2' = Spec_analysis.nexp_subst_exp ksubsts e2 in
-                  let exp2' = subst_exp ref_vars substs ksubsts exp2' in
                   let exp2' = apply_pat_choices pchoices exp2' in
+                  let exp2' = subst_exp ref_vars substs ksubsts exp2' in
                   let exp2' = stop_at_false_assertions exp2' in
                   Pat_aux (Pat_when (pat', map_exp exp1', map_exp exp2'),l))
                   patsubsts
