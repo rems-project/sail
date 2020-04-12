@@ -1,5 +1,6 @@
 $include <smt.sail>
 $include <flow.sail>
+$include <arith.sail>
 default Order dec
 type bits ('n : Int) = bitvector('n, dec)
 val operator & = "and_bool" : (bool, bool) -> bool
@@ -67,10 +68,26 @@ function willsplit(x) = {
   shadowed(n);
 }
 
+val execute : forall 'datasize. int('datasize) -> unit
+
+function execute(datasize) = {
+  let x : bits('datasize) = replicate_bits(0b1, datasize);
+  ()
+}
+
+val test_execute : unit -> unit
+
+function test_execute() = {
+  let exp = 4;
+  let datasize = shl_int(1, exp);
+  execute(datasize)
+}
+
 val run : unit -> unit effect {escape}
 
 function run () = {
   assert(true); /* To force us into the monad */
+  test_execute();
   willsplit(true);
   willsplit(false);
 }

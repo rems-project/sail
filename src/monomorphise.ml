@@ -1318,9 +1318,23 @@ let replace_type env typ =
                   ("replace_type: Unsupported type " ^ string_of_typ typ))
 
 
-let rewrite_size_parameters env (Defs defs) =
+let rewrite_size_parameters target type_env (Defs defs) =
   let open Rewriter in
   let open Util in
+
+  let const_prop_exp exp =
+    let ref_vars = Constant_propagation.referenced_vars exp in
+    let substs = (Bindings.empty, KBindings.empty) in
+    let assigns = Bindings.empty in
+    fst (Constant_propagation.const_prop target (Defs defs) ref_vars substs assigns exp)
+  in
+  let const_prop_pexp pexp =
+    let (pat, guard, exp, a) = destruct_pexp pexp in
+    construct_pexp (pat, guard, const_prop_exp exp, a)
+  in
+  let const_prop_funcl (FCL_aux (FCL_Funcl (id, pexp), a)) =
+    FCL_aux (FCL_Funcl (id, const_prop_pexp pexp), a)
+  in
 
   let sizes_funcl fsizes (FCL_aux (FCL_Funcl (id,pexp),(l,ann))) =
     let pat,guard,exp,pannot = destruct_pexp pexp in
@@ -1466,27 +1480,62 @@ in *)
   in
   let rewrite_letbind = fold_letbind { id_exp_alg with e_app = rewrite_e_app } in
   let rewrite_exp = fold_exp { id_exp_alg with e_app = rewrite_e_app } in
+  let replace_funtype id typ =
+    match Bindings.find id fn_sizes with
+    | to_change,_ when not (IntSet.is_empty to_change) ->
+       begin match typ with
+         | Typ_aux (Typ_fn (ts,t2,eff),l2) ->
+            Typ_aux (Typ_fn (mapat (replace_type type_env) to_change ts,t2,eff),l2)
+         | _ -> replace_type type_env typ
+       end
+    | _ -> typ
+    | exception Not_found -> typ
+  in
+  let type_env' =
+    let update_val_spec id _ env =
+      let (tq, typ) = Env.get_val_spec_orig id env in
+      Env.update_val_spec id (tq, replace_funtype id typ) env
+    in
+    Bindings.fold update_val_spec fn_sizes type_env
+  in
   let rewrite_def = function
     | DEF_fundef (FD_aux (FD_function (recopt,tannopt,effopt,funcls),(l,_))) ->
+       let funcls = List.map rewrite_funcl funcls in
+       (* Check whether we have ended up with itself('n) expressions where 'n
+          is not constant.  If so, try and see if constant propagation can
+          resolve those variable expressions.  In many cases the monomorphisation
+          pass will already have performed constant propagation, but it does not
+          for functions where it does not perform splits.*)
+       let check_funcl (FCL_aux (FCL_Funcl (id, pexp), (l, _)) as funcl) =
+         let has_nonconst_sizes =
+           let check_cast (typ, _) =
+             match unaux_typ typ with
+             | Typ_app (itself, [A_aux (A_nexp nexp, _)])
+             | Typ_exist (_, _, Typ_aux (Typ_app (itself, [A_aux (A_nexp nexp, _)]), _))
+               when string_of_id itself = "itself" ->
+                 not (is_nexp_constant nexp)
+             | _ -> false
+           in
+           fold_pexp { (pure_exp_alg false (||)) with e_cast = check_cast } pexp
+         in
+         if has_nonconst_sizes then
+           (* Constant propagation requires a fully type-annotated AST,
+              so re-check the function clause *)
+           let (tq, typ) = Env.get_val_spec id type_env' in
+           let env = add_typquant l tq type_env' in
+           const_prop_funcl (Type_check.check_funcl env funcl typ)
+         else funcl
+       in
+       let funcls = List.map check_funcl funcls in
        (* TODO rewrite tannopt? *)
-       DEF_fundef (FD_aux (FD_function (recopt,tannopt,effopt,List.map rewrite_funcl funcls),(l,empty_tannot)))
+       DEF_fundef (FD_aux (FD_function (recopt,tannopt,effopt,funcls),(l,empty_tannot)))
     | DEF_val lb -> DEF_val (rewrite_letbind lb)
     | DEF_spec (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,annot))) as spec ->
-       begin
-         match Bindings.find id fn_sizes with
-         | to_change,_ when not (IntSet.is_empty to_change) ->
-            let typschm = match typschm with
-              | TypSchm_aux (TypSchm_ts (tq,typ),l) ->
-                 let typ = match typ with
-                   | Typ_aux (Typ_fn (ts,t2,eff),l2) ->
-                      Typ_aux (Typ_fn (mapat (replace_type env) to_change ts,t2,eff),l2)
-                   | _ -> replace_type env typ
-                 in TypSchm_aux (TypSchm_ts (tq,typ),l)
-            in
-            DEF_spec (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,empty_tannot)))
-         | _ -> spec
-         | exception Not_found -> spec
-       end
+       let typschm = match typschm with
+         | TypSchm_aux (TypSchm_ts (tq, typ),l) ->
+            TypSchm_aux (TypSchm_ts (tq, replace_funtype id typ), l)
+       in
+       DEF_spec (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,annot)))
     | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), a)) ->
        DEF_reg_dec (DEC_aux (DEC_config (id, typ, rewrite_exp exp), a))
     | def -> def
@@ -3970,6 +4019,6 @@ let monomorphise target opts splits defs =
   in defs
 
 let add_bitvector_casts = BitvectorSizeCasts.add_bitvector_casts
-let rewrite_atoms_to_singletons defs =
+let rewrite_atoms_to_singletons target defs =
   let defs, env = Type_check.check Type_check.initial_env defs in
-  AtomToItself.rewrite_size_parameters env defs
+  AtomToItself.rewrite_size_parameters target env defs

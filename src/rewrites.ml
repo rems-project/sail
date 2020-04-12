@@ -4923,9 +4923,8 @@ let all_rewrites = [
     ("toplevel_nexps", Basic_rewriter rewrite_toplevel_nexps);
     ("toplevel_consts", String_rewriter (fun target -> Basic_rewriter (rewrite_toplevel_consts target)));
     ("monomorphise", String_rewriter (fun target -> Basic_rewriter (monomorphise target)));
-    ("atoms_to_singletons", Basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons));
+    ("atoms_to_singletons", String_rewriter (fun target -> (Basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons target))));
     ("add_bitvector_casts", Basic_rewriter Monomorphise.add_bitvector_casts);
-    ("atoms_to_singletons", Basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons));
     ("remove_impossible_int_cases", Basic_rewriter Constant_propagation.remove_impossible_int_cases);
     ("const_prop_mutrec", String_rewriter (fun target -> Basic_rewriter (Constant_propagation_mutrec.rewrite_defs target)));
     ("make_cases_exhaustive", Basic_rewriter MakeExhaustive.rewrite);
@@ -4978,7 +4977,7 @@ let rewrites_lem = [
     ("monomorphise", [String_arg "lem"; If_mono_arg]);
     ("recheck_defs", [If_mwords_arg]);
     ("add_bitvector_casts", [If_mwords_arg]);
-    ("atoms_to_singletons", [If_mono_arg]);
+    ("atoms_to_singletons", [String_arg "lem"; If_mono_arg]);
     ("recheck_defs", [If_mwords_arg]);
     ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);
@@ -5098,7 +5097,7 @@ let rewrites_c = [
     ("recheck_defs", [If_mono_arg]);
     ("toplevel_nexps", [If_mono_arg]);
     ("monomorphise", [String_arg "c"; If_mono_arg]);
-    ("atoms_to_singletons", [If_mono_arg]);
+    ("atoms_to_singletons", [String_arg "c"; If_mono_arg]);
     ("recheck_defs", [If_mono_arg]);
     ("undefined", [Bool_arg false]);
     ("vector_string_pats_to_bit_list", []);
