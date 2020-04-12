@@ -79,7 +79,7 @@ val test_execute : unit -> unit
 
 function test_execute() = {
   let exp = 4;
-  let datasize = shl_int(1, exp);
+  let 'datasize = shl_int(1, exp);
   execute(datasize)
 }
 

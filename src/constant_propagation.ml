@@ -792,6 +792,24 @@ let const_props target defs ref_vars =
       | _ -> GiveUp
     in
     let check_pat = check_exp_pat exp0 in
+    let add_ksubst_synonyms env' ksubst =
+      (* The type checker sometimes automatically generates kid synonyms, e.g.
+         in let 'datasize = ... in ... it binds both 'datasize and '_datasize.
+         If we subsitute one, we also want to substitute the other.
+         In order to find synonyms, we consult the environment after the
+         bind (see findpat_generic below). *)
+      let get_synonyms (kid, nexp) =
+        let rec synonyms_of_nc nc = match unaux_constraint nc with
+          | NC_equal (Nexp_aux (Nexp_var kid1, _), Nexp_aux (Nexp_var (kid2), _))
+            when Kid.compare kid kid1 = 0 ->
+             [(kid2, nexp)]
+          | NC_and _ -> List.concat (List.map synonyms_of_nc (constraint_conj nc))
+          | _ -> []
+        in
+        List.concat (List.map synonyms_of_nc (Env.get_constraints env'))
+      in
+      ksubst @ List.concat (List.map get_synonyms ksubst)
+    in
     let rec findpat_generic description assigns = function
       | [] -> (Reporting.print_err l "Monomorphisation"
                  ("Failed to find a case for " ^ description); None)
@@ -804,7 +822,9 @@ let const_props target defs ref_vars =
                        kbindings_union ksubsts (kbindings_from_list ksubst) in
           let (E_aux (guard,_)),assigns = const_prop_exp substs assigns guard in
           match guard with
-          | E_lit (L_aux (L_true,_)) -> Some (exp,vsubst,ksubst)
+          | E_lit (L_aux (L_true,_)) ->
+             let ksubst = add_ksubst_synonyms (env_of exp) ksubst in
+             Some (exp,vsubst,ksubst)
           | E_lit (L_aux (L_false,_)) -> findpat_generic description assigns tl
           | _ -> None
         end
@@ -813,7 +833,9 @@ let const_props target defs ref_vars =
       | (Pat_aux (Pat_exp (p,exp),_))::tl ->
          match check_pat p with
          | DoesNotMatch -> findpat_generic description assigns tl
-         | DoesMatch (subst,ksubst) -> Some (exp,subst,ksubst)
+         | DoesMatch (subst,ksubst) ->
+            let ksubst = add_ksubst_synonyms (env_of exp) ksubst in
+            Some (exp,subst,ksubst)
          | GiveUp -> None
     in findpat_generic (string_of_exp exp0) assigns cases
 
