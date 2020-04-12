@@ -3601,20 +3601,45 @@ let add_bitvector_casts global_env (Defs defs) =
          let rec aux = function
            | [] -> []
            | (E_aux (E_assert (assert_exp,msg),ann) as h)::t ->
-              let insts = extract assert_exp in
-              begin match insts with
-              | [] -> h::(aux t)
-              | _ ->
-                 let t' = aux t in
-                 let et = E_aux (E_block t',ann) in
-                 let env = env_of h in
-                 let insts = List.fold_left (fun insts (kid,i) ->
-                                 KBindings.add kid (nconstant i) insts) KBindings.empty insts in
-                 let et = make_bitvector_env_casts env (env_of et) quant_kids insts et in
-                 let src_typ = subst_kids_typ insts result_typ in
-                 let et = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ et in
-
-                 [h; et]
+              (* Check the assertion for constraints that instantiate kids *)
+              let is_known_kid kid = KBindings.mem kid (Env.get_typ_vars env) in
+              let is_int_kid kid = try Env.get_typ_var kid env = K_int with _ -> false in
+              begin match Type_check.assert_constraint env true assert_exp with
+                | Some nc when KidSet.for_all is_known_kid (tyvars_of_constraint nc) ->
+                   (* If the type checker can extract constraints from the assertion
+                      for pre-existing kids (not for those that are bound by the
+                      assertion itself), then look at the environment after the
+                      assertion to extract kid instantiations. *)
+                   let env_post = Env.add_constraint nc env in
+                   let check_inst kid insts =
+                     (* First check if the given kid already had a fixed value previously. *)
+                     let rec nc_fixes_kid nc = match unaux_constraint nc with
+                       | NC_equal (Nexp_aux (Nexp_var kid', _), Nexp_aux (Nexp_constant _, _)) ->
+                          Kid.compare kid kid' = 0
+                       | NC_and (_, _) -> List.exists nc_fixes_kid (constraint_conj nc)
+                       | _ -> false
+                     in
+                     if List.exists nc_fixes_kid (Env.get_constraints env) then
+                       insts
+                     else
+                       (* Otherwise ask the solver for a new, unique value *)
+                       match solve_unique env_post (nvar kid) with
+                       | Some n -> KBindings.add kid (nconstant n) insts
+                       | None -> insts
+                       | exception _ -> insts
+                   in
+                   let kids = KidSet.filter is_int_kid (tyvars_of_constraint nc) in
+                   let insts = KidSet.fold check_inst (tyvars_of_constraint nc) KBindings.empty in
+                   if KBindings.is_empty insts then h :: (aux t) else begin
+                     (* Propagate new instantiations and insert casts *)
+                     let t' = aux t in
+                     let et = E_aux (E_block t',ann) in
+                     let et = make_bitvector_env_casts env env_post quant_kids insts et in
+                     let src_typ = subst_kids_typ insts result_typ in
+                     let et = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ et in
+                     [h; et]
+                   end
+                | _ -> h :: (aux t)
               end
            | h::t -> h::(aux t)
          in E_aux (E_block (aux es),ann)
