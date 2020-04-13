@@ -2063,35 +2063,36 @@ let rewrite_vector_concat_assignments env defs =
              match nexp_simp len with
              | Nexp_aux (Nexp_constant len, _) -> len
              | _ -> (Big_int.of_int 1)
-           else (Big_int.of_int 1) in
+           else (Big_int.of_int 1)
+         in
          let next i step =
            if is_order_inc ord
            then (Big_int.sub (Big_int.add i step) (Big_int.of_int 1), Big_int.add i step)
-           else (Big_int.add (Big_int.sub i step) (Big_int.of_int 1), Big_int.sub i step) in
+           else (Big_int.add (Big_int.sub i step) (Big_int.of_int 1), Big_int.sub i step)
+         in
          let i = match nexp_simp start with
-         | (Nexp_aux (Nexp_constant i, _)) -> i
-         | _ -> if is_order_inc ord then Big_int.zero else Big_int.of_int (List.length lexps - 1) in
+           | (Nexp_aux (Nexp_constant i, _)) -> i
+           | _ -> if is_order_inc ord then Big_int.zero else Big_int.of_int (List.length lexps - 1)
+         in
          let l = gen_loc (fst annot) in
-         let exp' =
-           if small exp then strip_exp exp
-           else mk_exp (E_id (mk_id "split_vec")) in
+         let vec_id = mk_id "split_vec" in
+         let exp' = if small exp then strip_exp exp else mk_exp (E_id vec_id) in
          let lexp_to_exp (i, exps) lexp =
            let (j, i') = next i (len lexp) in
            let i_exp = mk_exp (E_lit (mk_lit (L_num i))) in
            let j_exp = mk_exp (E_lit (mk_lit (L_num j))) in
            let sub = mk_exp (E_vector_subrange (exp', i_exp, j_exp)) in
-           (i', exps @ [sub]) in
+           (i', exps @ [sub])
+         in
          let (_, exps) = List.fold_left lexp_to_exp (i, []) lexps in
-         let tup = mk_exp (E_tuple exps) in
-         let lexp = LEXP_aux (LEXP_tup (List.map strip_lexp lexps), (l, ())) in
-         let e_aux =
-           if small exp then mk_exp (E_assign (lexp, tup))
-           else mk_exp (
-             E_let (
-               mk_letbind (mk_pat (P_id (mk_id "split_vec"))) (strip_exp exp),
-               mk_exp (E_assign (lexp, tup)))) in
+         let assign lexp exp = mk_exp (E_assign (strip_lexp lexp, exp)) in
+         let block = mk_exp (E_block (List.map2 assign lexps exps)) in
+         let full_exp =
+           if small exp then block else
+           mk_exp (E_let (mk_letbind (mk_pat (P_id vec_id)) (strip_exp exp), block))
+         in
          begin
-           try check_exp env e_aux unit_typ with
+           try check_exp env full_exp unit_typ with
            | Type_error (_, l, err) ->
              raise (Reporting.err_typ l (Type_error.string_of_type_error err))
          end
@@ -4930,8 +4931,8 @@ let rewrites_lem = [
     ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);
     ("remove_impossible_int_cases", []);
-    ("vector_concat_assignments", []);
     ("tuple_assignments", []);
+    ("vector_concat_assignments", []);
     ("simple_assignments", []);
     ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
@@ -4972,8 +4973,8 @@ let rewrites_coq = [
     ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);
     ("remove_impossible_int_cases", []);
-    ("vector_concat_assignments", []);
     ("tuple_assignments", []);
+    ("vector_concat_assignments", []);
     ("simple_assignments", []);
     ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
@@ -5021,8 +5022,8 @@ let rewrites_ocaml = [
     ("mapping_builtins", []);
     ("undefined", [Bool_arg false]);
     ("vector_string_pats_to_bit_list", []);
-    ("vector_concat_assignments", []);
     ("tuple_assignments", []);
+    ("vector_concat_assignments", []);
     ("simple_assignments", []);
     ("remove_not_pats", []);
     ("remove_vector_concat", []);
@@ -5053,8 +5054,8 @@ let rewrites_c = [
     ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
     ("pattern_literals", [Literal_arg "all"]);
-    ("vector_concat_assignments", []);
     ("tuple_assignments", []);
+    ("vector_concat_assignments", []);
     ("simple_assignments", []);
     ("exp_lift_assign", []);
     ("merge_function_clauses", []);
@@ -5069,8 +5070,8 @@ let rewrites_interpreter = [
     ("pat_string_append", []);
     ("mapping_builtins", []);
     ("undefined", [Bool_arg false]);
-    ("vector_concat_assignments", []);
     ("tuple_assignments", []);
+    ("vector_concat_assignments", []);
     ("simple_assignments", [])
   ]
 
