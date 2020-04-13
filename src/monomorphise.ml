@@ -577,6 +577,8 @@ let stop_at_false_assertions e =
        end
     | E_assert (e1,_) when exp_false e1 ->
        ea, Some (typ_of_annot ann)
+    | E_throw e ->
+       ea, Some (typ_of_annot ann)
     | _ -> ea, None
   in fst (exp e)
 
@@ -1969,6 +1971,37 @@ let refine_dependency env (E_aux (e,(l,annot)) as exp) pexps =
      (match mk_subrange_pattern vannot vstart vend with
      | Some mk_pat -> check_dep id mk_pat
      | None -> None)
+  (* TODO: Aborted attempt at considering bitvector concatenations when
+     refining dependencies.  Needs corresponding support in constant
+     propagation to work. *)
+  (* | E_app (append, [vec1; vec2])
+    when is_id (env_of exp) (Id "append") append ->
+     (* If the expression is a concatenation resulting in a small enough bitvector,
+        perform a (total) case split on the sub-vectors *)
+     let vec_len v = try Util.option_map Big_int.to_int (get_constant_vec_len (env_of exp) v) with _ -> None in
+     let pow2 n = Big_int.pow_int (Big_int.of_int 2) n in
+     let size_set len1 len2 = Big_int.mul (pow2 len1) (pow2 len2) in
+     begin match (vec_len (typ_of exp), vec_len (typ_of vec1), vec_len (typ_of vec2)) with
+       | (Some len, Some len1, Some len2)
+         when Big_int.less_equal (size_set len1 len2) (Big_int.of_int size_set_limit) ->
+          let recur = refine_dependency env in
+          (* Create pexps with dummy bodies (ignored by the recursive call) *)
+          let mk_pexps len =
+            let mk_pexp lit =
+              let (_, ord, _) = vector_typ_args_of (typ_of exp) in
+              let tannot = mk_tannot (env_of exp) (bitvector_typ (nint len) ord) no_effect in
+              let pat = P_aux (P_lit lit, (Generated l, tannot)) in
+              let exp = E_aux (E_lit (mk_lit L_unit), (Generated l, empty_tannot)) in
+              Pat_aux (Pat_exp (pat, exp), (Generated l, empty_tannot))
+            in
+            List.map mk_pexp (make_vectors len)
+          in
+          begin match (recur vec1 (mk_pexps len1), recur vec2 (mk_pexps len2)) with
+            | (Some deps1, Some deps2) -> Some (dmerge deps1 deps2)
+            | _ -> None
+          end
+       | _ -> None
+     end *)
   | _ -> None
 
 let simplify_size_nexp env typ_env (Nexp_aux (ne,l) as nexp) =
@@ -2586,7 +2619,7 @@ let print_result r =
 let analyse_funcl debug tenv constants (FCL_aux (FCL_Funcl (id,pexp),(l,_))) =
   let _ = if debug > 2 then print_endline (string_of_id id) else () in
   let pat,guard,body,_ = destruct_pexp pexp in
-  let (tq,_) = Env.get_val_spec id tenv in
+  let (tq,_) = Env.get_val_spec_orig id tenv in
   let set_assertions = find_set_assertions body in
   let _ = if debug > 2 then print_set_assertions set_assertions in
   let aenv = initial_env id l tq pat body set_assertions constants in

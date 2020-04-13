@@ -663,6 +663,10 @@ let const_props target defs ref_vars =
     | "or_bool", ([E_aux (E_lit (L_aux (L_true, _)), _) as e_true; _] |
                   [_; E_aux (E_lit (L_aux (L_true, _)), _) as e_true]) ->
        e_true
+    | _, [E_aux (E_vector [], _); e']
+    | _, [e'; E_aux (E_vector [], _)]
+      when is_overload_of (mk_id "append") ->
+       e'
     | _, _ when List.for_all Constant_fold.is_constant args ->
        const_fold exp
     | _, [arg] when is_overload_of (mk_id "__size") ->
@@ -733,6 +737,10 @@ let const_props target defs ref_vars =
               (Reporting.print_err lit_l "Monomorphisation"
                  "Unexpected kind of literal for var match"; GiveUp)
          end
+      | E_lit ((L_aux ((L_bin _ | L_hex _), _) as lit)), P_vector _ ->
+         let mk_bitlit lit = E_aux (E_lit lit, (Generated l, mk_tannot env bit_typ no_effect)) in
+         let lits' = List.map mk_bitlit (vector_string_to_bit_list lit) in
+         check_exp_pat (E_aux (E_vector lits', (l, annot))) pat
       | E_lit _, _ ->
          (Reporting.print_err l' "Monomorphisation"
             "Unexpected kind of pattern for literal"; GiveUp)
@@ -744,6 +752,7 @@ let const_props target defs ref_vars =
               if lit_match (lit,lit') then DoesMatch ([],[]) else DoesNotMatch
            | E_aux (E_lit l,_), P_aux (P_id var,_) when pat_id_is_variable env var ->
               DoesMatch ([var, e],[])
+           | _, P_aux (P_wild, _) -> DoesMatch ([],[])
            | _ -> GiveUp) es ps in
          let final = List.fold_left (fun acc m -> match acc, m with
            | _, GiveUp -> GiveUp
@@ -755,6 +764,10 @@ let const_props target defs ref_vars =
             (Reporting.print_err l "Monomorphisation"
                "Unexpected kind of pattern for vector literal"; GiveUp)
          | _ -> final)
+      | E_vector _, P_lit ((L_aux ((L_bin _ | L_hex _), _) as lit)) ->
+         let mk_bitlit lit = P_aux (P_lit lit, (Generated l, mk_tannot env bit_typ no_effect)) in
+         let lits' = List.map mk_bitlit (vector_string_to_bit_list lit) in
+         check_exp_pat exp (P_aux (P_vector lits', (l, annot)))
       | E_vector _, _ ->
          (Reporting.print_err l "Monomorphisation"
             "Unexpected kind of pattern for vector literal"; GiveUp)

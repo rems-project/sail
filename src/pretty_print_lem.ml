@@ -1367,8 +1367,11 @@ let doc_fun_body_lem ctxt exp =
   then align (string "catch_early_return" ^//^ parens (doc_exp))
   else doc_exp
 
-let doc_funcl_lem type_env (FCL_aux(FCL_Funcl(id, pexp), annot)) =
-  let typ = typ_of_annot annot in
+let doc_funcl_lem type_env (FCL_aux(FCL_Funcl(id, pexp), ((l, _) as annot))) =
+  let (tq, typ) =
+    try Env.get_val_spec_orig id type_env with
+    | _ -> raise (unreachable l __POS__ ("Could not get val-spec of " ^ string_of_id id))
+  in
   let arg_typs = match typ with
     | Typ_aux (Typ_fn (arg_typs, typ_ret, _), _) -> arg_typs
     | Typ_aux (_, l) -> raise (unreachable l __POS__ "Non-function type for funcl")
@@ -1411,7 +1414,7 @@ let rec doc_fundef_lem type_env (FD_aux(FD_function(r, typa, efa, fcls),fannot) 
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | FCL_aux (FCL_Funcl(id, pexp),annot) :: _
-     when not (Env.is_extern id (env_of_annot annot) "lem") ->
+     when not (Env.is_extern id type_env "lem") ->
     (* Output "rec" modifier if function calls itself.  Mutually recursive
        functions are handled separately by doc_mutrec_lem. *)
     let is_funcl_rec =
