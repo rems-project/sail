@@ -1,4 +1,3 @@
-:rewrites interpreter
 initialize_registers()
 :run
 main()

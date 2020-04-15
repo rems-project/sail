@@ -55,6 +55,7 @@ open Printf
 let opt_interactive = ref false
 let opt_emacs_mode = ref false
 let opt_suppress_banner = ref false
+let opt_auto_interpreter_rewrites = ref false
 
 let env = ref Type_check.initial_env
 
@@ -80,7 +81,9 @@ let reflect_typ action =
     | ArgInt (_, next) -> int_typ :: arg_typs (next 0)
     | Action _ -> []
   in
-  function_typ (arg_typs action) unit_typ no_effect
+  match action with
+  | Action _ -> function_typ [unit_typ] unit_typ no_effect
+  | _ -> function_typ (arg_typs action) unit_typ no_effect
 
 let generate_help name help action =
   let rec args = function

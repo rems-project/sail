@@ -113,7 +113,8 @@ let sep = "-----------------------------------------------------" |> Util.blue |
 
 let vs_ids = ref (val_spec_ids !Interactive.ast)
 
-let interactive_state = ref (initial_state ~registers:false !Interactive.ast !Interactive.env !Value.primops)
+let interactive_state =
+  ref (initial_state ~registers:false !Interactive.ast !Interactive.env !Value.primops)
 
 (* We can't set up the elf commands in elf_loader.ml because it's used
    by Sail OCaml emulators at runtime, so set them up here. *)
@@ -314,6 +315,8 @@ let help =
   | ":option" ->
      sprintf ":option %s - Parse string as if it was an option passed on the command line. e.g. :option -help."
              (color yellow "<string>")
+  | ":recheck" ->
+     sprintf ":recheck - Re type-check the Sail AST, and synchronize the interpreters internal state to that AST."
   | ":rewrite" ->
      sprintf ":rewrite %s - Apply a rewrite to the AST. %s shows all possible rewrites. See also %s"
              (color yellow "<rewrite> <args>") (color green ":list_rewrites") (color green ":rewrites")
@@ -468,7 +471,7 @@ let handle_input' input =
         let more_commands = Util.string_of_list " " fst !Interactive.commands in
         let commands =
           [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help :output :option";
-            "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :rewrite :rewrites :list_rewrites :compile " ^ more_commands;
+            "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :recheck :rewrite :rewrites :list_rewrites :compile " ^ more_commands;
             "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
             "";
             ":(c)ommand can be called as either :c or :command." ]
@@ -510,9 +513,15 @@ let handle_input' input =
         | ":l" | ":load" ->
            let files = Util.split_on_char ' ' arg in
            let (_, ast, env) = Process_file.load_files options !Interactive.env files in
+           let ast, env =
+             if !Interactive.opt_auto_interpreter_rewrites then
+               Process_file.rewrite_ast_target "interpreter" env ast
+             else
+               ast, env
+           in
            Interactive.ast := append_ast !Interactive.ast ast;
-           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
            Interactive.env := env;
+           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
            vs_ids := val_spec_ids !Interactive.ast
         | ":u" | ":unload" ->
            Interactive.ast := Ast.Defs [];
@@ -819,6 +828,13 @@ let () =
          | _ -> None
     );
 
+  if !Interactive.opt_auto_interpreter_rewrites then (
+    let new_ast, new_env = Process_file.rewrite_ast_target "interpreter" !Interactive.env !Interactive.ast in
+    Interactive.ast := new_ast;
+    Interactive.env := new_env;
+    interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops
+  );
+  
   (* Read the script file if it is set with the -is option, and excute them *)
   begin match !opt_interactive_script with
   | None -> ()
