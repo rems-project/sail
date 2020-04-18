@@ -146,6 +146,7 @@ overload operator + = {add_bits, add_bits_int}
 
 val sub_bits = {
   ocaml: "sub_vec",
+  interpreter: "sub_vec",
   lem: "sub_vec",
   c: "sub_bits",
   coq: "sub_vec"
