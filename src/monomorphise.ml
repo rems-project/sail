@@ -81,6 +81,16 @@ let kbindings_union s1 s2 =
   |  (Some x), _ -> Some x
   |  _,  _ -> None) s1 s2
 
+let ids_in_exp exp =
+  let open Rewriter in
+  fold_exp {
+      (pure_exp_alg IdSet.empty IdSet.union) with
+      e_id = IdSet.singleton;
+      lEXP_id = IdSet.singleton;
+      lEXP_memory = (fun (id,s) -> List.fold_left IdSet.union (IdSet.singleton id) s);
+      lEXP_cast = (fun (_,id) -> IdSet.singleton id)
+    } exp
+
 let make_vector_lit sz i =
   let f j = if Big_int.equal (Big_int.modulus (Big_int.shift_right i (sz-j-1)) (Big_int.of_int 2)) Big_int.zero then '0' else '1' in
   let s = String.init sz f in
@@ -94,6 +104,12 @@ let tabulate f n =
 
 let make_vectors sz =
   tabulate (make_vector_lit sz) (Big_int.shift_left (Big_int.of_int 1) sz)
+
+let is_inc_vec typ =
+  try
+    let (_, ord, _) = vector_typ_args_of typ in
+    is_order_inc ord
+  with _ -> false
 
 let rec cross = function
   | [] -> failwith "cross"
@@ -2816,13 +2832,15 @@ let is_constant = function
   | E_aux (E_lit _,_) -> true
   | _ -> false
 
-let get_constant_vec_len env typ =
+let get_constant_vec_len ?solve:(solve=false) env typ =
   let typ = Env.base_typ_of env typ in
   match destruct_bitvector env typ with
   | Some (size,_) ->
-     (match nexp_simp size with
-     | Nexp_aux (Nexp_constant i,_) -> Some i
-     | _ -> None)
+     begin match nexp_simp size with
+       | Nexp_aux (Nexp_constant i,_) -> Some i
+       | nexp when solve -> solve_unique env nexp
+       | _ -> None
+     end
   | _ -> None
 
 let is_constant_vec_typ env typ = (get_constant_vec_len env typ <> None)
@@ -2878,13 +2896,13 @@ let rec rewrite_app env typ (id,args) =
     | [E_aux (E_app (append,
               [e1;
                E_aux (E_app (subrange1,
-                             [vector1; start1; end1]),_)]),_);
+                             [vector1; start1; end1]),_) as sub1]),_);
        E_aux (E_app (subrange2,
-                     [vector2; start2; end2]),_)]
+                     [vector2; start2; end2]),_) as sub2]
         when is_append append && is_subrange subrange1 && is_subrange subrange2 &&
           is_constant_vec_typ env (typ_of e1) &&
           is_bitvector_typ (typ_of vector1) && is_bitvector_typ (typ_of vector2) &&
-          not (is_constant_range (start1, end1) || is_constant_range (start2, end2)) ->
+          not (is_constant_vec_typ env (typ_of sub1) || is_constant_vec_typ env (typ_of sub2)) ->
        let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
        let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
        let midsize = nminus size size1 in begin
@@ -2935,10 +2953,10 @@ let rec rewrite_app env typ (id,args) =
        end
 
     (* variable-slice @ zeros *)
-    | [E_aux (E_app (op, [vector1; start1; len1]),_); zeros_exp]
+    | [E_aux (E_app (op, [vector1; start1; len1]),_) as exp1; zeros_exp]
         when (is_slice op || is_subrange op) && is_zeros_exp zeros_exp
           && is_bitvector_typ (typ_of vector1)
-          && not (is_constant start1 && is_constant len1 && is_constant_vec_typ env (typ_of zeros_exp)) ->
+          && not (is_constant_vec_typ env (typ_of exp1) && is_constant_vec_typ env (typ_of zeros_exp)) ->
        let op' = if is_subrange op then "place_subrange" else "place_slice" in
        begin match get_zeros_exp_len zeros_exp with
          | Some zlen -> try_cast_to_typ (mk_exp (E_app (mk_id op', [vector1; start1; len1; zlen])))
@@ -2956,12 +2974,12 @@ let rec rewrite_app env typ (id,args) =
 
     (* variable-range @ variable-range *)
     | [E_aux (E_app (subrange1,
-                     [vector1; start1; end1]),_);
+                     [vector1; start1; end1]),_) as exp1;
        E_aux (E_app (subrange2,
-                     [vector2; start2; end2]),_)]
+                     [vector2; start2; end2]),_) as exp2]
         when is_subrange subrange1 && is_subrange subrange2 &&
           is_bitvector_typ (typ_of vector1) && is_bitvector_typ (typ_of vector2) &&
-          not (is_constant_range (start1, end1) || is_constant_range (start2, end2)) ->
+          not (is_constant_vec_typ env (typ_of exp1) || is_constant_vec_typ env (typ_of exp2)) ->
        try_cast_to_typ
          (E_aux (E_app (mk_id "subrange_subrange_concat",
                         [vector1; start1; end1; vector2; start2; end2]),
@@ -3184,11 +3202,12 @@ let rec rewrite_app env typ (id,args) =
     let length_arg = List.filter (fun arg -> is_number (typ_of arg)) args in
     match List.filter (fun arg -> not (is_number (typ_of arg))) args with
     | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
-        when is_slice slice1 && not (is_constant length1) && is_bitvector_typ (typ_of vector1) ->
+      when is_slice slice1 && not (is_constant length1) && is_bitvector_typ (typ_of vector1) ->
        try_cast_to_typ (rewrap (E_app (mk_id "sext_slice", length_arg @ [vector1; start1; length1])))
 
-    | [E_aux (E_app (subrange1, [vector1; hi1; lo1]),_)]
-        when is_subrange subrange1 && not (is_constant hi1 && is_constant lo1) && is_bitvector_typ (typ_of vector1) ->
+    | [E_aux (E_app (subrange1, [vector1; hi1; lo1]),_) as exp1]
+      when is_subrange subrange1 && not (is_constant_vec_typ env (typ_of exp1))
+        && is_bitvector_typ (typ_of vector1) ->
        try_cast_to_typ (rewrap (E_app (mk_id "sext_subrange", length_arg @ [vector1; hi1; lo1])))
 
     | [E_aux (E_app (append, [E_aux (E_app (op, [vector1; start1; len1]), _); zeros_exp]), _)]
@@ -3251,7 +3270,7 @@ let rec rewrite_app env typ (id,args) =
 
     | _ -> E_app (id,args)
 
-  else if is_id env (Id "__SetSlice_bits") id then
+  else if is_id env (Id "__SetSlice_bits") id || is_id env (Id "SetSlice") id then
     match args with
     | [len; slice_len; vector; start; E_aux (E_app (zeros, _), _)]
       when is_zeros zeros && is_bitvector_typ (typ_of vector) ->
@@ -3267,9 +3286,31 @@ let rec rewrite_app env typ (id,args) =
        E_app (mk_id "sail_ones", length_arg)
     | _ -> E_app (id, args)
 
+  (* Turn constant-length subranges into slices, making the constant length more explicit,
+     e.g. turning x[i+1 .. i] into slice(x, i, 2) *)
+  else if is_subrange id then
+    match get_constant_vec_len ~solve:true env typ, args with
+    | Some i, [vector1; start1; end1]
+      when is_bitvector_typ (typ_of vector1) && not (is_constant start1 && is_constant end1) ->
+       let low = if is_inc_vec (typ_of vector1) then start1 else end1 in
+       E_app (mk_id "slice", [vector1; low; mk_exp (E_lit (mk_lit (L_num i)))])
+    | _, _ -> E_app (id, args)
+
+  (* Rewrite (v[x .. y] + i) to (v + (i << y))[x .. y], which is more amenable to further rewriting *)
+  else if is_id env (Id "add_bits_int") id then
+    match args with
+    | [E_aux (E_app (subrange1, [vec1; start1; end1]), a) as exp1; exp2]
+      when is_subrange subrange1 && is_bitvector_typ (typ_of vec1)
+        && not (is_constant_vec_typ env (typ_of exp1)) ->
+       let low = if is_inc_vec (typ_of vec1) then start1 else end1 in
+       let exp2' = mk_exp (E_app (mk_id "shl_int", [exp2; low])) in
+       let vec1' = E_aux (E_app (id, [vec1; exp2']), a) in
+       E_app (subrange1, [vec1'; start1; end1])
+    | _ -> E_app (id, args)
+
   else E_app (id,args)
 
-let rewrite_aux = function
+let rec rewrite_aux = function
   | E_app (id,args), (l, tannot) ->
      begin match destruct_tannot tannot with
      | Some (env, ty, _) ->
@@ -3299,7 +3340,19 @@ let rewrite_aux = function
      let lhs = LEXP_aux (LEXP_id id1, annot1) in
      let rhs = E_aux (E_app (mk_id "set_subrange_zeros", [E_aux (E_id id1, annot1); start1; end1]), annot1) in
      E_aux (E_assign (lhs, rhs), annot)
-  | exp,annot -> E_aux (exp,annot)
+  | (E_let (LB_aux (LB_val (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _),
+                           (E_aux (E_app (subrange1, [vec1; start1; end1]), _) as exp1)), _),
+           exp2) as e_aux), annot
+    when is_id (env_of_annot annot) (Id "vector_subrange") subrange1
+      && not (is_constant_vec_typ (env_of_annot annot) (typ_of exp1))->
+     let open Spec_analysis in
+     let depends1 = ids_in_exp exp1 in
+     let assigned2 = IdSet.union (assigned_vars exp2) (bound_vars exp2) in
+     if IdSet.disjoint depends1 assigned2 then rewrite_exp (subst id exp1 exp2) else
+     E_aux (e_aux, annot)
+  | e_aux, annot -> E_aux (e_aux, annot)
+
+and rewrite_exp exp = Rewriter.fold_exp { Rewriter.id_exp_alg with e_aux = rewrite_aux } exp
 
 let mono_rewrite defs =
   let open Rewriter in
@@ -3451,16 +3504,6 @@ let make_bitvector_cast_assign cast_name top_env env quant_kids src_typ target_t
 let make_bitvector_cast_cast cast_name top_env env quant_kids src_typ target_typ =
   let _,_,f = make_bitvector_cast_fns cast_name top_env env quant_kids src_typ target_typ
   in f
-
-let ids_in_exp exp =
-  let open Rewriter in
-  fold_exp {
-      (pure_exp_alg IdSet.empty IdSet.union) with
-      e_id = IdSet.singleton;
-      lEXP_id = IdSet.singleton;
-      lEXP_memory = (fun (id,s) -> List.fold_left IdSet.union (IdSet.singleton id) s);
-      lEXP_cast = (fun (_,id) -> IdSet.singleton id)
-    } exp
 
 let make_bitvector_env_casts top_env env quant_kids insts exp =
   let mk_cast var typ exp = (make_bitvector_cast_let "bitvector_cast_in" env top_env quant_kids typ (subst_kids_typ insts typ)) var exp in

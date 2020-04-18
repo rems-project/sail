@@ -602,11 +602,11 @@ let top_sort_defs (Defs defs) =
 
 
 let assigned_vars exp =
-  fst (Rewriter.fold_exp
-         { (Rewriter.compute_exp_alg IdSet.empty IdSet.union) with
-           Rewriter.lEXP_id = (fun id -> IdSet.singleton id, LEXP_id id);
-           Rewriter.lEXP_cast = (fun (ty,id) -> IdSet.singleton id, LEXP_cast (ty,id)) }
-         exp)
+  (Rewriter.fold_exp
+     { (Rewriter.pure_exp_alg IdSet.empty IdSet.union) with
+       Rewriter.lEXP_id = (fun id -> IdSet.singleton id);
+       Rewriter.lEXP_cast = (fun (ty,id) -> IdSet.singleton id) }
+     exp)
 
 let assigned_vars_in_fexps fes =
   List.fold_left
@@ -633,6 +633,14 @@ let rec assigned_vars_in_lexp (LEXP_aux (le,_)) =
   | LEXP_field (le,_) -> assigned_vars_in_lexp le
   | LEXP_deref e -> assigned_vars e
 
+let bound_vars exp =
+  let open Rewriter in
+  let pat_alg = {
+    (pure_pat_alg IdSet.empty IdSet.union) with
+    p_id = IdSet.singleton;
+    p_as = (fun (ids, id) -> IdSet.add id ids)
+  } in
+  fold_exp { (pure_exp_alg IdSet.empty IdSet.union) with pat_alg = pat_alg } exp
 
 let pat_id_is_variable env id =
   match Type_check.Env.lookup_id id env with
