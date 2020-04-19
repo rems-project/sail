@@ -362,46 +362,63 @@ let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
   lem_nexps_of_typ typ
   |> NexpSet.exists (fun nexp -> not (is_nexp_constant nexp))
 
-let replace_typ_size ctxt env (Typ_aux (t,a)) =
+let rec replace_typ_size ctxt env (Typ_aux (t, a) as typ) =
+  let rewrap t = Typ_aux (t, a) in
+  let recur = replace_typ_size ctxt env in
   match t with
-  | Typ_app (Id_aux (Id "bitvector",_) as id, [A_aux (A_nexp size,_);ord]) ->
-     begin
-       let mk_typ nexp =
-         Some (Typ_aux (Typ_app (id, [A_aux (A_nexp nexp,Parse_ast.Unknown);ord]),a))
-       in
-       match Type_check.solve_unique env size with
-       | Some n -> mk_typ (nconstant n)
+  | Typ_tup typs ->
+     begin match Util.option_all (List.map recur typs) with
+       | Some typs' -> Some (rewrap (Typ_tup typs'))
+       | None -> None
+     end
+  | Typ_app (id, args) when contains_t_pp_var ctxt typ ->
+     begin match Util.option_all (List.map (replace_typ_arg_size ctxt env) args) with
+       | Some args' -> Some (rewrap (Typ_app (id, args')))
+       | None -> None
+     end
+  | Typ_app _ -> Some typ
+  | Typ_id _ -> Some typ
+  | Typ_fn (argtyps, rtyp, eff) ->
+     begin match (Util.option_all (List.map recur argtyps), recur rtyp) with
+       | (Some argtyps', Some rtyp') -> Some (rewrap (Typ_fn (argtyps', rtyp', eff)))
+       | _ -> None
+     end
+  | Typ_var kid ->
+     let is_kid nexp = Nexp.compare nexp (nvar kid) = 0 in
+     if NexpSet.exists is_kid ctxt.bound_nexps then Some typ else None
+  | Typ_exist (kids, nc, typ) ->
+     begin match recur typ with
+       | Some typ' -> Some (rewrap (Typ_exist (kids, nc, typ')))
+       | None -> None
+     end
+  | Typ_internal_unknown
+  | Typ_bidir (_, _, _) -> None
+and replace_typ_arg_size ctxt env (A_aux (ta, a) as targ) =
+  let rewrap ta = A_aux (ta, a) in
+  match ta with
+  | A_nexp nexp ->
+     begin match Type_check.solve_unique env nexp with
+       | Some n -> Some (rewrap (A_nexp (nconstant n)))
        | None ->
-          let is_equal nexp =
-            prove __POS__ env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
-          in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
-          | nexp -> mk_typ nexp
+          let is_equal nexp' =
+            prove __POS__ env (NC_aux (NC_equal (nexp,nexp'),Parse_ast.Unknown))
+          in
+          match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
+          | nexp' -> Some (rewrap (A_nexp nexp'))
           | exception Not_found -> None
      end
-       (*
-  | Typ_app (Id_aux (Id "vector",_) as id, [A_aux (A_nexp size,_);ord;typ']) ->
-     begin
-       let mk_typ nexp =
-         Some (Typ_aux (Typ_app (id, [A_aux (A_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
-       in
-       match Type_check.solve_unique env size with
-       | Some n -> mk_typ (nconstant n)
-       | None ->
-          let is_equal nexp =
-            prove __POS__ env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
-          in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
-          | nexp -> mk_typ nexp
-          | exception Not_found -> None
+  | A_typ typ ->
+     begin match replace_typ_size ctxt env typ with
+       | Some typ' -> Some (rewrap (A_typ typ'))
+       | None -> None
      end
-        *)
-  | _ -> None
+  | A_order _ | A_bool _ -> Some targ
 
 let make_printable_type ctxt env typ =
   if contains_t_pp_var ctxt typ
   then
-    match replace_typ_size ctxt env typ with
-    | None -> None
-    | Some typ -> Some typ
+    try replace_typ_size ctxt env (Env.expand_synonyms env typ) with
+    | _ -> None
   else Some typ
 
 let doc_tannot_lem ctxt env eff typ =
