@@ -3348,7 +3348,7 @@ let rec rewrite_aux = function
      let open Spec_analysis in
      let depends1 = ids_in_exp exp1 in
      let assigned2 = IdSet.union (assigned_vars exp2) (bound_vars exp2) in
-     if IdSet.disjoint depends1 assigned2 then rewrite_exp (subst id exp1 exp2) else
+     if IdSet.is_empty (IdSet.inter depends1 assigned2) then rewrite_exp (subst id exp1 exp2) else
      E_aux (e_aux, annot)
   | e_aux, annot -> E_aux (e_aux, annot)
 
