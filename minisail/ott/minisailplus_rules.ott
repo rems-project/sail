@@ -332,7 +332,11 @@ formula :: formula_ ::=
   | bsub = UNIFY bp1 bp2 :: :: unify_bp {{ isa Some [[bsub]] = unify_b  [[bp1]] [[bp2]] }}  {{ coq Some [[bsub]] = unify_b  [[bp1]] [[bp2]] }}
   | bp1 .. bpn = b_of ( tp1 .. tpm ) :: :: base_of_many {{ com Extract bases from types }}
                   {{ isa ([[bp1 .. bpn ]] = List.map b_of [[tp1 .. tpm ]]) }}
-		  {{ coq ([[bp1 .. bpn ]] = b_of_many [[tp1 .. tpm ]]) }}
+		  {{ coq ([[bp1 .. bpn ]] = b_of_many [[tp1 .. tpm ]] }}
+  | bp1 .... bpn = replicate_base_vec order bp patp1 .... patpm :: :: replicate_base_vec
+                  {{ com Replicate vector base type }}
+                  {{ isa ( [[bp1 .... bpn ]] = replicate_base order bp (length [[patp1 .... patpm]])) }}
+		  {{ coq ( [[bp1 .... bpn ]] = replicate_base order bp (length [[patp1 .... patpm]])) }}
 
 parsing
 G_cons left G_cons
@@ -569,19 +573,9 @@ defn
 T ; G |- patp <<= tp ~> xp ; klist ; xlist :: :: check_patp :: check_patm_
 {{ com Type check pattern $[[patp]]$ is $[[tp]]$. $[[xlist]]$ is the list of pattern variables in the pattern. }}
 by
-
-% The xp passed in already has an entry in the context
-
------------------------- :: wild
-T ; G |- _ <<= {  zp : bp | cp } ~>  xp ; ;
-% :K_singleton: xp  : bp [ :C_subst: c[x/z] ] ;  xm
-
-%G |- x =>> t ~> x ; D
-%G |- t ~< { EX </ ki : bi [ ci ] // i /> . z : bp | cp }
---------------------------------------------------- :: id
-%G |- id <<= {  z : bp | cp } ~>  x ; :K_cons: x  : bp [ :C_subst: c[x/z] ] , :K_singleton: id : b [ xp = id ] ;
-T ; G |- id <<= {  zp : bp | cp } ~>  xp ; :K_singleton: id : bp [ xp = id ] ; id
-
+% The xp passed in already has an entry in the context that matches tp.
+% klist tracks the types of the sub-patterns
+% Mode:  i => i => i => i => i => o => o
 % DONOT Satis check. Only in letbind situation do we want pattern to be complete
 % FIXME Sometimes add xm' as dummy; just to have a constraint
 %:check_v: G |- lit <<= {  z : bp | cp } ~>
@@ -590,14 +584,22 @@ xp2 = fresh G
 ------------------------------------------------------- :: lit
 T ; G |- lit <<= {  zp : bp | cp } ~> xp1 ; :K_singleton: xp2 : bp [ xp1 = lit ] ; xp1
 
-% xm' is the type of the whole pattern; xp2 is the type of the argumepnts for the constructor app
-tp1 { zp : bp | cp } = lookup_ctor T id
-xp2 = fresh G
-T ; :G_cons: G , xp2 : bp [ :C_subst: cp [xp2/zp] ] |- (patp1 , .. , patpn ) <<= { zp : bp | cp } ~> xp2 ; klist ; xlist
-vp = mk_ctor_v id xlist
-T ; G |- tp2 ~< tp1
-------------------------------------------------- :: ctor
-T ; G |- id ( patp1 , .. , patpn ) <<= tp2 ~> xp2 ; xp2 : bp [ :C_conj: :C_subst: cp [xp2/zp] /\ xp2 = vp] , klist ; xlist
+------------------------ :: wild
+T ; G |- _ <<= {  zp : bp | cp } ~>  xp ; ;
+% :K_singleton: xp  : bp [ :C_subst: c[x/z] ] ;  xm
+
+
+T ; G |- patp <<= tp1 ~> xp ; klist ;xlist
+T ; G , klist |- tp1 ~< tp2
+----------------------------------- :: typ
+T ; G |- ( tp1 ) patp <<= tp2 ~> xp ; klist ; xlist
+
+
+%G |- x =>> t ~> x ; D
+%G |- t ~< { EX </ ki : bi [ ci ] // i /> . z : bp | cp }
+--------------------------------------------------- :: id
+%G |- id <<= {  z : bp | cp } ~>  x ; :K_cons: x  : bp [ :C_subst: c[x/z] ] , :K_singleton: id : b [ xp = id ] ;
+T ; G |- id <<= {  zp : bp | cp } ~>  xp ; :K_singleton: id : bp [ xp = id ] ; id
 
 % FIXME Should rationalise this and the one above. SAil->MS should spit out one style
 tp1 { zp : bp | cp } = lookup_ctor T id
@@ -605,8 +607,24 @@ xp2 = fresh G
 T ; :G_cons: G , xp2 : bp [ :C_subst: cp [xp2/zp] ] |- patp <<= { zp : bp | cp } ~> xp2 ; klist ; xlist
 vp = mk_ctor_v id xlist
 T ; G |- tp2 ~< tp1
-------------------------------------------------- :: ctor_single
+------------------------------------------------- :: app_single
 T ; G |- id ( patp ) <<= tp2 ~> xp2 ; xp2 : bp [ :C_conj: :C_subst: cp [xp2/zp] /\ xp2 = vp] , klist ; xlist
+
+
+% xm' is the type of the whole pattern; xp2 is the type of the argumepnts for the constructor app
+tp1 { zp : bp | cp } = lookup_ctor T id
+xp2 = fresh G
+T ; :G_cons: G , xp2 : bp [ :C_subst: cp [xp2/zp] ] |- (patp1 , .. , patpn ) <<= { zp : bp | cp } ~> xp2 ; klist ; xlist
+vp = mk_ctor_v id xlist
+T ; G |- tp2 ~< tp1
+------------------------------------------------- :: app_many
+T ; G |- id ( patp1 , .. , patpn ) <<= tp2 ~> xp2 ; xp2 : bp [ :C_conj: :C_subst: cp [xp2/zp] /\ xp2 = vp] , klist ; xlist
+
+bp1 .... bpn = replicate_base_vec order bp patp1 .... patpn
+T ; G |- patp1 .... patpn <<= bp1 , .... , bpn ~> klist ; xp1 .. xpj
+------------------------------------------------------------------------------------------ :: concat
+T ; G |- patp1 : .... : patpn  <<= { zp : vec order bp | cp } ~> xp ; klist ; xp1 .. xpj
+
 
 
 %G |- {  zp : bp1 | true }  ~> x1 ; klist1 ; xlist1   ..  G |- patpn <<= {  z : bpn | true }  ~> xn ; klistn ; xlistn
@@ -618,15 +636,23 @@ T ; G , klist1 |- patp1 .. patpn <<= bp1 , .. , bpn ~> klist2 ; xp1 .. xpn
 ---------------------------------------------------------------------------------- :: tuple
 T ; G |- ( patp1 , .. , patpn ) <<=  { zp : ( bp1 , .. , bpn ) | cp  } ~> xp ; ( klist1 , klist2 ) ; xp
 
-T ; G |- patp <<= tp1 ~> xp ; klist ;xlist
-T ; G , klist |- tp1 ~< tp2
------------------------------------ :: typ
-T ; G |- ( tp1 ) patp <<= tp2 ~> xp ; klist ; xlist
+
+% These are not needed to type check riscv
+%----------------------------------------- :: list
+%T ; G |- [|| patp1 , .. , patpn ||] <<= tp ~> xp ; klist ; xp
 
 
-%G |- patp1 =>> { z : vec order b | cp1 } ~> D1  .... G |- patpn =>> { z : vec order b | cn } ~> Dn
-%------------------------------------------------------------------------------------------ :: concat
-%G |- patp1 : .... : patpn  <<= t ~> D1 , .... , Dn
+%xp_hd = fresh G
+%T ; G |- patp1 <<= { zp : bp : true } ~> xp_hd ; klist1 ; xplist1
+%xp_tl = fresh G
+%T ; G |- patp2 <<= { zp : vec odr bp : true } ~> xp_tl ; klist2 ; xplist2
+%-------------------------------------------------------------------------------------------- :: cons
+%T ; G |- patp1 :: patp2 <<= { zp : vec odr bp | cp } ~> xp ; (klist1 ; klist2 ) ; xp
+
+
+%T ; G |- patp1 ... patpn <== bp1 , .. , bpn ~> klist ; xplist
+%-------------------------------------------------------------- :: string_append
+%T ; G |- patp1 ^^ ... ^^ patpn <<= { zp : string | cp } ~> xp ; klist ; xplist
 
 embed {{ isa
 code_pred   (modes: i ⇒ i ⇒ i ⇒ i ⇒ i => o => o ⇒  bool ) [show_steps,  show_mode_inference,  show_invalid_clauses] check_patp .

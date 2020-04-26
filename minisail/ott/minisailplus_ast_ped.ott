@@ -94,21 +94,21 @@ klist {{ tex \gamma^p }} :: 'K_' ::= {{ phantom }} {{ isa (xp*bp*cp) list }}  {{
 
 % Not included from Sail are or and not patterns
 patp {{ tex pat^p }} :: 'Pp_' ::= {{ com Patterns }} {{ aux loc _ }}
-  | lit     :: :: lit
-  | _ :: :: wild
-  | ( patp as xp )           :: :: as_var  {{ com pattern as an immutable variable }}
-  | ( tp ) patp          :: :: typ           {{ com pattern cast }}
-  | id :: :: id
-  | patp as tp          :: :: as_typ   {{ com pattern as a type-variable }}
-  | id ( patp1 , ... , patpn )   :: :: app
-  | [ patp1 , .. , patpn ] :: :: vector          {{ com vector pattern }}
-  | patp1 : .... : patpn   :: :: vector_concat  {{ com concatenated vector pattern }}
-  | ( patp1 , .. , patpn ) :: :: tup      {{ com tuple pattern }}
+  | lit                        :: :: lit
+  | _                          :: :: wild
+  | ( patp as xp )             :: :: as_var  {{ com pattern as an immutable variable }}
+  | ( tp ) patp                :: :: typ           {{ com pattern cast }}
+  | id                         :: :: id
+  | patp as tp                 :: :: as_typ   {{ com pattern as a type-variable }}
+  | id ( patp1 , ... , patpn ) :: :: app
+  | [ patp1 , .. , patpn ]     :: :: vector          {{ com vector pattern }}
+  | patp1 : .... : patpn       :: :: vector_concat  {{ com concatenated vector pattern }}
+  | ( patp1 , .. , patpn )     :: :: tup      {{ com tuple pattern }}
   | [|| patp1 , .. , patpn ||] :: :: list {{ com list pattern }}
-  | ( patp )              :: S :: paren {{ ichlo [[patp]] }}
-  | patp1 '::' patp2     :: :: cons {{ com cons pattern }}
-  | patp1 ^^ ... ^^ patpn :: :: string_append {{ com string append pattern }}
-  | patp [ vp / xp ] :: M :: subst {{ icho (subst_patp  [[vp]] [[xp]] [[patp]] ) }}
+  | ( patp )                   :: S :: paren {{ ichlo [[patp]] }}
+  | patp1 '::' patp2           :: :: cons {{ com cons pattern }}
+  | patp1 ^^ ... ^^ patpn      :: :: string_append {{ com string append pattern }}
+  | patp [ vp / xp ]           :: M :: subst {{ icho (subst_patp  [[vp]] [[xp]] [[patp]] ) }}
 
 
 
@@ -167,7 +167,8 @@ ep {{ tex e^p }} :: 'Ep_' ::= {{ com Expressions }} {{ aux loc _ }}
   | [ ep1 , ... , epn ]                            :: :: vec {{ com vector }}
   | [|| ep1 , .. , epn ||]                         :: :: list {{ com list }}          
   | ep1 '::' ep2                                   :: :: cons {{ com list cons }}
-
+  | ref ep                                         :: :: ref {{ com register reference }}
+  
 funclp {{ tex funcl }}  :: 'FCLp_' ::= {{ aux loc _ }} {{ com Function clause }}
   | id pexpp :: :: funcl
 

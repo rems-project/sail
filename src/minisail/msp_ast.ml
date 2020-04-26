@@ -72,7 +72,6 @@ end;; (*struct HOL*)
 module Option : sig
   val equal_optiona : 'a HOL.equal -> 'a option -> 'a option -> bool
   val equal_option : 'a HOL.equal -> ('a option) HOL.equal
-  val rel_option : ('a -> 'b -> bool) -> 'a option -> 'b option -> bool
 end = struct
 
 let rec equal_optiona _A x0 x1 = match x0, x1 with None, Some x2 -> false
@@ -83,14 +82,11 @@ let rec equal_optiona _A x0 x1 = match x0, x1 with None, Some x2 -> false
 let rec equal_option _A =
   ({HOL.equal = equal_optiona _A} : ('a option) HOL.equal);;
 
-let rec rel_option r x1 x2 = match r, x1, x2 with r, None, Some y2 -> false
-                     | r, Some y2, None -> false
-                     | r, None, None -> true
-                     | r, Some x2, Some y2 -> r x2 y2;;
-
 end;; (*struct Option*)
 
 module Product_Type : sig
+  val equal_boola : bool -> bool -> bool
+  val equal_bool : bool HOL.equal
   val equal_proda : 'a HOL.equal -> 'b HOL.equal -> 'a * 'b -> 'a * 'b -> bool
   val equal_prod : 'a HOL.equal -> 'b HOL.equal -> ('a * 'b) HOL.equal
   val equal_unita : unit -> unit -> bool
@@ -98,8 +94,14 @@ module Product_Type : sig
   val apsnd : ('a -> 'b) -> 'c * 'a -> 'c * 'b
   val fst : 'a * 'b -> 'a
   val snd : 'a * 'b -> 'b
-  val equal_bool : bool -> bool -> bool
 end = struct
+
+let rec equal_boola p pa = match p, pa with p, true -> p
+                      | p, false -> not p
+                      | true, p -> p
+                      | false, p -> not p;;
+
+let equal_bool = ({HOL.equal = equal_boola} : bool HOL.equal);;
 
 let rec equal_proda _A _B
   (x1, x2) (y1, y2) = HOL.eq _A x1 y1 && HOL.eq _B x2 y2;;
@@ -116,11 +118,6 @@ let rec apsnd f (x, y) = (x, f y);;
 let rec fst (x1, x2) = x1;;
 
 let rec snd (x1, x2) = x2;;
-
-let rec equal_bool p pa = match p, pa with p, true -> p
-                     | p, false -> not p
-                     | true, p -> p
-                     | false, p -> not p;;
 
 end;; (*struct Product_Type*)
 
@@ -369,6 +366,7 @@ module Lista : sig
   val map : ('a -> 'b) -> 'a list -> 'b list
   val enumerate : Arith.nat -> 'a list -> (Arith.nat * 'a) list
   val removeAll : 'a HOL.equal -> 'a -> 'a list -> 'a list
+  val replicate : Arith.nat -> 'a -> 'a list
   val gen_length : Arith.nat -> 'a list -> Arith.nat
   val map_filter : ('a -> 'b option) -> 'a list -> 'b list
   val list_update : 'a list -> Arith.nat -> 'a -> 'a list
@@ -446,6 +444,10 @@ let rec removeAll _A
   x xa1 = match x, xa1 with x, [] -> []
     | x, y :: xs ->
         (if HOL.eq _A x y then removeAll _A x xs else y :: removeAll _A x xs);;
+
+let rec replicate
+  n x = (if Arith.equal_nat n Arith.zero_nat then []
+          else x :: replicate (Arith.minus_nat n Arith.one_nat) x);;
 
 let rec gen_length
   n x1 = match n, x1 with n, x :: xs -> gen_length (Arith.suc n) xs
@@ -1382,18 +1384,15 @@ end;; (*struct Map*)
 
 module Set : sig
   type 'a set = Set of 'a list | Coset of 'a list
-  val ball : 'a set -> ('a -> bool) -> bool
   val image : ('a -> 'b) -> 'a set -> 'b set
   val insert : 'a HOL.equal -> 'a -> 'a set -> 'a set
   val member : 'a HOL.equal -> 'a -> 'a set -> bool
   val bot_set : 'a set
   val sup_set : 'a HOL.equal -> 'a set -> 'a set -> 'a set
-  val top_set : 'a set
+  val less_eq_set : 'a HOL.equal -> 'a set -> 'a set -> bool
 end = struct
 
 type 'a set = Set of 'a list | Coset of 'a list;;
-
-let rec ball (Set xs) p = Lista.list_all p xs;;
 
 let rec image f (Set xs) = Set (Lista.map f xs);;
 
@@ -1412,29 +1411,17 @@ let rec sup_set _A
     Coset xs, a -> Coset (Lista.filter (fun x -> not (member _A x a)) xs)
     | Set xs, a -> Lista.fold (insert _A) xs a;;
 
-let top_set : 'a set = Coset [];;
+let rec less_eq_set _A
+  a b = match a, b with
+    Coset xs, Set ys ->
+      (if Lista.null xs && Lista.null ys then false
+        else failwith
+               "subset_eq (List.coset _) (List.set _) requires type class instance card_UNIV"
+               (fun _ -> less_eq_set _A (Coset xs) (Set ys)))
+    | a, Coset ys -> Lista.list_all (fun y -> not (member _A y a)) ys
+    | Set xs, b -> Lista.list_all (fun x -> member _A x b) xs;;
 
 end;; (*struct Set*)
-
-module FSet : sig
-  type 'a fset = Abs_fset of 'a Set.set
-  val fset : 'a fset -> 'a Set.set
-  val fBall : 'a fset -> ('a -> bool) -> bool
-  val fimage : ('b -> 'a) -> 'b fset -> 'a fset
-  val fset_of_list : 'a list -> 'a fset
-end = struct
-
-type 'a fset = Abs_fset of 'a Set.set;;
-
-let rec fset (Abs_fset x) = x;;
-
-let rec fBall xa = Set.ball (fset xa);;
-
-let rec fimage xb xc = Abs_fset (Set.image xb (fset xc));;
-
-let rec fset_of_list xa = Abs_fset (Set.Set xa);;
-
-end;; (*struct FSet*)
 
 module AList : sig
   val update : 'a HOL.equal -> 'a -> 'b -> ('a * 'b) list -> ('a * 'b) list
@@ -1462,15 +1449,10 @@ end;; (*struct Debug*)
 module Finite_Map : sig
   type ('a, 'b) fmap = Fmap_of_list of ('a * 'b) list
   val fmadd : 'a HOL.equal -> ('a, 'b) fmap -> ('a, 'b) fmap -> ('a, 'b) fmap
-  val fmdom : ('a, 'b) fmap -> 'a FSet.fset
   val fmupd : 'a HOL.equal -> 'a -> 'b -> ('a, 'b) fmap -> ('a, 'b) fmap
   val fmempty : ('a, 'b) fmap
-  val fmlookup : 'a HOL.equal -> ('a, 'b) fmap -> 'a -> 'b option
-  val fmrel :
-    'c HOL.equal -> ('a -> 'b -> bool) -> ('c, 'a) fmap -> ('c, 'b) fmap -> bool
   val fmmap_keys : ('a -> 'b -> 'c) -> ('a, 'b) fmap -> ('a, 'c) fmap
-  val equal_fmap :
-    'a HOL.equal -> 'b HOL.equal -> ('a, 'b) fmap -> ('a, 'b) fmap -> bool
+  val fmlookup : 'a HOL.equal -> ('a, 'b) fmap -> 'a -> 'b option
 end = struct
 
 type ('a, 'b) fmap = Fmap_of_list of ('a * 'b) list;;
@@ -1478,26 +1460,14 @@ type ('a, 'b) fmap = Fmap_of_list of ('a * 'b) list;;
 let rec fmadd _A
   (Fmap_of_list m) (Fmap_of_list n) = Fmap_of_list (AList.merge _A m n);;
 
-let rec fmdom
-  (Fmap_of_list m) = FSet.fimage Product_Type.fst (FSet.fset_of_list m);;
-
 let rec fmupd _A k v m = fmadd _A m (Fmap_of_list [(k, v)]);;
 
 let fmempty : ('a, 'b) fmap = Fmap_of_list [];;
 
-let rec fmlookup _A (Fmap_of_list m) = Map.map_of _A m;;
-
-let rec fmrel _C
-  r m n =
-    FSet.fBall (fmdom m)
-      (fun x -> Option.rel_option r (fmlookup _C m x) (fmlookup _C n x)) &&
-      FSet.fBall (fmdom n)
-        (fun x -> Option.rel_option r (fmlookup _C m x) (fmlookup _C n x));;
-
 let rec fmmap_keys
   f (Fmap_of_list m) = Fmap_of_list (Lista.map (fun (a, b) -> (a, f a b)) m);;
 
-let rec equal_fmap _A _B = fmrel _A (HOL.equal _B);;
+let rec fmlookup _A (Fmap_of_list m) = Map.map_of _A m;;
 
 end;; (*struct Finite_Map*)
 
@@ -1578,14 +1548,14 @@ let rec explode
 let rec equal_char
   (Chara (x1, x2, x3, x4, x5, x6, x7, x8))
     (Chara (y1, y2, y3, y4, y5, y6, y7, y8)) =
-    Product_Type.equal_bool x1 y1 &&
-      (Product_Type.equal_bool x2 y2 &&
-        (Product_Type.equal_bool x3 y3 &&
-          (Product_Type.equal_bool x4 y4 &&
-            (Product_Type.equal_bool x5 y5 &&
-              (Product_Type.equal_bool x6 y6 &&
-                (Product_Type.equal_bool x7 y7 &&
-                  Product_Type.equal_bool x8 y8))))));;
+    Product_Type.equal_boola x1 y1 &&
+      (Product_Type.equal_boola x2 y2 &&
+        (Product_Type.equal_boola x3 y3 &&
+          (Product_Type.equal_boola x4 y4 &&
+            (Product_Type.equal_boola x5 y5 &&
+              (Product_Type.equal_boola x6 y6 &&
+                (Product_Type.equal_boola x7 y7 &&
+                  Product_Type.equal_boola x8 y8))))));;
 
 end;; (*struct Stringa*)
 
@@ -1608,7 +1578,7 @@ module SyntaxVCT : sig
   val equal_vp : vp HOL.equal
   type cep = CE_val of vp | CE_bop of bop * cep * cep | CE_many_plus of cep list
     | CE_uop of uop * cep | CE_proj of string * cep |
-    CE_field_access of xp * string
+    CE_field_access of vp * string
   val equal_cepa : cep -> cep -> bool
   val equal_cep : cep HOL.equal
   type cp = C_true | C_false | C_conj of cp * cp | C_conj_many of cp list |
@@ -2045,7 +2015,7 @@ let equal_vp = equal_vp ();;
 
 type cep = CE_val of vp | CE_bop of bop * cep * cep | CE_many_plus of cep list |
   CE_uop of uop * cep | CE_proj of string * cep |
-  CE_field_access of xp * string;;
+  CE_field_access of vp * string;;
 
 let rec equal_cepa
   x0 x1 = match x0, x1 with
@@ -2080,7 +2050,7 @@ let rec equal_cepa
     | CE_val x1, CE_bop (x21, x22, x23) -> false
     | CE_bop (x21, x22, x23), CE_val x1 -> false
     | CE_field_access (x61, x62), CE_field_access (y61, y62) ->
-        equal_xpa x61 y61 && ((x62 : string) = y62)
+        equal_vpa x61 y61 && ((x62 : string) = y62)
     | CE_proj (x51, x52), CE_proj (y51, y52) ->
         ((x51 : string) = y51) && equal_cepa x52 y52
     | CE_uop (x41, x42), CE_uop (y41, y42) ->
@@ -2570,15 +2540,12 @@ module SyntaxPED : sig
     Pp_tup of Location.loc * patp list | Pp_list of Location.loc * patp list |
     Pp_cons of Location.loc * patp * patp |
     Pp_string_append of Location.loc * patp list
-  val equal_patpa : patp -> patp -> bool
-  val equal_patp : patp HOL.equal
   type lexpp = LEXPp_mvar of Location.loc * string |
     LEXPp_cast of Location.loc * SyntaxVCT.tau * string |
     LEXPp_tup of Location.loc * lexpp list |
     LEXPp_field of Location.loc * lexpp * string
   type loop = While | Until
-  type letbind = LBp_val of Location.loc * patp * ep
-  and ep = Ep_val of Location.loc * SyntaxVCT.vp |
+  type ep = Ep_val of Location.loc * SyntaxVCT.vp |
     Ep_mvar of Location.loc * string | Ep_concat of Location.loc * ep list |
     Ep_tuple of Location.loc * ep list |
     Ep_app of Location.loc * SyntaxVCT.xp * ep |
@@ -2604,14 +2571,7 @@ module SyntaxPED : sig
     Ep_assert of Location.loc * ep * ep | Ep_vec of Location.loc * ep list |
     Ep_list of Location.loc * ep list | Ep_cons of Location.loc * ep * ep
   and pexpp = PEXPp_exp of patp * ep | PEXPp_when of patp * ep * ep
-  val equal_lexppa : lexpp -> lexpp -> bool
-  val equal_lexpp : lexpp HOL.equal
-  val equal_loop : loop -> loop -> bool
-  val equal_ep : ep HOL.equal
-  val equal_epa : ep -> ep -> bool
-  val equal_pexppa : pexpp -> pexpp -> bool
-  val equal_pexpp : pexpp HOL.equal
-  val equal_letbind : letbind -> letbind -> bool
+  and letbind = LBp_val of Location.loc * patp * ep
   type tannot_opt_p = Typ_annot_opt_pnone of Location.loc |
     Typ_annot_opt_psome of
       Location.loc * (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
@@ -2854,200 +2814,6 @@ type patp = Pp_lit of Location.loc * SyntaxVCT.lit | Pp_wild of Location.loc |
   Pp_cons of Location.loc * patp * patp |
   Pp_string_append of Location.loc * patp list;;
 
-let rec equal_patpa
-  x0 x1 = match x0, x1 with
-    Pp_cons (x121, x122, x123), Pp_string_append (x131, x132) -> false
-    | Pp_string_append (x131, x132), Pp_cons (x121, x122, x123) -> false
-    | Pp_list (x111, x112), Pp_string_append (x131, x132) -> false
-    | Pp_string_append (x131, x132), Pp_list (x111, x112) -> false
-    | Pp_list (x111, x112), Pp_cons (x121, x122, x123) -> false
-    | Pp_cons (x121, x122, x123), Pp_list (x111, x112) -> false
-    | Pp_tup (x101, x102), Pp_string_append (x131, x132) -> false
-    | Pp_string_append (x131, x132), Pp_tup (x101, x102) -> false
-    | Pp_tup (x101, x102), Pp_cons (x121, x122, x123) -> false
-    | Pp_cons (x121, x122, x123), Pp_tup (x101, x102) -> false
-    | Pp_tup (x101, x102), Pp_list (x111, x112) -> false
-    | Pp_list (x111, x112), Pp_tup (x101, x102) -> false
-    | Pp_vector_concat (x91, x92), Pp_string_append (x131, x132) -> false
-    | Pp_string_append (x131, x132), Pp_vector_concat (x91, x92) -> false
-    | Pp_vector_concat (x91, x92), Pp_cons (x121, x122, x123) -> false
-    | Pp_cons (x121, x122, x123), Pp_vector_concat (x91, x92) -> false
-    | Pp_vector_concat (x91, x92), Pp_list (x111, x112) -> false
-    | Pp_list (x111, x112), Pp_vector_concat (x91, x92) -> false
-    | Pp_vector_concat (x91, x92), Pp_tup (x101, x102) -> false
-    | Pp_tup (x101, x102), Pp_vector_concat (x91, x92) -> false
-    | Pp_vector (x81, x82), Pp_string_append (x131, x132) -> false
-    | Pp_string_append (x131, x132), Pp_vector (x81, x82) -> false
-    | Pp_vector (x81, x82), Pp_cons (x121, x122, x123) -> false
-    | Pp_cons (x121, x122, x123), Pp_vector (x81, x82) -> false
-    | Pp_vector (x81, x82), Pp_list (x111, x112) -> false
-    | Pp_list (x111, x112), Pp_vector (x81, x82) -> false
-    | Pp_vector (x81, x82), Pp_tup (x101, x102) -> false
-    | Pp_tup (x101, x102), Pp_vector (x81, x82) -> false
-    | Pp_vector (x81, x82), Pp_vector_concat (x91, x92) -> false
-    | Pp_vector_concat (x91, x92), Pp_vector (x81, x82) -> false
-    | Pp_app (x71, x72, x73), Pp_string_append (x131, x132) -> false
-    | Pp_string_append (x131, x132), Pp_app (x71, x72, x73) -> false
-    | Pp_app (x71, x72, x73), Pp_cons (x121, x122, x123) -> false
-    | Pp_cons (x121, x122, x123), Pp_app (x71, x72, x73) -> false
-    | Pp_app (x71, x72, x73), Pp_list (x111, x112) -> false
-    | Pp_list (x111, x112), Pp_app (x71, x72, x73) -> false
-    | Pp_app (x71, x72, x73), Pp_tup (x101, x102) -> false
-    | Pp_tup (x101, x102), Pp_app (x71, x72, x73) -> false
-    | Pp_app (x71, x72, x73), Pp_vector_concat (x91, x92) -> false
-    | Pp_vector_concat (x91, x92), Pp_app (x71, x72, x73) -> false
-    | Pp_app (x71, x72, x73), Pp_vector (x81, x82) -> false
-    | Pp_vector (x81, x82), Pp_app (x71, x72, x73) -> false
-    | Pp_as_typ (x61, x62, x63), Pp_string_append (x131, x132) -> false
-    | Pp_string_append (x131, x132), Pp_as_typ (x61, x62, x63) -> false
-    | Pp_as_typ (x61, x62, x63), Pp_cons (x121, x122, x123) -> false
-    | Pp_cons (x121, x122, x123), Pp_as_typ (x61, x62, x63) -> false
-    | Pp_as_typ (x61, x62, x63), Pp_list (x111, x112) -> false
-    | Pp_list (x111, x112), Pp_as_typ (x61, x62, x63) -> false
-    | Pp_as_typ (x61, x62, x63), Pp_tup (x101, x102) -> false
-    | Pp_tup (x101, x102), Pp_as_typ (x61, x62, x63) -> false
-    | Pp_as_typ (x61, x62, x63), Pp_vector_concat (x91, x92) -> false
-    | Pp_vector_concat (x91, x92), Pp_as_typ (x61, x62, x63) -> false
-    | Pp_as_typ (x61, x62, x63), Pp_vector (x81, x82) -> false
-    | Pp_vector (x81, x82), Pp_as_typ (x61, x62, x63) -> false
-    | Pp_as_typ (x61, x62, x63), Pp_app (x71, x72, x73) -> false
-    | Pp_app (x71, x72, x73), Pp_as_typ (x61, x62, x63) -> false
-    | Pp_id (x51, x52), Pp_string_append (x131, x132) -> false
-    | Pp_string_append (x131, x132), Pp_id (x51, x52) -> false
-    | Pp_id (x51, x52), Pp_cons (x121, x122, x123) -> false
-    | Pp_cons (x121, x122, x123), Pp_id (x51, x52) -> false
-    | Pp_id (x51, x52), Pp_list (x111, x112) -> false
-    | Pp_list (x111, x112), Pp_id (x51, x52) -> false
-    | Pp_id (x51, x52), Pp_tup (x101, x102) -> false
-    | Pp_tup (x101, x102), Pp_id (x51, x52) -> false
-    | Pp_id (x51, x52), Pp_vector_concat (x91, x92) -> false
-    | Pp_vector_concat (x91, x92), Pp_id (x51, x52) -> false
-    | Pp_id (x51, x52), Pp_vector (x81, x82) -> false
-    | Pp_vector (x81, x82), Pp_id (x51, x52) -> false
-    | Pp_id (x51, x52), Pp_app (x71, x72, x73) -> false
-    | Pp_app (x71, x72, x73), Pp_id (x51, x52) -> false
-    | Pp_id (x51, x52), Pp_as_typ (x61, x62, x63) -> false
-    | Pp_as_typ (x61, x62, x63), Pp_id (x51, x52) -> false
-    | Pp_typ (x41, x42, x43), Pp_string_append (x131, x132) -> false
-    | Pp_string_append (x131, x132), Pp_typ (x41, x42, x43) -> false
-    | Pp_typ (x41, x42, x43), Pp_cons (x121, x122, x123) -> false
-    | Pp_cons (x121, x122, x123), Pp_typ (x41, x42, x43) -> false
-    | Pp_typ (x41, x42, x43), Pp_list (x111, x112) -> false
-    | Pp_list (x111, x112), Pp_typ (x41, x42, x43) -> false
-    | Pp_typ (x41, x42, x43), Pp_tup (x101, x102) -> false
-    | Pp_tup (x101, x102), Pp_typ (x41, x42, x43) -> false
-    | Pp_typ (x41, x42, x43), Pp_vector_concat (x91, x92) -> false
-    | Pp_vector_concat (x91, x92), Pp_typ (x41, x42, x43) -> false
-    | Pp_typ (x41, x42, x43), Pp_vector (x81, x82) -> false
-    | Pp_vector (x81, x82), Pp_typ (x41, x42, x43) -> false
-    | Pp_typ (x41, x42, x43), Pp_app (x71, x72, x73) -> false
-    | Pp_app (x71, x72, x73), Pp_typ (x41, x42, x43) -> false
-    | Pp_typ (x41, x42, x43), Pp_as_typ (x61, x62, x63) -> false
-    | Pp_as_typ (x61, x62, x63), Pp_typ (x41, x42, x43) -> false
-    | Pp_typ (x41, x42, x43), Pp_id (x51, x52) -> false
-    | Pp_id (x51, x52), Pp_typ (x41, x42, x43) -> false
-    | Pp_as_var (x31, x32, x33), Pp_string_append (x131, x132) -> false
-    | Pp_string_append (x131, x132), Pp_as_var (x31, x32, x33) -> false
-    | Pp_as_var (x31, x32, x33), Pp_cons (x121, x122, x123) -> false
-    | Pp_cons (x121, x122, x123), Pp_as_var (x31, x32, x33) -> false
-    | Pp_as_var (x31, x32, x33), Pp_list (x111, x112) -> false
-    | Pp_list (x111, x112), Pp_as_var (x31, x32, x33) -> false
-    | Pp_as_var (x31, x32, x33), Pp_tup (x101, x102) -> false
-    | Pp_tup (x101, x102), Pp_as_var (x31, x32, x33) -> false
-    | Pp_as_var (x31, x32, x33), Pp_vector_concat (x91, x92) -> false
-    | Pp_vector_concat (x91, x92), Pp_as_var (x31, x32, x33) -> false
-    | Pp_as_var (x31, x32, x33), Pp_vector (x81, x82) -> false
-    | Pp_vector (x81, x82), Pp_as_var (x31, x32, x33) -> false
-    | Pp_as_var (x31, x32, x33), Pp_app (x71, x72, x73) -> false
-    | Pp_app (x71, x72, x73), Pp_as_var (x31, x32, x33) -> false
-    | Pp_as_var (x31, x32, x33), Pp_as_typ (x61, x62, x63) -> false
-    | Pp_as_typ (x61, x62, x63), Pp_as_var (x31, x32, x33) -> false
-    | Pp_as_var (x31, x32, x33), Pp_id (x51, x52) -> false
-    | Pp_id (x51, x52), Pp_as_var (x31, x32, x33) -> false
-    | Pp_as_var (x31, x32, x33), Pp_typ (x41, x42, x43) -> false
-    | Pp_typ (x41, x42, x43), Pp_as_var (x31, x32, x33) -> false
-    | Pp_wild x2, Pp_string_append (x131, x132) -> false
-    | Pp_string_append (x131, x132), Pp_wild x2 -> false
-    | Pp_wild x2, Pp_cons (x121, x122, x123) -> false
-    | Pp_cons (x121, x122, x123), Pp_wild x2 -> false
-    | Pp_wild x2, Pp_list (x111, x112) -> false
-    | Pp_list (x111, x112), Pp_wild x2 -> false
-    | Pp_wild x2, Pp_tup (x101, x102) -> false
-    | Pp_tup (x101, x102), Pp_wild x2 -> false
-    | Pp_wild x2, Pp_vector_concat (x91, x92) -> false
-    | Pp_vector_concat (x91, x92), Pp_wild x2 -> false
-    | Pp_wild x2, Pp_vector (x81, x82) -> false
-    | Pp_vector (x81, x82), Pp_wild x2 -> false
-    | Pp_wild x2, Pp_app (x71, x72, x73) -> false
-    | Pp_app (x71, x72, x73), Pp_wild x2 -> false
-    | Pp_wild x2, Pp_as_typ (x61, x62, x63) -> false
-    | Pp_as_typ (x61, x62, x63), Pp_wild x2 -> false
-    | Pp_wild x2, Pp_id (x51, x52) -> false
-    | Pp_id (x51, x52), Pp_wild x2 -> false
-    | Pp_wild x2, Pp_typ (x41, x42, x43) -> false
-    | Pp_typ (x41, x42, x43), Pp_wild x2 -> false
-    | Pp_wild x2, Pp_as_var (x31, x32, x33) -> false
-    | Pp_as_var (x31, x32, x33), Pp_wild x2 -> false
-    | Pp_lit (x11, x12), Pp_string_append (x131, x132) -> false
-    | Pp_string_append (x131, x132), Pp_lit (x11, x12) -> false
-    | Pp_lit (x11, x12), Pp_cons (x121, x122, x123) -> false
-    | Pp_cons (x121, x122, x123), Pp_lit (x11, x12) -> false
-    | Pp_lit (x11, x12), Pp_list (x111, x112) -> false
-    | Pp_list (x111, x112), Pp_lit (x11, x12) -> false
-    | Pp_lit (x11, x12), Pp_tup (x101, x102) -> false
-    | Pp_tup (x101, x102), Pp_lit (x11, x12) -> false
-    | Pp_lit (x11, x12), Pp_vector_concat (x91, x92) -> false
-    | Pp_vector_concat (x91, x92), Pp_lit (x11, x12) -> false
-    | Pp_lit (x11, x12), Pp_vector (x81, x82) -> false
-    | Pp_vector (x81, x82), Pp_lit (x11, x12) -> false
-    | Pp_lit (x11, x12), Pp_app (x71, x72, x73) -> false
-    | Pp_app (x71, x72, x73), Pp_lit (x11, x12) -> false
-    | Pp_lit (x11, x12), Pp_as_typ (x61, x62, x63) -> false
-    | Pp_as_typ (x61, x62, x63), Pp_lit (x11, x12) -> false
-    | Pp_lit (x11, x12), Pp_id (x51, x52) -> false
-    | Pp_id (x51, x52), Pp_lit (x11, x12) -> false
-    | Pp_lit (x11, x12), Pp_typ (x41, x42, x43) -> false
-    | Pp_typ (x41, x42, x43), Pp_lit (x11, x12) -> false
-    | Pp_lit (x11, x12), Pp_as_var (x31, x32, x33) -> false
-    | Pp_as_var (x31, x32, x33), Pp_lit (x11, x12) -> false
-    | Pp_lit (x11, x12), Pp_wild x2 -> false
-    | Pp_wild x2, Pp_lit (x11, x12) -> false
-    | Pp_string_append (x131, x132), Pp_string_append (y131, y132) ->
-        Location.equal_loc x131 y131 &&
-          Lista.equal_lista (equal_patp ()) x132 y132
-    | Pp_cons (x121, x122, x123), Pp_cons (y121, y122, y123) ->
-        Location.equal_loc x121 y121 &&
-          (equal_patpa x122 y122 && equal_patpa x123 y123)
-    | Pp_list (x111, x112), Pp_list (y111, y112) ->
-        Location.equal_loc x111 y111 &&
-          Lista.equal_lista (equal_patp ()) x112 y112
-    | Pp_tup (x101, x102), Pp_tup (y101, y102) ->
-        Location.equal_loc x101 y101 &&
-          Lista.equal_lista (equal_patp ()) x102 y102
-    | Pp_vector_concat (x91, x92), Pp_vector_concat (y91, y92) ->
-        Location.equal_loc x91 y91 && Lista.equal_lista (equal_patp ()) x92 y92
-    | Pp_vector (x81, x82), Pp_vector (y81, y82) ->
-        Location.equal_loc x81 y81 && Lista.equal_lista (equal_patp ()) x82 y82
-    | Pp_app (x71, x72, x73), Pp_app (y71, y72, y73) ->
-        Location.equal_loc x71 y71 &&
-          (((x72 : string) = y72) && Lista.equal_lista (equal_patp ()) x73 y73)
-    | Pp_as_typ (x61, x62, x63), Pp_as_typ (y61, y62, y63) ->
-        Location.equal_loc x61 y61 &&
-          (equal_patpa x62 y62 && SyntaxVCT.equal_taua x63 y63)
-    | Pp_id (x51, x52), Pp_id (y51, y52) ->
-        Location.equal_loc x51 y51 && ((x52 : string) = y52)
-    | Pp_typ (x41, x42, x43), Pp_typ (y41, y42, y43) ->
-        Location.equal_loc x41 y41 &&
-          (SyntaxVCT.equal_taua x42 y42 && equal_patpa x43 y43)
-    | Pp_as_var (x31, x32, x33), Pp_as_var (y31, y32, y33) ->
-        Location.equal_loc x31 y31 &&
-          (equal_patpa x32 y32 && SyntaxVCT.equal_xpa x33 y33)
-    | Pp_wild x2, Pp_wild y2 -> Location.equal_loc x2 y2
-    | Pp_lit (x11, x12), Pp_lit (y11, y12) ->
-        Location.equal_loc x11 y11 && SyntaxVCT.equal_lita x12 y12
-and equal_patp () = ({HOL.equal = equal_patpa} : patp HOL.equal);;
-let equal_patp = equal_patp ();;
-
 type lexpp = LEXPp_mvar of Location.loc * string |
   LEXPp_cast of Location.loc * SyntaxVCT.tau * string |
   LEXPp_tup of Location.loc * lexpp list |
@@ -3055,8 +2821,7 @@ type lexpp = LEXPp_mvar of Location.loc * string |
 
 type loop = While | Until;;
 
-type letbind = LBp_val of Location.loc * patp * ep
-and ep = Ep_val of Location.loc * SyntaxVCT.vp |
+type ep = Ep_val of Location.loc * SyntaxVCT.vp |
   Ep_mvar of Location.loc * string | Ep_concat of Location.loc * ep list |
   Ep_tuple of Location.loc * ep list |
   Ep_app of Location.loc * SyntaxVCT.xp * ep |
@@ -3081,1285 +2846,8 @@ and ep = Ep_val of Location.loc * SyntaxVCT.vp |
   Ep_for of Location.loc * string * ep * ep * ep * SyntaxVCT.order * ep |
   Ep_assert of Location.loc * ep * ep | Ep_vec of Location.loc * ep list |
   Ep_list of Location.loc * ep list | Ep_cons of Location.loc * ep * ep
-and pexpp = PEXPp_exp of patp * ep | PEXPp_when of patp * ep * ep;;
-
-let rec equal_lexppa
-  x0 x1 = match x0, x1 with
-    LEXPp_tup (x31, x32), LEXPp_field (x41, x42, x43) -> false
-    | LEXPp_field (x41, x42, x43), LEXPp_tup (x31, x32) -> false
-    | LEXPp_cast (x21, x22, x23), LEXPp_field (x41, x42, x43) -> false
-    | LEXPp_field (x41, x42, x43), LEXPp_cast (x21, x22, x23) -> false
-    | LEXPp_cast (x21, x22, x23), LEXPp_tup (x31, x32) -> false
-    | LEXPp_tup (x31, x32), LEXPp_cast (x21, x22, x23) -> false
-    | LEXPp_mvar (x11, x12), LEXPp_field (x41, x42, x43) -> false
-    | LEXPp_field (x41, x42, x43), LEXPp_mvar (x11, x12) -> false
-    | LEXPp_mvar (x11, x12), LEXPp_tup (x31, x32) -> false
-    | LEXPp_tup (x31, x32), LEXPp_mvar (x11, x12) -> false
-    | LEXPp_mvar (x11, x12), LEXPp_cast (x21, x22, x23) -> false
-    | LEXPp_cast (x21, x22, x23), LEXPp_mvar (x11, x12) -> false
-    | LEXPp_field (x41, x42, x43), LEXPp_field (y41, y42, y43) ->
-        Location.equal_loc x41 y41 &&
-          (equal_lexppa x42 y42 && ((x43 : string) = y43))
-    | LEXPp_tup (x31, x32), LEXPp_tup (y31, y32) ->
-        Location.equal_loc x31 y31 && Lista.equal_lista (equal_lexpp ()) x32 y32
-    | LEXPp_cast (x21, x22, x23), LEXPp_cast (y21, y22, y23) ->
-        Location.equal_loc x21 y21 &&
-          (SyntaxVCT.equal_taua x22 y22 && ((x23 : string) = y23))
-    | LEXPp_mvar (x11, x12), LEXPp_mvar (y11, y12) ->
-        Location.equal_loc x11 y11 && ((x12 : string) = y12)
-and equal_lexpp () = ({HOL.equal = equal_lexppa} : lexpp HOL.equal);;
-let equal_lexpp = equal_lexpp ();;
-
-let rec equal_loop x0 x1 = match x0, x1 with While, Until -> false
-                     | Until, While -> false
-                     | Until, Until -> true
-                     | While, While -> true;;
-
-let rec equal_ep () = ({HOL.equal = equal_epa} : ep HOL.equal)
-and equal_epa
-  x0 x1 = match x0, x1 with
-    Ep_list (x311, x312), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_list (x311, x312) -> false
-    | Ep_vec (x301, x302), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_vec (x301, x302) -> false
-    | Ep_assert (x291, x292, x293), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_assert (x291, x292, x293) -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_cons (x321, x322, x323)
-        -> false
-    | Ep_cons (x321, x322, x323),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_list (x311, x312) ->
-        false
-    | Ep_list (x311, x312), Ep_for (x281, x282, x283, x284, x285, x286, x287) ->
-        false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_vec (x301, x302) ->
-        false
-    | Ep_vec (x301, x302), Ep_for (x281, x282, x283, x284, x285, x286, x287) ->
-        false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_assert (x291, x292, x293)
-        -> false
-    | Ep_assert (x291, x292, x293),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_loop (x271, x272, x273, x274)
-        -> false
-    | Ep_constraint (x261, x262), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_constraint (x261, x262)
-        -> false
-    | Ep_constraint (x261, x262), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_constraint (x261, x262) -> false
-    | Ep_try (x251, x252, x253), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_try (x251, x252, x253)
-        -> false
-    | Ep_try (x251, x252, x253), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_try (x251, x252, x253) -> false
-    | Ep_throw (x241, x242), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_throw (x241, x242)
-        -> false
-    | Ep_throw (x241, x242), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_throw (x241, x242) -> false
-    | Ep_ref (x231, x232), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_for (x281, x282, x283, x284, x285, x286, x287) ->
-        false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_ref (x231, x232) ->
-        false
-    | Ep_ref (x231, x232), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_ref (x231, x232) -> false
-    | Ep_exit (x221, x222), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_for (x281, x282, x283, x284, x285, x286, x287) ->
-        false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_exit (x221, x222) ->
-        false
-    | Ep_exit (x221, x222), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_exit (x221, x222) -> false
-    | Ep_return (x211, x212), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_return (x211, x212)
-        -> false
-    | Ep_return (x211, x212), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_return (x211, x212) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_assign (x201, x202, x203, x204)
-        -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_loop (x271, x272, x273, x274) ->
-        false
-    | Ep_loop (x271, x272, x273, x274), Ep_assign (x201, x202, x203, x204) ->
-        false
-    | Ep_assign (x201, x202, x203, x204), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_case (x191, x192, x193), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_case (x191, x192, x193)
-        -> false
-    | Ep_case (x191, x192, x193), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_case (x191, x192, x193) -> false
-    | Ep_block (x181, x182), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_block (x181, x182)
-        -> false
-    | Ep_block (x181, x182), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_block (x181, x182) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_if (x171, x172, x173, x174)
-        -> false
-    | Ep_if (x171, x172, x173, x174), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_assign (x201, x202, x203, x204) ->
-        false
-    | Ep_assign (x201, x202, x203, x204), Ep_if (x171, x172, x173, x174) ->
-        false
-    | Ep_if (x171, x172, x173, x174), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_cons (x321, x322, x323) ->
-        false
-    | Ep_cons (x321, x322, x323), Ep_let2 (x161, x162, x163, x164, x165) ->
-        false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_assert (x291, x292, x293) ->
-        false
-    | Ep_assert (x291, x292, x293), Ep_let2 (x161, x162, x163, x164, x165) ->
-        false
-    | Ep_let2 (x161, x162, x163, x164, x165),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_let2 (x161, x162, x163, x164, x165)
-        -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_loop (x271, x272, x273, x274)
-        -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_let2 (x161, x162, x163, x164, x165)
-        -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_constraint (x261, x262) ->
-        false
-    | Ep_constraint (x261, x262), Ep_let2 (x161, x162, x163, x164, x165) ->
-        false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_assign (x201, x202, x203, x204)
-        -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_let2 (x161, x162, x163, x164, x165)
-        -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_case (x191, x192, x193) ->
-        false
-    | Ep_case (x191, x192, x193), Ep_let2 (x161, x162, x163, x164, x165) ->
-        false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_if (x171, x172, x173, x174) ->
-        false
-    | Ep_if (x171, x172, x173, x174), Ep_let2 (x161, x162, x163, x164, x165) ->
-        false
-    | Ep_let (x151, x152, x153), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_let (x151, x152, x153)
-        -> false
-    | Ep_let (x151, x152, x153), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_let (x151, x152, x153) -> false
-    | Ep_record_update (x141, x142, x143), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_record_update (x141, x142, x143)
-        -> false
-    | Ep_record_update (x141, x142, x143), Ep_loop (x271, x272, x273, x274) ->
-        false
-    | Ep_loop (x271, x272, x273, x274), Ep_record_update (x141, x142, x143) ->
-        false
-    | Ep_record_update (x141, x142, x143), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_assign (x201, x202, x203, x204) ->
-        false
-    | Ep_assign (x201, x202, x203, x204), Ep_record_update (x141, x142, x143) ->
-        false
-    | Ep_record_update (x141, x142, x143), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_if (x171, x172, x173, x174) ->
-        false
-    | Ep_if (x171, x172, x173, x174), Ep_record_update (x141, x142, x143) ->
-        false
-    | Ep_record_update (x141, x142, x143),
-        Ep_let2 (x161, x162, x163, x164, x165)
-        -> false
-    | Ep_let2 (x161, x162, x163, x164, x165),
-        Ep_record_update (x141, x142, x143)
-        -> false
-    | Ep_record_update (x141, x142, x143), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record (x131, x132), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_record (x131, x132)
-        -> false
-    | Ep_record (x131, x132), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_record (x131, x132) -> false
-    | Ep_cast (x121, x122, x123), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_cast (x121, x122, x123)
-        -> false
-    | Ep_cast (x121, x122, x123), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_let2 (x161, x162, x163, x164, x165) ->
-        false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_cast (x121, x122, x123) ->
-        false
-    | Ep_cast (x121, x122, x123), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_cast (x121, x122, x123) -> false
-    | Ep_sizeof (x111, x112), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_sizeof (x111, x112)
-        -> false
-    | Ep_sizeof (x111, x112), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_sizeof (x111, x112) -> false
-    | Ep_field_access (x101, x102, x103), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_field_access (x101, x102, x103)
-        -> false
-    | Ep_field_access (x101, x102, x103), Ep_loop (x271, x272, x273, x274) ->
-        false
-    | Ep_loop (x271, x272, x273, x274), Ep_field_access (x101, x102, x103) ->
-        false
-    | Ep_field_access (x101, x102, x103), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_assign (x201, x202, x203, x204) ->
-        false
-    | Ep_assign (x201, x202, x203, x204), Ep_field_access (x101, x102, x103) ->
-        false
-    | Ep_field_access (x101, x102, x103), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_if (x171, x172, x173, x174) ->
-        false
-    | Ep_if (x171, x172, x173, x174), Ep_field_access (x101, x102, x103) ->
-        false
-    | Ep_field_access (x101, x102, x103), Ep_let2 (x161, x162, x163, x164, x165)
-        -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_field_access (x101, x102, x103)
-        -> false
-    | Ep_field_access (x101, x102, x103), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_record_update (x141, x142, x143) ->
-        false
-    | Ep_record_update (x141, x142, x143), Ep_field_access (x101, x102, x103) ->
-        false
-    | Ep_field_access (x101, x102, x103), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_field_access (x101, x102, x103) -> false
-    | Ep_constr (x91, x92, x93), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_constr (x91, x92, x93)
-        -> false
-    | Ep_constr (x91, x92, x93), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_constr (x91, x92, x93) -> false
-    | Ep_proj (x81, x82, x83), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_proj (x81, x82, x83)
-        -> false
-    | Ep_proj (x81, x82, x83), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_proj (x81, x82, x83) -> false
-    | Ep_uop (x71, x72, x73), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_uop (x71, x72, x73)
-        -> false
-    | Ep_uop (x71, x72, x73), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_uop (x71, x72, x73) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64),
-        Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_bop (x61, x62, x63, x64)
-        -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_let2 (x161, x162, x163, x164, x165) ->
-        false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_bop (x61, x62, x63, x64) ->
-        false
-    | Ep_bop (x61, x62, x63, x64), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_app (x51, x52, x53), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_for (x281, x282, x283, x284, x285, x286, x287)
-        -> false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_app (x51, x52, x53)
-        -> false
-    | Ep_app (x51, x52, x53), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_app (x51, x52, x53) -> false
-    | Ep_tuple (x41, x42), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_for (x281, x282, x283, x284, x285, x286, x287) ->
-        false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_tuple (x41, x42) ->
-        false
-    | Ep_tuple (x41, x42), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_tuple (x41, x42) -> false
-    | Ep_concat (x31, x32), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_for (x281, x282, x283, x284, x285, x286, x287) ->
-        false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_concat (x31, x32) ->
-        false
-    | Ep_concat (x31, x32), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_concat (x31, x32) -> false
-    | Ep_mvar (x21, x22), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_for (x281, x282, x283, x284, x285, x286, x287) ->
-        false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_mvar (x21, x22) ->
-        false
-    | Ep_mvar (x21, x22), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_mvar (x21, x22) -> false
-    | Ep_val (x11, x12), Ep_cons (x321, x322, x323) -> false
-    | Ep_cons (x321, x322, x323), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_list (x311, x312) -> false
-    | Ep_list (x311, x312), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_vec (x301, x302) -> false
-    | Ep_vec (x301, x302), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_assert (x291, x292, x293) -> false
-    | Ep_assert (x291, x292, x293), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_for (x281, x282, x283, x284, x285, x286, x287) ->
-        false
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287), Ep_val (x11, x12) ->
-        false
-    | Ep_val (x11, x12), Ep_loop (x271, x272, x273, x274) -> false
-    | Ep_loop (x271, x272, x273, x274), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_constraint (x261, x262) -> false
-    | Ep_constraint (x261, x262), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_try (x251, x252, x253) -> false
-    | Ep_try (x251, x252, x253), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_throw (x241, x242) -> false
-    | Ep_throw (x241, x242), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_ref (x231, x232) -> false
-    | Ep_ref (x231, x232), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_exit (x221, x222) -> false
-    | Ep_exit (x221, x222), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_return (x211, x212) -> false
-    | Ep_return (x211, x212), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_assign (x201, x202, x203, x204) -> false
-    | Ep_assign (x201, x202, x203, x204), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_case (x191, x192, x193) -> false
-    | Ep_case (x191, x192, x193), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_block (x181, x182) -> false
-    | Ep_block (x181, x182), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_if (x171, x172, x173, x174) -> false
-    | Ep_if (x171, x172, x173, x174), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_let2 (x161, x162, x163, x164, x165) -> false
-    | Ep_let2 (x161, x162, x163, x164, x165), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_let (x151, x152, x153) -> false
-    | Ep_let (x151, x152, x153), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_record_update (x141, x142, x143) -> false
-    | Ep_record_update (x141, x142, x143), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_record (x131, x132) -> false
-    | Ep_record (x131, x132), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_cast (x121, x122, x123) -> false
-    | Ep_cast (x121, x122, x123), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_sizeof (x111, x112) -> false
-    | Ep_sizeof (x111, x112), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_field_access (x101, x102, x103) -> false
-    | Ep_field_access (x101, x102, x103), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_constr (x91, x92, x93) -> false
-    | Ep_constr (x91, x92, x93), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_proj (x81, x82, x83) -> false
-    | Ep_proj (x81, x82, x83), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_uop (x71, x72, x73) -> false
-    | Ep_uop (x71, x72, x73), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_bop (x61, x62, x63, x64) -> false
-    | Ep_bop (x61, x62, x63, x64), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_app (x51, x52, x53) -> false
-    | Ep_app (x51, x52, x53), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_tuple (x41, x42) -> false
-    | Ep_tuple (x41, x42), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_concat (x31, x32) -> false
-    | Ep_concat (x31, x32), Ep_val (x11, x12) -> false
-    | Ep_val (x11, x12), Ep_mvar (x21, x22) -> false
-    | Ep_mvar (x21, x22), Ep_val (x11, x12) -> false
-    | Ep_cons (x321, x322, x323), Ep_cons (y321, y322, y323) ->
-        Location.equal_loc x321 y321 &&
-          (equal_epa x322 y322 && equal_epa x323 y323)
-    | Ep_list (x311, x312), Ep_list (y311, y312) ->
-        Location.equal_loc x311 y311 &&
-          Lista.equal_lista (equal_ep ()) x312 y312
-    | Ep_vec (x301, x302), Ep_vec (y301, y302) ->
-        Location.equal_loc x301 y301 &&
-          Lista.equal_lista (equal_ep ()) x302 y302
-    | Ep_assert (x291, x292, x293), Ep_assert (y291, y292, y293) ->
-        Location.equal_loc x291 y291 &&
-          (equal_epa x292 y292 && equal_epa x293 y293)
-    | Ep_for (x281, x282, x283, x284, x285, x286, x287),
-        Ep_for (y281, y282, y283, y284, y285, y286, y287)
-        -> Location.equal_loc x281 y281 &&
-             (((x282 : string) = y282) &&
-               (equal_epa x283 y283 &&
-                 (equal_epa x284 y284 &&
-                   (equal_epa x285 y285 &&
-                     (SyntaxVCT.equal_order x286 y286 &&
-                       equal_epa x287 y287)))))
-    | Ep_loop (x271, x272, x273, x274), Ep_loop (y271, y272, y273, y274) ->
-        Location.equal_loc x271 y271 &&
-          (equal_loop x272 y272 && (equal_epa x273 y273 && equal_epa x274 y274))
-    | Ep_constraint (x261, x262), Ep_constraint (y261, y262) ->
-        Location.equal_loc x261 y261 && SyntaxVCT.equal_cpa x262 y262
-    | Ep_try (x251, x252, x253), Ep_try (y251, y252, y253) ->
-        Location.equal_loc x251 y251 &&
-          (equal_epa x252 y252 && Lista.equal_lista (equal_pexpp ()) x253 y253)
-    | Ep_throw (x241, x242), Ep_throw (y241, y242) ->
-        Location.equal_loc x241 y241 && equal_epa x242 y242
-    | Ep_ref (x231, x232), Ep_ref (y231, y232) ->
-        Location.equal_loc x231 y231 && ((x232 : string) = y232)
-    | Ep_exit (x221, x222), Ep_exit (y221, y222) ->
-        Location.equal_loc x221 y221 && equal_epa x222 y222
-    | Ep_return (x211, x212), Ep_return (y211, y212) ->
-        Location.equal_loc x211 y211 && equal_epa x212 y212
-    | Ep_assign (x201, x202, x203, x204), Ep_assign (y201, y202, y203, y204) ->
-        Location.equal_loc x201 y201 &&
-          (equal_lexppa x202 y202 &&
-            (equal_epa x203 y203 && equal_epa x204 y204))
-    | Ep_case (x191, x192, x193), Ep_case (y191, y192, y193) ->
-        Location.equal_loc x191 y191 &&
-          (equal_epa x192 y192 && Lista.equal_lista (equal_pexpp ()) x193 y193)
-    | Ep_block (x181, x182), Ep_block (y181, y182) ->
-        Location.equal_loc x181 y181 &&
-          Lista.equal_lista (equal_ep ()) x182 y182
-    | Ep_if (x171, x172, x173, x174), Ep_if (y171, y172, y173, y174) ->
-        Location.equal_loc x171 y171 &&
-          (equal_epa x172 y172 && (equal_epa x173 y173 && equal_epa x174 y174))
-    | Ep_let2 (x161, x162, x163, x164, x165),
-        Ep_let2 (y161, y162, y163, y164, y165)
-        -> Location.equal_loc x161 y161 &&
-             (SyntaxVCT.equal_xpa x162 y162 &&
-               (SyntaxVCT.equal_taua x163 y163 &&
-                 (equal_epa x164 y164 && equal_epa x165 y165)))
-    | Ep_let (x151, x152, x153), Ep_let (y151, y152, y153) ->
-        Location.equal_loc x151 y151 &&
-          (equal_letbind x152 y152 && equal_epa x153 y153)
-    | Ep_record_update (x141, x142, x143), Ep_record_update (y141, y142, y143)
-        -> Location.equal_loc x141 y141 &&
-             (equal_epa x142 y142 &&
-               Lista.equal_lista
-                 (Product_Type.equal_prod Stringa.equal_literal (equal_ep ()))
-                 x143 y143)
-    | Ep_record (x131, x132), Ep_record (y131, y132) ->
-        Location.equal_loc x131 y131 &&
-          Lista.equal_lista
-            (Product_Type.equal_prod Stringa.equal_literal (equal_ep ())) x132
-            y132
-    | Ep_cast (x121, x122, x123), Ep_cast (y121, y122, y123) ->
-        Location.equal_loc x121 y121 &&
-          (SyntaxVCT.equal_taua x122 y122 && equal_epa x123 y123)
-    | Ep_sizeof (x111, x112), Ep_sizeof (y111, y112) ->
-        Location.equal_loc x111 y111 && SyntaxVCT.equal_cepa x112 y112
-    | Ep_field_access (x101, x102, x103), Ep_field_access (y101, y102, y103) ->
-        Location.equal_loc x101 y101 &&
-          (equal_epa x102 y102 && ((x103 : string) = y103))
-    | Ep_constr (x91, x92, x93), Ep_constr (y91, y92, y93) ->
-        Location.equal_loc x91 y91 &&
-          (((x92 : string) = y92) && equal_epa x93 y93)
-    | Ep_proj (x81, x82, x83), Ep_proj (y81, y82, y83) ->
-        Location.equal_loc x81 y81 &&
-          (((x82 : string) = y82) && equal_epa x83 y83)
-    | Ep_uop (x71, x72, x73), Ep_uop (y71, y72, y73) ->
-        Location.equal_loc x71 y71 &&
-          (SyntaxVCT.equal_uop x72 y72 && equal_epa x73 y73)
-    | Ep_bop (x61, x62, x63, x64), Ep_bop (y61, y62, y63, y64) ->
-        Location.equal_loc x61 y61 &&
-          (SyntaxVCT.equal_bop x62 y62 &&
-            (equal_epa x63 y63 && equal_epa x64 y64))
-    | Ep_app (x51, x52, x53), Ep_app (y51, y52, y53) ->
-        Location.equal_loc x51 y51 &&
-          (SyntaxVCT.equal_xpa x52 y52 && equal_epa x53 y53)
-    | Ep_tuple (x41, x42), Ep_tuple (y41, y42) ->
-        Location.equal_loc x41 y41 && Lista.equal_lista (equal_ep ()) x42 y42
-    | Ep_concat (x31, x32), Ep_concat (y31, y32) ->
-        Location.equal_loc x31 y31 && Lista.equal_lista (equal_ep ()) x32 y32
-    | Ep_mvar (x21, x22), Ep_mvar (y21, y22) ->
-        Location.equal_loc x21 y21 && ((x22 : string) = y22)
-    | Ep_val (x11, x12), Ep_val (y11, y12) ->
-        Location.equal_loc x11 y11 && SyntaxVCT.equal_vpa x12 y12
-and equal_pexppa
-  x0 x1 = match x0, x1 with
-    PEXPp_exp (x11, x12), PEXPp_when (x21, x22, x23) -> false
-    | PEXPp_when (x21, x22, x23), PEXPp_exp (x11, x12) -> false
-    | PEXPp_when (x21, x22, x23), PEXPp_when (y21, y22, y23) ->
-        equal_patpa x21 y21 && (equal_epa x22 y22 && equal_epa x23 y23)
-    | PEXPp_exp (x11, x12), PEXPp_exp (y11, y12) ->
-        equal_patpa x11 y11 && equal_epa x12 y12
-and equal_pexpp () = ({HOL.equal = equal_pexppa} : pexpp HOL.equal)
-and equal_letbind
-  (LBp_val (x1, x2, x3)) (LBp_val (y1, y2, y3)) =
-    Location.equal_loc x1 y1 && (equal_patpa x2 y2 && equal_epa x3 y3);;
-let equal_ep = equal_ep ();;
-let equal_pexpp = equal_pexpp ();;
+and pexpp = PEXPp_exp of patp * ep | PEXPp_when of patp * ep * ep
+and letbind = LBp_val of Location.loc * patp * ep;;
 
 type tannot_opt_p = Typ_annot_opt_pnone of Location.loc |
   Typ_annot_opt_psome of
@@ -5421,6 +3909,517 @@ let rec string_lit_of_integer
 
 end;; (*struct Utils*)
 
+module SyntaxUtils : sig
+  val mk_proj_eq_x : SyntaxVCT.xp -> SyntaxVCT.xp -> string -> SyntaxVCT.cp
+  val b_of : SyntaxVCT.tau -> SyntaxVCT.bp
+  val aux :
+    SyntaxVCT.xp ->
+      string -> SyntaxVCT.tau -> (string * SyntaxVCT.bp) * SyntaxVCT.cp
+  val c_of : SyntaxVCT.tau -> SyntaxVCT.cp
+  val rv_id : string -> (string, string) Finite_Map.fmap -> string
+  val rv_xp : SyntaxVCT.xp -> (string, string) Finite_Map.fmap -> SyntaxVCT.xp
+  val rv_vp : SyntaxVCT.vp -> (string, string) Finite_Map.fmap -> SyntaxVCT.vp
+  val rv_cep :
+    SyntaxVCT.cep -> (string, string) Finite_Map.fmap -> SyntaxVCT.cep
+  val rv_cp : SyntaxVCT.cp -> (string, string) Finite_Map.fmap -> SyntaxVCT.cp
+  val rv_t : SyntaxVCT.tau -> (string, string) Finite_Map.fmap -> SyntaxVCT.tau
+  val rv_pat :
+    SyntaxPED.patp -> (string, string) Finite_Map.fmap -> SyntaxPED.patp
+  val rv_lexpp :
+    SyntaxPED.lexpp -> (string, string) Finite_Map.fmap -> SyntaxPED.lexpp
+  val rv_ep : SyntaxPED.ep -> (string, string) Finite_Map.fmap -> SyntaxPED.ep
+  val rv_pexpp :
+    SyntaxPED.pexpp -> (string, string) Finite_Map.fmap -> SyntaxPED.pexpp
+  val rv_letbind :
+    SyntaxPED.letbind -> (string, string) Finite_Map.fmap -> SyntaxPED.letbind
+  val mk_new : 'a list -> string -> string
+  val pat_id : SyntaxPED.patp -> string list
+  val unzip3 : ('a * ('b * 'c)) list -> 'a list * ('b list * 'c list)
+  val b_of_lit : SyntaxVCT.lit -> SyntaxVCT.bp
+  val mk_fresh_aux : string list -> string list -> string -> string
+  val mk_fresh : string list -> string -> string
+  val mk_l_eq_c : SyntaxVCT.xp -> SyntaxVCT.lit -> SyntaxVCT.cp
+  val mk_l_eq_t : SyntaxVCT.lit -> SyntaxVCT.tau
+  val mk_list_c : SyntaxVCT.xp -> SyntaxVCT.xp list -> SyntaxVCT.cp
+  val mk_v_eq_c : SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.cp
+  val mk_v_eq_t : SyntaxVCT.bp -> SyntaxVCT.vp -> SyntaxVCT.tau
+  val mk_mapping :
+    string list -> string list -> (string, string) Finite_Map.fmap
+  val freshen_pexp_aux :
+    string list ->
+      SyntaxPED.patp -> SyntaxPED.ep -> SyntaxPED.patp * SyntaxPED.ep
+  val freshen_ep : string list -> SyntaxPED.ep -> SyntaxPED.ep
+  val freshen_pexpp : string list -> SyntaxPED.pexpp -> SyntaxPED.pexpp
+  val mk_eq_proj :
+    Location.loc -> SyntaxVCT.xp -> Arith.nat -> Arith.nat -> SyntaxVCT.cp
+  val mk_proj_eq : SyntaxVCT.xp -> string -> SyntaxVCT.cp
+  val c_conj_list : SyntaxVCT.cp list -> SyntaxVCT.cp
+  val mk_record_b_c :
+    SyntaxVCT.xp list ->
+      (string * SyntaxVCT.tau) list -> SyntaxVCT.bp * SyntaxVCT.cp
+  val mk_vec_len_eq_c : SyntaxVCT.xp -> 'a list -> SyntaxVCT.cp
+  val mk_x_eq_c_tuple : SyntaxVCT.xp -> SyntaxVCT.xp list -> SyntaxVCT.cp
+  val subst_x_cp : SyntaxVCT.cp -> SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.cp
+end = struct
+
+let rec mk_proj_eq_x
+  x y field =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_val (SyntaxVCT.V_var y),
+        SyntaxVCT.CE_val (SyntaxVCT.V_proj (field, SyntaxVCT.V_var x)));;
+
+let rec b_of (SyntaxVCT.T_refined_type (uu, b, uv)) = b;;
+
+let rec aux z f t = ((f, b_of t), mk_proj_eq_x SyntaxVCT.VIndex z f);;
+
+let rec c_of (SyntaxVCT.T_refined_type (uu, uv, c)) = c;;
+
+let rec rv_id
+  xp fm =
+    (match Finite_Map.fmlookup Stringa.equal_literal fm xp with None -> xp
+      | Some xpa -> xpa);;
+
+let rec rv_xp
+  x0 fm = match x0, fm with
+    SyntaxVCT.VNamed xp, fm -> SyntaxVCT.VNamed (rv_id xp fm)
+    | SyntaxVCT.VIndex, uu -> SyntaxVCT.VIndex;;
+
+let rec rv_vp
+  x0 fm = match x0, fm with
+    SyntaxVCT.V_var xp, fm -> SyntaxVCT.V_var (rv_xp xp fm)
+    | SyntaxVCT.V_lit lit, fm -> SyntaxVCT.V_lit lit
+    | SyntaxVCT.V_vec vp_list, fm ->
+        SyntaxVCT.V_vec (Lista.map (fun p -> rv_vp p fm) vp_list)
+    | SyntaxVCT.V_list vp_list, fm ->
+        SyntaxVCT.V_list (Lista.map (fun p -> rv_vp p fm) vp_list)
+    | SyntaxVCT.V_cons (vp1, vp2), fm ->
+        SyntaxVCT.V_cons (rv_vp vp1 fm, rv_vp vp2 fm)
+    | SyntaxVCT.V_constr (ctor, vp), fm ->
+        SyntaxVCT.V_constr (ctor, rv_vp vp fm)
+    | SyntaxVCT.V_record fs, fm ->
+        SyntaxVCT.V_record (Lista.map (fun (f, p) -> (f, rv_vp p fm)) fs)
+    | SyntaxVCT.V_tuple vp_list, fm ->
+        SyntaxVCT.V_tuple (Lista.map (fun p -> rv_vp p fm) vp_list)
+    | SyntaxVCT.V_proj (s, vp), fm -> SyntaxVCT.V_proj (s, rv_vp vp fm);;
+
+let rec rv_cep
+  x0 fm = match x0, fm with
+    SyntaxVCT.CE_val vp, fm -> SyntaxVCT.CE_val (rv_vp vp fm)
+    | SyntaxVCT.CE_bop (bop, cep1, cep2), fm ->
+        SyntaxVCT.CE_bop (bop, rv_cep cep1 fm, rv_cep cep2 fm)
+    | SyntaxVCT.CE_many_plus cep_list, fm ->
+        SyntaxVCT.CE_many_plus (Lista.map (fun c -> rv_cep c fm) cep_list)
+    | SyntaxVCT.CE_uop (uop, cep), fm -> SyntaxVCT.CE_uop (uop, rv_cep cep fm)
+    | SyntaxVCT.CE_proj (p, cep), fm -> SyntaxVCT.CE_proj (p, rv_cep cep fm)
+    | SyntaxVCT.CE_field_access (vp, field), fm ->
+        SyntaxVCT.CE_field_access (rv_vp vp fm, field);;
+
+let rec rv_cp
+  x0 fm = match x0, fm with SyntaxVCT.C_true, fm -> SyntaxVCT.C_true
+    | SyntaxVCT.C_false, fm -> SyntaxVCT.C_false
+    | SyntaxVCT.C_conj (cp1, cp2), fm ->
+        SyntaxVCT.C_conj (rv_cp cp1 fm, rv_cp cp2 fm)
+    | SyntaxVCT.C_conj_many cp_list, fm ->
+        SyntaxVCT.C_conj_many (Lista.map (fun c -> rv_cp c fm) cp_list)
+    | SyntaxVCT.C_disj (cp1, cp2), fm ->
+        SyntaxVCT.C_disj (rv_cp cp1 fm, rv_cp cp2 fm)
+    | SyntaxVCT.C_not cp, fm -> SyntaxVCT.C_not (rv_cp cp fm)
+    | SyntaxVCT.C_eq (cep1, cep2), fm ->
+        SyntaxVCT.C_eq (rv_cep cep1 fm, rv_cep cep2 fm)
+    | SyntaxVCT.C_leq (cep1, cep2), fm ->
+        SyntaxVCT.C_leq (rv_cep cep1 fm, rv_cep cep2 fm)
+    | SyntaxVCT.C_imp (cp1, cp2), fm ->
+        SyntaxVCT.C_imp (rv_cp cp1 fm, rv_cp cp2 fm);;
+
+let rec rv_t
+  (SyntaxVCT.T_refined_type (SyntaxVCT.VIndex, b, cp)) fm =
+    SyntaxVCT.T_refined_type (SyntaxVCT.VIndex, b, rv_cp cp fm);;
+
+let rec rv_pat
+  x0 fm = match x0, fm with
+    SyntaxPED.Pp_id (loc, xp), fm ->
+      (match Finite_Map.fmlookup Stringa.equal_literal fm xp
+        with None -> SyntaxPED.Pp_id (loc, xp)
+        | Some a -> SyntaxPED.Pp_id (loc, a))
+    | SyntaxPED.Pp_wild l, fm -> SyntaxPED.Pp_wild l
+    | SyntaxPED.Pp_lit (loc, l), fm -> SyntaxPED.Pp_lit (loc, l)
+    | SyntaxPED.Pp_as_var (loc, patp, xp), fm ->
+        SyntaxPED.Pp_as_var (loc, rv_pat patp fm, rv_xp xp fm)
+    | SyntaxPED.Pp_typ (loc, tau, patp), fm ->
+        SyntaxPED.Pp_typ (loc, rv_t tau fm, rv_pat patp fm)
+    | SyntaxPED.Pp_as_typ (loc, patp, tau), fm ->
+        SyntaxPED.Pp_as_typ (loc, rv_pat patp fm, rv_t tau fm)
+    | SyntaxPED.Pp_app (loc, idd, patp_list), fm ->
+        SyntaxPED.Pp_app (loc, idd, Lista.map (fun p -> rv_pat p fm) patp_list)
+    | SyntaxPED.Pp_vector (loc, patp_list), fm ->
+        SyntaxPED.Pp_vector (loc, Lista.map (fun p -> rv_pat p fm) patp_list)
+    | SyntaxPED.Pp_vector_concat (loc, patp_list), fm ->
+        SyntaxPED.Pp_vector_concat
+          (loc, Lista.map (fun p -> rv_pat p fm) patp_list)
+    | SyntaxPED.Pp_tup (loc, patp_list), fm ->
+        SyntaxPED.Pp_tup (loc, Lista.map (fun p -> rv_pat p fm) patp_list)
+    | SyntaxPED.Pp_list (loc, patp_list), fm ->
+        SyntaxPED.Pp_list (loc, Lista.map (fun p -> rv_pat p fm) patp_list)
+    | SyntaxPED.Pp_cons (loc, patp1, patp2), fm ->
+        SyntaxPED.Pp_cons (loc, rv_pat patp1 fm, rv_pat patp2 fm)
+    | SyntaxPED.Pp_string_append (loc, patp_list), fm ->
+        SyntaxPED.Pp_string_append
+          (loc, Lista.map (fun p -> rv_pat p fm) patp_list);;
+
+let rec rv_lexpp
+  x0 fm = match x0, fm with
+    SyntaxPED.LEXPp_mvar (loc, up), fm -> SyntaxPED.LEXPp_mvar (loc, up)
+    | SyntaxPED.LEXPp_cast (loc, tau, up), fm ->
+        SyntaxPED.LEXPp_cast (loc, rv_t tau fm, up)
+    | SyntaxPED.LEXPp_tup (loc, lexpp_list), fm ->
+        SyntaxPED.LEXPp_tup (loc, Lista.map (fun l -> rv_lexpp l fm) lexpp_list)
+    | SyntaxPED.LEXPp_field (loc, lexpp, idd), fm ->
+        SyntaxPED.LEXPp_field (loc, rv_lexpp lexpp fm, idd);;
+
+let rec rv_ep
+  x0 fm = match x0, fm with
+    SyntaxPED.Ep_val (loc, v), fm -> SyntaxPED.Ep_val (loc, rv_vp v fm)
+    | SyntaxPED.Ep_mvar (loc, up), fm -> SyntaxPED.Ep_mvar (loc, up)
+    | SyntaxPED.Ep_concat (loc, ep_list), fm ->
+        SyntaxPED.Ep_concat (loc, Lista.map (fun e -> rv_ep e fm) ep_list)
+    | SyntaxPED.Ep_tuple (loc, ep_list), fm ->
+        SyntaxPED.Ep_tuple (loc, Lista.map (fun e -> rv_ep e fm) ep_list)
+    | SyntaxPED.Ep_app (loc, fp, ep), fm ->
+        SyntaxPED.Ep_app (loc, fp, rv_ep ep fm)
+    | SyntaxPED.Ep_bop (loc, bop, ep1, ep2), fm ->
+        SyntaxPED.Ep_bop (loc, bop, rv_ep ep1 fm, rv_ep ep2 fm)
+    | SyntaxPED.Ep_uop (loc, uop, ep), fm ->
+        SyntaxPED.Ep_uop (loc, uop, rv_ep ep fm)
+    | SyntaxPED.Ep_proj (loc, p, ep), fm ->
+        SyntaxPED.Ep_proj (loc, p, rv_ep ep fm)
+    | SyntaxPED.Ep_constr (loc, ctor, ep), fm ->
+        SyntaxPED.Ep_constr (loc, ctor, rv_ep ep fm)
+    | SyntaxPED.Ep_field_access (loc, ep, field), fm ->
+        SyntaxPED.Ep_field_access (loc, rv_ep ep fm, field)
+    | SyntaxPED.Ep_sizeof (loc, cep), fm ->
+        SyntaxPED.Ep_sizeof (loc, rv_cep cep fm)
+    | SyntaxPED.Ep_cast (loc, tau, ep), fm ->
+        SyntaxPED.Ep_cast (loc, rv_t tau fm, rv_ep ep fm)
+    | SyntaxPED.Ep_record (loc, field_ep_list), fm ->
+        SyntaxPED.Ep_record
+          (loc, Lista.map (fun (f, e) -> (f, rv_ep e fm)) field_ep_list)
+    | SyntaxPED.Ep_record_update (loc, ep, field_ep_list), fm ->
+        SyntaxPED.Ep_record_update
+          (loc, rv_ep ep fm,
+            Lista.map (fun (f, e) -> (f, rv_ep e fm)) field_ep_list)
+    | SyntaxPED.Ep_let (loc, letbind, ep2), fm ->
+        SyntaxPED.Ep_let (loc, rv_letbind letbind fm, rv_ep ep2 fm)
+    | SyntaxPED.Ep_let2 (loc, xp, tau, ep1, ep2), fm ->
+        SyntaxPED.Ep_let2
+          (loc, rv_xp xp fm, rv_t tau fm, rv_ep ep1 fm, rv_ep ep2 fm)
+    | SyntaxPED.Ep_if (loc, ep1, ep2, ep3), fm ->
+        SyntaxPED.Ep_if (loc, rv_ep ep1 fm, rv_ep ep2 fm, rv_ep ep3 fm)
+    | SyntaxPED.Ep_block (loc, ep_list), fm ->
+        SyntaxPED.Ep_block (loc, Lista.map (fun e -> rv_ep e fm) ep_list)
+    | SyntaxPED.Ep_case (loc, ep, pexpp_list), fm ->
+        SyntaxPED.Ep_case
+          (loc, rv_ep ep fm, Lista.map (fun p -> rv_pexpp p fm) pexpp_list)
+    | SyntaxPED.Ep_assign (loc, lexpp, ep1, ep2), fm ->
+        SyntaxPED.Ep_assign (loc, rv_lexpp lexpp fm, rv_ep ep1 fm, rv_ep ep2 fm)
+    | SyntaxPED.Ep_return (loc, ep), fm ->
+        SyntaxPED.Ep_return (loc, rv_ep ep fm)
+    | SyntaxPED.Ep_exit (loc, ep), fm -> SyntaxPED.Ep_exit (loc, rv_ep ep fm)
+    | SyntaxPED.Ep_ref (loc, idd), fm -> SyntaxPED.Ep_ref (loc, rv_id idd fm)
+    | SyntaxPED.Ep_throw (loc, ep), fm -> SyntaxPED.Ep_throw (loc, rv_ep ep fm)
+    | SyntaxPED.Ep_try (loc, ep, pexpp_list), fm ->
+        SyntaxPED.Ep_try
+          (loc, rv_ep ep fm, Lista.map (fun p -> rv_pexpp p fm) pexpp_list)
+    | SyntaxPED.Ep_constraint (loc, cp), fm ->
+        SyntaxPED.Ep_constraint (loc, rv_cp cp fm)
+    | SyntaxPED.Ep_loop (loc, loop, ep1, ep2), fm ->
+        SyntaxPED.Ep_loop (loc, loop, rv_ep ep1 fm, rv_ep ep2 fm)
+    | SyntaxPED.Ep_for (loc, idd, ep1, ep2, ep3, order, ep4), fm ->
+        SyntaxPED.Ep_for
+          (loc, rv_id idd fm, rv_ep ep1 fm, rv_ep ep2 fm, rv_ep ep3 fm, order,
+            rv_ep ep4 fm)
+    | SyntaxPED.Ep_assert (loc, ep1, ep2), fm ->
+        SyntaxPED.Ep_assert (loc, rv_ep ep1 fm, rv_ep ep2 fm)
+    | SyntaxPED.Ep_vec (loc, ep_list), fm ->
+        SyntaxPED.Ep_vec (loc, Lista.map (fun e -> rv_ep e fm) ep_list)
+    | SyntaxPED.Ep_list (loc, ep_list), fm ->
+        SyntaxPED.Ep_list (loc, Lista.map (fun e -> rv_ep e fm) ep_list)
+    | SyntaxPED.Ep_cons (loc, ep1, ep2), fm ->
+        SyntaxPED.Ep_cons (loc, rv_ep ep1 fm, rv_ep ep2 fm)
+and rv_pexpp
+  x0 fm = match x0, fm with
+    SyntaxPED.PEXPp_exp (patp, ep), fm ->
+      SyntaxPED.PEXPp_exp (rv_pat patp fm, rv_ep ep fm)
+    | SyntaxPED.PEXPp_when (patp, ep1, ep2), fm ->
+        SyntaxPED.PEXPp_when (rv_pat patp fm, rv_ep ep1 fm, rv_ep ep2 fm)
+and rv_letbind
+  (SyntaxPED.LBp_val (loc, patp, ep)) fm =
+    SyntaxPED.LBp_val (loc, rv_pat patp fm, rv_ep ep fm);;
+
+let rec mk_new
+  s xp =
+    (xp ^ "_") ^ Stringa.implode (Utils.string_of_nat (Lista.size_list s));;
+
+let rec pat_id
+  = function SyntaxPED.Pp_lit (loc, lit) -> []
+    | SyntaxPED.Pp_wild loc -> []
+    | SyntaxPED.Pp_as_var (loc, patp, xp) -> pat_id patp
+    | SyntaxPED.Pp_typ (loc, tau, patp) -> pat_id patp
+    | SyntaxPED.Pp_id (loc, idd) -> [idd]
+    | SyntaxPED.Pp_as_typ (loc, patp, tau) -> pat_id patp
+    | SyntaxPED.Pp_app (loc, idd, patp_list) -> Lista.maps pat_id patp_list
+    | SyntaxPED.Pp_vector (loc, patp_list) -> Lista.maps pat_id patp_list
+    | SyntaxPED.Pp_vector_concat (loc, patp_list) -> Lista.maps pat_id patp_list
+    | SyntaxPED.Pp_tup (loc, patp_list) -> Lista.maps pat_id patp_list
+    | SyntaxPED.Pp_list (loc, patp_list) -> Lista.maps pat_id patp_list
+    | SyntaxPED.Pp_cons (loc, patp1, patp2) -> pat_id patp1 @ pat_id patp2
+    | SyntaxPED.Pp_string_append (loc, patp_list) ->
+        Lista.maps pat_id patp_list;;
+
+let rec unzip3
+  = function [] -> ([], ([], []))
+    | (x, (y, z)) :: xyzs ->
+        (let (xs, (ys, zs)) = unzip3 xyzs in (x :: xs, (y :: ys, z :: zs)));;
+
+let rec b_of_lit = function SyntaxVCT.L_true -> SyntaxVCT.B_bool
+                   | SyntaxVCT.L_false -> SyntaxVCT.B_bool
+                   | SyntaxVCT.L_num n -> SyntaxVCT.B_int
+                   | SyntaxVCT.L_zero -> SyntaxVCT.B_bit
+                   | SyntaxVCT.L_one -> SyntaxVCT.B_bit
+                   | SyntaxVCT.L_unit -> SyntaxVCT.B_unit
+                   | SyntaxVCT.L_string uu -> SyntaxVCT.B_string
+                   | SyntaxVCT.L_real uv -> SyntaxVCT.B_real
+                   | SyntaxVCT.L_undef -> SyntaxVCT.B_undef;;
+
+let rec mk_fresh_aux
+  x0 s2 xp = match x0, s2, xp with [], s2, xp -> xp
+    | yp :: s, s2, xp ->
+        (let a = (if not ((xp : string) = yp) then xp else mk_new s2 xp) in
+          mk_fresh_aux s (yp :: s2) a);;
+
+let rec mk_fresh s xp = mk_fresh_aux s [] xp;;
+
+let rec mk_l_eq_c
+  x xa1 = match x, xa1 with
+    x, SyntaxVCT.L_bitvec bs ->
+      SyntaxVCT.C_conj
+        (SyntaxVCT.C_eq
+           (SyntaxVCT.CE_uop
+              (SyntaxVCT.Len, SyntaxVCT.CE_val (SyntaxVCT.V_var x)),
+             SyntaxVCT.CE_val
+               (SyntaxVCT.V_lit
+                 (SyntaxVCT.L_num
+                   (Arith.integer_of_nat (Lista.size_list bs))))),
+          SyntaxVCT.C_eq
+            (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+              SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_bitvec bs))))
+    | x, SyntaxVCT.L_unit ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_unit))
+    | x, SyntaxVCT.L_zero ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_zero))
+    | x, SyntaxVCT.L_one ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_one))
+    | x, SyntaxVCT.L_true ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_true))
+    | x, SyntaxVCT.L_false ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_false))
+    | x, SyntaxVCT.L_num v ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_num v)))
+    | x, SyntaxVCT.L_string v ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_string v)))
+    | x, SyntaxVCT.L_undef ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_undef))
+    | x, SyntaxVCT.L_real v ->
+        SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_real v)));;
+
+let rec mk_l_eq_t
+  l = SyntaxVCT.T_refined_type
+        (SyntaxVCT.VIndex, b_of_lit l, mk_l_eq_c SyntaxVCT.VIndex l);;
+
+let rec mk_list_c
+  x xs =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+        SyntaxVCT.CE_val
+          (SyntaxVCT.V_list (Lista.map (fun a -> SyntaxVCT.V_var a) xs)));;
+
+let rec mk_v_eq_c
+  x v = SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x), SyntaxVCT.CE_val v);;
+
+let rec mk_v_eq_t
+  b v = SyntaxVCT.T_refined_type
+          (SyntaxVCT.VIndex, b, mk_v_eq_c SyntaxVCT.VIndex v);;
+
+let rec mk_mapping
+  s ids =
+    Lista.fold
+      (fun xp m ->
+        (if Lista.member Stringa.equal_literal s xp
+          then Finite_Map.fmupd Stringa.equal_literal xp (mk_fresh s xp) m
+          else m))
+      ids Finite_Map.fmempty;;
+
+let rec freshen_pexp_aux
+  s patp ep = (let patid = pat_id patp in
+               let mapp = mk_mapping s patid in
+               let patpa = rv_pat patp mapp in
+               let a = rv_ep ep mapp in
+                (patpa, a));;
+
+let rec freshen_ep
+  s x1 = match s, x1 with
+    s, SyntaxPED.Ep_let (loc2, SyntaxPED.LBp_val (loc1, pat, ep1), ep2) ->
+      (let (pat_new, ep2_new) = freshen_pexp_aux s pat ep2 in
+        SyntaxPED.Ep_let
+          (loc2, SyntaxPED.LBp_val (loc1, pat_new, freshen_ep s ep1),
+            freshen_ep
+              (Lista.remdups Stringa.equal_literal (s @ pat_id pat_new))
+              ep2_new))
+    | s, SyntaxPED.Ep_let2 (loc, xp, tau, ep1, ep2) ->
+        SyntaxPED.Ep_let2 (loc, xp, tau, freshen_ep s ep1, freshen_ep s ep2)
+    | s, SyntaxPED.Ep_case (loc, ep, pexpp_list) ->
+        SyntaxPED.Ep_case
+          (loc, freshen_ep s ep, Lista.map (freshen_pexpp s) pexpp_list)
+    | s, SyntaxPED.Ep_val (loc, v) -> SyntaxPED.Ep_val (loc, v)
+    | s, SyntaxPED.Ep_mvar (loc, up) -> SyntaxPED.Ep_mvar (loc, up)
+    | s, SyntaxPED.Ep_concat (loc, ep_list) ->
+        SyntaxPED.Ep_concat (loc, Lista.map (freshen_ep s) ep_list)
+    | s, SyntaxPED.Ep_tuple (loc, ep_list) ->
+        SyntaxPED.Ep_tuple (loc, Lista.map (freshen_ep s) ep_list)
+    | s, SyntaxPED.Ep_app (loc, fp, ep) ->
+        SyntaxPED.Ep_app (loc, fp, freshen_ep s ep)
+    | s, SyntaxPED.Ep_bop (loc, bop, ep1, ep2) ->
+        SyntaxPED.Ep_bop (loc, bop, freshen_ep s ep1, freshen_ep s ep2)
+    | s, SyntaxPED.Ep_uop (loc, uop, ep) ->
+        SyntaxPED.Ep_uop (loc, uop, freshen_ep s ep)
+    | s, SyntaxPED.Ep_proj (loc, p, ep) ->
+        SyntaxPED.Ep_proj (loc, p, freshen_ep s ep)
+    | s, SyntaxPED.Ep_constr (loc, ctor, ep) ->
+        SyntaxPED.Ep_constr (loc, ctor, freshen_ep s ep)
+    | s, SyntaxPED.Ep_field_access (loc, ep, field) ->
+        SyntaxPED.Ep_field_access (loc, freshen_ep s ep, field)
+    | s, SyntaxPED.Ep_sizeof (loc, cep) -> SyntaxPED.Ep_sizeof (loc, cep)
+    | s, SyntaxPED.Ep_cast (loc, tau, ep) ->
+        SyntaxPED.Ep_cast (loc, tau, freshen_ep s ep)
+    | s, SyntaxPED.Ep_record (loc, field_ep_list) ->
+        SyntaxPED.Ep_record
+          (loc, Lista.map (fun (f, e) -> (f, freshen_ep s e)) field_ep_list)
+    | s, SyntaxPED.Ep_record_update (loc, ep, field_ep_list) ->
+        SyntaxPED.Ep_record_update
+          (loc, freshen_ep s ep,
+            Lista.map (fun (f, e) -> (f, freshen_ep s e)) field_ep_list)
+    | s, SyntaxPED.Ep_if (loc, ep1, ep2, ep3) ->
+        SyntaxPED.Ep_if
+          (loc, freshen_ep s ep1, freshen_ep s ep2, freshen_ep s ep3)
+    | s, SyntaxPED.Ep_block (loc, ep_list) ->
+        SyntaxPED.Ep_block (loc, Lista.map (freshen_ep s) ep_list)
+    | s, SyntaxPED.Ep_assign (loc, lexpp, ep1, ep2) ->
+        SyntaxPED.Ep_assign (loc, lexpp, freshen_ep s ep1, freshen_ep s ep2)
+    | s, SyntaxPED.Ep_return (loc, ep) ->
+        SyntaxPED.Ep_return (loc, freshen_ep s ep)
+    | s, SyntaxPED.Ep_exit (loc, ep) -> SyntaxPED.Ep_exit (loc, freshen_ep s ep)
+    | s, SyntaxPED.Ep_ref (loc, idd) -> SyntaxPED.Ep_ref (loc, idd)
+    | s, SyntaxPED.Ep_throw (loc, ep) ->
+        SyntaxPED.Ep_throw (loc, freshen_ep s ep)
+    | s, SyntaxPED.Ep_try (loc, ep, pexpp_list) ->
+        SyntaxPED.Ep_try
+          (loc, freshen_ep s ep, Lista.map (freshen_pexpp s) pexpp_list)
+    | s, SyntaxPED.Ep_constraint (loc, cp) -> SyntaxPED.Ep_constraint (loc, cp)
+    | s, SyntaxPED.Ep_loop (loc, loop, ep1, ep2) ->
+        SyntaxPED.Ep_loop (loc, loop, freshen_ep s ep1, freshen_ep s ep2)
+    | s, SyntaxPED.Ep_for (loc, idd, ep1, ep2, ep3, order, ep4) ->
+        SyntaxPED.Ep_for
+          (loc, idd, freshen_ep s ep1, freshen_ep s ep2, freshen_ep s ep3,
+            order, freshen_ep s ep4)
+    | s, SyntaxPED.Ep_assert (loc, ep1, ep2) ->
+        SyntaxPED.Ep_assert (loc, freshen_ep s ep1, freshen_ep s ep2)
+    | s, SyntaxPED.Ep_vec (loc, ep_list) ->
+        SyntaxPED.Ep_vec (loc, Lista.map (freshen_ep s) ep_list)
+    | s, SyntaxPED.Ep_list (loc, ep_list) ->
+        SyntaxPED.Ep_list (loc, Lista.map (freshen_ep s) ep_list)
+    | s, SyntaxPED.Ep_cons (loc, ep1, ep2) ->
+        SyntaxPED.Ep_cons (loc, freshen_ep s ep1, freshen_ep s ep2)
+and freshen_pexpp
+  s x1 = match s, x1 with
+    s, SyntaxPED.PEXPp_exp (patp, ep) ->
+      (let (pat_new, ep_new) = freshen_pexp_aux s patp ep in
+        SyntaxPED.PEXPp_exp
+          (pat_new,
+            freshen_ep
+              (Lista.remdups Stringa.equal_literal (s @ pat_id pat_new))
+              ep_new))
+    | s, SyntaxPED.PEXPp_when (patp, ep1, ep2) ->
+        (let (pat_new, ep2_new) = freshen_pexp_aux s patp ep2 in
+          SyntaxPED.PEXPp_when
+            (pat_new, freshen_ep s ep1,
+              freshen_ep
+                (Lista.remdups Stringa.equal_literal (s @ pat_id pat_new))
+                ep2_new));;
+
+let rec mk_eq_proj
+  l x i n =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex),
+        SyntaxVCT.CE_val
+          (SyntaxVCT.V_proj
+            ((Utils.string_lit_of_nat n ^ "X") ^ Utils.string_lit_of_nat i,
+              SyntaxVCT.V_var x)));;
+
+let rec mk_proj_eq
+  x field =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex),
+        SyntaxVCT.CE_val (SyntaxVCT.V_proj (field, SyntaxVCT.V_var x)));;
+
+let rec c_conj_list
+  cs = Lista.fold (fun a b -> SyntaxVCT.C_conj (a, b)) cs SyntaxVCT.C_true;;
+
+let rec mk_record_b_c
+  zs fts =
+    (let (fbs, cs) =
+       Utils.unzip
+         (Lista.map (fun (x, a) -> (let (aa, b) = a in aux x aa b))
+           (Lista.zip zs fts))
+       in
+      (SyntaxVCT.B_record fbs, c_conj_list cs));;
+
+let rec mk_vec_len_eq_c
+  x bs =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_uop (SyntaxVCT.Len, SyntaxVCT.CE_val (SyntaxVCT.V_var x)),
+        SyntaxVCT.CE_val
+          (SyntaxVCT.V_lit
+            (SyntaxVCT.L_num (Arith.integer_of_nat (Lista.size_list bs)))));;
+
+let rec mk_x_eq_c_tuple
+  x xs =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+        SyntaxVCT.CE_val
+          (SyntaxVCT.V_tuple (Lista.map (fun a -> SyntaxVCT.V_var a) xs)));;
+
+let rec subst_x_cp x = (fun a xa v -> SyntaxPED.subst_cp v xa a) x;;
+
+end;; (*struct SyntaxUtils*)
+
 module Contexts : sig
   type g_entry = GEPair of SyntaxVCT.bp * SyntaxVCT.cp | GETyp of SyntaxVCT.tau
   val equal_g_entrya : g_entry -> g_entry -> bool
@@ -5434,16 +4433,14 @@ module Contexts : sig
         (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap *
         (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap * SyntaxVCT.xp list *
         SyntaxVCT.tau option * 'b
-  val mk_proj_eq_x : SyntaxVCT.xp -> SyntaxVCT.xp -> string -> SyntaxVCT.cp
-  val b_of : SyntaxVCT.tau -> SyntaxVCT.bp
-  val aux :
-    SyntaxVCT.xp ->
-      string -> SyntaxVCT.tau -> (string * SyntaxVCT.bp) * SyntaxVCT.cp
-  val c_of : SyntaxVCT.tau -> SyntaxVCT.cp
   val conj : SyntaxVCT.cp list -> SyntaxVCT.cp
   val mapi : (Arith.nat -> 'a -> 'b) -> 'a list -> 'b list
   val n_of : SyntaxVCT.xp -> string
   val gamma_x : ('a, 'b) gamma_ext -> (SyntaxVCT.xp * g_entry) list
+  val pp_vp : SyntaxVCT.vp -> string
+  val pp_ce : SyntaxVCT.cep -> string
+  val pp_cp : SyntaxVCT.cp -> string
+  val pp_gep : g_entry -> string
   val x_of : SyntaxVCT.xp -> string
   val pp_G : ('a, unit) gamma_ext -> string
   val zipi : 'a list -> (Arith.nat * 'a) list
@@ -5462,18 +4459,15 @@ module Contexts : sig
           (string, (string list)) Finite_Map.fmap
   val unify_b_aux :
     SyntaxVCT.bp -> SyntaxVCT.bp -> ((string * SyntaxVCT.bp) list) option
-  val types_of : ('a * 'b) list -> 'b list
+  val bases_of : ('a * SyntaxVCT.tau) list -> SyntaxVCT.bp list
   val unify_b :
     SyntaxVCT.bp -> SyntaxVCT.bp -> ((string * SyntaxVCT.bp) list) option
-  val unify_b_t :
-    SyntaxVCT.tau -> SyntaxVCT.tau -> ((string * SyntaxVCT.bp) list) option
-  val unify_b_t_list :
-    SyntaxVCT.tau list ->
-      SyntaxVCT.tau list -> ((string * SyntaxVCT.bp) list) option
+  val unify_b_list :
+    SyntaxVCT.bp list ->
+      SyntaxVCT.bp list -> ((string * SyntaxVCT.bp) list) option
   val add_vars :
     ('a, unit) gamma_ext ->
       (SyntaxVCT.xp * g_entry) list -> ('a, unit) gamma_ext
-  val b_of_lit : SyntaxVCT.lit -> SyntaxVCT.bp
   val emptyEnv : ('a, unit) gamma_ext
   val gamma_f :
     ('a, 'b) gamma_ext ->
@@ -5481,11 +4475,6 @@ module Contexts : sig
         Finite_Map.fmap
   val check_var : ('a, unit) gamma_ext -> SyntaxVCT.xp -> bool
   val mk_ctor_v : string -> SyntaxVCT.xp list -> SyntaxVCT.vp
-  val mk_l_eq_c : SyntaxVCT.xp -> SyntaxVCT.lit -> SyntaxVCT.cp
-  val mk_l_eq_t : SyntaxVCT.lit -> SyntaxVCT.tau
-  val mk_list_c : SyntaxVCT.xp -> SyntaxVCT.xp list -> SyntaxVCT.cp
-  val mk_v_eq_c : SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.cp
-  val mk_v_eq_t : SyntaxVCT.bp -> SyntaxVCT.vp -> SyntaxVCT.tau
   val subst_c_x : SyntaxVCT.cp -> SyntaxVCT.xp -> SyntaxVCT.cp
   val check_vars : ('a, unit) gamma_ext -> SyntaxVCT.xp list -> bool
   val convert_ge :
@@ -5493,7 +4482,6 @@ module Contexts : sig
       (SyntaxVCT.xp * g_entry) list
   val lookup_ivar : ('a, unit) gamma_ext -> SyntaxVCT.xp -> g_entry option
   val lookup_var : ('a, unit) gamma_ext -> SyntaxVCT.xp -> g_entry option
-  val mk_proj_eq : SyntaxVCT.xp -> string -> SyntaxVCT.cp
   val subst_c_v0 : SyntaxVCT.cp -> SyntaxVCT.vp -> SyntaxVCT.cp
   val tuple_proj : Arith.nat -> Arith.nat -> SyntaxVCT.vp -> SyntaxVCT.vp
   val add_vars_ge :
@@ -5512,11 +4500,6 @@ module Contexts : sig
   val convert_to_bc :
     Arith.nat -> Arith.nat -> SyntaxVCT.tau -> SyntaxVCT.bp * SyntaxVCT.cp
   val convert_to_st : SyntaxVCT.tau list -> SyntaxVCT.bp list * SyntaxVCT.cp
-  val mk_record_b_c :
-    SyntaxVCT.xp list ->
-      (string * SyntaxVCT.tau) list -> SyntaxVCT.bp * SyntaxVCT.cp
-  val mk_vec_len_eq_c : SyntaxVCT.xp -> 'a list -> SyntaxVCT.cp
-  val mk_x_eq_c_tuple : SyntaxVCT.xp -> SyntaxVCT.xp list -> SyntaxVCT.cp
   val add_type_to_scope :
     ('a, unit) gamma_ext -> SyntaxVCT.tau -> ('a, unit) gamma_ext
   val gamma_e : ('a, 'b) gamma_ext -> SyntaxVCT.tau option
@@ -5524,9 +4507,6 @@ module Contexts : sig
   val gamma_e_update :
     (SyntaxVCT.tau option -> SyntaxVCT.tau option) ->
       ('a, 'b) gamma_ext -> ('a, 'b) gamma_ext
-  val equal_Gamma_ext :
-    'a HOL.equal -> 'b HOL.equal ->
-      ('a, 'b) gamma_ext -> ('a, 'b) gamma_ext -> bool
 end = struct
 
 type g_entry = GEPair of SyntaxVCT.bp * SyntaxVCT.cp | GETyp of SyntaxVCT.tau;;
@@ -5550,18 +4530,6 @@ type ('a, 'b) gamma_ext =
       (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap * SyntaxVCT.xp list *
       SyntaxVCT.tau option * 'b;;
 
-let rec mk_proj_eq_x
-  x y field =
-    SyntaxVCT.C_eq
-      (SyntaxVCT.CE_val (SyntaxVCT.V_var y),
-        SyntaxVCT.CE_val (SyntaxVCT.V_proj (field, SyntaxVCT.V_var x)));;
-
-let rec b_of (SyntaxVCT.T_refined_type (uu, b, uv)) = b;;
-
-let rec aux z f t = ((f, b_of t), mk_proj_eq_x SyntaxVCT.VIndex z f);;
-
-let rec c_of (SyntaxVCT.T_refined_type (uu, uv, c)) = c;;
-
 let rec conj
   xs = Lista.foldr
          (fun x y ->
@@ -5584,11 +4552,62 @@ let rec gamma_x
       more))
     = gamma_x;;
 
+let rec pp_vp = function SyntaxVCT.V_var (SyntaxVCT.VNamed s) -> s
+                | SyntaxVCT.V_lit v -> "vp"
+                | SyntaxVCT.V_var SyntaxVCT.VIndex -> "vp"
+                | SyntaxVCT.V_vec v -> "vp"
+                | SyntaxVCT.V_list v -> "vp"
+                | SyntaxVCT.V_cons (v, va) -> "vp"
+                | SyntaxVCT.V_constr (v, va) -> "vp"
+                | SyntaxVCT.V_record v -> "vp"
+                | SyntaxVCT.V_tuple v -> "vp"
+                | SyntaxVCT.V_proj (v, va) -> "vp";;
+
+let rec pp_ce
+  = function SyntaxVCT.CE_val v -> pp_vp v
+    | SyntaxVCT.CE_bop (SyntaxVCT.Plus, e1, e2) -> (pp_ce e1 ^ " + ") ^ pp_ce e2
+    | SyntaxVCT.CE_bop (SyntaxVCT.LEq, e1, e2) -> (pp_ce e1 ^ " <= ") ^ pp_ce e2
+    | SyntaxVCT.CE_bop (SyntaxVCT.Times, e1, e2) ->
+        (pp_ce e1 ^ " <= ") ^ pp_ce e2
+    | SyntaxVCT.CE_bop (SyntaxVCT.Minus, e1, e2) ->
+        (pp_ce e1 ^ " <= ") ^ pp_ce e2
+    | SyntaxVCT.CE_bop (SyntaxVCT.Div, e1, e2) -> (pp_ce e1 ^ " <= ") ^ pp_ce e2
+    | SyntaxVCT.CE_bop (SyntaxVCT.Mod, e1, e2) -> (pp_ce e1 ^ " <= ") ^ pp_ce e2
+    | SyntaxVCT.CE_bop (SyntaxVCT.Eq, e1, e2) -> (pp_ce e1 ^ " <= ") ^ pp_ce e2
+    | SyntaxVCT.CE_bop (SyntaxVCT.NEq, e1, e2) -> (pp_ce e1 ^ " <= ") ^ pp_ce e2
+    | SyntaxVCT.CE_bop (SyntaxVCT.LT, e1, e2) -> (pp_ce e1 ^ " <= ") ^ pp_ce e2
+    | SyntaxVCT.CE_bop (SyntaxVCT.And, e1, e2) -> (pp_ce e1 ^ " <= ") ^ pp_ce e2
+    | SyntaxVCT.CE_bop (SyntaxVCT.Or, e1, e2) -> (pp_ce e1 ^ " <= ") ^ pp_ce e2
+    | SyntaxVCT.CE_bop (SyntaxVCT.GEq, e1, e2) -> (pp_ce e1 ^ "GEq") ^ pp_ce e2
+    | SyntaxVCT.CE_bop (SyntaxVCT.GT, e1, e2) -> (pp_ce e1 ^ " <= ") ^ pp_ce e2
+    | SyntaxVCT.CE_uop (SyntaxVCT.Len, e) -> pp_ce e
+    | SyntaxVCT.CE_uop (SyntaxVCT.Nott, e) -> pp_ce e
+    | SyntaxVCT.CE_uop (SyntaxVCT.Abs, e) -> pp_ce e
+    | SyntaxVCT.CE_many_plus v -> failwith "undefined"
+    | SyntaxVCT.CE_uop (SyntaxVCT.Exp, va) -> pp_ce va
+    | SyntaxVCT.CE_uop (SyntaxVCT.Neg, va) -> pp_ce va
+    | SyntaxVCT.CE_proj (v, va) -> pp_ce va
+    | SyntaxVCT.CE_field_access (vp, field) -> pp_vp vp;;
+
+let rec pp_cp = function SyntaxVCT.C_true -> "T"
+                | SyntaxVCT.C_false -> "F"
+                | SyntaxVCT.C_conj (c1, c2) -> (pp_cp c1 ^ " AND ") ^ pp_cp c2
+                | SyntaxVCT.C_disj (c1, c2) -> (pp_cp c1 ^ " OR  ") ^ pp_cp c2
+                | SyntaxVCT.C_not c -> pp_cp c
+                | SyntaxVCT.C_imp (c1, c2) -> pp_cp c1 ^ pp_cp c2
+                | SyntaxVCT.C_eq (e1, e2) -> (pp_ce e1 ^ "=") ^ pp_ce e2
+                | SyntaxVCT.C_leq (e1, e2) -> "C_leq"
+                | SyntaxVCT.C_conj_many cs -> "C_conj_many";;
+
+let rec pp_gep (GEPair (bp, cp)) = pp_cp cp;;
+
 let rec x_of (SyntaxVCT.VNamed x) = x;;
 
 let rec pp_G
   g = Stringa.implode
-        (Lista.maps (fun (x, _) -> Stringa.explode (x_of x ^ " "))
+        (Lista.maps
+          (fun (x, gep) ->
+            Stringa.explode (((x_of x ^ "[ ") ^ pp_gep gep) ^ "]"))
           (gamma_x g));;
 
 let rec zipi xs = mapi (fun a b -> (a, b)) xs;;
@@ -5653,7 +4672,8 @@ let rec unify_b_aux
     | uu, SyntaxVCT.B_exception -> None
     | uu, SyntaxVCT.B_finite_set v -> None;;
 
-let rec types_of ts = Lista.map Product_Type.snd ts;;
+let rec bases_of
+  ts = Lista.map (Fun.comp SyntaxUtils.b_of Product_Type.snd) ts;;
 
 let rec unify_b
   b1 b2 = match b1, b2 with
@@ -5664,7 +4684,8 @@ let rec unify_b
     | SyntaxVCT.B_list b1, SyntaxVCT.B_list b2 ->
         (match unify_b b1 b2 with None -> None | Some a -> Some a)
     | SyntaxVCT.B_union (s1, ts1), SyntaxVCT.B_union (s2, ts2) ->
-        unify_b_t_list (types_of ts1) (types_of ts2)
+        unify_b_list (bases_of ts1) (bases_of ts2)
+    | SyntaxVCT.B_tuple bs1, SyntaxVCT.B_tuple bs2 -> unify_b_list bs1 bs2
     | SyntaxVCT.B_var v, b2 ->
         (if SyntaxVCT.equal_bpa (SyntaxVCT.B_var v) b2 then Some []
           else (match unify_b_aux (SyntaxVCT.B_var v) b2
@@ -5810,10 +4831,118 @@ let rec unify_b
                  with None ->
                    unify_b_aux (SyntaxVCT.B_finite_set va) (SyntaxVCT.B_list v)
                  | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, b2 ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) b2 then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) b2
-                 with None -> unify_b_aux b2 (SyntaxVCT.B_tuple v)
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_var va ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) (SyntaxVCT.B_var va)
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_var va)
+                 with None ->
+                   unify_b_aux (SyntaxVCT.B_var va) (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_tid va ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) (SyntaxVCT.B_tid va)
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_tid va)
+                 with None ->
+                   unify_b_aux (SyntaxVCT.B_tid va) (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_int ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_int
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_int
+                 with None -> unify_b_aux SyntaxVCT.B_int (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_bool ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_bool
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_bool
+                 with None -> unify_b_aux SyntaxVCT.B_bool (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_bit ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_bit
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_bit
+                 with None -> unify_b_aux SyntaxVCT.B_bit (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_unit ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_unit
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_unit
+                 with None -> unify_b_aux SyntaxVCT.B_unit (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_real ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_real
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_real
+                 with None -> unify_b_aux SyntaxVCT.B_real (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_vec (va, vb) ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) (SyntaxVCT.B_vec (va, vb))
+          then Some []
+          else (match
+                 unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_vec (va, vb))
+                 with None ->
+                   unify_b_aux (SyntaxVCT.B_vec (va, vb)) (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_list va ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) (SyntaxVCT.B_list va)
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_list va)
+                 with None ->
+                   unify_b_aux (SyntaxVCT.B_list va) (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_union (va, vb) ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v)
+              (SyntaxVCT.B_union (va, vb))
+          then Some []
+          else (match
+                 unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_union (va, vb))
+                 with None ->
+                   unify_b_aux (SyntaxVCT.B_union (va, vb))
+                     (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_record va ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) (SyntaxVCT.B_record va)
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_record va)
+                 with None ->
+                   unify_b_aux (SyntaxVCT.B_record va) (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_undef ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_undef
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_undef
+                 with None ->
+                   unify_b_aux SyntaxVCT.B_undef (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_reg va ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) (SyntaxVCT.B_reg va)
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_reg va)
+                 with None ->
+                   unify_b_aux (SyntaxVCT.B_reg va) (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_string ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_string
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_string
+                 with None ->
+                   unify_b_aux SyntaxVCT.B_string (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_exception ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_exception
+          then Some []
+          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_exception
+                 with None ->
+                   unify_b_aux SyntaxVCT.B_exception (SyntaxVCT.B_tuple v)
+                 | Some a -> Some a))
+    | SyntaxVCT.B_tuple v, SyntaxVCT.B_finite_set va ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v)
+              (SyntaxVCT.B_finite_set va)
+          then Some []
+          else (match
+                 unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_finite_set va)
+                 with None ->
+                   unify_b_aux (SyntaxVCT.B_finite_set va) (SyntaxVCT.B_tuple v)
                  | Some a -> Some a))
     | SyntaxVCT.B_union (v, va), SyntaxVCT.B_var vb ->
         (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va)) (SyntaxVCT.B_var vb)
@@ -6021,10 +5150,13 @@ let rec unify_b
                  with None ->
                    unify_b_aux (SyntaxVCT.B_list v) (SyntaxVCT.B_vec (va, vb))
                  | Some a -> Some a))
-    | b1, SyntaxVCT.B_tuple v ->
-        (if SyntaxVCT.equal_bpa b1 (SyntaxVCT.B_tuple v) then Some []
-          else (match unify_b_aux b1 (SyntaxVCT.B_tuple v)
-                 with None -> unify_b_aux (SyntaxVCT.B_tuple v) b1
+    | SyntaxVCT.B_vec (va, vb), SyntaxVCT.B_tuple v ->
+        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_vec (va, vb)) (SyntaxVCT.B_tuple v)
+          then Some []
+          else (match
+                 unify_b_aux (SyntaxVCT.B_vec (va, vb)) (SyntaxVCT.B_tuple v)
+                 with None ->
+                   unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_vec (va, vb))
                  | Some a -> Some a))
     | SyntaxVCT.B_vec (vb, vc), SyntaxVCT.B_union (v, va) ->
         (if SyntaxVCT.equal_bpa (SyntaxVCT.B_vec (vb, vc))
@@ -6067,31 +5199,18 @@ let rec unify_b
           else (match unify_b_aux b1 (SyntaxVCT.B_finite_set v)
                  with None -> unify_b_aux (SyntaxVCT.B_finite_set v) b1
                  | Some a -> Some a))
-and unify_b_t
-  (SyntaxVCT.T_refined_type (x1, b1, c1))
-    (SyntaxVCT.T_refined_type (x2, b2, c2)) = unify_b b1 b2
-and unify_b_t_list
+and unify_b_list
   x0 x1 = match x0, x1 with
     t1 :: ts1, t2 :: ts2 ->
-      (match unify_b_t t1 t2 with None -> None
+      (match unify_b t1 t2 with None -> None
         | Some bs ->
-          (match unify_b_t_list ts1 ts2 with None -> None
+          (match unify_b_list ts1 ts2 with None -> None
             | Some bs2 -> Some (bs @ bs2)))
     | [], [] -> Some []
     | [], v :: va -> None
     | v :: va, [] -> None;;
 
 let rec add_vars gamma bs = gamma_x_update (fun _ -> bs @ gamma_x gamma) gamma;;
-
-let rec b_of_lit = function SyntaxVCT.L_true -> SyntaxVCT.B_bool
-                   | SyntaxVCT.L_false -> SyntaxVCT.B_bool
-                   | SyntaxVCT.L_num n -> SyntaxVCT.B_int
-                   | SyntaxVCT.L_zero -> SyntaxVCT.B_bit
-                   | SyntaxVCT.L_one -> SyntaxVCT.B_bit
-                   | SyntaxVCT.L_unit -> SyntaxVCT.B_unit
-                   | SyntaxVCT.L_string uu -> SyntaxVCT.B_string
-                   | SyntaxVCT.L_real uv -> SyntaxVCT.B_real
-                   | SyntaxVCT.L_undef -> SyntaxVCT.B_undef;;
 
 let emptyEnv : ('a, unit) gamma_ext
   = Gamma_ext
@@ -6117,80 +5236,6 @@ let rec mk_ctor_v
           (idx, SyntaxVCT.V_tuple
                   (Lista.map (fun a -> SyntaxVCT.V_var a) (x :: v :: va)));;
 
-let rec mk_l_eq_c
-  x xa1 = match x, xa1 with
-    x, SyntaxVCT.L_bitvec bs ->
-      SyntaxVCT.C_conj
-        (SyntaxVCT.C_eq
-           (SyntaxVCT.CE_uop
-              (SyntaxVCT.Len, SyntaxVCT.CE_val (SyntaxVCT.V_var x)),
-             SyntaxVCT.CE_val
-               (SyntaxVCT.V_lit
-                 (SyntaxVCT.L_num
-                   (Arith.integer_of_int
-                     (Arith.int_of_nat (Lista.size_list bs)))))),
-          SyntaxVCT.C_eq
-            (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-              SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_bitvec bs))))
-    | x, SyntaxVCT.L_unit ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_unit))
-    | x, SyntaxVCT.L_zero ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_zero))
-    | x, SyntaxVCT.L_one ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_one))
-    | x, SyntaxVCT.L_true ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_true))
-    | x, SyntaxVCT.L_false ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_false))
-    | x, SyntaxVCT.L_num v ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_num v)))
-    | x, SyntaxVCT.L_string v ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_string v)))
-    | x, SyntaxVCT.L_undef ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_undef))
-    | x, SyntaxVCT.L_real v ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_real v)));;
-
-let rec mk_l_eq_t
-  l = SyntaxVCT.T_refined_type
-        (SyntaxVCT.VIndex, b_of_lit l, mk_l_eq_c SyntaxVCT.VIndex l);;
-
-let rec mk_list_c
-  x xs =
-    SyntaxVCT.C_eq
-      (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-        SyntaxVCT.CE_val
-          (SyntaxVCT.V_list (Lista.map (fun a -> SyntaxVCT.V_var a) xs)));;
-
-let rec mk_v_eq_c
-  x v = SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x), SyntaxVCT.CE_val v);;
-
-let rec mk_v_eq_t
-  b v = SyntaxVCT.T_refined_type
-          (SyntaxVCT.VIndex, b,
-            SyntaxVCT.C_eq
-              (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex),
-                SyntaxVCT.CE_val v));;
-
 let rec subst_c_x
   c x = SyntaxPED.subst_cp (SyntaxVCT.V_var x) SyntaxVCT.VIndex c;;
 
@@ -6201,12 +5246,6 @@ let rec convert_ge xs = Lista.map (fun (x, (b, c)) -> (x, GEPair (b, c))) xs;;
 let rec lookup_ivar gamma x = lookup SyntaxVCT.equal_xp (gamma_x gamma) x;;
 
 let rec lookup_var gamma x = lookup_ivar gamma x;;
-
-let rec mk_proj_eq
-  x field =
-    SyntaxVCT.C_eq
-      (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex),
-        SyntaxVCT.CE_val (SyntaxVCT.V_proj (field, SyntaxVCT.V_var x)));;
 
 let rec subst_c_v0 c v = SyntaxPED.subst_cp v SyntaxVCT.VIndex c;;
 
@@ -6269,31 +5308,6 @@ let rec convert_to_st
           in
          (blist, conj clist));;
 
-let rec mk_record_b_c
-  zs fts =
-    (let (fbs, cs) =
-       unzip (Lista.map (fun (x, a) -> (let (aa, b) = a in aux x aa b))
-               (Lista.zip zs fts))
-       in
-      (SyntaxVCT.B_record fbs, conj cs));;
-
-let rec mk_vec_len_eq_c
-  x bs =
-    SyntaxVCT.C_eq
-      (SyntaxVCT.CE_uop (SyntaxVCT.Len, SyntaxVCT.CE_val (SyntaxVCT.V_var x)),
-        SyntaxVCT.CE_val
-          (SyntaxVCT.V_lit
-            (SyntaxVCT.L_num
-              (Arith.integer_of_int
-                (Arith.int_of_nat (Lista.size_list bs))))));;
-
-let rec mk_x_eq_c_tuple
-  x xs =
-    SyntaxVCT.C_eq
-      (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-        SyntaxVCT.CE_val
-          (SyntaxVCT.V_tuple (Lista.map (fun a -> SyntaxVCT.V_var a) xs)));;
-
 let rec add_type_to_scope
   gamma x1 = match gamma, x1 with
     gamma,
@@ -6339,37 +5353,6 @@ let rec gamma_e_update
         (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s,
           gamma_ea gamma_e, more);;
 
-let rec equal_Gamma_ext _A _B
-  (Gamma_ext
-    (gamma_fa, gamma_xa, gamma_ua, gamma_Ta, gamma_oa, gamma_ra, gamma_sa,
-      gamma_ea, morea))
-    (Gamma_ext
-      (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_e,
-        more))
-    = Finite_Map.equal_fmap SyntaxVCT.equal_xp
-        (Lista.equal_list
-          (Product_Type.equal_prod SyntaxVCT.equal_xp
-            (Product_Type.equal_prod SyntaxVCT.equal_ap
-              (Option.equal_option _A))))
-        gamma_fa gamma_f &&
-        (Lista.equal_lista
-           (Product_Type.equal_prod SyntaxVCT.equal_xp equal_g_entry) gamma_xa
-           gamma_x &&
-          (Lista.equal_lista
-             (Product_Type.equal_prod SyntaxVCT.equal_xp equal_g_entry) gamma_ua
-             gamma_u &&
-            (Lista.equal_lista
-               (Product_Type.equal_prod SyntaxVCT.equal_xp SyntaxVCT.equal_tau)
-               gamma_Ta gamma_T &&
-              (Finite_Map.equal_fmap SyntaxVCT.equal_xp
-                 (Lista.equal_list SyntaxVCT.equal_xp) gamma_oa gamma_o &&
-                (Finite_Map.equal_fmap SyntaxVCT.equal_xp SyntaxVCT.equal_tau
-                   gamma_ra gamma_r &&
-                  (Lista.equal_lista SyntaxVCT.equal_xp gamma_sa gamma_s &&
-                    (Option.equal_optiona SyntaxVCT.equal_tau gamma_ea
-                       gamma_e &&
-                      HOL.eq _B morea more)))))));;
-
 end;; (*struct Contexts*)
 
 module ContextsPiDelta : sig
@@ -6412,8 +5395,6 @@ module ContextsPiDelta : sig
   val add_type :
     unit theta_ext -> SyntaxVCT.xp -> SyntaxVCT.tau -> unit theta_ext
   val emptyDEnv : unit delta_ext
-  val emptyThetaEnv : unit theta_ext
-  val emptyTEnv : unit theta_ext
   val lookup_field_in_type : SyntaxVCT.tau -> string -> SyntaxVCT.bp option
   val lookup_field_record_aux :
     (SyntaxVCT.xp * SyntaxVCT.tau) list ->
@@ -6445,6 +5426,7 @@ module ContextsPiDelta : sig
   val theta_r : 'a theta_ext -> (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap
   val add_register :
     unit theta_ext -> SyntaxVCT.xp -> SyntaxVCT.tau -> unit theta_ext
+  val emptyThetaEnv : unit theta_ext
   val lookup_fields : unit theta_ext -> string list -> SyntaxVCT.tau option
   val mvar_not_in_d : unit delta_ext -> string -> bool
   val phi_o :
@@ -6649,11 +5631,6 @@ let rec add_type
 
 let emptyDEnv : unit delta_ext = Delta_ext ([], ());;
 
-let emptyThetaEnv : unit theta_ext
-  = Theta_ext ([], Finite_Map.fmempty, None, ());;
-
-let emptyTEnv : unit theta_ext = emptyThetaEnv;;
-
 let rec lookup_field_in_type
   xa0 x = match xa0, x with
     SyntaxVCT.T_refined_type (uu, SyntaxVCT.B_record fs, c), x ->
@@ -6712,7 +5689,7 @@ let rec tids_in_b_aux
     | t, SyntaxVCT.B_exception -> []
     | t, SyntaxVCT.B_finite_set v -> [];;
 
-let rec tids_in_t_aux ta t = tids_in_b_aux ta (Contexts.b_of t);;
+let rec tids_in_t_aux ta t = tids_in_b_aux ta (SyntaxUtils.b_of t);;
 
 let rec tids_in_b
   t x1 = match t, x1 with t, SyntaxVCT.B_tid i -> [i]
@@ -6736,7 +5713,7 @@ let rec tids_in_b
     | t, SyntaxVCT.B_exception -> []
     | t, SyntaxVCT.B_finite_set v -> [];;
 
-let rec tids_in_t ta t = tids_in_b ta (Contexts.b_of t);;
+let rec tids_in_t ta t = tids_in_b ta (SyntaxUtils.b_of t);;
 
 let rec fm_from_t
   t = Finite_Map.Fmap_of_list
@@ -6794,6 +5771,9 @@ let rec add_register
     theta_r_update
       (fun _ -> Finite_Map.fmupd SyntaxVCT.equal_xp xp t (theta_r theta))
       theta;;
+
+let emptyThetaEnv : unit theta_ext
+  = Theta_ext ([], Finite_Map.fmempty, None, ());;
 
 let rec lookup_fields
   g x1 = match g, x1 with
@@ -7232,15 +6212,16 @@ module UnifyType : sig
   val fvs_t_field_bp_list : (string * SyntaxVCT.bp) list -> string list
   val tsubst_bp_list_list :
     SyntaxVCT.bp list -> (string * SyntaxVCT.bp) list -> SyntaxVCT.bp list
-  val unify_b_aux_i_i_o :
-    SyntaxVCT.bp ->
-      SyntaxVCT.bp -> ((string * SyntaxVCT.bp) list) Predicate.pred
-  val unify_b_aux_list_i_i_o :
-    SyntaxVCT.bp list ->
-      SyntaxVCT.bp list -> ((string * SyntaxVCT.bp) list) Predicate.pred
   val unify_b_i_i_o :
     SyntaxVCT.bp ->
-      SyntaxVCT.bp -> ((string * SyntaxVCT.bp) list) Predicate.pred
+      SyntaxVCT.bp -> (((string * SyntaxVCT.bp) list) option) Predicate.pred
+  val unify_b_aux_list_i_i_o :
+    SyntaxVCT.bp list ->
+      SyntaxVCT.bp list ->
+        (((string * SyntaxVCT.bp) list) option) Predicate.pred
+  val unify_b_aux_i_i_o :
+    SyntaxVCT.bp ->
+      SyntaxVCT.bp -> (((string * SyntaxVCT.bp) list) option) Predicate.pred
 end = struct
 
 let rec b_of (SyntaxVCT.T_refined_type (uu, b, uv)) = b;;
@@ -7291,7 +6272,7 @@ let rec tsubst_bp_list_list
     | bp_list, (tvar, bp) :: bsub ->
         tsubst_bp_list_list (SyntaxPED.tsubst_bp_list bp tvar bp_list) bsub;;
 
-let rec unify_b_aux_i_i_o
+let rec unify_b_i_i_o
   x xa =
     Predicate.sup_pred
       (Predicate.bind (Predicate.single (x, xa))
@@ -7304,7 +6285,98 @@ let rec unify_b_aux_i_i_o
                   [])
                 (fun () ->
                   Predicate.bind (eq_i_i SyntaxVCT.equal_bp b1 b2)
-                    (fun () -> Predicate.single [])))))
+                    (fun () -> Predicate.single (Some []))))))
+      (Predicate.sup_pred
+        (Predicate.bind (Predicate.single (x, xa))
+          (fun (b1, b2) ->
+            Predicate.bind
+              (eq_i_i (Lista.equal_list Stringa.equal_literal) (fvs_t_bp b1) [])
+              (fun () ->
+                Predicate.bind
+                  (eq_i_i (Lista.equal_list Stringa.equal_literal) (fvs_t_bp b2)
+                    [])
+                  (fun () ->
+                    Predicate.bind
+                      (Predicate.if_pred (not (SyntaxVCT.equal_bpa b1 b2)))
+                      (fun () -> Predicate.single None)))))
+        (Predicate.bind (Predicate.single (x, xa))
+          (fun (b1, b2) ->
+            Predicate.bind
+              (Predicate.if_pred
+                (not (Lista.null (fvs_t_bp b1)) ||
+                  not (Lista.null (fvs_t_bp b2))))
+              (fun () ->
+                Predicate.bind (unify_b_aux_i_i_o b1 b2) Predicate.single))))
+and unify_b_aux_list_i_i_o
+  x xa =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (x, xa))
+        (fun a ->
+          (match a with ([], []) -> Predicate.single (Some [])
+            | ([], _ :: _) -> Predicate.bot_pred
+            | (_ :: _, _) -> Predicate.bot_pred)))
+      (Predicate.bind (Predicate.single (x, xa))
+        (fun a ->
+          (match a with ([], _) -> Predicate.bot_pred
+            | (_ :: _, []) -> Predicate.bot_pred
+            | (b1 :: bs1, b2 :: _) ->
+              Predicate.bind (unify_b_i_i_o b1 b2)
+                (fun aa ->
+                  (match aa with None -> Predicate.bot_pred
+                    | Some bsub1 ->
+                      Predicate.bind
+                        (unify_b_aux_list_i_i_o (tsubst_bp_list_list bs1 bsub1)
+                          (tsubst_bp_list_list bs1 bsub1))
+                        (fun ab ->
+                          (match ab with None -> Predicate.bot_pred
+                            | Some bsub2 ->
+                              Predicate.single (Some (bsub1 @ bsub2)))))))))
+and unify_b_aux_i_i_o
+  x xa =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (x, xa))
+        (fun a ->
+          (match a with (SyntaxVCT.B_var _, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_tid _, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_int, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_bool, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_bit, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_unit, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_real, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_var _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_tid _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_int) -> Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_bool) -> Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_bit) -> Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_unit) -> Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_real) -> Predicate.bot_pred
+            | (SyntaxVCT.B_vec (ord, b1), SyntaxVCT.B_vec (orda, b2)) ->
+              (if SyntaxVCT.equal_order ord orda
+                then Predicate.bind (unify_b_i_i_o b1 b2) Predicate.single
+                else Predicate.bot_pred)
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_list _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_tuple _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_union (_, _)) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_record _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_undef) -> Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_reg _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_string) -> Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_exception) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_finite_set _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.B_list _, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_tuple _, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_union (_, _), _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_record _, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_undef, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_reg _, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_string, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_exception, _) -> Predicate.bot_pred
+            | (SyntaxVCT.B_finite_set _, _) -> Predicate.bot_pred)))
       (Predicate.sup_pred
         (Predicate.bind (Predicate.single (x, xa))
           (fun a ->
@@ -7315,38 +6387,29 @@ let rec unify_b_aux_i_i_o
               | (SyntaxVCT.B_bit, _) -> Predicate.bot_pred
               | (SyntaxVCT.B_unit, _) -> Predicate.bot_pred
               | (SyntaxVCT.B_real, _) -> Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_var _) ->
+              | (SyntaxVCT.B_vec (_, _), _) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_var _) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_tid _) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_int) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_bool) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_bit) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_unit) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_real) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_vec (_, _)) ->
                 Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_tid _) ->
+              | (SyntaxVCT.B_list b1, SyntaxVCT.B_list b2) ->
+                Predicate.bind (unify_b_i_i_o b1 b2) Predicate.single
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_tuple _) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_union (_, _)) ->
                 Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_int) -> Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_bool) -> Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_bit) -> Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_unit) -> Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_real) -> Predicate.bot_pred
-              | (SyntaxVCT.B_vec (ord, b1), SyntaxVCT.B_vec (orda, b2)) ->
-                (if SyntaxVCT.equal_order ord orda
-                  then Predicate.bind (unify_b_aux_i_i_o b1 b2) Predicate.single
-                  else Predicate.bot_pred)
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_list _) ->
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_record _) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_undef) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_reg _) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_string) -> Predicate.bot_pred
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_exception) ->
                 Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_tuple _) ->
+              | (SyntaxVCT.B_list _, SyntaxVCT.B_finite_set _) ->
                 Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_union (_, _)) ->
-                Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_record _) ->
-                Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_undef) ->
-                Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_reg _) ->
-                Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_string) ->
-                Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_exception) ->
-                Predicate.bot_pred
-              | (SyntaxVCT.B_vec (_, _), SyntaxVCT.B_finite_set _) ->
-                Predicate.bot_pred
-              | (SyntaxVCT.B_list _, _) -> Predicate.bot_pred
               | (SyntaxVCT.B_tuple _, _) -> Predicate.bot_pred
               | (SyntaxVCT.B_union (_, _), _) -> Predicate.bot_pred
               | (SyntaxVCT.B_record _, _) -> Predicate.bot_pred
@@ -7358,7 +6421,12 @@ let rec unify_b_aux_i_i_o
         (Predicate.sup_pred
           (Predicate.bind (Predicate.single (x, xa))
             (fun a ->
-              (match a with (SyntaxVCT.B_var _, _) -> Predicate.bot_pred
+              (match a
+                with (SyntaxVCT.B_var bv, b) ->
+                  Predicate.bind
+                    (eq_i_i (Lista.equal_list Stringa.equal_literal)
+                      (fvs_t_bp b) [])
+                    (fun () -> Predicate.single (Some [(bv, b)]))
                 | (SyntaxVCT.B_tid _, _) -> Predicate.bot_pred
                 | (SyntaxVCT.B_int, _) -> Predicate.bot_pred
                 | (SyntaxVCT.B_bool, _) -> Predicate.bot_pred
@@ -7366,30 +6434,7 @@ let rec unify_b_aux_i_i_o
                 | (SyntaxVCT.B_unit, _) -> Predicate.bot_pred
                 | (SyntaxVCT.B_real, _) -> Predicate.bot_pred
                 | (SyntaxVCT.B_vec (_, _), _) -> Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_var _) -> Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_tid _) -> Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_int) -> Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_bool) -> Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_bit) -> Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_unit) -> Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_real) -> Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_vec (_, _)) ->
-                  Predicate.bot_pred
-                | (SyntaxVCT.B_list b1, SyntaxVCT.B_list b2) ->
-                  Predicate.bind (unify_b_aux_i_i_o b1 b2) Predicate.single
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_tuple _) ->
-                  Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_union (_, _)) ->
-                  Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_record _) ->
-                  Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_undef) -> Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_reg _) -> Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_string) -> Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_exception) ->
-                  Predicate.bot_pred
-                | (SyntaxVCT.B_list _, SyntaxVCT.B_finite_set _) ->
-                  Predicate.bot_pred
+                | (SyntaxVCT.B_list _, _) -> Predicate.bot_pred
                 | (SyntaxVCT.B_tuple _, _) -> Predicate.bot_pred
                 | (SyntaxVCT.B_union (_, _), _) -> Predicate.bot_pred
                 | (SyntaxVCT.B_record _, _) -> Predicate.bot_pred
@@ -7402,52 +6447,80 @@ let rec unify_b_aux_i_i_o
             (Predicate.bind (Predicate.single (x, xa))
               (fun a ->
                 (match a
-                  with (SyntaxVCT.B_var bv, b) ->
+                  with (b, SyntaxVCT.B_var bv) ->
                     Predicate.bind
                       (eq_i_i (Lista.equal_list Stringa.equal_literal)
                         (fvs_t_bp b) [])
-                      (fun () -> Predicate.single [(bv, b)])
-                  | (SyntaxVCT.B_tid _, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_int, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_bool, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_bit, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_unit, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_real, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_vec (_, _), _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_list _, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_tuple _, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_union (_, _), _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_record _, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_undef, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_reg _, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_string, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_exception, _) -> Predicate.bot_pred
-                  | (SyntaxVCT.B_finite_set _, _) -> Predicate.bot_pred)))
+                      (fun () -> Predicate.single (Some [(bv, b)]))
+                  | (_, SyntaxVCT.B_tid _) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_int) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_bool) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_bit) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_unit) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_real) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_vec (_, _)) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_list _) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_tuple _) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_union (_, _)) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_record _) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_undef) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_reg _) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_string) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_exception) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_finite_set _) -> Predicate.bot_pred)))
             (Predicate.sup_pred
               (Predicate.bind (Predicate.single (x, xa))
                 (fun a ->
                   (match a
-                    with (b, SyntaxVCT.B_var bv) ->
-                      Predicate.bind
-                        (eq_i_i (Lista.equal_list Stringa.equal_literal)
-                          (fvs_t_bp b) [])
-                        (fun () -> Predicate.single [(bv, b)])
-                    | (_, SyntaxVCT.B_tid _) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_int) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_bool) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_bit) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_unit) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_real) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_vec (_, _)) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_list _) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_tuple _) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_union (_, _)) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_record _) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_undef) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_reg _) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_string) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_exception) -> Predicate.bot_pred
-                    | (_, SyntaxVCT.B_finite_set _) -> Predicate.bot_pred)))
+                    with (SyntaxVCT.B_var bv, SyntaxVCT.B_var bva) ->
+                      (if ((bv : string) = bva) then Predicate.single (Some [])
+                        else Predicate.bot_pred)
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_tid _) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_int) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_bool) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_bit) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_unit) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_real) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_vec (_, _)) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_list _) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_tuple _) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_union (_, _)) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_record _) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_undef) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_reg _) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_string) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_exception) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_var _, SyntaxVCT.B_finite_set _) ->
+                      Predicate.bot_pred
+                    | (SyntaxVCT.B_tid _, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_int, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_bool, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_bit, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_unit, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_real, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_vec (_, _), _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_list _, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_tuple _, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_union (_, _), _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_record _, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_undef, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_reg _, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_string, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_exception, _) -> Predicate.bot_pred
+                    | (SyntaxVCT.B_finite_set _, _) -> Predicate.bot_pred)))
               (Predicate.sup_pred
                 (Predicate.bind (Predicate.single (x, xa))
                   (fun a ->
@@ -7618,456 +6691,9 @@ let rec unify_b_aux_i_i_o
                         | (SyntaxVCT.B_string, _) -> Predicate.bot_pred
                         | (SyntaxVCT.B_exception, _) -> Predicate.bot_pred
                         | (SyntaxVCT.B_finite_set _, _) ->
-                          Predicate.bot_pred)))))))))
-and unify_b_aux_list_i_i_o
-  x xa =
-    Predicate.sup_pred
-      (Predicate.bind (Predicate.single (x, xa))
-        (fun a ->
-          (match a with ([], []) -> Predicate.single []
-            | ([], _ :: _) -> Predicate.bot_pred
-            | (_ :: _, _) -> Predicate.bot_pred)))
-      (Predicate.bind (Predicate.single (x, xa))
-        (fun a ->
-          (match a with ([], _) -> Predicate.bot_pred
-            | (_ :: _, []) -> Predicate.bot_pred
-            | (b1 :: bs1, b2 :: _) ->
-              Predicate.bind (unify_b_aux_i_i_o b1 b2)
-                (fun xb ->
-                  Predicate.bind
-                    (unify_b_aux_list_i_i_o (tsubst_bp_list_list bs1 xb)
-                      (tsubst_bp_list_list bs1 xb))
-                    (fun xaa -> Predicate.single (xb @ xaa))))));;
-
-let rec unify_b_i_i_o
-  x xa =
-    Predicate.sup_pred
-      (Predicate.bind (Predicate.single (x, xa))
-        (fun (b1, b2) ->
-          Predicate.bind
-            (eq_i_i (Lista.equal_list Stringa.equal_literal) (fvs_t_bp b1) [])
-            (fun () ->
-              Predicate.bind (unify_b_aux_i_i_o b1 b2) Predicate.single)))
-      (Predicate.bind (Predicate.single (x, xa))
-        (fun (b1, b2) ->
-          Predicate.bind
-            (eq_i_i (Lista.equal_list Stringa.equal_literal) (fvs_t_bp b2) [])
-            (fun () ->
-              Predicate.bind (unify_b_aux_i_i_o b1 b2) Predicate.single)));;
+                          Predicate.bot_pred)))))))));;
 
 end;; (*struct UnifyType*)
-
-module Phantom_Type : sig
-  type ('a, 'b) phantom = Phantom of 'b
-  val of_phantom : ('a, 'b) phantom -> 'b
-end = struct
-
-type ('a, 'b) phantom = Phantom of 'b;;
-
-let rec of_phantom (Phantom x) = x;;
-
-end;; (*struct Phantom_Type*)
-
-module Cardinality : sig
-  val finite_UNIV_integera : (Z.t, bool) Phantom_Type.phantom
-  val card_UNIV_integera : (Z.t, Arith.nat) Phantom_Type.phantom
-  type 'a finite_UNIV = {finite_UNIV : ('a, bool) Phantom_Type.phantom}
-  val finite_UNIV : 'a finite_UNIV -> ('a, bool) Phantom_Type.phantom
-  type 'a card_UNIV =
-    {finite_UNIV_card_UNIV : 'a finite_UNIV;
-      card_UNIV : ('a, Arith.nat) Phantom_Type.phantom}
-  val card_UNIV : 'a card_UNIV -> ('a, Arith.nat) Phantom_Type.phantom
-  val finite_UNIV_integer : Z.t finite_UNIV
-  val card_UNIV_integer : Z.t card_UNIV
-  val card : 'a card_UNIV * 'a HOL.equal -> 'a Set.set -> Arith.nat
-  val subset : 'a card_UNIV * 'a HOL.equal -> 'a Set.set -> 'a Set.set -> bool
-end = struct
-
-let finite_UNIV_integera : (Z.t, bool) Phantom_Type.phantom
-  = Phantom_Type.Phantom false;;
-
-let card_UNIV_integera : (Z.t, Arith.nat) Phantom_Type.phantom
-  = Phantom_Type.Phantom Arith.zero_nat;;
-
-type 'a finite_UNIV = {finite_UNIV : ('a, bool) Phantom_Type.phantom};;
-let finite_UNIV _A = _A.finite_UNIV;;
-
-type 'a card_UNIV =
-  {finite_UNIV_card_UNIV : 'a finite_UNIV;
-    card_UNIV : ('a, Arith.nat) Phantom_Type.phantom};;
-let card_UNIV _A = _A.card_UNIV;;
-
-let finite_UNIV_integer =
-  ({finite_UNIV = finite_UNIV_integera} : Z.t finite_UNIV);;
-
-let card_UNIV_integer =
-  ({finite_UNIV_card_UNIV = finite_UNIV_integer; card_UNIV = card_UNIV_integera}
-    : Z.t card_UNIV);;
-
-let rec card (_A1, _A2)
-  = function
-    Set.Coset xs ->
-      Arith.minus_nat (Phantom_Type.of_phantom (card_UNIV _A1))
-        (Lista.size_list (Lista.remdups _A2 xs))
-    | Set.Set xs -> Lista.size_list (Lista.remdups _A2 xs);;
-
-let rec subset (_A1, _A2)
-  a b = match a, b with
-    Set.Coset xs, Set.Set ys ->
-      (let n = card (_A1, _A2) Set.top_set in
-        Arith.less_nat Arith.zero_nat n &&
-          Arith.equal_nat (card (_A1, _A2) (Set.Set (xs @ ys))) n)
-    | Set.Set ys, b -> Lista.list_all (fun y -> Set.member _A2 y b) ys
-    | a, Set.Coset ys -> Lista.list_all (fun y -> not (Set.member _A2 y a)) ys;;
-
-end;; (*struct Cardinality*)
-
-module SyntaxUtils : sig
-  val rv_id : string -> (string, string) Finite_Map.fmap -> string
-  val rv_xp : SyntaxVCT.xp -> (string, string) Finite_Map.fmap -> SyntaxVCT.xp
-  val rv_vp : SyntaxVCT.vp -> (string, string) Finite_Map.fmap -> SyntaxVCT.vp
-  val rv_cep :
-    SyntaxVCT.cep -> (string, string) Finite_Map.fmap -> SyntaxVCT.cep
-  val rv_cp : SyntaxVCT.cp -> (string, string) Finite_Map.fmap -> SyntaxVCT.cp
-  val rv_t : SyntaxVCT.tau -> (string, string) Finite_Map.fmap -> SyntaxVCT.tau
-  val rv_pat :
-    SyntaxPED.patp -> (string, string) Finite_Map.fmap -> SyntaxPED.patp
-  val rv_lexpp :
-    SyntaxPED.lexpp -> (string, string) Finite_Map.fmap -> SyntaxPED.lexpp
-  val rv_ep : SyntaxPED.ep -> (string, string) Finite_Map.fmap -> SyntaxPED.ep
-  val rv_pexpp :
-    SyntaxPED.pexpp -> (string, string) Finite_Map.fmap -> SyntaxPED.pexpp
-  val rv_letbind :
-    SyntaxPED.letbind -> (string, string) Finite_Map.fmap -> SyntaxPED.letbind
-  val mk_new : 'a list -> string -> string
-  val pat_id : SyntaxPED.patp -> string list
-  val mk_fresh_aux : string list -> string list -> string -> string
-  val mk_fresh : string list -> string -> string
-  val mk_mapping :
-    string list -> string list -> (string, string) Finite_Map.fmap
-  val freshen_pexp_aux :
-    string list ->
-      SyntaxPED.patp -> SyntaxPED.ep -> SyntaxPED.patp * SyntaxPED.ep
-  val freshen_ep : string list -> SyntaxPED.ep -> SyntaxPED.ep
-  val freshen_pexpp : string list -> SyntaxPED.pexpp -> SyntaxPED.pexpp
-end = struct
-
-let rec rv_id
-  xp fm =
-    (match Finite_Map.fmlookup Stringa.equal_literal fm xp with None -> xp
-      | Some xpa -> xpa);;
-
-let rec rv_xp
-  x0 fm = match x0, fm with
-    SyntaxVCT.VNamed xp, fm -> SyntaxVCT.VNamed (rv_id xp fm)
-    | SyntaxVCT.VIndex, uu -> SyntaxVCT.VIndex;;
-
-let rec rv_vp
-  x0 fm = match x0, fm with
-    SyntaxVCT.V_var xp, fm -> SyntaxVCT.V_var (rv_xp xp fm)
-    | SyntaxVCT.V_lit lit, fm -> SyntaxVCT.V_lit lit
-    | SyntaxVCT.V_vec vp_list, fm ->
-        SyntaxVCT.V_vec (Lista.map (fun p -> rv_vp p fm) vp_list)
-    | SyntaxVCT.V_list vp_list, fm ->
-        SyntaxVCT.V_list (Lista.map (fun p -> rv_vp p fm) vp_list)
-    | SyntaxVCT.V_cons (vp1, vp2), fm ->
-        SyntaxVCT.V_cons (rv_vp vp1 fm, rv_vp vp2 fm)
-    | SyntaxVCT.V_constr (ctor, vp), fm ->
-        SyntaxVCT.V_constr (ctor, rv_vp vp fm)
-    | SyntaxVCT.V_record fs, fm ->
-        SyntaxVCT.V_record (Lista.map (fun (f, p) -> (f, rv_vp p fm)) fs)
-    | SyntaxVCT.V_tuple vp_list, fm ->
-        SyntaxVCT.V_tuple (Lista.map (fun p -> rv_vp p fm) vp_list)
-    | SyntaxVCT.V_proj (s, vp), fm -> SyntaxVCT.V_proj (s, rv_vp vp fm);;
-
-let rec rv_cep
-  x0 fm = match x0, fm with
-    SyntaxVCT.CE_val vp, fm -> SyntaxVCT.CE_val (rv_vp vp fm)
-    | SyntaxVCT.CE_bop (bop, cep1, cep2), fm ->
-        SyntaxVCT.CE_bop (bop, rv_cep cep1 fm, rv_cep cep2 fm)
-    | SyntaxVCT.CE_many_plus cep_list, fm ->
-        SyntaxVCT.CE_many_plus (Lista.map (fun c -> rv_cep c fm) cep_list)
-    | SyntaxVCT.CE_uop (uop, cep), fm -> SyntaxVCT.CE_uop (uop, rv_cep cep fm)
-    | SyntaxVCT.CE_proj (p, cep), fm -> SyntaxVCT.CE_proj (p, rv_cep cep fm)
-    | SyntaxVCT.CE_field_access (xp, field), fm ->
-        SyntaxVCT.CE_field_access (rv_xp xp fm, field);;
-
-let rec rv_cp
-  x0 fm = match x0, fm with SyntaxVCT.C_true, fm -> SyntaxVCT.C_true
-    | SyntaxVCT.C_false, fm -> SyntaxVCT.C_false
-    | SyntaxVCT.C_conj (cp1, cp2), fm ->
-        SyntaxVCT.C_conj (rv_cp cp1 fm, rv_cp cp2 fm)
-    | SyntaxVCT.C_conj_many cp_list, fm ->
-        SyntaxVCT.C_conj_many (Lista.map (fun c -> rv_cp c fm) cp_list)
-    | SyntaxVCT.C_disj (cp1, cp2), fm ->
-        SyntaxVCT.C_disj (rv_cp cp1 fm, rv_cp cp2 fm)
-    | SyntaxVCT.C_not cp, fm -> SyntaxVCT.C_not (rv_cp cp fm)
-    | SyntaxVCT.C_eq (cep1, cep2), fm ->
-        SyntaxVCT.C_eq (rv_cep cep1 fm, rv_cep cep2 fm)
-    | SyntaxVCT.C_leq (cep1, cep2), fm ->
-        SyntaxVCT.C_leq (rv_cep cep1 fm, rv_cep cep2 fm)
-    | SyntaxVCT.C_imp (cp1, cp2), fm ->
-        SyntaxVCT.C_imp (rv_cp cp1 fm, rv_cp cp2 fm);;
-
-let rec rv_t
-  (SyntaxVCT.T_refined_type (SyntaxVCT.VIndex, b, cp)) fm =
-    SyntaxVCT.T_refined_type (SyntaxVCT.VIndex, b, rv_cp cp fm);;
-
-let rec rv_pat
-  x0 fm = match x0, fm with
-    SyntaxPED.Pp_id (loc, xp), fm ->
-      (match Finite_Map.fmlookup Stringa.equal_literal fm xp
-        with None -> SyntaxPED.Pp_id (loc, xp)
-        | Some a -> SyntaxPED.Pp_id (loc, a))
-    | SyntaxPED.Pp_wild l, fm -> SyntaxPED.Pp_wild l
-    | SyntaxPED.Pp_lit (loc, l), fm -> SyntaxPED.Pp_lit (loc, l)
-    | SyntaxPED.Pp_as_var (loc, patp, xp), fm ->
-        SyntaxPED.Pp_as_var (loc, rv_pat patp fm, rv_xp xp fm)
-    | SyntaxPED.Pp_typ (loc, tau, patp), fm ->
-        SyntaxPED.Pp_typ (loc, rv_t tau fm, rv_pat patp fm)
-    | SyntaxPED.Pp_as_typ (loc, patp, tau), fm ->
-        SyntaxPED.Pp_as_typ (loc, rv_pat patp fm, rv_t tau fm)
-    | SyntaxPED.Pp_app (loc, idd, patp_list), fm ->
-        SyntaxPED.Pp_app (loc, idd, Lista.map (fun p -> rv_pat p fm) patp_list)
-    | SyntaxPED.Pp_vector (loc, patp_list), fm ->
-        SyntaxPED.Pp_vector (loc, Lista.map (fun p -> rv_pat p fm) patp_list)
-    | SyntaxPED.Pp_vector_concat (loc, patp_list), fm ->
-        SyntaxPED.Pp_vector_concat
-          (loc, Lista.map (fun p -> rv_pat p fm) patp_list)
-    | SyntaxPED.Pp_tup (loc, patp_list), fm ->
-        SyntaxPED.Pp_tup (loc, Lista.map (fun p -> rv_pat p fm) patp_list)
-    | SyntaxPED.Pp_list (loc, patp_list), fm ->
-        SyntaxPED.Pp_list (loc, Lista.map (fun p -> rv_pat p fm) patp_list)
-    | SyntaxPED.Pp_cons (loc, patp1, patp2), fm ->
-        SyntaxPED.Pp_cons (loc, rv_pat patp1 fm, rv_pat patp2 fm)
-    | SyntaxPED.Pp_string_append (loc, patp_list), fm ->
-        SyntaxPED.Pp_string_append
-          (loc, Lista.map (fun p -> rv_pat p fm) patp_list);;
-
-let rec rv_lexpp
-  x0 fm = match x0, fm with
-    SyntaxPED.LEXPp_mvar (loc, up), fm -> SyntaxPED.LEXPp_mvar (loc, up)
-    | SyntaxPED.LEXPp_cast (loc, tau, up), fm ->
-        SyntaxPED.LEXPp_cast (loc, rv_t tau fm, up)
-    | SyntaxPED.LEXPp_tup (loc, lexpp_list), fm ->
-        SyntaxPED.LEXPp_tup (loc, Lista.map (fun l -> rv_lexpp l fm) lexpp_list)
-    | SyntaxPED.LEXPp_field (loc, lexpp, idd), fm ->
-        SyntaxPED.LEXPp_field (loc, rv_lexpp lexpp fm, idd);;
-
-let rec rv_ep
-  x0 fm = match x0, fm with
-    SyntaxPED.Ep_val (loc, v), fm -> SyntaxPED.Ep_val (loc, rv_vp v fm)
-    | SyntaxPED.Ep_mvar (loc, up), fm -> SyntaxPED.Ep_mvar (loc, up)
-    | SyntaxPED.Ep_concat (loc, ep_list), fm ->
-        SyntaxPED.Ep_concat (loc, Lista.map (fun e -> rv_ep e fm) ep_list)
-    | SyntaxPED.Ep_tuple (loc, ep_list), fm ->
-        SyntaxPED.Ep_tuple (loc, Lista.map (fun e -> rv_ep e fm) ep_list)
-    | SyntaxPED.Ep_app (loc, fp, ep), fm ->
-        SyntaxPED.Ep_app (loc, fp, rv_ep ep fm)
-    | SyntaxPED.Ep_bop (loc, bop, ep1, ep2), fm ->
-        SyntaxPED.Ep_bop (loc, bop, rv_ep ep1 fm, rv_ep ep2 fm)
-    | SyntaxPED.Ep_uop (loc, uop, ep), fm ->
-        SyntaxPED.Ep_uop (loc, uop, rv_ep ep fm)
-    | SyntaxPED.Ep_proj (loc, p, ep), fm ->
-        SyntaxPED.Ep_proj (loc, p, rv_ep ep fm)
-    | SyntaxPED.Ep_constr (loc, ctor, ep), fm ->
-        SyntaxPED.Ep_constr (loc, ctor, rv_ep ep fm)
-    | SyntaxPED.Ep_field_access (loc, ep, field), fm ->
-        SyntaxPED.Ep_field_access (loc, rv_ep ep fm, field)
-    | SyntaxPED.Ep_sizeof (loc, cep), fm ->
-        SyntaxPED.Ep_sizeof (loc, rv_cep cep fm)
-    | SyntaxPED.Ep_cast (loc, tau, ep), fm ->
-        SyntaxPED.Ep_cast (loc, rv_t tau fm, rv_ep ep fm)
-    | SyntaxPED.Ep_record (loc, field_ep_list), fm ->
-        SyntaxPED.Ep_record
-          (loc, Lista.map (fun (f, e) -> (f, rv_ep e fm)) field_ep_list)
-    | SyntaxPED.Ep_record_update (loc, ep, field_ep_list), fm ->
-        SyntaxPED.Ep_record_update
-          (loc, rv_ep ep fm,
-            Lista.map (fun (f, e) -> (f, rv_ep e fm)) field_ep_list)
-    | SyntaxPED.Ep_let (loc, letbind, ep2), fm ->
-        SyntaxPED.Ep_let (loc, rv_letbind letbind fm, rv_ep ep2 fm)
-    | SyntaxPED.Ep_let2 (loc, xp, tau, ep1, ep2), fm ->
-        SyntaxPED.Ep_let2
-          (loc, rv_xp xp fm, rv_t tau fm, rv_ep ep1 fm, rv_ep ep2 fm)
-    | SyntaxPED.Ep_if (loc, ep1, ep2, ep3), fm ->
-        SyntaxPED.Ep_if (loc, rv_ep ep1 fm, rv_ep ep2 fm, rv_ep ep3 fm)
-    | SyntaxPED.Ep_block (loc, ep_list), fm ->
-        SyntaxPED.Ep_block (loc, Lista.map (fun e -> rv_ep e fm) ep_list)
-    | SyntaxPED.Ep_case (loc, ep, pexpp_list), fm ->
-        SyntaxPED.Ep_case
-          (loc, rv_ep ep fm, Lista.map (fun p -> rv_pexpp p fm) pexpp_list)
-    | SyntaxPED.Ep_assign (loc, lexpp, ep1, ep2), fm ->
-        SyntaxPED.Ep_assign (loc, rv_lexpp lexpp fm, rv_ep ep1 fm, rv_ep ep2 fm)
-    | SyntaxPED.Ep_return (loc, ep), fm ->
-        SyntaxPED.Ep_return (loc, rv_ep ep fm)
-    | SyntaxPED.Ep_exit (loc, ep), fm -> SyntaxPED.Ep_exit (loc, rv_ep ep fm)
-    | SyntaxPED.Ep_ref (loc, idd), fm -> SyntaxPED.Ep_ref (loc, rv_id idd fm)
-    | SyntaxPED.Ep_throw (loc, ep), fm -> SyntaxPED.Ep_throw (loc, rv_ep ep fm)
-    | SyntaxPED.Ep_try (loc, ep, pexpp_list), fm ->
-        SyntaxPED.Ep_try
-          (loc, rv_ep ep fm, Lista.map (fun p -> rv_pexpp p fm) pexpp_list)
-    | SyntaxPED.Ep_constraint (loc, cp), fm ->
-        SyntaxPED.Ep_constraint (loc, rv_cp cp fm)
-    | SyntaxPED.Ep_loop (loc, loop, ep1, ep2), fm ->
-        SyntaxPED.Ep_loop (loc, loop, rv_ep ep1 fm, rv_ep ep2 fm)
-    | SyntaxPED.Ep_for (loc, idd, ep1, ep2, ep3, order, ep4), fm ->
-        SyntaxPED.Ep_for
-          (loc, rv_id idd fm, rv_ep ep1 fm, rv_ep ep2 fm, rv_ep ep3 fm, order,
-            rv_ep ep4 fm)
-    | SyntaxPED.Ep_assert (loc, ep1, ep2), fm ->
-        SyntaxPED.Ep_assert (loc, rv_ep ep1 fm, rv_ep ep2 fm)
-    | SyntaxPED.Ep_vec (loc, ep_list), fm ->
-        SyntaxPED.Ep_vec (loc, Lista.map (fun e -> rv_ep e fm) ep_list)
-    | SyntaxPED.Ep_list (loc, ep_list), fm ->
-        SyntaxPED.Ep_list (loc, Lista.map (fun e -> rv_ep e fm) ep_list)
-    | SyntaxPED.Ep_cons (loc, ep1, ep2), fm ->
-        SyntaxPED.Ep_cons (loc, rv_ep ep1 fm, rv_ep ep2 fm)
-and rv_pexpp
-  x0 fm = match x0, fm with
-    SyntaxPED.PEXPp_exp (patp, ep), fm ->
-      SyntaxPED.PEXPp_exp (rv_pat patp fm, rv_ep ep fm)
-    | SyntaxPED.PEXPp_when (patp, ep1, ep2), fm ->
-        SyntaxPED.PEXPp_when (rv_pat patp fm, rv_ep ep1 fm, rv_ep ep2 fm)
-and rv_letbind
-  (SyntaxPED.LBp_val (loc, patp, ep)) fm =
-    SyntaxPED.LBp_val (loc, rv_pat patp fm, rv_ep ep fm);;
-
-let rec mk_new
-  s xp =
-    (xp ^ "_") ^ Stringa.implode (Utils.string_of_nat (Lista.size_list s));;
-
-let rec pat_id
-  = function SyntaxPED.Pp_lit (loc, lit) -> []
-    | SyntaxPED.Pp_wild loc -> []
-    | SyntaxPED.Pp_as_var (loc, patp, xp) -> pat_id patp
-    | SyntaxPED.Pp_typ (loc, tau, patp) -> pat_id patp
-    | SyntaxPED.Pp_id (loc, idd) -> [idd]
-    | SyntaxPED.Pp_as_typ (loc, patp, tau) -> pat_id patp
-    | SyntaxPED.Pp_app (loc, idd, patp_list) -> Lista.maps pat_id patp_list
-    | SyntaxPED.Pp_vector (loc, patp_list) -> Lista.maps pat_id patp_list
-    | SyntaxPED.Pp_vector_concat (loc, patp_list) -> Lista.maps pat_id patp_list
-    | SyntaxPED.Pp_tup (loc, patp_list) -> Lista.maps pat_id patp_list
-    | SyntaxPED.Pp_list (loc, patp_list) -> Lista.maps pat_id patp_list
-    | SyntaxPED.Pp_cons (loc, patp1, patp2) -> pat_id patp1 @ pat_id patp2
-    | SyntaxPED.Pp_string_append (loc, patp_list) ->
-        Lista.maps pat_id patp_list;;
-
-let rec mk_fresh_aux
-  x0 s2 xp = match x0, s2, xp with [], s2, xp -> xp
-    | yp :: s, s2, xp ->
-        (let a = (if not ((xp : string) = yp) then xp else mk_new s2 xp) in
-          mk_fresh_aux s (yp :: s2) a);;
-
-let rec mk_fresh s xp = mk_fresh_aux s [] xp;;
-
-let rec mk_mapping
-  s ids =
-    Lista.fold
-      (fun xp m ->
-        (if Lista.member Stringa.equal_literal s xp
-          then Finite_Map.fmupd Stringa.equal_literal xp (mk_fresh s xp) m
-          else m))
-      ids Finite_Map.fmempty;;
-
-let rec freshen_pexp_aux
-  s patp ep = (let patid = pat_id patp in
-               let mapp = mk_mapping s patid in
-               let patpa = rv_pat patp mapp in
-               let a = rv_ep ep mapp in
-                (patpa, a));;
-
-let rec freshen_ep
-  s x1 = match s, x1 with
-    s, SyntaxPED.Ep_let (loc2, SyntaxPED.LBp_val (loc1, pat, ep1), ep2) ->
-      (let (pat_new, ep2_new) = freshen_pexp_aux s pat ep2 in
-        SyntaxPED.Ep_let
-          (loc2, SyntaxPED.LBp_val (loc1, pat_new, freshen_ep s ep1),
-            freshen_ep
-              (Lista.remdups Stringa.equal_literal (s @ pat_id pat_new))
-              ep2_new))
-    | s, SyntaxPED.Ep_let2 (loc, xp, tau, ep1, ep2) ->
-        SyntaxPED.Ep_let2 (loc, xp, tau, freshen_ep s ep1, freshen_ep s ep2)
-    | s, SyntaxPED.Ep_case (loc, ep, pexpp_list) ->
-        SyntaxPED.Ep_case
-          (loc, freshen_ep s ep, Lista.map (freshen_pexpp s) pexpp_list)
-    | s, SyntaxPED.Ep_val (loc, v) -> SyntaxPED.Ep_val (loc, v)
-    | s, SyntaxPED.Ep_mvar (loc, up) -> SyntaxPED.Ep_mvar (loc, up)
-    | s, SyntaxPED.Ep_concat (loc, ep_list) ->
-        SyntaxPED.Ep_concat (loc, Lista.map (freshen_ep s) ep_list)
-    | s, SyntaxPED.Ep_tuple (loc, ep_list) ->
-        SyntaxPED.Ep_tuple (loc, Lista.map (freshen_ep s) ep_list)
-    | s, SyntaxPED.Ep_app (loc, fp, ep) ->
-        SyntaxPED.Ep_app (loc, fp, freshen_ep s ep)
-    | s, SyntaxPED.Ep_bop (loc, bop, ep1, ep2) ->
-        SyntaxPED.Ep_bop (loc, bop, freshen_ep s ep1, freshen_ep s ep2)
-    | s, SyntaxPED.Ep_uop (loc, uop, ep) ->
-        SyntaxPED.Ep_uop (loc, uop, freshen_ep s ep)
-    | s, SyntaxPED.Ep_proj (loc, p, ep) ->
-        SyntaxPED.Ep_proj (loc, p, freshen_ep s ep)
-    | s, SyntaxPED.Ep_constr (loc, ctor, ep) ->
-        SyntaxPED.Ep_constr (loc, ctor, freshen_ep s ep)
-    | s, SyntaxPED.Ep_field_access (loc, ep, field) ->
-        SyntaxPED.Ep_field_access (loc, freshen_ep s ep, field)
-    | s, SyntaxPED.Ep_sizeof (loc, cep) -> SyntaxPED.Ep_sizeof (loc, cep)
-    | s, SyntaxPED.Ep_cast (loc, tau, ep) ->
-        SyntaxPED.Ep_cast (loc, tau, freshen_ep s ep)
-    | s, SyntaxPED.Ep_record (loc, field_ep_list) ->
-        SyntaxPED.Ep_record
-          (loc, Lista.map (fun (f, e) -> (f, freshen_ep s e)) field_ep_list)
-    | s, SyntaxPED.Ep_record_update (loc, ep, field_ep_list) ->
-        SyntaxPED.Ep_record_update
-          (loc, freshen_ep s ep,
-            Lista.map (fun (f, e) -> (f, freshen_ep s e)) field_ep_list)
-    | s, SyntaxPED.Ep_if (loc, ep1, ep2, ep3) ->
-        SyntaxPED.Ep_if
-          (loc, freshen_ep s ep1, freshen_ep s ep2, freshen_ep s ep3)
-    | s, SyntaxPED.Ep_block (loc, ep_list) ->
-        SyntaxPED.Ep_block (loc, Lista.map (freshen_ep s) ep_list)
-    | s, SyntaxPED.Ep_assign (loc, lexpp, ep1, ep2) ->
-        SyntaxPED.Ep_assign (loc, lexpp, freshen_ep s ep1, freshen_ep s ep2)
-    | s, SyntaxPED.Ep_return (loc, ep) ->
-        SyntaxPED.Ep_return (loc, freshen_ep s ep)
-    | s, SyntaxPED.Ep_exit (loc, ep) -> SyntaxPED.Ep_exit (loc, freshen_ep s ep)
-    | s, SyntaxPED.Ep_ref (loc, idd) -> SyntaxPED.Ep_ref (loc, idd)
-    | s, SyntaxPED.Ep_throw (loc, ep) ->
-        SyntaxPED.Ep_throw (loc, freshen_ep s ep)
-    | s, SyntaxPED.Ep_try (loc, ep, pexpp_list) ->
-        SyntaxPED.Ep_try
-          (loc, freshen_ep s ep, Lista.map (freshen_pexpp s) pexpp_list)
-    | s, SyntaxPED.Ep_constraint (loc, cp) -> SyntaxPED.Ep_constraint (loc, cp)
-    | s, SyntaxPED.Ep_loop (loc, loop, ep1, ep2) ->
-        SyntaxPED.Ep_loop (loc, loop, freshen_ep s ep1, freshen_ep s ep2)
-    | s, SyntaxPED.Ep_for (loc, idd, ep1, ep2, ep3, order, ep4) ->
-        SyntaxPED.Ep_for
-          (loc, idd, freshen_ep s ep1, freshen_ep s ep2, freshen_ep s ep3,
-            order, freshen_ep s ep4)
-    | s, SyntaxPED.Ep_assert (loc, ep1, ep2) ->
-        SyntaxPED.Ep_assert (loc, freshen_ep s ep1, freshen_ep s ep2)
-    | s, SyntaxPED.Ep_vec (loc, ep_list) ->
-        SyntaxPED.Ep_vec (loc, Lista.map (freshen_ep s) ep_list)
-    | s, SyntaxPED.Ep_list (loc, ep_list) ->
-        SyntaxPED.Ep_list (loc, Lista.map (freshen_ep s) ep_list)
-    | s, SyntaxPED.Ep_cons (loc, ep1, ep2) ->
-        SyntaxPED.Ep_cons (loc, freshen_ep s ep1, freshen_ep s ep2)
-and freshen_pexpp
-  s x1 = match s, x1 with
-    s, SyntaxPED.PEXPp_exp (patp, ep) ->
-      (let (pat_new, ep_new) = freshen_pexp_aux s patp ep in
-        SyntaxPED.PEXPp_exp
-          (pat_new,
-            freshen_ep
-              (Lista.remdups Stringa.equal_literal (s @ pat_id pat_new))
-              ep_new))
-    | s, SyntaxPED.PEXPp_when (patp, ep1, ep2) ->
-        (let (pat_new, ep2_new) = freshen_pexp_aux s patp ep2 in
-          SyntaxPED.PEXPp_when
-            (pat_new, freshen_ep s ep1,
-              freshen_ep
-                (Lista.remdups Stringa.equal_literal (s @ pat_id pat_new))
-                ep2_new));;
-
-end;; (*struct SyntaxUtils*)
 
 module TypingUtils : sig
   val k_list :
@@ -8081,9 +6707,7 @@ module TypingUtils : sig
     ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list) list ->
       (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list
   val emptyEnv : (SyntaxPED.pexpp, unit) Contexts.gamma_ext
-  val fresh_string_aux : string list -> Arith.int list -> string
-  val fresh_string : string list -> string
-  val mk_fresh : (SyntaxPED.pexpp, unit) Contexts.gamma_ext -> SyntaxVCT.xp
+  val emptyTEnv : unit ContextsPiDelta.theta_ext
   val mk_constructor_fun :
     SyntaxVCT.tau ->
       SyntaxVCT.tau ->
@@ -8094,6 +6718,10 @@ module TypingUtils : sig
       (SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
         SyntaxVCT.xp ->
           ((SyntaxVCT.xp * (SyntaxVCT.ap * SyntaxPED.pexpp option)) list) option
+  val fresh_string_aux : string list -> Arith.int list -> string
+  val fresh_string : string list -> string
+  val mk_fresh_g : (SyntaxPED.pexpp, unit) Contexts.gamma_ext -> SyntaxVCT.xp
+  val mk_fresh_i : Arith.nat -> Arith.nat * SyntaxVCT.xp
   val add_fun_all :
     (SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
       SyntaxVCT.ap ->
@@ -8105,6 +6733,8 @@ module TypingUtils : sig
     SyntaxVCT.xp ->
       SyntaxVCT.bp list ->
         SyntaxVCT.xp list * (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list
+  val tsubst_t_many :
+    SyntaxVCT.tau -> (string * SyntaxVCT.bp) list -> SyntaxVCT.tau
   val tsubst_bp_many :
     SyntaxVCT.bp -> (string * SyntaxVCT.bp) list -> SyntaxVCT.bp
   val lookup_fun_type :
@@ -8131,24 +6761,9 @@ let emptyEnv : (SyntaxPED.pexpp, unit) Contexts.gamma_ext
       (Finite_Map.fmempty, [], [], [], Finite_Map.fmempty, Finite_Map.fmempty,
         [], None, ());;
 
-let rec fresh_string_aux
-  ss x1 = match ss, x1 with ss, [] -> "_x_runout"
-    | ss, n :: ns ->
-        (let s = "_x" ^ Utils.string_lit_of_int n in
-          (if Lista.member Stringa.equal_literal ss s
-            then fresh_string_aux ss ns else s));;
-
-let rec fresh_string
-  ss = fresh_string_aux ss
-         (Lista.upto Arith.one_inta (Arith.Int_of_integer (Z.of_int 100)));;
-
-let rec mk_fresh
-  g = (let s =
-         fresh_string
-           (Lista.map (fun (x, _) -> Contexts.x_of x) (Contexts.gamma_x g))
-         in
-       let _ = Debug.trace ("mk_fresh: " ^ s) in
-        SyntaxVCT.VNamed s);;
+let emptyTEnv : unit ContextsPiDelta.theta_ext
+  = ContextsPiDelta.Theta_ext
+      ([], Finite_Map.fmempty, Some SyntaxVCT.Ord_inc, ());;
 
 let rec mk_constructor_fun
   (SyntaxVCT.T_refined_type (z, b, c)) ret cn =
@@ -8159,7 +6774,7 @@ let rec mk_constructor_fun
                    SyntaxPED.subst_cp (SyntaxVCT.V_var (SyntaxVCT.VNamed x)) z
                      c,
                    SyntaxVCT.T_refined_type
-                     (SyntaxVCT.VIndex, Contexts.b_of ret,
+                     (SyntaxVCT.VIndex, SyntaxUtils.b_of ret,
                        SyntaxVCT.C_eq
                          (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex),
                            SyntaxVCT.CE_val
@@ -8185,6 +6800,30 @@ let rec lookup_fun
                   with None -> None | Some ta -> mk_constructor_fun ta ret cn)))
         | Some ta -> (let _ = Debug.trace ("found function " ^ cn) in Some ta))
     | uu, uv, SyntaxVCT.VIndex -> None;;
+
+let rec fresh_string_aux
+  ss x1 = match ss, x1 with ss, [] -> "_x_runout"
+    | ss, n :: ns ->
+        (let s = "_xx" ^ Utils.string_lit_of_int n in
+          (if Lista.member Stringa.equal_literal ss s
+            then fresh_string_aux ss ns else s));;
+
+let rec fresh_string
+  ss = fresh_string_aux ss
+         (Lista.upto Arith.one_inta (Arith.Int_of_integer (Z.of_int 100)));;
+
+let rec mk_fresh_g
+  g = (let s =
+         fresh_string
+           (Lista.map (fun (x, _) -> Contexts.x_of x) (Contexts.gamma_x g))
+         in
+       let _ = Debug.trace ("mk_fresh: " ^ s) in
+        SyntaxVCT.VNamed s);;
+
+let rec mk_fresh_i
+  i = (let s = "_x" ^ Stringa.implode (Utils.string_of_nat i) in
+       let _ = Debug.trace ("mk_fresh: " ^ s) in
+        (Arith.plus_nat i Arith.one_nat, SyntaxVCT.VNamed s));;
 
 let rec add_fun_all
   g a x2 = match g, a, x2 with g, a, [] -> g
@@ -8219,7 +6858,13 @@ let rec mk_proj_vars
        in
       (Lista.map Product_Type.fst ks, ks));;
 
-let rec tsubst_bp_many bp uu = bp;;
+let rec tsubst_t_many
+  b x1 = match b, x1 with b, [] -> b
+    | ba, (bv, b) :: bsub -> SyntaxPED.tsubst_tp b bv (tsubst_t_many ba bsub);;
+
+let rec tsubst_bp_many
+  b x1 = match b, x1 with b, [] -> b
+    | ba, (bv, b) :: bsub -> SyntaxPED.tsubst_bp b bv (tsubst_bp_many ba bsub);;
 
 let rec lookup_fun_type
   t g x =
@@ -8230,7 +6875,7 @@ let rec lookup_fun_type
 let rec lookup_ctor_base
   theta ctor =
     (match ContextsPiDelta.lookup_constr_union_type theta ctor with None -> None
-      | Some (t1, t2) -> Some (t1, Contexts.b_of t2));;
+      | Some (t1, t2) -> Some (t1, SyntaxUtils.b_of t2));;
 
 end;; (*struct TypingUtils*)
 

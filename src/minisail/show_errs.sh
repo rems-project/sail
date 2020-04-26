@@ -1,5 +1,5 @@
 echo "Total Defs: " `fgrep -c "CHECK DEF:" ~/a`
-echo "Total Fails: " `fgrep -c "CHECK DEF: failed" ~/a`
+echo "Total Fails: " `fgrep -c "CHECK DEF: Failed" ~/a`
 echo "check_pat tuple: " `fgrep -c "check_pat Tuple" ~/a`
 echo "tuple type unexpected: " `fgrep -c "Pp_tup. type unexpected" ~/a`
 

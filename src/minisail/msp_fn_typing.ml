@@ -272,7 +272,8 @@ let rec convert_ce
     | SyntaxVCT.CE_uop (SyntaxVCT.Neg, va) ->
         Z3.Z3E_minus (Z3.Z3E_num Z.zero, convert_ce va)
     | SyntaxVCT.CE_proj (v, va) -> Z3.Z3E_proj (v, convert_ce va)
-    | SyntaxVCT.CE_field_access (v, va) -> failwith "undefined";;
+    | SyntaxVCT.CE_field_access (vp, field) ->
+        Z3.Z3E_proj (field, convert_v vp);;
 
 let rec z3and
   es = (let esa =
@@ -367,7 +368,8 @@ and type_app_lists
 and type_app_tlists
   ve vf = match ve, vf with
     (vc, t1) :: ts1, (vd, t2) :: ts2 ->
-      type_app (Contexts.b_of t1) (Contexts.b_of t2) @ type_app_tlists ts1 ts2
+      type_app (SyntaxUtils.b_of t1) (SyntaxUtils.b_of t2) @
+        type_app_tlists ts1 ts2
     | [], vf -> []
     | ve, [] -> [];;
 
@@ -378,7 +380,7 @@ let rec type_app_t
         (SyntaxVCT.VNamed s)
       with None -> []
       | Some tdef ->
-        type_app (Contexts.b_of tdef) (SyntaxVCT.B_union (s, cs)));;
+        type_app (SyntaxUtils.b_of tdef) (SyntaxVCT.B_union (s, cs)));;
 
 let rec convert_b
   uu uv x2 = match uu, uv, x2 with
@@ -433,7 +435,9 @@ let rec convert_g_aux
     | p, (x, Contexts.GETyp t) :: gamma ->
         (let (ds, es) = convert_g_aux p gamma in
          let (d, e) =
-           convert_xbc p x (Contexts.b_of t) (subst_c_z x (Contexts.c_of t)) in
+           convert_xbc p x (SyntaxUtils.b_of t)
+             (subst_c_z x (SyntaxUtils.c_of t))
+           in
           (d @ ds, e :: es));;
 
 let rec convert_smt_problem_valid
@@ -731,7 +735,7 @@ let rec bv_consts_c
     | SyntaxVCT.C_leq (v, va) -> [];;
 
 let rec c_of_e = function Contexts.GEPair (uu, c) -> c
-                 | Contexts.GETyp t -> Contexts.c_of t;;
+                 | Contexts.GETyp t -> SyntaxUtils.c_of t;;
 
 let rec bv_consts_aux
   xbc = Lista.maps (fun (_, e) -> bv_consts_c (c_of_e e)) xbc;;
@@ -999,7 +1003,7 @@ let rec has_no_t_var_b
     | SyntaxVCT.B_finite_set v -> true;;
 
 let rec b_of_e = function Contexts.GEPair (b, uu) -> b
-                 | Contexts.GETyp t -> Contexts.b_of t;;
+                 | Contexts.GETyp t -> SyntaxUtils.b_of t;;
 
 let rec has_no_t_var_g
   g = Lista.list_all (fun (_, t) -> has_no_t_var_b (b_of_e t))
@@ -1012,7 +1016,7 @@ let rec has_t_var
 
 let rec valid
   s loc p g xbc c =
-    (let _ = Debug.trace ("satisfiable call" ^ Contexts.pp_G g) in
+    (let _ = Debug.trace ("valid call: vars=" ^ Contexts.pp_G g) in
       has_t_var g xbc ||
         Smt2.traceG s g xbc c &&
           not (Smt2.satisfiable s loc (pp_smt_problem_valid p g xbc c) false));;
@@ -1021,7 +1025,6 @@ end;; (*struct Satis*)
 module TypingMonadFunction : sig
   val pp_b : SyntaxVCT.bp -> string
   val id_of : SyntaxVCT.xp -> string
-  val unzip3 : ('a * ('b * 'c)) list -> 'a list * ('b list * 'c list)
   val infer_pat :
     (SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
       Location.loc ->
@@ -1098,8 +1101,6 @@ module TypingMonadFunction : sig
   val check_varsM :
     (SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
       Location.loc -> SyntaxVCT.xp list -> bool Monad.checkM
-  val mk_eq_proj :
-    Location.loc -> SyntaxVCT.xp -> Arith.nat -> Arith.nat -> SyntaxVCT.cp
   val loc_lexp : SyntaxPED.lexpp -> Location.loc
   val check_lexp :
     unit ContextsPiDelta.theta_ext ->
@@ -1243,19 +1244,14 @@ let rec pp_b = function SyntaxVCT.B_int -> " int "
 
 let rec id_of (SyntaxVCT.VNamed s) = s;;
 
-let rec unzip3
-  = function [] -> ([], ([], []))
-    | (x, (y, z)) :: xyzs ->
-        (let (xs, (ys, zs)) = unzip3 xyzs in (x :: xs, (y :: ys, z :: zs)));;
-
 let rec infer_pat
   g loc x2 = match g, loc, x2 with
     g, loc, SyntaxPED.Pp_typ (uu, t, SyntaxPED.Pp_id (uv, x)) ->
       Monad.return
         (SyntaxVCT.VNamed x,
           ([(SyntaxVCT.VNamed x,
-              (Contexts.b_of t,
-                Contexts.subst_c_x (Contexts.c_of t) (SyntaxVCT.VNamed x)))],
+              (SyntaxUtils.b_of t,
+                Contexts.subst_c_x (SyntaxUtils.c_of t) (SyntaxVCT.VNamed x)))],
             (Some t, [SyntaxVCT.VNamed x])))
     | g, loc, SyntaxPED.Pp_typ (uw, t, SyntaxPED.Pp_wild ux) ->
         Monad.check_bind
@@ -1269,8 +1265,8 @@ let rec infer_pat
                 (false, false, false, false, true, true, true, false)])
           (fun x ->
             Monad.return
-              (x, ([(x, (Contexts.b_of t,
-                          Contexts.subst_c_x (Contexts.c_of t) x))],
+              (x, ([(x, (SyntaxUtils.b_of t,
+                          Contexts.subst_c_x (SyntaxUtils.c_of t) x))],
                     (Some t, [x]))))
     | g, loc, SyntaxPED.Pp_lit (v, va) ->
         Monad.return (SyntaxVCT.VNamed "_", ([], (None, [])))
@@ -1350,7 +1346,8 @@ let rec subtype
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1358,22 +1355,22 @@ let rec subtype
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid vc, vb), t2 ->
         Monad.check_bind
@@ -1392,7 +1389,8 @@ let rec subtype
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1400,22 +1398,22 @@ let rec subtype
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, vb), t2 ->
         Monad.check_bind
@@ -1433,7 +1431,8 @@ let rec subtype
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1441,22 +1440,22 @@ let rec subtype
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, vb), t2 ->
         Monad.check_bind
@@ -1474,7 +1473,8 @@ let rec subtype
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1482,22 +1482,22 @@ let rec subtype
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, vb), t2 ->
         Monad.check_bind
@@ -1515,7 +1515,8 @@ let rec subtype
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1523,22 +1524,22 @@ let rec subtype
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, vb), t2 ->
         Monad.check_bind
@@ -1556,7 +1557,8 @@ let rec subtype
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1564,22 +1566,22 @@ let rec subtype
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, vb), t2 ->
         Monad.check_bind
@@ -1597,7 +1599,8 @@ let rec subtype
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1605,22 +1608,22 @@ let rec subtype
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (vc, vd), vb), t2
         -> Monad.check_bind
@@ -1641,7 +1644,8 @@ let rec subtype
                              false)])
                      (fun z ->
                        (match
-                         Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                         Contexts.unify_b (SyntaxUtils.b_of t1)
+                           (SyntaxUtils.b_of t2a)
                          with None ->
                            Monad.check_bind
                              (Monad.return
@@ -1649,20 +1653,20 @@ let rec subtype
                                  "Subtype check / Bases don\039t match. Printing G"
                                  loc p
                                  (Contexts.add_vars_ge g
-                                   [(z, (Contexts.b_of t1,
-  Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
+                                   [(z, (SyntaxUtils.b_of t1,
+  Contexts.subst_c_v0 (SyntaxUtils.c_of t1) (Monad.mk_var z)))])
                                  (Contexts.convert_ge [])
-                                 (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                                 (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                    (Monad.mk_var z))))
                              (fun _ -> Monad.return false)
                          | Some bp ->
                            Monad.return
                              (Satis.valid "Subtype check / Bases match" loc p
                                (Contexts.add_vars_ge g
-                                 [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
+                                 [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+Contexts.subst_c_v0 (SyntaxUtils.c_of t1) (Monad.mk_var z)))])
                                (Contexts.convert_ge [])
-                               (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                               (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                  (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list vc, vb), t2 ->
         Monad.check_bind
@@ -1681,7 +1685,8 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1689,22 +1694,22 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tuple vc, vb), t2 ->
         Monad.check_bind
@@ -1723,7 +1728,8 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1731,22 +1737,22 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_union (vc, vd), vb),
         t2
@@ -1768,7 +1774,8 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                              false)])
                      (fun z ->
                        (match
-                         Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                         Contexts.unify_b (SyntaxUtils.b_of t1)
+                           (SyntaxUtils.b_of t2a)
                          with None ->
                            Monad.check_bind
                              (Monad.return
@@ -1776,20 +1783,20 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                                  "Subtype check / Bases don\039t match. Printing G"
                                  loc p
                                  (Contexts.add_vars_ge g
-                                   [(z, (Contexts.b_of t1,
-  Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
+                                   [(z, (SyntaxUtils.b_of t1,
+  Contexts.subst_c_v0 (SyntaxUtils.c_of t1) (Monad.mk_var z)))])
                                  (Contexts.convert_ge [])
-                                 (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                                 (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                    (Monad.mk_var z))))
                              (fun _ -> Monad.return false)
                          | Some bp ->
                            Monad.return
                              (Satis.valid "Subtype check / Bases match" loc p
                                (Contexts.add_vars_ge g
-                                 [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
+                                 [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+Contexts.subst_c_v0 (SyntaxUtils.c_of t1) (Monad.mk_var z)))])
                                (Contexts.convert_ge [])
-                               (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                               (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                  (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_record vc, vb), t2 ->
         Monad.check_bind
@@ -1808,7 +1815,8 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1816,22 +1824,22 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vc, vb), t2 ->
         Monad.check_bind
@@ -1850,7 +1858,8 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1858,22 +1867,22 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, vb), t2 ->
         Monad.check_bind
@@ -1892,7 +1901,8 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1900,22 +1910,22 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, vb), t2 ->
         Monad.check_bind
@@ -1934,7 +1944,8 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                         (false, false, true, false, true, true, true, false)])
                   (fun z ->
                     (match
-                      Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                      Contexts.unify_b (SyntaxUtils.b_of t1)
+                        (SyntaxUtils.b_of t2a)
                       with None ->
                         Monad.check_bind
                           (Monad.return
@@ -1942,22 +1953,22 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                               "Subtype check / Bases don\039t match. Printing G"
                               loc p
                               (Contexts.add_vars_ge g
-                                [(z, (Contexts.b_of t1,
-                                       Contexts.subst_c_v0 (Contexts.c_of t1)
+                                [(z, (SyntaxUtils.b_of t1,
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
  (Monad.mk_var z)))])
                               (Contexts.convert_ge [])
-                              (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                              (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                 (Monad.mk_var z))))
                           (fun _ -> Monad.return false)
                       | Some bp ->
                         Monad.return
                           (Satis.valid "Subtype check / Bases match" loc p
                             (Contexts.add_vars_ge g
-                              [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-                                     Contexts.subst_c_v0 (Contexts.c_of t1)
+                              [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+                                     Contexts.subst_c_v0 (SyntaxUtils.c_of t1)
                                        (Monad.mk_var z)))])
                             (Contexts.convert_ge [])
-                            (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                            (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                               (Monad.mk_var z)))))))
     | loc, p, g, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set vc, vb), t2
         -> Monad.check_bind
@@ -1978,7 +1989,8 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                              false)])
                      (fun z ->
                        (match
-                         Contexts.unify_b (Contexts.b_of t1) (Contexts.b_of t2a)
+                         Contexts.unify_b (SyntaxUtils.b_of t1)
+                           (SyntaxUtils.b_of t2a)
                          with None ->
                            Monad.check_bind
                              (Monad.return
@@ -1986,20 +1998,20 @@ Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
                                  "Subtype check / Bases don\039t match. Printing G"
                                  loc p
                                  (Contexts.add_vars_ge g
-                                   [(z, (Contexts.b_of t1,
-  Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
+                                   [(z, (SyntaxUtils.b_of t1,
+  Contexts.subst_c_v0 (SyntaxUtils.c_of t1) (Monad.mk_var z)))])
                                  (Contexts.convert_ge [])
-                                 (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                                 (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                    (Monad.mk_var z))))
                              (fun _ -> Monad.return false)
                          | Some bp ->
                            Monad.return
                              (Satis.valid "Subtype check / Bases match" loc p
                                (Contexts.add_vars_ge g
-                                 [(z, (tsubst_bp_many (Contexts.b_of t1) bp,
-Contexts.subst_c_v0 (Contexts.c_of t1) (Monad.mk_var z)))])
+                                 [(z, (tsubst_bp_many (SyntaxUtils.b_of t1) bp,
+Contexts.subst_c_v0 (SyntaxUtils.c_of t1) (Monad.mk_var z)))])
                                (Contexts.convert_ge [])
-                               (Contexts.subst_c_v0 (Contexts.c_of t2a)
+                               (Contexts.subst_c_v0 (SyntaxUtils.c_of t2a)
                                  (Monad.mk_var z)))))));;
 
 let rec infer_l
@@ -2023,11 +2035,12 @@ let rec infer_l
                 (fun x ->
                   Monad.return
                     (x, ([(x, (SyntaxVCT.B_vec (dord, SyntaxVCT.B_bit),
-                                Contexts.mk_l_eq_c x (SyntaxVCT.L_bitvec bs)))],
+                                SyntaxUtils.mk_l_eq_c x
+                                  (SyntaxVCT.L_bitvec bs)))],
                           SyntaxVCT.T_refined_type
                             (SyntaxVCT.VIndex,
                               SyntaxVCT.B_vec (dord, SyntaxVCT.B_bit),
-                              Contexts.mk_l_eq_c SyntaxVCT.VIndex
+                              SyntaxUtils.mk_l_eq_c SyntaxVCT.VIndex
                                 (SyntaxVCT.L_bitvec bs)))))))
     | t, SyntaxVCT.L_undef ->
         Monad.fail
@@ -2043,9 +2056,9 @@ let rec infer_l
                 (false, false, true, false, true, true, true, false)])
           (fun x ->
             Monad.return
-              (x, ([(x, (Contexts.b_of_lit SyntaxVCT.L_unit,
-                          Contexts.mk_l_eq_c x SyntaxVCT.L_unit))],
-                    Contexts.mk_l_eq_t SyntaxVCT.L_unit)))
+              (x, ([(x, (SyntaxUtils.b_of_lit SyntaxVCT.L_unit,
+                          SyntaxUtils.mk_l_eq_c x SyntaxVCT.L_unit))],
+                    SyntaxUtils.mk_l_eq_t SyntaxVCT.L_unit)))
     | t, SyntaxVCT.L_zero ->
         Monad.check_bind
           (Monad.mk_fresh
@@ -2056,9 +2069,9 @@ let rec infer_l
                 (false, false, true, false, true, true, true, false)])
           (fun x ->
             Monad.return
-              (x, ([(x, (Contexts.b_of_lit SyntaxVCT.L_zero,
-                          Contexts.mk_l_eq_c x SyntaxVCT.L_zero))],
-                    Contexts.mk_l_eq_t SyntaxVCT.L_zero)))
+              (x, ([(x, (SyntaxUtils.b_of_lit SyntaxVCT.L_zero,
+                          SyntaxUtils.mk_l_eq_c x SyntaxVCT.L_zero))],
+                    SyntaxUtils.mk_l_eq_t SyntaxVCT.L_zero)))
     | t, SyntaxVCT.L_one ->
         Monad.check_bind
           (Monad.mk_fresh
@@ -2069,9 +2082,9 @@ let rec infer_l
                 (false, false, true, false, true, true, true, false)])
           (fun x ->
             Monad.return
-              (x, ([(x, (Contexts.b_of_lit SyntaxVCT.L_one,
-                          Contexts.mk_l_eq_c x SyntaxVCT.L_one))],
-                    Contexts.mk_l_eq_t SyntaxVCT.L_one)))
+              (x, ([(x, (SyntaxUtils.b_of_lit SyntaxVCT.L_one,
+                          SyntaxUtils.mk_l_eq_c x SyntaxVCT.L_one))],
+                    SyntaxUtils.mk_l_eq_t SyntaxVCT.L_one)))
     | t, SyntaxVCT.L_true ->
         Monad.check_bind
           (Monad.mk_fresh
@@ -2082,9 +2095,9 @@ let rec infer_l
                 (false, false, true, false, true, true, true, false)])
           (fun x ->
             Monad.return
-              (x, ([(x, (Contexts.b_of_lit SyntaxVCT.L_true,
-                          Contexts.mk_l_eq_c x SyntaxVCT.L_true))],
-                    Contexts.mk_l_eq_t SyntaxVCT.L_true)))
+              (x, ([(x, (SyntaxUtils.b_of_lit SyntaxVCT.L_true,
+                          SyntaxUtils.mk_l_eq_c x SyntaxVCT.L_true))],
+                    SyntaxUtils.mk_l_eq_t SyntaxVCT.L_true)))
     | t, SyntaxVCT.L_false ->
         Monad.check_bind
           (Monad.mk_fresh
@@ -2095,9 +2108,9 @@ let rec infer_l
                 (false, false, true, false, true, true, true, false)])
           (fun x ->
             Monad.return
-              (x, ([(x, (Contexts.b_of_lit SyntaxVCT.L_false,
-                          Contexts.mk_l_eq_c x SyntaxVCT.L_false))],
-                    Contexts.mk_l_eq_t SyntaxVCT.L_false)))
+              (x, ([(x, (SyntaxUtils.b_of_lit SyntaxVCT.L_false,
+                          SyntaxUtils.mk_l_eq_c x SyntaxVCT.L_false))],
+                    SyntaxUtils.mk_l_eq_t SyntaxVCT.L_false)))
     | t, SyntaxVCT.L_num v ->
         Monad.check_bind
           (Monad.mk_fresh
@@ -2108,9 +2121,9 @@ let rec infer_l
                 (false, false, true, false, true, true, true, false)])
           (fun x ->
             Monad.return
-              (x, ([(x, (Contexts.b_of_lit (SyntaxVCT.L_num v),
-                          Contexts.mk_l_eq_c x (SyntaxVCT.L_num v)))],
-                    Contexts.mk_l_eq_t (SyntaxVCT.L_num v))))
+              (x, ([(x, (SyntaxUtils.b_of_lit (SyntaxVCT.L_num v),
+                          SyntaxUtils.mk_l_eq_c x (SyntaxVCT.L_num v)))],
+                    SyntaxUtils.mk_l_eq_t (SyntaxVCT.L_num v))))
     | t, SyntaxVCT.L_string v ->
         Monad.check_bind
           (Monad.mk_fresh
@@ -2121,9 +2134,9 @@ let rec infer_l
                 (false, false, true, false, true, true, true, false)])
           (fun x ->
             Monad.return
-              (x, ([(x, (Contexts.b_of_lit (SyntaxVCT.L_string v),
-                          Contexts.mk_l_eq_c x (SyntaxVCT.L_string v)))],
-                    Contexts.mk_l_eq_t (SyntaxVCT.L_string v))))
+              (x, ([(x, (SyntaxUtils.b_of_lit (SyntaxVCT.L_string v),
+                          SyntaxUtils.mk_l_eq_c x (SyntaxVCT.L_string v)))],
+                    SyntaxUtils.mk_l_eq_t (SyntaxVCT.L_string v))))
     | t, SyntaxVCT.L_real v ->
         Monad.check_bind
           (Monad.mk_fresh
@@ -2134,9 +2147,9 @@ let rec infer_l
                 (false, false, true, false, true, true, true, false)])
           (fun x ->
             Monad.return
-              (x, ([(x, (Contexts.b_of_lit (SyntaxVCT.L_real v),
-                          Contexts.mk_l_eq_c x (SyntaxVCT.L_real v)))],
-                    Contexts.mk_l_eq_t (SyntaxVCT.L_real v))));;
+              (x, ([(x, (SyntaxUtils.b_of_lit (SyntaxVCT.L_real v),
+                          SyntaxUtils.mk_l_eq_c x (SyntaxVCT.L_real v)))],
+                    SyntaxUtils.mk_l_eq_t (SyntaxVCT.L_real v))));;
 
 let rec check_pat
   uu ta p gamma x4 t = match uu, ta, p, gamma, x4, t with
@@ -2150,8 +2163,8 @@ let rec check_pat
           Monad.check_bind (Monad.freshen_t t)
             (fun tb ->
               Monad.return
-                (z, ([(z, (Contexts.b_of tb,
-                            Contexts.subst_c_v0 (Contexts.c_of tb)
+                (z, ([(z, (SyntaxUtils.b_of tb,
+                            Contexts.subst_c_v0 (SyntaxUtils.c_of tb)
                               (Monad.mk_var z)))],
                       []))))
     | uw, ta, p, gamma, SyntaxPED.Pp_id (l1, x), t ->
@@ -2162,8 +2175,8 @@ let rec check_pat
                 Monad.return
                   (SyntaxVCT.VNamed x,
                     ((SyntaxVCT.VNamed x,
-                       (Contexts.b_of tb,
-                         Contexts.subst_c_x (Contexts.c_of tb)
+                       (SyntaxUtils.b_of tb,
+                         Contexts.subst_c_x (SyntaxUtils.c_of tb)
                            (SyntaxVCT.VNamed x))) ::
                        kvars_of tb,
                       [SyntaxVCT.VNamed x]))
@@ -2184,7 +2197,7 @@ true, false);
                                  (fun xa ->
                                    Monad.return
                                      (xa, ((xa,
-     (Contexts.b_of tb, Contexts.subst_c_x (Contexts.c_of tb) xa)) ::
+     (SyntaxUtils.b_of tb, Contexts.subst_c_x (SyntaxUtils.c_of tb) xa)) ::
      kvars_of tb,
     [])))
                       else Monad.fail
@@ -2227,12 +2240,13 @@ true, false);
                        Monad.check_bind
                          (Monad.return
                            (SyntaxVCT.C_conj
-                             (Contexts.mk_x_eq_c_tuple z xs,
+                             (SyntaxUtils.mk_x_eq_c_tuple z xs,
                                Contexts.subst_c_v0 c (SyntaxVCT.V_var z))))
                          (fun tup_c ->
                            Monad.check_bind
                              (Monad.return
-                               (Contexts.mk_x_eq_c_tuple SyntaxVCT.VIndex xs))
+                               (SyntaxUtils.mk_x_eq_c_tuple SyntaxVCT.VIndex
+                                 xs))
                              (fun tup_c2 ->
                                Monad.check_bind
                                  (subtype loc t
@@ -2371,7 +2385,7 @@ true, false);
     | litok, ta, p, gamma, SyntaxPED.Pp_lit (loc, l), t ->
         Monad.check_bind (infer_l ta l)
           (fun (_, (_, taa)) ->
-            (if SyntaxVCT.equal_bpa (Contexts.b_of t) (Contexts.b_of taa)
+            (if SyntaxVCT.equal_bpa (SyntaxUtils.b_of t) (SyntaxUtils.b_of taa)
               then Monad.check_bind
                      (Monad.mk_fresh
                        [Stringa.Chara
@@ -2386,17 +2400,18 @@ true, false);
                              false)])
                      (fun z ->
                        Monad.return
-                         (z, ([(z, (Contexts.b_of t,
+                         (z, ([(z, (SyntaxUtils.b_of t,
                                      SyntaxVCT.C_conj
-                                       (Contexts.subst_c_x (Contexts.c_of t) z,
- Contexts.mk_l_eq_c z l)))],
+                                       (Contexts.subst_c_x (SyntaxUtils.c_of t)
+  z,
+ SyntaxUtils.mk_l_eq_c z l)))],
                                [])))
               else Monad.fail
                      (Monad.TypeError
                        (loc, (("Literal base type mismatched. Expected " ^
-                                pp_b (Contexts.b_of t)) ^
+                                pp_b (SyntaxUtils.b_of t)) ^
                                " Found: ") ^
-                               pp_b (Contexts.b_of_lit l)))))
+                               pp_b (SyntaxUtils.b_of_lit l)))))
     | litok, t, p, gamma, SyntaxPED.Pp_vector_concat (loc, vs),
         SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_vec (odr, b), c)
         -> Monad.check_bind (check_pat_vec_list litok t p gamma loc vs odr b)
@@ -2469,7 +2484,7 @@ true, false);
         (match ContextsPiDelta.lookup_constr_union_type ta ctor
           with None -> Monad.fail (Monad.TypeError (loc, "Pp_constr"))
           | Some (t1, t2) ->
-            (match Contexts.unify_b (Contexts.b_of t) (Contexts.b_of t1)
+            (match Contexts.unify_b (SyntaxUtils.b_of t) (SyntaxUtils.b_of t1)
               with None ->
                 Monad.fail
                   (Monad.CheckFail
@@ -2496,8 +2511,9 @@ true, false);
                             (if st
                               then Monad.return
                                      (z, ((z,
-    (Contexts.b_of t,
-      Contexts.mk_v_eq_c z (SyntaxVCT.V_constr (ctor, SyntaxVCT.V_var x)))) ::
+    (SyntaxUtils.b_of t,
+      SyntaxUtils.mk_v_eq_c z
+        (SyntaxVCT.V_constr (ctor, SyntaxVCT.V_var x)))) ::
     g,
    vars))
                               else Monad.fail
@@ -2554,7 +2570,7 @@ true, false);
           | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_finite_set _, _) ->
             Monad.fail (Monad.TypeError (loc, "Pp_cons")))
     | litok, ta, p, gamma, SyntaxPED.Pp_string_append (loc, ps), t ->
-        (if SyntaxVCT.equal_bpa (Contexts.b_of t) SyntaxVCT.B_string
+        (if SyntaxVCT.equal_bpa (SyntaxUtils.b_of t) SyntaxVCT.B_string
           then Monad.check_bind
                  (check_pat_list litok ta p gamma loc ps
                    (Lista.map
@@ -2575,8 +2591,9 @@ true, false);
                              false)])
                      (fun x ->
                        Monad.return
-                         (x, (((x, (Contexts.b_of t,
-                                     Contexts.subst_c_x (Contexts.c_of t) x)) ::
+                         (x, (((x, (SyntaxUtils.b_of t,
+                                     Contexts.subst_c_x (SyntaxUtils.c_of t)
+                                       x)) ::
                                 kvars_of t) @
                                 gs,
                                vars2))))
@@ -2622,7 +2639,8 @@ true, false);
                         (false, false, true, false, true, true, true, false)])
                   (fun x ->
                     Monad.return
-                      (x, ((x, (SyntaxVCT.B_list b, Contexts.mk_list_c x xs)) ::
+                      (x, ((x, (SyntaxVCT.B_list b,
+                                 SyntaxUtils.mk_list_c x xs)) ::
                              gs,
                             vars))))
           | SyntaxVCT.T_refined_type (_, SyntaxVCT.B_tuple _, _) ->
@@ -2695,7 +2713,7 @@ let rec convert_to_stM
                    (Lista.concat kvars, (blist, Contexts.conj clist)))));;
 
 let rec single_base
-  ts = (match Lista.remdups SyntaxVCT.equal_bp (Lista.map Contexts.b_of ts)
+  ts = (match Lista.remdups SyntaxVCT.equal_bp (Lista.map SyntaxUtils.b_of ts)
          with [] -> None | [b] -> Some b | _ :: _ :: _ -> None);;
 
 let rec check_varM
@@ -2712,15 +2730,6 @@ let rec check_varsM
     Monad.check_bind (Monad.mapM (check_varM g loc) xs)
       (fun _ -> Monad.return true);;
 
-let rec mk_eq_proj
-  l x i n =
-    SyntaxVCT.C_eq
-      (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex),
-        SyntaxVCT.CE_val
-          (SyntaxVCT.V_proj
-            ((Utils.string_lit_of_nat n ^ "X") ^ Utils.string_lit_of_nat i,
-              SyntaxVCT.V_var x)));;
-
 let rec loc_lexp uu = Location.Loc_unknown;;
 
 let rec check_lexp
@@ -2733,8 +2742,8 @@ let rec check_lexp
               (match ContextsPiDelta.lookup_mvar d x
                 with None ->
                   Monad.return
-                    (xx, ([(xx, (Contexts.b_of tb,
-                                  Contexts.subst_c_v0 (Contexts.c_of tb)
+                    (xx, ([(xx, (SyntaxUtils.b_of tb,
+                                  Contexts.subst_c_v0 (SyntaxUtils.c_of tb)
                                     (SyntaxVCT.V_var xx)))] @
                             kvars_of tb,
                            [xx]))
@@ -2742,24 +2751,24 @@ let rec check_lexp
                   Monad.check_bind
                     (subtype loc ta g tb
                       (SyntaxVCT.T_refined_type
-                        (SyntaxVCT.VIndex, Contexts.b_of tt,
+                        (SyntaxVCT.VIndex, SyntaxUtils.b_of tt,
                           SyntaxPED.subst_cp (SyntaxVCT.V_var SyntaxVCT.VIndex)
-                            xx (Contexts.c_of tt))))
+                            xx (SyntaxUtils.c_of tt))))
                     (fun bs ->
                       (if bs
                         then Monad.return
                                (xx, ([(xx,
-(Contexts.b_of tb,
-  Contexts.subst_c_v0 (Contexts.c_of tb) (SyntaxVCT.V_var xx)))] @
+(SyntaxUtils.b_of tb,
+  Contexts.subst_c_v0 (SyntaxUtils.c_of tb) (SyntaxVCT.V_var xx)))] @
                                        kvars_of tb,
                                       [xx]))
                         else Monad.fail
                                (Monad.CheckFail
                                  (loc, g, "lvalue pattern subtype", tb,
                                    SyntaxVCT.T_refined_type
-                                     (SyntaxVCT.VIndex, Contexts.b_of tt,
+                                     (SyntaxVCT.VIndex, SyntaxUtils.b_of tt,
                                        SyntaxPED.subst_cp
- (SyntaxVCT.V_var SyntaxVCT.VIndex) xx (Contexts.c_of tt)))))))))
+ (SyntaxVCT.V_var SyntaxVCT.VIndex) xx (SyntaxUtils.c_of tt)))))))))
     | t, p, g, d, SyntaxPED.LEXPp_tup (l1, es),
         SyntaxVCT.T_refined_type (vt, SyntaxVCT.B_tuple bs, c)
         -> Monad.check_bind
@@ -2781,12 +2790,12 @@ let rec check_lexp
                            check_lexp t p ga d x
                              (SyntaxVCT.T_refined_type
                                (SyntaxVCT.VIndex, xa,
-                                 mk_eq_proj l1 z
+                                 SyntaxUtils.mk_eq_proj l1 z
                                    (Arith.nat (Arith.int_of_nat xaa))
                                    (Lista.size_list bs))))
                          es bs)
                        (fun xx ->
-                         Monad.check_bind (Monad.return (unzip3 xx))
+                         Monad.check_bind (Monad.return (SyntaxUtils.unzip3 xx))
                            (fun (_, (gs, vars)) ->
                              Monad.check_bind (Monad.return (Lista.concat gs))
                                (fun gsa ->
@@ -2906,20 +2915,20 @@ let rec infer_v
                          (fun _ ->
                            Monad.return
                              (x, ([], SyntaxVCT.T_refined_type
-(SyntaxVCT.VIndex, Contexts.b_of ta,
+(SyntaxVCT.VIndex, SyntaxUtils.b_of ta,
   SyntaxPED.subst_cp (SyntaxVCT.V_var SyntaxVCT.VIndex) x
-    (Contexts.c_of ta))))))
+    (SyntaxUtils.c_of ta))))))
                  | Some ge ->
                    Monad.check_bind (Monad.trace Monad.VarI)
                      (fun _ ->
                        Monad.return
-                         (x, ([], Contexts.mk_v_eq_t (Satis.b_of_e ge)
+                         (x, ([], SyntaxUtils.mk_v_eq_t (Satis.b_of_e ge)
                                     (SyntaxVCT.V_var x)))))
           else Monad.fail (Monad.ScopeError (Location.Loc_unknown, g, x)))
     | t, p, gamma, d, SyntaxVCT.V_tuple es ->
         Monad.check_bind (Monad.mapM (infer_v t p gamma d) es)
           (fun xx ->
-            Monad.check_bind (Monad.return (unzip3 xx))
+            Monad.check_bind (Monad.return (SyntaxUtils.unzip3 xx))
               (fun (_, (g, ts)) ->
                 Monad.check_bind (Monad.return (Lista.concat g))
                   (fun _ ->
@@ -2952,7 +2961,7 @@ let rec infer_v
           | Some dord ->
             Monad.check_bind (Monad.mapM (infer_v t p g d) vs)
               (fun xx ->
-                Monad.check_bind (Monad.return (unzip3 xx))
+                Monad.check_bind (Monad.return (SyntaxUtils.unzip3 xx))
                   (fun (_, (ga, ts)) ->
                     Monad.check_bind (Monad.return (Lista.concat ga))
                       (fun _ ->
@@ -2970,16 +2979,17 @@ let rec infer_v
                           (fun x ->
                             (let bs =
                                Lista.remdups SyntaxVCT.equal_bp
-                                 (Lista.map Contexts.b_of ts)
+                                 (Lista.map SyntaxUtils.b_of ts)
                                in
                               (if Arith.equal_nat (Lista.size_list bs)
                                     Arith.one_nat
                                 then Monad.return
                                        (x,
- ([(x, (SyntaxVCT.B_vec (dord, Lista.hd bs), Contexts.mk_vec_len_eq_c x vs))],
+ ([(x, (SyntaxVCT.B_vec (dord, Lista.hd bs),
+         SyntaxUtils.mk_vec_len_eq_c x vs))],
    SyntaxVCT.T_refined_type
      (SyntaxVCT.VIndex, SyntaxVCT.B_vec (dord, Lista.hd bs),
-       Contexts.mk_vec_len_eq_c SyntaxVCT.VIndex vs)))
+       SyntaxUtils.mk_vec_len_eq_c SyntaxVCT.VIndex vs)))
                                 else Monad.fail
                                        Monad.VectorElementsDiffType)))))))
     | t, p, g, d, SyntaxVCT.V_constr (s, v) ->
@@ -2999,8 +3009,8 @@ let rec infer_v
                         (false, true, false, false, true, true, true, false)])
                   (fun x ->
                     Monad.return
-                      (x, ((x, (Contexts.b_of tb,
-                                 Contexts.subst_c_x (Contexts.c_of tb) x)) ::
+                      (x, ((x, (SyntaxUtils.b_of tb,
+                                 Contexts.subst_c_x (SyntaxUtils.c_of tb) x)) ::
                              kvars_of2 tb,
                             tb)))))
     | t, p, g, d, SyntaxVCT.V_record fs ->
@@ -3038,9 +3048,10 @@ let rec check_s
                           Monad.check_bind
                             (Monad.return
                               (Contexts.add_vars_ge ga
-                                ((za, (Contexts.b_of tba,
+                                ((za, (SyntaxUtils.b_of tba,
 SyntaxVCT.C_conj
-  (mk_c_eq z za, Contexts.subst_c_v0 (Contexts.c_of tba) (Monad.mk_var z)))) ::
+  (mk_c_eq z za,
+    Contexts.subst_c_v0 (SyntaxUtils.c_of tba) (Monad.mk_var z)))) ::
                                   bs)))
                             (fun gb ->
                               Monad.check_bind (check_s ta pa gb d s t)
@@ -3063,11 +3074,11 @@ SyntaxVCT.C_conj
                   Stringa.Chara
                     (false, false, true, false, true, true, true, false)])
               (fun z2 ->
-                (if SyntaxVCT.equal_bpa (Contexts.b_of t1) SyntaxVCT.B_bool
+                (if SyntaxVCT.equal_bpa (SyntaxUtils.b_of t1) SyntaxVCT.B_bool
                   then Monad.return
                          (Contexts.add_vars_ge g
                            ((z2, (SyntaxVCT.B_bool,
-                                   Contexts.mk_l_eq_c z SyntaxVCT.L_true)) ::
+                                   SyntaxUtils.mk_l_eq_c z SyntaxVCT.L_true)) ::
                              ga))
                   else Monad.fail
                          (Monad.CheckFail
@@ -3199,7 +3210,7 @@ SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_false)),
                     Monad.check_bind
                       (Monad.check_bind (infer_e t p g d ea)
                         (fun (z, (ga, ta)) ->
-                          (match Contexts.b_of ta
+                          (match SyntaxUtils.b_of ta
                             with SyntaxVCT.B_var _ ->
                               Monad.fail (Monad.UnknownErrorLoc loc)
                             | SyntaxVCT.B_tid _ ->
@@ -3236,9 +3247,9 @@ Stringa.Chara (true, true, true, true, false, true, true, false);
 Stringa.Chara (false, true, false, true, false, true, true, false)])
                                     (fun za ->
                                       Monad.return
-(za, ((za, (b, Contexts.mk_proj_eq_x z za f)) :: ga,
+(za, ((za, (b, SyntaxUtils.mk_proj_eq_x z za f)) :: ga,
        SyntaxVCT.T_refined_type
-         (SyntaxVCT.VIndex, b, Contexts.mk_proj_eq z f)))))
+         (SyntaxVCT.VIndex, b, SyntaxUtils.mk_proj_eq z f)))))
                             | SyntaxVCT.B_undef ->
                               Monad.fail (Monad.UnknownErrorLoc loc)
                             | SyntaxVCT.B_reg _ ->
@@ -3596,10 +3607,10 @@ and check_pexp
                       Monad.check_bind
                         (Monad.return
                           (Contexts.add_vars_ge g
-                            ((za, (Contexts.b_of t1a,
+                            ((za, (SyntaxUtils.b_of t1a,
                                     SyntaxVCT.C_conj
                                       (mk_c_eq z za,
-Contexts.subst_c_v0 (Contexts.c_of t1a) (Monad.mk_var z)))) ::
+Contexts.subst_c_v0 (SyntaxUtils.c_of t1a) (Monad.mk_var z)))) ::
                               bs)))
                         (fun ga ->
                           Monad.check_bind
@@ -3629,9 +3640,10 @@ Contexts.subst_c_v0 (Contexts.c_of t1a) (Monad.mk_var z)))) ::
                           (Monad.return
                             (Contexts.add_to_scope
                               (Contexts.add_vars_ge g
-                                ((za, (Contexts.b_of t1a,
+                                ((za, (SyntaxUtils.b_of t1a,
 SyntaxVCT.C_conj
-  (mk_c_eq z za, Contexts.subst_c_v0 (Contexts.c_of t1a) (Monad.mk_var z)))) ::
+  (mk_c_eq z za,
+    Contexts.subst_c_v0 (SyntaxUtils.c_of t1a) (Monad.mk_var z)))) ::
                                   bs))
                               vars))
                           (fun ga ->
@@ -3670,10 +3682,10 @@ and infer_e_lbind
                 Monad.check_bind (Monad.freshen_t ta)
                   (fun tb ->
                     Monad.return
-                      (za, ((za, (Contexts.b_of tb,
+                      (za, ((za, (SyntaxUtils.b_of tb,
                                    SyntaxVCT.C_conj
                                      (mk_c_eq z za,
-                                       Contexts.subst_c_v0 (Contexts.c_of tb)
+                                       Contexts.subst_c_v0 (SyntaxUtils.c_of tb)
  (Monad.mk_var z)))) ::
                               gs,
                              (tb, varsa)))))))
@@ -3693,7 +3705,7 @@ and infer_e
     | t, p, g, d, SyntaxPED.Ep_proj (loc, fid, e) ->
         Monad.check_bind (infer_e t p g d e)
           (fun (z, (ga, ta)) ->
-            (match Contexts.b_of ta
+            (match SyntaxUtils.b_of ta
               with SyntaxVCT.B_var _ -> Monad.fail (Monad.UnknownErrorLoc loc)
               | SyntaxVCT.B_tid _ -> Monad.fail (Monad.UnknownErrorLoc loc)
               | SyntaxVCT.B_int -> Monad.fail (Monad.UnknownErrorLoc loc)
@@ -3725,10 +3737,11 @@ and infer_e
                               false)])
                       (fun za ->
                         Monad.return
-                          (za, ((za, (b, Contexts.mk_proj_eq_x z za fid)) :: ga,
+                          (za, ((za, (b, SyntaxUtils.mk_proj_eq_x z za fid)) ::
+                                  ga,
                                  SyntaxVCT.T_refined_type
                                    (SyntaxVCT.VIndex, b,
-                                     Contexts.mk_proj_eq z fid)))))
+                                     SyntaxUtils.mk_proj_eq z fid)))))
               | SyntaxVCT.B_undef -> Monad.fail (Monad.UnknownErrorLoc loc)
               | SyntaxVCT.B_reg _ -> Monad.fail (Monad.UnknownErrorLoc loc)
               | SyntaxVCT.B_string -> Monad.fail (Monad.UnknownErrorLoc loc)
@@ -3760,7 +3773,7 @@ and infer_e
     | t, p, g, d, SyntaxPED.Ep_tuple (loc, es) ->
         Monad.check_bind (Monad.mapM (infer_e t p g d) es)
           (fun xx ->
-            Monad.check_bind (Monad.return (unzip3 xx))
+            Monad.check_bind (Monad.return (SyntaxUtils.unzip3 xx))
               (fun (_, (ga, ts)) ->
                 Monad.check_bind (Monad.return (Lista.concat ga))
                   (fun gb ->
@@ -3802,14 +3815,14 @@ cs))))))))
                 Monad.check_bind (Monad.freshen_t ta)
                   (fun tb ->
                     Monad.return
-                      (z, ((z, (Contexts.b_of tb,
-                                 Contexts.subst_c_x (Contexts.c_of tb) z)) ::
+                      (z, ((z, (SyntaxUtils.b_of tb,
+                                 Contexts.subst_c_x (SyntaxUtils.c_of tb) z)) ::
                              kvars_of tb,
                             tb)))))
     | t, p, g, d, SyntaxPED.Ep_vec (loc, es) ->
         Monad.check_bind (Monad.mapM (infer_e t p g d) es)
           (fun xx ->
-            Monad.check_bind (Monad.return (unzip3 xx))
+            Monad.check_bind (Monad.return (SyntaxUtils.unzip3 xx))
               (fun (_, (ga, ts)) ->
                 Monad.check_bind (Monad.return (Lista.concat ga))
                   (fun gb ->
@@ -3841,7 +3854,7 @@ cs))))))))
                                   (z, (gb,
 SyntaxVCT.T_refined_type
   (SyntaxVCT.VIndex, SyntaxVCT.B_vec (ord, b),
-    Contexts.mk_vec_len_eq_c SyntaxVCT.VIndex es)))))))))
+    SyntaxUtils.mk_vec_len_eq_c SyntaxVCT.VIndex es)))))))))
     | t, p, g, d, SyntaxPED.Ep_list (loc, es) ->
         Monad.fail (Monad.NotImplemented (loc, "list"))
     | ta, p, g, d, SyntaxPED.Ep_cast (loc, t, e) ->
@@ -3931,13 +3944,13 @@ SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_true)),
                                 ga))
                             d e2)
                           (fun (_, (g2, t2)) ->
-                            (if SyntaxVCT.equal_bpa (Contexts.b_of t1)
-                                  (Contexts.b_of t2)
+                            (if SyntaxVCT.equal_bpa (SyntaxUtils.b_of t1)
+                                  (SyntaxUtils.b_of t2)
                               then Monad.return
                                      (z, (g1 @ g2,
    SyntaxVCT.T_refined_type
-     (SyntaxVCT.VIndex, Contexts.b_of t1,
-       SyntaxVCT.C_disj (Contexts.c_of t1, Contexts.c_of t2))))
+     (SyntaxVCT.VIndex, SyntaxUtils.b_of t1,
+       SyntaxVCT.C_disj (SyntaxUtils.c_of t1, SyntaxUtils.c_of t2))))
                               else Monad.fail
                                      (Monad.CheckFail
                                        (loc, g,
@@ -4034,7 +4047,19 @@ SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_true)),
     | t, p, g, d, SyntaxPED.Ep_return (loc, va) ->
         Monad.fail (Monad.NotImplemented (loc, " infer return expr "))
     | t, p, g, d, SyntaxPED.Ep_throw (loc, va) ->
-        Monad.fail (Monad.NotImplemented (loc, " therow expr "))
+        Monad.check_bind (infer_e t p g d va)
+          (fun (x, (g1, t2)) ->
+            (if SyntaxVCT.equal_bpa (SyntaxUtils.b_of t2) SyntaxVCT.B_exception
+              then Monad.return
+                     (x, (g1, SyntaxVCT.T_refined_type
+                                (SyntaxVCT.VIndex, SyntaxVCT.B_unit,
+                                  SyntaxVCT.C_true)))
+              else Monad.fail
+                     (Monad.CheckFail
+                       (loc, g, "exception type expected for throw", t2,
+                         SyntaxVCT.T_refined_type
+                           (SyntaxVCT.VIndex, SyntaxVCT.B_exception,
+                             SyntaxVCT.C_true)))))
     | t, p, g, d, SyntaxPED.Ep_try (loc, va, vb) ->
         Monad.fail (Monad.NotImplemented (loc, " try expr "))
     | t, p, g, d, SyntaxPED.Ep_constraint (loc, va) ->
@@ -4092,7 +4117,7 @@ and infer_app
                        (if st
                          then Monad.check_bind
                                 (Monad.return
-                                  (Satis.type_app b2 (Contexts.b_of ta)))
+                                  (Satis.type_app b2 (SyntaxUtils.b_of ta)))
                                 (fun sub ->
                                   Monad.check_bind
                                     (Monad.mk_fresh
@@ -4104,14 +4129,14 @@ Stringa.Chara (false, false, false, false, true, true, true, false)])
                                       Monad.check_bind
 (Monad.return
   (SyntaxVCT.T_refined_type
-    (SyntaxVCT.VIndex, tsubst_bp_many (Contexts.b_of taua) sub,
-      Contexts.c_of taua)))
+    (SyntaxVCT.VIndex, tsubst_bp_many (SyntaxUtils.b_of taua) sub,
+      SyntaxUtils.c_of taua)))
 (fun taub ->
   (let kv =
-     (z, (Contexts.b_of taub,
+     (z, (SyntaxUtils.b_of taub,
            SyntaxVCT.C_conj_many
-             [Contexts.subst_c_v0 (Contexts.c_of ta) (Monad.mk_var z2);
-               Contexts.subst_c_v0 (Contexts.c_of taub) (Monad.mk_var z)]))
+             [Contexts.subst_c_v0 (SyntaxUtils.c_of ta) (Monad.mk_var z2);
+               Contexts.subst_c_v0 (SyntaxUtils.c_of taub) (Monad.mk_var z)]))
      in
     Monad.check_bind (Monad.trace (Monad.AppI Monad.VarI))
       (fun _ ->
@@ -4134,9 +4159,9 @@ let rec return_fun
   t = (let arg = SyntaxVCT.VNamed "return_arg" in
         (SyntaxVCT.VNamed "return",
           (SyntaxVCT.A_function
-             (arg, Contexts.b_of t,
+             (arg, SyntaxUtils.b_of t,
                SyntaxPED.subst_cp (SyntaxVCT.V_var arg) SyntaxVCT.VIndex
-                 (Contexts.c_of t),
+                 (SyntaxUtils.c_of t),
                t),
             None)));;
 
@@ -4292,10 +4317,10 @@ let rec check_def
                           (t, (pa, Contexts.add_vars_ge
                                      (Contexts.add_to_scope g vars)
                                      ((za,
-(Contexts.b_of taa,
+(SyntaxUtils.b_of taa,
   SyntaxVCT.C_conj
     (mk_c_eq z za,
-      Contexts.subst_c_v0 (Contexts.c_of taa) (Monad.mk_var z)))) ::
+      Contexts.subst_c_v0 (SyntaxUtils.c_of taa) (Monad.mk_var z)))) ::
                                        bs @ kvars_of taa)))))))
     | t, p, g, SyntaxPED.DEFp_overload (loc, idd, idlist) ->
         Monad.return

@@ -103,7 +103,7 @@ and pp_raw_typ_aux x = match x with
 | Typ_id(id) -> string "Typ_id" ^^ string "(" ^^ pp_raw_id id ^^ string ")"
 | Typ_var(kid) -> string "Typ_var" ^^ string "(" ^^ pp_raw_kid kid ^^ string ")"
 | Typ_fn(typ0,typ2,effect) -> string "Typ_fn" ^^ string "(" ^^ string "[" ^^ separate  (string ";") (List.map (function (typ0) -> string "(" ^^ pp_raw_typ typ0 ^^ string ")") typ0) ^^ string "]" ^^ string "," ^^ pp_raw_typ typ2 ^^ string "," ^^ pp_raw_effect effect ^^ string ")"
-| Typ_bidir(typ1,typ2) -> string "Typ_bidir" ^^ string "(" ^^ pp_raw_typ typ1 ^^ string "," ^^ pp_raw_typ typ2 ^^ string ")"
+| Typ_bidir(typ1,typ2,effect) -> string "Typ_bidir" ^^ string "(" ^^ pp_raw_typ typ1 ^^ string "," ^^ pp_raw_typ typ2 ^^ string "," ^^ pp_raw_effect effect ^^ string ")"
 | Typ_tup(typ0) -> string "Typ_tup" ^^ string "(" ^^ string "[" ^^ separate  (string ";") (List.map (function (typ0) -> string "(" ^^ pp_raw_typ typ0 ^^ string ")") typ0) ^^ string "]" ^^ string ")"
 | Typ_app(id,typ_arg0) -> string "Typ_app" ^^ string "(" ^^ pp_raw_id id ^^ string "," ^^ string "[" ^^ separate  (string ";") (List.map (function (typ_arg0) -> string "(" ^^ pp_raw_typ_arg typ_arg0 ^^ string ")") typ_arg0) ^^ string "]" ^^ string ")"
 | Typ_exist(kinded_id0,n_constraint,typ) -> string "Typ_exist" ^^ string "(" ^^ string "[" ^^ separate  (string ";") (List.map (function (kinded_id0) -> string "(" ^^ pp_raw_kinded_id kinded_id0 ^^ string ")") kinded_id0) ^^ string "]" ^^ string "," ^^ pp_raw_n_constraint n_constraint ^^ string "," ^^ pp_raw_typ typ ^^ string ")"
@@ -583,7 +583,7 @@ and pp_typ_aux x = match x with
 | Typ_id(id) -> pp_id id
 | Typ_var(kid) -> pp_kid kid
 | Typ_fn(typ0,typ2,effect) -> group(string "" ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (typ0) -> nest 2 (pp_typ typ0)) typ0)) ^^ break 1 ^^ string ")" ^^ break 1 ^^ string "->" ^^ break 1 ^^ nest 2 (pp_typ typ2) ^^ break 1 ^^ string "effectkw" ^^ break 1 ^^ nest 2 (pp_effect effect) ^^ string "")
-| Typ_bidir(typ1,typ2) -> group(string "" ^^ nest 2 (pp_typ typ1) ^^ break 1 ^^ string "<->" ^^ break 1 ^^ nest 2 (pp_typ typ2) ^^ string "")
+| Typ_bidir(typ1,typ2,effect) -> group(string "" ^^ nest 2 (pp_typ typ1) ^^ break 1 ^^ string "<->" ^^ break 1 ^^ nest 2 (pp_typ typ2) ^^ break 1 ^^ string "effectkw" ^^ break 1 ^^ nest 2 (pp_effect effect) ^^ string "")
 | Typ_tup(typ0) -> group(string "" ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (typ0) -> nest 2 (pp_typ typ0)) typ0)) ^^ break 1 ^^ string ")" ^^ string "")
 | Typ_app(id,typ_arg0) -> group(string "" ^^ nest 2 (pp_id id) ^^ break 1 ^^ string "(" ^^ break 1 ^^ group(separate (string ",") (List.map (function (typ_arg0) -> nest 2 (pp_typ_arg typ_arg0)) typ_arg0)) ^^ break 1 ^^ string ")" ^^ string "")
 | Typ_exist(kinded_id0,n_constraint,typ) -> group(string "" ^^ string "{" ^^ break 1 ^^ group(separate (break 1) (List.map (function (kinded_id0) -> nest 2 (pp_kinded_id kinded_id0)) kinded_id0)) ^^ break 1 ^^ string "," ^^ break 1 ^^ nest 2 (pp_n_constraint n_constraint) ^^ break 1 ^^ string "." ^^ break 1 ^^ nest 2 (pp_typ typ) ^^ break 1 ^^ string "}" ^^ string "")

@@ -29,7 +29,7 @@ See the POPL 2019 [paper](http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019
 
 MiniSail+ is a larger subset of Sail with a syntax that is more closely aligned to Sail.
 The [Sail RISCV model](https://github.com/rems-project/sail-riscv) can be converted (with
-a few ommissions) into MiniSail+.
+a few omissions) into MiniSail+.
 An experimental implementation of a Sail to MiniSail+ converter and a MiniSail+
 type checker is available.
 Source for this is located in sail_root/src/minisail and makes use of ML code
@@ -93,7 +93,7 @@ Importantly, expressions with branching, match and if, don't have type synthesis
 
 In MiniSail-ANF we partition expression forms where checking occurs into MiniSail-ANF statements and
 expressions where synthesis occurs into MiniSail-ANF expressions. This is not done in MiniSail+
-to maintain the closer connection to Sail. 
+to maintain the closer connection to Sail.
 
 The following contexts are used in the judgements:
 * T - contains type definitions.

@@ -9,6 +9,7 @@ open PPrintCombinators
 module A = Ast 
 module P = Parse_ast
 open Util_ms
+open Sail_pp
        
 open Msp_ast.SyntaxVCT  (* Mini Sail AST as obtain from Isabelle *)
 open Msp_ast.SyntaxPED  (* Mini Sail AST as obtain from Isabelle *)
@@ -34,6 +35,7 @@ type xbcs = ((xp* (bp*cp)) list)
 type ctx_type = CtxType of (xbcs  * tau * mods * ceks )
 type ctx_kind = CtxKind of (xbcs * cep * mods * ceks )
 
+exception NotSupported of string;;
 exception InvertFail
                             
 type 'a ctx = {
@@ -44,6 +46,7 @@ type 'a ctx = {
     scattereds : (tau * ( ( ('a A.pat)* ('a A.exp)) list)) SBindings.t;
     ended : ESet.t;
     mvars : ESet.t;
+    enums : ESet.t;
   }
 
 let initial_ctx = {
@@ -54,6 +57,7 @@ let initial_ctx = {
     scattereds = SBindings.empty;
     ended = ESet.empty;
     mvars = ESet.empty;
+    enums = ESet.empty;
   }
 
 let pp_location l = match l with
@@ -81,7 +85,7 @@ let int_of_int i = (Big_int.big_int_of_string (string_of_int i))
 (* Convert from the Sail parse_ast big num to big_int int *)
 let big_int_of_big_num i = Big_int.big_int_of_string (P.Big_int.to_string i)
 
-let convert_to_isa (s : string ) : string = if s = "arg#" then "argg" else s (* FIXPE remove call to this when ok with string type *)
+let convert_to_isa (s : string ) : string = if s = "arg#" then "argg" else s (* FIXME remove call to this when ok with string type *)
 let convert_kid (A.Kid_aux (Var id,_)) = convert_to_isa id
 
 let mk_proj_op len i = convert_to_isa ((string_of_int len) ^ "X" ^ (string_of_int i))
@@ -272,7 +276,7 @@ let tsubst_t_list typ args = List.fold_left (
            T_refined_type (z,b3, subst_cp v x2 c3 )
  ) typ args
 
-(* FIXPE - Need to handle ks *)
+(* FIXME - Need to handle ks *)
 let normalise_tlist ts = let (bs,cs) =  unzip  (List.mapi (fun i (T_refined_type (ks , b, c)) ->
                                                     (b, subst_c_v0 c
                                                           (V_proj (convert_to_isa ((string_of_int (List.length ts)) ^ "X" ^ (string_of_int (i+1))),
@@ -308,7 +312,7 @@ let rec to_ms_kind (A.KOpt_aux (kid,loc) : A.kinded_id ) : string * bp = match k
                                    | KOpt_kind (K_aux (K_int,_), (Kid_aux (Var kid,_))) -> (kid,B_int)
                                    | KOpt_kind (K_aux (K_bool,_), (Kid_aux (Var kid,_))) -> (kid,B_bool)
                                    | KOpt_kind (K_aux (K_type,_), (Kid_aux (Var kid,_))) -> (kid,B_var (convert_to_isa kid))
-                                   | KOpt_kind (K_aux (K_order,_), (Kid_aux (Var kid,_))) -> (kid,B_bool) (* FIXPE *)
+                                   | KOpt_kind (K_aux (K_order,_), (Kid_aux (Var kid,_))) -> (kid,B_bool) (* FIXME *)
                                    | _ -> raise (Failure ("Unknown kopt " ^ (pp_location loc)))
 
 
@@ -321,10 +325,16 @@ and replace_ks_in_c ( kcs : (xp*cep) list) ( c  : cp ) : cp = List.fold_left (fu
 
 and replace_ks_in_funcl ( kcs : (xp*cep) list ) funcl = List.fold_left (fun funcl (k,e) -> ce_subst_funclp e (k) funcl) funcl kcs
 
+let show_typ_aux s typ =
+    ToChannel.pretty 1. 80 stderr (string s ^^ ( pp_raw_typ_aux typ))
+
+let show_typ s typ =
+    ToChannel.pretty 1. 80 stderr (string s ^^ ( pp_raw_typ typ))
+
                                                                               
 (* Extract equations from Sail type *)
 let rec extract_equations_typ ctx   (zvr : cep ) ((A.Typ_aux (typ,_)) as typ' : A.typ) =
-  Printf.eprintf "extract_eq: %s\n" ( Ast.show_typ typ');
+  show_typ_aux "extract_eq:" typ;
   match typ with
   | A.Typ_id (Id_aux (Id id,_)) when List.mem id ["unit"; "bit"; "string"; "real"; "bool"; "int";"nat"] -> []
   | A.Typ_app (Id_aux (Id id,_), [ typ_arg ] ) when List.mem id ["bool"; "int";"atom";"atom_bool";"implicit"] ->
@@ -339,7 +349,7 @@ let rec extract_equations_typ ctx   (zvr : cep ) ((A.Typ_aux (typ,_)) as typ' : 
      List.concat (List.mapi (fun i t -> extract_equations_typ ctx (CE_proj (mk_proj_op (List.length ts) (i+1), zvr)) t ) ts)
   | A.Typ_app (Id_aux (Id id,_), typ_args ) ->
      (match TBindings.find_opt id ctx.types with
-      | Some  (CtxType (ks, target_t,mods,ceks)) -> (* FIXPE FIXPE. Making assumption about ordering and length of ceks/ks/typargs *)
+      | Some  (CtxType (ks, target_t,mods,ceks)) -> (* FIXME FIXME. Making assumption about ordering and length of ceks/ks/typargs *)
          let ces = List.concat (List.map (fun ((k,(b,c)),ta) -> match b with
                                                                 B_int -> [to_ms_ce ctx (targ_to_nexp ta)]
                                                                | _ -> []) (zip ks typ_args)) in
@@ -388,12 +398,12 @@ let filter_bool_ces ( ces : (cep * cep ) list ) (kids : (xp*bp) list) =
                                                                            | _ -> (ces1,(ce1,ce2)::ces2,kids)) ([],[],[]) ces in
  (ces1,ces2, kids)
                                  
-let rec extract_pp ctx ( kids : (xp*bp) list ) ( typ : A.typ) : ( xp * cep ) list * cp list =
+let rec invert_and_solve ctx ( kids : (xp*bp) list ) ( typ : A.typ) : ( xp * cep ) list * cp list =
   (*  let kids =   List.map (fun k -> let (k,b) = to_ms_kind k in (VNamed k)) kids' in*)
   let ces = extract_equations_typ ctx (CE_val (V_var zvar)) typ in
   let (ceks', ces, kids) = filter_bool_ces ces kids in
   let cs = extract_constraints_typ ctx (CE_val (V_var zvar)) typ in
-  Printf.eprintf "** extract_pp ** \n";
+  Printf.eprintf "** invert_and_solve ** \n";
   List.iter ( fun (ce1,ce2) -> pp_line (pp_cep ce1 ^^ (string " = ") ^^ (pp_cep ce2))) ces;
   List.iter ( fun (ce1,ce2) -> pp_line (pp_raw_cep ce1 ^^ (string " = ") ^^ (pp_raw_cep ce2))) ces;  
   List.iter ( fun (c) -> pp_line (pp_raw_cp c)) cs;
@@ -403,27 +413,13 @@ let rec extract_pp ctx ( kids : (xp*bp) list ) ( typ : A.typ) : ( xp * cep ) lis
        (ceks', cs)) else
   match solve_ce_ce kids ces with
   | Some (ces,mods) -> List.iter ( fun ce1 -> pp_line (pp_cep ce1 )) ces;
-                if List.length kids > List.length ces then raise (Failure "Mising equalities")
+                if List.length kids > List.length ces then raise (Failure "Missing equalities")
                 else let (ceks,ce) = zip_partial kids ces in
                      let cs = replace_ks_in_c ceks (C_conj_many cs) in
                      (ceks@ceks', cs :: mods @ List.map (fun ce -> C_eq ((CE_val (V_lit (L_num (Z.zero)))),ce)) ce)
   | None -> raise (Failure "Linear Solver Failed")
                            
-                                           
-(*
-and convert_invert kid e1 typ_arg c =
-  let (C_eq (_ , c_exp)) = convert_to_c_exp typ_arg in
-  let (mods,e1) = invert_ce [] (VNamed kid) e1 c_exp in
-  PPrintEngine.ToChannel.compact stderr (Minisailplus_pp.pp_c c);
-  PPrintEngine.ToChannel.compact stderr (Minisailplus_pp.pp_cep e1);
-  let mods = C_conj_many (List.map (fun (x,y) -> C_eq ( CE_bop (Mod , x,y), CE_val (V_lit (L_num (int_of_int 0))))) mods) in
-  Printf.eprintf "k=%s\n" kid;
-  let c = replace_k_in_c (VNamed kid) e1 c in
-  let c =C_conj (mods, c) in 
-  PPrintEngine.ToChannel.compact stderr (Minisailplus_pp.pp_c c);
-  c
- *)
-                                      
+                                                                                 
 and convert_invert_typ_arg ctx (kids : string list)  (e1 : cep ) ( typ_arg : A.typ_arg ) 
     :  (cep * cep ) list * ((string option) * cep)
   =
@@ -440,14 +436,17 @@ and convert_invert_typ_arg ctx (kids : string list)  (e1 : cep ) ( typ_arg : A.t
   PPrintEngine.ToChannel.compact stderr (Minisailplus_pp.pp_cep e1); Printf.eprintf "\n";
   (mods,(kid,e1))
 
-    
+(* 
+   From a Sail type and a MiniSail constraint that represents the value of this type, invert the Sail type.
+   For example given z and vector('n, ), we get "len z = 'n" 
+*)
 and convert_invert_typ ctx ( kids : string list)  (zvar : cep ) ((A.Typ_aux (typ,loc)) as typ' : A.typ)
     : mods * ceks *  (cp list) =
-  Printf.eprintf "convert_invert_typ: %s"; (Ast.show_typ typ');
+  show_typ_aux "convert_invert_typ: " typ;
   match typ with
   | A.Typ_var _ -> ([],[],[])
                      
-  | A.Typ_id (Id_aux (Id id,_)) when List.mem id ["unit";"bit";"bool";"int";"nat";"string";"real"] -> ([],[],[]) (* FIXPE nat needs a constraint *)
+  | A.Typ_id (Id_aux (Id id,_)) when List.mem id ["unit";"bit";"bool";"int";"nat";"string";"real"] -> ([],[],[]) (* FIXME nat needs a constraint *)
   | A.Typ_id (Id_aux (Id id,_)) ->
      (match TBindings.find_opt id ctx.types with
       | Some  (CtxType (ks, target_t,mods,ceks)) ->
@@ -491,25 +490,6 @@ and convert_invert_typ ctx ( kids : string list)  (zvar : cep ) ((A.Typ_aux (typ
      (List.concat mods, List.concat ces, List.concat cs)
   | _ -> raise (Failure ("convert_invert_typ: Unknown typ " ^ pp_location loc))
 
-(*       
-and to_ms_exist_one_rec loc ctx kid b c typ = 
-  let (A.Typ_aux (typ,_)) = typ in
-  match typ with
-  | A.Typ_app (Id_aux (Id "atom",_), [ typ_arg ] ) ->
-     let c = convert_invert kid (CE_val (V_var zvar)) typ_arg c in
-     T_refined_type ([],zvar,B_int, c )
-  | A.Typ_app (Id_aux (Id "vector",_), ( [ len_arg ; ord_arg ; base_arg ] ) ) ->
-     let c = convert_invert kid (CE_uop (Len, CE_val (V_var zvar))) len_arg c in
-     let ord = convert_order ord_arg in
-     T_refined_type( [], zvar, B_vec (ord,B_bit), c )
-  | A.Typ_tup ts ->
-     let ts = List.map (to_ms_exist_one_rec loc ctx kid b C_true) ts in
-     let (bs,c) = normalise_tlist ts in
-     Printf.eprintf "After normalise\n";
-     PPrintEngine.ToChannel.compact stderr (Minisailplus_pp.pp_c c);
-     T_refined_type ([],zvar,B_tuple bs, c)
- *)
-
 
 (* Sometimes we might have more than one MS c-expression for a Sail type-variable so we need
    to create a constraint that will link of these together *)
@@ -529,55 +509,31 @@ and to_ms_exist_many loc ctx (kids : A.kinded_id list) (cons : A.n_constraint) (
                                            | B_bool -> true
                                            | _ -> false) kids in
   let kids = List.map (fun (x,b) -> (VNamed x,b)) kids in
-  let (t,_) = to_ms_exist_many_aux ctx loc kids c typ in
+  let (t,_) = to_ms_typ_with_constraints ctx loc kids c typ in
   t
 
 (* 
-   ceks is a list of (kid,ce) such that kid = ce,
-   kid is either bool or int Sail type variable
-   cs1 is a list of additional constraints arising from linear solving
-   mods is a list of mod constraints arising from use of div 
+   Convert Sail type that may reference type level variables and have constraints into MiniSail type.
+           kids - Type level variables and constraints
+           c - Extra constraint
+           typ - Sail typ
 *)    
-and to_ms_exist_many_aux ctx loc (kids : (xp*bp) list) (c : cp) (typ : A.typ)  =
-  Printf.eprintf "to_ms_exist_many_aux %s\n" (pp_location loc);
+and to_ms_typ_with_constraints ctx loc (kids : (xp*bp) list) (c : cp) (typ : A.typ) :   tau * (xp * cep) list =
+  Printf.eprintf "to_ms_typ_with_constraints %s\n" (pp_location loc);
   let int_kids = List.fold_left (fun ks (x,b) -> match b with
                                                  | B_int -> (x,b)::ks
                                                  | B_bool -> (x,b)::ks
                                            | _ -> ks) [] kids in
-  let (ceks,cs1) = extract_pp ctx int_kids typ in (*convert_invert_typ ctx kids (CE_val (V_var xvar)) typ in*)
+  let (ceks,cs1) = invert_and_solve ctx int_kids typ in 
   let mods = [] in
   List.iter (fun (k,e1) -> match k with
                            | VNamed k -> Printf.eprintf "k=%s\n" k; pp_line (pp_cep e1)
     ) ceks;
   let cs = replace_ks_in_c ceks c in
   let c_eq = find_c_eq ceks in 
- (* 
-  let mods = List.map (fun (x,y) -> C_eq ( CE_bop (Mod , x,y), CE_val (V_lit (L_num (int_of_int 0))))) mods in
-  let c_z_eq = [] (*map_concat (fun (k,e) -> match k with
-                                    | None -> [C_eq (CE_val (V_var zvar),e)]
-                                    | Some _ -> []) ceks in*)
-  let ceks = map_concat (fun (k,e) -> match k with
-                                    | None -> []
-                                    | Some k -> [(k,e)]) ceks in
-  let ceks' = merge_assoc ceks in
-  let c_eq = List.concat (List.map (fun k -> match List.assoc_opt k ceks' with
-                                | Some (ce::ces)  -> List.map (fun ce' -> C_eq (ce,ce')) ces
-                                | Some _ -> []
-                                | None -> raise (Failure ("No equation for type variable " ^ k ))
-                            ) kids) in 
-  let t =   T_refined_type( zvar, to_ms_base ctx typ, C_conj_many (cs :: mods @ c_eq @ c_z_eq @ cs2)) in *)
   let t =   T_refined_type( zvar, to_ms_base ctx typ, C_conj_many (c_eq::cs::cs1) ) in 
   PPrintEngine.ToChannel.compact stderr ((string "to_ms_exist_many result=\n") ^^ Minisailplus_pp.pp_tp t ^^ (string "\n"));
   (t,ceks)
-                                 
-                          
-(*
-  let c_eq = match ces with
-    | ce::ces -> List.map (fun ce' -> C_eq (ce,ce')) ces
-    | _ -> [] in
-
-  T_refined_type( [], zvar, to_ms_base typ, C_conj_many (mods @ cs @ c_eq))*)
-
                 
 and to_ms_exist loc ctx kids cons typ : tau = match kids with
   | [] -> to_ms_typ ctx typ
@@ -588,7 +544,7 @@ and to_ms_exist loc ctx kids cons typ : tau = match kids with
        
 (* Allow many existentials *)                              
 and to_ms_exist_allow_many loc ctx kids cons typ = 
-  (* The FIXPE kids are all ints ? *)
+
   let c = to_ms_constraint ctx cons in 
   
   let rec convert_kid kids  = List.map (fun k -> let (k,b) = to_ms_kind k in (VNamed k, (b,C_true))) kids in
@@ -644,7 +600,7 @@ and  to_ms_base ctx (A.Typ_aux (typ,loc)) : bp =
        | Typ_app (Id_aux (Id "int",_), [typ_arg]) ->  B_int
        | Typ_app (Id_aux (Id "atom_bool",_), [typ_arg]) ->   B_bool
        | Typ_app (Id_aux (Id "list",_), [ A_aux (A_typ typ,_)] ) -> B_list (to_ms_base ctx typ)
-       | Typ_app (Id_aux (Id "implicit", _), _) -> B_int (* FIXPE *)
+       | Typ_app (Id_aux (Id "implicit", _), _) -> B_int (* FIXME *)
        | Typ_app (Id_aux (Id "register",_), [A_aux (A_typ typ,_)]) ->
           let typ = to_ms_typ ctx typ in
           B_reg typ
@@ -667,7 +623,7 @@ and  to_ms_typ (ctx : 'a ctx ) (A.Typ_aux (typ,loc)) : tau =
        | A.Typ_id (Id_aux (Id s,loc2)) -> (match s with
               "int" -> T_refined_type ( zvar , B_int, C_true)
             | "bool"|"boolean" -> T_refined_type (zvar,B_bool, C_true)
-            | "reg_size" ->       T_refined_type (zvar,B_int, C_true) (* FIXPE *)                             
+            | "reg_size" ->       T_refined_type (zvar,B_int, C_true) (* FIXME *)                             
             | "unit" ->           T_refined_type (zvar,B_unit, C_true)
             | "bit" ->            T_refined_type (zvar,B_bit, C_true)
             | "real" ->           T_refined_type (zvar,B_real, C_true)
@@ -688,11 +644,6 @@ and  to_ms_typ (ctx : 'a ctx ) (A.Typ_aux (typ,loc)) : tau =
                | A.K_type -> T_refined_type(zvar,B_var kid , C_true)
                | _ -> raise (Failure "to_ms_typ Unexpected use of order kind"))
            | None -> raise (Failure (Printf.sprintf "Kind lookup %s failed at %s\n" kid (pp_location loc))))
-
-(*       | Typ_lit lit -> T_refined_type(zvar, B_int, convert_to_c_exp  (A.Typ_aux (typ,loc)))
-       | Typ_times _ -> raise (Failure ("to_ms_typ Typ_times"))
-       | Typ_sum _ -> raise (Failure ("to_ms_typ Typ_sum"))
-       | Typ_minus _ -> raise (Failure ("to_ms_typ Typ_minus"))*)
        | Typ_app (Id_aux (Id "atom",_), [ typ_arg ] ) ->
           let c_exp = convert_to_c_exp ctx typ_arg in  T_refined_type (zvar,B_int, c_exp )
        | Typ_app (Id_aux (Id "range",loc), typ_args ) ->
@@ -718,11 +669,11 @@ and  to_ms_typ (ctx : 'a ctx ) (A.Typ_aux (typ,loc)) : tau =
           let c_exp = convert_to_c_exp ctx typ_arg in  T_refined_type (zvar,B_int, c_exp )
        | Typ_app (Id_aux (Id "atom_bool",_), [typ_arg]) ->
           let c_exp = convert_to_c_exp ctx typ_arg in  T_refined_type (zvar,B_bool, c_exp )
-       | Typ_app (Id_aux (Id "implicit",_), [ A_aux (A_typ typ,_)] ) -> to_ms_typ ctx typ (* FIXPE - Is this how we handle implicit ? *)
+       | Typ_app (Id_aux (Id "implicit",_), [ A_aux (A_typ typ,_)] ) -> to_ms_typ ctx typ (* FIXME - Is this how we handle implicit ? *)
        | Typ_app (Id_aux (Id "list",_), [ A_aux (A_typ typ,_)] ) ->
                    let (T_refined_type (zvar, b, _)) = to_ms_typ ctx typ in 
                    T_refined_type (zvar,B_list b, C_true)
-       | Typ_app (Id_aux (Id "register",_), [typ_arg]) ->   (* FIXPE Should have a base type for registers ? *)
+       | Typ_app (Id_aux (Id "register",_), [typ_arg]) ->   (* FIXME Should have a base type for registers ? *)
           let c_exp = convert_to_c_exp ctx typ_arg in  T_refined_type (zvar,B_int, c_exp )
        | Typ_app (Id_aux (Id "bitvector",_), [len; ord]) ->
           let odr = convert_order ord in
@@ -734,27 +685,100 @@ and  to_ms_typ (ctx : 'a ctx ) (A.Typ_aux (typ,loc)) : tau =
           let (bs,c) = normalise_tlist ts in 
           T_refined_type (zvar,B_tuple bs, c)
        | Typ_exist (kids, cons, typ ) -> to_ms_exist loc ctx kids cons typ
-                            
-(*       | Typ_with ( atyp, cons ) ->
-          let c =to_ms_constraint ctx cons in
-          let T_refined_type (_,_,b,c_typ) = to_ms_typ ctx atyp in
-          let kids = Msp_ast.Syntax.fvs_c(c) in (* FIXPE Need to take away forall quantified ? *)
-          let kids = List.map (fun x -> (x,(B_int,C_true))) kids in
-          let kids = match kids with
-              [] -> []
-            | (k,(b,_))::xs -> (k,(b,c))::xs in
-          T_refined_type ( kids ,zvar,b,c_typ)*)
-       (*       | Typ_wild -> T_refined_type ([], zvar,B_int, C_true)*)
        | Typ_fn _ -> raise (Failure ( "Unhandled typ Typ_fn" ^ (pp_location loc)))
        | Typ_bidir _ -> raise (Failure ( "Unhandled typ Typ_bidir" ^ (pp_location loc)))
 
-(* Permit 0 or 1 existential *)
-(* FIXPE - We can allow more than one if they are 'separable' ie
-   { 'q, 'p , p = q + 1 . ( int('q+1), int('p+2) ) }
-leads to
-   'q = proj 1 z - 1 
-   'p = proj 2 z - 2 
-and
-   { z : (int,int) | (proj 2 z) = (proj 1 z - 1) + 1 }
- *)
 
+let rec to_ms_typ_schm ctx (A.TypSchm_aux (TypSchm_ts (tq, typ),_)) :  'a ctx * (xp * (bp * cp)) list * tau =
+  let (ctx,tq) = to_ms_typquant ctx tq
+  in (ctx,tq, to_ms_typ ctx typ)
+
+(* Convert Sail type quant into list of MiniSail variables, base and constraint triples *)
+and  to_ms_typquant (ctx : 'a ctx ) ( (A.TypQ_aux (tq,loc)) : A.typquant) : 'a ctx * (xp * (bp * cp)) list  =
+  let rec convert_qis qis kids = match qis with
+      [] -> kids
+     | (x::xs) -> match x with
+                    (A.QI_aux (QI_constraint nc,_)) -> let c = to_ms_constraint ctx nc in
+                                                  let fv = fvs_cp c in
+                                                  let kd = List.map fst kids in 
+                                                  let fv = List.filter (fun v -> not (List.mem v kd)) fv in
+                                                  let fv = List.map (fun v -> (v,(B_int, C_true))) fv in
+                                                  let kids = fv@kids in 
+                                                  (match kids with
+                                                  | (x, (b,c' ))::ks -> convert_qis xs ((x,(b,C_conj (c,c')))::ks)
+                                                  | [] -> raise (Failure "to_ms_typquant Constraint with no kid"))
+                  | (QI_aux (QI_id kid,_)) -> let (k,b) = to_ms_kind kid in
+                                              convert_qis xs ((VNamed (convert_to_isa k),
+                                                               (b, C_true)) :: kids)
+                  | (QI_aux (QI_constant [kid],_)) -> let (k,b) = to_ms_kind kid in
+                                              convert_qis xs ((VNamed (convert_to_isa k),
+                                                               (b, C_true)) :: kids)
+                  | _ -> raise (Failure ("to_ms_typquant. pattern fail loc=" ^ (pp_location loc)))
+
+  in match tq with
+       TypQ_no_forall -> (ctx,[])
+     | TypQ_tq qis ->
+        let ctx = List.fold_left (fun ctx qi -> match qi with
+                                                | (A.QI_aux (QI_id (KOpt_aux(kid, loc)),_)) ->
+                                                   (match kid with
+                                                      KOpt_kind (kind,(Kid_aux (Var kid,_))) ->
+                                                      { ctx with kinds = KBindings.add kid kind  ctx.kinds }
+                                                   ) 
+                                                | _ -> ctx ) ctx qis
+        in (ctx,convert_qis qis [])
+
+(* Convert Sail function type into MiniSail function type. 
+    kids - List of Sail type variables and constraints but in MiniSail syntax 
+    tin - Function input type
+    tout - Function output type
+*)             
+let to_ms_fun loc (ctx : 'a ctx ) (kids : (xp*(bp*cp)) list) (tin : A.typ) (tout : A.typ) :  bp * cp * tau * (string option * cep ) list
+  =
+  List.iter (fun ((VNamed x,(b,c))) -> Printf.eprintf "k=%s\n" x;
+                                       pp_line (pp_bp b)) kids;
+  let kids = List.filter (fun (x,(b,c)) -> match b with
+                                           | B_int -> true
+                                           | B_bool -> true
+                                           | _ -> false) kids in
+  let c = match kids with
+    | ((_,(_,c))::_) -> c
+    | _ -> C_true in
+  let kids = List.map (fun (x,(b,c)) -> (x,b)) kids in
+  let (tin,ceks) = to_ms_typ_with_constraints ctx loc kids c tin in
+  let T_refined_type (z,bout, cout ) = to_ms_typ ctx tout in
+  let ceks = List.map (fun (k,ce) -> (k,subst_cep (V_var xvar) zvar ce)) ceks in
+  Printf.eprintf "ceks are:\n";
+  List.iter (fun (VNamed k,ce) -> Printf.eprintf "%s\n" k; pp_line (pp_cep ce)) ceks;
+  let cout = replace_ks_in_c ceks cout in
+  let tout = T_refined_type(z,bout,cout) in
+  Printf.eprintf "convert_fn tin= "; pp_line (pp_tp tin);
+  Printf.eprintf "convert_fn tout= "; pp_line (pp_tp tout);
+  let ceks = List.map (fun (VNamed x, cep) -> (Some x, cep)) ceks in
+  (b_of tin, subst_cp (V_var xvar) zvar (c_of tin), tout,ceks)
+
+(* Merge with to_ms_typ_schem *)
+
+
+let convert_tq_typ ctx loc tq typ = match typ with
+  | A.Typ_aux (Typ_fn (tin,tout,teff),_) ->
+     Printf.eprintf "convert fun %s\n (pp_location loc)";
+     let (ctx,kids) = to_ms_typquant ctx tq in
+     let tin = (match tin with
+                | [tin] -> tin
+                | _ -> A.Typ_aux (Typ_tup tin,loc)) in
+     let (b,c,tout,ceks) = to_ms_fun loc ctx kids tin tout in
+     ([],b,c,tout,ceks)
+  | A.Typ_aux (Typ_bidir _, _) ->
+     raise (NotSupported ("Typ_bidir loc=" ^ (pp_location loc)))
+  | _ -> Printf.eprintf "Unknown type scheme pattern %s\n" (pp_location loc);
+         show_typ "" typ;
+         raise (Failure "Unknown type scheme")
+
+let to_ms_typschm ( ctx : 'a ctx ) (A.TypSchm_aux (TypSchm_ts (tq, typ),loc)) = convert_tq_typ ctx loc tq typ
+                                  
+let convert_tannot ctx typ = match typ with
+  | A.Typ_annot_opt_aux (Typ_annot_opt_some (tq,typ), loc ) ->
+     let (kids,b,c,tout,ceks) = convert_tq_typ ctx loc tq typ in
+     Some (ctx,C_true, A_function(xvar, b, c , tout ))
+  | A.Typ_annot_opt_aux (Typ_annot_opt_none,_)  -> None
+                              

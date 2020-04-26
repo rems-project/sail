@@ -48,7 +48,6 @@ open Minisailplus_pp
 
 open Convert_typ
 
-exception NotSupported of string;;
        
 let add_abbrev ctx id tq typ (mods : mods ) (ceks : ceks) = { ctx with types = TBindings.add id (CtxType (tq,typ,mods,ceks)) ctx.types }
 
@@ -81,7 +80,7 @@ let list_to_map ls = List.fold_left (fun y (k,(ks,t)) -> TBindings.add (implode 
                               
 let convert_pos (p : Lexing.position) = Pos_ext (convert_to_isa  p.pos_fname, Z.of_int p.pos_lnum, Z.of_int  p.pos_bol, Z.of_int p.pos_cnum, ())
 
-
+let is_enum ctx id = ESet.mem id ctx.enums
                                                          
 let convert_loc (l : A.l) = match l with
   | P.Range (p1,p2) -> Loc_range (convert_pos p1, convert_pos p2)
@@ -127,8 +126,8 @@ let to_ms_lit (A.L_aux (l,loc)) = match l with
   | L_real r -> L_real (convert_to_isa r)
 
 let to_ms_lit_v (A.L_aux (l,loc)) = match l with
-  | L_hex s -> V_vec (List.map (fun l -> V_lit l) (hex_to_bv (explode s)))
-  | L_bin bs -> (V_vec (List.map (fun b -> if b = '0' then (V_lit L_zero) else (V_lit L_one)) (explode bs)))
+  | L_hex s -> V_lit (L_bitvec ((hex_to_bv (explode s))))
+  | L_bin bs -> V_lit (L_bitvec (List.map (fun b -> if b = '0' then L_zero else L_one ) (explode bs)))
   | _ -> V_lit (to_ms_lit (A.L_aux (l,loc)))
                         
 (* Convert from atyp to constraint expression *)
@@ -149,106 +148,6 @@ let base_of (T_refined_type (_,b,c)) = b
 
                     
                               
-let rec to_ms_typ_schm ctx (A.TypSchm_aux (TypSchm_ts (tq, typ),_)) =
-  let (ctx,tq) = to_ms_typquant ctx tq
-  in (ctx,tq, to_ms_typ ctx typ)
-                              
-                                                               
-
-(* Return list of variables and associated types corresponding to quantifier.
-Work through quant items, if we hit a Q_id, add to var list with top constraint, if a constraint, then make this the
-  constraint for the last var *)
-
-                                                
-and  to_ms_typquant (ctx : 'a ctx ) ( (A.TypQ_aux (tq,loc)) : A.typquant) =
-  let rec convert_qis qis kids = match qis with
-      [] -> kids
-     | (x::xs) -> match x with
-                    (A.QI_aux (QI_constraint nc,_)) -> let c = to_ms_constraint ctx nc in
-                                                  let fv = fvs_cp c in
-                                                  let kd = List.map fst kids in 
-                                                  let fv = List.filter (fun v -> not (List.mem v kd)) fv in
-                                                  let fv = List.map (fun v -> (v,(B_int, C_true))) fv in
-                                                  let kids = fv@kids in 
-                                                  (match kids with
-                                                  | (x, (b,c' ))::ks -> convert_qis xs ((x,(b,C_conj (c,c')))::ks)
-                                                  | [] -> raise (Failure "to_ms_typquant Constraint with no kid"))
-                  | (QI_aux (QI_id kid,_)) -> let (k,b) = to_ms_kind kid in
-                                              convert_qis xs ((VNamed (convert_to_isa k),
-                                                               (b, C_true)) :: kids)
-                  | (QI_aux (QI_constant [kid],_)) -> let (k,b) = to_ms_kind kid in
-                                              convert_qis xs ((VNamed (convert_to_isa k),
-                                                               (b, C_true)) :: kids)
-                  | _ -> raise (Failure ("to_ms_typquant. pattern fail loc=" ^ (pp_location loc)))
-
-  in match tq with
-       TypQ_no_forall -> (ctx,[])
-     | TypQ_tq qis ->
-        let ctx = List.fold_left (fun ctx qi -> match qi with
-                                                | (A.QI_aux (QI_id (KOpt_aux(kid, loc)),_)) ->
-                                                   (match kid with
-                                                      KOpt_kind (kind,(Kid_aux (Var kid,_))) ->
-                                                      { ctx with kinds = KBindings.add kid kind  ctx.kinds }
-                                                   ) 
-                                                | _ -> ctx ) ctx qis
-        in (ctx,convert_qis qis [])
-
-let to_ms_fun loc (ctx : 'a ctx ) (kids : (xp*(bp*cp)) list) (tin : A.typ) (tout : A.typ) =
-  List.iter (fun ((VNamed x,(b,c))) -> Printf.eprintf "k=%s\n" x;
-                                       pp_line (pp_bp b)) kids;
-  let kids = List.filter (fun (x,(b,c)) -> match b with
-                                           | B_int -> true
-                                           | B_bool -> true
-                                           | _ -> false) kids in
-  let c = match kids with
-    | ((_,(_,c))::_) -> c
-    | _ -> C_true in
-  let kids = List.map (fun (x,(b,c)) -> (x,b)) kids in
-  (*  let kids = List.map (fun (VNamed x,_) -> VNamed x) kids in*)
-  let (tin,ceks) = to_ms_exist_many_aux ctx loc kids c tin in
-  let T_refined_type (z,bout, cout ) = to_ms_typ ctx tout in
-  let ceks = List.map (fun (k,ce) -> (k,subst_cep (V_var xvar) zvar ce)) ceks in
-  Printf.eprintf "ceks are:\n";
-  List.iter (fun (VNamed k,ce) -> Printf.eprintf "%s\n" k; pp_line (pp_cep ce)) ceks;
-  let cout = replace_ks_in_c ceks cout in
-  let tout = T_refined_type(z,bout,cout) in
-  Printf.eprintf "convert_fn tin= "; pp_line (pp_tp tin);
-  Printf.eprintf "convert_fn tout= "; pp_line (pp_tp tout);
-  let ceks = List.map (fun (VNamed x, cep) -> (Some x, cep)) ceks in
-  (b_of tin, subst_cp (V_var xvar) zvar (c_of tin), tout,ceks)
-
-(* Merge with to_ms_typ_schem *)
-
-
-let convert_tq_typ ctx loc tq typ = match typ with
-  | A.Typ_aux (Typ_fn (tin,tout,teff),_) ->
-     Printf.eprintf "convert fun %s\n (pp_location loc)";
-     let (ctx,kids) = to_ms_typquant ctx tq in
-     let tin = (match tin with
-                | [tin] -> tin
-                | _ -> A.Typ_aux (Typ_tup tin,loc)) in
-     (*
-     let (T_refined_type (in_kids,in_z,b,c)) = to_ms_typ ctx tin in
-     PPrintEngine.ToChannel.compact stderr (Minisailplus_pp.pp_cm c);
-     let tout = to_ms_typ ctx tout in
-     (kids@in_kids, b, c, tout)
-     *)
-     let (b,c,tout,ceks) = to_ms_fun loc ctx kids tin tout in
-     ([],b,c,tout,ceks)
-  | A.Typ_aux (Typ_bidir _, _) ->
-     raise (NotSupported ("Typ_bidir loc=" ^ (pp_location loc)))
-  | _ -> Printf.eprintf "Unknown type scheme pattern %s\n" (pp_location loc);
-         Printf.eprintf "%s\n"  (Ast.show_typ typ);
-         raise (Failure "Unknown type scheme")
-
-let to_ms_typschm ( ctx : 'a ctx ) (A.TypSchm_aux (TypSchm_ts (tq, typ),loc)) = convert_tq_typ ctx loc tq typ
-                                  
-let convert_tannot ctx typ = match typ with
-  | A.Typ_annot_opt_aux (Typ_annot_opt_some (tq,typ), loc ) ->
-     let (kids,b,c,tout,ceks) = convert_tq_typ ctx loc tq typ in
-     (*     let (ctx,c) = to_ms_typquant ctx tq*)
-     Some (ctx,C_true, A_function(xvar, b, c , tout ))
-  | A.Typ_annot_opt_aux (Typ_annot_opt_none,_)  -> None
 
 let to_ms_op op = match op with
     "+" -> Plus
@@ -322,7 +221,10 @@ and  to_ms_pat (ctx : 'a ctx) (A.P_aux (pat, (loc,_)) as full_pat : 'a A.pat ) :
                           Pp_typ (convert_loc loc, t,(to_ms_pat ctx pat))
   | P_id (Id_aux (Id id,_)) ->
      Printf.eprintf "Got a P_id %s\n" id;
-     Pp_id (convert_loc loc, (convert_to_isa id))
+     if is_enum ctx id then
+       Pp_app (convert_loc loc, convert_to_isa id, [ Pp_lit (convert_loc loc, L_unit) ] )
+     else
+       Pp_id (convert_loc loc, (convert_to_isa id))
   | P_var ( P_aux ( P_id (Id_aux (Id id,_ )),_) , typ) ->
      Printf.eprintf "Got a P_var. Treating as id %s\n" id;
      Pp_id (convert_loc loc, (convert_to_isa id))
@@ -409,7 +311,7 @@ and  to_ms_e_aux ( ctx : 'a ctx ) ( exp : 'a A.exp_aux) ( loc : P.l )  =
   | E_vector_subrange (e1,e2,e3) -> convert_builtin ctx "vector_subrange" [e1;e2;e3] loc
   | E_vector_update (e1,e2,e3) -> convert_builtin ctx "vector_update" [e1;e2;e3] loc
   | E_vector_update_subrange (e1,e2,e3,e4) -> convert_builtin ctx "vector_update" [e1;e2;e3;e4] loc
-  | E_field ( A.E_aux(v,_) , Id_aux (Id id, loc)) -> Ep_proj (lc,convert_to_isa id, to_ms_e_aux ctx v loc )
+  | E_field ( A.E_aux(v,_) , Id_aux (Id id, loc)) -> Ep_field_access (lc, to_ms_e_aux ctx v loc,convert_to_isa id )
 
   | E_record fexps -> Ep_record (lc, List.map (fun e -> convert_fexp_e ctx loc e ) fexps)
   | E_cast (typ,exp) -> Ep_cast (lc, to_ms_typ ctx typ, to_ms_e ctx exp)
@@ -462,7 +364,10 @@ and  to_ms_e_aux ( ctx : 'a ctx ) ( exp : 'a A.exp_aux) ( loc : P.l )  =
   | E_assert (e1,e2) -> Ep_assert( convert_loc loc, to_ms_e ctx e1, to_ms_e ctx e2)
   | E_id (Id_aux (Id x, loc)) -> if ESet.mem (convert_to_isa x) ctx.mvars then
                                    Ep_mvar (convert_loc loc, convert_to_isa x)
-                                 else (Ep_val (lc,to_ms_v exp loc))
+                                 else if is_enum ctx x then
+                                   (Ep_app (lc, VNamed x , Ep_val (lc, (V_lit L_unit))))
+                                 else
+                                   (Ep_val (lc,to_ms_v exp loc))
 
   | E_try (exp, pexps) -> Ep_try (convert_loc loc, to_ms_e ctx exp , List.map (to_ms_pexp ctx) pexps  )
 
@@ -688,7 +593,7 @@ let to_ms_scattered ctx ( sd : 'a A.scattered_def_aux) loc =
     Printf.eprintf "Not supported (%s) \n" s;
     (ctx,None)
 
-
+let add_enums ctx id_list = { ctx with  enums = List.fold_left (fun st x -> ESet.add  (convert_id x) st ) ctx.enums id_list }
                                       
 let to_ms_typedef (ctx : 'a ctx )  (A.TD_aux (aux,(l,_)) : 'a A.type_def) =
   let lc = convert_loc l in 
@@ -729,6 +634,7 @@ let to_ms_typedef (ctx : 'a ctx )  (A.TD_aux (aux,(l,_)) : 'a A.type_def) =
        
   | A.TD_enum (Id_aux (Id id,_), id_list , _) ->
      let variant = List.fold_left (fun var x -> TBindings.add (up_id x) (to_ms_typ ctx (Typ_aux (Typ_id (mk_id "unit"),l ))) var) TBindings.empty id_list in
+     let ctx = add_enums ctx id_list in 
      let variant = to_ms_variant_typ id variant                              
      in (add_abbrev ctx id [] variant [] [] , Some (DEFp_typedef (lc, convert_to_isa id,[],variant)))
 
@@ -829,7 +735,8 @@ let to_ms_def ctx def =
   try
     to_ms_def_aux ctx def
   with NotSupported s ->
-    Printf.eprintf "DEF form not supported (%s) \n" (Ast.show_def (fun fmt _ -> Format.pp_print_text fmt "(.)" ) def);
+    Printf.eprintf "DEF form not supported (%s) \n" ;
+    Pretty_print_sail.pp_defs stderr (Defs [def]); (*Ast.show_def (fun fmt _ -> Format.pp_print_text fmt "(.)" ) def);*)
     (ctx,None)
                                   
 let append_some xs x = match x with
