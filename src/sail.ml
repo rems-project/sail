@@ -185,6 +185,9 @@ let options = Arg.align ([
   ( "-c",
     Arg.Tuple [set_target "c"; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
+  ( "-c2",
+    Arg.Tuple [set_target "c2"; Arg.Set Initial_check.opt_undefined_gen],
+    " output a C translated version of the input");
   ( "-c_include",
     Arg.String (fun i -> opt_includes_c := i::!opt_includes_c),
     "<filename> provide additional include for C output");
@@ -304,7 +307,7 @@ let options = Arg.align ([
     Arg.Clear opt_memo_z3,
     " do not memoize calls to z3 (default)");
   ( "-memo",
-    Arg.Tuple [Arg.Set opt_memo_z3; Arg.Set C_backend.opt_memo_cache],
+    Arg.Tuple [Arg.Set opt_memo_z3; Arg.Set Jib_compile.opt_memo_cache],
     " memoize calls to z3, and intermediate compilation results");
   ( "-have_feature",
     Arg.String (fun symbol -> opt_have_feature := Some symbol),
@@ -474,6 +477,27 @@ let target name out_name ast type_envs =
      flush output_chan;
      if close then close_out output_chan else ()
 
+  | Some "c2" ->
+     let module StringMap = Map.Make(String) in
+     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
+     let ast_c, type_envs =
+       if !opt_specialize_c then
+         Specialize.(specialize_passes 2 int_specialization type_envs ast_c)
+       else
+         ast_c, type_envs
+     in
+     let output_name = match !opt_file_out with Some f -> f | None -> "out" in
+     Reporting.opt_warnings := true;
+     let codegen ctx cdefs =
+       let module Codegen =
+         C_codegen.Make(
+             struct let opts = C_codegen.default_options cdefs end
+           )
+       in
+       Codegen.emulator ctx output_name cdefs
+     in
+     C_backend.compile_ast_clib type_envs ast_c codegen;
+ 
   | Some "ir" ->
      let ast_c, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
      (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in *)

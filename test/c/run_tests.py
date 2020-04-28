@@ -32,6 +32,27 @@ def test_c(name, c_opts, sail_opts, valgrind):
         results.collect(tests)
     return results.finish()
 
+def test_c2(name, c_opts, sail_opts, valgrind):
+    banner('Testing {} with C (-c2) options: {} Sail options: {} valgrind: {}'.format(name, c_opts, sail_opts, valgrind))
+    results = Results(name)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
+            basename = os.path.splitext(os.path.basename(filename))[0]
+            tests[filename] = os.fork()
+            if tests[filename] == 0:
+                step('sail -no_warn -c2 {} {} -o {}'.format(sail_opts, filename, basename))
+                step('gcc {} {}.c {}_emu.c {}/lib/*.c -lgmp -lz -I {}/lib -o {}'.format(c_opts, basename, basename, sail_dir, sail_dir, basename))
+                step('./{} 1> {}.result'.format(basename, basename), expected_status = 1 if basename == "exception" else 0)
+                step('diff {}.result {}.expect'.format(basename, basename))
+                if valgrind:
+                    step("valgrind --leak-check=full --track-origins=yes --errors-for-leak-kinds=all --error-exitcode=2 ./{}".format(basename), expected_status = 1 if basename == "exception" else 0)
+                step('rm {}.c {} {}.result'.format(basename, basename, basename))
+                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                sys.exit()
+        results.collect(tests)
+    return results.finish()
+
 def test_interpreter(name):
     banner('Testing {}'.format(name))
     results = Results(name)
@@ -94,16 +115,17 @@ def test_lem(name):
 
 xml = '<testsuites>\n'
 
-xml += test_c('unoptimized C', '', '', True)
-xml += test_c('optimized C', '-O2', '-O', True)
-xml += test_c('constant folding', '', '-Oconstant_fold', True)
-xml += test_c('monomorphised C', '-O2', '-O -Oconstant_fold -auto_mono', True)
-xml += test_c('specialization', '-O1', '-O -c_specialize', True)
-xml += test_c('undefined behavior sanitised', '-O2 -fsanitize=undefined', '-O', False)
+xml += test_c2('unoptimized C', '', '', True)
+#xml += test_c('unoptimized C', '', '', True)
+#xml += test_c('optimized C', '-O2', '-O', True)
+#xml += test_c('constant folding', '', '-Oconstant_fold', True)
+#xml += test_c('monomorphised C', '-O2', '-O -Oconstant_fold -auto_mono', True)
+#xml += test_c('specialization', '-O1', '-O -c_specialize', True)
+#xml += test_c('undefined behavior sanitised', '-O2 -fsanitize=undefined', '-O', False)
 
-xml += test_interpreter('interpreter')
+#xml += test_interpreter('interpreter')
 
-xml += test_ocaml('OCaml')
+#xml += test_ocaml('OCaml')
 
 #xml += test_lem('lem')
 

@@ -1,12 +1,13 @@
-#pragma once
+#ifndef SAIL_H
+#define SAIL_H
 
-#include<inttypes.h>
-#include<stdlib.h>
-#include<stdio.h>
-#include<stdbool.h>
-#include<gmp.h>
+#include <inttypes.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include <gmp.h>
 
-#include<time.h>
+#include <time.h>
 
 static inline void *sail_malloc(size_t size)
 {
@@ -440,3 +441,5 @@ void get_time_ns(sail_int*, const unit);
 /* ***** ARM optimisations ***** */
 
 void arm_align(lbits *, const lbits, const sail_int);
+
+#endif

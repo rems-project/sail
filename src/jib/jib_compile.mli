@@ -65,7 +65,16 @@ val optimize_aarch64_fast_struct : bool ref
    useful for debugging C but we want to turn it off for SMT generation
    where we can't use strings *)
 val opt_track_throw : bool ref
- 
+
+(** (WIP) [opt_memo_cache] will store the compiled function
+   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
+   of the original function to be compiled. Enabled using the -memo
+   flag. Uses Marshal so it's quite picky about the exact version of
+   the Sail version. This cache can obviously become stale if the Sail
+   changes - it'll load an old version compiled without said
+   changes. *)
+val opt_memo_cache : bool ref
+  
 (** {2 Jib context} *)
 
 (** Dynamic context for compiling Sail to Jib. We need to pass a

@@ -76,6 +76,7 @@ let optimize_unit instrs =
   in
   let non_pointless_copy (I_aux (aux, annot)) =
     match aux with
+    | I_decl (CT_unit, _) -> false
     | I_copy (CL_void, _) -> false
     | _ -> true
   in
@@ -245,6 +246,7 @@ let rec find_function fid = function
 
 let ssa_name i = function
   | Name (id, _) -> Name (id, i)
+  | Global (id, _) -> Global (id, i)
   | Have_exception _ -> Have_exception i
   | Current_exception _ -> Current_exception i
   | Throw_location _ -> Throw_location i

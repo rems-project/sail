@@ -88,15 +88,6 @@ val opt_prefix : string ref
 val opt_extra_params : string option ref
 val opt_extra_arguments : string option ref
 
-(** (WIP) [opt_memo_cache] will store the compiled function
-   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
-   of the original function to be compiled. Enabled using the -memo
-   flag. Uses Marshal so it's quite picky about the exact version of
-   the Sail version. This cache can obviously become stale if the C
-   backend changes - it'll load an old version compiled without said
-   changes. *)
-val opt_memo_cache : bool ref
-
 (** Optimization flags *)
 
 val optimize_primops : bool ref
@@ -108,3 +99,6 @@ val optimize_fixed_bits : bool ref
 
 val jib_of_ast : Env.t -> tannot Ast.defs -> cdef list * Jib_compile.ctx
 val compile_ast : Env.t -> out_channel -> string list -> tannot Ast.defs -> unit
+
+val jib_of_ast_clib : Env.t -> tannot Ast.defs -> cdef list * Jib_compile.ctx
+val compile_ast_clib : Env.t -> tannot Ast.defs -> (Jib_compile.ctx -> cdef list -> unit) -> unit

@@ -190,6 +190,12 @@ let rec chunkify n xs =
   | xs, [] -> [xs]
   | xs, ys -> xs :: chunkify n ys
 
+let name_or_global ctx id =
+  if Env.is_register id ctx.local_env || IdSet.mem id (Env.get_toplevel_lets ctx.local_env) then
+    global id
+  else
+    name id
+ 
 let rec compile_aval l ctx = function
   | AV_cval (cval, typ) ->
      let ctyp = cval_ctyp cval in
@@ -201,13 +207,11 @@ let rec compile_aval l ctx = function
        [], cval, []
 
   | AV_id (id, typ) ->
-     begin
-       try
-         let _, ctyp = Bindings.find id ctx.locals in
-         [], V_id (name id, ctyp), []
-       with
-       | Not_found ->
-          [], V_id (name id, ctyp_of_typ ctx (lvar_typ typ)), []
+     begin match Bindings.find_opt id ctx.locals with
+     | Some (_, ctyp) ->
+        [], V_id (name id, ctyp), []
+     | None ->
+        [], V_id (name_or_global ctx id, ctyp_of_typ ctx (lvar_typ typ)), []
      end
 
   | AV_ref (id, typ) ->
@@ -520,7 +524,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
 
   | AP_global (pid, typ) ->
      let global_ctyp = ctyp_of_typ ctx typ in
-     [icopy l (CL_id (name pid, global_ctyp)) cval], [], ctx
+     [icopy l (CL_id (global pid, global_ctyp)) cval], [], ctx
 
   | AP_id (pid, _) when is_ct_enum ctyp ->
      begin match Env.lookup_id pid ctx.tc_env with
@@ -778,7 +782,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let compile_fields (field_id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup
-       @ [icopy l (CL_field (CL_id (name id, ctyp_of_typ ctx typ), (field_id, []))) cval]
+       @ [icopy l (CL_field (CL_id (name_or_global ctx id, ctyp_of_typ ctx typ), (field_id, []))) cval]
        @ field_cleanup
      in
      List.concat (List.map compile_fields (Bindings.bindings fields)),
@@ -792,7 +796,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        | None -> ctyp_of_typ ctx assign_typ
      in
      let setup, call, cleanup = compile_aexp ctx aexp in
-     setup @ [call (CL_id (name id, assign_ctyp))], (fun clexp -> icopy l clexp unit_cval), cleanup
+     setup @ [call (CL_id (name_or_global ctx id, assign_ctyp))], (fun clexp -> icopy l clexp unit_cval), cleanup
 
   | AE_write_ref (id, assign_typ, aexp) ->
      let assign_ctyp =
@@ -801,7 +805,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        | None -> ctyp_of_typ ctx assign_typ
      in
      let setup, call, cleanup = compile_aexp ctx aexp in
-     setup @ [call (CL_addr (CL_id (name id, assign_ctyp)))], (fun clexp -> icopy l clexp unit_cval), cleanup
+     setup @ [call (CL_addr (CL_id (name_or_global ctx id, assign_ctyp)))], (fun clexp -> icopy l clexp unit_cval), cleanup
 
   | AE_block (aexps, aexp, _) ->
      let block = compile_block ctx aexps in
@@ -1302,7 +1306,7 @@ and compile_def' n total ctx = function
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
      let aexp = C.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
-     let instrs = setup @ [call (CL_id (name id, ctyp_of_typ ctx typ))] @ cleanup in
+     let instrs = setup @ [call (CL_id (global id, ctyp_of_typ ctx typ))] @ cleanup in
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, instrs)], ctx
 
   | DEF_reg_dec (DEC_aux (_, (l, _))) ->
