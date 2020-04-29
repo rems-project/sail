@@ -1147,7 +1147,9 @@ let split_defs target all_errors splits env defs =
          List.map (fun fcl' -> SD_aux (SD_funcl fcl', annot)) (map_funcl fcl)
       | _ -> [sd]
     in
-    let map_def d =
+    let num_defs = List.length defs in
+    let map_def idx d =
+      Util.progress "Monomorphising " (string_of_int idx ^ "/" ^ string_of_int num_defs) idx num_defs;
       match d with
       | DEF_type _
       | DEF_spec _
@@ -1168,10 +1170,11 @@ let split_defs target all_errors splits env defs =
          Reporting.unreachable (id_loc id) __POS__
            "Loop termination measures should have been rewritten before now"
     in
-    Defs (List.concat (List.map map_def defs))
+    Defs (List.concat (List.mapi map_def defs))
   in
-  let defs'' = map_locs splits defs' in
-  !no_errors_happened, defs''
+  let (Defs defs'') = map_locs splits defs' in
+  Util.progress "Monomorphising " "done" (List.length defs'') (List.length defs'');
+  !no_errors_happened, (Defs defs'')
 
 
 
@@ -2725,11 +2728,17 @@ let argset_to_list splits =
   List.map argelt l
 
 let analyse_defs debug env (Defs defs) =
-  let def (globals,r) d =
+  let def (idx,globals,r) d =
+    begin match d with
+      | DEF_fundef fd ->
+         Util.progress "Analysing " (string_of_id (id_of_fundef fd)) idx (List.length defs)
+      | _ -> ()
+    end;
     let globals,r' = analyse_def debug env globals d in
-    globals, merge r r'
+    idx + 1, globals, merge r r'
   in
-  let _,r = List.fold_left def (Bindings.empty,empty) defs in
+  let _,_,r = List.fold_left def (0,Bindings.empty,empty) defs in
+  let _ = Util.progress "Analysing " "done" (List.length defs) (List.length defs) in
 
   (* Resolve the interprocedural dependencies *)
 
@@ -3770,13 +3779,15 @@ let add_bitvector_casts global_env (Defs defs) =
     let pexp = construct_pexp (pat,guard,body,annot) in
     FCL_aux (FCL_Funcl (id,pexp),fcl_ann)
   in
-  let rewrite_def = function
-    | DEF_fundef (FD_aux (FD_function (r,t,e,fcls),fd_ann)) ->
+  let rewrite_def idx = function
+    | DEF_fundef (FD_aux (FD_function (r,t,e,fcls),fd_ann) as fd) ->
+       Util.progress "Adding casts " (string_of_id (id_of_fundef fd)) idx (List.length defs);
        DEF_fundef (FD_aux (FD_function (r,t,e,List.map rewrite_funcl fcls),fd_ann))
     | d -> d
   in
   specs_required := IdSet.empty;
-  let defs = List.map rewrite_def defs in
+  let defs = List.mapi rewrite_def defs in
+  let _ = Util.progress "Adding casts " "done" (List.length defs) (List.length defs) in
   let l = Generated Unknown in
   let Defs cast_specs,_ =
     (* TODO: use default/relevant order *)
