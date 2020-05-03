@@ -1,15 +1,11 @@
 (* 
-    Convert from Sail AST to MiniSail AST (the AST as generated from Ott via Isabelle).
-
-    See sail_to_ms.txt for notes on what this does
+    Convert from Sail AST to MiniSail AST (the later generated from Ott via Isabelle).
 
     Follows outline of sail/initial_check.ml 
 
-    Possibly making more work for myself here than necessary.
-
     Attempt to get the balance on the path from AST to type checking, where the work is done.
     Convert_ast is doing more work than normal; but this enables a more cleaner
-    type checker and since as the tc is generated from inductive rules, cleaner, more mathematical rules. 
+    type checker and since the tc is generated from inductive rules, cleaner, more mathematical rules. 
 
     Differences between Sail and MiniSail AST
       In Sail, expressions in constraints use different datatypes than expressions in statements. In
@@ -27,7 +23,13 @@
    A number of well-formedness conditions are checked for / required:
         Conversion to Nexp. Nexp_id and Nexp_app are not handled   
         Conversion from n_constraint. var and app not handled
- *)
+
+   We maintain a context of Sail bindings etc. that is threaded through the conversion. See Convert_typ.ctx
+	
+   Note that this conversion is polymorphic in the annotation on the Sail AST. It doesn't need
+   type information on the Sail AST.
+   
+*)
 
 open PPrintEngine
 open PPrintCombinators
@@ -37,11 +39,10 @@ module P = Parse_ast
              
 open Util
 open Util_ms
-(*open Util2*)
 open Ast_walker
        
-open Msp_ast.SyntaxVCT  (* Mini Sail AST as obtain from Isabelle *)
-open Msp_ast.SyntaxPED  (* Mini Sail AST as obtain from Isabelle *)
+open Msp_ast.SyntaxVCT  (* Mini Sail AST from Isabelle *)
+open Msp_ast.SyntaxPED  (* Mini Sail AST from Isabelle *)
 open Msp_ast.Location
 open Msp_ast.Contexts
 open Minisailplus_pp
@@ -53,17 +54,12 @@ let add_abbrev ctx id tq typ (mods : mods ) (ceks : ceks) = { ctx with types = T
 
 let add_kind ctx id tq ce (mods : mods) ( ceks : ceks ) = { ctx with kind_abbrev = KABindings.add id (CtxKind (tq,ce, mods, ceks)) ctx.kind_abbrev }
                                                               
-(*val to_ms_e : ctx -> unit A.exp -> e
-val to_ms_e_aux : ctx -> unit A.exp -> P.l -> e*)
-
 let fresh_cnt = ref 0
 
 let fresh_var _ = let x = (VNamed ("xxx" ^ (string_of_int !fresh_cnt))) in
                   fresh_cnt :=  !fresh_cnt + 1;
                   x
                             
-(*type env_entry = EType of ((x* (b*c)) list) * tau | EFun of ( ((x* (b*c)) list) *  b * c * tau)*)
-
 let print_tenv ctx = Printf.eprintf "print_tenv\n";
                       TBindings.iter (fun k e -> Printf.eprintf "k=<%s>\n" k) ctx.types
                                               
@@ -73,11 +69,7 @@ let rec unzip xs = match xs with
 
                                                  
 let list_to_map ls = List.fold_left (fun y (k,(ks,t)) -> TBindings.add (implode k)  (ks,t) y ) TBindings.empty ls
-
-                                 
-(*let nat_of_sint i = Arith.Nat (Big_int.big_int_of_string (string_of_int i))*)
-
-                              
+                                
 let convert_pos (p : Lexing.position) = Pos_ext (convert_to_isa  p.pos_fname, Z.of_int p.pos_lnum, Z.of_int  p.pos_bol, Z.of_int p.pos_cnum, ())
 
 let is_enum ctx id = ESet.mem id ctx.enums
@@ -85,8 +77,7 @@ let is_enum ctx id = ESet.mem id ctx.enums
 let convert_loc (l : A.l) = match l with
   | P.Range (p1,p2) -> Loc_range (convert_pos p1, convert_pos p2)
   | _ -> Loc_unknown
-                                 
-                           
+                                                            
 let convert_id id = match id with
     A.Id_aux (Id id , _ ) -> convert_to_isa id
     | Id_aux (Operator id , _ ) -> convert_to_isa id
@@ -96,9 +87,18 @@ let mk_id x = A.Id_aux (Id x , Unknown)
 let up_id id = match id with
     A.Id_aux (Id id , _ ) -> id
   | Id_aux (Operator id , _ ) -> id
-    
-                       
 
+let hex_to_bv_str (s : char list) =
+  String.concat "" (List.concat
+    ( List.map (fun c ->
+          let c = Scanf.sscanf (implode [c]) "%x%!" (fun x -> x) in
+          [
+            if (c / 8) mod 2 = 0 then "0" else "1";
+            if (c / 4) mod 2 = 0 then "0" else "1";
+            if (c / 2) mod 2 = 0 then "0" else "1";
+            if c mod 2 = 0 then "0" else "1"
+          ]) s))
+                               
 let hex_to_bv (s : char list) =
   List.concat
     ( List.map (fun c ->
@@ -109,9 +109,7 @@ let hex_to_bv (s : char list) =
             if (c / 2) mod 2 = 0 then L_zero else L_one;
             if c mod 2 = 0 then L_zero else L_one
           ]) s)
-                                 
-
-                        
+                                                        
 let to_ms_lit (A.L_aux (l,loc)) = match l with
   | L_unit -> L_unit
   | L_zero -> L_zero
@@ -119,15 +117,15 @@ let to_ms_lit (A.L_aux (l,loc)) = match l with
   | L_true -> L_true
   | L_false -> L_false
   | L_num n -> L_num ( n ) (*(Nat_big_num.to_int n)))*)
-  | L_hex s -> L_bitvec (hex_to_bv (explode s))
-  | L_bin bs -> (L_bitvec (List.map (fun b -> if b = '0' then L_zero else L_one) (explode bs)))
+  | L_hex s -> L_bin ((hex_to_bv_str (explode s)))
+  | L_bin bs -> (L_bin bs) (*c (List.map (fun b -> if b = '0' then L_zero else L_one) (explode bs)))*)
   | L_undef -> L_undef
   | L_string s -> L_string (convert_to_isa s)
   | L_real r -> L_real (convert_to_isa r)
 
 let to_ms_lit_v (A.L_aux (l,loc)) = match l with
-  | L_hex s -> V_lit (L_bitvec ((hex_to_bv (explode s))))
-  | L_bin bs -> V_lit (L_bitvec (List.map (fun b -> if b = '0' then L_zero else L_one ) (explode bs)))
+  | L_hex s -> V_lit (L_bin ((hex_to_bv_str (explode s))))
+  | L_bin bs -> V_lit (L_bin bs) 
   | _ -> V_lit (to_ms_lit (A.L_aux (l,loc)))
                         
 (* Convert from atyp to constraint expression *)
@@ -143,12 +141,8 @@ let invert_bop bop = match bop with
   Any use of div as an inversion of times needs to be recorded to that we can generate a mod expression for it.
 *)
 
-
 let base_of (T_refined_type (_,b,c)) = b
-
-                    
-                              
-
+                                                  
 let to_ms_op op = match op with
     "+" -> Plus
   | "<=" -> LEq
@@ -178,7 +172,7 @@ and  to_ms_v ( exp : 'a A.exp_aux) loc : vp =
   | E_tuple args -> V_tuple (List.map (fun (A.E_aux(e,(l,_))) -> to_ms_v e l ) args)
   | E_record fexps -> V_record (List.map (convert_fexp loc) fexps)
 
-(*  | E_block [E_aux (exp1,_); E_aux (exp2,_) ] -> let v1 = to_ms_v exp1 loc in  (* Terrible hack. Seems like record constructors are not E_record *)
+(* | E_block [E_aux (exp1,_); E_aux (exp2,_) ] -> let v1 = to_ms_v exp1 loc in  (* Terrible hack. Seems like record constructors are not E_record *)
                                                  let v2 = to_ms_v exp2 loc in
                                                     V_pair (v1,v2)*)
   (*  | E_app _ -> raise (Failure ("Trying to process an App  as a value loc=" ^ (pp_location loc)))*)
@@ -199,51 +193,56 @@ and  to_ms_v ( exp : 'a A.exp_aux) loc : vp =
 let tick_var ( s : string ): bool = match (explode s) with
     [] -> false
   | x::xs -> (x = (Char.chr(96)))
+
+
+let convert_loc_pair (loc : Convert_typ.A.l) : Msp_ast.Location.loc * tau option = (convert_loc loc, None )          
                
 (* Converts the <pat> as <typ> construct *)
 let rec to_ms_pat_as_typ ( ctx : 'a ctx)  (pat : 'a A.pat) (A.Typ_aux (typ,loc) as full_typ) = match typ with
   | Typ_id (Id_aux (Id id,_)) -> if (tick_var id) then
-                                    Pp_as_typ( convert_loc loc, to_ms_pat ctx pat,
+                                    Pp_as_typ( convert_loc_pair loc , to_ms_pat ctx pat,
                                                    T_refined_type(zvar, B_int, c_eq_x (VNamed (convert_to_isa id)) zvar))
                                   else
-                                    Pp_as_var( convert_loc loc, to_ms_pat ctx pat,
+                                    Pp_as_var( convert_loc_pair loc , to_ms_pat ctx pat,
                                       VNamed (convert_to_isa id))
                                                      
-  | _ -> Pp_as_typ (convert_loc loc, to_ms_pat ctx pat, to_ms_typ ctx full_typ)
+  | _ -> Pp_as_typ (convert_loc_pair loc, to_ms_pat ctx pat, to_ms_typ ctx full_typ)
 
-and  to_ms_pat (ctx : 'a ctx) (A.P_aux (pat, (loc,_)) as full_pat : 'a A.pat ) : patp = match pat with
-  | P_lit l -> Pp_lit (convert_loc loc, to_ms_lit l)
-  | P_wild -> Pp_wild (convert_loc loc)
+and  to_ms_pat (ctx : 'a ctx) (A.P_aux (pat, (loc,_)) as full_pat : 'a A.pat ) : (tau option) patp =
+  let loc_ms = convert_loc_pair loc in
+  match pat with
+  | P_lit l -> Pp_lit (loc_ms, to_ms_lit l)
+  | P_wild -> Pp_wild ( loc_ms)
   | P_or _ -> raise (Failure ("to_ms_pat Or patterns not handled " ^ (pp_location loc)))
   | P_not _ -> raise (Failure ("to_ms_pat Not patterns not handled " ^ (pp_location loc)))
   | P_as _ -> raise (Failure ("to_ms_pat As patterns not handled " ^ (pp_location loc)))
   | (P_typ (typ, pat)) -> let t = to_ms_typ ctx typ in
-                          Pp_typ (convert_loc loc, t,(to_ms_pat ctx pat))
+                          Pp_typ ( loc_ms, t,(to_ms_pat ctx pat))
   | P_id (Id_aux (Id id,_)) ->
      Printf.eprintf "Got a P_id %s\n" id;
      if is_enum ctx id then
-       Pp_app (convert_loc loc, convert_to_isa id, [ Pp_lit (convert_loc loc, L_unit) ] )
+       Pp_app ( loc_ms, convert_to_isa id, [ Pp_lit ( loc_ms, L_unit) ] )
      else
-       Pp_id (convert_loc loc, (convert_to_isa id))
+       Pp_id ( loc_ms, (convert_to_isa id))
   | P_var ( P_aux ( P_id (Id_aux (Id id,_ )),_) , typ) ->
      Printf.eprintf "Got a P_var. Treating as id %s\n" id;
-     Pp_id (convert_loc loc, (convert_to_isa id))
+     Pp_id ( loc_ms, (convert_to_isa id))
 (*  | (P_app (Id_aux (Id id,_), [parg] )) -> let p = to_ms_pat ctx parg in
-                                           Pp_app (convert_loc loc, id, p)*)
+                                           Pp_app ( loc_ms, id, p)*)
   | (P_app (Id_aux (Id id,_), pargs )) -> let ps = List.map (to_ms_pat ctx) pargs  in
                                           Printf.eprintf "to_ms_pat P_app %s\n" id;
-                                          (Pp_app (convert_loc loc, (convert_to_isa id), ps))
-(*  | (P_record (ps,b )) -> Pp_record(convert_loc loc ,
+                                          (Pp_app ( loc_ms, (convert_to_isa id), ps))
+(*  | (P_record (ps,b )) -> Pp_record( loc ,
                                        List.map (fun (A.FP_aux (FP_Fpat (Id_aux(Id f, _),p),_)) -> (convert_to_isa f,to_ms_pat ctx p)) ps )*)
   | (P_vector pats ) -> let ps  = List.map (to_ms_pat ctx) pats  in
-                              Pp_vector (convert_loc loc, ps)
+                              Pp_vector ( loc_ms, ps)
   | (P_vector_concat pats) -> let ps  = List.map (to_ms_pat ctx) pats  in
-                              Pp_vector_concat (convert_loc loc, ps)
+                              Pp_vector_concat ( loc_ms, ps)
   | (P_tup pats) -> let ps = List.map (to_ms_pat ctx) pats in
-                    Pp_tup (convert_loc loc, ps)
-  | (P_list ps ) -> Pp_list (convert_loc loc, List.map (fun x -> to_ms_pat ctx x) ps)
-  | (P_cons (p1,p2) ) -> Pp_cons (convert_loc loc, to_ms_pat ctx p1, to_ms_pat ctx p2)
-  | (P_string_append ps ) -> Pp_string_append (convert_loc loc, List.map (fun x -> to_ms_pat ctx x) ps)
+                    Pp_tup ( loc_ms, ps)
+  | (P_list ps ) -> Pp_list ( loc_ms, List.map (fun x -> to_ms_pat ctx x) ps)
+  | (P_cons (p1,p2) ) -> Pp_cons ( loc_ms, to_ms_pat ctx p1, to_ms_pat ctx p2)
+  | (P_string_append ps ) -> Pp_string_append ( loc_ms, List.map (fun x -> to_ms_pat ctx x) ps)
 
                
 and to_ms_letbind (ctx : 'a ctx) lb = match lb with
@@ -259,8 +258,10 @@ and to_ms_letbind (ctx : 'a ctx) lb = match lb with
  *)
 (*and convert_id (A.E_aux (E_id (Id_aux (Id x , _)),_)) = x*)
 
-and convert_builtin ctx f elist loc = let e = Ep_tuple (Loc_unknown, List.map (fun (A.E_aux (exp,_) as exp_full) -> to_ms_e ctx exp_full ) elist) in
-                                   Ep_app (Loc_unknown, VNamed (convert_to_isa f), e )
+and convert_builtin ctx f elist loc =
+  let e =
+    Ep_tuple ( (Loc_unknown, None) , List.map (fun (A.E_aux (exp,_) as exp_full) -> to_ms_e ctx exp_full ) elist) in
+  Ep_app ( (Loc_unknown,None), VNamed (convert_to_isa f), e )
 
 and convert_fexp_e ctx (loc : A.l) (A.FE_aux (FE_Fexp ( Id_aux (Id id,_) , E_aux( exp, _ ) ), _)) =  (convert_to_isa id , to_ms_e_aux ctx exp loc  )
                                          
@@ -269,10 +270,10 @@ and convert_fexp_e ctx (loc : A.l) (A.FE_aux (FE_Fexp ( Id_aux (Id id,_) , E_aux
 
 and convert_id_e ctx loc x = Ep_val (loc, V_var (x))
 
-and to_ms_e ( ctx : 'a ctx ) ((A.E_aux (exp,(loc,_))) : 'a A.exp ) : ep = to_ms_e_aux ctx exp loc           
+and to_ms_e ( ctx : 'a ctx ) ((A.E_aux (exp,(loc,_))) : 'a A.exp ) : (tau option ) ep = to_ms_e_aux ctx exp loc           
 
 and convert_lexp ctx (A.LEXP_aux (lexp, (loc1,_))) =
-  let loc = convert_loc loc1 in
+  let loc = convert_loc_pair loc1 in
   match lexp with
     LEXP_cast (typ, x) -> ([ convert_id x ] , LEXPp_cast (loc, to_ms_typ ctx typ, (convert_id x)))
   | LEXP_id x -> ([ convert_id x ], LEXPp_mvar (loc, convert_id x))
@@ -290,10 +291,11 @@ and convert_lexp ctx (A.LEXP_aux (lexp, (loc1,_))) =
 
 
                
-and  to_ms_e_aux ( ctx : 'a ctx ) ( exp : 'a A.exp_aux) ( loc : P.l )  = 
-  let lc = convert_loc loc in
+and  to_ms_e_aux ( ctx : 'a ctx ) ( exp : 'a A.exp_aux) ( loc : P.l ) : ( tau option ) ep = 
+  let lc = convert_loc_pair loc in
   match exp with
-  | A.E_app (Id_aux (Id "add_int",_), [ E_aux (arg1,_); E_aux (arg2,_)]) ->  (Ep_bop (lc,Plus, to_ms_e_aux ctx arg1 loc,to_ms_e_aux ctx arg2 loc))
+  | A.E_app (Id_aux (Id "add_int",_), [ E_aux (arg1,_); E_aux (arg2,_)]) ->
+     (Ep_bop (lc,Plus, to_ms_e_aux ctx arg1 loc,to_ms_e_aux ctx arg2 loc))
 
   | E_app (Id_aux (Id "add_range",_), [ E_aux (arg1,_); E_aux (arg2,_)]) ->
       (Ep_bop (lc,Plus , to_ms_e_aux ctx  arg1 loc, to_ms_e_aux ctx arg2 loc))
@@ -326,7 +328,7 @@ and  to_ms_e_aux ( ctx : 'a ctx ) ( exp : 'a A.exp_aux) ( loc : P.l )  =
   | E_if ( (A.E_aux (e1,_)) , e2 ,e3 ) -> (Ep_if (lc,to_ms_e_aux ctx  e1 loc, to_ms_e ctx e2, to_ms_e ctx e3))
   | E_case (e,pexp_list) -> Ep_case (lc,to_ms_e ctx e , List.map (fun pexp -> to_ms_pexp ctx pexp) pexp_list)
   | E_assign ( lexp, e ) -> let (_, lexp ) = convert_lexp ctx lexp in
-                            Ep_assign (lc, lexp , to_ms_e ctx e , Ep_val (lc,V_lit L_unit))
+                            Ep_assign (lc, lexp , to_ms_e ctx e ) (*, Ep_val (lc,V_lit L_unit))*)
   | E_throw exp -> Ep_throw (lc,to_ms_e ctx exp)
 
 (*  | E_assign (LEXP_aux (LEXP_cast (typ, x) , _), e2) ->
@@ -344,32 +346,32 @@ and  to_ms_e_aux ( ctx : 'a ctx ) ( exp : 'a A.exp_aux) ( loc : P.l )  =
      let e1 = to_ms_e ctx e1 in
      let e2 = to_ms_e ctx e2 in
      let e3 = to_ms_e ctx e3 in
-     S_exp (convert_loc loc, E_app ( convert_loc loc, VNamed (convert_to_isa "vector_update"), E_tuple (convert_loc loc, [e1;e2;e3])))
+     S_exp (convert_loc_pair loc, E_app ( convert_loc_pair loc, VNamed (convert_to_isa "vector_update"), E_tuple (convert_loc_pair loc, [e1;e2;e3])))
   | E_assign (E_aux (E_app (Id_aux (Id f,_), e_list ),_),e) ->
               let e = Ep_tuple (lc,List.map (fun (A.E_aux (exp,_)) -> to_ms_e_aux ctx exp loc) (e_list @ [e])) in
               S_exp(lc,Ep_app (lc,VNamed (convert_to_isa f), e ))*)
 
   | E_block es -> convert_block ctx loc es 
-  | E_loop ( While, _ , e1 , e2) -> Ep_loop(convert_loc loc, While , to_ms_e ctx e1, to_ms_e ctx e2)
-  | E_loop ( Until, _ , e1 , e2) -> Ep_loop(convert_loc loc, Until , to_ms_e ctx e1, to_ms_e ctx e2)
-  | E_for (Id_aux (Id lid,_), e1, e2 , e3 , inc_dec, e4 ) -> Ep_for(convert_loc loc,  (convert_to_isa lid),
+  | E_loop ( While, _ , e1 , e2) -> Ep_loop(convert_loc_pair loc, While , to_ms_e ctx e1, to_ms_e ctx e2)
+  | E_loop ( Until, _ , e1 , e2) -> Ep_loop(convert_loc_pair loc, Until , to_ms_e ctx e1, to_ms_e ctx e2)
+  | E_for (Id_aux (Id lid,_), e1, e2 , e3 , inc_dec, e4 ) -> Ep_for(convert_loc_pair loc,  (convert_to_isa lid),
                                                                    to_ms_e ctx e1, to_ms_e ctx e2, to_ms_e ctx e3,
                                                                    (match inc_dec with
                                                                      (A.Ord_aux (A.Ord_inc,_)) -> Ord_inc
                                                                    | (A.Ord_aux (A.Ord_dec,_)) -> Ord_dec),
                                                                    to_ms_e ctx e4)
 
-  | E_return e -> Ep_return (convert_loc loc, to_ms_e ctx e)
-  | E_exit e -> Ep_exit  (convert_loc loc, to_ms_e ctx e)
-  | E_assert (e1,e2) -> Ep_assert( convert_loc loc, to_ms_e ctx e1, to_ms_e ctx e2)
+  | E_return e -> Ep_return (convert_loc_pair loc, to_ms_e ctx e)
+  | E_exit e -> Ep_exit  (convert_loc_pair loc, to_ms_e ctx e)
+  | E_assert (e1,e2) -> Ep_assert( convert_loc_pair loc, to_ms_e ctx e1, to_ms_e ctx e2)
   | E_id (Id_aux (Id x, loc)) -> if ESet.mem (convert_to_isa x) ctx.mvars then
-                                   Ep_mvar (convert_loc loc, convert_to_isa x)
+                                   Ep_mvar (convert_loc_pair loc, convert_to_isa x)
                                  else if is_enum ctx x then
                                    (Ep_app (lc, VNamed x , Ep_val (lc, (V_lit L_unit))))
                                  else
                                    (Ep_val (lc,to_ms_v exp loc))
 
-  | E_try (exp, pexps) -> Ep_try (convert_loc loc, to_ms_e ctx exp , List.map (to_ms_pexp ctx) pexps  )
+  | E_try (exp, pexps) -> Ep_try (convert_loc_pair loc, to_ms_e ctx exp , List.map (to_ms_pexp ctx) pexps  )
 
   | _ -> (Ep_val (lc,to_ms_v exp loc))
 
@@ -378,16 +380,17 @@ and  to_ms_e_aux ( ctx : 'a ctx ) ( exp : 'a A.exp_aux) ( loc : P.l )  =
 
 
 
-and to_ms_pexp ctx (A.Pat_aux (p,loc)) =
+and to_ms_pexp ctx (A.Pat_aux (p,(loc,_))) =
+  let loc_ms = convert_loc_pair loc in
   match p with
-    Pat_exp (pat,exp) -> PEXPp_exp( to_ms_pat ctx pat, to_ms_e ctx exp)
-  | Pat_when (pat,exp1,exp2) -> PEXPp_when ( to_ms_pat ctx pat, to_ms_e ctx exp1, to_ms_e ctx exp2)
+    Pat_exp (pat,exp) -> PEXPp_exp(loc_ms, to_ms_pat ctx pat, to_ms_e ctx exp)
+  | Pat_when (pat,exp1,exp2) -> PEXPp_when (loc_ms, to_ms_pat ctx pat, to_ms_e ctx exp1, to_ms_e ctx exp2)
                                    
 and check_record ctx es =
   Printf.eprintf "check_record\n";
   try 
     let fids_expr = List.map (fun (A.E_aux (E_app_infix (E_aux (E_id (Id_aux (Id fid,_)),_),  Id_aux (Id "=",_), E_aux (e,(loc,_))) , _ )) -> (convert_to_isa fid, to_ms_v e loc)) es
-    in  Some (Ep_val (Loc_unknown,V_record (fids_expr)))
+    in  Some (Ep_val ( (Loc_unknown,()) ,V_record (fids_expr)))
   with Match_failure _ -> None     
 
 (*
@@ -400,18 +403,21 @@ and to_ms_eeq ctx ss = Ep_block (Loc_unknown, List.map (to_ms_e ctx) ss)
 
 and add_mvars ctx mvars = { ctx with mvars = List.fold_left (fun mvars s -> ESet.add s mvars) ctx.mvars mvars }
                             
-and  convert_block ( ctx : 'a ctx ) ( loc : A.l) (exps : ('a A.exp) list) : ep = match exps with
-  | (A.E_aux (E_assign (lexp,e), (loc,_))) :: exps -> (match exps with
-                                                         [] -> let (_, lexp) = convert_lexp ctx lexp in
-                                                               Ep_assign (convert_loc loc, lexp , to_ms_e ctx e, Ep_val (convert_loc loc, V_lit L_unit))
-                                                       | _ -> let (mvars,lexp) = convert_lexp ctx lexp in
-                                                              let ctx' = add_mvars ctx mvars in 
-                                                              Ep_assign (convert_loc loc, lexp, to_ms_e ctx e, convert_block ctx' loc exps))
-  | exps -> Ep_block (convert_loc loc, List.map (to_ms_e ctx ) exps )
+and  convert_block ( ctx : 'a ctx ) ( loc : A.l) (exps : ('a A.exp) list) : 'b  ep =
+  let ms_loc = convert_loc_pair loc in
+  match exps with
+  | (A.E_aux (E_assign (lexp,e), (loc,_))) :: exps -> (
+    match exps with
+    |  [] -> let (_, lexp) = convert_lexp ctx lexp in
+             Ep_assign (ms_loc, lexp , to_ms_e ctx e)
+    | _ -> let (mvars,lexp) = convert_lexp ctx lexp in
+           let ctx' = add_mvars ctx mvars in 
+           Ep_var (ms_loc, lexp, to_ms_e ctx e, convert_block ctx' loc exps))
+  | exps -> Ep_block (ms_loc, List.map (to_ms_e ctx ) exps )
 
-let to_ms_funcl_pexp (ctx : 'a ctx ) (A.Pat_aux (Pat_exp ( pat,exp), (loc,_)) : 'a A.pexp ) : pexpp = 
-      let lc = convert_loc loc in 
-      let pexp = PEXPp_exp (to_ms_pat ctx pat, to_ms_e ctx exp)
+let to_ms_funcl_pexp (ctx : 'a ctx ) (A.Pat_aux (Pat_exp ( pat,exp), (loc,_)) : 'a A.pexp ) : 'b pexpp = 
+      let lc = convert_loc_pair loc in 
+      let pexp = PEXPp_exp (lc,to_ms_pat ctx pat, to_ms_e ctx exp)
       in Msp_ast.SyntaxUtils.freshen_pexpp [] pexp
 
 
@@ -426,9 +432,9 @@ let function_name funcl = match funcl with
   | (A.FCL_aux (FCL_Funcl (Id_aux (Operator f,_), _),_)) -> f
 
                                                               
-let to_ms_funcl (ctx : 'a ctx ) (funcl : 'a A.funcl ) : funclp = match funcl with
+let to_ms_funcl (ctx : 'a ctx ) (funcl : 'a A.funcl ) : 'b funclp = match funcl with
     A.FCL_aux (A.FCL_Funcl ((Id_aux (_,_)), pexp ), (loc,_)) ->
-       FCLp_funcl (convert_loc loc, convert_to_isa (function_name funcl), to_ms_funcl_pexp ctx pexp)
+       FCLp_funcl (convert_loc_pair loc, convert_to_isa (function_name funcl), to_ms_funcl_pexp ctx pexp)
 
 
 let to_ms_variant_typ name t : tau = let ls = TBindings.fold (fun k v l -> ( (convert_to_isa k,v)::l) ) t []
@@ -437,15 +443,15 @@ let to_ms_variant_typ name t : tau = let ls = TBindings.fold (fun k v l -> ( (co
 (* Convert pattern and also return its type; this is needed for functions with complex args ie
    where the top level pattern constructor is not P_typ
    We can't use this for all cases as ... *)
-let rec to_ms_pat_and_typ ctx (A.P_aux (pat,(loc,_))) : tau * patp =
-  let lc = convert_loc loc in
+let rec to_ms_pat_and_typ ctx (A.P_aux (pat,(loc,_))) : tau * 'b patp =
+  let lc = convert_loc_pair loc in
   match pat with    
   | (P_typ (typ, pat)) -> let t = to_ms_typ ctx typ in
                           (t, Pp_typ (lc,t,(to_ms_pat ctx pat)))
   | (P_tup pats) -> let (ts , ps ) = List.map (to_ms_pat_and_typ ctx) pats |> unzip in
                     let (bs,c) = normalise_tlist ts in 
-                    (T_refined_type (zvar,B_tuple bs, c), Pp_tup (convert_loc loc, ps))                      
-  | P_lit l  -> (T_refined_type (zvar,B_unit,C_true), Pp_lit (convert_loc loc, to_ms_lit l)) 
+                    (T_refined_type (zvar,B_tuple bs, c), Pp_tup (lc, ps))                      
+  | P_lit l  -> (T_refined_type (zvar,B_unit,C_true), Pp_lit (lc, to_ms_lit l)) 
   | _ -> raise (Failure ("Unknown pat " ^ (pp_location loc)))
                
 (*and to_ms_pat_raw ctx (A.P_aux (pat,loc)) = match pat with
@@ -478,7 +484,7 @@ let to_ms_end_scattered id ctx  =
   if ESet.mem id ctx.ended then
     None
   else
-     let lc = Loc_unknown in
+     let lc = (Loc_unknown,None) in
      match TBindings.find_opt id ctx.types with
        Some (CtxType (xbc,t,_,_)) ->
         PPrintEngine.ToChannel.compact stderr (string "Ending scattered type " ^^ pp_tp t);
@@ -487,7 +493,7 @@ let to_ms_end_scattered id ctx  =
                 | None -> None
                 | Some (ks,b,c,ret,ceks) ->
                    let (_, cls ) = SBindings.find id ctx.scattereds  in
-                   let cls = List.map (fun (c,e) -> let p = to_ms_pat ctx c in FCLp_funcl (lc,id, PEXPp_exp (p, to_ms_e ctx e))) cls in
+                   let cls = List.map (fun (c,e) -> let p = to_ms_pat ctx c in FCLp_funcl (lc,id, PEXPp_exp (lc,p, to_ms_e ctx e))) cls in
                    Some (DEFp_fundef (lc, 
                                      A_function (xvar,b, c, ret ), cls))
                )
@@ -551,22 +557,23 @@ let to_ms_scattered_old ctx sd loc   =
  | SD_mapcl _  -> raise (Failure ("to_ms_scattered SD_mapcl " ^ (pp_location loc)))
  *)
            
-let to_ms_scattered_aux ctx ( sd : 'a A.scattered_def_aux) loc   = 
-                                    match sd with
+let to_ms_scattered_aux ctx ( sd : 'a A.scattered_def_aux) loc   =
+  let ms_loc = convert_loc_pair loc in
+  match sd with
  |  (A.SD_function (rc,typ,eff, (Id_aux (Id id,_)))) ->
     (match convert_tannot ctx typ with
-       Some (ctx,kids,t) ->  (ctx,(SDp_function (convert_loc loc, Typ_annot_opt_psome_fn  (convert_loc loc, t) , convert_to_isa id)))
-     | None ->  (ctx,(SDp_function (convert_loc loc, Typ_annot_opt_pnone (convert_loc loc) ,  convert_to_isa id))))
+       Some (ctx,kids,t) ->  (ctx,(SDp_function (ms_loc, Typ_annot_opt_psome_fn  (ms_loc, t) , convert_to_isa id)))
+     | None ->  (ctx,(SDp_function (ms_loc, Typ_annot_opt_pnone (ms_loc) ,  convert_to_isa id))))
       
  | (SD_funcl (FCL_aux (FCL_Funcl (Id_aux (Id id,_),Pat_aux (Pat_exp (pat,expr), _)),_))) ->
-    (ctx,(SDp_funclp (convert_loc loc, FCLp_funcl (convert_loc loc, convert_to_isa id, PEXPp_exp (to_ms_pat ctx pat, to_ms_e ctx expr)))))
+    (ctx,(SDp_funclp (ms_loc, FCLp_funcl (ms_loc, convert_to_isa id, PEXPp_exp (ms_loc,to_ms_pat ctx pat, to_ms_e ctx expr)))))
 
  | SD_variant (Id_aux (Id id, _), typ_quant) -> 
     let (ctx,typq) = to_ms_typquant ctx typ_quant in
     let t = T_refined_type(zvar, B_union (convert_to_isa id, []), C_true) in
     Printf.eprintf "Adding scattered variant %s\n" id;
     let ctx = add_abbrev ctx id typq t [] []  in
-    (ctx,SDp_variant (convert_loc loc, convert_to_isa id, typq))
+    (ctx,SDp_variant (ms_loc, convert_to_isa id, typq))
 
  | (SD_unioncl (Id_aux (Id id, _), type_union)) ->
     Printf.eprintf "Adding union cl %s %s \n" id (pp_location loc);
@@ -577,18 +584,19 @@ let to_ms_scattered_aux ctx ( sd : 'a A.scattered_def_aux) loc   =
           (A.Tu_aux (Tu_ty_id (t,Id_aux (Id ctor,_)),_)) ->
              let t = to_ms_typ ctx t in 
              let ctx = add_abbrev ctx id kvars (T_refined_type(zvar,B_union (isa_id, vs@[(convert_to_isa ctor, t)]), c)) [] [] in
-             (ctx,SDp_unioncl (convert_loc loc, convert_to_isa id, convert_to_isa ctor, t))))
+             (ctx,SDp_unioncl (ms_loc, convert_to_isa id, convert_to_isa ctor, t))))
     
- | (SD_end (Id_aux (Id id,_))) -> (ctx,(SDp_end (convert_loc loc, convert_to_isa id)))
+ | (SD_end (Id_aux (Id id,_))) -> (ctx,(SDp_end (ms_loc, convert_to_isa id)))
            
  | SD_funcl _  -> raise (Failure ("to_ms_scattered SD_funcl unknown form " ^ (pp_location loc)))
  | SD_mapping _  -> raise (Failure ("to_ms_scattered SD_mapping " ^ (pp_location loc)))
  | SD_mapcl _  -> raise (Failure ("to_ms_scattered SD_mapcl " ^ (pp_location loc)))
 
 let to_ms_scattered ctx ( sd : 'a A.scattered_def_aux) loc =
+  let ms_loc = convert_loc_pair loc in 
   try 
     let (ctx,sd) = to_ms_scattered_aux ctx sd loc
-    in (ctx, Some (DEFp_scattered (convert_loc loc, sd)))
+    in (ctx, Some (DEFp_scattered (ms_loc, sd)))
   with NotSupported s ->
     Printf.eprintf "Not supported (%s) \n" s;
     (ctx,None)
@@ -596,7 +604,7 @@ let to_ms_scattered ctx ( sd : 'a A.scattered_def_aux) loc =
 let add_enums ctx id_list = { ctx with  enums = List.fold_left (fun st x -> ESet.add  (convert_id x) st ) ctx.enums id_list }
                                       
 let to_ms_typedef (ctx : 'a ctx )  (A.TD_aux (aux,(l,_)) : 'a A.type_def) =
-  let lc = convert_loc l in 
+  let lc = convert_loc_pair l in 
   match aux with 
   | A.TD_variant (  Id_aux ((Id id), _ ), typq, typ_union , _) ->
      let (local_ctx, typq) = to_ms_typquant ctx typq in 
@@ -651,8 +659,8 @@ let add_kids ctx loc kids = List.fold_left (fun ctx (VNamed x,(b,c)) ->
                             | B_var _ -> { ctx with kinds = KBindings.add x (A.K_aux (K_type, loc)) ctx.kinds }
                             | B_bool -> { ctx with kinds = KBindings.add x (A.K_aux (K_order, loc)) ctx.kinds }) ctx kids
                 
-let to_ms_def_aux (ctx : 'a ctx) ( d : 'a A.def ) : ('a ctx * def option) =
-  let lc = Loc_unknown in
+let to_ms_def_aux (ctx : 'a ctx) ( d : 'a A.def ) : ('a ctx * 'b defp option) =
+  let lc = (Loc_unknown,None) in
 
   match d with
   (*    A.DEF_kind (KD_aux (_, (loc,_))) -> raise (Failure ("Kind def not supported" ^ (pp_location loc)))*)
@@ -669,7 +677,7 @@ let to_ms_def_aux (ctx : 'a ctx) ( d : 'a A.def ) : ('a ctx * def option) =
      let funcls = List.map (to_ms_funcl local_ctx) funcls in
      let ceks = List.map (fun (Some x, ce) -> (VNamed x,ce)) ceks in
      let funcls = List.map (replace_ks_in_funcl ceks) funcls in
-     (ctx, Some (DEFp_fundef  (convert_loc loc, fun_t ,funcls)))
+     (ctx, Some (DEFp_fundef  (lc, fun_t ,funcls)))
 
 (* Some confusion on why this needed. Sail TC seems put the correct type as a val spec so no need to try and work
 it out here       
@@ -690,7 +698,7 @@ it out here
   | DEF_val lb  ->
      let (pat,exp,(loc,_),_) = to_ms_letbind ctx lb in (ctx, Some (
                                                                (DEFp_val 
-                                                                  (convert_loc loc, (LBp_val (convert_loc loc, pat , exp ))))))
+                                                                  (lc, (LBp_val (lc, pat , exp ))))))
 
   | DEF_overload ( fid ,fidlist) ->
      (ctx,Some (DEFp_overload (lc,convert_id fid,List.map convert_id fidlist)))
@@ -703,7 +711,7 @@ it out here
       let id = (match id with Id x -> x | Operator x -> x) in
       let ((kids,b,c,t,ceks) as ftype) = to_ms_typschm ctx ts in 
       let ctx = { ctx with funs = FBindings.add id ftype ctx.funs } in
-      (ctx, Some (DEFp_spec (convert_loc loc,  (convert_to_isa id),
+      (ctx, Some (DEFp_spec (lc,  (convert_to_isa id),
                             A_function(xvar, b , c , t ))))
     with InvertFail -> 
           Printf.eprintf "Warning: Could not process DEF_spec at %s. Inversion failed\n" (pp_location loc);
@@ -719,12 +727,12 @@ it out here
  *)                                                  
  | DEF_spec (VS_aux (_, (loc,_))) -> raise (Failure ("General DEF_spec not supported" ^ (pp_location loc)))
                        
- | DEF_default (DT_aux( DT_order (Ord_aux(Ord_inc,_)),loc)) -> (ctx,Some (DEFp_default (convert_loc loc, Ord_inc)))
- | DEF_default (DT_aux( DT_order (Ord_aux(Ord_dec,_)),loc)) -> (ctx,Some (DEFp_default (convert_loc loc, Ord_dec)))
+ | DEF_default (DT_aux( DT_order (Ord_aux(Ord_inc,_)),loc)) -> (ctx,Some (DEFp_default (lc, Ord_inc)))
+ | DEF_default (DT_aux( DT_order (Ord_aux(Ord_dec,_)),loc)) -> (ctx,Some (DEFp_default (lc, Ord_dec)))
 
  | DEF_scattered (SD_aux (sd, loc)) -> (ctx,None)
                       
- | DEF_reg_dec (DEC_aux (DEC_reg (_ , _ , typ, Id_aux (Id id, _)),(loc,_))) -> (ctx, Some (DEFp_reg (convert_loc loc,to_ms_typ ctx typ, VNamed (convert_to_isa id))))
+ | DEF_reg_dec (DEC_aux (DEC_reg (_ , _ , typ, Id_aux (Id id, _)),(loc,_))) -> (ctx, Some (DEFp_reg (lc,to_ms_typ ctx typ, VNamed (convert_to_isa id))))
  | DEF_reg_dec _ -> raise (Failure "Unknown reg_dec form")
                             
  | DEF_pragma (s1,s2,loc) -> raise (Failure ("Pragma def not supported " ^ (pp_location loc) ^ " " ^ s1 ^ " " ^ s2))
@@ -744,29 +752,32 @@ let append_some xs x = match x with
   | None -> xs
                                
            
-let convert_ast ((A.Defs sail_defs) : 'a A.defs ) : progp =
+let convert_ast ((A.Defs sail_defs) : 'a A.defs ) : 'b progp =
 
           
-  (* Process type defs first. Some may be scattered *)
+  (* Process type defs first. Some may be scattered so we gather then up first *)
   let (ctx,defs) = List.fold_left (fun (ctx,y) x ->
                               match x with
                               | A.DEF_type _ -> let (ctx,x) = to_ms_def ctx x in (ctx, append_some y x )
                               | A.DEF_scattered (SD_aux (sd,(loc,_))) when is_union_sd sd -> let (ctx,x) = to_ms_scattered ctx sd loc  in (ctx,append_some y x)
+                              | A.DEF_scattered (SD_aux (sd,(loc,_))) when is_fun_sd sd -> let (ctx,x) = to_ms_scattered ctx sd loc  in (ctx,append_some y x)
                               | _ -> (ctx,y))
                             (initial_ctx,[]) sail_defs in
 
   let (ctx,defs) = List.fold_left (fun (ctx,y) x ->
                               match x with
-                              (*                              | A.DEF_type _ -> let (ctx,x) = to_ms_def ctx x in (ctx, append_some y x )*)
                               | A.DEF_scattered (SD_aux (sd,(loc,_))) when is_fun_sd sd -> let (ctx,x) = to_ms_scattered ctx sd loc  in (ctx,append_some y x)
                               | A.DEF_scattered (SD_aux (sd,(loc,_))) when is_union_sd sd -> let (_,x) = to_ms_scattered ctx sd loc  in (ctx,append_some y x) (* Why is this repeated? *)
                               | _ -> let (ctx,x) = to_ms_def ctx x in (ctx,append_some y x))
                             ( { initial_ctx with types = ctx.types; ended = ctx.ended },[]) sail_defs in
-  
-  let wlk = { visit_def = None; visit_b = Some (fun b -> match b with
+
+  (* Resolve all type references to actual type *)
+  let wlk = { visit_def = None;
+              visit_b = Some (fun b -> match b with
                         B_tid s -> let CtxType (_,T_refined_type (_,b,c),_,_) = TBindings.find ( s) ctx.types
                                    in (c,b)
                       | _ -> (C_true,b))
             } in
   let defs = List.map (def_walk wlk) defs in
-  Pp_prog defs
+  
+  Pp_prog ((Loc_unknown,None),defs)

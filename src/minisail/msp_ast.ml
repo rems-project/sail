@@ -1479,6 +1479,7 @@ module Stringa : sig
   val char_of_integer : Z.t -> char
   val explode : string -> char list
   val equal_char : char -> char -> bool
+  val size_literal : string -> Arith.nat
 end = struct
 
 let equal_literal =
@@ -1557,6 +1558,8 @@ let rec equal_char
                 (Product_Type.equal_boola x7 y7 &&
                   Product_Type.equal_boola x8 y8))))));;
 
+let rec size_literal xa = Lista.size_list (explode xa);;
+
 end;; (*struct Stringa*)
 
 module SyntaxVCT : sig
@@ -1568,9 +1571,9 @@ module SyntaxVCT : sig
     Or | NEq
   val equal_bop : bop -> bop -> bool
   type lit = L_unit | L_zero | L_one | L_true | L_false | L_num of Z.t |
-    L_bitvec of lit list | L_string of string | L_undef | L_real of string
+    L_hex of string | L_bin of string | L_string of string | L_undef |
+    L_real of string
   val equal_lita : lit -> lit -> bool
-  val equal_lit : lit HOL.equal
   type vp = V_lit of lit | V_var of xp | V_vec of vp list | V_list of vp list |
     V_cons of vp * vp | V_constr of string * vp | V_record of (string * vp) list
     | V_tuple of vp list | V_proj of string * vp
@@ -1578,7 +1581,7 @@ module SyntaxVCT : sig
   val equal_vp : vp HOL.equal
   type cep = CE_val of vp | CE_bop of bop * cep * cep | CE_many_plus of cep list
     | CE_uop of uop * cep | CE_proj of string * cep |
-    CE_field_access of vp * string
+    CE_field_access of vp * string | CE_len of vp
   val equal_cepa : cep -> cep -> bool
   val equal_cep : cep HOL.equal
   type cp = C_true | C_false | C_conj of cp * cp | C_conj_many of cp list |
@@ -1601,7 +1604,7 @@ module SyntaxVCT : sig
   val equal_apa : ap -> ap -> bool
   val equal_ap : ap HOL.equal
   val equal_xp : xp HOL.equal
-  type bsub = BS_empty | BS_cons of bsub * bp * string
+  val equal_lit : lit HOL.equal
 end = struct
 
 type xp = VNamed of string | VIndex;;
@@ -1813,111 +1816,130 @@ let rec equal_bop x0 x1 = match x0, x1 with Or, NEq -> false
                     | Plus, Plus -> true;;
 
 type lit = L_unit | L_zero | L_one | L_true | L_false | L_num of Z.t |
-  L_bitvec of lit list | L_string of string | L_undef | L_real of string;;
+  L_hex of string | L_bin of string | L_string of string | L_undef |
+  L_real of string;;
 
-let rec equal_lita
-  x0 x1 = match x0, x1 with L_undef, L_real x10 -> false
-    | L_real x10, L_undef -> false
-    | L_string x8, L_real x10 -> false
-    | L_real x10, L_string x8 -> false
-    | L_string x8, L_undef -> false
-    | L_undef, L_string x8 -> false
-    | L_bitvec x7, L_real x10 -> false
-    | L_real x10, L_bitvec x7 -> false
-    | L_bitvec x7, L_undef -> false
-    | L_undef, L_bitvec x7 -> false
-    | L_bitvec x7, L_string x8 -> false
-    | L_string x8, L_bitvec x7 -> false
-    | L_num x6, L_real x10 -> false
-    | L_real x10, L_num x6 -> false
-    | L_num x6, L_undef -> false
-    | L_undef, L_num x6 -> false
-    | L_num x6, L_string x8 -> false
-    | L_string x8, L_num x6 -> false
-    | L_num x6, L_bitvec x7 -> false
-    | L_bitvec x7, L_num x6 -> false
-    | L_false, L_real x10 -> false
-    | L_real x10, L_false -> false
-    | L_false, L_undef -> false
-    | L_undef, L_false -> false
-    | L_false, L_string x8 -> false
-    | L_string x8, L_false -> false
-    | L_false, L_bitvec x7 -> false
-    | L_bitvec x7, L_false -> false
-    | L_false, L_num x6 -> false
-    | L_num x6, L_false -> false
-    | L_true, L_real x10 -> false
-    | L_real x10, L_true -> false
-    | L_true, L_undef -> false
-    | L_undef, L_true -> false
-    | L_true, L_string x8 -> false
-    | L_string x8, L_true -> false
-    | L_true, L_bitvec x7 -> false
-    | L_bitvec x7, L_true -> false
-    | L_true, L_num x6 -> false
-    | L_num x6, L_true -> false
-    | L_true, L_false -> false
-    | L_false, L_true -> false
-    | L_one, L_real x10 -> false
-    | L_real x10, L_one -> false
-    | L_one, L_undef -> false
-    | L_undef, L_one -> false
-    | L_one, L_string x8 -> false
-    | L_string x8, L_one -> false
-    | L_one, L_bitvec x7 -> false
-    | L_bitvec x7, L_one -> false
-    | L_one, L_num x6 -> false
-    | L_num x6, L_one -> false
-    | L_one, L_false -> false
-    | L_false, L_one -> false
-    | L_one, L_true -> false
-    | L_true, L_one -> false
-    | L_zero, L_real x10 -> false
-    | L_real x10, L_zero -> false
-    | L_zero, L_undef -> false
-    | L_undef, L_zero -> false
-    | L_zero, L_string x8 -> false
-    | L_string x8, L_zero -> false
-    | L_zero, L_bitvec x7 -> false
-    | L_bitvec x7, L_zero -> false
-    | L_zero, L_num x6 -> false
-    | L_num x6, L_zero -> false
-    | L_zero, L_false -> false
-    | L_false, L_zero -> false
-    | L_zero, L_true -> false
-    | L_true, L_zero -> false
-    | L_zero, L_one -> false
-    | L_one, L_zero -> false
-    | L_unit, L_real x10 -> false
-    | L_real x10, L_unit -> false
-    | L_unit, L_undef -> false
-    | L_undef, L_unit -> false
-    | L_unit, L_string x8 -> false
-    | L_string x8, L_unit -> false
-    | L_unit, L_bitvec x7 -> false
-    | L_bitvec x7, L_unit -> false
-    | L_unit, L_num x6 -> false
-    | L_num x6, L_unit -> false
-    | L_unit, L_false -> false
-    | L_false, L_unit -> false
-    | L_unit, L_true -> false
-    | L_true, L_unit -> false
-    | L_unit, L_one -> false
-    | L_one, L_unit -> false
-    | L_unit, L_zero -> false
-    | L_zero, L_unit -> false
-    | L_real x10, L_real y10 -> ((x10 : string) = y10)
-    | L_string x8, L_string y8 -> ((x8 : string) = y8)
-    | L_bitvec x7, L_bitvec y7 -> Lista.equal_lista (equal_lit ()) x7 y7
-    | L_num x6, L_num y6 -> Z.equal x6 y6
-    | L_undef, L_undef -> true
-    | L_false, L_false -> true
-    | L_true, L_true -> true
-    | L_one, L_one -> true
-    | L_zero, L_zero -> true
-    | L_unit, L_unit -> true
-and equal_lit () = ({HOL.equal = equal_lita} : lit HOL.equal);;
-let equal_lit = equal_lit ();;
+let rec equal_lita x0 x1 = match x0, x1 with L_undef, L_real x11 -> false
+                     | L_real x11, L_undef -> false
+                     | L_string x9, L_real x11 -> false
+                     | L_real x11, L_string x9 -> false
+                     | L_string x9, L_undef -> false
+                     | L_undef, L_string x9 -> false
+                     | L_bin x8, L_real x11 -> false
+                     | L_real x11, L_bin x8 -> false
+                     | L_bin x8, L_undef -> false
+                     | L_undef, L_bin x8 -> false
+                     | L_bin x8, L_string x9 -> false
+                     | L_string x9, L_bin x8 -> false
+                     | L_hex x7, L_real x11 -> false
+                     | L_real x11, L_hex x7 -> false
+                     | L_hex x7, L_undef -> false
+                     | L_undef, L_hex x7 -> false
+                     | L_hex x7, L_string x9 -> false
+                     | L_string x9, L_hex x7 -> false
+                     | L_hex x7, L_bin x8 -> false
+                     | L_bin x8, L_hex x7 -> false
+                     | L_num x6, L_real x11 -> false
+                     | L_real x11, L_num x6 -> false
+                     | L_num x6, L_undef -> false
+                     | L_undef, L_num x6 -> false
+                     | L_num x6, L_string x9 -> false
+                     | L_string x9, L_num x6 -> false
+                     | L_num x6, L_bin x8 -> false
+                     | L_bin x8, L_num x6 -> false
+                     | L_num x6, L_hex x7 -> false
+                     | L_hex x7, L_num x6 -> false
+                     | L_false, L_real x11 -> false
+                     | L_real x11, L_false -> false
+                     | L_false, L_undef -> false
+                     | L_undef, L_false -> false
+                     | L_false, L_string x9 -> false
+                     | L_string x9, L_false -> false
+                     | L_false, L_bin x8 -> false
+                     | L_bin x8, L_false -> false
+                     | L_false, L_hex x7 -> false
+                     | L_hex x7, L_false -> false
+                     | L_false, L_num x6 -> false
+                     | L_num x6, L_false -> false
+                     | L_true, L_real x11 -> false
+                     | L_real x11, L_true -> false
+                     | L_true, L_undef -> false
+                     | L_undef, L_true -> false
+                     | L_true, L_string x9 -> false
+                     | L_string x9, L_true -> false
+                     | L_true, L_bin x8 -> false
+                     | L_bin x8, L_true -> false
+                     | L_true, L_hex x7 -> false
+                     | L_hex x7, L_true -> false
+                     | L_true, L_num x6 -> false
+                     | L_num x6, L_true -> false
+                     | L_true, L_false -> false
+                     | L_false, L_true -> false
+                     | L_one, L_real x11 -> false
+                     | L_real x11, L_one -> false
+                     | L_one, L_undef -> false
+                     | L_undef, L_one -> false
+                     | L_one, L_string x9 -> false
+                     | L_string x9, L_one -> false
+                     | L_one, L_bin x8 -> false
+                     | L_bin x8, L_one -> false
+                     | L_one, L_hex x7 -> false
+                     | L_hex x7, L_one -> false
+                     | L_one, L_num x6 -> false
+                     | L_num x6, L_one -> false
+                     | L_one, L_false -> false
+                     | L_false, L_one -> false
+                     | L_one, L_true -> false
+                     | L_true, L_one -> false
+                     | L_zero, L_real x11 -> false
+                     | L_real x11, L_zero -> false
+                     | L_zero, L_undef -> false
+                     | L_undef, L_zero -> false
+                     | L_zero, L_string x9 -> false
+                     | L_string x9, L_zero -> false
+                     | L_zero, L_bin x8 -> false
+                     | L_bin x8, L_zero -> false
+                     | L_zero, L_hex x7 -> false
+                     | L_hex x7, L_zero -> false
+                     | L_zero, L_num x6 -> false
+                     | L_num x6, L_zero -> false
+                     | L_zero, L_false -> false
+                     | L_false, L_zero -> false
+                     | L_zero, L_true -> false
+                     | L_true, L_zero -> false
+                     | L_zero, L_one -> false
+                     | L_one, L_zero -> false
+                     | L_unit, L_real x11 -> false
+                     | L_real x11, L_unit -> false
+                     | L_unit, L_undef -> false
+                     | L_undef, L_unit -> false
+                     | L_unit, L_string x9 -> false
+                     | L_string x9, L_unit -> false
+                     | L_unit, L_bin x8 -> false
+                     | L_bin x8, L_unit -> false
+                     | L_unit, L_hex x7 -> false
+                     | L_hex x7, L_unit -> false
+                     | L_unit, L_num x6 -> false
+                     | L_num x6, L_unit -> false
+                     | L_unit, L_false -> false
+                     | L_false, L_unit -> false
+                     | L_unit, L_true -> false
+                     | L_true, L_unit -> false
+                     | L_unit, L_one -> false
+                     | L_one, L_unit -> false
+                     | L_unit, L_zero -> false
+                     | L_zero, L_unit -> false
+                     | L_real x11, L_real y11 -> ((x11 : string) = y11)
+                     | L_string x9, L_string y9 -> ((x9 : string) = y9)
+                     | L_bin x8, L_bin y8 -> ((x8 : string) = y8)
+                     | L_hex x7, L_hex y7 -> ((x7 : string) = y7)
+                     | L_num x6, L_num y6 -> Z.equal x6 y6
+                     | L_undef, L_undef -> true
+                     | L_false, L_false -> true
+                     | L_true, L_true -> true
+                     | L_one, L_one -> true
+                     | L_zero, L_zero -> true
+                     | L_unit, L_unit -> true;;
 
 type vp = V_lit of lit | V_var of xp | V_vec of vp list | V_list of vp list |
   V_cons of vp * vp | V_constr of string * vp | V_record of (string * vp) list |
@@ -2014,23 +2036,32 @@ and equal_vp () = ({HOL.equal = equal_vpa} : vp HOL.equal);;
 let equal_vp = equal_vp ();;
 
 type cep = CE_val of vp | CE_bop of bop * cep * cep | CE_many_plus of cep list |
-  CE_uop of uop * cep | CE_proj of string * cep |
-  CE_field_access of vp * string;;
+  CE_uop of uop * cep | CE_proj of string * cep | CE_field_access of vp * string
+  | CE_len of vp;;
 
 let rec equal_cepa
-  x0 x1 = match x0, x1 with
-    CE_proj (x51, x52), CE_field_access (x61, x62) -> false
+  x0 x1 = match x0, x1 with CE_field_access (x61, x62), CE_len x7 -> false
+    | CE_len x7, CE_field_access (x61, x62) -> false
+    | CE_proj (x51, x52), CE_len x7 -> false
+    | CE_len x7, CE_proj (x51, x52) -> false
+    | CE_proj (x51, x52), CE_field_access (x61, x62) -> false
     | CE_field_access (x61, x62), CE_proj (x51, x52) -> false
+    | CE_uop (x41, x42), CE_len x7 -> false
+    | CE_len x7, CE_uop (x41, x42) -> false
     | CE_uop (x41, x42), CE_field_access (x61, x62) -> false
     | CE_field_access (x61, x62), CE_uop (x41, x42) -> false
     | CE_uop (x41, x42), CE_proj (x51, x52) -> false
     | CE_proj (x51, x52), CE_uop (x41, x42) -> false
+    | CE_many_plus x3, CE_len x7 -> false
+    | CE_len x7, CE_many_plus x3 -> false
     | CE_many_plus x3, CE_field_access (x61, x62) -> false
     | CE_field_access (x61, x62), CE_many_plus x3 -> false
     | CE_many_plus x3, CE_proj (x51, x52) -> false
     | CE_proj (x51, x52), CE_many_plus x3 -> false
     | CE_many_plus x3, CE_uop (x41, x42) -> false
     | CE_uop (x41, x42), CE_many_plus x3 -> false
+    | CE_bop (x21, x22, x23), CE_len x7 -> false
+    | CE_len x7, CE_bop (x21, x22, x23) -> false
     | CE_bop (x21, x22, x23), CE_field_access (x61, x62) -> false
     | CE_field_access (x61, x62), CE_bop (x21, x22, x23) -> false
     | CE_bop (x21, x22, x23), CE_proj (x51, x52) -> false
@@ -2039,6 +2070,8 @@ let rec equal_cepa
     | CE_uop (x41, x42), CE_bop (x21, x22, x23) -> false
     | CE_bop (x21, x22, x23), CE_many_plus x3 -> false
     | CE_many_plus x3, CE_bop (x21, x22, x23) -> false
+    | CE_val x1, CE_len x7 -> false
+    | CE_len x7, CE_val x1 -> false
     | CE_val x1, CE_field_access (x61, x62) -> false
     | CE_field_access (x61, x62), CE_val x1 -> false
     | CE_val x1, CE_proj (x51, x52) -> false
@@ -2049,6 +2082,7 @@ let rec equal_cepa
     | CE_many_plus x3, CE_val x1 -> false
     | CE_val x1, CE_bop (x21, x22, x23) -> false
     | CE_bop (x21, x22, x23), CE_val x1 -> false
+    | CE_len x7, CE_len y7 -> equal_vpa x7 y7
     | CE_field_access (x61, x62), CE_field_access (y61, y62) ->
         equal_vpa x61 y61 && ((x62 : string) = y62)
     | CE_proj (x51, x52), CE_proj (y51, y52) ->
@@ -2495,20 +2529,19 @@ let equal_ap = ({HOL.equal = equal_apa} : ap HOL.equal);;
 
 let equal_xp = ({HOL.equal = equal_xpa} : xp HOL.equal);;
 
-type bsub = BS_empty | BS_cons of bsub * bp * string;;
+let equal_lit = ({HOL.equal = equal_lita} : lit HOL.equal);;
 
 end;; (*struct SyntaxVCT*)
 
 module Location : sig
   type 'a pos_ext = Pos_ext of string * Z.t * Z.t * Z.t * 'a
-  type loc = Loc_unknown | Loc_range of unit pos_ext * unit pos_ext
   val equal_pos_ext : 'a HOL.equal -> 'a pos_ext -> 'a pos_ext -> bool
-  val equal_loc : loc -> loc -> bool
+  type loc = Loc_unknown | Loc_range of unit pos_ext * unit pos_ext
+  val equal_loca : loc -> loc -> bool
+  val equal_loc : loc HOL.equal
 end = struct
 
 type 'a pos_ext = Pos_ext of string * Z.t * Z.t * Z.t * 'a;;
-
-type loc = Loc_unknown | Loc_range of unit pos_ext * unit pos_ext;;
 
 let rec equal_pos_ext _A
   (Pos_ext (pos_fnamea, pos_lnuma, pos_bola, pos_cnuma, morea))
@@ -2518,7 +2551,9 @@ let rec equal_pos_ext _A
         (Z.equal pos_bola pos_bol &&
           (Z.equal pos_cnuma pos_cnum && HOL.eq _A morea more)));;
 
-let rec equal_loc
+type loc = Loc_unknown | Loc_range of unit pos_ext * unit pos_ext;;
+
+let rec equal_loca
   x0 x1 = match x0, x1 with Loc_unknown, Loc_range (x21, x22) -> false
     | Loc_range (x21, x22), Loc_unknown -> false
     | Loc_range (x21, x22), Loc_range (y21, y22) ->
@@ -2526,75 +2561,93 @@ let rec equal_loc
           equal_pos_ext Product_Type.equal_unit x22 y22
     | Loc_unknown, Loc_unknown -> true;;
 
+let equal_loc = ({HOL.equal = equal_loca} : loc HOL.equal);;
+
 end;; (*struct Location*)
 
 module SyntaxPED : sig
-  type patp = Pp_lit of Location.loc * SyntaxVCT.lit | Pp_wild of Location.loc |
-    Pp_as_var of Location.loc * patp * SyntaxVCT.xp |
-    Pp_typ of Location.loc * SyntaxVCT.tau * patp |
-    Pp_id of Location.loc * string |
-    Pp_as_typ of Location.loc * patp * SyntaxVCT.tau |
-    Pp_app of Location.loc * string * patp list |
-    Pp_vector of Location.loc * patp list |
-    Pp_vector_concat of Location.loc * patp list |
-    Pp_tup of Location.loc * patp list | Pp_list of Location.loc * patp list |
-    Pp_cons of Location.loc * patp * patp |
-    Pp_string_append of Location.loc * patp list
-  type lexpp = LEXPp_mvar of Location.loc * string |
-    LEXPp_cast of Location.loc * SyntaxVCT.tau * string |
-    LEXPp_tup of Location.loc * lexpp list |
-    LEXPp_field of Location.loc * lexpp * string
+  type 'a patp = Pp_lit of (Location.loc * 'a) * SyntaxVCT.lit |
+    Pp_wild of (Location.loc * 'a) |
+    Pp_as_var of (Location.loc * 'a) * 'a patp * SyntaxVCT.xp |
+    Pp_typ of (Location.loc * 'a) * SyntaxVCT.tau * 'a patp |
+    Pp_id of (Location.loc * 'a) * string |
+    Pp_as_typ of (Location.loc * 'a) * 'a patp * SyntaxVCT.tau |
+    Pp_app of (Location.loc * 'a) * string * 'a patp list |
+    Pp_vector of (Location.loc * 'a) * 'a patp list |
+    Pp_vector_concat of (Location.loc * 'a) * 'a patp list |
+    Pp_tup of (Location.loc * 'a) * 'a patp list |
+    Pp_list of (Location.loc * 'a) * 'a patp list |
+    Pp_cons of (Location.loc * 'a) * 'a patp * 'a patp |
+    Pp_string_append of (Location.loc * 'a) * 'a patp list
+  type 'a lexpp = LEXPp_mvar of (Location.loc * 'a) * string |
+    LEXPp_reg of (Location.loc * 'a) * string |
+    LEXPp_cast of (Location.loc * 'a) * SyntaxVCT.tau * string |
+    LEXPp_tup of (Location.loc * 'a) * 'a lexpp list |
+    LEXPp_field of (Location.loc * 'a) * 'a lexpp * string |
+    LEXPp_deref of (Location.loc * 'a)
   type loop = While | Until
-  type ep = Ep_val of Location.loc * SyntaxVCT.vp |
-    Ep_mvar of Location.loc * string | Ep_concat of Location.loc * ep list |
-    Ep_tuple of Location.loc * ep list |
-    Ep_app of Location.loc * SyntaxVCT.xp * ep |
-    Ep_bop of Location.loc * SyntaxVCT.bop * ep * ep |
-    Ep_uop of Location.loc * SyntaxVCT.uop * ep |
-    Ep_proj of Location.loc * string * ep |
-    Ep_constr of Location.loc * string * ep |
-    Ep_field_access of Location.loc * ep * string |
-    Ep_sizeof of Location.loc * SyntaxVCT.cep |
-    Ep_cast of Location.loc * SyntaxVCT.tau * ep |
-    Ep_record of Location.loc * (string * ep) list |
-    Ep_record_update of Location.loc * ep * (string * ep) list |
-    Ep_let of Location.loc * letbind * ep |
-    Ep_let2 of Location.loc * SyntaxVCT.xp * SyntaxVCT.tau * ep * ep |
-    Ep_if of Location.loc * ep * ep * ep | Ep_block of Location.loc * ep list |
-    Ep_case of Location.loc * ep * pexpp list |
-    Ep_assign of Location.loc * lexpp * ep * ep | Ep_return of Location.loc * ep
-    | Ep_exit of Location.loc * ep | Ep_ref of Location.loc * string |
-    Ep_throw of Location.loc * ep | Ep_try of Location.loc * ep * pexpp list |
-    Ep_constraint of Location.loc * SyntaxVCT.cp |
-    Ep_loop of Location.loc * loop * ep * ep |
-    Ep_for of Location.loc * string * ep * ep * ep * SyntaxVCT.order * ep |
-    Ep_assert of Location.loc * ep * ep | Ep_vec of Location.loc * ep list |
-    Ep_list of Location.loc * ep list | Ep_cons of Location.loc * ep * ep
-  and pexpp = PEXPp_exp of patp * ep | PEXPp_when of patp * ep * ep
-  and letbind = LBp_val of Location.loc * patp * ep
-  type tannot_opt_p = Typ_annot_opt_pnone of Location.loc |
+  type 'a ep = Ep_block of (Location.loc * 'a) * 'a ep list |
+    Ep_val of (Location.loc * 'a) * SyntaxVCT.vp |
+    Ep_mvar of (Location.loc * 'a) * string |
+    Ep_bop of (Location.loc * 'a) * SyntaxVCT.bop * 'a ep * 'a ep |
+    Ep_uop of (Location.loc * 'a) * SyntaxVCT.uop * 'a ep |
+    Ep_proj of (Location.loc * 'a) * string * 'a ep |
+    Ep_cast of (Location.loc * 'a) * SyntaxVCT.tau * 'a ep |
+    Ep_app of (Location.loc * 'a) * SyntaxVCT.xp * 'a ep |
+    Ep_tuple of (Location.loc * 'a) * 'a ep list |
+    Ep_if of (Location.loc * 'a) * 'a ep * 'a ep * 'a ep |
+    Ep_loop of (Location.loc * 'a) * loop * 'a ep * 'a ep |
+    Ep_for of
+      (Location.loc * 'a) * string * 'a ep * 'a ep * 'a ep * SyntaxVCT.order *
+        'a ep
+    | Ep_vec of (Location.loc * 'a) * 'a ep list |
+    Ep_concat of (Location.loc * 'a) * 'a ep list |
+    Ep_list of (Location.loc * 'a) * 'a ep list |
+    Ep_cons of (Location.loc * 'a) * 'a ep * 'a ep |
+    Ep_record of (Location.loc * 'a) * (string * 'a ep) list |
+    Ep_record_update of (Location.loc * 'a) * 'a ep * (string * 'a ep) list |
+    Ep_field_access of (Location.loc * 'a) * 'a ep * string |
+    Ep_case of (Location.loc * 'a) * 'a ep * 'a pexpp list |
+    Ep_let of (Location.loc * 'a) * 'a letbindp * 'a ep |
+    Ep_sizeof of (Location.loc * 'a) * SyntaxVCT.cep |
+    Ep_exit of (Location.loc * 'a) * 'a ep |
+    Ep_return of (Location.loc * 'a) * 'a ep |
+    Ep_ref of (Location.loc * 'a) * string |
+    Ep_throw of (Location.loc * 'a) * 'a ep |
+    Ep_try of (Location.loc * 'a) * 'a ep * 'a pexpp list |
+    Ep_assert of (Location.loc * 'a) * 'a ep * 'a ep |
+    Ep_var of (Location.loc * 'a) * 'a lexpp * 'a ep * 'a ep |
+    Ep_assign of (Location.loc * 'a) * 'a lexpp * 'a ep |
+    Ep_constraint of (Location.loc * 'a) * SyntaxVCT.cp
+  and 'a pexpp = PEXPp_exp of (Location.loc * 'a) * 'a patp * 'a ep |
+    PEXPp_when of (Location.loc * 'a) * 'a patp * 'a ep * 'a ep
+  and 'a letbindp = LBp_val of (Location.loc * 'a) * 'a patp * 'a ep
+  type 'a tannot_opt_p = Typ_annot_opt_pnone of (Location.loc * 'a) |
     Typ_annot_opt_psome of
-      Location.loc * (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
-        SyntaxVCT.tau
-    | Typ_annot_opt_psome_fn of Location.loc * SyntaxVCT.ap
-  type funclp = FCLp_funcl of Location.loc * string * pexpp
-  type scattered_defp = SDp_function of Location.loc * tannot_opt_p * string |
-    SDp_variant of
-      Location.loc * string *
-        (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list
-    | SDp_unioncl of Location.loc * string * string * SyntaxVCT.tau |
-    SDp_funclp of Location.loc * funclp | SDp_end of Location.loc * string
-  type def = DEFp_fundef of Location.loc * SyntaxVCT.ap * funclp list |
-    DEFp_typedef of
-      Location.loc * string *
+      (Location.loc * 'a) *
         (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list * SyntaxVCT.tau
-    | DEFp_spec of Location.loc * string * SyntaxVCT.ap |
-    DEFp_val of Location.loc * letbind |
-    DEFp_reg of Location.loc * SyntaxVCT.tau * SyntaxVCT.xp |
-    DEFp_overload of Location.loc * string * string list |
-    DEFp_scattered of Location.loc * scattered_defp |
-    DEFp_default of Location.loc * SyntaxVCT.order
-  type progp = Pp_prog of def list
+    | Typ_annot_opt_psome_fn of (Location.loc * 'a) * SyntaxVCT.ap
+  type 'a funclp = FCLp_funcl of (Location.loc * 'a) * string * 'a pexpp
+  type 'a scattered_defp =
+    SDp_function of (Location.loc * 'a) * 'a tannot_opt_p * string |
+    SDp_variant of
+      (Location.loc * 'a) * string *
+        (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list
+    | SDp_unioncl of (Location.loc * 'a) * string * string * SyntaxVCT.tau |
+    SDp_funclp of (Location.loc * 'a) * 'a funclp |
+    SDp_end of (Location.loc * 'a) * string
+  type 'a defp =
+    DEFp_fundef of (Location.loc * 'a) * SyntaxVCT.ap * 'a funclp list |
+    DEFp_typedef of
+      (Location.loc * 'a) * string *
+        (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list * SyntaxVCT.tau
+    | DEFp_spec of (Location.loc * 'a) * string * SyntaxVCT.ap |
+    DEFp_val of (Location.loc * 'a) * 'a letbindp |
+    DEFp_reg of (Location.loc * 'a) * SyntaxVCT.tau * SyntaxVCT.xp |
+    DEFp_overload of (Location.loc * 'a) * string * string list |
+    DEFp_scattered of (Location.loc * 'a) * 'a scattered_defp |
+    DEFp_default of (Location.loc * 'a) * SyntaxVCT.order
+  type 'a progp = Pp_prog of (Location.loc * 'a) * 'a defp list
   val fvs_vp : SyntaxVCT.vp -> SyntaxVCT.xp list
   val fvs_vp_list_V_vec : SyntaxVCT.vp list -> SyntaxVCT.xp list
   val fvs_vp_list_V_list : SyntaxVCT.vp list -> SyntaxVCT.xp list
@@ -2613,32 +2666,30 @@ module SyntaxPED : sig
   val fvs_bp_list : SyntaxVCT.bp list -> SyntaxVCT.xp list
   val fvs_field_bp : string * SyntaxVCT.bp -> SyntaxVCT.xp list
   val fvs_field_bp_list : (string * SyntaxVCT.bp) list -> SyntaxVCT.xp list
-  val fvs_patp : patp -> SyntaxVCT.xp list
-  val fvs_patp_list_Pp_app : patp list -> SyntaxVCT.xp list
-  val fvs_patp_list_Pp_tup : patp list -> SyntaxVCT.xp list
-  val fvs_patp_list_Pp_list : patp list -> SyntaxVCT.xp list
-  val fvs_patp_list_Pp_vector : patp list -> SyntaxVCT.xp list
-  val fvs_patp_list_Pp_string_append : patp list -> SyntaxVCT.xp list
-  val fvs_patp_list_Pp_vector_concat : patp list -> SyntaxVCT.xp list
-  val list_minus : 'a HOL.equal -> 'a list -> 'a list -> 'a list
-  val fvs_lexpp : lexpp -> SyntaxVCT.xp list
-  val fvs_lexpp_list : lexpp list -> SyntaxVCT.xp list
-  val fvs_ep : ep -> SyntaxVCT.xp list
-  val fvs_pexpp : pexpp -> SyntaxVCT.xp list
-  val fvs_pexpp_list_Ep_try : pexpp list -> SyntaxVCT.xp list
-  val fvs_pexpp_list_Ep_case : pexpp list -> SyntaxVCT.xp list
-  val fvs_letbind : letbind -> SyntaxVCT.xp list
-  val fvs_ep_list_Ep_vec : ep list -> SyntaxVCT.xp list
-  val fvs_ep_list_Ep_list : ep list -> SyntaxVCT.xp list
-  val fvs_ep_list_Ep_block : ep list -> SyntaxVCT.xp list
-  val fvs_ep_list_Ep_tuple : ep list -> SyntaxVCT.xp list
-  val fvs_ep_list_Ep_concat : ep list -> SyntaxVCT.xp list
-  val fvs_field_ep_Ep_record : string * ep -> SyntaxVCT.xp list
-  val fvs_field_ep_list_Ep_record : (string * ep) list -> SyntaxVCT.xp list
-  val fvs_field_ep_Ep_record_update : string * ep -> SyntaxVCT.xp list
+  val fvs_patp : 'a patp -> SyntaxVCT.xp list
+  val fvs_patp_list_Pp_app : 'a patp list -> SyntaxVCT.xp list
+  val fvs_patp_list_Pp_tup : 'a patp list -> SyntaxVCT.xp list
+  val fvs_patp_list_Pp_list : 'a patp list -> SyntaxVCT.xp list
+  val fvs_patp_list_Pp_vector : 'a patp list -> SyntaxVCT.xp list
+  val fvs_patp_list_Pp_string_append : 'a patp list -> SyntaxVCT.xp list
+  val fvs_patp_list_Pp_vector_concat : 'a patp list -> SyntaxVCT.xp list
+  val fvs_lexpp : 'a lexpp -> SyntaxVCT.xp list
+  val fvs_lexpp_list : 'a lexpp list -> SyntaxVCT.xp list
+  val fvs_ep : 'a ep -> SyntaxVCT.xp list
+  val fvs_pexpp : 'a pexpp -> SyntaxVCT.xp list
+  val fvs_pexpp_list_Ep_try : 'a pexpp list -> SyntaxVCT.xp list
+  val fvs_pexpp_list_Ep_case : 'a pexpp list -> SyntaxVCT.xp list
+  val fvs_letbindp : 'a letbindp -> SyntaxVCT.xp list
+  val fvs_ep_list_Ep_vec : 'a ep list -> SyntaxVCT.xp list
+  val fvs_ep_list_Ep_list : 'a ep list -> SyntaxVCT.xp list
+  val fvs_ep_list_Ep_block : 'a ep list -> SyntaxVCT.xp list
+  val fvs_ep_list_Ep_tuple : 'a ep list -> SyntaxVCT.xp list
+  val fvs_ep_list_Ep_concat : 'a ep list -> SyntaxVCT.xp list
+  val fvs_field_ep_Ep_record : string * 'a ep -> SyntaxVCT.xp list
+  val fvs_field_ep_list_Ep_record : (string * 'a ep) list -> SyntaxVCT.xp list
+  val fvs_field_ep_Ep_record_update : string * 'a ep -> SyntaxVCT.xp list
   val fvs_field_ep_list_Ep_record_update :
-    (string * ep) list -> SyntaxVCT.xp list
-  val loc_e : ep -> Location.loc
+    (string * 'a ep) list -> SyntaxVCT.xp list
   val subst_vp : SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.vp
   val subst_vp_list_V_vec :
     SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.vp list -> SyntaxVCT.vp list
@@ -2677,45 +2728,50 @@ module SyntaxPED : sig
     SyntaxVCT.vp ->
       SyntaxVCT.xp ->
         (string * SyntaxVCT.bp) list -> (string * SyntaxVCT.bp) list
-  val subst_patp : SyntaxVCT.vp -> SyntaxVCT.xp -> patp -> patp
+  val subst_patp : SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp -> 'a patp
   val subst_patp_list_Pp_app :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> patp list -> patp list
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp list -> 'a patp list
   val subst_patp_list_Pp_tup :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> patp list -> patp list
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp list -> 'a patp list
   val subst_patp_list_Pp_list :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> patp list -> patp list
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp list -> 'a patp list
   val subst_patp_list_Pp_vector :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> patp list -> patp list
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp list -> 'a patp list
   val subst_patp_list_Pp_string_append :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> patp list -> patp list
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp list -> 'a patp list
   val subst_patp_list_Pp_vector_concat :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> patp list -> patp list
-  val subst_lexpp : SyntaxVCT.vp -> SyntaxVCT.xp -> lexpp -> lexpp
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp list -> 'a patp list
+  val subst_lexpp : SyntaxVCT.vp -> SyntaxVCT.xp -> 'a lexpp -> 'a lexpp
   val subst_lexpp_list :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> lexpp list -> lexpp list
-  val subst_ep : SyntaxVCT.vp -> SyntaxVCT.xp -> ep -> ep
-  val subst_pexpp : SyntaxVCT.vp -> SyntaxVCT.xp -> pexpp -> pexpp
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a lexpp list -> 'a lexpp list
+  val subst_ep : SyntaxVCT.vp -> SyntaxVCT.xp -> 'a ep -> 'a ep
+  val subst_pexpp : SyntaxVCT.vp -> SyntaxVCT.xp -> 'a pexpp -> 'a pexpp
   val subst_pexpp_list_Ep_try :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> pexpp list -> pexpp list
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a pexpp list -> 'a pexpp list
   val subst_pexpp_list_Ep_case :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> pexpp list -> pexpp list
-  val subst_letbind : SyntaxVCT.vp -> SyntaxVCT.xp -> letbind -> letbind
-  val subst_ep_list_Ep_vec : SyntaxVCT.vp -> SyntaxVCT.xp -> ep list -> ep list
-  val subst_ep_list_Ep_list : SyntaxVCT.vp -> SyntaxVCT.xp -> ep list -> ep list
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a pexpp list -> 'a pexpp list
+  val subst_letbindp :
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a letbindp -> 'a letbindp
+  val subst_ep_list_Ep_vec :
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a ep list -> 'a ep list
+  val subst_ep_list_Ep_list :
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a ep list -> 'a ep list
   val subst_ep_list_Ep_block :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> ep list -> ep list
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a ep list -> 'a ep list
   val subst_ep_list_Ep_tuple :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> ep list -> ep list
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a ep list -> 'a ep list
   val subst_ep_list_Ep_concat :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> ep list -> ep list
+    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a ep list -> 'a ep list
   val subst_field_ep_Ep_record :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> string * ep -> string * ep
+    SyntaxVCT.vp -> SyntaxVCT.xp -> string * 'a ep -> string * 'a ep
   val subst_field_ep_list_Ep_record :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> (string * ep) list -> (string * ep) list
+    SyntaxVCT.vp ->
+      SyntaxVCT.xp -> (string * 'a ep) list -> (string * 'a ep) list
   val subst_field_ep_Ep_record_update :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> string * ep -> string * ep
+    SyntaxVCT.vp -> SyntaxVCT.xp -> string * 'a ep -> string * 'a ep
   val subst_field_ep_list_Ep_record_update :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> (string * ep) list -> (string * ep) list
+    SyntaxVCT.vp ->
+      SyntaxVCT.xp -> (string * 'a ep) list -> (string * 'a ep) list
   val tsubst_bp : SyntaxVCT.bp -> string -> SyntaxVCT.bp -> SyntaxVCT.bp
   val tsubst_tp : SyntaxVCT.bp -> string -> SyntaxVCT.tau -> SyntaxVCT.tau
   val tsubst_ctor_tau :
@@ -2730,151 +2786,99 @@ module SyntaxPED : sig
   val tsubst_field_bp_list :
     SyntaxVCT.bp ->
       string -> (string * SyntaxVCT.bp) list -> (string * SyntaxVCT.bp) list
-  val ce_subst_cep :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cep -> SyntaxVCT.cep
-  val ce_subst_cep_list :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cep list -> SyntaxVCT.cep list
-  val ce_subst_cp :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cp -> SyntaxVCT.cp
-  val ce_subst_cp_list :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cp list -> SyntaxVCT.cp list
-  val ce_subst_bp :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.bp -> SyntaxVCT.bp
-  val ce_subst_tp :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.tau -> SyntaxVCT.tau
-  val ce_subst_ctor_tau :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp -> string * SyntaxVCT.tau -> string * SyntaxVCT.tau
-  val ce_subst_ctor_tau_list :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp ->
-        (string * SyntaxVCT.tau) list -> (string * SyntaxVCT.tau) list
-  val ce_subst_bp_list :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.bp list -> SyntaxVCT.bp list
-  val ce_subst_field_bp :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp -> string * SyntaxVCT.bp -> string * SyntaxVCT.bp
-  val ce_subst_field_bp_list :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp ->
-        (string * SyntaxVCT.bp) list -> (string * SyntaxVCT.bp) list
-  val ce_subst_patp : SyntaxVCT.cep -> SyntaxVCT.xp -> patp -> patp
-  val ce_subst_patp_list_Pp_app :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> patp list -> patp list
-  val ce_subst_patp_list_Pp_tup :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> patp list -> patp list
-  val ce_subst_patp_list_Pp_list :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> patp list -> patp list
-  val ce_subst_patp_list_Pp_vector :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> patp list -> patp list
-  val ce_subst_patp_list_Pp_string_append :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> patp list -> patp list
-  val ce_subst_patp_list_Pp_vector_concat :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> patp list -> patp list
-  val ce_subst_lexpp : SyntaxVCT.cep -> SyntaxVCT.xp -> lexpp -> lexpp
-  val ce_subst_lexpp_list :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> lexpp list -> lexpp list
-  val ce_subst_ep : SyntaxVCT.cep -> SyntaxVCT.xp -> ep -> ep
-  val ce_subst_pexpp : SyntaxVCT.cep -> SyntaxVCT.xp -> pexpp -> pexpp
-  val ce_subst_pexpp_list_Ep_try :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> pexpp list -> pexpp list
-  val ce_subst_pexpp_list_Ep_case :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> pexpp list -> pexpp list
-  val ce_subst_letbind : SyntaxVCT.cep -> SyntaxVCT.xp -> letbind -> letbind
-  val ce_subst_ep_list_Ep_vec :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> ep list -> ep list
-  val ce_subst_ep_list_Ep_list :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> ep list -> ep list
-  val ce_subst_ep_list_Ep_block :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> ep list -> ep list
-  val ce_subst_ep_list_Ep_tuple :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> ep list -> ep list
-  val ce_subst_ep_list_Ep_concat :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> ep list -> ep list
-  val ce_subst_field_ep_Ep_record :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> string * ep -> string * ep
-  val ce_subst_field_ep_list_Ep_record :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> (string * ep) list -> (string * ep) list
-  val ce_subst_field_ep_Ep_record_update :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> string * ep -> string * ep
-  val ce_subst_field_ep_list_Ep_record_update :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> (string * ep) list -> (string * ep) list
-  val tsubst_bsub : SyntaxVCT.bp -> string -> SyntaxVCT.bsub -> SyntaxVCT.bsub
-  val ce_subst_funclp : SyntaxVCT.cep -> SyntaxVCT.xp -> funclp -> funclp
+  val annot_e : 'a ep -> Location.loc * 'a
 end = struct
 
-type patp = Pp_lit of Location.loc * SyntaxVCT.lit | Pp_wild of Location.loc |
-  Pp_as_var of Location.loc * patp * SyntaxVCT.xp |
-  Pp_typ of Location.loc * SyntaxVCT.tau * patp | Pp_id of Location.loc * string
-  | Pp_as_typ of Location.loc * patp * SyntaxVCT.tau |
-  Pp_app of Location.loc * string * patp list |
-  Pp_vector of Location.loc * patp list |
-  Pp_vector_concat of Location.loc * patp list |
-  Pp_tup of Location.loc * patp list | Pp_list of Location.loc * patp list |
-  Pp_cons of Location.loc * patp * patp |
-  Pp_string_append of Location.loc * patp list;;
+type 'a patp = Pp_lit of (Location.loc * 'a) * SyntaxVCT.lit |
+  Pp_wild of (Location.loc * 'a) |
+  Pp_as_var of (Location.loc * 'a) * 'a patp * SyntaxVCT.xp |
+  Pp_typ of (Location.loc * 'a) * SyntaxVCT.tau * 'a patp |
+  Pp_id of (Location.loc * 'a) * string |
+  Pp_as_typ of (Location.loc * 'a) * 'a patp * SyntaxVCT.tau |
+  Pp_app of (Location.loc * 'a) * string * 'a patp list |
+  Pp_vector of (Location.loc * 'a) * 'a patp list |
+  Pp_vector_concat of (Location.loc * 'a) * 'a patp list |
+  Pp_tup of (Location.loc * 'a) * 'a patp list |
+  Pp_list of (Location.loc * 'a) * 'a patp list |
+  Pp_cons of (Location.loc * 'a) * 'a patp * 'a patp |
+  Pp_string_append of (Location.loc * 'a) * 'a patp list;;
 
-type lexpp = LEXPp_mvar of Location.loc * string |
-  LEXPp_cast of Location.loc * SyntaxVCT.tau * string |
-  LEXPp_tup of Location.loc * lexpp list |
-  LEXPp_field of Location.loc * lexpp * string;;
+type 'a lexpp = LEXPp_mvar of (Location.loc * 'a) * string |
+  LEXPp_reg of (Location.loc * 'a) * string |
+  LEXPp_cast of (Location.loc * 'a) * SyntaxVCT.tau * string |
+  LEXPp_tup of (Location.loc * 'a) * 'a lexpp list |
+  LEXPp_field of (Location.loc * 'a) * 'a lexpp * string |
+  LEXPp_deref of (Location.loc * 'a);;
 
 type loop = While | Until;;
 
-type ep = Ep_val of Location.loc * SyntaxVCT.vp |
-  Ep_mvar of Location.loc * string | Ep_concat of Location.loc * ep list |
-  Ep_tuple of Location.loc * ep list |
-  Ep_app of Location.loc * SyntaxVCT.xp * ep |
-  Ep_bop of Location.loc * SyntaxVCT.bop * ep * ep |
-  Ep_uop of Location.loc * SyntaxVCT.uop * ep |
-  Ep_proj of Location.loc * string * ep |
-  Ep_constr of Location.loc * string * ep |
-  Ep_field_access of Location.loc * ep * string |
-  Ep_sizeof of Location.loc * SyntaxVCT.cep |
-  Ep_cast of Location.loc * SyntaxVCT.tau * ep |
-  Ep_record of Location.loc * (string * ep) list |
-  Ep_record_update of Location.loc * ep * (string * ep) list |
-  Ep_let of Location.loc * letbind * ep |
-  Ep_let2 of Location.loc * SyntaxVCT.xp * SyntaxVCT.tau * ep * ep |
-  Ep_if of Location.loc * ep * ep * ep | Ep_block of Location.loc * ep list |
-  Ep_case of Location.loc * ep * pexpp list |
-  Ep_assign of Location.loc * lexpp * ep * ep | Ep_return of Location.loc * ep |
-  Ep_exit of Location.loc * ep | Ep_ref of Location.loc * string |
-  Ep_throw of Location.loc * ep | Ep_try of Location.loc * ep * pexpp list |
-  Ep_constraint of Location.loc * SyntaxVCT.cp |
-  Ep_loop of Location.loc * loop * ep * ep |
-  Ep_for of Location.loc * string * ep * ep * ep * SyntaxVCT.order * ep |
-  Ep_assert of Location.loc * ep * ep | Ep_vec of Location.loc * ep list |
-  Ep_list of Location.loc * ep list | Ep_cons of Location.loc * ep * ep
-and pexpp = PEXPp_exp of patp * ep | PEXPp_when of patp * ep * ep
-and letbind = LBp_val of Location.loc * patp * ep;;
+type 'a ep = Ep_block of (Location.loc * 'a) * 'a ep list |
+  Ep_val of (Location.loc * 'a) * SyntaxVCT.vp |
+  Ep_mvar of (Location.loc * 'a) * string |
+  Ep_bop of (Location.loc * 'a) * SyntaxVCT.bop * 'a ep * 'a ep |
+  Ep_uop of (Location.loc * 'a) * SyntaxVCT.uop * 'a ep |
+  Ep_proj of (Location.loc * 'a) * string * 'a ep |
+  Ep_cast of (Location.loc * 'a) * SyntaxVCT.tau * 'a ep |
+  Ep_app of (Location.loc * 'a) * SyntaxVCT.xp * 'a ep |
+  Ep_tuple of (Location.loc * 'a) * 'a ep list |
+  Ep_if of (Location.loc * 'a) * 'a ep * 'a ep * 'a ep |
+  Ep_loop of (Location.loc * 'a) * loop * 'a ep * 'a ep |
+  Ep_for of
+    (Location.loc * 'a) * string * 'a ep * 'a ep * 'a ep * SyntaxVCT.order *
+      'a ep
+  | Ep_vec of (Location.loc * 'a) * 'a ep list |
+  Ep_concat of (Location.loc * 'a) * 'a ep list |
+  Ep_list of (Location.loc * 'a) * 'a ep list |
+  Ep_cons of (Location.loc * 'a) * 'a ep * 'a ep |
+  Ep_record of (Location.loc * 'a) * (string * 'a ep) list |
+  Ep_record_update of (Location.loc * 'a) * 'a ep * (string * 'a ep) list |
+  Ep_field_access of (Location.loc * 'a) * 'a ep * string |
+  Ep_case of (Location.loc * 'a) * 'a ep * 'a pexpp list |
+  Ep_let of (Location.loc * 'a) * 'a letbindp * 'a ep |
+  Ep_sizeof of (Location.loc * 'a) * SyntaxVCT.cep |
+  Ep_exit of (Location.loc * 'a) * 'a ep |
+  Ep_return of (Location.loc * 'a) * 'a ep |
+  Ep_ref of (Location.loc * 'a) * string |
+  Ep_throw of (Location.loc * 'a) * 'a ep |
+  Ep_try of (Location.loc * 'a) * 'a ep * 'a pexpp list |
+  Ep_assert of (Location.loc * 'a) * 'a ep * 'a ep |
+  Ep_var of (Location.loc * 'a) * 'a lexpp * 'a ep * 'a ep |
+  Ep_assign of (Location.loc * 'a) * 'a lexpp * 'a ep |
+  Ep_constraint of (Location.loc * 'a) * SyntaxVCT.cp
+and 'a pexpp = PEXPp_exp of (Location.loc * 'a) * 'a patp * 'a ep |
+  PEXPp_when of (Location.loc * 'a) * 'a patp * 'a ep * 'a ep
+and 'a letbindp = LBp_val of (Location.loc * 'a) * 'a patp * 'a ep;;
 
-type tannot_opt_p = Typ_annot_opt_pnone of Location.loc |
+type 'a tannot_opt_p = Typ_annot_opt_pnone of (Location.loc * 'a) |
   Typ_annot_opt_psome of
-    Location.loc * (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
+    (Location.loc * 'a) * (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
       SyntaxVCT.tau
-  | Typ_annot_opt_psome_fn of Location.loc * SyntaxVCT.ap;;
+  | Typ_annot_opt_psome_fn of (Location.loc * 'a) * SyntaxVCT.ap;;
 
-type funclp = FCLp_funcl of Location.loc * string * pexpp;;
+type 'a funclp = FCLp_funcl of (Location.loc * 'a) * string * 'a pexpp;;
 
-type scattered_defp = SDp_function of Location.loc * tannot_opt_p * string |
+type 'a scattered_defp =
+  SDp_function of (Location.loc * 'a) * 'a tannot_opt_p * string |
   SDp_variant of
-    Location.loc * string * (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list
-  | SDp_unioncl of Location.loc * string * string * SyntaxVCT.tau |
-  SDp_funclp of Location.loc * funclp | SDp_end of Location.loc * string;;
+    (Location.loc * 'a) * string *
+      (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list
+  | SDp_unioncl of (Location.loc * 'a) * string * string * SyntaxVCT.tau |
+  SDp_funclp of (Location.loc * 'a) * 'a funclp |
+  SDp_end of (Location.loc * 'a) * string;;
 
-type def = DEFp_fundef of Location.loc * SyntaxVCT.ap * funclp list |
+type 'a defp =
+  DEFp_fundef of (Location.loc * 'a) * SyntaxVCT.ap * 'a funclp list |
   DEFp_typedef of
-    Location.loc * string *
+    (Location.loc * 'a) * string *
       (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list * SyntaxVCT.tau
-  | DEFp_spec of Location.loc * string * SyntaxVCT.ap |
-  DEFp_val of Location.loc * letbind |
-  DEFp_reg of Location.loc * SyntaxVCT.tau * SyntaxVCT.xp |
-  DEFp_overload of Location.loc * string * string list |
-  DEFp_scattered of Location.loc * scattered_defp |
-  DEFp_default of Location.loc * SyntaxVCT.order;;
+  | DEFp_spec of (Location.loc * 'a) * string * SyntaxVCT.ap |
+  DEFp_val of (Location.loc * 'a) * 'a letbindp |
+  DEFp_reg of (Location.loc * 'a) * SyntaxVCT.tau * SyntaxVCT.xp |
+  DEFp_overload of (Location.loc * 'a) * string * string list |
+  DEFp_scattered of (Location.loc * 'a) * 'a scattered_defp |
+  DEFp_default of (Location.loc * 'a) * SyntaxVCT.order;;
 
-type progp = Pp_prog of def list;;
+type 'a progp = Pp_prog of (Location.loc * 'a) * 'a defp list;;
 
 let rec fvs_vp
   = function SyntaxVCT.V_lit lit -> []
@@ -2909,7 +2913,8 @@ let rec fvs_cep
     | SyntaxVCT.CE_many_plus cep_list -> fvs_cep_list cep_list
     | SyntaxVCT.CE_uop (uop, cep) -> fvs_cep cep
     | SyntaxVCT.CE_proj (p, cep) -> fvs_cep cep
-    | SyntaxVCT.CE_field_access (xp, field) -> []
+    | SyntaxVCT.CE_field_access (vp, field) -> fvs_vp vp
+    | SyntaxVCT.CE_len vp -> fvs_vp vp
 and fvs_cep_list
   = function [] -> []
     | cep_XXX :: cep_list_XXX -> fvs_cep cep_XXX @ fvs_cep_list cep_list_XXX;;
@@ -2961,20 +2966,20 @@ and fvs_field_bp_list
         fvs_field_bp field_bp_XXX @ fvs_field_bp_list field_bp_list_XXX;;
 
 let rec fvs_patp
-  = function Pp_lit (loc, lit) -> []
-    | Pp_wild loc -> []
-    | Pp_as_var (loc, patp, xp) -> fvs_patp patp
-    | Pp_typ (loc, tau, patp) -> fvs_tau tau @ fvs_patp patp
-    | Pp_id (loc, id) -> []
-    | Pp_as_typ (loc, patp, tau) -> fvs_patp patp @ fvs_tau tau
-    | Pp_app (loc, id, patp_list) -> fvs_patp_list_Pp_app patp_list
-    | Pp_vector (loc, patp_list) -> fvs_patp_list_Pp_vector patp_list
-    | Pp_vector_concat (loc, patp_list) ->
+  = function Pp_lit (annot, lit) -> []
+    | Pp_wild annot -> []
+    | Pp_as_var (annot, patp, xp) -> fvs_patp patp
+    | Pp_typ (annot, tau, patp) -> fvs_tau tau @ fvs_patp patp
+    | Pp_id (annot, id) -> []
+    | Pp_as_typ (annot, patp, tau) -> fvs_patp patp @ fvs_tau tau
+    | Pp_app (annot, id, patp_list) -> fvs_patp_list_Pp_app patp_list
+    | Pp_vector (annot, patp_list) -> fvs_patp_list_Pp_vector patp_list
+    | Pp_vector_concat (annot, patp_list) ->
         fvs_patp_list_Pp_vector_concat patp_list
-    | Pp_tup (loc, patp_list) -> fvs_patp_list_Pp_tup patp_list
-    | Pp_list (loc, patp_list) -> fvs_patp_list_Pp_list patp_list
-    | Pp_cons (loc, patp1, patp2) -> fvs_patp patp1 @ fvs_patp patp2
-    | Pp_string_append (loc, patp_list) ->
+    | Pp_tup (annot, patp_list) -> fvs_patp_list_Pp_tup patp_list
+    | Pp_list (annot, patp_list) -> fvs_patp_list_Pp_list patp_list
+    | Pp_cons (annot, patp1, patp2) -> fvs_patp patp1 @ fvs_patp patp2
+    | Pp_string_append (annot, patp_list) ->
         fvs_patp_list_Pp_string_append patp_list
 and fvs_patp_list_Pp_app
   = function [] -> []
@@ -3001,65 +3006,59 @@ and fvs_patp_list_Pp_vector_concat
     | patp_XXX :: patp_list_XXX ->
         fvs_patp patp_XXX @ fvs_patp_list_Pp_vector_concat patp_list_XXX;;
 
-let rec list_minus _A
-  x0 ys = match x0, ys with [], ys -> []
-    | x :: xs, ys ->
-        (if not (Lista.member _A ys x) then x :: list_minus _A xs ys
-          else list_minus _A xs ys);;
-
-let rec fvs_lexpp = function LEXPp_mvar (loc, up) -> []
-                    | LEXPp_cast (loc, tau, up) -> fvs_tau tau
-                    | LEXPp_tup (loc, lexpp_list) -> fvs_lexpp_list lexpp_list
-                    | LEXPp_field (loc, lexpp, id) -> fvs_lexpp lexpp
+let rec fvs_lexpp = function LEXPp_mvar (annot, up) -> []
+                    | LEXPp_reg (annot, id) -> []
+                    | LEXPp_cast (annot, tau, up) -> fvs_tau tau
+                    | LEXPp_tup (annot, lexpp_list) -> fvs_lexpp_list lexpp_list
+                    | LEXPp_field (annot, lexpp, id) -> fvs_lexpp lexpp
+                    | LEXPp_deref annot -> []
 and fvs_lexpp_list
   = function [] -> []
     | lexpp_XXX :: lexpp_list_XXX ->
         fvs_lexpp lexpp_XXX @ fvs_lexpp_list lexpp_list_XXX;;
 
 let rec fvs_ep
-  = function Ep_val (loc, vp) -> fvs_vp vp
-    | Ep_mvar (loc, up) -> []
-    | Ep_concat (loc, ep_list) -> fvs_ep_list_Ep_concat ep_list
-    | Ep_tuple (loc, ep_list) -> fvs_ep_list_Ep_tuple ep_list
-    | Ep_app (loc, fp, ep) -> fvs_ep ep
-    | Ep_bop (loc, bop, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
-    | Ep_uop (loc, uop, ep) -> fvs_ep ep
-    | Ep_proj (loc, p, ep) -> fvs_ep ep
-    | Ep_constr (loc, ctor, ep) -> fvs_ep ep
-    | Ep_field_access (loc, ep, field) -> fvs_ep ep
-    | Ep_sizeof (loc, cep) -> fvs_cep cep
-    | Ep_cast (loc, tau, ep) -> fvs_tau tau @ fvs_ep ep
-    | Ep_record (loc, field_ep_list) ->
-        fvs_field_ep_list_Ep_record field_ep_list
-    | Ep_record_update (loc, ep, field_ep_list) ->
-        fvs_ep ep @ fvs_field_ep_list_Ep_record_update field_ep_list
-    | Ep_let (loc, letbind, ep2) -> fvs_letbind letbind @ fvs_ep ep2
-    | Ep_let2 (loc, xp, tau, ep1, ep2) ->
-        fvs_tau tau @
-          fvs_ep ep1 @ list_minus SyntaxVCT.equal_xp (fvs_ep ep2) [xp]
-    | Ep_if (loc, ep1, ep2, ep3) -> fvs_ep ep1 @ fvs_ep ep2 @ fvs_ep ep3
-    | Ep_block (loc, ep_list) -> fvs_ep_list_Ep_block ep_list
-    | Ep_case (loc, ep, pexpp_list) ->
-        fvs_ep ep @ fvs_pexpp_list_Ep_case pexpp_list
-    | Ep_assign (loc, lexpp, ep1, ep2) ->
-        fvs_lexpp lexpp @ fvs_ep ep1 @ fvs_ep ep2
-    | Ep_return (loc, ep) -> fvs_ep ep
-    | Ep_exit (loc, ep) -> fvs_ep ep
-    | Ep_ref (loc, id) -> []
-    | Ep_throw (loc, ep) -> fvs_ep ep
-    | Ep_try (loc, ep, pexpp_list) ->
-        fvs_ep ep @ fvs_pexpp_list_Ep_try pexpp_list
-    | Ep_constraint (loc, cp) -> fvs_cp cp
-    | Ep_loop (loc, loop, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
-    | Ep_for (loc, id, ep1, ep2, ep3, order, ep4) ->
+  = function Ep_block (annot, ep_list) -> fvs_ep_list_Ep_block ep_list
+    | Ep_val (annot, vp) -> fvs_vp vp
+    | Ep_mvar (annot, up) -> []
+    | Ep_bop (annot, bop, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
+    | Ep_uop (annot, uop, ep) -> fvs_ep ep
+    | Ep_proj (annot, p, ep) -> fvs_ep ep
+    | Ep_cast (annot, tau, ep) -> fvs_tau tau @ fvs_ep ep
+    | Ep_app (annot, fp, ep) -> fvs_ep ep
+    | Ep_tuple (annot, ep_list) -> fvs_ep_list_Ep_tuple ep_list
+    | Ep_if (annot, ep1, ep2, ep3) -> fvs_ep ep1 @ fvs_ep ep2 @ fvs_ep ep3
+    | Ep_loop (annot, loop, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
+    | Ep_for (annot, id, ep1, ep2, ep3, order, ep4) ->
         fvs_ep ep1 @ fvs_ep ep2 @ fvs_ep ep3 @ fvs_ep ep4
-    | Ep_assert (loc, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
-    | Ep_vec (loc, ep_list) -> fvs_ep_list_Ep_vec ep_list
-    | Ep_list (loc, ep_list) -> fvs_ep_list_Ep_list ep_list
-    | Ep_cons (loc, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
+    | Ep_vec (annot, ep_list) -> fvs_ep_list_Ep_vec ep_list
+    | Ep_concat (annot, ep_list) -> fvs_ep_list_Ep_concat ep_list
+    | Ep_list (annot, ep_list) -> fvs_ep_list_Ep_list ep_list
+    | Ep_cons (annot, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
+    | Ep_record (annot, field_ep_list) ->
+        fvs_field_ep_list_Ep_record field_ep_list
+    | Ep_record_update (annot, ep, field_ep_list) ->
+        fvs_ep ep @ fvs_field_ep_list_Ep_record_update field_ep_list
+    | Ep_field_access (annot, ep, field) -> fvs_ep ep
+    | Ep_case (annot, ep, pexpp_list) ->
+        fvs_ep ep @ fvs_pexpp_list_Ep_case pexpp_list
+    | Ep_let (annot, letbindp, ep2) -> fvs_letbindp letbindp @ fvs_ep ep2
+    | Ep_sizeof (annot, cep) -> fvs_cep cep
+    | Ep_exit (annot, ep) -> fvs_ep ep
+    | Ep_return (annot, ep) -> fvs_ep ep
+    | Ep_ref (annot, id) -> []
+    | Ep_throw (annot, ep) -> fvs_ep ep
+    | Ep_try (annot, ep, pexpp_list) ->
+        fvs_ep ep @ fvs_pexpp_list_Ep_try pexpp_list
+    | Ep_assert (annot, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
+    | Ep_var (annot, lexpp, ep1, ep2) ->
+        fvs_lexpp lexpp @ fvs_ep ep1 @ fvs_ep ep2
+    | Ep_assign (annot, lexpp, ep) -> fvs_lexpp lexpp @ fvs_ep ep
+    | Ep_constraint (annot, cp) -> fvs_cp cp
 and fvs_pexpp
-  = function PEXPp_exp (patp, ep) -> fvs_patp patp @ fvs_ep ep
-    | PEXPp_when (patp, ep1, ep2) -> fvs_patp patp @ fvs_ep ep1 @ fvs_ep ep2
+  = function PEXPp_exp (annot, patp, ep) -> fvs_patp patp @ fvs_ep ep
+    | PEXPp_when (annot, patp, ep1, ep2) ->
+        fvs_patp patp @ fvs_ep ep1 @ fvs_ep ep2
 and fvs_pexpp_list_Ep_try
   = function [] -> []
     | pexpp_XXX :: pexpp_list_XXX ->
@@ -3068,7 +3067,7 @@ and fvs_pexpp_list_Ep_case
   = function [] -> []
     | pexpp_XXX :: pexpp_list_XXX ->
         fvs_pexpp pexpp_XXX @ fvs_pexpp_list_Ep_case pexpp_list_XXX
-and fvs_letbind (LBp_val (loc, patp, ep)) = fvs_patp patp @ fvs_ep ep
+and fvs_letbindp (LBp_val (annot, patp, ep)) = fvs_patp patp @ fvs_ep ep
 and fvs_ep_list_Ep_vec
   = function [] -> []
     | ep_XXX :: ep_list_XXX -> fvs_ep ep_XXX @ fvs_ep_list_Ep_vec ep_list_XXX
@@ -3096,39 +3095,6 @@ and fvs_field_ep_list_Ep_record_update
     | field_ep_XXX :: field_ep_list_XXX ->
         fvs_field_ep_Ep_record_update field_ep_XXX @
           fvs_field_ep_list_Ep_record_update field_ep_list_XXX;;
-
-let rec loc_e = function Ep_val (x11, x12) -> x11
-                | Ep_mvar (x21, x22) -> x21
-                | Ep_concat (x31, x32) -> x31
-                | Ep_tuple (x41, x42) -> x41
-                | Ep_app (x51, x52, x53) -> x51
-                | Ep_bop (x61, x62, x63, x64) -> x61
-                | Ep_uop (x71, x72, x73) -> x71
-                | Ep_proj (x81, x82, x83) -> x81
-                | Ep_constr (x91, x92, x93) -> x91
-                | Ep_field_access (x101, x102, x103) -> x101
-                | Ep_sizeof (x111, x112) -> x111
-                | Ep_cast (x121, x122, x123) -> x121
-                | Ep_record (x131, x132) -> x131
-                | Ep_record_update (x141, x142, x143) -> x141
-                | Ep_let (x151, x152, x153) -> x151
-                | Ep_let2 (x161, x162, x163, x164, x165) -> x161
-                | Ep_if (x171, x172, x173, x174) -> x171
-                | Ep_block (x181, x182) -> x181
-                | Ep_case (x191, x192, x193) -> x191
-                | Ep_assign (x201, x202, x203, x204) -> x201
-                | Ep_return (x211, x212) -> x211
-                | Ep_exit (x221, x222) -> x221
-                | Ep_ref (x231, x232) -> x231
-                | Ep_throw (x241, x242) -> x241
-                | Ep_try (x251, x252, x253) -> x251
-                | Ep_constraint (x261, x262) -> x261
-                | Ep_loop (x271, x272, x273, x274) -> x271
-                | Ep_for (x281, x282, x283, x284, x285, x286, x287) -> x281
-                | Ep_assert (x291, x292, x293) -> x291
-                | Ep_vec (x301, x302) -> x301
-                | Ep_list (x311, x312) -> x311
-                | Ep_cons (x321, x322, x323) -> x321;;
 
 let rec subst_vp
   vp_5 zp5 x2 = match vp_5, zp5, x2 with
@@ -3180,8 +3146,9 @@ let rec subst_cep
         SyntaxVCT.CE_uop (uop, subst_cep vp5 zp5 cep)
     | vp5, zp5, SyntaxVCT.CE_proj (p, cep) ->
         SyntaxVCT.CE_proj (p, subst_cep vp5 zp5 cep)
-    | vp5, zp5, SyntaxVCT.CE_field_access (xp, field) ->
-        SyntaxVCT.CE_field_access (xp, field)
+    | vp5, zp5, SyntaxVCT.CE_field_access (vp, field) ->
+        SyntaxVCT.CE_field_access (subst_vp vp5 zp5 vp, field)
+    | vp5, zp5, SyntaxVCT.CE_len vp -> SyntaxVCT.CE_len (subst_vp vp5 zp5 vp)
 and subst_cep_list
   vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
     | vp5, zp5, cep_XXX :: cep_list_XXX ->
@@ -3255,31 +3222,31 @@ and subst_field_bp_list
 
 let rec subst_patp
   vp5 zp5 x2 = match vp5, zp5, x2 with
-    vp5, zp5, Pp_lit (loc, lit) -> Pp_lit (loc, lit)
-    | vp5, zp5, Pp_wild loc -> Pp_wild loc
-    | vp5, zp5, Pp_as_var (loc, patp, xp) ->
-        Pp_as_var (loc, subst_patp vp5 zp5 patp, xp)
-    | vp5, zp5, Pp_typ (loc, tau, patp) ->
-        Pp_typ (loc, subst_tp vp5 zp5 tau, subst_patp vp5 zp5 patp)
-    | vp5, zp5, Pp_id (loc, id) -> Pp_id (loc, id)
-    | vp5, zp5, Pp_as_typ (loc, patp, tau) ->
-        Pp_as_typ (loc, subst_patp vp5 zp5 patp, subst_tp vp5 zp5 tau)
-    | vp5, zp5, Pp_app (loc, id, patp_list) ->
-        Pp_app (loc, id, subst_patp_list_Pp_app vp5 zp5 patp_list)
-    | vp5, zp5, Pp_vector (loc, patp_list) ->
-        Pp_vector (loc, subst_patp_list_Pp_vector vp5 zp5 patp_list)
-    | vp5, zp5, Pp_vector_concat (loc, patp_list) ->
+    vp5, zp5, Pp_lit (annot, lit) -> Pp_lit (annot, lit)
+    | vp5, zp5, Pp_wild annot -> Pp_wild annot
+    | vp5, zp5, Pp_as_var (annot, patp, xp) ->
+        Pp_as_var (annot, subst_patp vp5 zp5 patp, xp)
+    | vp5, zp5, Pp_typ (annot, tau, patp) ->
+        Pp_typ (annot, subst_tp vp5 zp5 tau, subst_patp vp5 zp5 patp)
+    | vp5, zp5, Pp_id (annot, id) -> Pp_id (annot, id)
+    | vp5, zp5, Pp_as_typ (annot, patp, tau) ->
+        Pp_as_typ (annot, subst_patp vp5 zp5 patp, subst_tp vp5 zp5 tau)
+    | vp5, zp5, Pp_app (annot, id, patp_list) ->
+        Pp_app (annot, id, subst_patp_list_Pp_app vp5 zp5 patp_list)
+    | vp5, zp5, Pp_vector (annot, patp_list) ->
+        Pp_vector (annot, subst_patp_list_Pp_vector vp5 zp5 patp_list)
+    | vp5, zp5, Pp_vector_concat (annot, patp_list) ->
         Pp_vector_concat
-          (loc, subst_patp_list_Pp_vector_concat vp5 zp5 patp_list)
-    | vp5, zp5, Pp_tup (loc, patp_list) ->
-        Pp_tup (loc, subst_patp_list_Pp_tup vp5 zp5 patp_list)
-    | vp5, zp5, Pp_list (loc, patp_list) ->
-        Pp_list (loc, subst_patp_list_Pp_list vp5 zp5 patp_list)
-    | vp5, zp5, Pp_cons (loc, patp1, patp2) ->
-        Pp_cons (loc, subst_patp vp5 zp5 patp1, subst_patp vp5 zp5 patp2)
-    | vp5, zp5, Pp_string_append (loc, patp_list) ->
+          (annot, subst_patp_list_Pp_vector_concat vp5 zp5 patp_list)
+    | vp5, zp5, Pp_tup (annot, patp_list) ->
+        Pp_tup (annot, subst_patp_list_Pp_tup vp5 zp5 patp_list)
+    | vp5, zp5, Pp_list (annot, patp_list) ->
+        Pp_list (annot, subst_patp_list_Pp_list vp5 zp5 patp_list)
+    | vp5, zp5, Pp_cons (annot, patp1, patp2) ->
+        Pp_cons (annot, subst_patp vp5 zp5 patp1, subst_patp vp5 zp5 patp2)
+    | vp5, zp5, Pp_string_append (annot, patp_list) ->
         Pp_string_append
-          (loc, subst_patp_list_Pp_string_append vp5 zp5 patp_list)
+          (annot, subst_patp_list_Pp_string_append vp5 zp5 patp_list)
 and subst_patp_list_Pp_app
   vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
     | vp5, zp5, patp_XXX :: patp_list_XXX ->
@@ -3313,13 +3280,15 @@ and subst_patp_list_Pp_vector_concat
 
 let rec subst_lexpp
   vp5 zp5 x2 = match vp5, zp5, x2 with
-    vp5, zp5, LEXPp_mvar (loc, up) -> LEXPp_mvar (loc, up)
-    | vp5, zp5, LEXPp_cast (loc, tau, up) ->
-        LEXPp_cast (loc, subst_tp vp5 zp5 tau, up)
-    | vp5, zp5, LEXPp_tup (loc, lexpp_list) ->
-        LEXPp_tup (loc, subst_lexpp_list vp5 zp5 lexpp_list)
-    | vp5, zp5, LEXPp_field (loc, lexpp, id) ->
-        LEXPp_field (loc, subst_lexpp vp5 zp5 lexpp, id)
+    vp5, zp5, LEXPp_mvar (annot, up) -> LEXPp_mvar (annot, up)
+    | vp5, zp5, LEXPp_reg (annot, id) -> LEXPp_reg (annot, id)
+    | vp5, zp5, LEXPp_cast (annot, tau, up) ->
+        LEXPp_cast (annot, subst_tp vp5 zp5 tau, up)
+    | vp5, zp5, LEXPp_tup (annot, lexpp_list) ->
+        LEXPp_tup (annot, subst_lexpp_list vp5 zp5 lexpp_list)
+    | vp5, zp5, LEXPp_field (annot, lexpp, id) ->
+        LEXPp_field (annot, subst_lexpp vp5 zp5 lexpp, id)
+    | vp5, zp5, LEXPp_deref annot -> LEXPp_deref annot
 and subst_lexpp_list
   vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
     | vp5, zp5, lexpp_XXX :: lexpp_list_XXX ->
@@ -3328,80 +3297,81 @@ and subst_lexpp_list
 
 let rec subst_ep
   vp5 zp5 x2 = match vp5, zp5, x2 with
-    vp5, zp5, Ep_val (loc, vp) -> Ep_val (loc, subst_vp vp5 zp5 vp)
-    | vp5, zp5, Ep_mvar (loc, up) -> Ep_mvar (loc, up)
-    | vp5, zp5, Ep_concat (loc, ep_list) ->
-        Ep_concat (loc, subst_ep_list_Ep_concat vp5 zp5 ep_list)
-    | vp5, zp5, Ep_tuple (loc, ep_list) ->
-        Ep_tuple (loc, subst_ep_list_Ep_tuple vp5 zp5 ep_list)
-    | vp5, zp5, Ep_app (loc, fp, ep) -> Ep_app (loc, fp, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_bop (loc, bop, ep1, ep2) ->
-        Ep_bop (loc, bop, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
-    | vp5, zp5, Ep_uop (loc, uop, ep) -> Ep_uop (loc, uop, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_proj (loc, p, ep) -> Ep_proj (loc, p, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_constr (loc, ctor, ep) ->
-        Ep_constr (loc, ctor, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_field_access (loc, ep, field) ->
-        Ep_field_access (loc, subst_ep vp5 zp5 ep, field)
-    | vp5, zp5, Ep_sizeof (loc, cep) -> Ep_sizeof (loc, subst_cep vp5 zp5 cep)
-    | vp5, zp5, Ep_cast (loc, tau, ep) ->
-        Ep_cast (loc, subst_tp vp5 zp5 tau, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_record (loc, field_ep_list) ->
-        Ep_record (loc, subst_field_ep_list_Ep_record vp5 zp5 field_ep_list)
-    | vp5, zp5, Ep_record_update (loc, ep, field_ep_list) ->
-        Ep_record_update
-          (loc, subst_ep vp5 zp5 ep,
-            subst_field_ep_list_Ep_record_update vp5 zp5 field_ep_list)
-    | vp5, zp5, Ep_let (loc, letbind, ep2) ->
-        Ep_let (loc, subst_letbind vp5 zp5 letbind, subst_ep vp5 zp5 ep2)
-    | vp5, zp5, Ep_let2 (loc, xp, tau, ep1, ep2) ->
-        Ep_let2
-          (loc, xp, subst_tp vp5 zp5 tau, subst_ep vp5 zp5 ep1,
-            (if Lista.member SyntaxVCT.equal_xp [xp] zp5 then ep2
-              else subst_ep vp5 zp5 ep2))
-    | vp5, zp5, Ep_if (loc, ep1, ep2, ep3) ->
-        Ep_if (loc, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2,
+    vp5, zp5, Ep_block (annot, ep_list) ->
+      Ep_block (annot, subst_ep_list_Ep_block vp5 zp5 ep_list)
+    | vp5, zp5, Ep_val (annot, vp) -> Ep_val (annot, subst_vp vp5 zp5 vp)
+    | vp5, zp5, Ep_mvar (annot, up) -> Ep_mvar (annot, up)
+    | vp5, zp5, Ep_bop (annot, bop, ep1, ep2) ->
+        Ep_bop (annot, bop, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
+    | vp5, zp5, Ep_uop (annot, uop, ep) ->
+        Ep_uop (annot, uop, subst_ep vp5 zp5 ep)
+    | vp5, zp5, Ep_proj (annot, p, ep) ->
+        Ep_proj (annot, p, subst_ep vp5 zp5 ep)
+    | vp5, zp5, Ep_cast (annot, tau, ep) ->
+        Ep_cast (annot, subst_tp vp5 zp5 tau, subst_ep vp5 zp5 ep)
+    | vp5, zp5, Ep_app (annot, fp, ep) ->
+        Ep_app (annot, fp, subst_ep vp5 zp5 ep)
+    | vp5, zp5, Ep_tuple (annot, ep_list) ->
+        Ep_tuple (annot, subst_ep_list_Ep_tuple vp5 zp5 ep_list)
+    | vp5, zp5, Ep_if (annot, ep1, ep2, ep3) ->
+        Ep_if (annot, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2,
                 subst_ep vp5 zp5 ep3)
-    | vp5, zp5, Ep_block (loc, ep_list) ->
-        Ep_block (loc, subst_ep_list_Ep_block vp5 zp5 ep_list)
-    | vp5, zp5, Ep_case (loc, ep, pexpp_list) ->
-        Ep_case
-          (loc, subst_ep vp5 zp5 ep,
-            subst_pexpp_list_Ep_case vp5 zp5 pexpp_list)
-    | vp5, zp5, Ep_assign (loc, lexpp, ep1, ep2) ->
-        Ep_assign
-          (loc, subst_lexpp vp5 zp5 lexpp, subst_ep vp5 zp5 ep1,
-            subst_ep vp5 zp5 ep2)
-    | vp5, zp5, Ep_return (loc, ep) -> Ep_return (loc, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_exit (loc, ep) -> Ep_exit (loc, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_ref (loc, id) -> Ep_ref (loc, id)
-    | vp5, zp5, Ep_throw (loc, ep) -> Ep_throw (loc, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_try (loc, ep, pexpp_list) ->
-        Ep_try
-          (loc, subst_ep vp5 zp5 ep, subst_pexpp_list_Ep_try vp5 zp5 pexpp_list)
-    | vp5, zp5, Ep_constraint (loc, cp) ->
-        Ep_constraint (loc, subst_cp vp5 zp5 cp)
-    | vp5, zp5, Ep_loop (loc, loop, ep1, ep2) ->
-        Ep_loop (loc, loop, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
-    | vp5, zp5, Ep_for (loc, id, ep1, ep2, ep3, order, ep4) ->
+    | vp5, zp5, Ep_loop (annot, loop, ep1, ep2) ->
+        Ep_loop (annot, loop, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
+    | vp5, zp5, Ep_for (annot, id, ep1, ep2, ep3, order, ep4) ->
         Ep_for
-          (loc, id, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2,
+          (annot, id, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2,
             subst_ep vp5 zp5 ep3, order, subst_ep vp5 zp5 ep4)
-    | vp5, zp5, Ep_assert (loc, ep1, ep2) ->
-        Ep_assert (loc, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
-    | vp5, zp5, Ep_vec (loc, ep_list) ->
-        Ep_vec (loc, subst_ep_list_Ep_vec vp5 zp5 ep_list)
-    | vp5, zp5, Ep_list (loc, ep_list) ->
-        Ep_list (loc, subst_ep_list_Ep_list vp5 zp5 ep_list)
-    | vp5, zp5, Ep_cons (loc, ep1, ep2) ->
-        Ep_cons (loc, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
+    | vp5, zp5, Ep_vec (annot, ep_list) ->
+        Ep_vec (annot, subst_ep_list_Ep_vec vp5 zp5 ep_list)
+    | vp5, zp5, Ep_concat (annot, ep_list) ->
+        Ep_concat (annot, subst_ep_list_Ep_concat vp5 zp5 ep_list)
+    | vp5, zp5, Ep_list (annot, ep_list) ->
+        Ep_list (annot, subst_ep_list_Ep_list vp5 zp5 ep_list)
+    | vp5, zp5, Ep_cons (annot, ep1, ep2) ->
+        Ep_cons (annot, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
+    | vp5, zp5, Ep_record (annot, field_ep_list) ->
+        Ep_record (annot, subst_field_ep_list_Ep_record vp5 zp5 field_ep_list)
+    | vp5, zp5, Ep_record_update (annot, ep, field_ep_list) ->
+        Ep_record_update
+          (annot, subst_ep vp5 zp5 ep,
+            subst_field_ep_list_Ep_record_update vp5 zp5 field_ep_list)
+    | vp5, zp5, Ep_field_access (annot, ep, field) ->
+        Ep_field_access (annot, subst_ep vp5 zp5 ep, field)
+    | vp5, zp5, Ep_case (annot, ep, pexpp_list) ->
+        Ep_case
+          (annot, subst_ep vp5 zp5 ep,
+            subst_pexpp_list_Ep_case vp5 zp5 pexpp_list)
+    | vp5, zp5, Ep_let (annot, letbindp, ep2) ->
+        Ep_let (annot, subst_letbindp vp5 zp5 letbindp, subst_ep vp5 zp5 ep2)
+    | vp5, zp5, Ep_sizeof (annot, cep) ->
+        Ep_sizeof (annot, subst_cep vp5 zp5 cep)
+    | vp5, zp5, Ep_exit (annot, ep) -> Ep_exit (annot, subst_ep vp5 zp5 ep)
+    | vp5, zp5, Ep_return (annot, ep) -> Ep_return (annot, subst_ep vp5 zp5 ep)
+    | vp5, zp5, Ep_ref (annot, id) -> Ep_ref (annot, id)
+    | vp5, zp5, Ep_throw (annot, ep) -> Ep_throw (annot, subst_ep vp5 zp5 ep)
+    | vp5, zp5, Ep_try (annot, ep, pexpp_list) ->
+        Ep_try
+          (annot, subst_ep vp5 zp5 ep,
+            subst_pexpp_list_Ep_try vp5 zp5 pexpp_list)
+    | vp5, zp5, Ep_assert (annot, ep1, ep2) ->
+        Ep_assert (annot, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
+    | vp5, zp5, Ep_var (annot, lexpp, ep1, ep2) ->
+        Ep_var
+          (annot, subst_lexpp vp5 zp5 lexpp, subst_ep vp5 zp5 ep1,
+            subst_ep vp5 zp5 ep2)
+    | vp5, zp5, Ep_assign (annot, lexpp, ep) ->
+        Ep_assign (annot, subst_lexpp vp5 zp5 lexpp, subst_ep vp5 zp5 ep)
+    | vp5, zp5, Ep_constraint (annot, cp) ->
+        Ep_constraint (annot, subst_cp vp5 zp5 cp)
 and subst_pexpp
   vp5 zp5 x2 = match vp5, zp5, x2 with
-    vp5, zp5, PEXPp_exp (patp, ep) ->
-      PEXPp_exp (subst_patp vp5 zp5 patp, subst_ep vp5 zp5 ep)
-    | vp5, zp5, PEXPp_when (patp, ep1, ep2) ->
+    vp5, zp5, PEXPp_exp (annot, patp, ep) ->
+      PEXPp_exp (annot, subst_patp vp5 zp5 patp, subst_ep vp5 zp5 ep)
+    | vp5, zp5, PEXPp_when (annot, patp, ep1, ep2) ->
         PEXPp_when
-          (subst_patp vp5 zp5 patp, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
+          (annot, subst_patp vp5 zp5 patp, subst_ep vp5 zp5 ep1,
+            subst_ep vp5 zp5 ep2)
 and subst_pexpp_list_Ep_try
   vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
     | vp5, zp5, pexpp_XXX :: pexpp_list_XXX ->
@@ -3412,9 +3382,9 @@ and subst_pexpp_list_Ep_case
     | vp5, zp5, pexpp_XXX :: pexpp_list_XXX ->
         subst_pexpp vp5 zp5 pexpp_XXX ::
           subst_pexpp_list_Ep_case vp5 zp5 pexpp_list_XXX
-and subst_letbind
-  vp5 zp5 (LBp_val (loc, patp, ep)) =
-    LBp_val (loc, subst_patp vp5 zp5 patp, subst_ep vp5 zp5 ep)
+and subst_letbindp
+  vp5 zp5 (LBp_val (annot, patp, ep)) =
+    LBp_val (annot, subst_patp vp5 zp5 patp, subst_ep vp5 zp5 ep)
 and subst_ep_list_Ep_vec
   vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
     | vp5, zp5, ep_XXX :: ep_list_XXX ->
@@ -3498,329 +3468,37 @@ and tsubst_field_bp_list
         tsubst_field_bp bp_5 tvar5 field_bp_XXX ::
           tsubst_field_bp_list bp_5 tvar5 field_bp_list_XXX;;
 
-let rec ce_subst_cep
-  cep_5 zp5 x2 = match cep_5, zp5, x2 with
-    cep_5, zp5, SyntaxVCT.CE_val v ->
-      (match v with SyntaxVCT.V_lit _ -> SyntaxVCT.CE_val v
-        | SyntaxVCT.V_var x ->
-          (if SyntaxVCT.equal_xpa x zp5 then cep_5 else SyntaxVCT.CE_val v)
-        | SyntaxVCT.V_vec _ -> SyntaxVCT.CE_val v
-        | SyntaxVCT.V_list _ -> SyntaxVCT.CE_val v
-        | SyntaxVCT.V_cons (_, _) -> SyntaxVCT.CE_val v
-        | SyntaxVCT.V_constr (_, _) -> SyntaxVCT.CE_val v
-        | SyntaxVCT.V_record _ -> SyntaxVCT.CE_val v
-        | SyntaxVCT.V_tuple _ -> SyntaxVCT.CE_val v
-        | SyntaxVCT.V_proj (_, _) -> SyntaxVCT.CE_val v)
-    | cep_5, zp5, SyntaxVCT.CE_bop (bop, cep1, cep2) ->
-        SyntaxVCT.CE_bop
-          (bop, ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)
-    | cep_5, zp5, SyntaxVCT.CE_many_plus cep_list ->
-        SyntaxVCT.CE_many_plus (ce_subst_cep_list cep_5 zp5 cep_list)
-    | cep_5, zp5, SyntaxVCT.CE_uop (uop, cep) ->
-        SyntaxVCT.CE_uop (uop, ce_subst_cep cep_5 zp5 cep)
-    | cep_5, zp5, SyntaxVCT.CE_proj (p, cep) ->
-        SyntaxVCT.CE_proj (p, ce_subst_cep cep_5 zp5 cep)
-    | cep_5, zp5, SyntaxVCT.CE_field_access (xp, field) ->
-        SyntaxVCT.CE_field_access (xp, field)
-and ce_subst_cep_list
-  cep_5 zp5 x2 = match cep_5, zp5, x2 with cep_5, zp5, [] -> []
-    | cep_5, zp5, cep_XXX :: cep_list_XXX ->
-        ce_subst_cep cep_5 zp5 cep_XXX ::
-          ce_subst_cep_list cep_5 zp5 cep_list_XXX;;
-
-let rec ce_subst_cp
-  cep_5 zp5 x2 = match cep_5, zp5, x2 with
-    cep_5, zp5, SyntaxVCT.C_true -> SyntaxVCT.C_true
-    | cep_5, zp5, SyntaxVCT.C_false -> SyntaxVCT.C_false
-    | cep_5, zp5, SyntaxVCT.C_conj (cp1, cp2) ->
-        SyntaxVCT.C_conj (ce_subst_cp cep_5 zp5 cp1, ce_subst_cp cep_5 zp5 cp2)
-    | cep_5, zp5, SyntaxVCT.C_conj_many cp_list ->
-        SyntaxVCT.C_conj_many (ce_subst_cp_list cep_5 zp5 cp_list)
-    | cep_5, zp5, SyntaxVCT.C_disj (cp1, cp2) ->
-        SyntaxVCT.C_disj (ce_subst_cp cep_5 zp5 cp1, ce_subst_cp cep_5 zp5 cp2)
-    | cep_5, zp5, SyntaxVCT.C_not cp ->
-        SyntaxVCT.C_not (ce_subst_cp cep_5 zp5 cp)
-    | cep_5, zp5, SyntaxVCT.C_eq (cep1, cep2) ->
-        SyntaxVCT.C_eq
-          (ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)
-    | cep_5, zp5, SyntaxVCT.C_leq (cep1, cep2) ->
-        SyntaxVCT.C_leq
-          (ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)
-    | cep_5, zp5, SyntaxVCT.C_imp (cp1, cp2) ->
-        SyntaxVCT.C_imp (ce_subst_cp cep_5 zp5 cp1, ce_subst_cp cep_5 zp5 cp2)
-and ce_subst_cp_list
-  cep_5 zp5 x2 = match cep_5, zp5, x2 with cep_5, zp5, [] -> []
-    | cep_5, zp5, cp_XXX :: cp_list_XXX ->
-        ce_subst_cp cep_5 zp5 cp_XXX :: ce_subst_cp_list cep_5 zp5 cp_list_XXX;;
-
-let rec ce_subst_bp
-  cep5 zp5 x2 = match cep5, zp5, x2 with
-    cep5, zp5, SyntaxVCT.B_var tvar -> SyntaxVCT.B_var tvar
-    | cep5, zp5, SyntaxVCT.B_tid id -> SyntaxVCT.B_tid id
-    | cep5, zp5, SyntaxVCT.B_int -> SyntaxVCT.B_int
-    | cep5, zp5, SyntaxVCT.B_bool -> SyntaxVCT.B_bool
-    | cep5, zp5, SyntaxVCT.B_bit -> SyntaxVCT.B_bit
-    | cep5, zp5, SyntaxVCT.B_unit -> SyntaxVCT.B_unit
-    | cep5, zp5, SyntaxVCT.B_real -> SyntaxVCT.B_real
-    | cep5, zp5, SyntaxVCT.B_vec (order, bp) ->
-        SyntaxVCT.B_vec (order, ce_subst_bp cep5 zp5 bp)
-    | cep5, zp5, SyntaxVCT.B_list bp ->
-        SyntaxVCT.B_list (ce_subst_bp cep5 zp5 bp)
-    | cep5, zp5, SyntaxVCT.B_tuple bp_list ->
-        SyntaxVCT.B_tuple (ce_subst_bp_list cep5 zp5 bp_list)
-    | cep5, zp5, SyntaxVCT.B_union (id, ctor_tau_list) ->
-        SyntaxVCT.B_union (id, ce_subst_ctor_tau_list cep5 zp5 ctor_tau_list)
-    | cep5, zp5, SyntaxVCT.B_record field_bp_list ->
-        SyntaxVCT.B_record (ce_subst_field_bp_list cep5 zp5 field_bp_list)
-    | cep5, zp5, SyntaxVCT.B_undef -> SyntaxVCT.B_undef
-    | cep5, zp5, SyntaxVCT.B_reg tau ->
-        SyntaxVCT.B_reg (ce_subst_tp cep5 zp5 tau)
-    | cep5, zp5, SyntaxVCT.B_string -> SyntaxVCT.B_string
-    | cep5, zp5, SyntaxVCT.B_exception -> SyntaxVCT.B_exception
-    | cep5, zp5, SyntaxVCT.B_finite_set num_list ->
-        SyntaxVCT.B_finite_set num_list
-and ce_subst_tp
-  cep5 zp5 (SyntaxVCT.T_refined_type (zp, bp, cp)) =
-    SyntaxVCT.T_refined_type
-      (zp, ce_subst_bp cep5 zp5 bp, ce_subst_cp cep5 zp5 cp)
-and ce_subst_ctor_tau cep5 zp5 (ctor1, tp1) = (ctor1, ce_subst_tp cep5 zp5 tp1)
-and ce_subst_ctor_tau_list
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, ctor_tau_XXX :: ctor_tau_list_XXX ->
-        ce_subst_ctor_tau cep5 zp5 ctor_tau_XXX ::
-          ce_subst_ctor_tau_list cep5 zp5 ctor_tau_list_XXX
-and ce_subst_bp_list
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, bp_XXX :: bp_list_XXX ->
-        ce_subst_bp cep5 zp5 bp_XXX :: ce_subst_bp_list cep5 zp5 bp_list_XXX
-and ce_subst_field_bp
-  cep5 zp5 (field1, bp1) = (field1, ce_subst_bp cep5 zp5 bp1)
-and ce_subst_field_bp_list
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, field_bp_XXX :: field_bp_list_XXX ->
-        ce_subst_field_bp cep5 zp5 field_bp_XXX ::
-          ce_subst_field_bp_list cep5 zp5 field_bp_list_XXX;;
-
-let rec ce_subst_patp
-  cep5 zp5 x2 = match cep5, zp5, x2 with
-    cep5, zp5, Pp_lit (loc, lit) -> Pp_lit (loc, lit)
-    | cep5, zp5, Pp_wild loc -> Pp_wild loc
-    | cep5, zp5, Pp_as_var (loc, patp, xp) ->
-        Pp_as_var (loc, ce_subst_patp cep5 zp5 patp, xp)
-    | cep5, zp5, Pp_typ (loc, tau, patp) ->
-        Pp_typ (loc, ce_subst_tp cep5 zp5 tau, ce_subst_patp cep5 zp5 patp)
-    | cep5, zp5, Pp_id (loc, id) -> Pp_id (loc, id)
-    | cep5, zp5, Pp_as_typ (loc, patp, tau) ->
-        Pp_as_typ (loc, ce_subst_patp cep5 zp5 patp, ce_subst_tp cep5 zp5 tau)
-    | cep5, zp5, Pp_app (loc, id, patp_list) ->
-        Pp_app (loc, id, ce_subst_patp_list_Pp_app cep5 zp5 patp_list)
-    | cep5, zp5, Pp_vector (loc, patp_list) ->
-        Pp_vector (loc, ce_subst_patp_list_Pp_vector cep5 zp5 patp_list)
-    | cep5, zp5, Pp_vector_concat (loc, patp_list) ->
-        Pp_vector_concat
-          (loc, ce_subst_patp_list_Pp_vector_concat cep5 zp5 patp_list)
-    | cep5, zp5, Pp_tup (loc, patp_list) ->
-        Pp_tup (loc, ce_subst_patp_list_Pp_tup cep5 zp5 patp_list)
-    | cep5, zp5, Pp_list (loc, patp_list) ->
-        Pp_list (loc, ce_subst_patp_list_Pp_list cep5 zp5 patp_list)
-    | cep5, zp5, Pp_cons (loc, patp1, patp2) ->
-        Pp_cons
-          (loc, ce_subst_patp cep5 zp5 patp1, ce_subst_patp cep5 zp5 patp2)
-    | cep5, zp5, Pp_string_append (loc, patp_list) ->
-        Pp_string_append
-          (loc, ce_subst_patp_list_Pp_string_append cep5 zp5 patp_list)
-and ce_subst_patp_list_Pp_app
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, patp_XXX :: patp_list_XXX ->
-        ce_subst_patp cep5 zp5 patp_XXX ::
-          ce_subst_patp_list_Pp_app cep5 zp5 patp_list_XXX
-and ce_subst_patp_list_Pp_tup
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, patp_XXX :: patp_list_XXX ->
-        ce_subst_patp cep5 zp5 patp_XXX ::
-          ce_subst_patp_list_Pp_tup cep5 zp5 patp_list_XXX
-and ce_subst_patp_list_Pp_list
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, patp_XXX :: patp_list_XXX ->
-        ce_subst_patp cep5 zp5 patp_XXX ::
-          ce_subst_patp_list_Pp_list cep5 zp5 patp_list_XXX
-and ce_subst_patp_list_Pp_vector
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, patp_XXX :: patp_list_XXX ->
-        ce_subst_patp cep5 zp5 patp_XXX ::
-          ce_subst_patp_list_Pp_vector cep5 zp5 patp_list_XXX
-and ce_subst_patp_list_Pp_string_append
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, patp_XXX :: patp_list_XXX ->
-        ce_subst_patp cep5 zp5 patp_XXX ::
-          ce_subst_patp_list_Pp_string_append cep5 zp5 patp_list_XXX
-and ce_subst_patp_list_Pp_vector_concat
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, patp_XXX :: patp_list_XXX ->
-        ce_subst_patp cep5 zp5 patp_XXX ::
-          ce_subst_patp_list_Pp_vector_concat cep5 zp5 patp_list_XXX;;
-
-let rec ce_subst_lexpp
-  cep5 zp5 x2 = match cep5, zp5, x2 with
-    cep5, zp5, LEXPp_mvar (loc, up) -> LEXPp_mvar (loc, up)
-    | cep5, zp5, LEXPp_cast (loc, tau, up) ->
-        LEXPp_cast (loc, ce_subst_tp cep5 zp5 tau, up)
-    | cep5, zp5, LEXPp_tup (loc, lexpp_list) ->
-        LEXPp_tup (loc, ce_subst_lexpp_list cep5 zp5 lexpp_list)
-    | cep5, zp5, LEXPp_field (loc, lexpp, id) ->
-        LEXPp_field (loc, ce_subst_lexpp cep5 zp5 lexpp, id)
-and ce_subst_lexpp_list
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, lexpp_XXX :: lexpp_list_XXX ->
-        ce_subst_lexpp cep5 zp5 lexpp_XXX ::
-          ce_subst_lexpp_list cep5 zp5 lexpp_list_XXX;;
-
-let rec ce_subst_ep
-  cep5 zp5 x2 = match cep5, zp5, x2 with
-    cep5, zp5, Ep_val (loc, vp) -> Ep_val (loc, vp)
-    | cep5, zp5, Ep_mvar (loc, up) -> Ep_mvar (loc, up)
-    | cep5, zp5, Ep_concat (loc, ep_list) ->
-        Ep_concat (loc, ce_subst_ep_list_Ep_concat cep5 zp5 ep_list)
-    | cep5, zp5, Ep_tuple (loc, ep_list) ->
-        Ep_tuple (loc, ce_subst_ep_list_Ep_tuple cep5 zp5 ep_list)
-    | cep5, zp5, Ep_app (loc, fp, ep) ->
-        Ep_app (loc, fp, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, Ep_bop (loc, bop, ep1, ep2) ->
-        Ep_bop (loc, bop, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
-    | cep5, zp5, Ep_uop (loc, uop, ep) ->
-        Ep_uop (loc, uop, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, Ep_proj (loc, p, ep) ->
-        Ep_proj (loc, p, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, Ep_constr (loc, ctor, ep) ->
-        Ep_constr (loc, ctor, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, Ep_field_access (loc, ep, field) ->
-        Ep_field_access (loc, ce_subst_ep cep5 zp5 ep, field)
-    | cep5, zp5, Ep_sizeof (loc, cep) ->
-        Ep_sizeof (loc, ce_subst_cep cep5 zp5 cep)
-    | cep5, zp5, Ep_cast (loc, tau, ep) ->
-        Ep_cast (loc, ce_subst_tp cep5 zp5 tau, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, Ep_record (loc, field_ep_list) ->
-        Ep_record (loc, ce_subst_field_ep_list_Ep_record cep5 zp5 field_ep_list)
-    | cep5, zp5, Ep_record_update (loc, ep, field_ep_list) ->
-        Ep_record_update
-          (loc, ce_subst_ep cep5 zp5 ep,
-            ce_subst_field_ep_list_Ep_record_update cep5 zp5 field_ep_list)
-    | cep5, zp5, Ep_let (loc, letbind, ep2) ->
-        Ep_let
-          (loc, ce_subst_letbind cep5 zp5 letbind, ce_subst_ep cep5 zp5 ep2)
-    | cep5, zp5, Ep_let2 (loc, xp, tau, ep1, ep2) ->
-        Ep_let2
-          (loc, xp, ce_subst_tp cep5 zp5 tau, ce_subst_ep cep5 zp5 ep1,
-            (if Lista.member SyntaxVCT.equal_xp [xp] zp5 then ep2
-              else ce_subst_ep cep5 zp5 ep2))
-    | cep5, zp5, Ep_if (loc, ep1, ep2, ep3) ->
-        Ep_if (loc, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2,
-                ce_subst_ep cep5 zp5 ep3)
-    | cep5, zp5, Ep_block (loc, ep_list) ->
-        Ep_block (loc, ce_subst_ep_list_Ep_block cep5 zp5 ep_list)
-    | cep5, zp5, Ep_case (loc, ep, pexpp_list) ->
-        Ep_case
-          (loc, ce_subst_ep cep5 zp5 ep,
-            ce_subst_pexpp_list_Ep_case cep5 zp5 pexpp_list)
-    | cep5, zp5, Ep_assign (loc, lexpp, ep1, ep2) ->
-        Ep_assign
-          (loc, ce_subst_lexpp cep5 zp5 lexpp, ce_subst_ep cep5 zp5 ep1,
-            ce_subst_ep cep5 zp5 ep2)
-    | cep5, zp5, Ep_return (loc, ep) -> Ep_return (loc, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, Ep_exit (loc, ep) -> Ep_exit (loc, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, Ep_ref (loc, id) -> Ep_ref (loc, id)
-    | cep5, zp5, Ep_throw (loc, ep) -> Ep_throw (loc, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, Ep_try (loc, ep, pexpp_list) ->
-        Ep_try
-          (loc, ce_subst_ep cep5 zp5 ep,
-            ce_subst_pexpp_list_Ep_try cep5 zp5 pexpp_list)
-    | cep5, zp5, Ep_constraint (loc, cp) ->
-        Ep_constraint (loc, ce_subst_cp cep5 zp5 cp)
-    | cep5, zp5, Ep_loop (loc, loop, ep1, ep2) ->
-        Ep_loop (loc, loop, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
-    | cep5, zp5, Ep_for (loc, id, ep1, ep2, ep3, order, ep4) ->
-        Ep_for
-          (loc, id, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2,
-            ce_subst_ep cep5 zp5 ep3, order, ce_subst_ep cep5 zp5 ep4)
-    | cep5, zp5, Ep_assert (loc, ep1, ep2) ->
-        Ep_assert (loc, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
-    | cep5, zp5, Ep_vec (loc, ep_list) ->
-        Ep_vec (loc, ce_subst_ep_list_Ep_vec cep5 zp5 ep_list)
-    | cep5, zp5, Ep_list (loc, ep_list) ->
-        Ep_list (loc, ce_subst_ep_list_Ep_list cep5 zp5 ep_list)
-    | cep5, zp5, Ep_cons (loc, ep1, ep2) ->
-        Ep_cons (loc, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
-and ce_subst_pexpp
-  cep5 zp5 x2 = match cep5, zp5, x2 with
-    cep5, zp5, PEXPp_exp (patp, ep) ->
-      PEXPp_exp (ce_subst_patp cep5 zp5 patp, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, PEXPp_when (patp, ep1, ep2) ->
-        PEXPp_when
-          (ce_subst_patp cep5 zp5 patp, ce_subst_ep cep5 zp5 ep1,
-            ce_subst_ep cep5 zp5 ep2)
-and ce_subst_pexpp_list_Ep_try
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, pexpp_XXX :: pexpp_list_XXX ->
-        ce_subst_pexpp cep5 zp5 pexpp_XXX ::
-          ce_subst_pexpp_list_Ep_try cep5 zp5 pexpp_list_XXX
-and ce_subst_pexpp_list_Ep_case
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, pexpp_XXX :: pexpp_list_XXX ->
-        ce_subst_pexpp cep5 zp5 pexpp_XXX ::
-          ce_subst_pexpp_list_Ep_case cep5 zp5 pexpp_list_XXX
-and ce_subst_letbind
-  cep5 zp5 (LBp_val (loc, patp, ep)) =
-    LBp_val (loc, ce_subst_patp cep5 zp5 patp, ce_subst_ep cep5 zp5 ep)
-and ce_subst_ep_list_Ep_vec
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, ep_XXX :: ep_list_XXX ->
-        ce_subst_ep cep5 zp5 ep_XXX ::
-          ce_subst_ep_list_Ep_vec cep5 zp5 ep_list_XXX
-and ce_subst_ep_list_Ep_list
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, ep_XXX :: ep_list_XXX ->
-        ce_subst_ep cep5 zp5 ep_XXX ::
-          ce_subst_ep_list_Ep_list cep5 zp5 ep_list_XXX
-and ce_subst_ep_list_Ep_block
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, ep_XXX :: ep_list_XXX ->
-        ce_subst_ep cep5 zp5 ep_XXX ::
-          ce_subst_ep_list_Ep_block cep5 zp5 ep_list_XXX
-and ce_subst_ep_list_Ep_tuple
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, ep_XXX :: ep_list_XXX ->
-        ce_subst_ep cep5 zp5 ep_XXX ::
-          ce_subst_ep_list_Ep_tuple cep5 zp5 ep_list_XXX
-and ce_subst_ep_list_Ep_concat
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, ep_XXX :: ep_list_XXX ->
-        ce_subst_ep cep5 zp5 ep_XXX ::
-          ce_subst_ep_list_Ep_concat cep5 zp5 ep_list_XXX
-and ce_subst_field_ep_Ep_record
-  cep5 zp5 (field1, ep1) = (field1, ce_subst_ep cep5 zp5 ep1)
-and ce_subst_field_ep_list_Ep_record
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, field_ep_XXX :: field_ep_list_XXX ->
-        ce_subst_field_ep_Ep_record cep5 zp5 field_ep_XXX ::
-          ce_subst_field_ep_list_Ep_record cep5 zp5 field_ep_list_XXX
-and ce_subst_field_ep_Ep_record_update
-  cep5 zp5 (field1, ep1) = (field1, ce_subst_ep cep5 zp5 ep1)
-and ce_subst_field_ep_list_Ep_record_update
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, field_ep_XXX :: field_ep_list_XXX ->
-        ce_subst_field_ep_Ep_record_update cep5 zp5 field_ep_XXX ::
-          ce_subst_field_ep_list_Ep_record_update cep5 zp5 field_ep_list_XXX;;
-
-let rec tsubst_bsub
-  bp5 tvar5 x2 = match bp5, tvar5, x2 with
-    bp5, tvar5, SyntaxVCT.BS_empty -> SyntaxVCT.BS_empty
-    | bp5, tvar5, SyntaxVCT.BS_cons (bsub, bp, tvar) ->
-        SyntaxVCT.BS_cons
-          (tsubst_bsub bp5 tvar5 bsub, tsubst_bp bp5 tvar5 bp, tvar);;
-
-let rec ce_subst_funclp
-  cep5 zp5 (FCLp_funcl (loc, id, pexpp)) =
-    FCLp_funcl (loc, id, ce_subst_pexpp cep5 zp5 pexpp);;
+let rec annot_e = function Ep_block (x11, x12) -> x11
+                  | Ep_val (x21, x22) -> x21
+                  | Ep_mvar (x31, x32) -> x31
+                  | Ep_bop (x41, x42, x43, x44) -> x41
+                  | Ep_uop (x51, x52, x53) -> x51
+                  | Ep_proj (x61, x62, x63) -> x61
+                  | Ep_cast (x71, x72, x73) -> x71
+                  | Ep_app (x81, x82, x83) -> x81
+                  | Ep_tuple (x91, x92) -> x91
+                  | Ep_if (x101, x102, x103, x104) -> x101
+                  | Ep_loop (x111, x112, x113, x114) -> x111
+                  | Ep_for (x121, x122, x123, x124, x125, x126, x127) -> x121
+                  | Ep_vec (x131, x132) -> x131
+                  | Ep_concat (x141, x142) -> x141
+                  | Ep_list (x151, x152) -> x151
+                  | Ep_cons (x161, x162, x163) -> x161
+                  | Ep_record (x171, x172) -> x171
+                  | Ep_record_update (x181, x182, x183) -> x181
+                  | Ep_field_access (x191, x192, x193) -> x191
+                  | Ep_case (x201, x202, x203) -> x201
+                  | Ep_let (x211, x212, x213) -> x211
+                  | Ep_sizeof (x221, x222) -> x221
+                  | Ep_exit (x231, x232) -> x231
+                  | Ep_return (x241, x242) -> x241
+                  | Ep_ref (x251, x252) -> x251
+                  | Ep_throw (x261, x262) -> x261
+                  | Ep_try (x271, x272, x273) -> x271
+                  | Ep_assert (x281, x282, x283) -> x281
+                  | Ep_var (x291, x292, x293, x294) -> x291
+                  | Ep_assign (x301, x302, x303) -> x301
+                  | Ep_constraint (x311, x312) -> x311;;
 
 end;; (*struct SyntaxPED*)
 
@@ -3924,16 +3602,18 @@ module SyntaxUtils : sig
   val rv_cp : SyntaxVCT.cp -> (string, string) Finite_Map.fmap -> SyntaxVCT.cp
   val rv_t : SyntaxVCT.tau -> (string, string) Finite_Map.fmap -> SyntaxVCT.tau
   val rv_pat :
-    SyntaxPED.patp -> (string, string) Finite_Map.fmap -> SyntaxPED.patp
+    'a SyntaxPED.patp -> (string, string) Finite_Map.fmap -> 'a SyntaxPED.patp
   val rv_lexpp :
-    SyntaxPED.lexpp -> (string, string) Finite_Map.fmap -> SyntaxPED.lexpp
-  val rv_ep : SyntaxPED.ep -> (string, string) Finite_Map.fmap -> SyntaxPED.ep
+    'a SyntaxPED.lexpp -> (string, string) Finite_Map.fmap -> 'a SyntaxPED.lexpp
+  val rv_ep :
+    'a SyntaxPED.ep -> (string, string) Finite_Map.fmap -> 'a SyntaxPED.ep
   val rv_pexpp :
-    SyntaxPED.pexpp -> (string, string) Finite_Map.fmap -> SyntaxPED.pexpp
+    'a SyntaxPED.pexpp -> (string, string) Finite_Map.fmap -> 'a SyntaxPED.pexpp
   val rv_letbind :
-    SyntaxPED.letbind -> (string, string) Finite_Map.fmap -> SyntaxPED.letbind
+    'a SyntaxPED.letbindp ->
+      (string, string) Finite_Map.fmap -> 'a SyntaxPED.letbindp
   val mk_new : 'a list -> string -> string
-  val pat_id : SyntaxPED.patp -> string list
+  val pat_id : 'a SyntaxPED.patp -> string list
   val unzip3 : ('a * ('b * 'c)) list -> 'a list * ('b list * 'c list)
   val b_of_lit : SyntaxVCT.lit -> SyntaxVCT.bp
   val mk_fresh_aux : string list -> string list -> string -> string
@@ -3947,13 +3627,15 @@ module SyntaxUtils : sig
     string list -> string list -> (string, string) Finite_Map.fmap
   val freshen_pexp_aux :
     string list ->
-      SyntaxPED.patp -> SyntaxPED.ep -> SyntaxPED.patp * SyntaxPED.ep
-  val freshen_ep : string list -> SyntaxPED.ep -> SyntaxPED.ep
-  val freshen_pexpp : string list -> SyntaxPED.pexpp -> SyntaxPED.pexpp
+      'a SyntaxPED.patp ->
+        'a SyntaxPED.ep -> 'a SyntaxPED.patp * 'a SyntaxPED.ep
+  val freshen_ep : string list -> 'a SyntaxPED.ep -> 'a SyntaxPED.ep
+  val freshen_pexpp : string list -> 'a SyntaxPED.pexpp -> 'a SyntaxPED.pexpp
   val mk_eq_proj :
     Location.loc -> SyntaxVCT.xp -> Arith.nat -> Arith.nat -> SyntaxVCT.cp
   val mk_proj_eq : SyntaxVCT.xp -> string -> SyntaxVCT.cp
   val c_conj_list : SyntaxVCT.cp list -> SyntaxVCT.cp
+  val empty_annot : Location.loc * SyntaxVCT.tau option
   val mk_record_b_c :
     SyntaxVCT.xp list ->
       (string * SyntaxVCT.tau) list -> SyntaxVCT.bp * SyntaxVCT.cp
@@ -4012,7 +3694,8 @@ let rec rv_cep
     | SyntaxVCT.CE_uop (uop, cep), fm -> SyntaxVCT.CE_uop (uop, rv_cep cep fm)
     | SyntaxVCT.CE_proj (p, cep), fm -> SyntaxVCT.CE_proj (p, rv_cep cep fm)
     | SyntaxVCT.CE_field_access (vp, field), fm ->
-        SyntaxVCT.CE_field_access (rv_vp vp fm, field);;
+        SyntaxVCT.CE_field_access (rv_vp vp fm, field)
+    | SyntaxVCT.CE_len vp, fm -> SyntaxVCT.CE_len (rv_vp vp fm);;
 
 let rec rv_cp
   x0 fm = match x0, fm with SyntaxVCT.C_true, fm -> SyntaxVCT.C_true
@@ -4074,7 +3757,9 @@ let rec rv_lexpp
     | SyntaxPED.LEXPp_tup (loc, lexpp_list), fm ->
         SyntaxPED.LEXPp_tup (loc, Lista.map (fun l -> rv_lexpp l fm) lexpp_list)
     | SyntaxPED.LEXPp_field (loc, lexpp, idd), fm ->
-        SyntaxPED.LEXPp_field (loc, rv_lexpp lexpp fm, idd);;
+        SyntaxPED.LEXPp_field (loc, rv_lexpp lexpp fm, idd)
+    | SyntaxPED.LEXPp_reg (loc, idd), fm -> SyntaxPED.LEXPp_reg (loc, idd)
+    | SyntaxPED.LEXPp_deref loc, fm -> SyntaxPED.LEXPp_deref loc;;
 
 let rec rv_ep
   x0 fm = match x0, fm with
@@ -4092,8 +3777,6 @@ let rec rv_ep
         SyntaxPED.Ep_uop (loc, uop, rv_ep ep fm)
     | SyntaxPED.Ep_proj (loc, p, ep), fm ->
         SyntaxPED.Ep_proj (loc, p, rv_ep ep fm)
-    | SyntaxPED.Ep_constr (loc, ctor, ep), fm ->
-        SyntaxPED.Ep_constr (loc, ctor, rv_ep ep fm)
     | SyntaxPED.Ep_field_access (loc, ep, field), fm ->
         SyntaxPED.Ep_field_access (loc, rv_ep ep fm, field)
     | SyntaxPED.Ep_sizeof (loc, cep), fm ->
@@ -4109,9 +3792,6 @@ let rec rv_ep
             Lista.map (fun (f, e) -> (f, rv_ep e fm)) field_ep_list)
     | SyntaxPED.Ep_let (loc, letbind, ep2), fm ->
         SyntaxPED.Ep_let (loc, rv_letbind letbind fm, rv_ep ep2 fm)
-    | SyntaxPED.Ep_let2 (loc, xp, tau, ep1, ep2), fm ->
-        SyntaxPED.Ep_let2
-          (loc, rv_xp xp fm, rv_t tau fm, rv_ep ep1 fm, rv_ep ep2 fm)
     | SyntaxPED.Ep_if (loc, ep1, ep2, ep3), fm ->
         SyntaxPED.Ep_if (loc, rv_ep ep1 fm, rv_ep ep2 fm, rv_ep ep3 fm)
     | SyntaxPED.Ep_block (loc, ep_list), fm ->
@@ -4119,8 +3799,10 @@ let rec rv_ep
     | SyntaxPED.Ep_case (loc, ep, pexpp_list), fm ->
         SyntaxPED.Ep_case
           (loc, rv_ep ep fm, Lista.map (fun p -> rv_pexpp p fm) pexpp_list)
-    | SyntaxPED.Ep_assign (loc, lexpp, ep1, ep2), fm ->
-        SyntaxPED.Ep_assign (loc, rv_lexpp lexpp fm, rv_ep ep1 fm, rv_ep ep2 fm)
+    | SyntaxPED.Ep_assign (loc, lexpp, ep1), fm ->
+        SyntaxPED.Ep_assign (loc, rv_lexpp lexpp fm, rv_ep ep1 fm)
+    | SyntaxPED.Ep_var (loc, lexpp, ep1, ep2), fm ->
+        SyntaxPED.Ep_var (loc, rv_lexpp lexpp fm, rv_ep ep1 fm, rv_ep ep2 fm)
     | SyntaxPED.Ep_return (loc, ep), fm ->
         SyntaxPED.Ep_return (loc, rv_ep ep fm)
     | SyntaxPED.Ep_exit (loc, ep), fm -> SyntaxPED.Ep_exit (loc, rv_ep ep fm)
@@ -4147,10 +3829,10 @@ let rec rv_ep
         SyntaxPED.Ep_cons (loc, rv_ep ep1 fm, rv_ep ep2 fm)
 and rv_pexpp
   x0 fm = match x0, fm with
-    SyntaxPED.PEXPp_exp (patp, ep), fm ->
-      SyntaxPED.PEXPp_exp (rv_pat patp fm, rv_ep ep fm)
-    | SyntaxPED.PEXPp_when (patp, ep1, ep2), fm ->
-        SyntaxPED.PEXPp_when (rv_pat patp fm, rv_ep ep1 fm, rv_ep ep2 fm)
+    SyntaxPED.PEXPp_exp (loc, patp, ep), fm ->
+      SyntaxPED.PEXPp_exp (loc, rv_pat patp fm, rv_ep ep fm)
+    | SyntaxPED.PEXPp_when (loc, patp, ep1, ep2), fm ->
+        SyntaxPED.PEXPp_when (loc, rv_pat patp fm, rv_ep ep1 fm, rv_ep ep2 fm)
 and rv_letbind
   (SyntaxPED.LBp_val (loc, patp, ep)) fm =
     SyntaxPED.LBp_val (loc, rv_pat patp fm, rv_ep ep fm);;
@@ -4199,55 +3881,9 @@ let rec mk_fresh_aux
 let rec mk_fresh s xp = mk_fresh_aux s [] xp;;
 
 let rec mk_l_eq_c
-  x xa1 = match x, xa1 with
-    x, SyntaxVCT.L_bitvec bs ->
-      SyntaxVCT.C_conj
-        (SyntaxVCT.C_eq
-           (SyntaxVCT.CE_uop
-              (SyntaxVCT.Len, SyntaxVCT.CE_val (SyntaxVCT.V_var x)),
-             SyntaxVCT.CE_val
-               (SyntaxVCT.V_lit
-                 (SyntaxVCT.L_num
-                   (Arith.integer_of_nat (Lista.size_list bs))))),
-          SyntaxVCT.C_eq
-            (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-              SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_bitvec bs))))
-    | x, SyntaxVCT.L_unit ->
-        SyntaxVCT.C_eq
+  x l = SyntaxVCT.C_eq
           (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_unit))
-    | x, SyntaxVCT.L_zero ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_zero))
-    | x, SyntaxVCT.L_one ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_one))
-    | x, SyntaxVCT.L_true ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_true))
-    | x, SyntaxVCT.L_false ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_false))
-    | x, SyntaxVCT.L_num v ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_num v)))
-    | x, SyntaxVCT.L_string v ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_string v)))
-    | x, SyntaxVCT.L_undef ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_undef))
-    | x, SyntaxVCT.L_real v ->
-        SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_real v)));;
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit l));;
 
 let rec mk_l_eq_t
   l = SyntaxVCT.T_refined_type
@@ -4293,8 +3929,6 @@ let rec freshen_ep
             freshen_ep
               (Lista.remdups Stringa.equal_literal (s @ pat_id pat_new))
               ep2_new))
-    | s, SyntaxPED.Ep_let2 (loc, xp, tau, ep1, ep2) ->
-        SyntaxPED.Ep_let2 (loc, xp, tau, freshen_ep s ep1, freshen_ep s ep2)
     | s, SyntaxPED.Ep_case (loc, ep, pexpp_list) ->
         SyntaxPED.Ep_case
           (loc, freshen_ep s ep, Lista.map (freshen_pexpp s) pexpp_list)
@@ -4312,8 +3946,6 @@ let rec freshen_ep
         SyntaxPED.Ep_uop (loc, uop, freshen_ep s ep)
     | s, SyntaxPED.Ep_proj (loc, p, ep) ->
         SyntaxPED.Ep_proj (loc, p, freshen_ep s ep)
-    | s, SyntaxPED.Ep_constr (loc, ctor, ep) ->
-        SyntaxPED.Ep_constr (loc, ctor, freshen_ep s ep)
     | s, SyntaxPED.Ep_field_access (loc, ep, field) ->
         SyntaxPED.Ep_field_access (loc, freshen_ep s ep, field)
     | s, SyntaxPED.Ep_sizeof (loc, cep) -> SyntaxPED.Ep_sizeof (loc, cep)
@@ -4331,8 +3963,10 @@ let rec freshen_ep
           (loc, freshen_ep s ep1, freshen_ep s ep2, freshen_ep s ep3)
     | s, SyntaxPED.Ep_block (loc, ep_list) ->
         SyntaxPED.Ep_block (loc, Lista.map (freshen_ep s) ep_list)
-    | s, SyntaxPED.Ep_assign (loc, lexpp, ep1, ep2) ->
-        SyntaxPED.Ep_assign (loc, lexpp, freshen_ep s ep1, freshen_ep s ep2)
+    | s, SyntaxPED.Ep_var (loc, lexpp, ep1, ep2) ->
+        SyntaxPED.Ep_var (loc, lexpp, freshen_ep s ep1, freshen_ep s ep2)
+    | s, SyntaxPED.Ep_assign (loc, lexpp, ep1) ->
+        SyntaxPED.Ep_assign (loc, lexpp, freshen_ep s ep1)
     | s, SyntaxPED.Ep_return (loc, ep) ->
         SyntaxPED.Ep_return (loc, freshen_ep s ep)
     | s, SyntaxPED.Ep_exit (loc, ep) -> SyntaxPED.Ep_exit (loc, freshen_ep s ep)
@@ -4359,17 +3993,17 @@ let rec freshen_ep
         SyntaxPED.Ep_cons (loc, freshen_ep s ep1, freshen_ep s ep2)
 and freshen_pexpp
   s x1 = match s, x1 with
-    s, SyntaxPED.PEXPp_exp (patp, ep) ->
+    s, SyntaxPED.PEXPp_exp (loc, patp, ep) ->
       (let (pat_new, ep_new) = freshen_pexp_aux s patp ep in
         SyntaxPED.PEXPp_exp
-          (pat_new,
+          (loc, pat_new,
             freshen_ep
               (Lista.remdups Stringa.equal_literal (s @ pat_id pat_new))
               ep_new))
-    | s, SyntaxPED.PEXPp_when (patp, ep1, ep2) ->
+    | s, SyntaxPED.PEXPp_when (loc, patp, ep1, ep2) ->
         (let (pat_new, ep2_new) = freshen_pexp_aux s patp ep2 in
           SyntaxPED.PEXPp_when
-            (pat_new, freshen_ep s ep1,
+            (loc, pat_new, freshen_ep s ep1,
               freshen_ep
                 (Lista.remdups Stringa.equal_literal (s @ pat_id pat_new))
                 ep2_new));;
@@ -4391,6 +4025,9 @@ let rec mk_proj_eq
 
 let rec c_conj_list
   cs = Lista.fold (fun a b -> SyntaxVCT.C_conj (a, b)) cs SyntaxVCT.C_true;;
+
+let empty_annot : Location.loc * SyntaxVCT.tau option
+  = (Location.Loc_unknown, None);;
 
 let rec mk_record_b_c
   zs fts =
@@ -5910,19 +5547,26 @@ module Monad : sig
   type tag = IfThen | IfElse
   type witness = LitI | VarI | TrueI | FalseI | NumI | TupleI |
     PlusI of witness * witness | LEqI of witness * witness | AppI of witness |
-    CValI of witness * (SyntaxPED.pexpp, unit) Contexts.gamma_ext * SyntaxVCT.cp
+    CValI of
+      witness *
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext *
+        SyntaxVCT.cp
     | CLetI of witness * witness | CLet2I of witness * witness |
     CIfI of witness * witness * witness
   type state = StateD of Arith.int * witness list
   type fail_reason = VarUnknown of Location.loc * SyntaxVCT.xp |
-    OperandTypesWrongLeft of SyntaxPED.ep * SyntaxVCT.bp * SyntaxVCT.bp |
-    OperandTypesWrongRight of SyntaxPED.ep * SyntaxVCT.bp * SyntaxVCT.bp |
-    CheckFail of
-      Location.loc * (SyntaxPED.pexpp, unit) Contexts.gamma_ext * string *
-        SyntaxVCT.tau * SyntaxVCT.tau
+    OperandTypesWrongLeft of
+      (SyntaxVCT.tau option) SyntaxPED.ep * SyntaxVCT.bp * SyntaxVCT.bp
+    | OperandTypesWrongRight of
+        (SyntaxVCT.tau option) SyntaxPED.ep * SyntaxVCT.bp * SyntaxVCT.bp
+    | CheckFail of
+        Location.loc *
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext *
+          string * SyntaxVCT.tau * SyntaxVCT.tau
     | IfCondType of Location.loc * SyntaxVCT.tau |
     IfThenBranchType of Location.loc | IfElseBranchType of Location.loc |
-    NotSatisfiable | FunctionUnknown of SyntaxPED.ep * SyntaxVCT.xp |
+    NotSatisfiable |
+    FunctionUnknown of (SyntaxVCT.tau option) SyntaxPED.ep * SyntaxVCT.xp |
     FunctionType |
     FunctionArgWrongType of Location.loc * SyntaxVCT.tau * SyntaxVCT.tau |
     VectorElementsDiffType | UnknownConstructor of Location.loc * string |
@@ -5930,7 +5574,9 @@ module Monad : sig
     UnknownErrorLoc of Location.loc | TypeError of Location.loc * string |
     RecordFieldUpdateFail of Location.loc * string |
     ScopeError of
-      Location.loc * (SyntaxPED.pexpp, unit) Contexts.gamma_ext * SyntaxVCT.xp
+      Location.loc *
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext *
+        SyntaxVCT.xp
   type 'a checkD = Check_Ok of 'a | Check_Fail of tag option * fail_reason
   type 'a checkM = State of (state -> 'a checkD * state)
   val fail : fail_reason -> 'a checkM
@@ -5957,47 +5603,66 @@ module Monad : sig
   val set_state : state -> unit checkM
   val lookup_fun :
     unit ContextsPiDelta.theta_ext ->
-      (SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
+      ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
         SyntaxVCT.xp ->
-          ((SyntaxVCT.xp * (SyntaxVCT.ap * SyntaxPED.pexpp option)) list) option
+          ((SyntaxVCT.xp *
+             (SyntaxVCT.ap *
+               (SyntaxVCT.tau option) SyntaxPED.pexpp option)) list) option
   val convert_fun :
-    SyntaxVCT.xp * (SyntaxVCT.ap * SyntaxPED.pexpp option) ->
-      (SyntaxVCT.xp * (SyntaxVCT.ap * SyntaxPED.pexpp option)) checkM
+    SyntaxVCT.xp *
+      (SyntaxVCT.ap * (SyntaxVCT.tau option) SyntaxPED.pexpp option) ->
+      (SyntaxVCT.xp *
+        (SyntaxVCT.ap * (SyntaxVCT.tau option) SyntaxPED.pexpp option))
+        checkM
   val subst_e_list :
-    SyntaxPED.ep -> (SyntaxVCT.xp * SyntaxVCT.vp) list -> SyntaxPED.ep
+    (SyntaxVCT.tau option) SyntaxPED.ep ->
+      (SyntaxVCT.xp * SyntaxVCT.vp) list -> (SyntaxVCT.tau option) SyntaxPED.ep
   val lookup_fun_and_convert_aux :
     unit ContextsPiDelta.theta_ext ->
-      (SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
+      ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
         SyntaxVCT.xp ->
-          ((SyntaxVCT.xp * (SyntaxVCT.ap * SyntaxPED.pexpp option)) list) checkM
+          ((SyntaxVCT.xp *
+             (SyntaxVCT.ap *
+               (SyntaxVCT.tau option) SyntaxPED.pexpp option)) list)
+            checkM
 end = struct
 
 type tag = IfThen | IfElse;;
 
 type witness = LitI | VarI | TrueI | FalseI | NumI | TupleI |
   PlusI of witness * witness | LEqI of witness * witness | AppI of witness |
-  CValI of witness * (SyntaxPED.pexpp, unit) Contexts.gamma_ext * SyntaxVCT.cp |
-  CLetI of witness * witness | CLet2I of witness * witness |
+  CValI of
+    witness *
+      ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext *
+      SyntaxVCT.cp
+  | CLetI of witness * witness | CLet2I of witness * witness |
   CIfI of witness * witness * witness;;
 
 type state = StateD of Arith.int * witness list;;
 
 type fail_reason = VarUnknown of Location.loc * SyntaxVCT.xp |
-  OperandTypesWrongLeft of SyntaxPED.ep * SyntaxVCT.bp * SyntaxVCT.bp |
-  OperandTypesWrongRight of SyntaxPED.ep * SyntaxVCT.bp * SyntaxVCT.bp |
-  CheckFail of
-    Location.loc * (SyntaxPED.pexpp, unit) Contexts.gamma_ext * string *
-      SyntaxVCT.tau * SyntaxVCT.tau
+  OperandTypesWrongLeft of
+    (SyntaxVCT.tau option) SyntaxPED.ep * SyntaxVCT.bp * SyntaxVCT.bp
+  | OperandTypesWrongRight of
+      (SyntaxVCT.tau option) SyntaxPED.ep * SyntaxVCT.bp * SyntaxVCT.bp
+  | CheckFail of
+      Location.loc *
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext *
+        string * SyntaxVCT.tau * SyntaxVCT.tau
   | IfCondType of Location.loc * SyntaxVCT.tau |
   IfThenBranchType of Location.loc | IfElseBranchType of Location.loc |
-  NotSatisfiable | FunctionUnknown of SyntaxPED.ep * SyntaxVCT.xp | FunctionType
-  | FunctionArgWrongType of Location.loc * SyntaxVCT.tau * SyntaxVCT.tau |
+  NotSatisfiable |
+  FunctionUnknown of (SyntaxVCT.tau option) SyntaxPED.ep * SyntaxVCT.xp |
+  FunctionType |
+  FunctionArgWrongType of Location.loc * SyntaxVCT.tau * SyntaxVCT.tau |
   VectorElementsDiffType | UnknownConstructor of Location.loc * string |
   NotImplemented of Location.loc * string | UnknownError |
   UnknownErrorLoc of Location.loc | TypeError of Location.loc * string |
   RecordFieldUpdateFail of Location.loc * string |
   ScopeError of
-    Location.loc * (SyntaxPED.pexpp, unit) Contexts.gamma_ext * SyntaxVCT.xp;;
+    Location.loc *
+      ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext *
+      SyntaxVCT.xp;;
 
 type 'a checkD = Check_Ok of 'a | Check_Fail of tag option * fail_reason;;
 
@@ -6099,10 +5764,17 @@ let rec lookup_fun
                                  (SyntaxVCT.V_var (SyntaxVCT.VNamed "_x")) z c,
                                ret),
                             Some (SyntaxPED.PEXPp_exp
-                                   (SyntaxPED.Pp_id
-                                      (Location.Loc_unknown, "_x"),
+                                   (SyntaxPED.annot_e
+                                      (SyntaxPED.Ep_val
+((Location.Loc_unknown, None),
+  SyntaxVCT.V_constr (cn, SyntaxVCT.V_var (SyntaxVCT.VNamed "_x")))),
+                                     SyntaxPED.Pp_wild
+                                       (SyntaxPED.annot_e
+ (SyntaxPED.Ep_val
+   ((Location.Loc_unknown, None),
+     SyntaxVCT.V_constr (cn, SyntaxVCT.V_var (SyntaxVCT.VNamed "_x"))))),
                                      SyntaxPED.Ep_val
-                                       (Location.Loc_unknown,
+                                       ((Location.Loc_unknown, None),
  SyntaxVCT.V_constr (cn, SyntaxVCT.V_var (SyntaxVCT.VNamed "_x")))))))]))
         | Some a -> Some a)
     | uu, uv, SyntaxVCT.VIndex -> None;;
@@ -6147,6 +5819,365 @@ let rec lookup_fun_and_convert_aux
 
 end;; (*struct Monad*)
 
+
+module CESubst : sig
+  val ce_subst_vp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.cep
+  val ce_subst_cep :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cep -> SyntaxVCT.cep
+  val ce_subst_cep_list :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cep list -> SyntaxVCT.cep list
+  val ce_subst_cp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cp -> SyntaxVCT.cp
+  val ce_subst_cp_list :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cp list -> SyntaxVCT.cp list
+  val ce_subst_bp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.bp -> SyntaxVCT.bp
+  val ce_subst_tp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.tau -> SyntaxVCT.tau
+  val ce_subst_ctor_tau :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> string * SyntaxVCT.tau -> string * SyntaxVCT.tau
+  val ce_subst_ctor_tau_list :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp ->
+        (string * SyntaxVCT.tau) list -> (string * SyntaxVCT.tau) list
+  val ce_subst_bp_list :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.bp list -> SyntaxVCT.bp list
+  val ce_subst_field_bp :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> string * SyntaxVCT.bp -> string * SyntaxVCT.bp
+  val ce_subst_field_bp_list :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp ->
+        (string * SyntaxVCT.bp) list -> (string * SyntaxVCT.bp) list
+  val ce_subst_patp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.patp -> 'a SyntaxPED.patp
+  val ce_subst_patp_list_Pp_app :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
+  val ce_subst_patp_list_Pp_tup :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
+  val ce_subst_patp_list_Pp_list :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
+  val ce_subst_patp_list_Pp_vector :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
+  val ce_subst_patp_list_Pp_string_append :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
+  val ce_subst_patp_list_Pp_vector_concat :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
+  val ce_subst_lexpp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.lexpp -> 'a SyntaxPED.lexpp
+  val ce_subst_lexpp_list :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.lexpp list -> 'a SyntaxPED.lexpp list
+  val ce_subst_ep :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.ep -> 'a SyntaxPED.ep
+  val ce_subst_pexpp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.pexpp -> 'a SyntaxPED.pexpp
+  val ce_subst_letbindp :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.letbindp -> 'a SyntaxPED.letbindp
+  val ce_subst_funclp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.funclp -> 'a SyntaxPED.funclp
+end = struct
+
+let rec ce_subst_vp
+  cep yp x2 = match cep, yp, x2 with
+    cep, yp, SyntaxVCT.V_var xp ->
+      (if SyntaxVCT.equal_xpa xp yp then cep
+        else SyntaxVCT.CE_val (SyntaxVCT.V_var xp))
+    | uu, uv, SyntaxVCT.V_lit va -> SyntaxVCT.CE_val (SyntaxVCT.V_lit va)
+    | uu, uv, SyntaxVCT.V_vec va -> SyntaxVCT.CE_val (SyntaxVCT.V_vec va)
+    | uu, uv, SyntaxVCT.V_list va -> SyntaxVCT.CE_val (SyntaxVCT.V_list va)
+    | uu, uv, SyntaxVCT.V_cons (va, vb) ->
+        SyntaxVCT.CE_val (SyntaxVCT.V_cons (va, vb))
+    | uu, uv, SyntaxVCT.V_constr (va, vb) ->
+        SyntaxVCT.CE_val (SyntaxVCT.V_constr (va, vb))
+    | uu, uv, SyntaxVCT.V_record va -> SyntaxVCT.CE_val (SyntaxVCT.V_record va)
+    | uu, uv, SyntaxVCT.V_tuple va -> SyntaxVCT.CE_val (SyntaxVCT.V_tuple va)
+    | uu, uv, SyntaxVCT.V_proj (va, vb) ->
+        SyntaxVCT.CE_val (SyntaxVCT.V_proj (va, vb));;
+
+let rec ce_subst_cep
+  cep_5 zp5 x2 = match cep_5, zp5, x2 with
+    cep_5, zp5, SyntaxVCT.CE_val vp -> ce_subst_vp cep_5 zp5 vp
+    | cep_5, zp5, SyntaxVCT.CE_bop (bop, cep1, cep2) ->
+        SyntaxVCT.CE_bop
+          (bop, ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)
+    | cep_5, zp5, SyntaxVCT.CE_many_plus cep_list ->
+        SyntaxVCT.CE_many_plus (ce_subst_cep_list cep_5 zp5 cep_list)
+    | cep_5, zp5, SyntaxVCT.CE_uop (uop, cep) ->
+        SyntaxVCT.CE_uop (uop, ce_subst_cep cep_5 zp5 cep)
+    | cep_5, zp5, SyntaxVCT.CE_proj (p, cep) ->
+        SyntaxVCT.CE_proj (p, ce_subst_cep cep_5 zp5 cep)
+    | cep_5, zp5, SyntaxVCT.CE_field_access (xp, field) ->
+        SyntaxVCT.CE_field_access (xp, field)
+and ce_subst_cep_list
+  cep_5 zp5 x2 = match cep_5, zp5, x2 with cep_5, zp5, [] -> []
+    | cep_5, zp5, cep_XXX :: cep_list_XXX ->
+        ce_subst_cep cep_5 zp5 cep_XXX ::
+          ce_subst_cep_list cep_5 zp5 cep_list_XXX;;
+
+let rec ce_subst_cp
+  cep_5 zp5 x2 = match cep_5, zp5, x2 with
+    cep_5, zp5, SyntaxVCT.C_true -> SyntaxVCT.C_true
+    | cep_5, zp5, SyntaxVCT.C_false -> SyntaxVCT.C_false
+    | cep_5, zp5, SyntaxVCT.C_conj (cp1, cp2) ->
+        SyntaxVCT.C_conj (ce_subst_cp cep_5 zp5 cp1, ce_subst_cp cep_5 zp5 cp2)
+    | cep_5, zp5, SyntaxVCT.C_conj_many cp_list ->
+        SyntaxVCT.C_conj_many (ce_subst_cp_list cep_5 zp5 cp_list)
+    | cep_5, zp5, SyntaxVCT.C_disj (cp1, cp2) ->
+        SyntaxVCT.C_disj (ce_subst_cp cep_5 zp5 cp1, ce_subst_cp cep_5 zp5 cp2)
+    | cep_5, zp5, SyntaxVCT.C_not cp ->
+        SyntaxVCT.C_not (ce_subst_cp cep_5 zp5 cp)
+    | cep_5, zp5, SyntaxVCT.C_eq (cep1, cep2) ->
+        SyntaxVCT.C_eq
+          (ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)
+    | cep_5, zp5, SyntaxVCT.C_leq (cep1, cep2) ->
+        SyntaxVCT.C_leq
+          (ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)
+    | cep_5, zp5, SyntaxVCT.C_imp (cp1, cp2) ->
+        SyntaxVCT.C_imp (ce_subst_cp cep_5 zp5 cp1, ce_subst_cp cep_5 zp5 cp2)
+and ce_subst_cp_list
+  cep_5 zp5 x2 = match cep_5, zp5, x2 with cep_5, zp5, [] -> []
+    | cep_5, zp5, cp_XXX :: cp_list_XXX ->
+        ce_subst_cp cep_5 zp5 cp_XXX :: ce_subst_cp_list cep_5 zp5 cp_list_XXX;;
+
+let rec ce_subst_bp
+  cep5 zp5 x2 = match cep5, zp5, x2 with
+    cep5, zp5, SyntaxVCT.B_var tvar -> SyntaxVCT.B_var tvar
+    | cep5, zp5, SyntaxVCT.B_tid id -> SyntaxVCT.B_tid id
+    | cep5, zp5, SyntaxVCT.B_int -> SyntaxVCT.B_int
+    | cep5, zp5, SyntaxVCT.B_bool -> SyntaxVCT.B_bool
+    | cep5, zp5, SyntaxVCT.B_bit -> SyntaxVCT.B_bit
+    | cep5, zp5, SyntaxVCT.B_unit -> SyntaxVCT.B_unit
+    | cep5, zp5, SyntaxVCT.B_real -> SyntaxVCT.B_real
+    | cep5, zp5, SyntaxVCT.B_vec (order, bp) ->
+        SyntaxVCT.B_vec (order, ce_subst_bp cep5 zp5 bp)
+    | cep5, zp5, SyntaxVCT.B_list bp ->
+        SyntaxVCT.B_list (ce_subst_bp cep5 zp5 bp)
+    | cep5, zp5, SyntaxVCT.B_tuple bp_list ->
+        SyntaxVCT.B_tuple (ce_subst_bp_list cep5 zp5 bp_list)
+    | cep5, zp5, SyntaxVCT.B_union (id, ctor_tau_list) ->
+        SyntaxVCT.B_union (id, ce_subst_ctor_tau_list cep5 zp5 ctor_tau_list)
+    | cep5, zp5, SyntaxVCT.B_record field_bp_list ->
+        SyntaxVCT.B_record (ce_subst_field_bp_list cep5 zp5 field_bp_list)
+    | cep5, zp5, SyntaxVCT.B_undef -> SyntaxVCT.B_undef
+    | cep5, zp5, SyntaxVCT.B_reg tau ->
+        SyntaxVCT.B_reg (ce_subst_tp cep5 zp5 tau)
+    | cep5, zp5, SyntaxVCT.B_string -> SyntaxVCT.B_string
+    | cep5, zp5, SyntaxVCT.B_exception -> SyntaxVCT.B_exception
+    | cep5, zp5, SyntaxVCT.B_finite_set num_list ->
+        SyntaxVCT.B_finite_set num_list
+and ce_subst_tp
+  cep5 zp5 (SyntaxVCT.T_refined_type (zp, bp, cp)) =
+    SyntaxVCT.T_refined_type
+      (zp, ce_subst_bp cep5 zp5 bp, ce_subst_cp cep5 zp5 cp)
+and ce_subst_ctor_tau cep5 zp5 (ctor1, tp1) = (ctor1, ce_subst_tp cep5 zp5 tp1)
+and ce_subst_ctor_tau_list
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, ctor_tau_XXX :: ctor_tau_list_XXX ->
+        ce_subst_ctor_tau cep5 zp5 ctor_tau_XXX ::
+          ce_subst_ctor_tau_list cep5 zp5 ctor_tau_list_XXX
+and ce_subst_bp_list
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, bp_XXX :: bp_list_XXX ->
+        ce_subst_bp cep5 zp5 bp_XXX :: ce_subst_bp_list cep5 zp5 bp_list_XXX
+and ce_subst_field_bp
+  cep5 zp5 (field1, bp1) = (field1, ce_subst_bp cep5 zp5 bp1)
+and ce_subst_field_bp_list
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, field_bp_XXX :: field_bp_list_XXX ->
+        ce_subst_field_bp cep5 zp5 field_bp_XXX ::
+          ce_subst_field_bp_list cep5 zp5 field_bp_list_XXX;;
+
+let rec ce_subst_patp
+  cep5 zp5 x2 = match cep5, zp5, x2 with
+    cep5, zp5, SyntaxPED.Pp_lit (loc, lit) -> SyntaxPED.Pp_lit (loc, lit)
+    | cep5, zp5, SyntaxPED.Pp_wild loc -> SyntaxPED.Pp_wild loc
+    | cep5, zp5, SyntaxPED.Pp_as_var (loc, patp, xp) ->
+        SyntaxPED.Pp_as_var (loc, ce_subst_patp cep5 zp5 patp, xp)
+    | cep5, zp5, SyntaxPED.Pp_typ (loc, tau, patp) ->
+        SyntaxPED.Pp_typ
+          (loc, ce_subst_tp cep5 zp5 tau, ce_subst_patp cep5 zp5 patp)
+    | cep5, zp5, SyntaxPED.Pp_id (loc, id) -> SyntaxPED.Pp_id (loc, id)
+    | cep5, zp5, SyntaxPED.Pp_as_typ (loc, patp, tau) ->
+        SyntaxPED.Pp_as_typ
+          (loc, ce_subst_patp cep5 zp5 patp, ce_subst_tp cep5 zp5 tau)
+    | cep5, zp5, SyntaxPED.Pp_app (loc, id, patp_list) ->
+        SyntaxPED.Pp_app (loc, id, ce_subst_patp_list_Pp_app cep5 zp5 patp_list)
+    | cep5, zp5, SyntaxPED.Pp_vector (loc, patp_list) ->
+        SyntaxPED.Pp_vector
+          (loc, ce_subst_patp_list_Pp_vector cep5 zp5 patp_list)
+    | cep5, zp5, SyntaxPED.Pp_vector_concat (loc, patp_list) ->
+        SyntaxPED.Pp_vector_concat
+          (loc, ce_subst_patp_list_Pp_vector_concat cep5 zp5 patp_list)
+    | cep5, zp5, SyntaxPED.Pp_tup (loc, patp_list) ->
+        SyntaxPED.Pp_tup (loc, ce_subst_patp_list_Pp_tup cep5 zp5 patp_list)
+    | cep5, zp5, SyntaxPED.Pp_list (loc, patp_list) ->
+        SyntaxPED.Pp_list (loc, ce_subst_patp_list_Pp_list cep5 zp5 patp_list)
+    | cep5, zp5, SyntaxPED.Pp_cons (loc, patp1, patp2) ->
+        SyntaxPED.Pp_cons
+          (loc, ce_subst_patp cep5 zp5 patp1, ce_subst_patp cep5 zp5 patp2)
+    | cep5, zp5, SyntaxPED.Pp_string_append (loc, patp_list) ->
+        SyntaxPED.Pp_string_append
+          (loc, ce_subst_patp_list_Pp_string_append cep5 zp5 patp_list)
+and ce_subst_patp_list_Pp_app
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, patp_XXX :: patp_list_XXX ->
+        ce_subst_patp cep5 zp5 patp_XXX ::
+          ce_subst_patp_list_Pp_app cep5 zp5 patp_list_XXX
+and ce_subst_patp_list_Pp_tup
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, patp_XXX :: patp_list_XXX ->
+        ce_subst_patp cep5 zp5 patp_XXX ::
+          ce_subst_patp_list_Pp_tup cep5 zp5 patp_list_XXX
+and ce_subst_patp_list_Pp_list
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, patp_XXX :: patp_list_XXX ->
+        ce_subst_patp cep5 zp5 patp_XXX ::
+          ce_subst_patp_list_Pp_list cep5 zp5 patp_list_XXX
+and ce_subst_patp_list_Pp_vector
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, patp_XXX :: patp_list_XXX ->
+        ce_subst_patp cep5 zp5 patp_XXX ::
+          ce_subst_patp_list_Pp_vector cep5 zp5 patp_list_XXX
+and ce_subst_patp_list_Pp_string_append
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, patp_XXX :: patp_list_XXX ->
+        ce_subst_patp cep5 zp5 patp_XXX ::
+          ce_subst_patp_list_Pp_string_append cep5 zp5 patp_list_XXX
+and ce_subst_patp_list_Pp_vector_concat
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, patp_XXX :: patp_list_XXX ->
+        ce_subst_patp cep5 zp5 patp_XXX ::
+          ce_subst_patp_list_Pp_vector_concat cep5 zp5 patp_list_XXX;;
+
+let rec ce_subst_lexpp
+  cep5 zp5 x2 = match cep5, zp5, x2 with
+    cep5, zp5, SyntaxPED.LEXPp_mvar (loc, up) -> SyntaxPED.LEXPp_mvar (loc, up)
+    | cep5, zp5, SyntaxPED.LEXPp_cast (loc, tau, up) ->
+        SyntaxPED.LEXPp_cast (loc, ce_subst_tp cep5 zp5 tau, up)
+    | cep5, zp5, SyntaxPED.LEXPp_tup (loc, lexpp_list) ->
+        SyntaxPED.LEXPp_tup (loc, ce_subst_lexpp_list cep5 zp5 lexpp_list)
+    | cep5, zp5, SyntaxPED.LEXPp_field (loc, lexpp, id) ->
+        SyntaxPED.LEXPp_field (loc, ce_subst_lexpp cep5 zp5 lexpp, id)
+and ce_subst_lexpp_list
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, lexpp_XXX :: lexpp_list_XXX ->
+        ce_subst_lexpp cep5 zp5 lexpp_XXX ::
+          ce_subst_lexpp_list cep5 zp5 lexpp_list_XXX;;
+
+let rec ce_subst_ep
+  cep5 zp5 x2 = match cep5, zp5, x2 with
+    cep5, zp5, SyntaxPED.Ep_val (loc, vp) -> SyntaxPED.Ep_val (loc, vp)
+    | cep5, zp5, SyntaxPED.Ep_mvar (loc, up) -> SyntaxPED.Ep_mvar (loc, up)
+    | cep5, zp5, SyntaxPED.Ep_concat (loc, ep_list) ->
+        SyntaxPED.Ep_concat (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
+    | cep5, zp5, SyntaxPED.Ep_tuple (loc, ep_list) ->
+        SyntaxPED.Ep_tuple (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
+    | cep5, zp5, SyntaxPED.Ep_app (loc, fp, ep) ->
+        SyntaxPED.Ep_app (loc, fp, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_bop (loc, bop, ep1, ep2) ->
+        SyntaxPED.Ep_bop
+          (loc, bop, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
+    | cep5, zp5, SyntaxPED.Ep_uop (loc, uop, ep) ->
+        SyntaxPED.Ep_uop (loc, uop, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_proj (loc, p, ep) ->
+        SyntaxPED.Ep_proj (loc, p, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_field_access (loc, ep, field) ->
+        SyntaxPED.Ep_field_access (loc, ce_subst_ep cep5 zp5 ep, field)
+    | cep5, zp5, SyntaxPED.Ep_sizeof (loc, cep) ->
+        SyntaxPED.Ep_sizeof (loc, ce_subst_cep cep5 zp5 cep)
+    | cep5, zp5, SyntaxPED.Ep_cast (loc, tau, ep) ->
+        SyntaxPED.Ep_cast
+          (loc, ce_subst_tp cep5 zp5 tau, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_record (loc, field_ep_list) ->
+        SyntaxPED.Ep_record
+          (loc, Lista.map
+                  (fun fe ->
+                    (Product_Type.fst fe,
+                      ce_subst_ep cep5 zp5 (Product_Type.snd fe)))
+                  field_ep_list)
+    | cep5, zp5, SyntaxPED.Ep_record_update (loc, ep, field_ep_list) ->
+        SyntaxPED.Ep_record_update
+          (loc, ce_subst_ep cep5 zp5 ep,
+            Lista.map (fun (f, e) -> (f, ce_subst_ep cep5 zp5 e)) field_ep_list)
+    | cep5, zp5, SyntaxPED.Ep_let (loc, letbindp, ep2) ->
+        SyntaxPED.Ep_let
+          (loc, ce_subst_letbindp cep5 zp5 letbindp, ce_subst_ep cep5 zp5 ep2)
+    | cep5, zp5, SyntaxPED.Ep_if (loc, ep1, ep2, ep3) ->
+        SyntaxPED.Ep_if
+          (loc, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2,
+            ce_subst_ep cep5 zp5 ep3)
+    | cep5, zp5, SyntaxPED.Ep_block (loc, ep_list) ->
+        SyntaxPED.Ep_block (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
+    | cep5, zp5, SyntaxPED.Ep_case (loc, ep, pexpp_list) ->
+        SyntaxPED.Ep_case
+          (loc, ce_subst_ep cep5 zp5 ep,
+            Lista.map (ce_subst_pexpp cep5 zp5) pexpp_list)
+    | cep5, zp5, SyntaxPED.Ep_assign (loc, lexpp, ep1) ->
+        SyntaxPED.Ep_assign
+          (loc, ce_subst_lexpp cep5 zp5 lexpp, ce_subst_ep cep5 zp5 ep1)
+    | cep5, zp5, SyntaxPED.Ep_var (loc, lexpp, ep1, ep2) ->
+        SyntaxPED.Ep_var
+          (loc, ce_subst_lexpp cep5 zp5 lexpp, ce_subst_ep cep5 zp5 ep1,
+            ce_subst_ep cep5 zp5 ep2)
+    | cep5, zp5, SyntaxPED.Ep_return (loc, ep) ->
+        SyntaxPED.Ep_return (loc, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_exit (loc, ep) ->
+        SyntaxPED.Ep_exit (loc, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_ref (loc, id) -> SyntaxPED.Ep_ref (loc, id)
+    | cep5, zp5, SyntaxPED.Ep_throw (loc, ep) ->
+        SyntaxPED.Ep_throw (loc, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_try (loc, ep, pexpp_list) ->
+        SyntaxPED.Ep_try
+          (loc, ce_subst_ep cep5 zp5 ep,
+            Lista.map (ce_subst_pexpp cep5 zp5) pexpp_list)
+    | cep5, zp5, SyntaxPED.Ep_constraint (loc, cp) ->
+        SyntaxPED.Ep_constraint (loc, ce_subst_cp cep5 zp5 cp)
+    | cep5, zp5, SyntaxPED.Ep_loop (loc, loop, ep1, ep2) ->
+        SyntaxPED.Ep_loop
+          (loc, loop, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
+    | cep5, zp5, SyntaxPED.Ep_for (loc, id, ep1, ep2, ep3, order, ep4) ->
+        SyntaxPED.Ep_for
+          (loc, id, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2,
+            ce_subst_ep cep5 zp5 ep3, order, ce_subst_ep cep5 zp5 ep4)
+    | cep5, zp5, SyntaxPED.Ep_assert (loc, ep1, ep2) ->
+        SyntaxPED.Ep_assert
+          (loc, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
+    | cep5, zp5, SyntaxPED.Ep_vec (loc, ep_list) ->
+        SyntaxPED.Ep_vec (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
+    | cep5, zp5, SyntaxPED.Ep_list (loc, ep_list) ->
+        SyntaxPED.Ep_list (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
+    | cep5, zp5, SyntaxPED.Ep_cons (loc, ep1, ep2) ->
+        SyntaxPED.Ep_cons
+          (loc, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
+and ce_subst_pexpp
+  cep5 zp5 x2 = match cep5, zp5, x2 with
+    cep5, zp5, SyntaxPED.PEXPp_exp (loc, patp, ep) ->
+      SyntaxPED.PEXPp_exp
+        (loc, ce_subst_patp cep5 zp5 patp, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.PEXPp_when (loc, patp, ep1, ep2) ->
+        SyntaxPED.PEXPp_when
+          (loc, ce_subst_patp cep5 zp5 patp, ce_subst_ep cep5 zp5 ep1,
+            ce_subst_ep cep5 zp5 ep2)
+and ce_subst_letbindp
+  cep5 zp5 (SyntaxPED.LBp_val (loc, patp, ep)) =
+    SyntaxPED.LBp_val
+      (loc, ce_subst_patp cep5 zp5 patp, ce_subst_ep cep5 zp5 ep);;
+
+let rec ce_subst_funclp
+  cep5 zp5 (SyntaxPED.FCLp_funcl (loc, id, pexpp)) =
+    SyntaxPED.FCLp_funcl (loc, id, ce_subst_pexpp cep5 zp5 pexpp);;
+
+end;; (*struct CESubst*)
 
 module Predicate : sig
   type 'a seq = Empty | Insert of 'a * 'a pred | Join of 'a pred * 'a seq
@@ -6696,36 +6727,45 @@ and unify_b_aux_i_i_o
 end;; (*struct UnifyType*)
 
 module TypingUtils : sig
+  val upd_t : Location.loc * 'a -> 'b -> Location.loc * 'b option
   val k_list :
     (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list ->
       (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list
   val g_cons3 :
-    (SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+    ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
       ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list) list ->
-        (SyntaxPED.pexpp, unit) Contexts.gamma_ext
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext
   val k_append :
     ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list) list ->
       (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list
-  val emptyEnv : (SyntaxPED.pexpp, unit) Contexts.gamma_ext
+  val emptyEnv :
+    ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext
   val emptyTEnv : unit ContextsPiDelta.theta_ext
   val mk_constructor_fun :
     SyntaxVCT.tau ->
       SyntaxVCT.tau ->
         string ->
-          ((SyntaxVCT.xp * (SyntaxVCT.ap * SyntaxPED.pexpp option)) list) option
+          ((SyntaxVCT.xp *
+             (SyntaxVCT.ap *
+               (SyntaxVCT.tau option) SyntaxPED.pexpp option)) list) option
   val lookup_fun :
     unit ContextsPiDelta.theta_ext ->
-      (SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
+      ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
         SyntaxVCT.xp ->
-          ((SyntaxVCT.xp * (SyntaxVCT.ap * SyntaxPED.pexpp option)) list) option
+          ((SyntaxVCT.xp *
+             (SyntaxVCT.ap *
+               (SyntaxVCT.tau option) SyntaxPED.pexpp option)) list) option
   val fresh_string_aux : string list -> Arith.int list -> string
   val fresh_string : string list -> string
-  val mk_fresh_g : (SyntaxPED.pexpp, unit) Contexts.gamma_ext -> SyntaxVCT.xp
+  val mk_fresh_g :
+    ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+      SyntaxVCT.xp
   val mk_fresh_i : Arith.nat -> Arith.nat * SyntaxVCT.xp
   val add_fun_all :
-    (SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
+    ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
       SyntaxVCT.ap ->
-        SyntaxPED.funclp list -> (SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext
+        (SyntaxVCT.tau option) SyntaxPED.funclp list ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext
   val mk_proj_var : SyntaxVCT.xp -> Arith.nat -> SyntaxVCT.xp
   val mk_eq_proj_aux :
     SyntaxVCT.xp -> Arith.nat -> Arith.nat -> SyntaxVCT.xp -> SyntaxVCT.cp
@@ -6739,12 +6779,14 @@ module TypingUtils : sig
     SyntaxVCT.bp -> (string * SyntaxVCT.bp) list -> SyntaxVCT.bp
   val lookup_fun_type :
     unit ContextsPiDelta.theta_ext ->
-      (SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
-        SyntaxVCT.xp -> (SyntaxVCT.ap list) option
+      ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
+        SyntaxVCT.xp -> ((SyntaxVCT.xp * SyntaxVCT.ap) list) option
   val lookup_ctor_base :
     unit ContextsPiDelta.theta_ext ->
       string -> (SyntaxVCT.tau * SyntaxVCT.bp) option
 end = struct
+
+let rec upd_t (loc, uu) t = (loc, Some t);;
 
 let rec k_list k = k;;
 
@@ -6756,7 +6798,7 @@ let rec g_cons3
 
 let rec k_append ks = Lista.concat ks;;
 
-let emptyEnv : (SyntaxPED.pexpp, unit) Contexts.gamma_ext
+let emptyEnv : ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext
   = Contexts.Gamma_ext
       (Finite_Map.fmempty, [], [], [], Finite_Map.fmempty, Finite_Map.fmempty,
         [], None, ());;
@@ -6781,9 +6823,20 @@ let rec mk_constructor_fun
                              (SyntaxVCT.V_constr
                                (cn, SyntaxVCT.V_var (SyntaxVCT.VNamed x)))))),
                 Some (SyntaxPED.PEXPp_exp
-                       (SyntaxPED.Pp_id (Location.Loc_unknown, x),
+                       (SyntaxPED.annot_e
+                          (SyntaxPED.Ep_val
+                            (SyntaxUtils.empty_annot,
+                              SyntaxVCT.V_constr
+                                (cn, SyntaxVCT.V_var (SyntaxVCT.VNamed x)))),
+                         SyntaxPED.Pp_wild
+                           (SyntaxPED.annot_e
+                             (SyntaxPED.Ep_val
+                               (SyntaxUtils.empty_annot,
+                                 SyntaxVCT.V_constr
+                                   (cn, SyntaxVCT.V_var
+  (SyntaxVCT.VNamed x))))),
                          SyntaxPED.Ep_val
-                           (Location.Loc_unknown,
+                           (SyntaxUtils.empty_annot,
                              SyntaxVCT.V_constr
                                (cn, SyntaxVCT.V_var
                                       (SyntaxVCT.VNamed x)))))))]);;
@@ -6870,7 +6923,7 @@ let rec lookup_fun_type
   t g x =
     (match lookup_fun t g x with None -> None
       | Some asa ->
-        Some (Lista.map (fun (_, a) -> (let (aa, _) = a in aa)) asa));;
+        Some (Lista.map (fun (f, a) -> (let (aa, _) = a in (f, aa))) asa));;
 
 let rec lookup_ctor_base
   theta ctor =
@@ -7070,7 +7123,8 @@ let rec linearise
     | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_one) -> Some []
     | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_true) -> Some []
     | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_false) -> Some []
-    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_bitvec vb)) -> Some []
+    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_hex vb)) -> Some []
+    | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_bin vb)) -> Some []
     | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_string vb)) -> Some []
     | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit SyntaxVCT.L_undef) -> Some []
     | ks, SyntaxVCT.CE_val (SyntaxVCT.V_lit (SyntaxVCT.L_real vb)) -> Some []
@@ -7094,7 +7148,8 @@ let rec linearise
     | ks, SyntaxVCT.CE_many_plus v -> Some []
     | ks, SyntaxVCT.CE_uop (v, va) -> Some []
     | ks, SyntaxVCT.CE_proj (v, va) -> Some []
-    | ks, SyntaxVCT.CE_field_access (v, va) -> Some [];;
+    | ks, SyntaxVCT.CE_field_access (v, va) -> Some []
+    | ks, SyntaxVCT.CE_len v -> Some [];;
 
 let rec linearise_A
   ks x1 = match ks, x1 with ks, [] -> Some []

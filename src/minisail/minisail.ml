@@ -16,7 +16,7 @@ let rec set_of_seq_limit i _A
     Predicate.Join (p, xq) -> Set.sup_set _A (set_of_pred_limit (i-1) _A p) (set_of_seq_limit (i-1) _A xq)
   | Insert (x, p) ->
      (match x with
-                       | ITD.OK () -> Printf.eprintf "Found ok derivation"; Set.bot_set (*Set.insert _A x (set_of_pred_limit (i-1) _A p)*)
+                       | ITD.OK  -> Printf.eprintf "Found ok derivation"; Set.bot_set (*Set.insert _A x (set_of_pred_limit (i-1) _A p)*)
                        | Error _ -> Printf.eprintf "Found error\n" ; Set.bot_set)
   (*     Set.insert _A x (set_of_pred_limit (i-1) _A p)*)
     | Empty -> Set.bot_set
@@ -25,7 +25,7 @@ and set_of_pred_limit i _A  (Seq f) =
   (match f () with
      Predicate.Empty -> Set.bot_set
    | Insert (x, p) -> (match x with
-                       | ITD.OK () -> Printf.eprintf "Found ok derivation"; Set.bot_set (*Set.insert _A x (set_of_pred_limit (i-1) _A p)*)
+                       | ITD.OK  -> Printf.eprintf "Found ok derivation"; Set.bot_set (*Set.insert _A x (set_of_pred_limit (i-1) _A p)*)
                        | Error _ -> Printf.eprintf "Found error\n" ; Set.bot_set)
       | Join (p, xq) -> Set.sup_set _A (set_of_pred_limit (i-1) _A p) (set_of_seq_limit (i-1) _A xq));;
 
@@ -41,25 +41,45 @@ let opt_dmsp_check_before = ref None
 let opt_dmsp_check_after = ref None
 
 let pp_ok_error ok = match ok with
-    ITD.OK _ -> string "Ok\n"
-  | Error (CheckFail (s, loc)) -> string "err = " ^^ string s ^^ string " loc=" ^^ (pp_loc loc)
-                               
+    ITD.OK -> string "Ok\n"
+  | Error (ITD.CheckFail (s, loc)) -> string "Error: " ^^ string s ^^ string " loc=" ^^ (pp_loc loc)
+
+let rec pp_trace_check_def = function
+                           | ITD.CheckFunDef w -> string "CheckFunDef " ^^ separate (string ", ") (List.map  pp_trace_pexp w) ^^ string ")"
+                           | _ -> string "check_def_w"  
+and pp_trace_pexp = function
+                  | CheckPExp (pat,ep) -> string "CheckPexp (" ^^ pp_trace_ep ep ^^ string ")"
+                  | _ -> string "check_pexp_w"
+and pp_trace_ep = function
+                | CheckSubtype (ep,st) -> string "CheckSubType (" ^^ pp_trace_infer_ep ep ^^ string ", " ^^ pp_subtype st ^^ string ")"
+                | _ -> string "check_ep_w"
+and pp_trace_infer_ep = function
+  | InferApp (ep,st) -> string "InferApp (" ^^ pp_trace_infer_ep ep ^^ string ", " ^^ pp_subtype st ^^ string ")"
+  | InferVal v -> string "InferVal (" ^^ pp_trace_infer_v v ^^ string ")"
+  | InferTuple _ -> string "InferTuple"
+and pp_trace_infer_v = function
+  | InferVVar _ ->  string "InferVar"
+  | _ -> string "infer_v_w"
+and pp_subtype = function
+  | Subtype _ -> string "subtype_w ok"
+  | SubtypeFail -> string "subtype_w fail"
+                                    
 let check_prog_decl ms_ast =
 (*  let (Msp_ast.Set.Set res) = set_of_pred_limit 10
              {equal=fun x y -> (x == y)} (ITD.check_prog_i_o ms_ast) in *)
   let (Msp_ast.Set.Set res) = Predicate.set_of_pred
-             {equal=fun x y -> (x == y)} (ITD.check_prog_i_o ms_ast) in
+             {equal=fun x y -> (x == y)} (ITD.check_prog_i_o_o_o ms_ast) in
   match res with
     [] -> Printf.eprintf "Program didn't type check.\n"
-  |  (ok) :: xs ->  Printf.eprintf "Program type checked. (%d derivations) " (List.length res);
+  |  (_,(_,ok)) :: xs ->  Printf.eprintf "Program type checked. (%d derivations) " (List.length res);
                     PPrintEngine.ToChannel.compact stderr ((pp_ok_error ok) ^^ string "\n")
 
 let loc_def = function
-  | AST.DEFp_fundef (loc, _, _ ) -> loc
-  | DEFp_typedef (loc,_, _, _) -> loc
-  | DEFp_spec (loc, _ , _ ) -> loc
-  | DEFp_val (loc , _ ) -> loc
-  | _ -> Loc_unknown
+  | AST.DEFp_fundef ((loc,_), _, _ ) -> loc
+  | DEFp_typedef ((loc,_),_, _, _) -> loc
+  | DEFp_spec ((loc,_), _ , _ ) -> loc
+  | DEFp_val ((loc,_) , _ ) -> loc
+  | _ -> (Msp_ast.Location.Loc_unknown)
            (*
     DEFp_reg of Location.loc * SyntaxVCT.tau * SyntaxVCT.xp |
     DEFp_overload of Location.loc * string * string list |
@@ -73,8 +93,8 @@ let some_head xs = match xs with
 
 (* Get one of the successful derivations *)
 let get_ok res = 
-  let res = List.filter (fun (t, (p , (g, (i, ok)))) -> match ok with
-                                                             ITD.OK _ -> true
+  let res = List.filter (fun (t, (p , (g, (i, (k,(l,ok)))))) -> match ok with
+                                                             ITD.OK  -> true
                                                            | _ -> false) res in
   some_head res
 
@@ -87,21 +107,25 @@ let get_error res =
     
            
 let check_def_decl i t p g def =
-  let _ = Printf.eprintf "** Checking def **\n" ;  PPrintEngine.ToChannel.compact stderr (pp_defp def) in
+  let _ = Printf.eprintf "++ Checking def term:\n" ;  PPrintEngine.ToChannel.compact stderr (pp_defp def) in
+  let _ = Printf.eprintf "\n" in
   (let (Msp_ast.Set.Set res) = Predicate.set_of_pred
-             {equal=fun x y -> (x == y)} (ITD.check_def_i_i_i_i_i_o_o_o_o_o i t p g def) in
+             {equal=fun x y -> (x == y)} (ITD.check_def_i_i_i_i_i_o_o_o_o_o_o_o i t p g def) in
   match res with
-    [] -> Printf.eprintf "CHECK DEF: Failed. No derivations. Loc=";
+    [] -> Printf.eprintf "Failed. No derivations. Loc=";
           PPrintEngine.ToChannel.compact stderr (pp_loc (loc_def def) );
-          Printf.eprintf "\n";
+          Printf.eprintf "\n\n";
           Some (i,t,p,g,false)
   |  xs -> match get_error xs with
-             Some (_,(_,(_,(_,err)))) -> Printf.eprintf "CHECK DEF: Failed. %d derivations\n" (List.length res);
+             Some (_,(_,(_,(_,(_,(tr,err)))))) -> Printf.eprintf "Failed. %d derivations\n" (List.length res);
                                          PPrintEngine.ToChannel.compact stderr ((pp_ok_error err) );
-                                         Printf.eprintf "\n";
+                                         Printf.eprintf "\n\n";
                                          Some (i,t,p,g,false)
-           | None -> Printf.eprintf "CHECK DEF: Ok. %d derivations\n" (List.length res);
-                     let Some (t,(p,(g,(i,_)))) = get_ok res in Some (i,t,p,g,true)
+           | None -> Printf.eprintf "Success. %d derivations\n\n" (List.length res);
+                     let Some (t,(p,(g,(_,(i,(tr,_)))))) = get_ok res in
+                     PPrintEngine.ToChannel.compact stderr (pp_trace_check_def tr);
+                     Printf.eprintf "\n";
+                     Some (i,t,p,g,true)
 
   )
 
@@ -114,7 +138,7 @@ let check_prog_fn ms_ast =
 
 let check_def_fn t p g def i = 
     match (Msp_ast.Monad.run_state (ITF.check_def t p g  def) (StateD (i,[]))) with
-     | (Msp_ast.Monad.Check_Ok (t',(p',g')),StateD (i',_)) -> Printf.eprintf  "CHECK DEF: ok\n"; (t',p',g',i')
+     | (Msp_ast.Monad.Check_Ok (t',(p',g')),StateD (i',_)) -> Printf.eprintf  "Success.\n"; (t',p',g',i')
      | (Check_Fail (_, r), StateD (i',_)) ->
         Printf.eprintf "CHECK DEF: failed. ";
         PPrintEngine.ToChannel.compact stderr ((pp_fail r) ^^ string "\n");
@@ -134,9 +158,10 @@ let rec check_defs_decl i t p g defs = match defs with
                    | None -> (i,t,p,g,false)
 
                                     
-let check_prog_defs_fn (AST.Pp_prog defs) = check_defs_fn Msp_ast.TypingUtils.emptyTEnv Ctx.emptyPiEnv Msp_ast.TypingUtils.emptyEnv defs (Msp_ast.Arith.zero_int)
+let check_prog_defs_fn (AST.Pp_prog (_ ,defs)) = check_defs_fn Msp_ast.TypingUtils.emptyTEnv
+                                                   Ctx.emptyPiEnv Msp_ast.TypingUtils.emptyEnv defs (Msp_ast.Arith.zero_int)
 
-let check_prog_defs_decl (AST.Pp_prog defs) =
+let check_prog_defs_decl (AST.Pp_prog (_, defs)) =
   let (_,_,_,_,ok) = check_defs_decl (Msp_ast.Arith.zero_nat) Msp_ast.TypingUtils.emptyTEnv Ctx.emptyPiEnv Msp_ast.TypingUtils.emptyEnv defs
   in ok
                               

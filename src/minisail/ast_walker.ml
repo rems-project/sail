@@ -4,8 +4,8 @@ open Msp_ast
 open Msp_ast.SyntaxVCT
 open Msp_ast.SyntaxPED
 
-type 'a walker = {
-    visit_def : (def -> 'a * def) option;
+type ('a,'b) walker = {
+    visit_def : ('b defp -> 'a * 'b defp) option;
     visit_b   : (bp -> 'a * bp ) option;
 }
 

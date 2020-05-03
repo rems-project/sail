@@ -52,14 +52,15 @@ let pp_ge e = match e with
 
 let pp_g (Ctx.Gamma_ext (_,g1,g2,_,_,_,scope,_,_)) xbc c =
   let g = g1@g2 in
-  PPrintEngine.ToChannel.compact stderr ( string "Evars" ^^  (separate (string " ") (List.map
+  PPrintEngine.ToChannel.compact stderr ( string "Immutable variables:" ^^  (separate (string " ") (List.map
            (fun (MAST.VNamed x, e) ->
              (string x ^^ string " , " ^^ (pp_ge e)  ^^ string "\n" )) xbc)) ^^ 
-                                            string "G=\n" ^^ (separate (string "\n") (List.map (fun (MAST.VNamed x , e) ->
-                                                                                          string x ^^  string " : " ^^ (pp_ge e)) g)) ^^
-                                              string "\nC=" ^^ (pp_cp c) ^^ string "\nVariables in scope:\n" ^^ 
-                                                (separate (string " ") (List.map (fun (MAST.VNamed x) -> string x) scope)) ^^
-                                                  string "\n"
+              string "\n" ^^ (separate (string "\n")
+             (List.map (fun (MAST.VNamed x , e) ->
+                string x ^^  string " : " ^^ (pp_ge e)) g)) ^^
+                string "\nC=" ^^ (pp_cp c) ^^ string "\nVariables in scope:\n" ^^ 
+                (separate (string " ") (List.map (fun (MAST.VNamed x) -> string x) scope)) ^^
+                string "\n"
     )
                                  
                                
@@ -77,11 +78,10 @@ let rec satisfiable (label : string) loc ( str_list : string list ) ( def : bool
   let str_list = List.map convert_isa_string str_list in *)
   let z3_file = Util_ms.string_of_list "\n" (fun x -> x) str_list in
   let z3_file = !opt_solver.header ^ "\n" ^ z3_file ^ "\n" ^ !opt_solver.footer in
-  Printf.eprintf "CALLZ3 %d\n" (!Util.opt_verbosity);
   if !Util.opt_verbosity > 1 then 
-    (prerr_endline (Printf.sprintf "Label: %s" label);
+    (prerr_endline (Printf.sprintf "SMT solver call: %s" label);
      PPrintEngine.ToChannel.compact stderr (string "Location: " ^^ (pp_loc loc));
-     prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" z3_file)); 
+     prerr_endline (Printf.sprintf "\nScript: \n%s%!" z3_file)); 
 
   let rec input_lines chan = function
     | 0 -> ""
@@ -116,7 +116,7 @@ let rec satisfiable (label : string) loc ( str_list : string list ) ( def : bool
     let _ = Unix.close_process_in z3_chan in
     let _ = 
       if !Util.opt_verbosity > 1 then 
-        let _ = List.iter (fun (_, result) -> Printf.eprintf "Z3 Result: %s\n" result) z3_output in
+        let _ = List.iter (fun (_, result) -> Printf.eprintf "Result: %s\n\n" result) z3_output in
         let vals = get_values z3_output in
         let _ = List.iter (fun (x,y) -> Printf.eprintf "Val %s=%s\n" x y) vals in ()
       else

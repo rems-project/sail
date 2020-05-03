@@ -14,6 +14,7 @@ open Sail_pp
 open Msp_ast.SyntaxVCT  (* Mini Sail AST as obtain from Isabelle *)
 open Msp_ast.SyntaxPED  (* Mini Sail AST as obtain from Isabelle *)
 open Msp_ast.Location
+open Msp_ast.CESubst
 open Msp_ast.Contexts
 open Msp_ast.ConvertTypes
 open Minisailplus_pp
@@ -71,7 +72,7 @@ let b_of (T_refined_type (_,b,_)) = b
 let c_of (T_refined_type (_,_,c)) = c
 
 let zvar = VIndex
-let xvar = VNamed "#x"
+let xvar = VNamed "_xvar"
 
 let c_le v1 v2 = C_eq (CE_val (V_lit (L_true)) , ( CE_bop (LEq, v1, v2)))
 let c_ge v1 v2 = C_eq (CE_val (V_lit (L_true)) , ( CE_bop (GEq, v1, v2)))
@@ -530,8 +531,9 @@ and to_ms_typ_with_constraints ctx loc (kids : (xp*bp) list) (c : cp) (typ : A.t
                            | VNamed k -> Printf.eprintf "k=%s\n" k; pp_line (pp_cep e1)
     ) ceks;
   let cs = replace_ks_in_c ceks c in
-  let c_eq = find_c_eq ceks in 
-  let t =   T_refined_type( zvar, to_ms_base ctx typ, C_conj_many (c_eq::cs::cs1) ) in 
+  let c_eq = find_c_eq ceks in
+  let (b_typ,c_typ) = to_ms_base_with_c ctx typ in 
+  let t =   T_refined_type( zvar, b_typ, C_conj_many (c_typ::c_eq::cs::cs1) ) in 
   PPrintEngine.ToChannel.compact stderr ((string "to_ms_exist_many result=\n") ^^ Minisailplus_pp.pp_tp t ^^ (string "\n"));
   (t,ceks)
                 
@@ -574,6 +576,16 @@ and to_ms_typ_app ctx loc id typ_args =
            | None -> raise (Failure "to_ms_typ"))
 
 (* Extract from the Sail typ its MiniSail base type *)
+
+and  to_ms_base_with_c ctx (A.Typ_aux (typ,loc)) : (bp*cp) =
+  match typ with
+       | A.Typ_id (Id_aux (Id id,loc2)) -> 
+               (match TBindings.find_opt id ctx.types with
+                | Some  (CtxType (ks, target_t,mods,ceks)) -> (b_of target_t, c_of target_t)
+                | None -> ( to_ms_base ctx (A.Typ_aux (typ,loc)) , C_true))
+       | _ -> (to_ms_base ctx (A.Typ_aux (typ,loc)), C_true)
+  
+  
 and  to_ms_base ctx (A.Typ_aux (typ,loc)) : bp = 
   match typ with
        | A.Typ_id (Id_aux (Id id,loc2)) -> (match id with
