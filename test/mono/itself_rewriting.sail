@@ -83,6 +83,13 @@ function test_execute() = {
   execute(datasize)
 }
 
+val transitive_itself : forall 'n. int('n) -> unit
+
+function transitive_itself(n) = {
+  needs_size_in_guard(n);
+  ()
+}
+
 val run : unit -> unit effect {escape}
 
 function run () = {
@@ -90,4 +97,5 @@ function run () = {
   test_execute();
   willsplit(true);
   willsplit(false);
+  transitive_itself(16);
 }

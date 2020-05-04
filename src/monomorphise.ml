@@ -1394,31 +1394,52 @@ let rewrite_size_parameters target type_env (Defs defs) =
  print_endline ("Nexp map for " ^ string_of_id id);
  List.iter (fun (nexp, i) -> print_endline ("  " ^ string_of_nexp nexp ^ " -> " ^ string_of_int i)) nexp_list
 in *)
-    let parameters_for tannot =
-      match destruct_tannot tannot with
-      | Some (env,typ,_) ->
-         begin match Env.base_typ_of env typ with
-         | Typ_aux (Typ_app (Id_aux (Id "bitvector",_), [A_aux (A_nexp size,_);_]),_)
-             when not (is_nexp_constant size) ->
-            begin
-              match NexpMap.find size nexp_map with
-              | i -> IntSet.singleton i
-              | exception Not_found ->
-                 (* Look for equivalent nexps, but only in consistent type env *)
-                 if prove __POS__ env (NC_aux (NC_false,Unknown)) then IntSet.empty else
-                   match List.find (fun (nexp,i) -> 
-                     prove __POS__ env (NC_aux (NC_equal (nexp,size),Unknown))) nexp_list with
-                   | _, i -> IntSet.singleton i
-                   | exception Not_found -> IntSet.empty
+    let parameters_for e tannot =
+      let parameters_for_nexp env size =
+        match solve_unique env size with
+        | Some _ -> IntSet.empty
+        | None ->
+           match NexpMap.find size nexp_map with
+           | i -> IntSet.singleton i
+           | exception Not_found ->
+              (* Look for equivalent nexps, but only in consistent type env *)
+              if prove __POS__ env (NC_aux (NC_false,Unknown)) then IntSet.empty else
+                match List.find (fun (nexp,i) ->
+                  prove __POS__ env (NC_aux (NC_equal (nexp,size),Unknown))) nexp_list with
+                | _, i -> IntSet.singleton i
+                | exception Not_found -> IntSet.empty
+      in
+      let parameters_for_typ =
+        match destruct_tannot tannot with
+        | Some (env,typ,_) ->
+          begin match Env.base_typ_of env typ with
+          | Typ_aux (Typ_app (Id_aux (Id "bitvector",_), [A_aux (A_nexp size,_);_]),_)
+            when not (is_nexp_constant size) ->
+              parameters_for_nexp env size
+          | _ -> IntSet.empty
           end
-         | _ -> IntSet.empty
-         end
-      | None -> IntSet.empty
+        | None -> IntSet.empty
+      in
+      let parameters_for_exp = match e with
+        | E_app (id, args) when Bindings.mem id fsizes ->
+           let add_arg (i, s) arg =
+             if IntSet.mem i (fst (Bindings.find id fsizes)) then
+               try match destruct_numeric (typ_of arg) with
+                 | Some ([], _, nexp) ->
+                    (i + 1, IntSet.union s (parameters_for_nexp env nexp))
+                 | _ -> (i + 1, s)
+               with _ -> (i + 1, s)
+             else (i + 1, s)
+           in
+           snd (List.fold_left add_arg (0, IntSet.empty) args)
+        | _ -> IntSet.empty
+      in
+      IntSet.union parameters_for_typ parameters_for_exp
     in
     let parameters_to_rewrite =
       fst (fold_pexp
              { (compute_exp_alg IntSet.empty IntSet.union) with
-               e_aux = (fun ((s,e),(l,annot)) -> IntSet.union s (parameters_for annot),E_aux (e,(l,annot)))
+               e_aux = (fun ((s,e),(l,annot)) -> IntSet.union s (parameters_for e annot),E_aux (e,(l,annot)))
              } pexp)
     in
     let new_nexps = NexpSet.of_list (List.map fst
