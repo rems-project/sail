@@ -90,6 +90,13 @@ function transitive_itself(n) = {
   ()
 }
 
+val transitive_split : bool -> unit
+
+function transitive_split(x) = {
+  let n = if x then 8 else 16;
+  transitive_itself(n);
+}
+
 val run : unit -> unit effect {escape}
 
 function run () = {
@@ -98,4 +105,6 @@ function run () = {
   willsplit(true);
   willsplit(false);
   transitive_itself(16);
+  transitive_split(true);
+  transitive_split(false);
 }

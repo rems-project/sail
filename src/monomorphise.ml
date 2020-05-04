@@ -1749,9 +1749,19 @@ let string_of_dep = function
 (* If a callee uses a type variable as a size, does it need to be split in the
    current function, or is it also a parameter?  (Note that there may be multiple
    calls, so more than one parameter can be involved) *)
-type call_dep =
-  | InFun of dependencies
-  | Parents of CallerKidSet.t
+type call_dep = {
+  in_fun : dependencies option;
+  parents : CallerKidSet.t;
+}
+
+let empty_call_dep = {
+  in_fun = None;
+  parents = CallerKidSet.empty;
+}
+
+let in_fun_call_dep deps = { in_fun = Some deps; parents = CallerKidSet.empty }
+
+let parents_call_dep cks = { in_fun = None; parents = cks }
 
 (* Result of analysing the body of a function.  The split field gives
    the arguments to split based on the body alone, the extra_splits
@@ -1811,17 +1821,16 @@ let dep_bindings_merge a1 a2 =
 let dep_kbindings_merge a1 a2 =
   KBindings.merge (opt_merge dmerge) a1 a2
 
+let call_dep_merge k d1 d2 = {
+  in_fun = opt_merge dmerge k d1.in_fun d2.in_fun;
+  parents = CallerKidSet.union d1.parents d2.parents
+}
+
 let call_kid_merge k x y =
   match x, y with
   | None, x -> x
   | x, None -> x
-  | Some (InFun deps), Some (Parents _)
-  | Some (Parents _), Some (InFun deps)
-    -> Some (InFun deps)
-  | Some (InFun deps), Some (InFun deps')
-    -> Some (InFun (dmerge deps deps'))
-  | Some (Parents fns), Some (Parents fns')
-    -> Some (Parents (CallerKidSet.union fns fns'))
+  | Some d1, Some d2 -> Some (call_dep_merge k d1 d2)
 
 let call_arg_merge k args args' =
   match args, args' with
@@ -1989,11 +1998,11 @@ and deps_of_typ_arg l fn_id env arg_deps (A_aux (aux, _)) =
   match aux with
   | A_nexp (Nexp_aux (Nexp_var kid,_))
       when List.exists (fun k -> Kid.compare kid k == 0) env.top_kids ->
-     Parents (CallerKidSet.singleton (fn_id,kid))
-  | A_nexp nexp -> InFun (deps_of_nexp l env.kid_deps arg_deps nexp)
-  | A_order _ -> InFun dempty
-  | A_typ typ -> InFun (deps_of_typ l env.kid_deps arg_deps typ)
-  | A_bool nc -> InFun (deps_of_nc env.kid_deps nc)
+     parents_call_dep (CallerKidSet.singleton (fn_id,kid))
+  | A_nexp nexp -> in_fun_call_dep (deps_of_nexp l env.kid_deps arg_deps nexp)
+  | A_order _ -> in_fun_call_dep dempty
+  | A_typ typ -> in_fun_call_dep (deps_of_typ l env.kid_deps arg_deps typ)
+  | A_bool nc -> in_fun_call_dep (deps_of_nc env.kid_deps nc)
 
 let mk_subrange_pattern vannot vstart vend =
   let (len,ord,typ) = vector_typ_args_of (Env.base_typ_of (env_of_annot vannot) (typ_of_annot vannot)) in
@@ -2221,7 +2230,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        let rdep,r' =
          if Id.compare fn_id id == 0 then
            let bad = Unknown (l,"Recursive call of " ^ string_of_id id) in
-           let kid_deps = KBindings.map (fun _ -> InFun bad) kid_deps in
+           let kid_deps = KBindings.map (fun _ -> in_fun_call_dep bad) kid_deps in
            bad, { empty with split_on_call = Bindings.singleton id kid_deps }
          else
            dempty, { empty with split_on_call = Bindings.singleton id kid_deps } in
@@ -2683,11 +2692,12 @@ let print_set_assertions set_assertions =
 let print_result r =
   let _ = print_endline ("  splits: " ^ string_of_argsplits r.split) in
   let print_kbinding kid dep =
-    let s = match dep with
-      | InFun dep -> "InFun " ^ string_of_dep dep
-      | Parents cks -> string_of_callerkidset cks
+    let s1 = match dep.in_fun with
+      | Some dep -> "InFun " ^ string_of_dep dep
+      | None -> ""
     in
-    let _ = print_endline ("      " ^ string_of_kid kid ^ ": " ^ s) in
+    let s2 = string_of_callerkidset dep.parents in
+    let _ = print_endline ("      " ^ string_of_kid kid ^ ": " ^ s1 ^ "; " ^ s2) in
     ()
   in
   let print_binding id kdep =
@@ -2773,8 +2783,12 @@ let analyse_defs debug env (Defs defs) =
     match Bindings.find id r.split_on_call with
     | kid_deps -> begin
       match KBindings.find kid kid_deps with
-      | InFun deps -> separate_deps deps
-      | Parents fns -> CallerKidSet.fold add_kid fns (ArgSplits.empty, ExtraSplits.empty, Failures.empty)
+      | call_dep ->
+         let (splits, extras, fails) = match call_dep.in_fun with
+           | Some deps -> separate_deps deps
+           | None -> (ArgSplits.empty, ExtraSplits.empty, Failures.empty)
+         in
+         CallerKidSet.fold add_kid call_dep.parents (splits, extras, fails)
       | exception Not_found -> ArgSplits.empty,ExtraSplits.empty,Failures.empty
     end
     | exception Not_found -> ArgSplits.empty,ExtraSplits.empty,Failures.empty
