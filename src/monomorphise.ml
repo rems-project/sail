@@ -3042,11 +3042,11 @@ let rec rewrite_app env typ (id,args) =
                         [vector1; start1; length1; vector2; start2; length2]),(Unknown,empty_tannot)))
 
     (* variable-slice @ local-var *)
-    | [E_aux (E_app (op,
-                     [vector1; start1; length1]),_);
+    | [(E_aux (E_app (op,
+                     [vector1; start1; length1]),_) as exp1);
        (E_aux (E_id _,_) as vector2)]
         when (is_slice op || is_subrange op) && is_bitvector_typ (typ_of vector1) &&
-             not (is_constant length1) ->
+             not (is_constant_vec_typ env (typ_of exp1)) ->
        let op' = if is_subrange op then "subrange_subrange_concat" else "slice_slice_concat" in
        let zero = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
        let one = mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1)))) in
@@ -3063,11 +3063,11 @@ let rec rewrite_app env typ (id,args) =
 
     | [E_aux (E_app (append1,
                      [e1;
-                      E_aux (E_app (op, [vector1; start1; length1]),_)]),_);
+                      (E_aux (E_app (op, [vector1; start1; length1]),_) as slice1)]),_);
        E_aux (E_app (zeros1, [length2]),_)]
         when is_append append1 && (is_slice op || is_subrange op) && is_zeros zeros1 &&
           is_constant_vec_typ env (typ_of e1) && is_bitvector_typ (typ_of vector1) &&
-          not (is_constant length1 || is_constant length2) ->
+          not (is_constant_vec_typ env (typ_of slice1) || is_constant length2) ->
        let op' = mk_id (if is_subrange op then "subrange_zeros_concat" else "slice_zeros_concat") in
        let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
        let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
