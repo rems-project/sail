@@ -95,9 +95,9 @@ let rec fix_id remove_tick name = match name with
   | "with"
   | "check"
   | "field"
-  | "LT"
-  | "GT"
-  | "EQ"
+  | "LT" | "lt" | "lteq"
+  | "GT" | "gt" | "gteq"
+  | "EQ" | "eq" | "neq"
   | "integer"
     -> name ^ "'"
   | _ ->
