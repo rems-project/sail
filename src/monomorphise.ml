@@ -3336,8 +3336,10 @@ let rec rewrite_app env typ (id,args) =
     match get_constant_vec_len ~solve:true env typ, args with
     | Some i, [vector1; start1; end1]
       when is_bitvector_typ (typ_of vector1) && not (is_constant start1 && is_constant end1) ->
-       let low = if is_inc_vec (typ_of vector1) then start1 else end1 in
-       E_app (mk_id "slice", [vector1; low; mk_exp (E_lit (mk_lit (L_num i)))])
+       let inc = is_inc_vec (typ_of vector1) in
+       let low = if inc then start1 else end1 in
+       let exp' = rewrap (E_app (mk_id "slice", [vector1; low; mk_exp (E_lit (mk_lit (L_num i)))])) in
+       E_cast (bitvector_typ (nconstant i) (if inc then inc_ord else dec_ord), exp')
     | _, _ -> E_app (id, args)
 
   (* Rewrite (v[x .. y] + i) to (v + (i << y))[x .. y], which is more amenable to further rewriting *)
