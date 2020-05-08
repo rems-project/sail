@@ -2108,7 +2108,9 @@ let simplify_size_nexp env typ_env (Nexp_aux (ne,l) as nexp) =
   | None ->
      let is_equal kid =
        try
-         prove __POS__ typ_env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+         if Env.get_typ_var kid typ_env = K_int then
+           prove __POS__ typ_env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+         else false
        with _ -> false
      in
      match ne with
