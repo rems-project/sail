@@ -1,71 +1,70 @@
+
 open Msp_ast
-module Satis : sig
+open PPrintEngine
+open PPrintCombinators
+
+module SatisInductive : sig
   val upto : Arith.nat -> Arith.nat list
   val wf_g_aux :
     (SyntaxVCT.xp * Contexts.g_entry) list ->
       (SyntaxVCT.xp * Contexts.g_entry) list -> bool
   val wf_g : ('a, 'b) Contexts.gamma_ext -> bool
   val z3eq : Z3.z3_expr -> Z3.z3_expr -> Z3.z3_bool_expr
-  val convert_x : SyntaxVCT.xp -> string
+  val z3and : Z3.z3_bool_expr list -> Z3.z3_bool_expr
+  val convert_b_i_i_i_o :
+    unit ContextsPiDelta.theta_ext ->
+      SyntaxVCT.vp ->
+        SyntaxVCT.bp -> (Z3.z3_type * Z3.z3_bool_expr) Predicate.pred
+  val convert_blist_i_i_i_o :
+    unit ContextsPiDelta.theta_ext ->
+      SyntaxVCT.vp ->
+        SyntaxVCT.bp list ->
+          (Z3.z3_type list * Z3.z3_bool_expr list) Predicate.pred
   val convert_l : SyntaxVCT.lit -> Z3.z3_expr
   val convert_v : SyntaxVCT.vp -> Z3.z3_expr
   val convert_ce : SyntaxVCT.cep -> Z3.z3_expr
-  val z3and : Z3.z3_bool_expr list -> Z3.z3_bool_expr
   val convert_c : SyntaxVCT.cp -> Z3.z3_bool_expr
-  val type_app : SyntaxVCT.bp -> SyntaxVCT.bp -> (string * SyntaxVCT.bp) list
-  val type_app_lists :
-    SyntaxVCT.bp list -> SyntaxVCT.bp list -> (string * SyntaxVCT.bp) list
-  val type_app_tlists :
-    (string * SyntaxVCT.tau) list ->
-      (string * SyntaxVCT.tau) list -> (string * SyntaxVCT.bp) list
-  val type_app_t :
-    unit ContextsPiDelta.theta_ext ->
-      SyntaxVCT.bp -> (string * SyntaxVCT.bp) list
-  val convert_b :
-    unit ContextsPiDelta.theta_ext ->
-      SyntaxVCT.vp -> SyntaxVCT.bp -> Z3.z3_type * Z3.z3_bool_expr
-  val convert_blist :
+  val convert_t_i_i_i_o :
     unit ContextsPiDelta.theta_ext ->
       SyntaxVCT.vp ->
-        SyntaxVCT.bp list -> Z3.z3_type list * Z3.z3_bool_expr list
-  val convert_xbc :
+        SyntaxVCT.tau -> (Z3.z3_type * Z3.z3_bool_expr) Predicate.pred
+  val convert_ft_list_i_i_i_o :
     unit ContextsPiDelta.theta_ext ->
-      SyntaxVCT.xp ->
-        SyntaxVCT.bp -> SyntaxVCT.cp -> Z3.z3_decl list * Z3.z3_bool_expr
-  val subst_c_z : SyntaxVCT.xp -> SyntaxVCT.cp -> SyntaxVCT.cp
-  val convert_g_aux :
+      SyntaxVCT.vp ->
+        (string * SyntaxVCT.tau) list ->
+          ((string * Z3.z3_type) list * Z3.z3_bool_expr list) Predicate.pred
+  val freshen_type : Z3.z3_type -> Z3.z3_type
+  val freshen_type_var : Z3.z3_type_var -> Z3.z3_type_var
+  val freshen_constr : Z3.z3_constr -> Z3.z3_constr
+  val freshen_decl : Z3.z3_decl -> Z3.z3_decl
+  val b_t_vars : SyntaxVCT.bp -> string list
+  val t_t_vars : SyntaxVCT.tau -> string list
+  val convert_typedef_i_i_o :
+    unit ContextsPiDelta.theta_ext ->
+      SyntaxVCT.xp * SyntaxPED.typdef -> Z3.z3_decl Predicate.pred
+  val pp_z3_type : Z3.z3_type -> string
+  val pp_z3_type_var : Z3.z3_type_var -> string
+  val pp_z3_fields : (string * Z3.z3_type_var) list -> string
+  val pp_z3_ty_constr : Z3.z3_constr -> string
+  val pp_z3_decl : Z3.z3_decl -> string
+  val pp_typedef_i_Pii_o :
+    unit ContextsPiDelta.theta_ext ->
+      SyntaxVCT.xp * SyntaxPED.typdef -> string Predicate.pred
+  val pp_typedef_list_i_i_o :
+    unit ContextsPiDelta.theta_ext ->
+      (SyntaxVCT.xp * SyntaxPED.typdef) list -> (string list) Predicate.pred
+  val minimise_td_i_i_o :
     unit ContextsPiDelta.theta_ext ->
       (SyntaxVCT.xp * Contexts.g_entry) list ->
-        Z3.z3_decl list * Z3.z3_bool_expr list
-  val convert_smt_problem_valid :
-    unit ContextsPiDelta.theta_ext ->
-      ('a, unit) Contexts.gamma_ext ->
-        (SyntaxVCT.xp * Contexts.g_entry) list ->
-          SyntaxVCT.cp ->
-            (SyntaxVCT.xp * Contexts.g_entry) list *
-              (Z3.z3_decl list * (Z3.z3_decl list * Z3.z3_bool_expr))
+        ((SyntaxVCT.xp * SyntaxPED.typdef) list) Predicate.pred
   val pp_z3_expr : Z3.z3_expr -> string
   val pp_z3_bool_expr : Z3.z3_bool_expr -> string
-  val lin_ze :
-    Arith.nat ->
-      Z3.z3_expr -> Arith.nat * (Z3.z3_expr * (Z3.z3_expr * Z3.z3_expr) list)
-  val lin_ze_pair :
-    Arith.nat ->
-      Z3.z3_expr ->
-        Z3.z3_expr ->
-          (Z3.z3_expr -> Z3.z3_expr -> Z3.z3_expr) ->
-            Arith.nat * (Z3.z3_expr * (Z3.z3_expr * Z3.z3_expr) list)
-  val lin_zb :
-    Arith.nat ->
-      Z3.z3_bool_expr ->
-        Arith.nat * (Z3.z3_bool_expr * (Z3.z3_expr * Z3.z3_expr) list)
   val rewrite_passes :
     'a -> 'b -> Z3.z3_decl list ->
                   Z3.z3_bool_expr -> Z3.z3_decl list * Z3.z3_bool_expr
   val z3_vector_sort : string
   val pp_bv_concats : Arith.int -> string list
-  val t_t_vars : SyntaxVCT.tau -> string list
-  val b_t_vars : SyntaxVCT.bp -> string list
+  val td_t_vars : SyntaxPED.typdef -> string list
   val pp_sort_decl :
     unit ContextsPiDelta.theta_ext ->
       ('a, unit) Contexts.gamma_ext -> string list
@@ -83,50 +82,63 @@ module Satis : sig
       (SyntaxVCT.xp * Contexts.g_entry) list -> SyntaxVCT.cp -> string list
   val pp_z3_vector_funs : string
   val pp_z3_exp_pred : Arith.nat -> string
-  val pp_z3_type : Z3.z3_type -> string
-  val pp_z3_type_var : Z3.z3_type_var -> string
-  val pp_z3_fields : (string * Z3.z3_type_var) list -> string
-  val pp_z3_ty_constr : Z3.z3_constr -> string
-  val pp_z3_decl : Z3.z3_decl -> string
   val z3_declare_tuple : Arith.int -> Z3.z3_decl
   val pp_tuples : Arith.int -> string list
   val pp_builtins : Arith.int -> string list
-  val freshen_type : Z3.z3_type -> Z3.z3_type
-  val freshen_type_var : Z3.z3_type_var -> Z3.z3_type_var
-  val freshen_constr : Z3.z3_constr -> Z3.z3_constr
-  val freshen_decl : Z3.z3_decl -> Z3.z3_decl
-  val convert_t :
-    unit ContextsPiDelta.theta_ext ->
-      SyntaxVCT.vp -> SyntaxVCT.tau -> Z3.z3_type * Z3.z3_bool_expr
-  val convert_typedef :
-    unit ContextsPiDelta.theta_ext ->
-      SyntaxVCT.xp * SyntaxVCT.tau -> Z3.z3_decl option
-  val pp_typedef :
-    unit ContextsPiDelta.theta_ext -> SyntaxVCT.xp * SyntaxVCT.tau -> string
   val max_tuples : Arith.int
-  val convert_smt_problem_final :
+  val convert_smt_problem_final_i_i_i_i_i_i_i_i_o :
     unit ContextsPiDelta.theta_ext ->
       ('a, unit) Contexts.gamma_ext ->
         (SyntaxVCT.xp * Contexts.g_entry) list ->
           SyntaxVCT.cp ->
             (SyntaxVCT.xp * Contexts.g_entry) list ->
-              Z3.z3_decl list -> 'b list -> Z3.z3_bool_expr -> string list
-  val pp_smt_problem_valid :
+              Z3.z3_decl list ->
+                'b list -> Z3.z3_bool_expr -> (string list) Predicate.pred
+  val convert_x : SyntaxVCT.xp -> string
+  val convert_xbc_i_i_i_i_Poo :
+    unit ContextsPiDelta.theta_ext ->
+      SyntaxVCT.xp ->
+        SyntaxVCT.bp ->
+          SyntaxVCT.cp -> (Z3.z3_decl list * Z3.z3_bool_expr) Predicate.pred
+  val subst_c_z : SyntaxVCT.xp -> SyntaxVCT.cp -> SyntaxVCT.cp
+  val convert_g_aux_i_i_Poo :
+    unit ContextsPiDelta.theta_ext ->
+      (SyntaxVCT.xp * Contexts.g_entry) list ->
+        (Z3.z3_decl list * Z3.z3_bool_expr list) Predicate.pred
+  val convert_smt_problem_valid_i_i_i_i_o :
     unit ContextsPiDelta.theta_ext ->
       ('a, unit) Contexts.gamma_ext ->
-        (SyntaxVCT.xp * Contexts.g_entry) list -> SyntaxVCT.cp -> string list
-  val has_no_t_var_b : SyntaxVCT.bp -> bool
-  val b_of_e : Contexts.g_entry -> SyntaxVCT.bp
-  val has_no_t_var_g : ('a, unit) Contexts.gamma_ext -> bool
-  val has_t_var :
-    ('a, unit) Contexts.gamma_ext ->
-      (SyntaxVCT.xp * Contexts.g_entry) list -> bool
+        (SyntaxVCT.xp * Contexts.g_entry) list ->
+          SyntaxVCT.cp ->
+            ((SyntaxVCT.xp * Contexts.g_entry) list *
+              (Z3.z3_decl list * (Z3.z3_decl list * Z3.z3_bool_expr)))
+              Predicate.pred
+  val pp_smt_problem_valid_i_i_i_i_o :
+    unit ContextsPiDelta.theta_ext ->
+      ('a, unit) Contexts.gamma_ext ->
+        (SyntaxVCT.xp * Contexts.g_entry) list ->
+          SyntaxVCT.cp -> (string list) Predicate.pred
+  val valid_i_i_i_i_i_i_i :
+    string ->
+      Location.loc ->
+        unit ContextsPiDelta.theta_ext ->
+          ('a, unit) Contexts.gamma_ext ->
+            (SyntaxVCT.xp * Contexts.g_entry) list ->
+              SyntaxVCT.cp -> bool -> unit Predicate.pred
   val valid :
     string ->
       Location.loc ->
         unit ContextsPiDelta.theta_ext ->
           ('a, unit) Contexts.gamma_ext ->
-            (SyntaxVCT.xp * Contexts.g_entry) list -> SyntaxVCT.cp -> bool
+            (SyntaxVCT.xp * Contexts.g_entry) list ->
+              SyntaxVCT.cp -> bool -> bool
+  val valid_i_i_i_i_i_i_o :
+    string ->
+      Location.loc ->
+        unit ContextsPiDelta.theta_ext ->
+          ('a, unit) Contexts.gamma_ext ->
+            (SyntaxVCT.xp * Contexts.g_entry) list ->
+              SyntaxVCT.cp -> bool Predicate.pred
 end = struct
 
 let rec upto
@@ -137,7 +149,7 @@ let rec upto
 let rec wf_g_aux
   x0 g = match x0, g with [], g -> true
     | (xp, Contexts.GEPair (bp, cp)) :: ga, g ->
-        (if Set.less_eq_set SyntaxVCT.equal_xp (Set.Set (SyntaxPED.fvs_cp cp))
+        (if Set.less_eq_set SyntaxVCT.equal_xp (Set.Set (Subst.fvs_cp cp))
               (Set.image Product_Type.fst (Set.Set g))
           then wf_g_aux ga g
           else (let _ = Debug.trace ("wf_g fails in " ^ Contexts.pp_cp cp) in
@@ -201,8 +213,503 @@ let rec z3eq
     | e1, Z3.Z3E_proj (v, va) -> Z3.Z3BE_eq (e1, Z3.Z3E_proj (v, va))
     | e1, Z3.Z3E_string v -> Z3.Z3BE_eq (e1, Z3.Z3E_string v);;
 
-let rec convert_x = function SyntaxVCT.VNamed x -> Contexts.remove_tick x
-                    | SyntaxVCT.VIndex -> "#0";;
+let rec z3and
+  es = (let esa =
+          Lista.filter (fun e -> not (Z3.equal_z3_bool_expra e Z3.Z3BE_true)) es
+          in
+         (match esa with [] -> Z3.Z3BE_true | [e] -> e
+           | _ :: _ :: _ -> Z3.Z3BE_and esa));;
+
+let rec convert_b_i_i_i_o
+  x xa xb =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (x, (xa, xb)))
+        (fun a ->
+          (match a with (_, (_, SyntaxVCT.B_var _)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_tid _)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_int)) ->
+              Predicate.single (Z3.Z3T_int, Z3.Z3BE_true)
+            | (_, (_, SyntaxVCT.B_bool)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_bit)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_unit)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_real)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_vec (_, _))) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_list _)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_tuple _)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_union (_, _))) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_record _)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_undef)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_reg _)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_string)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_exception)) -> Predicate.bot_pred
+            | (_, (_, SyntaxVCT.B_finite_set _)) -> Predicate.bot_pred)))
+      (Predicate.sup_pred
+        (Predicate.bind (Predicate.single (x, (xa, xb)))
+          (fun a ->
+            (match a with (_, (_, SyntaxVCT.B_var _)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_tid _)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_int)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_bool)) ->
+                Predicate.single (Z3.Z3T_bool, Z3.Z3BE_true)
+              | (_, (_, SyntaxVCT.B_bit)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_unit)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_real)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_vec (_, _))) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_list _)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_tuple _)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_union (_, _))) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_record _)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_undef)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_reg _)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_string)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_exception)) -> Predicate.bot_pred
+              | (_, (_, SyntaxVCT.B_finite_set _)) -> Predicate.bot_pred)))
+        (Predicate.sup_pred
+          (Predicate.bind (Predicate.single (x, (xa, xb)))
+            (fun a ->
+              (match a with (_, (_, SyntaxVCT.B_var _)) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_tid _)) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_int)) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_bool)) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_bit)) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_unit)) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_real)) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_vec (_, _))) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_list _)) -> Predicate.bot_pred
+                | (p, (v, SyntaxVCT.B_tuple blist)) ->
+                  Predicate.bind (convert_blist_i_i_i_o p v blist)
+                    (fun (blist2, clist) ->
+                      Predicate.single
+                        (Z3.Z3T_dt
+                           ("Tuple" ^
+                              Utils.string_lit_of_nat (Lista.size_list blist),
+                             blist2),
+                          z3and clist))
+                | (_, (_, SyntaxVCT.B_union (_, _))) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_record _)) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_undef)) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_reg _)) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_string)) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_exception)) -> Predicate.bot_pred
+                | (_, (_, SyntaxVCT.B_finite_set _)) -> Predicate.bot_pred)))
+          (Predicate.sup_pred
+            (Predicate.bind (Predicate.single (x, (xa, xb)))
+              (fun a ->
+                (match a with (_, (_, SyntaxVCT.B_var _)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_tid _)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_int)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_bool)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_bit)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_unit)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_real)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_vec (_, _))) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_list _)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_tuple _)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_union (_, _))) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_record [])) -> Predicate.bot_pred
+                  | (p, (_, SyntaxVCT.B_record ((fid, _) :: _))) ->
+                    Predicate.bind
+                      (ContextsPiDelta.eq_o_i
+                        (ContextsPiDelta.lookup_record_name p fid))
+                      (fun aa ->
+                        (match aa with None -> Predicate.bot_pred
+                          | Some s ->
+                            Predicate.single (Z3.Z3T_dt (s, []), Z3.Z3BE_true)))
+                  | (_, (_, SyntaxVCT.B_undef)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_reg _)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_string)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_exception)) -> Predicate.bot_pred
+                  | (_, (_, SyntaxVCT.B_finite_set _)) -> Predicate.bot_pred)))
+            (Predicate.sup_pred
+              (Predicate.bind (Predicate.single (x, (xa, xb)))
+                (fun a ->
+                  (match a
+                    with (_, (_, SyntaxVCT.B_var _)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_tid _)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_int)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_bool)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_bit)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_unit)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_real)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_vec (_, _))) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_list _)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_tuple _)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_union (_, _))) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_record [])) -> Predicate.bot_pred
+                    | (p, (_, SyntaxVCT.B_record ((fid, _) :: _))) ->
+                      Predicate.bind
+                        (ContextsPiDelta.eq_i_i
+                          (Option.equal_option Stringa.equal_literal) None
+                          (ContextsPiDelta.lookup_record_name p fid))
+                        (fun () ->
+                          Predicate.single
+                            (Z3.Z3T_dt ("unknownrecord", []), Z3.Z3BE_true))
+                    | (_, (_, SyntaxVCT.B_undef)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_reg _)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_string)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_exception)) -> Predicate.bot_pred
+                    | (_, (_, SyntaxVCT.B_finite_set _)) ->
+                      Predicate.bot_pred)))
+              (Predicate.sup_pred
+                (Predicate.bind (Predicate.single (x, (xa, xb)))
+                  (fun a ->
+                    (match a
+                      with (_, (_, SyntaxVCT.B_var _)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_tid _)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_int)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_bool)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_bit)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_unit)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_real)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_vec (_, _))) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_list _)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_tuple _)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_union (_, _))) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_record [])) ->
+                        Predicate.single
+                          (Z3.Z3T_dt ("unknownrecord", []), Z3.Z3BE_true)
+                      | (_, (_, SyntaxVCT.B_record (_ :: _))) ->
+                        Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_undef)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_reg _)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_string)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_exception)) -> Predicate.bot_pred
+                      | (_, (_, SyntaxVCT.B_finite_set _)) ->
+                        Predicate.bot_pred)))
+                (Predicate.sup_pred
+                  (Predicate.bind (Predicate.single (x, (xa, xb)))
+                    (fun a ->
+                      (match a
+                        with (_, (_, SyntaxVCT.B_var _)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_tid _)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_int)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_bool)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_bit)) ->
+                          Predicate.single (Z3.Z3T_bool, Z3.Z3BE_true)
+                        | (_, (_, SyntaxVCT.B_unit)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_real)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_vec (_, _))) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_list _)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_tuple _)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_union (_, _))) ->
+                          Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_record _)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_undef)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_reg _)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_string)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_exception)) -> Predicate.bot_pred
+                        | (_, (_, SyntaxVCT.B_finite_set _)) ->
+                          Predicate.bot_pred)))
+                  (Predicate.sup_pred
+                    (Predicate.bind (Predicate.single (x, (xa, xb)))
+                      (fun a ->
+                        (match a
+                          with (_, (_, SyntaxVCT.B_var _)) -> Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_tid _)) -> Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_int)) -> Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_bool)) -> Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_bit)) -> Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_unit)) -> Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_real)) -> Predicate.bot_pred
+                          | (p, (v, SyntaxVCT.B_vec (_, b))) ->
+                            Predicate.bind (convert_b_i_i_i_o p v b)
+                              (fun (t, _) ->
+                                Predicate.single
+                                  (Z3.Z3T_array (Z3.Z3T_int, t), Z3.Z3BE_true))
+                          | (_, (_, SyntaxVCT.B_list _)) -> Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_tuple _)) -> Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_union (_, _))) ->
+                            Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_record _)) -> Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_undef)) -> Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_reg _)) -> Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_string)) -> Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_exception)) ->
+                            Predicate.bot_pred
+                          | (_, (_, SyntaxVCT.B_finite_set _)) ->
+                            Predicate.bot_pred)))
+                    (Predicate.sup_pred
+                      (Predicate.bind (Predicate.single (x, (xa, xb)))
+                        (fun a ->
+                          (match a
+                            with (_, (_, SyntaxVCT.B_var _)) ->
+                              Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_tid _)) -> Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_int)) -> Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_bool)) -> Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_bit)) -> Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_unit)) -> Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_real)) -> Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_vec (_, _))) ->
+                              Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_list _)) -> Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_tuple _)) ->
+                              Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_union (_, _))) ->
+                              Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_record _)) ->
+                              Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_undef)) -> Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_reg _)) -> Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_string)) ->
+                              Predicate.single (Z3.Z3T_string, Z3.Z3BE_true)
+                            | (_, (_, SyntaxVCT.B_exception)) ->
+                              Predicate.bot_pred
+                            | (_, (_, SyntaxVCT.B_finite_set _)) ->
+                              Predicate.bot_pred)))
+                      (Predicate.sup_pred
+                        (Predicate.bind (Predicate.single (x, (xa, xb)))
+                          (fun a ->
+                            (match a
+                              with (_, (_, SyntaxVCT.B_var _)) ->
+                                Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_tid _)) ->
+                                Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_int)) -> Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_bool)) -> Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_bit)) -> Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_unit)) ->
+                                Predicate.single
+                                  (Z3.Z3T_dt ("Unit", []), Z3.Z3BE_true)
+                              | (_, (_, SyntaxVCT.B_real)) -> Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_vec (_, _))) ->
+                                Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_list _)) ->
+                                Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_tuple _)) ->
+                                Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_union (_, _))) ->
+                                Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_record _)) ->
+                                Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_undef)) ->
+                                Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_reg _)) ->
+                                Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_string)) ->
+                                Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_exception)) ->
+                                Predicate.bot_pred
+                              | (_, (_, SyntaxVCT.B_finite_set _)) ->
+                                Predicate.bot_pred)))
+                        (Predicate.sup_pred
+                          (Predicate.bind (Predicate.single (x, (xa, xb)))
+                            (fun a ->
+                              (match a
+                                with (_, (_, SyntaxVCT.B_var _)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_tid _)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_int)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_bool)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_bit)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_unit)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_real)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_vec (_, _))) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_list _)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_tuple _)) ->
+                                  Predicate.bot_pred
+                                | (p, (v, SyntaxVCT.B_union (s, bs))) ->
+                                  Predicate.bind (convert_blist_i_i_i_o p v bs)
+                                    (fun (blist2, _) ->
+                                      Predicate.single
+(Z3.Z3T_dt (s, blist2), Z3.Z3BE_true))
+                                | (_, (_, SyntaxVCT.B_record _)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_undef)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_reg _)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_string)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_exception)) ->
+                                  Predicate.bot_pred
+                                | (_, (_, SyntaxVCT.B_finite_set _)) ->
+                                  Predicate.bot_pred)))
+                          (Predicate.sup_pred
+                            (Predicate.bind (Predicate.single (x, (xa, xb)))
+                              (fun a ->
+                                (match a
+                                  with (_, (_, SyntaxVCT.B_var _)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_tid _)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_int)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_bool)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_bit)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_unit)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_real)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_vec (_, _))) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_list _)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_tuple _)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_union (_, _))) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_record _)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_undef)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_reg _)) ->
+                                    Predicate.single
+                                      (Z3.Z3T_dt ("reg", []), Z3.Z3BE_true)
+                                  | (_, (_, SyntaxVCT.B_string)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_exception)) ->
+                                    Predicate.bot_pred
+                                  | (_, (_, SyntaxVCT.B_finite_set _)) ->
+                                    Predicate.bot_pred)))
+                            (Predicate.sup_pred
+                              (Predicate.bind (Predicate.single (x, (xa, xb)))
+                                (fun a ->
+                                  (match a
+                                    with (_, (_, SyntaxVCT.B_var vs)) ->
+                                      Predicate.single
+(Z3.Z3T_sort vs, Z3.Z3BE_true)
+                                    | (_, (_, SyntaxVCT.B_tid _)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_int)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_bool)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_bit)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_unit)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_real)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_vec (_, _))) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_list _)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_tuple _)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_union (_, _))) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_record _)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_undef)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_reg _)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_string)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_exception)) ->
+                                      Predicate.bot_pred
+                                    | (_, (_, SyntaxVCT.B_finite_set _)) ->
+                                      Predicate.bot_pred)))
+                              (Predicate.sup_pred
+                                (Predicate.bind (Predicate.single (x, (xa, xb)))
+                                  (fun a ->
+                                    (match a
+                                      with (_, (_, SyntaxVCT.B_var _)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_tid vs)) ->
+Predicate.single (Z3.Z3T_dt (vs, []), Z3.Z3BE_true)
+                                      | (_, (_, SyntaxVCT.B_int)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_bool)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_bit)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_unit)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_real)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_vec (_, _))) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_list _)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_tuple _)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_union (_, _))) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_record _)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_undef)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_reg _)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_string)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_exception)) ->
+Predicate.bot_pred
+                                      | (_, (_, SyntaxVCT.B_finite_set _)) ->
+Predicate.bot_pred)))
+                                (Predicate.sup_pred
+                                  (Predicate.bind
+                                    (Predicate.single (x, (xa, xb)))
+                                    (fun a ->
+                                      (match a
+with (_, (_, SyntaxVCT.B_var _)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_tid _)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_int)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_bool)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_bit)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_unit)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_real)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_vec (_, _))) -> Predicate.bot_pred
+| (p, (v, SyntaxVCT.B_list b)) ->
+  Predicate.bind (convert_b_i_i_i_o p v b)
+    (fun (t, _) -> Predicate.single (Z3.Z3T_dt ("List", [t]), Z3.Z3BE_true))
+| (_, (_, SyntaxVCT.B_tuple _)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_union (_, _))) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_record _)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_undef)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_reg _)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_string)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_exception)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_finite_set _)) -> Predicate.bot_pred)))
+                                  (Predicate.bind
+                                    (Predicate.single (x, (xa, xb)))
+                                    (fun a ->
+                                      (match a
+with (_, (_, SyntaxVCT.B_var _)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_tid _)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_int)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_bool)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_bit)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_unit)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_real)) -> Predicate.single (Z3.Z3T_string, Z3.Z3BE_true)
+| (_, (_, SyntaxVCT.B_vec (_, _))) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_list _)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_tuple _)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_union (_, _))) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_record _)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_undef)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_reg _)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_string)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_exception)) -> Predicate.bot_pred
+| (_, (_, SyntaxVCT.B_finite_set _)) -> Predicate.bot_pred)))))))))))))))))
+and convert_blist_i_i_i_o
+  x xa xb =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (x, (xa, xb)))
+        (fun a ->
+          (match a with (_, (_, [])) -> Predicate.single ([], [])
+            | (_, (_, _ :: _)) -> Predicate.bot_pred)))
+      (Predicate.bind (Predicate.single (x, (xa, xb)))
+        (fun a ->
+          (match a with (_, (_, [])) -> Predicate.bot_pred
+            | (t, (v, b :: blist)) ->
+              Predicate.bind (convert_blist_i_i_i_o t v blist)
+                (fun (ts, belist) ->
+                  Predicate.bind (convert_b_i_i_i_o t v b)
+                    (fun (ta, be) ->
+                      Predicate.single (ta :: ts, be :: belist))))));;
 
 let rec convert_l
   = function SyntaxVCT.L_num n -> Z3.Z3E_num n
@@ -278,13 +785,6 @@ let rec convert_ce
     | SyntaxVCT.CE_field_access (vp, field) ->
         Z3.Z3E_proj (field, convert_v vp);;
 
-let rec z3and
-  es = (let esa =
-          Lista.filter (fun e -> not (Z3.equal_z3_bool_expra e Z3.Z3BE_true)) es
-          in
-         (match esa with [] -> Z3.Z3BE_true | [e] -> e
-           | _ :: _ :: _ -> Z3.Z3BE_and esa));;
-
 let rec convert_c
   = function SyntaxVCT.C_true -> Z3.Z3BE_true
     | SyntaxVCT.C_false -> Z3.Z3BE_false
@@ -296,160 +796,348 @@ let rec convert_c
     | SyntaxVCT.C_leq (e1, e2) -> Z3.Z3BE_leq (convert_ce e1, convert_ce e2)
     | SyntaxVCT.C_conj_many cs -> z3and (Lista.map convert_c cs);;
 
-let rec type_app
-  x0 b = match x0, b with SyntaxVCT.B_var v, b -> [(v, b)]
-    | SyntaxVCT.B_tuple bs1, SyntaxVCT.B_tuple bs2 -> type_app_lists bs1 bs2
-    | SyntaxVCT.B_vec (uu, b1), SyntaxVCT.B_vec (uv, b2) -> type_app b1 b2
-    | SyntaxVCT.B_union (uw, branches1), SyntaxVCT.B_union (ux, branches2) ->
-        type_app_tlists branches1 branches2
-    | SyntaxVCT.B_tid v, uz -> []
-    | SyntaxVCT.B_int, uz -> []
-    | SyntaxVCT.B_bool, uz -> []
-    | SyntaxVCT.B_bit, uz -> []
-    | SyntaxVCT.B_unit, uz -> []
-    | SyntaxVCT.B_real, uz -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_var vb -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_tid vb -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_int -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_bool -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_bit -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_unit -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_real -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_list vb -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_tuple vb -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_union (vb, vc) -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_record vb -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_undef -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_reg vb -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_string -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_exception -> []
-    | SyntaxVCT.B_vec (v, va), SyntaxVCT.B_finite_set vb -> []
-    | SyntaxVCT.B_list v, uz -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_var va -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_tid va -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_int -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_bool -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_bit -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_unit -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_real -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_vec (va, vb) -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_list va -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_union (va, vb) -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_record va -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_undef -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_reg va -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_string -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_exception -> []
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_finite_set va -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_var vb -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_tid vb -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_int -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_bool -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_bit -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_unit -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_real -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_vec (vb, vc) -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_list vb -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_tuple vb -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_record vb -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_undef -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_reg vb -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_string -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_exception -> []
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_finite_set vb -> []
-    | SyntaxVCT.B_record v, uz -> []
-    | SyntaxVCT.B_undef, uz -> []
-    | SyntaxVCT.B_reg v, uz -> []
-    | SyntaxVCT.B_string, uz -> []
-    | SyntaxVCT.B_exception, uz -> []
-    | SyntaxVCT.B_finite_set v, uz -> []
-and type_app_lists
-  va vb = match va, vb with
-    b1 :: bs1, b2 :: bs2 -> type_app b1 b2 @ type_app_lists bs1 bs2
-    | [], vb -> []
-    | va, [] -> []
-and type_app_tlists
-  ve vf = match ve, vf with
-    (vc, t1) :: ts1, (vd, t2) :: ts2 ->
-      type_app (SyntaxUtils.b_of t1) (SyntaxUtils.b_of t2) @
-        type_app_tlists ts1 ts2
-    | [], vf -> []
-    | ve, [] -> [];;
+let rec convert_t_i_i_i_o
+          x xa xb =
+    PPrintEngine.ToChannel.compact stderr ((string "convert_t tp=") ^^ (Minisailplus_pp.pp_tp xb) ^^ (string "\n"));
+    Predicate.bind (Predicate.single (x, (xa, xb)))
+      (fun (p, (v, SyntaxVCT.T_refined_type (_, b, c))) ->
+        Predicate.bind (convert_b_i_i_i_o p v b)
+          (fun (t, e) ->
+            Predicate.single
+              (t, z3and [e; convert_c
+                              (Subst.subst_cp v SyntaxVCT.VIndex c)])));;
 
-let rec type_app_t
-  pi (SyntaxVCT.B_union (s, cs)) =
-    (match
-      Contexts.lookup SyntaxVCT.equal_xp (ContextsPiDelta.theta_T pi)
-        (SyntaxVCT.VNamed s)
-      with None -> []
-      | Some tdef ->
-        type_app (SyntaxUtils.b_of tdef) (SyntaxVCT.B_union (s, cs)));;
+let rec convert_ft_list_i_i_i_o
+  x xa xb =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (x, (xa, xb)))
+        (fun a ->
+          (match a with (_, (_, [])) -> Predicate.single ([], [])
+            | (_, (_, _ :: _)) -> Predicate.bot_pred)))
+      (Predicate.bind (Predicate.single (x, (xa, xb)))
+        (fun a ->
+          (match a with (_, (_, [])) -> Predicate.bot_pred
+            | (t, (v, (f, ta) :: tlist)) ->
+              Predicate.bind (convert_ft_list_i_i_i_o t v tlist)
+                (fun (zts, belist) ->
+                  Predicate.bind (convert_t_i_i_i_o t v ta)
+                    (fun (zt, be) ->
+                      Predicate.single ((f, zt) :: zts, be :: belist))))));;
 
-let rec convert_b
-  uu uv x2 = match uu, uv, x2 with
-    uu, uv, SyntaxVCT.B_int -> (Z3.Z3T_int, Z3.Z3BE_true)
-    | uw, ux, SyntaxVCT.B_bool -> (Z3.Z3T_bool, Z3.Z3BE_true)
-    | p, v, SyntaxVCT.B_tuple blist ->
-        (let (blist2, clist) = convert_blist p v blist in
-          (Z3.Z3T_dt
-             ("Tuple" ^ Utils.string_lit_of_nat (Lista.size_list blist),
-               blist2),
-            z3and clist))
-    | p, uy, SyntaxVCT.B_record ((fid, uz) :: xs) ->
-        (match ContextsPiDelta.lookup_record_name p fid
-          with None -> (Z3.Z3T_dt ("unknownrecord", []), Z3.Z3BE_true)
-          | Some s -> (Z3.Z3T_dt (s, []), Z3.Z3BE_true))
-    | p, va, SyntaxVCT.B_record [] ->
-        (Z3.Z3T_dt ("unknownrecord", []), Z3.Z3BE_true)
-    | vb, vc, SyntaxVCT.B_bit -> (Z3.Z3T_bool, Z3.Z3BE_true)
-    | p, v, SyntaxVCT.B_vec (vd, b) ->
-        (let (t, _) = convert_b p v b in
-          (Z3.Z3T_array (Z3.Z3T_int, t), Z3.Z3BE_true))
-    | p, ve, SyntaxVCT.B_string -> (Z3.Z3T_string, Z3.Z3BE_true)
-    | p, vf, SyntaxVCT.B_unit -> (Z3.Z3T_dt ("Unit", []), Z3.Z3BE_true)
-    | p, v, SyntaxVCT.B_union (s, cs) ->
-        (Z3.Z3T_dt
-           (s, Lista.map (fun b -> Product_Type.fst (convert_b p v b))
-                 (Lista.map Product_Type.snd
-                   (type_app_t p (SyntaxVCT.B_union (s, cs))))),
-          Z3.Z3BE_true)
-    | vg, vh, SyntaxVCT.B_reg vi -> (Z3.Z3T_dt ("reg", []), Z3.Z3BE_true)
-    | vj, vk, SyntaxVCT.B_var v -> (Z3.Z3T_sort v, Z3.Z3BE_true)
-    | vl, vm, SyntaxVCT.B_tid v -> (Z3.Z3T_dt (v, []), Z3.Z3BE_true)
-    | p, v, SyntaxVCT.B_list b ->
-        (Z3.Z3T_dt ("List", [Product_Type.fst (convert_b p v b)]), Z3.Z3BE_true)
-    | vn, b, SyntaxVCT.B_real -> (Z3.Z3T_string, Z3.Z3BE_true)
-and convert_blist p v blist = Contexts.unzip (Lista.map (convert_b p v) blist);;
+let rec freshen_type
+  = function Z3.Z3T_int -> Z3.Z3T_int
+    | Z3.Z3T_bool -> Z3.Z3T_bool
+    | Z3.Z3T_unit -> Z3.Z3T_unit
+    | Z3.Z3T_array (t1, t2) -> Z3.Z3T_array (freshen_type t1, freshen_type t2)
+    | Z3.Z3T_dt (s, zts) -> Z3.Z3T_dt (s, Lista.map freshen_type zts)
+    | Z3.Z3T_sort s -> Z3.Z3T_sort (s ^ "T")
+    | Z3.Z3T_string -> Z3.Z3T_string;;
 
-let rec convert_xbc
-  p x b c =
-    (let (t1, c1) = convert_b p (SyntaxVCT.V_var x) b in
-      ([Z3.Z3D_decl_const (convert_x x, t1)], z3and [c1; convert_c c]));;
+let rec freshen_type_var
+  = function Z3.Z3TV_tv_type t -> Z3.Z3TV_tv_type (freshen_type t)
+    | Z3.Z3TV_tv_var i -> Z3.Z3TV_tv_var i;;
 
-let rec subst_c_z
-  x c = SyntaxPED.subst_cp (SyntaxVCT.V_var x) SyntaxVCT.VIndex c;;
+let rec freshen_constr
+  (Z3.Z3C_ty_constr (s, stvs)) =
+    Z3.Z3C_ty_constr
+      (s, Lista.map (fun (sa, t) -> (sa, freshen_type_var t)) stvs);;
 
-let rec convert_g_aux
-  p x1 = match p, x1 with p, [] -> ([], [])
-    | p, (x, Contexts.GEPair (b, c)) :: gamma ->
-        (let (ds, es) = convert_g_aux p gamma in
-         let (d, e) = convert_xbc p x b c in
-          (d @ ds, e :: es))
-    | p, (x, Contexts.GETyp t) :: gamma ->
-        (let (ds, es) = convert_g_aux p gamma in
-         let (d, e) =
-           convert_xbc p x (SyntaxUtils.b_of t)
-             (subst_c_z x (SyntaxUtils.c_of t))
-           in
-          (d @ ds, e :: es));;
+let rec freshen_decl
+  = function Z3.Z3D_decl_fun -> Z3.Z3D_decl_fun
+    | Z3.Z3D_decl_const (s, t) -> Z3.Z3D_decl_const (s, freshen_type t)
+    | Z3.Z3D_decl_datatype (s, vs, cs) ->
+        Z3.Z3D_decl_datatype
+          (s, Lista.map freshen_type_var vs, Lista.map freshen_constr cs);;
 
-let rec convert_smt_problem_valid
-  p g ev c =
-    (let ga = Contexts.gamma_x g @ Contexts.gamma_u g in
-     let (d1, e1) = convert_g_aux p ga in
-     let (d2, e2) = convert_g_aux p ev in
-     let ca = convert_c c in
-      (ga, (d1, (d2, z3and (e1 @ [Z3.Z3BE_not (z3and (ca :: e2))])))));;
+let rec b_t_vars
+  = function SyntaxVCT.B_var s -> [s]
+    | SyntaxVCT.B_tuple bs ->
+        Lista.remdups Stringa.equal_literal (Lista.maps b_t_vars bs)
+    | SyntaxVCT.B_union (uu, ts) ->
+        Lista.remdups Stringa.equal_literal (Lista.maps b_t_vars ts)
+    | SyntaxVCT.B_record ts ->
+        Lista.remdups Stringa.equal_literal
+          (Lista.maps (fun (_, a) -> b_t_vars a) ts)
+    | SyntaxVCT.B_vec (uv, b) -> b_t_vars b
+    | SyntaxVCT.B_list b -> b_t_vars b
+    | SyntaxVCT.B_tid v -> []
+    | SyntaxVCT.B_int -> []
+    | SyntaxVCT.B_bool -> []
+    | SyntaxVCT.B_bit -> []
+    | SyntaxVCT.B_unit -> []
+    | SyntaxVCT.B_real -> []
+    | SyntaxVCT.B_undef -> []
+    | SyntaxVCT.B_reg v -> []
+    | SyntaxVCT.B_string -> []
+    | SyntaxVCT.B_exception -> []
+    | SyntaxVCT.B_finite_set v -> [];;
+
+let rec t_t_vars (SyntaxVCT.T_refined_type (vIndex0, b, c)) = b_t_vars b;;
+
+let rec convert_typedef_i_i_o
+  xa (xb, xc) =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (xa, (xb, xc)))
+        (fun a ->
+          (match a
+            with (_, (SyntaxVCT.VNamed _, SyntaxPED.Record (_, _, _))) ->
+              Predicate.bot_pred
+            | (p, (SyntaxVCT.VNamed x, SyntaxPED.Variant (_, _, clist))) ->
+              Predicate.bind
+                (convert_ft_list_i_i_i_o p (SyntaxVCT.V_var SyntaxVCT.VIndex)
+                  clist)
+                (fun (ztlist, _) ->
+                  Predicate.bind
+                    (ContextsPiDelta.eq_o_i
+                      (Lista.map (fun v -> Z3.Z3TV_tv_type (Z3.Z3T_sort v))
+                        (Lista.maps (fun (_, aa) -> t_t_vars aa) clist)))
+                    (fun xaa ->
+                      Predicate.bind
+                        (ContextsPiDelta.eq_o_i
+                          (Lista.map
+                            (fun (s, zt) ->
+                              Z3.Z3C_ty_constr
+                                (s, [((("proj" ^ x) ^ "x") ^ s,
+                                       Z3.Z3TV_tv_type zt)]))
+                            ztlist))
+                        (fun xaaa ->
+                          Predicate.single
+                            (freshen_decl
+                              (Z3.Z3D_decl_datatype (x, xaa, xaaa))))))
+            | (_, (SyntaxVCT.VIndex, _)) -> Predicate.bot_pred)))
+      (Predicate.bind (Predicate.single (xa, (xb, xc)))
+        (fun a ->
+          (match a
+            with (_, (SyntaxVCT.VNamed _,
+                       SyntaxPED.Record
+                         (_, _,
+                           SyntaxVCT.T_refined_type
+                             (SyntaxVCT.VNamed _, _, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_var _, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_tid _, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_int, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_bool, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_bit, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_unit, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_real, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_vec (_, _), _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_list _, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_tuple _, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_union (_, _), _))))
+              -> Predicate.bot_pred
+            | (p, (SyntaxVCT.VNamed x,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_record clista, _))))
+              -> Predicate.bind
+                   (convert_blist_i_i_i_o p (SyntaxVCT.V_var SyntaxVCT.VIndex)
+                     (Lista.map Product_Type.snd clista))
+                   (fun (ztlista, _) ->
+                     Predicate.bind
+                       (ContextsPiDelta.eq_o_i
+                         (Lista.map (fun v -> Z3.Z3TV_tv_type (Z3.Z3T_sort v))
+                           (Lista.maps (fun (_, aa) -> b_t_vars aa) clista)))
+                       (fun xaa ->
+                         Predicate.bind
+                           (ContextsPiDelta.eq_o_i
+                             [Z3.Z3C_ty_constr
+                                ("mk-" ^ x,
+                                  Lista.map
+                                    (fun (s, zt) ->
+                                      ("proj" ^ Product_Type.fst s,
+Z3.Z3TV_tv_type zt))
+                                    (Lista.zip clista ztlista))])
+                           (fun xaaa ->
+                             Predicate.single
+                               (freshen_decl
+                                 (Z3.Z3D_decl_datatype (x, xaa, xaaa))))))
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_undef, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_reg _, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_string, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_exception, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _,
+                    SyntaxPED.Record
+                      (_, _,
+                        SyntaxVCT.T_refined_type
+                          (SyntaxVCT.VIndex, SyntaxVCT.B_finite_set _, _))))
+              -> Predicate.bot_pred
+            | (_, (SyntaxVCT.VNamed _, SyntaxPED.Variant (_, _, _))) ->
+              Predicate.bot_pred
+            | (_, (SyntaxVCT.VIndex, _)) -> Predicate.bot_pred)));;
+
+let rec pp_z3_type
+  = function Z3.Z3T_int -> "Int"
+    | Z3.Z3T_bool -> "Bool"
+    | Z3.Z3T_unit -> "Unit"
+    | Z3.Z3T_array (t1, t2) ->
+        ((("(Array " ^ pp_z3_type t1) ^ " ") ^ pp_z3_type t2) ^ " )"
+    | Z3.Z3T_dt (s, tlist) ->
+        ((("( " ^ s) ^ " ") ^
+          Lista.foldr (fun t -> (fun a -> (pp_z3_type t ^ " ") ^ a)) tlist
+            " ") ^
+          ") "
+    | Z3.Z3T_sort s -> Contexts.remove_tick s
+    | Z3.Z3T_string -> "String";;
+
+let rec pp_z3_type_var
+  = function Z3.Z3TV_tv_type t -> pp_z3_type t
+    | Z3.Z3TV_tv_var n -> "T" ^ Utils.string_lit_of_integer n;;
+
+let rec pp_z3_fields
+  fs = Lista.foldr
+         (fun (c, t) ->
+           (fun a -> ((((" ( " ^ c) ^ " ") ^ pp_z3_type_var t) ^ " ) ") ^ a))
+         fs "";;
+
+let rec pp_z3_ty_constr
+  (Z3.Z3C_ty_constr (c, x)) = (((" ( " ^ c) ^ " ") ^ pp_z3_fields x) ^ ")";;
+
+let rec pp_z3_decl
+  = function
+    Z3.Z3D_decl_const (s, t) ->
+      ((("(declare-const " ^ s) ^ " ") ^ pp_z3_type t) ^ ")"
+    | Z3.Z3D_decl_fun -> "Unknown"
+    | Z3.Z3D_decl_datatype (s, tvs, dt_list) ->
+        (((((((("(declare-datatypes " ^ " (( ") ^ s) ^ " ") ^
+              Utils.string_lit_of_nat (Lista.size_list tvs)) ^
+             ")) (( par ( ") ^
+            Utils.string_lit_map " " pp_z3_type_var tvs) ^
+           " ) ( ") ^
+          Lista.foldr (fun tc -> (fun a -> pp_z3_ty_constr tc ^ a)) dt_list
+            "") ^
+          "))))";;
+
+let rec pp_typedef_i_Pii_o
+  xa (xb, xc) =
+    Predicate.bind (Predicate.single (xa, (xb, xc)))
+      (fun (p, (x, y)) ->
+        Predicate.bind (convert_typedef_i_i_o p (x, y))
+          (fun xd -> Predicate.single (pp_z3_decl xd)));;
+
+let rec pp_typedef_list_i_i_o
+  xa xb =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (xa, xb))
+        (fun a ->
+          (match a with (_, []) -> Predicate.single []
+            | (_, _ :: _) -> Predicate.bot_pred)))
+      (Predicate.bind (Predicate.single (xa, xb))
+        (fun a ->
+          (match a with (_, []) -> Predicate.bot_pred
+            | (t, (x, y) :: tds) ->
+              Predicate.bind (pp_typedef_list_i_i_o t tds)
+                (fun xaa ->
+                  Predicate.bind (pp_typedef_i_Pii_o t (x, y))
+                    (fun xc -> Predicate.single (xc :: xaa))))));;
+
+let rec minimise_td_i_i_o
+  x xa =
+    Predicate.bind (Predicate.single (x, xa))
+      (fun (t, g) ->
+        Predicate.bind (ContextsPiDelta.fm_from_t_i_o t)
+          (fun xb ->
+            Predicate.bind
+              (ContextsPiDelta.eq_o_i
+                (Lista.map (fun (_, a) -> ContextsPiDelta.b_of_ge a) g))
+              (fun xaa ->
+                Predicate.bind (ContextsPiDelta.tids_in_blist_i_i_o t xaa)
+                  (fun xab ->
+                    Predicate.bind
+                      (ContextsPiDelta.eq_o_i
+                        (let fm =
+                           Contexts.iterate
+                             (Lista.size_list (ContextsPiDelta.theta_T t)) xb xb
+                           in
+                         let ss_bp = Lista.remdups Stringa.equal_literal xab in
+                         let ss =
+                           Lista.remdups Stringa.equal_literal
+                             (Lista.maps
+                               (fun s ->
+                                 (match
+                                   Finite_Map.fmlookup Stringa.equal_literal fm
+                                     s
+                                   with None -> [] | Some ss -> ss))
+                               ss_bp)
+                           in
+                          ContextsPiDelta.restrict_t (ContextsPiDelta.theta_T t)
+                            (Lista.remdups Stringa.equal_literal (ss @ ss_bp))))
+                      Predicate.single))));;
 
 let rec pp_z3_expr
   = function Z3.Z3E_var s -> s
@@ -526,117 +1214,9 @@ let rec pp_z3_bool_expr
             " ") ^
           ")";;
 
-let rec lin_ze
-  i x1 = match i, x1 with
-    i, Z3.Z3E_exp e ->
-      (let new_var = "exp_" ^ Stringa.implode (Utils.string_of_nat i) in
-        (Arith.plus_nat i Arith.one_nat,
-          (Z3.Z3E_var new_var, [(Z3.Z3E_var new_var, e)])))
-    | i, Z3.Z3E_var s -> (i, (Z3.Z3E_var s, []))
-    | i, Z3.Z3E_len e ->
-        (let (ia, (ea, b)) = lin_ze i e in (ia, (Z3.Z3E_len ea, b)))
-    | i, Z3.Z3E_num n -> (i, (Z3.Z3E_num n, []))
-    | i, Z3.Z3E_true -> (i, (Z3.Z3E_true, []))
-    | i, Z3.Z3E_false -> (i, (Z3.Z3E_false, []))
-    | i, Z3.Z3E_bitone -> (i, (Z3.Z3E_bitone, []))
-    | i, Z3.Z3E_bitzero -> (i, (Z3.Z3E_bitzero, []))
-    | i, Z3.Z3E_unit -> (i, (Z3.Z3E_unit, []))
-    | i, Z3.Z3E_plus (e1, e2) ->
-        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_plus (a, b))
-    | i, Z3.Z3E_leq (e1, e2) ->
-        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_leq (a, b))
-    | i, Z3.Z3E_geq (e1, e2) ->
-        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_geq (a, b))
-    | i, Z3.Z3E_times (e1, e2) ->
-        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_times (a, b))
-    | i, Z3.Z3E_div (e1, e2) ->
-        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_div (a, b))
-    | i, Z3.Z3E_mod (e1, e2) ->
-        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_mod (a, b))
-    | i, Z3.Z3E_minus (e1, e2) ->
-        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_minus (a, b))
-    | i, Z3.Z3E_eq (e1, e2) -> lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_eq (a, b))
-    | i, Z3.Z3E_bitvec s -> (i, (Z3.Z3E_bitvec s, []))
-    | i, Z3.Z3E_proj (s, e) ->
-        (let (ia, (ea, b)) = lin_ze i e in (ia, (Z3.Z3E_proj (s, ea), b)))
-    | i, Z3.Z3E_not e ->
-        (let (ia, (ea, b)) = lin_ze i e in (ia, (Z3.Z3E_not ea, b)))
-    | i, Z3.Z3E_and (e1, e2) ->
-        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_and (a, b))
-    | i, Z3.Z3E_or (e1, e2) -> lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_or (a, b))
-    | i, Z3.Z3E_constr (s, elist) ->
-        (let (ia, (elista, bs)) =
-           Lista.foldr
-             (fun sa (ia, (es, bs)) ->
-               (let (ib, (e, b)) = lin_ze ia sa in (ib, (e :: es, b @ bs))))
-             elist (i, ([], []))
-           in
-          (ia, (Z3.Z3E_constr (s, elista), bs)))
-    | i, Z3.Z3E_neq (e1, e2) ->
-        lin_ze_pair i e1 e2 (fun a b -> Z3.Z3E_neq (a, b))
-    | i, Z3.Z3E_abs e ->
-        (let (ia, (ea, b)) = lin_ze i e in (ia, (Z3.Z3E_abs ea, b)))
-    | i, Z3.Z3E_concat elist ->
-        (let (ia, (elista, bs)) =
-           Lista.foldr
-             (fun s (ia, (es, bs)) ->
-               (let (ib, (e, b)) = lin_ze ia s in (ib, (e :: es, b @ bs))))
-             elist (i, ([], []))
-           in
-          (ia, (Z3.Z3E_concat elista, bs)))
-    | i, Z3.Z3E_string v -> (i, (Z3.Z3E_string v, []))
-and lin_ze_pair
-  i e1 e2 ctor =
-    (let (i1, (e1a, bs1)) = lin_ze i e1 in
-     let (i2, (e2a, bs2)) = lin_ze i1 e2 in
-      (i2, (ctor e1a e2a, bs1 @ bs2)));;
-
-let rec lin_zb
-  i x1 = match i, x1 with
-    i, Z3.Z3BE_eq (e1, e2) ->
-      (let (i1, (e1a, bs1)) = lin_ze i e1 in
-       let (i2, (e2a, bs2)) = lin_ze i1 e2 in
-        (i2, (Z3.Z3BE_eq (e1a, e2a), bs1 @ bs2)))
-    | i, Z3.Z3BE_leq (e1, e2) ->
-        (let (i1, (e1a, bs1)) = lin_ze i e1 in
-         let (i2, (e2a, bs2)) = lin_ze i1 e2 in
-          (i2, (Z3.Z3BE_leq (e1a, e2a), bs1 @ bs2)))
-    | i, Z3.Z3BE_true -> (i, (Z3.Z3BE_true, []))
-    | i, Z3.Z3BE_false -> (i, (Z3.Z3BE_false, []))
-    | i, Z3.Z3BE_and elist ->
-        (let (ia, (elista, bs)) =
-           Lista.foldr
-             (fun s (ia, (es, bs)) ->
-               (let (ib, (e, b)) = lin_zb ia s in (ib, (e :: es, b @ bs))))
-             elist (i, ([], []))
-           in
-          (ia, (Z3.Z3BE_and elista, bs)))
-    | i, Z3.Z3BE_or elist ->
-        (let (ia, (elista, bs)) =
-           Lista.foldr
-             (fun s (ia, (es, bs)) ->
-               (let (ib, (e, b)) = lin_zb ia s in (ib, (e :: es, b @ bs))))
-             elist (i, ([], []))
-           in
-          (ia, (Z3.Z3BE_or elista, bs)))
-    | i, Z3.Z3BE_implies (e1, e2) ->
-        (let (i1, (e1a, bs1)) = lin_zb i e1 in
-         let (i2, (e2a, bs2)) = lin_zb i1 e2 in
-          (i2, (Z3.Z3BE_implies (e1a, e2a), bs1 @ bs2)))
-    | i, Z3.Z3BE_not e1 ->
-        (let (i1, (e1a, bs1)) = lin_zb i e1 in (i1, (Z3.Z3BE_not e1a, bs1)))
-    | i, Z3.Z3BE_pred (s, elist) ->
-        (let (ia, (elista, bs)) =
-           Lista.foldr
-             (fun sa (ia, (es, bs)) ->
-               (let (ib, (e, b)) = lin_ze ia sa in (ib, (e :: es, b @ bs))))
-             elist (i, ([], []))
-           in
-          (ia, (Z3.Z3BE_pred (s, elista), bs)));;
-
 let rec rewrite_passes
   p g d1 e1 =
-    (let x = lin_zb Arith.zero_nat e1 in
+    (let x = (Arith.zero_nat, (e1, [])) in
      let (i, (e1a, bs)) = (let (xa, a) = x in (Arith.int_of_nat xa, a)) in
      let var_decls =
        Lista.map
@@ -664,30 +1244,11 @@ let rec pp_bv_concats
              ")"])
         (Lista.upto Arith.one_inta n);;
 
-let rec t_t_vars (SyntaxVCT.T_refined_type (vIndex0, b, c)) = b_t_vars b
-and b_t_vars
-  = function SyntaxVCT.B_var s -> [s]
-    | SyntaxVCT.B_tuple bs ->
-        Lista.remdups Stringa.equal_literal (Lista.maps b_t_vars bs)
-    | SyntaxVCT.B_union (uu, ts) ->
+let rec td_t_vars
+  = function SyntaxPED.Record (ux, uy, ts) -> t_t_vars ts
+    | SyntaxPED.Variant (uz, va, ts) ->
         Lista.remdups Stringa.equal_literal
-          (Lista.maps (fun (_, a) -> t_t_vars a) ts)
-    | SyntaxVCT.B_record ts ->
-        Lista.remdups Stringa.equal_literal
-          (Lista.maps (fun (_, a) -> b_t_vars a) ts)
-    | SyntaxVCT.B_vec (uv, b) -> b_t_vars b
-    | SyntaxVCT.B_list b -> b_t_vars b
-    | SyntaxVCT.B_tid v -> []
-    | SyntaxVCT.B_int -> []
-    | SyntaxVCT.B_bool -> []
-    | SyntaxVCT.B_bit -> []
-    | SyntaxVCT.B_unit -> []
-    | SyntaxVCT.B_real -> []
-    | SyntaxVCT.B_undef -> []
-    | SyntaxVCT.B_reg v -> []
-    | SyntaxVCT.B_string -> []
-    | SyntaxVCT.B_exception -> []
-    | SyntaxVCT.B_finite_set v -> [];;
+          (Lista.maps (Fun.comp t_t_vars Product_Type.snd) ts);;
 
 let rec pp_sort_decl
   p g = Lista.remdups Stringa.equal_literal
@@ -695,7 +1256,7 @@ let rec pp_sort_decl
             (fun (_, t) ->
               Lista.map
                 (fun s -> ("(declare-sort " ^ Contexts.remove_tick s) ^ ")")
-                (Lista.remdups Stringa.equal_literal (t_t_vars t)))
+                (Lista.remdups Stringa.equal_literal (td_t_vars t)))
             (ContextsPiDelta.theta_T p));;
 
 let rec bv_consts_v
@@ -811,48 +1372,6 @@ let rec pp_z3_exp_pred
         (upto maxx)) ^
       ")) ";;
 
-let rec pp_z3_type
-  = function Z3.Z3T_int -> "Int"
-    | Z3.Z3T_bool -> "Bool"
-    | Z3.Z3T_unit -> "Unit"
-    | Z3.Z3T_array (t1, t2) ->
-        ((("(Array " ^ pp_z3_type t1) ^ " ") ^ pp_z3_type t2) ^ " )"
-    | Z3.Z3T_dt (s, tlist) ->
-        ((("( " ^ s) ^ " ") ^
-          Lista.foldr (fun t -> (fun a -> (pp_z3_type t ^ " ") ^ a)) tlist
-            " ") ^
-          ") "
-    | Z3.Z3T_sort s -> Contexts.remove_tick s
-    | Z3.Z3T_string -> "String";;
-
-let rec pp_z3_type_var
-  = function Z3.Z3TV_tv_type t -> pp_z3_type t
-    | Z3.Z3TV_tv_var n -> "T" ^ Utils.string_lit_of_integer n;;
-
-let rec pp_z3_fields
-  fs = Lista.foldr
-         (fun (c, t) ->
-           (fun a -> ((((" ( " ^ c) ^ " ") ^ pp_z3_type_var t) ^ " ) ") ^ a))
-         fs "";;
-
-let rec pp_z3_ty_constr
-  (Z3.Z3C_ty_constr (c, x)) = (((" ( " ^ c) ^ " ") ^ pp_z3_fields x) ^ ")";;
-
-let rec pp_z3_decl
-  = function
-    Z3.Z3D_decl_const (s, t) ->
-      ((("(declare-const " ^ s) ^ " ") ^ pp_z3_type t) ^ ")"
-    | Z3.Z3D_decl_fun -> "Unknown"
-    | Z3.Z3D_decl_datatype (s, tvs, dt_list) ->
-        (((((((("(declare-datatypes " ^ " (( ") ^ s) ^ " ") ^
-              Utils.string_lit_of_nat (Lista.size_list tvs)) ^
-             ")) (( par ( ") ^
-            Utils.string_lit_map " " pp_z3_type_var tvs) ^
-           " ) ( ") ^
-          Lista.foldr (fun tc -> (fun a -> pp_z3_ty_constr tc ^ a)) dt_list
-            "") ^
-          "))))";;
-
 let rec z3_declare_tuple
   n = Z3.Z3D_decl_datatype
         ("Tuple" ^ Utils.string_lit_of_int n,
@@ -880,189 +1399,154 @@ let rec pp_builtins
                 ("Unit", [], [Z3.Z3C_ty_constr ("unit", [])])) ::
               pp_tuples n;;
 
-let rec freshen_type
-  = function Z3.Z3T_int -> Z3.Z3T_int
-    | Z3.Z3T_bool -> Z3.Z3T_bool
-    | Z3.Z3T_unit -> Z3.Z3T_unit
-    | Z3.Z3T_array (t1, t2) -> Z3.Z3T_array (freshen_type t1, freshen_type t2)
-    | Z3.Z3T_dt (s, zts) -> Z3.Z3T_dt (s, Lista.map freshen_type zts)
-    | Z3.Z3T_sort s -> Z3.Z3T_sort (s ^ "T")
-    | Z3.Z3T_string -> Z3.Z3T_string;;
-
-let rec freshen_type_var
-  = function Z3.Z3TV_tv_type t -> Z3.Z3TV_tv_type (freshen_type t)
-    | Z3.Z3TV_tv_var i -> Z3.Z3TV_tv_var i;;
-
-let rec freshen_constr
-  (Z3.Z3C_ty_constr (s, stvs)) =
-    Z3.Z3C_ty_constr
-      (s, Lista.map (fun (sa, t) -> (sa, freshen_type_var t)) stvs);;
-
-let rec freshen_decl
-  = function Z3.Z3D_decl_fun -> Z3.Z3D_decl_fun
-    | Z3.Z3D_decl_const (s, t) -> Z3.Z3D_decl_const (s, freshen_type t)
-    | Z3.Z3D_decl_datatype (s, vs, cs) ->
-        Z3.Z3D_decl_datatype
-          (s, Lista.map freshen_type_var vs, Lista.map freshen_constr cs);;
-
-let rec convert_t
-  p v (SyntaxVCT.T_refined_type (vIndex0, b, c)) =
-    (let (t, e) = convert_b p v b in
-      (t, z3and [e; convert_c (SyntaxPED.subst_cp v SyntaxVCT.VIndex c)]));;
-
-let rec convert_typedef
-  p x1 = match p, x1 with
-    p, (SyntaxVCT.VNamed x,
-         SyntaxVCT.T_refined_type (uu, SyntaxVCT.B_union (s, clist), uv))
-      -> (let decl =
-            Z3.Z3D_decl_datatype
-              (x, Lista.map (fun v -> Z3.Z3TV_tv_type (Z3.Z3T_sort v))
-                    (Lista.maps (fun (_, a) -> t_t_vars a) clist),
-                Lista.map
-                  (fun (sa, t) ->
-                    (let (zt, _) =
-                       convert_t p (SyntaxVCT.V_var SyntaxVCT.VIndex) t in
-                      Z3.Z3C_ty_constr
-                        (sa, [((("proj" ^ x) ^ "x") ^ sa,
-                                Z3.Z3TV_tv_type zt)])))
-                  clist)
-            in
-           Some (freshen_decl decl))
-    | p, (SyntaxVCT.VNamed x,
-           SyntaxVCT.T_refined_type (uw, SyntaxVCT.B_record clist, ux))
-        -> (let decl =
-              Z3.Z3D_decl_datatype
-                (x, Lista.map (fun v -> Z3.Z3TV_tv_type (Z3.Z3T_sort v))
-                      (Lista.maps (fun (_, a) -> b_t_vars a) clist),
-                  [Z3.Z3C_ty_constr
-                     ("mk-" ^ x,
-                       Lista.map
-                         (fun (s, t) ->
-                           (let (zt, _) =
-                              convert_b p (SyntaxVCT.V_var SyntaxVCT.VIndex) t
-                              in
-                             ("proj" ^ s, Z3.Z3TV_tv_type zt)))
-                         clist)])
-              in
-             Some (freshen_decl decl))
-    | uy, (SyntaxVCT.VIndex, va) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_var ve, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_tid ve, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_int, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_bool, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_bit, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_unit, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_real, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_vec (ve, vf), vd)) ->
-        None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_list ve, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_tuple ve, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_undef, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_reg ve, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_string, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_exception, vd)) -> None
-    | uy, (v, SyntaxVCT.T_refined_type (vb, SyntaxVCT.B_finite_set ve, vd)) ->
-        None;;
-
-let rec pp_typedef
-  p td = (match convert_typedef p td with None -> "" | Some a -> pp_z3_decl a);;
-
 let max_tuples : Arith.int = Arith.Int_of_integer (Z.of_int 10);;
 
-let rec convert_smt_problem_final
-  p ga ev c g d1 d2 e1 =
-    (let (d1a, e1a) = rewrite_passes p ga d1 e1 in
-      pp_bv_concats (Arith.Int_of_integer (Z.of_int 3)) @
-        pp_builtins max_tuples @
-          pp_bv_consts ga ev c @
-            pp_sort_decl p ga @
-              Lista.map (pp_typedef p) (ContextsPiDelta.minimise_td p g) @
-                Lista.map pp_z3_decl d1a @
-                  [("(define-fun constraint () Bool " ^ pp_z3_bool_expr e1a) ^
-                     (if Arith.equal_nat (Lista.size_list d2) Arith.zero_nat
-                       then ")" else "))")] @
-                    ["(assert constraint)"; "(check-sat)"]);;
+let rec convert_smt_problem_final_i_i_i_i_i_i_i_i_o
+  x xa xb xc xd xe xf xg =
+    Predicate.bind
+      (Predicate.single (x, (xa, (xb, (xc, (xd, (xe, (xf, xg))))))))
+      (fun (p, (g, (ev, (c, (ga, (d1, (d2, e1))))))) ->
+        Predicate.bind (ContextsPiDelta.eq_o_i (rewrite_passes p g d1 e1))
+          (fun (d1a, e1a) ->
+            Predicate.bind (minimise_td_i_i_o p ga)
+              (fun xh ->
+                Predicate.bind (pp_typedef_list_i_i_o p xh)
+                  (fun xi ->
+                    Predicate.bind
+                      (ContextsPiDelta.eq_o_i
+                        (pp_bv_concats (Arith.Int_of_integer (Z.of_int 3)) @
+                          pp_builtins max_tuples @
+                            pp_bv_consts g ev c @
+                              pp_sort_decl p g @
+                                xi @ Lista.map pp_z3_decl d1a @
+                                       [("(define-fun constraint () Bool " ^
+  pp_z3_bool_expr e1a) ^
+  (if Arith.equal_nat (Lista.size_list d2) Arith.zero_nat then ")" else "))")] @
+ ["(assert constraint)"; "(check-sat)"]))
+                      Predicate.single))));;
 
-let rec pp_smt_problem_valid
-  p g ev c =
-    (let a = convert_smt_problem_valid p g ev c in
-     let (ga, aa) = a in
-     let (d1, ab) = aa in
-     let (ac, b) = ab in
-      convert_smt_problem_final p g ev c ga d1 ac b);;
+let rec convert_x = function SyntaxVCT.VNamed x -> Contexts.remove_tick x
+                    | SyntaxVCT.VIndex -> "#0";;
 
-let rec has_no_t_var_b
-  = function SyntaxVCT.B_var uu -> false
-    | SyntaxVCT.B_tuple bs -> Lista.list_all has_no_t_var_b bs
-    | SyntaxVCT.B_tid v -> true
-    | SyntaxVCT.B_int -> true
-    | SyntaxVCT.B_bool -> true
-    | SyntaxVCT.B_bit -> true
-    | SyntaxVCT.B_unit -> true
-    | SyntaxVCT.B_real -> true
-    | SyntaxVCT.B_vec (v, va) -> true
-    | SyntaxVCT.B_list v -> true
-    | SyntaxVCT.B_union (v, va) -> true
-    | SyntaxVCT.B_record v -> true
-    | SyntaxVCT.B_undef -> true
-    | SyntaxVCT.B_reg v -> true
-    | SyntaxVCT.B_string -> true
-    | SyntaxVCT.B_exception -> true
-    | SyntaxVCT.B_finite_set v -> true;;
+let rec convert_xbc_i_i_i_i_Poo
+  xa xb xc xd =
+    Predicate.bind (Predicate.single (xa, (xb, (xc, xd))))
+      (fun (p, (x, (b, c))) ->
+        Predicate.bind (convert_b_i_i_i_o p (SyntaxVCT.V_var x) b)
+          (fun (t1, c1) ->
+            Predicate.single
+              ([Z3.Z3D_decl_const (convert_x x, t1)],
+                z3and [c1; convert_c c])));;
 
-let rec b_of_e = function Contexts.GEPair (b, uu) -> b
-                 | Contexts.GETyp t -> SyntaxUtils.b_of t;;
+let rec subst_c_z x c = Subst.subst_cp (SyntaxVCT.V_var x) SyntaxVCT.VIndex c;;
 
-let rec has_no_t_var_g
-  g = Lista.list_all (fun (_, t) -> has_no_t_var_b (b_of_e t))
-        (Contexts.gamma_x g);;
+let rec convert_g_aux_i_i_Poo
+  xa xb =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (xa, xb))
+        (fun a ->
+          (match a with (_, []) -> Predicate.single ([], [])
+            | (_, _ :: _) -> Predicate.bot_pred)))
+      (Predicate.sup_pred
+        (Predicate.bind (Predicate.single (xa, xb))
+          (fun a ->
+            (match a with (_, []) -> Predicate.bot_pred
+              | (p, (x, Contexts.GEPair (b, c)) :: gamma) ->
+                Predicate.bind (convert_g_aux_i_i_Poo p gamma)
+                  (fun (ds, es) ->
+                    Predicate.bind (convert_xbc_i_i_i_i_Poo p x b c)
+                      (fun (d, e) -> Predicate.single (d @ ds, e :: es)))
+              | (_, (_, Contexts.GETyp _) :: _) -> Predicate.bot_pred)))
+        (Predicate.bind (Predicate.single (xa, xb))
+          (fun a ->
+            (match a with (_, []) -> Predicate.bot_pred
+              | (_, (_, Contexts.GEPair (_, _)) :: _) -> Predicate.bot_pred
+              | (p, (x, Contexts.GETyp t) :: gamma) ->
+                Predicate.bind (convert_g_aux_i_i_Poo p gamma)
+                  (fun (ds, es) ->
+                    Predicate.bind
+                      (convert_xbc_i_i_i_i_Poo p x (SyntaxUtils.b_of t)
+                        (subst_c_z x (SyntaxUtils.c_of t)))
+                      (fun (d, e) -> Predicate.single (d @ ds, e :: es)))))));;
 
-let rec has_t_var
-  g xbc =
-    not (has_no_t_var_g g &&
-          Lista.list_all (fun (_, t) -> has_no_t_var_b (b_of_e t)) xbc);;
+let rec convert_smt_problem_valid_i_i_i_i_o
+  x xa xb xc =
+    Predicate.bind (Predicate.single (x, (xa, (xb, xc))))
+      (fun (p, (g, (ev, c))) ->
+        Predicate.bind
+          (ContextsPiDelta.eq_o_i (Contexts.gamma_x g @ Contexts.gamma_u g))
+          (fun xd ->
+            Predicate.bind (convert_g_aux_i_i_Poo p xd)
+              (fun (d1, e1) ->
+                Predicate.bind (convert_g_aux_i_i_Poo p ev)
+                  (fun (d2, e2) ->
+                    Predicate.bind (ContextsPiDelta.eq_o_i (convert_c c))
+                      (fun xaa ->
+                        Predicate.single
+                          (xd, (d1, (d2, z3and
+   (e1 @ [Z3.Z3BE_not (z3and (xaa :: e2))])))))))));;
+
+let rec pp_smt_problem_valid_i_i_i_i_o
+  x xa xb xc =
+    Predicate.bind (Predicate.single (x, (xa, (xb, xc))))
+      (fun (p, (g, (ev, c))) ->
+        Predicate.bind (convert_smt_problem_valid_i_i_i_i_o p g ev c)
+          (fun (ga, (d1, (d2, e1))) ->
+            Predicate.bind
+              (convert_smt_problem_final_i_i_i_i_i_i_i_i_o p g ev c ga d1 d2 e1)
+              Predicate.single));;
+
+let rec valid_i_i_i_i_i_i_i
+  x xa xb xc xd xe xf =
+    Predicate.bind (Predicate.single (x, (xa, (xb, (xc, (xd, (xe, xf)))))))
+      (fun (s, (loc, (p, (g, (xbc, (c, smt_result)))))) ->
+        Predicate.bind
+          (Predicate.if_pred (Smt2.traceG "satisfiable call" g xbc c))
+          (fun () ->
+            Predicate.bind (pp_smt_problem_valid_i_i_i_i_o p g xbc c)
+              (fun xg ->
+                Predicate.bind
+                  (ContextsPiDelta.eq_i_i Product_Type.equal_bool smt_result
+                    (not (Smt2.satisfiable s loc xg false)))
+                  (fun () -> Predicate.single ()))));;
 
 let rec valid
-  s loc p g xbc c =
-    (let _ = Debug.trace ("valid call: vars=" ^ Contexts.pp_G g) in
-      has_t_var g xbc ||
-        Smt2.traceG s g xbc c &&
-          not (Smt2.satisfiable s loc (pp_smt_problem_valid p g xbc c) false));;
+  x1 x2 x3 x4 x5 x6 x7 =
+    Predicate.holds (valid_i_i_i_i_i_i_i x1 x2 x3 x4 x5 x6 x7);;
 
-end;; (*struct Satis*)
-module TypingDeclFailRules : sig
-  type err = CheckFail of string * Location.loc
+let rec valid_i_i_i_i_i_i_o
+  x xa xb xc xd xe =
+    Predicate.bind (Predicate.single (x, (xa, (xb, (xc, (xd, xe))))))
+      (fun (s, (loc, (p, (g, (xbc, c))))) ->
+        Predicate.bind
+          (Predicate.if_pred (Smt2.traceG "satisfiable call" g xbc c))
+          (fun () ->
+            Predicate.bind (pp_smt_problem_valid_i_i_i_i_o p g xbc c)
+              (fun xf ->
+                Predicate.bind
+                  (ContextsPiDelta.eq_o_i
+                    (not (Smt2.satisfiable s loc xf false)))
+                  Predicate.single)));;
+
+end;; (*struct SatisInductive*)
+module TypingDeclFailRulesVP : sig
+  type err = CheckFail of string * Location.loc |
+    UnifyFail of string * Location.loc * SyntaxVCT.bp * SyntaxVCT.bp |
+    SubtypeFail of string * Location.loc * SyntaxVCT.tau * SyntaxVCT.tau
   val equal_erra : err -> err -> bool
   val equal_err : err HOL.equal
   type 'a ok_error = OK | Error of 'a
-  type check_pat_w = CheckPLit | CheckPId | CheckPWild |
-    CheckPApp of check_pat_w | CheckPTuple of check_pat_w list |
-    CheckPVec of check_pat_w list | CheckPNull
-  type subtype_w = Subtype of SyntaxVCT.tau * SyntaxVCT.tau | SubtypeFail
   type infer_v_w = InferVVar of SyntaxVCT.xp | InferVLit |
     InferVBitvec of infer_v_w list | InferVTuple of infer_v_w list |
     InferVCons of infer_v_w * infer_v_w
-  type check_e_w = CheckCase of infer_e_w * check_pexp_w list |
-    CheckIf of infer_e_w * subtype_w * check_e_w * check_e_w |
-    CheckRecord of check_e_w list | CheckSubtype of infer_e_w * subtype_w |
-    CheckAssign of check_lexp_w | CheckVar of check_lexp_w * check_e_w
-  and infer_e_w = NullTr | InferVal of infer_v_w |
-    InferApp of infer_e_w * subtype_w | InferTuple of infer_e_w list |
-    LookupMVar | InferVecConcat of infer_e_w list |
-    InferLoop of infer_e_w * check_e_w |
-    InferRecordUpdate of infer_e_w * check_e_w list
-  and check_lexp_w = LExp_bound of check_e_w | LExp_unbound of infer_e_w
-  and check_pexp_w = CheckPExp of check_pat_w * check_e_w
-  type check_letbind_w = LetBindInf of infer_e_w * check_pat_w |
-    LetBindCheck of check_e_w * check_pat_w
-  type check_def_w = CheckFunDef of check_pexp_w list |
-    CheckLetDef of check_letbind_w | CheckDef
+  type subtype_w = Subtype of SyntaxVCT.tau * SyntaxVCT.tau | SubtypeFailW
+  type check_pat_w = CheckPLit | CheckPId | CheckPWild |
+    CheckPApp of check_pat_w | CheckPTuple of check_pat_w list |
+    CheckPVec of check_pat_w list | CheckPNull
   val plus : 'a ok_error -> 'a ok_error -> 'a ok_error
   val s_of : SyntaxVCT.xp -> string
   val bot_t : SyntaxVCT.tau
-  val ep_null : (SyntaxVCT.tau option) SyntaxPED.ep
   val get_loc : Location.loc * SyntaxVCT.tau option -> Location.loc
-  val upd_t_none : 'a * 'b -> 'a * 'c option
   val update_klist :
     (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list ->
       SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp) ->
@@ -1082,40 +1566,6 @@ module TypingDeclFailRules : sig
         ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
           SyntaxVCT.tau ->
             SyntaxVCT.tau -> (subtype_w * err ok_error) Predicate.pred
-  val check_pat_i_i_i_i_i_i_o_o_o_o_o_o :
-    Arith.nat ->
-      unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-          (SyntaxVCT.tau option) SyntaxPED.patp ->
-            SyntaxVCT.tau ->
-              SyntaxVCT.vp ->
-                ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
-                  (SyntaxVCT.xp list *
-                    ((SyntaxVCT.tau option) SyntaxPED.patp *
-                      (Arith.nat * (check_pat_w * err ok_error)))))
-                  Predicate.pred
-  val check_pat_list_i_i_i_i_i_o_i_o_o_o_o :
-    Arith.nat ->
-      unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-          (SyntaxVCT.tau option) SyntaxPED.patp list ->
-            SyntaxVCT.bp list ->
-              SyntaxVCT.vp list ->
-                ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
-                  ((SyntaxVCT.tau option) SyntaxPED.patp list *
-                    (Arith.nat * (check_pat_w list * err ok_error))))
-                  Predicate.pred
-  val match_arg_i_i_i_i_i_i_i_o_o_o_o :
-    Location.loc ->
-      unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-          SyntaxVCT.xp ->
-            SyntaxVCT.bp ->
-              SyntaxVCT.cp ->
-                (SyntaxVCT.xp * SyntaxVCT.ap) list ->
-                  ((SyntaxVCT.xp * SyntaxVCT.ap) *
-                    ((string * SyntaxVCT.bp) list * (subtype_w * err ok_error)))
-                    Predicate.pred
   val equal_ok_error : 'a HOL.equal -> 'a ok_error -> 'a ok_error -> bool
   val infer_v_i_i_i_o_o_i :
     unit ContextsPiDelta.theta_ext ->
@@ -1145,250 +1595,67 @@ module TypingDeclFailRules : sig
       ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
         SyntaxVCT.vp list ->
           (SyntaxVCT.tau list * (infer_v_w list * err ok_error)) Predicate.pred
-  val check_pexp_i_i_i_i_i_i_i_i_i_o_o_o_o_o :
+  val check_pat_i_i_i_i_i_i_o_o_o_o_o_o :
     Arith.nat ->
       unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-          ContextsPiDelta.phi_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-            unit ContextsPiDelta.delta_ext ->
-              (SyntaxVCT.tau option) SyntaxPED.pexpp ->
-                SyntaxVCT.tau ->
-                  SyntaxVCT.tau ->
-                    SyntaxVCT.vp ->
-                      (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-                         Contexts.gamma_ext *
-                        ((SyntaxVCT.tau option) SyntaxPED.pexpp *
-                          (Arith.nat * (check_pexp_w * err ok_error))))
-                        Predicate.pred
-  val check_pexp_list_i_i_i_i_i_i_i_i_i_o_o_o_o :
-    Arith.nat ->
-      unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-          ContextsPiDelta.phi_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-            unit ContextsPiDelta.delta_ext ->
-              (SyntaxVCT.tau option) SyntaxPED.pexpp list ->
-                SyntaxVCT.tau ->
-                  SyntaxVCT.tau ->
-                    SyntaxVCT.vp ->
-                      ((SyntaxVCT.tau option) SyntaxPED.pexpp list *
-                        (Arith.nat * (check_pexp_w list * err ok_error)))
-                        Predicate.pred
-  val check_e_i_i_i_i_i_i_i_o_o_o_o :
-    Arith.nat ->
-      unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-          ContextsPiDelta.phi_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-            unit ContextsPiDelta.delta_ext ->
-              (SyntaxVCT.tau option) SyntaxPED.ep ->
-                SyntaxVCT.tau ->
-                  ((SyntaxVCT.tau option) SyntaxPED.ep *
-                    (Arith.nat * (check_e_w * err ok_error)))
-                    Predicate.pred
-  val check_e_list_i_i_i_i_i_i_i_o_o_o_o_o :
-    Arith.nat ->
-      unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-          ContextsPiDelta.phi_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-            unit ContextsPiDelta.delta_ext ->
-              (SyntaxVCT.tau option) SyntaxPED.ep list ->
-                SyntaxVCT.tau list ->
-                  (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-                     Contexts.gamma_ext *
-                    ((SyntaxVCT.tau option) SyntaxPED.ep list *
-                      (Arith.nat * (check_e_w list * err ok_error))))
-                    Predicate.pred
-  val infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o :
-    Arith.nat ->
-      unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-          ContextsPiDelta.phi_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-            unit ContextsPiDelta.delta_ext ->
-              (SyntaxVCT.tau option) SyntaxPED.ep ->
-                (SyntaxVCT.tau *
-                  (SyntaxVCT.vp *
-                    ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
-                      ((SyntaxVCT.tau option) SyntaxPED.ep *
-                        (Arith.nat * (infer_e_w * err ok_error))))))
-                  Predicate.pred
-  val check_letbind_i_i_i_i_i_i_o_o_o_o_o :
-    Arith.nat ->
-      unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-          ContextsPiDelta.phi_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-            unit ContextsPiDelta.delta_ext ->
-              (SyntaxVCT.tau option) SyntaxPED.letbindp ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+          (SyntaxVCT.tau option) SyntaxPED.patp ->
+            SyntaxVCT.tau ->
+              SyntaxVCT.vp ->
                 ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
-                  ((SyntaxVCT.tau option) SyntaxPED.letbindp *
-                    (Arith.nat * (check_letbind_w * err ok_error))))
+                  (SyntaxVCT.xp list *
+                    ((SyntaxVCT.tau option) SyntaxPED.patp *
+                      (Arith.nat * (check_pat_w * err ok_error)))))
                   Predicate.pred
-  val infer_e_list_i_i_i_i_i_i_o_o_o_o_o_o_o :
+  val check_pat_list_i_i_i_i_i_o_i_o_o_o_o :
     Arith.nat ->
       unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-          ContextsPiDelta.phi_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-            unit ContextsPiDelta.delta_ext ->
-              (SyntaxVCT.tau option) SyntaxPED.ep list ->
-                (SyntaxVCT.tau list *
-                  (SyntaxVCT.vp list *
-                    ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
-                      ((SyntaxVCT.tau option) SyntaxPED.ep list *
-                        (Arith.nat * (infer_e_w list * err ok_error))))))
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+          (SyntaxVCT.tau option) SyntaxPED.patp list ->
+            SyntaxVCT.bp list ->
+              SyntaxVCT.vp list ->
+                ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
+                  ((SyntaxVCT.tau option) SyntaxPED.patp list *
+                    (Arith.nat * (check_pat_w list * err ok_error))))
                   Predicate.pred
-  val infer_app_i_i_i_i_i_i_i_i_o_o_o_o_o_o_o_o_o :
-    Arith.nat ->
-      Location.loc ->
-        unit ContextsPiDelta.theta_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-            ContextsPiDelta.phi_ext ->
-            ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-              unit ContextsPiDelta.delta_ext ->
-                (SyntaxVCT.xp * SyntaxVCT.ap) list ->
-                  (SyntaxVCT.tau option) SyntaxPED.ep ->
-                    (SyntaxVCT.tau *
-                      (SyntaxVCT.vp *
-                        ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
-                          (SyntaxVCT.xp *
-                            ((string * SyntaxVCT.bp) list *
-                              ((SyntaxVCT.tau option) SyntaxPED.ep *
-                                (Arith.nat * (infer_e_w * err ok_error))))))))
-                      Predicate.pred
-  val infer_e_T_P_G_D_ep_list_xp_order_bp_cp_list_xp_list_klist_list_i_i_i_i_i_i_o_o_o_o_o_o_o_o_o_o
-    : Arith.nat ->
-        unit ContextsPiDelta.theta_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-            ContextsPiDelta.phi_ext ->
-            ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-              unit ContextsPiDelta.delta_ext ->
-                (SyntaxVCT.tau option) SyntaxPED.ep list ->
-                  (SyntaxVCT.xp *
-                    (SyntaxVCT.order *
-                      (SyntaxVCT.bp *
-                        (SyntaxVCT.cp list *
-                          (SyntaxVCT.vp list *
-                            (((SyntaxVCT.xp *
-                                (SyntaxVCT.bp * SyntaxVCT.cp)) list) list *
-                              ((SyntaxVCT.tau option) SyntaxPED.ep list *
-                                (Arith.nat *
-                                  (infer_e_w list * err ok_error)))))))))
-                    Predicate.pred
-  val check_lexp_i_i_i_i_i_i_i_o_o_o_o_o_o_o :
-    Arith.nat ->
-      unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-          ContextsPiDelta.phi_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-            unit ContextsPiDelta.delta_ext ->
-              (SyntaxVCT.tau option) SyntaxPED.lexpp ->
-                (SyntaxVCT.tau option) SyntaxPED.ep ->
-                  (unit ContextsPiDelta.delta_ext *
-                    ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
-                      ((SyntaxVCT.tau option) SyntaxPED.lexpp *
-                        ((SyntaxVCT.tau option) SyntaxPED.ep *
-                          (Arith.nat * (check_lexp_w * err ok_error))))))
-                    Predicate.pred
-  val check_funcls_i_i_i_i_i_i_i_i_i_o_o_o_o_o_o :
-    Arith.nat ->
-      unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-          ContextsPiDelta.phi_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-            (SyntaxVCT.tau option) SyntaxPED.funclp list ->
-              SyntaxVCT.xp ->
-                SyntaxVCT.bp ->
-                  SyntaxVCT.cp ->
-                    SyntaxVCT.tau ->
-                      (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-                         ContextsPiDelta.phi_ext *
-                        (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-                           Contexts.gamma_ext *
-                          ((SyntaxVCT.tau option) SyntaxPED.funclp list *
-                            (Arith.nat * (check_pexp_w list * err ok_error)))))
-                        Predicate.pred
-  val def_checking_mapI_xp_bp_cp_i_o_o_o_o :
-    (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list ->
-      (SyntaxVCT.xp list *
-        (SyntaxVCT.bp list * (SyntaxVCT.cp list * err ok_error)))
-        Predicate.pred
-  val check_def_i_i_i_i_i_o_o_o_o_o_o_o :
-    Arith.nat ->
-      unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-          ContextsPiDelta.phi_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-            (SyntaxVCT.tau option) SyntaxPED.defp ->
-              (unit ContextsPiDelta.theta_ext *
-                (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-                   ContextsPiDelta.phi_ext *
-                  (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-                     Contexts.gamma_ext *
-                    ((SyntaxVCT.tau option) SyntaxPED.defp *
-                      (Arith.nat * (check_def_w * err ok_error))))))
-                Predicate.pred
-  val check_defs_i_i_i_i_i_o_o_o_o_o_o_o :
-    Arith.nat ->
-      unit ContextsPiDelta.theta_ext ->
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-          ContextsPiDelta.phi_ext ->
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
-            (SyntaxVCT.tau option) SyntaxPED.defp list ->
-              (unit ContextsPiDelta.theta_ext *
-                (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-                   ContextsPiDelta.phi_ext *
-                  (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
-                     Contexts.gamma_ext *
-                    ((SyntaxVCT.tau option) SyntaxPED.defp list *
-                      (Arith.nat * (check_def_w list * err ok_error))))))
-                Predicate.pred
-  val check_prog_i_o_o_o :
-    (SyntaxVCT.tau option) SyntaxPED.progp ->
-      ((SyntaxVCT.tau option) SyntaxPED.progp *
-        (check_def_w list * err ok_error))
-        Predicate.pred
 end = struct
 
-type err = CheckFail of string * Location.loc;;
+type err = CheckFail of string * Location.loc |
+  UnifyFail of string * Location.loc * SyntaxVCT.bp * SyntaxVCT.bp |
+  SubtypeFail of string * Location.loc * SyntaxVCT.tau * SyntaxVCT.tau;;
 
 let rec equal_erra
-  (CheckFail (x1, x2)) (CheckFail (y1, y2)) =
-    ((x1 : string) = y1) && Location.equal_loca x2 y2;;
+  x0 x1 = match x0, x1 with
+    UnifyFail (x21, x22, x23, x24), SubtypeFail (x31, x32, x33, x34) -> false
+    | SubtypeFail (x31, x32, x33, x34), UnifyFail (x21, x22, x23, x24) -> false
+    | CheckFail (x11, x12), SubtypeFail (x31, x32, x33, x34) -> false
+    | SubtypeFail (x31, x32, x33, x34), CheckFail (x11, x12) -> false
+    | CheckFail (x11, x12), UnifyFail (x21, x22, x23, x24) -> false
+    | UnifyFail (x21, x22, x23, x24), CheckFail (x11, x12) -> false
+    | SubtypeFail (x31, x32, x33, x34), SubtypeFail (y31, y32, y33, y34) ->
+        ((x31 : string) = y31) &&
+          (Location.equal_loca x32 y32 &&
+            (SyntaxVCT.equal_taua x33 y33 && SyntaxVCT.equal_taua x34 y34))
+    | UnifyFail (x21, x22, x23, x24), UnifyFail (y21, y22, y23, y24) ->
+        ((x21 : string) = y21) &&
+          (Location.equal_loca x22 y22 &&
+            (SyntaxVCT.equal_bpa x23 y23 && SyntaxVCT.equal_bpa x24 y24))
+    | CheckFail (x11, x12), CheckFail (y11, y12) ->
+        ((x11 : string) = y11) && Location.equal_loca x12 y12;;
 
 let equal_err = ({HOL.equal = equal_erra} : err HOL.equal);;
 
 type 'a ok_error = OK | Error of 'a;;
 
-type check_pat_w = CheckPLit | CheckPId | CheckPWild | CheckPApp of check_pat_w
-  | CheckPTuple of check_pat_w list | CheckPVec of check_pat_w list |
-  CheckPNull;;
-
-type subtype_w = Subtype of SyntaxVCT.tau * SyntaxVCT.tau | SubtypeFail;;
-
 type infer_v_w = InferVVar of SyntaxVCT.xp | InferVLit |
   InferVBitvec of infer_v_w list | InferVTuple of infer_v_w list |
   InferVCons of infer_v_w * infer_v_w;;
 
-type check_e_w = CheckCase of infer_e_w * check_pexp_w list |
-  CheckIf of infer_e_w * subtype_w * check_e_w * check_e_w |
-  CheckRecord of check_e_w list | CheckSubtype of infer_e_w * subtype_w |
-  CheckAssign of check_lexp_w | CheckVar of check_lexp_w * check_e_w
-and infer_e_w = NullTr | InferVal of infer_v_w |
-  InferApp of infer_e_w * subtype_w | InferTuple of infer_e_w list | LookupMVar
-  | InferVecConcat of infer_e_w list | InferLoop of infer_e_w * check_e_w |
-  InferRecordUpdate of infer_e_w * check_e_w list
-and check_lexp_w = LExp_bound of check_e_w | LExp_unbound of infer_e_w
-and check_pexp_w = CheckPExp of check_pat_w * check_e_w;;
+type subtype_w = Subtype of SyntaxVCT.tau * SyntaxVCT.tau | SubtypeFailW;;
 
-type check_letbind_w = LetBindInf of infer_e_w * check_pat_w |
-  LetBindCheck of check_e_w * check_pat_w;;
-
-type check_def_w = CheckFunDef of check_pexp_w list |
-  CheckLetDef of check_letbind_w | CheckDef;;
+type check_pat_w = CheckPLit | CheckPId | CheckPWild | CheckPApp of check_pat_w
+  | CheckPTuple of check_pat_w list | CheckPVec of check_pat_w list |
+  CheckPNull;;
 
 let rec plus x0 uu = match x0, uu with Error e, uu -> Error e
                | OK, Error e -> Error e
@@ -1401,16 +1668,7 @@ let bot_t : SyntaxVCT.tau
   = SyntaxVCT.T_refined_type
       (SyntaxVCT.VIndex, SyntaxVCT.B_unit, SyntaxVCT.C_false);;
 
-let ep_null : (SyntaxVCT.tau option) SyntaxPED.ep
-  = SyntaxPED.Ep_val
-      ((Location.Loc_unknown,
-         Some (SyntaxVCT.T_refined_type
-                (SyntaxVCT.VIndex, SyntaxVCT.B_unit, SyntaxVCT.C_false))),
-        SyntaxVCT.V_lit SyntaxVCT.L_unit);;
-
 let rec get_loc annot = Product_Type.fst annot;;
-
-let rec upd_t_none (loc, uu) = (loc, None);;
 
 let rec update_klist
   x0 x1 = match x0, x1 with [], (xp, (bp, cp)) -> [(xp, (bp, cp))]
@@ -1446,7 +1704,7 @@ let rec b_of_lit_full
 
 let rec tsubst_bp_many
   b x1 = match b, x1 with b, [] -> b
-    | ba, (bv, b) :: bsub -> SyntaxPED.tsubst_bp b bv (tsubst_bp_many ba bsub);;
+    | ba, (bv, b) :: bsub -> Subst.tsubst_bp b bv (tsubst_bp_many ba bsub);;
 
 let rec subtype_i_i_i_i_i_o_o
   x xa xb xc xd =
@@ -1461,11 +1719,11 @@ let rec subtype_i_i_i_i_i_o_o
                  (match a with None -> Predicate.bot_pred
                    | Some _ ->
                      Predicate.bind
-                       (UnifyType.eq_o_i (TypingUtils.mk_fresh_g gamma))
+                       (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_g gamma))
                        (fun xe ->
                          Predicate.bind
-                           (UnifyType.eq_i_i Product_Type.equal_bool true
-                             (Satis.wf_g
+                           (ContextsPiDelta.eq_i_i Product_Type.equal_bool true
+                             (SatisInductive.wf_g
                                (Contexts.add_var gamma
                                  (xe, Contexts.GEPair
 (bp1, SyntaxVCT.C_conj
@@ -1473,19 +1731,27 @@ let rec subtype_i_i_i_i_i_o_o
           SyntaxUtils.subst_x_cp cp2 zp2 (SyntaxVCT.V_var xe)))))))
                            (fun () ->
                              Predicate.bind
-                               (UnifyType.eq_i_i Product_Type.equal_bool true
-                                 (Satis.valid "check_valid" loc theta
-                                   (Contexts.add_var gamma
-                                     (xe, Contexts.GEPair
-    (bp1, SyntaxUtils.subst_x_cp cp1 zp1 (SyntaxVCT.V_var xe))))
-                                   [] (SyntaxUtils.subst_x_cp cp2 zp2
-(SyntaxVCT.V_var xe))))
-                               (fun () ->
-                                 Predicate.single
-                                   (Subtype
-                                      (SyntaxVCT.T_refined_type (zp1, bp1, cp1),
-SyntaxVCT.T_refined_type (zp2, bp2, cp2)),
-                                     OK))))))))
+                               (SatisInductive.valid_i_i_i_i_i_i_o "check_valid"
+                                 loc theta
+                                 (Contexts.add_var gamma
+                                   (xe, Contexts.GEPair
+  (bp1, SyntaxUtils.subst_x_cp cp1 zp1 (SyntaxVCT.V_var xe))))
+                                 [] (SyntaxUtils.subst_x_cp cp2 zp2
+                                      (SyntaxVCT.V_var xe)))
+                               (fun xf ->
+                                 Predicate.bind
+                                   (ContextsPiDelta.eq_o_i
+                                     (if xf then OK
+                                       else Error
+      (SubtypeFail
+        ("subtype: valid fail", loc, SyntaxVCT.T_refined_type (zp1, bp1, cp1),
+          SyntaxVCT.T_refined_type (zp2, bp2, cp2)))))
+                                   (fun xg ->
+                                     Predicate.single
+                                       (Subtype
+  (SyntaxVCT.T_refined_type (zp1, bp1, cp1),
+    SyntaxVCT.T_refined_type (zp2, bp2, cp2)),
+ xg)))))))))
       (Predicate.sup_pred
         (Predicate.bind (Predicate.single (x, (xa, (xb, (xc, xd)))))
           (fun (loc, (_, (_, (SyntaxVCT.T_refined_type (zp1, bp1, cp1),
@@ -1498,1007 +1764,47 @@ SyntaxVCT.T_refined_type (zp2, bp2, cp2)),
                          (Subtype
                             (SyntaxVCT.T_refined_type (zp1, bp1, cp1),
                               SyntaxVCT.T_refined_type (zp2, bp2, cp2)),
-                           Error (CheckFail ("subtype: unify fail", loc)))
+                           Error (UnifyFail
+                                   ("subtype: unify fail", loc, bp1, bp2)))
                      | Some _ -> Predicate.bot_pred))))
-        (Predicate.sup_pred
-          (Predicate.bind (Predicate.single (x, (xa, (xb, (xc, xd)))))
-            (fun (loc, (theta,
-                         (gamma,
-                           (SyntaxVCT.T_refined_type (zp1, bp1, cp1),
-                             SyntaxVCT.T_refined_type (zp2, bp2, cp2)))))
-              -> Predicate.bind (UnifyType.unify_b_i_i_o bp1 bp2)
-                   (fun a ->
-                     (match a with None -> Predicate.bot_pred
-                       | Some _ ->
-                         Predicate.bind
-                           (UnifyType.eq_o_i (TypingUtils.mk_fresh_g gamma))
-                           (fun xe ->
-                             Predicate.bind
-                               (UnifyType.eq_i_i Product_Type.equal_bool false
-                                 (Satis.wf_g
-                                   (Contexts.add_var gamma
-                                     (xe, Contexts.GEPair
-    (bp1, SyntaxVCT.C_conj
-            (SyntaxUtils.subst_x_cp cp1 zp1 (SyntaxVCT.V_var xe),
-              SyntaxUtils.subst_x_cp cp2 zp2 (SyntaxVCT.V_var xe)))))))
-                               (fun () ->
-                                 Predicate.bind
-                                   (UnifyType.eq_o_i
-                                     (Satis.valid "check_valid wf_g fail" loc
-                                       theta
-                                       (Contexts.add_var gamma
- (xe, Contexts.GEPair
-        (bp1, SyntaxUtils.subst_x_cp cp1 zp1 (SyntaxVCT.V_var xe))))
-                                       [] (SyntaxUtils.subst_x_cp cp2 zp2
-    (SyntaxVCT.V_var xe))))
-                                   (fun _ ->
-                                     Predicate.single
-                                       (Subtype
-  (SyntaxVCT.T_refined_type (zp1, bp1, cp1),
-    SyntaxVCT.T_refined_type (zp2, bp2, cp2)),
- Error (CheckFail ("subtype: G not well formed", loc))))))))))
-          (Predicate.bind (Predicate.single (x, (xa, (xb, (xc, xd)))))
-            (fun (loc, (theta,
-                         (gamma,
-                           (SyntaxVCT.T_refined_type (zp1, bp1, cp1),
-                             SyntaxVCT.T_refined_type (zp2, bp2, cp2)))))
-              -> Predicate.bind (UnifyType.unify_b_i_i_o bp1 bp2)
-                   (fun a ->
-                     (match a with None -> Predicate.bot_pred
-                       | Some _ ->
-                         Predicate.bind
-                           (UnifyType.eq_o_i (TypingUtils.mk_fresh_g gamma))
-                           (fun xe ->
-                             Predicate.bind
-                               (UnifyType.eq_i_i Product_Type.equal_bool true
-                                 (Satis.wf_g
-                                   (Contexts.add_var gamma
-                                     (xe, Contexts.GEPair
-    (bp1, SyntaxVCT.C_conj
-            (SyntaxUtils.subst_x_cp cp1 zp1 (SyntaxVCT.V_var xe),
-              SyntaxUtils.subst_x_cp cp2 zp2 (SyntaxVCT.V_var xe)))))))
-                               (fun () ->
-                                 Predicate.bind
-                                   (UnifyType.eq_i_i Product_Type.equal_bool
-                                     false
-                                     (Satis.valid "check_valid" loc theta
-                                       (Contexts.add_var gamma
- (xe, Contexts.GEPair
-        (bp1, SyntaxUtils.subst_x_cp cp1 zp1 (SyntaxVCT.V_var xe))))
-                                       [] (SyntaxUtils.subst_x_cp cp2 zp2
-    (SyntaxVCT.V_var xe))))
-                                   (fun () ->
-                                     Predicate.single
-                                       (Subtype
-  (SyntaxVCT.T_refined_type (zp1, bp1, cp1),
-    SyntaxVCT.T_refined_type (zp2, bp2, cp2)),
- Error (CheckFail ("subtype: valid fail", loc))))))))))));;
-
-let rec check_pat_i_i_i_i_i_i_o_o_o_o_o_o
-  x xb xc xd xe xf =
-    Predicate.sup_pred
-      (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-        (fun a ->
-          (match a
-            with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
-              Predicate.bot_pred
-            | (i1, (_, (_, (SyntaxPED.Pp_wild loc,
-                             (SyntaxVCT.T_refined_type (zp, bp, cp), _)))))
-              -> Predicate.bind (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i1))
-                   (fun (i2, xp2) ->
-                     Predicate.single
-                       ([(xp2, (bp, SyntaxUtils.subst_x_cp cp zp
-                                      (SyntaxVCT.V_var xp2)))],
-                         ([xp2],
-                           (SyntaxPED.Pp_wild
-                              (TypingUtils.upd_t loc
-                                (SyntaxVCT.T_refined_type (zp, bp, cp))),
-                             (i2, (CheckPWild, OK))))))
-            | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
-              Predicate.bot_pred
-            | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
-              Predicate.bot_pred
-            | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) -> Predicate.bot_pred
-            | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
-              Predicate.bot_pred
-            | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
-              Predicate.bot_pred
-            | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
-              Predicate.bot_pred
-            | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _)))) ->
-              Predicate.bot_pred
-            | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) -> Predicate.bot_pred
-            | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) -> Predicate.bot_pred
-            | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
-              Predicate.bot_pred
-            | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))) ->
-              Predicate.bot_pred)))
-      (Predicate.sup_pred
-        (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-          (fun a ->
-            (match a
-              with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
-                Predicate.bot_pred
-              | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) -> Predicate.bot_pred
-              | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
-                Predicate.bot_pred
-              | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
-                Predicate.bot_pred
-              | (i, (_, (_, (SyntaxPED.Pp_id (loc, idd),
-                              (SyntaxVCT.T_refined_type (zp, bp, cp), vp)))))
-                -> Predicate.single
-                     ([(SyntaxVCT.VNamed idd,
-                         (bp, SyntaxVCT.C_eq
-                                (SyntaxVCT.CE_val vp,
-                                  SyntaxVCT.CE_val
-                                    (SyntaxVCT.V_var
-                                      (SyntaxVCT.VNamed idd)))))],
-                       ([SyntaxVCT.VNamed idd],
-                         (SyntaxPED.Pp_id
-                            (TypingUtils.upd_t loc
-                               (SyntaxVCT.T_refined_type (zp, bp, cp)),
-                              idd),
-                           (i, (CheckPId, OK)))))
-              | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
-                Predicate.bot_pred
-              | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
-                Predicate.bot_pred
-              | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
-                Predicate.bot_pred
-              | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _)))) ->
-                Predicate.bot_pred
-              | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
-                Predicate.bot_pred
-              | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
-                Predicate.bot_pred
-              | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
-                Predicate.bot_pred
-              | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))) ->
-                Predicate.bot_pred)))
-        (Predicate.sup_pred
-          (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-            (fun a ->
-              (match a
-                with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
-                  Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
-                  Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
-                  Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
-                  Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
-                  Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
-                  Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
-                  Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _)))) ->
-                  Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_var _, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_tid _, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_int, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_bool, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_bit, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_unit, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_real, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_vec (_, _), _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_list _, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (i1, (theta,
-                         (gamma,
-                           (SyntaxPED.Pp_tup (loc, patp_list),
-                             (SyntaxVCT.T_refined_type
-                                (zp, SyntaxVCT.B_tuple bp_list, cp),
-                               vp)))))
-                  -> Predicate.bind (UnifyType.eq_o_i (mk_fresh_lbl i1 "ptup"))
-                       (fun (i2, xp) ->
-                         Predicate.bind
-                           (UnifyType.eq_o_i
-                             (TypingUtils.mk_proj_vars xp bp_list))
-                           (fun (xp_list, klist1) ->
-                             Predicate.bind
-                               (UnifyType.eq_o_i
-                                 ((xp, (SyntaxVCT.B_tuple bp_list,
- SyntaxVCT.C_conj
-   (SyntaxUtils.subst_x_cp cp zp (SyntaxVCT.V_var xp),
-     SyntaxUtils.mk_v_eq_c xp vp))) ::
-                                   klist1))
-                               (fun xa ->
-                                 Predicate.bind
-                                   (check_pat_list_i_i_i_i_i_o_i_o_o_o_o i2
-                                     theta (TypingUtils.g_cons3 gamma [xa])
-                                     patp_list bp_list
-                                     (Lista.map (fun aa -> SyntaxVCT.V_var aa)
-                                       xp_list))
-                                   (fun (klist2, (patp_lista, (i3, (trs, ok))))
-                                     -> Predicate.bind
-  (UnifyType.eq_o_i (merge_klist xa klist2))
-  (fun xg ->
-    Predicate.single
-      (Lista.concat [xg],
-        (xp_list,
-          (SyntaxPED.Pp_tup
-             (TypingUtils.upd_t loc
-                (SyntaxVCT.T_refined_type (zp, SyntaxVCT.B_tuple bp_list, cp)),
-               patp_lista),
-            (i3, (CheckPTuple trs, ok))))))))))
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_union (_, _), _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_record _, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_undef, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_reg _, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_string, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_exception, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
-                                (SyntaxVCT.T_refined_type
-                                   (_, SyntaxVCT.B_finite_set _, _),
-                                  _)))))
-                  -> Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
-                  Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
-                  Predicate.bot_pred
-                | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))) ->
-                  Predicate.bot_pred)))
-          (Predicate.sup_pred
-            (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-              (fun a ->
-                (match a
-                  with (i1, (theta,
-                              (_, (SyntaxPED.Pp_lit (loc, lit),
-                                    (SyntaxVCT.T_refined_type (zp, bp, cp),
-                                      xp1)))))
-                    -> Predicate.bind
-                         (UnifyType.unify_b_i_i_o (b_of_lit_full theta lit) bp)
-                         (fun aa ->
-                           (match aa with None -> Predicate.bot_pred
-                             | Some _ ->
-                               Predicate.bind
-                                 (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i1))
-                                 (fun (i2, xp2) ->
-                                   Predicate.single
-                                     ([(xp2,
- (b_of_lit_full theta lit,
-   SyntaxVCT.C_eq
-     (SyntaxVCT.CE_val xp1, SyntaxVCT.CE_val (SyntaxVCT.V_lit lit))))],
-                                       ([xp2],
- (SyntaxPED.Pp_lit
-    (TypingUtils.upd_t loc (SyntaxVCT.T_refined_type (zp, bp, cp)), lit),
-   (i2, (CheckPLit, OK))))))))
-                  | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
-                    Predicate.bot_pred
-                  | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
-                    Predicate.bot_pred
-                  | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
-                    Predicate.bot_pred
-                  | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
-                    Predicate.bot_pred
-                  | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
-                    Predicate.bot_pred
-                  | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
-                    Predicate.bot_pred
-                  | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
-                    Predicate.bot_pred
-                  | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _)))) ->
-                    Predicate.bot_pred
-                  | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
-                    Predicate.bot_pred
-                  | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
-                    Predicate.bot_pred
-                  | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
-                    Predicate.bot_pred
-                  | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))) ->
-                    Predicate.bot_pred)))
-            (Predicate.sup_pred
-              (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-                (fun a ->
-                  (match a
-                    with (i1, (theta,
-                                (_, (SyntaxPED.Pp_lit (loc, lit),
-                                      (SyntaxVCT.T_refined_type (zp, bp, cp),
-_)))))
-                      -> Predicate.bind
-                           (UnifyType.unify_b_i_i_o (b_of_lit_full theta lit)
-                             bp)
-                           (fun aa ->
-                             (match aa
-                               with None ->
-                                 Predicate.single
-                                   ([], ([],
-  (SyntaxPED.Pp_lit
-     (TypingUtils.upd_t loc (SyntaxVCT.T_refined_type (zp, bp, cp)), lit),
-    (i1, (CheckPLit,
-           Error (CheckFail
-                   ("Pattern literal. Base type mismatch", get_loc loc)))))))
-                               | Some _ -> Predicate.bot_pred))
-                    | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
-                      Predicate.bot_pred
-                    | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
-                      Predicate.bot_pred
-                    | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
-                      Predicate.bot_pred
-                    | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
-                      Predicate.bot_pred
-                    | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
-                      Predicate.bot_pred
-                    | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
-                      Predicate.bot_pred
-                    | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
-                      Predicate.bot_pred
-                    | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _)))) ->
-                      Predicate.bot_pred
-                    | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
-                      Predicate.bot_pred
-                    | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
-                      Predicate.bot_pred
-                    | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
-                      Predicate.bot_pred
-                    | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))) ->
-                      Predicate.bot_pred)))
-              (Predicate.sup_pred
-                (Predicate.bind
-                  (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-                  (fun a ->
-                    (match a
-                      with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_var _, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_tid _, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_int, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_bool, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_bit, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_unit, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_real, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (i1, (theta,
-                               (gamma,
-                                 (SyntaxPED.Pp_vector_concat (loc, cs),
-                                   (SyntaxVCT.T_refined_type
-                                      (zp, SyntaxVCT.B_vec (odr, bp), cp),
-                                     xpa)))))
-                        -> Predicate.bind
-                             (check_pat_list_i_i_i_i_i_o_i_o_o_o_o i1 theta
-                               gamma cs
-                               (Lista.replicate (Lista.size_list cs)
-                                 (SyntaxVCT.B_vec (odr, bp)))
-                               (Lista.replicate (Lista.size_list cs) xpa))
-                             (fun (klist, (csa, (i2, (trs, ok)))) ->
-                               Predicate.single
-                                 (klist,
-                                   ([], (SyntaxPED.Pp_vector_concat
-   (TypingUtils.upd_t loc
-      (SyntaxVCT.T_refined_type (zp, SyntaxVCT.B_vec (odr, bp), cp)),
-     csa),
-  (i2, (CheckPVec trs, ok))))))
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_list _, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_tuple _, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_union (_, _), _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_record _, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_undef, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_reg _, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_string, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_exception, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-                                      (SyntaxVCT.T_refined_type
- (_, SyntaxVCT.B_finite_set _, _),
-_)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))) ->
-                        Predicate.bot_pred)))
-                (Predicate.sup_pred
-                  (Predicate.bind
-                    (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-                    (fun a ->
-                      (match a
-                        with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
-                          Predicate.bot_pred
-                        | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
-                          Predicate.bot_pred
-                        | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
-                          Predicate.bot_pred
-                        | (i1, (theta,
-                                 (gamma,
-                                   (SyntaxPED.Pp_typ (loc, tau_1, patp),
-                                     (SyntaxVCT.T_refined_type (zp, bp, cp),
-                                       xpa)))))
-                          -> Predicate.bind
-                               (check_pat_i_i_i_i_i_i_o_o_o_o_o_o i1 theta gamma
-                                 patp tau_1 xpa)
-                               (fun (klist, (xlist, (patpa, (i2, (wt1, ok1)))))
-                                 -> Predicate.bind
-                                      (subtype_i_i_i_i_i_o_o (get_loc loc) theta
-(TypingUtils.g_cons3 gamma [klist]) tau_1
-(SyntaxVCT.T_refined_type (zp, bp, cp)))
-                                      (fun (_, ok2) ->
-Predicate.single
-  (klist,
-    (xlist,
-      (SyntaxPED.Pp_typ
-         (TypingUtils.upd_t loc (SyntaxVCT.T_refined_type (zp, bp, cp)), tau_1,
-           patpa),
-        (i2, (wt1, plus ok1 ok2)))))))
-                        | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
-                          Predicate.bot_pred
-                        | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
-                          Predicate.bot_pred
-                        | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
-                          Predicate.bot_pred
-                        | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
-                          Predicate.bot_pred
-                        | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _))))
-                          -> Predicate.bot_pred
-                        | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
-                          Predicate.bot_pred
-                        | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
-                          Predicate.bot_pred
-                        | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
-                          Predicate.bot_pred
-                        | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _))))
-                          -> Predicate.bot_pred)))
-                  (Predicate.sup_pred
-                    (Predicate.bind
-                      (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-                      (fun a ->
-                        (match a
-                          with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
-                            Predicate.bot_pred
-                          | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
-                            Predicate.bot_pred
-                          | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
-                            Predicate.bot_pred
-                          | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
-                            Predicate.bot_pred
-                          | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
-                            Predicate.bot_pred
-                          | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
-                            Predicate.bot_pred
-                          | (i1, (theta,
-                                   (gamma,
-                                     (SyntaxPED.Pp_app (loc, id, patp_list),
-                                       (tau_2, _)))))
-                            -> Predicate.bind
-                                 (UnifyType.eq_o_i
-                                   (ContextsPiDelta.lookup_constr_union_type
-                                     theta id))
-                                 (fun aa ->
-                                   (match aa with None -> Predicate.bot_pred
-                                     | Some (tau_1, tau_in) ->
-                                       Predicate.bind
- (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i1))
- (fun (i2, xp3) ->
-   Predicate.bind
-     (UnifyType.unify_b_i_i_o (UnifyType.b_of tau_1) (UnifyType.b_of tau_2))
-     (fun ab ->
-       (match ab with None -> Predicate.bot_pred
-         | Some bsub ->
-           Predicate.bind
-             (UnifyType.eq_o_i (TypingUtils.tsubst_t_many tau_in bsub))
-             (fun (SyntaxVCT.T_refined_type (zp, bp, cp)) ->
-               Predicate.bind
-                 (subtype_i_i_i_i_i_o_o (get_loc loc) theta gamma tau_2 tau_1)
-                 (fun (_, ok2) ->
-                   Predicate.bind
-                     (check_pat_i_i_i_i_i_i_o_o_o_o_o_o i2 theta
-                       (Contexts.add_var gamma
-                         (xp3, Contexts.GEPair
-                                 (bp, SyntaxUtils.subst_x_cp cp zp
-(SyntaxVCT.V_var xp3))))
-                       (SyntaxPED.Pp_tup (loc, patp_list))
-                       (SyntaxVCT.T_refined_type (zp, bp, cp))
-                       (SyntaxVCT.V_var xp3))
-                     (fun ac ->
-                       (match ac
-                         with (_, (_, (SyntaxPED.Pp_lit (_, _), _))) ->
-                           Predicate.bot_pred
-                         | (_, (_, (SyntaxPED.Pp_wild _, _))) ->
-                           Predicate.bot_pred
-                         | (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _))) ->
-                           Predicate.bot_pred
-                         | (_, (_, (SyntaxPED.Pp_typ (_, _, _), _))) ->
-                           Predicate.bot_pred
-                         | (_, (_, (SyntaxPED.Pp_id (_, _), _))) ->
-                           Predicate.bot_pred
-                         | (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _))) ->
-                           Predicate.bot_pred
-                         | (_, (_, (SyntaxPED.Pp_app (_, _, _), _))) ->
-                           Predicate.bot_pred
-                         | (_, (_, (SyntaxPED.Pp_vector (_, _), _))) ->
-                           Predicate.bot_pred
-                         | (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _))) ->
-                           Predicate.bot_pred
-                         | (klist,
-                             (xlist,
-                               (SyntaxPED.Pp_tup (_, patp_lista),
-                                 (i3, (wt1, ok1)))))
-                           -> Predicate.bind
-                                (UnifyType.eq_o_i (Contexts.mk_ctor_v id xlist))
-                                (fun _ ->
-                                  Predicate.single
-                                    ((xp3, (bp,
-     SyntaxUtils.subst_x_cp cp zp (SyntaxVCT.V_var xp3))) ::
-                                       klist,
-                                      (xp3 :: xlist,
-(SyntaxPED.Pp_app (TypingUtils.upd_t loc tau_2, id, patp_lista),
-  (i3, (CheckPApp wt1, plus ok1 ok2))))))
-                         | (_, (_, (SyntaxPED.Pp_list (_, _), _))) ->
-                           Predicate.bot_pred
-                         | (_, (_, (SyntaxPED.Pp_cons (_, _, _), _))) ->
-                           Predicate.bot_pred
-                         | (_, (_, (SyntaxPED.Pp_string_append (_, _), _))) ->
-                           Predicate.bot_pred)))))))))
-                          | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
-                            Predicate.bot_pred
-                          | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
-  _))))
-                            -> Predicate.bot_pred
-                          | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
-                            Predicate.bot_pred
-                          | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
-                            Predicate.bot_pred
-                          | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
-                            Predicate.bot_pred
-                          | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _),
-  _))))
-                            -> Predicate.bot_pred)))
-                    (Predicate.sup_pred
-                      (Predicate.bind
-                        (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-                        (fun a ->
-                          (match a
-                            with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
-                              Predicate.bot_pred
-                            | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
-                              Predicate.bot_pred
-                            | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _))))
-                              -> Predicate.bot_pred
-                            | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
-                              Predicate.bot_pred
-                            | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
-                              Predicate.bot_pred
-                            | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _))))
-                              -> Predicate.bot_pred
-                            | (_, (_, (_, (SyntaxPED.Pp_app (_, _, []), _)))) ->
-                              Predicate.bot_pred
-                            | (i1a, (theta,
-                                      (gamma,
-(SyntaxPED.Pp_app (loca, ida, [patpa]), (tau_2a, _)))))
-                              -> Predicate.bind
-                                   (UnifyType.eq_o_i
-                                     (ContextsPiDelta.lookup_constr_union_type
-                                       theta ida))
-                                   (fun aa ->
-                                     (match aa with None -> Predicate.bot_pred
-                                       | Some (tau_1a, tau_ina) ->
- Predicate.bind (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i1a))
-   (fun (i2a, xp3a) ->
-     Predicate.bind (UnifyType.eq_o_i xp3a)
-       (fun _ ->
-         Predicate.bind
-           (UnifyType.unify_b_i_i_o (UnifyType.b_of tau_1a)
-             (UnifyType.b_of tau_2a))
-           (fun ab ->
-             (match ab with None -> Predicate.bot_pred
-               | Some bsuba ->
-                 Predicate.bind
-                   (UnifyType.eq_o_i (TypingUtils.tsubst_t_many tau_ina bsuba))
-                   (fun (SyntaxVCT.T_refined_type (zpa, bpa, cpa)) ->
-                     Predicate.bind
-                       (UnifyType.eq_o_i
-                         (Contexts.GEPair
-                           (bpa, SyntaxUtils.subst_x_cp cpa zpa
-                                   (SyntaxVCT.V_var xp3a))))
-                       (fun _ ->
-                         Predicate.bind
-                           (subtype_i_i_i_i_i_o_o (get_loc loca) theta gamma
-                             tau_2a tau_1a)
-                           (fun (_, ok2a) ->
-                             Predicate.bind
-                               (check_pat_i_i_i_i_i_i_o_o_o_o_o_o i2a theta
+        (Predicate.bind (Predicate.single (x, (xa, (xb, (xc, xd)))))
+          (fun (loc, (theta,
+                       (gamma,
+                         (SyntaxVCT.T_refined_type (zp1, bp1, cp1),
+                           SyntaxVCT.T_refined_type (zp2, bp2, cp2)))))
+            -> Predicate.bind (UnifyType.unify_b_i_i_o bp1 bp2)
+                 (fun a ->
+                   (match a with None -> Predicate.bot_pred
+                     | Some _ ->
+                       Predicate.bind
+                         (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_g gamma))
+                         (fun xe ->
+                           Predicate.bind
+                             (ContextsPiDelta.eq_i_i Product_Type.equal_bool
+                               false
+                               (SatisInductive.wf_g
                                  (Contexts.add_var gamma
-                                   (xp3a,
-                                     Contexts.GEPair
-                                       (bpa,
- SyntaxUtils.subst_x_cp cpa zpa (SyntaxVCT.V_var xp3a))))
-                                 patpa
-                                 (SyntaxVCT.T_refined_type (zpa, bpa, cpa))
-                                 (SyntaxVCT.V_var xp3a))
-                               (fun (klista,
-                                      (xlista, (patp_a, (i3a, (wt1a, ok1a)))))
-                                 -> Predicate.bind
-                                      (UnifyType.eq_o_i
-(Contexts.mk_ctor_v ida xlista))
-                                      (fun _ ->
-Predicate.single
-  ((xp3a, (bpa, SyntaxUtils.subst_x_cp cpa zpa (SyntaxVCT.V_var xp3a))) ::
-     klista,
-    (xp3a :: xlista,
-      (SyntaxPED.Pp_app (TypingUtils.upd_t loca tau_2a, ida, [patp_a]),
-        (i3a, (CheckPApp wt1a, plus ok1a ok2a))))))))))))))))
-                            | (_, (_, (_,
-(SyntaxPED.Pp_app (_, _, _ :: _ :: _), _))))
-                              -> Predicate.bot_pred
-                            | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
-                              Predicate.bot_pred
-                            | (_, (_, (_,
-(SyntaxPED.Pp_vector_concat (_, _), _))))
-                              -> Predicate.bot_pred
-                            | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
-                              Predicate.bot_pred
-                            | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
-                              Predicate.bot_pred
-                            | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
-                              Predicate.bot_pred
-                            | (_, (_, (_,
-(SyntaxPED.Pp_string_append (_, _), _))))
-                              -> Predicate.bot_pred)))
-                      (Predicate.sup_pred
-                        (Predicate.bind
-                          (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-                          (fun a ->
-                            (match a
-                              with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _))))
-                                -> Predicate.bot_pred
-                              | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
-                                Predicate.bot_pred
-                              | (_, (_, (_,
-  (SyntaxPED.Pp_as_var (_, _, _), _))))
-                                -> Predicate.bot_pred
-                              | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _))))
-                                -> Predicate.bot_pred
-                              | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
-                                Predicate.bot_pred
-                              | (_, (_, (_,
-  (SyntaxPED.Pp_as_typ (_, _, _), _))))
-                                -> Predicate.bot_pred
-                              | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _))))
-                                -> Predicate.bot_pred
-                              | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _))))
-                                -> Predicate.bot_pred
-                              | (_, (_, (_,
-  (SyntaxPED.Pp_vector_concat (_, _), _))))
-                                -> Predicate.bot_pred
-                              | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
-                                Predicate.bot_pred
-                              | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
-                                Predicate.bot_pred
-                              | (i, (_, (_,
-  (SyntaxPED.Pp_cons (loc, _, _), (t, _)))))
-                                -> Predicate.single
-                                     ([], ([],
-    (SyntaxPED.Pp_wild (TypingUtils.upd_t loc t),
-      (i, (CheckPNull, Error (CheckFail ("Pp_cons not impl", get_loc loc)))))))
-                              | (_, (_, (_,
-  (SyntaxPED.Pp_string_append (_, _), _))))
-                                -> Predicate.bot_pred)))
-                        (Predicate.sup_pred
-                          (Predicate.bind
-                            (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-                            (fun a ->
-                              (match a
-                                with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
-                                  Predicate.bot_pred
-                                | (_, (_,
-(_, (SyntaxPED.Pp_as_var (_, _, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
-                                  Predicate.bot_pred
-                                | (_, (_,
-(_, (SyntaxPED.Pp_as_typ (_, _, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_,
-(_, (SyntaxPED.Pp_vector_concat (_, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
-                                  Predicate.bot_pred
-                                | (i, (_,
-(_, (SyntaxPED.Pp_list (loc, _), (t, _)))))
-                                  -> Predicate.single
-                                       ([],
- ([], (SyntaxPED.Pp_wild (TypingUtils.upd_t loc t),
-        (i, (CheckPNull,
-              Error (CheckFail ("Pp_list not impl", get_loc loc)))))))
-                                | (_, (_,
-(_, (SyntaxPED.Pp_cons (_, _, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_,
-(_, (SyntaxPED.Pp_string_append (_, _), _))))
-                                  -> Predicate.bot_pred)))
-                          (Predicate.bind
-                            (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-                            (fun a ->
-                              (match a
-                                with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
-                                  Predicate.bot_pred
-                                | (_, (_,
-(_, (SyntaxPED.Pp_as_var (_, _, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
-                                  Predicate.bot_pred
-                                | (_, (_,
-(_, (SyntaxPED.Pp_as_typ (_, _, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_,
-(_, (SyntaxPED.Pp_vector_concat (_, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
-                                  Predicate.bot_pred
-                                | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _))))
-                                  -> Predicate.bot_pred
-                                | (_, (_,
-(_, (SyntaxPED.Pp_cons (_, _, _), _))))
-                                  -> Predicate.bot_pred
-                                | (i, (_,
-(_, (SyntaxPED.Pp_string_append (loc, _), (t, _)))))
-                                  -> Predicate.single
-                                       ([],
- ([], (SyntaxPED.Pp_wild (TypingUtils.upd_t loc t),
-        (i, (CheckPNull,
-              Error (CheckFail
-                      ("Pp_string_append not impl",
-                        get_loc loc))))))))))))))))))))
-and check_pat_list_i_i_i_i_i_o_i_o_o_o_o
-  x xb xc xd xe xf =
-    Predicate.sup_pred
-      (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-        (fun a ->
-          (match a
-            with (i, (_, (_, ([], ([], []))))) ->
-              Predicate.single (TypingUtils.k_list [], ([], (i, ([], OK))))
-            | (_, (_, (_, ([], ([], _ :: _))))) -> Predicate.bot_pred
-            | (_, (_, (_, ([], (_ :: _, _))))) -> Predicate.bot_pred
-            | (_, (_, (_, (_ :: _, _)))) -> Predicate.bot_pred)))
-      (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
-        (fun a ->
-          (match a with (_, (_, (_, ([], _)))) -> Predicate.bot_pred
-            | (_, (_, (_, (_ :: _, ([], _))))) -> Predicate.bot_pred
-            | (_, (_, (_, (_ :: _, (_ :: _, []))))) -> Predicate.bot_pred
-            | (i1, (theta,
-                     (gamma,
-                       (patp :: patp_list, (bp :: bp_list, vp :: vp_list)))))
-              -> Predicate.bind
-                   (check_pat_i_i_i_i_i_i_o_o_o_o_o_o i1 theta gamma patp
-                     (SyntaxVCT.T_refined_type
-                       (SyntaxVCT.VIndex, bp, SyntaxVCT.C_true))
-                     vp)
-                   (fun (klist, (_, (patpa, (i2, (wt1, ok1))))) ->
-                     Predicate.bind
-                       (check_pat_list_i_i_i_i_i_o_i_o_o_o_o i2 theta
-                         (TypingUtils.g_cons3 gamma [klist]) patp_list bp_list
-                         vp_list)
-                       (fun (klist2, (patp_lista, (i3, (trs, ok2)))) ->
-                         Predicate.single
-                           (TypingUtils.k_append [klist; klist2],
-                             (patpa :: patp_lista,
-                               (i3, (wt1 :: trs, plus ok1 ok2)))))))));;
-
-let rec match_arg_i_i_i_i_i_i_i_o_o_o_o
-  x xa xb xc xd xe xf =
-    Predicate.sup_pred
-      (Predicate.bind (Predicate.single (x, (xa, (xb, (xc, (xd, (xe, xf)))))))
-        (fun a ->
-          (match a with (_, (_, (_, (_, (_, (_, [])))))) -> Predicate.bot_pred
-            | (_, (_, (_, (_, (_, (_, (_, SyntaxVCT.A_monotype _) :: _)))))) ->
-              Predicate.bot_pred
-            | (loc, (theta,
-                      (gamma,
-                        (zp2, (bp2, (cp2, (f,
-    SyntaxVCT.A_function
-      (xp1, bp1, cp1, SyntaxVCT.T_refined_type (zp3, bp3, cp3))) ::
-    _))))))
-              -> Predicate.bind (UnifyType.unify_b_i_i_o bp1 bp2)
-                   (fun aa ->
-                     (match aa with None -> Predicate.bot_pred
-                       | Some bsub ->
-                         Predicate.bind
-                           (subtype_i_i_i_i_i_o_o loc theta gamma
-                             (SyntaxVCT.T_refined_type
-                               (zp2, tsubst_bp_many bp2 bsub, cp2))
-                             (SyntaxVCT.T_refined_type
-                               (xp1, tsubst_bp_many bp1 bsub, cp1)))
-                           (fun (tr, ok) ->
-                             Predicate.single
-                               ((f, SyntaxVCT.A_function
-                                      (xp1, bp1, cp1,
-SyntaxVCT.T_refined_type (zp3, bp3, cp3))),
-                                 (bsub, (tr, ok)))))))))
-      (Predicate.sup_pred
-        (Predicate.bind (Predicate.single (x, (xa, (xb, (xc, (xd, (xe, xf)))))))
-          (fun a ->
-            (match a with (_, (_, (_, (_, (_, (_, [])))))) -> Predicate.bot_pred
-              | (_, (_, (_, (_, (_, (_, (_, SyntaxVCT.A_monotype _) :: _))))))
-                -> Predicate.bot_pred
-              | (loc, (_, (_, (_, (bp2, (_,
-  (f, SyntaxVCT.A_function
-        (xp1, bp1, cp1, SyntaxVCT.T_refined_type (zp3, bp3, cp3))) ::
-    _))))))
-                -> Predicate.bind (UnifyType.unify_b_i_i_o bp1 bp2)
-                     (fun aa ->
-                       (match aa
-                         with None ->
-                           Predicate.single
-                             ((f, SyntaxVCT.A_function
-                                    (xp1, bp1, cp1,
-                                      SyntaxVCT.T_refined_type
-(zp3, bp3, cp3))),
-                               ([], (SubtypeFail,
-                                      Error (CheckFail ("match_arg", loc)))))
-                         | Some _ -> Predicate.bot_pred)))))
-        (Predicate.bind (Predicate.single (x, (xa, (xb, (xc, (xd, (xe, xf)))))))
-          (fun a ->
-            (match a with (_, (_, (_, (_, (_, (_, [])))))) -> Predicate.bot_pred
-              | (loc, (theta, (gamma, (zp2, (bp2, (cp2, _ :: ap_list)))))) ->
-                Predicate.bind
-                  (match_arg_i_i_i_i_i_i_i_o_o_o_o loc theta gamma zp2 bp2 cp2
-                    ap_list)
-                  (fun aa ->
-                    (match aa
-                      with ((_, SyntaxVCT.A_monotype _), _) ->
-                        Predicate.bot_pred
-                      | ((f, SyntaxVCT.A_function
-                               (xp1, bp1, cp1,
-                                 SyntaxVCT.T_refined_type (zp3, bp3, cp3))),
-                          (bsub, (tr, ok)))
-                        -> Predicate.single
-                             ((f, SyntaxVCT.A_function
-                                    (xp1, bp1, cp1,
-                                      SyntaxVCT.T_refined_type
-(zp3, bp3, cp3))),
-                               (bsub, (tr, ok)))))))));;
+                                   (xe, Contexts.GEPair
+  (bp1, SyntaxVCT.C_conj
+          (SyntaxUtils.subst_x_cp cp1 zp1 (SyntaxVCT.V_var xe),
+            SyntaxUtils.subst_x_cp cp2 zp2 (SyntaxVCT.V_var xe)))))))
+                             (fun () ->
+                               Predicate.bind
+                                 (ContextsPiDelta.eq_o_i
+                                   (SatisInductive.valid "check_valid wf_g fail"
+                                     loc theta
+                                     (Contexts.add_var gamma
+                                       (xe,
+ Contexts.GEPair (bp1, SyntaxUtils.subst_x_cp cp1 zp1 (SyntaxVCT.V_var xe))))
+                                     [] (SyntaxUtils.subst_x_cp cp2 zp2
+  (SyntaxVCT.V_var xe))))
+                                 (fun _ ->
+                                   Predicate.single
+                                     (Subtype
+(SyntaxVCT.T_refined_type (zp1, bp1, cp1),
+  SyntaxVCT.T_refined_type (zp2, bp2, cp2)),
+                                       Error
+ (CheckFail ("subtype: G not well formed", loc)))))))))));;
 
 let rec equal_ok_error _A x0 x1 = match x0, x1 with OK, Error x2 -> false
                             | Error x2, OK -> false
@@ -2512,7 +1818,8 @@ let rec infer_v_i_i_i_o_o_i
         (fun a ->
           (match a with (_, (_, (SyntaxVCT.V_lit _, _))) -> Predicate.bot_pred
             | (_, (gamma, (SyntaxVCT.V_var xp, OK))) ->
-              Predicate.bind (UnifyType.eq_o_i (Contexts.lookup_var gamma xp))
+              Predicate.bind
+                (ContextsPiDelta.eq_o_i (Contexts.lookup_var gamma xp))
                 (fun aa ->
                   (match aa with None -> Predicate.bot_pred
                     | Some (Contexts.GEPair (bp, cp)) ->
@@ -2540,7 +1847,7 @@ let rec infer_v_i_i_i_o_o_i
                       (SyntaxVCT.V_var xp,
                         Error (CheckFail (xd, Location.Loc_unknown)))))
                 -> Predicate.bind
-                     (UnifyType.eq_i_i
+                     (ContextsPiDelta.eq_i_i
                        (Option.equal_option Contexts.equal_g_entry) None
                        (Contexts.lookup_var gamma xp))
                      (fun () ->
@@ -2549,6 +1856,10 @@ let rec infer_v_i_i_i_o_o_i
                          else Predicate.bot_pred))
               | (_, (_, (SyntaxVCT.V_var _,
                           Error (CheckFail (_, Location.Loc_range (_, _))))))
+                -> Predicate.bot_pred
+              | (_, (_, (SyntaxVCT.V_var _, Error (UnifyFail (_, _, _, _))))) ->
+                Predicate.bot_pred
+              | (_, (_, (SyntaxVCT.V_var _, Error (SubtypeFail (_, _, _, _)))))
                 -> Predicate.bot_pred
               | (_, (_, (SyntaxVCT.V_vec _, _))) -> Predicate.bot_pred
               | (_, (_, (SyntaxVCT.V_list _, _))) -> Predicate.bot_pred
@@ -2920,12 +2231,12 @@ _)))
                                   (_, (SyntaxVCT.V_lit (SyntaxVCT.L_bin b_list),
 OK)))
                                 -> Predicate.bind
-                                     (UnifyType.eq_o_i
+                                     (ContextsPiDelta.eq_o_i
                                        (Arith.integer_of_nat
  (Stringa.size_literal b_list)))
                                      (fun xd ->
                                        Predicate.bind
- (UnifyType.eq_o_i (ContextsPiDelta.theta_d theta))
+ (ContextsPiDelta.eq_o_i (ContextsPiDelta.theta_d theta))
  (fun aa ->
    (match aa with None -> Predicate.bot_pred
      | Some order ->
@@ -2976,7 +2287,7 @@ OK)))
                                 | (theta,
                                     (gamma, (SyntaxVCT.V_vec vm_list, ok)))
                                   -> Predicate.bind
-                                       (UnifyType.eq_o_i
+                                       (ContextsPiDelta.eq_o_i
  (ContextsPiDelta.theta_d theta))
                                        (fun aa ->
  (match aa with None -> Predicate.bot_pred
@@ -2987,11 +2298,11 @@ OK)))
        (fun (_, (bp_list, (_, (trs, oka)))) ->
          (if equal_ok_error equal_err ok oka
            then Predicate.bind
-                  (UnifyType.eq_o_i
+                  (ContextsPiDelta.eq_o_i
                     (Arith.integer_of_nat (Lista.size_list bp_list)))
                   (fun xd ->
                     Predicate.bind
-                      (UnifyType.eq_o_i (Contexts.single_base bp_list))
+                      (ContextsPiDelta.eq_o_i (Contexts.single_base bp_list))
                       (fun ab ->
                         (match ab with None -> Predicate.bot_pred
                           | Some bm ->
@@ -3041,7 +2352,7 @@ OK)))
                                     -> Predicate.bind
  (infer_v_T_G_vp_list_tp_list_i_i_i_o_o_i theta gamma vp_list ok)
  (fun (tp_list, trs) ->
-   Predicate.bind (UnifyType.eq_o_i (Lista.map UnifyType.b_of tp_list))
+   Predicate.bind (ContextsPiDelta.eq_o_i (Lista.map UnifyType.b_of tp_list))
      (fun xd ->
        Predicate.single
          (SyntaxVCT.T_refined_type
@@ -3145,7 +2456,7 @@ OK)))
                                     | (theta,
 (gamma, (SyntaxVCT.V_constr (ctor, vp), xd)))
                                       -> Predicate.bind
-   (UnifyType.eq_o_i (TypingUtils.lookup_ctor_base theta ctor))
+   (ContextsPiDelta.eq_o_i (TypingUtils.lookup_ctor_base theta ctor))
    (fun aa ->
      (match aa with None -> Predicate.bot_pred
        | Some (SyntaxVCT.T_refined_type (zp, bp2, cp2), bp) ->
@@ -3251,7 +2562,8 @@ and infer_v_i_i_i_o_o_o
         (fun a ->
           (match a with (_, (_, SyntaxVCT.V_lit _)) -> Predicate.bot_pred
             | (_, (gamma, SyntaxVCT.V_var xp)) ->
-              Predicate.bind (UnifyType.eq_o_i (Contexts.lookup_var gamma xp))
+              Predicate.bind
+                (ContextsPiDelta.eq_o_i (Contexts.lookup_var gamma xp))
                 (fun aa ->
                   (match aa with None -> Predicate.bot_pred
                     | Some (Contexts.GEPair (bp, cp)) ->
@@ -3275,8 +2587,9 @@ and infer_v_i_i_i_o_o_o
             (match a with (_, (_, SyntaxVCT.V_lit _)) -> Predicate.bot_pred
               | (_, (gamma, SyntaxVCT.V_var xp)) ->
                 Predicate.bind
-                  (UnifyType.eq_i_i (Option.equal_option Contexts.equal_g_entry)
-                    None (Contexts.lookup_var gamma xp))
+                  (ContextsPiDelta.eq_i_i
+                    (Option.equal_option Contexts.equal_g_entry) None
+                    (Contexts.lookup_var gamma xp))
                   (fun () ->
                     Predicate.single
                       (bot_t,
@@ -3614,12 +2927,12 @@ SyntaxVCT.C_true),
                               | (theta,
                                   (_, SyntaxVCT.V_lit (SyntaxVCT.L_bin b_list)))
                                 -> Predicate.bind
-                                     (UnifyType.eq_o_i
+                                     (ContextsPiDelta.eq_o_i
                                        (Arith.integer_of_nat
  (Stringa.size_literal b_list)))
                                      (fun xc ->
                                        Predicate.bind
- (UnifyType.eq_o_i (ContextsPiDelta.theta_d theta))
+ (ContextsPiDelta.eq_o_i (ContextsPiDelta.theta_d theta))
  (fun aa ->
    (match aa with None -> Predicate.bot_pred
      | Some order ->
@@ -3664,7 +2977,7 @@ SyntaxVCT.C_true),
                                   Predicate.bot_pred
                                 | (theta, (gamma, SyntaxVCT.V_vec vm_list)) ->
                                   Predicate.bind
-                                    (UnifyType.eq_o_i
+                                    (ContextsPiDelta.eq_o_i
                                       (ContextsPiDelta.theta_d theta))
                                     (fun aa ->
                                       (match aa with None -> Predicate.bot_pred
@@ -3674,9 +2987,10 @@ SyntaxVCT.C_true),
       vm_list)
     (fun (_, (bp_list, (_, (trs, ok)))) ->
       Predicate.bind
-        (UnifyType.eq_o_i (Arith.integer_of_nat (Lista.size_list bp_list)))
+        (ContextsPiDelta.eq_o_i
+          (Arith.integer_of_nat (Lista.size_list bp_list)))
         (fun xc ->
-          Predicate.bind (UnifyType.eq_o_i (Contexts.single_base bp_list))
+          Predicate.bind (ContextsPiDelta.eq_o_i (Contexts.single_base bp_list))
             (fun ab ->
               (match ab with None -> Predicate.bot_pred
                 | Some bm ->
@@ -3725,7 +3039,7 @@ SyntaxVCT.C_true),
                                     -> Predicate.bind
  (infer_v_T_G_vp_list_tp_list_i_i_i_o_o_o theta gamma vp_list)
  (fun (tp_list, (trs, ok)) ->
-   Predicate.bind (UnifyType.eq_o_i (Lista.map UnifyType.b_of tp_list))
+   Predicate.bind (ContextsPiDelta.eq_o_i (Lista.map UnifyType.b_of tp_list))
      (fun xc ->
        Predicate.single
          (SyntaxVCT.T_refined_type
@@ -3825,7 +3139,7 @@ SyntaxVCT.C_true),
                                     | (theta,
 (gamma, SyntaxVCT.V_constr (ctor, vp)))
                                       -> Predicate.bind
-   (UnifyType.eq_o_i (TypingUtils.lookup_ctor_base theta ctor))
+   (ContextsPiDelta.eq_o_i (TypingUtils.lookup_ctor_base theta ctor))
    (fun aa ->
      (match aa with None -> Predicate.bot_pred
        | Some (SyntaxVCT.T_refined_type (zp, bp2, cp2), bp) ->
@@ -3889,6 +3203,1249 @@ and infer_v_T_G_vp_list_tp_list_i_i_i_o_o_o
                       | (_, (tr, Error sa)) ->
                         Predicate.single ([], ([tr], Error sa))))))));;
 
+let rec check_pat_i_i_i_i_i_i_o_o_o_o_o_o
+  x xb xc xd xe xf =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+        (fun a ->
+          (match a
+            with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
+              Predicate.bot_pred
+            | (i1, (_, (_, (SyntaxPED.Pp_wild loc,
+                             (SyntaxVCT.T_refined_type (zp, bp, cp), _)))))
+              -> Predicate.bind
+                   (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i1))
+                   (fun (i2, xp2) ->
+                     Predicate.single
+                       ([(xp2, (bp, SyntaxUtils.subst_x_cp cp zp
+                                      (SyntaxVCT.V_var xp2)))],
+                         ([xp2],
+                           (SyntaxPED.Pp_wild
+                              (TypingUtils.upd_t loc
+                                (SyntaxVCT.T_refined_type (zp, bp, cp))),
+                             (i2, (CheckPWild, OK))))))
+            | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
+              Predicate.bot_pred
+            | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
+              Predicate.bot_pred
+            | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) -> Predicate.bot_pred
+            | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
+              Predicate.bot_pred
+            | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
+              Predicate.bot_pred
+            | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
+              Predicate.bot_pred
+            | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _)))) ->
+              Predicate.bot_pred
+            | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) -> Predicate.bot_pred
+            | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) -> Predicate.bot_pred
+            | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
+              Predicate.bot_pred
+            | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))) ->
+              Predicate.bot_pred)))
+      (Predicate.sup_pred
+        (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+          (fun a ->
+            (match a
+              with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
+                Predicate.bot_pred
+              | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) -> Predicate.bot_pred
+              | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
+                Predicate.bot_pred
+              | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
+                Predicate.bot_pred
+              | (i, (_, (_, (SyntaxPED.Pp_id (loc, idd),
+                              (SyntaxVCT.T_refined_type (zp, bp, cp), vp)))))
+                -> Predicate.single
+                     ([(SyntaxVCT.VNamed idd,
+                         (bp, SyntaxVCT.C_eq
+                                (SyntaxVCT.CE_val vp,
+                                  SyntaxVCT.CE_val
+                                    (SyntaxVCT.V_var
+                                      (SyntaxVCT.VNamed idd)))))],
+                       ([SyntaxVCT.VNamed idd],
+                         (SyntaxPED.Pp_id
+                            (TypingUtils.upd_t loc
+                               (SyntaxVCT.T_refined_type (zp, bp, cp)),
+                              idd),
+                           (i, (CheckPId, OK)))))
+              | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
+                Predicate.bot_pred
+              | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
+                Predicate.bot_pred
+              | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
+                Predicate.bot_pred
+              | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _)))) ->
+                Predicate.bot_pred
+              | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
+                Predicate.bot_pred
+              | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
+                Predicate.bot_pred
+              | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
+                Predicate.bot_pred
+              | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))) ->
+                Predicate.bot_pred)))
+        (Predicate.sup_pred
+          (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+            (fun a ->
+              (match a
+                with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
+                  Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
+                  Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
+                  Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
+                  Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
+                  Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
+                  Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
+                  Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _)))) ->
+                  Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_var _, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_tid _, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_int, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_bool, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_bit, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_unit, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_real, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_vec (_, _), _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_list _, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (i1, (theta,
+                         (gamma,
+                           (SyntaxPED.Pp_tup (loc, patp_list),
+                             (SyntaxVCT.T_refined_type
+                                (zp, SyntaxVCT.B_tuple bp_list, cp),
+                               vp)))))
+                  -> Predicate.bind
+                       (ContextsPiDelta.eq_o_i (mk_fresh_lbl i1 "ptup"))
+                       (fun (i2, xp) ->
+                         Predicate.bind
+                           (ContextsPiDelta.eq_o_i
+                             (TypingUtils.mk_proj_vars xp bp_list))
+                           (fun (xp_list, klist1) ->
+                             Predicate.bind
+                               (ContextsPiDelta.eq_o_i
+                                 ((xp, (SyntaxVCT.B_tuple bp_list,
+ SyntaxVCT.C_conj
+   (SyntaxUtils.subst_x_cp cp zp (SyntaxVCT.V_var xp),
+     SyntaxUtils.mk_v_eq_c xp vp))) ::
+                                   klist1))
+                               (fun xa ->
+                                 Predicate.bind
+                                   (check_pat_list_i_i_i_i_i_o_i_o_o_o_o i2
+                                     theta (TypingUtils.g_cons3 gamma [xa])
+                                     patp_list bp_list
+                                     (Lista.map (fun aa -> SyntaxVCT.V_var aa)
+                                       xp_list))
+                                   (fun (klist2, (patp_lista, (i3, (trs, ok))))
+                                     -> Predicate.bind
+  (ContextsPiDelta.eq_o_i (merge_klist xa klist2))
+  (fun xg ->
+    Predicate.single
+      (Lista.concat [xg],
+        (xp_list,
+          (SyntaxPED.Pp_tup
+             (TypingUtils.upd_t loc
+                (SyntaxVCT.T_refined_type (zp, SyntaxVCT.B_tuple bp_list, cp)),
+               patp_lista),
+            (i3, (CheckPTuple trs, ok))))))))))
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_union (_, _), _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_record _, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_undef, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_reg _, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_string, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_exception, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _),
+                                (SyntaxVCT.T_refined_type
+                                   (_, SyntaxVCT.B_finite_set _, _),
+                                  _)))))
+                  -> Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
+                  Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
+                  Predicate.bot_pred
+                | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))) ->
+                  Predicate.bot_pred)))
+          (Predicate.sup_pred
+            (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+              (fun a ->
+                (match a
+                  with (i1, (theta,
+                              (_, (SyntaxPED.Pp_lit (loc, lit),
+                                    (SyntaxVCT.T_refined_type (zp, bp, cp),
+                                      xp1)))))
+                    -> Predicate.bind
+                         (UnifyType.unify_b_i_i_o (b_of_lit_full theta lit) bp)
+                         (fun aa ->
+                           (match aa with None -> Predicate.bot_pred
+                             | Some _ ->
+                               Predicate.bind
+                                 (ContextsPiDelta.eq_o_i
+                                   (TypingUtils.mk_fresh_i i1))
+                                 (fun (i2, xp2) ->
+                                   Predicate.single
+                                     ([(xp2,
+ (b_of_lit_full theta lit,
+   SyntaxVCT.C_eq
+     (SyntaxVCT.CE_val xp1, SyntaxVCT.CE_val (SyntaxVCT.V_lit lit))))],
+                                       ([xp2],
+ (SyntaxPED.Pp_lit
+    (TypingUtils.upd_t loc (SyntaxVCT.T_refined_type (zp, bp, cp)), lit),
+   (i2, (CheckPLit, OK))))))))
+                  | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
+                    Predicate.bot_pred
+                  | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
+                    Predicate.bot_pred
+                  | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
+                    Predicate.bot_pred
+                  | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
+                    Predicate.bot_pred
+                  | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
+                    Predicate.bot_pred
+                  | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
+                    Predicate.bot_pred
+                  | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
+                    Predicate.bot_pred
+                  | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _)))) ->
+                    Predicate.bot_pred
+                  | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
+                    Predicate.bot_pred
+                  | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
+                    Predicate.bot_pred
+                  | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
+                    Predicate.bot_pred
+                  | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))) ->
+                    Predicate.bot_pred)))
+            (Predicate.sup_pred
+              (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+                (fun a ->
+                  (match a
+                    with (i1, (theta,
+                                (_, (SyntaxPED.Pp_lit (loc, lit),
+                                      (SyntaxVCT.T_refined_type (zp, bp, cp),
+_)))))
+                      -> Predicate.bind
+                           (UnifyType.unify_b_i_i_o (b_of_lit_full theta lit)
+                             bp)
+                           (fun aa ->
+                             (match aa
+                               with None ->
+                                 Predicate.single
+                                   ([], ([],
+  (SyntaxPED.Pp_lit
+     (TypingUtils.upd_t loc (SyntaxVCT.T_refined_type (zp, bp, cp)), lit),
+    (i1, (CheckPLit,
+           Error (CheckFail
+                   ("Pattern literal. Base type mismatch", get_loc loc)))))))
+                               | Some _ -> Predicate.bot_pred))
+                    | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
+                      Predicate.bot_pred
+                    | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
+                      Predicate.bot_pred
+                    | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
+                      Predicate.bot_pred
+                    | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
+                      Predicate.bot_pred
+                    | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
+                      Predicate.bot_pred
+                    | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
+                      Predicate.bot_pred
+                    | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
+                      Predicate.bot_pred
+                    | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _)))) ->
+                      Predicate.bot_pred
+                    | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
+                      Predicate.bot_pred
+                    | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
+                      Predicate.bot_pred
+                    | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
+                      Predicate.bot_pred
+                    | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))) ->
+                      Predicate.bot_pred)))
+              (Predicate.sup_pred
+                (Predicate.bind
+                  (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+                  (fun a ->
+                    (match a
+                      with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
+                        Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
+                        Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
+                        Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
+                        Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
+                        Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
+                        Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
+                        Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
+                        Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_var _, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_tid _, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_int, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_bool, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_bit, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_unit, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_real, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (i1, (theta,
+                               (gamma,
+                                 (SyntaxPED.Pp_vector_concat (loc, cs),
+                                   (SyntaxVCT.T_refined_type
+                                      (zp, SyntaxVCT.B_vec (odr, bp), cp),
+                                     xpa)))))
+                        -> Predicate.bind
+                             (check_pat_list_i_i_i_i_i_o_i_o_o_o_o i1 theta
+                               gamma cs
+                               (Lista.replicate (Lista.size_list cs)
+                                 (SyntaxVCT.B_vec (odr, bp)))
+                               (Lista.replicate (Lista.size_list cs) xpa))
+                             (fun (klist, (csa, (i2, (trs, ok)))) ->
+                               Predicate.single
+                                 (klist,
+                                   ([], (SyntaxPED.Pp_vector_concat
+   (TypingUtils.upd_t loc
+      (SyntaxVCT.T_refined_type (zp, SyntaxVCT.B_vec (odr, bp), cp)),
+     csa),
+  (i2, (CheckPVec trs, ok))))))
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_list _, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_tuple _, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_union (_, _), _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_record _, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_undef, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_reg _, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_string, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_exception, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+                                      (SyntaxVCT.T_refined_type
+ (_, SyntaxVCT.B_finite_set _, _),
+_)))))
+                        -> Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
+                        Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
+                        Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
+                        Predicate.bot_pred
+                      | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))) ->
+                        Predicate.bot_pred)))
+                (Predicate.sup_pred
+                  (Predicate.bind
+                    (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+                    (fun a ->
+                      (match a
+                        with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
+                          Predicate.bot_pred
+                        | (i1, (theta,
+                                 (gamma,
+                                   (SyntaxPED.Pp_typ (loc, tau_1, patp),
+                                     (SyntaxVCT.T_refined_type (zp, bp, cp),
+                                       xpa)))))
+                          -> Predicate.bind
+                               (check_pat_i_i_i_i_i_i_o_o_o_o_o_o i1 theta gamma
+                                 patp tau_1 xpa)
+                               (fun (klist, (xlist, (patpa, (i2, (wt1, ok1)))))
+                                 -> Predicate.bind
+                                      (subtype_i_i_i_i_i_o_o (get_loc loc) theta
+(TypingUtils.g_cons3 gamma [klist]) tau_1
+(SyntaxVCT.T_refined_type (zp, bp, cp)))
+                                      (fun (_, ok2) ->
+Predicate.single
+  (klist,
+    (xlist,
+      (SyntaxPED.Pp_typ
+         (TypingUtils.upd_t loc (SyntaxVCT.T_refined_type (zp, bp, cp)), tau_1,
+           patpa),
+        (i2, (wt1, plus ok1 ok2)))))))
+                        | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _)))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _))))
+                          -> Predicate.bot_pred
+                        | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _), _))))
+                          -> Predicate.bot_pred)))
+                  (Predicate.sup_pred
+                    (Predicate.bind
+                      (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+                      (fun a ->
+                        (match a
+                          with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
+                            Predicate.bot_pred
+                          | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
+                            Predicate.bot_pred
+                          | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _)))) ->
+                            Predicate.bot_pred
+                          | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
+                            Predicate.bot_pred
+                          | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
+                            Predicate.bot_pred
+                          | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _)))) ->
+                            Predicate.bot_pred
+                          | (i1, (theta,
+                                   (gamma,
+                                     (SyntaxPED.Pp_app (loc, id, patp_list),
+                                       (tau_2, _)))))
+                            -> Predicate.bind
+                                 (ContextsPiDelta.eq_o_i
+                                   (TypingUtils.lookup_ctor_base theta id))
+                                 (fun aa ->
+                                   (match aa with None -> Predicate.bot_pred
+                                     | Some (tau_in, b_variant) ->
+                                       Predicate.bind
+ (ContextsPiDelta.eq_o_i
+   (SyntaxVCT.T_refined_type (SyntaxVCT.VIndex, b_variant, SyntaxVCT.C_true)))
+ (fun xa ->
+   Predicate.bind (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i1))
+     (fun (i2, xp3) ->
+       Predicate.bind
+         (UnifyType.unify_b_i_i_o (UnifyType.b_of xa) (UnifyType.b_of tau_2))
+         (fun ab ->
+           (match ab with None -> Predicate.bot_pred
+             | Some bsub ->
+               Predicate.bind
+                 (ContextsPiDelta.eq_o_i
+                   (TypingUtils.tsubst_t_many tau_in bsub))
+                 (fun (SyntaxVCT.T_refined_type (zp, bp, cp)) ->
+                   Predicate.bind
+                     (subtype_i_i_i_i_i_o_o (get_loc loc) theta gamma tau_2 xa)
+                     (fun (_, ok2) ->
+                       Predicate.bind
+                         (check_pat_i_i_i_i_i_i_o_o_o_o_o_o i2 theta
+                           (Contexts.add_var gamma
+                             (xp3, Contexts.GEPair
+                                     (bp, SyntaxUtils.subst_x_cp cp zp
+    (SyntaxVCT.V_var xp3))))
+                           (SyntaxPED.Pp_tup (loc, patp_list))
+                           (SyntaxVCT.T_refined_type (zp, bp, cp))
+                           (SyntaxVCT.V_var xp3))
+                         (fun ac ->
+                           (match ac
+                             with (_, (_, (SyntaxPED.Pp_lit (_, _), _))) ->
+                               Predicate.bot_pred
+                             | (_, (_, (SyntaxPED.Pp_wild _, _))) ->
+                               Predicate.bot_pred
+                             | (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _))) ->
+                               Predicate.bot_pred
+                             | (_, (_, (SyntaxPED.Pp_typ (_, _, _), _))) ->
+                               Predicate.bot_pred
+                             | (_, (_, (SyntaxPED.Pp_id (_, _), _))) ->
+                               Predicate.bot_pred
+                             | (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _))) ->
+                               Predicate.bot_pred
+                             | (_, (_, (SyntaxPED.Pp_app (_, _, _), _))) ->
+                               Predicate.bot_pred
+                             | (_, (_, (SyntaxPED.Pp_vector (_, _), _))) ->
+                               Predicate.bot_pred
+                             | (_, (_, (SyntaxPED.Pp_vector_concat (_, _), _)))
+                               -> Predicate.bot_pred
+                             | (klist,
+                                 (xlist,
+                                   (SyntaxPED.Pp_tup (_, patp_lista),
+                                     (i3, (wt1, ok1)))))
+                               -> Predicate.bind
+                                    (ContextsPiDelta.eq_o_i
+                                      (Contexts.mk_ctor_v id xlist))
+                                    (fun _ ->
+                                      Predicate.single
+((xp3, (bp, SyntaxUtils.subst_x_cp cp zp (SyntaxVCT.V_var xp3))) :: klist,
+  (xp3 :: xlist,
+    (SyntaxPED.Pp_app (TypingUtils.upd_t loc tau_2, id, patp_lista),
+      (i3, (CheckPApp wt1, plus ok1 ok2))))))
+                             | (_, (_, (SyntaxPED.Pp_list (_, _), _))) ->
+                               Predicate.bot_pred
+                             | (_, (_, (SyntaxPED.Pp_cons (_, _, _), _))) ->
+                               Predicate.bot_pred
+                             | (_, (_, (SyntaxPED.Pp_string_append (_, _), _)))
+                               -> Predicate.bot_pred))))))))))
+                          | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
+                            Predicate.bot_pred
+                          | (_, (_, (_, (SyntaxPED.Pp_vector_concat (_, _),
+  _))))
+                            -> Predicate.bot_pred
+                          | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
+                            Predicate.bot_pred
+                          | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
+                            Predicate.bot_pred
+                          | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
+                            Predicate.bot_pred
+                          | (_, (_, (_, (SyntaxPED.Pp_string_append (_, _),
+  _))))
+                            -> Predicate.bot_pred)))
+                    (Predicate.sup_pred
+                      (Predicate.bind
+                        (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+                        (fun a ->
+                          (match a
+                            with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _)))) ->
+                              Predicate.bot_pred
+                            | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
+                              Predicate.bot_pred
+                            | (_, (_, (_, (SyntaxPED.Pp_as_var (_, _, _), _))))
+                              -> Predicate.bot_pred
+                            | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _)))) ->
+                              Predicate.bot_pred
+                            | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
+                              Predicate.bot_pred
+                            | (_, (_, (_, (SyntaxPED.Pp_as_typ (_, _, _), _))))
+                              -> Predicate.bot_pred
+                            | (_, (_, (_, (SyntaxPED.Pp_app (_, _, []), _)))) ->
+                              Predicate.bot_pred
+                            | (i1a, (theta,
+                                      (gamma,
+(SyntaxPED.Pp_app (loca, ida, [patpa]), (tau_2a, _)))))
+                              -> Predicate.bind
+                                   (ContextsPiDelta.eq_o_i
+                                     (TypingUtils.lookup_ctor_base theta ida))
+                                   (fun aa ->
+                                     (match aa with None -> Predicate.bot_pred
+                                       | Some (tau_ina, b_varianta) ->
+ Predicate.bind
+   (ContextsPiDelta.eq_o_i
+     (SyntaxVCT.T_refined_type
+       (SyntaxVCT.VIndex, b_varianta, SyntaxVCT.C_true)))
+   (fun xa ->
+     Predicate.bind (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i1a))
+       (fun (i2a, xp3a) ->
+         Predicate.bind (ContextsPiDelta.eq_o_i xp3a)
+           (fun _ ->
+             Predicate.bind
+               (UnifyType.unify_b_i_i_o (UnifyType.b_of xa)
+                 (UnifyType.b_of tau_2a))
+               (fun ab ->
+                 (match ab with None -> Predicate.bot_pred
+                   | Some bsuba ->
+                     Predicate.bind
+                       (ContextsPiDelta.eq_o_i
+                         (TypingUtils.tsubst_t_many tau_ina bsuba))
+                       (fun (SyntaxVCT.T_refined_type (zpa, bpa, cpa)) ->
+                         Predicate.bind
+                           (ContextsPiDelta.eq_o_i
+                             (Contexts.GEPair
+                               (bpa, SyntaxUtils.subst_x_cp cpa zpa
+                                       (SyntaxVCT.V_var xp3a))))
+                           (fun _ ->
+                             Predicate.bind
+                               (subtype_i_i_i_i_i_o_o (get_loc loca) theta gamma
+                                 tau_2a xa)
+                               (fun (_, ok2a) ->
+                                 Predicate.bind
+                                   (check_pat_i_i_i_i_i_i_o_o_o_o_o_o i2a theta
+                                     (Contexts.add_var gamma
+                                       (xp3a,
+ Contexts.GEPair (bpa, SyntaxUtils.subst_x_cp cpa zpa (SyntaxVCT.V_var xp3a))))
+                                     patpa
+                                     (SyntaxVCT.T_refined_type (zpa, bpa, cpa))
+                                     (SyntaxVCT.V_var xp3a))
+                                   (fun (klista,
+  (xlista, (patp_a, (i3a, (wt1a, ok1a)))))
+                                     -> Predicate.bind
+  (ContextsPiDelta.eq_o_i (Contexts.mk_ctor_v ida xlista))
+  (fun _ ->
+    Predicate.single
+      ((xp3a, (bpa, SyntaxUtils.subst_x_cp cpa zpa (SyntaxVCT.V_var xp3a))) ::
+         klista,
+        (xp3a :: xlista,
+          (SyntaxPED.Pp_app (TypingUtils.upd_t loca tau_2a, ida, [patp_a]),
+            (i3a, (CheckPApp wt1a, plus ok1a ok2a)))))))))))))))))
+                            | (_, (_, (_,
+(SyntaxPED.Pp_app (_, _, _ :: _ :: _), _))))
+                              -> Predicate.bot_pred
+                            | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _)))) ->
+                              Predicate.bot_pred
+                            | (_, (_, (_,
+(SyntaxPED.Pp_vector_concat (_, _), _))))
+                              -> Predicate.bot_pred
+                            | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
+                              Predicate.bot_pred
+                            | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
+                              Predicate.bot_pred
+                            | (_, (_, (_, (SyntaxPED.Pp_cons (_, _, _), _)))) ->
+                              Predicate.bot_pred
+                            | (_, (_, (_,
+(SyntaxPED.Pp_string_append (_, _), _))))
+                              -> Predicate.bot_pred)))
+                      (Predicate.sup_pred
+                        (Predicate.bind
+                          (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+                          (fun a ->
+                            (match a
+                              with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
+                                Predicate.bot_pred
+                              | (_, (_, (_,
+  (SyntaxPED.Pp_as_var (_, _, _), _))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
+                                Predicate.bot_pred
+                              | (_, (_, (_,
+  (SyntaxPED.Pp_as_typ (_, _, _), _))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (SyntaxPED.Pp_vector_concat (_, _), _))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
+                                Predicate.bot_pred
+                              | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _)))) ->
+                                Predicate.bot_pred
+                              | (i, (_, (_,
+  (SyntaxPED.Pp_cons (loc, _, _), (t, _)))))
+                                -> Predicate.single
+                                     ([], ([],
+    (SyntaxPED.Pp_wild (TypingUtils.upd_t loc t),
+      (i, (CheckPNull, Error (CheckFail ("Pp_cons not impl", get_loc loc)))))))
+                              | (_, (_, (_,
+  (SyntaxPED.Pp_string_append (_, _), _))))
+                                -> Predicate.bot_pred)))
+                        (Predicate.sup_pred
+                          (Predicate.bind
+                            (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+                            (fun a ->
+                              (match a
+                                with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
+                                  Predicate.bot_pred
+                                | (_, (_,
+(_, (SyntaxPED.Pp_as_var (_, _, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
+                                  Predicate.bot_pred
+                                | (_, (_,
+(_, (SyntaxPED.Pp_as_typ (_, _, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_,
+(_, (SyntaxPED.Pp_vector_concat (_, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
+                                  Predicate.bot_pred
+                                | (i, (_,
+(_, (SyntaxPED.Pp_list (loc, _), (t, _)))))
+                                  -> Predicate.single
+                                       ([],
+ ([], (SyntaxPED.Pp_wild (TypingUtils.upd_t loc t),
+        (i, (CheckPNull,
+              Error (CheckFail ("Pp_list not impl", get_loc loc)))))))
+                                | (_, (_,
+(_, (SyntaxPED.Pp_cons (_, _, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_,
+(_, (SyntaxPED.Pp_string_append (_, _), _))))
+                                  -> Predicate.bot_pred)))
+                          (Predicate.bind
+                            (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+                            (fun a ->
+                              (match a
+                                with (_, (_, (_, (SyntaxPED.Pp_lit (_, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_wild _, _)))) ->
+                                  Predicate.bot_pred
+                                | (_, (_,
+(_, (SyntaxPED.Pp_as_var (_, _, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_typ (_, _, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_id (_, _), _)))) ->
+                                  Predicate.bot_pred
+                                | (_, (_,
+(_, (SyntaxPED.Pp_as_typ (_, _, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_app (_, _, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_vector (_, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_,
+(_, (SyntaxPED.Pp_vector_concat (_, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_tup (_, _), _)))) ->
+                                  Predicate.bot_pred
+                                | (_, (_, (_, (SyntaxPED.Pp_list (_, _), _))))
+                                  -> Predicate.bot_pred
+                                | (_, (_,
+(_, (SyntaxPED.Pp_cons (_, _, _), _))))
+                                  -> Predicate.bot_pred
+                                | (i, (_,
+(_, (SyntaxPED.Pp_string_append (loc, _), (t, _)))))
+                                  -> Predicate.single
+                                       ([],
+ ([], (SyntaxPED.Pp_wild (TypingUtils.upd_t loc t),
+        (i, (CheckPNull,
+              Error (CheckFail
+                      ("Pp_string_append not impl",
+                        get_loc loc))))))))))))))))))))
+and check_pat_list_i_i_i_i_i_o_i_o_o_o_o
+  x xb xc xd xe xf =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+        (fun a ->
+          (match a
+            with (i, (_, (_, ([], ([], []))))) ->
+              Predicate.single (TypingUtils.k_list [], ([], (i, ([], OK))))
+            | (_, (_, (_, ([], ([], _ :: _))))) -> Predicate.bot_pred
+            | (_, (_, (_, ([], (_ :: _, _))))) -> Predicate.bot_pred
+            | (_, (_, (_, (_ :: _, _)))) -> Predicate.bot_pred)))
+      (Predicate.bind (Predicate.single (x, (xb, (xc, (xd, (xe, xf))))))
+        (fun a ->
+          (match a with (_, (_, (_, ([], _)))) -> Predicate.bot_pred
+            | (_, (_, (_, (_ :: _, ([], _))))) -> Predicate.bot_pred
+            | (_, (_, (_, (_ :: _, (_ :: _, []))))) -> Predicate.bot_pred
+            | (i1, (theta,
+                     (gamma,
+                       (patp :: patp_list, (bp :: bp_list, vp :: vp_list)))))
+              -> Predicate.bind
+                   (check_pat_i_i_i_i_i_i_o_o_o_o_o_o i1 theta gamma patp
+                     (SyntaxVCT.T_refined_type
+                       (SyntaxVCT.VIndex, bp, SyntaxVCT.C_true))
+                     vp)
+                   (fun (klist, (_, (patpa, (i2, (wt1, ok1))))) ->
+                     Predicate.bind
+                       (check_pat_list_i_i_i_i_i_o_i_o_o_o_o i2 theta
+                         (TypingUtils.g_cons3 gamma [klist]) patp_list bp_list
+                         vp_list)
+                       (fun (klist2, (patp_lista, (i3, (trs, ok2)))) ->
+                         Predicate.single
+                           (TypingUtils.k_append [klist; klist2],
+                             (patpa :: patp_lista,
+                               (i3, (wt1 :: trs, plus ok1 ok2)))))))));;
+
+end;; (*struct TypingDeclFailRulesVP*)
+module TypingDeclFailRules : sig
+  type check_e_w = CheckCase of infer_e_w * check_pexp_w list |
+    CheckIf of
+      infer_e_w * TypingDeclFailRulesVP.subtype_w * check_e_w * check_e_w
+    | CheckRecord of check_e_w list |
+    CheckSubtype of infer_e_w * TypingDeclFailRulesVP.subtype_w |
+    CheckAssign of check_lexp_w | CheckVar of check_lexp_w * check_e_w
+  and infer_e_w = NullTr | InferVal of TypingDeclFailRulesVP.infer_v_w |
+    InferApp of infer_e_w * TypingDeclFailRulesVP.subtype_w |
+    InferTuple of infer_e_w list | LookupMVar | InferVecConcat of infer_e_w list
+    | InferLoop of infer_e_w * check_e_w |
+    InferRecordUpdate of infer_e_w * check_e_w list
+  and check_lexp_w = LExp_bound of check_e_w | LExp_unbound of infer_e_w
+  and check_pexp_w = CheckPExp of TypingDeclFailRulesVP.check_pat_w * check_e_w
+  type infer_letbind_w =
+    LetBindInf of infer_e_w * TypingDeclFailRulesVP.check_pat_w |
+    LetBindCheck of check_e_w * TypingDeclFailRulesVP.check_pat_w
+  type check_def_w = CheckFunDef of check_pexp_w list |
+    CheckLetDef of infer_letbind_w | CheckDef
+  val ep_null : (SyntaxVCT.tau option) SyntaxPED.ep
+  val upd_t_none : 'a * 'b -> 'a * 'c option
+  val is_not_ptyp : 'a SyntaxPED.patp -> bool
+  val match_arg_i_i_i_i_i_i_i_o_o_o_o :
+    Location.loc ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+          SyntaxVCT.xp ->
+            SyntaxVCT.bp ->
+              SyntaxVCT.cp ->
+                (SyntaxVCT.xp * SyntaxVCT.ap) list ->
+                  ((SyntaxVCT.xp * SyntaxVCT.ap) *
+                    ((string * SyntaxVCT.bp) list *
+                      (TypingDeclFailRulesVP.subtype_w *
+                        TypingDeclFailRulesVP.err
+                          TypingDeclFailRulesVP.ok_error)))
+                    Predicate.pred
+  val check_pexp_i_i_i_i_i_i_i_i_i_o_o_o_o_o :
+    Arith.nat ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+          ContextsPiDelta.phi_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+            unit ContextsPiDelta.delta_ext ->
+              (SyntaxVCT.tau option) SyntaxPED.pexpp ->
+                SyntaxVCT.tau ->
+                  SyntaxVCT.tau ->
+                    SyntaxVCT.vp ->
+                      (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+                         Contexts.gamma_ext *
+                        ((SyntaxVCT.tau option) SyntaxPED.pexpp *
+                          (Arith.nat *
+                            (check_pexp_w *
+                              TypingDeclFailRulesVP.err
+                                TypingDeclFailRulesVP.ok_error))))
+                        Predicate.pred
+  val check_pexp_list_i_i_i_i_i_i_i_i_i_o_o_o_o :
+    Arith.nat ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+          ContextsPiDelta.phi_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+            unit ContextsPiDelta.delta_ext ->
+              (SyntaxVCT.tau option) SyntaxPED.pexpp list ->
+                SyntaxVCT.tau ->
+                  SyntaxVCT.tau ->
+                    SyntaxVCT.vp ->
+                      ((SyntaxVCT.tau option) SyntaxPED.pexpp list *
+                        (Arith.nat *
+                          (check_pexp_w list *
+                            TypingDeclFailRulesVP.err
+                              TypingDeclFailRulesVP.ok_error)))
+                        Predicate.pred
+  val check_e_i_i_i_i_i_i_i_o_o_o_o :
+    Arith.nat ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+          ContextsPiDelta.phi_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+            unit ContextsPiDelta.delta_ext ->
+              (SyntaxVCT.tau option) SyntaxPED.ep ->
+                SyntaxVCT.tau ->
+                  ((SyntaxVCT.tau option) SyntaxPED.ep *
+                    (Arith.nat *
+                      (check_e_w *
+                        TypingDeclFailRulesVP.err
+                          TypingDeclFailRulesVP.ok_error)))
+                    Predicate.pred
+  val check_e_list_i_i_i_i_i_i_i_o_o_o_o_o :
+    Arith.nat ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+          ContextsPiDelta.phi_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+            unit ContextsPiDelta.delta_ext ->
+              (SyntaxVCT.tau option) SyntaxPED.ep list ->
+                SyntaxVCT.tau list ->
+                  (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+                     Contexts.gamma_ext *
+                    ((SyntaxVCT.tau option) SyntaxPED.ep list *
+                      (Arith.nat *
+                        (check_e_w list *
+                          TypingDeclFailRulesVP.err
+                            TypingDeclFailRulesVP.ok_error))))
+                    Predicate.pred
+  val infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o :
+    Arith.nat ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+          ContextsPiDelta.phi_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+            unit ContextsPiDelta.delta_ext ->
+              (SyntaxVCT.tau option) SyntaxPED.ep ->
+                (SyntaxVCT.tau *
+                  (SyntaxVCT.vp *
+                    ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
+                      ((SyntaxVCT.tau option) SyntaxPED.ep *
+                        (Arith.nat *
+                          (infer_e_w *
+                            TypingDeclFailRulesVP.err
+                              TypingDeclFailRulesVP.ok_error))))))
+                  Predicate.pred
+  val infer_letbind_i_i_i_i_i_i_o_o_o_o_o :
+    Arith.nat ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+          ContextsPiDelta.phi_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+            unit ContextsPiDelta.delta_ext ->
+              (SyntaxVCT.tau option) SyntaxPED.letbindp ->
+                ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
+                  ((SyntaxVCT.tau option) SyntaxPED.letbindp *
+                    (Arith.nat *
+                      (infer_letbind_w *
+                        TypingDeclFailRulesVP.err
+                          TypingDeclFailRulesVP.ok_error))))
+                  Predicate.pred
+  val infer_e_list_i_i_i_i_i_i_o_o_o_o_o_o_o :
+    Arith.nat ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+          ContextsPiDelta.phi_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+            unit ContextsPiDelta.delta_ext ->
+              (SyntaxVCT.tau option) SyntaxPED.ep list ->
+                (SyntaxVCT.tau list *
+                  (SyntaxVCT.vp list *
+                    ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
+                      ((SyntaxVCT.tau option) SyntaxPED.ep list *
+                        (Arith.nat *
+                          (infer_e_w list *
+                            TypingDeclFailRulesVP.err
+                              TypingDeclFailRulesVP.ok_error))))))
+                  Predicate.pred
+  val infer_app_i_i_i_i_i_i_i_i_o_o_o_o_o_o_o_o_o :
+    Arith.nat ->
+      Location.loc ->
+        unit ContextsPiDelta.theta_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+            ContextsPiDelta.phi_ext ->
+            ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+              unit ContextsPiDelta.delta_ext ->
+                (SyntaxVCT.xp * SyntaxVCT.ap) list ->
+                  (SyntaxVCT.tau option) SyntaxPED.ep ->
+                    (SyntaxVCT.tau *
+                      (SyntaxVCT.vp *
+                        ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
+                          (SyntaxVCT.xp *
+                            ((string * SyntaxVCT.bp) list *
+                              ((SyntaxVCT.tau option) SyntaxPED.ep *
+                                (Arith.nat *
+                                  (infer_e_w *
+                                    TypingDeclFailRulesVP.err
+                                      TypingDeclFailRulesVP.ok_error))))))))
+                      Predicate.pred
+  val infer_e_T_P_G_D_ep_list_xp_order_bp_cp_list_xp_list_klist_list_i_i_i_i_i_i_o_o_o_o_o_o_o_o_o_o
+    : Arith.nat ->
+        unit ContextsPiDelta.theta_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+            ContextsPiDelta.phi_ext ->
+            ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+              unit ContextsPiDelta.delta_ext ->
+                (SyntaxVCT.tau option) SyntaxPED.ep list ->
+                  (SyntaxVCT.xp *
+                    (SyntaxVCT.order *
+                      (SyntaxVCT.bp *
+                        (SyntaxVCT.cp list *
+                          (SyntaxVCT.vp list *
+                            (((SyntaxVCT.xp *
+                                (SyntaxVCT.bp * SyntaxVCT.cp)) list) list *
+                              ((SyntaxVCT.tau option) SyntaxPED.ep list *
+                                (Arith.nat *
+                                  (infer_e_w list *
+                                    TypingDeclFailRulesVP.err
+                                      TypingDeclFailRulesVP.ok_error)))))))))
+                    Predicate.pred
+  val check_lexp_i_i_i_i_i_i_i_o_o_o_o_o_o_o :
+    Arith.nat ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+          ContextsPiDelta.phi_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+            unit ContextsPiDelta.delta_ext ->
+              (SyntaxVCT.tau option) SyntaxPED.lexpp ->
+                (SyntaxVCT.tau option) SyntaxPED.ep ->
+                  (unit ContextsPiDelta.delta_ext *
+                    ((SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
+                      ((SyntaxVCT.tau option) SyntaxPED.lexpp *
+                        ((SyntaxVCT.tau option) SyntaxPED.ep *
+                          (Arith.nat *
+                            (check_lexp_w *
+                              TypingDeclFailRulesVP.err
+                                TypingDeclFailRulesVP.ok_error))))))
+                    Predicate.pred
+  val check_funcl_i_i_i_i_i_i_i_i_i_o_o_o_o_o_o :
+    Arith.nat ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+          ContextsPiDelta.phi_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+            (SyntaxVCT.tau option) SyntaxPED.funclp ->
+              SyntaxVCT.xp ->
+                SyntaxVCT.bp ->
+                  SyntaxVCT.cp ->
+                    SyntaxVCT.tau ->
+                      (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+                         ContextsPiDelta.phi_ext *
+                        (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+                           Contexts.gamma_ext *
+                          ((SyntaxVCT.tau option) SyntaxPED.funclp *
+                            (Arith.nat *
+                              (check_pexp_w *
+                                TypingDeclFailRulesVP.err
+                                  TypingDeclFailRulesVP.ok_error)))))
+                        Predicate.pred
+  val check_funcls_i_i_i_i_i_i_i_i_i_o_o_o_o_o_o :
+    Arith.nat ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+          ContextsPiDelta.phi_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+            (SyntaxVCT.tau option) SyntaxPED.funclp list ->
+              SyntaxVCT.xp ->
+                SyntaxVCT.bp ->
+                  SyntaxVCT.cp ->
+                    SyntaxVCT.tau ->
+                      (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+                         ContextsPiDelta.phi_ext *
+                        (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+                           Contexts.gamma_ext *
+                          ((SyntaxVCT.tau option) SyntaxPED.funclp list *
+                            (Arith.nat *
+                              (check_pexp_w list *
+                                TypingDeclFailRulesVP.err
+                                  TypingDeclFailRulesVP.ok_error)))))
+                        Predicate.pred
+  val check_def_i_i_i_i_i_o_o_o_o_o_o_o :
+    Arith.nat ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+          ContextsPiDelta.phi_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+            (SyntaxVCT.tau option) SyntaxPED.defp ->
+              (unit ContextsPiDelta.theta_ext *
+                (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+                   ContextsPiDelta.phi_ext *
+                  (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+                     Contexts.gamma_ext *
+                    ((SyntaxVCT.tau option) SyntaxPED.defp *
+                      (Arith.nat *
+                        (check_def_w *
+                          TypingDeclFailRulesVP.err
+                            TypingDeclFailRulesVP.ok_error))))))
+                Predicate.pred
+  val check_defs_i_i_i_i_i_o_o_o_o_o_o_o :
+    Arith.nat ->
+      unit ContextsPiDelta.theta_ext ->
+        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+          ContextsPiDelta.phi_ext ->
+          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext ->
+            (SyntaxVCT.tau option) SyntaxPED.defp list ->
+              (unit ContextsPiDelta.theta_ext *
+                (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+                   ContextsPiDelta.phi_ext *
+                  (((SyntaxVCT.tau option) SyntaxPED.pexpp, unit)
+                     Contexts.gamma_ext *
+                    ((SyntaxVCT.tau option) SyntaxPED.defp list *
+                      (Arith.nat *
+                        (check_def_w list *
+                          TypingDeclFailRulesVP.err
+                            TypingDeclFailRulesVP.ok_error))))))
+                Predicate.pred
+  val check_prog_i_o_o_o :
+    (SyntaxVCT.tau option) SyntaxPED.progp ->
+      ((SyntaxVCT.tau option) SyntaxPED.progp *
+        (check_def_w list *
+          TypingDeclFailRulesVP.err TypingDeclFailRulesVP.ok_error))
+        Predicate.pred
+end = struct
+
+type check_e_w = CheckCase of infer_e_w * check_pexp_w list |
+  CheckIf of infer_e_w * TypingDeclFailRulesVP.subtype_w * check_e_w * check_e_w
+  | CheckRecord of check_e_w list |
+  CheckSubtype of infer_e_w * TypingDeclFailRulesVP.subtype_w |
+  CheckAssign of check_lexp_w | CheckVar of check_lexp_w * check_e_w
+and infer_e_w = NullTr | InferVal of TypingDeclFailRulesVP.infer_v_w |
+  InferApp of infer_e_w * TypingDeclFailRulesVP.subtype_w |
+  InferTuple of infer_e_w list | LookupMVar | InferVecConcat of infer_e_w list |
+  InferLoop of infer_e_w * check_e_w |
+  InferRecordUpdate of infer_e_w * check_e_w list
+and check_lexp_w = LExp_bound of check_e_w | LExp_unbound of infer_e_w
+and check_pexp_w = CheckPExp of TypingDeclFailRulesVP.check_pat_w * check_e_w;;
+
+type infer_letbind_w =
+  LetBindInf of infer_e_w * TypingDeclFailRulesVP.check_pat_w |
+  LetBindCheck of check_e_w * TypingDeclFailRulesVP.check_pat_w;;
+
+type check_def_w = CheckFunDef of check_pexp_w list |
+  CheckLetDef of infer_letbind_w | CheckDef;;
+
+let ep_null : (SyntaxVCT.tau option) SyntaxPED.ep
+  = SyntaxPED.Ep_val
+      ((Location.Loc_unknown,
+         Some (SyntaxVCT.T_refined_type
+                (SyntaxVCT.VIndex, SyntaxVCT.B_unit, SyntaxVCT.C_false))),
+        SyntaxVCT.V_lit SyntaxVCT.L_unit);;
+
+let rec upd_t_none (loc, uu) = (loc, None);;
+
+let rec is_not_ptyp = function SyntaxPED.Pp_typ (uu, uv, uw) -> false
+                      | SyntaxPED.Pp_lit (v, va) -> true
+                      | SyntaxPED.Pp_wild v -> true
+                      | SyntaxPED.Pp_as_var (v, va, vb) -> true
+                      | SyntaxPED.Pp_id (v, va) -> true
+                      | SyntaxPED.Pp_as_typ (v, va, vb) -> true
+                      | SyntaxPED.Pp_app (v, va, vb) -> true
+                      | SyntaxPED.Pp_vector (v, va) -> true
+                      | SyntaxPED.Pp_vector_concat (v, va) -> true
+                      | SyntaxPED.Pp_tup (v, va) -> true
+                      | SyntaxPED.Pp_list (v, va) -> true
+                      | SyntaxPED.Pp_cons (v, va, vb) -> true
+                      | SyntaxPED.Pp_string_append (v, va) -> true;;
+
+let rec match_arg_i_i_i_i_i_i_i_o_o_o_o
+  x xa xb xc xd xe xf =
+    Predicate.bind (Predicate.single (x, (xa, (xb, (xc, (xd, (xe, xf)))))))
+      (fun a ->
+        (match a with (_, (_, (_, (_, (_, (_, [])))))) -> Predicate.bot_pred
+          | (_, (_, (_, (_, (_, (_, (_, SyntaxVCT.A_monotype _) :: _)))))) ->
+            Predicate.bot_pred
+          | (loc, (theta,
+                    (gamma,
+                      (zp2, (bp2, (cp2, (f,
+  SyntaxVCT.A_function
+    (xp1, bp1, cp1, SyntaxVCT.T_refined_type (zp3, bp3, cp3))) ::
+  _))))))
+            -> Predicate.bind
+                 (ContextsPiDelta.eq_o_i (Debug.trace "match_arg_headI start"))
+                 (fun _ ->
+                   Predicate.bind (UnifyType.unify_b_i_i_o bp1 bp2)
+                     (fun aa ->
+                       (match aa with None -> Predicate.bot_pred
+                         | Some bsub ->
+                           Predicate.bind
+                             (ContextsPiDelta.eq_o_i
+                               (Debug.trace "match_arg_headI end"))
+                             (fun _ ->
+                               Predicate.bind
+                                 (TypingDeclFailRulesVP.subtype_i_i_i_i_i_o_o
+                                   loc theta gamma
+                                   (SyntaxVCT.T_refined_type
+                                     (zp2, TypingDeclFailRulesVP.tsubst_bp_many
+     bp2 bsub,
+                                       cp2))
+                                   (SyntaxVCT.T_refined_type
+                                     (xp1, TypingDeclFailRulesVP.tsubst_bp_many
+     bp1 bsub,
+                                       cp1)))
+                                 (fun (tr, ok) ->
+                                   Predicate.single
+                                     ((f,
+SyntaxVCT.A_function (xp1, bp1, cp1, SyntaxVCT.T_refined_type (zp3, bp3, cp3))),
+                                       (bsub, (tr, ok))))))))));;
+
 let rec check_pexp_i_i_i_i_i_i_i_i_i_o_o_o_o_o
   xa xb xc xd xe xf xg xh xi =
     Predicate.sup_pred
@@ -3903,8 +4460,9 @@ let rec check_pexp_i_i_i_i_i_i_i_i_i_o_o_o_o_o
                                     (SyntaxVCT.T_refined_type (zp, bp, cp),
                                       (tau, xp))))))))
               -> Predicate.bind
-                   (check_pat_i_i_i_i_i_i_o_o_o_o_o_o i1 theta gamma patp
-                     (SyntaxVCT.T_refined_type (zp, bp, cp)) xp)
+                   (TypingDeclFailRulesVP.check_pat_i_i_i_i_i_i_o_o_o_o_o_o i1
+                     theta gamma patp (SyntaxVCT.T_refined_type (zp, bp, cp))
+                     xp)
                    (fun (klist, (_, (patpa, (i3, (wt1e, ok1))))) ->
                      Predicate.bind
                        (check_e_i_i_i_i_i_i_i_o_o_o_o i3 theta phi
@@ -3914,7 +4472,8 @@ let rec check_pexp_i_i_i_i_i_i_i_i_i_o_o_o_o_o
                            (TypingUtils.g_cons3 gamma [klist],
                              (SyntaxPED.PEXPp_exp
                                 (SyntaxPED.annot_e epa, patpa, epa),
-                               (i4, (CheckPExp (wt1e, wt2a), plus ok1 ok2))))))
+                               (i4, (CheckPExp (wt1e, wt2a),
+                                      TypingDeclFailRulesVP.plus ok1 ok2))))))
             | (_, (_, (_, (_, (_, (SyntaxPED.PEXPp_when (_, _, _, _), _)))))) ->
               Predicate.bot_pred)))
       (Predicate.bind
@@ -3929,8 +4488,8 @@ let rec check_pexp_i_i_i_i_i_i_i_i_i_o_o_o_o_o
                                (SyntaxPED.PEXPp_when (_, patp, ep1, ep2),
                                  (tau_2, (tau_1, xp))))))))
               -> Predicate.bind
-                   (check_pat_i_i_i_i_i_i_o_o_o_o_o_o i1 theta gamma patp tau_2
-                     xp)
+                   (TypingDeclFailRulesVP.check_pat_i_i_i_i_i_i_o_o_o_o_o_o i1
+                     theta gamma patp tau_2 xp)
                    (fun (klist, (_, (patpa, (i3, (wt1e, ok1))))) ->
                      Predicate.bind
                        (check_e_i_i_i_i_i_i_i_o_o_o_o i3 theta phi
@@ -3951,7 +4510,7 @@ let rec check_pexp_i_i_i_i_i_i_i_i_i_o_o_o_o_o
                                  (SyntaxPED.PEXPp_when
                                     (SyntaxPED.annot_e ep1a, patpa, ep1a, ep2a),
                                    (i5, (CheckPExp (wt1e, wt2a),
-  plus ok1 (plus ok2 ok3)))))))))))
+  TypingDeclFailRulesVP.plus ok1 (TypingDeclFailRulesVP.plus ok2 ok3)))))))))))
 and check_pexp_list_i_i_i_i_i_i_i_i_i_o_o_o_o
   xa xb xc xd xe xf xg xh xi =
     Predicate.sup_pred
@@ -3987,7 +4546,8 @@ and check_pexp_list_i_i_i_i_i_i_i_i_i_o_o_o_o
                            (fun (pexp_lista, (i3, (wt2b, ok2))) ->
                              Predicate.single
                                (pexpa :: pexp_lista,
-                                 (i3, (wt1f :: wt2b, plus ok1 ok2)))))))))
+                                 (i3, (wt1f :: wt2b,
+TypingDeclFailRulesVP.plus ok1 ok2)))))))))
 and check_e_i_i_i_i_i_i_i_o_o_o_o
   xa xb xc xd xe xf xg =
     Predicate.sup_pred
@@ -4044,7 +4604,8 @@ and check_e_i_i_i_i_i_i_i_o_o_o_o
             | (i1, (theta,
                      (phi, (gamma,
                              (delta, (SyntaxPED.Ep_return (loc, ep), tau_2))))))
-              -> Predicate.bind (UnifyType.eq_o_i (Contexts.gamma_e gamma))
+              -> Predicate.bind
+                   (ContextsPiDelta.eq_o_i (Contexts.gamma_e gamma))
                    (fun aa ->
                      (match aa with None -> Predicate.bot_pred
                        | Some tau_1 ->
@@ -4184,10 +4745,12 @@ and check_e_i_i_i_i_i_i_i_o_o_o_o
                        (fun (SyntaxVCT.T_refined_type (zp3, b, cp1),
                               (vp, (klist, (epa, (i2, (wt1, ok1))))))
                          -> Predicate.bind
-                              (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i2))
+                              (ContextsPiDelta.eq_o_i
+                                (TypingUtils.mk_fresh_i i2))
                               (fun (i3, xp3) ->
                                 Predicate.bind
-                                  (subtype_i_i_i_i_i_o_o (get_loc loc) theta
+                                  (TypingDeclFailRulesVP.subtype_i_i_i_i_i_o_o
+                                    (TypingDeclFailRulesVP.get_loc loc) theta
                                     (TypingUtils.g_cons3 gamma [klist])
                                     (SyntaxVCT.T_refined_type (zp3, b, cp1))
                                     (SyntaxVCT.T_refined_type
@@ -4235,7 +4798,8 @@ Predicate.bind
          (TypingUtils.upd_t loc (SyntaxVCT.T_refined_type (zp, bp, cp)), epa,
            ep1a, ep2a),
         (i5, (CheckIf (wt1, wt2, wt3, tr4),
-               plus (plus ok1 ok2) (plus ok3 ok4)))))))))
+               TypingDeclFailRulesVP.plus (TypingDeclFailRulesVP.plus ok1 ok2)
+                 (TypingDeclFailRulesVP.plus ok3 ok4)))))))))
                 | (_, (_, (_, (_, (_, (SyntaxPED.Ep_loop (_, _, _, _), _))))))
                   -> Predicate.bot_pred
                 | (_, (_, (_, (_, (_, (SyntaxPED.Ep_for (_, _, _, _, _, _, _),
@@ -4336,7 +4900,7 @@ _))))))
 (loc, SyntaxPED.LBp_val (loca, patp, ep1), ep2),
                                        tau))))))
                     -> Predicate.bind
-                         (check_letbind_i_i_i_i_i_i_o_o_o_o_o i1 theta phi gamma
+                         (infer_letbind_i_i_i_i_i_i_o_o_o_o_o i1 theta phi gamma
                            delta (SyntaxPED.LBp_val (loca, patp, ep1)))
                          (fun (klist, (lp, (i2, (_, ok1)))) ->
                            Predicate.bind
@@ -4347,7 +4911,8 @@ _))))))
                                Predicate.single
                                  (SyntaxPED.Ep_let
                                     (TypingUtils.upd_t loc tau, lp, ep2a),
-                                   (i3, (wt2a, plus ok1 ok2)))))
+                                   (i3, (wt2a,
+  TypingDeclFailRulesVP.plus ok1 ok2)))))
                   | (_, (_, (_, (_, (_, (SyntaxPED.Ep_sizeof (_, _), _)))))) ->
                     Predicate.bot_pred
                   | (_, (_, (_, (_, (_, (SyntaxPED.Ep_exit (_, _), _)))))) ->
@@ -4435,7 +5000,7 @@ _))))))
                                     Predicate.single
                                       (SyntaxPED.Ep_case
  (TypingUtils.upd_t loc t_exp, epa, patp_ep_lista),
-(i3, (CheckCase (wt1, trs), plus ok1 ok2)))))
+(i3, (CheckCase (wt1, trs), TypingDeclFailRulesVP.plus ok1 ok2)))))
                     | (_, (_, (_, (_, (_, (SyntaxPED.Ep_let (_, _, _), _))))))
                       -> Predicate.bot_pred
                     | (_, (_, (_, (_, (_, (SyntaxPED.Ep_sizeof (_, _), _))))))
@@ -4554,7 +5119,7 @@ _))))))
 (SyntaxPED.Ep_var
    (TypingUtils.upd_t loc (SyntaxVCT.T_refined_type (zp, bp, cp)), lexpa, ep1a,
      ep2a),
-  (i3, (CheckVar (wt1b, wt2a), plus ok1 ok2)))))
+  (i3, (CheckVar (wt1b, wt2a), TypingDeclFailRulesVP.plus ok1 ok2)))))
                       | (_, (_, (_, (_, (_,
   (SyntaxPED.Ep_assign (_, _, _), _))))))
                         -> Predicate.bot_pred
@@ -4784,25 +5349,28 @@ _))))))
                             with (_, (_, (_,
    (_, (_, (SyntaxPED.Ep_block (_, []), _))))))
                               -> Predicate.bot_pred
+                            | (_, (_, (_,
+(_, (_, (SyntaxPED.Ep_block (_, [_]), _))))))
+                              -> Predicate.bot_pred
                             | (i1, (theta,
                                      (phi, (gamma,
-     (delta, (SyntaxPED.Ep_block (loc, ep :: ep_list), tau))))))
+     (delta, (SyntaxPED.Ep_block (loc, ep :: epa :: ep_list), tau))))))
                               -> Predicate.bind
                                    (check_e_i_i_i_i_i_i_i_o_o_o_o i1 theta phi
                                      gamma delta ep
                                      (SyntaxVCT.T_refined_type
                                        (SyntaxVCT.VIndex, SyntaxVCT.B_unit,
  SyntaxVCT.C_true)))
-                                   (fun (epa, (i2, (wt1c, ok1))) ->
+                                   (fun (epb, (i2, (wt1c, ok1))) ->
                                      Predicate.bind
                                        (check_e_i_i_i_i_i_i_i_o_o_o_o i2 theta
- phi gamma delta (SyntaxPED.Ep_block (loc, ep_list)) tau)
+ phi gamma delta (SyntaxPED.Ep_block (loc, epa :: ep_list)) tau)
                                        (fun aa ->
  (match aa
    with (SyntaxPED.Ep_block (_, ep_lista), (i3, (_, ok2))) ->
      Predicate.single
-       (SyntaxPED.Ep_block (TypingUtils.upd_t loc tau, epa :: ep_lista),
-         (i3, (wt1c, plus ok1 ok2)))
+       (SyntaxPED.Ep_block (TypingUtils.upd_t loc tau, epb :: ep_lista),
+         (i3, (wt1c, TypingDeclFailRulesVP.plus ok1 ok2)))
    | (SyntaxPED.Ep_val (_, _), _) -> Predicate.bot_pred
    | (SyntaxPED.Ep_mvar (_, _), _) -> Predicate.bot_pred
    | (SyntaxPED.Ep_bop (_, _, _, _), _) -> Predicate.bot_pred
@@ -4981,69 +5549,109 @@ _))))))
   (_, (_, (SyntaxPED.Ep_record (_, _),
             SyntaxVCT.T_refined_type (SyntaxVCT.VNamed _, _, _)))))))
                                 -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_var _, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_tid _, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_int, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_bool, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_bit, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_unit, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_real, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_vec (_, _), _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_list _, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_tuple _, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_union (_, _), _)))))))
+                                -> Predicate.bot_pred
                               | (i1, (theta,
                                        (phi,
  (gamma,
    (delta,
      (SyntaxPED.Ep_record (loc, field_e_list),
-       SyntaxVCT.T_refined_type (SyntaxVCT.VIndex, b, c)))))))
+       SyntaxVCT.T_refined_type
+         (SyntaxVCT.VIndex, SyntaxVCT.B_record fb_list, c)))))))
                                 -> Predicate.bind
-                                     (UnifyType.eq_o_i
-                                       (ContextsPiDelta.lookup_fields theta
- (Lista.map Product_Type.fst field_e_list)))
-                                     (fun aa ->
-                                       (match aa with None -> Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_var _, _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_tid _, _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_int, _)) -> Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_bool, _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_bit, _)) -> Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_unit, _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_real, _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_vec (_, _), _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_list _, _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_tuple _, _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_union (_, _), _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (z, SyntaxVCT.B_record fb_list, ca)) ->
-   Predicate.bind
-     (subtype_i_i_i_i_i_o_o (get_loc loc) theta gamma
-       (SyntaxVCT.T_refined_type (SyntaxVCT.VIndex, b, c))
-       (SyntaxVCT.T_refined_type (z, SyntaxVCT.B_record fb_list, ca)))
-     (fun (_, ok2) ->
-       Predicate.bind
-         (check_e_list_i_i_i_i_i_i_i_o_o_o_o_o i1 theta phi gamma delta
-           (Lista.map Product_Type.snd field_e_list)
-           (Lista.map
-             (fun (_, ba) ->
-               SyntaxVCT.T_refined_type
-                 (SyntaxVCT.VIndex, ba, SyntaxVCT.C_true))
-             fb_list))
-         (fun (_, (ep_list, (i2, (wt1d, ok1)))) ->
-           Predicate.single
-             (SyntaxPED.Ep_record
-                (TypingUtils.upd_t loc
-                   (SyntaxVCT.T_refined_type (SyntaxVCT.VIndex, b, c)),
-                  Lista.zip (Lista.map Product_Type.fst field_e_list) ep_list),
-               (i2, (CheckRecord wt1d, plus ok1 ok2)))))
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_undef, _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_reg _, _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_string, _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_exception, _)) ->
-   Predicate.bot_pred
- | Some (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_finite_set _, _)) ->
-   Predicate.bot_pred))
+                                     (check_e_list_i_i_i_i_i_i_i_o_o_o_o_o i1
+                                       theta phi gamma delta
+                                       (Lista.map Product_Type.snd field_e_list)
+                                       (Lista.map
+ (fun (_, b) ->
+   SyntaxVCT.T_refined_type (SyntaxVCT.VIndex, b, SyntaxVCT.C_true))
+ fb_list))
+                                     (fun (_, (ep_list, (i2, (wt1d, ok1)))) ->
+                                       Predicate.single
+ (SyntaxPED.Ep_record
+    (TypingUtils.upd_t loc
+       (SyntaxVCT.T_refined_type
+         (SyntaxVCT.VIndex, SyntaxVCT.B_record fb_list, c)),
+      Lista.zip (Lista.map Product_Type.fst field_e_list) ep_list),
+   (i2, (CheckRecord wt1d, ok1))))
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_undef, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_reg _, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_string, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_exception, _)))))))
+                                -> Predicate.bot_pred
+                              | (_, (_, (_,
+  (_, (_, (SyntaxPED.Ep_record (_, _),
+            SyntaxVCT.T_refined_type
+              (SyntaxVCT.VIndex, SyntaxVCT.B_finite_set _, _)))))))
+                                -> Predicate.bot_pred
                               | (_, (_, (_,
   (_, (_, (SyntaxPED.Ep_record_update (_, _, _), _))))))
                                 -> Predicate.bot_pred
@@ -5092,16 +5700,22 @@ _))))))
                           (fun (i1, (theta,
                                       (phi, (gamma, (delta, (ep, tau_2))))))
                             -> Predicate.bind
-                                 (infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o i1 theta phi
-                                   gamma delta ep)
-                                 (fun (tau_1,
-(_, (klist, (epa, (i2, (wt1, ok1))))))
-                                   -> Predicate.bind
-(subtype_i_i_i_i_i_o_o (get_loc (SyntaxPED.annot_e ep)) theta
-  (TypingUtils.g_cons3 gamma [klist]) tau_1 tau_2)
-(fun (wt2, ok2) ->
-  Predicate.single
-    (epa, (i2, (CheckSubtype (wt1, wt2), plus ok1 ok2))))))))))))))))
+                                 (ContextsPiDelta.eq_o_i
+                                   (Debug.trace "check_e_subtypeI"))
+                                 (fun _ ->
+                                   Predicate.bind
+                                     (infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o i1 theta
+                                       phi gamma delta ep)
+                                     (fun (tau_1,
+    (_, (klist, (epa, (i2, (wt1, ok1))))))
+                                       -> Predicate.bind
+    (TypingDeclFailRulesVP.subtype_i_i_i_i_i_o_o
+      (TypingDeclFailRulesVP.get_loc (SyntaxPED.annot_e ep)) theta
+      (TypingUtils.g_cons3 gamma [klist]) tau_1 tau_2)
+    (fun (wt2, ok2) ->
+      Predicate.single
+        (epa, (i2, (CheckSubtype (wt1, wt2),
+                     TypingDeclFailRulesVP.plus ok1 ok2)))))))))))))))))
 and check_e_list_i_i_i_i_i_i_i_o_o_o_o_o
   xa xb xc xd xe xf xg =
     Predicate.sup_pred
@@ -5109,7 +5723,8 @@ and check_e_list_i_i_i_i_i_i_i_o_o_o_o_o
         (fun a ->
           (match a
             with (i, (_, (_, (gamma, (_, ([], [])))))) ->
-              Predicate.single (gamma, ([], (i, ([], OK))))
+              Predicate.single
+                (gamma, ([], (i, ([], TypingDeclFailRulesVP.OK))))
             | (_, (_, (_, (_, (_, ([], _ :: _)))))) -> Predicate.bot_pred
             | (_, (_, (_, (_, (_, (_ :: _, _)))))) -> Predicate.bot_pred)))
       (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, (xe, (xf, xg)))))))
@@ -5129,7 +5744,9 @@ and check_e_list_i_i_i_i_i_i_i_o_o_o_o_o
                          Predicate.single
                            (gammaa,
                              (epa :: ep_lista,
-                               (i3, (wt1c :: wt2c, plus ok1 ok2)))))))))
+                               (i3, (wt1c :: wt2c,
+                                      TypingDeclFailRulesVP.plus ok1
+ok2)))))))))
 and infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o
   xa xb xc xd xe xf =
     Predicate.sup_pred
@@ -5139,7 +5756,9 @@ and infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o
             with (_, (_, (_, (_, (_, SyntaxPED.Ep_block (_, _)))))) ->
               Predicate.bot_pred
             | (i1, (theta, (_, (gamma, (_, SyntaxPED.Ep_val (loc, vp)))))) ->
-              Predicate.bind (infer_v_i_i_i_o_o_i theta gamma vp OK)
+              Predicate.bind
+                (TypingDeclFailRulesVP.infer_v_i_i_i_o_o_i theta gamma vp
+                  TypingDeclFailRulesVP.OK)
                 (fun (SyntaxVCT.T_refined_type (zp, bp, cp), trb) ->
                   Predicate.single
                     (SyntaxVCT.T_refined_type (zp, bp, cp),
@@ -5147,7 +5766,8 @@ and infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o
                                    (TypingUtils.upd_t loc
                                       (SyntaxVCT.T_refined_type (zp, bp, cp)),
                                      vp),
-                                  (i1, (InferVal trb, OK)))))))
+                                  (i1, (InferVal trb,
+ TypingDeclFailRulesVP.OK)))))))
             | (_, (_, (_, (_, (_, SyntaxPED.Ep_mvar (_, _)))))) ->
               Predicate.bot_pred
             | (_, (_, (_, (_, (_, SyntaxPED.Ep_bop (_, _, _, _)))))) ->
@@ -5260,14 +5880,14 @@ and infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o
                 Predicate.bot_pred
               | (i1, (theta, (_, (_, (_, SyntaxPED.Ep_ref (loc, idd)))))) ->
                 Predicate.bind
-                  (UnifyType.eq_o_i
+                  (ContextsPiDelta.eq_o_i
                     (ContextsPiDelta.lookup_register theta
                       (SyntaxVCT.VNamed idd)))
                   (fun aa ->
                     (match aa with None -> Predicate.bot_pred
                       | Some t ->
                         Predicate.bind
-                          (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i1))
+                          (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i1))
                           (fun (i2, xpa) ->
                             Predicate.single
                               (SyntaxVCT.T_refined_type
@@ -5281,7 +5901,8 @@ and infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o
   (SyntaxVCT.T_refined_type
     (SyntaxVCT.VIndex, SyntaxVCT.B_reg t, SyntaxVCT.C_true)),
  idd),
-                                      (i2, (NullTr, OK)))))))))
+                                      (i2,
+(NullTr, TypingDeclFailRulesVP.OK)))))))))
               | (_, (_, (_, (_, (_, SyntaxPED.Ep_throw (_, _)))))) ->
                 Predicate.bot_pred
               | (_, (_, (_, (_, (_, SyntaxPED.Ep_try (_, _, _)))))) ->
@@ -5318,13 +5939,14 @@ and infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o
                          delta ep)
                        (fun (t2, (vp, (klist, (epa, (i2, (wt1, ok1)))))) ->
                          Predicate.bind
-                           (subtype_i_i_i_i_i_o_o (get_loc loc) theta
+                           (TypingDeclFailRulesVP.subtype_i_i_i_i_i_o_o
+                             (TypingDeclFailRulesVP.get_loc loc) theta
                              (TypingUtils.g_cons3 gamma [klist]) t2 t1)
                            (fun (_, ok2) ->
                              Predicate.single
                                (t2, (vp, (klist,
    (SyntaxPED.Ep_cast (TypingUtils.upd_t loc t2, t1, epa),
-     (i2, (wt1, plus ok1 ok2))))))))
+     (i2, (wt1, TypingDeclFailRulesVP.plus ok1 ok2))))))))
                 | (_, (_, (_, (_, (_, SyntaxPED.Ep_app (_, _, _)))))) ->
                   Predicate.bot_pred
                 | (_, (_, (_, (_, (_, SyntaxPED.Ep_tuple (_, _)))))) ->
@@ -5384,10 +6006,10 @@ and infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o
                     Predicate.bot_pred
                   | (i1, (_, (_, (_, (delta, SyntaxPED.Ep_mvar (loc, up)))))) ->
                     Predicate.bind
-                      (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i1))
+                      (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i1))
                       (fun (i2, xpa) ->
                         Predicate.bind
-                          (UnifyType.eq_o_i
+                          (ContextsPiDelta.eq_o_i
                             (ContextsPiDelta.lookup_mvar delta up))
                           (fun aa ->
                             (match aa with None -> Predicate.bot_pred
@@ -5396,10 +6018,10 @@ and infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o
                                   (SyntaxVCT.T_refined_type (zp, bp, cp),
                                     (SyntaxVCT.V_var xpa,
                                       ([(xpa,
-  (bp, SyntaxPED.subst_cp (SyntaxVCT.V_var xpa) zp cp))],
+  (bp, Subst.subst_cp (SyntaxVCT.V_var xpa) zp cp))],
 (SyntaxPED.Ep_mvar
    (TypingUtils.upd_t loc (SyntaxVCT.T_refined_type (zp, bp, cp)), up),
-  (i2, (NullTr, OK)))))))))
+  (i2, (NullTr, TypingDeclFailRulesVP.OK)))))))))
                   | (_, (_, (_, (_, (_, SyntaxPED.Ep_bop (_, _, _, _)))))) ->
                     Predicate.bot_pred
                   | (_, (_, (_, (_, (_, SyntaxPED.Ep_uop (_, _, _)))))) ->
@@ -5510,7 +6132,7 @@ SyntaxPED.Ep_field_access (_, _, _))))))
                       Predicate.bot_pred
                     | (i1, (_, (_, (_, (_, SyntaxPED.Ep_sizeof (loc, cep))))))
                       -> Predicate.bind
-                           (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i1))
+                           (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i1))
                            (fun (i2, xpa) ->
                              Predicate.single
                                (SyntaxVCT.T_refined_type
@@ -5529,7 +6151,8 @@ cep)),
        SyntaxVCT.C_eq
          (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex), cep))),
   cep),
-                                       (i2, (NullTr, OK)))))))
+                                       (i2,
+ (NullTr, TypingDeclFailRulesVP.OK)))))))
                     | (_, (_, (_, (_, (_, SyntaxPED.Ep_exit (_, _)))))) ->
                       Predicate.bot_pred
                     | (_, (_, (_, (_, (_, SyntaxPED.Ep_return (_, _)))))) ->
@@ -5619,7 +6242,8 @@ cep)),
                       | (i1, (_, (_, (_, (_,
    SyntaxPED.Ep_constraint (loc, cp))))))
                         -> Predicate.bind
-                             (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i1))
+                             (ContextsPiDelta.eq_o_i
+                               (TypingUtils.mk_fresh_i i1))
                              (fun (i2, xpa) ->
                                Predicate.single
                                  (SyntaxVCT.T_refined_type
@@ -5630,7 +6254,7 @@ cep)),
   (TypingUtils.upd_t loc
      (SyntaxVCT.T_refined_type (SyntaxVCT.VIndex, SyntaxVCT.B_bool, cp)),
     cp),
- (i2, (NullTr, OK))))))))))
+ (i2, (NullTr, TypingDeclFailRulesVP.OK))))))))))
                 (Predicate.sup_pred
                   (Predicate.bind
                     (Predicate.single (xa, (xb, (xc, (xd, (xe, xf))))))
@@ -5654,21 +6278,27 @@ cep)),
                                  (phi, (gamma,
  (delta, SyntaxPED.Ep_app (loc, fp, ep))))))
                           -> Predicate.bind
-                               (UnifyType.eq_o_i
+                               (ContextsPiDelta.eq_o_i
                                  (TypingUtils.lookup_fun_type theta phi fp))
                                (fun aa ->
                                  (match aa with None -> Predicate.bot_pred
                                    | Some ap_list ->
                                      Predicate.bind
-                                       (infer_app_i_i_i_i_i_i_i_i_o_o_o_o_o_o_o_o_o
- i1 (get_loc loc) theta phi gamma delta ap_list ep)
-                                       (fun
- (tau_1, (vp1, (klist, (fpa, (_, (epa, (i2, (trc, ok)))))))) ->
- Predicate.single
-   (tau_1,
-     (vp1, (klist,
-             (SyntaxPED.Ep_app (TypingUtils.upd_t loc tau_1, fpa, epa),
-               (i2, (trc, ok)))))))))
+                                       (ContextsPiDelta.eq_o_i
+ (Debug.trace
+   ("infer_e_appI |ap_list|=" ^
+     Stringa.implode
+       (Utils.string_of_int (Arith.int_of_nat (Lista.size_list ap_list))))))
+                                       (fun _ ->
+ Predicate.bind
+   (infer_app_i_i_i_i_i_i_i_i_o_o_o_o_o_o_o_o_o i1
+     (TypingDeclFailRulesVP.get_loc loc) theta phi gamma delta ap_list ep)
+   (fun (tau_1, (vp1, (klist, (fpa, (_, (epa, (i2, (trc, ok)))))))) ->
+     Predicate.single
+       (tau_1,
+         (vp1, (klist,
+                 (SyntaxPED.Ep_app (TypingUtils.upd_t loc tau_1, fpa, epa),
+                   (i2, (trc, ok))))))))))
                         | (_, (_, (_, (_, (_, SyntaxPED.Ep_tuple (_, _)))))) ->
                           Predicate.bot_pred
                         | (_, (_, (_, (_, (_, SyntaxPED.Ep_if (_, _, _, _))))))
@@ -5745,7 +6375,7 @@ cep)),
                                   (phi, (_,
   (_, SyntaxPED.Ep_app (loc, fp, _))))))
                             -> Predicate.bind
-                                 (UnifyType.eq_i_i
+                                 (ContextsPiDelta.eq_i_i
                                    (Option.equal_option
                                      (Lista.equal_list
                                        (Product_Type.equal_prod
@@ -5767,8 +6397,10 @@ cep)),
                       (SyntaxVCT.VIndex, SyntaxVCT.B_unit, SyntaxVCT.C_false)),
                    SyntaxVCT.V_lit SyntaxVCT.L_unit)),
         (i, (NullTr,
-              Error (CheckFail
-                      ("unknown function: " ^ s_of fp, get_loc loc)))))))))
+              TypingDeclFailRulesVP.Error
+                (TypingDeclFailRulesVP.CheckFail
+                  ("unknown function: " ^ TypingDeclFailRulesVP.s_of fp,
+                    TypingDeclFailRulesVP.get_loc loc)))))))))
                           | (_, (_, (_, (_, (_, SyntaxPED.Ep_tuple (_, _))))))
                             -> Predicate.bot_pred
                           | (_, (_, (_, (_,
@@ -5855,7 +6487,7 @@ cep)),
                                      (phi, (gamma,
      (delta, SyntaxPED.Ep_tuple (loc, ep_list))))))
                               -> Predicate.bind
-                                   (UnifyType.eq_o_i
+                                   (ContextsPiDelta.eq_o_i
                                      (TypingUtils.mk_fresh_i i1))
                                    (fun (i2, xpa) ->
                                      Predicate.bind
@@ -5863,32 +6495,38 @@ cep)),
  i2 theta phi gamma delta ep_list)
                                        (fun aa ->
  (match aa
-   with (tp_list, (xp_lista, (klist, (ep_lista, (i3, (trd, OK)))))) ->
-     Predicate.bind (UnifyType.eq_o_i (Lista.map UnifyType.b_of tp_list))
-       (fun x ->
-         Predicate.single
-           (SyntaxVCT.T_refined_type
-              (SyntaxVCT.VIndex, SyntaxVCT.B_tuple x,
-                SyntaxVCT.C_eq
-                  (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex),
-                    SyntaxVCT.CE_val (SyntaxVCT.V_tuple xp_lista))),
-             (SyntaxVCT.V_var xpa,
-               ((xpa, (SyntaxVCT.B_tuple x,
-                        SyntaxVCT.C_eq
-                          (SyntaxVCT.CE_val (SyntaxVCT.V_var xpa),
-                            SyntaxVCT.CE_val (SyntaxVCT.V_tuple xp_lista)))) ::
-                  klist,
-                 (SyntaxPED.Ep_tuple
-                    (TypingUtils.upd_t loc
-                       (SyntaxVCT.T_refined_type
-                         (SyntaxVCT.VIndex, SyntaxVCT.B_tuple x,
+   with (tp_list,
+          (xp_lista,
+            (klist, (ep_lista, (i3, (trd, TypingDeclFailRulesVP.OK))))))
+     -> Predicate.bind
+          (ContextsPiDelta.eq_o_i (Lista.map UnifyType.b_of tp_list))
+          (fun x ->
+            Predicate.single
+              (SyntaxVCT.T_refined_type
+                 (SyntaxVCT.VIndex, SyntaxVCT.B_tuple x,
+                   SyntaxVCT.C_eq
+                     (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex),
+                       SyntaxVCT.CE_val (SyntaxVCT.V_tuple xp_lista))),
+                (SyntaxVCT.V_var xpa,
+                  ((xpa, (SyntaxVCT.B_tuple x,
                            SyntaxVCT.C_eq
-                             (SyntaxVCT.CE_val
-                                (SyntaxVCT.V_var SyntaxVCT.VIndex),
-                               SyntaxVCT.CE_val (SyntaxVCT.V_tuple xp_lista)))),
-                      ep_lista),
-                   (i3, (InferTuple trd, OK)))))))
-   | (_, (_, (_, (_, (_, (_, Error _)))))) -> Predicate.bot_pred)))
+                             (SyntaxVCT.CE_val (SyntaxVCT.V_var xpa),
+                               SyntaxVCT.CE_val
+                                 (SyntaxVCT.V_tuple xp_lista)))) ::
+                     klist,
+                    (SyntaxPED.Ep_tuple
+                       (TypingUtils.upd_t loc
+                          (SyntaxVCT.T_refined_type
+                            (SyntaxVCT.VIndex, SyntaxVCT.B_tuple x,
+                              SyntaxVCT.C_eq
+                                (SyntaxVCT.CE_val
+                                   (SyntaxVCT.V_var SyntaxVCT.VIndex),
+                                  SyntaxVCT.CE_val
+                                    (SyntaxVCT.V_tuple xp_lista)))),
+                         ep_lista),
+                      (i3, (InferTuple trd, TypingDeclFailRulesVP.OK)))))))
+   | (_, (_, (_, (_, (_, (_, TypingDeclFailRulesVP.Error _)))))) ->
+     Predicate.bot_pred)))
                             | (_, (_, (_,
 (_, (_, SyntaxPED.Ep_if (_, _, _, _))))))
                               -> Predicate.bot_pred
@@ -6001,10 +6639,10 @@ cep)),
                                      (fun (_,
     (order, (bp, (_, (xp_lista, (klist_list, (ep_lista, (i2, (trsa, ok)))))))))
                                        -> Predicate.bind
-    (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i2))
+    (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i2))
     (fun (i3, xpa) ->
       Predicate.bind
-        (UnifyType.eq_o_i
+        (ContextsPiDelta.eq_o_i
           (SyntaxVCT.T_refined_type
             (SyntaxVCT.VIndex, SyntaxVCT.B_vec (order, bp),
               SyntaxVCT.C_eq
@@ -6139,7 +6777,7 @@ cep)),
                                 | (i1, (theta,
  (phi, (gamma, (delta, SyntaxPED.Ep_field_access (loc, ep, field))))))
                                   -> Predicate.bind
-                                       (UnifyType.eq_o_i
+                                       (ContextsPiDelta.eq_o_i
  (ContextsPiDelta.lookup_field_record_type theta field))
                                        (fun aa ->
  (match aa with None -> Predicate.bot_pred
@@ -6147,10 +6785,10 @@ cep)),
      Predicate.bind
        (infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o i1 theta phi gamma delta ep)
        (fun (tau_2, (vp1, (klist, (epa, (i2, (wt1, ok1)))))) ->
-         Predicate.bind (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i2))
+         Predicate.bind (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i2))
            (fun (i3, xp2) ->
              Predicate.bind
-               (UnifyType.eq_o_i
+               (ContextsPiDelta.eq_o_i
                  (SyntaxVCT.T_refined_type
                    (SyntaxVCT.VIndex, bp,
                      SyntaxVCT.C_eq
@@ -6158,7 +6796,8 @@ cep)),
                          SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex)))))
                (fun x ->
                  Predicate.bind
-                   (subtype_i_i_i_i_i_o_o (get_loc loc) theta
+                   (TypingDeclFailRulesVP.subtype_i_i_i_i_i_o_o
+                     (TypingDeclFailRulesVP.get_loc loc) theta
                      (TypingUtils.g_cons3 gamma [klist]) tau_2 tau_1)
                    (fun (_, ok2) ->
                      Predicate.single
@@ -6169,7 +6808,8 @@ cep)),
                                 klist,
                                (SyntaxPED.Ep_field_access
                                   (TypingUtils.upd_t loc x, epa, field),
-                                 (i3, (wt1, plus ok1 ok2))))))))))))
+                                 (i3, (wt1,
+TypingDeclFailRulesVP.plus ok1 ok2))))))))))))
                                 | (_, (_,
 (_, (_, (_, SyntaxPED.Ep_case (_, _, _))))))
                                   -> Predicate.bot_pred
@@ -6245,7 +6885,7 @@ cep)),
                                   | (i1, (theta,
    (phi, (gamma, (delta, SyntaxPED.Ep_loop (loc, loop, ep1, ep2))))))
                                     -> Predicate.bind
- (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i1))
+ (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i1))
  (fun (i2, xpa) ->
    Predicate.bind
      (infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o i2 theta phi gamma delta ep1)
@@ -6280,7 +6920,8 @@ cep)),
                                   (SyntaxVCT.VIndex, SyntaxVCT.B_unit,
                                     SyntaxVCT.C_true)),
                                loop, ep1a, ep2a),
-                            (i4, (InferLoop (wt1, wt2a), plus ok1 ok2)))))))
+                            (i4, (InferLoop (wt1, wt2a),
+                                   TypingDeclFailRulesVP.plus ok1 ok2)))))))
          | (SyntaxVCT.T_refined_type (SyntaxVCT.VIndex, SyntaxVCT.B_bit, _), _)
            -> Predicate.bot_pred
          | (SyntaxVCT.T_refined_type (SyntaxVCT.VIndex, SyntaxVCT.B_unit, _), _)
@@ -6447,7 +7088,7 @@ cep)),
    (fun (SyntaxVCT.T_refined_type (z, b, c),
           (_, (klist, (ep, (i2, (wt1, ok1))))))
      -> Predicate.bind
-          (UnifyType.eq_o_i
+          (ContextsPiDelta.eq_o_i
             (ContextsPiDelta.lookup_types_for b
               (Lista.map Product_Type.fst field_e_list)))
           (fun aa ->
@@ -6464,12 +7105,12 @@ cep)),
                       b_list))
                   (fun (_, (ep_list, (i3, (wt2c, ok2)))) ->
                     Predicate.bind
-                      (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i3))
+                      (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i3))
                       (fun (i4, x) ->
                         Predicate.single
                           (SyntaxVCT.T_refined_type (z, b, c),
                             (SyntaxVCT.V_var x,
-                              ((x, (b, SyntaxPED.subst_cp (SyntaxVCT.V_var x) z
+                              ((x, (b, Subst.subst_cp (SyntaxVCT.V_var x) z
  c)) ::
                                  klist,
                                 (SyntaxPED.Ep_record_update
@@ -6478,7 +7119,7 @@ cep)),
                                      ep, Lista.zip
    (Lista.map Product_Type.fst field_e_list) ep_list),
                                   (i4, (InferRecordUpdate (wt1, wt2c),
- plus ok1 ok2)))))))))))
+ TypingDeclFailRulesVP.plus ok1 ok2)))))))))))
                                     | (_,
 (_, (_, (_, (_, SyntaxPED.Ep_field_access (_, _, _))))))
                                       -> Predicate.bot_pred
@@ -6552,21 +7193,23 @@ Predicate.bot_pred
                                       |
 (i1, (theta, (phi, (gamma, (delta, SyntaxPED.Ep_vec (loc, e_list)))))) ->
 Predicate.bind
-  (UnifyType.eq_o_i (Arith.integer_of_nat (Lista.size_list e_list)))
+  (ContextsPiDelta.eq_o_i (Arith.integer_of_nat (Lista.size_list e_list)))
   (fun x ->
-    Predicate.bind (UnifyType.eq_o_i (Contexts.single_base [SyntaxVCT.B_bit]))
+    Predicate.bind
+      (ContextsPiDelta.eq_o_i (Contexts.single_base [SyntaxVCT.B_bit]))
       (fun aa ->
         (match aa with None -> Predicate.bot_pred
           | Some bp ->
-            Predicate.bind (UnifyType.eq_o_i (ContextsPiDelta.theta_d theta))
+            Predicate.bind
+              (ContextsPiDelta.eq_o_i (ContextsPiDelta.theta_d theta))
               (fun ab ->
                 (match ab with None -> Predicate.bot_pred
                   | Some order ->
                     Predicate.bind
-                      (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i1))
+                      (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i1))
                       (fun (i2, xpa) ->
                         Predicate.bind
-                          (UnifyType.eq_o_i
+                          (ContextsPiDelta.eq_o_i
                             (SyntaxVCT.T_refined_type
                               (SyntaxVCT.VIndex, SyntaxVCT.B_vec (order, bp),
                                 SyntaxVCT.C_eq
@@ -6668,57 +7311,65 @@ with (_, (_, (_, (_, (_, SyntaxPED.Ep_block (_, _)))))) -> Predicate.bot_pred
 | (_, (_, (_, (_, (_, SyntaxPED.Ep_return (_, _)))))) -> Predicate.bot_pred
 | (_, (_, (_, (_, (_, SyntaxPED.Ep_ref (_, _)))))) -> Predicate.bot_pred
 | (i1, (theta, (phi, (gamma, (delta, SyntaxPED.Ep_throw (loc, ep)))))) ->
-  Predicate.bind (infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o i1 theta phi gamma delta ep)
-    (fun aa ->
-      (match aa
-        with (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_var _, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_tid _, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_int, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_bool, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_bit, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_unit, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_real, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_vec (_, _), _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_list _, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_tuple _, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_union (_, _), _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_record _, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_undef, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_reg _, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_string, _), _) ->
-          Predicate.bot_pred
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_exception, _),
-            (_, (klist, (epa, (i2, (wt1, ok1))))))
-          -> Predicate.bind (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i2))
-               (fun (i3, xpa) ->
-                 Predicate.single
-                   (SyntaxVCT.T_refined_type
-                      (SyntaxVCT.VIndex, SyntaxVCT.B_unit, SyntaxVCT.C_true),
-                     (SyntaxVCT.V_var xpa,
-                       ((xpa, (SyntaxVCT.B_unit, SyntaxVCT.C_true)) :: klist,
-                         (SyntaxPED.Ep_throw
-                            (TypingUtils.upd_t loc
-                               (SyntaxVCT.T_refined_type
+  Predicate.bind (ContextsPiDelta.eq_o_i "exception")
+    (fun x ->
+      Predicate.bind
+        (infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o i1 theta phi gamma delta ep)
+        (fun aa ->
+          (match aa
+            with (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_var _, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_tid _, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_int, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_bool, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_bit, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_unit, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_real, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_vec (_, _), _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_list _, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_tuple _, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_union (idda, _), _),
+                (_, (klist, (epa, (i2, (wt1, ok1))))))
+              -> (if ((x : string) = idda)
+                   then Predicate.bind
+                          (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i2))
+                          (fun (i3, xpa) ->
+                            Predicate.single
+                              (SyntaxVCT.T_refined_type
                                  (SyntaxVCT.VIndex, SyntaxVCT.B_unit,
-                                   SyntaxVCT.C_true)),
-                              epa),
-                           (i3, (wt1, ok1)))))))
-        | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_finite_set _, _), _) ->
-          Predicate.bot_pred))
+                                   SyntaxVCT.C_true),
+                                (SyntaxVCT.V_var xpa,
+                                  ((xpa, (SyntaxVCT.B_unit,
+   SyntaxVCT.C_true)) ::
+                                     klist,
+                                    (SyntaxPED.Ep_throw
+                                       (TypingUtils.upd_t loc
+  (SyntaxVCT.T_refined_type
+    (SyntaxVCT.VIndex, SyntaxVCT.B_unit, SyntaxVCT.C_true)),
+ epa),
+                                      (i3, (wt1, ok1)))))))
+                   else Predicate.bot_pred)
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_record _, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_undef, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_reg _, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_string, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_exception, _), _) ->
+              Predicate.bot_pred
+            | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_finite_set _, _), _) ->
+              Predicate.bot_pred)))
 | (_, (_, (_, (_, (_, SyntaxPED.Ep_try (_, _, _)))))) -> Predicate.bot_pred
 | (_, (_, (_, (_, (_, SyntaxPED.Ep_assert (_, _, _)))))) -> Predicate.bot_pred
 | (_, (_, (_, (_, (_, SyntaxPED.Ep_var (_, _, _, _)))))) -> Predicate.bot_pred
@@ -6765,8 +7416,10 @@ with (_, (_, (_, (_, (_, SyntaxPED.Ep_block (_, _)))))) -> Predicate.bot_pred
         (SyntaxVCT.V_var SyntaxVCT.VIndex,
           ([], (ep_null,
                  (i1, (NullTr,
-                        Error (CheckFail
-                                ("Not Implemented: return", get_loc loc))))))))
+                        TypingDeclFailRulesVP.Error
+                          (TypingDeclFailRulesVP.CheckFail
+                            ("Not Implemented: return",
+                              TypingDeclFailRulesVP.get_loc loc))))))))
   | (_, (_, (_, (_, (_, SyntaxPED.Ep_ref (_, _)))))) -> Predicate.bot_pred
   | (_, (_, (_, (_, (_, SyntaxPED.Ep_throw (_, _)))))) -> Predicate.bot_pred
   | (_, (_, (_, (_, (_, SyntaxPED.Ep_try (_, _, _)))))) -> Predicate.bot_pred
@@ -6816,8 +7469,10 @@ with (_, (_, (_, (_, (_, SyntaxPED.Ep_block (_, _)))))) -> Predicate.bot_pred
           (SyntaxVCT.V_var SyntaxVCT.VIndex,
             ([], (ep_null,
                    (i1, (NullTr,
-                          Error (CheckFail
-                                  ("Not Implemented: exit", get_loc loc))))))))
+                          TypingDeclFailRulesVP.Error
+                            (TypingDeclFailRulesVP.CheckFail
+                              ("Not Implemented: exit",
+                                TypingDeclFailRulesVP.get_loc loc))))))))
     | (_, (_, (_, (_, (_, SyntaxPED.Ep_return (_, _)))))) -> Predicate.bot_pred
     | (_, (_, (_, (_, (_, SyntaxPED.Ep_ref (_, _)))))) -> Predicate.bot_pred
     | (_, (_, (_, (_, (_, SyntaxPED.Ep_throw (_, _)))))) -> Predicate.bot_pred
@@ -6885,8 +7540,10 @@ with (_, (_, (_, (_, (_, SyntaxPED.Ep_block (_, _)))))) -> Predicate.bot_pred
             (SyntaxVCT.V_var SyntaxVCT.VIndex,
               ([], (ep_null,
                      (i1, (NullTr,
-                            Error (CheckFail
-                                    ("Not Implemented: try", get_loc loc))))))))
+                            TypingDeclFailRulesVP.Error
+                              (TypingDeclFailRulesVP.CheckFail
+                                ("Not Implemented: try",
+                                  TypingDeclFailRulesVP.get_loc loc))))))))
       | (_, (_, (_, (_, (_, SyntaxPED.Ep_assert (_, _, _)))))) ->
         Predicate.bot_pred
       | (_, (_, (_, (_, (_, SyntaxPED.Ep_var (_, _, _, _)))))) ->
@@ -6895,244 +7552,101 @@ with (_, (_, (_, (_, (_, SyntaxPED.Ep_block (_, _)))))) -> Predicate.bot_pred
         Predicate.bot_pred
       | (_, (_, (_, (_, (_, SyntaxPED.Ep_constraint (_, _)))))) ->
         Predicate.bot_pred)))
-(Predicate.sup_pred
-  (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, (xe, xf))))))
-    (fun a ->
-      (match a
-        with (_, (_, (_, (_, (_, SyntaxPED.Ep_block (_, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_val (_, _)))))) -> Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_mvar (_, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_bop (_, _, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_uop (_, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_proj (_, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_cast (_, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_app (_, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_tuple (_, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_if (_, _, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_loop (_, _, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_for (_, _, _, _, _, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_vec (_, _)))))) -> Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_concat (_, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_list (_, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_cons (_, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_record (_, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_record_update (_, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_field_access (_, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_case (_, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_let (_, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_sizeof (_, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_exit (_, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_return (_, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_ref (_, _)))))) -> Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_throw (_, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_try (_, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_assert (_, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_var (_, _, _, _)))))) ->
-          Predicate.bot_pred
-        | (_, (_, (_, (_, (_, SyntaxPED.Ep_assign (_, _, _)))))) ->
-          Predicate.bot_pred
-        | (i1, (_, (_, (_, (_, SyntaxPED.Ep_constraint (loc, _)))))) ->
-          Predicate.single
-            (SyntaxVCT.T_refined_type
-               (SyntaxVCT.VIndex, SyntaxVCT.B_unit, SyntaxVCT.C_false),
-              (SyntaxVCT.V_var SyntaxVCT.VIndex,
-                ([], (ep_null,
-                       (i1, (NullTr,
-                              Error (CheckFail
-                                      ("Not Implemented: constraint",
-get_loc loc)))))))))))
-  (Predicate.sup_pred
-    (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, (xe, xf))))))
-      (fun a ->
-        (match a
-          with (_, (_, (_, (_, (_, SyntaxPED.Ep_block (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_val (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_mvar (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_bop (_, _, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_uop (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_proj (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_cast (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_app (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_tuple (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_if (_, _, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_loop (_, _, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_for (_, _, _, _, _, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_vec (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_concat (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_list (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_cons (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_record (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_record_update (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_field_access (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_case (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_let (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_sizeof (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_exit (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_return (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_ref (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_throw (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_try (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (i1, (_, (_, (_, (_, SyntaxPED.Ep_assert (loc, _, _)))))) ->
-            Predicate.single
-              (SyntaxVCT.T_refined_type
-                 (SyntaxVCT.VIndex, SyntaxVCT.B_unit, SyntaxVCT.C_false),
-                (SyntaxVCT.V_var SyntaxVCT.VIndex,
-                  ([], (ep_null,
-                         (i1, (NullTr,
-                                Error (CheckFail
-("Not Implemented: assert", get_loc loc))))))))
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_var (_, _, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_assign (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_constraint (_, _)))))) ->
-            Predicate.bot_pred)))
-    (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, (xe, xf))))))
-      (fun a ->
-        (match a
-          with (_, (_, (_, (_, (_, SyntaxPED.Ep_block (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_val (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_mvar (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_bop (_, _, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_uop (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_proj (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_cast (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_app (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_tuple (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_if (_, _, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_loop (_, _, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_for (_, _, _, _, _, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_vec (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_concat (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_list (_, _)))))) ->
-            Predicate.bot_pred
-          | (i1, (_, (_, (_, (_, SyntaxPED.Ep_cons (loc, _, _)))))) ->
-            Predicate.single
-              (SyntaxVCT.T_refined_type
-                 (SyntaxVCT.VIndex, SyntaxVCT.B_unit, SyntaxVCT.C_false),
-                (SyntaxVCT.V_var SyntaxVCT.VIndex,
-                  ([], (ep_null,
-                         (i1, (NullTr,
-                                Error (CheckFail
-("Not Implemented: cons", get_loc loc))))))))
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_record (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_record_update (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_field_access (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_case (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_let (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_sizeof (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_exit (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_return (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_ref (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_throw (_, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_try (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_assert (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_var (_, _, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_assign (_, _, _)))))) ->
-            Predicate.bot_pred
-          | (_, (_, (_, (_, (_, SyntaxPED.Ep_constraint (_, _)))))) ->
-            Predicate.bot_pred))))))))))))))))))))))
-and check_letbind_i_i_i_i_i_i_o_o_o_o_o
+(Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, (xe, xf))))))
+  (fun a ->
+    (match a
+      with (_, (_, (_, (_, (_, SyntaxPED.Ep_block (_, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_val (_, _)))))) -> Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_mvar (_, _)))))) -> Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_bop (_, _, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_uop (_, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_proj (_, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_cast (_, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_app (_, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_tuple (_, _)))))) -> Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_if (_, _, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_loop (_, _, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_for (_, _, _, _, _, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_vec (_, _)))))) -> Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_concat (_, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_list (_, _)))))) -> Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_cons (_, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_record (_, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_record_update (_, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_field_access (_, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_case (_, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_let (_, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_sizeof (_, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_exit (_, _)))))) -> Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_return (_, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_ref (_, _)))))) -> Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_throw (_, _)))))) -> Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_try (_, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_assert (_, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_var (_, _, _, _)))))) ->
+        Predicate.bot_pred
+      | (_, (_, (_, (_, (_, SyntaxPED.Ep_assign (_, _, _)))))) ->
+        Predicate.bot_pred
+      | (i1, (_, (_, (_, (_, SyntaxPED.Ep_constraint (loc, _)))))) ->
+        Predicate.single
+          (SyntaxVCT.T_refined_type
+             (SyntaxVCT.VIndex, SyntaxVCT.B_unit, SyntaxVCT.C_false),
+            (SyntaxVCT.V_var SyntaxVCT.VIndex,
+              ([], (ep_null,
+                     (i1, (NullTr,
+                            TypingDeclFailRulesVP.Error
+                              (TypingDeclFailRulesVP.CheckFail
+                                ("Not Implemented: constraint",
+                                  TypingDeclFailRulesVP.get_loc
+                                    loc))))))))))))))))))))))))))))
+and infer_letbind_i_i_i_i_i_i_o_o_o_o_o
   xa xb xc xd xe xf =
     Predicate.sup_pred
       (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, (xe, xf))))))
         (fun (i1, (theta,
                     (phi, (gamma, (delta, SyntaxPED.LBp_val (loc, patp, ep))))))
-          -> Predicate.bind
-               (infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o i1 theta phi gamma delta ep)
-               (fun (tau, (xp1, (klist1, (epa, (i2, (wt1, ok1)))))) ->
+          -> Predicate.bind (Predicate.if_pred (is_not_ptyp patp))
+               (fun () ->
                  Predicate.bind
-                   (check_pat_i_i_i_i_i_i_o_o_o_o_o_o i2 theta
-                     (TypingUtils.g_cons3 gamma [klist1]) patp tau xp1)
-                   (fun (klist2, (yp_list, (patpa, (i3, (wt2f, ok2))))) ->
+                   (ContextsPiDelta.eq_o_i (Debug.trace "infer_letbind_inferI"))
+                   (fun _ ->
                      Predicate.bind
-                       (Predicate.if_pred (Contexts.check_vars gamma yp_list))
-                       (fun () ->
-                         Predicate.single
-                           (Lista.concat [klist1; klist2],
-                             (SyntaxPED.LBp_val
-                                (TypingUtils.upd_t loc tau, patpa, epa),
-                               (i3, (LetBindInf (wt1, wt2f),
-                                      plus ok1 ok2)))))))))
+                       (infer_e_i_i_i_i_i_i_o_o_o_o_o_o_o i1 theta phi gamma
+                         delta ep)
+                       (fun (tau, (xp1, (klist1, (epa, (i2, (wt1, ok1)))))) ->
+                         Predicate.bind
+                           (TypingDeclFailRulesVP.check_pat_i_i_i_i_i_i_o_o_o_o_o_o
+                             i2 theta (TypingUtils.g_cons3 gamma [klist1]) patp
+                             tau xp1)
+                           (fun (klist2, (yp_list, (patpa, (i3, (wt2f, ok2)))))
+                             -> Predicate.bind
+                                  (Predicate.if_pred
+                                    (Contexts.check_vars gamma yp_list))
+                                  (fun () ->
+                                    Predicate.single
+                                      (Lista.concat [klist1; klist2],
+(SyntaxPED.LBp_val (TypingUtils.upd_t loc tau, patpa, epa),
+  (i3, (LetBindInf (wt1, wt2f), TypingDeclFailRulesVP.plus ok1 ok2)))))))))))
       (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, (xe, xf))))))
         (fun a ->
           (match a
@@ -7152,37 +7666,40 @@ and check_letbind_i_i_i_i_i_i_o_o_o_o_o
    (loca, SyntaxVCT.T_refined_type (zp, bp, cp), patp),
                                      ep))))))
               -> Predicate.bind
-                   (check_e_i_i_i_i_i_i_i_o_o_o_o i1 theta phi gamma
-                     ContextsPiDelta.emptyDEnv ep
-                     (SyntaxVCT.T_refined_type (zp, bp, cp)))
-                   (fun (epa, (i2, (wt1c, ok1))) ->
+                   (ContextsPiDelta.eq_o_i (Debug.trace "infer_letbind_checkI"))
+                   (fun _ ->
                      Predicate.bind
-                       (UnifyType.eq_o_i (TypingUtils.mk_fresh_i i2))
-                       (fun (i3, xpa) ->
+                       (check_e_i_i_i_i_i_i_i_o_o_o_o i1 theta phi gamma
+                         ContextsPiDelta.emptyDEnv ep
+                         (SyntaxVCT.T_refined_type (zp, bp, cp)))
+                       (fun (epa, (i2, (wt1c, ok1))) ->
                          Predicate.bind
-                           (check_pat_i_i_i_i_i_i_o_o_o_o_o_o i3 theta
-                             (Contexts.add_var gamma
-                               (xpa, Contexts.GEPair
-                                       (bp,
- SyntaxUtils.subst_x_cp cp zp (SyntaxVCT.V_var xpa))))
-                             patp (SyntaxVCT.T_refined_type (zp, bp, cp))
-                             (SyntaxVCT.V_var xpa))
-                           (fun (klist, (xp_list, (patpa, (i4, (wt2f, ok2)))))
-                             -> Predicate.bind
-                                  (Predicate.if_pred
-                                    (Contexts.check_vars gamma xp_list))
-                                  (fun () ->
-                                    Predicate.single
-                                      ((xpa,
- (bp, SyntaxUtils.subst_x_cp cp zp (SyntaxVCT.V_var xpa))) ::
- klist,
-(SyntaxPED.LBp_val
-   (TypingUtils.upd_t loc (SyntaxVCT.T_refined_type (zp, bp, cp)),
-     SyntaxPED.Pp_typ
-       (TypingUtils.upd_t loca (SyntaxVCT.T_refined_type (zp, bp, cp)),
-         SyntaxVCT.T_refined_type (zp, bp, cp), patpa),
-     epa),
-  (i4, (LetBindCheck (wt1c, wt2f), plus ok1 ok2))))))))
+                           (ContextsPiDelta.eq_o_i (TypingUtils.mk_fresh_i i2))
+                           (fun (i3, xpa) ->
+                             Predicate.bind
+                               (TypingDeclFailRulesVP.check_pat_i_i_i_i_i_i_o_o_o_o_o_o
+                                 i3 theta
+                                 (Contexts.add_var gamma
+                                   (xpa, Contexts.GEPair
+   (bp, SyntaxUtils.subst_x_cp cp zp (SyntaxVCT.V_var xpa))))
+                                 patp (SyntaxVCT.T_refined_type (zp, bp, cp))
+                                 (SyntaxVCT.V_var xpa))
+                               (fun (klist,
+                                      (xp_list, (patpa, (i4, (wt2f, ok2)))))
+                                 -> Predicate.bind
+                                      (Predicate.if_pred
+(Contexts.check_vars gamma xp_list))
+                                      (fun () ->
+Predicate.single
+  ((xpa, (bp, SyntaxUtils.subst_x_cp cp zp (SyntaxVCT.V_var xpa))) :: klist,
+    (SyntaxPED.LBp_val
+       (TypingUtils.upd_t loc (SyntaxVCT.T_refined_type (zp, bp, cp)),
+         SyntaxPED.Pp_typ
+           (TypingUtils.upd_t loca (SyntaxVCT.T_refined_type (zp, bp, cp)),
+             SyntaxVCT.T_refined_type (zp, bp, cp), patpa),
+         epa),
+      (i4, (LetBindCheck (wt1c, wt2f),
+             TypingDeclFailRulesVP.plus ok1 ok2)))))))))
             | (_, (_, (_, (_, (_, SyntaxPED.LBp_val
                                     (_, SyntaxPED.Pp_id (_, _), _))))))
               -> Predicate.bot_pred
@@ -7219,7 +7736,8 @@ and infer_e_list_i_i_i_i_i_i_o_o_o_o_o_o_o
         (fun a ->
           (match a
             with (i1, (_, (_, (_, (_, []))))) ->
-              Predicate.single ([], ([], ([], ([], (i1, ([], OK))))))
+              Predicate.single
+                ([], ([], ([], ([], (i1, ([], TypingDeclFailRulesVP.OK))))))
             | (_, (_, (_, (_, (_, _ :: _))))) -> Predicate.bot_pred)))
       (Predicate.sup_pred
         (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, (xe, xf))))))
@@ -7231,23 +7749,27 @@ and infer_e_list_i_i_i_i_i_i_o_o_o_o_o_o_o
                     ep)
                   (fun aa ->
                     (match aa
-                      with (tau, (vp, (klist1, (epa, (i2, (trc, OK)))))) ->
-                        Predicate.bind
-                          (infer_e_list_i_i_i_i_i_i_o_o_o_o_o_o_o i2 theta phi
-                            (TypingUtils.g_cons3 gamma [klist1]) delta ep_list)
-                          (fun ab ->
-                            (match ab
-                              with (tp_list,
-                                     (vp_list,
-                                       (klist2, (ep_lista, (i3, (trsa, OK))))))
-                                -> Predicate.single
-                                     (tau :: tp_list,
-                                       (vp :: vp_list,
- (Lista.concat [klist1; klist2], (epa :: ep_lista, (i3, (trc :: trsa, OK))))))
-                              | (_, (_, (_, (_, (_, (_, Error _)))))) ->
-                                Predicate.bot_pred))
-                      | (_, (_, (_, (_, (_, (_, Error _)))))) ->
-                        Predicate.bot_pred)))))
+                      with (tau, (vp, (klist1,
+(epa, (i2, (trc, TypingDeclFailRulesVP.OK))))))
+                        -> Predicate.bind
+                             (infer_e_list_i_i_i_i_i_i_o_o_o_o_o_o_o i2 theta
+                               phi (TypingUtils.g_cons3 gamma [klist1]) delta
+                               ep_list)
+                             (fun ab ->
+                               (match ab
+                                 with (tp_list,
+(vp_list, (klist2, (ep_lista, (i3, (trsa, TypingDeclFailRulesVP.OK))))))
+                                   -> Predicate.single
+(tau :: tp_list,
+  (vp :: vp_list,
+    (Lista.concat [klist1; klist2],
+      (epa :: ep_lista, (i3, (trc :: trsa, TypingDeclFailRulesVP.OK))))))
+                                 | (_, (_,
+ (_, (_, (_, (_, TypingDeclFailRulesVP.Error _))))))
+                                   -> Predicate.bot_pred))
+                      | (_, (_, (_, (_, (_,
+  (_, TypingDeclFailRulesVP.Error _))))))
+                        -> Predicate.bot_pred)))))
         (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, (xe, xf))))))
           (fun a ->
             (match a with (_, (_, (_, (_, (_, []))))) -> Predicate.bot_pred
@@ -7257,14 +7779,18 @@ and infer_e_list_i_i_i_i_i_i_o_o_o_o_o_o_o
                     ep)
                   (fun aa ->
                     (match aa
-                      with (_, (_, (_, (_, (_, (_, OK)))))) ->
-                        Predicate.bot_pred
-                      | (tau, (vp, (_, (epa, (i2, (trc, Error err)))))) ->
-                        Predicate.single
-                          ([tau],
-                            ([vp],
-                              (Lista.concat [],
-                                ([epa], (i2, ([trc], Error err))))))))))))
+                      with (_, (_, (_, (_,
+ (_, (_, TypingDeclFailRulesVP.OK))))))
+                        -> Predicate.bot_pred
+                      | (tau, (vp, (_, (epa,
+ (i2, (trc, TypingDeclFailRulesVP.Error err))))))
+                        -> Predicate.single
+                             ([tau],
+                               ([vp],
+                                 (Lista.concat [],
+                                   ([epa],
+                                     (i2, ([trc],
+    TypingDeclFailRulesVP.Error err))))))))))))
 and infer_app_i_i_i_i_i_i_i_i_o_o_o_o_o_o_o_o_o
   xa xb xc xd xe xf xg xh =
     Predicate.bind
@@ -7275,8 +7801,11 @@ and infer_app_i_i_i_i_i_i_i_i_o_o_o_o_o_o_o_o_o
           (fun a ->
             (match a
               with (SyntaxVCT.T_refined_type (zp2, bp2, cp2),
-                     (vp2, (klist, (epa, (i2, (wt1, OK))))))
-                -> Predicate.bind (UnifyType.eq_o_i (mk_fresh_lbl i2 "_app"))
+                     (vp2, (klist,
+                             (epa, (i2, (wt1, TypingDeclFailRulesVP.OK))))))
+                -> Predicate.bind
+                     (ContextsPiDelta.eq_o_i
+                       (TypingDeclFailRulesVP.mk_fresh_lbl i2 "_app"))
                      (fun (i3, xp3) ->
                        Predicate.bind
                          (match_arg_i_i_i_i_i_i_i_o_o_o_o loca theta
@@ -7292,16 +7821,20 @@ SyntaxVCT.T_refined_type (zp3, bp3, cp3))),
                                  (bsub, (wt2, ok2)))
                                -> Predicate.single
                                     (SyntaxVCT.T_refined_type
-                                       (zp3, tsubst_bp_many bp3 bsub,
+                                       (zp3,
+ TypingDeclFailRulesVP.tsubst_bp_many bp3 bsub,
  SyntaxUtils.subst_x_cp cp3 xp1a vp2),
                                       (SyntaxVCT.V_var xp3,
-((xp3, (tsubst_bp_many bp3 bsub,
+((xp3, (TypingDeclFailRulesVP.tsubst_bp_many bp3 bsub,
          SyntaxUtils.subst_x_cp (SyntaxUtils.subst_x_cp cp3 xp1a vp2) zp3
            (SyntaxVCT.V_var xp3))) ::
    klist,
-  (f, (bsub, (epa, (i3, (InferApp (wt1, wt2), plus OK ok2)))))))))))
+  (f, (bsub,
+        (epa, (i3, (InferApp (wt1, wt2),
+                     TypingDeclFailRulesVP.plus TypingDeclFailRulesVP.OK
+                       ok2)))))))))))
               | (SyntaxVCT.T_refined_type (_, _, _),
-                  (_, (_, (_, (_, (_, Error _))))))
+                  (_, (_, (_, (_, (_, TypingDeclFailRulesVP.Error _))))))
                 -> Predicate.bot_pred)))
 and infer_e_T_P_G_D_ep_list_xp_order_bp_cp_list_xp_list_klist_list_i_i_i_i_i_i_o_o_o_o_o_o_o_o_o_o
   xa xb xc xd xe xf =
@@ -7397,7 +7930,9 @@ SyntaxVCT.equal_xpa zp zpa)
         (bp, (cp :: cp_list,
                (xp :: xp_lista,
                  (klist :: klist_list,
-                   (epa :: ep_lista, (i3, (wt1 :: wt2e, plus ok1 ok2)))))))))
+                   (epa :: ep_lista,
+                     (i3, (wt1 :: wt2e,
+                            TypingDeclFailRulesVP.plus ok1 ok2)))))))))
                                   else Predicate.bot_pred))
                     | (SyntaxVCT.T_refined_type (_, SyntaxVCT.B_list _, _), _)
                       -> Predicate.bot_pred
@@ -7465,7 +8000,8 @@ and check_lexp_i_i_i_i_i_i_i_o_o_o_o_o_o_o
                                   (delta,
                                     (SyntaxPED.LEXPp_mvar (loc, up), ep))))))
                 -> Predicate.bind
-                     (UnifyType.eq_o_i (ContextsPiDelta.lookup_mvar delta up))
+                     (ContextsPiDelta.eq_o_i
+                       (ContextsPiDelta.lookup_mvar delta up))
                      (fun aa ->
                        (match aa with None -> Predicate.bot_pred
                          | Some tau ->
@@ -7538,13 +8074,14 @@ and check_lexp_i_i_i_i_i_i_i_o_o_o_o_o_o_o
                                      (SyntaxPED.LEXPp_cast (loc, tau_2, up),
                                        ep))))))
                     -> Predicate.bind
-                         (UnifyType.eq_o_i
+                         (ContextsPiDelta.eq_o_i
                            (ContextsPiDelta.lookup_mvar delta up))
                          (fun aa ->
                            (match aa with None -> Predicate.bot_pred
                              | Some tau_1 ->
                                Predicate.bind
-                                 (subtype_i_i_i_i_i_o_o (get_loc loc) theta
+                                 (TypingDeclFailRulesVP.subtype_i_i_i_i_i_o_o
+                                   (TypingDeclFailRulesVP.get_loc loc) theta
                                    gamma tau_2 tau_1)
                                  (fun (_, ok1) ->
                                    Predicate.bind
@@ -7555,7 +8092,7 @@ and check_lexp_i_i_i_i_i_i_i_o_o_o_o_o_o_o
  (ContextsPiDelta.update_mvar delta (up, tau_2),
    (TypingUtils.k_list [],
      (SyntaxPED.LEXPp_cast (TypingUtils.upd_t loc tau_2, tau_2, up),
-       (epa, (i2, (LExp_bound wt2a, plus ok1 ok2))))))))))
+       (epa, (i2, (LExp_bound wt2a, TypingDeclFailRulesVP.plus ok1 ok2))))))))))
                   | (_, (_, (_, (_, (_, (SyntaxPED.LEXPp_tup (_, _), _)))))) ->
                     Predicate.bot_pred
                   | (_, (_, (_, (_, (_, (SyntaxPED.LEXPp_field (_, _, _),
@@ -7582,22 +8119,24 @@ and check_lexp_i_i_i_i_i_i_i_o_o_o_o_o_o_o
                              (phi, (gamma,
                                      (delta,
                                        (SyntaxPED.LEXPp_field
-  (loc, SyntaxPED.LEXPp_mvar (loca, up), id),
+  (loc, SyntaxPED.LEXPp_mvar (loca, up), fid),
  ep))))))
                       -> Predicate.bind
-                           (UnifyType.eq_o_i
+                           (ContextsPiDelta.eq_o_i
                              (ContextsPiDelta.lookup_field_and_record_type theta
-                               up))
+                               fid))
                            (fun aa ->
                              (match aa with None -> Predicate.bot_pred
                                | Some (tau_1, tau_2) ->
                                  Predicate.bind
-                                   (UnifyType.eq_o_i
+                                   (ContextsPiDelta.eq_o_i
                                      (ContextsPiDelta.lookup_mvar delta up))
                                    (fun ab ->
                                      (match ab with None -> Predicate.bot_pred
                                        | Some tau ->
- Predicate.bind (subtype_i_i_i_i_i_o_o (get_loc loc) theta gamma tau tau_2)
+ Predicate.bind
+   (TypingDeclFailRulesVP.subtype_i_i_i_i_i_o_o
+     (TypingDeclFailRulesVP.get_loc loc) theta gamma tau tau_2)
    (fun (_, ok1) ->
      Predicate.bind
        (check_e_i_i_i_i_i_i_i_o_o_o_o i1 theta phi gamma delta ep tau_1)
@@ -7607,8 +8146,9 @@ and check_lexp_i_i_i_i_i_i_i_o_o_o_o_o_o_o
              (TypingUtils.k_list [],
                (SyntaxPED.LEXPp_field
                   (TypingUtils.upd_t loc tau_1,
-                    SyntaxPED.LEXPp_mvar (TypingUtils.upd_t loca tau, up), id),
-                 (epa, (i2, (LExp_bound wt2a, plus ok1 ok2))))))))))))
+                    SyntaxPED.LEXPp_mvar (TypingUtils.upd_t loca tau, up), fid),
+                 (epa, (i2, (LExp_bound wt2a,
+                              TypingDeclFailRulesVP.plus ok1 ok2))))))))))))
                     | (_, (_, (_, (_, (_,
 (SyntaxPED.LEXPp_field (_, SyntaxPED.LEXPp_reg (_, _), _), _))))))
                       -> Predicate.bot_pred
@@ -7851,7 +8391,7 @@ with (_, (_, (SyntaxPED.LEXPp_mvar (_, _), _))) -> Predicate.bot_pred
                      (SyntaxPED.annot_e epa, lexppa :: lexpp_lista),
                     (SyntaxPED.Ep_tuple
                        (SyntaxPED.annot_e epa, epa :: ep_lista),
-                      (i3, (wt1b, plus ok1 ok2))))))
+                      (i3, (wt1b, TypingDeclFailRulesVP.plus ok1 ok2))))))
        else Predicate.bot_pred)
 | (_, (_, (SyntaxPED.LEXPp_tup (_, _), (SyntaxPED.Ep_if (_, _, _, _), _)))) ->
   Predicate.bot_pred
@@ -7974,6 +8514,37 @@ with (_, (_, (SyntaxPED.LEXPp_mvar (_, _), _))) -> Predicate.bot_pred
                       | (_, (_, (_, (_, (_, (SyntaxPED.LEXPp_deref _, _)))))) ->
                         Predicate.bot_pred))))))));;
 
+let rec check_funcl_i_i_i_i_i_i_i_i_i_o_o_o_o_o_o
+  x xa xb xc xd xe xf xg xh =
+    Predicate.bind
+      (Predicate.single (x, (xa, (xb, (xc, (xd, (xe, (xf, (xg, xh)))))))))
+      (fun (i1, (theta,
+                  (phi, (gamma,
+                          (SyntaxPED.FCLp_funcl (loc, fnid, ep),
+                            (xp, (bp, (cp, tau_2))))))))
+        -> Predicate.bind
+             (ContextsPiDelta.eq_o_i
+               (Contexts.gamma_e_update (fun _ -> Some tau_2) gamma))
+             (fun xi ->
+               Predicate.bind
+                 (ContextsPiDelta.eq_o_i
+                   (TypingUtils.add_fun_all phi
+                     (SyntaxVCT.A_function (xp, bp, cp, tau_2))
+                     [SyntaxPED.FCLp_funcl (loc, fnid, ep)]))
+                 (fun xaa ->
+                   Predicate.bind
+                     (check_pexp_i_i_i_i_i_i_i_i_i_o_o_o_o_o i1 theta phi
+                       (Contexts.add_var xi (xp, Contexts.GEPair (bp, cp)))
+                       ContextsPiDelta.emptyDEnv ep
+                       (SyntaxVCT.T_refined_type (xp, bp, cp)) tau_2
+                       (SyntaxVCT.V_var xp))
+                     (fun (_, (epa, (i3, (wt1, ok1)))) ->
+                       Predicate.single
+                         (xaa, (gamma,
+                                 (SyntaxPED.FCLp_funcl
+                                    (upd_t_none loc, fnid, epa),
+                                   (i3, (wt1, ok1)))))))));;
+
 let rec check_funcls_i_i_i_i_i_i_i_i_i_o_o_o_o_o_o
   x xa xb xc xd xe xf xg xh =
     Predicate.sup_pred
@@ -7982,7 +8553,8 @@ let rec check_funcls_i_i_i_i_i_i_i_i_i_o_o_o_o_o_o
         (fun a ->
           (match a
             with (i, (_, (phi, (gamma, ([], (_, (_, (_, _)))))))) ->
-              Predicate.single (phi, (gamma, ([], (i, ([], OK)))))
+              Predicate.single
+                (phi, (gamma, ([], (i, ([], TypingDeclFailRulesVP.OK)))))
             | (_, (_, (_, (_, (_ :: _, _))))) -> Predicate.bot_pred)))
       (Predicate.bind
         (Predicate.single (x, (xa, (xb, (xc, (xd, (xe, (xf, (xg, xh)))))))))
@@ -7990,54 +8562,22 @@ let rec check_funcls_i_i_i_i_i_i_i_i_i_o_o_o_o_o_o
           (match a with (_, (_, (_, (_, ([], _))))) -> Predicate.bot_pred
             | (i1, (theta,
                      (phi, (gamma,
-                             (SyntaxPED.FCLp_funcl (loc, id, ep) :: funclp_list,
+                             (funclp :: funclp_list,
                                (xp, (bp, (cp, tau_2))))))))
               -> Predicate.bind
-                   (UnifyType.eq_o_i
-                     (Contexts.gamma_e_update (fun _ -> Some tau_2) gamma))
-                   (fun xi ->
+                   (check_funcl_i_i_i_i_i_i_i_i_i_o_o_o_o_o_o i1 theta phi gamma
+                     funclp xp bp cp tau_2)
+                   (fun (phia, (gammaa, (funclpa, (i3, (wt1, ok1))))) ->
                      Predicate.bind
-                       (UnifyType.eq_o_i
-                         (TypingUtils.add_fun_all phi
-                           (SyntaxVCT.A_function (xp, bp, cp, tau_2))
-                           [SyntaxPED.FCLp_funcl (loc, id, ep)]))
-                       (fun xaa ->
-                         Predicate.bind
-                           (check_pexp_i_i_i_i_i_i_i_i_i_o_o_o_o_o i1 theta phi
-                             (Contexts.add_var xi
-                               (xp, Contexts.GEPair (bp, cp)))
-                             ContextsPiDelta.emptyDEnv ep
-                             (SyntaxVCT.T_refined_type (xp, bp, cp)) tau_2
-                             (SyntaxVCT.V_var xp))
-                           (fun (_, (epa, (i3, (wt1, ok1)))) ->
-                             Predicate.bind
-                               (check_funcls_i_i_i_i_i_i_i_i_i_o_o_o_o_o_o i3
-                                 theta xaa gamma funclp_list xp bp cp tau_2)
-                               (fun (phia,
-                                      (gammaa,
-(funclp_lista, (i4, (wt2, ok2)))))
-                                 -> Predicate.single
-                                      (phia,
-(gammaa,
-  (SyntaxPED.FCLp_funcl (upd_t_none loc, id, epa) :: funclp_lista,
-    (i4, (wt1 :: wt2, plus ok1 ok2))))))))))));;
-
-let rec def_checking_mapI_xp_bp_cp_i_o_o_o_o
-  x = Predicate.sup_pred
-        (Predicate.bind (Predicate.single x)
-          (fun a ->
-            (match a with [] -> Predicate.single ([], ([], ([], OK)))
-              | _ :: _ -> Predicate.bot_pred)))
-        (Predicate.bind (Predicate.single x)
-          (fun a ->
-            (match a with [] -> Predicate.bot_pred
-              | (kp, (bp, cp)) :: xp_bp_cp_list ->
-                Predicate.bind
-                  (def_checking_mapI_xp_bp_cp_i_o_o_o_o xp_bp_cp_list)
-                  (fun (kp_list, (bp_list, (cp_list, ok))) ->
-                    Predicate.single
-                      (kp :: kp_list,
-                        (bp :: bp_list, (cp :: cp_list, ok)))))));;
+                       (check_funcls_i_i_i_i_i_i_i_i_i_o_o_o_o_o_o i3 theta phia
+                         gammaa funclp_list xp bp cp tau_2)
+                       (fun (phib, (gammab, (funclp_lista, (i4, (wt2, ok2)))))
+                         -> Predicate.single
+                              (phib,
+                                (gammab,
+                                  (funclpa :: funclp_lista,
+                                    (i4, (wt1 :: wt2,
+   TypingDeclFailRulesVP.plus ok1 ok2))))))))));;
 
 let rec check_def_i_i_i_i_i_o_o_o_o_o_o_o
   xa xb xc xd xe =
@@ -8066,7 +8606,7 @@ let rec check_def_i_i_i_i_i_o_o_o_o_o_o_o
                                   SyntaxVCT.A_function (xp, bp, cp, tau_2),
                                   funclp_lista),
                                (i2, (CheckFunDef tr, ok)))))))
-            | (_, (_, (_, (_, SyntaxPED.DEFp_typedef (_, _, _, _))))) ->
+            | (_, (_, (_, (_, SyntaxPED.DEFp_typedef (_, _))))) ->
               Predicate.bot_pred
             | (_, (_, (_, (_, SyntaxPED.DEFp_spec (_, _, _))))) ->
               Predicate.bot_pred
@@ -8086,7 +8626,7 @@ let rec check_def_i_i_i_i_i_o_o_o_o_o_o_o
             (match a
               with (_, (_, (_, (_, SyntaxPED.DEFp_fundef (_, _, _))))) ->
                 Predicate.bot_pred
-              | (_, (_, (_, (_, SyntaxPED.DEFp_typedef (_, _, _, _))))) ->
+              | (_, (_, (_, (_, SyntaxPED.DEFp_typedef (_, _))))) ->
                 Predicate.bot_pred
               | (_, (_, (_, (_, SyntaxPED.DEFp_spec (_, _, _))))) ->
                 Predicate.bot_pred
@@ -8095,7 +8635,7 @@ let rec check_def_i_i_i_i_i_o_o_o_o_o_o_o
                                SyntaxPED.DEFp_val
                                  (loc, SyntaxPED.LBp_val (loca, patp, ep))))))
                 -> Predicate.bind
-                     (check_letbind_i_i_i_i_i_i_o_o_o_o_o i1 theta phi gamma
+                     (infer_letbind_i_i_i_i_i_i_o_o_o_o_o i1 theta phi gamma
                        ContextsPiDelta.emptyDEnv
                        (SyntaxPED.LBp_val (loca, patp, ep)))
                      (fun (klist, (letbind, (i2, (tra, ok)))) ->
@@ -8119,17 +8659,17 @@ let rec check_def_i_i_i_i_i_o_o_o_o_o_o_o
               (match a
                 with (_, (_, (_, (_, SyntaxPED.DEFp_fundef (_, _, _))))) ->
                   Predicate.bot_pred
-                | (_, (_, (_, (_, SyntaxPED.DEFp_typedef (_, _, _, _))))) ->
+                | (_, (_, (_, (_, SyntaxPED.DEFp_typedef (_, _))))) ->
                   Predicate.bot_pred
                 | (i, (theta,
-                        (phi, (gamma, SyntaxPED.DEFp_spec (loc, id, ap)))))
+                        (phi, (gamma, SyntaxPED.DEFp_spec (loc, sid, ap)))))
                   -> Predicate.single
                        (theta,
                          (ContextsPiDelta.add_fun phi
-                            (SyntaxVCT.VNamed id, (ap, None)),
+                            (SyntaxVCT.VNamed sid, (ap, None)),
                            (gamma,
-                             (SyntaxPED.DEFp_spec (upd_t_none loc, id, ap),
-                               (i, (CheckDef, OK))))))
+                             (SyntaxPED.DEFp_spec (upd_t_none loc, sid, ap),
+                               (i, (CheckDef, TypingDeclFailRulesVP.OK))))))
                 | (_, (_, (_, (_, SyntaxPED.DEFp_val (_, _))))) ->
                   Predicate.bot_pred
                 | (_, (_, (_, (_, SyntaxPED.DEFp_reg (_, _, _))))) ->
@@ -8146,7 +8686,7 @@ let rec check_def_i_i_i_i_i_o_o_o_o_o_o_o
                 (match a
                   with (_, (_, (_, (_, SyntaxPED.DEFp_fundef (_, _, _))))) ->
                     Predicate.bot_pred
-                  | (_, (_, (_, (_, SyntaxPED.DEFp_typedef (_, _, _, _))))) ->
+                  | (_, (_, (_, (_, SyntaxPED.DEFp_typedef (_, _))))) ->
                     Predicate.bot_pred
                   | (_, (_, (_, (_, SyntaxPED.DEFp_spec (_, _, _))))) ->
                     Predicate.bot_pred
@@ -8154,95 +8694,67 @@ let rec check_def_i_i_i_i_i_o_o_o_o_o_o_o
                     Predicate.bot_pred
                   | (_, (_, (_, (_, SyntaxPED.DEFp_reg (_, _, _))))) ->
                     Predicate.bot_pred
-                  | (i, (theta,
-                          (phi, (gamma,
-                                  SyntaxPED.DEFp_overload (loc, id, id_list)))))
-                    -> Predicate.single
-                         (theta,
-                           (ContextsPiDelta.add_to_overload phi
-                              (SyntaxVCT.VNamed id)
-                              (Lista.map (fun aa -> SyntaxVCT.VNamed aa)
-                                id_list),
-                             (gamma,
-                               (SyntaxPED.DEFp_overload
-                                  (upd_t_none loc, id, id_list),
-                                 (i, (CheckDef, OK))))))
+                  | (_, (_, (_, (_, SyntaxPED.DEFp_overload (_, _, _))))) ->
+                    Predicate.bot_pred
                   | (_, (_, (_, (_, SyntaxPED.DEFp_scattered (_, _))))) ->
                     Predicate.bot_pred
-                  | (_, (_, (_, (_, SyntaxPED.DEFp_default (_, _))))) ->
-                    Predicate.bot_pred)))
+                  | (i, (theta,
+                          (phi, (gamma, SyntaxPED.DEFp_default (loc, order)))))
+                    -> Predicate.single
+                         (ContextsPiDelta.theta_d_update (fun _ -> Some order)
+                            theta,
+                           (phi, (gamma,
+                                   (SyntaxPED.DEFp_default
+                                      (upd_t_none loc, order),
+                                     (i, (CheckDef,
+   TypingDeclFailRulesVP.OK)))))))))
             (Predicate.sup_pred
               (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, xe)))))
                 (fun a ->
                   (match a
                     with (_, (_, (_, (_, SyntaxPED.DEFp_fundef (_, _, _))))) ->
                       Predicate.bot_pred
-                    | (_, (_, (_, (_, SyntaxPED.DEFp_typedef (_, _, _, _))))) ->
+                    | (_, (_, (_, (_, SyntaxPED.DEFp_typedef (_, _))))) ->
                       Predicate.bot_pred
                     | (_, (_, (_, (_, SyntaxPED.DEFp_spec (_, _, _))))) ->
                       Predicate.bot_pred
                     | (_, (_, (_, (_, SyntaxPED.DEFp_val (_, _))))) ->
                       Predicate.bot_pred
-                    | (_, (_, (_, (_, SyntaxPED.DEFp_reg (_, _, _))))) ->
-                      Predicate.bot_pred
+                    | (i, (theta,
+                            (phi, (gamma, SyntaxPED.DEFp_reg (loc, t, x)))))
+                      -> Predicate.single
+                           (ContextsPiDelta.add_register theta x t,
+                             (phi, (gamma,
+                                     (SyntaxPED.DEFp_reg (upd_t_none loc, t, x),
+                                       (i,
+ (CheckDef, TypingDeclFailRulesVP.OK))))))
                     | (_, (_, (_, (_, SyntaxPED.DEFp_overload (_, _, _))))) ->
                       Predicate.bot_pred
                     | (_, (_, (_, (_, SyntaxPED.DEFp_scattered (_, _))))) ->
                       Predicate.bot_pred
-                    | (i, (theta,
-                            (phi, (gamma,
-                                    SyntaxPED.DEFp_default (loc, order)))))
-                      -> Predicate.single
-                           (ContextsPiDelta.theta_d_update (fun _ -> Some order)
-                              theta,
-                             (phi, (gamma,
-                                     (SyntaxPED.DEFp_default
-(upd_t_none loc, order),
-                                       (i, (CheckDef, OK)))))))))
+                    | (_, (_, (_, (_, SyntaxPED.DEFp_default (_, _))))) ->
+                      Predicate.bot_pred)))
               (Predicate.sup_pred
                 (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, xe)))))
                   (fun a ->
                     (match a
                       with (_, (_, (_, (_, SyntaxPED.DEFp_fundef (_, _, _)))))
                         -> Predicate.bot_pred
-                      | (_, (_, (_, (_, SyntaxPED.DEFp_typedef (_, _, _, _)))))
-                        -> Predicate.bot_pred
-                      | (_, (_, (_, (_, SyntaxPED.DEFp_spec (_, _, _))))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (_, SyntaxPED.DEFp_val (_, _))))) ->
-                        Predicate.bot_pred
-                      | (i, (theta,
-                              (phi, (gamma, SyntaxPED.DEFp_reg (loc, t, x)))))
-                        -> Predicate.single
-                             (ContextsPiDelta.add_register theta x t,
-                               (phi, (gamma,
-                                       (SyntaxPED.DEFp_reg
-  (upd_t_none loc, t, x),
- (i, (CheckDef, OK))))))
-                      | (_, (_, (_, (_, SyntaxPED.DEFp_overload (_, _, _))))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (_, SyntaxPED.DEFp_scattered (_, _))))) ->
-                        Predicate.bot_pred
-                      | (_, (_, (_, (_, SyntaxPED.DEFp_default (_, _))))) ->
-                        Predicate.bot_pred)))
-                (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, xe)))))
-                  (fun a ->
-                    (match a
-                      with (_, (_, (_, (_, SyntaxPED.DEFp_fundef (_, _, _)))))
+                      | (_, (_, (_, (_, SyntaxPED.DEFp_typedef
+  (_, SyntaxPED.Record (_, _, _))))))
                         -> Predicate.bot_pred
                       | (i, (theta,
                               (phi, (gamma,
                                       SyntaxPED.DEFp_typedef
-(loc, id, k_bp_c_list, tau)))))
-                        -> Predicate.bind
-                             (def_checking_mapI_xp_bp_cp_i_o_o_o_o k_bp_c_list)
-                             (fun (_, (_, (_, ok))) ->
-                               Predicate.single
-                                 (ContextsPiDelta.add_type theta
-                                    (SyntaxVCT.VNamed id) tau,
-                                   (phi, (gamma,
-   (SyntaxPED.DEFp_typedef (upd_t_none loc, id, k_bp_c_list, tau),
-     (i, (CheckDef, ok)))))))
+(loc, SyntaxPED.Variant (tid, xbc, ta))))))
+                        -> Predicate.single
+                             (ContextsPiDelta.add_type theta
+                                (SyntaxVCT.VNamed tid)
+                                (SyntaxPED.Variant (tid, xbc, ta)),
+                               (phi, (gamma,
+                                       (SyntaxPED.DEFp_typedef
+  (upd_t_none loc, SyntaxPED.Variant (tid, xbc, ta)),
+ (i, (CheckDef, TypingDeclFailRulesVP.OK))))))
                       | (_, (_, (_, (_, SyntaxPED.DEFp_spec (_, _, _))))) ->
                         Predicate.bot_pred
                       | (_, (_, (_, (_, SyntaxPED.DEFp_val (_, _))))) ->
@@ -8254,7 +8766,94 @@ let rec check_def_i_i_i_i_i_o_o_o_o_o_o_o
                       | (_, (_, (_, (_, SyntaxPED.DEFp_scattered (_, _))))) ->
                         Predicate.bot_pred
                       | (_, (_, (_, (_, SyntaxPED.DEFp_default (_, _))))) ->
-                        Predicate.bot_pred))))))));;
+                        Predicate.bot_pred)))
+                (Predicate.sup_pred
+                  (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, xe)))))
+                    (fun a ->
+                      (match a
+                        with (_, (_, (_, (_, SyntaxPED.DEFp_fundef (_, _, _)))))
+                          -> Predicate.bot_pred
+                        | (i, (theta,
+                                (phi, (gamma,
+SyntaxPED.DEFp_typedef (loc, SyntaxPED.Record (tid, xbc, t))))))
+                          -> Predicate.single
+                               (ContextsPiDelta.add_type theta
+                                  (SyntaxVCT.VNamed tid)
+                                  (SyntaxPED.Record (tid, xbc, t)),
+                                 (phi, (gamma,
+ (SyntaxPED.DEFp_typedef (upd_t_none loc, SyntaxPED.Record (tid, xbc, t)),
+   (i, (CheckDef, TypingDeclFailRulesVP.OK))))))
+                        | (_, (_, (_, (_,
+SyntaxPED.DEFp_typedef (_, SyntaxPED.Variant (_, _, _))))))
+                          -> Predicate.bot_pred
+                        | (_, (_, (_, (_, SyntaxPED.DEFp_spec (_, _, _))))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (_, SyntaxPED.DEFp_val (_, _))))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (_, SyntaxPED.DEFp_reg (_, _, _))))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (_, SyntaxPED.DEFp_overload (_, _, _)))))
+                          -> Predicate.bot_pred
+                        | (_, (_, (_, (_, SyntaxPED.DEFp_scattered (_, _))))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (_, SyntaxPED.DEFp_default (_, _))))) ->
+                          Predicate.bot_pred)))
+                  (Predicate.bind (Predicate.single (xa, (xb, (xc, (xd, xe)))))
+                    (fun a ->
+                      (match a
+                        with (_, (_, (_, (_, SyntaxPED.DEFp_fundef (_, _, _)))))
+                          -> Predicate.bot_pred
+                        | (_, (_, (_, (_, SyntaxPED.DEFp_typedef (_, _))))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (_, SyntaxPED.DEFp_spec (_, _, _))))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (_, SyntaxPED.DEFp_val (_, _))))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (_, SyntaxPED.DEFp_reg (_, _, _))))) ->
+                          Predicate.bot_pred
+                        | (_, (_, (_, (_, SyntaxPED.DEFp_overload (_, _, _)))))
+                          -> Predicate.bot_pred
+                        | (_, (_, (_, (_,
+SyntaxPED.DEFp_scattered (_, SyntaxPED.SDp_function (_, _, _))))))
+                          -> Predicate.bot_pred
+                        | (_, (_, (_, (_,
+SyntaxPED.DEFp_scattered (_, SyntaxPED.SDp_variant (_, _, _))))))
+                          -> Predicate.bot_pred
+                        | (_, (_, (_, (_,
+SyntaxPED.DEFp_scattered (_, SyntaxPED.SDp_unioncl (_, _, _, _))))))
+                          -> Predicate.bot_pred
+                        | (i1, (theta,
+                                 (phi, (gamma,
+ SyntaxPED.DEFp_scattered
+   (loc1, SyntaxPED.SDp_funclp (loc2, SyntaxPED.FCLp_funcl (loc3, fp, epa)))))))
+                          -> Predicate.bind
+                               (ContextsPiDelta.eq_o_i
+                                 (TypingUtils.lookup_fun_type theta phi
+                                   (SyntaxVCT.VNamed fp)))
+                               (fun aa ->
+                                 (match aa with None -> Predicate.bot_pred
+                                   | Some [] -> Predicate.bot_pred
+                                   | Some ((_, SyntaxVCT.A_monotype _) :: _) ->
+                                     Predicate.bot_pred
+                                   | Some ((_,
+     SyntaxVCT.A_function (xp, bp, cp, tau_2)) ::
+    _)
+                                     -> Predicate.bind
+  (check_funcl_i_i_i_i_i_i_i_i_i_o_o_o_o_o_o i1 theta phi gamma
+    (SyntaxPED.FCLp_funcl (loc3, fp, epa)) xp bp cp tau_2)
+  (fun (phia, (gammaa, (funclp, (i2, (_, ok))))) ->
+    Predicate.single
+      (theta,
+        (phia,
+          (gammaa,
+            (SyntaxPED.DEFp_scattered
+               (loc1, SyntaxPED.SDp_funclp (loc2, funclp)),
+              (i2, (CheckDef, ok)))))))))
+                        | (_, (_, (_, (_,
+SyntaxPED.DEFp_scattered (_, SyntaxPED.SDp_end (_, _))))))
+                          -> Predicate.bot_pred
+                        | (_, (_, (_, (_, SyntaxPED.DEFp_default (_, _))))) ->
+                          Predicate.bot_pred)))))))));;
 
 let rec check_defs_i_i_i_i_i_o_o_o_o_o_o_o
   x xa xb xc xd =
@@ -8272,20 +8871,23 @@ let rec check_defs_i_i_i_i_i_o_o_o_o_o_o_o
       (Predicate.bind (Predicate.single (x, (xa, (xb, (xc, xd)))))
         (fun a ->
           (match a with (_, (_, (_, (_, [])))) -> Predicate.bot_pred
-            | (i1, (theta, (phi, (gamma, def :: def_list)))) ->
+            | (_, (_, (_, (_, [_])))) -> Predicate.bot_pred
+            | (i1, (theta, (phi, (gamma, def :: defa :: def_list)))) ->
               Predicate.bind
                 (check_def_i_i_i_i_i_o_o_o_o_o_o_o i1 theta phi gamma def)
-                (fun (thetaa, (phia, (gammaa, (defa, (i2, (wt1, ok1)))))) ->
+                (fun (thetaa, (phia, (gammaa, (defb, (i2, (wt1, ok1)))))) ->
                   Predicate.bind
                     (check_defs_i_i_i_i_i_o_o_o_o_o_o_o i2 thetaa phia gammaa
-                      def_list)
+                      (defa :: def_list))
                     (fun (thetab, (phib, (gammab, (defs, (i3, (wt2, ok2)))))) ->
                       Predicate.single
                         (thetab,
                           (phib,
                             (gammab,
-                              (defa :: defs,
-                                (i3, (wt1 :: wt2, plus ok1 ok2)))))))))));;
+                              (defb :: defs,
+                                (i3, (wt1 :: wt2,
+                                       TypingDeclFailRulesVP.plus ok1
+ ok2)))))))))));;
 
 let rec check_prog_i_o_o_o
   x = Predicate.bind (Predicate.single x)

@@ -65,9 +65,10 @@ let pp_g (Ctx.Gamma_ext (_,g1,g2,_,_,_,scope,_,_)) xbc c =
                                  
                                
 let traceG (s : string) g xbc c = 
-  if !Util.opt_verbosity > 1 then 
+  if !Util.opt_verbosity > 1 then
+    (PPrintEngine.ToChannel.compact stderr ( string s);
     let _ = pp_g g xbc c in
-    true
+    true)
   else
     true
  

@@ -15,6 +15,8 @@ open Msp_ast.SyntaxVCT  (* Mini Sail AST as obtain from Isabelle *)
 open Msp_ast.SyntaxPED  (* Mini Sail AST as obtain from Isabelle *)
 open Msp_ast.Location
 open Msp_ast.CESubst
+open Msp_ast.TSubst
+open Msp_ast.Subst
 open Msp_ast.Contexts
 open Msp_ast.ConvertTypes
 open Minisailplus_pp
@@ -33,7 +35,7 @@ type mods = ((cep*cep) list)
 type ceks =  (string option*cep) list
 type xbcs = ((xp* (bp*cp)) list)
               
-type ctx_type = CtxType of (xbcs  * tau * mods * ceks )
+type ctx_type = CtxType of (typdef * mods * ceks )
 type ctx_kind = CtxKind of (xbcs * cep * mods * ceks )
 
 exception NotSupported of string;;
@@ -91,6 +93,8 @@ let convert_kid (A.Kid_aux (Var id,_)) = convert_to_isa id
 
 let mk_proj_op len i = convert_to_isa ((string_of_int len) ^ "X" ^ (string_of_int i))
 
+let mk_proj_ce len i ce = CE_proj ((string_of_int len) ^ "X" ^ (string_of_int (i+1)), ce)
+                     
 let mk_range_c_ce zvar left right = C_conj (c_le left zvar, c_le zvar right )
                                            
 let mk_range_c zvar left right =  mk_range_c_ce  (CE_val (V_var (zvar))) left right
@@ -249,10 +253,10 @@ and  to_ms_constraint ( ctx : 'a ctx ) ( A.NC_aux(nc,_)  : A.n_constraint) : cp 
   | NC_true -> C_true
   | NC_false -> C_false 
 
-
+(* Lift the constraints on the record fields to a constraint on the record *)
 let normalise_record_type fd_type =
   let (f_b,cs) = unzip (List.map (fun (f, T_refined_type(_,b,c)) -> ((f,b),
-                     subst_c_v0 c (V_proj (f, V_var (zvar))))) fd_type) in
+                     ce_subst_cp  (CE_proj (f, CE_val (V_var (zvar)))) zvar c  )) fd_type) in
   let c = Msp_ast.Contexts.conj cs in
   T_refined_type (zvar , B_record f_b , c)
 
@@ -261,14 +265,26 @@ let targ_to_nexp (A.A_aux (A_nexp ne,_)) = ne
 
 type ('a, 'b) either  = Left of 'a | Right of 'b
 
+
+(*                                                
+let tsubst_tp_full b_actual c_actual bv_formal typ =
+  Printf.eprintf "tsubst_tp_full bv_formal=%s\n" bv_formal;
+  match typ with
+     |  T_refined_type (z3,B_var bv3, c3) when bv3 = bv_formal -> T_refined_type (z3, b_actual, C_conj (c3,c_actual) )
+     | _ -> tsubst_tp b_actual bv_formal typ
+ *)
 (* Do the substition for the type application. Restrictions on what can be subst for Int type variables *)
-let tsubst_t_list typ args = List.fold_left (
+
+let tsubst_t_list typ args =
+  PPrintEngine.ToChannel.compact stderr (string "tsubst_t_list typ=" ^^ (Minisailplus_pp.pp_tp typ)); Printf.eprintf "\n";
+
+  List.fold_left (
         fun typ (actual_arg,formal_arg) ->
         let (x2,(b2,c2)) = formal_arg in
         match actual_arg with
-          Left (T_refined_type (_,b1,c1)) ->
+          Left (T_refined_type (z1,b1,c1)) ->
           (match b2 with
-            B_var bv -> tsubst_tp b1 bv typ
+            B_var bv -> tsubst_tp_full typ bv (T_refined_type (z1,b1,c1))
           | _ -> let (T_refined_type (z,b3,c3)) = typ in
                  T_refined_type( z,b3,C_conj (c3,subst_cp (V_var (x2)) zvar c1)))
         | Right (CE_val v) ->
@@ -287,11 +303,11 @@ let normalise_tlist ts = let (bs,cs) =  unzip  (List.mapi (fun i (T_refined_type
 
        
 
-let rec convert_to_c_exp ctx (A.A_aux (ae,_)) = match ae with
+let rec convert_to_c_exp ctx (A.A_aux (ae,_)) : cp = match ae with
   | A_nexp ne -> let e = to_ms_ce ctx ne in C_eq (CE_val (V_var (VIndex)), e)
   | A_bool nc -> let e = to_ms_ce_bool ctx nc in C_eq (CE_val (V_var (VIndex)), e)
 
-and to_ms_ce_bool ctx ( A.NC_aux(nc,loc)  : A.n_constraint)  = match nc with
+and to_ms_ce_bool ctx ( A.NC_aux(nc,loc)  : A.n_constraint) : cep  = match nc with
   | A.NC_equal (n1,n2) -> CE_bop (Eq,  (to_ms_ce ctx n1), (to_ms_ce ctx n2))
   | A.NC_bounded_ge (n1,n2) -> CE_bop (GEq,  (to_ms_ce ctx n1), (to_ms_ce ctx n2))
   | A.NC_bounded_gt (n1,n2) -> CE_bop (GT,  (to_ms_ce ctx n1), (to_ms_ce ctx n2))
@@ -332,7 +348,20 @@ let show_typ_aux s typ =
 let show_typ s typ =
     ToChannel.pretty 1. 80 stderr (string s ^^ ( pp_raw_typ typ))
 
-                                                                              
+let get_ks = function
+    Variant (_,ks,_) -> ks
+  | Record (_,ks,_) -> ks
+
+let t_of_tdef = function
+  | Variant (id,xbc,_) ->
+     let bvars = filter_map (fun (x,(b,c)) -> match b with
+                                                 B_var _ -> Some b | _ -> None) xbc in
+     T_refined_type (zvar,B_union (id,bvars),C_true)
+  | Record (_,_,t) -> t
+
+let b_of_tdef td = b_of (t_of_tdef td)
+                     
+                     
 (* Extract equations from Sail type *)
 let rec extract_equations_typ ctx   (zvr : cep ) ((A.Typ_aux (typ,_)) as typ' : A.typ) =
   show_typ_aux "extract_eq:" typ;
@@ -350,7 +379,8 @@ let rec extract_equations_typ ctx   (zvr : cep ) ((A.Typ_aux (typ,_)) as typ' : 
      List.concat (List.mapi (fun i t -> extract_equations_typ ctx (CE_proj (mk_proj_op (List.length ts) (i+1), zvr)) t ) ts)
   | A.Typ_app (Id_aux (Id id,_), typ_args ) ->
      (match TBindings.find_opt id ctx.types with
-      | Some  (CtxType (ks, target_t,mods,ceks)) -> (* FIXME FIXME. Making assumption about ordering and length of ceks/ks/typargs *)
+      | Some  (CtxType (target_t,mods,ceks)) -> (* FIXME FIXME. Making assumption about ordering and length of ceks/ks/typargs *)
+         let ks = get_ks target_t in 
          let ces = List.concat (List.map (fun ((k,(b,c)),ta) -> match b with
                                                                 B_int -> [to_ms_ce ctx (targ_to_nexp ta)]
                                                                | _ -> []) (zip ks typ_args)) in
@@ -360,7 +390,7 @@ let rec extract_equations_typ ctx   (zvr : cep ) ((A.Typ_aux (typ,_)) as typ' : 
       | None -> raise (Failure ("extract_equations_typ: Typ_app. Not found " ^ id )))
   | A.Typ_id (Id_aux (Id id,_)) ->
      (match TBindings.find_opt id ctx.types with
-      | Some  (CtxType (ks, target_t,mods,ceks)) -> []
+      | Some  (CtxType (target_t,mods,ceks)) -> []
       | None -> raise (Failure ("extract_equations_typ: Typ_id. Not found " ^ id )))
 
   | A.Typ_var _ -> []
@@ -393,32 +423,73 @@ let rec zip_partial (xs : 'a list) (ys : 'blist) : ('a * 'b) list * ('b list) = 
 
 (* Pull out the cep pairs that are basic equalities - no need to run these through the solver *)
 let filter_bool_ces ( ces : (cep * cep ) list ) (kids : (xp*bp) list) =
-  let kids = List.fold_left (fun ks (k,b) -> match b with B_int -> k::ks | _ -> ks ) [] kids in
-  let (ces1,ces2,kids) = List.fold_left (fun (ces1,ces2,kids) (ce1,ce2) -> match ce1 with
-                                                                             (CE_val (V_var k)) -> ((k,ce2)::ces1,ces2,kids)
-                                                                           | _ -> (ces1,(ce1,ce2)::ces2,kids)) ([],[],[]) ces in
+  let kids = filter_map (fun (k,b) -> match b with B_int -> Some k | _ -> None) kids in
+  let (ces1,ces2,rkids) = List.fold_left (fun (ces1,ces2,rkids) (ce1,ce2) -> match ce1 with
+                                                                             (CE_val (V_var k)) -> ((k,ce2)::ces1,ces2,k::rkids)
+                                                                            | _ -> (ces1,(ce1,ce2)::ces2,rkids)) ([],[],[]) ces in
+  let kids = List.filter (fun x -> not (List.mem x rkids)) kids in 
  (ces1,ces2, kids)
-                                 
+
+(* 
+    Input to this is a Sail type, typ, with 0 or more type level variables, kids.  
+    The typ gives us both base-type information and also contains type level expressions involving
+    the type level variables. 
+    The base-type information gives us a skeleton with type level expressions at the leafs.
+     
+
+ *)
+
+let extract_equations_and_constraints_typ ctx typ = 
+  let ces = extract_equations_typ ctx (CE_val (V_var zvar)) typ in
+  let cs = extract_constraints_typ ctx (CE_val (V_var zvar)) typ in
+  (ces,cs)
+  
 let rec invert_and_solve ctx ( kids : (xp*bp) list ) ( typ : A.typ) : ( xp * cep ) list * cp list =
   (*  let kids =   List.map (fun k -> let (k,b) = to_ms_kind k in (VNamed k)) kids' in*)
-  let ces = extract_equations_typ ctx (CE_val (V_var zvar)) typ in
-  let (ceks', ces, kids) = filter_bool_ces ces kids in
-  let cs = extract_constraints_typ ctx (CE_val (V_var zvar)) typ in
-  Printf.eprintf "** invert_and_solve ** \n";
+
+  (* 
+    First extract the equalities. 
+      rhs is the MiniSail view of the position in the type (for example using proj)
+      lhs is the type level expression at the position 
+     Also extract other constraints
+  *)
+  let (ces,cs) = extract_equations_and_constraints_typ ctx typ in
+
+  Printf.eprintf "\nExtracted equations \n";
   List.iter ( fun (ce1,ce2) -> pp_line (pp_cep ce1 ^^ (string " = ") ^^ (pp_cep ce2))) ces;
-  List.iter ( fun (ce1,ce2) -> pp_line (pp_raw_cep ce1 ^^ (string " = ") ^^ (pp_raw_cep ce2))) ces;  
-  List.iter ( fun (c) -> pp_line (pp_raw_cp c)) cs;
+  Printf.eprintf "Extracted constraints \n";
+  List.iter ( fun c -> pp_line (pp_cp c)) cs;
+
+  (* Some of the equations might already be in form with lhs being the Sail type variable.
+     We pull these out into ceks' with the remaining type level variables in kids *)
+  let (ceks', ces, kids) = filter_bool_ces ces kids in
+
+  Printf.eprintf "** invert_and_solve ** \nThese are the equations we want to invert:\n";
+  List.iter ( fun (ce1,ce2) -> pp_line (pp_cep ce1 ^^ (string " = ") ^^ (pp_cep ce2))) ces;
+  (*List.iter ( fun (ce1,ce2) -> pp_line (pp_raw_cep ce1 ^^ (string " = ") ^^ (pp_raw_cep ce2))) ces;*)
   Printf.eprintf "#kids=%d\n" (List.length kids);
-  if kids = [] & ces = [] then
-       (Printf.eprintf "No need to run solver\n";
-       (ceks', cs)) else
-  match solve_ce_ce kids ces with
-  | Some (ces,mods) -> List.iter ( fun ce1 -> pp_line (pp_cep ce1 )) ces;
-                if List.length kids > List.length ces then raise (Failure "Missing equalities")
-                else let (ceks,ce) = zip_partial kids ces in
-                     let cs = replace_ks_in_c ceks (C_conj_many cs) in
-                     (ceks@ceks', cs :: mods @ List.map (fun ce -> C_eq ((CE_val (V_lit (L_num (Z.zero)))),ce)) ce)
-  | None -> raise (Failure "Linear Solver Failed")
+
+  (* We have basic equalities for all type level variables we use these *)
+  if kids = [] then
+    let cs_ces = List.map (fun (ce1,ce2) -> C_eq (ce1,ce2)) ces in
+    let cs_ces = replace_ks_in_c ceks' (C_conj_many cs_ces) in
+    (Printf.eprintf "No need to run solver\n";
+     (ceks', cs_ces::cs))
+  else if ces = [] then
+     (ceks', cs )
+  else
+    match solve_ce_ce kids ces with
+    | Some (ces,mods) ->
+       Printf.eprintf "ces=\n";
+       List.iter ( fun ce1 -> pp_line (pp_cep ce1 )) ces;
+       Printf.eprintf "#kids=%d\n" (List.length kids);
+       if List.length kids > List.length ces then raise (Failure "Missing equalities")
+       else let (ceks,ce) = zip_partial kids ces in
+            Printf.eprintf "#ceks'=%d\n" (List.length ceks');
+            let cs = replace_ks_in_c ceks (C_conj_many cs) in
+            
+            (ceks@ceks', cs :: mods @ List.map (fun ce -> C_eq ((CE_val (V_lit (L_num (Z.zero)))),ce)) ce)
+    | None -> raise (Failure "Linear Solver Failed")
                            
                                                                                  
 and convert_invert_typ_arg ctx (kids : string list)  (e1 : cep ) ( typ_arg : A.typ_arg ) 
@@ -450,7 +521,7 @@ and convert_invert_typ ctx ( kids : string list)  (zvar : cep ) ((A.Typ_aux (typ
   | A.Typ_id (Id_aux (Id id,_)) when List.mem id ["unit";"bit";"bool";"int";"nat";"string";"real"] -> ([],[],[]) (* FIXME nat needs a constraint *)
   | A.Typ_id (Id_aux (Id id,_)) ->
      (match TBindings.find_opt id ctx.types with
-      | Some  (CtxType (ks, target_t,mods,ceks)) ->
+      | Some  (CtxType (target_t,mods,ceks)) ->
          Printf.eprintf "typ_app |ceks|=%d\n" (List.length ceks);
          let (mods,ceks) =
            if List.length ceks = 0 then
@@ -476,7 +547,7 @@ and convert_invert_typ ctx ( kids : string list)  (zvar : cep ) ((A.Typ_aux (typ
   | A.Typ_app (Id_aux (Id "list",_), ( [base_arg ] )) ->  ([],[],[])
   | A.Typ_app (Id_aux (Id id,_), typ_args ) ->
      (match TBindings.find_opt id ctx.types with
-      | Some  (CtxType (ks, target_t,mods,ceks)) ->
+      | Some  (CtxType (target_t,mods,ceks)) ->
          Printf.eprintf "typ_app |ceks|=%d\n" (List.length ceks);
          let (mods,ceks) =
            if List.length ceks = 0 then
@@ -532,9 +603,10 @@ and to_ms_typ_with_constraints ctx loc (kids : (xp*bp) list) (c : cp) (typ : A.t
     ) ceks;
   let cs = replace_ks_in_c ceks c in
   let c_eq = find_c_eq ceks in
-  let (b_typ,c_typ) = to_ms_base_with_c ctx typ in 
+  let (b_typ,c_typ) = to_ms_base_with_c ctx (CE_val (V_var zvar)) typ in 
   let t =   T_refined_type( zvar, b_typ, C_conj_many (c_typ::c_eq::cs::cs1) ) in 
-  PPrintEngine.ToChannel.compact stderr ((string "to_ms_exist_many result=\n") ^^ Minisailplus_pp.pp_tp t ^^ (string "\n"));
+  PPrintEngine.ToChannel.compact stderr ((string "to_ms_exist_many result=\n") ^^ Minisailplus_pp.pp_tp t ^^
+                                           string " c_typ=" ^^ (Minisailplus_pp.pp_cp c_typ) ^^ (string "\n"));
   (t,ceks)
                 
 and to_ms_exist loc ctx kids cons typ : tau = match kids with
@@ -563,27 +635,56 @@ and to_ms_exist_allow_many loc ctx kids cons typ =
 and to_ms_typ_app ctx loc id typ_args =
   Printf.eprintf "Typ_app %s (%s)\n" id (pp_location loc);
   
-  (match TBindings.find_opt id ctx.types with
-           | Some  (CtxType (ks, target_t,_,_)) -> 
-              Printf.eprintf "  |typ_args|=%d |ks|=%d\n" (List.length typ_args) (List.length ks);
-              let typ_args = List.map (fun ta ->
+  match TBindings.find_opt id ctx.types with
+   | Some  (CtxType (Record (_,ks,target_t),_,_)) ->  
+      Printf.eprintf "  |typ_args|=%d |ks|=%d\n" (List.length typ_args) (List.length ks);
+      let typ_args = List.map (fun ta ->
+                         match ta with
+                         | A.A_aux (A_typ t,_) -> Left (to_ms_typ ctx t)
+                         | A.A_aux (A_nexp n,_) -> Right (to_ms_ce ctx n)
+                       ) typ_args in
+      let ksb = zip typ_args ks in 
+      tsubst_t_list target_t ksb
+      
+   | Some  (CtxType (Variant (_,ks,target_t),_,_)) ->  (* FIXME assuming only record? *)
+      Printf.eprintf "  |typ_args|=%d |ks|=%d\n" (List.length typ_args) (List.length ks);
+      let typ_args = List.map (fun ta ->
                                  match ta with
-                                 | A.A_aux (A_typ t,_) -> Left (to_ms_typ ctx t)
-                                 | A.A_aux (A_nexp n,_) -> Right (to_ms_ce ctx n)
+                                 | A.A_aux (A_typ t,_) -> b_of (to_ms_typ ctx t)
                                ) typ_args in
-              let ksb = zip typ_args ks in 
-              tsubst_t_list target_t ksb
-           | None -> raise (Failure "to_ms_typ"))
+      (*      let ksb = zip typ_args ks in 
+      tsubst_t_list target_t ksb*)
+      T_refined_type(zvar, B_union (id,typ_args),C_true)
+
+   | None -> raise (Failure "to_ms_typ")
 
 (* Extract from the Sail typ its MiniSail base type *)
 
-and  to_ms_base_with_c ctx (A.Typ_aux (typ,loc)) : (bp*cp) =
+(* Note: This only works at top level. If for example top-level is a tuple with a record
+   inside it, we won't get any constraints on the record fields coming out FIXME *)
+and  to_ms_base_with_c ctx ( zvar_in : cep ) (A.Typ_aux (typ,loc) as typ_all) : (bp*cp) =
+  PPrintEngine.ToChannel.compact stderr (string "type=" ^^ Sail_pp.pp_raw_typ typ_all ^^ string "\n");
   match typ with
        | A.Typ_id (Id_aux (Id id,loc2)) -> 
                (match TBindings.find_opt id ctx.types with
-                | Some  (CtxType (ks, target_t,mods,ceks)) -> (b_of target_t, c_of target_t)
+                | Some  (CtxType (Variant (_,_,_) as td ,mods,ceks)) -> (b_of_tdef td ,C_true) (* FIXME. Need to handle option(range(1,10)) *)
+                | Some  (CtxType (Record (_,ks,target_t),mods,ceks)) ->
+                   let cp = ce_subst_cp zvar_in zvar (c_of target_t) in
+                   PPrintEngine.ToChannel.compact stderr (string " cp_out=" ^^ pp_cp cp ^^ string "zin=" ^^ pp_cep zvar_in ^^ string "\n");
+                   (b_of (target_t), cp)
                 | None -> ( to_ms_base ctx (A.Typ_aux (typ,loc)) , C_true))
-       | _ -> (to_ms_base ctx (A.Typ_aux (typ,loc)), C_true)
+       | A.Typ_tup ts ->
+          let (bs,cs) = unzip (List.mapi (fun i t -> to_ms_base_with_c ctx (mk_proj_ce  (List.length ts) i zvar_in) t) ts) in
+          let _ = List.iter (fun c ->   PPrintEngine.ToChannel.compact stderr (string " cp=" ^^ pp_cp c ^^ string "\n")) cs in
+          (B_tuple bs, C_conj_many cs)
+
+       | _ -> (to_ms_base ctx (A.Typ_aux (typ,loc)),C_true)
+                (*
+          try
+            let t = to_ms_typ ctx (A.Typ_aux (typ,loc)) in
+            (b_of t, c_of t)
+          with _ -> 
+                 *)
   
   
 and  to_ms_base ctx (A.Typ_aux (typ,loc)) : bp = 
@@ -600,7 +701,7 @@ and  to_ms_base ctx (A.Typ_aux (typ,loc)) : bp =
             | "bitvector" ->      B_vec (Ord_def,B_bit)
             | _  ->
                (match TBindings.find_opt id ctx.types with
-                | Some  (CtxType (ks, target_t,mods,ceks)) -> b_of target_t
+                | Some  (CtxType (td,mods,ceks)) -> b_of_tdef td
                 | None -> raise (Failure ("to_ms_base: Typ_app. Not found " ^ id )))
                                            )
        | Typ_app (Id_aux (Id "atom",_), [ typ_arg ] ) -> B_int
@@ -619,7 +720,7 @@ and  to_ms_base ctx (A.Typ_aux (typ,loc)) : bp =
        | Typ_app (Id_aux (Id "bitvector",_), [len ; odr]) ->   B_vec ( convert_order odr, B_bit)
        | Typ_app (Id_aux (Id s,_), _ ) -> 
           (match TBindings.find_opt s ctx.types with
-           | Some (CtxType (ks,t,_,_)) -> b_of t
+           | Some (CtxType (td,_,_)) -> b_of_tdef td
            | None -> raise (Failure ("Lookup tid " ^ s)))
        | Typ_tup ts ->
           let bs = List.map (fun t -> to_ms_base ctx t) ts in
@@ -645,7 +746,7 @@ and  to_ms_typ (ctx : 'a ctx ) (A.Typ_aux (typ,loc)) : tau =
             | _ -> 
                Printf.eprintf "Lookup tid loc = %s %s\n" (pp_location loc2) s;
                (match TBindings.find_opt s ctx.types with
-                | Some (CtxType (ks,t,_,_)) -> t
+                | Some (CtxType (td,_,_)) -> t_of_tdef td
                 | None -> raise (Failure "Lookup tid"))
                                            )
        | Typ_var (Kid_aux (Var kid,_)) ->
@@ -655,7 +756,8 @@ and  to_ms_typ (ctx : 'a ctx ) (A.Typ_aux (typ,loc)) : tau =
                | A.K_int -> T_refined_type(zvar,B_int , c_eq (CE_val (V_var (zvar))) (CE_val (V_var (VNamed kid))))
                | A.K_type -> T_refined_type(zvar,B_var kid , C_true)
                | _ -> raise (Failure "to_ms_typ Unexpected use of order kind"))
-           | None -> raise (Failure (Printf.sprintf "Kind lookup %s failed at %s\n" kid (pp_location loc))))
+          )
+           (*           | None -> raise (Failure (Printf.sprintf "Kind lookup %s failed at %s\n" kid (pp_location loc))))*)
        | Typ_app (Id_aux (Id "atom",_), [ typ_arg ] ) ->
           let c_exp = convert_to_c_exp ctx typ_arg in  T_refined_type (zvar,B_int, c_exp )
        | Typ_app (Id_aux (Id "range",loc), typ_args ) ->
@@ -675,7 +777,7 @@ and  to_ms_typ (ctx : 'a ctx ) (A.Typ_aux (typ,loc)) : tau =
           T_refined_type ( zvar,B_vec (odr,b), convert_to_len_exp ctx len )
        | Typ_app (Id_aux (Id "bits",_), [ len]) ->                         (* FIXME? - Don't do this. Let prelude define it and use general lookup. need to handle nexp as typ_arg *)
           (match TBindings.find_opt "bits" ctx.types with
-           | Some  (CtxType (ks, target_t,_,_)) ->  T_refined_type ( zvar, b_of target_t, convert_to_len_exp ctx len )
+           | Some  (CtxType (target_t,_,_)) ->  T_refined_type ( zvar, b_of_tdef target_t, convert_to_len_exp ctx len )
           )
        | Typ_app (Id_aux (Id "int",_), [typ_arg]) ->
           let c_exp = convert_to_c_exp ctx typ_arg in  T_refined_type (zvar,B_int, c_exp )

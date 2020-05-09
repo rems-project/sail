@@ -18,7 +18,7 @@ let rec b_walk w b =
   match b with
   | B_tuple bs -> B_tuple (List.map (b_walk w) bs)
   | B_record (bs) -> B_record (List.map (fun (s,b) -> (s,b_walk w b)) bs)
-  | B_union (s,ts) -> B_union (s,List.map (fun (s,t) -> (s,t_walk w t)) ts)
+  | B_union (s,bs) -> B_union (s, List.map (b_walk w) bs)
   | B_vec (o,b) -> B_vec (o, b_walk w b)
   | b -> b
 and t_walk w (T_refined_type (z, b, c)) =
@@ -34,7 +34,8 @@ let def_walk w def =
       Some f -> let (_,def) = f def in def
     | None -> def in
   match def with
-  | DEFp_typedef (l,id,ks,t) -> DEFp_typedef (l,id, ks,t_walk w t)
+  | DEFp_typedef (l,Variant (id,ks,ts)) -> DEFp_typedef (l, Variant (id, ks, List.map (fun ( f,t) -> (f,t_walk w t)) ts))
+  | DEFp_typedef (l,Record (id,ks,ts)) -> DEFp_typedef (l, Record (id, ks, t_walk w ts))
   | DEFp_fundef (l, f , funcls) ->
      let f = f_walk w f in
      let s = List.map (fun (FCLp_funcl (l,id,s)) -> (FCLp_funcl (l,id,s_walk w s))) funcls in 

@@ -50,7 +50,7 @@ open Minisailplus_pp
 open Convert_typ
 
        
-let add_abbrev ctx id tq typ (mods : mods ) (ceks : ceks) = { ctx with types = TBindings.add id (CtxType (tq,typ,mods,ceks)) ctx.types }
+let add_abbrev ctx id tdef (mods : mods ) (ceks : ceks) = { ctx with types = TBindings.add id (CtxType (tdef,mods,ceks)) ctx.types }
 
 let add_kind ctx id tq ce (mods : mods) ( ceks : ceks ) = { ctx with kind_abbrev = KABindings.add id (CtxKind (tq,ce, mods, ceks)) ctx.kind_abbrev }
                                                               
@@ -418,7 +418,7 @@ and  convert_block ( ctx : 'a ctx ) ( loc : A.l) (exps : ('a A.exp) list) : 'b  
 let to_ms_funcl_pexp (ctx : 'a ctx ) (A.Pat_aux (Pat_exp ( pat,exp), (loc,_)) : 'a A.pexp ) : 'b pexpp = 
       let lc = convert_loc_pair loc in 
       let pexp = PEXPp_exp (lc,to_ms_pat ctx pat, to_ms_e ctx exp)
-      in Msp_ast.SyntaxUtils.freshen_pexpp [] pexp
+      in Msp_ast.Freshen.freshen_pexpp [] pexp
 
 
 
@@ -437,8 +437,8 @@ let to_ms_funcl (ctx : 'a ctx ) (funcl : 'a A.funcl ) : 'b funclp = match funcl 
        FCLp_funcl (convert_loc_pair loc, convert_to_isa (function_name funcl), to_ms_funcl_pexp ctx pexp)
 
 
-let to_ms_variant_typ name t : tau = let ls = TBindings.fold (fun k v l -> ( (convert_to_isa k,v)::l) ) t []
-                             in T_refined_type (zvar,B_union (convert_to_isa name , ls), C_true) 
+let to_ms_variant_typ name t  = let ls = TBindings.fold (fun k v l -> ( (convert_to_isa k,v)::l) ) t []
+                                     in  ls (*T_refined_type (zvar,B_union (convert_to_isa name , []), C_true) *)
 
 (* Convert pattern and also return its type; this is needed for functions with complex args ie
    where the top level pattern constructor is not P_typ
@@ -486,9 +486,9 @@ let to_ms_end_scattered id ctx  =
   else
      let lc = (Loc_unknown,None) in
      match TBindings.find_opt id ctx.types with
-       Some (CtxType (xbc,t,_,_)) ->
-        PPrintEngine.ToChannel.compact stderr (string "Ending scattered type " ^^ pp_tp t);
-        Some (DEFp_typedef (lc,convert_to_isa id, [], t)) (* FIXME. Not empty [] ? *)
+       Some (CtxType (Variant (_,xbc,tps),_,_)) ->
+        (*        PPrintEngine.ToChannel.compact stderr (string "Ending scattered type " ^^ pp_tp t);*)
+        Some (DEFp_typedef (lc,Variant (convert_to_isa id, [], tps))) (* FIXME. Not empty [] ? *)
      | None -> (match FBindings.find_opt id ctx.funs with
                 | None -> None
                 | Some (ks,b,c,ret,ceks) ->
@@ -568,22 +568,24 @@ let to_ms_scattered_aux ctx ( sd : 'a A.scattered_def_aux) loc   =
  | (SD_funcl (FCL_aux (FCL_Funcl (Id_aux (Id id,_),Pat_aux (Pat_exp (pat,expr), _)),_))) ->
     (ctx,(SDp_funclp (ms_loc, FCLp_funcl (ms_loc, convert_to_isa id, PEXPp_exp (ms_loc,to_ms_pat ctx pat, to_ms_e ctx expr)))))
 
+ (* Start of variant/union scattered definition *)
  | SD_variant (Id_aux (Id id, _), typ_quant) -> 
     let (ctx,typq) = to_ms_typquant ctx typ_quant in
-    let t = T_refined_type(zvar, B_union (convert_to_isa id, []), C_true) in
+    let t = [] in (* T_refined_type(zvar, B_union (convert_to_isa id, []), C_true) in*)
     Printf.eprintf "Adding scattered variant %s\n" id;
-    let ctx = add_abbrev ctx id typq t [] []  in
+    let ctx = add_abbrev ctx id (Variant (id,typq,t)) [] []  in
     (ctx,SDp_variant (ms_loc, convert_to_isa id, typq))
 
+ (* Clause of variant/union scattered definition *)
  | (SD_unioncl (Id_aux (Id id, _), type_union)) ->
     Printf.eprintf "Adding union cl %s %s \n" id (pp_location loc);
     (match TBindings.find_opt id ctx.types with
     | None -> raise (Failure "to_ms_scattered Union clause not opened")
-    | Some (CtxType (kvars,T_refined_type( _ , B_union (isa_id, vs), c ),_,_)) -> 
+    | Some (CtxType (Variant (id,kvars, ts),_,_)) -> (* T_refined_type( _ , B_union (isa_id, vs), c ),_,_)) -> *)
        (match type_union with
           (A.Tu_aux (Tu_ty_id (t,Id_aux (Id ctor,_)),_)) ->
              let t = to_ms_typ ctx t in 
-             let ctx = add_abbrev ctx id kvars (T_refined_type(zvar,B_union (isa_id, vs@[(convert_to_isa ctor, t)]), c)) [] [] in
+             let ctx = add_abbrev ctx id (Variant (id,kvars, ts@[(convert_to_isa ctor, t)])) [] [] in
              (ctx,SDp_unioncl (ms_loc, convert_to_isa id, convert_to_isa ctor, t))))
     
  | (SD_end (Id_aux (Id id,_))) -> (ctx,(SDp_end (ms_loc, convert_to_isa id)))
@@ -607,21 +609,24 @@ let to_ms_typedef (ctx : 'a ctx )  (A.TD_aux (aux,(l,_)) : 'a A.type_def) =
   let lc = convert_loc_pair l in 
   match aux with 
   | A.TD_variant (  Id_aux ((Id id), _ ), typq, typ_union , _) ->
-     let (local_ctx, typq) = to_ms_typquant ctx typq in 
+     let (local_ctx, typq) = to_ms_typquant ctx typq in
+     let id = convert_to_isa id in
      let kvars= List.map (fun (x,y) -> x ) typq in (* FIXME SHould be taking types as well ??? *)
-     let variant = List.fold_left (fun var x -> match x with
-                                                  (A.Tu_aux (Tu_ty_id (t,Id_aux (Id id,_)),_)) -> TBindings.add id (to_ms_typ local_ctx t) var )
-                     TBindings.empty typ_union in
-     let variant = to_ms_variant_typ id variant                              
-     in (add_abbrev ctx id typq variant [] []  , Some (DEFp_typedef (lc,convert_to_isa id,typq,variant))) 
+     let variant = List.map (fun x -> match x with
+                                       (A.Tu_aux (Tu_ty_id (t,Id_aux (Id id,_)),_)) -> (id,to_ms_typ local_ctx t))
+                     typ_union in
+     let variant = Variant (id, typq, variant) in (*to_ms_variant_typ id variant                              *)
+     (add_abbrev ctx id variant [] []  , Some (DEFp_typedef (lc,variant))) 
           
   | A.TD_record ( Id_aux ((Id id), _ ), typq, id_typ_list, _) ->
-     let (ctx,typq) = to_ms_typquant ctx typq in 
+     let (ctx,typq) = to_ms_typquant ctx typq in
+     let id = convert_to_isa id in
      let kvars= List.map (fun (x,y) -> x ) typq in (* FIXME SHould be taking types as well ??? *)    
      let fd_typ = List.map (fun (typ,A.Id_aux (Id id,_)) -> (convert_to_isa id, to_ms_typ ctx typ)) id_typ_list in
      let record = normalise_record_type fd_typ in
-     let ctx = add_abbrev ctx id typq record [] [] in
-     (ctx, Some (DEFp_typedef (lc,convert_to_isa id, typq, record )))
+     let record = Record (id, typq , record) in
+     let ctx = add_abbrev ctx id record [] [] in
+     (ctx, Some (DEFp_typedef (lc,record )))
                                                               
   | A.TD_abbrev ( Id_aux (Id id, loc), tq , A_aux( A_typ typ, _)) -> (* FIXME Now has kind included. USe for what? *)
      Printf.eprintf "type abbrev %s loc=%s\n" (id) (pp_location loc);
@@ -629,7 +634,8 @@ let to_ms_typedef (ctx : 'a ctx )  (A.TD_aux (aux,(l,_)) : 'a A.type_def) =
      let (mods,ceks,_) = convert_invert_typ ctx (List.map (fun (VNamed k,(_,_)) -> k ) tq) (CE_val (V_var xvar) ) typ in
      let typ = to_ms_typ ctx typ in 
      let kvars = List.map (fun (x,y) -> x) tq in
-     (add_abbrev ctx id tq typ mods ceks, Some (DEFp_typedef (lc, convert_to_isa id, tq,typ)))
+     let record = Record (id,tq,typ) in 
+     (add_abbrev ctx id (Record (id,tq, typ)) mods ceks, Some (DEFp_typedef (lc, record )))
        
   | A.TD_abbrev ( Id_aux (Id id, _), tq , A_aux( A_nexp nexp, _)) -> (* FIXME. Only assuming kind = Int *)
      Printf.eprintf "type abbrev kind %s\n" (id);
@@ -643,8 +649,10 @@ let to_ms_typedef (ctx : 'a ctx )  (A.TD_aux (aux,(l,_)) : 'a A.type_def) =
   | A.TD_enum (Id_aux (Id id,_), id_list , _) ->
      let variant = List.fold_left (fun var x -> TBindings.add (up_id x) (to_ms_typ ctx (Typ_aux (Typ_id (mk_id "unit"),l ))) var) TBindings.empty id_list in
      let ctx = add_enums ctx id_list in 
-     let variant = to_ms_variant_typ id variant                              
-     in (add_abbrev ctx id [] variant [] [] , Some (DEFp_typedef (lc, convert_to_isa id,[],variant)))
+     let variant = to_ms_variant_typ id variant in
+     (*let (B_union (_ ts) = b_of variant in *)
+     let variant = Variant (id,[],variant)
+     in (add_abbrev ctx id variant [] [] , Some (DEFp_typedef (lc, variant)))
 
   | _  -> raise (Failure ("Unknown def type form: " ^ (pp_location l)))
 
@@ -658,26 +666,27 @@ let add_kids ctx loc kids = List.fold_left (fun ctx (VNamed x,(b,c)) ->
                             | B_int -> { ctx with kinds = KBindings.add x (A.K_aux (K_int, loc)) ctx.kinds }
                             | B_var _ -> { ctx with kinds = KBindings.add x (A.K_aux (K_type, loc)) ctx.kinds }
                             | B_bool -> { ctx with kinds = KBindings.add x (A.K_aux (K_order, loc)) ctx.kinds }) ctx kids
-                
+
+                          
 let to_ms_def_aux (ctx : 'a ctx) ( d : 'a A.def ) : ('a ctx * 'b defp option) =
   let lc = (Loc_unknown,None) in
-
   match d with
   (*    A.DEF_kind (KD_aux (_, (loc,_))) -> raise (Failure ("Kind def not supported" ^ (pp_location loc)))*)
 
   | A.DEF_type aux -> to_ms_typedef ctx aux
 
   | A.DEF_fundef (FD_aux ( FD_function (rc, _ , eff, (( funcl::_) as funcls)) ,(loc,_))) ->
+     let ms_loc = convert_loc_pair loc in
      (*  | A.DEF_fundef (FD_aux ( FD_function (rc,Typ_annot_opt_aux(Typ_annot_opt_none,_), eff, (( funcl::_) as funcls)) ,(loc,_))) ->*)
      Printf.eprintf "to_ms_def DEF_fundef none %s\n" (pp_location loc);
      let fname = function_name funcl in
      let (local_ctx,kids, fun_t,ceks) = (match (FBindings.find_opt fname ctx.funs ) with
            | Some (kids,b,c,tret,ceks) -> (add_kids ctx loc kids ,kids, A_function(xvar,b,c,tret),ceks)
-           | None ->  raise (Failure "to_ms_def DEF_fundef. Cannot find type for function")) in
+           | None ->  raise (Failure ("to_ms_def DEF_fundef. Cannot find type for function " ^ fname))) in
      let funcls = List.map (to_ms_funcl local_ctx) funcls in
      let ceks = List.map (fun (Some x, ce) -> (VNamed x,ce)) ceks in
      let funcls = List.map (replace_ks_in_funcl ceks) funcls in
-     (ctx, Some (DEFp_fundef  (lc, fun_t ,funcls)))
+     (ctx, Some (DEFp_fundef  (ms_loc, fun_t ,funcls)))
 
 (* Some confusion on why this needed. Sail TC seems put the correct type as a val spec so no need to try and work
 it out here       
@@ -700,18 +709,19 @@ it out here
                                                                (DEFp_val 
                                                                   (lc, (LBp_val (lc, pat , exp ))))))
 
-  | DEF_overload ( fid ,fidlist) ->
-     (ctx,Some (DEFp_overload (lc,convert_id fid,List.map convert_id fidlist)))
+  | DEF_overload ( fid ,fidlist) -> (ctx,None)
+  (*     (ctx,Some (DEFp_overload (lc,convert_id fid,List.map convert_id fidlist)))*)
       
  | DEF_fixity _ -> (ctx,None)
 
  | DEF_spec (VS_aux (VS_val_spec (ts,Id_aux( id ,_) , _ ,_),(loc,_))) ->
     
     (try
+      let ms_loc = convert_loc_pair loc in
       let id = (match id with Id x -> x | Operator x -> x) in
       let ((kids,b,c,t,ceks) as ftype) = to_ms_typschm ctx ts in 
       let ctx = { ctx with funs = FBindings.add id ftype ctx.funs } in
-      (ctx, Some (DEFp_spec (lc,  (convert_to_isa id),
+      (ctx, Some (DEFp_spec (ms_loc,  (convert_to_isa id),
                             A_function(xvar, b , c , t ))))
     with InvertFail -> 
           Printf.eprintf "Warning: Could not process DEF_spec at %s. Inversion failed\n" (pp_location loc);
@@ -774,7 +784,7 @@ let convert_ast ((A.Defs sail_defs) : 'a A.defs ) : 'b progp =
   (* Resolve all type references to actual type *)
   let wlk = { visit_def = None;
               visit_b = Some (fun b -> match b with
-                        B_tid s -> let CtxType (_,T_refined_type (_,b,c),_,_) = TBindings.find ( s) ctx.types
+                        B_tid s -> let CtxType (Record(_,_,T_refined_type (_,b,c)),_,_) = TBindings.find ( s) ctx.types
                                    in (c,b)
                       | _ -> (C_true,b))
             } in

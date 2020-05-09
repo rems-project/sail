@@ -72,6 +72,7 @@ end;; (*struct HOL*)
 module Option : sig
   val equal_optiona : 'a HOL.equal -> 'a option -> 'a option -> bool
   val equal_option : 'a HOL.equal -> ('a option) HOL.equal
+  val bind : 'a option -> ('a -> 'b option) -> 'b option
 end = struct
 
 let rec equal_optiona _A x0 x1 = match x0, x1 with None, Some x2 -> false
@@ -81,6 +82,9 @@ let rec equal_optiona _A x0 x1 = match x0, x1 with None, Some x2 -> false
 
 let rec equal_option _A =
   ({HOL.equal = equal_optiona _A} : ('a option) HOL.equal);;
+
+let rec bind x0 f = match x0, f with None, f -> None
+               | Some x, f -> f x;;
 
 end;; (*struct Option*)
 
@@ -173,7 +177,6 @@ module Arith : sig
   val less_int : int -> int -> bool
   val less_nat : nat -> nat -> bool
   val int_of_nat : nat -> int
-  val plus_int : int -> int -> int
   val zero_int : int
   val divmod_integer : Z.t -> Z.t -> Z.t * Z.t
   val nat_of_integer : Z.t -> nat
@@ -263,9 +266,6 @@ let rec less_int k l = Z.lt (integer_of_int k) (integer_of_int l);;
 let rec less_nat m n = Z.lt (integer_of_nat m) (integer_of_nat n);;
 
 let rec int_of_nat n = Int_of_integer (integer_of_nat n);;
-
-let rec plus_int
-  k l = Int_of_integer (Z.add (integer_of_int k) (integer_of_int l));;
 
 let zero_int : int = Int_of_integer Z.zero;;
 
@@ -1446,31 +1446,6 @@ let rec trace s = ();;
 
 end;; (*struct Debug*)
 
-module Finite_Map : sig
-  type ('a, 'b) fmap = Fmap_of_list of ('a * 'b) list
-  val fmadd : 'a HOL.equal -> ('a, 'b) fmap -> ('a, 'b) fmap -> ('a, 'b) fmap
-  val fmupd : 'a HOL.equal -> 'a -> 'b -> ('a, 'b) fmap -> ('a, 'b) fmap
-  val fmempty : ('a, 'b) fmap
-  val fmmap_keys : ('a -> 'b -> 'c) -> ('a, 'b) fmap -> ('a, 'c) fmap
-  val fmlookup : 'a HOL.equal -> ('a, 'b) fmap -> 'a -> 'b option
-end = struct
-
-type ('a, 'b) fmap = Fmap_of_list of ('a * 'b) list;;
-
-let rec fmadd _A
-  (Fmap_of_list m) (Fmap_of_list n) = Fmap_of_list (AList.merge _A m n);;
-
-let rec fmupd _A k v m = fmadd _A m (Fmap_of_list [(k, v)]);;
-
-let fmempty : ('a, 'b) fmap = Fmap_of_list [];;
-
-let rec fmmap_keys
-  f (Fmap_of_list m) = Fmap_of_list (Lista.map (fun (a, b) -> (a, f a b)) m);;
-
-let rec fmlookup _A (Fmap_of_list m) = Map.map_of _A m;;
-
-end;; (*struct Finite_Map*)
-
 module Stringa : sig
   val equal_literal : string HOL.equal
   type char = Chara of bool * bool * bool * bool * bool * bool * bool * bool
@@ -1593,11 +1568,10 @@ module SyntaxVCT : sig
   val equal_order : order -> order -> bool
   type bp = B_var of string | B_tid of string | B_int | B_bool | B_bit | B_unit
     | B_real | B_vec of order * bp | B_list of bp | B_tuple of bp list |
-    B_union of string * (string * tau) list | B_record of (string * bp) list |
-    B_undef | B_reg of tau | B_string | B_exception | B_finite_set of Z.t list
+    B_union of string * bp list | B_record of (string * bp) list | B_undef |
+    B_reg of tau | B_string | B_exception | B_finite_set of Z.t list
   and tau = T_refined_type of xp * bp * cp
   val equal_taua : tau -> tau -> bool
-  val equal_tau : tau HOL.equal
   val equal_bpa : bp -> bp -> bool
   val equal_bp : bp HOL.equal
   type ap = A_monotype of tau | A_function of xp * bp * cp * tau
@@ -1605,6 +1579,7 @@ module SyntaxVCT : sig
   val equal_ap : ap HOL.equal
   val equal_xp : xp HOL.equal
   val equal_lit : lit HOL.equal
+  val equal_tau : tau HOL.equal
 end = struct
 
 type xp = VNamed of string | VIndex;;
@@ -2204,14 +2179,13 @@ let rec equal_order x0 x1 = match x0, x1 with Ord_dec, Ord_def -> false
 
 type bp = B_var of string | B_tid of string | B_int | B_bool | B_bit | B_unit |
   B_real | B_vec of order * bp | B_list of bp | B_tuple of bp list |
-  B_union of string * (string * tau) list | B_record of (string * bp) list |
-  B_undef | B_reg of tau | B_string | B_exception | B_finite_set of Z.t list
+  B_union of string * bp list | B_record of (string * bp) list | B_undef |
+  B_reg of tau | B_string | B_exception | B_finite_set of Z.t list
 and tau = T_refined_type of xp * bp * cp;;
 
 let rec equal_taua
   (T_refined_type (x1, x2, x3)) (T_refined_type (y1, y2, y3)) =
     equal_xpa x1 y1 && (equal_bpa x2 y2 && equal_cpa x3 y3)
-and equal_tau () = ({HOL.equal = equal_taua} : tau HOL.equal)
 and equal_bpa
   x0 x1 = match x0, x1 with B_exception, B_finite_set x17 -> false
     | B_finite_set x17, B_exception -> false
@@ -2492,10 +2466,7 @@ and equal_bpa
         Lista.equal_lista
           (Product_Type.equal_prod Stringa.equal_literal (equal_bp ())) x12 y12
     | B_union (x111, x112), B_union (y111, y112) ->
-        ((x111 : string) = y111) &&
-          Lista.equal_lista
-            (Product_Type.equal_prod Stringa.equal_literal (equal_tau ())) x112
-            y112
+        ((x111 : string) = y111) && Lista.equal_lista (equal_bp ()) x112 y112
     | B_tuple x10, B_tuple y10 -> Lista.equal_lista (equal_bp ()) x10 y10
     | B_list x9, B_list y9 -> equal_bpa x9 y9
     | B_vec (x81, x82), B_vec (y81, y82) ->
@@ -2511,7 +2482,6 @@ and equal_bpa
     | B_bool, B_bool -> true
     | B_int, B_int -> true
 and equal_bp () = ({HOL.equal = equal_bpa} : bp HOL.equal);;
-let equal_tau = equal_tau ();;
 let equal_bp = equal_bp ();;
 
 type ap = A_monotype of tau | A_function of xp * bp * cp * tau;;
@@ -2530,6 +2500,8 @@ let equal_ap = ({HOL.equal = equal_apa} : ap HOL.equal);;
 let equal_xp = ({HOL.equal = equal_xpa} : xp HOL.equal);;
 
 let equal_lit = ({HOL.equal = equal_lita} : lit HOL.equal);;
+
+let equal_tau = ({HOL.equal = equal_taua} : tau HOL.equal);;
 
 end;; (*struct SyntaxVCT*)
 
@@ -2636,156 +2608,23 @@ module SyntaxPED : sig
     | SDp_unioncl of (Location.loc * 'a) * string * string * SyntaxVCT.tau |
     SDp_funclp of (Location.loc * 'a) * 'a funclp |
     SDp_end of (Location.loc * 'a) * string
+  type typdef =
+    Record of
+      string * (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
+        SyntaxVCT.tau
+    | Variant of
+        string * (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
+          (string * SyntaxVCT.tau) list
   type 'a defp =
     DEFp_fundef of (Location.loc * 'a) * SyntaxVCT.ap * 'a funclp list |
-    DEFp_typedef of
-      (Location.loc * 'a) * string *
-        (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list * SyntaxVCT.tau
-    | DEFp_spec of (Location.loc * 'a) * string * SyntaxVCT.ap |
+    DEFp_typedef of (Location.loc * 'a) * typdef |
+    DEFp_spec of (Location.loc * 'a) * string * SyntaxVCT.ap |
     DEFp_val of (Location.loc * 'a) * 'a letbindp |
     DEFp_reg of (Location.loc * 'a) * SyntaxVCT.tau * SyntaxVCT.xp |
     DEFp_overload of (Location.loc * 'a) * string * string list |
     DEFp_scattered of (Location.loc * 'a) * 'a scattered_defp |
     DEFp_default of (Location.loc * 'a) * SyntaxVCT.order
   type 'a progp = Pp_prog of (Location.loc * 'a) * 'a defp list
-  val fvs_vp : SyntaxVCT.vp -> SyntaxVCT.xp list
-  val fvs_vp_list_V_vec : SyntaxVCT.vp list -> SyntaxVCT.xp list
-  val fvs_vp_list_V_list : SyntaxVCT.vp list -> SyntaxVCT.xp list
-  val fvs_vp_list_V_tuple : SyntaxVCT.vp list -> SyntaxVCT.xp list
-  val fvs_field_vp_V_record : string * SyntaxVCT.vp -> SyntaxVCT.xp list
-  val fvs_field_vp_list_V_record :
-    (string * SyntaxVCT.vp) list -> SyntaxVCT.xp list
-  val fvs_cep : SyntaxVCT.cep -> SyntaxVCT.xp list
-  val fvs_cep_list : SyntaxVCT.cep list -> SyntaxVCT.xp list
-  val fvs_cp : SyntaxVCT.cp -> SyntaxVCT.xp list
-  val fvs_cp_list : SyntaxVCT.cp list -> SyntaxVCT.xp list
-  val fvs_bp : SyntaxVCT.bp -> SyntaxVCT.xp list
-  val fvs_tau : SyntaxVCT.tau -> SyntaxVCT.xp list
-  val fvs_ctor_tau : string * SyntaxVCT.tau -> SyntaxVCT.xp list
-  val fvs_ctor_tau_list : (string * SyntaxVCT.tau) list -> SyntaxVCT.xp list
-  val fvs_bp_list : SyntaxVCT.bp list -> SyntaxVCT.xp list
-  val fvs_field_bp : string * SyntaxVCT.bp -> SyntaxVCT.xp list
-  val fvs_field_bp_list : (string * SyntaxVCT.bp) list -> SyntaxVCT.xp list
-  val fvs_patp : 'a patp -> SyntaxVCT.xp list
-  val fvs_patp_list_Pp_app : 'a patp list -> SyntaxVCT.xp list
-  val fvs_patp_list_Pp_tup : 'a patp list -> SyntaxVCT.xp list
-  val fvs_patp_list_Pp_list : 'a patp list -> SyntaxVCT.xp list
-  val fvs_patp_list_Pp_vector : 'a patp list -> SyntaxVCT.xp list
-  val fvs_patp_list_Pp_string_append : 'a patp list -> SyntaxVCT.xp list
-  val fvs_patp_list_Pp_vector_concat : 'a patp list -> SyntaxVCT.xp list
-  val fvs_lexpp : 'a lexpp -> SyntaxVCT.xp list
-  val fvs_lexpp_list : 'a lexpp list -> SyntaxVCT.xp list
-  val fvs_ep : 'a ep -> SyntaxVCT.xp list
-  val fvs_pexpp : 'a pexpp -> SyntaxVCT.xp list
-  val fvs_pexpp_list_Ep_try : 'a pexpp list -> SyntaxVCT.xp list
-  val fvs_pexpp_list_Ep_case : 'a pexpp list -> SyntaxVCT.xp list
-  val fvs_letbindp : 'a letbindp -> SyntaxVCT.xp list
-  val fvs_ep_list_Ep_vec : 'a ep list -> SyntaxVCT.xp list
-  val fvs_ep_list_Ep_list : 'a ep list -> SyntaxVCT.xp list
-  val fvs_ep_list_Ep_block : 'a ep list -> SyntaxVCT.xp list
-  val fvs_ep_list_Ep_tuple : 'a ep list -> SyntaxVCT.xp list
-  val fvs_ep_list_Ep_concat : 'a ep list -> SyntaxVCT.xp list
-  val fvs_field_ep_Ep_record : string * 'a ep -> SyntaxVCT.xp list
-  val fvs_field_ep_list_Ep_record : (string * 'a ep) list -> SyntaxVCT.xp list
-  val fvs_field_ep_Ep_record_update : string * 'a ep -> SyntaxVCT.xp list
-  val fvs_field_ep_list_Ep_record_update :
-    (string * 'a ep) list -> SyntaxVCT.xp list
-  val subst_vp : SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.vp
-  val subst_vp_list_V_vec :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.vp list -> SyntaxVCT.vp list
-  val subst_vp_list_V_list :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.vp list -> SyntaxVCT.vp list
-  val subst_vp_list_V_tuple :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.vp list -> SyntaxVCT.vp list
-  val subst_field_vp_V_record :
-    SyntaxVCT.vp ->
-      SyntaxVCT.xp -> string * SyntaxVCT.vp -> string * SyntaxVCT.vp
-  val subst_field_vp_list_V_record :
-    SyntaxVCT.vp ->
-      SyntaxVCT.xp ->
-        (string * SyntaxVCT.vp) list -> (string * SyntaxVCT.vp) list
-  val subst_cep : SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.cep -> SyntaxVCT.cep
-  val subst_cep_list :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.cep list -> SyntaxVCT.cep list
-  val subst_cp : SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.cp -> SyntaxVCT.cp
-  val subst_cp_list :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.cp list -> SyntaxVCT.cp list
-  val subst_bp : SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.bp -> SyntaxVCT.bp
-  val subst_tp : SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.tau -> SyntaxVCT.tau
-  val subst_ctor_tau :
-    SyntaxVCT.vp ->
-      SyntaxVCT.xp -> string * SyntaxVCT.tau -> string * SyntaxVCT.tau
-  val subst_ctor_tau_list :
-    SyntaxVCT.vp ->
-      SyntaxVCT.xp ->
-        (string * SyntaxVCT.tau) list -> (string * SyntaxVCT.tau) list
-  val subst_bp_list :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.bp list -> SyntaxVCT.bp list
-  val subst_field_bp :
-    SyntaxVCT.vp ->
-      SyntaxVCT.xp -> string * SyntaxVCT.bp -> string * SyntaxVCT.bp
-  val subst_field_bp_list :
-    SyntaxVCT.vp ->
-      SyntaxVCT.xp ->
-        (string * SyntaxVCT.bp) list -> (string * SyntaxVCT.bp) list
-  val subst_patp : SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp -> 'a patp
-  val subst_patp_list_Pp_app :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp list -> 'a patp list
-  val subst_patp_list_Pp_tup :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp list -> 'a patp list
-  val subst_patp_list_Pp_list :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp list -> 'a patp list
-  val subst_patp_list_Pp_vector :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp list -> 'a patp list
-  val subst_patp_list_Pp_string_append :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp list -> 'a patp list
-  val subst_patp_list_Pp_vector_concat :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a patp list -> 'a patp list
-  val subst_lexpp : SyntaxVCT.vp -> SyntaxVCT.xp -> 'a lexpp -> 'a lexpp
-  val subst_lexpp_list :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a lexpp list -> 'a lexpp list
-  val subst_ep : SyntaxVCT.vp -> SyntaxVCT.xp -> 'a ep -> 'a ep
-  val subst_pexpp : SyntaxVCT.vp -> SyntaxVCT.xp -> 'a pexpp -> 'a pexpp
-  val subst_pexpp_list_Ep_try :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a pexpp list -> 'a pexpp list
-  val subst_pexpp_list_Ep_case :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a pexpp list -> 'a pexpp list
-  val subst_letbindp :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a letbindp -> 'a letbindp
-  val subst_ep_list_Ep_vec :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a ep list -> 'a ep list
-  val subst_ep_list_Ep_list :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a ep list -> 'a ep list
-  val subst_ep_list_Ep_block :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a ep list -> 'a ep list
-  val subst_ep_list_Ep_tuple :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a ep list -> 'a ep list
-  val subst_ep_list_Ep_concat :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> 'a ep list -> 'a ep list
-  val subst_field_ep_Ep_record :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> string * 'a ep -> string * 'a ep
-  val subst_field_ep_list_Ep_record :
-    SyntaxVCT.vp ->
-      SyntaxVCT.xp -> (string * 'a ep) list -> (string * 'a ep) list
-  val subst_field_ep_Ep_record_update :
-    SyntaxVCT.vp -> SyntaxVCT.xp -> string * 'a ep -> string * 'a ep
-  val subst_field_ep_list_Ep_record_update :
-    SyntaxVCT.vp ->
-      SyntaxVCT.xp -> (string * 'a ep) list -> (string * 'a ep) list
-  val tsubst_bp : SyntaxVCT.bp -> string -> SyntaxVCT.bp -> SyntaxVCT.bp
-  val tsubst_tp : SyntaxVCT.bp -> string -> SyntaxVCT.tau -> SyntaxVCT.tau
-  val tsubst_ctor_tau :
-    SyntaxVCT.bp -> string -> string * SyntaxVCT.tau -> string * SyntaxVCT.tau
-  val tsubst_ctor_tau_list :
-    SyntaxVCT.bp ->
-      string -> (string * SyntaxVCT.tau) list -> (string * SyntaxVCT.tau) list
-  val tsubst_bp_list :
-    SyntaxVCT.bp -> string -> SyntaxVCT.bp list -> SyntaxVCT.bp list
-  val tsubst_field_bp :
-    SyntaxVCT.bp -> string -> string * SyntaxVCT.bp -> string * SyntaxVCT.bp
-  val tsubst_field_bp_list :
-    SyntaxVCT.bp ->
-      string -> (string * SyntaxVCT.bp) list -> (string * SyntaxVCT.bp) list
   val annot_e : 'a ep -> Location.loc * 'a
 end = struct
 
@@ -2866,12 +2705,17 @@ type 'a scattered_defp =
   SDp_funclp of (Location.loc * 'a) * 'a funclp |
   SDp_end of (Location.loc * 'a) * string;;
 
+type typdef =
+  Record of
+    string * (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list * SyntaxVCT.tau
+  | Variant of
+      string * (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list *
+        (string * SyntaxVCT.tau) list;;
+
 type 'a defp =
   DEFp_fundef of (Location.loc * 'a) * SyntaxVCT.ap * 'a funclp list |
-  DEFp_typedef of
-    (Location.loc * 'a) * string *
-      (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list * SyntaxVCT.tau
-  | DEFp_spec of (Location.loc * 'a) * string * SyntaxVCT.ap |
+  DEFp_typedef of (Location.loc * 'a) * typdef |
+  DEFp_spec of (Location.loc * 'a) * string * SyntaxVCT.ap |
   DEFp_val of (Location.loc * 'a) * 'a letbindp |
   DEFp_reg of (Location.loc * 'a) * SyntaxVCT.tau * SyntaxVCT.xp |
   DEFp_overload of (Location.loc * 'a) * string * string list |
@@ -2879,6 +2723,109 @@ type 'a defp =
   DEFp_default of (Location.loc * 'a) * SyntaxVCT.order;;
 
 type 'a progp = Pp_prog of (Location.loc * 'a) * 'a defp list;;
+
+let rec annot_e = function Ep_block (x11, x12) -> x11
+                  | Ep_val (x21, x22) -> x21
+                  | Ep_mvar (x31, x32) -> x31
+                  | Ep_bop (x41, x42, x43, x44) -> x41
+                  | Ep_uop (x51, x52, x53) -> x51
+                  | Ep_proj (x61, x62, x63) -> x61
+                  | Ep_cast (x71, x72, x73) -> x71
+                  | Ep_app (x81, x82, x83) -> x81
+                  | Ep_tuple (x91, x92) -> x91
+                  | Ep_if (x101, x102, x103, x104) -> x101
+                  | Ep_loop (x111, x112, x113, x114) -> x111
+                  | Ep_for (x121, x122, x123, x124, x125, x126, x127) -> x121
+                  | Ep_vec (x131, x132) -> x131
+                  | Ep_concat (x141, x142) -> x141
+                  | Ep_list (x151, x152) -> x151
+                  | Ep_cons (x161, x162, x163) -> x161
+                  | Ep_record (x171, x172) -> x171
+                  | Ep_record_update (x181, x182, x183) -> x181
+                  | Ep_field_access (x191, x192, x193) -> x191
+                  | Ep_case (x201, x202, x203) -> x201
+                  | Ep_let (x211, x212, x213) -> x211
+                  | Ep_sizeof (x221, x222) -> x221
+                  | Ep_exit (x231, x232) -> x231
+                  | Ep_return (x241, x242) -> x241
+                  | Ep_ref (x251, x252) -> x251
+                  | Ep_throw (x261, x262) -> x261
+                  | Ep_try (x271, x272, x273) -> x271
+                  | Ep_assert (x281, x282, x283) -> x281
+                  | Ep_var (x291, x292, x293, x294) -> x291
+                  | Ep_assign (x301, x302, x303) -> x301
+                  | Ep_constraint (x311, x312) -> x311;;
+
+end;; (*struct SyntaxPED*)
+
+module Subst : sig
+  val fvs_vp : SyntaxVCT.vp -> SyntaxVCT.xp list
+  val fvs_vp_list_V_vec : SyntaxVCT.vp list -> SyntaxVCT.xp list
+  val fvs_vp_list_V_list : SyntaxVCT.vp list -> SyntaxVCT.xp list
+  val fvs_vp_list_V_tuple : SyntaxVCT.vp list -> SyntaxVCT.xp list
+  val fvs_field_vp_V_record : string * SyntaxVCT.vp -> SyntaxVCT.xp list
+  val fvs_field_vp_list_V_record :
+    (string * SyntaxVCT.vp) list -> SyntaxVCT.xp list
+  val fvs_cep : SyntaxVCT.cep -> SyntaxVCT.xp list
+  val fvs_cep_list : SyntaxVCT.cep list -> SyntaxVCT.xp list
+  val fvs_cp : SyntaxVCT.cp -> SyntaxVCT.xp list
+  val fvs_cp_list : SyntaxVCT.cp list -> SyntaxVCT.xp list
+  val fvs_bp : SyntaxVCT.bp -> SyntaxVCT.xp list
+  val fvs_tau : SyntaxVCT.tau -> SyntaxVCT.xp list
+  val fvs_bp_list : SyntaxVCT.bp list -> SyntaxVCT.xp list
+  val fvs_field_bp : string * SyntaxVCT.bp -> SyntaxVCT.xp list
+  val fvs_field_bp_list : (string * SyntaxVCT.bp) list -> SyntaxVCT.xp list
+  val fvs_patp : 'a SyntaxPED.patp -> SyntaxVCT.xp list
+  val fvs_patp_list_Pp_app : 'a SyntaxPED.patp list -> SyntaxVCT.xp list
+  val fvs_patp_list_Pp_tup : 'a SyntaxPED.patp list -> SyntaxVCT.xp list
+  val fvs_patp_list_Pp_list : 'a SyntaxPED.patp list -> SyntaxVCT.xp list
+  val fvs_patp_list_Pp_vector : 'a SyntaxPED.patp list -> SyntaxVCT.xp list
+  val fvs_patp_list_Pp_string_append :
+    'a SyntaxPED.patp list -> SyntaxVCT.xp list
+  val fvs_patp_list_Pp_vector_concat :
+    'a SyntaxPED.patp list -> SyntaxVCT.xp list
+  val fvs_lexpp : 'a SyntaxPED.lexpp -> SyntaxVCT.xp list
+  val fvs_lexpp_list : 'a SyntaxPED.lexpp list -> SyntaxVCT.xp list
+  val fvs_ep : 'a SyntaxPED.ep -> SyntaxVCT.xp list
+  val fvs_pexpp : 'a SyntaxPED.pexpp -> SyntaxVCT.xp list
+  val fvs_pexpp_list_Ep_try : 'a SyntaxPED.pexpp list -> SyntaxVCT.xp list
+  val fvs_pexpp_list_Ep_case : 'a SyntaxPED.pexpp list -> SyntaxVCT.xp list
+  val fvs_letbindp : 'a SyntaxPED.letbindp -> SyntaxVCT.xp list
+  val fvs_ep_list_Ep_vec : 'a SyntaxPED.ep list -> SyntaxVCT.xp list
+  val fvs_ep_list_Ep_list : 'a SyntaxPED.ep list -> SyntaxVCT.xp list
+  val fvs_ep_list_Ep_block : 'a SyntaxPED.ep list -> SyntaxVCT.xp list
+  val fvs_ep_list_Ep_tuple : 'a SyntaxPED.ep list -> SyntaxVCT.xp list
+  val fvs_ep_list_Ep_concat : 'a SyntaxPED.ep list -> SyntaxVCT.xp list
+  val fvs_field_ep_Ep_record : string * 'a SyntaxPED.ep -> SyntaxVCT.xp list
+  val fvs_field_ep_list_Ep_record :
+    (string * 'a SyntaxPED.ep) list -> SyntaxVCT.xp list
+  val fvs_field_ep_Ep_record_update :
+    string * 'a SyntaxPED.ep -> SyntaxVCT.xp list
+  val fvs_field_ep_list_Ep_record_update :
+    (string * 'a SyntaxPED.ep) list -> SyntaxVCT.xp list
+  val subst_vp : SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.vp
+  val subst_vp_list_V_vec :
+    SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.vp list -> SyntaxVCT.vp list
+  val subst_vp_list_V_list :
+    SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.vp list -> SyntaxVCT.vp list
+  val subst_vp_list_V_tuple :
+    SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.vp list -> SyntaxVCT.vp list
+  val subst_field_vp_V_record :
+    SyntaxVCT.vp ->
+      SyntaxVCT.xp -> string * SyntaxVCT.vp -> string * SyntaxVCT.vp
+  val subst_field_vp_list_V_record :
+    SyntaxVCT.vp ->
+      SyntaxVCT.xp ->
+        (string * SyntaxVCT.vp) list -> (string * SyntaxVCT.vp) list
+  val subst_cep : SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.cep -> SyntaxVCT.cep
+  val subst_cep_list :
+    SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.cep list -> SyntaxVCT.cep list
+  val subst_cp : SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.cp -> SyntaxVCT.cp
+  val subst_cp_list :
+    SyntaxVCT.vp -> SyntaxVCT.xp -> SyntaxVCT.cp list -> SyntaxVCT.cp list
+  val tsubst_bp : SyntaxVCT.bp -> string -> SyntaxVCT.bp -> SyntaxVCT.bp
+  val tsubst_tp : SyntaxVCT.bp -> string -> SyntaxVCT.tau -> SyntaxVCT.tau
+end = struct
 
 let rec fvs_vp
   = function SyntaxVCT.V_lit lit -> []
@@ -2943,7 +2890,7 @@ let rec fvs_bp
     | SyntaxVCT.B_vec (order, bp) -> fvs_bp bp
     | SyntaxVCT.B_list bp -> fvs_bp bp
     | SyntaxVCT.B_tuple bp_list -> fvs_bp_list bp_list
-    | SyntaxVCT.B_union (id, ctor_tau_list) -> fvs_ctor_tau_list ctor_tau_list
+    | SyntaxVCT.B_union (id, bp_list) -> fvs_bp_list bp_list
     | SyntaxVCT.B_record field_bp_list -> fvs_field_bp_list field_bp_list
     | SyntaxVCT.B_undef -> []
     | SyntaxVCT.B_reg tau -> fvs_tau tau
@@ -2951,11 +2898,6 @@ let rec fvs_bp
     | SyntaxVCT.B_exception -> []
     | SyntaxVCT.B_finite_set num_list -> []
 and fvs_tau (SyntaxVCT.T_refined_type (zp, bp, cp)) = fvs_bp bp @ fvs_cp cp
-and fvs_ctor_tau (ctor_XXX, tau_XXX) = fvs_tau tau_XXX
-and fvs_ctor_tau_list
-  = function [] -> []
-    | ctor_tau_XXX :: ctor_tau_list_XXX ->
-        fvs_ctor_tau ctor_tau_XXX @ fvs_ctor_tau_list ctor_tau_list_XXX
 and fvs_bp_list
   = function [] -> []
     | bp_XXX :: bp_list_XXX -> fvs_bp bp_XXX @ fvs_bp_list bp_list_XXX
@@ -2966,20 +2908,21 @@ and fvs_field_bp_list
         fvs_field_bp field_bp_XXX @ fvs_field_bp_list field_bp_list_XXX;;
 
 let rec fvs_patp
-  = function Pp_lit (annot, lit) -> []
-    | Pp_wild annot -> []
-    | Pp_as_var (annot, patp, xp) -> fvs_patp patp
-    | Pp_typ (annot, tau, patp) -> fvs_tau tau @ fvs_patp patp
-    | Pp_id (annot, id) -> []
-    | Pp_as_typ (annot, patp, tau) -> fvs_patp patp @ fvs_tau tau
-    | Pp_app (annot, id, patp_list) -> fvs_patp_list_Pp_app patp_list
-    | Pp_vector (annot, patp_list) -> fvs_patp_list_Pp_vector patp_list
-    | Pp_vector_concat (annot, patp_list) ->
+  = function SyntaxPED.Pp_lit (annot, lit) -> []
+    | SyntaxPED.Pp_wild annot -> []
+    | SyntaxPED.Pp_as_var (annot, patp, xp) -> fvs_patp patp
+    | SyntaxPED.Pp_typ (annot, tau, patp) -> fvs_tau tau @ fvs_patp patp
+    | SyntaxPED.Pp_id (annot, id) -> []
+    | SyntaxPED.Pp_as_typ (annot, patp, tau) -> fvs_patp patp @ fvs_tau tau
+    | SyntaxPED.Pp_app (annot, id, patp_list) -> fvs_patp_list_Pp_app patp_list
+    | SyntaxPED.Pp_vector (annot, patp_list) ->
+        fvs_patp_list_Pp_vector patp_list
+    | SyntaxPED.Pp_vector_concat (annot, patp_list) ->
         fvs_patp_list_Pp_vector_concat patp_list
-    | Pp_tup (annot, patp_list) -> fvs_patp_list_Pp_tup patp_list
-    | Pp_list (annot, patp_list) -> fvs_patp_list_Pp_list patp_list
-    | Pp_cons (annot, patp1, patp2) -> fvs_patp patp1 @ fvs_patp patp2
-    | Pp_string_append (annot, patp_list) ->
+    | SyntaxPED.Pp_tup (annot, patp_list) -> fvs_patp_list_Pp_tup patp_list
+    | SyntaxPED.Pp_list (annot, patp_list) -> fvs_patp_list_Pp_list patp_list
+    | SyntaxPED.Pp_cons (annot, patp1, patp2) -> fvs_patp patp1 @ fvs_patp patp2
+    | SyntaxPED.Pp_string_append (annot, patp_list) ->
         fvs_patp_list_Pp_string_append patp_list
 and fvs_patp_list_Pp_app
   = function [] -> []
@@ -3006,58 +2949,61 @@ and fvs_patp_list_Pp_vector_concat
     | patp_XXX :: patp_list_XXX ->
         fvs_patp patp_XXX @ fvs_patp_list_Pp_vector_concat patp_list_XXX;;
 
-let rec fvs_lexpp = function LEXPp_mvar (annot, up) -> []
-                    | LEXPp_reg (annot, id) -> []
-                    | LEXPp_cast (annot, tau, up) -> fvs_tau tau
-                    | LEXPp_tup (annot, lexpp_list) -> fvs_lexpp_list lexpp_list
-                    | LEXPp_field (annot, lexpp, id) -> fvs_lexpp lexpp
-                    | LEXPp_deref annot -> []
+let rec fvs_lexpp
+  = function SyntaxPED.LEXPp_mvar (annot, up) -> []
+    | SyntaxPED.LEXPp_reg (annot, id) -> []
+    | SyntaxPED.LEXPp_cast (annot, tau, up) -> fvs_tau tau
+    | SyntaxPED.LEXPp_tup (annot, lexpp_list) -> fvs_lexpp_list lexpp_list
+    | SyntaxPED.LEXPp_field (annot, lexpp, id) -> fvs_lexpp lexpp
+    | SyntaxPED.LEXPp_deref annot -> []
 and fvs_lexpp_list
   = function [] -> []
     | lexpp_XXX :: lexpp_list_XXX ->
         fvs_lexpp lexpp_XXX @ fvs_lexpp_list lexpp_list_XXX;;
 
 let rec fvs_ep
-  = function Ep_block (annot, ep_list) -> fvs_ep_list_Ep_block ep_list
-    | Ep_val (annot, vp) -> fvs_vp vp
-    | Ep_mvar (annot, up) -> []
-    | Ep_bop (annot, bop, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
-    | Ep_uop (annot, uop, ep) -> fvs_ep ep
-    | Ep_proj (annot, p, ep) -> fvs_ep ep
-    | Ep_cast (annot, tau, ep) -> fvs_tau tau @ fvs_ep ep
-    | Ep_app (annot, fp, ep) -> fvs_ep ep
-    | Ep_tuple (annot, ep_list) -> fvs_ep_list_Ep_tuple ep_list
-    | Ep_if (annot, ep1, ep2, ep3) -> fvs_ep ep1 @ fvs_ep ep2 @ fvs_ep ep3
-    | Ep_loop (annot, loop, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
-    | Ep_for (annot, id, ep1, ep2, ep3, order, ep4) ->
+  = function SyntaxPED.Ep_block (annot, ep_list) -> fvs_ep_list_Ep_block ep_list
+    | SyntaxPED.Ep_val (annot, vp) -> fvs_vp vp
+    | SyntaxPED.Ep_mvar (annot, up) -> []
+    | SyntaxPED.Ep_bop (annot, bop, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
+    | SyntaxPED.Ep_uop (annot, uop, ep) -> fvs_ep ep
+    | SyntaxPED.Ep_proj (annot, p, ep) -> fvs_ep ep
+    | SyntaxPED.Ep_cast (annot, tau, ep) -> fvs_tau tau @ fvs_ep ep
+    | SyntaxPED.Ep_app (annot, fp, ep) -> fvs_ep ep
+    | SyntaxPED.Ep_tuple (annot, ep_list) -> fvs_ep_list_Ep_tuple ep_list
+    | SyntaxPED.Ep_if (annot, ep1, ep2, ep3) ->
+        fvs_ep ep1 @ fvs_ep ep2 @ fvs_ep ep3
+    | SyntaxPED.Ep_loop (annot, loop, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
+    | SyntaxPED.Ep_for (annot, id, ep1, ep2, ep3, order, ep4) ->
         fvs_ep ep1 @ fvs_ep ep2 @ fvs_ep ep3 @ fvs_ep ep4
-    | Ep_vec (annot, ep_list) -> fvs_ep_list_Ep_vec ep_list
-    | Ep_concat (annot, ep_list) -> fvs_ep_list_Ep_concat ep_list
-    | Ep_list (annot, ep_list) -> fvs_ep_list_Ep_list ep_list
-    | Ep_cons (annot, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
-    | Ep_record (annot, field_ep_list) ->
+    | SyntaxPED.Ep_vec (annot, ep_list) -> fvs_ep_list_Ep_vec ep_list
+    | SyntaxPED.Ep_concat (annot, ep_list) -> fvs_ep_list_Ep_concat ep_list
+    | SyntaxPED.Ep_list (annot, ep_list) -> fvs_ep_list_Ep_list ep_list
+    | SyntaxPED.Ep_cons (annot, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
+    | SyntaxPED.Ep_record (annot, field_ep_list) ->
         fvs_field_ep_list_Ep_record field_ep_list
-    | Ep_record_update (annot, ep, field_ep_list) ->
+    | SyntaxPED.Ep_record_update (annot, ep, field_ep_list) ->
         fvs_ep ep @ fvs_field_ep_list_Ep_record_update field_ep_list
-    | Ep_field_access (annot, ep, field) -> fvs_ep ep
-    | Ep_case (annot, ep, pexpp_list) ->
+    | SyntaxPED.Ep_field_access (annot, ep, field) -> fvs_ep ep
+    | SyntaxPED.Ep_case (annot, ep, pexpp_list) ->
         fvs_ep ep @ fvs_pexpp_list_Ep_case pexpp_list
-    | Ep_let (annot, letbindp, ep2) -> fvs_letbindp letbindp @ fvs_ep ep2
-    | Ep_sizeof (annot, cep) -> fvs_cep cep
-    | Ep_exit (annot, ep) -> fvs_ep ep
-    | Ep_return (annot, ep) -> fvs_ep ep
-    | Ep_ref (annot, id) -> []
-    | Ep_throw (annot, ep) -> fvs_ep ep
-    | Ep_try (annot, ep, pexpp_list) ->
+    | SyntaxPED.Ep_let (annot, letbindp, ep2) ->
+        fvs_letbindp letbindp @ fvs_ep ep2
+    | SyntaxPED.Ep_sizeof (annot, cep) -> fvs_cep cep
+    | SyntaxPED.Ep_exit (annot, ep) -> fvs_ep ep
+    | SyntaxPED.Ep_return (annot, ep) -> fvs_ep ep
+    | SyntaxPED.Ep_ref (annot, id) -> []
+    | SyntaxPED.Ep_throw (annot, ep) -> fvs_ep ep
+    | SyntaxPED.Ep_try (annot, ep, pexpp_list) ->
         fvs_ep ep @ fvs_pexpp_list_Ep_try pexpp_list
-    | Ep_assert (annot, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
-    | Ep_var (annot, lexpp, ep1, ep2) ->
+    | SyntaxPED.Ep_assert (annot, ep1, ep2) -> fvs_ep ep1 @ fvs_ep ep2
+    | SyntaxPED.Ep_var (annot, lexpp, ep1, ep2) ->
         fvs_lexpp lexpp @ fvs_ep ep1 @ fvs_ep ep2
-    | Ep_assign (annot, lexpp, ep) -> fvs_lexpp lexpp @ fvs_ep ep
-    | Ep_constraint (annot, cp) -> fvs_cp cp
+    | SyntaxPED.Ep_assign (annot, lexpp, ep) -> fvs_lexpp lexpp @ fvs_ep ep
+    | SyntaxPED.Ep_constraint (annot, cp) -> fvs_cp cp
 and fvs_pexpp
-  = function PEXPp_exp (annot, patp, ep) -> fvs_patp patp @ fvs_ep ep
-    | PEXPp_when (annot, patp, ep1, ep2) ->
+  = function SyntaxPED.PEXPp_exp (annot, patp, ep) -> fvs_patp patp @ fvs_ep ep
+    | SyntaxPED.PEXPp_when (annot, patp, ep1, ep2) ->
         fvs_patp patp @ fvs_ep ep1 @ fvs_ep ep2
 and fvs_pexpp_list_Ep_try
   = function [] -> []
@@ -3067,7 +3013,8 @@ and fvs_pexpp_list_Ep_case
   = function [] -> []
     | pexpp_XXX :: pexpp_list_XXX ->
         fvs_pexpp pexpp_XXX @ fvs_pexpp_list_Ep_case pexpp_list_XXX
-and fvs_letbindp (LBp_val (annot, patp, ep)) = fvs_patp patp @ fvs_ep ep
+and fvs_letbindp
+  (SyntaxPED.LBp_val (annot, patp, ep)) = fvs_patp patp @ fvs_ep ep
 and fvs_ep_list_Ep_vec
   = function [] -> []
     | ep_XXX :: ep_list_XXX -> fvs_ep ep_XXX @ fvs_ep_list_Ep_vec ep_list_XXX
@@ -3176,250 +3123,6 @@ and subst_cp_list
     | vp5, zp5, cp_XXX :: cp_list_XXX ->
         subst_cp vp5 zp5 cp_XXX :: subst_cp_list vp5 zp5 cp_list_XXX;;
 
-let rec subst_bp
-  vp5 zp5 x2 = match vp5, zp5, x2 with
-    vp5, zp5, SyntaxVCT.B_var tvar -> SyntaxVCT.B_var tvar
-    | vp5, zp5, SyntaxVCT.B_tid id -> SyntaxVCT.B_tid id
-    | vp5, zp5, SyntaxVCT.B_int -> SyntaxVCT.B_int
-    | vp5, zp5, SyntaxVCT.B_bool -> SyntaxVCT.B_bool
-    | vp5, zp5, SyntaxVCT.B_bit -> SyntaxVCT.B_bit
-    | vp5, zp5, SyntaxVCT.B_unit -> SyntaxVCT.B_unit
-    | vp5, zp5, SyntaxVCT.B_real -> SyntaxVCT.B_real
-    | vp5, zp5, SyntaxVCT.B_vec (order, bp) ->
-        SyntaxVCT.B_vec (order, subst_bp vp5 zp5 bp)
-    | vp5, zp5, SyntaxVCT.B_list bp -> SyntaxVCT.B_list (subst_bp vp5 zp5 bp)
-    | vp5, zp5, SyntaxVCT.B_tuple bp_list ->
-        SyntaxVCT.B_tuple (subst_bp_list vp5 zp5 bp_list)
-    | vp5, zp5, SyntaxVCT.B_union (id, ctor_tau_list) ->
-        SyntaxVCT.B_union (id, subst_ctor_tau_list vp5 zp5 ctor_tau_list)
-    | vp5, zp5, SyntaxVCT.B_record field_bp_list ->
-        SyntaxVCT.B_record (subst_field_bp_list vp5 zp5 field_bp_list)
-    | vp5, zp5, SyntaxVCT.B_undef -> SyntaxVCT.B_undef
-    | vp5, zp5, SyntaxVCT.B_reg tau -> SyntaxVCT.B_reg (subst_tp vp5 zp5 tau)
-    | vp5, zp5, SyntaxVCT.B_string -> SyntaxVCT.B_string
-    | vp5, zp5, SyntaxVCT.B_exception -> SyntaxVCT.B_exception
-    | vp5, zp5, SyntaxVCT.B_finite_set num_list ->
-        SyntaxVCT.B_finite_set num_list
-and subst_tp
-  vp5 zp5 (SyntaxVCT.T_refined_type (zp, bp, cp)) =
-    SyntaxVCT.T_refined_type (zp, subst_bp vp5 zp5 bp, subst_cp vp5 zp5 cp)
-and subst_ctor_tau vp5 zp5 (ctor1, tp1) = (ctor1, subst_tp vp5 zp5 tp1)
-and subst_ctor_tau_list
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, ctor_tau_XXX :: ctor_tau_list_XXX ->
-        subst_ctor_tau vp5 zp5 ctor_tau_XXX ::
-          subst_ctor_tau_list vp5 zp5 ctor_tau_list_XXX
-and subst_bp_list
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, bp_XXX :: bp_list_XXX ->
-        subst_bp vp5 zp5 bp_XXX :: subst_bp_list vp5 zp5 bp_list_XXX
-and subst_field_bp vp5 zp5 (field1, bp1) = (field1, subst_bp vp5 zp5 bp1)
-and subst_field_bp_list
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, field_bp_XXX :: field_bp_list_XXX ->
-        subst_field_bp vp5 zp5 field_bp_XXX ::
-          subst_field_bp_list vp5 zp5 field_bp_list_XXX;;
-
-let rec subst_patp
-  vp5 zp5 x2 = match vp5, zp5, x2 with
-    vp5, zp5, Pp_lit (annot, lit) -> Pp_lit (annot, lit)
-    | vp5, zp5, Pp_wild annot -> Pp_wild annot
-    | vp5, zp5, Pp_as_var (annot, patp, xp) ->
-        Pp_as_var (annot, subst_patp vp5 zp5 patp, xp)
-    | vp5, zp5, Pp_typ (annot, tau, patp) ->
-        Pp_typ (annot, subst_tp vp5 zp5 tau, subst_patp vp5 zp5 patp)
-    | vp5, zp5, Pp_id (annot, id) -> Pp_id (annot, id)
-    | vp5, zp5, Pp_as_typ (annot, patp, tau) ->
-        Pp_as_typ (annot, subst_patp vp5 zp5 patp, subst_tp vp5 zp5 tau)
-    | vp5, zp5, Pp_app (annot, id, patp_list) ->
-        Pp_app (annot, id, subst_patp_list_Pp_app vp5 zp5 patp_list)
-    | vp5, zp5, Pp_vector (annot, patp_list) ->
-        Pp_vector (annot, subst_patp_list_Pp_vector vp5 zp5 patp_list)
-    | vp5, zp5, Pp_vector_concat (annot, patp_list) ->
-        Pp_vector_concat
-          (annot, subst_patp_list_Pp_vector_concat vp5 zp5 patp_list)
-    | vp5, zp5, Pp_tup (annot, patp_list) ->
-        Pp_tup (annot, subst_patp_list_Pp_tup vp5 zp5 patp_list)
-    | vp5, zp5, Pp_list (annot, patp_list) ->
-        Pp_list (annot, subst_patp_list_Pp_list vp5 zp5 patp_list)
-    | vp5, zp5, Pp_cons (annot, patp1, patp2) ->
-        Pp_cons (annot, subst_patp vp5 zp5 patp1, subst_patp vp5 zp5 patp2)
-    | vp5, zp5, Pp_string_append (annot, patp_list) ->
-        Pp_string_append
-          (annot, subst_patp_list_Pp_string_append vp5 zp5 patp_list)
-and subst_patp_list_Pp_app
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, patp_XXX :: patp_list_XXX ->
-        subst_patp vp5 zp5 patp_XXX ::
-          subst_patp_list_Pp_app vp5 zp5 patp_list_XXX
-and subst_patp_list_Pp_tup
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, patp_XXX :: patp_list_XXX ->
-        subst_patp vp5 zp5 patp_XXX ::
-          subst_patp_list_Pp_tup vp5 zp5 patp_list_XXX
-and subst_patp_list_Pp_list
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, patp_XXX :: patp_list_XXX ->
-        subst_patp vp5 zp5 patp_XXX ::
-          subst_patp_list_Pp_list vp5 zp5 patp_list_XXX
-and subst_patp_list_Pp_vector
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, patp_XXX :: patp_list_XXX ->
-        subst_patp vp5 zp5 patp_XXX ::
-          subst_patp_list_Pp_vector vp5 zp5 patp_list_XXX
-and subst_patp_list_Pp_string_append
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, patp_XXX :: patp_list_XXX ->
-        subst_patp vp5 zp5 patp_XXX ::
-          subst_patp_list_Pp_string_append vp5 zp5 patp_list_XXX
-and subst_patp_list_Pp_vector_concat
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, patp_XXX :: patp_list_XXX ->
-        subst_patp vp5 zp5 patp_XXX ::
-          subst_patp_list_Pp_vector_concat vp5 zp5 patp_list_XXX;;
-
-let rec subst_lexpp
-  vp5 zp5 x2 = match vp5, zp5, x2 with
-    vp5, zp5, LEXPp_mvar (annot, up) -> LEXPp_mvar (annot, up)
-    | vp5, zp5, LEXPp_reg (annot, id) -> LEXPp_reg (annot, id)
-    | vp5, zp5, LEXPp_cast (annot, tau, up) ->
-        LEXPp_cast (annot, subst_tp vp5 zp5 tau, up)
-    | vp5, zp5, LEXPp_tup (annot, lexpp_list) ->
-        LEXPp_tup (annot, subst_lexpp_list vp5 zp5 lexpp_list)
-    | vp5, zp5, LEXPp_field (annot, lexpp, id) ->
-        LEXPp_field (annot, subst_lexpp vp5 zp5 lexpp, id)
-    | vp5, zp5, LEXPp_deref annot -> LEXPp_deref annot
-and subst_lexpp_list
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, lexpp_XXX :: lexpp_list_XXX ->
-        subst_lexpp vp5 zp5 lexpp_XXX ::
-          subst_lexpp_list vp5 zp5 lexpp_list_XXX;;
-
-let rec subst_ep
-  vp5 zp5 x2 = match vp5, zp5, x2 with
-    vp5, zp5, Ep_block (annot, ep_list) ->
-      Ep_block (annot, subst_ep_list_Ep_block vp5 zp5 ep_list)
-    | vp5, zp5, Ep_val (annot, vp) -> Ep_val (annot, subst_vp vp5 zp5 vp)
-    | vp5, zp5, Ep_mvar (annot, up) -> Ep_mvar (annot, up)
-    | vp5, zp5, Ep_bop (annot, bop, ep1, ep2) ->
-        Ep_bop (annot, bop, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
-    | vp5, zp5, Ep_uop (annot, uop, ep) ->
-        Ep_uop (annot, uop, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_proj (annot, p, ep) ->
-        Ep_proj (annot, p, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_cast (annot, tau, ep) ->
-        Ep_cast (annot, subst_tp vp5 zp5 tau, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_app (annot, fp, ep) ->
-        Ep_app (annot, fp, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_tuple (annot, ep_list) ->
-        Ep_tuple (annot, subst_ep_list_Ep_tuple vp5 zp5 ep_list)
-    | vp5, zp5, Ep_if (annot, ep1, ep2, ep3) ->
-        Ep_if (annot, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2,
-                subst_ep vp5 zp5 ep3)
-    | vp5, zp5, Ep_loop (annot, loop, ep1, ep2) ->
-        Ep_loop (annot, loop, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
-    | vp5, zp5, Ep_for (annot, id, ep1, ep2, ep3, order, ep4) ->
-        Ep_for
-          (annot, id, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2,
-            subst_ep vp5 zp5 ep3, order, subst_ep vp5 zp5 ep4)
-    | vp5, zp5, Ep_vec (annot, ep_list) ->
-        Ep_vec (annot, subst_ep_list_Ep_vec vp5 zp5 ep_list)
-    | vp5, zp5, Ep_concat (annot, ep_list) ->
-        Ep_concat (annot, subst_ep_list_Ep_concat vp5 zp5 ep_list)
-    | vp5, zp5, Ep_list (annot, ep_list) ->
-        Ep_list (annot, subst_ep_list_Ep_list vp5 zp5 ep_list)
-    | vp5, zp5, Ep_cons (annot, ep1, ep2) ->
-        Ep_cons (annot, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
-    | vp5, zp5, Ep_record (annot, field_ep_list) ->
-        Ep_record (annot, subst_field_ep_list_Ep_record vp5 zp5 field_ep_list)
-    | vp5, zp5, Ep_record_update (annot, ep, field_ep_list) ->
-        Ep_record_update
-          (annot, subst_ep vp5 zp5 ep,
-            subst_field_ep_list_Ep_record_update vp5 zp5 field_ep_list)
-    | vp5, zp5, Ep_field_access (annot, ep, field) ->
-        Ep_field_access (annot, subst_ep vp5 zp5 ep, field)
-    | vp5, zp5, Ep_case (annot, ep, pexpp_list) ->
-        Ep_case
-          (annot, subst_ep vp5 zp5 ep,
-            subst_pexpp_list_Ep_case vp5 zp5 pexpp_list)
-    | vp5, zp5, Ep_let (annot, letbindp, ep2) ->
-        Ep_let (annot, subst_letbindp vp5 zp5 letbindp, subst_ep vp5 zp5 ep2)
-    | vp5, zp5, Ep_sizeof (annot, cep) ->
-        Ep_sizeof (annot, subst_cep vp5 zp5 cep)
-    | vp5, zp5, Ep_exit (annot, ep) -> Ep_exit (annot, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_return (annot, ep) -> Ep_return (annot, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_ref (annot, id) -> Ep_ref (annot, id)
-    | vp5, zp5, Ep_throw (annot, ep) -> Ep_throw (annot, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_try (annot, ep, pexpp_list) ->
-        Ep_try
-          (annot, subst_ep vp5 zp5 ep,
-            subst_pexpp_list_Ep_try vp5 zp5 pexpp_list)
-    | vp5, zp5, Ep_assert (annot, ep1, ep2) ->
-        Ep_assert (annot, subst_ep vp5 zp5 ep1, subst_ep vp5 zp5 ep2)
-    | vp5, zp5, Ep_var (annot, lexpp, ep1, ep2) ->
-        Ep_var
-          (annot, subst_lexpp vp5 zp5 lexpp, subst_ep vp5 zp5 ep1,
-            subst_ep vp5 zp5 ep2)
-    | vp5, zp5, Ep_assign (annot, lexpp, ep) ->
-        Ep_assign (annot, subst_lexpp vp5 zp5 lexpp, subst_ep vp5 zp5 ep)
-    | vp5, zp5, Ep_constraint (annot, cp) ->
-        Ep_constraint (annot, subst_cp vp5 zp5 cp)
-and subst_pexpp
-  vp5 zp5 x2 = match vp5, zp5, x2 with
-    vp5, zp5, PEXPp_exp (annot, patp, ep) ->
-      PEXPp_exp (annot, subst_patp vp5 zp5 patp, subst_ep vp5 zp5 ep)
-    | vp5, zp5, PEXPp_when (annot, patp, ep1, ep2) ->
-        PEXPp_when
-          (annot, subst_patp vp5 zp5 patp, subst_ep vp5 zp5 ep1,
-            subst_ep vp5 zp5 ep2)
-and subst_pexpp_list_Ep_try
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, pexpp_XXX :: pexpp_list_XXX ->
-        subst_pexpp vp5 zp5 pexpp_XXX ::
-          subst_pexpp_list_Ep_try vp5 zp5 pexpp_list_XXX
-and subst_pexpp_list_Ep_case
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, pexpp_XXX :: pexpp_list_XXX ->
-        subst_pexpp vp5 zp5 pexpp_XXX ::
-          subst_pexpp_list_Ep_case vp5 zp5 pexpp_list_XXX
-and subst_letbindp
-  vp5 zp5 (LBp_val (annot, patp, ep)) =
-    LBp_val (annot, subst_patp vp5 zp5 patp, subst_ep vp5 zp5 ep)
-and subst_ep_list_Ep_vec
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, ep_XXX :: ep_list_XXX ->
-        subst_ep vp5 zp5 ep_XXX :: subst_ep_list_Ep_vec vp5 zp5 ep_list_XXX
-and subst_ep_list_Ep_list
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, ep_XXX :: ep_list_XXX ->
-        subst_ep vp5 zp5 ep_XXX :: subst_ep_list_Ep_list vp5 zp5 ep_list_XXX
-and subst_ep_list_Ep_block
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, ep_XXX :: ep_list_XXX ->
-        subst_ep vp5 zp5 ep_XXX :: subst_ep_list_Ep_block vp5 zp5 ep_list_XXX
-and subst_ep_list_Ep_tuple
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, ep_XXX :: ep_list_XXX ->
-        subst_ep vp5 zp5 ep_XXX :: subst_ep_list_Ep_tuple vp5 zp5 ep_list_XXX
-and subst_ep_list_Ep_concat
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, ep_XXX :: ep_list_XXX ->
-        subst_ep vp5 zp5 ep_XXX :: subst_ep_list_Ep_concat vp5 zp5 ep_list_XXX
-and subst_field_ep_Ep_record
-  vp5 zp5 (field1, ep1) = (field1, subst_ep vp5 zp5 ep1)
-and subst_field_ep_list_Ep_record
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, field_ep_XXX :: field_ep_list_XXX ->
-        subst_field_ep_Ep_record vp5 zp5 field_ep_XXX ::
-          subst_field_ep_list_Ep_record vp5 zp5 field_ep_list_XXX
-and subst_field_ep_Ep_record_update
-  vp5 zp5 (field1, ep1) = (field1, subst_ep vp5 zp5 ep1)
-and subst_field_ep_list_Ep_record_update
-  vp5 zp5 x2 = match vp5, zp5, x2 with vp5, zp5, [] -> []
-    | vp5, zp5, field_ep_XXX :: field_ep_list_XXX ->
-        subst_field_ep_Ep_record_update vp5 zp5 field_ep_XXX ::
-          subst_field_ep_list_Ep_record_update vp5 zp5 field_ep_list_XXX;;
-
 let rec tsubst_bp
   bp_5 tvar5 x2 = match bp_5, tvar5, x2 with
     bp_5, tvar5, SyntaxVCT.B_var tvar ->
@@ -3435,11 +3138,12 @@ let rec tsubst_bp
     | bp_5, tvar5, SyntaxVCT.B_list bp ->
         SyntaxVCT.B_list (tsubst_bp bp_5 tvar5 bp)
     | bp_5, tvar5, SyntaxVCT.B_tuple bp_list ->
-        SyntaxVCT.B_tuple (tsubst_bp_list bp_5 tvar5 bp_list)
-    | bp_5, tvar5, SyntaxVCT.B_union (id, ctor_tau_list) ->
-        SyntaxVCT.B_union (id, tsubst_ctor_tau_list bp_5 tvar5 ctor_tau_list)
+        SyntaxVCT.B_tuple (Lista.map (tsubst_bp bp_5 tvar5) bp_list)
+    | bp_5, tvar5, SyntaxVCT.B_union (id, bp_list) ->
+        SyntaxVCT.B_union (id, Lista.map (tsubst_bp bp_5 tvar5) bp_list)
     | bp_5, tvar5, SyntaxVCT.B_record field_bp_list ->
-        SyntaxVCT.B_record (tsubst_field_bp_list bp_5 tvar5 field_bp_list)
+        SyntaxVCT.B_record
+          (Lista.map (fun (x, y) -> (x, tsubst_bp bp_5 tvar5 y)) field_bp_list)
     | bp_5, tvar5, SyntaxVCT.B_undef -> SyntaxVCT.B_undef
     | bp_5, tvar5, SyntaxVCT.B_reg tau ->
         SyntaxVCT.B_reg (tsubst_tp bp_5 tvar5 tau)
@@ -3449,58 +3153,9 @@ let rec tsubst_bp
         SyntaxVCT.B_finite_set num_list
 and tsubst_tp
   bp5 tvar5 (SyntaxVCT.T_refined_type (zp, bp, cp)) =
-    SyntaxVCT.T_refined_type (zp, tsubst_bp bp5 tvar5 bp, cp)
-and tsubst_ctor_tau bp_5 tvar5 (ctor1, tp1) = (ctor1, tsubst_tp bp_5 tvar5 tp1)
-and tsubst_ctor_tau_list
-  bp_5 tvar5 x2 = match bp_5, tvar5, x2 with bp_5, tvar5, [] -> []
-    | bp_5, tvar5, ctor_tau_XXX :: ctor_tau_list_XXX ->
-        tsubst_ctor_tau bp_5 tvar5 ctor_tau_XXX ::
-          tsubst_ctor_tau_list bp_5 tvar5 ctor_tau_list_XXX
-and tsubst_bp_list
-  bp_5 tvar5 x2 = match bp_5, tvar5, x2 with bp_5, tvar5, [] -> []
-    | bp_5, tvar5, bp_XXX :: bp_list_XXX ->
-        tsubst_bp bp_5 tvar5 bp_XXX :: tsubst_bp_list bp_5 tvar5 bp_list_XXX
-and tsubst_field_bp
-  bp_5 tvar5 (field1, bp1) = (field1, tsubst_bp bp_5 tvar5 bp1)
-and tsubst_field_bp_list
-  bp_5 tvar5 x2 = match bp_5, tvar5, x2 with bp_5, tvar5, [] -> []
-    | bp_5, tvar5, field_bp_XXX :: field_bp_list_XXX ->
-        tsubst_field_bp bp_5 tvar5 field_bp_XXX ::
-          tsubst_field_bp_list bp_5 tvar5 field_bp_list_XXX;;
+    SyntaxVCT.T_refined_type (zp, tsubst_bp bp5 tvar5 bp, cp);;
 
-let rec annot_e = function Ep_block (x11, x12) -> x11
-                  | Ep_val (x21, x22) -> x21
-                  | Ep_mvar (x31, x32) -> x31
-                  | Ep_bop (x41, x42, x43, x44) -> x41
-                  | Ep_uop (x51, x52, x53) -> x51
-                  | Ep_proj (x61, x62, x63) -> x61
-                  | Ep_cast (x71, x72, x73) -> x71
-                  | Ep_app (x81, x82, x83) -> x81
-                  | Ep_tuple (x91, x92) -> x91
-                  | Ep_if (x101, x102, x103, x104) -> x101
-                  | Ep_loop (x111, x112, x113, x114) -> x111
-                  | Ep_for (x121, x122, x123, x124, x125, x126, x127) -> x121
-                  | Ep_vec (x131, x132) -> x131
-                  | Ep_concat (x141, x142) -> x141
-                  | Ep_list (x151, x152) -> x151
-                  | Ep_cons (x161, x162, x163) -> x161
-                  | Ep_record (x171, x172) -> x171
-                  | Ep_record_update (x181, x182, x183) -> x181
-                  | Ep_field_access (x191, x192, x193) -> x191
-                  | Ep_case (x201, x202, x203) -> x201
-                  | Ep_let (x211, x212, x213) -> x211
-                  | Ep_sizeof (x221, x222) -> x221
-                  | Ep_exit (x231, x232) -> x231
-                  | Ep_return (x241, x242) -> x241
-                  | Ep_ref (x251, x252) -> x251
-                  | Ep_throw (x261, x262) -> x261
-                  | Ep_try (x271, x272, x273) -> x271
-                  | Ep_assert (x281, x282, x283) -> x281
-                  | Ep_var (x291, x292, x293, x294) -> x291
-                  | Ep_assign (x301, x302, x303) -> x301
-                  | Ep_constraint (x311, x312) -> x311;;
-
-end;; (*struct SyntaxPED*)
+end;; (*struct Subst*)
 
 module Utils : sig
   val unzip : ('a * 'b) list -> 'a list * 'b list
@@ -3587,13 +3242,445 @@ let rec string_lit_of_integer
 
 end;; (*struct Utils*)
 
-module SyntaxUtils : sig
-  val mk_proj_eq_x : SyntaxVCT.xp -> SyntaxVCT.xp -> string -> SyntaxVCT.cp
+module TSubst : sig
   val b_of : SyntaxVCT.tau -> SyntaxVCT.bp
-  val aux :
-    SyntaxVCT.xp ->
-      string -> SyntaxVCT.tau -> (string * SyntaxVCT.bp) * SyntaxVCT.cp
-  val c_of : SyntaxVCT.tau -> SyntaxVCT.cp
+  val tsubst_tp_full : SyntaxVCT.tau -> string -> SyntaxVCT.tau -> SyntaxVCT.tau
+end = struct
+
+let rec b_of (SyntaxVCT.T_refined_type (uu, b, uv)) = b;;
+
+let rec tsubst_tp_full
+  x0 y t2 = match x0, y, t2 with
+    SyntaxVCT.T_refined_type (z1, SyntaxVCT.B_var x, c1), y,
+      SyntaxVCT.T_refined_type (z2, b, c2)
+      -> (if ((x : string) = y)
+           then SyntaxVCT.T_refined_type
+                  (z1, b,
+                    SyntaxVCT.C_conj
+                      (c1, Subst.subst_cp (SyntaxVCT.V_var z1) z2 c2))
+           else SyntaxVCT.T_refined_type (z1, SyntaxVCT.B_var x, c1))
+    | SyntaxVCT.T_refined_type (z1, SyntaxVCT.B_union (idd, bs), c1), y, t2 ->
+        SyntaxVCT.T_refined_type (z1, SyntaxVCT.B_union (idd, bs), c1)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vc, vb), b, c ->
+        SyntaxVCT.T_refined_type
+          (v, SyntaxVCT.B_reg (tsubst_tp_full vc b c), vb)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid va, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar (SyntaxVCT.B_tid va), c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar SyntaxVCT.B_int, c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar SyntaxVCT.B_bool, c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar SyntaxVCT.B_bit, c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar SyntaxVCT.B_unit, c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar SyntaxVCT.B_real, c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (va, vb), c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar (SyntaxVCT.B_vec (va, vb)), c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list va, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar (SyntaxVCT.B_list va), c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tuple va, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar (SyntaxVCT.B_tuple va), c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_record va, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar (SyntaxVCT.B_record va), c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_undef, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar SyntaxVCT.B_undef, c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar SyntaxVCT.B_string, c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar SyntaxVCT.B_exception, c)
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set va, c), bvar, tp ->
+        SyntaxVCT.T_refined_type
+          (v, Subst.tsubst_bp (b_of tp) bvar (SyntaxVCT.B_finite_set va), c);;
+
+end;; (*struct TSubst*)
+
+module CESubst : sig
+  val ce_subst_vp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.cep
+  val ce_subst_cep :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cep -> SyntaxVCT.cep
+  val ce_subst_cep_list :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cep list -> SyntaxVCT.cep list
+  val ce_subst_cp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cp -> SyntaxVCT.cp
+  val ce_subst_cp_list :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cp list -> SyntaxVCT.cp list
+  val ce_subst_bp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.bp -> SyntaxVCT.bp
+  val ce_subst_tp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.tau -> SyntaxVCT.tau
+  val ce_subst_bp_list :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.bp list -> SyntaxVCT.bp list
+  val ce_subst_field_bp :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> string * SyntaxVCT.bp -> string * SyntaxVCT.bp
+  val ce_subst_field_bp_list :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp ->
+        (string * SyntaxVCT.bp) list -> (string * SyntaxVCT.bp) list
+  val ce_subst_patp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.patp -> 'a SyntaxPED.patp
+  val ce_subst_patp_list_Pp_app :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
+  val ce_subst_patp_list_Pp_tup :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
+  val ce_subst_patp_list_Pp_list :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
+  val ce_subst_patp_list_Pp_vector :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
+  val ce_subst_patp_list_Pp_string_append :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
+  val ce_subst_patp_list_Pp_vector_concat :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
+  val ce_subst_lexpp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.lexpp -> 'a SyntaxPED.lexpp
+  val ce_subst_lexpp_list :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.lexpp list -> 'a SyntaxPED.lexpp list
+  val ce_subst_ep :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.ep -> 'a SyntaxPED.ep
+  val ce_subst_pexpp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.pexpp -> 'a SyntaxPED.pexpp
+  val ce_subst_letbindp :
+    SyntaxVCT.cep ->
+      SyntaxVCT.xp -> 'a SyntaxPED.letbindp -> 'a SyntaxPED.letbindp
+  val ce_subst_funclp :
+    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.funclp -> 'a SyntaxPED.funclp
+end = struct
+
+let rec ce_subst_vp
+  cep yp x2 = match cep, yp, x2 with
+    cep, yp, SyntaxVCT.V_var xp ->
+      (if SyntaxVCT.equal_xpa xp yp then cep
+        else SyntaxVCT.CE_val (SyntaxVCT.V_var xp))
+    | uu, uv, SyntaxVCT.V_lit va -> SyntaxVCT.CE_val (SyntaxVCT.V_lit va)
+    | uu, uv, SyntaxVCT.V_vec va -> SyntaxVCT.CE_val (SyntaxVCT.V_vec va)
+    | uu, uv, SyntaxVCT.V_list va -> SyntaxVCT.CE_val (SyntaxVCT.V_list va)
+    | uu, uv, SyntaxVCT.V_cons (va, vb) ->
+        SyntaxVCT.CE_val (SyntaxVCT.V_cons (va, vb))
+    | uu, uv, SyntaxVCT.V_constr (va, vb) ->
+        SyntaxVCT.CE_val (SyntaxVCT.V_constr (va, vb))
+    | uu, uv, SyntaxVCT.V_record va -> SyntaxVCT.CE_val (SyntaxVCT.V_record va)
+    | uu, uv, SyntaxVCT.V_tuple va -> SyntaxVCT.CE_val (SyntaxVCT.V_tuple va)
+    | uu, uv, SyntaxVCT.V_proj (va, vb) ->
+        SyntaxVCT.CE_val (SyntaxVCT.V_proj (va, vb));;
+
+let rec ce_subst_cep
+  cep_5 zp5 x2 = match cep_5, zp5, x2 with
+    cep_5, zp5, SyntaxVCT.CE_val vp -> ce_subst_vp cep_5 zp5 vp
+    | cep_5, zp5, SyntaxVCT.CE_bop (bop, cep1, cep2) ->
+        SyntaxVCT.CE_bop
+          (bop, ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)
+    | cep_5, zp5, SyntaxVCT.CE_many_plus cep_list ->
+        SyntaxVCT.CE_many_plus (ce_subst_cep_list cep_5 zp5 cep_list)
+    | cep_5, zp5, SyntaxVCT.CE_uop (uop, cep) ->
+        SyntaxVCT.CE_uop (uop, ce_subst_cep cep_5 zp5 cep)
+    | cep_5, zp5, SyntaxVCT.CE_proj (p, cep) ->
+        SyntaxVCT.CE_proj (p, ce_subst_cep cep_5 zp5 cep)
+    | cep_5, zp5, SyntaxVCT.CE_field_access (xp, field) ->
+        SyntaxVCT.CE_field_access (xp, field)
+and ce_subst_cep_list
+  cep_5 zp5 x2 = match cep_5, zp5, x2 with cep_5, zp5, [] -> []
+    | cep_5, zp5, cep_XXX :: cep_list_XXX ->
+        ce_subst_cep cep_5 zp5 cep_XXX ::
+          ce_subst_cep_list cep_5 zp5 cep_list_XXX;;
+
+let rec ce_subst_cp
+  cep_5 zp5 x2 = match cep_5, zp5, x2 with
+    cep_5, zp5, SyntaxVCT.C_true -> SyntaxVCT.C_true
+    | cep_5, zp5, SyntaxVCT.C_false -> SyntaxVCT.C_false
+    | cep_5, zp5, SyntaxVCT.C_conj (cp1, cp2) ->
+        SyntaxVCT.C_conj (ce_subst_cp cep_5 zp5 cp1, ce_subst_cp cep_5 zp5 cp2)
+    | cep_5, zp5, SyntaxVCT.C_conj_many cp_list ->
+        SyntaxVCT.C_conj_many (ce_subst_cp_list cep_5 zp5 cp_list)
+    | cep_5, zp5, SyntaxVCT.C_disj (cp1, cp2) ->
+        SyntaxVCT.C_disj (ce_subst_cp cep_5 zp5 cp1, ce_subst_cp cep_5 zp5 cp2)
+    | cep_5, zp5, SyntaxVCT.C_not cp ->
+        SyntaxVCT.C_not (ce_subst_cp cep_5 zp5 cp)
+    | cep_5, zp5, SyntaxVCT.C_eq (cep1, cep2) ->
+        SyntaxVCT.C_eq
+          (ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)
+    | cep_5, zp5, SyntaxVCT.C_leq (cep1, cep2) ->
+        SyntaxVCT.C_leq
+          (ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)
+    | cep_5, zp5, SyntaxVCT.C_imp (cp1, cp2) ->
+        SyntaxVCT.C_imp (ce_subst_cp cep_5 zp5 cp1, ce_subst_cp cep_5 zp5 cp2)
+and ce_subst_cp_list
+  cep_5 zp5 x2 = match cep_5, zp5, x2 with cep_5, zp5, [] -> []
+    | cep_5, zp5, cp_XXX :: cp_list_XXX ->
+        ce_subst_cp cep_5 zp5 cp_XXX :: ce_subst_cp_list cep_5 zp5 cp_list_XXX;;
+
+let rec ce_subst_bp
+  cep5 zp5 x2 = match cep5, zp5, x2 with
+    cep5, zp5, SyntaxVCT.B_var tvar -> SyntaxVCT.B_var tvar
+    | cep5, zp5, SyntaxVCT.B_tid id -> SyntaxVCT.B_tid id
+    | cep5, zp5, SyntaxVCT.B_int -> SyntaxVCT.B_int
+    | cep5, zp5, SyntaxVCT.B_bool -> SyntaxVCT.B_bool
+    | cep5, zp5, SyntaxVCT.B_bit -> SyntaxVCT.B_bit
+    | cep5, zp5, SyntaxVCT.B_unit -> SyntaxVCT.B_unit
+    | cep5, zp5, SyntaxVCT.B_real -> SyntaxVCT.B_real
+    | cep5, zp5, SyntaxVCT.B_vec (order, bp) ->
+        SyntaxVCT.B_vec (order, ce_subst_bp cep5 zp5 bp)
+    | cep5, zp5, SyntaxVCT.B_list bp ->
+        SyntaxVCT.B_list (ce_subst_bp cep5 zp5 bp)
+    | cep5, zp5, SyntaxVCT.B_tuple bp_list ->
+        SyntaxVCT.B_tuple (ce_subst_bp_list cep5 zp5 bp_list)
+    | cep5, zp5, SyntaxVCT.B_union (id, bs) ->
+        SyntaxVCT.B_union (id, ce_subst_bp_list cep5 zp5 bs)
+    | cep5, zp5, SyntaxVCT.B_record field_bp_list ->
+        SyntaxVCT.B_record (ce_subst_field_bp_list cep5 zp5 field_bp_list)
+    | cep5, zp5, SyntaxVCT.B_undef -> SyntaxVCT.B_undef
+    | cep5, zp5, SyntaxVCT.B_reg tau ->
+        SyntaxVCT.B_reg (ce_subst_tp cep5 zp5 tau)
+    | cep5, zp5, SyntaxVCT.B_string -> SyntaxVCT.B_string
+    | cep5, zp5, SyntaxVCT.B_exception -> SyntaxVCT.B_exception
+    | cep5, zp5, SyntaxVCT.B_finite_set num_list ->
+        SyntaxVCT.B_finite_set num_list
+and ce_subst_tp
+  cep5 zp5 (SyntaxVCT.T_refined_type (zp, bp, cp)) =
+    SyntaxVCT.T_refined_type
+      (zp, ce_subst_bp cep5 zp5 bp, ce_subst_cp cep5 zp5 cp)
+and ce_subst_bp_list
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, bp_XXX :: bp_list_XXX ->
+        ce_subst_bp cep5 zp5 bp_XXX :: ce_subst_bp_list cep5 zp5 bp_list_XXX
+and ce_subst_field_bp
+  cep5 zp5 (field1, bp1) = (field1, ce_subst_bp cep5 zp5 bp1)
+and ce_subst_field_bp_list
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, field_bp_XXX :: field_bp_list_XXX ->
+        ce_subst_field_bp cep5 zp5 field_bp_XXX ::
+          ce_subst_field_bp_list cep5 zp5 field_bp_list_XXX;;
+
+let rec ce_subst_patp
+  cep5 zp5 x2 = match cep5, zp5, x2 with
+    cep5, zp5, SyntaxPED.Pp_lit (loc, lit) -> SyntaxPED.Pp_lit (loc, lit)
+    | cep5, zp5, SyntaxPED.Pp_wild loc -> SyntaxPED.Pp_wild loc
+    | cep5, zp5, SyntaxPED.Pp_as_var (loc, patp, xp) ->
+        SyntaxPED.Pp_as_var (loc, ce_subst_patp cep5 zp5 patp, xp)
+    | cep5, zp5, SyntaxPED.Pp_typ (loc, tau, patp) ->
+        SyntaxPED.Pp_typ
+          (loc, ce_subst_tp cep5 zp5 tau, ce_subst_patp cep5 zp5 patp)
+    | cep5, zp5, SyntaxPED.Pp_id (loc, id) -> SyntaxPED.Pp_id (loc, id)
+    | cep5, zp5, SyntaxPED.Pp_as_typ (loc, patp, tau) ->
+        SyntaxPED.Pp_as_typ
+          (loc, ce_subst_patp cep5 zp5 patp, ce_subst_tp cep5 zp5 tau)
+    | cep5, zp5, SyntaxPED.Pp_app (loc, id, patp_list) ->
+        SyntaxPED.Pp_app (loc, id, ce_subst_patp_list_Pp_app cep5 zp5 patp_list)
+    | cep5, zp5, SyntaxPED.Pp_vector (loc, patp_list) ->
+        SyntaxPED.Pp_vector
+          (loc, ce_subst_patp_list_Pp_vector cep5 zp5 patp_list)
+    | cep5, zp5, SyntaxPED.Pp_vector_concat (loc, patp_list) ->
+        SyntaxPED.Pp_vector_concat
+          (loc, ce_subst_patp_list_Pp_vector_concat cep5 zp5 patp_list)
+    | cep5, zp5, SyntaxPED.Pp_tup (loc, patp_list) ->
+        SyntaxPED.Pp_tup (loc, ce_subst_patp_list_Pp_tup cep5 zp5 patp_list)
+    | cep5, zp5, SyntaxPED.Pp_list (loc, patp_list) ->
+        SyntaxPED.Pp_list (loc, ce_subst_patp_list_Pp_list cep5 zp5 patp_list)
+    | cep5, zp5, SyntaxPED.Pp_cons (loc, patp1, patp2) ->
+        SyntaxPED.Pp_cons
+          (loc, ce_subst_patp cep5 zp5 patp1, ce_subst_patp cep5 zp5 patp2)
+    | cep5, zp5, SyntaxPED.Pp_string_append (loc, patp_list) ->
+        SyntaxPED.Pp_string_append
+          (loc, ce_subst_patp_list_Pp_string_append cep5 zp5 patp_list)
+and ce_subst_patp_list_Pp_app
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, patp_XXX :: patp_list_XXX ->
+        ce_subst_patp cep5 zp5 patp_XXX ::
+          ce_subst_patp_list_Pp_app cep5 zp5 patp_list_XXX
+and ce_subst_patp_list_Pp_tup
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, patp_XXX :: patp_list_XXX ->
+        ce_subst_patp cep5 zp5 patp_XXX ::
+          ce_subst_patp_list_Pp_tup cep5 zp5 patp_list_XXX
+and ce_subst_patp_list_Pp_list
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, patp_XXX :: patp_list_XXX ->
+        ce_subst_patp cep5 zp5 patp_XXX ::
+          ce_subst_patp_list_Pp_list cep5 zp5 patp_list_XXX
+and ce_subst_patp_list_Pp_vector
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, patp_XXX :: patp_list_XXX ->
+        ce_subst_patp cep5 zp5 patp_XXX ::
+          ce_subst_patp_list_Pp_vector cep5 zp5 patp_list_XXX
+and ce_subst_patp_list_Pp_string_append
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, patp_XXX :: patp_list_XXX ->
+        ce_subst_patp cep5 zp5 patp_XXX ::
+          ce_subst_patp_list_Pp_string_append cep5 zp5 patp_list_XXX
+and ce_subst_patp_list_Pp_vector_concat
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, patp_XXX :: patp_list_XXX ->
+        ce_subst_patp cep5 zp5 patp_XXX ::
+          ce_subst_patp_list_Pp_vector_concat cep5 zp5 patp_list_XXX;;
+
+let rec ce_subst_lexpp
+  cep5 zp5 x2 = match cep5, zp5, x2 with
+    cep5, zp5, SyntaxPED.LEXPp_mvar (loc, up) -> SyntaxPED.LEXPp_mvar (loc, up)
+    | cep5, zp5, SyntaxPED.LEXPp_cast (loc, tau, up) ->
+        SyntaxPED.LEXPp_cast (loc, ce_subst_tp cep5 zp5 tau, up)
+    | cep5, zp5, SyntaxPED.LEXPp_tup (loc, lexpp_list) ->
+        SyntaxPED.LEXPp_tup (loc, ce_subst_lexpp_list cep5 zp5 lexpp_list)
+    | cep5, zp5, SyntaxPED.LEXPp_field (loc, lexpp, id) ->
+        SyntaxPED.LEXPp_field (loc, ce_subst_lexpp cep5 zp5 lexpp, id)
+and ce_subst_lexpp_list
+  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
+    | cep5, zp5, lexpp_XXX :: lexpp_list_XXX ->
+        ce_subst_lexpp cep5 zp5 lexpp_XXX ::
+          ce_subst_lexpp_list cep5 zp5 lexpp_list_XXX;;
+
+let rec ce_subst_ep
+  cep5 zp5 x2 = match cep5, zp5, x2 with
+    cep5, zp5, SyntaxPED.Ep_val (loc, vp) -> SyntaxPED.Ep_val (loc, vp)
+    | cep5, zp5, SyntaxPED.Ep_mvar (loc, up) -> SyntaxPED.Ep_mvar (loc, up)
+    | cep5, zp5, SyntaxPED.Ep_concat (loc, ep_list) ->
+        SyntaxPED.Ep_concat (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
+    | cep5, zp5, SyntaxPED.Ep_tuple (loc, ep_list) ->
+        SyntaxPED.Ep_tuple (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
+    | cep5, zp5, SyntaxPED.Ep_app (loc, fp, ep) ->
+        SyntaxPED.Ep_app (loc, fp, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_bop (loc, bop, ep1, ep2) ->
+        SyntaxPED.Ep_bop
+          (loc, bop, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
+    | cep5, zp5, SyntaxPED.Ep_uop (loc, uop, ep) ->
+        SyntaxPED.Ep_uop (loc, uop, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_proj (loc, p, ep) ->
+        SyntaxPED.Ep_proj (loc, p, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_field_access (loc, ep, field) ->
+        SyntaxPED.Ep_field_access (loc, ce_subst_ep cep5 zp5 ep, field)
+    | cep5, zp5, SyntaxPED.Ep_sizeof (loc, cep) ->
+        SyntaxPED.Ep_sizeof (loc, ce_subst_cep cep5 zp5 cep)
+    | cep5, zp5, SyntaxPED.Ep_cast (loc, tau, ep) ->
+        SyntaxPED.Ep_cast
+          (loc, ce_subst_tp cep5 zp5 tau, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_record (loc, field_ep_list) ->
+        SyntaxPED.Ep_record
+          (loc, Lista.map
+                  (fun fe ->
+                    (Product_Type.fst fe,
+                      ce_subst_ep cep5 zp5 (Product_Type.snd fe)))
+                  field_ep_list)
+    | cep5, zp5, SyntaxPED.Ep_record_update (loc, ep, field_ep_list) ->
+        SyntaxPED.Ep_record_update
+          (loc, ce_subst_ep cep5 zp5 ep,
+            Lista.map (fun (f, e) -> (f, ce_subst_ep cep5 zp5 e)) field_ep_list)
+    | cep5, zp5, SyntaxPED.Ep_let (loc, letbindp, ep2) ->
+        SyntaxPED.Ep_let
+          (loc, ce_subst_letbindp cep5 zp5 letbindp, ce_subst_ep cep5 zp5 ep2)
+    | cep5, zp5, SyntaxPED.Ep_if (loc, ep1, ep2, ep3) ->
+        SyntaxPED.Ep_if
+          (loc, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2,
+            ce_subst_ep cep5 zp5 ep3)
+    | cep5, zp5, SyntaxPED.Ep_block (loc, ep_list) ->
+        SyntaxPED.Ep_block (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
+    | cep5, zp5, SyntaxPED.Ep_case (loc, ep, pexpp_list) ->
+        SyntaxPED.Ep_case
+          (loc, ce_subst_ep cep5 zp5 ep,
+            Lista.map (ce_subst_pexpp cep5 zp5) pexpp_list)
+    | cep5, zp5, SyntaxPED.Ep_assign (loc, lexpp, ep1) ->
+        SyntaxPED.Ep_assign
+          (loc, ce_subst_lexpp cep5 zp5 lexpp, ce_subst_ep cep5 zp5 ep1)
+    | cep5, zp5, SyntaxPED.Ep_var (loc, lexpp, ep1, ep2) ->
+        SyntaxPED.Ep_var
+          (loc, ce_subst_lexpp cep5 zp5 lexpp, ce_subst_ep cep5 zp5 ep1,
+            ce_subst_ep cep5 zp5 ep2)
+    | cep5, zp5, SyntaxPED.Ep_return (loc, ep) ->
+        SyntaxPED.Ep_return (loc, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_exit (loc, ep) ->
+        SyntaxPED.Ep_exit (loc, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_ref (loc, id) -> SyntaxPED.Ep_ref (loc, id)
+    | cep5, zp5, SyntaxPED.Ep_throw (loc, ep) ->
+        SyntaxPED.Ep_throw (loc, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.Ep_try (loc, ep, pexpp_list) ->
+        SyntaxPED.Ep_try
+          (loc, ce_subst_ep cep5 zp5 ep,
+            Lista.map (ce_subst_pexpp cep5 zp5) pexpp_list)
+    | cep5, zp5, SyntaxPED.Ep_constraint (loc, cp) ->
+        SyntaxPED.Ep_constraint (loc, ce_subst_cp cep5 zp5 cp)
+    | cep5, zp5, SyntaxPED.Ep_loop (loc, loop, ep1, ep2) ->
+        SyntaxPED.Ep_loop
+          (loc, loop, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
+    | cep5, zp5, SyntaxPED.Ep_for (loc, id, ep1, ep2, ep3, order, ep4) ->
+        SyntaxPED.Ep_for
+          (loc, id, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2,
+            ce_subst_ep cep5 zp5 ep3, order, ce_subst_ep cep5 zp5 ep4)
+    | cep5, zp5, SyntaxPED.Ep_assert (loc, ep1, ep2) ->
+        SyntaxPED.Ep_assert
+          (loc, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
+    | cep5, zp5, SyntaxPED.Ep_vec (loc, ep_list) ->
+        SyntaxPED.Ep_vec (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
+    | cep5, zp5, SyntaxPED.Ep_list (loc, ep_list) ->
+        SyntaxPED.Ep_list (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
+    | cep5, zp5, SyntaxPED.Ep_cons (loc, ep1, ep2) ->
+        SyntaxPED.Ep_cons
+          (loc, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
+and ce_subst_pexpp
+  cep5 zp5 x2 = match cep5, zp5, x2 with
+    cep5, zp5, SyntaxPED.PEXPp_exp (loc, patp, ep) ->
+      SyntaxPED.PEXPp_exp
+        (loc, ce_subst_patp cep5 zp5 patp, ce_subst_ep cep5 zp5 ep)
+    | cep5, zp5, SyntaxPED.PEXPp_when (loc, patp, ep1, ep2) ->
+        SyntaxPED.PEXPp_when
+          (loc, ce_subst_patp cep5 zp5 patp, ce_subst_ep cep5 zp5 ep1,
+            ce_subst_ep cep5 zp5 ep2)
+and ce_subst_letbindp
+  cep5 zp5 (SyntaxPED.LBp_val (loc, patp, ep)) =
+    SyntaxPED.LBp_val
+      (loc, ce_subst_patp cep5 zp5 patp, ce_subst_ep cep5 zp5 ep);;
+
+let rec ce_subst_funclp
+  cep5 zp5 (SyntaxPED.FCLp_funcl (loc, id, pexpp)) =
+    SyntaxPED.FCLp_funcl (loc, id, ce_subst_pexpp cep5 zp5 pexpp);;
+
+end;; (*struct CESubst*)
+
+module Finite_Map : sig
+  type ('a, 'b) fmap = Fmap_of_list of ('a * 'b) list
+  val fmadd : 'a HOL.equal -> ('a, 'b) fmap -> ('a, 'b) fmap -> ('a, 'b) fmap
+  val fmupd : 'a HOL.equal -> 'a -> 'b -> ('a, 'b) fmap -> ('a, 'b) fmap
+  val fmempty : ('a, 'b) fmap
+  val fmmap_keys : ('a -> 'b -> 'c) -> ('a, 'b) fmap -> ('a, 'c) fmap
+  val fmlookup : 'a HOL.equal -> ('a, 'b) fmap -> 'a -> 'b option
+end = struct
+
+type ('a, 'b) fmap = Fmap_of_list of ('a * 'b) list;;
+
+let rec fmadd _A
+  (Fmap_of_list m) (Fmap_of_list n) = Fmap_of_list (AList.merge _A m n);;
+
+let rec fmupd _A k v m = fmadd _A m (Fmap_of_list [(k, v)]);;
+
+let fmempty : ('a, 'b) fmap = Fmap_of_list [];;
+
+let rec fmmap_keys
+  f (Fmap_of_list m) = Fmap_of_list (Lista.map (fun (a, b) -> (a, f a b)) m);;
+
+let rec fmlookup _A (Fmap_of_list m) = Map.map_of _A m;;
+
+end;; (*struct Finite_Map*)
+
+module Freshen : sig
   val rv_id : string -> (string, string) Finite_Map.fmap -> string
   val rv_xp : SyntaxVCT.xp -> (string, string) Finite_Map.fmap -> SyntaxVCT.xp
   val rv_vp : SyntaxVCT.vp -> (string, string) Finite_Map.fmap -> SyntaxVCT.vp
@@ -3614,15 +3701,8 @@ module SyntaxUtils : sig
       (string, string) Finite_Map.fmap -> 'a SyntaxPED.letbindp
   val mk_new : 'a list -> string -> string
   val pat_id : 'a SyntaxPED.patp -> string list
-  val unzip3 : ('a * ('b * 'c)) list -> 'a list * ('b list * 'c list)
-  val b_of_lit : SyntaxVCT.lit -> SyntaxVCT.bp
   val mk_fresh_aux : string list -> string list -> string -> string
   val mk_fresh : string list -> string -> string
-  val mk_l_eq_c : SyntaxVCT.xp -> SyntaxVCT.lit -> SyntaxVCT.cp
-  val mk_l_eq_t : SyntaxVCT.lit -> SyntaxVCT.tau
-  val mk_list_c : SyntaxVCT.xp -> SyntaxVCT.xp list -> SyntaxVCT.cp
-  val mk_v_eq_c : SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.cp
-  val mk_v_eq_t : SyntaxVCT.bp -> SyntaxVCT.vp -> SyntaxVCT.tau
   val mk_mapping :
     string list -> string list -> (string, string) Finite_Map.fmap
   val freshen_pexp_aux :
@@ -3631,30 +3711,7 @@ module SyntaxUtils : sig
         'a SyntaxPED.ep -> 'a SyntaxPED.patp * 'a SyntaxPED.ep
   val freshen_ep : string list -> 'a SyntaxPED.ep -> 'a SyntaxPED.ep
   val freshen_pexpp : string list -> 'a SyntaxPED.pexpp -> 'a SyntaxPED.pexpp
-  val mk_eq_proj :
-    Location.loc -> SyntaxVCT.xp -> Arith.nat -> Arith.nat -> SyntaxVCT.cp
-  val mk_proj_eq : SyntaxVCT.xp -> string -> SyntaxVCT.cp
-  val c_conj_list : SyntaxVCT.cp list -> SyntaxVCT.cp
-  val empty_annot : Location.loc * SyntaxVCT.tau option
-  val mk_record_b_c :
-    SyntaxVCT.xp list ->
-      (string * SyntaxVCT.tau) list -> SyntaxVCT.bp * SyntaxVCT.cp
-  val mk_vec_len_eq_c : SyntaxVCT.xp -> 'a list -> SyntaxVCT.cp
-  val mk_x_eq_c_tuple : SyntaxVCT.xp -> SyntaxVCT.xp list -> SyntaxVCT.cp
-  val subst_x_cp : SyntaxVCT.cp -> SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.cp
 end = struct
-
-let rec mk_proj_eq_x
-  x y field =
-    SyntaxVCT.C_eq
-      (SyntaxVCT.CE_val (SyntaxVCT.V_var y),
-        SyntaxVCT.CE_val (SyntaxVCT.V_proj (field, SyntaxVCT.V_var x)));;
-
-let rec b_of (SyntaxVCT.T_refined_type (uu, b, uv)) = b;;
-
-let rec aux z f t = ((f, b_of t), mk_proj_eq_x SyntaxVCT.VIndex z f);;
-
-let rec c_of (SyntaxVCT.T_refined_type (uu, uv, c)) = c;;
 
 let rec rv_id
   xp fm =
@@ -3857,21 +3914,6 @@ let rec pat_id
     | SyntaxPED.Pp_string_append (loc, patp_list) ->
         Lista.maps pat_id patp_list;;
 
-let rec unzip3
-  = function [] -> ([], ([], []))
-    | (x, (y, z)) :: xyzs ->
-        (let (xs, (ys, zs)) = unzip3 xyzs in (x :: xs, (y :: ys, z :: zs)));;
-
-let rec b_of_lit = function SyntaxVCT.L_true -> SyntaxVCT.B_bool
-                   | SyntaxVCT.L_false -> SyntaxVCT.B_bool
-                   | SyntaxVCT.L_num n -> SyntaxVCT.B_int
-                   | SyntaxVCT.L_zero -> SyntaxVCT.B_bit
-                   | SyntaxVCT.L_one -> SyntaxVCT.B_bit
-                   | SyntaxVCT.L_unit -> SyntaxVCT.B_unit
-                   | SyntaxVCT.L_string uu -> SyntaxVCT.B_string
-                   | SyntaxVCT.L_real uv -> SyntaxVCT.B_real
-                   | SyntaxVCT.L_undef -> SyntaxVCT.B_undef;;
-
 let rec mk_fresh_aux
   x0 s2 xp = match x0, s2, xp with [], s2, xp -> xp
     | yp :: s, s2, xp ->
@@ -3879,30 +3921,6 @@ let rec mk_fresh_aux
           mk_fresh_aux s (yp :: s2) a);;
 
 let rec mk_fresh s xp = mk_fresh_aux s [] xp;;
-
-let rec mk_l_eq_c
-  x l = SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-            SyntaxVCT.CE_val (SyntaxVCT.V_lit l));;
-
-let rec mk_l_eq_t
-  l = SyntaxVCT.T_refined_type
-        (SyntaxVCT.VIndex, b_of_lit l, mk_l_eq_c SyntaxVCT.VIndex l);;
-
-let rec mk_list_c
-  x xs =
-    SyntaxVCT.C_eq
-      (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-        SyntaxVCT.CE_val
-          (SyntaxVCT.V_list (Lista.map (fun a -> SyntaxVCT.V_var a) xs)));;
-
-let rec mk_v_eq_c
-  x v = SyntaxVCT.C_eq
-          (SyntaxVCT.CE_val (SyntaxVCT.V_var x), SyntaxVCT.CE_val v);;
-
-let rec mk_v_eq_t
-  b v = SyntaxVCT.T_refined_type
-          (SyntaxVCT.VIndex, b, mk_v_eq_c SyntaxVCT.VIndex v);;
 
 let rec mk_mapping
   s ids =
@@ -4008,54 +4026,7 @@ and freshen_pexpp
                 (Lista.remdups Stringa.equal_literal (s @ pat_id pat_new))
                 ep2_new));;
 
-let rec mk_eq_proj
-  l x i n =
-    SyntaxVCT.C_eq
-      (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex),
-        SyntaxVCT.CE_val
-          (SyntaxVCT.V_proj
-            ((Utils.string_lit_of_nat n ^ "X") ^ Utils.string_lit_of_nat i,
-              SyntaxVCT.V_var x)));;
-
-let rec mk_proj_eq
-  x field =
-    SyntaxVCT.C_eq
-      (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex),
-        SyntaxVCT.CE_val (SyntaxVCT.V_proj (field, SyntaxVCT.V_var x)));;
-
-let rec c_conj_list
-  cs = Lista.fold (fun a b -> SyntaxVCT.C_conj (a, b)) cs SyntaxVCT.C_true;;
-
-let empty_annot : Location.loc * SyntaxVCT.tau option
-  = (Location.Loc_unknown, None);;
-
-let rec mk_record_b_c
-  zs fts =
-    (let (fbs, cs) =
-       Utils.unzip
-         (Lista.map (fun (x, a) -> (let (aa, b) = a in aux x aa b))
-           (Lista.zip zs fts))
-       in
-      (SyntaxVCT.B_record fbs, c_conj_list cs));;
-
-let rec mk_vec_len_eq_c
-  x bs =
-    SyntaxVCT.C_eq
-      (SyntaxVCT.CE_uop (SyntaxVCT.Len, SyntaxVCT.CE_val (SyntaxVCT.V_var x)),
-        SyntaxVCT.CE_val
-          (SyntaxVCT.V_lit
-            (SyntaxVCT.L_num (Arith.integer_of_nat (Lista.size_list bs)))));;
-
-let rec mk_x_eq_c_tuple
-  x xs =
-    SyntaxVCT.C_eq
-      (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
-        SyntaxVCT.CE_val
-          (SyntaxVCT.V_tuple (Lista.map (fun a -> SyntaxVCT.V_var a) xs)));;
-
-let rec subst_x_cp x = (fun a xa v -> SyntaxPED.subst_cp v xa a) x;;
-
-end;; (*struct SyntaxUtils*)
+end;; (*struct Freshen*)
 
 module Contexts : sig
   type g_entry = GEPair of SyntaxVCT.bp * SyntaxVCT.cp | GETyp of SyntaxVCT.tau
@@ -4066,27 +4037,25 @@ module Contexts : sig
       (SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
         Finite_Map.fmap *
         (SyntaxVCT.xp * g_entry) list * (SyntaxVCT.xp * g_entry) list *
-        (SyntaxVCT.xp * SyntaxVCT.tau) list *
+        (string * SyntaxPED.typdef) list *
         (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap *
         (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap * SyntaxVCT.xp list *
         SyntaxVCT.tau option * 'b
   val conj : SyntaxVCT.cp list -> SyntaxVCT.cp
   val mapi : (Arith.nat -> 'a -> 'b) -> 'a list -> 'b list
   val n_of : SyntaxVCT.xp -> string
-  val gamma_x : ('a, 'b) gamma_ext -> (SyntaxVCT.xp * g_entry) list
+  val x_of : SyntaxVCT.xp -> string
+  val zipi : 'a list -> (Arith.nat * 'a) list
   val pp_vp : SyntaxVCT.vp -> string
   val pp_ce : SyntaxVCT.cep -> string
   val pp_cp : SyntaxVCT.cp -> string
-  val pp_gep : g_entry -> string
-  val x_of : SyntaxVCT.xp -> string
-  val pp_G : ('a, unit) gamma_ext -> string
-  val zipi : 'a list -> (Arith.nat * 'a) list
   val unzip : ('a * 'b) list -> 'a list * 'b list
   val lookup : 'a HOL.equal -> ('a * 'b) list -> 'a -> 'b option
   val update : 'a HOL.equal -> ('a * 'b) list -> 'a -> 'b -> ('a * 'b) list
   val gamma_x_update :
     ((SyntaxVCT.xp * g_entry) list -> (SyntaxVCT.xp * g_entry) list) ->
       ('a, 'b) gamma_ext -> ('a, 'b) gamma_ext
+  val gamma_x : ('a, 'b) gamma_ext -> (SyntaxVCT.xp * g_entry) list
   val add_var :
     ('a, unit) gamma_ext -> SyntaxVCT.xp * g_entry -> ('a, unit) gamma_ext
   val iterate :
@@ -4094,14 +4063,6 @@ module Contexts : sig
       (string, (string list)) Finite_Map.fmap ->
         (string, (string list)) Finite_Map.fmap ->
           (string, (string list)) Finite_Map.fmap
-  val unify_b_aux :
-    SyntaxVCT.bp -> SyntaxVCT.bp -> ((string * SyntaxVCT.bp) list) option
-  val bases_of : ('a * SyntaxVCT.tau) list -> SyntaxVCT.bp list
-  val unify_b :
-    SyntaxVCT.bp -> SyntaxVCT.bp -> ((string * SyntaxVCT.bp) list) option
-  val unify_b_list :
-    SyntaxVCT.bp list ->
-      SyntaxVCT.bp list -> ((string * SyntaxVCT.bp) list) option
   val add_vars :
     ('a, unit) gamma_ext ->
       (SyntaxVCT.xp * g_entry) list -> ('a, unit) gamma_ext
@@ -4137,8 +4098,6 @@ module Contexts : sig
   val convert_to_bc :
     Arith.nat -> Arith.nat -> SyntaxVCT.tau -> SyntaxVCT.bp * SyntaxVCT.cp
   val convert_to_st : SyntaxVCT.tau list -> SyntaxVCT.bp list * SyntaxVCT.cp
-  val add_type_to_scope :
-    ('a, unit) gamma_ext -> SyntaxVCT.tau -> ('a, unit) gamma_ext
   val gamma_e : ('a, 'b) gamma_ext -> SyntaxVCT.tau option
   val gamma_u : ('a, 'b) gamma_ext -> (SyntaxVCT.xp * g_entry) list
   val gamma_e_update :
@@ -4162,7 +4121,7 @@ type ('a, 'b) gamma_ext =
     (SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
       Finite_Map.fmap *
       (SyntaxVCT.xp * g_entry) list * (SyntaxVCT.xp * g_entry) list *
-      (SyntaxVCT.xp * SyntaxVCT.tau) list *
+      (string * SyntaxPED.typdef) list *
       (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap *
       (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap * SyntaxVCT.xp list *
       SyntaxVCT.tau option * 'b;;
@@ -4183,11 +4142,9 @@ let rec mapi
 let rec n_of = function SyntaxVCT.VNamed s -> s
                | SyntaxVCT.VIndex -> "#0";;
 
-let rec gamma_x
-  (Gamma_ext
-    (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_e,
-      more))
-    = gamma_x;;
+let rec x_of (SyntaxVCT.VNamed x) = x;;
+
+let rec zipi xs = mapi (fun a b -> (a, b)) xs;;
 
 let rec pp_vp = function SyntaxVCT.V_var (SyntaxVCT.VNamed s) -> s
                 | SyntaxVCT.V_lit v -> "vp"
@@ -4236,19 +4193,6 @@ let rec pp_cp = function SyntaxVCT.C_true -> "T"
                 | SyntaxVCT.C_leq (e1, e2) -> "C_leq"
                 | SyntaxVCT.C_conj_many cs -> "C_conj_many";;
 
-let rec pp_gep (GEPair (bp, cp)) = pp_cp cp;;
-
-let rec x_of (SyntaxVCT.VNamed x) = x;;
-
-let rec pp_G
-  g = Stringa.implode
-        (Lista.maps
-          (fun (x, gep) ->
-            Stringa.explode (((x_of x ^ "[ ") ^ pp_gep gep) ^ "]"))
-          (gamma_x g));;
-
-let rec zipi xs = mapi (fun a b -> (a, b)) xs;;
-
 let rec unzip
   = function [] -> ([], [])
     | (x, y) :: xys -> (let (xs, ys) = unzip xys in (x :: xs, y :: ys));;
@@ -4273,6 +4217,12 @@ let rec gamma_x_update
         (gamma_f, gamma_xa gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s,
           gamma_e, more);;
 
+let rec gamma_x
+  (Gamma_ext
+    (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_e,
+      more))
+    = gamma_x;;
+
 let rec add_var
   gamma (x, t) = gamma_x_update (fun _ -> (x, t) :: gamma_x gamma) gamma;;
 
@@ -4289,563 +4239,6 @@ let rec iterate
                          with None -> [] | Some ss -> ss))
                      ss1))
              (iterate (Arith.minus_nat i Arith.one_nat) fm1 fm2));;
-
-let rec unify_b_aux
-  b x1 = match b, x1 with b, SyntaxVCT.B_var x -> Some [(x, b)]
-    | uu, SyntaxVCT.B_tid v -> None
-    | uu, SyntaxVCT.B_int -> None
-    | uu, SyntaxVCT.B_bool -> None
-    | uu, SyntaxVCT.B_bit -> None
-    | uu, SyntaxVCT.B_unit -> None
-    | uu, SyntaxVCT.B_real -> None
-    | uu, SyntaxVCT.B_vec (v, va) -> None
-    | uu, SyntaxVCT.B_list v -> None
-    | uu, SyntaxVCT.B_tuple v -> None
-    | uu, SyntaxVCT.B_union (v, va) -> None
-    | uu, SyntaxVCT.B_record v -> None
-    | uu, SyntaxVCT.B_undef -> None
-    | uu, SyntaxVCT.B_reg v -> None
-    | uu, SyntaxVCT.B_string -> None
-    | uu, SyntaxVCT.B_exception -> None
-    | uu, SyntaxVCT.B_finite_set v -> None;;
-
-let rec bases_of
-  ts = Lista.map (Fun.comp SyntaxUtils.b_of Product_Type.snd) ts;;
-
-let rec unify_b
-  b1 b2 = match b1, b2 with
-    SyntaxVCT.B_vec (o1, b1), SyntaxVCT.B_vec (o2, b2) ->
-      (if SyntaxVCT.equal_order o1 o2
-        then (match unify_b b1 b2 with None -> None | Some a -> Some a)
-        else None)
-    | SyntaxVCT.B_list b1, SyntaxVCT.B_list b2 ->
-        (match unify_b b1 b2 with None -> None | Some a -> Some a)
-    | SyntaxVCT.B_union (s1, ts1), SyntaxVCT.B_union (s2, ts2) ->
-        unify_b_list (bases_of ts1) (bases_of ts2)
-    | SyntaxVCT.B_tuple bs1, SyntaxVCT.B_tuple bs2 -> unify_b_list bs1 bs2
-    | SyntaxVCT.B_var v, b2 ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_var v) b2 then Some []
-          else (match unify_b_aux (SyntaxVCT.B_var v) b2
-                 with None -> unify_b_aux b2 (SyntaxVCT.B_var v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tid v, b2 ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tid v) b2 then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tid v) b2
-                 with None -> unify_b_aux b2 (SyntaxVCT.B_tid v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_int, b2 ->
-        (if SyntaxVCT.equal_bpa SyntaxVCT.B_int b2 then Some []
-          else (match unify_b_aux SyntaxVCT.B_int b2
-                 with None -> unify_b_aux b2 SyntaxVCT.B_int
-                 | Some a -> Some a))
-    | SyntaxVCT.B_bool, b2 ->
-        (if SyntaxVCT.equal_bpa SyntaxVCT.B_bool b2 then Some []
-          else (match unify_b_aux SyntaxVCT.B_bool b2
-                 with None -> unify_b_aux b2 SyntaxVCT.B_bool
-                 | Some a -> Some a))
-    | SyntaxVCT.B_bit, b2 ->
-        (if SyntaxVCT.equal_bpa SyntaxVCT.B_bit b2 then Some []
-          else (match unify_b_aux SyntaxVCT.B_bit b2
-                 with None -> unify_b_aux b2 SyntaxVCT.B_bit
-                 | Some a -> Some a))
-    | SyntaxVCT.B_unit, b2 ->
-        (if SyntaxVCT.equal_bpa SyntaxVCT.B_unit b2 then Some []
-          else (match unify_b_aux SyntaxVCT.B_unit b2
-                 with None -> unify_b_aux b2 SyntaxVCT.B_unit
-                 | Some a -> Some a))
-    | SyntaxVCT.B_real, b2 ->
-        (if SyntaxVCT.equal_bpa SyntaxVCT.B_real b2 then Some []
-          else (match unify_b_aux SyntaxVCT.B_real b2
-                 with None -> unify_b_aux b2 SyntaxVCT.B_real
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_var va ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) (SyntaxVCT.B_var va)
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) (SyntaxVCT.B_var va)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_var va) (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_tid va ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) (SyntaxVCT.B_tid va)
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) (SyntaxVCT.B_tid va)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_tid va) (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_int ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) SyntaxVCT.B_int
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) SyntaxVCT.B_int
-                 with None -> unify_b_aux SyntaxVCT.B_int (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_bool ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) SyntaxVCT.B_bool
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) SyntaxVCT.B_bool
-                 with None -> unify_b_aux SyntaxVCT.B_bool (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_bit ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) SyntaxVCT.B_bit
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) SyntaxVCT.B_bit
-                 with None -> unify_b_aux SyntaxVCT.B_bit (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_unit ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) SyntaxVCT.B_unit
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) SyntaxVCT.B_unit
-                 with None -> unify_b_aux SyntaxVCT.B_unit (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_real ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) SyntaxVCT.B_real
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) SyntaxVCT.B_real
-                 with None -> unify_b_aux SyntaxVCT.B_real (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_vec (va, vb) ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) (SyntaxVCT.B_vec (va, vb))
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_list v) (SyntaxVCT.B_vec (va, vb))
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_vec (va, vb)) (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_tuple va ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) (SyntaxVCT.B_tuple va)
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) (SyntaxVCT.B_tuple va)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_tuple va) (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_union (va, vb) ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v)
-              (SyntaxVCT.B_union (va, vb))
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_list v) (SyntaxVCT.B_union (va, vb))
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_union (va, vb)) (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_record va ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) (SyntaxVCT.B_record va)
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) (SyntaxVCT.B_record va)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_record va) (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_undef ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) SyntaxVCT.B_undef
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) SyntaxVCT.B_undef
-                 with None -> unify_b_aux SyntaxVCT.B_undef (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_reg va ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) (SyntaxVCT.B_reg va)
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) (SyntaxVCT.B_reg va)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_reg va) (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_string ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) SyntaxVCT.B_string
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) SyntaxVCT.B_string
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_string (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_exception ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) SyntaxVCT.B_exception
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_list v) SyntaxVCT.B_exception
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_exception (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_list v, SyntaxVCT.B_finite_set va ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_list v) (SyntaxVCT.B_finite_set va)
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_list v) (SyntaxVCT.B_finite_set va)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_finite_set va) (SyntaxVCT.B_list v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_var va ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) (SyntaxVCT.B_var va)
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_var va)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_var va) (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_tid va ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) (SyntaxVCT.B_tid va)
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_tid va)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_tid va) (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_int ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_int
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_int
-                 with None -> unify_b_aux SyntaxVCT.B_int (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_bool ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_bool
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_bool
-                 with None -> unify_b_aux SyntaxVCT.B_bool (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_bit ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_bit
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_bit
-                 with None -> unify_b_aux SyntaxVCT.B_bit (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_unit ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_unit
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_unit
-                 with None -> unify_b_aux SyntaxVCT.B_unit (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_real ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_real
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_real
-                 with None -> unify_b_aux SyntaxVCT.B_real (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_vec (va, vb) ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) (SyntaxVCT.B_vec (va, vb))
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_vec (va, vb))
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_vec (va, vb)) (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_list va ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) (SyntaxVCT.B_list va)
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_list va)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_list va) (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_union (va, vb) ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v)
-              (SyntaxVCT.B_union (va, vb))
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_union (va, vb))
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_union (va, vb))
-                     (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_record va ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) (SyntaxVCT.B_record va)
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_record va)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_record va) (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_undef ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_undef
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_undef
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_undef (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_reg va ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) (SyntaxVCT.B_reg va)
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_reg va)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_reg va) (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_string ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_string
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_string
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_string (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_exception ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v) SyntaxVCT.B_exception
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_tuple v) SyntaxVCT.B_exception
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_exception (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_tuple v, SyntaxVCT.B_finite_set va ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_tuple v)
-              (SyntaxVCT.B_finite_set va)
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_finite_set va)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_finite_set va) (SyntaxVCT.B_tuple v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_var vb ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va)) (SyntaxVCT.B_var vb)
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_union (v, va)) (SyntaxVCT.B_var vb)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_var vb) (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_tid vb ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va)) (SyntaxVCT.B_tid vb)
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_union (v, va)) (SyntaxVCT.B_tid vb)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_tid vb) (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_int ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_int
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_int
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_int (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_bool ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_bool
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_bool
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_bool (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_bit ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_bit
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_bit
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_bit (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_unit ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_unit
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_unit
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_unit (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_real ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_real
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_real
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_real (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_vec (vb, vc) ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va))
-              (SyntaxVCT.B_vec (vb, vc))
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_union (v, va))
-                   (SyntaxVCT.B_vec (vb, vc))
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_vec (vb, vc))
-                     (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_list vb ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va))
-              (SyntaxVCT.B_list vb)
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_union (v, va)) (SyntaxVCT.B_list vb)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_list vb) (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_tuple vb ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va))
-              (SyntaxVCT.B_tuple vb)
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_union (v, va)) (SyntaxVCT.B_tuple vb)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_tuple vb)
-                     (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_record vb ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va))
-              (SyntaxVCT.B_record vb)
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_union (v, va)) (SyntaxVCT.B_record vb)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_record vb)
-                     (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_undef ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_undef
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_undef
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_undef (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_reg vb ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va)) (SyntaxVCT.B_reg vb)
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_union (v, va)) (SyntaxVCT.B_reg vb)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_reg vb) (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_string ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_string
-          then Some []
-          else (match unify_b_aux (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_string
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_string (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_exception ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va))
-              SyntaxVCT.B_exception
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_union (v, va)) SyntaxVCT.B_exception
-                 with None ->
-                   unify_b_aux SyntaxVCT.B_exception (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_union (v, va), SyntaxVCT.B_finite_set vb ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_union (v, va))
-              (SyntaxVCT.B_finite_set vb)
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_union (v, va))
-                   (SyntaxVCT.B_finite_set vb)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_finite_set vb)
-                     (SyntaxVCT.B_union (v, va))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_record v, b2 ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_record v) b2 then Some []
-          else (match unify_b_aux (SyntaxVCT.B_record v) b2
-                 with None -> unify_b_aux b2 (SyntaxVCT.B_record v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_undef, b2 ->
-        (if SyntaxVCT.equal_bpa SyntaxVCT.B_undef b2 then Some []
-          else (match unify_b_aux SyntaxVCT.B_undef b2
-                 with None -> unify_b_aux b2 SyntaxVCT.B_undef
-                 | Some a -> Some a))
-    | SyntaxVCT.B_reg v, b2 ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_reg v) b2 then Some []
-          else (match unify_b_aux (SyntaxVCT.B_reg v) b2
-                 with None -> unify_b_aux b2 (SyntaxVCT.B_reg v)
-                 | Some a -> Some a))
-    | SyntaxVCT.B_string, b2 ->
-        (if SyntaxVCT.equal_bpa SyntaxVCT.B_string b2 then Some []
-          else (match unify_b_aux SyntaxVCT.B_string b2
-                 with None -> unify_b_aux b2 SyntaxVCT.B_string
-                 | Some a -> Some a))
-    | SyntaxVCT.B_exception, b2 ->
-        (if SyntaxVCT.equal_bpa SyntaxVCT.B_exception b2 then Some []
-          else (match unify_b_aux SyntaxVCT.B_exception b2
-                 with None -> unify_b_aux b2 SyntaxVCT.B_exception
-                 | Some a -> Some a))
-    | SyntaxVCT.B_finite_set v, b2 ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_finite_set v) b2 then Some []
-          else (match unify_b_aux (SyntaxVCT.B_finite_set v) b2
-                 with None -> unify_b_aux b2 (SyntaxVCT.B_finite_set v)
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_var v ->
-        (if SyntaxVCT.equal_bpa b1 (SyntaxVCT.B_var v) then Some []
-          else (match unify_b_aux b1 (SyntaxVCT.B_var v)
-                 with None -> unify_b_aux (SyntaxVCT.B_var v) b1
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_tid v ->
-        (if SyntaxVCT.equal_bpa b1 (SyntaxVCT.B_tid v) then Some []
-          else (match unify_b_aux b1 (SyntaxVCT.B_tid v)
-                 with None -> unify_b_aux (SyntaxVCT.B_tid v) b1
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_int ->
-        (if SyntaxVCT.equal_bpa b1 SyntaxVCT.B_int then Some []
-          else (match unify_b_aux b1 SyntaxVCT.B_int
-                 with None -> unify_b_aux SyntaxVCT.B_int b1
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_bool ->
-        (if SyntaxVCT.equal_bpa b1 SyntaxVCT.B_bool then Some []
-          else (match unify_b_aux b1 SyntaxVCT.B_bool
-                 with None -> unify_b_aux SyntaxVCT.B_bool b1
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_bit ->
-        (if SyntaxVCT.equal_bpa b1 SyntaxVCT.B_bit then Some []
-          else (match unify_b_aux b1 SyntaxVCT.B_bit
-                 with None -> unify_b_aux SyntaxVCT.B_bit b1
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_unit ->
-        (if SyntaxVCT.equal_bpa b1 SyntaxVCT.B_unit then Some []
-          else (match unify_b_aux b1 SyntaxVCT.B_unit
-                 with None -> unify_b_aux SyntaxVCT.B_unit b1
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_real ->
-        (if SyntaxVCT.equal_bpa b1 SyntaxVCT.B_real then Some []
-          else (match unify_b_aux b1 SyntaxVCT.B_real
-                 with None -> unify_b_aux SyntaxVCT.B_real b1
-                 | Some a -> Some a))
-    | SyntaxVCT.B_vec (va, vb), SyntaxVCT.B_list v ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_vec (va, vb)) (SyntaxVCT.B_list v)
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_vec (va, vb)) (SyntaxVCT.B_list v)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_list v) (SyntaxVCT.B_vec (va, vb))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_vec (va, vb), SyntaxVCT.B_tuple v ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_vec (va, vb)) (SyntaxVCT.B_tuple v)
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_vec (va, vb)) (SyntaxVCT.B_tuple v)
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_tuple v) (SyntaxVCT.B_vec (va, vb))
-                 | Some a -> Some a))
-    | SyntaxVCT.B_vec (vb, vc), SyntaxVCT.B_union (v, va) ->
-        (if SyntaxVCT.equal_bpa (SyntaxVCT.B_vec (vb, vc))
-              (SyntaxVCT.B_union (v, va))
-          then Some []
-          else (match
-                 unify_b_aux (SyntaxVCT.B_vec (vb, vc))
-                   (SyntaxVCT.B_union (v, va))
-                 with None ->
-                   unify_b_aux (SyntaxVCT.B_union (v, va))
-                     (SyntaxVCT.B_vec (vb, vc))
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_record v ->
-        (if SyntaxVCT.equal_bpa b1 (SyntaxVCT.B_record v) then Some []
-          else (match unify_b_aux b1 (SyntaxVCT.B_record v)
-                 with None -> unify_b_aux (SyntaxVCT.B_record v) b1
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_undef ->
-        (if SyntaxVCT.equal_bpa b1 SyntaxVCT.B_undef then Some []
-          else (match unify_b_aux b1 SyntaxVCT.B_undef
-                 with None -> unify_b_aux SyntaxVCT.B_undef b1
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_reg v ->
-        (if SyntaxVCT.equal_bpa b1 (SyntaxVCT.B_reg v) then Some []
-          else (match unify_b_aux b1 (SyntaxVCT.B_reg v)
-                 with None -> unify_b_aux (SyntaxVCT.B_reg v) b1
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_string ->
-        (if SyntaxVCT.equal_bpa b1 SyntaxVCT.B_string then Some []
-          else (match unify_b_aux b1 SyntaxVCT.B_string
-                 with None -> unify_b_aux SyntaxVCT.B_string b1
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_exception ->
-        (if SyntaxVCT.equal_bpa b1 SyntaxVCT.B_exception then Some []
-          else (match unify_b_aux b1 SyntaxVCT.B_exception
-                 with None -> unify_b_aux SyntaxVCT.B_exception b1
-                 | Some a -> Some a))
-    | b1, SyntaxVCT.B_finite_set v ->
-        (if SyntaxVCT.equal_bpa b1 (SyntaxVCT.B_finite_set v) then Some []
-          else (match unify_b_aux b1 (SyntaxVCT.B_finite_set v)
-                 with None -> unify_b_aux (SyntaxVCT.B_finite_set v) b1
-                 | Some a -> Some a))
-and unify_b_list
-  x0 x1 = match x0, x1 with
-    t1 :: ts1, t2 :: ts2 ->
-      (match unify_b t1 t2 with None -> None
-        | Some bs ->
-          (match unify_b_list ts1 ts2 with None -> None
-            | Some bs2 -> Some (bs @ bs2)))
-    | [], [] -> Some []
-    | [], v :: va -> None
-    | v :: va, [] -> None;;
 
 let rec add_vars gamma bs = gamma_x_update (fun _ -> bs @ gamma_x gamma) gamma;;
 
@@ -4873,8 +4266,7 @@ let rec mk_ctor_v
           (idx, SyntaxVCT.V_tuple
                   (Lista.map (fun a -> SyntaxVCT.V_var a) (x :: v :: va)));;
 
-let rec subst_c_x
-  c x = SyntaxPED.subst_cp (SyntaxVCT.V_var x) SyntaxVCT.VIndex c;;
+let rec subst_c_x c x = Subst.subst_cp (SyntaxVCT.V_var x) SyntaxVCT.VIndex c;;
 
 let rec check_vars g xs = Lista.list_all (check_var g) xs;;
 
@@ -4884,7 +4276,7 @@ let rec lookup_ivar gamma x = lookup SyntaxVCT.equal_xp (gamma_x gamma) x;;
 
 let rec lookup_var gamma x = lookup_ivar gamma x;;
 
-let rec subst_c_v0 c v = SyntaxPED.subst_cp v SyntaxVCT.VIndex c;;
+let rec subst_c_v0 c v = Subst.subst_cp v SyntaxVCT.VIndex c;;
 
 let rec tuple_proj
   i n v =
@@ -4945,30 +4337,6 @@ let rec convert_to_st
           in
          (blist, conj clist));;
 
-let rec add_type_to_scope
-  gamma x1 = match gamma, x1 with
-    gamma,
-      SyntaxVCT.T_refined_type (zvar, SyntaxVCT.B_union (uname, variants), c)
-      -> add_to_scope gamma
-           (Lista.map (fun s -> SyntaxVCT.VNamed (Product_Type.fst s)) variants)
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_var vc, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid vc, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (vc, vd), vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list vc, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tuple vc, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_record vc, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_undef, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vc, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, vb) -> gamma
-    | gamma, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set vc, vb) ->
-        gamma;;
-
 let rec gamma_e
   (Gamma_ext
     (gamma_f, gamma_x, gamma_u, gamma_T, gamma_o, gamma_r, gamma_s, gamma_e,
@@ -4992,1198 +4360,14 @@ let rec gamma_e_update
 
 end;; (*struct Contexts*)
 
-module ContextsPiDelta : sig
-  type ('a, 'b) phi_ext =
-    Phi_ext of
-      (SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
-        Finite_Map.fmap *
-        (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap * 'b
-  type 'a delta_ext = Delta_ext of (string * SyntaxVCT.tau) list * 'a
-  type 'a theta_ext =
-    Theta_ext of
-      (SyntaxVCT.xp * SyntaxVCT.tau) list *
-        (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap * SyntaxVCT.order option *
-        'a
-  val phi_f_update :
-    ((SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
-       Finite_Map.fmap ->
-      (SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
-        Finite_Map.fmap) ->
-      ('a, 'b) phi_ext -> ('a, 'b) phi_ext
-  val phi_f :
-    ('a, 'b) phi_ext ->
-      (SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
-        Finite_Map.fmap
-  val add_fun :
-    ('a, unit) phi_ext ->
-      SyntaxVCT.xp * (SyntaxVCT.ap * 'a option) -> ('a, unit) phi_ext
-  val b_of_ge : Contexts.g_entry -> SyntaxVCT.bp
-  val delta_m_update :
-    ((string * SyntaxVCT.tau) list -> (string * SyntaxVCT.tau) list) ->
-      'a delta_ext -> 'a delta_ext
-  val delta_m : 'a delta_ext -> (string * SyntaxVCT.tau) list
-  val add_mvar : unit delta_ext -> string * SyntaxVCT.tau -> unit delta_ext
-  val theta_T_update :
-    ((SyntaxVCT.xp * SyntaxVCT.tau) list ->
-      (SyntaxVCT.xp * SyntaxVCT.tau) list) ->
-      'a theta_ext -> 'a theta_ext
-  val theta_T : 'a theta_ext -> (SyntaxVCT.xp * SyntaxVCT.tau) list
-  val add_to_scope_theta : unit theta_ext -> SyntaxVCT.xp list -> unit theta_ext
-  val add_type :
-    unit theta_ext -> SyntaxVCT.xp -> SyntaxVCT.tau -> unit theta_ext
-  val emptyDEnv : unit delta_ext
-  val lookup_field_in_type : SyntaxVCT.tau -> string -> SyntaxVCT.bp option
-  val lookup_field_record_aux :
-    (SyntaxVCT.xp * SyntaxVCT.tau) list ->
-      string -> (SyntaxVCT.xp * SyntaxVCT.tau) option
-  val lookup_field_record :
-    unit theta_ext -> string -> (SyntaxVCT.xp * SyntaxVCT.tau) option
-  val lookup_record_name : unit theta_ext -> string -> string option
-  val tids_in_b_aux : unit theta_ext -> SyntaxVCT.bp -> string list
-  val tids_in_t_aux : unit theta_ext -> SyntaxVCT.tau -> string list
-  val tids_in_b : unit theta_ext -> SyntaxVCT.bp -> string list
-  val tids_in_t : unit theta_ext -> SyntaxVCT.tau -> string list
-  val fm_from_t : unit theta_ext -> (string, (string list)) Finite_Map.fmap
-  val emptyPiEnv : ('a, unit) phi_ext
-  val restrict_t :
-    (SyntaxVCT.xp * SyntaxVCT.tau) list ->
-      string list -> (SyntaxVCT.xp * SyntaxVCT.tau) list
-  val lookup_mvar : unit delta_ext -> string -> SyntaxVCT.tau option
-  val minimise_td :
-    unit theta_ext ->
-      (SyntaxVCT.xp * Contexts.g_entry) list ->
-        (SyntaxVCT.xp * SyntaxVCT.tau) list
-  val update_mvar : unit delta_ext -> string * SyntaxVCT.tau -> unit delta_ext
-  val update_type :
-    unit theta_ext -> SyntaxVCT.xp -> SyntaxVCT.tau -> unit theta_ext
-  val theta_r_update :
-    ((SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap ->
-      (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap) ->
-      'a theta_ext -> 'a theta_ext
-  val theta_r : 'a theta_ext -> (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap
-  val add_register :
-    unit theta_ext -> SyntaxVCT.xp -> SyntaxVCT.tau -> unit theta_ext
-  val emptyThetaEnv : unit theta_ext
-  val lookup_fields : unit theta_ext -> string list -> SyntaxVCT.tau option
-  val mvar_not_in_d : unit delta_ext -> string -> bool
-  val phi_o :
-    ('a, 'b) phi_ext -> (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap
-  val lookup_fun_aux :
-    ('a, unit) phi_ext ->
-      SyntaxVCT.xp -> ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list) option
-  val phi_o_update :
-    ((SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap ->
-      (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap) ->
-      ('a, 'b) phi_ext -> ('a, 'b) phi_ext
-  val add_to_overload :
-    ('a, unit) phi_ext ->
-      SyntaxVCT.xp -> SyntaxVCT.xp list -> ('a, unit) phi_ext
-  val lookup_register : unit theta_ext -> SyntaxVCT.xp -> SyntaxVCT.tau option
-  val lookup_types_for :
-    SyntaxVCT.bp -> string list -> (SyntaxVCT.bp list) option
-  val lookup_constr_in_type : SyntaxVCT.tau -> string -> SyntaxVCT.tau option
-  val lookup_constr_aux :
-    (SyntaxVCT.xp * SyntaxVCT.tau) list -> string -> SyntaxVCT.tau option
-  val lookup_constr_union : unit theta_ext -> string -> SyntaxVCT.tau option
-  val lookup_constr_union_x :
-    unit theta_ext -> SyntaxVCT.xp -> SyntaxVCT.tau option
-  val lookup_constr_union_type :
-    unit theta_ext -> string -> (SyntaxVCT.tau * SyntaxVCT.tau) option
-  val lookup_field_record_type :
-    unit theta_ext -> string -> (SyntaxVCT.bp * SyntaxVCT.tau) option
-  val theta_d : 'a theta_ext -> SyntaxVCT.order option
-  val lookup_field_and_record_type :
-    unit theta_ext -> string -> (SyntaxVCT.tau * SyntaxVCT.tau) option
-  val theta_d_update :
-    (SyntaxVCT.order option -> SyntaxVCT.order option) ->
-      'a theta_ext -> 'a theta_ext
-end = struct
-
-type ('a, 'b) phi_ext =
-  Phi_ext of
-    (SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
-      Finite_Map.fmap *
-      (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap * 'b;;
-
-type 'a delta_ext = Delta_ext of (string * SyntaxVCT.tau) list * 'a;;
-
-type 'a theta_ext =
-  Theta_ext of
-    (SyntaxVCT.xp * SyntaxVCT.tau) list *
-      (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap * SyntaxVCT.order option *
-      'a;;
-
-let rec phi_f_update
-  phi_fa (Phi_ext (phi_f, phi_o, more)) = Phi_ext (phi_fa phi_f, phi_o, more);;
-
-let rec phi_f (Phi_ext (phi_f, phi_o, more)) = phi_f;;
-
-let rec add_fun
-  phi (x, (f, s)) =
-    (match Finite_Map.fmlookup SyntaxVCT.equal_xp (phi_f phi) x
-      with None ->
-        phi_f_update
-          (fun _ ->
-            Finite_Map.fmupd SyntaxVCT.equal_xp x [(x, (f, s))] (phi_f phi))
-          phi
-      | Some fs ->
-        phi_f_update
-          (fun _ ->
-            Finite_Map.fmupd SyntaxVCT.equal_xp x ((x, (f, s)) :: fs)
-              (phi_f phi))
-          phi);;
-
-let rec b_of_ge (Contexts.GEPair (b, c)) = b;;
-
-let rec delta_m_update
-  delta_ma (Delta_ext (delta_m, more)) = Delta_ext (delta_ma delta_m, more);;
-
-let rec delta_m (Delta_ext (delta_m, more)) = delta_m;;
-
-let rec add_mvar
-  delta (x, t) =
-    (match Contexts.lookup Stringa.equal_literal (delta_m delta) x
-      with None ->
-        delta_m_update
-          (fun _ -> Contexts.update Stringa.equal_literal (delta_m delta) x t)
-          delta
-      | Some _ -> delta);;
-
-let rec theta_T_update
-  theta_Ta (Theta_ext (theta_T, theta_r, theta_d, more)) =
-    Theta_ext (theta_Ta theta_T, theta_r, theta_d, more);;
-
-let rec theta_T (Theta_ext (theta_T, theta_r, theta_d, more)) = theta_T;;
-
-let rec add_to_scope_theta theta xs = theta;;
-
-let rec add_type
-  phi x xa2 = match phi, x, xa2 with
-    phi, x,
-      SyntaxVCT.T_refined_type (zvar, SyntaxVCT.B_union (uname, variants), c)
-      -> add_to_scope_theta
-           (theta_T_update
-             (fun _ ->
-               (x, SyntaxVCT.T_refined_type
-                     (zvar, SyntaxVCT.B_union (uname, variants), c)) ::
-                 theta_T phi)
-             phi)
-           (Lista.map (fun s -> SyntaxVCT.VNamed (Product_Type.fst s)) variants)
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_var vc, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_var vc, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid vc, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid vc, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (vc, vd), vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (vc, vd), vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list vc, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list vc, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tuple vc, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tuple vc, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_record vc, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_record vc, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_undef, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_undef, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vc, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vc, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, vb)) ::
-              theta_T phi)
-          phi
-    | phi, x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set vc, vb) ->
-        theta_T_update
-          (fun _ ->
-            (x, SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set vc, vb)) ::
-              theta_T phi)
-          phi;;
-
-let emptyDEnv : unit delta_ext = Delta_ext ([], ());;
-
-let rec lookup_field_in_type
-  xa0 x = match xa0, x with
-    SyntaxVCT.T_refined_type (uu, SyntaxVCT.B_record fs, c), x ->
-      Contexts.lookup Stringa.equal_literal fs x
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_var vc, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid vc, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (vc, vd), vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list vc, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tuple vc, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_union (vc, vd), vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_undef, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vc, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set vc, vb), uw -> None;;
-
-let rec lookup_field_record_aux
-  x0 uu = match x0, uu with [], uu -> None
-    | (xa, t) :: ts, x ->
-        (match lookup_field_in_type t x
-          with None -> lookup_field_record_aux ts x | Some _ -> Some (xa, t));;
-
-let rec lookup_field_record
-  theta fid = lookup_field_record_aux (theta_T theta) fid;;
-
-let rec lookup_record_name
-  theta fid =
-    (match lookup_field_record theta fid with None -> None
-      | Some a ->
-        (match a with (SyntaxVCT.VNamed aa, _) -> Some aa
-          | (SyntaxVCT.VIndex, _) -> None));;
-
-let rec tids_in_b_aux
-  t x1 = match t, x1 with t, SyntaxVCT.B_tid i -> [i]
-    | t, SyntaxVCT.B_tuple bs -> Lista.maps (tids_in_b_aux t) bs
-    | t, SyntaxVCT.B_record ((fid, uu) :: xs) ->
-        (match lookup_record_name t fid with None -> [] | Some s -> [s])
-    | t, SyntaxVCT.B_union (i, vs) -> [i]
-    | t, SyntaxVCT.B_var v -> []
-    | t, SyntaxVCT.B_int -> []
-    | t, SyntaxVCT.B_bool -> []
-    | t, SyntaxVCT.B_bit -> []
-    | t, SyntaxVCT.B_unit -> []
-    | t, SyntaxVCT.B_real -> []
-    | t, SyntaxVCT.B_vec (v, va) -> []
-    | t, SyntaxVCT.B_list v -> []
-    | t, SyntaxVCT.B_record [] -> []
-    | t, SyntaxVCT.B_undef -> []
-    | t, SyntaxVCT.B_reg v -> []
-    | t, SyntaxVCT.B_string -> []
-    | t, SyntaxVCT.B_exception -> []
-    | t, SyntaxVCT.B_finite_set v -> [];;
-
-let rec tids_in_t_aux ta t = tids_in_b_aux ta (SyntaxUtils.b_of t);;
-
-let rec tids_in_b
-  t x1 = match t, x1 with t, SyntaxVCT.B_tid i -> [i]
-    | t, SyntaxVCT.B_tuple bs -> Lista.maps (tids_in_b_aux t) bs
-    | t, SyntaxVCT.B_record ((fid, uu) :: xs) ->
-        (match lookup_record_name t fid with None -> [] | Some s -> [s])
-    | t, SyntaxVCT.B_union (i, vs) ->
-        i :: Lista.maps (Fun.comp (tids_in_t_aux t) Product_Type.snd) vs
-    | t, SyntaxVCT.B_var v -> []
-    | t, SyntaxVCT.B_int -> []
-    | t, SyntaxVCT.B_bool -> []
-    | t, SyntaxVCT.B_bit -> []
-    | t, SyntaxVCT.B_unit -> []
-    | t, SyntaxVCT.B_real -> []
-    | t, SyntaxVCT.B_vec (v, va) -> []
-    | t, SyntaxVCT.B_list v -> []
-    | t, SyntaxVCT.B_record [] -> []
-    | t, SyntaxVCT.B_undef -> []
-    | t, SyntaxVCT.B_reg v -> []
-    | t, SyntaxVCT.B_string -> []
-    | t, SyntaxVCT.B_exception -> []
-    | t, SyntaxVCT.B_finite_set v -> [];;
-
-let rec tids_in_t ta t = tids_in_b ta (SyntaxUtils.b_of t);;
-
-let rec fm_from_t
-  t = Finite_Map.Fmap_of_list
-        (Lista.map (fun (s, ta) -> (Contexts.n_of s, tids_in_t t ta))
-          (theta_T t));;
-
-let emptyPiEnv : ('a, unit) phi_ext
-  = Phi_ext (Finite_Map.fmempty, Finite_Map.fmempty, ());;
-
-let rec restrict_t
-  x0 uu = match x0, uu with [], uu -> []
-    | (xp, ta) :: t, ss ->
-        (if Lista.member Stringa.equal_literal ss (Contexts.n_of xp)
-          then (xp, ta) :: restrict_t t ss else restrict_t t ss);;
-
-let rec lookup_mvar
-  delta x = Contexts.lookup Stringa.equal_literal (delta_m delta) x;;
-
-let rec minimise_td
-  t g = (let fm = fm_from_t t in
-         let fma = Contexts.iterate (Lista.size_list (theta_T t)) fm fm in
-         let bps = Lista.map (fun (_, a) -> b_of_ge a) g in
-         let ss_bp =
-           Lista.remdups Stringa.equal_literal (Lista.maps (tids_in_b t) bps) in
-         let ss =
-           Lista.remdups Stringa.equal_literal
-             (Lista.maps
-               (fun s ->
-                 (match Finite_Map.fmlookup Stringa.equal_literal fma s
-                   with None -> [] | Some ss -> ss))
-               ss_bp)
-           in
-          restrict_t (theta_T t)
-            (Lista.remdups Stringa.equal_literal (ss @ ss_bp)));;
-
-let rec update_mvar
-  delta (x, t) =
-    delta_m_update
-      (fun _ -> Contexts.update Stringa.equal_literal (delta_m delta) x t)
-      delta;;
-
-let rec update_type
-  theta x t =
-    theta_T_update
-      (fun _ -> Contexts.update SyntaxVCT.equal_xp (theta_T theta) x t) theta;;
-
-let rec theta_r_update
-  theta_ra (Theta_ext (theta_T, theta_r, theta_d, more)) =
-    Theta_ext (theta_T, theta_ra theta_r, theta_d, more);;
-
-let rec theta_r (Theta_ext (theta_T, theta_r, theta_d, more)) = theta_r;;
-
-let rec add_register
-  theta xp t =
-    theta_r_update
-      (fun _ -> Finite_Map.fmupd SyntaxVCT.equal_xp xp t (theta_r theta))
-      theta;;
-
-let emptyThetaEnv : unit theta_ext
-  = Theta_ext ([], Finite_Map.fmempty, None, ());;
-
-let rec lookup_fields
-  g x1 = match g, x1 with
-    g, fid :: uu ->
-      (match lookup_field_record g fid with None -> None
-        | Some a -> (let (_, aa) = a in Some aa))
-    | g, [] -> None;;
-
-let rec mvar_not_in_d
-  delta x =
-    (match Contexts.lookup Stringa.equal_literal (delta_m delta) x
-      with None -> true | Some _ -> false);;
-
-let rec phi_o (Phi_ext (phi_f, phi_o, more)) = phi_o;;
-
-let rec lookup_fun_aux
-  phi x =
-    (match Finite_Map.fmlookup SyntaxVCT.equal_xp (phi_o phi) x
-      with None -> Finite_Map.fmlookup SyntaxVCT.equal_xp (phi_f phi) x
-      | Some xs ->
-        Some (Lista.concat
-               (Lista.map_filter
-                 (Finite_Map.fmlookup SyntaxVCT.equal_xp (phi_f phi)) xs)));;
-
-let rec phi_o_update
-  phi_oa (Phi_ext (phi_f, phi_o, more)) = Phi_ext (phi_f, phi_oa phi_o, more);;
-
-let rec add_to_overload
-  phi idd id_list =
-    (match Finite_Map.fmlookup SyntaxVCT.equal_xp (phi_o phi) idd
-      with None ->
-        phi_o_update
-          (fun _ -> Finite_Map.fmupd SyntaxVCT.equal_xp idd id_list (phi_o phi))
-          phi
-      | Some id_lista ->
-        phi_o_update
-          (fun _ ->
-            Finite_Map.fmupd SyntaxVCT.equal_xp idd (id_lista @ id_list)
-              (phi_o phi))
-          phi);;
-
-let rec lookup_register
-  t x = Finite_Map.fmlookup SyntaxVCT.equal_xp (theta_r t) x;;
-
-let rec lookup_types_for
-  x0 uw = match x0, uw with
-    SyntaxVCT.B_record fbs, f :: fs ->
-      (match lookup_types_for (SyntaxVCT.B_record fbs) fs with None -> None
-        | Some bp ->
-          (match Contexts.lookup Stringa.equal_literal fbs f with None -> None
-            | Some b -> Some (b :: bp)))
-    | SyntaxVCT.B_record uu, [] -> Some []
-    | SyntaxVCT.B_var v, uw -> None
-    | SyntaxVCT.B_tid v, uw -> None
-    | SyntaxVCT.B_int, uw -> None
-    | SyntaxVCT.B_bool, uw -> None
-    | SyntaxVCT.B_bit, uw -> None
-    | SyntaxVCT.B_unit, uw -> None
-    | SyntaxVCT.B_real, uw -> None
-    | SyntaxVCT.B_vec (v, va), uw -> None
-    | SyntaxVCT.B_list v, uw -> None
-    | SyntaxVCT.B_tuple v, uw -> None
-    | SyntaxVCT.B_union (v, va), uw -> None
-    | SyntaxVCT.B_undef, uw -> None
-    | SyntaxVCT.B_reg v, uw -> None
-    | SyntaxVCT.B_string, uw -> None
-    | SyntaxVCT.B_exception, uw -> None
-    | SyntaxVCT.B_finite_set v, uw -> None;;
-
-let rec lookup_constr_in_type
-  xa0 x = match xa0, x with
-    SyntaxVCT.T_refined_type (uu, SyntaxVCT.B_union (s, fs), c), x ->
-      Contexts.lookup Stringa.equal_literal fs x
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_var vc, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid vc, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (vc, vd), vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list vc, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tuple vc, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_record vc, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_undef, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vc, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, vb), uw -> None
-    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set vc, vb), uw -> None;;
-
-let rec lookup_constr_aux
-  x0 uu = match x0, uu with [], uu -> None
-    | (xa, t) :: ts, x ->
-        (match lookup_constr_in_type t x with None -> lookup_constr_aux ts x
-          | Some _ -> Some t);;
-
-let rec lookup_constr_union theta fid = lookup_constr_aux (theta_T theta) fid;;
-
-let rec lookup_constr_union_x g (SyntaxVCT.VNamed x) = lookup_constr_union g x;;
-
-let rec lookup_constr_union_type
-  phi fid =
-    (match lookup_constr_union phi fid with None -> None
-      | Some t1 ->
-        (match lookup_constr_in_type t1 fid with None -> None
-          | Some t2 -> Some (t1, t2)));;
-
-let rec lookup_field_record_type
-  theta fid =
-    (match lookup_field_record theta fid with None -> None
-      | Some (_, t) ->
-        (match lookup_field_in_type t fid with None -> None
-          | Some ta -> Some (ta, t)));;
-
-let rec theta_d (Theta_ext (theta_T, theta_r, theta_d, more)) = theta_d;;
-
-let rec lookup_field_and_record_type
-  theta fid =
-    (match lookup_field_record theta fid with None -> None
-      | Some (_, t) ->
-        (match lookup_field_in_type t fid with None -> None
-          | Some ta ->
-            Some (SyntaxVCT.T_refined_type
-                    (SyntaxVCT.VIndex, ta, SyntaxVCT.C_true),
-                   t)));;
-
-let rec theta_d_update
-  theta_da (Theta_ext (theta_T, theta_r, theta_d, more)) =
-    Theta_ext (theta_T, theta_r, theta_da theta_d, more);;
-
-end;; (*struct ContextsPiDelta*)
-
-module Monad : sig
-  type tag = IfThen | IfElse
-  type witness = LitI | VarI | TrueI | FalseI | NumI | TupleI |
-    PlusI of witness * witness | LEqI of witness * witness | AppI of witness |
-    CValI of
-      witness *
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext *
-        SyntaxVCT.cp
-    | CLetI of witness * witness | CLet2I of witness * witness |
-    CIfI of witness * witness * witness
-  type state = StateD of Arith.int * witness list
-  type fail_reason = VarUnknown of Location.loc * SyntaxVCT.xp |
-    OperandTypesWrongLeft of
-      (SyntaxVCT.tau option) SyntaxPED.ep * SyntaxVCT.bp * SyntaxVCT.bp
-    | OperandTypesWrongRight of
-        (SyntaxVCT.tau option) SyntaxPED.ep * SyntaxVCT.bp * SyntaxVCT.bp
-    | CheckFail of
-        Location.loc *
-          ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext *
-          string * SyntaxVCT.tau * SyntaxVCT.tau
-    | IfCondType of Location.loc * SyntaxVCT.tau |
-    IfThenBranchType of Location.loc | IfElseBranchType of Location.loc |
-    NotSatisfiable |
-    FunctionUnknown of (SyntaxVCT.tau option) SyntaxPED.ep * SyntaxVCT.xp |
-    FunctionType |
-    FunctionArgWrongType of Location.loc * SyntaxVCT.tau * SyntaxVCT.tau |
-    VectorElementsDiffType | UnknownConstructor of Location.loc * string |
-    NotImplemented of Location.loc * string | UnknownError |
-    UnknownErrorLoc of Location.loc | TypeError of Location.loc * string |
-    RecordFieldUpdateFail of Location.loc * string |
-    ScopeError of
-      Location.loc *
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext *
-        SyntaxVCT.xp
-  type 'a checkD = Check_Ok of 'a | Check_Fail of tag option * fail_reason
-  type 'a checkM = State of (state -> 'a checkD * state)
-  val fail : fail_reason -> 'a checkM
-  val run_state : 'a checkM -> state -> 'a checkD * state
-  val check_bind : 'a checkM -> ('a -> 'b checkM) -> 'b checkM
-  val return : 'a -> 'a checkM
-  val mapM : ('a -> 'b checkM) -> 'a list -> ('b list) checkM
-  val map2M : ('a -> 'b -> 'c checkM) -> 'a list -> 'b list -> ('c list) checkM
-  val trace : witness -> unit checkM
-  val map2iM :
-    ('a -> 'b -> Arith.nat -> 'c checkM) ->
-      'a list -> 'b list -> ('c list) checkM
-  val mk_var : SyntaxVCT.xp -> SyntaxVCT.vp
-  val mk_fresh : Stringa.char list -> SyntaxVCT.xp checkM
-  val subst_c_list2 :
-    SyntaxVCT.cp -> (SyntaxVCT.xp * SyntaxVCT.vp) list -> SyntaxVCT.cp
-  val freshen_vars :
-    (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list ->
-      ((SyntaxVCT.xp * SyntaxVCT.vp) list *
-        (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list)
-        checkM
-  val freshen_t : SyntaxVCT.tau -> SyntaxVCT.tau checkM
-  val get_state : unit -> state checkM
-  val set_state : state -> unit checkM
-  val lookup_fun :
-    unit ContextsPiDelta.theta_ext ->
-      ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
-        SyntaxVCT.xp ->
-          ((SyntaxVCT.xp *
-             (SyntaxVCT.ap *
-               (SyntaxVCT.tau option) SyntaxPED.pexpp option)) list) option
-  val convert_fun :
-    SyntaxVCT.xp *
-      (SyntaxVCT.ap * (SyntaxVCT.tau option) SyntaxPED.pexpp option) ->
-      (SyntaxVCT.xp *
-        (SyntaxVCT.ap * (SyntaxVCT.tau option) SyntaxPED.pexpp option))
-        checkM
-  val subst_e_list :
-    (SyntaxVCT.tau option) SyntaxPED.ep ->
-      (SyntaxVCT.xp * SyntaxVCT.vp) list -> (SyntaxVCT.tau option) SyntaxPED.ep
-  val lookup_fun_and_convert_aux :
-    unit ContextsPiDelta.theta_ext ->
-      ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) ContextsPiDelta.phi_ext ->
-        SyntaxVCT.xp ->
-          ((SyntaxVCT.xp *
-             (SyntaxVCT.ap *
-               (SyntaxVCT.tau option) SyntaxPED.pexpp option)) list)
-            checkM
-end = struct
-
-type tag = IfThen | IfElse;;
-
-type witness = LitI | VarI | TrueI | FalseI | NumI | TupleI |
-  PlusI of witness * witness | LEqI of witness * witness | AppI of witness |
-  CValI of
-    witness *
-      ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext *
-      SyntaxVCT.cp
-  | CLetI of witness * witness | CLet2I of witness * witness |
-  CIfI of witness * witness * witness;;
-
-type state = StateD of Arith.int * witness list;;
-
-type fail_reason = VarUnknown of Location.loc * SyntaxVCT.xp |
-  OperandTypesWrongLeft of
-    (SyntaxVCT.tau option) SyntaxPED.ep * SyntaxVCT.bp * SyntaxVCT.bp
-  | OperandTypesWrongRight of
-      (SyntaxVCT.tau option) SyntaxPED.ep * SyntaxVCT.bp * SyntaxVCT.bp
-  | CheckFail of
-      Location.loc *
-        ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext *
-        string * SyntaxVCT.tau * SyntaxVCT.tau
-  | IfCondType of Location.loc * SyntaxVCT.tau |
-  IfThenBranchType of Location.loc | IfElseBranchType of Location.loc |
-  NotSatisfiable |
-  FunctionUnknown of (SyntaxVCT.tau option) SyntaxPED.ep * SyntaxVCT.xp |
-  FunctionType |
-  FunctionArgWrongType of Location.loc * SyntaxVCT.tau * SyntaxVCT.tau |
-  VectorElementsDiffType | UnknownConstructor of Location.loc * string |
-  NotImplemented of Location.loc * string | UnknownError |
-  UnknownErrorLoc of Location.loc | TypeError of Location.loc * string |
-  RecordFieldUpdateFail of Location.loc * string |
-  ScopeError of
-    Location.loc *
-      ((SyntaxVCT.tau option) SyntaxPED.pexpp, unit) Contexts.gamma_ext *
-      SyntaxVCT.xp;;
-
-type 'a checkD = Check_Ok of 'a | Check_Fail of tag option * fail_reason;;
-
-type 'a checkM = State of (state -> 'a checkD * state);;
-
-let rec fail r = State (fun a -> (Check_Fail (None, r), a));;
-
-let rec run_state (State x) = x;;
-
-let rec check_bind
-  x f = State (fun s ->
-                (match run_state x s with (Check_Ok y, sa) -> run_state (f y) sa
-                  | (Check_Fail (t, r), sa) -> (Check_Fail (t, r), sa)));;
-
-let rec return x = State (fun a -> (Check_Ok x, a));;
-
-let rec mapM
-  uu x1 = match uu, x1 with uu, [] -> return []
-    | f, x :: xs ->
-        check_bind (f x)
-          (fun xa -> check_bind (mapM f xs) (fun xsa -> return (xa :: xsa)));;
-
-let rec map2M
-  uu x1 uv = match uu, x1, uv with uu, [], uv -> return []
-    | uw, v :: va, [] -> return []
-    | f, x :: xs, y :: ys ->
-        check_bind (f x y)
-          (fun xy ->
-            check_bind (map2M f xs ys) (fun xys -> return (xy :: xys)));;
-
-let rec trace
-  w = State (fun (StateD (i, ws)) -> (Check_Ok (), StateD (i, w :: ws)));;
-
-let rec map2iM
-  uu x1 uv = match uu, x1, uv with uu, [], uv -> return []
-    | uw, v :: va, [] -> return []
-    | f, x :: xs, y :: ys ->
-        check_bind (f x y (Arith.plus_nat (Lista.size_list xs) Arith.one_nat))
-          (fun xy ->
-            check_bind (map2iM f xs ys) (fun xys -> return (xy :: xys)));;
-
-let rec mk_var x = SyntaxVCT.V_var x;;
-
-let rec mk_fresh
-  prefix =
-    State (fun (StateD (i, w)) ->
-            (Check_Ok
-               (SyntaxVCT.VNamed
-                 (Stringa.implode prefix ^ Utils.string_lit_of_int i)),
-              StateD (Arith.plus_int i Arith.one_inta, w)));;
-
-let rec subst_c_list2
-  c x1 = match c, x1 with c, [] -> c
-    | c, (x, v) :: xvs -> subst_c_list2 (SyntaxPED.subst_cp v x c) xvs;;
-
-let rec freshen_vars
-  = function [] -> return ([], [])
-    | (x, (b, c)) :: xbc ->
-        check_bind
-          (mk_fresh
-            [Stringa.Chara (true, true, false, true, false, true, true, false)])
-          (fun xa ->
-            check_bind (freshen_vars xbc)
-              (fun (x1, x2) ->
-                return
-                  ((x, mk_var xa) :: x1,
-                    (xa, (b, SyntaxPED.subst_cp (mk_var xa) x c)) :: x2)));;
-
-let rec freshen_t
-  (SyntaxVCT.T_refined_type (z, b, c)) =
-    check_bind (freshen_vars [])
-      (fun (kmap, kvars) ->
-        (let _ =
-           Lista.map (fun (x, (ba, ca)) -> (x, (ba, subst_c_list2 ca kmap)))
-             kvars
-           in
-          return
-            (SyntaxVCT.T_refined_type
-              (SyntaxVCT.VIndex, b, subst_c_list2 c kmap))));;
-
-let rec get_state uu = State (fun s -> (Check_Ok s, s));;
-
-let rec set_state s = State (fun a -> (Check_Ok (), a));;
-
-let rec lookup_fun
-  theta gamma x2 = match theta, gamma, x2 with
-    theta, gamma, SyntaxVCT.VNamed cn ->
-      (match ContextsPiDelta.lookup_fun_aux gamma (SyntaxVCT.VNamed cn)
-        with None ->
-          (match ContextsPiDelta.lookup_constr_union theta cn with None -> None
-            | Some ret ->
-              (match ContextsPiDelta.lookup_constr_in_type ret cn
-                with None -> None
-                | Some (SyntaxVCT.T_refined_type (z, b, c)) ->
-                  Some [(SyntaxVCT.VNamed cn,
-                          (SyntaxVCT.A_function
-                             (SyntaxVCT.VNamed "_x", b,
-                               SyntaxPED.subst_cp
-                                 (SyntaxVCT.V_var (SyntaxVCT.VNamed "_x")) z c,
-                               ret),
-                            Some (SyntaxPED.PEXPp_exp
-                                   (SyntaxPED.annot_e
-                                      (SyntaxPED.Ep_val
-((Location.Loc_unknown, None),
-  SyntaxVCT.V_constr (cn, SyntaxVCT.V_var (SyntaxVCT.VNamed "_x")))),
-                                     SyntaxPED.Pp_wild
-                                       (SyntaxPED.annot_e
- (SyntaxPED.Ep_val
-   ((Location.Loc_unknown, None),
-     SyntaxVCT.V_constr (cn, SyntaxVCT.V_var (SyntaxVCT.VNamed "_x"))))),
-                                     SyntaxPED.Ep_val
-                                       ((Location.Loc_unknown, None),
- SyntaxVCT.V_constr (cn, SyntaxVCT.V_var (SyntaxVCT.VNamed "_x")))))))]))
-        | Some a -> Some a)
-    | uu, uv, SyntaxVCT.VIndex -> None;;
-
-let rec convert_fun
-  (SyntaxVCT.VNamed f,
-    (SyntaxVCT.A_function (SyntaxVCT.VNamed xin, bin, cin, t2), s))
-    = check_bind
-        (mk_fresh
-          ([Stringa.Chara (true, true, true, true, true, false, true, false);
-             Stringa.Chara (false, false, false, true, true, true, true, false);
-             Stringa.Chara (true, false, false, true, false, true, true, false);
-             Stringa.Chara (false, true, true, true, false, true, true, false);
-             Stringa.Chara (true, true, true, true, true, false, true, false)] @
-            Stringa.explode f))
-        (fun xina ->
-          check_bind
-            (match s with None -> return None
-              | Some sa ->
-                return
-                  (Some (SyntaxPED.subst_pexpp (SyntaxVCT.V_var xina)
-                          (SyntaxVCT.VNamed xin) sa)))
-            (fun sa ->
-              return
-                (SyntaxVCT.VNamed f,
-                  (SyntaxVCT.A_function
-                     (xina, bin,
-                       SyntaxPED.subst_cp (SyntaxVCT.V_var xina)
-                         (SyntaxVCT.VNamed xin) cin,
-                       SyntaxPED.subst_tp (SyntaxVCT.V_var xina)
-                         (SyntaxVCT.VNamed xin) t2),
-                    sa))));;
-
-let rec subst_e_list
-  c x1 = match c, x1 with c, [] -> c
-    | c, (x, v) :: xvs -> subst_e_list (SyntaxPED.subst_ep v x c) xvs;;
-
-let rec lookup_fun_and_convert_aux
-  t pi f =
-    (match lookup_fun t pi f with None -> return []
-      | Some a -> mapM convert_fun a);;
-
-end;; (*struct Monad*)
-
-
-module CESubst : sig
-  val ce_subst_vp :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.cep
-  val ce_subst_cep :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cep -> SyntaxVCT.cep
-  val ce_subst_cep_list :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cep list -> SyntaxVCT.cep list
-  val ce_subst_cp :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cp -> SyntaxVCT.cp
-  val ce_subst_cp_list :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.cp list -> SyntaxVCT.cp list
-  val ce_subst_bp :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.bp -> SyntaxVCT.bp
-  val ce_subst_tp :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.tau -> SyntaxVCT.tau
-  val ce_subst_ctor_tau :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp -> string * SyntaxVCT.tau -> string * SyntaxVCT.tau
-  val ce_subst_ctor_tau_list :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp ->
-        (string * SyntaxVCT.tau) list -> (string * SyntaxVCT.tau) list
-  val ce_subst_bp_list :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> SyntaxVCT.bp list -> SyntaxVCT.bp list
-  val ce_subst_field_bp :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp -> string * SyntaxVCT.bp -> string * SyntaxVCT.bp
-  val ce_subst_field_bp_list :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp ->
-        (string * SyntaxVCT.bp) list -> (string * SyntaxVCT.bp) list
-  val ce_subst_patp :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.patp -> 'a SyntaxPED.patp
-  val ce_subst_patp_list_Pp_app :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
-  val ce_subst_patp_list_Pp_tup :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
-  val ce_subst_patp_list_Pp_list :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
-  val ce_subst_patp_list_Pp_vector :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
-  val ce_subst_patp_list_Pp_string_append :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
-  val ce_subst_patp_list_Pp_vector_concat :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp -> 'a SyntaxPED.patp list -> 'a SyntaxPED.patp list
-  val ce_subst_lexpp :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.lexpp -> 'a SyntaxPED.lexpp
-  val ce_subst_lexpp_list :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp -> 'a SyntaxPED.lexpp list -> 'a SyntaxPED.lexpp list
-  val ce_subst_ep :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.ep -> 'a SyntaxPED.ep
-  val ce_subst_pexpp :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.pexpp -> 'a SyntaxPED.pexpp
-  val ce_subst_letbindp :
-    SyntaxVCT.cep ->
-      SyntaxVCT.xp -> 'a SyntaxPED.letbindp -> 'a SyntaxPED.letbindp
-  val ce_subst_funclp :
-    SyntaxVCT.cep -> SyntaxVCT.xp -> 'a SyntaxPED.funclp -> 'a SyntaxPED.funclp
-end = struct
-
-let rec ce_subst_vp
-  cep yp x2 = match cep, yp, x2 with
-    cep, yp, SyntaxVCT.V_var xp ->
-      (if SyntaxVCT.equal_xpa xp yp then cep
-        else SyntaxVCT.CE_val (SyntaxVCT.V_var xp))
-    | uu, uv, SyntaxVCT.V_lit va -> SyntaxVCT.CE_val (SyntaxVCT.V_lit va)
-    | uu, uv, SyntaxVCT.V_vec va -> SyntaxVCT.CE_val (SyntaxVCT.V_vec va)
-    | uu, uv, SyntaxVCT.V_list va -> SyntaxVCT.CE_val (SyntaxVCT.V_list va)
-    | uu, uv, SyntaxVCT.V_cons (va, vb) ->
-        SyntaxVCT.CE_val (SyntaxVCT.V_cons (va, vb))
-    | uu, uv, SyntaxVCT.V_constr (va, vb) ->
-        SyntaxVCT.CE_val (SyntaxVCT.V_constr (va, vb))
-    | uu, uv, SyntaxVCT.V_record va -> SyntaxVCT.CE_val (SyntaxVCT.V_record va)
-    | uu, uv, SyntaxVCT.V_tuple va -> SyntaxVCT.CE_val (SyntaxVCT.V_tuple va)
-    | uu, uv, SyntaxVCT.V_proj (va, vb) ->
-        SyntaxVCT.CE_val (SyntaxVCT.V_proj (va, vb));;
-
-let rec ce_subst_cep
-  cep_5 zp5 x2 = match cep_5, zp5, x2 with
-    cep_5, zp5, SyntaxVCT.CE_val vp -> ce_subst_vp cep_5 zp5 vp
-    | cep_5, zp5, SyntaxVCT.CE_bop (bop, cep1, cep2) ->
-        SyntaxVCT.CE_bop
-          (bop, ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)
-    | cep_5, zp5, SyntaxVCT.CE_many_plus cep_list ->
-        SyntaxVCT.CE_many_plus (ce_subst_cep_list cep_5 zp5 cep_list)
-    | cep_5, zp5, SyntaxVCT.CE_uop (uop, cep) ->
-        SyntaxVCT.CE_uop (uop, ce_subst_cep cep_5 zp5 cep)
-    | cep_5, zp5, SyntaxVCT.CE_proj (p, cep) ->
-        SyntaxVCT.CE_proj (p, ce_subst_cep cep_5 zp5 cep)
-    | cep_5, zp5, SyntaxVCT.CE_field_access (xp, field) ->
-        SyntaxVCT.CE_field_access (xp, field)
-and ce_subst_cep_list
-  cep_5 zp5 x2 = match cep_5, zp5, x2 with cep_5, zp5, [] -> []
-    | cep_5, zp5, cep_XXX :: cep_list_XXX ->
-        ce_subst_cep cep_5 zp5 cep_XXX ::
-          ce_subst_cep_list cep_5 zp5 cep_list_XXX;;
-
-let rec ce_subst_cp
-  cep_5 zp5 x2 = match cep_5, zp5, x2 with
-    cep_5, zp5, SyntaxVCT.C_true -> SyntaxVCT.C_true
-    | cep_5, zp5, SyntaxVCT.C_false -> SyntaxVCT.C_false
-    | cep_5, zp5, SyntaxVCT.C_conj (cp1, cp2) ->
-        SyntaxVCT.C_conj (ce_subst_cp cep_5 zp5 cp1, ce_subst_cp cep_5 zp5 cp2)
-    | cep_5, zp5, SyntaxVCT.C_conj_many cp_list ->
-        SyntaxVCT.C_conj_many (ce_subst_cp_list cep_5 zp5 cp_list)
-    | cep_5, zp5, SyntaxVCT.C_disj (cp1, cp2) ->
-        SyntaxVCT.C_disj (ce_subst_cp cep_5 zp5 cp1, ce_subst_cp cep_5 zp5 cp2)
-    | cep_5, zp5, SyntaxVCT.C_not cp ->
-        SyntaxVCT.C_not (ce_subst_cp cep_5 zp5 cp)
-    | cep_5, zp5, SyntaxVCT.C_eq (cep1, cep2) ->
-        SyntaxVCT.C_eq
-          (ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)
-    | cep_5, zp5, SyntaxVCT.C_leq (cep1, cep2) ->
-        SyntaxVCT.C_leq
-          (ce_subst_cep cep_5 zp5 cep1, ce_subst_cep cep_5 zp5 cep2)
-    | cep_5, zp5, SyntaxVCT.C_imp (cp1, cp2) ->
-        SyntaxVCT.C_imp (ce_subst_cp cep_5 zp5 cp1, ce_subst_cp cep_5 zp5 cp2)
-and ce_subst_cp_list
-  cep_5 zp5 x2 = match cep_5, zp5, x2 with cep_5, zp5, [] -> []
-    | cep_5, zp5, cp_XXX :: cp_list_XXX ->
-        ce_subst_cp cep_5 zp5 cp_XXX :: ce_subst_cp_list cep_5 zp5 cp_list_XXX;;
-
-let rec ce_subst_bp
-  cep5 zp5 x2 = match cep5, zp5, x2 with
-    cep5, zp5, SyntaxVCT.B_var tvar -> SyntaxVCT.B_var tvar
-    | cep5, zp5, SyntaxVCT.B_tid id -> SyntaxVCT.B_tid id
-    | cep5, zp5, SyntaxVCT.B_int -> SyntaxVCT.B_int
-    | cep5, zp5, SyntaxVCT.B_bool -> SyntaxVCT.B_bool
-    | cep5, zp5, SyntaxVCT.B_bit -> SyntaxVCT.B_bit
-    | cep5, zp5, SyntaxVCT.B_unit -> SyntaxVCT.B_unit
-    | cep5, zp5, SyntaxVCT.B_real -> SyntaxVCT.B_real
-    | cep5, zp5, SyntaxVCT.B_vec (order, bp) ->
-        SyntaxVCT.B_vec (order, ce_subst_bp cep5 zp5 bp)
-    | cep5, zp5, SyntaxVCT.B_list bp ->
-        SyntaxVCT.B_list (ce_subst_bp cep5 zp5 bp)
-    | cep5, zp5, SyntaxVCT.B_tuple bp_list ->
-        SyntaxVCT.B_tuple (ce_subst_bp_list cep5 zp5 bp_list)
-    | cep5, zp5, SyntaxVCT.B_union (id, ctor_tau_list) ->
-        SyntaxVCT.B_union (id, ce_subst_ctor_tau_list cep5 zp5 ctor_tau_list)
-    | cep5, zp5, SyntaxVCT.B_record field_bp_list ->
-        SyntaxVCT.B_record (ce_subst_field_bp_list cep5 zp5 field_bp_list)
-    | cep5, zp5, SyntaxVCT.B_undef -> SyntaxVCT.B_undef
-    | cep5, zp5, SyntaxVCT.B_reg tau ->
-        SyntaxVCT.B_reg (ce_subst_tp cep5 zp5 tau)
-    | cep5, zp5, SyntaxVCT.B_string -> SyntaxVCT.B_string
-    | cep5, zp5, SyntaxVCT.B_exception -> SyntaxVCT.B_exception
-    | cep5, zp5, SyntaxVCT.B_finite_set num_list ->
-        SyntaxVCT.B_finite_set num_list
-and ce_subst_tp
-  cep5 zp5 (SyntaxVCT.T_refined_type (zp, bp, cp)) =
-    SyntaxVCT.T_refined_type
-      (zp, ce_subst_bp cep5 zp5 bp, ce_subst_cp cep5 zp5 cp)
-and ce_subst_ctor_tau cep5 zp5 (ctor1, tp1) = (ctor1, ce_subst_tp cep5 zp5 tp1)
-and ce_subst_ctor_tau_list
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, ctor_tau_XXX :: ctor_tau_list_XXX ->
-        ce_subst_ctor_tau cep5 zp5 ctor_tau_XXX ::
-          ce_subst_ctor_tau_list cep5 zp5 ctor_tau_list_XXX
-and ce_subst_bp_list
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, bp_XXX :: bp_list_XXX ->
-        ce_subst_bp cep5 zp5 bp_XXX :: ce_subst_bp_list cep5 zp5 bp_list_XXX
-and ce_subst_field_bp
-  cep5 zp5 (field1, bp1) = (field1, ce_subst_bp cep5 zp5 bp1)
-and ce_subst_field_bp_list
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, field_bp_XXX :: field_bp_list_XXX ->
-        ce_subst_field_bp cep5 zp5 field_bp_XXX ::
-          ce_subst_field_bp_list cep5 zp5 field_bp_list_XXX;;
-
-let rec ce_subst_patp
-  cep5 zp5 x2 = match cep5, zp5, x2 with
-    cep5, zp5, SyntaxPED.Pp_lit (loc, lit) -> SyntaxPED.Pp_lit (loc, lit)
-    | cep5, zp5, SyntaxPED.Pp_wild loc -> SyntaxPED.Pp_wild loc
-    | cep5, zp5, SyntaxPED.Pp_as_var (loc, patp, xp) ->
-        SyntaxPED.Pp_as_var (loc, ce_subst_patp cep5 zp5 patp, xp)
-    | cep5, zp5, SyntaxPED.Pp_typ (loc, tau, patp) ->
-        SyntaxPED.Pp_typ
-          (loc, ce_subst_tp cep5 zp5 tau, ce_subst_patp cep5 zp5 patp)
-    | cep5, zp5, SyntaxPED.Pp_id (loc, id) -> SyntaxPED.Pp_id (loc, id)
-    | cep5, zp5, SyntaxPED.Pp_as_typ (loc, patp, tau) ->
-        SyntaxPED.Pp_as_typ
-          (loc, ce_subst_patp cep5 zp5 patp, ce_subst_tp cep5 zp5 tau)
-    | cep5, zp5, SyntaxPED.Pp_app (loc, id, patp_list) ->
-        SyntaxPED.Pp_app (loc, id, ce_subst_patp_list_Pp_app cep5 zp5 patp_list)
-    | cep5, zp5, SyntaxPED.Pp_vector (loc, patp_list) ->
-        SyntaxPED.Pp_vector
-          (loc, ce_subst_patp_list_Pp_vector cep5 zp5 patp_list)
-    | cep5, zp5, SyntaxPED.Pp_vector_concat (loc, patp_list) ->
-        SyntaxPED.Pp_vector_concat
-          (loc, ce_subst_patp_list_Pp_vector_concat cep5 zp5 patp_list)
-    | cep5, zp5, SyntaxPED.Pp_tup (loc, patp_list) ->
-        SyntaxPED.Pp_tup (loc, ce_subst_patp_list_Pp_tup cep5 zp5 patp_list)
-    | cep5, zp5, SyntaxPED.Pp_list (loc, patp_list) ->
-        SyntaxPED.Pp_list (loc, ce_subst_patp_list_Pp_list cep5 zp5 patp_list)
-    | cep5, zp5, SyntaxPED.Pp_cons (loc, patp1, patp2) ->
-        SyntaxPED.Pp_cons
-          (loc, ce_subst_patp cep5 zp5 patp1, ce_subst_patp cep5 zp5 patp2)
-    | cep5, zp5, SyntaxPED.Pp_string_append (loc, patp_list) ->
-        SyntaxPED.Pp_string_append
-          (loc, ce_subst_patp_list_Pp_string_append cep5 zp5 patp_list)
-and ce_subst_patp_list_Pp_app
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, patp_XXX :: patp_list_XXX ->
-        ce_subst_patp cep5 zp5 patp_XXX ::
-          ce_subst_patp_list_Pp_app cep5 zp5 patp_list_XXX
-and ce_subst_patp_list_Pp_tup
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, patp_XXX :: patp_list_XXX ->
-        ce_subst_patp cep5 zp5 patp_XXX ::
-          ce_subst_patp_list_Pp_tup cep5 zp5 patp_list_XXX
-and ce_subst_patp_list_Pp_list
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, patp_XXX :: patp_list_XXX ->
-        ce_subst_patp cep5 zp5 patp_XXX ::
-          ce_subst_patp_list_Pp_list cep5 zp5 patp_list_XXX
-and ce_subst_patp_list_Pp_vector
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, patp_XXX :: patp_list_XXX ->
-        ce_subst_patp cep5 zp5 patp_XXX ::
-          ce_subst_patp_list_Pp_vector cep5 zp5 patp_list_XXX
-and ce_subst_patp_list_Pp_string_append
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, patp_XXX :: patp_list_XXX ->
-        ce_subst_patp cep5 zp5 patp_XXX ::
-          ce_subst_patp_list_Pp_string_append cep5 zp5 patp_list_XXX
-and ce_subst_patp_list_Pp_vector_concat
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, patp_XXX :: patp_list_XXX ->
-        ce_subst_patp cep5 zp5 patp_XXX ::
-          ce_subst_patp_list_Pp_vector_concat cep5 zp5 patp_list_XXX;;
-
-let rec ce_subst_lexpp
-  cep5 zp5 x2 = match cep5, zp5, x2 with
-    cep5, zp5, SyntaxPED.LEXPp_mvar (loc, up) -> SyntaxPED.LEXPp_mvar (loc, up)
-    | cep5, zp5, SyntaxPED.LEXPp_cast (loc, tau, up) ->
-        SyntaxPED.LEXPp_cast (loc, ce_subst_tp cep5 zp5 tau, up)
-    | cep5, zp5, SyntaxPED.LEXPp_tup (loc, lexpp_list) ->
-        SyntaxPED.LEXPp_tup (loc, ce_subst_lexpp_list cep5 zp5 lexpp_list)
-    | cep5, zp5, SyntaxPED.LEXPp_field (loc, lexpp, id) ->
-        SyntaxPED.LEXPp_field (loc, ce_subst_lexpp cep5 zp5 lexpp, id)
-and ce_subst_lexpp_list
-  cep5 zp5 x2 = match cep5, zp5, x2 with cep5, zp5, [] -> []
-    | cep5, zp5, lexpp_XXX :: lexpp_list_XXX ->
-        ce_subst_lexpp cep5 zp5 lexpp_XXX ::
-          ce_subst_lexpp_list cep5 zp5 lexpp_list_XXX;;
-
-let rec ce_subst_ep
-  cep5 zp5 x2 = match cep5, zp5, x2 with
-    cep5, zp5, SyntaxPED.Ep_val (loc, vp) -> SyntaxPED.Ep_val (loc, vp)
-    | cep5, zp5, SyntaxPED.Ep_mvar (loc, up) -> SyntaxPED.Ep_mvar (loc, up)
-    | cep5, zp5, SyntaxPED.Ep_concat (loc, ep_list) ->
-        SyntaxPED.Ep_concat (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
-    | cep5, zp5, SyntaxPED.Ep_tuple (loc, ep_list) ->
-        SyntaxPED.Ep_tuple (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
-    | cep5, zp5, SyntaxPED.Ep_app (loc, fp, ep) ->
-        SyntaxPED.Ep_app (loc, fp, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, SyntaxPED.Ep_bop (loc, bop, ep1, ep2) ->
-        SyntaxPED.Ep_bop
-          (loc, bop, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
-    | cep5, zp5, SyntaxPED.Ep_uop (loc, uop, ep) ->
-        SyntaxPED.Ep_uop (loc, uop, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, SyntaxPED.Ep_proj (loc, p, ep) ->
-        SyntaxPED.Ep_proj (loc, p, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, SyntaxPED.Ep_field_access (loc, ep, field) ->
-        SyntaxPED.Ep_field_access (loc, ce_subst_ep cep5 zp5 ep, field)
-    | cep5, zp5, SyntaxPED.Ep_sizeof (loc, cep) ->
-        SyntaxPED.Ep_sizeof (loc, ce_subst_cep cep5 zp5 cep)
-    | cep5, zp5, SyntaxPED.Ep_cast (loc, tau, ep) ->
-        SyntaxPED.Ep_cast
-          (loc, ce_subst_tp cep5 zp5 tau, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, SyntaxPED.Ep_record (loc, field_ep_list) ->
-        SyntaxPED.Ep_record
-          (loc, Lista.map
-                  (fun fe ->
-                    (Product_Type.fst fe,
-                      ce_subst_ep cep5 zp5 (Product_Type.snd fe)))
-                  field_ep_list)
-    | cep5, zp5, SyntaxPED.Ep_record_update (loc, ep, field_ep_list) ->
-        SyntaxPED.Ep_record_update
-          (loc, ce_subst_ep cep5 zp5 ep,
-            Lista.map (fun (f, e) -> (f, ce_subst_ep cep5 zp5 e)) field_ep_list)
-    | cep5, zp5, SyntaxPED.Ep_let (loc, letbindp, ep2) ->
-        SyntaxPED.Ep_let
-          (loc, ce_subst_letbindp cep5 zp5 letbindp, ce_subst_ep cep5 zp5 ep2)
-    | cep5, zp5, SyntaxPED.Ep_if (loc, ep1, ep2, ep3) ->
-        SyntaxPED.Ep_if
-          (loc, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2,
-            ce_subst_ep cep5 zp5 ep3)
-    | cep5, zp5, SyntaxPED.Ep_block (loc, ep_list) ->
-        SyntaxPED.Ep_block (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
-    | cep5, zp5, SyntaxPED.Ep_case (loc, ep, pexpp_list) ->
-        SyntaxPED.Ep_case
-          (loc, ce_subst_ep cep5 zp5 ep,
-            Lista.map (ce_subst_pexpp cep5 zp5) pexpp_list)
-    | cep5, zp5, SyntaxPED.Ep_assign (loc, lexpp, ep1) ->
-        SyntaxPED.Ep_assign
-          (loc, ce_subst_lexpp cep5 zp5 lexpp, ce_subst_ep cep5 zp5 ep1)
-    | cep5, zp5, SyntaxPED.Ep_var (loc, lexpp, ep1, ep2) ->
-        SyntaxPED.Ep_var
-          (loc, ce_subst_lexpp cep5 zp5 lexpp, ce_subst_ep cep5 zp5 ep1,
-            ce_subst_ep cep5 zp5 ep2)
-    | cep5, zp5, SyntaxPED.Ep_return (loc, ep) ->
-        SyntaxPED.Ep_return (loc, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, SyntaxPED.Ep_exit (loc, ep) ->
-        SyntaxPED.Ep_exit (loc, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, SyntaxPED.Ep_ref (loc, id) -> SyntaxPED.Ep_ref (loc, id)
-    | cep5, zp5, SyntaxPED.Ep_throw (loc, ep) ->
-        SyntaxPED.Ep_throw (loc, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, SyntaxPED.Ep_try (loc, ep, pexpp_list) ->
-        SyntaxPED.Ep_try
-          (loc, ce_subst_ep cep5 zp5 ep,
-            Lista.map (ce_subst_pexpp cep5 zp5) pexpp_list)
-    | cep5, zp5, SyntaxPED.Ep_constraint (loc, cp) ->
-        SyntaxPED.Ep_constraint (loc, ce_subst_cp cep5 zp5 cp)
-    | cep5, zp5, SyntaxPED.Ep_loop (loc, loop, ep1, ep2) ->
-        SyntaxPED.Ep_loop
-          (loc, loop, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
-    | cep5, zp5, SyntaxPED.Ep_for (loc, id, ep1, ep2, ep3, order, ep4) ->
-        SyntaxPED.Ep_for
-          (loc, id, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2,
-            ce_subst_ep cep5 zp5 ep3, order, ce_subst_ep cep5 zp5 ep4)
-    | cep5, zp5, SyntaxPED.Ep_assert (loc, ep1, ep2) ->
-        SyntaxPED.Ep_assert
-          (loc, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
-    | cep5, zp5, SyntaxPED.Ep_vec (loc, ep_list) ->
-        SyntaxPED.Ep_vec (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
-    | cep5, zp5, SyntaxPED.Ep_list (loc, ep_list) ->
-        SyntaxPED.Ep_list (loc, Lista.map (ce_subst_ep cep5 zp5) ep_list)
-    | cep5, zp5, SyntaxPED.Ep_cons (loc, ep1, ep2) ->
-        SyntaxPED.Ep_cons
-          (loc, ce_subst_ep cep5 zp5 ep1, ce_subst_ep cep5 zp5 ep2)
-and ce_subst_pexpp
-  cep5 zp5 x2 = match cep5, zp5, x2 with
-    cep5, zp5, SyntaxPED.PEXPp_exp (loc, patp, ep) ->
-      SyntaxPED.PEXPp_exp
-        (loc, ce_subst_patp cep5 zp5 patp, ce_subst_ep cep5 zp5 ep)
-    | cep5, zp5, SyntaxPED.PEXPp_when (loc, patp, ep1, ep2) ->
-        SyntaxPED.PEXPp_when
-          (loc, ce_subst_patp cep5 zp5 patp, ce_subst_ep cep5 zp5 ep1,
-            ce_subst_ep cep5 zp5 ep2)
-and ce_subst_letbindp
-  cep5 zp5 (SyntaxPED.LBp_val (loc, patp, ep)) =
-    SyntaxPED.LBp_val
-      (loc, ce_subst_patp cep5 zp5 patp, ce_subst_ep cep5 zp5 ep);;
-
-let rec ce_subst_funclp
-  cep5 zp5 (SyntaxPED.FCLp_funcl (loc, id, pexpp)) =
-    SyntaxPED.FCLp_funcl (loc, id, ce_subst_pexpp cep5 zp5 pexpp);;
-
-end;; (*struct CESubst*)
-
 module Predicate : sig
   type 'a seq = Empty | Insert of 'a * 'a pred | Join of 'a pred * 'a seq
   and 'a pred = Seq of (unit -> 'a seq)
   val bind : 'a pred -> ('a -> 'b pred) -> 'b pred
   val apply : ('a -> 'b pred) -> 'a seq -> 'b seq
+  val eval : 'a HOL.equal -> 'a pred -> 'a -> bool
+  val member : 'a HOL.equal -> 'a seq -> 'a -> bool
+  val holds : unit pred -> bool
   val bot_pred : 'a pred
   val single : 'a -> 'a pred
   val adjunct : 'a pred -> 'a seq -> 'a seq
@@ -6200,6 +4384,13 @@ let rec bind (Seq g) f = Seq (fun _ -> apply f (g ()))
 and apply f x1 = match f, x1 with f, Empty -> Empty
             | f, Insert (x, p) -> Join (f x, Join (bind p f, Empty))
             | f, Join (p, xq) -> Join (bind p f, apply f xq);;
+
+let rec eval _A (Seq f) = member _A (f ())
+and member _A xa0 x = match xa0, x with Empty, x -> false
+                | Insert (y, p), x -> HOL.eq _A x y || eval _A p x
+                | Join (p, xq), x -> eval _A p x || member _A xq x;;
+
+let rec holds p = eval Product_Type.equal_unit p ();;
 
 let bot_pred : 'a pred = Seq (fun _ -> Empty);;
 
@@ -6233,14 +4424,12 @@ end;; (*struct Predicate*)
 module UnifyType : sig
   val b_of : SyntaxVCT.tau -> SyntaxVCT.bp
   val eq_i_i : 'a HOL.equal -> 'a -> 'a -> unit Predicate.pred
-  val eq_o_i : 'a -> 'a Predicate.pred
   val fvs_t_bp : SyntaxVCT.bp -> string list
   val fvs_t_tau : SyntaxVCT.tau -> string list
-  val fvs_t_ctor_tau : string * SyntaxVCT.tau -> string list
-  val fvs_t_ctor_tau_list : (string * SyntaxVCT.tau) list -> string list
   val fvs_t_bp_list : SyntaxVCT.bp list -> string list
   val fvs_t_field_bp : string * SyntaxVCT.bp -> string list
   val fvs_t_field_bp_list : (string * SyntaxVCT.bp) list -> string list
+  val normalise_bp : SyntaxVCT.bp -> SyntaxVCT.bp
   val tsubst_bp_list_list :
     SyntaxVCT.bp list -> (string * SyntaxVCT.bp) list -> SyntaxVCT.bp list
   val unify_b_i_i_o :
@@ -6263,8 +4452,6 @@ let rec eq_i_i _A
       (fun (x, xaa) ->
         (if HOL.eq _A x xaa then Predicate.single () else Predicate.bot_pred));;
 
-let rec eq_o_i xa = Predicate.bind (Predicate.single xa) Predicate.single;;
-
 let rec fvs_t_bp
   = function SyntaxVCT.B_var tvar -> [tvar]
     | SyntaxVCT.B_tid uu -> []
@@ -6276,7 +4463,7 @@ let rec fvs_t_bp
     | SyntaxVCT.B_vec (order, bp) -> fvs_t_bp bp
     | SyntaxVCT.B_list bp -> fvs_t_bp bp
     | SyntaxVCT.B_tuple bp_list -> fvs_t_bp_list bp_list
-    | SyntaxVCT.B_union (uv, ctor_tau_list) -> fvs_t_ctor_tau_list ctor_tau_list
+    | SyntaxVCT.B_union (uv, ctor_tau_list) -> fvs_t_bp_list ctor_tau_list
     | SyntaxVCT.B_record field_bp_list -> fvs_t_field_bp_list field_bp_list
     | SyntaxVCT.B_undef -> []
     | SyntaxVCT.B_reg t -> fvs_t_tau t
@@ -6284,11 +4471,6 @@ let rec fvs_t_bp
     | SyntaxVCT.B_exception -> []
     | SyntaxVCT.B_finite_set num_list -> []
 and fvs_t_tau (SyntaxVCT.T_refined_type (zp, bp, cp)) = fvs_t_bp bp
-and fvs_t_ctor_tau (ctor_XXX, tau_XXX) = fvs_t_tau tau_XXX
-and fvs_t_ctor_tau_list
-  = function [] -> []
-    | ctor_tau_XXX :: ctor_tau_list_XXX ->
-        fvs_t_ctor_tau ctor_tau_XXX @ fvs_t_ctor_tau_list ctor_tau_list_XXX
 and fvs_t_bp_list
   = function [] -> []
     | bp_XXX :: bp_list_XXX -> fvs_t_bp bp_XXX @ fvs_t_bp_list bp_list_XXX
@@ -6298,10 +4480,32 @@ and fvs_t_field_bp_list
     | field_bp_XXX :: field_bp_list_XXX ->
         fvs_t_field_bp field_bp_XXX @ fvs_t_field_bp_list field_bp_list_XXX;;
 
+let rec normalise_bp
+  = function
+    SyntaxVCT.B_union (idd, flist) ->
+      SyntaxVCT.B_union (idd, Lista.map normalise_bp flist)
+    | SyntaxVCT.B_tuple blist ->
+        SyntaxVCT.B_tuple (Lista.map normalise_bp blist)
+    | SyntaxVCT.B_var v -> SyntaxVCT.B_var v
+    | SyntaxVCT.B_tid v -> SyntaxVCT.B_tid v
+    | SyntaxVCT.B_int -> SyntaxVCT.B_int
+    | SyntaxVCT.B_bool -> SyntaxVCT.B_bool
+    | SyntaxVCT.B_bit -> SyntaxVCT.B_bit
+    | SyntaxVCT.B_unit -> SyntaxVCT.B_unit
+    | SyntaxVCT.B_real -> SyntaxVCT.B_real
+    | SyntaxVCT.B_vec (v, va) -> SyntaxVCT.B_vec (v, va)
+    | SyntaxVCT.B_list v -> SyntaxVCT.B_list v
+    | SyntaxVCT.B_record v -> SyntaxVCT.B_record v
+    | SyntaxVCT.B_undef -> SyntaxVCT.B_undef
+    | SyntaxVCT.B_reg v -> SyntaxVCT.B_reg v
+    | SyntaxVCT.B_string -> SyntaxVCT.B_string
+    | SyntaxVCT.B_exception -> SyntaxVCT.B_exception
+    | SyntaxVCT.B_finite_set v -> SyntaxVCT.B_finite_set v;;
+
 let rec tsubst_bp_list_list
   bp_list x1 = match bp_list, x1 with bp_list, [] -> bp_list
     | bp_list, (tvar, bp) :: bsub ->
-        tsubst_bp_list_list (SyntaxPED.tsubst_bp_list bp tvar bp_list) bsub;;
+        tsubst_bp_list_list (Lista.map (Subst.tsubst_bp bp tvar) bp_list) bsub;;
 
 let rec unify_b_i_i_o
   x xa =
@@ -6315,7 +4519,9 @@ let rec unify_b_i_i_o
                 (eq_i_i (Lista.equal_list Stringa.equal_literal) (fvs_t_bp b2)
                   [])
                 (fun () ->
-                  Predicate.bind (eq_i_i SyntaxVCT.equal_bp b1 b2)
+                  Predicate.bind
+                    (eq_i_i SyntaxVCT.equal_bp (normalise_bp b1)
+                      (normalise_bp b2))
                     (fun () -> Predicate.single (Some []))))))
       (Predicate.sup_pred
         (Predicate.bind (Predicate.single (x, xa))
@@ -6328,7 +4534,9 @@ let rec unify_b_i_i_o
                     [])
                   (fun () ->
                     Predicate.bind
-                      (Predicate.if_pred (not (SyntaxVCT.equal_bpa b1 b2)))
+                      (Predicate.if_pred
+                        (not (SyntaxVCT.equal_bpa (normalise_bp b1)
+                               (normalise_bp b2))))
                       (fun () -> Predicate.single None)))))
         (Predicate.bind (Predicate.single (x, xa))
           (fun (b1, b2) ->
@@ -6699,9 +4907,7 @@ and unify_b_aux_i_i_o
                             SyntaxVCT.B_union (sa, fs2a))
                           -> (if ((s : string) = sa)
                                then Predicate.bind
-                                      (unify_b_aux_list_i_i_o
-(Lista.map (Fun.comp b_of Product_Type.snd) fs1a)
-(Lista.map (Fun.comp b_of Product_Type.snd) fs2a))
+                                      (unify_b_aux_list_i_i_o fs1a fs2a)
                                       Predicate.single
                                else Predicate.bot_pred)
                         | (SyntaxVCT.B_union (_, _), SyntaxVCT.B_record _) ->
@@ -6725,6 +4931,822 @@ and unify_b_aux_i_i_o
                           Predicate.bot_pred)))))))));;
 
 end;; (*struct UnifyType*)
+
+module State_Monad : sig
+  type ('a, 'b) state = State of ('a -> 'b * 'a)
+  val run_state : ('a, 'b) state -> 'a -> 'b * 'a
+end = struct
+
+type ('a, 'b) state = State of ('a -> 'b * 'a);;
+
+let rec run_state (State x) = x;;
+
+end;; (*struct State_Monad*)
+
+module SyntaxUtils : sig
+  val mk_proj_eq_x : SyntaxVCT.xp -> SyntaxVCT.xp -> string -> SyntaxVCT.cp
+  val b_of : SyntaxVCT.tau -> SyntaxVCT.bp
+  val aux :
+    SyntaxVCT.xp ->
+      string -> SyntaxVCT.tau -> (string * SyntaxVCT.bp) * SyntaxVCT.cp
+  val c_of : SyntaxVCT.tau -> SyntaxVCT.cp
+  val empty_annot : Location.loc * SyntaxVCT.tau option
+  val mk_var : string -> (SyntaxVCT.tau option) SyntaxPED.ep
+  val unzip3 : ('a * ('b * 'c)) list -> 'a list * ('b list * 'c list)
+  val b_of_lit : SyntaxVCT.lit -> SyntaxVCT.bp
+  val mk_l_eq_c : SyntaxVCT.xp -> SyntaxVCT.lit -> SyntaxVCT.cp
+  val mk_l_eq_t : SyntaxVCT.lit -> SyntaxVCT.tau
+  val mk_list_c : SyntaxVCT.xp -> SyntaxVCT.xp list -> SyntaxVCT.cp
+  val mk_v_eq_c : SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.cp
+  val mk_v_eq_t : SyntaxVCT.bp -> SyntaxVCT.vp -> SyntaxVCT.tau
+  val mk_eq_proj :
+    Location.loc -> SyntaxVCT.xp -> Arith.nat -> Arith.nat -> SyntaxVCT.cp
+  val mk_proj_eq : SyntaxVCT.xp -> string -> SyntaxVCT.cp
+  val c_conj_list : SyntaxVCT.cp list -> SyntaxVCT.cp
+  val mk_record_b_c :
+    SyntaxVCT.xp list ->
+      (string * SyntaxVCT.tau) list -> SyntaxVCT.bp * SyntaxVCT.cp
+  val mk_vec_len_eq_c : SyntaxVCT.xp -> 'a list -> SyntaxVCT.cp
+  val mk_x_eq_c_tuple : SyntaxVCT.xp -> SyntaxVCT.xp list -> SyntaxVCT.cp
+  val subst_x_cp : SyntaxVCT.cp -> SyntaxVCT.xp -> SyntaxVCT.vp -> SyntaxVCT.cp
+end = struct
+
+let rec mk_proj_eq_x
+  x y field =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_val (SyntaxVCT.V_var y),
+        SyntaxVCT.CE_val (SyntaxVCT.V_proj (field, SyntaxVCT.V_var x)));;
+
+let rec b_of (SyntaxVCT.T_refined_type (uu, b, uv)) = b;;
+
+let rec aux z f t = ((f, b_of t), mk_proj_eq_x SyntaxVCT.VIndex z f);;
+
+let rec c_of (SyntaxVCT.T_refined_type (uu, uv, c)) = c;;
+
+let empty_annot : Location.loc * SyntaxVCT.tau option
+  = (Location.Loc_unknown, None);;
+
+let rec mk_var
+  s = SyntaxPED.Ep_val (empty_annot, SyntaxVCT.V_var (SyntaxVCT.VNamed s));;
+
+let rec unzip3
+  = function [] -> ([], ([], []))
+    | (x, (y, z)) :: xyzs ->
+        (let (xs, (ys, zs)) = unzip3 xyzs in (x :: xs, (y :: ys, z :: zs)));;
+
+let rec b_of_lit = function SyntaxVCT.L_true -> SyntaxVCT.B_bool
+                   | SyntaxVCT.L_false -> SyntaxVCT.B_bool
+                   | SyntaxVCT.L_num n -> SyntaxVCT.B_int
+                   | SyntaxVCT.L_zero -> SyntaxVCT.B_bit
+                   | SyntaxVCT.L_one -> SyntaxVCT.B_bit
+                   | SyntaxVCT.L_unit -> SyntaxVCT.B_unit
+                   | SyntaxVCT.L_string uu -> SyntaxVCT.B_string
+                   | SyntaxVCT.L_real uv -> SyntaxVCT.B_real
+                   | SyntaxVCT.L_undef -> SyntaxVCT.B_undef;;
+
+let rec mk_l_eq_c
+  x l = SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+            SyntaxVCT.CE_val (SyntaxVCT.V_lit l));;
+
+let rec mk_l_eq_t
+  l = SyntaxVCT.T_refined_type
+        (SyntaxVCT.VIndex, b_of_lit l, mk_l_eq_c SyntaxVCT.VIndex l);;
+
+let rec mk_list_c
+  x xs =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+        SyntaxVCT.CE_val
+          (SyntaxVCT.V_list (Lista.map (fun a -> SyntaxVCT.V_var a) xs)));;
+
+let rec mk_v_eq_c
+  x v = SyntaxVCT.C_eq
+          (SyntaxVCT.CE_val (SyntaxVCT.V_var x), SyntaxVCT.CE_val v);;
+
+let rec mk_v_eq_t
+  b v = SyntaxVCT.T_refined_type
+          (SyntaxVCT.VIndex, b, mk_v_eq_c SyntaxVCT.VIndex v);;
+
+let rec mk_eq_proj
+  l x i n =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex),
+        SyntaxVCT.CE_val
+          (SyntaxVCT.V_proj
+            ((Utils.string_lit_of_nat n ^ "X") ^ Utils.string_lit_of_nat i,
+              SyntaxVCT.V_var x)));;
+
+let rec mk_proj_eq
+  x field =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_val (SyntaxVCT.V_var SyntaxVCT.VIndex),
+        SyntaxVCT.CE_val (SyntaxVCT.V_proj (field, SyntaxVCT.V_var x)));;
+
+let rec c_conj_list
+  cs = Lista.fold (fun a b -> SyntaxVCT.C_conj (a, b)) cs SyntaxVCT.C_true;;
+
+let rec mk_record_b_c
+  zs fts =
+    (let (fbs, cs) =
+       Utils.unzip
+         (Lista.map (fun (x, a) -> (let (aa, b) = a in aux x aa b))
+           (Lista.zip zs fts))
+       in
+      (SyntaxVCT.B_record fbs, c_conj_list cs));;
+
+let rec mk_vec_len_eq_c
+  x bs =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_uop (SyntaxVCT.Len, SyntaxVCT.CE_val (SyntaxVCT.V_var x)),
+        SyntaxVCT.CE_val
+          (SyntaxVCT.V_lit
+            (SyntaxVCT.L_num (Arith.integer_of_nat (Lista.size_list bs)))));;
+
+let rec mk_x_eq_c_tuple
+  x xs =
+    SyntaxVCT.C_eq
+      (SyntaxVCT.CE_val (SyntaxVCT.V_var x),
+        SyntaxVCT.CE_val
+          (SyntaxVCT.V_tuple (Lista.map (fun a -> SyntaxVCT.V_var a) xs)));;
+
+let rec subst_x_cp x = (fun a xa v -> Subst.subst_cp v xa a) x;;
+
+end;; (*struct SyntaxUtils*)
+
+module ContextsPiDelta : sig
+  type ('a, 'b) phi_ext =
+    Phi_ext of
+      (SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
+        Finite_Map.fmap *
+        (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap * 'b
+  type 'a delta_ext = Delta_ext of (string * SyntaxVCT.tau) list * 'a
+  type 'a theta_ext =
+    Theta_ext of
+      (SyntaxVCT.xp * SyntaxPED.typdef) list *
+        (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap * SyntaxVCT.order option *
+        'a
+  val eq_i_i : 'a HOL.equal -> 'a -> 'a -> unit Predicate.pred
+  val eq_o_i : 'a -> 'a Predicate.pred
+  val phi_f_update :
+    ((SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
+       Finite_Map.fmap ->
+      (SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
+        Finite_Map.fmap) ->
+      ('a, 'b) phi_ext -> ('a, 'b) phi_ext
+  val phi_f :
+    ('a, 'b) phi_ext ->
+      (SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
+        Finite_Map.fmap
+  val add_fun :
+    ('a, unit) phi_ext ->
+      SyntaxVCT.xp * (SyntaxVCT.ap * 'a option) -> ('a, unit) phi_ext
+  val b_of_ge : Contexts.g_entry -> SyntaxVCT.bp
+  val bvar_of :
+    (SyntaxVCT.xp * (SyntaxVCT.bp * SyntaxVCT.cp)) list -> SyntaxVCT.bp list
+  val delta_m_update :
+    ((string * SyntaxVCT.tau) list -> (string * SyntaxVCT.tau) list) ->
+      'a delta_ext -> 'a delta_ext
+  val delta_m : 'a delta_ext -> (string * SyntaxVCT.tau) list
+  val add_mvar : unit delta_ext -> string * SyntaxVCT.tau -> unit delta_ext
+  val theta_T_update :
+    ((SyntaxVCT.xp * SyntaxPED.typdef) list ->
+      (SyntaxVCT.xp * SyntaxPED.typdef) list) ->
+      'a theta_ext -> 'a theta_ext
+  val theta_T : 'a theta_ext -> (SyntaxVCT.xp * SyntaxPED.typdef) list
+  val add_to_scope_theta : unit theta_ext -> SyntaxVCT.xp list -> unit theta_ext
+  val add_type :
+    unit theta_ext -> SyntaxVCT.xp -> SyntaxPED.typdef -> unit theta_ext
+  val emptyDEnv : unit delta_ext
+  val emptyPiEnv : ('a, unit) phi_ext
+  val restrict_t :
+    (SyntaxVCT.xp * SyntaxPED.typdef) list ->
+      string list -> (SyntaxVCT.xp * SyntaxPED.typdef) list
+  val b_is_simple : SyntaxVCT.bp -> bool
+  val lookup_mvar : unit delta_ext -> string -> SyntaxVCT.tau option
+  val update_mvar : unit delta_ext -> string * SyntaxVCT.tau -> unit delta_ext
+  val update_type :
+    unit theta_ext -> SyntaxVCT.xp -> SyntaxPED.typdef -> unit theta_ext
+  val theta_r_update :
+    ((SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap ->
+      (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap) ->
+      'a theta_ext -> 'a theta_ext
+  val theta_r : 'a theta_ext -> (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap
+  val add_register :
+    unit theta_ext -> SyntaxVCT.xp -> SyntaxVCT.tau -> unit theta_ext
+  val emptyThetaEnv : unit theta_ext
+  val lookup_field_in_type : SyntaxVCT.tau -> string -> SyntaxVCT.bp option
+  val lookup_field_record_aux :
+    (SyntaxVCT.xp * SyntaxPED.typdef) list ->
+      string -> (SyntaxVCT.xp * SyntaxVCT.tau) option
+  val lookup_field_record :
+    unit theta_ext -> string -> (SyntaxVCT.xp * SyntaxVCT.tau) option
+  val lookup_record_name : unit theta_ext -> string -> string option
+  val tids_in_td_i_i_o :
+    unit theta_ext -> SyntaxPED.typdef -> (string list) Predicate.pred
+  val tids_in_b_i_i_o :
+    unit theta_ext -> SyntaxVCT.bp -> (string list) Predicate.pred
+  val tids_in_t_i_i_o :
+    unit theta_ext -> SyntaxVCT.tau -> (string list) Predicate.pred
+  val tids_in_tlist_i_i_o :
+    unit theta_ext -> SyntaxVCT.tau list -> (string list) Predicate.pred
+  val tids_in_blist_i_i_o :
+    unit theta_ext -> SyntaxVCT.bp list -> (string list) Predicate.pred
+  val tids_in_td_list_i_i_o :
+    unit theta_ext -> SyntaxPED.typdef list -> (string list) Predicate.pred
+  val fm_from_t_i_o :
+    unit theta_ext -> (string, (string list)) Finite_Map.fmap Predicate.pred
+  val mvar_not_in_d : unit delta_ext -> string -> bool
+  val phi_o :
+    ('a, 'b) phi_ext -> (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap
+  val lookup_fun_aux :
+    ('a, unit) phi_ext ->
+      SyntaxVCT.xp -> ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list) option
+  val phi_o_update :
+    ((SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap ->
+      (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap) ->
+      ('a, 'b) phi_ext -> ('a, 'b) phi_ext
+  val add_to_overload :
+    ('a, unit) phi_ext ->
+      SyntaxVCT.xp -> SyntaxVCT.xp list -> ('a, unit) phi_ext
+  val lookup_register : unit theta_ext -> SyntaxVCT.xp -> SyntaxVCT.tau option
+  val lookup_types_for :
+    SyntaxVCT.bp -> string list -> (SyntaxVCT.bp list) option
+  val lookup_constr_aux :
+    (SyntaxVCT.xp * SyntaxPED.typdef) list -> string -> SyntaxVCT.tau option
+  val lookup_constr_type_aux :
+    (SyntaxVCT.xp * SyntaxPED.typdef) list -> string -> SyntaxVCT.tau option
+  val lookup_constr_type : unit theta_ext -> string -> SyntaxVCT.tau option
+  val lookup_constr_union : unit theta_ext -> string -> SyntaxVCT.tau option
+  val lookup_constr_union_x :
+    unit theta_ext -> SyntaxVCT.xp -> SyntaxVCT.tau option
+  val lookup_field_record_type :
+    unit theta_ext -> string -> (SyntaxVCT.bp * SyntaxVCT.tau) option
+  val theta_d : 'a theta_ext -> SyntaxVCT.order option
+  val lookup_field_and_record_type :
+    unit theta_ext -> string -> (SyntaxVCT.tau * SyntaxVCT.tau) option
+  val theta_d_update :
+    (SyntaxVCT.order option -> SyntaxVCT.order option) ->
+      'a theta_ext -> 'a theta_ext
+end = struct
+
+type ('a, 'b) phi_ext =
+  Phi_ext of
+    (SyntaxVCT.xp, ((SyntaxVCT.xp * (SyntaxVCT.ap * 'a option)) list))
+      Finite_Map.fmap *
+      (SyntaxVCT.xp, (SyntaxVCT.xp list)) Finite_Map.fmap * 'b;;
+
+type 'a delta_ext = Delta_ext of (string * SyntaxVCT.tau) list * 'a;;
+
+type 'a theta_ext =
+  Theta_ext of
+    (SyntaxVCT.xp * SyntaxPED.typdef) list *
+      (SyntaxVCT.xp, SyntaxVCT.tau) Finite_Map.fmap * SyntaxVCT.order option *
+      'a;;
+
+let rec eq_i_i _A
+  xa xb =
+    Predicate.bind (Predicate.single (xa, xb))
+      (fun (x, xaa) ->
+        (if HOL.eq _A x xaa then Predicate.single () else Predicate.bot_pred));;
+
+let rec eq_o_i xa = Predicate.bind (Predicate.single xa) Predicate.single;;
+
+let rec phi_f_update
+  phi_fa (Phi_ext (phi_f, phi_o, more)) = Phi_ext (phi_fa phi_f, phi_o, more);;
+
+let rec phi_f (Phi_ext (phi_f, phi_o, more)) = phi_f;;
+
+let rec add_fun
+  phi (x, (f, s)) =
+    (match Finite_Map.fmlookup SyntaxVCT.equal_xp (phi_f phi) x
+      with None ->
+        phi_f_update
+          (fun _ ->
+            Finite_Map.fmupd SyntaxVCT.equal_xp x [(x, (f, s))] (phi_f phi))
+          phi
+      | Some fs ->
+        phi_f_update
+          (fun _ ->
+            Finite_Map.fmupd SyntaxVCT.equal_xp x ((x, (f, s)) :: fs)
+              (phi_f phi))
+          phi);;
+
+let rec b_of_ge (Contexts.GEPair (b, c)) = b;;
+
+let rec bvar_of
+  x = Lista.map_filter
+        (fun (_, (b, _)) ->
+          (match b with SyntaxVCT.B_var _ -> Some b | SyntaxVCT.B_tid _ -> None
+            | SyntaxVCT.B_int -> None | SyntaxVCT.B_bool -> None
+            | SyntaxVCT.B_bit -> None | SyntaxVCT.B_unit -> None
+            | SyntaxVCT.B_real -> None | SyntaxVCT.B_vec (_, _) -> None
+            | SyntaxVCT.B_list _ -> None | SyntaxVCT.B_tuple _ -> None
+            | SyntaxVCT.B_union (_, _) -> None | SyntaxVCT.B_record _ -> None
+            | SyntaxVCT.B_undef -> None | SyntaxVCT.B_reg _ -> None
+            | SyntaxVCT.B_string -> None | SyntaxVCT.B_exception -> None
+            | SyntaxVCT.B_finite_set _ -> None))
+        x;;
+
+let rec delta_m_update
+  delta_ma (Delta_ext (delta_m, more)) = Delta_ext (delta_ma delta_m, more);;
+
+let rec delta_m (Delta_ext (delta_m, more)) = delta_m;;
+
+let rec add_mvar
+  delta (x, t) =
+    (match Contexts.lookup Stringa.equal_literal (delta_m delta) x
+      with None ->
+        delta_m_update
+          (fun _ -> Contexts.update Stringa.equal_literal (delta_m delta) x t)
+          delta
+      | Some _ -> delta);;
+
+let rec theta_T_update
+  theta_Ta (Theta_ext (theta_T, theta_r, theta_d, more)) =
+    Theta_ext (theta_Ta theta_T, theta_r, theta_d, more);;
+
+let rec theta_T (Theta_ext (theta_T, theta_r, theta_d, more)) = theta_T;;
+
+let rec add_to_scope_theta theta xs = theta;;
+
+let rec add_type
+  phi x xa2 = match phi, x, xa2 with
+    phi, x, SyntaxPED.Variant (tid, xbc, ts) ->
+      add_to_scope_theta
+        (theta_T_update
+          (fun _ -> theta_T phi @ [(x, SyntaxPED.Variant (tid, xbc, ts))]) phi)
+        (Lista.map (fun s -> SyntaxVCT.VNamed (Product_Type.fst s)) ts)
+    | phi, x, SyntaxPED.Record (v, va, vb) ->
+        theta_T_update
+          (fun _ -> (x, SyntaxPED.Record (v, va, vb)) :: theta_T phi) phi;;
+
+let emptyDEnv : unit delta_ext = Delta_ext ([], ());;
+
+let emptyPiEnv : ('a, unit) phi_ext
+  = Phi_ext (Finite_Map.fmempty, Finite_Map.fmempty, ());;
+
+let rec restrict_t
+  x0 uu = match x0, uu with [], uu -> []
+    | (xp, ta) :: t, ss ->
+        (if Lista.member Stringa.equal_literal ss (Contexts.n_of xp)
+          then (xp, ta) :: restrict_t t ss else restrict_t t ss);;
+
+let rec b_is_simple = function SyntaxVCT.B_list uu -> false
+                      | SyntaxVCT.B_tuple uv -> false
+                      | SyntaxVCT.B_union (uw, ux) -> false
+                      | SyntaxVCT.B_record uy -> false
+                      | SyntaxVCT.B_tid uz -> false
+                      | SyntaxVCT.B_reg va -> false
+                      | SyntaxVCT.B_vec (vb, vc) -> false
+                      | SyntaxVCT.B_var v -> true
+                      | SyntaxVCT.B_int -> true
+                      | SyntaxVCT.B_bool -> true
+                      | SyntaxVCT.B_bit -> true
+                      | SyntaxVCT.B_unit -> true
+                      | SyntaxVCT.B_real -> true
+                      | SyntaxVCT.B_undef -> true
+                      | SyntaxVCT.B_string -> true
+                      | SyntaxVCT.B_exception -> true
+                      | SyntaxVCT.B_finite_set v -> true;;
+
+let rec lookup_mvar
+  delta x = Contexts.lookup Stringa.equal_literal (delta_m delta) x;;
+
+let rec update_mvar
+  delta (x, t) =
+    delta_m_update
+      (fun _ -> Contexts.update Stringa.equal_literal (delta_m delta) x t)
+      delta;;
+
+let rec update_type
+  theta x t =
+    theta_T_update
+      (fun _ -> Contexts.update SyntaxVCT.equal_xp (theta_T theta) x t) theta;;
+
+let rec theta_r_update
+  theta_ra (Theta_ext (theta_T, theta_r, theta_d, more)) =
+    Theta_ext (theta_T, theta_ra theta_r, theta_d, more);;
+
+let rec theta_r (Theta_ext (theta_T, theta_r, theta_d, more)) = theta_r;;
+
+let rec add_register
+  theta xp t =
+    theta_r_update
+      (fun _ -> Finite_Map.fmupd SyntaxVCT.equal_xp xp t (theta_r theta))
+      theta;;
+
+let emptyThetaEnv : unit theta_ext
+  = Theta_ext ([], Finite_Map.fmempty, None, ());;
+
+let rec lookup_field_in_type
+  xa0 x = match xa0, x with
+    SyntaxVCT.T_refined_type (uu, SyntaxVCT.B_record fs, c), x ->
+      Contexts.lookup Stringa.equal_literal fs x
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_var vc, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tid vc, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_int, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bool, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_bit, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_unit, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_real, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_vec (vc, vd), vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_list vc, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_tuple vc, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_union (vc, vd), vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_undef, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_reg vc, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_string, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_exception, vb), uw -> None
+    | SyntaxVCT.T_refined_type (v, SyntaxVCT.B_finite_set vc, vb), uw -> None;;
+
+let rec lookup_field_record_aux
+  x0 uu = match x0, uu with [], uu -> None
+    | (xa, SyntaxPED.Record (uv, uw, t)) :: ts, x ->
+        (match lookup_field_in_type t x
+          with None -> lookup_field_record_aux ts x | Some _ -> Some (xa, t))
+    | (xa, SyntaxPED.Variant (ux, uy, t)) :: ts, x ->
+        lookup_field_record_aux ts x;;
+
+let rec lookup_field_record
+  theta fid = lookup_field_record_aux (theta_T theta) fid;;
+
+let rec lookup_record_name
+  theta fid =
+    (match lookup_field_record theta fid with None -> None
+      | Some a ->
+        (match a with (SyntaxVCT.VNamed aa, _) -> Some aa
+          | (SyntaxVCT.VIndex, _) -> None));;
+
+let rec tids_in_td_i_i_o
+  x xa =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (x, xa))
+        (fun a ->
+          (match a
+            with (t, SyntaxPED.Record (_, _, ta)) ->
+              Predicate.bind (tids_in_t_i_i_o t ta) Predicate.single
+            | (_, SyntaxPED.Variant (_, _, _)) -> Predicate.bot_pred)))
+      (Predicate.bind (Predicate.single (x, xa))
+        (fun a ->
+          (match a with (_, SyntaxPED.Record (_, _, _)) -> Predicate.bot_pred
+            | (t, SyntaxPED.Variant (_, _, tps)) ->
+              Predicate.bind
+                (tids_in_tlist_i_i_o t (Lista.map Product_Type.snd tps))
+                Predicate.single)))
+and tids_in_b_i_i_o
+  x xa =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (x, xa))
+        (fun (_, b) ->
+          Predicate.bind (Predicate.if_pred (b_is_simple b))
+            (fun () -> Predicate.single [])))
+      (Predicate.sup_pred
+        (Predicate.bind (Predicate.single (x, xa))
+          (fun a ->
+            (match a with (_, SyntaxVCT.B_var _) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_tid tid) -> Predicate.single [tid]
+              | (_, SyntaxVCT.B_int) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_bool) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_bit) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_unit) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_real) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_vec (_, _)) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_list _) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_tuple _) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_union (_, _)) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_record _) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_undef) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_reg _) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_string) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_exception) -> Predicate.bot_pred
+              | (_, SyntaxVCT.B_finite_set _) -> Predicate.bot_pred)))
+        (Predicate.sup_pred
+          (Predicate.bind (Predicate.single (x, xa))
+            (fun a ->
+              (match a with (_, SyntaxVCT.B_var _) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_tid _) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_int) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_bool) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_bit) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_unit) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_real) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_vec (_, _)) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_list _) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_tuple _) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_union (_, _)) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_record _) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_undef) -> Predicate.bot_pred
+                | (t, SyntaxVCT.B_reg ta) ->
+                  Predicate.bind (tids_in_t_i_i_o t ta) Predicate.single
+                | (_, SyntaxVCT.B_string) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_exception) -> Predicate.bot_pred
+                | (_, SyntaxVCT.B_finite_set _) -> Predicate.bot_pred)))
+          (Predicate.sup_pred
+            (Predicate.bind (Predicate.single (x, xa))
+              (fun a ->
+                (match a with (_, SyntaxVCT.B_var _) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_tid _) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_int) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_bool) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_bit) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_unit) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_real) -> Predicate.bot_pred
+                  | (t, SyntaxVCT.B_vec (_, bp)) ->
+                    Predicate.bind (tids_in_b_i_i_o t bp) Predicate.single
+                  | (_, SyntaxVCT.B_list _) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_tuple _) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_union (_, _)) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_record _) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_undef) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_reg _) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_string) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_exception) -> Predicate.bot_pred
+                  | (_, SyntaxVCT.B_finite_set _) -> Predicate.bot_pred)))
+            (Predicate.sup_pred
+              (Predicate.bind (Predicate.single (x, xa))
+                (fun a ->
+                  (match a with (_, SyntaxVCT.B_var _) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_tid _) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_int) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_bool) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_bit) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_unit) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_real) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_vec (_, _)) -> Predicate.bot_pred
+                    | (t, SyntaxVCT.B_list bp) ->
+                      Predicate.bind (tids_in_b_i_i_o t bp) Predicate.single
+                    | (_, SyntaxVCT.B_tuple _) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_union (_, _)) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_record _) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_undef) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_reg _) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_string) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_exception) -> Predicate.bot_pred
+                    | (_, SyntaxVCT.B_finite_set _) -> Predicate.bot_pred)))
+              (Predicate.sup_pred
+                (Predicate.bind (Predicate.single (x, xa))
+                  (fun a ->
+                    (match a with (_, SyntaxVCT.B_var _) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_tid _) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_int) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_bool) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_bit) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_unit) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_real) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_vec (_, _)) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_list _) -> Predicate.bot_pred
+                      | (t, SyntaxVCT.B_tuple bs) ->
+                        Predicate.bind (tids_in_blist_i_i_o t bs)
+                          Predicate.single
+                      | (_, SyntaxVCT.B_union (_, _)) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_record _) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_undef) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_reg _) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_string) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_exception) -> Predicate.bot_pred
+                      | (_, SyntaxVCT.B_finite_set _) -> Predicate.bot_pred)))
+                (Predicate.sup_pred
+                  (Predicate.bind (Predicate.single (x, xa))
+                    (fun a ->
+                      (match a with (_, SyntaxVCT.B_var _) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_tid _) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_int) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_bool) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_bit) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_unit) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_real) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_vec (_, _)) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_list _) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_tuple _) -> Predicate.bot_pred
+                        | (t, SyntaxVCT.B_union (i, _)) ->
+                          Predicate.bind
+                            (eq_o_i
+                              (Contexts.lookup SyntaxVCT.equal_xp (theta_T t)
+                                (SyntaxVCT.VNamed i)))
+                            (fun aa ->
+                              (match aa with None -> Predicate.bot_pred
+                                | Some (SyntaxPED.Record (_, _, _)) ->
+                                  Predicate.bot_pred
+                                | Some (SyntaxPED.Variant (tid, xbc, ts)) ->
+                                  Predicate.bind
+                                    (tids_in_td_i_i_o t
+                                      (SyntaxPED.Variant (tid, xbc, ts)))
+                                    (fun xb -> Predicate.single (i :: xb))))
+                        | (_, SyntaxVCT.B_record _) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_undef) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_reg _) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_string) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_exception) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_finite_set _) -> Predicate.bot_pred)))
+                  (Predicate.bind (Predicate.single (x, xa))
+                    (fun a ->
+                      (match a with (_, SyntaxVCT.B_var _) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_tid _) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_int) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_bool) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_bit) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_unit) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_real) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_vec (_, _)) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_list _) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_tuple _) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_union (_, _)) -> Predicate.bot_pred
+                        | (t, SyntaxVCT.B_record xs) ->
+                          Predicate.bind
+                            (eq_o_i
+                              (lookup_record_name t
+                                (Product_Type.fst (Lista.hd xs))))
+                            (fun aa ->
+                              (match aa with None -> Predicate.bot_pred
+                                | Some recname ->
+                                  Predicate.bind
+                                    (tids_in_blist_i_i_o t
+                                      (Lista.map Product_Type.snd xs))
+                                    (fun xb ->
+                                      Predicate.single (recname :: xb))))
+                        | (_, SyntaxVCT.B_undef) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_reg _) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_string) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_exception) -> Predicate.bot_pred
+                        | (_, SyntaxVCT.B_finite_set _) ->
+                          Predicate.bot_pred)))))))))
+and tids_in_t_i_i_o
+  x xa =
+    Predicate.bind (Predicate.single (x, xa))
+      (fun (t, ta) ->
+        Predicate.bind (tids_in_b_i_i_o t (SyntaxUtils.b_of ta))
+          Predicate.single)
+and tids_in_tlist_i_i_o
+  x xa =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (x, xa))
+        (fun a ->
+          (match a with (_, []) -> Predicate.single []
+            | (_, _ :: _) -> Predicate.bot_pred)))
+      (Predicate.bind (Predicate.single (x, xa))
+        (fun a ->
+          (match a with (_, []) -> Predicate.bot_pred
+            | (t, ba :: bsa) ->
+              Predicate.bind (tids_in_tlist_i_i_o t bsa)
+                (fun xb ->
+                  Predicate.bind (tids_in_t_i_i_o t ba)
+                    (fun xaa -> Predicate.single (xaa @ xb))))))
+and tids_in_blist_i_i_o
+  x xa =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (x, xa))
+        (fun a ->
+          (match a with (_, []) -> Predicate.single []
+            | (_, _ :: _) -> Predicate.bot_pred)))
+      (Predicate.bind (Predicate.single (x, xa))
+        (fun a ->
+          (match a with (_, []) -> Predicate.bot_pred
+            | (t, b :: bs) ->
+              Predicate.bind (tids_in_blist_i_i_o t bs)
+                (fun xb ->
+                  Predicate.bind (tids_in_b_i_i_o t b)
+                    (fun xaa -> Predicate.single (xaa @ xb))))));;
+
+let rec tids_in_td_list_i_i_o
+  x xa =
+    Predicate.sup_pred
+      (Predicate.bind (Predicate.single (x, xa))
+        (fun a ->
+          (match a with (_, []) -> Predicate.single []
+            | (_, _ :: _) -> Predicate.bot_pred)))
+      (Predicate.bind (Predicate.single (x, xa))
+        (fun a ->
+          (match a with (_, []) -> Predicate.bot_pred
+            | (t, td :: tds) ->
+              Predicate.bind (tids_in_td_list_i_i_o t tds)
+                (fun xb ->
+                  Predicate.bind (tids_in_td_i_i_o t td)
+                    (fun xaa -> Predicate.single (xaa @ xb))))));;
+
+let rec fm_from_t_i_o
+  x = Predicate.bind (Predicate.single x)
+        (fun xa ->
+          Predicate.bind
+            (tids_in_td_list_i_i_o xa (Lista.map Product_Type.snd (theta_T xa)))
+            (fun xaa ->
+              Predicate.single
+                (Finite_Map.Fmap_of_list
+                  (Lista.map (fun (s, _) -> (Contexts.n_of s, xaa))
+                    (Lista.zip (Lista.map Product_Type.fst (theta_T xa))
+                      xaa)))));;
+
+let rec mvar_not_in_d
+  delta x =
+    (match Contexts.lookup Stringa.equal_literal (delta_m delta) x
+      with None -> true | Some _ -> false);;
+
+let rec phi_o (Phi_ext (phi_f, phi_o, more)) = phi_o;;
+
+let rec lookup_fun_aux
+  phi x =
+    (match Finite_Map.fmlookup SyntaxVCT.equal_xp (phi_o phi) x
+      with None -> Finite_Map.fmlookup SyntaxVCT.equal_xp (phi_f phi) x
+      | Some xs ->
+        Some (Lista.concat
+               (Lista.map_filter
+                 (Finite_Map.fmlookup SyntaxVCT.equal_xp (phi_f phi)) xs)));;
+
+let rec phi_o_update
+  phi_oa (Phi_ext (phi_f, phi_o, more)) = Phi_ext (phi_f, phi_oa phi_o, more);;
+
+let rec add_to_overload
+  phi idd id_list =
+    (match Finite_Map.fmlookup SyntaxVCT.equal_xp (phi_o phi) idd
+      with None ->
+        phi_o_update
+          (fun _ -> Finite_Map.fmupd SyntaxVCT.equal_xp idd id_list (phi_o phi))
+          phi
+      | Some id_lista ->
+        phi_o_update
+          (fun _ ->
+            Finite_Map.fmupd SyntaxVCT.equal_xp idd (id_lista @ id_list)
+              (phi_o phi))
+          phi);;
+
+let rec lookup_register
+  t x = Finite_Map.fmlookup SyntaxVCT.equal_xp (theta_r t) x;;
+
+let rec lookup_types_for
+  x0 uw = match x0, uw with
+    SyntaxVCT.B_record fbs, f :: fs ->
+      (match lookup_types_for (SyntaxVCT.B_record fbs) fs with None -> None
+        | Some bp ->
+          (match Contexts.lookup Stringa.equal_literal fbs f with None -> None
+            | Some b -> Some (b :: bp)))
+    | SyntaxVCT.B_record uu, [] -> Some []
+    | SyntaxVCT.B_var v, uw -> None
+    | SyntaxVCT.B_tid v, uw -> None
+    | SyntaxVCT.B_int, uw -> None
+    | SyntaxVCT.B_bool, uw -> None
+    | SyntaxVCT.B_bit, uw -> None
+    | SyntaxVCT.B_unit, uw -> None
+    | SyntaxVCT.B_real, uw -> None
+    | SyntaxVCT.B_vec (v, va), uw -> None
+    | SyntaxVCT.B_list v, uw -> None
+    | SyntaxVCT.B_tuple v, uw -> None
+    | SyntaxVCT.B_union (v, va), uw -> None
+    | SyntaxVCT.B_undef, uw -> None
+    | SyntaxVCT.B_reg v, uw -> None
+    | SyntaxVCT.B_string, uw -> None
+    | SyntaxVCT.B_exception, uw -> None
+    | SyntaxVCT.B_finite_set v, uw -> None;;
+
+let rec lookup_constr_aux
+  x0 uu = match x0, uu with [], uu -> None
+    | (SyntaxVCT.VNamed xa, SyntaxPED.Variant (y, xbc, t)) :: ts, x ->
+        (match Contexts.lookup Stringa.equal_literal t x
+          with None -> lookup_constr_aux ts x
+          | Some _ ->
+            Some (SyntaxVCT.T_refined_type
+                   (SyntaxVCT.VIndex, SyntaxVCT.B_union (xa, bvar_of xbc),
+                     SyntaxVCT.C_true)))
+    | (xa, SyntaxPED.Record (uv, uw, t)) :: ts, x -> lookup_constr_aux ts x;;
+
+let rec lookup_constr_type_aux
+  x0 uu = match x0, uu with [], uu -> None
+    | (SyntaxVCT.VNamed xa, SyntaxPED.Variant (uv, uw, t)) :: ts, x ->
+        (match Contexts.lookup Stringa.equal_literal t x
+          with None -> lookup_constr_type_aux ts x | Some a -> Some a)
+    | (xa, SyntaxPED.Record (ux, uy, t)) :: ts, x ->
+        lookup_constr_type_aux ts x;;
+
+let rec lookup_constr_type
+  theta fid = lookup_constr_type_aux (theta_T theta) fid;;
+
+let rec lookup_constr_union theta fid = lookup_constr_aux (theta_T theta) fid;;
+
+let rec lookup_constr_union_x g (SyntaxVCT.VNamed x) = lookup_constr_union g x;;
+
+let rec lookup_field_record_type
+  theta fid =
+    (match lookup_field_record theta fid with None -> None
+      | Some (_, t) ->
+        (match lookup_field_in_type t fid with None -> None
+          | Some ta -> Some (ta, t)));;
+
+let rec theta_d (Theta_ext (theta_T, theta_r, theta_d, more)) = theta_d;;
+
+let rec lookup_field_and_record_type
+  theta fid =
+    (match lookup_field_record theta fid with None -> None
+      | Some (_, t) ->
+        (match lookup_field_in_type t fid with None -> None
+          | Some ta ->
+            Some (SyntaxVCT.T_refined_type
+                    (SyntaxVCT.VIndex, ta, SyntaxVCT.C_true),
+                   t)));;
+
+let rec theta_d_update
+  theta_da (Theta_ext (theta_T, theta_r, theta_d, more)) =
+    Theta_ext (theta_T, theta_r, theta_da theta_d, more);;
+
+end;; (*struct ContextsPiDelta*)
 
 module TypingUtils : sig
   val upd_t : Location.loc * 'a -> 'b -> Location.loc * 'b option
@@ -6813,8 +5835,7 @@ let rec mk_constructor_fun
       Some [(SyntaxVCT.VNamed cn,
               (SyntaxVCT.A_function
                  (SyntaxVCT.VNamed x, b,
-                   SyntaxPED.subst_cp (SyntaxVCT.V_var (SyntaxVCT.VNamed x)) z
-                     c,
+                   Subst.subst_cp (SyntaxVCT.V_var (SyntaxVCT.VNamed x)) z c,
                    SyntaxVCT.T_refined_type
                      (SyntaxVCT.VIndex, SyntaxUtils.b_of ret,
                        SyntaxVCT.C_eq
@@ -6849,8 +5870,8 @@ let rec lookup_fun
           (let _ = Debug.trace ("Did find function " ^ cn) in
             (match ContextsPiDelta.lookup_constr_union t cn with None -> None
               | Some ret ->
-                (match ContextsPiDelta.lookup_constr_in_type ret cn
-                  with None -> None | Some ta -> mk_constructor_fun ta ret cn)))
+                (match ContextsPiDelta.lookup_constr_type t cn with None -> None
+                  | Some ta -> mk_constructor_fun ta ret cn)))
         | Some ta -> (let _ = Debug.trace ("found function " ^ cn) in Some ta))
     | uu, uv, SyntaxVCT.VIndex -> None;;
 
@@ -6913,11 +5934,11 @@ let rec mk_proj_vars
 
 let rec tsubst_t_many
   b x1 = match b, x1 with b, [] -> b
-    | ba, (bv, b) :: bsub -> SyntaxPED.tsubst_tp b bv (tsubst_t_many ba bsub);;
+    | ba, (bv, b) :: bsub -> Subst.tsubst_tp b bv (tsubst_t_many ba bsub);;
 
 let rec tsubst_bp_many
   b x1 = match b, x1 with b, [] -> b
-    | ba, (bv, b) :: bsub -> SyntaxPED.tsubst_bp b bv (tsubst_bp_many ba bsub);;
+    | ba, (bv, b) :: bsub -> Subst.tsubst_bp b bv (tsubst_bp_many ba bsub);;
 
 let rec lookup_fun_type
   t g x =
@@ -6927,8 +5948,10 @@ let rec lookup_fun_type
 
 let rec lookup_ctor_base
   theta ctor =
-    (match ContextsPiDelta.lookup_constr_union_type theta ctor with None -> None
-      | Some (t1, t2) -> Some (t1, SyntaxUtils.b_of t2));;
+    Option.bind (ContextsPiDelta.lookup_constr_type theta ctor)
+      (fun t1 ->
+        Option.bind (ContextsPiDelta.lookup_constr_union theta ctor)
+          (fun t2 -> Some (t1, SyntaxUtils.b_of t2)));;
 
 end;; (*struct TypingUtils*)
 
@@ -7163,4 +6186,6 @@ let rec solve_ce_ce
     (match linearise_A ks ces with None -> None | Some a -> Some (solve_ce a));;
 
 end;; (*struct ConvertTypes*)
+
+
 

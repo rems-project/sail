@@ -47,7 +47,7 @@ and pp_raw_bp x = match x with
 | B_vec(order,bp) -> string "B_vec" ^^ string "(" ^^ pp_raw_order order ^^ string "," ^^ pp_raw_bp bp ^^ string ")"
 | B_list(bp) -> string "B_list" ^^ string "(" ^^ pp_raw_bp bp ^^ string ")"
 | B_tuple(bp0) -> string "B_tuple" ^^ string "(" ^^ string "[" ^^ separate  (string ";") (List.map (function (bp0) -> string "(" ^^ pp_raw_bp bp0 ^^ string ")") bp0) ^^ string "]" ^^ string ")"
-| B_union(id,ctor0_tp0) -> string "B_union" ^^ string "(" ^^  string "\"" ^^ string id ^^ string "\"" ^^ string "," ^^ string "[" ^^ separate  (string ";") (List.map (function (ctor0,tp0) -> string "(" ^^  string "\"" ^^ string ctor0 ^^ string "\"" ^^ string "," ^^ pp_raw_tp tp0 ^^ string ")") ctor0_tp0) ^^ string "]" ^^ string ")"
+| B_union(id,ctor0_tp0) -> string "B_union" ^^ string "(" ^^  string "\"" ^^ string id ^^ string "\"" ^^ string "," ^^ string "[" ^^ separate  (string ";") (List.map (function (tp0) -> string "(" ^^  pp_raw_bp tp0 ^^ string ")") ctor0_tp0) ^^ string "]" ^^ string ")"
 | B_record(field0_bp0) -> string "B_record" ^^ string "(" ^^ string "[" ^^ separate  (string ";") (List.map (function (field0,bp0) -> string "(" ^^  string "\"" ^^ string field0 ^^ string "\"" ^^ string "," ^^ pp_raw_bp bp0 ^^ string ")") field0_bp0) ^^ string "]" ^^ string ")"
 | B_undef -> string "B_undef"
 | B_reg(tp) -> string "B_reg" ^^ string "(" ^^ pp_raw_tp tp ^^ string ")"
@@ -195,9 +195,19 @@ and pp_raw_scattered_defp x = match x with
 | SDp_funclp(ott_menhir_loc,funclp) -> string "SDp_funclp" ^^ string "(" ^^ pp_raw_funclp funclp ^^ string ")"
 | SDp_end(ott_menhir_loc,id) -> string "SDp_end" ^^ string "(" ^^  string "\"" ^^ string id ^^ string "\"" ^^ string ")"
 
+and pp_raw_td td = match td with
+    Variant (tid,xbc,f_bp_list) -> string "Variant " ^^ string tid ^^ string " [ " ^^
+          separate (string ", ")
+            (List.map (function (kp0,(bp0,cp0)) -> string "(" ^^ pp_raw_xp kp0 ^^ string "," ^^ pp_raw_bp bp0 ^^ string "," ^^ pp_raw_cp cp0 ^^ string ")") xbc) ^^ string "] < " ^^ separate (string ", " ) 
+            (List.map (function (f,bp)  -> string f ^^ string ":" ^^ pp_raw_tp bp ) f_bp_list)
+                                 
+  | Record (tid,xbc,tp) -> string "Record" ^^ string tid ^^ string " < " ^^
+         separate (string ", ")  (List.map (function (kp0,(bp0,cp0)) -> string "(" ^^ pp_raw_xp kp0 ^^ string "," ^^ pp_raw_bp bp0 ^^ string "," ^^ pp_raw_cp cp0 ^^ string ")") xbc) ^^ string ">" ^^ pp_raw_tp tp
+                              
 and pp_raw_defp x = match x with
 | DEFp_fundef(ott_menhir_loc,ap,funclp0) -> string "DEFp_fundef" ^^ string "(" ^^ pp_raw_ap ap ^^ string "," ^^ string "[" ^^ separate  (string ";") (List.map (function (funclp0) -> string "(" ^^ pp_raw_funclp funclp0 ^^ string ")") funclp0) ^^ string "]" ^^ string ")"
-| DEFp_typedef(ott_menhir_loc,id,kp0_bp0_cp0,tp) -> string "DEFp_typedef" ^^ string "(" ^^  string "\"" ^^ string id ^^ string "\"" ^^ string "," ^^ string "[" ^^ separate  (string ";") (List.map (function (kp0,(bp0,cp0)) -> string "(" ^^ pp_raw_xp kp0 ^^ string "," ^^ pp_raw_bp bp0 ^^ string "," ^^ pp_raw_cp cp0 ^^ string ")") kp0_bp0_cp0) ^^ string "]" ^^ string "," ^^ pp_raw_tp tp ^^ string ")"
+| DEFp_typedef(ott_menhir_loc,tdef)  -> string "DEFp_typedef " ^^ pp_raw_td tdef
+
 | DEFp_spec(ott_menhir_loc,id,ap) -> string "DEFp_spec" ^^ string "(" ^^  string "\"" ^^ string id ^^ string "\"" ^^ string "," ^^ pp_raw_ap ap ^^ string ")"
 | DEFp_val(ott_menhir_loc,letbindp) -> string "DEFp_val" ^^ string "(" ^^ pp_raw_letbindp letbindp ^^ string ")"
 | DEFp_reg(ott_menhir_loc,tp,xp) -> string "DEFp_reg" ^^ string "(" ^^ pp_raw_tp tp ^^ string "," ^^ pp_raw_xp xp ^^ string ")"
@@ -248,7 +258,8 @@ and pp_bp x = match x with
 | B_vec(order,bp) -> string "(" ^^ string "vec" ^^ string " " ^^ pp_order order ^^ string " " ^^ pp_bp bp ^^ string ")"
 | B_list(bp) -> string "(" ^^ string "list" ^^ string " " ^^ pp_bp bp ^^ string ")"
 | B_tuple(bp0) -> string "(" ^^ string "(" ^^ string " " ^^ separate (string ",") (List.map (function (bp0) -> pp_bp bp0) bp0) ^^ string " " ^^ string ")" ^^ string ")"
-| B_union(id,ctor0_tp0) -> string "(" ^^ string id ^^ string " " ^^ string "<" ^^ string " " ^^ separate (string ",") (List.map (function (ctor0,tp0) -> string ctor0 ^^ string " " ^^ string ":" ^^ string " " ^^ pp_tp tp0) ctor0_tp0) ^^ string " " ^^ string ">" ^^ string ")"
+| B_union(id,ctor0_tp0) -> string "(" ^^ string id ^^ string " " ^^ string "<" ^^ string " " ^^ separate (string ",")
+                        (List.map (function (tp0) ->  pp_bp tp0) ctor0_tp0) ^^ string " " ^^ string ">" ^^ string ")"
 | B_record(field0_bp0) -> string "(" ^^ string "{" ^^ string " " ^^ separate (string ",") (List.map (function (field0,bp0) -> string field0 ^^ string " " ^^ string ":" ^^ string " " ^^ pp_bp bp0) field0_bp0) ^^ string " " ^^ string "}" ^^ string ")"
 | B_undef -> string "undef"
 | B_reg(tp) -> string "(" ^^ string "reg" ^^ string " " ^^ pp_tp tp ^^ string ")"
@@ -315,7 +326,7 @@ and pp_vp x = match x with
 | V_record(field0_vp0) -> string "(" ^^ string "{" ^^ string " " ^^ separate (string ",") (List.map (function (field0,vp0) -> string field0 ^^ string " " ^^ string "=" ^^ string " " ^^ pp_vp vp0) field0_vp0) ^^ string " " ^^ string "}" ^^ string ")"
 | V_tuple(vp0) -> string "(" ^^ string "(" ^^ string " " ^^ separate (string ",") (List.map (function (vp0) -> pp_vp vp0) vp0) ^^ string " " ^^ string ")" ^^ string ")"
 | V_proj(p,vp) -> string "(" ^^ string "proj" ^^ string " " ^^ string p ^^ string " " ^^ pp_vp vp ^^ string ")"
-
+ 
 
 and pp_klist x = separate (string ",") (List.map (function (x,(b,c)) -> (pp_xp x ^^ pp_bp b ^^ pp_cp c )) x)
 and pp_patp x = match x with
@@ -396,9 +407,14 @@ and pp_scattered_defp x = match x with
 | SDp_funclp(ott_menhir_loc,funclp) -> string "(" ^^ string "function" ^^ string " " ^^ string "clause" ^^ string " " ^^ pp_funclp funclp ^^ string ")"
 | SDp_end(ott_menhir_loc,id) -> string "(" ^^ string "end" ^^ string " " ^^ string id ^^ string ")"
 
+and pp_td td = match td with
+    Variant (tid,xbc,f_bp_list) -> string "Variant " ^^ string tid
+  | Record (tid,xbc,f_bp_list) -> string "Record" ^^ string tid
+
+                              
 and pp_defp x = match x with
 | DEFp_fundef(ott_menhir_loc,ap,funclp0) -> string "(" ^^ string "function" ^^ string " " ^^ pp_ap ap ^^ string " " ^^ separate (string "and") (List.map (function (funclp0) -> pp_funclp funclp0) funclp0) ^^ string ")"
-| DEFp_typedef(ott_menhir_loc,id,kp0_bp0_cp0,tp) -> string "(" ^^ string "typedef" ^^ string " " ^^ string id ^^ string " " ^^ string "=" ^^ string " " ^^ string "ALL" ^^ string " " ^^ separate (string " ") (List.map (function (kp0,(bp0,cp0)) -> pp_xp kp0 ^^ string " " ^^ string ":" ^^ string " " ^^ pp_bp bp0 ^^ string " " ^^ string "[" ^^ string " " ^^ pp_cp cp0 ^^ string " " ^^ string "]") kp0_bp0_cp0) ^^ string " " ^^ pp_tp tp ^^ string ")"
+| DEFp_typedef(ott_menhir_loc,td) -> string "(" ^^ pp_raw_td td
 | DEFp_spec(ott_menhir_loc,id,ap) -> string "(" ^^ string "val" ^^ string " " ^^ string id ^^ string " " ^^ string ":" ^^ string " " ^^ pp_ap ap ^^ string ")"
 | DEFp_val(ott_menhir_loc,letbindp) -> pp_letbindp letbindp
 | DEFp_reg(ott_menhir_loc,tp,xp) -> string "(" ^^ string "register" ^^ string " " ^^ pp_tp tp ^^ string " " ^^ pp_xp xp ^^ string ")"
