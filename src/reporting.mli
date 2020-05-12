@@ -116,6 +116,9 @@ val print_error : error -> unit
    location, the second after. *)
 val warn : string -> Parse_ast.l -> string -> unit
 
+(** Print a simple one-line warning without a location. *)
+val simple_warn: string -> unit
+  
 (** Will suppress all warnings for a given file. Used by
    $suppress_warnings directive in process_file.ml *)
 val suppress_warnings_for_file : string -> unit

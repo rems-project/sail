@@ -51,9 +51,11 @@
 open Process_file
 
 module Big_int = Nat_big_num
+module Json = Yojson.Basic
 
 let lib = ref ([] : string list)
 let opt_interactive_script : string option ref = ref None
+let opt_config : Json.t option ref = ref None
 let opt_print_version = ref false
 let opt_target = ref None
 let opt_tofrominterp_output_dir : string option ref = ref None
@@ -72,6 +74,13 @@ let opt_have_feature = ref None
 
 let set_target name = Arg.Unit (fun _ -> opt_target := Some name)
 
+let load_json_config file =
+  try Json.from_file file with
+  | Yojson.Json_error desc | Sys_error desc ->
+     prerr_endline "Error when loading configuration file:";
+     prerr_endline desc;
+     exit 1
+ 
 let options = Arg.align ([
   ( "-o",
     Arg.String (fun f -> opt_file_out := Some f),
@@ -101,6 +110,9 @@ let options = Arg.align ([
   ( "-no_warn",
     Arg.Clear Reporting.opt_warnings,
     " do not print warnings");
+  ( "-config",
+    Arg.String (fun file -> opt_config := Some (load_json_config file)),
+    " JSON configuration file");
   ( "-tofrominterp",
     set_target "tofrominterp",
     " output OCaml functions to translate between shallow embedding and interpreter");
@@ -489,9 +501,14 @@ let target name out_name ast type_envs =
      let output_name = match !opt_file_out with Some f -> f | None -> "out" in
      Reporting.opt_warnings := true;
      let codegen ctx cdefs =
+       let open Json.Util in
+       let codegen_opts = match !opt_config with
+         | Some config -> C_codegen.options_from_json (member "codegen" config) cdefs
+         | None -> C_codegen.default_options cdefs
+       in
        let module Codegen =
          C_codegen.Make(
-             struct let opts = C_codegen.default_options cdefs end
+             struct let opts = codegen_opts end
            )
        in
        Codegen.emulator ctx output_name cdefs

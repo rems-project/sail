@@ -179,7 +179,7 @@ let ignored_files = ref StringSet.empty
 
 let suppress_warnings_for_file f =
   ignored_files := StringSet.add f !ignored_files
-
+ 
 let warn str1 l str2 =
   if !opt_warnings then
     match simp_loc l with
@@ -191,3 +191,5 @@ let warn str1 l str2 =
     | Some _ -> ()
   else
     ()
+
+let simple_warn str = warn str Parse_ast.Unknown ""

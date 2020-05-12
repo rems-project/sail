@@ -59,12 +59,10 @@ open Printf
 open Value2
    
 module StringMap = Map.Make(String)
+module StringSet = Set.Make(String)
 module Big_int = Nat_big_num
-
-let opt_no_main = ref false
-let opt_no_lib = ref false
-let opt_no_rts = ref false
-               
+module Json = Yojson.Basic
+ 
 let (gensym, _) = symbol_generator "c2"
 let ngensym () = name (gensym ())
  
@@ -101,15 +99,35 @@ let rec is_stack_ctyp ctyp = match ctyp with
 let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1), true), CT_fbits (i, true))
        
 type codegen_options = {
+    (** Rewrites a Sail identifier into a user-specified name in the generated C *)
     exports : string Bindings.t;
+    (** Rewrites a generated symbol after name-mangling has ocurred *)
     exports_mangled : string StringMap.t;
+    (** Extra headers to include in the generated .h file *)
+    extra_headers : string list;
+    (** Extra lines that are included in the sail_state struct. Used
+       to add user-specified state to the structs, which can then be
+       passed to primops in state_primops *)
+    extra_state : string list;
+    (** Primitives in this set will be passed a pointer to the
+       sail_state struct *)
+    state_primops : StringSet.t;
   }
 
+let initial_options = {
+    exports = Bindings.empty;
+    exports_mangled = StringMap.empty;
+    extra_headers = [];
+    extra_state = [];
+    state_primops = StringSet.empty;
+  }
+                     
 let add_export opts id = { opts with exports = Bindings.add id (string_of_id id) opts.exports }
 
 let add_custom_export opts id into = { opts with exports = Bindings.add id into opts.exports }
                        
-let add_mangled_rename opts (from, into) = { opts with exports_mangled = StringMap.add from into opts.exports_mangled }
+let add_mangled_rename opts (from, into) =
+  { opts with exports_mangled = StringMap.add from into opts.exports_mangled }
                        
 let add_export_uid opts (id, ctyps) =
   match ctyps with
@@ -128,18 +146,74 @@ let cdef_initial_options opts = function
   | CDEF_reg_dec (id, _, _) -> add_export opts id
   | CDEF_let (_, bindings, _) -> List.fold_left (fun opts (id, _) -> add_export opts id) opts bindings
   | _ -> opts
-
-let initial_options = {
-    exports = Bindings.empty;
-    exports_mangled = StringMap.empty;
-  }
        
 let default_options cdefs =
   let opts = List.fold_left cdef_initial_options initial_options cdefs in
   let opts = add_export opts (mk_id "initialize_registers") in
   let opts = add_custom_export opts (mk_id "main") "sail_main" in
   List.fold_left add_mangled_rename opts (List.init 9 (fun n -> "ztup" ^ string_of_int n, "tuple_" ^ string_of_int n))
- 
+
+let options_from_json json cdefs =
+  let open Json.Util in
+  let bad_key k json =
+    raise (Reporting.err_general Parse_ast.Unknown
+             (sprintf "Invalid %s key in codegen json configuration: %s" k (Json.to_string json)))
+  in
+  let opts = match member "default_exports" json with
+    | `Bool true -> default_options cdefs
+    | `Bool false -> initial_options
+    | `Null ->
+       Reporting.simple_warn "No default_exports key in codegen json configuration";
+       initial_options
+    | json -> bad_key "default_exports" json
+  in
+  let process_exports opts = function
+    | `List [`String from; `String into] -> add_custom_export opts (mk_id from) into
+    | `String str -> add_export opts (mk_id str)
+    | json -> bad_key "exports" json
+  in
+  let opts = match member "exports" json with
+    | `List exports -> List.fold_left process_exports opts exports
+    | `Null ->
+       Reporting.simple_warn "No exports key in codegen json configuration";
+       opts
+    | json -> bad_key "exports" json
+  in
+  let process_exports_mangled opts = function
+    | `List [`String from; `String into] -> add_mangled_rename opts (from, into)
+    | json -> bad_key "exports_mangled" json
+  in
+  let opts = match member "exports_mangled" json with
+    | `List exports -> List.fold_left process_exports_mangled opts exports
+    | `Null ->
+       Reporting.simple_warn "No exports_mangled key in codegen json configuration";
+       opts
+    | json -> bad_key "exports_mangled" json
+  in
+  let process_extra_header opts = function
+    | `String header -> { opts with extra_headers = header :: opts.extra_headers }
+    | json -> bad_key "extra_headers" json
+  in
+  let opts = match member "extra_headers" json with
+    | `List headers -> List.fold_left process_extra_header opts headers
+    | `Null ->
+       Reporting.simple_warn "No extra_headers key in codegen json configuration";
+       opts
+    | json -> bad_key "extra_headers" json
+  in
+  let process_extra_state opts = function
+    | `String member -> { opts with extra_state = member :: opts.extra_state }
+    | json -> bad_key "extra_state" json
+  in
+  let opts = match member "extra_state" json with
+    | `List members -> List.fold_left process_extra_state opts members
+    | `Null ->
+       Reporting.simple_warn "No extra_state key in codegen json configuration";
+       opts
+    | json -> bad_key "extra_state" json
+  in
+  opts
+  
 module type Config = sig
   val opts : codegen_options
 end
@@ -195,7 +269,7 @@ let rec sgen_ctyp = function
   | CT_constant _ -> "int64_t"
   | CT_lint -> "sail_int"
   | CT_lbits _ -> "lbits"
-  | CT_tup _ as tup -> "struct " ^ Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
+  | CT_tup _ as tup -> "struct " ^ mangle ("tuple_" ^ string_of_ctyp tup)
   | CT_struct (id, _) -> "struct " ^ sgen_id id
   | CT_enum (id, _) -> "enum " ^ sgen_id id
   | CT_variant (id, _) -> "struct " ^ sgen_id id
@@ -217,7 +291,7 @@ let rec sgen_ctyp_name = function
   | CT_constant _ -> "mach_int"
   | CT_lint -> "sail_int"
   | CT_lbits _ -> "lbits"
-  | CT_tup _ as tup -> Util.zencode_string ("tuple_" ^ string_of_ctyp tup)
+  | CT_tup _ as tup -> mangle ("tuple_" ^ string_of_ctyp tup)
   | CT_struct (id, _) -> sgen_id id
   | CT_enum (id, _) -> sgen_id id
   | CT_variant (id, _) -> sgen_id id
@@ -565,14 +639,19 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
   | I_funcall (x, special_extern, f, args) ->
      let c_args = Util.string_of_list ", " (sgen_cval ctx) args in
      let ctyp = clexp_ctyp x in
-     let is_extern = Env.is_extern (fst f) ctx.tc_env "c" || special_extern in
-     let fname =
+     let fname, is_extern =
        if special_extern then
-         string_of_id (fst f)
+         (string_of_id (fst f), true)
        else if Env.is_extern (fst f) ctx.tc_env "c" then
-         Env.get_extern (fst f) ctx.tc_env "c"
+         (Env.get_extern (fst f) ctx.tc_env "c", true)
        else
-         sgen_function_uid f
+         (sgen_function_uid f, false)
+     in
+     let sail_state_arg =
+       if is_extern && StringSet.mem fname C.opts.state_primops then
+         "sail_state *state, "
+       else
+         ""
      in
      let fname =
        match fname, ctyp with
@@ -631,9 +710,9 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
          ksprintf string "  COPY(%s)(&%s, *(%s));" (sgen_ctyp_name ctyp) (sgen_clexp_pure ctx x) c_args
      else
        if is_stack_ctyp ctyp then
-         ksprintf string "  %s = %s(%s%s);" (sgen_clexp_pure ctx x) fname (extra_arguments is_extern) c_args
+         ksprintf string "  %s = %s(%s%s%s);" (sgen_clexp_pure ctx x) fname sail_state_arg (extra_arguments is_extern) c_args
        else
-         ksprintf string "  %s(%s%s, %s);" fname (extra_arguments is_extern) (sgen_clexp ctx x) c_args
+         ksprintf string "  %s(%s%s%s, %s);" fname sail_state_arg (extra_arguments is_extern) (sgen_clexp ctx x) c_args
 
   | I_clear (ctyp, id) when is_stack_ctyp ctyp ->
      empty
@@ -1385,6 +1464,7 @@ let codegen_state_struct ctx cdefs =
         ^^ string "    bool have_exception;" ^^ hardline
         ^^ string "    sail_string *throw_location;" ^^ hardline
      ))
+  ^^ separate_map hardline (fun str -> string ("  " ^ str)) C.opts.extra_state ^^ hardline
   ^^ string "};"
 
 let is_cdef_startup = function
@@ -1465,9 +1545,9 @@ let codegen ctx output_name cdefs =
   in
 
   let header =
-    stdlib_headers
-    ^^ hardline
-    ^^ sail_headers ^^ twice hardline
+    stdlib_headers ^^ hardline
+    ^^ sail_headers ^^ hardline
+    ^^ concat_map (fun str -> string str ^^ hardline) C.opts.extra_headers ^^ hardline
     ^^ string "struct sail_state;" ^^ hardline
     ^^ string "typedef struct sail_state sail_state;"
     ^^ twice hardline
@@ -1539,15 +1619,13 @@ let codegen ctx output_name cdefs =
 let emulator ctx output_name cdefs =
   codegen ctx output_name cdefs;
 
-  let preamble = separate hardline
-                   ((if !opt_no_lib then [] else
-                       [ string "#include \"sail.h\"";
-                         string "#include \"sail_failure.h\"" ])
-                    @ (if !opt_no_rts then [] else
-                         [ string "#include \"rts.h\"";
-                           string "#include \"elf.h\"" ])
-                    @ [ ksprintf string "#include \"%s.h\"" output_name ]
-                    @ (List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) [] (*c_includes*)))
+  let headers = separate hardline
+    ([ string "#include \"sail.h\"";
+       string "#include \"sail_failure.h\"";
+       string "#include \"rts.h\"";
+       string "#include \"elf.h\"";
+       ksprintf string "#include \"%s.h\"" output_name ]
+     @ (List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) [] (*c_includes*)))
   in
  
   let startup cdefs =
@@ -1560,7 +1638,7 @@ let emulator ctx output_name cdefs =
   let regs = c_ast_registers cdefs in
  
   let model_init = separate hardline (List.map string
-     ( [ "void model_init(sail_state *state)";
+     ( [ "void model_initialize(sail_state *state)";
          "{";
          "  sail_initialize_state(state);";
          "  setup_rts();" ]
@@ -1570,7 +1648,7 @@ let emulator ctx output_name cdefs =
   in
 
   let model_fini = separate hardline (List.map string
-     ( [ "void model_fini(sail_state *state)";
+     ( [ "void model_finalize(sail_state *state)";
          "{" ]
      @ finish cdefs
      @ [ "  cleanup_rts();";
@@ -1582,34 +1660,30 @@ let emulator ctx output_name cdefs =
        ([ "int model_main(int argc, char *argv[])";
           "{";
           "  sail_state state;";
-          "  model_init(&state);";
+          "  model_initialize(&state);";
           "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
           sprintf "  %s(&state, UNIT);" (sgen_function_id (mk_id "main")) ]
         @ (if not (Bindings.mem (mk_id "exception") ctx.variants) then [] else
              [ "  if (state.have_exception) {fprintf(stderr, \"Exiting due to uncaught exception: %s\\n\", *state.throw_location);}" ])
-        @ [ "  model_fini(&state);" ]
+        @ [ "  model_finalize(&state);" ]
         @ (if not (Bindings.mem (mk_id "exception") ctx.variants) then [] else
              [ "  if (state.have_exception) {return(EXIT_FAILURE);}" ])
         @ [ "  return EXIT_SUCCESS;";
             "}" ]))
   in
 
-  let model_main = separate hardline (if (!opt_no_main) then [] else List.map string
+  let model_main = separate hardline (List.map string
        [ "int main(int argc, char *argv[])";
          "{";
          "  return model_main(argc, argv);";
-         "}" ] )
+         "}" ])
   in
 
-  let hlhl = hardline ^^ hardline in
   let emu =
-    preamble ^^ hlhl
-    ^^ (if not !opt_no_rts then
-          model_init ^^ hlhl
-          ^^ model_fini ^^ hlhl
-          ^^ model_default_main ^^ hlhl
-        else
-          empty)
+    headers ^^ twice hardline
+    ^^ model_init ^^ twice hardline
+    ^^ model_fini ^^ twice hardline
+    ^^ model_default_main ^^ twice hardline
     ^^ model_main ^^ hardline
   in
   codegen_output (output_name ^ "_emu.c") emu

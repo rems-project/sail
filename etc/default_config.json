@@ -1,0 +1,30 @@
+{
+    "codegen": {
+        // Apply some default name mangling rules if true. If false,
+        // mangle everything.
+        "default_exports": true,
+        // An array containing either ["identifier", "string"] or
+        // "identifier". For the first case the identifier will be
+        // rewritten into string in the generated C source. For the
+        // second the identifier will be preserved without name
+        // mangling.
+        "exports": [],
+        // Generic functions must always have name mangling applied
+        // due to specialization. They can be renamed using ["symbol",
+        // "string"] pairs in this array, where "symbol" is any
+        // mangled symbol that appears in the generated C.
+        "exports_mangled": [
+            ["ztuple_z8z5i64zCz0z5iz9", "tuple_i64_int"]
+        ],
+        // Include the following extra headers in the generated
+        // C. Should be specified as either "<header.h>" or "header.h"
+        "extra_headers": [],
+        // An array of extra string lines that are added to the
+        // sail_state struct.
+        "extra_state": [],
+        // The sail_state struct will be passed to the following array
+        // of primops, which are specified via the "foo" string from
+        // val id = "foo" : ... in Sail.
+        "state_primops": []
+    }
+}
