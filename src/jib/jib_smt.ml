@@ -1563,6 +1563,7 @@ let unroll_static_foreach ctx = function
   let unroll_loops () = Some !opt_unroll_limit
   let struct_value = true
   let use_real = true
+  let branch_coverage = false
 end
 
 

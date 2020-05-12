@@ -117,6 +117,8 @@ module type Config = sig
   val struct_value : bool
   (** Allow real literals *)
   val use_real : bool
+  (** Insert branch coverage operations *)
+  val branch_coverage : bool
 end
 
 module Make(C: Config) : sig

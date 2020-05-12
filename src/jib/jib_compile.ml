@@ -179,6 +179,7 @@ module type Config = sig
   val ignore_64 : bool
   val struct_value : bool
   val use_real : bool
+  val branch_coverage : bool
 end
 
 module Make(C: Config) = struct
@@ -195,6 +196,45 @@ let name_or_global ctx id =
     global id
   else
     name id
+
+let coverage_branch_count = ref 0
+
+let coverage_loc_args l =
+  match Reporting.simp_loc l with
+  | None ->
+     Reporting.simple_warn "Branch found with no location info when inserting coverage instrumentation";
+     None
+  | Some (p1, p2) ->
+     Some (Printf.sprintf "\"%s\", %d, %d, %d, %d"
+             p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol))
+ 
+let coverage_branch_reached l =
+  let branch_id = !coverage_branch_count in
+  incr coverage_branch_count;
+  branch_id,
+  if C.branch_coverage then
+    begin match coverage_loc_args l with
+    | None ->
+       Reporting.simple_warn "Branch found with no location info when inserting coverage instrumentation";
+       []
+    | Some args ->
+       [iraw (Printf.sprintf "sail_branch_reached(%d, %s);" branch_id args)]
+    end
+  else
+    []
+
+let append_into_block instrs instr =
+  match instrs with
+  | [] -> instr
+  | _ -> iblock (instrs @ [instr])
+  
+let coverage_branch_taken branch_id (AE_aux (_, _, l)) =
+  if not C.branch_coverage then
+    []
+  else
+    match coverage_loc_args l with
+    | None -> []
+    | Some args -> [iraw (Printf.sprintf "sail_branch_taken(%d, %s);" branch_id args)]
  
 let rec compile_aval l ctx = function
   | AV_cval (cval, typ) ->
@@ -628,6 +668,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   | AE_case (aval, cases, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
      let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
+     let branch_id, on_reached = coverage_branch_reached l in
      let case_return_id = ngensym () in
      let finish_match_label = label "finish_match_" in
      let compile_case (apat, guard, body) =
@@ -647,7 +688,9 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
               guard_setup @ [idecl CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
               @ [iif l (V_call (Bnot, [V_id (gs, CT_bool)])) (destructure_cleanup @ [igoto case_label]) [] CT_unit]
             else [])
-         @ body_setup @ [body_call (CL_id (case_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
+         @ body_setup
+         @ coverage_branch_taken branch_id body
+         @ [body_call (CL_id (case_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
          @ [igoto finish_match_label]
        in
        if is_dead_aexp body then
@@ -655,7 +698,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        else
          [iblock case_instrs; ilabel case_label]
      in
-     aval_setup @ [idecl ctyp case_return_id]
+     aval_setup @ on_reached @ [idecl ctyp case_return_id]
      @ List.concat (List.map compile_case cases)
      @ [imatch_failure ()]
      @ [ilabel finish_match_label],
@@ -713,16 +756,19 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        compile_aexp ctx then_aexp
      else
        let if_ctyp = ctyp_of_typ ctx if_typ in
+       let branch_id, on_reached = coverage_branch_reached l in
        let compile_branch aexp =
          let setup, call, cleanup = compile_aexp ctx aexp in
-         fun clexp -> setup @ [call clexp] @ cleanup
+         fun clexp -> coverage_branch_taken branch_id aexp @ setup @ [call clexp] @ cleanup
        in
        let setup, cval, cleanup = compile_aval l ctx aval in
        setup,
-       (fun clexp -> iif l cval
-                         (compile_branch then_aexp clexp)
-                         (compile_branch else_aexp clexp)
-                         if_ctyp),
+       (fun clexp ->
+         append_into_block on_reached
+           (iif l cval
+              (compile_branch then_aexp clexp)
+              (compile_branch else_aexp clexp)
+              if_ctyp)),
        cleanup
 
   (* FIXME: AE_record_update could be AV_record_update - would reduce some copying. *)

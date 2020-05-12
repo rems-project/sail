@@ -165,11 +165,11 @@ let literal_to_fragment (L_aux (l_aux, _) as lit) =
   | _ -> None
  
 module C_config : Config = struct
-
-(** Convert a sail type into a C-type. This function can be quite
-   slow, because it uses ctx.local_env and SMT to analyse the Sail
-   types and attempts to fit them into the smallest possible C
-   types, provided ctx.optimize_smt is true (default) **)
+  
+  (** Convert a sail type into a C-type. This function can be quite
+     slow, because it uses ctx.local_env and SMT to analyse the Sail
+     types and attempts to fit them into the smallest possible C
+     types, provided ctx.optimize_smt is true (default) **)
   let rec convert_typ ctx typ =
     let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
     match typ_aux with
@@ -562,6 +562,7 @@ module C_config : Config = struct
   let ignore_64 = false
   let struct_value = false
   let use_real = false
+  let branch_coverage = false
 end
 
 (* When compiling to a C library, we want to do things slightly
@@ -656,6 +657,7 @@ module Clib_config : Config = struct
   let ignore_64 = false
   let struct_value = false
   let use_real = false
+  let branch_coverage = false
 end
                
 (** Functions that have heap-allocated return types are implemented by

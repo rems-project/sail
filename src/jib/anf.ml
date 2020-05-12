@@ -106,6 +106,8 @@ and 'a aval =
   | AV_record of ('a aval) Bindings.t * 'a
   | AV_cval of cval * 'a
 
+let aexp_loc (AE_aux (_, _, l)) = l
+             
 (* Renaming variables in ANF expressions *)
 
 let rec apat_bindings (AP_aux (apat_aux, _, _)) =

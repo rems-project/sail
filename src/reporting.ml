@@ -127,6 +127,11 @@ let short_loc_to_string l =
      Printf.sprintf "%s %d:%d - %d:%d"
        p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol)
 
+let loc_to_coverage l =
+  match simp_loc l with
+  | None -> None
+  | Some (p1, p2) -> Some (p1.pos_fname, p1.pos_cnum - p1.pos_bol, p2.pos_lnum, p2.pos_cnum - p2.pos_bol)
+    
 let print_err l m1 m2 =
   print_err_internal (Loc l) m1 m2
 
