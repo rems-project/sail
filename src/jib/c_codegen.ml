@@ -322,7 +322,11 @@ let rec sgen_value = function
   | VL_bits ([], _) -> "UINT64_C(0)"
   | VL_bits (bs, true) -> "UINT64_C(" ^ Sail2_values.show_bitlist bs ^ ")"
   | VL_bits (bs, false) -> "UINT64_C(" ^ Sail2_values.show_bitlist (List.rev bs) ^ ")"
-  | VL_int i -> Big_int.to_string i ^ "l"
+  | VL_int i ->
+     if Big_int.equal i (min_int 64) then
+       "INT64_MIN"
+     else
+       "INT64_C(" ^ Big_int.to_string i ^ ")"
   | VL_bool true -> "true"
   | VL_bool false -> "false"
   | VL_unit -> "UNIT"
