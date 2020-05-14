@@ -57,15 +57,15 @@ open Type_check
 open PPrint
 open Printf
 open Value2
-   
+
 module StringMap = Map.Make(String)
 module StringSet = Set.Make(String)
 module Big_int = Nat_big_num
 module Json = Yojson.Basic
- 
+
 let (gensym, _) = symbol_generator "c2"
 let ngensym () = name (gensym ())
- 
+
 let zencode_id id = Util.zencode_string (string_of_id id)
 
 let zencode_uid (id, ctyps) =
@@ -74,7 +74,7 @@ let zencode_uid (id, ctyps) =
   | _ -> Util.zencode_string (string_of_id id ^ "#" ^ Util.string_of_list "_" string_of_ctyp ctyps)
 
 let ctor_bindings = List.fold_left (fun map (id, ctyp) -> UBindings.add id ctyp map) UBindings.empty
-       
+
 let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
 let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
 
@@ -97,7 +97,7 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
 
 let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1), true), CT_fbits (i, true))
-       
+
 type codegen_options = {
     (** Rewrites a Sail identifier into a user-specified name in the generated C *)
     exports : string Bindings.t;
@@ -121,32 +121,31 @@ let initial_options = {
     extra_state = [];
     state_primops = StringSet.empty;
   }
-                     
+
 let add_export opts id = { opts with exports = Bindings.add id (string_of_id id) opts.exports }
 
 let add_custom_export opts id into = { opts with exports = Bindings.add id into opts.exports }
-                       
+
 let add_mangled_rename opts (from, into) =
   { opts with exports_mangled = StringMap.add from into opts.exports_mangled }
-                       
+
 let add_export_uid opts (id, ctyps) =
   match ctyps with
   | [] -> { opts with exports = Bindings.add id (string_of_id id) opts.exports }
   | _ -> opts
-                          
+
 let ctype_def_initial_options opts = function
   | CTD_enum (id, ids) ->
      List.fold_left add_export (add_export opts id) ids
-  | CTD_struct (id, ctors) ->
-     List.fold_left add_export_uid (add_export opts id) (List.map fst ctors)
-  | _ -> opts
-                     
+  | CTD_struct (id, members) | CTD_variant (id, members) ->
+     List.fold_left add_export_uid (add_export opts id) (List.map fst members)
+
 let cdef_initial_options opts = function
   | CDEF_type ctype_def -> ctype_def_initial_options opts ctype_def
   | CDEF_reg_dec (id, _, _) -> add_export opts id
   | CDEF_let (_, bindings, _) -> List.fold_left (fun opts (id, _) -> add_export opts id) opts bindings
   | _ -> opts
-       
+
 let default_options cdefs =
   let opts = List.fold_left cdef_initial_options initial_options cdefs in
   let opts = add_export opts (mk_id "initialize_registers") in
@@ -213,7 +212,7 @@ let options_from_json json cdefs =
     | json -> bad_key "extra_state" json
   in
   opts
-  
+
 module type Config = sig
   val opts : codegen_options
 end
@@ -225,7 +224,7 @@ let mangle str =
   match StringMap.find_opt mangled C.opts.exports_mangled with
   | Some export -> export
   | None -> mangled
-  
+
 let sgen_id id =
   match Bindings.find_opt id C.opts.exports with
   | Some export -> export
@@ -245,7 +244,7 @@ let sgen_name =
      "(*(state->current_exception))"
   | Throw_location _ ->
      "(state->throw_location)"
-             
+
 let sgen_uid (id, ctyps) =
   match ctyps with
   | [] -> sgen_id id
@@ -273,8 +272,8 @@ let rec sgen_ctyp = function
   | CT_struct (id, _) -> "struct " ^ sgen_id id
   | CT_enum (id, _) -> "enum " ^ sgen_id id
   | CT_variant (id, _) -> "struct " ^ sgen_id id
-  | CT_list _ as l -> Util.zencode_string (string_of_ctyp l)
-  | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
+  | CT_list _ as l -> mangle (string_of_ctyp l)
+  | CT_vector _ as v -> mangle (string_of_ctyp v)
   | CT_fvector (_, ord, typ) -> sgen_ctyp (CT_vector (ord, typ))
   | CT_string -> "sail_string"
   | CT_real -> "real"
@@ -295,8 +294,8 @@ let rec sgen_ctyp_name = function
   | CT_struct (id, _) -> sgen_id id
   | CT_enum (id, _) -> sgen_id id
   | CT_variant (id, _) -> sgen_id id
-  | CT_list _ as l -> Util.zencode_string (string_of_ctyp l)
-  | CT_vector _ as v -> Util.zencode_string (string_of_ctyp v)
+  | CT_list _ as l -> mangle (string_of_ctyp l)
+  | CT_vector _ as v -> mangle (string_of_ctyp v)
   | CT_fvector (_, ord, typ) -> sgen_ctyp_name (CT_vector (ord, typ))
   | CT_string -> "sail_string"
   | CT_real -> "real"
@@ -349,10 +348,10 @@ let rec sgen_cval ctx = function
      sprintf "%s.%s" (sgen_cval ctx f) (mangle ("tup" ^ string_of_int n))
   | V_ctor_kind (f, ctor, unifiers, _) ->
      sgen_cval ctx f ^ ".kind"
-     ^ " != Kind_" ^ zencode_uid (ctor, unifiers)
+     ^ " != Kind_" ^ sgen_uid (ctor, unifiers)
   | V_struct (fields, _) ->
      sprintf "{%s}"
-       (Util.string_of_list ", " (fun (field, cval) -> zencode_uid field ^ " = " ^ sgen_cval ctx cval) fields)
+       (Util.string_of_list ", " (fun (field, cval) -> sgen_uid field ^ " = " ^ sgen_cval ctx cval) fields)
   | V_ctor_unwrap (ctor, f, unifiers, _) ->
      sprintf "%s.%s"
        (sgen_cval ctx f)
@@ -600,7 +599,7 @@ let extra_arguments is_extern =
     ""
   else
     "state, "
- 
+
 let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
   match instr with
   | I_decl (ctyp, id) when is_stack_ctyp ctyp ->
@@ -776,7 +775,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      separate_map hardline (fun str -> string ("  " ^ str)) (List.rev prev)
      ^^ hardline
      ^^ ksprintf string "  return %s;" ret
- 
+
   | I_comment str ->
      string ("  /* " ^ str ^ " */")
 
@@ -798,7 +797,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
 (**************************************************************************)
 (* Code generation for type definitions (enums, structs, and variants)    *)
 (**************************************************************************)
-    
+
 let codegen_type_def_header = function
   | CTD_enum (id, ids) ->
      ksprintf string "// enum %s" (string_of_id id) ^^ hardline
@@ -1016,11 +1015,11 @@ let codegen_type_def_body ctx = function
 
 let codegen_type_def ctx ctype_def =
   codegen_type_def_header ctype_def, codegen_type_def_body ctx ctype_def
-     
+
 (**************************************************************************)
 (* Code generation for generated types (lists, tuples, etc)               *)
 (**************************************************************************)
-     
+
 (** GLOBAL: because C doesn't have real anonymous tuple types
    (anonymous structs don't quite work the way we need) every tuple
    type in the spec becomes some generated named struct in C. This is
@@ -1051,13 +1050,13 @@ let codegen_tup ctx ctyps =
       generated := IdSet.add id !generated;
       codegen_type_def ctx (CTD_struct (id, UBindings.bindings fields))
     end
- 
+
 let codegen_list_header id =
   ksprintf string "// generated list type %s" (string_of_id id) ^^ hardline
   ^^ ksprintf string "struct node_%s;" (sgen_id id) ^^ hardline
   ^^ ksprintf string "typedef struct node_%s *%s;" (sgen_id id) (sgen_id id)
   ^^ twice hardline
- 
+
 let codegen_node id ctyp =
   ksprintf string "struct node_%s {\n  %s hd;\n  struct node_%s *tl;\n};\n" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id)
   ^^ ksprintf string "typedef struct node_%s *%s;" (sgen_id id) (sgen_id id)
@@ -1123,7 +1122,7 @@ let codegen_list_undefined id ctyp =
   ksprintf string "static void UNDEFINED(%s)(%s *rop, %s u) {\n" (sgen_id id) (sgen_id id) (sgen_ctyp ctyp)
   ^^ ksprintf string "  *rop = NULL;\n"
   ^^ string "}"
-  
+
 let codegen_list ctx ctyp =
   let id = mk_id (string_of_ctyp (CT_list ctyp)) in
   if IdSet.mem id !generated then (
@@ -1152,7 +1151,7 @@ let codegen_vector_header ctx id (direction, ctyp) =
     ^^ string (Printf.sprintf "typedef struct %s %s;" (sgen_id id) (sgen_id id))
   in
   vector_typedef ^^ twice hardline
-  
+
 let codegen_vector_body ctx id (direction, ctyp) =
   let vector_init =
     string (Printf.sprintf "static void CREATE(%s)(%s *rop) {\n  rop->len = 0;\n  rop->data = NULL;\n}" (sgen_id id) (sgen_id id))
@@ -1248,7 +1247,7 @@ let codegen_vector_body ctx id (direction, ctyp) =
   ^^ vector_update ^^ twice hardline
   ^^ internal_vector_update ^^ twice hardline
   ^^ internal_vector_init ^^ twice hardline
-  
+
 let codegen_vector ctx (direction, ctyp) =
   let id = mk_id (string_of_ctyp (CT_vector (direction, ctyp))) in
   if IdSet.mem id !generated then (
@@ -1258,7 +1257,7 @@ let codegen_vector ctx (direction, ctyp) =
     codegen_vector_header ctx id (direction, ctyp),
     codegen_vector_body ctx id (direction, ctyp)
   )
-  
+
 (**************************************************************************)
 (* Code generation for definitions                                        *)
 (**************************************************************************)
@@ -1285,7 +1284,7 @@ let add_local_labels' instrs =
 let is_decl = function
   | I_aux (I_decl _, _) -> true
   | _ -> false
-  
+
 let codegen_decl = function
   | I_aux (I_decl (ctyp, id), _) ->
      string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_name id))
@@ -1296,12 +1295,12 @@ let codegen_alloc = function
   | I_aux (I_decl (ctyp, id), _) ->
      string (Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name id))
   | _ -> assert false
-       
+
 let add_local_labels instrs =
   match map_instrs add_local_labels' (iblock instrs) with
   | I_aux (I_block instrs, _) -> instrs
   | _ -> assert false
-  
+
 let codegen_def_header ctx = function
   | CDEF_spec (id, _, arg_ctyps, ret_ctyp) ->
      if Env.is_extern id ctx.tc_env "c" then
@@ -1317,14 +1316,14 @@ let codegen_def_header ctx = function
 
   | CDEF_type ctype_def ->
      codegen_type_def_header ctype_def
- 
+
   | _ -> empty
 
 let codegen_def_body ctx = function
   | CDEF_reg_dec _ -> empty
 
   | CDEF_spec _ -> empty
-     
+
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
      let arg_ctyps, ret_ctyp = match Bindings.find_opt id ctx.valspecs with
        | Some vs -> vs
@@ -1399,7 +1398,7 @@ let codegen_def_body ctx = function
      ^^ jump 0 2 (separate_map hardline (codegen_instr (mk_id "let") ctx) cleanup) ^^ hardline
      ^^ string "}"
      ^^ twice hardline
- 
+
 (** As we generate C we need to generate specialized version of tuple,
    list, and vector type. These must be generated in the correct
    order. The ctyp_dependencies function generates a list of
@@ -1426,9 +1425,18 @@ let codegen_ctg ctx = function
   | CTG_tup ctyps -> codegen_tup ctx ctyps
   | CTG_list ctyp -> codegen_list ctx ctyp
 
+let codegen_progress n total = function
+  | CDEF_reg_dec (id, _, _) ->
+     Util.progress "Codegen " ("R " ^ string_of_id id) n total
+  | CDEF_fundef (id, _, _, _) ->
+     Util.progress "Codegen " (string_of_id id) n total
+  | _ ->
+     Util.progress "Codegen " "" n total
+
 (** When we generate code for a definition, we need to first generate
    any auxillary type definitions that are required. *)
-let codegen_def ctx def =
+let codegen_def n total ctx def =
+  codegen_progress n total def;
   let ctyps = cdef_ctyps def |> CTSet.elements in
   (* We should have erased any polymorphism introduced by variants at this point! *)
   if List.exists is_polymorphic ctyps then
@@ -1448,7 +1456,7 @@ let codegen_state_struct_def ctx = function
 
   | CDEF_let (_, [], _) -> empty
   | CDEF_let (_, bindings, _) ->
-     separate_map hardline (fun (id, ctyp) -> string (Printf.sprintf "  %s %s;" (sgen_ctyp ctyp) (sgen_id id))) bindings
+     separate_map hardline (fun (id, ctyp) -> string (Printf.sprintf "    %s %s;" (sgen_ctyp ctyp) (sgen_id id))) bindings
      ^^ hardline
 
   | _ -> empty
@@ -1464,7 +1472,7 @@ let codegen_state_struct ctx cdefs =
         ^^ string "    bool have_exception;" ^^ hardline
         ^^ string "    sail_string *throw_location;" ^^ hardline
      ))
-  ^^ separate_map hardline (fun str -> string ("  " ^ str)) C.opts.extra_state ^^ hardline
+  ^^ concat_map (fun str -> string ("  " ^ str) ^^ hardline) C.opts.extra_state
   ^^ string "};"
 
 let is_cdef_startup = function
@@ -1514,15 +1522,26 @@ let rec get_recursive_functions (Defs defs) =
 
   | _ :: defs -> get_recursive_functions (Defs defs)
   | [] -> IdSet.empty
-  
+
 let codegen_output file_name docs =
   let chan = open_out file_name in
   output_string chan (Pretty_print_sail.to_string docs);
   flush chan;
   close_out chan
 
+let add_extra_header str =
+  if String.length str > 0 then (
+    if str.[0] == '<' && str.[String.length str - 1] == '>' then
+      string ("#include " ^ str) ^^ hardline
+    else
+      string ("#include \"" ^ str ^ "\"") ^^ hardline
+  ) else (
+    empty
+  )
+
 let codegen ctx output_name cdefs =
-  let docs_header, docs_body = List.map (codegen_def ctx) cdefs |> List.split in
+  let total = List.length cdefs in
+  let docs_header, docs_body = List.mapi (fun n def -> codegen_def (n + 1) total ctx def) cdefs |> List.split in
 
   let state = codegen_state_struct ctx cdefs in
 
@@ -1547,7 +1566,7 @@ let codegen ctx output_name cdefs =
   let header =
     stdlib_headers ^^ hardline
     ^^ sail_headers ^^ hardline
-    ^^ concat_map (fun str -> string str ^^ hardline) C.opts.extra_headers ^^ hardline
+    ^^ concat_map add_extra_header C.opts.extra_headers ^^ hardline
     ^^ string "struct sail_state;" ^^ hardline
     ^^ string "typedef struct sail_state sail_state;"
     ^^ twice hardline
@@ -1568,9 +1587,9 @@ let codegen ctx output_name cdefs =
   let letbind_finalizers =
     List.map (fun n -> Printf.sprintf "  sail_kill_letbind_%d(state);" n) ctx.letbinds
   in
-  
+
   let body =
-    ksprintf string "#include \"%s.h\"" output_name
+    ksprintf string "#include \"%s.h\"" (Filename.basename output_name)
     ^^ twice hardline
     ^^ concat docs_body
     ^^ string "void sail_initialize_letbindings(sail_state *state) {" ^^ hardline
@@ -1624,10 +1643,10 @@ let emulator ctx output_name cdefs =
        string "#include \"sail_failure.h\"";
        string "#include \"rts.h\"";
        string "#include \"elf.h\"";
-       ksprintf string "#include \"%s.h\"" output_name ]
+       ksprintf string "#include \"%s.h\"" (Filename.basename output_name) ]
      @ (List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) [] (*c_includes*)))
   in
- 
+
   let startup cdefs =
     List.map sgen_startup (List.filter is_cdef_startup cdefs)
   in
@@ -1636,7 +1655,7 @@ let emulator ctx output_name cdefs =
   in
 
   let regs = c_ast_registers cdefs in
- 
+
   let model_init = separate hardline (List.map string
      ( [ "void model_initialize(sail_state *state)";
          "{";
