@@ -55,7 +55,7 @@ module Json = Yojson.Basic
 
 let lib = ref ([] : string list)
 let opt_interactive_script : string option ref = ref None
-(* Note: May cause a depcrecated warning for json type, but this cannot be
+(* Note: May cause a deprecated warning for json type, but this cannot be
    fixed without breaking Ubuntu 18.04 CI *)
 let opt_config : Json.json option ref = ref None
 let opt_print_version = ref false
