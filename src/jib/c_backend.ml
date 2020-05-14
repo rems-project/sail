@@ -1592,7 +1592,7 @@ let codegen_type_def ctx = function
      in
      let codegen_undefined =
        let name = sgen_id id in
-       string (Printf.sprintf "enum %s UNDEFINED(%s)(unit u) { return %s; }" name name (sgen_id first_id))
+       string (Printf.sprintf "static enum %s UNDEFINED(%s)(unit u) { return %s; }" name name (sgen_id first_id))
      in
      string (Printf.sprintf "// enum %s" (string_of_id id)) ^^ hardline
      ^^ separate space [string "enum"; codegen_id id; lbrace; separate_map (comma ^^ space) codegen_id ids; rbrace ^^ semi]
