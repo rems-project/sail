@@ -711,8 +711,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let ctyp = ctyp_of_typ ctx typ in
      let aexp_setup, aexp_call, aexp_cleanup = compile_aexp ctx aexp in
      let try_return_id = ngensym () in
-     let handled_exception_label = label "handled_exception_" in
-     let fallthrough_label = label "fallthrough_exception_" in
+     let post_exception_handlers_label = label "post_exception_handlers_" in
      let compile_case (apat, guard, body) =
        let trivial_guard = match guard with
          | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _, _)
@@ -733,19 +732,19 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
               @ [icomment "end guard"]
             else [])
          @ body_setup @ [body_call (CL_id (try_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
-         @ [igoto handled_exception_label]
+         @ [igoto post_exception_handlers_label]
        in
        [iblock case_instrs; ilabel try_label]
      in
      assert (ctyp_equal ctyp (ctyp_of_typ ctx typ));
      [idecl ctyp try_return_id;
       itry_block (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
-      ijump l (V_call (Bnot, [V_id (have_exception, CT_bool)])) handled_exception_label]
+      ijump l (V_call (Bnot, [V_id (have_exception, CT_bool)])) post_exception_handlers_label;
+      icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool false, CT_bool))]
      @ List.concat (List.map compile_case cases)
-     @ [igoto fallthrough_label;
-        ilabel handled_exception_label;
-        icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool false, CT_bool));
-        ilabel fallthrough_label],
+     @ [(* fallthrough *)
+        icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool true, CT_bool));
+        ilabel post_exception_handlers_label],
      (fun clexp -> icopy l clexp (V_id (try_return_id, ctyp))),
      []
 
