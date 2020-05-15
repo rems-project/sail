@@ -2291,7 +2291,7 @@ let compile_ast env output_chan c_includes ast =
     in
 
     let model_init = separate hardline (List.map string
-       ( [ "void model_init(void)";
+       ( [ "static void model_init(void)";
            "{";
            "  setup_rts();" ]
        @ fst exn_boilerplate
@@ -2303,7 +2303,7 @@ let compile_ast env output_chan c_includes ast =
     in
 
     let model_fini = separate hardline (List.map string
-       ( [ "void model_fini(void)";
+       ( [ "static void model_fini(void)";
            "{" ]
        @ letbind_finalizers
        @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
@@ -2313,8 +2313,8 @@ let compile_ast env output_chan c_includes ast =
        @ [ "}" ] ))
     in
 
-    let model_default_main = 
-      ([ "int model_main(int argc, char *argv[])";
+    let model_default_main =
+      ([ Printf.sprintf "%sint model_main(int argc, char *argv[])" (if !opt_static then "static " else "");
          "{";
          "  model_init();";
          "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
