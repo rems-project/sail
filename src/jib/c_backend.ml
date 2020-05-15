@@ -2289,7 +2289,7 @@ let compile_ast env output_chan c_includes ast =
     in
 
     let model_init = separate hardline (List.map string
-       ( [ "static void model_init(void)";
+       ( [ Printf.sprintf "%svoid model_init(void)" (static ());
            "{";
            "  setup_rts();" ]
        @ fst exn_boilerplate
@@ -2301,7 +2301,7 @@ let compile_ast env output_chan c_includes ast =
     in
 
     let model_fini = separate hardline (List.map string
-       ( [ "static void model_fini(void)";
+       ( [ Printf.sprintf "%svoid model_fini(void)" (static ());
            "{" ]
        @ letbind_finalizers
        @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
