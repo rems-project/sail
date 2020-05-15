@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>riscv_vmem_sv39</title></head>
+<body>
+<code style="display: block">
+/*&nbsp;Sv39&nbsp;address&nbsp;translation&nbsp;for&nbsp;RV64.&nbsp;*/<br>
+<br>
+val&nbsp;walk39&nbsp;:&nbsp;(vaddr39,&nbsp;AccessType(ext_access_type),&nbsp;Privilege,&nbsp;bool,&nbsp;bool,&nbsp;paddr64,&nbsp;nat,&nbsp;bool,&nbsp;ext_ptw)&nbsp;-&gt;&nbsp;PTW_Result(paddr64,&nbsp;SV39_PTE)&nbsp;effect&nbsp;{rmem,&nbsp;rmemt,&nbsp;rreg,&nbsp;escape}<br>
+function&nbsp;walk39(vaddr,&nbsp;ac,&nbsp;priv,&nbsp;mxr,&nbsp;do_sum,&nbsp;ptb,&nbsp;level,&nbsp;global,&nbsp;ext_ptw)&nbsp;=&nbsp;<span style="background-color: #c0FFc0">{<br>
+&nbsp;&nbsp;let&nbsp;va&nbsp;=&nbsp;Mk_SV39_Vaddr(vaddr);<br>
+&nbsp;&nbsp;let&nbsp;pt_ofs&nbsp;:&nbsp;paddr64&nbsp;=&nbsp;shiftl(EXTZ(shiftr(va.VPNi(),&nbsp;(level&nbsp;*&nbsp;SV39_LEVEL_BITS))[(SV39_LEVEL_BITS&nbsp;-&nbsp;1)&nbsp;..&nbsp;0]),<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTE39_LOG_SIZE);<br>
+&nbsp;&nbsp;let&nbsp;pte_addr&nbsp;=&nbsp;ptb&nbsp;+&nbsp;pt_ofs;<br>
+&nbsp;&nbsp;match&nbsp;(mem_read(ac,&nbsp;EXTZ(pte_addr),&nbsp;8,&nbsp;false,&nbsp;false,&nbsp;false))&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MemException(_)&nbsp;=&gt;&nbsp;<span style="background-color: #FFc0c0">{<br>
+/*&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;walk39(vaddr=&quot;&nbsp;^&nbsp;BitStr(vaddr)&nbsp;^&nbsp;&quot;&nbsp;level=&quot;&nbsp;^&nbsp;string_of_int(level)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^&nbsp;&quot;&nbsp;pt_base=&quot;&nbsp;^&nbsp;BitStr(ptb)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^&nbsp;&quot;&nbsp;pt_ofs=&quot;&nbsp;^&nbsp;BitStr(pt_ofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^&nbsp;&quot;&nbsp;pte_addr=&quot;&nbsp;^&nbsp;BitStr(pte_addr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^&nbsp;&quot;:&nbsp;invalid&nbsp;pte&nbsp;address&quot;);&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTW_Failure(PTW_Access(),&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;MemValue(v)&nbsp;=&gt;&nbsp;<span style="background-color: #a0FFa0">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pte&nbsp;=&nbsp;Mk_SV39_PTE(v);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pbits&nbsp;=&nbsp;pte.BITS();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ext_pte&nbsp;=&nbsp;pte.Ext();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pattr&nbsp;=&nbsp;Mk_PTE_Bits(pbits);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;is_global&nbsp;=&nbsp;global&nbsp;|&nbsp;(pattr.G()&nbsp;==&nbsp;0b1);<br>
+/*&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;walk39(vaddr=&quot;&nbsp;^&nbsp;BitStr(vaddr)&nbsp;^&nbsp;&quot;&nbsp;level=&quot;&nbsp;^&nbsp;string_of_int(level)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^&nbsp;&quot;&nbsp;pt_base=&quot;&nbsp;^&nbsp;BitStr(ptb)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^&nbsp;&quot;&nbsp;pt_ofs=&quot;&nbsp;^&nbsp;BitStr(pt_ofs)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^&nbsp;&quot;&nbsp;pte_addr=&quot;&nbsp;^&nbsp;BitStr(pte_addr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^&nbsp;&quot;&nbsp;pte=&quot;&nbsp;^&nbsp;BitStr(v));&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isInvalidPTE(pbits,&nbsp;ext_pte)&nbsp;then&nbsp;<span style="background-color: #80FF80">{<br>
+/*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;walk39:&nbsp;invalid&nbsp;pte&quot;);&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTW_Failure(PTW_Invalid_PTE(),&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span>&nbsp;else&nbsp;<span style="background-color: #80FF80">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isPTEPtr(pbits,&nbsp;ext_pte)&nbsp;then&nbsp;<span style="background-color: #60FF60">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;level&nbsp;&gt;&nbsp;0&nbsp;then&nbsp;<span style="background-color: #40FF40">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;walk&nbsp;down&nbsp;the&nbsp;pointer&nbsp;to&nbsp;the&nbsp;next&nbsp;level&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;walk39(vaddr,&nbsp;ac,&nbsp;priv,&nbsp;mxr,&nbsp;do_sum,&nbsp;shiftl(EXTZ(pte.PPNi()),&nbsp;PAGESIZE_BITS),&nbsp;level&nbsp;-&nbsp;1,&nbsp;is_global,&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span>&nbsp;else&nbsp;<span style="background-color: #FFc0c0">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;last-level&nbsp;PTE&nbsp;contains&nbsp;a&nbsp;pointer&nbsp;instead&nbsp;of&nbsp;a&nbsp;leaf&nbsp;*/<br>
+/*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;walk39:&nbsp;last-level&nbsp;pte&nbsp;contains&nbsp;a&nbsp;ptr&quot;);&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTW_Failure(PTW_Invalid_PTE(),&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span>&nbsp;else&nbsp;<span style="background-color: #60FF60">{&nbsp;/*&nbsp;leaf&nbsp;PTE&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;checkPTEPermission(ac,&nbsp;priv,&nbsp;mxr,&nbsp;do_sum,&nbsp;pattr,&nbsp;ext_pte,&nbsp;ext_ptw)&nbsp;{<br>
+	&nbsp;&nbsp;&nbsp;&nbsp;PTE_Check_Failure(ext_ptw)&nbsp;=&gt;&nbsp;<span style="background-color: #40FF40">{<br>
+/*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;walk39:&nbsp;pte&nbsp;permission&nbsp;check&nbsp;failure&quot;);&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTW_Failure(PTW_No_Permission(),&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTE_Check_Success(ext_ptw)&nbsp;&nbsp;=&gt;&nbsp;<span style="background-color: #40FF40">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;level&nbsp;&gt;&nbsp;0&nbsp;then&nbsp;<span style="background-color: #20FF20">{&nbsp;/*&nbsp;superpage&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;fixme&nbsp;hack:&nbsp;to&nbsp;get&nbsp;a&nbsp;mask&nbsp;of&nbsp;appropriate&nbsp;size&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mask&nbsp;=&nbsp;shiftl(pte.PPNi()&nbsp;^&nbsp;pte.PPNi()&nbsp;^&nbsp;EXTZ(0b1),&nbsp;level&nbsp;*&nbsp;SV39_LEVEL_BITS)&nbsp;-&nbsp;1;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;(pte.PPNi()&nbsp;&&nbsp;mask)&nbsp;!=&nbsp;EXTZ(0b0)&nbsp;then&nbsp;<span style="background-color: #0FF0">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;misaligned&nbsp;superpage&nbsp;mapping&nbsp;*/<br>
+/*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;walk39:&nbsp;misaligned&nbsp;superpage&nbsp;mapping&quot;);&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTW_Failure(PTW_Misaligned(),&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span>&nbsp;else&nbsp;<span style="background-color: #0FF0">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;add&nbsp;the&nbsp;appropriate&nbsp;bits&nbsp;of&nbsp;the&nbsp;VPN&nbsp;to&nbsp;the&nbsp;superpage&nbsp;PPN&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ppn&nbsp;=&nbsp;pte.PPNi()&nbsp;|&nbsp;(EXTZ(va.VPNi())&nbsp;&&nbsp;mask);<br>
+/*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;res&nbsp;=&nbsp;append(ppn,&nbsp;va.PgOfs());<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;walk39:&nbsp;using&nbsp;superpage:&nbsp;pte.ppn=&quot;&nbsp;^&nbsp;BitStr(pte.PPNi())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^&nbsp;&quot;&nbsp;ppn=&quot;&nbsp;^&nbsp;BitStr(ppn)&nbsp;^&nbsp;&quot;&nbsp;res=&quot;&nbsp;^&nbsp;BitStr(res));&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTW_Success(append(ppn,&nbsp;va.PgOfs()),&nbsp;pte,&nbsp;pte_addr,&nbsp;level,&nbsp;is_global,&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span>&nbsp;else&nbsp;<span style="background-color: #20FF20">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;normal&nbsp;leaf&nbsp;PTE&nbsp;*/<br>
+/*&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;res&nbsp;=&nbsp;append(pte.PPNi(),&nbsp;va.PgOfs());<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;walk39:&nbsp;pte.ppn=&quot;&nbsp;^&nbsp;BitStr(pte.PPNi())&nbsp;^&nbsp;&quot;&nbsp;ppn=&quot;&nbsp;^&nbsp;BitStr(pte.PPNi())&nbsp;^&nbsp;&quot;&nbsp;res=&quot;&nbsp;^&nbsp;BitStr(res));&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTW_Success(append(pte.PPNi(),&nbsp;va.PgOfs()),&nbsp;pte,&nbsp;pte_addr,&nbsp;level,&nbsp;is_global,&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;}<br>
+}</span><br>
+<br>
+/*&nbsp;TLB&nbsp;management:&nbsp;single&nbsp;entry&nbsp;for&nbsp;now&nbsp;*/<br>
+<br>
+//&nbsp;ideally&nbsp;we&nbsp;would&nbsp;use&nbsp;the&nbsp;below&nbsp;form:<br>
+//&nbsp;type&nbsp;TLB39_Entry&nbsp;=&nbsp;TLB_Entry(sizeof(asid64),&nbsp;sizeof(vaddr39),&nbsp;sizeof(paddr64),&nbsp;sizeof(pte64))<br>
+type&nbsp;TLB39_Entry&nbsp;=&nbsp;TLB_Entry(16,&nbsp;39,&nbsp;56,&nbsp;64)<br>
+register&nbsp;tlb39&nbsp;:&nbsp;option(TLB39_Entry)<br>
+<br>
+val&nbsp;lookup_TLB39&nbsp;:&nbsp;(asid64,&nbsp;vaddr39)&nbsp;-&gt;&nbsp;option((nat,&nbsp;TLB39_Entry))&nbsp;effect&nbsp;{rreg}<br>
+function&nbsp;lookup_TLB39(asid,&nbsp;vaddr)&nbsp;=<br>
+&nbsp;&nbsp;<span style="background-color: #c0FFc0">match&nbsp;tlb39&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;None()&nbsp;&nbsp;=&gt;&nbsp;<span style="background-color: #a0FFa0">None()</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Some(e)&nbsp;=&gt;&nbsp;<span style="background-color: #a0FFa0">if&nbsp;match_TLB_Entry(e,&nbsp;asid,&nbsp;vaddr)&nbsp;then&nbsp;<span style="background-color: #80FF80">Some((0,&nbsp;e))</span>&nbsp;else&nbsp;<span style="background-color: #80FF80">None()</span></span><br>
+&nbsp;&nbsp;}</span><br>
+<br>
+val&nbsp;add_to_TLB39&nbsp;:&nbsp;(asid64,&nbsp;vaddr39,&nbsp;paddr64,&nbsp;SV39_PTE,&nbsp;paddr64,&nbsp;nat,&nbsp;bool)&nbsp;-&gt;&nbsp;unit&nbsp;effect&nbsp;{wreg,&nbsp;rreg}<br>
+function&nbsp;add_to_TLB39(asid,&nbsp;vAddr,&nbsp;pAddr,&nbsp;pte,&nbsp;pteAddr,&nbsp;level,&nbsp;global)&nbsp;=&nbsp;<span style="background-color: #c0FFc0">{<br>
+&nbsp;&nbsp;let&nbsp;ent&nbsp;:&nbsp;TLB39_Entry&nbsp;=&nbsp;make_TLB_Entry(asid,&nbsp;global,&nbsp;vAddr,&nbsp;pAddr,&nbsp;pte.bits(),&nbsp;level,&nbsp;pteAddr,&nbsp;SV39_LEVEL_BITS);<br>
+&nbsp;&nbsp;tlb39&nbsp;=&nbsp;Some(ent)<br>
+}</span><br>
+<br>
+function&nbsp;write_TLB39(idx&nbsp;:&nbsp;nat,&nbsp;ent&nbsp;:&nbsp;TLB39_Entry)&nbsp;-&gt;&nbsp;unit&nbsp;=<br>
+&nbsp;&nbsp;<span style="background-color: #FFc0c0">tlb39&nbsp;=&nbsp;Some(ent)</span><br>
+<br>
+val&nbsp;flush_TLB39&nbsp;:&nbsp;(option(asid64),&nbsp;option(vaddr39))&nbsp;-&gt;&nbsp;unit&nbsp;effect&nbsp;{rreg,&nbsp;wreg}<br>
+function&nbsp;flush_TLB39(asid,&nbsp;addr)&nbsp;=<br>
+&nbsp;&nbsp;<span style="background-color: #c0FFc0">match&nbsp;(tlb39)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;None()&nbsp;&nbsp;=&gt;&nbsp;<span style="background-color: #a0FFa0">()</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Some(e)&nbsp;=&gt;&nbsp;<span style="background-color: #a0FFa0">if&nbsp;&nbsp;&nbsp;flush_TLB_Entry(e,&nbsp;asid,&nbsp;addr)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;then&nbsp;<span style="background-color: #80FF80">tlb39&nbsp;=&nbsp;None()</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else&nbsp;<span style="background-color: #80FF80">()</span></span><br>
+&nbsp;&nbsp;}</span><br>
+<br>
+/*&nbsp;address&nbsp;translation&nbsp;*/<br>
+<br>
+val&nbsp;translate39&nbsp;:&nbsp;(asid64,&nbsp;paddr64,&nbsp;vaddr39,&nbsp;AccessType(ext_access_type),&nbsp;Privilege,&nbsp;bool,&nbsp;bool,&nbsp;nat,&nbsp;ext_ptw)&nbsp;-&gt;&nbsp;TR_Result(paddr64,&nbsp;PTW_Error)&nbsp;effect&nbsp;{rreg,&nbsp;wreg,&nbsp;wmv,&nbsp;wmvt,&nbsp;escape,&nbsp;rmem,&nbsp;rmemt}<br>
+function&nbsp;translate39(asid,&nbsp;ptb,&nbsp;vAddr,&nbsp;ac,&nbsp;priv,&nbsp;mxr,&nbsp;do_sum,&nbsp;level,&nbsp;ext_ptw)&nbsp;=&nbsp;<span style="background-color: #c0FFc0">{<br>
+&nbsp;&nbsp;match&nbsp;lookup_TLB39(asid,&nbsp;vAddr)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;Some(idx,&nbsp;ent)&nbsp;=&gt;&nbsp;<span style="background-color: #a0FFa0">{<br>
+/*&nbsp;&nbsp;&nbsp;&nbsp;print(&quot;translate39:&nbsp;TLB39&nbsp;hit&nbsp;for&nbsp;&quot;&nbsp;^&nbsp;BitStr(vAddr));&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;&nbsp;pte&nbsp;=&nbsp;Mk_SV39_PTE(ent.pte);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;&nbsp;ext_pte&nbsp;=&nbsp;pte.Ext();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;&nbsp;pteBits&nbsp;=&nbsp;Mk_PTE_Bits(pte.BITS());<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;checkPTEPermission(ac,&nbsp;priv,&nbsp;mxr,&nbsp;do_sum,&nbsp;pteBits,&nbsp;ext_pte,&nbsp;ext_ptw)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTE_Check_Failure(ext_ptw)&nbsp;=&gt;&nbsp;<span style="background-color: #FFc0c0">{&nbsp;TR_Failure(PTW_No_Permission(),&nbsp;ext_ptw)&nbsp;}</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTE_Check_Success(ext_ptw)&nbsp;=&gt;&nbsp;<span style="background-color: #80FF80">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;update_PTE_Bits(pteBits,&nbsp;ac,&nbsp;ext_pte)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None()&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&gt;&nbsp;<span style="background-color: #60FF60">TR_Address(ent.pAddr&nbsp;|&nbsp;EXTZ(vAddr&nbsp;&&nbsp;ent.vAddrMask),&nbsp;ext_ptw)</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(pbits,&nbsp;ext)&nbsp;=&gt;&nbsp;<span style="background-color: #60FF60">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;~&nbsp;(plat_enable_dirty_update&nbsp;())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;then&nbsp;<span style="background-color: #40FF40">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;pte&nbsp;needs&nbsp;dirty/accessed&nbsp;update&nbsp;but&nbsp;that&nbsp;is&nbsp;not&nbsp;enabled&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TR_Failure(PTW_PTE_Update(),&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span>&nbsp;else&nbsp;<span style="background-color: #FFc0c0">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;update&nbsp;PTE&nbsp;entry&nbsp;and&nbsp;TLB&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_pte&nbsp;=&nbsp;update_BITS(pte,&nbsp;pbits.bits());<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_pte&nbsp;=&nbsp;update_Ext(n_pte,&nbsp;ext);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_ent&nbsp;:&nbsp;TLB39_Entry&nbsp;=&nbsp;ent;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n_ent.pte&nbsp;=&nbsp;n_pte.bits();<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;write_TLB39(idx,&nbsp;n_ent);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;update&nbsp;page&nbsp;table&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;mem_write_value(EXTZ(ent.pteAddr),&nbsp;8,&nbsp;n_pte.bits(),&nbsp;false,&nbsp;false,&nbsp;false)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MemValue(_)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;=&gt;&nbsp;<span style="background-color: #FFa0a0">()</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MemException(e)&nbsp;=&gt;&nbsp;<span style="background-color: #FFa0a0">internal_error(&quot;invalid&nbsp;physical&nbsp;address&nbsp;in&nbsp;TLB&quot;)</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TR_Address(ent.pAddr&nbsp;|&nbsp;EXTZ(vAddr&nbsp;&&nbsp;ent.vAddrMask),&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;None()&nbsp;=&gt;&nbsp;<span style="background-color: #a0FFa0">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;walk39(vAddr,&nbsp;ac,&nbsp;priv,&nbsp;mxr,&nbsp;do_sum,&nbsp;ptb,&nbsp;level,&nbsp;false,&nbsp;ext_ptw)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTW_Failure(f,&nbsp;ext_ptw)&nbsp;=&gt;&nbsp;<span style="background-color: #80FF80">TR_Failure(f,&nbsp;ext_ptw)</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PTW_Success(pAddr,&nbsp;pte,&nbsp;pteAddr,&nbsp;level,&nbsp;global,&nbsp;ext_ptw)&nbsp;=&gt;&nbsp;<span style="background-color: #80FF80">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;update_PTE_Bits(Mk_PTE_Bits(pte.BITS()),&nbsp;ac,&nbsp;pte.Ext())&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None()&nbsp;=&gt;&nbsp;<span style="background-color: #60FF60">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add_to_TLB39(asid,&nbsp;vAddr,&nbsp;pAddr,&nbsp;pte,&nbsp;pteAddr,&nbsp;level,&nbsp;global);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TR_Address(pAddr,&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(pbits,&nbsp;ext)&nbsp;=&gt;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="background-color: #60FF60">if&nbsp;~&nbsp;(plat_enable_dirty_update&nbsp;())<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;then&nbsp;<span style="background-color: #40FF40">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;pte&nbsp;needs&nbsp;dirty/accessed&nbsp;update&nbsp;but&nbsp;that&nbsp;is&nbsp;not&nbsp;enabled&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TR_Failure(PTW_PTE_Update(),&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span>&nbsp;else&nbsp;<span style="background-color: #FFc0c0">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;w_pte&nbsp;:&nbsp;SV39_PTE&nbsp;=&nbsp;update_BITS(pte,&nbsp;pbits.bits());<br>
+		w_pte&nbsp;:&nbsp;SV39_PTE&nbsp;=&nbsp;update_Ext(w_pte,&nbsp;ext);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;mem_write_value(EXTZ(pteAddr),&nbsp;8,&nbsp;w_pte.bits(),&nbsp;false,&nbsp;false,&nbsp;false)&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MemValue(_)&nbsp;=&gt;&nbsp;<span style="background-color: #FFa0a0">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add_to_TLB39(asid,&nbsp;vAddr,&nbsp;pAddr,&nbsp;w_pte,&nbsp;pteAddr,&nbsp;level,&nbsp;global);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TR_Address(pAddr,&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MemException(e)&nbsp;=&gt;&nbsp;<span style="background-color: #FFa0a0">{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/*&nbsp;pte&nbsp;is&nbsp;not&nbsp;in&nbsp;valid&nbsp;memory&nbsp;*/<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TR_Failure(PTW_Access(),&nbsp;ext_ptw)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span></span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;&nbsp;&nbsp;}</span><br>
+&nbsp;&nbsp;}<br>
+}</span><br>
+<br>
+function&nbsp;init_vmem_sv39()&nbsp;-&gt;&nbsp;unit&nbsp;=&nbsp;<span style="background-color: #c0FFc0">{<br>
+&nbsp;&nbsp;tlb39&nbsp;=&nbsp;None()<br>
+}</span><br>
+</code>
+</body>
+</html>

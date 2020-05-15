@@ -28,7 +28,7 @@ repository.
 
 Finally, when we run our model it will append coverage information
 into a file called `sail_coverage`. The tool in this directory can
-compare that will the data contained in the `all_branches` file
+compare that with the data contained in the `all_branches` file
 described above and produce an html coverage report for each file in
 the specification. For example:
 
@@ -36,7 +36,7 @@ the specification. For example:
 sailcov -a all_branches -t sail_coverage my_model.sail
 ```
 
-which produce a my_model.html file.
-
-
-
+which produces a `my_model.html` file. Multiple sail files can be
+passed to the tool, and it will produce html for each
+individually. See [riscv_vmem_sv39.html](riscv_vmem_sv_39.html) for an
+example of the output.
