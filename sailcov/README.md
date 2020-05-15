@@ -43,3 +43,13 @@ individually. See
 for an example of the output. There is also a `--tab-width` option for
 sailcov that can be used to control the tab width in the generated
 html.
+
+### Colour options
+
+`sailcov -h` will list the available options for the colours used in
+the output. The hue and saturation for the colours used for covered
+and uncovered code can be individually set. Or the default red/green
+colours for uncovered/covered can be swapped for a yellow/blue theme
+using `--alt-colors` or `--alt-colours`. See the alternate
+[riscv_vmem_sv39.html](https://alasdair.github.io/riscv_vmem_sv39_alt.html)
+for an example.

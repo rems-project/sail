@@ -6,7 +6,23 @@ let opt_taken = ref "sail_coverage"
 let opt_all = ref "all_branches"
 
 let opt_tab_width = ref 4
-              
+
+type color = {
+    hue: int;
+    saturation: int;
+  }
+
+let opt_bad_color = ref { hue = 0; saturation = 85 }
+let opt_good_color = ref { hue = 120; saturation = 85 }
+let opt_darken = ref 5
+                   
+let clamp_degree n = max 0 (min n 360)
+let clamp_percent n = max 0 (min n 100)
+
+let use_alt_colors () = 
+  opt_good_color := { !opt_good_color with hue = 220 };
+  opt_bad_color := { !opt_good_color with hue = 50 }
+
 let options =
   Arg.align [
       ( "-t",
@@ -17,7 +33,28 @@ let options =
         "<file> information about all possible branches (default: all_branches)");
       ( "--tab-width",
         Arg.Int (fun n -> opt_tab_width := n),
-        "<integer> set the tab width for html output (default: 4)")
+        "<integer> set the tab width for html output (default: 4)");
+      ( "--covered-hue",
+        Arg.Int (fun n -> opt_good_color := { !opt_good_color with hue = clamp_degree n }),
+        "<int> set the hue (between 0 and 360) of the color used for code that is covered (default: 120 (green))");
+      ( "--uncovered-hue",
+        Arg.Int (fun n -> opt_bad_color := { !opt_bad_color with hue = clamp_degree n }),
+        "<int> set the hue (between 0 and 360) of the color used for code that is not covered (default: 0 (red))");
+      ( "--covered-saturation",
+        Arg.Int (fun n -> opt_good_color := { !opt_good_color with saturation = clamp_percent n }),
+        "<int> set the saturation (between 0 and 100) of the color used for code that is covered (default: 85)");
+      ( "--uncovered-saturation",
+        Arg.Int (fun n -> opt_bad_color := { !opt_bad_color with saturation = clamp_percent n }),
+        "<int> set the hue (between 0 and 100) of the color used for code that is not covered (default: 85)");
+      ( "--nesting-darkness",
+        Arg.Int (fun n -> opt_darken := n),
+        "<int> factor which controls how much darker nested spans of the same color become (default: 5)");
+      ( "--alt-colors",
+        Arg.Unit use_alt_colors,
+        " swap default colors from red/green into alternate yellow/blue theme");
+      ( "--alt-colours",
+        Arg.Unit use_alt_colors,
+        "")
     ]
 
 type span = {
@@ -117,14 +154,15 @@ let main () =
       let current_goodness = ref 0 in
       let current_badness = ref 0 in
 
-      let good_color () =
-        let darken = 0xE0 - (!current_goodness * 0x20) in
-        Printf.sprintf "#%xFF%x" darken darken
+      let clamp_lightness l = max 30 (min 80 l) in
+
+      let html_color color darkness =
+        Printf.sprintf "hsl(%d, %d%%, %d%%)"
+          color.hue color.saturation (clamp_lightness ((80 + !opt_darken) - darkness * !opt_darken))
       in
-      let bad_color () =
-        let darken = 0xE0 - (!current_badness * 0x20) in
-        Printf.sprintf "#FF%x%x" darken darken
-      in
+      let good_color () = html_color !opt_good_color !current_goodness in
+      let bad_color () = html_color !opt_bad_color !current_badness in
+
       output_string chan "<!DOCTYPE html>\n";
       output_string chan "<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n";
       output_string chan (Printf.sprintf "<title>%s</title>" (Filename.remove_extension (Filename.basename file)));
@@ -187,7 +225,7 @@ let main () =
       Printf.printf "%s (%d/%d)\n" file (SpanSet.cardinal taken) (SpanSet.cardinal all)
     ) !opt_files
 
-let usage_msg = "usage: sail-coverage-viz -c <file> -a <file> <.sail files>\n"
+let usage_msg = "usage: sailcov -c <file> -a <file> <.sail files>\n"
 
 let _ =
   Arg.parse options
