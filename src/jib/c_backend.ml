@@ -2050,7 +2050,7 @@ let codegen_alloc = function
 let codegen_def' ctx = function
   | CDEF_reg_dec (id, ctyp, _) ->
      string (Printf.sprintf "// register %s" (string_of_id id)) ^^ hardline
-     ^^ string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
+     ^^ string (Printf.sprintf "%s%s %s;" (if !opt_static then "static " else "") (sgen_ctyp ctyp) (sgen_id id))
 
   | CDEF_spec (id, _, arg_ctyps, ret_ctyp) ->
      let static = if !opt_static then "static " else "" in
