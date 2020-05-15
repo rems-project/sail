@@ -46,7 +46,7 @@ html.
 
 ### Colour options
 
-`sailcov -h` will list the available options for the colours used in
+`sailcov -help` will list the available options for the colours used in
 the output. The hue and saturation for the colours used for covered
 and uncovered code can be individually set. Alternatively the default
 red/green colours for uncovered/covered can be swapped for a

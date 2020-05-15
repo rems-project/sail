@@ -225,7 +225,7 @@ let main () =
       Printf.printf "%s (%d/%d)\n" file (SpanSet.cardinal taken) (SpanSet.cardinal all)
     ) !opt_files
 
-let usage_msg = "usage: sailcov -c <file> -a <file> <.sail files>\n"
+let usage_msg = "usage: sailcov -t <file> -a <file> <.sail files>\n"
 
 let _ =
   Arg.parse options
