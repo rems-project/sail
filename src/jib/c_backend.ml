@@ -62,6 +62,7 @@ open Anf
 module Big_int = Nat_big_num
 
 let opt_static = ref false
+let static () = if !opt_static then "static " else ""
 let opt_no_main = ref false
 let opt_no_lib = ref false
 let opt_no_rts = ref false
@@ -2050,16 +2051,15 @@ let codegen_alloc = function
 let codegen_def' ctx = function
   | CDEF_reg_dec (id, ctyp, _) ->
      string (Printf.sprintf "// register %s" (string_of_id id)) ^^ hardline
-     ^^ string (Printf.sprintf "%s%s %s;" (if !opt_static then "static " else "") (sgen_ctyp ctyp) (sgen_id id))
+     ^^ string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))
 
   | CDEF_spec (id, _, arg_ctyps, ret_ctyp) ->
-     let static = if !opt_static then "static " else "" in
      if Env.is_extern id ctx.tc_env "c" then
        empty
      else if is_stack_ctyp ret_ctyp then
-       string (Printf.sprintf "%s%s %s(%s%s);" static (sgen_ctyp ret_ctyp) (sgen_function_id id) (extra_params ()) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+       string (Printf.sprintf "%s%s %s(%s%s);" (static ()) (sgen_ctyp ret_ctyp) (sgen_function_id id) (extra_params ()) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
      else
-       string (Printf.sprintf "%svoid %s(%s%s *rop, %s);" static (sgen_function_id id) (extra_params ()) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+       string (Printf.sprintf "%svoid %s(%s%s *rop, %s);" (static ()) (sgen_function_id id) (extra_params ()) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
      let arg_ctyps, ret_ctyp = match Bindings.find_opt id ctx.valspecs with
@@ -2100,8 +2100,7 @@ let codegen_def' ctx = function
      codegen_type_def ctx ctype_def
 
   | CDEF_startup (id, instrs) ->
-     let static = if !opt_static then "static " else "" in
-     let startup_header = string (Printf.sprintf "%svoid startup_%s(void)" static (sgen_function_id id)) in
+     let startup_header = string (Printf.sprintf "%svoid startup_%s(void)" (static ()) (sgen_function_id id)) in
      separate_map hardline codegen_decl instrs
      ^^ twice hardline
      ^^ startup_header ^^ hardline
@@ -2110,8 +2109,7 @@ let codegen_def' ctx = function
      ^^ string "}"
 
   | CDEF_finish (id, instrs) ->
-     let static = if !opt_static then "static " else "" in
-     let finish_header = string (Printf.sprintf "%svoid finish_%s(void)" static (sgen_function_id id)) in
+     let finish_header = string (Printf.sprintf "%svoid finish_%s(void)" (static ()) (sgen_function_id id)) in
      separate_map hardline codegen_decl (List.filter is_decl instrs)
      ^^ twice hardline
      ^^ finish_header ^^ hardline
@@ -2127,8 +2125,7 @@ let codegen_def' ctx = function
      let cleanup =
        List.concat (List.map (fun (id, ctyp) -> [iclear ctyp (name id)]) bindings)
      in
-     let static = if !opt_static then "static " else "" in
-     separate_map hardline (fun (id, ctyp) -> string (Printf.sprintf "%s%s %s;" static (sgen_ctyp ctyp) (sgen_id id))) bindings
+     separate_map hardline (fun (id, ctyp) -> string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))) bindings
      ^^ hardline ^^ string (Printf.sprintf "static void create_letbind_%d(void) " number)
      ^^ string "{"
      ^^ jump 0 2 (separate_map hardline codegen_alloc setup) ^^ hardline
@@ -2315,7 +2312,7 @@ let compile_ast env output_chan c_includes ast =
     in
 
     let model_default_main =
-      ([ Printf.sprintf "%sint model_main(int argc, char *argv[])" (if !opt_static then "static " else "");
+      ([ Printf.sprintf "%sint model_main(int argc, char *argv[])" (static ());
          "{";
          "  model_init();";
          "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
