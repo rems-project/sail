@@ -68,7 +68,8 @@ let opt_no_rts = ref false
 let opt_prefix = ref "z"
 let opt_extra_params = ref None
 let opt_extra_arguments = ref None
-
+let opt_branch_coverage = ref false
+                        
 let extra_params () =
   match !opt_extra_params with
   | Some str -> str ^ ", "
@@ -164,7 +165,7 @@ let literal_to_fragment (L_aux (l_aux, _) as lit) =
   | L_false -> Some (V_lit (VL_bool false, CT_bool))
   | _ -> None
  
-module C_config : Config = struct
+module C_config(Opts : sig val branch_coverage : bool end) : Config = struct
   
   (** Convert a sail type into a C-type. This function can be quite
      slow, because it uses ctx.local_env and SMT to analyse the Sail
@@ -557,107 +558,13 @@ module C_config : Config = struct
     analyze_functions ctx analyze_primop (c_literals ctx aexp)
 
 
-  let unroll_loops () = None
+  let unroll_loops = None
   let specialize_calls = false
   let ignore_64 = false
   let struct_value = false
   let use_real = false
-  let branch_coverage = false
-end
-
-(* When compiling to a C library, we want to do things slightly
-   differently. First, to ensure that functions have a predictable
-   type and calling convention, we don't use the SMT solver to
-   optimize types at all. Second we don't apply the analyse primitives
-   step in optimize_anf for similar reasons. *)
-module Clib_config : Config = struct
-  let rec convert_typ ctx typ =
-    let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
-    match typ_aux with
-    | Typ_id id when string_of_id id = "bit"    -> CT_bit
-    | Typ_id id when string_of_id id = "bool"   -> CT_bool
-    | Typ_id id when string_of_id id = "int"    -> CT_lint
-    | Typ_id id when string_of_id id = "nat"    -> CT_lint
-    | Typ_id id when string_of_id id = "unit"   -> CT_unit
-    | Typ_id id when string_of_id id = "string" -> CT_string
-    | Typ_id id when string_of_id id = "real"   -> CT_real
-
-    | Typ_app (id, _) when string_of_id id = "atom_bool" -> CT_bool
-    | Typ_app (id, _) when
-           string_of_id id = "range" || string_of_id id = "atom" || string_of_id id = "implicit" || string_of_id id = "itself" ->
-       begin match destruct_range Env.empty typ with
-       | None -> assert false (* Checked if range type in guard *)
-       | Some (kids, constr, n, m) ->
-          let ctx = { ctx with local_env = add_existential Parse_ast.Unknown (List.map (mk_kopt K_int) kids) constr ctx.local_env }in
-          match nexp_simp n, nexp_simp m with
-          | Nexp_aux (Nexp_constant n, _), Nexp_aux (Nexp_constant m, _)
-               when Big_int.less_equal (min_int 64) n && Big_int.less_equal m (max_int 64) ->
-             CT_fint 64
-          | _, _ ->
-             CT_lint
-       end
- 
-    | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
-       CT_list (convert_typ ctx typ)
-
-    | Typ_app (id, [A_aux (A_nexp n, _);
-                    A_aux (A_order ord, _)])
-         when string_of_id id = "bitvector" ->
-       let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
-       begin match nexp_simp n with
-       | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_fbits (Big_int.to_int n, direction)
-       | _ -> CT_lbits direction
-       end
-
-    | Typ_app (id, [A_aux (A_nexp n, _);
-                    A_aux (A_order ord, _);
-                    A_aux (A_typ typ, _)])
-         when string_of_id id = "vector" ->
-       let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
-       CT_vector (direction, convert_typ ctx typ)
-
-    | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
-       CT_ref (convert_typ ctx typ)
-
-    | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records  -> CT_struct (id, Bindings.find id ctx.records |> UBindings.bindings)
-    | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> UBindings.bindings)
-    | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
-
-    | Typ_tup typs -> CT_tup (List.map (convert_typ ctx) typs)
-
-    | Typ_exist _ ->
-       begin match destruct_exist (Env.expand_synonyms ctx.local_env typ) with
-       | Some (kids, nc, typ) ->
-          let env = add_existential l kids nc ctx.local_env in
-          convert_typ { ctx with local_env = env } typ
-       | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
-       end
-
-    | Typ_var kid -> CT_poly
-
-    | _ -> c_error ~loc:l ("No C type for type " ^ string_of_typ typ)
-
-  let c_literals ctx =
-    let rec c_literal env l = function
-      | AV_lit (lit, typ) as v when is_stack_ctyp (convert_typ { ctx with local_env = env } typ) ->
-         begin
-           match literal_to_fragment lit with
-           | Some cval -> AV_cval (cval, typ)
-           | None -> v
-         end
-      | AV_tuple avals -> AV_tuple (List.map (c_literal env l) avals)
-      | v -> v
-    in
-    map_aval c_literal
-
-  let optimize_anf ctx aexp = c_literals ctx aexp
-
-  let unroll_loops () = None
-  let specialize_calls = false
-  let ignore_64 = false
-  let struct_value = false
-  let use_real = false
-  let branch_coverage = false
+  let branch_coverage = Opts.branch_coverage
+  let track_throw = true
 end
                
 (** Functions that have heap-allocated return types are implemented by
@@ -2320,7 +2227,7 @@ let rec get_recursive_functions (Defs defs) =
   | [] -> IdSet.empty
 
 let jib_of_ast env ast =
-  let module Jibc = Make(C_config) in
+  let module Jibc = Make(C_config(struct let branch_coverage = !opt_branch_coverage end)) in
   let ctx = initial_ctx (add_special_functions env) in
   Jibc.compile_ast ctx ast
  
@@ -2341,6 +2248,7 @@ let compile_ast env output_chan c_includes ast =
                       @ (if !opt_no_rts then [] else
                            [ string "#include \"rts.h\"";
                              string "#include \"elf.h\"" ])
+                      @ (if !opt_branch_coverage then [string "#include \"sail_coverage.h\""] else [])
                       @ (List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) c_includes))
     in
 
@@ -2405,22 +2313,32 @@ let compile_ast env output_chan c_includes ast =
        @ [ "}" ] ))
     in
 
-    let model_default_main = separate hardline (List.map string
-         [ "int model_main(int argc, char *argv[])";
-           "{";
-           "  model_init();";
-           "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
-           Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "main"));
-           "  model_fini();";
-           "  return EXIT_SUCCESS;";
-           "}" ] )
+    let model_default_main = 
+      ([ "int model_main(int argc, char *argv[])";
+         "{";
+         "  model_init();";
+         "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
+         Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "main"));
+         "  model_fini();" ]
+       @ (if !opt_branch_coverage then
+            [ "  if (sail_coverage_exit() != 0) {";
+              "    fprintf(stderr, \"Could not write coverage information\\n\");";
+              "    exit(EXIT_FAILURE);";
+              "  }" ]
+          else
+            []
+         )
+       @ [ "  return EXIT_SUCCESS;";
+           "}" ])
+      |> List.map string
+      |> separate hardline
     in
 
     let model_main = separate hardline (if (!opt_no_main) then [] else List.map string
-         [ "int main(int argc, char *argv[])";
-           "{";
-           "  return model_main(argc, argv);";
-           "}" ] )
+        [ "int main(int argc, char *argv[])";
+          "{";
+          "  return model_main(argc, argv);";
+          "}" ] )
     in
 
     let hlhl = hardline ^^ hardline in
@@ -2437,11 +2355,6 @@ let compile_ast env output_chan c_includes ast =
   with
   | Type_error (_, l, err) ->
      c_error ~loc:l ("Unexpected type error when compiling to C:\n" ^ Type_error.string_of_type_error err)
-
-let jib_of_ast_clib env ast =
-  let module Jibc = Make(Clib_config) in
-  let ctx = initial_ctx (add_special_functions env) in
-  Jibc.compile_ast ctx ast
 
 let compile_ast_clib env ast codegen =
   let cdefs, ctx = jib_of_ast env ast in

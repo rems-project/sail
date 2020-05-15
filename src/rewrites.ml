@@ -489,6 +489,13 @@ let remove_vector_concat_pat pat =
 
   let decls = List.fold_left (fun f g x -> f (g x)) (fun b -> b) decls in
 
+  (* Finally we patch up the top location for the expressions wrapped
+     by decls, otherwise this can cause the coverage instrumentation
+     to get super confused by the generated locations *) 
+  let decls (E_aux (_, (l, _)) as exp) =
+    let E_aux (aux, (_, annot)) = decls exp in
+    E_aux (aux, (gen_loc l, annot)) in
+  
   (* at this point shouldn't have P_as patterns in P_vector_concat patterns any more,
      all P_as and P_id vectors should have their declarations in decls.
      Now flatten all vector_concat patterns *)
@@ -691,7 +698,7 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
     if Env.lookup_id id1 (env_of_annot annot1) = Unbound then Some [] else None
   | P_var (pat1,_), P_var (pat2,_) -> subsumes_pat pat1 pat2
   | P_wild, _ -> Some []
-  | P_app (Id_aux (id1,l1),args1), P_app (Id_aux (id2,_),args2) ->
+  | P_app (Id_aux (id1,_),args1), P_app (Id_aux (id2,_),args2) ->
     if id1 = id2 then subsumes_list subsumes_pat args1 args2 else None
   | P_vector pats1, P_vector pats2
   | P_vector_concat pats1, P_vector_concat pats2
@@ -1374,9 +1381,6 @@ let updates_vars exp =
   lit vectors in patterns or expressions
  *)
 let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as full_exp) =
-  let rewrap e = E_aux (e,annot) in
-  let rewrap_effects e eff =
-    E_aux (e, (l,Some (env_of_annot annot, typ_of_annot annot, eff))) in
   let rewrite_rec = rewriters.rewrite_exp rewriters in
   let rewrite_base = rewrite_exp rewriters in
   match exp with
@@ -2562,7 +2566,7 @@ let fold_typed_guards env guards =
   | g :: gs -> List.fold_left (fun g g' -> annot_exp (E_app (mk_id "and_bool", [g; g'])) Parse_ast.Unknown env bool_typ) g gs
 
 
-let rewrite_pexp_with_guards rewrite_pat (Pat_aux (pexp_aux, (annot: tannot annot)) as pexp) =
+let rewrite_pexp_with_guards rewrite_pat (Pat_aux (pexp_aux, (l, _)) as pexp) =
   let guards = ref [] in
 
   match pexp_aux with
@@ -2572,13 +2576,13 @@ let rewrite_pexp_with_guards rewrite_pat (Pat_aux (pexp_aux, (annot: tannot anno
        match !guards with
        | [] -> pexp
        | gs ->
-          let unchecked_pexp = mk_pexp (Pat_when (strip_pat pat, List.map strip_exp gs |> fold_guards, strip_exp exp)) in
+          let unchecked_pexp = mk_pexp ~loc:l (Pat_when (strip_pat pat, List.map strip_exp gs |> fold_guards, strip_exp exp)) in
           check_case (env_of_pat pat) (typ_of_pat pat) unchecked_pexp (typ_of exp)
      end
   | Pat_when (pat, guard, exp) ->
      begin
        let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat guards } pat in
-       let unchecked_pexp = mk_pexp (Pat_when (strip_pat pat, List.map strip_exp !guards |> fold_guards, strip_exp exp)) in
+       let unchecked_pexp = mk_pexp ~loc:l (Pat_when (strip_pat pat, List.map strip_exp !guards |> fold_guards, strip_exp exp)) in
        check_case (env_of_pat pat) (typ_of_pat pat) unchecked_pexp (typ_of exp)
      end
 

@@ -89,7 +89,7 @@ let untyp_pat = function
   | P_aux (P_typ (typ, pat), _) -> pat, Some typ
   | pat -> pat, None
 
-let mk_pexp pexp_aux = Pat_aux (pexp_aux, no_annot)
+let mk_pexp ?loc:(l=Parse_ast.Unknown) pexp_aux = Pat_aux (pexp_aux, (l, ()))
 
 let mk_mpat mpat_aux = MP_aux (mpat_aux, no_annot)
 let mk_mpexp mpexp_aux = MPat_aux (mpexp_aux, no_annot)

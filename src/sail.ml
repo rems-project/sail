@@ -173,10 +173,10 @@ let options = Arg.align ([
     set_target "ir",
     " print intermediate representation");
   ( "-smt",
-    Arg.Tuple [set_target "smt"; Arg.Clear Jib_compile.opt_track_throw],
+    Arg.Tuple [set_target "smt"],
     " print SMT translated version of input");
   ( "-smt_auto",
-    Arg.Tuple [set_target "smt"; Arg.Clear Jib_compile.opt_track_throw; Arg.Set Jib_smt.opt_auto],
+    Arg.Tuple [set_target "smt"; Arg.Set Jib_smt.opt_auto],
     " generate SMT and automatically call the solver (implies -smt)");
   ( "-smt_ignore_overflow",
     Arg.Set Jib_smt.opt_ignore_overflow,
@@ -201,7 +201,7 @@ let options = Arg.align ([
     " output a C translated version of the input");
   ( "-c2",
     Arg.Tuple [set_target "c2"; Arg.Set Initial_check.opt_undefined_gen],
-    " output a C translated version of the input");
+    " output a C translated version of the input (experimental code-generation)");
   ( "-c_include",
     Arg.String (fun i -> opt_includes_c := i::!opt_includes_c),
     "<filename> provide additional include for C output");
@@ -232,6 +232,9 @@ let options = Arg.align ([
   ( "-c_fold_unit",
     Arg.String (fun str -> Constant_fold.opt_fold_to_unit := Util.split_on_char ',' str),
     " remove comma separated list of functions from C output, replacing them with unit");
+  ( "-c_coverage",
+    Arg.Set C_backend.opt_branch_coverage,
+    " instrument C code to track branch coverage");
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an ELF file so that it can be executed by compiled C code");

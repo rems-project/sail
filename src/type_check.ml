@@ -2994,7 +2994,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let checked_exp = crule check_exp env exp exc_typ in
      annot_exp_effect (E_throw checked_exp) typ (mk_effect [BE_escape])
   | E_var (lexp, bind, exp), _ ->
-     let lexp, bind, env = match bind_assignment env lexp bind with
+     let lexp, bind, env = match bind_assignment l env lexp bind with
        | E_aux (E_assign (lexp, bind), _), env -> lexp, bind, env
        | _, _ -> assert false
      in
@@ -3059,8 +3059,8 @@ and check_block l env exps ret_typ =
   match Nl_flow.analyze exps with
   | [] -> (match ret_typ with Some typ -> typ_equality l env typ unit_typ; [] | None -> [])
   | [exp] -> [final env exp]
-  | (E_aux (E_assign (lexp, bind), _) :: exps) ->
-     let texp, env = bind_assignment env lexp bind in
+  | (E_aux (E_assign (lexp, bind), (assign_l, _)) :: exps) ->
+     let texp, env = bind_assignment assign_l env lexp bind in
      texp :: check_block l env exps ret_typ
   | ((E_aux (E_assert (constr_exp, msg), _) as exp) :: exps) ->
      let msg = assert_msg msg in
@@ -3548,9 +3548,9 @@ and bind_typ_pat_arg env (TP_aux (typ_pat_aux, l) as typ_pat) (A_aux (typ_arg_au
   | _, A_order _ -> typ_error env l "Cannot bind type pattern against order"
   | _, _ -> typ_error env l ("Couldn't bind type argument " ^ string_of_typ_arg typ_arg ^ " with " ^ string_of_typ_pat typ_pat)
 
-and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as exp) =
-  let annot_assign lexp exp = E_aux (E_assign (lexp, exp), (l, mk_tannot env (mk_typ (Typ_id (mk_id "unit"))) no_effect)) in
-  let annot_lexp_effect lexp typ eff = LEXP_aux (lexp, (l, mk_tannot env typ eff)) in
+and bind_assignment assign_l env (LEXP_aux (lexp_aux, (lexp_l, ())) as lexp) (E_aux (_, (exp_l, ())) as exp) =
+  let annot_assign lexp exp = E_aux (E_assign (lexp, exp), (assign_l, mk_tannot env (mk_typ (Typ_id (mk_id "unit"))) no_effect)) in
+  let annot_lexp_effect lexp typ eff = LEXP_aux (lexp, (lexp_l, mk_tannot env typ eff)) in
   let annot_lexp lexp typ = annot_lexp_effect lexp typ no_effect in
   let has_typ v env =
     match Env.lookup_id v env with
@@ -3559,7 +3559,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
   in
   match lexp_aux with
   | LEXP_memory (f, xs) ->
-     check_exp env (E_aux (E_app (f, xs @ [exp]), (l, ()))) unit_typ, env
+     check_exp env (E_aux (E_app (f, xs @ [exp]), (lexp_l, ()))) unit_typ, env
   | LEXP_cast (typ_annot, v) ->
      let checked_exp = crule check_exp env exp typ_annot in
      let tlexp, env' = bind_lexp env lexp (typ_of checked_exp) in
@@ -3817,7 +3817,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let inferred_exps = List.map (irule infer_exp env) exps in
      annot_exp (E_tuple inferred_exps) (mk_typ (Typ_tup (List.map typ_of inferred_exps)))
   | E_assign (lexp, bind) ->
-     fst (bind_assignment env lexp bind)
+     fst (bind_assignment l env lexp bind)
   | E_record_update (exp, fexps) ->
      let inferred_exp = irule infer_exp env exp in
      let typ = typ_of inferred_exp in

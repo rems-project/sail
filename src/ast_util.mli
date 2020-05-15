@@ -84,7 +84,7 @@ val mk_nexp : nexp_aux -> nexp
 val mk_exp : ?loc:l -> unit exp_aux -> unit exp
 val mk_pat : unit pat_aux -> unit pat
 val mk_mpat : unit mpat_aux -> unit mpat
-val mk_pexp : unit pexp_aux -> unit pexp
+val mk_pexp : ?loc:l -> unit pexp_aux -> unit pexp
 val mk_mpexp : unit mpexp_aux -> unit mpexp
 val mk_lexp : unit lexp_aux -> unit lexp
 val mk_lit : lit_aux -> lit

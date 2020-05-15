@@ -288,8 +288,10 @@ rule token = parse
   | "-" digit+ as i                       { (Num(Big_int.of_string i)) }
   | "0b" (binarydigit+ as i)              { (Bin(Util.string_of_list "" (fun s -> s) (Util.split_on_char '_' i))) }
   | "0x" (hexdigit+ as i)                 { (Hex(Util.string_of_list "" (fun s -> s) (Util.split_on_char '_' i))) }
-  | '"'                                   { (String(
-					     string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf)) }
+  | '"'                                   { let startpos = Lexing.lexeme_start_p lexbuf in
+                                            let contents = string startpos (Buffer.create 10) lexbuf in
+                                            lexbuf.lex_start_p <- startpos;
+                                            String(contents) }
   | eof                                   { Eof }
   | _  as c                               { raise (LexError(
                                             Printf.sprintf "Unexpected character: %c" c,
@@ -331,10 +333,6 @@ and string pos b = parse
   | '\\' '\n' ws                        { Lexing.new_line lexbuf; string pos b lexbuf }
   | '\\'                                { assert false (*raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
                                             "illegal backslash escape in string"*) }
-  | '"'                                 { let s = unescaped(Buffer.contents b) in
-                                          (*try Ulib.UTF8.validate s; s
-                                          with Ulib.UTF8.Malformed_code ->
-                                            raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
-                                              "String literal is not valid utf8"))) *) s }
+  | '"'                                 { unescaped (Buffer.contents b) }
   | eof                                 { assert false (*raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
                                             "String literal not terminated")))*) }

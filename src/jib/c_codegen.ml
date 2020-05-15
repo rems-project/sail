@@ -213,20 +213,20 @@ let options_from_json json cdefs =
   in
   opts
 
-module type Config = sig
+module type Options = sig
   val opts : codegen_options
 end
 
-module Make(C: Config) = struct
+module Make(O: Options) = struct
 
 let mangle str =
   let mangled = Util.zencode_string str in
-  match StringMap.find_opt mangled C.opts.exports_mangled with
+  match StringMap.find_opt mangled O.opts.exports_mangled with
   | Some export -> export
   | None -> mangled
 
 let sgen_id id =
-  match Bindings.find_opt id C.opts.exports with
+  match Bindings.find_opt id O.opts.exports with
   | Some export -> export
   | None -> mangle (string_of_id id)
 
@@ -651,7 +651,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
          (sgen_function_uid f, false)
      in
      let sail_state_arg =
-       if is_extern && StringSet.mem fname C.opts.state_primops then
+       if is_extern && StringSet.mem fname O.opts.state_primops then
          "sail_state *state, "
        else
          ""
@@ -1476,7 +1476,7 @@ let codegen_state_struct ctx cdefs =
         ^^ string "    bool have_exception;" ^^ hardline
         ^^ string "    sail_string *throw_location;" ^^ hardline
      ))
-  ^^ concat_map (fun str -> string ("  " ^ str) ^^ hardline) C.opts.extra_state
+  ^^ concat_map (fun str -> string ("  " ^ str) ^^ hardline) O.opts.extra_state
   ^^ string "};"
 
 let is_cdef_startup = function
@@ -1570,7 +1570,7 @@ let codegen ctx output_name cdefs =
   let header =
     stdlib_headers ^^ hardline
     ^^ sail_headers ^^ hardline
-    ^^ concat_map add_extra_header C.opts.extra_headers ^^ hardline
+    ^^ concat_map add_extra_header O.opts.extra_headers ^^ hardline
     ^^ string "struct sail_state;" ^^ hardline
     ^^ string "typedef struct sail_state sail_state;"
     ^^ twice hardline

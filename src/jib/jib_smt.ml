@@ -1397,7 +1397,7 @@ let rec generate_reg_decs ctx inits = function
 let max_int n = Big_int.pred (Big_int.pow_int_positive 2 (n - 1))
 let min_int n = Big_int.negate (Big_int.pow_int_positive 2 (n - 1))
 
-module SMT_config : Jib_compile.Config = struct
+module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = struct
   open Jib_compile
 
   (** Convert a sail type into a C-type. This function can be quite
@@ -1560,10 +1560,11 @@ let unroll_static_foreach ctx = function
 
   let specialize_calls = true
   let ignore_64 = true
-  let unroll_loops () = Some !opt_unroll_limit
+  let unroll_loops = Some Opts.unroll_limit
   let struct_value = true
   let use_real = true
   let branch_coverage = false
+  let track_throw = false
 end
 
 
@@ -2328,7 +2329,7 @@ let rec build_register_map rmap = function
 
 let compile env ast =
   let cdefs, jib_ctx =
-    let module Jibc = Jib_compile.Make(SMT_config) in
+    let module Jibc = Jib_compile.Make(SMT_config(struct let unroll_limit = !opt_unroll_limit end)) in
     let ctx = Jib_compile.(initial_ctx (add_special_functions env)) in
     let t = Profile.start () in
     let cdefs, ctx = Jibc.compile_ast ctx ast in

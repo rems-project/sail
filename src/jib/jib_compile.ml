@@ -58,7 +58,6 @@ open Value2
 open Anf
 
 let opt_memo_cache = ref false
-let opt_track_throw = ref true
 
 let optimize_aarch64_fast_struct = ref false
 
@@ -174,12 +173,13 @@ let initial_ctx env =
 module type Config = sig
   val convert_typ : ctx -> typ -> ctyp
   val optimize_anf : ctx -> typ aexp -> typ aexp
-  val unroll_loops : unit -> int option
+  val unroll_loops : int option
   val specialize_calls : bool
   val ignore_64 : bool
   val struct_value : bool
   val use_real : bool
   val branch_coverage : bool
+  val track_throw : bool
 end
 
 module Make(C: Config) = struct
@@ -201,12 +201,10 @@ let coverage_branch_count = ref 0
 
 let coverage_loc_args l =
   match Reporting.simp_loc l with
-  | None ->
-     Reporting.simple_warn "Branch found with no location info when inserting coverage instrumentation";
-     None
+  | None -> None
   | Some (p1, p2) ->
      Some (Printf.sprintf "\"%s\", %d, %d, %d, %d"
-             p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol))
+             (String.escaped p1.pos_fname) p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol))
  
 let coverage_branch_reached l =
   let branch_id = !coverage_branch_count in
@@ -214,9 +212,7 @@ let coverage_branch_reached l =
   branch_id,
   if C.branch_coverage then
     begin match coverage_loc_args l with
-    | None ->
-       Reporting.simple_warn "Branch found with no location info when inserting coverage instrumentation";
-       []
+    | None -> []
     | Some args ->
        [iraw (Printf.sprintf "sail_branch_reached(%d, %s);" branch_id args)]
     end
@@ -234,8 +230,20 @@ let coverage_branch_taken branch_id (AE_aux (_, _, l)) =
   else
     match coverage_loc_args l with
     | None -> []
-    | Some args -> [iraw (Printf.sprintf "sail_branch_taken(%d, %s);" branch_id args)]
- 
+    | Some args ->
+       print_endline ("B " ^ args);
+       [iraw (Printf.sprintf "sail_branch_taken(%d, %s);" branch_id args)]
+
+let coverage_function_entry id l =
+  if not C.branch_coverage then
+    []
+  else
+    match coverage_loc_args l with
+    | None -> []
+    | Some args ->
+       print_endline ("F " ^ args);
+       [iraw (Printf.sprintf "sail_function_entry(\"%s\", %s);" (string_of_id id) args)]
+       
 let rec compile_aval l ctx = function
   | AV_cval (cval, typ) ->
      let ctyp = cval_ctyp cval in
@@ -668,6 +676,9 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   | AE_case (aval, cases, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
      let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
+     (* Get the number of cases, because we don't want to check branch
+        coverage for matches with only a single case. *)
+     let num_cases = List.length cases in
      let branch_id, on_reached = coverage_branch_reached l in
      let case_return_id = ngensym () in
      let finish_match_label = label "finish_match_" in
@@ -689,7 +700,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
               @ [iif l (V_call (Bnot, [V_id (gs, CT_bool)])) (destructure_cleanup @ [igoto case_label]) [] CT_unit]
             else [])
          @ body_setup
-         @ coverage_branch_taken branch_id body
+         @ (if num_cases > 1 then coverage_branch_taken branch_id body else [])
          @ [body_call (CL_id (case_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
          @ [igoto finish_match_label]
        in
@@ -698,7 +709,9 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        else
          [iblock case_instrs; ilabel case_label]
      in
-     aval_setup @ on_reached @ [idecl ctyp case_return_id]
+     aval_setup
+     @ (if num_cases > 1 then on_reached else [])
+     @ [idecl ctyp case_return_id]
      @ List.concat (List.map compile_case cases)
      @ [imatch_failure ()]
      @ [ilabel finish_match_label],
@@ -997,7 +1010,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      (* We can either generate an actual loop body for C, or unroll the body for SMT *)
      let actual = loop_body [ilabel loop_start_label] (fun () -> [igoto loop_start_label]) in
      let rec unroll max n = loop_body [] (fun () -> if n < max then unroll max (n + 1) else [imatch_failure ()]) in
-     let body = match C.unroll_loops () with Some times -> unroll times 0 | None -> actual in
+     let body = match C.unroll_loops with Some times -> unroll times 0 | None -> actual in
 
      variable_init from_gs from_setup from_call from_cleanup
      @ variable_init to_gs to_setup to_call to_cleanup
@@ -1106,7 +1119,7 @@ let fix_exception_block ?return:(return=None) ctx instrs =
        before
        @ [icopy l (CL_id (current_exception, cval_ctyp cval)) cval;
           icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool true, CT_bool))]
-       @ (if !opt_track_throw then
+       @ (if C.track_throw then
             let loc_string = Reporting.short_loc_to_string l in
             [icopy l (CL_id (throw_location, CT_string)) (V_lit (VL_string loc_string, CT_string))]
           else [])
@@ -1307,6 +1320,7 @@ let compile_funcl ctx id pat guard exp =
   let instrs = arg_setup @ destructure @ guard_instrs @ setup @ [call (CL_id (return, ret_ctyp))] @ cleanup @ destructure_cleanup @ arg_cleanup in
   let instrs = fix_early_return (CL_id (return, ret_ctyp)) instrs in
   let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
+  let instrs = coverage_function_entry id (exp_loc exp) @ instrs in
 
   [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], orig_ctx
 
