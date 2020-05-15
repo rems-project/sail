@@ -4,6 +4,8 @@ let opt_files = ref ([] : string list)
 let opt_taken = ref "sail_coverage"
 
 let opt_all = ref "all_branches"
+
+let opt_tab_width = ref 4
               
 let options =
   Arg.align [
@@ -12,7 +14,10 @@ let options =
         "<file> coverage information for branches taken while executing the model (default: sail_coverage)");
       ( "-a",
         Arg.String (fun str -> opt_all := str),
-        "<file> information about all possible branches (default: all_branches)")
+        "<file> information about all possible branches (default: all_branches)");
+      ( "--tab-width",
+        Arg.Int (fun n -> opt_tab_width := n),
+        "<integer> set the tab width for html output (default: 4)")
     ]
 
 type span = {
@@ -89,6 +94,8 @@ let output_html_char chan c =
     output_string chan "&gt;"
   else if c == '"' then
     output_string chan "&quot;"
+  else if c == '\t' then
+    output_string chan (String.concat "" (List.init !opt_tab_width (fun _ -> "&nbsp;")))
   else
     output_char chan c
     
