@@ -2127,7 +2127,8 @@ let codegen_def' ctx = function
      let cleanup =
        List.concat (List.map (fun (id, ctyp) -> [iclear ctyp (name id)]) bindings)
      in
-     separate_map hardline (fun (id, ctyp) -> string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))) bindings
+     let static = if !opt_static then "static " else "" in
+     separate_map hardline (fun (id, ctyp) -> string (Printf.sprintf "%s%s %s;" static (sgen_ctyp ctyp) (sgen_id id))) bindings
      ^^ hardline ^^ string (Printf.sprintf "static void create_letbind_%d(void) " number)
      ^^ string "{"
      ^^ jump 0 2 (separate_map hardline codegen_alloc setup) ^^ hardline
