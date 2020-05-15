@@ -306,7 +306,6 @@ let main () =
               if loc.bad_zero_width then (
                 output_string chan (Printf.sprintf "<span style=\"background-color: %s\">" (bad_color ()));
                 output_string chan "&#171;Invisible branch not taken here&#187";
-                prerr_endline ("zero" ^ file);
                 output_string chan "</span>"
               );
               
