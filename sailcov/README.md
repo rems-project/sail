@@ -38,5 +38,5 @@ sailcov -a all_branches -t sail_coverage my_model.sail
 
 which produces a `my_model.html` file. Multiple sail files can be
 passed to the tool, and it will produce html for each
-individually. See [riscv_vmem_sv39.html](riscv_vmem_sv_39.html) for an
+individually. See [riscv_vmem_sv39.html](https://alasdair.github.io/riscv_vmem_sv39.html) for an
 example of the output.
