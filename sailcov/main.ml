@@ -2,13 +2,13 @@
 let opt_files = ref ([] : string list)
 
 let opt_taken = ref "sail_coverage"
-
 let opt_all = ref "all_branches"
 
 let opt_tab_width = ref 4
 
 let opt_index = ref None
 let opt_index_default = ref None
+let opt_prefix = ref ""
                   
 type color = {
     hue: int;
@@ -45,10 +45,13 @@ let options =
         "<integer> set the tab width for html output (default: 4)");
       ( "--index",
         Arg.String (fun str -> opt_index := Some str),
-        "<name> create an <name>.html page as an index");
+        "<name> create a <name>.html page as an index");
       ( "--index-default",
         Arg.String (fun str -> opt_index_default := Some str),
         "<file> The .sail file that will be displayed by the generated index page by default");
+      ( "--prefix",
+        Arg.String (fun str -> opt_prefix := str),
+        "<string> Prepend a prefix to all generated html coverage files");
       ( "--covered-hue",
         Arg.Int (fun n -> opt_good_color := { !opt_good_color with hue = clamp_degree n }),
         "<int> set the hue (between 0 and 360) of the color used for code that is covered (default: 120 (green))");
@@ -232,7 +235,10 @@ iframe {
   padding: 0;
 }
 "
-  
+
+let html_file_for file =
+  !opt_prefix ^ Filename.remove_extension (Filename.basename file) ^ ".html"
+              
 let main () =
   let all = read_coverage !opt_all in
   let taken = read_coverage !opt_taken in
@@ -244,7 +250,7 @@ let main () =
       SpanSet.iter (mark_good_region source) taken;
       SpanSet.iter (mark_bad_region source) not_taken;
       
-      let output_file = Filename.remove_extension (Filename.basename file) ^ ".html" in
+      let output_file = html_file_for file in
       let chan = open_out output_file in
       
       let current_goodness = ref 0 in
@@ -342,16 +348,16 @@ let main () =
      output_string chan "<table><tr><td class=\"left\"><div class=\"scroll\">";
      List.iter (fun file ->
          let _, _, desc = file_info file all taken in
-         Printf.ksprintf (output_string chan) "<a href=\"%s.html\" target=\"source\">%s</a><br>\n"
-           (Filename.remove_extension (Filename.basename file)) desc
+         Printf.ksprintf (output_string chan) "<a href=\"%s\" target=\"source\">%s</a><br>\n"
+           (html_file_for file) desc
        ) !opt_files;
      output_string chan "</div></td>";
 
      output_string chan "<td class=\"right\">";
      begin match !opt_index_default with
      | Some default_file ->
-        Printf.ksprintf (output_string chan) "<iframe src=\"%s.html\" name=\"source\"></iframe>"
-          (Filename.remove_extension (Filename.basename default_file));
+        Printf.ksprintf (output_string chan) "<iframe src=\"%s\" name=\"source\"></iframe>"
+          (html_file_for default_file);
      | None ->
         output_string chan "<iframe name=\"source\"></iframe>"
      end;
