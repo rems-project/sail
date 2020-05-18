@@ -8,6 +8,7 @@ let opt_all = ref "all_branches"
 let opt_tab_width = ref 4
 
 let opt_index = ref None
+let opt_index_default = ref None
                   
 type color = {
     hue: int;
@@ -44,7 +45,10 @@ let options =
         "<integer> set the tab width for html output (default: 4)");
       ( "--index",
         Arg.String (fun str -> opt_index := Some str),
-        " create an index.html page");
+        "<name> create an <name>.html page as an index");
+      ( "--index-default",
+        Arg.String (fun str -> opt_index_default := Some str),
+        "<file> The .sail file that will be displayed by the generated index page by default");
       ( "--covered-hue",
         Arg.Int (fun n -> opt_good_color := { !opt_good_color with hue = clamp_degree n }),
         "<int> set the hue (between 0 and 360) of the color used for code that is covered (default: 120 (green))");
@@ -260,6 +264,7 @@ let main () =
       output_string chan (Printf.sprintf "<title>%s</title>" (Filename.remove_extension (Filename.basename file)));
       output_string chan "</head>\n";
       output_string chan "<body>\n";
+      output_string chan (Printf.sprintf "<h1>%s</h1>\n" desc);
       output_string chan "<code style=\"display: block\">\n";
 
       Array.iter (fun line ->
@@ -341,8 +346,16 @@ let main () =
            (Filename.remove_extension (Filename.basename file)) desc
        ) !opt_files;
      output_string chan "</div></td>";
-     
-     output_string chan "<td class=\"right\"><iframe name=\"source\"></iframe></td></tr></table>\n";
+
+     output_string chan "<td class=\"right\">";
+     begin match !opt_index_default with
+     | Some default_file ->
+        Printf.ksprintf (output_string chan) "<iframe src=\"%s.html\" name=\"source\"></iframe>"
+          (Filename.remove_extension (Filename.basename default_file));
+     | None ->
+        output_string chan "<iframe name=\"source\"></iframe>"
+     end;
+     output_string chan "</td></tr></table>\n";
      output_string chan "</body>\n";
      output_string chan "</html>";
      close_out chan
