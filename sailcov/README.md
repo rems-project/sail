@@ -3,6 +3,8 @@ sailcov
 
 sailcov is a simple branch coverage visualiser for sail specifications.
 
+Requires OCaml 4.07 or greater
+
 ### Usage
 
 First, compile your model to c using the `-c_coverage` flag and
