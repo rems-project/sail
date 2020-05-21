@@ -1493,3 +1493,5 @@ defs:
 file:
   | defs Eof
     { $1 }
+  | Eof
+    { (Defs []) }

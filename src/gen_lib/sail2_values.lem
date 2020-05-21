@@ -35,15 +35,27 @@ let power_int_nat l r = integerPow l r
 let power_int_int l r = integerPow l (nat_of_int r)
 let negate_int i = integerNegate i
 let min_int l r = integerMin l r
-let max_int l r = integerMax l r
+let max_int l r = integerMax l r*)
 
-let add_real l r = realAdd l r
-let sub_real l r = realMinus l r
-let mult_real l r = realMult l r
-let div_real l r = realDiv l r
-let negate_real r = realNegate r
-let abs_real r = realAbs r
-let power_real b e = realPowInteger b e*)
+let inline add_real l r = realAdd l r
+let inline sub_real l r = realMinus l r
+let inline mult_real l r = realMult l r
+let inline div_real l r = realDiv l r
+let inline neg_real r = realNegate r
+let inline abs_real r = realAbs r
+let inline real_power b e = realPowInteger b e
+let inline sqrt_real r = realSqrt r
+
+let inline eq_real l r = realEq l r
+let inline lt_real l r = realLess l r
+let inline gt_real l r = realLessEqual l r
+let inline lteq_real l r = realGreater l r
+let inline gteq_real l r = realGreaterEqual l r
+
+let inline to_real i = realFromInteger i
+
+let inline round_down r = realFloor r
+let inline round_up r = realCeiling r
 
 val print_endline : string -> unit
 let print_endline _ = ()
@@ -463,6 +475,44 @@ let show_bitlist_prefix c bs =
   end
 
 let show_bitlist bs = show_bitlist_prefix #'0' bs
+
+val hex_char : natural -> char
+
+let hex_char n =
+  match n with
+  | 0 -> #'0'
+  | 1 -> #'1'
+  | 2 -> #'2'
+  | 3 -> #'3'
+  | 4 -> #'4'
+  | 5 -> #'5'
+  | 6 -> #'6'
+  | 7 -> #'7'
+  | 8 -> #'8'
+  | 9 -> #'9'
+  | 10 -> #'A'
+  | 11 -> #'B'
+  | 12 -> #'C'
+  | 13 -> #'D'
+  | 14 -> #'E'
+  | 15 -> #'F'
+  | _ -> failwith "hex_char: not a hexadecimal digit"
+  end
+
+val hex_str_aux : natural -> list char -> list char
+
+let rec hex_str_aux n acc =
+  if n = 0 then acc else
+  hex_str_aux (n div 16) (hex_char (n mod 16) :: acc)
+
+declare {isabelle} termination_argument hex_str_aux = automatic
+
+val hex_str : integer -> string
+
+let hex_str i =
+  if i < 0 then failwith "hex_str: negative" else
+  if i = 0 then "0x0" else
+  "0x" ^ toString (hex_str_aux (naturalFromInteger (abs i)) [])
 
 (*** List operations *)
 

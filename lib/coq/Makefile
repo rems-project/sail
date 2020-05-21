@@ -1,10 +1,10 @@
-BBV_DIR?=../../../bbv
+BBV_DIR?=../../../bbv/src/bbv
 
 CORESRC=Sail2_prompt_monad.v  Sail2_prompt.v  Sail2_impl_base.v  Sail2_instr_kinds.v  Sail2_operators_bitlists.v  Sail2_operators_mwords.v  Sail2_operators.v  Sail2_values.v  Sail2_state_monad.v  Sail2_state.v  Sail2_state_lifting.v  Sail2_string.v  Sail2_real.v
 PROOFSRC=Sail2_values_lemmas.v Sail2_state_monad_lemmas.v Sail2_state_lemmas.v Hoare.v
 SRC=$(CORESRC) $(PROOFSRC)
 
-COQ_LIBS = -R . Sail -R "$(BBV_DIR)/theories" bbv
+COQ_LIBS = -R . Sail -R "$(BBV_DIR)" bbv
 
 TARGETS=$(SRC:.v=.vo)
 

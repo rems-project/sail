@@ -653,4 +653,5 @@ let _ = try
   with Reporting.Fatal_error e ->
     Reporting.print_error e;
     Interactive.opt_suppress_banner := true;
+    if !opt_memo_z3 then Constraint.save_digests () else ();
     if !Interactive.opt_interactive then () else exit 1

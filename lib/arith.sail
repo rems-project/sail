@@ -56,19 +56,21 @@ A common idiom in asl is to take two bits of an opcode and convert in into a var
 let elsize = shl_int(8, UInt(size))
 ```
 THIS ensures that in this case the typechecker knows that the end result will be a value in the set `{8, 16, 32, 64}`
+
+Similarly, we define shifts of 32 and 1 (i.e., powers of two).
 */
 val _shl8 = {c: "shl_mach_int", coq: "shl_int_8", _: "shl_int"} :
   forall 'n, 0 <= 'n <= 3. (int(8), int('n)) -> {'m, 'm in {8, 16, 32, 64}. int('m)}
 
-/*!
-Similarly, we can shift 32 by either 0 or 1 to get a value in `{32, 64}`
-*/
 val _shl32 = {c: "shl_mach_int", coq: "shl_int_32", _: "shl_int"} :
   forall 'n, 'n in {0, 1}. (int(32), int('n)) -> {'m, 'm in {32, 64}. int('m)}
 
+val _shl1 = {c: "shl_mach_int", coq: "shl_int_32", _: "shl_int"} :
+  forall 'n, 0 <= 'n <= 3. (int(1), int('n)) -> {'m, 'm in {1, 2, 4, 8}. int('m)}
+
 val _shl_int = "shl_int" : (int, int) -> int
 
-overload shl_int = {_shl8, _shl32, _shl_int}
+overload shl_int = {_shl1, _shl8, _shl32, _shl_int}
 
 val _shr32 = {c: "shr_mach_int", coq: "shr_int_32", _: "shr_int"} : forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}
 

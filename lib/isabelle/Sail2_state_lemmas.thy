@@ -122,22 +122,22 @@ lemma liftState_write_mem[liftState_simp]:
   by (auto simp: write_mem_def write_memS_def write_memtS_def write_mem_bytesS_def liftState_simp
            split: option.splits)
 
-lemma liftState_read_reg_readS:
+lemma liftState_read_reg:
   assumes "\<And>s. Option.bind (get_regval' (name reg) s) (of_regval reg) = Some (read_from reg s)"
-  shows "liftState (get_regval', set_regval') (read_reg reg) = readS (read_from reg \<circ> regstate)"
+  shows "liftState (get_regval', set_regval') (read_reg reg) = read_regS reg"
 proof
   fix s :: "'a sequential_state"
   obtain rv v where "get_regval' (name reg) (regstate s) = Some rv"
     and "of_regval reg rv \<equiv> Some v" and "read_from reg (regstate s) = v"
     using assms unfolding bind_eq_Some_conv by blast
-  then show "liftState (get_regval', set_regval') (read_reg reg) s = readS (read_from reg \<circ> regstate) s"
+  then show "liftState (get_regval', set_regval') (read_reg reg) s = read_regS reg s"
     by (auto simp: read_reg_def bindS_def returnS_def read_regS_def readS_def)
 qed
 
-lemma liftState_write_reg_updateS:
+lemma liftState_write_reg:
   assumes "\<And>s. set_regval' (name reg) (regval_of reg v) s = Some (write_to reg v s)"
-  shows "liftState (get_regval', set_regval') (write_reg reg v) = updateS (regstate_update (write_to reg v))"
-  using assms by (auto simp: write_reg_def updateS_def returnS_def bindS_readS)
+  shows "liftState (get_regval', set_regval') (write_reg reg v) = write_regS reg v"
+  using assms by (auto simp: write_reg_def updateS_def returnS_def bindS_readS write_regS_def)
 
 lemma liftState_iter_aux[liftState_simp]:
   shows "liftState r (iter_aux i f xs) = iterS_aux i (\<lambda>i x. liftState r (f i x)) xs"

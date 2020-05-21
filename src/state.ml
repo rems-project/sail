@@ -410,12 +410,12 @@ let generate_isa_lemmas mwords (Defs defs : tannot defs) =
     let id' = remove_trailing_underscores id in
     separate_map hardline string [
       "lemma liftS_read_reg_" ^ id ^ "[liftState_simp]:";
-      "  \"\\<lbrakk>read_reg " ^ id ^ "_ref\\<rbrakk>\\<^sub>S = readS (" ^ id' ^ " \\<circ> regstate)\"";
-      "  by (auto simp: liftState_read_reg_readS register_defs)";
+      "  \"\\<lbrakk>read_reg " ^ id ^ "_ref\\<rbrakk>\\<^sub>S = read_regS " ^ id ^ "_ref\"";
+      "  by (intro liftState_read_reg) (auto simp: register_defs)";
       "";
       "lemma liftS_write_reg_" ^ id ^ "[liftState_simp]:";
-      "  \"\\<lbrakk>write_reg " ^ id ^ "_ref v\\<rbrakk>\\<^sub>S = updateS (regstate_update (" ^ id' ^ "_update (\\<lambda>_. v)))\"";
-      "  by (auto simp: liftState_write_reg_updateS register_defs)"
+      "  \"\\<lbrakk>write_reg " ^ id ^ "_ref v\\<rbrakk>\\<^sub>S = write_regS " ^ id ^ "_ref v\"";
+      "  by (intro liftState_write_reg) (auto simp: register_defs)"
     ]
   in
   string "abbreviation liftS (\"\\<lbrakk>_\\<rbrakk>\\<^sub>S\") where \"liftS \\<equiv> liftState (get_regval, set_regval)\"" ^^

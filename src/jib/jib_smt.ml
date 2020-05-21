@@ -287,6 +287,8 @@ let smt_conversion ctx from_ctyp to_ctyp x =
      force_size ctx n ctx.lint_size x
   | CT_lint, CT_lbits _ ->
      Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int ctx.lint_size); force_size ctx (lbits_size ctx) ctx.lint_size x])
+  | CT_fint n, CT_lbits _ ->
+     Fn ("Bits", [bvint ctx.lbits_index (Big_int.of_int n); force_size ctx (lbits_size ctx) n x])
   | CT_lbits _, CT_fbits (n, _) ->
      unsigned_size ctx n (lbits_size ctx) (Fn ("contents", [x]))
   | CT_fbits (n, _), CT_fbits (m, _) ->
@@ -960,6 +962,11 @@ let builtin_add_bits_int ctx v1 v2 ret_ctyp =
   | CT_fbits (n, _), CT_lint, CT_fbits (o, _) when n = o ->
      Fn ("bvadd", [smt_cval ctx v1; force_size ctx o ctx.lint_size (smt_cval ctx v2)])
 
+  | CT_lbits _, CT_fint n, CT_lbits _ when n < lbits_size ctx ->
+     let smt1 = smt_cval ctx v1 in
+     let smt2 = force_size ctx (lbits_size ctx) n (smt_cval ctx v2) in
+     Fn ("Bits", [Fn ("len", [smt1]); Fn ("bvadd", [Fn ("contents", [smt1]); smt2])])
+
   | _ -> builtin_type_error ctx "add_bits_int" [v1; v2] (Some ret_ctyp)
 
 let builtin_sub_bits_int ctx v1 v2 ret_ctyp =
@@ -1128,6 +1135,20 @@ let builtin_set_slice_bits ctx v1 v2 v3 v4 v5 ret_ctyp =
        let mask = Fn ("concat", [bvones (n - m - pos); Fn ("concat", [bvzero m; bvones pos])]) in
        let smt5 = Fn ("concat", [bvzero (n - m - pos); Fn ("concat", [smt_cval ctx v5; bvzero pos])]) in
        Fn ("bvor", [Fn ("bvand", [smt_cval ctx v3; mask]); smt5])
+
+  (* set_slice_bits(len, slen, x, pos, y) =
+       let mask = slice_mask(len, pos, slen) in
+       (x AND NOT(mask)) OR ((unsigned_size(len, y) << pos) AND mask) *)
+  | CT_constant n', _, CT_fbits (n, _), _, CT_lbits _, CT_fbits (n'', _)
+    when Big_int.to_int n' = n && n'' = n ->
+      let pos = bvzeint ctx (lbits_size ctx) v4 in
+      let slen = bvzeint ctx ctx.lbits_index v2 in
+      let mask = Fn ("bvshl", [bvmask ctx slen; pos]) in
+      let smt3 = unsigned_size ctx (lbits_size ctx) n (smt_cval ctx v3) in
+      let smt3' = Fn ("bvand", [smt3; Fn ("bvnot", [mask])]) in
+      let smt5 = Fn ("contents", [smt_cval ctx v5]) in
+      let smt5' = Fn ("bvand", [Fn ("bvshl", [smt5; pos]); mask]) in
+      Extract (n - 1, 0, Fn ("bvor", [smt3'; smt5']))
 
   | _ -> builtin_type_error ctx "set_slice" [v1; v2; v3; v4; v5] (Some ret_ctyp)
 
@@ -1877,11 +1898,14 @@ let smt_instr ctx =
      Reporting.unreachable l __POS__ "Register reference write should be re-written by now"
 
   | I_aux (I_init (ctyp, id, cval), _) | I_aux (I_copy (CL_id (id, ctyp), cval), _) ->
-     begin match id with
-     | Name (id, _) | Global (id, _) when IdSet.mem id ctx.preserved ->
+     begin match id, cval with
+     | (Name (id, _) | Global (id, _)), _ when IdSet.mem id ctx.preserved ->
         [preserve_const ctx id ctyp
            (smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval))]
-     | _ ->
+     | _, V_lit (VL_undefined, _) ->
+        (* Declare undefined variables as arbitrary but fixed *)
+        [declare_const ctx id ctyp]
+     | _, _ ->
         [define_const ctx id ctyp
            (smt_conversion ctx (cval_ctyp cval) ctyp (smt_cval ctx cval))]
      end

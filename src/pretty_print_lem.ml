@@ -95,9 +95,9 @@ let rec fix_id remove_tick name = match name with
   | "with"
   | "check"
   | "field"
-  | "LT"
-  | "GT"
-  | "EQ"
+  | "LT" | "lt" | "lteq"
+  | "GT" | "gt" | "gteq"
+  | "EQ" | "eq" | "neq"
   | "integer"
     -> name ^ "'"
   | _ ->
@@ -362,46 +362,63 @@ let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
   lem_nexps_of_typ typ
   |> NexpSet.exists (fun nexp -> not (is_nexp_constant nexp))
 
-let replace_typ_size ctxt env (Typ_aux (t,a)) =
+let rec replace_typ_size ctxt env (Typ_aux (t, a) as typ) =
+  let rewrap t = Typ_aux (t, a) in
+  let recur = replace_typ_size ctxt env in
   match t with
-  | Typ_app (Id_aux (Id "bitvector",_) as id, [A_aux (A_nexp size,_);ord]) ->
-     begin
-       let mk_typ nexp =
-         Some (Typ_aux (Typ_app (id, [A_aux (A_nexp nexp,Parse_ast.Unknown);ord]),a))
-       in
-       match Type_check.solve_unique env size with
-       | Some n -> mk_typ (nconstant n)
+  | Typ_tup typs ->
+     begin match Util.option_all (List.map recur typs) with
+       | Some typs' -> Some (rewrap (Typ_tup typs'))
+       | None -> None
+     end
+  | Typ_app (id, args) when contains_t_pp_var ctxt typ ->
+     begin match Util.option_all (List.map (replace_typ_arg_size ctxt env) args) with
+       | Some args' -> Some (rewrap (Typ_app (id, args')))
+       | None -> None
+     end
+  | Typ_app _ -> Some typ
+  | Typ_id _ -> Some typ
+  | Typ_fn (argtyps, rtyp, eff) ->
+     begin match (Util.option_all (List.map recur argtyps), recur rtyp) with
+       | (Some argtyps', Some rtyp') -> Some (rewrap (Typ_fn (argtyps', rtyp', eff)))
+       | _ -> None
+     end
+  | Typ_var kid ->
+     let is_kid nexp = Nexp.compare nexp (nvar kid) = 0 in
+     if NexpSet.exists is_kid ctxt.bound_nexps then Some typ else None
+  | Typ_exist (kids, nc, typ) ->
+     begin match recur typ with
+       | Some typ' -> Some (rewrap (Typ_exist (kids, nc, typ')))
+       | None -> None
+     end
+  | Typ_internal_unknown
+  | Typ_bidir (_, _, _) -> None
+and replace_typ_arg_size ctxt env (A_aux (ta, a) as targ) =
+  let rewrap ta = A_aux (ta, a) in
+  match ta with
+  | A_nexp nexp ->
+     begin match Type_check.solve_unique env nexp with
+       | Some n -> Some (rewrap (A_nexp (nconstant n)))
        | None ->
-          let is_equal nexp =
-            prove __POS__ env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
-          in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
-          | nexp -> mk_typ nexp
+          let is_equal nexp' =
+            prove __POS__ env (NC_aux (NC_equal (nexp,nexp'),Parse_ast.Unknown))
+          in
+          match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
+          | nexp' -> Some (rewrap (A_nexp nexp'))
           | exception Not_found -> None
      end
-       (*
-  | Typ_app (Id_aux (Id "vector",_) as id, [A_aux (A_nexp size,_);ord;typ']) ->
-     begin
-       let mk_typ nexp =
-         Some (Typ_aux (Typ_app (id, [A_aux (A_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
-       in
-       match Type_check.solve_unique env size with
-       | Some n -> mk_typ (nconstant n)
-       | None ->
-          let is_equal nexp =
-            prove __POS__ env (NC_aux (NC_equal (size,nexp),Parse_ast.Unknown))
-          in match List.find is_equal (NexpSet.elements ctxt.bound_nexps) with
-          | nexp -> mk_typ nexp
-          | exception Not_found -> None
+  | A_typ typ ->
+     begin match replace_typ_size ctxt env typ with
+       | Some typ' -> Some (rewrap (A_typ typ'))
+       | None -> None
      end
-        *)
-  | _ -> None
+  | A_order _ | A_bool _ -> Some targ
 
 let make_printable_type ctxt env typ =
   if contains_t_pp_var ctxt typ
   then
-    match replace_typ_size ctxt env typ with
-    | None -> None
-    | Some typ -> Some typ
+    try replace_typ_size ctxt env (Env.expand_synonyms env typ) with
+    | _ -> None
   else Some typ
 
 let doc_tannot_lem ctxt env eff typ =
@@ -529,8 +546,8 @@ let rec doc_pat_lem ctxt apat_needed (P_aux (p,(l,annot)) as pa) = match p with
   | P_typ(Typ_aux (Typ_tup typs, _), P_aux (P_tup pats, _)) ->
      (* Isabelle does not seem to like type-annotated tuple patterns;
         it gives a syntax error. Avoid this by annotating the tuple elements instead *)
-     let doc_elem typ pat =
-       doc_pat_lem ctxt true (add_p_typ typ pat) in
+     let env = env_of_pat pa in
+     let doc_elem typ pat = doc_pat_lem ctxt true (add_p_typ env typ pat) in
      parens (separate comma_sp (List.map2 doc_elem typs pats))
   | P_typ(typ,p) ->
     let doc_p = doc_pat_lem ctxt true p in
@@ -901,7 +918,7 @@ let doc_exp_lem, doc_let_lem =
            when Env.is_record tid env ->
            tid
          | _ ->  raise (report l __POS__ ("cannot get record type from annot " ^ string_of_tannot annot ^ " of exp " ^ string_of_exp full_exp)) in
-       anglebars (doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps))
+       anglebars (space ^^ doc_op (string "with") (expY e) (separate_map semi_sp (doc_fexp ctxt recordtyp) fexps)  ^^ space)
     | E_vector exps ->
        let t = Env.base_typ_of (env_of full_exp) (typ_of full_exp) in
        let start, (len, order, etyp) =
@@ -1367,8 +1384,11 @@ let doc_fun_body_lem ctxt exp =
   then align (string "catch_early_return" ^//^ parens (doc_exp))
   else doc_exp
 
-let doc_funcl_lem (FCL_aux(FCL_Funcl(id, pexp), annot)) =
-  let typ = typ_of_annot annot in
+let doc_funcl_lem type_env (FCL_aux(FCL_Funcl(id, pexp), ((l, _) as annot))) =
+  let (tq, typ) =
+    try Env.get_val_spec_orig id type_env with
+    | _ -> raise (unreachable l __POS__ ("Could not get val-spec of " ^ string_of_id id))
+  in
   let arg_typs = match typ with
     | Typ_aux (Typ_fn (arg_typs, typ_ret, _), _) -> arg_typs
     | Typ_aux (_, l) -> raise (unreachable l __POS__ "Non-function type for funcl")
@@ -1377,7 +1397,7 @@ let doc_funcl_lem (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let ctxt =
     { early_ret = contains_early_return exp;
       bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ);
-      top_env = env_of_annot annot } in
+      top_env = type_env } in
   let pats, bind = untuple_args_pat pat arg_typs in
   let patspp = separate_map space (doc_pat_lem ctxt true) pats in
   let _ = match guard with
@@ -1398,20 +1418,20 @@ module StringSet = Set.Make(String)
 (* Strictly speaking, Lem doesn't support multiple clauses for a single function
    joined by "and", although it has worked for Isabelle before.  However, all
    the funcls should have been merged by the merge_funcls rewrite now. *)   
-let doc_fundef_rhs_lem (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
-  separate_map (hardline ^^ string "and ") doc_funcl_lem funcls
+let doc_fundef_rhs_lem type_env (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
+  separate_map (hardline ^^ string "and ") (doc_funcl_lem type_env) funcls
 
-let doc_mutrec_lem = function
+let doc_mutrec_lem type_env = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
   | fundefs ->
      string "let rec " ^^
-     separate_map (hardline ^^ string "and ") doc_fundef_rhs_lem fundefs
+     separate_map (hardline ^^ string "and ") (doc_fundef_rhs_lem type_env) fundefs
 
-let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
+let rec doc_fundef_lem type_env (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | FCL_aux (FCL_Funcl(id, pexp),annot) :: _
-     when not (Env.is_extern id (env_of_annot annot) "lem") ->
+     when not (Env.is_extern id type_env "lem") ->
     (* Output "rec" modifier if function calls itself.  Mutually recursive
        functions are handled separately by doc_mutrec_lem. *)
     let is_funcl_rec =
@@ -1422,7 +1442,7 @@ let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
         pexp
     in
     let doc_rec = if is_funcl_rec then [string "rec"] else [] in
-    separate space ([string "let"] @ doc_rec @ [doc_fundef_rhs_lem fd])
+    separate space ([string "let"] @ doc_rec @ [doc_fundef_rhs_lem type_env fd])
   | _ -> empty
 
 
@@ -1523,8 +1543,8 @@ let rec doc_def_lem type_env def =
   | DEF_reg_dec dec -> group (doc_dec_lem dec)
 
   | DEF_default df -> empty
-  | DEF_fundef fdef -> group (doc_fundef_lem fdef) ^/^ hardline
-  | DEF_internal_mutrec fundefs -> doc_mutrec_lem fundefs ^/^ hardline
+  | DEF_fundef fdef -> group (doc_fundef_lem type_env fdef) ^/^ hardline
+  | DEF_internal_mutrec fundefs -> doc_mutrec_lem type_env fundefs ^/^ hardline
   | DEF_val (LB_aux (LB_val (pat, _), _) as lbind) ->
      group (doc_let_lem empty_ctxt lbind) ^/^ hardline
   | DEF_scattered sdef -> failwith "doc_def_lem: shoulnd't have DEF_scattered at this point"

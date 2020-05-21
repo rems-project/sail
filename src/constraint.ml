@@ -230,6 +230,7 @@ type smt_result = Unknown | Sat | Unsat
 module DigestMap = Map.Make(Digest)
 
 let known_problems = ref (DigestMap.empty)
+let known_uniques = ref (DigestMap.empty)
 
 let load_digests_err () =
   let in_chan = open_in_bin "z3_problems" in
@@ -241,6 +242,10 @@ let load_digests_err () =
       | 0 -> known_problems := DigestMap.add digest Unknown !known_problems
       | 1 -> known_problems := DigestMap.add digest Sat !known_problems
       | 2 -> known_problems := DigestMap.add digest Unsat !known_problems
+      | 3 -> known_uniques := DigestMap.add digest None !known_uniques
+      | 4 ->
+         let solution = input_binary_int in_chan in
+         known_uniques := DigestMap.add digest (Some solution) !known_uniques
       | _ -> assert false
     end;
     load ()
@@ -254,14 +259,21 @@ let load_digests () =
 
 let save_digests () =
   let out_chan = open_out_bin "z3_problems" in
-  let output digest result =
+  let output_problem digest result =
     Digest.output out_chan digest;
     match result with
     | Unknown -> output_byte out_chan 0
     | Sat -> output_byte out_chan 1
     | Unsat -> output_byte out_chan 2
   in
-  DigestMap.iter output !known_problems;
+  DigestMap.iter output_problem !known_problems;
+  let output_solution digest result =
+    Digest.output out_chan digest;
+    match result with
+    | None -> output_byte out_chan 3
+    | Some i -> output_byte out_chan 4; output_binary_int out_chan i
+  in
+  DigestMap.iter output_solution !known_uniques;
   close_out out_chan
 
 let kopt_pair kopt = (kopt_kid kopt, unaux_kind (kopt_kind kopt))
@@ -344,16 +356,17 @@ let call_smt l constraints =
   Profile.finish_smt t;
   result
 
-let solve_smt l constraints var =
+let solve_smt_file l constraints =
   let vars =
     kopts_of_constraint constraints
     |> KOptSet.elements
     |> List.map kopt_pair
     |> List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty
   in
-  let smt_file, smt_var = smtlib_of_constraints ~get_model:true l vars constraints in
-  let smt_var = pp_sexpr (smt_var var) in
+  smtlib_of_constraints ~get_model:true l vars constraints
 
+let call_smt_solve l smt_file smt_vars var =
+  let smt_var = pp_sexpr (smt_vars var) in
   if !opt_smt_verbose then
     prerr_endline (Printf.sprintf "SMTLIB2 constraints are (solve for %s): \n%s%!" smt_var smt_file)
   else ();
@@ -389,6 +402,10 @@ let solve_smt l constraints var =
   with
   | Not_found -> None
 
+let solve_smt l constraints var =
+  let smt_file, smt_vars = solve_smt_file l constraints in
+  call_smt_solve l smt_file smt_vars var
+
 let solve_all_smt l constraints var =
   let rec aux results =
     let constraints = List.fold_left (fun ncs r -> (nc_and ncs (nc_neq (nconstant r) (nvar var)))) constraints results in
@@ -402,10 +419,24 @@ let solve_all_smt l constraints var =
   aux []
 
 let solve_unique_smt l constraints var =
-  match solve_smt l constraints var with
-  | Some result ->
-     begin match call_smt l (nc_and constraints (nc_neq (nconstant result) (nvar var))) with
-     | Unsat -> Some result
-     | _ -> None
-     end
-  | None -> None
+  let smt_file, smt_vars = solve_smt_file l constraints in
+  let digest = Digest.string (smt_file ^ pp_sexpr (smt_vars var)) in
+  match DigestMap.find_opt digest !known_uniques with
+  | Some (Some result) -> Some (Big_int.of_int result)
+  | Some (None) -> None
+  | None ->
+     match call_smt_solve l smt_file smt_vars var with
+     | Some result ->
+        begin match call_smt l (nc_and constraints (nc_neq (nconstant result) (nvar var))) with
+        | Unsat ->
+           if Big_int.less_equal Big_int.zero result && Big_int.less result (Big_int.pow_int_positive 2 30) then
+             known_uniques := DigestMap.add digest (Some (Big_int.to_int result)) !known_uniques
+           else ();
+           Some result
+        | _ ->
+           known_uniques := DigestMap.add digest None !known_uniques;
+           None
+        end
+     | None ->
+        known_uniques := DigestMap.add digest None !known_uniques;
+        None

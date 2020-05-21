@@ -3663,18 +3663,18 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
           let inferred_exp2 = infer_exp env exp2 in
           let nexp1, env = bind_numeric l (typ_of inferred_exp1) env in
           let nexp2, env = bind_numeric l (typ_of inferred_exp2) env in
-          let (len, check) = match ord with
+          let (slice_len, check) = match ord with
             | Ord_aux (Ord_inc, _) ->
                (nexp_simp (nsum (nminus nexp2 nexp1) (nint 1)),
-                nc_lteq nexp1 nexp2)
+                nc_and (nc_and (nc_lteq (nint 0) nexp1) (nc_lteq nexp1 nexp2)) (nc_lt nexp2 len))
             | Ord_aux (Ord_dec, _) ->
                (nexp_simp (nsum (nminus nexp1 nexp2) (nint 1)),
-                nc_gteq nexp1 nexp2)
+                nc_and (nc_and (nc_lteq (nint 0) nexp2) (nc_lteq nexp2 nexp1)) (nc_lt nexp1 len))
             | Ord_aux (Ord_var _, _) ->
                typ_error env l "Slice assignment to bitvector with variable indexing order unsupported"
           in
           if !opt_no_lexp_bounds_check || prove __POS__ env check then
-            annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ len ord)
+            annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ slice_len ord)
           else
             typ_raise env l (Err_lexp_bounds (check, Env.get_locals env, Env.get_constraints env))
        | _ -> typ_error env l "Cannot assign slice of non vector type"
@@ -3882,7 +3882,11 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | Measure_aux (Measure_some exp,l) ->
           Measure_aux (Measure_some (crule check_exp env exp int_typ),l)
      in
-     let checked_body = crule check_exp (add_opt_constraint (assert_constraint env true checked_cond) env) body unit_typ in
+     let nc = match loop_type with
+       | While -> assert_constraint env true checked_cond
+       | Until -> None
+     in
+     let checked_body = crule check_exp (add_opt_constraint nc env) body unit_typ in
      annot_exp (E_loop (loop_type, checked_measure, checked_cond, checked_body)) unit_typ
   | E_for (v, f, t, step, ord, body) ->
      begin
