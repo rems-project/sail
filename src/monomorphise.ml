@@ -1147,7 +1147,9 @@ let split_defs target all_errors splits env defs =
          List.map (fun fcl' -> SD_aux (SD_funcl fcl', annot)) (map_funcl fcl)
       | _ -> [sd]
     in
-    let map_def d =
+    let num_defs = List.length defs in
+    let map_def idx d =
+      Util.progress "Monomorphising " (string_of_int idx ^ "/" ^ string_of_int num_defs) idx num_defs;
       match d with
       | DEF_type _
       | DEF_spec _
@@ -1168,10 +1170,11 @@ let split_defs target all_errors splits env defs =
          Reporting.unreachable (id_loc id) __POS__
            "Loop termination measures should have been rewritten before now"
     in
-    Defs (List.concat (List.map map_def defs))
+    Defs (List.concat (List.mapi map_def defs))
   in
-  let defs'' = map_locs splits defs' in
-  !no_errors_happened, defs''
+  let (Defs defs'') = map_locs splits defs' in
+  Util.progress "Monomorphising " "done" (List.length defs'') (List.length defs'');
+  !no_errors_happened, (Defs defs'')
 
 
 
@@ -1391,31 +1394,52 @@ let rewrite_size_parameters target type_env (Defs defs) =
  print_endline ("Nexp map for " ^ string_of_id id);
  List.iter (fun (nexp, i) -> print_endline ("  " ^ string_of_nexp nexp ^ " -> " ^ string_of_int i)) nexp_list
 in *)
-    let parameters_for tannot =
-      match destruct_tannot tannot with
-      | Some (env,typ,_) ->
-         begin match Env.base_typ_of env typ with
-         | Typ_aux (Typ_app (Id_aux (Id "bitvector",_), [A_aux (A_nexp size,_);_]),_)
-             when not (is_nexp_constant size) ->
-            begin
-              match NexpMap.find size nexp_map with
-              | i -> IntSet.singleton i
-              | exception Not_found ->
-                 (* Look for equivalent nexps, but only in consistent type env *)
-                 if prove __POS__ env (NC_aux (NC_false,Unknown)) then IntSet.empty else
-                   match List.find (fun (nexp,i) -> 
-                     prove __POS__ env (NC_aux (NC_equal (nexp,size),Unknown))) nexp_list with
-                   | _, i -> IntSet.singleton i
-                   | exception Not_found -> IntSet.empty
+    let parameters_for e tannot =
+      let parameters_for_nexp env size =
+        match solve_unique env size with
+        | Some _ -> IntSet.empty
+        | None ->
+           match NexpMap.find size nexp_map with
+           | i -> IntSet.singleton i
+           | exception Not_found ->
+              (* Look for equivalent nexps, but only in consistent type env *)
+              if prove __POS__ env (NC_aux (NC_false,Unknown)) then IntSet.empty else
+                match List.find (fun (nexp,i) ->
+                  prove __POS__ env (NC_aux (NC_equal (nexp,size),Unknown))) nexp_list with
+                | _, i -> IntSet.singleton i
+                | exception Not_found -> IntSet.empty
+      in
+      let parameters_for_typ =
+        match destruct_tannot tannot with
+        | Some (env,typ,_) ->
+          begin match Env.base_typ_of env typ with
+          | Typ_aux (Typ_app (Id_aux (Id "bitvector",_), [A_aux (A_nexp size,_);_]),_)
+            when not (is_nexp_constant size) ->
+              parameters_for_nexp env size
+          | _ -> IntSet.empty
           end
-         | _ -> IntSet.empty
-         end
-      | None -> IntSet.empty
+        | None -> IntSet.empty
+      in
+      let parameters_for_exp = match e with
+        | E_app (id, args) when Bindings.mem id fsizes ->
+           let add_arg (i, s) arg =
+             if IntSet.mem i (fst (Bindings.find id fsizes)) then
+               try match destruct_numeric (typ_of arg) with
+                 | Some ([], _, nexp) ->
+                    (i + 1, IntSet.union s (parameters_for_nexp env nexp))
+                 | _ -> (i + 1, s)
+               with _ -> (i + 1, s)
+             else (i + 1, s)
+           in
+           snd (List.fold_left add_arg (0, IntSet.empty) args)
+        | _ -> IntSet.empty
+      in
+      IntSet.union parameters_for_typ parameters_for_exp
     in
     let parameters_to_rewrite =
       fst (fold_pexp
              { (compute_exp_alg IntSet.empty IntSet.union) with
-               e_aux = (fun ((s,e),(l,annot)) -> IntSet.union s (parameters_for annot),E_aux (e,(l,annot)))
+               e_aux = (fun ((s,e),(l,annot)) -> IntSet.union s (parameters_for e annot),E_aux (e,(l,annot)))
              } pexp)
     in
     let new_nexps = NexpSet.of_list (List.map fst
@@ -1725,9 +1749,19 @@ let string_of_dep = function
 (* If a callee uses a type variable as a size, does it need to be split in the
    current function, or is it also a parameter?  (Note that there may be multiple
    calls, so more than one parameter can be involved) *)
-type call_dep =
-  | InFun of dependencies
-  | Parents of CallerKidSet.t
+type call_dep = {
+  in_fun : dependencies option;
+  parents : CallerKidSet.t;
+}
+
+let empty_call_dep = {
+  in_fun = None;
+  parents = CallerKidSet.empty;
+}
+
+let in_fun_call_dep deps = { in_fun = Some deps; parents = CallerKidSet.empty }
+
+let parents_call_dep cks = { in_fun = None; parents = cks }
 
 (* Result of analysing the body of a function.  The split field gives
    the arguments to split based on the body alone, the extra_splits
@@ -1787,17 +1821,16 @@ let dep_bindings_merge a1 a2 =
 let dep_kbindings_merge a1 a2 =
   KBindings.merge (opt_merge dmerge) a1 a2
 
+let call_dep_merge k d1 d2 = {
+  in_fun = opt_merge dmerge k d1.in_fun d2.in_fun;
+  parents = CallerKidSet.union d1.parents d2.parents
+}
+
 let call_kid_merge k x y =
   match x, y with
   | None, x -> x
   | x, None -> x
-  | Some (InFun deps), Some (Parents _)
-  | Some (Parents _), Some (InFun deps)
-    -> Some (InFun deps)
-  | Some (InFun deps), Some (InFun deps')
-    -> Some (InFun (dmerge deps deps'))
-  | Some (Parents fns), Some (Parents fns')
-    -> Some (Parents (CallerKidSet.union fns fns'))
+  | Some d1, Some d2 -> Some (call_dep_merge k d1 d2)
 
 let call_arg_merge k args args' =
   match args, args' with
@@ -1965,11 +1998,11 @@ and deps_of_typ_arg l fn_id env arg_deps (A_aux (aux, _)) =
   match aux with
   | A_nexp (Nexp_aux (Nexp_var kid,_))
       when List.exists (fun k -> Kid.compare kid k == 0) env.top_kids ->
-     Parents (CallerKidSet.singleton (fn_id,kid))
-  | A_nexp nexp -> InFun (deps_of_nexp l env.kid_deps arg_deps nexp)
-  | A_order _ -> InFun dempty
-  | A_typ typ -> InFun (deps_of_typ l env.kid_deps arg_deps typ)
-  | A_bool nc -> InFun (deps_of_nc env.kid_deps nc)
+     parents_call_dep (CallerKidSet.singleton (fn_id,kid))
+  | A_nexp nexp -> in_fun_call_dep (deps_of_nexp l env.kid_deps arg_deps nexp)
+  | A_order _ -> in_fun_call_dep dempty
+  | A_typ typ -> in_fun_call_dep (deps_of_typ l env.kid_deps arg_deps typ)
+  | A_bool nc -> in_fun_call_dep (deps_of_nc env.kid_deps nc)
 
 let mk_subrange_pattern vannot vstart vend =
   let (len,ord,typ) = vector_typ_args_of (Env.base_typ_of (env_of_annot vannot) (typ_of_annot vannot)) in
@@ -2075,7 +2108,9 @@ let simplify_size_nexp env typ_env (Nexp_aux (ne,l) as nexp) =
   | None ->
      let is_equal kid =
        try
-         prove __POS__ typ_env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+         if Env.get_typ_var kid typ_env = K_int then
+           prove __POS__ typ_env (NC_aux (NC_equal (Nexp_aux (Nexp_var kid,Unknown), nexp),Unknown))
+         else false
        with _ -> false
      in
      match ne with
@@ -2197,7 +2232,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        let rdep,r' =
          if Id.compare fn_id id == 0 then
            let bad = Unknown (l,"Recursive call of " ^ string_of_id id) in
-           let kid_deps = KBindings.map (fun _ -> InFun bad) kid_deps in
+           let kid_deps = KBindings.map (fun _ -> in_fun_call_dep bad) kid_deps in
            bad, { empty with split_on_call = Bindings.singleton id kid_deps }
          else
            dempty, { empty with split_on_call = Bindings.singleton id kid_deps } in
@@ -2659,11 +2694,12 @@ let print_set_assertions set_assertions =
 let print_result r =
   let _ = print_endline ("  splits: " ^ string_of_argsplits r.split) in
   let print_kbinding kid dep =
-    let s = match dep with
-      | InFun dep -> "InFun " ^ string_of_dep dep
-      | Parents cks -> string_of_callerkidset cks
+    let s1 = match dep.in_fun with
+      | Some dep -> "InFun " ^ string_of_dep dep
+      | None -> ""
     in
-    let _ = print_endline ("      " ^ string_of_kid kid ^ ": " ^ s) in
+    let s2 = string_of_callerkidset dep.parents in
+    let _ = print_endline ("      " ^ string_of_kid kid ^ ": " ^ s1 ^ "; " ^ s2) in
     ()
   in
   let print_binding id kdep =
@@ -2725,11 +2761,17 @@ let argset_to_list splits =
   List.map argelt l
 
 let analyse_defs debug env (Defs defs) =
-  let def (globals,r) d =
+  let def (idx,globals,r) d =
+    begin match d with
+      | DEF_fundef fd ->
+         Util.progress "Analysing " (string_of_id (id_of_fundef fd)) idx (List.length defs)
+      | _ -> ()
+    end;
     let globals,r' = analyse_def debug env globals d in
-    globals, merge r r'
+    idx + 1, globals, merge r r'
   in
-  let _,r = List.fold_left def (Bindings.empty,empty) defs in
+  let _,_,r = List.fold_left def (0,Bindings.empty,empty) defs in
+  let _ = Util.progress "Analysing " "done" (List.length defs) (List.length defs) in
 
   (* Resolve the interprocedural dependencies *)
 
@@ -2743,8 +2785,12 @@ let analyse_defs debug env (Defs defs) =
     match Bindings.find id r.split_on_call with
     | kid_deps -> begin
       match KBindings.find kid kid_deps with
-      | InFun deps -> separate_deps deps
-      | Parents fns -> CallerKidSet.fold add_kid fns (ArgSplits.empty, ExtraSplits.empty, Failures.empty)
+      | call_dep ->
+         let (splits, extras, fails) = match call_dep.in_fun with
+           | Some deps -> separate_deps deps
+           | None -> (ArgSplits.empty, ExtraSplits.empty, Failures.empty)
+         in
+         CallerKidSet.fold add_kid call_dep.parents (splits, extras, fails)
       | exception Not_found -> ArgSplits.empty,ExtraSplits.empty,Failures.empty
     end
     | exception Not_found -> ArgSplits.empty,ExtraSplits.empty,Failures.empty
@@ -2998,11 +3044,11 @@ let rec rewrite_app env typ (id,args) =
                         [vector1; start1; length1; vector2; start2; length2]),(Unknown,empty_tannot)))
 
     (* variable-slice @ local-var *)
-    | [E_aux (E_app (op,
-                     [vector1; start1; length1]),_);
+    | [(E_aux (E_app (op,
+                     [vector1; start1; length1]),_) as exp1);
        (E_aux (E_id _,_) as vector2)]
         when (is_slice op || is_subrange op) && is_bitvector_typ (typ_of vector1) &&
-             not (is_constant length1) ->
+             not (is_constant_vec_typ env (typ_of exp1)) ->
        let op' = if is_subrange op then "subrange_subrange_concat" else "slice_slice_concat" in
        let zero = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
        let one = mk_exp (E_lit (mk_lit (L_num (Big_int.of_int 1)))) in
@@ -3019,11 +3065,11 @@ let rec rewrite_app env typ (id,args) =
 
     | [E_aux (E_app (append1,
                      [e1;
-                      E_aux (E_app (op, [vector1; start1; length1]),_)]),_);
+                      (E_aux (E_app (op, [vector1; start1; length1]),_) as slice1)]),_);
        E_aux (E_app (zeros1, [length2]),_)]
         when is_append append1 && (is_slice op || is_subrange op) && is_zeros zeros1 &&
           is_constant_vec_typ env (typ_of e1) && is_bitvector_typ (typ_of vector1) &&
-          not (is_constant length1 || is_constant length2) ->
+          not (is_constant_vec_typ env (typ_of slice1) || is_constant length2) ->
        let op' = mk_id (if is_subrange op then "subrange_zeros_concat" else "slice_zeros_concat") in
        let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
        let (size1,_,_) = vector_typ_args_of (Env.base_typ_of env (typ_of e1)) in
@@ -3292,8 +3338,10 @@ let rec rewrite_app env typ (id,args) =
     match get_constant_vec_len ~solve:true env typ, args with
     | Some i, [vector1; start1; end1]
       when is_bitvector_typ (typ_of vector1) && not (is_constant start1 && is_constant end1) ->
-       let low = if is_inc_vec (typ_of vector1) then start1 else end1 in
-       E_app (mk_id "slice", [vector1; low; mk_exp (E_lit (mk_lit (L_num i)))])
+       let inc = is_inc_vec (typ_of vector1) in
+       let low = if inc then start1 else end1 in
+       let exp' = rewrap (E_app (mk_id "slice", [vector1; low; mk_exp (E_lit (mk_lit (L_num i)))])) in
+       E_cast (bitvector_typ (nconstant i) (if inc then inc_ord else dec_ord), exp')
     | _, _ -> E_app (id, args)
 
   (* Rewrite (v[x .. y] + i) to (v + (i << y))[x .. y], which is more amenable to further rewriting *)
@@ -3770,13 +3818,15 @@ let add_bitvector_casts global_env (Defs defs) =
     let pexp = construct_pexp (pat,guard,body,annot) in
     FCL_aux (FCL_Funcl (id,pexp),fcl_ann)
   in
-  let rewrite_def = function
-    | DEF_fundef (FD_aux (FD_function (r,t,e,fcls),fd_ann)) ->
+  let rewrite_def idx = function
+    | DEF_fundef (FD_aux (FD_function (r,t,e,fcls),fd_ann) as fd) ->
+       Util.progress "Adding casts " (string_of_id (id_of_fundef fd)) idx (List.length defs);
        DEF_fundef (FD_aux (FD_function (r,t,e,List.map rewrite_funcl fcls),fd_ann))
     | d -> d
   in
   specs_required := IdSet.empty;
-  let defs = List.map rewrite_def defs in
+  let defs = List.mapi rewrite_def defs in
+  let _ = Util.progress "Adding casts " "done" (List.length defs) (List.length defs) in
   let l = Generated Unknown in
   let Defs cast_specs,_ =
     (* TODO: use default/relevant order *)

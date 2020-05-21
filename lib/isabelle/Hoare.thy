@@ -96,6 +96,14 @@ lemma PrePost_readS[intro, PrePost_atomI]: "PrePost (\<lambda>s. P (Value (f s))
 lemma PrePost_updateS[intro, PrePost_atomI]: "PrePost (\<lambda>s. P (Value ()) (f s)) (updateS f) P"
   unfolding PrePost_def updateS_def returnS_def by auto
 
+lemma PrePost_read_regS[intro, PrePost_atomI]:
+  "PrePost (\<lambda>s. P (Value (read_from reg (regstate s))) s) (read_regS reg) P"
+  unfolding read_regS_def by (rule PrePost_readS)
+
+lemma PrePost_write_regS[intro, PrePost_atomI]:
+  "PrePost (\<lambda>s. P (Value ()) (s\<lparr>regstate := write_to reg v (regstate s)\<rparr>)) (write_regS reg v) P"
+  unfolding write_regS_def by (rule PrePost_updateS)
+
 lemma PrePost_if:
   assumes "b \<Longrightarrow> PrePost P f Q" and "\<not>b \<Longrightarrow> PrePost P g Q"
   shows "PrePost P (if b then f else g) Q"
@@ -310,6 +318,14 @@ lemma PrePostE_readS[PrePostE_atomI, intro]: "PrePostE (\<lambda>s. Q (f s) s) (
 
 lemma PrePostE_updateS[PrePostE_atomI, intro]: "PrePostE (\<lambda>s. Q () (f s)) (updateS f) Q E"
   unfolding PrePostE_def by (auto intro: PrePost_strengthen_pre)
+
+lemma PrePostE_read_regS[PrePostE_atomI, intro]:
+  "PrePostE (\<lambda>s. Q (read_from reg (regstate s)) s) (read_regS reg) Q E"
+  unfolding read_regS_def by (rule PrePostE_readS)
+
+lemma PrePostE_write_regS[PrePostE_atomI, intro]:
+  "PrePostE (\<lambda>s. Q () (s\<lparr>regstate := write_to reg v (regstate s)\<rparr>)) (write_regS reg v) Q E"
+  unfolding write_regS_def by (rule PrePostE_updateS)
 
 lemma PrePostE_if_branch[PrePostE_compositeI]:
   assumes "b \<Longrightarrow> PrePostE Pf f Q E" and "\<not>b \<Longrightarrow> PrePostE Pg g Q E"
