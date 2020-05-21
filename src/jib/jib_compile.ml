@@ -58,7 +58,6 @@ open Value2
 open Anf
 
 let opt_memo_cache = ref false
-let opt_track_throw = ref true
 
 let optimize_aarch64_fast_struct = ref false
 
@@ -174,11 +173,13 @@ let initial_ctx env =
 module type Config = sig
   val convert_typ : ctx -> typ -> ctyp
   val optimize_anf : ctx -> typ aexp -> typ aexp
-  val unroll_loops : unit -> int option
+  val unroll_loops : int option
   val specialize_calls : bool
   val ignore_64 : bool
   val struct_value : bool
   val use_real : bool
+  val branch_coverage : bool
+  val track_throw : bool
 end
 
 module Make(C: Config) = struct
@@ -190,6 +191,59 @@ let rec chunkify n xs =
   | xs, [] -> [xs]
   | xs, ys -> xs :: chunkify n ys
 
+let name_or_global ctx id =
+  if Env.is_register id ctx.local_env || IdSet.mem id (Env.get_toplevel_lets ctx.local_env) then
+    global id
+  else
+    name id
+
+let coverage_branch_count = ref 0
+
+let coverage_loc_args l =
+  match Reporting.simp_loc l with
+  | None -> None
+  | Some (p1, p2) ->
+     Some (Printf.sprintf "\"%s\", %d, %d, %d, %d"
+             (String.escaped p1.pos_fname) p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol))
+ 
+let coverage_branch_reached l =
+  let branch_id = !coverage_branch_count in
+  incr coverage_branch_count;
+  branch_id,
+  if C.branch_coverage then
+    begin match coverage_loc_args l with
+    | None -> []
+    | Some args ->
+       [iraw (Printf.sprintf "sail_branch_reached(%d, %s);" branch_id args)]
+    end
+  else
+    []
+
+let append_into_block instrs instr =
+  match instrs with
+  | [] -> instr
+  | _ -> iblock (instrs @ [instr])
+  
+let coverage_branch_taken branch_id (AE_aux (_, _, l)) =
+  if not C.branch_coverage then
+    []
+  else
+    match coverage_loc_args l with
+    | None -> []
+    | Some args ->
+       print_endline ("B " ^ args);
+       [iraw (Printf.sprintf "sail_branch_taken(%d, %s);" branch_id args)]
+
+let coverage_function_entry id l =
+  if not C.branch_coverage then
+    []
+  else
+    match coverage_loc_args l with
+    | None -> []
+    | Some args ->
+       print_endline ("F " ^ args);
+       [iraw (Printf.sprintf "sail_function_entry(\"%s\", %s);" (string_of_id id) args)]
+       
 let rec compile_aval l ctx = function
   | AV_cval (cval, typ) ->
      let ctyp = cval_ctyp cval in
@@ -201,13 +255,11 @@ let rec compile_aval l ctx = function
        [], cval, []
 
   | AV_id (id, typ) ->
-     begin
-       try
-         let _, ctyp = Bindings.find id ctx.locals in
-         [], V_id (name id, ctyp), []
-       with
-       | Not_found ->
-          [], V_id (name id, ctyp_of_typ ctx (lvar_typ typ)), []
+     begin match Bindings.find_opt id ctx.locals with
+     | Some (_, ctyp) ->
+        [], V_id (name id, ctyp), []
+     | None ->
+        [], V_id (name_or_global ctx id, ctyp_of_typ ctx (lvar_typ typ)), []
      end
 
   | AV_ref (id, typ) ->
@@ -520,7 +572,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
 
   | AP_global (pid, typ) ->
      let global_ctyp = ctyp_of_typ ctx typ in
-     [icopy l (CL_id (name pid, global_ctyp)) cval], [], ctx
+     [icopy l (CL_id (global pid, global_ctyp)) cval], [], ctx
 
   | AP_id (pid, _) when is_ct_enum ctyp ->
      begin match Env.lookup_id pid ctx.tc_env with
@@ -624,6 +676,10 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   | AE_case (aval, cases, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
      let aval_setup, cval, aval_cleanup = compile_aval l ctx aval in
+     (* Get the number of cases, because we don't want to check branch
+        coverage for matches with only a single case. *)
+     let num_cases = List.length cases in
+     let branch_id, on_reached = coverage_branch_reached l in
      let case_return_id = ngensym () in
      let finish_match_label = label "finish_match_" in
      let compile_case (apat, guard, body) =
@@ -643,7 +699,9 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
               guard_setup @ [idecl CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
               @ [iif l (V_call (Bnot, [V_id (gs, CT_bool)])) (destructure_cleanup @ [igoto case_label]) [] CT_unit]
             else [])
-         @ body_setup @ [body_call (CL_id (case_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
+         @ body_setup
+         @ (if num_cases > 1 then coverage_branch_taken branch_id body else [])
+         @ [body_call (CL_id (case_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
          @ [igoto finish_match_label]
        in
        if is_dead_aexp body then
@@ -651,7 +709,9 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        else
          [iblock case_instrs; ilabel case_label]
      in
-     aval_setup @ [idecl ctyp case_return_id]
+     aval_setup
+     @ (if num_cases > 1 then on_reached else [])
+     @ [idecl ctyp case_return_id]
      @ List.concat (List.map compile_case cases)
      @ [imatch_failure ()]
      @ [ilabel finish_match_label],
@@ -664,8 +724,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let ctyp = ctyp_of_typ ctx typ in
      let aexp_setup, aexp_call, aexp_cleanup = compile_aexp ctx aexp in
      let try_return_id = ngensym () in
-     let handled_exception_label = label "handled_exception_" in
-     let fallthrough_label = label "fallthrough_exception_" in
+     let post_exception_handlers_label = label "post_exception_handlers_" in
      let compile_case (apat, guard, body) =
        let trivial_guard = match guard with
          | AE_aux (AE_val (AV_lit (L_aux (L_true, _), _)), _, _)
@@ -686,19 +745,19 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
               @ [icomment "end guard"]
             else [])
          @ body_setup @ [body_call (CL_id (try_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
-         @ [igoto handled_exception_label]
+         @ [igoto post_exception_handlers_label]
        in
        [iblock case_instrs; ilabel try_label]
      in
      assert (ctyp_equal ctyp (ctyp_of_typ ctx typ));
      [idecl ctyp try_return_id;
       itry_block (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
-      ijump l (V_call (Bnot, [V_id (have_exception, CT_bool)])) handled_exception_label]
+      ijump l (V_call (Bnot, [V_id (have_exception, CT_bool)])) post_exception_handlers_label;
+      icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool false, CT_bool))]
      @ List.concat (List.map compile_case cases)
-     @ [igoto fallthrough_label;
-        ilabel handled_exception_label;
-        icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool false, CT_bool));
-        ilabel fallthrough_label],
+     @ [(* fallthrough *)
+        icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool true, CT_bool));
+        ilabel post_exception_handlers_label],
      (fun clexp -> icopy l clexp (V_id (try_return_id, ctyp))),
      []
 
@@ -709,16 +768,19 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        compile_aexp ctx then_aexp
      else
        let if_ctyp = ctyp_of_typ ctx if_typ in
+       let branch_id, on_reached = coverage_branch_reached l in
        let compile_branch aexp =
          let setup, call, cleanup = compile_aexp ctx aexp in
-         fun clexp -> setup @ [call clexp] @ cleanup
+         fun clexp -> coverage_branch_taken branch_id aexp @ setup @ [call clexp] @ cleanup
        in
        let setup, cval, cleanup = compile_aval l ctx aval in
        setup,
-       (fun clexp -> iif l cval
-                         (compile_branch then_aexp clexp)
-                         (compile_branch else_aexp clexp)
-                         if_ctyp),
+       (fun clexp ->
+         append_into_block on_reached
+           (iif l cval
+              (compile_branch then_aexp clexp)
+              (compile_branch else_aexp clexp)
+              if_ctyp)),
        cleanup
 
   (* FIXME: AE_record_update could be AV_record_update - would reduce some copying. *)
@@ -778,7 +840,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let compile_fields (field_id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup
-       @ [icopy l (CL_field (CL_id (name id, ctyp_of_typ ctx typ), (field_id, []))) cval]
+       @ [icopy l (CL_field (CL_id (name_or_global ctx id, ctyp_of_typ ctx typ), (field_id, []))) cval]
        @ field_cleanup
      in
      List.concat (List.map compile_fields (Bindings.bindings fields)),
@@ -792,7 +854,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        | None -> ctyp_of_typ ctx assign_typ
      in
      let setup, call, cleanup = compile_aexp ctx aexp in
-     setup @ [call (CL_id (name id, assign_ctyp))], (fun clexp -> icopy l clexp unit_cval), cleanup
+     setup @ [call (CL_id (name_or_global ctx id, assign_ctyp))], (fun clexp -> icopy l clexp unit_cval), cleanup
 
   | AE_write_ref (id, assign_typ, aexp) ->
      let assign_ctyp =
@@ -801,7 +863,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        | None -> ctyp_of_typ ctx assign_typ
      in
      let setup, call, cleanup = compile_aexp ctx aexp in
-     setup @ [call (CL_addr (CL_id (name id, assign_ctyp)))], (fun clexp -> icopy l clexp unit_cval), cleanup
+     setup @ [call (CL_addr (CL_id (name_or_global ctx id, assign_ctyp)))], (fun clexp -> icopy l clexp unit_cval), cleanup
 
   | AE_block (aexps, aexp, _) ->
      let block = compile_block ctx aexps in
@@ -948,7 +1010,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      (* We can either generate an actual loop body for C, or unroll the body for SMT *)
      let actual = loop_body [ilabel loop_start_label] (fun () -> [igoto loop_start_label]) in
      let rec unroll max n = loop_body [] (fun () -> if n < max then unroll max (n + 1) else [imatch_failure ()]) in
-     let body = match C.unroll_loops () with Some times -> unroll times 0 | None -> actual in
+     let body = match C.unroll_loops with Some times -> unroll times 0 | None -> actual in
 
      variable_init from_gs from_setup from_call from_cleanup
      @ variable_init to_gs to_setup to_call to_cleanup
@@ -1057,7 +1119,7 @@ let fix_exception_block ?return:(return=None) ctx instrs =
        before
        @ [icopy l (CL_id (current_exception, cval_ctyp cval)) cval;
           icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool true, CT_bool))]
-       @ (if !opt_track_throw then
+       @ (if C.track_throw then
             let loc_string = Reporting.short_loc_to_string l in
             [icopy l (CL_id (throw_location, CT_string)) (V_lit (VL_string loc_string, CT_string))]
           else [])
@@ -1258,6 +1320,7 @@ let compile_funcl ctx id pat guard exp =
   let instrs = arg_setup @ destructure @ guard_instrs @ setup @ [call (CL_id (return, ret_ctyp))] @ cleanup @ destructure_cleanup @ arg_cleanup in
   let instrs = fix_early_return (CL_id (return, ret_ctyp)) instrs in
   let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
+  let instrs = coverage_function_entry id (exp_loc exp) @ instrs in
 
   [CDEF_fundef (id, None, List.map fst compiled_args, instrs)], orig_ctx
 
@@ -1302,7 +1365,7 @@ and compile_def' n total ctx = function
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
      let aexp = C.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
-     let instrs = setup @ [call (CL_id (name id, ctyp_of_typ ctx typ))] @ cleanup in
+     let instrs = setup @ [call (CL_id (global id, ctyp_of_typ ctx typ))] @ cleanup in
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, instrs)], ctx
 
   | DEF_reg_dec (DEC_aux (_, (l, _))) ->

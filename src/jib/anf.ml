@@ -106,6 +106,8 @@ and 'a aval =
   | AV_record of ('a aval) Bindings.t * 'a
   | AV_cval of cval * 'a
 
+let aexp_loc (AE_aux (_, _, l)) = l
+             
 (* Renaming variables in ANF expressions *)
 
 let rec apat_bindings (AP_aux (apat_aux, _, _)) =
@@ -523,13 +525,13 @@ let rec apat_globals (AP_aux (aux, _, _)) =
 let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   let mk_aexp aexp = AE_aux (aexp, env_of_annot exp_annot, l) in
 
-  let to_aval (AE_aux (aexp_aux, env, l) as aexp) =
-    let mk_aexp aexp = AE_aux (aexp, env, l) in
+  let to_aval (AE_aux (aexp_aux, env, _) as aexp) =
+    let mk_aexp (AE_aux (_, _, l)) aexp = AE_aux (aexp, env, l) in
     match aexp_aux with
     | AE_val v -> (v, fun x -> x)
     | AE_short_circuit (_, _, _) ->
        let id = gensym () in
-       (AV_id (id, Local (Immutable, bool_typ)), fun x -> mk_aexp (AE_let (Immutable, id, bool_typ, aexp, x, typ_of exp)))
+       (AV_id (id, Local (Immutable, bool_typ)), fun x -> mk_aexp x (AE_let (Immutable, id, bool_typ, aexp, x, typ_of exp)))
     | AE_app (_, _, typ)
       | AE_let (_, _, _, _, _, typ)
       | AE_return (_, typ)
@@ -542,10 +544,10 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
       | AE_record_update (_, _, typ)
       | AE_block (_, _, typ) ->
        let id = gensym () in
-       (AV_id (id, Local (Immutable, typ)), fun x -> mk_aexp (AE_let (Immutable, id, typ, aexp, x, typ_of exp)))
+       (AV_id (id, Local (Immutable, typ)), fun x -> mk_aexp x (AE_let (Immutable, id, typ, aexp, x, typ_of exp)))
     | AE_assign _ | AE_for _ | AE_loop _ | AE_write_ref _ ->
        let id = gensym () in
-       (AV_id (id, Local (Immutable, unit_typ)), fun x -> mk_aexp (AE_let (Immutable, id, unit_typ, aexp, x, typ_of exp)))
+       (AV_id (id, Local (Immutable, unit_typ)), fun x -> mk_aexp x (AE_let (Immutable, id, unit_typ, aexp, x, typ_of exp)))
   in
   match e_aux with
   | E_lit lit -> mk_aexp (ae_lit lit (typ_of exp))
@@ -701,7 +703,8 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
 
   | E_var (LEXP_aux (LEXP_id id, _), binding, body)
     | E_var (LEXP_aux (LEXP_cast (_, id), _), binding, body)
-    | E_let (LB_aux (LB_val (P_aux (P_id id, _), binding), _), body) ->
+    | E_let (LB_aux (LB_val (P_aux (P_id id, _), binding), _), body)
+    | E_let (LB_aux (LB_val (P_aux (P_typ (_, P_aux (P_id id, _)), _), binding), _), body) ->
      let env = env_of body in
      let lvar = Env.lookup_id id env in
      mk_aexp (AE_let (Mutable, id, lvar_typ lvar, anf binding, anf body, typ_of exp))

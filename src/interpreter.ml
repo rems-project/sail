@@ -961,7 +961,7 @@ let rec initialize_registers allow_registers gstate =
        begin
          let env = Type_check.env_of_annot annot in
          let typ = Type_check.Env.expand_synonyms env typ in
-         let exp = mk_exp (E_cast (typ, mk_exp (E_lit (mk_lit (L_undef))))) in
+         let exp = mk_exp (E_cast (typ, mk_exp (E_lit (mk_lit L_undef)))) in
          let exp = Type_check.check_exp env exp typ in
          { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
        end

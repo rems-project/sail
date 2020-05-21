@@ -90,13 +90,38 @@ val tdiv_int = {
 } : (int, int) -> int
 
 /*! Remainder for truncating division (has sign of dividend) */
-val tmod_int = {
+val _tmod_int = {
   ocaml: "tmod_int",
   interpreter: "tmod_int",
   lem: "tmod_int",
   c: "tmod_int",
   coq: "Z.rem"
-} : (int, int) -> nat
+} : (int, int) -> int
+
+/*! If we know the second argument is positive, we know the result is positive */
+val _tmod_int_positive = {
+  ocaml: "tmod_int",
+  interpreter: "tmod_int",
+  lem: "tmod_int",
+  c: "tmod_int",
+  coq: "Z.rem"
+} : forall 'n, 'n >= 1. (int, int('n)) -> nat
+
+overload tmod_int = {_tmod_int_positive, _tmod_int}
+
+function fdiv_int(n: int, m: int) -> int = {
+  if n < 0 & m > 0 then {
+    tdiv_int(n + 1, m) - 1
+  } else if n > 0 & m < 0 then {
+    tdiv_int(n - 1, m) - 1
+  } else {
+    tdiv_int(n, m)
+  }
+}
+
+function fmod_int(n: int, m: int) -> int = {
+  n - (m * fdiv_int(n, m))
+}
 
 val abs_int_plain = {
   smt : "abs",

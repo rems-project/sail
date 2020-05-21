@@ -62,7 +62,7 @@ module StringMap = Map.Make(String)
 let string_of_name =
   let ssa_num n = if n = -1 then "" else ("/" ^ string_of_int n) in
   function
-  | Name (id, n) -> zencode_id id ^ ssa_num n
+  | Name (id, n) | Global (id, n) -> zencode_id id ^ ssa_num n
   | Have_exception n ->
      "have_exception" ^ ssa_num n
   | Return n ->

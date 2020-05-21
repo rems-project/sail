@@ -1,12 +1,13 @@
-#pragma once
+#ifndef SAIL_H
+#define SAIL_H
 
-#include<inttypes.h>
-#include<stdlib.h>
-#include<stdio.h>
-#include<stdbool.h>
-#include<gmp.h>
+#include <inttypes.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdbool.h>
+#include <gmp.h>
 
-#include<time.h>
+#include <time.h>
 
 static inline void *sail_malloc(size_t size)
 {
@@ -73,7 +74,7 @@ bool UNDEFINED(bool)(const unit);
  */
 typedef char *sail_string;
 
-SAIL_BUILTIN_TYPE(sail_string);
+SAIL_BUILTIN_TYPE(sail_string)
 
 void dec_str(sail_string *str, const mpz_t n);
 void hex_str(sail_string *str, const mpz_t n);
@@ -98,7 +99,7 @@ uint64_t sail_int_get_ui(const sail_int);
 
 #define SAIL_INT_FUNCTION(fname, rtype, ...) void fname(rtype*, __VA_ARGS__)
 
-SAIL_BUILTIN_TYPE(sail_int);
+SAIL_BUILTIN_TYPE(sail_int)
 
 void CREATE_OF(sail_int, mach_int)(sail_int *, const mach_int);
 void RECREATE_OF(sail_int, mach_int)(sail_int *, const mach_int);
@@ -198,7 +199,7 @@ typedef struct {
 typedef uint64_t mach_bits;
 typedef lbits sail_bits;
 
-SAIL_BUILTIN_TYPE(lbits);
+SAIL_BUILTIN_TYPE(lbits)
 
 void CREATE_OF(lbits, fbits)(lbits *,
 			     const fbits op,
@@ -360,7 +361,7 @@ sbits sub_sbits(const sbits op1, const sbits op2);
 
 typedef mpq_t real;
 
-SAIL_BUILTIN_TYPE(real);
+SAIL_BUILTIN_TYPE(real)
 
 void CREATE_OF(real, sail_string)(real *rop, const sail_string op);
 void CONVERT_OF(real, sail_string)(real *rop, const sail_string op);
@@ -440,3 +441,5 @@ void get_time_ns(sail_int*, const unit);
 /* ***** ARM optimisations ***** */
 
 void arm_align(lbits *, const lbits, const sail_int);
+
+#endif

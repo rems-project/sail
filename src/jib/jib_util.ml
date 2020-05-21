@@ -144,11 +144,16 @@ module Name = struct
     | Name (x, n), Name (y, m) ->
        let c1 = Id.compare x y in
        if c1 = 0 then compare n m else c1
+    | Global (x, n), Global (y, m) ->
+       let c1 = Id.compare x y in
+       if c1 = 0 then compare n m else c1
     | Have_exception n, Have_exception m -> compare n m
     | Current_exception n, Current_exception m -> compare n m
     | Return n, Return m -> compare n m
     | Name _, _ -> 1
     | _, Name _ -> -1
+    | Global _, _ -> 1
+    | _, Global _ -> -1
     | Have_exception _, _ -> 1
     | _, Have_exception _ -> -1
     | Current_exception _, _ -> 1
@@ -166,6 +171,7 @@ let throw_location = Throw_location (-1)
 let return = Return (-1)
 
 let name id = Name (id, -1)
+let global id = Global (id, -1)
 
 let rec cval_rename from_id to_id = function
   | V_id (id, ctyp) when Name.compare id from_id = 0 -> V_id (to_id, ctyp)
@@ -261,7 +267,7 @@ let rec instr_rename from_id to_id (I_aux (instr, aux)) =
 let string_of_name ?deref_current_exception:(dce=false) ?zencode:(zencode=true) =
   let ssa_num n = if n = -1 then "" else ("/" ^ string_of_int n) in
   function
-  | Name (id, n) ->
+  | Name (id, n) | Global (id, n) ->
      (if zencode then Util.zencode_string (string_of_id id) else string_of_id id) ^ ssa_num n
   | Have_exception n ->
      "have_exception" ^ ssa_num n
