@@ -2155,13 +2155,18 @@ let rewrite_tuple_assignments env defs =
   let assign_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp assign_exp) } in
   rewrite_defs_base assign_defs defs
 
-let rewrite_simple_assignments env defs =
+let rewrite_simple_assignments allow_fields env defs =
+  let rec is_simple (LEXP_aux (aux, _)) =
+    match aux with
+    | LEXP_id _ -> true
+    | LEXP_cast _ -> true
+    | LEXP_field (lexp, _) when allow_fields -> is_simple lexp 
+    | _ -> false
+  in
   let assign_e_aux e_aux annot =
     let env = env_of_annot annot in
     match e_aux with
-    | E_assign (LEXP_aux (LEXP_id _, _), _) ->
-       E_aux (e_aux, annot)
-    | E_assign (LEXP_aux (LEXP_cast (_, _), _), _) ->
+    | E_assign (lexp, _) when is_simple lexp ->
        E_aux (e_aux, annot)
     | E_assign (lexp, exp) ->
        let (lexp, rhs) = rewrite_lexp_to_rhs lexp in
@@ -4938,7 +4943,8 @@ let all_rewrites = [
     ("pattern_literals", Literal_rewriter (fun f -> Basic_rewriter (rewrite_defs_pat_lits f)));
     ("vector_concat_assignments", Basic_rewriter rewrite_vector_concat_assignments);
     ("tuple_assignments", Basic_rewriter rewrite_tuple_assignments);
-    ("simple_assignments", Basic_rewriter rewrite_simple_assignments);
+    ("simple_assignments", Basic_rewriter (rewrite_simple_assignments false));
+    ("simple_struct_assignments", Basic_rewriter (rewrite_simple_assignments true));
     ("remove_vector_concat", Basic_rewriter rewrite_defs_remove_vector_concat);
     ("remove_bitvector_pats", Basic_rewriter rewrite_defs_remove_bitvector_pats);
     ("remove_numeral_pats", Basic_rewriter rewrite_defs_remove_numeral_pats);
@@ -5111,7 +5117,7 @@ let rewrites_c = [
     ("pattern_literals", [Literal_arg "all"]);
     ("tuple_assignments", []);
     ("vector_concat_assignments", []);
-    ("simple_assignments", []);
+    ("simple_struct_assignments", []);
     ("exp_lift_assign", []);
     ("merge_function_clauses", []);
     ("optimize_recheck_defs", []);

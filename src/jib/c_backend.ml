@@ -357,9 +357,7 @@ module C_config(Opts : sig val branch_coverage : bool end) : Config = struct
 
       | AE_cast (aexp, typ) -> AE_cast (analyze_functions ctx f aexp, typ)
 
-      | AE_assign (id, typ, aexp) -> AE_assign (id, typ, analyze_functions ctx f aexp)
-
-      | AE_write_ref (id, typ, aexp) -> AE_write_ref (id, typ, analyze_functions ctx f aexp)
+      | AE_assign (alexp, aexp) -> AE_assign (alexp, analyze_functions ctx f aexp)
 
       | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, analyze_functions ctx f aexp)
 

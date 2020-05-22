@@ -650,6 +650,23 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
 
 let unit_cval = V_lit (VL_unit, CT_unit)
 
+let rec compile_alexp ctx alexp =
+  match alexp with
+  | AL_id (id, typ) ->
+     let ctyp = match Bindings.find_opt id ctx.locals with
+       | Some (_, ctyp) -> ctyp
+       | None -> ctyp_of_typ ctx typ
+     in
+     CL_id (name_or_global ctx id, ctyp)
+  | AL_addr (id, typ) ->
+     let ctyp = match Bindings.find_opt id ctx.locals with
+       | Some (_, ctyp) -> ctyp
+       | None -> ctyp_of_typ ctx typ
+     in
+     CL_addr (CL_id (name_or_global ctx id, ctyp))
+  | AL_field (alexp, field_id) ->
+     CL_field (compile_alexp ctx alexp, (field_id, []))
+     
 let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   let ctx = { ctx with local_env = env } in
   match aexp_aux with
@@ -835,7 +852,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
 
   (* This is a faster assignment rule for updating fields of a
      struct. *)
-  | AE_assign (id, assign_typ, AE_aux (AE_record_update (AV_id (rid, _), fields, typ), _, _))
+  | AE_assign (AL_id (id, assign_typ), AE_aux (AE_record_update (AV_id (rid, _), fields, typ), _, _))
        when Id.compare id rid = 0 ->
      let compile_fields (field_id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
@@ -847,23 +864,9 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      (fun clexp -> icopy l clexp unit_cval),
      []
 
-  | AE_assign (id, assign_typ, aexp) ->
-     let assign_ctyp =
-       match Bindings.find_opt id ctx.locals with
-       | Some (_, ctyp) -> ctyp
-       | None -> ctyp_of_typ ctx assign_typ
-     in
+  | AE_assign (alexp, aexp) ->
      let setup, call, cleanup = compile_aexp ctx aexp in
-     setup @ [call (CL_id (name_or_global ctx id, assign_ctyp))], (fun clexp -> icopy l clexp unit_cval), cleanup
-
-  | AE_write_ref (id, assign_typ, aexp) ->
-     let assign_ctyp =
-       match Bindings.find_opt id ctx.locals with
-       | Some (_, ctyp) -> ctyp
-       | None -> ctyp_of_typ ctx assign_typ
-     in
-     let setup, call, cleanup = compile_aexp ctx aexp in
-     setup @ [call (CL_addr (CL_id (name_or_global ctx id, assign_ctyp)))], (fun clexp -> icopy l clexp unit_cval), cleanup
+     setup @ [call (compile_alexp ctx alexp)], (fun clexp -> icopy l clexp unit_cval), cleanup
 
   | AE_block (aexps, aexp, _) ->
      let block = compile_block ctx aexps in
@@ -1311,7 +1314,7 @@ let compile_funcl ctx id pat guard exp =
 
   (* Optimize and compile the expression to ANF. *)
   let aexp = C.optimize_anf ctx (no_shadow (pat_ids pat) (anf exp)) in
-
+  
   let setup, call, cleanup = compile_aexp ctx aexp in
   let destructure, destructure_cleanup =
     compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure fundef_label

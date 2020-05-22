@@ -67,8 +67,7 @@ and 'a aexp_aux =
   | AE_val of 'a aval
   | AE_app of id * ('a aval) list * 'a
   | AE_cast of 'a aexp * 'a
-  | AE_assign of id * 'a * 'a aexp
-  | AE_write_ref of id * 'a * 'a aexp
+  | AE_assign of 'a alexp * 'a aexp
   | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
   | AE_block of ('a aexp) list * 'a aexp * 'a
   | AE_return of 'a aval * 'a
@@ -106,6 +105,11 @@ and 'a aval =
   | AV_record of ('a aval) Bindings.t * 'a
   | AV_cval of cval * 'a
 
+and 'a alexp =
+  | AL_id of id * 'a
+  | AL_addr of id * 'a
+  | AL_field of 'a alexp * id
+             
 let aexp_loc (AE_aux (_, _, l)) = l
              
 (* Renaming variables in ANF expressions *)
@@ -172,7 +176,6 @@ let aexp_typ (AE_aux (aux, _, _)) =
   | AE_app (_, _, typ) -> typ
   | AE_cast (_, typ) -> typ
   | AE_assign _ -> unit_typ
-  | AE_write_ref _ -> unit_typ
   | AE_let (_, _, _, _, _, typ) -> typ
   | AE_block (_, _, typ) -> typ
   | AE_return (_, typ) -> typ
@@ -198,16 +201,20 @@ let rec aval_rename from_id to_id = function
   | AV_record (avals, typ) -> AV_record (Bindings.map (aval_rename from_id to_id) avals, typ)
   | AV_cval (cval, typ) -> AV_cval (cval_rename (name from_id) (name to_id) cval, typ)
 
+let rec alexp_rename from_id to_id = function
+  | AL_id (id, typ) when Id.compare from_id id = 0 -> AL_id (to_id, typ)
+  | AL_id (id, typ) -> AL_id (id, typ)
+  | AL_addr (id, typ) when Id.compare from_id id = 0 -> AL_addr (to_id, typ)
+  | AL_addr (id, typ) -> AL_id (id, typ)
+  | AL_field (alexp, field_id) -> AL_field (alexp_rename from_id to_id alexp, field_id)
+                         
 let rec aexp_rename from_id to_id (AE_aux (aexp, env, l)) =
   let recur = aexp_rename from_id to_id in
   let aexp = match aexp with
     | AE_val aval -> AE_val (aval_rename from_id to_id aval)
     | AE_app (id, avals, typ) -> AE_app (id, List.map (aval_rename from_id to_id) avals, typ)
     | AE_cast (aexp, typ) -> AE_cast (recur aexp, typ)
-    | AE_assign (id, typ, aexp) when Id.compare from_id id = 0 -> AE_assign (to_id, typ, aexp_rename from_id to_id aexp)
-    | AE_assign (id, typ, aexp) -> AE_assign (id, typ, aexp_rename from_id to_id aexp)
-    | AE_write_ref (id, typ, aexp) when Id.compare from_id id = 0 -> AE_write_ref (to_id, typ, aexp_rename from_id to_id aexp)
-    | AE_write_ref (id, typ, aexp) -> AE_write_ref (id, typ, aexp_rename from_id to_id aexp)
+    | AE_assign (alexp, aexp) -> AE_assign (alexp_rename from_id to_id alexp, aexp_rename from_id to_id aexp)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) when Id.compare from_id id = 0 -> AE_let (mut, id, typ1, recur aexp1, aexp2, typ2)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) -> AE_let (mut, id, typ1, recur aexp1, recur aexp2, typ2)
     | AE_block (aexps, aexp, typ) -> AE_block (List.map recur aexps, recur aexp, typ)
@@ -243,8 +250,7 @@ let rec no_shadow ids (AE_aux (aexp, env, l)) =
     | AE_val aval -> AE_val aval
     | AE_app (id, avals, typ) -> AE_app (id, avals, typ)
     | AE_cast (aexp, typ) -> AE_cast (no_shadow ids aexp, typ)
-    | AE_assign (id, typ, aexp) -> AE_assign (id, typ, no_shadow ids aexp)
-    | AE_write_ref (id, typ, aexp) -> AE_write_ref (id, typ, no_shadow ids aexp)
+    | AE_assign (alexp, aexp) -> AE_assign (alexp, no_shadow ids aexp)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) when IdSet.mem id ids ->
        let shadow_id = new_shadow id in
        let aexp1 = no_shadow ids aexp1 in
@@ -288,8 +294,7 @@ let rec map_aval f (AE_aux (aexp, env, l)) =
   let aexp = match aexp with
     | AE_val v -> AE_val (f env l v)
     | AE_cast (aexp, typ) -> AE_cast (map_aval f aexp, typ)
-    | AE_assign (id, typ, aexp) -> AE_assign (id, typ, map_aval f aexp)
-    | AE_write_ref (id, typ, aexp) -> AE_write_ref (id, typ, map_aval f aexp)
+    | AE_assign (alexp, aexp) -> AE_assign (alexp, map_aval f aexp)
     | AE_app (id, vs, typ) -> AE_app (id, List.map (f env l) vs, typ)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) ->
        AE_let (mut, id, typ1, map_aval f aexp1, map_aval f aexp2, typ2)
@@ -318,8 +323,7 @@ let rec map_functions f (AE_aux (aexp, env, l)) =
   let aexp = match aexp with
     | AE_app (id, vs, typ) -> f env l id vs typ
     | AE_cast (aexp, typ) -> AE_cast (map_functions f aexp, typ)
-    | AE_assign (id, typ, aexp) -> AE_assign (id, typ, map_functions f aexp)
-    | AE_write_ref (id, typ, aexp) -> AE_write_ref (id, typ, map_functions f aexp)
+    | AE_assign (alexp, aexp) -> AE_assign (alexp, map_functions f aexp)
     | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, map_functions f aexp)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) -> AE_let (mut, id, typ1, map_functions f aexp1, map_functions f aexp2, typ2)
     | AE_block (aexps, aexp, typ) -> AE_block (List.map (map_functions f) aexps, map_functions f aexp, typ)
@@ -340,8 +344,7 @@ let rec fold_aexp f (AE_aux (aexp, env, l)) =
   let aexp = match aexp with
     | AE_app (id, vs, typ) -> AE_app (id, vs, typ)
     | AE_cast (aexp, typ) -> AE_cast (fold_aexp f aexp, typ)
-    | AE_assign (id, typ, aexp) -> AE_assign (id, typ, fold_aexp f aexp)
-    | AE_write_ref (id, typ, aexp) -> AE_write_ref (id, typ, fold_aexp f aexp)
+    | AE_assign (alexp, aexp) -> AE_assign (alexp, fold_aexp f aexp)
     | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, fold_aexp f aexp)
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) -> AE_let (mut, id, typ1, fold_aexp f aexp1, fold_aexp f aexp2, typ2)
     | AE_block (aexps, aexp, typ) -> AE_block (List.map (fold_aexp f) aexps, fold_aexp f aexp, typ)
@@ -383,15 +386,21 @@ let pp_order = function
 let pp_id id =
   string (string_of_id id)
 
+let rec pp_alexp = function
+  | AL_id (id, typ) ->
+     pp_annot typ (pp_id id)
+  | AL_addr (id, typ) ->
+     string "*" ^^ parens (pp_annot typ (pp_id id))
+  | AL_field (alexp, field) ->
+     pp_alexp alexp ^^ dot ^^ pp_id field 
+    
 let rec pp_aexp (AE_aux (aexp, _, _)) =
   match aexp with
   | AE_val v -> pp_aval v
   | AE_cast (aexp, typ) ->
      pp_annot typ (string "$" ^^ pp_aexp aexp)
-  | AE_assign (id, typ, aexp) ->
-     pp_annot typ (pp_id id) ^^ string " := " ^^ pp_aexp aexp
-  | AE_write_ref (id, typ, aexp) ->
-     string "*" ^^ parens (pp_annot typ (pp_id id)) ^^ string " := " ^^ pp_aexp aexp
+  | AE_assign (alexp, aexp) ->
+     pp_alexp alexp ^^ string " := " ^^ pp_aexp aexp
   | AE_app (id, args, typ) ->
      pp_annot typ (pp_id id ^^ parens (separate_map (comma ^^ space) pp_aval args))
   | AE_short_circuit (SC_or, aval, aexp) ->
@@ -525,6 +534,22 @@ let rec apat_globals (AP_aux (aux, _, _)) =
 let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   let mk_aexp aexp = AE_aux (aexp, env_of_annot exp_annot, l) in
 
+  let rec anf_lexp env (LEXP_aux (aux, (l, _)) as lexp) =
+    match aux with
+    | LEXP_id id | LEXP_cast (_, id) ->
+       (fun x -> x), AL_id (id, lvar_typ (Env.lookup_id id env))
+    | LEXP_field (lexp, field_id) ->
+       let wrap, alexp = anf_lexp env lexp in
+       wrap, AL_field (alexp, field_id)
+    | LEXP_deref dexp ->
+       let gs = gensym () in
+       (fun x -> mk_aexp (AE_let (Mutable, gs, typ_of dexp, anf dexp, x, unit_typ))),
+       AL_addr (gs, typ_of dexp)
+    | _ ->
+       Reporting.unreachable l __POS__
+         ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF")
+  in
+  
   let to_aval (AE_aux (aexp_aux, env, _) as aexp) =
     let mk_aexp (AE_aux (_, _, l)) aexp = AE_aux (aexp, env, l) in
     match aexp_aux with
@@ -545,10 +570,11 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
       | AE_block (_, _, typ) ->
        let id = gensym () in
        (AV_id (id, Local (Immutable, typ)), fun x -> mk_aexp x (AE_let (Immutable, id, typ, aexp, x, typ_of exp)))
-    | AE_assign _ | AE_for _ | AE_loop _ | AE_write_ref _ ->
+    | AE_assign _ | AE_for _ | AE_loop _ ->
        let id = gensym () in
        (AV_id (id, Local (Immutable, unit_typ)), fun x -> mk_aexp x (AE_let (Immutable, id, unit_typ, aexp, x, typ_of exp)))
   in
+
   match e_aux with
   | E_lit lit -> mk_aexp (ae_lit lit (typ_of exp))
 
@@ -562,18 +588,10 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let alast = anf last in
      mk_aexp (AE_block (aexps, alast, typ_of exp))
 
-  | E_assign (LEXP_aux (LEXP_deref dexp, _), exp) ->
-     let gs = gensym () in
-     mk_aexp (AE_let (Mutable, gs, typ_of dexp, anf dexp, mk_aexp (AE_write_ref (gs, typ_of dexp, anf exp)), unit_typ))
-
-  | E_assign (LEXP_aux (LEXP_id id, _), exp)
-    | E_assign (LEXP_aux (LEXP_cast (_, id), _), exp) ->
+  | E_assign (lexp, exp) ->
      let aexp = anf exp in
-     mk_aexp (AE_assign (id, lvar_typ (Env.lookup_id id (env_of exp)), aexp))
-
-  | E_assign (lexp, _) ->
-     raise (Reporting.err_unreachable l __POS__
-       ("Encountered complex l-expression " ^ string_of_lexp lexp ^ " when converting to ANF"))
+     let wrap, alexp = anf_lexp (env_of exp) lexp in
+     wrap (mk_aexp (AE_assign (alexp, aexp)))
 
   | E_loop (loop_typ, _, cond, exp) ->
      let acond = anf cond in
