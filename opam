@@ -35,8 +35,8 @@ depends: [
   "omd"
   "conf-gmp"
   "conf-zlib"
-  "base64" {< "3.0.0"}
-  "yojson" {<= "1.7.0"}
+  "base64" {>= "3.1.0"}
+  "yojson" {>= "1.6.0"}
   "pprint"
 ]
 available: [ocaml-version >= "4.06.1"]

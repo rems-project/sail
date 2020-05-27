@@ -57,7 +57,7 @@ let lib = ref ([] : string list)
 let opt_interactive_script : string option ref = ref None
 (* Note: May cause a deprecated warning for json type, but this cannot be
    fixed without breaking Ubuntu 18.04 CI *)
-let opt_config : Json.json option ref = ref None
+let opt_config : Json.t option ref = ref None
 let opt_print_version = ref false
 let opt_target = ref None
 let opt_tofrominterp_output_dir : string option ref = ref None
@@ -476,7 +476,7 @@ let target name out_name ast type_envs =
          (l, Type_check.replace_env (Type_check.Env.set_prover None (Type_check.env_of_tannot tannot)) tannot)
      in
      Marshal.to_string (Ast_util.map_defs_annot remove_prover ast, Type_check.Env.set_prover None type_envs) [Marshal.Compat_32]
-     |> B64.encode
+     |> Base64.encode_string
      |> output_string f;
      close_out f
 
