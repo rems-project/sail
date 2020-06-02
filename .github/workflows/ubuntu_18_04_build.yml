@@ -1,4 +1,4 @@
-name: CI ubuntu-latest
+name: CI ubuntu-18.04
 
 on: [push]
 
