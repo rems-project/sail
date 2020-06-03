@@ -5,6 +5,8 @@ ARCHS += risc-v
 # ARCHS += cheri
 ARCHS += x86
 
+INSTALL_DIR ?= .
+
 all: sail interpreter
 .PHONY: all
 
@@ -30,6 +32,14 @@ archs:
 isabelle-lib:
 	$(MAKE) -C isabelle-lib
 .PHONY: isabelle-lib
+
+install:
+	if [ -z "$(SHARE_DIR)" ]; then echo SHARE_DIR is unset; false; fi
+	mkdir -p $(INSTALL_DIR)/bin
+	cp src/sail.native $(INSTALL_DIR)/bin/sail-legacy
+	mkdir -p $(SHARE_DIR)/src
+	cp -r src/gen_lib $(SHARE_DIR)/src
+	cp -r src/lem_interp $(SHARE_DIR)/src
 
 apply_header:
 	$(MAKE) clean

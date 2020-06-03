@@ -1,0 +1,40 @@
+opam-version: "2.0"
+name: "sail-legacy"
+version: "0.1"
+maintainer: "Sail Devs <cl-sail-dev@lists.cam.ac.uk>"
+authors: [
+  "Alasdair Armstrong"
+  "Thomas Bauereiss"
+  "Brian Campbell"
+  "Shaked Flur"
+  "Jonathan French"
+  "Kathy Gray"
+  "Robert Norton"
+  "Christopher Pulte"
+  "Peter Sewell"
+  "Mark Wassell"
+]
+homepage: "http://www.cl.cam.ac.uk/~pes20/sail/"
+bug-reports: "https://github.com/rems-project/sail/issues"
+license: "BSD3"
+dev-repo: "git+https://github.com/rems-project/sail.git#legacy"
+build: [make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{sail-legacy:share}%" "sail"]
+install: [make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{sail-legacy:share}%" "install"]
+depends: [
+  "ocaml" {>= "4.06.1"}
+  "ocamlfind" {build} 
+  "ocamlbuild" {build}
+  "zarith"
+  "ott" {>= "0.28" & build}
+  "lem" {>= "2018-12-14"}
+  "linksem" {>= "0.3"}
+  "conf-gmp"
+  "conf-zlib"
+  "pprint"
+]
+synopsis:
+  "This is a legacy version of the Sail language, and should not be used"
+description:
+  """Sail is a language for describing the instruction-set
+architecture (ISA) semantics of processors. This is a legacy version
+to support RMEM and should not be used."""

@@ -62,14 +62,14 @@ endif
 endif
 
 
-.PHONY: all sail test clean doc lib power test_power test_idempotence
+.PHONY: all sail test clean doc power test_power test_idempotence
 
 # set to -p on command line to enable gprof profiling
 OCAML_OPTS?=
 
-all: sail lib doc
+all: sail doc
 
-full: sail lib power doc test
+full: sail power doc test
 
 sail:
 	ocamlbuild -use-ocamlfind sail.native sail_lib.cma sail_lib.cmxa
@@ -255,6 +255,3 @@ clean:
 
 doc:
 	ocamlbuild -use-ocamlfind sail.docdir/index.html
-
-lib:
-	ocamlbuild -use-ocamlfind pretty_print.cmxa pretty_print.cma
