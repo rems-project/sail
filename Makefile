@@ -40,6 +40,11 @@ install:
 	mkdir -p $(SHARE_DIR)/src
 	cp -r src/gen_lib $(SHARE_DIR)/src
 	cp -r src/lem_interp $(SHARE_DIR)/src
+	mkdir -p $(SHARE_DIR)/arch
+	for arch in $(ARCHS); do\
+	  cp -r "$$arch" $(SHARE_DIR)/arch;\
+	done
+.PHONY: install
 
 apply_header:
 	$(MAKE) clean
