@@ -1,5 +1,5 @@
 SAIL:=../src/sail.native
-LEM:=../../lem/lem
+LEM:=lem
 
 SOURCES:=power.sail ../etc/regfp.sail power_regfp.sail
 

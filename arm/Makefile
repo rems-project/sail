@@ -1,5 +1,5 @@
 SAIL:=../src/sail.native
-LEM:=../../lem/lem
+LEM:=lem
 
 # the order of the files is important
 SOURCES=armV8.h.sail\

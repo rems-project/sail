@@ -1,7 +1,7 @@
 ARCHS += power
 ARCHS += arm
-ARCHS += risc-v
-# ARCHS += mips
+# ARCHS += risc-v
+ARCHS += mips
 # ARCHS += cheri
 ARCHS += x86
 
@@ -33,7 +33,7 @@ isabelle-lib:
 	$(MAKE) -C isabelle-lib
 .PHONY: isabelle-lib
 
-install:
+install: archs
 	if [ -z "$(SHARE_DIR)" ]; then echo SHARE_DIR is unset; false; fi
 	mkdir -p $(INSTALL_DIR)/bin
 	cp src/sail.native $(INSTALL_DIR)/bin/sail-legacy

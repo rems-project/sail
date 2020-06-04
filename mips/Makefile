@@ -1,5 +1,5 @@
 SAIL:=../src/sail.native
-LEM:=../../lem/lem
+LEM:=lem
 
 # SOURCES:=mips_prelude.sail mips_tlb.sail mips_wrappers.sail mips_insts.sail mips_ri.sail mips_epilogue.sail ../etc/regfp.sail mips_regfp.sail
 SOURCES:=mips_prelude.sail mips_tlb_stub.sail mips_wrappers.sail mips_insts.sail mips_epilogue.sail ../etc/regfp.sail mips_regfp.sail

@@ -1,5 +1,5 @@
 SAIL=../src/sail.native
-LEM:=../../lem/lem
+LEM:=lem
 
 SOURCES=../etc/regfp.sail x64.sail
 
