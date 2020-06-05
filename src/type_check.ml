@@ -2763,6 +2763,44 @@ let rec filter_casts env from_typ to_typ casts =
      end
   | [] -> []
 
+type pattern_duplicate =
+  | Pattern_singleton of l
+  | Pattern_duplicate of l * l 
+        
+(* Check if a pattern contains duplicate bindings, and raise a type
+   error if this is the case *)
+let check_pattern_duplicates env pat =
+  let is_duplicate _ = function
+    | Pattern_duplicate _ -> true
+    | _ -> false
+  in
+  let rec collect_duplicates ids (P_aux (aux, (l, _))) =
+    let update_id = function
+      | None -> Some (Pattern_singleton l)
+      | Some (Pattern_singleton l2) -> Some (Pattern_duplicate (l2, l))
+      | duplicate -> duplicate
+    in
+    match aux with
+    | P_id id ->
+       ids := Bindings.update id update_id !ids
+    | P_lit _ | P_wild -> ()
+    | P_not p | P_as (p, _) | P_typ (_, p) | P_var (p, _) ->
+       collect_duplicates ids p
+    | P_or (p1, p2) | P_cons (p1, p2) ->
+       collect_duplicates ids p1; collect_duplicates ids p2
+    | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tup ps | P_list ps | P_string_append ps ->
+       List.iter (collect_duplicates ids) ps
+  in
+  let ids = ref Bindings.empty in
+  collect_duplicates ids pat;
+  match Bindings.choose_opt (Bindings.filter is_duplicate !ids) with
+  | Some (id, Pattern_duplicate (l1, l2)) ->
+     typ_raise env l2
+       (Err_because (Err_other ("Duplicate binding for " ^ string_of_id id ^ " in pattern"),
+                     l1,
+                     Err_other ("Previous binding of " ^ string_of_id id ^ " here")))
+  | _ -> ()
+      
 let crule r env exp typ =
   incr depth;
   typ_print (lazy (Util.("Check " |> cyan |> clear) ^ string_of_exp exp ^ " <= " ^ string_of_typ typ));
@@ -2884,11 +2922,13 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        | LB_val (P_aux (P_typ (ptyp, _), _) as pat, bind) ->
           Env.wf_typ env ptyp;
           let checked_bind = crule check_exp env bind ptyp in
+          check_pattern_duplicates env pat;
           let tpat, inner_env = bind_pat_no_guard env pat ptyp in
           annot_exp (E_let (LB_aux (LB_val (tpat, checked_bind), (let_loc, None)), crule check_exp inner_env exp typ))
             (check_shadow_leaks l inner_env env typ)
        | LB_val (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
+          check_pattern_duplicates env pat;
           let tpat, inner_env = bind_pat_no_guard env pat (typ_of inferred_bind) in
           annot_exp (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, None)), crule check_exp inner_env exp typ))
             (check_shadow_leaks l inner_env env typ)
@@ -3085,6 +3125,7 @@ and check_block l env exps ret_typ =
 
 and check_case env pat_typ pexp typ =
   let pat,guard,case,((l,_) as annot) = destruct_pexp pexp in
+  check_pattern_duplicates env pat;
   match bind_pat env pat pat_typ with
   | tpat, env, guards ->
      let guard = match guard, guards with
@@ -4012,6 +4053,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | LB_val (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
           inferred_bind, pat, typ_of inferred_bind in
+     check_pattern_duplicates env pat;
      let tpat, inner_env = bind_pat_no_guard env pat ptyp in
      let inferred_exp = irule infer_exp inner_env exp in
      annot_exp (E_let (LB_aux (LB_val (tpat, bind_exp), (let_loc, None)), inferred_exp))
