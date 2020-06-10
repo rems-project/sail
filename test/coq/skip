@@ -35,5 +35,9 @@ while_MM.sail
 while_MP.sail
 while_PM.sail
 while_PP.sail
+XXXXX Non-terminating loop that's only really useful for the type checking tests
+repeat_constraint.sail
 XXXXX Not yet - haven't decided whether to support register reads in measures
 while_MM_terminating.sail
+XXXXX TODO, add termination measure
+floor_pow2.sail

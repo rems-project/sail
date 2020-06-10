@@ -1,7 +1,7 @@
-Require Import Sail2_values.
-Require Import Sail2_prompt_monad.
-Require Import Sail2_prompt.
-Require Import Sail2_state_monad.
+Require Import Sail.Values.
+Require Import Sail.Prompt_monad.
+Require Import Sail.Prompt.
+Require Import Sail.State_monad.
 Import ListNotations.
 
 (* Lifting from prompt monad to state monad *)

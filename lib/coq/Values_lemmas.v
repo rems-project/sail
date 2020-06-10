@@ -1,4 +1,4 @@
-Require Import Sail2_values.
+Require Import Sail.Values.
 
 (*
 

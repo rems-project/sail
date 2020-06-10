@@ -1,6 +1,5 @@
-(*Require Import Sail_impl_base*)
-Require Import Sail2_values.
-Require Import Sail2_prompt_monad.
+Require Import Sail.Values.
+Require Import Sail.Prompt_monad.
 Require Export ZArith.Zwf.
 Require Import List.
 Import ListNotations.

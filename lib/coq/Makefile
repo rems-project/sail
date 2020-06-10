@@ -1,26 +1,40 @@
-BBV_DIR?=../../../bbv/src/bbv
+HAVE_OPAM_BBV=$(shell if opam config var coq-bbv:share >/dev/null 2>/dev/null; then echo yes; else echo no; fi)
 
-CORESRC=Sail2_prompt_monad.v  Sail2_prompt.v  Sail2_impl_base.v  Sail2_instr_kinds.v  Sail2_operators_bitlists.v  Sail2_operators_mwords.v  Sail2_operators.v  Sail2_values.v  Sail2_state_monad.v  Sail2_state.v  Sail2_state_lifting.v  Sail2_string.v  Sail2_real.v
-PROOFSRC=Sail2_values_lemmas.v Sail2_state_monad_lemmas.v Sail2_state_lemmas.v Hoare.v
+ifeq ($(HAVE_OPAM_BBV),no)
+BBV_DIR?=../../../bbv/src/bbv
+endif
+
+CORESRC=Prompt_monad.v  Prompt.v  Impl_base.v  Instr_kinds.v  Operators_bitlists.v  Operators_mwords.v  Operators.v  Values.v  State_monad.v  State.v  State_lifting.v  String.v  Real.v  Base.v
+PROOFSRC=Values_lemmas.v State_monad_lemmas.v State_lemmas.v Hoare.v
 SRC=$(CORESRC) $(PROOFSRC)
 
-COQ_LIBS = -R . Sail -R "$(BBV_DIR)" bbv
+ifdef BBV_DIR
+COQ_LIBS = -Q . Sail -Q "$(BBV_DIR)" bbv
+else
+COQ_LIBS = -Q . Sail
+endif
 
 TARGETS=$(SRC:.v=.vo)
 
-.PHONY: all clean *.ide
+.PHONY: all clean install
 
 all: $(TARGETS)
 clean:
 	rm -f -- $(TARGETS) $(TARGETS:.vo=.glob) $(TARGETS:%.vo=.%.aux) deps
 
-%.vo: %.v
+$(TARGETS): %.vo: %.v
 	coqc $(COQ_LIBS) $<
-
-%.ide: %.v
-	coqide $(COQ_LIBS) $<
 
 deps: $(SRC)
 	coqdep $(COQ_LIBS) $(SRC) > deps
 
 -include deps
+
+COQLIB = $(shell coqc -where)
+DESTDIR ?=
+INSTALLDIR = $(DESTDIR)/$(COQLIB)/user-contrib/Sail
+
+install: $(TARGETS)
+	test -d "$(DESTDIR)/$(COQLIB)/user-contrib" || echo Coq library directory "$(DESTDIR)/$(COQLIB)/user-contrib" not present
+	install -d -- "$(INSTALLDIR)"
+	install -m 644 -- $(SRC) $(TARGETS) $(TARGETS:.vo=.glob) "$(INSTALLDIR)"

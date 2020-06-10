@@ -1,5 +1,5 @@
-Require Import Sail2_instr_kinds.
-Require Import Sail2_values.
+Require Import Sail.Instr_kinds.
+Require Import Sail.Values.
 Require FMapList.
 Require Import OrderedType.
 Require OrderedTypeEx.

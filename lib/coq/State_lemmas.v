@@ -1,5 +1,5 @@
-Require Import Sail2_values Sail2_prompt_monad Sail2_prompt Sail2_state_monad Sail2_state Sail2_state Sail2_state_lifting.
-Require Import Sail2_state_monad_lemmas.
+Require Import Sail.Values Sail.Prompt_monad Sail.Prompt Sail.State_monad Sail.State Sail.State Sail.State_lifting.
+Require Import Sail.State_monad_lemmas.
 
 Local Open Scope equiv_scope.
 
@@ -209,14 +209,14 @@ Qed.
 
 (* Monad lifting *)
 
-Lemma liftState_bind Regval Regs A B E {r : Sail2_values.register_accessors Regs Regval} {m : monad Regval A E} {f : A -> monad Regval B E} :
+Lemma liftState_bind Regval Regs A B E {r : Sail.Values.register_accessors Regs Regval} {m : monad Regval A E} {f : A -> monad Regval B E} :
   liftState r (bind m f) === bindS (liftState r m) (fun x => liftState r (f x)).
 induction m; simpl; autorewrite with state; auto using bindS_cong.
 Qed.
 Hint Rewrite liftState_bind : liftState.
 Hint Resolve liftState_bind : liftState.
 
-Lemma liftState_bind0 Regval Regs B E {r : Sail2_values.register_accessors Regs Regval} {m : monad Regval unit E} {m' : monad Regval B E} :
+Lemma liftState_bind0 Regval Regs B E {r : Sail.Values.register_accessors Regs Regval} {m : monad Regval unit E} {m' : monad Regval B E} :
   liftState r (bind0 m m') === seqS (liftState r m) (liftState r m').
 induction m; simpl; autorewrite with state; auto using bindS_cong.
 Qed.
@@ -327,7 +327,7 @@ Ltac rewrite_liftState :=
     try let H := fresh "H" in (eassert (H:liftState r tm === _); [ statecong liftState | rewrite H; clear H])
   end.
 
-Lemma liftState_return Regval Regs A E {r : Sail2_values.register_accessors Regs Regval} {a :A} :
+Lemma liftState_return Regval Regs A E {r : Sail.Values.register_accessors Regs Regval} {a :A} :
   liftState (E:=E) r (returnm a) = returnS a.
 reflexivity.
 Qed.
@@ -633,7 +633,7 @@ Hint Resolve liftState_write_mem_ea : liftState.
 Lemma liftState_write_memt Regs Regval A B E wk addr sz v t r :
   liftState (Regs := Regs) r (@write_memt Regval A B E wk addr sz v t) = write_memtS wk addr sz v t.
 unfold write_memt, write_memtS.
-destruct (Sail2_values.mem_bytes_of_bits v); auto.
+destruct (Sail.Values.mem_bytes_of_bits v); auto.
 Qed.
 Hint Rewrite liftState_write_memt : liftState.
 Hint Resolve liftState_write_memt : liftState.
@@ -641,7 +641,7 @@ Hint Resolve liftState_write_memt : liftState.
 Lemma liftState_write_mem Regs Regval A B E wk addrsize addr sz v r :
   liftState (Regs := Regs) r (@write_mem Regval A B E wk addrsize addr sz v) = write_memS wk addr sz v.
 unfold write_mem, write_memS, write_memtS.
-destruct (Sail2_values.mem_bytes_of_bits v); simpl; auto.
+destruct (Sail.Values.mem_bytes_of_bits v); simpl; auto.
 Qed.
 Hint Rewrite liftState_write_mem : liftState.
 Hint Resolve liftState_write_mem : liftState.

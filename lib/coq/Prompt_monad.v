@@ -1,7 +1,7 @@
 Require Import String.
 (*Require Import Sail_impl_base*)
-Require Import Sail2_instr_kinds.
-Require Import Sail2_values.
+Require Import Sail.Instr_kinds.
+Require Import Sail.Values.
 Require bbv.Word.
 Import ListNotations.
 

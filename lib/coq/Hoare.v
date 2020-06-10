@@ -1,6 +1,6 @@
 Require Import String ZArith Setoid Morphisms Equivalence.
-Require Import Sail2_state_monad Sail2_prompt Sail2_state Sail2_state_monad_lemmas.
-Require Import Sail2_state_lemmas.
+Require Import Sail.State_monad Sail.Prompt Sail.State Sail.State_monad_lemmas.
+Require Import Sail.State_lemmas.
 
 (*adhoc_overloading
   Monad_Syntax.bind State_monad.bindS*)
@@ -193,9 +193,9 @@ eapply PrePost_bindS.
 Qed.
 
 Lemma PrePost_and_boolSP (*[PrePost_compositeI]:*) Regs E PP QQ RR H
-  (l : monadS Regs {b : bool & Sail2_values.ArithFactP (PP b)} E)
-  (r : monadS Regs {b : bool & Sail2_values.ArithFactP (QQ b)} E)
-  P (Q : result {b : bool & Sail2_values.ArithFactP (RR b)} E -> predS Regs) R :
+  (l : monadS Regs {b : bool & Sail.Values.ArithFactP (PP b)} E)
+  (r : monadS Regs {b : bool & Sail.Values.ArithFactP (QQ b)} E)
+  P (Q : result {b : bool & Sail.Values.ArithFactP (RR b)} E -> predS Regs) R :
   (forall p,
       PrePost R r
               (fun r =>
@@ -237,9 +237,9 @@ eapply PrePost_bindS.
 Qed.
 
 Lemma PrePost_or_boolSP (*[PrePost_compositeI]:*) Regs E PP QQ RR H
-  (l : monadS Regs {b : bool & Sail2_values.ArithFactP (PP b)} E)
-  (r : monadS Regs {b : bool & Sail2_values.ArithFactP (QQ b)} E)
-  P (Q : result {b : bool & Sail2_values.ArithFactP (RR b)} E -> predS Regs) R :
+  (l : monadS Regs {b : bool & Sail.Values.ArithFactP (PP b)} E)
+  (r : monadS Regs {b : bool & Sail.Values.ArithFactP (QQ b)} E)
+  P (Q : result {b : bool & Sail.Values.ArithFactP (RR b)} E -> predS Regs) R :
   (forall p,
       PrePost R r
               (fun r =>
@@ -608,9 +608,9 @@ Qed.
    and prevents the reduction of the function application. *)
 
 Lemma PrePostE_and_boolSP (*[PrePost_compositeI]:*) Regs Ety PP QQ RR H
-  (l : monadS Regs {b : bool & Sail2_values.ArithFactP (PP b)} Ety)
-  (r : monadS Regs {b : bool & Sail2_values.ArithFactP (QQ b)} Ety)
-  P (Q : {b : bool & Sail2_values.ArithFactP (RR b)} -> predS Regs) E R :
+  (l : monadS Regs {b : bool & Sail.Values.ArithFactP (PP b)} Ety)
+  (r : monadS Regs {b : bool & Sail.Values.ArithFactP (QQ b)} Ety)
+  P (Q : {b : bool & Sail.Values.ArithFactP (RR b)} -> predS Regs) E R :
   PrePostE R r (fun r s => forall pf, Q (existT _ (projT1 r) pf) s) E ->
   PrePostE P l
           (fun r s => match r with
@@ -645,9 +645,9 @@ eapply PrePostE_bindS.
 Qed.
 
 Lemma PrePostE_or_boolSP (*[PrePost_compositeI]:*) Regs Ety PP QQ RR H
-  (l : monadS Regs {b : bool & Sail2_values.ArithFactP (PP b)} Ety)
-  (r : monadS Regs {b : bool & Sail2_values.ArithFactP (QQ b)} Ety)
-  P (Q : {b : bool & Sail2_values.ArithFactP (RR b)} -> predS Regs) E R :
+  (l : monadS Regs {b : bool & Sail.Values.ArithFactP (PP b)} Ety)
+  (r : monadS Regs {b : bool & Sail.Values.ArithFactP (QQ b)} Ety)
+  P (Q : {b : bool & Sail.Values.ArithFactP (RR b)} -> predS Regs) E R :
   PrePostE R r (fun r s => forall pf, Q (existT _ (projT1 r) pf) s) E ->
   PrePostE P l
           (fun r s => match r with
@@ -774,7 +774,7 @@ apply PrePost_foreachS_invariant with (Q := fun v => match v with Value a => Q a
 auto.
 Qed.
 
-Lemma PrePostE_foreach_ZS_up_invariant Regs Vars Ety from to step (H : Sail2_values.ArithFact (0 <? step)%Z) vars body (Q : Vars -> predS Regs) (E : ex Ety -> predS Regs) :
+Lemma PrePostE_foreach_ZS_up_invariant Regs Vars Ety from to step (H : Sail.Values.ArithFact (0 <? step)%Z) vars body (Q : Vars -> predS Regs) (E : ex Ety -> predS Regs) :
   (forall i range vars, PrePostE (Q vars) (body i range vars) Q E) ->
   PrePostE (Q vars) (foreach_ZS_up from to step vars body) Q E.
 intro INV.
@@ -793,7 +793,7 @@ induction (S (Z.abs_nat (from - to))); intros.
   + apply PrePostE_returnS.
 Qed.
 
-Lemma PrePostE_foreach_ZS_down_invariant Regs Vars Ety from to step (H : Sail2_values.ArithFact (0 <? step)%Z) vars body (Q : Vars -> predS Regs) (E : ex Ety -> predS Regs) :
+Lemma PrePostE_foreach_ZS_down_invariant Regs Vars Ety from to step (H : Sail.Values.ArithFact (0 <? step)%Z) vars body (Q : Vars -> predS Regs) (E : ex Ety -> predS Regs) :
   (forall i range vars, PrePostE (Q vars) (body i range vars) Q E) ->
   PrePostE (Q vars) (foreach_ZS_down from to step vars body) Q E.
 intro INV.
@@ -838,7 +838,7 @@ apply PrePostE_use_pre. intros s0 Pre0.
 assert (measure vars >= 0) as Hlimit_0 by eauto. clear s0 Pre0.
 remember (measure vars) as limit eqn: Heqlimit in Hlimit_0 |- *.
 assert (measure vars <= limit) as Hlimit by omega. clear Heqlimit.
-generalize (Sail2_prompt.Zwf_guarded limit).
+generalize (Sail.Prompt.Zwf_guarded limit).
 revert vars Hlimit.
 apply Wf_Z.natlike_ind with (x := limit).
 * intros vars Hmeasure_limit [acc]. simpl.
@@ -1000,7 +1000,7 @@ unfold internal_pickS.
 intro notnil.
 eapply PrePostE_bindS with (R := fun _ s => forall x, List.In x xs -> Q x s).
 * intros.
-  destruct (nth_error_modulo (Sail2_values.nat_of_bools a) notnil) as (x & IN & nth).
+  destruct (nth_error_modulo (Sail.Values.nat_of_bools a) notnil) as (x & IN & nth).
   rewrite nth.
   eapply PrePostE_strengthen_pre.
   apply PrePostE_returnS.
@@ -1038,7 +1038,7 @@ Qed.
 
 Local Open Scope Z.
 
-Lemma PrePostE_undefined_bitvectorS_any Regs Ety n `{Sail2_values.ArithFact (n >=? 0)} (Q : Sail2_values.mword n -> predS Regs) (E : ex Ety -> predS Regs) :
+Lemma PrePostE_undefined_bitvectorS_any Regs Ety n `{Sail.Values.ArithFact (n >=? 0)} (Q : Sail.Values.mword n -> predS Regs) (E : ex Ety -> predS Regs) :
   PrePostE (fun s => forall w, Q w s) (undefined_bitvectorS n) Q E.
 unfold undefined_bitvectorS.
 eapply PrePostE_strengthen_pre.
@@ -1049,15 +1049,15 @@ simpl.
 auto.
 Qed.
 
-Lemma PrePostE_undefined_bitvectorS_ignore Regs Ety n `{Sail2_values.ArithFact (n >=? 0)} (Q : predS Regs) (E : ex Ety -> predS Regs) :
+Lemma PrePostE_undefined_bitvectorS_ignore Regs Ety n `{Sail.Values.ArithFact (n >=? 0)} (Q : predS Regs) (E : ex Ety -> predS Regs) :
   PrePostE Q (undefined_bitvectorS n) (fun _ => Q) E.
 eapply PrePostE_strengthen_pre.
 apply PrePostE_undefined_bitvectorS_any; auto.
 simpl; auto.
 Qed.
 
-Lemma PrePostE_build_trivial_exS Regs (T:Type) Ety (m : monadS Regs T Ety) P (Q : {T & Sail2_values.ArithFact true} -> predS Regs) E :
-  PrePostE P m (fun v => Q (existT _ v (Sail2_values.Build_ArithFactP _ eq_refl))) E ->
+Lemma PrePostE_build_trivial_exS Regs (T:Type) Ety (m : monadS Regs T Ety) P (Q : {T & Sail.Values.ArithFact true} -> predS Regs) E :
+  PrePostE P m (fun v => Q (existT _ v (Sail.Values.Build_ArithFactP _ eq_refl))) E ->
   PrePostE P (build_trivial_exS m) Q E.
 intro H.
 unfold build_trivial_exS.

@@ -359,16 +359,7 @@ let output_lem filename libs type_env defs =
 let output_coq opt_dir filename alt_modules alt_modules2 libs defs =
   let generated_line = generated_line filename in
   let types_module = (filename ^ "_types") in
-  let monad_modules = ["Sail2_prompt_monad"; "Sail2_prompt"; "Sail2_state"] in
-  let operators_module = "Sail2_operators_mwords" in
-  let base_imports_default = [
-      "Sail2_instr_kinds";
-      "Sail2_values";
-      "Sail2_string";
-      "Sail2_real";
-      operators_module
-    ] @ monad_modules
-  in
+  let base_imports_default = ["Sail.Base"; "Sail.Real"] in
   let base_imports =
     (match alt_modules with
     | [] -> base_imports_default

@@ -1,4 +1,4 @@
-Require Import Sail2_values.
+Require Import Sail.Values.
 Require Import Coq.Strings.Ascii.
 
 Definition string_sub (s : string) (start : Z) (len : Z) : string :=
