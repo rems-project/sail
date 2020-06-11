@@ -2057,10 +2057,14 @@ Ltac default_andor :=
   repeat match goal with |- @ex _ _ => eexists end;
   rewrite ?Bool.eqb_true_iff, ?Bool.eqb_false_iff in *;
   match goal with
-  | H:?v = true -> _ |- _ = ?v && _ => eapply default_and_proof; eauto
-  | H:?v = true -> _ |- _ = ?v && _ => eapply default_and_proof2; eauto
-  | H:?v = false -> _ |- _ = ?v || _ => eapply default_or_proof; eauto
-  | H:?v = false -> _ |- _ = ?v || _ => eapply default_or_proof2; eauto
+  | H:?v = true -> _ |- _ = ?v && _ => solve [eapply default_and_proof; eauto 2]
+  | H:?v = true -> _ |- _ = ?v && _ => solve [eapply default_and_proof2; eauto 2]
+  | H:?v = false -> _ |- _ = ?v || _ => solve [eapply default_or_proof; eauto 2]
+  | H:?v = false -> _ |- _ = ?v || _ => solve [eapply default_or_proof2; eauto 2]
+  | H:?v = true -> _ |- _ = ?v && _ => solve [rewrite Bool.andb_comm; eapply default_and_proof; eauto 2]
+  | H:?v = true -> _ |- _ = ?v && _ => solve [rewrite Bool.andb_comm; eapply default_and_proof2; eauto 2]
+  | H:?v = false -> _ |- _ = ?v || _ => solve [rewrite Bool.orb_comm; eapply default_or_proof; eauto 2]
+  | H:?v = false -> _ |- _ = ?v || _ => solve [rewrite Bool.orb_comm; eapply default_or_proof2; eauto 2]
   end.
 
 (* Solving simple and_boolMP / or_boolMP goals where unknown booleans
@@ -2117,7 +2121,6 @@ Ltac squashed_andor_solver :=
   | |- context[?li =? ?ri] =>
     specialize (Z.eqb_eq li ri); generalize (li =? ri); intros
   end;
-  rewrite <- ?Z.eqb_eq in *;
   solve_bool_with_Z.
 
 Ltac run_main_solver_impl :=
