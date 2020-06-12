@@ -2109,10 +2109,13 @@ Ltac squashed_andor_solver :=
     destruct H as [x H'];
     exists x
   end;
-  (* Attempt to shrink size of problem *)
+  (* Attempt to shrink size of problem.
+     I originally used just one match here with a non-linear pattern, but it
+     appears it matched up to convertability and so definitions could break
+     the generalization. *)
   try match goal with
-      | _ : l = _ -> ?v = r |- context[?v] => generalize dependent v; intros
-      | _ : l = _ -> Bool.eqb ?v r = true |- context[?v] => generalize dependent v; intros
+      | _ : l = _ -> ?v = r |- _ => match goal with |- context[v] => generalize dependent v; intros end
+      | _ : l = _ -> Bool.eqb ?v r = true |- _ => match goal with |- context[v] => generalize dependent v; intros end
       end;
   unbool_comparisons; unbool_comparisons_goal;
   repeat match goal with
