@@ -178,7 +178,7 @@ module type Config = sig
   val ignore_64 : bool
   val struct_value : bool
   val use_real : bool
-  val branch_coverage : bool
+  val branch_coverage : out_channel option
   val track_throw : bool
 end
 
@@ -210,40 +210,43 @@ let coverage_branch_reached l =
   let branch_id = !coverage_branch_count in
   incr coverage_branch_count;
   branch_id,
-  if C.branch_coverage then
-    begin match coverage_loc_args l with
-    | None -> []
-    | Some args ->
-       [iraw (Printf.sprintf "sail_branch_reached(%d, %s);" branch_id args)]
-    end
-  else
-    []
+  (match C.branch_coverage with
+   | Some _ ->
+      begin match coverage_loc_args l with
+      | None -> []
+      | Some args ->
+         [iraw (Printf.sprintf "sail_branch_reached(%d, %s);" branch_id args)]
+      end
+   | _ -> []
+  )
 
 let append_into_block instrs instr =
   match instrs with
   | [] -> instr
   | _ -> iblock (instrs @ [instr])
-  
+
 let coverage_branch_taken branch_id (AE_aux (_, _, l)) =
-  if not C.branch_coverage then
-    []
-  else
-    match coverage_loc_args l with
-    | None -> []
-    | Some args ->
-       print_endline ("B " ^ args);
-       [iraw (Printf.sprintf "sail_branch_taken(%d, %s);" branch_id args)]
+  match C.branch_coverage with
+  | None -> []
+  | Some out -> begin
+     match coverage_loc_args l with
+     | None -> []
+     | Some args ->
+        Printf.fprintf out "%s\n" ("B " ^ args);
+        [iraw (Printf.sprintf "sail_branch_taken(%d, %s);" branch_id args)]
+    end
 
 let coverage_function_entry id l =
-  if not C.branch_coverage then
-    []
-  else
-    match coverage_loc_args l with
-    | None -> []
-    | Some args ->
-       print_endline ("F " ^ args);
-       [iraw (Printf.sprintf "sail_function_entry(\"%s\", %s);" (string_of_id id) args)]
-       
+  match C.branch_coverage with
+  | None -> []
+  | Some out -> begin
+     match coverage_loc_args l with
+     | None -> []
+     | Some args ->
+        Printf.fprintf out "%s\n" ("F " ^ args);
+        [iraw (Printf.sprintf "sail_function_entry(\"%s\", %s);" (string_of_id id) args)]
+    end
+
 let rec compile_aval l ctx = function
   | AV_cval (cval, typ) ->
      let ctyp = cval_ctyp cval in

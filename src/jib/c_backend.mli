@@ -88,7 +88,7 @@ val opt_prefix : string ref
 val opt_extra_params : string option ref
 val opt_extra_arguments : string option ref
 
-val opt_branch_coverage : bool ref
+val opt_branch_coverage : out_channel option ref
   
 (** Optimization flags *)
 

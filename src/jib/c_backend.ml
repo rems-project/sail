@@ -69,7 +69,7 @@ let opt_no_rts = ref false
 let opt_prefix = ref "z"
 let opt_extra_params = ref None
 let opt_extra_arguments = ref None
-let opt_branch_coverage = ref false
+let opt_branch_coverage = ref None
                         
 let extra_params () =
   match !opt_extra_params with
@@ -166,7 +166,7 @@ let literal_to_fragment (L_aux (l_aux, _) as lit) =
   | L_false -> Some (V_lit (VL_bool false, CT_bool))
   | _ -> None
  
-module C_config(Opts : sig val branch_coverage : bool end) : Config = struct
+module C_config(Opts : sig val branch_coverage : out_channel option end) : Config = struct
   
   (** Convert a sail type into a C-type. This function can be quite
      slow, because it uses ctx.local_env and SMT to analyse the Sail
@@ -2244,7 +2244,7 @@ let compile_ast env output_chan c_includes ast =
                       @ (if !opt_no_rts then [] else
                            [ string "#include \"rts.h\"";
                              string "#include \"elf.h\"" ])
-                      @ (if !opt_branch_coverage then [string "#include \"sail_coverage.h\""] else [])
+                      @ (if Util.is_some !opt_branch_coverage then [string "#include \"sail_coverage.h\""] else [])
                       @ (List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) c_includes))
     in
 
@@ -2316,7 +2316,7 @@ let compile_ast env output_chan c_includes ast =
          "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
          Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "main"));
          "  model_fini();" ]
-       @ (if !opt_branch_coverage then
+       @ (if Util.is_some !opt_branch_coverage then
             [ "  if (sail_coverage_exit() != 0) {";
               "    fprintf(stderr, \"Could not write coverage information\\n\");";
               "    exit(EXIT_FAILURE);";
