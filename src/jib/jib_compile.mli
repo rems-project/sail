@@ -113,7 +113,7 @@ module type Config = sig
   (** Allow real literals *)
   val use_real : bool
   (** Insert branch coverage operations *)
-  val branch_coverage : bool
+  val branch_coverage : out_channel option
   (** If true track the location of the last exception thrown, useful
      for debugging C but we want to turn it off for SMT generation
      where we can't use strings *)

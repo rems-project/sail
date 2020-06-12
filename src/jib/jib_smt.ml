@@ -1584,7 +1584,7 @@ let unroll_static_foreach ctx = function
   let unroll_loops = Some Opts.unroll_limit
   let struct_value = true
   let use_real = true
-  let branch_coverage = false
+  let branch_coverage = None
   let track_throw = false
 end
 

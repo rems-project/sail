@@ -233,8 +233,8 @@ let options = Arg.align ([
     Arg.String (fun str -> Constant_fold.opt_fold_to_unit := Util.split_on_char ',' str),
     " remove comma separated list of functions from C output, replacing them with unit");
   ( "-c_coverage",
-    Arg.Set C_backend.opt_branch_coverage,
-    " instrument C code to track branch coverage");
+    Arg.String (fun str -> C_backend.opt_branch_coverage := Some (open_out str)),
+    " output file for C code instrumention to track branch coverage");
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an ELF file so that it can be executed by compiled C code");
