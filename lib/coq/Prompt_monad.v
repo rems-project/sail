@@ -4,6 +4,7 @@ Require Import Sail.Instr_kinds.
 Require Import Sail.Values.
 Require bbv.Word.
 Import ListNotations.
+Local Open Scope Z.
 
 Definition register_name := string.
 Definition address := list bitU.

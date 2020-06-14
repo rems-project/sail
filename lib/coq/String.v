@@ -1,5 +1,6 @@
 Require Import Sail.Values.
 Require Import Coq.Strings.Ascii.
+Local Open Scope Z.
 
 Definition string_sub (s : string) (start : Z) (len : Z) : string :=
   String.substring (Z.to_nat start) (Z.to_nat len) s.

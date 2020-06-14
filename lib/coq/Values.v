@@ -14,8 +14,8 @@ Require Export Zeuclid.
 Require Import Lia.
 Import ListNotations.
 
-Open Scope Z.
-Open Scope bool.
+Local Open Scope Z.
+Local Open Scope bool.
 
 Module Z_eq_dec.
 Definition U := Z.

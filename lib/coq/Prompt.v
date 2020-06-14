@@ -3,6 +3,7 @@ Require Import Sail.Prompt_monad.
 Require Export ZArith.Zwf.
 Require Import List.
 Import ListNotations.
+Local Open Scope Z.
 (*
 
 val iter_aux : forall 'rv 'a 'e. integer -> (integer -> 'a -> monad 'rv unit 'e) -> list 'a -> monad 'rv unit 'e

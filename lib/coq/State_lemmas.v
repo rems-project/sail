@@ -2,6 +2,7 @@ Require Import Sail.Values Sail.Prompt_monad Sail.Prompt Sail.State_monad Sail.S
 Require Import Sail.State_monad_lemmas.
 
 Local Open Scope equiv_scope.
+Local Open Scope Z.
 
 Lemma seqS_cong A RV E (m1 m1' : monadS RV unit E) (m2 m2' : monadS RV A E) :
   m1 === m1' ->

@@ -6,6 +6,7 @@ Require OrderedTypeEx.
 Require Import List.
 Require bbv.Word.
 Import ListNotations.
+Local Open Scope Z.
 
 (* TODO: revisit choice of FMapList *)
 Module NatMap := FMapList.Make(OrderedTypeEx.Nat_as_OT).

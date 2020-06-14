@@ -3311,6 +3311,10 @@ try
           (fun lib -> separate space [string "Require Import";string lib] ^^ dot) types_modules;hardline;
         string "Import ListNotations.";
         hardline;
+        string "Open Scope string."; hardline;
+        string "Open Scope bool."; hardline;
+        string "Open Scope Z."; hardline;
+        hardline;
         separate empty (List.map doc_def typdefs); hardline;
         hardline;
         separate empty (List.map doc_def statedefs); hardline;

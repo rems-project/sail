@@ -6,10 +6,12 @@ SAILDIR="$DIR/../.."
 TYPECHECKTESTSDIR="$DIR/../typecheck/pass"
 EXTRATESTSDIR="$DIR/pass"
 
-if [ -z "$BBVDIR" ] || opam config var coq-bbv:share >/dev/null 2>/dev/null; then
+if opam config var coq-bbv:share >/dev/null 2>/dev/null; then
   COQOPTS="-Q $SAILDIR/lib/coq Sail"
 else
-  BBVDIR="$DIR/../../../bbv/src/bbv"
+  if [ -z "$BBVDIR" ]; then
+    BBVDIR="$DIR/../../../bbv/src/bbv"
+  fi
   COQOPTS="-Q $SAILDIR/lib/coq Sail -Q $BBVDIR bbv"
 fi
 
