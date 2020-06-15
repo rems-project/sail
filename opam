@@ -22,7 +22,7 @@ build: [make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{sail-legacy:share}%" "sail"]
 install: [make "INSTALL_DIR=%{prefix}%" "SHARE_DIR=%{sail-legacy:share}%" "install"]
 depends: [
   "ocaml" {>= "4.06.1"}
-  "ocamlfind" {build} 
+  "ocamlfind" {build}
   "ocamlbuild" {build}
   "zarith"
   "ott" {>= "0.28" & build}
@@ -31,10 +31,11 @@ depends: [
   "conf-gmp"
   "conf-zlib"
   "pprint"
+  "num"
 ]
 synopsis:
   "This is a legacy version of the Sail language, and should not be used"
 description:
   """Sail is a language for describing the instruction-set
 architecture (ISA) semantics of processors. This is a legacy version
-to support RMEM and should not be used."""
+to support RMEM and should not be used. Use the "sail" package instead."""
