@@ -1,5 +1,6 @@
 *.native
 *.byte
+sail
 src/_build/
 src/sail.docdir
 language/*.pdf
