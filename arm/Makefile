@@ -19,8 +19,10 @@ all: armV8.lem armV8.ml armV8_embed.lem
 armV8.lem: $(SOURCES)
 	$(SAIL) -lem_ast -o armV8 $(SOURCES)
 
-armV8.ml: armV8.lem ../src/lem_interp/interp_ast.lem
-	$(LEM) -ocaml -lib ../src/lem_interp/ $<
+armV8.ml: # armV8.lem ../src/lem_interp/interp_ast.lem
+	# $(LEM) -ocaml -lib ../src/lem_interp/ $<
+	# for now, pull in David's optimised armv8.ml in
+	cp patched/armV8.ml armV8.ml
 
 
 armV8_embed.lem: $(SOURCES)
