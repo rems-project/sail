@@ -1,17 +1,11 @@
 # How to install Sail using opam
 
 First, install opam (the OCaml package manager) if you haven't already. You can use your system's package
-manager e.g. `sudo apt-get install opam` or follow the [instructions
+manager e.g. `sudo apt-get install opam` (on Ubuntu 20.04) or follow the [instructions
 from the opam website](https://opam.ocaml.org/doc/Install.html).
-Depending on your system and how you installed opam you may get either
-opam version 1 or 2. Opam 1 is no longer officially supported but our
-packages should work with either.
+The opam version must be >= 2.0, opam 1 versions are no longer supported. On older Ubuntu versions you will not be able to use opam from the package manager, and will need to install it following the instructions on the opam website.
 
-Use `ocaml -version` to check your OCaml version. If you do not have OCaml 4.06.1 or newer then use `opam switch` to install it e.g.:
-```
-opam switch 4.06.1
-```
-OR, if you are using opam >=2.0, the syntax of the switch command changed slightly:
+Use `ocaml -version` to check your OCaml version. If you do not have OCaml 4.06.1 or newer then use `opam switch` to install it e.g. (if you do have a newer version, you should keep using that version and not downgrade):
 ```
 opam switch create 4.06.1
 ```
@@ -19,10 +13,6 @@ opam switch create 4.06.1
 Then set up the environment for the OCaml we just installed (note that older versions of opam suggest backticks instead of `$(...)`, but it makes no difference):
 ```
 eval $(opam config env)
-```
-Add our local opam repo:
-```
-opam repository add rems https://github.com/rems-project/opam-repository.git
 ```
 Install system dependencies, on Ubuntu (if using WSL see the note below):
 ```
@@ -33,7 +23,7 @@ or [MacOS homebrew](https://brew.sh/):
 xcode-select --install # if you haven't already
 brew install gmp z3 pkg-config
 ```
-Finally, install sail and its dependencies:
+Finally, install sail from the opam package [https://opam.ocaml.org/packages/sail/](https://opam.ocaml.org/packages/sail/) and its dependencies:
 ```
 opam install sail
 ```
