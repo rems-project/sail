@@ -1,5 +1,3 @@
-$option -non_lexical_flow
-
 default Order dec
 
 $include <prelude.sail>

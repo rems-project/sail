@@ -2845,6 +2845,13 @@ let fresh_var =
             let () = counter := n+1 in
             mk_id ("v#" ^ string_of_int n)
 
+let rec exp_unconditionally_returns (E_aux (aux, _)) =
+  match aux with
+  | E_return _ -> true
+  | E_block [] -> false
+  | E_block exps -> exp_unconditionally_returns (List.hd (List.rev exps))
+  | _ -> false
+
 let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
   let annot_exp_effect exp typ' eff = E_aux (exp, (l, mk_expected_tannot env typ' eff (Some typ))) in
   let add_effect exp eff = match exp with
@@ -3115,6 +3122,11 @@ and check_block l env exps ret_typ =
      let texp = annot_exp_effect (E_assert (constr_exp, checked_msg)) unit_typ (mk_effect [BE_escape]) (Some unit_typ) in
      texp :: check_block l env exps ret_typ
   | ((E_aux (E_if (cond, (E_aux (E_throw _, _) | E_aux (E_block [E_aux (E_throw _, _)], _)), _), _) as exp) :: exps) ->
+     let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
+     let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
+     let env = add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env in
+     texp :: check_block l env exps ret_typ
+  | ((E_aux (E_if (cond, true_exp, _), _) as exp) :: exps) when exp_unconditionally_returns true_exp ->
      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
      let env = add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env in

@@ -60,18 +60,6 @@ let rec escapes (E_aux (aux, _)) =
   | E_block exps -> escapes (List.hd (List.rev exps))
   | _ -> false
 
-let rec returns (E_aux (aux, _)) =
-  match aux with
-  | E_return _ -> true
-  | E_block [] -> false
-  | E_block exps -> returns (List.hd (List.rev exps))
-  | _ -> false
-
-let is_assert (E_aux (aux, _)) =
-  match aux with
-  | E_assert _ -> true
-  | _ -> false
-
 let is_bitvector_literal (L_aux (aux, _)) =
   match aux with
   | L_bin _ | L_hex _ -> true
@@ -124,12 +112,6 @@ let analyze' exps =
         List.map (modify_unsigned id value) exps
      | _ -> exps
      end
-  | (E_aux (E_if (cond, then_exp, _), (l, _)) as exp) :: next :: rest
-    when returns then_exp && not (is_assert next) ->
-     let msg = mk_lit_exp (L_string "") in
-     let not_cond = locate (fun _ -> gen_loc l) (mk_exp (E_app (mk_id "not_bool", [cond]))) in
-     let assertion = locate (fun _ -> gen_loc l) (mk_exp (E_assert (not_cond, msg))) in
-     exp :: assertion :: next :: rest
   | _ -> exps
 
 let analyze exps =
