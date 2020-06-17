@@ -1620,8 +1620,10 @@ let doc_exp, doc_let =
                let from_exp_pp, to_exp_pp, step_exp_pp =
                  expY from_exp, expY to_exp, expY step_exp
                in
+               (* The body has the right type for deciding whether a proof is necessary *)
+               let vartuple_retyped = check_exp env (strip_exp vartuple) (general_typ_of body) in
                let vartuple_pp, body_lambda =
-                 make_loop_vars [doc_id loopvar; underscore] vartuple
+                 make_loop_vars [doc_id loopvar; underscore] vartuple_retyped
                in
                parens (
                    (prefix 2 1)
@@ -1673,8 +1675,10 @@ let doc_exp, doc_let =
               | _ -> body
             in
             let used_vars_body = find_e_ids body in
+            (* The body has the right type for deciding whether a proof is necessary *)
+            let varstuple_retyped = check_exp env (strip_exp varstuple) (general_typ_of body) in
             let varstuple_pp, lambda =
-              make_loop_vars [] varstuple
+              make_loop_vars [] varstuple_retyped
             in
             let msuffix, measure_pp =
               match measure with
