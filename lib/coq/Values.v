@@ -2835,6 +2835,16 @@ Definition max_nat (x : Z) `{ArithFact (x >=? 0)} (y : Z) `{ArithFact (y >=? 0)}
   {z : Z & ArithFact (z >=? 0)} :=
   build_ex (Z.max x y).
 
+Definition shl_int_1 (x y : Z) `{HE:ArithFact (x =? 1)} `{HR:ArithFact (0 <=? y <=? 3)}: {z : Z & ArithFact (member_Z_list z [1;2;4;8])}.
+refine (existT _ (shl_int x y) _).
+destruct HE as [HE].
+destruct HR as [HR].
+unbool_comparisons.
+assert (y = 0 \/ y = 1 \/ y = 2 \/ y = 3) by omega.
+constructor.
+intuition (subst; compute; auto).
+Defined.
+
 Definition shl_int_8 (x y : Z) `{HE:ArithFact (x =? 8)} `{HR:ArithFact (0 <=? y <=? 3)}: {z : Z & ArithFact (member_Z_list z [8;16;32;64])}.
 refine (existT _ (shl_int x y) _).
 destruct HE as [HE].

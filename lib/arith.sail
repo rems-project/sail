@@ -65,7 +65,7 @@ val _shl8 = {c: "shl_mach_int", coq: "shl_int_8", _: "shl_int"} :
 val _shl32 = {c: "shl_mach_int", coq: "shl_int_32", _: "shl_int"} :
   forall 'n, 'n in {0, 1}. (int(32), int('n)) -> {'m, 'm in {32, 64}. int('m)}
 
-val _shl1 = {c: "shl_mach_int", coq: "shl_int_32", _: "shl_int"} :
+val _shl1 = {c: "shl_mach_int", coq: "shl_int_1", _: "shl_int"} :
   forall 'n, 0 <= 'n <= 3. (int(1), int('n)) -> {'m, 'm in {1, 2, 4, 8}. int('m)}
 
 val _shl_int = "shl_int" : (int, int) -> int
