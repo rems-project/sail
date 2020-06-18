@@ -455,9 +455,7 @@ module Env : sig
   val add_extern : id -> (string * string) list -> t -> t
   val get_extern : id -> t -> string -> string
   val get_default_order : t -> order
-  val set_default_order : order_aux -> t -> t
-  val set_default_order_inc : t -> t
-  val set_default_order_dec : t -> t
+  val set_default_order : order -> t -> t
   val add_enum : id -> id list -> t -> t
   val get_enum : id -> t -> id list
   val is_enum : id -> t -> bool
@@ -1309,12 +1307,12 @@ end = struct
     | Some ord -> ord
 
   let set_default_order o env =
-    match env.default_order with
-    | None -> { env with default_order = Some (Ord_aux (o, Parse_ast.Unknown)) }
-    | Some _ -> typ_error env Parse_ast.Unknown ("Cannot change default order once already set")
-
-  let set_default_order_inc = set_default_order Ord_inc
-  let set_default_order_dec = set_default_order Ord_dec
+    match o with
+    | Ord_aux (Ord_var _, l) -> typ_error env l "Cannot have variable default order"
+    | Ord_aux (_, l) ->
+       match env.default_order with
+       | None -> { env with default_order = Some o }
+       | Some _ -> typ_error env l ("Cannot change default order once already set")
 
   let base_typ_of env typ =
     let rec aux (Typ_aux (t,a)) =
@@ -5178,11 +5176,8 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
   in
   [annotate vs typ eff], Env.add_val_spec id (typq, typ) env
 
-let check_default env (DT_aux (ds, l)) =
-  match ds with
-  | DT_order (Ord_aux (Ord_inc, _)) -> [DEF_default (DT_aux (ds, l))], Env.set_default_order_inc env
-  | DT_order (Ord_aux (Ord_dec, _)) -> [DEF_default (DT_aux (ds, l))], Env.set_default_order_dec env
-  | DT_order (Ord_aux (Ord_var _, _)) -> typ_error env l "Cannot have variable default order"
+let check_default env (DT_aux (DT_order order, l)) =
+  [DEF_default (DT_aux (DT_order order, l))], Env.set_default_order order env
 
 let kinded_id_arg kind_id =
   let typ_arg arg = A_aux (arg, Parse_ast.Unknown) in
