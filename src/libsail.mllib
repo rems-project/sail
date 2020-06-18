@@ -51,6 +51,7 @@ Smtlib
 Spec_analysis
 Specialize
 Splice
+Slice
 State
 ToFromInterp_backend
 ToFromInterp_lib_mword
