@@ -127,7 +127,7 @@ let rec apat_bindings (AP_aux (apat_aux, _, _)) =
 
 (** This function returns the types of all bound variables in a
    pattern. It ignores AP_global, apat_globals is used for that. *)
-let rec apat_types (AP_aux (apat_aux, _, _)) =
+let rec apat_types (AP_aux (apat_aux, env, _)) =
   let merge id b1 b2 =
     match b1, b2 with
     | None,   None   -> None
@@ -137,7 +137,8 @@ let rec apat_types (AP_aux (apat_aux, _, _)) =
   in
   match apat_aux with
   | AP_tup apats -> List.fold_left (Bindings.merge merge) Bindings.empty (List.map apat_types apats)
-  | AP_id (id, typ) -> Bindings.singleton id typ
+  | AP_id (id, typ) when not (is_enum_member id env) -> Bindings.singleton id typ
+  | AP_id _ -> Bindings.empty
   | AP_global (id, _) -> Bindings.empty
   | AP_app (id, apat, _) -> apat_types apat
   | AP_cons (apat1, apat2) -> (Bindings.merge merge) (apat_types apat1) (apat_types apat2)

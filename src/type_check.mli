@@ -341,6 +341,8 @@ val canonicalize : Env.t -> typ -> typ
 
 val subtype_check : Env.t -> typ -> typ -> bool
 
+val is_enum_member : id -> Env.t -> bool
+  
 val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp list
 
 (** Variant that doesn't introduce new guards for literal patterns,

@@ -2764,7 +2764,11 @@ let rec filter_casts env from_typ to_typ casts =
 type pattern_duplicate =
   | Pattern_singleton of l
   | Pattern_duplicate of l * l 
-        
+
+let is_enum_member id env = match Env.lookup_id id env with
+  | Enum _ -> true
+  | _ -> false
+                       
 (* Check if a pattern contains duplicate bindings, and raise a type
    error if this is the case *)
 let check_pattern_duplicates env pat =
@@ -2779,9 +2783,9 @@ let check_pattern_duplicates env pat =
       | duplicate -> duplicate
     in
     match aux with
-    | P_id id ->
+    | P_id id when not (is_enum_member id env) ->
        ids := Bindings.update id update_id !ids
-    | P_lit _ | P_wild -> ()
+    | P_id _ | P_lit _ | P_wild -> ()
     | P_not p | P_as (p, _) | P_typ (_, p) | P_var (p, _) ->
        collect_duplicates ids p
     | P_or (p1, p2) | P_cons (p1, p2) ->
