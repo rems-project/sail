@@ -77,14 +77,24 @@ let options = Arg.align ([
     Arg.String (fun f -> opt_file_out := Some f),
     "<prefix> select output filename prefix");
   ( "-i",
-    Arg.Tuple [Arg.Set Interactive.opt_interactive],
+    Arg.Tuple [Arg.Set Interactive.opt_interactive;
+               Arg.Set Interactive.opt_auto_interpreter_rewrites;
+               Arg.Set Initial_check.opt_undefined_gen],
     " start interactive interpreter");
   ( "-is",
-    Arg.Tuple [Arg.Set Interactive.opt_interactive; Arg.String (fun s -> opt_interactive_script := Some s)],
+    Arg.Tuple [Arg.Set Interactive.opt_interactive;
+               Arg.Set Interactive.opt_auto_interpreter_rewrites;
+               Arg.Set Initial_check.opt_undefined_gen;
+               Arg.String (fun s -> opt_interactive_script := Some s)],
     "<filename> start interactive interpreter and execute commands in script");
   ( "-iout",
     Arg.String (fun file -> Value.output_redirect (open_out file)),
     "<filename> print interpreter output to file");
+  ( "-interact_custom",
+    Arg.Set Interactive.opt_interactive,
+    " drop to an interactive session after running Sail. Differs from \
+     -i in that it does not set up the interpreter in the interactive \
+     shell.");
   ( "-emacs",
     Arg.Set Interactive.opt_emacs_mode,
     " run sail interactively as an emacs mode child process");

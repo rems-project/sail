@@ -108,6 +108,8 @@ let have_symbol symbol =
 
 let clear_symbols () = symbols := default_symbols
 
+let add_symbol str = symbols := StringSet.add str !symbols
+                     
 let cond_pragma l defs =
   let depth = ref 0 in
   let in_then = ref true in

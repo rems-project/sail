@@ -8,6 +8,7 @@ Require Import Arith.
 Require Import ZArith.
 Require Import Omega.
 Require Import Eqdep_dec.
+Open Scope Z.
 
 Fixpoint cast_positive (T : positive -> Type) (p q : positive) : T p -> p = q -> T q.
 refine (

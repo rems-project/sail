@@ -31,6 +31,23 @@ union diafp = {
   DIAFP_reg : regfp
 }
 
+$ifdef ARM_SPEC
+enum read_kind = {
+  Read_plain,
+  Read_reserve,
+  Read_acquire,
+  Read_exclusive,
+  Read_exclusive_acquire,
+  Read_stream,
+  Read_ifetch,
+  Read_RISCV_acquire,
+  Read_RISCV_strong_acquire,
+  Read_RISCV_reserved,
+  Read_RISCV_reserved_acquire,
+  Read_RISCV_reserved_strong_acquire,
+  Read_X86_locked
+}
+$else
 enum read_kind = {
   Read_plain,
   Read_reserve,
@@ -45,6 +62,7 @@ enum read_kind = {
   Read_RISCV_reserved_strong_acquire,
   Read_X86_locked
 }
+$endif
 
 enum write_kind = {
   Write_plain,
@@ -60,6 +78,35 @@ enum write_kind = {
   Write_X86_locked
 }
 
+$ifdef ARM_SPEC
+enum barrier_kind = {
+  Barrier_DMB_SY,
+  Barrier_DMB_ST,
+  Barrier_DMB_LD,
+  Barrier_DMB_ISH,
+  Barrier_DMB_ISHST,
+  Barrier_DMB_ISHLD,
+  Barrier_DMB_NSH,
+  Barrier_DMB_NSHST,
+  Barrier_DMB_NSHLD,
+  Barrier_DMB_OSH,
+  Barrier_DMB_OSHST,
+  Barrier_DMB_OSHLD,
+  Barrier_DSB_SY,
+  Barrier_DSB_ST,
+  Barrier_DSB_LD,
+  Barrier_DSB_ISH,
+  Barrier_DSB_ISHST,
+  Barrier_DSB_ISHLD,
+  Barrier_DSB_NSH,
+  Barrier_DSB_NSHST,
+  Barrier_DSB_NSHLD,
+  Barrier_DSB_OSH,
+  Barrier_DSB_OSHST,
+  Barrier_DSB_OSHLD,
+  Barrier_ISB
+}
+$else
 enum a64_barrier_domain = {
   A64_FullShare,
   A64_InnerShare,
@@ -95,6 +142,7 @@ union barrier_kind = {
   Barrier_RISCV_i : unit,
   Barrier_x86_MFENCE : unit
 }
+$endif
 
 enum trans_kind = {
   Transaction_start,
@@ -142,6 +190,20 @@ val __barrier
   = { ocaml: "Platform.barrier", c: "platform_barrier", _: "barrier" }
   : barrier_kind -> unit effect {barr}
 
+val __branch_announce
+  = { ocaml: "Platform.branch_announce", c: "platform_branch_announce", _ : "branch_announce" }
+  : forall (constant 'addrsize : Int), 'addrsize in {32, 64}.
+  (int('addrsize), bits('addrsize)) -> unit
+
+val __cache_maintenance
+  = { ocaml: "Platform.cache_maintenance", c: "platform_cache_maintenance", _ : "cache_maintenance" }
+  : forall (constant 'addrsize : Int), 'addrsize in {32, 64}.
+  (cache_op_kind, int('addrsize), bits('addrsize)) -> unit
+
+val __instr_announce
+  = { ocaml: "Platform.instr_announce", c: "platform_instr_announce", _: "instr_announce" }
+  : forall 'n, 'n > 0.
+  bits('n) -> unit
 
 /*
 val __write : forall 'n, 'n > 0. (write_kind, bits(64), int('n), bits(8 * 'n)) -> bool effect {eamem,wmv}

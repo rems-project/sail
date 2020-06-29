@@ -24,9 +24,9 @@ Add our local opam repo:
 ```
 opam repository add rems https://github.com/rems-project/opam-repository.git
 ```
-Install system dependencies, on Ubuntu:
+Install system dependencies, on Ubuntu (if using WSL see the note below):
 ```
-sudo apt-get install build-essential libgmp-dev z3
+sudo apt-get install build-essential libgmp-dev z3 pkg-config zlib1g-dev
 ```
 or [MacOS homebrew](https://brew.sh/):
 ```
@@ -43,6 +43,10 @@ which sail
 sail --help
 ```
 Some source files that sail uses are found at ``opam config var sail:share`` (e.g. for ``$include <foo.sail>``) but sail should find those when it needs them.
+
+### Note for WSL (Windows subsystem for Linux) users
+
+The version of z3 that ships in the ubuntu repositories can be quite old, and we've had reports that this can cause issues when using Sail on WSL. On WSL we recommend downloading a recent z3 release from https://github.com/Z3Prover/z3/releases rather than installing it via apt-get.
 
 ### Installing development versions of Sail
 Released Sail packages lag behind the latest development in the repository. If you find you need a recently added feature or bug fix you can use opam pin to install the latest version of Sail from the repository. Assuming you have previously followed the above instructions (required to install dependencies):

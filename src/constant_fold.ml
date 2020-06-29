@@ -374,4 +374,10 @@ let () =
        ~name:"fix_registers"
        ~help:"Fix the value of specified registers, specified as a \
               list of <register>=<value>. Can also fix a specific \
-              register field as <register>.<field>=<value>."
+              register field as <register>.<field>=<value>. Note that \
+              this is not used to set registers normally, but instead \
+              fixes their value such that the constant folding rewrite \
+              (which is subsequently invoked by this command) will \
+              replace register reads with the fixed values. Requires a \
+              target (c, lem, etc.), as the set of functions that can \
+              be constant folded can differ on a per-target basis."

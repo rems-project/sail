@@ -2114,8 +2114,7 @@ let rewrite_tuple_assignments env defs =
        let (_, ids) = List.fold_left (fun (n, ids) _ -> (n + 1, ids @ [mk_id ("tup__" ^ string_of_int n)])) (0, []) lexps in
        let block_assign i lexp = mk_exp (E_assign (strip_lexp lexp, mk_exp (E_id (mk_id ("tup__" ^ string_of_int i))))) in
        let block = mk_exp (E_block (List.mapi block_assign lexps)) in
-       let letbind = mk_letbind (mk_pat (P_typ (Type_check.typ_of exp,
-                                                mk_pat (P_tup (List.map (fun id -> mk_pat (P_id id)) ids)))))
+       let letbind = mk_letbind (mk_pat (P_tup (List.map (fun id -> mk_pat (P_id id)) ids)))
                                 (strip_exp exp)
        in
        let let_exp = mk_exp (E_let (letbind, block)) in
@@ -5031,6 +5030,8 @@ let rewrites_c = [
     ("remove_vector_concat", []);
     ("remove_bitvector_pats", []);
     ("pattern_literals", [Literal_arg "all"]);
+    ("vector_concat_assignments", []);
+    ("tuple_assignments", []);
     ("vector_concat_assignments", []);
     ("tuple_assignments", []);
     ("simple_assignments", []);

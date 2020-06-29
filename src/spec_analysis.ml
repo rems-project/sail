@@ -72,7 +72,7 @@ let conditional_add typ_or_exp bound used id =
     if typ_or_exp (*true for typ*)
     then ["bit";"vector";"unit";"string";"int";"bool"]
     else ["=="; "!="; "|";"~";"&";"add_int"] in
-  let i = (string_of_id id) in
+  let i = (string_of_id (if typ_or_exp then prepend_id "typ:" id else id)) in
   if Nameset.mem i bound || List.mem i known_list
   then used
   else Nameset.add i used
@@ -106,12 +106,6 @@ and free_type_names_t_args consider_var targs =
   nameset_bigunion (List.map (free_type_names_t_arg consider_var) targs)
 
 
-let rec free_type_names_tannot consider_var tannot =
-  match Type_check.destruct_tannot tannot with
-  | None -> mt
-  | Some (_, t, _) -> free_type_names_t consider_var t
-
-
 let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
   match t with
   | Typ_var (Kid_aux (Var v,l)) ->
@@ -130,6 +124,11 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
        (List.fold_left (fun b (KOpt_aux (KOpt_kind (_, (Kid_aux (Var v,_))), _)) -> Nameset.add v b) bound kopts)
        used t'
   | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
+
+and fv_of_tannot consider_var bound used tannot =
+  match Type_check.destruct_tannot tannot with
+  | None -> mt
+  | Some (_, t, _) -> fv_of_typ consider_var bound used t
 
 and fv_of_targ consider_var bound used (Ast.A_aux(targ,_)) : Nameset.t = match targ with
   | A_typ t -> fv_of_typ consider_var bound used t
@@ -167,13 +166,13 @@ let rec pat_bindings consider_var bound used (P_aux(p,(_,tannot))) =
   | P_as(p,id) -> let b,ns = pat_bindings consider_var bound used p in
     Nameset.add (string_of_id id) b,ns
   | P_typ(t,p) ->
-     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
+     let used = fv_of_tannot consider_var bound used tannot in
      let ns = fv_of_typ consider_var bound used t in pat_bindings consider_var bound ns p
   | P_id id ->
-     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
+     let used = fv_of_tannot consider_var bound used tannot in
      Nameset.add (string_of_id id) bound,used
   | P_app(id,pats) ->
-    let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
+     let used = fv_of_tannot consider_var bound used tannot in
     list_fv bound (Nameset.add (string_of_id id) used) pats
   | P_vector pats | Ast.P_vector_concat pats | Ast.P_tup pats | Ast.P_list pats -> list_fv bound used pats
   | _ -> bound,used
@@ -185,7 +184,7 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
     list_fv bound used set es
   | E_id id | E_ref id ->
      let used = conditional_add_exp bound used id in
-     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
+     let used = fv_of_tannot consider_var bound used tannot in
      bound,used,set
   | E_cast (t,e) ->
     let u = fv_of_typ consider_var (if consider_var then bound else mt) used t in
@@ -211,7 +210,7 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
   | E_vector_update_subrange(v,i1,i2,e) -> list_fv bound used set [v;i1;i2;e]
   | E_vector_append(e1,e2) | E_cons(e1,e2) -> list_fv bound used set [e1;e2]
   | E_record fexps ->
-     let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
+     let used = fv_of_tannot consider_var bound used tannot in
      List.fold_right
        (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (bound,used,set)
   | E_record_update(e, fexps) ->
@@ -260,7 +259,7 @@ and fv_of_let consider_var bound used set (LB_aux(lebind,_)) = match lebind with
 and fv_of_lexp consider_var bound used set (LEXP_aux(lexp,(_,tannot))) =
   match lexp with
   | LEXP_id id ->
-    let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
+    let used = fv_of_tannot consider_var bound used tannot in
     let i = string_of_id id in
     if Nameset.mem i bound
     then bound, used, Nameset.add i set
@@ -268,7 +267,7 @@ and fv_of_lexp consider_var bound used set (LEXP_aux(lexp,(_,tannot))) =
   | LEXP_deref exp ->
     fv_of_exp consider_var bound used set exp
   | LEXP_cast(typ,id) ->
-    let used = Nameset.union (free_type_names_tannot consider_var tannot) used in
+    let used = fv_of_tannot consider_var bound used tannot in
     let i = string_of_id id in
     let used_t = fv_of_typ consider_var bound used typ in
     if Nameset.mem i bound
@@ -311,18 +310,18 @@ let fv_of_abbrev consider_var bound used typq typ_arg =
 
 let fv_of_type_def consider_var (TD_aux(t,_)) = match t with
   | TD_abbrev(id,typq,typ_arg) ->
-     init_env (string_of_id id), snd (fv_of_abbrev consider_var mt mt typq typ_arg)
+     init_env ("typ:" ^ string_of_id id), snd (fv_of_abbrev consider_var mt mt typq typ_arg)
   | TD_record(id,typq,tids,_) ->
-    let binds = init_env (string_of_id id) in
+    let binds = init_env ("typ:" ^ string_of_id id) in
     let bounds = if consider_var then typq_bindings typq else mt in
     binds, List.fold_right (fun (t,_) n -> fv_of_typ consider_var bounds n t) tids mt
   | TD_variant(id,typq,tunions,_) ->
-    let bindings = Nameset.add (string_of_id id) (if consider_var then typq_bindings typq else mt) in
+    let bindings = Nameset.add ("typ:" ^ string_of_id id) (if consider_var then typq_bindings typq else mt) in
     typ_variants consider_var bindings tunions
   | TD_enum(id,ids,_) ->
-    Nameset.of_list (List.map string_of_id (id::ids)),mt
+    Nameset.of_list (("typ:" ^ string_of_id id) :: List.map string_of_id ids),mt
   | TD_bitfield(id,typ,_) ->
-    init_env (string_of_id id), Nameset.empty (* fv_of_typ consider_var mt typ *)
+    init_env ("typ:" ^ string_of_id id), Nameset.empty (* fv_of_typ consider_var mt typ *)
 
 let fv_of_tannot_opt consider_var (Typ_annot_opt_aux (t,_)) =
   match t with
@@ -521,67 +520,8 @@ let group_defs consider_scatter_as_one (Ast.Defs defs) =
  *)
 
 module Namemap = Map.Make(String)
-(* Nodes are labeled with strings.  A graph is represented as a map associating
-   each node with its sucessors *)
-type graph = Nameset.t Namemap.t
+module NameGraph = Graph.Make(String)
 type node_idx = { index : int; root : int }
-
-(* Find strongly connected components using Tarjan's algorithm.
-   This algorithm also returns a topological sorting of the graph components. *)
-let scc ?(original_order : string list option) (g : graph) =
-  let components = ref [] in
-  let index = ref 0 in
-
-  let stack = ref [] in
-  let push v = (stack := v :: !stack) in
-  let pop () =
-    begin
-      let v = List.hd !stack in
-      stack := List.tl !stack;
-      v
-    end
-  in
-
-  let node_indices = Hashtbl.create (Namemap.cardinal g) in
-  let get_index v = (Hashtbl.find node_indices v).index in
-  let get_root v = (Hashtbl.find node_indices v).root in
-  let set_root v r =
-    Hashtbl.replace node_indices v { (Hashtbl.find node_indices v) with root = r } in
-
-  let rec visit_node v =
-    begin
-      Hashtbl.add node_indices v { index = !index; root = !index };
-      index := !index + 1;
-      push v;
-      if Namemap.mem v g then Nameset.iter (visit_edge v) (Namemap.find v g);
-      if get_root v = get_index v then (* v is the root of a SCC *)
-        begin
-          let component = ref [] in
-          let finished = ref false in
-          while not !finished do
-            let w = pop () in
-            component := w :: !component;
-            if String.compare v w = 0 then finished := true;
-          done;
-          components := !component :: !components;
-        end
-    end
-  and visit_edge v w =
-    if not (Hashtbl.mem node_indices w) then
-      begin
-        visit_node w;
-        if Hashtbl.mem node_indices w then set_root v (min (get_root v) (get_root w));
-      end else begin
-        if List.mem w !stack then set_root v (min (get_root v) (get_index w))
-      end
-  in
-
-  let nodes = match original_order with
-    | Some nodes -> nodes
-    | None -> List.map fst (Namemap.bindings g)
-  in
-  List.iter (fun v -> if not (Hashtbl.mem node_indices v) then visit_node v) nodes;
-  List.rev !components
 
 let add_def_to_map id d defset =
   Namemap.add id
@@ -593,11 +533,14 @@ let add_def_to_map id d defset =
 let add_def_to_graph (prelude, original_order, defset, graph) d =
   let bound, used = fv_of_def false true [] d in
   let used = match d with
-    | DEF_reg_dec _ ->
+    | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, _), annot))
+    | DEF_reg_dec (DEC_aux (DEC_config (_, typ, _), annot)) ->
        (* For a register, we need to ensure that any undefined_type
           functions for types used by the register are placed before
           the register declaration. *)
-       let undefineds = Nameset.map (fun name -> "undefined_" ^ name) used in
+       let env = Type_check.env_of_annot annot in
+       let typ' = Type_check.Env.expand_synonyms env typ in
+       let undefineds = Nameset.map (fun name -> "undefined_" ^ name) (free_type_names_t false typ') in
        Nameset.union undefineds used
     | _ -> used
   in
@@ -607,13 +550,15 @@ let add_def_to_graph (prelude, original_order, defset, graph) d =
        definition is attached to only one of the identifiers, so it will not
        be duplicated in the final output. *)
     let id = Nameset.choose bound in
-    let other_ids = Nameset.remove id bound in
-    let graph_id = Namemap.add id (Nameset.union used other_ids) graph in
-    let add_other_node id' g = Namemap.add id' (Nameset.singleton id) g in
+    let other_ids = Nameset.elements (Nameset.remove id bound) in
+    let graph' =
+      NameGraph.add_edges id (other_ids @ Nameset.elements used) graph
+      |> List.fold_right (fun id' g -> NameGraph.add_edge id' id g) other_ids
+    in
     prelude,
     original_order @ [id],
     add_def_to_map id d defset,
-    Nameset.fold add_other_node other_ids graph_id
+    graph'
   with
   | Not_found ->
      (* Some definitions do not bind any identifiers at all.  This *should*
@@ -626,19 +571,6 @@ let add_def_to_graph (prelude, original_order, defset, graph) d =
         currently have to assume those declarations are moved to the
         beginning when using a backend that requires topological sorting. *)
      prelude @ [d], original_order, defset, graph
-
-let print_dot graph component : unit =
-  match component with
-  | root :: _ ->
-     prerr_endline ("// Dependency cycle including " ^ root);
-     prerr_endline ("digraph cycle_" ^ root ^ " {");
-     List.iter (fun caller ->
-       let print_edge callee = prerr_endline ("  \"" ^ caller ^ "\" -> \"" ^ callee ^ "\";") in
-       Namemap.find caller graph
-       |> Nameset.filter (fun id -> List.mem id component)
-       |> Nameset.iter print_edge) component;
-     prerr_endline "}"
-  | [] -> ()
 
 let def_of_component graph defset comp =
   let get_def id = if Namemap.mem id defset then Namemap.find id defset else [] in
@@ -653,7 +585,7 @@ let def_of_component graph defset comp =
           raise (Reporting.err_unreachable (def_loc def) __POS__
             "Trying to merge non-function definition with mutually recursive functions") in
      let fundefs = List.concat (List.map get_fundefs defs) in
-     print_dot graph (List.map (fun fd -> string_of_id (id_of_fundef fd)) fundefs);
+     (* print_dot graph (List.map (fun fd -> string_of_id (id_of_fundef fd)) fundefs); *)
      [DEF_internal_mutrec fundefs]
   (* We could merge other stuff, in particular overloads, but don't need to just now *)
   | defs -> defs
@@ -661,7 +593,7 @@ let def_of_component graph defset comp =
 let top_sort_defs (Defs defs) =
   let prelude, original_order, defset, graph =
     List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) defs in
-  let components = scc ~original_order:original_order graph in
+  let components = NameGraph.scc ~original_order:original_order graph in
   Defs (prelude @ List.concat (List.map (def_of_component graph defset) components))
 
 

@@ -108,7 +108,7 @@ val add_bits_int = {
 
 overload operator + = {add_bits, add_bits_int}
 
-val vector_subrange = {
+val subrange_bits = {
   ocaml: "subrange",
   interpreter: "subrange",
   lem: "subrange_vec_inc",
@@ -117,13 +117,17 @@ val vector_subrange = {
 } : forall ('n : Int) ('m : Int) ('o : Int), 0 <= 'm <= 'o < 'n.
   (bits('n), atom('m), atom('o)) -> bits('o - 'm + 1)
 
-val vector_update_subrange = {
+overload vector_subrange = {subrange_bits}
+
+val update_subrange_bits = {
   ocaml: "update_subrange",
   interpreter: "update_subrange",
   lem: "update_subrange_vec_inc",
   c: "vector_update_subrange",
   coq: "update_subrange_vec_inc"
 } : forall 'n 'm 'o, 0 <= 'm <= 'o < 'n. (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
+
+overload vector_update_subrange = {update_subrange_bits}
 
 // Some ARM specific builtins
 

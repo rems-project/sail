@@ -92,13 +92,13 @@ do
     pushd $DIR/fail > /dev/null;
     if $SAILDIR/sail -no_memo_z3 $(basename $file) 2> result
     then
-        red "Expected failure, but $i $(basename $file) passed" "fail"
+        red "Expected failure, but $(basename $file) passed" "fail"
     else
         if diff ${file%.sail}.expect result;
         then
-            green "failing $i $(basename $file)" "pass"
+            green "failing $(basename $file)" "pass"
         else
-            yellow "failing $i $(basename $file)" "unexpected error"
+            yellow "failing $(basename $file)" "unexpected error"
         fi
     fi;
     rm -f result;

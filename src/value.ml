@@ -123,7 +123,7 @@ let rec string_of_value = function
 let rec eq_value v1 v2 =
   match v1, v2 with
   | V_vector v1s, V_vector v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
-  | V_list v1s, V_vector v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
+  | V_list v1s, V_list v2s when List.length v1s = List.length v2s -> List.for_all2 eq_value v1s v2s
   | V_int n, V_int m -> Big_int.equal n m
   | V_real n, V_real m -> Rational.equal n m
   | V_bool b1, V_bool b2 -> b1 = b2
@@ -369,6 +369,14 @@ let value_mult = function
   | [v1; v2] -> V_int (Sail_lib.mult (coerce_int v1, coerce_int v2))
   | _ -> failwith "value mult"
 
+let value_tdiv_int = function
+  | [v1; v2] -> V_int (Sail_lib.tdiv_int (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value tdiv_int"
+
+let value_tmod_int = function
+  | [v1; v2] -> V_int (Sail_lib.tmod_int (coerce_int v1, coerce_int v2))
+  | _ -> failwith "value tmod_int"
+
 let value_quotient = function
   | [v1; v2] -> V_int (Sail_lib.quotient (coerce_int v1, coerce_int v2))
   | _ -> failwith "value quotient"
@@ -417,6 +425,10 @@ let value_replicate_bits = function
   | [v1; v2] -> mk_vector (Sail_lib.replicate_bits (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value replicate_bits"
 
+let value_count_leading_zeros = function
+  | [v1] -> V_int (Sail_lib.count_leading_zeros (coerce_bv v1))
+  | _ -> failwith "value count_leading_zeros"
+
 let is_ctor = function
   | V_ctor _ -> true
   | _ -> false
@@ -444,6 +456,10 @@ let value_shiftl = function
 let value_shiftr = function
   | [v1; v2] -> mk_vector (Sail_lib.shiftr (coerce_bv v1, coerce_int v2))
   | _ -> failwith "value shiftr"
+
+let value_arith_shiftr = function
+  | [v1; v2] -> mk_vector (Sail_lib.arith_shiftr (coerce_bv v1, coerce_int v2))
+  | _ -> failwith "value arith_shiftr"
 
 let value_shift_bits_left = function
   | [v1; v2] -> mk_vector (Sail_lib.shift_bits_left (coerce_bv v1, coerce_bv v2))
@@ -482,6 +498,10 @@ let value_internal_pick = function
 let value_undefined_vector = function
   | [v1; v2] -> V_vector (Sail_lib.undefined_vector (coerce_int v1, v2))
   | _ -> failwith "value undefined_vector"
+
+let value_undefined_list = function
+  | [_] -> V_list []
+  | _ -> failwith "value undefined_list"
 
 let value_undefined_bitvector = function
   | [v] -> V_vector (Sail_lib.undefined_vector (coerce_int v, V_bit (Sail_lib.B0)))
@@ -681,12 +701,15 @@ let primops = ref
        ("ones", value_ones);
        ("shiftr", value_shiftr);
        ("shiftl", value_shiftl);
+       ("arith_shiftr", value_arith_shiftr);
        ("shift_bits_left", value_shift_bits_left);
        ("shift_bits_right", value_shift_bits_right);
        ("add_int", value_add_int);
        ("sub_int", value_sub_int);
        ("sub_nat", value_sub_nat);
        ("div_int", value_quotient);
+       ("tdiv_int", value_tdiv_int);
+       ("tmod_int", value_tmod_int);
        ("mult_int", value_mult);
        ("mult", value_mult);
        ("quotient", value_quotient);
@@ -737,9 +760,11 @@ let primops = ref
        ("undefined_bool", fun _ -> V_bool false);
        ("undefined_bitvector", value_undefined_bitvector);
        ("undefined_vector", value_undefined_vector);
+       ("undefined_list", value_undefined_list);
        ("undefined_string", fun _ -> V_string "");
        ("internal_pick", value_internal_pick);
        ("replicate_bits", value_replicate_bits);
+       ("count_leading_zeros", value_count_leading_zeros);
        ("Elf_loader.elf_entry", fun _ -> V_int (!Elf_loader.opt_elf_entry));
        ("Elf_loader.elf_tohost", fun _ -> V_int (!Elf_loader.opt_elf_tohost));
        ("string_append", value_string_append);

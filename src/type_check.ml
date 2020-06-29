@@ -102,6 +102,7 @@ type type_error =
   | Err_no_casts of unit exp * typ * typ * type_error * type_error list
   | Err_no_overloading of id * (id * type_error) list
   | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * n_constraint list
+  | Err_lexp_bounds of n_constraint * (mut * typ) Bindings.t * n_constraint list
   | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
@@ -441,8 +442,10 @@ module Env : sig
   val add_constraint : n_constraint -> t -> t
   val get_typ_var : kid -> t -> kind_aux
   val get_typ_var_loc : kid -> t -> Ast.l
+  val get_typ_var_loc_opt : kid -> t -> Ast.l option
   val get_typ_vars : t -> kind_aux KBindings.t
   val get_typ_var_locs : t -> Ast.l KBindings.t
+  val shadows : kid -> t -> int
   val add_typ_var_shadow : l -> kinded_id -> t -> t * kid option
   val add_typ_var : l -> kinded_id -> t -> t
   val get_ret_typ : t -> typ option
@@ -539,6 +542,11 @@ end = struct
   let allow_unknowns env = env.allow_unknowns
   let set_allow_unknowns b env = { env with allow_unknowns = b }
 
+  let get_typ_var_loc_opt kid env =
+    match KBindings.find_opt kid env.typ_vars with
+    | Some (l, _) -> Some l
+    | None -> None
+                               
   let get_typ_var kid env =
     try snd (KBindings.find kid env.typ_vars) with
     | Not_found -> typ_error env (kid_loc kid) ("No type variable " ^ string_of_kid kid)
@@ -1239,6 +1247,8 @@ end = struct
     with
     | Not_found -> Unbound
 
+  let shadows v env = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0
+                 
   let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
     if KBindings.mem v env.typ_vars then begin
         let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
@@ -1414,6 +1424,30 @@ let bind_numeric l typ env =
      nexp, add_existential l (List.map (mk_kopt K_int) kids) nc env
   | None -> typ_error env l ("Expected " ^ string_of_typ typ ^ " to be numeric")
 
+let rec check_shadow_leaks l inner_env outer_env typ =
+  typ_debug (lazy ("Shadow leaks: " ^ string_of_typ typ));
+  let vars = tyvars_of_typ typ in
+  List.iter (fun var ->
+      if Env.shadows var inner_env > Env.shadows var outer_env then
+        typ_error outer_env l
+          ("Type variable " ^ string_of_kid var ^ " would leak into a scope where it is shadowed")
+      else
+        match Env.get_typ_var_loc_opt var outer_env with
+        | Some _ -> ()
+        | None ->
+           match Env.get_typ_var_loc_opt var inner_env with
+           | Some leak_l ->
+              typ_raise outer_env l
+                (Err_because
+                   (Err_other ("The type variable " ^ string_of_kid var
+                               ^ " would leak into an outer scope.\n\nTry adding a type annotation to this expression."),
+                    leak_l,
+                    Err_other ("Type variable " ^ string_of_kid var ^ " was introduced here")))
+           | None -> Reporting.unreachable l __POS__ "Found a type with an unknown type variable"
+    )
+    (KidSet.elements vars);
+  typ
+   
 (** Pull an (potentially)-existentially qualified type into the global
    typing environment **)
 let bind_existential l name typ env =
@@ -2844,32 +2878,39 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      in
      annot_exp (E_record_update (checked_exp, List.map check_fexp fexps)) typ
   | E_record fexps, _ ->
-     (* TODO: check record fields are total *)
      let rectyp_id = match Env.expand_synonyms env typ with
        | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->
           rectyp_id
        | _ -> typ_error env l ("The type " ^ string_of_typ typ ^ " is not a record")
      in
+     let record_fields = ref (Env.get_record rectyp_id env |> snd |> List.map snd |> IdSet.of_list) in
      let check_fexp (FE_aux (FE_Fexp (field, exp), (l, ()))) =
+       record_fields := IdSet.remove field !record_fields;
        let (typq, rectyp_q, field_typ, _) = Env.get_accessor rectyp_id field env in
        let unifiers = try unify l env (tyvars_of_typ rectyp_q) rectyp_q typ with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m) in
        let field_typ' = subst_unifiers unifiers field_typ in
        let checked_exp = crule check_exp env exp field_typ' in
        FE_aux (FE_Fexp (field, checked_exp), (l, None))
      in
-     annot_exp (E_record (List.map check_fexp fexps)) typ
+     let fexps = List.map check_fexp fexps in
+     if IdSet.is_empty !record_fields then
+       annot_exp (E_record fexps) typ
+     else
+       typ_error env l ("struct literal missing fields: " ^ string_of_list ", " string_of_id (IdSet.elements !record_fields))
   | E_let (LB_aux (letbind, (let_loc, _)), exp), _ ->
      begin
        match letbind with
        | LB_val (P_aux (P_typ (ptyp, _), _) as pat, bind) ->
           Env.wf_typ env ptyp;
           let checked_bind = crule check_exp env bind ptyp in
-          let tpat, env = bind_pat_no_guard env pat ptyp in
-          annot_exp (E_let (LB_aux (LB_val (tpat, checked_bind), (let_loc, None)), crule check_exp env exp typ)) typ
+          let tpat, inner_env = bind_pat_no_guard env pat ptyp in
+          annot_exp (E_let (LB_aux (LB_val (tpat, checked_bind), (let_loc, None)), crule check_exp inner_env exp typ))
+            (check_shadow_leaks l inner_env env typ)
        | LB_val (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
-          let tpat, env = bind_pat_no_guard env pat (typ_of inferred_bind) in
-          annot_exp (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, None)), crule check_exp env exp typ)) typ
+          let tpat, inner_env = bind_pat_no_guard env pat (typ_of inferred_bind) in
+          annot_exp (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, None)), crule check_exp inner_env exp typ))
+            (check_shadow_leaks l inner_env env typ)
      end
   | E_app_infix (x, op, y), _ ->
      check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ()))) typ
@@ -3641,15 +3682,20 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
           let inferred_exp2 = infer_exp env exp2 in
           let nexp1, env = bind_numeric l (typ_of inferred_exp1) env in
           let nexp2, env = bind_numeric l (typ_of inferred_exp2) env in
-          begin match ord with
-          | Ord_aux (Ord_inc, _) when !opt_no_lexp_bounds_check || prove __POS__ env (nc_lteq nexp1 nexp2) ->
-             let len = nexp_simp (nsum (nminus nexp2 nexp1) (nint 1)) in
-             annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ len ord)
-          | Ord_aux (Ord_dec, _) when !opt_no_lexp_bounds_check || prove __POS__ env (nc_gteq nexp1 nexp2) ->
-             let len = nexp_simp (nsum (nminus nexp1 nexp2) (nint 1)) in
-             annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ len ord)
-          | _ -> typ_error env l ("Could not infer length of vector slice assignment " ^ string_of_lexp lexp)
-          end
+          let (len, check) = match ord with
+            | Ord_aux (Ord_inc, _) ->
+               (nexp_simp (nsum (nminus nexp2 nexp1) (nint 1)),
+                nc_lteq nexp1 nexp2)
+            | Ord_aux (Ord_dec, _) ->
+               (nexp_simp (nsum (nminus nexp1 nexp2) (nint 1)),
+                nc_gteq nexp1 nexp2)
+            | Ord_aux (Ord_var _, _) ->
+               typ_error env l "Slice assignment to bitvector with variable indexing order unsupported"
+          in
+          if !opt_no_lexp_bounds_check || prove __POS__ env check then
+            annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ len ord)
+          else
+            typ_raise env l (Err_lexp_bounds (check, Env.get_locals env, Env.get_constraints env))
        | _ -> typ_error env l "Cannot assign slice of non vector type"
      end
   | LEXP_vector (v_lexp, exp) ->
@@ -3661,18 +3707,20 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
             when Id.compare id (mk_id "vector") = 0 ->
           let inferred_exp = infer_exp env exp in
           let nexp, env = bind_numeric l (typ_of inferred_exp) env in
-          if !opt_no_lexp_bounds_check || prove __POS__ env (nc_and (nc_lteq (nint 0) nexp) (nc_lteq nexp (nexp_simp (nminus len (nint 1))))) then
+          let bounds_check = nc_and (nc_lteq (nint 0) nexp) (nc_lt nexp len) in
+          if !opt_no_lexp_bounds_check || prove __POS__ env bounds_check then
             annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) elem_typ
           else
-            typ_error env l ("Vector assignment not provably in bounds " ^ string_of_lexp lexp)
+            typ_raise env l (Err_lexp_bounds (bounds_check, Env.get_locals env, Env.get_constraints env))
        | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order ord, _)])
             when Id.compare id (mk_id "bitvector") = 0 ->
           let inferred_exp = infer_exp env exp in
           let nexp, env = bind_numeric l (typ_of inferred_exp) env in
-          if !opt_no_lexp_bounds_check || prove __POS__ env (nc_and (nc_lteq (nint 0) nexp) (nc_lteq nexp (nexp_simp (nminus len (nint 1))))) then
+          let bounds_check = nc_and (nc_lteq (nint 0) nexp) (nc_lt nexp len) in
+          if !opt_no_lexp_bounds_check || prove __POS__ env bounds_check then
             annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) bit_typ
           else
-            typ_error env l ("Vector assignment not provably in bounds " ^ string_of_lexp lexp)
+            typ_raise env l (Err_lexp_bounds (bounds_check, Env.get_locals env, Env.get_constraints env))
        | Typ_id id when !opt_new_bitfields ->
           begin match exp with
           | E_aux (E_id field, _) ->
@@ -3979,9 +4027,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | LB_val (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
           inferred_bind, pat, typ_of inferred_bind in
-     let tpat, env = bind_pat_no_guard env pat ptyp in
-     let inferred_exp = irule infer_exp env exp in
-     annot_exp (E_let (LB_aux (LB_val (tpat, bind_exp), (let_loc, None)), inferred_exp)) (typ_of inferred_exp)
+     let tpat, inner_env = bind_pat_no_guard env pat ptyp in
+     let inferred_exp = irule infer_exp inner_env exp in
+     annot_exp (E_let (LB_aux (LB_val (tpat, bind_exp), (let_loc, None)), inferred_exp))
+       (check_shadow_leaks l inner_env env (typ_of inferred_exp))
   | E_ref id when Env.is_register id env ->
      let _, _, typ = Env.get_register id env in
      annot_exp (E_ref id) (register_typ typ)
