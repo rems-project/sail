@@ -251,7 +251,7 @@ let opt_ddump_tc_raw_ast = ref false
       
 let check_ast (env : Type_check.Env.t) (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.Env.t =
 
-  let () = match !(Minisail.opt_dmsp_check_before) with
+  let _ = match !(Minisail.opt_dmsp_check_before) with
     | Some vrb -> Minisail.check_ast vrb defs
     | None -> () in
 
@@ -266,6 +266,12 @@ let check_ast (env : Type_check.Env.t) (defs : unit Ast.defs) : Type_check.tanno
     | Some vrb -> Minisail.check_ast vrb ast 
     | None -> () in
 
+  let _ = if !(Tc_checker.opt_dtc_check) then
+            let ast = Rewrites.monomorphise "lem" env ast in
+            let () = match !opt_ddump_tc_ast_ott_raw with None -> () | Some file -> (let c = open_out file in Pretty_print_sail.pp_defs_ott_raw c ast; close_out c) in
+            Tc_checker.tc_check ast
+          else () in
+  
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)
 

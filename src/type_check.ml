@@ -409,6 +409,7 @@ module Env : sig
   val update_val_spec : id -> typquant * typ -> t -> t
   val define_val_spec : id -> t -> t
   val get_val_spec : id -> t -> typquant * typ
+  val get_val_specs : t -> (typquant * typ ) Bindings.t
   val get_val_spec_orig : id -> t -> typquant * typ
   val is_union_constructor : id -> t -> bool
   val is_singleton_union_constructor : id -> t -> bool
@@ -416,6 +417,7 @@ module Env : sig
   val add_record : id -> typquant -> (typ * id) list -> t -> t
   val is_record : id -> t -> bool
   val get_record : id -> t -> typquant * (typ * id) list
+  val get_records : t -> (typquant * (typ * id) list) Bindings.t
   val get_accessor_fn : id -> id -> t -> typquant * typ
   val get_accessor : id -> id -> t -> typquant * typ * typ * effect
   val add_local : id -> mut * typ -> t -> t
@@ -426,6 +428,7 @@ module Env : sig
   val add_scattered_variant : id -> typquant -> t -> t
   val add_variant_clause : id -> type_union -> t -> t
   val get_variant : id -> t -> typquant * type_union list
+  val get_variants : t -> (typquant * type_union list) Bindings.t
   val get_scattered_variant_env : id -> t -> t
   val add_mapping : id -> typquant * typ * typ * effect -> t -> t
   val add_union_id : id -> typquant * typ -> t -> t
@@ -446,6 +449,7 @@ module Env : sig
   val add_ret_typ : typ -> t -> t
   val add_typ_synonym : id -> typquant -> typ_arg -> t -> t
   val get_typ_synonym : id -> t -> Ast.l -> t -> typ_arg list -> typ_arg
+  val get_typ_synonyms : t -> (typquant * typ_arg) Bindings.t
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
   val is_extern : id -> t -> string -> bool
@@ -457,6 +461,7 @@ module Env : sig
   val set_default_order_dec : t -> t
   val add_enum : id -> id list -> t -> t
   val get_enum : id -> t -> id list
+  val get_enums : t -> IdSet.t Bindings.t 
   val is_enum : id -> t -> bool
   val get_casts : t -> id list
   val allow_casts : t -> bool
@@ -674,6 +679,8 @@ end = struct
     | Some (typq, arg) -> mk_synonym typq arg
     | None -> raise Not_found
 
+  let get_typ_synonyms env = env.typ_synonyms
+            
   let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
     typ_debug ~level:2 (lazy ("Expanding " ^ string_of_n_constraint nc));
     match aux with
@@ -726,7 +733,7 @@ end = struct
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
     | Typ_fn (arg_typs, ret_typ, effs) -> Typ_aux (Typ_fn (List.map (expand_synonyms env) arg_typs, expand_synonyms env ret_typ, effs), l)
     | Typ_bidir (typ1, typ2, effs) -> Typ_aux (Typ_bidir (expand_synonyms env typ1, expand_synonyms env typ2, effs), l)
-    | Typ_app (id, args) ->
+    | Typ_app ( (Id_aux (Id s, _)) as id, args) ->
        (try
           begin match get_typ_synonym id env l env args with
           | A_aux (A_typ typ, _) -> expand_synonyms env typ
@@ -934,6 +941,8 @@ end = struct
     with
     | Not_found -> typ_error env (id_loc id) ("No val spec found for " ^ string_of_id id)
 
+  let get_val_specs env = env.top_val_specs
+                 
   let add_union_id id bind env =
     typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind));
     { env with union_ids = Bindings.add id bind env.union_ids }
@@ -1068,11 +1077,17 @@ end = struct
     with
     | Not_found -> typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
+  let get_enums env = env.enums
+                 
   let is_enum id env = Bindings.mem id env.enums
 
   let is_record id env = Bindings.mem id env.records
 
   let get_record id env = Bindings.find id env.records
+
+  let get_records env = env.records
+
+  let get_variants env = env.variants
 
   let add_record id typq fields env =
     if bound_typ_id env id
@@ -2381,6 +2396,10 @@ let is_empty_tannot = function
   | None -> true
   | Some _ -> false
 
+let get_instantiations = function
+  | None -> None
+  | Some t -> t.instantiation
+            
 let destruct_tannot tannot = Util.option_map (fun t -> (t.env, t.typ, t.effect)) tannot
 
 let string_of_tannot tannot =

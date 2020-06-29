@@ -116,6 +116,8 @@ module Env : sig
       type variables. *)
   val get_val_spec : id -> t -> typquant * typ
 
+  val get_val_specs : t -> (typquant * typ ) Bindings.t
+    
   (** Like get_val_spec, except that the original type variables are used.
       Useful when processing the body of the function. *)
   val get_val_spec_orig : id -> t -> typquant * typ
@@ -127,6 +129,8 @@ module Env : sig
   (** Return all the identifiers in an enumeration. Throws a type
      error if the enumeration doesn't exist. *)
   val get_enum : id -> t -> id list
+
+  val get_enums : t -> IdSet.t Bindings.t 
 
   val get_locals : t -> (mut * typ) Bindings.t
 
@@ -150,12 +154,18 @@ module Env : sig
 
   val get_typ_var_locs : t -> Ast.l KBindings.t
 
+  val get_typ_synonyms : t -> (typquant * typ_arg) Bindings.t
+    
   val add_typ_var : Ast.l -> kinded_id -> t -> t
 
   val is_record : id -> t -> bool
 
   (** Returns record quantifiers and fields *)
   val get_record : id -> t -> typquant * (typ * id) list
+
+  val get_records : t -> (typquant * (typ * id) list) Bindings.t
+
+  val get_variants : t -> (typquant * type_union list) Bindings.t
 
   (** Return type is: quantifier, argument type, return type, effect *)
   val get_accessor : id -> id -> t -> typquant * typ * typ * effect
@@ -259,9 +269,11 @@ type tannot
    (i.e an expression). Note that it is specifically not guaranteed
    that calling destruct_tannot followed by mk_tannot returns an
    identical type annotation. *)
-val destruct_tannot : tannot -> (Env.t * typ * effect) option
+val destruct_tannot : tannot -> (Env.t * typ * effect ) option
 val mk_tannot : Env.t -> typ -> effect -> tannot
 
+val get_instantiations : tannot -> typ_arg KBindings.t option
+  
 val empty_tannot : tannot
 val is_empty_tannot : tannot -> bool
 
@@ -467,3 +479,5 @@ val check_with_envs : Env.t -> 'a def list -> (tannot def list * Env.t) list
 
 (** The initial type checking environment *)
 val initial_env : Env.t
+
+val prove_smt : Env.t -> n_constraint -> bool                    

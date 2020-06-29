@@ -358,10 +358,10 @@ let options = Arg.align ([
     " (debug) dump the typechecked ast to stdout");
   ( "-ddump_tc_ast_ott_raw",
     Arg.String (fun file -> opt_ddump_tc_ast_ott_raw := Some file),
-    " <filename> (debug) dump the typechecked ast to stdout using Ott raw pp");
+    " <filename> (debug) dump the typechecked ast to file using Ott raw pp");
   ( "-ddump_tc_ast_ott_pp",
     Arg.String (fun file -> opt_ddump_tc_ast_ott_pp := Some file),
-    " <filename> (debug) dump the typechecked ast to stdout using Ott pp");
+    " <filename> (debug) dump the typechecked ast to file using Ott pp");
   ( "-ddump_rewrite_ast",
     Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0); Specialize.opt_ddump_spec_ast := Some (l, 0)),
     "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
@@ -389,6 +389,9 @@ let options = Arg.align ([
   ( "-dsmtfuzz",
     Arg.Tuple [set_target "smt"; Arg.Set opt_smt_fuzz],
     " (debug) fuzz sail SMT builtins");
+  ( "-dtc_check",
+     Arg.Set Tc_checker.opt_dtc_check,
+      "(debug) Run check of annotated AST based on declarative rules");
   ( "-dmsp_check_before",
       Arg.Int (fun vrb -> Minisail.opt_dmsp_check_before := Some vrb ),
       "(debug) run MiniSail type checker before Sail type checker");
@@ -461,7 +464,7 @@ let target name out_name ast type_envs =
          (l, Type_check.replace_env (Type_check.Env.set_prover None (Type_check.env_of_tannot tannot)) tannot)
      in
      Marshal.to_string (Ast_util.map_defs_annot remove_prover ast, Type_check.Env.set_prover None type_envs) [Marshal.Compat_32]
-     |> B64.encode
+     |> Base64.encode_string
      |> output_string f;
      close_out f
 
