@@ -331,6 +331,8 @@ val infer_lexp : Env.t -> unit lexp -> tannot lexp
 
 val check_case : Env.t -> typ -> unit pexp -> typ -> tannot pexp
 
+val check_funcl : Env.t -> 'a funcl -> typ -> tannot funcl
+
 val check_fundef : Env.t -> 'a fundef -> tannot def list * Env.t
 
 val check_val_spec : Env.t -> 'a val_spec -> tannot def list * Env.t
@@ -351,6 +353,8 @@ val canonicalize : Env.t -> typ -> typ
 
 val subtype_check : Env.t -> typ -> typ -> bool
 
+val is_enum_member : id -> Env.t -> bool
+  
 val bind_pat : Env.t -> unit pat -> typ -> tannot pat * Env.t * unit Ast.exp list
 
 (** Variant that doesn't introduce new guards for literal patterns,

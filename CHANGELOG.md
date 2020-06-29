@@ -1,6 +1,32 @@
 Changelog
 =========
 
+Sail 0.13
+---------
+
+##### Experimental new C backend
+
+Supports creating C code that works as a library in a more natural
+way. Rather than defining lots of global state, the model state will
+be packaged into a `sail_state` struct that is passed into each
+generated C function. The code generation is much more configurable,
+including options for fine-grained control over name-mangling (see
+etc/default_config.json).
+
+Currently the -c2 option can be used. Eventually it is planned that
+this will become the default C code generation option, and the old C
+code generator will be removed.
+
+##### Improved monomorphisation
+
+The monomorphisation pass for Isabelle and HOL4 has been improved
+significantly.
+
+##### Code coverage
+
+There is now a code coverage tool (sailcov) in the sailcov
+subdirectory of this repository
+
 Sail 0.8
 --------
 

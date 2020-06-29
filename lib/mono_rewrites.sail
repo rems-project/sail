@@ -66,6 +66,12 @@ function slice_zeros_concat (xs, i, l, l') = {
   sail_shiftleft(extzv(l + l', xs), l')
 }
 
+val subrange_zeros_concat : forall 'n 'hi 'lo 'q, 'n >= 0 & 'hi - 'lo + 1 + 'q >= 0.
+  (bits('n), atom('hi), atom('lo), atom('q)) -> bits('hi - 'lo + 1 + 'q) effect pure
+
+function subrange_zeros_concat (xs, hi, lo, l') =
+  slice_zeros_concat(xs, lo, hi - lo + 1, l')
+
 /* Assumes initial vectors are of equal size */
 
 val subrange_subrange_eq : forall 'n, 'n >= 0.
@@ -103,12 +109,18 @@ function place_slice(m,xs,i,l,shift) = {
 }
 
 val set_slice_zeros : forall 'n, 'n >= 0.
-  (atom('n), bits('n), int, int) -> bits('n) effect pure
+  (implicit('n), bits('n), int, int) -> bits('n) effect pure
 
 function set_slice_zeros(n, xs, i, l) = {
   let ys : bits('n) = slice_mask(n, i, l) in
   xs & not_vec(ys)
 }
+
+val set_subrange_zeros : forall 'n, 'n >= 0.
+  (implicit('n), bits('n), int, int) -> bits('n) effect pure
+
+function set_subrange_zeros(n, xs, hi, lo) =
+  set_slice_zeros(n, xs, lo, hi - lo + 1)
 
 val zext_slice : forall 'n 'm, 'n >= 0 & 'm >= 0.
   (implicit('m), bits('n), int, int) -> bits('m) effect pure
@@ -118,6 +130,11 @@ function zext_slice(m,xs,i,l) = {
   extzv(m, xs)
 }
 
+val zext_subrange : forall 'n 'm, 'n >= 0 & 'm >= 0.
+  (implicit('m), bits('n), int, int) -> bits('m) effect pure
+
+function zext_subrange(m, xs, i, j) = zext_slice(m, xs, j, i - j + 1)
+
 val sext_slice : forall 'n 'm, 'n >= 0 & 'm >= 0.
   (implicit('m), bits('n), int, int) -> bits('m) effect pure
 
@@ -125,6 +142,11 @@ function sext_slice(m,xs,i,l) = {
   let xs = sail_arith_shiftright(sail_shiftleft((xs & slice_mask(i,l)), ('n - i - l)), 'n - l) in
   extsv(m, xs)
 }
+
+val sext_subrange : forall 'n 'm, 'n >= 0 & 'm >= 0.
+  (implicit('m), bits('n), int, int) -> bits('m) effect pure
+
+function sext_subrange(m, xs, i, j) = sext_slice(m, xs, j, i - j + 1)
 
 val place_slice_signed : forall 'n 'm, 'n >= 0 & 'm >= 0.
   (implicit('m), bits('n), int, int, int) -> bits('m) effect pure
@@ -200,6 +222,15 @@ function vector_update_subrange_from_subrange(n,v1,s1,e1,v2,s2,e2) = {
   let xs = sail_shiftleft(extzv(n, xs), e1) in
   let ys = v1 & not_vec(slice_mask(e1,s1-e1+1)) in
   xs | ys
+}
+
+val vector_update_subrange_from_integer_subrange : forall 'n1 's1 'e1 's2 'e2,
+    0 <= 'e1 <= 's1 < 'n1 & 0 <= 'e2 <= 's2 & 's1 - 'e1 == 's2 - 'e2.
+    (implicit('n1), bits('n1), int('s1), int('e1), int, int('s2), int('e2)) -> bits('n1)
+
+function vector_update_subrange_from_integer_subrange(n1, v1, s1, e1, i, s2, e2) = {
+  let v2 : bits('n1) = get_slice_int(n1, i, e2) in
+  vector_update_subrange_from_subrange(n1, v1, s1, e1, v2, s2 - e2, 0)
 }
 
 $endif

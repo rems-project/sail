@@ -1,4 +1,4 @@
-.PHONY: all sail language clean archs isabelle-lib apply_header
+.PHONY: all sail language clean archs isabelle-lib apply_header docker
 
 INSTALL_DIR ?= .
 
@@ -86,3 +86,7 @@ clean:
 	  $(MAKE) -C "$$subdir" clean;\
 	done
 	rm -f sail
+
+docker:
+	docker build --tag sail:0.1 .
+	@echo 'for example: docker run --volume `PWD`:/data/ sail:0.1 --help'

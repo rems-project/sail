@@ -1,0 +1,16 @@
+name: CI ubuntu-20.04 (ocaml latest)
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Build on ubuntu (ocaml latest)
+      run: |
+        sudo apt install build-essential libgmp-dev z3
+        sudo apt install opam
+        etc/ci_opam_latest_build.sh

@@ -146,6 +146,7 @@ overload operator + = {add_bits, add_bits_int}
 
 val sub_bits = {
   ocaml: "sub_vec",
+  interpreter: "sub_vec",
   lem: "sub_vec",
   c: "sub_bits",
   coq: "sub_vec"
@@ -230,7 +231,7 @@ val get_slice_int = "get_slice_int" : forall 'w. (int('w), int, int) -> bits('w)
 val set_slice_int = "set_slice_int" : forall 'w. (int('w), int, int, bits('w)) -> int
 
 val set_slice_bits = "set_slice" : forall 'n 'm.
-  (int('n), int('m), bits('n), int, bits('m)) -> bits('n)
+  (implicit('n), int('m), bits('n), int, bits('m)) -> bits('n)
 
 /*!
 converts a bit vector of length $n$ to an integer in the range $0$ to $2^n - 1$.

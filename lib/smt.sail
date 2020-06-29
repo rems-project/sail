@@ -23,7 +23,7 @@ val emod_int = {
 val abs_int_atom = {
   ocaml: "abs_int",
   interpreter: "abs_int",
-  lem: "abs_int",
+  lem: "integerAbs",
   c: "abs_int",
   coq: "abs_with_eq"
 } : forall 'n. int('n) -> int(abs('n))

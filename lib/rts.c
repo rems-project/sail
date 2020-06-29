@@ -1,27 +1,14 @@
-#include<string.h>
-#include<getopt.h>
-#include<inttypes.h>
+#include <string.h>
+#include <getopt.h>
+#include <inttypes.h>
 
-#include"sail.h"
-#include"rts.h"
-#include"elf.h"
+#include "sail.h"
+#include "rts.h"
+#include "elf.h"
 
 static uint64_t g_elf_entry;
 uint64_t g_cycle_count = 0;
 static uint64_t g_cycle_limit;
-
-void sail_match_failure(sail_string msg)
-{
-  fprintf(stderr, "Pattern match failure in %s\n", msg);
-  exit(EXIT_FAILURE);
-}
-
-unit sail_assert(bool b, sail_string msg)
-{
-  if (b) return UNIT;
-  fprintf(stderr, "Assertion failed: %s\n", msg);
-  exit(EXIT_FAILURE);
-}
 
 unit sail_exit(unit u)
 {

@@ -61,11 +61,15 @@ open Type_check
    ARM v8.5 spec. It is unsound in general. *)
 val optimize_aarch64_fast_struct : bool ref
 
-(** If true (default) track the location of the last exception thrown,
-   useful for debugging C but we want to turn it off for SMT generation
-   where we can't use strings *)
-val opt_track_throw : bool ref
- 
+(** (WIP) [opt_memo_cache] will store the compiled function
+   definitions in file _sbuild/ccacheDIGEST where DIGEST is the md5sum
+   of the original function to be compiled. Enabled using the -memo
+   flag. Uses Marshal so it's quite picky about the exact version of
+   the Sail version. This cache can obviously become stale if the Sail
+   changes - it'll load an old version compiled without said
+   changes. *)
+val opt_memo_cache : bool ref
+  
 (** {2 Jib context} *)
 
 (** Dynamic context for compiling Sail to Jib. We need to pass a
@@ -96,7 +100,7 @@ module type Config = sig
   val optimize_anf : ctx -> typ aexp -> typ aexp
   (** Unroll all for loops a bounded number of times. Used for SMT
        generation. *)
-  val unroll_loops : unit -> int option
+  val unroll_loops : int option
   (** If false, function arguments must match the function
        type exactly. If true, they can be more specific. *)
   val specialize_calls : bool
@@ -108,6 +112,12 @@ module type Config = sig
   val struct_value : bool
   (** Allow real literals *)
   val use_real : bool
+  (** Insert branch coverage operations *)
+  val branch_coverage : out_channel option
+  (** If true track the location of the last exception thrown, useful
+     for debugging C but we want to turn it off for SMT generation
+     where we can't use strings *)
+  val track_throw : bool
 end
 
 module Make(C: Config) : sig

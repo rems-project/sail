@@ -62,14 +62,15 @@ open Anf
 module Big_int = Nat_big_num
 
 let opt_static = ref false
+let static () = if !opt_static then "static " else ""
 let opt_no_main = ref false
-let opt_memo_cache = ref false
 let opt_no_lib = ref false
 let opt_no_rts = ref false
 let opt_prefix = ref "z"
 let opt_extra_params = ref None
 let opt_extra_arguments = ref None
-
+let opt_branch_coverage = ref None
+                        
 let extra_params () =
   match !opt_extra_params with
   | Some str -> str ^ ", "
@@ -130,12 +131,47 @@ let rec is_stack_ctyp ctyp = match ctyp with
 
 let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1), true), CT_fbits (i, true))
 
-module C_config : Config = struct
-
-(** Convert a sail type into a C-type. This function can be quite
-   slow, because it uses ctx.local_env and SMT to analyse the Sail
-   types and attempts to fit them into the smallest possible C
-   types, provided ctx.optimize_smt is true (default) **)
+let hex_char =
+  let open Sail2_values in
+  function
+  | '0' -> [B0; B0; B0; B0]
+  | '1' -> [B0; B0; B0; B1]
+  | '2' -> [B0; B0; B1; B0]
+  | '3' -> [B0; B0; B1; B1]
+  | '4' -> [B0; B1; B0; B0]
+  | '5' -> [B0; B1; B0; B1]
+  | '6' -> [B0; B1; B1; B0]
+  | '7' -> [B0; B1; B1; B1]
+  | '8' -> [B1; B0; B0; B0]
+  | '9' -> [B1; B0; B0; B1]
+  | 'A' | 'a' -> [B1; B0; B1; B0]
+  | 'B' | 'b' -> [B1; B0; B1; B1]
+  | 'C' | 'c' -> [B1; B1; B0; B0]
+  | 'D' | 'd' -> [B1; B1; B0; B1]
+  | 'E' | 'e' -> [B1; B1; B1; B0]
+  | 'F' | 'f' -> [B1; B1; B1; B1]
+  | _ -> failwith "Invalid hex character"
+                  
+let literal_to_fragment (L_aux (l_aux, _) as lit) =
+  match l_aux with
+  | L_num n when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
+     Some (V_lit (VL_int n, CT_fint 64))
+  | L_hex str when String.length str <= 16 ->
+     let padding = 16 - String.length str in
+     let padding = Util.list_init padding (fun _ -> Sail2_values.B0) in
+     let content = Util.string_to_list str |> List.map hex_char |> List.concat in
+     Some (V_lit (VL_bits (padding @ content, true), CT_fbits (String.length str * 4, true)))
+  | L_unit -> Some (V_lit (VL_unit, CT_unit))
+  | L_true -> Some (V_lit (VL_bool true, CT_bool))
+  | L_false -> Some (V_lit (VL_bool false, CT_bool))
+  | _ -> None
+ 
+module C_config(Opts : sig val branch_coverage : out_channel option end) : Config = struct
+  
+  (** Convert a sail type into a C-type. This function can be quite
+     slow, because it uses ctx.local_env and SMT to analyse the Sail
+     types and attempts to fit them into the smallest possible C
+     types, provided ctx.optimize_smt is true (default) **)
   let rec convert_typ ctx typ =
     let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
     match typ_aux with
@@ -232,41 +268,6 @@ module C_config : Config = struct
   (* 3. Optimization of primitives and literals                             *)
   (**************************************************************************)
 
-  let hex_char =
-    let open Sail2_values in
-    function
-    | '0' -> [B0; B0; B0; B0]
-    | '1' -> [B0; B0; B0; B1]
-    | '2' -> [B0; B0; B1; B0]
-    | '3' -> [B0; B0; B1; B1]
-    | '4' -> [B0; B1; B0; B0]
-    | '5' -> [B0; B1; B0; B1]
-    | '6' -> [B0; B1; B1; B0]
-    | '7' -> [B0; B1; B1; B1]
-    | '8' -> [B1; B0; B0; B0]
-    | '9' -> [B1; B0; B0; B1]
-    | 'A' | 'a' -> [B1; B0; B1; B0]
-    | 'B' | 'b' -> [B1; B0; B1; B1]
-    | 'C' | 'c' -> [B1; B1; B0; B0]
-    | 'D' | 'd' -> [B1; B1; B0; B1]
-    | 'E' | 'e' -> [B1; B1; B1; B0]
-    | 'F' | 'f' -> [B1; B1; B1; B1]
-    | _ -> failwith "Invalid hex character"
-
-  let literal_to_fragment (L_aux (l_aux, _) as lit) =
-    match l_aux with
-    | L_num n when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
-       Some (V_lit (VL_int n, CT_fint 64))
-    | L_hex str when String.length str <= 16 ->
-       let padding = 16 - String.length str in
-       let padding = Util.list_init padding (fun _ -> Sail2_values.B0) in
-       let content = Util.string_to_list str |> List.map hex_char |> List.concat in
-       Some (V_lit (VL_bits (padding @ content, true), CT_fbits (String.length str * 4, true)))
-    | L_unit -> Some (V_lit (VL_unit, CT_unit))
-    | L_true -> Some (V_lit (VL_bool true, CT_bool))
-    | L_false -> Some (V_lit (VL_bool false, CT_bool))
-    | _ -> None
-
   let c_literals ctx =
     let rec c_literal env l = function
       | AV_lit (lit, typ) as v when is_stack_ctyp (convert_typ { ctx with local_env = env } typ) ->
@@ -356,9 +357,7 @@ module C_config : Config = struct
 
       | AE_cast (aexp, typ) -> AE_cast (analyze_functions ctx f aexp, typ)
 
-      | AE_assign (id, typ, aexp) -> AE_assign (id, typ, analyze_functions ctx f aexp)
-
-      | AE_write_ref (id, typ, aexp) -> AE_write_ref (id, typ, analyze_functions ctx f aexp)
+      | AE_assign (alexp, aexp) -> AE_assign (alexp, analyze_functions ctx f aexp)
 
       | AE_short_circuit (op, aval, aexp) -> AE_short_circuit (op, aval, analyze_functions ctx f aexp)
 
@@ -558,13 +557,15 @@ module C_config : Config = struct
     analyze_functions ctx analyze_primop (c_literals ctx aexp)
 
 
-  let unroll_loops () = None
+  let unroll_loops = None
   let specialize_calls = false
   let ignore_64 = false
   let struct_value = false
   let use_real = false
+  let branch_coverage = Opts.branch_coverage
+  let track_throw = true
 end
-
+               
 (** Functions that have heap-allocated return types are implemented by
    passing a pointer a location where the return value should be
    stored. The ANF -> Sail IR pass for expressions simply outputs an
@@ -1117,7 +1118,11 @@ let rec sgen_value = function
   | VL_bits ([], _) -> "UINT64_C(0)"
   | VL_bits (bs, true) -> "UINT64_C(" ^ Sail2_values.show_bitlist bs ^ ")"
   | VL_bits (bs, false) -> "UINT64_C(" ^ Sail2_values.show_bitlist (List.rev bs) ^ ")"
-  | VL_int i -> Big_int.to_string i ^ "l"
+  | VL_int i ->
+     if Big_int.equal i (min_int 64) then
+       "INT64_MIN"
+     else
+       "INT64_C(" ^ Big_int.to_string i ^ ")"
   | VL_bool true -> "true"
   | VL_bool false -> "false"
   | VL_unit -> "UNIT"
@@ -1329,6 +1334,7 @@ let rec sgen_clexp = function
   | CL_id (Throw_location _, _) -> "throw_location"
   | CL_id (Return _, _) -> assert false
   | CL_id (Name (id, _), _) -> "&" ^ sgen_id id
+  | CL_id (Global (id, _), _) -> "&" ^ sgen_id id
   | CL_field (clexp, field) -> "&((" ^ sgen_clexp clexp ^ ")->" ^ zencode_uid field ^ ")"
   | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp clexp ^ ")->ztup" ^ string_of_int n ^ ")"
   | CL_addr clexp -> "(*(" ^ sgen_clexp clexp ^ "))"
@@ -1341,6 +1347,7 @@ let rec sgen_clexp_pure = function
   | CL_id (Throw_location _, _) -> "throw_location"
   | CL_id (Return _, _) -> assert false
   | CL_id (Name (id, _), _) -> sgen_id id
+  | CL_id (Global (id, _), _) -> sgen_id id
   | CL_field (clexp, field) -> sgen_clexp_pure clexp ^ "." ^ zencode_uid field
   | CL_tuple (clexp, n) -> sgen_clexp_pure clexp ^ ".ztup" ^ string_of_int n
   | CL_addr clexp -> "(*(" ^ sgen_clexp_pure clexp ^ "))"
@@ -1584,7 +1591,7 @@ let codegen_type_def ctx = function
      in
      let codegen_undefined =
        let name = sgen_id id in
-       string (Printf.sprintf "enum %s UNDEFINED(%s)(unit u) { return %s; }" name name (sgen_id first_id))
+       string (Printf.sprintf "static enum %s UNDEFINED(%s)(unit u) { return %s; }" name name (sgen_id first_id))
      in
      string (Printf.sprintf "// enum %s" (string_of_id id)) ^^ hardline
      ^^ separate space [string "enum"; codegen_id id; lbrace; separate_map (comma ^^ space) codegen_id ids; rbrace ^^ semi]
@@ -2042,16 +2049,15 @@ let codegen_alloc = function
 let codegen_def' ctx = function
   | CDEF_reg_dec (id, ctyp, _) ->
      string (Printf.sprintf "// register %s" (string_of_id id)) ^^ hardline
-     ^^ string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
+     ^^ string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))
 
   | CDEF_spec (id, _, arg_ctyps, ret_ctyp) ->
-     let static = if !opt_static then "static " else "" in
      if Env.is_extern id ctx.tc_env "c" then
        empty
      else if is_stack_ctyp ret_ctyp then
-       string (Printf.sprintf "%s%s %s(%s%s);" static (sgen_ctyp ret_ctyp) (sgen_function_id id) (extra_params ()) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+       string (Printf.sprintf "%s%s %s(%s%s);" (static ()) (sgen_ctyp ret_ctyp) (sgen_function_id id) (extra_params ()) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
      else
-       string (Printf.sprintf "%svoid %s(%s%s *rop, %s);" static (sgen_function_id id) (extra_params ()) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
+       string (Printf.sprintf "%svoid %s(%s%s *rop, %s);" (static ()) (sgen_function_id id) (extra_params ()) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
      let arg_ctyps, ret_ctyp = match Bindings.find_opt id ctx.valspecs with
@@ -2092,8 +2098,7 @@ let codegen_def' ctx = function
      codegen_type_def ctx ctype_def
 
   | CDEF_startup (id, instrs) ->
-     let static = if !opt_static then "static " else "" in
-     let startup_header = string (Printf.sprintf "%svoid startup_%s(void)" static (sgen_function_id id)) in
+     let startup_header = string (Printf.sprintf "%svoid startup_%s(void)" (static ()) (sgen_function_id id)) in
      separate_map hardline codegen_decl instrs
      ^^ twice hardline
      ^^ startup_header ^^ hardline
@@ -2102,8 +2107,7 @@ let codegen_def' ctx = function
      ^^ string "}"
 
   | CDEF_finish (id, instrs) ->
-     let static = if !opt_static then "static " else "" in
-     let finish_header = string (Printf.sprintf "%svoid finish_%s(void)" static (sgen_function_id id)) in
+     let finish_header = string (Printf.sprintf "%svoid finish_%s(void)" (static ()) (sgen_function_id id)) in
      separate_map hardline codegen_decl (List.filter is_decl instrs)
      ^^ twice hardline
      ^^ finish_header ^^ hardline
@@ -2119,7 +2123,7 @@ let codegen_def' ctx = function
      let cleanup =
        List.concat (List.map (fun (id, ctyp) -> [iclear ctyp (name id)]) bindings)
      in
-     separate_map hardline (fun (id, ctyp) -> string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))) bindings
+     separate_map hardline (fun (id, ctyp) -> string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))) bindings
      ^^ hardline ^^ string (Printf.sprintf "static void create_letbind_%d(void) " number)
      ^^ string "{"
      ^^ jump 0 2 (separate_map hardline codegen_alloc setup) ^^ hardline
@@ -2219,10 +2223,10 @@ let rec get_recursive_functions (Defs defs) =
   | [] -> IdSet.empty
 
 let jib_of_ast env ast =
-  let module Jibc = Make(C_config) in
+  let module Jibc = Make(C_config(struct let branch_coverage = !opt_branch_coverage end)) in
   let ctx = initial_ctx (add_special_functions env) in
   Jibc.compile_ast ctx ast
-
+ 
 let compile_ast env output_chan c_includes ast =
   try
     let recursive_functions = Spec_analysis.top_sort_defs ast |> get_recursive_functions in
@@ -2240,6 +2244,7 @@ let compile_ast env output_chan c_includes ast =
                       @ (if !opt_no_rts then [] else
                            [ string "#include \"rts.h\"";
                              string "#include \"elf.h\"" ])
+                      @ (if Util.is_some !opt_branch_coverage then [string "#include \"sail_coverage.h\""] else [])
                       @ (List.map (fun h -> string (Printf.sprintf "#include \"%s\"" h)) c_includes))
     in
 
@@ -2282,7 +2287,7 @@ let compile_ast env output_chan c_includes ast =
     in
 
     let model_init = separate hardline (List.map string
-       ( [ "void model_init(void)";
+       ( [ Printf.sprintf "%svoid model_init(void)" (static ());
            "{";
            "  setup_rts();" ]
        @ fst exn_boilerplate
@@ -2294,7 +2299,7 @@ let compile_ast env output_chan c_includes ast =
     in
 
     let model_fini = separate hardline (List.map string
-       ( [ "void model_fini(void)";
+       ( [ Printf.sprintf "%svoid model_fini(void)" (static ());
            "{" ]
        @ letbind_finalizers
        @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
@@ -2304,22 +2309,32 @@ let compile_ast env output_chan c_includes ast =
        @ [ "}" ] ))
     in
 
-    let model_default_main = separate hardline (List.map string
-         [ "int model_main(int argc, char *argv[])";
-           "{";
-           "  model_init();";
-           "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
-           Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "main"));
-           "  model_fini();";
-           "  return EXIT_SUCCESS;";
-           "}" ] )
+    let model_default_main =
+      ([ Printf.sprintf "%sint model_main(int argc, char *argv[])" (static ());
+         "{";
+         "  model_init();";
+         "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
+         Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "main"));
+         "  model_fini();" ]
+       @ (if Util.is_some !opt_branch_coverage then
+            [ "  if (sail_coverage_exit() != 0) {";
+              "    fprintf(stderr, \"Could not write coverage information\\n\");";
+              "    exit(EXIT_FAILURE);";
+              "  }" ]
+          else
+            []
+         )
+       @ [ "  return EXIT_SUCCESS;";
+           "}" ])
+      |> List.map string
+      |> separate hardline
     in
 
     let model_main = separate hardline (if (!opt_no_main) then [] else List.map string
-         [ "int main(int argc, char *argv[])";
-           "{";
-           "  return model_main(argc, argv);";
-           "}" ] )
+        [ "int main(int argc, char *argv[])";
+          "{";
+          "  return model_main(argc, argv);";
+          "}" ] )
     in
 
     let hlhl = hardline ^^ hardline in
@@ -2336,3 +2351,10 @@ let compile_ast env output_chan c_includes ast =
   with
   | Type_error (_, l, err) ->
      c_error ~loc:l ("Unexpected type error when compiling to C:\n" ^ Type_error.string_of_type_error err)
+
+let compile_ast_clib env ast codegen =
+  let cdefs, ctx = jib_of_ast env ast in
+  let cdefs', _ = Jib_optimize.remove_tuples cdefs ctx in
+  Jib_interactive.ir := cdefs';
+  let cdefs = insert_heap_returns Bindings.empty cdefs in
+  codegen ctx cdefs

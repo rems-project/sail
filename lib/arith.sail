@@ -56,19 +56,21 @@ A common idiom in asl is to take two bits of an opcode and convert in into a var
 let elsize = shl_int(8, UInt(size))
 ```
 THIS ensures that in this case the typechecker knows that the end result will be a value in the set `{8, 16, 32, 64}`
+
+Similarly, we define shifts of 32 and 1 (i.e., powers of two).
 */
 val _shl8 = {c: "shl_mach_int", coq: "shl_int_8", _: "shl_int"} :
   forall 'n, 0 <= 'n <= 3. (int(8), int('n)) -> {'m, 'm in {8, 16, 32, 64}. int('m)}
 
-/*!
-Similarly, we can shift 32 by either 0 or 1 to get a value in `{32, 64}`
-*/
 val _shl32 = {c: "shl_mach_int", coq: "shl_int_32", _: "shl_int"} :
   forall 'n, 'n in {0, 1}. (int(32), int('n)) -> {'m, 'm in {32, 64}. int('m)}
 
+val _shl1 = {c: "shl_mach_int", coq: "shl_int_1", _: "shl_int"} :
+  forall 'n, 0 <= 'n <= 3. (int(1), int('n)) -> {'m, 'm in {1, 2, 4, 8}. int('m)}
+
 val _shl_int = "shl_int" : (int, int) -> int
 
-overload shl_int = {_shl8, _shl32, _shl_int}
+overload shl_int = {_shl1, _shl8, _shl32, _shl_int}
 
 val _shr32 = {c: "shr_mach_int", coq: "shr_int_32", _: "shr_int"} : forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}
 
@@ -88,13 +90,38 @@ val tdiv_int = {
 } : (int, int) -> int
 
 /*! Remainder for truncating division (has sign of dividend) */
-val tmod_int = {
+val _tmod_int = {
   ocaml: "tmod_int",
   interpreter: "tmod_int",
   lem: "tmod_int",
   c: "tmod_int",
   coq: "Z.rem"
-} : (int, int) -> nat
+} : (int, int) -> int
+
+/*! If we know the second argument is positive, we know the result is positive */
+val _tmod_int_positive = {
+  ocaml: "tmod_int",
+  interpreter: "tmod_int",
+  lem: "tmod_int",
+  c: "tmod_int",
+  coq: "Z.rem"
+} : forall 'n, 'n >= 1. (int, int('n)) -> nat
+
+overload tmod_int = {_tmod_int_positive, _tmod_int}
+
+function fdiv_int(n: int, m: int) -> int = {
+  if n < 0 & m > 0 then {
+    tdiv_int(n + 1, m) - 1
+  } else if n > 0 & m < 0 then {
+    tdiv_int(n - 1, m) - 1
+  } else {
+    tdiv_int(n, m)
+  }
+}
+
+function fmod_int(n: int, m: int) -> int = {
+  n - (m * fdiv_int(n, m))
+}
 
 val abs_int_plain = {
   smt : "abs",

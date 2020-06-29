@@ -87,8 +87,7 @@ and 'a aexp_aux =
   | AE_val of 'a aval
   | AE_app of id * ('a aval) list * 'a
   | AE_cast of 'a aexp * 'a
-  | AE_assign of id * 'a * 'a aexp
-  | AE_write_ref of id * 'a * 'a aexp
+  | AE_assign of 'a alexp * 'a aexp
   | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
   | AE_block of ('a aexp) list * 'a aexp * 'a
   | AE_return of 'a aval * 'a
@@ -129,12 +128,19 @@ and 'a aval =
   | AV_record of ('a aval) Bindings.t * 'a
   | AV_cval of cval * 'a
 
+and 'a alexp =
+  | AL_id of id * 'a
+  | AL_addr of id * 'a
+  | AL_field of 'a alexp * id
+ 
 (** When ANF translation has to introduce new bindings it uses a
 counter to ensure uniqueness. This function resets that counter. *)
 val reset_anf_counter : unit -> unit
 
+val aexp_loc : 'a aexp -> Parse_ast.l
+  
 (** {2 Functions for transforming ANF expressions} *)
-
+  
 val aval_typ : typ aval -> typ
 val aexp_typ : typ aexp -> typ
 

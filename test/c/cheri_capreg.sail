@@ -63,29 +63,6 @@ struct CapStruct = {
   length                  : bits(64),
 }
 
-let null_cap : CapStruct = struct {
-  tag = false,
-  padding = zeros(),
-  otype = zeros(),
-  uperms = zeros(),
-  perm_reserved11_14 = zeros(),
-  access_system_regs = false,
-  permit_unseal = false,
-  permit_ccall = false,
-  permit_seal = false,
-  permit_store_local_cap = false,
-  permit_store_cap = false,
-  permit_load_cap = false,
-  permit_store = false,
-  permit_load = false,
-  permit_execute = false,
-  global = false,
-  sealed = false,
-  address = zeros(),
-  base = zeros(),
-  length = 0xffffffffffffffff
-}
-
 let default_cap : CapStruct = struct {
   tag = true,
   padding = zeros(),

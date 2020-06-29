@@ -47,6 +47,19 @@ function main () = {
     },
     _            => ()
   };
+  try throw(Eunknown()) catch {
+    _ => try let _ = g() in () catch {
+      _ => print("caught old exception")
+    }
+  };
+  try
+    try throw Eunknown() catch {
+      Estring(_) => ()
+    }
+  catch {
+    Eunknown() => print("Fall through OK"),
+    _ => ()
+  };
   f();
   ()
 }

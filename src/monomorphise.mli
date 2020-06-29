@@ -69,7 +69,7 @@ val mono_rewrites : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_toplevel_nexps : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 
 (* Add casts across case splits *)
-val add_bitvector_casts : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val add_bitvector_casts : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 
 (* Replace atom arguments which are fixed by a type parameter for a size with a singleton type *)
-val rewrite_atoms_to_singletons : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_atoms_to_singletons : string -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs

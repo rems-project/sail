@@ -1,9 +1,9 @@
-(*Require Import Sail_impl_base*)
-Require Import Sail2_values.
-Require Import Sail2_prompt_monad.
-Require Import Sail2_prompt.
-Require Import Sail2_state_monad.
+Require Import Sail.Values.
+Require Import Sail.Prompt_monad.
+Require Import Sail.Prompt.
+Require Import Sail.State_monad.
 Import ListNotations.
+Local Open Scope Z.
 
 (*val iterS_aux : forall 'rv 'a 'e. integer -> (integer -> 'a -> monadS 'rv unit 'e) -> list 'a -> monadS 'rv unit 'e*)
 Fixpoint iterS_aux {RV A E} i (f : Z -> A -> monadS RV unit E) (xs : list A) :=

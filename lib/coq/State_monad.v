@@ -1,11 +1,12 @@
-Require Import Sail2_instr_kinds.
-Require Import Sail2_values.
+Require Import Sail.Instr_kinds.
+Require Import Sail.Values.
 Require FMapList.
 Require Import OrderedType.
 Require OrderedTypeEx.
 Require Import List.
 Require bbv.Word.
 Import ListNotations.
+Local Open Scope Z.
 
 (* TODO: revisit choice of FMapList *)
 Module NatMap := FMapList.Make(OrderedTypeEx.Nat_as_OT).

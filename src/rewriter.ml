@@ -91,6 +91,17 @@ let lookup_generated_kid env kid =
 
 let generated_kids typ = KidSet.filter is_kid_generated (tyvars_of_typ typ)
 
+let rec is_src_typ typ =
+  match typ with
+  | Typ_aux (Typ_tup typs, l) -> List.for_all is_src_typ typs
+  | _ ->
+     match destruct_exist typ with
+     | Some (kopts, nc, typ') ->
+        let declared_kids = KidSet.of_list (List.map kopt_kid kopts) in
+        let unused_kids = KidSet.diff declared_kids (tyvars_of_typ typ') in
+        KidSet.is_empty unused_kids && KidSet.is_empty (generated_kids typ)
+     | None -> KidSet.is_empty (generated_kids typ)
+
 let resolve_generated_kids env typ =
   let subst_kid kid typ = subst_kid typ_subst kid (lookup_generated_kid env kid) typ in
   KidSet.fold subst_kid (generated_kids typ) typ
@@ -99,21 +110,31 @@ let rec remove_p_typ = function
   | P_aux (P_typ (typ, pat), _) -> remove_p_typ pat
   | pat -> pat
 
-let add_p_typ typ (P_aux (paux, annot) as pat) =
-  let typ' = resolve_generated_kids (env_of_pat pat) typ in
-  if KidSet.is_empty (generated_kids typ') then
-    P_aux (P_typ (typ', remove_p_typ pat), annot)
-  else pat
+let add_p_typ env typ (P_aux (paux, annot) as pat) =
+  let typ' = resolve_generated_kids env typ in
+  if is_src_typ typ' then P_aux (P_typ (typ', remove_p_typ pat), annot) else pat
 
 let rec remove_e_cast = function
   | E_aux (E_cast (_, exp), _) -> remove_e_cast exp
   | exp -> exp
 
-let add_e_cast typ (E_aux (eaux, annot) as exp) =
-  let typ' = resolve_generated_kids (env_of exp) typ in
-  if KidSet.is_empty (generated_kids typ') then
-    E_aux (E_cast (typ', remove_e_cast exp), annot)
-  else exp
+let add_e_cast env typ (E_aux (eaux, annot) as exp) =
+  let typ' = resolve_generated_kids env typ in
+  if is_src_typ typ' then E_aux (E_cast (typ', remove_e_cast exp), annot) else exp
+
+let add_typs_let env ltyp rtyp exp =
+  let aux pat lhs rhs =
+    let pat' = add_p_typ env ltyp pat in
+    (pat', lhs, rhs)
+  in
+  match exp with
+  | E_aux (E_let (LB_aux (LB_val (pat, lhs), lba), rhs), a) ->
+     let (pat', lhs', rhs') = aux pat lhs rhs in
+     E_aux (E_let (LB_aux (LB_val (pat', lhs'), lba), rhs'), a)
+  | E_aux (E_internal_plet (pat, lhs, rhs), a) ->
+     let (pat', lhs', rhs') = aux pat lhs rhs in
+     E_aux (E_internal_plet (pat', lhs', rhs'), a)
+  | _ -> exp
 
 let rec small (E_aux (exp,_)) = match exp with
   | E_id _

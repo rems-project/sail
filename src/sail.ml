@@ -51,9 +51,13 @@
 open Process_file
 
 module Big_int = Nat_big_num
+module Json = Yojson.Basic
 
 let lib = ref ([] : string list)
 let opt_interactive_script : string option ref = ref None
+(* Note: May cause a deprecated warning for json type, but this cannot be
+   fixed without breaking Ubuntu 18.04 CI *)
+let opt_config : Json.t option ref = ref None
 let opt_print_version = ref false
 let opt_target = ref None
 let opt_tofrominterp_output_dir : string option ref = ref None
@@ -72,6 +76,13 @@ let opt_have_feature = ref None
 
 let set_target name = Arg.Unit (fun _ -> opt_target := Some name)
 
+let load_json_config file =
+  try Json.from_file file with
+  | Yojson.Json_error desc | Sys_error desc ->
+     prerr_endline "Error when loading configuration file:";
+     prerr_endline desc;
+     exit 1
+ 
 let options = Arg.align ([
   ( "-o",
     Arg.String (fun f -> opt_file_out := Some f),
@@ -101,6 +112,9 @@ let options = Arg.align ([
   ( "-no_warn",
     Arg.Clear Reporting.opt_warnings,
     " do not print warnings");
+  ( "-config",
+    Arg.String (fun file -> opt_config := Some (load_json_config file)),
+    " JSON configuration file");
   ( "-tofrominterp",
     set_target "tofrominterp",
     " output OCaml functions to translate between shallow embedding and interpreter");
@@ -159,10 +173,10 @@ let options = Arg.align ([
     set_target "ir",
     " print intermediate representation");
   ( "-smt",
-    Arg.Tuple [set_target "smt"; Arg.Clear Jib_compile.opt_track_throw],
+    Arg.Tuple [set_target "smt"],
     " print SMT translated version of input");
   ( "-smt_auto",
-    Arg.Tuple [set_target "smt"; Arg.Clear Jib_compile.opt_track_throw; Arg.Set Jib_smt.opt_auto],
+    Arg.Tuple [set_target "smt"; Arg.Set Jib_smt.opt_auto],
     " generate SMT and automatically call the solver (implies -smt)");
   ( "-smt_ignore_overflow",
     Arg.Set Jib_smt.opt_ignore_overflow,
@@ -185,6 +199,9 @@ let options = Arg.align ([
   ( "-c",
     Arg.Tuple [set_target "c"; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
+  ( "-c2",
+    Arg.Tuple [set_target "c2"; Arg.Set Initial_check.opt_undefined_gen],
+    " output a C translated version of the input (experimental code-generation)");
   ( "-c_include",
     Arg.String (fun i -> opt_includes_c := i::!opt_includes_c),
     "<filename> provide additional include for C output");
@@ -215,6 +232,9 @@ let options = Arg.align ([
   ( "-c_fold_unit",
     Arg.String (fun str -> Constant_fold.opt_fold_to_unit := Util.split_on_char ',' str),
     " remove comma separated list of functions from C output, replacing them with unit");
+  ( "-c_coverage",
+    Arg.String (fun str -> C_backend.opt_branch_coverage := Some (open_out str)),
+    " output file for C code instrumention to track branch coverage");
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an ELF file so that it can be executed by compiled C code");
@@ -304,7 +324,7 @@ let options = Arg.align ([
     Arg.Clear opt_memo_z3,
     " do not memoize calls to z3 (default)");
   ( "-memo",
-    Arg.Tuple [Arg.Set opt_memo_z3; Arg.Set C_backend.opt_memo_cache],
+    Arg.Tuple [Arg.Set opt_memo_z3; Arg.Set Jib_compile.opt_memo_cache],
     " memoize calls to z3, and intermediate compilation results");
   ( "-have_feature",
     Arg.String (fun symbol -> opt_have_feature := Some symbol),
@@ -492,6 +512,32 @@ let target name out_name ast type_envs =
      flush output_chan;
      if close then close_out output_chan else ()
 
+  | Some "c2" ->
+     let module StringMap = Map.Make(String) in
+     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
+     let ast_c, type_envs =
+       if !opt_specialize_c then
+         Specialize.(specialize_passes 2 int_specialization type_envs ast_c)
+       else
+         ast_c, type_envs
+     in
+     let output_name = match !opt_file_out with Some f -> f | None -> "out" in
+     Reporting.opt_warnings := true;
+     let codegen ctx cdefs =
+       let open Json.Util in
+       let codegen_opts = match !opt_config with
+         | Some config -> C_codegen.options_from_json (member "codegen" config) cdefs
+         | None -> C_codegen.default_options cdefs
+       in
+       let module Codegen =
+         C_codegen.Make(
+             struct let opts = codegen_opts end
+           )
+       in
+       Codegen.emulator ctx output_name cdefs
+     in
+     C_backend.compile_ast_clib type_envs ast_c codegen;
+ 
   | Some "ir" ->
      let ast_c, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
      (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in *)
@@ -625,4 +671,5 @@ let _ = try
   with Reporting.Fatal_error e ->
     Reporting.print_error e;
     Interactive.opt_suppress_banner := true;
+    if !opt_memo_z3 then Constraint.save_digests () else ();
     if !Interactive.opt_interactive then () else exit 1

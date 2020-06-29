@@ -1,5 +1,5 @@
-Require Import Sail2_state_monad.
-(*Require Import Sail2_values_lemmas.*)
+Require Import Sail.State_monad.
+(*Require Import Sail.Values_lemmas.*)
 Require Export Setoid.
 Require Export Morphisms Equivalence.
 
@@ -8,7 +8,7 @@ Require Export Morphisms Equivalence.
    Note that rewriting results are put into both a rewriting hint database and
    a normal automation one.  The former can be used with autorewrite and friends,
    but the latter can be used with the rewriting under congruence tactics, such as
-   statecong in Sail2_state_lemmas, and PrePostE_rewrite in Hoare. *)
+   statecong in Sail.State_lemmas, and PrePostE_rewrite in Hoare. *)
 
 (* Ensure that pointwise equality on states is the preferred notion of
    equivalence for the state monad. *)
@@ -540,7 +540,7 @@ Hint Resolve no_throw_mem_builtins_7 : ignore_throw.
 Lemma no_throw_mem_builtins_8 Regs E1 E2 A B wk addr sz v t :
   ignore_throw (E2 := E2) (@write_memtS Regs E1 A B wk addr sz v t) === write_memtS wk addr sz v t.
 unfold write_memtS. rewrite ignore_throw_option_case_distrib_2.
-destruct (Sail2_values.mem_bytes_of_bits v); autorewrite with ignore_throw; auto.
+destruct (Sail.Values.mem_bytes_of_bits v); autorewrite with ignore_throw; auto.
 Qed.
 Hint Rewrite no_throw_mem_builtins_8 : ignore_throw.
 Hint Resolve no_throw_mem_builtins_8 : ignore_throw.

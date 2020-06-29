@@ -663,6 +663,10 @@ let const_props target defs ref_vars =
     | "or_bool", ([E_aux (E_lit (L_aux (L_true, _)), _) as e_true; _] |
                   [_; E_aux (E_lit (L_aux (L_true, _)), _) as e_true]) ->
        e_true
+    | _, [E_aux (E_vector [], _); e']
+    | _, [e'; E_aux (E_vector [], _)]
+      when is_overload_of (mk_id "append") ->
+       e'
     | _, _ when List.for_all Constant_fold.is_constant args ->
        const_fold exp
     | _, [arg] when is_overload_of (mk_id "__size") ->
@@ -733,6 +737,10 @@ let const_props target defs ref_vars =
               (Reporting.print_err lit_l "Monomorphisation"
                  "Unexpected kind of literal for var match"; GiveUp)
          end
+      | E_lit ((L_aux ((L_bin _ | L_hex _), _) as lit)), P_vector _ ->
+         let mk_bitlit lit = E_aux (E_lit lit, (Generated l, mk_tannot env bit_typ no_effect)) in
+         let lits' = List.map mk_bitlit (vector_string_to_bit_list lit) in
+         check_exp_pat (E_aux (E_vector lits', (l, annot))) pat
       | E_lit _, _ ->
          (Reporting.print_err l' "Monomorphisation"
             "Unexpected kind of pattern for literal"; GiveUp)
@@ -744,6 +752,7 @@ let const_props target defs ref_vars =
               if lit_match (lit,lit') then DoesMatch ([],[]) else DoesNotMatch
            | E_aux (E_lit l,_), P_aux (P_id var,_) when pat_id_is_variable env var ->
               DoesMatch ([var, e],[])
+           | _, P_aux (P_wild, _) -> DoesMatch ([],[])
            | _ -> GiveUp) es ps in
          let final = List.fold_left (fun acc m -> match acc, m with
            | _, GiveUp -> GiveUp
@@ -755,6 +764,10 @@ let const_props target defs ref_vars =
             (Reporting.print_err l "Monomorphisation"
                "Unexpected kind of pattern for vector literal"; GiveUp)
          | _ -> final)
+      | E_vector _, P_lit ((L_aux ((L_bin _ | L_hex _), _) as lit)) ->
+         let mk_bitlit lit = P_aux (P_lit lit, (Generated l, mk_tannot env bit_typ no_effect)) in
+         let lits' = List.map mk_bitlit (vector_string_to_bit_list lit) in
+         check_exp_pat exp (P_aux (P_vector lits', (l, annot)))
       | E_vector _, _ ->
          (Reporting.print_err l "Monomorphisation"
             "Unexpected kind of pattern for vector literal"; GiveUp)
@@ -779,6 +792,24 @@ let const_props target defs ref_vars =
       | _ -> GiveUp
     in
     let check_pat = check_exp_pat exp0 in
+    let add_ksubst_synonyms env' ksubst =
+      (* The type checker sometimes automatically generates kid synonyms, e.g.
+         in let 'datasize = ... in ... it binds both 'datasize and '_datasize.
+         If we subsitute one, we also want to substitute the other.
+         In order to find synonyms, we consult the environment after the
+         bind (see findpat_generic below). *)
+      let get_synonyms (kid, nexp) =
+        let rec synonyms_of_nc nc = match unaux_constraint nc with
+          | NC_equal (Nexp_aux (Nexp_var kid1, _), Nexp_aux (Nexp_var (kid2), _))
+            when Kid.compare kid kid1 = 0 ->
+             [(kid2, nexp)]
+          | NC_and _ -> List.concat (List.map synonyms_of_nc (constraint_conj nc))
+          | _ -> []
+        in
+        List.concat (List.map synonyms_of_nc (Env.get_constraints env'))
+      in
+      ksubst @ List.concat (List.map get_synonyms ksubst)
+    in
     let rec findpat_generic description assigns = function
       | [] -> (Reporting.print_err l "Monomorphisation"
                  ("Failed to find a case for " ^ description); None)
@@ -791,7 +822,9 @@ let const_props target defs ref_vars =
                        kbindings_union ksubsts (kbindings_from_list ksubst) in
           let (E_aux (guard,_)),assigns = const_prop_exp substs assigns guard in
           match guard with
-          | E_lit (L_aux (L_true,_)) -> Some (exp,vsubst,ksubst)
+          | E_lit (L_aux (L_true,_)) ->
+             let ksubst = add_ksubst_synonyms (env_of exp) ksubst in
+             Some (exp,vsubst,ksubst)
           | E_lit (L_aux (L_false,_)) -> findpat_generic description assigns tl
           | _ -> None
         end
@@ -800,7 +833,9 @@ let const_props target defs ref_vars =
       | (Pat_aux (Pat_exp (p,exp),_))::tl ->
          match check_pat p with
          | DoesNotMatch -> findpat_generic description assigns tl
-         | DoesMatch (subst,ksubst) -> Some (exp,subst,ksubst)
+         | DoesMatch (subst,ksubst) ->
+            let ksubst = add_ksubst_synonyms (env_of exp) ksubst in
+            Some (exp,subst,ksubst)
          | GiveUp -> None
     in findpat_generic (string_of_exp exp0) assigns cases
 

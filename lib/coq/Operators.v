@@ -1,6 +1,7 @@
-Require Import Sail2_values.
+Require Import Sail.Values.
 Require List.
 Import List.ListNotations.
+Local Open Scope Z.
 
 (*** Bit vector operations *)
 

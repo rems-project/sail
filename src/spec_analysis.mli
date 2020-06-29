@@ -84,9 +84,10 @@ val assigned_vars_in_fexps : 'a fexp list -> IdSet.t
 val assigned_vars_in_pexp : 'a pexp -> IdSet.t
 val assigned_vars_in_lexp : 'a lexp -> IdSet.t
 
-(** Variable bindings in patterns *)
+(** Variable bindings in patterns and expressions *)
 val pat_id_is_variable : env -> id -> bool
 val bindings_from_pat : tannot pat -> id list
+val bound_vars : 'a exp -> IdSet.t
 
 val equal_kids_ncs : kid -> n_constraint list -> KidSet.t
 val equal_kids : env -> kid -> KidSet.t

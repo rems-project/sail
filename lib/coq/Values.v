@@ -14,8 +14,8 @@ Require Export Zeuclid.
 Require Import Lia.
 Import ListNotations.
 
-Open Scope Z.
-Open Scope bool.
+Local Open Scope Z.
+Local Open Scope bool.
 
 Module Z_eq_dec.
 Definition U := Z.
@@ -2057,10 +2057,14 @@ Ltac default_andor :=
   repeat match goal with |- @ex _ _ => eexists end;
   rewrite ?Bool.eqb_true_iff, ?Bool.eqb_false_iff in *;
   match goal with
-  | H:?v = true -> _ |- _ = ?v && _ => eapply default_and_proof; eauto
-  | H:?v = true -> _ |- _ = ?v && _ => eapply default_and_proof2; eauto
-  | H:?v = false -> _ |- _ = ?v || _ => eapply default_or_proof; eauto
-  | H:?v = false -> _ |- _ = ?v || _ => eapply default_or_proof2; eauto
+  | H:?v = true -> _ |- _ = ?v && _ => solve [eapply default_and_proof; eauto 2]
+  | H:?v = true -> _ |- _ = ?v && _ => solve [eapply default_and_proof2; eauto 2]
+  | H:?v = false -> _ |- _ = ?v || _ => solve [eapply default_or_proof; eauto 2]
+  | H:?v = false -> _ |- _ = ?v || _ => solve [eapply default_or_proof2; eauto 2]
+  | H:?v = true -> _ |- _ = ?v && _ => solve [rewrite Bool.andb_comm; eapply default_and_proof; eauto 2]
+  | H:?v = true -> _ |- _ = ?v && _ => solve [rewrite Bool.andb_comm; eapply default_and_proof2; eauto 2]
+  | H:?v = false -> _ |- _ = ?v || _ => solve [rewrite Bool.orb_comm; eapply default_or_proof; eauto 2]
+  | H:?v = false -> _ |- _ = ?v || _ => solve [rewrite Bool.orb_comm; eapply default_or_proof2; eauto 2]
   end.
 
 (* Solving simple and_boolMP / or_boolMP goals where unknown booleans
@@ -2105,10 +2109,13 @@ Ltac squashed_andor_solver :=
     destruct H as [x H'];
     exists x
   end;
-  (* Attempt to shrink size of problem *)
+  (* Attempt to shrink size of problem.
+     I originally used just one match here with a non-linear pattern, but it
+     appears it matched up to convertability and so definitions could break
+     the generalization. *)
   try match goal with
-      | _ : l = _ -> ?v = r |- context[?v] => generalize dependent v; intros
-      | _ : l = _ -> Bool.eqb ?v r = true |- context[?v] => generalize dependent v; intros
+      | _ : l = _ -> ?v = r |- _ => match goal with |- context[v] => generalize dependent v; intros end
+      | _ : l = _ -> Bool.eqb ?v r = true |- _ => match goal with |- context[v] => generalize dependent v; intros end
       end;
   unbool_comparisons; unbool_comparisons_goal;
   repeat match goal with
@@ -2117,7 +2124,6 @@ Ltac squashed_andor_solver :=
   | |- context[?li =? ?ri] =>
     specialize (Z.eqb_eq li ri); generalize (li =? ri); intros
   end;
-  rewrite <- ?Z.eqb_eq in *;
   solve_bool_with_Z.
 
 Ltac run_main_solver_impl :=
@@ -2828,6 +2834,16 @@ Definition min_nat (x : Z) `{ArithFact (x >=? 0)} (y : Z) `{ArithFact (y >=? 0)}
 Definition max_nat (x : Z) `{ArithFact (x >=? 0)} (y : Z) `{ArithFact (y >=? 0)} :
   {z : Z & ArithFact (z >=? 0)} :=
   build_ex (Z.max x y).
+
+Definition shl_int_1 (x y : Z) `{HE:ArithFact (x =? 1)} `{HR:ArithFact (0 <=? y <=? 3)}: {z : Z & ArithFact (member_Z_list z [1;2;4;8])}.
+refine (existT _ (shl_int x y) _).
+destruct HE as [HE].
+destruct HR as [HR].
+unbool_comparisons.
+assert (y = 0 \/ y = 1 \/ y = 2 \/ y = 3) by omega.
+constructor.
+intuition (subst; compute; auto).
+Defined.
 
 Definition shl_int_8 (x y : Z) `{HE:ArithFact (x =? 8)} `{HR:ArithFact (0 <=? y <=? 3)}: {z : Z & ArithFact (member_Z_list z [8;16;32;64])}.
 refine (existT _ (shl_int x y) _).

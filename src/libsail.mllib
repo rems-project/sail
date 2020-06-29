@@ -50,6 +50,7 @@ Scattered
 Smtlib
 Spec_analysis
 Specialize
+Splice
 State
 ToFromInterp_backend
 ToFromInterp_lib_mword

@@ -1,7 +1,8 @@
 Require Export Rbase.
 Require Import Reals.
 Require Export ROrderedType.
-Require Import Sail2_values.
+Require Import Sail.Values.
+Local Open Scope Z.
 
 (* "Decidable" in a classical sense... *)
 Instance Decidable_eq_real : forall (x y : R), Decidable (x = y) :=

@@ -459,9 +459,7 @@ module Env : sig
   val add_extern : id -> (string * string) list -> t -> t
   val get_extern : id -> t -> string -> string
   val get_default_order : t -> order
-  val set_default_order : order_aux -> t -> t
-  val set_default_order_inc : t -> t
-  val set_default_order_dec : t -> t
+  val set_default_order : order -> t -> t
   val add_enum : id -> id list -> t -> t
   val get_enum : id -> t -> id list
   val get_enums : t -> IdSet.t Bindings.t 
@@ -1324,12 +1322,12 @@ end = struct
     | Some ord -> ord
 
   let set_default_order o env =
-    match env.default_order with
-    | None -> { env with default_order = Some (Ord_aux (o, Parse_ast.Unknown)) }
-    | Some _ -> typ_error env Parse_ast.Unknown ("Cannot change default order once already set")
-
-  let set_default_order_inc = set_default_order Ord_inc
-  let set_default_order_dec = set_default_order Ord_dec
+    match o with
+    | Ord_aux (Ord_var _, l) -> typ_error env l "Cannot have variable default order"
+    | Ord_aux (_, l) ->
+       match env.default_order with
+       | None -> { env with default_order = Some o }
+       | Some _ -> typ_error env l ("Cannot change default order once already set")
 
   let base_typ_of env typ =
     let rec aux (Typ_aux (t,a)) =
@@ -2782,6 +2780,48 @@ let rec filter_casts env from_typ to_typ casts =
      end
   | [] -> []
 
+type pattern_duplicate =
+  | Pattern_singleton of l
+  | Pattern_duplicate of l * l 
+
+let is_enum_member id env = match Env.lookup_id id env with
+  | Enum _ -> true
+  | _ -> false
+                       
+(* Check if a pattern contains duplicate bindings, and raise a type
+   error if this is the case *)
+let check_pattern_duplicates env pat =
+  let is_duplicate _ = function
+    | Pattern_duplicate _ -> true
+    | _ -> false
+  in
+  let rec collect_duplicates ids (P_aux (aux, (l, _))) =
+    let update_id = function
+      | None -> Some (Pattern_singleton l)
+      | Some (Pattern_singleton l2) -> Some (Pattern_duplicate (l2, l))
+      | duplicate -> duplicate
+    in
+    match aux with
+    | P_id id when not (is_enum_member id env) ->
+       ids := Bindings.update id update_id !ids
+    | P_id _ | P_lit _ | P_wild -> ()
+    | P_not p | P_as (p, _) | P_typ (_, p) | P_var (p, _) ->
+       collect_duplicates ids p
+    | P_or (p1, p2) | P_cons (p1, p2) ->
+       collect_duplicates ids p1; collect_duplicates ids p2
+    | P_app (_, ps) | P_vector ps | P_vector_concat ps | P_tup ps | P_list ps | P_string_append ps ->
+       List.iter (collect_duplicates ids) ps
+  in
+  let ids = ref Bindings.empty in
+  collect_duplicates ids pat;
+  match Bindings.choose_opt (Bindings.filter is_duplicate !ids) with
+  | Some (id, Pattern_duplicate (l1, l2)) ->
+     typ_raise env l2
+       (Err_because (Err_other ("Duplicate binding for " ^ string_of_id id ^ " in pattern"),
+                     l1,
+                     Err_other ("Previous binding of " ^ string_of_id id ^ " here")))
+  | _ -> ()
+      
 let crule r env exp typ =
   incr depth;
   typ_print (lazy (Util.("Check " |> cyan |> clear) ^ string_of_exp exp ^ " <= " ^ string_of_typ typ));
@@ -2825,6 +2865,13 @@ let fresh_var =
   fun () -> let n = !counter in
             let () = counter := n+1 in
             mk_id ("v#" ^ string_of_int n)
+
+let rec exp_unconditionally_returns (E_aux (aux, _)) =
+  match aux with
+  | E_return _ -> true
+  | E_block [] -> false
+  | E_block exps -> exp_unconditionally_returns (List.hd (List.rev exps))
+  | _ -> false
 
 let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
   let annot_exp_effect exp typ' eff = E_aux (exp, (l, mk_expected_tannot env typ' eff (Some typ))) in
@@ -2903,11 +2950,13 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        | LB_val (P_aux (P_typ (ptyp, _), _) as pat, bind) ->
           Env.wf_typ env ptyp;
           let checked_bind = crule check_exp env bind ptyp in
+          check_pattern_duplicates env pat;
           let tpat, inner_env = bind_pat_no_guard env pat ptyp in
           annot_exp (E_let (LB_aux (LB_val (tpat, checked_bind), (let_loc, None)), crule check_exp inner_env exp typ))
             (check_shadow_leaks l inner_env env typ)
        | LB_val (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
+          check_pattern_duplicates env pat;
           let tpat, inner_env = bind_pat_no_guard env pat (typ_of inferred_bind) in
           annot_exp (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, None)), crule check_exp inner_env exp typ))
             (check_shadow_leaks l inner_env env typ)
@@ -3013,7 +3062,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let checked_exp = crule check_exp env exp exc_typ in
      annot_exp_effect (E_throw checked_exp) typ (mk_effect [BE_escape])
   | E_var (lexp, bind, exp), _ ->
-     let lexp, bind, env = match bind_assignment env lexp bind with
+     let lexp, bind, env = match bind_assignment l env lexp bind with
        | E_aux (E_assign (lexp, bind), _), env -> lexp, bind, env
        | _, _ -> assert false
      in
@@ -3078,8 +3127,8 @@ and check_block l env exps ret_typ =
   match Nl_flow.analyze exps with
   | [] -> (match ret_typ with Some typ -> typ_equality l env typ unit_typ; [] | None -> [])
   | [exp] -> [final env exp]
-  | (E_aux (E_assign (lexp, bind), _) :: exps) ->
-     let texp, env = bind_assignment env lexp bind in
+  | (E_aux (E_assign (lexp, bind), (assign_l, _)) :: exps) ->
+     let texp, env = bind_assignment assign_l env lexp bind in
      texp :: check_block l env exps ret_typ
   | ((E_aux (E_assert (constr_exp, msg), _) as exp) :: exps) ->
      let msg = assert_msg msg in
@@ -3098,12 +3147,18 @@ and check_block l env exps ret_typ =
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
      let env = add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env in
      texp :: check_block l env exps ret_typ
+  | ((E_aux (E_if (cond, true_exp, _), _) as exp) :: exps) when exp_unconditionally_returns true_exp ->
+     let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
+     let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
+     let env = add_opt_constraint (option_map nc_not (assert_constraint env false cond')) env in
+     texp :: check_block l env exps ret_typ
   | (exp :: exps) ->
      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
      texp :: check_block l env exps ret_typ
 
 and check_case env pat_typ pexp typ =
   let pat,guard,case,((l,_) as annot) = destruct_pexp pexp in
+  check_pattern_duplicates env pat;
   match bind_pat env pat pat_typ with
   | tpat, env, guards ->
      let guard = match guard, guards with
@@ -3567,9 +3622,9 @@ and bind_typ_pat_arg env (TP_aux (typ_pat_aux, l) as typ_pat) (A_aux (typ_arg_au
   | _, A_order _ -> typ_error env l "Cannot bind type pattern against order"
   | _, _ -> typ_error env l ("Couldn't bind type argument " ^ string_of_typ_arg typ_arg ^ " with " ^ string_of_typ_pat typ_pat)
 
-and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as exp) =
-  let annot_assign lexp exp = E_aux (E_assign (lexp, exp), (l, mk_tannot env (mk_typ (Typ_id (mk_id "unit"))) no_effect)) in
-  let annot_lexp_effect lexp typ eff = LEXP_aux (lexp, (l, mk_tannot env typ eff)) in
+and bind_assignment assign_l env (LEXP_aux (lexp_aux, (lexp_l, ())) as lexp) (E_aux (_, (exp_l, ())) as exp) =
+  let annot_assign lexp exp = E_aux (E_assign (lexp, exp), (assign_l, mk_tannot env (mk_typ (Typ_id (mk_id "unit"))) no_effect)) in
+  let annot_lexp_effect lexp typ eff = LEXP_aux (lexp, (lexp_l, mk_tannot env typ eff)) in
   let annot_lexp lexp typ = annot_lexp_effect lexp typ no_effect in
   let has_typ v env =
     match Env.lookup_id v env with
@@ -3578,7 +3633,7 @@ and bind_assignment env (LEXP_aux (lexp_aux, _) as lexp) (E_aux (_, (l, ())) as 
   in
   match lexp_aux with
   | LEXP_memory (f, xs) ->
-     check_exp env (E_aux (E_app (f, xs @ [exp]), (l, ()))) unit_typ, env
+     check_exp env (E_aux (E_app (f, xs @ [exp]), (lexp_l, ()))) unit_typ, env
   | LEXP_cast (typ_annot, v) ->
      let checked_exp = crule check_exp env exp typ_annot in
      let tlexp, env' = bind_lexp env lexp (typ_of checked_exp) in
@@ -3682,18 +3737,18 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
           let inferred_exp2 = infer_exp env exp2 in
           let nexp1, env = bind_numeric l (typ_of inferred_exp1) env in
           let nexp2, env = bind_numeric l (typ_of inferred_exp2) env in
-          let (len, check) = match ord with
+          let (slice_len, check) = match ord with
             | Ord_aux (Ord_inc, _) ->
                (nexp_simp (nsum (nminus nexp2 nexp1) (nint 1)),
-                nc_lteq nexp1 nexp2)
+                nc_and (nc_and (nc_lteq (nint 0) nexp1) (nc_lteq nexp1 nexp2)) (nc_lt nexp2 len))
             | Ord_aux (Ord_dec, _) ->
                (nexp_simp (nsum (nminus nexp1 nexp2) (nint 1)),
-                nc_gteq nexp1 nexp2)
+                nc_and (nc_and (nc_lteq (nint 0) nexp2) (nc_lteq nexp2 nexp1)) (nc_lt nexp1 len))
             | Ord_aux (Ord_var _, _) ->
                typ_error env l "Slice assignment to bitvector with variable indexing order unsupported"
           in
           if !opt_no_lexp_bounds_check || prove __POS__ env check then
-            annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ len ord)
+            annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ slice_len ord)
           else
             typ_raise env l (Err_lexp_bounds (check, Env.get_locals env, Env.get_constraints env))
        | _ -> typ_error env l "Cannot assign slice of non vector type"
@@ -3836,7 +3891,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let inferred_exps = List.map (irule infer_exp env) exps in
      annot_exp (E_tuple inferred_exps) (mk_typ (Typ_tup (List.map typ_of inferred_exps)))
   | E_assign (lexp, bind) ->
-     fst (bind_assignment env lexp bind)
+     fst (bind_assignment l env lexp bind)
   | E_record_update (exp, fexps) ->
      let inferred_exp = irule infer_exp env exp in
      let typ = typ_of inferred_exp in
@@ -3901,7 +3956,11 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | Measure_aux (Measure_some exp,l) ->
           Measure_aux (Measure_some (crule check_exp env exp int_typ),l)
      in
-     let checked_body = crule check_exp (add_opt_constraint (assert_constraint env true checked_cond) env) body unit_typ in
+     let nc = match loop_type with
+       | While -> assert_constraint env true checked_cond
+       | Until -> None
+     in
+     let checked_body = crule check_exp (add_opt_constraint nc env) body unit_typ in
      annot_exp (E_loop (loop_type, checked_measure, checked_cond, checked_body)) unit_typ
   | E_for (v, f, t, step, ord, body) ->
      begin
@@ -4027,6 +4086,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        | LB_val (pat, bind) ->
           let inferred_bind = irule infer_exp env bind in
           inferred_bind, pat, typ_of inferred_bind in
+     check_pattern_duplicates env pat;
      let tpat, inner_env = bind_pat_no_guard env pat ptyp in
      let inferred_exp = irule infer_exp inner_env exp in
      annot_exp (E_let (LB_aux (LB_val (tpat, bind_exp), (let_loc, None)), inferred_exp))
@@ -5139,11 +5199,8 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
   in
   [annotate vs typ eff], Env.add_val_spec id (typq, typ) env
 
-let check_default env (DT_aux (ds, l)) =
-  match ds with
-  | DT_order (Ord_aux (Ord_inc, _)) -> [DEF_default (DT_aux (ds, l))], Env.set_default_order_inc env
-  | DT_order (Ord_aux (Ord_dec, _)) -> [DEF_default (DT_aux (ds, l))], Env.set_default_order_dec env
-  | DT_order (Ord_aux (Ord_var _, _)) -> typ_error env l "Cannot have variable default order"
+let check_default env (DT_aux (DT_order order, l)) =
+  [DEF_default (DT_aux (DT_order order, l))], Env.set_default_order order env
 
 let kinded_id_arg kind_id =
   let typ_arg arg = A_aux (arg, Parse_ast.Unknown) in

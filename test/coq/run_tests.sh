@@ -5,7 +5,15 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SAILDIR="$DIR/../.."
 TYPECHECKTESTSDIR="$DIR/../typecheck/pass"
 EXTRATESTSDIR="$DIR/pass"
-BBVDIR="$DIR/../../../bbv/theories"
+
+if opam config var coq-bbv:share >/dev/null 2>/dev/null; then
+  COQOPTS="-Q $SAILDIR/lib/coq Sail"
+else
+  if [ -z "$BBVDIR" ]; then
+    BBVDIR="$DIR/../../../bbv/src/bbv"
+  fi
+  COQOPTS="-Q $SAILDIR/lib/coq Sail -Q $BBVDIR bbv"
+fi
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -56,8 +64,8 @@ function check_tests_dir {
     do
         if $SAILDIR/sail -coq -dcoq_undef_axioms -o out $TESTSDIR/$i &>/dev/null;
         then
-    	if coqc -R "$BBVDIR" bbv -R "$SAILDIR/lib/coq" Sail out_types.v &>/dev/null &&
-    	   coqc -R "$BBVDIR" bbv -R "$SAILDIR/lib/coq" Sail out.v &>/dev/null;
+    	if coqc $COQOPTS out_types.v &>/dev/null &&
+    	   coqc $COQOPTS out.v &>/dev/null;
     	then
     	    green "tested $i expecting pass" "pass"
     	else

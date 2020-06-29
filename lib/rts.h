@@ -1,22 +1,12 @@
-#pragma once
+#ifndef SAIL_RTS_H
+#define SAIL_RTS_H
 
-#include<inttypes.h>
-#include<stdlib.h>
-#include<stdio.h>
+#include <inttypes.h>
+#include <stdlib.h>
+#include <stdio.h>
 
-#include"sail.h"
-
-/*
- * This function should be called whenever a pattern match failure
- * occurs. Pattern match failures are always fatal.
- */
-void sail_match_failure(sail_string msg);
-
-/*
- * sail_assert implements the assert construct in Sail. If any
- * assertion fails we immediately exit the model.
- */
-unit sail_assert(bool b, sail_string msg);
+#include "sail.h"
+#include "sail_failure.h"
 
 unit sail_exit(unit);
 
@@ -169,3 +159,5 @@ void cleanup_rts(void);
 
 unit z__SetConfig(sail_string, sail_int);
 unit z__ListConfig(const unit u);
+
+#endif

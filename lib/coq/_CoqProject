@@ -1,2 +1,2 @@
--R . Sail
--R ../../../bbv/theories bbv
+-Q . Sail
+-Q ../../../bbv/theories bbv
