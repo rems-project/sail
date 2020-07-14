@@ -320,21 +320,21 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
                   (* We need to check that id's type hasn't changed due to flow typing *)
                   let _, ctyp' = Bindings.find id ctx.locals in
                   if ctyp_equal ctyp ctyp' then
-                    AV_cval (V_id (name id, ctyp), typ)
+                    AV_cval (V_id (name_or_global ctx id, ctyp), typ)
                   else
                     (* id's type changed due to flow typing, so it's
                        really still heap allocated!  *)
                     v
                 with
                   (* Hack: Assuming global letbindings don't change from flow typing... *)
-                  Not_found -> AV_cval (V_id (name id, ctyp), typ)
+                  Not_found -> AV_cval (V_id (name_or_global ctx id, ctyp), typ)
               end
             else
               v
          | Register (_, _, typ) ->
             let ctyp = convert_typ ctx typ in
             if is_stack_ctyp ctyp && not (never_optimize ctyp) then
-              AV_cval (V_id (name id, ctyp), typ)
+              AV_cval (V_id (global id, ctyp), typ)
             else
               v
          | _ -> v

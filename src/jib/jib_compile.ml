@@ -182,6 +182,12 @@ module type Config = sig
   val track_throw : bool
 end
 
+let name_or_global ctx id =
+  if Env.is_register id ctx.local_env || IdSet.mem id (Env.get_toplevel_lets ctx.local_env) then
+    global id
+  else
+    name id
+
 module Make(C: Config) = struct
 
 let ctyp_of_typ ctx typ = C.convert_typ ctx typ
@@ -190,12 +196,6 @@ let rec chunkify n xs =
   match Util.take n xs, Util.drop n xs with
   | xs, [] -> [xs]
   | xs, ys -> xs :: chunkify n ys
-
-let name_or_global ctx id =
-  if Env.is_register id ctx.local_env || IdSet.mem id (Env.get_toplevel_lets ctx.local_env) then
-    global id
-  else
-    name id
 
 let coverage_branch_count = ref 0
 
