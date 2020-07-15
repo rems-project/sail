@@ -590,6 +590,10 @@ end = struct
     || Bindings.mem id env.enums
     || Bindings.mem id builtin_typs
 
+  let bound_ctor_fn env id =
+    Bindings.mem id env.top_val_specs
+    || Bindings.mem id env.union_ids
+    
   let get_overloads id env =
     try Bindings.find id env.overloads with
     | Not_found -> []
@@ -941,9 +945,14 @@ end = struct
     | Not_found -> typ_error env (id_loc id) ("No val spec found for " ^ string_of_id id)
 
   let add_union_id id bind env =
-    typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind));
-    { env with union_ids = Bindings.add id bind env.union_ids }
-
+    if bound_ctor_fn env id
+    then typ_error env (id_loc id) ("A union constructor or function already exists with name " ^ string_of_id id )
+    else
+      begin
+        typ_print (lazy (adding ^ "union identifier " ^ string_of_id id ^ " : " ^ string_of_bind bind));
+        { env with union_ids = Bindings.add id bind env.union_ids }
+      end
+    
   let get_union_id id env =
     try
       let bind = Bindings.find id env.union_ids in
@@ -1151,15 +1160,25 @@ end = struct
   let get_toplevel_lets env = env.top_letbinds
 
   let add_variant id variant env =
-    typ_print (lazy (adding ^ "variant " ^ string_of_id id));
-    { env with variants = Bindings.add id variant env.variants }
-
+    if bound_typ_id env id
+    then typ_error env (id_loc id) ("Cannot create variant " ^ string_of_id id ^ ", type name is already bound")
+    else
+      begin
+        typ_print (lazy (adding ^ "variant " ^ string_of_id id));
+        { env with variants = Bindings.add id variant env.variants }
+      end
+    
   let add_scattered_variant id typq env =
-    typ_print (lazy (adding ^ "scattered variant " ^ string_of_id id));
-    { env with
-      variants = Bindings.add id (typq, []) env.variants;
-      scattered_variant_envs = Bindings.add id env env.scattered_variant_envs
-    }
+    if bound_typ_id env id
+    then typ_error env (id_loc id) ("Cannot create scattered variant " ^ string_of_id id ^ ", type name is already bound")
+    else
+      begin
+        typ_print (lazy (adding ^ "scattered variant " ^ string_of_id id));
+        { env with
+          variants = Bindings.add id (typq, []) env.variants;
+          scattered_variant_envs = Bindings.add id env env.scattered_variant_envs
+        }
+      end
 
   let add_variant_clause id tu env =
     match Bindings.find_opt id env.variants with
