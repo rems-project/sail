@@ -1,7 +1,7 @@
 let is_inc = false
 
 let translate_reg name value = 
-    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 5,Nat_big_num.of_int (reg_to_int value))
+    Sail_values.to_vec is_inc (Nat_big_num.of_int 5,Nat_big_num.of_int (reg_to_int value))
 
 let translate_uop op = match op with
   | RISCVLUI   -> RISCV_LUI
@@ -74,22 +74,22 @@ let translate_bool name = function
   | false -> Sail_values.B0
 
 let translate_imm21 name value = 
-    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 21,Nat_big_num.of_int value)
+    Sail_values.to_vec is_inc (Nat_big_num.of_int 21,Nat_big_num.of_int value)
 
 let translate_imm20 name value = 
-    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 20,Nat_big_num.of_int value)
+    Sail_values.to_vec is_inc (Nat_big_num.of_int 20,Nat_big_num.of_int value)
 
 let translate_imm13 name value = 
-    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 13,Nat_big_num.of_int value)
+    Sail_values.to_vec is_inc (Nat_big_num.of_int 13,Nat_big_num.of_int value)
 
 let translate_imm12 name value = 
-    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 12,Nat_big_num.of_int value)
+    Sail_values.to_vec is_inc (Nat_big_num.of_int 12,Nat_big_num.of_int value)
 
 let translate_imm6 name value = 
-    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 6,Nat_big_num.of_int value)
+    Sail_values.to_vec is_inc (Nat_big_num.of_int 6,Nat_big_num.of_int value)
 
 let translate_imm5 name value = 
-    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 5,Nat_big_num.of_int value)
+    Sail_values.to_vec is_inc (Nat_big_num.of_int 5,Nat_big_num.of_int value)
 
 let translate_imm4 name value =
-    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 4,Nat_big_num.of_int value)
+    Sail_values.to_vec is_inc (Nat_big_num.of_int 4,Nat_big_num.of_int value)

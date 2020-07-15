@@ -6,12 +6,12 @@ let translate_big_int bits (name : string) value =
   (name, Range0 (Some bits), IInt.bit_list_of_integer bits value)
 
 let translate_big_bit bits (name:string) value =
-  Sail_values.to_vec0 is_inc (Nat_big_num.of_int bits,value)
+  Sail_values.to_vec is_inc (Nat_big_num.of_int bits,value)
 
 let translate_int (size : int) (name:string) value = (Nat_big_num.of_int value)
 
 let translate_bits bits (name:string) value =
-  Sail_values.to_vec0 is_inc (Nat_big_num.of_int bits,Nat_big_num.of_int value)
+  Sail_values.to_vec is_inc (Nat_big_num.of_int bits,Nat_big_num.of_int value)
 
 let translate_bool _ = function
   | true -> B1
