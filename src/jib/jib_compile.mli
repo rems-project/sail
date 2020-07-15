@@ -134,3 +134,5 @@ end
    convert several Sail language features, these are sail_assert,
    sail_exit, and sail_cons. *)
 val add_special_functions : Env.t -> Env.t
+
+val name_or_global : ctx -> id -> name
