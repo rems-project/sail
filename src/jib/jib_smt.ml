@@ -1086,7 +1086,7 @@ let builtin_count_leading_zeros ctx v ret_ctyp =
            bvint ret_sz (Big_int.zero))
     else (
       assert (sz land (sz - 1) = 0);
-      let hsz = sz /2 in
+      let hsz = sz / 2 in
       Ite (Fn ("=", [Extract (sz - 1, hsz, smt); bvzero hsz]),
            Fn ("bvadd", [bvint ret_sz (Big_int.of_int hsz); lzcnt hsz (Extract (hsz - 1, 0, smt))]),
            lzcnt hsz (Extract (sz - 1, hsz, smt)))

@@ -2,5 +2,5 @@ Type error:
 [[96mduplicate_ctor.sail[0m]:3:15-19
 3[96m |[0munion foo2 = { Bar1 : int }
  [91m |[0m               [91m^--^[0m
- [91m |[0m Constructor or function already exists for Bar1
+ [91m |[0m A union constructor or function already exists with name Bar1
  [91m |[0m 
