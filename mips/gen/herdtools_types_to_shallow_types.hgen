@@ -91,14 +91,14 @@ let translate_bcmpz_op cmp link likely    = uppercase (pp_bcmpz_op cmp link like
 
 
 let translate_reg name value = 
-    Sail_values.to_vec is_inc (Nat_big_num.of_int 5,Nat_big_num.of_int (reg_to_int value))
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 5,Nat_big_num.of_int (reg_to_int value))
 
 let translate_imm26 name value = 
-    Sail_values.to_vec is_inc (Nat_big_num.of_int 26,Nat_big_num.of_int value)
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 26,Nat_big_num.of_int value)
 let translate_imm16 name value = 
-    Sail_values.to_vec is_inc (Nat_big_num.of_int 16,Nat_big_num.of_int value)
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 16,Nat_big_num.of_int value)
 let translate_imm5 name value = 
-    Sail_values.to_vec is_inc (Nat_big_num.of_int 5,Nat_big_num.of_int value)
+    Sail_values.to_vec0 is_inc (Nat_big_num.of_int 5,Nat_big_num.of_int value)
 let translate_bool name = function
   | true -> Sail_values.B1
   | false -> Sail_values.B0

@@ -36,9 +36,9 @@ let translate_size = function
 let translate_reg r = Nat_big_num.of_int (reg_to_int r)
 
 let translate_scale s = 
-  Sail_values.to_vec is_inc (Nat_big_num.of_int 2, Nat_big_num.of_int s)
+  Sail_values.to_vec0 is_inc (Nat_big_num.of_int 2, Nat_big_num.of_int s)
 
-let translate_imm64 i = Sail_values.to_vec is_inc (Nat_big_num.of_int 64, i)
+let translate_imm64 i = Sail_values.to_vec0 is_inc (Nat_big_num.of_int 64, i)
 
 let translate_msi = function
   | Some (scale, reg) -> Some (translate_scale scale, translate_reg reg)
