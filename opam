@@ -34,8 +34,8 @@ depends: [
   "num"
 ]
 synopsis:
-  "This is a legacy version of the Sail language, and should not be used"
+  "This is a legacy version of the Sail language to support RMEM, and should not be used elsewhere"
 description:
   """Sail is a language for describing the instruction-set
 architecture (ISA) semantics of processors. This is a legacy version
-to support RMEM and should not be used. Use the "sail" package instead."""
+to support RMEM and should not be used elsewhere. Use the "sail" package instead."""
