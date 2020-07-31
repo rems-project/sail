@@ -1,1 +1,0 @@
-The mips spec. now lives at https://github.com/CTSRD-CHERI/sail-cheri-mips .
