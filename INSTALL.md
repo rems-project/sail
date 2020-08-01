@@ -3,14 +3,14 @@
 First, install opam (the OCaml package manager) if you haven't already. You can use your system's package
 manager e.g. `sudo apt-get install opam` (on Ubuntu 20.04) or follow the [instructions
 from the opam website](https://opam.ocaml.org/doc/Install.html).
-The opam version must be >= 2.0, opam 1 versions are no longer supported. On older Ubuntu versions you will not be able to use opam from the package manager, and will need to install it following the instructions on the opam website.
+The opam version must be >= 2.0; opam 1 versions are no longer supported. On older Ubuntu versions you will not be able to use opam from the package manager, and will need to install it following the instructions on the opam website.
 
-Use `ocaml -version` to check your OCaml version. If you do not have OCaml 4.06.1 or newer then use `opam switch` to install it e.g. (if you do have a newer version, you should keep using that version and not downgrade):
+Use `ocaml -version` to check your OCaml version. If have OCaml 4.06.1 or newer, that's fine, otherwise use `opam switch` to install 4.06.1:
 ```
 opam switch create 4.06.1
 ```
 
-Then set up the environment for the OCaml we just installed (note that older versions of opam suggest backticks instead of `$(...)`, but it makes no difference):
+and set up the environment for that OCaml version (note that older versions of opam suggest backticks instead of `$(...)`, but it makes no difference):
 ```
 eval $(opam config env)
 ```

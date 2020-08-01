@@ -27,7 +27,7 @@ models; see the most recent papers and the ARMv8.5-A model for
 descriptions of the current state.
 <p>
 
-  <img src="https://www.cl.cam.ac.uk/~pes20/sail/overview-sail.png">
+  <img width="500" src="https://www.cl.cam.ac.uk/~pes20/sail/overview-sail.png">
 <p>
 
 This repository contains the implementation of Sail, together with
