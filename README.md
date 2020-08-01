@@ -141,10 +141,20 @@ The models in separate repositories are licensed as described in each.
 
 ## Funding 
 
-This software was developed within the Rigorous Engineering of
-Mainstream Systems (REMS) project, partly funded by EPSRC grant
-EP/K008528/1, at the Universities of Cambridge and Edinburgh.
+This work was partially supported by EPSRC grant EP/K008528/1 <a href="http://www.cl.cam.ac.uk/users/pes20/rems">REMS: Rigorous Engineering for
+  Mainstream Systems</a>,
+an ARM iCASE award, and EPSRC IAA KTF funding.
+This project has received funding from the European Research Council
+(ERC) under the European Union’s Horizon 2020 research and innovation programme (grant agreement No 789108).
 
-This software was developed by SRI International and the University of
-Cambridge Computer Laboratory (Department of Computer Science and
-Technology) under DARPA/AFRL contract FA8650-18-C-7809 ("CIFV").
+Approved for public release; distribution is unlimited. This research
+is sponsored by the Defense Advanced Research Projects Agency (DARPA)
+and the Air Force Research Laboratory (AFRL), under contracts
+FA8750-10-C-0237 ("CTSRD") and FA8650-18-C-7809 ("CIFV"). The views,
+opinions, and/or findings contained in these articles OR presentations are
+those of the author(s)/presenter(s) and should not be interpreted as
+representing the official views or policies of the Department of
+Defense or the U.S. Government.
+
+
+
