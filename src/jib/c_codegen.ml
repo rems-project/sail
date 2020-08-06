@@ -355,7 +355,8 @@ let rec sgen_cval ctx = function
   | V_call (op, cvals) -> sgen_call ctx op cvals
   | V_field (f, field) -> 
     begin match f with
-    | V_id (Global (id, _), ctyp) -> sprintf "state_get_%s_in_%s(state)" (sgen_uid field) (sgen_id id) 
+    | V_id (Global (id, _), ctyp) when is_api_ctyp ctyp ->
+       sprintf "state_get_%s_in_%s(state)" (sgen_uid field) (sgen_id id)
     | _ -> sprintf "%s.%s" (sgen_cval ctx f) (sgen_uid field)
     end
   | V_tuple_member (f, _, n) ->
@@ -1543,11 +1544,18 @@ let codegen_state_struct_def ctx = function
 
 let codegen_state_api_struct id ctyp =
   match ctyp with
-  | CT_struct (_, fields) -> separate_map hardline (fun ((fid, _), ctyp) -> if is_api_ctyp ctyp then 
-    string (Printf.sprintf "static inline void state_set_%s_in_%s(sail_state* st, %s u) { st->%s.%s = u; }" (sgen_id fid) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id) (sgen_id fid))
-    ^^ hardline ^^
-    string (Printf.sprintf "static inline %s state_get_%s_in_%s(sail_state* st) { return st->%s.%s; }" (sgen_ctyp ctyp) (sgen_id fid) (sgen_id id) (sgen_id id) (sgen_id fid))
-    else empty) fields ^^ hardline
+  | CT_struct (_, fields) ->
+     let codegen_state_api_field ((fid, _), ctyp) =
+       if is_api_ctyp ctyp then
+         ksprintf string "static inline void state_set_%s_in_%s(sail_state* st, %s u) { st->%s.%s = u; }"
+           (sgen_id fid) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id) (sgen_id fid)
+         ^^ hardline
+         ^^ ksprintf string "static inline %s state_get_%s_in_%s(sail_state* st) { return st->%s.%s; }"
+              (sgen_ctyp ctyp) (sgen_id fid) (sgen_id id) (sgen_id id) (sgen_id fid)
+       else
+         empty
+     in
+     separate_map hardline codegen_state_api_field fields ^^ hardline
   | _ -> empty
 
 let codegen_state_api_vector id ctyp vctyp =
