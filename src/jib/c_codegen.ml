@@ -96,6 +96,10 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_poly -> true
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
 
+(** For now, the types that can be used in the state API are the types that fits on the stack.
+    In the future, this can be expanded to support more complex types if needed. *)
+let is_api_ctyp = is_stack_ctyp
+
 let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1), true), CT_fbits (i, true))
 
 type codegen_options = {
@@ -230,12 +234,15 @@ let sgen_id id =
   | Some export -> export
   | None -> mangle (string_of_id id)
 
-let sgen_name =
-  function
+let sgen_name ctyp id =
+  match id with
   | Name (id, _) ->
      sgen_id id
   | Global (id, _) ->
-     sprintf "(state->%s)" (sgen_id id)
+     if is_api_ctyp ctyp then
+        sprintf "(state_get_%s(state))" (sgen_id id)
+     else
+        sprintf "(state->%s)" (sgen_id id)
   | Have_exception _ ->
      "(state->have_exception)"
   | Return _ ->
@@ -343,11 +350,14 @@ let rec sgen_value = function
 
 let rec sgen_cval ctx = function
   | V_id (id, ctyp) ->
-     sgen_name id
+     sgen_name ctyp id
   | V_lit (vl, ctyp) -> sgen_value vl
   | V_call (op, cvals) -> sgen_call ctx op cvals
-  | V_field (f, field) ->
-     sprintf "%s.%s" (sgen_cval ctx f) (sgen_uid field)
+  | V_field (f, field) -> 
+    begin match f with
+    | V_id (Global (id, _), ctyp) -> sprintf "state_get_%s_in_%s(state)" (sgen_uid field) (sgen_id id) 
+    | _ -> sprintf "%s.%s" (sgen_cval ctx f) (sgen_uid field)
+    end
   | V_tuple_member (f, _, n) ->
      sprintf "%s.%s" (sgen_cval ctx f) (mangle ("tup" ^ string_of_int n))
   | V_ctor_kind (f, ctor, unifiers, _) ->
@@ -532,25 +542,70 @@ let sgen_cval_param ctx cval =
   | _ ->
      sgen_cval ctx cval
 
-let rec sgen_clexp ctx = function
+let rec sgen_clexp_state_api = function
+  | CL_id (Global (id, _), _) -> sgen_id id
+  | CL_field (clexp, field) -> sgen_uid field ^ "_in_" ^ sgen_clexp_state_api clexp 
+  | _ -> assert false
+
+let sgen_cval_state_api = function
+  | V_id (Global (id, _), ctyp) -> sgen_id id
+  | _ -> assert false
+
+let rec is_state_api_cval = function
+  | V_id (Global (id, _), ctyp) ->
+    begin match ctyp with 
+    | CT_vector (_, vctyp) -> is_api_ctyp vctyp
+    | CT_fvector (_, _, vctyp) -> is_api_ctyp vctyp
+    | _ when is_api_ctyp ctyp -> true
+    | _ -> false
+    end
+  | V_field (clexp, field) -> is_state_api_cval clexp
+  | _ -> false
+
+let rec is_state_api_clexp = function
+  | CL_id (Global (id, _), ctyp) ->
+    begin match ctyp with 
+    | CT_vector (_, vctyp) -> is_api_ctyp vctyp
+    | CT_fvector (_, _, vctyp) -> is_api_ctyp vctyp
+    | _ when is_api_ctyp ctyp -> true
+    | _ -> false
+    end
+  | CL_field (clexp, field) -> is_state_api_clexp clexp
+  | _ -> false
+
+let rec sgen_clexp ctx clexp =
+  match clexp with
   | CL_id (Have_exception _, _) -> "(state->have_exception)"
   | CL_id (Current_exception _, _) -> "(state->current_exception)"
   | CL_id (Throw_location _, _) -> "(state->throw_location)"
   | CL_id (Return _, _) -> assert false
-  | CL_id (Global (id, _), _) -> "&(state->" ^ sgen_id id ^ ")"
+  | CL_id (Global (id, _), _) -> 
+    let ctyp = clexp_ctyp clexp in
+    if is_api_ctyp ctyp then
+      "(state_get_" ^ sgen_id id ^ "(state))"
+    else
+      "&(state->" ^ sgen_id id ^ ")"
   | CL_id (Name (id, _), _) -> "&" ^ sgen_id id
-  | CL_field (clexp, field) -> "&((" ^ sgen_clexp ctx clexp ^ ")->" ^ sgen_uid field ^ ")"
+  | CL_field (clexp, field) ->
+     begin match clexp with
+     | CL_id (Global (id, _), ctyp) when is_api_ctyp ctyp -> "(state_get_ " ^ sgen_uid field ^ "_in_" ^ sgen_clexp_state_api clexp ^ "(state))"
+     | _ -> "&((" ^ sgen_clexp ctx clexp ^ ")->" ^ sgen_uid field ^ ")"
+     end
   | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp ctx clexp ^ ")->" ^ mangle ("tup" ^ string_of_int n) ^ ")"
   | CL_addr clexp -> "(*(" ^ sgen_clexp ctx clexp ^ "))"
   | CL_void -> assert false
   | CL_rmw _ -> assert false
 
-let rec sgen_clexp_pure ctx = function
+let rec sgen_clexp_pure ctx clexp =
+  match clexp with
   | CL_id (Have_exception _, _) -> "(state->have_exception)"
   | CL_id (Current_exception _, _) -> "(state->current_exception)"
   | CL_id (Throw_location _, _) -> "(state->throw_location)"
   | CL_id (Return _, _) -> assert false
-  | CL_id (Global (id, _), _) -> "state->" ^ sgen_id id
+  | CL_id (Global (id, _), _) ->
+    let ctyp = clexp_ctyp clexp in
+    assert (not (is_api_ctyp ctyp));
+      "state->" ^ sgen_id id
   | CL_id (Name (id, _), _) -> sgen_id id
   | CL_field (clexp, field) -> sgen_clexp_pure ctx clexp ^ "." ^ sgen_uid field
   | CL_tuple (clexp, n) -> sgen_clexp_pure ctx clexp ^ "." ^ mangle ("tup" ^ string_of_int n)
@@ -569,7 +624,10 @@ let rec codegen_conversion l ctx clexp cval =
   (* When both types are equal, we don't need any conversion. *)
   | _, _ when ctyp_equal ctyp_to ctyp_from ->
      if is_stack_ctyp ctyp_to then
-       ksprintf string "  %s = %s;" (sgen_clexp_pure ctx clexp) (sgen_cval ctx cval)
+       if is_state_api_clexp clexp then
+         ksprintf string "  state_set_%s(state, %s);" (sgen_clexp_state_api clexp) (sgen_cval ctx cval)
+       else
+         ksprintf string "  %s = %s;" (sgen_clexp_pure ctx clexp) (sgen_cval ctx cval)
      else
        ksprintf string "  COPY(%s)(%s, %s);" (sgen_ctyp_name ctyp_to) (sgen_clexp ctx clexp) (sgen_cval ctx cval)
 
@@ -590,6 +648,10 @@ let rec codegen_conversion l ctx clexp cval =
 
   (* For anything not special cased, just try to call a appropriate CONVERT_OF function. *)
   | _, _ when is_stack_ctyp (clexp_ctyp clexp) ->
+    if is_state_api_clexp clexp then
+     ksprintf string "  state_set_%s(state, CONVERT_OF(%s, %s)(%s));"
+       (sgen_clexp_state_api clexp) (sgen_ctyp_name ctyp_to) (sgen_ctyp_name ctyp_from) (sgen_cval_param ctx cval)
+    else
      ksprintf string "  %s = CONVERT_OF(%s, %s)(%s);"
        (sgen_clexp_pure ctx clexp) (sgen_ctyp_name ctyp_to) (sgen_ctyp_name ctyp_from) (sgen_cval_param ctx cval)
   | _, _ ->
@@ -607,10 +669,10 @@ let extra_arguments is_extern =
 let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
   match instr with
   | I_decl (ctyp, id) when is_stack_ctyp ctyp ->
-     ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_name id)
+     ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_name ctyp id)
   | I_decl (ctyp, id) ->
-     ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_name id) ^^ hardline
-     ^^ ksprintf string "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name id)
+     ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_name ctyp id) ^^ hardline
+     ^^ ksprintf string "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name ctyp id)
 
   | I_copy (clexp, cval) -> codegen_conversion l ctx clexp cval
 
@@ -650,11 +712,11 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        else
          (sgen_function_uid f, false)
      in
-     let sail_state_arg =
-       if is_extern && StringSet.mem fname O.opts.state_primops then
+     let sail_state_arg : string ref = ref 
+       (if is_extern && StringSet.mem fname O.opts.state_primops then
          "sail_state *state, "
        else
-         ""
+         "")
      in
      let fname =
        match fname, ctyp with
@@ -677,6 +739,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | "vector_access", CT_bit -> "bitvector_access"
        | "vector_access", _ ->
           begin match args with
+          | cval :: _  when is_state_api_cval cval -> sail_state_arg := "state, "; sprintf "state_vector_access_%s" (sgen_cval_state_api cval) 
           | cval :: _ -> sprintf "vector_access_%s" (sgen_ctyp_name (cval_ctyp cval))
           | _ -> Reporting.unreachable l __POS__ "vector access function with bad arity."
           end
@@ -684,7 +747,11 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
        | "vector_subrange", _ -> sprintf "vector_subrange_%s" (sgen_ctyp_name ctyp)
        | "vector_update", CT_fbits _ -> "update_fbits"
        | "vector_update", CT_lbits _ -> "update_lbits"
-       | "vector_update", _ -> sprintf "vector_update_%s" (sgen_ctyp_name ctyp)
+       | "vector_update", _ -> if is_state_api_clexp x then (
+                                 sail_state_arg := "state, ";
+                                 sprintf "state_vector_update_%s" (sgen_clexp_state_api x))
+                               else
+                                 sprintf "vector_update_%s" (sgen_ctyp_name ctyp)
        | "string_of_bits", _ ->
           begin match cval_ctyp (List.nth args 0) with
           | CT_fbits _ -> "string_of_fbits"
@@ -713,14 +780,17 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
          ksprintf string "  COPY(%s)(&%s, *(%s));" (sgen_ctyp_name ctyp) (sgen_clexp_pure ctx x) c_args
      else
        if is_stack_ctyp ctyp then
-         ksprintf string "  %s = %s(%s%s%s);" (sgen_clexp_pure ctx x) fname sail_state_arg (extra_arguments is_extern) c_args
+          if is_state_api_clexp x then
+            ksprintf string "  state_set_%s(state, %s(%s%s%s));" (sgen_clexp_state_api x) fname !sail_state_arg (extra_arguments is_extern) c_args
+          else
+            ksprintf string "  %s = %s(%s%s%s);" (sgen_clexp_pure ctx x) fname !sail_state_arg (extra_arguments is_extern) c_args
        else
-         ksprintf string "  %s(%s%s%s, %s);" fname sail_state_arg (extra_arguments is_extern) (sgen_clexp ctx x) c_args
+         ksprintf string "  %s(%s%s%s, %s);" fname !sail_state_arg (extra_arguments is_extern) (sgen_clexp ctx x) c_args
 
   | I_clear (ctyp, id) when is_stack_ctyp ctyp ->
      empty
   | I_clear (ctyp, id) ->
-     ksprintf string "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name id)
+     ksprintf string "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name ctyp id)
 
   | I_init (ctyp, id, cval) ->
      codegen_instr fid ctx (idecl ctyp id) ^^ hardline
@@ -731,9 +801,9 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      ^^ codegen_conversion Parse_ast.Unknown ctx (CL_id (id, ctyp)) cval
 
   | I_reset (ctyp, id) when is_stack_ctyp ctyp ->
-     ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_name id)
+     ksprintf string "  %s %s;" (sgen_ctyp ctyp) (sgen_name ctyp id)
   | I_reset (ctyp, id) ->
-     ksprintf string "  RECREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name id)
+     ksprintf string "  RECREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name ctyp id)
 
   | I_return cval ->
      ksprintf string "  return %s;" (sgen_cval ctx cval)
@@ -760,8 +830,8 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
             sprintf ".%s = %s" (mangle ("tup" ^ string_of_int n)) init :: inits, prev @ prev'
           in
           let inits, prev = List.fold_left fold ([], []) (List.mapi (fun i x -> (i, x)) ctyps) in
-          sgen_name gs,
-          [sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_name gs)
+          sgen_name ctyp gs,
+          [sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_name ctyp gs)
            ^ Util.string_of_list ", " (fun x -> x) inits ^ " };"] @ prev
        | CT_struct (id, ctors) when is_stack_ctyp ctyp ->
           let gs = ngensym () in
@@ -770,8 +840,8 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
             sprintf ".%s = %s" (sgen_uid uid) init :: inits, prev @ prev'
           in
           let inits, prev = List.fold_left fold ([], []) ctors in
-          sgen_name gs,
-          [sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_name gs)
+          sgen_name ctyp gs,
+          [sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_name ctyp gs)
            ^ Util.string_of_list ", " (fun x -> x) inits ^ " };"] @ prev
        | ctyp -> Reporting.unreachable l __POS__ ("Cannot create undefined value for type: " ^ string_of_ctyp ctyp)
      in
@@ -1154,7 +1224,13 @@ let codegen_vector_header ctx id (direction, ctyp) =
     string (Printf.sprintf "struct %s {\n  size_t len;\n  %s *data;\n};\n" (sgen_id id) (sgen_ctyp ctyp))
     ^^ string (Printf.sprintf "typedef struct %s %s;" (sgen_id id) (sgen_id id))
   in
-  vector_typedef ^^ twice hardline
+  vector_typedef ^^ hardline ^^
+  string (Printf.sprintf "void vector_update_%s(%s *rop, %s op, sail_int n, %s elem);" (sgen_id id) (sgen_id id) (sgen_id id) (sgen_ctyp ctyp)) ^^ hardline ^^
+  if is_stack_ctyp ctyp then
+    string (Printf.sprintf "%s vector_access_%s(%s op, sail_int n);" (sgen_ctyp ctyp) (sgen_id id) (sgen_id id))
+  else
+    string (Printf.sprintf "static void vector_access_%s(%s *rop, %s op, sail_int n);" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
+  ^^ twice hardline
 
 let codegen_vector_body ctx id (direction, ctyp) =
   let vector_init =
@@ -1184,7 +1260,7 @@ let codegen_vector_body ctx id (direction, ctyp) =
     ^^ string "}"
   in
   let vector_update =
-    string (Printf.sprintf "static void vector_update_%s(%s *rop, %s op, sail_int n, %s elem) {\n" (sgen_id id) (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
+    string (Printf.sprintf "void vector_update_%s(%s *rop, %s op, sail_int n, %s elem) {\n" (sgen_id id) (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
     ^^ string "  int m = sail_int_get_ui(n);\n"
     ^^ string "  if (rop->data == op.data) {\n"
     ^^ string (if is_stack_ctyp ctyp then
@@ -1210,7 +1286,7 @@ let codegen_vector_body ctx id (direction, ctyp) =
   in
   let vector_access =
     if is_stack_ctyp ctyp then
-      string (Printf.sprintf "static %s vector_access_%s(%s op, sail_int n) {\n" (sgen_ctyp ctyp) (sgen_id id) (sgen_id id))
+      string (Printf.sprintf "%s vector_access_%s(%s op, sail_int n) {\n" (sgen_ctyp ctyp) (sgen_id id) (sgen_id id))
       ^^ string "  int m = sail_int_get_ui(n);\n"
       ^^ string "  return op.data[m];\n"
       ^^ string "}"
@@ -1291,13 +1367,13 @@ let is_decl = function
 
 let codegen_decl = function
   | I_aux (I_decl (ctyp, id), _) ->
-     string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_name id))
+     string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_name ctyp id))
   | _ -> assert false
 
 let codegen_alloc = function
   | I_aux (I_decl (ctyp, id), _) when is_stack_ctyp ctyp -> empty
   | I_aux (I_decl (ctyp, id), _) ->
-     string (Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name id))
+     string (Printf.sprintf "  CREATE(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name ctyp id))
   | _ -> assert false
 
 let add_local_labels instrs =
@@ -1465,6 +1541,40 @@ let codegen_state_struct_def ctx = function
 
   | _ -> empty
 
+let codegen_state_api_struct id ctyp =
+  match ctyp with
+  | CT_struct (_, fields) -> separate_map hardline (fun ((fid, _), ctyp) -> if is_api_ctyp ctyp then 
+    string (Printf.sprintf "static inline void state_set_%s_in_%s(sail_state* st, %s u) { st->%s.%s = u; }" (sgen_id fid) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id) (sgen_id fid))
+    ^^ hardline ^^
+    string (Printf.sprintf "static inline %s state_get_%s_in_%s(sail_state* st) { return st->%s.%s; }" (sgen_ctyp ctyp) (sgen_id fid) (sgen_id id) (sgen_id id) (sgen_id fid))
+    else empty) fields ^^ hardline
+  | _ -> empty
+
+let codegen_state_api_vector id ctyp vctyp =
+  string (Printf.sprintf "static inline void state_vector_update_%s(sail_state* st, %s *rop, %s op, sail_int n, %s elem) { vector_update_%s(rop, op, n, elem); }"
+  (sgen_id id) (sgen_ctyp ctyp) (sgen_ctyp ctyp) (sgen_ctyp vctyp) (sgen_ctyp ctyp)) ^^ hardline ^^
+  string (Printf.sprintf "static inline %s state_vector_access_%s(sail_state* st, %s op, sail_int n) { return vector_access_%s(op, n); }"
+  (sgen_ctyp vctyp) (sgen_id id) (sgen_ctyp ctyp) (sgen_ctyp ctyp))  ^^ hardline
+
+let codegen_state_api_reg_dec id ctyp =
+  begin match ctyp with
+  | _ when is_api_ctyp ctyp ->
+    ksprintf string "static inline %s state_get_%s(sail_state* st) { return st->%s; }" (sgen_ctyp ctyp) (sgen_id id) (sgen_id id) ^^ hardline ^^ 
+    ksprintf string "static inline void state_set_%s(sail_state* st, %s n) { st->%s = n; }" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id) ^^ hardline ^^
+    codegen_state_api_struct id ctyp
+  | CT_vector (_, vctyp) when is_api_ctyp vctyp -> codegen_state_api_vector id ctyp vctyp 
+  | CT_fvector (_, _, vctyp) when is_api_ctyp vctyp -> codegen_state_api_vector id ctyp vctyp 
+  | _ -> empty
+  end
+
+let codegen_state_api ctx = function
+| CDEF_reg_dec (id, ctyp, _) -> codegen_state_api_reg_dec id ctyp
+| CDEF_let (_, [], _) -> empty
+| CDEF_let (_, bindings, _) ->
+    separate_map hardline (fun (id, ctyp) -> codegen_state_api_reg_dec id ctyp) bindings 
+    ^^ hardline
+| _ -> empty
+
 let codegen_state_struct ctx cdefs =
   string "struct sail_state {" ^^ hardline
   ^^ concat_map (codegen_state_struct_def ctx) cdefs
@@ -1477,7 +1587,8 @@ let codegen_state_struct ctx cdefs =
         ^^ string "    sail_string *throw_location;" ^^ hardline
      ))
   ^^ concat_map (fun str -> string ("  " ^ str) ^^ hardline) O.opts.extra_state
-  ^^ string "};"
+  ^^ string "};" ^^ hardline ^^ hardline
+  ^^ concat_map (codegen_state_api ctx) cdefs
 
 let is_cdef_startup = function
   | CDEF_startup _ -> true
