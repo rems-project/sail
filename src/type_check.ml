@@ -1156,7 +1156,7 @@ end = struct
 
   let add_toplevel_lets ids env =
     { env with top_letbinds = IdSet.union ids env.top_letbinds }
-
+ 
   let get_toplevel_lets env = env.top_letbinds
 
   let add_variant id variant env =
@@ -4909,23 +4909,31 @@ and propagate_lexp_effect_aux = function
 (* 7. Checking toplevel definitions                                       *)
 (**************************************************************************)
 
+let check_duplicate_letbinding l pat env =
+  match IdSet.choose_opt (IdSet.inter (pat_ids pat) (Env.get_toplevel_lets env)) with
+  | Some id ->
+     typ_error env l ("Duplicate toplevel let binding " ^ string_of_id id)
+  | None -> ()
+     
 let check_letdef orig_env (LB_aux (letbind, (l, _))) =
-  typ_print (lazy "\nChecking top-level let");
+  typ_print (lazy ("\nChecking top-level let" |> cyan |> clear));
   begin
     match letbind with
     | LB_val (P_aux (P_typ (typ_annot, _), _) as pat, bind) ->
+       check_duplicate_letbinding l pat orig_env;
        let checked_bind = propagate_exp_effect (crule check_exp orig_env (strip_exp bind) typ_annot) in
        let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) typ_annot in
        if (BESet.is_empty (effect_set (effect_of checked_bind)) || !opt_no_effects)
        then
-         [DEF_val (LB_aux (LB_val (tpat, checked_bind), (l, None)))], Env.add_toplevel_lets (pat_ids tpat) env
+         [DEF_val (LB_aux (LB_val (tpat, checked_bind), (l, None)))], Env.add_toplevel_lets l (pat_ids tpat) env
        else typ_error env l ("Top-level definition with effects " ^ string_of_effect (effect_of checked_bind))
     | LB_val (pat, bind) ->
+       check_duplicate_letbinding l pat orig_env;
        let inferred_bind = propagate_exp_effect (irule infer_exp orig_env (strip_exp bind)) in
        let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) (typ_of inferred_bind) in
        if (BESet.is_empty (effect_set (effect_of inferred_bind)) || !opt_no_effects)
        then
-         [DEF_val (LB_aux (LB_val (tpat, inferred_bind), (l, None)))], Env.add_toplevel_lets (pat_ids tpat) env
+         [DEF_val (LB_aux (LB_val (tpat, inferred_bind), (l, None)))], Env.add_toplevel_lets l (pat_ids tpat) env
        else typ_error env l ("Top-level definition with effects " ^ string_of_effect (effect_of inferred_bind))
   end
 
