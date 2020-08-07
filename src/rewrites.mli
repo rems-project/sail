@@ -85,6 +85,7 @@ val rewrite_lit_lem : lit -> bool
 type rewriter_arg =
   | If_mono_arg
   | If_mwords_arg
+  | If_flag of bool ref
   | Bool_arg of bool
   | String_arg of string
   | Literal_arg of string

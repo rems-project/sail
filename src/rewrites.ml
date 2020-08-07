@@ -4878,6 +4878,11 @@ let if_mwords f env defs =
 let if_mwords_env f env defs =
   if !Pretty_print_lem.opt_mwords then f env defs else if_mono_env f env defs
 
+let if_flag flag f env defs =
+  if !flag then f env defs else defs
+let if_flag_env flag f env defs =
+  if !flag then f env defs else defs, env
+
 type rewriter =
   | Basic_rewriter of (Env.t -> tannot defs -> tannot defs)
   | Checking_rewriter of (Env.t -> tannot defs -> tannot defs * Env.t)
@@ -4888,6 +4893,7 @@ type rewriter =
 type rewriter_arg =
   | If_mono_arg
   | If_mwords_arg
+  | If_flag of bool ref
   | Bool_arg of bool
   | String_arg of string
   | Literal_arg of string
@@ -4904,8 +4910,10 @@ let instantiate_rewrite rewriter args =
     match rewriter, arg with
     | Basic_rewriter rw, If_mono_arg -> Basic_rewriter (if_mono rw)
     | Basic_rewriter rw, If_mwords_arg -> Basic_rewriter (if_mwords rw)
+    | Basic_rewriter rw, If_flag flag -> Basic_rewriter (if_flag flag rw)
     | Checking_rewriter rw, If_mono_arg -> Checking_rewriter (if_mono_env rw)
     | Checking_rewriter rw, If_mwords_arg -> Checking_rewriter (if_mwords_env rw)
+    | Checking_rewriter rw, If_flag flag -> Checking_rewriter (if_flag_env flag rw)
     | Bool_rewriter rw, Bool_arg b -> rw b
     | String_rewriter rw, String_arg str -> rw str
     | Literal_rewriter rw, Literal_arg selector -> rw (selector_function selector)
@@ -4979,8 +4987,8 @@ let rewrites_lem = [
     ("toplevel_string_append", []);
     ("pat_string_append", []);
     ("mapping_builtins", []);
-    ("mono_rewrites", []);
-    ("recheck_defs", [If_mono_arg]);
+    ("mono_rewrites", [If_flag opt_mono_rewrites]);
+    ("recheck_defs", [If_flag opt_mono_rewrites]);
     ("undefined", [Bool_arg false]);
     ("toplevel_consts", [String_arg "lem"; If_mwords_arg]);
     ("toplevel_nexps", [If_mono_arg]);
@@ -5103,8 +5111,8 @@ let rewrites_c = [
     ("toplevel_string_append", []);
     ("pat_string_append", []);
     ("mapping_builtins", []);
-    ("mono_rewrites", [If_mono_arg]);
-    ("recheck_defs", [If_mono_arg]);
+    ("mono_rewrites", [If_flag opt_mono_rewrites]);
+    ("recheck_defs", [If_flag opt_mono_rewrites]);
     ("toplevel_nexps", [If_mono_arg]);
     ("monomorphise", [String_arg "c"; If_mono_arg]);
     ("atoms_to_singletons", [String_arg "c"; If_mono_arg]);
