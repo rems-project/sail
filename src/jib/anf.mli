@@ -152,6 +152,8 @@ val map_functions : (Env.t -> Ast.l -> id -> ('a aval) list -> 'a -> 'a aexp_aux
 
 val fold_aexp : ('a aexp -> 'a aexp) -> 'a aexp -> 'a aexp
 
+val aexp_bindings : 'a aexp -> IdSet.t
+  
 (** Remove all variable shadowing in an ANF expression *)
 val no_shadow : IdSet.t -> 'a aexp -> 'a aexp
 

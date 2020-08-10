@@ -1297,9 +1297,12 @@ let compile_funcl ctx id pat guard exp =
     List.fold_left2 (fun ctx (id, _) ctyp -> { ctx with locals = Bindings.add id (Immutable, ctyp) ctx.locals }) ctx compiled_args arg_ctyps
   in
 
+  let guard_bindings = ref IdSet.empty in
   let guard_instrs = match guard with
     | Some guard ->
-       let guard_aexp = C.optimize_anf ctx (no_shadow (pat_ids pat) (anf guard)) in
+       let guard = anf guard in
+       guard_bindings := aexp_bindings guard;
+       let guard_aexp = C.optimize_anf ctx (no_shadow (pat_ids pat) guard) in
        let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard_aexp in
        let guard_label = label "guard_" in
        let gs = ngensym () in
@@ -1316,7 +1319,7 @@ let compile_funcl ctx id pat guard exp =
   in
 
   (* Optimize and compile the expression to ANF. *)
-  let aexp = C.optimize_anf ctx (no_shadow (pat_ids pat) (anf exp)) in
+  let aexp = C.optimize_anf ctx (no_shadow (IdSet.union (pat_ids pat) !guard_bindings) (anf exp)) in
   
   let setup, call, cleanup = compile_aexp ctx aexp in
   let destructure, destructure_cleanup =

@@ -1156,7 +1156,7 @@ end = struct
 
   let add_toplevel_lets ids env =
     { env with top_letbinds = IdSet.union ids env.top_letbinds }
- 
+
   let get_toplevel_lets env = env.top_letbinds
 
   let add_variant id variant env =
