@@ -717,6 +717,10 @@ let rec doc_scattered (SD_aux (sd_aux, _)) =
   | SD_unioncl (id, tu) ->
      separate space [string "union clause"; doc_id id; equals; doc_union tu]
 
+let doc_filter = function
+  | DEF_pragma ("file_start", _, _) | DEF_pragma ("file_end", _, _) -> false
+  | _ -> true
+    
 let rec doc_def def = group (match def with
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
@@ -744,7 +748,7 @@ let rec doc_def def = group (match def with
   ) ^^ hardline
 
 let doc_defs (Defs(defs)) =
-  separate_map hardline doc_def defs
+  separate_map hardline doc_def (List.filter doc_filter defs)
 
 let pp_defs f d = ToChannel.pretty 1. 80 f (doc_defs d)
 

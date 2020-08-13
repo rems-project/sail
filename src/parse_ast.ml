@@ -531,4 +531,4 @@ and lexp =
 
 type 
 defs =  (* Definition sequence *)
-   Defs of (def) list
+   Defs of (string * def list) list

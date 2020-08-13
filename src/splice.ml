@@ -40,8 +40,8 @@ let filter_replacements spec_found (Defs defs) =
   in List.filter not_found defs
 
 let splice ast file =
-  let parsed_ast = Process_file.parse_file file in
-  let repl_ast = Initial_check.process_ast ~generate:false parsed_ast in
+  let parsed_ast = Process_file.parse_file file |> snd in
+  let repl_ast = Initial_check.process_ast ~generate:false (Parse_ast.Defs [(file, parsed_ast)]) in
   let repl_ast = Rewrites.move_loop_measures repl_ast in
   let repl_ast = map_defs_annot (fun (l,_) -> l,Type_check.empty_tannot) repl_ast in
   let repl_ids, repl_specs = scan_defs repl_ast in

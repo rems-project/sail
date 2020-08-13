@@ -527,3 +527,7 @@ val quant_item_subst_kid : kid -> kid -> quant_item -> quant_item
 val typquant_subst_kid : kid -> kid -> typquant -> typquant
 
 val simple_string_of_loc : Parse_ast.l -> string
+
+(** Attach comments produced by the lexer into their nearest nodes in
+   the abstract syntax tree *)
+val attach_comments : Lexer.comment list -> 'a def list -> 'a def list

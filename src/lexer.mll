@@ -186,7 +186,12 @@ let kw_table =
      ("internal_return",         (fun _ -> InternalReturn));
    ]
 
+type comment_type = Comment_block | Comment_line
 
+type comment =
+  | Comment of comment_type * Lexing.position * Lexing.position * string
+
+let comments = ref []
 
 }
 
@@ -256,8 +261,8 @@ rule token = parse
   | "=>"                                { EqGt(r "=>") }
   | "<="				{ (LtEq(r"<=")) }
   | "/*!"       { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf) }
-  | "//"        { line_comment (Lexing.lexeme_start_p lexbuf) lexbuf; token lexbuf }
-  | "/*"        { comment (Lexing.lexeme_start_p lexbuf) 0 lexbuf; token lexbuf }
+  | "//"        { line_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token lexbuf }
+  | "/*"        { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token lexbuf }
   | "*/"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
   | "$" (ident+ as i) (lchar* as f) "\n"
     { Lexing.new_line lexbuf; Pragma(i, String.trim f) }
@@ -297,9 +302,10 @@ rule token = parse
                                             Printf.sprintf "Unexpected character: %c" c,
                                             Lexing.lexeme_start_p lexbuf)) }
 
-and line_comment pos = parse
-  | "\n"                                { Lexing.new_line lexbuf; () }
-  | _                                   { line_comment pos lexbuf }
+and line_comment pos b = parse
+  | "\n"                                { Lexing.new_line lexbuf;
+                                          comments := Comment (Comment_line, pos, Lexing.lexeme_end_p lexbuf, Buffer.contents b) :: !comments }
+  | _ as c                              { Buffer.add_string b (String.make 1 c); line_comment pos b lexbuf }
   | eof                                 { raise (LexError("File ended before newline in comment", pos)) }
 
 and doc_comment pos b depth = parse
@@ -312,16 +318,19 @@ and doc_comment pos b depth = parse
   | "\n"                                { Buffer.add_string b "\n"; Lexing.new_line lexbuf; doc_comment pos b depth lexbuf }
   | _ as c                              { Buffer.add_string b (String.make 1 c); doc_comment pos b depth lexbuf }
 
-and comment pos depth = parse
-  | "/*"                                { comment pos (depth+1) lexbuf }
-  | "*/"                                { if depth = 0 then ()
-                                          else if depth > 0 then comment pos (depth-1) lexbuf
-                                          else assert false }
-  | "\n"                                { Lexing.new_line lexbuf;
-                                          comment pos depth lexbuf }
+and comment pos b depth = parse
+  | "/*"                                { comment pos b (depth + 1) lexbuf }
+  | "*/"                                { if depth = 0 then (
+                                            comments := Comment (Comment_block, pos, Lexing.lexeme_end_p lexbuf, Buffer.contents b) :: !comments
+                                          ) else (
+                                            comment pos b (depth-1) lexbuf
+                                          ) }
+  | "\n"                                { Buffer.add_string b "\n"; 
+                                          Lexing.new_line lexbuf;
+                                          comment pos b depth lexbuf }
   | '"'                                 { ignore(string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf);
-                                          comment pos depth lexbuf }
-  | _                                   { comment pos depth lexbuf }
+                                          comment pos b depth lexbuf }
+  | _ as c                              { Buffer.add_string b (String.make 1 c); comment pos b depth lexbuf }
   | eof                                 { raise (LexError("Unbalanced comment", pos)) }
 
 and string pos b = parse

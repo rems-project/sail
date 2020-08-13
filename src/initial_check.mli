@@ -103,7 +103,7 @@ val process_ast : ?generate:bool -> Parse_ast.defs -> unit defs
 val extern_of_string : id -> string -> unit def
 val val_spec_of_string : id -> string -> unit def
 val ast_of_def_string : string -> unit defs
-val ast_of_def_string_with : (Parse_ast.defs -> Parse_ast.defs) -> string -> unit defs
+val ast_of_def_string_with : (Parse_ast.def list -> Parse_ast.def list) -> string -> unit defs
 val exp_of_string : string -> unit exp
 val typ_of_string : string -> typ
 val constraint_of_string : string -> n_constraint

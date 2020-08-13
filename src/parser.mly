@@ -224,7 +224,7 @@ let rec desugar_rchain chain s e =
 %type <Parse_ast.atyp> typ_eof
 %type <Parse_ast.exp> exp_eof
 %type <Parse_ast.def> def_eof
-%type <Parse_ast.defs> file
+%type <Parse_ast.def list> file
 
 %%
 
@@ -1480,18 +1480,14 @@ defs_list:
   | def
     { [$1] }
   | def defs_list
-    { $1::$2 }
+    { $1 :: $2 }
 
 def_eof:
   | def Eof
     { $1 }
 
-defs:
-  | defs_list
-    { (Defs $1) }
-
 file:
-  | defs Eof
+  | defs_list Eof
     { $1 }
   | Eof
-    { (Defs []) }
+    { [] }

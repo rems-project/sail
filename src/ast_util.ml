@@ -2228,3 +2228,57 @@ let rec simple_string_of_loc = function
   | Parse_ast.Generated l -> "Generated(" ^ simple_string_of_loc l ^ ")"
   | Parse_ast.Range (lx1,lx2) -> "Range(" ^ string_of_lx lx1 ^ "->" ^ string_of_lx lx2 ^ ")"
   | Parse_ast.Documented (_,l) -> "Documented(_," ^ simple_string_of_loc l ^ ")"
+
+let attach_comments comments defs =
+  let open Lexing in
+  let module IntMap = Map.Make(struct type t = int let compare = compare end) in
+  let high_scores = ref IntMap.empty in
+  let uid = ref (-1) in
+
+  let comment_text (Lexer.Comment (_, _, _, text)) = text in
+  
+  let loc_distance p1 p2 =
+    abs (p1.pos_lnum - p2.pos_lnum) * 1000 + abs (p1.pos_cnum - p2.pos_cnum) in
+ 
+  let comment_distance (Lexer.Comment (_, c1, c2, _)) l =
+    match Reporting.simp_loc l with
+    | None -> None
+    | Some (p1, p2) -> Some (min (loc_distance c1 p2) (loc_distance c2 p1)) in
+  
+  let loc_width l =
+    match Reporting.simp_loc l with
+    | None -> -1
+    | Some (p1, p2) -> p1.pos_cnum - p2.pos_cnum in
+
+  let score_annot l n comment =
+    incr uid;
+    begin match comment_distance comment l with
+    | Some dist ->
+       begin match IntMap.find_opt n !high_scores with
+       | Some (best_dist, best_l, _) ->
+          if dist < best_dist || (dist = best_dist && loc_width l > loc_width best_l) then
+            high_scores := IntMap.add n (dist, l, !uid) !high_scores
+          else
+            ()
+       | None ->
+          high_scores := IntMap.add n (dist, l, !uid) !high_scores
+       end
+    | None -> ()
+    end;
+    !uid
+  in
+
+  let defs = List.map (map_def_annot (fun (l, annot) -> (l, (List.mapi (score_annot l) comments, annot)))) defs in
+
+  let attach_comment (l, (uids, annot)) =
+    let l =
+      IntMap.fold (fun n (_, _, uid) l ->
+          if List.mem uid uids then
+            Parse_ast.Documented (List.nth comments n |> comment_text, l)
+          else
+            l
+        ) !high_scores l
+    in
+    (l, annot)
+  in
+  List.map (map_def_annot attach_comment) defs

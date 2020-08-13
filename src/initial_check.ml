@@ -828,12 +828,25 @@ let rec remove_mutrec = function
   | def :: defs ->
      def :: remove_mutrec defs
 
-let to_ast ctx (P.Defs(defs)) =
-  let defs = remove_mutrec defs in
-  let defs, ctx =
-    List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def ctx def in (def @ defs, ctx)) ([], ctx) defs
+let to_ast ctx (P.Defs files) =
+  let to_ast_defs ctx (_, defs) =
+    let defs = remove_mutrec defs in
+    let defs, ctx =
+      List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def ctx def in (def @ defs, ctx)) ([], ctx) defs
+    in
+    List.rev defs, ctx
   in
-  Defs (List.rev defs), ctx
+  let wrap_file file defs =
+    [DEF_pragma ("file_start", file, P.Unknown)]
+    @ defs
+    @ [DEF_pragma ("file_end", file, P.Unknown)]
+  in
+  let defs, ctx =
+    List.fold_left (fun (defs, ctx) file ->
+        let defs', ctx = to_ast_defs ctx file in (defs @ wrap_file (fst file) defs', ctx)
+      ) ([], ctx) files
+  in
+  Defs defs, ctx
 
 let initial_ctx = {
     type_constructors =
@@ -1107,8 +1120,8 @@ let process_ast ?generate:(generate=true) defs =
 
 let ast_of_def_string_with f str =
   let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
-  process_ast (f (P.Defs [def]))
+  process_ast (P.Defs [("", f [def])])
 
 let ast_of_def_string str =
   let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
-  process_ast (P.Defs [def])
+  process_ast (P.Defs [("", [def])])

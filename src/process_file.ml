@@ -72,13 +72,15 @@ let get_lexbuf f =
                                 Lexing.pos_cnum = 0; };
   lexbuf, in_chan
 
-let parse_file ?loc:(l=Parse_ast.Unknown) (f : string) : Parse_ast.defs =
+let parse_file ?loc:(l=Parse_ast.Unknown) (f : string) : (Lexer.comment list * Parse_ast.def list) =
   try
     let lexbuf, in_chan = get_lexbuf f in
     begin
       try
-        let ast = Parser.file Lexer.token lexbuf in
-        close_in in_chan; ast
+        Lexer.comments := [];
+        let defs = Parser.file Lexer.token lexbuf in
+        close_in in_chan;
+        (!Lexer.comments, defs)
       with
       | Parser.Error ->
          let pos = Lexing.lexeme_start_p lexbuf in
@@ -155,8 +157,15 @@ let all_pragmas =
       "property";
       "counterexample";
       "suppress_warnings";
+      "include_start";
+      "include_end"
     ]
 
+let wrap_include l file defs =
+  [Parse_ast.DEF_pragma ("include_start", file, l)]
+  @ defs
+  @ [Parse_ast.DEF_pragma ("include_end", file, l)]
+  
 let rec preprocess opts = function
   | [] -> []
   | Parse_ast.DEF_pragma ("define", symbol, _) :: defs ->
@@ -197,9 +206,9 @@ let rec preprocess opts = function
          | _ -> failwith "Couldn't figure out relative path for $include. This really shouldn't ever happen."
        in
        let file = String.sub file 1 (len - 2) in
-       let (Parse_ast.Defs include_defs) = parse_file ~loc:l (Filename.concat relative file) in
-       let include_defs = preprocess opts include_defs in
-       include_defs @ preprocess opts defs
+       let include_file = Filename.concat relative file in
+       let include_defs = parse_file ~loc:l (Filename.concat relative file) |> snd |> preprocess opts in
+       wrap_include l include_file include_defs @ preprocess opts defs
      else if file.[0] = '<' && file.[len - 1] = '>' then
        let file = String.sub file 1 (len - 2) in
        let sail_dir =
@@ -212,9 +221,8 @@ let rec preprocess opts = function
               (failwith ("Library directory " ^ share_dir ^ " does not exist. Make sure sail is installed or try setting environment variable SAIL_DIR so that I can find $include " ^ file))
        in
        let file = Filename.concat sail_dir ("lib/" ^ file) in
-       let (Parse_ast.Defs include_defs) = parse_file ~loc:l file in
-       let include_defs = preprocess opts include_defs in
-       include_defs @ preprocess opts defs
+       let include_defs = parse_file ~loc:l file |> snd |> preprocess opts in
+       wrap_include l file include_defs @ preprocess opts defs
      else
        let help = "Make sure the filename is surrounded by quotes or angle brackets" in
        (Reporting.warn "" l ("Skipping bad $include " ^ file ^ ". " ^ help); preprocess opts defs)
@@ -226,6 +234,12 @@ let rec preprocess opts = function
      end;
      preprocess opts defs
 
+  (* Filter file_start and file_end out of the AST so when we
+     round-trip files through the compiler we don't end up with
+     incorrect start/end annotations *)
+  | (Parse_ast.DEF_pragma ("file_start", _, _) | Parse_ast.DEF_pragma ("file_end", _, _)) :: defs ->
+     preprocess opts defs
+ 
   | Parse_ast.DEF_pragma (p, arg, l) :: defs ->
      if not (StringSet.mem p all_pragmas) then
        Reporting.warn "" l ("Unrecognised directive: " ^ p);
@@ -239,8 +253,6 @@ let rec preprocess opts = function
      end
 
   | def :: defs -> def :: preprocess opts defs
-
-let preprocess_ast opts (Parse_ast.Defs defs) = Parse_ast.Defs (preprocess opts defs)
 
 let opt_just_check = ref false
 let opt_ddump_tc_ast = ref false
@@ -258,11 +270,7 @@ let load_files ?check:(check=false) options type_envs files =
   if !opt_memo_z3 then Constraint.load_digests () else ();
 
   let t = Profile.start () in
-  let parsed = List.map (fun f -> (f, parse_file f)) files in
-  let ast =
-    List.fold_right (fun (_, Parse_ast.Defs ast_nodes) (Parse_ast.Defs later_nodes)
-                     -> Parse_ast.Defs (ast_nodes@later_nodes)) parsed (Parse_ast.Defs []) in
-  let ast = preprocess_ast options ast in
+  let ast = Parse_ast.Defs (List.map (fun f -> (f, parse_file f |> snd |> preprocess options)) files) in
   let ast = Initial_check.process_ast ~generate:(not check) ast in
   (* The separate loop measures declarations would be awkward to type check, so
      move them into the definitions beforehand. *)
@@ -276,8 +284,8 @@ let load_files ?check:(check=false) options type_envs files =
   if !opt_memo_z3 then Constraint.save_digests () else ();
 
   let out_name = match !opt_file_out with
-    | None when parsed = [] -> "out.sail"
-    | None -> fst (List.hd parsed)
+    | None when files = [] -> "out.sail"
+    | None -> List.hd files
     | Some f -> f ^ ".sail" in
 
   (out_name, ast, type_envs)

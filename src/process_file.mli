@@ -50,13 +50,13 @@
 
 (** Parse a file. The optional loc argument is the location of the
    $include directive that is importing the file, if applicable. *)
-val parse_file : ?loc:Parse_ast.l -> string -> Parse_ast.defs
+val parse_file : ?loc:Parse_ast.l -> string -> Lexer.comment list * Parse_ast.def list
 
 val clear_symbols : unit -> unit
 val have_symbol : string -> bool
 val add_symbol : string -> unit
 
-val preprocess_ast : (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.defs -> Parse_ast.defs
+val preprocess : (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.def list -> Parse_ast.def list
 val check_ast : Type_check.Env.t -> unit Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
 val rewrite_ast_initial : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
 val rewrite_ast_target : string -> Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs * Type_check.Env.t
