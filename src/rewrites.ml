@@ -1601,6 +1601,14 @@ let rewrite_defs_early_return env (Defs defs) =
          rewrap (E_block (Util.butlast es @ [add_final_return true (Util.last es)]))
       | E_if (c, t, e) ->
          rewrap (E_if (c, add_final_return true t, add_final_return true e))
+      | E_case (e, pes) ->
+         let add_final_return_pexp = function
+           | Pat_aux (Pat_exp (p, e), a) ->
+              Pat_aux (Pat_exp (p, add_final_return true e), a)
+           | Pat_aux (Pat_when (p, g, e), a) ->
+              Pat_aux (Pat_when (p, g, add_final_return true e), a)
+         in
+         rewrap (E_case (e, List.map add_final_return_pexp pes))
       | E_let (lb, exp) ->
          rewrap (E_let (lb, add_final_return true exp))
       | E_var (lexp, e1, e2) ->
