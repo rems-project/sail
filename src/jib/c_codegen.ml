@@ -215,6 +215,17 @@ let options_from_json json cdefs =
        opts
     | json -> bad_key "extra_state" json
   in
+  let process_state_primops opts = function
+    | `String member -> { opts with state_primops = StringSet.add member opts.state_primops }
+    | json -> bad_key "state_primops" json
+  in
+  let opts = match member "state_primops" json with
+    | `List members -> List.fold_left process_state_primops opts members
+    | `Null ->
+       Reporting.simple_warn "No state_primops key in codegen json configuration";
+       opts
+    | json -> bad_key "state_primops" json
+  in
   opts
 
 module type Options = sig
@@ -715,7 +726,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      in
      let sail_state_arg : string ref = ref 
        (if is_extern && StringSet.mem fname O.opts.state_primops then
-         "sail_state *state, "
+         "state, "
        else
          "")
      in
@@ -1673,7 +1684,8 @@ let codegen ctx output_name cdefs =
     ^^ string "#include <stdbool.h>"
   in
   let sail_headers =
-    string "#include \"sail.h\"" ^^ hardline
+    string "#include \"sail_state.h\"" ^^ hardline
+    ^^ string "#include \"sail.h\"" ^^ hardline
     ^^ string "#include \"sail_failure.h\""
   in
 
@@ -1690,9 +1702,6 @@ let codegen ctx output_name cdefs =
     stdlib_headers ^^ hardline
     ^^ sail_headers ^^ hardline
     ^^ concat_map add_extra_header O.opts.extra_headers ^^ hardline
-    ^^ string "struct sail_state;" ^^ hardline
-    ^^ string "typedef struct sail_state sail_state;"
-    ^^ twice hardline
     ^^ concat docs_header
     ^^ state
     ^^ twice hardline
