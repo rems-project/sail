@@ -65,6 +65,8 @@ val rewrite_ast_check : Type_check.Env.t -> Type_check.tannot Ast.defs -> Type_c
 val opt_file_out : string option ref
 val opt_memo_z3 : bool ref
 val opt_just_check : bool ref
+val opt_reformat : string option ref
+val opt_ddump_initial_ast : bool ref
 val opt_ddump_tc_ast : bool ref
 val opt_ddump_rewrite_ast : ((string * int) option) ref
 val opt_dno_cast : bool ref

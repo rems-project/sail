@@ -161,11 +161,13 @@ let all_pragmas =
       "include_end"
     ]
 
-let wrap_include l file defs =
-  [Parse_ast.DEF_pragma ("include_start", file, l)]
-  @ defs
-  @ [Parse_ast.DEF_pragma ("include_end", file, l)]
-  
+let wrap_include l file = function
+  | [] -> []
+  | defs ->
+     [Parse_ast.DEF_pragma ("include_start", file, l)]
+     @ defs
+     @ [Parse_ast.DEF_pragma ("include_end", file, l)]
+ 
 let rec preprocess opts = function
   | [] -> []
   | Parse_ast.DEF_pragma ("define", symbol, _) :: defs ->
@@ -255,6 +257,8 @@ let rec preprocess opts = function
   | def :: defs -> def :: preprocess opts defs
 
 let opt_just_check = ref false
+let opt_reformat = ref None
+let opt_ddump_initial_ast = ref false
 let opt_ddump_tc_ast = ref false
 let opt_ddump_rewrite_ast = ref None
 let opt_dno_cast = ref false
@@ -272,6 +276,15 @@ let load_files ?check:(check=false) options type_envs files =
   let t = Profile.start () in
   let ast = Parse_ast.Defs (List.map (fun f -> (f, parse_file f |> snd |> preprocess options)) files) in
   let ast = Initial_check.process_ast ~generate:(not check) ast in
+  let () = if !opt_ddump_initial_ast then Pretty_print_sail.pp_defs stdout ast else () in
+
+  begin match !opt_reformat with
+  | Some dir ->
+     Pretty_print_sail.reformat dir ast;
+     exit 0
+  | None -> ()
+  end;
+  
   (* The separate loop measures declarations would be awkward to type check, so
      move them into the definitions beforehand. *)
   let ast = Rewrites.move_loop_measures ast in

@@ -53,6 +53,7 @@ open Ast_util
 open PPrint
 
 let opt_use_heuristics = ref false
+let opt_insert_braces = ref false
 
 module Big_int = Nat_big_num
 
@@ -397,6 +398,12 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_app_infix _ -> doc_infix 0 exp
   | E_tuple exps -> parens (separate_map (comma ^^ space) doc_exp exps)
 
+  | E_if (if_exp, then_exp, else_exp) when !opt_insert_braces ->
+     separate space [string "if"; doc_exp if_exp; string "then"] ^^ space
+     ^^ doc_exp_as_block then_exp
+     ^^ space ^^ string "else" ^^ space
+     ^^ doc_exp_as_block else_exp
+    
   (* Various rules to try to format if blocks nicely based on content *)
   | E_if (if_exp, then_exp, else_exp) when if_block_then then_exp && if_block_else else_exp ->
      (separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp)
@@ -428,7 +435,8 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp exp; doc_pexps pexps]
   | E_let (LB_aux (LB_val (pat, binding), _), exp) ->
-     separate space [string "let"; doc_pat pat; equals; doc_exp binding; string "in"; doc_exp exp]
+     separate space [string "let"; doc_pat pat; equals; doc_exp binding; string "in"]
+     ^//^ doc_exp exp
   | E_internal_plet (pat, exp1, exp2) ->
      let le =
        prefix 2 1
@@ -519,6 +527,8 @@ and doc_block = function
   | [] -> string "()"
   | [E_aux (E_let (LB_aux (LB_val (pat, binding), _), E_aux (E_block exps, _)), _)] ->
      separate space [string "let"; doc_pat pat; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block exps
+  | [E_aux (E_let (LB_aux (LB_val (pat, binding), _), exp), _)] ->
+     separate space [string "let"; doc_pat pat; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block [exp]
   | [E_aux (E_var (lexp, binding, E_aux (E_block exps, _)), _)] ->
      separate space [string "var"; doc_lexp lexp; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block exps
   | [exp] -> doc_exp exp
@@ -548,13 +558,19 @@ and doc_letbind (LB_aux (lb_aux, _)) =
   match lb_aux with
   | LB_val (pat, exp) ->
      separate space [doc_pat pat; equals; doc_exp exp]
-
+and doc_exp_as_block (E_aux (aux, _) as exp) =
+  match aux with
+  | E_block _ | E_lit _ -> doc_exp exp
+  | _ when !opt_insert_braces ->
+     group (lbrace ^^ nest 4 (hardline ^^ doc_block [exp]) ^^ hardline ^^ rbrace)
+  | _ -> doc_exp exp
+ 
 let doc_funcl (FCL_aux (FCL_Funcl (id, Pat_aux (pexp,_)), _)) =
   match pexp with
   | Pat_exp (pat,exp) ->
-     group (separate space [doc_id id; doc_pat pat; equals; doc_exp exp])
+     group (separate space [doc_id id; doc_pat pat; equals; doc_exp_as_block exp])
   | Pat_when (pat,wh,exp) ->
-     group (separate space [doc_id id; parens (separate space [doc_pat pat; string "if"; doc_exp wh]); string "="; doc_exp exp])
+     group (separate space [doc_id id; parens (separate space [doc_pat pat; string "if"; doc_exp wh]); string "="; doc_exp_as_block exp])
 
 let doc_default (DT_aux (DT_order ord, _)) = separate space [string "default"; string "Order"; doc_ord ord]
 
@@ -749,6 +765,58 @@ let rec doc_def def = group (match def with
 
 let doc_defs (Defs(defs)) =
   separate_map hardline doc_def (List.filter doc_filter defs)
+
+let reformat dir (Defs defs) =
+  let file_stack = ref [] in
+
+  let pop () = match !file_stack with
+    | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Unbalanced file structure"
+    | Some chan :: chans ->
+       close_out chan;
+       file_stack := chans
+    | None :: chans ->
+       file_stack := chans
+  in
+
+  let push = function
+    | Some path ->
+       file_stack := Some (open_out path) :: !file_stack
+    | None ->
+       file_stack := None :: !file_stack
+  in
+
+  let adjust_path path = Filename.concat (Filename.concat (Filename.dirname path) dir) (Filename.basename path) in
+
+  let output_def def = match !file_stack with
+    | Some chan :: _ ->
+       ToChannel.pretty 1. 120 chan (hardline ^^ doc_def def)
+    | None :: _ -> ()
+    | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "No file for definition"
+  in
+
+  let output_include path = match !file_stack with
+    | Some chan :: _ ->
+       if Filename.is_relative path then
+         Printf.fprintf chan "$include \"%s\"\n" path
+       else
+         Printf.fprintf chan "$include <%s>\n" (Filename.basename path)
+    | None :: _ -> ()
+    | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "No file for include"
+  in
+          
+  let format_def = function
+    | DEF_pragma ("file_start", path, _) -> push (Some (adjust_path path))
+    | DEF_pragma ("file_end", _, _) -> pop ()
+    | DEF_pragma ("include_start", path, _) ->
+       output_include path;
+       if Filename.is_relative path then push (Some (adjust_path path)) else push None
+    | DEF_pragma ("include_end", path, _) -> pop ()
+    | def -> output_def def
+  in
+
+  opt_insert_braces := true;
+  List.iter format_def defs;
+  opt_insert_braces := false
 
 let pp_defs f d = ToChannel.pretty 1. 80 f (doc_defs d)
 

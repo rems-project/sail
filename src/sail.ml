@@ -383,6 +383,12 @@ let options = Arg.align ([
   ( "-output_sail",
     set_target "sail",
     " print Sail code after type checking and initial rewriting");
+  ( "-reformat",
+    Arg.String (fun dir -> opt_reformat := Some dir),
+    "<dir> reformat the input Sail code placing output into a separate directory");
+  ( "-ddump_initial_ast",
+    Arg.Set opt_ddump_initial_ast,
+    " (debug) dump the initial ast to stdout");
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
