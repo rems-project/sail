@@ -1605,7 +1605,7 @@ let codegen_state_struct ctx cdefs =
         ^^ string "    bool have_exception;" ^^ hardline
         ^^ string "    sail_string *throw_location;" ^^ hardline
      ))
-  ^^ concat_map (fun str -> string ("  " ^ str) ^^ hardline) O.opts.extra_state
+  ^^ concat_map (fun str -> string ("    " ^ str ^ ";") ^^ hardline) O.opts.extra_state
   ^^ string "};" ^^ hardline ^^ hardline
   ^^ concat_map (codegen_state_api ctx) cdefs
 
@@ -1698,8 +1698,11 @@ let codegen ctx output_name cdefs =
       [ Printf.sprintf "  KILL(%s)(&(state->%s));" (sgen_ctyp_name ctyp) (sgen_id id) ]
   in
 
+  let header_symbol = String.uppercase_ascii (Filename.basename output_name) in
   let header =
-    stdlib_headers ^^ hardline
+    ksprintf string "#ifndef SAILC_%s_H" header_symbol ^^ hardline 
+    ^^ ksprintf string "#define SAILC_%s_H" header_symbol ^^ hardline
+    ^^ stdlib_headers ^^ hardline
     ^^ sail_headers ^^ hardline
     ^^ concat_map add_extra_header O.opts.extra_headers ^^ hardline
     ^^ concat docs_header
@@ -1708,16 +1711,18 @@ let codegen ctx output_name cdefs =
     ^^ string "void sail_initialize_state(sail_state *state);"
     ^^ hardline
     ^^ string "void sail_finalize_state(sail_state *state);"
+    ^^ twice hardline
+    ^^ string "#endif"
     ^^ hardline
   in
 
   let regs = c_ast_registers cdefs in
 
   let letbind_initializers =
-    List.map (fun n -> Printf.sprintf "  sail_create_letbind_%d(state);" n) (List.rev ctx.letbinds)
+    List.map (fun n -> sprintf "  sail_create_letbind_%d(state);" n) (List.rev ctx.letbinds)
   in
   let letbind_finalizers =
-    List.map (fun n -> Printf.sprintf "  sail_kill_letbind_%d(state);" n) ctx.letbinds
+    List.map (fun n -> sprintf "  sail_kill_letbind_%d(state);" n) ctx.letbinds
   in
 
   let body =
