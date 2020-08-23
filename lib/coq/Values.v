@@ -214,7 +214,6 @@ intros.
 unfold ZEuclid.div.
 change 0 with (0 * 0).
 apply Zmult_le_compat; auto with zarith.
-* apply Z.sgn_nonneg. auto with zarith.
 * apply Z_div_pos; auto. apply Z.lt_gt. apply Z.abs_pos. auto with zarith.
 Qed.
 
@@ -1920,7 +1919,7 @@ Ltac main_solver :=
  solve
  [ apply ArithFact_mword; assumption
  | z_comparisons
- | omega with Z
+ | omega
    (* Try sail hints before dropping the existential *)
  | subst; eauto 3 with zarith sail
    (* The datatypes hints give us some list handling, esp In *)
@@ -2547,6 +2546,33 @@ Fixpoint foreach_Z' {Vars} from to step n (vars : Vars) (body : Z -> Vars -> Var
 Definition foreach_Z {Vars} from to step vars body :=
   foreach_Z' (Vars := Vars) from to step (S (Z.abs_nat (from - to))) vars body.
 
+Fixpoint foreach_Z_up' {Vars} (from to step off : Z) (n:nat) `{ArithFact (0 <? step)} `{ArithFact (0 <=? off)} (vars : Vars) (body : forall (z : Z) `(ArithFact ((from <=? z <=? to))), Vars -> Vars) {struct n} : Vars.
+Proof.
+  refine (if sumbool_of_bool (from + off <=? to) then
+            match n with
+            | O => vars
+            | S n' => _
+            end
+          else
+            vars).
+  epose (vars' := body (from + off) _ vars).
+  refine (foreach_Z_up' _ from to step (off + step) n' _ _ vars' body).
+Defined.
+
+Fixpoint foreach_Z_down' {Vars} from to step off (n:nat) `{ArithFact (0 <? step)} `{ArithFact (off <=? 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact ((to <=? z <=? from))), Vars -> Vars) {struct n} : Vars.
+Proof.
+  refine (if sumbool_of_bool (to <=? from + off) then
+            match n with
+            | O => vars
+            | S n' => _
+            end
+          else
+            vars).
+  epose (vars' := body (from + off) _ vars).
+  refine (foreach_Z_down' _ from to step (off - step) n' _ _ vars' body).
+Defined.
+
+(*
 Fixpoint foreach_Z_up' {Vars} (from to step off : Z) (n:nat) `{ArithFact (0 <? step)} `{ArithFact (0 <=? off)} (vars : Vars) (body : forall (z : Z) `(ArithFact ((from <=? z <=? to))), Vars -> Vars) {struct n} : Vars :=
   if sumbool_of_bool (from + off <=? to) then
     match n with
@@ -2562,6 +2588,7 @@ Fixpoint foreach_Z_down' {Vars} from to step off n `{ArithFact (0 <? step)} `{Ar
     | S n => let vars := body (from + off) _ vars in foreach_Z_down' from to step (off - step) n vars body
     end
   else vars.
+*)
 
 Definition foreach_Z_up {Vars} from to step vars body `{ArithFact (0 <? step)} :=
     foreach_Z_up' (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.

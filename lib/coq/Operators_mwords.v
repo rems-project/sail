@@ -256,7 +256,6 @@ Lemma concat_eq {a b} : a >= 0 -> b >= 0 -> Z.of_nat (Z.to_nat b + Z.to_nat a)%n
 intros.
 rewrite Nat2Z.inj_add.
 rewrite Z2Nat.id; auto with zarith.
-rewrite Z2Nat.id; auto with zarith.
 Qed.
 
 
@@ -490,8 +489,6 @@ Lemma replicate_ok {n a} `{ArithFact (n >=? 0)} `{ArithFact (a >=? 0)} :
    Z.of_nat (Z.to_nat n * Z.to_nat a) = a * n.
 destruct H. destruct H0. unbool_comparisons.
 rewrite <- Z2Nat.id; auto with zarith.
-rewrite Z2Nat.inj_mul; auto with zarith.
-rewrite Nat.mul_comm. reflexivity.
 Qed.
 Definition replicate_bits {a} (w : mword a) (n : Z) `{ArithFact (n >=? 0)} : mword (a * n) :=
  cast_to_mword (replicate_bits_aux (get_word w) (Z.to_nat n)) replicate_ok.
