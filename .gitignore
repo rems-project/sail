@@ -33,6 +33,7 @@ lib/hol/sail-heap
 *.glob
 .*.aux
 /lib/coq/.nia.cache
+/lib/coq/deps
 
 # Isabelle
 
@@ -75,6 +76,7 @@ lib/hol/sail-heap
 /test/mono/log
 /test/mono/test.cmi
 /test/mono/test.cmo
+/test/mono/test-output
 
 /language/*.pdf
 /language/*.uo
