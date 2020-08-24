@@ -116,6 +116,11 @@ type codegen_options = {
     (** Primitives in this set will be passed a pointer to the
        sail_state struct *)
     state_primops : StringSet.t;
+    (** Control which sail_state variables accessors will be implemented
+       by the consumer of the library. This is a list of regular expressions,
+       if one of those regular expression matches the name of a sail_state variable,
+       only the declaration of the accessors will be generated. *)
+    external_state_api : string list;
   }
 
 let initial_options = {
@@ -124,6 +129,7 @@ let initial_options = {
     extra_headers = [];
     extra_state = [];
     state_primops = StringSet.empty;
+    external_state_api = [];
   }
 
 let add_export opts id = { opts with exports = Bindings.add id (string_of_id id) opts.exports }
@@ -132,6 +138,9 @@ let add_custom_export opts id into = { opts with exports = Bindings.add id into 
 
 let add_mangled_rename opts (from, into) =
   { opts with exports_mangled = StringMap.add from into opts.exports_mangled }
+
+let add_external_state_api_regex opts regex =
+  { opts with external_state_api = regex :: opts.external_state_api }
 
 let add_export_uid opts (id, ctyps) =
   match ctyps with
@@ -225,6 +234,17 @@ let options_from_json json cdefs =
        Reporting.simple_warn "No state_primops key in codegen json configuration";
        opts
     | json -> bad_key "state_primops" json
+  in
+  let process_external_state_api opts = function
+    | `String member -> add_external_state_api_regex opts member
+    | json -> bad_key "external_state_api" json
+  in
+  let opts = match member "external_state_api" json with
+    | `List members -> List.fold_left process_external_state_api opts members
+    | `Null ->
+       Reporting.simple_warn "No external_state_api key in codegen json configuration";
+       opts
+    | json -> bad_key "external_state_api" json
   in
   opts
 
@@ -1553,16 +1573,25 @@ let codegen_state_struct_def ctx = function
 
   | _ -> empty
 
+let codegen_state_function_body_on_match id body =
+  let is_external = List.exists (fun regex -> Str.string_match (Str.regexp regex) id 0) O.opts.external_state_api in
+  if is_external then
+    ("" ,";")
+  else
+    ("static inline ", Printf.sprintf " { %s }" body) 
+
 let codegen_state_api_struct id ctyp =
   match ctyp with
   | CT_struct (_, fields) ->
      let codegen_state_api_field ((fid, _), ctyp) =
        if is_api_ctyp ctyp then
-         ksprintf string "static inline void state_set_%s_in_%s(sail_state* st, %s u) { st->%s.%s = u; }"
-           (sgen_id fid) (sgen_id id) (sgen_ctyp ctyp) (sgen_id id) (sgen_id fid)
+         let set_attrs, set_body = codegen_state_function_body_on_match (sgen_id fid) (Printf.sprintf "st->%s.%s = u;" (sgen_id id) (sgen_id fid)) in 
+         let get_attrs, get_body = codegen_state_function_body_on_match (sgen_id fid) (Printf.sprintf "return st->%s.%s;" (sgen_id id) (sgen_id fid)) in
+         ksprintf string "%svoid state_set_%s_in_%s(sail_state* st, %s u)%s"
+           set_attrs (sgen_id fid) (sgen_id id) (sgen_ctyp ctyp) set_body
          ^^ hardline
-         ^^ ksprintf string "static inline %s state_get_%s_in_%s(sail_state* st) { return st->%s.%s; }"
-              (sgen_ctyp ctyp) (sgen_id fid) (sgen_id id) (sgen_id id) (sgen_id fid)
+         ^^ ksprintf string "%s%s state_get_%s_in_%s(sail_state* st)%s"
+              get_attrs (sgen_ctyp ctyp) (sgen_id fid) (sgen_id id) get_body
        else
          empty
      in
@@ -1570,16 +1599,22 @@ let codegen_state_api_struct id ctyp =
   | _ -> empty
 
 let codegen_state_api_vector id ctyp vctyp =
-  string (Printf.sprintf "static inline void state_vector_update_%s(sail_state* st, %s *rop, %s op, sail_int n, %s elem) { vector_update_%s(rop, op, n, elem); }"
-  (sgen_id id) (sgen_ctyp ctyp) (sgen_ctyp ctyp) (sgen_ctyp vctyp) (sgen_ctyp ctyp)) ^^ hardline ^^
-  string (Printf.sprintf "static inline %s state_vector_access_%s(sail_state* st, %s op, sail_int n) { return vector_access_%s(op, n); }"
-  (sgen_ctyp vctyp) (sgen_id id) (sgen_ctyp ctyp) (sgen_ctyp ctyp))  ^^ hardline
+  let attrs, body = codegen_state_function_body_on_match (sgen_id id) (Printf.sprintf "vector_update_%s(rop, op, n, elem);" (sgen_ctyp ctyp)) in
+  string (Printf.sprintf "%svoid state_vector_update_%s(sail_state* st, %s *rop, %s op, sail_int n, %s elem)%s"
+          attrs (sgen_id id) (sgen_ctyp ctyp) (sgen_ctyp ctyp) (sgen_ctyp vctyp) body)
+    ^^ hardline ^^
+  let attrs, body = codegen_state_function_body_on_match (sgen_id id) (Printf.sprintf "return vector_access_%s(op, n);" (sgen_ctyp ctyp)) in
+  string (Printf.sprintf "%s%s state_vector_access_%s(sail_state* st, %s op, sail_int n)%s"
+    attrs (sgen_ctyp vctyp) (sgen_id id) (sgen_ctyp ctyp) body)
+    ^^ hardline
 
 let codegen_state_api_reg_dec id ctyp =
   begin match ctyp with
   | _ when is_api_ctyp ctyp ->
-    ksprintf string "static inline %s state_get_%s(sail_state* st) { return st->%s; }" (sgen_ctyp ctyp) (sgen_id id) (sgen_id id) ^^ hardline ^^ 
-    ksprintf string "static inline void state_set_%s(sail_state* st, %s n) { st->%s = n; }" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id) ^^ hardline ^^
+    let attrs, body = codegen_state_function_body_on_match (sgen_id id) (Printf.sprintf "return st->%s;" (sgen_id id)) in
+    ksprintf string "%s%s state_get_%s(sail_state* st)%s" attrs (sgen_ctyp ctyp) (sgen_id id) body ^^ hardline ^^ 
+    let attrs, body = codegen_state_function_body_on_match (sgen_id id) (Printf.sprintf "st->%s = n;" (sgen_id id)) in
+    ksprintf string "%svoid state_set_%s(sail_state* st, %s n)%s" attrs (sgen_id id) (sgen_ctyp ctyp) body ^^ hardline ^^
     codegen_state_api_struct id ctyp
   | CT_vector (_, vctyp) when is_api_ctyp vctyp -> codegen_state_api_vector id ctyp vctyp 
   | CT_fvector (_, _, vctyp) when is_api_ctyp vctyp -> codegen_state_api_vector id ctyp vctyp 

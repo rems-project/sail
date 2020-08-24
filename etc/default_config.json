@@ -25,6 +25,11 @@
         // The sail_state struct will be passed to the following array
         // of primops, which are specified via the "foo" string from
         // val id = "foo" : ... in Sail.
-        "state_primops": []
+        "state_primops": [],
+        // Control which sail_state variables accessors will be implemented
+        // by the consumer of the library. This is a list of regular expressions,
+        // if one of those regular expression matches the name of a sail_state variable,
+        // only the declaration of the accessors will be generated.
+        "external_state_api" : []
     }
 }
