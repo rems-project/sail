@@ -398,6 +398,11 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_app_infix _ -> doc_infix 0 exp
   | E_tuple exps -> parens (separate_map (comma ^^ space) doc_exp exps)
 
+  | E_if (if_exp, then_exp, (E_aux (E_if (_, _, _), _) as else_exp)) when !opt_insert_braces ->
+     separate space [string "if"; doc_exp if_exp; string "then"] ^^ space
+     ^^ doc_exp_as_block then_exp
+     ^^ space ^^ string "else" ^^ space
+     ^^ doc_exp else_exp
   | E_if (if_exp, then_exp, else_exp) when !opt_insert_braces ->
      separate space [string "if"; doc_exp if_exp; string "then"] ^^ space
      ^^ doc_exp_as_block then_exp
