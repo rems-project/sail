@@ -213,7 +213,8 @@ Lemma ZEuclid_div_pos : forall x y, 0 < y -> 0 <= x -> 0 <= ZEuclid.div x y.
 intros.
 unfold ZEuclid.div.
 change 0 with (0 * 0).
-apply Zmult_le_compat; auto with zarith.
+apply Zmult_le_compat.
+3,4: auto with zarith.
 * apply Z.sgn_nonneg. auto with zarith.
 * apply Z_div_pos; auto. apply Z.lt_gt. apply Z.abs_pos. auto with zarith.
 Qed.
@@ -231,7 +232,7 @@ Qed.
 Lemma ZEuclid_div_ge : forall x y, y > 0 -> x >= 0 -> x - ZEuclid.div x y >= 0.
 intros.
 unfold ZEuclid.div.
-rewrite Z.sgn_pos; auto with zarith.
+rewrite Z.sgn_pos. 2: solve [ auto with zarith ].
 rewrite Z.mul_1_l.
 apply Z.le_ge.
 apply Zle_minus_le_0.
@@ -1152,9 +1153,9 @@ Qed.
 Lemma ArithFact_mword (a : Z) (w : mword a) : ArithFact (a >=? 0).
 constructor.
 destruct a.
-auto with zarith.
-auto using Z.le_ge, Zle_0_pos.
-destruct w.
+* auto with zarith.
+* auto using Z.le_ge, Zle_0_pos.
+* destruct w.
 Qed.
 (* Remove constructor from ArithFact(P)s and if they're used elsewhere
    in the context create a copy that rewrites will work on. *)
@@ -2205,9 +2206,9 @@ Hint Unfold neq_atom : sail.
 Lemma ReasonableSize_witness (a : Z) (w : mword a) : ReasonableSize a.
 constructor.
 destruct a.
-auto with zarith.
-auto using Z.le_ge, Zle_0_pos.
-destruct w.
+* auto with zarith.
+* auto using Z.le_ge, Zle_0_pos.
+* destruct w.
 Qed.
 
 Hint Extern 0 (ReasonableSize ?A) => (unwrap_ArithFacts; solve [apply ReasonableSize_witness; assumption | constructor; auto with zarith]) : typeclass_instances.

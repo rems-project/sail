@@ -186,8 +186,8 @@ Defined.
 Definition update_subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <=? m)} `{ArithFact (m <=? o <? n)} (w : mword (o - m + 1)) : mword n := update_subrange_vec_dec v (n-1-m) (n-1-o) (autocast w).
 
 Lemma mword_nonneg {a} : mword a -> a >= 0.
-destruct a;
-auto using Z.le_ge, Zle_0_pos with zarith.
+destruct a.
+1,2: auto using Z.le_ge, Zle_0_pos with zarith.
 destruct 1.
 Qed.
 
@@ -255,7 +255,7 @@ Defined.
 Lemma concat_eq {a b} : a >= 0 -> b >= 0 -> Z.of_nat (Z.to_nat b + Z.to_nat a)%nat = a + b.
 intros.
 rewrite Nat2Z.inj_add.
-rewrite Z2Nat.id; auto with zarith.
+rewrite Z2Nat.id. 2: solve [ auto with zarith ].
 rewrite Z2Nat.id; auto with zarith.
 Qed.
 
@@ -303,9 +303,9 @@ constructor.
   assert (2 ^ a - 1 = Z.of_N (2 ^ (Z.to_N a) - 1)). {
     rewrite N2Z.inj_sub.
     * rewrite N2Z.inj_pow.
-      rewrite Z2N.id; auto.
-      destruct a; auto with zarith. destruct x.
-    * apply N.le_trans with (m := (2^0)%N); auto using N.le_refl.
+      rewrite Z2N.id. solve [ auto ].
+      destruct a. 1,2: auto with zarith. destruct x.
+    * apply N.le_trans with (m := (2^0)%N). solve [ auto using N.le_refl ].
       apply N.pow_le_mono_r.
       inversion 1.
       apply N.le_0_l.
@@ -346,8 +346,8 @@ rewrite eq.
 rewrite Nat2Z.id.
 intro w.
 destruct (Word.wordToZ_size' w) as [LO HI].
-replace 1 with (Z.of_nat 1); auto.
-rewrite <- Nat2Z.inj_sub; auto with arith.
+replace 1 with (Z.of_nat 1). 2: solve [ auto ].
+rewrite <- Nat2Z.inj_sub. 2: solve [ auto with arith ].
 simpl.
 rewrite <- minus_n_O.
 rewrite Zpow_pow2.
@@ -489,8 +489,8 @@ end.
 Lemma replicate_ok {n a} `{ArithFact (n >=? 0)} `{ArithFact (a >=? 0)} :
    Z.of_nat (Z.to_nat n * Z.to_nat a) = a * n.
 destruct H. destruct H0. unbool_comparisons.
-rewrite <- Z2Nat.id; auto with zarith.
-rewrite Z2Nat.inj_mul; auto with zarith.
+rewrite <- Z2Nat.id. 2: solve [ auto with zarith ].
+rewrite Z2Nat.inj_mul. 2,3: solve [ auto with zarith ].
 rewrite Nat.mul_comm. reflexivity.
 Qed.
 Definition replicate_bits {a} (w : mword a) (n : Z) `{ArithFact (n >=? 0)} : mword (a * n) :=
