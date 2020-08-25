@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 
 use std::collections::HashSet;
 use std::ffi::{CStr, CString};
-use std::fs::{OpenOptions, File};
+use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::os::raw::{c_char, c_int};
 use std::sync::Mutex;
@@ -20,6 +20,7 @@ struct Span {
 lazy_static! {
     static ref BRANCHES: Mutex<HashSet<Span>> = Mutex::new(HashSet::new());
     static ref FUNCTIONS: Mutex<HashSet<Span>> = Mutex::new(HashSet::new());
+    static ref OUTPUT_FILE: Mutex<String> = Mutex::new("sail_coverage".to_string());
 }
 
 fn function_entry(_function_name: &CStr, span: Span) {
@@ -30,15 +31,13 @@ fn branch_taken(_branch_id: i32, span: Span) {
     BRANCHES.lock().unwrap().insert(span);
 }
 
-fn branch_reached(_branch_id: i32, _span: Span) {
-    ()
-}
+fn branch_reached(_branch_id: i32, _span: Span) {}
 
 fn write_locations(file: &mut File, kind: char, spans: &Mutex<HashSet<Span>>) -> bool {
     for span in spans.lock().unwrap().iter() {
-        let res = write!(
+        let res = writeln!(
             file,
-            "{} \"{}\", {}, {}, {}, {}\n",
+            "{} \"{}\", {}, {}, {}, {}",
             kind,
             span.sail_file.to_string_lossy(),
             span.line1,
@@ -49,23 +48,32 @@ fn write_locations(file: &mut File, kind: char, spans: &Mutex<HashSet<Span>>) ->
         if res.is_err() {
             return false;
         }
-    };
+    }
     true
 }
 
 #[no_mangle]
 pub extern "C" fn sail_coverage_exit() -> c_int {
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("sail_coverage") {
+    if let Ok(mut file) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&*OUTPUT_FILE.lock().unwrap())
+    {
         if !write_locations(&mut file, 'B', &BRANCHES) {
-            return 1
+            return 1;
         }
         if !write_locations(&mut file, 'F', &FUNCTIONS) {
-            return 1
+            return 1;
         }
         0
     } else {
         1
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sail_set_coverage_file(output_file: *const c_char) {
+    *OUTPUT_FILE.lock().unwrap() = CStr::from_ptr(output_file).to_string_lossy().to_string()
 }
 
 #[no_mangle]
