@@ -2548,21 +2548,30 @@ Fixpoint foreach_Z' {Vars} from to step n (vars : Vars) (body : Z -> Vars -> Var
 Definition foreach_Z {Vars} from to step vars body :=
   foreach_Z' (Vars := Vars) from to step (S (Z.abs_nat (from - to))) vars body.
 
-Fixpoint foreach_Z_up' {Vars} (from to step off : Z) (n:nat) `{ArithFact (0 <? step)} `{ArithFact (0 <=? off)} (vars : Vars) (body : forall (z : Z) `(ArithFact ((from <=? z <=? to))), Vars -> Vars) {struct n} : Vars :=
+(* Define these in proof mode to avoid anomalies related to abstract.
+   (See https://github.com/coq/coq/issues/10959) *)
+
+Fixpoint foreach_Z_up' {Vars} (from to step off : Z) (n:nat) `{ArithFact (0 <? step)} `{ArithFact (0 <=? off)} (vars : Vars) (body : forall (z : Z) `(ArithFact ((from <=? z <=? to))), Vars -> Vars) {struct n} : Vars.
+refine (
   if sumbool_of_bool (from + off <=? to) then
     match n with
     | O => vars
-    | S n => let vars := body (from + off) _ vars in foreach_Z_up' from to step (off + step) n vars body
+    | S n => let vars := body (from + off) _ vars in foreach_Z_up' _ from to step (off + step) n _ _ vars body
     end
-  else vars.
+  else vars
+).
+Defined.
 
-Fixpoint foreach_Z_down' {Vars} from to step off n `{ArithFact (0 <? step)} `{ArithFact (off <=? 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact ((to <=? z <=? from))), Vars -> Vars) {struct n} : Vars :=
+Fixpoint foreach_Z_down' {Vars} from to step off (n:nat) `{ArithFact (0 <? step)} `{ArithFact (off <=? 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact ((to <=? z <=? from))), Vars -> Vars) {struct n} : Vars.
+refine (
   if sumbool_of_bool (to <=? from + off) then
     match n with
     | O => vars
-    | S n => let vars := body (from + off) _ vars in foreach_Z_down' from to step (off - step) n vars body
+    | S n => let vars := body (from + off) _ vars in foreach_Z_down' _ from to step (off - step) n _ _ vars body
     end
-  else vars.
+  else vars
+).
+Defined.
 
 Definition foreach_Z_up {Vars} from to step vars body `{ArithFact (0 <? step)} :=
     foreach_Z_up' (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
