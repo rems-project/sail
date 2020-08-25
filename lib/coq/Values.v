@@ -239,12 +239,7 @@ apply Zle_minus_le_0.
 apply Z.div_le_upper_bound.
 * apply Z.abs_pos. auto with zarith.
 * rewrite Z.mul_comm.
-  assert (0 < Z.abs y). {
-    apply Z.abs_pos.
-    omega.
-  }
-  revert H1.
-  generalize (Z.abs y). intros. nia.
+  nia.
 Qed.
 
 Lemma ZEuclid_div_mod0 : forall x y, y <> 0 ->
@@ -842,7 +837,7 @@ refine
   end).
 exfalso. inversion H.
 exfalso. inversion H.
-simpl in H. omega.
+simpl in H. lia.
 Defined.
 
 Lemma nth_in_range_is_nth : forall A n (l : list A) d (H : n < length l),
@@ -864,17 +859,6 @@ rewrite Nat2Z.id in bounded.
 assumption.
 Qed.
 
-(*
-Lemma nth_top_aux {A} {n} {xs : list A} : Z.to_nat n < length xs -> let top := ((length_list xs) - 1)%Z in Z.to_nat (top - n)%Z < length xs.
-unfold length_list.
-generalize (length xs).
-intro n0.
-rewrite <- (Nat2Z.id n0).
-intro H.
-apply Z2Nat.inj_lt.
-* omega. 
-*)
-
 Close Scope nat.
 
 (*val access_list_inc : forall a. list a -> Z -> a*)
@@ -891,8 +875,8 @@ Definition access_list_dec {A} (xs : list A) n `{H1:ArithFact (0 <=? n)} `{H2:Ar
 refine (
   let top := (length_list xs) - 1 in
   @access_list_inc A xs (top - n) _ _).
-abstract (constructor; apply use_ArithFact, Z.leb_le in H1; apply use_ArithFact, Z.ltb_lt in H2; apply Z.leb_le; omega).
-abstract (constructor; apply use_ArithFact, Z.leb_le in H1; apply use_ArithFact, Z.ltb_lt in H2; apply Z.ltb_lt; omega).
+abstract (constructor; apply use_ArithFact, Z.leb_le in H1; apply use_ArithFact, Z.ltb_lt in H2; apply Z.leb_le; lia).
+abstract (constructor; apply use_ArithFact, Z.leb_le in H1; apply use_ArithFact, Z.ltb_lt in H2; apply Z.ltb_lt; lia).
 Defined.
 
 (*val access_list : forall a. bool -> list a -> Z -> a*)
@@ -1613,7 +1597,7 @@ destruct x; compute; split; congruence.
 Qed.
 
 Lemma b2z_tf x : 0 <= Z.b2z x <= 1.
-destruct x; simpl; omega.
+destruct x; simpl; lia.
 Qed.
 
 Lemma b2z_andb a b :
@@ -1686,7 +1670,7 @@ Ltac guess_ex_solver :=
   | |- @ex bool _ => exists true; guess_ex_solver
   | |- @ex bool _ => exists false; guess_ex_solver
   | x : ?ty |- @ex ?ty _ => exists x; guess_ex_solver
-  | _ => solve [tauto | eauto 3 with zarith sail | solve_bool_with_Z | omega]
+  | _ => solve [tauto | eauto 3 with zarith sail | solve_bool_with_Z | lia]
   end.
 
 (* A straightforward solver for simple problems like
@@ -1815,7 +1799,7 @@ Ltac ex_iff_solve :=
   match goal with
   | |- @ex _ _ => eexists; ex_iff_solve
   (* Range constraints are attached to the right *)
-  | |- _ /\ _ => split; [ex_iff_solve | omega]
+  | |- _ /\ _ => split; [ex_iff_solve | lia]
   | |- _ <-> _ => conjuncts_iff_solve || (symmetry; conjuncts_iff_solve)
   end.
 
@@ -1897,7 +1881,7 @@ in
    remaining evar with left over.  TODO: apply to goals without an evar clause *)
 match goal with
   | |- @ex _ _ => eexists; clause_matching_bool_solver
-  | |- _ = _ /\ _ <= _ <= _ => split; [clause_matching_bool_solver | omega]
+  | |- _ = _ /\ _ <= _ <= _ => split; [clause_matching_bool_solver | lia]
   | |- ?l = ?r =>
   let rec clause l r :=
       match l with
@@ -1921,7 +1905,7 @@ Ltac main_solver :=
  solve
  [ apply ArithFact_mword; assumption
  | z_comparisons
- | omega with Z
+ | lia
    (* Try sail hints before dropping the existential *)
  | subst; eauto 3 with zarith sail
    (* The datatypes hints give us some list handling, esp In *)
@@ -1999,7 +1983,7 @@ Ltac main_solver :=
 Ltac simple_omega :=
   repeat match goal with
   H := projT1 _ |- _ => clearbody H
-  end; omega.
+  end; lia.
 
 Ltac solve_unknown :=
   match goal with
@@ -2749,10 +2733,10 @@ assert ((0 <= Z.to_nat m < Datatypes.length l)%nat).
     apply Z2Nat.inj_lt; auto with zarith.
 }
 rewrite app_length.
-rewrite firstn_length_le; only 2:omega.
+rewrite firstn_length_le; only 2:lia.
 cbn -[skipn].
 rewrite skipn_length;
-omega.
+lia.
 Qed.
 
 Program Definition vec_update_dec {T n} (v : vec T n) m t `{ArithFact (0 <=? m <? n)} : vec T n := existT _ (update_list_dec (projT1 v) m t) _.
@@ -2764,7 +2748,7 @@ rewrite update_list_inc_length.
 + destruct H as [H].
   unbool_comparisons.
   destruct v. simpl (projT1 _). rewrite e.
-  omega.
+  lia.
 Qed.
 
 Program Definition vec_update_inc {T n} (v : vec T n) m t `{ArithFact (0 <=? m <? n)} : vec T n := existT _ (update_list_inc (projT1 v) m t) _.
@@ -2775,7 +2759,7 @@ rewrite update_list_inc_length.
 + destruct H.
   unbool_comparisons.
   destruct v. simpl (projT1 _). rewrite e.
-  omega.
+  auto.
 Qed.
 
 Program Definition vec_map {S T} (f : S -> T) {n} (v : vec S n) : vec T n := existT _ (List.map f (projT1 v)) _.
@@ -2850,7 +2834,7 @@ refine (existT _ (shl_int x y) _).
 destruct HE as [HE].
 destruct HR as [HR].
 unbool_comparisons.
-assert (y = 0 \/ y = 1 \/ y = 2 \/ y = 3) by omega.
+assert (y = 0 \/ y = 1 \/ y = 2 \/ y = 3) by lia.
 constructor.
 intuition (subst; compute; auto).
 Defined.
@@ -2860,7 +2844,7 @@ refine (existT _ (shl_int x y) _).
 destruct HE as [HE].
 destruct HR as [HR].
 unbool_comparisons.
-assert (y = 0 \/ y = 1 \/ y = 2 \/ y = 3) by omega.
+assert (y = 0 \/ y = 1 \/ y = 2 \/ y = 3) by lia.
 constructor.
 intuition (subst; compute; auto).
 Defined.
@@ -2900,7 +2884,7 @@ Lemma shl_8_ge_0 {n} : shl_int 8 n >= 0.
 unfold shl_int.
 apply Z.le_ge.  
 apply <- Z.shiftl_nonneg.
-omega.
+lia.
 Qed.
 Hint Resolve shl_8_ge_0 : sail.
 
@@ -2909,6 +2893,6 @@ Hint Resolve shl_8_ge_0 : sail.
 
 Lemma sail_lt_ge (x y : Z) :
   x < y <-> y >= x +1.
-omega.
+lia.
 Qed.
 Hint Resolve sail_lt_ge : sail.
