@@ -1,6 +1,7 @@
 Require Import String ZArith Setoid Morphisms Equivalence.
 Require Import Sail.State_monad Sail.Prompt Sail.State Sail.State_monad_lemmas.
 Require Import Sail.State_lemmas.
+Require Import Lia.
 
 (*adhoc_overloading
   Monad_Syntax.bind State_monad.bindS*)
@@ -837,7 +838,7 @@ unfold untilST.
 apply PrePostE_use_pre. intros s0 Pre0.
 assert (measure vars >= 0) as Hlimit_0 by eauto. clear s0 Pre0.
 remember (measure vars) as limit eqn: Heqlimit in Hlimit_0 |- *.
-assert (measure vars <= limit) as Hlimit by omega. clear Heqlimit.
+assert (measure vars <= limit) as Hlimit by lia. clear Heqlimit.
 generalize (Sail.Prompt.Zwf_guarded limit).
 revert vars Hlimit.
 apply Wf_Z.natlike_ind with (x := limit).
@@ -857,10 +858,10 @@ apply Wf_Z.natlike_ind with (x := limit).
     intros ? [[? ?] ?]; auto.
   - apply PrePostE_I;
     intros ? ? ? [[Pre ?] ?] ?; exfalso;
-    specialize (Hmeasure _ _ Pre); omega.
+    specialize (Hmeasure _ _ Pre); lia.
 * intros limit' Hlimit' IH vars Hmeasure_limit [acc].
   simpl.
-  destruct (Z_ge_dec _ _); try omega.
+  destruct (Z_ge_dec _ _). 2: lia.
   eapply PrePostE_bindS; [ | apply Hbody].
   intros vars'.
   eapply PrePostE_bindS with (R := (fun c s' => (Inv Q vars' s' /\ (c = true -> Q vars' s')) /\ measure vars' < measure vars)).
@@ -875,14 +876,14 @@ apply Wf_Z.natlike_ind with (x := limit).
   - eapply PrePostE_strengthen_pre; try apply PrePostE_returnS.
     intros ? [[? ?] ?]; auto.
   - gen_reduces.
-    replace (Z.succ limit' - 1) with limit'; [ | omega].
+    replace (Z.succ limit' - 1) with limit'; [ | lia].
     intro acc'.
     apply PrePostE_use_pre. intros sx [[Pre _] Hreduces].
     apply Hmeasure in Pre.
     eapply PrePostE_strengthen_pre; [apply IH | ].
-    + omega.
+    + lia.
     + tauto.
-* omega.
+* lia.
 Qed.
 
 

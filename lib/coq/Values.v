@@ -1499,10 +1499,6 @@ Ltac clean_up_props :=
   | H1:?P, H2:?R <-> ?Q |- _ => constr_eq P Q; apply (iff_known_r H1) in H2
   | H:context[_ \/ False] |- _ => rewrite or_False_r in H
   | H:context[False \/ _] |- _ => rewrite or_False_l in H
- (* omega doesn't cope well with extra "True"s in the goal.
-    Check that they actually appear because setoid_rewrite can fill in evars. *)
-  | |- context[True /\ _] => setoid_rewrite True_left
-  | |- context[_ /\ True] => setoid_rewrite True_right
   end;
   remove_unnecessary_casesplit.
 
@@ -1511,7 +1507,7 @@ Ltac prepare_for_solver :=
  generalize_embedded_proofs;
  clear_irrelevant_defns;
  clear_non_Z_bool_defns;
- autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let omega see through fns *)
+ autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let lia see through fns *)
  split_cases;
  extract_properties;
  repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;

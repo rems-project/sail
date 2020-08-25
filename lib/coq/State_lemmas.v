@@ -1,5 +1,6 @@
 Require Import Sail.Values Sail.Prompt_monad Sail.Prompt Sail.State_monad Sail.State Sail.State Sail.State_lifting.
 Require Import Sail.State_monad_lemmas.
+Require Import Lia.
 
 Local Open Scope equiv_scope.
 Local Open Scope Z.
@@ -88,18 +89,19 @@ destruct (Z.le_decidable 0 limit).
     reflexivity.
   + clear limit H.
     intros limit H IH [acc] vars s. simpl.
-    destruct (Z_ge_dec _ _); try omega.
+    destruct (Z_ge_dec _ _). 2: lia.
     apply bindS_cong; auto.
     intros [|]; auto.
     apply bindS_cong; auto.
     intros.
     gen_reduces.
-    replace (Z.succ limit - 1) with limit; try omega. intro acc'.
+    replace (Z.succ limit - 1) with limit. 2: lia. intro acc'.
     apply IH.
   + assumption.
 * intros. simpl.
-  destruct (Z_ge_dec _ _); try omega.
-  reflexivity.
+  destruct (Z_ge_dec _ _).
+  + lia.
+  + reflexivity.
 Qed.
 
 Lemma untilST_cong RV Vars E measure vars cond cond' (body body' : Vars -> monadS RV Vars E) :
@@ -121,17 +123,18 @@ destruct (Z.le_decidable 0 limit).
     reflexivity.
   + clear limit H.
     intros limit H IH [acc] vars s. simpl.
-    destruct (Z_ge_dec _ _); try omega.
+    destruct (Z_ge_dec _ _). 2: lia.
     apply bindS_cong; auto.
     intros. apply bindS_cong; auto.
     intros [|]; auto.
     gen_reduces.
-    replace (Z.succ limit - 1) with limit; try omega. intro acc'.
+    replace (Z.succ limit - 1) with limit. 2: lia. intro acc'.
     apply IH.
   + assumption.
 * intros. simpl.
-  destruct (Z_ge_dec _ _); try omega.
-  reflexivity.
+  destruct (Z_ge_dec _ _).
+  + lia.
+  + reflexivity.
 Qed.
 
 Lemma genlistS_cong {A RV E} f f' n :
@@ -966,19 +969,20 @@ destruct (Z.le_decidable 0 limit).
     reflexivity.
   + clear limit H.
     intros limit H IH [acc1] [acc2] vars s. simpl.
-    destruct (Z_ge_dec _ _); try omega.
+    destruct (Z_ge_dec _ _). 2: lia.
     rewrite_liftState.
     apply bindS_cong; auto.
     intros [|]; auto.
     apply bindS_cong; auto.
     intros.
     repeat gen_reduces.
-    replace (Z.succ limit - 1) with limit; try omega. intros acc1' acc2'.
+    replace (Z.succ limit - 1) with limit. 2: lia. intros acc1' acc2'.
     apply IH.
   + assumption.
 * intros. simpl.
-  destruct (Z_ge_dec _ _); try omega.
-  reflexivity.
+  destruct (Z_ge_dec _ _).
+  + lia.
+  + reflexivity.
 Qed.
 Hint Resolve liftState_whileM : liftState.
 
@@ -1039,18 +1043,19 @@ destruct (Z.le_decidable 0 limit).
     reflexivity.
   + clear limit H.
     intros limit H IH [acc1] [acc2] vars s. simpl.
-    destruct (Z_ge_dec _ _); try omega.
+    destruct (Z_ge_dec _ _). 2: lia.
     rewrite_liftState.
     apply bindS_cong; auto.
     intros. apply bindS_cong; auto.
     intros [|]; auto.
     repeat gen_reduces.
-    replace (Z.succ limit - 1) with limit; try omega. intros acc1' acc2'.
+    replace (Z.succ limit - 1) with limit. 2: lia. intros acc1' acc2'.
     apply IH.
   + assumption.
 * intros. simpl.
-  destruct (Z_ge_dec _ _); try omega.
-  reflexivity.
+  destruct (Z_ge_dec _ _).
+  + lia.
+  + reflexivity.
 Qed.
 Hint Resolve liftState_untilM : liftState.
 

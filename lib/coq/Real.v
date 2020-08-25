@@ -2,6 +2,7 @@ Require Export Rbase.
 Require Import Reals.
 Require Export ROrderedType.
 Require Import Sail.Values.
+Require Import Lia.
 Local Open Scope Z.
 
 (* "Decidable" in a classical sense... *)
@@ -53,7 +54,7 @@ apply IZR_le.
 apply Z.mul_div_le.
 assumption.
 discrR.
-omega.
+lia.
 Qed.
 
 (* One annoying use of reals in the ARM spec I've been looking at. *)
@@ -80,13 +81,13 @@ assert (diveq : n*((m+n-1)/n) = (m+n-1) - (m+n-1) mod n).
 apply Zplus_minus_eq.
 rewrite (Z.add_comm ((m+n-1) mod n)).
 apply Z.div_mod.
-omega.
+lia.
 rewrite diveq.
 assert (modmax : (m+n-1) mod n < n).
 specialize (Z.mod_pos_bound (m+n-1) n). intuition.
-omega.
+lia.
 
-discrR; omega.
+discrR; lia.
 
 rewrite <- Z.opp_sub_distr.
 rewrite Ropp_Ropp_IZR.
@@ -96,7 +97,7 @@ auto using IZR_lt.
 unfold Rdiv.
 rewrite <- Rmult_assoc.
 rewrite Rinv_r_simpl_m.
-2: { discrR. omega. }
+2: { discrR. lia. }
 rewrite <- mult_IZR.
 apply IZR_lt.
 rewrite Z.mul_sub_distr_l.
@@ -104,5 +105,5 @@ apply Z.le_lt_trans with (m := m+n-1-n*1).
 apply Z.sub_le_mono_r.
 apply Z.mul_div_le.
 assumption.
-omega.
+lia.
 Qed.
