@@ -4831,6 +4831,23 @@ let rewrite_toplevel_consts target type_env (Defs defs) =
   let (revdefs, _) = List.fold_left rewrite_def ([], Bindings.empty) defs in
   Defs (List.rev revdefs)
 
+(* Hex literals are always a multiple of 4 bits long.  If one of a different size is needed, users may truncate
+   them down.  This can be bad for isla because the original may be too long for the concrete bitvector
+   representation (e.g., 132 bits when at most 129 long bitvectors are supported), so cut them down now. *)
+let rewrite_truncate_hex_literals _type_env defs =
+  let rewrite_aux (e, annot) =
+    match e with
+    | E_app (Id_aux (Id "truncate", _), [E_aux (E_lit (L_aux (L_hex hex, l_ann)),_); E_aux (E_lit (L_aux (L_num len, _)),_)]) ->
+       let bin = hex_to_bin hex in
+       let len = Nat_big_num.to_int len in
+       let truncation = String.sub bin (String.length bin - len) len in
+       E_aux (E_lit (L_aux (L_bin truncation, l_ann)), annot)
+    | _ -> E_aux (e, annot)
+  in
+  rewrite_defs_base
+    { rewriters_base with
+      rewrite_exp = (fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux }) }
+    defs
 
 let opt_mono_rewrites = ref false
 let opt_mono_complex_nexps = ref true
@@ -4936,6 +4953,7 @@ let all_rewrites = [
     ("toplevel_string_append", Basic_rewriter rewrite_defs_toplevel_string_append);
     ("pat_string_append", Basic_rewriter rewrite_defs_pat_string_append);
     ("mapping_builtins", Basic_rewriter rewrite_defs_mapping_patterns);
+    ("truncate_hex_literals", Basic_rewriter rewrite_truncate_hex_literals);
     ("mono_rewrites", Basic_rewriter mono_rewrites);
     ("toplevel_nexps", Basic_rewriter rewrite_toplevel_nexps);
     ("toplevel_consts", String_rewriter (fun target -> Basic_rewriter (rewrite_toplevel_consts target)));
@@ -5111,6 +5129,7 @@ let rewrites_c = [
     ("toplevel_string_append", []);
     ("pat_string_append", []);
     ("mapping_builtins", []);
+    ("truncate_hex_literals", []);
     ("mono_rewrites", [If_flag opt_mono_rewrites]);
     ("recheck_defs", [If_flag opt_mono_rewrites]);
     ("toplevel_nexps", [If_mono_arg]);
