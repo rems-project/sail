@@ -12,6 +12,8 @@ let scan_defs (Defs defs) =
        IdSet.add (id_of_fundef fd) ids, specs
     | DEF_spec (VS_aux (VS_val_spec (_,id,_,_),_) as vs) ->
        ids, Bindings.add id vs specs
+    | DEF_pragma (("file_start" | "file_end"), _ ,_) ->
+       ids, specs
     | d -> raise (Reporting.err_general (def_loc d)
                     "Definition in splice file isn't a spec or function")
   in List.fold_left scan (IdSet.empty, Bindings.empty) defs
