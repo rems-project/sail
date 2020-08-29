@@ -175,7 +175,8 @@ val _builtin_unsigned = {
   ocaml: "uint",
   lem: "uint",
   interpreter: "uint",
-  c: "sail_uint"
+  c: "sail_unsigned",
+  coq: "uint"
 } : forall 'n. bits('n) -> {'m, 0 <= 'm < 2 ^ 'n. int('m)}
 
 /* There are different implementation choices for division and remainder, but
