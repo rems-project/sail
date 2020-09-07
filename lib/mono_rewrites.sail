@@ -165,7 +165,7 @@ val place_subrange_signed : forall 'n 'm, 'n >= 0 & 'm >= 0.
   (implicit('m), bits('n), int, int, int) -> bits('m) effect pure
 
 function place_subrange_signed(m,xs,i,j,shift) = {
-  place_slice_signed(m, xs, i, i-j+1, shift)
+  place_slice_signed(m, xs, j, i-j+1, shift)
 }
 
 /* This has different names in the aarch64 prelude (UInt) and the other

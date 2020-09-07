@@ -2910,6 +2910,11 @@ let rec rewrite_app env typ (id,args) =
     is_id env (Id "zero_extend") id || is_id env (Id "sail_zero_extend") id ||
     is_id env (Id "mips_zero_extend") id || is_id env (Id "EXTZ") id
   in
+  let is_sign_extend =
+    is_id env (Id "SignExtend") id ||
+    is_id env (Id "sign_extend") id || is_id env (Id "sail_sign_extend") id ||
+    is_id env (Id "mips_sign_extend") id || is_id env (Id "EXTS") id
+  in
   let is_truncate = is_id env (Id "truncate") id in
   let mk_exp e = E_aux (e, (Unknown, empty_tannot)) in
   let rec is_zeros_exp e = match unaux_exp e with
@@ -3244,7 +3249,7 @@ let rec rewrite_app env typ (id,args) =
 
     | _ -> E_app (id,args)
 
-  else if is_id env (Id "SignExtend") id || is_id env (Id "sign_extend") id then
+  else if is_sign_extend then
     let length_arg = List.filter (fun arg -> is_number (typ_of arg)) args in
     match List.filter (fun arg -> not (is_number (typ_of arg))) args with
     | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
