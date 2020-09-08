@@ -2,7 +2,9 @@
 open PPrintEngine
 open PPrintCombinators
 open Ast
-
+open Type_check
+open Ast_util
+   
 let rec pp_raw_num x = string (Nat_big_num.to_string x)
 
 and pp_raw_nat x = string (Nat_big_num.to_string x)
@@ -21,11 +23,43 @@ and pp_raw_value x = string "TODO:value"
 
 and pp_raw_x x = string "\"" ^^ string x ^^ string "\""
 
-and pp_raw_ix x = string "\"" ^^ string x ^^ string "\""
+and pp_raw_ix x = string "\"" ^^ string x ^^ string "\""                
 
-and pp_raw_l x = string (Ast_util.short_string_of_loc x)
+and pp_raw_l x = string "" (*(Ast_util.short_string_of_loc x)*)
 
-and pp_raw_annot x = (match x with (_,tannot) -> match Type_check.destruct_tannot tannot with None -> string "None" | Some (_,t,_) -> pp_raw_typ t)
+and pp_raw_env env = string "\nE { " ^^
+      string "locals = " ^^ separate (string ",") (List.map (fun (s,(_,t)) -> pp_raw_id s ^^ string " : " ^^ pp_raw_typ t) (Bindings.bindings (Env.get_locals env)))  ^^ string ";\n" ^^
+                                                   
+      string "typ_vars =  " ^^  separate (string ",") (List.map (fun (s,k) -> pp_raw_kid s ^^ string "=" ^^ pp_raw_kind_aux k) (KBindings.bindings (Env.get_typ_vars env)))  ^^ string ";\n" ^^
+
+      string "C = " ^^ separate (string ",") (List.map (fun c -> pp_raw_n_constraint c) (Env.get_constraints env)) ^^ string ";\n" ^^
+      string "Records = " ^^ separate (string ",") (List.map (fun (s,(_,fields)) ->
+           string "   " ^^ pp_raw_id s ^^ string " = {" ^^
+           separate (string ",") (List.map (fun (typ,id) -> pp_raw_id id ^^ string " : " ^^ pp_raw_typ typ) fields ) ^^ string "}\n"
+          ) (Bindings.bindings (Env.get_records env))) ^^ string ";\n" ^^
+ 
+      string "}\n"
+
+and pp_raw_instant (x : tannot ) = match Type_check.get_instantiations x with
+    None -> string "(None)"
+  | Some inst -> separate (string ",") (List.map (fun (id,ta) -> pp_raw_kid id ^^ string " = " ^^ pp_raw_typ_arg ta)
+                                      (KBindings.bindings inst))
+
+               
+and pp_raw_annot (x : tannot annot) = string ""
+(*                                        
+  match x with (_,tannot) -> (match Type_check.destruct_tannot tannot with
+                               None -> string "No tannot" |
+                               Some (e,t,_) -> pp_raw_env e ^^ string "Typ=" ^^ pp_raw_typ t ^^ string "Inst" ^^
+                                      pp_raw_instant tannot)
+ *)
+(*  (match x with
+                        (_,tannot) -> (match tannot with
+                                        None -> string "None" |
+                                        Some t -> string "( " ^^ pp_raw_env t.env ^^ string "Typ=" ^^
+                                                    pp_raw_typ t.typ ^^ string "inst=" ^^ pp_raw_inst t.instantiation
+                                                        ^^ string ")")
+ *)
 
 and pp_raw_id_aux x = match x with
 | Id(x) -> string "Id" ^^ string "(" ^^ pp_raw_x x ^^ string ")"
@@ -166,7 +200,7 @@ and pp_raw_typschm x = match x with
 | TypSchm_aux(typschm_aux,l) -> string "TypSchm_aux" ^^ string "(" ^^ pp_raw_typschm_aux typschm_aux ^^ string "," ^^ pp_raw_l l ^^ string ")"
 
 and pp_raw_type_def x = match x with
-| TD_aux (x,y) -> string "..type_def"
+| TD_aux (x,y) -> pp_raw_type_def_aux x
 
 and pp_raw_type_def_aux x = match x with
 | TD_abbrev(id,typquant,typ_arg) -> string "TD_abbrev" ^^ string "(" ^^ pp_raw_id id ^^ string "," ^^ pp_raw_typquant typquant ^^ string "," ^^ pp_raw_typ_arg typ_arg ^^ string ")"
@@ -283,7 +317,7 @@ and pp_raw_exp_aux x = match x with
 | E_constraint(n_constraint) -> string "E_constraint" ^^ string "(" ^^ pp_raw_n_constraint n_constraint ^^ string ")"
 
 and pp_raw_exp x = match x with
-| E_aux(exp_aux,annot) -> string "E_aux" ^^ string "(" ^^ pp_raw_exp_aux exp_aux ^^ string "," ^^ pp_raw_annot annot ^^ string ")"
+| E_aux(exp_aux,annot) -> string "E_aux" ^^ string "(" ^^ pp_raw_exp_aux exp_aux ^^ string "," ^^ pp_raw_annot annot ^^ string ")\n"
 
 and pp_raw_lexp_aux x = match x with
 | LEXP_id(id) -> string "LEXP_id" ^^ string "(" ^^ pp_raw_id id ^^ string ")"
@@ -482,7 +516,7 @@ and pp_raw_def x = match x with
 | DEF_pragma(string1,string2,l) -> string "DEF_pragma" ^^ string "(" ^^ pp_raw_string string1 ^^ string "," ^^ pp_raw_string string2 ^^ string "," ^^ pp_raw_l l ^^ string ")"
 
 and pp_raw_defs x = match x with
-| Defs(def0) -> string "Defs" ^^ string "(" ^^ string "[" ^^ separate  (string ";") (List.map (function (def0) -> string "(" ^^ pp_raw_def def0 ^^ string ")") def0) ^^ string "]" ^^ string ")"
+| Defs(def0) -> string "Defs" ^^ string "(" ^^ string "[" ^^ separate  (string ";") (List.map (function (def0) -> string "(" ^^ pp_raw_def def0 ^^ string ")\n") def0) ^^ string "]" ^^ string ")"
 
 
 let rec pp_n x = string (string_of_int x)
@@ -646,7 +680,7 @@ and pp_typschm x = match x with
 | TypSchm_aux(typschm_aux,l) -> pp_typschm_aux typschm_aux
 
 and pp_type_def x = match x with
-| TD_aux (x,y) -> string "..type_def"
+| TD_aux (x,y) -> pp_type_def_aux x
 
 and pp_type_def_aux x = match x with
 | TD_abbrev(id,typquant,typ_arg) -> group(string "" ^^ string "type" ^^ break 1 ^^ nest 2 (pp_id id) ^^ break 1 ^^ nest 2 (pp_typquant typquant) ^^ break 1 ^^ string "=" ^^ break 1 ^^ nest 2 (pp_typ_arg typ_arg) ^^ string "")

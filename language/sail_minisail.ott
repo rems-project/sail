@@ -1,0 +1,1074 @@
+%
+%% Grammar for user language. Generates ./src/ast.ml
+%%
+
+indexvar n , m , i , j ::=
+  {{ phantom }}
+  {{ com Index variables for meta-lists }}
+  {{ pp x = string (string_of_int x) }}
+
+metavar num,numZero,numOne ::=
+  {{ phantom }}
+  {{ lex numeric }}
+%% change to match lem - which is the only Ott target actually used in sail build?
+%%  {{ ocaml big_int }}
+  {{ ocaml Nat_big_num.num }}
+  {{ pp-raw x = string (Nat_big_num.to_string x) }}
+  {{ pp x = string (Nat_big_num.to_string x) }}
+  {{ hol num }}
+  {{ lem integer }}
+  {{ isa int }}
+  {{ com Numeric literals }}
+
+metavar nat ::=
+  {{ phantom }}
+%%  {{ ocaml int }}
+  {{ ocaml Nat_big_num.num }}
+  {{ pp-raw x = string (Nat_big_num.to_string x) }}
+  {{ pp x = string (Nat_big_num.to_string x) }}
+  {{ lex numeric }}
+  {{ lem nat }}
+  {{ isa nat }}
+  
+metavar hex ::=
+  {{ phantom }}
+  {{ lex numeric }}
+  {{ ocaml string }}
+  {{ lem string }}
+  {{ isa string }}
+  {{ com Bit vector literal, specified by C-style hex number }}
+
+metavar bin ::=
+  {{ phantom }}
+  {{ lex numeric }}
+  {{ ocaml string }}
+  {{ lem string }}
+  {{ isa string }}
+  {{ com Bit vector literal, specified by C-style binary number }}
+
+metavar string ::=
+  {{ phantom }}
+  {{ ocaml string }}
+  {{ lem string }}
+  {{ hol string }}
+  {{ isa string }}
+  {{ com String literals }}
+
+metavar regexp ::=
+  {{ phantom }}
+  {{ ocaml string }}
+  {{ lem string }}
+  {{ hol string }}
+  {{ isa string }}
+  {{ com Regular expresions, as a string literal }}
+
+metavar real ::=
+   {{ phantom }}
+  {{ ocaml string }}
+  {{ lem string }}
+  {{ hol string }}
+  {{ isa string }}
+  {{ com Real number literal }}
+
+metavar value ::=
+  {{ phantom }}
+  {{ ocaml value }}
+  {{ pp-raw x = string "TODO:value" }}
+  {{ pp x = string "TODO:value" }}
+  {{ lem value }}
+  {{ isa value }}
+
+embed
+{{ ocaml
+
+open Big_int
+open Value
+
+type text = string
+
+type l = Parse_ast.l
+
+type 'a annot = l * 'a
+
+type loop = While | Until
+
+
+}}
+
+embed
+{{ lem
+
+type l = | Unknown
+
+type value = | Val
+
+type loop = While | Until
+
+type annot 'a = l * 'a
+
+}}
+
+embed
+{{ isa
+
+datatype "l" = Unknown 
+
+datatype "value" = Val
+
+datatype "loop" = While | Until
+
+type_synonym "annot" = l
+
+hide_const id
+
+}}
+
+metavar x , y , z ::=
+  {{ ocaml text }}
+  {{ pp-raw x = string "\"" ^^ string x ^^ string "\"" }}
+  {{ pp x = string x }}
+  {{ lem string }}
+  {{ hol string }}
+  {{ isa string }}
+  {{ com identifier }}
+  {{ ocamlvar "[[x]]" }}
+  {{ lemvar "[[x]]" }}
+
+
+metavar ix ::=
+  {{ lex alphanum }}
+  {{ ocaml text }}
+  {{ pp-raw x = string "\"" ^^ string x ^^ string "\"" }}
+  {{ pp x = string x }}
+  {{ lem string }}
+  {{ hol string }}
+  {{ isa string }}
+  {{ com infix identifier }}
+  {{ ocamlvar "[[ix]]" }}
+  {{ lemvar "[[ix]]" }}
+
+
+grammar
+
+l :: '' ::=                                     {{ phantom }}
+                                                {{ ocaml Parse_ast.l }}
+                                                {{ pp-raw x = string (Ast_util.short_string_of_loc x) }}
+                                                {{ pp-suppress }}
+                                                {{ lem l }}
+                                                {{ hol unit }}
+                                                {{ com source location }}
+  |                                             :: :: Unknown
+    {{ ocaml Unknown }}
+    {{ lem Unknown }}
+    {{ hol () }}
+
+annot :: '' ::=
+  {{ phantom }}
+  {{ ocaml 'a annot }}
+  {{ pp-raw x = (match x with (_,tannot) -> match Type_check.destruct_tannot tannot with None -> string "None" | Some (_,t,_) -> pp_raw_typ t) }}
+  {{ pp-suppress }}
+  {{ lem annot 'a }}
+  {{ hol unit }}
+%% workaround to make Ott generate a pp_raw_annot function - shouldn't be needed
+| :: :: Foo {{ lem foo }}
+
+id :: '' ::=
+  {{ com Identifier }}
+  {{ aux l _ }}
+  | x              :: :: id
+  | ( operator x ) :: D :: operator {{ com remove infix status }}
+   | bool :: S :: bool {{ isa Id_id ''bool'' }} {{ lem "bool" }} {{ ocaml "bool" }}
+   | not :: S :: not     {{ isa Id_id ''not'' }} {{ lem "not" }} {{ ocaml "not"" }}
+   | atom :: S :: atom   {{ isa Id_id ''atom'' }} {{ lem "atom" }} {{ ocaml "atom" }}
+   | real :: S :: real   {{ isa Id_id ''real'' }}   {{ lem "atom" }} {{ ocaml "atom" }}
+   | string :: S :: string {{ isa Id_id ''string'' }} {{ lem "atom" }} {{ ocaml "atom" }}
+   | bitvector :: S :: bitvector {{ isa Id_id ''bitvector'' }} {{ lem "atom" }} {{ ocaml "atom" }}
+   | bit :: S :: bit {{ isa Id_id ''bitvector'' }} {{ lem "atom" }} {{ ocaml "atom" }}
+   | unit :: S :: unit {{ isa Id_id ''bitvector'' }} {{ lem "atom" }} {{ ocaml "atom" }}
+   | exception :: S :: exception {{ isa Id_id ''bitvector'' }} {{ lem "atom" }} {{ ocaml "atom" }}
+   | int :: S :: int {{ isa Id_id ''bitvector'' }} {{ lem "atom" }} {{ ocaml "atom" }}
+   | list :: S :: list {{ isa Id_id ''bitvector'' }} {{ lem "atom" }} {{ ocaml "atom" }}
+   | vector :: S :: vector {{ isa Id_id ''bitvector'' }} {{ lem "atom" }} {{ ocaml "atom" }}
+   | register :: S :: register {{ isa Id_id ''bitvector'' }} {{ lem "atom" }} {{ ocaml "atom" }}
+   | range :: S :: range {{ isa Id_id ''range'' }} {{ lem "range" }} {{ ocaml "range" }}
+
+kid :: '' ::=
+  {{ com kinded IDs: Type, Int, and Order variables }}
+  {{ aux l _ }}
+  | ' x :: :: var
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Kinds and Types                                              %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+grammar
+
+kind :: 'K_' ::=
+  {{ com base kind}}
+  {{ aux l _ }}
+  | Type  :: :: type  {{ com kind of types  }}
+  | Int   :: :: int   {{ com kind of natural number size expressions  }}
+  | Order :: :: order {{ com kind of vector order specifications  }}
+  | Bool  :: :: bool  {{ com kind of constraints }}
+
+nexp :: 'Nexp_' ::=
+  {{ com numeric expression, of kind Int }}
+  {{ aux l _ }}
+  | id                         :: :: id       {{ com abbreviation identifier }}
+  | kid                        :: :: var      {{ com variable }}
+  | num                        :: :: constant {{ com constant }}
+  | id ( nexp1 , ... , nexpn ) :: :: app      {{ com app }}
+  | nexp1 * nexp2              :: :: times    {{ com product }}
+  | nexp1 + nexp2              :: :: sum      {{ com sum }}
+  | nexp1 - nexp2              :: :: minus    {{ com subtraction }}
+  | 2 ^ nexp                   :: :: exp      {{ com exponential }}
+  | - nexp                     :: :: neg      {{ com unary negation}}
+  | ( nexp )                   :: S :: paren  {{ ichlo [[nexp]] }}
+  | nexp1 + ... + nexpn :: M :: sum_many {{ ichlo nexp_sum [[nexp1 ... nexpn]] }}
+
+order :: 'Ord_' ::=
+  {{ com vector order specifications, of kind Order }}
+  {{ aux l _ }}
+  | kid                                 :: :: var {{ com variable }} 
+  | inc                                 :: :: inc {{ com increasing }}
+  | dec                                 :: :: dec {{ com decreasing }}
+  | ( order )                           :: S :: paren {{ ichlo [[order]] }}
+
+base_effect :: 'BE_' ::=
+  {{ com effect }}
+  {{ aux l _ }}
+  | rreg                                :: :: rreg {{ com read register }}
+  | wreg                                :: :: wreg {{ com write register }}
+  | rmem                                :: :: rmem {{ com read memory }}
+  | rmemt                               :: :: rmemt {{ com read memory and tag }}
+  | wmem                                :: :: wmem {{ com write memory }}
+  | wmea                                :: :: eamem {{ com signal effective address for writing memory }}
+  | exmem                               :: :: exmem {{ com determine if a store-exclusive (ARM) is going to succeed }}
+  | wmv                                 :: :: wmv {{ com write memory, sending only value }}
+  | wmvt                                :: :: wmvt {{ com write memory, sending only value and tag }}
+  | barr                                :: :: barr {{ com memory barrier }}
+  | depend                              :: :: depend {{ com dynamic footprint }}
+  | undef                               :: :: undef {{ com undefined-instruction exception }}
+  | unspec                              :: :: unspec {{ com unspecified values }}
+  | nondet                              :: :: nondet {{ com nondeterminism, from $[[nondet]]$ }}
+  | escape                              :: :: escape {{ com potential exception }}
+  | config                              :: :: config {{ com configuration option }}
+
+effect :: 'Effect_' ::=
+  {{ aux l _ }}
+  | { base_effect1 , .. , base_effectn } :: :: set {{ com effect set }}
+  | pure                                 :: M :: pure {{ com sugar for empty effect set }}
+    {{ ichlo (Effect_set []) }} 
+
+% Isabelle doesn't like typ but can't put in {{ isa typp }} as this conflicts with using aux
+typ   :: 'Typ_' ::=
+  {{ com type expressions, of kind Type }}
+  {{ aux l _ }}
+  |                                               :: :: internal_unknown
+  | id                                            :: :: id {{ com defined type }}
+  | kid                                           :: :: var {{ com type variable }}
+  | ( typ1 , ... , typn ) -> typ2 effectkw effect :: :: fn {{ com Function (first-order only) }}
+  | typ1 <-> typ2 effectkw effect                 :: :: bidir {{ com Mapping }}
+  | ( typ1 , .... , typn )                        :: :: tup {{ com Tuple }}
+  | id ( typ_arg1 , ... , typ_argn )              :: :: app {{ com type constructor application }}
+  | ( typ )                                       :: S :: paren {{ ichlo [[typ]] }} 
+  | { kinded_id1 ...  kinded_idn , n_constraint . typ }
+    :: :: exist
+  | t_of exp :: M :: typ_of_exp {{ tex \text{typ}_{[[exp]]} }} {{ ichlo t_of_exp [[exp]] }} 
+  | t_of lexp :: M :: typ_of_lexp {{ tex \text{typ}_{[[lexp]]} }}	{{ ichlo t_of_lexp [[lexp]] }}
+  | t_of pat :: M :: typ_of_pat {{ tex \text{typ}_{[[pat]]} }}        {{ ichlo t_of_pat [[pat]] }}
+
+%  | typ as { kinded_id1 ..  kinded_idn , n_constraint . nexp } :: M :: destruct_numeric
+%     {{ isa Some ([[kinded_id1 .. kindedidn]] , [[n_constraint]] , [[nexp]] ) =  destruct_numeric [[typ]] }}
+
+%  | { kinded_id1 ..  kinded_idn , n_constraint . nexp } :: M :: destruct_numeric
+%  | { kinded_id1 ..  kinded_idn . n_constraint } :: M :: destruct_bool {{ Some ([[kinded_id1 .. kinded_idn]], n_constraint ) = destruct
+  | sigma ( typ ) :: M :: subst  {{ ichlo subst_t [[typ]] [[sigma]] }}
+
+
+typ_arg :: 'A_' ::=
+  {{ com type constructor arguments of all kinds }}
+  {{ aux l _ }}
+  | nexp         :: :: nexp
+  | typ          :: :: typ
+  | order        :: :: order
+  | n_constraint :: :: bool
+
+n_constraint :: 'NC_' ::=
+  {{ com constraint over kind Int }}
+  {{ aux l _ }}
+
+  | nexp == nexp'                    :: :: equal
+  | nexp >= nexp'                    :: :: bounded_ge
+  | nexp > nexp'                     :: :: bounded_gt
+  | nexp '<=' nexp'                  :: :: bounded_le
+  | nexp '<' nexp'                   :: :: bounded_lt
+  | nexp != nexp'                    :: :: not_equal
+  | kid 'IN' { num1 , ... , numn }   :: :: set
+  | n_constraint & n_constraint'     :: :: or {{ tex [[n_constraint]] \wedge [[n_constraint']] }}
+  | n_constraint | n_constraint'     :: :: and 
+  | id ( typ_arg0 , ... , typ_argn ) :: :: app
+  | kid                              :: :: var
+  | true                             :: :: true
+  | false                            :: :: false
+
+kinded_id :: 'KOpt_' ::=
+  {{ com optionally kind-annotated identifier }}
+  {{ aux l _ }}
+  | kind kid       :: :: kind {{ com kind-annotated variable }}
+  | kid            :: S :: none {{ ichlo [[kid]] }}
+
+quant_item :: 'QI_' ::=
+  {{ com kinded identifier or Int constraint }}
+  {{ aux l _ }}
+  | kinded_id 	  	 	       	      :: :: id {{ com optionally kinded identifier }}
+  | n_constraint			      :: :: constraint {{ com constraint }}
+  | kinded_id0 ... kinded_idn                 :: :: constant
+
+typquant :: 'TypQ_' ::=
+  {{ com type quantifiers and constraints}}
+  {{ aux l _ }}
+  | forall quant_item1 , ... , quant_itemn . :: :: tq %{{ texlong }}
+  |                                          :: ::  no_forall     {{ com empty }}
+
+typschm :: 'TypSchm_' ::=
+  {{ com type scheme  }}
+  {{ aux l _ }}
+  |  typquant typ                            :: :: ts
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Type definitions                                             %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+grammar
+
+type_def {{ ocaml 'a type_def }} {{ lem type_def 'a }} :: 'TD_' ::=
+  {{ ocaml TD_aux of type_def_aux * 'a annot }}
+  {{ lem TD_aux of type_def_aux * annot 'a }}
+| type_def_aux  :: :: aux
+  {{ pp-raw (x,y) -> string "..type_def" }}
+  {{ pp (x,y) -> string "..type_def" }}
+
+
+type_def_aux  :: 'TD_' ::=
+  {{ com type definition body }}
+  | type id typquant = typ_arg                                        :: :: abbrev
+    {{ com type abbreviation }} {{ texlong }}
+  | typedef id = const struct typquant { typ1 id1 ; ... ; typn idn semi_opt }     :: :: record
+    {{ com struct type definition }} {{ texlong }}
+  | typedef id = const union typquant { type_union1 ; ... ; type_unionn semi_opt }   :: :: variant
+    {{ com tagged union type definition}} {{ texlong }}
+  | typedef id = enumerate { id1 ; ... ; idn semi_opt }   :: :: enum
+    {{ com enumeration type definition}} {{ texlong }}
+  | bitfield id : typ = { id1 : index_range1 , ... , idn : index_rangen } :: :: bitfield
+    {{ com register mutable bitfield type definition }} {{ texlong }}
+
+type_union :: 'Tu_' ::=
+  {{ com type union constructors }}
+  {{ aux l _ }}
+  | typ id                                              :: :: ty_id
+
+index_range :: 'BF_' ::= {{ com index specification, for bitfields in register types}} 
+  {{ aux l _ }}
+  | nexp :: :: 'single'  {{ com single index }}
+  | nexp1 '..' nexp2 :: :: range {{ com index range }}
+  | index_range1 , index_range2 :: :: concat {{ com concatenation of index ranges }}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Literals                                                     %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+lit :: 'L_' ::=
+  {{ com literal constant }}
+  {{ aux l _ }}
+  | ( )       :: :: unit
+  | bitzero   :: :: zero
+  | bitone    :: :: one
+  | true      :: :: true
+  | false     :: :: false
+  | num       :: :: num {{ com natural number constant }}
+  | hex       :: :: hex {{ com bit vector constant, C-style }}
+  | bin       :: :: bin  {{ com bit vector constant, C-style }}
+  | string1   :: :: string {{ com string constant }}
+  | undefined :: :: undef {{ com undefined-value constant }}
+  | real      :: :: real
+
+semi_opt {{ tex \ottnt{;}^{?} }} :: 'semi_' ::=         {{ phantom }}
+                                                        {{ ocaml bool }}
+                                                        {{ pp-raw _ = string "semi_opt" }}
+                                                        {{ pp _ = string "semi_opt" }}
+                                                        {{ lem bool }}
+                                                        {{ hol bool }}
+							{{ isa bool }}
+  {{ com optional semi-colon }}
+  |                                                     :: :: no
+    {{ hol F }}
+    {{ ocaml false }}
+    {{ lem false }}
+    {{ isa False }}
+  | ';'                                                 :: :: yes
+    {{ hol T }}
+    {{ ocaml true }}
+    {{ lem true }}
+    {{ isa True }}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Patterns                                                     %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+typ_pat :: 'TP_' ::=
+  {{ com type pattern }}
+  {{ aux l _ }}
+  | _                               :: :: wild
+  | kid                             :: :: var
+  | id ( typ_pat1 , .. , typ_patn ) :: :: app
+
+pat :: 'P_' ::=
+  {{ com pattern }}
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | lit                                     :: :: lit
+    {{ com literal constant pattern }}
+  | _                                       :: :: wild
+    {{ com wildcard }}
+  | pat1 | pat2                             :: :: or
+    {{ com pattern disjunction }}
+  | ~ pat                                   :: :: not
+    {{ com pattern negation }}
+  | ( pat as id )                           :: :: as
+    {{ com named pattern }}
+  | ( typ ) pat                             :: :: typ
+    {{ com typed pattern }}
+  | id                                      :: :: id
+    {{ com identifier  }}
+  | pat typ_pat :: :: var
+    {{ com bind pattern to type variable }}
+  | id ( pat1 , .. , patn )                 :: :: app
+    {{ com union constructor pattern }}
+  | [ pat1 , ... , patn  ]                  :: :: vector
+    {{ com vector pattern }}
+  |  pat1 @ ... @ patn                      :: :: vector_concat
+    {{ com concatenated vector pattern }}
+  | ( pat1 , .... , patn )                  :: :: tup
+    {{ com tuple pattern }}
+  | [|| pat1 , .. , patn ||]                :: :: list
+    {{ com list pattern }}
+  | ( pat )                                 :: S :: paren
+    {{ ichlo [[pat]] }}
+  | pat1 '::' pat2                          :: :: cons
+    {{ com Cons patterns }}
+  | pat1 ^^ ... ^^ patn                     :: :: string_append
+    {{ com string append pattern, x ^^ y }}
+
+parsing
+P_app <= P_app
+P_app <= P_as
+
+grammar
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % Interpreter specific things                                  %
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% optx :: '' ::= {{ phantom }} {{ lem maybe string }} {{ ocaml string option }}
+%   | x                                            ::  :: optx_x
+%   {{ lem (Just [[x]]) }} {{ ocaml (Some [[x]]) }}
+%   |                                              :: :: optx_none
+%   {{ lem Nothing }} {{ ocaml None }}
+
+% tag :: 'Tag_' ::=
+% {{ com Data indicating where the identifier arises and thus information necessary in compilation }}
+%    | None                                 :: :: empty
+%    | Intro                                :: :: intro {{ com Denotes an assignment and lexp that introduces a binding }}
+%    | Set                                  :: :: set {{ com Denotes an expression that mutates a local variable }}
+%    | Tuple                                :: :: tuple_assign {{ com Denotes an assignment with a tuple lexp }}
+%    | Global				  :: :: global {{ com Globally let-bound or enumeration based value/variable }}
+%    | Ctor                                 :: :: ctor {{ com Data constructor from a type union }}
+%    | Extern optx                          :: :: extern {{ com External function, specied only with a val statement }}
+%    | Default                              :: :: default {{ com Type has come from default declaration, identifier may not be bound locally }}
+%    | Spec				  :: :: spec
+%    | Enum num				  :: :: enum
+%    | Alias				  :: :: alias
+%    | Unknown_path optx			  :: :: unknown {{ com Tag to distinguish an unknown path from a non-analysis non deterministic path}}
+
+% embed
+% {{ lem
+
+% type tannot = maybe (typ * tag * list unit * effect * effect)
+
+% }}
+
+% embed
+% {{ ocaml
+
+% (* Interpreter specific things are just set to unit here *)
+% type tannot = unit
+
+% type reg_form_set = unit
+
+% }}
+
+% grammar
+% tannot :: '' ::=
+%   {{ phantom }}
+%   {{ ocaml unit }}
+%   {{ lem tannot }}
+
+% i_direction :: 'I' ::=
+%   | IInc :: :: Inc
+%   | IDec :: :: Dec
+
+% ctor_kind :: 'C_' ::=
+%   | C_Enum nat :: :: Enum
+%   | C_Union    :: :: Union
+
+% reg_form :: 'Form_' ::=
+%   | Reg id tannot i_direction :: :: Reg
+%   | SubReg id reg_form index_range :: :: SubReg
+
+% reg_form_set :: '' ::= {{ phantom }} {{ lem set reg_form }}
+
+% alias_spec_tannot :: '' ::= {{ phantom }} {{ lem alias_spec tannot }} {{ ocaml tannot alias_spec }}
+
+% value :: 'V_' ::= {{ com interpreter evaluated value }}
+%   | Boxref nat typ                                                                  :: :: boxref
+%   | Lit lit                                                                         :: :: lit
+%   | Tuple ( value1 , ... , valuen )                                                 :: :: tuple
+%   | List ( value1 , ... , valuen )                                                  :: :: list
+%   | Vector nat i_direction ( value1 , ... , valuen )                                :: :: vector
+%   | Vector_sparse nat' nat'' i_direction ( nat1 value1 , ... , natn valuen ) value' :: :: vector_sparse
+%   | Record typ ( id1 value1 , ... , idn valuen )                                    :: :: record
+%   | V_ctor id typ ctor_kind value1                                                  :: :: ctor
+%   | Unknown                                                                         :: :: unknown
+%   | Register reg_form                                                               :: :: register
+%   | Register_alias alias_spec_tannot tannot                                         :: :: register_alias
+%   | Track value reg_form_set                                                        :: :: track
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Expressions                                                  %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+loop :: loop ::= {{ phantom }}
+                 {{ pp-raw _ = string "loop" }}
+                 {{ pp _ = string "loop" }}
+  | while ::   :: while 
+  | until ::  :: until 
+
+internal_loop_measure :: 'Measure_' ::=
+  {{ com internal syntax for an optional termination measure for a loop }}
+  {{ auxparam 'a }}
+  {{ aux l _ }}
+  |                               :: :: none
+  | 'termination_measure' { exp } :: :: some
+
+exp :: 'E_' ::=
+  {{ com expression }}
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | { exp1 ; ... ; expn }                               :: :: block
+    {{ com sequential block }}
+  | id                                                  :: :: id
+    {{ com identifier }}
+  | lit                                                 :: :: lit
+    {{ com literal constant }}
+  | ( typ ) exp                                         :: :: cast
+    {{ com cast }}
+  | id ( exp1 , .. , expn )                             :: :: app
+    {{ com function application }}
+  | exp1 id exp2                                        :: :: app_infix
+    {{ com infix function application }}
+  | ( exp1 , .... , expn )                              :: :: tuple
+    {{ com tuple }}
+  | if exp1 then exp2 else exp3                         :: :: if
+    {{ com conditional }}
+  | loop internal_loop_measure exp1 exp2                    :: :: loop
+  | foreach ( id from exp1 to exp2 by exp3 in order ) exp4  :: :: for   {{ com for loop }}
+
+  % vectors
+  | [ exp1 , ... , expn ]                             :: :: vector {{ com vector (indexed from 0) }}
+  | exp [ exp' ]                                      :: :: vector_access {{ com vector access }}
+  | exp [ exp1 '..' exp2 ]                            :: :: vector_subrange {{ com subvector extraction }}
+  | [ exp with exp1 = exp2 ]                          :: :: vector_update {{ com vector functional update }}
+  | [ exp with exp1 '..' exp2 = exp3 ]                :: :: vector_update_subrange {{ com vector subrange update, with vector}}
+  | exp1 @ exp2                                       :: :: vector_append {{ com vector concatenation }}
+
+  % lists
+  | [| exp1 , ..  , expn |]                           :: :: list {{ com list }}
+  | exp1 '::' exp2                                    :: :: cons {{ com cons }}
+
+  % structs
+  | struct { fexp0 , ... , fexpn }                    :: :: record {{ com struct }}
+  | { exp with fexp0 , ... , fexpn }                  :: :: record_update {{ com functional update of struct }}
+  | exp . id                                          :: :: field {{ com field projection from struct  }}
+
+  | match exp { pexp1 , ... , pexpn }                 :: :: case {{ com pattern matching }}
+
+  | letbind in exp                                    :: :: let
+    {{ com let expression }}
+
+  | lexp = exp                                        :: :: assign
+    {{ com imperative assignment }}
+
+  | sizeof nexp                                       :: :: sizeof
+    {{ com the value of $[[nexp]]$ at run time }}
+
+  | return exp                                        :: :: return {{ com  return $[[exp]]$ from current function }}
+  | exit exp                                          :: :: exit
+    {{ com halt all current execution }}
+  | ref id                                            :: :: ref
+  | throw exp                                         :: :: throw
+  | try exp catch { pexp1 , ... , pexpn }             :: :: try
+  | assert ( exp , exp' )                             :: :: assert
+    {{ com halt with error message $[[exp']]$ when not $[[exp]]$. exp' is optional. }}
+  | ( exp )                                           :: S :: paren {{ ichlo [[exp]] }}
+  | var lexp = exp in exp'  :: I :: var {{ com This is an internal node for compilation that demonstrates the scope of a local mutable variable }}
+  | let pat = exp in exp'   :: I :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
+  | return_int ( exp )      ::  :: internal_return {{ com For internal use to embed into monad definition }}
+  | value :: I :: internal_value {{ com For internal use in interpreter to wrap pre-evaluated values when returning an action }}
+  | constraint n_constraint :: :: constraint
+
+lexp :: 'LEXP_' ::= {{ com lvalue expression }}
+    {{ aux annot _ }} {{ auxparam 'a }}
+    | id                      :: :: id {{ com identifier }}
+    | deref exp               :: :: deref
+    | id ( exp1 , .. , expn ) :: :: memory {{ com memory or register write via function call }}
+    | ( typ ) id	      :: :: cast
+    | ( lexp0 , .. , lexpn )  :: :: tup {{ com multiple (non-memory) assignment }}
+    | lexp1 @ ... @ lexpn     :: :: vector_concat {{ com vector concatenation L-exp }}
+    | lexp [ exp ]            :: :: vector  {{ com vector element }}
+    | lexp [ exp1 '..' exp2 ] :: :: vector_range {{ com subvector }}
+    | lexp . id               :: :: field {{ com struct field }}
+
+fexp :: 'FE_' ::=
+  {{ com field expression }}
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | id = exp                  :: :: Fexp
+
+opt_default :: 'Def_val_' ::=
+  {{ com optional default value for indexed vector expressions }} %, to define a default value for any unspecified positions in a sparse map 
+  {{ aux annot _ }} {{ auxparam 'a }}
+  |                           :: :: empty
+  | ; default = exp           :: :: dec
+
+pexp :: 'Pat_' ::=
+  {{ com pattern match }}
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | pat -> exp                          :: :: exp
+  | pat when exp1 -> exp                :: :: when
+% apparently could use -> or => for this.
+
+%% % psexp :: 'Pats' ::=
+%% %   {{ com Multi-pattern matches }}
+%% %   {{ aux l _ }}
+%% %   | pat1 ... patn -> exp                                :: :: exp
+
+
+parsing
+
+%P_app right LB_Let_val
+
+%%P_app <= Fun
+
+%%Fun right App
+%%Function right App
+E_case right E_app
+E_let right E_app
+
+%%Fun <= Field
+%%Function <= Field
+E_app <= E_field
+E_case <= E_field
+E_let <= E_field
+
+E_app left E_app
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Function definitions                                         %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%% old Lem style %%%%%%
+grammar
+%% % lem_tannot_opt_aux :: 'LEM_Typ_annot_' ::=
+%% %   {{ com Optional type annotations }}
+%% %   |                                                     :: :: none
+%% %   | : typ                                               :: :: some 
+%% % 
+%% % lem_tannot_opt {{ tex \ottnt{tannot}^? }} :: 'LEM_Typ_annot_' ::=
+%% %   {{ com location-annotated optional type annotations }}
+%% %   | tannot_opt_aux l                                    :: :: aux
+%% % 
+%% % lem_funcl :: 'LEM_FCL' ::=
+%% %   {{ com Function clauses }}
+%% %   {{ aux l _ }}
+%% %   | id pat1 ... patn tannot_opt = exp                   :: :: Funcl
+%% % 
+%% % lem_letbind :: 'LEM_LB_' ::=
+%% %   {{ com Let bindings }}
+%% %   {{ aux l _ }}
+%% %   | pat tannot_opt = exp                                :: :: Let_val
+%% %     {{ com Value bindings }}
+%% %   | lem_funcl                                           :: :: Let_fun
+%% %     {{ com Function bindings }}
+%% % 
+%% % 
+%% % grammar
+%% % lem_val_def :: 'LEM_VD' ::= 
+%% %   {{ com Value definitions }}
+%% %   {{ aux l _ }}
+%% %   | let lem_letbind                                     :: :: Let_def
+%% %     {{ com Non-recursive value definitions }}
+%% %   | let rec  lem_funcl1 and ... and lem_funcln          :: :: Let_rec
+%% %     {{ com Recursive function definitions }}
+%% % 
+%% % lem_val_spec :: 'LEM_VS' ::=
+%% %   {{ com Value type specifications }} 
+%% %   {{ aux l _ }}
+%% %   | val x_l : typschm                                           :: :: Val_spec
+
+%%%%% C-ish style %%%%%%%%%%
+
+tannot_opt :: 'Typ_annot_opt_' ::=
+  {{ com optional type annotation for functions}}
+  {{ aux l _ }}
+  |                                             :: :: none
+% Currently not optional; one issue, do the type parameters apply over the argument types, or should this be the type of the function and not just the return
+  | typquant typ                                :: :: some
+
+rec_opt :: 'Rec_' ::=
+  {{ com optional recursive annotation for functions }}
+  {{ auxparam 'a }}
+  {{ aux l _ }}
+  |                                             :: :: nonrec {{ com non-recursive }}
+  | rec                                         :: :: rec {{ com recursive without termination measure }}
+  | { pat -> exp }                              :: :: measure {{ com recursive with termination measure }}
+
+effect_opt :: 'Effect_opt_' ::=
+  {{ com optional effect annotation for functions }}
+  {{ aux l _ }}
+  |                                              :: :: none {{ com no effect annotation }}
+  | effectkw effect                              :: :: effect
+
+% Generate a pexp, but from slightly different syntax (= rather than ->)
+% FIXME Can't mix type params and synonyms in Isabelle
+pexp_funcl :: 'Pat_funcl_' ::=
+  {{ auxparam 'a }}
+  {{ ocaml ('a pexp) }}
+  {{ isa pexp }}
+  {{ lem (pexp 'a) }}
+  {{ pp-raw x = pp_raw_pexp x }}
+  {{ pp x = pp_pexp x }}
+  | pat = exp                       :: :: exp {{ ichlo (Pat_aux (Pat_exp [[pat]] [[exp]],Unknown)) }}
+  | ( pat when exp1 ) = exp         :: :: when {{ ichlo (Pat_aux (Pat_when [[pat]] [[exp1]] [[exp]],Unknown)) }}
+
+
+funcl :: 'FCL_' ::=
+  {{ com function clause }}
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | id pexp_funcl                   :: :: Funcl
+
+
+fundef :: 'FD_' ::=
+  {{ com function definition}}
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | function rec_opt tannot_opt effect_opt funcl1 and ... and funcln :: :: function {{ texlong }}  
+% Note that the typ in the tannot_opt is
+% the *result* type, not the type of the whole function.  The argument
+% type comes from the pattern in the funcl
+
+mpat :: 'MP_' ::=
+  {{ com Mapping pattern. Mostly the same as normal patterns but only constructible parts }}
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | lit                                ::   :: lit
+  | id                                 ::   :: id
+  | id ( mpat1 , ... , mpatn )         ::   :: app
+  | [ mpat1 , ... , mpatn ]            ::   :: vector
+  | mpat1 @ ... @ mpatn                ::   :: vector_concat
+  | ( mpat1 , ... , mpatn )            ::   :: tup
+  | [|| mpat1 , ... , mpatn ||]        ::   :: list
+  | ( mpat )                           :: S :: paren {{ ichlo [[mpat]] }}
+  | mpat1 '::' mpat2                   ::   :: cons
+  | mpat1 ^^ ... ^^ mpatn              ::   :: string_append
+  | mpat : typ                         ::   :: typ
+  | mpat as id                         ::   :: as
+
+mpexp :: 'MPat_' ::=
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | mpat          :: :: pat
+  | mpat when exp :: :: when
+
+mapcl :: 'MCL_' ::=
+  {{ com mapping clause (bidirectional pattern-match) }}
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | mpexp1 <-> mpexp2 :: :: bidir
+  | mpexp   => exp    :: :: forwards
+  | mpexp  <-  exp     :: :: backwards
+
+
+mapdef :: 'MD_' ::=
+  {{ com mapping definition (bidirectional pattern-match function) }}
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | mapping id tannot_opt = { mapcl1 , ... , mapcln } :: :: mapping {{ texlong }}
+
+letbind :: 'LB_' ::=
+  {{ com let binding }}
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | let pat = exp                                    :: :: val
+    {{ com let, implicit type ($[[pat]]$ must be total)}}
+
+val_spec {{ ocaml 'a val_spec }} {{ lem val_spec 'a }} :: 'VS_' ::=
+   {{ ocaml VS_aux of val_spec_aux * 'a annot }}
+   {{ pp-raw x = match x with VS_aux(vs,annot) -> pp_raw_val_spec_aux vs }}
+   {{ pp x = match x with VS_aux(vs,annot) -> pp_val_spec_aux vs }}
+   {{ lem VS_aux of val_spec_aux * annot 'a }}
+  | val_spec_aux ::  :: aux
+
+val_spec_aux :: 'VS_' ::=
+  {{ com value type specification }}
+  {{ ocaml  VS_val_spec of typschm * id * (string * string) list * bool }}
+  {{ pp-raw x =
+match x with 
+| VS_val_spec(ts,id,ext,is_cast) ->
+  let doc_extern ext =
+    let docs = List.map (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\"")) ext in
+    (if docs = [] then string "[]" else  brackets (separate comma docs))
+    in
+  string "VS_val_spec("
+(*     if comment then docstring annot else empty*) 
+     ^^ (if is_cast then (string "cast_true") else (string "cast_false")) ^^ comma
+     ^^ pp_raw_id id ^^ comma
+     ^^ doc_extern ext ^^ comma
+     ^^ pp_raw_typschm ts
+     ^^ string ")"
+}}
+  {{ pp x = (* based on pretty_print_sail.ml doc_spec *)
+match x with 
+| VS_val_spec(ts,id,ext,is_cast) ->
+  let doc_extern ext =
+    let docs = List.map (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\"")) ext in
+    if docs = [] then empty else equals ^^ space ^^ braces (separate (comma ^^ space) docs)
+    in
+     empty (*     if comment then docstring annot else*) 
+     ^^ string "val" ^^ space
+     ^^ (if is_cast then (string "cast" ^^ space) else empty)
+     ^^ pp_id id ^^ space
+     ^^ doc_extern ext
+     ^^ colon ^^ space
+     ^^ pp_typschm ts
+}}
+  {{ lem VS_val_spec of typschm * id * list (string * string) * bool }}
+  {{ isa  typschm * id  * (string => string option) * bool }}
+  | val typschm id                                  :: S :: val_spec
+    {{ com specify the type of an upcoming definition }}
+    {{ ocaml (VS_val_spec [[typschm]] [[id]] None false) }} {{ lem }} {{ isa }}
+  | val cast typschm id                             :: S :: cast
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] None true) }} {{ lem }} {{ isa }}
+  | val extern typschm id                           :: S :: extern_no_rename
+    {{ com specify the type of an external function }}
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] (Some [[id]]) false) }} {{ lem }} {{ isa }}
+  | val extern typschm id = string                  :: S :: extern_spec
+    {{ com specify the type of a function from Lem }}
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] (Some [[string]]) false) }} {{ lem }} {{ isa }}
+%where the string must provide an explicit path to the required function but will not be checked
+
+default_spec :: 'DT_' ::=
+  {{ com default kinding or typing assumption }}
+  {{ aux l _ }}
+  | default Order order      :: :: order
+
+scattered_def :: 'SD_' ::=
+  {{ com scattered function and union type definitions }}
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | scattered function rec_opt tannot_opt effect_opt id   :: :: function
+{{ texlong }} {{ com scattered function definition header }}
+
+  | function clause funcl  :: :: funcl
+{{ texlong }} {{ com scattered function definition clause }}
+
+  | scattered typedef id = const union typquant :: :: variant
+{{ texlong }} {{ com scattered union definition header }}
+
+  | union id member type_union :: :: unioncl
+{{ texlong }} {{ com scattered union definition member }}
+
+  | scattered mapping id : tannot_opt :: :: mapping
+
+  | mapping clause id = mapcl :: :: mapcl
+
+  | end id  :: :: end
+{{ texlong }} {{ com scattered definition end }}
+
+reg_id :: 'RI_' ::=
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | id								:: :: id
+
+alias_spec :: 'AL_' ::=
+  {{ com register alias expression forms }}
+%. Other than where noted, each id must refer to an unaliased register of type vector
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | reg_id . id							:: :: subreg
+  | reg_id [ exp ] 						:: :: bit
+  | reg_id [ exp '..' exp' ]					:: :: slice
+  | reg_id : reg_id'  	    					:: :: concat
+
+dec_spec :: 'DEC_' ::=
+  {{ com register declarations }}
+  {{ aux annot _ }} {{ auxparam 'a }}
+  | register effect effect' typ id                              :: :: reg
+  | register configuration id : typ = exp                       :: :: config
+  | register alias id = alias_spec				:: :: alias
+  | register alias typ id = alias_spec				:: :: typ_alias
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Top-level definitions                                        %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+prec :: '' ::=
+   | infix :: :: Infix
+   | infixl :: :: InfixL
+   | infixr :: :: InfixR
+
+loop_measure :: '' ::=
+   {{ auxparam 'a }}
+   | loop exp :: :: Loop
+
+def :: 'DEF_' ::=
+  {{ com top-level definition }}
+  {{ auxparam 'a }}
+  | type_def                                           :: :: type
+    {{ com type definition }}
+  | fundef                                             :: :: fundef
+    {{ com function definition }}
+  | mapdef                                             :: :: mapdef
+    {{ com mapping definition }}
+  | letbind                                            :: :: val
+    {{ com value definition }}
+  | val_spec                                           :: :: spec
+    {{ com top-level type constraint }}
+  | fix prec num id                                    :: :: fixity
+    {{ com fixity declaration }}
+  |  overload id [ id1 ; ... ; idn ]                   :: :: overload
+    {{ com operator overload specification }}
+  | default_spec                                       :: :: default
+    {{ com default kind and type assumptions }}
+  | scattered_def                                      :: :: scattered
+    {{ com scattered function and type definition }}
+  | 'termination_measure' id pat = exp                 :: :: measure
+    {{ com separate termination measure declaration }}
+  | 'termination_measure' id loop_measure1 , .. , loop_measuren :: :: loop_measures
+    {{ com separate termination measure declaration }}
+  | dec_spec                                           :: :: reg_dec
+    {{ com register declaration }}
+  | fundef1 .. fundefn                                 :: I :: internal_mutrec
+    {{ com internal representation of mutually recursive functions }}
+  | $ string1 string2 l                                :: :: pragma
+    {{ com compiler directive }}
+
+defs :: '' ::=
+  {{ com definition sequence }}
+  {{ auxparam 'a }}
+  | def1  .. defn                 :: :: Defs
+
+
+
+terminals :: '' ::=
+  | **                                  :: :: starstar
+    {{ tex \ensuremath{\mathop{\mathord{*}\mathord{*} } } }}
+    {{ com \texttt{**} }}
+   | >=                                  :: :: geq
+    {{ tex \ensuremath{\geq} }}
+%     {{ tex \ottsym{\textgreater=} }}
+%     {{ com \texttt{>=} }}
+   | '<='                                        :: :: leq
+    {{ tex \ensuremath{\leq} }}
+%     {{ tex \ottsym{\textless=} }}
+%     {{ com \texttt{<=} }}
+   | ->                                  :: :: arrow
+    {{ tex \ensuremath{\rightarrow} }}
+   | <->                                 :: :: bidir
+    {{ tex \ensuremath{\leftrightarrow} }}
+
+%     {{ tex \ottsym{-\textgreater} }}
+%     {{ com \texttt{->} }}
+   | ==>                                 :: :: Longrightarrow
+     {{ tex \ensuremath{\Longrightarrow} }}
+     {{ com \texttt{==>} }}
+%   | <|                                  :: :: startrec
+%     {{ tex \ensuremath{\langle|} }}
+%     {{ com \texttt{<|} }}
+%   | |>                                  :: :: endrec
+%     {{ tex \ensuremath{|\rangle} }}
+%     {{ com \texttt{|>} }}
+  | inter                               :: :: inter
+    {{ tex \ensuremath{\cap} }}
+  | u+                                  :: :: uplus
+    {{ tex \ensuremath{\uplus} }}
+  | u-                                  :: :: uminus
+    {{ tex \ensuremath{\setminus} }}
+  | NOTIN                               :: :: notin
+    {{ tex \ensuremath{\not\in} }}
+  | SUBSET                              :: :: subset
+    {{ tex \ensuremath{\subset} }}
+  | NOTEQ                               :: :: noteq
+    {{ tex \ensuremath{\not=} }}
+  | emptyset                            :: :: emptyset
+    {{ tex \ensuremath{\emptyset} }}
+%   | <                                   :: :: lt
+    {{ tex \ensuremath{\langle} }}
+%     {{ tex \ottsym{<} }}
+%   | >                                   :: :: gt
+    {{ tex \ensuremath{\rangle} }}
+%    {{ tex \ottsym{>} }}
+  | lt                                  :: :: mathlt
+    {{ tex < }}
+  | gt                                  :: :: mathgt
+    {{ tex > }} 
+  | ~=                                  :: :: alphaeq
+    {{ tex \ensuremath{\approx} }}
+  | ~< 	   			:: :: consist
+    {{ tex \ensuremath{\precapprox} }}
+  | |-                                  :: :: vdash
+    {{ tex \ensuremath{\vdash} }}
+  | |-t					:: :: vdashT
+    {{ tex \ensuremath{\vdash_t} }}
+  | |-n					:: :: vdashN
+    {{ tex \ensuremath{\vdash_n} }}
+  | |-e					:: :: vdashE
+    {{ tex \ensuremath{\vdash_e} }}
+  | |-o					:: :: vdashO
+    {{ tex \ensuremath{\vdash_o} }}
+  | |-c                                 :: :: vdashC
+    {{ tex \ensuremath{\vdash_c} }}
+  | '                                   :: :: quote
+    {{ tex \ottsym{'} }}
+  | |->                                 :: :: mapsto
+    {{ tex \ensuremath{\mapsto} }}
+  | gives                               :: :: gives
+    {{ tex \ensuremath{\triangleright} }}
+  | ~>                                  :: :: leadsto
+    {{ tex \ensuremath{\leadsto} }}
+  | select				:: :: select
+   {{ tex \ensuremath{\sigma} }}
+  | =>                                  :: :: Rightarrow
+    {{ tex \ensuremath{\Rightarrow} }}
+  | --                                  :: :: dashdash
+    {{ tex \mbox{--} }}
+  | effectkw				:: :: effectkw
+    {{ tex \ottkw{effect} }}
+  | empty                               :: :: empty
+    {{ tex \ensuremath{\epsilon} }}
+  | consistent_increase                 :: :: ci
+    {{ tex \ottkw{consistent\_increase}~ }}
+  | consistent_decrease                 :: :: cd
+    {{ tex \ottkw{consistent\_decrease}~ }}
+  | == :: :: equiv
+    {{ tex \equiv }}
+%   | [| :: :: range_start
+%     {{ tex \mbox{$\ottsym{[\textbar}$} }}       
+%   | |] :: :: range_end       
+%     {{ tex \mbox{$\ottsym{\textbar]}$} }}       
+%   | [|| :: :: list_start
+%     {{ tex \mbox{$\ottsym{[\textbar\textbar}$} }}       
+%   | ||] :: :: list_end       
+%     {{ tex \mbox{$\ottsym{\textbar\textbar]}$} }}       
+  | INN :: :: member {{ tex \in }}
+  | |~ :: :: ncdash {{ tex \ncdash }}
+%  | ~ :: :: sim {{ tex \sim }}

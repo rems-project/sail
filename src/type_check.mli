@@ -126,6 +126,7 @@ module Env : sig
   val update_val_spec : id -> typquant * typ -> t -> t
 
   val get_register : id -> t -> effect * effect * typ
+  val get_registers : t -> (effect * effect * typ) Bindings.t
 
   (** Return all the identifiers in an enumeration. Throws a type
      error if the enumeration doesn't exist. *)
@@ -137,6 +138,8 @@ module Env : sig
 
   val add_local : id -> mut * typ -> t -> t
 
+  val get_default_order_option : t -> order option
+    
   val add_scattered_variant : id -> typquant -> t -> t
 
   (** Check if a local variable is mutable. Throws Type_error if it

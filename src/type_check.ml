@@ -436,6 +436,7 @@ module Env : sig
   val get_union_id  : id -> t -> typquant * typ
   val is_register : id -> t -> bool
   val get_register : id -> t -> effect * effect * typ
+  val get_registers : t -> (effect * effect * typ) Bindings.t
   val add_register : id -> effect -> effect -> typ -> t -> t
   val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
@@ -459,6 +460,7 @@ module Env : sig
   val add_extern : id -> (string * string) list -> t -> t
   val get_extern : id -> t -> string -> string
   val get_default_order : t -> order
+  val get_default_order_option : t -> order option
   val set_default_order : order -> t -> t
   val add_enum : id -> id list -> t -> t
   val get_enum : id -> t -> id list
@@ -1198,6 +1200,8 @@ end = struct
     try Bindings.find id env.registers with
     | Not_found -> typ_error env (id_loc id) ("No register binding found for " ^ string_of_id id)
 
+  let get_registers env = env.registers
+                 
   let is_extern id env backend =
     try not (Ast_util.extern_assoc backend (Bindings.find id env.externs) = None) with
     | Not_found -> false
@@ -1320,6 +1324,8 @@ end = struct
     match env.default_order with
     | None -> typ_error env Parse_ast.Unknown ("No default order has been set")
     | Some ord -> ord
+
+  let get_default_order_option env = env.default_order
 
   let set_default_order o env =
     match o with

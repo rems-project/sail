@@ -253,25 +253,29 @@ let opt_ddump_tc_raw_ast = ref false
       
 let check_ast (env : Type_check.Env.t) (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.Env.t =
 
-  let _ = match !(Minisail.opt_dmsp_check_before) with
-    | Some vrb -> Minisail.check_ast vrb defs
-    | None -> () in
-
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
   let ast, env = Type_error.check env defs in
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_defs stdout ast else () in
 
-  let () = match !opt_ddump_tc_ast_ott_raw with None -> () | Some file -> (let c = open_out file in Pretty_print_sail.pp_defs_ott_raw c ast; close_out c) in
+
   let () = match !opt_ddump_tc_ast_ott_pp with None -> () | Some file -> (let c = open_out file in Pretty_print_sail.pp_defs_ott_pp c ast; close_out c) in
 
-  let () = match !(Minisail.opt_dmsp_check_after) with
-    | Some vrb -> Minisail.check_ast vrb ast 
-    | None -> () in
+  let _ = if !(Minisail.opt_dtc_check) then
+            let ast , env = Specialize.specialize Specialize.typ_ord_specialization env ast in
+            (*let ast = Rewrites.monomorphise "lem" env ast in*)
+            let () = match !opt_ddump_tc_ast_ott_raw with
+              | None -> ()
+              | Some file -> (let c = open_out file in Pretty_print_sail.pp_defs_ott_raw c ast; close_out c) in
+            Minisail.tc_check env ast
+          else () in
 
-  let _ = if !(Tc_checker.opt_dtc_check) then
-            let ast = Rewrites.monomorphise "lem" env ast in
-            let () = match !opt_ddump_tc_ast_ott_raw with None -> () | Some file -> (let c = open_out file in Pretty_print_sail.pp_defs_ott_raw c ast; close_out c) in
-            Tc_checker.tc_check ast
+  let _ = if !(Minisail.opt_dtc_convert) then
+            let ast = Scattered.descatter ast in
+            let () = match !opt_ddump_tc_ast_ott_raw with
+                None -> () | Some file ->
+                              (let c = open_out file in Pretty_print_sail.pp_defs_ott_raw c ast; close_out c) in
+            let ast , env = Specialize.specialize Specialize.typ_ord_specialization env ast in
+            Minisail.tc_convert env ast
           else () in
   
   let () = if !opt_just_check then exit 0 else () in

@@ -100,3 +100,5 @@ val opt_coq_warn_nonexhaustive : bool ref
 val rewrite_defs_check : (string * (Env.t -> tannot defs -> tannot defs * Env.t)) list
 
 val simple_typ : typ -> typ
+
+val monomorphise :  string -> 'a -> Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs

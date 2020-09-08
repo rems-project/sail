@@ -420,14 +420,11 @@ let options = Arg.align ([
     Arg.Tuple [set_target "smt"; Arg.Set opt_smt_fuzz],
     " (debug) fuzz sail SMT builtins");
   ( "-dtc_check",
-     Arg.Set Tc_checker.opt_dtc_check,
-      "(debug) Run check of annotated AST based on declarative rules");
-  ( "-dmsp_check_before",
-      Arg.Int (fun vrb -> Minisail.opt_dmsp_check_before := Some vrb ),
-      "(debug) run MiniSail type checker before Sail type checker");
-  ( "-dmsp_check_after",
-      Arg.Int (fun vrb -> Minisail.opt_dmsp_check_after := Some vrb ),
-      "(debug) run MiniSail type checker after Sail type checker");
+     Arg.Set Minisail.opt_dtc_check,
+     "(debug) Run check of annotated Sail AST based on declarative rules");
+  ( "-dtc_convert",
+    Arg.Set Minisail.opt_dtc_convert,
+    "(debug) Convert annotated Sail AST based to MiniSail");
   ( "-ddump_tc_raw_ast",
     Arg.Set opt_ddump_tc_raw_ast,
     "(debug) dump the typechecked raw ast to stdout");

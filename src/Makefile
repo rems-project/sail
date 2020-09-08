@@ -77,8 +77,8 @@ full: sail lib doc
 ast.lem: ../language/sail.ott
 	$(OTT) -sort false -generate_aux_rules true -o ast.lem -picky_multiple_parses true  ../language/sail.ott
 
-sail_pp.ml: ../language/sail.ott 
-	$(OTT) -sort false -generate_aux_rules true  -picky_multiple_parses true -ocaml_pp sail_pp.ml -ocaml_pp_ast_module Ast ../language/sail.ott
+#sail_pp.ml: ../language/sail.ott 
+#	$(OTT) -sort false -generate_aux_rules true  -picky_multiple_parses true -ocaml_pp sail_pp.ml -ocaml_pp_ast_module Ast ../language/sail.ott
 
 # test sail_pp on risc-v, rebuilding:
 #../../sail-riscv/generated_definitions/ast/riscv-ast-pp.txt
