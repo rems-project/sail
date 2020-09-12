@@ -127,7 +127,7 @@ To build Sail with interactive support we need two more commands
 opam install linenoise
 make isail
 ```
-To test Sail is installed correctly, execute the following from the
+To test if Sail behaves correctly, execute the following from the
 root directory of the sail repository. You may also need to set
 $LEM_DIR to the root of the lem repository for the lem tests. Some of
 the C backend tests will fail if valgrind isn't installed. Some tests will
@@ -136,3 +136,12 @@ fail if cvc4 isn’t installed.
 export SAIL_DIR=$PWD
 test/run_tests.sh
 ```
+
+To install Sail using OPAM from the git repo, use `opam pin` as follows.
+```
+opam pin add sail /path/to/local/sail/repo
+```
+This way, you can make the most recent changes to Sail easily available to programs
+that use it. To rebuild this installation of Sail, use `opam upgrade` as usual.
+If you want to do more complicated things, `opam pin --help` might be of
+interest.
