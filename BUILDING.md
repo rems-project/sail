@@ -130,7 +130,8 @@ make isail
 To test Sail is installed correctly, execute the following from the
 root directory of the sail repository. You may also need to set
 $LEM_DIR to the root of the lem repository for the lem tests. Some of
-the C backend tests will fail if valgrind isn't installed.
+the C backend tests will fail if valgrind isn't installed. Some tests will
+fail if cvc4 isn’t installed.
 ```
 export SAIL_DIR=$PWD
 test/run_tests.sh
