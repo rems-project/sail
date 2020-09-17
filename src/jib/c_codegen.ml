@@ -1261,7 +1261,7 @@ let codegen_vector_header ctx id (direction, ctyp) =
   if is_stack_ctyp ctyp then
     string (Printf.sprintf "%s vector_access_%s(%s op, sail_int n);" (sgen_ctyp ctyp) (sgen_id id) (sgen_id id))
   else
-    string (Printf.sprintf "static void vector_access_%s(%s *rop, %s op, sail_int n);" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
+    string "" (* Not needed in the header file at the moment *)
   ^^ twice hardline
 
 let codegen_vector_body ctx id (direction, ctyp) =
