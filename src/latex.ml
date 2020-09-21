@@ -260,7 +260,7 @@ let latex_of_markdown str =
        ^ "\n\\end{itemize}"
     | Br -> "\n"
     | NL -> "\n"
-    | elem -> failwith ("Can't convert to latex: " ^ to_text [elem])
+    | elem -> failwith ("Can't convert to latex: " ^ Omd_backend.sexpr_of_md [elem])
 
   and format elems =
     String.concat "" (List.map format_elem elems)
