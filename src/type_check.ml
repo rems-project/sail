@@ -410,6 +410,7 @@ module Env : sig
   val update_val_spec : id -> typquant * typ -> t -> t
   val define_val_spec : id -> t -> t
   val get_val_spec : id -> t -> typquant * typ
+  val get_val_specs : t -> (typquant * typ ) Bindings.t
   val get_val_spec_orig : id -> t -> typquant * typ
   val is_union_constructor : id -> t -> bool
   val is_singleton_union_constructor : id -> t -> bool
@@ -417,6 +418,7 @@ module Env : sig
   val add_record : id -> typquant -> (typ * id) list -> t -> t
   val is_record : id -> t -> bool
   val get_record : id -> t -> typquant * (typ * id) list
+  val get_records : t -> (typquant * (typ * id) list) Bindings.t
   val get_accessor_fn : id -> id -> t -> typquant * typ
   val get_accessor : id -> id -> t -> typquant * typ * typ * effect
   val add_local : id -> mut * typ -> t -> t
@@ -427,12 +429,14 @@ module Env : sig
   val add_scattered_variant : id -> typquant -> t -> t
   val add_variant_clause : id -> type_union -> t -> t
   val get_variant : id -> t -> typquant * type_union list
+  val get_variants : t -> (typquant * type_union list) Bindings.t
   val get_scattered_variant_env : id -> t -> t
   val add_mapping : id -> typquant * typ * typ * effect -> t -> t
   val add_union_id : id -> typquant * typ -> t -> t
   val get_union_id  : id -> t -> typquant * typ
   val is_register : id -> t -> bool
   val get_register : id -> t -> effect * effect * typ
+  val get_registers : t -> (effect * effect * typ) Bindings.t
   val add_register : id -> effect -> effect -> typ -> t -> t
   val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
@@ -449,15 +453,18 @@ module Env : sig
   val add_ret_typ : typ -> t -> t
   val add_typ_synonym : id -> typquant -> typ_arg -> t -> t
   val get_typ_synonym : id -> t -> Ast.l -> t -> typ_arg list -> typ_arg
+  val get_typ_synonyms : t -> (typquant * typ_arg) Bindings.t
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
   val is_extern : id -> t -> string -> bool
   val add_extern : id -> (string * string) list -> t -> t
   val get_extern : id -> t -> string -> string
   val get_default_order : t -> order
+  val get_default_order_option : t -> order option
   val set_default_order : order -> t -> t
   val add_enum : id -> id list -> t -> t
   val get_enum : id -> t -> id list
+  val get_enums : t -> IdSet.t Bindings.t 
   val is_enum : id -> t -> bool
   val get_casts : t -> id list
   val allow_casts : t -> bool
@@ -683,6 +690,8 @@ end = struct
     match Bindings.find_opt id env.typ_synonyms with
     | Some (typq, arg) -> mk_synonym typq arg
     | None -> raise Not_found
+
+  let get_typ_synonyms env = env.typ_synonyms
 
   let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
     typ_debug ~level:2 (lazy ("Expanding " ^ string_of_n_constraint nc));
@@ -944,6 +953,8 @@ end = struct
     with
     | Not_found -> typ_error env (id_loc id) ("No val spec found for " ^ string_of_id id)
 
+  let get_val_specs env = env.top_val_specs
+                 
   let add_union_id id bind env =
     if bound_ctor_fn env id
     then typ_error env (id_loc id) ("A union constructor or function already exists with name " ^ string_of_id id )
@@ -1083,12 +1094,16 @@ end = struct
     with
     | Not_found -> typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
+  let get_enums env = env.enums
+
   let is_enum id env = Bindings.mem id env.enums
 
   let is_record id env = Bindings.mem id env.records
 
   let get_record id env = Bindings.find id env.records
-
+                        
+  let get_records env = env.records
+                        
   let add_record id typq fields env =
     if bound_typ_id env id
     then typ_error env (id_loc id) ("Cannot create record " ^ string_of_id id ^ ", type name is already bound")
@@ -1185,6 +1200,8 @@ end = struct
     | Some (typq, tus) -> { env with variants = Bindings.add id (typq, tus @ [tu]) env.variants }
     | None -> typ_error env (id_loc id) ("scattered union " ^ string_of_id id ^ " not found")
 
+  let get_variants env = env.variants
+            
   let get_variant id env =
     match Bindings.find_opt id env.variants with
     | Some (typq, tus) -> typq, tus
@@ -1201,6 +1218,8 @@ end = struct
   let get_register id env =
     try Bindings.find id env.registers with
     | Not_found -> typ_error env (id_loc id) ("No register binding found for " ^ string_of_id id)
+
+  let get_registers env = env.registers
 
   let is_extern id env backend =
     try not (Ast_util.extern_assoc backend (Bindings.find id env.externs) = None) with
@@ -1325,6 +1344,8 @@ end = struct
     | None -> typ_error env Parse_ast.Unknown ("No default order has been set")
     | Some ord -> ord
 
+  let get_default_order_option env = env.default_order
+                
   let set_default_order o env =
     match o with
     | Ord_aux (Ord_var _, l) -> typ_error env l "Cannot have variable default order"
@@ -2426,6 +2447,10 @@ let mk_expected_tannot env typ effect expected : tannot =
       instantiation = None
     }
 
+let get_instantiations = function
+  | None -> None
+  | Some t -> t.instantiation
+  
 let empty_tannot = None
 
 let is_empty_tannot = function
