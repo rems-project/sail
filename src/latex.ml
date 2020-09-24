@@ -254,13 +254,17 @@ let latex_of_markdown str =
        output_string chan code;
        close_out chan;
        sprintf "\\lstinputlisting[language=%s]{%s/block%s.%s}" lang !opt_directory uid lang
-    | Ul list ->
+    | (Ul list | Ulp list) ->
        "\\begin{itemize}\n\\item "
        ^ Util.string_of_list "\n\\item " format list
        ^ "\n\\end{itemize}"
+    | (Ol list | Olp list) ->
+       "\\begin{enumerate}\n\\item "
+       ^ Util.string_of_list "\n\\item " format list
+       ^ "\n\\end{enumerate}"
     | Br -> "\n"
     | NL -> "\n"
-    | elem -> failwith ("Can't convert to latex: " ^ to_text [elem])
+    | elem -> failwith ("Can't convert to latex: " ^ Omd_backend.sexpr_of_md [elem])
 
   and format elems =
     String.concat "" (List.map format_elem elems)
