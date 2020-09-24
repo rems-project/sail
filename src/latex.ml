@@ -333,9 +333,9 @@ let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext, is_cast), _)) =
 
 let rec latex_command cat id no_loc ((l, _) as annot) =
   state.this <- Some id;
-  let labelling = match cat with
-    | Val -> sprintf "\\label{%s}" (refcode_id id)
-    | _ -> sprintf "\\label{%s%s}" (category_name cat) (refcode_id id)
+  let labelname = match cat with
+    | Val -> sprintf "%s" (refcode_id id)
+    | _ -> sprintf "%s%s" (category_name cat) (refcode_id id)
   in
   (* To avoid problems with verbatim environments in commands, we have
      to put the sail code for each command in a separate file. *)
@@ -351,9 +351,9 @@ let rec latex_command cat id no_loc ((l, _) as annot) =
     begin
       state.commands <- StringSet.add command state.commands;
 
-      ksprintf string "\\newcommand{%s}{\\phantomsection%s\\saildoc%s{" command labelling (category_name_simple cat)
+      ksprintf string "\\newcommand{%s}{\\saildoclabelled{%s}{\\saildoc%s{" command labelname (category_name_simple cat)
       ^^ docstring l ^^ string "}{"
-      ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}}" (Filename.concat !opt_directory code_file)
+      ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}}}" (Filename.concat !opt_directory code_file)
     end
 
 let latex_label str id =
@@ -434,6 +434,8 @@ let tdef_id = function
 let defs (Defs defs) =
   reset_state state;
 
+  let preamble = string "\\providecommand\\saildoclabelled[2]{\\phantomsection\\label{#1}#2}" ^^ twice hardline in
+
   let overload_counter = ref 0 in
 
   let valspecs = ref IdSet.empty in
@@ -505,7 +507,8 @@ let defs (Defs defs) =
     |> string
   in
 
-  tex
+  preamble
+  ^^ tex
   ^^ separate (twice hardline) [id_command Val !valspecs;
                                 ref_command Val !valspecs;
                                 id_command Function !fundefs;
