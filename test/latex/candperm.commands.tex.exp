@@ -4,16 +4,40 @@
 
 \newcommand{\sailvalexecute}{\saildoclabelled{zexecute}{\saildocval{}{\lstinputlisting[language=sail]{out/valzexecute33a689e3a631b9b905b85461d3814943.tex}}}}
 
-\newcommand{\sailfclCAndPermexecute}{\saildoclabelled{fclCAndPermzexecute}{\saildocfcl{Capability register \emph{cd} is replaced with the contents of capability
+\newcommand{\sailfclCAndPermBrokenexecute}{\saildoclabelled{fclCAndPermBrokenzexecute}{\saildocfcl{Capability register \emph{cd} is replaced with the contents of capability
+register \emph{cs1} with the \cperms{} field set to the bitwise-AND of
+its previous value and bits 0 .. 10 of integer register \emph{rs2}
+and the \cuperms{} field set to the bitwise and of its previous value
+and bits \hyperref\hyperref[ztablezGpseudocodezDconstants]{\lstinline{table:pseudocode-constants}}{\emph{first\_uperm}} ..
+\hyperref\hyperref[ztablezGpseudocodezDconstants]{\lstinline{table:pseudocode-constants}}{\emph{last\_uperm}} of \emph{rd}.
+
+}{\lstinputlisting[language=sail]{out/fclCAndPermBrokenzexecute33a689e3a631b9b905b85461d3814943.tex}}}}
+
+\newcommand{\sailfclCAndPermEscapedexecute}{\saildoclabelled{fclCAndPermEscapedzexecute}{\saildocfcl{Capability register \emph{cd} is replaced with the contents of capability
 register \emph{cs1} with the \cperms{} field set to the bitwise-AND of
 its previous value and bits 0 .. 10 of integer register \emph{rs2}
 and the \cuperms{} field set to the bitwise and of its previous value
 and bits \hyperref[table:pseudocode-constants]{\emph{first\_uperm}} ..
 \hyperref[table:pseudocode-constants]{\emph{last\_uperm}} of \emph{rd}.
 
-}{\lstinputlisting[language=sail]{out/fclCAndPermzexecute33a689e3a631b9b905b85461d3814943.tex}}}}
+}{\lstinputlisting[language=sail]{out/fclCAndPermEscapedzexecute33a689e3a631b9b905b85461d3814943.tex}}}}
 
-\newcommand{\sailfclCSetFlagsexecute}{\saildoclabelled{fclCSetFlagszexecute}{\saildocfcl{}{\lstinputlisting[language=sail]{out/fclCSetFlagszexecute33a689e3a631b9b905b85461d3814943.tex}}}}
+\newcommand{\sailfclCAndPermMarkdownexecute}{\saildoclabelled{fclCAndPermMarkdownzexecute}{\saildocfcl{Capability register \emph{cd} is replaced with the contents of capability
+register \emph{cs1} with the \cperms{} field set to the bitwise-AND of
+its previous value and bits 0 .. 10 of integer register \emph{rs2}
+and the \cuperms{} field set to the bitwise and of its previous value
+and bits \hyperref[table:pseudocode-constants]{*first_uperm*} ..
+\hyperref[table:pseudocode-constants]{*last_uperm*} of \emph{rd}.
+
+}{\lstinputlisting[language=sail]{out/fclCAndPermMarkdownzexecute33a689e3a631b9b905b85461d3814943.tex}}}}
+
+\newcommand{\sailfclCAndPermMarkdownWithRefMacroexecute}{\saildoclabelled{fclCAndPermMarkdownWithRefMacrozexecute}{\saildocfcl{Capability register \emph{cd} is replaced with the contents of capability
+register \emph{cs1} with the \cperms{} field set to the bitwise-AND of
+its previous value and bits 0 .. 10 of integer register \emph{rs2}
+and the \cuperms{} field set to the bitwise and of its previous value
+and bits \firstUPerm{} .. \lastUPerm{} of \emph{rd}.
+
+}{\lstinputlisting[language=sail]{out/fclCAndPermMarkdownWithRefMacrozexecute33a689e3a631b9b905b85461d3814943.tex}}}}
 
 
 

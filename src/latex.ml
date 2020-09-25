@@ -237,10 +237,14 @@ let latex_of_markdown str =
     | Ref (r, name, alt, _) ->
        (* special case for [id] (format as code) *)
        let format_fn = if name = alt then inline_code else replace_this in
-       begin match r#get_ref name with
-       | None -> sprintf "\\hyperref[%s]{%s}" (refcode_string name) (format_fn alt)
-       | Some (link, _) -> sprintf "\\hyperref[%s]{%s}" (refcode_string link) (format_fn alt)
-       end
+       (* Do not attempt to escape link destinations wrapped in <> *)
+       if Str.string_match (Str.regexp "<.+>") name 0 then
+         sprintf "\\hyperref[%s]{%s}" (String.sub name 1 ((String.length name) - 2)) (format_fn alt)
+       else
+         begin match r#get_ref name with
+         | None -> sprintf "\\hyperref[%s]{%s}" (refcode_string name) (format_fn alt)
+         | Some (link, _) -> sprintf "\\hyperref[%s]{%s}" (refcode_string link) (format_fn alt)
+         end
     | Url (href, text, "") ->
        sprintf "\\href{%s}{%s}" href (format text)
     | Url (href, text, reference) ->
