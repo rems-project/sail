@@ -360,9 +360,6 @@ let rec latex_command cat id no_loc ((l, _) as annot) =
       ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}}}" (Filename.concat !opt_directory code_file)
     end
 
-let latex_label str id =
-  string (Printf.sprintf "\\label{%s:%s}" str (Util.zencode_string (string_of_id id)))
-
 let counter = ref 0
 
 let rec app_code (E_aux (exp, _)) =
