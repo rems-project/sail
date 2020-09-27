@@ -197,7 +197,7 @@ let latex_id_raw id =
     state.generated_names <- Bindings.add id str state.generated_names;
     str
 
-let latex_cat_id cat id = category_name cat ^ latex_id_raw id
+let latex_cat_id cat id = !opt_prefix ^ category_name cat ^ latex_id_raw id
 
 let rec app_code (E_aux (exp, _)) =
   match exp with
@@ -358,7 +358,7 @@ let rec latex_command cat id no_loc ((l, _) as annot) =
   let doc = if cat = Val then no_loc else latex_loc no_loc l in
   output_string chan (Pretty_print_sail.to_string doc);
   close_out chan;
-  let command = sprintf "\\%s%s" !opt_prefix (latex_cat_id cat id) in
+  let command = sprintf "\\%s" (latex_cat_id cat id) in
   if StringSet.mem command state.commands then
     (Reporting.warn "" l ("Multiple instances of " ^ string_of_id id ^ " only generating latex for the first"); empty)
   else
@@ -495,7 +495,7 @@ let defs (Defs defs) =
      identifiers then outputs the correct mangled command. *)
   let id_command cat ids =
     sprintf "\\newcommand{\\%s%s}[1]{\n  " !opt_prefix (category_name cat)
-    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\%s%s}{}" (string_of_id id) !opt_prefix (latex_cat_id cat id))
+    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\%s}{}" (string_of_id id) (latex_cat_id cat id))
                           (IdSet.elements ids)
     ^ "}"
     |> string
