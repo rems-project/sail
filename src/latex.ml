@@ -208,7 +208,8 @@ let rec app_code (E_aux (exp, _)) =
   | _ -> ""
 
 let refcode_cat_string cat str =
-  category_name_val cat ^ Str.global_replace (Str.regexp "_") "zy" (Util.zencode_string str)
+  let refcode_str = Str.global_replace (Str.regexp "_") "zy" (Util.zencode_string str) in
+  !opt_prefix ^ category_name_val cat ^ refcode_str
 
 let refcode_cat_id prefix id = refcode_cat_string prefix (string_of_id id)
 

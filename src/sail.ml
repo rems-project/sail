@@ -162,7 +162,7 @@ let options = Arg.align ([
     " pretty print the input to LaTeX");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix := prefix),
-    "<prefix> set a custom prefix for generated LaTeX macro command (default sail)");
+    "<prefix> set a custom prefix for generated LaTeX labels and macro commands (default sail)");
   ( "-latex_full_valspecs",
     Arg.Clear Latex.opt_simple_val,
     " print full valspecs in LaTeX output");
