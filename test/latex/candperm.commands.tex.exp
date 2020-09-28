@@ -51,7 +51,8 @@ An exception is raised if:
 \begin{itemize}
 \item \emph{cs1.tag} is not set.
 \item \emph{cs1} is sealed.
-\end{itemize}}{\lstinputlisting[language=sail]{out/fclCAndPermMarkdownWithExceptionszexecute33a689e3a631b9b905b85461d3814943.tex}}}}
+\end{itemize}
+}{\lstinputlisting[language=sail]{out/fclCAndPermMarkdownWithExceptionszexecute33a689e3a631b9b905b85461d3814943.tex}}}}
 
 
 

@@ -261,11 +261,11 @@ let latex_of_markdown str =
     | (Ul list | Ulp list) ->
        "\\begin{itemize}\n\\item "
        ^ Util.string_of_list "\n\\item " format list
-       ^ "\n\\end{itemize}"
+       ^ "\n\\end{itemize}\n"
     | (Ol list | Olp list) ->
        "\\begin{enumerate}\n\\item "
        ^ Util.string_of_list "\n\\item " format list
-       ^ "\n\\end{enumerate}"
+       ^ "\n\\end{enumerate}\n"
     | H1 header -> "\\section*{" ^ (format header) ^ "}\n"
     | H2 header -> "\\subsection*{" ^ (format header) ^ "}\n"
     | H3 header -> "\\subsubsection*{" ^ (format header) ^ "}\n"
