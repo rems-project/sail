@@ -440,7 +440,12 @@ let tdef_id = function
 let defs (Defs defs) =
   reset_state state;
 
-  let preamble = string "\\providecommand\\saildoclabelled[2]{\\phantomsection\\label{#1}#2}" ^^ twice hardline in
+  let preamble = string ("\\providecommand\\saildoclabelled[2]{\\phantomsection\\label{#1}#2}\n" ^
+    "\\providecommand\\saildocval[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocfcl[2]{#1 #2}\n" ^
+    "\\providecommand\\saildoctype[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocfn[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocoverload[2]{#1 #2}\n\n") in
 
   let overload_counter = ref 0 in
 
