@@ -1,0 +1,39 @@
+name: Sail CI Build
+
+on:
+  push:
+  pull_request:
+  schedule:
+  - cron: "0 0 * * *"
+
+jobs:
+  full-test:
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, macOS-latest]
+        ocaml: [4.06.1, 4.10.0]
+    runs-on: ${{ matrix.os }} 
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v2
+      - name: Install deps (linux)
+        if: matrix.os == 'ubuntu-20.04'
+        run: sudo apt-get install -y --no-install-recommends build-essential libgmp-dev z3 libz3-dev opam
+      - name: Install deps (macOS)
+        if: matrix.os == 'macOS-latest'
+        run: brew install gpatch gmp z3 pkg-config opam
+      - name: init opam
+        run: opam init -y --no-setup --compiler=${{ matrix.ocaml }} --shell=sh
+      - name: opam config env
+        run: eval `opam config env`
+      - name: pin and install sail from git
+        run: opam pin -y add sail $PWD
+      - name: test sail installation
+        run: eval $(opam env) && sail -v
+
+      - name: make sail-arm
+        run: git clone https://github.com/rems-project/sail-arm.git && cd sail-arm/arm-v8.5-a && eval $(opam env) && make
+
+      - name: make sail-riscv
+        run: git clone https://github.com/rems-project/sail-riscv.git && cd sail-riscv && eval $(opam env) && make
