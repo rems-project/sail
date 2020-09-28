@@ -48,7 +48,7 @@ for testfile in *.sail; do
         # Check that the generated latex builds:
         if command -v latexmk > /dev/null; then
             cp -f "$DIR/main.tex" "$temp_dir"
-            if latexmk -pdf -cd -interaction=batchmode "$temp_dir/main.tex" > /dev/null 2>&1; then
+            if latexmk -pdf -cd -file-line-error -interaction=batchmode "$temp_dir/main.tex" > /dev/null 2>&1; then
                 green "Building LaTeX for $testfile" "ok"
             else
                 tail -n 50 "$temp_dir/main.log"
