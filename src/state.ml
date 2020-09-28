@@ -63,7 +63,7 @@ let opt_type_grouped_regstate = ref false
 
 let defs_of_string = ast_of_def_string
 
-let is_defined defs name = IdSet.mem (mk_id name) (ids_of_defs (Defs defs))
+let is_defined defs name = IdSet.mem (mk_id name) (ids_of_ast (Defs defs))
 
 let has_default_order defs =
   List.exists (function DEF_default (DT_aux (DT_order _, _)) -> true | _ -> false) defs
@@ -375,7 +375,7 @@ let register_refs_lem mwords registers =
 (* TODO Generate well-typedness predicate for register states (and events),
    asserting that all lists representing non-bit-vectors have the right length. *)
 
-let generate_isa_lemmas mwords (Defs defs : tannot defs) =
+let generate_isa_lemmas mwords (Defs defs : tannot ast) =
   let rec drop_while f = function
     | x :: xs when f x -> drop_while f xs
     | xs -> xs

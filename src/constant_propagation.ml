@@ -307,7 +307,7 @@ let const_props target defs ref_vars =
     let interpreter_istate =
       (* Do not interpret undefined_X functions *)
       let open Interpreter in
-      let undefined_builtin_ids = ids_of_defs (Defs Initial_check.undefined_builtin_val_specs) in
+      let undefined_builtin_ids = ids_of_ast (Defs Initial_check.undefined_builtin_val_specs) in
       let remove_primop id = StringMap.remove (string_of_id id) in
       let remove_undefined_primops = IdSet.fold remove_primop undefined_builtin_ids in
       let (lstate, gstate) = Constant_fold.initial_state defs Type_check.initial_env in
@@ -894,4 +894,4 @@ let remove_impossible_int_cases _ =
   in
   let open Rewriter in
   let rewrite_exp _ = fold_exp { id_exp_alg with e_case = e_case; e_if = e_if } in
-  rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp }
+  rewrite_ast_base { rewriters_base with rewrite_exp = rewrite_exp }

@@ -355,7 +355,7 @@ val map_valspec_annot : ('a annot -> 'b annot) -> 'a val_spec -> 'b val_spec
 val map_scattered_annot : ('a annot -> 'b annot) -> 'a scattered_def -> 'b scattered_def
 
 val map_def_annot : ('a annot -> 'b annot) -> 'a def -> 'b def
-val map_defs_annot : ('a annot -> 'b annot) -> 'a defs -> 'b defs
+val map_ast_annot : ('a annot -> 'b annot) -> 'a ast -> 'b ast
 
 (** {2 Extract locations from terms} *)
 val id_loc : id -> Parse_ast.l
@@ -455,17 +455,17 @@ val rename_valspec : id -> 'a val_spec -> 'a val_spec
 
 val rename_fundef : id -> 'a fundef -> 'a fundef
 
-val split_defs : ('a def -> bool) -> 'a defs -> ('a defs * 'a def * 'a defs) option
+val split_ast : ('a def -> bool) -> 'a ast -> ('a ast * 'a def * 'a ast) option
 
-val append_ast : 'a defs -> 'a defs -> 'a defs
-val concat_ast : 'a defs list -> 'a defs
+val append_ast : 'a ast -> 'a ast -> 'a ast
+val concat_ast : 'a ast list -> 'a ast
 
 val type_union_id : type_union -> id
 
 val ids_of_def : 'a def -> IdSet.t
-val ids_of_defs : 'a defs -> IdSet.t
+val ids_of_ast : 'a ast -> IdSet.t
 
-val val_spec_ids : 'a defs -> IdSet.t
+val val_spec_ids : 'a ast -> IdSet.t
 
 val pat_ids : 'a pat -> IdSet.t
 
@@ -502,7 +502,7 @@ val extern_assoc : string -> (string * string) list -> string option
    the closest annotation or even finding an annotation at all. This
    is used by the Emacs mode to provide type-at-cursor functionality
    and we don't mind if it's a bit fuzzy in that context. *)
-val find_annot_ast : (Lexing.position * Lexing.position) option -> 'a defs -> (Ast.l * 'a) option
+val find_annot_ast : (Lexing.position * Lexing.position) option -> 'a ast -> (Ast.l * 'a) option
 
 (** {2 Substitutions}
 

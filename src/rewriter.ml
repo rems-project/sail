@@ -61,7 +61,7 @@ type 'a rewriters = {
     rewrite_let  : 'a rewriters -> 'a letbind -> 'a letbind;
     rewrite_fun  : 'a rewriters -> 'a fundef -> 'a fundef;
     rewrite_def  : 'a rewriters -> 'a def -> 'a def;
-    rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
+    rewrite_ast  : 'a rewriters -> 'a ast -> 'a ast;
   }
 
 let effect_of_lexp (LEXP_aux (_,(_,a))) = effect_of_annot a
@@ -386,13 +386,13 @@ let rewrite_def rewriters d = match d with
   | DEF_measure (id,pat,exp) -> DEF_measure (id,rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
   | DEF_loop_measures (id,_) -> raise (Reporting.err_unreachable (id_loc id) __POS__ "DEF_loop_measures survived to rewriter")
 
-let rewrite_defs_base rewriters (Defs defs) =
+let rewrite_ast_base rewriters (Defs defs) =
   let rec rewrite ds = match ds with
     | [] -> []
     | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds) in
   Defs (rewrite defs)
 
-let rewrite_defs_base_progress prefix rewriters (Defs defs) =
+let rewrite_ast_base_progress prefix rewriters (Defs defs) =
   let total = List.length defs in
   let rec rewrite n = function
     | [] -> []
@@ -411,7 +411,7 @@ let rec takedrop n xs =
      let ys, xs = takedrop (n - 1) xs in
      x :: ys, xs
 
-let rewrite_defs_base_parallel j rewriters (Defs defs) =
+let rewrite_ast_base_parallel j rewriters (Defs defs) =
   let module IntMap = Map.Make(struct type t = int let compare = compare end) in
   let total = List.length defs in
   let defs = ref defs in
@@ -428,7 +428,7 @@ let rewrite_defs_base_parallel j rewriters (Defs defs) =
     let pid = Unix.fork () in
     begin
       if pid = 0 then
-        let Defs work = rewrite_defs_base rewriters (Defs work) in
+        let Defs work = rewrite_ast_base rewriters (Defs work) in
         let out_chan = open_out result in
         Marshal.to_channel out_chan work [Marshal.Closures];
         close_out out_chan;
@@ -468,9 +468,9 @@ let rewriters_base =
    rewrite_lexp = rewrite_lexp;
    rewrite_fun = rewrite_fun;
    rewrite_def = rewrite_def;
-   rewrite_defs = rewrite_defs_base}
+   rewrite_ast = rewrite_ast_base}
 
-let rewrite_defs (Defs defs) = rewrite_defs_base rewriters_base (Defs defs)
+let rewrite_ast (Defs defs) = rewrite_ast_base rewriters_base (Defs defs)
 
 type ('a,'pat,'pat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux

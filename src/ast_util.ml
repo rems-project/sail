@@ -713,7 +713,7 @@ and map_def_annot f = function
   | DEF_reg_dec ds -> DEF_reg_dec (map_decspec_annot f ds)
   | DEF_internal_mutrec fds -> DEF_internal_mutrec (List.map (map_fundef_annot f) fds)
   | DEF_pragma (name, arg, l) -> DEF_pragma (name, arg, l)
-and map_defs_annot f = function
+and map_ast_annot f = function
   | Defs defs -> Defs (List.map (map_def_annot f) defs)
 
 and map_loop_measure_annot f = function
@@ -1086,7 +1086,7 @@ let ids_of_def = function
   | DEF_spec vs -> IdSet.singleton (id_of_val_spec vs)
   | DEF_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
   | _ -> IdSet.empty
-let ids_of_defs (Defs defs) =
+let ids_of_ast (Defs defs) =
   List.fold_left IdSet.union IdSet.empty (List.map ids_of_def defs)
 
 let val_spec_ids (Defs defs) =
@@ -1540,7 +1540,7 @@ let rec split_defs' f defs acc =
   | def :: defs when f def -> Some (acc, def, defs)
   | def :: defs -> split_defs' f defs (def :: acc)
 
-let split_defs f (Defs defs) =
+let split_ast f (Defs defs) =
   match split_defs' f defs [] with
   | None -> None
   | Some (pre_defs, def, post_defs) ->

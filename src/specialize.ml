@@ -253,8 +253,8 @@ let rec instantiations_of spec id ast =
   let rewrite_pat = { id_pat_alg with p_aux = (fun (pat, annot) -> inspect_pat (P_aux (pat, annot))) } in
   let rewrite_exp = { id_exp_alg with pat_alg = rewrite_pat;
                                       e_aux = (fun (exp, annot) -> inspect_exp (E_aux (exp, annot))) } in
-  let _ = rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp);
-                                                  rewrite_pat = (fun _ -> fold_pat rewrite_pat)} ast in
+  let _ = rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp);
+                                                 rewrite_pat = (fun _ -> fold_pat rewrite_pat)} ast in
 
   !instantiations
 
@@ -279,7 +279,7 @@ let rec rewrite_polymorphic_calls spec id ast =
   in
 
   let rewrite_exp = { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
-  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) } ast
+  rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) } ast
 
 let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
@@ -368,7 +368,7 @@ let instantiate_constraints instantiation ncs =
   List.map (fun c -> List.fold_left (fun c (v, a) -> constraint_subst v a c) c (KBindings.bindings instantiation)) ncs
 
 let specialize_id_valspec spec instantiations id ast =
-  match split_defs (is_valspec id) ast with
+  match split_ast (is_valspec id) ast with
   | None -> Reporting.unreachable (id_loc id) __POS__ ("Valspec " ^ string_of_id id ^ " does not exist!")
   | Some (pre_ast, vs, post_ast) ->
      let typschm, externs, is_cast, annot = match vs with
@@ -450,7 +450,7 @@ let specialize_annotations instantiation fdef =
              annot)
 
 let specialize_id_fundef instantiations id ast =
-  match split_defs (is_fundef id) ast with
+  match split_ast (is_fundef id) ast with
   | None -> ast
   | Some (pre_ast, DEF_fundef fundef, post_ast) ->
      let spec_ids = ref IdSet.empty in
@@ -511,7 +511,7 @@ let remove_unused_valspecs env ast =
   in
 
   let rewrite_exp = { id_exp_alg with e_aux = (fun (exp, annot) -> inspect_exp (E_aux (exp, annot))) } in
-  let _ = rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) } ast in
+  let _ = rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) } ast in
 
   let unused = IdSet.filter (fun vs_id -> not (IdSet.mem vs_id !calls)) vs_ids in
 

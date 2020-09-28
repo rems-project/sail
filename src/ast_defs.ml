@@ -50,4 +50,4 @@
 
 open Ast
 
-type 'a defs = Defs of 'a def list
+type 'a ast = Defs of 'a def list

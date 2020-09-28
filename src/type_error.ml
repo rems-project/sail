@@ -186,7 +186,7 @@ let rec collapse_errors = function
        Err_because (err1, l, err2)
   | err -> err
 
-let check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
+let check : 'a. Env.t -> 'a ast -> tannot ast * Env.t =
   fun env defs ->
   try Type_check.check env defs with
   | Type_error (env, l, err) ->

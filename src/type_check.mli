@@ -480,7 +480,7 @@ Some invariants that will hold of a fully checked AST are:
    check throws type_errors rather than Sail generic errors from
    Reporting. For a function that uses generic errors, use
    Type_error.check *)
-val check : Env.t -> 'a defs -> tannot defs * Env.t
+val check : Env.t -> 'a ast -> tannot ast * Env.t
 
 (** The same as [check], but exposes the intermediate type-checking
    environments so we don't have to always re-check the entire AST *)

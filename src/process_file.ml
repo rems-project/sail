@@ -264,9 +264,9 @@ let opt_ddump_tc_ast = ref false
 let opt_ddump_rewrite_ast = ref None
 let opt_dno_cast = ref false
 
-let check_ast (env : Type_check.Env.t) (defs : unit defs) : Type_check.tannot defs * Type_check.Env.t =
+let check_ast (env : Type_check.Env.t) (ast : unit ast) : Type_check.tannot ast * Type_check.Env.t =
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
-  let ast, env = Type_error.check env defs in
+  let ast, env = Type_error.check env ast in
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_defs stdout ast else () in
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)
@@ -367,7 +367,7 @@ let output_lem filename libs type_env defs =
     open_output_with_check_unformatted !opt_lem_output_dir (filename ^ "_types" ^ ".lem") in
   let ((o,_,_,_) as ext_o) =
     open_output_with_check_unformatted !opt_lem_output_dir (filename ^ ".lem") in
-  (Pretty_print.pp_defs_lem
+  (Pretty_print.pp_ast_lem
      (ot, base_imports)
      (o, base_imports @ (String.capitalize_ascii types_module :: libs))
      type_env defs generated_line);
@@ -446,11 +446,11 @@ let rewrite env rewriters defs =
   | Type_check.Type_error (_, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err))
 
-let rewrite_ast_initial env = rewrite env [("initial", fun env defs -> Rewriter.rewrite_defs defs, env)]
+let rewrite_ast_initial env = rewrite env [("initial", fun env defs -> Rewriter.rewrite_ast defs, env)]
 
-let rewrite_ast_target tgt env = rewrite env (Rewrites.rewrite_defs_target tgt)
+let rewrite_ast_target tgt env = rewrite env (Rewrites.rewrite_ast_target tgt)
 
-let rewrite_ast_check env = rewrite env Rewrites.rewrite_defs_check
+let rewrite_ast_check env = rewrite env Rewrites.rewrite_ast_check
 
 let descatter type_envs ast =
   let ast = Scattered.descatter ast in

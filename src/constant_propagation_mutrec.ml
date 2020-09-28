@@ -191,7 +191,7 @@ let prop_args_pexp target defs ksubsts args pexp =
   in
   construct_pexp (pat', guard, exp', annot)
 
-let rewrite_defs target env (Defs defs) =
+let rewrite_ast target env (Defs defs) =
   let rec rewrite = function
     | [] -> []
     | DEF_internal_mutrec mutrecs :: ds ->
@@ -206,7 +206,7 @@ let rewrite_defs target env (Defs defs) =
              | [] -> [infer_exp env (mk_lit_exp L_unit)]
              | args' -> args'
            in
-           if not (IdSet.mem id' (ids_of_defs (Defs !valspecs))) then begin
+           if not (IdSet.mem id' (ids_of_ast (Defs !valspecs))) then begin
              (* Generate copy of function with constant arguments propagated in *)
              let (FD_aux (FD_function (_, _, _, fcls), _)) =
                List.find (fun fd -> Id.compare id (id_of_fundef fd) = 0) mutrecs

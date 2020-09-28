@@ -5420,7 +5420,7 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
      Reporting.unreachable (id_loc id) __POS__
        "Loop termination measures should have been rewritten before type checking"
 
-and check_defs : 'a. int -> int -> Env.t -> 'a def list -> tannot defs * Env.t =
+and check_defs : 'a. int -> int -> Env.t -> 'a def list -> tannot ast * Env.t =
   fun n total env defs ->
   match defs with
   | [] -> Defs [], env
@@ -5430,7 +5430,7 @@ and check_defs : 'a. int -> int -> Env.t -> 'a def list -> tannot defs * Env.t =
      let Defs defs, env = check_defs (n + 1) total env defs in
      Defs (def @ defs), env
 
-and check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
+and check : 'a. Env.t -> 'a ast -> tannot ast * Env.t =
   fun env (Defs defs) -> let total = List.length defs in check_defs 1 total env defs
 
 and check_with_envs : 'a. Env.t -> 'a def list -> (tannot def list * Env.t) list =

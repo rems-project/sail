@@ -1561,7 +1561,7 @@ let find_exc_typ defs =
     | _ -> false in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
-let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) type_env (Defs defs) top_line =
+let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) type_env (Defs defs) top_line =
   (* let regtypes = find_regtypes d in *)
   let state_ids =
     State.generate_regstate_defs !opt_mwords defs

@@ -3410,7 +3410,7 @@ and rewrite_exp exp = Rewriter.fold_exp { Rewriter.id_exp_alg with e_aux = rewri
 
 let mono_rewrite defs =
   let open Rewriter in
-  rewrite_defs_base
+  rewrite_ast_base
     { rewriters_base with
       rewrite_exp = fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux } }
     defs
