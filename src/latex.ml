@@ -266,6 +266,10 @@ let latex_of_markdown str =
        "\\begin{enumerate}\n\\item "
        ^ Util.string_of_list "\n\\item " format list
        ^ "\n\\end{enumerate}"
+    | H1 header -> "\\section*{" ^ (format header) ^ "}\n"
+    | H2 header -> "\\subsection*{" ^ (format header) ^ "}\n"
+    | H3 header -> "\\subsubsection*{" ^ (format header) ^ "}\n"
+    | H4 header -> "\\paragraph*{" ^ (format header) ^ "}\n"
     | Br -> "\n"
     | NL -> "\n"
     | elem -> failwith ("Can't convert to latex: " ^ Omd_backend.sexpr_of_md [elem])
