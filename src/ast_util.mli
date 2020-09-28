@@ -51,6 +51,7 @@
 (** Utilities and helper functions for operating on Sail ASTs *)
 
 open Ast
+open Ast_defs
 module Big_int = Nat_big_num
 
 type mut = Immutable | Mutable

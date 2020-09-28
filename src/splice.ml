@@ -4,6 +4,7 @@
 *)
 
 open Ast
+open Ast_defs
 open Ast_util
 
 let scan_defs (Defs defs) =

@@ -569,7 +569,7 @@ let handle_input' input =
            interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
            vs_ids := val_spec_ids !Interactive.ast
         | ":u" | ":unload" ->
-           Interactive.ast := Ast.Defs [];
+           Interactive.ast := Ast_defs.Defs [];
            Interactive.env := Type_check.initial_env;
            interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
            vs_ids := val_spec_ids !Interactive.ast;
@@ -693,7 +693,7 @@ let handle_input' input =
                 print_endline (emacs_error l (String.escaped msg))
            end
         | ":unload" ->
-           Interactive.ast := Ast.Defs [];
+           Interactive.ast := Ast_defs.Defs [];
            Interactive.env := Type_check.initial_env;
            interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
            vs_ids := val_spec_ids !Interactive.ast;

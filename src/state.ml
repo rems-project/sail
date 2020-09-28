@@ -53,6 +53,7 @@ module Big_int = Nat_big_num
 open Initial_check
 open Type_check
 open Ast
+open Ast_defs
 open Ast_util
 open PPrint
 open Pretty_print_common

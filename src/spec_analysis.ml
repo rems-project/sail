@@ -49,8 +49,9 @@
 (**************************************************************************)
 
 open Ast
-open Util
+open Ast_defs
 open Ast_util
+open Util
 
 module Nameset = Set.Make(String)
 
@@ -511,7 +512,7 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
      Reporting.unreachable (id_loc id) __POS__ "Loop termination measures should be rewritten before now"
 
 
-let group_defs consider_scatter_as_one (Ast.Defs defs) =
+let group_defs consider_scatter_as_one (Defs defs) =
   List.map (fun d -> (fv_of_def false consider_scatter_as_one defs d,d)) defs
 
 

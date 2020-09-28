@@ -49,8 +49,9 @@
 (**************************************************************************)
 
 open Ast
-open Util
+open Ast_defs
 open Ast_util
+open Util
 open Printf
 module Big_int = Nat_big_num
 

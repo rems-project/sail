@@ -875,13 +875,6 @@ def :: 'DEF_' ::=
   | $ string1 string2 l                                :: :: pragma
     {{ com compiler directive }}
 
-defs :: '' ::=
-  {{ com definition sequence }}
-  {{ auxparam 'a }}
-  | def1  .. defn                 :: :: Defs
-
-
-
 terminals :: '' ::=
   | **                                  :: :: starstar
     {{ tex \ensuremath{\mathop{\mathord{*}\mathord{*} } } }}

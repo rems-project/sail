@@ -52,6 +52,7 @@
 
 module Big_int = Nat_big_num
 open Ast
+open Ast_defs
 open Type_check
 
 type 'a rewriters = { rewrite_exp  : 'a rewriters -> 'a exp -> 'a exp;

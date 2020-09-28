@@ -51,6 +51,7 @@
 (** Initial desugaring pass over AST after parsing *)
 
 open Ast
+open Ast_defs
 open Ast_util
 
 (** {2 Options} *)

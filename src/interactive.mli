@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Type_check
 
 val opt_interactive : bool ref

@@ -48,6 +48,7 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+open Ast_defs
 open PPrint
 open Pretty_print_common
 
@@ -263,7 +264,7 @@ let opt_ddump_tc_ast = ref false
 let opt_ddump_rewrite_ast = ref None
 let opt_dno_cast = ref false
 
-let check_ast (env : Type_check.Env.t) (defs : unit Ast.defs) : Type_check.tannot Ast.defs * Type_check.Env.t =
+let check_ast (env : Type_check.Env.t) (defs : unit defs) : Type_check.tannot defs * Type_check.Env.t =
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
   let ast, env = Type_error.check env defs in
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_defs stdout ast else () in

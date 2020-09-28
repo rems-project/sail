@@ -51,6 +51,7 @@
 (** Rewrites for removing polymorphism from specifications *)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Type_check
 

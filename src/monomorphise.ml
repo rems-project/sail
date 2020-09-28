@@ -56,6 +56,7 @@
 
 open Parse_ast
 open Ast
+open Ast_defs
 open Ast_util
 module Big_int = Nat_big_num
 open Type_check

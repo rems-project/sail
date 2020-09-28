@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Type_check
 
 (* Prints on formatter the defs as Lem Ast nodes *)

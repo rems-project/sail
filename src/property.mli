@@ -52,6 +52,7 @@
    $counterexample pragmas. *)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Type_check
 

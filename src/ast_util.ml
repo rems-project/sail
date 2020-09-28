@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Util
 module Big_int = Nat_big_num
 

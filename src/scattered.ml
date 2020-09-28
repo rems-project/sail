@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 
 let funcl_id (FCL_aux (FCL_Funcl (id, _), _)) = id

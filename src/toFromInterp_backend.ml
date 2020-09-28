@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open PPrint
 open Type_check
