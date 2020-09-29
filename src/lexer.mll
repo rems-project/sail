@@ -164,7 +164,6 @@ let kw_table =
      ("do",                      (fun _ -> Do));
      ("mutual",                  (fun _ -> Mutual));
      ("bitfield",                (fun _ -> Bitfield));
-
      ("barr",                    (fun x -> Barr));
      ("depend",                  (fun x -> Depend));
      ("rreg",                    (fun x -> Rreg));

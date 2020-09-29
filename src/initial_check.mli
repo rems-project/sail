@@ -103,6 +103,7 @@ val process_ast : ?generate:bool -> Parse_ast.defs -> unit ast
 
 val extern_of_string : id -> string -> unit def
 val val_spec_of_string : id -> string -> unit def
+val defs_of_string : string -> unit def list
 val ast_of_def_string : string -> unit ast
 val ast_of_def_string_with : (Parse_ast.def list -> Parse_ast.def list) -> string -> unit ast
 val exp_of_string : string -> unit exp

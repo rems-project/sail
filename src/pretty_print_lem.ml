@@ -1535,7 +1535,6 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   separate_map hardline doc_field fields
 
 let rec doc_def_lem type_env def =
-  (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
   | DEF_spec v_spec -> doc_spec_lem type_env v_spec
   | DEF_fixity _ -> empty
@@ -1561,7 +1560,7 @@ let find_exc_typ defs =
     | _ -> false in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
-let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) type_env (Defs defs) top_line =
+let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) type_env { defs; _ } top_line =
   (* let regtypes = find_regtypes d in *)
   let state_ids =
     State.generate_regstate_defs !opt_mwords defs

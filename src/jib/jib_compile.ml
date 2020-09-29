@@ -1642,7 +1642,7 @@ let sort_ctype_defs cdefs =
 
   ctype_defs @ cdefs
 
-let compile_ast ctx (Defs defs) =
+let compile_ast ctx ast =
   if !opt_memo_cache then
     (try
        if Sys.is_directory "_sbuild" then
@@ -1653,9 +1653,9 @@ let compile_ast ctx (Defs defs) =
      | Sys_error _ -> Unix.mkdir "_sbuild" 0o775)
   else ();
 
-  let total = List.length defs in
+  let total = List.length ast.defs in
   let _, chunks, ctx =
-    List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) defs
+    List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) ast.defs
   in
   let cdefs = List.concat (List.rev chunks) in
   let cdefs, ctx = specialize_variants ctx [] cdefs in
@@ -1669,4 +1669,4 @@ let add_special_functions env =
   let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
   let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
 
-  snd (Type_error.check env (Defs [assert_vs; exit_vs; cons_vs]))
+  snd (Type_error.check_defs env [assert_vs; exit_vs; cons_vs])

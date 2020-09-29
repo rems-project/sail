@@ -457,13 +457,13 @@ let target name out_name ast type_envs =
   | None -> ()
 
   | Some "sail" ->
-     Pretty_print_sail.pp_defs stdout ast
+     Pretty_print_sail.pp_ast stdout ast
 
   | Some "ocaml" ->
      let ocaml_generator_info =
        match !opt_ocaml_generators with
        | [] -> None
-       | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast, !opt_ocaml_generators)
+       | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast.defs, !opt_ocaml_generators)
      in
      let out = match !opt_file_out with None -> "out" | Some s -> s in
      Ocaml_backend.ocaml_compile out ast ocaml_generator_info

@@ -139,4 +139,4 @@ let rec descatter' funcls mapcls = function
   | def :: defs -> def :: descatter' funcls mapcls defs
   | [] -> []
 
-let descatter (Defs defs) = Defs (descatter' Bindings.empty Bindings.empty defs)
+let descatter ast = { ast with defs = descatter' Bindings.empty Bindings.empty ast.defs }

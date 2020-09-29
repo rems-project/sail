@@ -5350,8 +5350,8 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
         let size = Big_int.to_int size in
         let eval_index_nexp env nexp =
           int_of_nexp_opt (nexp_simp (Env.expand_nexp_synonyms env nexp)) in
-        let (Defs defs), env =
-          check env (Bitfield.macro (eval_index_nexp env, (typ_error env)) id size order ranges) in
+        let defs, env =
+          check_defs env (Bitfield.macro (eval_index_nexp env, (typ_error env)) id size order ranges) in
         defs, env
      | _ ->
         typ_error env l "Underlying bitfield type must be a constant-width bitvector"
@@ -5420,20 +5420,26 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
      Reporting.unreachable (id_loc id) __POS__
        "Loop termination measures should have been rewritten before type checking"
 
-and check_defs : 'a. int -> int -> Env.t -> 'a def list -> tannot ast * Env.t =
+and check_defs_progress : 'a. int -> int -> Env.t -> 'a def list -> tannot def list * Env.t =
   fun n total env defs ->
   match defs with
-  | [] -> Defs [], env
+  | [] -> [], env
   | def :: defs ->
      Util.progress "Type check " (string_of_int n ^ "/" ^ string_of_int total) n total;
      let (def, env) = check_def env def in
-     let Defs defs, env = check_defs (n + 1) total env defs in
-     Defs (def @ defs), env
+     let defs, env = check_defs_progress (n + 1) total env defs in
+     def @ defs, env
 
-and check : 'a. Env.t -> 'a ast -> tannot ast * Env.t =
-  fun env (Defs defs) -> let total = List.length defs in check_defs 1 total env defs
+and check_defs : 'a. Env.t -> 'a def list -> tannot def list * Env.t =
+  fun env defs -> let total = List.length defs in check_defs_progress 1 total env defs
 
-and check_with_envs : 'a. Env.t -> 'a def list -> (tannot def list * Env.t) list =
+let check : 'a. Env.t -> 'a ast -> tannot ast * Env.t =
+  fun env ast ->
+  let total = List.length ast.defs in
+  let defs, env = check_defs_progress 1 total env ast.defs in
+  { ast with defs = defs }, env
+
+let rec check_with_envs : 'a. Env.t -> 'a def list -> (tannot def list * Env.t) list =
   fun env defs ->
   match defs with
   | [] -> []

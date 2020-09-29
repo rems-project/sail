@@ -1666,10 +1666,10 @@ let sgen_finish = function
      Printf.sprintf "  finish_%s();" (sgen_id id)
   | _ -> assert false
 
-let rec get_recursive_functions (Defs defs) =
+let rec get_recursive_functions defs =
   match defs with
   | DEF_internal_mutrec fundefs :: defs ->
-     IdSet.union (List.map id_of_fundef fundefs |> IdSet.of_list) (get_recursive_functions (Defs defs))
+     IdSet.union (List.map id_of_fundef fundefs |> IdSet.of_list) (get_recursive_functions defs)
 
   | (DEF_fundef fdef as def) :: defs ->
      let open Rewriter in
@@ -1686,11 +1686,11 @@ let rec get_recursive_functions (Defs defs) =
      let map_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp map_exp) } in
      let _ = rewrite_def map_defs def in
      if IdSet.mem (id_of_fundef fdef) !ids then
-       IdSet.add (id_of_fundef fdef) (get_recursive_functions (Defs defs))
+       IdSet.add (id_of_fundef fdef) (get_recursive_functions defs)
      else
-       get_recursive_functions (Defs defs)
+       get_recursive_functions defs
 
-  | _ :: defs -> get_recursive_functions (Defs defs)
+  | _ :: defs -> get_recursive_functions defs
   | [] -> IdSet.empty
 
 let codegen_output file_name docs =

@@ -111,7 +111,7 @@ let sail_logo =
 
 let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear
 
-let vs_ids = ref (val_spec_ids !Interactive.ast)
+let vs_ids = ref (val_spec_ids !Interactive.ast.defs)
 
 let interactive_state =
   ref (initial_state ~registers:false !Interactive.ast !Interactive.env !Value.primops)
@@ -150,8 +150,8 @@ let setup_sail_scripting () =
         let typschm = mk_typschm (mk_typquant []) (reflect_typ action) in
         mk_val_spec (VS_val_spec (typschm, mk_id name, [("_", name)], false))
       ) !commands in
-  let val_specs, env' = Type_check.check !env (Defs val_specs) in
-  ast := append_ast !ast val_specs;
+  let val_specs, env' = Type_check.check_defs !env val_specs in
+  ast := append_ast_defs !ast val_specs;
   env := env';
 
   if !sail_scripting_primops_once then (
@@ -538,7 +538,7 @@ let handle_input' input =
         print_endline (Pretty_print_sail.to_string (Latex.defs !Interactive.ast))
      | ":ast" ->
         let chan = open_out arg in
-        Pretty_print_sail.pp_defs chan !Interactive.ast;
+        Pretty_print_sail.pp_ast chan !Interactive.ast;
         close_out chan
      | ":output" ->
         let chan = open_out arg in
@@ -567,12 +567,12 @@ let handle_input' input =
            Interactive.ast := append_ast !Interactive.ast ast;
            Interactive.env := env;
            interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
-           vs_ids := val_spec_ids !Interactive.ast
+           vs_ids := val_spec_ids !Interactive.ast.defs
         | ":u" | ":unload" ->
-           Interactive.ast := Ast_defs.Defs [];
+           Interactive.ast := Ast_defs.empty_ast;
            Interactive.env := Type_check.initial_env;
            interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
-           vs_ids := val_spec_ids !Interactive.ast;
+           vs_ids := val_spec_ids !Interactive.ast.defs;
            (* See initial_check.mli for an explanation of why we need this. *)
            Initial_check.have_undefined_builtins := false;
            Process_file.clear_symbols ()
@@ -590,8 +590,8 @@ let handle_input' input =
            begin match args with
            | v :: "=" :: args ->
               let exp = Initial_check.exp_of_string (String.concat " " args) in
-              let ast, env = Type_check.check !Interactive.env (Defs [DEF_val (mk_letbind (mk_pat (P_id (mk_id v))) exp)]) in
-              Interactive.ast := append_ast !Interactive.ast ast;
+              let defs, env = Type_check.check_defs !Interactive.env [DEF_val (mk_letbind (mk_pat (P_id (mk_id v))) exp)] in
+              Interactive.ast := append_ast_defs !Interactive.ast defs;
               Interactive.env := env;
               interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
            | _ -> print_endline "Invalid arguments for :let"
@@ -648,12 +648,12 @@ let handle_input' input =
            Interactive.env := env;
            Interactive.ast := ast;
            interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
-           vs_ids := val_spec_ids !Interactive.ast
+           vs_ids := val_spec_ids !Interactive.ast.defs
         | ":recheck_types" ->
            let ast, env = Type_check.check Type_check.initial_env !Interactive.ast in
            Interactive.env := env;
            Interactive.ast := ast;
-           vs_ids := val_spec_ids !Interactive.ast
+           vs_ids := val_spec_ids !Interactive.ast.defs
         | ":compile" ->
            let out_name = match !Process_file.opt_file_out with
              | None -> "out.sail"
@@ -686,17 +686,17 @@ let handle_input' input =
                Interactive.ast := append_ast !Interactive.ast ast;
                interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
                Interactive.env := env;
-               vs_ids := val_spec_ids !Interactive.ast;
+               vs_ids := val_spec_ids !Interactive.ast.defs;
                print_endline ("(message \"Checked " ^ arg ^ " done\")\n");
              with
              | Reporting.Fatal_error (Err_type (l, msg)) ->
                 print_endline (emacs_error l (String.escaped msg))
            end
         | ":unload" ->
-           Interactive.ast := Ast_defs.Defs [];
+           Interactive.ast := Ast_defs.empty_ast;
            Interactive.env := Type_check.initial_env;
            interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
-           vs_ids := val_spec_ids !Interactive.ast;
+           vs_ids := val_spec_ids !Interactive.ast.defs;
            Initial_check.have_undefined_builtins := false;
            Process_file.clear_symbols ()
         | ":typeat" ->

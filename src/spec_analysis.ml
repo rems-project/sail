@@ -512,8 +512,8 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
      Reporting.unreachable (id_loc id) __POS__ "Loop termination measures should be rewritten before now"
 
 
-let group_defs consider_scatter_as_one (Defs defs) =
-  List.map (fun d -> (fv_of_def false consider_scatter_as_one defs d,d)) defs
+let group_defs consider_scatter_as_one ast =
+  List.map (fun d -> (fv_of_def false consider_scatter_as_one ast.defs d,d)) ast.defs
 
 
 (*
@@ -591,11 +591,11 @@ let def_of_component graph defset comp =
   (* We could merge other stuff, in particular overloads, but don't need to just now *)
   | defs -> defs
 
-let top_sort_defs (Defs defs) =
+let top_sort_defs ast =
   let prelude, original_order, defset, graph =
-    List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) defs in
+    List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) ast.defs in
   let components = NameGraph.scc ~original_order:original_order graph in
-  Defs (prelude @ List.concat (List.map (def_of_component graph defset) components))
+  { ast with defs = prelude @ List.concat (List.map (def_of_component graph defset) components) }
 
 
 (* Functions for finding the set of variables assigned to.  Used in constant propagation

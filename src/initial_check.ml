@@ -847,7 +847,7 @@ let to_ast ctx (P.Defs files) =
         let defs', ctx = to_ast_defs ctx file in (defs @ wrap_file (fst file) defs', ctx)
       ) ([], ctx) files
   in
-  Defs defs, ctx
+  { defs = defs }, ctx
 
 let initial_ctx = {
     type_constructors =
@@ -931,7 +931,7 @@ let undefined_builtin_val_specs =
    extern_of_string (mk_id "undefined_bitvector") "forall 'n. atom('n) -> bitvector('n, dec) effect {undef}";
    extern_of_string (mk_id "undefined_unit") "unit -> unit effect {undef}"]
 
-let generate_undefineds vs_ids (Defs defs) =
+let generate_undefineds vs_ids defs =
   let undefined_builtins =
     if !have_undefined_builtins then
       []
@@ -1026,14 +1026,14 @@ let generate_undefineds vs_ids (Defs defs) =
        def :: undefined_defs defs
     | [] -> []
   in
-  Defs (undefined_builtins @ undefined_defs defs)
+  undefined_builtins @ undefined_defs defs
 
 let rec get_registers = function
   | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) :: defs -> (typ, id) :: get_registers defs
   | _ :: defs -> get_registers defs
   | [] -> []
 
-let generate_initialize_registers vs_ids (Defs defs) =
+let generate_initialize_registers vs_ids defs =
   let regs = get_registers defs in
   let initialize_registers =
     if IdSet.mem (mk_id "initialize_registers") vs_ids || regs = [] then []
@@ -1043,9 +1043,9 @@ let generate_initialize_registers vs_ids (Defs defs) =
                            (mk_pat (P_lit (mk_lit L_unit)))
                            (mk_exp (E_block (List.map (fun (typ, id) -> mk_exp (E_assign (mk_lexp (LEXP_cast (typ, id)), mk_lit_exp L_undef))) regs)))]]
   in
-  Defs (defs @ initialize_registers)
+  defs @ initialize_registers
 
-let generate_enum_functions vs_ids (Defs defs) =
+let generate_enum_functions vs_ids defs =
   let rec gen_enums = function
     | DEF_type (TD_aux (TD_enum (id, elems, _), _)) as enum :: defs ->
        let enum_val_spec name quants typ =
@@ -1101,21 +1101,23 @@ let generate_enum_functions vs_ids (Defs defs) =
     | def :: defs -> def :: gen_enums defs
     | [] -> []
   in
-  Defs (gen_enums defs)
+  gen_enums defs
 
 let incremental_ctx = ref initial_ctx
 
-let process_ast ?generate:(generate=true) defs =
-  let ast, ctx = to_ast !incremental_ctx defs in
+let process_ast ?generate:(generate=true) ast =
+  let ast, ctx = to_ast !incremental_ctx ast in
   incremental_ctx := ctx;
-  let vs_ids = val_spec_ids ast in
+  let vs_ids = val_spec_ids ast.defs in
   if not !opt_undefined_gen && generate then
-    generate_enum_functions vs_ids ast
+    { ast with defs = generate_enum_functions vs_ids ast.defs }
   else if generate then
-    ast
-    |> generate_undefineds vs_ids
-    |> generate_enum_functions vs_ids
-    |> generate_initialize_registers vs_ids
+    { ast with
+      defs = ast.defs
+             |> generate_undefineds vs_ids
+             |> generate_enum_functions vs_ids
+             |> generate_initialize_registers vs_ids
+    }
   else
     ast
 
@@ -1123,6 +1125,11 @@ let ast_of_def_string_with f str =
   let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
   process_ast (P.Defs [("", f [def])])
 
+  
 let ast_of_def_string str =
   let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
   process_ast (P.Defs [("", [def])])
+
+let defs_of_string str =
+  let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
+  (process_ast (P.Defs [("", [def])])).defs

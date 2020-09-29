@@ -73,8 +73,6 @@ val rewrite_ast : tannot ast -> tannot ast
 
 val rewrite_ast_base : tannot rewriters -> tannot ast -> tannot ast
 
-val rewrite_ast_base_parallel : int -> tannot rewriters -> tannot ast -> tannot ast
-
 (** Same as rewrite_defs_base but display a progress bar when verbosity >= 1 *)
 val rewrite_ast_base_progress : string -> tannot rewriters -> tannot ast -> tannot ast
 

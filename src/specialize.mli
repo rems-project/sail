@@ -73,7 +73,7 @@ val int_specialization_with_externs : specialization
    argument specifies what X should be - it should be one of:
    [is_int_kopt], [is_order_kopt], or [is_typ_kopt] from [Ast_util],
    or some combination of those. *)
-val polymorphic_functions : specialization -> 'a ast -> IdSet.t
+val polymorphic_functions : specialization -> 'a def list -> IdSet.t
 
 val add_initial_calls : IdSet.t -> unit
 

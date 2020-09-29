@@ -438,7 +438,7 @@ let tdef_id = function
   | TD_enum (id, _, _) -> id
   | TD_bitfield (id, _, _) -> id
 
-let defs (Defs defs) =
+let defs { defs; _ } =
   reset_state state;
 
   let preamble = string "\\providecommand\\saildoclabelled[2]{\\phantomsection\\label{#1}#2}" ^^ twice hardline in

@@ -455,17 +455,19 @@ val rename_valspec : id -> 'a val_spec -> 'a val_spec
 
 val rename_fundef : id -> 'a fundef -> 'a fundef
 
-val split_ast : ('a def -> bool) -> 'a ast -> ('a ast * 'a def * 'a ast) option
+val split_defs : ('a def -> bool) -> 'a def list -> ('a def list * 'a def * 'a def list) option
 
 val append_ast : 'a ast -> 'a ast -> 'a ast
+val append_ast_defs : 'a ast -> 'a def list -> 'a ast
 val concat_ast : 'a ast list -> 'a ast
 
 val type_union_id : type_union -> id
 
 val ids_of_def : 'a def -> IdSet.t
+val ids_of_defs : 'a def list -> IdSet.t
 val ids_of_ast : 'a ast -> IdSet.t
 
-val val_spec_ids : 'a ast -> IdSet.t
+val val_spec_ids : 'a def list -> IdSet.t
 
 val pat_ids : 'a pat -> IdSet.t
 

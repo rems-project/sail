@@ -50,4 +50,10 @@
 
 open Ast
 
-type 'a ast = Defs of 'a def list
+type 'a ast = {
+    defs : 'a def list
+  }
+
+let empty_ast = {
+    defs = []
+  }

@@ -977,10 +977,10 @@ let rec initialize_registers allow_registers gstate =
      initialize_registers allow_registers (process_def def) defs
   | [] -> gstate
 
-let initial_state ?(registers=true) (Defs defs) env primops =
-  let gstate = initial_gstate primops defs env in
+let initial_state ?(registers=true) ast env primops =
+  let gstate = initial_gstate primops ast.defs env in
   let gstate =
-    { (initialize_registers registers gstate defs)
+    { (initialize_registers registers gstate ast.defs)
       with allow_registers = registers }
   in
   initial_lstate, gstate

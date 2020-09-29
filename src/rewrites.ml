@@ -595,7 +595,7 @@ let rewrite_fun_remove_vector_concat_pat
     (FCL_aux (FCL_Funcl (id,pexp'),(l,annot)))
   in FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
 
-let rewrite_ast_remove_vector_concat env (Defs defs) =
+let rewrite_ast_remove_vector_concat env ast =
   let rewriters =
     {rewrite_exp = rewrite_exp_remove_vector_concat_pat;
      rewrite_pat = rewrite_pat;
@@ -612,7 +612,7 @@ let rewrite_ast_remove_vector_concat env (Defs defs) =
        let defvals = List.map (fun lb -> DEF_val lb) letbinds in
        [DEF_val (LB_aux (LB_val (pat,exp),a))] @ defvals
     | d -> [d] in
-  Defs (List.flatten (List.map rewrite_def defs))
+  { ast with defs = List.flatten (List.map rewrite_def ast.defs) }
 
 (* A few helper functions for rewriting guarded pattern clauses.
    Used both by the rewriting of P_when and separately by the rewriting of
@@ -1188,7 +1188,7 @@ let rewrite_fun_remove_bitvector_pat
     | _ -> funcls in
   FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))
 
-let rewrite_ast_remove_bitvector_pats env (Defs defs) =
+let rewrite_ast_remove_bitvector_pats env ast =
   let rewriters =
     {rewrite_exp = rewrite_exp_remove_bitvector_pat;
      rewrite_pat = rewrite_pat;
@@ -1207,8 +1207,8 @@ let rewrite_ast_remove_bitvector_pats env (Defs defs) =
     | d -> [d] in
   (* FIXME See above in rewrite_sizeof *)
   (* fst (check initial_env ( *)
-    Defs (List.flatten (List.map rewrite_def defs))
-    (* )) *)
+  { ast with defs = List.flatten (List.map rewrite_def ast.defs) }
+  (* )) *)
 
 (* Rewrite literal number patterns to guarded patterns
    Those numeral patterns are not handled very well by Lem (or Isabelle)
@@ -1447,9 +1447,9 @@ let rewrite_ast_exp_lift_assign env defs = rewrite_ast_base
    becomes
      write_reg_ref (vector_access (GPR, i)) exp
  *)
-let rewrite_register_ref_writes (Defs defs) =
-  let (Defs write_reg_spec) = fst (Type_error.check initial_env (Defs (List.map gen_vs
-    [("write_reg_ref", "forall ('a : Type). (register('a), 'a) -> unit effect {wreg}")]))) in
+let rewrite_register_ref_writes ast =
+  let write_reg_spec = fst (Type_error.check_defs initial_env (List.map gen_vs
+    [("write_reg_ref", "forall ('a : Type). (register('a), 'a) -> unit effect {wreg}")])) in
   let lexp_ref_exp (LEXP_aux (_, annot) as lexp) =
     try
       let exp = infer_exp (env_of_annot annot) (strip_exp (lexp_to_exp lexp)) in
@@ -1468,7 +1468,7 @@ let rewrite_register_ref_writes (Defs defs) =
   let rec rewrite ds = match ds with
     | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds)
     | [] -> [] in
-  Defs (rewrite (write_reg_spec @ defs))
+  { ast with defs = rewrite (write_reg_spec @ ast.defs) }
 
 
 (* Remove redundant return statements, and translate remaining ones into an
@@ -1478,7 +1478,7 @@ let rewrite_register_ref_writes (Defs defs) =
    TODO: Maybe separate generic removal of redundant returns, and Lem-specific
    rewriting of early returns
  *)
-let rewrite_ast_early_return env (Defs defs) =
+let rewrite_ast_early_return env ast =
   let is_unit (E_aux (exp, _)) = match exp with
   | E_lit (L_aux (L_unit, _)) -> true
   | _ -> false in
@@ -1646,12 +1646,12 @@ let rewrite_ast_early_return env (Defs defs) =
     FD_aux (FD_function (rec_opt, tannot_opt, effect_opt,
       List.map (rewrite_funcl_early_return rewriters) funcls), a) in
 
-  let (Defs early_ret_spec) = fst (Type_error.check initial_env (Defs [gen_vs
-    ("early_return", "forall ('a : Type) ('b : Type). 'a -> 'b effect {escape}")])) in
+  let early_ret_spec = fst (Type_error.check_defs initial_env [gen_vs
+    ("early_return", "forall ('a : Type) ('b : Type). 'a -> 'b effect {escape}")]) in
 
   rewrite_ast_base
     { rewriters_base with rewrite_fun = rewrite_fun_early_return }
-    (Defs (early_ret_spec @ defs))
+    { ast with defs = early_ret_spec @ ast.defs }
 
 let swaptyp typ (l,tannot) = match destruct_tannot tannot with
   | Some (env, typ', eff) -> (l, mk_tannot env typ eff)
@@ -1702,7 +1702,7 @@ let pat_var (P_aux (paux, a)) =
      Instr : {'r, 'r in {32, 64}. (int('x), bits('r))}
    }
  *)
-let rewrite_split_fun_ctor_pats fun_name env (Defs defs) =
+let rewrite_split_fun_ctor_pats fun_name env ast =
   let rewrite_fundef typquant (FD_aux (FD_function (r_o, t_o, e_o, clauses), ((l, _) as fdannot))) =
     let rec_clauses, clauses = List.partition is_funcl_rec clauses in
     let clauses, aux_funs =
@@ -1800,18 +1800,18 @@ let rewrite_split_fun_ctor_pats fun_name env (Defs defs) =
   let typquant = List.fold_left (fun tq def -> match def with
     | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tq, _), _), id, _, _), _))
       when string_of_id id = fun_name -> tq
-    | _ -> tq) (mk_typquant []) defs
+    | _ -> tq) (mk_typquant []) ast.defs
   in
   let defs = List.fold_right (fun def defs -> match def with
     | DEF_fundef fundef when string_of_id (id_of_fundef fundef) = fun_name ->
        rewrite_fundef typquant fundef @ defs
-    | _ -> def :: defs) defs []
+    | _ -> def :: defs) ast.defs []
   in
-  Defs defs
+  { ast with defs = defs }
 
 (* Propagate effects of functions, if effect checking and propagation
    have not been performed already by the type checker. *)
-let rewrite_fix_val_specs env (Defs defs) =
+let rewrite_fix_val_specs env ast =
   let find_vs env val_specs id =
     try Bindings.find id val_specs with
     | Not_found ->
@@ -1940,13 +1940,10 @@ let rewrite_fix_val_specs env (Defs defs) =
     | def -> def
   in
 
-  let (val_specs, defs) = List.fold_left rewrite_def (Bindings.empty, []) defs in
+  let (val_specs, defs) = List.fold_left rewrite_def (Bindings.empty, []) ast.defs in
   let defs = List.map (rewrite_val_specs val_specs) defs in
 
-  (* if !Type_check.opt_no_effects
-  then *)
-  Defs defs
-  (* else Defs defs *)
+  { ast with defs = defs }
 
 let rewrite_type_union_typs rw_typ (Tu_aux (Tu_ty_id (typ, id), annot)) =
   Tu_aux (Tu_ty_id (rw_typ typ, id), annot)
@@ -1973,7 +1970,7 @@ let rewrite_dec_spec_typs rw_typ (DEC_aux (ds, annot)) =
 
 (* Remove overload definitions and cast val specs from the
    specification because the interpreter doesn't know about them.*)
-let rewrite_overload_cast env (Defs defs) =
+let rewrite_overload_cast env ast =
   let remove_cast_vs (VS_aux (vs_aux, annot)) =
     match vs_aux with
     | VS_val_spec (typschm, id, ext, _) -> VS_aux (VS_val_spec (typschm, id, ext, false), annot)
@@ -1986,8 +1983,8 @@ let rewrite_overload_cast env (Defs defs) =
     | DEF_overload _ -> true
     | _ -> false
   in
-  let defs = List.map simple_def defs in
-  Defs (List.filter (fun def -> not (is_overload def)) defs)
+  let defs = List.map simple_def ast.defs in
+  { ast with defs = List.filter (fun def -> not (is_overload def)) defs }
 
 
 let rewrite_undefined mwords env =
@@ -2029,7 +2026,7 @@ and simple_typ_arg (A_aux (typ_arg_aux, l)) =
   | _ -> []
 
 (* This pass aims to remove all the Num quantifiers from the specification. *)
-let rewrite_simple_types env (Defs defs) =
+let rewrite_simple_types env ast =
   let is_simple = function
     | QI_aux (QI_id kopt, annot) as qi when is_typ_kopt kopt || is_order_kopt kopt -> true
     | _ -> false
@@ -2076,8 +2073,8 @@ let rewrite_simple_types env (Defs defs) =
   let simple_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp simple_exp);
                                           rewrite_pat = (fun _ -> fold_pat simple_pat) }
   in
-  let defs = Defs (List.map simple_def defs) in
-  rewrite_ast_base simple_defs defs
+  let ast = { ast with defs = List.map simple_def ast.defs } in
+  rewrite_ast_base simple_defs ast
 
 let rewrite_vector_concat_assignments env defs =
   let assign_tuple e_aux annot =
@@ -2514,7 +2511,6 @@ let rewrite_ast_letbind_effects env =
     FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),fdannot)
   in
   let rewrite_def rewriters def =
-    (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
     match def with
     | DEF_val (LB_aux (lb, annot)) ->
       let rewrap lb = DEF_val (LB_aux (lb, annot)) in
@@ -2862,7 +2858,7 @@ let construct_toplevel_string_append_func env f_id pat =
   let new_fun_def, env = Type_check.check_fundef env new_fun_def in
   List.flatten [new_val_spec; new_fun_def]
 
-let rewrite_ast_toplevel_string_append env (Defs defs) =
+let rewrite_ast_toplevel_string_append env ast =
   let new_defs = ref ([] : tannot def list) in
   let rec rewrite_pexp (Pat_aux (pexp_aux, pexp_annot) as pexp) =
     (* merge cases of Pat_exp and Pat_when *)
@@ -2896,7 +2892,7 @@ let rewrite_ast_toplevel_string_append env (Defs defs) =
     let rewritten = rewrite_def { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) } def in
     !new_defs @ [rewritten]
   in
-  Defs (List.map rewrite defs |> List.flatten)
+  { ast with defs = List.map rewrite ast.defs |> List.flatten }
 
 
 let rec rewrite_ast_pat_string_append env =
@@ -3352,8 +3348,8 @@ let rewrite_ast_pat_lits rewrite_lit env ast =
   in
 
   let alg = { id_exp_alg with pat_aux = (fun (pexp_aux, annot) -> rewrite_pexp (Pat_aux (pexp_aux, annot))) } in
-  let Defs defs = rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) } ast in
-  Defs (List.map rewrite_def defs)
+  let ast = rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) } ast in
+  { ast with defs = List.map rewrite_def ast.defs }
 
 
 (* Now all expressions have no blocks anymore, any term is a sequence of let-expressions,
@@ -3821,13 +3817,13 @@ let rewrite_ast_remove_superfluous_returns env =
     }
 
 
-let rewrite_ast_remove_e_assign env (Defs defs) =
-  let (Defs loop_specs) = fst (Type_error.check initial_env (Defs (List.map gen_vs
+let rewrite_ast_remove_e_assign env ast =
+  let loop_specs = fst (Type_error.check_defs initial_env (List.map gen_vs
     [("foreach#", "forall ('vars_in 'vars_out : Type). (int, int, int, bool, 'vars_in, 'vars_out) -> 'vars_out");
      ("while#", "forall ('vars_in 'vars_out : Type). (bool, 'vars_in, 'vars_out) -> 'vars_out");
      ("until#", "forall ('vars_in 'vars_out : Type). (bool, 'vars_in, 'vars_out) -> 'vars_out");
      ("while#t", "forall ('vars_in 'vars_out : Type). (bool, 'vars_in, 'vars_out, int) -> 'vars_out");
-     ("until#t", "forall ('vars_in 'vars_out : Type). (bool, 'vars_in, 'vars_out, int) -> 'vars_out")]))) in
+     ("until#t", "forall ('vars_in 'vars_out : Type). (bool, 'vars_in, 'vars_out, int) -> 'vars_out")])) in
  let rewrite_exp _ e =
     replace_memwrite_e_assign (remove_reference_types (rewrite_var_updates e)) in
   rewrite_ast_base
@@ -3838,9 +3834,9 @@ let rewrite_ast_remove_e_assign env (Defs defs) =
     ; rewrite_fun = rewrite_fun
     ; rewrite_def = rewrite_def
     ; rewrite_ast = rewrite_ast_base
-    } (Defs (loop_specs @ defs))
+    } { ast with defs = loop_specs @ ast.defs }
 
-let merge_funcls env (Defs defs) =
+let merge_funcls env ast =
   let merge_function (FD_aux (FD_function (r,t,e,fcls),ann) as f) =
     match fcls with
     | [] | [_] -> f
@@ -3858,7 +3854,7 @@ let merge_funcls env (Defs defs) =
     | DEF_fundef f -> DEF_fundef (merge_function f)
     | DEF_internal_mutrec fs -> DEF_internal_mutrec (List.map merge_function fs)
     | d -> d
-  in Defs (List.map merge_in_def defs)
+  in { ast with defs = List.map merge_in_def ast.defs }
 
 
 let rec exp_of_mpat ((MP_aux (mpat, (l,annot))) as mp_aux) =
@@ -3899,7 +3895,7 @@ and pat_of_mpat (MP_aux (mpat, annot)) =
   | MP_typ (mpat, typ)              -> P_aux (P_typ (typ, pat_of_mpat mpat), annot)
   | MP_as (mpat, id)                -> P_aux (P_as (pat_of_mpat mpat, id), annot)
 
-let rewrite_ast_realise_mappings _ (Defs defs) =
+let rewrite_ast_realise_mappings _ ast =
   let realise_mpexps forwards mpexp1 mpexp2 =
     let mpexp_pat, mpexp_exp =
       if forwards then mpexp1, mpexp2
@@ -4112,7 +4108,7 @@ let rewrite_ast_realise_mappings _ (Defs defs) =
                 []
       end
     in
-    let has_def id = IdSet.mem id (ids_of_ast (Defs defs)) in
+    let has_def id = IdSet.mem id (ids_of_ast ast) in
 
     (if has_def forwards_id then [] else forwards_fun)
     @ (if has_def backwards_id then [] else backwards_fun)
@@ -4126,7 +4122,7 @@ let rewrite_ast_realise_mappings _ (Defs defs) =
     | DEF_mapdef mdef -> realise_mapdef mdef
     | d -> [d]
   in
-  Defs (List.map rewrite_def defs |> List.flatten)
+  { ast with defs = List.map rewrite_def ast.defs |> List.flatten }
 
 (* Rewrite to make all pattern matches in Coq output exhaustive.
    Assumes that guards, vector patterns, etc have been rewritten already,
@@ -4500,7 +4496,7 @@ end
    new functions that appear to be recursive but are not.  This checks to
    see if the flag can be turned off.  Doesn't handle mutual recursion
    for now. *)
-let minimise_recursive_functions env (Defs defs) =
+let minimise_recursive_functions env ast =
   let funcl_is_rec (FCL_aux (FCL_Funcl (id,pexp),_)) =
     fold_pexp
       { (pure_exp_alg false (||)) with
@@ -4521,10 +4517,10 @@ let minimise_recursive_functions env (Defs defs) =
   let rewrite_def = function
     | DEF_fundef fd -> DEF_fundef (rewrite_function fd)
     | d -> d
-  in Defs (List.map rewrite_def defs)
+  in { ast with defs = List.map rewrite_def ast.defs }
 
 (* Move recursive function termination measures into the function definitions. *)
-let move_termination_measures env (Defs defs) =
+let move_termination_measures env ast =
   let scan_for id defs =
     let rec aux = function
       | [] -> None
@@ -4551,11 +4547,11 @@ let move_termination_measures env (Defs defs) =
       end
     | (DEF_measure _)::t -> aux acc t
     | h::t -> aux (h::acc) t
-  in Defs (aux [] defs)
+  in { ast with defs = aux [] ast.defs }
 
 (* Make recursive functions with a measure use the measure as an
    explicit recursion limit, enforced by an assertion. *)
-let rewrite_explicit_measure env (Defs defs) =
+let rewrite_explicit_measure env ast =
   let scan_function measures = function
     | FD_aux (FD_function (Rec_aux (Rec_measure (mpat,mexp),rl),topt,effopt,
                            FCL_aux (FCL_Funcl (id,_),_)::_),ann) ->
@@ -4567,7 +4563,7 @@ let rewrite_explicit_measure env (Defs defs) =
     | DEF_internal_mutrec fds -> List.fold_left scan_function measures fds
     | _ -> measures
   in
-  let measures = List.fold_left scan_def Bindings.empty defs in
+  let measures = List.fold_left scan_def Bindings.empty ast.defs in
   let add_escape eff =
     union_effects eff (mk_effect [BE_escape])
   in
@@ -4699,7 +4695,7 @@ let rewrite_explicit_measure env (Defs defs) =
        (DEF_internal_mutrec fds)::(List.map (fun f -> DEF_fundef f) extras)
     | d -> [d]
   in
-  Defs (List.flatten (List.map rewrite_def defs))
+  { ast with defs = List.flatten (List.map rewrite_def ast.defs) }
 
 (* Add a dummy assert to loops for backends that require loops to be able to
    fail.  Note that the Coq backend will spot the assert and omit it. *)
@@ -4735,14 +4731,14 @@ let recheck_defs_without_effects env defs =
 (* In realise_mappings we may have duplicated a user-supplied val spec, which
    causes problems for some targets. Keep the first one, except use the externs
    from the last one, as subsequent redefinitions override earlier ones. *)
-let remove_duplicate_valspecs env (Defs defs) =
+let remove_duplicate_valspecs env ast =
   let last_externs =
     List.fold_left
       (fun last_externs def ->
         match def with
         | DEF_spec (VS_aux (VS_val_spec (_, id, externs, _), _)) ->
             Bindings.add id externs last_externs
-        | _ -> last_externs) Bindings.empty defs
+        | _ -> last_externs) Bindings.empty ast.defs
   in
   let (_, rev_defs) =
     List.fold_left
@@ -4754,14 +4750,14 @@ let remove_duplicate_valspecs env (Defs defs) =
               let externs = Bindings.find id last_externs in
               let vs = VS_aux (VS_val_spec (typschm, id, externs, cast), l) in
               (IdSet.add id set, (DEF_spec vs)::defs)
-        | _ -> (set, def::defs)) (IdSet.empty, []) defs
-  in Defs (List.rev rev_defs)
+        | _ -> (set, def::defs)) (IdSet.empty, []) ast.defs
+  in { ast with defs = List.rev rev_defs }
 
 
 (* Move loop termination measures into loop AST nodes.  This is used before
    type checking so that we avoid the complexity of type checking separate
    measures. *)
-let rec move_loop_measures (Defs defs) =
+let rec move_loop_measures ast =
   let loop_measures =
     List.fold_left
       (fun m d ->
@@ -4773,7 +4769,7 @@ let rec move_loop_measures (Defs defs) =
               | None -> measures
               | Some m -> m @ measures)
              m
-        | _ -> m) Bindings.empty defs
+        | _ -> m) Bindings.empty ast.defs
   in
   let do_exp exp_rec measures (E_aux (e,ann) as exp) =
     match e, measures with
@@ -4799,7 +4795,7 @@ let rec move_loop_measures (Defs defs) =
             let m,rfcls = List.fold_left do_funcl (m,[]) fcls in
             m, (DEF_fundef (FD_aux (FD_function (r,t,e,List.rev rfcls),ann)))::acc
         | _ -> m, d::acc)
-      (loop_measures,[]) defs
+      (loop_measures,[]) ast.defs
   in let () = Bindings.iter
                 (fun id -> function
                   | [] -> ()
@@ -4807,11 +4803,11 @@ let rec move_loop_measures (Defs defs) =
                      Reporting.print_err (id_loc id) "Warning"
                        ("unused loop measure for function " ^ string_of_id id))
                 unused
-  in Defs (List.rev rev_defs)
+  in { ast with defs = List.rev rev_defs }
 
 
-let rewrite_toplevel_consts target type_env (Defs defs) =
-  let istate = Constant_fold.initial_state (Defs defs) type_env in
+let rewrite_toplevel_consts target type_env ast =
+  let istate = Constant_fold.initial_state ast type_env in
   let subst consts exp =
     let open Rewriter in
     let used_ids = fold_exp { (pure_exp_alg IdSet.empty IdSet.union) with e_id = IdSet.singleton } exp in
@@ -4837,8 +4833,8 @@ let rewrite_toplevel_consts target type_env (Defs defs) =
        end
     | def -> (def :: revdefs, consts)
   in
-  let (revdefs, _) = List.fold_left rewrite_def ([], Bindings.empty) defs in
-  Defs (List.rev revdefs)
+  let (revdefs, _) = List.fold_left rewrite_def ([], Bindings.empty) ast.defs in
+  { ast with defs = List.rev revdefs }
 
 (* Hex literals are always a multiple of 4 bits long.  If one of a different size is needed, users may truncate
    them down.  This can be bad for isla because the original may be too long for the concrete bitvector
