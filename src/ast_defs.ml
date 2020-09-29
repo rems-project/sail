@@ -51,9 +51,11 @@
 open Ast
 
 type 'a ast = {
-    defs : 'a def list
+    defs : 'a def list;
+    comments : (string * Lexer.comment list) list
   }
 
 let empty_ast = {
-    defs = []
+    defs = [];
+    comments = []
   }

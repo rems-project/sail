@@ -275,8 +275,14 @@ let load_files ?check:(check=false) options type_envs files =
   if !opt_memo_z3 then Constraint.load_digests () else ();
 
   let t = Profile.start () in
-  let ast = Parse_ast.Defs (List.map (fun f -> (f, parse_file f |> snd |> preprocess options)) files) in
+
+  let parsed_files = List.map (fun f -> (f, parse_file f)) files in
+
+  let comments = List.map (fun (f, (comments, _)) -> (f, comments)) parsed_files in
+  let ast = Parse_ast.Defs (List.map (fun (f, (_, file_ast)) -> (f, preprocess options file_ast)) parsed_files) in
   let ast = Initial_check.process_ast ~generate:(not check) ast in
+  let ast = { ast with comments = comments } in
+  
   let () = if !opt_ddump_initial_ast then Pretty_print_sail.pp_ast stdout ast else () in
 
   begin match !opt_reformat with

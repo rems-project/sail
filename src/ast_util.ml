@@ -1546,7 +1546,7 @@ let split_defs f defs =
   | Some (pre_defs, def, post_defs) ->
      Some (List.rev pre_defs, def, post_defs)
 
-let append_ast ast1 ast2 = { defs = ast1.defs @ ast2.defs }
+let append_ast ast1 ast2 = { defs = ast1.defs @ ast2.defs; comments = ast1.comments @ ast2.comments }
 let append_ast_defs ast defs = { ast with defs = ast.defs @ defs }
 let concat_ast asts = List.fold_right append_ast asts empty_ast
 

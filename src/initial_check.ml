@@ -847,7 +847,7 @@ let to_ast ctx (P.Defs files) =
         let defs', ctx = to_ast_defs ctx file in (defs @ wrap_file (fst file) defs', ctx)
       ) ([], ctx) files
   in
-  { defs = defs }, ctx
+  { defs = defs; comments = [] }, ctx
 
 let initial_ctx = {
     type_constructors =
