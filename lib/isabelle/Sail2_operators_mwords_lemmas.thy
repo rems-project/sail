@@ -166,4 +166,36 @@ lemma shiftl_simp[simp]: "shiftl w l = w << (nat l)"
 lemma shiftr_simp[simp]: "shiftr w l = w >> (nat l)"
   by (auto simp: shiftr_def shiftr_mword_def)
 
+termination shl_int
+  apply (rule_tac R="measure (nat o snd)" in shl_int.termination)
+   apply simp
+  apply simp
+  done
+
+declare shl_int.simps[simp del]
+
+lemma shl_int[simp]:
+  "shl_int x y = Bits.shiftl x (nat y)"
+  apply (induct n \<equiv> "nat y" arbitrary: x y)
+   apply (simp add: shl_int.simps)
+  apply (subst shl_int.simps)
+  apply (clarsimp dest!: sym[where s="Suc _"] simp: shiftl_int_def)
+  apply (simp add: nat_diff_distrib)
+  done
+
+termination shr_int
+  apply (rule_tac R="measure (nat o snd)" in shr_int.termination)
+   apply simp_all
+  done
+
+declare shr_int.simps[simp del]
+
+lemma shr_int[simp]:
+  "shr_int x i = Bits.shiftr x (nat i)"
+  apply (induct x i rule: shr_int.induct)
+  apply (subst shr_int.simps)
+  apply (clarsimp simp: shiftr_int_def zdiv_zmult2_eq[symmetric])
+  apply (simp add: power_Suc[symmetric] Suc_nat_eq_nat_zadd1 del: power_Suc)
+  done
+
 end
