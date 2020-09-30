@@ -1,0 +1,54 @@
+\providecommand\saildoclabelled[2]{\phantomsection\label{#1}#2}
+\providecommand\saildocval[2]{#1 #2}
+\providecommand\saildocfcl[2]{#1 #2}
+\providecommand\saildoctype[2]{#1 #2}
+\providecommand\saildocfn[2]{#1 #2}
+\providecommand\saildocoverload[2]{#1 #2}
+
+\newcommand{\sailtypecapUpermsWidth}{\saildoclabelled{sailtypezcapzyupermszywidth}{\saildoctype{}{\lstinputlisting[language=sail]{out/typezcap_uperms_widthf6dfed0942499b0c2d58b90971faca40.tex}}}}
+
+\newcommand{\sailvalmain}{\saildoclabelled{sailzmain}{\saildocval{}{\lstinputlisting[language=sail]{out/valzmaine3ee21bf8f1dbb3fd716a5a1803d7e24.tex}}}}
+
+\newcommand{\sailfnmain}{\saildoclabelled{sailfnzmain}{\saildocfn{\begin{itemize}
+\item Ref to \hyperref[sailzcapzyupermszywidth]{\lstinline{cap_uperms_width}}
+\item Ref to \hyperref[sailzcapzyupermszywidth]{description}
+\item Ref to \hyperref[sailztypez0capzyupermszywidth]{type description}
+\item Ref to % FIXME: this should be using type\_description \hyperref[sailztypezycapzyupermszywidth]{type_description}
+\item Ref to \sailreftype{cap\_uperms\_width}{uperms\_width}
+\item Ref to \sailreftype{cap\_uperms\_width}{uperms\_width}
+\end{itemize}
+}{\lstinputlisting[language=sail]{out/fnzmaine3ee21bf8f1dbb3fd716a5a1803d7e24.tex}}}}
+
+\newcommand{\sailvalfunctionWithUnderscores}{\saildoclabelled{sailzfunctionzywithzyunderscores}{\saildocval{}{\lstinputlisting[language=sail]{out/valzfunction_with_underscores6e195bff96b3fe3d60b356f28519989f.tex}}}}
+
+\newcommand{\sailfnfunctionWithUnderscores}{\saildoclabelled{sailfnzfunctionzywithzyunderscores}{\saildocfn{\begin{itemize}
+\item \hyperref[sailzfunction\_with\_underscores]{\lstinline{function\_with\_underscores}}
+\item \hyperref[sailzfunctionzywithzyunderscores]{\lstinline{function_with_underscores}}
+\item \hyperref[sailzNOTz0function\_with\_underscores]{function\_with\_underscores}
+\item \hyperref[sailzNOTz0\lstinline{function_with_underscores}]{\lstinline{function_with_underscores}}
+\item \hyperref[sailzfunction\_with\_underscores]{NOT function\_with\_underscores}
+\item \hyperref[sailzfunctionzywithzyunderscores]{NOT \lstinline{function_with_underscores}}
+\end{itemize}
+}{\lstinputlisting[language=sail]{out/fnzfunction_with_underscores6e195bff96b3fe3d60b356f28519989f.tex}}}}
+
+\newcommand{\sailval}[1]{
+  \ifstrequal{#1}{function\_with\_underscores}{\sailvalfunctionWithUnderscores}{}%
+  \ifstrequal{#1}{main}{\sailvalmain}{}}
+
+\newcommand{\sailrefval}[2]{
+  \ifstrequal{#1}{function_with_underscores}{\hyperref[sailzfunctionzywithzyunderscores]{#2}}{}%
+  \ifstrequal{#1}{main}{\hyperref[sailzmain]{#2}}{}}
+
+\newcommand{\sailfn}[1]{
+  \ifstrequal{#1}{function\_with\_underscores}{\sailfnfunctionWithUnderscores}{}%
+  \ifstrequal{#1}{main}{\sailfnmain}{}}
+
+\newcommand{\sailreffn}[2]{
+  \ifstrequal{#1}{function_with_underscores}{\hyperref[sailfnzfunctionzywithzyunderscores]{#2}}{}%
+  \ifstrequal{#1}{main}{\hyperref[sailfnzmain]{#2}}{}}
+
+\newcommand{\sailtype}[1]{
+  \ifstrequal{#1}{cap\_uperms\_width}{\sailtypecapUpermsWidth}{}}
+
+\newcommand{\sailreftype}[2]{
+  \ifstrequal{#1}{cap_uperms_width}{\hyperref[sailtypezcapzyupermszywidth]{#2}}{}}

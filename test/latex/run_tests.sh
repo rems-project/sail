@@ -26,7 +26,6 @@ for testfile in *.sail; do
         exp_prefix=${testfile//.sail/}
         errmsg="Missing .exp files for $testfile?"
         for expected in "${exp_prefix}"*.exp; do
-            echo "expected=$expected"
             # remove prefix and suffix
             exp_file_name=${expected//${exp_prefix}./}
             generated_file="$temp_dir/out/${exp_file_name//.exp/}"
@@ -42,10 +41,22 @@ for testfile in *.sail; do
             fi
         done
         if [ -z "$errmsg" ]; then
-            green "LaTeX for $testfile" "ok"
+            green "Generating LaTeX for $testfile" "ok"
         else
-            yellow "LaTeX for $testfile" "$errmsg"
+            yellow "Generating LaTeX for $testfile" "$errmsg"
         fi;
+        # Check that the generated latex builds:
+        if command -v latexmk > /dev/null; then
+            cp -f "$DIR/main.tex" "$temp_dir"
+            if latexmk -pdf -cd -file-line-error -interaction=batchmode "$temp_dir/main.tex" > /dev/null 2>&1; then
+                green "Building LaTeX for $testfile" "ok"
+            else
+                tail -n 50 "$temp_dir/main.log"
+                yellow "Building LaTeX for $testfile" "failed to build"
+            fi
+        else
+            red "Building LaTeX for $testfile" "latexmk not installed"
+        fi
     else
         red "failed to generate latex for $testfile" "fail"
     fi

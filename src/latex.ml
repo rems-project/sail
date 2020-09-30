@@ -242,7 +242,7 @@ let latex_of_markdown str =
     | Paragraph elems ->
        let prepend = if state.noindent then (state.noindent <- false; "\\noindent ") else "" in
        prepend ^ format elems ^ "\n\n"
-    | Text str -> Str.global_replace (Str.regexp_string "_") "\\_" str
+    | Text str -> text_code str
     | Emph elems -> sprintf "\\emph{%s}" (format elems)
     | Bold elems -> sprintf "\\textbf{%s}" (format elems)
     | Ref (r, "THIS", alt, _) ->
@@ -441,7 +441,12 @@ let tdef_id = function
 let defs { defs; _ } =
   reset_state state;
 
-  let preamble = string "\\providecommand\\saildoclabelled[2]{\\phantomsection\\label{#1}#2}" ^^ twice hardline in
+  let preamble = string ("\\providecommand\\saildoclabelled[2]{\\phantomsection\\label{#1}#2}\n" ^
+    "\\providecommand\\saildocval[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocfcl[2]{#1 #2}\n" ^
+    "\\providecommand\\saildoctype[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocfn[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocoverload[2]{#1 #2}\n\n") in
 
   let overload_counter = ref 0 in
 
@@ -501,7 +506,7 @@ let defs { defs; _ } =
      identifiers then outputs the correct mangled command. *)
   let id_command cat ids =
     sprintf "\\newcommand{\\%s%s}[1]{\n  " !opt_prefix (category_name cat)
-    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\%s}{}" (string_of_id id) (latex_cat_id cat id))
+    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\%s}{}" (text_code (string_of_id id)) (latex_cat_id cat id))
                           (IdSet.elements ids)
     ^ "}"
     |> string
