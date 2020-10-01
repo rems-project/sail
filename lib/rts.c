@@ -589,7 +589,7 @@ int process_arguments(int argc, char *argv[])
       break;
 
     case 'e':
-      load_elf(optarg, NULL, NULL);
+      load_elf(optarg, NULL, &g_elf_entry);
       break;
 
     case 'n':
