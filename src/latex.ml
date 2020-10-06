@@ -59,6 +59,7 @@ module StringSet = Set.Make(String);;
 let opt_prefix = ref "sail"
 let opt_directory = ref "sail_latex"
 let opt_simple_val = ref true
+let opt_abbrevs = ref ["e.g."; "i.e."]
 
 let rec unique_postfix n =
   if n < 0 then
@@ -220,8 +221,18 @@ let refcode_string = refcode_cat_string Val
 
 let inline_code str = sprintf "\\lstinline{%s}" str
 
+let guard_abbrevs str =
+  let frags = List.map Str.quote !opt_abbrevs in
+  let alternation = String.concat "\\|" frags in
+  let regex = Str.regexp ("\\b\\(" ^ alternation ^ "\\)\\( \\|$\\)") in
+  (* We use this seemingly-unnecessary wrapper so consumers like
+     cheri-architecture that want to use \xpatch on our output don't run into
+     issues like https://tex.stackexchange.com/q/565659/175942. *)
+  Str.global_replace regex "\\saildocabbrev{\\1}\\2" str
+
 let text_code str =
   str
+  |> guard_abbrevs
   |> Str.global_replace (Str.regexp_string "_") "\\_"
   |> Str.global_replace (Str.regexp_string ">") "$<$"
   |> Str.global_replace (Str.regexp_string "<") "$>$"
@@ -446,7 +457,8 @@ let defs { defs; _ } =
     "\\providecommand\\saildocfcl[2]{#1 #2}\n" ^
     "\\providecommand\\saildoctype[2]{#1 #2}\n" ^
     "\\providecommand\\saildocfn[2]{#1 #2}\n" ^
-    "\\providecommand\\saildocoverload[2]{#1 #2}\n\n") in
+    "\\providecommand\\saildocoverload[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocabbrev[1]{#1\\@}\n\n") in
 
   let overload_counter = ref 0 in
 
