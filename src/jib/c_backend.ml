@@ -2310,23 +2310,32 @@ let compile_ast env output_chan c_includes ast =
        @ [ "}" ] ))
     in
 
+    let model_pre_exit =
+      [ "void model_pre_exit()";
+        "{" ]
+      @ (if Util.is_some !opt_branch_coverage then
+         [ "  if (sail_coverage_exit() != 0) {";
+           "    fprintf(stderr, \"Could not write coverage information\\n\");";
+           "    exit(EXIT_FAILURE);";
+           "  }";
+           "}" ]
+         else
+           ["}"]
+        )
+      |> List.map string
+      |> separate hardline
+    in
+
     let model_default_main =
       ([ Printf.sprintf "%sint model_main(int argc, char *argv[])" (static ());
          "{";
          "  model_init();";
          "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
          Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "main"));
-         "  model_fini();" ]
-       @ (if Util.is_some !opt_branch_coverage then
-            [ "  if (sail_coverage_exit() != 0) {";
-              "    fprintf(stderr, \"Could not write coverage information\\n\");";
-              "    exit(EXIT_FAILURE);";
-              "  }" ]
-          else
-            []
-         )
-       @ [ "  return EXIT_SUCCESS;";
-           "}" ])
+         "  model_fini();";
+         "  model_pre_exit();";
+         "  return EXIT_SUCCESS;";
+         "}" ])
       |> List.map string
       |> separate hardline
     in
@@ -2344,6 +2353,7 @@ let compile_ast env output_chan c_includes ast =
                                  ^^ (if not !opt_no_rts then
                                        model_init ^^ hlhl
                                        ^^ model_fini ^^ hlhl
+                                       ^^ model_pre_exit ^^ hlhl
                                        ^^ model_default_main ^^ hlhl
                                      else
                                        empty)
