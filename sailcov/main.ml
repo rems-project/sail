@@ -1,7 +1,8 @@
 
 let opt_files = ref ([] : string list)
 
-let opt_taken = ref "sail_coverage"
+let opt_taken = ref ([] : string list)
+let opt_taken_list = ref ([] : string list)
 let opt_all = ref "all_branches"
 
 let opt_tab_width = ref 4
@@ -10,6 +11,8 @@ let opt_index = ref None
 let opt_index_default = ref None
 let opt_prefix = ref ""
                   
+let opt_cumulative_table = ref None
+
 type color = {
     hue: int;
     saturation: int;
@@ -29,11 +32,14 @@ let use_alt_colors () =
 let options =
   Arg.align [
       ( "-t",
-        Arg.String (fun str -> opt_taken := str),
+        Arg.String (fun str -> opt_taken := str::!opt_taken),
         "<file> coverage information for branches taken while executing the model (default: sail_coverage)");
       ( "--taken",
-        Arg.String (fun str -> opt_taken := str),
+        Arg.String (fun str -> opt_taken := str::!opt_taken),
         " long form of -t");
+      ( "--taken-list",
+        Arg.String (fun str -> opt_taken_list := str::!opt_taken_list),
+        "<file> file containing a list of filenames of branches taken");
       ( "-a",
         Arg.String (fun str -> opt_all := str),
         "<file> information about all possible branches (default: all_branches)");
@@ -72,7 +78,10 @@ let options =
         " swap default colors from red/green into alternate yellow/blue theme");
       ( "--alt-colours",
         Arg.Unit use_alt_colors,
-        "")
+        "");
+      ( "--cumulative-table",
+        Arg.String (fun str -> opt_cumulative_table := Some str),
+        "<file> write a table of cumulative coverage to file")
     ]
 
 type span = {
@@ -96,8 +105,8 @@ module SpanMap = Map.Make(Span)
 
 let mk_span _ file l1 c1 l2 c2 = { file = Filename.basename file; l1 = l1; c1 = c1; l2 = l2; c2 = c2 }
                
-let read_coverage filename = 
-  let spans = ref SpanSet.empty in
+let read_more_coverage filename spans = 
+  let spans = ref spans in
   let chan = open_in filename in
   try
     let rec loop () =
@@ -109,6 +118,8 @@ let read_coverage filename =
   with End_of_file ->
     close_in chan;
     !spans
+
+let read_coverage filename = read_more_coverage filename SpanSet.empty
 
 (** We color the source either red (bad) or green (good) if it's
    covered vs uncovered. If we have nested uncovered branches, they
@@ -239,9 +250,32 @@ iframe {
 let html_file_for file =
   !opt_prefix ^ Filename.remove_extension (Filename.basename file) ^ ".html"
               
+let read_taken_files () =
+  match !opt_cumulative_table with
+  | Some table_name ->
+     let table_chan = open_out table_name in
+     List.iter (fun src_file -> Printf.fprintf table_chan "%s, " (Filename.basename src_file)) !opt_files;
+     Printf.fprintf table_chan ",, Total\n";
+     let read_more filename spans =
+       let new_spans = read_more_coverage filename spans in
+       let counts = List.map (fun src_name ->
+           let taken = SpanSet.filter (fun s -> s.file = Filename.basename src_name) new_spans in
+           SpanSet.cardinal taken
+         ) !opt_files
+       in
+       List.iter (fun i -> Printf.fprintf table_chan "%d, " i) counts;
+       Printf.fprintf table_chan ",, %d\n" (List.fold_left (+) 0 counts);
+       new_spans
+     in
+     let spans = List.fold_right read_more !opt_taken SpanSet.empty in
+     close_out table_chan;
+     spans
+  | None ->
+     List.fold_right read_more_coverage !opt_taken SpanSet.empty
+
 let main () =
   let all = read_coverage !opt_all in
-  let taken = read_coverage !opt_taken in
+  let taken = read_taken_files () in
   List.iter (fun file ->
       let taken, not_taken, desc = file_info file all taken in
       print_endline desc;
@@ -370,9 +404,25 @@ let main () =
 
 let usage_msg = "usage: sailcov -t <file> -a <file> <.sail files>\n"
 
+let read_taken_lists () =
+  List.iter (fun filename ->
+      let chan = open_in filename in
+      try
+        let rec loop () =
+          opt_taken := (input_line chan)::!opt_taken;
+          loop ()
+        in loop ()
+      with End_of_file ->
+        ()) !opt_taken_list
+
 let _ =
   Arg.parse options
     (fun s -> opt_files := !opt_files @ [s])
     usage_msg;
+  read_taken_lists ();
+  begin opt_taken := match !opt_taken with
+  | [] -> ["sail_coverage"]
+  | l -> List.rev l
+  end;
   try main () with
   | Sys_error msg -> prerr_endline msg; exit 1 

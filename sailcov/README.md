@@ -55,3 +55,12 @@ yellow/blue theme using `--alt-colors` or `--alt-colours`. See the
 alternate
 [riscv_vmem_sv39.html](https://alasdair.github.io/alt_riscv_vmem_sv39.html)
 for an example.
+
+### Combining multiple coverage files
+
+The `-t` option can be given multiple times to merge the coverage from
+multiple executions.  The `--taken-list` option acts as if each line
+of the given file is a `-t` argument, allowing the coverage of large
+number of tests to be assessed.  Adding the `--cumulative-table`
+option will output an additional file in CSV format showing how the
+coverage increases across all the files.
