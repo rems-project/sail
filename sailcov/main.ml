@@ -12,6 +12,7 @@ let opt_index_default = ref None
 let opt_prefix = ref ""
                   
 let opt_cumulative_table = ref None
+let opt_histogram = ref false
 
 type color = {
     hue: int;
@@ -81,7 +82,10 @@ let options =
         "");
       ( "--cumulative-table",
         Arg.String (fun str -> opt_cumulative_table := Some str),
-        "<file> write a table of cumulative coverage to file")
+        "<file> write a table of cumulative coverage to file");
+      ( "--histogram",
+        Arg.Set opt_histogram,
+        "display a histogram of the coverage level");
     ]
 
 type span = {
@@ -103,12 +107,14 @@ module SpanSet = Set.Make(Span)
 module SpanMap = Map.Make(Span)
 
 module StringMap = Map.Make(String)
+module IntMap = Map.Make(Int)
 
 let add_span spans _ file l1 c1 l2 c2 =
   StringMap.update (Filename.basename file)
     (fun x ->
-      let file_spans = Option.value x ~default:SpanSet.empty in
-      Some (SpanSet.add { l1 = l1; c1 = c1; l2 = l2; c2 = c2 } file_spans))
+      let file_spans = Option.value x ~default:SpanMap.empty in
+      Some (SpanMap.update { l1 = l1; c1 = c1; l2 = l2; c2 = c2 }
+              (function None -> Some 1 | Some i -> Some (i+1)) file_spans))
     spans
 
 let read_more_coverage filename spans = 
@@ -140,7 +146,7 @@ type source_char = {
 
 let zero_width span = span.l1 = span.l2 && span.c1 = span.c2
 
-let mark_bad_region source span =
+let mark_bad_region source span _ =
   if zero_width span then (
     source.(span.l2 - 1).(span.c2 - 1).bad_zero_width <- true
   ) else (
@@ -148,7 +154,7 @@ let mark_bad_region source span =
     source.(span.l2 - 1).(span.c2 - 1).badness <- source.(span.l2 - 1).(span.c2 - 1).badness - 1
   )
 
-let mark_good_region source span =
+let mark_good_region source span _ =
   if not (zero_width span) then (
     source.(span.l1 - 1).(span.c1).goodness <- source.(span.l1 - 1).(span.c1).goodness + 1;
     source.(span.l2 - 1).(span.c2 - 1).goodness <- source.(span.l2 - 1).(span.c2 - 1).goodness - 1
@@ -184,11 +190,21 @@ let output_html_char chan c =
     output_char chan c
 
 let file_info file all taken =
-  let not_taken = SpanSet.diff all taken in
+  let diff span all_count taken_count =
+    match all_count, taken_count with
+    | Some _, Some _ -> None
+    | Some n, None   -> Some n
+    | None, Some _ -> begin
+        Printf.eprintf "Warning: span not in all branches file: %s\n" (string_of_span file span);
+        None
+      end
+    | None, None -> None
+  in
+  let not_taken = SpanMap.merge diff all taken in
   
   let percent =
-    if SpanSet.cardinal all != 0 then
-      let p = 100. *. (Float.of_int (SpanSet.cardinal taken) /. Float.of_int (SpanSet.cardinal all)) in
+    if SpanMap.cardinal all != 0 then
+      let p = 100. *. (Float.of_int (SpanMap.cardinal taken) /. Float.of_int (SpanMap.cardinal all)) in
       Printf.sprintf "%.0f%%" p
     else
       "-"
@@ -196,7 +212,7 @@ let file_info file all taken =
 
   taken,
   not_taken,
-  Printf.sprintf "%s (%d/%d) %s" (Filename.basename file) (SpanSet.cardinal taken) (SpanSet.cardinal all) percent
+  Printf.sprintf "%s (%d/%d) %s" (Filename.basename file) (SpanMap.cardinal taken) (SpanMap.cardinal all) percent
 
 let index_css = "
 body, html {
@@ -263,8 +279,8 @@ let read_taken_files () =
      let read_more filename spans =
        let new_spans = read_more_coverage filename spans in
        let counts = List.map (fun src_name ->
-           let taken = Option.value ~default:SpanSet.empty (StringMap.find_opt (Filename.basename src_name) new_spans) in
-           SpanSet.cardinal taken
+           let taken = Option.value ~default:SpanMap.empty (StringMap.find_opt (Filename.basename src_name) new_spans) in
+           SpanMap.cardinal taken
          ) !opt_files
        in
        List.iter (fun i -> Printf.fprintf table_chan "%d, " i) counts;
@@ -280,10 +296,10 @@ let read_taken_files () =
 let get_file_spans filename all taken =
       let file = Filename.basename filename in
       let all = match StringMap.find_opt file all with
-        | None -> Printf.eprintf "Warning: file %s not found\n" file; SpanSet.empty
+        | None -> Printf.eprintf "Warning: %s not found in coverage files\n" file; SpanMap.empty
         | Some s -> s
       in
-      let taken = Option.value ~default:SpanSet.empty (StringMap.find_opt file taken) in
+      let taken = Option.value ~default:SpanMap.empty (StringMap.find_opt file taken) in
       all, taken
 
 let main () =
@@ -293,10 +309,18 @@ let main () =
       let all, taken = get_file_spans file all taken in
       let taken, not_taken, desc = file_info file all taken in
       print_endline desc;
+
+      if !opt_histogram && not (SpanMap.is_empty taken) then begin
+          let histogram = SpanMap.fold (fun _ count m -> IntMap.update count (function None -> Some 1 | Some i -> Some (i+1)) m) taken IntMap.empty in
+          Printf.printf "Count | Number of spans\n";
+          IntMap.iter (fun count spans ->
+              Printf.printf "%5d | %7d\n" count spans
+            ) histogram
+        end;
       
       let source = read_source file in
-      SpanSet.iter (mark_good_region source) taken;
-      SpanSet.iter (mark_bad_region source) not_taken;
+      SpanMap.iter (mark_good_region source) taken;
+      SpanMap.iter (mark_bad_region source) not_taken;
       
       let output_file = html_file_for file in
       let chan = open_out output_file in
@@ -370,7 +394,7 @@ let main () =
               
               assert (!current_goodness >= 0);
               assert (!current_badness >= 0)
-                      
+              
             ) line;
           output_string chan "<br>\n"
         ) source;
@@ -385,7 +409,7 @@ let main () =
   begin match !opt_index with
   | Some name ->
      let chan = open_out (name ^ ".html") in
-    
+     
      output_string chan "<!DOCTYPE html>\n";
      output_string chan "<html lang=\"en\">\n";
      Printf.ksprintf (output_string chan)
