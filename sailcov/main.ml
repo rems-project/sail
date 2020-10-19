@@ -85,15 +85,14 @@ let options =
     ]
 
 type span = {
-    file : string;
     l1 : int;
     c1 : int;
     l2 : int;
     c2 : int;
   }
 
-let string_of_span span =
-  Printf.sprintf "\"%s\" %d:%d - %d:%d" span.file span.l1 span.c1 span.l2 span.c2
+let string_of_span file span =
+  Printf.sprintf "\"%s\" %d:%d - %d:%d" file span.l1 span.c1 span.l2 span.c2
 
 module Span = struct
   type t = span
@@ -103,15 +102,22 @@ end
 module SpanSet = Set.Make(Span)
 module SpanMap = Map.Make(Span)
 
-let mk_span _ file l1 c1 l2 c2 = { file = Filename.basename file; l1 = l1; c1 = c1; l2 = l2; c2 = c2 }
-               
+module StringMap = Map.Make(String)
+
+let add_span spans _ file l1 c1 l2 c2 =
+  StringMap.update (Filename.basename file)
+    (fun x ->
+      let file_spans = Option.value x ~default:SpanSet.empty in
+      Some (SpanSet.add { l1 = l1; c1 = c1; l2 = l2; c2 = c2 } file_spans))
+    spans
+
 let read_more_coverage filename spans = 
   let spans = ref spans in
   let chan = open_in filename in
   try
     let rec loop () =
       let line = input_line chan in
-      spans := SpanSet.add (Scanf.sscanf line "%c %S, %d, %d, %d, %d" mk_span) !spans;
+      spans := Scanf.sscanf line "%c %S, %d, %d, %d, %d" (add_span !spans);
       loop ()
     in
     loop ()
@@ -119,7 +125,7 @@ let read_more_coverage filename spans =
     close_in chan;
     !spans
 
-let read_coverage filename = read_more_coverage filename SpanSet.empty
+let read_coverage filename = read_more_coverage filename StringMap.empty
 
 (** We color the source either red (bad) or green (good) if it's
    covered vs uncovered. If we have nested uncovered branches, they
@@ -178,8 +184,6 @@ let output_html_char chan c =
     output_char chan c
 
 let file_info file all taken =
-  let all = SpanSet.filter (fun s -> s.file = Filename.basename file) all in
-  let taken = SpanSet.filter (fun s -> s.file = Filename.basename file) taken in
   let not_taken = SpanSet.diff all taken in
   
   let percent =
@@ -259,7 +263,7 @@ let read_taken_files () =
      let read_more filename spans =
        let new_spans = read_more_coverage filename spans in
        let counts = List.map (fun src_name ->
-           let taken = SpanSet.filter (fun s -> s.file = Filename.basename src_name) new_spans in
+           let taken = Option.value ~default:SpanSet.empty (StringMap.find_opt (Filename.basename src_name) new_spans) in
            SpanSet.cardinal taken
          ) !opt_files
        in
@@ -267,16 +271,26 @@ let read_taken_files () =
        Printf.fprintf table_chan ",, %d\n" (List.fold_left (+) 0 counts);
        new_spans
      in
-     let spans = List.fold_right read_more !opt_taken SpanSet.empty in
+     let spans = List.fold_right read_more !opt_taken StringMap.empty in
      close_out table_chan;
      spans
   | None ->
-     List.fold_right read_more_coverage !opt_taken SpanSet.empty
+     List.fold_right read_more_coverage !opt_taken StringMap.empty
+
+let get_file_spans filename all taken =
+      let file = Filename.basename filename in
+      let all = match StringMap.find_opt file all with
+        | None -> Printf.eprintf "Warning: file %s not found\n" file; SpanSet.empty
+        | Some s -> s
+      in
+      let taken = Option.value ~default:SpanSet.empty (StringMap.find_opt file taken) in
+      all, taken
 
 let main () =
   let all = read_coverage !opt_all in
   let taken = read_taken_files () in
   List.iter (fun file ->
+      let all, taken = get_file_spans file all taken in
       let taken, not_taken, desc = file_info file all taken in
       print_endline desc;
       
@@ -381,6 +395,7 @@ let main () =
      
      output_string chan "<table><tr><td class=\"left\"><div class=\"scroll\">";
      List.iter (fun file ->
+         let all, taken = get_file_spans file all taken in
          let _, _, desc = file_info file all taken in
          Printf.ksprintf (output_string chan) "<a href=\"%s\" target=\"source\">%s</a><br>\n"
            (html_file_for file) desc
