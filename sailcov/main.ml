@@ -312,7 +312,7 @@ let main () =
 
       if !opt_histogram && not (SpanMap.is_empty taken) then begin
           let histogram = SpanMap.fold (fun _ count m -> IntMap.update count (function None -> Some 1 | Some i -> Some (i+1)) m) taken IntMap.empty in
-          Printf.printf "Count | Number of spans\n";
+          Printf.printf "Files | Number of spans\n";
           IntMap.iter (fun count spans ->
               Printf.printf "%5d | %7d\n" count spans
             ) histogram
