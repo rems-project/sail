@@ -13,6 +13,7 @@ let opt_prefix = ref ""
                   
 let opt_cumulative_table = ref None
 let opt_histogram = ref false
+let opt_colour_count = ref false
 
 type color = {
     hue: int;
@@ -86,6 +87,12 @@ let options =
       ( "--histogram",
         Arg.Set opt_histogram,
         "display a histogram of the coverage level");
+      ( "--color-by-count",
+        Arg.Set opt_colour_count,
+        "color by number of files a span appears in (instead of nesting depth)");
+      ( "--colour-by-count",
+        Arg.Set opt_colour_count,
+        "colour by number of files a span appears in (instead of nesting depth)");
     ]
 
 type span = {
@@ -100,7 +107,12 @@ let string_of_span file span =
 
 module Span = struct
   type t = span
-  let compare s1 s2 = compare s1 s2
+  let compare s1 s2 =
+    if s1.l1 < s2.l1 then -1 else if s1.l1 > s2.l1 then 1
+    else if s1.c1 < s2.c1 then -1 else if s1.c1 > s2.c1 then 1
+    else if s1.l2 < s2.l2 then -1 else if s1.l2 > s2.l2 then 1
+    else if s1.c2 < s2.c2 then -1 else if s1.c2 > s2.c2 then 1
+    else 0
 end
 
 module SpanSet = Set.Make(Span)
@@ -345,6 +357,84 @@ let main () =
       output_string chan (Printf.sprintf "<h1>%s</h1>\n" desc);
       output_string chan "<code style=\"display: block\">\n";
 
+      if !opt_colour_count then
+        let combined = SpanMap.merge (fun span present count ->
+                           match present, count with
+                           | None, _ -> Printf.eprintf "Span %s missing in all branches file %s" (string_of_span file span) !opt_all; None
+                           | Some _, None -> Some 0
+                           | Some _, Some n -> Some n) all taken
+        in
+        (* The spans are ordered, so print forwards until we find the next span start or end (the
+           ends of spans are held in the stack).  TODO: check for lingering off-by-one errors. *)
+        let rec process span count (stack, line, char) =
+          (*Printf.eprintf "span %s line %d char %d\n" (string_of_span file span) line char;*)
+          if span.l1 > line then
+            match stack with
+            | h::t when h.l2 = line ->
+               for i = char to h.c2 - 1 do
+                 output_html_char chan source.(line - 1).(i).char
+               done;
+               output_string chan (Printf.sprintf "</span>");
+               process span count (t, line, h.c2)
+            | _ ->
+               for i = char to Array.length (source.(line - 1)) - 1 do
+                 output_html_char chan source.(line - 1).(i).char
+               done;
+               output_string chan "<br>\n";
+               process span count (stack, line + 1, 0)
+          else if span.l1 = line && span.c1 > char then
+            match stack with
+            | h::t when h.l2 = line && h.c2 < span.c1 ->
+               for i = char to h.c2 - 1 do
+                 output_html_char chan source.(line - 1).(i).char
+               done;
+               output_string chan (Printf.sprintf "</span>");
+               process span count (t, line, h.c2)
+            | _ ->
+               for i = char to span.c1 - 1 do
+                 output_html_char chan source.(line - 1).(i).char
+               done;
+               if span.c1 - 1 = Array.length source.(line - 1)
+               then process span count (stack, line + 1, 0)
+               else process span count (stack, line, span.c1)
+          else
+            let () = assert (span.l1 = line && span.c1 = char) in
+            if zero_width span then begin
+                output_string chan (Printf.sprintf "<span style=\"background-color: %s\">" (bad_color ()));
+                output_string chan "&#171;Invisible branch not taken here&#187";
+                output_string chan "</span>";
+                (stack, line, char)
+              end else begin
+                let colour =
+                  if count = 0 then html_color !opt_bad_color 0 else
+                    html_color !opt_good_color count
+                in
+                output_string chan (Printf.sprintf "<span title=\"%d\" style=\"background-color: %s\">" count colour);
+                (span::stack, line, char)
+              end
+        in
+        let rec finish (stack, line, char) =
+          (*Printf.eprintf "line %d char %d\n" line char;*)
+          match stack with
+          | h::t when h.l2 = line ->
+             for i = char to h.c2 - 1 do
+               output_html_char chan source.(line - 1).(i).char
+             done;
+             output_string chan (Printf.sprintf "</span>");
+             finish (t, line, h.c2)
+          | _ ->
+             if line >= Array.length source then () else
+             for i = char to Array.length (source.(line - 1)) - 1 do
+               output_html_char chan source.(line - 1).(i).char
+             done;
+             output_string chan "<br>\n";
+             if line + 1 < Array.length source
+             then finish (stack, line + 1, 0)
+             else ()
+        in
+        let (stack, line, char) = SpanMap.fold process combined ([], 1, 0) in
+        finish (stack, line, char)
+      else
       Array.iter (fun line ->
           Array.iter (fun loc ->
               if loc.goodness < 0 && loc.badness < 0 then (
