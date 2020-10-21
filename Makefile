@@ -10,7 +10,7 @@ sail:
 
 isail:
 	$(MAKE) -C src isail
-	ln -f -s src/isail.native sail
+	ln -f -s src/isail.native isail
 
 coverage:
 	$(MAKE) -C src coverage
