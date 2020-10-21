@@ -166,6 +166,14 @@ let options = Arg.align ([
   ( "-latex_full_valspecs",
     Arg.Clear Latex.opt_simple_val,
     " print full valspecs in LaTeX output");
+  ( "-latex_abbrevs",
+    Arg.String (fun s ->
+      let abbrevs = String.split_on_char ';' s in
+      let filtered = List.filter (fun abbrev -> not (String.equal "" abbrev)) abbrevs in
+      match List.find_opt (fun abbrev -> not (String.equal "." (String.sub abbrev (String.length abbrev - 1) 1))) filtered with
+      | None -> Latex.opt_abbrevs := filtered
+      | Some abbrev -> raise (Arg.Bad (abbrev ^ " does not end in a '.'"))),
+    " semicolon-separated list of abbreviations to fix spacing for in LaTeX output (default 'e.g.;i.e.')");
   ( "-marshal",
     Arg.Tuple [set_target "marshal"; Arg.Set Initial_check.opt_undefined_gen],
     " OCaml-marshal out the rewritten AST to a file");
