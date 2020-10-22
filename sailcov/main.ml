@@ -13,6 +13,7 @@ let opt_prefix = ref ""
                   
 let opt_cumulative_table = ref None
 let opt_histogram = ref false
+let opt_cumulative_histogram = ref None
 let opt_colour_count = ref false
 
 type color = {
@@ -87,6 +88,9 @@ let options =
       ( "--histogram",
         Arg.Set opt_histogram,
         "display a histogram of the coverage level");
+      ( "--cumulative-histogram",
+        Arg.String (fun str -> opt_cumulative_histogram := Some str),
+        "<file> write a table of cumulative histograms to file");
       ( "--color-by-count",
         Arg.Set opt_colour_count,
         "color by number of files a span appears in (instead of nesting depth)");
@@ -282,28 +286,64 @@ iframe {
 let html_file_for file =
   !opt_prefix ^ Filename.remove_extension (Filename.basename file) ^ ".html"
               
-let read_taken_files () =
-  match !opt_cumulative_table with
-  | Some table_name ->
-     let table_chan = open_out table_name in
-     List.iter (fun src_file -> Printf.fprintf table_chan "%s, " (Filename.basename src_file)) !opt_files;
-     Printf.fprintf table_chan ",, Total\n";
-     let read_more filename spans =
-       let new_spans = read_more_coverage filename spans in
-       let counts = List.map (fun src_name ->
-           let taken = Option.value ~default:SpanMap.empty (StringMap.find_opt (Filename.basename src_name) new_spans) in
-           SpanMap.cardinal taken
-         ) !opt_files
-       in
-       List.iter (fun i -> Printf.fprintf table_chan "%d, " i) counts;
-       Printf.fprintf table_chan ",, %d\n" (List.fold_left (+) 0 counts);
-       new_spans
-     in
-     let spans = List.fold_right read_more !opt_taken StringMap.empty in
-     close_out table_chan;
-     spans
-  | None ->
-     List.fold_right read_more_coverage !opt_taken StringMap.empty
+let read_taken_files all =
+  (* Initialise optional CSV outputs *)
+  let table_chan = match !opt_cumulative_table with
+    | Some table_name ->
+       let table_chan = open_out table_name in
+       List.iter (fun src_file -> Printf.fprintf table_chan "%s, " (Filename.basename src_file)) !opt_files;
+       Printf.fprintf table_chan ",, Total\n";
+       Some table_chan
+    | None -> None
+  in
+  let histograms_info = match !opt_cumulative_histogram with
+      | Some file_name ->
+         let chan = open_out file_name in
+         Printf.fprintf chan "Total, File, sum";
+         for i = 1 to List.length !opt_files do
+           Printf.fprintf chan ", %d" i
+         done;
+         output_char chan '\n';
+         let total_spans = StringMap.fold (fun _ spans n -> n + SpanMap.cardinal spans) all 0 in
+         Some (chan, total_spans)
+      | None -> None
+  in
+  (* Read each file, generating lines for CSV outputs if necessary *)
+  let read_more filename (spans, i) =
+    let new_spans = read_more_coverage filename spans in
+    Option.iter
+      (fun chan ->
+        let counts =
+          List.map (fun src_name ->
+              let taken = Option.value ~default:SpanMap.empty (StringMap.find_opt (Filename.basename src_name) new_spans) in
+              SpanMap.cardinal taken
+            ) !opt_files
+        in
+        List.iter (fun i -> Printf.fprintf chan "%d, " i) counts;
+        Printf.fprintf chan ",, %d\n" (List.fold_left (+) 0 counts)
+      ) table_chan;
+    Option.iter
+      (fun (chan, total_spans) ->
+        let histogram =
+          StringMap.fold
+            (fun _ spans histo ->
+              SpanMap.fold (fun _ count histo -> IntMap.update count (function None -> Some 1 | Some i -> Some (i+1)) histo) spans histo)
+            new_spans IntMap.empty
+        in
+        let sum = IntMap.fold (fun _ m n -> m + n) histogram 0 in
+        Printf.fprintf chan "%d,%d,%d," total_spans i sum;
+        for i = 1 to fst (IntMap.max_binding histogram) do
+          Printf.fprintf chan "%d," (Option.value ~default:0 (IntMap.find_opt i histogram))
+        done;
+        Printf.fprintf chan "\n"
+      ) histograms_info;
+    new_spans, i+1
+  in
+  let spans, _ = List.fold_right read_more !opt_taken (StringMap.empty, 1) in
+  (* Clean up *)
+  Option.iter close_out table_chan;
+  Option.iter (fun (c,_) -> close_out c) histograms_info;
+  spans
 
 let get_file_spans filename all taken =
       let file = Filename.basename filename in
@@ -316,7 +356,7 @@ let get_file_spans filename all taken =
 
 let main () =
   let all = read_coverage !opt_all in
-  let taken = read_taken_files () in
+  let taken = read_taken_files all in
   List.iter (fun file ->
       let all, taken = get_file_spans file all taken in
       let taken, not_taken, desc = file_info file all taken in
