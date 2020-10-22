@@ -300,7 +300,7 @@ let read_taken_files all =
       | Some file_name ->
          let chan = open_out file_name in
          Printf.fprintf chan "Total, File, sum";
-         for i = 1 to List.length !opt_files do
+         for i = 1 to List.length !opt_taken do
            Printf.fprintf chan ", %d" i
          done;
          output_char chan '\n';
