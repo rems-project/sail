@@ -205,6 +205,9 @@ let output_html_char chan c =
   else
     output_char chan c
 
+let output_html_string char s =
+  String.iter (output_html_char char) s
+
 let file_info file all taken =
   let diff span all_count taken_count =
     match all_count, taken_count with
@@ -439,8 +442,10 @@ let main () =
                else process span count (stack, line, span.c1)
           else
             let () = assert (span.l1 = line && span.c1 = char) in
-            if zero_width span then begin
-                output_string chan (Printf.sprintf "<span style=\"background-color: %s\">" (bad_color ()));
+            if count = 0 && zero_width span then begin
+                output_string chan "<span title=\"";
+                output_html_string chan (string_of_span file span);
+                output_string chan (Printf.sprintf "\" style=\"background-color: %s\">" (bad_color ()));
                 output_string chan "&#171;Invisible branch not taken here&#187";
                 output_string chan "</span>";
                 (stack, line, char)
