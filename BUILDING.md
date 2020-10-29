@@ -41,7 +41,7 @@ Install OPAM. Either directly from [https://opam.ocaml.org] or from
 the package manager - both should work, but we used the install script
 from the website. ```opam init``` must be run after installing OPAM.
 
-Distributions often contain quite outdated OCaml packages, so we need to make sure that we use an up-to-date OCaml compiler with opam:
+Distributions often contain quite outdated OCaml packages, so we need to make sure that we use an up-to-date OCaml compiler with opam. Here we use 4.06.1 as an example because it's the oldest, but you should be able to use whatever latest version is.
 ```
 opam switch 4.06.1
 ```
@@ -54,19 +54,20 @@ After doing opam switch it is important to check that the ocaml tools in your $P
 The `opam` file in the Sail repository specifies the required dependencies:
 ```
 depends: [
-  "ocamlfind"
-  "ocamlbuild"
+  "ocaml" {>= "4.06.1"}
+  "ocamlfind" {build} 
+  "ocamlbuild" {build}
   "zarith"
-  "menhir"
+  "menhir" {build}
   "linenoise" {>= "1.1.0"}
-  "ott" {>= "0.28"}
+  "ott" {>= "0.28" & build}
   "lem" {>= "2018-12-14"}
   "linksem" {>= "0.3"}
-  "omd"
+  "omd" {>= "1.3.1"}
   "conf-gmp"
   "conf-zlib"
-  "base64" {< "3.0.0"}
-  "yojson"
+  "base64" {>= "3.1.0"}
+  "yojson" {>= "1.6.0"}
   "pprint"
 ]
 ```
