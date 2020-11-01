@@ -748,7 +748,7 @@ and pattern_match env (P_aux (p_aux, (l, _)) as pat) value =
         let hd_match, hd_bind = pattern_match env hd_pat hd_value in
         let tl_match, tl_bind = pattern_match env tl_pat (V_list tl_values) in
         hd_match && tl_match, Bindings.merge combine hd_bind tl_bind
-     | None -> failwith "Cannot match cons pattern against non-list"
+     | None -> false, Bindings.empty
      end
   | P_string_append _ -> assert false (* TODO *)
 
