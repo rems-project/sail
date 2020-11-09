@@ -58,19 +58,19 @@ Sail is currently being used for ARM, RISC-V, MIPS, CHERI-MIPS, IBM Power, and x
 
 * [Sail ARMv8.5-A ISA model, automatically generated from the ARM-internal ASL reference, as used in the ARM ARM](https://github.com/rems-project/sail-arm).
 
-* [Sail ARMv8.3-A ISA model](https://github.com/rems-project/sail/tree/sail2/arm). This is the "public" model described in our [POPL 2019 paper](http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019.pdf), now largely superseded by the above.
+* [Sail ARMv8.3-A ISA model](https://github.com/rems-project/sail/tree/sail2/aarch64). This is the "public" model described in our [POPL 2019 paper](http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019.pdf), now largely superseded by the above.
 
-* [Sail ARMv8-A ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/arm). This is a handwritten user-mode fragment.
+* [Sail ARMv8-A ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/aarch64_small). This is a handwritten user-mode fragment.
 
 * [Sail RISC-V ISA model, handwritten](https://github.com/rems-project/sail-riscv). 
 
 * [Sail MIPS and CHERI-MIPS ISA models, handwritten](https://github.com/CTSRD-CHERI/sail-cheri-mips).
 
-* [Sail IBM POWER ISA model, automatically generated from IBM XML documentation](https://github.com/rems-project/sail/tree/sail2/power).  This is a user-mode fragment. 
+* [Sail IBM POWER ISA model, automatically generated from IBM XML documentation](https://github.com/rems-project/sail/tree/sail2/old/power).  This is a user-mode fragment. 
 
-* [Sail x86 ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/x86). This is a handwritten user-mode fragment. 
+* [Sail x86 ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/old/x86). This is a handwritten user-mode fragment. 
 
-The hand-written ARMv8-A, IBM POWER, and x86 models are currently not in sync
+The hand-written IBM POWER, and x86 models are currently not in sync
 with the latest version of Sail, which is the (default) sail2 branch
 on Github.  These and the RISC-V model are integrated with our [RMEM](http://www.cl.cam.ac.uk/users/pes20/rmem) tool for concurrency semantics. 
 
