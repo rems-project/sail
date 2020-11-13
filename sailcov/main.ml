@@ -596,7 +596,7 @@ let _ =
   read_taken_lists ();
   begin opt_taken := match !opt_taken with
   | [] -> ["sail_coverage"]
-  | l -> List.rev l
+  | l -> l
   end;
   try main () with
   | Sys_error msg -> prerr_endline msg; exit 1 
