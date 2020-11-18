@@ -720,8 +720,8 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
               guard_setup @ [idecl CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
               @ [iif l (V_call (Bnot, [V_id (gs, CT_bool)])) (destructure_cleanup @ [igoto case_label]) [] CT_unit]
             else [])
-         @ body_setup
          @ (if num_cases > 1 then coverage_branch_taken branch_id body else [])
+         @ body_setup
          @ [body_call (CL_id (case_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
          @ [igoto finish_match_label]
        in
