@@ -2936,8 +2936,9 @@ let rec rewrite_app env typ (id,args) =
   in
   let try_cast_to_typ (E_aux (e,(l, _)) as exp) =
     let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
-    match size with
-    | Nexp_aux (Nexp_constant _,_) -> E_cast (typ,exp)
+    (* vector_typ_args_of might simplify size, so rebuild the type even if it's constant *)
+   match size with
+    | Nexp_aux (Nexp_constant c,_) -> E_cast (bitvector_typ (nconstant c) order, exp)
     | _ -> match solve_unique env size with
       | Some c -> E_cast (bitvector_typ (nconstant c) order, exp)
       | None -> e
