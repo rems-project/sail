@@ -828,27 +828,33 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      [iclear ctyp gs]
 
   | AE_short_circuit (SC_and, aval, aexp) ->
+     let branch_id, on_reached = coverage_branch_reached l in
      let left_setup, cval, left_cleanup = compile_aval l ctx aval in
      let right_setup, call, right_cleanup = compile_aexp ctx aexp in
+     let right_coverage = coverage_branch_taken branch_id aexp in
      let gs = ngensym () in
      left_setup
+     @ on_reached
      @ [ idecl CT_bool gs;
          iif l cval
-             (right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
+             (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
              [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool false, CT_bool))]
              CT_bool ]
      @ left_cleanup,
      (fun clexp -> icopy l clexp (V_id (gs, CT_bool))),
      []
   | AE_short_circuit (SC_or, aval, aexp) ->
+     let branch_id, on_reached = coverage_branch_reached l in
      let left_setup, cval, left_cleanup = compile_aval l ctx aval in
      let right_setup, call, right_cleanup = compile_aexp ctx aexp in
+     let right_coverage = coverage_branch_taken branch_id aexp in
      let gs = ngensym () in
      left_setup
+     @ on_reached
      @ [ idecl CT_bool gs;
          iif l cval
              [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool true, CT_bool))]
-             (right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
+             (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
              CT_bool ]
      @ left_cleanup,
      (fun clexp -> icopy l clexp (V_id (gs, CT_bool))),
