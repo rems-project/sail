@@ -226,11 +226,19 @@ let append_into_block instrs instr =
   | [] -> instr
   | _ -> iblock (instrs @ [instr])
 
-let coverage_branch_taken branch_id (AE_aux (_, _, l)) =
+let rec find_aexp_loc (AE_aux (e, _, l)) =
+  match Reporting.simp_loc l with
+  | Some _ -> l
+  | None ->
+    match e with
+    | AE_cast (e',_) -> find_aexp_loc e'
+    | _ -> l
+
+let coverage_branch_taken branch_id aexp =
   match C.branch_coverage with
   | None -> []
   | Some out -> begin
-     match coverage_loc_args l with
+     match coverage_loc_args (find_aexp_loc aexp) with
      | None -> []
      | Some args ->
         Printf.fprintf out "%s\n" ("B " ^ args);
