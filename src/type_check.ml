@@ -647,8 +647,8 @@ end = struct
     else typ_error env (id_loc id) ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
 
   let add_typ_synonym id typq arg env =
-    if Bindings.mem id env.typ_synonyms then
-      typ_error env (id_loc id) ("Type synonym " ^ string_of_id id ^ " already exists")
+    if bound_typ_id env id then
+      typ_error env (id_loc id) ("Cannot define type synonym " ^ string_of_id id ^ ", as a type or synonym with that name already exists")
     else
       begin
         typ_print (lazy (adding ^ "type synonym " ^ string_of_id id));
