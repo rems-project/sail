@@ -367,7 +367,8 @@ function clause execute ( Hint(op) ) = {
     SystemHintOp_YIELD  =>
       Hint_Yield(),
 
-    SystemHintOp_WFE  => {
+    SystemHintOp_WFE  => /* FIXME: implement events?
+    {
       if EventRegistered() then
         ClearEventRegister()
       else {
@@ -379,7 +380,7 @@ function clause execute ( Hint(op) ) = {
           AArch64_CheckForWFxTrap(EL3, true);
         WaitForEvent();
       }
-    },
+    } */ (),
 
     SystemHintOp_WFI  => {
       if ~(InterruptPending()) then {
@@ -394,10 +395,14 @@ function clause execute ( Hint(op) ) = {
     },
 
     SystemHintOp_SEV  =>
-      SendEvent(),
+      /* FIXME: implement events?
+      SendEvent() */
+      (),
 
     SystemHintOp_SEVL  =>
-      EventRegisterSet(),
+      /* FIXME: implement events?
+      EventRegisterSet()*/
+      (),
 
     _  => () /* do nothing */
   }

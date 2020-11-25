@@ -201,14 +201,17 @@ function initial_analysis (instr:ast) -> (regfps,regfps,regfps,niafps,diafp,inst
     (Hint(op))  => 
       match op {
         SystemHintOp_YIELD  => (),
-        SystemHintOp_WFE  => {
+        SystemHintOp_WFE  =>
+        /* FIXME: implement events?
+        {
           if EventRegistered() then () /* ClearEventRegister */
           else {
             /* the execute code for this case always fails because of
                WaitForEvent, declared as extern but not defined */
-            not_implemented("Hint(SystemHintOp_WFE);") 
+            not_implemented("Hint(SystemHintOp_WFE);")
           }
-        },
+        }, */
+        (),
         SystemHintOp_WFI  => {
             /* the execute code for this case always fails because of
                InterruptPending, declared as extern but not defined */
