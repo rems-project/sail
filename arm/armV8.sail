@@ -711,9 +711,11 @@ function clause decodeUnconditionalBranchRegister (0b1101011:0b00:op:0b11111:0b0
 
 function clause execute (BranchRegister(n,branch_type)) =
 {
+  (* ARM: the 'wX(30)' happens after the 'rX(n)'.
+  We reorder those to allow MP+dmb.sy+blr-addr *)
+  if branch_type == BranchType_CALL then wX(30) := rPC() + 4;
   (bit[64]) target := rX(n);
 
-  if branch_type == BranchType_CALL then wX(30) := rPC() + 4;
   BranchTo(target, branch_type);
 }
 
