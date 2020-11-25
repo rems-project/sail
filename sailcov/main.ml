@@ -87,16 +87,16 @@ let options =
         "<file> write a table of cumulative coverage to file");
       ( "--histogram",
         Arg.Set opt_histogram,
-        "display a histogram of the coverage level");
+        " display a histogram of the coverage level");
       ( "--cumulative-histogram",
         Arg.String (fun str -> opt_cumulative_histogram := Some str),
         "<file> write a table of cumulative histograms to file");
       ( "--color-by-count",
         Arg.Set opt_colour_count,
-        "color by number of files a span appears in (instead of nesting depth)");
+        " color by number of files a span appears in (instead of nesting depth)");
       ( "--colour-by-count",
         Arg.Set opt_colour_count,
-        "colour by number of files a span appears in (instead of nesting depth)");
+        " colour by number of files a span appears in (instead of nesting depth)");
     ]
 
 type span = {
