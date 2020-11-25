@@ -1263,7 +1263,7 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
       | _ ->
          let rec range i j = if i > j then [] else i :: (range (i+1) j) in
          let nats = range 0 in
-         let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) doc_id_lem_ctor enums) in
+         let enums_doc = group (pipe ^^ space ^^ separate_map (break 1 ^^ pipe ^^ space) doc_id_lem_ctor enums) in
          let typ_pp = (doc_op equals)
                         (concat [string "type"; space; doc_id_lem_type id;])
                         (enums_doc) in
