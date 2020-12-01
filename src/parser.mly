@@ -1231,9 +1231,11 @@ type_def:
   | Struct id typaram Eq Lcurly struct_fields Rcurly
     { mk_td (TD_record ($2, $3, $6, false)) $startpos $endpos }
   | Enum id Eq enum_bar
-    { mk_td (TD_enum ($2, $4, false)) $startpos $endpos }
+    { mk_td (TD_enum ($2, [], $4, false)) $startpos $endpos }
   | Enum id Eq Lcurly enum Rcurly
-    { mk_td (TD_enum ($2, $5, false)) $startpos $endpos }
+    { mk_td (TD_enum ($2, [], $5, false)) $startpos $endpos }
+  | Enum id With enum_functions Eq Lcurly enum Rcurly
+    { mk_td (TD_enum ($2, $4, $7, false)) $startpos $endpos }
   | Newtype id Eq type_union
     { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), [$4], false)) $startpos $endpos }
   | Newtype id typaram Eq type_union
@@ -1245,17 +1247,27 @@ type_def:
   | Bitfield id Colon typ Eq Lcurly r_def_body Rcurly
     { mk_td (TD_bitfield ($2, $4, $7)) $startpos $endpos }
 
+enum_functions:
+  | id MinusGt typ Comma enum_functions
+    { ($1, $3) :: $5 }
+  | id MinusGt typ
+    { [($1, $3)] }
+
 enum_bar:
   | id
-    { [$1] }
+    { [($1, None)] }
   | id Bar enum_bar
-    { $1 :: $3 }
+    { ($1, None) :: $3 }
 
 enum:
   | id
-    { [$1] }
+    { [($1, None)] }
+  | id EqGt exp
+    { [($1, Some $3)] }
   | id Comma enum
-    { $1 :: $3 }
+    { ($1, None) :: $3 }
+  | id EqGt exp Comma enum
+    { ($1, Some $3) :: $5 }
 
 struct_field:
   | id Colon typ
@@ -1500,7 +1512,7 @@ def:
   | Overload id Eq Lcurly id_list Rcurly
     { DEF_overload ($2, $5) }
   | Overload id Eq enum_bar
-    { DEF_overload ($2, $4) }
+    { DEF_overload ($2, List.map fst $4) }
   | scattered_def
     { DEF_scattered $1 }
   | default_def
