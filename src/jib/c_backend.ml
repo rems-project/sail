@@ -1374,6 +1374,44 @@ let rec codegen_conversion l clexp cval =
   | CT_ref ctyp_to, ctyp_from ->
      codegen_conversion l (CL_addr clexp) cval
 
+  | CT_vector (_, ctyp_elem_to), CT_vector (_, ctyp_elem_from) ->
+     let i = ngensym () in
+     let from = ngensym () in
+     let into = ngensym () in
+     ksprintf string "  KILL(%s)(%s);" (sgen_ctyp_name ctyp_to) (sgen_clexp clexp) ^^ hardline
+     ^^ ksprintf string "  internal_vector_init_%s(%s, %s.len);" (sgen_ctyp_name ctyp_to) (sgen_clexp clexp) (sgen_cval cval) ^^ hardline
+     ^^ ksprintf string "  for (int %s = 0; %s < %s.len; %s++) {" (sgen_name i) (sgen_name i) (sgen_cval cval) (sgen_name i) ^^ hardline
+     ^^ (if is_stack_ctyp ctyp_elem_from then
+           ksprintf string "    %s %s = %s.data[%s];" (sgen_ctyp ctyp_elem_from) (sgen_name from) (sgen_cval cval) (sgen_name i)
+         else
+           ksprintf string "    %s %s;" (sgen_ctyp ctyp_elem_from) (sgen_name from) ^^ hardline
+           ^^ ksprintf string "    CREATE(%s)(&%s);" (sgen_ctyp_name ctyp_elem_from) (sgen_name from) ^^ hardline
+           ^^ ksprintf string "    COPY(%s)(&%s, %s.data[%s]);" (sgen_ctyp_name ctyp_elem_from) (sgen_name from) (sgen_cval cval) (sgen_name i)
+        )
+     ^^ hardline
+     ^^ ksprintf string "    %s %s;" (sgen_ctyp ctyp_elem_to) (sgen_name into)
+     ^^ (if is_stack_ctyp ctyp_elem_to then
+           empty
+         else
+           hardline ^^ ksprintf string "    CREATE(%s)(&%s);" (sgen_ctyp_name ctyp_elem_to) (sgen_name into)
+        )
+     ^^ nest 2 (hardline
+                ^^ codegen_conversion l (CL_id (into, ctyp_elem_to)) (V_id (from, ctyp_elem_from)))
+     ^^ hardline
+     ^^ (if is_stack_ctyp ctyp_elem_to then
+           ksprintf string "    %s.data[%s] = %s;" (sgen_clexp_pure clexp) (sgen_name i) (sgen_name into)
+         else
+           ksprintf string "    COPY(%s)(&((%s)->data[%s]), %s);" (sgen_ctyp_name ctyp_elem_to) (sgen_clexp clexp) (sgen_name i) (sgen_name into)
+           ^^ hardline ^^ ksprintf string "    KILL(%s)(&%s);" (sgen_ctyp_name ctyp_elem_to) (sgen_name into)
+        )
+     ^^ (if is_stack_ctyp ctyp_elem_from then
+           empty
+         else
+           hardline ^^ ksprintf string "    KILL(%s)(&%s);" (sgen_ctyp_name ctyp_elem_from) (sgen_name from)
+        )
+     ^^ hardline
+     ^^ string "  }"
+     
   (* If we have to convert between tuple types, convert the fields individually. *)
   | CT_tup ctyps_to, CT_tup ctyps_from when List.length ctyps_to = List.length ctyps_from ->
      let len = List.length ctyps_to in
@@ -2019,6 +2057,17 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ string "  }\n"
       ^^ string "}"
     in
+    let vector_equal =
+      let open Printf in
+         ksprintf string "static bool EQUAL(%s)(const %s op1, const %s op2) {\n" (sgen_id id) (sgen_id id) (sgen_id id)
+      ^^          string "  if (op1.len != op2.len) return false;\n"
+      ^^          string "  bool result = true;" 
+      ^^          string "  for (int i = 0; i < op1.len; i++) {\n"
+      ^^ ksprintf string "    result &= EQUAL(%s)(op1.data[i], op2.data[i]);" (sgen_ctyp_name ctyp)
+      ^^          string "  }\n"
+      ^^ ksprintf string "  return result;\n"
+      ^^          string "}"
+    in
     begin
       generated := IdSet.add id !generated;
       vector_typedef ^^ twice hardline
@@ -2028,6 +2077,7 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ vector_access ^^ twice hardline
       ^^ vector_set ^^ twice hardline
       ^^ vector_update ^^ twice hardline
+      ^^ vector_equal ^^ twice hardline
       ^^ internal_vector_update ^^ twice hardline
       ^^ internal_vector_init ^^ twice hardline
     end

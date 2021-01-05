@@ -461,6 +461,11 @@ bool EQUAL(fbits)(const fbits op1, const fbits op2)
   return op1 == op2;
 }
 
+bool EQUAL(ref_fbits)(const fbits *op1, const fbits *op2)
+{
+  return *op1 == *op2;
+}
+
 void CREATE(lbits)(lbits *rop)
 {
   rop->bits = sail_malloc(sizeof(mpz_t));
@@ -789,6 +794,11 @@ bool eq_bits(const lbits op1, const lbits op2)
 bool EQUAL(lbits)(const lbits op1, const lbits op2)
 {
   return eq_bits(op1, op2);
+}
+
+bool EQUAL(ref_lbits)(const lbits *op1, const lbits *op2)
+{
+  return eq_bits(*op1, *op2);
 }
 
 bool neq_bits(const lbits op1, const lbits op2)

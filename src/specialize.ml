@@ -381,14 +381,26 @@ let specialize_id_valspec spec instantiations id ast =
      let spec_ids = ref IdSet.empty in
 
      let specialize_instance instantiation =
-       let safe_instantiation, reverse = safe_instantiation instantiation in
-       (* Replace the polymorphic type variables in the type with their concrete instantiation. *)
-       let typ = remove_implicit (Type_check.subst_unifiers reverse (Type_check.subst_unifiers safe_instantiation typ)) in
+       let uninstantiated = quant_kopts typq |> List.map kopt_kid |> List.filter (fun v -> not (KBindings.mem v instantiation)) |> KidSet.of_list in
 
        (* Collect any new type variables introduced by the instantiation *)
        let collect_kids kidsets = KidSet.elements (List.fold_left KidSet.union KidSet.empty kidsets) in
        let typ_frees = KBindings.bindings instantiation |> List.map snd |> List.map typ_arg_frees |> collect_kids in
        let int_frees = KBindings.bindings instantiation |> List.map snd |> List.map typ_arg_int_frees |> collect_kids in
+
+       let typq, typ =
+         List.fold_left (fun (typq, typ) free ->
+             if KidSet.mem free uninstantiated then
+               let fresh_v = prepend_kid "o#" free in
+               typquant_subst_kid free fresh_v typq, subst_kid typ_subst free fresh_v typ
+             else
+               typq, typ
+           ) (typq, typ) (typ_frees @ int_frees)
+       in
+       
+       let safe_instantiation, reverse = safe_instantiation instantiation in
+       (* Replace the polymorphic type variables in the type with their concrete instantiation. *)
+       let typ = remove_implicit (Type_check.subst_unifiers reverse (Type_check.subst_unifiers safe_instantiation typ)) in
 
        (* Remove type variables from the type quantifier. *)
        let kopts, constraints = quant_split typq in
