@@ -134,7 +134,7 @@ declare exts_vec_def[simp]
 declare concat_vec_def[simp]
 
 lemma msb_Bits_msb[simp]:
-  "msb w = bitU_of_bool (Bits.msb w)"
+  "msb w = bitU_of_bool (Most_significant_bit.msb w)"
   by (auto simp: msb_def most_significant_def BC_mword_defs word_msb_alt split: list.splits)
 
 declare and_vec_def[simp]
@@ -147,7 +147,7 @@ lemma arith_vec_simps[simp]:
   "sub_vec l r = l - r"
   "mult_vec l r = (ucast l) * (ucast r)"
   unfolding add_vec_def sub_vec_def mult_vec_def
-  by (auto simp: int_of_mword_def word_add_def word_sub_wi word_mult_def)
+  by auto
 
 declare adds_vec_def[simp]
 declare subs_vec_def[simp]
@@ -158,7 +158,7 @@ lemma arith_vec_int_simps[simp]:
   "sub_vec_int l r = l - (word_of_int r)"
   "mult_vec_int l r = (ucast l) * (word_of_int r)"
   unfolding add_vec_int_def sub_vec_int_def mult_vec_int_def
-  by (auto simp: arith_op_bv_int_def BC_mword_defs word_add_def word_sub_wi word_mult_def)
+  by (auto simp: arith_op_bv_int_def BC_mword_defs)
 
 lemma shiftl_simp[simp]: "shiftl w l = w << (nat l)"
   by (auto simp: shiftl_def shiftl_mword_def)
