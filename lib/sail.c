@@ -7,9 +7,13 @@
 #include<string.h>
 #include<time.h>
 
-#include <x86intrin.h>
-
 #include"sail.h"
+
+// zero bits from high index, same semantics as bzhi intrinsic
+uint64_t bzhi_u64(uint64_t bits, uint64_t len)
+{
+  return bits & (UINT64_MAX >> (64 - len));
+}
 
 /*
  * Temporary mpzs for use in functions below. To avoid conflicts, only
@@ -716,12 +720,6 @@ void zero_extend(lbits *rop, const lbits op, const sail_int len)
   mpz_set(*rop->bits, *op.bits);
 }
 
-__attribute__((target ("bmi2")))
-fbits pdep_fbits(const fbits op, const uint64_t selector)
-{
-  return _pdep_u64(op, selector);
-}
-
 fbits fast_zero_extend(const sbits op, const uint64_t n)
 {
   return op.bits;
@@ -1062,11 +1060,10 @@ void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int 
   }
 }
 
-__attribute__((target ("bmi2")))
 sbits sslice(const fbits op, const mach_int start, const mach_int len)
 {
   sbits rop;
-  rop.bits = _bzhi_u64(op >> start, len);
+  rop.bits = bzhi_u64(op >> start, len);
   rop.len = len;
   return rop;
 }
@@ -1191,11 +1188,10 @@ bool neq_sbits(const sbits op1, const sbits op2)
   return op1.bits != op2.bits;
 }
 
-__attribute__((target ("bmi2")))
 sbits not_sbits(const sbits op)
 {
   sbits rop;
-  rop.bits = (~op.bits) & _bzhi_u64(UINT64_MAX, op.len);
+  rop.bits = (~op.bits) & bzhi_u64(UINT64_MAX, op.len);
   rop.len = op.len;
   return rop;
 }
@@ -1224,20 +1220,18 @@ sbits and_sbits(const sbits op1, const sbits op2)
   return rop;
 }
 
-__attribute__((target ("bmi2")))
 sbits add_sbits(const sbits op1, const sbits op2)
 {
   sbits rop;
-  rop.bits = (op1.bits + op2.bits) & _bzhi_u64(UINT64_MAX, op1.len);
+  rop.bits = (op1.bits + op2.bits) & bzhi_u64(UINT64_MAX, op1.len);
   rop.len = op1.len;
   return rop;
 }
 
-__attribute__((target ("bmi2")))
 sbits sub_sbits(const sbits op1, const sbits op2)
 {
   sbits rop;
-  rop.bits = (op1.bits - op2.bits) & _bzhi_u64(UINT64_MAX, op1.len);
+  rop.bits = (op1.bits - op2.bits) & bzhi_u64(UINT64_MAX, op1.len);
   rop.len = op1.len;
   return rop;
 }
