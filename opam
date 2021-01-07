@@ -1,6 +1,6 @@
 opam-version: "2.0"
 name: "sail"
-version: "0.13"
+version: "0.14"
 maintainer: "Sail Devs <cl-sail-dev@lists.cam.ac.uk>"
 authors: [
   "Alasdair Armstrong"
