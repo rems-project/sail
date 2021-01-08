@@ -973,7 +973,7 @@ functions that guarantee more constraints about their output be
 overloaded with functions that accept more inputs but guarantee less
 about their results. For example, we might have two division functions:
 \begin{lstlisting}
-val div1 : forall 'm, 'n >= 0 & 'm > 0. (int('n), int('m)) -> {'o, 'o >= 0. int('o)}
+val div1 : forall 'm 'n >= 0 & 'm > 0. (int('n), int('m)) -> {'o, 'o >= 0. int('o)}
 
 val div2 : (int, int) -> option(int)
 \end{lstlisting}
