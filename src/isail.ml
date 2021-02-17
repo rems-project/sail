@@ -339,7 +339,7 @@ let help =
      sprintf "(:s | :step) %s - Perform a number of evaluation steps."
              (color yellow "<number>")
   | ":f" | ":step_function" ->
-     sprintf "(:s | :step) - Perform evaluation steps until the currently evaulating function returns."
+     sprintf "(:f | :step_function) - Perform evaluation steps until the currently evaulating function returns."
   | ":n" | ":normal" ->
      "(:n | :normal) - Exit evaluation mode back to normal mode."
   | ":clear" ->
@@ -517,7 +517,7 @@ let handle_input' input =
         let commands =
           [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help :output :option";
             "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :recheck :rewrite :rewrites :list_rewrites :compile " ^ more_commands;
-            "Evaluation mode commands - :(r)un :(s)tep :(n)ormal";
+            "Evaluation mode commands - :(r)un :(s)tep :step_(f)unction :(n)ormal";
             "";
             ":(c)ommand can be called as either :c or :command." ]
         in
