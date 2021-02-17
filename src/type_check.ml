@@ -952,7 +952,7 @@ end = struct
       typ_debug (lazy ("get_val_spec: freshened to " ^ string_of_bind bind'));
       bind'
     with
-    | Not_found -> typ_error env (id_loc id) ("No val spec found for " ^ string_of_id id)
+    | Not_found -> typ_error env (id_loc id) ("No type declaration found for " ^ string_of_id id)
 
   let get_val_specs env = env.top_val_specs
                  
@@ -3883,7 +3883,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        match Env.lookup_id v env with
        | Local (_, typ) | Enum typ -> annot_exp (E_id v) typ
        | Register (reff, _, typ) -> annot_exp_effect (E_id v) typ reff
-       | Unbound -> typ_error env l ("Identifier " ^ string_of_id v ^ " is unbound")
+       | Unbound ->
+          match Bindings.find_opt v (Env.get_val_specs env) with
+          | Some _ -> typ_error env l ("Identifier " ^ string_of_id v ^ " is unbound (Did you mean to call the " ^ string_of_id v ^ " function?)")
+          | None -> typ_error env l ("Identifier " ^ string_of_id v ^ " is unbound")
      end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
   | E_sizeof nexp ->
