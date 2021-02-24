@@ -1,0 +1,38 @@
+name: Docker Nightly
+
+on:
+  push:
+    # Publish `master` as Docker `nightly` image.
+    branches:
+      - master
+
+env:
+  IMAGE_NAME: sail
+
+jobs:
+  # Push image to GitHub Packages.
+  push:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Build image
+        run: docker build . --file ./Dockerfile.nightly --tag sail:nightly
+
+      - name: Log into GitHub Container Registry
+        run: echo "${{ secrets.CR_PAT }}" | docker login https://ghcr.io -u USERNAME --password-stdin
+
+      - name: Push image to GitHub Container Registry
+        run: |
+          IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME
+          
+          # Change all uppercase to lowercase
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          
+          echo IMAGE_NAME=$IMAGE_NAME
+          echo IMAGE_ID=$IMAGE_ID
+          
+          docker tag $IMAGE_NAME:nightly $IMAGE_ID:nightly
+          docker push $IMAGE_ID
