@@ -673,10 +673,9 @@ let update_effects effect_map ast =
   in
   { ast with defs = List.map update_def ast.defs }
 
-let infer_effects target ast =
+let infer_effects ast =
   let add_external_effects effect_map = function
-    | DEF_spec (VS_aux (VS_val_spec(type_scheme, id, exts, _), _))
-         (*when Option.is_some (Ast_util.extern_assoc target exts)*) ->
+    | DEF_spec (VS_aux (VS_val_spec(type_scheme, id, exts, _), _)) ->
        let TypSchm_aux (TypSchm_ts (_, ty), _) = type_scheme in
        begin match ty with
        | Typ_aux (Typ_fn (_, _, eff), _) ->
@@ -691,7 +690,7 @@ let infer_effects target ast =
   let components = NameGraph.scc ~original_order:original_order graph in
   let add_def_effects effect_map name =
     let callees = NameGraph.children graph name in
-    let own_effect = Option.value (Namemap.find_opt name effect_map) ~default:no_effect in
+    let own_effect = match Namemap.find_opt name effect_map with Some e -> e | None -> no_effect in
     let effects = List.fold_left (fun effects callee ->
                       match Namemap.find_opt callee effect_map with
                       | Some effect -> union_effects effects effect

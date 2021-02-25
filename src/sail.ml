@@ -635,7 +635,7 @@ let main () =
 
       let ast, type_envs =
         if !opt_infer_effects then
-          let ast = Spec_analysis.infer_effects (Option.value !opt_target ~default:"") ast in
+          let ast = Spec_analysis.infer_effects ast in
           let _ = if reset_effect_checking then Type_check.opt_no_effects := true in
           Type_error.check Type_check.initial_env ast
         else ast, type_envs
