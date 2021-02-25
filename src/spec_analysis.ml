@@ -647,6 +647,66 @@ let top_sort_defs ast =
   { ast with defs = prelude @ List.concat (List.map (def_of_component graph defset) components) }
 
 
+(* Effect inference.  Uses dependency graph to propagate effects from
+   leaves upwards, keeping any annotations found along the way.  The
+   update_effects function then places the inferred effects into
+   val_specs, but not the actual terms.  A fresh type check will
+   propagate them, and check them if allowed. *)
+
+let update_effects effect_map ast =
+  let update_type_scheme effects (TypSchm_aux (TypSchm_ts (qs, ty),l)) =
+    let ty' =
+      match ty with
+      | Typ_aux (Typ_fn (tys, rty, eff), l) -> Typ_aux (Typ_fn (tys, rty, union_effects eff effects), l)
+      | _ -> ty
+    in TypSchm_aux (TypSchm_ts (qs, ty'),l)
+  in
+  let update_def = function
+    | DEF_spec (VS_aux (VS_val_spec (type_scheme, id, ext, is_cast), (l, tannot))) as def ->
+       begin match Namemap.find_opt (string_of_id id) effect_map with
+       | Some effects ->
+          let type_scheme' = update_type_scheme effects type_scheme in
+          DEF_spec (VS_aux (VS_val_spec (type_scheme', id, ext, is_cast), (l, Type_check.add_effect_annot tannot effects)))
+       | None -> def
+       end
+    | def -> def
+  in
+  { ast with defs = List.map update_def ast.defs }
+
+let infer_effects target ast =
+  let add_external_effects effect_map = function
+    | DEF_spec (VS_aux (VS_val_spec(type_scheme, id, exts, _), _))
+         (*when Option.is_some (Ast_util.extern_assoc target exts)*) ->
+       let TypSchm_aux (TypSchm_ts (_, ty), _) = type_scheme in
+       begin match ty with
+       | Typ_aux (Typ_fn (_, _, eff), _) ->
+          Namemap.add (string_of_id id) eff effect_map
+       | _ -> effect_map
+       end
+    | _ -> effect_map
+  in
+  let initial_effects = List.fold_left add_external_effects Namemap.empty ast.defs in
+  let prelude, original_order, defset, graph =
+    List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) ast.defs in
+  let components = NameGraph.scc ~original_order:original_order graph in
+  let add_def_effects effect_map name =
+    let callees = NameGraph.children graph name in
+    let own_effect = Option.value (Namemap.find_opt name effect_map) ~default:no_effect in
+    let effects = List.fold_left (fun effects callee ->
+                      match Namemap.find_opt callee effect_map with
+                      | Some effect -> union_effects effects effect
+                      | None -> effects) own_effect callees
+    in
+    Namemap.add name effects effect_map
+  in
+  let add_component_effects effect_map names =
+    List.fold_left add_def_effects effect_map names
+  in
+  let effect_map = List.fold_left add_component_effects initial_effects components
+(* in let _ = Namemap.iter (fun name effect -> prerr_endline (name ^ " is " ^ string_of_effect effect)) effect_map *)
+  in update_effects effect_map ast
+
+
 (* Functions for finding the set of variables assigned to.  Used in constant propagation
    and monomorphisation. *)
 

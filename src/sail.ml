@@ -73,6 +73,7 @@ let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
 let opt_splice = ref ([]:string list)
 let opt_have_feature = ref None
+let opt_infer_effects = ref false
 
 let set_target name = Arg.Unit (fun _ -> opt_target := Some name)
 
@@ -361,6 +362,9 @@ let options = Arg.align ([
   ( "-no_effects",
     Arg.Set Type_check.opt_no_effects,
     " (experimental) turn off effect checking");
+  ( "-infer_effects",
+    Arg.Set opt_infer_effects,
+    " (experimental) infer effects");
   ( "-just_check",
     Arg.Set opt_just_check,
     " (experimental) terminate immediately after typechecking");
@@ -619,6 +623,8 @@ let main () =
     print_endline version
   else
     begin
+      let reset_effect_checking = !opt_infer_effects && not !Type_check.opt_no_effects in
+      let () = if !opt_infer_effects then Type_check.opt_no_effects := true in
       let out_name, ast, type_envs = load_files options Type_check.initial_env !opt_file_arguments in
       let ast, type_envs = descatter type_envs ast in
       let ast, type_envs =
@@ -626,6 +632,14 @@ let main () =
           (!opt_splice) (ast, type_envs)
       in
       Reporting.opt_warnings := false; (* Don't show warnings during re-writing for now *)
+
+      let ast, type_envs =
+        if !opt_infer_effects then
+          let ast = Spec_analysis.infer_effects (Option.value !opt_target ~default:"") ast in
+          let _ = if reset_effect_checking then Type_check.opt_no_effects := true in
+          Type_error.check Type_check.initial_env ast
+        else ast, type_envs
+      in
 
       begin match !opt_process_elf, !opt_file_out with
       | Some elf, Some out ->

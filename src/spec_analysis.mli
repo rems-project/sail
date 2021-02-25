@@ -79,6 +79,8 @@ val is_within_machine64 : typ -> nexp_range list -> triple *)
 
 val top_sort_defs : tannot ast -> tannot ast
 
+val infer_effects : string -> tannot ast -> tannot ast
+
 (** Return the set of mutable variables assigned to in the given AST. *)
 val assigned_vars : 'a exp -> IdSet.t
 val assigned_vars_in_fexps : 'a fexp list -> IdSet.t
