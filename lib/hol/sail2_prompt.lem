@@ -1,17 +1,21 @@
+open import Pervasives
 open import Sail2_prompt_monad
 open import Sail2_state_monad
 open import Sail2_state
 
-let inline undefined_bool = undefined_boolS
-let inline bool_of_bitU_nondet = bool_of_bitU_nondetS
 let inline bool_of_bitU_fail = Sail2_state.bool_of_bitU_fail
+let inline of_bits_fail = of_bits_failS
+let inline reg_deref = read_regS
+let inline bool_of_bitU_nondet = bool_of_bitU_nondetS
 let inline bools_of_bits_nondet = bools_of_bits_nondetS
 let inline of_bits_nondet = of_bits_nondetS
-let inline of_bits_fail = of_bits_failS
 let inline mword_nondet = mword_nondetS
-let inline reg_deref = read_regS
-let inline choose msg xs = chooseS xs
-let inline internal_pick = internal_pickS
+
+val choose_from_list : forall 'regs 'a 'e. SetType 'a => string -> list 'a -> monad 'regs 'a 'e
+let inline choose_from_list msg xs = chooseS (Set.fromList xs)
+
+val choose_bools : forall 'rv 'e. string -> nat -> monad 'rv (list bool) 'e
+let inline choose_bool descr n = choose_boolS n
 
 let inline foreachM = foreachS
 let inline whileM = whileS

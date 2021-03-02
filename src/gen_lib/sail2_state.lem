@@ -50,7 +50,7 @@ val bool_of_bitU_nondetS : forall 'rv 'e. bitU -> monadS 'rv bool 'e
 let bool_of_bitU_nondetS = function
   | B0 -> returnS false
   | B1 -> returnS true
-  | BU -> undefined_boolS ()
+  | BU -> choose_boolS ()
 end
 
 val bools_of_bits_nondetS : forall 'rv 'e. list bitU -> monadS 'rv (list bool) 'e
@@ -91,15 +91,3 @@ let rec untilS vars cond body s =
 
 val choose_boolsS : forall 'rv 'e. nat -> monadS 'rv (list bool) 'e
 let choose_boolsS n = genlistS (fun _ -> choose_boolS ()) n
-
-(* TODO: Replace by chooseS and prove equivalence to prompt monad version *)
-val internal_pickS : forall 'rv 'a 'e. list 'a -> monadS 'rv 'a 'e
-let internal_pickS xs =
-  (* Use sufficiently many nondeterministically chosen bits and convert into an
-     index into the list *)
-  choose_boolsS (List.length xs) >>$= fun bs ->
-  let idx = (natFromNatural (nat_of_bools bs)) mod List.length xs in
-  match index xs idx with
-    | Just x -> returnS x
-    | Nothing -> failS "choose internal_pick"
-  end

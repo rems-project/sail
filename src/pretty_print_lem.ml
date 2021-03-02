@@ -1578,7 +1578,8 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) type_env (De
   let exc_typ = find_exc_typ defs in
   let typdefs, defs = List.partition is_typ_def defs in
   let statedefs, defs = List.partition is_state_def defs in
-  let register_refs = State.register_refs_lem !opt_mwords (State.find_registers defs) in
+  let register_ref_tannot typ = string " : register_ref regstate register_value " ^^ parens (doc_typ_lem type_env typ) in
+  let register_refs = State.register_refs_lem !opt_mwords register_ref_tannot (State.find_registers defs) in
   (print types_file)
     (concat
        [string "(*" ^^ (string top_line) ^^ string "*)";hardline;
@@ -1599,6 +1600,8 @@ let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) type_env (De
         separate empty (List.map (doc_def_lem type_env) typdefs); hardline;
         hardline;
         separate empty (List.map (doc_def_lem type_env) statedefs); hardline;
+        hardline;
+        State.regval_instance_lem;
         hardline;
         register_refs; hardline;
         concat [

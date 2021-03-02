@@ -832,6 +832,17 @@ type register =
   | UndefinedRegister of integer (* length *)
   | RegisterPair of register * register*)
 
+class (Register_Value 'rv)
+  val bool_of_regval : 'rv -> maybe bool
+  val regval_of_bool : bool -> 'rv
+  val int_of_regval : 'rv -> maybe integer
+  val regval_of_int : integer -> 'rv
+  val real_of_regval : 'rv -> maybe real
+  val regval_of_real : real -> 'rv
+  val string_of_regval : 'rv -> maybe string
+  val regval_of_string : string -> 'rv
+end
+
 type register_ref 'regstate 'regval 'a =
   <| name : string;
      (*is_inc : bool;*)

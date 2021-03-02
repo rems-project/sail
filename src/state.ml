@@ -228,11 +228,11 @@ let generate_initial_regstate defs =
   with
   | _ -> [] (* Do not generate an initial register state if anything goes wrong *)
 
-let regval_constr_id = id_of_regtyp (IdSet.of_list (List.map mk_id ["vector"; "bitvector"; "list"; "option"]))
+let regval_constr_id = id_of_regtyp (IdSet.of_list (List.map mk_id ["bool"; "int"; "real"; "string"; "vector"; "bitvector"; "list"; "option"]))
 
 let register_base_types mwords typs =
   let rec add_base_typs typs (Typ_aux (t, _) as typ) =
-    let builtins = IdSet.of_list (List.map mk_id ["vector"; "list"; "option"]) in
+    let builtins = IdSet.of_list (List.map mk_id ["bool"; "atom_bool"; "atom"; "int"; "real"; "string"; "vector"; "list"; "option"]) in
     match t with
       | Typ_app (id, args)
         when IdSet.mem id builtins && not (mwords && is_bitvector_typ typ) ->
@@ -242,6 +242,7 @@ let register_base_types mwords typs =
              | _ -> base_typs
          in
          List.fold_left add_typ_arg typs args
+      | Typ_id id when IdSet.mem id builtins -> typs
       | _ -> Bindings.add (regval_constr_id mwords typ) typ typs
   in
   List.fold_left add_base_typs Bindings.empty (bit_typ :: typs)
@@ -252,12 +253,30 @@ let generate_regval_typ typs =
   let builtins =
     "Regval_vector : list(register_value), " ^
     "Regval_list : list(register_value), " ^
-    "Regval_option : option(register_value)"
+    "Regval_option : option(register_value), " ^
+    "Regval_bool : bool, " ^
+    "Regval_int : int, " ^
+    "Regval_real : real, " ^
+    "Regval_string : string"
   in
   [defs_of_string
     ("union register_value = { " ^
      (String.concat ", " (builtins :: List.map constr (Bindings.bindings typs))) ^
      " }")]
+
+let regval_instance_lem =
+  separate_map hardline string [
+    "instance (Register_Value register_value)";
+    "  let bool_of_regval rv = match rv with | Regval_bool (v) -> Just v | _ -> Nothing end";
+    "  let regval_of_bool v = Regval_bool v";
+    "  let int_of_regval rv = match rv with | Regval_int (v) -> Just v | _ -> Nothing end";
+    "  let regval_of_int v = Regval_int v";
+    "  let real_of_regval rv = match rv with | Regval_real (v) -> Just v | _ -> Nothing end";
+    "  let regval_of_real v = Regval_real v";
+    "  let string_of_regval rv = match rv with | Regval_string (v) -> Just v | _ -> Nothing end";
+    "  let regval_of_string v = Regval_string v";
+    "end";
+  ]
 
 let add_regval_conv id typ (Defs defs) =
   let id = string_of_id id in
@@ -298,7 +317,7 @@ let rec regval_convs_lem mwords (Typ_aux (t, _) as typ) = match t with
      let id = string_of_id (regval_constr_id mwords typ) in
      "(fun v -> " ^ id ^ "_of_regval v)", "(fun v -> regval_of_" ^ id ^ " v)"
 
-let register_refs_lem mwords registers =
+let register_refs_lem mwords pp_tannot registers =
   let generic_convs =
     separate_map hardline string [
       "val vector_of_regval : forall 'a. (register_value -> maybe 'a) -> register_value -> maybe (list 'a)";
@@ -343,7 +362,8 @@ let register_refs_lem mwords registers =
     in
     (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
     let of_regval, regval_of = regval_convs_lem mwords typ in
-    concat [string "let "; idd; string "_ref = <|"; hardline;
+    let tannot = pp_tannot typ in
+    concat [string "let "; idd; string "_ref "; tannot; string " = <|"; hardline;
       string "  name = \""; idd; string "\";"; hardline;
       string "  read_from = (fun s -> s."; read_from; string ");"; hardline;
       string "  write_to = (fun v s -> (<| s with "; write_to; string " |>));"; hardline;

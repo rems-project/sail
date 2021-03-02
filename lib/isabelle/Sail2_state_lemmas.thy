@@ -45,11 +45,6 @@ lemma liftState_barrier[liftState_simp]: "liftState r (barrier bk) = returnS ()"
   by (auto simp: barrier_def)
 lemma liftState_footprint[liftState_simp]: "liftState r (footprint ()) = returnS ()"
   by (auto simp: footprint_def)
-lemma liftState_choose_bool[liftState_simp]: "liftState r (choose_bool descr) = choose_boolS ()"
-  by (auto simp: choose_bool_def liftState_simp)
-declare undefined_boolS_def[simp]
-lemma liftState_undefined[liftState_simp]: "liftState r (undefined_bool ()) = undefined_boolS ()"
-  by (auto simp: undefined_bool_def liftState_simp)
 lemma liftState_maybe_fail[liftState_simp]: "liftState r (maybe_fail msg x) = maybe_failS msg x"
   by (auto simp: maybe_fail_def maybe_failS_def liftState_simp split: option.splits)
 lemma liftState_and_boolM[liftState_simp]:
@@ -79,9 +74,9 @@ lemma liftState_try_catchR[liftState_simp]:
   "liftState r (try_catchR m h) = try_catchRS (liftState r m) (liftState r \<circ> h)"
   by (auto simp: try_catchR_def try_catchRS_def sum.case_distrib liftState_simp cong: sum.case_cong)
 
-lemma liftState_bool_of_bitU_nondet[liftState_simp]:
+(*lemma liftState_bool_of_bitU_nondet[liftState_simp]:
   "liftState r (bool_of_bitU_nondet b) = bool_of_bitU_nondetS b"
-  by (cases b; auto simp: bool_of_bitU_nondet_def bool_of_bitU_nondetS_def liftState_simp)
+  by (cases b; auto simp: bool_of_bitU_nondet_def bool_of_bitU_nondetS_def liftState_simp)*)
 
 lemma liftState_read_memt[liftState_simp]:
   shows "liftState r (read_memt BCa BCb rk a sz) = read_memtS BCa BCb rk a sz"
@@ -161,7 +156,7 @@ lemma liftState_genlistM[liftState_simp]:
   "liftState r (genlistM f n) = genlistS (liftState r \<circ> f) n"
   by (auto simp: genlistM_def genlistS_def liftState_simp cong: bindS_cong)
 
-lemma liftState_choose_bools[liftState_simp]:
+(*lemma liftState_choose_bools[liftState_simp]:
   "liftState r (choose_bools descr n) = choose_boolsS n"
   by (auto simp: choose_bools_def choose_boolsS_def liftState_simp comp_def)
 
@@ -176,7 +171,7 @@ lemma liftState_internal_pick[liftState_simp]:
                  chooseM_def
                  option.case_distrib[where h = "liftState r"]
            simp del: repeat.simps
-           cong: option.case_cong)
+           cong: option.case_cong)*)
 
 lemma liftRS_returnS[simp]: "liftRS (returnS x) = returnS x"
   by (auto simp: liftRS_def)
