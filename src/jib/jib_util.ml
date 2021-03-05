@@ -74,19 +74,19 @@ let instr_number () =
   incr instr_counter;
   n
 
-let idecl ?loc:(l=Parse_ast.Unknown) ctyp id =
+let idecl l ctyp id =
   I_aux (I_decl (ctyp, id), (instr_number (), l))
 
 let ireset ?loc:(l=Parse_ast.Unknown) ctyp id =
   I_aux (I_reset (ctyp, id), (instr_number (), l))
 
-let iinit ?loc:(l=Parse_ast.Unknown) ctyp id cval =
+let iinit l ctyp id cval =
   I_aux (I_init (ctyp, id, cval), (instr_number (), l))
 
 let iif l cval then_instrs else_instrs ctyp =
   I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (instr_number (), l))
 
-let ifuncall ?loc:(l=Parse_ast.Unknown) clexp id cvals =
+let ifuncall l clexp id cvals =
   I_aux (I_funcall (clexp, false, id, cvals), (instr_number (), l))
 
 let iextern ?loc:(l=Parse_ast.Unknown) clexp id cvals =

@@ -662,7 +662,7 @@ let rec insert_heap_returns ret_ctyps = function
         CDEF_fundef (id, Some gs, args, fix_early_heap_return (name gs) ret_ctyp body)
         :: insert_heap_returns ret_ctyps cdefs
      | Some ret_ctyp ->
-        CDEF_fundef (id, None, args, fix_early_stack_return (name gs) ret_ctyp (idecl ret_ctyp (name gs) :: body))
+        CDEF_fundef (id, None, args, fix_early_stack_return (name gs) ret_ctyp (idecl (id_loc id) ret_ctyp (name gs) :: body))
         :: insert_heap_returns ret_ctyps cdefs
      end
 
@@ -723,14 +723,14 @@ let hoist_allocations recursive_functions = function
      let rec hoist = function
        | I_aux (I_decl (ctyp, decl_id), annot) :: instrs when hoist_ctyp ctyp ->
           let hid = hoist_id () in
-          decls := idecl ctyp hid :: !decls;
+          decls := idecl (snd annot) ctyp hid :: !decls;
           cleanups := iclear ctyp hid :: !cleanups;
           let instrs = instrs_rename decl_id hid instrs in
           I_aux (I_reset (ctyp, hid), annot) :: hoist instrs
 
        | I_aux (I_init (ctyp, decl_id, cval), annot) :: instrs when hoist_ctyp ctyp ->
           let hid = hoist_id () in
-          decls := idecl ctyp hid :: !decls;
+          decls := idecl (snd annot) ctyp hid :: !decls;
           cleanups := iclear ctyp hid :: !cleanups;
           let instrs = instrs_rename decl_id hid instrs in
           I_aux (I_reinit (ctyp, hid, cval), annot) :: hoist instrs
@@ -1547,7 +1547,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      string (Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name id))
 
   | I_init (ctyp, id, cval) ->
-     codegen_instr fid ctx (idecl ctyp id) ^^ hardline
+     codegen_instr fid ctx (idecl l ctyp id) ^^ hardline
      ^^ codegen_conversion Parse_ast.Unknown (CL_id (id, ctyp)) cval
 
   | I_reinit (ctyp, id, cval) ->
@@ -2169,10 +2169,10 @@ let codegen_def' ctx = function
   | CDEF_let (number, bindings, instrs) ->
      let instrs = add_local_labels instrs in
      let setup =
-       List.concat (List.map (fun (id, ctyp) -> [idecl ctyp (name id)]) bindings)
+       List.concat (List.map (fun (id, ctyp) -> [idecl (id_loc id) ctyp (name id)]) bindings)
      in
      let cleanup =
-       List.concat (List.map (fun (id, ctyp) -> [iclear ctyp (name id)]) bindings)
+       List.concat (List.map (fun (id, ctyp) -> [iclear ~loc:(id_loc id) ctyp (name id)]) bindings)
      in
      separate_map hardline (fun (id, ctyp) -> string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))) bindings
      ^^ hardline ^^ string (Printf.sprintf "static void create_letbind_%d(void) " number)

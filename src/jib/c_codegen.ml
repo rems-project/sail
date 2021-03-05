@@ -826,7 +826,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      ksprintf string "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name ctyp id)
 
   | I_init (ctyp, id, cval) ->
-     codegen_instr fid ctx (idecl ctyp id) ^^ hardline
+     codegen_instr fid ctx (idecl l ctyp id) ^^ hardline
      ^^ codegen_conversion Parse_ast.Unknown ctx (CL_id (id, ctyp)) cval
 
   | I_reinit (ctyp, id, cval) ->
@@ -1496,10 +1496,10 @@ let codegen_def_body ctx = function
   | CDEF_let (number, bindings, instrs) ->
      let instrs = add_local_labels instrs in
      let setup =
-       List.concat (List.map (fun (id, ctyp) -> [idecl ctyp (global id)]) bindings)
+       List.concat (List.map (fun (id, ctyp) -> [idecl (id_loc id) ctyp (global id)]) bindings)
      in
      let cleanup =
-       List.concat (List.map (fun (id, ctyp) -> [iclear ctyp (global id)]) bindings)
+       List.concat (List.map (fun (id, ctyp) -> [iclear ~loc:(id_loc id) ctyp (global id)]) bindings)
      in
      hardline ^^ string (Printf.sprintf "void sail_create_letbind_%d(sail_state *state) " number)
      ^^ string "{"

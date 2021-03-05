@@ -187,7 +187,7 @@ let fuzz_cdef ctx all_cdefs = function
 
                  let jib =
                    let gs = ngensym () in
-                   [ifuncall (CL_id (gs, ret_ctyp)) (id, []) (List.map snd values)]
+                   [ifuncall (id_loc id) (CL_id (gs, ret_ctyp)) (id, []) (List.map snd values)]
                    @ gen_assertion ret_ctyp result gs
                    @ [iend ()]
                  in
