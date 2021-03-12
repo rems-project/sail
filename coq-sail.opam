@@ -22,7 +22,7 @@ build: [make "-C" "lib/coq"]
 install: [make "-C" "lib/coq" "install"]
 depends: [
   "coq" {>= "8.9.0"}
-  "coq-bbv" {= "1.1"}
+  "coq-bbv" {>= "1.1"}
 ]
 synopsis:
   "Support library for Sail, a language for describing the instruction semantics of processors"
