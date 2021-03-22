@@ -238,6 +238,9 @@ let options = Arg.align ([
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an ELF file so that it can be executed by compiled C code");
+  ( "-D",
+    Arg.String (fun symbol -> Process_file.add_symbol symbol),
+    "<symbol> define a symbol for the preprocessor, as $define does in the source code");
   ( "-O",
     Arg.Tuple [Arg.Set C_backend.optimize_primops;
                Arg.Set C_backend.optimize_hoist_allocations;
