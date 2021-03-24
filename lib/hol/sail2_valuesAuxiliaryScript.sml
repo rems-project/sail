@@ -125,9 +125,8 @@ val just_list_spec = store_thm("just_list_spec",
   conj_tac
   \\ ho_match_mp_tac just_list_ind
   \\ Cases \\ rw[]
-  \\ rw[Once just_list_def]
+  \\ srw_tac [boolSimps.NORMEQ_ss] [Once just_list_def]
   >- ( CASE_TAC \\ fs[] \\ CASE_TAC )
-  >- PROVE_TAC[]
   \\ Cases_on`es` \\ fs[]
   \\ CASE_TAC \\ fs[]
   \\ CASE_TAC \\ fs[]
