@@ -375,10 +375,33 @@ lemma bind_cong[fundef_cong]:
 
 lemma liftR_read_reg[simp]: "liftR (read_reg reg) = read_reg reg" by (auto simp: read_reg_def liftR_def split: option.splits)
 lemma try_catch_return[simp]: "try_catch (return x) h = return x" by (auto simp: return_def)
-lemma try_catch_choose_bool[simp]: "try_catch (choose_bool descr) h = choose_bool descr" by (auto simp: choose_bool_def)
-lemma liftR_choose_bool[simp]: "liftR (choose_bool descr) = choose_bool descr" by (auto simp: choose_bool_def liftR_def)
 lemma liftR_return[simp]: "liftR (return x) = return x" by (auto simp: liftR_def)
-lemma liftR_undefined_bool[simp]: "liftR (undefined_bool ()) = undefined_bool ()" by (auto simp: undefined_bool_def)
 lemma assert_exp_True_return[simp]: "assert_exp True msg = return ()" by (auto simp: assert_exp_def return_def)
+lemma try_catch_maybe_fail[simp]: "try_catch (maybe_fail msg v) h = maybe_fail msg v" by (cases v; auto simp: maybe_fail_def)
+lemma liftR_choose_regval[simp]: "liftR (choose_regval descr) = choose_regval descr" by (auto simp: liftR_def choose_regval_def)
+lemma liftR_choose_convert[simp]: "liftR (choose_convert of_rv descr) = choose_convert of_rv descr" by (auto simp: liftR_def choose_convert_def)
+lemma liftR_choose_builtins[simp]:
+  "liftR (choose_bool RV u) = choose_bool RV u"
+  "liftR (choose_int RV u) = choose_int RV u"
+  "liftR (choose_real RV u) = choose_real RV u"
+  "liftR (choose_string RV u) = choose_string RV u"
+  unfolding choose_bool_def choose_int_def choose_real_def choose_string_def
+  by auto
+
+text \<open>Precondition to ensure reading a register doesn't fail.\<close>
+
+fun(sequential)
+  register_reads_ok :: "(string \<Rightarrow> ('regval \<Rightarrow> bool) option) \<Rightarrow> 'regval event \<Rightarrow> bool"
+  where
+    "register_reads_ok f (E_read_reg nm v) = register_read_ok f nm v"
+  | "register_reads_ok f _ = True"
+
+lemma read_reg_non_failure:
+  "(read_reg reg_ref, t, x) \<in> Traces \<Longrightarrow>
+    f (name reg_ref) = Some (fst (register_ops_of reg_ref)) \<Longrightarrow>
+    \<forall>event \<in> set t. register_reads_ok f event \<Longrightarrow>
+    x \<noteq> Fail msg"
+  by (auto simp: read_reg_def register_read_ok_def register_ops_of_def
+        elim!: Read_reg_TracesE split: option.split_asm)
 
 end

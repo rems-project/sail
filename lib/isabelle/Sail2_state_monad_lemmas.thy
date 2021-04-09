@@ -38,7 +38,7 @@ lemma bindS_updateS: "bindS (updateS f) m = (\<lambda>s. m () (f s))"
 lemma bindS_assertS_True[simp]: "bindS (assert_expS True msg) f = f ()"
   by (auto simp: assert_expS_def)
 
-lemma bindS_chooseS_returnS[simp]: "bindS (chooseS xs) (\<lambda>x. returnS (f x)) = chooseS (map f xs)"
+lemma bindS_chooseS_returnS[simp]: "bindS (chooseS xs) (\<lambda>x. returnS (f x)) = chooseS (f ` xs)"
   by (intro ext) (auto simp: bindS_def chooseS_def returnS_def)
 
 lemma result_cases:
@@ -221,10 +221,9 @@ lemma no_throw_mem_builtins:
   "\<And>BCa BCv wk asz addr sz v s. ignore_throw (write_memS BCa BCv wk asz addr sz v) s = write_memS BCa BCv wk asz addr sz v s"
   "\<And>BCa BCv wk addr sz v t s. ignore_throw (write_memtS BCa BCv wk addr sz v t) s = write_memtS BCa BCv wk addr sz v t s"
   "\<And>s. ignore_throw (excl_resultS ()) s = excl_resultS () s"
-  "\<And>s. ignore_throw (undefined_boolS ()) s = undefined_boolS () s"
   unfolding read_mem_bytesS_def read_memt_bytesS_def read_memtS_def read_memS_def read_tagS_def
   unfolding write_memS_def write_memtS_def write_mem_bytesS_def write_memt_bytesS_def
-  unfolding excl_resultS_def undefined_boolS_def maybe_failS_def
+  unfolding excl_resultS_def maybe_failS_def
   unfolding ignore_throw_bindS
   by (auto cong: bindS_cong bindS_ext_cong ignore_throw_cong option.case_cong
            simp: prod.case_distrib ignore_throw_option_case_distrib ignore_throw_let_distrib comp_def)

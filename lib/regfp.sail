@@ -31,7 +31,6 @@ union diafp = {
   DIAFP_reg : regfp
 }
 
-$ifdef ARM_SPEC
 enum read_kind = {
   Read_plain,
   Read_reserve,
@@ -47,22 +46,6 @@ enum read_kind = {
   Read_RISCV_reserved_strong_acquire,
   Read_X86_locked
 }
-$else
-enum read_kind = {
-  Read_plain,
-  Read_reserve,
-  Read_acquire,
-  Read_exclusive,
-  Read_exclusive_acquire,
-  Read_stream,
-  Read_RISCV_acquire,
-  Read_RISCV_strong_acquire,
-  Read_RISCV_reserved,
-  Read_RISCV_reserved_acquire,
-  Read_RISCV_reserved_strong_acquire,
-  Read_X86_locked
-}
-$endif
 
 enum write_kind = {
   Write_plain,

@@ -56,21 +56,21 @@ let bool_of_bitU_fail = function
   | BU -> Fail "bool_of_bitU"
 end
 
-val bool_of_bitU_nondet : forall 'rv 'e. bitU -> monad 'rv bool 'e
+val bool_of_bitU_nondet : forall 'rv 'e. Register_Value 'rv => bitU -> monad 'rv bool 'e
 let bool_of_bitU_nondet = function
   | B0 -> return false
   | B1 -> return true
   | BU -> choose_bool "bool_of_bitU"
 end
 
-val bools_of_bits_nondet : forall 'rv 'e. list bitU -> monad 'rv (list bool) 'e
+val bools_of_bits_nondet : forall 'rv 'e. Register_Value 'rv => list bitU -> monad 'rv (list bool) 'e
 let bools_of_bits_nondet bits =
   foreachM bits []
     (fun b bools ->
       bool_of_bitU_nondet b >>= (fun b ->
       return (bools ++ [b])))
 
-val of_bits_nondet : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monad 'rv 'a 'e
+val of_bits_nondet : forall 'rv 'a 'e. Bitvector 'a, Register_Value 'rv => list bitU -> monad 'rv 'a 'e
 let of_bits_nondet bits =
   bools_of_bits_nondet bits >>= (fun bs ->
   return (of_bools bs))
@@ -78,7 +78,7 @@ let of_bits_nondet bits =
 val of_bits_fail : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monad 'rv 'a 'e
 let of_bits_fail bits = maybe_fail "of_bits" (of_bits bits)
 
-val mword_nondet : forall 'rv 'a 'e. Size 'a => unit -> monad 'rv (mword 'a) 'e
+val mword_nondet : forall 'rv 'a 'e. Size 'a, Register_Value 'rv => unit -> monad 'rv (mword 'a) 'e
 let mword_nondet () =
   bools_of_bits_nondet (repeat [BU] (integerFromNat size)) >>= (fun bs ->
   return (wordFromBitlist bs))
@@ -98,24 +98,16 @@ let rec untilM vars cond body =
   cond vars >>= fun cond_val ->
   if cond_val then return vars else untilM vars cond body
 
-val choose_bools : forall 'rv 'e. string -> nat -> monad 'rv (list bool) 'e
+val choose_bools : forall 'rv 'e. Register_Value 'rv => string -> nat -> monad 'rv (list bool) 'e
 let choose_bools descr n = genlistM (fun _ -> choose_bool descr) n
 
-val choose : forall 'rv 'a 'e. string -> list 'a -> monad 'rv 'a 'e
-let choose descr xs =
-  (* Use sufficiently many nondeterministically chosen bits and convert into an
-     index into the list *)
-  choose_bools descr (List.length xs) >>= fun bs ->
-  let idx = (natFromNatural (nat_of_bools bs)) mod List.length xs in
-  match index xs idx with
+val choose_from_list : forall 'rv 'a 'e. Register_Value 'rv => string -> list 'a -> monad 'rv 'a 'e
+let choose_from_list descr xs =
+  choose_int ("choose_from_list " ^ descr) >>= fun idx ->
+  match index xs (natFromInteger idx mod List.length xs) with
     | Just x -> return x
-    | Nothing -> Fail ("choose " ^ descr)
+    | Nothing -> Fail ("choose_from_list " ^ descr)
   end
-
-declare {isabelle} rename function choose = chooseM
-
-val internal_pick : forall 'rv 'a 'e. list 'a -> monad 'rv 'a 'e
-let internal_pick xs = choose "internal_pick" xs
 
 (*let write_two_regs r1 r2 vec =
   let is_inc =

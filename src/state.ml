@@ -229,11 +229,11 @@ let generate_initial_regstate defs =
   with
   | _ -> [] (* Do not generate an initial register state if anything goes wrong *)
 
-let regval_constr_id = id_of_regtyp (IdSet.of_list (List.map mk_id ["vector"; "bitvector"; "list"; "option"]))
+let regval_constr_id = id_of_regtyp (IdSet.of_list (List.map mk_id ["bool"; "int"; "real"; "string"; "vector"; "bitvector"; "list"; "option"]))
 
 let register_base_types mwords typs =
   let rec add_base_typs typs (Typ_aux (t, _) as typ) =
-    let builtins = IdSet.of_list (List.map mk_id ["vector"; "list"; "option"]) in
+    let builtins = IdSet.of_list (List.map mk_id ["bool"; "atom_bool"; "atom"; "int"; "real"; "string"; "vector"; "list"; "option"]) in
     match t with
       | Typ_app (id, args)
         when IdSet.mem id builtins && not (mwords && is_bitvector_typ typ) ->
@@ -243,6 +243,7 @@ let register_base_types mwords typs =
              | _ -> base_typs
          in
          List.fold_left add_typ_arg typs args
+      | Typ_id id when IdSet.mem id builtins -> typs
       | _ -> Bindings.add (regval_constr_id mwords typ) typ typs
   in
   List.fold_left add_base_typs Bindings.empty (bit_typ :: typs)
@@ -253,12 +254,30 @@ let generate_regval_typ typs =
   let builtins =
     "Regval_vector : list(register_value), " ^
     "Regval_list : list(register_value), " ^
-    "Regval_option : option(register_value)"
+    "Regval_option : option(register_value), " ^
+    "Regval_bool : bool, " ^
+    "Regval_int : int, " ^
+    "Regval_real : real, " ^
+    "Regval_string : string"
   in
   [defs_of_string
     ("union register_value = { " ^
      (String.concat ", " (builtins :: List.map constr (Bindings.bindings typs))) ^
      " }")]
+
+let regval_instance_lem =
+  separate_map hardline string [
+    "instance (Register_Value register_value)";
+    "  let bool_of_regval rv = match rv with | Regval_bool (v) -> Just v | _ -> Nothing end";
+    "  let regval_of_bool v = Regval_bool v";
+    "  let int_of_regval rv = match rv with | Regval_int (v) -> Just v | _ -> Nothing end";
+    "  let regval_of_int v = Regval_int v";
+    "  let real_of_regval rv = match rv with | Regval_real (v) -> Just v | _ -> Nothing end";
+    "  let regval_of_real v = Regval_real v";
+    "  let string_of_regval rv = match rv with | Regval_string (v) -> Just v | _ -> Nothing end";
+    "  let regval_of_string v = Regval_string v";
+    "end";
+  ]
 
 let add_regval_conv id typ defs =
   let id = string_of_id id in
@@ -299,7 +318,7 @@ let rec regval_convs_lem mwords (Typ_aux (t, _) as typ) = match t with
      let id = string_of_id (regval_constr_id mwords typ) in
      "(fun v -> " ^ id ^ "_of_regval v)", "(fun v -> regval_of_" ^ id ^ " v)"
 
-let register_refs_lem mwords registers =
+let register_refs_lem mwords pp_tannot registers =
   let generic_convs =
     separate_map hardline string [
       "val vector_of_regval : forall 'a. (register_value -> maybe 'a) -> register_value -> maybe (list 'a)";
@@ -344,7 +363,8 @@ let register_refs_lem mwords registers =
     in
     (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
     let of_regval, regval_of = regval_convs_lem mwords typ in
-    concat [string "let "; idd; string "_ref = <|"; hardline;
+    let tannot = pp_tannot typ in
+    concat [string "let "; idd; string "_ref "; tannot; string " = <|"; hardline;
       string "  name = \""; idd; string "\";"; hardline;
       string "  read_from = (fun s -> s."; read_from; string ");"; hardline;
       string "  write_to = (fun v s -> (<| s with "; write_to; string " |>));"; hardline;
@@ -352,25 +372,27 @@ let register_refs_lem mwords registers =
       string "  regval_of = "; string regval_of; string " |>"; hardline]
   in
   let refs = separate_map hardline register_ref registers in
-  let get_set_reg (_, id) =
+  let mk_reg_assoc (_, id) =
     let idd = string_of_id id in
-    string ("  if reg_name = \"" ^ idd ^ "\" then Just (" ^ idd ^ "_ref.regval_of (" ^ idd ^ "_ref.read_from s)) else"),
-    string ("  if reg_name = \"" ^ idd ^ "\" then Maybe.map (fun v -> " ^ idd ^ "_ref.write_to v s) (" ^ idd ^ "_ref.of_regval v) else")
+    let qidd = "\"" ^ idd ^ "\"" in
+    string ("    (" ^ qidd ^ ", register_ops_of " ^ idd ^ "_ref)")
+  in
+  let reg_assocs = separate hardline [
+    string "val registers : list (string * register_ops regstate register_value)";
+    string "let registers = [";
+    separate (string ";" ^^ hardline) (List.map mk_reg_assoc registers);
+    string "  ]"] ^^ hardline
   in
   let getters_setters =
-    let getters, setters = List.split (List.map get_set_reg registers) in
+    string "let register_accessors = mk_accessors (fun nm -> List.lookup nm registers)" ^^
+    hardline ^^ hardline ^^
     string "val get_regval : string -> regstate -> maybe register_value" ^^ hardline ^^
-    string "let get_regval reg_name s =" ^^ hardline ^^
-    separate hardline getters ^^ hardline ^^
-    string "  Nothing" ^^ hardline ^^ hardline ^^
+    string "let get_regval = fst register_accessors" ^^ hardline ^^ hardline ^^
     string "val set_regval : string -> register_value -> regstate -> maybe regstate" ^^ hardline ^^
-    string "let set_regval reg_name v s =" ^^ hardline ^^
-    separate hardline setters ^^ hardline ^^
-    string "  Nothing" ^^ hardline ^^ hardline ^^
-    string "let register_accessors = (get_regval, set_regval)" ^^ hardline ^^ hardline
+    string "let set_regval = snd register_accessors" ^^ hardline ^^ hardline
     (* string "let liftS s = liftState register_accessors s" ^^ hardline *)
   in
-  separate hardline [generic_convs; refs; getters_setters]
+  separate hardline [generic_convs; refs; reg_assocs; getters_setters]
 
 (* TODO Generate well-typedness predicate for register states (and events),
    asserting that all lists representing non-bit-vectors have the right length. *)
@@ -396,7 +418,7 @@ let generate_isa_lemmas mwords defs =
   let register_defs =
     let reg_id id = remove_leading_underscores (string_of_id id) in
     hang 2 (flow_map (break 1) string
-      (["lemmas register_defs"; "="; "get_regval_def"; "set_regval_def"] @
+      (["lemmas register_defs"; "="; "get_regval_unfold"; "set_regval_unfold"] @
       (List.map (fun (typ, id) -> reg_id id ^ "_ref_def") registers)))
   in
   let conv_lemma typ_id =
@@ -419,6 +441,28 @@ let generate_isa_lemmas mwords defs =
       "  by (intro liftState_write_reg) (auto simp: register_defs)"
     ]
   in
+  let registers_eqs = separate hardline (List.map string [
+    "lemma registers_distinct:";
+    "  \"distinct (map fst registers)\"";
+    "  unfolding registers_def list.simps fst_conv";
+    "  by (distinct_string; simp)";
+    "";
+    "lemma registers_eqs_setup:";
+    "  \"!x : set registers. map_of registers (fst x) = Some (snd x)\"";
+    "  using registers_distinct";
+    "  by simp";
+    "";
+    "lemmas map_of_registers_eqs[simp] =";
+    "    registers_eqs_setup[simplified arg_cong[where f=set, OF registers_def]";
+    "        list.simps ball_simps fst_conv snd_conv]";
+    "";
+    "lemmas get_regval_unfold = get_regval_def[THEN fun_cong,";
+    "    unfolded register_accessors_def mk_accessors_def fst_conv snd_conv]";
+    "lemmas set_regval_unfold = set_regval_def[THEN fun_cong,";
+    "    unfolded register_accessors_def mk_accessors_def fst_conv snd_conv]";
+  ])
+  in
+  registers_eqs ^^ hardline ^^ hardline ^^
   string "abbreviation liftS (\"\\<lbrakk>_\\<rbrakk>\\<^sub>S\") where \"liftS \\<equiv> liftState (get_regval, set_regval)\"" ^^
   hardline ^^ hardline ^^
   register_defs ^^

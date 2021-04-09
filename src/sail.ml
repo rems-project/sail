@@ -247,6 +247,9 @@ let options = Arg.align ([
   ( "-elf",
     Arg.String (fun elf -> opt_process_elf := Some elf),
     " process an ELF file so that it can be executed by compiled C code");
+  ( "-D",
+    Arg.String (fun symbol -> Process_file.add_symbol symbol),
+    "<symbol> define a symbol for the preprocessor, as $define does in the source code");
   ( "-O",
     Arg.Tuple [Arg.Set C_backend.optimize_primops;
                Arg.Set C_backend.optimize_hoist_allocations;
@@ -572,7 +575,9 @@ let target name out_name ast type_envs =
   | Some "smt" ->
      let open Ast_util in
      let props = Property.find_properties ast in
-     Bindings.bindings props |> List.map fst |> IdSet.of_list |> Specialize.add_initial_calls;
+     let prop_ids = Bindings.bindings props |> List.map fst |> IdSet.of_list in
+     let ast = Slice.filter_ast_ids prop_ids IdSet.empty ast in
+     Specialize.add_initial_calls prop_ids;
      let ast_smt, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
      let ast_smt, type_envs = Specialize.(specialize_passes 2 int_specialization_with_externs type_envs ast_smt) in
      let name_file =
