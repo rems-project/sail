@@ -388,4 +388,20 @@ lemma liftR_choose_builtins[simp]:
   unfolding choose_bool_def choose_int_def choose_real_def choose_string_def
   by auto
 
+text \<open>Precondition to ensure reading a register doesn't fail.\<close>
+
+fun(sequential)
+  register_reads_ok :: "(string \<Rightarrow> ('regval \<Rightarrow> bool) option) \<Rightarrow> 'regval event \<Rightarrow> bool"
+  where
+    "register_reads_ok f (E_read_reg nm v) = register_read_ok f nm v"
+  | "register_reads_ok f _ = True"
+
+lemma read_reg_non_failure:
+  "(read_reg reg_ref, t, x) \<in> Traces \<Longrightarrow>
+    f (name reg_ref) = Some (fst (register_ops_of reg_ref)) \<Longrightarrow>
+    \<forall>event \<in> set t. register_reads_ok f event \<Longrightarrow>
+    x \<noteq> Fail msg"
+  by (auto simp: read_reg_def register_read_ok_def register_ops_of_def
+        elim!: Read_reg_TracesE split: option.split_asm)
+
 end

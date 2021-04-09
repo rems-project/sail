@@ -371,25 +371,27 @@ let register_refs_lem mwords pp_tannot registers =
       string "  regval_of = "; string regval_of; string " |>"; hardline]
   in
   let refs = separate_map hardline register_ref registers in
-  let get_set_reg (_, id) =
+  let mk_reg_assoc (_, id) =
     let idd = string_of_id id in
-    string ("  if reg_name = \"" ^ idd ^ "\" then Just (" ^ idd ^ "_ref.regval_of (" ^ idd ^ "_ref.read_from s)) else"),
-    string ("  if reg_name = \"" ^ idd ^ "\" then Maybe.map (fun v -> " ^ idd ^ "_ref.write_to v s) (" ^ idd ^ "_ref.of_regval v) else")
+    let qidd = "\"" ^ idd ^ "\"" in
+    string ("    (" ^ qidd ^ ", register_ops_of " ^ idd ^ "_ref)")
+  in
+  let reg_assocs = separate hardline [
+    string "val registers : list (string * register_ops regstate register_value)";
+    string "let registers = [";
+    separate (string ";" ^^ hardline) (List.map mk_reg_assoc registers);
+    string "  ]"] ^^ hardline
   in
   let getters_setters =
-    let getters, setters = List.split (List.map get_set_reg registers) in
+    string "let register_accessors = mk_accessors (fun nm -> List.lookup nm registers)" ^^
+    hardline ^^ hardline ^^
     string "val get_regval : string -> regstate -> maybe register_value" ^^ hardline ^^
-    string "let get_regval reg_name s =" ^^ hardline ^^
-    separate hardline getters ^^ hardline ^^
-    string "  Nothing" ^^ hardline ^^ hardline ^^
+    string "let get_regval = fst register_accessors" ^^ hardline ^^ hardline ^^
     string "val set_regval : string -> register_value -> regstate -> maybe regstate" ^^ hardline ^^
-    string "let set_regval reg_name v s =" ^^ hardline ^^
-    separate hardline setters ^^ hardline ^^
-    string "  Nothing" ^^ hardline ^^ hardline ^^
-    string "let register_accessors = (get_regval, set_regval)" ^^ hardline ^^ hardline
+    string "let set_regval = snd register_accessors" ^^ hardline ^^ hardline
     (* string "let liftS s = liftState register_accessors s" ^^ hardline *)
   in
-  separate hardline [generic_convs; refs; getters_setters]
+  separate hardline [generic_convs; refs; reg_assocs; getters_setters]
 
 (* TODO Generate well-typedness predicate for register states (and events),
    asserting that all lists representing non-bit-vectors have the right length. *)
@@ -415,7 +417,7 @@ let generate_isa_lemmas mwords (Defs defs : tannot defs) =
   let register_defs =
     let reg_id id = remove_leading_underscores (string_of_id id) in
     hang 2 (flow_map (break 1) string
-      (["lemmas register_defs"; "="; "get_regval_def"; "set_regval_def"] @
+      (["lemmas register_defs"; "="; "get_regval_unfold"; "set_regval_unfold"] @
       (List.map (fun (typ, id) -> reg_id id ^ "_ref_def") registers)))
   in
   let conv_lemma typ_id =
@@ -438,6 +440,28 @@ let generate_isa_lemmas mwords (Defs defs : tannot defs) =
       "  by (intro liftState_write_reg) (auto simp: register_defs)"
     ]
   in
+  let registers_eqs = separate hardline (List.map string [
+    "lemma registers_distinct:";
+    "  \"distinct (map fst registers)\"";
+    "  unfolding registers_def list.simps fst_conv";
+    "  by (distinct_string; simp)";
+    "";
+    "lemma registers_eqs_setup:";
+    "  \"!x : set registers. map_of registers (fst x) = Some (snd x)\"";
+    "  using registers_distinct";
+    "  by simp";
+    "";
+    "lemmas map_of_registers_eqs[simp] =";
+    "    registers_eqs_setup[simplified arg_cong[where f=set, OF registers_def]";
+    "        list.simps ball_simps fst_conv snd_conv]";
+    "";
+    "lemmas get_regval_unfold = get_regval_def[THEN fun_cong,";
+    "    unfolded register_accessors_def mk_accessors_def fst_conv snd_conv]";
+    "lemmas set_regval_unfold = set_regval_def[THEN fun_cong,";
+    "    unfolded register_accessors_def mk_accessors_def fst_conv snd_conv]";
+  ])
+  in
+  registers_eqs ^^ hardline ^^ hardline ^^
   string "abbreviation liftS (\"\\<lbrakk>_\\<rbrakk>\\<^sub>S\") where \"liftS \\<equiv> liftState (get_regval, set_regval)\"" ^^
   hardline ^^ hardline ^^
   register_defs ^^

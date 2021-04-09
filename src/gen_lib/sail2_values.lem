@@ -851,10 +851,28 @@ type register_ref 'regstate 'regval 'a =
      of_regval : 'regval -> maybe 'a;
      regval_of : 'a -> 'regval |>
 
+(* Register operations which do not depend on polymorphic type *)
+type register_ops 'regstate 'regval =
+  (('regval -> bool) * ('regstate -> 'regval) *
+   ('regval -> 'regstate -> maybe 'regstate))
+
+val register_ops_of : forall 'st 'regval 'a.
+    register_ref 'st 'regval 'a -> register_ops 'st 'regval
+let register_ops_of reg =
+  ((fun x -> isJust (reg.of_regval x)),
+   (fun x -> reg.regval_of (reg.read_from x)),
+   (fun x st -> Maybe.map (fun v -> reg.write_to v st) (reg.of_regval x)))
+
 (* Register accessors: pair of functions for reading and writing register values *)
 type register_accessors 'regstate 'regval =
   ((string -> 'regstate -> maybe 'regval) *
    (string -> 'regval -> 'regstate -> maybe 'regstate))
+
+val mk_accessors : forall 'st 'v.
+    (string -> maybe (register_ops 'st 'v)) -> register_accessors 'st 'v
+let mk_accessors regs =
+  ((fun nm st -> Maybe.map (fun (_, acc, _) -> acc st) (regs nm)),
+   (fun nm v st -> Maybe.bind (regs nm) (fun (_, _, put) -> put v st)))
 
 type field_ref 'regtype 'a =
   <| field_name : string;

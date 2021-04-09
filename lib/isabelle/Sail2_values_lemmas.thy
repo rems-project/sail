@@ -365,4 +365,12 @@ lemma bools_of_int_bin_to_bl[simp]:
   "bools_of_int len n = bin_to_bl (nat len) n"
   by (auto simp: bools_of_int_def Let_def map_Not_bin_to_bl rbl_succ[unfolded bin_to_bl_def])
 
+lemmas register_ops_of_simp[simp] = register_ops_of_def[of "register_ref_ext _ _ _ _ _ _"]
+
+definition
+  register_read_ok :: "(string \<Rightarrow> ('regval \<Rightarrow> bool) option) \<Rightarrow> string \<Rightarrow> 'regval \<Rightarrow> bool"
+  where
+  "register_read_ok f nm r = (case f nm of None \<Rightarrow> False | Some P \<Rightarrow> P r)"
+
+
 end

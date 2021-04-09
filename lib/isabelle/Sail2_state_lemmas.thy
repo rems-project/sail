@@ -1,5 +1,8 @@
 theory Sail2_state_lemmas
-  imports Sail2_state Sail2_state_lifting
+  imports
+    Sail2_state
+    Sail2_state_lifting
+    Add_Cancel_Distinct
 begin
 
 text \<open>Monad lifting\<close>

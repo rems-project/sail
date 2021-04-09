@@ -183,7 +183,7 @@ fun solve nm tac = (tac THEN_ALL_NEW SUBGOAL
         (fn (t, _) => raise TERM (nm ^ ": unsolved subgoal", [t])))
     ORELSE' SUBGOAL (fn (t, _) => raise TERM (nm ^ ": tactic failed", [t]))
 
-fun tac ctxt dest ord rel = SUBGOAL (fn (t, i) => let
+fun main_tac ctxt dest ord rel = SUBGOAL (fn (t, i) => let
     val xs_t = case HOLogic.dest_Trueprop t of
         Const (@{const_name distinct}, _) $ xs => xs
       | t => raise TERM ("distinct_tac: not distinct", [t])
@@ -199,6 +199,9 @@ fun tac ctxt dest ord rel = SUBGOAL (fn (t, i) => let
     THEN' simp_only ctxt (@{thms sorted_wrt2_simps} @ snd rel))
     i
   end)
+
+fun tac ctxt dest ord rel = simp_only ctxt @{thms distinct.simps(1) distinct_singleton}
+    THEN_ALL_NEW main_tac ctxt dest ord rel
 
 end
 
