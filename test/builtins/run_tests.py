@@ -97,7 +97,7 @@ def test_coq_builtins(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Coq from Sail
-                step('sail -no_warn -coq -o {} {}'.format(basename, filename))
+                step('sail -no_warn -coq -undefined_gen -o {} {}'.format(basename, filename))
 
                 step('mkdir -p _coqbuild_{}'.format(basename))
                 step('mv {}.v _coqbuild_{}'.format(basename, basename))
@@ -106,9 +106,9 @@ def test_coq_builtins(name):
                 os.chdir('_coqbuild_{}'.format(basename))
 
                 # TODO: find bbv properly
-                step('coqc -R $SAIL_DIR/../bbv/theories bbv -R $SAIL_DIR/lib/coq Sail {}_types.v'.format(basename))
-                step('coqc -R $SAIL_DIR/../bbv/theories bbv -R $SAIL_DIR/lib/coq Sail {}.v'.format(basename))
-                step('coqtop -R "$SAIL_DIR/../bbv/theories" bbv -R "$SAIL_DIR/lib/coq" Sail -require {}_types -require {} -l test.v -batch | tee /dev/stderr | grep -q OK'.format(basename,basename))
+                step('coqc -Q $SAIL_DIR/lib/coq Sail {}_types.v'.format(basename))
+                step('coqc -Q $SAIL_DIR/lib/coq Sail {}.v'.format(basename))
+                step('coqtop -Q "$SAIL_DIR/lib/coq" Sail -require-import {}_types -require-import {} -l test.v -batch | tee /dev/stderr | grep -q OK'.format(basename,basename))
 
                 os.chdir('..')
                 step('rm -r _coqbuild_{}'.format(basename))
@@ -117,6 +117,25 @@ def test_coq_builtins(name):
                 sys.exit()
         results.collect(tests)
     return results.finish()
+
+def test_isla_builtins(name):
+    banner('Testing builtins: {}'.format(name))
+    isla_dir = os.environ['ISLA_DIR']
+    results = Results(name)
+    for filenames in chunks(os.listdir('.'), parallel()):
+        tests = {}
+        for filename in filenames:
+            basename = os.path.splitext(os.path.basename(filename))[0]
+            tests[filename] = os.fork()
+            if tests[filename] == 0:
+                step('{}/isla-sail/isla-sail {} {}/lib/vector_dec.sail {}/test/property/include/config.sail -o {}'.format(isla_dir, filename, sail_dir, isla_dir, basename))
+                step('{}/target/release/isla-execute-function -A {}.ir -C {}/configs/plain.toml main'.format(isla_dir, basename, isla_dir))
+                step('rm {}.ir'.format(basename))
+                print '{} {}{}{}'.format(filename, color.PASS, 'ok', color.END)
+                sys.exit()
+        results.collect(tests)
+    return results.finish()
+    return collect_results(name, tests)
 
 xml = '<testsuites>\n'
 
@@ -129,6 +148,11 @@ xml += test_ocaml_builtins('OCaml', '')
 # Comment this out for most runs because it's really slow
 # xml += test_lem_builtins('Lem to OCaml')
 # xml += test_coq_builtins('Coq')
+
+# Isla is separate, so don't run by default
+# For testing symbolic operations in Isla it's useful to tweak the primop macros
+# so that the symbolic versions are used even when the values are concrete.
+# xml += test_isla_builtins('Isla')
 
 xml += '</testsuites>\n'
 
