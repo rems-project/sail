@@ -1,5 +1,4 @@
-Require Import Sail2_state_monad.
-Require Import Sail2_state_lifting.
+From Sail Require Import State_monad State_lifting.
 Require Import String.
 Require Import List.
 Import ListNotations.
