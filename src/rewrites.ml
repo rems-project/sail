@@ -3211,11 +3211,16 @@ let rewrite_ast_mapping_patterns env =
        let new_let = annot_exp (E_let (new_letbind, expr)) unk env (typ_of expr) in
 
        let false_exp = annot_exp (E_lit (L_aux (L_false, unk))) unk env bool_typ in
-       let new_other_guards = annot_exp (E_if (new_guard,
-                                               (annot_exp (E_let (new_letbind, annot_exp (E_cast (bool_typ, fold_typed_guards env guards)) unk env bool_typ)) unk env bool_typ),
-                                               false_exp)) unk env bool_typ in
+       let new_complete_guard =
+         match guards with
+         | [] -> new_guard
+         | _ ->
+            annot_exp (E_if (new_guard,
+                             (annot_exp (E_let (new_letbind, annot_exp (E_cast (bool_typ, fold_typed_guards env guards)) unk env bool_typ)) unk env bool_typ),
+                             false_exp)) unk env bool_typ
+       in
 
-       annot_pat (P_typ (mapping_in_typ, annot_pat (P_id s_id) unk env mapping_in_typ)) unk env mapping_in_typ, [new_guard; new_other_guards], new_let
+       annot_pat (P_typ (mapping_in_typ, annot_pat (P_id s_id) unk env mapping_in_typ)) unk env mapping_in_typ, [new_complete_guard], new_let
 
     | P_aux (P_as (inner_pat, inner_id), p_annot) ->
        let inner_pat, guards, expr = rewrite_pat env (inner_pat, guards, expr) in
