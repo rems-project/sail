@@ -380,6 +380,8 @@ lemma assert_exp_True_return[simp]: "assert_exp True msg = return ()" by (auto s
 lemma try_catch_maybe_fail[simp]: "try_catch (maybe_fail msg v) h = maybe_fail msg v" by (cases v; auto simp: maybe_fail_def)
 lemma liftR_choose_regval[simp]: "liftR (choose_regval descr) = choose_regval descr" by (auto simp: liftR_def choose_regval_def)
 lemma liftR_choose_convert[simp]: "liftR (choose_convert of_rv descr) = choose_convert of_rv descr" by (auto simp: liftR_def choose_convert_def)
+lemma liftR_choose_convert_default[simp]: "liftR (choose_convert_default of_rv x descr) = choose_convert_default of_rv x descr"
+  by (auto simp: liftR_def choose_convert_default_def)
 lemma liftR_choose_builtins[simp]:
   "liftR (choose_bool RV u) = choose_bool RV u"
   "liftR (choose_int RV u) = choose_int RV u"

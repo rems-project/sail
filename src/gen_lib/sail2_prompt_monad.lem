@@ -148,17 +148,23 @@ let choose_regval descr = Choose descr return
 val choose_convert : forall 'rv 'e 'a. ('rv -> maybe 'a) -> string -> monad 'rv 'a 'e
 let choose_convert of_rv descr = Choose descr (fun rv -> maybe_fail descr (of_rv rv))
 
+val choose_convert_default : forall 'rv 'e 'a. ('rv -> maybe 'a) -> 'a -> string -> monad 'rv 'a 'e
+let choose_convert_default of_rv x descr = Choose descr (fun rv -> return (match of_rv rv with
+    | Just a -> a
+    | Nothing -> x
+  end))
+
 val choose_bool : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv bool 'e
-let choose_bool descr = choose_convert bool_of_regval descr
+let choose_bool descr = choose_convert_default bool_of_regval false descr
 
 val choose_int : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv integer 'e
-let choose_int descr = choose_convert int_of_regval descr
+let choose_int descr = choose_convert_default int_of_regval 0 descr
 
 val choose_real : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv real 'e
-let choose_real descr = choose_convert real_of_regval descr
+let choose_real descr = choose_convert_default real_of_regval 0 descr
 
 val choose_string : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv string 'e
-let choose_string descr = choose_convert string_of_regval descr
+let choose_string descr = choose_convert_default string_of_regval "default" descr
 
 val headM : forall 'rv 'a 'e. list 'a -> monad 'rv 'a 'e
 let headM = function
