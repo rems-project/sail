@@ -1,0 +1,34 @@
+\section{Sail Grammar}
+
+This appendix contains a grammar for the Sail language that is
+automatically generated from the Menhir parser definition.  First, we
+need some lexical conventions:
+
+\begin{quote}
+\begin{tabular}{lcl}
+\sailId{} &\sailgramdef&
+[\lstinline"a"-\lstinline"zA"-\lstinline"Z?_"][\lstinline"a"-\lstinline"zA"-\lstinline"Z?_0-9'"]\ensuremath{^*}
+\\
+\sailTyVar{} &\sailgramdef&
+\lstinline-'-[\lstinline"a"-\lstinline"zA"-\lstinline"Z?_"][\lstinline"a"-\lstinline"zA"-\lstinline"Z?_0-9'"]\ensuremath{^*}
+\\
+\sailBin{} &\sailgramdef&
+\lstinline'0b'[\lstinline'01_']$^+$
+\\
+\sailHex{} &\sailgramdef&
+\lstinline'0x'[\lstinline'0'-\lstinline'9A'-\lstinline'Fa'-\lstinline'f_']$^+$
+\\
+\sailNum{} &\sailgramdef&
+\lstinline'-'$^?$[\lstinline'0'-\lstinline'9']$^+$
+\\
+\sailReal{} &\sailgramdef&
+\lstinline'-'$^?$[\lstinline'0'-\lstinline'9']$^+$\lstinline'.'[\lstinline'0'-\lstinline'9']$^+$
+\\
+\sailString{} &\sailgramdef&
+% TODO
+\lstinline'"'\dots\lstinline'"'
+\end{tabular}
+\end{quote}
+
+Now the actual grammar:
+\input{parser_grammar}

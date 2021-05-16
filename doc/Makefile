@@ -83,7 +83,7 @@ internals.tex: internals.md
 	sed -i.bak -f pandocfix.sed $@
 
 LATEXARG=manual.tex
-manual.pdf: grammar.tex introduction.tex usage.tex types.tex code_riscv.tex riscv.tex manual.tex manual.bib tutorial.tex internals.tex code_myreplicatebits.tex parser_grammar.tex parser_package.sty
+manual.pdf: grammar.tex introduction.tex usage.tex types.tex code_riscv.tex riscv.tex manual.tex manual.bib tutorial.tex internals.tex code_myreplicatebits.tex parser_grammar.tex parser_package.sty grammar_section.tex
 	pdflatex ${LATEXARG}
 	bibtex manual
 	pdflatex ${LATEXARG}
