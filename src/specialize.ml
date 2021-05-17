@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Rewriter
 
@@ -116,15 +117,15 @@ let fix_instantiation spec instantiation =
    for some set of kinded-identifiers, specified by the is_kopt
    predicate. For example, polymorphic_functions is_int_kopt will
    return all Int-polymorphic functions. *)
-let rec polymorphic_functions ctx (Defs defs) =
+let rec polymorphic_functions ctx defs =
   match defs with
   | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ) , _), id, externs, _), _)) :: defs ->
      let is_polymorphic = List.exists ctx.is_polymorphic (quant_kopts typq) in
      if is_polymorphic && not (ctx.extern_filter externs) then
-       IdSet.add id (polymorphic_functions ctx (Defs defs))
+       IdSet.add id (polymorphic_functions ctx defs)
      else
-       polymorphic_functions ctx (Defs defs)
-  | _ :: defs -> polymorphic_functions ctx (Defs defs)
+       polymorphic_functions ctx defs
+  | _ :: defs -> polymorphic_functions ctx defs
   | [] -> IdSet.empty
 
 (* When we specialize a function, we need to generate new name. To do
@@ -208,11 +209,11 @@ let id_of_instantiation id instantiation =
   let str = string_of_instantiation instantiation in
   prepend_id (str ^ "#") id
 
-let rec variant_generic_typ id (Defs defs) =
+let rec variant_generic_typ id defs =
   match defs with
   | DEF_type (TD_aux (TD_variant (id', typq, _, _), _)) :: _ when Id.compare id id' = 0 ->
      mk_typ (Typ_app (id', List.map (fun kopt -> mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kopt))))) (quant_kopts typq)))
-  | _ :: defs -> variant_generic_typ id (Defs defs)
+  | _ :: defs -> variant_generic_typ id defs
   | [] -> failwith ("No variant with id " ^ string_of_id id)
 
 (* Returns a list of all the instantiations of a function id in an
@@ -237,8 +238,8 @@ let rec instantiations_of spec id ast =
        | Typ_aux (Typ_app (variant_id, _), _) as typ ->
           let open Type_check in
           let instantiation = unify (fst annot) (env_of_annot annot)
-                                (tyvars_of_typ (variant_generic_typ variant_id ast))
-                                (variant_generic_typ variant_id ast)
+                                (tyvars_of_typ (variant_generic_typ variant_id ast.defs))
+                                (variant_generic_typ variant_id ast.defs)
                                 typ
           in
           instantiations := fix_instantiation spec instantiation :: !instantiations;
@@ -252,13 +253,13 @@ let rec instantiations_of spec id ast =
   let rewrite_pat = { id_pat_alg with p_aux = (fun (pat, annot) -> inspect_pat (P_aux (pat, annot))) } in
   let rewrite_exp = { id_exp_alg with pat_alg = rewrite_pat;
                                       e_aux = (fun (exp, annot) -> inspect_exp (E_aux (exp, annot))) } in
-  let _ = rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp);
-                                                  rewrite_pat = (fun _ -> fold_pat rewrite_pat)} ast in
+  let _ = rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp);
+                                                 rewrite_pat = (fun _ -> fold_pat rewrite_pat)} ast in
 
   !instantiations
 
 let rec rewrite_polymorphic_calls spec id ast =
-  let vs_ids = val_spec_ids ast in
+  let vs_ids = val_spec_ids ast.defs in
 
   let rewrite_e_aux = function
     | E_aux (E_app (id', args), annot) as exp when Id.compare id id' = 0 ->
@@ -278,7 +279,7 @@ let rec rewrite_polymorphic_calls spec id ast =
   in
 
   let rewrite_exp = { id_exp_alg with e_aux = (fun (exp, annot) -> rewrite_e_aux (E_aux (exp, annot))) } in
-  rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) } ast
+  rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) } ast
 
 let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
@@ -367,9 +368,9 @@ let instantiate_constraints instantiation ncs =
   List.map (fun c -> List.fold_left (fun c (v, a) -> constraint_subst v a c) c (KBindings.bindings instantiation)) ncs
 
 let specialize_id_valspec spec instantiations id ast =
-  match split_defs (is_valspec id) ast with
+  match split_defs (is_valspec id) ast.defs with
   | None -> Reporting.unreachable (id_loc id) __POS__ ("Valspec " ^ string_of_id id ^ " does not exist!")
-  | Some (pre_ast, vs, post_ast) ->
+  | Some (pre_defs, vs, post_defs) ->
      let typschm, externs, is_cast, annot = match vs with
        | DEF_spec (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot)) -> typschm, externs, is_cast, annot
        | _ -> Reporting.unreachable (id_loc id) __POS__ "val-spec is not actually a val-spec"
@@ -380,14 +381,26 @@ let specialize_id_valspec spec instantiations id ast =
      let spec_ids = ref IdSet.empty in
 
      let specialize_instance instantiation =
-       let safe_instantiation, reverse = safe_instantiation instantiation in
-       (* Replace the polymorphic type variables in the type with their concrete instantiation. *)
-       let typ = remove_implicit (Type_check.subst_unifiers reverse (Type_check.subst_unifiers safe_instantiation typ)) in
+       let uninstantiated = quant_kopts typq |> List.map kopt_kid |> List.filter (fun v -> not (KBindings.mem v instantiation)) |> KidSet.of_list in
 
        (* Collect any new type variables introduced by the instantiation *)
        let collect_kids kidsets = KidSet.elements (List.fold_left KidSet.union KidSet.empty kidsets) in
        let typ_frees = KBindings.bindings instantiation |> List.map snd |> List.map typ_arg_frees |> collect_kids in
        let int_frees = KBindings.bindings instantiation |> List.map snd |> List.map typ_arg_int_frees |> collect_kids in
+
+       let typq, typ =
+         List.fold_left (fun (typq, typ) free ->
+             if KidSet.mem free uninstantiated then
+               let fresh_v = prepend_kid "o#" free in
+               typquant_subst_kid free fresh_v typq, subst_kid typ_subst free fresh_v typ
+             else
+               typq, typ
+           ) (typq, typ) (typ_frees @ int_frees)
+       in
+       
+       let safe_instantiation, reverse = safe_instantiation instantiation in
+       (* Replace the polymorphic type variables in the type with their concrete instantiation. *)
+       let typ = remove_implicit (Type_check.subst_unifiers reverse (Type_check.subst_unifiers safe_instantiation typ)) in
 
        (* Remove type variables from the type quantifier. *)
        let kopts, constraints = quant_split typq in
@@ -415,7 +428,7 @@ let specialize_id_valspec spec instantiations id ast =
 
      let specializations = List.map specialize_instance instantiations |> List.concat in
 
-     append_ast pre_ast (append_ast (Defs (vs :: specializations)) post_ast)
+     { ast with defs = pre_defs @ (vs :: specializations) @ post_defs }
 
 (* When we specialize a function definition we also need to specialize
    all the types that appear as annotations within the function
@@ -449,9 +462,9 @@ let specialize_annotations instantiation fdef =
              annot)
 
 let specialize_id_fundef instantiations id ast =
-  match split_defs (is_fundef id) ast with
+  match split_defs (is_fundef id) ast.defs with
   | None -> ast
-  | Some (pre_ast, DEF_fundef fundef, post_ast) ->
+  | Some (pre_defs, DEF_fundef fundef, post_defs) ->
      let spec_ids = ref IdSet.empty in
      let specialize_fundef instantiation =
        let spec_id = id_of_instantiation id instantiation in
@@ -462,10 +475,10 @@ let specialize_id_fundef instantiations id ast =
          end
      in
      let fundefs = List.map specialize_fundef instantiations |> List.concat in
-     append_ast pre_ast (append_ast (Defs (DEF_fundef fundef :: fundefs)) post_ast)
+     { ast with defs = pre_defs @ (DEF_fundef fundef :: fundefs) @ post_defs }
   | Some _ -> assert false (* unreachable *)
 
-let specialize_id_overloads instantiations id (Defs defs) =
+let specialize_id_overloads instantiations id ast =
   let ids = IdSet.of_list (List.map (id_of_instantiation id) instantiations) in
 
   let rec rewrite_overloads defs =
@@ -477,7 +490,7 @@ let specialize_id_overloads instantiations id (Defs defs) =
     | [] -> []
   in
 
-  Defs (rewrite_overloads defs)
+  { ast with defs = rewrite_overloads ast.defs }
 
 (* Once we've specialized a definition, it's original valspec should
    be unused, unless another polymorphic function called it. We
@@ -500,7 +513,7 @@ let add_initial_calls ids = initial_calls := IdSet.union ids !initial_calls
 
 let remove_unused_valspecs env ast =
   let calls = ref !initial_calls in
-  let vs_ids = val_spec_ids ast in
+  let vs_ids = val_spec_ids ast.defs in
 
   let inspect_exp = function
     | E_aux (E_app (call, _), _) as exp ->
@@ -510,27 +523,27 @@ let remove_unused_valspecs env ast =
   in
 
   let rewrite_exp = { id_exp_alg with e_aux = (fun (exp, annot) -> inspect_exp (E_aux (exp, annot))) } in
-  let _ = rewrite_defs_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) } ast in
+  let _ = rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp) } ast in
 
   let unused = IdSet.filter (fun vs_id -> not (IdSet.mem vs_id !calls)) vs_ids in
 
-  let rec remove_unused (Defs defs) id =
+  let rec remove_unused defs id =
     match defs with
     | def :: defs when is_fundef id def ->
-       remove_unused (Defs defs) id
+       remove_unused defs id
     | def :: defs when is_valspec id def ->
-       remove_unused (Defs defs) id
+       remove_unused defs id
     | DEF_overload (overload_id, overloads) :: defs ->
        begin
          match List.filter (fun id' -> Id.compare id id' <> 0) overloads with
-         | [] -> remove_unused (Defs defs) id
-         | overloads -> DEF_overload (overload_id, overloads) :: remove_unused (Defs defs) id
+         | [] -> remove_unused defs id
+         | overloads -> DEF_overload (overload_id, overloads) :: remove_unused defs id
        end
-    | def :: defs -> def :: remove_unused (Defs defs) id
+    | def :: defs -> def :: remove_unused defs id
     | [] -> []
   in
 
-  List.fold_left (fun ast id -> Defs (remove_unused ast id)) ast (IdSet.elements unused)
+  List.fold_left (fun ast id -> { ast with defs = remove_unused ast.defs id }) ast (IdSet.elements unused)
 
 let specialize_id spec id ast =
   let instantiations = instantiations_of spec id ast in
@@ -542,7 +555,7 @@ let specialize_id spec id ast =
    ensure that the types they are specialized to appear before the
    function definitions in the AST. Therefore we pull all the type
    definitions (and default definitions) to the start of the AST. *)
-let reorder_typedefs (Defs defs) =
+let reorder_typedefs ast =
   let tdefs = ref [] in
 
   let rec filter_typedefs = function
@@ -553,8 +566,8 @@ let reorder_typedefs (Defs defs) =
     | [] -> []
   in
 
-  let others = filter_typedefs defs in
-  Defs (List.rev !tdefs @ others)
+  let others = filter_typedefs ast.defs in
+  { ast with defs = List.rev !tdefs @ others }
 
 let specialize_ids spec ids ast =
   let t = Profile.start () in
@@ -570,7 +583,7 @@ let specialize_ids spec ids ast =
   | Some (f, i) ->
      let filename = f ^ "_spec_" ^ string_of_int i ^ ".sail" in
      let out_chan = open_out filename in
-     Pretty_print_sail.pp_defs out_chan ast;
+     Pretty_print_sail.pp_ast out_chan ast;
      close_out out_chan;
      opt_ddump_spec_ast := Some (f, i + 1)
   | None -> ()
@@ -592,7 +605,7 @@ let rec specialize_passes n spec env ast =
   if n = 0 then
     ast, env
   else
-    let ids = polymorphic_functions spec ast in
+    let ids = polymorphic_functions spec ast.defs in
     if IdSet.is_empty ids then
       ast, env
     else

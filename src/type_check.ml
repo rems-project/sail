@@ -49,8 +49,9 @@
 (**************************************************************************)
 
 open Ast
-open Util
+open Ast_defs
 open Ast_util
+open Util
 open Lazy
 
 module Big_int = Nat_big_num
@@ -410,6 +411,7 @@ module Env : sig
   val update_val_spec : id -> typquant * typ -> t -> t
   val define_val_spec : id -> t -> t
   val get_val_spec : id -> t -> typquant * typ
+  val get_val_specs : t -> (typquant * typ ) Bindings.t
   val get_val_spec_orig : id -> t -> typquant * typ
   val is_union_constructor : id -> t -> bool
   val is_singleton_union_constructor : id -> t -> bool
@@ -417,6 +419,7 @@ module Env : sig
   val add_record : id -> typquant -> (typ * id) list -> t -> t
   val is_record : id -> t -> bool
   val get_record : id -> t -> typquant * (typ * id) list
+  val get_records : t -> (typquant * (typ * id) list) Bindings.t
   val get_accessor_fn : id -> id -> t -> typquant * typ
   val get_accessor : id -> id -> t -> typquant * typ * typ * effect
   val add_local : id -> mut * typ -> t -> t
@@ -427,12 +430,14 @@ module Env : sig
   val add_scattered_variant : id -> typquant -> t -> t
   val add_variant_clause : id -> type_union -> t -> t
   val get_variant : id -> t -> typquant * type_union list
+  val get_variants : t -> (typquant * type_union list) Bindings.t
   val get_scattered_variant_env : id -> t -> t
   val add_mapping : id -> typquant * typ * typ * effect -> t -> t
   val add_union_id : id -> typquant * typ -> t -> t
   val get_union_id  : id -> t -> typquant * typ
   val is_register : id -> t -> bool
   val get_register : id -> t -> effect * effect * typ
+  val get_registers : t -> (effect * effect * typ) Bindings.t
   val add_register : id -> effect -> effect -> typ -> t -> t
   val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
@@ -449,15 +454,18 @@ module Env : sig
   val add_ret_typ : typ -> t -> t
   val add_typ_synonym : id -> typquant -> typ_arg -> t -> t
   val get_typ_synonym : id -> t -> Ast.l -> t -> typ_arg list -> typ_arg
+  val get_typ_synonyms : t -> (typquant * typ_arg) Bindings.t
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
   val is_extern : id -> t -> string -> bool
   val add_extern : id -> (string * string) list -> t -> t
   val get_extern : id -> t -> string -> string
   val get_default_order : t -> order
+  val get_default_order_option : t -> order option
   val set_default_order : order -> t -> t
   val add_enum : id -> id list -> t -> t
   val get_enum : id -> t -> id list
+  val get_enums : t -> IdSet.t Bindings.t 
   val is_enum : id -> t -> bool
   val get_casts : t -> id list
   val allow_casts : t -> bool
@@ -639,8 +647,8 @@ end = struct
     else typ_error env (id_loc id) ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
 
   let add_typ_synonym id typq arg env =
-    if Bindings.mem id env.typ_synonyms then
-      typ_error env (id_loc id) ("Type synonym " ^ string_of_id id ^ " already exists")
+    if bound_typ_id env id then
+      typ_error env (id_loc id) ("Cannot define type synonym " ^ string_of_id id ^ ", as a type or synonym with that name already exists")
     else
       begin
         typ_print (lazy (adding ^ "type synonym " ^ string_of_id id));
@@ -683,6 +691,8 @@ end = struct
     match Bindings.find_opt id env.typ_synonyms with
     | Some (typq, arg) -> mk_synonym typq arg
     | None -> raise Not_found
+
+  let get_typ_synonyms env = env.typ_synonyms
 
   let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
     typ_debug ~level:2 (lazy ("Expanding " ^ string_of_n_constraint nc));
@@ -942,8 +952,10 @@ end = struct
       typ_debug (lazy ("get_val_spec: freshened to " ^ string_of_bind bind'));
       bind'
     with
-    | Not_found -> typ_error env (id_loc id) ("No val spec found for " ^ string_of_id id)
+    | Not_found -> typ_error env (id_loc id) ("No type declaration found for " ^ string_of_id id)
 
+  let get_val_specs env = env.top_val_specs
+                 
   let add_union_id id bind env =
     if bound_ctor_fn env id
     then typ_error env (id_loc id) ("A union constructor or function already exists with name " ^ string_of_id id )
@@ -1083,12 +1095,16 @@ end = struct
     with
     | Not_found -> typ_error env (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
 
+  let get_enums env = env.enums
+
   let is_enum id env = Bindings.mem id env.enums
 
   let is_record id env = Bindings.mem id env.records
 
   let get_record id env = Bindings.find id env.records
-
+                        
+  let get_records env = env.records
+                        
   let add_record id typq fields env =
     if bound_typ_id env id
     then typ_error env (id_loc id) ("Cannot create record " ^ string_of_id id ^ ", type name is already bound")
@@ -1185,6 +1201,8 @@ end = struct
     | Some (typq, tus) -> { env with variants = Bindings.add id (typq, tus @ [tu]) env.variants }
     | None -> typ_error env (id_loc id) ("scattered union " ^ string_of_id id ^ " not found")
 
+  let get_variants env = env.variants
+            
   let get_variant id env =
     match Bindings.find_opt id env.variants with
     | Some (typq, tus) -> typq, tus
@@ -1201,6 +1219,8 @@ end = struct
   let get_register id env =
     try Bindings.find id env.registers with
     | Not_found -> typ_error env (id_loc id) ("No register binding found for " ^ string_of_id id)
+
+  let get_registers env = env.registers
 
   let is_extern id env backend =
     try not (Ast_util.extern_assoc backend (Bindings.find id env.externs) = None) with
@@ -1325,6 +1345,8 @@ end = struct
     | None -> typ_error env Parse_ast.Unknown ("No default order has been set")
     | Some ord -> ord
 
+  let get_default_order_option env = env.default_order
+                
   let set_default_order o env =
     match o with
     | Ord_aux (Ord_var _, l) -> typ_error env l "Cannot have variable default order"
@@ -2426,6 +2448,10 @@ let mk_expected_tannot env typ effect expected : tannot =
       instantiation = None
     }
 
+let get_instantiations = function
+  | None -> None
+  | Some t -> t.instantiation
+  
 let empty_tannot = None
 
 let is_empty_tannot = function
@@ -3857,7 +3883,10 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
        match Env.lookup_id v env with
        | Local (_, typ) | Enum typ -> annot_exp (E_id v) typ
        | Register (reff, _, typ) -> annot_exp_effect (E_id v) typ reff
-       | Unbound -> typ_error env l ("Identifier " ^ string_of_id v ^ " is unbound")
+       | Unbound ->
+          match Bindings.find_opt v (Env.get_val_specs env) with
+          | Some _ -> typ_error env l ("Identifier " ^ string_of_id v ^ " is unbound (Did you mean to call the " ^ string_of_id v ^ " function?)")
+          | None -> typ_error env l ("Identifier " ^ string_of_id v ^ " is unbound")
      end
   | E_lit lit -> annot_exp (E_lit lit) (infer_lit env lit)
   | E_sizeof nexp ->
@@ -5324,8 +5353,8 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
         let size = Big_int.to_int size in
         let eval_index_nexp env nexp =
           int_of_nexp_opt (nexp_simp (Env.expand_nexp_synonyms env nexp)) in
-        let (Defs defs), env =
-          check env (Bitfield.macro (eval_index_nexp env, (typ_error env)) id size order ranges) in
+        let defs, env =
+          check_defs env (Bitfield.macro (eval_index_nexp env, (typ_error env)) id size order ranges) in
         defs, env
      | _ ->
         typ_error env l "Underlying bitfield type must be a constant-width bitvector"
@@ -5394,20 +5423,26 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
      Reporting.unreachable (id_loc id) __POS__
        "Loop termination measures should have been rewritten before type checking"
 
-and check_defs : 'a. int -> int -> Env.t -> 'a def list -> tannot defs * Env.t =
+and check_defs_progress : 'a. int -> int -> Env.t -> 'a def list -> tannot def list * Env.t =
   fun n total env defs ->
   match defs with
-  | [] -> Defs [], env
+  | [] -> [], env
   | def :: defs ->
      Util.progress "Type check " (string_of_int n ^ "/" ^ string_of_int total) n total;
      let (def, env) = check_def env def in
-     let Defs defs, env = check_defs (n + 1) total env defs in
-     Defs (def @ defs), env
+     let defs, env = check_defs_progress (n + 1) total env defs in
+     def @ defs, env
 
-and check : 'a. Env.t -> 'a defs -> tannot defs * Env.t =
-  fun env (Defs defs) -> let total = List.length defs in check_defs 1 total env defs
+and check_defs : 'a. Env.t -> 'a def list -> tannot def list * Env.t =
+  fun env defs -> let total = List.length defs in check_defs_progress 1 total env defs
 
-and check_with_envs : 'a. Env.t -> 'a def list -> (tannot def list * Env.t) list =
+let check : 'a. Env.t -> 'a ast -> tannot ast * Env.t =
+  fun env ast ->
+  let total = List.length ast.defs in
+  let defs, env = check_defs_progress 1 total env ast.defs in
+  { ast with defs = defs }, env
+
+let rec check_with_envs : 'a. Env.t -> 'a def list -> (tannot def list * Env.t) list =
   fun env defs ->
   match defs with
   | [] -> []

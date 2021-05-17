@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Rewriter
 
@@ -64,7 +65,7 @@ let split_at_function id defs =
   | Some (pre_defs, def, post_defs) ->
      Some (List.rev pre_defs, def, post_defs)
 
-let recheck (Defs defs) =
+let recheck ({ defs; _} as ast) =
   let defs = Type_check.check_with_envs Type_check.initial_env defs in
 
   let rec find_optimizations = function
@@ -111,4 +112,4 @@ let recheck (Defs defs) =
     | [] -> []
   in
 
-  Defs (find_optimizations defs)
+  { ast with defs = find_optimizations defs }

@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Util
 open Type_check
@@ -76,7 +77,9 @@ val is_within_machine64 : typ -> nexp_range list -> triple *)
 (* produce a new ordering for defs, limiting to those listed in the list, which respects dependencies *)
 (* val restrict_defs : 'a defs -> string list -> 'a defs *)
 
-val top_sort_defs : tannot defs -> tannot defs
+val top_sort_defs : tannot ast -> tannot ast
+
+val infer_effects : tannot ast -> tannot ast
 
 (** Return the set of mutable variables assigned to in the given AST. *)
 val assigned_vars : 'a exp -> IdSet.t

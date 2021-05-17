@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open PPrint
 open Type_check
@@ -392,7 +393,7 @@ let tofrominterp_def def = match def with
   | DEF_type td -> group (frominterp_typedef td ^^ twice hardline ^^ tointerp_typedef td ^^ twice hardline)
   | _ -> empty
 
-let tofrominterp_defs name (Defs defs) =
+let tofrominterp_ast name { defs; _ } =
   (string "open Sail_lib;;" ^^ hardline)
   ^^ (string "open Value;;" ^^ hardline)
   ^^ (if !lem_mode then (string "open Sail2_instr_kinds;;" ^^ hardline) else empty)
@@ -404,11 +405,11 @@ let tofrominterp_defs name (Defs defs) =
   ^^ (if not !mword_mode then (string "include ToFromInterp_lib_bitlist.Make(struct type t = Sail2_values.bitU0 let b0 = Sail2_values.B00 let b1 = Sail2_values.B10 end)" ^^ hardline) else empty)
   ^^ concat (List.map tofrominterp_def defs)
 
-let tofrominterp_pp_defs name f defs =
-  ToChannel.pretty 1. 80 f (tofrominterp_defs name defs)
+let tofrominterp_pp_ast name f ast =
+  ToChannel.pretty 1. 80 f (tofrominterp_ast name ast)
 
-let tofrominterp_output maybe_dir name defs =
+let tofrominterp_output maybe_dir name ast =
   let dir = match maybe_dir with Some dir -> dir | None -> "." in
   let out_chan = open_out (Filename.concat dir (name ^ "_toFromInterp2.ml")) in
-  tofrominterp_pp_defs name out_chan defs;
+  tofrominterp_pp_ast name out_chan ast;
   close_out out_chan

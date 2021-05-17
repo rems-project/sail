@@ -1,0 +1,80 @@
+\providecommand\saildoclabelled[2]{\phantomsection\label{#1}#2}
+\providecommand\saildocval[2]{#1 #2}
+\providecommand\saildocfcl[2]{#1 #2}
+\providecommand\saildoctype[2]{#1 #2}
+\providecommand\saildocfn[2]{#1 #2}
+\providecommand\saildocoverload[2]{#1 #2}
+
+\newcommand{\sailtypeast}{\saildoclabelled{sailtypezast}{\saildoctype{}{\lstinputlisting[language=sail]{out/typezast6bb070d12e82e4887160cdfd016230c8.tex}}}}
+
+\newcommand{\sailvalexecute}{\saildoclabelled{sailzexecute}{\saildocval{}{\lstinputlisting[language=sail]{out/valzexecute33a689e3a631b9b905b85461d3814943.tex}}}}
+
+\newcommand{\sailfclCAndPermBrokenexecute}{\saildoclabelled{sailfclCAndPermBrokenzexecute}{\saildocfcl{Capability register \emph{cd} is replaced with the contents of capability
+register \emph{cs1} with the \cperms{} field set to the bitwise-AND of
+its previous value and bits 0 .. 10 of integer register \emph{rs2}
+and the \cuperms{} field set to the bitwise and of its previous value
+and bits \hyperref\hyperref[sailztablezGpseudocodezDconstants]{\lstinline{table:pseudocode-constants}}{\emph{first\_uperm}} ..
+\hyperref\hyperref[sailztablezGpseudocodezDconstants]{\lstinline{table:pseudocode-constants}}{\emph{last\_uperm}} of \emph{rd}.
+
+}{\lstinputlisting[language=sail]{out/fclCAndPermBrokenzexecute33a689e3a631b9b905b85461d3814943.tex}}}}
+
+\newcommand{\sailfclCAndPermEscapedexecute}{\saildoclabelled{sailfclCAndPermEscapedzexecute}{\saildocfcl{Capability register \emph{cd} is replaced with the contents of capability
+register \emph{cs1} with the \cperms{} field set to the bitwise-AND of
+its previous value and bits 0 .. 10 of integer register \emph{rs2}
+and the \cuperms{} field set to the bitwise and of its previous value
+and bits \hyperref[table:pseudocode-constants]{\emph{first\_uperm}} ..
+\hyperref[table:pseudocode-constants]{\emph{last\_uperm}} of \emph{rd}.
+
+}{\lstinputlisting[language=sail]{out/fclCAndPermEscapedzexecute33a689e3a631b9b905b85461d3814943.tex}}}}
+
+\newcommand{\sailfclCAndPermMarkdownexecute}{\saildoclabelled{sailfclCAndPermMarkdownzexecute}{\saildocfcl{Capability register \emph{cd} is replaced with the contents of capability
+register \emph{cs1} with the \cperms{} field set to the bitwise-AND of
+its previous value and bits 0 .. 10 of integer register \emph{rs2}
+and the \cuperms{} field set to the bitwise and of its previous value
+and bits \hyperref[table:pseudocode-constants]{*first_uperm*} ..
+\hyperref[table:pseudocode-constants]{*last_uperm*} of \emph{rd}.
+
+}{\lstinputlisting[language=sail]{out/fclCAndPermMarkdownzexecute33a689e3a631b9b905b85461d3814943.tex}}}}
+
+\newcommand{\sailfclCAndPermMarkdownWithRefMacroexecute}{\saildoclabelled{sailfclCAndPermMarkdownWithRefMacrozexecute}{\saildocfcl{Capability register \emph{cd} is replaced with the contents of capability
+register \emph{cs1} with the \cperms{} field set to the bitwise-AND of
+its previous value and bits 0 .. 10 of integer register \emph{rs2}
+and the \cuperms{} field set to the bitwise and of its previous value
+and bits \firstUPerm{} .. \lastUPerm{} of \emph{rd}.
+
+}{\lstinputlisting[language=sail]{out/fclCAndPermMarkdownWithRefMacrozexecute33a689e3a631b9b905b85461d3814943.tex}}}}
+
+\newcommand{\sailfclCAndPermMarkdownWithExceptionsexecute}{\saildoclabelled{sailfclCAndPermMarkdownWithExceptionszexecute}{\saildocfcl{Capability register \emph{cd} is replaced with the contents of capability
+register \emph{cs1} with the \cperms{} field set to the bitwise-AND of
+its previous value and bits 0 .. 10 of integer register \emph{rs2}
+and the \cuperms{} field set to the bitwise and of its previous value
+and bits \firstUPerm{} .. \lastUPerm{} of \emph{rd}.
+
+\subsubsection*{Exceptions:}
+An exception is raised if:
+
+\begin{itemize}
+\item \emph{cs1.tag} is not set.
+\item \emph{cs1} is sealed.
+\end{itemize}
+}{\lstinputlisting[language=sail]{out/fclCAndPermMarkdownWithExceptionszexecute33a689e3a631b9b905b85461d3814943.tex}}}}
+
+
+
+\newcommand{\sailval}[1]{
+  \ifstrequal{#1}{execute}{\sailvalexecute}{}}
+
+\newcommand{\sailrefval}[2]{
+  \ifstrequal{#1}{execute}{\hyperref[sailzexecute]{#2}}{}}
+
+\newcommand{\sailfn}[1]{
+  }
+
+\newcommand{\sailreffn}[2]{
+  }
+
+\newcommand{\sailtype}[1]{
+  \ifstrequal{#1}{ast}{\sailtypeast}{}}
+
+\newcommand{\sailreftype}[2]{
+  \ifstrequal{#1}{ast}{\hyperref[sailtypezast]{#2}}{}}

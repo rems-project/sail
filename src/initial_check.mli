@@ -51,6 +51,7 @@
 (** Initial desugaring pass over AST after parsing *)
 
 open Ast
+open Ast_defs
 open Ast_util
 
 (** {2 Options} *)
@@ -96,14 +97,15 @@ val undefined_builtin_val_specs : unit def list
 
 (** If the generate flag is false, then we won't generate any
    auxilliary definitions, like the initialize_registers function *)
-val process_ast : ?generate:bool -> Parse_ast.defs -> unit defs
+val process_ast : ?generate:bool -> Parse_ast.defs -> unit ast
 
 (** {2 Parsing expressions and definitions from strings} *)
 
 val extern_of_string : id -> string -> unit def
 val val_spec_of_string : id -> string -> unit def
-val ast_of_def_string : string -> unit defs
-val ast_of_def_string_with : (Parse_ast.def list -> Parse_ast.def list) -> string -> unit defs
+val defs_of_string : string -> unit def list
+val ast_of_def_string : string -> unit ast
+val ast_of_def_string_with : (Parse_ast.def list -> Parse_ast.def list) -> string -> unit ast
 val exp_of_string : string -> unit exp
 val typ_of_string : string -> typ
 val constraint_of_string : string -> n_constraint

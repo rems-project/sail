@@ -50,6 +50,7 @@
 
 open Type_check
 open Ast
+open Ast_defs
 open Ast_util
 open Reporting
 open Rewriter
@@ -3231,7 +3232,6 @@ let doc_val pat exp =
   group (separate space [string "Hint Unfold"; idpp; colon; string "sail."]) ^^ hardline
 
 let rec doc_def unimplemented generic_eq_types def =
-  (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
   | DEF_spec v_spec -> doc_val_spec unimplemented v_spec
   | DEF_fixity _ -> empty
@@ -3280,7 +3280,7 @@ let find_unimplemented defs =
   in
   List.fold_left adjust_def IdSet.empty defs
 
-let pp_defs_coq (types_file,types_modules) (defs_file,defs_modules) (Defs defs) top_line suppress_MR_M =
+let pp_ast_coq (types_file,types_modules) (defs_file,defs_modules) { defs; _ } top_line suppress_MR_M =
 try
   (* let regtypes = find_regtypes d in *)
   let state_ids =

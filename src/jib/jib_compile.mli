@@ -52,6 +52,7 @@
 
 open Anf
 open Ast
+open Ast_defs
 open Ast_util
 open Jib
 open Type_check
@@ -127,7 +128,7 @@ module Make(C: Config) : sig
        (see Util.progress). *)
   val compile_def : int -> int -> ctx -> tannot def -> cdef list * ctx
 
-  val compile_ast : ctx -> tannot defs -> cdef list * ctx
+  val compile_ast : ctx -> tannot ast -> cdef list * ctx
 end
 
 (** Adds some special functions to the environment that are used to

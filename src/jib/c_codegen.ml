@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Jib
 open Jib_compile
@@ -825,7 +826,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      ksprintf string "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name ctyp id)
 
   | I_init (ctyp, id, cval) ->
-     codegen_instr fid ctx (idecl ctyp id) ^^ hardline
+     codegen_instr fid ctx (idecl l ctyp id) ^^ hardline
      ^^ codegen_conversion Parse_ast.Unknown ctx (CL_id (id, ctyp)) cval
 
   | I_reinit (ctyp, id, cval) ->
@@ -1261,7 +1262,7 @@ let codegen_vector_header ctx id (direction, ctyp) =
   if is_stack_ctyp ctyp then
     string (Printf.sprintf "%s vector_access_%s(%s op, sail_int n);" (sgen_ctyp ctyp) (sgen_id id) (sgen_id id))
   else
-    string (Printf.sprintf "static void vector_access_%s(%s *rop, %s op, sail_int n);" (sgen_id id) (sgen_ctyp ctyp) (sgen_id id))
+    string "" (* Not needed in the header file at the moment *)
   ^^ twice hardline
 
 let codegen_vector_body ctx id (direction, ctyp) =
@@ -1495,10 +1496,10 @@ let codegen_def_body ctx = function
   | CDEF_let (number, bindings, instrs) ->
      let instrs = add_local_labels instrs in
      let setup =
-       List.concat (List.map (fun (id, ctyp) -> [idecl ctyp (global id)]) bindings)
+       List.concat (List.map (fun (id, ctyp) -> [idecl (id_loc id) ctyp (global id)]) bindings)
      in
      let cleanup =
-       List.concat (List.map (fun (id, ctyp) -> [iclear ctyp (global id)]) bindings)
+       List.concat (List.map (fun (id, ctyp) -> [iclear ~loc:(id_loc id) ctyp (global id)]) bindings)
      in
      hardline ^^ string (Printf.sprintf "void sail_create_letbind_%d(sail_state *state) " number)
      ^^ string "{"
@@ -1665,10 +1666,10 @@ let sgen_finish = function
      Printf.sprintf "  finish_%s();" (sgen_id id)
   | _ -> assert false
 
-let rec get_recursive_functions (Defs defs) =
+let rec get_recursive_functions defs =
   match defs with
   | DEF_internal_mutrec fundefs :: defs ->
-     IdSet.union (List.map id_of_fundef fundefs |> IdSet.of_list) (get_recursive_functions (Defs defs))
+     IdSet.union (List.map id_of_fundef fundefs |> IdSet.of_list) (get_recursive_functions defs)
 
   | (DEF_fundef fdef as def) :: defs ->
      let open Rewriter in
@@ -1685,11 +1686,11 @@ let rec get_recursive_functions (Defs defs) =
      let map_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp map_exp) } in
      let _ = rewrite_def map_defs def in
      if IdSet.mem (id_of_fundef fdef) !ids then
-       IdSet.add (id_of_fundef fdef) (get_recursive_functions (Defs defs))
+       IdSet.add (id_of_fundef fdef) (get_recursive_functions defs)
      else
-       get_recursive_functions (Defs defs)
+       get_recursive_functions defs
 
-  | _ :: defs -> get_recursive_functions (Defs defs)
+  | _ :: defs -> get_recursive_functions defs
   | [] -> IdSet.empty
 
 let codegen_output file_name docs =

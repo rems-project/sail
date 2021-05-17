@@ -757,23 +757,30 @@ val_spec {{ ocaml 'a val_spec }} {{ lem val_spec 'a }} :: 'VS_' ::=
    {{ lem VS_aux of val_spec_aux * annot 'a }}
   | val_spec_aux ::  :: aux
 
+cast_opt :: 'Cast_' ::=
+   {{ com option cast annotation for val specs }}
+   {{ ocaml bool }} {{ lem bool }} {{ isa bool }}
+   |       :: S :: no_cast {{ ocaml false }} {{ lem false }} {{ isa false }}
+   | cast  :: S :: cast {{ ocaml true }} {{ lem true }} {{ isa true }}
+
+
 val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
   {{ ocaml  VS_val_spec of typschm * id * (string * string) list * bool }}
   {{ lem VS_val_spec of typschm * id * list (string * string) * bool }}
-  {{ isa  typschm * id  * (string => string option) * bool }}
-  | val typschm id                                  :: S :: val_spec
+  {{ isa  typschm * id  * (string => string option) * bool }}  
+  | val cast_opt id : typschm                           :: S :: val_spec
     {{ com specify the type of an upcoming definition }}
-    {{ ocaml (VS_val_spec [[typschm]] [[id]] None false) }} {{ lem }} {{ isa }}
-  | val cast typschm id                             :: S :: cast
-    {{ ocaml  (VS_val_spec [[typschm]] [[id]] None true) }} {{ lem }} {{ isa }}
-  | val extern typschm id                           :: S :: extern_no_rename
+    {{ ocaml (VS_val_spec [[typschm]] [[id]] [] [[cast_opt]]) }} {{ lem }} {{ isa }}
+  | val cast_opt string : typschm       :: S :: extern_no_rename
     {{ com specify the type of an external function }}
-    {{ ocaml  (VS_val_spec [[typschm]] [[id]] (Some [[id]]) false) }} {{ lem }} {{ isa }}
-  | val extern typschm id = string                  :: S :: extern_spec
-    {{ com specify the type of a function from Lem }}
-    {{ ocaml  (VS_val_spec [[typschm]] [[id]] (Some [[string]]) false) }} {{ lem }} {{ isa }}
-%where the string must provide an explicit path to the required function but will not be checked
+    {{ ocaml  (VS_val_spec [[typschm]] [[string]] [ ( "_" , [[string]] ) ] [[cast_opt]] ) }} {{ lem }} {{ isa }}
+  | val cast_opt id = string : typschm      :: S :: extern_rename_all
+    {{ com specify the type of an external function }}
+    {{ ocaml  (VS_val_spec [[typschm]] [[id]] [ ( "_" , [[string]] ) ] [[cast_opt]] ) }} {{ lem }} {{ isa }}
+  | val cast_opt id = { string1 = string'1 , ... , stringn = string'n } : typschm :: S :: extern_rename_some
+    {{ ichlo }}
+
 
 default_spec :: 'DT_' ::=
   {{ com default kinding or typing assumption }}
@@ -867,13 +874,6 @@ def :: 'DEF_' ::=
     {{ com internal representation of mutually recursive functions }}
   | $ string1 string2 l                                :: :: pragma
     {{ com compiler directive }}
-
-defs :: '' ::=
-  {{ com definition sequence }}
-  {{ auxparam 'a }}
-  | def1  .. defn                 :: :: Defs
-
-
 
 terminals :: '' ::=
   | **                                  :: :: starstar

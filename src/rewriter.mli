@@ -52,6 +52,7 @@
 
 module Big_int = Nat_big_num
 open Ast
+open Ast_defs
 open Type_check
 
 type 'a rewriters = { rewrite_exp  : 'a rewriters -> 'a exp -> 'a exp;
@@ -60,7 +61,7 @@ type 'a rewriters = { rewrite_exp  : 'a rewriters -> 'a exp -> 'a exp;
                       rewrite_let  : 'a rewriters -> 'a letbind -> 'a letbind;
                       rewrite_fun  : 'a rewriters -> 'a fundef -> 'a fundef;
                       rewrite_def  : 'a rewriters -> 'a def -> 'a def;
-                      rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
+                      rewrite_ast : 'a rewriters -> 'a ast -> 'a ast;
                     }
 
 val rewrite_exp : tannot rewriters -> tannot exp -> tannot exp
@@ -68,14 +69,12 @@ val rewrite_exp : tannot rewriters -> tannot exp -> tannot exp
 val rewriters_base : tannot rewriters
 
 (** The identity re-writer *)
-val rewrite_defs : tannot defs -> tannot defs
+val rewrite_ast : tannot ast -> tannot ast
 
-val rewrite_defs_base : tannot rewriters -> tannot defs -> tannot defs
-
-val rewrite_defs_base_parallel : int -> tannot rewriters -> tannot defs -> tannot defs
+val rewrite_ast_base : tannot rewriters -> tannot ast -> tannot ast
 
 (** Same as rewrite_defs_base but display a progress bar when verbosity >= 1 *)
-val rewrite_defs_base_progress : string -> tannot rewriters -> tannot defs -> tannot defs
+val rewrite_ast_base_progress : string -> tannot rewriters -> tannot ast -> tannot ast
 
 val rewrite_lexp : tannot rewriters -> tannot lexp -> tannot lexp
 

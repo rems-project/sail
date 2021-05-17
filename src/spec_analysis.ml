@@ -49,8 +49,9 @@
 (**************************************************************************)
 
 open Ast
-open Util
+open Ast_defs
 open Ast_util
+open Util
 
 module Nameset = Set.Make(String)
 
@@ -146,6 +147,21 @@ and fv_of_nexp consider_var bound used (Ast.Nexp_aux(n,_)) = match n with
   | Nexp_exp n | Ast.Nexp_neg n -> fv_of_nexp consider_var bound used n
   | _ -> used
 
+and fv_of_nconstraint consider_var bound used (Ast.NC_aux(nc,_)) = match nc with
+  | NC_equal (n1,n2) | NC_bounded_ge (n1,n2) | NC_bounded_gt (n1, n2) | NC_bounded_le (n1,n2)
+  | NC_bounded_lt (n1,n2) | NC_not_equal (n1, n2) ->
+    fv_of_nexp consider_var bound (fv_of_nexp consider_var bound used n1) n2
+  | NC_set (Ast.Kid_aux (Ast.Var i,_), _)
+  | NC_var (Ast.Kid_aux (Ast.Var i,_)) ->
+    if consider_var
+    then conditional_add_typ bound used (Ast.Id_aux (Ast.Id i, Parse_ast.Unknown))
+    else used
+  | NC_or (nc1,nc2) | NC_and (nc1,nc2) ->
+     fv_of_nconstraint consider_var bound (fv_of_nconstraint consider_var bound used nc1) nc2
+  | NC_app (id, targs) ->
+     List.fold_right (fun ta n -> fv_of_targ consider_var bound n ta) targs (conditional_add_typ bound used id)
+  | NC_true | NC_false -> used
+
 let typq_bindings (TypQ_aux(tq,_)) = match tq with
   | TypQ_tq quants ->
     List.fold_right (fun (QI_aux (qi,_)) bounds ->
@@ -160,9 +176,27 @@ let fv_of_typschm consider_var bound used (Ast.TypSchm_aux ((Ast.TypSchm_ts(typq
   let ts_bound = if consider_var then typq_bindings typq else mt in
   ts_bound, fv_of_typ consider_var (Nameset.union bound ts_bound) used typ
 
+let rec fv_of_typ_pat consider_var bound used (TP_aux (tp, _)) =
+  match tp with
+  | TP_wild -> bound, used
+  | TP_var (Kid_aux (Var v, l)) ->
+    Nameset.add (string_of_id (Ast.Id_aux (Ast.Id v,l))) bound, used
+  | TP_app (id, tps) ->
+     let u = conditional_add_typ bound used id in
+     List.fold_right (fun ta (b, u) -> fv_of_typ_pat consider_var b u ta) tps (bound, u)
+
 let rec pat_bindings consider_var bound used (P_aux(p,(_,tannot))) =
   let list_fv bound used ps = List.fold_right (fun p (b,n) -> pat_bindings consider_var b n p) ps (bound, used) in
   match p with
+  | P_lit _ | P_wild -> bound,used
+  | P_or(p1,p2) ->
+    (* The typechecker currently drops bindings in disjunctions entirely *)
+    let _b1, u1 = pat_bindings consider_var bound used p1 in
+    let _b2, u2 = pat_bindings consider_var bound used p2 in
+    bound, Nameset.union u1 u2
+  | P_not p ->
+     let _b, u = pat_bindings consider_var bound used p in
+     bound, u
   | P_as(p,id) -> let b,ns = pat_bindings consider_var bound used p in
     Nameset.add (string_of_id id) b,ns
   | P_typ(t,p) ->
@@ -171,15 +205,22 @@ let rec pat_bindings consider_var bound used (P_aux(p,(_,tannot))) =
   | P_id id ->
      let used = fv_of_tannot consider_var bound used tannot in
      Nameset.add (string_of_id id) bound,used
+  | P_var (p, typ_p) ->
+    let b, u = pat_bindings consider_var bound used p in
+    fv_of_typ_pat consider_var b u typ_p
   | P_app(id,pats) ->
      let used = fv_of_tannot consider_var bound used tannot in
     list_fv bound (Nameset.add (string_of_id id) used) pats
-  | P_vector pats | Ast.P_vector_concat pats | Ast.P_tup pats | Ast.P_list pats -> list_fv bound used pats
-  | _ -> bound,used
+  | P_vector pats | Ast.P_vector_concat pats | Ast.P_tup pats | Ast.P_list pats | P_string_append pats -> list_fv bound used pats
+  | P_cons (p1,p2) ->
+    let b1, u1 = pat_bindings consider_var bound used p1 in
+    pat_bindings consider_var b1 u1 p2
 
 let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.t * Nameset.t * Nameset.t) =
   let list_fv b n s es = List.fold_right (fun e (b,n,s) -> fv_of_exp consider_var b n s e) es (b,n,s) in
   match e with
+  | E_lit _
+  | E_internal_value _ -> bound,used,set
   | E_block es | Ast.E_tuple es | Ast.E_vector es | Ast.E_list es ->
     list_fv bound used set es
   | E_id id | E_ref id ->
@@ -218,7 +259,8 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
     List.fold_right
       (fun (FE_aux(FE_Fexp(_,e),_)) (b,u,s) -> fv_of_exp consider_var b u s e) fexps (b,u,s)
   | E_field(e,_) -> fv_of_exp consider_var bound used set e
-  | E_case(e,pes) ->
+  | E_case(e,pes)
+  | E_try(e,pes) ->
     let b,u,s = fv_of_exp consider_var bound used set e in
     fv_of_pes consider_var b u s pes
   | E_let(lebind,e) ->
@@ -234,8 +276,16 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
     b,used,set
   | E_exit e -> fv_of_exp consider_var bound used set e
   | E_assert(c,m) -> list_fv bound used set [c;m]
-  | E_return e -> fv_of_exp consider_var bound used set e
-  | _ -> bound,used,set
+  | E_sizeof ne -> bound, fv_of_nexp consider_var bound used ne, set
+  | E_return e
+  | E_throw e
+  | E_internal_return e ->
+     fv_of_exp consider_var bound used set e
+  | E_internal_plet (pat, exp1, exp2) ->
+     let bp,up = pat_bindings consider_var bound used pat in
+     let _,u1,s1 = fv_of_exp consider_var bound used set exp1 in
+     fv_of_exp consider_var bp (Nameset.union up u1) s1 exp2
+  | E_constraint nc -> bound, fv_of_nconstraint consider_var bound used nc, set
 
 and fv_of_pes consider_var bound used set pes =
   match pes with
@@ -511,8 +561,8 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
      Reporting.unreachable (id_loc id) __POS__ "Loop termination measures should be rewritten before now"
 
 
-let group_defs consider_scatter_as_one (Ast.Defs defs) =
-  List.map (fun d -> (fv_of_def false consider_scatter_as_one defs d,d)) defs
+let group_defs consider_scatter_as_one ast =
+  List.map (fun d -> (fv_of_def false consider_scatter_as_one ast.defs d,d)) ast.defs
 
 
 (*
@@ -590,11 +640,70 @@ let def_of_component graph defset comp =
   (* We could merge other stuff, in particular overloads, but don't need to just now *)
   | defs -> defs
 
-let top_sort_defs (Defs defs) =
+let top_sort_defs ast =
   let prelude, original_order, defset, graph =
-    List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) defs in
+    List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) ast.defs in
   let components = NameGraph.scc ~original_order:original_order graph in
-  Defs (prelude @ List.concat (List.map (def_of_component graph defset) components))
+  { ast with defs = prelude @ List.concat (List.map (def_of_component graph defset) components) }
+
+
+(* Effect inference.  Uses dependency graph to propagate effects from
+   leaves upwards, keeping any annotations found along the way.  The
+   update_effects function then places the inferred effects into
+   val_specs, but not the actual terms.  A fresh type check will
+   propagate them, and check them if allowed. *)
+
+let update_effects effect_map ast =
+  let update_type_scheme effects (TypSchm_aux (TypSchm_ts (qs, ty),l)) =
+    let ty' =
+      match ty with
+      | Typ_aux (Typ_fn (tys, rty, eff), l) -> Typ_aux (Typ_fn (tys, rty, union_effects eff effects), l)
+      | _ -> ty
+    in TypSchm_aux (TypSchm_ts (qs, ty'),l)
+  in
+  let update_def = function
+    | DEF_spec (VS_aux (VS_val_spec (type_scheme, id, ext, is_cast), (l, tannot))) as def ->
+       begin match Namemap.find_opt (string_of_id id) effect_map with
+       | Some effects ->
+          let type_scheme' = update_type_scheme effects type_scheme in
+          DEF_spec (VS_aux (VS_val_spec (type_scheme', id, ext, is_cast), (l, Type_check.add_effect_annot tannot effects)))
+       | None -> def
+       end
+    | def -> def
+  in
+  { ast with defs = List.map update_def ast.defs }
+
+let infer_effects ast =
+  let add_external_effects effect_map = function
+    | DEF_spec (VS_aux (VS_val_spec(type_scheme, id, exts, _), _)) ->
+       let TypSchm_aux (TypSchm_ts (_, ty), _) = type_scheme in
+       begin match ty with
+       | Typ_aux (Typ_fn (_, _, eff), _) ->
+          Namemap.add (string_of_id id) eff effect_map
+       | _ -> effect_map
+       end
+    | _ -> effect_map
+  in
+  let initial_effects = List.fold_left add_external_effects Namemap.empty ast.defs in
+  let prelude, original_order, defset, graph =
+    List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) ast.defs in
+  let components = NameGraph.scc ~original_order:original_order graph in
+  let add_def_effects effect_map name =
+    let callees = NameGraph.children graph name in
+    let own_effect = match Namemap.find_opt name effect_map with Some e -> e | None -> no_effect in
+    let effects = List.fold_left (fun effects callee ->
+                      match Namemap.find_opt callee effect_map with
+                      | Some effect -> union_effects effects effect
+                      | None -> effects) own_effect callees
+    in
+    Namemap.add name effects effect_map
+  in
+  let add_component_effects effect_map names =
+    List.fold_left add_def_effects effect_map names
+  in
+  let effect_map = List.fold_left add_component_effects initial_effects components
+(* in let _ = Namemap.iter (fun name effect -> prerr_endline (name ^ " is " ^ string_of_effect effect)) effect_map *)
+  in update_effects effect_map ast
 
 
 (* Functions for finding the set of variables assigned to.  Used in constant propagation

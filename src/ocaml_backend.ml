@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open PPrint
 open Type_check
@@ -634,7 +635,7 @@ let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
   | TD_bitfield _ ->
      Reporting.unreachable l __POS__ "Bitfield should be re-written"
 
-let get_externs (Defs defs) =
+let get_externs defs =
   let extern_id (VS_aux (VS_val_spec (typschm, id, exts, _), _)) =
     match Ast_util.extern_assoc "ocaml" exts with
     | None -> []
@@ -660,7 +661,7 @@ let ocaml_def ctx def = match def with
   | DEF_val lb -> nf_group (string "let" ^^ space ^^ ocaml_letbind ctx lb) ^^ ocaml_def_end
   | _ -> empty
 
-let val_spec_typs (Defs defs) =
+let val_spec_typs defs =
   let typs = ref (Bindings.empty) in
   let val_spec_typ (VS_aux (vs_aux, _)) =
     match vs_aux with
@@ -682,7 +683,7 @@ let val_spec_typs (Defs defs) =
    size of the vector is.
  *)
 
-let orig_types_for_ocaml_generator (Defs defs) =
+let orig_types_for_ocaml_generator defs =
   Util.map_filter (function
       | DEF_type td -> Some td
       | _ -> None) defs
@@ -925,10 +926,10 @@ let ocaml_pp_generators ctx defs orig_types required =
     separate_map hardline make_rand_gen (IdSet.elements required) ^^
       hardline ^^ rand_record_pp
 
-let ocaml_defs (Defs defs) generator_info =
-  let ctx = { register_inits = get_initialize_registers defs;
-              externs = get_externs (Defs defs);
-              val_specs = val_spec_typs (Defs defs)
+let ocaml_ast ast generator_info =
+  let ctx = { register_inits = get_initialize_registers ast.defs;
+              externs = get_externs ast.defs;
+              val_specs = val_spec_typs ast.defs
             }
   in
   let empty_reg_init =
@@ -941,11 +942,11 @@ let ocaml_defs (Defs defs) generator_info =
   let gen_pp =
     match generator_info with
     | None -> empty
-    | Some (types, req) -> ocaml_pp_generators ctx defs types (List.map mk_id req)
+    | Some (types, req) -> ocaml_pp_generators ctx ast.defs types (List.map mk_id req)
   in
   (string "open Sail_lib;;" ^^ hardline)
   ^^ (string "module Big_int = Nat_big_num" ^^ ocaml_def_end)
-  ^^ concat (List.map (ocaml_def ctx) defs)
+  ^^ concat (List.map (ocaml_def ctx) ast.defs)
   ^^ empty_reg_init
   ^^ gen_pp
 
@@ -968,8 +969,8 @@ let ocaml_main spec sail_dir =
        "  try zmain () with exn -> (prerr_endline(\"Exiting due to uncaught exception:\\n\" ^ Printexc.to_string exn); exit 1)\n";])
   |> String.concat "\n"
 
-let ocaml_pp_defs f defs generator_types =
-  ToChannel.pretty 1. 80 f (ocaml_defs defs generator_types)
+let ocaml_pp_ast f ast generator_types =
+  ToChannel.pretty 1. 80 f (ocaml_ast ast generator_types)
 
 
 let system_checked str =
@@ -985,7 +986,7 @@ let system_checked str =
      prerr_endline (str ^ " was stopped by a signal");
      exit 1
 
-let ocaml_compile spec defs generator_types =
+let ocaml_compile spec ast generator_types =
   let sail_dir =
     try Sys.getenv "SAIL_DIR" with
     | Not_found ->
@@ -1006,9 +1007,9 @@ let ocaml_compile spec defs generator_types =
   let out_chan = open_out (spec ^ ".ml") in
   if !opt_ocaml_coverage then
     ignore(Unix.system ("cp -r " ^ sail_dir ^ "/lib/myocamlbuild_coverage.ml myocamlbuild.ml"));
-  ocaml_pp_defs out_chan defs generator_types;
+  ocaml_pp_ast out_chan ast generator_types;
   close_out out_chan;
-  if IdSet.mem (mk_id "main") (val_spec_ids defs)
+  if IdSet.mem (mk_id "main") (val_spec_ids ast.defs)
   then
     begin
       print_endline "Generating main";

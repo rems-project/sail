@@ -56,6 +56,7 @@
 
 open Parse_ast
 open Ast
+open Ast_defs
 open Ast_util
 module Big_int = Nat_big_num
 open Type_check
@@ -657,10 +658,10 @@ let apply_pat_choices choices =
     e_assert = rewrite_assert;
     e_case = rewrite_case }
 
-let split_defs target all_errors splits env defs =
+let split_defs target all_errors splits env ast =
   let no_errors_happened = ref true in
   let error_opt = if all_errors then Some no_errors_happened else None in
-  let split_constructors (Defs defs) =
+  let split_constructors defs =
     let sc_type_union q (Tu_aux (Tu_ty_id (ty, id), l)) =
       match split_src_type error_opt env id ty q with
       | None -> ([],[Tu_aux (Tu_ty_id (ty,id),l)])
@@ -681,14 +682,14 @@ let split_defs target all_errors splits env defs =
     | _ -> ([], d)
     in
     let (refinements, defs') = List.split (List.map sc_def defs)
-    in (List.concat refinements, Defs defs')
+    in (List.concat refinements, defs')
   in
 
-  let (refinements, defs') = split_constructors defs in
+  let (refinements, defs') = split_constructors ast.defs in
 
   let subst_exp ref_vars substs ksubsts exp =
     let substs = bindings_from_list substs, ksubsts in
-    fst (Constant_propagation.const_prop target defs ref_vars substs Bindings.empty exp)
+    fst (Constant_propagation.const_prop target ast ref_vars substs Bindings.empty exp)
   in
 
   (* Split a variable pattern into every possible value *)
@@ -772,7 +773,7 @@ let split_defs target all_errors splits env defs =
 
   (* Split variable patterns at the given locations *)
 
-  let map_locs ls (Defs defs) =
+  let map_locs ls defs =
     let rec match_l = function
       | Unknown -> []
       | Unique (_, l) -> match_l l
@@ -1170,11 +1171,11 @@ let split_defs target all_errors splits env defs =
          Reporting.unreachable (id_loc id) __POS__
            "Loop termination measures should have been rewritten before now"
     in
-    Defs (List.concat (List.mapi map_def defs))
+    List.concat (List.mapi map_def defs)
   in
-  let (Defs defs'') = map_locs splits defs' in
+  let defs'' = map_locs splits defs' in
   Util.progress "Monomorphising " "done" (List.length defs'') (List.length defs'');
-  !no_errors_happened, (Defs defs'')
+  !no_errors_happened, { ast with defs = defs'' }
 
 
 
@@ -1337,7 +1338,7 @@ let replace_type env typ =
                   ("replace_type: Unsupported type " ^ string_of_typ typ))
 
 
-let rewrite_size_parameters target type_env (Defs defs) =
+let rewrite_size_parameters target type_env ast =
   let open Rewriter in
   let open Util in
 
@@ -1345,7 +1346,7 @@ let rewrite_size_parameters target type_env (Defs defs) =
     let ref_vars = Constant_propagation.referenced_vars exp in
     let substs = (Bindings.empty, KBindings.empty) in
     let assigns = Bindings.empty in
-    fst (Constant_propagation.const_prop target (Defs defs) ref_vars substs assigns exp)
+    fst (Constant_propagation.const_prop target ast ref_vars substs assigns exp)
   in
   let const_prop_pexp pexp =
     let (pat, guard, exp, a) = destruct_pexp pexp in
@@ -1454,7 +1455,7 @@ in *)
        List.fold_left sizes_funcl fsizes funcls
     | _ -> fsizes
   in
-  let fn_sizes = List.fold_left sizes_def Bindings.empty defs in
+  let fn_sizes = List.fold_left sizes_def Bindings.empty ast.defs in
 
   let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),(l,annot))) =
     let pat,guard,body,(pl,_) = destruct_pexp pexp in
@@ -1585,7 +1586,7 @@ in *)
     print_endline (string_of_id id ^ " needs " ^
                      String.concat ", " (List.map string_of_int args))) fn_sizes
 *)
-  Defs (List.map rewrite_def defs)
+  { ast with defs = List.map rewrite_def ast.defs }
 
 end
 
@@ -2760,18 +2761,19 @@ let argset_to_list splits =
   in
   List.map argelt l
 
-let analyse_defs debug env (Defs defs) =
+let analyse_defs debug env ast =
+  let total_defs = List.length ast.defs in
   let def (idx,globals,r) d =
     begin match d with
       | DEF_fundef fd ->
-         Util.progress "Analysing " (string_of_id (id_of_fundef fd)) idx (List.length defs)
+         Util.progress "Analysing " (string_of_id (id_of_fundef fd)) idx total_defs
       | _ -> ()
     end;
     let globals,r' = analyse_def debug env globals d in
     idx + 1, globals, merge r r'
   in
-  let _,_,r = List.fold_left def (0,Bindings.empty,empty) defs in
-  let _ = Util.progress "Analysing " "done" (List.length defs) (List.length defs) in
+  let _,_,r = List.fold_left def (0,Bindings.empty,empty) ast.defs in
+  let _ = Util.progress "Analysing " "done" total_defs total_defs in
 
   (* Resolve the interprocedural dependencies *)
 
@@ -2828,7 +2830,7 @@ let fresh_sz_var =
     let () = counter := n+1 in
     mk_id ("sz#" ^ string_of_int n)
 
-let add_extra_splits extras (Defs defs) =
+let add_extra_splits extras defs =
   let success = ref true in
   let add_to_body extras (E_aux (_,(l,annot)) as e) =
     let l' = Generated l in
@@ -2865,7 +2867,7 @@ let add_extra_splits extras (Defs defs) =
     | d -> d, []
   in 
   let defs, splits = List.split (List.map add_to_def defs) in
-  !success, Defs defs, List.concat splits
+  !success, defs, List.concat splits
 
 module MonoRewrites =
 struct
@@ -2910,6 +2912,11 @@ let rec rewrite_app env typ (id,args) =
     is_id env (Id "zero_extend") id || is_id env (Id "sail_zero_extend") id ||
     is_id env (Id "mips_zero_extend") id || is_id env (Id "EXTZ") id
   in
+  let is_sign_extend =
+    is_id env (Id "SignExtend") id ||
+    is_id env (Id "sign_extend") id || is_id env (Id "sail_sign_extend") id ||
+    is_id env (Id "mips_sign_extend") id || is_id env (Id "EXTS") id
+  in
   let is_truncate = is_id env (Id "truncate") id in
   let mk_exp e = E_aux (e, (Unknown, empty_tannot)) in
   let rec is_zeros_exp e = match unaux_exp e with
@@ -2929,8 +2936,9 @@ let rec rewrite_app env typ (id,args) =
   in
   let try_cast_to_typ (E_aux (e,(l, _)) as exp) =
     let (size,order,bittyp) = vector_typ_args_of (Env.base_typ_of env typ) in
-    match size with
-    | Nexp_aux (Nexp_constant _,_) -> E_cast (typ,exp)
+    (* vector_typ_args_of might simplify size, so rebuild the type even if it's constant *)
+   match size with
+    | Nexp_aux (Nexp_constant c,_) -> E_cast (bitvector_typ (nconstant c) order, exp)
     | _ -> match solve_unique env size with
       | Some c -> E_cast (bitvector_typ (nconstant c) order, exp)
       | None -> e
@@ -3244,7 +3252,7 @@ let rec rewrite_app env typ (id,args) =
 
     | _ -> E_app (id,args)
 
-  else if is_id env (Id "SignExtend") id || is_id env (Id "sign_extend") id then
+  else if is_sign_extend then
     let length_arg = List.filter (fun arg -> is_number (typ_of arg)) args in
     match List.filter (fun arg -> not (is_number (typ_of arg))) args with
     | [E_aux (E_app (slice1, [vector1; start1; length1]),_)]
@@ -3404,7 +3412,7 @@ and rewrite_exp exp = Rewriter.fold_exp { Rewriter.id_exp_alg with e_aux = rewri
 
 let mono_rewrite defs =
   let open Rewriter in
-  rewrite_defs_base
+  rewrite_ast_base
     { rewriters_base with
       rewrite_exp = fun _ -> fold_exp { id_exp_alg with e_aux = rewrite_aux } }
     defs
@@ -3677,7 +3685,7 @@ let rec extract (E_aux (e,_)) =
    provide some way for the Lem pretty printer to know what to use; currently
    we just use two names for the cast, bitvector_cast_in and bitvector_cast_out,
    to let the pretty printer know whether to use the top-level environment. *)
-let add_bitvector_casts global_env (Defs defs) =
+let add_bitvector_casts global_env ({ defs; _ } as ast) =
   let rewrite_body id quant_kids top_env ret_typ exp =
     let rewrite_aux (e,ann) =
       match e with
@@ -3828,7 +3836,7 @@ let add_bitvector_casts global_env (Defs defs) =
   let defs = List.mapi rewrite_def defs in
   let _ = Util.progress "Adding casts " "done" (List.length defs) (List.length defs) in
   let l = Generated Unknown in
-  let Defs cast_specs,_ =
+  let cast_specs, _ =
     (* TODO: use default/relevant order *)
     let kid = mk_kid "n" in
     let bitsn = bitvector_typ (nvar kid) dec_ord in
@@ -3838,8 +3846,8 @@ let add_bitvector_casts global_env (Defs defs) =
       mk_val_spec (VS_val_spec (ts,name,[("_", "zeroExtend")],false))
     in
     let defs = List.map mkfn (IdSet.elements !specs_required) in
-    check initial_env (Defs defs)
-  in Defs (cast_specs @ defs)
+    check_defs initial_env defs
+  in { ast with defs = cast_specs @ defs }
 end
 
 let replace_nexp_in_typ env typ orig new_nexp =
@@ -3902,7 +3910,7 @@ let fresh_nexp_kid nexp =
      types, which these are explicitly supposed to be. *)
   mk_kid (mangle_nexp nexp (*^ "#"*))
 
-let rewrite_toplevel_nexps (Defs defs) =
+let rewrite_toplevel_nexps ({ defs; _ } as ast) =
   let find_nexp env nexp_map nexp =
     let is_equal (kid,nexp') = prove __POS__ env (nc_eq nexp nexp') in
     List.find is_equal nexp_map
@@ -4070,7 +4078,7 @@ let rewrite_toplevel_nexps (Defs defs) =
   (* Allow use of div and mod in nexp rewriting during later typechecking passes
      to help prove equivalences such as (8 * 'n) = 'p8_times_n# *)
   Type_check.opt_smt_div := true;
-  Defs (List.rev defs)
+  { ast with defs = List.rev defs }
 
 type options = {
   auto : bool;
@@ -4088,28 +4096,29 @@ let recheck defs =
 
 let mono_rewrites = MonoRewrites.mono_rewrite
 
-let monomorphise target opts splits defs =
-  let defs, env = Type_check.check Type_check.initial_env defs in
+let monomorphise target opts splits ast =
+  let ast, env = Type_check.check Type_check.initial_env ast in
   let ok_analysis, new_splits, extra_splits =
     if opts.auto
     then
-      let f,r,ex = Analysis.analyse_defs opts.debug_analysis env defs in
+      let f,r,ex = Analysis.analyse_defs opts.debug_analysis env ast in
       if f || opts.all_split_errors || opts.continue_anyway
       then f, r, ex
       else raise (Reporting.err_general Unknown "Unable to monomorphise program")
     else true, [], Analysis.ExtraSplits.empty in
   let splits = new_splits @ (List.map (fun (loc,id) -> (loc,id,None)) splits) in
-  let ok_extras, defs, extra_splits = add_extra_splits extra_splits defs in
+  let ok_extras, defs, extra_splits = add_extra_splits extra_splits ast.defs in
+  let ast = { ast with defs = defs } in
   let splits = splits @ extra_splits in
   let () = if ok_extras || opts.all_split_errors || opts.continue_anyway
       then ()
       else raise (Reporting.err_general Unknown "Unable to monomorphise program")
   in
-  let ok_split, defs = split_defs target opts.all_split_errors splits env defs in
+  let ok_split, ast = split_defs target opts.all_split_errors splits env ast in
   let () = if (ok_analysis && ok_extras && ok_split) || opts.continue_anyway
       then ()
       else raise (Reporting.err_general Unknown "Unable to monomorphise program")
-  in defs
+  in ast
 
 let add_bitvector_casts = BitvectorSizeCasts.add_bitvector_casts
 let rewrite_atoms_to_singletons target defs =

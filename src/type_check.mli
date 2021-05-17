@@ -51,6 +51,7 @@
 (** The type checker API *)
 
 open Ast
+open Ast_defs
 open Ast_util
 module Big_int = Nat_big_num
 
@@ -117,6 +118,8 @@ module Env : sig
       type variables. *)
   val get_val_spec : id -> t -> typquant * typ
 
+  val get_val_specs : t -> (typquant * typ ) Bindings.t
+    
   (** Like get_val_spec, except that the original type variables are used.
       Useful when processing the body of the function. *)
   val get_val_spec_orig : id -> t -> typquant * typ
@@ -124,15 +127,20 @@ module Env : sig
   val update_val_spec : id -> typquant * typ -> t -> t
 
   val get_register : id -> t -> effect * effect * typ
+  val get_registers : t -> (effect * effect * typ) Bindings.t
 
   (** Return all the identifiers in an enumeration. Throws a type
      error if the enumeration doesn't exist. *)
   val get_enum : id -> t -> id list
 
+  val get_enums : t -> IdSet.t Bindings.t 
+
   val get_locals : t -> (mut * typ) Bindings.t
 
   val add_local : id -> mut * typ -> t -> t
 
+  val get_default_order_option : t -> order option
+    
   val add_scattered_variant : id -> typquant -> t -> t
 
   (** Check if a local variable is mutable. Throws Type_error if it
@@ -151,12 +159,18 @@ module Env : sig
 
   val get_typ_var_locs : t -> Ast.l KBindings.t
 
+  val get_typ_synonyms : t -> (typquant * typ_arg) Bindings.t
+    
   val add_typ_var : Ast.l -> kinded_id -> t -> t
 
   val is_record : id -> t -> bool
 
   (** Returns record quantifiers and fields *)
   val get_record : id -> t -> typquant * (typ * id) list
+
+  val get_records : t -> (typquant * (typ * id) list) Bindings.t
+
+  val get_variants : t -> (typquant * type_union list) Bindings.t
 
   (** Return type is: quantifier, argument type, return type, effect *)
   val get_accessor : id -> id -> t -> typquant * typ * typ * effect
@@ -263,6 +277,8 @@ type tannot
 val destruct_tannot : tannot -> (Env.t * typ * effect) option
 val mk_tannot : Env.t -> typ -> effect -> tannot
 
+val get_instantiations : tannot -> typ_arg KBindings.t option
+  
 val empty_tannot : tannot
 val is_empty_tannot : tannot -> bool
 
@@ -464,11 +480,15 @@ Some invariants that will hold of a fully checked AST are:
    check throws type_errors rather than Sail generic errors from
    Reporting. For a function that uses generic errors, use
    Type_error.check *)
-val check : Env.t -> 'a defs -> tannot defs * Env.t
+val check : Env.t -> 'a ast -> tannot ast * Env.t
 
+val check_defs : Env.t -> 'a def list -> tannot def list * Env.t
+  
 (** The same as [check], but exposes the intermediate type-checking
    environments so we don't have to always re-check the entire AST *)
 val check_with_envs : Env.t -> 'a def list -> (tannot def list * Env.t) list
 
 (** The initial type checking environment *)
 val initial_env : Env.t
+
+val prove_smt : Env.t -> n_constraint -> bool                    

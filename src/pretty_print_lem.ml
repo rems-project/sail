@@ -50,6 +50,7 @@
 
 open Type_check
 open Ast
+open Ast_defs
 open Ast_util
 open Reporting
 open Rewriter
@@ -1262,7 +1263,7 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
       | _ ->
          let rec range i j = if i > j then [] else i :: (range (i+1) j) in
          let nats = range 0 in
-         let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) doc_id_lem_ctor enums) in
+         let enums_doc = group (pipe ^^ space ^^ separate_map (break 1 ^^ pipe ^^ space) doc_id_lem_ctor enums) in
          let typ_pp = (doc_op equals)
                         (concat [string "type"; space; doc_id_lem_type id;])
                         (enums_doc) in
@@ -1534,7 +1535,6 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   separate_map hardline doc_field fields
 
 let rec doc_def_lem type_env def =
-  (* let _ = Pretty_print_sail.pp_defs stderr (Defs [def]) in *)
   match def with
   | DEF_spec v_spec -> doc_spec_lem type_env v_spec
   | DEF_fixity _ -> empty
@@ -1560,7 +1560,7 @@ let find_exc_typ defs =
     | _ -> false in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
-let pp_defs_lem (types_file,types_modules) (defs_file,defs_modules) type_env (Defs defs) top_line =
+let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) type_env { defs; _ } top_line =
   (* let regtypes = find_regtypes d in *)
   let state_ids =
     State.generate_regstate_defs !opt_mwords defs

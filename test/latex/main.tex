@@ -1,0 +1,44 @@
+\documentclass{article}
+\usepackage{etoolbox}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\lstdefinelanguage{sail}
+  { morekeywords={val,function,mapping,cast,type,forall,overload,operator,enum,union,undefined,exit,and,assert,sizeof,
+      scattered,register,inc,dec,if,then,else,effect,let,as,@,in,end,Type,Int,Order,match,clause,struct,
+      foreach,from,to,by,infix,infixl,infixr,bitfield,default,try,catch,throw,constraint},
+    keywordstyle={\bf\ttfamily\color{blue}},
+    morestring=[b]",
+    stringstyle={\ttfamily\color{red}},
+    morecomment=[l][\itshape\color{DarkGreen}]{//},
+    morecomment=[s][\itshape\color{DarkGreen}]{/*}{*/},
+    deletestring=[bd]{'},
+    escapechar=\#,
+    emphstyle={\it},
+    literate=
+      {\{|}{{$\{|$}}1
+      {|\}}{{$|\}$}}1
+  }
+
+\input{out/commands.tex}
+\begin{document}
+
+\clearpage
+type: \sailtype{cap\_uperms\_width}
+
+\clearpage
+ref type: \sailreftype{cap\_uperms\_width}{ref to cap\_uperms\_width}
+
+\clearpage
+val: \sailval{main}
+
+\clearpage
+refval: \sailrefval{main}{ref to main}
+
+\clearpage
+\sailfn{main}
+
+\clearpage
+reffn: \sailreffn{main}{ref to main}
+
+\end{document}

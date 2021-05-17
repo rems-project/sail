@@ -302,7 +302,7 @@ let rec rewrite_constant_function_calls' fixed target ast =
       rewriters_base with
       rewrite_exp = (fun _ -> rw_exp fixed target ok not_ok istate)
     } in
-  let ast = rewrite_defs_base rw_defs ast in
+  let ast = rewrite_ast_base rw_defs ast in
   (* We keep iterating until we have no more re-writes to do *)
   if !rewrite_count > 0
   then rewrite_constant_function_calls' fixed target ast

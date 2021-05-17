@@ -301,16 +301,16 @@ let is_env_inconsistent env ksubsts =
 module StringSet = Set.Make(String)
 module StringMap = Map.Make(String)
 
-let const_props target defs ref_vars =
+let const_props target ast ref_vars =
   let const_fold exp =
     (* Constant-fold function applications with constant arguments *)
     let interpreter_istate =
       (* Do not interpret undefined_X functions *)
       let open Interpreter in
-      let undefined_builtin_ids = ids_of_defs (Defs Initial_check.undefined_builtin_val_specs) in
+      let undefined_builtin_ids = ids_of_defs Initial_check.undefined_builtin_val_specs in
       let remove_primop id = StringMap.remove (string_of_id id) in
       let remove_undefined_primops = IdSet.fold remove_primop undefined_builtin_ids in
-      let (lstate, gstate) = Constant_fold.initial_state defs Type_check.initial_env in
+      let (lstate, gstate) = Constant_fold.initial_state ast Type_check.initial_env in
       (lstate, { gstate with primops = remove_undefined_primops gstate.primops })
     in
     try
@@ -328,9 +328,7 @@ let const_props target defs ref_vars =
          Bindings.add id exp m
       | _ -> m
     in
-    match defs with
-    | Defs defs ->
-       List.fold_left add Bindings.empty defs
+    List.fold_left add Bindings.empty ast.defs
   in
   let replace_constant (E_aux (e,annot) as exp) =
     match e with
@@ -894,4 +892,4 @@ let remove_impossible_int_cases _ =
   in
   let open Rewriter in
   let rewrite_exp _ = fold_exp { id_exp_alg with e_case = e_case; e_if = e_if } in
-  rewrite_defs_base { rewriters_base with rewrite_exp = rewrite_exp }
+  rewrite_ast_base { rewriters_base with rewrite_exp = rewrite_exp }

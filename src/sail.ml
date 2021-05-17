@@ -73,6 +73,7 @@ let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
 let opt_splice = ref ([]:string list)
 let opt_have_feature = ref None
+let opt_infer_effects = ref false
 
 let set_target name = Arg.Unit (fun _ -> opt_target := Some name)
 
@@ -162,10 +163,18 @@ let options = Arg.align ([
     " pretty print the input to LaTeX");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix := prefix),
-    "<prefix> set a custom prefix for generated LaTeX macro command (default sail)");
+    "<prefix> set a custom prefix for generated LaTeX labels and macro commands (default sail)");
   ( "-latex_full_valspecs",
     Arg.Clear Latex.opt_simple_val,
     " print full valspecs in LaTeX output");
+  ( "-latex_abbrevs",
+    Arg.String (fun s ->
+      let abbrevs = String.split_on_char ';' s in
+      let filtered = List.filter (fun abbrev -> not (String.equal "" abbrev)) abbrevs in
+      match List.find_opt (fun abbrev -> not (String.equal "." (String.sub abbrev (String.length abbrev - 1) 1))) filtered with
+      | None -> Latex.opt_abbrevs := filtered
+      | Some abbrev -> raise (Arg.Bad (abbrev ^ " does not end in a '.'"))),
+    " semicolon-separated list of abbreviations to fix spacing for in LaTeX output (default 'e.g.;i.e.')");
   ( "-marshal",
     Arg.Tuple [set_target "marshal"; Arg.Set Initial_check.opt_undefined_gen],
     " OCaml-marshal out the rewritten AST to a file");
@@ -356,6 +365,9 @@ let options = Arg.align ([
   ( "-no_effects",
     Arg.Set Type_check.opt_no_effects,
     " (experimental) turn off effect checking");
+  ( "-infer_effects",
+    Arg.Set opt_infer_effects,
+    " (experimental) infer effects");
   ( "-just_check",
     Arg.Set opt_just_check,
     " (experimental) terminate immediately after typechecking");
@@ -460,13 +472,13 @@ let target name out_name ast type_envs =
   | None -> ()
 
   | Some "sail" ->
-     Pretty_print_sail.pp_defs stdout ast
+     Pretty_print_sail.pp_ast stdout ast
 
   | Some "ocaml" ->
      let ocaml_generator_info =
        match !opt_ocaml_generators with
        | [] -> None
-       | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast, !opt_ocaml_generators)
+       | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast.defs, !opt_ocaml_generators)
      in
      let out = match !opt_file_out with None -> "out" | Some s -> s in
      Ocaml_backend.ocaml_compile out ast ocaml_generator_info
@@ -484,7 +496,7 @@ let target name out_name ast type_envs =
        else
          (l, Type_check.replace_env (Type_check.Env.set_prover None (Type_check.env_of_tannot tannot)) tannot)
      in
-     Marshal.to_string (Ast_util.map_defs_annot remove_prover ast, Type_check.Env.set_prover None type_envs) [Marshal.Compat_32]
+     Marshal.to_string (Ast_util.map_ast_annot remove_prover ast, Type_check.Env.set_prover None type_envs) [Marshal.Compat_32]
      |> Base64.encode_string
      |> output_string f;
      close_out f
@@ -616,6 +628,8 @@ let main () =
     print_endline version
   else
     begin
+      let reset_effect_checking = !opt_infer_effects && not !Type_check.opt_no_effects in
+      let () = if !opt_infer_effects then Type_check.opt_no_effects := true in
       let out_name, ast, type_envs = load_files options Type_check.initial_env !opt_file_arguments in
       let ast, type_envs = descatter type_envs ast in
       let ast, type_envs =
@@ -623,6 +637,14 @@ let main () =
           (!opt_splice) (ast, type_envs)
       in
       Reporting.opt_warnings := false; (* Don't show warnings during re-writing for now *)
+
+      let ast, type_envs =
+        if !opt_infer_effects then
+          let ast = Spec_analysis.infer_effects ast in
+          let _ = if reset_effect_checking then Type_check.opt_no_effects := true in
+          Type_error.check Type_check.initial_env ast
+        else ast, type_envs
+      in
 
       begin match !opt_process_elf, !opt_file_out with
       | Some elf, Some out ->

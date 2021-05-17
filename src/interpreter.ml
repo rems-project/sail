@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Value
 
@@ -747,7 +748,7 @@ and pattern_match env (P_aux (p_aux, (l, _)) as pat) value =
         let hd_match, hd_bind = pattern_match env hd_pat hd_value in
         let tl_match, tl_bind = pattern_match env tl_pat (V_list tl_values) in
         hd_match && tl_match, Bindings.merge combine hd_bind tl_bind
-     | None -> failwith "Cannot match cons pattern against non-list"
+     | None -> false, Bindings.empty
      end
   | P_string_append _ -> assert false (* TODO *)
 
@@ -755,11 +756,11 @@ let exp_of_fundef (FD_aux (FD_function (_, _, _, funcls), annot)) value =
   let pexp_of_funcl (FCL_aux (FCL_Funcl (_, pexp), _)) = pexp in
   E_aux (E_case (exp_of_value value, List.map pexp_of_funcl funcls), annot)
 
-let rec ast_letbinds (Defs defs) =
+let rec defs_letbinds defs =
   match defs with
   | [] -> []
-  | DEF_val lb :: defs -> lb :: ast_letbinds (Defs defs)
-  | _ :: defs -> ast_letbinds (Defs defs)
+  | DEF_val lb :: defs -> lb :: defs_letbinds defs
+  | _ :: defs -> defs_letbinds defs
 
 let initial_lstate =
   { locals = Bindings.empty }
@@ -945,11 +946,11 @@ let rec run_frame frame =
 let eval_exp state exp =
   run_frame (Step (lazy "", state, return exp, []))
 
-let initial_gstate primops ast env =
+let initial_gstate primops defs env =
   { registers = Bindings.empty;
     allow_registers = true;
     primops = primops;
-    letbinds = ast_letbinds ast;
+    letbinds = defs_letbinds defs;
     fundefs = Bindings.empty;
     last_write_ea = None;
     typecheck_env = env;
@@ -972,14 +973,14 @@ let rec initialize_registers allow_registers gstate =
     | _ -> gstate
   in
   function
-  | Defs (def :: defs) ->
-     initialize_registers allow_registers (process_def def) (Defs defs)
-  | Defs [] -> gstate
+  | def :: defs ->
+     initialize_registers allow_registers (process_def def) defs
+  | [] -> gstate
 
 let initial_state ?(registers=true) ast env primops =
-  let gstate = initial_gstate primops ast env in
+  let gstate = initial_gstate primops ast.defs env in
   let gstate =
-    { (initialize_registers registers gstate ast)
+    { (initialize_registers registers gstate ast.defs)
       with allow_registers = registers }
   in
   initial_lstate, gstate

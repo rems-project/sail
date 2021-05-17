@@ -184,6 +184,7 @@ static inline bool bit_to_bool(const fbits a)
 }
 
 bool EQUAL(fbits)(const fbits, const fbits);
+bool EQUAL(ref_fbits)(const fbits*, const fbits*);
 
 typedef struct {
   uint64_t len;
@@ -277,6 +278,7 @@ void count_leading_zeros(sail_int *rop, const lbits op);
 
 bool eq_bits(const lbits op1, const lbits op2);
 bool EQUAL(lbits)(const lbits op1, const lbits op2);
+bool EQUAL(ref_lbits)(const lbits *op1, const lbits *op2);
 bool neq_bits(const lbits op1, const lbits op2);
 
 void vector_subrange_lbits(lbits *rop,

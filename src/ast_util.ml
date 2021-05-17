@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Util
 module Big_int = Nat_big_num
 
@@ -712,8 +713,7 @@ and map_def_annot f = function
   | DEF_reg_dec ds -> DEF_reg_dec (map_decspec_annot f ds)
   | DEF_internal_mutrec fds -> DEF_internal_mutrec (List.map (map_fundef_annot f) fds)
   | DEF_pragma (name, arg, l) -> DEF_pragma (name, arg, l)
-and map_defs_annot f = function
-  | Defs defs -> Defs (List.map (map_def_annot f) defs)
+and map_ast_annot f ast = { ast with defs = List.map (map_def_annot f) ast.defs }
 
 and map_loop_measure_annot f = function
   | Loop (loop, exp) -> Loop (loop, map_exp_annot f exp)
@@ -1085,10 +1085,11 @@ let ids_of_def = function
   | DEF_spec vs -> IdSet.singleton (id_of_val_spec vs)
   | DEF_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
   | _ -> IdSet.empty
-let ids_of_defs (Defs defs) =
+let ids_of_defs defs =
   List.fold_left IdSet.union IdSet.empty (List.map ids_of_def defs)
+let ids_of_ast ast = ids_of_defs ast.defs
 
-let val_spec_ids (Defs defs) =
+let val_spec_ids defs =
   let val_spec_id (VS_aux (vs_aux, _)) =
     match vs_aux with
     | VS_val_spec (_, id, _, _) -> id
@@ -1539,14 +1540,15 @@ let rec split_defs' f defs acc =
   | def :: defs when f def -> Some (acc, def, defs)
   | def :: defs -> split_defs' f defs (def :: acc)
 
-let split_defs f (Defs defs) =
+let split_defs f defs =
   match split_defs' f defs [] with
   | None -> None
   | Some (pre_defs, def, post_defs) ->
-     Some (Defs (List.rev pre_defs), def, Defs post_defs)
+     Some (List.rev pre_defs, def, post_defs)
 
-let append_ast (Defs ast1) (Defs ast2) = Defs (ast1 @ ast2)
-let concat_ast asts = List.fold_right append_ast asts (Defs [])
+let append_ast ast1 ast2 = { defs = ast1.defs @ ast2.defs; comments = ast1.comments @ ast2.comments }
+let append_ast_defs ast defs = { ast with defs = ast.defs @ defs }
+let concat_ast asts = List.fold_right append_ast asts empty_ast
 
 let type_union_id (Tu_aux (Tu_ty_id (_, id), _)) = id
 
@@ -2216,7 +2218,7 @@ let rec find_annot_defs sl = function
      find_annot_defs sl defs
   | [] -> None
 
-let rec find_annot_ast sl (Defs defs) = find_annot_defs sl defs
+let rec find_annot_ast sl { defs; _ } = find_annot_defs sl defs
 
 let string_of_lx lx =
   let open Lexing in

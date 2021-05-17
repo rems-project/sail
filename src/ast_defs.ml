@@ -49,29 +49,13 @@
 (**************************************************************************)
 
 open Ast
-open Ast_util
-open PPrint
 
-let to_string doc =
-  let b = Buffer.create 120 in
-  ToBuffer.pretty 1. 120 b doc;
-  Buffer.contents b
+type 'a ast = {
+    defs : 'a def list;
+    comments : (string * Lexer.comment list) list
+  }
 
-let do_mapdef_thing (MD_aux (MD_mapping (_, _, clauses), _)) =
-  print_endline ("Mapping has " ^ string_of_int (List.length clauses) ^ " clauses")
-
-let rec list_registers = function
-  | [] -> ()
-  | (DEF_reg_dec reg) :: defs ->
-     print_endline (to_string (Pretty_print_sail.doc_dec reg));
-     list_registers defs
-  | (DEF_mapdef mapdef) :: defs ->
-     do_mapdef_thing mapdef;
-     list_registers defs
-  | def :: defs ->
-     list_registers defs
-
-let output env (Defs defs) =
-  let xlenbits = mk_typ (Typ_id (mk_id "xlenbits")) in
-  print_endline (string_of_typ (Type_check.Env.expand_synonyms env xlenbits));
-  list_registers defs
+let empty_ast = {
+    defs = [];
+    comments = []
+  }

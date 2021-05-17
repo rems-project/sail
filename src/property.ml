@@ -49,10 +49,11 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Parser_combinators
 
-let find_properties (Defs defs) =
+let find_properties { defs; _ } =
   let rec find_prop acc = function
     | DEF_pragma (("property" | "counterexample") as prop_type, command, l) :: defs ->
        begin match Util.find_next (function DEF_spec _ -> true | _ -> false) defs with
@@ -68,7 +69,7 @@ let find_properties (Defs defs) =
   |> List.map (fun ((_, _, _, vs) as prop) -> (id_of_val_spec vs, prop))
   |> List.fold_left (fun m (id, prop) -> Bindings.add id prop m) Bindings.empty
 
-let add_property_guards props (Defs defs) =
+let add_property_guards props ast =
   let open Type_check in
   let rec add_property_guards' acc = function
     | (DEF_fundef (FD_aux (FD_function (r_opt, t_opt, e_opt, funcls), fd_aux) as fdef) as def) :: defs ->
@@ -117,7 +118,7 @@ let add_property_guards props (Defs defs) =
     | def :: defs -> add_property_guards' (def :: acc) defs
     | [] -> List.rev acc
   in
-  Defs (add_property_guards' [] defs)
+  { ast with defs = add_property_guards' [] ast.defs }
 
 let rewrite defs =
   add_property_guards (find_properties defs) defs

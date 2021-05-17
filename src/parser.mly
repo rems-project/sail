@@ -107,7 +107,6 @@ let mk_typschm_opt ts n m = TypSchm_opt_aux (
 let mk_typschm_opt_none = TypSchm_opt_aux (TypSchm_opt_none, Unknown)
 
 let mk_sd s n m = SD_aux (s, loc n m)
-let mk_sd_doc s str n m = SD_aux (s, Documented (str, loc n m))
 let mk_ir r n m = BF_aux (r, loc n m)
 
 let mk_funcl f n m = FCL_aux (f, loc n m)
@@ -124,7 +123,30 @@ let mk_forwards_mapcl mpexp exp n m = MCL_aux (MCL_forwards (mpexp, exp), loc n 
 let mk_backwards_mapcl mpexp exp n m = MCL_aux (MCL_backwards (mpexp, exp), loc n m)
 let mk_map id tannot mapcls n m = MD_aux (MD_mapping (id, tannot, mapcls), loc n m)
 
-let doc_vs doc (VS_aux (v, l)) = VS_aux (v, Documented (doc, l))
+let doc_loc doc l =
+  match l with
+  | Documented _ -> l
+  | _            -> Documented (doc, l)
+
+let doc_funcl doc (FCL_aux (f, l)) = FCL_aux (f, doc_loc doc l)
+let doc_fun doc (FD_aux (fn, l)) = FD_aux (fn, doc_loc doc l)
+let doc_td doc (TD_aux (t, l)) = TD_aux (t, doc_loc doc l)
+let doc_vs doc (VS_aux (v, l)) = VS_aux (v, doc_loc doc l)
+let doc_reg_dec doc (DEC_aux (d, l)) = DEC_aux (d, doc_loc doc l)
+let doc_mapcl doc (MCL_aux (d, l)) = MCL_aux (d, doc_loc doc l)
+let doc_map doc (MD_aux (m, l)) = MD_aux (m, doc_loc doc l)
+let doc_tu doc (Tu_aux (tu, l)) = Tu_aux (tu, doc_loc doc l)
+
+let doc_sd doc (SD_aux (sd, l)) =
+  match sd with
+  | SD_funcl fcl -> SD_aux (SD_funcl (doc_funcl doc fcl), l)
+  | SD_unioncl (id, tu) -> SD_aux (SD_unioncl (id, doc_tu doc tu), l)
+  | SD_mapcl (id, mcl) -> SD_aux (SD_mapcl (id, doc_mapcl doc mcl), l)
+
+  | SD_function _
+  | SD_variant _
+  | SD_mapping _
+  | SD_end _ -> SD_aux (sd, doc_loc doc l)
 
 let qi_id_of_kopt (KOpt_aux (kopt_aux, l) as kopt) = QI_aux (QI_id kopt, l)
 
@@ -1132,11 +1154,17 @@ funcl:
   | id funcl_patexp
     { mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos }
 
+funcl_doc:
+  | Doc funcl_doc
+    { doc_funcl $1 $2 }
+  | funcl
+    { $1 }
+
 funcls2:
-  | id funcl_patexp
-    { [mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos] }
-  | id funcl_patexp And funcls2
-    { mk_funcl (FCL_Funcl ($1, $2)) $startpos $endpos($2) :: $4 }
+  | funcl_doc
+    { [$1] }
+  | funcl_doc And funcls2
+    { $1 :: $3 }
 
 funcls:
   | id funcl_patexp_typ
@@ -1188,6 +1216,8 @@ typaram:
     { mk_typq $2 [] $startpos $endpos }
 
 type_def:
+  | Doc type_def
+    { doc_td $1 $2 }
   | Typedef id typaram Eq typ
     { mk_td (TD_abbrev ($2, $3, K_aux (K_type, Parse_ast.Unknown), $5)) $startpos $endpos }
   | Typedef id Eq typ
@@ -1201,9 +1231,11 @@ type_def:
   | Struct id typaram Eq Lcurly struct_fields Rcurly
     { mk_td (TD_record ($2, $3, $6, false)) $startpos $endpos }
   | Enum id Eq enum_bar
-    { mk_td (TD_enum ($2, $4, false)) $startpos $endpos }
+    { mk_td (TD_enum ($2, [], $4, false)) $startpos $endpos }
   | Enum id Eq Lcurly enum Rcurly
-    { mk_td (TD_enum ($2, $5, false)) $startpos $endpos }
+    { mk_td (TD_enum ($2, [], $5, false)) $startpos $endpos }
+  | Enum id With enum_functions Eq Lcurly enum Rcurly
+    { mk_td (TD_enum ($2, $4, $7, false)) $startpos $endpos }
   | Newtype id Eq type_union
     { mk_td (TD_variant ($2, TypQ_aux (TypQ_tq [], loc $endpos($2) $startpos($3)), [$4], false)) $startpos $endpos }
   | Newtype id typaram Eq type_union
@@ -1215,17 +1247,27 @@ type_def:
   | Bitfield id Colon typ Eq Lcurly r_def_body Rcurly
     { mk_td (TD_bitfield ($2, $4, $7)) $startpos $endpos }
 
+enum_functions:
+  | id MinusGt typ Comma enum_functions
+    { ($1, $3) :: $5 }
+  | id MinusGt typ
+    { [($1, $3)] }
+
 enum_bar:
   | id
-    { [$1] }
+    { [($1, None)] }
   | id Bar enum_bar
-    { $1 :: $3 }
+    { ($1, None) :: $3 }
 
 enum:
   | id
-    { [$1] }
+    { [($1, None)] }
+  | id EqGt exp
+    { [($1, Some $3)] }
   | id Comma enum
-    { $1 :: $3 }
+    { ($1, None) :: $3 }
+  | id EqGt exp Comma enum
+    { ($1, Some $3) :: $5 }
 
 struct_field:
   | id Colon typ
@@ -1240,6 +1282,8 @@ struct_fields:
     { $1 :: $3 }
 
 type_union:
+  | Doc type_union
+    { doc_tu $1 $2 }
   | id Colon typ
     { Tu_aux (Tu_ty_id ($3, $1), loc $startpos $endpos) }
   | id Colon typ MinusGt typ
@@ -1260,10 +1304,10 @@ rec_measure:
     { mk_recr (Rec_measure ($2, $4)) $startpos $endpos }
 
 fun_def:
-  | Function_ funcls
-    { let funcls, tannot = $2 in mk_fun (FD_function (mk_recn, tannot, mk_eannotn, funcls)) $startpos $endpos }
-  | Function_ rec_measure funcls
-    { let funcls, tannot = $3 in mk_fun (FD_function ($2, tannot, mk_eannotn, funcls)) $startpos $endpos }
+  | Doc fun_def
+    { doc_fun $1 $2 }
+  | Function_ rec_measure? funcls
+    { let funcls, tannot = $3 in mk_fun (FD_function (default_opt mk_recn $2, tannot, mk_eannotn, funcls)) $startpos $endpos }
 
 fun_def_list:
   | fun_def
@@ -1344,13 +1388,21 @@ mapcl:
    * | exp LtMinus pat If_ exp
    *   { mk_backwards_mapcl (mk_pexp (Pat_when ($3, $5, $1)) $startpos $endpos) $startpos $endpos } *)
 
-mapcl_list:
+mapcl_doc:
+  | Doc mapcl_doc
+    { doc_mapcl $1 $2 }
   | mapcl
+    { $1 }
+
+mapcl_list:
+  | mapcl_doc
     { [$1] }
-  | mapcl Comma mapcl_list
+  | mapcl_doc Comma mapcl_list
     { $1 :: $3 }
 
 map_def:
+  | Doc map_def
+    { doc_map $1 $2 }
   | Mapping id Eq Lcurly mapcl_list Rcurly
     { mk_map $2 mk_typschm_opt_none $5 $startpos $endpos }
   | Mapping id Colon typschm Eq Lcurly mapcl_list Rcurly
@@ -1389,6 +1441,8 @@ val_spec_def:
     { mk_vs (VS_val_spec ($9, $3, $6, true)) $startpos $endpos }
 
 register_def:
+  | Doc register_def
+    { doc_reg_dec $1 $2 }
   | Register id Colon typ
     { let rreg = mk_typ (ATyp_set [mk_effect BE_rreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
       let wreg = mk_typ (ATyp_set [mk_effect BE_wreg $startpos($1) $endpos($1)]) $startpos($1) $endpos($1) in
@@ -1405,22 +1459,26 @@ default_def:
     { mk_default (DT_order ($2, mk_typ ATyp_dec $startpos($3) $endpos)) $startpos $endpos }
 
 scattered_def:
-  | Union id typaram
-    { mk_sd (SD_variant($2, $3)) $startpos $endpos }
-  | Union id
-    { mk_sd (SD_variant($2, mk_typqn)) $startpos $endpos }
-  | Function_ id
-    { mk_sd (SD_function(mk_recn, mk_tannotn, mk_eannotn, $2)) $startpos $endpos }
-  | Mapping id
-    { mk_sd (SD_mapping ($2, mk_tannotn)) $startpos $endpos }
-  | Mapping id Colon funcl_typ
-    { mk_sd (SD_mapping ($2, $4)) $startpos $endpos }
-
-scattered_clause:
-  | Doc Function_ Clause funcl
-    { mk_sd_doc (SD_funcl $4) $1 $startpos($2) $endpos }
+  | Doc scattered_def
+    { doc_sd $1 $2 }
+  | Scattered Union id typaram
+    { mk_sd (SD_variant($3, $4)) $startpos $endpos }
+  | Scattered Union id
+    { mk_sd (SD_variant($3, mk_typqn)) $startpos $endpos }
+  | Scattered Function_ id
+    { mk_sd (SD_function(mk_recn, mk_tannotn, mk_eannotn, $3)) $startpos $endpos }
+  | Scattered Mapping id
+    { mk_sd (SD_mapping ($3, mk_tannotn)) $startpos $endpos }
+  | Scattered Mapping id Colon funcl_typ
+    { mk_sd (SD_mapping ($3, $5)) $startpos $endpos }
   | Function_ Clause funcl
     { mk_sd (SD_funcl $3) $startpos $endpos }
+  | Union Clause id Eq type_union
+    { mk_sd (SD_unioncl ($3, $5)) $startpos $endpos }
+  | Mapping Clause id Eq mapcl
+    { mk_sd (SD_mapcl ($3, $5)) $startpos $endpos }
+  | End id
+    { mk_sd (SD_end $2) $startpos $endpos }
 
 loop_measure:
   | Until exp
@@ -1454,17 +1512,9 @@ def:
   | Overload id Eq Lcurly id_list Rcurly
     { DEF_overload ($2, $5) }
   | Overload id Eq enum_bar
-    { DEF_overload ($2, $4) }
-  | Scattered scattered_def
-    { DEF_scattered $2 }
-  | scattered_clause
+    { DEF_overload ($2, List.map fst $4) }
+  | scattered_def
     { DEF_scattered $1 }
-  | Union Clause id Eq type_union
-    { DEF_scattered (mk_sd (SD_unioncl ($3, $5)) $startpos $endpos) }
-  | Mapping Clause id Eq mapcl
-    { DEF_scattered (mk_sd (SD_mapcl ($3, $5)) $startpos $endpos) }
-  | End id
-    { DEF_scattered (mk_sd (SD_end $2) $startpos $endpos) }
   | default_def
     { DEF_default $1 }
   | Mutual Lcurly fun_def_list Rcurly

@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 
 let funcl_id (FCL_aux (FCL_Funcl (id, _), _)) = id
@@ -138,4 +139,4 @@ let rec descatter' funcls mapcls = function
   | def :: defs -> def :: descatter' funcls mapcls defs
   | [] -> []
 
-let descatter (Defs defs) = Defs (descatter' Bindings.empty Bindings.empty defs)
+let descatter ast = { ast with defs = descatter' Bindings.empty Bindings.empty ast.defs }

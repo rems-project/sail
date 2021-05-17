@@ -19,7 +19,7 @@
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control.sail",
-				"match": "\\b(if|then|while|for|return|match)\\b"
+				"match": "\\b(if|then|while|for|return|match|else)\\b"
 			},{
 				"name": "keyword.other.sail",
 				"match": "\\b(type|val|let|in|function|scattered|enum|union|clause|default|order|dec|register|vector)\\b"

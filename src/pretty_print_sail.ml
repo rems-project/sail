@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open PPrint
 
@@ -768,10 +769,10 @@ let rec doc_def def = group (match def with
      separate space [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
   ) ^^ hardline
 
-let doc_defs (Defs(defs)) =
+let doc_ast { defs } =
   separate_map hardline doc_def (List.filter doc_filter defs)
 
-let reformat dir (Defs defs) =
+let reformat dir { defs } =
   let file_stack = ref [] in
 
   let pop () = match !file_stack with
@@ -823,7 +824,7 @@ let reformat dir (Defs defs) =
   List.iter format_def defs;
   opt_insert_braces := false
 
-let pp_defs f d = ToChannel.pretty 1. 80 f (doc_defs d)
+let pp_ast f d = ToChannel.pretty 1. 80 f (doc_ast d)
 
 let pretty_sail f doc = ToChannel.pretty 1. 120 f doc
 

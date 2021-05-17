@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Jib
 open Jib_util
@@ -91,7 +92,7 @@ type ctx = {
        generating the SMT for. Used for error messages. *)
     arg_stack : (int * string) Stack.t;
     (** Used internally to keep track of function argument names *)
-    ast : Type_check.tannot defs;
+    ast : Type_check.tannot ast;
     (** The fully type-checked ast *)
     shared : ctyp Bindings.t;
     (** Shared variables. These variables do not get renamed by
@@ -123,7 +124,7 @@ type ctx = {
   }
 
 (** Compile an AST into Jib suitable for SMT generation, and initialise a context. *)
-val compile : Type_check.Env.t -> Type_check.tannot defs -> cdef list * Jib_compile.ctx * ctx
+val compile : Type_check.Env.t -> Type_check.tannot ast -> cdef list * Jib_compile.ctx * ctx
 
 (* TODO: Currently we internally use mutable stacks and queues to
    avoid any issues with stack overflows caused by some non
@@ -153,7 +154,7 @@ module Make_optimizer(S : Sequence) : sig
 end
 
 val serialize_smt_model :
-  string -> Type_check.Env.t -> Type_check.tannot defs -> unit
+  string -> Type_check.Env.t -> Type_check.tannot ast -> unit
 
 val deserialize_smt_model :
   string -> cdef list * ctx
@@ -164,5 +165,5 @@ val generate_smt :
   (string * string * l * 'a val_spec) Bindings.t (* See Property.find_properties *)
   -> (string -> string) (* Applied to each function name to generate the file name for the smtlib file *)
   -> Type_check.Env.t
-  -> Type_check.tannot defs
+  -> Type_check.tannot ast
   -> unit

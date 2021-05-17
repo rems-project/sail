@@ -164,7 +164,6 @@ let kw_table =
      ("do",                      (fun _ -> Do));
      ("mutual",                  (fun _ -> Mutual));
      ("bitfield",                (fun _ -> Bitfield));
-
      ("barr",                    (fun x -> Barr));
      ("depend",                  (fun x -> Depend));
      ("rreg",                    (fun x -> Rreg));
@@ -195,7 +194,8 @@ let comments = ref []
 
 }
 
-let ws = [' ''\t']+
+let wsc = [' ''\t']
+let ws = wsc+
 let letter = ['a'-'z''A'-'Z''?']
 let digit = ['0'-'9']
 let binarydigit = ['0'-'1''_']
@@ -260,7 +260,7 @@ rule token = parse
   | "<-"                                { LtMinus }
   | "=>"                                { EqGt(r "=>") }
   | "<="				{ (LtEq(r"<=")) }
-  | "/*!"       { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf) }
+  | "/*!" wsc*  { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 false lexbuf) }
   | "//"        { line_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token lexbuf }
   | "/*"        { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token lexbuf }
   | "*/"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
@@ -308,15 +308,20 @@ and line_comment pos b = parse
   | _ as c                              { Buffer.add_string b (String.make 1 c); line_comment pos b lexbuf }
   | eof                                 { raise (LexError("File ended before newline in comment", pos)) }
 
-and doc_comment pos b depth = parse
-  | "/*!"                               { doc_comment pos b  (depth + 1) lexbuf }
-  | "/*"                                { doc_comment pos b (depth + 1) lexbuf }
-  | "*/"                                { if depth = 0 then Buffer.contents b
-					  else if depth > 0 then doc_comment pos b (depth - 1) lexbuf
+and doc_comment pos b depth lstart = parse
+  | "/*!"                               { doc_comment pos b (depth + 1) false lexbuf }
+  | "/*"                                { doc_comment pos b (depth + 1) false lexbuf }
+  | wsc* "*/"                           { if depth = 0 then Buffer.contents b
+					  else if depth > 0 then doc_comment pos b (depth - 1) false lexbuf
 					  else assert false }
   | eof                                 { raise (LexError("Unbalanced comment", pos)) }
-  | "\n"                                { Buffer.add_string b "\n"; Lexing.new_line lexbuf; doc_comment pos b depth lexbuf }
-  | _ as c                              { Buffer.add_string b (String.make 1 c); doc_comment pos b depth lexbuf }
+  | "\n"                                { Buffer.add_string b "\n"; Lexing.new_line lexbuf; doc_comment pos b depth true lexbuf }
+  | wsc* "*" wsc? as prefix             { if lstart then (
+                                            doc_comment pos b depth false lexbuf
+                                          ) else (
+                                            Buffer.add_string b prefix; doc_comment pos b depth false lexbuf
+                                          ) }
+  | _ as c                              { Buffer.add_string b (String.make 1 c); doc_comment pos b depth false lexbuf }
 
 and comment pos b depth = parse
   | "/*"                                { comment pos b (depth + 1) lexbuf }

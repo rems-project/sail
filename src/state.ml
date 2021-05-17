@@ -53,6 +53,7 @@ module Big_int = Nat_big_num
 open Initial_check
 open Type_check
 open Ast
+open Ast_defs
 open Ast_util
 open PPrint
 open Pretty_print_common
@@ -60,9 +61,9 @@ open Pretty_print_sail
 
 let opt_type_grouped_regstate = ref false
 
-let defs_of_string = ast_of_def_string
+let defs_of_string str = (ast_of_def_string str).defs
 
-let is_defined defs name = IdSet.mem (mk_id name) (ids_of_defs (Defs defs))
+let is_defined defs name = IdSet.mem (mk_id name) (ids_of_defs defs)
 
 let has_default_order defs =
   List.exists (function DEF_default (DT_aux (DT_order _, _)) -> true | _ -> false) defs
@@ -121,7 +122,7 @@ let generate_regstate registers =
       in
       TD_record (mk_id "regstate", mk_typquant [], fields, false)
   in
-  Defs [DEF_type (TD_aux (regstate_def, (Unknown, ())))]
+  [DEF_type (TD_aux (regstate_def, (Unknown, ())))]
 
 let generate_initial_regstate defs =
   let registers = find_registers defs in
@@ -278,7 +279,7 @@ let regval_instance_lem =
     "end";
   ]
 
-let add_regval_conv id typ (Defs defs) =
+let add_regval_conv id typ defs =
   let id = string_of_id id in
   let typ_str = to_string (doc_typ typ) in
   (* Create a function that converts from regval to the target type. *)
@@ -294,8 +295,8 @@ let add_regval_conv id typ (Defs defs) =
   let to_val = Printf.sprintf "val %s : %s -> register_value" to_name typ_str in
   let to_function = Printf.sprintf "function %s v = Regval_%s(v)" to_name id in
   let to_defs = if is_defined defs to_name then [] else [to_val; to_function] in
-  let cdefs = concat_ast (List.map defs_of_string (from_defs @ to_defs)) in
-  append_ast (Defs defs) cdefs
+  let cdefs = List.concat (List.map defs_of_string (from_defs @ to_defs)) in
+  defs @ cdefs
 
 let rec regval_convs_lem mwords (Typ_aux (t, _) as typ) = match t with
   | Typ_app _ when (is_vector_typ typ || is_bitvector_typ typ) && not (mwords && is_bitvector_typ typ) ->
@@ -396,7 +397,7 @@ let register_refs_lem mwords pp_tannot registers =
 (* TODO Generate well-typedness predicate for register states (and events),
    asserting that all lists representing non-bit-vectors have the right length. *)
 
-let generate_isa_lemmas mwords (Defs defs : tannot defs) =
+let generate_isa_lemmas mwords defs =
   let rec drop_while f = function
     | x :: xs when f x -> drop_while f xs
     | xs -> xs
@@ -596,12 +597,12 @@ let generate_regstate_defs mwords defs =
   in
   let defs =
     option_typ @ regval_typ @ regstate_typ @ initregstate
-    |> concat_ast
+    |> List.concat
     |> Bindings.fold add_regval_conv regtyps
   in
   Initial_check.opt_undefined_gen := gen_undef;
   defs
 
-let add_regstate_defs mwords env (Defs defs) =
-  let reg_defs, env = Type_error.check env (generate_regstate_defs mwords defs) in
-  env, append_ast (Defs defs) reg_defs
+let add_regstate_defs mwords env ast =
+  let reg_defs, env = Type_error.check_defs env (generate_regstate_defs mwords ast.defs) in
+  env, append_ast_defs ast reg_defs

@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Jib
 open Jib_compile
@@ -661,7 +662,7 @@ let rec insert_heap_returns ret_ctyps = function
         CDEF_fundef (id, Some gs, args, fix_early_heap_return (name gs) ret_ctyp body)
         :: insert_heap_returns ret_ctyps cdefs
      | Some ret_ctyp ->
-        CDEF_fundef (id, None, args, fix_early_stack_return (name gs) ret_ctyp (idecl ret_ctyp (name gs) :: body))
+        CDEF_fundef (id, None, args, fix_early_stack_return (name gs) ret_ctyp (idecl (id_loc id) ret_ctyp (name gs) :: body))
         :: insert_heap_returns ret_ctyps cdefs
      end
 
@@ -722,14 +723,14 @@ let hoist_allocations recursive_functions = function
      let rec hoist = function
        | I_aux (I_decl (ctyp, decl_id), annot) :: instrs when hoist_ctyp ctyp ->
           let hid = hoist_id () in
-          decls := idecl ctyp hid :: !decls;
+          decls := idecl (snd annot) ctyp hid :: !decls;
           cleanups := iclear ctyp hid :: !cleanups;
           let instrs = instrs_rename decl_id hid instrs in
           I_aux (I_reset (ctyp, hid), annot) :: hoist instrs
 
        | I_aux (I_init (ctyp, decl_id, cval), annot) :: instrs when hoist_ctyp ctyp ->
           let hid = hoist_id () in
-          decls := idecl ctyp hid :: !decls;
+          decls := idecl (snd annot) ctyp hid :: !decls;
           cleanups := iclear ctyp hid :: !cleanups;
           let instrs = instrs_rename decl_id hid instrs in
           I_aux (I_reinit (ctyp, hid, cval), annot) :: hoist instrs
@@ -1373,6 +1374,44 @@ let rec codegen_conversion l clexp cval =
   | CT_ref ctyp_to, ctyp_from ->
      codegen_conversion l (CL_addr clexp) cval
 
+  | CT_vector (_, ctyp_elem_to), CT_vector (_, ctyp_elem_from) ->
+     let i = ngensym () in
+     let from = ngensym () in
+     let into = ngensym () in
+     ksprintf string "  KILL(%s)(%s);" (sgen_ctyp_name ctyp_to) (sgen_clexp clexp) ^^ hardline
+     ^^ ksprintf string "  internal_vector_init_%s(%s, %s.len);" (sgen_ctyp_name ctyp_to) (sgen_clexp clexp) (sgen_cval cval) ^^ hardline
+     ^^ ksprintf string "  for (int %s = 0; %s < %s.len; %s++) {" (sgen_name i) (sgen_name i) (sgen_cval cval) (sgen_name i) ^^ hardline
+     ^^ (if is_stack_ctyp ctyp_elem_from then
+           ksprintf string "    %s %s = %s.data[%s];" (sgen_ctyp ctyp_elem_from) (sgen_name from) (sgen_cval cval) (sgen_name i)
+         else
+           ksprintf string "    %s %s;" (sgen_ctyp ctyp_elem_from) (sgen_name from) ^^ hardline
+           ^^ ksprintf string "    CREATE(%s)(&%s);" (sgen_ctyp_name ctyp_elem_from) (sgen_name from) ^^ hardline
+           ^^ ksprintf string "    COPY(%s)(&%s, %s.data[%s]);" (sgen_ctyp_name ctyp_elem_from) (sgen_name from) (sgen_cval cval) (sgen_name i)
+        )
+     ^^ hardline
+     ^^ ksprintf string "    %s %s;" (sgen_ctyp ctyp_elem_to) (sgen_name into)
+     ^^ (if is_stack_ctyp ctyp_elem_to then
+           empty
+         else
+           hardline ^^ ksprintf string "    CREATE(%s)(&%s);" (sgen_ctyp_name ctyp_elem_to) (sgen_name into)
+        )
+     ^^ nest 2 (hardline
+                ^^ codegen_conversion l (CL_id (into, ctyp_elem_to)) (V_id (from, ctyp_elem_from)))
+     ^^ hardline
+     ^^ (if is_stack_ctyp ctyp_elem_to then
+           ksprintf string "    %s.data[%s] = %s;" (sgen_clexp_pure clexp) (sgen_name i) (sgen_name into)
+         else
+           ksprintf string "    COPY(%s)(&((%s)->data[%s]), %s);" (sgen_ctyp_name ctyp_elem_to) (sgen_clexp clexp) (sgen_name i) (sgen_name into)
+           ^^ hardline ^^ ksprintf string "    KILL(%s)(&%s);" (sgen_ctyp_name ctyp_elem_to) (sgen_name into)
+        )
+     ^^ (if is_stack_ctyp ctyp_elem_from then
+           empty
+         else
+           hardline ^^ ksprintf string "    KILL(%s)(&%s);" (sgen_ctyp_name ctyp_elem_from) (sgen_name from)
+        )
+     ^^ hardline
+     ^^ string "  }"
+     
   (* If we have to convert between tuple types, convert the fields individually. *)
   | CT_tup ctyps_to, CT_tup ctyps_from when List.length ctyps_to = List.length ctyps_from ->
      let len = List.length ctyps_to in
@@ -1508,7 +1547,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      string (Printf.sprintf "  KILL(%s)(&%s);" (sgen_ctyp_name ctyp) (sgen_name id))
 
   | I_init (ctyp, id, cval) ->
-     codegen_instr fid ctx (idecl ctyp id) ^^ hardline
+     codegen_instr fid ctx (idecl l ctyp id) ^^ hardline
      ^^ codegen_conversion Parse_ast.Unknown (CL_id (id, ctyp)) cval
 
   | I_reinit (ctyp, id, cval) ->
@@ -2018,6 +2057,17 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ string "  }\n"
       ^^ string "}"
     in
+    let vector_equal =
+      let open Printf in
+         ksprintf string "static bool EQUAL(%s)(const %s op1, const %s op2) {\n" (sgen_id id) (sgen_id id) (sgen_id id)
+      ^^          string "  if (op1.len != op2.len) return false;\n"
+      ^^          string "  bool result = true;" 
+      ^^          string "  for (int i = 0; i < op1.len; i++) {\n"
+      ^^ ksprintf string "    result &= EQUAL(%s)(op1.data[i], op2.data[i]);" (sgen_ctyp_name ctyp)
+      ^^          string "  }\n"
+      ^^ ksprintf string "  return result;\n"
+      ^^          string "}"
+    in
     begin
       generated := IdSet.add id !generated;
       vector_typedef ^^ twice hardline
@@ -2027,6 +2077,7 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ vector_access ^^ twice hardline
       ^^ vector_set ^^ twice hardline
       ^^ vector_update ^^ twice hardline
+      ^^ vector_equal ^^ twice hardline
       ^^ internal_vector_update ^^ twice hardline
       ^^ internal_vector_init ^^ twice hardline
     end
@@ -2118,10 +2169,10 @@ let codegen_def' ctx = function
   | CDEF_let (number, bindings, instrs) ->
      let instrs = add_local_labels instrs in
      let setup =
-       List.concat (List.map (fun (id, ctyp) -> [idecl ctyp (name id)]) bindings)
+       List.concat (List.map (fun (id, ctyp) -> [idecl (id_loc id) ctyp (name id)]) bindings)
      in
      let cleanup =
-       List.concat (List.map (fun (id, ctyp) -> [iclear ctyp (name id)]) bindings)
+       List.concat (List.map (fun (id, ctyp) -> [iclear ~loc:(id_loc id) ctyp (name id)]) bindings)
      in
      separate_map hardline (fun (id, ctyp) -> string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))) bindings
      ^^ hardline ^^ string (Printf.sprintf "static void create_letbind_%d(void) " number)
@@ -2195,10 +2246,10 @@ let sgen_finish = function
      Printf.sprintf "  finish_%s();" (sgen_id id)
   | _ -> assert false
 
-let rec get_recursive_functions (Defs defs) =
+let rec get_recursive_functions defs =
   match defs with
   | DEF_internal_mutrec fundefs :: defs ->
-     IdSet.union (List.map id_of_fundef fundefs |> IdSet.of_list) (get_recursive_functions (Defs defs))
+     IdSet.union (List.map id_of_fundef fundefs |> IdSet.of_list) (get_recursive_functions defs)
 
   | (DEF_fundef fdef as def) :: defs ->
      let open Rewriter in
@@ -2215,11 +2266,11 @@ let rec get_recursive_functions (Defs defs) =
      let map_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp map_exp) } in
      let _ = rewrite_def map_defs def in
      if IdSet.mem (id_of_fundef fdef) !ids then
-       IdSet.add (id_of_fundef fdef) (get_recursive_functions (Defs defs))
+       IdSet.add (id_of_fundef fdef) (get_recursive_functions defs)
      else
-       get_recursive_functions (Defs defs)
+       get_recursive_functions defs
 
-  | _ :: defs -> get_recursive_functions (Defs defs)
+  | _ :: defs -> get_recursive_functions defs
   | [] -> IdSet.empty
 
 let jib_of_ast env ast =
@@ -2229,7 +2280,7 @@ let jib_of_ast env ast =
  
 let compile_ast env output_chan c_includes ast =
   try
-    let recursive_functions = Spec_analysis.top_sort_defs ast |> get_recursive_functions in
+    let recursive_functions = (Spec_analysis.top_sort_defs ast).defs |> get_recursive_functions in
 
     let cdefs, ctx = jib_of_ast env ast in
     let cdefs', _ = Jib_optimize.remove_tuples cdefs ctx in
@@ -2309,23 +2360,32 @@ let compile_ast env output_chan c_includes ast =
        @ [ "}" ] ))
     in
 
+    let model_pre_exit =
+      [ "void model_pre_exit()";
+        "{" ]
+      @ (if Util.is_some !opt_branch_coverage then
+         [ "  if (sail_coverage_exit() != 0) {";
+           "    fprintf(stderr, \"Could not write coverage information\\n\");";
+           "    exit(EXIT_FAILURE);";
+           "  }";
+           "}" ]
+         else
+           ["}"]
+        )
+      |> List.map string
+      |> separate hardline
+    in
+
     let model_default_main =
       ([ Printf.sprintf "%sint model_main(int argc, char *argv[])" (static ());
          "{";
          "  model_init();";
          "  if (process_arguments(argc, argv)) exit(EXIT_FAILURE);";
          Printf.sprintf "  %s(UNIT);" (sgen_function_id (mk_id "main"));
-         "  model_fini();" ]
-       @ (if Util.is_some !opt_branch_coverage then
-            [ "  if (sail_coverage_exit() != 0) {";
-              "    fprintf(stderr, \"Could not write coverage information\\n\");";
-              "    exit(EXIT_FAILURE);";
-              "  }" ]
-          else
-            []
-         )
-       @ [ "  return EXIT_SUCCESS;";
-           "}" ])
+         "  model_fini();";
+         "  model_pre_exit();";
+         "  return EXIT_SUCCESS;";
+         "}" ])
       |> List.map string
       |> separate hardline
     in
@@ -2343,6 +2403,7 @@ let compile_ast env output_chan c_includes ast =
                                  ^^ (if not !opt_no_rts then
                                        model_init ^^ hlhl
                                        ^^ model_fini ^^ hlhl
+                                       ^^ model_pre_exit ^^ hlhl
                                        ^^ model_default_main ^^ hlhl
                                      else
                                        empty)

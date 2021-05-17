@@ -48,6 +48,7 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
+open Ast_defs
 open Jib
 open Type_check
 
@@ -99,7 +100,7 @@ val optimize_alias : bool ref
 val optimize_fixed_int : bool ref
 val optimize_fixed_bits : bool ref
 
-val jib_of_ast : Env.t -> tannot Ast.defs -> cdef list * Jib_compile.ctx
-val compile_ast : Env.t -> out_channel -> string list -> tannot Ast.defs -> unit
+val jib_of_ast : Env.t -> tannot ast -> cdef list * Jib_compile.ctx
+val compile_ast : Env.t -> out_channel -> string list -> tannot ast -> unit
 
-val compile_ast_clib : Env.t -> tannot Ast.defs -> (Jib_compile.ctx -> cdef list -> unit) -> unit
+val compile_ast_clib : Env.t -> tannot ast -> (Jib_compile.ctx -> cdef list -> unit) -> unit

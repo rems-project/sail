@@ -11,6 +11,7 @@
 \usepackage{tikz}
 \usetikzlibrary{arrows}
 \usepackage{hyperref}
+\usepackage{parser_package}
 
 \hypersetup{colorlinks=true,linkcolor=DarkRed}
 
@@ -75,6 +76,9 @@
 %% \renewcommand{\ottrulehead}[3]{\multicolumn{9}{l}{$#1$\quad $#2$}}%
 %% \renewcommand{\ottprodline}[6]{\multicolumn{9}{l}{\quad$#1$\quad $#2$}}%
 
+% Pandoc 2.0 and above wrap lstinline with a dummy passthrough command for escaping purposes
+\newcommand{\passthrough}[1]{#1}
+
 \begin{document}
 
 \input{code_riscv}
@@ -110,6 +114,9 @@
 
 % Remove for now since incomplete
 %\include{types}
+
+\appendix
+\include{grammar_section}
 
 \bibliographystyle{unsrt}
 \bibliography{manual}

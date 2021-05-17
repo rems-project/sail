@@ -10,9 +10,12 @@ static uint64_t g_elf_entry;
 uint64_t g_cycle_count = 0;
 static uint64_t g_cycle_limit;
 
+extern void model_pre_exit();
+
 unit sail_exit(unit u)
 {
   fprintf(stderr, "[Sail] Exiting after %" PRIu64 " cycles\n", g_cycle_count);
+  model_pre_exit();
   exit(EXIT_SUCCESS);
   return UNIT;
 }
@@ -589,7 +592,7 @@ int process_arguments(int argc, char *argv[])
       break;
 
     case 'e':
-      load_elf(optarg, NULL, NULL);
+      load_elf(optarg, NULL, &g_elf_entry);
       break;
 
     case 'n':

@@ -51,6 +51,7 @@
 (** Rewrites for removing polymorphism from specifications *)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Type_check
 
@@ -72,7 +73,7 @@ val int_specialization_with_externs : specialization
    argument specifies what X should be - it should be one of:
    [is_int_kopt], [is_order_kopt], or [is_typ_kopt] from [Ast_util],
    or some combination of those. *)
-val polymorphic_functions : specialization -> 'a defs -> IdSet.t
+val polymorphic_functions : specialization -> 'a def list -> IdSet.t
 
 val add_initial_calls : IdSet.t -> unit
 
@@ -81,14 +82,14 @@ val add_initial_calls : IdSet.t -> unit
    AST with [Type_check.initial_env]. The env parameter is the
    environment to return if there is no polymorphism to remove, in
    which case specialize returns the AST unmodified. *)
-val specialize : specialization -> Env.t -> tannot defs -> tannot defs * Env.t
+val specialize : specialization -> Env.t -> tannot ast -> tannot ast * Env.t
 
 (** specialize' n performs at most n specialization passes. Useful for
    int_specialization which is not guaranteed to terminate. *)
-val specialize_passes : int -> specialization -> Env.t -> tannot defs -> tannot defs * Env.t
+val specialize_passes : int -> specialization -> Env.t -> tannot ast -> tannot ast * Env.t
 
 (** return all instantiations of a function id, with the
    instantiations filtered according to the specialization. *)
-val instantiations_of : specialization -> id -> tannot defs -> typ_arg KBindings.t list
+val instantiations_of : specialization -> id -> tannot ast -> typ_arg KBindings.t list
 
 val string_of_instantiation : typ_arg KBindings.t -> string

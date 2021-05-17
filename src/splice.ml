@@ -4,9 +4,10 @@
 *)
 
 open Ast
+open Ast_defs
 open Ast_util
 
-let scan_defs (Defs defs) =
+let scan_ast { defs; _ } =
   let scan (ids, specs) = function
     | DEF_fundef fd ->
        IdSet.add (id_of_fundef fd) ids, specs
@@ -18,7 +19,7 @@ let scan_defs (Defs defs) =
                     "Definition in splice file isn't a spec or function")
   in List.fold_left scan (IdSet.empty, Bindings.empty) defs
 
-let filter_old_ast repl_ids repl_specs (Defs defs) =
+let filter_old_ast repl_ids repl_specs { defs; _ } =
   let check (rdefs,spec_found) def =
     match def with
     | DEF_fundef fd ->
@@ -35,7 +36,7 @@ let filter_old_ast repl_ids repl_specs (Defs defs) =
   let rdefs, spec_found = List.fold_left check ([],IdSet.empty) defs in
   (List.rev rdefs, spec_found)
 
-let filter_replacements spec_found (Defs defs) =
+let filter_replacements spec_found { defs; _ } =
   let not_found = function
     | DEF_spec (VS_aux (VS_val_spec (_,id,_,_),_)) -> not (IdSet.mem id spec_found)
     | _ -> true
@@ -45,10 +46,9 @@ let splice ast file =
   let parsed_ast = Process_file.parse_file file |> snd in
   let repl_ast = Initial_check.process_ast ~generate:false (Parse_ast.Defs [(file, parsed_ast)]) in
   let repl_ast = Rewrites.move_loop_measures repl_ast in
-  let repl_ast = map_defs_annot (fun (l,_) -> l,Type_check.empty_tannot) repl_ast in
-  let repl_ids, repl_specs = scan_defs repl_ast in
+  let repl_ast = map_ast_annot (fun (l,_) -> l,Type_check.empty_tannot) repl_ast in
+  let repl_ids, repl_specs = scan_ast repl_ast in
   let defs1, specs_found = filter_old_ast repl_ids repl_specs ast in
   let defs2 = filter_replacements specs_found repl_ast in
-  let new_ast = Defs (defs1 @ defs2) in
-  Type_error.check Type_check.initial_env new_ast
+  Type_error.check Type_check.initial_env { ast with defs = defs1 @ defs2 }
 

@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Type_check
 open Rewriter
@@ -158,7 +159,7 @@ let const_prop target defs substs ksubsts exp =
   in
   Constant_propagation.const_prop
     target
-    (Defs defs)
+    defs
     (Constant_propagation.referenced_vars exp)
     (substs, nexp_substs)
     Bindings.empty
@@ -166,7 +167,7 @@ let const_prop target defs substs ksubsts exp =
   |> fst
 
 (* Propagate constant arguments into function clause pexp *)
-let prop_args_pexp target defs ksubsts args pexp =
+let prop_args_pexp target ast ksubsts args pexp =
   let pat, guard, exp, annot = destruct_pexp pexp in
   let pats = match pat with
     | P_aux (P_tup pats, _) -> pats
@@ -183,14 +184,14 @@ let prop_args_pexp target defs ksubsts args pexp =
     else (pat :: pats, substs)
   in
   let pats, substs = List.fold_right2 match_arg args pats ([], Bindings.empty) in
-  let exp' = const_prop target defs substs ksubsts exp in
+  let exp' = const_prop target ast substs ksubsts exp in
   let pat' = match pats with
     | [pat] -> pat
     | _ -> P_aux (P_tup pats, (Parse_ast.Unknown, empty_tannot))
   in
   construct_pexp (pat', guard, exp', annot)
 
-let rewrite_defs target env (Defs defs) =
+let rewrite_ast target env ({ defs; _ } as ast) =
   let rec rewrite = function
     | [] -> []
     | DEF_internal_mutrec mutrecs :: ds ->
@@ -205,7 +206,7 @@ let rewrite_defs target env (Defs defs) =
              | [] -> [infer_exp env (mk_lit_exp L_unit)]
              | args' -> args'
            in
-           if not (IdSet.mem id' (ids_of_defs (Defs !valspecs))) then begin
+           if not (IdSet.mem id' (ids_of_defs !valspecs)) then begin
              (* Generate copy of function with constant arguments propagated in *)
              let (FD_aux (FD_function (_, _, _, fcls), _)) =
                List.find (fun fd -> Id.compare id (id_of_fundef fd) = 0) mutrecs
@@ -213,7 +214,7 @@ let rewrite_defs target env (Defs defs) =
              let valspec, ksubsts = generate_val_spec env id args l annot in
              let const_prop_funcl (FCL_aux (FCL_Funcl (_, pexp), (l, _))) =
                let pexp' =
-                 prop_args_pexp target defs ksubsts args pexp
+                 prop_args_pexp target ast ksubsts args pexp
                  |> rewrite_pexp
                  |> strip_pexp
                in
@@ -234,7 +235,7 @@ let rewrite_defs target env (Defs defs) =
          let pexp' =
            if List.exists (fun id' -> Id.compare id id' = 0) !targets then
              let pat, guard, body, annot = destruct_pexp pexp in
-             let body' = const_prop target defs Bindings.empty KBindings.empty body in
+             let body' = const_prop target ast Bindings.empty KBindings.empty body in
              rewrite_pexp (construct_pexp (pat, guard, recheck_exp body', annot))
            else pexp
          in FCL_aux (FCL_Funcl (id, pexp'), a)
@@ -243,9 +244,9 @@ let rewrite_defs target env (Defs defs) =
          FD_aux (FD_function (ropt, topt, eopt, fcls'), a)
        in
        let mutrecs' = List.map (fun fd -> DEF_fundef (rewrite_fundef fd)) mutrecs in
-       let (Defs fdefs) = fst (check env (Defs (!valspecs @ !fundefs))) in
+       let fdefs = fst (check_defs env (!valspecs @ !fundefs)) in
        mutrecs' @ fdefs @ rewrite ds
     | d :: ds ->
        d :: rewrite ds
   in
-  Spec_analysis.top_sort_defs (Defs (rewrite defs))
+  Spec_analysis.top_sort_defs { ast with defs = rewrite defs }

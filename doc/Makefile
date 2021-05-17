@@ -69,12 +69,21 @@ code_myreplicatebits.tex: examples/my_replicate_bits.sail
 grammar.tex: ../language/sail.ott
 	ott -pp_grammar -tex_wrap false -tex_suppress_category I -tex_suppress_category D -tex_suppress_ntr terminals -tex_suppress_ntr formula -tex_suppress_ntr judgement -tex_suppress_ntr user_syntax -tex_suppress_ntr dec_comm -sort false -generate_aux_rules false  -picky_multiple_parses true -i ../language/sail.ott -o grammar.tex
 
+lexer_syntax.sed: ../src/lexer.mll
+	sed -n -e 's/^ *("\([A-Za-z0-9]*\)",[ \t]*(fun . -> \(.*\)));$//s\/{\2}\/{\\\\lstinline{\1}}\//p' \
+	  -e 's/^ *| "\([^"{}~&]\+\)"[ \t]*{ (\?\([A-Za-z]\+\)\((.*)\)\?)\? }$//s\/{\2}\/{\\\\lstinline"\1"}\//p' \
+	  < ../src/lexer.mll > lexer_syntax.sed
+
+parser_grammar.tex parser_package.sty: ../src/parser.mly lexer_syntax.sed extra_lexer_syntax.sed
+	obelisk latex -i -o parser_grammar.tex -prefix sail -package parser_package ../src/parser.mly
+	sed -i.bak -f lexer_syntax.sed -f extra_lexer_syntax.sed parser_package.sty
+
 internals.tex: internals.md
 	pandoc $< -f markdown -t latex --listings -o $@
 	sed -i.bak -f pandocfix.sed $@
 
 LATEXARG=manual.tex
-manual.pdf: grammar.tex introduction.tex usage.tex types.tex code_riscv.tex riscv.tex manual.tex manual.bib tutorial.tex internals.tex code_myreplicatebits.tex
+manual.pdf: grammar.tex introduction.tex usage.tex types.tex code_riscv.tex riscv.tex manual.tex manual.bib tutorial.tex internals.tex code_myreplicatebits.tex parser_grammar.tex parser_package.sty grammar_section.tex
 	pdflatex ${LATEXARG}
 	bibtex manual
 	pdflatex ${LATEXARG}
@@ -90,5 +99,6 @@ clean:
 	-rm -f internals.tex
 	-rm -rf code_myreplicatebits/
 	-rm -f code_myreplicatebits.tex
+	-rm -f lexer_syntax.sed parser_grammar.tex parser_package.sty
 	-rm -f *.aux
 	-rm -f *.log

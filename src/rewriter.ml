@@ -50,6 +50,7 @@
 
 module Big_int = Nat_big_num
 open Ast
+open Ast_defs
 open Ast_util
 open Type_check
 
@@ -60,7 +61,7 @@ type 'a rewriters = {
     rewrite_let  : 'a rewriters -> 'a letbind -> 'a letbind;
     rewrite_fun  : 'a rewriters -> 'a fundef -> 'a fundef;
     rewrite_def  : 'a rewriters -> 'a def -> 'a def;
-    rewrite_defs : 'a rewriters -> 'a defs -> 'a defs;
+    rewrite_ast  : 'a rewriters -> 'a ast -> 'a ast;
   }
 
 let effect_of_lexp (LEXP_aux (_,(_,a))) = effect_of_annot a
@@ -385,14 +386,14 @@ let rewrite_def rewriters d = match d with
   | DEF_measure (id,pat,exp) -> DEF_measure (id,rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
   | DEF_loop_measures (id,_) -> raise (Reporting.err_unreachable (id_loc id) __POS__ "DEF_loop_measures survived to rewriter")
 
-let rewrite_defs_base rewriters (Defs defs) =
+let rewrite_ast_base rewriters ast =
   let rec rewrite ds = match ds with
     | [] -> []
     | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds) in
-  Defs (rewrite defs)
+  { ast with defs = rewrite ast.defs }
 
-let rewrite_defs_base_progress prefix rewriters (Defs defs) =
-  let total = List.length defs in
+let rewrite_ast_base_progress prefix rewriters ast =
+  let total = List.length ast.defs in
   let rec rewrite n = function
     | [] -> []
     | d :: ds ->
@@ -400,7 +401,7 @@ let rewrite_defs_base_progress prefix rewriters (Defs defs) =
        let d = rewriters.rewrite_def rewriters d in
        d :: rewrite (n + 1) ds
   in
-  Defs (rewrite 1 defs)
+  { ast with defs = rewrite 1 ast.defs }
 
 let rec takedrop n xs =
   match n, xs with
@@ -410,56 +411,6 @@ let rec takedrop n xs =
      let ys, xs = takedrop (n - 1) xs in
      x :: ys, xs
 
-let rewrite_defs_base_parallel j rewriters (Defs defs) =
-  let module IntMap = Map.Make(struct type t = int let compare = compare end) in
-  let total = List.length defs in
-  let defs = ref defs in
-
-  (* We have a list of child processes in pids, and a mapping from pid
-     to result location in results. *)
-  let pids = ref [] in
-  let results = ref IntMap.empty in
-  for i = 1 to j do
-    let work = if i = 1 then total / j + total mod j else total / j in
-    let work, rest = takedrop work !defs in
-    (* Create a temporary file where the child process will return it's result *)
-    let result = Filename.temp_file "sail" ".rewrite" in
-    let pid = Unix.fork () in
-    begin
-      if pid = 0 then
-        let Defs work = rewrite_defs_base rewriters (Defs work) in
-        let out_chan = open_out result in
-        Marshal.to_channel out_chan work [Marshal.Closures];
-        close_out out_chan;
-        exit 0
-      else
-        (pids := pid :: !pids; results := IntMap.add pid result !results)
-    end;
-    defs := rest
-  done;
-  (* Make sure we haven't left any definitions behind! *)
-  assert(List.length !defs = 0);
-
-  let rewritten = ref [] in
-
-  (* Now we wait for all our child processes *)
-  while List.compare_length_with !pids 0 > 0 do
-    let child = List.hd !pids in
-    pids := List.tl !pids;
-    let _, status = Unix.waitpid [] child in
-    match status with
-    | WEXITED 0 ->
-       let result = IntMap.find child !results in
-       let in_chan = open_in result in
-       rewritten := Marshal.from_channel in_chan :: !rewritten;
-       close_in in_chan;
-       Sys.remove result
-    | _ ->
-       prerr_endline "Child process exited abnormally in parallel rewrite";
-       exit 1
-  done;
-  Defs (List.concat !rewritten)
-
 let rewriters_base =
   {rewrite_exp = rewrite_exp;
    rewrite_pat = rewrite_pat;
@@ -467,9 +418,9 @@ let rewriters_base =
    rewrite_lexp = rewrite_lexp;
    rewrite_fun = rewrite_fun;
    rewrite_def = rewrite_def;
-   rewrite_defs = rewrite_defs_base}
+   rewrite_ast = rewrite_ast_base}
 
-let rewrite_defs (Defs defs) = rewrite_defs_base rewriters_base (Defs defs)
+let rewrite_ast ast = rewrite_ast_base rewriters_base ast
 
 type ('a,'pat,'pat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux

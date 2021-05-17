@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Printf
 
@@ -59,7 +60,7 @@ let opt_auto_interpreter_rewrites = ref false
 
 let env = ref Type_check.initial_env
 
-let ast = ref (Defs [])
+let ast = ref empty_ast
 
 let arg str =
   ("<" ^ str ^ ">") |> Util.yellow |> Util.clear

@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open PPrint
 open Printf
@@ -58,6 +59,7 @@ module StringSet = Set.Make(String);;
 let opt_prefix = ref "sail"
 let opt_directory = ref "sail_latex"
 let opt_simple_val = ref true
+let opt_abbrevs = ref ["e.g."; "i.e."]
 
 let rec unique_postfix n =
   if n < 0 then
@@ -159,7 +161,7 @@ let category_name_simple = function
 (* Generate a unique latex identifier from a Sail identifier. We store
    a mapping from identifiers to strings in state so we always return
    the same latex id for a sail id. *)
-let latex_id id =
+let latex_id_raw id =
   if Bindings.mem id state.generated_names then
     Bindings.find id state.generated_names
   else
@@ -197,15 +199,40 @@ let latex_id id =
     state.generated_names <- Bindings.add id str state.generated_names;
     str
 
-let refcode_string str =
-  Str.global_replace (Str.regexp "_") "zy" (Util.zencode_string str)
+let latex_cat_id cat id = !opt_prefix ^ category_name cat ^ latex_id_raw id
 
-let refcode_id id = refcode_string (string_of_id id)
+let rec app_code (E_aux (exp, _)) =
+  match exp with
+  | E_app (f, [exp]) when Id.compare f (mk_id "Some") = 0 -> app_code exp
+  | E_app (f, [exp]) -> latex_id_raw f ^ app_code exp
+  | E_app (f, _) -> latex_id_raw f
+  | E_id id -> latex_id_raw id
+  | _ -> ""
+
+let refcode_cat_string cat str =
+  let refcode_str = Str.global_replace (Str.regexp "_") "zy" (Util.zencode_string str) in
+  !opt_prefix ^ category_name_val cat ^ refcode_str
+
+let refcode_cat_id prefix id = refcode_cat_string prefix (string_of_id id)
+
+let refcode_id = refcode_cat_id Val
+
+let refcode_string = refcode_cat_string Val
 
 let inline_code str = sprintf "\\lstinline{%s}" str
 
+let guard_abbrevs str =
+  let frags = List.map Str.quote !opt_abbrevs in
+  let alternation = String.concat "\\|" frags in
+  let regex = Str.regexp ("\\b\\(" ^ alternation ^ "\\)\\( \\|$\\)") in
+  (* We use this seemingly-unnecessary wrapper so consumers like
+     cheri-architecture that want to use \xpatch on our output don't run into
+     issues like https://tex.stackexchange.com/q/565659/175942. *)
+  Str.global_replace regex "\\saildocabbrev{\\1}\\2" str
+
 let text_code str =
   str
+  |> guard_abbrevs
   |> Str.global_replace (Str.regexp_string "_") "\\_"
   |> Str.global_replace (Str.regexp_string ">") "$<$"
   |> Str.global_replace (Str.regexp_string "<") "$>$"
@@ -226,21 +253,25 @@ let latex_of_markdown str =
     | Paragraph elems ->
        let prepend = if state.noindent then (state.noindent <- false; "\\noindent ") else "" in
        prepend ^ format elems ^ "\n\n"
-    | Text str -> Str.global_replace (Str.regexp_string "_") "\\_" str
+    | Text str -> text_code str
     | Emph elems -> sprintf "\\emph{%s}" (format elems)
     | Bold elems -> sprintf "\\textbf{%s}" (format elems)
     | Ref (r, "THIS", alt, _) ->
        begin match state.this with
-       | Some id -> sprintf "\\hyperref[%s]{%s}" (refcode_string (string_of_id id)) (replace_this alt)
+       | Some id -> sprintf "\\hyperref[%s]{%s}" (refcode_id id) (replace_this alt)
        | None -> failwith "Cannot create link to THIS"
        end
     | Ref (r, name, alt, _) ->
        (* special case for [id] (format as code) *)
        let format_fn = if name = alt then inline_code else replace_this in
-       begin match r#get_ref name with
-       | None -> sprintf "\\hyperref[%s]{%s}" (refcode_string name) (format_fn alt)
-       | Some (link, _) -> sprintf "\\hyperref[%s]{%s}" (refcode_string link) (format_fn alt)
-       end
+       (* Do not attempt to escape link destinations wrapped in <> *)
+       if Str.string_match (Str.regexp "<.+>") name 0 then
+         sprintf "\\hyperref[%s]{%s}" (String.sub name 1 ((String.length name) - 2)) (format_fn alt)
+       else
+         begin match r#get_ref name with
+         | None -> sprintf "\\hyperref[%s]{%s}" (refcode_string name) (format_fn alt)
+         | Some (link, _) -> sprintf "\\hyperref[%s]{%s}" (refcode_string link) (format_fn alt)
+         end
     | Url (href, text, "") ->
        sprintf "\\href{%s}{%s}" href (format text)
     | Url (href, text, reference) ->
@@ -254,13 +285,21 @@ let latex_of_markdown str =
        output_string chan code;
        close_out chan;
        sprintf "\\lstinputlisting[language=%s]{%s/block%s.%s}" lang !opt_directory uid lang
-    | Ul list ->
+    | (Ul list | Ulp list) ->
        "\\begin{itemize}\n\\item "
        ^ Util.string_of_list "\n\\item " format list
-       ^ "\n\\end{itemize}"
+       ^ "\n\\end{itemize}\n"
+    | (Ol list | Olp list) ->
+       "\\begin{enumerate}\n\\item "
+       ^ Util.string_of_list "\n\\item " format list
+       ^ "\n\\end{enumerate}\n"
+    | H1 header -> "\\section*{" ^ (format header) ^ "}\n"
+    | H2 header -> "\\subsection*{" ^ (format header) ^ "}\n"
+    | H3 header -> "\\subsubsection*{" ^ (format header) ^ "}\n"
+    | H4 header -> "\\paragraph*{" ^ (format header) ^ "}\n"
     | Br -> "\n"
     | NL -> "\n"
-    | elem -> failwith ("Can't convert to latex: " ^ to_text [elem])
+    | elem -> failwith ("Can't convert to latex: " ^ Omd_backend.sexpr_of_md [elem])
 
   and format elems =
     String.concat "" (List.map format_elem elems)
@@ -329,10 +368,6 @@ let doc_spec_simple (VS_aux (VS_val_spec (ts, id, ext, is_cast), _)) =
 
 let rec latex_command cat id no_loc ((l, _) as annot) =
   state.this <- Some id;
-  let labelling = match cat with
-    | Val -> sprintf "\\label{%s}" (refcode_id id)
-    | _ -> sprintf "\\label{%s%s}" (category_name cat) (refcode_id id)
-  in
   (* To avoid problems with verbatim environments in commands, we have
      to put the sail code for each command in a separate file. *)
   let code_file = category_name cat ^ Util.file_encode_string (string_of_id id) ^ ".tex" in
@@ -340,30 +375,17 @@ let rec latex_command cat id no_loc ((l, _) as annot) =
   let doc = if cat = Val then no_loc else latex_loc no_loc l in
   output_string chan (Pretty_print_sail.to_string doc);
   close_out chan;
-  let command = sprintf "\\%s%s%s" !opt_prefix (category_name cat) (latex_id id) in
+  let command = sprintf "\\%s" (latex_cat_id cat id) in
   if StringSet.mem command state.commands then
     (Reporting.warn "" l ("Multiple instances of " ^ string_of_id id ^ " only generating latex for the first"); empty)
   else
     begin
       state.commands <- StringSet.add command state.commands;
 
-      ksprintf string "\\newcommand{%s}{\\phantomsection%s\\saildoc%s{" command labelling (category_name_simple cat)
+      ksprintf string "\\newcommand{%s}{\\saildoclabelled{%s}{\\saildoc%s{" command (refcode_cat_id cat id) (category_name_simple cat)
       ^^ docstring l ^^ string "}{"
-      ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}}" (Filename.concat !opt_directory code_file)
+      ^^ ksprintf string "\\lstinputlisting[language=sail]{%s}}}}" (Filename.concat !opt_directory code_file)
     end
-
-let latex_label str id =
-  string (Printf.sprintf "\\label{%s:%s}" str (Util.zencode_string (string_of_id id)))
-
-let counter = ref 0
-
-let rec app_code (E_aux (exp, _)) =
-  match exp with
-  | E_app (f, [exp]) when Id.compare f (mk_id "Some") = 0 -> app_code exp
-  | E_app (f, [exp]) -> latex_id f ^ app_code exp
-  | E_app (f, _) -> latex_id f
-  | E_id id -> latex_id id
-  | _ -> ""
 
 let latex_funcls def =
   let module StringMap = Map.Make(String) in
@@ -427,8 +449,16 @@ let tdef_id = function
   | TD_enum (id, _, _) -> id
   | TD_bitfield (id, _, _) -> id
 
-let defs (Defs defs) =
+let defs { defs; _ } =
   reset_state state;
+
+  let preamble = string ("\\providecommand\\saildoclabelled[2]{\\phantomsection\\label{#1}#2}\n" ^
+    "\\providecommand\\saildocval[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocfcl[2]{#1 #2}\n" ^
+    "\\providecommand\\saildoctype[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocfn[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocoverload[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocabbrev[1]{#1\\@}\n\n") in
 
   let overload_counter = ref 0 in
 
@@ -488,20 +518,21 @@ let defs (Defs defs) =
      identifiers then outputs the correct mangled command. *)
   let id_command cat ids =
     sprintf "\\newcommand{\\%s%s}[1]{\n  " !opt_prefix (category_name cat)
-    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\%s%s%s}{}" (string_of_id id) !opt_prefix (category_name cat) (latex_id id))
+    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\%s}{}" (text_code (string_of_id id)) (latex_cat_id cat id))
                           (IdSet.elements ids)
     ^ "}"
     |> string
   in
   let ref_command cat ids =
     sprintf "\\newcommand{\\%sref%s}[2]{\n  " !opt_prefix (category_name cat)
-    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\hyperref[%s%s]{#2}}{}" (string_of_id id) (category_name_val cat) (refcode_id id))
+    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\hyperref[%s]{#2}}{}" (string_of_id id) (refcode_cat_id cat id))
                           (IdSet.elements ids)
     ^ "}"
     |> string
   in
 
-  tex
+  preamble
+  ^^ tex
   ^^ separate (twice hardline) [id_command Val !valspecs;
                                 ref_command Val !valspecs;
                                 id_command Function !fundefs;

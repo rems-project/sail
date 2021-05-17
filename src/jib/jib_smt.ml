@@ -50,6 +50,7 @@
 
 open Anf
 open Ast
+open Ast_defs
 open Ast_util
 open Jib
 open Jib_util
@@ -90,7 +91,7 @@ type ctx = {
     tc_env : Type_check.Env.t;
     pragma_l : Ast.l;
     arg_stack : (int * string) Stack.t;
-    ast : Type_check.tannot defs;
+    ast : Type_check.tannot ast;
     shared : ctyp Bindings.t;
     preserved : IdSet.t;
     events : smt_exp Stack.t EventMap.t ref;
@@ -117,7 +118,7 @@ let initial_ctx () = {
     tc_env = Type_check.initial_env;
     pragma_l = Parse_ast.Unknown;
     arg_stack = Stack.create ();
-    ast = Defs [];
+    ast = empty_ast;
     shared = Bindings.empty;
     preserved = IdSet.empty;
     events = ref EventMap.empty;
@@ -1961,7 +1962,7 @@ let rec find_function lets id = function
   | CDEF_fundef (id', heap_return, args, body) :: _ when Id.compare id id' = 0 ->
      lets, Some (heap_return, args, body)
   | CDEF_let (_, vars, setup) :: cdefs ->
-     let vars = List.map (fun (id, ctyp) -> idecl ctyp (global id)) vars in
+     let vars = List.map (fun (id, ctyp) -> idecl (id_loc id) ctyp (global id)) vars in
      find_function (lets @ vars @ setup) id cdefs;
   | _ :: cdefs ->
      find_function lets id cdefs
@@ -2147,7 +2148,7 @@ let expand_reg_deref env register_map = function
            let try_reg r =
              let next_label = label "next_reg_write_" in
              [ijump l (V_call (Neq, [V_lit (VL_ref (string_of_id r), reg_ctyp); V_id (id, ctyp)])) next_label;
-              ifuncall (CL_id (global r, reg_ctyp)) function_id args;
+              ifuncall l (CL_id (global r, reg_ctyp)) function_id args;
               igoto end_label;
               ilabel next_label]
            in
@@ -2269,7 +2270,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
         (* When we create each argument declaration, give it a unique
            location from the $property pragma, so we can identify it later. *)
         let arg_decls =
-          List.map2 (fun id ctyp -> let l = unique pragma_l in idecl ~loc:l ctyp (name id)) args arg_ctyps
+          List.map2 (fun id ctyp -> let l = unique pragma_l in idecl l ctyp (name id)) args arg_ctyps
         in
         let instrs =
           let open Jib_optimize in
@@ -2327,7 +2328,7 @@ let smt_cdef props lets name_file ctx all_cdefs = function
 let rec smt_cdefs props lets name_file ctx ast =
   function
   | CDEF_let (_, vars, setup) :: cdefs ->
-     let vars = List.map (fun (id, ctyp) -> idecl ctyp (global id)) vars in
+     let vars = List.map (fun (id, ctyp) -> idecl (id_loc id) ctyp (global id)) vars in
      smt_cdefs props (lets @ vars @ setup) name_file ctx ast cdefs;
   | cdef :: cdefs ->
      smt_cdef props lets name_file ctx ast cdef;

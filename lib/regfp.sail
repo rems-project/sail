@@ -174,6 +174,10 @@ val __write_memt
   = { ocaml: "Platform.write_memt", c: "platform_write_memt", _: "write_memt" }
   : forall 'n (constant 'addrsize : Int), 'n > 0 & 'addrsize in {32, 64}.
   (write_kind, bits('addrsize), int('n), bits(8 * 'n), bit) -> bool effect {wmvt}
+val __write_tag
+  = { ocaml: "Platform.write_tag", c: "platform_write_tag", _: "write_tag" }
+  : forall (constant 'addrsize : Int), 'addrsize in {32, 64}.
+  (write_kind, bits('addrsize), bit) -> bool effect {wmvt}
 val __excl_res
   = { ocaml: "Platform.excl_res", c: "platform_excl_res", _: "excl_result" }
   : unit -> bool effect {exmem}

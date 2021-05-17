@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Jib
 open Jib_util
@@ -225,11 +226,19 @@ let append_into_block instrs instr =
   | [] -> instr
   | _ -> iblock (instrs @ [instr])
 
-let coverage_branch_taken branch_id (AE_aux (_, _, l)) =
+let rec find_aexp_loc (AE_aux (e, _, l)) =
+  match Reporting.simp_loc l with
+  | Some _ -> l
+  | None ->
+    match e with
+    | AE_cast (e',_) -> find_aexp_loc e'
+    | _ -> l
+
+let coverage_branch_taken branch_id aexp =
   match C.branch_coverage with
   | None -> []
   | Some out -> begin
-     match coverage_loc_args l with
+     match coverage_loc_args (find_aexp_loc aexp) with
      | None -> []
      | Some args ->
         Printf.fprintf out "%s\n" ("B " ^ args);
@@ -253,7 +262,7 @@ let rec compile_aval l ctx = function
      let ctyp' = ctyp_of_typ ctx typ in
      if not (ctyp_equal ctyp ctyp') then
        let gs = ngensym () in
-       [iinit ctyp' gs cval], V_id (gs, ctyp'), [iclear ctyp' gs]
+       [iinit l ctyp' gs cval], V_id (gs, ctyp'), [iclear ctyp' gs]
      else
        [], cval, []
 
@@ -276,13 +285,13 @@ let rec compile_aval l ctx = function
 
   | AV_lit (L_aux (L_num n, _), typ) when Big_int.less_equal (min_int 64) n && Big_int.less_equal n (max_int 64) ->
      let gs = ngensym () in
-     [iinit CT_lint gs (V_lit (VL_int n, CT_fint 64))],
+     [iinit l CT_lint gs (V_lit (VL_int n, CT_fint 64))],
      V_id (gs, CT_lint),
      [iclear CT_lint gs]
 
   | AV_lit (L_aux (L_num n, _), typ) ->
      let gs = ngensym () in
-     [iinit CT_lint gs (V_lit (VL_string (Big_int.to_string n), CT_string))],
+     [iinit l CT_lint gs (V_lit (VL_string (Big_int.to_string n), CT_string))],
      V_id (gs, CT_lint),
      [iclear CT_lint gs]
 
@@ -297,7 +306,7 @@ let rec compile_aval l ctx = function
        [], V_lit (VL_real str, CT_real), []
      else
        let gs = ngensym () in
-       [iinit CT_real gs (V_lit (VL_string str, CT_string))],
+       [iinit l CT_real gs (V_lit (VL_string str, CT_string))],
        V_id (gs, CT_real),
        [iclear CT_real gs]
 
@@ -318,7 +327,7 @@ let rec compile_aval l ctx = function
      let tup_ctyp = CT_tup (List.map cval_ctyp cvals) in
      let gs = ngensym () in
      setup
-     @ [idecl tup_ctyp gs]
+     @ [idecl l tup_ctyp gs]
      @ List.mapi (fun n cval -> icopy l (CL_tuple (CL_id (gs, tup_ctyp), n)) cval) cvals,
      V_id (gs, CT_tup (List.map cval_ctyp cvals)),
      [iclear tup_ctyp gs]
@@ -337,7 +346,7 @@ let rec compile_aval l ctx = function
      let setup = List.concat (List.map (fun (s, _, _) -> s) field_triples) in
      let fields = List.map (fun (_, f, _) -> f) field_triples in
      let cleanup = List.concat (List.map (fun (_, _, c) -> c) field_triples) in
-     [idecl ctyp gs],
+     [idecl l ctyp gs],
      V_struct (fields, ctyp),
      [iclear ctyp gs]
 
@@ -350,7 +359,7 @@ let rec compile_aval l ctx = function
        @ [icopy l (CL_field (CL_id (gs, ctyp), (id, []))) cval]
        @ field_cleanup
      in
-     [idecl ctyp gs]
+     [idecl l ctyp gs]
      @ List.concat (List.map compile_fields (Bindings.bindings fields)),
      V_id (gs, ctyp),
      [iclear ctyp gs]
@@ -362,7 +371,7 @@ let rec compile_aval l ctx = function
            [], V_lit (VL_bits ([], ord), vector_ctyp), []
         | _ ->
         let gs = ngensym () in
-        [idecl vector_ctyp gs;
+        [idecl l vector_ctyp gs;
          iextern (CL_id (gs, vector_ctyp)) (mk_id "internal_vector_init", []) [V_lit (VL_int Big_int.zero, CT_fint 64)]],
         V_id (gs, vector_ctyp),
         [iclear vector_ctyp gs]
@@ -392,10 +401,10 @@ let rec compile_aval l ctx = function
      let first_chunk = bitstring (Util.take (len mod 64) avals) in
      let chunks = Util.drop (len mod 64) avals |> chunkify 64 |> List.map bitstring in
      let gs = ngensym () in
-     [iinit (CT_lbits true) gs (V_lit (first_chunk, CT_fbits (len mod 64, true)))]
-     @ List.map (fun chunk -> ifuncall (CL_id (gs, CT_lbits true))
-                                       (mk_id "append_64", [])
-                                       [V_id (gs, CT_lbits true); V_lit (chunk, CT_fbits (64, true))]) chunks,
+     [iinit l (CT_lbits true) gs (V_lit (first_chunk, CT_fbits (len mod 64, true)))]
+     @ List.map (fun chunk -> ifuncall l (CL_id (gs, CT_lbits true))
+                                (mk_id "append_64", [])
+                                [V_id (gs, CT_lbits true); V_lit (chunk, CT_fbits (64, true))]) chunks,
      V_id (gs, CT_lbits true),
      [iclear (CT_lbits true) gs]
 
@@ -424,7 +433,7 @@ let rec compile_aval l ctx = function
                      [V_id (gs, ctyp); V_lit (VL_int (Big_int.of_int i), CT_constant (Big_int.of_int i)); cval]]
           @ cleanup
      in
-     [idecl ctyp gs;
+     [idecl l ctyp gs;
       icopy l (CL_id (gs, ctyp)) (V_lit (VL_bits (Util.list_init len (fun _ -> Sail2_values.B0), direction), ctyp))]
      @ List.concat (List.mapi aval_mask (List.rev avals)),
      V_id (gs, ctyp),
@@ -449,7 +458,7 @@ let rec compile_aval l ctx = function
                   [V_id (gs, vector_ctyp); V_lit (VL_int (Big_int.of_int i), CT_fint 64); cval]]
        @ cleanup
      in
-     [idecl vector_ctyp gs;
+     [idecl l vector_ctyp gs;
       iextern (CL_id (gs, vector_ctyp)) (mk_id "internal_vector_init", []) [V_lit (VL_int (Big_int.of_int len), CT_fint 64)]]
      @ List.concat (List.mapi aval_set (if direction then List.rev avals else avals)),
      V_id (gs, vector_ctyp),
@@ -468,7 +477,7 @@ let rec compile_aval l ctx = function
        let setup, cval, cleanup = compile_aval l ctx aval in
        setup @ [iextern (CL_id (gs, CT_list ctyp)) (mk_id "cons", [ctyp]) [cval; V_id (gs, CT_list ctyp)]] @ cleanup
      in
-     [idecl (CT_list ctyp) gs]
+     [idecl l (CT_list ctyp) gs]
      @ List.concat (List.map mk_cons (List.rev avals)),
      V_id (gs, CT_list ctyp),
      [iclear (CT_list ctyp) gs]
@@ -487,18 +496,18 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
             cval
           else
             let gs = ngensym () in
-            setup := iinit ctyp gs cval :: !setup;
+            setup := iinit l ctyp gs cval :: !setup;
             cleanup := iclear ctyp gs :: !cleanup;
             V_id (gs, ctyp))
         arg_ctyps args
     in
     if C.specialize_calls || ctyp_equal (clexp_ctyp clexp) ret_ctyp then
-      !setup @ [ifuncall clexp id cast_args] @ !cleanup
+      !setup @ [ifuncall l clexp id cast_args] @ !cleanup
     else
       let gs = ngensym () in
       List.rev !setup
-      @ [idecl ret_ctyp gs;
-         ifuncall (CL_id (gs, ret_ctyp)) id cast_args;
+      @ [idecl l ret_ctyp gs;
+         ifuncall l (CL_id (gs, ret_ctyp)) id cast_args;
          icopy l clexp (V_id (gs, ret_ctyp));
          iclear ret_ctyp gs]
       @ !cleanup
@@ -508,7 +517,7 @@ let optimize_call l ctx clexp id args arg_ctyps ret_ctyp =
     begin match extern, List.map cval_ctyp args, clexp_ctyp clexp with
     | "slice", [CT_fbits _; CT_lint; _], CT_fbits (n, _) ->
        let start = ngensym () in
-       [iinit (CT_fint 64) start (List.nth args 1);
+       [iinit l (CT_fint 64) start (List.nth args 1);
         icopy l clexp (V_call (Slice n, [List.nth args 0; V_id (start, CT_fint 64)]))]
     | "sail_unsigned", [CT_fbits _], CT_fint 64 ->
        [icopy l clexp (V_call (Unsigned 64, [List.nth args 0]))]
@@ -579,20 +588,20 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
 
   | AP_id (pid, _) when is_ct_enum ctyp ->
      begin match Env.lookup_id pid ctx.tc_env with
-     | Unbound -> [idecl ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx
+     | Unbound -> [idecl l ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx
      | _ -> [ijump l (V_call (Neq, [V_id (name pid, ctyp); cval])) case_label], [], ctx
      end
 
   | AP_id (pid, typ) ->
      let id_ctyp = ctyp_of_typ ctx typ in
      let ctx = { ctx with locals = Bindings.add pid (Immutable, id_ctyp) ctx.locals } in
-     [idecl id_ctyp (name pid); icopy l (CL_id (name pid, id_ctyp)) cval], [iclear id_ctyp (name pid)], ctx
+     [idecl l id_ctyp (name pid); icopy l (CL_id (name pid, id_ctyp)) cval], [iclear id_ctyp (name pid)], ctx
 
   | AP_as (apat, id, typ) ->
      let id_ctyp = ctyp_of_typ ctx typ in
      let instrs, cleanup, ctx = compile_match ctx apat cval case_label in
      let ctx = { ctx with locals = Bindings.add id (Immutable, id_ctyp) ctx.locals } in
-     instrs @ [idecl id_ctyp (name id); icopy l (CL_id (name id, id_ctyp)) cval], iclear id_ctyp (name id) :: cleanup, ctx
+     instrs @ [idecl l id_ctyp (name id); icopy l (CL_id (name id, id_ctyp)) cval], iclear id_ctyp (name id) :: cleanup, ctx
 
   | AP_tup apats ->
      begin
@@ -677,7 +686,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let binding_ctyp = ctyp_of_typ { ctx with local_env = body_env } binding_typ in
      let setup, call, cleanup = compile_aexp ctx binding in
      let letb_setup, letb_cleanup =
-       [idecl binding_ctyp (name id);
+       [idecl l binding_ctyp (name id);
         iblock1 (setup @ [call (CL_id (name id, binding_ctyp))] @ cleanup)],
        [iclear binding_ctyp (name id)]
      in
@@ -716,11 +725,11 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        let case_instrs =
          destructure
          @ (if not trivial_guard then
-              guard_setup @ [idecl CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
+              guard_setup @ [idecl l CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
               @ [iif l (V_call (Bnot, [V_id (gs, CT_bool)])) (destructure_cleanup @ [igoto case_label]) [] CT_unit]
             else [])
-         @ body_setup
          @ (if num_cases > 1 then coverage_branch_taken branch_id body else [])
+         @ body_setup
          @ [body_call (CL_id (case_return_id, ctyp))] @ body_cleanup @ destructure_cleanup
          @ [igoto finish_match_label]
        in
@@ -731,7 +740,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      in
      aval_setup
      @ (if num_cases > 1 then on_reached else [])
-     @ [idecl ctyp case_return_id]
+     @ [idecl l ctyp case_return_id]
      @ List.concat (List.map compile_case cases)
      @ [imatch_failure ()]
      @ [ilabel finish_match_label],
@@ -760,7 +769,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        let case_instrs =
          destructure @ [icomment "end destructuring"]
          @ (if not trivial_guard then
-              guard_setup @ [idecl CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
+              guard_setup @ [idecl l CT_bool gs; guard_call (CL_id (gs, CT_bool))] @ guard_cleanup
               @ [ijump l (V_call (Bnot, [V_id (gs, CT_bool)])) try_label]
               @ [icomment "end guard"]
             else [])
@@ -770,7 +779,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        [iblock case_instrs; ilabel try_label]
      in
      assert (ctyp_equal ctyp (ctyp_of_typ ctx typ));
-     [idecl ctyp try_return_id;
+     [idecl l ctyp try_return_id;
       itry_block (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
       ijump l (V_call (Bnot, [V_id (have_exception, CT_bool)])) post_exception_handlers_label;
       icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool false, CT_bool))]
@@ -818,7 +827,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
        @ field_cleanup
      in
      let setup, cval, cleanup = compile_aval l ctx aval in
-     [idecl ctyp gs]
+     [idecl l ctyp gs]
      @ setup
      @ [icopy l (CL_id (gs, ctyp)) cval]
      @ cleanup
@@ -827,27 +836,33 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      [iclear ctyp gs]
 
   | AE_short_circuit (SC_and, aval, aexp) ->
+     let branch_id, on_reached = coverage_branch_reached l in
      let left_setup, cval, left_cleanup = compile_aval l ctx aval in
      let right_setup, call, right_cleanup = compile_aexp ctx aexp in
+     let right_coverage = coverage_branch_taken branch_id aexp in
      let gs = ngensym () in
      left_setup
-     @ [ idecl CT_bool gs;
+     @ on_reached
+     @ [ idecl l CT_bool gs;
          iif l cval
-             (right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
+             (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
              [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool false, CT_bool))]
              CT_bool ]
      @ left_cleanup,
      (fun clexp -> icopy l clexp (V_id (gs, CT_bool))),
      []
   | AE_short_circuit (SC_or, aval, aexp) ->
+     let branch_id, on_reached = coverage_branch_reached l in
      let left_setup, cval, left_cleanup = compile_aval l ctx aval in
      let right_setup, call, right_cleanup = compile_aexp ctx aexp in
+     let right_coverage = coverage_branch_taken branch_id aexp in
      let gs = ngensym () in
      left_setup
-     @ [ idecl CT_bool gs;
+     @ on_reached
+     @ [ idecl l CT_bool gs;
          iif l cval
              [icopy l (CL_id (gs, CT_bool)) (V_lit (VL_bool true, CT_bool))]
-             (right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
+             (right_coverage @ right_setup @ [call (CL_id (gs, CT_bool))] @ right_cleanup)
              CT_bool ]
      @ left_cleanup,
      (fun clexp -> icopy l clexp (V_id (gs, CT_bool))),
@@ -884,7 +899,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let gs = ngensym () in
      let unit_gs = ngensym () in
      let loop_test = V_call (Bnot, [V_id (gs, CT_bool)]) in
-     [idecl CT_bool gs; idecl CT_unit unit_gs]
+     [idecl l CT_bool gs; idecl l CT_unit unit_gs]
      @ [ilabel loop_start_label]
      @ [iblock (cond_setup
                 @ [cond_call (CL_id (gs, CT_bool))]
@@ -906,7 +921,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let gs = ngensym () in
      let unit_gs = ngensym () in
      let loop_test = V_id (gs, CT_bool) in
-     [idecl CT_bool gs; idecl CT_unit unit_gs]
+     [idecl l CT_bool gs; idecl l CT_unit unit_gs]
      @ [ilabel loop_start_label]
      @ [iblock (body_setup
                 @ [body_call (CL_id (unit_gs, CT_unit))]
@@ -934,7 +949,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
          [ireturn cval]
        else
          let gs = ngensym () in
-         [idecl fn_return_ctyp gs;
+         [idecl l fn_return_ctyp gs;
           icopy l (CL_id (gs, fn_return_ctyp)) cval;
           ireturn (V_id (gs, fn_return_ctyp))]
      in
@@ -992,7 +1007,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      let step_setup, step_call, step_cleanup = compile_aexp ctx loop_step in
      let step_gs = ngensym () in
      let variable_init gs setup call cleanup =
-       [idecl (CT_fint 64) gs;
+       [idecl l (CT_fint 64) gs;
         iblock (setup @ [call (CL_id (gs, CT_fint 64))] @ cleanup)]
      in
 
@@ -1021,9 +1036,9 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      variable_init from_gs from_setup from_call from_cleanup
      @ variable_init to_gs to_setup to_call to_cleanup
      @ variable_init step_gs step_setup step_call step_cleanup
-     @ [iblock ([idecl (CT_fint 64) loop_var;
+     @ [iblock ([idecl l (CT_fint 64) loop_var;
                  icopy l (CL_id (loop_var, (CT_fint 64))) (V_id (from_gs, CT_fint 64));
-                 idecl CT_unit body_gs]
+                 idecl l CT_unit body_gs]
                 @ body
                 @ [ilabel loop_end_label])],
      (fun clexp -> icopy l clexp unit_cval),
@@ -1031,11 +1046,11 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
 
 and compile_block ctx = function
   | [] -> []
-  | exp :: exps ->
+  | (AE_aux (_, _, l) as exp) :: exps ->
      let setup, call, cleanup = compile_aexp ctx exp in
      let rest = compile_block ctx exps in
      let gs = ngensym () in
-     iblock (setup @ [idecl CT_unit gs; call (CL_id (gs, CT_unit))] @ cleanup) :: rest
+     iblock (setup @ [idecl l CT_unit gs; call (CL_id (gs, CT_unit))] @ cleanup) :: rest
 
 let fast_int = function
   | CT_lint when !optimize_aarch64_fast_struct -> CT_fint 64
@@ -1194,7 +1209,7 @@ let rec compile_arg_pats ctx label (P_aux (p_aux, (l, _)) as pat) ctyps =
      let arg_id, (destructure, cleanup) = compile_arg_pat ctx label pat (CT_tup ctyps) in
      let new_ids = List.map (fun ctyp -> gensym (), ctyp) ctyps in
      destructure
-     @ [idecl (CT_tup ctyps) (name arg_id)]
+     @ [idecl l (CT_tup ctyps) (name arg_id)]
      @ List.mapi (fun i (id, ctyp) -> icopy l (CL_tuple (CL_id (name arg_id, CT_tup ctyps), i)) (V_id (name id, ctyp))) new_ids,
      List.map (fun (id, _) -> id, ([], [])) new_ids,
      [iclear (CT_tup ctyps) (name arg_id)]
@@ -1300,14 +1315,14 @@ let compile_funcl ctx id pat guard exp =
   let guard_bindings = ref IdSet.empty in
   let guard_instrs = match guard with
     | Some guard ->
-       let guard = anf guard in
+       let (AE_aux (_, _, l) as guard) = anf guard in
        guard_bindings := aexp_bindings guard;
        let guard_aexp = C.optimize_anf ctx (no_shadow (pat_ids pat) guard) in
        let guard_setup, guard_call, guard_cleanup = compile_aexp ctx guard_aexp in
        let guard_label = label "guard_" in
        let gs = ngensym () in
        [iblock (
-            [idecl CT_bool gs]
+            [idecl l CT_bool gs]
             @ guard_setup
             @ [guard_call (CL_id (gs, CT_bool))]
             @ guard_cleanup
@@ -1428,7 +1443,7 @@ and compile_def' n total ctx = function
      let end_label = label "let_end_" in
      let destructure, destructure_cleanup, _ = compile_match ctx apat (V_id (gs, ctyp)) end_label in
      let gs_setup, gs_cleanup =
-       [idecl ctyp gs], [iclear ctyp gs]
+       [idecl (exp_loc exp) ctyp gs], [iclear ctyp gs]
      in
      let bindings = List.map (fun (id, typ) -> id, ctyp_of_typ ctx typ) (apat_globals apat) in
      let n = !letdef_count in
@@ -1500,7 +1515,7 @@ let rec specialize_variants ctx prior =
            [], unpoly cval, []
          else
            let gs = ngensym () in
-           [idecl suprema gs;
+           [idecl l suprema gs;
             icopy l (CL_id (gs, suprema)) (unpoly cval)],
            V_id (gs, suprema),
            [iclear suprema gs]
@@ -1641,7 +1656,7 @@ let sort_ctype_defs cdefs =
 
   ctype_defs @ cdefs
 
-let compile_ast ctx (Defs defs) =
+let compile_ast ctx ast =
   if !opt_memo_cache then
     (try
        if Sys.is_directory "_sbuild" then
@@ -1652,9 +1667,9 @@ let compile_ast ctx (Defs defs) =
      | Sys_error _ -> Unix.mkdir "_sbuild" 0o775)
   else ();
 
-  let total = List.length defs in
+  let total = List.length ast.defs in
   let _, chunks, ctx =
-    List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) defs
+    List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) ast.defs
   in
   let cdefs = List.concat (List.rev chunks) in
   let cdefs, ctx = specialize_variants ctx [] cdefs in
@@ -1668,4 +1683,4 @@ let add_special_functions env =
   let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
   let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
 
-  snd (Type_error.check env (Defs [assert_vs; exit_vs; cons_vs]))
+  snd (Type_error.check_defs env [assert_vs; exit_vs; cons_vs])

@@ -1,0 +1,16 @@
+FROM ubuntu
+
+# Install apt deps
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates build-essential libgmp-dev z3 libz3-dev opam rsync pkg-config m4 zlib1g-dev
+
+# Configure opam
+RUN opam init -y --no-setup --compiler=4.10.0 --shell=sh --disable-sandboxing
+
+# Copy code
+WORKDIR /sail-src
+COPY . /sail-src
+
+# build
+RUN opam pin -y add sail $PWD
+
+ENTRYPOINT [ "/sail-src/docker_entry_point.sh" ]

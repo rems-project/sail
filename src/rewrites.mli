@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Type_check
 
 (* Monomorphisation options *)
@@ -64,17 +65,17 @@ val opt_dmono_continue : bool ref
 val fresh_id : string -> l -> id
 
 (* Move loop termination measures into loop AST nodes *)
-val move_loop_measures : 'a defs -> 'a defs
+val move_loop_measures : 'a ast -> 'a ast
 
 (* Re-write undefined to functions created by -undefined_gen flag *)
-val rewrite_undefined : bool -> Env.t -> tannot defs -> tannot defs
+val rewrite_undefined : bool -> Env.t -> tannot ast -> tannot ast
 
 (* Perform rewrites to create an AST supported for a specific target *)
-val rewrite_defs_target : string -> (string * (Env.t -> tannot defs -> tannot defs * Env.t)) list
+val rewrite_ast_target : string -> (string * (Env.t -> tannot ast -> tannot ast * Env.t)) list
 
 type rewriter =
-  | Basic_rewriter of (Env.t -> tannot defs -> tannot defs)
-  | Checking_rewriter of (Env.t -> tannot defs -> tannot defs * Env.t)
+  | Basic_rewriter of (Env.t -> tannot ast -> tannot ast)
+  | Checking_rewriter of (Env.t -> tannot ast -> tannot ast * Env.t)
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
@@ -98,6 +99,6 @@ val opt_coq_warn_nonexhaustive : bool ref
 
 (* This is a special rewriter pass that checks AST invariants without
    actually doing any re-writing *)
-val rewrite_defs_check : (string * (Env.t -> tannot defs -> tannot defs * Env.t)) list
+val rewrite_ast_check : (string * (Env.t -> tannot ast -> tannot ast * Env.t)) list
 
 val simple_typ : typ -> typ

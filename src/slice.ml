@@ -49,6 +49,7 @@
 (**************************************************************************)
 
 open Ast
+open Ast_defs
 open Ast_util
 open Rewriter
 
@@ -299,16 +300,18 @@ let add_def_to_graph graph def =
   end;
   !graph
 
-let rec graph_of_ast (Defs defs) =
+let rec graph_of_defs defs =
   let module G = Graph.Make(Node) in
 
   match defs with
   | def :: defs ->
-     let g = graph_of_ast (Defs defs) in
+     let g = graph_of_defs defs in
      add_def_to_graph g def
 
   | [] -> G.empty
 
+let graph_of_ast ast = graph_of_defs ast.defs
+        
 let id_of_typedef (TD_aux (aux, _)) =
   match aux with
   | TD_abbrev (id, _, _) -> id
@@ -323,8 +326,7 @@ let id_of_reg_dec (DEC_aux (aux, _)) =
   | DEC_config (id, _, _) -> id
   | _ -> assert false
 
-
-let filter_ast cuts g (Defs defs) =
+let filter_ast cuts g ast =
   let rec filter_ast' g =
     let module NS = Set.Make(Node) in
     let module NM = Map.Make(Node) in
@@ -357,7 +359,7 @@ let filter_ast cuts g (Defs defs) =
 
     | [] -> []
   in
-  Defs (filter_ast' g defs)
+  { ast with defs = filter_ast' g ast.defs }
 
 let dot_of_ast out_chan ast =
   let module G = Graph.Make(Node) in

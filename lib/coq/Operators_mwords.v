@@ -528,7 +528,7 @@ destruct n.
   compute. intuition.
 * simpl in *. destruct (weq v w).
   + subst. rewrite weqb_eq; tauto.
-  + rewrite weqb_ne; auto. intuition.
+  + rewrite weqb_ne; auto. split; congruence.
 * destruct v.
 Qed.
 

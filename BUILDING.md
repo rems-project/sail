@@ -41,7 +41,7 @@ Install OPAM. Either directly from [https://opam.ocaml.org] or from
 the package manager - both should work, but we used the install script
 from the website. ```opam init``` must be run after installing OPAM.
 
-Distributions often contain quite outdated OCaml packages, so we need to make sure that we use an up-to-date OCaml compiler with opam:
+Distributions often contain quite outdated OCaml packages, so we need to make sure that we use an up-to-date OCaml compiler with opam. Here we use 4.06.1 as an example because it's the oldest, but you should be able to use whatever latest version is.
 ```
 opam switch 4.06.1
 ```
@@ -54,19 +54,20 @@ After doing opam switch it is important to check that the ocaml tools in your $P
 The `opam` file in the Sail repository specifies the required dependencies:
 ```
 depends: [
-  "ocamlfind"
-  "ocamlbuild"
+  "ocaml" {>= "4.06.1"}
+  "ocamlfind" {build} 
+  "ocamlbuild" {build}
   "zarith"
-  "menhir"
+  "menhir" {build}
   "linenoise" {>= "1.1.0"}
-  "ott" {>= "0.28"}
+  "ott" {>= "0.28" & build}
   "lem" {>= "2018-12-14"}
   "linksem" {>= "0.3"}
-  "omd"
+  "omd" {>= "1.3.1"}
   "conf-gmp"
   "conf-zlib"
-  "base64" {< "3.0.0"}
-  "yojson"
+  "base64" {>= "3.1.0"}
+  "yojson" {>= "1.6.0"}
   "pprint"
 ]
 ```
@@ -127,11 +128,21 @@ To build Sail with interactive support we need two more commands
 opam install linenoise
 make isail
 ```
-To test Sail is installed correctly, execute the following from the
+To test if Sail behaves correctly, execute the following from the
 root directory of the sail repository. You may also need to set
 $LEM_DIR to the root of the lem repository for the lem tests. Some of
-the C backend tests will fail if valgrind isn't installed.
+the C backend tests will fail if valgrind isn't installed. Some tests will
+fail if cvc4 isn’t installed.
 ```
 export SAIL_DIR=$PWD
 test/run_tests.sh
 ```
+
+To install Sail using OPAM from the git repo, use `opam pin` as follows.
+```
+opam pin add sail /path/to/local/sail/repo
+```
+This way, you can make the most recent changes to Sail easily available to programs
+that use it. To rebuild this installation of Sail, use `opam upgrade` as usual.
+If you want to do more complicated things, `opam pin --help` might be of
+interest.
