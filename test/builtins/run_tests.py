@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 
 import os
 import re
@@ -68,7 +68,6 @@ def test_lem_builtins(name):
                 step('mkdir -p _lbuild_{}'.format(basename))
                 step('mv {}.lem _lbuild_{}'.format(basename, basename))
                 step('mv {}_types.lem _lbuild_{}'.format(basename, basename))
-                step('cp $SAIL_DIR/src/lem_interp/sail2_instr_kinds.lem _lbuild_{}'.format(basename))
                 step('cp myocamlbuild.ml _lbuild_{}'.format(basename))
                 os.chdir('_lbuild_{}'.format(basename))
                 step('ln -s $SAIL_DIR/src/gen_lib/ gen_lib')
