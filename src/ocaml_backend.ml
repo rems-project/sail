@@ -701,7 +701,7 @@ let ocaml_pp_generators ctx defs orig_types required =
        if Bindings.mem id Type_check.Env.builtin_typs
        then IdSet.add id required
        else
-         raise (Reporting.err_unreachable (id_loc id) __POS__
+         raise (Reporting.err_general (id_loc id)
                   ("Required generator of unknown type " ^ string_of_id id))
   and add_req_from_id required id =
     if IdSet.mem id required then required
