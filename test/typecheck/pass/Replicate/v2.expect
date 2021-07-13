@@ -2,7 +2,7 @@ Type error:
 [[96mReplicate/v2.sail[0m]:13:4-30
 13[96m |[0m    replicate_bits(x, 'N / 'M)
   [91m |[0m    [91m^------------------------^[0m
-  [91m |[0m Tried performing type coercion from {('ex215# : Int), true. bitvector(('M * 'ex215#), dec)} to bitvector('N, dec) on replicate_bits(x, tdiv_int(__id(N), bitvector_length(x)))
+  [91m |[0m Tried performing type coercion from {('ex229# : Int), true. bitvector(('M * 'ex229#), dec)} to bitvector('N, dec) on replicate_bits(x, tdiv_int(__id(N), bitvector_length(x)))
   [91m |[0m Coercion failed because:
   [91m |[0m Mismatched argument types in subtype check
   [91m |[0m 

@@ -4,17 +4,17 @@ Type error:
   [91m |[0m                                                [91m^---------------^[0m
   [91m |[0m Tried performing type coercion from (int(33), range(0, (2 ^ 5 - 1))) to {('d : Int) ('n : Int), (datasize('d) & (0 <= 'n & 'n < 'd)). (int('d), int('n))} on (33, unsigned(a))
   [91m |[0m Coercion failed because:
-  [91m |[0m (int(33), int('ex253#)) is not a subtype of (int('ex248#), int('ex249#))
+  [91m |[0m (int(33), int('ex267#)) is not a subtype of (int('ex262#), int('ex263#))
   [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
   [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
-  [91m |[0m   [93m |[0m 'ex248# bound here
+  [91m |[0m   [93m |[0m 'ex262# bound here
   [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
   [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
-  [91m |[0m   [93m |[0m 'ex249# bound here
+  [91m |[0m   [93m |[0m 'ex263# bound here
   [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
   [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
-  [91m |[0m   [93m |[0m 'ex253# bound here
+  [91m |[0m   [93m |[0m 'ex267# bound here
   [91m |[0m 

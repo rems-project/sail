@@ -3,5 +3,5 @@ Type error:
 25[96m |[0m    Some(Ctor(64, unsigned(0b0 @ b @ a)))
   [91m |[0m         [91m^-----------------------------^[0m
   [91m |[0m Could not resolve quantifiers for Ctor
-  [91m |[0m [94m*[0m (datasize(64) & (0 <= 'ex292# & 'ex292# < 64))
+  [91m |[0m [94m*[0m (datasize(64) & (0 <= 'ex306# & 'ex306# < 64))
   [91m |[0m 
