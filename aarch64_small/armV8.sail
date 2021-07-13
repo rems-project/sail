@@ -2008,7 +2008,7 @@ function clause execute( AddSubCarry((d,n,m,(datasize as int('R)),sub_op,setflag
 /* CCMN (immediate) */
 /* CCMP (immediate) */
 val decodeConditionalCompareImmediate : bits(32) -> option(ast) effect pure
-function decodeConditionalCompareImmediate ([sf]@[op]@[b1]@0b11010010@(imm5 : bits(5))@(_cond:bits(4))@[b1]@[b0]@(Rn:bits(5))@[b0]@(nzcv:bits(4))) = {
+function decodeConditionalCompareImmediate ([sf]@[op]@0b1@0b11010010@(imm5 : bits(5))@(_cond:bits(4))@0b1@0b0@(Rn:bits(5))@0b0@(nzcv:bits(4))) = {
   n : (reg_index) = UInt_reg(Rn);
   let datasize : {| 32, 64 |} /* : int('R) */ = if sf == b1 then 64 else 32;
   sub_op : boolean = (op == b1);
@@ -2038,7 +2038,7 @@ function clause execute(ConditionalCompareImmediate((n,datasize as int('R),sub_o
 /* CCMN (register) */
 /* CCMP (register) */
 val decodeConditionalCompareRegister : bits(32) -> option(ast) effect pure
-function decodeConditionalCompareRegister ([sf]@[op]@[b1]@0b11010010@(Rm:bits(5))@ (_cond:bits(4))@[b0]@[b0]@(Rn:bits(5))@[b0]@(nzcv:bits(4))) = {
+function decodeConditionalCompareRegister ([sf]@[op]@0b1@0b11010010@(Rm:bits(5))@ (_cond:bits(4))@0b0@0b0@(Rn:bits(5))@0b0@(nzcv:bits(4))) = {
   n : reg_index = UInt_reg(Rn);
   m : reg_index = UInt_reg(Rm);
   datasize : {|32,64|} /* : int('R) */ = if sf == b1 then 64 else 32;
@@ -2070,7 +2070,7 @@ function clause execute (ConditionalCompareRegister((n,m,datasize as int('R),sub
 /* CSINV op=1,o2=0 */
 /* CSNEG op=1,o2=1 */
 val decodeConditionalSelect : bits(32) -> option(ast) effect pure
-function decodeConditionalSelect ([sf]@[op]@[b0]@0b11010100@(Rm:bits(5))@(_cond:bits(4))@[b0]@[o2]@(Rn:bits(5))@(Rd:bits(5))) = {
+function decodeConditionalSelect ([sf]@[op]@0b0@0b11010100@(Rm:bits(5))@(_cond:bits(4))@0b0@[o2]@(Rn:bits(5))@(Rd:bits(5))) = {
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
@@ -2105,7 +2105,7 @@ scattered function decodeData1Source
 /* REV */
 /* REV16 */
 /* REV32 */
-function clause decodeData1Source ([sf]@[b1]@[b0]@0b11010110@0b00000@0b0000@(opc:bits(2))@(Rn:bits(5))@(Rd:bits(5))) = {
+function clause decodeData1Source ([sf]@0b1@0b0@0b11010110@0b00000@0b0000@(opc:bits(2))@(Rn:bits(5))@(Rd:bits(5))) = {
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
 
@@ -2164,7 +2164,7 @@ function clause execute ( Reverse((d,n,datasize as int('R),op)) ) = {
 
 /* CLS */
 /* CLZ */
-function clause decodeData1Source ([sf]@[b1]@[b0]@0b11010110@0b00000@0b00010@[op]@(Rn:bits(5))@(Rd:bits(5))) = {
+function clause decodeData1Source ([sf]@0b1@0b0@0b11010110@0b00000@0b00010@[op]@(Rn:bits(5))@(Rd:bits(5))) = {
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   datasize : {| 32,64 |} /* (int('R)) */ = if sf == b1 then 64 else 32;
@@ -2192,7 +2192,7 @@ scattered function decodeData2Source
 
 /* SDIV o1=1 */
 /* UDIV o1=0 */
-function clause decodeData2Source ([sf]@[b0]@[b0]@0b11010110@(Rm:bits(5))@0b00001@[o1]@(Rn:bits(5))@(Rd:bits(5))) = {
+function clause decodeData2Source ([sf]@0b0@0b0@0b11010110@(Rm:bits(5))@0b00001@[o1]@(Rn:bits(5))@(Rd:bits(5))) = {
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
@@ -2219,7 +2219,7 @@ function clause execute ( Division((d,n,m,datasize as int('R),_unsigned)) ) = {
 /* LSLV */
 /* LSRV */
 /* RORV */
-function clause decodeData2Source ([sf]@[b0]@[b0]@0b11010110@(Rm:bits(5))@0b0010@(op2:bits(2))@(Rn:bits(5))@(Rd:bits(5))) = {
+function clause decodeData2Source ([sf]@0b0@0b0@0b11010110@(Rm:bits(5))@0b0010@(op2:bits(2))@(Rn:bits(5))@(Rd:bits(5))) = {
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
@@ -2239,7 +2239,7 @@ function clause execute (Shift((d,n,m,datasize as int('R),shift_type))) = {
 
 /* CRC32B/CRC32H/CRC32W/CRC32X C=0 */
 /* CRC32CB/CRC32CH/CRC32CW/CRC32CX C=1 */
-function clause decodeData2Source ([sf]@[b0]@[b0]@0b11010110@(Rm:bits(5))@0b010@[C]@(sz:bits(2))@(Rn:bits(5))@(Rd:bits(5))) = {
+function clause decodeData2Source ([sf]@0b0@0b0@0b11010110@(Rm:bits(5))@0b010@[C]@(sz:bits(2))@(Rn:bits(5))@(Rd:bits(5))) = {
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
@@ -2305,7 +2305,7 @@ function clause execute ( MultiplyAddSub((d,n,m,a,destsize as int('D),datasize a
 /* SMSUBL */
 /* UMADDL */
 /* UMSUBL */
-function clause decodeData3Source ([b1]@0b00@0b11011@[U]@0b01@(Rm:bits(5))@[o0]@(Ra:bits(5))@(Rn:bits(5))@(Rd:bits(5))) = {
+function clause decodeData3Source (0b1@0b00@0b11011@[U]@0b01@(Rm:bits(5))@[o0]@(Ra:bits(5))@(Rn:bits(5))@(Rd:bits(5))) = {
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
@@ -2335,7 +2335,7 @@ function clause execute ( MultiplyAddSubLong((d,n,m,a,destsize as int('R),datasi
 
 /* SMULH */
 /* UMULH */
-function clause decodeData3Source ([b1]@0b00@0b11011@[U]@0b10@(Rm:bits(5))@[b0]@(Ra:bits(5))@(Rn:bits(5))@(Rd:bits(5))) = {
+function clause decodeData3Source (0b1@0b00@0b11011@[U]@0b10@(Rm:bits(5))@0b0@(Ra:bits(5))@(Rn:bits(5))@(Rd:bits(5))) = {
   d : (reg_index) = UInt_reg(Rd);
   n : (reg_index) = UInt_reg(Rn);
   m : (reg_index) = UInt_reg(Rm);
@@ -2425,59 +2425,59 @@ function decodeDataSIMDFPoint2 ( machineCode) = {
 val decodeDataRegister : bits(32) -> option(ast) effect {escape}
 function decodeDataRegister (machineCode) = {
   match machineCode {
-    ([_]@[_ ]@[_]@[b0]@ [b1]@[b0]@[b1]@[b0]@ [_ ]@[_ ]@[_ ]@ (_ : bits(9)) @[_ ]@(_ : bits(11)))  => decodeLogicalShiftedRegister(machineCode),
-    ([_]@[_ ]@[_]@[b0]@ [b1]@[b0]@[b1]@[b1]@ [_ ]@[_ ]@[b0]@ (_ : bits(9)) @[_ ]@(_ : bits(11)))  => decodeAddSubtractShiftedRegister(machineCode),
-    ([_]@[_ ]@[_]@[b0]@ [b1]@[b0]@[b1]@[b1]@ [_ ]@[_ ]@[b1]@ (_ : bits(9)) @[_ ]@(_ : bits(11)))  => decodeAddSubtractExtendedRegister(machineCode),
-    ([_]@[_ ]@[_]@[b1]@ [b1]@[b0]@[b1]@[b0]@ [b0]@[b0]@[b0]@ (_ : bits(9)) @[_ ]@(_ : bits(11)))  => decodeAddSubtractWithCarry(machineCode),
-    ([_]@[_ ]@[_]@[b1]@ [b1]@[b0]@[b1]@[b0]@ [b0]@[b1]@[b0]@ (_ : bits(9)) @[b0]@(_ : bits(11)))  => decodeConditionalCompareRegister(machineCode),
-    ([_]@[_ ]@[_]@[b1]@ [b1]@[b0]@[b1]@[b0]@ [b0]@[b1]@[b0]@ (_ : bits(9)) @[b1]@(_ : bits(11)))  => decodeConditionalCompareImmediate(machineCode),
-    ([_]@[_ ]@[_]@[b1]@ [b1]@[b0]@[b1]@[b0]@ [b1]@[b0]@[b0]@ (_ : bits(9)) @[_ ]@(_ : bits(11)))  => decodeConditionalSelect(machineCode),
-    ([_]@[_ ]@[_]@[b1]@ [b1]@[b0]@[b1]@[b1]@ [_ ]@[_ ]@[_] @ (_ : bits(9)) @[_ ]@(_ : bits(11)))  => decodeData3Source(machineCode),
-    ([_]@[b0]@[_]@[b1]@ [b1]@[b0]@[b1]@[b0]@ [b1]@[b1]@[b0]@ (_ : bits(9)) @[_ ]@(_ : bits(11)))  => decodeData2Source(machineCode),
-    ([_]@[b1]@[_]@[b1]@ [b1]@[b0]@[b1]@[b0]@ [b1]@[b1]@[b0]@ (_ : bits(9)) @[_ ]@(_ : bits(11)))  => decodeData1Source(machineCode)
+    ([_]@[_]@[_]@0b0@ 0b1@0b0@0b1@0b0@ [_]@[_]@[_]@ (_ : bits(9)) @[_]@(_ : bits(11)))  => decodeLogicalShiftedRegister(machineCode),
+    ([_]@[_]@[_]@0b0@ 0b1@0b0@0b1@0b1@ [_]@[_]@0b0@ (_ : bits(9)) @[_]@(_ : bits(11)))  => decodeAddSubtractShiftedRegister(machineCode),
+    ([_]@[_]@[_]@0b0@ 0b1@0b0@0b1@0b1@ [_]@[_]@0b1@ (_ : bits(9)) @[_]@(_ : bits(11)))  => decodeAddSubtractExtendedRegister(machineCode),
+    ([_]@[_]@[_]@0b1@ 0b1@0b0@0b1@0b0@ 0b0@0b0@0b0@ (_ : bits(9)) @[_]@(_ : bits(11)))  => decodeAddSubtractWithCarry(machineCode),
+    ([_]@[_]@[_]@0b1@ 0b1@0b0@0b1@0b0@ 0b0@0b1@0b0@ (_ : bits(9)) @0b0@(_ : bits(11)))  => decodeConditionalCompareRegister(machineCode),
+    ([_]@[_]@[_]@0b1@ 0b1@0b0@0b1@0b0@ 0b0@0b1@0b0@ (_ : bits(9)) @0b1@(_ : bits(11)))  => decodeConditionalCompareImmediate(machineCode),
+    ([_]@[_]@[_]@0b1@ 0b1@0b0@0b1@0b0@ 0b1@0b0@0b0@ (_ : bits(9)) @[_]@(_ : bits(11)))  => decodeConditionalSelect(machineCode),
+    ([_]@[_]@[_]@0b1@ 0b1@0b0@0b1@0b1@ [_]@[_]@[_]@ (_ : bits(9)) @[_]@(_ : bits(11)))  => decodeData3Source(machineCode),
+    ([_]@0b0@[_]@0b1@ 0b1@0b0@0b1@0b0@ 0b1@0b1@0b0@ (_ : bits(9)) @[_]@(_ : bits(11)))  => decodeData2Source(machineCode),
+    ([_]@0b1@[_]@0b1@ 0b1@0b0@0b1@0b0@ 0b1@0b1@0b0@ (_ : bits(9)) @[_]@(_ : bits(11)))  => decodeData1Source(machineCode)
   }
 }
 
 val decodeDataImmediate : bits(32) -> option(ast) effect {escape}
 function decodeDataImmediate (machineCode) = {
   match machineCode {
-    ((_ : bits(3))@[b1]@[b0]@[b0]@[b0]@[b0]@[_ ]@(_ : bits(23)))  => decodePCRelAddressing(machineCode),
-    ((_ : bits(3))@[b1]@[b0]@[b0]@[b0]@[b1]@[_ ]@(_ : bits(23)))  => decodeAddSubtractImmediate(machineCode),
-    ((_ : bits(3))@[b1]@[b0]@[b0]@[b1]@[b0]@[b0]@(_ : bits(23)))  => decodeLogicalImmediate(machineCode),
-    ((_ : bits(3))@[b1]@[b0]@[b0]@[b1]@[b0]@[b1]@(_ : bits(23)))  => decodeMoveWideImmediate(machineCode),
-    ((_ : bits(3))@[b1]@[b0]@[b0]@[b1]@[b1]@[b0]@(_ : bits(23)))  => decodeBitfield(machineCode),
-    ((_ : bits(3))@[b1]@[b0]@[b0]@[b1]@[b1]@[b1]@(_ : bits(23)))  => decodeExtract(machineCode)
+    ((_ : bits(3))@0b1@0b0@0b0@0b0@0b0@[_]@(_ : bits(23)))  => decodePCRelAddressing(machineCode),
+    ((_ : bits(3))@0b1@0b0@0b0@0b0@0b1@[_]@(_ : bits(23)))  => decodeAddSubtractImmediate(machineCode),
+    ((_ : bits(3))@0b1@0b0@0b0@0b1@0b0@0b0@(_ : bits(23)))  => decodeLogicalImmediate(machineCode),
+    ((_ : bits(3))@0b1@0b0@0b0@0b1@0b0@0b1@(_ : bits(23)))  => decodeMoveWideImmediate(machineCode),
+    ((_ : bits(3))@0b1@0b0@0b0@0b1@0b1@0b0@(_ : bits(23)))  => decodeBitfield(machineCode),
+    ((_ : bits(3))@0b1@0b0@0b0@0b1@0b1@0b1@(_ : bits(23)))  => decodeExtract(machineCode)
   }
 }
 
 val decodeLoadsStores : bits(32) -> option(ast) effect {escape}
 function decodeLoadsStores (machineCode) = {
   match machineCode {
-    ([_ ]@[_]@[b0]@[b0]@ [b1]@[b0]@[b0]@[b0]@ [_ ]@[_]@[_ ]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadStoreExclusive(machineCode),
-    ([_ ]@[_]@[b0]@[b1]@ [b1]@[_ ]@[b0]@[b0]@ [_ ]@[_]@[_ ]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadRegisterLiteral(machineCode),
-    ([_ ]@[_]@[b1]@[b0]@ [b1]@[_ ]@[b0]@[b0]@ [b0]@[_]@[_ ]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadStoreNoAllocatePairOffset(machineCode),
-    ([_ ]@[_]@[b1]@[b0]@ [b1]@[_ ]@[b0]@[b0]@ [b1]@[_]@[_ ]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadStoreRegisterPairPostIndexed(machineCode),
-    ([_ ]@[_]@[b1]@[b0]@ [b1]@[_ ]@[b0]@[b1]@ [b0]@[_]@[_ ]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadStoreRegisterPairOffset(machineCode),
-    ([_ ]@[_]@[b1]@[b0]@ [b1]@[_ ]@[b0]@[b1]@ [b1]@[_]@[_ ]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadStoreRegisterPairPreIndexed(machineCode),
-    ([_ ]@[_]@[b1]@[b1]@ [b1]@[_ ]@[b0]@[b0]@ [_ ]@[_]@[b0]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[b0]@[b0]@ (_ : bits(10)) )  => decodeLoadStoreRegisterUnscaledImmediate(machineCode),
-    ([_ ]@[_]@[b1]@[b1]@ [b1]@[_ ]@[b0]@[b0]@ [_ ]@[_]@[b0]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[b0]@[b1]@ (_ : bits(10)) )  => decodeLoadStoreRegisterImmediatePostIndexed(machineCode),
-    ([_ ]@[_]@[b1]@[b1]@ [b1]@[_ ]@[b0]@[b0]@ [_ ]@[_]@[b0]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[b1]@[b0]@ (_ : bits(10)) )  => decodeLoadStoreRegisterUnprivileged(machineCode),
-    ([_ ]@[_]@[b1]@[b1]@ [b1]@[_ ]@[b0]@[b0]@ [_ ]@[_]@[b0]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[b1]@[b1]@ (_ : bits(10)) )  => decodeLoadStoreRegisterImmediatePreIndexed(machineCode),
-    ([_ ]@[_]@[b1]@[b1]@ [b1]@[_ ]@[b0]@[b0]@ [_ ]@[_]@[b1]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[b1]@[b0]@ (_ : bits(10)) )  => decodeLoadStoreRegisterRegisterOffset(machineCode),
-    ([_ ]@[_]@[b1]@[b1]@ [b1]@[_ ]@[b0]@[b1]@ [_ ]@[_]@[_ ]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadStoreRegisterUnsignedImmediate(machineCode),
-    ([b0]@[_]@[b0]@[b0]@ [b1]@[b1]@[b0]@[b0]@ [b0]@[_]@[b0]@[b0]@ [b0]@[b0]@[b0]@[b0]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeAdvSIMDLoadStoreMultiStruct(machineCode),
-    ([b0]@[_]@[b0]@[b0]@ [b1]@[b1]@[b0]@[b0]@ [b1]@[_]@[b0]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeAdvSIMDLoadStoreMultiStructPostIndexed(machineCode),
-    ([b0]@[_]@[b0]@[b0]@ [b1]@[b1]@[b0]@[b1]@ [b0]@[_]@[_ ]@[b0]@ [b0]@[b0]@[b0]@[b0]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeAdvSIMDLoadStoreSingleStruct(machineCode),
-    ([b0]@[_]@[b0]@[b0]@ [b1]@[b1]@[b0]@[b1]@ [b1]@[_]@[_ ]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeAdvSIMDLoadStoreSingleStructPostIndexed(machineCode)
+    ([_]@[_]@0b0@0b0@ 0b1@0b0@0b0@0b0@ [_]@[_]@[_]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadStoreExclusive(machineCode),
+    ([_]@[_]@0b0@0b1@ 0b1@[_]@0b0@0b0@ [_]@[_]@[_]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadRegisterLiteral(machineCode),
+    ([_]@[_]@0b1@0b0@ 0b1@[_]@0b0@0b0@ 0b0@[_]@[_]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadStoreNoAllocatePairOffset(machineCode),
+    ([_]@[_]@0b1@0b0@ 0b1@[_]@0b0@0b0@ 0b1@[_]@[_]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadStoreRegisterPairPostIndexed(machineCode),
+    ([_]@[_]@0b1@0b0@ 0b1@[_]@0b0@0b1@ 0b0@[_]@[_]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadStoreRegisterPairOffset(machineCode),
+    ([_]@[_]@0b1@0b0@ 0b1@[_]@0b0@0b1@ 0b1@[_]@[_]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadStoreRegisterPairPreIndexed(machineCode),
+    ([_]@[_]@0b1@0b1@ 0b1@[_]@0b0@0b0@ [_]@[_]@0b0@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @0b0@0b0@ (_ : bits(10)) )  => decodeLoadStoreRegisterUnscaledImmediate(machineCode),
+    ([_]@[_]@0b1@0b1@ 0b1@[_]@0b0@0b0@ [_]@[_]@0b0@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @0b0@0b1@ (_ : bits(10)) )  => decodeLoadStoreRegisterImmediatePostIndexed(machineCode),
+    ([_]@[_]@0b1@0b1@ 0b1@[_]@0b0@0b0@ [_]@[_]@0b0@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @0b1@0b0@ (_ : bits(10)) )  => decodeLoadStoreRegisterUnprivileged(machineCode),
+    ([_]@[_]@0b1@0b1@ 0b1@[_]@0b0@0b0@ [_]@[_]@0b0@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @0b1@0b1@ (_ : bits(10)) )  => decodeLoadStoreRegisterImmediatePreIndexed(machineCode),
+    ([_]@[_]@0b1@0b1@ 0b1@[_]@0b0@0b0@ [_]@[_]@0b1@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @0b1@0b0@ (_ : bits(10)) )  => decodeLoadStoreRegisterRegisterOffset(machineCode),
+    ([_]@[_]@0b1@0b1@ 0b1@[_]@0b0@0b1@ [_]@[_]@[_]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeLoadStoreRegisterUnsignedImmediate(machineCode),
+    (0b0@[_]@0b0@0b0@ 0b1@0b1@0b0@0b0@ 0b0@[_]@0b0@0b0@ 0b0@0b0@0b0@0b0@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeAdvSIMDLoadStoreMultiStruct(machineCode),
+    (0b0@[_]@0b0@0b0@ 0b1@0b1@0b0@0b0@ 0b1@[_]@0b0@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeAdvSIMDLoadStoreMultiStructPostIndexed(machineCode),
+    (0b0@[_]@0b0@0b0@ 0b1@0b1@0b0@0b1@ 0b0@[_]@[_]@0b0@ 0b0@0b0@0b0@0b0@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeAdvSIMDLoadStoreSingleStruct(machineCode),
+    (0b0@[_]@0b0@0b0@ 0b1@0b1@0b0@0b1@ 0b1@[_]@[_]@[_]@ [_]@[_]@[_]@[_]@ (_ : bits(4)) @[_]@[_]@ (_ : bits(10)) )  => decodeAdvSIMDLoadStoreSingleStructPostIndexed(machineCode)
   }
 }
 
 val decodeSystemImplementationDefined : bits(32) -> option(ast) effect {escape}
 function decodeSystemImplementationDefined (machineCode) = {
   match machineCode {
-    ((_ : bits(11)) @[b0]@[b1]@[_]@[_]@[_]@[b1]@[_]@[b1]@[b1]@(_ : bits(12)))  => decodeImplementationDefined(machineCode),
-    ((_ : bits(11)) @[b1]@[b1]@[_]@[_]@[_]@[b1]@[_]@[b1]@[b1]@(_ : bits(12)))  => decodeImplementationDefined(machineCode),
-    ((_ : bits(11)) @[_ ]@[_ ]@[_]@[_]@[_]@[_ ]@[_]@[_ ]@[_ ]@(_ : bits(12)))  => decodeSystem(machineCode)
+    ((_ : bits(11)) @0b0@0b1@[_]@[_]@[_]@0b1@[_]@0b1@0b1@(_ : bits(12)))  => decodeImplementationDefined(machineCode),
+    ((_ : bits(11)) @0b1@0b1@[_]@[_]@[_]@0b1@[_]@0b1@0b1@(_ : bits(12)))  => decodeImplementationDefined(machineCode),
+    ((_ : bits(11)) @[_]@[_]@[_]@[_]@[_]@[_]@[_]@[_]@[_]@(_ : bits(12)))  => decodeSystem(machineCode)
   }
 }
 
@@ -2485,26 +2485,26 @@ function decodeSystemImplementationDefined (machineCode) = {
 val decodeBranchesExceptionSystem : bits(32) -> option(ast) effect {escape}
 function decodeBranchesExceptionSystem (machineCode) = {
   match machineCode {
-    ([_ ]@[b0]@[b0]@[b1]@[b0]@[b1]@[_ ]@[_]@[_]@[_]@(_ : bits(22)))  => decodeUnconditionalBranchImmediate(machineCode),
-    ([_ ]@[b0]@[b1]@[b1]@[b0]@[b1]@[b0]@[_]@[_]@[_]@(_ : bits(22)))  => decodeCompareBranchImmediate(machineCode),
-    ([_ ]@[b0]@[b1]@[b1]@[b0]@[b1]@[b1]@[_]@[_]@[_]@(_ : bits(22)))  => decodeTestBranchImmediate(machineCode),
-    ([b0]@[b1]@[b0]@[b1]@[b0]@[b1]@[b0]@[_]@[_]@[_]@(_ : bits(22)))  => decodeConditionalBranchImmediate(machineCode),
-    ([b1]@[b1]@[b0]@[b1]@[b0]@[b1]@[b0]@[b0]@[_]@[_]@(_ : bits(22)))  => decodeExceptionGeneration(machineCode),
-    ([b1]@[b1]@[b0]@[b1]@[b0]@[b1]@[b0]@[b1]@[b0]@[b0]@(_ : bits(22)))  => decodeSystemImplementationDefined(machineCode),
-    ([b1]@[b1]@[b0]@[b1]@[b0]@[b1]@[b1]@[_]@[_]@[_]@(_ : bits(22)))  => decodeUnconditionalBranchRegister(machineCode)
+    ([_]@0b0@0b0@0b1@0b0@0b1@[_]@[_]@[_]@[_]@(_ : bits(22)))  => decodeUnconditionalBranchImmediate(machineCode),
+    ([_]@0b0@0b1@0b1@0b0@0b1@0b0@[_]@[_]@[_]@(_ : bits(22)))  => decodeCompareBranchImmediate(machineCode),
+    ([_]@0b0@0b1@0b1@0b0@0b1@0b1@[_]@[_]@[_]@(_ : bits(22)))  => decodeTestBranchImmediate(machineCode),
+    (0b0@0b1@0b0@0b1@0b0@0b1@0b0@[_]@[_]@[_]@(_ : bits(22)))  => decodeConditionalBranchImmediate(machineCode),
+    (0b1@0b1@0b0@0b1@0b0@0b1@0b0@0b0@[_]@[_]@(_ : bits(22)))  => decodeExceptionGeneration(machineCode),
+    (0b1@0b1@0b0@0b1@0b0@0b1@0b0@0b1@0b0@0b0@(_ : bits(22)))  => decodeSystemImplementationDefined(machineCode),
+    (0b1@0b1@0b0@0b1@0b0@0b1@0b1@[_]@[_]@[_]@(_ : bits(22)))  => decodeUnconditionalBranchRegister(machineCode)
   }
 }
 
 val decode : bits(32) -> option(ast) effect {escape}
 function decode (machineCode) = {
   match machineCode {
-    ((_ : bits(3)) @[b0]@[b0]@[_ ]@[_ ]@(_ : bits(25)))  => Some(Unallocated()),
-    ((_ : bits(3)) @[b1]@[b0]@[b0]@[_ ]@(_ : bits(25)))  => decodeDataImmediate(machineCode),
-    ((_ : bits(3)) @[b1]@[b0]@[b1]@[_ ]@(_ : bits(25)))  => decodeBranchesExceptionSystem(machineCode),
-    ((_ : bits(3)) @[_ ]@[b1]@[_ ]@[b0]@(_ : bits(25)))  => decodeLoadsStores(machineCode),
-    ((_ : bits(3)) @[_ ]@[b1]@[b0]@[b1]@(_ : bits(25)))  => decodeDataRegister(machineCode),
-    ((_ : bits(3)) @[b0]@[b1]@[b1]@[b1]@(_ : bits(25)))  => decodeDataSIMDFPoint1(machineCode),
-    ((_ : bits(3)) @[b1]@[b1]@[b1]@[b1]@(_ : bits(25)))  => decodeDataSIMDFPoint2(machineCode),
+    ((_ : bits(3)) @0b0@0b0@[_]@[_]@(_ : bits(25)))  => Some(Unallocated()),
+    ((_ : bits(3)) @0b1@0b0@0b0@[_]@(_ : bits(25)))  => decodeDataImmediate(machineCode),
+    ((_ : bits(3)) @0b1@0b0@0b1@[_]@(_ : bits(25)))  => decodeBranchesExceptionSystem(machineCode),
+    ((_ : bits(3)) @[_]@0b1@[_]@0b0@(_ : bits(25)))  => decodeLoadsStores(machineCode),
+    ((_ : bits(3)) @[_]@0b1@0b0@0b1@(_ : bits(25)))  => decodeDataRegister(machineCode),
+    ((_ : bits(3)) @0b0@0b1@0b1@0b1@(_ : bits(25)))  => decodeDataSIMDFPoint1(machineCode),
+    ((_ : bits(3)) @0b1@0b1@0b1@0b1@(_ : bits(25)))  => decodeDataSIMDFPoint2(machineCode),
     _                                                => None()
   }
 }
