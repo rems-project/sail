@@ -4,6 +4,189 @@
 \providecommand\saildoctype[2]{#1 #2}
 \providecommand\saildocfn[2]{#1 #2}
 \providecommand\saildocoverload[2]{#1 #2}
+\providecommand\saildocabbrev[1]{#1\@}
+
+\newcommand{\sailvaleqUnit}{\saildoclabelled{sailzeqzyunit}{\saildocval{}{\lstinputlisting[language=sail]{out/valzeq_unit996f84433ac0995f4aadfca5b68cd358.tex}}}}
+
+\newcommand{\sailvaleqBit}{\saildoclabelled{sailzeqzybit}{\saildocval{}{\lstinputlisting[language=sail]{out/valzeq_bit7182cc37406e2c0d4c1e739a98e248ea.tex}}}}
+
+\newcommand{\sailfneqUnit}{\saildoclabelled{sailfnzeqzyunit}{\saildocfn{}{\lstinputlisting[language=sail]{out/fnzeq_unit996f84433ac0995f4aadfca5b68cd358.tex}}}}
+
+\newcommand{\sailvalnotBool}{\saildoclabelled{sailznotzybool}{\saildocval{}{\lstinputlisting[language=sail]{out/valznot_boole1dd3e44bc87a2a10d8e257004c2d36a.tex}}}}
+
+\newcommand{\sailvalandBool}{\saildoclabelled{sailzandzybool}{\saildocval{}{\lstinputlisting[language=sail]{out/valzand_boola4a2cf9ccaa44106300961b15ab20e79.tex}}}}
+
+\newcommand{\sailvalandBoolNoFlow}{\saildoclabelled{sailzandzyboolzynozyflow}{\saildocval{}{\lstinputlisting[language=sail]{out/valzand_bool_no_flow5d5041fa8ff689136cdc03e3a11eda3a.tex}}}}
+
+\newcommand{\sailvalorBool}{\saildoclabelled{sailzorzybool}{\saildocval{}{\lstinputlisting[language=sail]{out/valzor_bool5f07f9d72d4d1495c45a3531c787546a.tex}}}}
+
+\newcommand{\sailvaleqInt}{\saildoclabelled{sailzeqzyint}{\saildocval{}{\lstinputlisting[language=sail]{out/valzeq_int364a98dbf8a9faa70e666cce41d8c1aa.tex}}}}
+
+\newcommand{\sailvaleqBool}{\saildoclabelled{sailzeqzybool}{\saildocval{}{\lstinputlisting[language=sail]{out/valzeq_bool0e93587306381c3f984dc7cea6ae190d.tex}}}}
+
+\newcommand{\sailvalneqInt}{\saildoclabelled{sailzneqzyint}{\saildocval{}{\lstinputlisting[language=sail]{out/valzneq_int4fd2be7a83f27bec736b67bdbab1d8c6.tex}}}}
+
+\newcommand{\sailfnneqInt}{\saildoclabelled{sailfnzneqzyint}{\saildocfn{}{\lstinputlisting[language=sail]{out/fnzneq_int4fd2be7a83f27bec736b67bdbab1d8c6.tex}}}}
+
+\newcommand{\sailvalneqBool}{\saildoclabelled{sailzneqzybool}{\saildocval{}{\lstinputlisting[language=sail]{out/valzneq_bool40d90a9f3b3bd9e0f1966f198535e779.tex}}}}
+
+\newcommand{\sailfnneqBool}{\saildoclabelled{sailfnzneqzybool}{\saildocfn{}{\lstinputlisting[language=sail]{out/fnzneq_bool40d90a9f3b3bd9e0f1966f198535e779.tex}}}}
+
+\newcommand{\sailvallteqInt}{\saildoclabelled{sailzlteqzyint}{\saildocval{}{\lstinputlisting[language=sail]{out/valzlteq_intc80d1082e443aa434e39355e493ece1e.tex}}}}
+
+\newcommand{\sailvalgteqInt}{\saildoclabelled{sailzgteqzyint}{\saildocval{}{\lstinputlisting[language=sail]{out/valzgteq_inte32033a8d137f46d187455cff7dbe40e.tex}}}}
+
+\newcommand{\sailvalltInt}{\saildoclabelled{sailzltzyint}{\saildocval{}{\lstinputlisting[language=sail]{out/valzlt_int996a8b8c361a31bed6b5509ca6686e1a.tex}}}}
+
+\newcommand{\sailvalgtInt}{\saildoclabelled{sailzgtzyint}{\saildocval{}{\lstinputlisting[language=sail]{out/valzgt_intef94a8c66f39b1f715cb72941ed95921.tex}}}}
+
+\newcommand{\sailoverloadBzEightoperatorzZerozJzJzNine}{\saildoclabelled{sailoverloadBzz8operatorz0zJzJz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadBzz8operatorz0zjzjz9c650f45e06411dd4e97578ff2bad6338.tex}}}}
+
+\newcommand{\sailoverloadCzEightoperatorzZerozOnezJzNine}{\saildoclabelled{sailoverloadCzz8operatorz0z1zJz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadCzz8operatorz0z1zjz981ebe433e26f9e2dfa2a9d2c7f4fe1f4.tex}}}}
+
+\newcommand{\sailoverloadDzEightoperatorzZerozUzNine}{\saildoclabelled{sailoverloadDzz8operatorz0zUz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadDzz8operatorz0zuz99af95b281314726fa91893b57fc290dc.tex}}}}
+
+\newcommand{\sailoverloadEzEightoperatorzZerozSixzNine}{\saildoclabelled{sailoverloadEzz8operatorz0z6z9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadEzz8operatorz0z6z9d3731bb9b1c9d765858778ad48ba6b3a.tex}}}}
+
+\newcommand{\sailoverloadFzEightoperatorzZerozIzJzNine}{\saildoclabelled{sailoverloadFzz8operatorz0zIzJz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadFzz8operatorz0zizjz95c366628fed7d8b7c251f1acd527ee3b.tex}}}}
+
+\newcommand{\sailoverloadGzEightoperatorzZerozIzNine}{\saildoclabelled{sailoverloadGzz8operatorz0zIz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadGzz8operatorz0ziz9714b8c400aed24ebd80eac39b4f9d751.tex}}}}
+
+\newcommand{\sailoverloadHzEightoperatorzZerozKzJzNine}{\saildoclabelled{sailoverloadHzz8operatorz0zKzJz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadHzz8operatorz0zkzjz94161e4bfad2d20e5d25bc774612b6588.tex}}}}
+
+\newcommand{\sailoverloadIzEightoperatorzZerozKzNine}{\saildoclabelled{sailoverloadIzz8operatorz0zKz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadIzz8operatorz0zkz93747e4d4a6f99eb3fca0b477d2437ed5.tex}}}}
+
+\newcommand{\sailvalId}{\saildoclabelled{sailzzyzyid}{\saildocval{}{\lstinputlisting[language=sail]{out/valz__ided888b8991a27578d5dd72f84db80bce.tex}}}}
+
+\newcommand{\sailfnId}{\saildoclabelled{sailfnzzyzyid}{\saildocfn{}{\lstinputlisting[language=sail]{out/fnz__ided888b8991a27578d5dd72f84db80bce.tex}}}}
+
+\newcommand{\sailoverloadJSizze}{\saildoclabelled{sailoverloadJzzyzysizze}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadJz__sizze5b2e36a5dbb42eaba80b4d164e45d3ae.tex}}}}
+
+\newcommand{\sailvalDeref}{\saildoclabelled{sailzzyzyderef}{\saildocval{}{\lstinputlisting[language=sail]{out/valz__deref1dbc379e24bd1b182e1db755dea8c453.tex}}}}
+
+\newcommand{\sailvalBitfieldDeref}{\saildoclabelled{sailzzyzybitfieldzyderef}{\saildocval{}{\lstinputlisting[language=sail]{out/valz__bitfield_deref5ed587b7c1b91cf82e42f865304262ca.tex}}}}
+
+\newcommand{\sailtypebits}{\saildoclabelled{sailtypezbits}{\saildoctype{}{\lstinputlisting[language=sail]{out/typezbitsa4b31f9b3dc11c921007b665e0d0fce6.tex}}}}
+
+\newcommand{\sailvaleqBits}{\saildoclabelled{sailzeqzybits}{\saildocval{}{\lstinputlisting[language=sail]{out/valzeq_bits886ce7cf3ec93a28308e8d4e9d63f4be.tex}}}}
+
+\newcommand{\sailoverloadKzEightoperatorzZerozJzJzNine}{\saildoclabelled{sailoverloadKzz8operatorz0zJzJz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadKzz8operatorz0zjzjz9c650f45e06411dd4e97578ff2bad6338.tex}}}}
+
+\newcommand{\sailvalneqBits}{\saildoclabelled{sailzneqzybits}{\saildocval{}{\lstinputlisting[language=sail]{out/valzneq_bits167748c906c068e62596c88540a84f42.tex}}}}
+
+\newcommand{\sailfnneqBits}{\saildoclabelled{sailfnzneqzybits}{\saildocfn{}{\lstinputlisting[language=sail]{out/fnzneq_bits167748c906c068e62596c88540a84f42.tex}}}}
+
+\newcommand{\sailoverloadLzEightoperatorzZerozOnezJzNine}{\saildoclabelled{sailoverloadLzz8operatorz0z1zJz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadLzz8operatorz0z1zjz981ebe433e26f9e2dfa2a9d2c7f4fe1f4.tex}}}}
+
+\newcommand{\sailvalbitvectorLength}{\saildoclabelled{sailzbitvectorzylength}{\saildocval{}{\lstinputlisting[language=sail]{out/valzbitvector_lengthcd74a5cced7567d19500671e4b6e1031.tex}}}}
+
+\newcommand{\sailvalvectorLength}{\saildoclabelled{sailzvectorzylength}{\saildocval{}{\lstinputlisting[language=sail]{out/valzvector_length9ee541b308cdfd9738d44bfb3dff4b46.tex}}}}
+
+\newcommand{\sailoverloadMlength}{\saildoclabelled{sailoverloadMzlength}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadMzlength469e3f917f7b24f4691faf3caf842eba.tex}}}}
+
+\newcommand{\sailvalcountLeadingZeros}{\saildoclabelled{sailzcountzyleadingzyzzeros}{\saildocval{}{\lstinputlisting[language=sail]{out/valzcount_leading_zzeros315ae28f559df1d42a7d2ca4cfff2905.tex}}}}
+
+\newcommand{\sailvalprintBits}{\saildoclabelled{sailzprintzybits}{\saildocval{}{\lstinputlisting[language=sail]{out/valzprint_bits30cf225474fbf3e575d7aa83aa309559.tex}}}}
+
+\newcommand{\sailvalprerrBits}{\saildoclabelled{sailzprerrzybits}{\saildocval{}{\lstinputlisting[language=sail]{out/valzprerr_bits932899725108ebe483d3226f250f2b92.tex}}}}
+
+\newcommand{\sailvalsailSignExtend}{\saildoclabelled{sailzsailzysignzyextend}{\saildocval{}{\lstinputlisting[language=sail]{out/valzsail_sign_extendb66ac7c1aaedb0cb21bdf07e4518af5e.tex}}}}
+
+\newcommand{\sailvalsailZeroExtend}{\saildoclabelled{sailzsailzyzzerozyextend}{\saildocval{}{\lstinputlisting[language=sail]{out/valzsail_zzero_extend411875c18d3b332113845d17151890c2.tex}}}}
+
+\newcommand{\sailvaltruncate}{\saildoclabelled{sailztruncate}{\saildocval{\lstinline{truncate}\lstinline`(v, n)` truncates \lstinline`v`, keeping only the \emph{least} significant \lstinline`n` bits.
+
+}{\lstinputlisting[language=sail]{out/valztruncatea666e28ae0c8ca7327a2b3fcd1ed4ec7.tex}}}}
+
+\newcommand{\sailvaltruncateLSB}{\saildoclabelled{sailztruncateLSB}{\saildocval{\lstinline{truncateLSB}\lstinline`(v, n)` truncates \lstinline`v`, keeping only the \emph{most} significant \lstinline`n` bits.
+
+}{\lstinputlisting[language=sail]{out/valztruncatelsb4d124c6ec672453343dc0b20d295e82d.tex}}}}
+
+\newcommand{\sailvalsailMask}{\saildoclabelled{sailzsailzymask}{\saildocval{}{\lstinputlisting[language=sail]{out/valzsail_maske146b73afc824e90813dd8234bfa3053.tex}}}}
+
+\newcommand{\sailfnsailMask}{\saildoclabelled{sailfnzsailzymask}{\saildocfn{}{\lstinputlisting[language=sail]{out/fnzsail_maske146b73afc824e90813dd8234bfa3053.tex}}}}
+
+\newcommand{\sailoverloadNzEightoperatorzZerozQzNine}{\saildoclabelled{sailoverloadNzz8operatorz0zQz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadNzz8operatorz0zqz9ccbd65071d8f0fbb9677c7f6e86d3527.tex}}}}
+
+\newcommand{\sailvalbitvectorConcat}{\saildoclabelled{sailzbitvectorzyconcat}{\saildocval{}{\lstinputlisting[language=sail]{out/valzbitvector_concat6176f8be1468d8779ee8370fd3b4a6e0.tex}}}}
+
+\newcommand{\sailoverloadOappend}{\saildoclabelled{sailoverloadOzappend}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadOzappend88575169e0ec1639b6ae3851df999710.tex}}}}
+
+\newcommand{\sailvalappendSixFour}{\saildoclabelled{sailzappendzy64}{\saildocval{}{\lstinputlisting[language=sail]{out/valzappend_6433ef192058d4bf5f092d6f8b6d97f4c4.tex}}}}
+
+\newcommand{\sailvalbitvectorAccess}{\saildoclabelled{sailzbitvectorzyaccess}{\saildocval{}{\lstinputlisting[language=sail]{out/valzbitvector_access8b584ca86770abb6b0da5ef059a02ed9.tex}}}}
+
+\newcommand{\sailvalplainVectorAccess}{\saildoclabelled{sailzplainzyvectorzyaccess}{\saildocval{}{\lstinputlisting[language=sail]{out/valzplain_vector_access792547dd734d4ff2e6078cbb88967469.tex}}}}
+
+\newcommand{\sailoverloadPvectorAccess}{\saildoclabelled{sailoverloadPzvectorzyaccess}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadPzvector_accessbe81ec250d2df2ebadde393ea37a85a4.tex}}}}
+
+\newcommand{\sailvalbitvectorUpdate}{\saildoclabelled{sailzbitvectorzyupdate}{\saildocval{}{\lstinputlisting[language=sail]{out/valzbitvector_update20826799a1ff3ff40895206db0df14bb.tex}}}}
+
+\newcommand{\sailvalplainVectorUpdate}{\saildoclabelled{sailzplainzyvectorzyupdate}{\saildocval{}{\lstinputlisting[language=sail]{out/valzplain_vector_updateb31d67bfe51b1a6f79983347dfc57da0.tex}}}}
+
+\newcommand{\sailoverloadQvectorUpdate}{\saildoclabelled{sailoverloadQzvectorzyupdate}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadQzvector_updateb14d5207ae01ed7fc9d9882c9cc3ebef.tex}}}}
+
+\newcommand{\sailvaladdBits}{\saildoclabelled{sailzaddzybits}{\saildocval{}{\lstinputlisting[language=sail]{out/valzadd_bits24373ffc11f289d5bb648df2f4f41b25.tex}}}}
+
+\newcommand{\sailvaladdBitsInt}{\saildoclabelled{sailzaddzybitszyint}{\saildocval{}{\lstinputlisting[language=sail]{out/valzadd_bits_inta5424052402522ff4653275c899f7543.tex}}}}
+
+\newcommand{\sailoverloadRzEightoperatorzZerozBzNine}{\saildoclabelled{sailoverloadRzz8operatorz0zBz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadRzz8operatorz0zbz9a2d0168f574b152e5f31357e86602c16.tex}}}}
+
+\newcommand{\sailvalsubBits}{\saildoclabelled{sailzsubzybits}{\saildocval{}{\lstinputlisting[language=sail]{out/valzsub_bitsf0dc4fc3429d45517c523db21af72127.tex}}}}
+
+\newcommand{\sailvalnotVec}{\saildoclabelled{sailznotzyvec}{\saildocval{}{\lstinputlisting[language=sail]{out/valznot_vecfb45897f737be88160f5363827ef4a4b.tex}}}}
+
+\newcommand{\sailvalandVec}{\saildoclabelled{sailzandzyvec}{\saildocval{}{\lstinputlisting[language=sail]{out/valzand_vec99be3fe45d23194b597520c9e407ad35.tex}}}}
+
+\newcommand{\sailoverloadSzEightoperatorzZerozSixzNine}{\saildoclabelled{sailoverloadSzz8operatorz0z6z9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadSzz8operatorz0z6z9d3731bb9b1c9d765858778ad48ba6b3a.tex}}}}
+
+\newcommand{\sailvalorVec}{\saildoclabelled{sailzorzyvec}{\saildocval{}{\lstinputlisting[language=sail]{out/valzor_vec467c7a3f74be27085fe1b2aa3651ffe7.tex}}}}
+
+\newcommand{\sailoverloadTzEightoperatorzZerozUzNine}{\saildoclabelled{sailoverloadTzz8operatorz0zUz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadTzz8operatorz0zuz99af95b281314726fa91893b57fc290dc.tex}}}}
+
+\newcommand{\sailvalsubrangeBits}{\saildoclabelled{sailzsubrangezybits}{\saildocval{}{\lstinputlisting[language=sail]{out/valzsubrange_bits6c497c14df4f4754bd345a6c56ca2aad.tex}}}}
+
+\newcommand{\sailoverloadUvectorSubrange}{\saildoclabelled{sailoverloadUzvectorzysubrange}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadUzvector_subrange270c799ffa6c20b5244f22c64fba0367.tex}}}}
+
+\newcommand{\sailvalupdateSubrangeBits}{\saildoclabelled{sailzupdatezysubrangezybits}{\saildocval{}{\lstinputlisting[language=sail]{out/valzupdate_subrange_bitsb5ffe862b26310b45a779cd45bbf041e.tex}}}}
+
+\newcommand{\sailoverloadVvectorUpdateSubrange}{\saildoclabelled{sailoverloadVzvectorzyupdatezysubrange}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadVzvector_update_subrangeb77be803268d55f5f112399f9d0dfbc2.tex}}}}
+
+\newcommand{\sailvalsailShiftleft}{\saildoclabelled{sailzsailzyshiftleft}{\saildocval{}{\lstinputlisting[language=sail]{out/valzsail_shiftlefta7bc10407d10355c4e981688c9926084.tex}}}}
+
+\newcommand{\sailvalsailShiftright}{\saildoclabelled{sailzsailzyshiftright}{\saildocval{}{\lstinputlisting[language=sail]{out/valzsail_shiftrighte403ac5c2740b7767c2bdfe689082562.tex}}}}
+
+\newcommand{\sailvalsailArithShiftright}{\saildoclabelled{sailzsailzyarithzyshiftright}{\saildocval{}{\lstinputlisting[language=sail]{out/valzsail_arith_shiftrighta24f06e92ffcd84e26ed61085c833371.tex}}}}
+
+\newcommand{\sailvalsailZeros}{\saildoclabelled{sailzsailzyzzeros}{\saildocval{}{\lstinputlisting[language=sail]{out/valzsail_zzeros174d4d4928427d9df9fa9749f1df5f96.tex}}}}
+
+\newcommand{\sailvalsailOnes}{\saildoclabelled{sailzsailzyones}{\saildocval{}{\lstinputlisting[language=sail]{out/valzsail_ones0510f34656bd3d7b905b0ff315bf81d7.tex}}}}
+
+\newcommand{\sailfnsailOnes}{\saildoclabelled{sailfnzsailzyones}{\saildocfn{}{\lstinputlisting[language=sail]{out/fnzsail_ones0510f34656bd3d7b905b0ff315bf81d7.tex}}}}
+
+\newcommand{\sailvalslice}{\saildoclabelled{sailzslice}{\saildocval{}{\lstinputlisting[language=sail]{out/valzslice9979e992fd48f77a2c3fef7fbcce068e.tex}}}}
+
+\newcommand{\sailvalreplicateBits}{\saildoclabelled{sailzreplicatezybits}{\saildocval{}{\lstinputlisting[language=sail]{out/valzreplicate_bitsb29bdab6bb9437712accf2dc81ea3d3e.tex}}}}
+
+\newcommand{\sailvalsliceMask}{\saildoclabelled{sailzslicezymask}{\saildocval{}{\lstinputlisting[language=sail]{out/valzslice_maske01cafc7448fbf1583dc5dd96b06c854.tex}}}}
+
+\newcommand{\sailfnsliceMask}{\saildoclabelled{sailfnzslicezymask}{\saildocfn{}{\lstinputlisting[language=sail]{out/fnzslice_maske01cafc7448fbf1583dc5dd96b06c854.tex}}}}
+
+\newcommand{\sailvalgetSliceInt}{\saildoclabelled{sailzgetzyslicezyint}{\saildocval{}{\lstinputlisting[language=sail]{out/valzget_slice_int3c313e973dc436aff309f66096377164.tex}}}}
+
+\newcommand{\sailvalsetSliceInt}{\saildoclabelled{sailzsetzyslicezyint}{\saildocval{}{\lstinputlisting[language=sail]{out/valzset_slice_intf4b6b0ed3d8b3bb2f2e0d7a492959629.tex}}}}
+
+\newcommand{\sailvalsetSliceBits}{\saildoclabelled{sailzsetzyslicezybits}{\saildocval{}{\lstinputlisting[language=sail]{out/valzset_slice_bits5956200094c551f35973411fcc90a521.tex}}}}
+
+\newcommand{\sailvalunsigned}{\saildoclabelled{sailzunsigned}{\saildocval{converts a bit vector of length $n$ to an integer in the range $0$ to $2^n - 1$.
+
+}{\lstinputlisting[language=sail]{out/valzunsigned1010eda2cdd2666cd8fd0ddf82ac526f.tex}}}}
+
+\newcommand{\sailvalsigned}{\saildoclabelled{sailzsigned}{\saildocval{converts a bit vector of length $n$ to an integer in the range $-2^{n-1}$ to $2^{n-1} - 1$ using twos-complement.
+
+}{\lstinputlisting[language=sail]{out/valzsigned36d2317f34f1dacb4e465e6e56b185e6.tex}}}}
+
+\newcommand{\sailoverloadWSizze}{\saildoclabelled{sailoverloadWzzyzysizze}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadWz__sizze5b2e36a5dbb42eaba80b4d164e45d3ae.tex}}}}
 
 \newcommand{\sailtypecapUpermsWidth}{\saildoclabelled{sailtypezcapzyupermszywidth}{\saildoctype{}{\lstinputlisting[language=sail]{out/typezcap_uperms_widthf6dfed0942499b0c2d58b90971faca40.tex}}}}
 
@@ -32,23 +215,153 @@
 }{\lstinputlisting[language=sail]{out/fnzfunction_with_underscores6e195bff96b3fe3d60b356f28519989f.tex}}}}
 
 \newcommand{\sailval}[1]{
+  \ifstrequal{#1}{\_\_bitfield\_deref}{\sailvalBitfieldDeref}{}%
+  \ifstrequal{#1}{\_\_deref}{\sailvalDeref}{}%
+  \ifstrequal{#1}{\_\_id}{\sailvalId}{}%
+  \ifstrequal{#1}{add\_bits}{\sailvaladdBits}{}%
+  \ifstrequal{#1}{add\_bits\_int}{\sailvaladdBitsInt}{}%
+  \ifstrequal{#1}{and\_bool}{\sailvalandBool}{}%
+  \ifstrequal{#1}{and\_bool\_no\_flow}{\sailvalandBoolNoFlow}{}%
+  \ifstrequal{#1}{and\_vec}{\sailvalandVec}{}%
+  \ifstrequal{#1}{append\_64}{\sailvalappendSixFour}{}%
+  \ifstrequal{#1}{bitvector\_access}{\sailvalbitvectorAccess}{}%
+  \ifstrequal{#1}{bitvector\_concat}{\sailvalbitvectorConcat}{}%
+  \ifstrequal{#1}{bitvector\_length}{\sailvalbitvectorLength}{}%
+  \ifstrequal{#1}{bitvector\_update}{\sailvalbitvectorUpdate}{}%
+  \ifstrequal{#1}{count\_leading\_zeros}{\sailvalcountLeadingZeros}{}%
+  \ifstrequal{#1}{eq\_bit}{\sailvaleqBit}{}%
+  \ifstrequal{#1}{eq\_bits}{\sailvaleqBits}{}%
+  \ifstrequal{#1}{eq\_bool}{\sailvaleqBool}{}%
+  \ifstrequal{#1}{eq\_int}{\sailvaleqInt}{}%
+  \ifstrequal{#1}{eq\_unit}{\sailvaleqUnit}{}%
   \ifstrequal{#1}{function\_with\_underscores}{\sailvalfunctionWithUnderscores}{}%
-  \ifstrequal{#1}{main}{\sailvalmain}{}}
+  \ifstrequal{#1}{get\_slice\_int}{\sailvalgetSliceInt}{}%
+  \ifstrequal{#1}{gt\_int}{\sailvalgtInt}{}%
+  \ifstrequal{#1}{gteq\_int}{\sailvalgteqInt}{}%
+  \ifstrequal{#1}{lt\_int}{\sailvalltInt}{}%
+  \ifstrequal{#1}{lteq\_int}{\sailvallteqInt}{}%
+  \ifstrequal{#1}{main}{\sailvalmain}{}%
+  \ifstrequal{#1}{neq\_bits}{\sailvalneqBits}{}%
+  \ifstrequal{#1}{neq\_bool}{\sailvalneqBool}{}%
+  \ifstrequal{#1}{neq\_int}{\sailvalneqInt}{}%
+  \ifstrequal{#1}{not\_bool}{\sailvalnotBool}{}%
+  \ifstrequal{#1}{not\_vec}{\sailvalnotVec}{}%
+  \ifstrequal{#1}{or\_bool}{\sailvalorBool}{}%
+  \ifstrequal{#1}{or\_vec}{\sailvalorVec}{}%
+  \ifstrequal{#1}{plain\_vector\_access}{\sailvalplainVectorAccess}{}%
+  \ifstrequal{#1}{plain\_vector\_update}{\sailvalplainVectorUpdate}{}%
+  \ifstrequal{#1}{prerr\_bits}{\sailvalprerrBits}{}%
+  \ifstrequal{#1}{print\_bits}{\sailvalprintBits}{}%
+  \ifstrequal{#1}{replicate\_bits}{\sailvalreplicateBits}{}%
+  \ifstrequal{#1}{sail\_arith\_shiftright}{\sailvalsailArithShiftright}{}%
+  \ifstrequal{#1}{sail\_mask}{\sailvalsailMask}{}%
+  \ifstrequal{#1}{sail\_ones}{\sailvalsailOnes}{}%
+  \ifstrequal{#1}{sail\_shiftleft}{\sailvalsailShiftleft}{}%
+  \ifstrequal{#1}{sail\_shiftright}{\sailvalsailShiftright}{}%
+  \ifstrequal{#1}{sail\_sign\_extend}{\sailvalsailSignExtend}{}%
+  \ifstrequal{#1}{sail\_zero\_extend}{\sailvalsailZeroExtend}{}%
+  \ifstrequal{#1}{sail\_zeros}{\sailvalsailZeros}{}%
+  \ifstrequal{#1}{set\_slice\_bits}{\sailvalsetSliceBits}{}%
+  \ifstrequal{#1}{set\_slice\_int}{\sailvalsetSliceInt}{}%
+  \ifstrequal{#1}{signed}{\sailvalsigned}{}%
+  \ifstrequal{#1}{slice}{\sailvalslice}{}%
+  \ifstrequal{#1}{slice\_mask}{\sailvalsliceMask}{}%
+  \ifstrequal{#1}{sub\_bits}{\sailvalsubBits}{}%
+  \ifstrequal{#1}{subrange\_bits}{\sailvalsubrangeBits}{}%
+  \ifstrequal{#1}{truncate}{\sailvaltruncate}{}%
+  \ifstrequal{#1}{truncateLSB}{\sailvaltruncateLSB}{}%
+  \ifstrequal{#1}{unsigned}{\sailvalunsigned}{}%
+  \ifstrequal{#1}{update\_subrange\_bits}{\sailvalupdateSubrangeBits}{}%
+  \ifstrequal{#1}{vector\_length}{\sailvalvectorLength}{}}
 
 \newcommand{\sailrefval}[2]{
+  \ifstrequal{#1}{__bitfield_deref}{\hyperref[sailzzyzybitfieldzyderef]{#2}}{}%
+  \ifstrequal{#1}{__deref}{\hyperref[sailzzyzyderef]{#2}}{}%
+  \ifstrequal{#1}{__id}{\hyperref[sailzzyzyid]{#2}}{}%
+  \ifstrequal{#1}{add_bits}{\hyperref[sailzaddzybits]{#2}}{}%
+  \ifstrequal{#1}{add_bits_int}{\hyperref[sailzaddzybitszyint]{#2}}{}%
+  \ifstrequal{#1}{and_bool}{\hyperref[sailzandzybool]{#2}}{}%
+  \ifstrequal{#1}{and_bool_no_flow}{\hyperref[sailzandzyboolzynozyflow]{#2}}{}%
+  \ifstrequal{#1}{and_vec}{\hyperref[sailzandzyvec]{#2}}{}%
+  \ifstrequal{#1}{append_64}{\hyperref[sailzappendzy64]{#2}}{}%
+  \ifstrequal{#1}{bitvector_access}{\hyperref[sailzbitvectorzyaccess]{#2}}{}%
+  \ifstrequal{#1}{bitvector_concat}{\hyperref[sailzbitvectorzyconcat]{#2}}{}%
+  \ifstrequal{#1}{bitvector_length}{\hyperref[sailzbitvectorzylength]{#2}}{}%
+  \ifstrequal{#1}{bitvector_update}{\hyperref[sailzbitvectorzyupdate]{#2}}{}%
+  \ifstrequal{#1}{count_leading_zeros}{\hyperref[sailzcountzyleadingzyzzeros]{#2}}{}%
+  \ifstrequal{#1}{eq_bit}{\hyperref[sailzeqzybit]{#2}}{}%
+  \ifstrequal{#1}{eq_bits}{\hyperref[sailzeqzybits]{#2}}{}%
+  \ifstrequal{#1}{eq_bool}{\hyperref[sailzeqzybool]{#2}}{}%
+  \ifstrequal{#1}{eq_int}{\hyperref[sailzeqzyint]{#2}}{}%
+  \ifstrequal{#1}{eq_unit}{\hyperref[sailzeqzyunit]{#2}}{}%
   \ifstrequal{#1}{function_with_underscores}{\hyperref[sailzfunctionzywithzyunderscores]{#2}}{}%
-  \ifstrequal{#1}{main}{\hyperref[sailzmain]{#2}}{}}
+  \ifstrequal{#1}{get_slice_int}{\hyperref[sailzgetzyslicezyint]{#2}}{}%
+  \ifstrequal{#1}{gt_int}{\hyperref[sailzgtzyint]{#2}}{}%
+  \ifstrequal{#1}{gteq_int}{\hyperref[sailzgteqzyint]{#2}}{}%
+  \ifstrequal{#1}{lt_int}{\hyperref[sailzltzyint]{#2}}{}%
+  \ifstrequal{#1}{lteq_int}{\hyperref[sailzlteqzyint]{#2}}{}%
+  \ifstrequal{#1}{main}{\hyperref[sailzmain]{#2}}{}%
+  \ifstrequal{#1}{neq_bits}{\hyperref[sailzneqzybits]{#2}}{}%
+  \ifstrequal{#1}{neq_bool}{\hyperref[sailzneqzybool]{#2}}{}%
+  \ifstrequal{#1}{neq_int}{\hyperref[sailzneqzyint]{#2}}{}%
+  \ifstrequal{#1}{not_bool}{\hyperref[sailznotzybool]{#2}}{}%
+  \ifstrequal{#1}{not_vec}{\hyperref[sailznotzyvec]{#2}}{}%
+  \ifstrequal{#1}{or_bool}{\hyperref[sailzorzybool]{#2}}{}%
+  \ifstrequal{#1}{or_vec}{\hyperref[sailzorzyvec]{#2}}{}%
+  \ifstrequal{#1}{plain_vector_access}{\hyperref[sailzplainzyvectorzyaccess]{#2}}{}%
+  \ifstrequal{#1}{plain_vector_update}{\hyperref[sailzplainzyvectorzyupdate]{#2}}{}%
+  \ifstrequal{#1}{prerr_bits}{\hyperref[sailzprerrzybits]{#2}}{}%
+  \ifstrequal{#1}{print_bits}{\hyperref[sailzprintzybits]{#2}}{}%
+  \ifstrequal{#1}{replicate_bits}{\hyperref[sailzreplicatezybits]{#2}}{}%
+  \ifstrequal{#1}{sail_arith_shiftright}{\hyperref[sailzsailzyarithzyshiftright]{#2}}{}%
+  \ifstrequal{#1}{sail_mask}{\hyperref[sailzsailzymask]{#2}}{}%
+  \ifstrequal{#1}{sail_ones}{\hyperref[sailzsailzyones]{#2}}{}%
+  \ifstrequal{#1}{sail_shiftleft}{\hyperref[sailzsailzyshiftleft]{#2}}{}%
+  \ifstrequal{#1}{sail_shiftright}{\hyperref[sailzsailzyshiftright]{#2}}{}%
+  \ifstrequal{#1}{sail_sign_extend}{\hyperref[sailzsailzysignzyextend]{#2}}{}%
+  \ifstrequal{#1}{sail_zero_extend}{\hyperref[sailzsailzyzzerozyextend]{#2}}{}%
+  \ifstrequal{#1}{sail_zeros}{\hyperref[sailzsailzyzzeros]{#2}}{}%
+  \ifstrequal{#1}{set_slice_bits}{\hyperref[sailzsetzyslicezybits]{#2}}{}%
+  \ifstrequal{#1}{set_slice_int}{\hyperref[sailzsetzyslicezyint]{#2}}{}%
+  \ifstrequal{#1}{signed}{\hyperref[sailzsigned]{#2}}{}%
+  \ifstrequal{#1}{slice}{\hyperref[sailzslice]{#2}}{}%
+  \ifstrequal{#1}{slice_mask}{\hyperref[sailzslicezymask]{#2}}{}%
+  \ifstrequal{#1}{sub_bits}{\hyperref[sailzsubzybits]{#2}}{}%
+  \ifstrequal{#1}{subrange_bits}{\hyperref[sailzsubrangezybits]{#2}}{}%
+  \ifstrequal{#1}{truncate}{\hyperref[sailztruncate]{#2}}{}%
+  \ifstrequal{#1}{truncateLSB}{\hyperref[sailztruncateLSB]{#2}}{}%
+  \ifstrequal{#1}{unsigned}{\hyperref[sailzunsigned]{#2}}{}%
+  \ifstrequal{#1}{update_subrange_bits}{\hyperref[sailzupdatezysubrangezybits]{#2}}{}%
+  \ifstrequal{#1}{vector_length}{\hyperref[sailzvectorzylength]{#2}}{}}
 
 \newcommand{\sailfn}[1]{
+  \ifstrequal{#1}{\_\_id}{\sailfnId}{}%
+  \ifstrequal{#1}{eq\_unit}{\sailfneqUnit}{}%
   \ifstrequal{#1}{function\_with\_underscores}{\sailfnfunctionWithUnderscores}{}%
-  \ifstrequal{#1}{main}{\sailfnmain}{}}
+  \ifstrequal{#1}{main}{\sailfnmain}{}%
+  \ifstrequal{#1}{neq\_bits}{\sailfnneqBits}{}%
+  \ifstrequal{#1}{neq\_bool}{\sailfnneqBool}{}%
+  \ifstrequal{#1}{neq\_int}{\sailfnneqInt}{}%
+  \ifstrequal{#1}{sail\_mask}{\sailfnsailMask}{}%
+  \ifstrequal{#1}{sail\_ones}{\sailfnsailOnes}{}%
+  \ifstrequal{#1}{slice\_mask}{\sailfnsliceMask}{}}
 
 \newcommand{\sailreffn}[2]{
+  \ifstrequal{#1}{__id}{\hyperref[sailfnzzyzyid]{#2}}{}%
+  \ifstrequal{#1}{eq_unit}{\hyperref[sailfnzeqzyunit]{#2}}{}%
   \ifstrequal{#1}{function_with_underscores}{\hyperref[sailfnzfunctionzywithzyunderscores]{#2}}{}%
-  \ifstrequal{#1}{main}{\hyperref[sailfnzmain]{#2}}{}}
+  \ifstrequal{#1}{main}{\hyperref[sailfnzmain]{#2}}{}%
+  \ifstrequal{#1}{neq_bits}{\hyperref[sailfnzneqzybits]{#2}}{}%
+  \ifstrequal{#1}{neq_bool}{\hyperref[sailfnzneqzybool]{#2}}{}%
+  \ifstrequal{#1}{neq_int}{\hyperref[sailfnzneqzyint]{#2}}{}%
+  \ifstrequal{#1}{sail_mask}{\hyperref[sailfnzsailzymask]{#2}}{}%
+  \ifstrequal{#1}{sail_ones}{\hyperref[sailfnzsailzyones]{#2}}{}%
+  \ifstrequal{#1}{slice_mask}{\hyperref[sailfnzslicezymask]{#2}}{}}
 
 \newcommand{\sailtype}[1]{
+  \ifstrequal{#1}{bits}{\sailtypebits}{}%
   \ifstrequal{#1}{cap\_uperms\_width}{\sailtypecapUpermsWidth}{}}
 
 \newcommand{\sailreftype}[2]{
+  \ifstrequal{#1}{bits}{\hyperref[sailtypezbits]{#2}}{}%
   \ifstrequal{#1}{cap_uperms_width}{\hyperref[sailtypezcapzyupermszywidth]{#2}}{}}

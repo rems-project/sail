@@ -4,6 +4,7 @@
 \providecommand\saildoctype[2]{#1 #2}
 \providecommand\saildocfn[2]{#1 #2}
 \providecommand\saildocoverload[2]{#1 #2}
+\providecommand\saildocabbrev[1]{#1\@}
 
 \newcommand{\sailtypeast}{\saildoclabelled{sailtypezast}{\saildoctype{}{\lstinputlisting[language=sail]{out/typezast6bb070d12e82e4887160cdfd016230c8.tex}}}}
 
