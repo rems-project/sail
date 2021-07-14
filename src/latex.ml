@@ -516,17 +516,27 @@ let defs { defs; _ } =
      \sailfnmyFunction for a function my_function, we can write
      \sailfn{my_function} by generating a latex macro that compares
      identifiers then outputs the correct mangled command. *)
+
+  (* Accept both the plain identifier and an escaped one that can be used in
+     macros that might also typeset the argument. *)
+  let add_encoded_ids ids =
+    List.concat (List.map (fun id ->
+                     let s = string_of_id id in
+                     let s' = text_code s in
+                     if String.compare s s' == 0 then [(s,id)] else [(s,id); (s',id)]) ids)
+  in
+
   let id_command cat ids =
     sprintf "\\newcommand{\\%s%s}[1]{\n  " !opt_prefix (category_name cat)
-    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\%s}{}" (text_code (string_of_id id)) (latex_cat_id cat id))
-                          (IdSet.elements ids)
+    ^ Util.string_of_list "%\n  " (fun (s, id) -> sprintf "\\ifstrequal{#1}{%s}{\\%s}{}" s (latex_cat_id cat id))
+                          (add_encoded_ids (IdSet.elements ids))
     ^ "}"
     |> string
   in
   let ref_command cat ids =
     sprintf "\\newcommand{\\%sref%s}[2]{\n  " !opt_prefix (category_name cat)
-    ^ Util.string_of_list "%\n  " (fun id -> sprintf "\\ifstrequal{#1}{%s}{\\hyperref[%s]{#2}}{}" (string_of_id id) (refcode_cat_id cat id))
-                          (IdSet.elements ids)
+    ^ Util.string_of_list "%\n  " (fun (s, id) -> sprintf "\\ifstrequal{#1}{%s}{\\hyperref[%s]{#2}}{}" s (refcode_cat_id cat id))
+                          (add_encoded_ids (IdSet.elements ids))
     ^ "}"
     |> string
   in

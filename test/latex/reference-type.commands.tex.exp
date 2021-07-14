@@ -215,153 +215,277 @@
 }{\lstinputlisting[language=sail]{out/fnzfunction_with_underscores6e195bff96b3fe3d60b356f28519989f.tex}}}}
 
 \newcommand{\sailval}[1]{
+  \ifstrequal{#1}{__bitfield_deref}{\sailvalBitfieldDeref}{}%
   \ifstrequal{#1}{\_\_bitfield\_deref}{\sailvalBitfieldDeref}{}%
+  \ifstrequal{#1}{__deref}{\sailvalDeref}{}%
   \ifstrequal{#1}{\_\_deref}{\sailvalDeref}{}%
+  \ifstrequal{#1}{__id}{\sailvalId}{}%
   \ifstrequal{#1}{\_\_id}{\sailvalId}{}%
+  \ifstrequal{#1}{add_bits}{\sailvaladdBits}{}%
   \ifstrequal{#1}{add\_bits}{\sailvaladdBits}{}%
+  \ifstrequal{#1}{add_bits_int}{\sailvaladdBitsInt}{}%
   \ifstrequal{#1}{add\_bits\_int}{\sailvaladdBitsInt}{}%
+  \ifstrequal{#1}{and_bool}{\sailvalandBool}{}%
   \ifstrequal{#1}{and\_bool}{\sailvalandBool}{}%
+  \ifstrequal{#1}{and_bool_no_flow}{\sailvalandBoolNoFlow}{}%
   \ifstrequal{#1}{and\_bool\_no\_flow}{\sailvalandBoolNoFlow}{}%
+  \ifstrequal{#1}{and_vec}{\sailvalandVec}{}%
   \ifstrequal{#1}{and\_vec}{\sailvalandVec}{}%
+  \ifstrequal{#1}{append_64}{\sailvalappendSixFour}{}%
   \ifstrequal{#1}{append\_64}{\sailvalappendSixFour}{}%
+  \ifstrequal{#1}{bitvector_access}{\sailvalbitvectorAccess}{}%
   \ifstrequal{#1}{bitvector\_access}{\sailvalbitvectorAccess}{}%
+  \ifstrequal{#1}{bitvector_concat}{\sailvalbitvectorConcat}{}%
   \ifstrequal{#1}{bitvector\_concat}{\sailvalbitvectorConcat}{}%
+  \ifstrequal{#1}{bitvector_length}{\sailvalbitvectorLength}{}%
   \ifstrequal{#1}{bitvector\_length}{\sailvalbitvectorLength}{}%
+  \ifstrequal{#1}{bitvector_update}{\sailvalbitvectorUpdate}{}%
   \ifstrequal{#1}{bitvector\_update}{\sailvalbitvectorUpdate}{}%
+  \ifstrequal{#1}{count_leading_zeros}{\sailvalcountLeadingZeros}{}%
   \ifstrequal{#1}{count\_leading\_zeros}{\sailvalcountLeadingZeros}{}%
+  \ifstrequal{#1}{eq_bit}{\sailvaleqBit}{}%
   \ifstrequal{#1}{eq\_bit}{\sailvaleqBit}{}%
+  \ifstrequal{#1}{eq_bits}{\sailvaleqBits}{}%
   \ifstrequal{#1}{eq\_bits}{\sailvaleqBits}{}%
+  \ifstrequal{#1}{eq_bool}{\sailvaleqBool}{}%
   \ifstrequal{#1}{eq\_bool}{\sailvaleqBool}{}%
+  \ifstrequal{#1}{eq_int}{\sailvaleqInt}{}%
   \ifstrequal{#1}{eq\_int}{\sailvaleqInt}{}%
+  \ifstrequal{#1}{eq_unit}{\sailvaleqUnit}{}%
   \ifstrequal{#1}{eq\_unit}{\sailvaleqUnit}{}%
+  \ifstrequal{#1}{function_with_underscores}{\sailvalfunctionWithUnderscores}{}%
   \ifstrequal{#1}{function\_with\_underscores}{\sailvalfunctionWithUnderscores}{}%
+  \ifstrequal{#1}{get_slice_int}{\sailvalgetSliceInt}{}%
   \ifstrequal{#1}{get\_slice\_int}{\sailvalgetSliceInt}{}%
+  \ifstrequal{#1}{gt_int}{\sailvalgtInt}{}%
   \ifstrequal{#1}{gt\_int}{\sailvalgtInt}{}%
+  \ifstrequal{#1}{gteq_int}{\sailvalgteqInt}{}%
   \ifstrequal{#1}{gteq\_int}{\sailvalgteqInt}{}%
+  \ifstrequal{#1}{lt_int}{\sailvalltInt}{}%
   \ifstrequal{#1}{lt\_int}{\sailvalltInt}{}%
+  \ifstrequal{#1}{lteq_int}{\sailvallteqInt}{}%
   \ifstrequal{#1}{lteq\_int}{\sailvallteqInt}{}%
   \ifstrequal{#1}{main}{\sailvalmain}{}%
+  \ifstrequal{#1}{neq_bits}{\sailvalneqBits}{}%
   \ifstrequal{#1}{neq\_bits}{\sailvalneqBits}{}%
+  \ifstrequal{#1}{neq_bool}{\sailvalneqBool}{}%
   \ifstrequal{#1}{neq\_bool}{\sailvalneqBool}{}%
+  \ifstrequal{#1}{neq_int}{\sailvalneqInt}{}%
   \ifstrequal{#1}{neq\_int}{\sailvalneqInt}{}%
+  \ifstrequal{#1}{not_bool}{\sailvalnotBool}{}%
   \ifstrequal{#1}{not\_bool}{\sailvalnotBool}{}%
+  \ifstrequal{#1}{not_vec}{\sailvalnotVec}{}%
   \ifstrequal{#1}{not\_vec}{\sailvalnotVec}{}%
+  \ifstrequal{#1}{or_bool}{\sailvalorBool}{}%
   \ifstrequal{#1}{or\_bool}{\sailvalorBool}{}%
+  \ifstrequal{#1}{or_vec}{\sailvalorVec}{}%
   \ifstrequal{#1}{or\_vec}{\sailvalorVec}{}%
+  \ifstrequal{#1}{plain_vector_access}{\sailvalplainVectorAccess}{}%
   \ifstrequal{#1}{plain\_vector\_access}{\sailvalplainVectorAccess}{}%
+  \ifstrequal{#1}{plain_vector_update}{\sailvalplainVectorUpdate}{}%
   \ifstrequal{#1}{plain\_vector\_update}{\sailvalplainVectorUpdate}{}%
+  \ifstrequal{#1}{prerr_bits}{\sailvalprerrBits}{}%
   \ifstrequal{#1}{prerr\_bits}{\sailvalprerrBits}{}%
+  \ifstrequal{#1}{print_bits}{\sailvalprintBits}{}%
   \ifstrequal{#1}{print\_bits}{\sailvalprintBits}{}%
+  \ifstrequal{#1}{replicate_bits}{\sailvalreplicateBits}{}%
   \ifstrequal{#1}{replicate\_bits}{\sailvalreplicateBits}{}%
+  \ifstrequal{#1}{sail_arith_shiftright}{\sailvalsailArithShiftright}{}%
   \ifstrequal{#1}{sail\_arith\_shiftright}{\sailvalsailArithShiftright}{}%
+  \ifstrequal{#1}{sail_mask}{\sailvalsailMask}{}%
   \ifstrequal{#1}{sail\_mask}{\sailvalsailMask}{}%
+  \ifstrequal{#1}{sail_ones}{\sailvalsailOnes}{}%
   \ifstrequal{#1}{sail\_ones}{\sailvalsailOnes}{}%
+  \ifstrequal{#1}{sail_shiftleft}{\sailvalsailShiftleft}{}%
   \ifstrequal{#1}{sail\_shiftleft}{\sailvalsailShiftleft}{}%
+  \ifstrequal{#1}{sail_shiftright}{\sailvalsailShiftright}{}%
   \ifstrequal{#1}{sail\_shiftright}{\sailvalsailShiftright}{}%
+  \ifstrequal{#1}{sail_sign_extend}{\sailvalsailSignExtend}{}%
   \ifstrequal{#1}{sail\_sign\_extend}{\sailvalsailSignExtend}{}%
+  \ifstrequal{#1}{sail_zero_extend}{\sailvalsailZeroExtend}{}%
   \ifstrequal{#1}{sail\_zero\_extend}{\sailvalsailZeroExtend}{}%
+  \ifstrequal{#1}{sail_zeros}{\sailvalsailZeros}{}%
   \ifstrequal{#1}{sail\_zeros}{\sailvalsailZeros}{}%
+  \ifstrequal{#1}{set_slice_bits}{\sailvalsetSliceBits}{}%
   \ifstrequal{#1}{set\_slice\_bits}{\sailvalsetSliceBits}{}%
+  \ifstrequal{#1}{set_slice_int}{\sailvalsetSliceInt}{}%
   \ifstrequal{#1}{set\_slice\_int}{\sailvalsetSliceInt}{}%
   \ifstrequal{#1}{signed}{\sailvalsigned}{}%
   \ifstrequal{#1}{slice}{\sailvalslice}{}%
+  \ifstrequal{#1}{slice_mask}{\sailvalsliceMask}{}%
   \ifstrequal{#1}{slice\_mask}{\sailvalsliceMask}{}%
+  \ifstrequal{#1}{sub_bits}{\sailvalsubBits}{}%
   \ifstrequal{#1}{sub\_bits}{\sailvalsubBits}{}%
+  \ifstrequal{#1}{subrange_bits}{\sailvalsubrangeBits}{}%
   \ifstrequal{#1}{subrange\_bits}{\sailvalsubrangeBits}{}%
   \ifstrequal{#1}{truncate}{\sailvaltruncate}{}%
   \ifstrequal{#1}{truncateLSB}{\sailvaltruncateLSB}{}%
   \ifstrequal{#1}{unsigned}{\sailvalunsigned}{}%
+  \ifstrequal{#1}{update_subrange_bits}{\sailvalupdateSubrangeBits}{}%
   \ifstrequal{#1}{update\_subrange\_bits}{\sailvalupdateSubrangeBits}{}%
+  \ifstrequal{#1}{vector_length}{\sailvalvectorLength}{}%
   \ifstrequal{#1}{vector\_length}{\sailvalvectorLength}{}}
 
 \newcommand{\sailrefval}[2]{
   \ifstrequal{#1}{__bitfield_deref}{\hyperref[sailzzyzybitfieldzyderef]{#2}}{}%
+  \ifstrequal{#1}{\_\_bitfield\_deref}{\hyperref[sailzzyzybitfieldzyderef]{#2}}{}%
   \ifstrequal{#1}{__deref}{\hyperref[sailzzyzyderef]{#2}}{}%
+  \ifstrequal{#1}{\_\_deref}{\hyperref[sailzzyzyderef]{#2}}{}%
   \ifstrequal{#1}{__id}{\hyperref[sailzzyzyid]{#2}}{}%
+  \ifstrequal{#1}{\_\_id}{\hyperref[sailzzyzyid]{#2}}{}%
   \ifstrequal{#1}{add_bits}{\hyperref[sailzaddzybits]{#2}}{}%
+  \ifstrequal{#1}{add\_bits}{\hyperref[sailzaddzybits]{#2}}{}%
   \ifstrequal{#1}{add_bits_int}{\hyperref[sailzaddzybitszyint]{#2}}{}%
+  \ifstrequal{#1}{add\_bits\_int}{\hyperref[sailzaddzybitszyint]{#2}}{}%
   \ifstrequal{#1}{and_bool}{\hyperref[sailzandzybool]{#2}}{}%
+  \ifstrequal{#1}{and\_bool}{\hyperref[sailzandzybool]{#2}}{}%
   \ifstrequal{#1}{and_bool_no_flow}{\hyperref[sailzandzyboolzynozyflow]{#2}}{}%
+  \ifstrequal{#1}{and\_bool\_no\_flow}{\hyperref[sailzandzyboolzynozyflow]{#2}}{}%
   \ifstrequal{#1}{and_vec}{\hyperref[sailzandzyvec]{#2}}{}%
+  \ifstrequal{#1}{and\_vec}{\hyperref[sailzandzyvec]{#2}}{}%
   \ifstrequal{#1}{append_64}{\hyperref[sailzappendzy64]{#2}}{}%
+  \ifstrequal{#1}{append\_64}{\hyperref[sailzappendzy64]{#2}}{}%
   \ifstrequal{#1}{bitvector_access}{\hyperref[sailzbitvectorzyaccess]{#2}}{}%
+  \ifstrequal{#1}{bitvector\_access}{\hyperref[sailzbitvectorzyaccess]{#2}}{}%
   \ifstrequal{#1}{bitvector_concat}{\hyperref[sailzbitvectorzyconcat]{#2}}{}%
+  \ifstrequal{#1}{bitvector\_concat}{\hyperref[sailzbitvectorzyconcat]{#2}}{}%
   \ifstrequal{#1}{bitvector_length}{\hyperref[sailzbitvectorzylength]{#2}}{}%
+  \ifstrequal{#1}{bitvector\_length}{\hyperref[sailzbitvectorzylength]{#2}}{}%
   \ifstrequal{#1}{bitvector_update}{\hyperref[sailzbitvectorzyupdate]{#2}}{}%
+  \ifstrequal{#1}{bitvector\_update}{\hyperref[sailzbitvectorzyupdate]{#2}}{}%
   \ifstrequal{#1}{count_leading_zeros}{\hyperref[sailzcountzyleadingzyzzeros]{#2}}{}%
+  \ifstrequal{#1}{count\_leading\_zeros}{\hyperref[sailzcountzyleadingzyzzeros]{#2}}{}%
   \ifstrequal{#1}{eq_bit}{\hyperref[sailzeqzybit]{#2}}{}%
+  \ifstrequal{#1}{eq\_bit}{\hyperref[sailzeqzybit]{#2}}{}%
   \ifstrequal{#1}{eq_bits}{\hyperref[sailzeqzybits]{#2}}{}%
+  \ifstrequal{#1}{eq\_bits}{\hyperref[sailzeqzybits]{#2}}{}%
   \ifstrequal{#1}{eq_bool}{\hyperref[sailzeqzybool]{#2}}{}%
+  \ifstrequal{#1}{eq\_bool}{\hyperref[sailzeqzybool]{#2}}{}%
   \ifstrequal{#1}{eq_int}{\hyperref[sailzeqzyint]{#2}}{}%
+  \ifstrequal{#1}{eq\_int}{\hyperref[sailzeqzyint]{#2}}{}%
   \ifstrequal{#1}{eq_unit}{\hyperref[sailzeqzyunit]{#2}}{}%
+  \ifstrequal{#1}{eq\_unit}{\hyperref[sailzeqzyunit]{#2}}{}%
   \ifstrequal{#1}{function_with_underscores}{\hyperref[sailzfunctionzywithzyunderscores]{#2}}{}%
+  \ifstrequal{#1}{function\_with\_underscores}{\hyperref[sailzfunctionzywithzyunderscores]{#2}}{}%
   \ifstrequal{#1}{get_slice_int}{\hyperref[sailzgetzyslicezyint]{#2}}{}%
+  \ifstrequal{#1}{get\_slice\_int}{\hyperref[sailzgetzyslicezyint]{#2}}{}%
   \ifstrequal{#1}{gt_int}{\hyperref[sailzgtzyint]{#2}}{}%
+  \ifstrequal{#1}{gt\_int}{\hyperref[sailzgtzyint]{#2}}{}%
   \ifstrequal{#1}{gteq_int}{\hyperref[sailzgteqzyint]{#2}}{}%
+  \ifstrequal{#1}{gteq\_int}{\hyperref[sailzgteqzyint]{#2}}{}%
   \ifstrequal{#1}{lt_int}{\hyperref[sailzltzyint]{#2}}{}%
+  \ifstrequal{#1}{lt\_int}{\hyperref[sailzltzyint]{#2}}{}%
   \ifstrequal{#1}{lteq_int}{\hyperref[sailzlteqzyint]{#2}}{}%
+  \ifstrequal{#1}{lteq\_int}{\hyperref[sailzlteqzyint]{#2}}{}%
   \ifstrequal{#1}{main}{\hyperref[sailzmain]{#2}}{}%
   \ifstrequal{#1}{neq_bits}{\hyperref[sailzneqzybits]{#2}}{}%
+  \ifstrequal{#1}{neq\_bits}{\hyperref[sailzneqzybits]{#2}}{}%
   \ifstrequal{#1}{neq_bool}{\hyperref[sailzneqzybool]{#2}}{}%
+  \ifstrequal{#1}{neq\_bool}{\hyperref[sailzneqzybool]{#2}}{}%
   \ifstrequal{#1}{neq_int}{\hyperref[sailzneqzyint]{#2}}{}%
+  \ifstrequal{#1}{neq\_int}{\hyperref[sailzneqzyint]{#2}}{}%
   \ifstrequal{#1}{not_bool}{\hyperref[sailznotzybool]{#2}}{}%
+  \ifstrequal{#1}{not\_bool}{\hyperref[sailznotzybool]{#2}}{}%
   \ifstrequal{#1}{not_vec}{\hyperref[sailznotzyvec]{#2}}{}%
+  \ifstrequal{#1}{not\_vec}{\hyperref[sailznotzyvec]{#2}}{}%
   \ifstrequal{#1}{or_bool}{\hyperref[sailzorzybool]{#2}}{}%
+  \ifstrequal{#1}{or\_bool}{\hyperref[sailzorzybool]{#2}}{}%
   \ifstrequal{#1}{or_vec}{\hyperref[sailzorzyvec]{#2}}{}%
+  \ifstrequal{#1}{or\_vec}{\hyperref[sailzorzyvec]{#2}}{}%
   \ifstrequal{#1}{plain_vector_access}{\hyperref[sailzplainzyvectorzyaccess]{#2}}{}%
+  \ifstrequal{#1}{plain\_vector\_access}{\hyperref[sailzplainzyvectorzyaccess]{#2}}{}%
   \ifstrequal{#1}{plain_vector_update}{\hyperref[sailzplainzyvectorzyupdate]{#2}}{}%
+  \ifstrequal{#1}{plain\_vector\_update}{\hyperref[sailzplainzyvectorzyupdate]{#2}}{}%
   \ifstrequal{#1}{prerr_bits}{\hyperref[sailzprerrzybits]{#2}}{}%
+  \ifstrequal{#1}{prerr\_bits}{\hyperref[sailzprerrzybits]{#2}}{}%
   \ifstrequal{#1}{print_bits}{\hyperref[sailzprintzybits]{#2}}{}%
+  \ifstrequal{#1}{print\_bits}{\hyperref[sailzprintzybits]{#2}}{}%
   \ifstrequal{#1}{replicate_bits}{\hyperref[sailzreplicatezybits]{#2}}{}%
+  \ifstrequal{#1}{replicate\_bits}{\hyperref[sailzreplicatezybits]{#2}}{}%
   \ifstrequal{#1}{sail_arith_shiftright}{\hyperref[sailzsailzyarithzyshiftright]{#2}}{}%
+  \ifstrequal{#1}{sail\_arith\_shiftright}{\hyperref[sailzsailzyarithzyshiftright]{#2}}{}%
   \ifstrequal{#1}{sail_mask}{\hyperref[sailzsailzymask]{#2}}{}%
+  \ifstrequal{#1}{sail\_mask}{\hyperref[sailzsailzymask]{#2}}{}%
   \ifstrequal{#1}{sail_ones}{\hyperref[sailzsailzyones]{#2}}{}%
+  \ifstrequal{#1}{sail\_ones}{\hyperref[sailzsailzyones]{#2}}{}%
   \ifstrequal{#1}{sail_shiftleft}{\hyperref[sailzsailzyshiftleft]{#2}}{}%
+  \ifstrequal{#1}{sail\_shiftleft}{\hyperref[sailzsailzyshiftleft]{#2}}{}%
   \ifstrequal{#1}{sail_shiftright}{\hyperref[sailzsailzyshiftright]{#2}}{}%
+  \ifstrequal{#1}{sail\_shiftright}{\hyperref[sailzsailzyshiftright]{#2}}{}%
   \ifstrequal{#1}{sail_sign_extend}{\hyperref[sailzsailzysignzyextend]{#2}}{}%
+  \ifstrequal{#1}{sail\_sign\_extend}{\hyperref[sailzsailzysignzyextend]{#2}}{}%
   \ifstrequal{#1}{sail_zero_extend}{\hyperref[sailzsailzyzzerozyextend]{#2}}{}%
+  \ifstrequal{#1}{sail\_zero\_extend}{\hyperref[sailzsailzyzzerozyextend]{#2}}{}%
   \ifstrequal{#1}{sail_zeros}{\hyperref[sailzsailzyzzeros]{#2}}{}%
+  \ifstrequal{#1}{sail\_zeros}{\hyperref[sailzsailzyzzeros]{#2}}{}%
   \ifstrequal{#1}{set_slice_bits}{\hyperref[sailzsetzyslicezybits]{#2}}{}%
+  \ifstrequal{#1}{set\_slice\_bits}{\hyperref[sailzsetzyslicezybits]{#2}}{}%
   \ifstrequal{#1}{set_slice_int}{\hyperref[sailzsetzyslicezyint]{#2}}{}%
+  \ifstrequal{#1}{set\_slice\_int}{\hyperref[sailzsetzyslicezyint]{#2}}{}%
   \ifstrequal{#1}{signed}{\hyperref[sailzsigned]{#2}}{}%
   \ifstrequal{#1}{slice}{\hyperref[sailzslice]{#2}}{}%
   \ifstrequal{#1}{slice_mask}{\hyperref[sailzslicezymask]{#2}}{}%
+  \ifstrequal{#1}{slice\_mask}{\hyperref[sailzslicezymask]{#2}}{}%
   \ifstrequal{#1}{sub_bits}{\hyperref[sailzsubzybits]{#2}}{}%
+  \ifstrequal{#1}{sub\_bits}{\hyperref[sailzsubzybits]{#2}}{}%
   \ifstrequal{#1}{subrange_bits}{\hyperref[sailzsubrangezybits]{#2}}{}%
+  \ifstrequal{#1}{subrange\_bits}{\hyperref[sailzsubrangezybits]{#2}}{}%
   \ifstrequal{#1}{truncate}{\hyperref[sailztruncate]{#2}}{}%
   \ifstrequal{#1}{truncateLSB}{\hyperref[sailztruncateLSB]{#2}}{}%
   \ifstrequal{#1}{unsigned}{\hyperref[sailzunsigned]{#2}}{}%
   \ifstrequal{#1}{update_subrange_bits}{\hyperref[sailzupdatezysubrangezybits]{#2}}{}%
-  \ifstrequal{#1}{vector_length}{\hyperref[sailzvectorzylength]{#2}}{}}
+  \ifstrequal{#1}{update\_subrange\_bits}{\hyperref[sailzupdatezysubrangezybits]{#2}}{}%
+  \ifstrequal{#1}{vector_length}{\hyperref[sailzvectorzylength]{#2}}{}%
+  \ifstrequal{#1}{vector\_length}{\hyperref[sailzvectorzylength]{#2}}{}}
 
 \newcommand{\sailfn}[1]{
+  \ifstrequal{#1}{__id}{\sailfnId}{}%
   \ifstrequal{#1}{\_\_id}{\sailfnId}{}%
+  \ifstrequal{#1}{eq_unit}{\sailfneqUnit}{}%
   \ifstrequal{#1}{eq\_unit}{\sailfneqUnit}{}%
+  \ifstrequal{#1}{function_with_underscores}{\sailfnfunctionWithUnderscores}{}%
   \ifstrequal{#1}{function\_with\_underscores}{\sailfnfunctionWithUnderscores}{}%
   \ifstrequal{#1}{main}{\sailfnmain}{}%
+  \ifstrequal{#1}{neq_bits}{\sailfnneqBits}{}%
   \ifstrequal{#1}{neq\_bits}{\sailfnneqBits}{}%
+  \ifstrequal{#1}{neq_bool}{\sailfnneqBool}{}%
   \ifstrequal{#1}{neq\_bool}{\sailfnneqBool}{}%
+  \ifstrequal{#1}{neq_int}{\sailfnneqInt}{}%
   \ifstrequal{#1}{neq\_int}{\sailfnneqInt}{}%
+  \ifstrequal{#1}{sail_mask}{\sailfnsailMask}{}%
   \ifstrequal{#1}{sail\_mask}{\sailfnsailMask}{}%
+  \ifstrequal{#1}{sail_ones}{\sailfnsailOnes}{}%
   \ifstrequal{#1}{sail\_ones}{\sailfnsailOnes}{}%
+  \ifstrequal{#1}{slice_mask}{\sailfnsliceMask}{}%
   \ifstrequal{#1}{slice\_mask}{\sailfnsliceMask}{}}
 
 \newcommand{\sailreffn}[2]{
   \ifstrequal{#1}{__id}{\hyperref[sailfnzzyzyid]{#2}}{}%
+  \ifstrequal{#1}{\_\_id}{\hyperref[sailfnzzyzyid]{#2}}{}%
   \ifstrequal{#1}{eq_unit}{\hyperref[sailfnzeqzyunit]{#2}}{}%
+  \ifstrequal{#1}{eq\_unit}{\hyperref[sailfnzeqzyunit]{#2}}{}%
   \ifstrequal{#1}{function_with_underscores}{\hyperref[sailfnzfunctionzywithzyunderscores]{#2}}{}%
+  \ifstrequal{#1}{function\_with\_underscores}{\hyperref[sailfnzfunctionzywithzyunderscores]{#2}}{}%
   \ifstrequal{#1}{main}{\hyperref[sailfnzmain]{#2}}{}%
   \ifstrequal{#1}{neq_bits}{\hyperref[sailfnzneqzybits]{#2}}{}%
+  \ifstrequal{#1}{neq\_bits}{\hyperref[sailfnzneqzybits]{#2}}{}%
   \ifstrequal{#1}{neq_bool}{\hyperref[sailfnzneqzybool]{#2}}{}%
+  \ifstrequal{#1}{neq\_bool}{\hyperref[sailfnzneqzybool]{#2}}{}%
   \ifstrequal{#1}{neq_int}{\hyperref[sailfnzneqzyint]{#2}}{}%
+  \ifstrequal{#1}{neq\_int}{\hyperref[sailfnzneqzyint]{#2}}{}%
   \ifstrequal{#1}{sail_mask}{\hyperref[sailfnzsailzymask]{#2}}{}%
+  \ifstrequal{#1}{sail\_mask}{\hyperref[sailfnzsailzymask]{#2}}{}%
   \ifstrequal{#1}{sail_ones}{\hyperref[sailfnzsailzyones]{#2}}{}%
-  \ifstrequal{#1}{slice_mask}{\hyperref[sailfnzslicezymask]{#2}}{}}
+  \ifstrequal{#1}{sail\_ones}{\hyperref[sailfnzsailzyones]{#2}}{}%
+  \ifstrequal{#1}{slice_mask}{\hyperref[sailfnzslicezymask]{#2}}{}%
+  \ifstrequal{#1}{slice\_mask}{\hyperref[sailfnzslicezymask]{#2}}{}}
 
 \newcommand{\sailtype}[1]{
   \ifstrequal{#1}{bits}{\sailtypebits}{}%
+  \ifstrequal{#1}{cap_uperms_width}{\sailtypecapUpermsWidth}{}%
   \ifstrequal{#1}{cap\_uperms\_width}{\sailtypecapUpermsWidth}{}}
 
 \newcommand{\sailreftype}[2]{
   \ifstrequal{#1}{bits}{\hyperref[sailtypezbits]{#2}}{}%
-  \ifstrequal{#1}{cap_uperms_width}{\hyperref[sailtypezcapzyupermszywidth]{#2}}{}}
+  \ifstrequal{#1}{cap_uperms_width}{\hyperref[sailtypezcapzyupermszywidth]{#2}}{}%
+  \ifstrequal{#1}{cap\_uperms\_width}{\hyperref[sailtypezcapzyupermszywidth]{#2}}{}}

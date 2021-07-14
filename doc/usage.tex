@@ -230,12 +230,15 @@ declaration must be placed in it's own file then the command in
 include the generated Sail in a document one would do something like:
 \begin{lstlisting}[language=TeX]
   \input{commands.tex}
+  \sailtype{my_type}
   \sailval{my_function}
   \sailfn{my_function}
 \end{lstlisting}
-which would enclude the type declaration (\verb+\sailval+) for
-\verb+my_function+ as well as type body of that function
-(\verb+\sailfn+).
+which would include the type definition for \verb+my_type+, and the
+declaration (\verb+\sailval+) as well as the definition
+(\verb+\sailfn+) for \verb+my_function+.  These can also be used with
+escaped version of the names, such as \verb+my\_type+, which is useful
+when defining more complex macros.
 
 It is sometimes useful to include multiple versions of the same Sail
 definitions in a latex document. In this case the \verb+-latex_prefix+
@@ -243,6 +246,7 @@ option can be used. For example if we used \verb+-latex_prefix prefix+
 then the above example would become:
 \begin{lstlisting}[language=TeX]
   \input{commands.tex}
+  \prefixtype{my_type}
   \prefixval{my_function}
   \prefixfn{my_function}
 \end{lstlisting}
