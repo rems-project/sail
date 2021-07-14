@@ -60,11 +60,20 @@ mapping sep : unit <-> string = {
 $ifdef _DEFAULT_DEC
 $include <vector_dec.sail>
 
+val "hex_bits_of_prefix" : forall 'n. (implicit('n), string) -> (bits('n), nat)
+
+val hex_bits_matches_prefix : forall 'n. (implicit('n), string) -> option((bits('n), nat))
+function hex_bits_matches_prefix (n, s) = {
+  let (bs, 'len) = hex_bits_of_prefix(n, s);
+  if (len == 0) then None() else Some(bs, 'len)
+}
+
 val hex_bits_20 : bits(20) <-> string
 val hex_bits_20_forwards = "decimal_string_of_bits" : bits(20) -> string
 val hex_bits_20_forwards_matches : bits(20) -> bool
 function hex_bits_20_forwards_matches bv = true
-val "hex_bits_20_matches_prefix" : string -> option((bits(20), nat))
+val hex_bits_20_matches_prefix : string -> option((bits(20), nat))
+function hex_bits_20_matches_prefix s = hex_bits_matches_prefix(s)
 val hex_bits_20_backwards_matches : string -> bool
 function hex_bits_20_backwards_matches s = match s {
   s if match hex_bits_20_matches_prefix(s) {
