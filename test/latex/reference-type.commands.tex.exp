@@ -5,6 +5,8 @@
 \providecommand\saildocfn[2]{#1 #2}
 \providecommand\saildocoverload[2]{#1 #2}
 \providecommand\saildocabbrev[1]{#1\@}
+\providecommand\saildoclet[2]{#1 #2}
+\providecommand\saildocregister[2]{#1 #2}
 
 \newcommand{\sailvaleqUnit}{\saildoclabelled{sailzeqzyunit}{\saildocval{}{\lstinputlisting[language=sail]{out/valzeq_unit996f84433ac0995f4aadfca5b68cd358.tex}}}}
 
@@ -189,6 +191,8 @@
 \newcommand{\sailoverloadWSizze}{\saildoclabelled{sailoverloadWzzyzysizze}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadWz__sizze5b2e36a5dbb42eaba80b4d164e45d3ae.tex}}}}
 
 \newcommand{\sailtypecapUpermsWidth}{\saildoclabelled{sailtypezcapzyupermszywidth}{\saildoctype{}{\lstinputlisting[language=sail]{out/typezcap_uperms_widthf6dfed0942499b0c2d58b90971faca40.tex}}}}
+
+\newcommand{\sailletcapUpermsWidth}{\saildoclabelled{sailletzcapzyupermszywidth}{\saildoclet{}{\lstinputlisting[language=sail]{out/letzcap_uperms_widthf6dfed0942499b0c2d58b90971faca40.tex}}}}
 
 \newcommand{\sailvalmain}{\saildoclabelled{sailzmain}{\saildocval{}{\lstinputlisting[language=sail]{out/valzmaine3ee21bf8f1dbb3fd716a5a1803d7e24.tex}}}}
 
@@ -489,3 +493,17 @@
   \ifstrequal{#1}{bits}{\hyperref[sailtypezbits]{#2}}{}%
   \ifstrequal{#1}{cap_uperms_width}{\hyperref[sailtypezcapzyupermszywidth]{#2}}{}%
   \ifstrequal{#1}{cap\_uperms\_width}{\hyperref[sailtypezcapzyupermszywidth]{#2}}{}}
+
+\newcommand{\saillet}[1]{
+  \ifstrequal{#1}{cap_uperms_width}{\sailletcapUpermsWidth}{}%
+  \ifstrequal{#1}{cap\_uperms\_width}{\sailletcapUpermsWidth}{}}
+
+\newcommand{\sailreflet}[2]{
+  \ifstrequal{#1}{cap_uperms_width}{\hyperref[sailletzcapzyupermszywidth]{#2}}{}%
+  \ifstrequal{#1}{cap\_uperms\_width}{\hyperref[sailletzcapzyupermszywidth]{#2}}{}}
+
+\newcommand{\sailregister}[1]{
+  }
+
+\newcommand{\sailrefregister}[2]{
+  }

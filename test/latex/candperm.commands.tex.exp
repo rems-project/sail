@@ -5,6 +5,8 @@
 \providecommand\saildocfn[2]{#1 #2}
 \providecommand\saildocoverload[2]{#1 #2}
 \providecommand\saildocabbrev[1]{#1\@}
+\providecommand\saildoclet[2]{#1 #2}
+\providecommand\saildocregister[2]{#1 #2}
 
 \newcommand{\sailtypeast}{\saildoclabelled{sailtypezast}{\saildoctype{}{\lstinputlisting[language=sail]{out/typezast6bb070d12e82e4887160cdfd016230c8.tex}}}}
 
@@ -79,3 +81,15 @@ An exception is raised if:
 
 \newcommand{\sailreftype}[2]{
   \ifstrequal{#1}{ast}{\hyperref[sailtypezast]{#2}}{}}
+
+\newcommand{\saillet}[1]{
+  }
+
+\newcommand{\sailreflet}[2]{
+  }
+
+\newcommand{\sailregister}[1]{
+  }
+
+\newcommand{\sailrefregister}[2]{
+  }

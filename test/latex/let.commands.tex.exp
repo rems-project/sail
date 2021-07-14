@@ -1,0 +1,47 @@
+\providecommand\saildoclabelled[2]{\phantomsection\label{#1}#2}
+\providecommand\saildocval[2]{#1 #2}
+\providecommand\saildocfcl[2]{#1 #2}
+\providecommand\saildoctype[2]{#1 #2}
+\providecommand\saildocfn[2]{#1 #2}
+\providecommand\saildocoverload[2]{#1 #2}
+\providecommand\saildocabbrev[1]{#1\@}
+\providecommand\saildoclet[2]{#1 #2}
+\providecommand\saildocregister[2]{#1 #2}
+
+\newcommand{\sailletfive}{\saildoclabelled{sailletzfive}{\saildoclet{}{\lstinputlisting[language=sail]{out/letzfivecd794ea050dab71d846e756689b83a36.tex}}}}
+
+\newcommand{\sailletseven}{\saildoclabelled{sailletzseven}{\saildoclet{}{\lstinputlisting[language=sail]{out/letzseven4931f12072db48c84b4f78b84a6a1b73.tex}}}}
+
+\newcommand{\sailval}[1]{
+  }
+
+\newcommand{\sailrefval}[2]{
+  }
+
+\newcommand{\sailfn}[1]{
+  }
+
+\newcommand{\sailreffn}[2]{
+  }
+
+\newcommand{\sailtype}[1]{
+  }
+
+\newcommand{\sailreftype}[2]{
+  }
+
+\newcommand{\saillet}[1]{
+  \ifstrequal{#1}{five}{\sailletfive}{}%
+  \ifstrequal{#1}{seven}{\sailletseven}{}%
+  \ifstrequal{#1}{six}{\sailletseven}{}}
+
+\newcommand{\sailreflet}[2]{
+  \ifstrequal{#1}{five}{\hyperref[sailletzfive]{#2}}{}%
+  \ifstrequal{#1}{seven}{\hyperref[sailletzseven]{#2}}{}%
+  \ifstrequal{#1}{six}{\hyperref[sailletzseven]{#2}}{}}
+
+\newcommand{\sailregister}[1]{
+  }
+
+\newcommand{\sailrefregister}[2]{
+  }

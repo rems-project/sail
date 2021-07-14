@@ -108,6 +108,8 @@ type id_category =
   | FunclNum of int
   | FunclApp of string
   | Type
+  | Let
+  | Register
 
 let number_replacements =
     [ ("0", "Zero");
@@ -144,6 +146,8 @@ let category_name = function
      let str = replace_others (replace_numbers (Util.zencode_string (string_of_id id))) in
      "fcl" ^ String.sub str 1 (String.length str - 1) ^ unique_postfix n
   | FunclApp str -> "fcl" ^ str
+  | Let -> "let"
+  | Register -> "register"
 
 let category_name_val = function
   | Val -> ""
@@ -157,6 +161,8 @@ let category_name_simple = function
   | FunclNum _ -> "fcl"
   | FunclCtor (_, _) -> "fcl"
   | FunclApp _ -> "fcl"
+  | Let -> "let"
+  | Register -> "register"
 
 (* Generate a unique latex identifier from a Sail identifier. We store
    a mapping from identifiers to strings in state so we always return
@@ -458,13 +464,19 @@ let defs { defs; _ } =
     "\\providecommand\\saildoctype[2]{#1 #2}\n" ^
     "\\providecommand\\saildocfn[2]{#1 #2}\n" ^
     "\\providecommand\\saildocoverload[2]{#1 #2}\n" ^
-    "\\providecommand\\saildocabbrev[1]{#1\\@}\n\n") in
+    "\\providecommand\\saildocabbrev[1]{#1\\@}\n" ^
+    "\\providecommand\\saildoclet[2]{#1 #2}\n" ^
+    "\\providecommand\\saildocregister[2]{#1 #2}\n\n") in
 
   let overload_counter = ref 0 in
 
-  let valspecs = ref IdSet.empty in
-  let fundefs = ref IdSet.empty in
-  let typedefs = ref IdSet.empty in
+  (* These map each id to the canonical id used for the LaTeX macro; usually the
+     identity, but let bindings can produce multiple entries. *)
+  let valspecs = ref Bindings.empty in
+  let fundefs = ref Bindings.empty in
+  let typedefs = ref Bindings.empty in
+  let letdefs = ref Bindings.empty in
+  let regdefs = ref Bindings.empty in
 
   let latex_def def =
     match def with
@@ -476,19 +488,28 @@ let defs { defs; _ } =
        Some (latex_command (Overload !overload_counter) id doc (id_loc id, None))
 
     | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), annot) as vs) as def ->
-       valspecs := IdSet.add id !valspecs;
+       valspecs := Bindings.add id id !valspecs;
        if !opt_simple_val then
          Some (latex_command Val id (doc_spec_simple vs) annot)
        else
          Some (latex_command Val id (Pretty_print_sail.doc_spec ~comment:false vs) annot)
 
     | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, _), _)]), annot)) as def ->
-       fundefs := IdSet.add id !fundefs;
+       fundefs := Bindings.add id id !fundefs;
        Some (latex_command Function id (Pretty_print_sail.doc_def def) annot)
+
+    | DEF_val (LB_aux (LB_val (pat, _), annot)) as def ->
+       let ids = pat_ids pat in
+       begin match IdSet.min_elt_opt ids with
+       | None -> None
+       | Some base_id ->
+          letdefs := IdSet.fold (fun id -> Bindings.add id base_id) ids !letdefs;
+          Some (latex_command Let base_id (Pretty_print_sail.doc_def def) annot)
+       end
 
     | DEF_type (TD_aux (tdef, annot)) as def ->
        let id = tdef_id tdef in
-       typedefs := IdSet.add id !typedefs;
+       typedefs := Bindings.add id id !typedefs;
        Some (latex_command Type id (Pretty_print_sail.doc_def def) annot)
 
     | DEF_fundef (FD_aux (FD_function (_, _, _, funcls), annot)) as def ->
@@ -496,6 +517,11 @@ let defs { defs; _ } =
 
     | DEF_pragma ("latex", command, l) ->
        process_pragma l command
+
+    | DEF_reg_dec (DEC_aux (_, annot) as dec) as def ->
+       let id = id_of_dec_spec dec in
+       regdefs := Bindings.add id id !regdefs;
+       Some (latex_command Register id (Pretty_print_sail.doc_def def) annot)
 
     | _ -> None
   in
@@ -520,23 +546,23 @@ let defs { defs; _ } =
   (* Accept both the plain identifier and an escaped one that can be used in
      macros that might also typeset the argument. *)
   let add_encoded_ids ids =
-    List.concat (List.map (fun id ->
+    List.concat (List.map (fun (id,base) ->
                      let s = string_of_id id in
                      let s' = text_code s in
-                     if String.compare s s' == 0 then [(s,id)] else [(s,id); (s',id)]) ids)
+                     if String.compare s s' == 0 then [(s,base)] else [(s,base); (s',base)]) ids)
   in
 
   let id_command cat ids =
     sprintf "\\newcommand{\\%s%s}[1]{\n  " !opt_prefix (category_name cat)
     ^ Util.string_of_list "%\n  " (fun (s, id) -> sprintf "\\ifstrequal{#1}{%s}{\\%s}{}" s (latex_cat_id cat id))
-                          (add_encoded_ids (IdSet.elements ids))
+                          (add_encoded_ids (Bindings.bindings ids))
     ^ "}"
     |> string
   in
   let ref_command cat ids =
     sprintf "\\newcommand{\\%sref%s}[2]{\n  " !opt_prefix (category_name cat)
     ^ Util.string_of_list "%\n  " (fun (s, id) -> sprintf "\\ifstrequal{#1}{%s}{\\hyperref[%s]{#2}}{}" s (refcode_cat_id cat id))
-                          (add_encoded_ids (IdSet.elements ids))
+                          (add_encoded_ids (Bindings.bindings ids))
     ^ "}"
     |> string
   in
@@ -548,5 +574,9 @@ let defs { defs; _ } =
                                 id_command Function !fundefs;
                                 ref_command Function !fundefs;
                                 id_command Type !typedefs;
-                                ref_command Type !typedefs]
+                                ref_command Type !typedefs;
+                                id_command Let !letdefs;
+                                ref_command Let !letdefs;
+                                id_command Register !regdefs;
+                                ref_command Register !regdefs;]
   ^^ hardline

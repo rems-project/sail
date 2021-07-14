@@ -236,9 +236,11 @@ include the generated Sail in a document one would do something like:
 \end{lstlisting}
 which would include the type definition for \verb+my_type+, and the
 declaration (\verb+\sailval+) as well as the definition
-(\verb+\sailfn+) for \verb+my_function+.  These can also be used with
-escaped version of the names, such as \verb+my\_type+, which is useful
-when defining more complex macros.
+(\verb+\sailfn+) for \verb+my_function+.  There are also
+\verb+\saillet+ and \verb+\sailregister+ macros for value definitions
+and register definitions.  These can also be used with escaped version
+of the names, such as \verb+my\_type+, which is useful when defining
+more complex macros.
 
 It is sometimes useful to include multiple versions of the same Sail
 definitions in a latex document. In this case the \verb+-latex_prefix+
@@ -253,7 +255,7 @@ then the above example would become:
 
 The generated definitions are created wrapped in customisable macros
 that can be overridden to change the formatting of the Sail code. For
-\verb+\sailfn+ there is a macro \verb+\saildocfn+ that must be defined,
+\verb+\sailfn+ there is a macro \verb+\saildocfn+ that can be redefined,
 and similarly for the other Sail toplevel types.
 
 \paragraph{Cross-referencing} For each macro \verb+\sail+\emph{X}\verb+{id}+ there is a macro
