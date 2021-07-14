@@ -1,4 +1,2 @@
-$include <prelude.sail>
-
-register small : bits(32)
-register big : bits(64)
+register small : bitvector(32, dec)
+register big : bitvector(64, dec)

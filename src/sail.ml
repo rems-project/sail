@@ -159,7 +159,7 @@ let options = Arg.align ([
     Arg.Set Type_check.opt_smt_linearize,
     "(experimental) force linearization for constraints involving exponentials");
   ( "-latex",
-    Arg.Tuple [set_target "latex"; Arg.Clear Type_check.opt_expand_valspec],
+    Arg.Tuple [set_target "latex"; Arg.Clear Type_check.opt_expand_valspec; Arg.Set Type_check.opt_no_bitfield_expansion],
     " pretty print the input to LaTeX");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix := prefix),

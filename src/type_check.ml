@@ -83,6 +83,9 @@ let opt_smt_div = ref false
 (* Use new bitfield syntax, more compatible with ASL *)
 let opt_new_bitfields = ref false
 
+(* Don't expand bitfields (when using old syntax), used for LaTeX output *)
+let opt_no_bitfield_expansion = ref false
+
 let depth = ref 0
 
 let rec indent n = match n with
@@ -5355,7 +5358,9 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
           int_of_nexp_opt (nexp_simp (Env.expand_nexp_synonyms env nexp)) in
         let defs, env =
           check_defs env (Bitfield.macro (eval_index_nexp env, (typ_error env)) id size order ranges) in
-        defs, env
+        if !opt_no_bitfield_expansion
+        then [DEF_type (TD_aux (TD_bitfield (id, typ, ranges), (l, None)))], env
+        else defs, env
      | _ ->
         typ_error env l "Underlying bitfield type must be a constant-width bitvector"
      end
