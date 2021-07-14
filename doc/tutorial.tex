@@ -30,13 +30,13 @@ Code for this example can be found in
 the Sail repository in \verb|doc/examples/my_replicate_bits.sail|. To
 test it, we can invoke Sail interactively using the \verb|-i| option,
 passing the above file on the command line. Typing
-\verb|replicate_bits(3, 0xA)| will step through the execution of the
+\verb|my_replicate_bits(3, 0xA)| will step through the execution of the
 above function, and eventually return the result \verb|0xAAA|. Typing
 \verb|:run| in the interactive interpreter will cause the expression
 to be evaluated fully, rather than stepping through the execution.
 
 Sail allows type variables to be used directly within expressions, so
-the above could be re-written as \mrbfn{my_replicate_bits_two} This
+the above could be re-written as \mrbfn{my_replicate_bits_2} This
 notation can be succinct, but should be used with caution. What
 happens is that Sail will try to re-write the type variables using
 expressions of the appropriate size that are available within the
