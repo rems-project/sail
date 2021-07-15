@@ -775,10 +775,11 @@ let ocaml_pp_generators ctx defs orig_types required =
       else mk_typ_arg (A_typ (mk_typ (Typ_var (kopt_kid kindedid))))
     in
     let targs = List.map make_tyarg tquants in
-    let gen_tyvars_pp, out_typ = match gen_tyvars with
-      | [] -> empty, mk_id_typ id
-      | _ -> separate space gen_tyvars ^^ dot ^^ space, mk_typ (Typ_app (id,targs))
+    let gen_tyvars_pp = match gen_tyvars with
+      | [] -> empty
+      | _ -> separate space gen_tyvars ^^ dot ^^ space
     in
+    let out_typ = mk_typ (Typ_app (id,targs)) in
     let out_typ = Rewrites.simple_typ out_typ in
     let types = string "generators" :: List.map print_quant tquants @ [ocaml_typ ctx out_typ] in
     string name ^^ colon ^^ space ^^

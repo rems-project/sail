@@ -464,6 +464,19 @@ let prover_regstate tgt ast type_envs =
   | _ ->
      type_envs, ast
 
+let ocaml_generator_info : (Type_check.tannot Ast.type_def list * string list) option ref = ref None
+
+let stash_pre_rewrite_info tgt (ast : _ Ast_defs.ast) type_envs =
+  match tgt with
+  | Some "ocaml" ->
+     begin
+       ocaml_generator_info :=
+         match !opt_ocaml_generators with
+         | [] -> None
+         | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast.defs, !opt_ocaml_generators)
+     end
+  | _ -> ()
+
 let target name out_name ast type_envs =
   match name with
   | None -> ()
@@ -472,13 +485,8 @@ let target name out_name ast type_envs =
      Pretty_print_sail.pp_ast stdout ast
 
   | Some "ocaml" ->
-     let ocaml_generator_info =
-       match !opt_ocaml_generators with
-       | [] -> None
-       | _ -> Some (Ocaml_backend.orig_types_for_ocaml_generator ast.defs, !opt_ocaml_generators)
-     in
      let out = match !opt_file_out with None -> "out" | Some s -> s in
-     Ocaml_backend.ocaml_compile out ast ocaml_generator_info
+     Ocaml_backend.ocaml_compile out ast !ocaml_generator_info
 
   | Some "tofrominterp" ->
      let out = match !opt_file_out with None -> "out" | Some s -> s in
@@ -661,6 +669,8 @@ let main () =
       if !opt_sanity then
         ignore (rewrite_ast_check type_envs ast)
       else ();
+
+      stash_pre_rewrite_info !opt_target ast type_envs;
 
       let type_envs, ast = prover_regstate !opt_target ast type_envs in
       let ast, type_envs = match !opt_target with Some tgt -> rewrite_ast_target tgt type_envs ast | None -> ast, type_envs in
