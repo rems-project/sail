@@ -1432,6 +1432,10 @@ let rec codegen_conversion l clexp cval =
      ksprintf string "  CONVERT_OF(%s, %s)(%s, %s);"
               (sgen_ctyp_name ctyp_to) (sgen_ctyp_name ctyp_from) (sgen_clexp clexp) (sgen_cval_param cval)
 
+(* PPrint doesn't provide a nice way to filter out empty documents *)
+let squash_empty docs = List.filter (fun doc -> requirement doc > 0) docs
+let sq_separate_map sep f xs = separate sep (squash_empty (List.map f xs))
+
 let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
   let open Printf in
   match instr with
@@ -1454,18 +1458,18 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr fid ctx) then_instrs) (twice space ^^ rbrace)
   | I_if (cval, then_instrs, else_instrs, ctyp) ->
      string "  if" ^^ space ^^ parens (string (sgen_cval cval)) ^^ space
-     ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr fid ctx) then_instrs) (twice space ^^ rbrace)
+     ^^ surround 2 0 lbrace (sq_separate_map hardline (codegen_instr fid ctx) then_instrs) (twice space ^^ rbrace)
      ^^ space ^^ string "else" ^^ space
-     ^^ surround 2 0 lbrace (separate_map hardline (codegen_instr fid ctx) else_instrs) (twice space ^^ rbrace)
+     ^^ surround 2 0 lbrace (sq_separate_map hardline (codegen_instr fid ctx) else_instrs) (twice space ^^ rbrace)
 
   | I_block instrs ->
      string "  {"
-     ^^ jump 2 2 (separate_map hardline (codegen_instr fid ctx) instrs) ^^ hardline
+     ^^ jump 2 2 (sq_separate_map hardline (codegen_instr fid ctx) instrs) ^^ hardline
      ^^ string "  }"
 
   | I_try_block instrs ->
      string "  { /* try */"
-     ^^ jump 2 2 (separate_map hardline (codegen_instr fid ctx) instrs) ^^ hardline
+     ^^ jump 2 2 (sq_separate_map hardline (codegen_instr fid ctx) instrs) ^^ hardline
      ^^ string "  }"
 
   | I_funcall (x, special_extern, f, args) ->
