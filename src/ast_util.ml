@@ -1101,6 +1101,14 @@ let val_spec_ids defs =
   in
   IdSet.of_list (vs_ids defs)
 
+let record_ids defs =
+  let rec rec_ids = function
+    | DEF_type (TD_aux (TD_record (id, _, _, _), _)) :: defs -> id :: rec_ids defs
+    | def :: defs -> rec_ids defs
+    | [] -> []
+  in
+  IdSet.of_list (rec_ids defs)
+
 module BE = struct
   type t = base_effect
   let compare be1 be2 = String.compare (string_of_base_effect be1) (string_of_base_effect be2)

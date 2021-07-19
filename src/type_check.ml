@@ -3335,11 +3335,12 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
      begin
        (* If the identifier we're matching on is also a constructor of
           a union, that's probably a mistake, so warn about it. *)
-       if Env.is_union_constructor v env then
-         Reporting.warn (Printf.sprintf "Identifier %s found in pattern is also a union constructor at"
-                                        (string_of_id v))
-                        l ""
-       else ();
+       if Env.is_union_constructor v env then (
+         Reporting.warn
+           (Printf.sprintf "Identifier %s found in pattern is also a union constructor at" (string_of_id v))
+           l
+           (Printf.sprintf "Suggestion: Maybe you meant to match against %s() instead?" (string_of_id v))
+       );
        match Env.lookup_id v env with
        | Local _ | Unbound -> annot_pat (P_id v) typ, Env.add_local v (Immutable, typ) env, []
        | Register _ ->
@@ -3805,7 +3806,7 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
             annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) bit_typ
           else
             typ_raise env l (Err_lexp_bounds (bounds_check, Env.get_locals env, Env.get_constraints env))
-       | Typ_id id when !opt_new_bitfields ->
+       | Typ_id id ->
           begin match exp with
           | E_aux (E_id field, _) ->
              let (hi, lo) = Env.get_bitfield_range l id field env in
@@ -4045,7 +4046,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_vector_access (v, n) ->
      begin
        try infer_exp env (E_aux (E_app (mk_id "vector_access", [v; n]), (l, ()))) with
-       | Type_error (err_env, err_l, err) when !opt_new_bitfields ->
+       | Type_error (err_env, err_l, err) ->
           (try (
              let inferred_v = infer_exp env v in
              begin match typ_of inferred_v, n with
@@ -5312,7 +5313,7 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
      [DEF_type (TD_aux (tdef, (l, None)))], env
   | TD_enum (id, ids, _) ->
      [DEF_type (TD_aux (tdef, (l, None)))], Env.add_enum id ids env
-  | TD_bitfield (id, typ, ranges) when !opt_new_bitfields ->
+  | TD_bitfield (id, typ, ranges) as unexpanded ->
      let typ = Env.expand_synonyms env typ in
      begin match typ with
      (* The type of a bitfield must be a constant-width bitvector *)
@@ -5325,7 +5326,7 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
           | Some i -> i
           | None -> typ_error env l ("This numeric expression must evaluate to a constant: " ^ string_of_nexp nexp)
         in
-        let record_tdef = TD_record (id, mk_typquant [], [(typ, mk_id "bits")], false) in
+        let record_tdef = TD_record (id, mk_typquant [], [(strip_typ typ, mk_id "bits")], false) in
         let ranges =
           List.fold_left (fun ranges (field, range) ->
               match range with
@@ -5339,27 +5340,14 @@ let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
                  typ_error env l "Bitfield concatenation ranges are not supported"
             ) Bindings.empty ranges
         in
-        [DEF_type (TD_aux (record_tdef, (l, None)))],
-        env
-        |> Env.add_record id (mk_typquant []) [(typ, mk_id "bits")]
-        |> Env.add_bitfield id ranges
-     | _ ->
-        typ_error env l "Underlying bitfield type must be a constant-width bitvector"
-     end
-  | TD_bitfield (id, typ, ranges) ->
-     let typ = Env.expand_synonyms env typ in
-     begin match typ with
-     (* The type of a bitfield must be a constant-width bitvector *)
-     | Typ_aux (Typ_app (v, [A_aux (A_nexp (Nexp_aux (Nexp_constant size, _)), _);
-                             A_aux (A_order order, _)]), _)
-          when string_of_id v = "bitvector" ->
-        let size = Big_int.to_int size in
-        let eval_index_nexp env nexp =
-          int_of_nexp_opt (nexp_simp (Env.expand_nexp_synonyms env nexp)) in
         let defs, env =
-          check_defs env (Bitfield.macro (eval_index_nexp env, (typ_error env)) id size order ranges) in
+          (DEF_type (TD_aux (record_tdef, (l, ()))) :: Bitfield.macro id size order ranges)
+          |> Initial_check.generate_undefineds IdSet.empty
+          |> check_defs env
+        in
+        let env = Env.add_bitfield id ranges env in
         if !opt_no_bitfield_expansion
-        then [DEF_type (TD_aux (TD_bitfield (id, typ, ranges), (l, None)))], env
+        then [DEF_type (TD_aux (unexpanded, (l, None)))], env
         else defs, env
      | _ ->
         typ_error env l "Underlying bitfield type must be a constant-width bitvector"

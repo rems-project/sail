@@ -10,4 +10,11 @@ Type error:
   [91m |[0m    [94m*[0m (0 <= 10 & 10 < 8)
   [91m |[0m [94m*[0m plain_vector_access
   [91m |[0m    No valid casts resulted in unification
+  [91m |[0m This error was caused by:
+  [91m |[0m [[96mvec_length/v3.sail[0m]:6:10-12:3
+  [91m |[0m 6 [96m |[0m  let y = x[
+  [91m |[0m   [91m |[0m          [91m^-[0m
+  [91m |[0m 12[96m |[0m  ];
+  [91m |[0m   [91m |[0m[91m--^[0m
+  [91m |[0m   [91m |[0m Vector access could not be interpreted as a bitfield access
   [91m |[0m 

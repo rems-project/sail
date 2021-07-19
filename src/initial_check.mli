@@ -95,6 +95,8 @@ val undefined_builtin_val_specs : unit def list
 
 (** {2 Desugar and process AST } *)
 
+val generate_undefineds : IdSet.t -> unit def list -> unit def list
+  
 (** If the generate flag is false, then we won't generate any
    auxilliary definitions, like the initialize_registers function *)
 val process_ast : ?generate:bool -> Parse_ast.defs -> unit ast

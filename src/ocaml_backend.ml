@@ -67,13 +67,15 @@ let opt_ocaml_build_dir = ref "_sbuild"
 type ctx =
   { register_inits : tannot exp list;
     externs : id Bindings.t;
-    val_specs : typ Bindings.t
+    val_specs : typ Bindings.t;
+    records : IdSet.t
   }
 
 let empty_ctx =
   { register_inits = [];
     externs = Bindings.empty;
-    val_specs = Bindings.empty
+    val_specs = Bindings.empty;
+    records = IdSet.empty
   }
 
 let gensym_counter = ref 0
@@ -136,6 +138,7 @@ let ocaml_typ_id ctx = function
   | id when Id.compare id (mk_id "real") = 0 -> string "Rational.t"
   | id when Id.compare id (mk_id "exception") = 0 -> string "exn"
   | id when Id.compare id (mk_id "register") = 0 -> string "ref"
+  | id when IdSet.mem id ctx.records -> zencode_upper ctx id ^^ dot ^^ zencode ctx id
   | id -> zencode ctx id
 
 let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
@@ -214,7 +217,12 @@ let is_passed_by_name = function
   | (Typ_aux (Typ_app (tid, _), _)) -> string_of_id tid = "register"
   | _ -> false
 
-let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
+let record_id l exp = match typ_of exp with
+  | Typ_aux (Typ_id id, _) when Env.is_record id (env_of exp) -> id
+  | Typ_aux (Typ_app (id, _), _) when Env.is_record id (env_of exp) -> id
+  | typ -> Reporting.unreachable l __POS__ ("Found a struct without a record type when generating OCaml. Type found: " ^ string_of_typ typ)
+       
+let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
   match exp_aux with
   | E_app (f, [x]) when Env.is_union_constructor f (env_of exp) -> zencode_upper ctx f ^^ space ^^ ocaml_atomic_exp ctx x
   | E_app (f, [x]) -> zencode ctx f ^^ space ^^ ocaml_atomic_exp ctx x
@@ -248,11 +256,11 @@ let rec ocaml_exp ctx (E_aux (exp_aux, _) as exp) =
                                       string "then"; ocaml_atomic_exp ctx t;
                                       string "else"; ocaml_atomic_exp ctx e]
   | E_record fexps ->
-     enclose lbrace rbrace (group (separate_map (semi ^^ break 1) (ocaml_fexp ctx) fexps))
+     enclose lbrace rbrace (group (separate_map (semi ^^ break 1) (ocaml_fexp (record_id l exp) ctx) fexps))
   | E_record_update (exp, fexps) ->
      enclose lbrace rbrace (separate space [ocaml_atomic_exp ctx exp;
                                             string "with";
-                                            separate_map (semi ^^ space) (ocaml_fexp ctx) fexps])
+                                            separate_map (semi ^^ space) (ocaml_fexp (record_id l exp) ctx) fexps])
   | E_let (lb, exp) ->
      separate space [string "let"; ocaml_letbind ctx lb; string "in"]
      ^/^ ocaml_exp ctx exp
@@ -324,8 +332,8 @@ and ocaml_block ctx = function
   | [exp] -> ocaml_exp ctx exp
   | exp :: exps -> ocaml_exp ctx exp ^^ semi ^/^ ocaml_block ctx exps
   | _ -> assert false
-and ocaml_fexp ctx (FE_aux (FE_Fexp (id, exp), _)) =
-  separate space [zencode ctx id; equals; ocaml_exp ctx exp]
+and ocaml_fexp record_id ctx (FE_aux (FE_Fexp (id, exp), _)) =
+  separate space [zencode_upper ctx record_id ^^ dot ^^ zencode ctx id; equals; ocaml_exp ctx exp]
 and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
   match exp_aux with
   | E_lit lit -> ocaml_lit lit
@@ -585,12 +593,15 @@ let ocaml_string_of_enum ctx id ids =
   separate space [string "let"; ocaml_string_of id; equals; string "function"]
   ^//^ (separate_map hardline ocaml_case ids)
 
-let ocaml_string_of_struct ctx id typq fields =
+let ocaml_struct_type ctx id =
+  zencode_upper ctx id ^^ dot ^^ zencode ctx id
+  
+let ocaml_string_of_struct ctx struct_id typq fields =
   let arg = gensym () in
   let ocaml_field (typ, id) =
-    separate space [string (string_of_id id ^ " = \""); string "^"; ocaml_string_typ typ (arg ^^ string "." ^^ zencode ctx id)]
+    separate space [string (string_of_id id ^ " = \""); string "^"; ocaml_string_typ typ (arg ^^ dot ^^ zencode_upper ctx struct_id ^^ dot ^^ zencode ctx id)]
   in
-  separate space [string "let"; ocaml_string_of id; parens (arg ^^ space ^^ colon ^^ space ^^ ocaml_typquant typq ^^ space ^^ zencode ctx id); equals]
+  separate space [string "let"; ocaml_string_of struct_id; parens (arg ^^ space ^^ colon ^^ space ^^ ocaml_typquant typq ^^ space ^^ ocaml_struct_type ctx struct_id); equals]
   ^//^ (string "\"{" ^^ separate_map (hardline ^^ string "^ \", ") ocaml_field fields ^^ string " ^ \"}\"")
 
 let ocaml_string_of_abbrev ctx id typq typ =
@@ -604,9 +615,11 @@ let ocaml_string_of_variant ctx id typq cases =
 let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
   match td_aux with
   | TD_record (id, typq, fields, _) ->
-     ((separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; lbrace]
-       ^//^ ocaml_fields ctx fields)
-      ^/^ rbrace)
+     (separate space [string "module"; zencode_upper ctx id; equals; string "struct"]
+      ^//^ ((separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; lbrace]
+             ^//^ ocaml_fields ctx fields)
+            ^/^ rbrace)
+      ^/^ string "end")
      ^^ ocaml_def_end
      ^^ ocaml_string_of_struct ctx id typq fields
      ^^ ocaml_def_end
@@ -647,7 +660,7 @@ let get_externs defs =
     | [] -> []
   in
   List.fold_left (fun exts (id, name) -> Bindings.add id name exts) Bindings.empty (List.concat (extern_ids defs))
-
+ 
 let nf_group doc =
   first_function := true;
   group doc
@@ -930,7 +943,8 @@ let ocaml_pp_generators ctx defs orig_types required =
 let ocaml_ast ast generator_info =
   let ctx = { register_inits = get_initialize_registers ast.defs;
               externs = get_externs ast.defs;
-              val_specs = val_spec_typs ast.defs
+              val_specs = val_spec_typs ast.defs;
+              records = record_ids ast.defs
             }
   in
   let empty_reg_init =
