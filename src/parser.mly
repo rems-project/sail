@@ -1048,6 +1048,8 @@ case:
 case_list:
   | case
     { [$1] }
+  | case Comma
+    { [$1] }
   | case Comma case_list
     { $1 :: $3 }
 
@@ -1139,6 +1141,8 @@ fexp_exp:
 
 fexp_exp_list:
   | fexp_exp
+    { [$1] }
+  | fexp_exp Comma
     { [$1] }
   | fexp_exp Comma fexp_exp_list
     { $1 :: $3 }
