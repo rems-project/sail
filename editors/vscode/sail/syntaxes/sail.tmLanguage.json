@@ -78,7 +78,7 @@
 				"end": "}",
 				"endCaptures": {
 				  "0": {
-					"name": "punctuation.close.open"
+					"name": "punctuation.curly.close"
 				  }
 				},
 				"patterns": [
