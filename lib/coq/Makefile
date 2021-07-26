@@ -20,7 +20,7 @@ TARGETS=$(SRC:.v=.vo)
 
 all: $(TARGETS)
 clean:
-	rm -f -- $(TARGETS) $(TARGETS:.vo=.glob) $(TARGETS:%.vo=.%.aux) deps
+	rm -f -- $(TARGETS) $(TARGETS:.vo=.glob) $(TARGETS:.vo=.vos) $(TARGETS:.vo=.vok) $(TARGETS:%.vo=.%.aux) deps
 
 $(TARGETS): %.vo: %.v
 	coqc $(COQ_LIBS) $<
