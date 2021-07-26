@@ -175,12 +175,13 @@ termination shl_int
 declare shl_int.simps[simp del]
 
 lemma shl_int[simp]:
-  "shl_int x y = Bits.shiftl x (nat y)"
+  "shl_int x y = Traditional_Infix_Syntax.shiftl x (nat y)"
+  unfolding shiftl_eq_push_bit
   apply (induct n \<equiv> "nat y" arbitrary: x y)
    apply (simp add: shl_int.simps)
   apply (subst shl_int.simps)
   apply (clarsimp dest!: sym[where s="Suc _"] simp: shiftl_int_def)
-  apply (simp add: nat_diff_distrib)
+  apply (simp add: nat_diff_distrib push_bit_double)
   done
 
 termination shr_int
@@ -191,11 +192,12 @@ termination shr_int
 declare shr_int.simps[simp del]
 
 lemma shr_int[simp]:
-  "shr_int x i = Bits.shiftr x (nat i)"
+  "shr_int x i = Traditional_Infix_Syntax.shiftr x (nat i)"
+  unfolding shiftr_eq_drop_bit
   apply (induct x i rule: shr_int.induct)
   apply (subst shr_int.simps)
   apply (clarsimp simp: shiftr_int_def zdiv_zmult2_eq[symmetric])
-  apply (simp add: power_Suc[symmetric] Suc_nat_eq_nat_zadd1 del: power_Suc)
+  apply (simp add: drop_bit_Suc[symmetric] Suc_nat_eq_nat_zadd1)
   done
 
 end
