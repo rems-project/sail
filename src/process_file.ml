@@ -399,12 +399,13 @@ let output_coq opt_dir filename alt_modules alt_modules2 libs ast =
     | _ -> Str.split (Str.regexp "[ \t]+") (String.concat " " alt_modules2)
     ) in
   let ((ot,_,_,_) as ext_ot) =
-    open_output_with_check_unformatted opt_dir (filename ^ "_types" ^ ".v") in
+    open_output_with_check_unformatted opt_dir (types_module ^ ".v") in
   let ((o,_,_,_) as ext_o) =
     open_output_with_check_unformatted opt_dir (filename ^ ".v") in
   (Pretty_print_coq.pp_ast_coq
      (ot, base_imports)
      (o, base_imports @ (types_module :: libs) @ alt_modules2)
+     types_module
      ast generated_line)
      (alt_modules2 <> []); (* suppress MR and M defns if alt_modules2 present*)
   close_output_with_check ext_ot;

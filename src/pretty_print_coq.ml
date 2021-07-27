@@ -90,6 +90,7 @@ let opt_debug_on : string list ref = ref []
 
 
 type context = {
+  types_mod : string; (* Name of the types module for disambiguation *)
   early_ret : bool;
   kid_renames : kid KBindings.t; (* Plain tyvar -> tyvar renames,
                                     used to avoid variable/type variable name clashes *)
@@ -103,6 +104,7 @@ type context = {
   debug : bool;
 }
 let empty_ctxt = {
+  types_mod = "";
   early_ret = false;
   kid_renames = KBindings.empty;
   kid_id_renames = KBindings.empty;
@@ -198,10 +200,12 @@ let string_id (Id_aux(i,_)) =
 
 let doc_id id = string (string_id id)
 
-let doc_id_type (Id_aux(i,_)) =
+let doc_id_type types_mod env (Id_aux(i,_) as id) =
   match i with
   | Id("int") -> string "Z"
   | Id("real") -> string "R"
+  | Id i when Option.value ~default:false (Option.map (fun env -> IdSet.mem id (Env.get_defined_val_specs env)) env) ->
+     string types_mod ^^ dot ^^ string (fix_id false i)
   | Id i -> string (fix_id false i)
   | Operator x -> string (Util.zencode_string ("op " ^ x))
 
@@ -324,7 +328,7 @@ and orig_typ_arg (A_aux (arg,l)) =
 
 (* Returns the set of type variables that will appear in the Coq output,
    which may be smaller than those in the Sail type.  May need to be
-   updated with doc_typ *)
+   updated with do *)
 let rec coq_nvars_of_typ (Typ_aux (t,l)) =
   let trec = coq_nvars_of_typ in
   match t with
@@ -626,7 +630,7 @@ let rec doc_typ_fns ctx env =
                        doc_arithfact ctx env nc])
          end
       | Typ_app(id,args) ->
-         let tpp = (doc_id_type id) ^^ space ^^ (separate_map space doc_typ_arg args) in
+         let tpp = (doc_id_type ctx.types_mod (Some env) id) ^^ space ^^ (separate_map space doc_typ_arg args) in
          if atyp_needed then parens tpp else tpp
       | _ -> atomic_typ atyp_needed ty
     and atomic_typ atyp_needed ((Typ_aux (t, l)) as ty) = match t with
@@ -635,7 +639,7 @@ let rec doc_typ_fns ctx env =
       | Typ_id (id) ->
          (*if List.exists ((=) (string_of_id id)) regtypes
          then string "register"
-         else*) doc_id_type id
+         else*) doc_id_type ctx.types_mod (Some env) id
       | Typ_var v -> doc_var ctx v
       | Typ_app _ | Typ_tup _ | Typ_fn _ ->
          (* exhaustiveness matters here to avoid infinite loops
@@ -2444,17 +2448,17 @@ let rec doc_range ctxt (BF_aux(r,_)) = match r with
  *)
 
 (* TODO: check use of empty_ctxt below *)
-let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
+let doc_typdef types_mod generic_eq_types (TD_aux(td, (l, annot))) =
   match td with
   | TD_abbrev(id,typq,A_aux (A_typ typ, _)) ->
      let typschm = TypSchm_aux (TypSchm_ts (typq, typ), l) in
      doc_op coloneq
-       (separate space [string "Definition"; doc_id_type id;
+       (separate space [string "Definition"; doc_id_type types_mod None id;
                         doc_typquant_items empty_ctxt Env.empty parens typq;
                         colon; string "Type"])
        (doc_typschm empty_ctxt Env.empty false typschm) ^^ dot ^^ twice hardline
   | TD_abbrev(id,typq,A_aux (A_nexp nexp,_)) ->
-     let idpp = doc_id_type id in
+     let idpp = doc_id_type types_mod None id in
      doc_op coloneq
        (separate space [string "Definition"; idpp;
                         doc_typquant_items empty_ctxt Env.empty parens typq;
@@ -2463,7 +2467,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
      separate space [string "Hint Unfold"; idpp; colon; string "sail."] ^^
      twice hardline
   | TD_abbrev(id,typq,A_aux (A_bool nc,_)) ->
-     let idpp = doc_id_type id in
+     let idpp = doc_id_type types_mod None id in
      doc_op coloneq
        (separate space [string "Definition"; idpp;
                         doc_typquant_items empty_ctxt Env.empty parens typq;
@@ -2475,8 +2479,8 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
   | TD_bitfield _ -> empty (* TODO? *)
   | TD_record(id,typq,fs,_) ->
     let fname fid = if prefix_recordtype && string_of_id id <> "regstate"
-                    then concat [doc_id id;string "_";doc_id_type fid;]
-                    else doc_id_type fid in
+                    then concat [doc_id id;string "_";doc_id_type types_mod None fid;]
+                    else doc_id_type types_mod None fid in
     let f_pp (typ,fid) =
       concat [fname fid;space;colon;space;doc_typ empty_ctxt Env.empty typ; semi] in
     let rectyp = match typq with
@@ -2489,7 +2493,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
         mk_typ (Typ_app (id, targs))
       | TypQ_aux (TypQ_no_forall, _) -> mk_id_typ id in
     let fs_doc = group (separate_map (break 1) f_pp fs) in
-    let type_id_pp = doc_id_type id in
+    let type_id_pp = doc_id_type types_mod None id in
     let match_parameters =
       let (kopts,_) = quant_split typq in
       match kopts with
@@ -2552,7 +2556,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
       | Id_aux ((Id "diafp"),_) -> empty *)
       | Id_aux ((Id "option"),_) -> empty
       | _ ->
-         let id_pp = doc_id_type id in
+         let id_pp = doc_id_type types_mod None id in
          let typ_nm = separate space [id_pp; doc_typquant_items empty_ctxt Env.empty braces typq] in
          let ar_doc = group (separate_map (break 1) (fun x -> pipe ^^ space ^^ doc_type_union empty_ctxt id_pp x) ar) in
          let typ_pp =
@@ -2594,7 +2598,7 @@ let doc_typdef generic_eq_types (TD_aux(td, (l, annot))) =
       | Id_aux ((Id "diafp"),_) -> empty
       | _ ->
          let enums_doc = group (separate_map (break 1 ^^ pipe ^^ space) doc_id_ctor enums) in
-         let id_pp = doc_id_type id in
+         let id_pp = doc_id_type types_mod None id in
          let typ_pp = (doc_op coloneq)
                         (concat [string "Inductive"; space; id_pp])
                         (enums_doc) in
@@ -2801,7 +2805,7 @@ let merge_var_patterns map pats =
 
 type mutrec_pos = NotMutrec | FirstFn | LaterFn
 
-let doc_funcl_init mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
+let doc_funcl_init types_mod mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let env = env_of_annot annot in
   let (tq,typ) = Env.get_val_spec_orig id env in
   let (arg_typs, ret_typ, eff) = match typ with
@@ -2833,7 +2837,8 @@ let doc_funcl_init mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot))
       kid_to_arg_rename Bindings.empty
   in
   let ctxt0 =
-    { early_ret = contains_early_return exp;
+    { types_mod = types_mod;
+      early_ret = contains_early_return exp;
       kid_renames = mk_kid_renames ids_to_avoid kids_used;
       kid_id_renames = kid_to_arg_rename;
       kid_id_renames_rev = kir_rev;
@@ -2995,17 +3000,17 @@ let get_id = function
 (* Coq doesn't support multiple clauses for a single function joined
    by "and".  However, all the funcls should have been merged by the
    merge_funcls rewrite now. *)
-let doc_fundef_rhs ?(mutrec=NotMutrec) rec_set (FD_aux(FD_function(r, typa, efa, funcls),(l,_))) =
+let doc_fundef_rhs types_mod ?(mutrec=NotMutrec) rec_set (FD_aux(FD_function(r, typa, efa, funcls),(l,_))) =
   match funcls with
   | [] -> unreachable l __POS__ "function with no clauses"
-  | [funcl] -> doc_funcl_init mutrec r ~rec_set funcl
+  | [funcl] -> doc_funcl_init types_mod mutrec r ~rec_set funcl
   | (FCL_aux (FCL_Funcl (id,_),_))::_ -> unreachable l __POS__ ("function " ^ string_of_id id ^ " has multiple clauses in backend")
 
-let doc_mutrec rec_set = function
+let doc_mutrec types_mod rec_set = function
   | [] -> failwith "DEF_internal_mutrec with empty function list"
   | fundef::fundefs ->
-     let prepost1,ctxt1,details1 = doc_fundef_rhs ~mutrec:FirstFn rec_set fundef in
-     let prepostn,ctxtn,detailsn = Util.split3 (List.map (doc_fundef_rhs ~mutrec:LaterFn rec_set) fundefs) in
+     let prepost1,ctxt1,details1 = doc_fundef_rhs types_mod ~mutrec:FirstFn rec_set fundef in
+     let prepostn,ctxtn,detailsn = Util.split3 (List.map (doc_fundef_rhs types_mod ~mutrec:LaterFn rec_set) fundefs) in
      let recursive_fns = List.fold_left (fun m c -> Bindings.union (fun _ x _ -> Some x) m c.recursive_fns) ctxt1.recursive_fns ctxtn in
      let ctxts = List.map (fun c -> { c with recursive_fns }) (ctxt1::ctxtn) in
      let bodies = List.map2 doc_funcl_body ctxts (details1::detailsn) in
@@ -3017,18 +3022,18 @@ let doc_mutrec rec_set = function
          break 1 ^^ string "Defined." ^^ hardline ^^
            separate hardline posts
 
-let doc_funcl mutrec r funcl =
-  let (pre,post),ctxt,details = doc_funcl_init mutrec r funcl in
+let doc_funcl types_mod mutrec r funcl =
+  let (pre,post),ctxt,details = doc_funcl_init types_mod mutrec r funcl in
   let body = doc_funcl_body ctxt details in
   pre,body,post
 
-let rec doc_fundef (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
+let rec doc_fundef types_mod (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [FCL_aux (FCL_Funcl(id,_),annot) as funcl]
     when not (Env.is_extern id (env_of_annot annot) "coq") ->
      begin
-       let pre,body,post = doc_funcl NotMutrec r funcl in
+       let pre,body,post = doc_funcl types_mod NotMutrec r funcl in
        match r with
        | Rec_aux (Rec_measure _,_) ->
           group (pre ^^ dot ^^ hardline ^^
@@ -3231,17 +3236,17 @@ let doc_val pat exp =
   group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp) ^^ hardline ^^
   group (separate space [string "Hint Unfold"; idpp; colon; string "sail."]) ^^ hardline
 
-let rec doc_def unimplemented generic_eq_types def =
+let rec doc_def types_mod unimplemented generic_eq_types def =
   match def with
   | DEF_spec v_spec -> doc_val_spec unimplemented v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
-  | DEF_type t_def -> doc_typdef generic_eq_types t_def
+  | DEF_type t_def -> doc_typdef types_mod generic_eq_types t_def
   | DEF_reg_dec dec -> group (doc_dec dec)
 
   | DEF_default df -> empty
-  | DEF_fundef fdef -> group (doc_fundef fdef) ^/^ hardline
-  | DEF_internal_mutrec fundefs -> doc_mutrec (ids_of_def def) fundefs ^/^ hardline
+  | DEF_fundef fdef -> group (doc_fundef types_mod fdef) ^/^ hardline
+  | DEF_internal_mutrec fundefs -> doc_mutrec types_mod (ids_of_def def) fundefs ^/^ hardline
   | DEF_val (LB_aux (LB_val (pat, exp), _)) -> doc_val pat exp
   | DEF_scattered sdef -> failwith "doc_def: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l,_))) -> unreachable l __POS__ "Coq doesn't support mappings"
@@ -3280,7 +3285,7 @@ let find_unimplemented defs =
   in
   List.fold_left adjust_def IdSet.empty defs
 
-let pp_ast_coq (types_file,types_modules) (defs_file,defs_modules) { defs; _ } top_line suppress_MR_M =
+let pp_ast_coq (types_file,types_modules) (defs_file,defs_modules) type_defs_module { defs; _ } top_line suppress_MR_M =
 try
   (* let regtypes = find_regtypes d in *)
   let state_ids =
@@ -3302,7 +3307,7 @@ try
   let register_refs = State.register_refs_coq (State.find_registers defs) in
   let unimplemented = find_unimplemented defs in
   let generic_eq_types = types_used_with_generic_eq defs in
-  let doc_def = doc_def unimplemented generic_eq_types in
+  let doc_def = doc_def type_defs_module unimplemented generic_eq_types in
   let () = if !opt_undef_axioms || IdSet.is_empty unimplemented then () else
       Reporting.print_err Parse_ast.Unknown "Warning"
         ("The following functions were declared but are undefined:\n" ^

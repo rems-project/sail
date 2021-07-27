@@ -413,6 +413,7 @@ module Env : sig
   val add_val_spec : id -> typquant * typ -> t -> t
   val update_val_spec : id -> typquant * typ -> t -> t
   val define_val_spec : id -> t -> t
+  val get_defined_val_specs : t -> IdSet.t
   val get_val_spec : id -> t -> typquant * typ
   val get_val_specs : t -> (typquant * typ ) Bindings.t
   val get_val_spec_orig : id -> t -> typquant * typ
@@ -1063,6 +1064,8 @@ end = struct
     if IdSet.mem id env.defined_val_specs
     then typ_error env (id_loc id) ("Function " ^ string_of_id id ^ " has already been declared")
     else { env with defined_val_specs = IdSet.add id env.defined_val_specs }
+
+  let get_defined_val_specs env = env.defined_val_specs
 
   let is_union_constructor id env =
     let is_ctor id (Tu_aux (tu, _)) = match tu with

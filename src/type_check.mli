@@ -122,7 +122,9 @@ module Env : sig
   val get_val_spec : id -> t -> typquant * typ
 
   val get_val_specs : t -> (typquant * typ ) Bindings.t
-    
+
+  val get_defined_val_specs : t -> IdSet.t
+
   (** Like get_val_spec, except that the original type variables are used.
       Useful when processing the body of the function. *)
   val get_val_spec_orig : id -> t -> typquant * typ
