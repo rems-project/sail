@@ -201,10 +201,17 @@ let string_id (Id_aux(i,_)) =
 let doc_id id = string (string_id id)
 
 let doc_id_type types_mod env (Id_aux(i,_) as id) =
+  let is_shadowed () =
+    match env with
+    | None -> false
+    | Some env ->
+       IdSet.mem id (Env.get_defined_val_specs env) ||
+       Env.lookup_id id env <> Unbound
+  in
   match i with
   | Id("int") -> string "Z"
   | Id("real") -> string "R"
-  | Id i when Option.value ~default:false (Option.map (fun env -> IdSet.mem id (Env.get_defined_val_specs env)) env) ->
+  | Id i when is_shadowed () ->
      string types_mod ^^ dot ^^ string (fix_id false i)
   | Id i -> string (fix_id false i)
   | Operator x -> string (Util.zencode_string ("op " ^ x))

@@ -29,10 +29,17 @@ struct name2 = {
   el: int
 }
 
-val use : int -> int
+struct name3 = {
+  el: int
+}
+
+let name3 : int = 5
+
+val use : unit -> int
 function use(i) = {
-  let x = name1(i);
-  let y : name1 = struct {el = x};
-  let z : name2 = struct {el = y.el};
-  name2(z.el)
+  let x1 = name1(name3);
+  let x2 : name1 = struct {el = x1};
+  let x3 : name2 = struct {el = x2.el};
+  let x4 : name3 = struct {el = x3.el};
+  name2(x4.el)
 }
