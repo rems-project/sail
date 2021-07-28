@@ -24,7 +24,7 @@
 (*    Dominic Mulligan                                                      *)
 (*    Stephen Kell                                                          *)
 (*    Mark Wassell                                                          *)
-(*    Alastair Reid                                                         *)
+(*    Alastair Reid (Arm Ltd)                                               *)
 (*                                                                          *)
 (*  All rights reserved.                                                    *)
 (*                                                                          *)
