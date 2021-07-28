@@ -53,21 +53,30 @@ interpreter:
 apply_header:
 	$(MAKE) clean
 	headache -c etc/headache_config -h LICENCE `ls src/Makefile*`
-	headache -c etc/headache_config -h LICENCE `ls src/*.ml*`
+	headache -c etc/headache_config -h LICENCE `ls src/*.ml` `ls src/*.mli`
+	headache -c etc/headache_config -h LICENCE `ls src/*.mly` `ls src/*.mll`
+	headache -c etc/headache_config -h LICENCE `ls src/*.lem`
 	headache -c etc/headache_config -h LICENCE `ls src/lem_interp/*.ml`
 	headache -c etc/headache_config -h LICENCE `ls src/lem_interp/*.lem`
+	headache -c etc/headache_config -h LICENCE `ls src/jib/*.ml`
+	headache -c etc/headache_config -h LICENCE `ls src/jib/*.mli`
+	headache -c etc/headache_config -h LICENCE `ls lib/*.c` `ls lib/*.h`
+	headache -c etc/headache_config -h LICENCE `ls lib/*.ml`
+	headache -c etc/headache_config -h LICENCE `ls lib/*.sail`
+	headache -c etc/headache_config -h LICENCE `ls lib/coq/*.v`
 
-anon_dist:
-	headache -c etc/headache_config -h etc/anon_header `ls lib/*.ml`
-	headache -c etc/headache_config -h etc/anon_header `ls lib/coq/*.v`
-	headache -c etc/headache_config -h etc/anon_header `ls src/Makefile*`
-	headache -c etc/headache_config -h etc/anon_header `ls src/*.ml*`
-	headache -c etc/headache_config -h etc/anon_header `ls src/*.lem`
-	headache -c etc/headache_config -h etc/anon_header `ls src/lem_interp/*.ml`
-	headache -c etc/headache_config -h etc/anon_header `ls src/lem_interp/*.lem`
-	headache -c etc/headache_config -h etc/anon_header `ls snapshots/isabelle/lib/sail/*.thy`
-	headache -c etc/headache_config -h etc/anon_header `ls snapshots/isabelle/lib/lem/*.thy`
-	headache -c etc/headache_config -h etc/anon_header `ls snapshots/hol4/lem/hol-lib/*.sml`
+# If you want to use this you probably need to update the files it is applied to...
+#anon_dist:
+#	headache -c etc/headache_config -h etc/anon_header `ls lib/*.ml`
+#	headache -c etc/headache_config -h etc/anon_header `ls lib/coq/*.v`
+#	headache -c etc/headache_config -h etc/anon_header `ls src/Makefile*`
+#	headache -c etc/headache_config -h etc/anon_header `ls src/*.ml*`
+#	headache -c etc/headache_config -h etc/anon_header `ls src/*.lem`
+#	headache -c etc/headache_config -h etc/anon_header `ls src/lem_interp/*.ml`
+#	headache -c etc/headache_config -h etc/anon_header `ls src/lem_interp/*.lem`
+#	headache -c etc/headache_config -h etc/anon_header `ls snapshots/isabelle/lib/sail/*.thy`
+#	headache -c etc/headache_config -h etc/anon_header `ls snapshots/isabelle/lib/lem/*.thy`
+#	headache -c etc/headache_config -h etc/anon_header `ls snapshots/hol4/lem/hol-lib/*.sml`
 
 clean:
 	for subdir in src ; do\
