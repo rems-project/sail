@@ -143,9 +143,9 @@ The models in separate repositories are licensed as described in each.
 
 This work was partially supported by EPSRC grant EP/K008528/1 <a href="http://www.cl.cam.ac.uk/users/pes20/rems">REMS: Rigorous Engineering for
   Mainstream Systems</a>,
-an ARM iCASE award, and EPSRC IAA KTF funding.
+an ARM iCASE award, EPSRC IAA KTF funding, and donations from Arm.
 This project has received funding from the European Research Council
-(ERC) under the European Union’s Horizon 2020 research and innovation programme (grant agreement No 789108).
+(ERC) under the European Union’s Horizon 2020 research and innovation programme (grant agreement No 789108, ELVER).
 
 Approved for public release; distribution is unlimited. This research
 is sponsored by the Defense Advanced Research Projects Agency (DARPA)

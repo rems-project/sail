@@ -7,7 +7,7 @@ are subject to the BSD two-clause licence below.
 The ASL derived parts of the ARMv8.3 specification in
 aarch64/no_vector and aarch64/full are copyright ARM Ltd.
 
-Copyright (c) 2013-2018
+Copyright (c) 2013-2021
   Kathyrn Gray
   Shaked Flur
   Stephen Kell
@@ -26,13 +26,18 @@ Copyright (c) 2013-2018
 
 All rights reserved.
 
-This software was developed within the Rigorous Engineering of
-Mainstream Systems (REMS) project, partly funded by EPSRC grant
-EP/K008528/1, at the Universities of Cambridge and Edinburgh.
+This work was partially supported by EPSRC grant EP/K008528/1 <a
+href="http://www.cl.cam.ac.uk/users/pes20/rems">REMS: Rigorous
+Engineering for Mainstream Systems</a>, an ARM iCASE award, EPSRC IAA
+KTF funding, and donations from Arm.  This project has received
+funding from the European Research Council (ERC) under the European
+Union’s Horizon 2020 research and innovation programme (grant
+agreement No 789108, ELVER).
 
 This software was developed by SRI International and the University of
 Cambridge Computer Laboratory (Department of Computer Science and
-Technology) under DARPA/AFRL contract FA8650-18-C-7809 ("CIFV").
+Technology) under DARPA/AFRL contracts FA8650-18-C-7809 ("CIFV")
+and FA8750-10-C-0237 ("CTSRD").
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
