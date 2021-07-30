@@ -1773,13 +1773,12 @@ let unify_error l str = raise (Unification_error (l, str))
 
 let merge_unifiers l kid uvar1 uvar2 =
   match uvar1, uvar2 with
-  | Some (A_aux (A_nexp n1, _)), Some (A_aux (A_nexp n2, _)) ->
-     if nexp_identical n1 n2 then
-       Some (arg_nexp n1)
+  | Some arg1, Some arg2 ->
+     if typ_arg_identical arg1 arg2 then
+       Some arg1
      else
        unify_error l ("Multiple non-identical unifiers for " ^ string_of_kid kid
-                      ^ ": " ^ string_of_nexp n1 ^ " and " ^ string_of_nexp n2)
-  | Some _, Some _ -> unify_error l "Multiple non-identical non-nexp unifiers"
+                      ^ ": " ^ string_of_typ_arg arg1 ^ " and " ^ string_of_typ_arg arg2)
   | None, Some u2 -> Some u2
   | Some u1, None -> Some u1
   | None, None -> None

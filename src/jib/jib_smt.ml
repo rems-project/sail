@@ -218,7 +218,7 @@ let rec smt_ctyp ctx = function
   | CT_list _ -> raise (Reporting.err_todo ctx.pragma_l "Lists not yet supported in SMT generation")
   | CT_fvector _ ->
      Reporting.unreachable ctx.pragma_l __POS__ "Found CT_fvector in SMT property"
-  | CT_poly ->
+  | CT_poly _ ->
      Reporting.unreachable ctx.pragma_l __POS__ "Found polymorphic type in SMT property"
 
 (* We often need to create a SMT bitvector of a length sz with integer
@@ -388,8 +388,8 @@ let rec smt_cval ctx cval =
         Fn ("bvadd", [smt_cval ctx cval1; smt_cval ctx cval2])
      | V_ctor_kind (union, ctor_id, unifiers, _) ->
         Fn ("not", [Tester (zencode_uid (ctor_id, unifiers), smt_cval ctx union)])
-     | V_ctor_unwrap (ctor_id, union, unifiers, _) ->
-        Fn ("un" ^ zencode_uid (ctor_id, unifiers), [smt_cval ctx union])
+     | V_ctor_unwrap (union, ctor, _) ->
+        Fn ("un" ^ zencode_uid ctor, [smt_cval ctx union])
      | V_field (record, field) ->
         begin match cval_ctyp record with
         | CT_struct (struct_id, _) ->
@@ -1502,8 +1502,36 @@ module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = 
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
        CT_ref (convert_typ ctx typ)
 
-    | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records  -> CT_struct (id, Bindings.find id ctx.records |> UBindings.bindings)
-    | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> UBindings.bindings)
+    | Typ_id id when Bindings.mem id ctx.records -> CT_struct (id, Bindings.find id ctx.records |> snd |> UBindings.bindings)
+    | Typ_app (id, typ_args) when Bindings.mem id ctx.records ->
+       let (typ_params, fields) = Bindings.find id ctx.records in
+       let quants =
+         List.fold_left2 (fun quants typ_param typ_arg ->
+             match typ_arg with
+             | A_aux (A_typ typ, _) ->
+                KBindings.add typ_param (convert_typ ctx typ) quants
+             | _ ->
+                Reporting.unreachable l __POS__ "Non-type argument for record here should be impossible"
+           ) ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
+       in
+       let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
+       CT_struct (id, UBindings.map fix_ctyp fields |> UBindings.bindings)
+                                                         
+    | Typ_id id when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> snd |> UBindings.bindings)
+    | Typ_app (id, typ_args) when Bindings.mem id ctx.variants ->
+       let (typ_params, ctors) = Bindings.find id ctx.variants in
+       let quants =
+         List.fold_left2 (fun quants typ_param typ_arg ->
+             match typ_arg with
+             | A_aux (A_typ typ, _) ->
+                KBindings.add typ_param (convert_typ ctx typ) quants
+             | _ ->
+                Reporting.unreachable l __POS__ "Non-type argument for variant here should be impossible"
+           ) ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
+       in           
+       let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
+       CT_variant (id, UBindings.map fix_ctyp ctors |> UBindings.bindings)
+      
     | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
 
     | Typ_tup typs -> CT_tup (List.map (convert_typ ctx) typs)
@@ -1520,7 +1548,7 @@ module SMT_config(Opts : sig val unroll_limit : int end) : Jib_compile.Config = 
        | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
        end
 
-    | Typ_var kid -> CT_poly
+    | Typ_var kid -> CT_poly kid
 
     | _ -> raise (Reporting.err_unreachable l __POS__ ("No SMT type for type " ^ string_of_typ typ))
 

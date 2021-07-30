@@ -16,6 +16,11 @@ metavar id ::=
   {{ ocaml id }}
   {{ lem id }}
 
+metavar kid ::=
+  {{ phantom }}
+  {{ ocaml kid }}
+  {{ lem kid }}
+
 metavar mid ::=
   {{ phantom }}
   {{ ocaml id option }}
@@ -96,25 +101,25 @@ op :: '' ::=
   | set_slice         :: :: set_slice
   | replicate nat     :: :: replicate
 
-cval :: 'V_' ::=
-  | name : ctyp                                       :: :: id
-  | value : ctyp                                      :: :: lit
-  | struct { uid0 = cval0 , ... , uidn = cvaln } ctyp :: :: struct
-  | cval != kind id ( ctyp0 , ... , ctypn ) ctyp      :: :: ctor_kind
-  | unwrap id cval ( ctyp0 , ... , ctypn ) ctyp       :: :: ctor_unwrap
-  | cval nat0 nat1                                    :: :: tuple_member
-  | op ( cval0 , ... , cvaln )                        :: :: call
-  | cval . uid                                        :: :: field
-  | poly cval ctyp                                    :: :: poly
-
-% Note that init / clear are sometimes refered to as create / kill
-
-%%% IR types
-
 uid :: 'UId_' ::=
   {{ phantom }}
   {{ lem (id * list ctyp) }}
   {{ ocaml (id * ctyp list) }}
+  | id < ctyp0 , ... , ctypn > :: :: uid
+
+cval :: 'V_' ::=
+  | name : ctyp                                       :: :: id
+  | value : ctyp                                      :: :: lit
+  | struct { uid0 = cval0 , ... , uidn = cvaln } ctyp :: :: struct
+  | cval is id ( ctyp0 , ... , ctypn ) ctyp           :: :: ctor_kind
+  | cval as uid ctyp                                  :: :: ctor_unwrap
+  | cval nat0 nat1                                    :: :: tuple_member
+  | op ( cval0 , ... , cvaln )                        :: :: call
+  | cval . uid                                        :: :: field
+
+% Note that init / clear are sometimes refered to as create / kill
+
+%%% IR types
 
 ctyp :: 'CT_' ::=
   {{ com C type }}
@@ -163,16 +168,7 @@ ctyp :: 'CT_' ::=
 
   | ref ( ctyp )                   :: :: ref
 
-% We can still have a very limited amount of polymorphism in this IR
-% representation, as variants can have polymorphic constructors. The
-% reason is we can put more precise types into constructors and then
-% consume them as more general types meaning the underlying
-% representation (rather than the high-level sail types) are what we
-% need to specialise constructors, e.g. Some(0xFF) would be a Some
-% constructor containing a fbits(8, true), but this could be pattern
-% matched as Some(x) where the matching context expects x to have type
-% lbits, and this must work without compiling to type incorrect C.
-  | poly                           :: :: poly
+  | poly kid                       :: :: poly
 
 clexp :: 'CL_' ::=
   | name : ctyp              :: :: id

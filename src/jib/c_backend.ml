@@ -144,7 +144,7 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_variant (_, ctors) -> false (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *) (* FIXME *)
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
   | CT_ref ctyp -> true
-  | CT_poly -> true
+  | CT_poly _ -> true
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
 
 let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1), true), CT_fbits (i, true))
@@ -231,7 +231,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
     | Typ_app (id, [A_aux (A_nexp n, _);
                     A_aux (A_order ord, _)])
          when string_of_id id = "bitvector" ->
-       let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
+       let direction = true in (* match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in *)
        begin match nexp_simp n with
        | Nexp_aux (Nexp_constant n, _) when Big_int.less_equal n (Big_int.of_int 64) -> CT_fbits (Big_int.to_int n, direction)
        | n when prove __POS__ ctx.local_env (nc_lteq n (nint 64)) -> CT_sbits (64, direction)
@@ -242,14 +242,42 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
                     A_aux (A_order ord, _);
                     A_aux (A_typ typ, _)])
          when string_of_id id = "vector" ->
-       let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in
+       let direction = true in (* let direction = match ord with Ord_aux (Ord_dec, _) -> true | Ord_aux (Ord_inc, _) -> false | _ -> assert false in *)
        CT_vector (direction, convert_typ ctx typ)
 
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "register" ->
        CT_ref (convert_typ ctx typ)
 
-    | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.records  -> CT_struct (id, Bindings.find id ctx.records |> UBindings.bindings)
-    | Typ_id id | Typ_app (id, _) when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> UBindings.bindings)
+    | Typ_id id when Bindings.mem id ctx.records -> CT_struct (id, Bindings.find id ctx.records |> snd |> UBindings.bindings)
+    | Typ_app (id, typ_args) when Bindings.mem id ctx.records ->
+       let (typ_params, fields) = Bindings.find id ctx.records in
+       let quants =
+         List.fold_left2 (fun quants typ_param typ_arg ->
+             match typ_arg with
+             | A_aux (A_typ typ, _) ->
+                KBindings.add typ_param (convert_typ ctx typ) quants
+             | _ ->
+                Reporting.unreachable l __POS__ "Non-type argument for record here should be impossible"
+           ) ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
+       in
+       let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
+       CT_struct (id, UBindings.map fix_ctyp fields |> UBindings.bindings)
+                                                         
+    | Typ_id id when Bindings.mem id ctx.variants -> CT_variant (id, Bindings.find id ctx.variants |> snd |> UBindings.bindings)
+    | Typ_app (id, typ_args) when Bindings.mem id ctx.variants ->
+       let (typ_params, ctors) = Bindings.find id ctx.variants in
+       let quants =
+         List.fold_left2 (fun quants typ_param typ_arg ->
+             match typ_arg with
+             | A_aux (A_typ typ, _) ->
+                KBindings.add typ_param (convert_typ ctx typ) quants
+             | _ ->
+                Reporting.unreachable l __POS__ "Non-type argument for variant here should be impossible"
+           ) ctx.quants typ_params (List.filter is_typ_arg_typ typ_args)
+       in           
+       let fix_ctyp ctyp = if is_polymorphic ctyp then ctyp_suprema (subst_poly quants ctyp) else ctyp in
+       CT_variant (id, UBindings.map fix_ctyp ctors |> UBindings.bindings)
+ 
     | Typ_id id when Bindings.mem id ctx.enums -> CT_enum (id, Bindings.find id ctx.enums |> IdSet.elements)
 
     | Typ_tup typs -> CT_tup (List.map (convert_typ ctx) typs)
@@ -266,7 +294,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
        | None -> raise (Reporting.err_unreachable l __POS__ "Existential cannot be destructured!")
        end
 
-    | Typ_var kid -> CT_poly
+    | Typ_var kid -> CT_poly kid
 
     | _ -> c_error ~loc:l ("No C type for type " ^ string_of_typ typ)
 
@@ -423,7 +451,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
   let analyze_primop' ctx id args typ =
     let no_change = AE_app (id, args, typ) in
     let args = List.map (c_aval ctx) args in
-    let extern = if Env.is_extern id ctx.tc_env "c" then Env.get_extern id ctx.tc_env "c" else failwith "Not extern" in
+    let extern = if ctx_is_extern id ctx then ctx_get_extern id ctx else failwith "Not extern" in
 
     let v_one = V_lit (VL_int (Big_int.of_int 1), CT_fint 64) in
     let v_int n = V_lit (VL_int (Big_int.of_int n), CT_fint 64) in
@@ -583,7 +611,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
   let branch_coverage = Opts.branch_coverage
   let track_throw = true
 end
-               
+ 
 (** Functions that have heap-allocated return types are implemented by
    passing a pointer a location where the return value should be
    stored. The ANF -> Sail IR pass for expressions simply outputs an
@@ -1092,8 +1120,8 @@ let rec sgen_ctyp = function
   | CT_string -> "sail_string"
   | CT_real -> "real"
   | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
-  | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
-
+  | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
+             
 let rec sgen_ctyp_name = function
   | CT_unit -> "unit"
   | CT_bit -> "fbits"
@@ -1114,8 +1142,8 @@ let rec sgen_ctyp_name = function
   | CT_string -> "sail_string"
   | CT_real -> "real"
   | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
-  | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
-
+  | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
+ 
 let sgen_mask n =
   if n = 0 then
     "UINT64_C(0)"
@@ -1169,11 +1197,10 @@ let rec sgen_cval = function
   | V_struct (fields, _) ->
      Printf.sprintf "{%s}"
        (Util.string_of_list ", " (fun (field, cval) -> zencode_uid field ^ " = " ^ sgen_cval cval) fields)
-  | V_ctor_unwrap (ctor, f, unifiers, _) ->
+  | V_ctor_unwrap (f, ctor, _) ->
      Printf.sprintf "%s.%s"
        (sgen_cval f)
-       (sgen_uid (ctor, unifiers))
-  | V_poly (f, _) -> sgen_cval f
+       (sgen_uid ctor)
 
 and sgen_call op cvals =
   let open Printf in
@@ -1492,12 +1519,12 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
   | I_funcall (x, special_extern, f, args) ->
      let c_args = Util.string_of_list ", " sgen_cval args in
      let ctyp = clexp_ctyp x in
-     let is_extern = Env.is_extern (fst f) ctx.tc_env "c" || special_extern in
+     let is_extern = ctx_is_extern (fst f) ctx || special_extern in
      let fname =
        if special_extern then
          string_of_id (fst f)
-       else if Env.is_extern (fst f) ctx.tc_env "c" then
-         Env.get_extern (fst f) ctx.tc_env "c"
+       else if ctx_is_extern (fst f) ctx then
+         ctx_get_extern (fst f) ctx
        else
          sgen_function_uid f
      in
@@ -1872,12 +1899,10 @@ let codegen_type_def ctx = function
    associated with it. This global variable keeps track of these
    generated struct names, so we never generate two copies of the
    struct that is used to represent them in C.
-
    The way this works is that codegen_def scans each definition's type
    annotations for tuple types and generates the required structs
    using codegen_type_def before the actual definition is generated by
    codegen_def'.
-
    This variable should be reset to empty only when the entire AST has
    been translated to C. **)
 let generated = ref IdSet.empty
@@ -2124,7 +2149,7 @@ let codegen_def' ctx = function
      ^^ string (Printf.sprintf "%s%s %s;" (static ()) (sgen_ctyp ctyp) (sgen_id id))
 
   | CDEF_spec (id, _, arg_ctyps, ret_ctyp) ->
-     if Env.is_extern id ctx.tc_env "c" then
+     if ctx_is_extern id ctx then
        empty
      else if is_stack_ctyp ret_ctyp then
        string (Printf.sprintf "%s%s %s(%s%s);" (static ()) (sgen_ctyp ret_ctyp) (sgen_function_id id) (extra_params ()) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
@@ -2132,7 +2157,7 @@ let codegen_def' ctx = function
        string (Printf.sprintf "%svoid %s(%s%s *rop, %s);" (static ()) (sgen_function_id id) (extra_params ()) (sgen_ctyp ret_ctyp) (Util.string_of_list ", " sgen_ctyp arg_ctyps))
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
-     let arg_ctyps, ret_ctyp = match Bindings.find_opt id ctx.valspecs with
+     let _, arg_ctyps, ret_ctyp = match Bindings.find_opt id ctx.valspecs with
        | Some vs -> vs
        | None ->
           c_error ~loc:(id_loc id) ("No valspec found for " ^ string_of_id id)
@@ -2225,7 +2250,7 @@ let rec ctyp_dependencies = function
   | CT_ref ctyp -> ctyp_dependencies ctyp
   | CT_struct (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
   | CT_variant (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
-  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string | CT_enum _ | CT_poly | CT_constant _ -> []
+  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string | CT_enum _ | CT_poly _ | CT_constant _ -> []
 
 let codegen_ctg ctx = function
   | CTG_vector (direction, ctyp) -> codegen_vector ctx (direction, ctyp)
@@ -2440,3 +2465,4 @@ let compile_ast_clib env ast codegen =
   Jib_interactive.ir := cdefs';
   let cdefs = insert_heap_returns Bindings.empty cdefs in
   codegen ctx cdefs
+ 

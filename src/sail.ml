@@ -524,16 +524,10 @@ let target name out_name ast type_envs =
      close_out f
 
   | Some "c" ->
-     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
-     let ast_c, type_envs =
-       if !opt_specialize_c then
-         Specialize.(specialize_passes 2 int_specialization type_envs ast_c)
-       else
-         ast_c, type_envs
-     in
+     let ast, type_envs = Type_error.check Type_check.initial_env ast in
      let close, output_chan = match !opt_file_out with Some f -> true, open_out (f ^ ".c") | None -> false, stdout in
      Reporting.opt_warnings := true;
-     C_backend.compile_ast type_envs output_chan (!opt_includes_c) ast_c;
+     C_backend.compile_ast type_envs output_chan (!opt_includes_c) ast;
      flush output_chan;
      if close then close_out output_chan else ()
 
@@ -564,15 +558,14 @@ let target name out_name ast type_envs =
      C_backend.compile_ast_clib type_envs ast_c codegen;
  
   | Some "ir" ->
-     let ast_c, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
-     (* let ast_c, type_envs = Specialize.(specialize' 2 int_specialization_with_externs ast_c type_envs) in *)
+     let ast, type_envs = Type_error.check Type_check.initial_env ast in
      let close, output_chan =
        match !opt_file_out with
        | Some f -> Util.opt_colors := false; (true, open_out (f ^ ".ir"))
        | None -> false, stdout
      in
      Reporting.opt_warnings := true;
-     let cdefs, _ = C_backend.jib_of_ast type_envs ast_c in
+     let cdefs, _ = C_backend.jib_of_ast type_envs ast in
      let buf = Buffer.create 256 in
      Jib_ir.Flat_ir_formatter.output_defs buf cdefs;
      output_string output_chan (Buffer.contents buf);

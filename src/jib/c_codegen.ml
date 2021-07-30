@@ -111,7 +111,7 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_variant (_, ctors) -> false (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *) (* FIXME *)
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
   | CT_ref ctyp -> true
-  | CT_poly -> true
+  | CT_poly _ -> true
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
 
 (** For now, the types that can be used in the state API are the types that fits on the stack.
@@ -334,7 +334,7 @@ let rec sgen_ctyp = function
   | CT_string -> "sail_string"
   | CT_real -> "real"
   | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
-  | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
+  | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
 let rec sgen_ctyp_name = function
   | CT_unit -> "unit"
@@ -356,7 +356,7 @@ let rec sgen_ctyp_name = function
   | CT_string -> "sail_string"
   | CT_real -> "real"
   | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
-  | CT_poly -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
+  | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
 
 let sgen_mask n =
   if n = 0 then
@@ -416,11 +416,10 @@ let rec sgen_cval ctx = function
   | V_struct (fields, _) ->
      sprintf "{%s}"
        (Util.string_of_list ", " (fun (field, cval) -> sgen_uid field ^ " = " ^ sgen_cval ctx cval) fields)
-  | V_ctor_unwrap (ctor, f, unifiers, _) ->
+  | V_ctor_unwrap (f, (ctor, unifiers), _) ->
      sprintf "%s.%s"
        (sgen_cval ctx f)
        (sgen_uid (ctor, unifiers))
-  | V_poly (f, _) -> sgen_cval ctx f
 
 and sgen_call ctx op cvals =
   match op, cvals with
@@ -1455,7 +1454,7 @@ let codegen_def_body ctx = function
   | CDEF_spec _ -> empty
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
-     let arg_ctyps, ret_ctyp = match Bindings.find_opt id ctx.valspecs with
+     let _, arg_ctyps, ret_ctyp = match Bindings.find_opt id ctx.valspecs with
        | Some vs -> vs
        | None ->
           Reporting.unreachable (id_loc id) __POS__ ("No valspec found for " ^ string_of_id id)
@@ -1548,7 +1547,7 @@ let rec ctyp_dependencies = function
   | CT_ref ctyp -> ctyp_dependencies ctyp
   | CT_struct (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
   | CT_variant (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
-  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string | CT_enum _ | CT_poly | CT_constant _ -> []
+  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string | CT_enum _ | CT_poly _ | CT_constant _ -> []
 
 let codegen_ctg ctx = function
   | CTG_vector (direction, ctyp) -> codegen_vector ctx (direction, ctyp)

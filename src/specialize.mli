@@ -94,6 +94,8 @@ val polymorphic_functions : specialization -> 'a def list -> IdSet.t
 
 val add_initial_calls : IdSet.t -> unit
 
+val get_initial_calls : unit -> id list
+
 (** specialize returns an AST with all the Order and Type polymorphism
    removed, as well as the environment produced by type checking that
    AST with [Type_check.initial_env]. The env parameter is the

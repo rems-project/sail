@@ -94,16 +94,21 @@ val opt_memo_cache : bool ref
    (global) typechecking environment given by checking the full
    AST. *)
 type ctx =
-  { records : (ctyp Jib_util.UBindings.t) Bindings.t;
+  { records : (kid list * ctyp Jib_util.UBindings.t) Bindings.t;
     enums : IdSet.t Bindings.t;
-    variants : (ctyp Jib_util.UBindings.t) Bindings.t;
-    valspecs : (ctyp list * ctyp) Bindings.t;
+    variants : (kid list * ctyp Jib_util.UBindings.t) Bindings.t;
+    valspecs : (string option * ctyp list * ctyp) Bindings.t;
+    quants : ctyp KBindings.t;
     local_env : Env.t;
     tc_env : Env.t;
     locals : (mut * ctyp) Bindings.t;
     letbinds : int list;
     no_raw : bool;
   }
+
+val ctx_is_extern : id -> ctx -> bool
+
+val ctx_get_extern : id -> ctx -> string
 
 val initial_ctx : Env.t -> ctx
 

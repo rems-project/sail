@@ -528,6 +528,8 @@ let initial_calls = ref (IdSet.of_list
 
 let add_initial_calls ids = initial_calls := IdSet.union ids !initial_calls
 
+let get_initial_calls () = IdSet.elements !initial_calls
+                          
 let remove_unused_valspecs env ast =
   let calls = ref !initial_calls in
   let vs_ids = val_spec_ids ast.defs in

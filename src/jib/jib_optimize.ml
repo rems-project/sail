@@ -104,7 +104,7 @@ let flat_counter = ref 0
 let reset_flat_counter () = flat_counter := 0
 
 let flat_id orig_id =
-  let id = mk_id (string_of_name ~zencode:false orig_id ^ "_l#" ^ string_of_int !flat_counter) in
+  let id = mk_id ("$" ^ string_of_int !flat_counter) in
   incr flat_counter;
   name id
 
@@ -185,9 +185,8 @@ let rec cval_subst id subst = function
   | V_field (cval, field) -> V_field (cval_subst id subst cval, field)
   | V_tuple_member (cval, len, n) -> V_tuple_member (cval_subst id subst cval, len, n)
   | V_ctor_kind (cval, ctor, unifiers, ctyp) -> V_ctor_kind (cval_subst id subst cval, ctor, unifiers, ctyp)
-  | V_ctor_unwrap (ctor, cval, unifiers, ctyp) -> V_ctor_unwrap (ctor, cval_subst id subst cval, unifiers, ctyp)
+  | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (cval_subst id subst cval, ctor, ctyp)
   | V_struct (fields, ctyp) -> V_struct (List.map (fun (field, cval) -> field, cval_subst id subst cval) fields, ctyp)
-  | V_poly (cval, ctyp) -> V_poly (cval_subst id subst cval, ctyp)
 
 let rec cval_map_id f = function
   | V_id (id, ctyp) -> V_id (f id, ctyp)
@@ -196,10 +195,9 @@ let rec cval_map_id f = function
   | V_field (cval, field) -> V_field (cval_map_id f cval, field)
   | V_tuple_member (cval, len, n) -> V_tuple_member (cval_map_id f cval, len, n)
   | V_ctor_kind (cval, ctor, unifiers, ctyp) -> V_ctor_kind (cval_map_id f cval, ctor, unifiers, ctyp)
-  | V_ctor_unwrap (ctor, cval, unifiers, ctyp) -> V_ctor_unwrap (ctor, cval_map_id f cval, unifiers, ctyp)
+  | V_ctor_unwrap (cval, ctor, ctyp) -> V_ctor_unwrap (cval_map_id f cval, ctor, ctyp)
   | V_struct (fields, ctyp) ->
      V_struct (List.map (fun (field, cval) -> field, cval_map_id f cval) fields, ctyp)
-  | V_poly (cval, ctyp) -> V_poly (cval_map_id f cval, ctyp)
 
 let rec instrs_subst id subst =
   function
@@ -427,7 +425,7 @@ let remove_tuples cdefs ctx =
     | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp ->
        all_tuples ctyp
     | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
-      | CT_unit | CT_bool | CT_real | CT_bit | CT_poly | CT_string | CT_enum _ ->
+      | CT_unit | CT_bool | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ ->
        CTSet.empty
   in
   let rec tuple_depth = function
@@ -438,7 +436,7 @@ let remove_tuples cdefs ctx =
     | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp ->
        tuple_depth ctyp
     | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
-      | CT_unit | CT_bool | CT_real | CT_bit | CT_poly | CT_string | CT_enum _ ->
+      | CT_unit | CT_bool | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ ->
        0
   in
   let rec fix_tuples = function
@@ -455,7 +453,7 @@ let remove_tuples cdefs ctx =
     | CT_fvector (n, d, ctyp) -> CT_fvector (n, d, fix_tuples ctyp)
     | CT_ref ctyp -> CT_ref (fix_tuples ctyp)
     | (CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
-       | CT_unit | CT_bool | CT_real | CT_bit | CT_poly | CT_string | CT_enum _) as ctyp ->
+       | CT_unit | CT_bool | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _) as ctyp ->
        ctyp
   in
   let rec fix_cval = function
@@ -463,8 +461,8 @@ let remove_tuples cdefs ctx =
     | V_lit (vl, ctyp) -> V_lit (vl, ctyp)
     | V_ctor_kind (cval, id, unifiers, ctyp) ->
        V_ctor_kind (fix_cval cval, id, unifiers, ctyp)
-    | V_ctor_unwrap (id, cval, unifiers, ctyp) ->
-       V_ctor_unwrap (id, fix_cval cval, unifiers, ctyp)
+    | V_ctor_unwrap (cval, ctor, ctyp) ->
+       V_ctor_unwrap (fix_cval cval, ctor, ctyp)
     | V_tuple_member (cval, _, n) ->
        let ctyp = fix_tuples (cval_ctyp cval) in
        let cval = fix_cval cval in
@@ -479,7 +477,6 @@ let remove_tuples cdefs ctx =
     | V_field (cval, field) ->
        V_field (fix_cval cval, field)
     | V_struct (fields, ctyp) -> V_struct (List.map (fun (id, cval) -> id, fix_cval cval) fields, ctyp)
-    | V_poly (cval, ctyp) -> V_poly (fix_cval cval, ctyp)
   in
   let rec fix_clexp = function
     | CL_id (id, ctyp) -> CL_id (id, ctyp)
@@ -529,9 +526,9 @@ let remove_tuples cdefs ctx =
   in
   let fix_ctx ctx =
     { ctx with
-      records = Bindings.map (UBindings.map fix_tuples) ctx.records;
-      variants = Bindings.map (UBindings.map fix_tuples) ctx.variants;
-      valspecs = Bindings.map (fun (ctyps, ctyp) -> List.map fix_tuples ctyps, fix_tuples ctyp) ctx.valspecs;
+      records = Bindings.map (fun (params, fields) -> params, UBindings.map fix_tuples fields) ctx.records;
+      variants = Bindings.map (fun (params, ctors) -> params, UBindings.map fix_tuples ctors) ctx.variants;
+      valspecs = Bindings.map (fun (extern, ctyps, ctyp) -> extern, List.map fix_tuples ctyps, fix_tuples ctyp) ctx.valspecs;
       locals = Bindings.map (fun (mut, ctyp) -> mut, fix_tuples ctyp) ctx.locals
     }
   in

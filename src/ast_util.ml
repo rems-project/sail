@@ -1229,6 +1229,22 @@ and typ_arg_compare (A_aux (ta1,_)) (A_aux (ta2,_)) =
   | A_typ _, _  -> -1  | _, A_typ _ -> 1
   | A_order _, _ -> -1 | _, A_order _ -> 1
 
+let is_typ_arg_nexp = function
+  | (A_aux (A_typ _, _)) -> true
+  | _ -> false
+
+let is_typ_arg_typ = function
+  | (A_aux (A_typ _, _)) -> true
+  | _ -> false
+  
+let is_typ_arg_order = function
+  | (A_aux (A_order _, _)) -> true
+  | _ -> false
+
+let is_typ_arg_bool = function
+  | (A_aux (A_bool _, _)) -> true
+  | _ -> false
+
 module NC = struct
   type t = n_constraint
   let compare = nc_compare

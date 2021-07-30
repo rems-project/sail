@@ -158,6 +158,11 @@ val mk_typ : typ_aux -> typ
 val mk_typ_arg : typ_arg_aux -> typ_arg
 val mk_id_typ : id -> typ
 
+val is_typ_arg_nexp : typ_arg -> bool
+val is_typ_arg_typ : typ_arg -> bool
+val is_typ_arg_order : typ_arg -> bool
+val is_typ_arg_bool : typ_arg -> bool
+  
 (** {2 Sail builtin types} *)
 
 val unknown_typ : typ
