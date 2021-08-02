@@ -222,7 +222,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
        end
 
     | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" ->
-       CT_list (convert_typ ctx typ)
+       CT_list (ctyp_suprema (convert_typ ctx typ))
 
     (* When converting a sail bitvector type into C, we have three options in order of efficiency:
        - If the length is obviously static and smaller than 64, use the fixed bits type (aka uint64_t), fbits.
@@ -1417,7 +1417,7 @@ let rec codegen_conversion l clexp cval =
 
   | CT_ref ctyp_to, ctyp_from ->
      codegen_conversion l (CL_addr clexp) cval
-
+ 
   | CT_vector (_, ctyp_elem_to), CT_vector (_, ctyp_elem_from) ->
      let i = ngensym () in
      let from = ngensym () in

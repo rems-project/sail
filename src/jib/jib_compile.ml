@@ -539,7 +539,7 @@ let rec compile_aval l ctx = function
 
   | AV_list (avals, Typ_aux (typ, _)) ->
      let ctyp = match typ with
-       | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" -> ctyp_of_typ ctx typ
+       | Typ_app (id, [A_aux (A_typ typ, _)]) when string_of_id id = "list" -> ctyp_suprema (ctyp_of_typ ctx typ)
        | _ -> raise (Reporting.err_general l "Invalid list type")
      in
      let gs = ngensym () in
@@ -646,7 +646,7 @@ let rec apat_ctyp ctx (AP_aux (apat, env, _)) =
   match apat with
   | AP_tup apats -> CT_tup (List.map (apat_ctyp ctx) apats)
   | AP_global (_, typ) -> ctyp_of_typ ctx typ
-  | AP_cons (apat, _) -> CT_list (apat_ctyp ctx apat)
+  | AP_cons (apat, _) -> CT_list (ctyp_suprema (apat_ctyp ctx apat))
   | AP_wild typ | AP_nil typ | AP_id (_, typ) -> ctyp_of_typ ctx typ
   | AP_app (_, _, typ) -> ctyp_of_typ ctx typ
   | AP_as (_, _, typ) -> ctyp_of_typ ctx typ
@@ -1807,7 +1807,27 @@ let make_calls_precise ctx cdefs =
   let precise_call = function
     | I_aux (I_funcall (clexp, extern, (id, ctyp_args), args), ((_, l) as aux)) as instr ->
        begin match get_function_typ id with
-       | None -> instr
+       | None when string_of_id id = "cons" ->
+          begin match ctyp_args, args with
+          | ([ctyp_arg], [hd_arg; tl_arg]) ->
+             if not (ctyp_equal (cval_ctyp hd_arg) ctyp_arg) then
+               let gs = ngensym () in
+               let cast = [
+                   idecl l ctyp_arg gs;
+                   icopy l (CL_id (gs, ctyp_arg)) hd_arg
+                 ] in
+               let cleanup = [
+                   iclear ~loc:l ctyp_arg gs
+                 ] in
+               iblock (cast @ [I_aux (I_funcall (clexp, extern, (id, ctyp_args), [V_id (gs, ctyp_arg); tl_arg]), aux)] @ cleanup)
+             else
+               instr
+          | _ ->
+             (* cons must have a single type parameter and two arguments *)
+             Reporting.unreachable (id_loc id) __POS__ "Invalid cons call"
+          end
+       | None ->
+          instr
        | Some (param_ctyps, ret_ctyp) ->
           if List.compare_lengths args param_ctyps <> 0 then (
             Reporting.unreachable (id_loc id) __POS__ ("Function call found with incorrect arity: " ^ string_of_id id)
