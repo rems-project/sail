@@ -157,6 +157,9 @@ let choose_convert_default of_rv x descr = Choose descr (fun rv -> return (match
 val choose_bool : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv bool 'e
 let choose_bool descr = choose_convert_default bool_of_regval false descr
 
+val choose_bit : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv bitU 'e
+let choose_bit descr = bind (choose_bool descr) (fun b -> return (bitU_of_bool b))
+
 val choose_int : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv integer 'e
 let choose_int descr = choose_convert_default int_of_regval 0 descr
 

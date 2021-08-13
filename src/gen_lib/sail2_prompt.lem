@@ -101,6 +101,9 @@ let rec untilM vars cond body =
 val choose_bools : forall 'rv 'e. Register_Value 'rv => string -> nat -> monad 'rv (list bool) 'e
 let choose_bools descr n = genlistM (fun _ -> choose_bool descr) n
 
+val choose_bitvector : forall 'rv 'a 'e. Bitvector 'a, Register_Value 'rv => string -> nat -> monad 'rv 'a 'e
+let choose_bitvector descr n = choose_bools descr n >>= fun v -> return (of_bools v)
+
 val choose_from_list : forall 'rv 'a 'e. Register_Value 'rv => string -> list 'a -> monad 'rv 'a 'e
 let choose_from_list descr xs =
   choose_int ("choose_from_list " ^ descr) >>= fun idx ->
@@ -108,6 +111,17 @@ let choose_from_list descr xs =
     | Just x -> return x
     | Nothing -> Fail ("choose_from_list " ^ descr)
   end
+
+val choose_int_in_range : forall 'rv 'e. Register_Value 'rv => string -> integer -> integer -> monad 'rv integer 'e
+let choose_int_in_range descr i j =
+  choose_int descr >>= fun k ->
+  return (max i (min j k))
+
+val choose_nat : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv integer 'e
+let choose_nat descr = choose_int descr >>= fun i -> return (max 0 i)
+
+val internal_pick : forall 'rv 'a 'e. Register_Value 'rv => list 'a -> monad 'rv 'a 'e
+let internal_pick xs = choose_from_list "internal_pick" xs
 
 (*let write_two_regs r1 r2 vec =
   let is_inc =
