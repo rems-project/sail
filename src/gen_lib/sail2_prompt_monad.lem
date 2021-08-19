@@ -30,10 +30,10 @@ type monad 'regval 'a 'e =
   | Read_reg of register_name * ('regval -> monad 'regval 'a 'e)
   (* Request to write register *)
   | Write_reg of register_name * 'regval * monad 'regval 'a 'e
-  (* Request to choose a Boolean, e.g. to resolve an undefined bit. The string
-     argument may be used to provide information to the system about what the
-     Boolean is going to be used for. *)
-  | Choose of string * (bool -> monad 'regval 'a 'e)
+  (* Request to choose a (register) value, e.g. to resolve an undefined bit.
+     The string argument may be used to provide information to the system
+     about what the value is going to be used for. *)
+  | Choose of string * ('regval -> monad 'regval 'a 'e)
   (* Print debugging or tracing information *)
   | Print of string * monad 'regval 'a 'e
   (*Result of a failed assert with possible error message to report*)
@@ -52,7 +52,7 @@ type event 'regval =
   | E_footprint
   | E_read_reg of register_name * 'regval
   | E_write_reg of register_name * 'regval
-  | E_choose of string * bool
+  | E_choose of string * 'regval
   | E_print of string
 
 type trace 'regval = list (event 'regval)
@@ -81,12 +81,6 @@ end
 
 val exit : forall 'rv 'a 'e. unit -> monad 'rv 'a 'e
 let exit () = Fail "exit"
-
-val choose_bool : forall 'rv 'e. string -> monad 'rv bool 'e
-let choose_bool descr = Choose descr return
-
-val undefined_bool : forall 'rv 'e. unit -> monad 'rv bool 'e
-let undefined_bool () = choose_bool "undefined_bool"
 
 val assert_exp : forall 'rv 'e. bool -> string -> monad 'rv unit 'e
 let assert_exp exp msg = if exp then Done () else Fail msg
@@ -146,6 +140,45 @@ val maybe_fail : forall 'rv 'a 'e. string -> maybe 'a -> monad 'rv 'a 'e
 let maybe_fail msg = function
   | Just a -> return a
   | Nothing -> Fail msg
+end
+
+val choose_regval : forall 'rv 'e. string -> monad 'rv 'rv 'e
+let choose_regval descr = Choose descr return
+
+val choose_convert : forall 'rv 'e 'a. ('rv -> maybe 'a) -> string -> monad 'rv 'a 'e
+let choose_convert of_rv descr = Choose descr (fun rv -> maybe_fail descr (of_rv rv))
+
+val choose_convert_default : forall 'rv 'e 'a. ('rv -> maybe 'a) -> 'a -> string -> monad 'rv 'a 'e
+let choose_convert_default of_rv x descr = Choose descr (fun rv -> return (match of_rv rv with
+    | Just a -> a
+    | Nothing -> x
+  end))
+
+val choose_bool : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv bool 'e
+let choose_bool descr = choose_convert_default bool_of_regval false descr
+
+val choose_bit : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv bitU 'e
+let choose_bit descr = bind (choose_bool descr) (fun b -> return (bitU_of_bool b))
+
+val choose_int : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv integer 'e
+let choose_int descr = choose_convert_default int_of_regval 0 descr
+
+val choose_real : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv real 'e
+let choose_real descr = choose_convert_default real_of_regval 0 descr
+
+val choose_string : forall 'rv 'e. Register_Value 'rv => string -> monad 'rv string 'e
+let choose_string descr = choose_convert_default string_of_regval "default" descr
+
+val headM : forall 'rv 'a 'e. list 'a -> monad 'rv 'a 'e
+let headM = function
+  | x :: _ -> return x
+  | [] -> Fail "headM"
+end
+
+val tailM : forall 'rv 'a 'e. list 'a -> monad 'rv (list 'a) 'e
+let tailM = function
+  | _ :: xs -> return xs
+  | [] -> Fail "tailM"
 end
 
 val read_memt_bytes : forall 'rv 'a 'b 'e. Bitvector 'a, Bitvector 'b => read_kind -> 'a -> integer -> monad 'rv (list memory_byte * bitU) 'e

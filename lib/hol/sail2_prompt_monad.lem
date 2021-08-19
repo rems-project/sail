@@ -22,8 +22,35 @@ let inline bind = bindS
 let inline (>>=) = (>>$=)
 let inline (>>) = (>>$)
 
-let inline choose_bool msg = choose_boolS ()
-let inline undefined_bool = undefined_boolS
+val choose_regval : forall 'regs 'regval 'e. SetType 'regval => string -> monad 'regs 'regval 'e
+let choose_regval _ = chooseS universal
+
+val choose_convert : forall 'regs 'rv 'a 'e. SetType 'rv => ('rv -> maybe 'a) -> string -> monad 'regs 'a 'e
+let choose_convert of_rv descr = chooseS universal >>$= (fun rv -> maybe_failS descr (of_rv rv))
+
+val choose_convert_default : forall 'regs 'rv 'e 'a. SetType 'rv => ('rv -> maybe 'a) -> 'a -> string -> monad 'rv 'a 'e
+let choose_convert_default of_rv x descr = chooseS universal >>$= (fun rv -> returnS (match of_rv rv with
+    | Just a -> a
+    | Nothing -> x
+    end))
+
+val choose_bool : forall 'regs 'e. string -> monad 'regs bool 'e
+let choose_bool _ = choose_boolS ()
+
+val choose_bit : forall 'regs 'e. string -> monad 'regs bitU 'e
+let choose_bit descr = choose_bool descr >>$= (fun b -> returnS (bitU_of_bool b))
+
+val choose_int : forall 'regs 'e. string -> monad 'regs integer 'e
+let choose_int _ = chooseS universal
+
+val choose_real : forall 'regs 'e. string -> monad 'regs real 'e
+let choose_real _ = chooseS universal
+
+val choose_string : forall 'regs 'e. string -> monad 'regs string 'e
+let choose_string _ = chooseS universal
+
+let inline headM = headS
+
 let inline exit = exitS
 
 let inline throw = throwS

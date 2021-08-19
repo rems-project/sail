@@ -9,5 +9,6 @@ session "Sail" = "LEM" +
     Sail2_operators_mwords_lemmas
     Sail2_operators_bitlists
     Sail2_string
+    Sail2_undefined
     Hoare
   document_files "root.tex"

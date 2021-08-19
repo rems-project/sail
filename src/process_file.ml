@@ -358,6 +358,7 @@ let output_lem filename libs type_env ast =
   (* let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in *)
   let types_module = (filename ^ "_types") in
   let monad_modules = ["Sail2_prompt_monad"; "Sail2_prompt"] in
+  let undefined_modules = if !Initial_check.opt_undefined_gen then ["Sail2_undefined"] else [] in
   let operators_module =
     if !Pretty_print_lem.opt_mwords
     then "Sail2_operators_mwords"
@@ -370,6 +371,7 @@ let output_lem filename libs type_env ast =
       "Sail2_string";
       operators_module
     ] @ monad_modules
+    @ undefined_modules
   in
   let isa_thy_name = String.capitalize_ascii filename ^ "_lemmas" in
   let isa_lemmas =

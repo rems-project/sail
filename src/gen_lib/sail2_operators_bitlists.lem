@@ -233,7 +233,7 @@ let rotr         = rotr_bv
 val mod_vec        : list bitU -> list bitU -> list bitU
 val mod_vec_maybe  : list bitU -> list bitU -> maybe (list bitU)
 val mod_vec_fail   : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e
-val mod_vec_nondet : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e
+val mod_vec_nondet : forall 'rv 'e. Register_Value 'rv => list bitU -> list bitU -> monad 'rv (list bitU) 'e
 let mod_vec        l r = fromMaybe (repeat [BU] (length l)) (mod_bv l r)
 let mod_vec_maybe  l r = mod_bv l r
 let mod_vec_fail   l r = maybe_fail "mod_vec" (mod_bv l r)
@@ -242,7 +242,7 @@ let mod_vec_nondet l r = of_bits_nondet (mod_vec l r)
 val quot_vec        : list bitU -> list bitU -> list bitU
 val quot_vec_maybe  : list bitU -> list bitU -> maybe (list bitU)
 val quot_vec_fail   : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e
-val quot_vec_nondet : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e
+val quot_vec_nondet : forall 'rv 'e. Register_Value 'rv => list bitU -> list bitU -> monad 'rv (list bitU) 'e
 let quot_vec        l r = fromMaybe (repeat [BU] (length l)) (quot_bv l r)
 let quot_vec_maybe  l r = quot_bv l r
 let quot_vec_fail   l r = maybe_fail "quot_vec" (quot_bv l r)
@@ -251,7 +251,7 @@ let quot_vec_nondet l r = of_bits_nondet (quot_vec l r)
 val quots_vec        : list bitU -> list bitU -> list bitU
 val quots_vec_maybe  : list bitU -> list bitU -> maybe (list bitU)
 val quots_vec_fail   : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e
-val quots_vec_nondet : forall 'rv 'e. list bitU -> list bitU -> monad 'rv (list bitU) 'e
+val quots_vec_nondet : forall 'rv 'e. Register_Value 'rv => list bitU -> list bitU -> monad 'rv (list bitU) 'e
 let quots_vec        l r = fromMaybe (repeat [BU] (length l)) (quots_bv l r)
 let quots_vec_maybe  l r = quots_bv l r
 let quots_vec_fail   l r = maybe_fail "quots_vec" (quots_bv l r)
@@ -260,7 +260,7 @@ let quots_vec_nondet l r = of_bits_nondet (quots_vec l r)
 val mod_vec_int        : list bitU -> integer -> list bitU
 val mod_vec_int_maybe  : list bitU -> integer -> maybe (list bitU)
 val mod_vec_int_fail   : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
-val mod_vec_int_nondet : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
+val mod_vec_int_nondet : forall 'rv 'e. Register_Value 'rv => list bitU -> integer -> monad 'rv (list bitU) 'e
 let mod_vec_int        l r = fromMaybe (repeat [BU] (length l)) (mod_bv_int l r)
 let mod_vec_int_maybe  l r = mod_bv_int l r
 let mod_vec_int_fail   l r = maybe_fail "mod_vec_int" (mod_bv_int l r)
@@ -269,7 +269,7 @@ let mod_vec_int_nondet l r = of_bits_nondet (mod_vec_int l r)
 val quot_vec_int        : list bitU -> integer -> list bitU
 val quot_vec_int_maybe  : list bitU -> integer -> maybe (list bitU)
 val quot_vec_int_fail   : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
-val quot_vec_int_nondet : forall 'rv 'e. list bitU -> integer -> monad 'rv (list bitU) 'e
+val quot_vec_int_nondet : forall 'rv 'e. Register_Value 'rv => list bitU -> integer -> monad 'rv (list bitU) 'e
 let quot_vec_int        l r = fromMaybe (repeat [BU] (length l)) (quot_bv_int l r)
 let quot_vec_int_maybe  l r = quot_bv_int l r
 let quot_vec_int_fail   l r = maybe_fail "quot_vec_int" (quot_bv_int l r)

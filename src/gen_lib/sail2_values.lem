@@ -832,6 +832,17 @@ type register =
   | UndefinedRegister of integer (* length *)
   | RegisterPair of register * register*)
 
+class (Register_Value 'rv)
+  val bool_of_regval : 'rv -> maybe bool
+  val regval_of_bool : bool -> 'rv
+  val int_of_regval : 'rv -> maybe integer
+  val regval_of_int : integer -> 'rv
+  val real_of_regval : 'rv -> maybe real
+  val regval_of_real : real -> 'rv
+  val string_of_regval : 'rv -> maybe string
+  val regval_of_string : string -> 'rv
+end
+
 type register_ref 'regstate 'regval 'a =
   <| name : string;
      (*is_inc : bool;*)
@@ -840,10 +851,28 @@ type register_ref 'regstate 'regval 'a =
      of_regval : 'regval -> maybe 'a;
      regval_of : 'a -> 'regval |>
 
+(* Register operations which do not depend on polymorphic type *)
+type register_ops 'regstate 'regval =
+  (('regval -> bool) * ('regstate -> 'regval) *
+   ('regval -> 'regstate -> maybe 'regstate))
+
+val register_ops_of : forall 'st 'regval 'a.
+    register_ref 'st 'regval 'a -> register_ops 'st 'regval
+let register_ops_of reg =
+  ((fun x -> isJust (reg.of_regval x)),
+   (fun x -> reg.regval_of (reg.read_from x)),
+   (fun x st -> Maybe.map (fun v -> reg.write_to v st) (reg.of_regval x)))
+
 (* Register accessors: pair of functions for reading and writing register values *)
 type register_accessors 'regstate 'regval =
   ((string -> 'regstate -> maybe 'regval) *
    (string -> 'regval -> 'regstate -> maybe 'regstate))
+
+val mk_accessors : forall 'st 'v.
+    (string -> maybe (register_ops 'st 'v)) -> register_accessors 'st 'v
+let mk_accessors regs =
+  ((fun nm st -> Maybe.map (fun (_, acc, _) -> acc st) (regs nm)),
+   (fun nm v st -> Maybe.bind (regs nm) (fun (_, _, put) -> put v st)))
 
 type field_ref 'regtype 'a =
   <| field_name : string;

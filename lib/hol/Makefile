@@ -10,12 +10,13 @@ LEMSRC =  \
   ../../src/gen_lib/sail2_state.lem \
   ../../src/gen_lib/sail2_string.lem \
   sail2_prompt_monad.lem \
-  sail2_prompt.lem
+  sail2_prompt.lem \
+  sail2_undefined.lem \
 
 SCRIPTS = sail2_instr_kindsScript.sml sail2_valuesScript.sml sail2_operatorsScript.sml \
   sail2_operators_mwordsScript.sml sail2_operators_bitlistsScript.sml \
   sail2_state_monadScript.sml sail2_stateScript.sml \
-  sail2_prompt_monadScript.sml sail2_promptScript.sml \
+  sail2_prompt_monadScript.sml sail2_promptScript.sml sail2_undefinedScript.sml \
   sail2_stringScript.sml
 
 THYS = $(patsubst %Script.sml,%Theory.uo,$(SCRIPTS))

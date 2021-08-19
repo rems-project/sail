@@ -1,7 +1,7 @@
 THYS = Sail2_instr_kinds.thy Sail2_values.thy Sail2_operators.thy \
   Sail2_operators_mwords.thy Sail2_operators_bitlists.thy \
   Sail2_state_monad.thy Sail2_state.thy Sail2_state_lifting.thy \
-  Sail2_prompt_monad.thy Sail2_prompt.thy \
+  Sail2_prompt_monad.thy Sail2_prompt.thy Sail2_undefined.thy \
   Sail2_string.thy
 EXTRA_THYS = Sail2_state_monad_lemmas.thy Sail2_state_lemmas.thy \
   Sail2_prompt_monad_lemmas.thy \
@@ -47,6 +47,9 @@ Sail2_prompt_monad.thy: ../../src/gen_lib/sail2_prompt_monad.lem Sail2_values.th
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
 Sail2_prompt.thy: ../../src/gen_lib/sail2_prompt.lem Sail2_prompt_monad.thy Sail2_prompt_monad_lemmas.thy
+	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
+
+Sail2_undefined.thy: ../../src/gen_lib/sail2_undefined.lem Sail2_prompt.thy
 	lem -isa -outdir . -auxiliary_level none -lib ../../src/lem_interp -lib ../../src/gen_lib $<
 
 Sail2_state_monad.thy: ../../src/gen_lib/sail2_state_monad.lem Sail2_values.thy

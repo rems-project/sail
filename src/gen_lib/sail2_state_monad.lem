@@ -47,9 +47,6 @@ let seqS m n = bindS m (fun (_ : unit) -> n)
 let inline (>>$=) = bindS
 let inline (>>$) = seqS
 
-val chooseS : forall 'regs 'a 'e. SetType 'a => list 'a -> monadS 'regs 'a 'e
-let chooseS xs s = Set.fromList (List.map (fun x -> (Value x, s)) xs)
-
 val readS : forall 'regs 'a 'e. (sequential_state 'regs -> 'a) -> monadS 'regs 'a 'e
 let readS f = (fun s -> returnS (f s) s)
 
@@ -58,10 +55,6 @@ let updateS f = (fun s -> returnS () (f s))
 
 val failS : forall 'regs 'a 'e. string -> monadS 'regs 'a 'e
 let failS msg s = {(Ex (Failure msg), s)}
-
-val choose_boolS : forall 'regval 'regs 'a 'e. unit -> monadS 'regs bool 'e
-let choose_boolS () = chooseS [false; true]
-let undefined_boolS = choose_boolS
 
 val exitS : forall 'regs 'e 'a. unit -> monadS 'regs 'a 'e
 let exitS () = failS "exit"
@@ -115,6 +108,24 @@ let maybe_failS msg = function
   | Nothing -> failS msg
 end
 
+val chooseS : forall 'regs 'a 'e. SetType 'a => set 'a -> monadS 'regs 'a 'e
+let chooseS xs s = Set.map (fun x -> (Value x, s)) xs
+
+val choose_boolS : forall 'regs 'e. unit -> monadS 'regs bool 'e
+let choose_boolS () = chooseS {false; true}
+
+val headS : forall 'rv 'a 'e. list 'a -> monadS 'rv 'a 'e
+let headS = function
+  | x :: _ -> returnS x
+  | [] -> failS "headM"
+end
+
+val tailS : forall 'rv 'a 'e. list 'a -> monadS 'rv (list 'a) 'e
+let tailS = function
+  | _ :: xs -> returnS xs
+  | [] -> failS "tailM"
+end
+
 val read_tagS : forall 'regs 'a 'e. Bitvector 'a => 'a -> monadS 'regs bitU 'e
 let read_tagS addr =
   maybe_failS "nat_of_bv" (nat_of_bv addr) >>$= (fun addr ->
@@ -158,7 +169,7 @@ let excl_resultS =
      whether an exclusive load has occurred before.  However, this does not
      seem very precise; it might be safer to overapproximate the possible
      behaviours by always making a nondeterministic choice. *)
-  undefined_boolS
+  choose_boolS
 
 (* Write little-endian list of bytes to given address *)
 val put_mem_bytes : forall 'regs. nat -> nat -> list memory_byte -> bitU -> sequential_state 'regs -> sequential_state 'regs
