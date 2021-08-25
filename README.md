@@ -52,17 +52,17 @@ some Sail specifications and related tools.
 Sail ISA Models
 ===============
 
-Sail is currently being used for ARM, RISC-V, MIPS, CHERI-MIPS, IBM Power, and x86 models,  variously ranging from full definitions to core user-mode fragments, and either here or in separate repositories:
+Sail is currently being used for Arm, RISC-V, MIPS, CHERI-MIPS, IBM Power, and x86 models,  variously ranging from full definitions to core user-mode fragments, and either here or in separate repositories:
 
 ### REMS Models
 
-* [Sail ARMv8.5-A ISA model, automatically generated from the ARM-internal ASL reference, as used in the ARM ARM](https://github.com/rems-project/sail-arm).
+* [Sail Armv8.5-A ISA model, automatically generated from the Arm-internal ASL reference, as used in the Arm ARM](https://github.com/rems-project/sail-arm).
 
-* [Sail ARMv8.3-A ISA model](https://github.com/rems-project/sail/tree/sail2/aarch64). This is the "public" model described in our [POPL 2019 paper](http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019.pdf), now largely superseded by the above.
+* [Sail Armv8.3-A ISA model](https://github.com/rems-project/sail/tree/sail2/aarch64). This is the "public" model described in our [POPL 2019 paper](http://www.cl.cam.ac.uk/users/pes20/sail/sail-popl2019.pdf), now largely superseded by the above.
 
-* [Sail ARMv8-A ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/aarch64_small). This is a handwritten user-mode fragment.
+* [Sail Armv8-A ISA model, handwritten](https://github.com/rems-project/sail/tree/sail2/aarch64_small). This is a handwritten user-mode fragment.
 
-* [Sail RISC-V ISA model, handwritten](https://github.com/rems-project/sail-riscv). 
+* [Sail RISC-V ISA model, handwritten](https://github.com/riscv/sail-riscv). 
 
 * [Sail MIPS and CHERI-MIPS ISA models, handwritten](https://github.com/CTSRD-CHERI/sail-cheri-mips).
 
@@ -124,11 +124,11 @@ The Sail implementation, in src/, as well as its tests in test/ and
 other supporting files in lib/ and language/, is distributed under the
 2-clause BSD licence in the headers of those files and in src/LICENCE.
 
-The generated parts of the ASL-derived ARMv8.3 model in aarch64/ are
-copyright ARM Ltd. See https://github.com/meriac/archex, and the
+The generated parts of the ASL-derived Armv8.5 and Armv8.3 models are
+copyright Arm Ltd, and distributed under a BSD Clear licence. See https://github.com/meriac/archex, and the
 [README file](aarch64/README) in that directory.
 
-The hand-written ARMv8 model, in arm/, is distributed under the
+The hand-written Armv8 model, in arm/, is distributed under the
 2-clause BSD licence in the headers of those files.
 
 The x86 model in x86/ is distributed under the 2-clause BSD licence in
