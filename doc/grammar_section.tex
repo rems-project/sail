@@ -29,6 +29,23 @@ need some lexical conventions:
 \lstinline'"'\dots\lstinline'"'
 \end{tabular}
 \end{quote}
+Strings can include newlines, and a trailing \lstinline'\' at the end
+of a line will skip the newline and all of the whitespace before the
+next printing character.  The following escape codes can also be used:
+\begin{quote}
+\begin{tabbing}
+\lstinline{\x}$hh$ \= Include a literal \= \kill
+\lstinline'\\' \> Include a literal \> \lstinline'\' \\
+\lstinline'\"' \> \> \lstinline'"' \\
+\lstinline{\'} \> \> \lstinline{'} \\
+\lstinline{\n} \> Newline \\
+\lstinline{\t} \> Tab \\
+\lstinline{\b} \> Bell \\
+\lstinline{\r} \> Carriage return character \\
+\lstinline{\}$ddd$ \> Include character with code $ddd$ in decimal \\
+\lstinline{\x}$hh$ \> Include character with code $hh$ in hexadecimal
+\end{tabbing}
+\end{quote}
 
 Now the actual grammar:
 \input{parser_grammar}

@@ -71,7 +71,9 @@ grammar.tex: ../language/sail.ott
 
 lexer_syntax.sed: ../src/lexer.mll
 	sed -n -e 's/^ *("\([A-Za-z0-9]*\)",[ \t]*(fun . -> \(.*\)));$//s\/{\2}\/{\\\\lstinline{\1}}\//p' \
-	  -e 's/^ *| "\([^"{}~&]\+\)"[ \t]*{ (\?\([A-Za-z]\+\)\((.*)\)\?)\? }$//s\/{\2}\/{\\\\lstinline"\1"}\//p' \
+	  -e '/ *| "~"/d' \
+	  -e 's/~/\\\\~/g' \
+	  -e 's/^ *| "\([^"{}&]\+\)"[ \t]*{ (\?\([A-Za-z]\+\)\((.*)\)\?)\? }$//s\/{\2}\/{\\\\lstinline"\1"}\//p' \
 	  < ../src/lexer.mll > lexer_syntax.sed
 
 parser_grammar.tex parser_package.sty: ../src/parser.mly lexer_syntax.sed extra_lexer_syntax.sed
