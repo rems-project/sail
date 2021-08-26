@@ -372,5 +372,16 @@ definition
   where
   "register_read_ok f nm r = (case f nm of None \<Rightarrow> False | Some P \<Rightarrow> P r)"
 
+lemma option_bind_SomeE:
+  assumes "Option.bind x f = Some y"
+  obtains z where "x = Some z" and "f z = Some y"
+  using assms
+  by (cases x; auto)
+
+lemma map_of_Cons_SomeE:
+  assumes "map_of ((x, y) # xs) x' = Some y'"
+  obtains "x' = x" and "y' = y" | "map_of xs x' = Some y'"
+  using assms
+  by (cases "x' = x") auto
 
 end

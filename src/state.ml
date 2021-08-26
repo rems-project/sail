@@ -282,19 +282,24 @@ let generate_regval_typ typs =
      (String.concat ", " (builtins :: List.map constr (Bindings.bindings typs))) ^
      " }")]
 
+let regval_class_typs_lem = [("bool", "bool"); ("int", "integer"); ("real", "real"); ("string", "string")]
+
 let regval_instance_lem =
-  separate_map hardline string [
-    "instance (Register_Value register_value)";
-    "  let bool_of_regval rv = match rv with | Regval_bool (v) -> Just v | _ -> Nothing end";
-    "  let regval_of_bool v = Regval_bool v";
-    "  let int_of_regval rv = match rv with | Regval_int (v) -> Just v | _ -> Nothing end";
-    "  let regval_of_int v = Regval_int v";
-    "  let real_of_regval rv = match rv with | Regval_real (v) -> Just v | _ -> Nothing end";
-    "  let regval_of_real v = Regval_real v";
-    "  let string_of_regval rv = match rv with | Regval_string (v) -> Just v | _ -> Nothing end";
-    "  let regval_of_string v = Regval_string v";
-    "end";
-  ]
+  let conv_def (name, typ) =
+    [ "val " ^ name ^ "_of_register_value : register_value -> maybe " ^ typ;
+      "let " ^ name ^ "_of_register_value rv = match rv with Regval_" ^ name ^ " v -> Just v | _ -> Nothing end";
+      "val register_value_of_" ^ name ^ " : " ^ typ ^ " -> register_value";
+      "let register_value_of_" ^ name ^ " v = Regval_" ^ name ^ " v" ]
+  in
+  let conv_inst (name, typ) =
+    [ "let " ^ name ^ "_of_regval = " ^ name ^ "_of_register_value";
+      "let regval_of_" ^ name ^ " = register_value_of_" ^ name ]
+  in
+  separate_map hardline string
+    (List.concat (List.map conv_def regval_class_typs_lem)
+    @ [""; "instance (Register_Value register_value)"]
+    @ List.concat (List.map conv_inst regval_class_typs_lem)
+    @ ["end"])
 
 let add_regval_conv id typ defs =
   let id = string_of_id id in
@@ -315,31 +320,36 @@ let add_regval_conv id typ defs =
   let cdefs = List.concat (List.map defs_of_string (from_defs @ to_defs)) in
   defs @ cdefs
 
-let rec regval_convs_lem mwords (Typ_aux (t, _) as typ) = match t with
+let rec regval_convs mwords wrap_fun (Typ_aux (t, _) as typ) = match t with
   | Typ_app _ when (is_vector_typ typ || is_bitvector_typ typ) && not (mwords && is_bitvector_typ typ) ->
      let size, ord, etyp = vector_typ_args_of typ in
-     let etyp_of, of_etyp = regval_convs_lem mwords etyp in
-     "(fun v -> vector_of_regval " ^ etyp_of ^ " v)",
-     "(fun v -> regval_of_vector " ^ of_etyp ^ " v)"
+     let etyp_of, of_etyp = regval_convs mwords wrap_fun etyp in
+     "vector_of_regval " ^ wrap_fun etyp_of,
+     "regval_of_vector " ^ wrap_fun of_etyp
   | Typ_app (id, [A_aux (A_typ etyp, _)])
     when string_of_id id = "list" ->
-     let etyp_of, of_etyp = regval_convs_lem mwords etyp in
-     "(fun v -> list_of_regval " ^ etyp_of ^ " v)",
-     "(fun v -> regval_of_list " ^ of_etyp ^ " v)"
+     let etyp_of, of_etyp = regval_convs mwords wrap_fun etyp in
+     "list_of_regval " ^ wrap_fun etyp_of,
+     "regval_of_list " ^ wrap_fun of_etyp
   | Typ_app (id, [A_aux (A_typ etyp, _)])
     when string_of_id id = "option" ->
-     let etyp_of, of_etyp = regval_convs_lem mwords etyp in
-     "(fun v -> option_of_regval " ^ etyp_of ^ " v)",
-     "(fun v -> regval_of_option " ^ of_etyp ^ " v)"
+     let etyp_of, of_etyp = regval_convs mwords wrap_fun etyp in
+     "option_of_regval " ^ wrap_fun etyp_of,
+     "regval_of_option " ^ wrap_fun of_etyp
   | _ ->
      let id = string_of_id (regval_constr_id mwords typ) in
-     "(fun v -> " ^ id ^ "_of_regval v)", "(fun v -> regval_of_" ^ id ^ " v)"
+     if List.mem id (List.map fst regval_class_typs_lem)
+     then id ^ "_of_register_value", "register_value_of_" ^ id
+     else id ^ "_of_regval", "regval_of_" ^ id
+
+let regval_convs_lem mwords = regval_convs mwords (fun conv -> "(fun v -> " ^ conv ^ " v)")
+let regval_convs_isa mwords = regval_convs mwords (fun conv -> "(\\<lambda>v. " ^ conv ^ " v)")
 
 let register_refs_lem mwords pp_tannot registers =
   let generic_convs =
     separate_map hardline string [
       "val vector_of_regval : forall 'a. (register_value -> maybe 'a) -> register_value -> maybe (list 'a)";
-      "let vector_of_regval of_regval = function";
+      "let vector_of_regval of_regval rv = match rv with";
       "  | Regval_vector v -> just_list (List.map of_regval v)";
       "  | _ -> Nothing";
       "end";
@@ -348,7 +358,7 @@ let register_refs_lem mwords pp_tannot registers =
       "let regval_of_vector regval_of xs = Regval_vector (List.map regval_of xs)";
       "";
       "val list_of_regval : forall 'a. (register_value -> maybe 'a) -> register_value -> maybe (list 'a)";
-      "let list_of_regval of_regval = function";
+      "let list_of_regval of_regval rv = match rv with";
       "  | Regval_list v -> just_list (List.map of_regval v)";
       "  | _ -> Nothing";
       "end";
@@ -357,7 +367,7 @@ let register_refs_lem mwords pp_tannot registers =
       "let regval_of_list regval_of xs = Regval_list (List.map regval_of xs)";
       "";
       "val option_of_regval : forall 'a. (register_value -> maybe 'a) -> register_value -> maybe (maybe 'a)";
-      "let option_of_regval of_regval = function";
+      "let option_of_regval of_regval rv = match rv with";
       "  | Regval_option v -> Just (Maybe.bind v of_regval)";
       "  | _ -> Nothing";
       "end";
@@ -385,8 +395,8 @@ let register_refs_lem mwords pp_tannot registers =
       string "  name = \""; idd; string "\";"; hardline;
       string "  read_from = (fun s -> s."; read_from; string ");"; hardline;
       string "  write_to = (fun v s -> (<| s with "; write_to; string " |>));"; hardline;
-      string "  of_regval = "; string of_regval; string ";"; hardline;
-      string "  regval_of = "; string regval_of; string " |>"; hardline]
+      string "  of_regval = (fun v -> "; string of_regval; string " v);"; hardline;
+      string "  regval_of = (fun v -> "; string regval_of; string " v) |>"; hardline]
   in
   let refs = separate_map hardline register_ref registers in
   let mk_reg_assoc (_, id) =
@@ -427,11 +437,13 @@ let generate_isa_lemmas mwords defs =
     drop_while (fun s -> s = "") |> List.rev |>
     String.concat "_"
   in
+  let remove_underscores str = remove_leading_underscores (remove_trailing_underscores str) in
   let registers = find_registers defs in
   let regtyp_ids =
     register_base_types mwords (List.map fst registers)
     |> Bindings.bindings |> List.map fst
   in
+  let regval_class_typ_ids = List.map (fun (t, _) -> mk_id t) regval_class_typs_lem in
   let register_defs =
     let reg_id id = remove_leading_underscores (string_of_id id) in
     hang 2 (flow_map (break 1) string
@@ -441,13 +453,23 @@ let generate_isa_lemmas mwords defs =
   let conv_lemma typ_id =
     let typ_id = remove_trailing_underscores (string_of_id typ_id) in
     let typ_id' = remove_leading_underscores typ_id in
+    let (of_rv, rv_of) =
+      if List.mem typ_id (List.map fst regval_class_typs_lem)
+      then (typ_id' ^ "_of_register_value", "register_value_of_" ^ typ_id)
+      else (typ_id' ^ "_of_regval", "regval_of_" ^ typ_id)
+    in
+    string ("lemma " ^ of_rv ^ "_eq_Some_iff[simp]:") ^^ hardline ^^
+    string ("  \"" ^ of_rv ^ " rv = Some v \\<longleftrightarrow> rv = Regval_" ^ typ_id ^ " v\"") ^^ hardline ^^
+    string ("  by (cases rv; auto)") ^^ hardline ^^
+    hardline ^^
+    string ("declare " ^ rv_of ^ "_def[simp]") ^^ hardline ^^
+    hardline ^^
     string ("lemma regval_" ^ typ_id ^ "[simp]:") ^^ hardline ^^
-    string ("  \"" ^ typ_id' ^ "_of_regval (regval_of_" ^ typ_id ^ " v) = Some v\"") ^^ hardline ^^
-    string ("  by (auto simp: regval_of_" ^ typ_id ^ "_def)")
+    string ("  \"" ^ of_rv ^ " (" ^ rv_of ^ " v) = Some v\"") ^^ hardline ^^
+    string ("  by auto")
   in
   let register_lemmas (typ, id) =
     let id = remove_leading_underscores (string_of_id id) in
-    let id' = remove_trailing_underscores id in
     separate_map hardline string [
       "lemma liftS_read_reg_" ^ id ^ "[liftState_simp]:";
       "  \"\\<lbrakk>read_reg " ^ id ^ "_ref\\<rbrakk>\\<^sub>S = read_regS " ^ id ^ "_ref\"";
@@ -479,12 +501,64 @@ let generate_isa_lemmas mwords defs =
     "    unfolded register_accessors_def mk_accessors_def fst_conv snd_conv]";
   ])
   in
+  let module StringMap = Map.Make(String) in
+  let field_id typ = remove_leading_underscores (string_of_id (id_of_regtyp IdSet.empty false typ)) in
+  let field_id_stripped typ = remove_trailing_underscores (field_id typ) in
+  let set_regval_type_cases =
+    let add_reg_case cases (typ, id) =
+      let of_regval = remove_underscores (fst (regval_convs_isa mwords typ)) in
+      let case =
+        "(" ^ field_id_stripped typ ^ ") v where " ^
+        "\"" ^ of_regval ^ " rv = Some v\" and " ^
+        "\"s' = s\\<lparr>" ^ field_id typ ^ "_reg := (" ^ field_id typ ^ "_reg s)(r := v)\\<rparr>\""
+      in
+      StringMap.add (field_id typ) case cases
+    in
+    let cases = List.fold_left add_reg_case StringMap.empty registers |> StringMap.bindings |> List.map snd in
+    let prove_case (typ, id) = "    subgoal using " ^ field_id_stripped typ ^ " by (auto simp: register_defs fun_upd_def)" in
+    if List.length cases > 0 && !opt_type_grouped_regstate then
+      string "lemma set_regval_Some_type_cases:" ^^ hardline ^^
+      string "  assumes \"set_regval r rv s = Some s'\"" ^^ hardline ^^
+      string "  obtains " ^^ separate_map (hardline ^^ string "  | ") string cases ^^ hardline ^^
+      string "proof -" ^^ hardline ^^
+      string "  from assms show ?thesis" ^^ hardline ^^
+      string "    unfolding set_regval_unfold registers_def" ^^ hardline ^^
+      string "    apply (elim option_bind_SomeE map_of_Cons_SomeE)" ^^ hardline ^^
+      separate_map hardline string (List.map prove_case registers) ^^ hardline ^^
+      string "    by auto" ^^ hardline ^^
+      string "qed"
+    else string ""
+  in
+  let get_regval_type_cases =
+    let add_reg_case cases (typ, id) =
+      let regval_of = remove_underscores (snd (regval_convs_isa mwords typ)) in
+      let case = "(" ^ field_id_stripped typ ^ ") \"get_regval r = (\\<lambda>s. Some (" ^ regval_of ^ " (" ^ field_id typ ^ "_reg s r)))\"" in
+      StringMap.add (field_id typ) case cases
+    in
+    let cases = List.fold_left add_reg_case StringMap.empty registers in
+    let fail_case = "(None) \"get_regval r = (\\<lambda>s. None)\"" in
+    let cases = (StringMap.bindings cases |> List.map snd) @ [fail_case] in
+    let prove_case (typ, id) = "    subgoal using " ^ field_id_stripped typ ^ " by (auto simp: register_defs)" in
+    if !opt_type_grouped_regstate then
+      string "lemma get_regval_type_cases:" ^^ hardline ^^
+      string "  fixes r :: string" ^^ hardline ^^
+      string "  obtains " ^^ separate_map (hardline ^^ string "  | ") string cases ^^ hardline ^^
+      string "proof (cases \"map_of registers r\")" ^^ hardline ^^
+      string "  case (Some ops)" ^^ hardline ^^
+      string "  then show ?thesis" ^^ hardline ^^
+      string "    unfolding registers_def" ^^ hardline ^^
+      string "    apply (elim map_of_Cons_SomeE)" ^^ hardline ^^
+      separate_map hardline string (List.map prove_case registers) ^^ hardline ^^
+      string "    by auto" ^^ hardline ^^
+      string "qed (auto simp: get_regval_unfold)"
+    else string ""
+  in
   registers_eqs ^^ hardline ^^ hardline ^^
   string "abbreviation liftS (\"\\<lbrakk>_\\<rbrakk>\\<^sub>S\") where \"liftS \\<equiv> liftState (get_regval, set_regval)\"" ^^
   hardline ^^ hardline ^^
   register_defs ^^
   hardline ^^ hardline ^^
-  separate_map (hardline ^^ hardline) conv_lemma regtyp_ids ^^
+  separate_map (hardline ^^ hardline) conv_lemma (regval_class_typ_ids @ regtyp_ids) ^^
   hardline ^^ hardline ^^
   separate_map hardline string [
     "lemma vector_of_rv_rv_of_vector[simp]:";
@@ -492,23 +566,27 @@ let generate_isa_lemmas mwords defs =
     "  shows \"vector_of_regval of_rv (regval_of_vector rv_of v) = Some v\"";
     "proof -";
     "  from assms have \"of_rv \\<circ> rv_of = Some\" by auto";
-    "  then show ?thesis by (auto simp: vector_of_regval_def regval_of_vector_def)";
+    "  then show ?thesis by (auto simp: regval_of_vector_def)";
     "qed";
     "";
     "lemma option_of_rv_rv_of_option[simp]:";
     "  assumes \"\\<And>v. of_rv (rv_of v) = Some v\"";
     "  shows \"option_of_regval of_rv (regval_of_option rv_of v) = Some v\"";
-    "  using assms by (cases v) (auto simp: option_of_regval_def regval_of_option_def)";
+    "  using assms by (cases v) (auto simp: regval_of_option_def)";
     "";
     "lemma list_of_rv_rv_of_list[simp]:";
     "  assumes \"\\<And>v. of_rv (rv_of v) = Some v\"";
     "  shows \"list_of_regval of_rv (regval_of_list rv_of v) = Some v\"";
     "proof -";
     "  from assms have \"of_rv \\<circ> rv_of = Some\" by auto";
-    "  with assms show ?thesis by (induction v) (auto simp: list_of_regval_def regval_of_list_def)";
+    "  with assms show ?thesis by (induction v) (auto simp: regval_of_list_def)";
     "qed"] ^^
   hardline ^^ hardline ^^
-  separate_map (hardline ^^ hardline) register_lemmas registers
+  separate_map (hardline ^^ hardline) register_lemmas registers ^^
+  hardline ^^ hardline ^^
+  set_regval_type_cases ^^
+  hardline ^^ hardline ^^
+  get_regval_type_cases
 
 let rec regval_convs_coq (Typ_aux (t, _) as typ) = match t with
   | Typ_app _ when is_vector_typ typ && not (is_bitvector_typ typ) ->
