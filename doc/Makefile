@@ -76,8 +76,13 @@ lexer_syntax.sed: ../src/lexer.mll
 	  -e 's/^ *| "\([^"{}&]\+\)"[ \t]*{ (\?\([A-Za-z]\+\)\((.*)\)\?)\? }$//s\/{\2}\/{\\\\lstinline"\1"}\//p' \
 	  < ../src/lexer.mll > lexer_syntax.sed
 
+# The first sed removes a couple of rules that are only used for
+# partially rewritten programs, and non-terminals that are used for
+# interactive mode. Ideally I'd like to replace it by adding a
+# filtering option to obelisk.
 parser_grammar.tex parser_package.sty: ../src/parser.mly lexer_syntax.sed extra_lexer_syntax.sed
-	obelisk latex -i -o parser_grammar.tex -prefix sail -package parser_package ../src/parser.mly
+	sed -e '/[Ii]nternal_\?\([Pp][Ll]et\|[Rr]eturn\)/d' -e '/_eof:/,/^ *$$/d' ../src/parser.mly > parser.mly
+	obelisk latex -i -o parser_grammar.tex -prefix sail -package parser_package parser.mly
 	sed -i.bak -f lexer_syntax.sed -f extra_lexer_syntax.sed parser_package.sty
 
 internals.tex: internals.md
@@ -101,6 +106,6 @@ clean:
 	-rm -f internals.tex
 	-rm -rf code_myreplicatebits/
 	-rm -f code_myreplicatebits.tex
-	-rm -f lexer_syntax.sed parser_grammar.tex parser_package.sty
+	-rm -f lexer_syntax.sed parser_grammar.tex parser_package.sty parser.mly
 	-rm -f *.aux
 	-rm -f *.log
