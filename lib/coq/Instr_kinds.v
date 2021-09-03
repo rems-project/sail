@@ -104,6 +104,8 @@ Inductive read_kind :=
   | Read_RISCV_reserved_strong_acquire
   (* x86 reads *)
   | Read_X86_locked (* the read part of a lock'd instruction (rmw) *)
+  (* instruction fetch *)
+  | Read_ifetch
 .
 Scheme Equality for read_kind.
 (*
@@ -121,6 +123,7 @@ instance (Show read_kind)
     | Read_RISCV_reserved_acquire -> "Read_RISCV_reserved_acquire"
     | Read_RISCV_reserved_strong_acquire -> "Read_RISCV_reserved_strong_acquire"
     | Read_X86_locked -> "Read_X86_locked"
+    | Read_ifetch -> "Read_ifetch"
   end
 end
 *)
@@ -280,6 +283,7 @@ match r with
   | Read_RISCV_reserved_acquire => true
   | Read_RISCV_reserved_strong_acquire => true
   | Read_X86_locked => true
+  | Read_ifetch => false
 end.
 
 
@@ -298,6 +302,7 @@ instance (EnumerationType read_kind)
     | Read_RISCV_reserved_acquire -> 9
     | Read_RISCV_reserved_strong_acquire -> 10
     | Read_X86_locked -> 11
+    | Read_ifetch -> 12
   end
 end
 

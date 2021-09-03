@@ -613,6 +613,26 @@ let rec regval_convs_coq (Typ_aux (t, _) as typ) = match t with
 let register_refs_coq registers =
   let generic_convs =
     separate_map hardline string [
+      "Definition bool_of_regval (merge_var : register_value) : option bool :=";
+      "  match merge_var with | Regval_bool v => Some v | _ => None end.";
+      "";
+      "Definition regval_of_bool (v : bool) : register_value := Regval_bool v.";
+      "";
+      "Definition int_of_regval (merge_var : register_value) : option Z :=";
+      "  match merge_var with | Regval_int v => Some v | _ => None end.";
+      "";
+      "Definition regval_of_int (v : Z) : register_value := Regval_int v.";
+      "";
+      "Definition real_of_regval (merge_var : register_value) : option R :=";
+      "  match merge_var with | Regval_real v => Some v | _ => None end.";
+      "";
+      "Definition regval_of_real (v : R) : register_value := Regval_real v.";
+      "";
+      "Definition string_of_regval (merge_var : register_value) : option string :=";
+      "  match merge_var with | Regval_string v => Some v | _ => None end.";
+      "";
+      "Definition regval_of_string (v : string) : register_value := Regval_string v.";
+      "";
       "Definition vector_of_regval {a} n (of_regval : register_value -> option a) (rv : register_value) : option (vec a n) := match rv with";
       "  | Regval_vector v => if n =? length_list v then map_bind (vec_of_list n) (just_list (List.map of_regval v)) else None";
       "  | _ => None";
