@@ -86,6 +86,6 @@ val graph_of_ast : Type_check.tannot ast -> Graph.Make(Node).graph
 
 val dot_of_ast : out_channel -> Type_check.tannot ast -> unit
 
-val filter_ast : Set.Make(Node).t -> Graph.Make(Node).graph -> Type_check.tannot ast -> Type_check.tannot ast
+val filter_ast : Set.Make(Node).t -> Graph.Make(Node).graph -> 'a ast -> 'a ast
 
 val filter_ast_ids : IdSet.t -> IdSet.t -> Type_check.tannot ast -> Type_check.tannot ast
