@@ -2,7 +2,7 @@
 
 set -eu
 
-opam init -y --no-setup --compiler=4.07 --shell=sh
+opam init -y --no-setup --compiler=4.07.0 --shell=sh
 
 eval `opam config env`
 
