@@ -103,6 +103,9 @@ let opt_new_bitfields = ref false
 (* Don't expand bitfields (when using old syntax), used for LaTeX output *)
 let opt_no_bitfield_expansion = ref false
 
+(* Check pattern-match completeness when type-checking *)
+let opt_check_completeness = ref false
+                              
 let depth = ref 0
 
 let rec indent n = match n with
@@ -522,8 +525,6 @@ module Env : sig
   (* This must not be exported, initial_env sets up a correct initial
      environment. *)
   val empty : t
-
-  val pattern_completeness_ctx : t -> Pattern_completeness.ctx
 
   val builtin_typs : typquant Bindings.t
 end = struct
@@ -1415,11 +1416,6 @@ end = struct
 
   let polymorphic_undefineds env = env.poly_undefineds
 
-  let pattern_completeness_ctx env =
-    { Pattern_completeness.lookup_id = (fun id -> lookup_id id env);
-      Pattern_completeness.enums = env.enums;
-      Pattern_completeness.variants = Bindings.map (fun (_, tus) -> IdSet.of_list (List.map type_union_id tus)) env.variants
-    }
 end
 
 let add_typquant l (quant : typquant) (env : Env.t) : Env.t =
@@ -2921,6 +2917,13 @@ let rec exp_unconditionally_returns (E_aux (aux, _)) =
   | E_block exps -> exp_unconditionally_returns (List.hd (List.rev exps))
   | _ -> false
 
+module PC_config = struct
+  type t = tannot
+  let typ_of_pat = typ_of_pat
+end
+
+module PC = Pattern_completeness.Make(PC_config);;
+       
 let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ_aux, _) as typ) : tannot exp =
   let annot_exp_effect exp typ' eff = E_aux (exp, (l, mk_expected_tannot env typ' eff (Some typ))) in
   let add_effect exp eff = match exp with
@@ -2932,10 +2935,17 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_block exps, _ ->
      annot_exp (E_block (check_block l env exps (Some typ))) typ
   | E_case (exp, cases), _ ->
-     Pattern_completeness.check l (Env.pattern_completeness_ctx env) cases;
      let inferred_exp = irule infer_exp env exp in
      let inferred_typ = typ_of inferred_exp in
-     annot_exp (E_case (inferred_exp, List.map (fun case -> check_case env inferred_typ case typ) cases)) typ
+     let checked_cases = List.map (fun case -> check_case env inferred_typ case typ) cases in
+     if !opt_check_completeness then (
+       let ctx = {
+           Pattern_completeness.variants = Env.get_variants env;
+           Pattern_completeness.enums = Env.get_enums env
+         } in
+       ignore (PC.is_complete l ctx checked_cases inferred_typ)
+     );
+     annot_exp (E_case (inferred_exp, checked_cases)) typ
   | E_try (exp, cases), _ ->
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_try (checked_exp, List.map (fun case -> check_case env exc_typ case typ) cases)) typ
@@ -2957,7 +2967,6 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        | None -> typ_error env l ("List " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
      end
   | E_record_update (exp, fexps), _ ->
-     (* TODO: this could also infer exp - also fix code duplication with E_record below *)
      let checked_exp = crule check_exp env exp typ in
      let rectyp_id = match Env.expand_synonyms env typ with
        | Typ_aux (Typ_id rectyp_id, _) | Typ_aux (Typ_app (rectyp_id, _), _) when Env.is_record rectyp_id env ->

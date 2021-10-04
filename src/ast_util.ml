@@ -934,6 +934,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_constraint nc -> "constraint(" ^ string_of_n_constraint nc ^ ")"
   | E_lit lit -> string_of_lit lit
   | E_return exp -> "return " ^ string_of_exp exp
+  | E_app (f, [E_aux (E_lit (L_aux (L_unit, _)), _)]) -> string_of_id f ^ "()"
   | E_app (f, args) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp args ^ ")"
   | E_app_infix (x, op, y) -> "(" ^ string_of_exp x ^ " " ^ string_of_id op ^ " " ^ string_of_exp y ^ ")"
   | E_tuple exps -> "(" ^ string_of_list ", " string_of_exp exps ^ ")"

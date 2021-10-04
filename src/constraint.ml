@@ -419,6 +419,46 @@ let call_smt_solve l smt_file smt_vars var =
   with
   | Not_found -> None
 
+let call_smt_solve_bitvector l smt_file smt_vars =
+  let rec input_all chan =
+    try
+      let l = input_line chan in
+      let ls = input_all chan in
+      l :: ls
+    with
+      End_of_file -> []
+  in
+
+  let (input_file, tmp_chan) = Filename.open_temp_file "constraint_" ".smt2" in
+  output_string tmp_chan smt_file;
+  close_out tmp_chan;
+  let smt_output =
+    try
+      let smt_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
+      let smt_output = String.concat " " (input_all smt_chan) in
+      let _ = Unix.close_process_in smt_chan in
+      smt_output
+    with
+    | exn ->
+       raise (Reporting.err_general l ("Got error when calling smt: " ^ Printexc.to_string exn))
+  in
+  Sys.remove input_file;
+  List.map (fun (smt_var, smt_ty) ->
+      let smt_var_str = "v" ^ string_of_int smt_var in
+      let regexp = "(define-fun " ^ smt_var_str ^ " () " ^ smt_ty ^ {|[ ]+\(#[xb]\)\([0-9A-Fa-f]+\))|} in
+      try
+        let _ = Str.search_forward (Str.regexp regexp) smt_output 0 in
+        let prefix = Str.matched_group 1 smt_output in
+        let result = Str.matched_group 2 smt_output in
+        match prefix with
+        | "#b" -> Some (smt_var, mk_lit (L_bin result))
+        | "#x" -> Some (smt_var, mk_lit (L_hex result))
+        | _ ->
+           raise (Reporting.err_general l "Could not parse bitvector value from SMT solver")
+      with
+      | Not_found -> None
+    ) smt_vars |> Util.option_all
+                     
 let solve_smt l constraints var =
   let smt_file, smt_vars = solve_smt_file l constraints in
   call_smt_solve l smt_file smt_vars var

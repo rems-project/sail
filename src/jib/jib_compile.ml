@@ -1937,6 +1937,7 @@ let compile_ast ctx ast =
   let module NodeSet = Set.Make(Slice.Node) in
   let roots = Specialize.get_initial_calls () |> List.map (fun id -> Slice.Function id) |> NodeSet.of_list in
   let roots = NodeSet.add (Slice.Type (mk_id "exception")) roots in
+  let roots = Bindings.fold (fun typ_id _ roots -> NodeSet.add (Slice.Type typ_id) roots) (Env.get_enums ctx.tc_env) roots in
   let roots = NodeSet.union (toplevel_lets_of_ast ast |> List.map (fun id -> Slice.Letbind id) |> NodeSet.of_list) roots in
   let g = G.prune roots NodeSet.empty g in
   let ast = Slice.filter_ast NodeSet.empty g ast in

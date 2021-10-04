@@ -82,7 +82,6 @@ let opt_sanity = ref false
 let opt_includes_c = ref ([]:string list)
 let opt_specialize_c = ref false
 let opt_smt_serialize = ref false
-let opt_smt_fuzz = ref false
 let opt_libs_lem = ref ([]:string list)
 let opt_libs_coq = ref ([]:string list)
 let opt_file_arguments = ref ([]:string list)
@@ -448,9 +447,6 @@ let options = Arg.align ([
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
     " (debug) provide basic profiling information for rewriting passes within Sail");
-  ( "-dsmtfuzz",
-    Arg.Tuple [set_target "smt"; Arg.Set opt_smt_fuzz],
-    " (debug) fuzz sail SMT builtins");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
@@ -574,9 +570,6 @@ let target name out_name ast type_envs =
      output_string output_chan (Buffer.contents buf);
      flush output_chan;
      if close then close_out output_chan else ()
-
-  | Some "smt" when !opt_smt_fuzz ->
-     Jib_smt_fuzz.fuzz 0 type_envs ast
 
   | Some "smt" when !opt_smt_serialize ->
      let ast_smt, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in

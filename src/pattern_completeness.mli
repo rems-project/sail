@@ -68,12 +68,17 @@
 open Ast
 open Ast_util
 
-type ctx =
-  { lookup_id : id -> typ lvar;
+type ctx = {
+    variants : (typquant * type_union list) Bindings.t;
     enums : IdSet.t Bindings.t;
-    variants : IdSet.t Bindings.t
   }
 
-val is_complete : ctx -> 'a pexp list -> bool
+module type Config =
+  sig
+    type t
+    val typ_of_pat : t pat -> typ
+  end
 
-val check : Parse_ast.l -> ctx -> 'a pexp list -> unit
+module Make(C: Config) : sig
+  val is_complete : Parse_ast.l -> ctx -> C.t pexp list -> typ -> bool
+end

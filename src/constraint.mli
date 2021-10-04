@@ -80,6 +80,8 @@ val save_digests : unit -> unit
 
 val call_smt : l -> n_constraint -> smt_result
 
+val call_smt_solve_bitvector : l -> string -> (int * string) list -> (int * lit) list option
+  
 val solve_smt : l -> n_constraint -> kid -> Big_int.num option
 
 val solve_all_smt : l -> n_constraint -> kid -> Big_int.num list option

@@ -104,6 +104,9 @@ val opt_new_bitfields : bool ref
 (** Don't expand bitfields (when using old syntax), used for LaTeX output *)
 val opt_no_bitfield_expansion : bool ref
 
+(** Check pattern-match completeness when type-checking *)
+val opt_check_completeness : bool ref
+  
 (** {2 Type errors} *)
 
 type type_error =
@@ -255,8 +258,6 @@ module Env : sig
   (** Note: Likely want use Type_check.initial_env instead. The empty
      environment is lacking even basic builtins. *)
   val empty : t
-
-  val pattern_completeness_ctx : t -> Pattern_completeness.ctx
 
   val builtin_typs : typquant Bindings.t
 

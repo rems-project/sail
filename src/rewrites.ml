@@ -844,6 +844,20 @@ let case_exp e t cs =
     (* let efr = union_effs (List.map effect_of_pexp ps) in *)
     fix_eff_exp (annot_exp (E_case (e,ps)) l env t)
 
+module PC_config = struct
+  type t = tannot
+  let typ_of_pat = typ_of_pat
+end
+
+module PC = Pattern_completeness.Make(PC_config);;
+
+let pats_complete l env ps typ =
+  let ctx = {
+      Pattern_completeness.variants = Env.get_variants env;
+      Pattern_completeness.enums = Env.get_enums env
+    } in
+  PC.is_complete l ctx ps typ
+    
 (* Rewrite guarded patterns into a combination of if-expressions and
    unguarded pattern matches
 
@@ -925,8 +939,8 @@ let rewrite_guarded_clauses mk_fallthrough l env pat_typ typ cs =
           | _, _ -> body)
     | [] ->
         raise (Reporting.err_unreachable l __POS__
-            "if_exp given empty list in rewrite_guarded_clauses")) in
-  let is_complete = Pattern_completeness.is_complete (Env.pattern_completeness_ctx env) (List.map construct_pexp cs) in
+                 "if_exp given empty list in rewrite_guarded_clauses")) in
+  let is_complete = pats_complete l env (List.map construct_pexp cs) pat_typ in
   let fallthrough = if not is_complete then [destruct_pexp (mk_fallthrough l env pat_typ typ)] else [] in
   group [] (cs @ fallthrough)
 
@@ -1333,10 +1347,9 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
     | _ -> false
   in
   (* Also rewrite potentially incomplete pattern matches, adding a fallthrough clause *)
-  let pats_complete ps = Pattern_completeness.is_complete (Env.pattern_completeness_ctx (env_of full_exp)) ps in
   match exp with
   | E_case (e,ps)
-    when List.exists is_guarded_pexp ps || not (pats_complete ps) ->
+    when List.exists is_guarded_pexp ps || not (pats_complete l (env_of full_exp) ps (typ_of full_exp)) ->
     let clause = function
     | Pat_aux (Pat_exp (pat, body), annot) ->
       (pat, None, rewrite_rec body, annot)
@@ -1353,7 +1366,7 @@ let rewrite_exp_guarded_pats rewriters (E_aux (exp,(l,annot)) as full_exp) =
       rewrap (E_let (letbind_e, exp'))
     else case_exp e (typ_of full_exp) clauses
   | E_try (e,ps)
-    when List.exists is_guarded_pexp ps || not (pats_complete ps) ->
+    when List.exists is_guarded_pexp ps || not (pats_complete l (env_of full_exp) ps (typ_of full_exp)) ->
     let e = rewrite_rec e in
     let clause = function
     | Pat_aux (Pat_exp (pat, body), annot) ->
@@ -4259,13 +4272,12 @@ let make_cstr_mappings env ids m =
     | _ -> assert false
   in aux ids [] constructors
 
-let ctx_from_pattern_completeness_ctx env =
-  let ctx = Env.pattern_completeness_ctx env in
+let ctx_from_env env =
   { env = env;
     enum_to_rest = Bindings.fold (fun _ ids m -> make_enum_mappings ids m) 
-      ctx.Pattern_completeness.enums Bindings.empty;
+      (Env.get_enums env) Bindings.empty;
     constructor_to_rest = Bindings.fold (fun _ ids m -> make_cstr_mappings env ids m)
-      ctx.Pattern_completeness.variants Bindings.empty
+      (Bindings.map (fun (_, tus) -> IdSet.of_list (List.map type_union_id tus)) (Env.get_variants env)) Bindings.empty
   }
 
 let printprefix = ref "  "
@@ -4382,7 +4394,7 @@ let rec remove_clause_from_pattern ctx (P_aux (rm_pat,ann)) res_pat =
   in rp'
 
 let process_pexp env =
-  let ctx = ctx_from_pattern_completeness_ctx env in
+  let ctx = ctx_from_env env in
   fun rps patexp ->
   (*let _ = print_endline ("res_pats: " ^ String.concat "; " (List.map string_of_rp rps)) in
     let _ = print_endline ("pat: " ^ string_of_pexp patexp) in*)
@@ -4457,7 +4469,7 @@ let rewrite_case (e,ann) =
   | E_let (LB_aux (LB_val (pat,e1),lb_ann),e2) ->
      begin
      let env = env_of_annot ann in
-     let ctx = ctx_from_pattern_completeness_ctx env in
+     let ctx = ctx_from_env env in
      let rps = remove_clause_from_pattern ctx pat RP_any in
      match rps with
      | [] -> E_aux (e,ann)
