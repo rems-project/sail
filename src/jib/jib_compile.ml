@@ -1575,7 +1575,7 @@ let mangle_mono_id id ctx ctyps =
  
 let rec specialize_functions ctx cdefs =
   let polymorphic_functions =
-    List.filter_map (function
+    Util.map_filter (function
         | CDEF_spec (id, _, param_ctyps, ret_ctyp) ->
            if List.exists is_polymorphic param_ctyps || is_polymorphic ret_ctyp then
              Some id
@@ -1647,7 +1647,7 @@ let rec specialize_functions ctx cdefs =
      unreachable from any monomorphic function *)
   let graph = callgraph cdefs in
   let monomorphic_roots =
-    List.filter_map (function
+    Util.map_filter (function
         | CDEF_spec (id, _, param_ctyps, ret_ctyp) ->
            if List.exists is_polymorphic param_ctyps || is_polymorphic ret_ctyp then
              None
@@ -1661,7 +1661,7 @@ let rec specialize_functions ctx cdefs =
     IdSet.filter (fun id -> not (IdGraphNS.mem id monomorphic_reachable)) polymorphic_functions
   in
   let cdefs =
-    List.filter_map (function
+    Util.map_filter (function
         | CDEF_fundef (id, _, _, _) when IdSet.mem id unreachable_polymorphic_functions -> None
         | CDEF_spec (id, _, _, _) when IdSet.mem id unreachable_polymorphic_functions -> None
         | cdef -> Some cdef
