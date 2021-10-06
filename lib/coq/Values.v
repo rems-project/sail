@@ -72,6 +72,7 @@ Require Export ZArith.
 Require Import Ascii.
 Require Export String.
 Require Import bbv.Word.
+Require Import bbv.BinNotation.
 Require Export bbv.HexNotationWord.
 Require Export List.
 Require Export Sumbool.
@@ -80,6 +81,10 @@ Require Import Eqdep_dec.
 Require Export Zeuclid.
 Require Import Lia.
 Import ListNotations.
+
+(* Override expensive unary exponential notation *)
+Notation "sz ''b' a" := (Word.NToWord sz (BinNotation.bin a)) (at level 50).
+Notation "''b' a" := (Word.NToWord _ (BinNotation.bin a)) (at level 50).
 
 Local Open Scope Z.
 Local Open Scope bool.
