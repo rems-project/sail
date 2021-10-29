@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mduplicate_binding.sail[0m]:6:10-11
 6[96m |[0m  let (x, x) = (true, false);
  [91m |[0m          [91m^[0m

@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mconstraint_ctor/v3.sail[0m]:18:2-30
 18[96m |[0m  _prove(constraint('x >= 23));
   [91m |[0m  [91m^--------------------------^[0m

@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mlexp_vec/v2.sail[0m]:16:2-22
 16[96m |[0m  write_V(16, zeros())
   [91m |[0m  [91m^------------------^[0m

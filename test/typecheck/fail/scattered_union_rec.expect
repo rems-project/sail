@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mscattered_union_rec.sail[0m]:6:24-25
 6[96m |[0munion clause U = Ctor : E
  [91m |[0m                        [91m^[0m

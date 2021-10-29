@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mbool_constraint/v4.sail[0m]:46:4-32
 46[96m |[0m    _prove(constraint('n <= 13))
   [91m |[0m    [91m^--------------------------^[0m

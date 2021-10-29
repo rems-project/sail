@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mexist_synonym/v1.sail[0m]:6:41-42
 6[96m |[0mlet x : {'n, 0 <= 'n <= 33. regno('n)} = 4
  [91m |[0m                                         [91m^[0m

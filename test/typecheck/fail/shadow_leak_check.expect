@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mshadow_leak_check.sail[0m]:17:5-18:6
 17[96m |[0m     let 'x = some_other_int();
   [91m |[0m     [91m^-------------------------[0m

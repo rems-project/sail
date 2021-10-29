@@ -2296,7 +2296,7 @@ and subtyp_arg l env (A_aux (aux1, _) as arg1) (A_aux (aux2, _) as arg2) =
   | A_typ typ1, A_typ typ2 -> subtyp l env typ1 typ2
   | A_order ord1, A_order ord2 when ord_identical ord1 ord2 -> ()
   | A_bool nc1, A_bool nc2 when prove __POS__ env (nc_and (nc_or (nc_not nc1) nc2) (nc_or (nc_not nc2) nc1)) -> ()
-  | _, _ -> typ_error env l "Mismatched argument types in subtype check"
+  | _, _ -> typ_error env l "Mismatched argument types in sub-typing check"
 
 let typ_equality l env typ1 typ2 =
   subtyp l env typ1 typ2; subtyp l env typ2 typ1
@@ -3187,18 +3187,27 @@ and check_block l env exps ret_typ =
   | (E_aux (E_assign (lexp, bind), (assign_l, _)) :: exps) ->
      let texp, env = bind_assignment assign_l env lexp bind in
      texp :: check_block l env exps ret_typ
-  | ((E_aux (E_assert (constr_exp, msg), _) as exp) :: exps) ->
+  | ((E_aux (E_assert (constr_exp, msg), (assert_l, _)) as exp) :: exps) ->
      let msg = assert_msg msg in
      let constr_exp = crule check_exp env constr_exp bool_typ in
      let checked_msg = crule check_exp env msg string_typ in
-     let env = match assert_constraint env true constr_exp with
+     let env, added_constraint = match assert_constraint env true constr_exp with
        | Some nc ->
           typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint nc ^ " for assert"));
-          Env.add_constraint nc env
-       | None -> env
+          Env.add_constraint nc env, true
+       | None -> env, false
      in
      let texp = annot_exp_effect (E_assert (constr_exp, checked_msg)) unit_typ (mk_effect [BE_escape]) (Some unit_typ) in
-     texp :: check_block l env exps ret_typ
+     let checked_exps = check_block l env exps ret_typ in
+     (* If we can prove false, then any code after the assertion is
+        dead. In this inconsistent typing environment we can do some
+        broken things, so we eliminate this dead code here *)
+     if added_constraint && List.compare_length_with exps 1 >= 0 && prove __POS__ env nc_false then (
+       let ret_typ = List.rev checked_exps |> List.hd |> typ_of in
+       texp :: [crule check_exp env (mk_exp ~loc:assert_l (E_exit (mk_lit_exp L_unit))) ret_typ]
+     ) else (
+       texp :: checked_exps
+     )
   | ((E_aux (E_if (cond, (E_aux (E_throw _, _) | E_aux (E_block [E_aux (E_throw _, _)], _)), _), _) as exp) :: exps) ->
      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in

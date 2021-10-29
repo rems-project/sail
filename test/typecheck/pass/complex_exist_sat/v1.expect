@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mcomplex_exist_sat/v1.sail[0m]:3:18-19
 3[96m |[0mfunction foo(x) = 3
  [91m |[0m                  [91m^[0m

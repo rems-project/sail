@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mbool_constraint/v1.sail[0m]:12:19-20
 12[96m |[0m  if b then n else 4
   [91m |[0m                   [91m^[0m

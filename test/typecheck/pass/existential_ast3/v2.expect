@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mexistential_ast3/v2.sail[0m]:17:48-65
 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (31, unsigned(a));
   [91m |[0m                                                [91m^---------------^[0m

@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mvec_length/v1.sail[0m]:6:10-15
 6[96m |[0m  let y = x[10];
  [91m |[0m          [91m^---^[0m

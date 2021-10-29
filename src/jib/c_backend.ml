@@ -444,7 +444,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
       | AE_try (aexp, cases, typ) ->
          AE_try (analyze_functions ctx f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, analyze_functions ctx f aexp1, analyze_functions ctx f aexp2) cases, typ)
 
-      | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_throw _ as v -> v
+      | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_exit _ | AE_throw _ as v -> v
     in
     AE_aux (aexp, env, l)
 

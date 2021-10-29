@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mglobal_type_var/v3.sail[0m]:15:23-27
 15[96m |[0m    let y : atom(64) = size in
   [91m |[0m                       [91m^--^[0m

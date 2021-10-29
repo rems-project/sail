@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mand_let_bool.sail[0m]:6:11-42
 6[96m |[0m  and_bool(let y : bool = x in not_bool(y), x)
  [91m |[0m           [91m^-----------------------------^[0m

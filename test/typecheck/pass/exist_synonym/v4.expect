@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mexist_synonym/v4.sail[0m]:9:35-44
 9[96m |[0mval test : forall 'n, 0 <= 2 <= 4. regno('n) -> unit
  [91m |[0m                                   [91m^-------^[0m

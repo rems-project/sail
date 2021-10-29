@@ -11,7 +11,9 @@ type xlen: Int = 64
 
 let xlen_val = sizeof(xlen)
 
-val "test" : int(32) -> int(64)
+val test = { c: "test" } : int(32) -> int(64)
+
+function test(_) = 64
 
 val main : unit -> unit
 

@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mif_infer/v1.sail[0m]:10:10-37
 10[96m |[0m  let _ = 0b100[if R then 0 else f()];
   [91m |[0m          [91m^-------------------------^[0m

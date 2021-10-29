@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mexistential_ast3/v3.sail[0m]:25:9-40
 25[96m |[0m    Some(Ctor(64, unsigned(0b0 @ b @ a)))
   [91m |[0m         [91m^-----------------------------^[0m

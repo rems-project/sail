@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mstruct_rec.sail[0m]:3:10-11
 3[96m |[0m  field : S
  [91m |[0m          [91m^[0m

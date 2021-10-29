@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mmissing_tick.sail[0m]:5:16-17
 5[96m |[0mtype foo = bits(x)
  [91m |[0m                [91m^[0m

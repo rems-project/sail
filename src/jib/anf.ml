@@ -88,6 +88,7 @@ and 'a aexp_aux =
   | AE_let of mut * id * 'a * 'a aexp * 'a aexp * 'a
   | AE_block of ('a aexp) list * 'a aexp * 'a
   | AE_return of 'a aval * 'a
+  | AE_exit of 'a aval * 'a
   | AE_throw of 'a aval * 'a
   | AE_if of 'a aval * 'a aexp * 'a aexp * 'a
   | AE_field of 'a aval * id * 'a
@@ -197,6 +198,7 @@ let aexp_typ (AE_aux (aux, _, _)) =
   | AE_let (_, _, _, _, _, typ) -> typ
   | AE_block (_, _, typ) -> typ
   | AE_return (_, typ) -> typ
+  | AE_exit (_, typ) -> typ
   | AE_throw (_, typ) -> typ
   | AE_if (_, _, _, typ) -> typ
   | AE_field (_, _, typ) -> typ
@@ -237,6 +239,7 @@ let rec aexp_rename from_id to_id (AE_aux (aexp, env, l)) =
     | AE_let (mut, id, typ1, aexp1, aexp2, typ2) -> AE_let (mut, id, typ1, recur aexp1, recur aexp2, typ2)
     | AE_block (aexps, aexp, typ) -> AE_block (List.map recur aexps, recur aexp, typ)
     | AE_return (aval, typ) -> AE_return (aval_rename from_id to_id aval, typ)
+    | AE_exit (aval, typ) -> AE_exit (aval_rename from_id to_id aval, typ)
     | AE_throw (aval, typ) -> AE_throw (aval_rename from_id to_id aval, typ)
     | AE_if (aval, then_aexp, else_aexp, typ) -> AE_if (aval_rename from_id to_id aval, recur then_aexp, recur else_aexp, typ)
     | AE_field (aval, id, typ) -> AE_field (aval_rename from_id to_id aval, id, typ)
@@ -273,7 +276,7 @@ let rec fold_aexp f (AE_aux (aexp, env, l)) =
        AE_case (aval, List.map (fun (pat, aexp1, aexp2) -> pat, fold_aexp f aexp1, fold_aexp f aexp2) cases, typ)
     | AE_try (aexp, cases, typ) ->
        AE_try (fold_aexp f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, fold_aexp f aexp1, fold_aexp f aexp2) cases, typ)
-    | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_throw _ as v -> v
+    | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_exit _ | AE_throw _ as v -> v
   in
   f (AE_aux (aexp, env, l))
 
@@ -310,6 +313,7 @@ let rec no_shadow ids (AE_aux (aexp, env, l)) =
        AE_let (mut, id, typ1, no_shadow ids aexp1, no_shadow (IdSet.add id ids) aexp2, typ2)
     | AE_block (aexps, aexp, typ) -> AE_block (List.map (no_shadow ids) aexps, no_shadow ids aexp, typ)
     | AE_return (aval, typ) -> AE_return (aval, typ)
+    | AE_exit (aval, typ) -> AE_exit (aval, typ)
     | AE_throw (aval, typ) -> AE_throw (aval, typ)
     | AE_if (aval, then_aexp, else_aexp, typ) -> AE_if (aval, no_shadow ids then_aexp, no_shadow ids else_aexp, typ)
     | AE_field (aval, id, typ) -> AE_field (aval, id, typ)
@@ -351,6 +355,7 @@ let rec map_aval f (AE_aux (aexp, env, l)) =
        AE_let (mut, id, typ1, map_aval f aexp1, map_aval f aexp2, typ2)
     | AE_block (aexps, aexp, typ) -> AE_block (List.map (map_aval f) aexps, map_aval f aexp, typ)
     | AE_return (aval, typ) -> AE_return (f env l aval, typ)
+    | AE_exit (aval, typ) -> AE_exit (f env l aval, typ)
     | AE_throw (aval, typ) -> AE_throw (f env l aval, typ)
     | AE_if (aval, aexp1, aexp2, typ2) ->
        AE_if (f env l aval, map_aval f aexp1, map_aval f aexp2, typ2)
@@ -387,7 +392,7 @@ let rec map_functions f (AE_aux (aexp, env, l)) =
        AE_case (aval, List.map (fun (pat, aexp1, aexp2) -> pat, map_functions f aexp1, map_functions f aexp2) cases, typ)
     | AE_try (aexp, cases, typ) ->
        AE_try (map_functions f aexp, List.map (fun (pat, aexp1, aexp2) -> pat, map_functions f aexp1, map_functions f aexp2) cases, typ)
-    | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_throw _ as v -> v
+    | AE_field _ | AE_record_update _ | AE_val _ | AE_return _ | AE_exit _ | AE_throw _ as v -> v
   in
   AE_aux (aexp, env, l)
 
@@ -456,6 +461,7 @@ let rec pp_aexp (AE_aux (aexp, _, _)) =
   | AE_block (aexps, aexp, typ) ->
      pp_annot typ (surround 2 0 lbrace (pp_block (aexps @ [aexp])) rbrace)
   | AE_return (v, typ) -> pp_annot typ (string "return" ^^ parens (pp_aval v))
+  | AE_exit (v, typ) -> pp_annot typ (string "exit" ^^ parens (pp_aval v))
   | AE_throw (v, typ) -> pp_annot typ (string "throw" ^^ parens (pp_aval v))
   | AE_loop (While, aexp1, aexp2) ->
      separate space [string "while"; pp_aexp aexp1; string "do"; pp_aexp aexp2]
@@ -590,6 +596,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
     | AE_app (_, _, typ)
       | AE_let (_, _, _, _, _, typ)
       | AE_return (_, typ)
+      | AE_exit (_, typ)
       | AE_throw (_, typ)
       | AE_cast (_, typ)
       | AE_if (_, _, _, typ)
@@ -696,7 +703,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   | E_exit exp ->
      let aexp = anf exp in
      let aval, wrap = to_aval aexp in
-     wrap (mk_aexp (AE_app (mk_id "sail_exit", [aval], unit_typ)))
+     wrap (mk_aexp (AE_exit (aval, typ_of exp)))
 
   | E_return ret_exp ->
      let aexp = anf ret_exp in

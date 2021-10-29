@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mconstrained_struct/v1.sail[0m]:10:18-26
 10[96m |[0mtype MyStruct64 = MyStruct(65)
   [91m |[0m                  [91m^------^[0m

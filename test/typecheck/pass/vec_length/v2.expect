@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mvec_length/v2.sail[0m]:7:10-25
 7[96m |[0m  let z = [x with 10 = y];
  [91m |[0m          [91m^-------------^[0m

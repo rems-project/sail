@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96munion_recf.sail[0m]:3:9-10
 3[96m |[0m  Ctor : U -> U
  [91m |[0m         [91m^[0m

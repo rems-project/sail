@@ -1037,6 +1037,12 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      (fun clexp -> icomment "unreachable after throw"),
      []
 
+  | AE_exit (aval, typ) ->
+     let exit_setup, cval, _ = compile_aval l ctx aval in
+     exit_setup @ [imatch_failure ()],
+     (fun clexp -> icomment "unreachable after exit"),
+     []
+
   | AE_field (aval, id, typ) ->
      let aval_ctyp = ctyp_of_typ ctx typ in
      let setup, cval, cleanup = compile_aval l ctx aval in

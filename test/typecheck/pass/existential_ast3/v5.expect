@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mexistential_ast3/v5.sail[0m]:37:50-65
 37[96m |[0m  let n : range(0, 'datasize - 2) = if is_64 then unsigned(b @ a) else unsigned(a);
   [91m |[0m                                                  [91m^-------------^[0m

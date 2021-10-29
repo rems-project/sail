@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mconstant_nexp/v1.sail[0m]:11:2-26
 11[96m |[0m  multi_param(2 + 3, n, 5);
   [91m |[0m  [91m^----------------------^[0m

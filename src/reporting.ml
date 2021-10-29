@@ -168,10 +168,10 @@ let dest_err = function
   | Err_unreachable (l, (file, line, _, _), backtrace, m) ->
      (Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line, Loc l, m ^ "\n\n" ^ Printexc.raw_backtrace_to_string backtrace ^ issues)
   | Err_todo (l, m) -> ("Todo", Loc l, m)
-  | Err_syntax (p, m) -> ("Syntax error", Pos p, m)
-  | Err_syntax_loc (l, m) -> ("Syntax error", Loc l, m)
-  | Err_lex (p, s) -> ("Lexical error", Pos p, s)
-  | Err_type (l, m) -> ("Type error", Loc l, m)
+  | Err_syntax (p, m) -> (Util.("Syntax error" |> yellow |> clear), Pos p, m)
+  | Err_syntax_loc (l, m) -> (Util.("Syntax error" |> yellow |> clear), Loc l, m)
+  | Err_lex (p, s) -> (Util.("Lexical error" |> yellow |> clear), Pos p, s)
+  | Err_type (l, m) -> (Util.("Type error" |> yellow |> clear), Loc l, m)
 
 exception Fatal_error of error
 

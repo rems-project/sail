@@ -1,4 +1,4 @@
-Type error:
+[93mType error[0m:
 [[96mpoly_vector/v2.sail[0m]:5:5-14
 5[96m |[0mtype bitvector('n, 'ord: Order) = vector('n, 'ord, bit)
  [91m |[0m     [91m^-------^[0m
