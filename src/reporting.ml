@@ -120,14 +120,14 @@ let print_err_internal p_l m1 m2 =
   let open Error_format in
   prerr_endline (m1 ^ ":");
   begin match p_l with
-  | Loc l -> format_message (Location (l, Line m2)) err_formatter
-  | Pos p -> format_message (Location (Parse_ast.Range (p, p), Line m2)) err_formatter
+  | Loc l -> format_message (Location ("", l, Line m2)) err_formatter
+  | Pos p -> format_message (Location ("", Parse_ast.Range (p, p), Line m2)) err_formatter
   end
 
 let loc_to_string ?code:(code=true) l =
   let open Error_format in
   let b = Buffer.create 160 in
-  format_message (Location (l, Line "")) (buffer_formatter b);
+  format_message (Location ("", l, Line "")) (buffer_formatter b);
   Buffer.contents b
 
 let rec simp_loc = function

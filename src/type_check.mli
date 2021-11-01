@@ -178,6 +178,10 @@ module Env : sig
 
   val add_constraint : n_constraint -> t -> t
 
+  (** Push all the type variables and constraints from a typquant into
+      an environment *)
+  val add_typquant : Ast.l -> typquant -> t -> t
+    
   val get_typ_var : kid -> t -> kind_aux
 
   val get_typ_vars : t -> kind_aux KBindings.t
@@ -267,11 +271,6 @@ module Env : sig
 end
 
 (** {4 Environment helper functions} *)
-
-(** Push all the type variables and constraints from a typquant into
-   an environment *)
-val add_typquant : Ast.l -> typquant -> Env.t -> Env.t
-
 val add_existential : Ast.l -> kinded_id list -> n_constraint -> Env.t -> Env.t
 
 (** When the typechecker creates new type variables it gives them

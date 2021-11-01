@@ -3,8 +3,8 @@
 12[96m |[0m  V[i] = v
   [91m |[0m  [91m^--^[0m
   [91m |[0m Bounds check failed for l-expression: (0 <= 'i & 'i < 16)
-  [91m |[0m This error was caused by:
-  [91m |[0m [[96mlexp_vec/v1.sail[0m]:12:2-6
+  [91m |[0m 
+  [91m |[0m [93mCaused by [0m[[96mlexp_vec/v1.sail[0m]:12:2-6
   [91m |[0m 12[96m |[0m  V[i] = v
   [91m |[0m   [91m |[0m  [91m^--^[0m
   [91m |[0m   [91m |[0m Bounds check failed for l-expression: (0 <= 'i & 'i < 16)

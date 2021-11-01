@@ -1580,7 +1580,7 @@ in *)
            (* Constant propagation requires a fully type-annotated AST,
               so re-check the function clause *)
            let (tq, typ) = Env.get_val_spec id type_env' in
-           let env = add_typquant l tq type_env' in
+           let env = Env.add_typquant l tq type_env' in
            const_prop_funcl (Type_check.check_funcl env funcl typ)
          else funcl
        in
@@ -3994,7 +3994,7 @@ let rewrite_toplevel_nexps ({ defs; _ } as ast) =
     | TypQ_aux (TypQ_no_forall,_) -> None
     | TypQ_aux (TypQ_tq qs, tq_l) ->
        let env = env_of_annot ann in
-       let env = add_typquant tq_l tqs env in
+       let env = Env.add_typquant tq_l tqs env in
        let nexp_map, typ = rewrite_typ_in_spec env [] typ in
        match nexp_map with
        | [] -> None

@@ -466,6 +466,7 @@ module Env : sig
   val is_mutable : id -> t -> bool
   val get_constraints : t -> n_constraint list
   val add_constraint : n_constraint -> t -> t
+  val add_typquant : l -> typquant -> t -> t
   val get_typ_var : kid -> t -> kind_aux
   val get_typ_var_loc : kid -> t -> Ast.l
   val get_typ_var_loc_opt : kid -> t -> Ast.l option
@@ -512,7 +513,7 @@ module Env : sig
   val no_bindings : t -> t
 
   (* Well formedness-checks *)
-  val wf_typ : ?exs:KidSet.t -> t -> typ -> unit
+  val wf_typ : t -> typ -> unit
   val wf_nexp : ?exs:KidSet.t -> t -> nexp -> unit
   val wf_constraint : ?exs:KidSet.t -> t -> n_constraint -> unit
 
@@ -565,6 +566,33 @@ end = struct
   let allow_unknowns env = env.allow_unknowns
   let set_allow_unknowns b env = { env with allow_unknowns = b }
 
+  (* First, we define how type variables are added to the
+     environment. If we add a new variable shadowing a previous
+     variable, we need to modify the environment so the shadowed
+     variable is renamed. We can't just remove it because it may be
+     referenced by constraints. *)
+  let shadows v env = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0
+ 
+  let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
+    if KBindings.mem v env.typ_vars then begin
+        let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
+        let s_l, s_k = KBindings.find v env.typ_vars in
+        let s_v = Kid_aux (Var (string_of_kid v ^ "#" ^ string_of_int n), l) in
+        typ_print (lazy (Printf.sprintf "%stype variable (shadowing %s) %s : %s" adding (string_of_kid s_v) (string_of_kid v) (string_of_kind_aux k)));
+        { env with
+          constraints = List.map (constraint_subst v (arg_kopt (mk_kopt s_k s_v))) env.constraints;
+          typ_vars = KBindings.add v (l, k) (KBindings.add s_v (s_l, s_k) env.typ_vars);
+          locals = Bindings.map (fun (mut, typ) -> mut, typ_subst v (arg_kopt (mk_kopt s_k s_v)) typ) env.locals;
+          shadow_vars = KBindings.add v (n + 1) env.shadow_vars
+        }, Some s_v
+      end
+    else begin
+        typ_print (lazy (adding ^ "type variable " ^ string_of_kid v ^ " : " ^ string_of_kind_aux k));
+        { env with typ_vars = KBindings.add v (l, k) env.typ_vars }, None
+      end
+
+  let add_typ_var l kopt env = fst (add_typ_var_shadow l kopt env)
+                               
   let get_typ_var_loc_opt kid env =
     match KBindings.find_opt kid env.typ_vars with
     | Some (l, _) -> Some l
@@ -668,15 +696,6 @@ end = struct
     then ()
     else typ_error env (id_loc id) ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
 
-  let add_typ_synonym id typq arg env =
-    if bound_typ_id env id then
-      typ_error env (id_loc id) ("Cannot define type synonym " ^ string_of_id id ^ ", as a type or synonym with that name already exists")
-    else
-      begin
-        typ_print (lazy (adding ^ "type synonym " ^ string_of_id id));
-        { env with typ_synonyms = Bindings.add id (typq, arg) env.typ_synonyms }
-      end
-
   let mk_synonym typq typ_arg =
     let kopts, ncs = quant_split typq in
     let kopts = List.map (fun kopt -> kopt, fresh_existential (unaux_kind (kopt_kind kopt))) kopts in
@@ -716,112 +735,8 @@ end = struct
 
   let get_typ_synonyms env = env.typ_synonyms
 
-  let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
-    typ_debug ~level:2 (lazy ("Expanding " ^ string_of_n_constraint nc));
-    match aux with
-    | NC_or (nc1, nc2) -> NC_aux (NC_or (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
-    | NC_and (nc1, nc2) -> NC_aux (NC_and (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
-    | NC_equal (n1, n2) -> NC_aux (NC_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
-    | NC_not_equal (n1, n2) -> NC_aux (NC_not_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
-    | NC_bounded_le (n1, n2) -> NC_aux (NC_bounded_le (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
-    | NC_bounded_lt (n1, n2) -> NC_aux (NC_bounded_lt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
-    | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
-    | NC_bounded_gt (n1, n2) -> NC_aux (NC_bounded_gt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
-    | NC_app (id, args) ->
-       (try
-          begin match get_typ_synonym id env l env args with
-          | A_aux (A_bool nc, _) -> expand_constraint_synonyms env nc
-          | arg -> typ_error env l ("Expected Bool when expanding synonym " ^ string_of_id id ^ " got " ^ string_of_typ_arg arg)
-          end
-        with Not_found -> NC_aux (NC_app (id, List.map (expand_synonyms_arg env) args), l))
-    | NC_true | NC_false | NC_var _ | NC_set _ -> nc
-
-  and expand_nexp_synonyms env (Nexp_aux (aux, l) as nexp) =
-    typ_debug ~level:2 (lazy ("Expanding " ^ string_of_nexp nexp));
-    match aux with
-    | Nexp_app (id, args) ->
-       (try
-          begin match get_typ_synonym id env l env [] with
-          | A_aux (A_nexp nexp, _) -> expand_nexp_synonyms env nexp
-          | _ -> typ_error env l ("Expected Int when expanding synonym " ^ string_of_id id)
-          end
-        with
-        | Not_found -> Nexp_aux (Nexp_app (id, List.map (expand_nexp_synonyms env) args), l))
-    | Nexp_id id ->
-       (try
-          begin match get_typ_synonym id env l env [] with
-          | A_aux (A_nexp nexp, _) -> expand_nexp_synonyms env nexp
-          | _ -> typ_error env l ("Expected Int when expanding synonym " ^ string_of_id id)
-          end
-        with Not_found -> nexp)
-    | Nexp_times (nexp1, nexp2) -> Nexp_aux (Nexp_times (expand_nexp_synonyms env nexp1, expand_nexp_synonyms env nexp2), l)
-    | Nexp_sum (nexp1, nexp2) -> Nexp_aux (Nexp_sum (expand_nexp_synonyms env nexp1, expand_nexp_synonyms env nexp2), l)
-    | Nexp_minus (nexp1, nexp2) -> Nexp_aux (Nexp_minus (expand_nexp_synonyms env nexp1, expand_nexp_synonyms env nexp2), l)
-    | Nexp_exp nexp -> Nexp_aux (Nexp_exp (expand_nexp_synonyms env nexp), l)
-    | Nexp_neg nexp -> Nexp_aux (Nexp_neg (expand_nexp_synonyms env nexp), l)
-    | Nexp_var kid -> Nexp_aux (Nexp_var kid, l)
-    | Nexp_constant n -> Nexp_aux (Nexp_constant n, l)
-
-  and expand_synonyms env (Typ_aux (typ, l) as t) =
-    match typ with
-    | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
-    | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
-    | Typ_fn (arg_typs, ret_typ, effs) -> Typ_aux (Typ_fn (List.map (expand_synonyms env) arg_typs, expand_synonyms env ret_typ, effs), l)
-    | Typ_bidir (typ1, typ2, effs) -> Typ_aux (Typ_bidir (expand_synonyms env typ1, expand_synonyms env typ2, effs), l)
-    | Typ_app (id, args) ->
-       (try
-          begin match get_typ_synonym id env l env args with
-          | A_aux (A_typ typ, _) -> expand_synonyms env typ
-          | _ -> typ_error env l ("Expected Type when expanding synonym " ^ string_of_id id)
-          end
-        with
-        | Not_found -> Typ_aux (Typ_app (id, List.map (expand_synonyms_arg env) args), l))
-    | Typ_id id ->
-       (try
-          begin match get_typ_synonym id env l env [] with
-          | A_aux (A_typ typ, _) -> expand_synonyms env typ
-          | _ -> typ_error env l ("Expected Type when expanding synonym " ^ string_of_id id)
-          end
-        with
-        | Not_found -> Typ_aux (Typ_id id, l))
-    | Typ_exist (kopts, nc, typ) ->
-       (* When expanding an existential synonym we need to take care
-          to add the type variables and constraints to the
-          environment, so we can check constraints attached to type
-          synonyms within the existential. Furthermore, we must take
-          care to avoid clobbering any existing type variables in
-          scope while doing this. *)
-       let rebindings = ref [] in
-
-       let rename_kopt (KOpt_aux (KOpt_kind (k, kid), l) as kopt) =
-         if KBindings.mem kid env.typ_vars then
-           KOpt_aux (KOpt_kind (k, prepend_kid "syn#" kid), l)
-         else kopt
-       in
-       let add_typ_var env (KOpt_aux (KOpt_kind (k, kid), l) as kopt) =
-         try
-           let (l, _) = KBindings.find kid env.typ_vars in
-           rebindings := kid :: !rebindings;
-           { env with typ_vars = KBindings.add (prepend_kid "syn#" kid) (l, unaux_kind k) env.typ_vars }
-         with
-         | Not_found ->
-            { env with typ_vars = KBindings.add kid (l, unaux_kind k) env.typ_vars }
-       in
-
-       let env = List.fold_left add_typ_var env kopts in
-       let kopts = List.map rename_kopt kopts in
-       let nc = List.fold_left (fun nc kid -> constraint_subst kid (arg_nexp (nvar (prepend_kid "syn#" kid))) nc) nc !rebindings in
-       let typ = List.fold_left (fun typ kid -> typ_subst kid (arg_nexp (nvar (prepend_kid "syn#" kid))) typ) typ !rebindings in
-       let env = { env with constraints = nc :: env.constraints } in
-       Typ_aux (Typ_exist (kopts, nc, expand_synonyms env typ), l)
-    | Typ_var v -> Typ_aux (Typ_var v, l)
-  and expand_synonyms_arg env (A_aux (typ_arg, l)) =
-    match typ_arg with
-    | A_typ typ -> A_aux (A_typ (expand_synonyms env typ), l)
-    | A_bool nc -> A_aux (A_bool (expand_constraint_synonyms env nc), l)
-    | A_nexp nexp -> A_aux (A_nexp (expand_nexp_synonyms env nexp), l)
-    | arg -> A_aux (arg, l)
-
+  let get_constraints env = env.constraints
+                           
   (** Map over all nexps in a type - excluding those in existential constraints **)
   let rec map_nexps f (Typ_aux (typ_aux, l) as typ) =
     match typ_aux with
@@ -842,9 +757,7 @@ end = struct
 
   (* Check if a type, order, n-expression or constraint is
      well-formed. Throws a type error if the type is badly formed. *)
-  let rec wf_typ ?exs:(exs=KidSet.empty) env typ =
-    wf_debug "typ" string_of_typ typ exs;
-    let (Typ_aux (typ_aux, l)) = expand_synonyms env typ in
+  let rec wf_typ' ?exs:(exs=KidSet.empty) env (Typ_aux (typ_aux, l) as typ) =
     match typ_aux with
     | Typ_id id when bound_typ_id env id ->
        let typq = infer_kind env id in
@@ -860,11 +773,11 @@ end = struct
       | exception Not_found ->
          typ_error env l ("Unbound type variable " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
     end
-    | Typ_fn (arg_typs, ret_typ, effs) -> List.iter (wf_typ ~exs:exs env) arg_typs; wf_typ ~exs:exs env ret_typ
+    | Typ_fn (arg_typs, ret_typ, effs) -> List.iter (wf_typ' ~exs:exs env) arg_typs; wf_typ' ~exs:exs env ret_typ
     | Typ_bidir (typ1, typ2, _) when strip_typ typ1 = strip_typ typ2 ->
        typ_error env l "Bidirectional types cannot be the same on both sides"
-    | Typ_bidir (typ1, typ2, _) -> wf_typ ~exs:exs env typ1; wf_typ ~exs:exs env typ2
-    | Typ_tup typs -> List.iter (wf_typ ~exs:exs env) typs
+    | Typ_bidir (typ1, typ2, _) -> wf_typ' ~exs:exs env typ1; wf_typ' ~exs:exs env typ2
+    | Typ_tup typs -> List.iter (wf_typ' ~exs:exs env) typs
     | Typ_app (id, [A_aux (A_nexp _, _) as arg]) when string_of_id id = "implicit" ->
        wf_typ_arg ~exs:exs env arg
     | Typ_app (id, args) when bound_typ_id env id ->
@@ -874,18 +787,17 @@ end = struct
     | Typ_exist ([], _, _) -> typ_error env l ("Existential must have some type variables")
     | Typ_exist (kopts, nc, typ) when KidSet.is_empty exs ->
        wf_constraint ~exs:(KidSet.of_list (List.map kopt_kid kopts)) env nc;
-       wf_typ ~exs:(KidSet.of_list (List.map kopt_kid kopts)) { env with constraints = nc :: env.constraints } typ
+       wf_typ' ~exs:(KidSet.of_list (List.map kopt_kid kopts)) env typ
     | Typ_exist (_, _, _) -> typ_error env l ("Nested existentials are not allowed")
     | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
   and wf_typ_arg ?exs:(exs=KidSet.empty) env (A_aux (typ_arg_aux, _)) =
     match typ_arg_aux with
     | A_nexp nexp -> wf_nexp ~exs:exs env nexp
-    | A_typ typ -> wf_typ ~exs:exs env typ
+    | A_typ typ -> wf_typ' ~exs:exs env typ
     | A_order ord -> wf_order env ord
     | A_bool nc -> wf_constraint ~exs:exs env nc
-  and wf_nexp ?exs:(exs=KidSet.empty) env nexp =
+  and wf_nexp ?exs:(exs=KidSet.empty) env (Nexp_aux (nexp_aux, l) as nexp) =
     wf_debug "nexp" string_of_nexp nexp exs;
-    let Nexp_aux (nexp_aux, l) = expand_nexp_synonyms env nexp in
     match nexp_aux with
     | Nexp_id id -> typ_error env l ("Undefined synonym " ^ string_of_id id)
     | Nexp_var kid when KidSet.mem kid exs -> ()
@@ -942,7 +854,185 @@ end = struct
                               ^ string_of_kind_aux kind ^ " but should have kind Bool")
        end
     | NC_true | NC_false -> ()
+ 
+  let rec expand_constraint_synonyms env (NC_aux (aux, l) as nc) =
+    match aux with
+    | NC_or (nc1, nc2) -> NC_aux (NC_or (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
+    | NC_and (nc1, nc2) -> NC_aux (NC_and (expand_constraint_synonyms env nc1, expand_constraint_synonyms env nc2), l)
+    | NC_equal (n1, n2) -> NC_aux (NC_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_not_equal (n1, n2) -> NC_aux (NC_not_equal (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_bounded_le (n1, n2) -> NC_aux (NC_bounded_le (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_bounded_lt (n1, n2) -> NC_aux (NC_bounded_lt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_bounded_gt (n1, n2) -> NC_aux (NC_bounded_gt (expand_nexp_synonyms env n1, expand_nexp_synonyms env n2), l)
+    | NC_app (id, args) ->
+       (try
+          begin match get_typ_synonym id env l env args with
+          | A_aux (A_bool nc, _) -> expand_constraint_synonyms env nc
+          | arg -> typ_error env l ("Expected Bool when expanding synonym " ^ string_of_id id ^ " got " ^ string_of_typ_arg arg)
+          end
+        with Not_found -> NC_aux (NC_app (id, List.map (expand_arg_synonyms env) args), l))
+    | NC_true | NC_false | NC_var _ | NC_set _ -> nc
 
+  and expand_nexp_synonyms env (Nexp_aux (aux, l) as nexp) =
+    match aux with
+    | Nexp_app (id, args) ->
+       (try
+          begin match get_typ_synonym id env l env [] with
+          | A_aux (A_nexp nexp, _) -> expand_nexp_synonyms env nexp
+          | _ -> typ_error env l ("Expected Int when expanding synonym " ^ string_of_id id)
+          end
+        with
+        | Not_found -> Nexp_aux (Nexp_app (id, List.map (expand_nexp_synonyms env) args), l))
+    | Nexp_id id ->
+       (try
+          begin match get_typ_synonym id env l env [] with
+          | A_aux (A_nexp nexp, _) -> expand_nexp_synonyms env nexp
+          | _ -> typ_error env l ("Expected Int when expanding synonym " ^ string_of_id id)
+          end
+        with Not_found -> nexp)
+    | Nexp_times (nexp1, nexp2) -> Nexp_aux (Nexp_times (expand_nexp_synonyms env nexp1, expand_nexp_synonyms env nexp2), l)
+    | Nexp_sum (nexp1, nexp2) -> Nexp_aux (Nexp_sum (expand_nexp_synonyms env nexp1, expand_nexp_synonyms env nexp2), l)
+    | Nexp_minus (nexp1, nexp2) -> Nexp_aux (Nexp_minus (expand_nexp_synonyms env nexp1, expand_nexp_synonyms env nexp2), l)
+    | Nexp_exp nexp -> Nexp_aux (Nexp_exp (expand_nexp_synonyms env nexp), l)
+    | Nexp_neg nexp -> Nexp_aux (Nexp_neg (expand_nexp_synonyms env nexp), l)
+    | Nexp_var kid -> Nexp_aux (Nexp_var kid, l)
+    | Nexp_constant n -> Nexp_aux (Nexp_constant n, l)
+
+  and expand_synonyms env (Typ_aux (typ, l) as t) =
+    match typ with
+    | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
+    | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
+    | Typ_fn (arg_typs, ret_typ, effs) -> Typ_aux (Typ_fn (List.map (expand_synonyms env) arg_typs, expand_synonyms env ret_typ, effs), l)
+    | Typ_bidir (typ1, typ2, effs) -> Typ_aux (Typ_bidir (expand_synonyms env typ1, expand_synonyms env typ2, effs), l)
+    | Typ_app (id, args) ->
+       (try
+          begin match get_typ_synonym id env l env args with
+          | A_aux (A_typ typ, _) -> expand_synonyms env typ
+          | _ -> typ_error env l ("Expected Type when expanding synonym " ^ string_of_id id)
+          end
+        with
+        | Not_found -> Typ_aux (Typ_app (id, List.map (expand_arg_synonyms env) args), l))
+    | Typ_id id ->
+       (try
+          begin match get_typ_synonym id env l env [] with
+          | A_aux (A_typ typ, _) -> expand_synonyms env typ
+          | _ -> typ_error env l ("Expected Type when expanding synonym " ^ string_of_id id)
+          end
+        with
+        | Not_found -> Typ_aux (Typ_id id, l))
+    | Typ_exist (kopts, nc, typ) ->
+       let nc = expand_constraint_synonyms env nc in
+       
+       (* When expanding an existential synonym we need to take care
+          to add the type variables and constraints to the
+          environment, so we can check constraints attached to type
+          synonyms within the existential. Furthermore, we must take
+          care to avoid clobbering any existing type variables in
+          scope while doing this. *)
+       let rebindings = ref [] in
+
+       let rename_kopt (KOpt_aux (KOpt_kind (k, kid), l) as kopt) =
+         if KBindings.mem kid env.typ_vars then
+           KOpt_aux (KOpt_kind (k, prepend_kid "syn#" kid), l)
+         else kopt
+       in
+       let add_typ_var env (KOpt_aux (KOpt_kind (k, kid), l) as kopt) =
+         try
+           let (l, _) = KBindings.find kid env.typ_vars in
+           rebindings := kid :: !rebindings;
+           { env with typ_vars = KBindings.add (prepend_kid "syn#" kid) (l, unaux_kind k) env.typ_vars }
+         with
+         | Not_found ->
+            { env with typ_vars = KBindings.add kid (l, unaux_kind k) env.typ_vars }
+       in
+
+       let env = List.fold_left add_typ_var env kopts in
+       let kopts = List.map rename_kopt kopts in
+       let nc = List.fold_left (fun nc kid -> constraint_subst kid (arg_nexp (nvar (prepend_kid "syn#" kid))) nc) nc !rebindings in
+       let typ = List.fold_left (fun typ kid -> typ_subst kid (arg_nexp (nvar (prepend_kid "syn#" kid))) typ) typ !rebindings in
+       let env = add_constraint nc env in
+       Typ_aux (Typ_exist (kopts, nc, expand_synonyms env typ), l)
+    | Typ_var v -> Typ_aux (Typ_var v, l)
+
+  and expand_arg_synonyms env (A_aux (typ_arg, l)) =
+    match typ_arg with
+    | A_typ typ -> A_aux (A_typ (expand_synonyms env typ), l)
+    | A_bool nc -> A_aux (A_bool (expand_constraint_synonyms env nc), l)
+    | A_nexp nexp -> A_aux (A_nexp (expand_nexp_synonyms env nexp), l)
+    | arg -> A_aux (arg, l)
+
+  and add_constraint constr env =
+    let (NC_aux (nc_aux, l) as constr) = constraint_simp (expand_constraint_synonyms env constr) in
+    wf_constraint env constr;
+    let power_vars = constraint_power_variables constr in
+    if KidSet.cardinal power_vars > 1 && !opt_smt_linearize then
+      typ_error env l ("Cannot add constraint " ^ string_of_n_constraint constr
+                       ^ " where more than two variables appear within an exponential")
+    else if KidSet.cardinal power_vars = 1 && !opt_smt_linearize then
+      let v = KidSet.choose power_vars in
+      let constrs = List.fold_left nc_and nc_true (get_constraints env) in
+      begin match Constraint.solve_all_smt l constrs v with
+      | Some solutions ->
+         typ_print (lazy (Util.("Linearizing " |> red |> clear) ^ string_of_n_constraint constr
+                          ^ " for " ^ string_of_kid v ^ " in " ^ Util.string_of_list ", " Big_int.to_string solutions));
+         let linearized =
+           List.fold_left
+             (fun c s -> nc_or c (nc_and (nc_eq (nvar v) (nconstant s)) (constraint_subst v (arg_nexp (nconstant s)) constr)))
+             nc_false solutions
+         in
+         typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint linearized));
+         { env with constraints = linearized :: env.constraints }
+      | None ->
+         typ_error env l ("Type variable " ^ string_of_kid v
+                          ^ " must have a finite number of solutions to add " ^ string_of_n_constraint constr)
+      end
+    else
+      match nc_aux with
+      | NC_true -> env
+      | _ ->
+         typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint constr));
+         { env with constraints = constr :: env.constraints }
+
+  let add_typquant l quant env =
+    let rec add_quant_item env = function
+      | QI_aux (qi, _) -> add_quant_item_aux env qi
+    and add_quant_item_aux env = function
+      | QI_constraint constr -> add_constraint constr env
+      | QI_constant _ -> env
+      | QI_id kopt -> add_typ_var l kopt env
+    in
+    match quant with
+    | TypQ_aux (TypQ_no_forall, _) -> env
+    | TypQ_aux (TypQ_tq quants, _) -> List.fold_left add_quant_item env quants
+
+  let wf_typ env (Typ_aux (_, l) as typ) =
+    let typ = expand_synonyms env typ in
+    wf_debug "typ" string_of_typ typ KidSet.empty;
+    incr depth;
+    try
+      wf_typ' env typ;
+      decr depth
+    with
+    | Type_error (env, err_l, err) ->
+       decr depth;
+       typ_raise env l (Err_because (Err_other "Well-formedness check failed for type",
+                                     err_l,
+                                     err))
+ 
+  let add_typ_synonym id typq arg env =
+    if bound_typ_id env id then (
+      typ_error env (id_loc id) ("Cannot define type synonym " ^ string_of_id id ^ ", as a type or synonym with that name already exists")
+    ) else (
+      let typq =
+        quant_map_items (function
+            | QI_aux (QI_constraint nexp, aux) -> QI_aux (QI_constraint (expand_constraint_synonyms env nexp), aux)
+            | quant_item -> quant_item
+          ) typq in
+      typ_print (lazy (adding ^ "type synonym " ^ string_of_id id ^ ", " ^ string_of_typquant typq ^ " = " ^ string_of_typ_arg arg));
+      { env with typ_synonyms = Bindings.add id (typq, expand_arg_synonyms (add_typquant (id_loc id) typq env) arg) env.typ_synonyms }
+    )
+                          
   let counter = ref 0
 
   let fresh_kid ?kid:(kid=mk_kid "") env =
@@ -1006,7 +1096,8 @@ end = struct
     | [] -> ()
 
   let rec update_val_spec id (typq, typ) env =
-    begin match expand_synonyms env typ with
+    let typq_env = add_typquant (id_loc id) typq env in
+    begin match expand_synonyms typq_env typ with
     | Typ_aux (Typ_fn (arg_typs, ret_typ, effect), l) ->
        valid_implicits env true arg_typs;
 
@@ -1016,7 +1107,7 @@ end = struct
           forall 'n, 'n >= 2. (int('n), foo) -> bar
           this enforces the invariant that all things on the left of functions are 'base types' (i.e. without existentials)
         *)
-       let base_args = List.map (fun typ -> destruct_exist (expand_synonyms env typ)) arg_typs in
+       let base_args = List.map (fun typ -> destruct_exist (expand_synonyms typq_env typ)) arg_typs in
        let existential_arg typq = function
          | None -> typq
          | Some (exs, nc, _) ->
@@ -1039,17 +1130,7 @@ end = struct
   and add_val_spec id (bind_typq, bind_typ) env =
     if not (Bindings.mem id env.top_val_specs)
     then update_val_spec id (bind_typq, bind_typ) env
-    else
-      env
-        (*
-      let (existing_typq, existing_typ) = Bindings.find id env.top_val_specs in
-      let existing_cmp = (strip_typq existing_typq, strip_typ existing_typ) in
-      let bind_cmp = (strip_typq bind_typq, strip_typ bind_typ) in
-      if existing_cmp <> bind_cmp then
-        typ_error env (id_loc id) ("Identifier " ^ string_of_id id ^ " is already bound as " ^ string_of_bind (existing_typq, existing_typ) ^ ", cannot rebind as " ^ string_of_bind (bind_typq, bind_typ))
-      else
-        env
-         *)
+    else env
 
   and add_mapping id (typq, typ1, typ2, effect) env =
     typ_print (lazy (adding ^ "mapping " ^ string_of_id id));
@@ -1293,62 +1374,6 @@ end = struct
     with
     | Not_found -> Unbound
 
-  let shadows v env = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0
-                 
-  let add_typ_var_shadow l (KOpt_aux (KOpt_kind (K_aux (k, _), v), _)) env =
-    if KBindings.mem v env.typ_vars then begin
-        let n = match KBindings.find_opt v env.shadow_vars with Some n -> n | None -> 0 in
-        let s_l, s_k = KBindings.find v env.typ_vars in
-        let s_v = Kid_aux (Var (string_of_kid v ^ "#" ^ string_of_int n), l) in
-        typ_print (lazy (Printf.sprintf "%stype variable (shadowing %s) %s : %s" adding (string_of_kid s_v) (string_of_kid v) (string_of_kind_aux k)));
-        { env with
-          constraints = List.map (constraint_subst v (arg_kopt (mk_kopt s_k s_v))) env.constraints;
-          typ_vars = KBindings.add v (l, k) (KBindings.add s_v (s_l, s_k) env.typ_vars);
-          locals = Bindings.map (fun (mut, typ) -> mut, typ_subst v (arg_kopt (mk_kopt s_k s_v)) typ) env.locals;
-          shadow_vars = KBindings.add v (n + 1) env.shadow_vars
-        }, Some s_v
-      end
-    else begin
-        typ_print (lazy (adding ^ "type variable " ^ string_of_kid v ^ " : " ^ string_of_kind_aux k));
-        { env with typ_vars = KBindings.add v (l, k) env.typ_vars }, None
-      end
-
-  let add_typ_var l kopt env = fst (add_typ_var_shadow l kopt env)
-
-  let get_constraints env = env.constraints
-
-  let add_constraint constr env =
-    wf_constraint env constr;
-    let (NC_aux (nc_aux, l) as constr) = constraint_simp (expand_constraint_synonyms env constr) in
-    let power_vars = constraint_power_variables constr in
-    if KidSet.cardinal power_vars > 1 && !opt_smt_linearize then
-      typ_error env l ("Cannot add constraint " ^ string_of_n_constraint constr
-                       ^ " where more than two variables appear within an exponential")
-    else if KidSet.cardinal power_vars = 1 && !opt_smt_linearize then
-      let v = KidSet.choose power_vars in
-      let constrs = List.fold_left nc_and nc_true (get_constraints env) in
-      begin match Constraint.solve_all_smt l constrs v with
-      | Some solutions ->
-         typ_print (lazy (Util.("Linearizing " |> red |> clear) ^ string_of_n_constraint constr
-                          ^ " for " ^ string_of_kid v ^ " in " ^ Util.string_of_list ", " Big_int.to_string solutions));
-         let linearized =
-           List.fold_left
-             (fun c s -> nc_or c (nc_and (nc_eq (nvar v) (nconstant s)) (constraint_subst v (arg_nexp (nconstant s)) constr)))
-             nc_false solutions
-         in
-         typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint linearized));
-         { env with constraints = linearized :: env.constraints }
-      | None ->
-         typ_error env l ("Type variable " ^ string_of_kid v
-                          ^ " must have a finite number of solutions to add " ^ string_of_n_constraint constr)
-      end
-    else
-      match nc_aux with
-      | NC_true -> env
-      | _ ->
-         typ_print (lazy (adding ^ "constraint " ^ string_of_n_constraint constr));
-         { env with constraints = constr :: env.constraints }
-
   let get_ret_typ env = env.ret_typ
 
   let add_ret_typ typ env = { env with ret_typ = Some typ }
@@ -1418,23 +1443,11 @@ end = struct
 
 end
 
-let add_typquant l (quant : typquant) (env : Env.t) : Env.t =
-  let rec add_quant_item env = function
-    | QI_aux (qi, _) -> add_quant_item_aux env qi
-  and add_quant_item_aux env = function
-    | QI_constraint constr -> Env.add_constraint constr env
-    | QI_constant _ -> env
-    | QI_id kopt -> Env.add_typ_var l kopt env
-  in
-  match quant with
-  | TypQ_aux (TypQ_no_forall, _) -> env
-  | TypQ_aux (TypQ_tq quants, _) -> List.fold_left add_quant_item env quants
-
 let expand_bind_synonyms l env (typq, typ) =
-  typq, Env.expand_synonyms (add_typquant l typq env) typ
+  typq, Env.expand_synonyms (Env.add_typquant l typq env) typ
 
 let wf_binding l env (typq, typ) =
-  let env = add_typquant l typq env in
+  let env = Env.add_typquant l typq env in
   Env.wf_typ env typ
 
 let wf_typschm env (TypSchm_aux (TypSchm_ts (typq, typ), l)) = wf_binding l env (typq, typ)
@@ -2865,7 +2878,7 @@ let check_pattern_duplicates env pat =
                      l1,
                      Err_other ("Previous binding of " ^ string_of_id id ^ " here")))
   | _ -> ()
-      
+ 
 let crule r env exp typ =
   incr depth;
   typ_print (lazy (Util.("Check " |> cyan |> clear) ^ string_of_exp exp ^ " <= " ^ string_of_typ typ));
@@ -3458,7 +3471,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
   | P_app (f, [pat]) when Env.is_union_constructor f env ->
      let (typq, ctor_typ) = Env.get_union_id f env in
      let quants = quant_items typq in
-     begin match Env.expand_synonyms env ctor_typ with
+     begin match Env.expand_synonyms (Env.add_typquant l typq env) ctor_typ with
      | Typ_aux (Typ_fn ([arg_typ], ret_typ, _), _) ->
         begin
           try
@@ -4205,7 +4218,7 @@ and infer_funapp' l env f (typq, f_typ) xs expected_ret_typ =
   in
 
   let quants, typ_args, typ_ret, eff =
-    match Env.expand_synonyms env f_typ with
+    match Env.expand_synonyms (Env.add_typquant l typq env) f_typ with
     | Typ_aux (Typ_fn (typ_args, typ_ret, eff), _) -> ref (quant_items typq), typ_args, ref typ_ret, eff
     | _ -> typ_error env l (string_of_typ f_typ ^ " is not a function type")
   in
@@ -5139,7 +5152,7 @@ let check_termination_measure_decl env (id, pat, exp) =
     | Typ_aux (Typ_fn (arg_typs, _ ,_),l) -> arg_typs,l
     | _ -> typ_error env (id_loc id) "Function val spec is not a function type"
   in
-  let env = add_typquant l quant env in
+  let env = Env.add_typquant l quant env in
   let tpat, texp = check_termination_measure env arg_typs pat exp in
   DEF_measure (id, tpat, texp)
 
@@ -5170,7 +5183,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
   in
   check_tannotopt env quant vtyp_ret tannotopt;
   typ_debug (lazy ("Checking fundef " ^ string_of_id id ^ " has type " ^ string_of_bind (quant, typ)));
-  let funcl_env = add_typquant l quant env in
+  let funcl_env = Env.add_typquant l quant env in
   let recopt =
     match recopt with
     | Rec_aux (Rec_nonrec, l) -> Rec_aux (Rec_nonrec, l)
@@ -5223,7 +5236,7 @@ let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md
     else
       [], env
   in
-  let mapcl_env = add_typquant l quant env in
+  let mapcl_env = Env.add_typquant l quant env in
   let mapcls = List.map (fun mapcl -> check_mapcl mapcl_env mapcl typ) mapcls in
   let eff = List.fold_left union_effects no_effect (List.map mapcl_effect mapcls) in
   let env = Env.define_val_spec id env in
@@ -5246,11 +5259,9 @@ let rec warn_if_unsafe_cast l env = function
   | typ ->
      Reporting.warn ("Potentially unsafe cast involving " ^ string_of_typ typ) l ""
 
-(* Checking a val spec simply adds the type as a binding in the
-   context. We have to destructure the various kinds of val specs, but
-   the difference is irrelevant for the typechecker. *)
+(* Checking a val spec simply adds the type as a binding in the context. *)
 let check_val_spec env (VS_aux (vs, (l, _))) =
-  let annotate vs typ eff = DEF_spec (VS_aux (vs, (l, mk_tannot env typ eff))) in
+  let annotate vs typq typ eff = DEF_spec (VS_aux (vs, (l, mk_tannot (Env.add_typquant l typq env) typ eff))) in
   let vs, id, typq, typ, env = match vs with
     | VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), ts_l) as typschm, id, exts, is_cast) ->
        typ_print (lazy (Util.("Check val spec " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
@@ -5275,7 +5286,7 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
     | Typ_aux (Typ_fn (_, _, eff), _) -> eff
     | _ -> no_effect
   in
-  [annotate vs typ eff], Env.add_val_spec id (typq, typ) env
+  [annotate vs typq typ eff], Env.add_val_spec id (typq, typ) env
 
 let check_default env (DT_aux (DT_order order, l)) =
   [DEF_default (DT_aux (DT_order order, l))], Env.set_default_order order env
@@ -5304,7 +5315,7 @@ let forbid_recursive_types type_l f =
   try f () with
   | Type_error (env, l, err) ->
      let msg = "Types are not well-formed within this type definition. Note that recursive types are forbidden." in
-     raise (Type_error (env, l, Err_because (err, type_l, Err_other msg)))
+     raise (Type_error (env, type_l, Err_because (Err_other msg, l, err)))
 
 let check_type_union u_l non_rec_env env variant typq (Tu_aux (tu, l)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
@@ -5409,12 +5420,12 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
          raise (Type_error (env, l', Err_because (err, id_loc id, Err_other msg))))
   | SD_funcl (FCL_aux (FCL_Funcl (id, _), (l, _)) as funcl) ->
      let typq, typ = Env.get_val_spec id env in
-     let funcl_env = add_typquant l typq env in
+     let funcl_env = Env.add_typquant l typq env in
      let funcl = check_funcl funcl_env funcl typ in
      [DEF_scattered (SD_aux (SD_funcl funcl, (l, None)))], env
   | SD_mapcl (id, mapcl) ->
      let typq, typ = Env.get_val_spec id env in
-     let mapcl_env = add_typquant l typq env in
+     let mapcl_env = Env.add_typquant l typq env in
      let mapcl = check_mapcl mapcl_env mapcl typ in
      [DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, None)))], env
 

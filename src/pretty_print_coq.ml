@@ -3148,7 +3148,7 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
 
 (* Remove some type variables in a similar fashion to merge_kids_atoms *)
 let doc_axiom_typschm typ_env l (tqs,typ) =
-  let typ_env = add_typquant l tqs typ_env in
+  let typ_env = Env.add_typquant l tqs typ_env in
   match typ with
   | Typ_aux (Typ_fn (typs, ret_ty, eff),l') ->
      let check_typ (args,used) typ =

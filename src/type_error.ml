@@ -125,8 +125,8 @@ let message_of_type_error =
   let rec msg = function
     | Err_because (err, l', err') ->
        Seq [msg err;
-            Line "This error was caused by:";
-            Location (l', msg err')]
+            Line "";
+            Location (Util.("Caused by " |> yellow |> clear), l', msg err')]
 
     | Err_other str -> Line str
 
@@ -146,7 +146,7 @@ let message_of_type_error =
        let vars = List.filter (fun (v, _) -> KidSet.mem v (KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2))) vars in
        With ((fun ppf -> { ppf with loc_color = Util.yellow }),
              Seq (Line (string_of_typ typ1 ^ " is not a subtype of " ^ string_of_typ typ2)
-                  :: List.map (fun (kid, l) -> Location (l, Line (string_of_kid kid ^ " bound here"))) vars))
+                  :: List.map (fun (kid, l) -> Location ("", l, Line (string_of_kid kid ^ " bound here"))) vars))
 
   | Err_no_num_ident id ->
      Line ("No num identifier " ^ string_of_id id)

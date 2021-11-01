@@ -616,7 +616,7 @@ let compile_funcall l ctx id args =
     | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
     | _ -> assert false
   in
-  let ctx' = { ctx with local_env = add_typquant (id_loc id) quant ctx.tc_env } in
+  let ctx' = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.tc_env } in
   let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ in
 
   assert (List.length arg_ctyps = List.length args);
@@ -1143,7 +1143,7 @@ let compile_type_def ctx (TD_aux (type_def, (l, _))) =
      { ctx with enums = Bindings.add id (IdSet.of_list ids) ctx.enums }
 
   | TD_record (id, typq, ctors, _) ->
-     let record_ctx = { ctx with local_env = add_typquant l typq ctx.local_env } in
+     let record_ctx = { ctx with local_env = Env.add_typquant l typq ctx.local_env } in
      let ctors =
        List.fold_left (fun ctors (typ, id) -> UBindings.add (id, []) (fast_int (ctyp_of_typ record_ctx typ)) ctors) UBindings.empty ctors
      in
@@ -1154,7 +1154,7 @@ let compile_type_def ctx (TD_aux (type_def, (l, _))) =
   | TD_variant (id, typq, tus, _) ->
      let compile_tu = function
        | Tu_aux (Tu_ty_id (typ, id), _) ->
-          let ctx = { ctx with local_env = add_typquant (id_loc id) typq ctx.local_env } in
+          let ctx = { ctx with local_env = Env.add_typquant (id_loc id) typq ctx.local_env } in
           ctyp_of_typ ctx typ, id
      in
      let ctus = List.fold_left (fun ctus (ctyp, id) -> UBindings.add (id, []) ctyp ctus) UBindings.empty (List.map compile_tu tus) in
@@ -1375,7 +1375,7 @@ let compile_funcl ctx id pat guard exp =
   let fundef_label = label "fundef_fail_" in
   let orig_ctx = ctx in
   (* The context must be updated before we call ctyp_of_typ on the argument types. *)
-  let ctx = { ctx with local_env = add_typquant (id_loc id) quant ctx.tc_env } in
+  let ctx = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.tc_env } in
 
   let arg_ctyps =  List.map (ctyp_of_typ ctx) arg_typs in
   let ret_ctyp = ctyp_of_typ ctx ret_typ in
@@ -1482,7 +1482,7 @@ and compile_def' n total ctx = function
        | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
        | _ -> assert false
      in
-     let ctx' = { ctx with local_env = add_typquant (id_loc id) quant ctx.local_env } in
+     let ctx' = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.local_env } in
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx') arg_typs, ctyp_of_typ ctx' ret_typ in
      [CDEF_spec (id, extern, arg_ctyps, ret_ctyp)],
      { ctx with valspecs = Bindings.add id (extern, arg_ctyps, ret_ctyp) ctx.valspecs }

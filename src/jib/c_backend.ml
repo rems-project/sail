@@ -191,7 +191,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
      types and attempts to fit them into the smallest possible C
      types, provided ctx.optimize_smt is true (default) **)
   let rec convert_typ ctx typ =
-    let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.tc_env typ in
+    let Typ_aux (typ_aux, l) as typ = Env.expand_synonyms ctx.local_env typ in
     match typ_aux with
     | Typ_id id when string_of_id id = "bit"    -> CT_bit
     | Typ_id id when string_of_id id = "bool"   -> CT_bool
@@ -287,7 +287,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
           ensure that we don't cause any type variable clashes in
           local_env, and that we can optimize the existential based
           upon it's constraints. *)
-       begin match destruct_exist (Env.expand_synonyms ctx.local_env typ) with
+       begin match destruct_exist typ with
        | Some (kids, nc, typ) ->
           let env = add_existential l kids nc ctx.local_env in
           convert_typ { ctx with local_env = env } typ

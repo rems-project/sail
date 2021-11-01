@@ -8,8 +8,8 @@
  [91m |[0m    [94m*[0m (0 <= 10 & 10 < 8)
  [91m |[0m [94m*[0m plain_vector_access
  [91m |[0m    No valid casts resulted in unification
- [91m |[0m This error was caused by:
- [91m |[0m [[96mvec_length/v1.sail[0m]:6:10-15
+ [91m |[0m 
+ [91m |[0m [93mCaused by [0m[[96mvec_length/v1.sail[0m]:6:10-15
  [91m |[0m 6[96m |[0m  let y = x[10];
  [91m |[0m  [91m |[0m          [91m^---^[0m
  [91m |[0m  [91m |[0m Vector access could not be interpreted as a bitfield access
