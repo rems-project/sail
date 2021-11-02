@@ -7,5 +7,5 @@
   [91m |[0m [93mCaused by [0m[[96mwf_specs/wf_specs.sail[0m]:10:25-35
   [91m |[0m 10[96m |[0mval f : bits(32) -> bits(THIRTY_TWO)
   [91m |[0m   [91m |[0m                         [91m^--------^[0m
-  [91m |[0m   [91m |[0m Undefined synonym THIRTY_TWO
+  [91m |[0m   [91m |[0m Undefined type synonym THIRTY_TWO
   [91m |[0m 

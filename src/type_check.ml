@@ -799,7 +799,7 @@ end = struct
   and wf_nexp ?exs:(exs=KidSet.empty) env (Nexp_aux (nexp_aux, l) as nexp) =
     wf_debug "nexp" string_of_nexp nexp exs;
     match nexp_aux with
-    | Nexp_id id -> typ_error env l ("Undefined synonym " ^ string_of_id id)
+    | Nexp_id id -> typ_error env l ("Undefined type synonym " ^ string_of_id id)
     | Nexp_var kid when KidSet.mem kid exs -> ()
     | Nexp_var kid ->
        begin match get_typ_var kid env with
@@ -5004,6 +5004,7 @@ let check_letdef orig_env (LB_aux (letbind, (l, _))) =
     match letbind with
     | LB_val (P_aux (P_typ (typ_annot, _), _) as pat, bind) ->
        check_duplicate_letbinding l pat orig_env;
+       Env.wf_typ orig_env typ_annot;
        let checked_bind = propagate_exp_effect (crule check_exp orig_env (strip_exp bind) typ_annot) in
        let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) typ_annot in
        if (BESet.is_empty (effect_set (effect_of checked_bind)) || !opt_no_effects)
