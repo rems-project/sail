@@ -3237,12 +3237,14 @@ let rewrite_ast_mapping_patterns env =
        let s_exp = annot_exp (E_id s_id) unk env mapping_in_typ in
        let new_guard = annot_exp (E_app (mapping_matches_id, [s_exp])) unk env bool_typ in
        let new_binding = annot_exp (E_app (mapping_perform_id, [s_exp])) unk env typ2 in
-       let new_letbind = match arg_pats with
+       let new_letbind, expr = match arg_pats with
          | [] -> assert false
-         | [arg_pat] -> LB_aux (LB_val (arg_pat, new_binding), unkt)
+         | [arg_pat] ->
+            let arg_pat, _, expr = rewrite_pat env (arg_pat, [], expr) in
+            LB_aux (LB_val (arg_pat, new_binding), unkt), expr
          | arg_pats ->
             let checked_tup = annot_pat (P_tup arg_pats) unk env mapping_out_typ in
-            LB_aux (LB_val (checked_tup, new_binding), unkt)
+            LB_aux (LB_val (checked_tup, new_binding), unkt), expr
        in
 
        let new_let = annot_exp (E_let (new_letbind, expr)) unk env (typ_of expr) in
@@ -3940,8 +3942,7 @@ and pat_of_mpat (MP_aux (mpat, annot)) =
 let rewrite_ast_realise_mappings _ ast =
   let realise_mpexps forwards mpexp1 mpexp2 =
     let mpexp_pat, mpexp_exp =
-      if forwards then mpexp1, mpexp2
-      else mpexp2, mpexp1
+      if forwards then mpexp1, mpexp2 else mpexp2, mpexp1
     in
     let exp =
       match mpexp_exp with
@@ -5174,6 +5175,7 @@ let rewrites_c = [
     ("realise_mappings", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
+    ("mapping_builtins", []);
     ("mapping_builtins", []);
     ("truncate_hex_literals", []);
     ("mono_rewrites", [If_flag opt_mono_rewrites]);
