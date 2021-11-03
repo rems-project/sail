@@ -5176,7 +5176,6 @@ let rewrites_c = [
     ("toplevel_string_append", []);
     ("pat_string_append", []);
     ("mapping_builtins", []);
-    ("mapping_builtins", []);
     ("truncate_hex_literals", []);
     ("mono_rewrites", [If_flag opt_mono_rewrites]);
     ("recheck_defs", [If_flag opt_mono_rewrites]);
