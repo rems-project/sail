@@ -1071,8 +1071,8 @@ match n with
   let bit : word (S n) := wlshift' (natToWord _ 1) i in
   let mask : word (S n) := wnot bit in
   let masked := wand mask w in
-  if b then masked else wor masked bit
-end.
+  if b then wor masked bit else masked
+end. 
 
 (*val update_mword_bool_dec : forall 'a. mword 'a -> integer -> bool -> mword 'a*)
 Definition update_mword_bool_dec {a} (w : mword a) n b : mword a :=
