@@ -3491,9 +3491,15 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        let upper_id = mk_id ("loop_" ^ string_of_id id ^ "_upper") in
        let lower_kid = mk_kid ("loop_" ^ string_of_id id ^ "_lower") in
        let upper_kid = mk_kid ("loop_" ^ string_of_id id ^ "_upper") in
-       let lower_id_exp = annot_exp (E_id lower_id) el env (atom_typ (nvar lower_kid)) in
-       let upper_id_exp = annot_exp (E_id upper_id) el env (atom_typ (nvar upper_kid)) in
-       let annot_bool_lit lit = annot_exp (E_lit lit) el env bool_typ in
+       let env' =
+         env
+         |> Env.add_typ_var el (mk_kopt K_int lvar_kid)
+         |> Env.add_typ_var el (mk_kopt K_int lower_kid)
+         |> Env.add_typ_var el (mk_kopt K_int upper_kid)
+       in
+       let lower_id_exp = annot_exp (E_id lower_id) el env' (atom_typ (nvar lower_kid)) in
+       let upper_id_exp = annot_exp (E_id upper_id) el env' (atom_typ (nvar upper_kid)) in
+       let annot_bool_lit lit = annot_exp (E_lit lit) el env' bool_typ in
        let ord_exp, lower_exp, upper_exp, exp1, exp2 =
          if is_order_inc order
          then annot_bool_lit (mk_lit L_true),  exp1, exp2, lower_id_exp, upper_id_exp
@@ -3502,13 +3508,13 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        let lvar_nc = nc_and (nc_lteq (nvar lower_kid) (nvar lvar_kid)) (nc_lteq (nvar lvar_kid) (nvar upper_kid)) in
        let lvar_typ = mk_typ (Typ_exist (List.map (mk_kopt K_int) [lvar_kid], lvar_nc, atom_typ (nvar lvar_kid))) in
        let lvar_pat = unaux_pat (annot_pat (P_var (
-         annot_pat (P_id id) el env (atom_typ (nvar lvar_kid)),
-         TP_aux (TP_var lvar_kid, gen_loc el))) el env lvar_typ)
+         annot_pat (P_id id) el env' (atom_typ (nvar lvar_kid)),
+         TP_aux (TP_var lvar_kid, gen_loc el))) el env' lvar_typ)
        in
-       let lb = fix_eff_lb (annot_letbind (lvar_pat, exp1) el env lvar_typ) in
+       let lb = fix_eff_lb (annot_letbind (lvar_pat, exp1) el env' lvar_typ) in
        let body =
-         fix_eff_exp (annot_exp (E_let (lb, exp4)) el env (typ_of exp4))
-         |> add_typs_let env lvar_typ (typ_of exp4)
+         fix_eff_exp (annot_exp (E_let (lb, exp4)) el env' (typ_of exp4))
+         |> add_typs_let env' lvar_typ (typ_of exp4)
        in
        (* If lower > upper, the loop body never gets executed, and the type
           checker might not be able to prove that the initial value exp1
@@ -3524,10 +3530,10 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        let lb_lower = annot_letbind (lower_pat, lower_exp) el env (typ_of lower_exp) in
        let upper_pat = P_var (annot_pat (P_id upper_id) el env (typ_of upper_exp), mk_typ_pat (TP_app (mk_id "atom", [mk_typ_pat (TP_var upper_kid)]))) in
        let lb_upper = annot_letbind (upper_pat, upper_exp) el env (typ_of upper_exp) in
-       let guard = annot_exp (E_constraint (nc_lteq (nvar lower_kid) (nvar upper_kid))) el env bool_typ in
-       let unit_exp = annot_exp (E_lit (mk_lit L_unit)) el env unit_typ in
+       let guard = annot_exp (E_constraint (nc_lteq (nvar lower_kid) (nvar upper_kid))) el env' bool_typ in
+       let unit_exp = annot_exp (E_lit (mk_lit L_unit)) el env' unit_typ in
        let skip_val = tuple_exp (if overwrite then vars else unit_exp :: vars) in
-       let guarded_body = fix_eff_exp (annot_exp (E_if (guard, body, skip_val)) el env (typ_of exp4)) in
+       let guarded_body = fix_eff_exp (annot_exp (E_if (guard, body, skip_val)) el env' (typ_of exp4)) in
        let v =
          fix_eff_exp (annot_exp (E_let (lb_lower,
            fix_eff_exp (annot_exp (E_let (lb_upper,
