@@ -132,7 +132,8 @@ let mk_td t n m = TD_aux (t, loc n m)
 let mk_vs v n m = VS_aux (v, loc n m)
 let mk_reg_dec d n m = DEC_aux (d, loc n m)
 let mk_default d n m = DT_aux (d, loc n m)
-
+let mk_event ev n m = EV_aux (ev, loc n m)
+ 
 let mk_mpexp mpexp n m = MPat_aux (mpexp, loc n m)
 let mk_mpat mpat n m = MP_aux (mpat, loc n m)
 let mk_bidir_mapcl mpexp1 mpexp2 n m = MCL_aux (MCL_bidir (mpexp1, mpexp2), loc n m)
@@ -220,9 +221,9 @@ let rec desugar_rchain chain s e =
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
-%token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield Constant
+%token Undefined Union Newtype With Val Event Constraint Throw Try Catch Exit Bitfield Constant
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
-%token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure
+%token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation
 %token InternalPLet InternalReturn
 
 %nonassoc Then
@@ -1223,17 +1224,11 @@ param_kopt:
   | kid
     { KOpt_aux (KOpt_kind (None, [$1], None), loc $startpos $endpos) }
 
-param_kopt_list:
-  | param_kopt
-    { [$1] }
-  | param_kopt Comma param_kopt_list
-    { $1 :: $3 }
-
 typaram:
-  | Lparen param_kopt_list Rparen Comma typ
+  | Lparen separated_nonempty_list(Comma, param_kopt) Rparen Comma typ
     { let qi_nc = QI_aux (QI_constraint $5, loc $startpos($5) $endpos($5)) in
       mk_typq $2 [qi_nc] $startpos $endpos }
-  | Lparen param_kopt_list Rparen
+  | Lparen separated_nonempty_list(Comma, param_kopt) Rparen
     { mk_typq $2 [] $startpos $endpos }
 
 type_def:
@@ -1441,6 +1436,10 @@ externs:
   | id Colon String Comma externs
     { (string_of_id $1, $3) :: $5 }
 
+event_spec_def:
+  | Event id Colon typschm With separated_nonempty_list(Comma, param_kopt)
+    { mk_event (EV_event ($2, $4, $6)) $startpos $endpos }
+
 val_spec_def:
   | Doc val_spec_def
     { doc_vs $1 $2 }
@@ -1524,6 +1523,10 @@ def:
     { let (prec, n, op) = $1 in DEF_fixity (prec, n, Id_aux (Id op, loc $startpos $endpos)) }
   | val_spec_def
     { DEF_spec $1 }
+  | event_spec_def
+    { DEF_event ($1, []) }
+  | event_spec_def Eq Lcurly defs_list Rcurly
+    { DEF_event ($1, $4) }
   | type_def
     { DEF_type $1 }
   | let_def

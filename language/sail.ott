@@ -752,6 +752,11 @@ letbind :: 'LB_' ::=
   | let pat = exp                                    :: :: val
     {{ com let, implicit type ($[[pat]]$ must be total)}}
 
+event_spec :: 'EV_' ::=
+  {{ com event declaration }}
+  {{ aux _ l }}
+  | event id : typschm with kinded_id1 , ... , kinded_idn :: :: event
+
 val_spec {{ ocaml 'a val_spec }} {{ lem val_spec 'a }} :: 'VS_' ::=
    {{ ocaml VS_aux of val_spec_aux * 'a annot }}
    {{ lem VS_aux of val_spec_aux * annot 'a }}
@@ -762,7 +767,6 @@ cast_opt :: 'Cast_' ::=
    {{ ocaml bool }} {{ lem bool }} {{ isa bool }}
    |       :: S :: no_cast {{ ocaml false }} {{ lem false }} {{ isa false }}
    | cast  :: S :: cast {{ ocaml true }} {{ lem true }} {{ isa true }}
-
 
 val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
@@ -856,6 +860,8 @@ def :: 'DEF_' ::=
     {{ com value definition }}
   | val_spec                                           :: :: spec
     {{ com top-level type constraint }}
+  | event_spec { def1 ... defn }                       :: :: event
+    {{ com top-level event definition }}
   | fix prec num id                                    :: :: fixity
     {{ com fixity declaration }}
   |  overload id [ id1 ; ... ; idn ]                   :: :: overload

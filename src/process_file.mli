@@ -75,7 +75,7 @@ val clear_symbols : unit -> unit
 val have_symbol : string -> bool
 val add_symbol : string -> unit
 
-val preprocess : (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.def list -> Parse_ast.def list
+val preprocess : string option -> (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.def list -> Parse_ast.def list
 val check_ast : Type_check.Env.t -> unit ast -> Type_check.tannot ast * Type_check.Env.t
 val rewrite_ast_initial : Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Type_check.Env.t
 val rewrite_ast_target : string -> Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Type_check.Env.t
@@ -112,6 +112,6 @@ val output :
     the output file is only updated, if its content really changes. *)
 val always_replace_files : bool ref
 
-val load_files : ?check:bool -> (Arg.key * Arg.spec * Arg.doc) list -> Type_check.Env.t -> string list -> (string * Type_check.tannot ast * Type_check.Env.t)
+val load_files : ?check:bool -> string option -> (Arg.key * Arg.spec * Arg.doc) list -> Type_check.Env.t -> string list -> (string * Type_check.tannot ast * Type_check.Env.t)
 
 val descatter : Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Type_check.Env.t

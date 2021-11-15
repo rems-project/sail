@@ -455,7 +455,7 @@ let load_session upto file =
   | Some upto_file when Filename.basename upto_file = file -> None
   | Some upto_file ->
      let (_, ast, env) =
-       Process_file.load_files ~check:true options !Interactive.env [Filename.concat (Filename.dirname upto_file) file]
+       Process_file.load_files ~check:true !opt_target options !Interactive.env [Filename.concat (Filename.dirname upto_file) file]
      in
      Interactive.ast := append_ast !Interactive.ast ast;
      Interactive.env := env;
@@ -574,7 +574,7 @@ let handle_input' input =
         begin match cmd with
         | ":l" | ":load" ->
            let files = Util.split_on_char ' ' arg in
-           let (_, ast, env) = Process_file.load_files options !Interactive.env files in
+           let (_, ast, env) = Process_file.load_files !opt_target options !Interactive.env files in
            let ast, env =
              if !Interactive.opt_auto_interpreter_rewrites then
                Process_file.rewrite_ast_target "interpreter" env ast
@@ -614,7 +614,7 @@ let handle_input' input =
            | _ -> print_endline "Invalid arguments for :let"
            end
         | ":def" ->
-           let ast = Initial_check.ast_of_def_string_with (Process_file.preprocess options) arg in
+           let ast = Initial_check.ast_of_def_string_with (Process_file.preprocess !opt_target options) arg in
            let ast, env = Type_check.check !Interactive.env ast in
            Interactive.ast := append_ast !Interactive.ast ast;
            Interactive.env := env;
@@ -699,7 +699,7 @@ let handle_input' input =
            begin
              try
                load_into_session arg;
-               let (_, ast, env) = Process_file.load_files ~check:true options !Interactive.env [arg] in
+               let (_, ast, env) = Process_file.load_files ~check:true None options !Interactive.env [arg] in
                Interactive.ast := append_ast !Interactive.ast ast;
                interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
                Interactive.env := env;

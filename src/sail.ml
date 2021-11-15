@@ -641,7 +641,7 @@ let main () =
     begin
       let reset_effect_checking = !opt_infer_effects && not !Type_check.opt_no_effects in
       let () = if !opt_infer_effects then Type_check.opt_no_effects := true in
-      let out_name, ast, type_envs = load_files options Type_check.initial_env !opt_file_arguments in
+      let out_name, ast, type_envs = load_files !opt_target options Type_check.initial_env !opt_file_arguments in
       let ast, type_envs = descatter type_envs ast in
       let ast, type_envs =
         List.fold_right (fun file (ast,_) -> Splice.splice ast file)

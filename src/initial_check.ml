@@ -545,14 +545,23 @@ let to_ast_default ctx (default : P.default_typing_spec) : default_spec ctx_out 
         DT_aux(DT_order default_order,l),ctx
      | _ -> raise (Reporting.err_typ l "Inc and Dec must have kind Order")
 
-let to_ast_spec ctx (val_:P.val_spec) : (unit val_spec) ctx_out =
-  match val_ with
+let to_ast_spec ctx (vs : P.val_spec) : unit val_spec ctx_out =
+  match vs with
   | P.VS_aux(vs,l) ->
     (match vs with
     | P.VS_val_spec(ts,id,ext,is_cast) ->
       let typschm, _ = to_ast_typschm ctx ts in
       VS_aux(VS_val_spec(typschm,to_ast_id id,ext,is_cast),(l,())),ctx)
-
+ 
+let to_ast_event ctx (ev : P.event_spec) : event_spec ctx_out =
+  match ev with
+  | P.EV_aux (P.EV_event (id, typschm, event_args), l) ->
+     let event_args, inner_ctx =
+       List.fold_left (fun (args, ctx) arg -> let (arg, ctx), _ = to_ast_kopts ctx arg in (arg @ args, ctx)) ([], ctx) event_args
+     in
+     let typschm, _ = to_ast_typschm inner_ctx typschm in
+     EV_aux (EV_event (to_ast_id id, typschm, List.rev event_args), l), inner_ctx
+    
 let rec to_ast_range (P.BF_aux(r,l)) = (* TODO add check that ranges are sensible for some definition of sensible *)
   BF_aux(
     (match r with
@@ -845,7 +854,7 @@ let to_ast_loop_measure ctx = function
   | P.Loop (P.While, exp) -> Loop (While, to_ast_exp ctx exp)
   | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
 
-let to_ast_def ctx def : unit def list ctx_out =
+let rec to_ast_def ctx def : unit def list ctx_out =
   match def with
   | P.DEF_overload (id, ids) ->
      [DEF_overload (to_ast_id id, List.map to_ast_id ids)], ctx
@@ -865,6 +874,12 @@ let to_ast_def ctx def : unit def list ctx_out =
   | P.DEF_spec(val_spec) ->
      let vs,ctx = to_ast_spec ctx val_spec in
      [DEF_spec vs], ctx
+  | P.DEF_event(event_spec, defs) ->
+     let event_spec, inner_ctx = to_ast_event ctx event_spec in
+     let defs, _ =
+       List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def ctx def in (def @ defs, ctx)) ([], inner_ctx) defs
+     in
+     [DEF_event(event_spec, List.rev defs)], ctx
   | P.DEF_default(typ_spec) ->
      let default,ctx = to_ast_default ctx typ_spec in
      [DEF_default default], ctx

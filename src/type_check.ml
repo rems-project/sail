@@ -145,6 +145,7 @@ type env =
     typ_vars : (Ast.l * kind_aux) KBindings.t;
     shadow_vars : int KBindings.t;
     typ_synonyms : (typquant * typ_arg) Bindings.t;
+    typ_params : typquant Bindings.t;
     overloads : (id list) Bindings.t;
     enums : IdSet.t Bindings.t;
     records : (typquant * (typ * id) list) Bindings.t;
@@ -544,6 +545,7 @@ end = struct
       typ_vars = KBindings.empty;
       shadow_vars = KBindings.empty;
       typ_synonyms = Bindings.empty;
+      typ_params = Bindings.empty;
       overloads = Bindings.empty;
       enums = Bindings.empty;
       records = Bindings.empty;
@@ -640,7 +642,7 @@ end = struct
         ("int", Typ_bidir(int_typ, string_typ, no_effect));
         ("nat", Typ_bidir(nat_typ, string_typ, no_effect));
       ]
-
+ 
   let bound_typ_id env id =
     Bindings.mem id env.typ_synonyms
     || Bindings.mem id env.variants
@@ -5430,7 +5432,14 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
      let mapcl = check_mapcl mapcl_env mapcl typ in
      [DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, None)))], env
 
-and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
+and check_event : 'a. Env.t -> event_spec -> 'a def list -> event_spec * tannot def list * Env.t =
+  fun env (EV_aux (EV_event (id, typschm, args), l)) defs ->
+  let local_env = add_typ_vars l args env in
+  wf_typschm local_env typschm;
+  let defs, _ = check_defs local_env defs in
+  EV_aux (EV_event (id, typschm, args), l), defs, env
+     
+and check_def : 'a. Env.t -> 'a def -> tannot def list * Env.t =
   fun env def ->
   let cd_err () = raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented Case") in
   match def with
@@ -5447,6 +5456,9 @@ and check_def : 'a. Env.t -> 'a def -> (tannot def) list * Env.t =
      (defs @ [DEF_internal_mutrec fdefs]), env
   | DEF_val letdef -> check_letdef env letdef
   | DEF_spec vs -> check_val_spec env vs
+  | DEF_event (event, defs) ->
+     let event, defs, env = check_event env event defs in
+     [DEF_event (event, defs)], env
   | DEF_default default -> check_default env default
   | DEF_overload (id, ids) -> [DEF_overload (id, ids)], Env.add_overloads id ids env
   | DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id), (l, _))) ->

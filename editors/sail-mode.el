@@ -27,12 +27,12 @@
 (add-to-list 'auto-mode-alist '("\\.sail\\'" . sail2-mode))
 
 (defconst sail2-keywords
-  '("val" "function" "type" "struct" "union" "enum" "let" "var" "if" "then" "by"
+  '("val" "event" "function" "type" "struct" "union" "enum" "let" "var" "if" "then" "by"
     "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect"
     "overload" "cast" "sizeof" "constant" "constraint" "default" "assert" "newtype" "from"
     "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to"
     "throw" "clause" "as" "repeat" "until" "while" "do" "foreach" "bitfield"
-    "mapping" "where" "with" "implicit"))
+    "mapping" "where" "with" "implicit" "instantiation" "impl"))
 
 (defconst sail2-kinds
   '("Int" "Type" "Order" "Bool" "inc" "dec"
@@ -45,7 +45,7 @@
 
 (defconst sail2-special
   '("_prove" "_not_prove" "create" "kill" "convert" "undefined"
-    "$define" "$include" "$ifdef" "$ifndef" "$else" "$endif" "$option" "$optimize"
+    "$define" "$include" "$ifdef" "$ifndef" "$iftarget" "$else" "$endif" "$option" "$optimize"
     "$latex" "$property" "$counterexample" "$suppress_warnings" "$assert"))
 
 (defconst sail2-font-lock-keywords
@@ -60,6 +60,8 @@
     ("\'[a-zA-Z0-9_]+" . font-lock-variable-name-face)
     ("\\([a-zA-Z0-9_]+\\)(" 1 font-lock-function-name-face)
     ("function \\([a-zA-Z0-9_]+\\)" 1 font-lock-function-name-face)
+    ("impl \\([a-zA-Z0-9_]+\\)" 1 font-lock-function-name-face)
+    ("event \\([a-zA-Z0-9_]+\\)" 1 font-lock-function-name-face)
     ("val \\([a-zA-Z0-9_]+\\)" 1 font-lock-function-name-face)
     ("\\_<\\([0-9]+\\|0b[0-9_]+\\|0x[0-9a-fA-F_]+\\|true\\|false\\|bitone\\|bitzero\\)\\_>\\|()" . font-lock-constant-face)))
 
