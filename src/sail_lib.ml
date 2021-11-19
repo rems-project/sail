@@ -758,9 +758,9 @@ let real_of_string str =
   | [whole] -> Rational.of_int (int_of_string str)
   | _ -> failwith "invalid real literal"
 
-let print str = Pervasives.print_string str
+let print str = Stdlib.print_string str
 
-let prerr str = Pervasives.prerr_string str
+let prerr str = Stdlib.prerr_string str
 
 let print_int (str, x) =
   print_endline (str ^ Big_int.to_string x)

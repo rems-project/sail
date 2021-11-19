@@ -1555,9 +1555,9 @@ and compile_def' n total ctx = function
      let defs = List.map (fun fdef -> DEF_fundef fdef) fundefs in
      List.fold_left (fun (cdefs, ctx) def -> let cdefs', ctx = compile_def n total ctx def in (cdefs @ cdefs', ctx)) ([], ctx) defs
 
-  (* Scattereds and mapdefs should be removed by this point *)
-  | (DEF_scattered _ | DEF_mapdef _) as def ->
-     raise (Reporting.err_general Parse_ast.Unknown ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def def)))
+  (* Scattereds, mapdefs, and event related definitions should be removed by this point *)
+  | (DEF_scattered _ | DEF_mapdef _ | DEF_event _ | DEF_impl _ | DEF_instantiation _) as def ->
+     Reporting.unreachable (def_loc def) __POS__ ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def def))
 
 module IdGraph = Graph.Make(Id)
 module IdGraphNS = Set.Make(Id)

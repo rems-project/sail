@@ -2434,16 +2434,13 @@ let types_used_with_generic_eq defs =
     | DEF_reg_dec _
       -> IdSet.empty
     | DEF_fundef fd -> typs_req_fundef fd
-    | DEF_mapdef (MD_aux (_,(l,_)))
-    | DEF_scattered (SD_aux (_,(l,_)))
-    | DEF_measure (Id_aux (_,l),_,_)
-    | DEF_loop_measures (Id_aux (_,l),_)
-      -> unreachable l __POS__
-           "Definition found in the Coq back-end that should have been rewritten away"
     | DEF_internal_mutrec fds ->
        List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
     | DEF_val lb ->
        fst (Rewriter.fold_letbind alg lb)
+    | (DEF_mapdef _ | DEF_scattered _ | DEF_measure _ | DEF_loop_measures _ | DEF_impl _ | DEF_instantiation _ | DEF_event _) as d ->
+       unreachable (def_loc d) __POS__
+         "Definition found in the Coq back-end that should have been rewritten away"
   in
   List.fold_left IdSet.union IdSet.empty (List.map typs_req_def defs)
 
@@ -3282,7 +3279,10 @@ let rec doc_def types_mod unimplemented generic_eq_types def =
      unreachable (id_loc id) __POS__
        ("Loop termination measures for " ^ string_of_id id ^
           " should have been rewritten before backend")
+  | (DEF_impl _ | DEF_event _ | DEF_instantiation _) ->
+     unreachable (def_loc def) __POS__ "Event definition should have been rewritten before backend"
 
+    
 let find_exc_typ defs =
   let is_exc_typ_def = function
     | DEF_type td -> string_of_id (id_of_type_def td) = "exception"

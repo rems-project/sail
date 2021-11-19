@@ -143,7 +143,7 @@ let duplicates (x : S.elt list) : dups =
 end
 
 let remove_duplicates l =
-  let l' = List.sort Pervasives.compare l in
+  let l' = List.sort Stdlib.compare l in
   let rec aux acc l = match (acc, l) with
       (_, []) -> List.rev acc
     | ([], x :: xs) -> aux [x] xs
@@ -351,13 +351,13 @@ let string_to_list s =
 
 module IntSet = Set.Make(
   struct
-    let compare = Pervasives.compare
+    let compare = Stdlib.compare
     type t = int
   end )
 
 module IntIntSet = Set.Make(
   struct
-    let compare = Pervasives.compare
+    let compare = Stdlib.compare
     type t = int * int
   end )
 

@@ -574,9 +574,9 @@ let fv_of_def consider_var consider_scatter_as_one all_defs = function
      ((fun (_,u,_) -> Nameset.singleton ("measure:"^i),u)
         (fv_of_pes consider_var mt used mt
            [Pat_aux(Pat_exp (pat,exp),(Unknown,Type_check.empty_tannot))]))
-  | DEF_loop_measures(id,_) ->
-     Reporting.unreachable (id_loc id) __POS__ "Loop termination measures should be rewritten before now"
-
+  | (DEF_loop_measures _ | DEF_impl _ | DEF_event _ | DEF_instantiation _) as d ->
+     Reporting.unreachable (def_loc d) __POS__
+       "Found definition that should have been rewritten previously"
 
 let group_defs consider_scatter_as_one ast =
   List.map (fun d -> (fv_of_def false consider_scatter_as_one ast.defs d,d)) ast.defs

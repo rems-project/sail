@@ -1179,14 +1179,12 @@ let split_defs target all_errors splits env ast =
       | DEF_internal_mutrec _
         -> [d]
       | DEF_fundef fd -> [DEF_fundef (map_fundef fd)]
-      | DEF_mapdef (MD_aux (_, (l, _))) ->
-         Reporting.unreachable l __POS__ "mappings should be gone by now"
       | DEF_val lb -> [DEF_val (map_letbind lb)]
       | DEF_scattered sd -> List.map (fun x -> DEF_scattered x) (map_scattered_def sd)
       | DEF_measure (id,pat,exp) -> [DEF_measure (id,pat,map_exp exp)]
-      | DEF_loop_measures (id,_) ->
-         Reporting.unreachable (id_loc id) __POS__
-           "Loop termination measures should have been rewritten before now"
+      | DEF_impl _ | DEF_instantiation _ | DEF_event _ | DEF_mapdef _ | DEF_loop_measures _ ->
+         Reporting.unreachable (def_loc d) __POS__
+           "Found definition that should have been rewritten previously during monomorphisation"
     in
     List.concat (List.mapi map_def defs)
   in
