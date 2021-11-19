@@ -88,6 +88,8 @@ val rewriters_base : tannot rewriters
 (** The identity re-writer *)
 val rewrite_ast : tannot ast -> tannot ast
 
+val rewrite_ast_defs : tannot rewriters -> tannot def list -> tannot def list
+  
 val rewrite_ast_base : tannot rewriters -> tannot ast -> tannot ast
 
 (** Same as rewrite_defs_base but display a progress bar when verbosity >= 1 *)

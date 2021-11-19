@@ -133,6 +133,7 @@ let mk_vs v n m = VS_aux (v, loc n m)
 let mk_reg_dec d n m = DEC_aux (d, loc n m)
 let mk_default d n m = DT_aux (d, loc n m)
 let mk_event ev n m = EV_aux (ev, loc n m)
+let mk_subst ev n m = IS_aux (ev, loc n m)
  
 let mk_mpexp mpexp n m = MPat_aux (mpexp, loc n m)
 let mk_mpat mpat n m = MP_aux (mpat, loc n m)
@@ -223,7 +224,7 @@ let rec desugar_rchain chain s e =
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Event Constraint Throw Try Catch Exit Bitfield Constant
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
-%token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation
+%token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl
 %token InternalPLet InternalReturn
 
 %nonassoc Then
@@ -1514,11 +1515,19 @@ loop_measures:
   | loop_measure Comma loop_measures
     { $1::$3 }
 
+subst:
+  | kid Eq typ
+    { mk_subst (IS_typ ($1, $3)) $startpos $endpos }
+  | id Eq id
+    { mk_subst (IS_id ($1, $3)) $startpos $endpos }
+
 def:
   | fun_def
     { DEF_fundef $1 }
   | map_def
     { DEF_mapdef $1 }
+  | Impl funcl
+    { DEF_impl $2 }
   | Fixity
     { let (prec, n, op) = $1 in DEF_fixity (prec, n, Id_aux (Id op, loc $startpos $endpos)) }
   | val_spec_def
@@ -1527,6 +1536,8 @@ def:
     { DEF_event ($1, []) }
   | event_spec_def Eq Lcurly defs_list Rcurly
     { DEF_event ($1, $4) }
+  | Instantiation id With separated_list(Comma, subst)
+    { DEF_instantiation ($2, $4) }
   | type_def
     { DEF_type $1 }
   | let_def

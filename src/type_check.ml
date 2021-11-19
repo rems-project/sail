@@ -134,6 +134,7 @@ type type_error =
 
 type env =
   { top_val_specs : (typquant * typ) Bindings.t;
+    top_events : (typquant * typ * kinded_id list) Bindings.t;
     defined_val_specs : IdSet.t;
     locals : (mut * typ) Bindings.t;
     top_letbinds : IdSet.t;
@@ -161,6 +162,8 @@ type env =
     prove : (env -> n_constraint -> bool) option;
     allow_unknowns : bool;
     bitfields : (Big_int.num * Big_int.num) Bindings.t Bindings.t;
+    toplevel : l option;
+    event_typschm : (typquant * typ) option;
   }
 
 exception Type_error of env * l * type_error;;
@@ -432,12 +435,14 @@ let adding = Util.("Adding " |> darkgray |> clear)
 module Env : sig
   type t = env
   val add_val_spec : id -> typquant * typ -> t -> t
+  val add_event : id -> typquant * typ * kinded_id list -> t -> t
   val update_val_spec : id -> typquant * typ -> t -> t
   val define_val_spec : id -> t -> t
   val get_defined_val_specs : t -> IdSet.t
   val get_val_spec : id -> t -> typquant * typ
   val get_val_specs : t -> (typquant * typ ) Bindings.t
   val get_val_spec_orig : id -> t -> typquant * typ
+  val get_event : l -> id -> env -> typquant * typ * kinded_id list
   val is_union_constructor : id -> t -> bool
   val is_singleton_union_constructor : id -> t -> bool
   val is_mapping : id -> t -> bool
@@ -534,6 +539,7 @@ end = struct
 
   let empty =
     { top_val_specs = Bindings.empty;
+      top_events = Bindings.empty;
       defined_val_specs = IdSet.empty;
       locals = Bindings.empty;
       top_letbinds = IdSet.empty;
@@ -561,6 +567,8 @@ end = struct
       prove = None;
       allow_unknowns = false;
       bitfields = Bindings.empty;
+      toplevel = None;
+      event_typschm = None;
     }
 
   let set_prover f env = { env with prove = f }
@@ -1134,6 +1142,15 @@ end = struct
     then update_val_spec id (bind_typq, bind_typ) env
     else env
 
+  and add_event id (typq, typ, params) env =
+    { env with top_events = Bindings.add id (typq, typ, params) env.top_events }
+
+  and get_event l id env =
+    match Bindings.find_opt id env.top_events with
+    | Some event -> event
+    | None ->
+       typ_error env l ("Event " ^ string_of_id id ^ " does not exist")
+    
   and add_mapping id (typq, typ1, typ2, effect) env =
     typ_print (lazy (adding ^ "mapping " ^ string_of_id id));
     let forwards_id = mk_id (string_of_id id ^ "_forwards") in
@@ -5433,12 +5450,52 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
      [DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, None)))], env
 
 and check_event : 'a. Env.t -> event_spec -> 'a def list -> event_spec * tannot def list * Env.t =
-  fun env (EV_aux (EV_event (id, typschm, args), l)) defs ->
-  let local_env = add_typ_vars l args env in
-  wf_typschm local_env typschm;
-  let defs, _ = check_defs local_env defs in
-  EV_aux (EV_event (id, typschm, args), l), defs, env
-     
+  fun env (EV_aux (EV_event (id, typschm, params), l)) defs ->
+  typ_print (lazy (Util.("Check event " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
+  match env.toplevel with
+  | None ->
+     begin
+       incr depth;
+       try
+         let local_env = { (add_typ_vars l params env) with toplevel = Some l } in
+         wf_typschm local_env typschm;
+         let quant, typ = match typschm with
+           | TypSchm_aux (TypSchm_ts (typq, typ), _) -> typq, typ
+         in
+         let local_env = { local_env with event_typschm = Some (quant, typ) } in
+         let defs, _ = check_defs local_env defs in
+         decr depth;
+         EV_aux (EV_event (id, typschm, params), l), defs, Env.add_event id (quant, typ, params) env
+       with
+       | Type_error (env, err_l, err) ->
+          decr depth;
+          typ_raise env err_l err
+     end
+  | Some outer_l ->
+     let msg = "Event must be declared within top-level scope" in
+     typ_raise env l (Err_because (Err_other msg, outer_l, Err_other "Containing scope declared here"))
+
+and check_impldef : 'a. Env.t -> 'a funcl -> tannot def list * Env.t =
+  fun env (FCL_aux (FCL_Funcl (id, _), (l, _)) as funcl) ->
+  typ_print (lazy (Util.("Check impl " |> cyan |> clear) ^ string_of_id id));
+  match env.event_typschm with
+  | Some (quant, typ) ->
+     let funcl_env = Env.add_typquant l quant env in
+     [DEF_impl (check_funcl funcl_env funcl typ)], env
+  | None ->
+     typ_error env l "Cannot declare an implementation outside of an event"
+
+and check_event_instantiation : 'a. Env.t -> 'a instantiation_spec -> subst list -> tannot def list * Env.t =
+  fun env (IN_aux (IN_id id, (l, _))) substs ->
+  let typq, typ, params = Env.get_event l id env in
+  let instantiate_typ substs typ =
+    List.fold_left (fun typ -> function
+        | IS_aux (IS_typ (kid, subst_typ), _) -> typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ
+        | _ -> typ
+      ) typ substs
+  in
+  [DEF_instantiation (IN_aux (IN_id id, (l, mk_tannot env unit_typ no_effect)), substs)], Env.add_val_spec id (typq, instantiate_typ substs typ) env
+
 and check_def : 'a. Env.t -> 'a def -> tannot def list * Env.t =
   fun env def ->
   let cd_err () = raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Unimplemented Case") in
@@ -5447,6 +5504,7 @@ and check_def : 'a. Env.t -> 'a def -> tannot def list * Env.t =
   | DEF_fixity (prec, n, op) -> [DEF_fixity (prec, n, op)], env
   | DEF_fundef fdef -> check_fundef env fdef
   | DEF_mapdef mdef -> check_mapdef env mdef
+  | DEF_impl funcl -> check_impldef env funcl
   | DEF_internal_mutrec fdefs ->
      let defs = List.concat (List.map (fun fdef -> fst (check_fundef env fdef)) fdefs) in
      let split_fundef (defs, fdefs) def = match def with
@@ -5459,6 +5517,7 @@ and check_def : 'a. Env.t -> 'a def -> tannot def list * Env.t =
   | DEF_event (event, defs) ->
      let event, defs, env = check_event env event defs in
      [DEF_event (event, defs)], env
+  | DEF_instantiation (ispec, substs) -> check_event_instantiation env ispec substs
   | DEF_default default -> check_default env default
   | DEF_overload (id, ids) -> [DEF_overload (id, ids)], Env.add_overloads id ids env
   | DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id), (l, _))) ->

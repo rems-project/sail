@@ -426,6 +426,10 @@ let find_next f xs =
   in
   find_next' f [] xs
 
+let fold_left_concat_map f acc xs =
+  let ys, acc = List.fold_left (fun (ys, acc) x -> let acc, zs = f acc x in (List.rev zs @ ys, acc)) ([], acc) xs in
+  acc, List.rev ys
+  
 let is_none opt = not (is_some opt)
 
 let rec take n xs = match n, xs with

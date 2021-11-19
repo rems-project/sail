@@ -177,6 +177,7 @@ let kw_table =
      ("val",                     (fun x -> Val));
      ("event",                   (fun x -> Event));
      ("instantiation",           (fun _ -> Instantiation));
+     ("impl",                    (fun _ -> Impl));
      ("repeat",                  (fun _ -> Repeat));
      ("until",                   (fun _ -> Until));
      ("while",                   (fun _ -> While));

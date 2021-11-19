@@ -389,7 +389,13 @@ type
 type_union = 
    Tu_aux of type_union_aux * l
 
-
+type subst_aux =  (* instantiation substitution *)
+ | IS_typ of kid * atyp (* instantiate a type variable with a type *)
+ | IS_id of id * id (* instantiate an identifier with another identifier *)
+           
+type subst = 
+ | IS_aux of subst_aux * l
+           
 type 
 index_range_aux =  (* index specification, for bitfields in register types *)
    BF_single of atyp       (* single index *)
@@ -450,7 +456,6 @@ type event_spec =
 type 
 fundef_aux =  (* Function definition *)
    FD_function of rec_opt * tannot_opt * effect_opt * (funcl) list
-
 
 type 
 type_def_aux =  (* Type definition body *)
@@ -525,11 +530,13 @@ def =  (* Top-level definition *)
    DEF_type of type_def (* type definition *)
  | DEF_fundef of fundef (* function definition *)
  | DEF_mapdef of mapdef (* mapping definition *)
+ | DEF_impl of funcl (* impl definition *)
  | DEF_val of letbind (* value definition *)
  | DEF_overload of id * id list (* operator overload specifications *)
  | DEF_fixity of prec * Big_int.num * id (* fixity declaration *)
  | DEF_spec of val_spec (* top-level type constraint *)
  | DEF_event of event_spec * def list (* top-level event definition *)
+ | DEF_instantiation of id * subst list (* instantiation *)
  | DEF_default of default_typing_spec (* default kind and type assumptions *)
  | DEF_scattered of scattered_def (* scattered definition *)
  | DEF_measure of id * pat * exp (* separate termination measure declaration *)

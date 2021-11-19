@@ -712,6 +712,11 @@ fundef :: 'FD_' ::=
 % the *result* type, not the type of the whole function.  The argument
 % type comes from the pattern in the funcl
 
+impldef :: 'Impl_' ::=
+  {{ com impl for target }}
+  {{ aux _ l }} {{ auxparam 'a }}
+  | impl funcl :: :: impl
+
 mpat :: 'MP_' ::=
   {{ com Mapping pattern. Mostly the same as normal patterns but only constructible parts }}
   {{ aux _ annot }} {{ auxparam 'a }}
@@ -752,10 +757,22 @@ letbind :: 'LB_' ::=
   | let pat = exp                                    :: :: val
     {{ com let, implicit type ($[[pat]]$ must be total)}}
 
+subst :: 'IS_' ::=
+  {{ aux _ l }}
+  {{ com instantiation substitution }}
+  | kid = typ :: :: typ
+    {{ com instantiate a type variable with a type }}
+  | id1 = id2 :: :: id
+    {{ com instantiate an identifier with another identifier }}
+
 event_spec :: 'EV_' ::=
   {{ com event declaration }}
   {{ aux _ l }}
   | event id : typschm with kinded_id1 , ... , kinded_idn :: :: event
+
+instantiation_spec :: 'IN_' ::=
+  {{ aux _ annot }} {{ auxparam 'a }}
+  | id :: :: id  
 
 val_spec {{ ocaml 'a val_spec }} {{ lem val_spec 'a }} :: 'VS_' ::=
    {{ ocaml VS_aux of val_spec_aux * 'a annot }}
@@ -856,12 +873,16 @@ def :: 'DEF_' ::=
     {{ com function definition }}
   | mapdef                                             :: :: mapdef
     {{ com mapping definition }}
+  | impl funcl                                         :: :: impl
+    {{ com impl definition }}
   | letbind                                            :: :: val
     {{ com value definition }}
   | val_spec                                           :: :: spec
     {{ com top-level type constraint }}
   | event_spec { def1 ... defn }                       :: :: event
     {{ com top-level event definition }}
+  | instantiation instantiation_spec with subst1 , ... , substn        :: :: instantiation
+    {{ com instantiation }}
   | fix prec num id                                    :: :: fixity
     {{ com fixity declaration }}
   |  overload id [ id1 ; ... ; idn ]                   :: :: overload

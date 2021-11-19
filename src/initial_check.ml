@@ -850,6 +850,12 @@ let to_ast_prec = function
   | P.InfixL -> InfixL
   | P.InfixR -> InfixR
 
+let to_ast_subst ctx = function
+  | P.IS_aux (P.IS_id (id_from, id_to), l) ->
+     IS_aux (IS_id (to_ast_id id_from, to_ast_id id_to), l)
+  | P.IS_aux (P.IS_typ (kid, typ), l) ->
+     IS_aux (IS_typ (to_ast_var kid, to_ast_typ ctx typ), l)
+              
 let to_ast_loop_measure ctx = function
   | P.Loop (P.While, exp) -> Loop (While, to_ast_exp ctx exp)
   | P.Loop (P.Until, exp) -> Loop (Until, to_ast_exp ctx exp)
@@ -860,27 +866,32 @@ let rec to_ast_def ctx def : unit def list ctx_out =
      [DEF_overload (to_ast_id id, List.map to_ast_id ids)], ctx
   | P.DEF_fixity (prec, n, op) ->
      [DEF_fixity (to_ast_prec prec, n, to_ast_id op)], ctx
-  | P.DEF_type(t_def) ->
+  | P.DEF_type t_def ->
      to_ast_typedef ctx t_def
-  | P.DEF_fundef(f_def) ->
+  | P.DEF_fundef f_def ->
      let fd = to_ast_fundef ctx f_def in
      [DEF_fundef fd], ctx
-  | P.DEF_mapdef(m_def) ->
+  | P.DEF_mapdef m_def ->
      let md = to_ast_mapdef ctx m_def in
      [DEF_mapdef md], ctx
-  | P.DEF_val(lbind) ->
-     let lb = to_ast_letbind ctx lbind in
+  | P.DEF_impl funcl ->
+     [DEF_impl (to_ast_funcl ctx funcl)], ctx
+  | P.DEF_val lb ->
+     let lb = to_ast_letbind ctx lb in
      [DEF_val lb], ctx
-  | P.DEF_spec(val_spec) ->
+  | P.DEF_spec val_spec ->
      let vs,ctx = to_ast_spec ctx val_spec in
      [DEF_spec vs], ctx
-  | P.DEF_event(event_spec, defs) ->
+  | P.DEF_event (event_spec, defs) ->
      let event_spec, inner_ctx = to_ast_event ctx event_spec in
      let defs, _ =
        List.fold_left (fun (defs, ctx) def -> let def, ctx = to_ast_def ctx def in (def @ defs, ctx)) ([], inner_ctx) defs
      in
-     [DEF_event(event_spec, List.rev defs)], ctx
-  | P.DEF_default(typ_spec) ->
+     [DEF_event (event_spec, List.rev defs)], ctx
+  | P.DEF_instantiation (id, substs) ->
+     let id = to_ast_id id in
+     [DEF_instantiation (IN_aux (IN_id id, (id_loc id, ())), List.map (to_ast_subst ctx) substs)], ctx
+  | P.DEF_default typ_spec ->
      let default,ctx = to_ast_default ctx typ_spec in
      [DEF_default default], ctx
   | P.DEF_reg_dec dec ->

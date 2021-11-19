@@ -766,6 +766,12 @@ let rec doc_def def = group (match def with
   | DEF_type t_def -> doc_typdef t_def
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_mapdef m_def -> doc_mapdef m_def
+  | DEF_event (EV_aux (EV_event (id, typschm, args), _), defs) ->
+     string "event" ^^ space ^^ doc_id id ^^ space ^^ colon ^^ space ^^ doc_typschm typschm
+  | DEF_instantiation (IN_aux (IN_id id, _), substs) ->
+     string "instantiation" ^^ space ^^ doc_id id
+  | DEF_impl funcl ->
+     string "impl" ^^ space ^^ doc_funcl funcl
   | DEF_val lbind -> string "let" ^^ space ^^ doc_letbind lbind
   | DEF_internal_mutrec fundefs ->
      (string "mutual {" ^//^ separate_map (hardline ^^ hardline) doc_fundef fundefs)

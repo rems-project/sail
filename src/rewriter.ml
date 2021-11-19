@@ -379,23 +379,25 @@ let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
   | LEXP_vector_concat lexps -> rewrap (LEXP_vector_concat (List.map (rewriters.rewrite_lexp rewriters) lexps))
   | LEXP_field (lexp,id) -> rewrap (LEXP_field (rewriters.rewrite_lexp rewriters lexp,id))
 
+let rewrite_funcl rewriters (FCL_aux (FCL_Funcl(id,pexp),(l,annot))) =
+  FCL_aux (FCL_Funcl (id, rewrite_pexp rewriters pexp),(l,annot))
+                          
 let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
-  let rewrite_funcl (FCL_aux (FCL_Funcl(id,pexp),(l,annot))) =
-    (FCL_aux (FCL_Funcl (id, rewrite_pexp rewriters pexp),(l,annot)))
-  in
   let recopt = match recopt with
     | Rec_aux (Rec_nonrec, l) -> Rec_aux (Rec_nonrec, l)
     | Rec_aux (Rec_rec, l) -> Rec_aux (Rec_rec, l)
     | Rec_aux (Rec_measure (pat,exp),l) ->
        Rec_aux (Rec_measure (rewrite_pat rewriters pat, rewrite_exp rewriters exp),l)
   in
-  FD_aux (FD_function(recopt,tannotopt,effectopt,List.map rewrite_funcl funcls),(l,fdannot))
+  FD_aux (FD_function(recopt,tannotopt,effectopt,List.map (rewrite_funcl rewriters) funcls),(l,fdannot))
 
-let rewrite_def rewriters d = match d with
+let rec rewrite_def rewriters d = match d with
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), annot)) ->
      DEF_reg_dec (DEC_aux (DEC_config (id, typ, rewriters.rewrite_exp rewriters exp), annot))
-  | DEF_type _ | DEF_mapdef _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_overload _ | DEF_fixity _ -> d
+  | DEF_type _ | DEF_mapdef _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_overload _ | DEF_fixity _ | DEF_instantiation _ -> d
   | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
+  | DEF_impl funcl -> DEF_impl (rewrite_funcl rewriters funcl)
+  | DEF_event (event_spec, defs) -> DEF_event (event_spec, List.map (rewrite_def rewriters) defs)
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
   | DEF_pragma (pragma, arg, l) -> DEF_pragma (pragma, arg, l)
@@ -403,6 +405,13 @@ let rewrite_def rewriters d = match d with
   | DEF_measure (id,pat,exp) -> DEF_measure (id,rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
   | DEF_loop_measures (id,_) -> raise (Reporting.err_unreachable (id_loc id) __POS__ "DEF_loop_measures survived to rewriter")
 
+let rewrite_ast_defs rewriters defs =
+  let rec rewrite ds = match ds with
+    | [] -> []
+    | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds)
+  in
+  rewrite defs
+                              
 let rewrite_ast_base rewriters ast =
   let rec rewrite ds = match ds with
     | [] -> []

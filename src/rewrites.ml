@@ -5040,6 +5040,7 @@ let all_rewrites = [
     ("rewrite_loops_with_escape_effect", Basic_rewriter rewrite_loops_with_escape_effect);
     ("simple_types", Basic_rewriter rewrite_simple_types);
     ("overload_cast", Basic_rewriter rewrite_overload_cast);
+    ("instantiate_events", String_rewriter (fun target -> Basic_rewriter (fun _ -> Event_rewrites.instantiate target)));
     ("top_sort_defs", Basic_rewriter (fun _ -> top_sort_defs));
     ("constant_fold", String_rewriter (fun target -> Basic_rewriter (fun _ -> Constant_fold.(rewrite_constant_function_calls no_fixed target))));
     ("split", String_rewriter (fun str -> Basic_rewriter (rewrite_split_fun_ctor_pats str)));
@@ -5172,6 +5173,7 @@ let rewrites_ocaml = [
 
 let rewrites_c = [
     ("no_effect_check", []);
+    ("instantiate_events", [String_arg "c"]);
     ("realise_mappings", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);
