@@ -5151,6 +5151,7 @@ let rewrites_coq = [
 
 let rewrites_ocaml = [
     ("no_effect_check", []);
+    ("instantiate_events", [String_arg "ocaml"]);
     ("realise_mappings", []);
     ("toplevel_string_append", []);
     ("pat_string_append", []);

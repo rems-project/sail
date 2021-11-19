@@ -15,6 +15,15 @@ with
         let z: bits('n + 8) = 0xFF @ y;
         print_bits("z = ", z)
     }
+
+    impl ocaml(x, y) = {
+        match x {
+            w: 'a => print_bits("w = ", to_bits(w))
+        };
+        print_bits("x = ", to_bits(x : 'a));
+        let z: bits('n + 8) = 0xFF @ y;
+        print_bits("z = ", z)
+    }
 }
 
 function instance_to_bits(x: bits(32)) -> bits(64) = {
