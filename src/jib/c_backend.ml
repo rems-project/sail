@@ -2114,6 +2114,12 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ ksprintf string "  return result;\n"
       ^^          string "}"
     in
+    let vector_length =
+      let open Printf in
+          ksprintf string "static void length_%s(sail_int *rop, %s op) {\n" (sgen_id id) (sgen_id id)
+       ^^ ksprintf string "  mpz_set_ui(*rop, (unsigned long int)(op.len));\n"
+       ^^          string "}"
+    in
     begin
       generated := IdSet.add id !generated;
       vector_typedef ^^ twice hardline
@@ -2124,6 +2130,7 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ vector_set ^^ twice hardline
       ^^ vector_update ^^ twice hardline
       ^^ vector_equal ^^ twice hardline
+      ^^ vector_length ^^ twice hardline
       ^^ internal_vector_update ^^ twice hardline
       ^^ internal_vector_init ^^ twice hardline
     end
