@@ -1,9 +1,10 @@
 {
     "name": "sail",
     "displayName": "sail",
-    "description": "Sail ISA specification language",
-    "version": "0.0.3",
+    "description": "Syntax support for the Sail ISA specification language",
+    "version": "0.0.4",
     "publisher": "rems-project",
+    "icon": "images/sail_icon.png",
     "repository": {
       "type": "git",
       "url": "https://github.com/rems-project/sail"
@@ -13,6 +14,12 @@
     },
     "categories": [
         "Programming Languages"
+    ],
+    "keywords": [
+        "language",
+        "sail",
+        "highlight",
+        "syntax"
     ],
     "contributes": {
         "languages": [
