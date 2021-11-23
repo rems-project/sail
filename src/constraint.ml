@@ -236,7 +236,7 @@ let to_smt l vars constr =
   in
   let smt_constr = smt_constraint constr in
   var_decs l vars, smt_constr, smt_var, !exponentials
-
+ 
 let sailexp_concrete n =
   List.init (n + 1) (fun i -> sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))])
   
@@ -392,7 +392,7 @@ let rec call_smt' l extra constraints : smt_result =
         then try replacing `2^` with an uninterpreted function to see
         if the problem would be unsat in that case. *)
      opt_solver := { !opt_solver with uninterpret_power = true };
-     let result = match call_smt' l [] constraints with
+     let result = match call_smt' l (sailexp_concrete 64) constraints with
        | Unsat -> Unsat
        | Sat ->
           begin match call_smt' l (sailexp_concrete 64 @ List.map bound_exponential exponentials) constraints with
