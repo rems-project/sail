@@ -175,6 +175,8 @@ let to_smt l vars constr =
        Atom ("v" ^ string_of_int n)
   in
 
+  let exponentials = ref [] in
+  
   (* var_decs outputs the list of variables to be used by the SMT
      solver in SMTLIB v2.0 format. It takes a kind_aux KBindings, as
      returned by Type_check.get_typ_vars *)
@@ -201,7 +203,10 @@ let to_smt l vars constr =
        | Nexp_aux (Nexp_constant c, _) when Big_int.greater_equal c Big_int.zero ->
           Atom (Big_int.to_string (Big_int.pow_int_positive 2 (Big_int.to_int c)))
        | nexp when !opt_solver.uninterpret_power -> sfun "sailexp" [smt_nexp nexp]
-       | nexp -> sfun "^" [Atom "2"; smt_nexp nexp]
+       | nexp ->
+          let exp = smt_nexp nexp in
+          exponentials := exp :: !exponentials;
+          sfun "^" [Atom "2"; exp]
        end
     | Nexp_neg nexp -> sfun "-" [smt_nexp nexp]
   in
@@ -229,18 +234,24 @@ let to_smt l vars constr =
     | _ ->
        raise (Reporting.err_unreachable l __POS__ "Tried to pass Type or Order kind to SMT function")
   in
-  var_decs l vars, smt_constraint constr, smt_var
+  let smt_constr = smt_constraint constr in
+  var_decs l vars, smt_constr, smt_var, !exponentials
 
-let smtlib_of_constraints ?get_model:(get_model=false) l vars constr : string * (kid -> sexpr) =
-  let variables, problem, var_map = to_smt l vars constr in
+let sailexp_concrete n =
+  List.init (n + 1) (fun i -> sfun "=" [sfun "sailexp" [Atom (string_of_int i)]; Atom (Big_int.to_string (Big_int.pow_int_positive 2 i))])
+  
+let smtlib_of_constraints ?get_model:(get_model=false) l vars extra constr : string * (kid -> sexpr) * sexpr list =
+  let variables, problem, var_map, exponentials = to_smt l vars constr in
   !opt_solver.header
   ^ variables ^ "\n"
   ^ (if !opt_solver.uninterpret_power then "(declare-fun sailexp (Int) Int)\n" else "")
   ^ pp_sexpr (sfun "define-fun" [Atom "constraint"; List []; Atom "Bool"; problem])
+  ^ Util.string_of_list "" (fun sexpr -> "\n" ^ pp_sexpr (sfun "assert" [sexpr])) extra
   ^ "\n(assert constraint)\n(check-sat)"
   ^ (if get_model then "\n(get-model)\n" else "\n")
   ^ !opt_solver.footer,
-  var_map
+  var_map,
+  exponentials
 
 type smt_result = Unknown | Sat | Unsat
 
@@ -295,7 +306,9 @@ let save_digests () =
 
 let kopt_pair kopt = (kopt_kid kopt, unaux_kind (kopt_kind kopt))
 
-let call_smt' l constraints : smt_result =
+let bound_exponential sexpr = sfun "and" [sfun "<=" [Atom "0"; sexpr]; sfun "<=" [sexpr; Atom "64"]]
+ 
+let rec call_smt' l extra constraints : smt_result =
   let vars =
     kopts_of_constraint constraints
     |> KOptSet.elements
@@ -303,7 +316,7 @@ let call_smt' l constraints : smt_result =
     |> List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty
   in
   let problems = [constraints] in
-  let smt_file, _ = smtlib_of_constraints l vars constraints in
+  let smt_file, _, exponentials = smtlib_of_constraints l vars extra constraints in
 
   if !opt_smt_verbose then
     prerr_endline (Printf.sprintf "SMTLIB2 constraints are: \n%s%!" smt_file)
@@ -325,51 +338,76 @@ let call_smt' l constraints : smt_result =
 
   let digest = Digest.string smt_file in
 
-  match DigestMap.find_opt digest !known_problems with
-  | Some result -> result
-  | None ->
-     let (input_file, tmp_chan) =
-       try Filename.open_temp_file "constraint_" ".smt2" with
-       | Sys_error msg -> raise (Reporting.err_general l ("Could not open temp file when calling SMT: " ^ msg))
-     in
-     output_string tmp_chan smt_file;
-     close_out tmp_chan;
-     let status, smt_output, smt_errors =
+  let result = match DigestMap.find_opt digest !known_problems with
+    | Some result -> result
+    | None ->
+       let (input_file, tmp_chan) =
+         try Filename.open_temp_file "constraint_" ".smt2" with
+         | Sys_error msg -> raise (Reporting.err_general l ("Could not open temp file when calling SMT: " ^ msg))
+       in
+       output_string tmp_chan smt_file;
+       close_out tmp_chan;
+       let status, smt_output, smt_errors =
+         try
+           let smt_out, smt_in, smt_err = Unix.open_process_full (!opt_solver.command ^ " " ^ input_file) (Unix.environment ()) in
+           let smt_output =
+             try List.combine problems (input_lines smt_out (List.length problems)) with
+             | End_of_file -> List.combine problems ["unknown"]
+           in
+           let smt_errors = input_all smt_err in
+           let status = Unix.close_process_full (smt_out, smt_in, smt_err) in
+           status, smt_output, smt_errors
+         with
+         | exn ->
+            raise (Reporting.err_general l ("Error when calling smt: " ^ Printexc.to_string exn))
+       in
+       let _ = match status with
+         | Unix.WEXITED 0 -> ()
+         | Unix.WEXITED n ->
+            raise (Reporting.err_general l ("SMT solver returned unexpected status " ^ string_of_int n ^ "\n" ^ String.concat "\n" smt_errors))
+         | Unix.WSIGNALED n | Unix.WSTOPPED n ->
+            raise (Reporting.err_general l ("SMT solver killed by signal " ^ string_of_int n))
+       in
+       Sys.remove input_file;
        try
-         let smt_out, smt_in, smt_err = Unix.open_process_full (!opt_solver.command ^ " " ^ input_file) (Unix.environment ()) in
-         let smt_output =
-           try List.combine problems (input_lines smt_out (List.length problems)) with
-           | End_of_file -> List.combine problems ["unknown"]
-         in
-         let smt_errors = input_all smt_err in
-         let status = Unix.close_process_full (smt_out, smt_in, smt_err) in
-         status, smt_output, smt_errors
+         let (problem, _) = List.find (fun (_, result) -> result = "unsat") smt_output in
+         known_problems := DigestMap.add digest Unsat !known_problems;
+         Unsat
        with
-       | exn ->
-          raise (Reporting.err_general l ("Error when calling smt: " ^ Printexc.to_string exn))
+       | Not_found ->
+          let unsolved = List.filter (fun (_, result) -> result = "unknown") smt_output in
+          if unsolved == [] then (
+            known_problems := DigestMap.add digest Sat !known_problems;
+            Sat
+          ) else (
+            known_problems := DigestMap.add digest Unknown !known_problems;
+            Unknown
+          )
+  in
+  match result with
+  | Unsat -> Unsat
+  | Sat -> Sat
+  | Unknown when exponentials <> [] ->
+     (* If we get an unknown result for a constraint involving `2^x`,
+        then try replacing `2^` with an uninterpreted function to see
+        if the problem would be unsat in that case. *)
+     opt_solver := { !opt_solver with uninterpret_power = true };
+     let result = match call_smt' l [] constraints with
+       | Unsat -> Unsat
+       | Sat ->
+          begin match call_smt' l (sailexp_concrete 64 @ List.map bound_exponential exponentials) constraints with
+          | Sat -> Sat
+          | _ -> Unknown
+          end
+       | _ -> Unknown
      in
-     let _ = match status with
-       | Unix.WEXITED 0 -> ()
-       | Unix.WEXITED n ->
-          raise (Reporting.err_general l ("SMT solver returned unexpected status " ^ string_of_int n ^ "\n" ^ String.concat "\n" smt_errors))
-       | Unix.WSIGNALED n | Unix.WSTOPPED n ->
-          raise (Reporting.err_general l ("SMT solver killed by signal " ^ string_of_int n))
-     in
-     Sys.remove input_file;
-     try
-       let (problem, _) = List.find (fun (_, result) -> result = "unsat") smt_output in
-       known_problems := DigestMap.add digest Unsat !known_problems;
-       Unsat
-     with
-     | Not_found ->
-        let unsolved = List.filter (fun (_, result) -> result = "unknown") smt_output in
-        if unsolved == []
-        then (known_problems := DigestMap.add digest Sat !known_problems; Sat)
-        else (known_problems := DigestMap.add digest Unknown !known_problems; Unknown)
-
+     opt_solver := { !opt_solver with uninterpret_power = false };
+     result
+  | Unknown -> Unknown
+          
 let call_smt l constraints =
   let t = Profile.start_smt () in
-  let result = call_smt' l constraints in
+  let result = call_smt' l [] constraints in
   Profile.finish_smt t;
   result
 
@@ -380,7 +418,7 @@ let solve_smt_file l constraints =
     |> List.map kopt_pair
     |> List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty
   in
-  smtlib_of_constraints ~get_model:true l vars constraints
+  smtlib_of_constraints ~get_model:true l vars [] constraints
 
 let call_smt_solve l smt_file smt_vars var =
   let smt_var = pp_sexpr (smt_vars var) in
@@ -460,7 +498,7 @@ let call_smt_solve_bitvector l smt_file smt_vars =
     ) smt_vars |> Util.option_all
                      
 let solve_smt l constraints var =
-  let smt_file, smt_vars = solve_smt_file l constraints in
+  let smt_file, smt_vars, _ = solve_smt_file l constraints in
   call_smt_solve l smt_file smt_vars var
 
 let solve_all_smt l constraints var =
@@ -476,7 +514,7 @@ let solve_all_smt l constraints var =
   aux []
 
 let solve_unique_smt l constraints var =
-  let smt_file, smt_vars = solve_smt_file l constraints in
+  let smt_file, smt_vars, _ = solve_smt_file l constraints in
   let digest = Digest.string (smt_file ^ pp_sexpr (smt_vars var)) in
   match DigestMap.find_opt digest !known_uniques with
   | Some (Some result) -> Some (Big_int.of_int result)
