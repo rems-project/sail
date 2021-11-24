@@ -2591,7 +2591,7 @@ let instantiate_simple_equations =
        begin
          match List.concat (List.map (find_eqs_quant kid) quants) with
          | [] -> insts_tl
-         | h::_ -> KBindings.add kid h insts_tl
+         | h::_ -> KBindings.add kid h (KBindings.map (typ_arg_subst kid h) insts_tl)
        end
     | quant :: quants ->
        inst_from_eq quants
