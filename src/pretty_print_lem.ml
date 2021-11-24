@@ -530,7 +530,8 @@ let doc_typclasses_lem t =
   if NexpSet.is_empty nexps then (empty, NexpSet.empty) else
   (separate_map comma_sp (fun nexp -> string "Size " ^^ doc_nexp_lem nexp) (NexpSet.elements nexps) ^^ string " => ", nexps)
 
-let doc_typschm_lem env quants (TypSchm_aux(TypSchm_ts(tq,t),_)) =
+let doc_typschm_lem env quants (TypSchm_aux(TypSchm_ts(tq,t),l)) =
+  let env = Env.add_typquant l tq env in
   let pt = doc_typ_lem env t in
   if quants
   then
@@ -1204,6 +1205,7 @@ let doc_typdef_lem env (TD_aux(td, (l, annot))) = match td with
       | Id_aux ((Id "diafp"),_) -> empty *)
       | Id_aux ((Id "option"),_) -> empty
       | _ ->
+         let env = Env.add_typquant l typq env in
          let ar_doc = group (separate_map (break 1) (doc_type_union_lem env) ar) in
          let typ_pp =
            (doc_op equals)
