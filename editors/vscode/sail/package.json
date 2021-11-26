@@ -42,8 +42,5 @@
                 "path": "./syntaxes/sail.tmLanguage.json"
             }
         ]
-    },
-    "dependencies": {
-        "vsce": "^1.73.0"
     }
 }
