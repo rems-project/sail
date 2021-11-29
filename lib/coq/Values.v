@@ -2956,6 +2956,26 @@ lia.
 Qed.
 Hint Resolve shl_8_ge_0 : sail.
 
+(* Limits for remainders *)
+
+Require Zquot.
+Lemma Z_rem_really_nonneg : forall a b : Z, 0 <= a -> 0 <= Z.rem a b.
+intros.
+destruct (Z.eq_dec b 0).
++ subst. rewrite Zquot.Zrem_0_r. assumption.
++ auto using Z.rem_nonneg.
+Qed.
+
+Lemma Z_rem_pow_upper_bound : forall x x0 l,
+0 <= x -> 2 ^ l <= x0 -> x0 <= 2 ^ l -> 0 <= l -> Z.rem x x0 < 2 ^ l.
+intros.
+assert (x0 = 2 ^ l). auto with zarith.
+subst.
+apply Z.rem_bound_pos; auto with zarith.
+Qed.
+
+Hint Resolve Z_rem_really_nonneg Z_rem_pow_upper_bound : sail.
+
 (* This is needed because Sail's internal constraint language doesn't have
    < and could disappear if we add it... *)
 

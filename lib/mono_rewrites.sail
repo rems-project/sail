@@ -75,12 +75,12 @@ $include <vector_dec.sail>
 
 /* External definitions not in the usual asl prelude */
 
-val extzv = {lem: "extz_vec", coq: "extz_vec"} : forall 'n 'm, 'm >= 0. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
+val extzv = {lem: "extz_vec"} : forall 'n 'm, 'm >= 0. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
 function extzv(m, v) = {
   if m < 'n then truncate(v, m) else sail_zero_extend(v, m)
 }
 
-val extsv = {lem: "exts_vec", coq: "exts_vec"} : forall 'n 'm, 'm >= 0. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
+val extsv = {lem: "exts_vec"} : forall 'n 'm, 'm >= 0. (implicit('m), bitvector('n, dec)) -> bitvector('m, dec) effect pure
 function extsv(m, v) = {
   if m < 'n then truncate(v, m) else sail_sign_extend(v, m)
 }
