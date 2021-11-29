@@ -780,7 +780,7 @@ let rec disjoint_pat env (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2)
   | P_vector pats1, P_vector pats2
   | P_tup pats1, P_tup pats2
   | P_list pats1, P_list pats2 ->
-     List.exists2 (disjoint_pat env) pats1 pats2
+     List.length pats1 <> List.length pats2 || List.exists2 (disjoint_pat env) pats1 pats2
   | _ -> false
 
 let equiv_pats pat1 pat2 =
