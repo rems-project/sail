@@ -1763,7 +1763,7 @@ let doc_exp, doc_let =
             | Typ_aux (Typ_fn (arg_typs,ret_typ,eff),_) -> arg_typs, ret_typ, eff
             | _ -> raise (Reporting.err_unreachable l __POS__ "Function not a function type")
           in
-          let inst =
+          let inst, inst_env =
             (* We attempt to get an instantiation of the function signature's
                type variables which agrees with Coq by
                1. using dummy variables with the expected type of each argument
@@ -1779,21 +1779,29 @@ let doc_exp, doc_let =
             let () = debug ctxt (lazy (" arg types: " ^ String.concat ", " (List.map (fun (_,ty) -> string_of_typ ty) dummy_args))) in
             let dummy_exp = mk_exp (E_app (f, List.map (fun (id,_) -> mk_exp (E_id id)) dummy_args)) in
             let dummy_env = List.fold_left (fun env (id,typ) -> Env.add_local id (Immutable,typ) env) env dummy_args in
-            let inst_exp =
+            let (E_aux (_, (_, inst_tannot))) as inst_exp =
               try infer_exp dummy_env dummy_exp
               with ex ->
                 debug ctxt (lazy (" cannot infer dummy application " ^ Printexc.to_string ex));
                 full_exp
             in
-            match instantiation_of_without_type inst_exp with
-            | x -> x
+            (* We may have inherited existentials from the arguments,
+               so add any to the environment. *)
+            let inst_env =
+              match typ_of inst_exp with
+              | Typ_aux (Typ_exist (kopts, _, _), l) ->
+                 List.fold_left (fun env kopt -> Env.add_typ_var l kopt env) env kopts
+              | _ -> env
+            in
+            match get_instantiations inst_tannot with
+            | Some x -> x, inst_env
             (* Not all function applications can be inferred, so try falling back to the
                type inferred when we know the target type.
                TODO: there are probably some edge cases where this won't pick up a need
                to cast. *)
-            | exception _ ->
+            | None ->
                (debug ctxt (lazy (" unable to infer function instantiation without return type " ^ string_of_typ (typ_of full_exp)));
-                instantiation_of full_exp)
+                instantiation_of full_exp, env)
           in
           let () = debug ctxt (lazy (" instantiations pre-rename: " ^ String.concat ", " (List.map (fun (kid,tyarg) -> string_of_kid kid ^ " => " ^ string_of_typ_arg tyarg) (KBindings.bindings inst)))) in
           let inst = KBindings.fold (fun k u m ->
@@ -1806,7 +1814,7 @@ let doc_exp, doc_let =
           let doc_arg want_parens arg typ_from_fn =
             let env = env_of arg in
             let typ_from_fn = subst_unifiers inst typ_from_fn in
-            let typ_from_fn = Env.expand_synonyms env typ_from_fn in
+            let typ_from_fn = Env.expand_synonyms inst_env typ_from_fn in
             (* TODO: more sophisticated check *)
             let () =
               debug ctxt (lazy (" arg type found    " ^ string_of_typ (typ_of arg)));
@@ -1840,7 +1848,7 @@ let doc_exp, doc_let =
             | _ ->
                let want_parens1 = want_parens || autocast in
                let arg_pp =
-                 construct_dep_pairs env want_parens1 arg typ_from_fn
+                 construct_dep_pairs inst_env want_parens1 arg typ_from_fn
                in
                if autocast && false
                then let arg_pp = string "autocast" ^^ space ^^ arg_pp in
@@ -1877,7 +1885,7 @@ let doc_exp, doc_let =
           let packeff,unpack,autocast =
             let ann_typ = Env.expand_synonyms env (general_typ_of_annot (l,annot)) in
             let ann_typ = expand_range_type ann_typ in
-            let ret_typ_inst = expand_range_type (Env.expand_synonyms env ret_typ_inst) in
+            let ret_typ_inst = expand_range_type (Env.expand_synonyms inst_env ret_typ_inst) in
             let ret_typ_inst =
               if is_no_proof_fn env f then ret_typ_inst
               else snd (replace_atom_return_type ret_typ_inst) in
@@ -1887,7 +1895,7 @@ let doc_exp, doc_let =
             in
             let unpack, in_typ =
               if is_no_proof_fn env f then false, ret_typ_inst else
-                match classify_ex_type ctxt env ~rawbools:true ret_typ_inst with
+                match classify_ex_type ctxt inst_env ~rawbools:true ret_typ_inst with
                 | ExGeneral, _, t1 -> true,t1
                 | ExNone, _, t1 -> false,t1
             in
@@ -3243,6 +3251,10 @@ let doc_val pat exp =
   in
   let env = env_of exp in
   let ctxt = { empty_ctxt with debug  = List.mem (string_of_id id) (!opt_debug_on) } in
+  let () =
+    debug ctxt (lazy ("Checking definition " ^ string_of_id id));
+    debug_depth := 1
+  in
   let typpp, exp =
     match pat_typ with
     | None -> typpp, exp
@@ -3257,6 +3269,7 @@ let doc_val pat exp =
   in
   let idpp = doc_id id in
   let base_pp = doc_exp ctxt false exp ^^ dot in
+  let () = debug_depth := 0 in
   group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp) ^^ hardline ^^
   group (separate space [string "Hint Unfold"; idpp; colon; string "sail."]) ^^ hardline
 
