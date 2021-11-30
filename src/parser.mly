@@ -1225,6 +1225,14 @@ param_kopt:
   | kid
     { KOpt_aux (KOpt_kind (None, [$1], None), loc $startpos $endpos) }
 
+event_param_kopt:
+  | Enum kid Colon kind
+    { KOpt_aux (KOpt_kind (None, [$2], Some $4), loc $startpos $endpos) }
+  | kid Colon kind
+    { KOpt_aux (KOpt_kind (None, [$1], Some $3), loc $startpos $endpos) }
+  | kid
+    { KOpt_aux (KOpt_kind (None, [$1], None), loc $startpos $endpos) }
+
 typaram:
   | Lparen separated_nonempty_list(Comma, param_kopt) Rparen Comma typ
     { let qi_nc = QI_aux (QI_constraint $5, loc $startpos($5) $endpos($5)) in
@@ -1438,7 +1446,7 @@ externs:
     { (string_of_id $1, $3) :: $5 }
 
 event_spec_def:
-  | Event id Colon typschm With separated_nonempty_list(Comma, param_kopt)
+  | Event id Colon typschm With separated_nonempty_list(Comma, event_param_kopt)
     { mk_event (EV_event ($2, $4, $6)) $startpos $endpos }
 
 val_spec_def:

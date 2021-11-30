@@ -1824,6 +1824,8 @@ let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as 
 
   | Typ_var v, _ when KidSet.mem v goals -> KBindings.singleton v (arg_typ typ2)
 
+  | Typ_var v1, Typ_var v2 when Kid.compare v1 v2 = 0 -> KBindings.empty
+
   (* We need special cases for unifying range(n, m), nat, and int vs atom('n) *)
   | Typ_id int, Typ_app (atom, [A_aux (A_nexp n, _)]) when string_of_id int = "int" -> KBindings.empty
 
