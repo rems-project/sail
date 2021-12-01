@@ -1645,6 +1645,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
           sgen_name gs,
           [Printf.sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_name gs)
            ^ Util.string_of_list ", " (fun x -> x) inits ^ " };"] @ prev
+       | CT_ref _ -> "NULL", []
        | ctyp -> c_error ("Cannot create undefined value for type: " ^ string_of_ctyp ctyp)
      in
      let ret, prev = codegen_exn_return ctyp in
