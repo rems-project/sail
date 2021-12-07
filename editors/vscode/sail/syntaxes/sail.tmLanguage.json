@@ -111,14 +111,14 @@
 				"begin": "^\\s*((\\$)\\s*(include|import))\\b\\s*",
 				"beginCaptures": {
 					"1": {
-						"name": "keyword.control.directive.$3.c"
+						"name": "keyword.control.directive.$3.sail"
 					},
 					"2": {
-						"name": "punctuation.definition.directive.c"
+						"name": "punctuation.definition.directive.sail"
 					}
 				},
 				"end": "(?=(?://|/\\*))|(?<!\\\\)(?=\\n)",
-				"name": "meta.preprocessor.include.c",
+				"name": "meta.preprocessor.include.sail",
 				"patterns": [
 					{
 						"include": "#line_continuation_character"
@@ -127,35 +127,152 @@
 						"begin": "\"",
 						"beginCaptures": {
 							"0": {
-								"name": "punctuation.definition.string.begin.c"
+								"name": "punctuation.definition.string.begin.sail"
 							}
 						},
 						"end": "\"",
 						"endCaptures": {
 							"0": {
-								"name": "punctuation.definition.string.end.c"
+								"name": "punctuation.definition.string.end.sail"
 							}
 						},
-						"name": "string.quoted.double.include.c"
+						"name": "string.quoted.double.include.sail"
 					},
 					{
 						"begin": "<",
 						"beginCaptures": {
 							"0": {
-								"name": "punctuation.definition.string.begin.c"
+								"name": "punctuation.definition.string.begin.sail"
 							}
 						},
 						"end": ">",
 						"endCaptures": {
 							"0": {
-								"name": "punctuation.definition.string.end.c"
+								"name": "punctuation.definition.string.end.sail"
 							}
 						},
-						"name": "string.quoted.other.lt-gt.include.c"
+						"name": "string.quoted.other.lt-gt.include.sail"
 					}
 				]
+			}, {
+				"include": "#comments"
 			}
-
+			]
+		},
+		"comments": {
+			"patterns": [
+				{
+					"name": "comment.line.double-slash.documentation.sail",
+					"begin": "(?:^)(?>\\s*)(\\/\\/[!\\/]+)",
+					"beginCaptures": {
+						"1": {
+							"name": "punctuation.definition.comment.documentation.sail"
+						}
+					},
+					"end": "(?<=\\n)(?<!\\\\\\n)",
+					"patterns": [
+						{
+							"include": "#line_continuation_character"
+						}
+					]
+				},
+				{
+					"match": "(\\/\\*[!*]+(?=\\s))(.+)([!*]*\\*\\/)",
+					"captures": {
+						"1": {
+							"name": "punctuation.definition.comment.begin.documentation.sail"
+						},
+						"3": {
+							"name": "punctuation.definition.comment.end.documentation.sail"
+						}
+					},
+					"name": "comment.block.documentation.sail"
+				}, {
+					"name": "comment.block.documentation.sail",
+					"begin": "((?>\\s*)\\/\\*[!*]+(?:(?:\\n|$)|(?=\\s)))",
+					"beginCaptures": {
+						"1": {
+							"name": "punctuation.definition.comment.begin.documentation.sail"
+						}
+					},
+					"end": "([!*]*\\*\\/)",
+					"endCaptures": {
+						"1": {
+							"name": "punctuation.definition.comment.end.documentation.sail"
+						}
+					}
+				},
+				{
+					"match": "^\\/\\* =(\\s*.*?)\\s*= \\*\\/$\\n?",
+					"captures": {
+						"1": {
+							"name": "meta.toc-list.banner.block.sail"
+						}
+					},
+					"name": "comment.block.banner.sail"
+				},
+				{
+					"name": "comment.block.sail",
+					"begin": "(\\/\\*)",
+					"beginCaptures": {
+						"1": {
+							"name": "punctuation.definition.comment.begin.sail"
+						}
+					},
+					"end": "(\\*\\/)",
+					"endCaptures": {
+						"1": {
+							"name": "punctuation.definition.comment.end.sail"
+						}
+					}
+				},
+				{
+					"match": "^\\/\\/ =(\\s*.*?)\\s*=$\\n?",
+					"captures": {
+						"1": {
+							"name": "meta.toc-list.banner.line.sail"
+						}
+					},
+					"name": "comment.line.banner.sail"
+				},
+				{
+					"begin": "((?:^[ \\t]+)?)(?=\\/\\/)",
+					"beginCaptures": {
+						"1": {
+							"name": "punctuation.whitespace.comment.leading.sail"
+						}
+					},
+					"end": "(?!\\G)",
+					"patterns": [
+						{
+							"name": "comment.line.double-slash.sail",
+							"begin": "(\\/\\/)",
+							"beginCaptures": {
+								"1": {
+									"name": "punctuation.definition.comment.sail"
+								}
+							},
+							"end": "(?=\\n)",
+							"patterns": [
+								{
+									"include": "#line_continuation_character"
+								}
+							]
+						}
+					]
+				},
+			]
+		},
+		"line_continuation_character": {
+			"patterns": [
+				{
+					"match": "(\\\\)\\n",
+					"captures": {
+						"1": {
+							"name": "constant.character.escape.line-continuation.c"
+						}
+					}
+				}
 			]
 		},
 		"strings": {
@@ -173,7 +290,7 @@
 			"patterns": [
 				{
 					"match": "\\b((0(x|X)[0-9a-fA-F]*)|(0(b|B)[01]*)|(([0-9]+\\.?[0-9]*)|(\\.[0-9]+))((e|E)(\\+|-)?[0-9]+)?)(L|l|UL|ul|u|U|F|f|ll|LL|ull|ULL)?\\b",
-					"name": "constant.numeric.c"
+					"name": "constant.numeric.sail"
 				}
 			]
 		},
