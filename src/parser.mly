@@ -223,7 +223,7 @@ let rec desugar_rchain chain s e =
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Event Constraint Throw Try Catch Exit Bitfield Constant
-%token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
+%token Barr Depend Rreg Wreg Rmem Wmem Wmv Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl
 %token InternalPLet InternalReturn
 
@@ -653,14 +653,10 @@ effect:
     { mk_effect BE_wreg $startpos $endpos }
   | Rmem
     { mk_effect BE_rmem $startpos $endpos }
-  | Rmemt
-    { mk_effect BE_rmemt $startpos $endpos }
   | Wmem
     { mk_effect BE_wmem $startpos $endpos }
   | Wmv
     { mk_effect BE_wmv $startpos $endpos }
-  | Wmvt
-    { mk_effect BE_wmvt $startpos $endpos }
   | Eamem
     { mk_effect BE_eamem $startpos $endpos }
   | Exmem
@@ -1225,14 +1221,6 @@ param_kopt:
   | kid
     { KOpt_aux (KOpt_kind (None, [$1], None), loc $startpos $endpos) }
 
-event_param_kopt:
-  | Enum kid Colon kind
-    { KOpt_aux (KOpt_kind (None, [$2], Some $4), loc $startpos $endpos) }
-  | kid Colon kind
-    { KOpt_aux (KOpt_kind (None, [$1], Some $3), loc $startpos $endpos) }
-  | kid
-    { KOpt_aux (KOpt_kind (None, [$1], None), loc $startpos $endpos) }
-
 typaram:
   | Lparen separated_nonempty_list(Comma, param_kopt) Rparen Comma typ
     { let qi_nc = QI_aux (QI_constraint $5, loc $startpos($5) $endpos($5)) in
@@ -1446,7 +1434,7 @@ externs:
     { (string_of_id $1, $3) :: $5 }
 
 event_spec_def:
-  | Event id Colon typschm With separated_nonempty_list(Comma, event_param_kopt)
+  | Event id Colon typschm With separated_nonempty_list(Comma, param_kopt)
     { mk_event (EV_event ($2, $4, $6)) $startpos $endpos }
 
 val_spec_def:

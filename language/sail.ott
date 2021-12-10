@@ -202,12 +202,10 @@ base_effect :: 'BE_' ::=
   | rreg                                :: :: rreg {{ com read register }}
   | wreg                                :: :: wreg {{ com write register }}
   | rmem                                :: :: rmem {{ com read memory }}
-  | rmemt                               :: :: rmemt {{ com read memory and tag }}
   | wmem                                :: :: wmem {{ com write memory }}
   | wmea                                :: :: eamem {{ com signal effective address for writing memory }}
   | exmem                               :: :: exmem {{ com determine if a store-exclusive (ARM) is going to succeed }}
   | wmv                                 :: :: wmv {{ com write memory, sending only value }}
-  | wmvt                                :: :: wmvt {{ com write memory, sending only value and tag }}
   | barr                                :: :: barr {{ com memory barrier }}
   | depend                              :: :: depend {{ com dynamic footprint }}
   | undef                               :: :: undef {{ com undefined-instruction exception }}

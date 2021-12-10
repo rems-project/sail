@@ -82,6 +82,8 @@ val eq_bits = {
   coq: "eq_vec"
 } : forall 'n. (bits('n), bits('n)) -> bool
 
+val not_vec = {c: "not_bits", _: "not_vec"} : forall 'n. bits('n) -> bits('n)
+
 overload operator == = {eq_bit, eq_bits}
 
 val bitvector_length = {coq: "length_mword", _:"length"} : forall 'n. bits('n) -> atom('n)
@@ -96,13 +98,17 @@ val vector_length = {
 
 overload length = {bitvector_length, vector_length}
 
-val "zeros" : forall 'n. atom('n) -> bits('n)
+val sail_zeros = "zeros" : forall 'n. int('n) -> bits('n)
+
+val sail_ones : forall 'n, 'n >= 0. int('n) -> bits('n)
+
+function sail_ones(n) = not_vec(sail_zeros(n))
 
 val "print_bits" : forall 'n. (string, bits('n)) -> unit
 
-val "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+val sail_sign_extend = "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), int('m)) -> bits('m)
 
-val "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), atom('m)) -> bits('m)
+val sail_zero_extend = "zero_extend" : forall 'n 'm, 'm >= 'n. (bits('n), int('m)) -> bits('m)
 
 val truncate = {
   ocaml: "vector_truncate",
@@ -114,7 +120,7 @@ val truncate = {
 
 val mask : forall 'len 'v, 'len >= 0 & 'v >= 0. (atom('len), bits('v)) -> bits('len)
 
-function mask(len, v) = if len <= length(v) then truncate(v, len) else zero_extend(v, len)
+function mask(len, v) = if len <= length(v) then truncate(v, len) else sail_zero_extend(v, len)
 
 overload operator ^ = {mask}
 

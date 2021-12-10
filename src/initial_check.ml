@@ -126,10 +126,8 @@ let to_ast_effects = function
                 | P.BE_rreg   -> BE_rreg
                 | P.BE_wreg   -> BE_wreg
                 | P.BE_rmem   -> BE_rmem
-                | P.BE_rmemt  -> BE_rmemt
                 | P.BE_wmem   -> BE_wmem
                 | P.BE_wmv    -> BE_wmv
-                | P.BE_wmvt   -> BE_wmvt
                 | P.BE_eamem  -> BE_eamem
                 | P.BE_exmem  -> BE_exmem
                 | P.BE_depend -> BE_depend

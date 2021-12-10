@@ -172,13 +172,6 @@ let simple_num l n = E_aux (
 let effectful_set = function
   | [] -> false
   | _ -> true
-  (*List.exists
-    (fun (BE_aux (eff,_)) ->
-      match eff with
-      | BE_rreg | BE_wreg | BE_rmem | BE_rmemt | BE_wmem | BE_eamem
-      | BE_exmem | BE_wmv | BE_wmvt | BE_barr | BE_depend | BE_nondet
-      | BE_escape -> true
-      | _ -> false)*)
 
 let effectful (Effect_aux (Effect_set effs, _)) = effectful_set effs
 

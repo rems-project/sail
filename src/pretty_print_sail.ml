@@ -84,11 +84,15 @@ let doc_id (Id_aux (id_aux, _)) =
 
 let doc_kid kid = string (Ast_util.string_of_kid kid)
 
-let doc_kopt = function
+let doc_kopt_no_parens = function
   | kopt when is_int_kopt kopt -> doc_kid (kopt_kid kopt)
-  | kopt when is_typ_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Type"])
-  | kopt when is_order_kopt kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Order"])
-  | kopt -> parens (separate space [doc_kid (kopt_kid kopt); colon; string "Bool"])
+  | kopt when is_typ_kopt kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Type"]
+  | kopt when is_order_kopt kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Order"]
+  | kopt -> separate space [doc_kid (kopt_kid kopt); colon; string "Bool"]
+                
+let doc_kopt = function
+  | kopt when is_int_kopt kopt -> doc_kopt_no_parens kopt
+  | kopt -> parens (doc_kopt_no_parens kopt)
 
 let doc_int n = string (Big_int.to_string n)
 
@@ -760,7 +764,7 @@ let doc_filter = function
   | DEF_pragma ("file_start", _, _) | DEF_pragma ("file_end", _, _) -> false
   | _ -> true
     
-let rec doc_def def = group (match def with
+let rec doc_def_no_hardline = function
   | DEF_default df -> doc_default df
   | DEF_spec v_spec -> doc_spec v_spec
   | DEF_type t_def -> doc_typdef t_def
@@ -768,6 +772,10 @@ let rec doc_def def = group (match def with
   | DEF_mapdef m_def -> doc_mapdef m_def
   | DEF_event (EV_aux (EV_event (id, typschm, args), _), defs) ->
      string "event" ^^ space ^^ doc_id id ^^ space ^^ colon ^^ space ^^ doc_typschm typschm
+     ^^ break 1 ^^ (string "with" ^//^ separate_map (comma ^^ break 1) doc_kopt_no_parens args)
+     ^^ (match defs with
+         | [] -> empty
+         | _ -> break 1 ^^ ((string "= {" ^//^ separate_map (hardline ^^ hardline) doc_def_no_hardline defs) ^/^ string "}"))
   | DEF_instantiation (IN_aux (IN_id id, _), substs) ->
      string "instantiation" ^^ space ^^ doc_id id
   | DEF_impl funcl ->
@@ -790,7 +798,7 @@ let rec doc_def def = group (match def with
      separate space [doc_prec prec; doc_int n; doc_id id]
   | DEF_overload (id, ids) ->
      separate space [string "overload"; doc_id id; equals; surround 2 0 lbrace (separate_map (comma ^^ break 1) doc_id ids) rbrace]
-  ) ^^ hardline
+and doc_def def = group (doc_def_no_hardline def ^^ hardline)
 
 let doc_ast { defs } =
   separate_map hardline doc_def (List.filter doc_filter defs)

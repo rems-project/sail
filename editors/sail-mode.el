@@ -46,7 +46,7 @@
 (defconst sail2-special
   '("_prove" "_not_prove" "create" "kill" "convert" "undefined"
     "$define" "$include" "$ifdef" "$ifndef" "$iftarget" "$else" "$endif" "$option" "$optimize"
-    "$latex" "$property" "$counterexample" "$suppress_warnings" "$assert"))
+    "$latex" "$property" "$counterexample" "$suppress_warnings" "$assert" "$sail_internal"))
 
 (defconst sail2-font-lock-keywords
   `((,(regexp-opt sail2-keywords 'symbols) . font-lock-keyword-face)

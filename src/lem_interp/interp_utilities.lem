@@ -147,10 +147,8 @@ let rec has_effect which efcts =
     | (BE_rreg,BE_rreg)     -> true 
     | (BE_wreg,BE_wreg)     -> true 
     | (BE_rmem,BE_rmem)     -> true 
-    | (BE_rmemt,BE_rmemt)   -> true 
     | (BE_wmem,BE_wmem)     -> true 
     | (BE_wmv,BE_wmv)       -> true
-    | (BE_wmvt,BE_wmvt)     -> true
     | (BE_eamem,BE_eamem)   -> true
     | (BE_exmem,BE_exmem)   -> true
     | (BE_barr,BE_barr)     -> true 
@@ -162,13 +160,13 @@ let rec has_effect which efcts =
     end 
   end
 let has_rmem_effect = has_effect BE_rmem
-let has_rmemt_effect = has_effect BE_rmemt
+let has_rmemt_effect = has_effect BE_rmem
 let has_barr_effect = has_effect BE_barr
 let has_wmem_effect = has_effect BE_wmem
 let has_eamem_effect = has_effect BE_eamem
 let has_exmem_effect = has_effect BE_exmem
 let has_wmv_effect = has_effect BE_wmv
-let has_wmvt_effect = has_effect BE_wmvt
+let has_wmvt_effect = has_effect BE_wmv
 let has_depend_effect = has_effect BE_depend
 
 let get_typ (TypSchm_aux (TypSchm_ts tq t) _) = t

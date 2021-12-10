@@ -177,7 +177,8 @@ let all_pragmas =
       "counterexample";
       "suppress_warnings";
       "include_start";
-      "include_end"
+      "include_end";
+      "sail_internal";
     ]
 
 let wrap_include l file = function
