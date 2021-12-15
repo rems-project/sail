@@ -2624,6 +2624,8 @@ let doc_typdef types_mod generic_eq_types (TD_aux(td, (l, annot))) =
      (match id with
       | Id_aux ((Id "read_kind"),_) -> empty
       | Id_aux ((Id "write_kind"),_) -> empty
+      | Id_aux ((Id "a64_barrier_domain"),_) -> empty
+      | Id_aux ((Id "a64_barrier_type"),_) -> empty
       | Id_aux ((Id "barrier_kind"),_) -> empty
       | Id_aux ((Id "trans_kind"),_) -> empty
       | Id_aux ((Id "instruction_kind"),_) -> empty
