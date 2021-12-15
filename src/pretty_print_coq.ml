@@ -2293,7 +2293,8 @@ let doc_exp, doc_let =
          let env = env_of e1 in
          construct_dep_pairs env true e1 ret_typ ~rawbools:true
        in
-       wrap_parens (group (align (separate space [string "returnm"; valpp])))
+       let return_fn = if ctxt.early_ret then "returnR" else "returnM" in
+       wrap_parens (group (align (separate space [string return_fn; valpp])))
     | E_sizeof nexp ->
       (match nexp_simp nexp with
         | Nexp_aux (Nexp_constant i, _) -> doc_lit (L_aux (L_num i, l))
@@ -3374,7 +3375,9 @@ try
         register_refs; hardline;
         (if suppress_MR_M then empty else concat [
           string ("Definition MR a r := monadR register_value a r " ^ exc_typ ^ "."); hardline;
-          string ("Definition M a := monad register_value a " ^ exc_typ ^ "."); hardline
+          string ("Definition M a := monad register_value a " ^ exc_typ ^ "."); hardline;
+          string ("Definition returnM {A:Type} := @returnm register_value A " ^ exc_typ ^ "."); hardline;
+          string ("Definition returnR {R A:Type} := @returnm register_value A (R + " ^ exc_typ ^ ")."); hardline
         ])
         ]);
   (print defs_file)
