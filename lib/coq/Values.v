@@ -82,9 +82,6 @@ Require Export Zeuclid.
 Require Import Lia.
 Import ListNotations.
 
-(* Override expensive unary exponential notation *)
-Notation "sz ''b' a" := (Word.NToWord sz (BinNotation.bin a)) (at level 50).
-Notation "''b' a" := (Word.NToWord _ (BinNotation.bin a)) (at level 50).
 
 Local Open Scope Z.
 Local Open Scope bool.
@@ -2984,3 +2981,10 @@ Lemma sail_lt_ge (x y : Z) :
 lia.
 Qed.
 Hint Resolve sail_lt_ge : sail.
+
+
+(* Override expensive unary exponential notation *)
+Notation "sz ''b' a" := (Word.NToWord sz (BinNotation.bin a)) (at level 50).
+Notation "''b' a" := (Word.NToWord _ (BinNotation.bin a) :
+                       mword (ltac:(let sz := eval cbv in (Z.of_nat (String.length a)) in exact sz)))
+                     (at level 50).
