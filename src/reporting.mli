@@ -84,6 +84,9 @@ val opt_warnings : bool ref
 (** [loc_to_string] includes code from file if code optional argument is true (default) *)
 val loc_to_string : ?code:bool -> Parse_ast.l -> string
 
+(** [loc_file] returns the file for a location *)
+val loc_file : Parse_ast.l -> string option
+ 
 (** Reduce a location to a pair of positions if possible *)
 val simp_loc : Ast.l -> (Lexing.position * Lexing.position) option
 

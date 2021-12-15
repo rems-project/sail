@@ -397,7 +397,7 @@ let rec rewrite_def rewriters d = match d with
   | DEF_type _ | DEF_mapdef _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_overload _ | DEF_fixity _ | DEF_instantiation _ -> d
   | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
   | DEF_impl funcl -> DEF_impl (rewrite_funcl rewriters funcl)
-  | DEF_event (event_spec, defs) -> DEF_event (event_spec, List.map (rewrite_def rewriters) defs)
+  | DEF_outcome (outcome_spec, defs) -> DEF_outcome (outcome_spec, List.map (rewrite_def rewriters) defs)
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
   | DEF_pragma (pragma, arg, l) -> DEF_pragma (pragma, arg, l)

@@ -108,16 +108,16 @@ let instantiate_def target id substs = function
      Some def
 
 let instantiate target ast =
-  let process_def events = function
-    | DEF_event (EV_aux (EV_event (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), event_defs) ->
-       Bindings.add id (typq, typ, args, l, event_defs) events, []
+  let process_def outcomes = function
+    | DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), outcome_defs) ->
+       Bindings.add id (typq, typ, args, l, outcome_defs) outcomes, []
 
     | DEF_instantiation (IN_aux (IN_id id, annot), substs) ->
        let l = gen_loc (id_loc id) in
        let env = env_of_annot annot in
-       let (typq, typ, args, event_l, event_defs) = match Bindings.find_opt id events with
-         | Some event -> event
-         | None -> Reporting.unreachable (id_loc id) __POS__ ("Event for instantiation " ^ string_of_id id ^ " does not exist")
+       let (typq, typ, args, outcome_l, outcome_defs) = match Bindings.find_opt id outcomes with
+         | Some outcome -> outcome
+         | None -> Reporting.unreachable (id_loc id) __POS__ ("Outcome for instantiation " ^ string_of_id id ^ " does not exist")
        in
 
        let rewrite_p_aux (pat, annot) =
@@ -142,14 +142,14 @@ let instantiate target ast =
        let valspec =
          DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, [], false), (l, Type_check.empty_tannot)))
        in
-       let event_defs, _ =
-         (valspec :: rewrite_ast_defs { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp } event_defs)
+       let outcome_defs, _ =
+         (valspec :: rewrite_ast_defs { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp } outcome_defs)
          |> Util.map_filter (instantiate_def target id substs)
          |> Type_error.check_defs env
        in
-       events, event_defs
+       outcomes, outcome_defs
 
     | def ->
-       events, [def]
+       outcomes, [def]
   in
   { ast with defs = snd (Util.fold_left_concat_map process_def Bindings.empty ast.defs) }

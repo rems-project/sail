@@ -1,5 +1,7 @@
 default Order dec
 
+$sail_internal
+
 $include <flow.sail>
 
 val print = "print_endline" : string -> unit

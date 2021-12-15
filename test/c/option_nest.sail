@@ -1,3 +1,4 @@
+$sail_internal
 
 union test ('a : Type) = {
   Just : 'a,

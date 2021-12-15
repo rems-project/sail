@@ -132,7 +132,7 @@ let mk_td t n m = TD_aux (t, loc n m)
 let mk_vs v n m = VS_aux (v, loc n m)
 let mk_reg_dec d n m = DEC_aux (d, loc n m)
 let mk_default d n m = DT_aux (d, loc n m)
-let mk_event ev n m = EV_aux (ev, loc n m)
+let mk_outcome ev n m = OV_aux (ev, loc n m)
 let mk_subst ev n m = IS_aux (ev, loc n m)
  
 let mk_mpexp mpexp n m = MPat_aux (mpexp, loc n m)
@@ -222,7 +222,7 @@ let rec desugar_rchain chain s e =
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
-%token Undefined Union Newtype With Val Event Constraint Throw Try Catch Exit Bitfield Constant
+%token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
 %token Barr Depend Rreg Wreg Rmem Wmem Wmv Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl
 %token InternalPLet InternalReturn
@@ -1433,9 +1433,9 @@ externs:
   | id Colon String Comma externs
     { (string_of_id $1, $3) :: $5 }
 
-event_spec_def:
-  | Event id Colon typschm With separated_nonempty_list(Comma, param_kopt)
-    { mk_event (EV_event ($2, $4, $6)) $startpos $endpos }
+outcome_spec_def:
+  | Outcome id Colon typschm With separated_nonempty_list(Comma, param_kopt)
+    { mk_outcome (OV_outcome ($2, $4, $6)) $startpos $endpos }
 
 val_spec_def:
   | Doc val_spec_def
@@ -1528,10 +1528,10 @@ def:
     { let (prec, n, op) = $1 in DEF_fixity (prec, n, Id_aux (Id op, loc $startpos $endpos)) }
   | val_spec_def
     { DEF_spec $1 }
-  | event_spec_def
-    { DEF_event ($1, []) }
-  | event_spec_def Eq Lcurly defs_list Rcurly
-    { DEF_event ($1, $4) }
+  | outcome_spec_def
+    { DEF_outcome ($1, []) }
+  | outcome_spec_def Eq Lcurly defs_list Rcurly
+    { DEF_outcome ($1, $4) }
   | Instantiation id With separated_list(Comma, subst)
     { DEF_instantiation ($2, $4) }
   | type_def

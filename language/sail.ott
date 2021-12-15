@@ -763,10 +763,10 @@ subst :: 'IS_' ::=
   | id1 = id2 :: :: id
     {{ com instantiate an identifier with another identifier }}
 
-event_spec :: 'EV_' ::=
-  {{ com event declaration }}
+outcome_spec :: 'OV_' ::=
+  {{ com outcome declaration }}
   {{ aux _ l }}
-  | event id : typschm with kinded_id1 , ... , kinded_idn :: :: event
+  | outcome id : typschm with kinded_id1 , ... , kinded_idn :: :: outcome
 
 instantiation_spec :: 'IN_' ::=
   {{ aux _ annot }} {{ auxparam 'a }}
@@ -877,8 +877,8 @@ def :: 'DEF_' ::=
     {{ com value definition }}
   | val_spec                                           :: :: spec
     {{ com top-level type constraint }}
-  | event_spec { def1 ... defn }                       :: :: event
-    {{ com top-level event definition }}
+  | outcome_spec { def1 ... defn }                     :: :: outcome
+    {{ com top-level outcome definition }}
   | instantiation instantiation_spec with subst1 , ... , substn        :: :: instantiation
     {{ com instantiation }}
   | fix prec num id                                    :: :: fixity

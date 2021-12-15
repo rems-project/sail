@@ -238,6 +238,11 @@ and doc_arg_typs = function
   | [typ] -> doc_typ typ
   | typs -> parens (separate_map (comma ^^ space) doc_typ typs)
 
+let doc_subst (IS_aux (subst_aux, _)) =
+  match subst_aux with
+  | IS_typ (kid, typ) -> doc_kid kid ^^ space ^^ equals ^^ space ^^ doc_typ typ
+  | IS_id (id1, id2) -> doc_id id1 ^^ space ^^ equals ^^ space ^^ doc_id id2
+          
 let doc_kind (K_aux (k, _)) =
   string (match k with
           | K_int -> "Int"
@@ -770,14 +775,17 @@ let rec doc_def_no_hardline = function
   | DEF_type t_def -> doc_typdef t_def
   | DEF_fundef f_def -> doc_fundef f_def
   | DEF_mapdef m_def -> doc_mapdef m_def
-  | DEF_event (EV_aux (EV_event (id, typschm, args), _), defs) ->
-     string "event" ^^ space ^^ doc_id id ^^ space ^^ colon ^^ space ^^ doc_typschm typschm
+  | DEF_outcome (OV_aux (OV_outcome (id, typschm, args), _), defs) ->
+     string "outcome" ^^ space ^^ doc_id id ^^ space ^^ colon ^^ space ^^ doc_typschm typschm
      ^^ break 1 ^^ (string "with" ^//^ separate_map (comma ^^ break 1) doc_kopt_no_parens args)
      ^^ (match defs with
          | [] -> empty
          | _ -> break 1 ^^ ((string "= {" ^//^ separate_map (hardline ^^ hardline) doc_def_no_hardline defs) ^/^ string "}"))
   | DEF_instantiation (IN_aux (IN_id id, _), substs) ->
      string "instantiation" ^^ space ^^ doc_id id
+     ^^ (match substs with
+         | [] -> empty
+         | _ -> (space ^^ string "with") ^//^ separate_map (comma ^^ break 1) doc_subst substs)
   | DEF_impl funcl ->
      string "impl" ^^ space ^^ doc_funcl funcl
   | DEF_val lbind -> string "let" ^^ space ^^ doc_letbind lbind

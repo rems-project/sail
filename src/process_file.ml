@@ -179,6 +179,7 @@ let all_pragmas =
       "include_start";
       "include_end";
       "sail_internal";
+      "target_set";
     ]
 
 let wrap_include l file = function
@@ -276,8 +277,8 @@ let rec preprocess target opts = function
        Reporting.warn "" l ("Unrecognised directive: " ^ p);
      Parse_ast.DEF_pragma (p, arg, l) :: preprocess target opts defs
 
-  | Parse_ast.DEF_event (event_spec, inner_defs) :: defs ->
-     Parse_ast.DEF_event (event_spec, preprocess target opts inner_defs) :: preprocess target opts defs
+  | Parse_ast.DEF_outcome (outcome_spec, inner_defs) :: defs ->
+     Parse_ast.DEF_outcome (outcome_spec, preprocess target opts inner_defs) :: preprocess target opts defs
      
   | (Parse_ast.DEF_default (Parse_ast.DT_aux (Parse_ast.DT_order (_, Parse_ast.ATyp_aux (atyp, _)), _)) as def) :: defs ->
      begin match atyp with

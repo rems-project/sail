@@ -175,7 +175,7 @@ let kw_table =
      ("newtype",                 (fun x -> Newtype));
      ("with",                    (fun x -> With));
      ("val",                     (fun x -> Val));
-     ("event",                   (fun x -> Event));
+     ("outcome",                 (fun x -> Outcome));
      ("instantiation",           (fun _ -> Instantiation));
      ("impl",                    (fun _ -> Impl));
      ("repeat",                  (fun _ -> Repeat));

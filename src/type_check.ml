@@ -134,7 +134,7 @@ type type_error =
 
 type env =
   { top_val_specs : (typquant * typ) Bindings.t;
-    top_events : (typquant * typ * kinded_id list) Bindings.t;
+    top_outcomes : (typquant * typ * kinded_id list) Bindings.t;
     defined_val_specs : IdSet.t;
     locals : (mut * typ) Bindings.t;
     top_letbinds : IdSet.t;
@@ -163,7 +163,7 @@ type env =
     allow_unknowns : bool;
     bitfields : (Big_int.num * Big_int.num) Bindings.t Bindings.t;
     toplevel : l option;
-    event_typschm : (typquant * typ) option;
+    outcome_typschm : (typquant * typ) option;
   }
 
 exception Type_error of env * l * type_error;;
@@ -435,14 +435,14 @@ let adding = Util.("Adding " |> darkgray |> clear)
 module Env : sig
   type t = env
   val add_val_spec : id -> typquant * typ -> t -> t
-  val add_event : id -> typquant * typ * kinded_id list -> t -> t
+  val add_outcome : id -> typquant * typ * kinded_id list -> t -> t
   val update_val_spec : id -> typquant * typ -> t -> t
   val define_val_spec : id -> t -> t
   val get_defined_val_specs : t -> IdSet.t
   val get_val_spec : id -> t -> typquant * typ
   val get_val_specs : t -> (typquant * typ ) Bindings.t
   val get_val_spec_orig : id -> t -> typquant * typ
-  val get_event : l -> id -> env -> typquant * typ * kinded_id list
+  val get_outcome : l -> id -> env -> typquant * typ * kinded_id list
   val is_union_constructor : id -> t -> bool
   val is_singleton_union_constructor : id -> t -> bool
   val is_mapping : id -> t -> bool
@@ -539,7 +539,7 @@ end = struct
 
   let empty =
     { top_val_specs = Bindings.empty;
-      top_events = Bindings.empty;
+      top_outcomes = Bindings.empty;
       defined_val_specs = IdSet.empty;
       locals = Bindings.empty;
       top_letbinds = IdSet.empty;
@@ -568,7 +568,7 @@ end = struct
       allow_unknowns = false;
       bitfields = Bindings.empty;
       toplevel = None;
-      event_typschm = None;
+      outcome_typschm = None;
     }
 
   let set_prover f env = { env with prove = f }
@@ -1142,14 +1142,14 @@ end = struct
     then update_val_spec id (bind_typq, bind_typ) env
     else env
 
-  and add_event id (typq, typ, params) env =
-    { env with top_events = Bindings.add id (typq, typ, params) env.top_events }
+  and add_outcome id (typq, typ, params) env =
+    { env with top_outcomes = Bindings.add id (typq, typ, params) env.top_outcomes }
 
-  and get_event l id env =
-    match Bindings.find_opt id env.top_events with
-    | Some event -> event
+  and get_outcome l id env =
+    match Bindings.find_opt id env.top_outcomes with
+    | Some outcome -> outcome
     | None ->
-       typ_error env l ("Event " ^ string_of_id id ^ " does not exist")
+       typ_error env l ("Outcome " ^ string_of_id id ^ " does not exist")
     
   and add_mapping id (typq, typ1, typ2, effect) env =
     typ_print (lazy (adding ^ "mapping " ^ string_of_id id));
@@ -5451,9 +5451,9 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
      let mapcl = check_mapcl mapcl_env mapcl typ in
      [DEF_scattered (SD_aux (SD_mapcl (id, mapcl), (l, None)))], env
 
-and check_event : 'a. Env.t -> event_spec -> 'a def list -> event_spec * tannot def list * Env.t =
-  fun env (EV_aux (EV_event (id, typschm, params), l)) defs ->
-  typ_print (lazy (Util.("Check event " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
+and check_outcome : 'a. Env.t -> outcome_spec -> 'a def list -> outcome_spec * tannot def list * Env.t =
+  fun env (OV_aux (OV_outcome (id, typschm, params), l)) defs ->
+  typ_print (lazy (Util.("Check outcome " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
   match env.toplevel with
   | None ->
      begin
@@ -5464,35 +5464,37 @@ and check_event : 'a. Env.t -> event_spec -> 'a def list -> event_spec * tannot 
          let quant, typ = match typschm with
            | TypSchm_aux (TypSchm_ts (typq, typ), _) -> typq, typ
          in
-         let local_env = { local_env with event_typschm = Some (quant, typ) } in
+         let local_env = { local_env with outcome_typschm = Some (quant, typ) } in
          let defs, _ = check_defs local_env defs in
          decr depth;
-         EV_aux (EV_event (id, typschm, params), l), defs, Env.add_event id (quant, typ, params) env
+         OV_aux (OV_outcome (id, typschm, params), l), defs, Env.add_outcome id (quant, typ, params) env
        with
        | Type_error (env, err_l, err) ->
           decr depth;
           typ_raise env err_l err
      end
   | Some outer_l ->
-     let msg = "Event must be declared within top-level scope" in
+     let msg = "Outcome must be declared within top-level scope" in
      typ_raise env l (Err_because (Err_other msg, outer_l, Err_other "Containing scope declared here"))
 
 and check_impldef : 'a. Env.t -> 'a funcl -> tannot def list * Env.t =
   fun env (FCL_aux (FCL_Funcl (id, _), (l, _)) as funcl) ->
   typ_print (lazy (Util.("Check impl " |> cyan |> clear) ^ string_of_id id));
-  match env.event_typschm with
+  match env.outcome_typschm with
   | Some (quant, typ) ->
      let funcl_env = Env.add_typquant l quant env in
      [DEF_impl (check_funcl funcl_env funcl typ)], env
   | None ->
-     typ_error env l "Cannot declare an implementation outside of an event"
+     typ_error env l "Cannot declare an implementation outside of an outcome"
 
-and check_event_instantiation : 'a. Env.t -> 'a instantiation_spec -> subst list -> tannot def list * Env.t =
+and check_outcome_instantiation : 'a. Env.t -> 'a instantiation_spec -> subst list -> tannot def list * Env.t =
   fun env (IN_aux (IN_id id, (l, _))) substs ->
-  let typq, typ, params = Env.get_event l id env in
+  let typq, typ, params = Env.get_outcome l id env in
   let instantiate_typ substs typ =
     List.fold_left (fun typ -> function
-        | IS_aux (IS_typ (kid, subst_typ), _) -> typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ
+        | IS_aux (IS_typ (kid, subst_typ), _) ->
+           Env.wf_typ env subst_typ;
+           typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ
         | _ -> typ
       ) typ substs
   in
@@ -5516,10 +5518,10 @@ and check_def : 'a. Env.t -> 'a def -> tannot def list * Env.t =
      (defs @ [DEF_internal_mutrec fdefs]), env
   | DEF_val letdef -> check_letdef env letdef
   | DEF_spec vs -> check_val_spec env vs
-  | DEF_event (event, defs) ->
-     let event, defs, env = check_event env event defs in
-     [DEF_event (event, defs)], env
-  | DEF_instantiation (ispec, substs) -> check_event_instantiation env ispec substs
+  | DEF_outcome (outcome, defs) ->
+     let outcome, defs, env = check_outcome env outcome defs in
+     [DEF_outcome (outcome, defs)], env
+  | DEF_instantiation (ispec, substs) -> check_outcome_instantiation env ispec substs
   | DEF_default default -> check_default env default
   | DEF_overload (id, ids) -> [DEF_overload (id, ids)], Env.add_overloads id ids env
   | DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id), (l, _))) ->

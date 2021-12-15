@@ -2431,7 +2431,7 @@ let types_used_with_generic_eq defs =
        List.fold_left IdSet.union IdSet.empty (List.map typs_req_fundef fds)
     | DEF_val lb ->
        fst (Rewriter.fold_letbind alg lb)
-    | (DEF_mapdef _ | DEF_scattered _ | DEF_measure _ | DEF_loop_measures _ | DEF_impl _ | DEF_instantiation _ | DEF_event _) as d ->
+    | (DEF_mapdef _ | DEF_scattered _ | DEF_measure _ | DEF_loop_measures _ | DEF_impl _ | DEF_instantiation _ | DEF_outcome _) as d ->
        unreachable (def_loc d) __POS__
          "Definition found in the Coq back-end that should have been rewritten away"
   in
@@ -3272,7 +3272,7 @@ let rec doc_def types_mod unimplemented generic_eq_types def =
      unreachable (id_loc id) __POS__
        ("Loop termination measures for " ^ string_of_id id ^
           " should have been rewritten before backend")
-  | (DEF_impl _ | DEF_event _ | DEF_instantiation _) ->
+  | (DEF_impl _ | DEF_outcome _ | DEF_instantiation _) ->
      unreachable (def_loc def) __POS__ "Event definition should have been rewritten before backend"
 
     

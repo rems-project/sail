@@ -65,33 +65,47 @@
 /*  SUCH DAMAGE.                                                            */
 /*==========================================================================*/
 
-$ifndef _OPTION
-$define _OPTION
+$ifndef _RESULT
+$define _RESULT
 
 $sail_internal
 
-// The option type is treated specially by the lem backend, so it maps
-// onto the lem maybe type. If the constructors are named differently,
-// this won't work - also no other type should be created with
-// constructors named Some or None.
+$include <option.sail>
 
-union option('a: Type) = {
-  Some : 'a,
-  None : unit
+// Like the option type, the result type may also be treated specially
+// by various Sail backends.
+
+union result('a : Type, 'b : Type) = {
+  Ok : 'a,
+  Err : 'b
 }
 
-val is_none : forall ('a : Type). option('a) -> bool
+val is_ok : forall ('a 'b : Type). result('a, 'b) -> bool
 
-function is_none opt = match opt {
-  Some(_) => false,
-  None()  => true
+function is_ok r = match r {
+  Ok(_) => true,
+  Err(_) => false
 }
 
-val is_some : forall ('a : Type). option('a) -> bool
+val is_err : forall ('a 'b : Type). result('a, 'b) -> bool
 
-function is_some opt = match opt {
-  Some(_) => true,
-  None()  => false
+function is_err r = match r {
+  Ok(_) => false,
+  Err(_) => true
+}
+
+val ok_option : forall ('a 'b : Type). result('a, 'b) -> option('a)
+
+function ok_option r = match r {
+  Ok(x) => Some(x),
+  Err(_) => None()
+}
+
+val err_option : forall ('a 'b : Type). result('a, 'b) -> option('b)
+
+function err_option r = match r {
+  Ok(_) => None(),
+  Err(err) => Some(err)
 }
 
 $endif

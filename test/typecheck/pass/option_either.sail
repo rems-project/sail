@@ -1,5 +1,7 @@
 default Order inc
 
+$sail_internal
+
 union option('a: Type) = {None : unit, Some : 'a}
 
 function none forall ('a : Type). () -> option('a) = None()

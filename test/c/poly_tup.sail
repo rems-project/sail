@@ -1,5 +1,7 @@
 default Order dec
 
+$sail_internal
+
 val "print" : string -> unit
 val "print_int" : (string, int) -> unit
 

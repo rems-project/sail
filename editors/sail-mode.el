@@ -27,7 +27,7 @@
 (add-to-list 'auto-mode-alist '("\\.sail\\'" . sail2-mode))
 
 (defconst sail2-keywords
-  '("val" "event" "function" "type" "struct" "union" "enum" "let" "var" "if" "then" "by"
+  '("val" "outcome" "function" "type" "struct" "union" "enum" "let" "var" "if" "then" "by"
     "else" "match" "in" "return" "register" "ref" "forall" "operator" "effect"
     "overload" "cast" "sizeof" "constant" "constraint" "default" "assert" "newtype" "from"
     "pure" "infixl" "infixr" "infix" "scattered" "end" "try" "catch" "and" "to"
@@ -40,13 +40,12 @@
     "exmem" "undef" "unspec" "nondet" "escape" "configuration"))
 
 (defconst sail2-types
-  '("vector" "bitvector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string" "bits" "option"
-    "uint64_t" "int64_t" "bv_t" "mpz_t"))
+  '("vector" "bitvector" "int" "nat" "atom" "range" "unit" "bit" "real" "list" "bool" "string" "bits" "option" "result"))
 
 (defconst sail2-special
   '("_prove" "_not_prove" "create" "kill" "convert" "undefined"
     "$define" "$include" "$ifdef" "$ifndef" "$iftarget" "$else" "$endif" "$option" "$optimize"
-    "$latex" "$property" "$counterexample" "$suppress_warnings" "$assert" "$sail_internal"))
+    "$latex" "$property" "$counterexample" "$suppress_warnings" "$assert" "$sail_internal" "$target_set"))
 
 (defconst sail2-font-lock-keywords
   `((,(regexp-opt sail2-keywords 'symbols) . font-lock-keyword-face)

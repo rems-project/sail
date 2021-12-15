@@ -1,22 +1,15 @@
 default Order dec
 $include <prelude.sail>
 
-event test_ev1 : forall 'n, 'n > 0. ('a, bits('n)) -> unit
+$target_set emulator c ocaml interpreter
+
+outcome test_ev1 : forall 'n, 'n > 0. ('a, bits('n)) -> unit
 with
   'a: Type
 = {
     val to_bits : 'a -> bits(64)
 
-    impl c(x, y) = {
-        match x {
-            w: 'a => print_bits("w = ", to_bits(w))
-        };
-        print_bits("x = ", to_bits(x : 'a));
-        let z: bits('n + 8) = 0xFF @ y;
-        print_bits("z = ", z)
-    }
-
-    impl ocaml(x, y) = {
+    impl emulator(x, y) = {
         match x {
             w: 'a => print_bits("w = ", to_bits(w))
         };

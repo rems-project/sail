@@ -1,3 +1,4 @@
+$sail_internal
 
 union option ('a : Type) = {
   None : unit,

@@ -1182,7 +1182,7 @@ let split_defs target all_errors splits env ast =
       | DEF_val lb -> [DEF_val (map_letbind lb)]
       | DEF_scattered sd -> List.map (fun x -> DEF_scattered x) (map_scattered_def sd)
       | DEF_measure (id,pat,exp) -> [DEF_measure (id,pat,map_exp exp)]
-      | DEF_impl _ | DEF_instantiation _ | DEF_event _ | DEF_mapdef _ | DEF_loop_measures _ ->
+      | DEF_impl _ | DEF_instantiation _ | DEF_outcome _ | DEF_mapdef _ | DEF_loop_measures _ ->
          Reporting.unreachable (def_loc d) __POS__
            "Found definition that should have been rewritten previously during monomorphisation"
     in

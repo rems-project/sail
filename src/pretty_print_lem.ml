@@ -1559,7 +1559,7 @@ let rec doc_def_lem type_env def =
      group (doc_let_lem empty_ctxt lbind) ^/^ hardline
   | DEF_scattered sdef -> unreachable (def_loc def) __POS__ "doc_def_lem: shoulnd't have DEF_scattered at this point"
   | DEF_mapdef (MD_aux (_, (l, _))) -> unreachable l __POS__ "Lem doesn't support mappings"
-  | (DEF_event _ | DEF_impl _ | DEF_instantiation _) -> unreachable (def_loc def) __POS__ "Event definition found when generating lem"
+  | (DEF_outcome _ | DEF_impl _ | DEF_instantiation _) -> unreachable (def_loc def) __POS__ "Event definition found when generating lem"
   | DEF_pragma _ -> empty
   | DEF_measure _ -> empty (* we might use these in future *)
   | DEF_loop_measures _ -> empty

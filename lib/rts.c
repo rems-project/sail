@@ -272,9 +272,9 @@ void kill_mem()
 
 bool write_ram(const mpz_t addr_size,     // Either 32 or 64
 	       const mpz_t data_size_mpz, // Number of bytes
-	       const lbits  hex_ram,       // Currently unused
-	       const lbits  addr_bv,
-	       const lbits  data)
+	       const lbits hex_ram,       // Currently unused
+	       const lbits addr_bv,
+	       const lbits data)
 {
   uint64_t addr = mpz_get_ui(*addr_bv.bits);
   uint64_t data_size = mpz_get_ui(data_size_mpz);

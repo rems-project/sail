@@ -445,11 +445,11 @@ type mapdef_aux =  (* mapping definition (bidirectional pattern-match function) 
 type mapdef =
  | MD_aux of ( mapdef_aux) * l
 
-type event_spec_aux =  (* event declaration *)
- | EV_event of id * typschm * kinded_id list
+type outcome_spec_aux =  (* outcome declaration *)
+ | OV_outcome of id * typschm * kinded_id list
 
-type event_spec = 
- | EV_aux of event_spec_aux * l
+type outcome_spec = 
+ | OV_aux of outcome_spec_aux * l
  
 type 
 fundef_aux =  (* Function definition *)
@@ -533,7 +533,7 @@ def =  (* Top-level definition *)
  | DEF_overload of id * id list (* operator overload specifications *)
  | DEF_fixity of prec * Big_int.num * id (* fixity declaration *)
  | DEF_spec of val_spec (* top-level type constraint *)
- | DEF_event of event_spec * def list (* top-level event definition *)
+ | DEF_outcome of outcome_spec * def list (* top-level outcome definition *)
  | DEF_instantiation of id * subst list (* instantiation *)
  | DEF_default of default_typing_spec (* default kind and type assumptions *)
  | DEF_scattered of scattered_def (* scattered definition *)
