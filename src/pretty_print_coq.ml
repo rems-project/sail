@@ -2256,7 +2256,9 @@ let doc_exp, doc_let =
                       in separate space [string ">>= fun"; binder; bigarrow]
                 | P_aux (P_id id,_) ->
                    let typ = typ_of e1 in
-                   let plain_binder = squote ^^ doc_pat ctxt true true (pat, typ_of e1) in
+                   (* Ideally we'd drop the parens and the squote when possible, but it's
+                      easier to keep both, and avoids clashes with 'b"..." bitvector literals. *)
+                   let plain_binder = squote ^^ parens (doc_pat ctxt false true (pat, typ_of e1)) in
                    let binder = match classify_ex_type ctxt env1 ~binding:id (Env.expand_synonyms env1 typ) with
                      | ExGeneral, _, (Typ_aux (Typ_app (Id_aux (Id "atom_bool",_),_),_) as typ') ->
                          squote ^^ parens (separate space [string "existT"; underscore; doc_id id; underscore; colon; doc_typ ctxt outer_env typ])
@@ -2271,7 +2273,7 @@ let doc_exp, doc_let =
                 | P_aux (P_typ (typ, pat'),_) ->
                    separate space [string ">>= fun"; squote ^^ parens (doc_pat ctxt true true (pat, typ_of e1) ^/^ colon ^^ space ^^ doc_typ ctxt outer_env typ); bigarrow]
                 | _ ->
-                   separate space [string ">>= fun"; squote ^^ doc_pat ctxt true true (pat, typ_of e1); bigarrow]
+                   separate space [string ">>= fun"; squote ^^ parens (doc_pat ctxt false true (pat, typ_of e1)); bigarrow]
               in
               let e1_pp = expY e1 in
               let e2_pp = top_exp new_ctxt false e2 in
