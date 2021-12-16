@@ -119,6 +119,7 @@ type context = {
   build_at_return : string option;
   recursive_fns : (int * int) Bindings.t; (* Number of implicit arguments and constraints for (mutually) recursive definitions *)
   debug : bool;
+  ret_typ_pp : PPrint.document; (* Return type formatted for use with returnR *)
 }
 let empty_ctxt = {
   types_mod = "";
@@ -130,6 +131,7 @@ let empty_ctxt = {
   build_at_return = None;
   recursive_fns = Bindings.empty;
   debug = false;
+  ret_typ_pp = PPrint.empty;
 }
 
 let add_single_kid_id_rename ctxt id kid =
@@ -2294,8 +2296,10 @@ let doc_exp, doc_let =
          let env = env_of e1 in
          construct_dep_pairs env true e1 ret_typ ~rawbools:true
        in
-       let return_fn = if ctxt.early_ret then "returnR" else "returnM" in
-       wrap_parens (group (align (separate space [string return_fn; valpp])))
+       if ctxt.early_ret then
+         wrap_parens (group (align (separate space [string "returnR"; parens ctxt.ret_typ_pp; valpp])))
+       else
+         wrap_parens (group (align (separate space [string "returnM"; valpp])))
     | E_sizeof nexp ->
       (match nexp_simp nexp with
         | Nexp_aux (Nexp_constant i, _) -> doc_lit (L_aux (L_num i, l))
@@ -2885,7 +2889,8 @@ let doc_funcl_init types_mod mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp
       bound_nvars = bound_kids;
       build_at_return = None; (* filled in below *)
       recursive_fns = Bindings.empty; (* filled in later *)
-      debug = List.mem (string_of_id id) (!opt_debug_on)
+      debug = List.mem (string_of_id id) (!opt_debug_on);
+      ret_typ_pp = PPrint.empty; (* filled in below *)
     } in
   let build_ex, ret_typ = replace_atom_return_type ret_typ in
   let build_ex = match classify_ex_type ctxt0 env (Env.expand_synonyms env (expand_range_type ret_typ)) with
@@ -2894,6 +2899,7 @@ let doc_funcl_init types_mod mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp
   in
   let ctxt = { ctxt0 with
       build_at_return = if effectful eff then build_ex else None;
+      ret_typ_pp = doc_typ ctxt0 Env.empty ret_typ
              } in
   let () =
     debug ctxt (lazy ("Function " ^ string_of_id id));
@@ -2956,7 +2962,7 @@ let doc_funcl_init types_mod mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp
   let retpp =
     (* TODO: again, probably should provide proper environment *)
     if effectful eff
-    then string "M" ^^ space ^^ parens (doc_typ ctxt Env.empty ret_typ)
+    then string "M" ^^ space ^^ parens ctxt.ret_typ_pp
     else doc_typ ctxt Env.empty ret_typ
   in
   let idpp = doc_id id in
@@ -3378,7 +3384,7 @@ try
           string ("Definition MR a r := monadR register_value a r " ^ exc_typ ^ "."); hardline;
           string ("Definition M a := monad register_value a " ^ exc_typ ^ "."); hardline;
           string ("Definition returnM {A:Type} := @returnm register_value A " ^ exc_typ ^ "."); hardline;
-          string ("Definition returnR {R A:Type} := @returnm register_value A (R + " ^ exc_typ ^ ")."); hardline
+          string ("Definition returnR {A:Type} (R:Type) := @returnm register_value A (R + " ^ exc_typ ^ ")."); hardline
         ])
         ]);
   (print defs_file)

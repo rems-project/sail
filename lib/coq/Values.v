@@ -2186,6 +2186,8 @@ prepare_for_solver;
 (*dump_context;*)
 unbool_comparisons_goal; (* Applying the ArithFact constructor will reveal an = true, so this might do more than it did in prepare_for_solver *)
 repeat match goal with |- and _ _ => split end;
+(* Break up enumerations *)
+repeat match goal with |- context[match ?x with _ => _ end] => destruct x end;
 main_solver.
 
 (* This can be redefined to remove the abstract. *)

@@ -116,6 +116,7 @@ refine (cast_T x _).
 apply Z.eqb_eq.
 apply (use_ArithFact H).
 Defined.
+Arguments autocast _ _ & _ _.
 
 Definition autocast_m {rv e m n} (x : monad rv (mword m) e) `{H:ArithFact (m =? n)} : monad rv (mword n) e.
 refine (x >>= fun x => returnm (cast_T x _)).
