@@ -191,6 +191,7 @@ let rec fix_id remove_tick name = match name with
   | "EQ"
   | "Z"
   | "O"
+  | "R"
   | "S"
   | "mod"
   | "M"
@@ -1963,11 +1964,11 @@ let doc_exp, doc_let =
        let eff = effect_of full_exp in
        let base_typ = Env.base_typ_of env typ in
        if has_effect eff BE_rreg then
-         let epp = separate space [string "read_reg";doc_id (append_id id "_ref")] in
+         let epp = separate space [string "read_reg"; doc_id id ^^ string "_ref"] in
          if is_bitvector_typ base_typ
          then wrap_parens (align (group (prefix 0 1 (parens (liftR epp)) (doc_tannot ctxt env true base_typ))))
          else liftR epp
-       else if Env.is_register id env && is_regtyp typ env then doc_id (append_id id "_ref")
+       else if Env.is_register id env && is_regtyp typ env then doc_id id ^^ string "_ref"
        else if is_ctor env id then doc_id_ctor id
        else begin
          match Env.lookup_id id env with
@@ -2392,8 +2393,8 @@ let doc_exp, doc_let =
   and doc_lexp_deref ctxt ((LEXP_aux(lexp,(l,annot)))) = match lexp with
     | LEXP_field (le,id) ->
        parens (separate empty [doc_lexp_deref ctxt le;dot;doc_id id])
-    | LEXP_id id -> doc_id (append_id id "_ref")
-    | LEXP_cast (typ,id) -> doc_id (append_id id "_ref")
+    | LEXP_id id -> doc_id id ^^ string "_ref"
+    | LEXP_cast (typ,id) -> doc_id id ^^ string "_ref"
     | LEXP_tup lexps -> parens (separate_map comma_sp (doc_lexp_deref ctxt) lexps)
     | _ ->
        raise (Reporting.err_unreachable l __POS__ ("doc_lexp_deref: Unsupported lexp"))
@@ -3348,7 +3349,7 @@ try
   let exc_typ = find_exc_typ defs in
   let typdefs, defs = List.partition is_typ_def defs in
   let statedefs, defs = List.partition is_state_def defs in
-  let register_refs = State.register_refs_coq (State.find_registers defs) in
+  let register_refs = State.register_refs_coq doc_id (State.find_registers defs) in
   let unimplemented = find_unimplemented defs in
   let generic_eq_types = types_used_with_generic_eq defs in
   let doc_def = doc_def type_defs_module unimplemented generic_eq_types in
