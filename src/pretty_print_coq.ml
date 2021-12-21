@@ -1706,10 +1706,10 @@ let doc_exp, doc_let =
                          ,_),body'),_) -> body'
               | _ -> body
             in
-            let used_vars_body = find_e_ids body in
             (* The variable tuple (and the loop body) may have
                overspecific types, so use the loop's type for deciding
                whether a proof is necessary *)
+            let body_pp = construct_dep_pairs (env_of body) false body (general_typ_of full_exp) in
             let varstuple_retyped = check_exp env (strip_exp varstuple) (general_typ_of full_exp) in
             let varstuple_pp, lambda =
               make_loop_vars [] varstuple_retyped
@@ -1719,14 +1719,18 @@ let doc_exp, doc_let =
               | None -> "", []
               | Some exp -> "T", [parens (prefix 2 1 (group lambda) (expN exp))]
             in
-            parens (
+            let proj = match classify_ex_type ctxt env (general_typ_of full_exp) with
+              | ExGeneral, _, _ -> fun pp -> string "projT1 " ^^ parens pp
+              | ExNone, _, _ -> fun pp -> pp
+            in
+            parens (proj (
                 (prefix 2 1)
                   (string (combinator ^ csuffix ^ msuffix))
                   (separate (break 1)
                      (varstuple_pp::measure_pp@
                         [parens (prefix 2 1 (group lambda) (expN cond));
-                         parens (prefix 2 1 (group lambda) (expN body))]))
-              )
+                         parens (prefix 2 1 (group lambda) body_pp)]))
+              ))
           end
        | Id_aux (Id "early_return", _) ->
           begin
