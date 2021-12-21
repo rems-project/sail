@@ -219,9 +219,10 @@ Definition update_subrange_vec_dec_unchecked {a b} (v : mword a) i j (w : mword 
 Lemma update_subrange_vec_dec_pf {o m n} :
 ArithFact (0 <=? o) ->
 ArithFact (o <=? m <? n) ->
-Z.of_nat (Z.to_nat o + (Z.to_nat (m - o + 1) + (Z.to_nat n - (Z.to_nat m + 1)))) = n.
+Z.of_nat (Z.to_nat o + (Z.to_nat (m - (o - 1)) + (Z.to_nat n - (Z.to_nat m + 1)))) = n.
 intros [H1] [H2].
 unbool_comparisons.
+rewrite Z.sub_sub_distr.
 rewrite <- subrange_lemma3.
 rewrite !Nat2Z.inj_add.
 rewrite !Nat2Z.inj_sub.
@@ -232,7 +233,7 @@ apply Z2Nat.inj_lt; lia.
 apply Z2Nat.inj_le; lia.
 Qed.
 
-Definition update_subrange_vec_dec {n} (v : mword n) m o `{ArithFact (0 <=? o)} `{ArithFact (o <=? m <? n)} (w : mword (m - o + 1)) : mword n.
+Definition update_subrange_vec_dec {n} (v : mword n) m o `{ArithFact (0 <=? o)} `{ArithFact (o <=? m <? n)} (w : mword (m - (o - 1))) : mword n.
 refine (
   let n := Z.to_nat n in
   let m := Z.to_nat m in
@@ -250,7 +251,7 @@ refine (
   cast_to_mword z (update_subrange_vec_dec_pf _ _)).
 Defined.
 
-Definition update_subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <=? m)} `{ArithFact (m <=? o <? n)} (w : mword (o - m + 1)) : mword n := update_subrange_vec_dec v (n-1-m) (n-1-o) (autocast w).
+Definition update_subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <=? m)} `{ArithFact (m <=? o <? n)} (w : mword (o - (m - 1))) : mword n := update_subrange_vec_dec v (n-1-m) (n-1-o) (autocast w).
 
 Lemma mword_nonneg {a} : mword a -> a >= 0.
 destruct a.
