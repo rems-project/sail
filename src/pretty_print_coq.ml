@@ -1819,78 +1819,13 @@ let doc_exp, doc_let =
                          | None -> m (* must have been an existential *) ) inst KBindings.empty in
           let () = debug ctxt (lazy (" instantiations: " ^ String.concat ", " (List.map (fun (kid,tyarg) -> string_of_kid kid ^ " => " ^ string_of_typ_arg tyarg) (KBindings.bindings inst)))) in
 
-          (* Insert existential packing of arguments where necessary *)
-          let doc_arg want_parens arg typ_from_fn =
-            let env = env_of arg in
-            let typ_from_fn = subst_unifiers inst typ_from_fn in
-            let typ_from_fn = Env.expand_synonyms inst_env typ_from_fn in
-            (* TODO: more sophisticated check *)
-            let () =
-              debug ctxt (lazy (" arg type found    " ^ string_of_typ (typ_of arg)));
-              debug ctxt (lazy (" arg type expected " ^ string_of_typ typ_from_fn))
-            in
-            let typ_of_arg = Env.expand_synonyms env (typ_of arg) in
-            let typ_of_arg = expand_range_type typ_of_arg in
-            let typ_of_arg' = match typ_of_arg with Typ_aux (Typ_exist (_,_,t),_) -> t  | t -> t in
-            let typ_from_fn' = match typ_from_fn with Typ_aux (Typ_exist (_,_,t),_) -> t  | t -> t in
-            let autocast =
-              (* Avoid using helper functions which simplify the nexps *)
-              match typ_of_arg', typ_from_fn' with
-              | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
-                Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
-                 not (similar_nexps ctxt env n1 n2)
-              | _ -> false
-            in
-            (* If the argument is an integer that can be inferred from the
-               context in a different form, let Coq fill it in.  E.g.,
-               when "64" is really "8 * width".  Avoid cases where the
-               type checker has introduced a phantom type variable while
-               calculating the instantiations. *)
-            let vars_in_env n =
-              let ekids = Env.get_typ_vars env in
-              KidSet.for_all (fun kid -> KBindings.mem kid ekids) (nexp_frees n)
-            in
-            match destruct_atom_nexp env typ_of_arg, destruct_atom_nexp env typ_from_fn with
-            | Some n1, Some n2
-                 when vars_in_env n2 && not (similar_nexps ctxt env n1 n2) ->
-               underscore
-            | _ ->
-               let want_parens1 = want_parens || autocast in
-               let arg_pp =
-                 construct_dep_pairs inst_env want_parens1 arg typ_from_fn
-               in
-               if autocast && false
-               then let arg_pp = string "autocast" ^^ space ^^ arg_pp in
-                    if want_parens then parens arg_pp else arg_pp
-               else arg_pp
-          in
-          let epp =
-            if is_ctor
-            then
-              let argspp = match args, arg_typs with
-                | [arg], [arg_typ] -> doc_arg true arg arg_typ
-                | _, _ -> parens (flow (comma ^^ break 1) (List.map2 (doc_arg false) args arg_typs))
-              in group (hang 2 (call ^^ break 1 ^^ argspp))
-            else
-              let argspp = List.map2 (doc_arg true) args arg_typs in
-              let all =
-                match is_rec with
-                | Some (pre,post) -> call :: List.init pre (fun _ -> underscore) @ argspp @
-                                       List.init post (fun _ -> underscore) @
-                                         [parens (string "_limit_reduces _acc")]
-                | None -> 
-                   match f with
-                   | Id_aux (Id x,_) when is_prefix "#rec#" x ->
-                      call :: argspp @ [parens (string "Zwf_guarded _")]
-                   | _ -> call :: argspp
-              in hang 2 (flow (break 1) all) in
-
           (* Decide whether to unpack an existential result, pack one, or cast.
              To do this we compare the expected type stored in the checked expression
              with the inferred type. *)
           let ret_typ_inst =
                subst_unifiers inst ret_typ
           in
+
           let packeff,unpack,autocast =
             let ann_typ = Env.expand_synonyms env (general_typ_of_annot (l,annot)) in
             let ann_typ = expand_range_type ann_typ in
@@ -1922,6 +1857,73 @@ let doc_exp, doc_let =
               | _ -> false
             in pack,unpack,autocast
           in
+
+          (* Insert existential packing of arguments where necessary *)
+          let doc_arg want_parens arg typ_from_fn =
+            let env = env_of arg in
+            let typ_from_fn = subst_unifiers inst typ_from_fn in
+            let typ_from_fn = Env.expand_synonyms inst_env typ_from_fn in
+            (* TODO: more sophisticated check *)
+            let () =
+              debug ctxt (lazy (" arg type found    " ^ string_of_typ (typ_of arg)));
+              debug ctxt (lazy (" arg type expected " ^ string_of_typ typ_from_fn))
+            in
+            let typ_of_arg = Env.expand_synonyms env (typ_of arg) in
+            let typ_of_arg = expand_range_type typ_of_arg in
+            let typ_of_arg' = match typ_of_arg with Typ_aux (Typ_exist (_,_,t),_) -> t  | t -> t in
+            let typ_from_fn' = match typ_from_fn with Typ_aux (Typ_exist (_,_,t),_) -> t  | t -> t in
+            let autocast_arg =
+              (* Avoid using helper functions which simplify the nexps *)
+              match typ_of_arg', typ_from_fn' with
+              | Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n1,_);_]),_),
+                Typ_aux (Typ_app (Id_aux (Id "bitvector",_),[A_aux (A_nexp n2,_);_]),_) ->
+                 not (similar_nexps ctxt env n1 n2)
+              | _ -> false
+            in
+            (* If the argument is an integer that can be inferred from the
+               context in a different form, let Coq fill it in.  E.g.,
+               when "64" is really "8 * width".  Avoid cases where the
+               type checker has introduced a phantom type variable while
+               calculating the instantiations. *)
+            let vars_in_env n =
+              let ekids = Env.get_typ_vars env in
+              KidSet.for_all (fun kid -> KBindings.mem kid ekids) (nexp_frees n)
+            in
+            match destruct_atom_nexp env typ_of_arg, destruct_atom_nexp env typ_from_fn with
+            | Some n1, Some n2
+                 when (not autocast) && vars_in_env n2 && not (similar_nexps ctxt env n1 n2) ->
+               underscore
+            | _ ->
+               let want_parens1 = want_parens || autocast_arg in
+               let arg_pp =
+                 construct_dep_pairs inst_env want_parens1 arg typ_from_fn
+               in
+               if autocast_arg && false
+               then let arg_pp = string "autocast" ^^ space ^^ arg_pp in
+                    if want_parens then parens arg_pp else arg_pp
+               else arg_pp
+          in
+          let epp =
+            if is_ctor
+            then
+              let argspp = match args, arg_typs with
+                | [arg], [arg_typ] -> doc_arg true arg arg_typ
+                | _, _ -> parens (flow (comma ^^ break 1) (List.map2 (doc_arg false) args arg_typs))
+              in group (hang 2 (call ^^ break 1 ^^ argspp))
+            else
+              let argspp = List.map2 (doc_arg true) args arg_typs in
+              let all =
+                match is_rec with
+                | Some (pre,post) -> call :: List.init pre (fun _ -> underscore) @ argspp @
+                                       List.init post (fun _ -> underscore) @
+                                         [parens (string "_limit_reduces _acc")]
+                | None -> 
+                   match f with
+                   | Id_aux (Id x,_) when is_prefix "#rec#" x ->
+                      call :: argspp @ [parens (string "Zwf_guarded _")]
+                   | _ -> call :: argspp
+              in hang 2 (flow (break 1) all) in
+
           let () =
             debug ctxt (lazy (" packeff: " ^ string_of_bool packeff ^
                               " unpack: " ^ string_of_bool unpack ^
