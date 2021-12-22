@@ -270,7 +270,6 @@ let options = Arg.align ([
     Arg.Tuple [Arg.Set C_backend.optimize_primops;
                Arg.Set C_backend.optimize_hoist_allocations;
                Arg.Set Initial_check.opt_fast_undefined;
-               Arg.Set Type_check.opt_no_effects;
                Arg.Set C_backend.optimize_struct_updates;
                Arg.Set C_backend.optimize_alias],
     " turn on optimizations for C compilation");
