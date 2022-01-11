@@ -297,6 +297,7 @@ let add_def_to_graph graph def =
   begin match def with
   | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), id, _, _), _)) ->
      graph := G.add_edges (Function id) [] !graph;
+     scan_typquant (Function id) typq;
      IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ)
   | DEF_fundef fdef ->
      let id = id_of_fundef fdef in
