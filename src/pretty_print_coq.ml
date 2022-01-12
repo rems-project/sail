@@ -2004,6 +2004,9 @@ let doc_exp, doc_let =
          | _ -> doc_id id
        end
     | E_lit lit -> doc_lit lit
+    | E_tuple _
+    | E_cast(_, E_aux (E_tuple _, _)) ->
+       construct_dep_pairs (env_of_annot (l,annot)) true full_exp (general_typ_of full_exp)
     | E_cast(typ,e) ->
        let env = env_of_annot (l,annot) in
        let outer_typ = Env.expand_synonyms env (general_typ_of_annot (l,annot)) in
@@ -2097,8 +2100,6 @@ let doc_exp, doc_let =
          else epp
        in
        if aexp_needed then parens epp else epp
-    | E_tuple exps ->
-       construct_dep_pairs (env_of_annot (l,annot)) true full_exp (general_typ_of full_exp)
     | E_record fexps ->
        let recordtyp = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_), _)
