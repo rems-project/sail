@@ -165,11 +165,13 @@ Inductive a64_barrier_domain :=
   | A64_InnerShare
   | A64_OuterShare
   | A64_NonShare.
+Scheme Equality for a64_barrier_domain.
 
 Inductive a64_barrier_type :=
   A64_barrier_all
   | A64_barrier_LD
   | A64_barrier_ST.
+Scheme Equality for a64_barrier_type.
 
 Inductive barrier_kind :=
   (* Power barriers *)
@@ -178,8 +180,8 @@ Inductive barrier_kind :=
   | Barrier_Eieio : unit -> barrier_kind
   | Barrier_Isync : unit -> barrier_kind
   (* AArch64 barriers *)
-  | Barrier_DMB : a64_barrier_domain -> a64_barrier_type -> barrier_kind
-  | Barrier_DSB : a64_barrier_domain -> a64_barrier_type -> barrier_kind
+  | Barrier_DMB : a64_barrier_domain * a64_barrier_type -> barrier_kind
+  | Barrier_DSB : a64_barrier_domain * a64_barrier_type -> barrier_kind
   | Barrier_ISB : unit -> barrier_kind
  (* | Barrier_TM_COMMIT*)
   (* MIPS barriers *)
@@ -198,7 +200,37 @@ Inductive barrier_kind :=
   | Barrier_RISCV_i : unit -> barrier_kind
   (* X86 *)
   | Barrier_x86_MFENCE : unit -> barrier_kind.
-Scheme Equality for barrier_kind.
+(* Doesn't work for *  Scheme Equality for barrier_kind.*)
+Definition barrier_kind_beq x y :=
+match x, y with
+  | Barrier_Sync _, Barrier_Sync _ => true
+  | Barrier_LwSync _, Barrier_LwSync _ => true
+  | Barrier_Eieio _, Barrier_Eieio _ => true
+  | Barrier_Isync _, Barrier_Isync _ => true
+  (* AArch64 barriers *)
+  | Barrier_DMB (d, t), Barrier_DMB (d', t') => andb (a64_barrier_domain_beq d d') (a64_barrier_type_beq t t')
+  | Barrier_DSB (d, t), Barrier_DSB (d', t') => andb (a64_barrier_domain_beq d d') (a64_barrier_type_beq t t')
+  | Barrier_ISB _, Barrier_ISB _ => true
+ (* | Barrier_TM_COMMIT*)
+  (* MIPS barriers *)
+  | Barrier_MIPS_SYNC _, Barrier_MIPS_SYNC _ => true
+  (* RISC-V barriers *)
+  | Barrier_RISCV_rw_rw _, Barrier_RISCV_rw_rw _ => true
+  | Barrier_RISCV_r_rw _, Barrier_RISCV_r_rw _ => true
+  | Barrier_RISCV_r_r _, Barrier_RISCV_r_r _ => true
+  | Barrier_RISCV_rw_w _, Barrier_RISCV_rw_w _ => true
+  | Barrier_RISCV_w_w _, Barrier_RISCV_w_w _ => true
+  | Barrier_RISCV_w_rw _, Barrier_RISCV_w_rw _ => true
+  | Barrier_RISCV_rw_r _, Barrier_RISCV_rw_r _ => true
+  | Barrier_RISCV_r_w _, Barrier_RISCV_r_w _ => true
+  | Barrier_RISCV_w_r _, Barrier_RISCV_w_r _ => true
+  | Barrier_RISCV_tso _, Barrier_RISCV_tso _ => true
+  | Barrier_RISCV_i _, Barrier_RISCV_i _ => true
+  (* X86 *)
+  | Barrier_x86_MFENCE _, Barrier_x86_MFENCE _ => true
+  | _, _ => false
+end.
+
 
 (*
 instance (Show barrier_kind)
