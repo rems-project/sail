@@ -332,6 +332,60 @@ and constraint_nexps (NC_aux (nc_aux, l)) =
   | NC_or (nc1, nc2) | NC_and (nc1, nc2) -> constraint_nexps nc1 @ constraint_nexps nc2
   | NC_app (_, args) -> List.concat (List.map typ_arg_nexps args)
 
+(* Replace A_nexp nexp with A_nexp nexp' in typ, intended for use after typ_nexps. *)
+let rec replace_nexp_typ nexp nexp' (Typ_aux (typ_aux, l) as typ) =
+  let rep_typ = replace_nexp_typ nexp nexp' in
+  match typ_aux with
+  | Typ_internal_unknown
+  | Typ_id _
+  | Typ_var _
+    -> typ
+  | Typ_tup typs -> Typ_aux (Typ_tup (List.map rep_typ typs), l)
+  | Typ_app (f, args) -> Typ_aux (Typ_app (f, List.map (replace_nexp_typ_arg nexp nexp') args), l)
+  | Typ_exist (kids, nc, typ) -> Typ_aux (Typ_exist (kids, nc, rep_typ typ), l)
+  | Typ_fn (arg_typs, ret_typ, eff) -> Typ_aux (Typ_fn (List.map rep_typ arg_typs, rep_typ ret_typ, eff), l)
+  | Typ_bidir (typ1, typ2, eff) -> Typ_aux (Typ_bidir (rep_typ typ1, rep_typ typ2, eff), l)
+and replace_nexp_typ_arg nexp nexp' (A_aux (typ_arg_aux, l) as arg) =
+  match typ_arg_aux with
+  | A_nexp n -> if Nexp.compare n nexp == 0 then (A_aux (A_nexp nexp', l)) else arg
+  | A_typ typ -> A_aux (A_typ (replace_nexp_typ nexp nexp' typ), l)
+  | A_bool nc -> A_aux (A_bool (replace_nexp_nc nexp nexp' nc), l)
+  | A_order _ -> arg
+and replace_nexp_nc nexp nexp' (NC_aux (nc_aux, l) as nc) =
+  let rep_nc = replace_nexp_nc nexp nexp' in
+  let rep n = if Nexp.compare n nexp == 0 then nexp' else n in
+  match nc_aux with
+  | NC_equal (n1, n2) -> NC_aux (NC_equal (rep n1, rep n2), l)
+  | NC_bounded_ge (n1, n2) -> NC_aux (NC_bounded_ge (rep n1, rep n2), l)
+  | NC_bounded_le (n1, n2) -> NC_aux (NC_bounded_le (rep n1, rep n2), l)
+  | NC_bounded_gt (n1, n2) -> NC_aux (NC_bounded_gt (rep n1, rep n2), l)
+  | NC_bounded_lt (n1, n2) -> NC_aux (NC_bounded_lt (rep n1, rep n2), l)
+  | NC_not_equal (n1, n2) -> NC_aux (NC_not_equal (rep n1, rep n2), l)
+  | NC_set _ | NC_true | NC_false | NC_var _ -> nc
+  | NC_or (nc1, nc2) -> NC_aux (NC_or (rep_nc nc1, rep_nc nc2), l)
+  | NC_and (nc1, nc2) -> NC_aux (NC_and (rep_nc nc1, rep_nc nc2), l)
+  | NC_app (f, args) -> NC_aux (NC_app (f, List.map (replace_nexp_typ_arg nexp nexp') args), l)
+
+(* Similarly for constraints *)
+let rec replace_nc_typ nc nc' (Typ_aux (typ_aux, l) as typ) =
+  let rep_typ = replace_nc_typ nc nc' in
+  match typ_aux with
+  | Typ_internal_unknown
+  | Typ_id _
+  | Typ_var _
+    -> typ
+  | Typ_tup typs -> Typ_aux (Typ_tup (List.map rep_typ typs), l)
+  | Typ_app (f, args) -> Typ_aux (Typ_app (f, List.map (replace_nc_typ_arg nc nc') args), l)
+  | Typ_exist (kids, nc, typ) -> Typ_aux (Typ_exist (kids, nc, rep_typ typ), l)
+  | Typ_fn (arg_typs, ret_typ, eff) -> Typ_aux (Typ_fn (List.map rep_typ arg_typs, rep_typ ret_typ, eff), l)
+  | Typ_bidir (typ1, typ2, eff) -> Typ_aux (Typ_bidir (rep_typ typ1, rep_typ typ2, eff), l)
+and replace_nc_typ_arg nc nc' (A_aux (typ_arg_aux, l) as arg) =
+  match typ_arg_aux with
+  | A_nexp _ -> arg
+  | A_typ typ -> A_aux (A_typ (replace_nc_typ nc nc' typ), l)
+  | A_bool nc'' -> if NC.compare nc nc'' == 0 then A_aux (A_bool nc', l) else arg
+  | A_order _ -> arg
+
 (* Return a KidSet containing all the type variables appearing in
    nexp, where nexp occurs underneath a Nexp_exp, i.e. 2^nexp *)
 let rec nexp_power_variables (Nexp_aux (aux, _)) =
@@ -3404,7 +3458,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
        | Enum enum -> subtyp l env enum typ; annot_pat (P_id v) typ, env, []
      end
   | P_var (pat, typ_pat) ->
-     let env = bind_typ_pat env typ_pat typ in
+     let env, typ = bind_typ_pat env typ_pat typ in
      let typed_pat, env, guards = bind_pat env pat typ in
      annot_pat (P_var (typed_pat, typ_pat)) typ, env, guards
   | P_wild -> annot_pat P_wild typ, env, []
@@ -3677,34 +3731,36 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
 and bind_typ_pat env (TP_aux (typ_pat_aux, l) as typ_pat) (Typ_aux (typ_aux, _) as typ) =
   typ_print (lazy (Util.("Binding type pattern " |> yellow |> clear) ^ string_of_typ_pat typ_pat ^ " to " ^ string_of_typ typ));
   match typ_pat_aux, typ_aux with
-  | TP_wild, _ -> env
+  | TP_wild, _ -> env, typ
   | TP_var kid, _ ->
      begin
        match typ_nexps typ, typ_constraints typ with
        | [nexp], [] ->
           let env, shadow = Env.add_typ_var_shadow l (mk_kopt K_int kid) env in
           let nexp = match shadow with Some s_v -> nexp_subst kid (arg_nexp (nvar s_v)) nexp | None -> nexp in
-          Env.add_constraint (nc_eq (nvar kid) nexp) env
+          Env.add_constraint (nc_eq (nvar kid) nexp) env, replace_nexp_typ nexp (Nexp_aux (Nexp_var kid, l)) typ
        | [], [nc] ->
           let env, shadow = Env.add_typ_var_shadow l (mk_kopt K_bool kid) env in
-          let nexp = match shadow with Some s_v -> constraint_subst kid (arg_bool (nc_var s_v)) nc | None -> nc in
-          Env.add_constraint (nc_and (nc_or (nc_not nc) (nc_var kid)) (nc_or nc (nc_not (nc_var kid)))) env
+          let nc = match shadow with Some s_v -> constraint_subst kid (arg_bool (nc_var s_v)) nc | None -> nc in
+          Env.add_constraint (nc_and (nc_or (nc_not nc) (nc_var kid)) (nc_or nc (nc_not (nc_var kid)))) env,
+          replace_nc_typ nc (NC_aux (NC_var kid, l)) typ
        | [], [] ->
           typ_error env l ("No numeric expressions in " ^ string_of_typ typ ^ " to bind " ^ string_of_kid kid ^ " to")
        | _, _ ->
           typ_error env l ("Type " ^ string_of_typ typ ^ " has multiple numeric or boolean expressions. Cannot bind " ^ string_of_kid kid)
      end
   | TP_app (f1, tpats), Typ_app (f2, typs) when Id.compare f1 f2 = 0 ->
-     List.fold_left2 bind_typ_pat_arg env tpats typs
+     let env, args = List.fold_right2 (fun tp arg (env, args) -> let env, arg = bind_typ_pat_arg env tp arg in env, arg::args) tpats typs (env, []) in
+     env, Typ_aux (Typ_app (f2, args), l)
   | _, _ -> typ_error env l ("Couldn't bind type " ^ string_of_typ typ ^ " with " ^ string_of_typ_pat typ_pat)
-and bind_typ_pat_arg env (TP_aux (typ_pat_aux, l) as typ_pat) (A_aux (typ_arg_aux, _) as typ_arg) =
+and bind_typ_pat_arg env (TP_aux (typ_pat_aux, l) as typ_pat) (A_aux (typ_arg_aux, l_arg) as typ_arg) =
   match typ_pat_aux, typ_arg_aux with
-  | TP_wild, _ -> env
+  | TP_wild, _ -> env, typ_arg
   | TP_var kid, A_nexp nexp ->
      let env, shadow = Env.add_typ_var_shadow l (mk_kopt K_int kid) env in
      let nexp = match shadow with Some s_v -> nexp_subst kid (arg_nexp (nvar s_v)) nexp | None -> nexp in
-     Env.add_constraint (nc_eq (nvar kid) nexp) env
-  | _, A_typ typ -> bind_typ_pat env typ_pat typ
+     Env.add_constraint (nc_eq (nvar kid) nexp) env, arg_nexp ~loc:l (nvar kid)
+  | _, A_typ typ -> let env, typ' = bind_typ_pat env typ_pat typ in env, A_aux (A_typ typ', l_arg)
   | _, A_order _ -> typ_error env l "Cannot bind type pattern against order"
   | _, _ -> typ_error env l ("Couldn't bind type argument " ^ string_of_typ_arg typ_arg ^ " with " ^ string_of_typ_pat typ_pat)
 
