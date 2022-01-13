@@ -915,15 +915,18 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
      end
   | _ -> None*)
 
-let doc_tannot ctxt env eff typ =
+let doc_tannot_core ctxt env eff typ =
   let of_typ typ =
     let ta = doc_typ ctxt env typ in
     if eff then
       if ctxt.early_ret
-      then string " : MR " ^^ parens ta ^^ string " _"
-      else string " : M " ^^ parens ta
-    else string " : " ^^ ta
+      then string "MR " ^^ parens ta ^^ string " _"
+      else string "M " ^^ parens ta
+    else ta
   in of_typ typ
+
+let doc_tannot ctxt env eff typ =
+  string " : " ^^ doc_tannot_core ctxt env eff typ
 
 (* Only double-quotes need escaped - by doubling them. *)
 let coq_escape_string s =
@@ -1557,7 +1560,7 @@ let doc_exp, doc_let =
         "E_vector_append should have been rewritten before pretty-printing")
     | E_cons(le,re) -> doc_op (group (colon^^colon)) (expY le) (expY re)
     | E_if(c,t,e) ->
-       let epp = if_exp ctxt false c t e in
+       let epp = if_exp ctxt (env_of full_exp) (typ_of full_exp) false c t e in
        if aexp_needed then parens (align epp) else epp
     | E_for(id,exp1,exp2,exp3,(Ord_aux(order,_)),exp4) ->
        raise (report l __POS__ "E_for should have been rewritten before pretty-printing")
@@ -2332,15 +2335,23 @@ let doc_exp, doc_let =
     | E_internal_value _ ->
       raise (Reporting.err_unreachable l __POS__
         "unsupported internal expression encountered while pretty-printing")
-  and if_exp ctxt (elseif : bool) c t e =
+  and if_exp ctxt full_env full_typ (elseif : bool) c t e =
     let if_pp = string (if elseif then "else if" else "if") in
     let use_sumbool = condition_produces_constraint ctxt c in
     let c_pp = top_exp ctxt use_sumbool c in
+    (* Coq doesn't always seem to like carrying type information
+       across if expressions in complex situations, so provide an
+       annotation for monadic expressions. *)
+    let add_type_pp pp =
+      if effectful (effect_of t) then
+        pp ^/^ string "return" ^/^ doc_tannot_core ctxt full_env true full_typ
+      else pp
+    in
     let t_pp = top_exp ctxt false t in
     let else_pp = match e with
       | E_aux (E_if (c', t', e'), _)
       | E_aux (E_cast (_, E_aux (E_if (c', t', e'), _)), _) ->
-         if_exp ctxt true c' t' e'
+         if_exp ctxt full_env full_typ true c' t' e'
       (* Special case to prevent current arm decoder becoming a staircase *)
       (* TODO: replace with smarter pretty printing *)
       | E_aux (E_internal_plet (pat,exp1,E_aux (E_cast (typ, (E_aux (E_if (_, _, _), _) as exp2)),_)),ann) when Typ.compare typ unit_typ == 0 ->
@@ -2349,7 +2360,7 @@ let doc_exp, doc_let =
     in
     (prefix 2 1
       (soft_surround 2 1 if_pp
-         (if use_sumbool then string "sumbool_of_bool" ^/^ c_pp else c_pp)
+         (add_type_pp (if use_sumbool then string "sumbool_of_bool" ^/^ c_pp else c_pp))
          (string "then"))
       t_pp) ^^
     break 1 ^^
