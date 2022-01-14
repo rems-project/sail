@@ -1645,6 +1645,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
           sgen_name gs,
           [Printf.sprintf "struct %s %s = { " (sgen_ctyp_name ctyp) (sgen_name gs)
            ^ Util.string_of_list ", " (fun x -> x) inits ^ " };"] @ prev
+       | CT_ref _ -> "NULL", []
        | ctyp -> c_error ("Cannot create undefined value for type: " ^ string_of_ctyp ctyp)
      in
      let ret, prev = codegen_exn_return ctyp in
@@ -2114,6 +2115,12 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ ksprintf string "  return result;\n"
       ^^          string "}"
     in
+    let vector_length =
+      let open Printf in
+          ksprintf string "static void length_%s(sail_int *rop, %s op) {\n" (sgen_id id) (sgen_id id)
+       ^^ ksprintf string "  mpz_set_ui(*rop, (unsigned long int)(op.len));\n"
+       ^^          string "}"
+    in
     begin
       generated := IdSet.add id !generated;
       vector_typedef ^^ twice hardline
@@ -2124,6 +2131,7 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ vector_set ^^ twice hardline
       ^^ vector_update ^^ twice hardline
       ^^ vector_equal ^^ twice hardline
+      ^^ vector_length ^^ twice hardline
       ^^ internal_vector_update ^^ twice hardline
       ^^ internal_vector_init ^^ twice hardline
     end

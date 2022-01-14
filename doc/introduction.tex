@@ -14,9 +14,9 @@ the envelope of architecturally allowed behaviour for sequential code.
 
 For x86~\cite{Intel61}, the Intel pseudocode is just suggestive, with
 embedded prose, while the AMD descriptions~\cite{AMD_3_21} are prose
-alone.  For IBM Power~\cite{Power2.06}, there is reasonably detailed
-pseudocode for many instructions in the manual, but it has never been
-machine-parsed.  For ARM~\cite{armarmv8}, there is detailed
+alone.  For IBM Power~\cite{Power3.0B}, there is detailed pseudocode
+which has recently become machine-processed~\cite{Leighton21}.
+For ARM~\cite{armarmv8}, there is detailed
 pseudocode, which has recently become machine-processed~\cite{Reid16}.
 For MIPS~\cite{MIPS64-II,MIPS64-III} there is also reasonably detailed
 pseudocode.
@@ -119,7 +119,7 @@ CHERI        & hand-written \\ \hline
 
 %% The Power model is based on an automatic extraction of pseudocode and
 %% decoding data from an XML export of the Framemaker document source of
-%% the IBM Power manual\anonymiseomit{~\cite{Power2.06,micro2015}}, with manual patching
+%% the IBM Power manual\anonymiseomit{~\cite{Power3.0B,micro2015}}, with manual patching
 %% as necessary, principally by \anonymise{Kerneis and Gray}.
 
 The ARMv8 (ASL) model is based on an automatic translation of ARM's

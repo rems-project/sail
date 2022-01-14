@@ -311,7 +311,7 @@ let add_def_to_graph graph def =
   | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) ->
      IdSet.iter (fun typ_id -> graph := G.add_edge (Register id) (Type typ_id) !graph) (typ_ids typ)
   | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
-     ignore (rewrite_exp  (rewriters (Register id)) exp);
+     ignore (fold_exp (rw_exp (Register id)) exp);
      IdSet.iter (fun typ_id -> graph := G.add_edge (Register id) (Type typ_id) !graph) (typ_ids typ)
   | _ -> ()
   end;

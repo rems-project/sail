@@ -1071,8 +1071,8 @@ match n with
   let bit : word (S n) := wlshift' (natToWord _ 1) i in
   let mask : word (S n) := wnot bit in
   let masked := wand mask w in
-  if b then masked else wor masked bit
-end.
+  if b then wor masked bit else masked
+end. 
 
 (*val update_mword_bool_dec : forall 'a. mword 'a -> integer -> bool -> mword 'a*)
 Definition update_mword_bool_dec {a} (w : mword a) n b : mword a :=
@@ -2955,6 +2955,26 @@ apply <- Z.shiftl_nonneg.
 lia.
 Qed.
 Hint Resolve shl_8_ge_0 : sail.
+
+(* Limits for remainders *)
+
+Require Zquot.
+Lemma Z_rem_really_nonneg : forall a b : Z, 0 <= a -> 0 <= Z.rem a b.
+intros.
+destruct (Z.eq_dec b 0).
++ subst. rewrite Zquot.Zrem_0_r. assumption.
++ auto using Z.rem_nonneg.
+Qed.
+
+Lemma Z_rem_pow_upper_bound : forall x x0 l,
+0 <= x -> 2 ^ l <= x0 -> x0 <= 2 ^ l -> 0 <= l -> Z.rem x x0 < 2 ^ l.
+intros.
+assert (x0 = 2 ^ l). auto with zarith.
+subst.
+apply Z.rem_bound_pos; auto with zarith.
+Qed.
+
+Hint Resolve Z_rem_really_nonneg Z_rem_pow_upper_bound : sail.
 
 (* This is needed because Sail's internal constraint language doesn't have
    < and could disappear if we add it... *)

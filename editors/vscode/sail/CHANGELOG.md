@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.4
+
+- Add keywords and operators
+- Icon
+
 ## 0.3
 
 - Fix curly braces

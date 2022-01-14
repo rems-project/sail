@@ -1988,6 +1988,12 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
            | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
          end
        else unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
+    | Nexp_exp n1 ->
+       begin
+         match nexp_aux2 with
+         | Nexp_exp n2 -> unify_nexp l env goals n1 n2
+         | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
+       end
     | _ -> unify_error l ("Cannot unify Int expression " ^ string_of_nexp nexp1 ^ " with " ^ string_of_nexp nexp2)
 
 let unify l env goals typ1 typ2 =
@@ -2606,7 +2612,7 @@ let instantiate_simple_equations =
        begin
          match List.concat (List.map (find_eqs_quant kid) quants) with
          | [] -> insts_tl
-         | h::_ -> KBindings.add kid h insts_tl
+         | h::_ -> KBindings.add kid h (KBindings.map (typ_arg_subst kid h) insts_tl)
        end
     | quant :: quants ->
        inst_from_eq quants
