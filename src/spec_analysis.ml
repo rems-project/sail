@@ -817,15 +817,15 @@ let rec flatten_constraints = function
    necessary to deal with the fresh kids produced by the type checker while
    checking P_var patterns, so we don't do it for now. *)
 let equal_kids_ncs kid ncs =
-  let is_eq = function
+  let rec add_equal_kids_nc s = function
     | NC_aux (NC_equal (Nexp_aux (Nexp_var var1,_), Nexp_aux (Nexp_var var2,_)),_) ->
-       if Kid.compare kid var1 == 0 then Some var2 else
-         if Kid.compare kid var2 == 0 then Some var1 else
-           None
-    | _ -> None
+       if Kid.compare kid var1 == 0 then KidSet.add var2 s else
+         if Kid.compare kid var2 == 0 then KidSet.add var1 s else
+           s
+    | NC_aux (NC_and (nc1, nc2), _) -> add_equal_kids_nc (add_equal_kids_nc s nc1) nc2
+    | _ -> s
   in
-  let kids = Util.map_filter is_eq ncs in
-  List.fold_left (fun s k -> KidSet.add k s) (KidSet.singleton kid) kids
+  List.fold_left add_equal_kids_nc (KidSet.singleton kid) ncs
 
 let equal_kids env kid =
   let ncs = flatten_constraints (Type_check.Env.get_constraints env) in
