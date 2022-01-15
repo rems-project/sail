@@ -94,7 +94,10 @@ let effect_of_pexp (Pat_aux (pexp,(_,a))) =
        union_effects (effect_of_pat p) (union_effects (effect_of g) (effect_of e))
   in
   union_effects eff (effect_of_annot a)
-let effect_of_lb (LB_aux (_,(_,a))) = effect_of_annot a
+let effect_of_lb (LB_aux (LB_val (pat,exp),(_,a))) =
+  match destruct_tannot a with
+  | Some (_, _, eff) -> eff
+  | None -> union_effects (effect_of_pat pat) (effect_of exp)
 
 let simple_annot l typ = (gen_loc l, mk_tannot initial_env typ no_effect)
 
