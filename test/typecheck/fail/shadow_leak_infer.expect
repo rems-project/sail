@@ -4,5 +4,5 @@
   [91m |[0m     [91m^-------------------------[0m
 18[96m |[0m     x
   [91m |[0m[91m-----^[0m
-  [91m |[0m Type variable '_x would leak into a scope where it is shadowed
+  [91m |[0m Type variable 'x would leak into a scope where it is shadowed
   [91m |[0m 
