@@ -44,6 +44,7 @@ do
                "$SAILDIR/src/gen_lib/sail2_state.lem" \
                "$SAILDIR/src/gen_lib/sail2_prompt_monad.lem" \
                "$SAILDIR/src/gen_lib/sail2_string.lem" \
+               "$SAILDIR/src/gen_lib/sail2_undefined.lem" \
                "$DIR/test_extra.lem" \
                "$OUTPUTDIR/out_types.lem" "$OUTPUTDIR/out.lem" &>>log;
 	then
@@ -52,7 +53,7 @@ do
                          sail2_values.ml sail2_operators.ml \
                          sail2_instr_kinds.ml sail2_prompt_monad.ml sail2_prompt.ml \
                          sail2_operators_mwords.ml sail2_state_monad.ml sail2_state.ml \
-                         sail2_string.ml \
+                         sail2_string.ml sail2_undefined.ml \
                          test_extra.ml out_types.ml out.ml ../test.ml \
                          -o test &>>"$DIR/log"
             then
