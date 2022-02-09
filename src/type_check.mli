@@ -188,6 +188,9 @@ module Env : sig
 
   val get_typ_var_locs : t -> Ast.l KBindings.t
 
+  (** Returns the shadowing depth for the given type variable *)
+  val shadows : kid -> t -> int
+
   val get_typ_synonyms : t -> (typquant * typ_arg) Bindings.t
     
   val add_typ_var : Ast.l -> kinded_id -> t -> t

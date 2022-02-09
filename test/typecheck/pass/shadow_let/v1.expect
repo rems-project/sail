@@ -2,11 +2,11 @@
 [[96mshadow_let/v1.sail[0m]:13:6-7
 13[96m |[0m  bar(y);
   [91m |[0m      [91m^[0m
-  [91m |[0m Tried performing type coercion from int('_x#1) to int(2) on y
+  [91m |[0m Tried performing type coercion from int('y) to int(2) on y
   [91m |[0m Coercion failed because:
-  [91m |[0m int('_x#1) is not a subtype of int(2)
-  [91m |[0m [[96mshadow_let/v1.sail[0m]:9:6-8
-  [91m |[0m 9[96m |[0m  let 'x : {'z, 'z == 1. int('z)} = 1;
-  [91m |[0m  [93m |[0m      [93m^^[0m
-  [91m |[0m  [93m |[0m '_x#1 bound here
+  [91m |[0m int('y) is not a subtype of int(2)
+  [91m |[0m [[96mshadow_let/v1.sail[0m]:10:6-8
+  [91m |[0m 10[96m |[0m  let 'y = x;
+  [91m |[0m   [93m |[0m      [93m^^[0m
+  [91m |[0m   [93m |[0m 'y bound here
   [91m |[0m 

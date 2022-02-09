@@ -82,9 +82,6 @@ Require Export Zeuclid.
 Require Import Lia.
 Import ListNotations.
 
-(* Override expensive unary exponential notation *)
-Notation "sz ''b' a" := (Word.NToWord sz (BinNotation.bin a)) (at level 50).
-Notation "''b' a" := (Word.NToWord _ (BinNotation.bin a)) (at level 50).
 
 Local Open Scope Z.
 Local Open Scope bool.
@@ -2189,6 +2186,8 @@ prepare_for_solver;
 (*dump_context;*)
 unbool_comparisons_goal; (* Applying the ArithFact constructor will reveal an = true, so this might do more than it did in prepare_for_solver *)
 repeat match goal with |- and _ _ => split end;
+(* Break up enumerations *)
+repeat match goal with |- context[match ?x with _ => _ end] => destruct x end;
 main_solver.
 
 (* This can be redefined to remove the abstract. *)
@@ -2984,3 +2983,13 @@ Lemma sail_lt_ge (x y : Z) :
 lia.
 Qed.
 Hint Resolve sail_lt_ge : sail.
+
+
+(* Override expensive unary exponential notation for binary, fill in sizes too *)
+Notation "sz ''b' a" := (Word.NToWord sz (BinNotation.bin a)) (at level 50).
+Notation "''b' a" := (Word.NToWord _ (BinNotation.bin a) :
+                       mword (ltac:(let sz := eval cbv in (Z.of_nat (String.length a)) in exact sz)))
+                     (at level 50).
+Notation "'Ox' a" := (NToWord _ (hex a) :
+                       mword (ltac:(let sz := eval cbv in (4 * (Z.of_nat (String.length a))) in exact sz)))
+                     (at level 50).

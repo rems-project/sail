@@ -610,7 +610,7 @@ let rec regval_convs_coq (Typ_aux (t, _) as typ) = match t with
      let id = string_of_id (regval_constr_id true typ) in
      "(fun v => " ^ id ^ "_of_regval v)", "(fun v => regval_of_" ^ id ^ " v)"
 
-let register_refs_coq registers =
+let register_refs_coq doc_id registers =
   let generic_convs =
     separate_map hardline string [
       "Definition bool_of_regval (merge_var : register_value) : option bool :=";
@@ -658,7 +658,7 @@ let register_refs_coq registers =
     ]
   in
   let register_ref (typ, id) =
-    let idd = string (string_of_id id) in
+    let idd = doc_id id in
     (* let field = if prefix_recordtype then string "regstate_" ^^ idd else idd in *)
     let of_regval, regval_of = regval_convs_coq typ in
     concat [string "Definition "; idd; string "_ref := {|"; hardline;
@@ -670,9 +670,9 @@ let register_refs_coq registers =
   in
   let refs = separate_map hardline register_ref registers in
   let get_set_reg (_, id) =
-    let idd = string_of_id id in
-    string ("  if string_dec reg_name \"" ^ idd ^ "\" then Some (" ^ idd ^ "_ref.(regval_of) (" ^ idd ^ "_ref.(read_from) s)) else"),
-    string ("  if string_dec reg_name \"" ^ idd ^ "\" then option_map (fun v => " ^ idd ^ "_ref.(write_to) v s) (" ^ idd ^ "_ref.(of_regval) v) else")
+    let idd = doc_id id in
+    concat [string "  if string_dec reg_name \""; idd; string "\" then Some ("; idd; string "_ref.(regval_of) ("; idd; string "_ref.(read_from) s)) else"],
+    concat [string "  if string_dec reg_name \""; idd; string "\" then option_map (fun v => "; idd; string "_ref.(write_to) v s) ("; idd; string "_ref.(of_regval) v) else"]
   in
   let getters_setters =
     let getters, setters = List.split (List.map get_set_reg registers) in

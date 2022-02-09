@@ -2,11 +2,11 @@
 [[96mglobal_type_var/v3.sail[0m]:15:23-27
 15[96m |[0m    let y : atom(64) = size in
   [91m |[0m                       [91m^--^[0m
-  [91m |[0m Tried performing type coercion from int('_size) to int(64) on size
+  [91m |[0m Tried performing type coercion from int('size) to int(64) on size
   [91m |[0m Coercion failed because:
-  [91m |[0m int('_size) is not a subtype of int(64)
-  [91m |[0m [[96mglobal_type_var/v3.sail[0m]:5:5-18
+  [91m |[0m int('size) is not a subtype of int(64)
+  [91m |[0m [[96mglobal_type_var/v3.sail[0m]:5:13-18
   [91m |[0m 5[96m |[0mlet (size as 'size) : {|32, 64|} = 32
-  [91m |[0m  [93m |[0m     [93m^-----------^[0m
-  [91m |[0m  [93m |[0m '_size bound here
+  [91m |[0m  [93m |[0m             [93m^---^[0m
+  [91m |[0m  [93m |[0m 'size bound here
   [91m |[0m 
