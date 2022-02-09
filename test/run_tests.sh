@@ -6,6 +6,12 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $DIR
 
 printf "\n==========================================\n"
+printf "Lexing tests\n"
+printf "==========================================\n"
+
+./lexing/run_tests.sh
+
+printf "\n==========================================\n"
 printf "Typechecking tests\n"
 printf "==========================================\n"
 

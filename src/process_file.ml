@@ -104,8 +104,6 @@ let parse_file ?loc:(l=Parse_ast.Unknown) (f : string) : (Lexer.comment list * P
          let pos = Lexing.lexeme_start_p lexbuf in
          let tok = Lexing.lexeme lexbuf in
          raise (Reporting.err_syntax pos ("current token: " ^ tok))
-      | Lexer.LexError (s, p) ->
-         raise (Reporting.err_lex p s)
     end
   with
   | Sys_error err -> raise (Reporting.err_general l err)

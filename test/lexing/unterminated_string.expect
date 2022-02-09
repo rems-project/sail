@@ -1,0 +1,5 @@
+[93mLexical error[0m:
+[[96munterminated_string.sail[0m]:4:10-10
+4[96m |[0m  let x = "
+ [91m |[0m          [91m^[0m
+ [91m |[0m String literal not terminated

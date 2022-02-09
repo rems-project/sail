@@ -62,6 +62,9 @@
     ("impl \\([a-zA-Z0-9_]+\\)" 1 font-lock-function-name-face)
     ("event \\([a-zA-Z0-9_]+\\)" 1 font-lock-function-name-face)
     ("val \\([a-zA-Z0-9_]+\\)" 1 font-lock-function-name-face)
+    ("$target_set \\([a-zA-Z0-9_]+\\)" 1 font-lock-keyword-face)
+    ("$include \\(<.+>\\)" 1 font-lock-string-face)
+    ("$include \\(\".+\"\\)" 1 font-lock-string-face)
     ("\\_<\\([0-9]+\\|0b[0-9_]+\\|0x[0-9a-fA-F_]+\\|true\\|false\\|bitone\\|bitzero\\)\\_>\\|()" . font-lock-constant-face)))
 
 (defconst sail2-mode-syntax-table

@@ -1,0 +1,5 @@
+[93mLexical error[0m:
+[[96millegal_escape.sail[0m]:4:11-11
+4[96m |[0m  let x = "\f"
+ [91m |[0m           [91m^[0m
+ [91m |[0m String literal contains illegal backslash escape sequence

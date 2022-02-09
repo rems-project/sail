@@ -1,0 +1,5 @@
+[93mLexical error[0m:
+[[96mextended_ascii.sail[0m]:6:10-10
+6[96m |[0m  let _ = ™;
+ [91m |[0m          [91m^[0m
+ [91m |[0m Unexpected character: \226

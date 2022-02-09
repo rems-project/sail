@@ -1,0 +1,5 @@
+[93mLexical error[0m:
+[[96mimport_reserved.sail[0m]:3:0-0
+3[96m |[0mimport
+ [91m |[0m[91m^[0m
+ [91m |[0m import is a reserved keyword

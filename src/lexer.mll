@@ -70,7 +70,6 @@ open Parser
 module Big_int = Nat_big_num
 open Parse_ast
 module M = Map.Make(String)
-exception LexError of string * Lexing.position
 
 let r = fun s -> s (* Ulib.Text.of_latin1 *)
 (* Available as Scanf.unescaped since OCaml 4.0 but 3.12 is still common *)
@@ -143,62 +142,64 @@ let kw_table =
      ("false",                   (fun _ -> False));
      ("forall",                  (fun _ -> Forall));
      ("foreach",                 (fun _ -> Foreach));
-     ("function",                (fun x -> Function_));
+     ("function",                (fun _ -> Function_));
      ("mapping",                 (fun _ -> Mapping));
      ("overload",                (fun _ -> Overload));
      ("throw",                   (fun _ -> Throw));
      ("try",                     (fun _ -> Try));
      ("catch",                   (fun _ -> Catch));
-     ("if",                      (fun x -> If_));
-     ("in",			 (fun x -> In));
+     ("if",                      (fun _ -> If_));
+     ("in",			 (fun _ -> In));
      ("inc",                     (fun _ -> Inc));
-     ("let",                     (fun x -> Let_));
+     ("let",                     (fun _ -> Let_));
      ("var",                     (fun _ -> Var));
      ("ref",                     (fun _ -> Ref));
-     ("Int",                     (fun x -> Int));
-     ("Order",                   (fun x -> Order));
-     ("Bool",                    (fun x -> Bool));
-     ("pure",                    (fun x -> Pure));
-     ("register",		 (fun x -> Register));
-     ("return",                  (fun x -> Return));
-     ("scattered",               (fun x -> Scattered));
-     ("sizeof",                  (fun x -> Sizeof));
-     ("constraint",              (fun x -> Constraint));
-     ("constant",                (fun x -> Constant));
-     ("struct",                  (fun x -> Struct));
-     ("then",                    (fun x -> Then));
-     ("true",                    (fun x -> True));
-     ("Type",                    (fun x -> TYPE));
-     ("type",		         (fun x -> Typedef));
-     ("undefined",               (fun x -> Undefined));
-     ("union",			 (fun x -> Union));
-     ("newtype",                 (fun x -> Newtype));
-     ("with",                    (fun x -> With));
-     ("val",                     (fun x -> Val));
-     ("outcome",                 (fun x -> Outcome));
+     ("Int",                     (fun _ -> Int));
+     ("Order",                   (fun _ -> Order));
+     ("Bool",                    (fun _ -> Bool));
+     ("pure",                    (fun _ -> Pure));
+     ("register",		 (fun _ -> Register));
+     ("return",                  (fun _ -> Return));
+     ("scattered",               (fun _ -> Scattered));
+     ("sizeof",                  (fun _ -> Sizeof));
+     ("constraint",              (fun _ -> Constraint));
+     ("constant",                (fun _ -> Constant));
+     ("struct",                  (fun _ -> Struct));
+     ("then",                    (fun _ -> Then));
+     ("true",                    (fun _ -> True));
+     ("Type",                    (fun _ -> TYPE));
+     ("type",		         (fun _ -> Typedef));
+     ("undefined",               (fun _ -> Undefined));
+     ("union",			 (fun _ -> Union));
+     ("newtype",                 (fun _ -> Newtype));
+     ("with",                    (fun _ -> With));
+     ("val",                     (fun _ -> Val));
+     ("outcome",                 (fun _ -> Outcome));
      ("instantiation",           (fun _ -> Instantiation));
      ("impl",                    (fun _ -> Impl));
+     ("import",                  (fun p -> raise (Reporting.err_lex p "import is a reserved keyword")));
+     ("module",                  (fun p -> raise (Reporting.err_lex p "module is a reserved keyword")));
      ("repeat",                  (fun _ -> Repeat));
      ("until",                   (fun _ -> Until));
      ("while",                   (fun _ -> While));
      ("do",                      (fun _ -> Do));
      ("mutual",                  (fun _ -> Mutual));
      ("bitfield",                (fun _ -> Bitfield));
-     ("barr",                    (fun x -> Barr));
-     ("depend",                  (fun x -> Depend));
-     ("rreg",                    (fun x -> Rreg));
-     ("wreg",                    (fun x -> Wreg));
-     ("rmem",                    (fun x -> Rmem));
-     ("rmemt",                   (fun x -> Rmem));
-     ("wmem",                    (fun x -> Wmem));
-     ("wmv",                     (fun x -> Wmv));
-     ("wmvt",                    (fun x -> Wmv));
-     ("eamem",                   (fun x -> Eamem));
-     ("exmem",                   (fun x -> Exmem));
-     ("undef",                   (fun x -> Undef));
-     ("unspec",                  (fun x -> Unspec));
-     ("nondet",                  (fun x -> Nondet));
-     ("escape",                  (fun x -> Escape));
+     ("barr",                    (fun _ -> Barr));
+     ("depend",                  (fun _ -> Depend));
+     ("rreg",                    (fun _ -> Rreg));
+     ("wreg",                    (fun _ -> Wreg));
+     ("rmem",                    (fun _ -> Rmem));
+     ("rmemt",                   (fun _ -> Rmem));
+     ("wmem",                    (fun _ -> Wmem));
+     ("wmv",                     (fun _ -> Wmv));
+     ("wmvt",                    (fun _ -> Wmv));
+     ("eamem",                   (fun _ -> Eamem));
+     ("exmem",                   (fun _ -> Exmem));
+     ("undef",                   (fun _ -> Undef));
+     ("unspec",                  (fun _ -> Unspec));
+     ("nondet",                  (fun _ -> Nondet));
+     ("escape",                  (fun _ -> Escape));
      ("configuration",           (fun _ -> Configuration));
      ("termination_measure",     (fun _ -> TerminationMeasure));
      ("internal_plet",           (fun _ -> InternalPLet));
@@ -246,7 +247,6 @@ rule token = parse
   | "2" ws "^"                          { TwoCaret }
   | "^"					{ (Caret(r"^")) }
   | "::"                                { ColonColon(r "::") }
-  (* | "^^"                                { CaretCaret(r "^^") } *)
   | "~~"                                { TildeTilde(r "~~") }
   | ":"                                 { Colon(r ":") }
   | ","                                 { Comma }
@@ -283,7 +283,7 @@ rule token = parse
   | "/*!" wsc*  { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 false lexbuf) }
   | "//"        { line_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token lexbuf }
   | "/*"        { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token lexbuf }
-  | "*/"        { raise (LexError("Unbalanced comment", Lexing.lexeme_start_p lexbuf)) }
+  | "*/"        { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }
   | "$" (ident+ as i) (lchar* as f) "\n"
     { Lexing.new_line lexbuf; Pragma(i, String.trim f) }
   | "infix" ws (digit as p) ws (operator as op)
@@ -297,36 +297,33 @@ rule token = parse
       Fixity (InfixR, Big_int.of_string (Char.escaped p), op) }
   | operator as op
     { try M.find op !operators
-      with Not_found -> raise (LexError ("Operator fixity undeclared " ^ op, Lexing.lexeme_start_p lexbuf)) }
-  | tyvar_start startident ident* as i  { TyVar(r i) }
-  | "~"                                 { Id(r"~") }
-  | startident ident* as i              { if M.mem i kw_table then
-                                            (M.find i kw_table) ()
-					  (* else if
-                                            List.mem i default_type_names ||
-                                            List.mem i !custom_type_names then
-					    TyId(r i) *)
-					  else Id(r i) }
-  | (digit+ as i1) "." (digit+ as i2)     { (Real (i1 ^ "." ^ i2)) }
-  | "-" (digit* as i1) "." (digit+ as i2) { (Real ("-" ^ i1 ^ "." ^ i2)) }
-  | digit+ as i                           { (Num(Big_int.of_string i)) }
-  | "-" digit+ as i                       { (Num(Big_int.of_string i)) }
-  | "0b" (binarydigit+ as i)              { (Bin(Util.string_of_list "" (fun s -> s) (Util.split_on_char '_' i))) }
-  | "0x" (hexdigit+ as i)                 { (Hex(Util.string_of_list "" (fun s -> s) (Util.split_on_char '_' i))) }
+      with Not_found -> raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) ("Operator fixity undeclared " ^ op)) }
+  | tyvar_start startident ident* as i    { TyVar i }
+  | "~"                                   { Id "~" }
+  | startident ident* as i                { if M.mem i kw_table then
+                                              (M.find i kw_table) (Lexing.lexeme_start_p lexbuf)
+					    else
+                                              Id i }
+  | (digit+ as i1) "." (digit+ as i2)     { Real (i1 ^ "." ^ i2) }
+  | "-" (digit* as i1) "." (digit+ as i2) { Real ("-" ^ i1 ^ "." ^ i2) }
+  | digit+ as i                           { Num (Big_int.of_string i) }
+  | "-" digit+ as i                       { Num (Big_int.of_string i) }
+  | "0b" (binarydigit+ as i)              { Bin (Util.string_of_list "" (fun s -> s) (Util.split_on_char '_' i)) }
+  | "0x" (hexdigit+ as i)                 { Hex (Util.string_of_list "" (fun s -> s) (Util.split_on_char '_' i)) }
   | '"'                                   { let startpos = Lexing.lexeme_start_p lexbuf in
                                             let contents = string startpos (Buffer.create 10) lexbuf in
                                             lexbuf.lex_start_p <- startpos;
                                             String(contents) }
   | eof                                   { Eof }
-  | _  as c                               { raise (LexError(
-                                            Printf.sprintf "Unexpected character: %c" c,
-                                            Lexing.lexeme_start_p lexbuf)) }
+  | _  as c                               { raise (Reporting.err_lex
+                                              (Lexing.lexeme_start_p lexbuf)
+                                              (Printf.sprintf "Unexpected character: %s" (Char.escaped c))) }
 
 and line_comment pos b = parse
   | "\n"                                { Lexing.new_line lexbuf;
                                           comments := Comment (Comment_line, pos, Lexing.lexeme_end_p lexbuf, Buffer.contents b) :: !comments }
   | _ as c                              { Buffer.add_string b (String.make 1 c); line_comment pos b lexbuf }
-  | eof                                 { raise (LexError("File ended before newline in comment", pos)) }
+  | eof                                 { raise (Reporting.err_lex pos "File ended before newline in comment") }
 
 and doc_comment pos b depth lstart = parse
   | "/*!"                               { doc_comment pos b (depth + 1) false lexbuf }
@@ -334,7 +331,7 @@ and doc_comment pos b depth lstart = parse
   | wsc* "*/"                           { if depth = 0 then Buffer.contents b
 					  else if depth > 0 then doc_comment pos b (depth - 1) false lexbuf
 					  else assert false }
-  | eof                                 { raise (LexError("Unbalanced comment", pos)) }
+  | eof                                 { raise (Reporting.err_lex pos "Unbalanced comment") }
   | "\n"                                { Buffer.add_string b "\n"; Lexing.new_line lexbuf; doc_comment pos b depth true lexbuf }
   | wsc* "*" wsc? as prefix             { if lstart then (
                                             doc_comment pos b depth false lexbuf
@@ -356,7 +353,7 @@ and comment pos b depth = parse
   | '"'                                 { ignore(string (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf);
                                           comment pos b depth lexbuf }
   | _ as c                              { Buffer.add_string b (String.make 1 c); comment pos b depth lexbuf }
-  | eof                                 { raise (LexError("Unbalanced comment", pos)) }
+  | eof                                 { raise (Reporting.err_lex pos "Unbalanced comment") }
 
 and string pos b = parse
   | ([^'"''\n''\\']*'\n' as i)          { Lexing.new_line lexbuf;
@@ -365,8 +362,6 @@ and string pos b = parse
   | ([^'"''\n''\\']* as i)              { Buffer.add_string b i; string pos b lexbuf }
   | escape_sequence as i                { Buffer.add_string b i; string pos b lexbuf }
   | '\\' '\n' ws                        { Lexing.new_line lexbuf; string pos b lexbuf }
-  | '\\'                                { assert false (*raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
-                                            "illegal backslash escape in string"*) }
+  | '\\'                                { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "String literal contains illegal backslash escape sequence") }
   | '"'                                 { unescaped (Buffer.contents b) }
-  | eof                                 { assert false (*raise (Reporting.Fatal_error (Reporting.Err_syntax (pos,
-                                            "String literal not terminated")))*) }
+  | eof                                 { raise (Reporting.err_lex pos "String literal not terminated") }

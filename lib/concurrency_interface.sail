@@ -134,7 +134,7 @@ with
   val platform_read_mem : forall 'n (constant 'addrsize : Int), 'n > 0 & 'addrsize in {32, 64}.
     ('read_kind, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n) effect {rmem}
 
-  impl c(request) = {
+  impl emulator(request) = {
     let pa = pa_bits(request.pa);
     let rk = request_read_kind(request);
     let tag: option(bool) = if request.tag then {
