@@ -79,7 +79,7 @@ let constructor name order start stop =
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
   let constructor_val = Printf.sprintf "val Mk_%s : %s -> %s" name (bitvec size order) name in
   let constructor_fun = Printf.sprintf "function Mk_%s v = struct { bits = v }" name in
-  List.concat [defs_of_string constructor_val; defs_of_string constructor_fun]
+  List.concat [defs_of_string __POS__ constructor_val; defs_of_string __POS__ constructor_fun]
 
 (* For every index range, create a getter and setter *)
 let index_range_getter name field order start stop =
@@ -89,7 +89,7 @@ let index_range_getter name field order start stop =
     Printf.sprintf "v.%s_chunk_%i[%i .. %i]" name chunk start stop
   in
   let irg_function = Printf.sprintf "function _get_%s_%s v = v.bits[%i .. %i]" name field start stop in
-  List.concat [defs_of_string irg_val; defs_of_string irg_function]
+  List.concat [defs_of_string __POS__ irg_val; defs_of_string __POS__ irg_function]
 
 let index_range_setter name field order start stop =
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
@@ -103,7 +103,7 @@ let index_range_setter name field order start stop =
                      "}"
     ]
   in
-  List.concat [defs_of_string irs_val; defs_of_string irs_function]
+  List.concat [defs_of_string __POS__ irs_val; defs_of_string __POS__ irs_function]
 
 let index_range_update name field order start stop =
   let size = if start > stop then start - (stop - 1) else stop - (start - 1) in
@@ -113,10 +113,10 @@ let index_range_update name field order start stop =
       name field start stop
   in
   let iru_overload = Printf.sprintf "overload update_%s = {_update_%s_%s}" field name field in
-  List.concat [defs_of_string iru_val; defs_of_string iru_function; defs_of_string iru_overload]
+  List.concat [defs_of_string __POS__ iru_val; defs_of_string __POS__ iru_function; defs_of_string __POS__ iru_overload]
 
 let index_range_overload name field order =
-  defs_of_string (Printf.sprintf "overload _mod_%s = {_get_%s_%s, _set_%s_%s}" field name field name field)
+  defs_of_string __POS__ (Printf.sprintf "overload _mod_%s = {_get_%s_%s, _set_%s_%s}" field name field name field)
 
 let index_range_accessor name field order (n, m) =
   let getter n m = index_range_getter name field order (Big_int.to_int n) (Big_int.to_int m) in

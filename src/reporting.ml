@@ -196,6 +196,15 @@ let err_lex p m = Fatal_error (Err_lex (p, m))
 let unreachable l pos msg =
   raise (err_unreachable l pos msg)
 
+let forbid_errors ocaml_pos f x =
+  try f x with
+  | Fatal_error (Err_general (l, m)) -> raise (err_unreachable l ocaml_pos m)
+  | Fatal_error (Err_todo (l, m)) -> raise (err_unreachable l ocaml_pos m)
+  | Fatal_error (Err_syntax (p, m)) -> raise (err_unreachable (Range (p, p)) ocaml_pos m)
+  | Fatal_error (Err_syntax_loc (l, m)) -> raise (err_unreachable l ocaml_pos m)
+  | Fatal_error (Err_lex (p, m)) -> raise (err_unreachable (Range (p, p)) ocaml_pos m)
+  | Fatal_error (Err_type (l, m)) -> raise (err_unreachable l ocaml_pos m)
+ 
 let print_error e =
   let (m1, pos_l, m2) = dest_err e in
   print_err_internal pos_l m1 m2

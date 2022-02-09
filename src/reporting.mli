@@ -132,6 +132,8 @@ val unreachable : Parse_ast.l -> (string * int * int * int) -> string -> 'a
 
 val print_error : error -> unit
 
+val forbid_errors : (string * int * int * int) -> ('a -> 'b) -> 'a -> 'b
+  
 (** Print a warning message. The first string is printed before the
    location, the second after. *)
 val warn : string -> Parse_ast.l -> string -> unit

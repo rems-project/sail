@@ -614,7 +614,7 @@ let handle_input' input =
            | _ -> print_endline "Invalid arguments for :let"
            end
         | ":def" ->
-           let ast = Initial_check.ast_of_def_string_with (Process_file.preprocess !opt_target options) arg in
+           let ast = Initial_check.ast_of_def_string_with __POS__ (Process_file.preprocess !opt_target options) arg in
            let ast, env = Type_check.check !Interactive.env ast in
            Interactive.ast := append_ast !Interactive.ast ast;
            Interactive.env := env;

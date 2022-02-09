@@ -669,7 +669,7 @@ let to_ast_reserved_type_id ctx id =
     begin match Reporting.loc_file (id_loc id) with
     | Some file when !opt_magic_hash || List.exists (fun internal_file -> file = internal_file) ctx.internal_files -> id
     | None -> id
-    | _ ->
+    | Some file ->
        raise (Reporting.err_general (id_loc id) (sprintf "The type name %s is reserved" (string_of_id id)))
     end
   else
@@ -1258,15 +1258,16 @@ let process_ast ?generate:(generate=true) ast =
   else
     ast
 
-let ast_of_def_string_with f str =
-  let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
-  process_ast (P.Defs [("", f [def])])
+let ast_of_def_string_with ocaml_pos f str =
+  let lexbuf = Lexing.from_string str in
+  let internal = !opt_magic_hash in
+  opt_magic_hash := true;
+  lexbuf.lex_curr_p <- { pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
+  let def = Parser.def_eof Lexer.token lexbuf in
+  let ast = Reporting.forbid_errors ocaml_pos process_ast (P.Defs [("", f [def])]) in
+  opt_magic_hash := internal;
+  ast
 
-  
-let ast_of_def_string str =
-  let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
-  process_ast (P.Defs [("", [def])])
+let ast_of_def_string ocaml_pos str = ast_of_def_string_with ocaml_pos (fun x -> x) str
 
-let defs_of_string str =
-  let def = Parser.def_eof Lexer.token (Lexing.from_string str) in
-  (process_ast (P.Defs [("", [def])])).defs
+let defs_of_string ocaml_pos str = (ast_of_def_string ocaml_pos str).defs

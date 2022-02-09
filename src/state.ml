@@ -78,8 +78,6 @@ open Pretty_print_sail
 
 let opt_type_grouped_regstate = ref false
 
-let defs_of_string str = (ast_of_def_string str).defs
-
 let is_defined defs name = IdSet.mem (mk_id name) (ids_of_defs defs)
 
 let has_default_order defs =
@@ -238,7 +236,7 @@ let generate_initial_regstate defs =
       | _ -> inits) ([], Bindings.empty) defs
     in
     let init_reg (typ, id) = string_of_id id ^ " = " ^ lookup_init_val init_vals typ in
-    List.map defs_of_string
+    List.map (defs_of_string __POS__)
       (init_defs @
        ["let initial_regstate : regstate = struct { " ^
         (String.concat ", " (List.map init_reg registers)) ^
@@ -277,7 +275,7 @@ let generate_regval_typ typs =
     "Regval_real : real, " ^
     "Regval_string : string"
   in
-  [defs_of_string
+  [defs_of_string __POS__
     ("union register_value = { " ^
      (String.concat ", " (builtins :: List.map constr (Bindings.bindings typs))) ^
      " }")]
@@ -317,7 +315,7 @@ let add_regval_conv id typ defs =
   let to_val = Printf.sprintf "val %s : %s -> register_value" to_name typ_str in
   let to_function = Printf.sprintf "function %s v = Regval_%s(v)" to_name id in
   let to_defs = if is_defined defs to_name then [] else [to_val; to_function] in
-  let cdefs = List.concat (List.map defs_of_string (from_defs @ to_defs)) in
+  let cdefs = List.concat (List.map (defs_of_string __POS__) (from_defs @ to_defs)) in
   defs @ cdefs
 
 let rec regval_convs mwords wrap_fun (Typ_aux (t, _) as typ) = match t with
@@ -698,7 +696,7 @@ let generate_regstate_defs mwords defs =
   let regtyps = register_base_types mwords (List.map fst registers) in
   let option_typ =
     if is_defined defs "option" then [] else
-      [defs_of_string "union option ('a : Type) = {None : unit, Some : 'a}"]
+      [defs_of_string __POS__ "union option ('a : Type) = {None : unit, Some : 'a}"]
   in
   let regval_typ = if is_defined defs "register_value" then [] else generate_regval_typ regtyps in
   let regstate_typ = if is_defined defs "regstate" then [] else [generate_regstate registers] in
