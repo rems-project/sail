@@ -426,6 +426,22 @@ let find_next f xs =
   in
   find_next' f [] xs
 
+let find_index_opt f xs =
+  let rec find_index_opt' f i = function
+    | x :: xs when f x -> Some (i, x)
+    | _ :: xs -> find_index_opt' f (i + 1) xs
+    | [] -> None
+  in
+  find_index_opt' f 0 xs
+
+let rec find_map f = function
+  | x :: xs ->
+     begin match f x with
+     | Some y -> Some y
+     | None -> find_map f xs
+     end
+  | [] -> None
+  
 let is_none opt = not (is_some opt)
 
 let rec take n xs = match n, xs with

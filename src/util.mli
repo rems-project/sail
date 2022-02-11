@@ -215,6 +215,11 @@ val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
 
 val find_next : ('a -> bool) -> 'a list -> ('a list * ('a * 'a list) option)
 
+(** find an item in a list and return that item as well as its index *)
+val find_index_opt : ('a -> bool) -> 'a list -> (int * 'a) option
+
+val find_map : ('a -> 'b option) -> 'a list -> 'b option
+
 val list_init : int -> (int -> 'a) -> 'a list
 
 (** {2 Files} *)

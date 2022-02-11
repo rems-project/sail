@@ -228,6 +228,11 @@ module Env : sig
 
   val get_toplevel_lets : t -> IdSet.t
 
+  (** Check if id is a constructor, then if it is return a (n, m,
+     type_union) triple where the values represent it's position (n) in the
+     list of (m) constructors, and the type_union entry itself *)
+  val union_constructor_info : id -> t -> (int * int * id * type_union) option
+    
   val is_union_constructor : id -> t -> bool
 
   (** Check if the id is both a constructor, and the only constructor of that
