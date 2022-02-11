@@ -1227,7 +1227,7 @@ end = struct
                                 
   let union_constructor_info id env =
     let type_unions = List.map (fun (id, (_, tus)) -> (id, tus)) (Bindings.bindings env.variants) in
-    Util.find_map (fun (union_id, tus) -> Option.map (fun (n, tu) -> (n, List.length tus, union_id, tu)) (Util.find_index_opt (is_ctor id) tus)) type_unions
+    Util.find_map (fun (union_id, tus) -> Util.option_map (fun (n, tu) -> (n, List.length tus, union_id, tu)) (Util.find_index_opt (is_ctor id) tus)) type_unions
  
   let is_union_constructor id env =
     let type_unions = List.concat (List.map (fun (_, (_, tus)) -> tus) (Bindings.bindings env.variants)) in
