@@ -1,3 +1,3 @@
 default Order dec
 
-$include <concurrency_interface.sail>
+$include <concurrency_interface/v1.sail>

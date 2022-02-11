@@ -78,6 +78,7 @@ $endif
 
 $include <option.sail>
 $include <result.sail>
+$include <isla.sail>
 
 $target_set emulator c ocaml interpreter
 
@@ -280,11 +281,23 @@ with
   impl emulator(request) = {
     platform_cache_maintenance_extra(request_cache_op_kind(request), 64, sail_zeros(64), request_encode(request))
   }
+
+  impl isla(request) = {
+    isla_log_event("tlb-op", request) 
+  }
 }
 
-outcome sail_fault : 'fault -> unit with 'fault : Type
+outcome sail_fault_announce : 'fault -> unit with 'fault : Type = {
+  impl isla(fault) = {
+    isla_log_event("fault", fault)
+  }
+}
 
-outcome sail_eret : 'pa -> unit with 'pa : Type
+outcome sail_eret_announce : 'pa -> unit with 'pa : Type = {
+  impl isla(pa) = {
+    isla_log_event("eret", pa)
+  }
+}
 
 val sail_instr_announce
   = { ocaml: "Platform.instr_announce", c: "platform_instr_announce", _: "instr_announce" }
