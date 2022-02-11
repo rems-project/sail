@@ -206,7 +206,7 @@ let to_smt l vars constr =
        | nexp ->
           let exp = smt_nexp nexp in
           exponentials := exp :: !exponentials;
-          sfun "^" [Atom "2"; exp]
+          sfun "to_int" [sfun "^" [Atom "2"; exp]]
        end
     | Nexp_neg nexp -> sfun "-" [smt_nexp nexp]
   in
@@ -245,9 +245,9 @@ let smtlib_of_constraints ?get_model:(get_model=false) l vars extra constr : str
   !opt_solver.header
   ^ variables ^ "\n"
   ^ (if !opt_solver.uninterpret_power then "(declare-fun sailexp (Int) Int)\n" else "")
-  ^ pp_sexpr (sfun "define-fun" [Atom "constraint"; List []; Atom "Bool"; problem])
   ^ Util.string_of_list "" (fun sexpr -> "\n" ^ pp_sexpr (sfun "assert" [sexpr])) extra
-  ^ "\n(assert constraint)\n(check-sat)"
+  ^ pp_sexpr (sfun "assert" [problem])
+  ^ "\n(check-sat)"
   ^ (if get_model then "\n(get-model)\n" else "\n")
   ^ !opt_solver.footer,
   var_map,
