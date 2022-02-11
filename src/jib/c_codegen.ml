@@ -139,6 +139,7 @@ type codegen_options = {
        if one of those regular expression matches the name of a sail_state variable,
        only the declaration of the accessors will be generated. *)
     external_state_api : string list;
+    external_fun_definition : string list;
   }
 
 let initial_options = {
@@ -148,6 +149,7 @@ let initial_options = {
     extra_state = [];
     state_primops = StringSet.empty;
     external_state_api = [];
+    external_fun_definition = [];
   }
 
 let add_export opts id = { opts with exports = Bindings.add id (string_of_id id) opts.exports }
@@ -159,6 +161,9 @@ let add_mangled_rename opts (from, into) =
 
 let add_external_state_api_regex opts regex =
   { opts with external_state_api = regex :: opts.external_state_api }
+
+let add_external_fun_definition_regex opts regex =
+  { opts with external_fun_definition = regex :: opts.external_fun_definition }
 
 let add_export_uid opts (id, ctyps) =
   match ctyps with
@@ -263,6 +268,17 @@ let options_from_json json cdefs =
        Reporting.simple_warn "No external_state_api key in codegen json configuration";
        opts
     | json -> bad_key "external_state_api" json
+  in
+  let process_external_fun_definition opts = function
+    | `String member -> add_external_fun_definition_regex opts member
+    | json -> bad_key "external_fun_definition" json
+  in
+  let opts = match member "external_fun_definition" json with
+    | `List members -> List.fold_left process_external_fun_definition opts members
+    | `Null ->
+       Reporting.simple_warn "No external_fun_definition key in codegen json configuration";
+       opts
+    | json -> bad_key "external_fun_definition" json
   in
   opts
 
@@ -1448,10 +1464,15 @@ let codegen_def_header ctx = function
 
   | _ -> empty
 
+let codegen_is_external_fun_definition id =
+   List.exists (fun regex -> Str.string_match (Str.regexp regex) id 0) O.opts.external_fun_definition
+
 let codegen_def_body ctx = function
   | CDEF_reg_dec _ -> empty
 
   | CDEF_spec _ -> empty
+
+  | CDEF_fundef (id, _, _, _) when codegen_is_external_fun_definition (string_of_id id) -> empty
 
   | CDEF_fundef (id, ret_arg, args, instrs) as def ->
      let _, arg_ctyps, ret_ctyp = match Bindings.find_opt id ctx.valspecs with
@@ -1595,7 +1616,7 @@ let codegen_state_function_body_on_match id body =
   if is_external then
     ("" ,";")
   else
-    ("static inline ", Printf.sprintf " { %s }" body) 
+    ("static inline ", Printf.sprintf " { %s }" body)
 
 let codegen_state_api_struct id ctyp =
   match ctyp with

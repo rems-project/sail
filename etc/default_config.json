@@ -26,10 +26,15 @@
         // of primops, which are specified via the "foo" string from
         // val id = "foo" : ... in Sail.
         "state_primops": [],
-        // Control which sail_state variables accessors will be implemented
-        // by the consumer of the library. This is a list of regular expressions,
+        // control which sail_state variables accessors will be implemented
+        // by the consumer of the library. this is a list of regular expressions,
         // if one of those regular expression matches the name of a sail_state variable,
         // only the declaration of the accessors will be generated.
-        "external_state_api" : []
+        "external_state_api" : [],
+        // control which functions will provided as an external defintion
+        // by the consumer of the library. this is a list of regular expressions,
+        // if one of those regular expression matches the name of a Sail function,
+        // the function body will be omitted.
+        "external_fun_definition" : []
     }
 }
