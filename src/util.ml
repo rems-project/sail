@@ -426,6 +426,22 @@ let find_next f xs =
   in
   find_next' f [] xs
 
+let find_index_opt f xs =
+  let rec find_index_opt' f i = function
+    | x :: xs when f x -> Some (i, x)
+    | _ :: xs -> find_index_opt' f (i + 1) xs
+    | [] -> None
+  in
+  find_index_opt' f 0 xs
+
+let rec find_map f = function
+  | x :: xs ->
+     begin match f x with
+     | Some y -> Some y
+     | None -> find_map f xs
+     end
+  | [] -> None
+
 let fold_left_concat_map f acc xs =
   let ys, acc = List.fold_left (fun (ys, acc) x -> let acc, zs = f acc x in (List.rev zs @ ys, acc)) ([], acc) xs in
   acc, List.rev ys

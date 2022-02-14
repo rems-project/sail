@@ -497,6 +497,7 @@ module Env : sig
   val get_val_specs : t -> (typquant * typ ) Bindings.t
   val get_val_spec_orig : id -> t -> typquant * typ
   val get_outcome : l -> id -> env -> typquant * typ * kinded_id list
+  val union_constructor_info : id -> t -> (int * int * id * type_union) option
   val is_union_constructor : id -> t -> bool
   val is_singleton_union_constructor : id -> t -> bool
   val is_mapping : id -> t -> bool
@@ -704,7 +705,7 @@ end = struct
         ("int", Typ_bidir(int_typ, string_typ, no_effect));
         ("nat", Typ_bidir(nat_typ, string_typ, no_effect));
       ]
- 
+
   let bound_typ_id env id =
     Bindings.mem id env.typ_synonyms
     || Bindings.mem id env.variants
@@ -1239,19 +1240,19 @@ end = struct
 
   let get_defined_val_specs env = env.defined_val_specs
 
+  let is_ctor id (Tu_aux (tu, _)) = match tu with
+    | Tu_ty_id (_, ctor_id) when Id.compare id ctor_id = 0 -> true
+    | _ -> false
+                                
+  let union_constructor_info id env =
+    let type_unions = List.map (fun (id, (_, tus)) -> (id, tus)) (Bindings.bindings env.variants) in
+    Util.find_map (fun (union_id, tus) -> Util.option_map (fun (n, tu) -> (n, List.length tus, union_id, tu)) (Util.find_index_opt (is_ctor id) tus)) type_unions
+ 
   let is_union_constructor id env =
-    let is_ctor id (Tu_aux (tu, _)) = match tu with
-      | Tu_ty_id (_, ctor_id) when Id.compare id ctor_id = 0 -> true
-      | _ -> false
-    in
     let type_unions = List.concat (List.map (fun (_, (_, tus)) -> tus) (Bindings.bindings env.variants)) in
     List.exists (is_ctor id) type_unions
 
   let is_singleton_union_constructor id env =
-    let is_ctor id (Tu_aux (tu, _)) = match tu with
-      | Tu_ty_id (_, ctor_id) when Id.compare id ctor_id = 0 -> true
-      | _ -> false
-    in
     let type_unions = List.map (fun (_, (_, tus)) -> tus) (Bindings.bindings env.variants) in
     match List.find (List.exists (is_ctor id)) type_unions with
     | l -> List.length l = 1

@@ -81,6 +81,10 @@ let opt_ocaml_nobuild = ref false
 let opt_ocaml_coverage = ref false
 let opt_ocaml_build_dir = ref "_sbuild"
 
+(* OCaml variant type can have at most 246 non-constant
+   constructors. *)
+let ocaml_variant_max_constructors = 246
+                        
 type ctx =
   { register_inits : tannot exp list;
     externs : id Bindings.t;
@@ -223,7 +227,13 @@ let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
   | P_list pats -> brackets (separate_map (semi ^^ space) (ocaml_pat ctx) pats)
   | P_wild -> string "_"
   | P_as (pat, id) -> separate space [ocaml_pat ctx pat; string "as"; zencode ctx id]
-  | P_app (id, pats) -> zencode_upper ctx id ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
+  | P_app (id, pats) ->
+     begin match Env.union_constructor_info id (env_of_pat pat) with
+     | Some (_, m, _, _) when m > ocaml_variant_max_constructors ->
+        (string "`" ^^ zencode_upper ctx id) ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
+     | _ ->
+        zencode_upper ctx id ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_pat ctx) pats)
+     end
   | P_cons (hd_pat, tl_pat) -> ocaml_pat ctx hd_pat ^^ string " :: " ^^ ocaml_pat ctx tl_pat
   | _ -> string ("PAT<" ^ string_of_pat pat ^ ">")
 
@@ -238,20 +248,29 @@ let record_id l exp = match typ_of exp with
   | Typ_aux (Typ_id id, _) when Env.is_record id (env_of exp) -> id
   | Typ_aux (Typ_app (id, _), _) when Env.is_record id (env_of exp) -> id
   | typ -> Reporting.unreachable l __POS__ ("Found a struct without a record type when generating OCaml. Type found: " ^ string_of_typ typ)
-       
+ 
 let rec ocaml_exp ctx (E_aux (exp_aux, (l, _)) as exp) =
   match exp_aux with
-  | E_app (f, [x]) when Env.is_union_constructor f (env_of exp) -> zencode_upper ctx f ^^ space ^^ ocaml_atomic_exp ctx x
-  | E_app (f, [x]) -> zencode ctx f ^^ space ^^ ocaml_atomic_exp ctx x
-  | E_app (f, xs) when Env.is_union_constructor f (env_of exp) ->
-     zencode_upper ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
-  (* Make sure we get the correct short circuiting semantics for and and or *)
-  | E_app (f, [x; y]) when string_of_id f = "and_bool" ->
-     separate space [ocaml_atomic_exp ctx x; string "&&"; ocaml_atomic_exp ctx y]
-  | E_app (f, [x; y]) when string_of_id f = "or_bool" ->
-     separate space [ocaml_atomic_exp ctx x; string "||"; ocaml_atomic_exp ctx y]
   | E_app (f, xs) ->
-     zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
+     begin match Env.union_constructor_info f (env_of exp) with
+     | Some (_, m, _, _) ->
+        let name = if m > ocaml_variant_max_constructors then (string "`" ^^ zencode_upper ctx f) else zencode_upper ctx f in
+        begin match xs with
+        | [x] -> name ^^ space ^^ ocaml_atomic_exp ctx x
+        | xs -> name ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
+        end
+     | None -> 
+        begin match xs with
+        | [x] -> zencode ctx f ^^ space ^^ ocaml_atomic_exp ctx x
+        (* Make sure we get the correct short circuiting semantics for and and or *)
+        | [x; y] when string_of_id f = "and_bool" ->
+           separate space [ocaml_atomic_exp ctx x; string "&&"; ocaml_atomic_exp ctx y]
+        | [x; y] when string_of_id f = "or_bool" ->
+           separate space [ocaml_atomic_exp ctx x; string "||"; ocaml_atomic_exp ctx y]
+        | xs ->
+           zencode ctx f ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) xs)
+        end
+     end
   | E_vector_subrange (exp1, exp2, exp3) -> string "subrange" ^^ space ^^ parens (separate_map (comma ^^ space) (ocaml_atomic_exp ctx) [exp1; exp2; exp3])
   | E_return exp -> separate space [string "r.return"; ocaml_atomic_exp ctx exp]
   | E_assert (exp, _) -> separate space [string "assert"; ocaml_atomic_exp ctx exp]
@@ -576,13 +595,14 @@ let rec ocaml_fields ctx =
   | (typ, id) :: fields -> ocaml_field typ id ^^ semi ^/^ ocaml_fields ctx fields
   | [] -> empty
 
-let rec ocaml_cases ctx =
+let rec ocaml_cases polymorphic_variant ctx =
   let ocaml_case (Tu_aux (Tu_ty_id (typ, id), _)) =
-    separate space [bar; zencode_upper ctx id; string "of"; ocaml_typ ctx typ]
+    let name = if polymorphic_variant then (string "`" ^^ zencode_upper ctx id) else zencode_upper ctx id in
+    separate space [bar; name; string "of"; ocaml_typ ctx typ]
   in
   function
   | [tu] -> ocaml_case tu
-  | tu :: tus -> ocaml_case tu ^/^ ocaml_cases ctx tus
+  | tu :: tus -> ocaml_case tu ^/^ ocaml_cases polymorphic_variant ctx tus
   | [] -> empty
 
 let rec ocaml_exceptions ctx =
@@ -644,8 +664,14 @@ let ocaml_typedef ctx (TD_aux (td_aux, (l, _))) =
      ocaml_exceptions ctx cases
      ^^ ocaml_def_end
   | TD_variant (id, typq, cases, _) ->
-     (separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals]
-      ^//^ ocaml_cases ctx cases)
+     (if List.length cases > ocaml_variant_max_constructors then (
+        separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals; string "["]
+        ^//^ ocaml_cases true ctx cases
+        ^/^ string "]"
+      ) else (
+        separate space [string "type"; ocaml_typquant typq; zencode ctx id; equals]
+        ^//^ ocaml_cases false ctx cases
+     ))
      ^^ ocaml_def_end
      ^^ ocaml_string_of_variant ctx id typq cases
      ^^ ocaml_def_end

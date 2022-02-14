@@ -215,6 +215,11 @@ val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
 
 val find_next : ('a -> bool) -> 'a list -> ('a list * ('a * 'a list) option)
 
+(** find an item in a list and return that item as well as its index *)
+val find_index_opt : ('a -> bool) -> 'a list -> (int * 'a) option
+
+val find_map : ('a -> 'b option) -> 'a list -> 'b option
+
 val fold_left_concat_map : ('a -> 'b -> 'a * 'c list) -> 'a -> 'b list -> 'a * 'c list
   
 val list_init : int -> (int -> 'a) -> 'a list
