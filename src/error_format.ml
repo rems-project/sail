@@ -137,33 +137,41 @@ let format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to
   format_endline (blank_prefix ^ underline_double_to ppf.loc_color cnum_to) ppf;
   contents { ppf with indent = blank_prefix ^ " " }
 
+let format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf =
+  let blank_prefix = String.make (String.length (string_of_int lnum)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
+  format_endline (Printf.sprintf "%s[%s]:%d:%d-%d" prefix Util.(fname |> cyan |> clear) lnum cnum_from cnum_to) ppf;
+  contents { ppf with indent = blank_prefix ^ " " }
+  
 let format_code_single prefix fname lnum cnum_from cnum_to contents ppf =
   try
     let in_chan = open_in fname in
     begin
       try format_code_single' prefix fname in_chan lnum cnum_from cnum_to contents ppf; close_in in_chan
       with
-      | _ -> close_in_noerr in_chan; ()
+      | exn ->
+         format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf;
+         close_in_noerr in_chan
     end
   with
-  | _ ->
-     let blank_prefix = String.make (String.length (string_of_int lnum)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
-     format_endline (Printf.sprintf "%s[%s]:%d:%d-%d" prefix Util.(fname |> cyan |> clear) lnum cnum_from cnum_to) ppf;
-     contents { ppf with indent = blank_prefix ^ " " }
-    
+  | _ -> format_code_single_fallback prefix fname lnum cnum_from cnum_to contents ppf
+
+let format_code_double_fallback prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf =
+  let blank_prefix = String.make (String.length (string_of_int lnum_to)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
+  format_endline (Printf.sprintf "%s[%s]:%d:%d-%d:%d" prefix Util.(fname |> cyan |> clear) lnum_from cnum_from lnum_to cnum_to) ppf;
+  contents { ppf with indent = blank_prefix ^ " " }
+       
 let format_code_double prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf =
   try
     let in_chan = open_in fname in
     begin
       try format_code_double' prefix fname in_chan lnum_from cnum_from lnum_to cnum_to contents ppf; close_in in_chan
       with
-      | exn -> close_in_noerr in_chan; ()
+      | exn ->
+         format_code_double_fallback prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf;
+         close_in_noerr in_chan
     end
   with
-  | _ ->
-     let blank_prefix = String.make (String.length (string_of_int lnum_to)) ' ' ^ Util.(clear (ppf.loc_color " |")) in
-     format_endline (Printf.sprintf "%s[%s]:%d:%d-%d:%d" prefix Util.(fname |> cyan |> clear) lnum_from cnum_from lnum_to cnum_to) ppf;
-     contents { ppf with indent = blank_prefix ^ " " }
+  | _ -> format_code_double_fallback prefix fname lnum_from cnum_from lnum_to cnum_to contents ppf
 
 let format_pos prefix p1 p2 contents ppf =
   let open Lexing in

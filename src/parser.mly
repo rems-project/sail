@@ -1517,6 +1517,12 @@ subst:
   | id Eq id
     { mk_subst (IS_id ($1, $3)) $startpos $endpos }
 
+instantiation_def:
+  | Instantiation id
+    { ($2, []) }
+  | Instantiation id With separated_nonempty_list(Comma, subst)
+    { ($2, $4) }
+
 def:
   | fun_def
     { DEF_fundef $1 }
@@ -1532,8 +1538,8 @@ def:
     { DEF_outcome ($1, []) }
   | outcome_spec_def Eq Lcurly defs_list Rcurly
     { DEF_outcome ($1, $4) }
-  | Instantiation id With separated_list(Comma, subst)
-    { DEF_instantiation ($2, $4) }
+  | instantiation_def
+    { let (id, substs) = $1 in DEF_instantiation (id, substs) }
   | type_def
     { DEF_type $1 }
   | let_def

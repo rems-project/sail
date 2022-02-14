@@ -186,6 +186,8 @@ val list_iter_sep : (unit -> unit) -> ('a -> unit) -> 'a list -> unit
     with [f x = None]. *)
 val map_filter : ('a -> 'b option) -> 'a list -> 'b list
 
+val map_split : ('a -> ('b, 'c) result) -> 'a list -> 'b list * 'c list
+  
 (** [map_all f l] maps [f] over [l]. If at least one entry is [None], [None] is returned. Otherwise,
     the [Some] function is removed from the list. *)
 val map_all : ('a -> 'b option) -> 'a list -> 'b list option

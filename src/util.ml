@@ -234,6 +234,17 @@ let rec map_filter (f : 'a -> 'b option) (l : 'a list) : 'b list =
       match (f x) with None -> xs'
         | Some x' -> x' :: xs'
 
+let rec map_split f = function
+  | [] -> ([], [])
+  | x :: xs ->
+     match f x with
+     | Ok x' ->
+        let (xs', ys') = map_split f xs in
+        (x' :: xs', ys')
+     | Error y' ->
+        let (xs', ys') = map_split f xs in
+        (xs', y' :: ys')
+                   
 let list_index p l =
   let rec aux i l =
     match l with [] -> None

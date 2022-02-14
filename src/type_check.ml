@@ -5563,27 +5563,48 @@ and check_outcome_instantiation : 'a. Env.t -> 'a instantiation_spec -> subst li
   fun env (IN_aux (IN_id id, (l, _))) substs ->
   typ_print (lazy (Util.("Check instantiation " |> cyan |> clear) ^ string_of_id id));
   let typq, typ, params = Env.get_outcome l id env in
+  (* Find the outcome parameters that were already instantiated by previous instantiation commands *)
+  let instantiated, uninstantiated =
+    Util.map_split (fun kopt ->
+        match KBindings.find_opt (kopt_kid kopt) (Env.get_outcome_instantiation env) with
+        | Some (prev_l, existing_typ) -> Ok (kopt_kid kopt, (prev_l, kopt_kind kopt, existing_typ))
+        | None -> Error kopt
+      ) params in
+  let instantiated = List.fold_left (fun m (kid, inst) -> KBindings.add kid inst m) KBindings.empty instantiated in
+
+  (* Instantiate the outcome type with these existing parameters *)
+  let typ = List.fold_left (fun typ (kid, (_, _, existing_typ)) -> typ_subst kid (mk_typ_arg (A_typ existing_typ)) typ)
+              typ (KBindings.bindings instantiated) in
+
   let instantiate_typ substs typ =
-    List.fold_left (fun (typ, env) -> function
+    List.fold_left (fun (typ, new_instantiated, env) -> function
         | IS_aux (IS_typ (kid, subst_typ), decl_l) ->
-           begin match KBindings.find_opt kid (Env.get_outcome_instantiation env) with
-           | Some (_, existing_typ) when alpha_equivalent env subst_typ existing_typ ->
-              typ_subst kid (mk_typ_arg (A_typ existing_typ)) typ, env
-           | Some (prev_l, existing_typ) ->
+           begin match KBindings.find_opt kid instantiated with
+           | Some (_, _, existing_typ) when alpha_equivalent env subst_typ existing_typ ->
+              typ, new_instantiated, env
+           | Some (prev_l, _, existing_typ) ->
               let msg = Printf.sprintf "Cannot instantiate %s with %s, already instantiated as %s"
                           (string_of_kid kid) (string_of_typ subst_typ) (string_of_typ existing_typ) in
               typ_raise env decl_l (Err_because (Err_other msg, prev_l, Err_other "Previously instantiated here"))
            | None ->
               Env.wf_typ env subst_typ;
               typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ,
+              kid :: new_instantiated,
               Env.add_outcome_variable decl_l kid subst_typ env
            end
         | IS_aux (IS_id (id_from, id_to), _) ->
            let (to_typq, to_typ) = Env.get_val_spec id_to env in
-           typ, env
-      ) (typ, env) substs
+           typ, new_instantiated, env
+      ) (typ, [], env) substs
   in
-  let typ, env = instantiate_typ substs typ in
+  let typ, new_instantiated, env = instantiate_typ substs typ in
+
+  (* Make sure every required outcome parameter has been instantiated *)
+  List.iter (fun kopt ->
+      if not (List.exists (fun v -> Kid.compare (kopt_kid kopt) v = 0) new_instantiated) then
+        typ_error env l ("Type variable " ^ string_of_kinded_id kopt ^ " must be instantiated")
+    ) uninstantiated;
+  
   [DEF_instantiation (IN_aux (IN_id id, (l, mk_tannot env unit_typ no_effect)), substs)], Env.add_val_spec id (typq, typ) env
 
 and check_def : 'a. Env.t -> 'a def -> tannot def list * Env.t =
