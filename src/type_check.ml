@@ -164,6 +164,7 @@ type env =
     bitfields : (Big_int.num * Big_int.num) Bindings.t Bindings.t;
     toplevel : l option;
     outcome_typschm : (typquant * typ) option;
+    outcome_instantiation : (Ast.l * typ) KBindings.t;
   }
 
 exception Type_error of env * l * type_error;;
@@ -496,7 +497,9 @@ module Env : sig
   val get_val_spec : id -> t -> typquant * typ
   val get_val_specs : t -> (typquant * typ ) Bindings.t
   val get_val_spec_orig : id -> t -> typquant * typ
-  val get_outcome : l -> id -> env -> typquant * typ * kinded_id list
+  val get_outcome : l -> id -> t -> typquant * typ * kinded_id list
+  val get_outcome_instantiation : t -> (Ast.l * typ) KBindings.t
+  val add_outcome_variable : Ast.l -> kid -> typ -> t -> t
   val union_constructor_info : id -> t -> (int * int * id * type_union) option
   val is_union_constructor : id -> t -> bool
   val is_singleton_union_constructor : id -> t -> bool
@@ -624,6 +627,7 @@ end = struct
       bitfields = Bindings.empty;
       toplevel = None;
       outcome_typschm = None;
+      outcome_instantiation = KBindings.empty;
     }
 
   let set_prover f env = { env with prove = f }
@@ -1205,7 +1209,7 @@ end = struct
     | Some outcome -> outcome
     | None ->
        typ_error env l ("Outcome " ^ string_of_id id ^ " does not exist")
-    
+ 
   and add_mapping id (typq, typ1, typ2, effect) env =
     typ_print (lazy (adding ^ "mapping " ^ string_of_id id));
     let forwards_id = mk_id (string_of_id id ^ "_forwards") in
@@ -1233,6 +1237,11 @@ end = struct
     else
       env
 
+  let get_outcome_instantiation env = env.outcome_instantiation
+
+  let add_outcome_variable l kid typ env =
+    { env with outcome_instantiation = KBindings.add kid (l, typ) env.outcome_instantiation }
+                                    
   let define_val_spec id env =
     if IdSet.mem id env.defined_val_specs
     then typ_error env (id_loc id) ("Function " ^ string_of_id id ^ " has already been declared")
@@ -5552,16 +5561,30 @@ and check_impldef : 'a. Env.t -> 'a funcl -> tannot def list * Env.t =
 
 and check_outcome_instantiation : 'a. Env.t -> 'a instantiation_spec -> subst list -> tannot def list * Env.t =
   fun env (IN_aux (IN_id id, (l, _))) substs ->
+  typ_print (lazy (Util.("Check instantiation " |> cyan |> clear) ^ string_of_id id));
   let typq, typ, params = Env.get_outcome l id env in
   let instantiate_typ substs typ =
-    List.fold_left (fun typ -> function
-        | IS_aux (IS_typ (kid, subst_typ), _) ->
-           Env.wf_typ env subst_typ;
-           typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ
-        | _ -> typ
-      ) typ substs
+    List.fold_left (fun (typ, env) -> function
+        | IS_aux (IS_typ (kid, subst_typ), decl_l) ->
+           begin match KBindings.find_opt kid (Env.get_outcome_instantiation env) with
+           | Some (_, existing_typ) when alpha_equivalent env subst_typ existing_typ ->
+              typ_subst kid (mk_typ_arg (A_typ existing_typ)) typ, env
+           | Some (prev_l, existing_typ) ->
+              let msg = Printf.sprintf "Cannot instantiate %s with %s, already instantiated as %s"
+                          (string_of_kid kid) (string_of_typ subst_typ) (string_of_typ existing_typ) in
+              typ_raise env decl_l (Err_because (Err_other msg, prev_l, Err_other "Previously instantiated here"))
+           | None ->
+              Env.wf_typ env subst_typ;
+              typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ,
+              Env.add_outcome_variable decl_l kid subst_typ env
+           end
+        | IS_aux (IS_id (id_from, id_to), _) ->
+           let (to_typq, to_typ) = Env.get_val_spec id_to env in
+           typ, env
+      ) (typ, env) substs
   in
-  [DEF_instantiation (IN_aux (IN_id id, (l, mk_tannot env unit_typ no_effect)), substs)], Env.add_val_spec id (typq, instantiate_typ substs typ) env
+  let typ, env = instantiate_typ substs typ in
+  [DEF_instantiation (IN_aux (IN_id id, (l, mk_tannot env unit_typ no_effect)), substs)], Env.add_val_spec id (typq, typ) env
 
 and check_def : 'a. Env.t -> 'a def -> tannot def list * Env.t =
   fun env def ->

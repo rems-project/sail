@@ -86,10 +86,9 @@ let rec instantiate_id id = function
  
 let instantiate_typ substs typ =
   List.fold_left (fun typ -> function
-      | IS_aux (IS_typ (kid, subst_typ), _) -> typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ
-      | _ -> typ
-    ) typ substs
-        
+      | (kid, (_, subst_typ)) -> typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ
+    ) typ (KBindings.bindings substs)
+ 
 let instantiate_def target id substs = function
   | DEF_impl (FCL_aux (FCL_Funcl (target_id, pexp), annot)) when string_of_id target_id = target ->
      let l = gen_loc (id_loc id) in
@@ -112,9 +111,10 @@ let instantiate target ast =
     | DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), args), l), outcome_defs) ->
        Bindings.add id (typq, typ, args, l, outcome_defs) outcomes, []
 
-    | DEF_instantiation (IN_aux (IN_id id, annot), substs) ->
+    | DEF_instantiation (IN_aux (IN_id id, annot), id_substs) ->
        let l = gen_loc (id_loc id) in
        let env = env_of_annot annot in
+       let substs = Env.get_outcome_instantiation env in
        let (typq, typ, args, outcome_l, outcome_defs) = match Bindings.find_opt id outcomes with
          | Some outcome -> outcome
          | None -> Reporting.unreachable (id_loc id) __POS__ ("Outcome for instantiation " ^ string_of_id id ^ " does not exist")
@@ -127,7 +127,7 @@ let instantiate target ast =
        in
        let rewrite_e_aux (exp, annot) =
          match exp with
-         | E_app (f, args) -> E_aux (E_app (instantiate_id f substs, args), annot)
+         | E_app (f, args) -> E_aux (E_app (instantiate_id f id_substs, args), annot)
          | E_cast (typ, exp) -> E_aux (E_cast (instantiate_typ substs typ, exp), annot)
          | _ -> E_aux (exp, annot)
        in
@@ -144,7 +144,7 @@ let instantiate target ast =
        in
        let outcome_defs, _ =
          (valspec :: rewrite_ast_defs { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp } outcome_defs)
-         |> Util.map_filter (instantiate_def target id substs)
+         |> Util.map_filter (instantiate_def target id id_substs)
          |> Type_error.check_defs env
        in
        outcomes, outcome_defs
