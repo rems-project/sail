@@ -411,14 +411,14 @@ let call_smt l constraints =
   Profile.finish_smt t;
   result
 
-let solve_smt_file l constraints =
+let solve_smt_file l extra constraints =
   let vars =
     kopts_of_constraint constraints
     |> KOptSet.elements
     |> List.map kopt_pair
     |> List.fold_left (fun m (k, v) -> KBindings.add k v m) KBindings.empty
   in
-  smtlib_of_constraints ~get_model:true l vars [] constraints
+  smtlib_of_constraints ~get_model:true l vars extra constraints
 
 let call_smt_solve l smt_file smt_vars var =
   let smt_var = pp_sexpr (smt_vars var) in
@@ -498,7 +498,7 @@ let call_smt_solve_bitvector l smt_file smt_vars =
     ) smt_vars |> Util.option_all
                      
 let solve_smt l constraints var =
-  let smt_file, smt_vars, _ = solve_smt_file l constraints in
+  let smt_file, smt_vars, _ = solve_smt_file l [] constraints in
   call_smt_solve l smt_file smt_vars var
 
 let solve_all_smt l constraints var =
@@ -513,25 +513,47 @@ let solve_all_smt l constraints var =
   in
   aux []
 
-let solve_unique_smt l constraints var =
-  let smt_file, smt_vars, _ = solve_smt_file l constraints in
+let solve_unique_smt' l constraints exp_defn exp_bound var =
+  let smt_file, smt_vars, exponentials = solve_smt_file l (exp_defn @ exp_bound) constraints in
   let digest = Digest.string (smt_file ^ pp_sexpr (smt_vars var)) in
-  match DigestMap.find_opt digest !known_uniques with
-  | Some (Some result) -> Some (Big_int.of_int result)
-  | Some (None) -> None
-  | None ->
-     match call_smt_solve l smt_file smt_vars var with
-     | Some result ->
-        begin match call_smt l (nc_and constraints (nc_neq (nconstant result) (nvar var))) with
-        | Unsat ->
-           if Big_int.less_equal Big_int.zero result && Big_int.less result (Big_int.pow_int_positive 2 30) then
-             known_uniques := DigestMap.add digest (Some (Big_int.to_int result)) !known_uniques
-           else ();
-           Some result
-        | _ ->
-           known_uniques := DigestMap.add digest None !known_uniques;
-           None
-        end
-     | None ->
-        known_uniques := DigestMap.add digest None !known_uniques;
-        None
+  let result =
+    match DigestMap.find_opt digest !known_uniques with
+    | Some (Some result) -> Some (Big_int.of_int result)
+    | Some (None) -> None
+    | None ->
+       match call_smt_solve l smt_file smt_vars var with
+       | Some result ->
+          begin match call_smt' l exp_defn (nc_and constraints (nc_neq (nconstant result) (nvar var))) with
+          | Unsat ->
+             if Big_int.less_equal Big_int.zero result && Big_int.less result (Big_int.pow_int_positive 2 30) then
+               known_uniques := DigestMap.add digest (Some (Big_int.to_int result)) !known_uniques
+             else ();
+             Some result
+          | _ ->
+             known_uniques := DigestMap.add digest None !known_uniques;
+             None
+          end
+       | None ->
+          known_uniques := DigestMap.add digest None !known_uniques;
+          None
+  in result, exponentials
+
+(* Follows the same approach as call_smt' for unknown results due to
+   exponentials, retrying with a bounded spec. *)
+
+let solve_unique_smt l constraints var =
+  let t = Profile.start_smt () in
+  let result =
+    match solve_unique_smt' l constraints [] [] var with
+    | Some result, _ -> Some result
+    | None, [] -> None
+    | None, exponentials ->
+       opt_solver := { !opt_solver with uninterpret_power = true };
+       let sailexp = sailexp_concrete 64 in
+       let exp_bound = List.map bound_exponential exponentials in
+       let result, _ = solve_unique_smt' l constraints sailexp exp_bound var in
+       opt_solver := { !opt_solver with uninterpret_power = false };
+       result
+  in
+  Profile.finish_smt t;
+  result
