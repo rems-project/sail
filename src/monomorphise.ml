@@ -3676,7 +3676,7 @@ let make_bitvector_env_casts top_env env quant_kids insts exp =
     if mut = Immutable then mk_cast var typ exp else exp) immutables exp
 
 let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
-  if alpha_equivalent cast_env typ target_typ then exp else
+  if alpha_equivalent (env_of exp) typ target_typ then exp else
   let infer_arg_typ env f l typ =
     let (typq, ctor_typ) = Env.get_union_id f env in
     let quants = quant_items typq in
@@ -3693,7 +3693,7 @@ let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
   in
   (* Push the cast down, including through constructors *)
   let rec aux exp (typ, target_typ) =
-    if alpha_equivalent cast_env typ target_typ then exp else
+    if alpha_equivalent (env_of exp) typ target_typ then exp else
     let exp_env = env_of exp in
     match exp with
     | E_aux (E_let (lb,exp'),ann) ->
