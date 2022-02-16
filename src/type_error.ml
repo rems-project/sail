@@ -123,10 +123,10 @@ let rec analyze_unresolved_quant locals ncs = function
 let message_of_type_error =
   let open Error_format in
   let rec msg = function
-    | Err_because (err, l', err') ->
+    | Err_inner (err, l', prefix, err') ->
        Seq [msg err;
             Line "";
-            Location (Util.("Caused by " |> yellow |> clear), l', msg err')]
+            Location (Util.((prefix ^ " ") |> yellow |> clear), l', msg err')]
 
     | Err_other str -> Line str
 
@@ -194,13 +194,13 @@ let rec collapse_errors = function
         end
      | [] -> no_collapse
      end
-  | Err_because (err1, l, err2) as no_collapse ->
+  | Err_inner (err1, l, prefix, err2) ->
      let err1 = collapse_errors err1 in
      let err2 = collapse_errors err2 in
      if string_of_type_error err1 = string_of_type_error err2 then
        err1
      else
-       Err_because (err1, l, err2)
+       Err_inner (err1, l, prefix, err2)
   | err -> err
 
 let check_defs : 'a. Env.t -> 'a def list -> tannot def list * Env.t =

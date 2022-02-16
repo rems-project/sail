@@ -27,7 +27,6 @@ function instance_to_bits2(_) = 0xFFFF_FFFF_FFFF_FFFF
 
 instantiation test_outcome1 with
   'a = bits(32),
-  to_bits = instance_to_bits1
+  to_bits = instance_to_bits2
 
-instantiation test_outcome2 with
-  'a = bitvector(32, dec)
+instantiation test_outcome2

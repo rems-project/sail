@@ -130,11 +130,12 @@ type type_error =
   | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
-  | Err_because of type_error * Parse_ast.l * type_error
+  | Err_inner of type_error * Parse_ast.l * string * type_error
+
+let err_because (error1, l, error2) = Err_inner (error1, l, "Caused by", error2)
 
 type env =
   { top_val_specs : (typquant * typ) Bindings.t;
-    top_outcomes : (typquant * typ * kinded_id list) Bindings.t;
     defined_val_specs : IdSet.t;
     locals : (mut * typ) Bindings.t;
     top_letbinds : IdSet.t;
@@ -163,6 +164,7 @@ type env =
     allow_unknowns : bool;
     bitfields : (Big_int.num * Big_int.num) Bindings.t Bindings.t;
     toplevel : l option;
+    outcomes : (typquant * typ * kinded_id list * env) Bindings.t;
     outcome_typschm : (typquant * typ) option;
     outcome_instantiation : (Ast.l * typ) KBindings.t;
   }
@@ -490,14 +492,14 @@ let adding = Util.("Adding " |> darkgray |> clear)
 module Env : sig
   type t = env
   val add_val_spec : id -> typquant * typ -> t -> t
-  val add_outcome : id -> typquant * typ * kinded_id list -> t -> t
+  val add_outcome : id -> typquant * typ * kinded_id list * t -> t -> t
   val update_val_spec : id -> typquant * typ -> t -> t
   val define_val_spec : id -> t -> t
   val get_defined_val_specs : t -> IdSet.t
   val get_val_spec : id -> t -> typquant * typ
   val get_val_specs : t -> (typquant * typ ) Bindings.t
   val get_val_spec_orig : id -> t -> typquant * typ
-  val get_outcome : l -> id -> t -> typquant * typ * kinded_id list
+  val get_outcome : l -> id -> t -> typquant * typ * kinded_id list * t
   val get_outcome_instantiation : t -> (Ast.l * typ) KBindings.t
   val add_outcome_variable : Ast.l -> kid -> typ -> t -> t
   val union_constructor_info : id -> t -> (int * int * id * type_union) option
@@ -597,7 +599,6 @@ end = struct
 
   let empty =
     { top_val_specs = Bindings.empty;
-      top_outcomes = Bindings.empty;
       defined_val_specs = IdSet.empty;
       locals = Bindings.empty;
       top_letbinds = IdSet.empty;
@@ -626,6 +627,7 @@ end = struct
       allow_unknowns = false;
       bitfields = Bindings.empty;
       toplevel = None;
+      outcomes = Bindings.empty;
       outcome_typschm = None;
       outcome_instantiation = KBindings.empty;
     }
@@ -1085,7 +1087,7 @@ end = struct
     with
     | Type_error (env, err_l, err) ->
        decr depth;
-       typ_raise env l (Err_because (Err_other "Well-formedness check failed for type",
+       typ_raise env l (err_because (Err_other "Well-formedness check failed for type",
                                      err_l,
                                      err))
  
@@ -1201,11 +1203,11 @@ end = struct
     then update_val_spec id (bind_typq, bind_typ) env
     else env
 
-  and add_outcome id (typq, typ, params) env =
-    { env with top_outcomes = Bindings.add id (typq, typ, params) env.top_outcomes }
+  and add_outcome id (typq, typ, params, outcome_env) env =
+    { env with outcomes = Bindings.add id (typq, typ, params, outcome_env) env.outcomes }
 
   and get_outcome l id env =
-    match Bindings.find_opt id env.top_outcomes with
+    match Bindings.find_opt id env.outcomes with
     | Some outcome -> outcome
     | None ->
        typ_error env l ("Outcome " ^ string_of_id id ^ " does not exist")
@@ -1577,7 +1579,7 @@ let rec check_shadow_leaks l inner_env outer_env typ =
            match Env.get_typ_var_loc_opt var inner_env with
            | Some leak_l ->
               typ_raise outer_env l
-                (Err_because
+                (err_because
                    (Err_other ("The type variable " ^ string_of_kid var
                                ^ " would leak into an outer scope.\n\nTry adding a type annotation to this expression."),
                     leak_l,
@@ -1919,6 +1921,11 @@ let rec unify_typ l env goals (Typ_aux (aux1, _) as typ1) (Typ_aux (aux2, _) as 
   | Typ_tup typs1, Typ_tup typs2 when List.length typs1 = List.length typs2 ->
      List.fold_left (merge_uvars l) KBindings.empty (List.map2 (unify_typ l env goals) typs1 typs2)
 
+  | Typ_fn (arg_typs1, ret_typ1, _), Typ_fn (arg_typs2, ret_typ2, _) when List.length arg_typs1 = List.length arg_typs2 ->
+     merge_uvars l
+       (List.fold_left (merge_uvars l) KBindings.empty (List.map2 (unify_typ l env goals) arg_typs1 arg_typs2))
+       (unify_typ l env goals ret_typ1 ret_typ2)
+ 
   | _, _ -> unify_error l ("Could not unify " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2)
 
 and unify_typ_arg l env goals (A_aux (aux1, _) as typ_arg1) (A_aux (aux2, _) as typ_arg2) =
@@ -1980,7 +1987,7 @@ and unify_nexp l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (nexp_au
     begin
       if prove __POS__ env (NC_aux (NC_equal (nexp1, nexp2), Parse_ast.Unknown))
       then KBindings.empty
-      else unify_error l ("Nexp " ^ string_of_nexp nexp1 ^ " and " ^ string_of_nexp nexp2 ^ " are not equal")
+      else unify_error l ("Integer expressions " ^ string_of_nexp nexp1 ^ " and " ^ string_of_nexp nexp2 ^ " are not equal")
     end
   else
     match nexp_aux1 with
@@ -2359,9 +2366,7 @@ let rec subtyp l env typ1 typ2 =
   match typ_aux1, typ_aux2 with
   | _, Typ_internal_unknown when Env.allow_unknowns env -> ()
 
-  | Typ_app (id1, _), Typ_id id2 when string_of_id id1 = "atom_bool" && string_of_id id2 = "bool" ->
-     typ_debug (lazy "Boolean subtype");
-     ()
+  | Typ_app (id1, _), Typ_id id2 when string_of_id id1 = "atom_bool" && string_of_id id2 = "bool" -> ()
 
   | Typ_tup typs1, Typ_tup typs2 when List.length typs1 = List.length typs2 ->
      List.iter2 (subtyp l env) typs1 typs2
@@ -2373,6 +2378,16 @@ let rec subtyp l env typ1 typ2 =
   | Typ_id id1, Typ_app (id2, []) when Id.compare id1 id2 = 0 -> ()
   | Typ_app (id1, []), Typ_id id2 when Id.compare id1 id2 = 0 -> ()
 
+  | Typ_fn (typ_args1, ret_typ1, eff1), Typ_fn (typ_args2, ret_typ2, eff2) ->
+     if not (subseteq_effects eff1 eff2) then (
+       typ_error env l ("Effect " ^ string_of_effect eff1 ^ " must be a subset of " ^ string_of_effect eff2)
+     );
+     if List.compare_lengths typ_args1 typ_args2 <> 0 then (
+       typ_error env l "Function types do not have the same number of arguments in subtype check"
+     );
+     List.iter2 (subtyp l env) typ_args2 typ_args1;
+     subtyp l env ret_typ1 ret_typ2
+                                                               
   | _, _ ->
   match destruct_exist_plain typ1, destruct_exist (canonicalize env typ2) with
   | Some (kopts, nc, typ1), _ ->
@@ -2880,6 +2895,28 @@ let solve_quant env = function
   | QI_aux (QI_constant _, _) -> false
   | QI_aux (QI_constraint nc, _) -> prove __POS__ env nc
 
+let check_function_instantiation l id env bind1 bind2 =
+  let direction check (typq1, typ1) (typq2, typ2) =
+    let check_env = Env.add_typquant l typq1 env in
+    let unifiers =
+      try unify l check_env (quant_kopts typq2 |> List.map kopt_kid |> KidSet.of_list) typ2 typ1
+      with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m)
+    in
+    
+    let quants = List.fold_left (instantiate_quants env) (quant_items typq2) (KBindings.bindings unifiers) in
+    if not (List.for_all (solve_quant env) quants) then (
+      typ_raise env l (Err_unresolved_quants (id, quants, Env.get_locals env, Env.get_constraints env))
+    );
+    let typ2 = subst_unifiers unifiers typ2 in
+  
+    check check_env typ1 typ2;
+  in
+  try direction (fun check_env typ1 typ2 -> subtyp l check_env typ1 typ2) bind1 bind2 with
+  | Type_error (_, l1, err1) ->
+     try direction (fun check_env typ1 typ2 -> subtyp l check_env typ2 typ1) bind2 bind1 with
+     | Type_error (err_env, l2, err2) ->
+        typ_raise err_env l2 (Err_inner (err2, l1, "Also tried", err1))
+ 
 (* When doing implicit type coercion, for performance reasons we want
    to filter out the possible casts to only those that could
    reasonably apply. We don't mind if we try some coercions that are
@@ -2965,7 +3002,7 @@ let check_pattern_duplicates env pat =
   match Bindings.choose_opt (Bindings.filter is_duplicate !ids) with
   | Some (id, Pattern_duplicate (l1, l2)) ->
      typ_raise env l2
-       (Err_because (Err_other ("Duplicate binding for " ^ string_of_id id ^ " in pattern"),
+       (err_because (Err_other ("Duplicate binding for " ^ string_of_id id ^ " in pattern"),
                      l1,
                      Err_other ("Previous binding of " ^ string_of_id id ^ " here")))
   | _ -> ()
@@ -3834,7 +3871,7 @@ and bind_assignment assign_l env (LEXP_aux (lexp_aux, (lexp_l, ())) as lexp) (E_
           let inferred_lexp = infer_lexp env lexp in
           let checked_exp = crule check_exp env exp (lexp_typ_of inferred_lexp) in
           annot_assign inferred_lexp checked_exp, env
-        with Type_error (env, l', err') -> typ_raise env l' (Err_because (err', l, err))
+        with Type_error (env, l', err') -> typ_raise env l' (err_because (err', l, err))
 
 and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
   typ_print (lazy ("Binding mutable " ^ string_of_lexp lexp ^  " to " ^ string_of_typ typ));
@@ -4202,7 +4239,7 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
              end
            ) with
            | Type_error (_, err_l', err') ->
-              typ_raise err_env err_l (Err_because (err, err_l', err')))
+              typ_raise err_env err_l (err_because (err, err_l', err')))
        | exn -> raise exn
      end
   | E_vector_update (v, n, exp) -> infer_exp env (E_aux (E_app (mk_id "vector_update", [v; n; exp]), (l, ())))
@@ -5409,7 +5446,7 @@ let forbid_recursive_types type_l f =
   try f () with
   | Type_error (env, l, err) ->
      let msg = "Types are not well-formed within this type definition. Note that recursive types are forbidden." in
-     raise (Type_error (env, type_l, Err_because (Err_other msg, l, err)))
+     raise (Type_error (env, type_l, err_because (Err_other msg, l, err)))
 
 let check_type_union u_l non_rec_env env variant typq (Tu_aux (tu, l)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
@@ -5511,7 +5548,7 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
          let msg = "As this is a scattered union clause, this could \
                     also be caused by using a type defined after the \
                     'scattered union' declaration" in
-         raise (Type_error (env, l', Err_because (err, id_loc id, Err_other msg))))
+         raise (Type_error (env, l', err_because (err, id_loc id, Err_other msg))))
   | SD_funcl (FCL_aux (FCL_Funcl (id, _), (l, _)) as funcl) ->
      let typq, typ = Env.get_val_spec id env in
      let funcl_env = Env.add_typquant l typq env in
@@ -5537,9 +5574,9 @@ and check_outcome : 'a. Env.t -> outcome_spec -> 'a def list -> outcome_spec * t
            | TypSchm_aux (TypSchm_ts (typq, typ), _) -> typq, typ
          in
          let local_env = { local_env with outcome_typschm = Some (quant, typ) } in
-         let defs, _ = check_defs local_env defs in
+         let defs, local_env = check_defs local_env defs in
          decr depth;
-         OV_aux (OV_outcome (id, typschm, params), l), defs, Env.add_outcome id (quant, typ, params) env
+         OV_aux (OV_outcome (id, typschm, params), l), defs, Env.add_outcome id (quant, typ, params, local_env) env
        with
        | Type_error (env, err_l, err) ->
           decr depth;
@@ -5547,7 +5584,7 @@ and check_outcome : 'a. Env.t -> outcome_spec -> 'a def list -> outcome_spec * t
      end
   | Some outer_l ->
      let msg = "Outcome must be declared within top-level scope" in
-     typ_raise env l (Err_because (Err_other msg, outer_l, Err_other "Containing scope declared here"))
+     typ_raise env l (err_because (Err_other msg, outer_l, Err_other "Containing scope declared here"))
 
 and check_impldef : 'a. Env.t -> 'a funcl -> tannot def list * Env.t =
   fun env (FCL_aux (FCL_Funcl (id, _), (l, _)) as funcl) ->
@@ -5562,7 +5599,7 @@ and check_impldef : 'a. Env.t -> 'a funcl -> tannot def list * Env.t =
 and check_outcome_instantiation : 'a. Env.t -> 'a instantiation_spec -> subst list -> tannot def list * Env.t =
   fun env (IN_aux (IN_id id, (l, _))) substs ->
   typ_print (lazy (Util.("Check instantiation " |> cyan |> clear) ^ string_of_id id));
-  let typq, typ, params = Env.get_outcome l id env in
+  let typq, typ, params, outcome_env = Env.get_outcome l id env in
   (* Find the outcome parameters that were already instantiated by previous instantiation commands *)
   let instantiated, uninstantiated =
     Util.map_split (fun kopt ->
@@ -5577,34 +5614,45 @@ and check_outcome_instantiation : 'a. Env.t -> 'a instantiation_spec -> subst li
               typ (KBindings.bindings instantiated) in
 
   let instantiate_typ substs typ =
-    List.fold_left (fun (typ, new_instantiated, env) -> function
+    List.fold_left (fun (typ, new_instantiated, fns, env) -> function
         | IS_aux (IS_typ (kid, subst_typ), decl_l) ->
            begin match KBindings.find_opt kid instantiated with
            | Some (_, _, existing_typ) when alpha_equivalent env subst_typ existing_typ ->
-              typ, new_instantiated, env
+              typ, new_instantiated, fns, env
            | Some (prev_l, _, existing_typ) ->
               let msg = Printf.sprintf "Cannot instantiate %s with %s, already instantiated as %s"
                           (string_of_kid kid) (string_of_typ subst_typ) (string_of_typ existing_typ) in
-              typ_raise env decl_l (Err_because (Err_other msg, prev_l, Err_other "Previously instantiated here"))
+              typ_raise env decl_l (err_because (Err_other msg, prev_l, Err_other "Previously instantiated here"))
            | None ->
               Env.wf_typ env subst_typ;
               typ_subst kid (mk_typ_arg (A_typ subst_typ)) typ,
-              kid :: new_instantiated,
+              (kid, subst_typ) :: new_instantiated,
+              fns,
               Env.add_outcome_variable decl_l kid subst_typ env
            end
-        | IS_aux (IS_id (id_from, id_to), _) ->
-           let (to_typq, to_typ) = Env.get_val_spec id_to env in
-           typ, new_instantiated, env
-      ) (typ, [], env) substs
+        | IS_aux (IS_id (id_from, id_to), decl_l) ->
+           typ, new_instantiated, (id_from, id_to, decl_l) :: fns, env
+      ) (typ, [], [], env) substs
   in
-  let typ, new_instantiated, env = instantiate_typ substs typ in
+  let typ, new_instantiated, fns, env = instantiate_typ substs typ in
 
   (* Make sure every required outcome parameter has been instantiated *)
   List.iter (fun kopt ->
-      if not (List.exists (fun v -> Kid.compare (kopt_kid kopt) v = 0) new_instantiated) then
+      if not (List.exists (fun (v, _) -> Kid.compare (kopt_kid kopt) v = 0) new_instantiated) then
         typ_error env l ("Type variable " ^ string_of_kinded_id kopt ^ " must be instantiated")
     ) uninstantiated;
-  
+
+  List.iter (fun (id_from, id_to, decl_l) ->
+      let (to_typq, to_typ) = Env.get_val_spec id_to env in
+      let (from_typq, from_typ) = Env.get_val_spec id_from outcome_env in
+      typ_debug (lazy (string_of_bind (to_typq, to_typ)));
+      
+      let from_typ = List.fold_left (fun typ (v, subst_typ) -> typ_subst v (mk_typ_arg (A_typ subst_typ)) typ) from_typ new_instantiated in
+      let from_typ = List.fold_left (fun typ (v, (_, _, subst_typ)) -> typ_subst v (mk_typ_arg (A_typ subst_typ)) typ) from_typ (KBindings.bindings instantiated) in
+      
+      check_function_instantiation decl_l id_from env (to_typq, to_typ) (from_typq, from_typ);
+    ) fns;
+
   [DEF_instantiation (IN_aux (IN_id id, (l, mk_tannot env unit_typ no_effect)), substs)], Env.add_val_spec id (typq, typ) env
 
 and check_def : 'a. Env.t -> 'a def -> tannot def list * Env.t =

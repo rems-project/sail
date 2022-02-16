@@ -8,14 +8,14 @@ outcome test_outcome1 : forall 'n, 'n > 0. ('a, bits('n)) -> unit
 with
   'a: Type
 = {
-    val to_bits : 'a -> bits(64)
+    val to_bits : forall 'n, 'n == 64. 'a -> bits('n)
 }
 
 outcome test_outcome2 : ('a, int) -> unit
 with
   'a: Type
 
-val instance_to_bits1 : bits(32) -> bits(64)
+val instance_to_bits1 : forall 'a, 'a in {32, 48}. bits('a) -> bits(64)
 
 function instance_to_bits1(x) = {
     sail_zero_extend(x, 64)

@@ -26,6 +26,6 @@ val instance_to_bits2 : string -> bits(64)
 function instance_to_bits2(_) = 0xFFFF_FFFF_FFFF_FFFF
 
 instantiation test_outcome1 with
-  to_bits = instance_to_bits2
+  to_bits = instance_to_bits1
 
 instantiation test_outcome2

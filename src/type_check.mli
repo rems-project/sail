@@ -117,7 +117,7 @@ type type_error =
   | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
-  | Err_because of type_error * Ast.l * type_error
+  | Err_inner of type_error * Ast.l * string * type_error
 
 type env
 
