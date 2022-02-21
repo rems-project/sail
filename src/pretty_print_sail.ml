@@ -440,8 +440,10 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_if (if_exp, then_exp, else_exp) when if_block_then then_exp ->
      (separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp)
      ^/^ (string "else" ^^ space ^^ doc_exp else_exp)
+  (* Disabled because you need to know that it's not in an ambiguous context
   | E_if (if_exp, then_exp, E_aux ((E_lit (L_aux (L_unit, _)) | E_block []), _)) ->
      group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp])
+  *)
   | E_if (if_exp, then_exp, else_exp) ->
      group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp; string "else"; doc_exp else_exp])
 
