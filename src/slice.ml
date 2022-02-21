@@ -344,7 +344,7 @@ let id_of_reg_dec (DEC_aux (aux, _)) =
   | DEC_config (id, _, _) -> id
   | _ -> assert false
 
-let filter_ast cuts g ast =
+let filter_ast_extra cuts g ast keep_std =
   let rec filter_ast' g =
     let module NS = Set.Make(Node) in
     let module NM = Map.Make(Node) in
@@ -373,11 +373,25 @@ let filter_ast cuts g ast =
     | (DEF_measure (id,_,_) as def) :: defs when NM.mem (Function id) g -> def :: filter_ast' g defs
     | DEF_measure _ :: defs -> filter_ast' g defs
 
+    | (DEF_pragma ("include_start", file_name, _) as def) :: defs when keep_std ->
+       (* TODO: proper check *)
+       let d = Filename.dirname file_name in
+       if Filename.basename d = "lib" && Filename.basename (Filename.dirname d) = "sail" then
+         let rec in_file = function
+           | [] -> []
+           | DEF_pragma ("include_end", file_name', _) as def :: defs when file_name = file_name' ->
+              def :: filter_ast' g defs
+           | def :: defs -> def :: in_file defs
+         in def :: in_file defs
+       else def :: filter_ast' g defs
+
     | def :: defs -> def :: filter_ast' g defs
 
     | [] -> []
   in
   { ast with defs = filter_ast' g ast.defs }
+
+let filter_ast cuts g ast = filter_ast_extra cuts g ast false
 
 let dot_of_ast out_chan ast =
   let module G = Graph.Make(Node) in
@@ -398,6 +412,7 @@ let () =
   let open Printf in
   let open Interactive in
   let slice_roots = ref IdSet.empty in
+  let slice_keep_std = ref false in
   let slice_cuts = ref IdSet.empty in
 
   ArgString ("identifiers", fun arg -> Action (fun () ->
@@ -406,6 +421,10 @@ let () =
     Specialize.add_initial_calls ids;
     slice_roots := IdSet.union ids !slice_roots
   )) |> register_command ~name:"slice_roots" ~help:"Set the roots for :slice";
+
+  Action (fun () ->
+      slice_keep_std := true
+  ) |> register_command ~name:"slice_keep_std" ~help:"Keep standard library contents during :slice";
 
   ArgString ("identifiers", fun arg -> Action (fun () ->
     let args = Str.split (Str.regexp " +") arg in
@@ -420,7 +439,7 @@ let () =
     let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
     let cuts = !slice_cuts |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
     let g = G.prune roots cuts g in
-    ast := filter_ast cuts g !ast
+    ast := filter_ast_extra cuts g !ast !slice_keep_std
   ) |> register_command
          ~name:"slice"
          ~help:"Slice AST to the definitions which the functions given \
@@ -440,7 +459,7 @@ let () =
     in
     let cuts = NodeMap.bindings g |> Util.map_filter keep |> NodeSet.of_list in
     let g = G.prune roots cuts g in
-    ast := filter_ast cuts g !ast
+    ast := filter_ast_extra cuts g !ast !slice_keep_std
   ) |> register_command
          ~name:"thin_slice"
          ~help:(sprintf ":thin_slice - Slice AST to the function definitions given with %s" (command "slice_roots"));
