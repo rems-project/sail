@@ -55,17 +55,35 @@ val h : bool -> unit effect {escape}
 
 /* Note: we don't really need to split on b, but it's awkward to avoid.
    The important bit is not to overreact to the exception. */
-/* While the case splitting currently works, it doesn't yet generate a fake size
-   for 'x or remove the dead code that needs one
 function h(b) = {
   let 'x : {'x, true. atom('x)} =
     if b then 16 else throw () in
   let v : bits('x) = extz(0b0) in
   ()
 }
-*/
 
-val run : unit -> unit effect {escape}
+// A common pattern in current Arm decode functions (where undefined is
+// actually implementation defined)
+
+val i : bool -> unit effect {escape, undef}
+
+function i(b) = {
+  x : {|16,32|} = 16;
+  if b then {
+    x = 32;
+  } else {
+    if undefined then {
+      x = 16;
+    } else {
+      throw ();
+    }
+  };
+  let 'x = x;
+  let v : bits('x) = extz(0b0) in
+  ()
+}
+
+val run : unit -> unit effect {escape, undef}
 
 function run () = {
   assert(true);
@@ -73,5 +91,6 @@ function run () = {
   f(false,true);
   g(false,false);
   g(false,true);
-/*  h(true);*/
+  h(true);
+  i(true);
 }

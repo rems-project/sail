@@ -3587,6 +3587,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          |> List.fold_left IdSet.union IdSet.empty
          |> IdSet.inter used_vars
          |> mk_var_exps_pats pl env in
+       let e1 = if is_case then e1 else rewrite_var_updates (add_vars overwrite e1 vars) in
        if vars = [] then
          let ps = List.map (function
            | Pat_aux (Pat_exp (p,e),a) ->
@@ -3596,7 +3597,6 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          let expaux = if is_case then E_case (e1, ps) else E_try (e1, ps) in
          Same_vars (E_aux (expaux, annot))
        else
-         let e1 = if is_case then e1 else rewrite_var_updates (add_vars overwrite e1 vars) in
          let rewrite_pexp (Pat_aux (pexp, (l, _))) = match pexp with
            | Pat_exp (pat, exp) ->
              let exp = rewrite_var_updates (add_vars overwrite exp vars) in

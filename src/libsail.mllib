@@ -45,6 +45,10 @@ Reporting
 Rewriter
 Rewrites
 Sail2_values
+Sail2_operators
+Sail2_operators_bitlists
+Sail2_prompt
+Sail2_prompt_monad
 Sail_lib
 Scattered
 Smtlib

@@ -2912,21 +2912,29 @@ let is_zeros env id =
   is_id env (Id "Zeros") id || is_id env (Id "zeros") id ||
   is_id env (Id "sail_zeros") id
 
+let is_zero_extend env id =
+  is_id env (Id "ZeroExtend") id ||
+  is_id env (Id "zero_extend") id || is_id env (Id "sail_zero_extend") id ||
+  is_id env (Id "mips_zero_extend") id || is_id env (Id "EXTZ") id
+
+let eq_exp_conservative (E_aux (exp1, _)) (E_aux (exp2, _)) =
+  match exp1, exp2 with
+  | E_id id1, E_id id2 -> true
+  | E_lit lit1, E_lit lit2 -> lit_eq' lit1 lit2
+  | _ -> false
+
 (* We have to add casts in here with appropriate length information so that the
    type checker knows the expected return types. *)
 
 let rec rewrite_app env typ (id,args) =
   let is_append = is_id env (Id "append") in
   let is_subrange = is_id env (Id "vector_subrange") in
+  let is_integer_subrange = is_id env (Id "integer_subrange") in
   let is_slice = is_id env (Id "slice") in
   let is_zeros id = is_zeros env id in
   let is_ones id = is_id env (Id "Ones") id || is_id env (Id "ones") id ||
     is_id env (Id "sail_ones") id in
-  let is_zero_extend =
-    is_id env (Id "ZeroExtend") id ||
-    is_id env (Id "zero_extend") id || is_id env (Id "sail_zero_extend") id ||
-    is_id env (Id "mips_zero_extend") id || is_id env (Id "EXTZ") id
-  in
+  let is_zero_extend = is_zero_extend env id in
   let is_sign_extend =
     is_id env (Id "SignExtend") id ||
     is_id env (Id "sign_extend") id || is_id env (Id "sail_sign_extend") id ||
@@ -3182,6 +3190,23 @@ let rec rewrite_app env typ (id,args) =
         && not (is_constant_vec_typ env (typ_of e1)) && is_bitvector_typ (typ_of vector1) ->
        let op' = if is_subrange op then "is_zero_subrange" else "is_zeros_slice" in
        wrap (E_app (mk_id op', [vector1; start1; len1]))
+
+    (* Arm specs sometimes check for overflows on values that can be either 32 or 64 bits
+       by converting to unbounded integers and asking for the top slice. *)
+    | [E_aux (E_app (op1, [vector1; start1; end1]),_);
+       E_aux (E_app (op2, [vector2; start2; end2]),_)]
+         when is_integer_subrange op1 && is_integer_subrange op2 &&
+         is_constant start1 && is_constant start2 &&
+         not (is_constant end1) && not (is_constant end2) ->
+       let zero = mk_exp (E_lit (mk_lit (L_num Big_int.zero))) in
+       wrap (E_app (mk_id "subrange_subrange_eq",
+                    [mk_exp (E_app (mk_id "integer_subrange", [vector1; start1; zero]));
+                     start1;
+                     end1;
+                     mk_exp (E_app (mk_id "integer_subrange", [vector2; start2; zero]));
+                     start2;
+                     end2]))
+
     | _ -> E_app (id,args)
 
   else if is_id env (Id "IsZero") id then
@@ -3379,7 +3404,33 @@ let rec rewrite_app env typ (id,args) =
        E_app (subrange1, [vec1'; start1; end1])
     | _ -> E_app (id, args)
 
+  (* Similarly for bitwise operations *)
+  else if is_id env (Id "and_vec") id ||
+          is_id env (Id "or_vec") id ||
+          is_id env (Id "xor_vec") id then
+    match args with
+    | [E_aux (E_app (subrange1, [vec1; start1; end1]), a1) as exp1;
+       E_aux (E_app (subrange2, [vec2; start2; end2]), a2) as exp2]
+      when is_subrange subrange1 && is_bitvector_typ (typ_of vec1) &&
+           is_subrange subrange2 && is_bitvector_typ (typ_of vec2) &&
+           not (is_constant_vec_typ env (typ_of exp1)) &&
+           eq_exp_conservative start1 start2 &&
+           eq_exp_conservative end1 end2
+      ->
+       E_app (subrange1, [check_exp env (strip_exp (mk_exp (E_app (id, [vec1; vec2])))) (typ_of vec1); start1; end1])
+
+    | _ -> E_app (id, args)
+
   else E_app (id,args)
+
+(* A deeper rewrite may have removed the type information, so try reinferring it *)
+let base_typ_of_with_infer env (E_aux (_, (l, tannot)) as exp) =
+  let typ =
+    match destruct_tannot tannot with
+    | Some (_, typ, _) -> typ
+    | None ->
+       typ_of (infer_exp env (strip_exp exp))
+  in Env.base_typ_of env typ
 
 let rec rewrite_aux = function
   | E_app (id,args), (l, tannot) ->
@@ -3394,7 +3445,7 @@ let rec rewrite_aux = function
     annot
        when is_id (env_of_annot annot) (Id "vector_subrange") subrange2 &&
               not (is_constant_range (start1, end1)) ->
-     let typ2 = Env.base_typ_of (env_of_annot annot) (typ_of vector2) in
+     let typ2 = base_typ_of_with_infer (env_of_annot annot) vector2 in
      let op =
        if is_number typ2 then "vector_update_subrange_from_integer_subrange" else
        "vector_update_subrange_from_subrange"
@@ -3411,6 +3462,27 @@ let rec rewrite_aux = function
      let lhs = LEXP_aux (LEXP_id id1, annot1) in
      let rhs = E_aux (E_app (mk_id "set_subrange_zeros", [E_aux (E_id id1, annot1); start1; end1]), annot1) in
      E_aux (E_assign (lhs, rhs), annot)
+
+  | E_assign (LEXP_aux (LEXP_vector_range (lexp1, start1, end1), _),
+              E_aux (E_app (zero_extend, zero_extend_args), _)), (l, tannot)
+    when is_zero_extend (env_of_tannot tannot) zero_extend && not (is_constant_range (start1, end1)) ->
+     let new_annot = (Generated l, empty_tannot) in
+     let vector = List.find (fun exp -> is_bitvector_typ (typ_of exp)) zero_extend_args in
+     let len = E_aux (E_app (mk_id "length", [vector]), new_annot) in
+     let mid_point_high = E_aux (E_app_infix (end1, mk_id "+", len), new_annot) in
+     let mid_point_low = E_aux (E_app_infix (
+                                     mid_point_high,
+                                     mk_id "-",
+                                     E_aux (E_lit (mk_lit (L_num (Big_int.of_int 1))),new_annot)
+                                   ), new_annot)
+     in
+     let with_zeros = E_aux (E_app (mk_id "set_subrange_zeros", [lexp_to_exp lexp1; start1; mid_point_high]), new_annot) in
+     E_aux (E_block [
+                E_aux (E_assign (lexp1, with_zeros), new_annot);
+                E_aux (E_assign (LEXP_aux (LEXP_vector_range (lexp1, mid_point_low, end1), new_annot),
+                         vector), new_annot)
+              ], new_annot)
+
   | (E_let (LB_aux (LB_val (P_aux ((P_id id | P_typ (_, P_aux (P_id id, _))), _),
                            (E_aux (E_app (subrange1, [vec1; start1; end1]), _) as exp1)), _),
            exp2) as e_aux), annot
@@ -3602,7 +3674,7 @@ let make_bitvector_env_casts top_env env quant_kids insts exp =
     if mut = Immutable then mk_cast var typ exp else exp) immutables exp
 
 let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
-  if alpha_equivalent cast_env typ target_typ then exp else
+  if alpha_equivalent (env_of exp) typ target_typ then exp else
   let infer_arg_typ env f l typ =
     let (typq, ctor_typ) = Env.get_union_id f env in
     let quants = quant_items typq in
@@ -3619,7 +3691,7 @@ let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
   in
   (* Push the cast down, including through constructors *)
   let rec aux exp (typ, target_typ) =
-    if alpha_equivalent cast_env typ target_typ then exp else
+    if alpha_equivalent (env_of exp) typ target_typ then exp else
     let exp_env = env_of exp in
     match exp with
     | E_aux (E_let (lb,exp'),ann) ->

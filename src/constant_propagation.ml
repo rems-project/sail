@@ -462,8 +462,16 @@ let const_props target ast ref_vars =
           else
             let e2',assigns2 = const_prop_exp substs_true assigns e2 in
             let e3',assigns3 = const_prop_exp substs assigns e3 in
-            let assigns = isubst_minus_set assigns (assigned_vars e2) in
-            let assigns = isubst_minus_set assigns (assigned_vars e3) in
+            (* If one branch is a throw, use the assignments from the other *)
+            let assigns =
+              match e2', e3' with
+              | E_aux (E_throw _, _), _ -> assigns3
+              | _, E_aux (E_throw _, _) -> assigns2
+              | _, _ ->
+                 let assigns = isubst_minus_set assigns (assigned_vars e2) in
+                 let assigns = isubst_minus_set assigns (assigned_vars e3) in
+                 assigns
+            in
             re (E_if (e1',e2',e3')) assigns)
     | E_for (id,e1,e2,e3,ord,e4) ->
        (* Treat e1, e2 and e3 (from, to and by) as a non-det tuple *)
@@ -609,7 +617,8 @@ let const_props target ast ref_vars =
        let e',_ = const_prop_exp substs assigns e in
        re (E_throw e') Bindings.empty
     | E_try (e,cases) ->
-       (* TODO: try and preserve *any* assignment info *)
+       (* TODO: try and preserve *any* assignment info; note the special case in E_if if
+          one of the branches throws. *)
        let e',_ = const_prop_exp substs assigns e in
        re (E_case (e', List.map (const_prop_pexp substs Bindings.empty) cases)) Bindings.empty
     | E_return e ->
