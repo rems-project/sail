@@ -368,9 +368,6 @@ let options = Arg.align ([
   ( "-enum_casts",
     Arg.Set Initial_check.opt_enum_casts,
     " allow enumerations to be automatically casted to numeric range types");
-  ( "-new_bitfields",
-    Arg.Set Type_check.opt_new_bitfields,
-    " use new bitfield syntax");
   ( "-non_lexical_flow",
     Arg.Set Nl_flow.opt_nl_flow,
     " allow non-lexical flow typing");

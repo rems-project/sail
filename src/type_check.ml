@@ -97,9 +97,6 @@ let opt_smt_linearize = ref false
 (* Allow use of div and mod when rewriting nexps *)
 let opt_smt_div = ref false
 
-(* Use new bitfield syntax, more compatible with ASL *)
-let opt_new_bitfields = ref false
-
 (* Don't expand bitfields (when using old syntax), used for LaTeX output *)
 let opt_no_bitfield_expansion = ref false
 
