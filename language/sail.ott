@@ -469,8 +469,6 @@ grammar
 
 % reg_form_set :: '' ::= {{ phantom }} {{ lem set reg_form }}
 
-% alias_spec_tannot :: '' ::= {{ phantom }} {{ lem alias_spec tannot }} {{ ocaml tannot alias_spec }}
-
 % value :: 'V_' ::= {{ com interpreter evaluated value }}
 %   | Boxref nat typ                                                                  :: :: boxref
 %   | Lit lit                                                                         :: :: lit
@@ -828,26 +826,11 @@ scattered_def :: 'SD_' ::=
   | end id  :: :: end
 {{ texlong }} {{ com scattered definition end }}
 
-reg_id :: 'RI_' ::=
-  {{ aux _ annot }} {{ auxparam 'a }}
-  | id								:: :: id
-
-alias_spec :: 'AL_' ::=
-  {{ com register alias expression forms }}
-%. Other than where noted, each id must refer to an unaliased register of type vector
-  {{ aux _ annot }} {{ auxparam 'a }}
-  | reg_id . id							:: :: subreg
-  | reg_id [ exp ] 						:: :: bit
-  | reg_id [ exp '..' exp' ]					:: :: slice
-  | reg_id : reg_id'  	    					:: :: concat
-
 dec_spec :: 'DEC_' ::=
   {{ com register declarations }}
   {{ aux _ annot }} {{ auxparam 'a }}
   | register effect effect' typ id                              :: :: reg
   | register configuration id : typ = exp                       :: :: config
-  | register alias id = alias_spec				:: :: alias
-  | register alias typ id = alias_spec				:: :: typ_alias
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Top-level definitions                                        %

@@ -1467,9 +1467,6 @@ and compile_def' n total ctx = function
      let instrs = setup @ [call (CL_id (global id, ctyp_of_typ ctx typ))] @ cleanup in
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, instrs)], ctx
 
-  | DEF_reg_dec (DEC_aux (_, (l, _))) ->
-     raise (Reporting.err_general l "Cannot compile alias register declaration")
-
   | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), _)) ->
      let quant, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let extern =

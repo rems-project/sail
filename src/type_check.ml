@@ -5684,8 +5684,6 @@ and check_def : 'a. Env.t -> 'a def -> tannot def list * Env.t =
      let env = Env.add_register id no_effect (mk_effect [BE_config]) typ env in
      [DEF_reg_dec (DEC_aux (DEC_config (id, typ, checked_exp), (l, mk_expected_tannot env typ no_effect (Some typ))))], env
   | DEF_pragma (pragma, arg, l) -> [DEF_pragma (pragma, arg, l)], env
-  | DEF_reg_dec (DEC_aux (DEC_alias (id, aspec), (l, annot))) -> cd_err ()
-  | DEF_reg_dec (DEC_aux (DEC_typ_alias (typ, id, aspec), (l, tannot))) -> cd_err ()
   | DEF_scattered sdef -> check_scattered env sdef
   | DEF_measure (id, pat, exp) -> [check_termination_measure_decl env (id, pat, exp)], env
   | DEF_loop_measures (id, _) ->

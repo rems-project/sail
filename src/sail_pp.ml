@@ -484,8 +484,6 @@ and pp_raw_alias_spec x = match x with
 and pp_raw_dec_spec_aux x = match x with
 | DEC_aux(DEC_reg(effect,effect_prime,typ,id),ott_menhir_loc) ->  string "[" ^^ string (pp_raw_l ott_menhir_loc) ^^ string "]" ^^ string "DEC_reg" ^^ string "(" ^^ pp_raw_effect effect ^^ string "," ^^ pp_raw_effect effect_prime ^^ string "," ^^ pp_raw_typ typ ^^ string "," ^^ pp_raw_id id ^^ string ")"
 | DEC_aux(DEC_config(id,typ,exp),ott_menhir_loc) ->  string "[" ^^ string (pp_raw_l ott_menhir_loc) ^^ string "]" ^^ string "DEC_config" ^^ string "(" ^^ pp_raw_id id ^^ string "," ^^ pp_raw_typ typ ^^ string "," ^^ pp_raw_exp exp ^^ string ")"
-| DEC_aux(DEC_alias(id,alias_spec),ott_menhir_loc) ->  string "[" ^^ string (pp_raw_l ott_menhir_loc) ^^ string "]" ^^ string "DEC_alias" ^^ string "(" ^^ pp_raw_id id ^^ string "," ^^ pp_raw_alias_spec alias_spec ^^ string ")"
-| DEC_aux(DEC_typ_alias(typ,id,alias_spec),ott_menhir_loc) ->  string "[" ^^ string (pp_raw_l ott_menhir_loc) ^^ string "]" ^^ string "DEC_typ_alias" ^^ string "(" ^^ pp_raw_typ typ ^^ string "," ^^ pp_raw_id id ^^ string "," ^^ pp_raw_alias_spec alias_spec ^^ string ")"
 
 and pp_raw_dec_spec x = match x with
 | DEC_aux(dec_spec_aux,annot) -> string "DEC_aux" ^^ string "(" ^^ pp_raw_dec_spec_aux dec_spec_aux ^^ string "," ^^ pp_raw_annot annot ^^ string ")"
@@ -932,8 +930,6 @@ and pp_alias_spec x = match x with
 and pp_dec_spec_aux x = match x with
 | DEC_aux(DEC_reg(effect,effect_prime,typ,id),ott_menhir_loc) -> string "(" ^^ string "register" ^^ string " " ^^ pp_effect effect ^^ string " " ^^ pp_effect effect_prime ^^ string " " ^^ pp_typ typ ^^ string " " ^^ pp_id id ^^ string ")"
 | DEC_aux(DEC_config(id,typ,exp),ott_menhir_loc) -> string "(" ^^ string "register" ^^ string " " ^^ string "configuration" ^^ string " " ^^ pp_id id ^^ string " " ^^ string ":" ^^ string " " ^^ pp_typ typ ^^ string " " ^^ string "=" ^^ string " " ^^ pp_exp exp ^^ string ")"
-| DEC_aux(DEC_alias(id,alias_spec),ott_menhir_loc) -> string "(" ^^ string "register" ^^ string " " ^^ string "alias" ^^ string " " ^^ pp_id id ^^ string " " ^^ string "=" ^^ string " " ^^ pp_alias_spec alias_spec ^^ string ")"
-| DEC_aux(DEC_typ_alias(typ,id,alias_spec),ott_menhir_loc) -> string "(" ^^ string "register" ^^ string " " ^^ string "alias" ^^ string " " ^^ pp_typ typ ^^ string " " ^^ pp_id id ^^ string " " ^^ string "=" ^^ string " " ^^ pp_alias_spec alias_spec ^^ string ")"
 
 and pp_dec_spec x = match x with
 | DEC_aux(dec_spec_aux,annot) -> string "(" ^^ pp_dec_spec_aux dec_spec_aux ^^ string " " ^^ pp_annot annot ^^ string ")"

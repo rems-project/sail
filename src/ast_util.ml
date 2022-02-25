@@ -701,19 +701,6 @@ and map_decspec_annot f = function
 and map_decspec_annot_aux f = function
   | DEC_reg (eff1, eff2, typ, id) -> DEC_reg (eff1, eff2, typ, id)
   | DEC_config (id, typ, exp) -> DEC_config (id, typ, map_exp_annot f exp)
-  | DEC_alias (id, als) -> DEC_alias (id, map_aliasspec_annot f als)
-  | DEC_typ_alias (typ, id, als) -> DEC_typ_alias (typ, id, map_aliasspec_annot f als)
-and map_aliasspec_annot f = function
-  | AL_aux (al_aux, annot) -> AL_aux (map_aliasspec_annot_aux f al_aux, f annot)
-and map_aliasspec_annot_aux f = function
-  | AL_subreg (reg_id, id) -> AL_subreg (map_regid_annot f reg_id, id)
-  | AL_bit (reg_id, exp) -> AL_bit (map_regid_annot f reg_id, map_exp_annot f exp)
-  | AL_slice (reg_id, exp1, exp2) -> AL_slice (map_regid_annot f reg_id, map_exp_annot f exp1, map_exp_annot f exp2)
-  | AL_concat (reg_id1, reg_id2) -> AL_concat (map_regid_annot f reg_id1, map_regid_annot f reg_id2)
-and map_regid_annot f = function
-  | RI_aux (ri_aux, annot) -> RI_aux (map_regid_annot_aux f ri_aux, f annot)
-and map_regid_annot_aux f = function
-  | RI_id id -> RI_id id
 
 and map_def_annot f = function
   | DEF_type td -> DEF_type (map_typedef_annot f td)
@@ -1096,8 +1083,6 @@ let id_of_dec_spec (DEC_aux (ds_aux, _)) =
   match ds_aux with
   | DEC_reg (_, _, _, id) -> id
   | DEC_config (id, _, _) -> id
-  | DEC_alias (id, _) -> id
-  | DEC_typ_alias (_, id, _) -> id
 
 let ids_of_def = function
   | DEF_type td -> IdSet.singleton (id_of_type_def td)

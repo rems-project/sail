@@ -342,7 +342,6 @@ let id_of_reg_dec (DEC_aux (aux, _)) =
   match aux with
   | DEC_reg (_, _, _, id) -> id
   | DEC_config (id, _, _) -> id
-  | _ -> assert false
 
 let filter_ast_extra cuts g ast keep_std =
   let rec filter_ast' g =

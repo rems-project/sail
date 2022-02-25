@@ -1483,8 +1483,6 @@ let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
          else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ))
        else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ)) *)
   | DEC_config(id, typ, exp) -> separate space [string "let"; doc_id_lem id; equals; doc_exp_lem empty_ctxt false exp] ^^ hardline
-  | DEC_alias(id,alspec) -> empty
-  | DEC_typ_alias(typ,id,alspec) -> empty
 
 let doc_spec_lem env (VS_aux (valspec,annot)) =
   match valspec with

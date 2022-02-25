@@ -544,10 +544,6 @@ let fv_of_rd consider_var (DEC_aux (d, annot)) =
      let t' = Env.expand_synonyms env t in
      init_env (string_of_id id),
      Nameset.union (fv_of_typ consider_var mt mt t) (fv_of_typ consider_var mt mt t')
-  | DEC_alias(id, alias) ->
-     init_env (string_of_id id), mt
-  | DEC_typ_alias(t, id, alias) ->
-     init_env (string_of_id id), mt
 
 let fv_of_def consider_var consider_scatter_as_one all_defs = function
   | DEF_type tdef -> fv_of_type_def consider_var tdef

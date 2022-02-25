@@ -450,7 +450,6 @@ let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
      separate space [string "let"; zencode ctx id; colon;
                      parens (ocaml_typ ctx typ); string "ref"; equals;
                      string "ref"; parens (ocaml_exp ctx exp)]
-  | _ -> failwith "Unsupported register declaration"
 
 let first_function = ref true
 

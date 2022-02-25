@@ -2003,7 +2003,6 @@ let rewrite_dec_spec_typs rw_typ (DEC_aux (ds, annot)) =
   match ds with
   | DEC_reg (reffect, weffect, typ, id) -> DEC_aux (DEC_reg (reffect, weffect, rw_typ typ, id), annot)
   | DEC_config (id, typ, exp) -> DEC_aux (DEC_config (id, rw_typ typ, exp), annot)
-  | _ -> assert false
 
 (* Remove overload definitions and cast val specs from the
    specification because the interpreter doesn't know about them.*)

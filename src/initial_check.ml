@@ -816,30 +816,12 @@ let to_ast_mapdef ctx (P.MD_aux(md,l):P.mapdef) : unit mapdef =
      let tannot_opt, ctx = to_ast_typschm_opt ctx typschm_opt in
      MD_aux(MD_mapping(to_ast_id ctx id, tannot_opt, List.map (to_ast_mapcl ctx) mapcls), (l,()))
 
-let to_ast_alias_spec ctx (P.E_aux(e, l)) =
-  AL_aux((match e with
-          | P.E_field (P.E_aux (P.E_id id, li), field) ->
-             AL_subreg (RI_aux (RI_id (to_ast_id ctx id), (li, ())), to_ast_id ctx field)
-          | P.E_vector_access (P.E_aux (P.E_id id, li), range) ->
-             AL_bit (RI_aux (RI_id (to_ast_id ctx id), (li, ())), to_ast_exp ctx range)
-          | P.E_vector_subrange(P.E_aux(P.E_id id,li),base,stop) ->
-             AL_slice (RI_aux (RI_id (to_ast_id ctx id), (li,())), to_ast_exp ctx base, to_ast_exp ctx stop)
-          | P.E_vector_append (P.E_aux (P.E_id first, lf), P.E_aux (P.E_id second, ls)) ->
-             AL_concat (RI_aux (RI_id (to_ast_id ctx first), (lf, ())),
-                        RI_aux (RI_id (to_ast_id ctx second), (ls, ())))
-          | _ -> raise (Reporting.err_unreachable l __POS__ "Found an expression not supported by parser in to_ast_alias_spec")
-         ), (l, ()))
-
 let to_ast_dec ctx (P.DEC_aux(regdec,l)) =
   DEC_aux((match regdec with
            | P.DEC_reg (reffect, weffect, typ, id) ->
               DEC_reg (to_ast_effects reffect, to_ast_effects weffect, to_ast_typ ctx typ, to_ast_id ctx id)
            | P.DEC_config (id, typ, exp) ->
               DEC_config (to_ast_id ctx id, to_ast_typ ctx typ, to_ast_exp ctx exp)
-           | P.DEC_alias (id,e) ->
-              DEC_alias (to_ast_id ctx id, to_ast_alias_spec ctx e)
-           | P.DEC_typ_alias (typ,id,e) ->
-              DEC_typ_alias (to_ast_typ ctx typ, to_ast_id ctx id, to_ast_alias_spec ctx e)
           ),(l,()))
 
 let to_ast_scattered ctx (P.SD_aux (aux, l)) =

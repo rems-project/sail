@@ -98,9 +98,6 @@ val opt_smt_linearize : bool ref
 (** Allow use of div and mod when rewriting nexps *)
 val opt_smt_div : bool ref
 
-(** Use new bitfield syntax, more compatible with ASL *)
-val opt_new_bitfields : bool ref
-
 (** Don't expand bitfields (when using old syntax), used for LaTeX output *)
 val opt_no_bitfield_expansion : bool ref
 

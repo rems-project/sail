@@ -672,8 +672,6 @@ let doc_dec (DEC_aux (reg,_)) =
   | DEC_reg (reffect, weffect, typ, id) ->
      separate space [string "register"; doc_effect reffect; doc_effect weffect; doc_id id; colon; doc_typ typ]
   | DEC_config (id, typ, exp) -> separate space [string "register configuration"; doc_id id; colon; doc_typ typ; equals; doc_exp exp]
-  | DEC_alias(id,alspec) -> string "ALIAS"
-  | DEC_typ_alias(typ,id,alspec) -> string "ALIAS"
 
 let doc_field (typ, id) =
   separate space [doc_id id; colon; doc_typ typ]
