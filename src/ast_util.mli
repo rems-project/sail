@@ -424,7 +424,7 @@ val id_of_fundef : 'a fundef -> id
 val id_of_type_def : 'a type_def -> id
 val id_of_val_spec : 'a val_spec -> id
 val id_of_dec_spec : 'a dec_spec -> id
-
+  
 (** {2 Functions for manipulating identifiers} *)
 
 val id_of_kid : kid -> id

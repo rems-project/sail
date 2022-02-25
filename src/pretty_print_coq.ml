@@ -3105,7 +3105,7 @@ let rec doc_fundef types_mod (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
 
 let doc_dec (DEC_aux (reg, ((l, _) as annot))) =
   match reg with
-  | DEC_reg(_,_,typ,id) -> empty
+  | DEC_reg (_, _, typ, id, None) -> empty
      (*
        let env = env_of_annot annot in
        let rt = Env.base_typ_of env typ in
@@ -3124,7 +3124,8 @@ let doc_dec (DEC_aux (reg, ((l, _) as annot))) =
            ^/^ hardline
          else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ))
        else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ)) *)
-  | DEC_config(id, typ, exp) -> separate space [string "Definition"; doc_id id; coloneq; doc_exp empty_ctxt false exp] ^^ dot ^^ hardline
+  | DEC_reg (_, _, typ, id, Some exp) ->
+     separate space [string "Definition"; doc_id id; coloneq; doc_exp empty_ctxt false exp] ^^ dot ^^ hardline
 
 let is_field_accessor regtypes fdef =
   let is_field_of regtyp field =

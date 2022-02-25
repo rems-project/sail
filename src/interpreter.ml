@@ -975,16 +975,17 @@ let initial_gstate primops defs env =
 
 let rec initialize_registers allow_registers gstate =
   let process_def = function
-    | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), annot)) when allow_registers ->
-       begin
-         let env = Type_check.env_of_annot annot in
-         let typ = Type_check.Env.expand_synonyms env typ in
-         let exp = mk_exp (E_cast (typ, mk_exp (E_lit (mk_lit L_undef)))) in
-         let exp = Type_check.check_exp env exp typ in
-         { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
+    | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id, opt_exp), annot)) when allow_registers ->
+       begin match opt_exp with
+       | None ->
+          let env = Type_check.env_of_annot annot in
+          let typ = Type_check.Env.expand_synonyms env typ in
+          let exp = mk_exp (E_cast (typ, mk_exp (E_lit (mk_lit L_undef)))) in
+          let exp = Type_check.check_exp env exp typ in
+          { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
+       | Some exp ->
+          { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
        end
-    | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) when allow_registers ->
-       { gstate with registers = Bindings.add id (eval_exp (initial_lstate, gstate) exp) gstate.registers }
     | DEF_fundef fdef ->
        { gstate with fundefs = Bindings.add (id_of_fundef fdef) fdef gstate.fundefs }
     | _ -> gstate

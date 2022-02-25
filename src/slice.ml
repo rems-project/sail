@@ -309,10 +309,11 @@ let add_def_to_graph graph def =
      IdSet.iter (fun id -> ignore (rewrite_let (rewriters (Letbind id)) lb)) ids
   | DEF_type tdef ->
      add_type_def_to_graph tdef
-  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) ->
-     IdSet.iter (fun typ_id -> graph := G.add_edge (Register id) (Type typ_id) !graph) (typ_ids typ)
-  | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
-     ignore (fold_exp (rw_exp (Register id)) exp);
+  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id, opt_exp), _)) ->
+     begin match opt_exp with
+     | Some exp -> ignore (fold_exp (rw_exp (Register id)) exp);
+     | None -> ()
+     end;
      IdSet.iter (fun typ_id -> graph := G.add_edge (Register id) (Type typ_id) !graph) (typ_ids typ)
   | _ -> ()
   end;
@@ -338,10 +339,7 @@ let id_of_typedef (TD_aux (aux, _)) =
   | TD_enum (id, _, _) -> id
   | TD_bitfield (id, _, _) -> id
 
-let id_of_reg_dec (DEC_aux (aux, _)) =
-  match aux with
-  | DEC_reg (_, _, _, id) -> id
-  | DEC_config (id, _, _) -> id
+let id_of_reg_dec (DEC_aux (DEC_reg (_, _, _, id, _), _)) = id
 
 let filter_ast_extra cuts g ast keep_std =
   let rec filter_ast' g =

@@ -536,11 +536,7 @@ let fv_of_rd consider_var (DEC_aux (d, annot)) =
   let open Type_check in
   let env = env_of_annot annot in
   match d with
-  | DEC_reg(_, _, t, id) ->
-     let t' = Env.expand_synonyms env t in
-     init_env (string_of_id id),
-     Nameset.union (fv_of_typ consider_var mt mt t) (fv_of_typ consider_var mt mt t')
-  | DEC_config(id, t, exp) ->
+  | DEC_reg(_, _, t, id, _) ->
      let t' = Env.expand_synonyms env t in
      init_env (string_of_id id),
      Nameset.union (fv_of_typ consider_var mt mt t) (fv_of_typ consider_var mt mt t')
@@ -596,8 +592,7 @@ let add_def_to_map id d defset =
 let add_def_to_graph (prelude, original_order, defset, graph) d =
   let bound, used = fv_of_def false true [] d in
   let used = match d with
-    | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, _), annot))
-    | DEF_reg_dec (DEC_aux (DEC_config (_, typ, _), annot)) ->
+    | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, _, _), annot)) ->
        (* For a register, we need to ensure that any undefined_type
           functions for types used by the register are placed before
           the register declaration. *)

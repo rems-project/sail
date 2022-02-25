@@ -1998,11 +1998,10 @@ let rewrite_type_def_typs rw_typ rw_typquant (TD_aux (td, annot)) =
   | TD_enum (id, ids, flag) -> TD_aux (TD_enum (id, ids, flag), annot)
   | TD_bitfield _ -> assert false (* Processed before re-writing *)
 
-(* FIXME: other reg_dec types *)
+(* FIXME: rewrite in opt_exp? *)
 let rewrite_dec_spec_typs rw_typ (DEC_aux (ds, annot)) =
   match ds with
-  | DEC_reg (reffect, weffect, typ, id) -> DEC_aux (DEC_reg (reffect, weffect, rw_typ typ, id), annot)
-  | DEC_config (id, typ, exp) -> DEC_aux (DEC_config (id, rw_typ typ, exp), annot)
+  | DEC_reg (reffect, weffect, typ, id, opt_exp) -> DEC_aux (DEC_reg (reffect, weffect, rw_typ typ, id, opt_exp), annot)
 
 (* Remove overload definitions and cast val specs from the
    specification because the interpreter doesn't know about them.*)

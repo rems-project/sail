@@ -667,11 +667,19 @@ let doc_mapdef (MD_aux (MD_mapping (id, typa, mapcls), _)) =
 
 let doc_dec (DEC_aux (reg,_)) =
   match reg with
-  | DEC_reg (Effect_aux (Effect_set [BE_aux (BE_rreg, _)], _), Effect_aux (Effect_set [BE_aux (BE_wreg, _)], _), typ, id) ->
-     separate space [string "register"; doc_id id; colon; doc_typ typ]
-  | DEC_reg (reffect, weffect, typ, id) ->
-     separate space [string "register"; doc_effect reffect; doc_effect weffect; doc_id id; colon; doc_typ typ]
-  | DEC_config (id, typ, exp) -> separate space [string "register configuration"; doc_id id; colon; doc_typ typ; equals; doc_exp exp]
+  | DEC_reg (Effect_aux (Effect_set [BE_aux (BE_rreg, _)], _), Effect_aux (Effect_set [BE_aux (BE_wreg, _)], _), typ, id, opt_exp) ->
+     begin match opt_exp with
+     | None ->
+        separate space [string "register"; doc_id id; colon; doc_typ typ]
+     | Some exp ->
+        separate space [string "register"; doc_id id; colon; doc_typ typ; equals; doc_exp exp]
+     end
+  | DEC_reg (reffect, weffect, typ, id, opt_exp) ->
+     let exp = match opt_exp with
+       | None -> empty
+       | Some exp -> space ^^ equals ^^ space ^^ doc_exp exp
+     in
+     separate space [string "register"; doc_effect reffect; doc_effect weffect; doc_id id; colon; doc_typ typ] ^^ exp
 
 let doc_field (typ, id) =
   separate space [doc_id id; colon; doc_typ typ]

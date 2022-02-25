@@ -1592,8 +1592,8 @@ in *)
             TypSchm_aux (TypSchm_ts (tq, replace_funtype id typ), l)
        in
        DEF_spec (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,annot)))
-    | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), a)) ->
-       DEF_reg_dec (DEC_aux (DEC_config (id, typ, rewrite_exp exp), a))
+    | DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id, Some exp), a)) ->
+       DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id, Some (rewrite_exp exp)), a))
     | def -> def
   in
 (*

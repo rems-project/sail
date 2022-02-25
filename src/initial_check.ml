@@ -818,10 +818,14 @@ let to_ast_mapdef ctx (P.MD_aux(md,l):P.mapdef) : unit mapdef =
 
 let to_ast_dec ctx (P.DEC_aux(regdec,l)) =
   DEC_aux((match regdec with
-           | P.DEC_reg (reffect, weffect, typ, id) ->
-              DEC_reg (to_ast_effects reffect, to_ast_effects weffect, to_ast_typ ctx typ, to_ast_id ctx id)
+           | P.DEC_reg (reffect, weffect, typ, id, opt_exp) ->
+              let opt_exp = match opt_exp with
+                | None -> None
+                | Some exp -> Some (to_ast_exp ctx exp)
+              in
+              DEC_reg (to_ast_effects reffect, to_ast_effects weffect, to_ast_typ ctx typ, to_ast_id ctx id, opt_exp)
            | P.DEC_config (id, typ, exp) ->
-              DEC_config (to_ast_id ctx id, to_ast_typ ctx typ, to_ast_exp ctx exp)
+              DEC_reg (no_effect, mk_effect [BE_config], to_ast_typ ctx typ, to_ast_id ctx id, Some (to_ast_exp ctx exp))
           ),(l,()))
 
 let to_ast_scattered ctx (P.SD_aux (aux, l)) =
@@ -1147,13 +1151,13 @@ let generate_undefineds vs_ids defs =
   in
   undefined_builtins @ undefined_defs defs
 
-let rec get_registers = function
-  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) :: defs -> (typ, id) :: get_registers defs
-  | _ :: defs -> get_registers defs
+let rec get_uninitialized_registers = function
+  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id, None), _)) :: defs -> (typ, id) :: get_uninitialized_registers defs
+  | _ :: defs -> get_uninitialized_registers defs
   | [] -> []
 
 let generate_initialize_registers vs_ids defs =
-  let regs = get_registers defs in
+  let regs = get_uninitialized_registers defs in
   let initialize_registers =
     if IdSet.mem (mk_id "initialize_registers") vs_ids || regs = [] then []
     else

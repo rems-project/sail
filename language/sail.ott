@@ -826,11 +826,16 @@ scattered_def :: 'SD_' ::=
   | end id  :: :: end
 {{ texlong }} {{ com scattered definition end }}
 
+opt_exp :: '' ::= {{ phantom }} {{ lem maybe (exp 'a) }} {{ ocaml 'a exp option }} {{ auxparam 'a }}
+  | exp                                          :: :: opt_exp_some
+  {{ lem (Just [[exp]]) }} {{ ocaml (Some [[exp]]) }}
+  |                                              :: :: opt_exp_none
+  {{ lem Nothing }} {{ ocaml None }}
+
 dec_spec :: 'DEC_' ::=
   {{ com register declarations }}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | register effect effect' typ id                              :: :: reg
-  | register configuration id : typ = exp                       :: :: config
+  | register effect effect' typ id = opt_exp                    :: :: reg
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Top-level definitions                                        %

@@ -1459,9 +1459,9 @@ let rec compile_def n total ctx def =
   | _ -> compile_def' n total ctx def
 
 and compile_def' n total ctx = function
-  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id), _)) ->
+  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id, None), _)) ->
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, [])], ctx
-  | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), _)) ->
+  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id, Some exp), _)) ->
      let aexp = C.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
      let instrs = setup @ [call (CL_id (global id, ctyp_of_typ ctx typ))] @ cleanup in

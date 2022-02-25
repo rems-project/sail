@@ -5676,13 +5676,13 @@ and check_def : 'a. Env.t -> 'a def -> tannot def list * Env.t =
   | DEF_instantiation (ispec, substs) -> check_outcome_instantiation env ispec substs
   | DEF_default default -> check_default env default
   | DEF_overload (id, ids) -> [DEF_overload (id, ids)], Env.add_overloads id ids env
-  | DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id), (l, _))) ->
+  | DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id, None), (l, _))) ->
      let env = Env.add_register id reffect weffect typ env in
-     [DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id), (l, mk_expected_tannot env typ no_effect (Some typ))))], env
-  | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), (l, _))) ->
+     [DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id, None), (l, mk_expected_tannot env typ no_effect (Some typ))))], env
+  | DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id, Some exp), (l, _))) ->
      let checked_exp = crule check_exp env (strip_exp exp) typ in
-     let env = Env.add_register id no_effect (mk_effect [BE_config]) typ env in
-     [DEF_reg_dec (DEC_aux (DEC_config (id, typ, checked_exp), (l, mk_expected_tannot env typ no_effect (Some typ))))], env
+     let env = Env.add_register id reffect weffect typ env in
+     [DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id, Some checked_exp), (l, mk_expected_tannot env typ no_effect (Some typ))))], env
   | DEF_pragma (pragma, arg, l) -> [DEF_pragma (pragma, arg, l)], env
   | DEF_scattered sdef -> check_scattered env sdef
   | DEF_measure (id, pat, exp) -> [check_termination_measure_decl env (id, pat, exp)], env

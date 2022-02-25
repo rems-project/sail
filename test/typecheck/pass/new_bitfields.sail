@@ -2,8 +2,6 @@ default Order dec
 
 $include <prelude.sail>
 
-$option -new_bitfields
-
 bitfield B : bits(32) = {
   Field: 7..0
 }

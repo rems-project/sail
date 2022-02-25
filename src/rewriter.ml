@@ -395,8 +395,8 @@ let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls
   FD_aux (FD_function(recopt,tannotopt,effectopt,List.map (rewrite_funcl rewriters) funcls),(l,fdannot))
 
 let rec rewrite_def rewriters d = match d with
-  | DEF_reg_dec (DEC_aux (DEC_config (id, typ, exp), annot)) ->
-     DEF_reg_dec (DEC_aux (DEC_config (id, typ, rewriters.rewrite_exp rewriters exp), annot))
+  | DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id, Some exp), annot)) ->
+     DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id, Some (rewriters.rewrite_exp rewriters exp)), annot))
   | DEF_type _ | DEF_mapdef _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_overload _ | DEF_fixity _ | DEF_instantiation _ -> d
   | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
   | DEF_impl funcl -> DEF_impl (rewrite_funcl rewriters funcl)
