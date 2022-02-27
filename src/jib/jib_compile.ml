@@ -613,7 +613,7 @@ let compile_funcall l ctx id args =
     try Env.get_val_spec id ctx.local_env with Type_error _ -> Env.get_val_spec id ctx.tc_env
   in
   let arg_typs, ret_typ = match fn_typ with
-    | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
+    | Typ_fn (arg_typs, ret_typ) -> arg_typs, ret_typ
     | _ -> assert false
   in
   let ctx' = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.tc_env } in
@@ -661,7 +661,7 @@ let rec compile_match ctx (AP_aux (apat_aux, env, l)) cval case_label =
 
   | AP_id (pid, _) when is_ct_enum ctyp ->
      begin match Env.lookup_id pid ctx.tc_env with
-     | Unbound -> [idecl l ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx
+     | Unbound _ -> [idecl l ctyp (name pid); icopy l (CL_id (name pid, ctyp)) cval], [], ctx
      | _ -> [ijump l (V_call (Neq, [V_id (name pid, ctyp); cval])) case_label], [], ctx
      end
 
@@ -1223,18 +1223,14 @@ let fix_exception_block ?return:(return=None) ctx instrs =
        @ [igoto end_block_label]
        @ rewrite_exception (historic @ before) after
     | before, (I_aux (I_funcall (x, _, f, args), (_, l)) as funcall) :: after ->
-       let effects = match Env.get_val_spec (fst f) ctx.tc_env with
-         | _, Typ_aux (Typ_fn (_, _, effects), _) -> effects
-         | exception (Type_error _) -> no_effect (* nullary union constructor, so no val spec *)
-         | _ -> assert false (* valspec must have function type *)
-       in
-       if has_effect effects BE_escape then
+       (* TODO EFFECT: Fix this *)
+       (* if has_effect effects BE_escape then *)
          before
          @ [funcall;
             iif l (V_id (have_exception, CT_bool)) (generate_cleanup (historic @ before) @ [igoto end_block_label]) [] CT_unit]
          @ rewrite_exception (historic @ before) after
-       else
-         before @ funcall :: rewrite_exception (historic @ before) after
+       (* else
+         before @ funcall :: rewrite_exception (historic @ before) after *)
     | _, _ -> assert false (* unreachable *)
   in
   match return with
@@ -1367,7 +1363,7 @@ let compile_funcl ctx id pat guard exp =
     try Env.get_val_spec id ctx.local_env with Type_error _ -> Env.get_val_spec id ctx.tc_env
   in
   let arg_typs, ret_typ = match fn_typ with
-    | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
+    | Typ_fn (arg_typs, ret_typ) -> arg_typs, ret_typ
     | _ -> assert false
   in
 
@@ -1426,7 +1422,7 @@ let compile_funcl ctx id pat guard exp =
 (** Compile a Sail toplevel definition into an IR definition **)
 let rec compile_def n total ctx def =
   match def with
-  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, _), _)]), _))
+  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_Funcl (id, _), _)]), _))
        when !opt_memo_cache ->
      let digest =
        def |> Pretty_print_sail.doc_def |> Pretty_print_sail.to_string |> Digest.string
@@ -1459,9 +1455,9 @@ let rec compile_def n total ctx def =
   | _ -> compile_def' n total ctx def
 
 and compile_def' n total ctx = function
-  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id, None), _)) ->
+  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, None), _)) ->
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, [])], ctx
-  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id, Some exp), _)) ->
+  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, Some exp), _)) ->
      let aexp = C.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
      let instrs = setup @ [call (CL_id (global id, ctyp_of_typ ctx typ))] @ cleanup in
@@ -1476,7 +1472,7 @@ and compile_def' n total ctx = function
          None
      in
      let arg_typs, ret_typ = match fn_typ with
-       | Typ_fn (arg_typs, ret_typ, _) -> arg_typs, ret_typ
+       | Typ_fn (arg_typs, ret_typ) -> arg_typs, ret_typ
        | _ -> assert false
      in
      let ctx' = { ctx with local_env = Env.add_typquant (id_loc id) quant ctx.local_env } in
@@ -1484,18 +1480,18 @@ and compile_def' n total ctx = function
      [CDEF_spec (id, extern, arg_ctyps, ret_ctyp)],
      { ctx with valspecs = Bindings.add id (extern, arg_ctyps, ret_ctyp) ctx.valspecs }
  
-  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
+  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      Util.progress "Compiling " (string_of_id id) n total;
      compile_funcl ctx id pat None exp
 
-  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_when (pat, guard, exp), _)), _)]), _)) ->
+  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_when (pat, guard, exp), _)), _)]), _)) ->
      Util.progress "Compiling " (string_of_id id) n total;
      compile_funcl ctx id pat (Some guard) exp
 
-  | DEF_fundef (FD_aux (FD_function (_, _, _, []), (l, _))) ->
+  | DEF_fundef (FD_aux (FD_function (_, _, []), (l, _))) ->
      raise (Reporting.err_general l "Encountered function with no clauses")
 
-  | DEF_fundef (FD_aux (FD_function (_, _, _, _ :: _ :: _), (l, _))) ->
+  | DEF_fundef (FD_aux (FD_function (_, _, _ :: _ :: _), (l, _))) ->
      raise (Reporting.err_general l "Encountered function with multiple clauses")
 
   (* All abbreviations should expanded by the typechecker, so we don't
@@ -1960,6 +1956,16 @@ let compile_ast ctx ast =
     List.fold_left (fun (n, chunks, ctx) def -> let defs, ctx = compile_def n total ctx def in n + 1, defs :: chunks, ctx) (1, [], ctx) ast.defs
   in
   let cdefs = List.concat (List.rev chunks) in
+
+  (* If we don't have an exception type, add a dummy one *)
+  let dummy_exn = (mk_id "__dummy_exn#", []) in
+  let cdefs, ctx =
+    if not (Bindings.mem (mk_id "exception") ctx.variants) then
+      CDEF_type (CTD_variant (mk_id "exception", [(dummy_exn, CT_unit)])) :: cdefs,
+      { ctx with variants = Bindings.add (mk_id "exception") ([], UBindings.singleton dummy_exn CT_unit) ctx.variants }
+    else
+      cdefs, ctx
+  in
   let cdefs, ctx = specialize_functions ctx cdefs in
   let cdefs = sort_ctype_defs true cdefs in 
   let cdefs, ctx = specialize_variants ctx [] cdefs in

@@ -78,10 +78,6 @@ module Big_int = Nat_big_num
    is even more verbose still. *)
 val opt_tc_debug : int ref
 
-(** [opt_no_effects] turns of the effect checking. Effects will still
-   be propagated as normal however. *)
-val opt_no_effects : bool ref
-
 (** [opt_no_lexp_bounds_check] turns of the bounds checking in vector
    assignments in l-expressions. *)
 val opt_no_lexp_bounds_check : bool ref
@@ -148,8 +144,8 @@ module Env : sig
 
   val update_val_spec : id -> typquant * typ -> t -> t
 
-  val get_register : id -> t -> effect * effect * typ
-  val get_registers : t -> (effect * effect * typ) Bindings.t
+  val get_register : id -> t -> typ
+  val get_registers : t -> typ Bindings.t
 
   (** Return all the identifiers in an enumeration. Throws a type
      error if the enumeration doesn't exist. *)
@@ -202,7 +198,7 @@ module Env : sig
   val get_variants : t -> (typquant * type_union list) Bindings.t
 
   (** Return type is: quantifier, argument type, return type, effect *)
-  val get_accessor : id -> id -> t -> typquant * typ * typ * effect
+  val get_accessor : id -> id -> t -> typquant * typ * typ
 
   (** If the environment is checking a function, then this will get
      the expected return type of the function. It's useful for
@@ -298,20 +294,19 @@ val dvector_typ : Env.t -> nexp -> typ -> typ
 type tannot
 
 (** The canonical view of a type annotation is that it is a tuple
-   containing an environment (env), a type (typ), and an effect such
-   that check_X env (strip_X X) typ succeeds, where X is typically exp
-   (i.e an expression). Note that it is specifically not guaranteed
-   that calling destruct_tannot followed by mk_tannot returns an
-   identical type annotation. *)
-val destruct_tannot : tannot -> (Env.t * typ * effect) option
-val mk_tannot : Env.t -> typ -> effect -> tannot
+   containing an environment (env), a type (typ), such that check_X
+   env (strip_X X) typ succeeds, where X is typically exp (i.e an
+   expression). Note that it is specifically not guaranteed that
+   calling destruct_tannot followed by mk_tannot returns an identical
+   type annotation. *)
+val destruct_tannot : tannot -> (Env.t * typ) option
+val mk_tannot : Env.t -> typ -> tannot
 
 val get_instantiations : tannot -> typ_arg KBindings.t option
   
 val empty_tannot : tannot
 val is_empty_tannot : tannot -> bool
 
-val destruct_tannot : tannot -> (Env.t * typ * effect) option
 val string_of_tannot : tannot -> string (* For debugging only *)
 val replace_typ : typ -> tannot -> tannot
 val replace_env : Env.t -> tannot -> tannot
@@ -338,8 +333,6 @@ val strip_typ : typ -> typ
 val strip_typq : typquant -> typquant
 val strip_id : id -> id
 val strip_kid : kid -> kid
-val strip_base_effect : base_effect -> base_effect
-val strip_effect : effect -> effect
 val strip_nexp_aux : nexp_aux -> nexp_aux
 val strip_nexp : nexp -> nexp
 val strip_n_constraint_aux : n_constraint_aux -> n_constraint_aux
@@ -426,7 +419,7 @@ val effect_of : tannot exp -> effect
 val effect_of_pat : tannot pat -> effect
 val effect_of_annot : tannot -> effect
 val add_effect_annot : tannot -> effect -> tannot
-
+  
 (* Returns the type that an expression was checked against, if any.
    Note that these may be removed if an expression is rewritten. *)
 val expected_typ_of : Ast.l * tannot -> typ option
@@ -479,10 +472,6 @@ val instantiation_of_without_type : tannot exp -> typ_arg KBindings.t
 
 (* Type variable instantiations that inference will extract from constraints *)
 val instantiate_simple_equations : quant_item list -> typ_arg KBindings.t
-
-val propagate_exp_effect : tannot exp -> tannot exp
-
-val propagate_pexp_effect : tannot pexp -> tannot pexp * effect
 
 val big_int_of_nexp : nexp -> Big_int.num option
 

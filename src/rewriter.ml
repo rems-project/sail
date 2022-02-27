@@ -81,27 +81,6 @@ type 'a rewriters = {
     rewrite_ast  : 'a rewriters -> 'a ast -> 'a ast;
   }
 
-let effect_of_lexp (LEXP_aux (_,(_,a))) = effect_of_annot a
-let effect_of_fexp (FE_aux (_,(_,a))) = effect_of_annot a
-let effect_of_fexps fexps =
-  List.fold_left union_effects no_effect (List.map effect_of_fexp fexps)
-let effect_of_opt_default (Def_val_aux (_,(_,a))) = effect_of_annot a
-(* The typechecker does not seem to annotate pexps themselves *)
-let effect_of_pexp (Pat_aux (pexp,(_,a))) =
-  let eff = match pexp with
-    | Pat_exp (p, e) -> union_effects (effect_of_pat p) (effect_of e)
-    | Pat_when (p, g, e) ->
-       union_effects (effect_of_pat p) (union_effects (effect_of g) (effect_of e))
-  in
-  union_effects eff (effect_of_annot a)
-let effect_of_lb (LB_aux (LB_val (pat,exp),(_,a))) =
-  match destruct_tannot a with
-  | Some (_, _, eff) -> eff
-  | None -> union_effects (effect_of_pat pat) (effect_of exp)
-
-let simple_annot l typ = (gen_loc l, mk_tannot initial_env typ no_effect)
-
-
 let lookup_generated_kid env kid =
   let match_kid_nc kid = function
     | NC_aux (NC_equal (Nexp_aux (Nexp_var kid1, _), Nexp_aux (Nexp_var kid2, _)), _)
@@ -165,118 +144,6 @@ let rec small (E_aux (exp,_)) = match exp with
   | E_cons (e1,e2) -> small e1 && small e2
   | E_sizeof _ -> true
   | _ -> false
-
-let union_eff_exps es =
-  List.fold_left union_effects no_effect (List.map effect_of es)
-
-let fun_app_effects id env =
-  try
-    match Env.get_val_spec id env with
-    | (_, Typ_aux (Typ_fn (_,_,feff), _)) -> feff
-    | _ -> no_effect
-  with
-  | _ -> no_effect
-
-let fix_eff_exp (E_aux (e,((l,_) as annot))) = match destruct_tannot (snd annot) with
-| Some (env, typ, eff) ->
-  let effsum = match e with
-    | E_block es -> union_eff_exps es
-    | E_id _ | E_ref _
-    | E_lit _ -> eff
-    | E_cast (_,e) -> effect_of e
-    | E_app (f,es) ->
-      union_effects (fun_app_effects f env) (union_eff_exps es)
-    | E_tuple es -> union_eff_exps es
-    | E_app_infix (e1,f,e2) ->
-      union_effects (fun_app_effects f env) (union_eff_exps [e1;e2])
-    | E_if (e1,e2,e3) -> union_eff_exps [e1;e2;e3]
-    | E_for (_,e1,e2,e3,_,e4) -> union_eff_exps [e1;e2;e3;e4]
-    | E_loop (_,_,e1,e2) -> union_eff_exps [e1;e2]
-    | E_vector es -> union_eff_exps es
-    | E_vector_access (e1,e2) -> union_eff_exps [e1;e2]
-    | E_vector_subrange (e1,e2,e3) -> union_eff_exps [e1;e2;e3]
-    | E_vector_update (e1,e2,e3) -> union_eff_exps [e1;e2;e3]
-    | E_vector_update_subrange (e1,e2,e3,e4) -> union_eff_exps [e1;e2;e3;e4]
-    | E_vector_append (e1,e2) -> union_eff_exps [e1;e2]
-    | E_list es -> union_eff_exps es
-    | E_cons (e1,e2) -> union_eff_exps [e1;e2]
-    | E_record fexps -> effect_of_fexps fexps
-    | E_record_update(e,fexps) ->
-      union_effects (effect_of e) (effect_of_fexps fexps)
-    | E_field (e,_) -> effect_of e
-    | E_case (e,pexps) | E_try (e,pexps) ->
-      List.fold_left union_effects (effect_of e) (List.map effect_of_pexp pexps)
-    | E_let (lb,e) -> union_effects (effect_of_lb lb) (effect_of e)
-    | E_assign (lexp,e) -> union_effects (effect_of_lexp lexp) (effect_of e)
-    | E_exit e | E_return e | E_throw e -> union_effects eff (effect_of e)
-    | E_sizeof _ | E_constraint _ -> no_effect
-    | E_assert (c,m) -> union_effects eff (union_eff_exps [c; m])
-    | E_var (lexp,e1,e2) ->
-      union_effects (effect_of_lexp lexp)
-        (union_effects (effect_of e1) (effect_of e2))
-    | E_internal_plet (_,e1,e2) -> union_effects (effect_of e1) (effect_of e2)
-    | E_internal_return e1 -> effect_of e1
-    | E_internal_value v -> no_effect
-  in
-  E_aux (e, (l, mk_tannot env typ effsum))
-| None ->
-  E_aux (e, (l, empty_tannot))
-
-let fix_eff_lexp (LEXP_aux (lexp,((l,_) as annot))) = match destruct_tannot (snd annot) with
-| Some (env, typ, eff) ->
-  let effsum = union_effects eff (match lexp with
-    | LEXP_id _ -> no_effect
-    | LEXP_cast _ -> no_effect
-    | LEXP_deref e -> effect_of e
-    | LEXP_memory (_,es) -> union_eff_exps es
-    | LEXP_tup les ->
-      List.fold_left (fun eff le -> union_effects eff (effect_of_lexp le)) no_effect les
-    | LEXP_vector_concat les ->
-      List.fold_left (fun eff le -> union_effects eff (effect_of_lexp le)) no_effect les
-    | LEXP_vector (lexp,e) -> union_effects (effect_of_lexp lexp) (effect_of e)
-    | LEXP_vector_range (lexp,e1,e2) ->
-      union_effects (effect_of_lexp lexp)
-        (union_effects (effect_of e1) (effect_of e2))
-    | LEXP_field (lexp,_) -> effect_of_lexp lexp) in
-  LEXP_aux (lexp, (l, mk_tannot env typ effsum))
-| None ->
-  LEXP_aux (lexp, (l, empty_tannot))
-
-let fix_eff_fexp (FE_aux (fexp,((l,_) as annot))) = match destruct_tannot (snd annot) with
-| Some (env, typ, eff) ->
-  let effsum = union_effects eff (match fexp with
-    | FE_Fexp (_,e) -> effect_of e) in
-  FE_aux (fexp, (l, mk_tannot env typ effsum))
-| None ->
-  FE_aux (fexp, (l, empty_tannot))
-
-let fix_eff_fexps fexps = fexps (* FES_aux have no effect information *)
-
-let fix_eff_opt_default (Def_val_aux (opt_default,((l,_) as annot))) = match destruct_tannot (snd annot) with
-| Some (env, typ, eff) ->
-  let effsum = union_effects eff (match opt_default with
-    | Def_val_empty -> no_effect
-    | Def_val_dec e -> effect_of e) in
-  Def_val_aux (opt_default, (l, mk_tannot env typ effsum))
-| None ->
-  Def_val_aux (opt_default, (l, empty_tannot))
-
-let fix_eff_pexp (Pat_aux (pexp,((l,_) as annot))) = match destruct_tannot (snd annot) with
-| Some (env, typ, eff) ->
-  let effsum = match pexp with
-    | Pat_exp (_,e) -> effect_of e
-    | Pat_when (_,e,e') -> union_effects (effect_of e) (effect_of e') in
-  Pat_aux (pexp, (l, mk_tannot env typ effsum))
-| None ->
-  Pat_aux (pexp, (l, empty_tannot))
-
-let fix_eff_lb (LB_aux (lb,((l,_) as annot))) = match destruct_tannot (snd annot) with
-| Some (env, typ, eff) ->
-  let effsum = match lb with
-    | LB_val (_,e) -> effect_of e in
-  LB_aux (lb, (l, mk_tannot env typ effsum))
-| None ->
-  LB_aux (lb, (l, empty_tannot))
 
 let rewrite_pexp rewriters =
   let rewrite = rewriters.rewrite_exp rewriters in
@@ -385,18 +252,18 @@ let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
 let rewrite_funcl rewriters (FCL_aux (FCL_Funcl(id,pexp),(l,annot))) =
   FCL_aux (FCL_Funcl (id, rewrite_pexp rewriters pexp),(l,annot))
                           
-let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
+let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,funcls),(l,fdannot))) = 
   let recopt = match recopt with
     | Rec_aux (Rec_nonrec, l) -> Rec_aux (Rec_nonrec, l)
     | Rec_aux (Rec_rec, l) -> Rec_aux (Rec_rec, l)
     | Rec_aux (Rec_measure (pat,exp),l) ->
        Rec_aux (Rec_measure (rewrite_pat rewriters pat, rewrite_exp rewriters exp),l)
   in
-  FD_aux (FD_function(recopt,tannotopt,effectopt,List.map (rewrite_funcl rewriters) funcls),(l,fdannot))
+  FD_aux (FD_function(recopt,tannotopt,List.map (rewrite_funcl rewriters) funcls),(l,fdannot))
 
 let rec rewrite_def rewriters d = match d with
-  | DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id, Some exp), annot)) ->
-     DEF_reg_dec (DEC_aux (DEC_reg (reffect, weffect, typ, id, Some (rewriters.rewrite_exp rewriters exp)), annot))
+  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, Some exp), annot)) ->
+     DEF_reg_dec (DEC_aux (DEC_reg (typ, id, Some (rewriters.rewrite_exp rewriters exp)), annot))
   | DEF_type _ | DEF_mapdef _ | DEF_spec _ | DEF_default _ | DEF_reg_dec _ | DEF_overload _ | DEF_fixity _ | DEF_instantiation _ -> d
   | DEF_fundef fdef -> DEF_fundef (rewriters.rewrite_fun rewriters fdef)
   | DEF_impl funcl -> DEF_impl (rewrite_funcl rewriters funcl)
@@ -655,8 +522,8 @@ and fold_letbind alg (LB_aux (letbind_aux,annot)) = alg.lB_aux (fold_letbind_aux
 let fold_funcl alg (FCL_aux (FCL_Funcl (id, pexp), annot)) =
   FCL_aux (FCL_Funcl (id, fold_pexp alg pexp), annot)
 
-let fold_function alg (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), annot)) =
-  FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, List.map (fold_funcl alg) funcls), annot)
+let fold_function alg (FD_aux (FD_function (rec_opt, tannot_opt, funcls), annot)) =
+  FD_aux (FD_function (rec_opt, tannot_opt, List.map (fold_funcl alg) funcls), annot)
 
 let id_exp_alg =
   { e_block = (fun es -> E_block es)

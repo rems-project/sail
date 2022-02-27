@@ -94,7 +94,6 @@ let instantiate_def target id substs = function
      let l = gen_loc (id_loc id) in
      Some (DEF_fundef (FD_aux (FD_function (Rec_aux (Rec_nonrec, l),
                                             Typ_annot_opt_aux (Typ_annot_opt_none, l),
-                                            Effect_opt_aux (Effect_opt_none, l),
                                             [FCL_aux (FCL_Funcl (id, pexp), annot)]),
                                annot)))
 

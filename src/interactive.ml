@@ -100,8 +100,8 @@ let reflect_typ action =
     | Action _ -> []
   in
   match action with
-  | Action _ -> function_typ [unit_typ] unit_typ no_effect
-  | _ -> function_typ (arg_typs action) unit_typ no_effect
+  | Action _ -> function_typ [unit_typ] unit_typ
+  | _ -> function_typ (arg_typs action) unit_typ
 
 let generate_help name help action =
   let rec args = function

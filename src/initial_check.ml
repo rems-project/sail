@@ -127,30 +127,6 @@ let to_ast_id ctx (P.Id_aux (id, l)) =
 
 let to_ast_var (P.Kid_aux (P.Var v, l)) = Kid_aux (Var v, l)
 
-let to_ast_effects = function
-  | P.ATyp_aux (P.ATyp_set effects, l) ->
-     let to_effect (P.BE_aux (e, l)) =
-       BE_aux ((match e with
-                | P.BE_barr   -> BE_barr
-                | P.BE_rreg   -> BE_rreg
-                | P.BE_wreg   -> BE_wreg
-                | P.BE_rmem   -> BE_rmem
-                | P.BE_wmem   -> BE_wmem
-                | P.BE_wmv    -> BE_wmv
-                | P.BE_eamem  -> BE_eamem
-                | P.BE_exmem  -> BE_exmem
-                | P.BE_depend -> BE_depend
-                | P.BE_undef  -> BE_undef
-                | P.BE_unspec -> BE_unspec
-                | P.BE_nondet -> BE_nondet
-                | P.BE_escape -> BE_escape
-                | P.BE_config -> BE_config),
-               l)
-     in
-     Effect_aux (Effect_set (List.map to_effect effects), l)
-  | P.ATyp_aux (_, l) ->
-     raise (Reporting.err_typ l "Invalid effect set")
-
 (* Used for error messages involving lists of kinds *)
 let format_kind_aux_list = function
   | [kind] -> string_of_kind_aux kind
@@ -173,14 +149,14 @@ let rec to_ast_typ ctx (P.ATyp_aux (aux, l)) =
   let aux = match aux with
     | P.ATyp_id id -> Typ_id (to_ast_id ctx id)
     | P.ATyp_var v -> Typ_var (to_ast_var v)
-    | P.ATyp_fn (from_typ, to_typ, effects) ->
+    | P.ATyp_fn (from_typ, to_typ, _) ->
        let from_typs = match from_typ with
          | P.ATyp_aux (P.ATyp_tup typs, _) ->
             List.map (to_ast_typ ctx) typs
          | _ -> [to_ast_typ ctx from_typ]
        in
-       Typ_fn (from_typs, to_ast_typ ctx to_typ, to_ast_effects effects)
-    | P.ATyp_bidir (typ1, typ2, effects) -> Typ_bidir (to_ast_typ ctx typ1, to_ast_typ ctx typ2, to_ast_effects effects)
+       Typ_fn (from_typs, to_ast_typ ctx to_typ)
+    | P.ATyp_bidir (typ1, typ2, _) -> Typ_bidir (to_ast_typ ctx typ1, to_ast_typ ctx typ2)
     | P.ATyp_tup typs -> Typ_tup (List.map (to_ast_typ ctx) typs)
     | P.ATyp_app (P.Id_aux (P.Id "int", il), [n]) ->
        Typ_app (Id_aux (Id "atom", il), [to_ast_typ_arg ctx n K_int])
@@ -656,7 +632,7 @@ let generate_enum_functions l ctx enum_id fns exps =
                                   mk_pexp (Pat_exp (mk_pat (P_id id), exp))
                                 ) exps)))
          ];
-       mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) (function_typ [mk_id_typ enum_id] typ no_effect),
+       mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) (function_typ [mk_id_typ enum_id] typ),
                                  name,
                                  [],
                                  false))]
@@ -753,11 +729,6 @@ let to_ast_typschm_opt ctx (P.TypSchm_opt_aux(aux,l)) : tannot_opt ctx_out =
      let typq, ctx = to_ast_typquant ctx tq in
      Typ_annot_opt_aux (Typ_annot_opt_some (typq, to_ast_typ ctx typ), l), ctx
 
-let to_ast_effects_opt (P.Effect_opt_aux(e,l)) : effect_opt =
-  match e with
-  | P.Effect_opt_none -> Effect_opt_aux(Effect_opt_none,l)
-  | P.Effect_opt_effect(typ) -> Effect_opt_aux(Effect_opt_effect(to_ast_effects typ),l)
-
 let to_ast_funcl ctx (P.FCL_aux(fcl, l) : P.funcl) : unit funcl =
   match fcl with
   | P.FCL_Funcl (id, pexp) ->
@@ -776,9 +747,9 @@ let to_ast_impl_funcls ctx (P.FCL_aux (fcl, l) : P.funcl) : unit funcl list =
     
 let to_ast_fundef ctx (P.FD_aux(fd,l):P.fundef) : unit fundef =
   match fd with
-  | P.FD_function(rec_opt,tannot_opt,effects_opt,funcls) ->
-    let tannot_opt, ctx = to_ast_tannot_opt ctx tannot_opt in
-    FD_aux(FD_function(to_ast_rec ctx rec_opt, tannot_opt, to_ast_effects_opt effects_opt, List.map (to_ast_funcl ctx) funcls), (l,()))
+  | P.FD_function (rec_opt, tannot_opt, _, funcls) ->
+     let tannot_opt, ctx = to_ast_tannot_opt ctx tannot_opt in
+     FD_aux(FD_function(to_ast_rec ctx rec_opt, tannot_opt, List.map (to_ast_funcl ctx) funcls), (l,()))
 
 let rec to_ast_mpat ctx (P.MP_aux(mpat,l)) =
   MP_aux(
@@ -823,17 +794,16 @@ let to_ast_dec ctx (P.DEC_aux(regdec,l)) =
                 | None -> None
                 | Some exp -> Some (to_ast_exp ctx exp)
               in
-              DEC_reg (to_ast_effects reffect, to_ast_effects weffect, to_ast_typ ctx typ, to_ast_id ctx id, opt_exp)
+              DEC_reg (to_ast_typ ctx typ, to_ast_id ctx id, opt_exp)
            | P.DEC_config (id, typ, exp) ->
-              DEC_reg (no_effect, mk_effect [BE_config], to_ast_typ ctx typ, to_ast_id ctx id, Some (to_ast_exp ctx exp))
+              DEC_reg (to_ast_typ ctx typ, to_ast_id ctx id, Some (to_ast_exp ctx exp))
           ),(l,()))
 
 let to_ast_scattered ctx (P.SD_aux (aux, l)) =
   let aux, ctx = match aux with
-    | P.SD_function (rec_opt, tannot_opt, effect_opt, id) ->
+    | P.SD_function (rec_opt, tannot_opt, _, id) ->
        let tannot_opt, _ = to_ast_tannot_opt ctx tannot_opt in
-       let effect_opt = to_ast_effects_opt effect_opt in
-       SD_function (to_ast_rec ctx rec_opt, tannot_opt, effect_opt, to_ast_id ctx id), ctx
+       SD_function (to_ast_rec ctx rec_opt, tannot_opt, to_ast_id ctx id), ctx
     | P.SD_funcl funcl ->
        SD_funcl (to_ast_funcl ctx funcl), ctx
     | P.SD_variant (id, typq) ->
@@ -1032,11 +1002,11 @@ let quant_item_arg = function
 let undefined_typschm id typq =
   let qis = quant_items typq in
   if qis = [] then
-    mk_typschm typq (function_typ [unit_typ] (mk_typ (Typ_id id)) (mk_effect [BE_undef]))
+    mk_typschm typq (function_typ [unit_typ] (mk_typ (Typ_id id)))
   else
     let arg_typs = List.concat (List.map quant_item_typ qis) in
     let ret_typ = app_typ id (List.concat (List.map quant_item_arg qis)) in
-    mk_typschm typq (function_typ arg_typs ret_typ (mk_effect [BE_undef]))
+    mk_typschm typq (function_typ arg_typs ret_typ)
 
 let have_undefined_builtins = ref false
 
@@ -1152,7 +1122,7 @@ let generate_undefineds vs_ids defs =
   undefined_builtins @ undefined_defs defs
 
 let rec get_uninitialized_registers = function
-  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id, None), _)) :: defs -> (typ, id) :: get_uninitialized_registers defs
+  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, None), _)) :: defs -> (typ, id) :: get_uninitialized_registers defs
   | _ :: defs -> get_uninitialized_registers defs
   | [] -> []
 
@@ -1199,7 +1169,7 @@ let generate_enum_functions vs_ids defs =
          else
            [ enum_val_spec name
               [mk_qi_id K_int kid; mk_qi_nc (range_constraint kid)]
-              (function_typ [atom_typ (nvar kid)] (mk_typ (Typ_id id)) no_effect);
+              (function_typ [atom_typ (nvar kid)] (mk_typ (Typ_id id)));
              mk_fundef [funcl] ]
        in
 
@@ -1216,7 +1186,7 @@ let generate_enum_functions vs_ids defs =
          in
          if IdSet.mem name vs_ids then []
          else
-           [ enum_val_spec name [] (function_typ [mk_typ (Typ_id id)] to_typ no_effect);
+           [ enum_val_spec name [] (function_typ [mk_typ (Typ_id id)] to_typ);
              mk_fundef [funcl] ]
        in
        enum :: to_enum @ from_enum @ gen_enums defs

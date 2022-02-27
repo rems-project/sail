@@ -87,9 +87,9 @@ let find_registers defs =
   List.fold_left
     (fun acc def ->
       match def with
-      | DEF_reg_dec (DEC_aux(DEC_reg (_, _, typ, id, None), (_, tannot))) ->
+      | DEF_reg_dec (DEC_aux(DEC_reg (typ, id, None), (_, tannot))) ->
          let env = match destruct_tannot tannot with
-           | Some (env, _, _) -> env
+           | Some (env, _) -> env
            | _ -> Env.empty
          in
          (Env.expand_synonyms env typ, id) :: acc
@@ -129,7 +129,7 @@ let generate_regstate registers =
         if !opt_type_grouped_regstate then
           List.map
             (fun (typ, id) ->
-                 (function_typ [string_typ] typ no_effect,
+                 (function_typ [string_typ] typ,
                   regstate_field typ))
             registers
           |> List.sort_uniq (fun (typ1, id1) (typ2, id2) -> Id.compare id1 id2)

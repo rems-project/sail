@@ -115,7 +115,7 @@ let generate_fun_id id args =
    that will be propagated in *)
 let generate_val_spec env id args l annot =
   match Env.get_val_spec_orig id env with
-  | tq, (Typ_aux (Typ_fn (arg_typs, ret_typ, eff), _) as fn_typ) ->
+  | tq, (Typ_aux (Typ_fn (arg_typs, ret_typ), _) as fn_typ) ->
      (* Get instantiation of type variables at call site *)
      let orig_ksubst (kid, typ_arg) =
        match typ_arg with
@@ -149,7 +149,7 @@ let generate_val_spec env id args l annot =
          args arg_typs ([], kopts_of_typ (env_of_tannot annot) ret_typ')
      in
      let arg_typs' = if arg_typs' = [] then [unit_typ] else arg_typs' in
-     let typ' = mk_typ (Typ_fn (arg_typs', ret_typ', eff)) in
+     let typ' = mk_typ (Typ_fn (arg_typs', ret_typ')) in
      (* Construct new val spec *)
      let constraints' =
        quant_split tq |> snd
@@ -225,7 +225,7 @@ let rewrite_ast target env ({ defs; _ } as ast) =
            in
            if not (IdSet.mem id' (ids_of_defs !valspecs)) then begin
              (* Generate copy of function with constant arguments propagated in *)
-             let (FD_aux (FD_function (_, _, _, fcls), _)) =
+             let (FD_aux (FD_function (_, _, fcls), _)) =
                List.find (fun fd -> Id.compare id (id_of_fundef fd) = 0) mutrecs
              in
              let valspec, ksubsts = generate_val_spec env id args l annot in
@@ -256,9 +256,9 @@ let rewrite_ast target env ({ defs; _ } as ast) =
              rewrite_pexp (construct_pexp (pat, guard, recheck_exp body', annot))
            else pexp
          in FCL_aux (FCL_Funcl (id, pexp'), a)
-       and rewrite_fundef (FD_aux (FD_function (ropt, topt, eopt, fcls), a)) =
+       and rewrite_fundef (FD_aux (FD_function (ropt, topt, fcls), a)) =
          let fcls' = List.map rewrite_funcl fcls in
-         FD_aux (FD_function (ropt, topt, eopt, fcls'), a)
+         FD_aux (FD_function (ropt, topt, fcls'), a)
        in
        let mutrecs' = List.map (fun fd -> DEF_fundef (rewrite_fundef fd)) mutrecs in
        let fdefs = fst (check_defs env (!valspecs @ !fundefs)) in

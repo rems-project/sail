@@ -100,13 +100,6 @@ let rec list_extract f = function
   | [] -> None
   | h::t -> match f h with None -> list_extract f t | Some v -> Some v
 
-
-
-let is_pure e =
-  match e with
-  | Effect_aux (Effect_set [],_) -> true
-  | _ -> false
-
 let remove_bound (substs,ksubsts) pat =
   let bound = bindings_from_pat pat in
   List.fold_left (fun sub v -> Bindings.remove v sub) substs bound, ksubsts
@@ -118,11 +111,11 @@ let rec is_value (E_aux (e,(l,annot))) =
        (Reporting.print_err l "Monomorphisation"
           ("Missing type information for identifier " ^ string_of_id id);
         false) (* Be conservative if we have no info *)
-    | Some (env,_,_) ->
+    | Some (env, _) ->
        Env.is_union_constructor id env ||
          (match Env.lookup_id id env with
          | Enum _ -> true
-         | Unbound | Local _ | Register _ -> false)
+         | Unbound _ | Local _ | Register _ -> false)
   in
   match e with
   | E_id id -> is_constructor id
@@ -135,7 +128,7 @@ let rec is_value (E_aux (e,(l,annot))) =
   | E_cast (typ,E_aux (E_lit (L_aux (L_undef,_)),_)) -> true
   (* Also keep casts around records, as type inference fails without *)
   | E_cast (_, (E_aux (E_record _, _) as e')) -> is_value e'
-(* TODO: more? *)
+  (* TODO: more? *)
   | _ -> false
 
 let isubst_minus_set subst set =
@@ -192,7 +185,7 @@ let fabricate_nexp_exist env l typ kids nc typ' =
 let fabricate_nexp l tannot =
   match destruct_tannot tannot with
   | None -> nint 32
-  | Some (env,typ,_) ->
+  | Some (env,typ) ->
      match Type_check.destruct_exist (Type_check.Env.expand_synonyms env typ) with
      | None -> nint 32
      (* TODO: check this *)
@@ -600,7 +593,7 @@ let const_props target ast ref_vars =
          | Some id ->
             begin
               match Env.lookup_id id env with
-              | Local (Mutable,_) | Unbound ->
+              | Local (Mutable,_) | Unbound _ ->
                  if is_value e' && not (IdSet.mem id ref_vars)
                  then Bindings.add id (keep_undef_typ e') assigns
                  else Bindings.remove id assigns
@@ -762,7 +755,7 @@ let const_props target ast ref_vars =
                  "Unexpected kind of literal for var match"; GiveUp)
          end
       | E_lit ((L_aux ((L_bin _ | L_hex _), _) as lit)), P_vector _ ->
-         let mk_bitlit lit = E_aux (E_lit lit, (Generated l, mk_tannot env bit_typ no_effect)) in
+         let mk_bitlit lit = E_aux (E_lit lit, (Generated l, mk_tannot env bit_typ)) in
          let lits' = List.map mk_bitlit (vector_string_to_bit_list lit) in
          check_exp_pat (E_aux (E_vector lits', (l, annot))) pat
       | E_lit _, _ ->
@@ -789,7 +782,7 @@ let const_props target ast ref_vars =
                "Unexpected kind of pattern for vector literal"; GiveUp)
          | _ -> final)
       | E_vector _, P_lit ((L_aux ((L_bin _ | L_hex _), _) as lit)) ->
-         let mk_bitlit lit = P_aux (P_lit lit, (Generated l, mk_tannot env bit_typ no_effect)) in
+         let mk_bitlit lit = P_aux (P_lit lit, (Generated l, mk_tannot env bit_typ)) in
          let lits' = List.map mk_bitlit (vector_string_to_bit_list lit) in
          check_exp_pat exp (P_aux (P_vector lits', (l, annot)))
       | E_vector _, _ ->

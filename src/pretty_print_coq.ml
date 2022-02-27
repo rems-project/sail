@@ -226,7 +226,7 @@ let doc_id_type types_mod env (Id_aux(i,_) as id) =
     | None -> false
     | Some env ->
        IdSet.mem id (Env.get_defined_val_specs env) ||
-       Env.lookup_id id env <> Unbound
+       not (is_unbound (Env.lookup_id id env))
   in
   match i with
   | Id("int") -> string "Z"
@@ -252,17 +252,11 @@ let doc_docstring (l, _) = match l with
   | Parse_ast.Documented (str, _) -> string ("(*" ^ str ^ "*)") ^^ hardline
   | _ -> empty
 
-let simple_annot l typ = (Parse_ast.Generated l, Some (Env.empty, typ, no_effect))
+let simple_annot l typ = (Parse_ast.Generated l, Some (Env.empty, typ))
 let simple_num l n = E_aux (
   E_lit (L_aux (L_num n, Parse_ast.Generated l)),
   simple_annot (Parse_ast.Generated l)
     (atom_typ (Nexp_aux (Nexp_constant n, Parse_ast.Generated l))))
-
-let effectful_set = function
-  | [] -> false
-  | _ -> true
-
-let effectful (Effect_aux (Effect_set effs, _)) = effectful_set effs
 
 let is_regtyp (Typ_aux (typ, _)) env = match typ with
   | Typ_app(id, _) when string_of_id id = "register" -> true
@@ -354,7 +348,7 @@ let rec coq_nvars_of_typ (Typ_aux (t,l)) =
   match t with
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> tyvars_of_nexp (orig_nexp (nvar kid))
-  | Typ_fn (t1,t2,_) -> List.fold_left KidSet.union (trec t2) (List.map trec t1)
+  | Typ_fn (t1,t2) -> List.fold_left KidSet.union (trec t2) (List.map trec t1)
   | Typ_tup ts ->
      List.fold_left (fun s t -> KidSet.union s (trec t))
        KidSet.empty ts
@@ -598,11 +592,12 @@ let rec doc_typ_fns ctx env =
   let rec typ ty = fn_typ true ty
     and typ' ty = fn_typ false ty
     and fn_typ atyp_needed ((Typ_aux (t, _)) as ty) = match t with
-      | Typ_fn(args,ret,efct) ->
+      | Typ_fn(args,ret) ->
          let ret_typ =
-           if effectful efct
+           (* TODO EFFECT: Make this ICE, add a doc_fn_typ with a monadic parameter that only docs function types *)
+           (*if effectful efct
            then separate space [string "M"; fn_typ true ret]
-           else separate space [fn_typ false ret] in
+           else *) separate space [fn_typ false ret] in
          let arg_typs = List.map (app_typ false) args in
          let tpp = separate (space ^^ arrow ^^ space) (arg_typs @ [ret_typ]) in
          (* once we have proper excetions we need to know what the exceptions type is *)
@@ -1037,7 +1032,7 @@ let rec typeclass_nexps (Typ_aux(t,l)) =
   | Typ_id _
   | Typ_var _
     -> NexpSet.empty
-  | Typ_fn (t1,t2,_) -> List.fold_left NexpSet.union (typeclass_nexps t2) (List.map typeclass_nexps t1)
+  | Typ_fn (t1,t2) -> List.fold_left NexpSet.union (typeclass_nexps t2) (List.map typeclass_nexps t1)
   | Typ_tup ts -> List.fold_left NexpSet.union NexpSet.empty (List.map typeclass_nexps ts)
   | Typ_app (Id_aux (Id "bitvector",_),
              [A_aux (A_nexp size_nexp,_); _])
@@ -1137,7 +1132,7 @@ let rec doc_pat ctxt apat_needed exists_as_pairs (P_aux (p,(l,annot)) as pat, ty
        let (typq, ctor_typ) = Env.get_union_id id env in
        let arg_typs =
          match Env.expand_synonyms env ctor_typ with
-         | Typ_aux (Typ_fn (arg_typs, ret_typ, _), _) ->
+         | Typ_aux (Typ_fn (arg_typs, ret_typ), _) ->
             let unifiers = unify l env (tyvars_of_typ ret_typ) ret_typ typ in
             List.map (subst_unifiers unifiers) arg_typs
          | _ -> assert false
@@ -1488,8 +1483,6 @@ let doc_exp, doc_let =
       then separate space [string "liftR"; parens (doc)]
       else doc in
     match e with
-    | E_assign(_, _) when has_effect (effect_of full_exp) BE_config ->
-       string "returnm tt" (* TODO *)
     | E_assign((LEXP_aux(le_act,tannot) as le), e) ->
        (* can only be register writes *)
        (match le_act (*, t, tag*) with
@@ -1676,11 +1669,11 @@ let doc_exp, doc_let =
                               "Unexpected number of arguments for loop combinator")
             in
             let return (E_aux (e, (l,a))) =
-              let a' = mk_tannot (env_of_annot (l,a)) bool_typ no_effect in
+              let a' = mk_tannot (env_of_annot (l,a)) bool_typ in
               E_aux (E_internal_return (E_aux (e, (l,a))), (l,a'))
             in
             let simple_bool (E_aux (_, (l,a)) as exp) =
-              let a' = mk_tannot (env_of_annot (l,a)) bool_typ no_effect in
+              let a' = mk_tannot (env_of_annot (l,a)) bool_typ in
               E_aux (E_cast (bool_typ, exp), (l,a'))
             in
             let csuffix, cond, body =
@@ -1765,7 +1758,8 @@ let doc_exp, doc_let =
                             KBindings.add (orig_kid kid) kid m)
                           KBindings.empty (quant_kopts tqs) in
           let arg_typs, ret_typ, eff = match fn_ty with
-            | Typ_aux (Typ_fn (arg_typs,ret_typ,eff),_) -> arg_typs, ret_typ, eff
+            (* TODO EFFECT: Determine monadness from f *)
+            | Typ_aux (Typ_fn (arg_typs,ret_typ),_) -> arg_typs, ret_typ, no_effect
             | _ -> raise (Reporting.err_unreachable l __POS__ "Function not a function type")
           in
           let inst, inst_env =
@@ -1950,8 +1944,8 @@ let doc_exp, doc_let =
         "E_vector_subrange should have been rewritten before pretty-printing")
     | E_field((E_aux(_,(l,fannot)) as fexp),id) ->
        (match destruct_tannot fannot with
-        | Some(env, (Typ_aux (Typ_id tid, _)), _)
-        | Some(env, (Typ_aux (Typ_app (tid, _), _)), _)
+        | Some(env, (Typ_aux (Typ_id tid, _)))
+        | Some(env, (Typ_aux (Typ_app (tid, _), _)))
           when Env.is_record tid env ->
            let fname =
              if prefix_recordtype && string_of_id tid <> "regstate"
@@ -1967,12 +1961,12 @@ let doc_exp, doc_let =
        let typ = typ_of full_exp in
        let eff = effect_of full_exp in
        let base_typ = Env.base_typ_of env typ in
-       if has_effect eff BE_rreg then
+       if Env.is_register id env && (match e with E_id _ -> true | _ -> false) then
          let epp = separate space [string "read_reg"; doc_id id ^^ string "_ref"] in
          if is_bitvector_typ base_typ
          then wrap_parens (align (group (prefix 0 1 (parens (liftR epp)) (doc_tannot ctxt env true base_typ))))
          else liftR epp
-       else if Env.is_register id env && is_regtyp typ env then doc_id id ^^ string "_ref"
+       else if Env.is_register id env && (match e with E_ref _ -> true | _ -> false) then doc_id id ^^ string "_ref"
        else if is_ctor env id then doc_id_ctor id
        else begin
          match Env.lookup_id id env with
@@ -2098,8 +2092,8 @@ let doc_exp, doc_let =
        if aexp_needed then parens epp else epp
     | E_record fexps ->
        let recordtyp = match destruct_tannot annot with
-         | Some (env, Typ_aux (Typ_id tid,_), _)
-         | Some (env, Typ_aux (Typ_app (tid, _), _), _) ->
+         | Some (env, Typ_aux (Typ_id tid,_))
+         | Some (env, Typ_aux (Typ_app (tid, _), _)) ->
            (* when Env.is_record tid env -> *)
            tid
          | _ ->  raise (report l __POS__ ("cannot get record type from annot " ^ string_of_tannot annot ^ " of exp " ^ string_of_exp full_exp)) in
@@ -2109,8 +2103,8 @@ let doc_exp, doc_let =
        if aexp_needed then parens epp else epp
     | E_record_update(e, fexps) ->
        let recordtyp, env = match destruct_tannot annot with
-         | Some (env, Typ_aux (Typ_id tid,_), _)
-         | Some (env, Typ_aux (Typ_app (tid, _), _), _)
+         | Some (env, Typ_aux (Typ_id tid,_))
+         | Some (env, Typ_aux (Typ_app (tid, _), _))
            when Env.is_record tid env ->
            tid, env
          | _ ->  raise (report l __POS__ ("cannot get record type from annot " ^ string_of_tannot annot ^ " of exp " ^ string_of_exp full_exp)) in
@@ -2450,7 +2444,7 @@ let types_used_with_generic_eq defs =
   let typs_req_funcl (FCL_aux (FCL_Funcl (_,pexp), _)) =
     fst (Rewriter.fold_pexp alg pexp)
   in
-  let typs_req_fundef (FD_aux (FD_function (_,_,_,fcls),_)) =
+  let typs_req_fundef (FD_aux (FD_function (_,_,fcls),_)) =
     List.fold_left IdSet.union IdSet.empty (List.map typs_req_funcl fcls)
   in
   let rec typs_req_def = function
@@ -2666,8 +2660,8 @@ let doc_typdef types_mod generic_eq_types (TD_aux(td, (l, annot))) =
 let args_of_typ l env typs =
   let arg i typ =
     let id = mk_id ("arg" ^ string_of_int i) in
-    (P_aux (P_id id, (l, mk_tannot env typ no_effect)), typ),
-    E_aux (E_id id, (l, mk_tannot env typ no_effect)) in
+    (P_aux (P_id id, (l, mk_tannot env typ)), typ),
+    E_aux (E_id id, (l, mk_tannot env typ)) in
   List.split (List.mapi arg typs)
 
 (* Sail currently has a single pattern to match against a list of
@@ -2681,11 +2675,11 @@ let rec untuple_args_pat typs (P_aux (paux, ((l, _) as annot)) as pat) =
   let identity = (fun body -> body) in
   match paux, typs with
   | P_tup [], _ ->
-     let annot = (l, mk_tannot Env.empty unit_typ no_effect) in
+     let annot = (l, mk_tannot Env.empty unit_typ) in
      [P_aux (P_lit (mk_lit L_unit), annot), unit_typ], identity
   | P_tup pats, _ -> List.combine pats typs, identity
   | P_wild, _ ->
-     let wild typ = P_aux (P_wild, (l, mk_tannot env typ no_effect)), typ in
+     let wild typ = P_aux (P_wild, (l, mk_tannot env typ)), typ in
      List.map wild typs, identity
   | P_typ (_, pat), _ -> untuple_args_pat typs pat
   | P_as _, _::_::_ | P_id _, _::_::_ ->
@@ -2863,8 +2857,9 @@ type mutrec_pos = NotMutrec | FirstFn | LaterFn
 let doc_funcl_init types_mod mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let env = env_of_annot annot in
   let (tq,typ) = Env.get_val_spec_orig id env in
+  (* TODO EFFECT: Again get effectfulness from name *)
   let (arg_typs, ret_typ, eff) = match typ with
-    | Typ_aux (Typ_fn (arg_typs, ret_typ, eff),_) -> arg_typs, ret_typ, eff
+    | Typ_aux (Typ_fn (arg_typs, ret_typ),_) -> arg_typs, ret_typ, no_effect
     | _ -> failwith ("Function " ^ string_of_id id ^ " does not have function type")
   in
   let ids_to_avoid = all_ids pexp in
@@ -3057,7 +3052,7 @@ let get_id = function
 (* Coq doesn't support multiple clauses for a single function joined
    by "and".  However, all the funcls should have been merged by the
    merge_funcls rewrite now. *)
-let doc_fundef_rhs types_mod ?(mutrec=NotMutrec) rec_set (FD_aux(FD_function(r, typa, efa, funcls),(l,_))) =
+let doc_fundef_rhs types_mod ?(mutrec=NotMutrec) rec_set (FD_aux(FD_function(r, typa, funcls),(l,_))) =
   match funcls with
   | [] -> unreachable l __POS__ "function with no clauses"
   | [funcl] -> doc_funcl_init types_mod mutrec r ~rec_set funcl
@@ -3084,7 +3079,7 @@ let doc_funcl types_mod mutrec r funcl =
   let body = doc_funcl_body ctxt details in
   pre,body,post
 
-let rec doc_fundef types_mod (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
+let rec doc_fundef types_mod (FD_aux(FD_function(r, typa, fcls),fannot)) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | [FCL_aux (FCL_Funcl(id,_),annot) as funcl]
@@ -3105,7 +3100,7 @@ let rec doc_fundef types_mod (FD_aux(FD_function(r, typa, efa, fcls),fannot)) =
 
 let doc_dec (DEC_aux (reg, ((l, _) as annot))) =
   match reg with
-  | DEC_reg (_, _, typ, id, None) -> empty
+  | DEC_reg (typ, id, None) -> empty
      (*
        let env = env_of_annot annot in
        let rt = Env.base_typ_of env typ in
@@ -3124,7 +3119,7 @@ let doc_dec (DEC_aux (reg, ((l, _) as annot))) =
            ^/^ hardline
          else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ))
        else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ)) *)
-  | DEC_reg (_, _, typ, id, Some exp) ->
+  | DEC_reg (typ, id, Some exp) ->
      separate space [string "Definition"; doc_id id; coloneq; doc_exp empty_ctxt false exp] ^^ dot ^^ hardline
 
 let is_field_accessor regtypes fdef =
@@ -3182,7 +3177,9 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
 let doc_axiom_typschm typ_env l (tqs,typ) =
   let typ_env = Env.add_typquant l tqs typ_env in
   match typ with
-  | Typ_aux (Typ_fn (typs, ret_ty, eff),l') ->
+  | Typ_aux (Typ_fn (typs, ret_ty),l') ->
+     (* TODO EFFECT: Monadicity as parameter here *)
+     let eff = no_effect in
      let check_typ (args,used) typ =
        match Type_check.destruct_atom_nexp typ_env typ with
        | Some (Nexp_aux (Nexp_var kid,_)) ->
@@ -3289,7 +3286,7 @@ let doc_val pat exp =
        | Some _ ->
           empty, match exp with
           | E_aux (E_cast (typ',_),_) when alpha_equivalent env typ typ' -> exp
-          | _ -> E_aux (E_cast (typ,exp), (Parse_ast.Unknown, mk_tannot env typ (effect_of exp)))
+          | _ -> E_aux (E_cast (typ,exp), (Parse_ast.Unknown, mk_tannot env typ))
   in
   let idpp = doc_id id in
   let base_pp = doc_exp ctxt false exp ^^ dot in
@@ -3330,7 +3327,7 @@ let find_exc_typ defs =
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
 let find_unimplemented defs =
-  let adjust_fundef unimplemented (FD_aux (FD_function (_,_,_,funcls),_)) =
+  let adjust_fundef unimplemented (FD_aux (FD_function (_,_,funcls),_)) =
     match funcls with
     | [] -> unimplemented
     | (FCL_aux (FCL_Funcl (id,_),_))::_ ->

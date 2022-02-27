@@ -89,7 +89,7 @@ let find_properties { defs; _ } =
 let add_property_guards props ast =
   let open Type_check in
   let rec add_property_guards' acc = function
-    | (DEF_fundef (FD_aux (FD_function (r_opt, t_opt, e_opt, funcls), fd_aux) as fdef) as def) :: defs ->
+    | (DEF_fundef (FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) as fdef) as def) :: defs ->
        begin match Bindings.find_opt (id_of_fundef fdef) props with
        | Some (_, _, pragma_l, VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (quant, _), _), _, _, _), _)) ->
           begin match quant_split quant with
@@ -125,7 +125,7 @@ let add_property_guards props ast =
              in
 
              let funcls = List.map add_constraints_to_funcl funcls in
-             let fdef = FD_aux (FD_function (r_opt, t_opt, e_opt, funcls), fd_aux) in
+             let fdef = FD_aux (FD_function (r_opt, t_opt, funcls), fd_aux) in
 
              add_property_guards' (DEF_fundef fdef :: acc) defs
           end

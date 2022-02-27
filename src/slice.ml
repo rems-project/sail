@@ -146,9 +146,9 @@ and typ_ids' (Typ_aux (aux, _)) =
   | Typ_id id -> IdSet.singleton id
   | Typ_app (id, args) ->
      IdSet.add id (List.fold_left IdSet.union IdSet.empty (List.map typ_arg_ids' args))
-  | Typ_fn (typs, typ, _) ->
+  | Typ_fn (typs, typ) ->
      IdSet.union (typ_ids' typ) (List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs))
-  | Typ_bidir (typ1, typ2, _) ->
+  | Typ_bidir (typ1, typ2) ->
      IdSet.union (typ_ids' typ1) (typ_ids' typ2)
   | Typ_tup typs ->
      List.fold_left IdSet.union IdSet.empty (List.map typ_ids' typs)
@@ -309,7 +309,7 @@ let add_def_to_graph graph def =
      IdSet.iter (fun id -> ignore (rewrite_let (rewriters (Letbind id)) lb)) ids
   | DEF_type tdef ->
      add_type_def_to_graph tdef
-  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id, opt_exp), _)) ->
+  | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, opt_exp), _)) ->
      begin match opt_exp with
      | Some exp -> ignore (fold_exp (rw_exp (Register id)) exp);
      | None -> ()
@@ -339,7 +339,7 @@ let id_of_typedef (TD_aux (aux, _)) =
   | TD_enum (id, _, _) -> id
   | TD_bitfield (id, _, _) -> id
 
-let id_of_reg_dec (DEC_aux (DEC_reg (_, _, _, id, _), _)) = id
+let id_of_reg_dec (DEC_aux (DEC_reg (_, id, _), _)) = id
 
 let filter_ast_extra cuts g ast keep_std =
   let rec filter_ast' g =

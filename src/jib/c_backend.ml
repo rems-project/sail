@@ -377,7 +377,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
               end
             else
               v
-         | Register (_, _, typ) ->
+         | Register typ ->
             let ctyp = convert_typ ctx typ in
             if is_stack_ctyp ctyp && not (never_optimize ctyp) then
               AV_cval (V_id (global id, ctyp), typ)

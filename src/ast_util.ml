@@ -72,13 +72,21 @@ module Big_int = Nat_big_num
 
 type mut = Immutable | Mutable
 
-type 'a lvar = Register of effect * effect * 'a | Enum of 'a | Local of mut * 'a | Unbound
+type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
 
-let lvar_typ = function
+let is_unbound = function
+  | Unbound _ -> true
+  | _ -> false
+                                                                          
+let string_of_id = function
+  | Id_aux (Id v, _) -> v
+  | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
+                                                                          
+let lvar_typ ?loc:(l=Parse_ast.Unknown) = function
   | Local (_, typ) -> typ
-  | Register (_, _, typ) -> typ
+  | Register typ -> typ
   | Enum typ -> typ
-  | Unbound -> Reporting.unreachable Parse_ast.Unknown __POS__ "No type for unbound variable"
+  | Unbound id -> Reporting.unreachable l __POS__ ("No type for unbound variable " ^ string_of_id id)
 
 let no_annot = (Parse_ast.Unknown, ())
 
@@ -134,10 +142,9 @@ let mk_qi_kopt kopt = QI_aux (QI_id kopt, Parse_ast.Unknown)
 
 let mk_fundef funcls =
   let tannot_opt = Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown) in
-  let effect_opt = Effect_opt_aux (Effect_opt_none, Parse_ast.Unknown) in
   let rec_opt = Rec_aux (Rec_nonrec, Parse_ast.Unknown) in
   DEF_fundef
-   (FD_aux (FD_function (rec_opt, tannot_opt, effect_opt, funcls), no_annot))
+   (FD_aux (FD_function (rec_opt, tannot_opt, funcls), no_annot))
 
 let mk_letbind pat exp = LB_aux (LB_val (pat, exp), no_annot)
 
@@ -423,7 +430,7 @@ let atom_bool_typ nc = mk_typ (Typ_app (mk_id "atom_bool", [mk_typ_arg (A_bool n
 let string_typ = mk_id_typ (mk_id "string")
 let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (A_typ typ)]))
 let tuple_typ typs = mk_typ (Typ_tup typs)
-let function_typ arg_typs ret_typ eff = mk_typ (Typ_fn (arg_typs, ret_typ, eff))
+let function_typ arg_typs ret_typ = mk_typ (Typ_fn (arg_typs, ret_typ))
 
 let vector_typ n ord typ =
   mk_typ (Typ_app (mk_id "vector",
@@ -492,10 +499,10 @@ let mk_typquant qis = TypQ_aux (TypQ_tq qis, Parse_ast.Unknown)
 
 let mk_fexp id exp = FE_aux (FE_Fexp (id, exp), no_annot)
 
-let mk_effect effs =
-  Effect_aux (Effect_set (List.map (fun be_aux -> BE_aux (be_aux, Parse_ast.Unknown)) effs), Parse_ast.Unknown)
-
-let no_effect = mk_effect []
+type effect = bool
+                   
+let no_effect = false
+let monadic_effect = true
 
 let quant_add qi typq =
   match qi, typq with
@@ -664,8 +671,8 @@ and map_typedef_annot f = function
 and map_fundef_annot f = function
   | FD_aux (fd_aux, annot) -> FD_aux (map_fundef_annot_aux f fd_aux, f annot)
 and map_fundef_annot_aux f = function
-  | FD_function (rec_opt, tannot_opt, eff_opt, funcls) -> FD_function (map_recopt_annot f rec_opt, tannot_opt, eff_opt,
-                                                                       List.map (map_funcl_annot f) funcls)
+  | FD_function (rec_opt, tannot_opt, funcls) -> FD_function (map_recopt_annot f rec_opt, tannot_opt,
+                                                              List.map (map_funcl_annot f) funcls)
 and map_funcl_annot f = function
   | FCL_aux (fcl, annot) -> FCL_aux (map_funcl_annot_aux f fcl, f annot)
 and map_funcl_annot_aux f = function
@@ -688,7 +695,7 @@ and map_valspec_annot f = function
 and map_scattered_annot f = function
   | SD_aux (sd_aux, annot) -> SD_aux (map_scattered_annot_aux f sd_aux, f annot)
 and map_scattered_annot_aux f = function
-  | SD_function (rec_opt, tannot_opt, eff_opt, name) -> SD_function (map_recopt_annot f rec_opt, tannot_opt, eff_opt, name)
+  | SD_function (rec_opt, tannot_opt, name) -> SD_function (map_recopt_annot f rec_opt, tannot_opt, name)
   | SD_funcl fcl -> SD_funcl (map_funcl_annot f fcl)
   | SD_variant (id, typq) -> SD_variant (id, typq)
   | SD_unioncl (id, tu) -> SD_unioncl (id, tu)
@@ -699,8 +706,8 @@ and map_scattered_annot_aux f = function
 and map_decspec_annot f = function
   | DEC_aux (dec_aux, annot) -> DEC_aux (map_decspec_annot_aux f dec_aux, f annot)
 and map_decspec_annot_aux f = function
-  | DEC_reg (eff1, eff2, typ, id, None) -> DEC_reg (eff1, eff2, typ, id, None)
-  | DEC_reg (eff1, eff2, typ, id, Some exp) -> DEC_reg (eff1, eff2, typ, id, Some (map_exp_annot f exp))
+  | DEC_reg (typ, id, None) -> DEC_reg (typ, id, None)
+  | DEC_reg (typ, id, Some exp) -> DEC_reg (typ, id, Some (map_exp_annot f exp))
 
 and map_def_annot f = function
   | DEF_type td -> DEF_type (map_typedef_annot f td)
@@ -759,10 +766,6 @@ let def_loc = function
   | DEF_measure (id, _, _) -> id_loc id
   | DEF_loop_measures (id, _) -> id_loc id
 
-let string_of_id = function
-  | Id_aux (Id v, _) -> v
-  | Id_aux (Operator v, _) -> "(operator " ^ v ^ ")"
-
 let id_of_kid = function
   | Kid_aux (Var v, l) -> Id_aux (Id (String.sub v 1 (String.length v - 1)), l)
 
@@ -782,24 +785,6 @@ let append_id id str =
 let prepend_kid str = function
   | Kid_aux (Var v, l) -> Kid_aux (Var ("'" ^ str ^ String.sub v 1 (String.length v - 1)), l)
 
-let string_of_base_effect_aux = function
-  | BE_rreg -> "rreg"
-  | BE_wreg -> "wreg"
-  | BE_rmem -> "rmem"
-  | BE_wmem -> "wmem"
-  | BE_eamem -> "eamem"
-  | BE_exmem -> "exmem"
-  | BE_wmv -> "wmv"
-  | BE_barr -> "barr"
-  | BE_depend -> "depend"
-  | BE_undef -> "undef"
-  | BE_unspec -> "unspec"
-  | BE_nondet -> "nondet"
-  | BE_escape -> "escape"
-  | BE_config -> "configuration"
-  (*| BE_lset -> "lset"
-  | BE_lret -> "lret"*)
-
 let string_of_kind_aux = function
   | K_type -> "Type"
   | K_int -> "Int"
@@ -810,15 +795,6 @@ let string_of_kind (K_aux (k, _)) = string_of_kind_aux k
 
 let string_of_kinded_id (KOpt_aux (KOpt_kind (k, kid), _)) =
   "(" ^ string_of_kid kid ^ " : " ^ string_of_kind k ^ ")"
-
-let string_of_base_effect = function
-  | BE_aux (beff, _) -> string_of_base_effect_aux beff
-
-let string_of_effect = function
-  | Effect_aux (Effect_set [], _) -> "pure"
-  | Effect_aux (Effect_set beffs, _) ->
-     let beffs = List.map string_of_base_effect beffs |> List.sort String.compare in
-     "{" ^ string_of_list ", " (fun x -> x) beffs ^ "}"
 
 let string_of_order = function
   | Ord_aux (Ord_var kid, _) -> string_of_kid kid
@@ -848,12 +824,12 @@ and string_of_typ_aux = function
   | Typ_app (id, args) when Id.compare id (mk_id "atom") = 0 -> "int(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | Typ_app (id, args) when Id.compare id (mk_id "atom_bool") = 0 -> "bool(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | Typ_app (id, args) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
-  | Typ_fn ([typ_arg], typ_ret, eff) ->
-     string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
-  | Typ_fn (typ_args, typ_ret, eff) ->
+  | Typ_fn ([typ_arg], typ_ret) ->
+     string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret
+  | Typ_fn (typ_args, typ_ret) ->
      "(" ^ string_of_list ", " string_of_typ typ_args ^ ") -> "
-     ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
-  | Typ_bidir (typ1, typ2, eff) -> string_of_typ typ1 ^ " <-> " ^ string_of_typ typ2 ^ " effect " ^ string_of_effect eff
+     ^ string_of_typ typ_ret
+  | Typ_bidir (typ1, typ2) -> string_of_typ typ1 ^ " <-> " ^ string_of_typ typ2
   | Typ_exist (kids, nc, typ) ->
      "{" ^ string_of_list " " string_of_kinded_id kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"
 and string_of_typ_arg = function
@@ -1056,7 +1032,7 @@ let rec pat_ids (P_aux (pat_aux, _)) =
   | P_string_append pats ->
      List.fold_right IdSet.union (List.map pat_ids pats) IdSet.empty
 
-let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =
+let id_of_fundef (FD_aux (FD_function (_, _, funcls), (l, _))) =
   match (List.fold_right
            (fun (FCL_aux (FCL_Funcl (id, _), _)) id' ->
              match id' with
@@ -1079,13 +1055,13 @@ let id_of_type_def (TD_aux (td_aux, _)) = id_of_type_def_aux td_aux
 
 let id_of_val_spec (VS_aux (VS_val_spec (_, id, _, _), _)) = id
 
-let id_of_dec_spec (DEC_aux (DEC_reg (_, _, _, id, _), _)) = id
+let id_of_dec_spec (DEC_aux (DEC_reg (_, id, _), _)) = id
 
 let ids_of_def = function
   | DEF_type td -> IdSet.singleton (id_of_type_def td)
   | DEF_fundef fd -> IdSet.singleton (id_of_fundef fd)
   | DEF_val (LB_aux (LB_val (pat, _), _)) -> pat_ids pat
-  | DEF_reg_dec (DEC_aux (DEC_reg (_, _, _, id, _), _)) -> IdSet.singleton id
+  | DEF_reg_dec (DEC_aux (DEC_reg (_, id, _), _)) -> IdSet.singleton id
   | DEF_spec vs -> IdSet.singleton (id_of_val_spec vs)
   | DEF_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
   | _ -> IdSet.empty
@@ -1113,17 +1089,6 @@ let record_ids defs =
   in
   IdSet.of_list (rec_ids defs)
 
-module BE = struct
-  type t = base_effect
-  let compare be1 be2 = String.compare (string_of_base_effect be1) (string_of_base_effect be2)
-end
-
-module BESet = Set.Make(BE)
-
-let effect_compare (Effect_aux (Effect_set l1,_)) (Effect_aux (Effect_set l2,_)) =
-  match compare (List.length l1) (List.length l2) with
-  | 0 -> Util.compare_list BE.compare l1 l2
-  | n -> n
 let order_compare (Ord_aux (o1,_)) (Ord_aux (o2,_)) =
   match o1, o2 with
   | Ord_var k1, Ord_var k2 -> Kid.compare k1 k2
@@ -1175,17 +1140,13 @@ and typ_compare (Typ_aux (t1,_)) (Typ_aux (t2,_)) =
   | Typ_internal_unknown, Typ_internal_unknown -> 0
   | Typ_id id1, Typ_id id2 -> Id.compare id1 id2
   | Typ_var kid1, Typ_var kid2 -> Kid.compare kid1 kid2
-  | Typ_fn (ts1,t2,e1), Typ_fn (ts3,t4,e2) ->
+  | Typ_fn (ts1,t2), Typ_fn (ts3,t4) ->
      (match Util.compare_list typ_compare ts1 ts3 with
-     | 0 -> (match typ_compare t2 t4 with
-       | 0 -> effect_compare e1 e2
-       | n -> n)
+     | 0 -> typ_compare t2 t4
      | n -> n)
-  | Typ_bidir (t1,t2,e1), Typ_bidir (t3,t4,e2) ->
+  | Typ_bidir (t1,t2), Typ_bidir (t3,t4) ->
      (match typ_compare t1 t3 with
-      | 0 -> (match typ_compare t2 t4 with
-              | 0 -> effect_compare e1 e2
-              | n -> n)
+      | 0 -> typ_compare t2 t4
       | n -> n)
   | Typ_tup ts1, Typ_tup ts2 -> Util.compare_list typ_compare ts1 ts2
   | Typ_exist (ks1,nc1,t1), Typ_exist (ks2,nc2,t2) ->
@@ -1341,31 +1302,20 @@ let rec is_bitvector_typ = function
     is_bitvector_typ rtyp
   | _ -> false
 
-let has_effect (Effect_aux (eff,_)) searched_for = match eff with
-  | Effect_set effs ->
-    List.exists (fun (BE_aux (be,_)) -> be = searched_for) effs
-
-let effect_set (Effect_aux (eff,_)) = match eff with
-  | Effect_set effs -> BESet.of_list effs
-
 (* Utilities for constructing effect sets *)
 
-let union_effects e1 e2 =
-  match e1, e2 with
-  | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
-     let base_effs3 = BESet.elements (BESet.of_list (base_effs1 @ base_effs2)) in
-     Effect_aux (Effect_set base_effs3, Parse_ast.Unknown)
+let effectful e = e
+       
+let union_effects e1 e2 = e1 || e2
 
-let equal_effects e1 e2 =
-  match e1, e2 with
-  | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
-     BESet.compare (BESet.of_list base_effs1) (BESet.of_list base_effs2) = 0
+let equal_effects e1 e2 = e1 = e2
 
 let subseteq_effects e1 e2 =
   match e1, e2 with
-  | Effect_aux (Effect_set base_effs1, _), Effect_aux (Effect_set base_effs2, _) ->
-     BESet.subset (BESet.of_list base_effs1) (BESet.of_list base_effs2)
-
+  | false, _ -> true
+  | true, true -> true
+  | true, false -> false
+    
 let rec kopts_of_nexp (Nexp_aux (nexp,_)) =
   match nexp with
   | Nexp_id _
@@ -1406,8 +1356,8 @@ and kopts_of_typ (Typ_aux (t,_)) =
   | Typ_internal_unknown -> KOptSet.empty
   | Typ_id _ -> KOptSet.empty
   | Typ_var kid -> KOptSet.singleton (mk_kopt K_type kid)
-  | Typ_fn (ts, t, _) -> List.fold_left KOptSet.union (kopts_of_typ t) (List.map kopts_of_typ ts)
-  | Typ_bidir (t1, t2, _) -> KOptSet.union (kopts_of_typ t1) (kopts_of_typ t2)
+  | Typ_fn (ts, t) -> List.fold_left KOptSet.union (kopts_of_typ t) (List.map kopts_of_typ ts)
+  | Typ_bidir (t1, t2) -> KOptSet.union (kopts_of_typ t1) (kopts_of_typ t2)
   | Typ_tup ts ->
      List.fold_left (fun s t -> KOptSet.union s (kopts_of_typ t))
        KOptSet.empty ts
@@ -1466,8 +1416,8 @@ and tyvars_of_typ (Typ_aux (t,_)) =
   | Typ_internal_unknown -> KidSet.empty
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
-  | Typ_fn (ts, t, _) -> List.fold_left KidSet.union (tyvars_of_typ t) (List.map tyvars_of_typ ts)
-  | Typ_bidir (t1, t2, _) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
+  | Typ_fn (ts, t) -> List.fold_left KidSet.union (tyvars_of_typ t) (List.map tyvars_of_typ ts)
+  | Typ_bidir (t1, t2) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
   | Typ_tup ts ->
      List.fold_left (fun s t -> KidSet.union s (tyvars_of_typ t))
        KidSet.empty ts
@@ -1551,7 +1501,7 @@ let is_valspec id = function
   | _ -> false
 
 let is_fundef id = function
-  | DEF_fundef (FD_aux (FD_function (_, _, _, FCL_aux (FCL_Funcl (id', _), _) :: _), _)) when Id.compare id' id = 0 -> true
+  | DEF_fundef (FD_aux (FD_function (_, _, FCL_aux (FCL_Funcl (id', _), _) :: _), _)) when Id.compare id' id = 0 -> true
   | _ -> false
 
 let rename_valspec id (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot)) =
@@ -1559,8 +1509,8 @@ let rename_valspec id (VS_aux (VS_val_spec (typschm, _, externs, is_cast), annot
 
 let rename_funcl id (FCL_aux (FCL_Funcl (_, pexp), annot)) = FCL_aux (FCL_Funcl (id, pexp), annot)
 
-let rename_fundef id (FD_aux (FD_function (ropt, topt, eopt, funcls), annot)) =
-  FD_aux (FD_function (ropt, topt, eopt, List.map (rename_funcl id) funcls), annot)
+let rename_fundef id (FD_aux (FD_function (ropt, topt, funcls), annot)) =
+  FD_aux (FD_function (ropt, topt, List.map (rename_funcl id) funcls), annot)
 
 let rec split_defs' f defs acc =
   match defs with
@@ -1739,11 +1689,6 @@ let locate_kinded_id f (KOpt_aux (KOpt_kind (k, kid), l)) =
 
 let locate_lit f (L_aux (lit, l)) = L_aux (lit, f l)
 
-let locate_base_effect f (BE_aux (base_effect, l)) = BE_aux (base_effect, f l)
-
-let locate_effect f (Effect_aux (Effect_set effects, l)) =
-  Effect_aux (Effect_set (List.map (locate_base_effect f) effects), f l)
-
 let locate_order f (Ord_aux (ord_aux, l)) =
   let ord_aux = match ord_aux with
     | Ord_inc -> Ord_inc
@@ -1789,9 +1734,9 @@ and locate_typ f (Typ_aux (typ_aux, l)) =
     | Typ_internal_unknown -> Typ_internal_unknown
     | Typ_id id -> Typ_id (locate_id f id)
     | Typ_var kid -> Typ_var (locate_kid f kid)
-    | Typ_fn (arg_typs, ret_typ, effect) ->
-       Typ_fn (List.map (locate_typ f) arg_typs, locate_typ f ret_typ, locate_effect f effect)
-    | Typ_bidir (typ1, typ2, effect) -> Typ_bidir (locate_typ f typ1, locate_typ f typ2, locate_effect f effect)
+    | Typ_fn (arg_typs, ret_typ) ->
+       Typ_fn (List.map (locate_typ f) arg_typs, locate_typ f ret_typ)
+    | Typ_bidir (typ1, typ2) -> Typ_bidir (locate_typ f typ1, locate_typ f typ2)
     | Typ_tup typs -> Typ_tup (List.map (locate_typ f) typs)
     | Typ_exist (kopts, constr, typ) -> Typ_exist (List.map (locate_kinded_id f) kopts, locate_nc f constr, locate_typ f typ)
     | Typ_app (id, typ_args) -> Typ_app (locate_id f id, List.map (locate_typ_arg f) typ_args)
@@ -2009,8 +1954,8 @@ and typ_subst_aux sv subst = function
         unaux_typ typ
      | _ -> Typ_var kid
      end
-  | Typ_fn (arg_typs, ret_typ, effs) -> Typ_fn (List.map (typ_subst sv subst) arg_typs, typ_subst sv subst ret_typ, effs)
-  | Typ_bidir (typ1, typ2, effs) -> Typ_bidir (typ_subst sv subst typ1, typ_subst sv subst typ2, effs)
+  | Typ_fn (arg_typs, ret_typ) -> Typ_fn (List.map (typ_subst sv subst) arg_typs, typ_subst sv subst ret_typ)
+  | Typ_bidir (typ1, typ2) -> Typ_bidir (typ_subst sv subst typ1, typ_subst sv subst typ2)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_arg_subst sv subst) args)
   | Typ_exist (kopts, nc, typ) when KidSet.mem sv (KidSet.of_list (List.map kopt_kid kopts)) ->
@@ -2107,8 +2052,8 @@ let subst_kids_nc, subst_kids_typ, subst_kids_typ_arg =
     | Typ_id _
     | Typ_var _
       -> ty
-    | Typ_fn (t1,t2,e) -> re (Typ_fn (List.map (s_styp substs) t1, s_styp substs t2,e))
-    | Typ_bidir (t1,t2,e) -> re (Typ_bidir (s_styp substs t1, s_styp substs t2,e))
+    | Typ_fn (t1,t2) -> re (Typ_fn (List.map (s_styp substs) t1, s_styp substs t2))
+    | Typ_bidir (t1,t2) -> re (Typ_bidir (s_styp substs t1, s_styp substs t2))
     | Typ_tup ts -> re (Typ_tup (List.map (s_styp substs) ts))
     | Typ_app (id,tas) -> re (Typ_app (id,List.map (s_starg substs) tas))
     | Typ_exist (kopts,nc,t) ->
@@ -2215,7 +2160,7 @@ let find_annot_funcl sl (FCL_aux (FCL_Funcl (id, pexp), (l, annot))) =
     | None -> Some (l, annot)
     | result -> result
 
-let find_annot_fundef sl (FD_aux (FD_function (_, _, _, funcls), (l, annot))) =
+let find_annot_fundef sl (FD_aux (FD_function (_, _, funcls), (l, annot))) =
   if not (subloc sl l) then None else
     match option_mapm (find_annot_funcl sl) funcls with
     | None -> Some (l, annot)

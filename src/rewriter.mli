@@ -247,29 +247,11 @@ val pure_exp_alg : 'b -> ('b -> 'b -> 'b) ->
   'b,'b,
   'b,'b) exp_alg
 
-val simple_annot : Parse_ast.l -> typ -> Parse_ast.l * tannot
-
 val add_p_typ : Env.t -> typ -> 'a pat -> 'a pat
 
 val add_e_cast : Env.t -> typ -> 'a exp -> 'a exp
 
 val add_typs_let : Env.t -> typ -> typ -> 'a exp -> 'a exp
-
-val effect_of_pexp : tannot pexp -> effect
-
-val union_eff_exps : (tannot exp) list -> effect
-
-val fix_eff_exp : tannot exp -> tannot exp
-
-val fix_eff_lexp : tannot lexp -> tannot lexp
-
-val fix_eff_lb : tannot letbind -> tannot letbind
-
-val fix_eff_pexp : tannot pexp -> tannot pexp
-
-val fix_eff_fexp : tannot fexp -> tannot fexp
-
-val fix_eff_opt_default : tannot opt_default -> tannot opt_default
 
 (* In-order fold over expressions *)
 val foldin_exp : (('a -> 'b exp -> 'a * 'b exp) -> 'a -> 'b exp -> 'a * 'b exp) -> 'a -> 'b exp -> 'a * 'b exp

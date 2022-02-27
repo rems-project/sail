@@ -144,12 +144,6 @@ let rec doc_nexp nexp =
   in
   nexp0 nexp
 
-let doc_effect (Effect_aux (aux, _)) =
-  match aux with
-  | Effect_set [] -> string "pure"
-  | Effect_set effs ->
-     braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs))
-
 let rec doc_nc nc =
   let nc_op op n1 n2 = separate space [doc_nexp n1; string op; doc_nexp n2] in
   let rec atomic_nc (NC_aux (nc_aux, _) as nc) =
@@ -193,8 +187,6 @@ let rec doc_nc nc =
   in
   atomic_nc (constraint_simp nc)
 
-and doc_effects effs = braces (separate (comma ^^ space) (List.map (fun be -> string (string_of_base_effect be)) effs))
-
 and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id id -> doc_id id
@@ -216,17 +208,10 @@ and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
      enclose (string "{|") (string "|}") (separate_map (string ", ") doc_int ints)
   | Typ_exist (kopts, nc, typ) ->
      braces (separate_map space doc_kopt kopts ^^ comma ^^ space ^^ doc_nc nc ^^ dot ^^ space ^^ doc_typ typ)
-  | Typ_fn (typs, typ, Effect_aux (Effect_set [], _)) ->
-     separate space [doc_arg_typs typs; string "->"; doc_typ typ]
-  | Typ_fn (typs, typ, Effect_aux (Effect_set effs, _)) ->
-     if simple then
-       separate space [doc_arg_typs typs; string "->"; doc_typ ~simple:simple typ]
-     else
-       separate space [doc_arg_typs typs; string "->"; doc_typ typ; string "effect"; doc_effects effs]
-  | Typ_bidir (typ1, typ2, Effect_aux (Effect_set [], _)) ->
+  | Typ_fn (typs, typ) ->
+     separate space [doc_arg_typs typs; string "->"; doc_typ ~simple:simple typ]
+  | Typ_bidir (typ1, typ2) ->
      separate space [doc_typ typ1; string "<->"; doc_typ typ2]
-  | Typ_bidir (typ1, typ2, Effect_aux (Effect_set effs, _)) ->
-     separate space [doc_typ typ1; string "<->"; doc_typ typ2; string "effect"; doc_effects effs]
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
 and doc_typ_arg (A_aux (ta_aux, _)) =
   match ta_aux with
@@ -614,7 +599,7 @@ let doc_rec (Rec_aux (r,_)) =
   | Rec_rec -> empty
   | Rec_measure (pat,exp) -> braces (doc_pat pat ^^ string " => " ^^ doc_exp exp) ^^ space
 
-let doc_fundef (FD_aux (FD_function (r, typa, efa, funcls), annot)) =
+let doc_fundef (FD_aux (FD_function (r, typa, funcls), annot)) =
   docstring annot
   ^^ match funcls with
      | [] -> failwith "Empty function list"
@@ -667,19 +652,12 @@ let doc_mapdef (MD_aux (MD_mapping (id, typa, mapcls), _)) =
 
 let doc_dec (DEC_aux (reg,_)) =
   match reg with
-  | DEC_reg (Effect_aux (Effect_set [BE_aux (BE_rreg, _)], _), Effect_aux (Effect_set [BE_aux (BE_wreg, _)], _), typ, id, opt_exp) ->
-     begin match opt_exp with
+  | DEC_reg (typ, id, opt_exp) ->
+     match opt_exp with
      | None ->
         separate space [string "register"; doc_id id; colon; doc_typ typ]
      | Some exp ->
         separate space [string "register"; doc_id id; colon; doc_typ typ; equals; doc_exp exp]
-     end
-  | DEC_reg (reffect, weffect, typ, id, opt_exp) ->
-     let exp = match opt_exp with
-       | None -> empty
-       | Some exp -> space ^^ equals ^^ space ^^ doc_exp exp
-     in
-     separate space [string "register"; doc_effect reffect; doc_effect weffect; doc_id id; colon; doc_typ typ] ^^ exp
 
 let doc_field (typ, id) =
   separate space [doc_id id; colon; doc_typ typ]
@@ -754,7 +732,7 @@ let doc_loop_measures l =
 
 let rec doc_scattered (SD_aux (sd_aux, _)) =
   match sd_aux with
-  | SD_function (_, _, _, id) ->
+  | SD_function (_, _, id) ->
      string "scattered" ^^ space ^^ string "function" ^^ space ^^ doc_id id
   | SD_funcl funcl ->
      string "function" ^^ space ^^ string "clause" ^^ space ^^ doc_funcl funcl

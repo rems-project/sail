@@ -400,7 +400,7 @@ let rec map_functions f (AE_aux (aexp, env, l)) =
 
 let pp_lvar lvar doc =
   match lvar with
-  | Register (_, _, typ) ->
+  | Register typ ->
      string "[R/" ^^ string (string_of_typ typ |> Util.yellow |> Util.clear) ^^ string "]" ^^ doc
   | Local (Mutable, typ) ->
      string "[M/" ^^ string (string_of_typ typ |> Util.yellow |> Util.clear) ^^ string "]" ^^ doc
@@ -408,7 +408,7 @@ let pp_lvar lvar doc =
      string "[I/" ^^ string (string_of_typ typ |> Util.yellow |> Util.clear) ^^ string "]" ^^ doc
   | Enum typ ->
      string "[E/" ^^ string (string_of_typ typ |> Util.yellow |> Util.clear) ^^ string "]" ^^ doc
-  | Unbound -> string "[?]" ^^ doc
+  | Unbound id -> string "[?" ^^ string (string_of_id id) ^^ string "]" ^^ doc
 
 let pp_annot typ doc =
   string "[" ^^ string (string_of_typ typ |> Util.yellow |> Util.clear) ^^ string "]" ^^ doc
@@ -573,7 +573,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
   let rec anf_lexp env (LEXP_aux (aux, (l, _)) as lexp) =
     match aux with
     | LEXP_id id | LEXP_cast (_, id) ->
-       (fun x -> x), AL_id (id, lvar_typ (Env.lookup_id id env))
+       (fun x -> x), AL_id (id, lvar_typ ~loc:l (Env.lookup_id id env))
     | LEXP_field (lexp, field_id) ->
        let wrap, alexp = anf_lexp env lexp in
        wrap, AL_field (alexp, field_id)
@@ -625,8 +625,8 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
      let alast = anf last in
      mk_aexp (AE_block (aexps, alast, typ_of exp))
 
-  | E_assign (lexp, exp) ->
-     let aexp = anf exp in
+  | E_assign (lexp, assign_exp) ->
+     let aexp = anf assign_exp in
      let wrap, alexp = anf_lexp (env_of exp) lexp in
      wrap (mk_aexp (AE_assign (alexp, aexp)))
 
@@ -762,7 +762,7 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
     | E_let (LB_aux (LB_val (P_aux (P_typ (_, P_aux (P_id id, _)), _), binding), _), body) ->
      let env = env_of body in
      let lvar = Env.lookup_id id env in
-     mk_aexp (AE_let (Mutable, id, lvar_typ lvar, anf binding, anf body, typ_of exp))
+     mk_aexp (AE_let (Mutable, id, lvar_typ ~loc:l lvar, anf binding, anf body, typ_of exp))
 
   | E_var (lexp, _, _) ->
      raise (Reporting.err_unreachable l __POS__

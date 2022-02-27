@@ -359,7 +359,7 @@ let () =
                 let reg = mk_id reg in
                 let field = mk_id field in
                 begin match Env.lookup_id reg !env with
-                | Register (_, _, Typ_aux (Typ_id rec_id, _)) ->
+                | Register (Typ_aux (Typ_id rec_id, _)) ->
                    let (_, fields) = Env.get_record rec_id !env in
                    let typ = match List.find_opt (fun (typ, id) -> Id.compare id field = 0) fields with
                      | Some (typ, _) -> typ
@@ -374,7 +374,7 @@ let () =
              | _ ->
                 let reg = mk_id reg in
                 begin match Env.lookup_id reg !env with
-                | Register (_, _, typ) ->
+                | Register typ ->
                    let exp = Initial_check.exp_of_string value in
                    let exp = check_exp !env exp typ in
                    Register (reg, typ, exp)

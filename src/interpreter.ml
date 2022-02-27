@@ -600,7 +600,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
        match Env.lookup_id id (env_of_annot annot) with
        | Register _ ->
           write_reg name (value_of_exp exp) >> wrap unit_exp
-       | Local (Mutable, _) | Unbound ->
+       | Local (Mutable, _) | Unbound _ ->
           put_local name (value_of_exp exp) >> wrap unit_exp
        | Local (Immutable, _) ->
           fail ("Assignment to immutable local: " ^ name)
@@ -769,7 +769,7 @@ and pattern_match env (P_aux (p_aux, (l, _)) as pat) value =
      end
   | P_string_append _ -> assert false (* TODO *)
 
-let exp_of_fundef (FD_aux (FD_function (_, _, _, funcls), annot)) value =
+let exp_of_fundef (FD_aux (FD_function (_, _, funcls), annot)) value =
   let pexp_of_funcl (FCL_aux (FCL_Funcl (_, pexp), _)) = pexp in
   E_aux (E_case (exp_of_value value, List.map pexp_of_funcl funcls), annot)
 
@@ -975,7 +975,7 @@ let initial_gstate primops defs env =
 
 let rec initialize_registers allow_registers gstate =
   let process_def = function
-    | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, id, opt_exp), annot)) when allow_registers ->
+    | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, opt_exp), annot)) when allow_registers ->
        begin match opt_exp with
        | None ->
           let env = Type_check.env_of_annot annot in
@@ -1022,8 +1022,8 @@ let decode_instruction state bv =
   with _ as exn ->
     Value_error exn
 
-let annot_exp_effect e_aux l env typ effect = E_aux (e_aux, (l, Type_check.mk_tannot env typ effect))
-let annot_exp e_aux l env typ = annot_exp_effect e_aux l env typ no_effect
+let annot_exp_effect e_aux l env typ = E_aux (e_aux, (l, Type_check.mk_tannot env typ))
+let annot_exp e_aux l env typ = annot_exp_effect e_aux l env typ
 let id_typ id = mk_typ (Typ_id (mk_id id))
 
 let analyse_instruction state ast =

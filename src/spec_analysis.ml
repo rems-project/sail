@@ -105,10 +105,10 @@ let nameset_bigunion = List.fold_left Nameset.union mt
 let rec free_type_names_t consider_var (Typ_aux (t, l)) = match t with
   | Typ_var name -> if consider_var then Nameset.add (string_of_kid name) mt else mt
   | Typ_id name -> Nameset.add (string_of_id name) mt
-  | Typ_fn (arg_typs,ret_typ,_) ->
+  | Typ_fn (arg_typs,ret_typ) ->
      List.fold_left Nameset.union (free_type_names_t consider_var ret_typ) (List.map (free_type_names_t consider_var) arg_typs)
-  | Typ_bidir (t1,t2,_) -> Nameset.union (free_type_names_t consider_var t1)
-                                         (free_type_names_t consider_var t2)
+  | Typ_bidir (t1,t2) -> Nameset.union (free_type_names_t consider_var t1)
+                           (free_type_names_t consider_var t2)
   | Typ_tup ts -> free_type_names_ts consider_var ts
   | Typ_app (name,targs) -> Nameset.add (string_of_id name) (free_type_names_t_args consider_var targs)
   | Typ_exist (kopts,_,t') -> List.fold_left (fun s kopt -> Nameset.remove (string_of_kid (kopt_kid kopt)) s) (free_type_names_t consider_var t') kopts
@@ -131,9 +131,9 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
     then conditional_add_typ bound used (Ast.Id_aux (Ast.Id v,l))
     else used
   | Typ_id id -> conditional_add_typ bound used id
-  | Typ_fn(arg,ret,_) ->
+  | Typ_fn(arg,ret) ->
      fv_of_typ consider_var bound (List.fold_left Nameset.union Nameset.empty (List.map (fv_of_typ consider_var bound used) arg)) ret
-  | Typ_bidir(t1,t2,_) -> fv_of_typ consider_var bound (fv_of_typ consider_var bound used t1) t2 (* TODO FIXME? *)
+  | Typ_bidir(t1,t2) -> fv_of_typ consider_var bound (fv_of_typ consider_var bound used t1) t2 (* TODO FIXME? *)
   | Typ_tup ts -> List.fold_right (fun t n -> fv_of_typ consider_var bound n t) ts used
   | Typ_app(id,targs) ->
      List.fold_right (fun ta n -> fv_of_targ consider_var bound n ta) targs (conditional_add_typ bound used id)
@@ -146,7 +146,7 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,l)) : Nameset.t =
 and fv_of_tannot consider_var bound used tannot =
   match Type_check.destruct_tannot tannot with
   | None -> mt
-  | Some (_, t, _) -> fv_of_typ consider_var bound used t
+  | Some (_, t) -> fv_of_typ consider_var bound used t
 
 and fv_of_targ consider_var bound used (Ast.A_aux(targ,_)) : Nameset.t = match targ with
   | A_typ t -> fv_of_typ consider_var bound used t
@@ -412,7 +412,7 @@ let fv_of_funcl consider_var base_bounds (FCL_aux(FCL_Funcl(id,pexp),l)) =
      let _, exp_ns, exp_sets = fv_of_exp consider_var bound_g exp_ns exp_sets exp in
      (pat_bs,exp_ns,exp_sets)
 
-let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,_,funcls),_) as fd) =
+let fv_of_fun consider_var (FD_aux (FD_function(rec_opt,tannot_opt,funcls),_) as fd) =
   let fun_name = match funcls with
     | [] -> failwith "fv_of_fun fell off the end looking for the function name"
     | FCL_aux(FCL_Funcl(id,_),_)::_ -> string_of_id id in
@@ -462,7 +462,7 @@ let rec find_scattered_of name = function
   | [] -> []
   | DEF_scattered (SD_aux(sda,_) as sd):: defs ->
     (match sda with
-     | SD_function(_,_,_,id)
+     | SD_function(_,_,id)
      | SD_funcl(FCL_aux(FCL_Funcl(id,_),_))
      | SD_unioncl(id,_) ->
        if name = string_of_id id
@@ -472,7 +472,7 @@ let rec find_scattered_of name = function
   | _::defs -> find_scattered_of name defs
 
 let rec fv_of_scattered consider_var consider_scatter_as_one all_defs (SD_aux(sd,(l, _))) = match sd with
-  | SD_function(_,tannot_opt,_,id) ->
+  | SD_function(_,tannot_opt,id) ->
     let b,ns = (match tannot_opt with
         | Typ_annot_opt_aux(Typ_annot_opt_some (typq, typ),_) ->
           let bindings = if consider_var then typq_bindings typq else mt in
@@ -536,7 +536,7 @@ let fv_of_rd consider_var (DEC_aux (d, annot)) =
   let open Type_check in
   let env = env_of_annot annot in
   match d with
-  | DEC_reg(_, _, t, id, _) ->
+  | DEC_reg(t, id, _) ->
      let t' = Env.expand_synonyms env t in
      init_env (string_of_id id),
      Nameset.union (fv_of_typ consider_var mt mt t) (fv_of_typ consider_var mt mt t')
@@ -592,7 +592,7 @@ let add_def_to_map id d defset =
 let add_def_to_graph (prelude, original_order, defset, graph) d =
   let bound, used = fv_of_def false true [] d in
   let used = match d with
-    | DEF_reg_dec (DEC_aux (DEC_reg (_, _, typ, _, _), annot)) ->
+    | DEF_reg_dec (DEC_aux (DEC_reg (typ, _, _), annot)) ->
        (* For a register, we need to ensure that any undefined_type
           functions for types used by the register are placed before
           the register declaration. *)
@@ -654,69 +654,8 @@ let top_sort_defs ast =
   let components = NameGraph.scc ~original_order:original_order graph in
   { ast with defs = prelude @ List.concat (List.map (def_of_component graph defset) components) }
 
-
-(* Effect inference.  Uses dependency graph to propagate effects from
-   leaves upwards, keeping any annotations found along the way.  The
-   update_effects function then places the inferred effects into
-   val_specs, but not the actual terms.  A fresh type check will
-   propagate them, and check them if allowed. *)
-
-let update_effects effect_map ast =
-  let update_type_scheme effects (TypSchm_aux (TypSchm_ts (qs, ty),l)) =
-    let ty' =
-      match ty with
-      | Typ_aux (Typ_fn (tys, rty, eff), l) -> Typ_aux (Typ_fn (tys, rty, union_effects eff effects), l)
-      | _ -> ty
-    in TypSchm_aux (TypSchm_ts (qs, ty'),l)
-  in
-  let update_def = function
-    | DEF_spec (VS_aux (VS_val_spec (type_scheme, id, ext, is_cast), (l, tannot))) as def ->
-       begin match Namemap.find_opt (string_of_id id) effect_map with
-       | Some effects ->
-          let type_scheme' = update_type_scheme effects type_scheme in
-          DEF_spec (VS_aux (VS_val_spec (type_scheme', id, ext, is_cast), (l, Type_check.add_effect_annot tannot effects)))
-       | None -> def
-       end
-    | def -> def
-  in
-  { ast with defs = List.map update_def ast.defs }
-
-let infer_effects ast =
-  let add_external_effects effect_map = function
-    | DEF_spec (VS_aux (VS_val_spec(type_scheme, id, exts, _), _)) ->
-       let TypSchm_aux (TypSchm_ts (_, ty), _) = type_scheme in
-       begin match ty with
-       | Typ_aux (Typ_fn (_, _, eff), _) ->
-          Namemap.add (string_of_id id) eff effect_map
-       | _ -> effect_map
-       end
-    | _ -> effect_map
-  in
-  let initial_effects = List.fold_left add_external_effects Namemap.empty ast.defs in
-  let prelude, original_order, defset, graph =
-    List.fold_left add_def_to_graph ([], [], Namemap.empty, Namemap.empty) ast.defs in
-  let components = NameGraph.scc ~original_order:original_order graph in
-  let add_def_effects effect_map name =
-    let callees = NameGraph.children graph name in
-    let own_effect = match Namemap.find_opt name effect_map with Some e -> e | None -> no_effect in
-    let effects = List.fold_left (fun effects callee ->
-                      match Namemap.find_opt callee effect_map with
-                      | Some effect -> union_effects effects effect
-                      | None -> effects) own_effect callees
-    in
-    Namemap.add name effects effect_map
-  in
-  let add_component_effects effect_map names =
-    List.fold_left add_def_effects effect_map names
-  in
-  let effect_map = List.fold_left add_component_effects initial_effects components
-(* in let _ = Namemap.iter (fun name effect -> prerr_endline (name ^ " is " ^ string_of_effect effect)) effect_map *)
-  in update_effects effect_map ast
-
-
 (* Functions for finding the set of variables assigned to.  Used in constant propagation
    and monomorphisation. *)
-
 
 let assigned_vars exp =
   (Rewriter.fold_exp
@@ -763,7 +702,7 @@ let pat_id_is_variable env id =
   match Type_check.Env.lookup_id id env with
   (* Unbound is returned for both variables and constructors which take
      arguments, but the latter only don't appear in a P_id *)
-  | Unbound
+  | Unbound _
   (* Shadowing of immutable locals is allowed; mutable locals and registers
      are rejected by the type checker, so don't matter *)
   | Local _
@@ -833,7 +772,7 @@ let nexp_subst_fns substs =
   let s_tannot tannot =
     match Type_check.destruct_tannot tannot with
     | None -> Type_check.empty_tannot
-    | Some (env,t,eff) -> Type_check.mk_tannot env (s_t t) eff (* TODO: what about env? *)
+    | Some (env,t) -> Type_check.mk_tannot env (s_t t) (* TODO: what about env? *)
   in
   let rec s_pat (P_aux (p,(l,annot))) =
     let re p = P_aux (p,(l,s_tannot annot)) in

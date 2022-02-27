@@ -141,8 +141,8 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, l)) arg =
      in
      parens (separate space [string "fun"; parens (separate (comma ^^ space) args); string "->"; body])
      ^^ space ^^ arg
-  | Typ_fn (typ1, typ2, _) -> string "\"FN\""
-  | Typ_bidir (t1, t2, _) -> string "\"BIDIR\""
+  | Typ_fn (typ1, typ2) -> string "\"FN\""
+  | Typ_bidir (t1, t2) -> string "\"BIDIR\""
   | Typ_var kid -> string "\"VAR\""
   | Typ_exist _ -> assert false
   | Typ_internal_unknown -> raise (Reporting.err_unreachable l __POS__ "escaped Typ_internal_unknown")
@@ -168,7 +168,7 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, l)) =
   | Typ_app (id, []) -> ocaml_typ_id ctx id
   | Typ_app (id, typs) -> parens (separate_map (string ", ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
   | Typ_tup typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
-  | Typ_fn (typs, typ, _) -> separate space [ocaml_typ ctx (Typ_aux (Typ_tup typs, l)); string "->"; ocaml_typ ctx typ]
+  | Typ_fn (typs, typ) -> separate space [ocaml_typ ctx (Typ_aux (Typ_tup typs, l)); string "->"; ocaml_typ ctx typ]
   | Typ_bidir _ -> raise (Reporting.err_general l "Ocaml doesn't support bidir types")
   | Typ_var kid -> zencode_kid kid
   | Typ_exist _ -> assert false
@@ -217,7 +217,7 @@ let rec ocaml_pat ctx (P_aux (pat_aux, _) as pat) =
   | P_id id ->
      begin
        match Env.lookup_id id (env_of_pat pat) with
-       | Local (_, _) | Unbound -> zencode ctx id
+       | Local (_, _) | Unbound _ -> zencode ctx id
        | Enum _ -> zencode_upper ctx id
        | _ -> failwith ("Ocaml: Cannot pattern match on register: " ^ string_of_pat pat)
      end
@@ -377,10 +377,10 @@ and ocaml_atomic_exp ctx (E_aux (exp_aux, _) as exp) =
   | E_id id ->
      begin
        match Env.lookup_id id (env_of exp) with
-       | Local (Immutable, _) | Unbound -> zencode ctx id
+       | Local (Immutable, _) | Unbound _ -> zencode ctx id
        | Enum _ -> zencode_upper ctx id
        | Register _ when is_passed_by_name (typ_of exp) -> zencode ctx id
-       | Register (_, _, typ) ->
+       | Register typ ->
           if !opt_trace_ocaml then
             let var = gensym () in
             let str_typ = parens (ocaml_string_typ (Rewrites.simple_typ typ) var) in
@@ -397,7 +397,7 @@ and ocaml_assignment ctx (LEXP_aux (lexp_aux, _) as lexp) exp =
   | LEXP_cast (_, id) | LEXP_id id ->
      begin
        match Env.lookup_id id (env_of exp) with
-       | Register (_, _, typ) ->
+       | Register typ ->
           let var = gensym () in
           let traced_exp =
             if !opt_trace_ocaml then
@@ -425,7 +425,7 @@ and ocaml_atomic_lexp ctx (LEXP_aux (lexp_aux, _) as lexp) =
   | _ -> parens (ocaml_lexp ctx lexp)
 
 let rec get_initialize_registers = function
-  | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)),_)), _)]), _)) :: defs
+  | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (_, E_aux (E_block inits, _)),_)), _)]), _)) :: defs
        when Id.compare id (mk_id "initialize_registers") = 0 ->
      inits
   | _ :: defs -> get_initialize_registers defs
@@ -442,11 +442,11 @@ let initial_value_for id inits =
 
 let ocaml_dec_spec ctx (DEC_aux (reg, _)) =
   match reg with
-  | DEC_reg (_, _, typ, id, None) ->
+  | DEC_reg (typ, id, None) ->
      separate space [string "let"; zencode ctx id; colon;
                      parens (ocaml_typ ctx typ); string "ref"; equals;
                      string "ref"; parens (ocaml_exp ctx (initial_value_for id ctx.register_inits))]
-  | DEC_reg (_, _, typ, id, Some exp) ->
+  | DEC_reg (typ, id, Some exp) ->
      separate space [string "let"; zencode ctx id; colon;
                      parens (ocaml_typ ctx typ); string "ref"; equals;
                      string "ref"; parens (ocaml_exp ctx exp)]
@@ -508,7 +508,7 @@ let ocaml_funcls ctx =
      else
        let arg_typs, ret_typ =
          match Bindings.find id ctx.val_specs with
-         | Typ_aux (Typ_fn (typs, typ, _), _) -> (typs, typ)
+         | Typ_aux (Typ_fn (typs, typ), _) -> (typs, typ)
          | _ -> failwith "Found val spec which was not a function!"
          | exception Not_found -> failwith ("No val spec found for " ^ string_of_id id)
        in
@@ -566,7 +566,7 @@ let ocaml_funcls ctx =
      else
        let arg_typs, ret_typ =
          match Bindings.find id ctx.val_specs with
-         | Typ_aux (Typ_fn (typs, typ, _), _) -> (typs, typ)
+         | Typ_aux (Typ_fn (typs, typ), _) -> (typs, typ)
          | _ -> failwith "Found val spec which was not a function!"
        in
        let kids = List.fold_left KidSet.union (tyvars_of_typ ret_typ) (List.map tyvars_of_typ arg_typs) in
@@ -582,7 +582,7 @@ let ocaml_funcls ctx =
        in
        ocaml_funcl call string_of_arg string_of_ret
 
-let ocaml_fundef ctx (FD_aux (FD_function (_, _, _, funcls), _)) =
+let ocaml_fundef ctx (FD_aux (FD_function (_, _, funcls), _)) =
   ocaml_funcls ctx funcls
 
 let rec ocaml_fields ctx =
@@ -890,7 +890,7 @@ let ocaml_pp_generators ctx defs orig_types required =
       in
       let make_variant (Tu_aux (Tu_ty_id (typ,id),_)) =
         let arg_typs = match typ with
-          | Typ_aux (Typ_fn (typs,_,_),_) -> typs
+          | Typ_aux (Typ_fn (typs,_),_) -> typs
           | Typ_aux (Typ_tup typs,_) -> typs
           | _ -> [typ]
         in

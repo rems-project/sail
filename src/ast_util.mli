@@ -76,10 +76,12 @@ type mut = Immutable | Mutable
 (** [lvar] is the type of variables - they can either be registers,
    local mutable or immutable variables constructors or unbound
    identifiers. *)
-type 'a lvar = Register of effect * effect * 'a | Enum of 'a | Local of mut * 'a | Unbound
+type 'a lvar = Register of 'a | Enum of 'a | Local of mut * 'a | Unbound of id
 
+val is_unbound : 'a lvar -> bool
+                                                                          
 (** Note: Partial function -- fails for Unknown lvars *)
-val lvar_typ : 'a lvar -> 'a
+val lvar_typ : ?loc:l -> 'a lvar -> 'a
 
 (** The empty annotation. Should be used carefully because it can
    result in unhelpful error messgaes. However a common pattern is
@@ -184,7 +186,7 @@ val bitvector_typ : nexp -> order -> typ
 val list_typ : typ -> typ
 val exc_typ : typ
 val tuple_typ : typ list -> typ
-val function_typ : typ list -> typ -> effect -> typ
+val function_typ : typ list -> typ -> typ
 
 val is_unit_typ : typ -> bool
 val is_number : typ -> bool
@@ -237,11 +239,6 @@ module Nexp : sig
   val compare : nexp -> nexp -> int
 end
 
-module BE : sig
-  type t = base_effect
-  val compare : base_effect -> base_effect -> int
-end
-
 module NC : sig
   type t = n_constraint
   val compare : n_constraint -> n_constraint -> int
@@ -273,10 +270,6 @@ module KOptMap : sig
   include Map.S with type key = kinded_id
 end
 
-module BESet : sig
-  include Set.S with type elt = base_effect
-end
-
 module KidSet : sig
   include Set.S with type elt = kid
 end
@@ -297,19 +290,17 @@ module TypMap : sig
   include Map.S with type key = typ
 end
 
-
-(** {2 Functions for building and manipulating effects} *)
-
+type effect
+     
 val no_effect : effect
-val mk_effect : base_effect_aux list -> effect
+val monadic_effect : effect
 
-val has_effect : effect -> base_effect_aux -> bool
-val effect_set : effect -> BESet.t
+val effectful : effect -> bool
 
 val equal_effects : effect -> effect -> bool
 val subseteq_effects : effect -> effect -> bool
 val union_effects : effect -> effect -> effect
-
+     
 (** {2 Functions for building numeric expressions} *)
 
 val nconstant : Big_int.num -> nexp
@@ -394,11 +385,8 @@ val def_loc : 'a def -> Parse_ast.l
 
 val string_of_id : id -> string
 val string_of_kid : kid -> string
-val string_of_base_effect_aux : base_effect_aux -> string
 val string_of_kind_aux : kind_aux -> string
 val string_of_kind : kind -> string
-val string_of_base_effect : base_effect -> string
-val string_of_effect : effect -> string
 val string_of_order : order -> string
 val string_of_nexp : nexp -> string
 val string_of_typ : typ -> string

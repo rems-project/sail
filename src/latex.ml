@@ -511,7 +511,7 @@ let defs { defs; _ } =
        else
          Some (latex_command Val id (Pretty_print_sail.doc_spec ~comment:false vs) annot)
 
-    | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, _), _)]), annot)) as def ->
+    | DEF_fundef (FD_aux (FD_function (_, _, [FCL_aux (FCL_Funcl (id, _), _)]), annot)) as def ->
        fundefs := Bindings.add id id !fundefs;
        Some (latex_command Function id (Pretty_print_sail.doc_def def) annot)
 
@@ -529,7 +529,7 @@ let defs { defs; _ } =
        typedefs := Bindings.add id id !typedefs;
        Some (latex_command Type id (Pretty_print_sail.doc_def def) annot)
 
-    | DEF_fundef (FD_aux (FD_function (_, _, _, funcls), annot)) as def ->
+    | DEF_fundef (FD_aux (FD_function (_, _, funcls), annot)) as def ->
        Some (latex_funcls def funcls)
 
     | DEF_pragma ("latex", command, l) ->

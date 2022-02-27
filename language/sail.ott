@@ -196,38 +196,14 @@ order :: 'Ord_' ::=
   | dec                                 :: :: dec {{ com decreasing }}
   | ( order )                           :: S :: paren {{ ichlo [[order]] }}
 
-base_effect :: 'BE_' ::=
-  {{ com effect }}
-  {{ aux _ l }}
-  | rreg                                :: :: rreg {{ com read register }}
-  | wreg                                :: :: wreg {{ com write register }}
-  | rmem                                :: :: rmem {{ com read memory }}
-  | wmem                                :: :: wmem {{ com write memory }}
-  | wmea                                :: :: eamem {{ com signal effective address for writing memory }}
-  | exmem                               :: :: exmem {{ com determine if a store-exclusive (ARM) is going to succeed }}
-  | wmv                                 :: :: wmv {{ com write memory, sending only value }}
-  | barr                                :: :: barr {{ com memory barrier }}
-  | depend                              :: :: depend {{ com dynamic footprint }}
-  | undef                               :: :: undef {{ com undefined-instruction exception }}
-  | unspec                              :: :: unspec {{ com unspecified values }}
-  | nondet                              :: :: nondet {{ com nondeterminism, from $[[nondet]]$ }}
-  | escape                              :: :: escape {{ com potential exception }}
-  | config                              :: :: config {{ com configuration option }}
-
-effect :: 'Effect_' ::=
-  {{ aux _ l }}
-  | { base_effect1 , .. , base_effectn } :: :: set {{ com effect set }}
-  | pure                                 :: M :: pure {{ com sugar for empty effect set }}
-    {{ ichlo (Effect_set []) }} 
-
 typ :: 'Typ_' ::=
   {{ com type expressions, of kind Type }}
   {{ aux _ l }}
   |                                               :: :: internal_unknown
   | id                                            :: :: id {{ com defined type }}
   | kid                                           :: :: var {{ com type variable }}
-  | ( typ1 , ... , typn ) -> typ2 effectkw effect :: :: fn {{ com Function (first-order only) }}
-  | typ1 <-> typ2 effectkw effect                 :: :: bidir {{ com Mapping }}
+  | ( typ1 , ... , typn ) -> typ2                 :: :: fn {{ com Function (first-order only) }}
+  | typ1 <-> typ2                                 :: :: bidir {{ com Mapping }}
   | ( typ1 , .... , typn )                        :: :: tup {{ com Tuple }}
   | id ( typ_arg1 , ... , typ_argn )              :: :: app {{ com type constructor application }}
   | ( typ )                                       :: S :: paren {{ ichlo [[typ]] }} 
@@ -679,12 +655,6 @@ rec_opt :: 'Rec_' ::=
   | rec                                         :: :: rec {{ com recursive without termination measure }}
   | { pat -> exp }                              :: :: measure {{ com recursive with termination measure }}
 
-effect_opt :: 'Effect_opt_' ::=
-  {{ com optional effect annotation for functions }}
-  {{ aux _ l }}
-  |                                              :: :: none {{ com no effect annotation }}
-  | effectkw effect                              :: :: effect
-
 % Generate a pexp, but from slightly different syntax (= rather than ->)
 pexp_funcl :: 'Pat_funcl_' ::=
   {{ auxparam 'a }}
@@ -703,7 +673,7 @@ funcl :: 'FCL_' ::=
 fundef :: 'FD_' ::=
   {{ com function definition}}
   {{ aux _ annot }} {{ auxparam 'a }}
-  | function rec_opt tannot_opt effect_opt funcl1 and ... and funcln :: :: function {{ texlong }}  
+  | function rec_opt tannot_opt funcl1 and ... and funcln :: :: function {{ texlong }}  
 % Note that the typ in the tannot_opt is
 % the *result* type, not the type of the whole function.  The argument
 % type comes from the pattern in the funcl
