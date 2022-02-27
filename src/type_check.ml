@@ -554,7 +554,7 @@ module Env : sig
   val add_cast : id -> t -> t
   val allow_polymorphic_undefineds : t -> t
   val polymorphic_undefineds : t -> bool
-  val lookup_id : ?raw:bool -> id -> t -> typ lvar
+  val lookup_id : id -> t -> typ lvar
   val fresh_kid : ?kid:kid -> t -> kid
   val expand_synonyms : t -> typ -> typ
   val expand_nexp_synonyms : t -> nexp -> nexp
@@ -1431,7 +1431,7 @@ end = struct
 
   let get_locals env = env.locals
 
-  let lookup_id ?raw:(raw=false) id env =
+  let lookup_id id env =
     try
       let (mut, typ) = Bindings.find id env.locals in
       Local (mut, typ)
@@ -3029,6 +3029,62 @@ let strip_mpat : 'a. 'a mpat -> unit mpat = function mpat -> map_mpat_annot (fun
 let strip_mpexp : 'a. 'a mpexp -> unit mpexp = function mpexp -> map_mpexp_annot (fun (l, _) -> (l, ())) mpexp
 let strip_mapcl : 'a. 'a mapcl -> unit mapcl = function mapcl -> map_mapcl_annot (fun (l, _) -> (l, ())) mapcl
 
+(* A L-expression can either be declaring new variables, or updating existing variables, but never a mix of the two *)
+type lexp_assignment_type = Declaration | Update
+
+let is_update = function
+  | Update -> true
+  | Declaration -> false
+
+let is_declaration = function
+  | Update -> false
+  | Declaration -> true
+                 
+let rec lexp_assignment_type env (LEXP_aux (aux, (l, ()))) =
+  match aux with
+  | LEXP_id v ->
+     begin match Env.lookup_id v env with
+     | Register _ | Local (Mutable, _) -> Update
+     | Unbound _ -> Declaration
+     | Local (Immutable, _) | Enum _  ->
+        typ_error env l ("Cannot modify immutable let-bound constant or enumeration constructor " ^ string_of_id v)
+     end
+  | LEXP_cast (_, v) ->
+     begin match Env.lookup_id v env with
+     | Register _ | Local (Mutable, _) ->
+        Reporting.warn ("Redundant type annotation on assignment to " ^ string_of_id v) l "Its type is already known";
+        Update
+     | Unbound _ -> Declaration
+     | Local (Immutable, _) | Enum _  ->
+        typ_error env l ("Cannot modify immutable let-bound constant or enumeration constructor " ^ string_of_id v)
+     end
+  | LEXP_deref _ | LEXP_memory _ -> Update
+  | LEXP_field (lexp, _) ->
+     begin match lexp_assignment_type env lexp with
+     | Update -> Update
+     | Declaration ->
+        typ_error env l "Field assignment can only be done to a variable that has already been declared"
+     end
+  | LEXP_vector (lexp, _) | LEXP_vector_range (lexp, _, _) ->
+     begin match lexp_assignment_type env lexp with
+     | Update -> Update
+     | Declaration ->
+        typ_error env l "Vector assignment can only be done to a variable that has already been declared"
+     end
+  | LEXP_tup lexps | LEXP_vector_concat lexps ->
+     let lexp_is_update lexp = lexp_assignment_type env lexp |> is_update in
+     let lexp_is_declaration lexp = lexp_assignment_type env lexp |> is_declaration in
+     begin match List.find_opt lexp_is_update lexps, List.find_opt lexp_is_declaration lexps with
+     | Some (LEXP_aux (_, (l_u, _)) as lexp_update), Some (LEXP_aux (_, (l_d, _)) as lexp_declaration) ->
+        typ_raise env l_u (Err_inner (Err_other "Assignment expression declaring new variable mixed with expression updating an existing variable",
+                                      l_d,
+                                      "Existing variable",
+                                      Err_other "This assignment is to an existing variable"))
+     | None, _ -> Declaration
+     | _, None -> Update
+     end
+ 
+    
 let fresh_var =
   let counter = ref 0 in
   fun () -> let n = !counter in
@@ -3239,12 +3295,17 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let checked_exp = crule check_exp env exp exc_typ in
      annot_exp (E_throw checked_exp) typ
   | E_var (lexp, bind, exp), _ ->
-     let lexp, bind, env = match bind_assignment l env lexp bind with
-       | E_aux (E_assign (lexp, bind), _), env -> lexp, bind, env
-       | _, _ -> assert false
-     in
-     let checked_exp = crule check_exp env exp typ in
-     annot_exp (E_var (lexp, bind, checked_exp)) typ
+     begin match lexp_assignment_type env lexp with
+     | Declaration ->
+        let lexp, bind, env = match bind_assignment l env lexp bind with
+          | E_aux (E_assign (lexp, bind), _), env -> lexp, bind, env
+          | _, _ -> assert false
+        in
+        let checked_exp = crule check_exp env exp typ in
+        annot_exp (E_var (lexp, bind, checked_exp)) typ
+     | Update ->
+        typ_error env l "var expression can only be used to declare new variables, not update them"
+     end
   | E_internal_return exp, _ ->
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_internal_return checked_exp) typ
@@ -3304,8 +3365,21 @@ and check_block l env exps ret_typ =
   | [] -> (match ret_typ with Some typ -> typ_equality l env typ unit_typ; [] | None -> [])
   | [exp] -> [final env exp]
   | (E_aux (E_assign (lexp, bind), (assign_l, _)) :: exps) ->
-     let texp, env = bind_assignment assign_l env lexp bind in
-     texp :: check_block l env exps ret_typ
+     begin match lexp_assignment_type env lexp with
+     | Update ->
+        let texp, env = bind_assignment assign_l env lexp bind in
+        texp :: check_block l env exps ret_typ
+     | Declaration ->
+        let lexp, bind, env = match bind_assignment l env lexp bind with
+          | E_aux (E_assign (lexp, bind), _), env -> lexp, bind, env
+          | _, _ -> assert false
+        in
+        let rec last_typ = function [exp] -> typ_of exp | _ :: exps -> last_typ exps | [] -> unit_typ in
+        let rest = check_block l env exps ret_typ in
+        let typ = last_typ rest in
+        [annot_exp (E_var (lexp, bind, annot_exp (E_block rest) typ ret_typ)) typ ret_typ]
+     end
+        
   | ((E_aux (E_assert (constr_exp, msg), (assert_l, _)) as exp) :: exps) ->
      let msg = assert_msg msg in
      let constr_exp = crule check_exp env constr_exp bool_typ in
@@ -3825,7 +3899,7 @@ and bind_assignment assign_l env (LEXP_aux (lexp_aux, (lexp_l, ())) as lexp) (E_
      let tlexp, env' = bind_lexp env lexp (typ_of checked_exp) in
      annot_assign tlexp checked_exp, env'
   | LEXP_id v when has_typ v env ->
-     begin match Env.lookup_id ~raw:true v env with
+     begin match Env.lookup_id v env with
      | Local (Mutable, vtyp) | Register vtyp ->
         let checked_exp = crule check_exp env exp vtyp in
         let tlexp, env' = bind_lexp env lexp (typ_of checked_exp) in
@@ -3854,9 +3928,9 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
   let annot_lexp lexp typ = LEXP_aux (lexp, (l, mk_tannot env typ)) in
   match lexp_aux with
   | LEXP_cast (typ_annot, v) ->
-     begin match Env.lookup_id ~raw:true v env with
+     begin match Env.lookup_id v env with
        | Local (Immutable, _) | Enum _ ->
-          typ_error env l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
+          typ_error env l ("Cannot modify immutable let-bound constant or enumeration constructor " ^ string_of_id v)
        | Local (Mutable, vtyp) ->
           subtyp l env typ typ_annot;
           subtyp l env typ_annot vtyp;
@@ -3870,9 +3944,9 @@ and bind_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) typ =
           annot_lexp (LEXP_cast (typ_annot, v)) typ, Env.add_local v (Mutable, typ_annot) env
      end
   | LEXP_id v ->
-     begin match Env.lookup_id ~raw:true v env with
+     begin match Env.lookup_id v env with
      | Local (Immutable, _) | Enum _ ->
-        typ_error env l ("Cannot modify let-bound constant or enumeration constructor " ^ string_of_id v)
+        typ_error env l ("Cannot modify immutable let-bound constant or enumeration constructor " ^ string_of_id v)
      | Local (Mutable, vtyp) -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
      | Register vtyp -> subtyp l env typ vtyp; annot_lexp (LEXP_id v) typ, env
      | Unbound _ -> annot_lexp (LEXP_id v) typ, Env.add_local v (Mutable, typ) env
@@ -4076,7 +4150,12 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
      let inferred_exps = List.map (irule infer_exp env) exps in
      annot_exp (E_tuple inferred_exps) (mk_typ (Typ_tup (List.map typ_of inferred_exps)))
   | E_assign (lexp, bind) ->
-     fst (bind_assignment l env lexp bind)
+     begin match lexp_assignment_type env lexp with
+     | Update ->
+        fst (bind_assignment l env lexp bind)
+     | Declaration ->
+        typ_error env l "Variable declaration with unclear (or no) scope. Use an explicit var statement instead, or place in a block"
+     end
   | E_record_update (exp, fexps) ->
      let inferred_exp = irule infer_exp env exp in
      let typ = typ_of inferred_exp in

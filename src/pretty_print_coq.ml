@@ -1348,7 +1348,7 @@ let merge_new_tyvars ctxt old_env pat new_env =
       KBindings.add kid (Some id) m, Bindings.add id kid r
   in
   let merge_new_kids id m =
-    let typ = lvar_typ (Env.lookup_id ~raw:true id new_env) in
+    let typ = lvar_typ (Env.lookup_id id new_env) in
     debug ctxt (lazy (" considering tyvar mapping for " ^ string_of_id id ^ " at type " ^ string_of_typ typ ));
     match destruct_numeric typ, destruct_atom_bool new_env typ with
     | Some ([],_,Nexp_aux (Nexp_var kid,_)), _

@@ -6,7 +6,8 @@ val main : unit -> unit
 function main() = {
   match () {
     _ => {
-      TEST = ()
+      TEST = ();
+      ()
     }
   };
   print("ok")

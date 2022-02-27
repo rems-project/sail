@@ -11,4 +11,4 @@ function test () = {
 
 val test2 : unit -> unit
 
-function test2 () = { x = 10; () }
+function test2 () = x = 10

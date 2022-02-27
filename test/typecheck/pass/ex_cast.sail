@@ -6,4 +6,4 @@ val zeros : forall 'n. atom('n) -> vector('n, dec, bit)
 
 val test : int -> unit
 
-function test n = x = zeros(n)
+function test n = { x = zeros(n); () }

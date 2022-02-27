@@ -215,9 +215,8 @@ module Env : sig
   (** Lookup id searchs for a specified id in the environment, and
      returns it's type and what kind of identifier it is, using the
      lvar type. Returns Unbound if the identifier is unbound, and
-     won't throw any exceptions. If the raw option is true, then look
-     up the type without any flow typing modifiers. *)
-  val lookup_id : ?raw:bool -> id -> t -> typ lvar
+     won't throw any exceptions. *)
+  val lookup_id : id -> t -> typ lvar
 
   val get_toplevel_lets : t -> IdSet.t
 

@@ -20,5 +20,6 @@ val test : unit -> unit effect {undef}
 
 function test () = {
   myState2 : State = struct { N = undefined, Z = 0b1 };
-  myState3 : State = { myState2 with N = 0b0 }
+  myState3 : State = { myState2 with N = 0b0 };
+  ()
 }
