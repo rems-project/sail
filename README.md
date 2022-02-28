@@ -117,6 +117,13 @@ directory.
 
 This requires the [TextMate Bundles plugin](https://plugins.jetbrains.com/plugin/7221-textmate-bundles).
 
+Vim
+===
+
+[editors/vim][editors/vim] contains support for syntax highlighting in the vim
+editor, in vim's usual format of an `ftdetect` directory to detect Sail files
+and a `syntax` directory to provide the actual syntax highlighting.
+
 Licensing
 =========
 
