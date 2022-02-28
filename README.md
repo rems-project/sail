@@ -120,7 +120,7 @@ This requires the [TextMate Bundles plugin](https://plugins.jetbrains.com/plugin
 Vim
 ===
 
-[editors/vim][editors/vim] contains support for syntax highlighting in the vim
+[editors/vim](editors/vim) contains support for syntax highlighting in the vim
 editor, in vim's usual format of an `ftdetect` directory to detect Sail files
 and a `syntax` directory to provide the actual syntax highlighting.
 
