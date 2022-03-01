@@ -5266,6 +5266,11 @@ and check_scattered : 'a. Env.t -> 'a scattered_def -> (tannot def) list * Env.t
 
 and check_outcome : 'a. Env.t -> outcome_spec -> 'a def list -> outcome_spec * tannot def list * Env.t =
   fun env (OV_aux (OV_outcome (id, typschm, params), l)) defs ->
+  let valid_outcome_def = function
+    | DEF_impl _ | DEF_spec _ -> ()
+    | def ->
+       typ_error env (def_loc def) "Forbidden definition in outcome block"
+  in
   typ_print (lazy (Util.("Check outcome " |> cyan |> clear) ^ string_of_id id ^ " : " ^ string_of_typschm typschm));
   match env.toplevel with
   | None ->
@@ -5278,6 +5283,7 @@ and check_outcome : 'a. Env.t -> outcome_spec -> 'a def list -> outcome_spec * t
            | TypSchm_aux (TypSchm_ts (typq, typ), _) -> typq, typ
          in
          let local_env = { local_env with outcome_typschm = Some (quant, typ) } in
+         List.iter valid_outcome_def defs;
          let defs, local_env = check_defs local_env defs in
          decr depth;
          OV_aux (OV_outcome (id, typschm, params), l), defs, Env.add_outcome id (quant, typ, params, local_env) env

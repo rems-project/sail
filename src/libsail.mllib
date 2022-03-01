@@ -4,10 +4,12 @@ Ast_defs
 Ast_util
 Bitfield
 C_backend
+Callgraph
 Constant_fold
 Constant_propagation
 Constant_propagation_mutrec
 Constraint
+Effects
 Elf_loader
 Error_format
 Graph
@@ -55,7 +57,6 @@ Smtlib
 Spec_analysis
 Specialize
 Splice
-Slice
 State
 ToFromInterp_backend
 ToFromInterp_lib_mword

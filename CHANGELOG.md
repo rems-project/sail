@@ -1,6 +1,116 @@
 Changelog
 =========
 
+Sail 0.15
+---------
+
+##### New pattern completeness checker
+
+Sail now has a new pattern completeness checker that can generate
+counterexamples for incomplete patterns. It is designed to be less
+noisy, as it only issues warnings when it can guarantee that the
+pattern is incomplete.
+
+##### New monad outcome syntax and concurrency interface support
+
+
+##### Implicit casts now forbidden by default
+
+Previously they were only forbidden by the `-dno_cast` flag (which is
+used by both sail-riscv and sail-arm). This behavior is now the
+default and this flag is ignored. The `-allow_deprecated_casts` flag
+must be used to enable this now. Implicit casts will be fully removed
+in the next Sail release.
+
+##### No more explicit effect annotations (DEPRECATION)
+
+Explicit effect annotations are now deprecated and do nothing. This
+change relates to the previous change to allow custom outcomes in the
+event monad, as the effect system no-longer corresponded in any
+meaningful way with whether functions would become monadic or not in
+Sail's theorem prover backends.
+
+Function specifications (`val` keyword) can now be marked as `pure`. If
+this is done, the functions _must_ have no side-effects. The
+requirements for a function to be pure in this sense are stricter than
+they were previously - a pure function must not:
+
+* Throw an exception
+* Exit (either explicitly or by failing an assertion)
+* Contain a possibly incomplete pattern match
+* Read or write any register
+* Call any impure function
+
+This more strict notion of purity fixes some long-standing bugs when
+generating theorem prover definitions from Sail.
+
+Note that functions do not have to be explictly marked pure to be
+considered pure. Purity will be inferred automatically. The pure
+annotation is used to declare primitive functions as pure, and make it
+a hard error if a function is inferred to be impure.
+
+There are two places in the language where code must be pure:
+
+* Top level let-bindings `let x = exp`
+* Loop and function termination measures
+
+##### Stricter typechecking for mutable variables (MINOR BREAKING)
+
+Previously Sail allowed some assignment constructions that were a bit
+complex, for example one could declare a variable and modify an
+existing one in the same statement, e.g.
+
+```
+x: int = 1;
+(x, y: int) = (2, 3);
+```
+
+This is now forbidden, so l-expressions can either modify existing
+variables or declare new ones, but never both simultaneously. This
+change is primarily to increase readability, and simplify the language
+internally.
+
+In the future we may move further towards a world where new
+assignments must be declared with a `var` keyword, like the `let`
+keyword.
+
+Variable declarations are now forbidden in places where their scope is
+not syntactically obvious, for example:
+
+```
+val f : (unit, int) -> unit
+...
+f(x: int = 3, x)
+```
+
+The breakage caused by this change should be minor as we hope
+well-written Sail specifications do not declare variables in this way.
+
+##### GCC style error message formatting
+
+Error messages are now formatted as per:
+
+https://www.gnu.org/prep/standards/standards.html#Errors
+
+which should allow better editor integration
+
+##### sail_internal directive
+
+A new directive `$sail_internal` has been introduced. When placed in a
+file this allows the use of experimental or unstable functionality. It
+also allows the use of various identifiers that are ordinarily
+forbidden. Its primary purpose is to allow the Sail library to be
+implemented using new unstable features that may change, without them
+being exposed (and therefore relied upon) by downstream users.
+
+As such, any Sail file using this directive may become broken at any
+point.
+
+Sail 0.14
+---------
+
+This is mostly a bugfix release
+
 Sail 0.13
 ---------
 

@@ -1931,15 +1931,15 @@ let toplevel_lets_of_ast ast =
   toplevel_lets_of_defs ast.defs |> IdSet.elements
  
 let compile_ast ctx ast =
-  let module G = Graph.Make(Slice.Node) in
-  let g = Slice.graph_of_ast ast in
-  let module NodeSet = Set.Make(Slice.Node) in
-  let roots = Specialize.get_initial_calls () |> List.map (fun id -> Slice.Function id) |> NodeSet.of_list in
-  let roots = NodeSet.add (Slice.Type (mk_id "exception")) roots in
-  let roots = Bindings.fold (fun typ_id _ roots -> NodeSet.add (Slice.Type typ_id) roots) (Env.get_enums ctx.tc_env) roots in
-  let roots = NodeSet.union (toplevel_lets_of_ast ast |> List.map (fun id -> Slice.Letbind id) |> NodeSet.of_list) roots in
+  let module G = Graph.Make(Callgraph.Node) in
+  let g = Callgraph.graph_of_ast ast in
+  let module NodeSet = Set.Make(Callgraph.Node) in
+  let roots = Specialize.get_initial_calls () |> List.map (fun id -> Callgraph.Function id) |> NodeSet.of_list in
+  let roots = NodeSet.add (Callgraph.Type (mk_id "exception")) roots in
+  let roots = Bindings.fold (fun typ_id _ roots -> NodeSet.add (Callgraph.Type typ_id) roots) (Env.get_enums ctx.tc_env) roots in
+  let roots = NodeSet.union (toplevel_lets_of_ast ast |> List.map (fun id -> Callgraph.Letbind id) |> NodeSet.of_list) roots in
   let g = G.prune roots NodeSet.empty g in
-  let ast = Slice.filter_ast NodeSet.empty g ast in
+  let ast = Callgraph.filter_ast NodeSet.empty g ast in
   
   if !opt_memo_cache then
     (try

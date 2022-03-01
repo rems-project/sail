@@ -72,7 +72,7 @@ open Ast_util
 open Interpreter
 open Pretty_print_sail
 
-module Slice = Slice
+module Callgraph = Callgraph
 module Gdbmi = Gdbmi
 
 type mode =

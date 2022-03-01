@@ -77,7 +77,10 @@ type node =
   | Type of id
   | Overload of id
   | Constructor of id
-
+  | FunctionMeasure of id
+  | LoopMeasures of id
+  | Outcome of id
+                     
 let node_id = function
   | Register id -> id
   | Function id -> id
@@ -85,14 +88,20 @@ let node_id = function
   | Type id -> id
   | Overload id -> id
   | Constructor id -> id
+  | FunctionMeasure id -> id
+  | LoopMeasures id -> id
+  | Outcome id -> id
 
 let node_kind = function
   | Register _ -> 0
   | Function _ -> 1
-  | Letbind _ -> 3
-  | Type _ -> 4
-  | Overload _ -> 5
-  | Constructor _ -> 6
+  | Letbind _ -> 2
+  | Type _ -> 3
+  | Overload _ -> 4
+  | Constructor _ -> 5
+  | FunctionMeasure _ -> 6
+  | LoopMeasures _ -> 7
+  | Outcome _ -> 8
 
 module Node = struct
   type t = node
@@ -111,6 +120,9 @@ let node_color cuts =
   | Type _ -> "springgreen"
   | Overload _ -> "peachpuff"
   | Constructor _ -> "lightslateblue"
+  | FunctionMeasure _ -> "olivegreen"
+  | LoopMeasures _ -> "green"
+  | Outcome _ -> "purple"
 
 let node_string n = node_id n |> string_of_id |> String.escaped
 
@@ -165,6 +177,8 @@ let constraint_ids nc = IdSet.diff (constraint_ids' nc) builtins
 let nexp_ids nc = IdSet.diff (constraint_ids' nc) builtins
 and typ_ids typ = IdSet.diff (typ_ids' typ) builtins
 let typ_arg_ids nc = IdSet.diff (typ_arg_ids' nc) builtins
+
+type callgraph = Graph.Make(Node).graph
 
 let add_def_to_graph graph def =
   let open Type_check in
@@ -266,6 +280,8 @@ let add_def_to_graph graph def =
     | TypQ_tq quants -> List.iter (scan_quant_item self) quants
   in
 
+  let scan_loop_measure self (Loop (_, exp)) = ignore (fold_exp (rw_exp self) exp) in
+
   let add_type_def_to_graph (TD_aux (aux, (l, _))) =
     match aux with
     | TD_abbrev (id, typq, arg) ->
@@ -294,6 +310,17 @@ let add_def_to_graph graph def =
        Reporting.unreachable l __POS__ "Bitfield should be re-written"
   in
 
+  let scan_outcome_def l outcome = function
+    | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), _, _, _), _)) ->
+       graph := G.add_edges outcome [] !graph;
+       scan_typquant outcome typq;
+       IdSet.iter (fun typ_id -> graph := G.add_edge outcome (Type typ_id) !graph) (typ_ids typ)
+    | DEF_impl (FCL_aux (FCL_Funcl (_, pexp), _)) ->
+       ignore (rewrite_pexp (rewriters outcome) pexp)
+    | _ ->
+       Reporting.unreachable l __POS__ "Unexpected definition in outcome block"
+  in
+         
   begin match def with
   | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), id, _, _), _)) ->
      graph := G.add_edges (Function id) [] !graph;
@@ -315,6 +342,26 @@ let add_def_to_graph graph def =
      | None -> ()
      end;
      IdSet.iter (fun typ_id -> graph := G.add_edge (Register id) (Type typ_id) !graph) (typ_ids typ)
+  | DEF_measure (id, pat, exp) ->
+     graph := G.add_edges (FunctionMeasure id) [Function id] !graph;
+     ignore (fold_pat (rw_pat (FunctionMeasure id)) pat);
+     ignore (fold_exp (rw_exp (FunctionMeasure id)) exp)
+  | DEF_loop_measures (id, measures) ->
+     graph := G.add_edges (LoopMeasures id) [Function id]  !graph;
+     List.iter (scan_loop_measure (LoopMeasures id)) measures
+  | DEF_outcome (OV_aux (OV_outcome (id, TypSchm_aux (TypSchm_ts (typq, typ), _), _), l), outcome_defs) ->
+     graph := G.add_edges (Outcome id) [] !graph;
+     scan_typquant (Outcome id) typq;
+     IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ);
+     List.iter (scan_outcome_def l (Outcome id)) outcome_defs
+  | DEF_instantiation (IN_aux (IN_id id, _), substs) ->
+     graph := G.add_edges (Function id) [Outcome id] !graph;
+     List.iter (function
+         | IS_aux (IS_id (_, id_to), _) ->
+            graph := G.add_edges (Function id) [Function id_to] !graph
+         | IS_aux (IS_typ (_, typ), _) ->
+            IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ)
+       ) substs
   | _ -> ()
   end;
   !graph

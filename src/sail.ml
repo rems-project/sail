@@ -576,7 +576,7 @@ let target name out_name ast type_envs =
      let open Ast_util in
      let props = Property.find_properties ast in
      let prop_ids = Bindings.bindings props |> List.map fst |> IdSet.of_list in
-     let ast = Slice.filter_ast_ids prop_ids IdSet.empty ast in
+     let ast = Callgraph.filter_ast_ids prop_ids IdSet.empty ast in
      Specialize.add_initial_calls prop_ids;
      let ast_smt, type_envs = Specialize.(specialize typ_ord_specialization type_envs ast) in
      let ast_smt, type_envs = Specialize.(specialize_passes 2 int_specialization_with_externs type_envs ast_smt) in
