@@ -55,7 +55,8 @@ syntax match    sailEscape      "\\\o\o\=\o\=" contained
 
 syntax match    sailConstant    "\<[A-Z][A-Z0-9_]\+\>"
 
-syntax region   sailFilename    start=+<+ end=+>+  " works
+syntax match    sailPragma      "$include .*" contains=sailFilename
+syntax region   sailFilename    start=+<+ end=+>+ contained
 
 
 if version >= 508 || !exists("did_sail_syn_inits")
