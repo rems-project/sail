@@ -2475,7 +2475,10 @@ let rewrite_sizeof l env nexp =
      in
      begin match List.find_opt same_size locals with
      | Some (id, (_, typ)) -> mk_exp (E_app (mk_id "__size", [mk_exp (E_id id)]))
-     | None -> typ_error env l ("Cannot re-write sizeof(" ^ string_of_nexp nexp ^ ")")
+     | None ->
+        match solve_unique env nexp with
+        | Some n -> mk_lit_exp (L_num n)
+        | None -> typ_error env l ("Cannot re-write sizeof(" ^ string_of_nexp nexp ^ ")")
      end
 
 let rec rewrite_nc env (NC_aux (nc_aux, l)) = mk_exp ~loc:l (rewrite_nc_aux l env nc_aux)
