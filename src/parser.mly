@@ -1425,37 +1425,39 @@ let_def:
   | Let_ letbind
     { $2 }
 
-externs:
-  | id Colon String
-    { [(string_of_id $1, $3)] }
-  | Under Colon String
-    { [("_", $3)] }
-  | id Colon String Comma externs
-    { (string_of_id $1, $3) :: $5 }
-
 outcome_spec_def:
   | Outcome id Colon typschm With separated_nonempty_list(Comma, param_kopt)
     { mk_outcome (OV_outcome ($2, $4, $6)) $startpos $endpos }
 
+pure_opt:
+  |
+    { false }
+  | Pure
+    { true }
+
+extern_binding:
+  | id Colon String
+    { (string_of_id $1, $3) }
+  | Under Colon String
+    { ("_", $3) }
+
+externs:
+  |
+    { None }
+  | Eq pure_opt String
+    { Some { pure = $2; bindings = [("_", $3)] } }
+  | Eq pure_opt Lcurly separated_nonempty_list(Comma, extern_binding) Rcurly
+    { Some { pure = $2; bindings = $4 } }
+
 val_spec_def:
   | Doc val_spec_def
     { doc_vs $1 $2 }
-  | Val id Colon typschm
-    { mk_vs (VS_val_spec ($4, $2, [], false)) $startpos $endpos }
-  | Val Cast id Colon typschm
-    { mk_vs (VS_val_spec ($5, $3, [], true)) $startpos $endpos }
-  | Val id Eq String Colon typschm
-    { mk_vs (VS_val_spec ($6, $2, [("_", $4)], false)) $startpos $endpos }
-  | Val Cast id Eq String Colon typschm
-    { mk_vs (VS_val_spec ($7, $3, [("_", $5)], true)) $startpos $endpos }
   | Val String Colon typschm
-    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), [("_", $2)], false)) $startpos $endpos }
-  | Val Cast String Colon typschm
-    { mk_vs (VS_val_spec ($5, mk_id (Id $3) $startpos($3) $endpos($3), [("_", $3)], true)) $startpos $endpos }
-  | Val id Eq Lcurly externs Rcurly Colon typschm
-    { mk_vs (VS_val_spec ($8, $2, $5, false)) $startpos $endpos }
-  | Val Cast id Eq Lcurly externs Rcurly Colon typschm
-    { mk_vs (VS_val_spec ($9, $3, $6, true)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), Some { pure = false; bindings = [("_", $2)] }, false)) $startpos $endpos }
+  | Val id externs Colon typschm
+    { mk_vs (VS_val_spec ($5, $2, $3, false)) $startpos $endpos }
+  | Val Cast id externs Colon typschm
+    { mk_vs (VS_val_spec ($6, $3, $4, true)) $startpos $endpos }
 
 register_def:
   | Doc register_def

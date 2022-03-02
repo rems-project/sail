@@ -78,34 +78,34 @@ therefore be included in just about every Sail specification.
 
 val eq_unit : (unit, unit) -> bool(true)
 
-val eq_bit = { lem : "eq", _ : "eq_bit" } : (bit, bit) -> bool
+val eq_bit = pure { lem : "eq", _ : "eq_bit" } : (bit, bit) -> bool
 
 function eq_unit(_, _) = true
 
-val not_bool = {coq: "negb", _: "not"} : forall ('p : Bool). bool('p) -> bool(not('p))
+val not_bool = pure {coq: "negb", _: "not"} : forall ('p : Bool). bool('p) -> bool(not('p))
 /* NB: There are special cases in Sail for effectful uses of and_bool and
    or_bool that are not shown here. */
 
-val and_bool = {coq: "andb", _: "and_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p & 'q)
+val and_bool = pure {coq: "andb", _: "and_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p & 'q)
 
-val and_bool_no_flow = {coq: "andb", _: "and_bool"} : (bool, bool) -> bool
+val and_bool_no_flow = pure {coq: "andb", _: "and_bool"} : (bool, bool) -> bool
 
-val or_bool = {coq: "orb", _: "or_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p | 'q)
+val or_bool = pure {coq: "orb", _: "or_bool"} : forall ('p : Bool) ('q : Bool). (bool('p), bool('q)) -> bool('p | 'q)
 
-val eq_int = {ocaml: "eq_int", interpreter: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)
+val eq_int = pure {ocaml: "eq_int", interpreter: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm. (int('n), int('m)) -> bool('n == 'm)
 
-val eq_bool = {ocaml: "eq_bool", interpreter: "eq_bool", lem: "eq", c: "eq_bool", coq: "Bool.eqb"} : (bool, bool) -> bool
+val eq_bool = pure {ocaml: "eq_bool", interpreter: "eq_bool", lem: "eq", c: "eq_bool", coq: "Bool.eqb"} : (bool, bool) -> bool
 
-val neq_int = {lem: "neq"} : forall 'n 'm. (int('n), int('m)) -> bool('n != 'm)
+val neq_int = pure {lem: "neq"} : forall 'n 'm. (int('n), int('m)) -> bool('n != 'm)
 function neq_int (x, y) = not_bool(eq_int(x, y))
 
 val neq_bool : (bool, bool) -> bool
 function neq_bool (x, y) = not_bool(eq_bool(x, y))
 
-val lteq_int = {coq: "Z.leb", _:"lteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n <= 'm)
-val gteq_int = {coq: "Z.geb", _:"gteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n >= 'm)
-val lt_int = {coq: "Z.ltb", _:"lt"} : forall 'n 'm. (int('n), int('m)) -> bool('n < 'm)
-val gt_int = {coq: "Z.gtb", _:"gt"} : forall 'n 'm. (int('n), int('m)) -> bool('n > 'm)
+val lteq_int = pure {coq: "Z.leb", _:"lteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n <= 'm)
+val gteq_int = pure {coq: "Z.geb", _:"gteq"} : forall 'n 'm. (int('n), int('m)) -> bool('n >= 'm)
+val lt_int = pure {coq: "Z.ltb", _:"lt"} : forall 'n 'm. (int('n), int('m)) -> bool('n < 'm)
+val gt_int = pure {coq: "Z.gtb", _:"gt"} : forall 'n 'm. (int('n), int('m)) -> bool('n > 'm)
 
 overload operator == = {eq_int, eq_bit, eq_bool, eq_unit}
 overload operator != = {neq_int, neq_bool}
@@ -128,9 +128,6 @@ function __id forall 'n. (x: int('n)) -> int('n) = x
 
 overload __size = {__id}
 
-val __deref = "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
-
-/* Used to implement bitfield desugaring */
-val __bitfield_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a effect pure
+val __deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 
 $endif

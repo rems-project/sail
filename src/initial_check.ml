@@ -528,15 +528,16 @@ let to_ast_default ctx (default : P.default_typing_spec) : default_spec ctx_out 
         DT_aux(DT_order default_order,l),ctx
      | _ -> raise (Reporting.err_typ l "Inc and Dec must have kind Order")
 
+let to_ast_extern (ext : P.extern) : extern =
+  { pure = ext.pure; bindings = ext.bindings }
+          
 let to_ast_spec ctx (vs : P.val_spec) : unit val_spec ctx_out =
   match vs with
   | P.VS_aux (vs, l) ->
      match vs with
      | P.VS_val_spec (ts, id, ext, is_cast) ->
         let typschm, _ = to_ast_typschm ctx ts in
-        let ext = match ext with
-          | [] -> None
-          | bindings -> Some { pure = false; bindings = bindings } in
+        let ext = Util.option_map to_ast_extern ext in
         VS_aux (VS_val_spec (typschm,to_ast_id ctx id, ext, is_cast), (l, ())), ctx
  
 let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec ctx_out =

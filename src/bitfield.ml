@@ -97,7 +97,7 @@ let index_range_setter name field order start stop =
   (* Read-modify-write using an internal _reg_deref function without rreg effect *)
   let irs_function = String.concat "\n"
     [ Printf.sprintf "function _set_%s_%s (r_ref, v) = {" name field;
-                     "  r = __bitfield_deref(r_ref);";
+                     "  r = __deref(r_ref);";
       Printf.sprintf "  r.bits = [r.bits with %i .. %i = v];" start stop;
                      "  (*r_ref) = r";
                      "}"

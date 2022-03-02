@@ -80,12 +80,14 @@ type l =
 
 type 'a annot = l * 'a
 
+type extern = { pure : bool; bindings : (string * string) list }
+              
 exception Parse_error_locn of l * string
-
 
 type x = text (* identifier *)
 type ix = text (* infix identifier *)
 
+        
 type 
 kind_aux =  (* base kind *)
    K_type (* kind of types *)
@@ -465,7 +467,7 @@ type_def_aux =  (* Type definition body *)
 
 type 
 val_spec_aux =  (* Value type specification *)
-   VS_val_spec of typschm * id * (string * string) list * bool
+   VS_val_spec of typschm * id * extern option * bool
 
 type 
 dec_spec_aux =  (* Register declarations *)

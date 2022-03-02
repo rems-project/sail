@@ -205,19 +205,23 @@ let infer_side_effects ast =
   let module NodeSet = Set.Make(Callgraph.Node) in
   let cg = Callgraph.graph_of_ast ast in
 
+  let total = List.length ast.defs in
   let direct_effects = ref Bindings.empty in
-  List.iter (fun def ->
+  List.iteri (fun i def ->
+      Util.progress "Effects (direct) " (string_of_int (i + 1) ^ "/" ^ string_of_int total) (i + 1) total;
       if can_have_direct_side_effect def then (
         let effs = infer_def_direct_effects def in
         let ids = ids_of_def def in
         IdSet.iter (fun id ->
-            prerr_endline (string_of_id id ^ ": " ^ Util.string_of_list ", " string_of_side_effect (EffectSet.elements effs));
             direct_effects := Bindings.add id effs !direct_effects
           ) ids
       )
     ) ast.defs;
 
-  List.iter (fun node ->
+  let all_nodes = Callgraph.G.nodes cg in
+  let total = List.length all_nodes in
+  List.iteri (fun i node ->
+      Util.progress "Effects (transitive) " (string_of_int (i + 1) ^ "/" ^ string_of_int total) (i + 1) total;
       match node with
       | Callgraph.Function id ->
          let reachable = Callgraph.G.reachable (NodeSet.singleton node) NodeSet.empty cg in
@@ -238,8 +242,8 @@ let infer_side_effects ast =
            |> EffectSet.of_list
            |> EffectSet.union side_effects
          in
-         prerr_endline ("NODE: " ^ string_of_id id ^ " = " ^ Util.string_of_list ", " string_of_side_effect (EffectSet.elements side_effects))
+         ()
       | _ -> ()
-    ) (Callgraph.G.nodes cg);
+    ) all_nodes;
   
   Bindings.empty
