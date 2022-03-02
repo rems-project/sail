@@ -261,6 +261,22 @@ let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,funcls),(l,fdann
   in
   FD_aux (FD_function(recopt,tannotopt,List.map (rewrite_funcl rewriters) funcls),(l,fdannot))
 
+let rewrite_mapcl rewriters (MCL_aux (aux, (l, annot))) =
+  let aux = match aux with
+    | MCL_bidir (mpexp1, mpexp2) -> MCL_bidir (mpexp1, mpexp2)
+    | MCL_forwards (mpexp, exp) -> MCL_forwards (mpexp, rewriters.rewrite_exp rewriters exp)
+    | MCL_backwards (mpexp, exp) -> MCL_backwards (mpexp, rewriters.rewrite_exp rewriters exp)
+  in
+  MCL_aux (aux, (l, annot))
+
+let rewrite_scattered rewriters (SD_aux (sd, (l, annot))) =
+  let sd =  match sd with
+    | SD_funcl funcl -> SD_funcl (rewrite_funcl rewriters funcl)
+    | SD_mapcl (id, mapcl) -> SD_mapcl (id, rewrite_mapcl rewriters mapcl)
+    | SD_variant _ | SD_unioncl _ | SD_mapping _ | SD_function _ | SD_end _ -> sd
+  in
+  SD_aux (sd, (l, annot))
+  
 let rec rewrite_def rewriters d = match d with
   | DEF_reg_dec (DEC_aux (DEC_reg (typ, id, Some exp), annot)) ->
      DEF_reg_dec (DEC_aux (DEC_reg (typ, id, Some (rewriters.rewrite_exp rewriters exp)), annot))
@@ -271,7 +287,7 @@ let rec rewrite_def rewriters d = match d with
   | DEF_internal_mutrec fdefs -> DEF_internal_mutrec (List.map (rewriters.rewrite_fun rewriters) fdefs)
   | DEF_val letbind -> DEF_val (rewriters.rewrite_let rewriters letbind)
   | DEF_pragma (pragma, arg, l) -> DEF_pragma (pragma, arg, l)
-  | DEF_scattered _ -> raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "DEF_scattered survived to rewriter")
+  | DEF_scattered sd -> DEF_scattered (rewrite_scattered rewriters sd)
   | DEF_measure (id,pat,exp) -> DEF_measure (id,rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp)
   | DEF_loop_measures (id,_) -> raise (Reporting.err_unreachable (id_loc id) __POS__ "DEF_loop_measures survived to rewriter")
 

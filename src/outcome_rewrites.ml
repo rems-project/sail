@@ -139,7 +139,7 @@ let instantiate target ast =
        in
 
        let valspec =
-         DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, [], false), (l, Type_check.empty_tannot)))
+         DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, None, false), (l, Type_check.empty_tannot)))
        in
        let outcome_defs, _ =
          (valspec :: rewrite_ast_defs { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp } outcome_defs)

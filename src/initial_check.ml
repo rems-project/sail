@@ -530,11 +530,14 @@ let to_ast_default ctx (default : P.default_typing_spec) : default_spec ctx_out 
 
 let to_ast_spec ctx (vs : P.val_spec) : unit val_spec ctx_out =
   match vs with
-  | P.VS_aux(vs,l) ->
-    (match vs with
-    | P.VS_val_spec(ts,id,ext,is_cast) ->
-      let typschm, _ = to_ast_typschm ctx ts in
-      VS_aux(VS_val_spec(typschm,to_ast_id ctx id,ext,is_cast),(l,())),ctx)
+  | P.VS_aux (vs, l) ->
+     match vs with
+     | P.VS_val_spec (ts, id, ext, is_cast) ->
+        let typschm, _ = to_ast_typschm ctx ts in
+        let ext = match ext with
+          | [] -> None
+          | bindings -> Some { pure = false; bindings = bindings } in
+        VS_aux (VS_val_spec (typschm,to_ast_id ctx id, ext, is_cast), (l, ())), ctx
  
 let to_ast_outcome ctx (ev : P.outcome_spec) : outcome_spec ctx_out =
   match ev with
@@ -634,7 +637,7 @@ let generate_enum_functions l ctx enum_id fns exps =
          ];
        mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) (function_typ [mk_id_typ enum_id] typ),
                                  name,
-                                 [],
+                                 None,
                                  false))]
     ) fns
   |> List.concat
@@ -984,8 +987,11 @@ let constraint_of_string str =
   let atyp = Parser.typ_eof Lexer.token (Lexing.from_string str) in
   to_ast_constraint initial_ctx atyp
 
-let extern_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, [("_", string_of_id id)], false))
-let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, [], false))
+let extern_of_string id str =
+  VS_val_spec (typschm_of_string str, id, Some { pure = false; bindings = [("_", string_of_id id)] }, false)
+  |> mk_val_spec
+
+let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, None, false))
 
 let quant_item_param = function
   | QI_aux (QI_id kopt, _) when is_int_kopt kopt -> [prepend_id "atom_" (id_of_kid (kopt_kid kopt))]
@@ -1048,7 +1054,7 @@ let generate_undefineds vs_ids defs =
   let undefined_td = function
     | TD_enum (id, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let typschm = typschm_of_string ("unit -> " ^ string_of_id id ^ " effect {undef}") in
-       [mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, [], false));
+       [mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, None, false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             (mk_pat (P_lit (mk_lit L_unit)))
                             (if !opt_fast_undefined && List.length ids > 0 then
@@ -1058,7 +1064,7 @@ let generate_undefineds vs_ids defs =
                                               [mk_exp (E_list (List.map (fun id -> mk_exp (E_id id)) ids))])))]]
     | TD_record (id, typq, fields, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
        let pat = p_tup (quant_items typq |> List.map quant_item_param |> List.concat |> List.map (fun id -> mk_pat (P_id id))) in
-       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, [], false));
+       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None, false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             pat
                             (mk_exp (E_record (List.map (fun (_, id) -> mk_fexp id (mk_lit_exp L_undef)) fields)))]]
@@ -1106,7 +1112,7 @@ let generate_undefineds vs_ids defs =
              (mk_exp (E_app (mk_id "internal_pick",
                              [mk_exp (E_list (List.map (make_constr typ_to_var) constr_args))]))) letbinds
        in
-       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, [], false));
+       [mk_val_spec (VS_val_spec (undefined_typschm id typq, prepend_id "undefined_" id, None, false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                       pat
                       body]]
@@ -1142,7 +1148,7 @@ let generate_enum_functions vs_ids defs =
   let rec gen_enums = function
     | DEF_type (TD_aux (TD_enum (id, elems, _), _)) as enum :: defs ->
        let enum_val_spec name quants typ =
-         mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, [], !opt_enum_casts))
+         mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, None, !opt_enum_casts))
        in
        let range_constraint kid = nc_and (nc_lteq (nint 0) (nvar kid)) (nc_lteq (nvar kid) (nint (List.length elems - 1))) in
 

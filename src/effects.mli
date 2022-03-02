@@ -87,8 +87,22 @@ module EffectSet : sig
   include Set.S with type elt = side_effect
 end
 
+(* Note we intentionally keep the side effect type abstract, and
+   expose some functions on effect sets based on what we actually
+   need. *)
+     
 val throws : EffectSet.t -> bool
 
 val pure : EffectSet.t -> bool
+
+(** Outcome identifiers correspond to the set of user-defined prompt
+   monad constructors in the concurrency interface, replacing the
+   various ad-hoc rmem, wmem, barrier, and so on effects in previous
+   Sail versions. For example, using the concurrency interface in the Sail
+   library, the equivalent to checking for the wmem effect would be:
+
+   has_outcome (mk_id "sail_mem_write_request") effects
+   *)
+val has_outcome : id -> EffectSet.t -> bool
   
-val infer_side_effects : known_pure:IdSet.t -> Type_check.tannot ast -> EffectSet.t Bindings.t
+val infer_side_effects : Type_check.tannot ast -> EffectSet.t Bindings.t

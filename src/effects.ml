@@ -77,6 +77,8 @@ type side_effect =
   | IncompleteMatch
   | Register
   | Transitive
+  | External
+  | Outcome of id
 
 let string_of_side_effect = function
   | Throw -> "throw"
@@ -84,6 +86,8 @@ let string_of_side_effect = function
   | IncompleteMatch -> "incomplete match"
   | Register -> "register"
   | Transitive -> "transitive"
+  | External -> "external function"
+  | Outcome id -> ("outcome " ^ string_of_id id)
 
 module Effect = struct
   type t = side_effect
@@ -94,10 +98,14 @@ module Effect = struct
     | IncompleteMatch, IncompleteMatch -> 0
     | Register, Register -> 0
     | Transitive, Transitive -> 0
+    | External, External -> 0
+    | Outcome id1, Outcome id2 -> Id.compare id1 id2
     | Throw, _ -> 1 | _, Throw -> -1
     | Exit, _ -> 1 | _, Exit -> -1
     | IncompleteMatch, _ -> 1 | _, IncompleteMatch -> -1
     | Transitive, _ -> 1 | _, Transitive -> -1
+    | External, _ -> 1 | _, External -> -1
+    | Outcome _, _ -> 1 | _, Outcome _ -> -1
 end
 
 module EffectSet = Set.Make(Effect)
@@ -105,6 +113,8 @@ module EffectSet = Set.Make(Effect)
 let throws = EffectSet.mem Throw
 
 let pure = EffectSet.is_empty
+
+let has_outcome id = EffectSet.mem (Outcome id)
 
 module PC_config = struct
   type t = tannot
@@ -161,8 +171,75 @@ let infer_def_direct_effects def =
     fold_exp { id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp e_aux annot);
                                lEXP_aux = (fun (l_aux, annot) -> scan_lexp l_aux annot) } exp in
   ignore (rewrite_ast_defs { rewriters_base with rewrite_exp = rw_exp } [def]);
+
+  begin match def with
+  | DEF_spec (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }, _), _)) ->
+     effects := EffectSet.add External !effects
+  | _ -> ()
+  end;
+  
   !effects
-                      
-let infer_side_effects ~known_pure:known_pure ast =
+
+(* A top-level definition can have a side effect if it contains an
+   expression which could have some side effect *)
+let can_have_direct_side_effect = function
+  | DEF_type _ -> false
+  | DEF_fundef _ -> true
+  | DEF_mapdef _ -> true
+  | DEF_impl _ -> true
+  | DEF_val _ -> true
+  | DEF_spec _ -> true
+  | DEF_outcome _ -> true
+  | DEF_instantiation _ -> false
+  | DEF_fixity _ -> false
+  | DEF_overload _ -> false
+  | DEF_default _ -> false
+  | DEF_scattered _ -> true
+  | DEF_measure _ -> true
+  | DEF_loop_measures _ -> true
+  | DEF_reg_dec _ -> true
+  | DEF_internal_mutrec _ -> true
+  | DEF_pragma _ -> false
+
+let infer_side_effects ast =
+  let module NodeSet = Set.Make(Callgraph.Node) in
   let cg = Callgraph.graph_of_ast ast in
+
+  let direct_effects = ref Bindings.empty in
+  List.iter (fun def ->
+      if can_have_direct_side_effect def then (
+        let effs = infer_def_direct_effects def in
+        let ids = ids_of_def def in
+        IdSet.iter (fun id ->
+            prerr_endline (string_of_id id ^ ": " ^ Util.string_of_list ", " string_of_side_effect (EffectSet.elements effs));
+            direct_effects := Bindings.add id effs !direct_effects
+          ) ids
+      )
+    ) ast.defs;
+
+  List.iter (fun node ->
+      match node with
+      | Callgraph.Function id ->
+         let reachable = Callgraph.G.reachable (NodeSet.singleton node) NodeSet.empty cg in
+         (* First, a function has any side effects it directly causes *)
+         let side_effects = match Bindings.find_opt id !direct_effects with Some effs -> effs | None -> EffectSet.empty in
+         (* Second, a function has any side effects from any reachable callee function *)
+         let side_effects =
+           NodeSet.fold (fun node side_effects ->
+               match Bindings.find_opt (Callgraph.node_id node) !direct_effects with
+               | Some effs -> EffectSet.union effs side_effects
+               | None -> side_effects
+             ) reachable side_effects in
+         (* Third, if a function or any callee invokes an outcome, it has that effect *)
+         let side_effects =
+           NodeSet.filter (function Callgraph.Outcome _ -> true | _ -> false) reachable
+           |> NodeSet.elements
+           |> List.map (fun node -> Outcome (Callgraph.node_id node))
+           |> EffectSet.of_list
+           |> EffectSet.union side_effects
+         in
+         prerr_endline ("NODE: " ^ string_of_id id ^ " = " ^ Util.string_of_list ", " string_of_side_effect (EffectSet.elements side_effects))
+      | _ -> ()
+    ) (Callgraph.G.nodes cg);
+  
   Bindings.empty

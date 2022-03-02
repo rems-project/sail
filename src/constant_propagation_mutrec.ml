@@ -161,7 +161,7 @@ let generate_val_spec env id args l annot =
        List.map mk_qi_nc constraints'
      in
      let typschm = mk_typschm (mk_typquant quant_items') typ' in
-     mk_val_spec (VS_val_spec (typschm, generate_fun_id id args, [], false)),
+     mk_val_spec (VS_val_spec (typschm, generate_fun_id id args, None, false)),
      ksubsts
   | _, Typ_aux (_, l) ->
      raise (Reporting.err_unreachable l __POS__ "Function val spec is not a function type")

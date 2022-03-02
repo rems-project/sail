@@ -509,7 +509,7 @@ val locate_typ : (l -> l) -> typ -> typ
    a generated number. *)
 val unique : l -> l
 
-val extern_assoc : string -> (string * string) list -> string option
+val extern_assoc : string -> extern option -> string option
 
 (** Try to find the annotation closest to the provided (simplified)
    location. Note that this function makes no guarantees about finding

@@ -110,6 +110,8 @@ module Node = struct
     lex_ord (compare (node_kind n1) (node_kind n2)) (Id.compare (node_id n1) (node_id n2))
 end
 
+module G = Graph.Make(Node)
+            
 let node_color cuts =
   let module NodeSet = Set.Make(Node) in
   function
@@ -182,7 +184,6 @@ type callgraph = Graph.Make(Node).graph
 
 let add_def_to_graph graph def =
   let open Type_check in
-  let module G = Graph.Make(Node) in
   let graph = ref graph in
 
   let scan_pat self p_aux annot =

@@ -1813,7 +1813,7 @@ let rewrite_split_fun_ctor_pats fun_name env ast =
       in
       let val_spec =
         VS_aux (VS_val_spec
-          (mk_typschm (mk_typquant quants) fun_typ, id, [], false),
+          (mk_typschm (mk_typquant quants) fun_typ, id, None, false),
           (Parse_ast.Unknown, empty_tannot))
       in
       let fundef = FD_aux (FD_function (r_o, t_o, funcls), fdannot) in
@@ -2626,7 +2626,7 @@ let construct_toplevel_string_append_func env f_id pat =
                                                           ), unk)]
   in
   let fun_typ = (mk_typ (Typ_fn ([string_typ], option_typ))) in
-  let new_val_spec = VS_aux (VS_val_spec (mk_typschm (TypQ_aux (TypQ_no_forall, unk)) fun_typ, f_id, [], false), unkt) in
+  let new_val_spec = VS_aux (VS_val_spec (mk_typschm (TypQ_aux (TypQ_no_forall, unk)) fun_typ, f_id, None, false), unkt) in
   let new_val_spec, env = Type_check.check_val_spec env new_val_spec in
   let non_rec = (Rec_aux (Rec_nonrec, Parse_ast.Unknown)) in
   let no_tannot = (Typ_annot_opt_aux (Typ_annot_opt_none, Parse_ast.Unknown)) in
@@ -3897,10 +3897,10 @@ let rewrite_ast_realise_mappings _ ast =
       let backwards_typ = Typ_aux (Typ_fn ([typ2], typ1), l) in
       let backwards_matches_typ = Typ_aux (Typ_fn ([typ2], bool_typ), l) in
 
-      let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, [], false), (Parse_ast.Unknown,())) in
-      let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, [], false), (Parse_ast.Unknown,())) in
-      let forwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_matches_typ, forwards_matches_id, [], false), (Parse_ast.Unknown,())) in
-      let backwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_matches_typ, backwards_matches_id, [], false), (Parse_ast.Unknown,())) in
+      let forwards_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_typ, forwards_id, None, false), (Parse_ast.Unknown,())) in
+      let backwards_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_typ, backwards_id, None, false), (Parse_ast.Unknown,())) in
+      let forwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_matches_typ, forwards_matches_id, None, false), (Parse_ast.Unknown,())) in
+      let backwards_matches_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_matches_typ, backwards_matches_id, None, false), (Parse_ast.Unknown,())) in
 
       let forwards_spec, env = Type_check.check_val_spec env forwards_spec in
       let backwards_spec, env = Type_check.check_val_spec env backwards_spec in
@@ -3911,13 +3911,13 @@ let rewrite_ast_realise_mappings _ ast =
       let string_defs =
         begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then
                 let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)]), Parse_ast.Unknown) in
-                let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, [], false), (Parse_ast.Unknown,())) in
+                let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, None, false), (Parse_ast.Unknown,())) in
                 let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
                 forwards_prefix_spec
               else
                 if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then
                   let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)]), Parse_ast.Unknown) in
-                  let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, [], false), (Parse_ast.Unknown,())) in
+                  let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, None, false), (Parse_ast.Unknown,())) in
                   let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
                   backwards_prefix_spec
                 else

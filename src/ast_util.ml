@@ -1864,14 +1864,13 @@ let unique l =
   incr unique_ref;
   l
 
-let extern_assoc backend exts =
-  try
-    try
-      Some (List.assoc backend exts)
-    with Not_found ->
-      Some (List.assoc "_" exts)
-  with Not_found ->
-    None
+let extern_assoc backend ext =
+  match ext with
+  | None -> None
+  | Some ext ->
+     match List.assoc_opt backend ext.bindings with
+     | Some f -> Some f
+     | None -> List.assoc_opt "_" ext.bindings
 
 (**************************************************************************)
 (* 1. Substitutions                                                       *)

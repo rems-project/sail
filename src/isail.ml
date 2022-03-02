@@ -165,7 +165,7 @@ let setup_sail_scripting () =
     List.map (fun (cmd, (_, action)) ->
         let name = sail_command_name cmd in
         let typschm = mk_typschm (mk_typquant []) (reflect_typ action) in
-        mk_val_spec (VS_val_spec (typschm, mk_id name, [("_", name)], false))
+        mk_val_spec (VS_val_spec (typschm, mk_id name, Some { pure = false; bindings = [("_", name)] }, false))
       ) !commands in
   let val_specs, env' = Type_check.check_defs !env val_specs in
   ast := append_ast_defs !ast val_specs;

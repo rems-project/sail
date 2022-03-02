@@ -80,12 +80,20 @@ type node =
   | LoopMeasures of id
   | Outcome of id
 
+val node_id : node -> id
+             
 module Node : sig
   type t = node
   val compare : node -> node -> int
 end
 
-type callgraph = Graph.Make(Node).graph
+module G : sig
+  include Graph.S with type node = Node.t
+                   and type node_set = Set.Make(Node).t
+                   and type graph = Graph.Make(Node).graph
+end
+     
+type callgraph = G.graph
 
 val graph_of_ast : Type_check.tannot ast -> callgraph
                

@@ -705,8 +705,13 @@ let doc_typdef (TD_aux(td,_)) = match td with
 
 let doc_spec ?comment:(comment=false) (VS_aux (v, annot)) =
   let doc_extern ext =
-    let docs = List.map (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\"")) ext in
-    if docs = [] then empty else equals ^^ space ^^ braces (separate (comma ^^ space) docs)
+    match ext with
+    | Some ext ->
+       let pure = if ext.pure then string "pure" ^^ space else empty in
+       let docs = List.map (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\"")) ext.bindings in
+       equals ^^ space ^^ pure ^^ braces (separate (comma ^^ space) docs)
+    | None ->
+       empty
   in
   match v with
   | VS_val_spec(ts,id,ext,is_cast) ->

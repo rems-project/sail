@@ -65,6 +65,7 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
+open Ast_util
 open Ast_defs
 open PPrint
 open Pretty_print_common
@@ -299,6 +300,7 @@ let check_ast (env : Type_check.Env.t) (ast : unit ast) : Type_check.tannot ast 
   Type_check.opt_check_completeness := true;
   let ast, env = Type_error.check env ast in
   Type_check.opt_check_completeness := false;
+  let _ = Effects.infer_side_effects ast in
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_ast stdout ast else () in
   let () = if !opt_just_check then exit 0 else () in
   (ast, env)

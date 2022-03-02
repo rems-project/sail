@@ -82,6 +82,8 @@ type 'a annot = l * 'a
 
 type loop = While | Until
 
+type extern = { pure : bool; bindings : (string * string) list } option
+
 }}
 
 embed
@@ -94,6 +96,8 @@ type value = | Val
 type loop = While | Until
 
 type annot 'a = l * 'a
+
+type extern = <| pure : bool; bindings : list (string * string) |>
 
 }}
 
@@ -133,12 +137,18 @@ metavar ix ::=
 
 grammar
 
-l :: '' ::=                                     {{ phantom }}
-                                                {{ ocaml Parse_ast.l }}
-                                                {{ lem l }}
-                                                {{ hol unit }}
+external :: '' ::=
+  {{ phantom }}
+  {{ lem maybe extern }}
+  {{ ocaml extern option }}
+
+l :: '' ::=
+  {{ phantom }}
+  {{ ocaml Parse_ast.l }}
+  {{ lem l }}
+  {{ hol unit }}
   {{ com source location }}
-  |                                             :: :: Unknown
+  | :: :: Unknown
     {{ ocaml Unknown }}
     {{ lem Unknown }}
     {{ hol () }}
@@ -382,82 +392,6 @@ P_app <= P_app
 P_app <= P_as
 
 grammar
-
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % Interpreter specific things                                  %
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% optx :: '' ::= {{ phantom }} {{ lem maybe string }} {{ ocaml string option }}
-%   | x                                            ::  :: optx_x
-%   {{ lem (Just [[x]]) }} {{ ocaml (Some [[x]]) }}
-%   |                                              :: :: optx_none
-%   {{ lem Nothing }} {{ ocaml None }}
-
-% tag :: 'Tag_' ::=
-% {{ com Data indicating where the identifier arises and thus information necessary in compilation }}
-%    | None                                 :: :: empty
-%    | Intro                                :: :: intro {{ com Denotes an assignment and lexp that introduces a binding }}
-%    | Set                                  :: :: set {{ com Denotes an expression that mutates a local variable }}
-%    | Tuple                                :: :: tuple_assign {{ com Denotes an assignment with a tuple lexp }}
-%    | Global				  :: :: global {{ com Globally let-bound or enumeration based value/variable }}
-%    | Ctor                                 :: :: ctor {{ com Data constructor from a type union }}
-%    | Extern optx                          :: :: extern {{ com External function, specied only with a val statement }}
-%    | Default                              :: :: default {{ com Type has come from default declaration, identifier may not be bound locally }}
-%    | Spec				  :: :: spec
-%    | Enum num				  :: :: enum
-%    | Alias				  :: :: alias
-%    | Unknown_path optx			  :: :: unknown {{ com Tag to distinguish an unknown path from a non-analysis non deterministic path}}
-
-% embed
-% {{ lem
-
-% type tannot = maybe (typ * tag * list unit * effect * effect)
-
-% }}
-
-% embed
-% {{ ocaml
-
-% (* Interpreter specific things are just set to unit here *)
-% type tannot = unit
-
-% type reg_form_set = unit
-
-% }}
-
-% grammar
-% tannot :: '' ::=
-%   {{ phantom }}
-%   {{ ocaml unit }}
-%   {{ lem tannot }}
-
-% i_direction :: 'I' ::=
-%   | IInc :: :: Inc
-%   | IDec :: :: Dec
-
-% ctor_kind :: 'C_' ::=
-%   | C_Enum nat :: :: Enum
-%   | C_Union    :: :: Union
-
-% reg_form :: 'Form_' ::=
-%   | Reg id tannot i_direction :: :: Reg
-%   | SubReg id reg_form index_range :: :: SubReg
-
-% reg_form_set :: '' ::= {{ phantom }} {{ lem set reg_form }}
-
-% value :: 'V_' ::= {{ com interpreter evaluated value }}
-%   | Boxref nat typ                                                                  :: :: boxref
-%   | Lit lit                                                                         :: :: lit
-%   | Tuple ( value1 , ... , valuen )                                                 :: :: tuple
-%   | List ( value1 , ... , valuen )                                                  :: :: list
-%   | Vector nat i_direction ( value1 , ... , valuen )                                :: :: vector
-%   | Vector_sparse nat' nat'' i_direction ( nat1 value1 , ... , natn valuen ) value' :: :: vector_sparse
-%   | Record typ ( id1 value1 , ... , idn valuen )                                    :: :: record
-%   | V_ctor id typ ctor_kind value1                                                  :: :: ctor
-%   | Unknown                                                                         :: :: unknown
-%   | Register reg_form                                                               :: :: register
-%   | Register_alias alias_spec_tannot tannot                                         :: :: register_alias
-%   | Track value reg_form_set                                                        :: :: track
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Expressions                                                  %
@@ -754,7 +688,7 @@ cast_opt :: 'Cast_' ::=
 val_spec_aux :: 'VS_' ::=
   {{ com value type specification }}
   {{ ocaml  VS_val_spec of typschm * id * (string * string) list * bool }}
-  {{ lem VS_val_spec of typschm * id * list (string * string) * bool }}
+  {{ lem VS_val_spec of typschm * id * maybe extern * bool }}
   {{ isa  typschm * id  * (string => string option) * bool }}  
   | val cast_opt id : typschm                           :: S :: val_spec
     {{ com specify the type of an upcoming definition }}

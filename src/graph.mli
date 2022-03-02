@@ -90,6 +90,8 @@ module type S =
 
     val children : graph -> node -> node list
 
+    val nodes : graph -> node list
+      
     (** Return the set of nodes that are reachable from the first set
        of nodes (roots), without passing through the second set of
        nodes (cuts). *)

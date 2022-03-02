@@ -83,7 +83,7 @@ module type Config =
 type 'a rows = Rows of ('a list)
 type 'a columns = Columns of ('a list)
 
-type column_type = Tuple_column of int | App_column of id | Bool_column | Enum_column of id | Unknown_column
+type column_type = Tuple_column of int | App_column of id | Bool_column | Enum_column of id | Lit_column | Unknown_column
 
 type 'a completeness =
   | Incomplete of 'a
@@ -129,7 +129,7 @@ module Make(C: Config) = struct
   type gpat =
     | GP_wild
     | GP_unknown
-    | GP_lit of lit list
+    | GP_lit of lit
     | GP_tup of gpat list
     | GP_app of id * id * gpat list
     | GP_bitvector of int * (bv_constraint -> bv_constraint)
@@ -140,7 +140,7 @@ module Make(C: Config) = struct
   let rec string_of_gpat = function
     | GP_wild -> "_"
     | GP_unknown -> "?"
-    | GP_lit lits -> Util.string_of_list " | " string_of_lit lits
+    | GP_lit lit -> string_of_lit lit
     | GP_tup gpats -> "(" ^ Util.string_of_list ", " string_of_gpat gpats ^ ")"
     | GP_app (_, ctor, gpats) ->
        string_of_id ctor ^ "(" ^ Util.string_of_list ", " string_of_gpat gpats ^ ")"
@@ -162,13 +162,16 @@ module Make(C: Config) = struct
     | P_vector pats when is_bitvector_typ typ ->
        let mask, bits =
          List.fold_left (fun (mask, bits) (P_aux (pat, _)) ->
-             match pat with
-             | P_lit (L_aux (L_one, _)) -> (mask ^ "1", bits ^ "1")
-             | P_lit (L_aux (L_zero, _)) -> (mask ^ "1", bits ^ "0")
-             | P_wild | P_id _ -> (mask ^ "0", bits ^ "0")
-             | _ ->
-                Reporting.warn "Unexpected pattern" l "";
-                (mask ^ "0", bits ^ "0")
+             let rec go pat = match pat with
+               | P_lit (L_aux (L_one, _)) -> (mask ^ "1", bits ^ "1")
+               | P_lit (L_aux (L_zero, _)) -> (mask ^ "1", bits ^ "0")
+               | P_wild | P_id _ -> (mask ^ "0", bits ^ "0")
+               | P_typ (_, P_aux (pat, _)) -> go pat 
+               | _ ->
+                  Reporting.warn "Unexpected pattern" l "";
+                  (mask ^ "0", bits ^ "0")
+             in
+             go pat
            ) ("#b", "#b") pats
        in
        GP_bitvector (List.length pats, fun x -> BVC_eq (BVC_bvand (BVC_lit mask, x), BVC_lit bits))
@@ -220,7 +223,7 @@ module Make(C: Config) = struct
 
     | P_lit (L_aux (L_true, _)) -> GP_bool true
     | P_lit (L_aux (L_false, _)) -> GP_bool false
-    | P_lit lit -> GP_lit [lit]
+    | P_lit lit -> GP_lit lit
     | P_wild -> GP_wild
     | P_var (pat, _) -> generalize ctx pat
     | P_as (pat, _) -> generalize ctx pat
@@ -261,8 +264,25 @@ module Make(C: Config) = struct
     | GP_app (typ_id, _, _) :: _ -> App_column typ_id
     | GP_bool _ :: _ -> Bool_column
     | GP_enum (typ_id, _) :: _ -> Enum_column typ_id
+    | GP_lit _ :: _ -> Lit_column
     | _ :: rest -> column_type rest
     | [] -> Unknown_column
+
+  let rec unmatched_string_literal max_length = function
+    | GP_lit (L_aux (L_string str, _)) :: rest -> unmatched_string_literal (max (String.length str) max_length) rest
+    | _ :: rest -> unmatched_string_literal max_length rest
+    | [] -> L_string (String.make (max_length + 1) '?')
+
+  let rec unmatched_num_literal n = function
+    | GP_lit (L_aux (L_num m, _)) :: rest -> unmatched_num_literal (Big_int.max n m) rest
+    | _ :: rest -> unmatched_num_literal n rest
+    | [] -> L_num (Big_int.succ n)
+          
+  let rec unmatched_literal = function
+    | GP_lit (L_aux (L_string str, _)) :: rest -> Some (unmatched_string_literal (String.length str) rest)
+    | GP_lit (L_aux (L_num n, _)) :: rest -> Some (unmatched_num_literal n rest)
+    | _ :: rest -> unmatched_literal rest
+    | [] -> None
           
   let rec is_simple_matrix = function
     | Rows (Columns row :: matrix) -> List.for_all is_simple_gpat row && is_simple_matrix (Rows matrix)
@@ -382,6 +402,17 @@ module Make(C: Config) = struct
         |> List.map (fun row -> Columns (remove_index c (columns_to_list row)))
       )
 
+  let split_matrix_wild c matrix =
+    let is_wild_row = function
+      | GP_wild -> true
+      | _ -> false
+    in
+    Rows (
+        rows_to_list matrix
+        |> List.filter (fun row -> columns_to_list row |> (fun xs -> List.nth xs c) |> is_wild_row)
+        |> List.map (fun row -> Columns (remove_index c (columns_to_list row)))
+      )
+ 
   let split_matrix_enum e c matrix =
     let is_enum_row = function
       | GP_enum (_, id) -> Id.compare e id = 0
@@ -410,9 +441,12 @@ module Make(C: Config) = struct
     | [] ->
        xs @ [mk_exp (E_app (ctor, []))]
 
-  let rebool b i unmatcheds =
+  let relit lit i unmatcheds =
     let (xs, ys) = Util.split_after i unmatcheds in
-    xs @ mk_lit_exp (if b then L_true else L_false) :: ys
+    xs @ mk_lit_exp lit :: ys
+      
+  let rebool b i unmatcheds =
+    relit (if b then L_true else L_false) i unmatcheds
 
   let reenum e i unmatcheds =
     let (xs, ys) = Util.split_after i unmatcheds in
@@ -444,7 +478,21 @@ module Make(C: Config) = struct
        | Tuple_column width ->
           matrix_is_complete l ctx (flatten_tuple_column width i matrix)
           |> completeness_map (retuple width i)
- 
+
+       | Lit_column ->
+          let wild_matrix = split_matrix_wild i matrix in
+          begin match unmatched_literal col with
+          | None -> Completeness_unknown
+          | Some lit ->
+             if row_matrix_empty wild_matrix then
+               Incomplete (undefs_except 0 i (mk_lit_exp lit) (row_matrix_width l matrix))
+             else
+               match matrix_is_complete l ctx wild_matrix with
+               | Incomplete unmatcheds -> Incomplete (relit lit i unmatcheds)
+               | Complete -> Complete
+               | Completeness_unknown -> Completeness_unknown
+          end
+            
        | App_column typ_id ->
           let ctors = split_app_column l ctx col in
           Bindings.fold (fun ctor ctor_rows unmatcheds ->
@@ -531,6 +579,7 @@ module Make(C: Config) = struct
          end
     with
     (* For now, if any error occurs just report the pattern match is incomplete *)
-    | _ -> false
+    | exn ->
+       false
 
 end

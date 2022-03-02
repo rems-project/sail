@@ -80,7 +80,7 @@ let is_typ_ord_arg = function
 type specialization = {
     is_polymorphic : kinded_id -> bool;
     instantiation_filter : kid -> typ_arg -> bool;
-    extern_filter : (string * string) list -> bool
+    extern_filter : extern option -> bool
   }
 
 let typ_ord_specialization = {
