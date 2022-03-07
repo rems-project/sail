@@ -421,6 +421,7 @@ let rec describe_rewrite =
   | Bool_rewriter rw -> "<bool>" :: describe_rewrite (rw false)
   | Literal_rewriter rw -> "(ocaml|lem|all)" :: describe_rewrite (rw (fun _ -> true))
   | Basic_rewriter _
+  | Effects_rewriter _
   | Checking_rewriter _ -> []
 
 type session = {
@@ -454,7 +455,7 @@ let load_session upto file =
   | None -> None
   | Some upto_file when Filename.basename upto_file = file -> None
   | Some upto_file ->
-     let (_, ast, env) =
+     let (_, ast, env, _) =
        Process_file.load_files ~check:true !opt_target options !Interactive.env [Filename.concat (Filename.dirname upto_file) file]
      in
      Interactive.ast := append_ast !Interactive.ast ast;
@@ -574,10 +575,10 @@ let handle_input' input =
         begin match cmd with
         | ":l" | ":load" ->
            let files = Util.split_on_char ' ' arg in
-           let (_, ast, env) = Process_file.load_files !opt_target options !Interactive.env files in
+           let (_, ast, env, effect_info) = Process_file.load_files !opt_target options !Interactive.env files in
            let ast, env =
              if !Interactive.opt_auto_interpreter_rewrites then
-               Process_file.rewrite_ast_target "interpreter" env ast
+               Process_file.rewrite_ast_target effect_info "interpreter" env ast
              else
                ast, env
            in
@@ -651,10 +652,13 @@ let handle_input' input =
               failwith "Must provide the name of a rewrite, use :list_rewrites for a list of possible rewrites"
            end
         | ":rewrites" ->
+           (*
            let new_ast, new_env = Process_file.rewrite_ast_target arg !Interactive.env !Interactive.ast in
            Interactive.ast := new_ast;
            Interactive.env := new_env;
            interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops
+            *)
+           ()
         | ":prover_regstate" ->
            let env, ast = prover_regstate (Some arg) !Interactive.ast !Interactive.env in
            Interactive.env := env;
@@ -699,7 +703,7 @@ let handle_input' input =
            begin
              try
                load_into_session arg;
-               let (_, ast, env) = Process_file.load_files ~check:true None options !Interactive.env [arg] in
+               let (_, ast, env, _) = Process_file.load_files ~check:true None options !Interactive.env [arg] in
                Interactive.ast := append_ast !Interactive.ast ast;
                interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
                Interactive.env := env;
@@ -895,10 +899,13 @@ let () =
     );
 
   if !Interactive.opt_auto_interpreter_rewrites then (
+    (*
     let new_ast, new_env = Process_file.rewrite_ast_target "interpreter" !Interactive.env !Interactive.ast in
     Interactive.ast := new_ast;
     Interactive.env := new_env;
     interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops
+     *)
+    ()
   );
   
   (* Read the script file if it is set with the -is option, and excute them *)

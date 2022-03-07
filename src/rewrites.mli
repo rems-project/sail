@@ -88,10 +88,11 @@ val move_loop_measures : 'a ast -> 'a ast
 val rewrite_undefined : bool -> Env.t -> tannot ast -> tannot ast
 
 (* Perform rewrites to create an AST supported for a specific target *)
-val rewrite_ast_target : string -> (string * (Env.t -> tannot ast -> tannot ast * Env.t)) list
+val rewrite_ast_target : Effects.side_effect_info -> string -> (string * (Env.t -> tannot ast -> tannot ast * Env.t)) list
 
 type rewriter =
   | Basic_rewriter of (Env.t -> tannot ast -> tannot ast)
+  | Effects_rewriter of (Env.t -> Effects.side_effect_info -> tannot ast -> tannot ast)
   | Checking_rewriter of (Env.t -> tannot ast -> tannot ast * Env.t)
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)

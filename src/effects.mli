@@ -95,6 +95,8 @@ val throws : EffectSet.t -> bool
 
 val pure : EffectSet.t -> bool
 
+val effectful : EffectSet.t -> bool
+
 (** Outcome identifiers correspond to the set of user-defined prompt
    monad constructors in the concurrency interface, replacing the
    various ad-hoc rmem, wmem, barrier, and so on effects in previous
@@ -104,5 +106,12 @@ val pure : EffectSet.t -> bool
    has_outcome (mk_id "sail_mem_write_request") effects
    *)
 val has_outcome : id -> EffectSet.t -> bool
-  
-val infer_side_effects : Type_check.tannot ast -> EffectSet.t Bindings.t
+
+type side_effect_info = {
+    functions : EffectSet.t Bindings.t;
+    letbinds : EffectSet.t Bindings.t
+  }
+
+val infer_side_effects : Type_check.tannot ast -> side_effect_info
+
+val rewrite_attach_effects : side_effect_info -> Type_check.tannot ast -> Type_check.tannot ast

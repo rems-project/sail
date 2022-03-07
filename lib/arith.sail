@@ -72,19 +72,19 @@ $include <flow.sail>
 
 // ***** Addition *****
 
-val add_atom = {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : forall 'n 'm.
+val add_atom = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : forall 'n 'm.
   (int('n), int('m)) -> int('n + 'm)
 
-val add_int = {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : (int, int) -> int
+val add_int = pure {ocaml: "add_int", interpreter: "add_int", lem: "integerAdd", c: "add_int", coq: "Z.add"} : (int, int) -> int
 
 overload operator + = {add_atom, add_int}
 
 // ***** Subtraction *****
 
-val sub_atom = {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : forall 'n 'm.
+val sub_atom = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : forall 'n 'm.
   (int('n), int('m)) -> int('n - 'm)
 
-val sub_int = {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : (int, int) -> int
+val sub_int = pure {ocaml: "sub_int", interpreter: "sub_int", lem: "integerMinus", c: "sub_int", coq: "Z.sub"} : (int, int) -> int
 
 overload operator - = {sub_atom, sub_int}
 
@@ -96,18 +96,18 @@ val sub_nat = {
 
 // ***** Negation *****
 
-val negate_atom = {ocaml: "negate", interpreter: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : forall 'n. int('n) -> int(- 'n)
+val negate_atom = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : forall 'n. int('n) -> int(- 'n)
 
-val negate_int = {ocaml: "negate", interpreter: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : int -> int
+val negate_int = pure {ocaml: "negate", interpreter: "negate", lem: "integerNegate", c: "neg_int", coq: "Z.opp"} : int -> int
 
 overload negate = {negate_atom, negate_int}
 
 // ***** Multiplication *****
 
-val mult_atom = {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : forall 'n 'm.
+val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : forall 'n 'm.
   (int('n), int('m)) -> int('n * 'm)
 
-val mult_int = {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : (int, int) -> int
+val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : (int, int) -> int
 
 overload operator * = {mult_atom, mult_int}
 
@@ -128,20 +128,20 @@ Similarly, we define shifts of 32 and 1 (i.e., powers of two).
 
 The most general shift operations also allow negative shifts which go in the opposite direction, for compatibility with ASL.
 */
-val _shl8 = {c: "shl_mach_int", coq: "shl_int_8", _: "shl_int"} :
+val _shl8 = pure {c: "shl_mach_int", coq: "shl_int_8", _: "shl_int"} :
   forall 'n, 0 <= 'n <= 3. (int(8), int('n)) -> {'m, 'm in {8, 16, 32, 64}. int('m)}
 
-val _shl32 = {c: "shl_mach_int", coq: "shl_int_32", _: "shl_int"} :
+val _shl32 = pure {c: "shl_mach_int", coq: "shl_int_32", _: "shl_int"} :
   forall 'n, 'n in {0, 1}. (int(32), int('n)) -> {'m, 'm in {32, 64}. int('m)}
 
-val _shl1 = {c: "shl_mach_int", coq: "shl_int_1", _: "shl_int"} :
+val _shl1 = pure {c: "shl_mach_int", coq: "shl_int_1", _: "shl_int"} :
   forall 'n, 0 <= 'n <= 3. (int(1), int('n)) -> {'m, 'm in {1, 2, 4, 8}. int('m)}
 
-val _shl_int = "shl_int" : forall 'n, 0 <= 'n. (int, int('n)) -> int
+val _shl_int = pure "shl_int" : forall 'n, 0 <= 'n. (int, int('n)) -> int
 
-val _shr32 = {c: "shr_mach_int", coq: "shr_int_32", _: "shr_int"} : forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}
+val _shr32 = pure {c: "shr_mach_int", coq: "shr_int_32", _: "shr_int"} : forall 'n, 0 <= 'n <= 31. (int('n), int(1)) -> {'m, 0 <= 'm <= 15. int('m)}
 
-val _shr_int = "shr_int" : forall 'n, 0 <= 'n. (int, int('n)) -> int
+val _shr_int = pure "shr_int" : forall 'n, 0 <= 'n. (int, int('n)) -> int
 
 function _shl_int_general(m: int, n: int) -> int = if n >= 0 then _shl_int(m, n) else _shr_int(m, negate(n))
 function _shr_int_general(m: int, n: int) -> int = if n >= 0 then _shr_int(m, n) else _shl_int(m, negate(n))
@@ -152,7 +152,7 @@ overload shr_int = {_shr32, _shr_int, _shr_int_general}
 // ***** div and mod *****
 
 /*! Truncating division (rounds towards zero) */
-val tdiv_int = {
+val tdiv_int = pure {
   ocaml: "tdiv_int",
   interpreter: "tdiv_int",
   lem: "tdiv_int",
@@ -161,7 +161,7 @@ val tdiv_int = {
 } : (int, int) -> int
 
 /*! Remainder for truncating division (has sign of dividend) */
-val _tmod_int = {
+val _tmod_int = pure {
   ocaml: "tmod_int",
   interpreter: "tmod_int",
   lem: "tmod_int",
@@ -170,7 +170,7 @@ val _tmod_int = {
 } : (int, int) -> int
 
 /*! If we know the second argument is positive, we know the result is positive */
-val _tmod_int_positive = {
+val _tmod_int_positive = pure {
   ocaml: "tmod_int",
   interpreter: "tmod_int",
   lem: "tmod_int",

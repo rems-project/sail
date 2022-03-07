@@ -295,15 +295,15 @@ let opt_ddump_tc_ast = ref false
 let opt_ddump_rewrite_ast = ref None
 let opt_dno_cast = ref false
 
-let check_ast (env : Type_check.Env.t) (ast : unit ast) : Type_check.tannot ast * Type_check.Env.t =
+let check_ast (env : Type_check.Env.t) (ast : unit ast) : Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info =
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
   Type_check.opt_check_completeness := true;
   let ast, env = Type_error.check env ast in
   Type_check.opt_check_completeness := false;
-  let _ = Effects.infer_side_effects ast in
+  let side_effects = Effects.infer_side_effects ast in
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_ast stdout ast else () in
   let () = if !opt_just_check then exit 0 else () in
-  (ast, env)
+  (ast, env, side_effects)
 
 let load_files ?check:(check=false) target options type_envs files =
   if !opt_memo_z3 then Constraint.load_digests () else ();
@@ -332,7 +332,7 @@ let load_files ?check:(check=false) target options type_envs files =
   Profile.finish "parsing" t;
 
   let t = Profile.start () in
-  let (ast, type_envs) = check_ast type_envs ast in
+  let (ast, type_envs, side_effects) = check_ast type_envs ast in
   Profile.finish "type checking" t;
 
   if !opt_memo_z3 then Constraint.save_digests () else ();
@@ -342,7 +342,7 @@ let load_files ?check:(check=false) target options type_envs files =
     | None -> List.hd files
     | Some f -> f ^ ".sail" in
 
-  (out_name, ast, type_envs)
+  (out_name, ast, type_envs, side_effects)
 
 let open_output_with_check opt_dir file_name =
   let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in
@@ -490,7 +490,7 @@ let rewrite env rewriters ast =
 
 let rewrite_ast_initial env = rewrite env [("initial", fun env ast -> Rewriter.rewrite_ast ast, env)]
 
-let rewrite_ast_target tgt env = rewrite env (Rewrites.rewrite_ast_target tgt)
+let rewrite_ast_target effect_info tgt env = rewrite env (Rewrites.rewrite_ast_target effect_info tgt)
 
 let rewrite_ast_check env = rewrite env Rewrites.rewrite_ast_check
 

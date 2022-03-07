@@ -291,7 +291,7 @@ module TypMap : sig
 end
 
 type effect
-     
+ 
 val no_effect : effect
 val monadic_effect : effect
 

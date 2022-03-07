@@ -113,11 +113,14 @@ let simple_num l n = E_aux (
   simple_annot (gen_loc l)
     (atom_typ (Nexp_aux (Nexp_constant n, gen_loc l))))
 
-(* TODO EFFECT *)
-let effectful_effs _ = true
-
-let effectful eaux = true
-let effectful_pexp pexp = true
+let effectful eaux = Ast_util.effectful (effect_of eaux)
+let effectful_pexp pexp =
+  let (pat, guard, exp, _) = destruct_pexp pexp in
+  let guard_eff = match guard with
+    | Some g -> effect_of g
+    | None -> no_effect
+  in
+  Ast_util.effectful (union_effects guard_eff (effect_of exp))
 
 let rec small (E_aux (exp,_)) = match exp with
   | E_id _
@@ -154,11 +157,8 @@ let rec lexp_is_local_intro (LEXP_aux (lexp, _)) env = match lexp with
   | LEXP_vector_range (lexp,_,_)
   | LEXP_field (lexp,_) -> lexp_is_local_intro lexp env
 
-(* TODO EFFECT *)
-let lexp_is_effectful (LEXP_aux (_, (_, annot))) = match destruct_tannot annot with
-  | Some (_, _) -> true
-  | _ -> false
-
+let lexp_is_effectful (LEXP_aux (_, (_, tannot))) = Ast_util.effectful (effect_of_annot tannot)
+ 
 let find_used_vars exp =
   (* Overapproximates the set of used identifiers, but for the use cases below
      this is acceptable. *)
@@ -2376,11 +2376,6 @@ let rewrite_ast_letbind_effects env =
     | E_internal_plet _ -> failwith "E_internal_plet should not be here yet" in
 
   let rewrite_fun _ (FD_aux (FD_function(recopt,tannotopt,funcls),fdannot) as fd) =
-    (* let propagate_funcl_effect (FCL_aux (FCL_Funcl(id, pexp), (l, a))) =
-      let pexp, eff = propagate_pexp_effect pexp in
-      FCL_aux (FCL_Funcl(id, pexp), (l, add_effect_annot a eff))
-    in
-    let funcls = List.map propagate_funcl_effect funcls in *)
     (* TODO EFFECT *)
     let effectful_vs = true in
     let effectful_funcl (FCL_aux (FCL_Funcl(_, pexp), _)) = true in
@@ -2406,7 +2401,7 @@ let rewrite_ast_letbind_effects env =
     | d -> d
   in
   rewrite_ast_base
-    {rewrite_exp = rewrite_exp
+    { rewrite_exp = rewrite_exp
     ; rewrite_pat = rewrite_pat
     ; rewrite_let = rewrite_let
     ; rewrite_lexp = rewrite_lexp
@@ -4780,6 +4775,7 @@ let if_flag_env flag f env defs =
 
 type rewriter =
   | Basic_rewriter of (Env.t -> tannot ast -> tannot ast)
+  | Effects_rewriter of (Env.t -> Effects.side_effect_info -> tannot ast -> tannot ast)
   | Checking_rewriter of (Env.t -> tannot ast -> tannot ast * Env.t)
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)
@@ -4793,7 +4789,7 @@ type rewriter_arg =
   | String_arg of string
   | Literal_arg of string
 
-let instantiate_rewrite rewriter args =
+let instantiate_rewrite rewriter effect_info args =
   let selector_function = function
     | "ocaml" -> rewrite_lit_ocaml
     | "lem" -> rewrite_lit_lem
@@ -4817,6 +4813,7 @@ let instantiate_rewrite rewriter args =
   in
   match List.fold_left instantiate rewriter args with
   | Basic_rewriter rw -> fun env defs -> rw env defs, env
+  | Effects_rewriter rw -> fun env defs -> rw env effect_info defs, env
   | Checking_rewriter rw -> rw
   | _ ->
      raise (Reporting.err_general Parse_ast.Unknown "Rewrite not fully instantiated")
@@ -4873,6 +4870,7 @@ let all_rewrites = [
     ("constant_fold", String_rewriter (fun target -> Basic_rewriter (fun _ -> Constant_fold.(rewrite_constant_function_calls no_fixed target))));
     ("split", String_rewriter (fun str -> Basic_rewriter (rewrite_split_fun_ctor_pats str)));
     ("properties", Basic_rewriter (fun _ -> Property.rewrite));
+    ("attach_effects", Effects_rewriter (fun _ -> Effects.rewrite_attach_effects));
   ]
 
 let rewrites_lem = [
@@ -4914,6 +4912,7 @@ let rewrites_lem = [
     (* early_return currently breaks the types *)
     ("recheck_defs", []);
     ("remove_blocks", []);
+    ("attach_effects", []);
     ("letbind_effects", []);
     ("remove_e_assign", []);
     ("internal_lets", []);
@@ -5052,14 +5051,14 @@ let rewrites_target tgt =
   | _ ->
      raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ ("Invalid target for rewriting: " ^ tgt))
 
-let rewrite_ast_target tgt =
+let rewrite_ast_target effect_info tgt =
   let get_rewrite name =
     match List.assoc_opt name all_rewrites with
     | Some rewrite -> rewrite
     | None ->
        Reporting.unreachable Parse_ast.Unknown __POS__ ("Attempted to execute unknown rewrite " ^ name)
   in
-  List.map (fun (name, args) -> (name, instantiate_rewrite (get_rewrite name) args)) (rewrites_target tgt)
+  List.map (fun (name, args) -> (name, instantiate_rewrite (get_rewrite name) effect_info args)) (rewrites_target tgt)
 
 let rewrite_check_annot =
   let check_annot exp =

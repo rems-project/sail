@@ -628,7 +628,7 @@ let main () =
     print_endline version
   else
     begin
-      let out_name, ast, type_envs = load_files !opt_target options Type_check.initial_env !opt_file_arguments in
+      let out_name, ast, type_envs, effect_info = load_files !opt_target options Type_check.initial_env !opt_file_arguments in
       let ast, type_envs = descatter type_envs ast in
       let ast, type_envs =
         List.fold_right (fun file (ast,_) -> Splice.splice ast file)
@@ -660,7 +660,7 @@ let main () =
       stash_pre_rewrite_info !opt_target ast type_envs;
 
       let type_envs, ast = prover_regstate !opt_target ast type_envs in
-      let ast, type_envs = match !opt_target with Some tgt -> rewrite_ast_target tgt type_envs ast | None -> ast, type_envs in
+      let ast, type_envs = match !opt_target with Some tgt -> rewrite_ast_target effect_info tgt type_envs ast | None -> ast, type_envs in
       target !opt_target out_name ast type_envs;
 
       if !Interactive.opt_interactive then

@@ -114,6 +114,8 @@ let throws = EffectSet.mem Throw
 
 let pure = EffectSet.is_empty
 
+let effectful set = not (pure set)
+         
 let has_outcome id = EffectSet.mem (Outcome id)
 
 module PC_config = struct
@@ -201,6 +203,15 @@ let can_have_direct_side_effect = function
   | DEF_internal_mutrec _ -> true
   | DEF_pragma _ -> false
 
+type side_effect_info = {
+    functions : EffectSet.t Bindings.t;
+    letbinds : EffectSet.t Bindings.t
+  }
+
+let is_function = function
+  | Callgraph.Function _ -> true
+  | _ -> false
+                      
 let infer_side_effects ast =
   let module NodeSet = Set.Make(Callgraph.Node) in
   let cg = Callgraph.graph_of_ast ast in
@@ -218,12 +229,15 @@ let infer_side_effects ast =
       )
     ) ast.defs;
 
+  let function_effects = ref Bindings.empty in
+  let letbind_effects = ref Bindings.empty in
+
   let all_nodes = Callgraph.G.nodes cg in
   let total = List.length all_nodes in
   List.iteri (fun i node ->
       Util.progress "Effects (transitive) " (string_of_int (i + 1) ^ "/" ^ string_of_int total) (i + 1) total;
       match node with
-      | Callgraph.Function id ->
+      | Callgraph.Function id | Callgraph.Letbind id ->
          let reachable = Callgraph.G.reachable (NodeSet.singleton node) NodeSet.empty cg in
          (* First, a function has any side effects it directly causes *)
          let side_effects = match Bindings.find_opt id !direct_effects with Some effs -> effs | None -> EffectSet.empty in
@@ -242,8 +256,63 @@ let infer_side_effects ast =
            |> EffectSet.of_list
            |> EffectSet.union side_effects
          in
-         ()
+         if is_function node then
+           function_effects := Bindings.add id side_effects !function_effects
+         else
+           letbind_effects := Bindings.add id side_effects !letbind_effects
       | _ -> ()
     ) all_nodes;
-  
-  Bindings.empty
+
+  {
+    functions = !function_effects;
+    letbinds = !letbind_effects
+  }
+
+let rewrite_attach_effects effect_info =
+  let rewrite_lexp_aux ((child_eff, lexp_aux), (l, tannot)) =
+    let env = env_of_tannot tannot in
+    let eff = match lexp_aux with
+      | LEXP_cast (_, id) | LEXP_id id ->
+         begin match Env.lookup_id id env with
+         | Register _ -> monadic_effect
+         | _ -> no_effect
+         end
+      | LEXP_deref _ -> monadic_effect
+      | _ -> no_effect
+    in
+    let eff = union_effects eff child_eff in
+    eff, LEXP_aux (lexp_aux, (l, add_effect_annot tannot eff))
+  in
+
+  let rewrite_e_aux ((child_eff, e_aux), (l, tannot)) =
+    let env = env_of_tannot tannot in
+    let eff = match e_aux with
+      | E_app (f, _) ->
+         begin match Bindings.find_opt f effect_info.functions with
+         | Some side_effects -> if pure side_effects then no_effect else monadic_effect
+         | None -> no_effect
+         end
+      | E_id id ->
+         begin match Env.lookup_id id env with
+         | Register _ -> monadic_effect
+         | _ -> no_effect
+         end
+      | E_throw _ -> monadic_effect
+      | E_exit _ | E_assert _ -> monadic_effect
+      (* TODO: *)
+      | E_case (exp, cases) -> monadic_effect
+      | _ -> no_effect
+    in
+    let eff = union_effects eff child_eff in
+    eff, E_aux (e_aux, (l, add_effect_annot tannot eff))
+  in
+    
+  let rw_exp =
+    fold_exp {
+        (compute_exp_alg no_effect union_effects)
+      with
+        e_aux = rewrite_e_aux;
+        lEXP_aux = rewrite_lexp_aux;
+      }
+  in
+  rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ exp -> snd (rw_exp exp)) }
