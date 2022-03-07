@@ -2377,8 +2377,8 @@ let rewrite_ast_letbind_effects env =
 
   let rewrite_fun _ (FD_aux (FD_function(recopt,tannotopt,funcls),fdannot) as fd) =
     (* TODO EFFECT *)
-    let effectful_vs = true in
-    let effectful_funcl (FCL_aux (FCL_Funcl(_, pexp), _)) = true in
+    let effectful_vs = false in
+    let effectful_funcl (FCL_aux (FCL_Funcl(_, pexp), _)) = effectful_pexp pexp in
     let newreturn = effectful_vs || List.exists effectful_funcl funcls in
     let rewrite_funcl (FCL_aux (FCL_Funcl(id,pexp),annot)) =
       let _ = reset_fresh_name_counter () in

@@ -299,8 +299,6 @@ let rewrite_attach_effects effect_info =
          end
       | E_throw _ -> monadic_effect
       | E_exit _ | E_assert _ -> monadic_effect
-      (* TODO: *)
-      | E_case (exp, cases) -> monadic_effect
       | _ -> no_effect
     in
     let eff = union_effects eff child_eff in
