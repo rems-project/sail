@@ -79,6 +79,7 @@ type side_effect =
   | Transitive
   | External
   | Undefined
+  | Scattered
   | Outcome of id
 
 let string_of_side_effect = function
@@ -89,6 +90,7 @@ let string_of_side_effect = function
   | Transitive -> "calls effectful function"
   | External -> "calls external function not marked pure"
   | Undefined -> "contains undefined literal"
+  | Scattered -> "scattered function"
   | Outcome id -> ("outcome " ^ string_of_id id)
 
 module Effect = struct
@@ -102,6 +104,7 @@ module Effect = struct
     | Transitive, Transitive -> 0
     | External, External -> 0
     | Undefined, Undefined -> 0
+    | Scattered, Scattered -> 0
     | Outcome id1, Outcome id2 -> Id.compare id1 id2
     | Throw, _ -> 1 | _, Throw -> -1
     | Exit, _ -> 1 | _, Exit -> -1
@@ -109,6 +112,7 @@ module Effect = struct
     | Transitive, _ -> 1 | _, Transitive -> -1
     | External, _ -> 1 | _, External -> -1
     | Undefined, _ -> 1 | _, Undefined -> -1
+    | Scattered, _ -> 1 | _, Scattered -> -1
     | Outcome _, _ -> 1 | _, Outcome _ -> -1
 end
 
@@ -205,6 +209,8 @@ let infer_def_direct_effects def =
      | None ->
         Reporting.unreachable l __POS__ "Empty funcls in infer_def_direct_effects"
      end
+  | DEF_scattered _ ->
+     effects := EffectSet.add Scattered !effects
   | _ -> ()
   end;
   
@@ -317,6 +323,12 @@ let check_side_effects effect_info ast =
       | _ -> ()
     ) ast.defs
 
+let copy_function_effect id_from effect_info id_to =
+  match Bindings.find_opt id_from effect_info.functions with
+  | Some eff ->
+     { effect_info with functions = Bindings.add id_to eff effect_info.functions }
+  | None -> effect_info
+  
 let rewrite_attach_effects effect_info =
   let rewrite_lexp_aux ((child_eff, lexp_aux), (l, tannot)) =
     let env = env_of_tannot tannot in

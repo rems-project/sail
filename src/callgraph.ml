@@ -363,6 +363,12 @@ let add_def_to_graph graph def =
          | IS_aux (IS_typ (_, typ), _) ->
             IdSet.iter (fun typ_id -> graph := G.add_edge (Function id) (Type typ_id) !graph) (typ_ids typ)
        ) substs
+  | DEF_scattered (SD_aux (sdef, _)) ->
+     begin match sdef with
+     | SD_funcl (FCL_aux (FCL_Funcl (id, pexp), _)) ->
+        ignore (rewrite_pexp (rewriters (Function id)) pexp)
+     | _ -> ()
+     end
   | _ -> ()
   end;
   !graph

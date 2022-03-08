@@ -120,6 +120,8 @@ val infer_side_effects : Type_check.tannot ast -> side_effect_info
    violated. Currently these are that termination measures and
    top-level letbindings must be pure. *)
 val check_side_effects : side_effect_info -> Type_check.tannot ast -> unit
+
+val copy_function_effect : id -> side_effect_info -> id -> side_effect_info
   
 (** Previous code mostly assumes that side effect info is attached to
    nodes in the AST. To keep this code working, this rewrite pass

@@ -78,26 +78,43 @@ val opt_auto_mono : bool ref
 val opt_dall_split_errors : bool ref
 val opt_dmono_continue : bool ref
 
-(* Generate a fresh id with the given prefix *)
+(** Warn about matches where we add a default case for Coq because
+   they're not exhaustive *)
+val opt_coq_warn_nonexhaustive : bool ref
+
+(** Output each rewrite step (as produced by the rewrite function) to
+   a file for debugging *)
+val opt_ddump_rewrite_ast : ((string * int) option) ref
+  
+(** Generate a fresh id with the given prefix *)
 val fresh_id : string -> l -> id
 
-(* Move loop termination measures into loop AST nodes *)
+(** Move loop termination measures into loop AST nodes *)
 val move_loop_measures : 'a ast -> 'a ast
 
-(* Re-write undefined to functions created by -undefined_gen flag *)
+(** Re-write undefined to functions created by -undefined_gen flag *)
 val rewrite_undefined : bool -> Env.t -> tannot ast -> tannot ast
 
-(* Perform rewrites to create an AST supported for a specific target *)
-val rewrite_ast_target : Effects.side_effect_info -> string -> (string * (Env.t -> tannot ast -> tannot ast * Env.t)) list
-
 type rewriter =
-  | Basic_rewriter of (Env.t -> tannot ast -> tannot ast)
-  | Effects_rewriter of (Env.t -> Effects.side_effect_info -> tannot ast -> tannot ast)
-  | Checking_rewriter of (Env.t -> tannot ast -> tannot ast * Env.t)
+  | Base_rewriter of (Effects.side_effect_info -> Env.t -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t)
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
+  
+val all_rewriters : (string * rewriter) list
+  
+type rewrite_sequence = (string * (Effects.side_effect_info -> Env.t -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t)) list
 
+(** Get the list of instantiated rewrites for a defined target *)
+val rewrites_for_target : string -> rewrite_sequence
+
+(** This is a special rewriter pass that checks AST invariants without
+   actually doing any re-writing *)   
+val rewrites_check : rewrite_sequence
+
+(** Apply a sequence of rewrites to an AST *)
+val rewrite : Effects.side_effect_info -> Env.t -> rewrite_sequence -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t
+  
 val rewrite_lit_ocaml : lit -> bool
 val rewrite_lit_lem : lit -> bool
 
@@ -108,15 +125,5 @@ type rewriter_arg =
   | Bool_arg of bool
   | String_arg of string
   | Literal_arg of string
-
-val all_rewrites : (string * rewriter) list
-
-(* Warn about matches where we add a default case for Coq because they're not
-   exhaustive *)
-val opt_coq_warn_nonexhaustive : bool ref
-
-(* This is a special rewriter pass that checks AST invariants without
-   actually doing any re-writing *)
-val rewrite_ast_check : (string * (Env.t -> tannot ast -> tannot ast * Env.t)) list
 
 val simple_typ : typ -> typ

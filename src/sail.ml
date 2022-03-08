@@ -413,7 +413,7 @@ let options = Arg.align ([
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
   ( "-ddump_rewrite_ast",
-    Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0); Specialize.opt_ddump_spec_ast := Some (l, 0)),
+    Arg.String (fun l -> Rewrites.opt_ddump_rewrite_ast := Some (l, 0); Specialize.opt_ddump_spec_ast := Some (l, 0)),
     "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
   ( "-ddump_smt_graphs",
     Arg.Set Jib_smt.opt_debug_graphs,
@@ -629,7 +629,7 @@ let main () =
   else
     begin
       let out_name, ast, type_envs, effect_info = load_files !opt_target options Type_check.initial_env !opt_file_arguments in
-      let ast, type_envs = descatter type_envs ast in
+      let ast, type_envs = descatter effect_info type_envs ast in
       let ast, type_envs =
         List.fold_right (fun file (ast,_) -> Splice.splice ast file)
           (!opt_splice) (ast, type_envs)
@@ -654,13 +654,16 @@ let main () =
       end;
 
       if !opt_sanity then
-        ignore (rewrite_ast_check type_envs ast)
+        ignore (rewrite_ast_check effect_info type_envs ast)
       else ();
 
       stash_pre_rewrite_info !opt_target ast type_envs;
 
       let type_envs, ast = prover_regstate !opt_target ast type_envs in
-      let ast, type_envs = match !opt_target with Some tgt -> rewrite_ast_target effect_info tgt type_envs ast | None -> ast, type_envs in
+      let ast, effect_info, type_envs = match !opt_target with
+        | Some tgt -> Rewrites.rewrite effect_info type_envs (Rewrites.rewrites_for_target tgt) ast
+        | None -> ast, effect_info, type_envs
+      in
       target !opt_target out_name ast effect_info type_envs;
 
       if !Interactive.opt_interactive then

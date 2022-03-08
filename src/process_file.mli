@@ -77,9 +77,8 @@ val add_symbol : string -> unit
 
 val preprocess : string option -> (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.def list -> Parse_ast.def list
 val check_ast : Type_check.Env.t -> unit ast -> Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info
-val rewrite_ast_initial : Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Type_check.Env.t
-val rewrite_ast_target : Effects.side_effect_info -> string -> Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Type_check.Env.t
-val rewrite_ast_check : Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Type_check.Env.t
+val rewrite_ast_initial : Effects.side_effect_info -> Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Effects.side_effect_info * Type_check.Env.t
+val rewrite_ast_check : Effects.side_effect_info -> Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Effects.side_effect_info * Type_check.Env.t
 
 val opt_file_out : string option ref
 val opt_memo_z3 : bool ref
@@ -87,7 +86,6 @@ val opt_just_check : bool ref
 val opt_reformat : string option ref
 val opt_ddump_initial_ast : bool ref
 val opt_ddump_tc_ast : bool ref
-val opt_ddump_rewrite_ast : ((string * int) option) ref
 val opt_dno_cast : bool ref
 
 val opt_lem_output_dir : (string option) ref
@@ -97,8 +95,8 @@ val opt_alt_modules_coq : (string list) ref
 val opt_alt_modules2_coq : (string list) ref
 
 type out_type =
-  | Lem_out of string list (* If present, the strings are files to open in the lem backend*)
-  | Coq_out of string list (* If present, the strings are files to open in the coq backend*)
+  | Lem_out of string list (* If present, the strings are files to open in the lem backend *)
+  | Coq_out of string list (* If present, the strings are files to open in the coq backend *)
 
 val output :
   string -> (* The path to the library *)
@@ -106,12 +104,6 @@ val output :
   (string * Effects.side_effect_info * Type_check.Env.t * Type_check.tannot ast) list -> (*File names paired with definitions *)
   unit
 
-(** [always_replace_files] determines whether Sail only updates modified files.
-    If it is set to [true], all output files are written, regardless of whether the
-    files existed before. If it is set to [false] and an output file already exists,
-    the output file is only updated, if its content really changes. *)
-val always_replace_files : bool ref
-
 val load_files : ?check:bool -> string option -> (Arg.key * Arg.spec * Arg.doc) list -> Type_check.Env.t -> string list -> (string * Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info)
 
-val descatter : Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Type_check.Env.t
+val descatter : Effects.side_effect_info -> Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Type_check.Env.t

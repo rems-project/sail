@@ -1385,7 +1385,7 @@ let doc_fun_body_lem ctxt exp =
   then align (string "catch_early_return" ^//^ parens (doc_exp))
   else doc_exp
 
-let doc_funcl_lem type_env (FCL_aux(FCL_Funcl(id, pexp), ((l, _) as annot))) =
+let doc_funcl_lem monadic type_env (FCL_aux(FCL_Funcl(id, pexp), ((l, _) as annot))) =
   let (tq, typ) =
     try Env.get_val_spec_orig id type_env with
     | _ -> raise (unreachable l __POS__ ("Could not get val-spec of " ^ string_of_id id))
@@ -1401,6 +1401,7 @@ let doc_funcl_lem type_env (FCL_aux(FCL_Funcl(id, pexp), ((l, _) as annot))) =
       top_env = type_env } in
   let pats, bind = untuple_args_pat pat arg_typs in
   let patspp = separate_map space (doc_pat_lem ctxt true) pats in
+  let wrap_monadic = if monadic && not (effectful (effect_of exp)) then (fun doc -> string "return" ^^ space ^^ parens doc) else (fun doc -> doc) in
   let _ = match guard with
     | None -> ()
     | _ ->
@@ -1408,7 +1409,7 @@ let doc_funcl_lem type_env (FCL_aux(FCL_Funcl(id, pexp), ((l, _) as annot))) =
                "guarded pattern expression should have been rewritten before pretty-printing") in
   group (prefix 3 1
     (separate space [doc_id_lem id; patspp; equals])
-    (doc_fun_body_lem ctxt (bind exp)))
+    (wrap_monadic (doc_fun_body_lem ctxt (bind exp))))
 
 let get_id = function
   | [] -> failwith "FD_function with empty list"
@@ -1419,34 +1420,34 @@ module StringSet = Set.Make(String)
 (* Strictly speaking, Lem doesn't support multiple clauses for a single function
    joined by "and", although it has worked for Isabelle before.  However, all
    the funcls should have been merged by the merge_funcls rewrite now. *)   
-let doc_fundef_rhs_lem type_env (FD_aux(FD_function(r, typa, funcls),fannot) as fd) =
-  separate_map (hardline ^^ string "and ") (doc_funcl_lem type_env) funcls
+let doc_fundef_rhs_lem monadic env (FD_aux (FD_function (r, typa, funcls), fannot) as fd) =
+  separate_map (hardline ^^ string "and ") (doc_funcl_lem monadic env) funcls
 
-let doc_mutrec_lem type_env = function
-  | [] -> failwith "DEF_internal_mutrec with empty function list"
+let doc_mutrec_lem env = function
+  | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Empty internal_mutrec"
   | fundefs ->
      string "let rec " ^^
-     separate_map (hardline ^^ string "and ") (doc_fundef_rhs_lem type_env) fundefs
+     separate_map (hardline ^^ string "and ") (doc_fundef_rhs_lem false env) fundefs
 
-let rec doc_fundef_lem type_env (FD_aux(FD_function(r, typa, fcls),fannot) as fd) =
+let rec doc_fundef_lem effect_info env (FD_aux (FD_function (r, typa, fcls), fannot) as fd) =
   match fcls with
-  | [] -> failwith "FD_function with empty function list"
-  | FCL_aux (FCL_Funcl(id, pexp),annot) :: _
-     when not (Env.is_extern id type_env "lem") ->
-    (* Output "rec" modifier if function calls itself.  Mutually recursive
+  | [] -> Reporting.unreachable (fst fannot) __POS__ "FD_function with empty function list"
+  | FCL_aux (FCL_Funcl (id, pexp), annot) :: _
+       when not (Env.is_extern id env "lem") ->
+     (* A function is required to be monadic if Sail thinks it is impure *)
+     let required_monadic = not (Effects.function_is_pure id effect_info) in
+     (* Output "rec" modifier if function calls itself.  Mutually recursive
        functions are handled separately by doc_mutrec_lem. *)
-    let is_funcl_rec =
-      fold_pexp
-        { (pure_exp_alg false (||)) with
-          e_app = (fun (id', args) -> List.fold_left (||) (Id.compare id id' = 0) args);
-          e_app_infix = (fun (l, id', r) -> l || (Id.compare id id' = 0) || r) }
-        pexp
-    in
-    let doc_rec = if is_funcl_rec then [string "rec"] else [] in
-    separate space ([string "let"] @ doc_rec @ [doc_fundef_rhs_lem type_env fd])
+     let is_funcl_rec =
+       fold_pexp
+         { (pure_exp_alg false (||)) with
+           e_app = (fun (id', args) -> List.fold_left (||) (Id.compare id id' = 0) args);
+           e_app_infix = (fun (l, id', r) -> l || (Id.compare id id' = 0) || r) }
+         pexp
+     in
+     let doc_rec = if is_funcl_rec then [string "rec"] else [] in
+     separate space ([string "let"] @ doc_rec @ [doc_fundef_rhs_lem required_monadic env fd])
   | _ -> empty
-
-
 
 let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
   match reg with
@@ -1543,7 +1544,7 @@ let rec doc_def_lem effect_info type_env def =
   | DEF_reg_dec dec -> group (doc_dec_lem dec)
 
   | DEF_default df -> empty
-  | DEF_fundef fdef -> group (doc_fundef_lem type_env fdef) ^/^ hardline
+  | DEF_fundef fdef -> group (doc_fundef_lem effect_info type_env fdef) ^/^ hardline
   | DEF_internal_mutrec fundefs -> doc_mutrec_lem type_env fundefs ^/^ hardline
   | DEF_val (LB_aux (LB_val (pat, _), _) as lbind) ->
      group (doc_let_lem empty_ctxt lbind) ^/^ hardline

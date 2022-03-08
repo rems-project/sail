@@ -553,3 +553,26 @@ let progress prefix msg n total =
     flush stderr
   else
     ()
+
+let open_output_with_check opt_dir file_name =
+  let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in
+  let o' = Format.formatter_of_out_channel o in
+  (o', (o, temp_file_name, opt_dir, file_name))
+
+let open_output_with_check_unformatted opt_dir file_name =
+  let (temp_file_name, o) = Filename.open_temp_file "ll_temp" "" in
+  (o, temp_file_name, opt_dir, file_name)
+
+let always_replace_files = ref true
+
+let close_output_with_check (o, temp_file_name, opt_dir, file_name) =
+  let _ = close_out o in
+  let file_name = match opt_dir with
+                  | None     -> file_name
+                  | Some dir -> if Sys.file_exists dir then ()
+                                else Unix.mkdir dir 0o775;
+                                Filename.concat dir file_name in
+  let do_replace = !always_replace_files || (not (same_content_files temp_file_name file_name)) in
+  let _ = if (not do_replace) then Sys.remove temp_file_name
+          else move_file temp_file_name file_name in
+  ()

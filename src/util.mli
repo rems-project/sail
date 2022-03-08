@@ -299,3 +299,15 @@ val log_line : string -> int -> string -> string
 val header : string -> int -> string
 
 val progress : string -> string -> int -> int -> unit
+
+(** [always_replace_files] determines whether Sail only updates modified files.
+    If it is set to [true], all output files are written, regardless of whether the
+    files existed before. If it is set to [false] and an output file already exists,
+    the output file is only updated, if its content really changes. *)
+val always_replace_files : bool ref
+ 
+val open_output_with_check : string option -> string -> (Format.formatter * (out_channel * string * string option * string))
+
+val open_output_with_check_unformatted : string option -> string -> (out_channel * string * string option * string)
+
+val close_output_with_check : (out_channel * string * string option * string) -> unit

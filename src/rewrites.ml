@@ -1727,7 +1727,7 @@ let pat_var (P_aux (paux, a)) =
      Instr : {'r, 'r in {32, 64}. (int('x), bits('r))}
    }
  *)
-let rewrite_split_fun_ctor_pats fun_name env ast =
+let rewrite_split_fun_ctor_pats fun_name effect_info env ast =
   let rewrite_fundef typquant (FD_aux (FD_function (r_o, t_o, clauses), ((l, _) as fdannot))) =
     let rec_clauses, clauses = List.partition is_funcl_rec clauses in
     let clauses, aux_funs =
@@ -1820,19 +1820,24 @@ let rewrite_split_fun_ctor_pats fun_name env ast =
       [DEF_spec val_spec; DEF_fundef fundef] @ defs
     in
     Bindings.fold add_aux_def aux_funs
-      [DEF_fundef (FD_aux (FD_function (r_o, t_o, rec_clauses @ clauses), fdannot))]
+      [DEF_fundef (FD_aux (FD_function (r_o, t_o, rec_clauses @ clauses), fdannot))],
+    List.map fst (Bindings.bindings aux_funs)
   in
   let typquant = List.fold_left (fun tq def -> match def with
     | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (tq, _), _), id, _, _), _))
       when string_of_id id = fun_name -> tq
     | _ -> tq) (mk_typquant []) ast.defs
   in
-  let defs = List.fold_right (fun def defs -> match def with
-    | DEF_fundef fundef when string_of_id (id_of_fundef fundef) = fun_name ->
-       rewrite_fundef typquant fundef @ defs
-    | _ -> def :: defs) ast.defs []
+  let defs, new_effect_info =
+    List.fold_right (fun def (defs, effect_info) ->
+        match def with
+        | DEF_fundef fundef when string_of_id (id_of_fundef fundef) = fun_name ->
+           let new_defs, new_ids = rewrite_fundef typquant fundef in
+           (new_defs @ defs, List.fold_left (Effects.copy_function_effect (id_of_fundef fundef)) effect_info new_ids)
+        | _ -> (def :: defs, effect_info)
+      ) ast.defs ([], effect_info)
   in
-  { ast with defs = defs }
+  { ast with defs = defs }, new_effect_info, env
 
 let rewrite_type_union_typs rw_typ (Tu_aux (Tu_ty_id (typ, id), annot)) =
   Tu_aux (Tu_ty_id (rw_typ typ, id), annot)
@@ -4752,35 +4757,27 @@ let monomorphise target env defs =
     !opt_mono_split
     defs
 
-let if_mono f env defs =
+let if_mono f effect_info env ast =
   match !opt_mono_split, !opt_auto_mono with
-  | [], false -> defs
-  | _, _ -> f env defs
-
-let if_mono_env f env defs =
-  match !opt_mono_split, !opt_auto_mono with
-  | [], false -> defs, env
-  | _, _ -> f env defs
+  | [], false -> ast, effect_info, env
+  | _, _ -> f effect_info env ast
 
 (* Also turn mwords stages on when we're just trying out mono *)
-let if_mwords f env defs =
-  if !Pretty_print_lem.opt_mwords then f env defs else if_mono f env defs
-let if_mwords_env f env defs =
-  if !Pretty_print_lem.opt_mwords then f env defs else if_mono_env f env defs
+let if_mwords f effect_info env ast =
+  if !Pretty_print_lem.opt_mwords then f effect_info env ast else if_mono f effect_info env ast
 
-let if_flag flag f env defs =
-  if !flag then f env defs else defs
-let if_flag_env flag f env defs =
-  if !flag then f env defs else defs, env
+let if_flag flag f effect_info env ast =
+  if !flag then f effect_info env ast else (ast, effect_info, env)
 
 type rewriter =
-  | Basic_rewriter of (Env.t -> tannot ast -> tannot ast)
-  | Effects_rewriter of (Env.t -> Effects.side_effect_info -> tannot ast -> tannot ast)
-  | Checking_rewriter of (Env.t -> tannot ast -> tannot ast * Env.t)
+  | Base_rewriter of (Effects.side_effect_info -> Env.t -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t)
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
 
+let basic_rewriter f = Base_rewriter (fun effect_info env ast -> f env ast, effect_info, env)
+let checking_rewriter f = Base_rewriter (fun effect_info env ast -> let ast, env = f env ast in ast, effect_info, env)
+                      
 type rewriter_arg =
   | If_mono_arg
   | If_mwords_arg
@@ -4789,7 +4786,7 @@ type rewriter_arg =
   | String_arg of string
   | Literal_arg of string
 
-let instantiate_rewrite rewriter effect_info args =
+let instantiate_rewriter rewriter args =
   let selector_function = function
     | "ocaml" -> rewrite_lit_ocaml
     | "lem" -> rewrite_lit_lem
@@ -4799,78 +4796,73 @@ let instantiate_rewrite rewriter effect_info args =
   in
   let instantiate rewriter arg =
     match rewriter, arg with
-    | Basic_rewriter rw, If_mono_arg -> Basic_rewriter (if_mono rw)
-    | Basic_rewriter rw, If_mwords_arg -> Basic_rewriter (if_mwords rw)
-    | Basic_rewriter rw, If_flag flag -> Basic_rewriter (if_flag flag rw)
-    | Checking_rewriter rw, If_mono_arg -> Checking_rewriter (if_mono_env rw)
-    | Checking_rewriter rw, If_mwords_arg -> Checking_rewriter (if_mwords_env rw)
-    | Checking_rewriter rw, If_flag flag -> Checking_rewriter (if_flag_env flag rw)
+    | Base_rewriter rw, If_mono_arg -> Base_rewriter (if_mono rw)
+    | Base_rewriter rw, If_mwords_arg -> Base_rewriter (if_mwords rw)
+    | Base_rewriter rw, If_flag flag -> Base_rewriter (if_flag flag rw)
     | Bool_rewriter rw, Bool_arg b -> rw b
     | String_rewriter rw, String_arg str -> rw str
     | Literal_rewriter rw, Literal_arg selector -> rw (selector_function selector)
     | _, _ ->
-       raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ "Invalid rewrite argument")
+       Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid rewrite argument"
   in
   match List.fold_left instantiate rewriter args with
-  | Basic_rewriter rw -> fun env defs -> rw env defs, env
-  | Effects_rewriter rw -> fun env defs -> rw env effect_info defs, env
-  | Checking_rewriter rw -> rw
+  | Base_rewriter rw -> rw
   | _ ->
-     raise (Reporting.err_general Parse_ast.Unknown "Rewrite not fully instantiated")
+     Reporting.unreachable Parse_ast.Unknown __POS__ "Rewrite not fully instantiated"
 
-let all_rewrites = [
-    ("recheck_defs", Checking_rewriter recheck_defs);
-    ("optimize_recheck_defs", Basic_rewriter (fun _ -> Optimize.recheck));
-    ("realise_mappings", Basic_rewriter rewrite_ast_realise_mappings);
-    ("remove_duplicate_valspecs", Basic_rewriter remove_duplicate_valspecs);
-    ("toplevel_string_append", Basic_rewriter rewrite_ast_toplevel_string_append);
-    ("pat_string_append", Basic_rewriter rewrite_ast_pat_string_append);
-    ("mapping_builtins", Basic_rewriter rewrite_ast_mapping_patterns);
-    ("truncate_hex_literals", Basic_rewriter rewrite_truncate_hex_literals);
-    ("mono_rewrites", Basic_rewriter mono_rewrites);
-    ("toplevel_nexps", Basic_rewriter rewrite_toplevel_nexps);
-    ("toplevel_consts", String_rewriter (fun target -> Basic_rewriter (rewrite_toplevel_consts target)));
-    ("monomorphise", String_rewriter (fun target -> Basic_rewriter (monomorphise target)));
-    ("atoms_to_singletons", String_rewriter (fun target -> (Basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons target))));
-    ("add_bitvector_casts", Basic_rewriter Monomorphise.add_bitvector_casts);
-    ("remove_impossible_int_cases", Basic_rewriter Constant_propagation.remove_impossible_int_cases);
-    ("const_prop_mutrec", String_rewriter (fun target -> Basic_rewriter (Constant_propagation_mutrec.rewrite_ast target)));
-    ("make_cases_exhaustive", Basic_rewriter MakeExhaustive.rewrite);
-    ("undefined", Bool_rewriter (fun b -> Basic_rewriter (rewrite_undefined_if_gen b)));
-    ("vector_string_pats_to_bit_list", Basic_rewriter rewrite_ast_vector_string_pats_to_bit_list);
-    ("remove_not_pats", Basic_rewriter rewrite_ast_not_pats);
-    ("pattern_literals", Literal_rewriter (fun f -> Basic_rewriter (rewrite_ast_pat_lits f)));
-    ("vector_concat_assignments", Basic_rewriter rewrite_vector_concat_assignments);
-    ("tuple_assignments", Basic_rewriter rewrite_tuple_assignments);
-    ("simple_assignments", Basic_rewriter (rewrite_simple_assignments false));
-    ("simple_struct_assignments", Basic_rewriter (rewrite_simple_assignments true));
-    ("remove_vector_concat", Basic_rewriter rewrite_ast_remove_vector_concat);
-    ("remove_bitvector_pats", Basic_rewriter rewrite_ast_remove_bitvector_pats);
-    ("remove_numeral_pats", Basic_rewriter rewrite_ast_remove_numeral_pats);
-    ("guarded_pats", Basic_rewriter rewrite_ast_guarded_pats);
-    ("bit_lists_to_lits", Basic_rewriter rewrite_bit_lists_to_lits);
-    ("exp_lift_assign", Basic_rewriter rewrite_ast_exp_lift_assign);
-    ("early_return", Basic_rewriter rewrite_ast_early_return);
-    ("nexp_ids", Basic_rewriter rewrite_ast_nexp_ids);
-    ("remove_blocks", Basic_rewriter rewrite_ast_remove_blocks);
-    ("letbind_effects", Basic_rewriter rewrite_ast_letbind_effects);
-    ("remove_e_assign", Basic_rewriter rewrite_ast_remove_e_assign);
-    ("internal_lets", Basic_rewriter rewrite_ast_internal_lets);
-    ("remove_superfluous_letbinds", Basic_rewriter rewrite_ast_remove_superfluous_letbinds);
-    ("remove_superfluous_returns", Basic_rewriter rewrite_ast_remove_superfluous_returns);
-    ("merge_function_clauses", Basic_rewriter merge_funcls);
-    ("minimise_recursive_functions", Basic_rewriter minimise_recursive_functions);
-    ("move_termination_measures", Basic_rewriter move_termination_measures);
-    ("rewrite_explicit_measure", Basic_rewriter rewrite_explicit_measure);
-    ("rewrite_loops_with_escape_effect", Basic_rewriter rewrite_loops_with_escape_effect);
-    ("simple_types", Basic_rewriter rewrite_simple_types);
-    ("overload_cast", Basic_rewriter rewrite_overload_cast);
-    ("instantiate_outcomes", String_rewriter (fun target -> Basic_rewriter (fun _ -> Outcome_rewrites.instantiate target)));
-    ("top_sort_defs", Basic_rewriter (fun _ -> top_sort_defs));
-    ("constant_fold", String_rewriter (fun target -> Basic_rewriter (fun _ -> Constant_fold.(rewrite_constant_function_calls no_fixed target))));
-    ("split", String_rewriter (fun str -> Basic_rewriter (rewrite_split_fun_ctor_pats str)));
-    ("properties", Basic_rewriter (fun _ -> Property.rewrite));
-    ("attach_effects", Effects_rewriter (fun _ -> Effects.rewrite_attach_effects));
+let all_rewriters = [
+    ("recheck_defs", checking_rewriter recheck_defs);
+    ("optimize_recheck_defs", basic_rewriter (fun _ -> Optimize.recheck));
+    ("realise_mappings", basic_rewriter rewrite_ast_realise_mappings);
+    ("remove_duplicate_valspecs", basic_rewriter remove_duplicate_valspecs);
+    ("toplevel_string_append", basic_rewriter rewrite_ast_toplevel_string_append);
+    ("pat_string_append", basic_rewriter rewrite_ast_pat_string_append);
+    ("mapping_builtins", basic_rewriter rewrite_ast_mapping_patterns);
+    ("truncate_hex_literals", basic_rewriter rewrite_truncate_hex_literals);
+    ("mono_rewrites", basic_rewriter mono_rewrites);
+    ("toplevel_nexps", basic_rewriter rewrite_toplevel_nexps);
+    ("toplevel_consts", String_rewriter (fun target -> basic_rewriter (rewrite_toplevel_consts target)));
+    ("monomorphise", String_rewriter (fun target -> basic_rewriter (monomorphise target)));
+    ("atoms_to_singletons", String_rewriter (fun target -> (basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons target))));
+    ("add_bitvector_casts", basic_rewriter Monomorphise.add_bitvector_casts);
+    ("remove_impossible_int_cases", basic_rewriter Constant_propagation.remove_impossible_int_cases);
+    ("const_prop_mutrec", String_rewriter (fun target -> basic_rewriter (Constant_propagation_mutrec.rewrite_ast target)));
+    ("make_cases_exhaustive", basic_rewriter MakeExhaustive.rewrite);
+    ("undefined", Bool_rewriter (fun b -> basic_rewriter (rewrite_undefined_if_gen b)));
+    ("vector_string_pats_to_bit_list", basic_rewriter rewrite_ast_vector_string_pats_to_bit_list);
+    ("remove_not_pats", basic_rewriter rewrite_ast_not_pats);
+    ("pattern_literals", Literal_rewriter (fun f -> basic_rewriter (rewrite_ast_pat_lits f)));
+    ("vector_concat_assignments", basic_rewriter rewrite_vector_concat_assignments);
+    ("tuple_assignments", basic_rewriter rewrite_tuple_assignments);
+    ("simple_assignments", basic_rewriter (rewrite_simple_assignments false));
+    ("simple_struct_assignments", basic_rewriter (rewrite_simple_assignments true));
+    ("remove_vector_concat", basic_rewriter rewrite_ast_remove_vector_concat);
+    ("remove_bitvector_pats", basic_rewriter rewrite_ast_remove_bitvector_pats);
+    ("remove_numeral_pats", basic_rewriter rewrite_ast_remove_numeral_pats);
+    ("guarded_pats", basic_rewriter rewrite_ast_guarded_pats);
+    ("bit_lists_to_lits", basic_rewriter rewrite_bit_lists_to_lits);
+    ("exp_lift_assign", basic_rewriter rewrite_ast_exp_lift_assign);
+    ("early_return", basic_rewriter rewrite_ast_early_return);
+    ("nexp_ids", basic_rewriter rewrite_ast_nexp_ids);
+    ("remove_blocks", basic_rewriter rewrite_ast_remove_blocks);
+    ("letbind_effects", basic_rewriter rewrite_ast_letbind_effects);
+    ("remove_e_assign", basic_rewriter rewrite_ast_remove_e_assign);
+    ("internal_lets", basic_rewriter rewrite_ast_internal_lets);
+    ("remove_superfluous_letbinds", basic_rewriter rewrite_ast_remove_superfluous_letbinds);
+    ("remove_superfluous_returns", basic_rewriter rewrite_ast_remove_superfluous_returns);
+    ("merge_function_clauses", basic_rewriter merge_funcls);
+    ("minimise_recursive_functions", basic_rewriter minimise_recursive_functions);
+    ("move_termination_measures", basic_rewriter move_termination_measures);
+    ("rewrite_explicit_measure", basic_rewriter rewrite_explicit_measure);
+    ("rewrite_loops_with_escape_effect", basic_rewriter rewrite_loops_with_escape_effect);
+    ("simple_types", basic_rewriter rewrite_simple_types);
+    ("overload_cast", basic_rewriter rewrite_overload_cast);
+    ("instantiate_outcomes", String_rewriter (fun target -> basic_rewriter (fun _ -> Outcome_rewrites.instantiate target)));
+    ("top_sort_defs", basic_rewriter (fun _ -> top_sort_defs));
+    ("constant_fold", String_rewriter (fun target -> basic_rewriter (fun _ -> Constant_fold.(rewrite_constant_function_calls no_fixed target))));
+    ("split", String_rewriter (fun str -> Base_rewriter (rewrite_split_fun_ctor_pats str)));
+    ("properties", basic_rewriter (fun _ -> Property.rewrite));
+    ("attach_effects", Base_rewriter (fun effect_info env ast -> Effects.rewrite_attach_effects effect_info ast, effect_info, env));
   ]
 
 let rewrites_lem = [
@@ -5053,15 +5045,43 @@ let rewrites_target tgt =
   | _ ->
      raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ ("Invalid target for rewriting: " ^ tgt))
 
-let rewrite_ast_target effect_info tgt =
-  let get_rewrite name =
-    match List.assoc_opt name all_rewrites with
+type rewrite_sequence = (string * (Effects.side_effect_info -> Env.t -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t)) list
+    
+let rewrites_for_target tgt =
+  let get_rewriter name =
+    match List.assoc_opt name all_rewriters with
     | Some rewrite -> rewrite
     | None ->
        Reporting.unreachable Parse_ast.Unknown __POS__ ("Attempted to execute unknown rewrite " ^ name)
   in
-  List.map (fun (name, args) -> (name, instantiate_rewrite (get_rewrite name) effect_info args)) (rewrites_target tgt)
+  List.map (fun (name, args) -> (name, instantiate_rewriter (get_rewriter name) args)) (rewrites_target tgt)
 
+let opt_ddump_rewrite_ast = ref None
+  
+let rewrite_step n total (ast, effect_info, env) (name, rewriter) =
+  let t = Profile.start () in
+  let ast, effect_info, env = rewriter effect_info env ast in
+  Profile.finish ("rewrite " ^ name) t;
+
+  begin match !opt_ddump_rewrite_ast with
+  | Some (f, i) ->
+     let filename = f ^ "_rewrite_" ^ string_of_int i ^ "_" ^ name ^ ".sail" in
+     let ((ot,_,_,_) as ext_ot) = Util.open_output_with_check_unformatted None filename in
+     Pretty_print_sail.pp_ast ot ast;
+     Util.close_output_with_check ext_ot;
+     opt_ddump_rewrite_ast := Some (f, i + 1)
+  | _ -> ()
+  end;
+  Util.progress "Rewrite " name n total;
+
+  ast, effect_info, env
+
+let rewrite effect_info env rewriters ast =
+  let total = List.length rewriters in
+  try snd (List.fold_left (fun (n, astenv) rw -> n + 1, rewrite_step n total astenv rw) (1, (ast, effect_info, env)) rewriters) with
+  | Type_check.Type_error (_, l, err) ->
+     raise (Reporting.err_typ l (Type_error.string_of_type_error err))
+  
 let rewrite_check_annot =
   let check_annot exp =
     try
@@ -5089,6 +5109,6 @@ let rewrite_check_annot =
   rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp);
                                           rewrite_pat = (fun _ -> check_pat) }
 
-let rewrite_ast_check = [
-  ("check_annotations", fun env defs -> rewrite_check_annot defs, env);
+let rewrites_check = [
+    ("check_annotations", fun effect_info env defs -> rewrite_check_annot defs, effect_info, env);
   ]

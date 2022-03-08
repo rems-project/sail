@@ -1057,6 +1057,12 @@ let id_of_val_spec (VS_aux (VS_val_spec (_, id, _, _), _)) = id
 
 let id_of_dec_spec (DEC_aux (DEC_reg (_, id, _), _)) = id
 
+let id_of_scattered (SD_aux (sdef, _)) =
+  match sdef with
+  | SD_function (_, _, id)  | SD_funcl (FCL_aux (FCL_Funcl (id, _), _)) | SD_end id
+    | SD_variant (id, _) | SD_unioncl (id, _)
+    | SD_mapping (id, _) | SD_mapcl (id, _) -> id
+
 let ids_of_def = function
   | DEF_type td -> IdSet.singleton (id_of_type_def td)
   | DEF_fundef fd -> IdSet.singleton (id_of_fundef fd)
@@ -1064,6 +1070,7 @@ let ids_of_def = function
   | DEF_reg_dec (DEC_aux (DEC_reg (_, id, _), _)) -> IdSet.singleton id
   | DEF_spec vs -> IdSet.singleton (id_of_val_spec vs)
   | DEF_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
+  | DEF_scattered sdef -> IdSet.singleton (id_of_scattered sdef)
   | _ -> IdSet.empty
 let ids_of_defs defs =
   List.fold_left IdSet.union IdSet.empty (List.map ids_of_def defs)

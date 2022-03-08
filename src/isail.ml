@@ -420,9 +420,7 @@ let rec describe_rewrite =
   | String_rewriter rw -> "<string>" :: describe_rewrite (rw "")
   | Bool_rewriter rw -> "<bool>" :: describe_rewrite (rw false)
   | Literal_rewriter rw -> "(ocaml|lem|all)" :: describe_rewrite (rw (fun _ -> true))
-  | Basic_rewriter _
-  | Effects_rewriter _
-  | Checking_rewriter _ -> []
+  | Base_rewriter _ -> []
 
 type session = {
     id : string;
@@ -578,7 +576,7 @@ let handle_input' input =
            let (_, ast, env, effect_info) = Process_file.load_files !opt_target options !Interactive.env files in
            let ast, env =
              if !Interactive.opt_auto_interpreter_rewrites then
-               Process_file.rewrite_ast_target effect_info "interpreter" env ast
+               ast, env (* Process_file.rewrite_ast_target effect_info "interpreter" env ast *)
              else
                ast, env
            in
@@ -624,14 +622,14 @@ let handle_input' input =
            let print_rewrite (name, rw) =
              print_endline (name ^ " " ^ Util.(String.concat " " (describe_rewrite rw) |> yellow |> clear))
            in
-           List.sort (fun a b -> String.compare (fst a) (fst b)) Rewrites.all_rewrites
+           List.sort (fun a b -> String.compare (fst a) (fst b)) Rewrites.all_rewriters
            |> List.iter print_rewrite
         | ":rewrite" ->
            let open Rewrites in
            let args = Str.split (Str.regexp " +") arg in
            let rec parse_args rw args =
              match rw, args with
-             | Basic_rewriter rw, [] -> rw
+             | Base_rewriter rw, [] -> rw
              | Bool_rewriter rw, arg :: args -> parse_args (rw (bool_of_string arg)) args
              | String_rewriter rw, arg :: args -> parse_args (rw arg) args
              | Literal_rewriter rw, arg :: args ->
@@ -645,9 +643,10 @@ let handle_input' input =
            in
            begin match args with
            | rw :: args ->
-              let rw = List.assoc rw Rewrites.all_rewrites in
+              let rw = List.assoc rw Rewrites.all_rewriters in
               let rw = parse_args rw args in
-              Interactive.ast := rw !Interactive.env !Interactive.ast;
+           (* Interactive.ast := rw !Interactive.env !Interactive.ast; *)
+              ()
            | [] ->
               failwith "Must provide the name of a rewrite, use :list_rewrites for a list of possible rewrites"
            end
@@ -844,7 +843,7 @@ let () =
                    (line_so_far ^ Filename.concat dirname contents.(i) ^ (if is_dir then Filename.dir_sep else ""))
              done
         | ":rewrite" ->
-           List.map fst Rewrites.all_rewrites
+           List.map fst Rewrites.all_rewriters
            |> List.filter (fun opt -> Str.string_match (Str.regexp_string last_id) opt 0)
            |> List.map (fun completion -> line_so_far ^ completion)
            |> List.iter (LNoise.add_completion ln_completions)
@@ -883,7 +882,7 @@ let () =
          match args with
          | [":rewrite"] -> hint "<rewrite>"
          | ":rewrite" :: rw :: args ->
-            begin match List.assoc_opt rw Rewrites.all_rewrites with
+            begin match List.assoc_opt rw Rewrites.all_rewriters with
             | Some rw ->
                let hints = describe_rewrite rw in
                let hints = Util.drop (List.length args) hints in
