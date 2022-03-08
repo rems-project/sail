@@ -1,10 +1,10 @@
 
-val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_inc"} : forall ('l : Int) ('m : Int) ('o : Int), 'l >= 0 & 'm <= 'o & 'o <= 'l.
+val vector_subrange = pure {ocaml: "subrange", lem: "subrange_vec_inc"} : forall ('l : Int) ('m : Int) ('o : Int), 'l >= 0 & 'm <= 'o & 'o <= 'l.
   (bitvector('l, inc), atom('m), atom('o)) -> bitvector('o - 'm + 1, inc)
 
 val sub : forall ('n : Int) ('m : Int). (atom('n), atom('m)) -> atom('n - 'm)
 
-val bitvector_length = "length" : forall ('n : Int). bitvector('n, inc) -> atom('n)
+val bitvector_length = pure "length" : forall ('n : Int). bitvector('n, inc) -> atom('n)
 
 overload __size = {bitvector_length}
 

@@ -2,19 +2,19 @@ default Order dec
 
 infix 4 ==
 
-val extz = {ocaml: "extz", lem: "extz_vec"}: forall ('n : Int) ('m : Int) ('ord : Order).
+val extz = pure {ocaml: "extz", lem: "extz_vec"}: forall ('n : Int) ('m : Int) ('ord : Order).
   (int('m), vector('n, 'ord, bit)) -> vector('m, 'ord, bit)
 
-val length = {ocaml: "length", lem: "length"}: forall ('m : Int) ('ord : Order) ('a : Type).
+val length = pure {ocaml: "length", lem: "length"}: forall ('m : Int) ('ord : Order) ('a : Type).
   vector('m, 'ord, 'a) -> int('m)
 
-val eq_vec = {ocaml: "eq_vec", lem: "eq_vec"}: forall ('m : Int) ('ord : Order).
+val eq_vec = pure {ocaml: "eq_vec", lem: "eq_vec"}: forall ('m : Int) ('ord : Order).
   (vector('m, 'ord, bit), vector('m, 'ord, bit)) -> bool
 
-val eq_int = {ocaml: "eq_atom", lem: "eq"}: forall ('n : Int) ('m : Int).
+val eq_int = pure {ocaml: "eq_atom", lem: "eq"}: forall ('n : Int) ('m : Int).
   (int('n), int('m)) -> bool('n == 'm)
 
-val eq = {ocaml: "eq", lem: "eq"}: forall ('a : Type). ('a, 'a) -> bool
+val eq = pure {ocaml: "eq", lem: "eq"}: forall ('a : Type). ('a, 'a) -> bool
 
 overload operator == = {eq_vec, eq_int, eq}
 

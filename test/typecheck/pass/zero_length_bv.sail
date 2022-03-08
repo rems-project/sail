@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-val "print_endline" : string -> unit
+val print_endline = pure "print_endline" : string -> unit
 
 function main((): unit) -> unit = {
   let x: bits(0) = [];

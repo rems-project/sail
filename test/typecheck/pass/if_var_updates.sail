@@ -1,12 +1,12 @@
-val add_int = {ocaml: "add", lem: "integerAdd"}: (int, int) -> int
+val add_int = pure {ocaml: "add", lem: "integerAdd"}: (int, int) -> int
 
 overload operator + = {add_int}
 
-val sub_int = {ocaml: "sub", lem: "integerMinus"}: (int, int) -> int
+val sub_int = pure {ocaml: "sub", lem: "integerMinus"}: (int, int) -> int
 
 overload operator - = {sub_int}
 
-val lt_int = {ocaml: "lt_int", lem: "lt"} : (int, int) -> bool
+val lt_int = pure {ocaml: "lt_int", lem: "lt"} : (int, int) -> bool
 
 overload operator < = {lt_int}
 

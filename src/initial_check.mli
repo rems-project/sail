@@ -120,7 +120,7 @@ val process_ast : ?generate:bool -> Parse_ast.defs -> unit ast
 
 (** {2 Parsing expressions and definitions from strings} *)
 
-val extern_of_string : id -> string -> unit def
+val extern_of_string : ?pure:bool -> id -> string -> unit def
 val val_spec_of_string : id -> string -> unit def
 val defs_of_string : (string * int * int * int) -> string -> unit def list
 val ast_of_def_string : (string * int * int * int) -> string -> unit ast

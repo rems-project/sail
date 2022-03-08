@@ -2,7 +2,7 @@ default Order dec
 
 infix 4 ==
 
-val operator == = {lem: "eq_vec"} : forall 'n. (bitvector('n, dec), bitvector('n, dec)) -> bool
+val operator == = pure {lem: "eq_vec"} : forall 'n. (bitvector('n, dec), bitvector('n, dec)) -> bool
 
 struct ProcState ('n : Int) = {
   N : bitvector('n, dec),

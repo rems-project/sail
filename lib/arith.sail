@@ -111,9 +111,9 @@ val mult_int = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: 
 
 overload operator * = {mult_atom, mult_int}
 
-val "print_int" : (string, int) -> unit
+val print_int = pure "print_int" : (string, int) -> unit
 
-val "prerr_int" : (string, int) -> unit
+val prerr_int = pure "prerr_int" : (string, int) -> unit
 
 // ***** Integer shifts *****
 

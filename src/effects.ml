@@ -78,15 +78,17 @@ type side_effect =
   | Register
   | Transitive
   | External
+  | Undefined
   | Outcome of id
 
 let string_of_side_effect = function
-  | Throw -> "throw"
-  | Exit -> "exit"
-  | IncompleteMatch -> "incomplete match"
-  | Register -> "register"
-  | Transitive -> "transitive"
-  | External -> "external function"
+  | Throw -> "throws exception"
+  | Exit -> "exit statement"
+  | IncompleteMatch -> "incomplete pattern match"
+  | Register -> "register access"
+  | Transitive -> "calls effectful function"
+  | External -> "calls external function not marked pure"
+  | Undefined -> "contains undefined literal"
   | Outcome id -> ("outcome " ^ string_of_id id)
 
 module Effect = struct
@@ -99,12 +101,14 @@ module Effect = struct
     | Register, Register -> 0
     | Transitive, Transitive -> 0
     | External, External -> 0
+    | Undefined, Undefined -> 0
     | Outcome id1, Outcome id2 -> Id.compare id1 id2
     | Throw, _ -> 1 | _, Throw -> -1
     | Exit, _ -> 1 | _, Exit -> -1
     | IncompleteMatch, _ -> 1 | _, IncompleteMatch -> -1
     | Transitive, _ -> 1 | _, Transitive -> -1
     | External, _ -> 1 | _, External -> -1
+    | Undefined, _ -> 1 | _, Undefined -> -1
     | Outcome _, _ -> 1 | _, Outcome _ -> -1
 end
 
@@ -124,6 +128,15 @@ module PC_config = struct
 end
 
 module PC = Pattern_completeness.Make(PC_config)
+
+let rec funcls_to_pexps = function
+  | FCL_aux (FCL_Funcl (_, pexp), _) :: funcls -> pexp :: funcls_to_pexps funcls
+  | [] -> []
+
+let funcls_info = function
+  | FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, _), _)), _) :: _ -> Some (id, typ_of_pat pat, env_of_pat pat)
+  | FCL_aux (FCL_Funcl (id, Pat_aux (Pat_when (pat, _, _), _)), _) :: _ -> Some (id, typ_of_pat pat, env_of_pat pat)
+  | _ -> None
 
 let infer_def_direct_effects def =
   let effects = ref EffectSet.empty in
@@ -152,6 +165,7 @@ let infer_def_direct_effects def =
           effects := EffectSet.add Register !effects
        | _ -> ()
        end
+    | E_lit (L_aux (L_undef, _)) -> effects := EffectSet.add Undefined !effects
     | E_throw _ -> effects := EffectSet.add Throw !effects
     | E_exit _ | E_assert _ -> effects := EffectSet.add Exit !effects
     | E_app (f, _) when Id.compare f (mk_id "__deref") = 0 ->
@@ -177,6 +191,20 @@ let infer_def_direct_effects def =
   begin match def with
   | DEF_spec (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }, _), _)) ->
      effects := EffectSet.add External !effects
+  | DEF_fundef (FD_aux (FD_function (_, _, funcls), (l, _))) ->
+     begin match funcls_info funcls with
+     | Some (id, typ, env) ->
+        let cases = funcls_to_pexps funcls in
+        let ctx = {
+            Pattern_completeness.variants = Env.get_variants env;
+            Pattern_completeness.enums = Env.get_enums env
+          } in
+        if not (PC.is_complete l ctx cases typ) then (
+          effects := EffectSet.add IncompleteMatch !effects
+        )
+     | None ->
+        Reporting.unreachable l __POS__ "Empty funcls in infer_def_direct_effects"
+     end
   | _ -> ()
   end;
   
@@ -208,6 +236,11 @@ type side_effect_info = {
     letbinds : EffectSet.t Bindings.t
   }
 
+let function_is_pure id info =
+  match Bindings.find_opt id info.functions with
+  | Some eff -> pure eff
+  | None -> true
+                      
 let is_function = function
   | Callgraph.Function _ -> true
   | _ -> false
@@ -258,8 +291,9 @@ let infer_side_effects ast =
          in
          if is_function node then
            function_effects := Bindings.add id side_effects !function_effects
-         else
+         else (
            letbind_effects := Bindings.add id side_effects !letbind_effects
+         )
       | _ -> ()
     ) all_nodes;
 
@@ -267,6 +301,21 @@ let infer_side_effects ast =
     functions = !function_effects;
     letbinds = !letbind_effects
   }
+
+let check_side_effects effect_info ast =
+  List.iter (fun def ->
+      match def with
+      | DEF_val _ ->
+         IdSet.iter (fun id ->
+             match Bindings.find_opt id effect_info.letbinds with
+             | Some eff when not (pure eff) ->
+                raise (Reporting.err_general (id_loc id)
+                         ("Top-level let statement must not have any side effects. Found side effects: "
+                          ^ Util.string_of_list ", " string_of_side_effect (EffectSet.elements eff)))
+             | _ -> ()
+           ) (ids_of_def def)
+      | _ -> ()
+    ) ast.defs
 
 let rewrite_attach_effects effect_info =
   let rewrite_lexp_aux ((child_eff, lexp_aux), (l, tannot)) =
@@ -292,6 +341,7 @@ let rewrite_attach_effects effect_info =
          | Some side_effects -> if pure side_effects then no_effect else monadic_effect
          | None -> no_effect
          end
+      | E_lit (L_aux (L_undef, _)) -> monadic_effect
       | E_id id ->
          begin match Env.lookup_id id env with
          | Register _ -> monadic_effect

@@ -112,6 +112,18 @@ type side_effect_info = {
     letbinds : EffectSet.t Bindings.t
   }
 
+val function_is_pure : id -> side_effect_info -> bool
+                      
 val infer_side_effects : Type_check.tannot ast -> side_effect_info
 
+(** Checks constraints on side effects, raising an error if they are
+   violated. Currently these are that termination measures and
+   top-level letbindings must be pure. *)
+val check_side_effects : side_effect_info -> Type_check.tannot ast -> unit
+  
+(** Previous code mostly assumes that side effect info is attached to
+   nodes in the AST. To keep this code working, this rewrite pass
+   attaches effect info into to the AST. Note that the effect info is
+   simplified in its annotated form - it just becomes a boolean
+   representing effectful/non-effectful *)
 val rewrite_attach_effects : side_effect_info -> Type_check.tannot ast -> Type_check.tannot ast

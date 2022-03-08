@@ -482,7 +482,7 @@ let stash_pre_rewrite_info tgt (ast : _ Ast_defs.ast) type_envs =
      end
   | _ -> ()
 
-let target name out_name ast type_envs =
+let target name out_name ast effect_info type_envs =
   match name with
   | None -> ()
 
@@ -589,10 +589,10 @@ let target name out_name ast type_envs =
      Jib_smt.generate_smt props name_file type_envs ast_smt;
 
   | Some "lem" ->
-     output "" (Lem_out (!opt_libs_lem)) [(out_name, type_envs, ast)]
+     output "" (Lem_out (!opt_libs_lem)) [(out_name, effect_info, type_envs, ast)]
 
   | Some "coq" ->
-     output "" (Coq_out (!opt_libs_coq)) [(out_name, type_envs, ast)]
+     output "" (Coq_out (!opt_libs_coq)) [(out_name, effect_info, type_envs, ast)]
 
   | Some "latex" ->
      Reporting.opt_warnings := true;
@@ -661,7 +661,7 @@ let main () =
 
       let type_envs, ast = prover_regstate !opt_target ast type_envs in
       let ast, type_envs = match !opt_target with Some tgt -> rewrite_ast_target effect_info tgt type_envs ast | None -> ast, type_envs in
-      target !opt_target out_name ast type_envs;
+      target !opt_target out_name ast effect_info type_envs;
 
       if !Interactive.opt_interactive then
         (Interactive.ast := ast; Interactive.env := type_envs)

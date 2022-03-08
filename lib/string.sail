@@ -70,17 +70,17 @@ $define _STRING
 
 $include <arith.sail>
 
-val eq_string = {lem: "eq", coq: "generic_eq", _: "eq_string"} : (string, string) -> bool
+val eq_string = pure {lem: "eq", coq: "generic_eq", _: "eq_string"} : (string, string) -> bool
 
 overload operator == = {eq_string}
 
-val concat_str = {coq: "String.append", lem: "stringAppend", _: "concat_str"} : (string, string) -> string
+val concat_str = pure {coq: "String.append", lem: "stringAppend", _: "concat_str"} : (string, string) -> string
 
-val "dec_str" : int -> string
+val dec_str = pure "dec_str" : int -> string
 
-val "hex_str" : int -> string
+val hex_str = pure "hex_str" : int -> string
 
-val bits_str = "string_of_bits" : forall 'n. bitvector('n, dec) -> string
+val bits_str = pure "string_of_bits" : forall 'n. bitvector('n, dec) -> string
 
 val concat_str_bits : forall 'n. (string, bitvector('n, dec)) -> string
 
@@ -90,8 +90,8 @@ val concat_str_dec : (string, int) -> string
 
 function concat_str_dec(str, x) = concat_str(str, dec_str(x))
 
-val print_endline = "print_endline" : string -> unit
+val print_endline = pure "print_endline" : string -> unit
 
-val prerr_endline = "prerr_endline" : string -> unit
+val prerr_endline = pure "prerr_endline" : string -> unit
 
 $endif

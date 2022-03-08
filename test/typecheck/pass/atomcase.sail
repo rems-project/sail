@@ -2,7 +2,7 @@ default Order dec
 
 infix 4 ==
 
-val eq_atom = {ocaml: "eq_atom", lem: "eq", coq: "Z.eqb"}: forall ('n : Int) ('m : Int).
+val eq_atom = pure {ocaml: "eq_atom", lem: "eq", coq: "Z.eqb"}: forall ('n : Int) ('m : Int).
   (atom('n), atom('m)) -> bool
 
 overload operator == = {eq_atom}

@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-val czeros = "zeros" : forall (constant 'n : Int), 'n >= 0. int('n) -> bits('n)
+val czeros = pure "zeros" : forall (constant 'n : Int), 'n >= 0. int('n) -> bits('n)
 
 val multi_param : forall (constant 'n 'm : Int) ('o : Int). (int('n), int('m), int('o)) -> unit
 

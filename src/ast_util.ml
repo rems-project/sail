@@ -935,9 +935,9 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_cons (x, xs) -> string_of_exp x ^ " :: " ^ string_of_exp xs
   | E_list xs -> "[|" ^ string_of_list ", " string_of_exp xs ^ "|]"
   | E_record_update (exp, fexps) ->
-     "{ " ^ string_of_exp exp ^ " with " ^ string_of_list "; " string_of_fexp fexps ^ " }"
+     "struct { " ^ string_of_exp exp ^ " with " ^ string_of_list "; " string_of_fexp fexps ^ " }"
   | E_record fexps ->
-     "{ " ^ string_of_list "; " string_of_fexp fexps ^ " }"
+     "struct { " ^ string_of_list "; " string_of_fexp fexps ^ " }"
   | E_var (lexp, binding, exp) -> "var " ^ string_of_lexp lexp ^ " = " ^ string_of_exp binding ^ " in " ^ string_of_exp exp
   | E_internal_return exp -> "internal_return (" ^ string_of_exp exp ^ ")"
   | E_internal_plet (pat, exp, body) -> "internal_plet " ^ string_of_pat pat ^ " = " ^ string_of_exp exp ^ " in " ^ string_of_exp body

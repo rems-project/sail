@@ -103,7 +103,7 @@ type out_type =
 val output :
   string -> (* The path to the library *)
   out_type -> (* Backend kind *)
-  (string * Type_check.Env.t * Type_check.tannot ast) list -> (*File names paired with definitions *)
+  (string * Effects.side_effect_info * Type_check.Env.t * Type_check.tannot ast) list -> (*File names paired with definitions *)
   unit
 
 (** [always_replace_files] determines whether Sail only updates modified files.

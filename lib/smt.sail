@@ -71,7 +71,7 @@ $define _SMT
 // see http://smtlib.cs.uiowa.edu/theories-Ints.shtml
 
 /*! Euclidean division */
-val ediv_int = {
+val ediv_int = pure {
   ocaml: "quotient",
   interpreter: "quotient",
   lem: "integerDiv",
@@ -79,7 +79,7 @@ val ediv_int = {
   coq: "ediv_with_eq"
 } : forall 'n 'm. (int('n), int('m)) -> int(div('n, 'm))
 
-val emod_int = {
+val emod_int = pure {
   ocaml: "modulus",
   interpreter: "modulus",
   lem: "integerMod",
@@ -87,7 +87,7 @@ val emod_int = {
   coq: "emod_with_eq"
 } : forall 'n 'm. (int('n), int('m)) -> int(mod('n, 'm))
 
-val abs_int_atom = {
+val abs_int_atom = pure {
   ocaml: "abs_int",
   interpreter: "abs_int",
   lem: "integerAbs",

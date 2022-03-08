@@ -267,24 +267,12 @@ let lem_tyvars_of_typ typ =
     (lem_nexps_of_typ typ) KidSet.empty
 
 (* When making changes here, check whether they affect lem_tyvars_of_typ *)
-let doc_typ_lem, doc_atomic_typ_lem =
+let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
   (* following the structure of parser for precedence *)
-  let rec typ ty = fn_typ true ty
-    and typ' ty = fn_typ false ty
-    and fn_typ atyp_needed ((Typ_aux (t, _)) as ty) = match t with
-      | Typ_fn(args,ret) ->
-         let ret_typ =
-           (* TODO EFFECT: Monadicity as parameter or separate function. See Coq *)
-           (*
-           if effectful efct
-           then separate space [string "M"; fn_typ true ret]
-           else *) separate space [fn_typ false ret] in
-         let arg_typs = List.map (app_typ false) args in
-         let tpp = separate (space ^^ arrow ^^ space) (arg_typs @ [ret_typ]) in
-         (* once we have proper excetions we need to know what the exceptions type is *)
-         if atyp_needed then parens tpp else tpp
-      | _ -> tup_typ atyp_needed ty
-    and tup_typ atyp_needed ((Typ_aux (t, _)) as ty) = match t with
+  let rec typ atyp_needed ty = tup_typ atyp_needed ty
+    and tup_typ atyp_needed (Typ_aux (t, l) as ty) = match t with
+      | Typ_fn _ ->
+         Reporting.unreachable l __POS__ "Function type passed to doc_typ_lem"
       | Typ_tup typs ->
          parens (separate_map (space ^^ star ^^ space) (app_typ false) typs)
       | _ -> app_typ atyp_needed ty
@@ -293,7 +281,7 @@ let doc_typ_lem, doc_atomic_typ_lem =
           A_aux (A_nexp m, _);
           A_aux (A_order ord, _);
           A_aux (A_typ elem_typ, _)]) ->
-         let tpp = string "list" ^^ space ^^ typ elem_typ in
+         let tpp = string "list" ^^ space ^^ typ true elem_typ in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "bitvector", _), [
           A_aux (A_nexp m, _);
@@ -302,11 +290,11 @@ let doc_typ_lem, doc_atomic_typ_lem =
            if !opt_mwords then
              string "mword " ^^ doc_nexp_lem (nexp_simp m)
            else
-             string "list" ^^ space ^^ typ bit_typ
+             string "list" ^^ space ^^ typ true bit_typ
          in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "register", _), [A_aux (A_typ etyp, _)]) ->
-         let tpp = string "register_ref regstate register_value " ^^ typ etyp in
+         let tpp = string "register_ref regstate register_value " ^^ typ true etyp in
          if atyp_needed then parens tpp else tpp
       | Typ_app(Id_aux (Id "range", _),_) ->
          (string "integer")
@@ -331,11 +319,11 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | Typ_app _ | Typ_tup _ | Typ_fn _ ->
          (* exhaustiveness matters here to avoid infinite loops
           * if we add a new Typ constructor *)
-         let tpp = typ ty in
+         let tpp = typ true ty in
          if atyp_needed then parens tpp else tpp
       | Typ_exist (kopts,_,ty) when List.for_all is_int_kopt kopts -> begin
          let kids = List.map kopt_kid kopts in
-         let tpp = typ ty in
+         let tpp = typ true ty in
          let visible_vars = lem_tyvars_of_typ ty in
          match List.filter (fun kid -> KidSet.mem kid visible_vars) kids with
          | [] -> if atyp_needed then parens tpp else tpp
@@ -356,14 +344,20 @@ let doc_typ_lem, doc_atomic_typ_lem =
       | A_order o -> empty
       | A_bool _ -> empty
   in
-  let top env ty =
+  let top atyp_needed env ty =
     (* If we use the bitlist representation of bitvectors, the type argument in
        type abbreviations such as "bits('n)" becomes dead, which confuses HOL; as a
        workaround, we expand type synonyms in this case. *)
     let ty' = if !opt_mwords then ty else Env.expand_synonyms env ty in
-    typ' ty'
-  in top, atomic_typ
+    typ atyp_needed ty'
+  in top false, top true, atomic_typ
 
+let doc_fn_typ_lem ?(monad = empty) env (Typ_aux (aux, l) as ty) = match aux with
+  | Typ_fn (args, ret) ->
+     separate (space ^^ arrow ^^ space) (List.map (doc_typ_lem env) args @ [monad ^^ (doc_typ_lem_brackets env) ret])
+  | _ ->
+     doc_typ_lem env ty
+   
 (* Check for variables in types that would be pretty-printed. *)
 let contains_t_pp_var ctxt (Typ_aux (t,a) as typ) =
   lem_nexps_of_typ typ
@@ -519,9 +513,9 @@ let doc_typclasses_lem t =
   if NexpSet.is_empty nexps then (empty, NexpSet.empty) else
   (separate_map comma_sp (fun nexp -> string "Size " ^^ doc_nexp_lem nexp) (NexpSet.elements nexps) ^^ string " => ", nexps)
 
-let doc_typschm_lem env quants (TypSchm_aux(TypSchm_ts(tq,t),l)) =
+let doc_typschm_lem ?(monad = empty) env quants (TypSchm_aux(TypSchm_ts(tq,t),l)) =
   let env = Env.add_typquant l tq env in
-  let pt = doc_typ_lem env t in
+  let pt = doc_fn_typ_lem ~monad:monad env t in
   if quants
   then
     let nexps_used = lem_nexps_of_typ t in
@@ -1479,13 +1473,14 @@ let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
   | DEC_reg (typ, id, Some exp) ->
      separate space [string "let"; doc_id_lem id; equals; doc_exp_lem empty_ctxt false exp] ^^ hardline
 
-let doc_spec_lem env (VS_aux (valspec,annot)) =
+let doc_spec_lem effect_info env (VS_aux (valspec, annot)) =
   match valspec with
-  | VS_val_spec (typschm,id,exts,_) when Ast_util.extern_assoc "lem" exts = None ->
+  | VS_val_spec (typschm, id, exts, _) when Ast_util.extern_assoc "lem" exts = None ->
+     let monad = if Effects.function_is_pure id effect_info then empty else string "M" ^^ space in
      (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
      if contains_t_pp_var typ then empty else *)
      doc_docstring_lem annot ^^
-     separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem env true typschm] ^/^ hardline
+       separate space [string "val"; doc_id_lem id; string ":"; doc_typschm_lem ~monad:monad env true typschm] ^/^ hardline
   (* | VS_val_spec (_,_,Some _,_) -> empty *)
   | _ -> empty
 
@@ -1539,9 +1534,9 @@ let doc_regtype_fields (tname, (n1, n2, fields)) =
   in
   separate_map hardline doc_field fields
 
-let rec doc_def_lem type_env def =
+let rec doc_def_lem effect_info type_env def =
   match def with
-  | DEF_spec v_spec -> doc_spec_lem type_env v_spec
+  | DEF_spec v_spec -> doc_spec_lem effect_info type_env v_spec
   | DEF_fixity _ -> empty
   | DEF_overload _ -> empty
   | DEF_type t_def -> group (doc_typdef_lem type_env t_def) ^/^ hardline
@@ -1565,7 +1560,7 @@ let find_exc_typ defs =
     | _ -> false in
   if List.exists is_exc_typ_def defs then "exception" else "unit"
 
-let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) type_env { defs; _ } top_line =
+let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) effect_info type_env { defs; _ } top_line =
   (* let regtypes = find_regtypes d in *)
   let state_ids =
     State.generate_regstate_defs !opt_mwords defs
@@ -1602,9 +1597,9 @@ let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) type_env { de
              string "module SIA = Interp_ast"; hardline;
              hardline]
         else empty;
-        separate empty (List.map (doc_def_lem type_env) typdefs); hardline;
+        separate empty (List.map (doc_def_lem effect_info type_env) typdefs); hardline;
         hardline;
-        separate empty (List.map (doc_def_lem type_env) statedefs); hardline;
+        separate empty (List.map (doc_def_lem effect_info type_env) statedefs); hardline;
         hardline;
         State.regval_instance_lem;
         hardline;
@@ -1620,5 +1615,5 @@ let pp_ast_lem (types_file,types_modules) (defs_file,defs_modules) type_env { de
         (separate_map hardline)
           (fun lib -> separate space [string "open import";string lib]) defs_modules;hardline;
         hardline;
-        separate empty (List.map (doc_def_lem type_env) defs);
+        separate empty (List.map (doc_def_lem effect_info type_env) defs);
         hardline]);

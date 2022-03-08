@@ -24,7 +24,7 @@ infix 1 <-->
 
 type operator <-->('p: Bool, 'q: Bool) -> Bool = ('p --> 'q) & ('q --> 'p)
 
-val my_not = {coq: "negb", _: "not"} : forall ('p : Bool). bool('p) -> {('q : Bool), 'p <--> not('q). bool('q)}
+val my_not = pure {coq: "negb", _: "not"} : forall ('p : Bool). bool('p) -> {('q : Bool), 'p <--> not('q). bool('q)}
 
 /* This example mimics 32-bit ARM instructions where a flag in the
 function argument restricts a type variable in a specific branch of

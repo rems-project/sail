@@ -680,7 +680,8 @@ let handle_input' input =
              | None -> "out.sail"
              | Some f -> f ^ ".sail"
            in
-           target (Some arg) out_name !Interactive.ast !Interactive.env
+        (* target (Some arg) out_name !Interactive.ast !Interactive.env *)
+           ()
         | _ ->
            match List.assoc_opt cmd !Interactive.commands with
            | Some (_, action) -> Interactive.run_action cmd arg action

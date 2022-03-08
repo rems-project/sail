@@ -988,8 +988,8 @@ let constraint_of_string str =
   let atyp = Parser.typ_eof Lexer.token (Lexing.from_string str) in
   to_ast_constraint initial_ctx atyp
 
-let extern_of_string id str =
-  VS_val_spec (typschm_of_string str, id, Some { pure = false; bindings = [("_", string_of_id id)] }, false)
+let extern_of_string ?(pure = false) id str =
+  VS_val_spec (typschm_of_string str, id, Some { pure = pure; bindings = [("_", string_of_id id)] }, false)
   |> mk_val_spec
 
 let val_spec_of_string id str = mk_val_spec (VS_val_spec (typschm_of_string str, id, None, false))
@@ -1018,18 +1018,18 @@ let undefined_typschm id typq =
 let have_undefined_builtins = ref false
 
 let undefined_builtin_val_specs =
-  [extern_of_string (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a effect {undef}";
-   extern_of_string (mk_id "undefined_bool") "unit -> bool effect {undef}";
-   extern_of_string (mk_id "undefined_bit") "unit -> bit effect {undef}";
-   extern_of_string (mk_id "undefined_int") "unit -> int effect {undef}";
-   extern_of_string (mk_id "undefined_nat") "unit -> nat effect {undef}";
-   extern_of_string (mk_id "undefined_real") "unit -> real effect {undef}";
-   extern_of_string (mk_id "undefined_string") "unit -> string effect {undef}";
-   extern_of_string (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a) effect {undef}";
-   extern_of_string (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
-   extern_of_string (mk_id "undefined_vector") "forall 'n ('a:Type) ('ord : Order). (atom('n), 'a) -> vector('n, 'ord,'a) effect {undef}";
-   extern_of_string (mk_id "undefined_bitvector") "forall 'n. atom('n) -> bitvector('n, dec) effect {undef}";
-   extern_of_string (mk_id "undefined_unit") "unit -> unit effect {undef}"]
+  [extern_of_string (mk_id "internal_pick") "forall ('a:Type). list('a) -> 'a";
+   extern_of_string (mk_id "undefined_bool") "unit -> bool";
+   extern_of_string (mk_id "undefined_bit") "unit -> bit";
+   extern_of_string (mk_id "undefined_int") "unit -> int";
+   extern_of_string (mk_id "undefined_nat") "unit -> nat";
+   extern_of_string (mk_id "undefined_real") "unit -> real";
+   extern_of_string (mk_id "undefined_string") "unit -> string";
+   extern_of_string (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a)";
+   extern_of_string (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m)";
+   extern_of_string (mk_id "undefined_vector") "forall 'n ('a:Type) ('ord : Order). (atom('n), 'a) -> vector('n, 'ord,'a)";
+   extern_of_string (mk_id "undefined_bitvector") "forall 'n. atom('n) -> bitvector('n, dec)";
+   extern_of_string (mk_id "undefined_unit") "unit -> unit"]
 
 let generate_undefineds vs_ids defs =
   let undefined_builtins =
@@ -1054,7 +1054,7 @@ let generate_undefineds vs_ids defs =
   in
   let undefined_td = function
     | TD_enum (id, ids, _) when not (IdSet.mem (prepend_id "undefined_" id) vs_ids) ->
-       let typschm = typschm_of_string ("unit -> " ^ string_of_id id ^ " effect {undef}") in
+       let typschm = typschm_of_string ("unit -> " ^ string_of_id id) in
        [mk_val_spec (VS_val_spec (typschm, prepend_id "undefined_" id, None, false));
         mk_fundef [mk_funcl (prepend_id "undefined_" id)
                             (mk_pat (P_lit (mk_lit L_unit)))
@@ -1138,7 +1138,7 @@ let generate_initialize_registers vs_ids defs =
   let initialize_registers =
     if IdSet.mem (mk_id "initialize_registers") vs_ids || regs = [] then []
     else
-      [val_spec_of_string (mk_id "initialize_registers") "unit -> unit effect {undef, wreg}";
+      [val_spec_of_string (mk_id "initialize_registers") "unit -> unit";
        mk_fundef [mk_funcl (mk_id "initialize_registers")
                            (mk_pat (P_lit (mk_lit L_unit)))
                            (mk_exp (E_block (List.map (fun (typ, id) -> mk_exp (E_assign (mk_lexp (LEXP_cast (typ, id)), mk_lit_exp L_undef))) regs)))]]

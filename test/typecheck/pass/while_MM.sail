@@ -10,7 +10,7 @@ val add_vec_int : forall ('n : Int) ('ord : Order).
 
 overload operator + = {add_vec_int, add_range, add_int}
 
-val bool_not = {ocaml: "not", lem: "not"}: bool -> bool
+val bool_not = pure {ocaml: "not", lem: "not"}: bool -> bool
 
 val cast cast_0_vec_dec : forall ('l : Int).
   atom(0) -> vector('l, dec, bit)

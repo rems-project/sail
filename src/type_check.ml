@@ -4816,7 +4816,7 @@ let effect_of_annot = function
 let effect_of (E_aux (exp, (l, annot))) = effect_of_annot annot
 
 let add_effect_annot annot eff = match annot with
-  | Some tannot -> Some { tannot with monadic = union_effects eff tannot.monadic }
+  | Some tannot -> Some { tannot with monadic = eff }
   | None -> None
 
 let add_effect (E_aux (exp, (l, annot))) eff =
@@ -5034,8 +5034,6 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, funcls), (l, _)) a
        let tpat, texp = check_termination_measure funcl_env vtyp_args measure_p measure_e in
        Rec_aux (Rec_measure (tpat, texp), l)
   in
-  let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
-  let eff = List.fold_left union_effects no_effect (List.map funcl_effect funcls) in
   let vs_def, env =
     if not have_val_spec then
       let typ = Typ_aux (Typ_fn (vtyp_args, vtyp_ret), vl) in
@@ -5043,6 +5041,8 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, funcls), (l, _)) a
     else
       [], env
   in
+  let funcls = List.map (fun funcl -> check_funcl funcl_env funcl typ) funcls in
+  let eff = List.fold_left union_effects no_effect (List.map funcl_effect funcls) in
   let env = Env.define_val_spec id env in
   vs_def @ [DEF_fundef (FD_aux (FD_function (recopt, tannotopt, funcls), (l, None)))], env
 

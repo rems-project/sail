@@ -1,6 +1,6 @@
-val "print_endline" : string -> unit
+val print_endline = pure "print_endline" : string -> unit
 
-val operator <= = {
+val operator <= = pure {
   coq: "Z.leb",
   _: "lteq"
 } : forall 'n 'm. (int('n), int('m)) -> bool('n <= 'm)
@@ -15,7 +15,7 @@ function test1 forall 'n 'm. (n: int('n), m: int('m)) -> unit = {
   }
 }
 
-val and_bool = {
+val and_bool = pure {
   coq: "andb",
   _: "and_bool"
 } : forall ('p: Bool) ('q: Bool). (bool('p), bool('q)) -> bool('p & 'q)

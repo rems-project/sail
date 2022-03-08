@@ -7,7 +7,7 @@ default Order dec
 $include <prelude.sail>
 
 val f: (int) -> unit effect {escape, rreg}
-val "pow2" : forall 'n, 'n >= 0. int('n) -> int(2 ^ 'n)
+val pow2 = pure "pow2" : forall 'n, 'n >= 0. int('n) -> int(2 ^ 'n)
 
 register r: bits(32)
 

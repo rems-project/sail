@@ -99,7 +99,7 @@ let fresh_id_pat pre ((l,annot)) =
 
 let get_loc_exp (E_aux (_,(l,_))) = l
 
-let gen_vs (id, spec) = Initial_check.extern_of_string (mk_id id) spec
+let gen_vs ~pure (id, spec) = Initial_check.extern_of_string ~pure:pure (mk_id id) spec
 
 let simple_annot l typ = (gen_loc l, mk_tannot initial_env typ)
                        
@@ -1476,8 +1476,8 @@ let rewrite_ast_exp_lift_assign env defs = rewrite_ast_base
      write_reg_ref (vector_access (GPR, i)) exp
  *)
 let rewrite_register_ref_writes ast =
-  let write_reg_spec = fst (Type_error.check_defs initial_env (List.map gen_vs
-    [("write_reg_ref", "forall ('a : Type). (register('a), 'a) -> unit effect {wreg}")])) in
+  let write_reg_spec = fst (Type_error.check_defs initial_env (List.map (gen_vs ~pure:false)
+    [("write_reg_ref", "forall ('a : Type). (register('a), 'a) -> unit")])) in
   let lexp_ref_exp (LEXP_aux (_, annot) as lexp) =
     try
       let exp = infer_exp (env_of_annot annot) (strip_exp (lexp_to_exp lexp)) in
@@ -1671,8 +1671,8 @@ let rewrite_ast_early_return env ast =
     FD_aux (FD_function (rec_opt, tannot_opt,
       List.map (rewrite_funcl_early_return rewriters) funcls), a) in
 
-  let early_ret_spec = fst (Type_error.check_defs initial_env [gen_vs
-    ("early_return", "forall ('a : Type) ('b : Type). 'a -> 'b effect {escape}")]) in
+  let early_ret_spec = fst (Type_error.check_defs initial_env [gen_vs ~pure:true 
+    ("early_return", "forall ('a : Type) ('b : Type). 'a -> 'b")]) in
 
   rewrite_ast_base
     { rewriters_base with rewrite_fun = rewrite_fun_early_return }
@@ -3454,9 +3454,9 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
          let typ = lvar_typ (Env.lookup_id id env) in
          add_p_typ env typ (annot_pat (P_id id) pl env typ)
        in
-       if effectful exp then
+       if effectful full_exp then (
          Same_vars (E_aux (E_assign (lexp,vexp),annot))
-       else 
+       ) else 
          (match lexp with
           | LEXP_aux (LEXP_id id,annot) ->
              let pat = annot_pat (P_id id) pl env (typ_of vexp) in
@@ -3705,7 +3705,7 @@ let rewrite_ast_remove_superfluous_returns env =
 
 
 let rewrite_ast_remove_e_assign env ast =
-  let loop_specs = fst (Type_error.check_defs initial_env (List.map gen_vs
+  let loop_specs = fst (Type_error.check_defs initial_env (List.map (gen_vs ~pure:true)
     [("foreach#", "forall ('vars_in 'vars_out : Type). (int, int, int, bool, 'vars_in, 'vars_out) -> 'vars_out");
      ("while#", "forall ('vars_in 'vars_out : Type). (bool, 'vars_in, 'vars_out) -> 'vars_out");
      ("until#", "forall ('vars_in 'vars_out : Type). (bool, 'vars_in, 'vars_out) -> 'vars_out");
@@ -4915,12 +4915,14 @@ let rewrites_lem = [
     ("attach_effects", []);
     ("letbind_effects", []);
     ("remove_e_assign", []);
+    ("attach_effects", []);
     ("internal_lets", []);
     ("remove_superfluous_letbinds", []);
     ("remove_superfluous_returns", []);
     ("merge_function_clauses", []);
     ("bit_lists_to_lits", []);
-    ("recheck_defs", [])
+    ("recheck_defs", []);
+    ("attach_effects", [])
   ]
 
 let rewrites_coq = [

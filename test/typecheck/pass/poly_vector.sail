@@ -6,9 +6,9 @@ $ifndef FEATURE_BITVECTOR_TYPE
 type bitvector('n, 'ord) = vector('n, 'ord, bit)
 $endif
 
-val "to_generic" : forall 'n. bitvector('n, dec) -> vector('n, dec, bit)
+val to_generic = pure "to_generic" : forall 'n. bitvector('n, dec) -> vector('n, dec, bit)
 
-val "print_endline" : string -> unit
+val print_endline = pure "print_endline" : string -> unit
 
 function my_length forall 'n ('a : Type). (xs: vector('n, dec, 'a)) -> int('n) = {
   length(xs)

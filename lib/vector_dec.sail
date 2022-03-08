@@ -106,9 +106,9 @@ overload length = {bitvector_length, vector_length}
 
 val count_leading_zeros = pure "count_leading_zeros" : forall 'N , 'N >= 1. bits('N) -> {'n, 0 <= 'n <= 'N . atom('n)}
 
-val "print_bits" : forall 'n. (string, bits('n)) -> unit
+val print_bits = pure "print_bits" : forall 'n. (string, bits('n)) -> unit
 
-val "prerr_bits" : forall 'n. (string, bits('n)) -> unit
+val prerr_bits = pure "prerr_bits" : forall 'n. (string, bits('n)) -> unit
 
 val sail_sign_extend = pure "sign_extend" : forall 'n 'm, 'm >= 'n. (bits('n), int('m)) -> bits('m)
 
