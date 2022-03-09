@@ -107,6 +107,8 @@ val rewrite_def : tannot rewriters -> tannot def -> tannot def
 
 val rewrite_fun : tannot rewriters -> tannot fundef -> tannot fundef
 
+val rewrite_mapdef : tannot rewriters -> tannot mapdef -> tannot mapdef
+  
 (* the type of interpretations of pattern-matching expressions *)
 type ('a,'pat,'pat_aux) pat_alg =
   { p_lit            : lit -> 'pat_aux
@@ -195,6 +197,8 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
 (* fold over patterns *)
 val fold_pat : ('a,'pat,'pat_aux) pat_alg -> 'a pat -> 'pat
 
+val fold_mpat : ('a,'mpat,'mpat_aux) pat_alg -> 'a mpat -> 'mpat
+  
 (* fold over expressions *)
 val fold_exp : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
       'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
@@ -220,7 +224,10 @@ val fold_function : ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
       'opt_default_aux,'opt_default, 'a pexp,'pexp_aux,'letbind_aux,'letbind,
       'pat,'pat_aux) exp_alg -> 'a fundef -> 'a fundef
 
-val id_pat_alg : ('a,'a pat, 'a pat_aux) pat_alg
+val id_pat_alg : ('a, 'a pat, 'a pat_aux) pat_alg
+
+val id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg
+
 val id_exp_alg :
   ('a,'a exp,'a exp_aux,'a lexp,'a lexp_aux,'a fexp,
   'a fexp_aux,

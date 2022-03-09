@@ -1045,6 +1045,8 @@ let id_of_fundef (FD_aux (FD_function (_, _, funcls), (l, _))) =
   | Some id -> id
   | None -> raise (Reporting.err_typ l "funcl list is empty")
 
+let id_of_mapdef (MD_aux (MD_mapping (id, _, _), _)) = id
+          
 let id_of_type_def_aux = function
   | TD_abbrev (id, _, _)
   | TD_record (id, _, _, _)
@@ -1066,6 +1068,7 @@ let id_of_scattered (SD_aux (sdef, _)) =
 let ids_of_def = function
   | DEF_type td -> IdSet.singleton (id_of_type_def td)
   | DEF_fundef fd -> IdSet.singleton (id_of_fundef fd)
+  | DEF_mapdef md -> IdSet.singleton (id_of_mapdef md)
   | DEF_val (LB_aux (LB_val (pat, _), _)) -> pat_ids pat
   | DEF_reg_dec (DEC_aux (DEC_reg (_, id, _), _)) -> IdSet.singleton id
   | DEF_spec vs -> IdSet.singleton (id_of_val_spec vs)

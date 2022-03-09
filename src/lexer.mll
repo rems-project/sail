@@ -202,6 +202,8 @@ let kw_table =
      ("escape",                  (fun _ -> Escape));
      ("configuration",           (fun _ -> Configuration));
      ("termination_measure",     (fun _ -> TerminationMeasure));
+     ("forwards",                (fun _ -> Forwards));
+     ("backwards",               (fun _ -> Backwards));
      ("internal_plet",           (fun _ -> InternalPLet));
      ("internal_return",         (fun _ -> InternalReturn));
    ]
@@ -277,7 +279,6 @@ rule token = parse
   | ">="				{ (GtEq(r">=")) }
   | "->"                                { MinusGt }
   | "<->"                               { Bidir }
-  | "<-"                                { LtMinus }
   | "=>"                                { EqGt(r "=>") }
   | "<="				{ (LtEq(r"<=")) }
   | "/*!" wsc*  { Doc (doc_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 false lexbuf) }

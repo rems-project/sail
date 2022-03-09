@@ -82,11 +82,12 @@ let opt_sequential = ref false
 let opt_mwords = ref false
 
 type context = {
-  early_ret : bool;
-  bound_nexps : NexpSet.t;
-  top_env : Env.t
+    early_ret : bool;
+    monadic : bool;
+    bound_nexps : NexpSet.t;
+    top_env : Env.t
 }
-let empty_ctxt = { early_ret = false; bound_nexps = NexpSet.empty; top_env = Env.empty }
+let empty_ctxt = { early_ret = false; monadic = false; bound_nexps = NexpSet.empty; top_env = Env.empty }
 
 let print_to_from_interp_value = ref false
 let langlebar = string "<|"
@@ -806,24 +807,24 @@ let doc_exp_lem, doc_let_lem =
               "Unexpected number of arguments for loop combinator")
           end
        | Id_aux (Id "early_return", _) ->
-          begin
-            match args with
-            | [exp] ->
-               let epp = separate space [string "early_return"; expY exp] in
-               let aexp_needed, tepp =
-                 match Util.option_bind (make_printable_type ctxt ctxt.top_env)
-                                        (Env.get_ret_typ (env_of exp)),
-                       make_printable_type ctxt (env_of full_exp) (typ_of full_exp) with
-                   | Some typ, Some full_typ ->
-                     let tannot = separate space [string "MR";
-                       doc_atomic_typ_lem false full_typ;
-                       doc_atomic_typ_lem false typ] in
-                     true, doc_op colon epp tannot
-                   | _ -> aexp_needed, epp
-               in
-               if aexp_needed then parens tepp else tepp
-            | _ -> raise (Reporting.err_unreachable l __POS__
-              "Unexpected number of arguments for early_return builtin")
+          begin match args with
+          | [exp] ->
+             let (returner, monad, arg_order) = if ctxt.monadic then ("early_return", "MR", fun x -> x) else ("Left", "either", List.rev) in
+             let epp = separate space [string returner; expY exp] in
+             let aexp_needed, tepp =
+               match Util.option_bind (make_printable_type ctxt ctxt.top_env)
+                       (Env.get_ret_typ (env_of exp)),
+                     make_printable_type ctxt (env_of full_exp) (typ_of full_exp) with
+               | Some typ, Some full_typ ->
+                  let tannot = separate space ([string monad]
+                                               @ arg_order [doc_atomic_typ_lem false full_typ;
+                                                            doc_atomic_typ_lem false typ]) in
+                  true, doc_op colon epp tannot
+               | _ -> aexp_needed, epp
+             in
+             if aexp_needed then parens tepp else tepp
+          | _ -> raise (Reporting.err_unreachable l __POS__
+                          "Unexpected number of arguments for early_return builtin")
           end
        | _ ->
           begin match destruct_tannot annot with
@@ -982,30 +983,32 @@ let doc_exp_lem, doc_let_lem =
     | E_var(lexp, eq_exp, in_exp) ->
        raise (report l __POS__ "E_vars should have been removed before pretty-printing")
     | E_internal_plet (pat,e1,e2) ->
+       let bind, bind_unit = if ctxt.monadic then (">>=", ">>") else (">>$=", ">>$") in
        let epp =
          let b = match e1 with E_aux (E_if _,_) -> true | _ -> false in
          let middle =
            match fst (untyp_pat pat) with
            | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _)
-             when is_unit_typ (typ_of_pat pat) ->
-              string ">>"
+                when is_unit_typ (typ_of_pat pat) ->
+              string bind_unit
            | P_aux (P_tup _, _)
-             when not (IdSet.mem (mk_id "varstup") (find_e_ids e2)) ->
+                when not (IdSet.mem (mk_id "varstup") (find_e_ids e2)) ->
               (* Work around indentation issues in Lem when translating
                  tuple patterns to Isabelle *)
               separate space
-                [string ">>= fun varstup -> let";
+                [string (bind ^ " fun varstup -> let");
                  doc_pat_lem ctxt true pat;
                  string "= varstup in"]
            | _ ->
-              separate space [string ">>= fun";
+              separate space [string (bind ^ " fun");
                               doc_pat_lem ctxt true pat; arrow]
          in
          infix 0 1 middle (expV b e1) (expN e2)
        in
        wrap_parens (align epp)
     | E_internal_return (e1) ->
-       wrap_parens (align (separate space [string "return"; expY e1]))
+       let return = if ctxt.monadic then "return" else "Right" in
+       wrap_parens (align (separate space [string return; expY e1]))
     | E_sizeof nexp ->
       (match nexp_simp nexp with
         | Nexp_aux (Nexp_constant i, _) -> doc_lit_lem (L_aux (L_num i, l))
@@ -1381,9 +1384,12 @@ let doc_tannot_opt_lem env (Typ_annot_opt_aux(t,_)) = match t with
 
 let doc_fun_body_lem ctxt exp =
   let doc_exp = doc_exp_lem ctxt false exp in
-  if ctxt.early_ret
-  then align (string "catch_early_return" ^//^ parens (doc_exp))
-  else doc_exp
+  if ctxt.early_ret && ctxt.monadic then
+    align (string "catch_early_return" ^//^ parens (doc_exp))
+  else if ctxt.early_ret then
+    align (string "pure_early_return" ^//^ parens (doc_exp))
+  else
+    doc_exp
 
 let doc_funcl_lem monadic type_env (FCL_aux(FCL_Funcl(id, pexp), ((l, _) as annot))) =
   let (tq, typ) =
@@ -1397,11 +1403,15 @@ let doc_funcl_lem monadic type_env (FCL_aux(FCL_Funcl(id, pexp), ((l, _) as anno
   let pat,guard,exp,(l,_) = destruct_pexp pexp in
   let ctxt =
     { early_ret = contains_early_return exp;
+      monadic = monadic;
       bound_nexps = NexpSet.union (lem_nexps_of_typ typ) (typeclass_nexps typ);
       top_env = type_env } in
   let pats, bind = untuple_args_pat pat arg_typs in
   let patspp = separate_map space (doc_pat_lem ctxt true) pats in
-  let wrap_monadic = if monadic && not (effectful (effect_of exp)) then (fun doc -> string "return" ^^ space ^^ parens doc) else (fun doc -> doc) in
+  let wrap_monadic =
+    if monadic && not (effectful (effect_of exp)) then
+      (fun doc -> string "return" ^^ space ^^ parens doc)
+    else (fun doc -> doc) in
   let _ = match guard with
     | None -> ()
     | _ ->
@@ -1423,11 +1433,13 @@ module StringSet = Set.Make(String)
 let doc_fundef_rhs_lem monadic env (FD_aux (FD_function (r, typa, funcls), fannot) as fd) =
   separate_map (hardline ^^ string "and ") (doc_funcl_lem monadic env) funcls
 
-let doc_mutrec_lem env = function
+let doc_mutrec_lem effect_info env = function
   | [] -> Reporting.unreachable Parse_ast.Unknown __POS__ "Empty internal_mutrec"
-  | fundefs ->
+  | (fundef :: _ as fundefs) ->
+     let id = id_of_fundef fundef in
+     let required_monadic = not (Effects.function_is_pure id effect_info) in
      string "let rec " ^^
-     separate_map (hardline ^^ string "and ") (doc_fundef_rhs_lem false env) fundefs
+     separate_map (hardline ^^ string "and ") (doc_fundef_rhs_lem required_monadic env) fundefs
 
 let rec doc_fundef_lem effect_info env (FD_aux (FD_function (r, typa, fcls), fannot) as fd) =
   match fcls with
@@ -1542,10 +1554,9 @@ let rec doc_def_lem effect_info type_env def =
   | DEF_overload _ -> empty
   | DEF_type t_def -> group (doc_typdef_lem type_env t_def) ^/^ hardline
   | DEF_reg_dec dec -> group (doc_dec_lem dec)
-
   | DEF_default df -> empty
   | DEF_fundef fdef -> group (doc_fundef_lem effect_info type_env fdef) ^/^ hardline
-  | DEF_internal_mutrec fundefs -> doc_mutrec_lem type_env fundefs ^/^ hardline
+  | DEF_internal_mutrec fundefs -> doc_mutrec_lem effect_info type_env fundefs ^/^ hardline
   | DEF_val (LB_aux (LB_val (pat, _), _) as lbind) ->
      group (doc_let_lem empty_ctxt lbind) ^/^ hardline
   | DEF_scattered sdef -> unreachable (def_loc def) __POS__ "doc_def_lem: shoulnd't have DEF_scattered at this point"

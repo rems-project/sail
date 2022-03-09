@@ -123,6 +123,19 @@ let catch_early_return m =
       | Right e -> throw e
      end)
 
+val pure_early_return : forall 'a. either 'a 'a -> 'a
+let pure_early_return = function
+  | Left a -> a
+  | Right a -> a
+end
+
+val either_bind : forall 'e 'a 'b. either 'e 'a -> ('a -> either 'e 'b) -> either 'e 'b
+let either_bind m f =
+  match m with
+  | Left e -> Left e
+  | Right x -> f x
+  end
+
 (* Lift to monad with early return by wrapping exceptions *)
 val liftR : forall 'rv 'a 'r 'e. monad 'rv 'a 'e -> monadR 'rv 'a 'r 'e
 let liftR m = try_catch m (fun e -> throw (Right e))

@@ -109,7 +109,8 @@ val has_outcome : id -> EffectSet.t -> bool
 
 type side_effect_info = {
     functions : EffectSet.t Bindings.t;
-    letbinds : EffectSet.t Bindings.t
+    letbinds : EffectSet.t Bindings.t;
+    mappings : EffectSet.t Bindings.t
   }
 
 val function_is_pure : id -> side_effect_info -> bool
@@ -121,7 +122,12 @@ val infer_side_effects : Type_check.tannot ast -> side_effect_info
    top-level letbindings must be pure. *)
 val check_side_effects : side_effect_info -> Type_check.tannot ast -> unit
 
+(** [copy_function_effect id_from info id_to] copies the effect
+   information from id_from to id_to in the side effect
+   information. The order of arguments is to make it convenient to use
+   with List.fold_left. *)
 val copy_function_effect : id -> side_effect_info -> id -> side_effect_info
+val copy_mapping_to_function : id -> side_effect_info -> id -> side_effect_info
   
 (** Previous code mostly assumes that side effect info is attached to
    nodes in the AST. To keep this code working, this rewrite pass

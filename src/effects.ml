@@ -209,6 +209,8 @@ let infer_def_direct_effects def =
      | None ->
         Reporting.unreachable l __POS__ "Empty funcls in infer_def_direct_effects"
      end
+  | DEF_mapdef _ ->
+     effects := EffectSet.add IncompleteMatch !effects
   | DEF_scattered _ ->
      effects := EffectSet.add Scattered !effects
   | _ -> ()
@@ -239,7 +241,8 @@ let can_have_direct_side_effect = function
 
 type side_effect_info = {
     functions : EffectSet.t Bindings.t;
-    letbinds : EffectSet.t Bindings.t
+    letbinds : EffectSet.t Bindings.t;
+    mappings : EffectSet.t Bindings.t
   }
 
 let function_is_pure id info =
@@ -249,6 +252,10 @@ let function_is_pure id info =
                       
 let is_function = function
   | Callgraph.Function _ -> true
+  | _ -> false
+
+let is_mapping = function
+  | Callgraph.Mapping _ -> true
   | _ -> false
                       
 let infer_side_effects ast =
@@ -270,13 +277,14 @@ let infer_side_effects ast =
 
   let function_effects = ref Bindings.empty in
   let letbind_effects = ref Bindings.empty in
+  let mapping_effects = ref Bindings.empty in
 
   let all_nodes = Callgraph.G.nodes cg in
   let total = List.length all_nodes in
   List.iteri (fun i node ->
       Util.progress "Effects (transitive) " (string_of_int (i + 1) ^ "/" ^ string_of_int total) (i + 1) total;
       match node with
-      | Callgraph.Function id | Callgraph.Letbind id ->
+      | Callgraph.Function id | Callgraph.Letbind id | Callgraph.Mapping id ->
          let reachable = Callgraph.G.reachable (NodeSet.singleton node) NodeSet.empty cg in
          (* First, a function has any side effects it directly causes *)
          let side_effects = match Bindings.find_opt id !direct_effects with Some effs -> effs | None -> EffectSet.empty in
@@ -297,6 +305,8 @@ let infer_side_effects ast =
          in
          if is_function node then
            function_effects := Bindings.add id side_effects !function_effects
+         else if is_mapping node then
+           mapping_effects := Bindings.add id side_effects !mapping_effects
          else (
            letbind_effects := Bindings.add id side_effects !letbind_effects
          )
@@ -305,7 +315,8 @@ let infer_side_effects ast =
 
   {
     functions = !function_effects;
-    letbinds = !letbind_effects
+    letbinds = !letbind_effects;
+    mappings = !mapping_effects
   }
 
 let check_side_effects effect_info ast =
@@ -328,7 +339,13 @@ let copy_function_effect id_from effect_info id_to =
   | Some eff ->
      { effect_info with functions = Bindings.add id_to eff effect_info.functions }
   | None -> effect_info
-  
+
+let copy_mapping_to_function id_from effect_info id_to =
+  match Bindings.find_opt id_from effect_info.mappings with
+  | Some eff ->
+     { effect_info with functions = Bindings.add id_to eff effect_info.functions }
+  | None -> effect_info
+          
 let rewrite_attach_effects effect_info =
   let rewrite_lexp_aux ((child_eff, lexp_aux), (l, tannot)) =
     let env = env_of_tannot tannot in
@@ -348,6 +365,7 @@ let rewrite_attach_effects effect_info =
   let rewrite_e_aux ((child_eff, e_aux), (l, tannot)) =
     let env = env_of_tannot tannot in
     let eff = match e_aux with
+      | E_app (f, _) when string_of_id f = "early_return" -> monadic_effect
       | E_app (f, _) ->
          begin match Bindings.find_opt f effect_info.functions with
          | Some side_effects -> if pure side_effects then no_effect else monadic_effect

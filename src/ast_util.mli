@@ -409,6 +409,7 @@ val string_of_index_range : index_range -> string
 (** {2 Functions for getting identifiers from toplevel definitions} *)
 
 val id_of_fundef : 'a fundef -> id
+val id_of_mapdef : 'a mapdef -> id
 val id_of_type_def : 'a type_def -> id
 val id_of_val_spec : 'a val_spec -> id
 val id_of_dec_spec : 'a dec_spec -> id

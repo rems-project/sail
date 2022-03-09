@@ -226,13 +226,14 @@ let rec desugar_rchain chain s e =
 %token Barr Depend Rreg Wreg Rmem Wmem Wmv Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl
 %token InternalPLet InternalReturn
+%token Forwards Backwards
 
 %nonassoc Then
 %nonassoc Else
 
 %token Bar Comma Dot Eof Minus Semi Under DotDot
 %token Lcurly Rcurly Lparen Rparen Lsquare Rsquare LcurlyBar RcurlyBar LsquareBar RsquareBar
-%token MinusGt Bidir LtMinus
+%token MinusGt Bidir
 
 /*Terminals with content*/
 
@@ -1380,26 +1381,21 @@ atomic_mpat:
   | atomic_mpat Colon typ
     { mk_mpat (MP_typ ($1, $3)) $startpos $endpos }
 
-
-
 %inline mpexp:
   | mpat
     { mk_mpexp (MPat_pat $1) $startpos $endpos }
   | mpat If_ exp
     { mk_mpexp (MPat_when ($1, $3)) $startpos $endpos }
 
-
 mapcl:
   | mpexp Bidir mpexp
     { mk_bidir_mapcl $1 $3 $startpos $endpos }
   | mpexp EqGt exp
-      { mk_forwards_mapcl $1 $3 $startpos $endpos }
-  | mpexp LtMinus exp
-      { mk_backwards_mapcl $1 $3 $startpos $endpos }
-  (* | exp LtMinus pat
-   *   { mk_backwards_mapcl (mk_pexp (Pat_exp ($3, $1)) $startpos $endpos) $startpos $endpos }
-   * | exp LtMinus pat If_ exp
-   *   { mk_backwards_mapcl (mk_pexp (Pat_when ($3, $5, $1)) $startpos $endpos) $startpos $endpos } *)
+    { mk_forwards_mapcl $1 $3 $startpos $endpos }
+  | Forwards mpexp EqGt exp
+    { mk_forwards_mapcl $2 $4 $startpos $endpos }
+  | Backwards mpexp EqGt exp
+    { mk_backwards_mapcl $2 $4 $startpos $endpos }
 
 mapcl_doc:
   | Doc mapcl_doc

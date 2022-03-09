@@ -72,6 +72,7 @@ open Ast_util
 type node =
   | Register of id
   | Function of id
+  | Mapping of id
   | Letbind of id
   | Type of id
   | Overload of id

@@ -251,24 +251,34 @@ let rewrite_lexp rewriters (LEXP_aux(lexp,(l,annot))) =
 
 let rewrite_funcl rewriters (FCL_aux (FCL_Funcl(id,pexp),(l,annot))) =
   FCL_aux (FCL_Funcl (id, rewrite_pexp rewriters pexp),(l,annot))
-                          
+
 let rewrite_fun rewriters (FD_aux (FD_function(recopt,tannotopt,funcls),(l,fdannot))) = 
   let recopt = match recopt with
     | Rec_aux (Rec_nonrec, l) -> Rec_aux (Rec_nonrec, l)
     | Rec_aux (Rec_rec, l) -> Rec_aux (Rec_rec, l)
     | Rec_aux (Rec_measure (pat,exp),l) ->
-       Rec_aux (Rec_measure (rewrite_pat rewriters pat, rewrite_exp rewriters exp),l)
+       Rec_aux (Rec_measure (rewriters.rewrite_pat rewriters pat, rewriters.rewrite_exp rewriters exp),l)
   in
-  FD_aux (FD_function(recopt,tannotopt,List.map (rewrite_funcl rewriters) funcls),(l,fdannot))
+  FD_aux (FD_function(recopt,tannotopt,List.map (rewrite_funcl rewriters) funcls), (l,fdannot))
 
+let rewrite_mpexp rewriters (MPat_aux (aux, (l, annot))) =
+  let aux = match aux with
+    | MPat_pat mpat -> MPat_pat mpat
+    | MPat_when (mpat, exp) -> MPat_when (mpat, rewriters.rewrite_exp rewriters exp)
+  in
+  MPat_aux (aux, (l, annot))
+  
 let rewrite_mapcl rewriters (MCL_aux (aux, (l, annot))) =
   let aux = match aux with
-    | MCL_bidir (mpexp1, mpexp2) -> MCL_bidir (mpexp1, mpexp2)
-    | MCL_forwards (mpexp, exp) -> MCL_forwards (mpexp, rewriters.rewrite_exp rewriters exp)
-    | MCL_backwards (mpexp, exp) -> MCL_backwards (mpexp, rewriters.rewrite_exp rewriters exp)
+    | MCL_bidir (mpexp1, mpexp2) -> MCL_bidir (rewrite_mpexp rewriters mpexp1, mpexp2)
+    | MCL_forwards (mpexp, exp) -> MCL_forwards (rewrite_mpexp rewriters mpexp, rewriters.rewrite_exp rewriters exp)
+    | MCL_backwards (mpexp, exp) -> MCL_backwards (rewrite_mpexp rewriters mpexp, rewriters.rewrite_exp rewriters exp)
   in
   MCL_aux (aux, (l, annot))
 
+let rewrite_mapdef rewriters (MD_aux (MD_mapping (id, tannot_opt, mapcls), annot)) =
+  MD_aux (MD_mapping (id, tannot_opt, List.map (rewrite_mapcl rewriters) mapcls), annot)
+  
 let rewrite_scattered rewriters (SD_aux (sd, (l, annot))) =
   let sd =  match sd with
     | SD_funcl funcl -> SD_funcl (rewrite_funcl rewriters funcl)
@@ -370,11 +380,29 @@ let rec fold_pat_aux (alg : ('a,'pat,'pat_aux) pat_alg) : 'a pat_aux -> 'pat_aux
   | P_list ps           -> alg.p_list (List.map (fold_pat alg) ps)
   | P_cons (ph,pt)      -> alg.p_cons (fold_pat alg ph, fold_pat alg pt)
   | P_string_append ps  -> alg.p_string_append (List.map (fold_pat alg) ps)
-
+                         
 and fold_pat (alg : ('a,'pat,'pat_aux) pat_alg) : 'a pat -> 'pat =
   function
-  | P_aux (pat,annot)   -> alg.p_aux (fold_pat_aux alg pat,annot)
+  | P_aux (pat, annot) -> alg.p_aux (fold_pat_aux alg pat, annot)
 
+let rec fold_mpat_aux (alg : ('a,'mpat,'mpat_aux) pat_alg) : 'a mpat_aux -> 'mpat_aux =
+  function
+  | MP_lit lit          -> alg.p_lit lit
+  | MP_id id            -> alg.p_id id
+  | MP_as (p, id)       -> alg.p_as (fold_mpat alg p, id)
+  | MP_typ (p, typ)     -> alg.p_typ (typ,fold_mpat alg p)
+  | MP_app (id, ps)     -> alg.p_app (id,List.map (fold_mpat alg) ps)
+  | MP_vector ps        -> alg.p_vector (List.map (fold_mpat alg) ps)
+  | MP_vector_concat ps -> alg.p_vector_concat (List.map (fold_mpat alg) ps)
+  | MP_tup ps           -> alg.p_tup (List.map (fold_mpat alg) ps)
+  | MP_list ps          -> alg.p_list (List.map (fold_mpat alg) ps)
+  | MP_cons (ph, pt)    -> alg.p_cons (fold_mpat alg ph, fold_mpat alg pt)
+  | MP_string_append ps -> alg.p_string_append (List.map (fold_mpat alg) ps)
+
+and fold_mpat (alg : ('a,'mpat,'mpat_aux) pat_alg) : 'a mpat -> 'mpat =
+  function
+  | MP_aux (mpat, annot) -> alg.p_aux (fold_mpat_aux alg mpat, annot)
+                         
 (* identity fold from term alg to term alg *)
 let id_pat_alg : ('a,'a pat, 'a pat_aux) pat_alg =
   { p_lit            = (fun lit -> P_lit lit)
@@ -391,10 +419,29 @@ let id_pat_alg : ('a,'a pat, 'a pat_aux) pat_alg =
   ; p_tup            = (fun ps -> P_tup ps)
   ; p_list           = (fun ps -> P_list ps)
   ; p_cons           = (fun (ph,pt) -> P_cons (ph,pt))
-  ; p_string_append  = (fun (ps) -> P_string_append (ps))
+  ; p_string_append  = (fun ps -> P_string_append ps)
   ; p_aux            = (fun (pat,annot) -> P_aux (pat,annot))
   }
 
+let id_mpat_alg : ('a, 'a mpat option, 'a mpat_aux option) pat_alg =
+  { p_lit            = (fun lit -> Some (MP_lit lit))
+  ; p_wild           = None
+  ; p_or             = (fun _ -> None)
+  ; p_not            = (fun _ -> None)
+  ; p_as             = (fun (pat, id) -> Util.option_map (fun pat -> MP_as (pat, id)) pat)
+  ; p_typ            = (fun (typ, pat) -> Util.option_map (fun pat -> MP_typ (pat, typ)) pat)
+  ; p_id             = (fun id -> Some (MP_id id))
+  ; p_var            = (fun _ -> None)
+  ; p_app            = (fun (id, ps) -> Util.option_map (fun ps -> MP_app (id, ps)) (Util.option_all ps))
+  ; p_vector         = (fun ps -> Util.option_map (fun ps -> MP_vector ps) (Util.option_all ps))
+  ; p_vector_concat  = (fun ps -> Util.option_map (fun ps -> MP_vector_concat ps) (Util.option_all ps))
+  ; p_tup            = (fun ps -> Util.option_map (fun ps -> MP_tup ps) (Util.option_all ps))
+  ; p_list           = (fun ps -> Util.option_map (fun ps -> MP_list ps) (Util.option_all ps))
+  ; p_cons           = (fun (ph, pt) -> Util.option_bind (fun ph -> Util.option_map (fun pt -> MP_cons (ph, pt)) pt) ph)
+  ; p_string_append  = (fun ps -> Util.option_map (fun ps -> MP_string_append ps) (Util.option_all ps))
+  ; p_aux            = (fun (pat, annot) -> Util.option_map (fun pat -> MP_aux (pat,annot)) pat)
+  }
+  
 type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
       'opt_default_aux,'opt_default,'pexp,'pexp_aux,'letbind_aux,'letbind,
       'pat,'pat_aux) exp_alg =

@@ -73,6 +73,7 @@ open Rewriter
 type node =
   | Register of id
   | Function of id
+  | Mapping of id
   | Letbind of id
   | Type of id
   | Overload of id
@@ -84,6 +85,7 @@ type node =
 let node_id = function
   | Register id -> id
   | Function id -> id
+  | Mapping id -> id
   | Letbind id -> id
   | Type id -> id
   | Overload id -> id
@@ -95,13 +97,14 @@ let node_id = function
 let node_kind = function
   | Register _ -> 0
   | Function _ -> 1
-  | Letbind _ -> 2
-  | Type _ -> 3
-  | Overload _ -> 4
-  | Constructor _ -> 5
-  | FunctionMeasure _ -> 6
-  | LoopMeasures _ -> 7
-  | Outcome _ -> 8
+  | Mapping _ -> 2
+  | Letbind _ -> 3
+  | Type _ -> 4
+  | Overload _ -> 5
+  | Constructor _ -> 6
+  | FunctionMeasure _ -> 7
+  | LoopMeasures _ -> 8
+  | Outcome _ -> 9
 
 module Node = struct
   type t = node
@@ -118,6 +121,7 @@ let node_color cuts =
   | node when NodeSet.mem node cuts -> "red"
   | Register _ -> "lightpink"
   | Function _ -> "white"
+  | Mapping _ -> "azure2"
   | Letbind _ -> "yellow"
   | Type _ -> "springgreen"
   | Overload _ -> "peachpuff"
@@ -323,6 +327,10 @@ let add_def_to_graph graph def =
   in
          
   begin match def with
+  | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, (Typ_aux (Typ_bidir _, _) as typ)), _), id, _, _), _)) ->
+     graph := G.add_edges (Mapping id) [] !graph;
+     scan_typquant (Mapping id) typq;
+     IdSet.iter (fun typ_id -> graph := G.add_edge (Mapping id) (Type typ_id) !graph) (typ_ids typ)
   | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), id, _, _), _)) ->
      graph := G.add_edges (Function id) [] !graph;
      scan_typquant (Function id) typq;
@@ -331,6 +339,10 @@ let add_def_to_graph graph def =
      let id = id_of_fundef fdef in
      graph := G.add_edges (Function id) [] !graph;
      ignore (rewrite_fun (rewriters (Function id)) fdef)
+  | DEF_mapdef mdef ->
+     let id = id_of_mapdef mdef in
+     graph := G.add_edges (Mapping id) [] !graph;
+     ignore (rewrite_mapdef (rewriters (Mapping id)) mdef)
   | DEF_val (LB_aux (LB_val (pat, exp), _) as lb) ->
      let ids = pat_ids pat in
      IdSet.iter (fun id -> graph := G.add_edges (Letbind id) [] !graph) ids;
