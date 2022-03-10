@@ -2130,15 +2130,20 @@ let letbind (v : 'a exp) (body : 'a exp -> 'a exp) : 'a exp =
      annot_exp (E_let (lb, body)) l env (typ_of body)
      |> add_typs_let env typ (typ_of body)
   | None ->
-     raise (Reporting.err_unreachable l __POS__ "no type information")
+     Reporting.unreachable l __POS__ "no type information"
 
 let rec mapCont (f : 'b -> ('b -> 'a exp) -> 'a exp) (l : 'b list) (k : 'b list -> 'a exp) : 'a exp = 
   match l with
   | [] -> k []
   | exp :: exps -> f exp (fun exp -> mapCont f exps (fun exps -> k (exp :: exps)))
 
-let rewrite_ast_letbind_effects env =
+let rewrite_ast_letbind_effects effect_info env =
+  let monadic (E_aux (aux, (l, tannot)) as exp) =
+    E_aux (aux, (l, add_effect_annot tannot monadic_effect)) in
 
+  let purify (E_aux (aux, (l, tannot)) as exp) =
+    E_aux (aux, (l, add_effect_annot tannot no_effect)) in
+ 
   let rec value ((E_aux (exp_aux,_)) as exp) =
     not (effectful exp || updates_vars exp)
   and value_optdefault (Def_val_aux (o,_)) = match o with
@@ -2147,12 +2152,11 @@ let rewrite_ast_letbind_effects env =
   and value_fexps fexps =
     List.fold_left (fun b (FE_aux (FE_Fexp (_,e),_)) -> b && value e) true fexps in
 
-
   let rec n_exp_name (exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
-    n_exp exp (fun exp -> if value exp then k exp else letbind exp k)
+    n_exp exp (fun exp -> if value exp then k exp else monadic (letbind exp k))
 
   and n_exp_pure (exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
-    n_exp exp (fun exp -> if value exp then k exp else letbind exp k)
+    n_exp exp (fun exp -> if value exp then k exp else monadic (letbind exp k))
 
   and n_exp_nameL (exps : 'a exp list) (k : 'a exp list -> 'a exp) : 'a exp =
     mapCont n_exp_name exps k
@@ -2227,11 +2231,11 @@ let rewrite_ast_letbind_effects env =
   and n_exp_term ?cast:(cast=false) (newreturn : bool) (exp : 'a exp) : 'a exp =
     let (E_aux (_,(l,tannot))) = exp in
     let exp =
-      if newreturn then
+      if newreturn then (
         (* let typ = try typ_of exp with _ -> unit_typ in *)
         let exp = if cast then add_e_cast (env_of exp) (typ_of exp) exp else exp in
         annot_exp (E_internal_return exp) l (env_of exp) (typ_of exp)
-      else exp
+      ) else exp
     in
     (* n_exp_term forces an expression to be translated into a form 
        "let .. let .. let .. in EXP" where EXP has no effect and does not update
@@ -2239,9 +2243,8 @@ let rewrite_ast_letbind_effects env =
     n_exp_pure exp (fun exp -> exp)
 
   and n_exp (E_aux (exp_aux,annot) as exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp = 
-
     let rewrap e = E_aux (e,annot) in
-
+    let pure_rewrap e = purify (rewrap e) in
     match exp_aux with
     | E_block es -> failwith "E_block should have been removed till now"
     | E_id id -> k exp
@@ -2249,7 +2252,7 @@ let rewrite_ast_letbind_effects env =
     | E_lit _ -> k exp
     | E_cast (typ,exp') ->
        n_exp_name exp' (fun exp' ->
-       k (rewrap (E_cast (typ,exp'))))
+       k (pure_rewrap (E_cast (typ, exp'))))
     | E_app (op_bool, [l; r])
       when string_of_id op_bool = "and_bool" || string_of_id op_bool = "or_bool" ->
        (* Leave effectful operands of Boolean "and"/"or" in place to allow
@@ -2258,20 +2261,20 @@ let rewrite_ast_letbind_effects env =
        let l = n_exp_term ~cast:true newreturn l in
        let r = n_exp_term ~cast:true newreturn r in
        k (rewrap (E_app (op_bool, [l; r])))
-    | E_app (id,exps) ->
+    | E_app (id, exps) ->
+       let fix_eff = if Effects.function_is_pure id effect_info then purify else (fun exp -> exp) in
        n_exp_nameL exps (fun exps ->
-       k (rewrap (E_app (id,exps))))
-    | E_app_infix (exp1,id,exp2) ->
+       k (fix_eff (rewrap (E_app (id, exps)))))
+    | E_app_infix (exp1, id, exp2) ->
+       let fix_eff = if Effects.function_is_pure id effect_info then purify else (fun exp -> exp) in
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->
-       k (rewrap (E_app_infix (exp1,id,exp2)))))
+       k (fix_eff (rewrap (E_app_infix (exp1, id, exp2))))))
     | E_tuple exps ->
        n_exp_nameL exps (fun exps ->
-       k (rewrap (E_tuple exps)))
+       k (pure_rewrap (E_tuple exps)))
     | E_if (exp1,exp2,exp3) ->
        let e_if exp1 =
-         let (E_aux (_,annot2)) = exp2 in
-         let (E_aux (_,annot3)) = exp3 in
          let newreturn = effectful exp2 || effectful exp3 in
          let exp2 = n_exp_term newreturn exp2 in
          let exp3 = n_exp_term newreturn exp3 in
@@ -2295,48 +2298,48 @@ let rewrite_ast_letbind_effects env =
        k (rewrap (E_loop (loop,measure,cond,body)))
     | E_vector exps ->
        n_exp_nameL exps (fun exps ->
-       k (rewrap (E_vector exps)))
+       k (pure_rewrap (E_vector exps)))
     | E_vector_access (exp1,exp2) ->
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->
-       k (rewrap (E_vector_access (exp1,exp2)))))
+       k (pure_rewrap (E_vector_access (exp1,exp2)))))
     | E_vector_subrange (exp1,exp2,exp3) ->
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->
        n_exp_name exp3 (fun exp3 ->
-       k (rewrap (E_vector_subrange (exp1,exp2,exp3))))))
+       k (pure_rewrap (E_vector_subrange (exp1,exp2,exp3))))))
     | E_vector_update (exp1,exp2,exp3) ->
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->
        n_exp_name exp3 (fun exp3 ->
-       k (rewrap (E_vector_update (exp1,exp2,exp3))))))
+       k (pure_rewrap (E_vector_update (exp1,exp2,exp3))))))
     | E_vector_update_subrange (exp1,exp2,exp3,exp4) ->
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->
        n_exp_name exp3 (fun exp3 ->
        n_exp_name exp4 (fun exp4 ->
-       k (rewrap (E_vector_update_subrange (exp1,exp2,exp3,exp4)))))))
+       k (pure_rewrap (E_vector_update_subrange (exp1,exp2,exp3,exp4)))))))
     | E_vector_append (exp1,exp2) ->
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->
-       k (rewrap (E_vector_append (exp1,exp2)))))
+       k (pure_rewrap (E_vector_append (exp1,exp2)))))
     | E_list exps ->
        n_exp_nameL exps (fun exps ->
-       k (rewrap (E_list exps)))
+       k (pure_rewrap (E_list exps)))
     | E_cons (exp1,exp2) ->
        n_exp_name exp1 (fun exp1 ->
        n_exp_name exp2 (fun exp2 ->
-       k (rewrap (E_cons (exp1,exp2)))))
+       k (pure_rewrap (E_cons (exp1,exp2)))))
     | E_record fexps ->
        n_fexpL fexps (fun fexps ->
-       k (rewrap (E_record fexps)))
+       k (pure_rewrap (E_record fexps)))
     | E_record_update (exp1,fexps) ->
        n_exp_name exp1 (fun exp1 ->
        n_fexpL fexps (fun fexps ->
-       k (rewrap (E_record_update (exp1,fexps)))))
+       k (pure_rewrap (E_record_update (exp1,fexps)))))
     | E_field (exp1,id) ->
        n_exp_name exp1 (fun exp1 ->
-       k (rewrap (E_field (exp1,id))))
+       k (pure_rewrap (E_field (exp1,id))))
     | E_case (exp1,pexps) ->
        let newreturn = List.exists effectful_pexp pexps in
        n_exp_name exp1 (fun exp1 ->
@@ -2349,7 +2352,7 @@ let rewrite_ast_letbind_effects env =
        k (rewrap (E_try (exp1,pexps))))
     | E_let (lb,body) ->
        n_lb lb (fun lb ->
-       rewrap (E_let (lb,n_exp body k)))
+       rewrap (E_let (lb, n_exp body k)))
     | E_sizeof nexp ->
        k (rewrap (E_sizeof nexp))
     | E_constraint nc ->
@@ -2374,7 +2377,7 @@ let rewrite_ast_letbind_effects env =
        k (rewrap (E_internal_value v))
     | E_return exp' ->
        n_exp_name exp' (fun exp' ->
-       k (rewrap (E_return exp')))
+       k (pure_rewrap (E_return exp')))
     | E_throw exp' ->
        n_exp_name exp' (fun exp' ->
        k (rewrap (E_throw exp')))
@@ -2405,15 +2408,18 @@ let rewrite_ast_letbind_effects env =
       DEF_internal_mutrec (List.map (rewrite_fun rewriters) fdefs)
     | d -> d
   in
-  rewrite_ast_base
-    { rewrite_exp = rewrite_exp
-    ; rewrite_pat = rewrite_pat
-    ; rewrite_let = rewrite_let
-    ; rewrite_lexp = rewrite_lexp
-    ; rewrite_fun = rewrite_fun
-    ; rewrite_def = rewrite_def
-    ; rewrite_ast = rewrite_ast_base
-    }
+  (fun ast ->
+    rewrite_ast_base
+      { rewrite_exp = rewrite_exp
+      ; rewrite_pat = rewrite_pat
+      ; rewrite_let = rewrite_let
+      ; rewrite_lexp = rewrite_lexp
+      ; rewrite_fun = rewrite_fun
+      ; rewrite_def = rewrite_def
+      ; rewrite_ast = rewrite_ast_base
+      } ast,
+    effect_info,
+    env)
 
 let rewrite_ast_internal_lets env =
 
@@ -4851,7 +4857,7 @@ let all_rewriters = [
     ("early_return", basic_rewriter rewrite_ast_early_return);
     ("nexp_ids", basic_rewriter rewrite_ast_nexp_ids);
     ("remove_blocks", basic_rewriter rewrite_ast_remove_blocks);
-    ("letbind_effects", basic_rewriter rewrite_ast_letbind_effects);
+    ("letbind_effects", Base_rewriter rewrite_ast_letbind_effects);
     ("remove_e_assign", basic_rewriter rewrite_ast_remove_e_assign);
     ("internal_lets", basic_rewriter rewrite_ast_internal_lets);
     ("remove_superfluous_letbinds", basic_rewriter rewrite_ast_remove_superfluous_letbinds);

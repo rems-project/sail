@@ -1,6 +1,6 @@
 $include <arith.sail>
 
-val "pow2" : forall 'n, 'n >= 0. int('n) -> int(2 ^ 'n)
+val pow2 = pure "pow2" : forall 'n, 'n >= 0. int('n) -> int(2 ^ 'n)
 
 val floor_pow2 : forall ('x : Int), 'x >= 0. int('x) -> int
 

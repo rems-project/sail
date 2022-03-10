@@ -691,7 +691,7 @@ let rec to_ast_typedef ctx (P.TD_aux (aux, l) : P.type_def) : unit def list ctx_
      (* Now generate the AST union type *)
      let id = to_ast_reserved_type_id ctx id in
      let typq, typq_ctx = to_ast_typquant ctx typq in
-     let arms = List.map (to_ast_type_union typq_ctx) arms in
+     let arms = List.map (to_ast_type_union (add_constructor id typq typq_ctx)) arms in
      [DEF_type (TD_aux (TD_variant (id, typq, arms, false), (l, ())))] @ generated_records,
      add_constructor id typq ctx
 

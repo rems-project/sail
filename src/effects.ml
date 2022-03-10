@@ -304,7 +304,8 @@ let infer_side_effects ast =
            |> EffectSet.union side_effects
          in
          if is_function node then
-           function_effects := Bindings.add id side_effects !function_effects
+           (prerr_endline (string_of_id id ^ " " ^ Util.string_of_list ", " string_of_side_effect (EffectSet.elements side_effects));
+           function_effects := Bindings.add id side_effects !function_effects)
          else if is_mapping node then
            mapping_effects := Bindings.add id side_effects !mapping_effects
          else (
@@ -345,7 +346,7 @@ let copy_mapping_to_function id_from effect_info id_to =
   | Some eff ->
      { effect_info with functions = Bindings.add id_to eff effect_info.functions }
   | None -> effect_info
-          
+ 
 let rewrite_attach_effects effect_info =
   let rewrite_lexp_aux ((child_eff, lexp_aux), (l, tannot)) =
     let env = env_of_tannot tannot in
