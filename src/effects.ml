@@ -128,7 +128,7 @@ let has_outcome id = EffectSet.mem (Outcome id)
 
 module PC_config = struct
   type t = tannot
-  let typ_of_pat = Type_check.typ_of_pat
+  let typ_of_t = Type_check.typ_of_tannot
 end
 
 module PC = Pattern_completeness.Make(PC_config)
@@ -304,8 +304,7 @@ let infer_side_effects ast =
            |> EffectSet.union side_effects
          in
          if is_function node then
-           (prerr_endline (string_of_id id ^ " " ^ Util.string_of_list ", " string_of_side_effect (EffectSet.elements side_effects));
-           function_effects := Bindings.add id side_effects !function_effects)
+           function_effects := Bindings.add id side_effects !function_effects
          else if is_mapping node then
            mapping_effects := Bindings.add id side_effects !mapping_effects
          else (
@@ -343,9 +342,12 @@ let copy_function_effect id_from effect_info id_to =
 
 let copy_mapping_to_function id_from effect_info id_to =
   match Bindings.find_opt id_from effect_info.mappings with
-  | Some eff ->
+  (* Avoid copying the mapping effect to the function if it already
+     exists - this likely means the function has been manually
+     defined. *)
+  | Some eff when not (Bindings.mem id_to effect_info.functions) ->
      { effect_info with functions = Bindings.add id_to eff effect_info.functions }
-  | None -> effect_info
+  | _ -> effect_info
  
 let rewrite_attach_effects effect_info =
   let rewrite_lexp_aux ((child_eff, lexp_aux), (l, tannot)) =

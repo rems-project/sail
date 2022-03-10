@@ -839,7 +839,7 @@ let case_exp e t cs =
 
 module PC_config = struct
   type t = tannot
-  let typ_of_pat = typ_of_pat
+  let typ_of_t = typ_of_tannot
 end
 
 module PC = Pattern_completeness.Make(PC_config);;

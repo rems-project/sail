@@ -3051,7 +3051,7 @@ let rec lexp_assignment_type env (LEXP_aux (aux, (l, ()))) =
   | LEXP_cast (_, v) ->
      begin match Env.lookup_id v env with
      | Register _ | Local (Mutable, _) ->
-        Reporting.warn ("Redundant type annotation on assignment to " ^ string_of_id v) l "Its type is already known";
+        Reporting.warn ("Redundant type annotation on assignment to " ^ string_of_id v) l "Type is already known";
         Update
      | Unbound _ -> Declaration
      | Local (Immutable, _) | Enum _  ->
@@ -3099,7 +3099,7 @@ let rec exp_unconditionally_returns (E_aux (aux, _)) =
 
 module PC_config = struct
   type t = tannot
-  let typ_of_pat = typ_of_pat
+  let typ_of_t = typ_of_tannot
 end
 
 module PC = Pattern_completeness.Make(PC_config);;
@@ -3113,13 +3113,18 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let inferred_exp = irule infer_exp env exp in
      let inferred_typ = typ_of inferred_exp in
      let checked_cases = List.map (fun case -> check_case env inferred_typ case typ) cases in
-     if !opt_check_completeness then (
-       let ctx = {
-           Pattern_completeness.variants = Env.get_variants env;
-           Pattern_completeness.enums = Env.get_enums env
-         } in
-       ignore (PC.is_complete l ctx checked_cases inferred_typ)
-     );
+     let checked_cases =
+       if !opt_check_completeness then (
+         let ctx = {
+             Pattern_completeness.variants = Env.get_variants env;
+             Pattern_completeness.enums = Env.get_enums env
+           } in
+         match PC.is_complete_wildcarded l ctx checked_cases inferred_typ with
+         | Some wildcarded -> wildcarded
+         | None -> checked_cases
+       ) else (
+         checked_cases
+       ) in
      annot_exp (E_case (inferred_exp, checked_cases)) typ
   | E_try (exp, cases), _ ->
      let checked_exp = crule check_exp env exp typ in

@@ -119,6 +119,11 @@ let rec last = function
   | _ :: xs -> last xs
   | [] -> raise (Failure "last")
 
+let rec last_opt = function
+  | [x] -> Some x
+  | _ :: xs -> last_opt xs
+  | [] -> None
+             
 let rec butlast = function
   | [x] -> []
   | x :: xs -> x :: butlast xs

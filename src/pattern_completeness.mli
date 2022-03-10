@@ -76,9 +76,10 @@ type ctx = {
 module type Config =
   sig
     type t
-    val typ_of_pat : t pat -> typ
+    val typ_of_t : t -> typ
   end
 
 module Make(C: Config) : sig
+  val is_complete_wildcarded : Parse_ast.l -> ctx -> C.t pexp list -> typ -> C.t pexp list option
   val is_complete : Parse_ast.l -> ctx -> C.t pexp list -> typ -> bool
 end

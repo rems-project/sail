@@ -67,8 +67,6 @@
 
 %{
 
-let r = fun x -> x (* Ulib.Text.of_latin1 *)
-
 module Big_int = Nat_big_num
 open Parse_ast
 
@@ -221,7 +219,7 @@ let rec desugar_rchain chain s e =
 
 %token And As Assert Bitzero Bitone By Match Clause Dec Default Effect End Op
 %token Enum Else False Forall Foreach Overload Function_ Mapping If_ In Inc Let_ Int Order Bool Cast
-%token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
+%token Pure Monadic Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Outcome Constraint Throw Try Catch Exit Bitfield Constant
 %token Barr Depend Rreg Wreg Rmem Wmem Wmv Eamem Exmem Undef Unspec Nondet Escape
 %token Repeat Until While Do Mutual Var Ref Configuration TerminationMeasure Instantiation Impl
@@ -1427,6 +1425,8 @@ outcome_spec_def:
 
 pure_opt:
   |
+    { true }
+  | Monadic
     { false }
   | Pure
     { true }
@@ -1449,7 +1449,7 @@ val_spec_def:
   | Doc val_spec_def
     { doc_vs $1 $2 }
   | Val String Colon typschm
-    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), Some { pure = false; bindings = [("_", $2)] }, false)) $startpos $endpos }
+    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), Some { pure = true; bindings = [("_", $2)] }, false)) $startpos $endpos }
   | Val id externs Colon typschm
     { mk_vs (VS_val_spec ($5, $2, $3, false)) $startpos $endpos }
   | Val Cast id externs Colon typschm

@@ -158,6 +158,7 @@ let kw_table =
      ("Order",                   (fun _ -> Order));
      ("Bool",                    (fun _ -> Bool));
      ("pure",                    (fun _ -> Pure));
+     ("monadic",                 (fun _ -> Monadic));
      ("register",		 (fun _ -> Register));
      ("return",                  (fun _ -> Return));
      ("scattered",               (fun _ -> Scattered));

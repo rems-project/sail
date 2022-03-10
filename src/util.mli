@@ -73,6 +73,8 @@ val opt_verbosity : int ref
 (* Last element of a list *)
 val last : 'a list -> 'a
 
+val last_opt : 'a list -> 'a option
+  
 val butlast : 'a list -> 'a list
 
 (** Mixed useful things *)
