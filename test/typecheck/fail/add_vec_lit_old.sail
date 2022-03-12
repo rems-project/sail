@@ -1,9 +1,9 @@
 default Order inc
 
-val add_vec = {ocaml: "add_vec", lem: "add_vec"}: forall ('n : Int).
+val add_vec = monadic {ocaml: "add_vec", lem: "add_vec"}: forall ('n : Int).
   (bitvector('n, inc), bitvector('n, inc)) -> bitvector('n, inc)
 
-val add_range = {ocaml: "add_range", lem: "add_range"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
+val add_range = monadic {ocaml: "add_range", lem: "add_range"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
   (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
 
 val cast unsigned : forall ('n : Int).

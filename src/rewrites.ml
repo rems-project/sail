@@ -1671,7 +1671,7 @@ let rewrite_ast_early_return env ast =
     FD_aux (FD_function (rec_opt, tannot_opt,
       List.map (rewrite_funcl_early_return rewriters) funcls), a) in
 
-  let early_ret_spec = fst (Type_error.check_defs initial_env [gen_vs ~pure:true 
+  let early_ret_spec = fst (Type_error.check_defs initial_env [gen_vs ~pure:true
     ("early_return", "forall ('a : Type) ('b : Type). 'a -> 'b")]) in
 
   rewrite_ast_base
@@ -2371,8 +2371,11 @@ let rewrite_ast_letbind_effects effect_info env =
        n_exp exp1 (fun exp1 ->
        rewrap (E_var (lexp,exp1,n_exp exp2 k))))
     | E_internal_return exp1 ->
+       let is_early_return = function
+         | E_aux (E_app (id, _), _) -> string_of_id id = "early_return"
+         | _ -> false in
        n_exp_name exp1 (fun exp1 ->
-       k (if effectful exp1 then exp1 else rewrap (E_internal_return exp1)))
+       k (if effectful exp1 || is_early_return exp1 then exp1 else rewrap (E_internal_return exp1)))
     | E_internal_value v ->
        k (rewrap (E_internal_value v))
     | E_return exp' ->

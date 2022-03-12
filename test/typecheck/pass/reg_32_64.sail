@@ -2,7 +2,7 @@ default Order dec
 
 $include <prelude.sail>
 
-val "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
+val reg_deref = monadic "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
 
 register R0 : bits(64)
 register R1 : bits(64)

@@ -739,7 +739,13 @@ let doc_exp_lem, doc_let_lem =
                     parens (separate space [string "integerNegate"; expY exp3])
                  | _ -> expY exp3
                in
-               let combinator = if effectful (effect_of body) then "foreachM" else "foreach" in
+               let combinator =
+                 if ctxt.monadic && effectful (effect_of body) then
+                   "foreachM"
+                 else if effectful (effect_of body) then
+                   "foreachE"
+                 else
+                   "foreach" in
                let indices_pp = parens (separate space [string "index_list"; expY exp1; expY exp2; step]) in
                let used_vars_body = find_e_ids body in
                let body_lambda =

@@ -329,6 +329,9 @@ let add_def_to_graph graph def =
   begin match def with
   | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, (Typ_aux (Typ_bidir _, _) as typ)), _), id, _, _), _)) ->
      graph := G.add_edges (Mapping id) [] !graph;
+     List.iter (fun gen_id ->
+         graph := G.add_edges (Function gen_id) [Mapping id] !graph
+       ) [append_id id "_forwards"; append_id id "_forwards_matches"; append_id id "_backwards"; append_id id "_backwards_matches"];
      scan_typquant (Mapping id) typq;
      IdSet.iter (fun typ_id -> graph := G.add_edge (Mapping id) (Type typ_id) !graph) (typ_ids typ)
   | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ), _), id, _, _), _)) ->

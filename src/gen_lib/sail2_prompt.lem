@@ -44,6 +44,16 @@ match l with
   foreachM xs vars body
 end
 
+val foreachE : forall 'a 'vars 'e.
+  list 'a -> 'vars -> ('a -> 'vars -> either 'e 'vars) -> either 'e 'vars
+let rec foreachE l vars body =
+match l with
+| [] -> Right vars
+| (x :: xs) ->
+  body x vars >>$= fun vars ->
+  foreachE xs vars body
+end
+
 declare {isabelle} termination_argument foreachM = automatic
 
 val genlistM : forall 'a 'rv 'e. (nat -> monad 'rv 'a 'e) -> nat -> monad 'rv (list 'a) 'e

@@ -345,9 +345,13 @@ let copy_mapping_to_function id_from effect_info id_to =
   (* Avoid copying the mapping effect to the function if it already
      exists - this likely means the function has been manually
      defined. *)
-  | Some eff when not (Bindings.mem id_to effect_info.functions) ->
-     { effect_info with functions = Bindings.add id_to eff effect_info.functions }
-  | _ -> effect_info
+  | Some eff ->
+     let existing_effects = match Bindings.find_opt id_to effect_info.functions with
+       | Some existing_eff -> existing_eff
+       | None -> EffectSet.empty in
+     { effect_info with functions = Bindings.add id_to (EffectSet.union eff existing_effects) effect_info.functions }
+  | _ ->
+     effect_info
  
 let rewrite_attach_effects effect_info =
   let rewrite_lexp_aux ((child_eff, lexp_aux), (l, tannot)) =
