@@ -286,8 +286,8 @@ rule token = parse
   | "//"        { line_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; token lexbuf }
   | "/*"        { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; token lexbuf }
   | "*/"        { raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Unbalanced comment") }
-  | "$" (ident+ as i) (lchar* as f) "\n"
-    { Lexing.new_line lexbuf; Pragma(i, String.trim f) }
+  | "$" (ident+ as i)
+    { let p = pragma (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) false lexbuf in Pragma(i, String.trim p) }
   | "infix" ws (digit as p) ws (operator as op)
     { operators := M.add op (mk_operator Infix (int_of_string (Char.escaped p)) op) !operators;
       Fixity (Infix, Big_int.of_string (Char.escaped p), op) }
@@ -320,6 +320,19 @@ rule token = parse
   | _  as c                               { raise (Reporting.err_lex
                                               (Lexing.lexeme_start_p lexbuf)
                                               (Printf.sprintf "Unexpected character: %s" (Char.escaped c))) }
+
+and pragma pos b after_block = parse
+  | "\n"                                { Lexing.new_line lexbuf; Buffer.contents b }
+  | (wsc as c)                          { Buffer.add_string b (String.make 1 c); pragma pos b after_block lexbuf }
+  | "//"                                { line_comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) lexbuf; unescaped (Buffer.contents b) }
+  | "/*"                                { comment (Lexing.lexeme_start_p lexbuf) (Buffer.create 10) 0 lexbuf; pragma pos b true lexbuf }
+  | _ as c                              { if after_block then
+                                            raise (Reporting.err_lex (Lexing.lexeme_start_p lexbuf) "Directive continued after block comment")
+                                          else (
+                                            Buffer.add_string b (String.make 1 c);
+                                            pragma pos b after_block lexbuf
+                                          ) }
+  | eof                                 { raise (Reporting.err_lex pos "File ended before newline in directive") }
 
 and line_comment pos b = parse
   | "\n"                                { Lexing.new_line lexbuf;

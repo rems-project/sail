@@ -1,0 +1,5 @@
+[93mLexical error[0m:
+[[96mpragma_block.sail[0m]:3:44-44
+3[96m |[0m$include <prelude.sail> /* block comment */ more
+ [91m |[0m                                            [91m^[0m
+ [91m |[0m Directive continued after block comment
