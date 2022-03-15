@@ -1106,6 +1106,7 @@ let order_compare (Ord_aux (o1,_)) (Ord_aux (o2,_)) =
   | Ord_dec, Ord_dec -> 0
   | Ord_var _, _ -> -1 | _, Ord_var _ -> 1
   | Ord_inc, _ -> -1   | _, Ord_inc -> 1
+
 let lex_ord f g x1 x2 y1 y2 =
   match f x1 x2 with
   | 0 -> g y1 y2
@@ -1217,6 +1218,28 @@ end
 
 module TypMap = Map.Make(Typ)
 
+let pos_compare p1 p2 =
+  let open Lexing in
+  match String.compare p1.pos_fname p2.pos_fname with
+  | 0 ->
+     begin match Int.compare p1.pos_lnum p2.pos_lnum with
+     | 0 ->
+        begin match Int.compare p1.pos_bol p2.pos_bol with
+        | 0 -> Int.compare p1.pos_cnum p2.pos_cnum
+        | n -> n
+        end
+     | n -> n
+     end
+  | n -> n
+              
+module Range = struct
+  type t = Lexing.position * Lexing.position
+  let compare (p1, p2) (p3, p4) =
+    lex_ord pos_compare pos_compare p1 p3 p2 p4
+end
+
+module RangeMap = Map.Make(Range)
+ 
 let rec nexp_frees (Nexp_aux (nexp, l)) =
   match nexp with
   | Nexp_id _ -> raise (Reporting.err_typ l "Unimplemented Nexp_id in nexp_frees")

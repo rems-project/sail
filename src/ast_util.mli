@@ -243,13 +243,13 @@ module NC : sig
   type t = n_constraint
   val compare : n_constraint -> n_constraint -> int
 end
-
+     
 (* NB: the comparison function does not expand synonyms *)
 module Typ : sig
   type t = typ
   val compare : typ -> typ -> int
 end
-
+     
 module IdSet : sig
   include Set.S with type elt = id
 end

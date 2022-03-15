@@ -213,20 +213,47 @@ let print_error e =
 
 module StringSet = Set.Make(String)
 
+let pos_compare p1 p2 =
+  let open Lexing in
+  match String.compare p1.pos_fname p2.pos_fname with
+  | 0 ->
+     begin match Int.compare p1.pos_lnum p2.pos_lnum with
+     | 0 ->
+        begin match Int.compare p1.pos_bol p2.pos_bol with
+        | 0 -> Int.compare p1.pos_cnum p2.pos_cnum
+        | n -> n
+        end
+     | n -> n
+     end
+  | n -> n
+ 
+module Range = struct
+  type t = Lexing.position * Lexing.position
+  let compare (p1, p2) (p3, p4) =
+    let c = pos_compare p1 p3 in
+    if c = 0 then pos_compare p2 p4 else c
+end
+
+module RangeMap = Map.Make(Range)
+                 
 let ignored_files = ref StringSet.empty
 
 let suppress_warnings_for_file f =
   ignored_files := StringSet.add f !ignored_files
- 
-let warn str1 l str2 =
+
+let seen_warnings = ref RangeMap.empty
+
+let warn short_str l explanation =
   if !opt_warnings then
     match simp_loc l with
-    | None ->
-       prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ str1 ^ "\n" ^ str2 ^ "\n")
     | Some (p1, p2) when not (StringSet.mem p1.pos_fname !ignored_files) ->
-       prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": "
-                      ^ str1 ^ (if str1 <> "" then " " else "") ^ loc_to_string l ^ str2 ^ "\n")
-    | Some _ -> ()
+       let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Util.option_default [] in
+       if not (List.exists (fun s -> s = short_str) shorts) then (
+         prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": "
+                        ^ short_str ^ (if short_str <> "" then " " else "") ^ loc_to_string l ^ explanation ^ "\n");
+         seen_warnings := RangeMap.add (p1, p2) (short_str :: shorts) !seen_warnings
+       )
+    | _ -> prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ short_str ^ "\n" ^ explanation ^ "\n")
   else
     ()
 
