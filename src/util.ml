@@ -434,6 +434,11 @@ let rec take_drop f = function
      let (ys, zs) = take_drop f xs in
      (x :: ys, zs)
 
+let rec find_rest_opt f = function
+  | [] -> None
+  | x :: xs when f x -> Some (x, xs)
+  | x :: xs -> find_rest_opt f xs
+     
 let find_next f xs =
   let rec find_next' f acc = function
     | x :: xs when f x -> List.rev acc, Some (x, xs)

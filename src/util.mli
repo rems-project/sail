@@ -217,6 +217,8 @@ val drop : int -> 'a list -> 'a list
 
 val take_drop : ('a -> bool) -> 'a list -> ('a list * 'a list)
 
+val find_rest_opt : ('a -> bool) -> 'a list -> ('a * 'a list) option
+  
 val find_next : ('a -> bool) -> 'a list -> ('a list * ('a * 'a list) option)
 
 (** find an item in a list and return that item as well as its index *)
