@@ -1054,16 +1054,16 @@ case_list:
     { $1 :: $3 }
 
 block:
-  | exp
+  | exp Semi?
     { [$1] }
-  | Let_ letbind Semi
+  | Let_ letbind Semi?
     { [mk_exp (E_let ($2, mk_lit_exp L_unit $startpos($3) $endpos)) $startpos $endpos] }
   | Let_ letbind Semi block
     { [mk_exp (E_let ($2, mk_exp (E_block $4) $startpos($4) $endpos)) $startpos $endpos] }
+  | Var atomic_exp Eq exp Semi?
+    { [mk_exp (E_var ($2, $4, mk_lit_exp L_unit $startpos($5) $endpos)) $startpos $endpos] }
   | Var atomic_exp Eq exp Semi block
     { [mk_exp (E_var ($2, $4, mk_exp (E_block $6) $startpos($6) $endpos)) $startpos $endpos] }
-  | exp Semi /* Allow trailing semicolon in block */
-    { [$1] }
   | exp Semi block
     { $1 :: $3 }
 
