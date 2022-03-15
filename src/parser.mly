@@ -1056,6 +1056,8 @@ case_list:
 block:
   | exp
     { [$1] }
+  | Let_ letbind Semi
+    { [mk_exp (E_let ($2, mk_lit_exp L_unit $startpos($3) $endpos)) $startpos $endpos] }
   | Let_ letbind Semi block
     { [mk_exp (E_let ($2, mk_exp (E_block $4) $startpos($4) $endpos)) $startpos $endpos] }
   | Var atomic_exp Eq exp Semi block
