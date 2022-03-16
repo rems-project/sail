@@ -966,7 +966,6 @@ let doc_quant_item_id ?(prop_vars=false) ctx delimit (QI_aux (qi,_)) =
                                                string (if prop_vars then "Prop" else "bool")]))
   end
   | QI_constraint nc -> None
-  | QI_constant _ -> None
 
 let quant_item_id_name ctx (QI_aux (qi,_)) =
   match qi with
@@ -979,12 +978,10 @@ let quant_item_id_name ctx (QI_aux (qi,_)) =
     | K_bool -> Some (doc_var ctx kid)
   end
   | QI_constraint nc -> None
-  | QI_constant _ -> None
 
 let doc_quant_item_constr ?(prop_vars=false) ctx env delimit (QI_aux (qi,_)) =
   match qi with
   | QI_id  _ -> None
-  | QI_constant _ -> None
   | QI_constraint nc -> Some (bquote ^^ braces (doc_arithfact ctx env nc))
 
 (* At the moment these are all anonymous - when used we rely on Coq to fill
@@ -992,7 +989,6 @@ let doc_quant_item_constr ?(prop_vars=false) ctx env delimit (QI_aux (qi,_)) =
 let quant_item_constr_name ctx (QI_aux (qi,_)) =
   match qi with
   | QI_id  _ -> None
-  | QI_constant _ -> None
   | QI_constraint nc -> Some underscore
 
 let doc_typquant_items ?(prop_vars=false) ctx env delimit (TypQ_aux (tq,_)) =

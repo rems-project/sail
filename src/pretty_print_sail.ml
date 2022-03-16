@@ -235,30 +235,16 @@ let doc_kind (K_aux (k, _)) =
           | K_bool -> "Bool"
           | K_order -> "Order")
 
-let rec doc_kopts constants =
-  let is_in_group is_constant kind kopt =
-    Kind.compare kind (kopt_kind kopt) = 0 && KOptSet.mem kopt constants = is_constant
-  in
+let rec doc_kopts =
   function
   | kopt :: kopts ->
-     let is_constant = KOptSet.mem kopt constants in
-     let group, kopts = Util.take_drop (is_in_group is_constant (kopt_kind kopt)) kopts in
-     let attr = if is_constant then string "constant" ^^ space else empty in
-     parens (attr ^^ separate space (List.map (fun kopt -> doc_kid (kopt_kid kopt)) (kopt :: group))
-             ^^ space ^^ colon
-             ^^ space ^^ doc_kind (kopt_kind kopt))
-     ^^ begin match kopts with
-        | [] -> empty
-        | _ -> doc_kopts constants kopts
-        end
+     begin match kopts with
+     | [] -> empty
+     | _ -> doc_kopts kopts
+     end
   | [] -> empty
 
 let doc_quants quants =
-  let rec get_constants = function
-    | QI_aux (QI_constant kopts, _) :: qis -> KOptSet.union (KOptSet.of_list kopts) (get_constants qis)
-    | _ :: qis -> get_constants qis
-    | [] -> KOptSet.empty
-  in
   let rec get_kopts = function
     | QI_aux (QI_id kopt, _) :: qis -> kopt :: get_kopts qis
     | _ :: qis -> get_kopts qis
@@ -269,7 +255,7 @@ let doc_quants quants =
     | QI_constraint nc -> [nc]
     | _ -> []
   in
-  let kdoc = doc_kopts (get_constants quants) (get_kopts quants) in
+  let kdoc = doc_kopts (get_kopts quants) in
   let ncs = List.concat (List.map qi_nc quants) in
   match ncs with
   | [] -> kdoc
@@ -284,7 +270,6 @@ let doc_param_quants quants =
     | QI_id kopt when is_bool_kopt kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Bool"]
     | QI_id kopt -> [doc_kid (kopt_kid kopt) ^^ colon ^^ space ^^ string "Order"]
     | QI_constraint _ -> []
-    | QI_constant _ -> []
   in
   let qi_nc (QI_aux (qi_aux, _)) =
     match qi_aux with

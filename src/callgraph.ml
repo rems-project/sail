@@ -276,7 +276,6 @@ let add_def_to_graph graph def =
     | QI_id _ -> ()
     | QI_constraint nc ->
        IdSet.iter (fun id -> graph := G.add_edge self (Type id) !graph) (constraint_ids nc)
-    | QI_constant _ -> ()
   in
 
   let scan_typquant self (TypQ_aux (aux, _)) =

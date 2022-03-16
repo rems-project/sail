@@ -190,7 +190,6 @@ and pp_raw_kinded_id x = match x with
 and pp_raw_quant_item_aux x = match x with
 | QI_aux(QI_id(kinded_id),ott_menhir_loc) ->  string "[" ^^ string (pp_raw_l ott_menhir_loc) ^^ string "]" ^^ string "QI_id" ^^ string "(" ^^ pp_raw_kinded_id kinded_id ^^ string ")"
 | QI_aux(QI_constraint(n_constraint),ott_menhir_loc) ->  string "[" ^^ string (pp_raw_l ott_menhir_loc) ^^ string "]" ^^ string "QI_constraint" ^^ string "(" ^^ pp_raw_n_constraint n_constraint ^^ string ")"
-| QI_aux(QI_constant(kinded_id0),ott_menhir_loc) ->  string "[" ^^ string (pp_raw_l ott_menhir_loc) ^^ string "]" ^^ string "QI_constant" ^^ string "(" ^^ string "[" ^^ separate  (string ";") (List.map (function (kinded_id0) -> string "(" ^^ pp_raw_kinded_id kinded_id0 ^^ string ")") kinded_id0) ^^ string "]" ^^ string ")"
 
 and pp_raw_quant_item x = match x with
 | QI_aux(quant_item_aux,l) -> string "QI_aux" ^^ string "(" ^^ pp_raw_quant_item_aux quant_item_aux ^^ string "," ^^ pp_raw_l l ^^ string ")"
@@ -636,7 +635,6 @@ and pp_kinded_id x = match x with
 and pp_quant_item_aux x = match x with
 | QI_aux(QI_id(kinded_id),ott_menhir_loc) -> pp_kinded_id kinded_id
 | QI_aux(QI_constraint(n_constraint),ott_menhir_loc) -> pp_n_constraint n_constraint
-| QI_aux(QI_constant(kinded_id0),ott_menhir_loc) -> separate (string " ") (List.map (function (kinded_id0) -> pp_kinded_id kinded_id0) kinded_id0)
 
 and pp_quant_item x = match x with
 | QI_aux(quant_item_aux,l) -> string "(" ^^ pp_quant_item_aux quant_item_aux ^^ string " " ^^ pp_l l ^^ string ")"

@@ -1108,7 +1108,6 @@ let doc_typquant_sorts idpp (TypQ_aux (typq,_)) =
        | QI_id (KOpt_aux (KOpt_kind (K_aux (K_type,_),kid),_)) -> Some underscore
        | QI_id (KOpt_aux (KOpt_kind (K_aux ((K_order|K_bool),_),kid),_)) -> None
        | QI_constraint _ -> None
-       | QI_constant _ -> None
      in
      if List.exists (function (QI_aux (QI_id (KOpt_aux (KOpt_kind (K_aux (K_int,_),_),_)),_)) -> true | _ -> false) qs then
        let qs_pp = Util.map_filter q qs in

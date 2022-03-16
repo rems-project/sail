@@ -80,7 +80,9 @@ $include <option.sail>
 $include <result.sail>
 $include <isla.sail>
 
+$target_set emulator_prover c ocaml interpreter lem coq
 $target_set emulator c ocaml interpreter
+$target_set prover lem coq
 
 enum Access_variety = {
   AV_plain,
@@ -117,10 +119,16 @@ struct Mem_read_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type), 'n > 0
   tag : bool
 }
 
-val __read_tag# = "read_tag_bool"  : bits(64) -> bool effect {rmem}
+val __read_tag# = monadic "read_tag_bool"  : bits(64) -> bool
+
+val bit_to_bool : bit -> bool
+function bit_to_bool b = match b {
+  bitone  => true,
+  bitzero => false
+}
 
 outcome sail_mem_read_request : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
-  Mem_read_request('n, 'vasize, 'pa, 'translation_summary) -> result((bits(8 * 'n), option(bool)), 'abort) effect {rmem}
+  Mem_read_request('n, 'vasize, 'pa, 'translation_summary) -> result((bits(8 * 'n), option(bool)), 'abort)
 with
   'pa : Type,
   'translation_summary : Type,
@@ -132,8 +140,22 @@ with
   val request_read_kind : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
     Mem_read_request('n, 'vasize, 'pa, 'translation_summary) -> 'read_kind
 
-  val platform_read_mem : forall 'n (constant 'addrsize : Int), 'n > 0 & 'addrsize in {32, 64}.
-    ('read_kind, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n) effect {rmem}
+  val platform_read_mem : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+    ('read_kind, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
+
+  val platform_read_memt : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+    ('read_kind, bits('addrsize), int('n)) -> (bits(8 * 'n), bit)
+
+  impl prover(request) = {
+    let pa = pa_bits(request.pa);
+    let rk = request_read_kind(request);
+    if request.tag then {
+      let (data, tag) = platform_read_memt(rk, pa, request.size);
+      Ok((data, Some(bit_to_bool(tag))))
+    } else {
+      Ok((platform_read_mem(rk, length(pa), pa, request.size), None()))
+    }
+  }
 
   impl emulator(request) = {
     let pa = pa_bits(request.pa);
@@ -161,11 +183,11 @@ struct Mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type), 'n > 
   tag : option(bool),
 }
 
-val __write_tag# = "write_tag_bool" : (bits(64), bool) -> unit effect {wmv}
+val __write_tag# = "write_tag_bool" : (bits(64), bool) -> unit
 
 // the bool in the result is for the success/failure of a write-exclusive or a CAS, i.e.
 outcome sail_mem_write_request : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
-  Mem_write_request('n, 'vasize, 'pa, 'translation_summary) -> result(option(bool), 'abort) effect {wmv}
+  Mem_write_request('n, 'vasize, 'pa, 'translation_summary) -> result(option(bool), 'abort)
 with
   'pa : Type,
   'translation_summary : Type,
@@ -177,8 +199,8 @@ with
   val request_write_kind : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
     Mem_write_request('n, 'vasize, 'pa, 'translation_summary) -> 'write_kind
 
-  val platform_write_mem : forall 'n (constant 'addrsize : Int), 'n > 0 & 'addrsize in {32, 64}.
-    ('write_kind, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool effect {wmv}
+  val platform_write_mem : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
+    ('write_kind, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
 
   impl emulator(request) = {
     let pa = pa_bits(request.pa);
@@ -207,7 +229,7 @@ struct Mem_write_announce_address('n : Int, 'vasize : Int, 'pa : Type) = {
 }
 
 outcome sail_mem_write_announce_address : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
-  Mem_write_announce_address('n, 'vasize, 'pa) -> unit  effect {wmem}
+  Mem_write_announce_address('n, 'vasize, 'pa) -> unit
 with
   'pa : Type
 
@@ -218,7 +240,7 @@ with
 = {
   val pa_bits : 'pa -> {'pasize, 'pasize in {32, 64}. bits('pasize)}
 
-  val platform_branch_announce : forall (constant 'addrsize : Int), 'addrsize in {32, 64}.
+  val platform_branch_announce : forall 'addrsize, 'addrsize in {32, 64}.
     (int('addrsize), bits('addrsize)) -> unit
 
   impl emulator(pa) = {
@@ -231,14 +253,14 @@ with
   }
 }
 
-outcome sail_barrier_request : 'barrier -> unit effect {barr}
+outcome sail_barrier_request : 'barrier -> unit
 with
   'barrier : Type,
   'barrier_kind : Type
 = {
   val barrier_kind : 'barrier -> 'barrier_kind
 
-  val platform_barrier : 'barrier_kind -> unit effect {barr}
+  val platform_barrier : 'barrier_kind -> unit
 
   impl emulator(barrier) = platform_barrier(barrier_kind(barrier))
 }
@@ -248,16 +270,16 @@ with
   'cache_op : Type,
   'cache_op_kind : Type
 = {
-  val request_cache_op_kind : 'cache_op -> 'cache_op_kind
+  val cache_op_kind : 'cache_op -> 'cache_op_kind
 
-  val request_addr : 'cache_op -> {'pasize, 'pasize in {32, 64}. bits('pasize)}
+  val cache_op_addr : 'cache_op -> {'pasize, 'pasize in {32, 64}. bits('pasize)}
 
-  val platform_cache_maintenance : forall (constant 'addrsize : Int), 'addrsize in {32, 64}.
+  val platform_cache_maintenance : forall 'addrsize, 'addrsize in {32, 64}.
     ('cache_op_kind, int('addrsize), bits('addrsize)) -> unit
 
   impl emulator(request) = {
-    let pa = request_addr(request);
-    let kind = request_cache_op_kind(request);
+    let pa = cache_op_addr(request);
+    let kind = cache_op_kind(request);
     if length(pa) == 32 then {
       platform_cache_maintenance(kind, 32, pa)
     } else {
@@ -271,15 +293,15 @@ with
   'tlb_op : Type,
   'cache_op_kind : Type
 = {
-  val request_cache_op_kind : 'tlb_op -> 'cache_op_kind
+  val tlb_op_kind : 'tlb_op -> 'cache_op_kind
 
-  val request_encode : 'tlb_op -> bits(64)
+  val tlb_op_encode : 'tlb_op -> bits(64)
 
-  val platform_cache_maintenance_extra : forall (constant 'addrsize : Int), 'addrsize in {32, 64}.
+  val platform_cache_maintenance_extra : forall 'addrsize, 'addrsize in {32, 64}.
     ('cache_op_kind, int('addrsize), bits('addrsize), bits(64)) -> unit
 
   impl emulator(request) = {
-    platform_cache_maintenance_extra(request_cache_op_kind(request), 64, sail_zeros(64), request_encode(request))
+    platform_cache_maintenance_extra(tlb_op_kind(request), 64, sail_zeros(64), tlb_op_encode(request))
   }
 
   impl isla(request) = {

@@ -70,7 +70,7 @@ $define _ISLA
 
 $ifdef SYMBOLIC
 
-val isla_reset_registers = "reset_registers" : unit -> unit effect {rreg}
+val isla_reset_registers = "reset_registers" : unit -> unit
 
 val isla_log_event = "log_event" : forall ('a: Type). (string, 'a) -> unit
 
@@ -84,7 +84,7 @@ val isla_monomorphize = "monomorphize" : forall 'n, 'n >= 0. bits('n) -> bits('n
 
 $else
 
-val isla_reset_registers : unit -> unit effect {rreg}
+val isla_reset_registers : unit -> unit
 
 function isla_reset_registers() = ()
 

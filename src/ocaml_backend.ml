@@ -183,8 +183,6 @@ let ocaml_typquant (TypQ_aux (_, l) as typq) =
     | QI_aux (QI_id kopt, _) -> zencode_kid (kopt_kid kopt)
     | QI_aux (QI_constraint _, _) ->
        raise (Reporting.err_general l "Ocaml: type quantifiers should no longer contain constraints")
-    | QI_aux (QI_constant _, _) ->
-       raise (Reporting.err_general l "Ocaml: type quantifiers should no longer contain constrant constraints")
   in
   match quant_items typq with
   | [] -> empty

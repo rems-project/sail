@@ -2,10 +2,10 @@
 [[96moutcome_impl/v3.sail[0m]:30:2-29
 30[96m |[0m  to_bits = instance_to_bits2
   [91m |[0m  [91m^-------------------------^[0m
-  [91m |[0m Unification error: Could not unify string and bitvector(32, dec)
+  [91m |[0m bitvector(32, dec) is not a subtype of string
   [91m |[0m 
   [91m |[0m [93mAlso tried [0m[[96moutcome_impl/v3.sail[0m]:30:2-29
   [91m |[0m 30[96m |[0m  to_bits = instance_to_bits2
   [91m |[0m   [91m |[0m  [91m^-------------------------^[0m
-  [91m |[0m   [91m |[0m Unification error: Could not unify bitvector(32, dec) and string
+  [91m |[0m   [91m |[0m bitvector(32, dec) is not a subtype of string
   [91m |[0m 

@@ -96,14 +96,7 @@ let instantiate_def target id substs = function
                                             Typ_annot_opt_aux (Typ_annot_opt_none, l),
                                             [FCL_aux (FCL_Funcl (id, pexp), annot)]),
                                annot)))
-
-  | DEF_impl _ -> None
-
-  | DEF_spec (VS_aux (VS_val_spec (_, vs_id, _, _), _)) when in_substs vs_id substs ->
-     None
-     
-  | def ->
-     Some def
+  | def -> None
 
 let instantiate target ast =
   let process_def outcomes = function
@@ -142,8 +135,9 @@ let instantiate target ast =
          DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, instantiate_typ substs typ), l), id, None, false), (l, Type_check.empty_tannot)))
        in
        let outcome_defs, _ =
-         (valspec :: rewrite_ast_defs { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp } outcome_defs)
+         rewrite_ast_defs { rewriters_base with rewrite_pat = rewrite_pat; rewrite_exp = rewrite_exp } outcome_defs
          |> Util.map_filter (instantiate_def target id id_substs)
+         |> (fun defs -> valspec :: defs)
          |> Type_error.check_defs env
        in
        outcomes, outcome_defs

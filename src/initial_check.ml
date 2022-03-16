@@ -280,7 +280,8 @@ let to_ast_quant_items ctx (P.QI_aux (aux, l)) =
      let (kopts, ctx), attr = to_ast_kopts ctx kopt in
      match attr with
      | Some "constant" ->
-        QI_aux (QI_constant kopts, l) :: List.map (fun kopt -> QI_aux (QI_id kopt, l)) kopts, ctx
+        Reporting.warn "Deprecated" l "constant type variable attribute no longer used";
+        List.map (fun kopt -> QI_aux (QI_id kopt, l)) kopts, ctx
      | Some attr ->
         raise (Reporting.err_typ l (sprintf "Unknown attribute %s" attr))
      | None ->

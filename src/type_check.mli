@@ -237,11 +237,6 @@ module Env : sig
 
   val is_register : id -> t -> bool
 
-  (** Return a fresh kind identifier that doesn't exist in the
-     environment. The optional argument bases the new identifer on the
-     old one. *)
-  val fresh_kid : ?kid:kid -> t -> kid
-
   val expand_constraint_synonyms : t -> n_constraint -> n_constraint
 
   val expand_nexp_synonyms : t -> nexp -> nexp

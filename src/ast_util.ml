@@ -508,7 +508,6 @@ let quant_add qi typq =
   match qi, typq with
   | QI_aux (QI_constraint (NC_aux (NC_true, _)), _), _ -> typq
   | QI_aux (QI_id _, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qi :: qis), l)
-  | QI_aux (QI_constant _, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qis @ [qi]), l)
   | QI_aux (QI_constraint nc, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qis @ [qi]), l)
   | _, TypQ_aux (TypQ_no_forall, l) -> TypQ_aux (TypQ_tq [qi], l)
 
@@ -863,7 +862,6 @@ let string_of_kinded_id (KOpt_aux (KOpt_kind (k, kid), _)) = "(" ^ string_of_kid
 
 let string_of_quant_item_aux = function
   | QI_id kopt -> string_of_kinded_id kopt
-  | QI_constant kopts -> "is_constant(" ^ Util.string_of_list ", " string_of_kinded_id kopts ^ ")"
   | QI_constraint constr -> string_of_n_constraint constr
 
 let string_of_quant_item = function
@@ -1410,7 +1408,6 @@ and kopts_of_typ_arg (A_aux (ta,_)) =
 let kopts_of_quant_item (QI_aux (qi, _)) = match qi with
   | QI_id kopt ->
      KOptSet.singleton kopt
-  | QI_constant kopts -> KOptSet.of_list kopts
   | QI_constraint nc -> kopts_of_constraint nc
 
 let rec tyvars_of_nexp (Nexp_aux (nexp,_)) =
@@ -1470,7 +1467,6 @@ and tyvars_of_typ_arg (A_aux (ta,_)) =
 let tyvars_of_quant_item (QI_aux (qi, _)) = match qi with
   | QI_id (KOpt_aux (KOpt_kind (_, kid), _)) ->
      KidSet.singleton kid
-  | QI_constant kopts -> KidSet.of_list (List.map kopt_kid kopts)
   | QI_constraint nc -> tyvars_of_constraint nc
 
 let is_kid_generated kid = String.contains (string_of_kid kid) '#'
@@ -2015,8 +2011,6 @@ let kopt_subst_kid sv subst (KOpt_aux (KOpt_kind (k, kid), l) as orig) =
 let quant_item_subst_kid_aux sv subst = function
   | QI_id kopt ->
      QI_id (kopt_subst_kid sv subst kopt)
-  | QI_constant kopts ->
-     QI_constant (List.map (kopt_subst_kid sv subst) kopts)
   | QI_constraint nc ->
      QI_constraint (subst_kid constraint_subst sv subst nc)
 

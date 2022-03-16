@@ -4881,6 +4881,7 @@ let all_rewriters = [
   ]
 
 let rewrites_lem = [
+    ("instantiate_outcomes", [String_arg "lem"]);
     ("realize_mappings", []);
     ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);
@@ -4933,6 +4934,7 @@ let rewrites_lem = [
   ]
 
 let rewrites_coq = [
+    ("instantiate_outcomes", [String_arg "coq"]);
     ("realize_mappings", []);
     ("remove_duplicate_valspecs", []);
     ("toplevel_string_append", []);

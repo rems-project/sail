@@ -256,13 +256,13 @@ val update_subrange_bits = pure {
 overload vector_update_subrange = {update_subrange_bits}
 
 val sail_shiftleft = pure "shiftl" : forall 'n ('ord : Order).
-    (bitvector('n, 'ord), int) -> bitvector('n, 'ord) effect pure
+    (bitvector('n, 'ord), int) -> bitvector('n, 'ord)
 
 val sail_shiftright = pure "shiftr" : forall 'n ('ord : Order).
-    (bitvector('n, 'ord), int) -> bitvector('n, 'ord) effect pure
+    (bitvector('n, 'ord), int) -> bitvector('n, 'ord)
 
 val sail_arith_shiftright = pure "arith_shiftr" : forall 'n ('ord : Order).
-    (bitvector('n, 'ord), int) -> bitvector('n, 'ord) effect pure
+    (bitvector('n, 'ord), int) -> bitvector('n, 'ord)
 
 val sail_zeros = pure "zeros" : forall 'n, 'n >= 0. int('n) -> bits('n)
 
@@ -277,7 +277,7 @@ val slice = pure "slice" : forall 'n 'm 'o, 0 <= 'm & 0 <= 'n.
 
 val replicate_bits = pure "replicate_bits" : forall 'n 'm. (bits('n), int('m)) -> bits('n * 'm)
 
-val slice_mask : forall 'n, 'n >= 0. (implicit('n), int, int) -> bits('n) effect pure
+val slice_mask : forall 'n, 'n >= 0. (implicit('n), int, int) -> bits('n)
 function slice_mask(n,i,l) =
   if l >= n then {
     sail_shiftleft(sail_ones(n), i)

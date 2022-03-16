@@ -117,7 +117,7 @@ let rec analyze_unresolved_quant locals ncs = function
          else
            Suggest_none
 
-  | QI_aux (QI_id _, _) | QI_aux (QI_constant _, _) ->
+  | QI_aux (QI_id _, _) ->
      Suggest_none
 
 let message_of_type_error =

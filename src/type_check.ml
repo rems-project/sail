@@ -157,7 +157,7 @@ type env =
     allow_unknowns : bool;
     bitfields : (Big_int.num * Big_int.num) Bindings.t Bindings.t;
     toplevel : l option;
-    outcomes : (typquant * typ * kinded_id list * env) Bindings.t;
+    outcomes : (typquant * typ * kinded_id list * id list * env) Bindings.t;
     outcome_typschm : (typquant * typ) option;
     outcome_instantiation : (Ast.l * typ) KBindings.t;
   }
@@ -274,7 +274,6 @@ and strip_quant_item = function
   | QI_aux (qi_aux, _) -> QI_aux (strip_qi_aux qi_aux, Parse_ast.Unknown)
 and strip_qi_aux = function
   | QI_id kinded_id -> QI_id (strip_kinded_id kinded_id)
-  | QI_constant kopts -> QI_constant (List.map strip_kinded_id kopts)
   | QI_constraint constr -> QI_constraint (strip_n_constraint constr)
 and strip_kinded_id = function
   | KOpt_aux (kinded_id_aux, _) -> KOpt_aux (strip_kinded_id_aux kinded_id_aux, Parse_ast.Unknown)
@@ -474,6 +473,23 @@ let destruct_exist ?name:(name=None) typ =
 
 let adding = Util.("Adding " |> darkgray |> clear)
 
+let counter = ref 0
+ 
+let fresh_kid ?kid:(kid=mk_kid "") env =
+  let suffix = if Kid.compare kid (mk_kid "") = 0 then "#" else "#" ^ string_of_id (id_of_kid kid) in
+  let fresh = Kid_aux (Var ("'fv" ^ string_of_int !counter ^ suffix), Parse_ast.Unknown) in
+  incr counter; fresh
+
+let freshen_kid env kid (typq, typ) =
+  let fresh = fresh_kid ~kid:kid env in
+  if KidSet.mem kid (KidSet.of_list (List.map kopt_kid (quant_kopts typq))) then
+    (typquant_subst_kid kid fresh typq, subst_kid typ_subst kid fresh typ)
+  else
+    (typq, typ)
+
+let freshen_bind env bind =
+  List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
+
 (**************************************************************************)
 (* 1. Environment                                                         *)
 (**************************************************************************)
@@ -481,14 +497,14 @@ let adding = Util.("Adding " |> darkgray |> clear)
 module Env : sig
   type t = env
   val add_val_spec : id -> typquant * typ -> t -> t
-  val add_outcome : id -> typquant * typ * kinded_id list * t -> t -> t
+  val add_outcome : id -> typquant * typ * kinded_id list * id list * t -> t -> t
   val update_val_spec : id -> typquant * typ -> t -> t
   val define_val_spec : id -> t -> t
   val get_defined_val_specs : t -> IdSet.t
   val get_val_spec : id -> t -> typquant * typ
   val get_val_specs : t -> (typquant * typ ) Bindings.t
   val get_val_spec_orig : id -> t -> typquant * typ
-  val get_outcome : l -> id -> t -> typquant * typ * kinded_id list * t
+  val get_outcome : l -> id -> t -> typquant * typ * kinded_id list * id list * t
   val get_outcome_instantiation : t -> (Ast.l * typ) KBindings.t
   val add_outcome_variable : Ast.l -> kid -> typ -> t -> t
   val union_constructor_info : id -> t -> (int * int * id * type_union) option
@@ -555,7 +571,6 @@ module Env : sig
   val allow_polymorphic_undefineds : t -> t
   val polymorphic_undefineds : t -> bool
   val lookup_id : id -> t -> typ lvar
-  val fresh_kid : ?kid:kid -> t -> kid
   val expand_synonyms : t -> typ -> typ
   val expand_nexp_synonyms : t -> nexp -> nexp
   val expand_constraint_synonyms : t -> n_constraint -> n_constraint
@@ -1059,7 +1074,6 @@ end = struct
       | QI_aux (qi, _) -> add_quant_item_aux env qi
     and add_quant_item_aux env = function
       | QI_constraint constr -> add_constraint constr env
-      | QI_constant _ -> env
       | QI_id kopt -> add_typ_var l kopt env
     in
     match quant with
@@ -1092,23 +1106,6 @@ end = struct
       typ_print (lazy (adding ^ "type synonym " ^ string_of_id id ^ ", " ^ string_of_typquant typq ^ " = " ^ string_of_typ_arg arg));
       { env with typ_synonyms = Bindings.add id (typq, expand_arg_synonyms (add_typquant (id_loc id) typq env) arg) env.typ_synonyms }
     )
-                          
-  let counter = ref 0
-
-  let fresh_kid ?kid:(kid=mk_kid "") env =
-    let suffix = if Kid.compare kid (mk_kid "") = 0 then "#" else "#" ^ string_of_id (id_of_kid kid) in
-    let fresh = Kid_aux (Var ("'fv" ^ string_of_int !counter ^ suffix), Parse_ast.Unknown) in
-    incr counter; fresh
-
-  let freshen_kid env kid (typq, typ) =
-    let fresh = fresh_kid ~kid:kid env in
-    if KidSet.mem kid (KidSet.of_list (List.map kopt_kid (quant_kopts typq))) then
-      (typquant_subst_kid kid fresh typq, subst_kid typ_subst kid fresh typ)
-    else
-      (typq, typ)
-
-  let freshen_bind env bind =
-    List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
 
   let get_val_spec_orig id env =
     try
@@ -1192,8 +1189,8 @@ end = struct
     then update_val_spec id (bind_typq, bind_typ) env
     else env
 
-  and add_outcome id (typq, typ, params, outcome_env) env =
-    { env with outcomes = Bindings.add id (typq, typ, params, outcome_env) env.outcomes }
+  and add_outcome id (typq, typ, params, vals, outcome_env) env =
+    { env with outcomes = Bindings.add id (typq, typ, params, vals, outcome_env) env.outcomes }
 
   and get_outcome l id env =
     match Bindings.find_opt id env.outcomes with
@@ -2075,22 +2072,6 @@ let instantiate_quant env (v, arg) (QI_aux (aux, l) as qi) =
      typ_debug (lazy ("Instantiated " ^ string_of_quant_item qi));
      None
   | QI_id _ -> Some qi
-  | QI_constant kopts ->
-     let kopts =
-       Util.map_filter (fun kopt ->
-           if Kid.compare (kopt_kid kopt) v = 0 then
-             begin match arg with
-             | A_aux (A_nexp nexp, _) ->
-                if is_nexp_constant (Env.expand_nexp_synonyms env nexp) then None else Some kopt
-             | _ -> Some kopt
-             end
-           else
-             Some kopt
-         ) kopts in
-     begin match kopts with
-     | [] -> None
-     | _ -> Some (QI_aux (QI_constant kopts, l))
-     end
   | QI_constraint nc -> Some (QI_aux (QI_constraint (constraint_subst v arg nc), l))
 
 let instantiate_quants env quants unifier =
@@ -2666,7 +2647,7 @@ let instantiate_simple_equations =
   in
   let rec find_eqs_quant kid (QI_aux (qi,_)) =
     match qi with
-    | QI_id _ | QI_constant _ -> []
+    | QI_id _ -> []
     | QI_constraint nc -> find_eqs kid nc
   in
   let rec inst_from_eq = function
@@ -2878,24 +2859,28 @@ let rec add_constraints constrs env =
 
 let solve_quant env = function
   | QI_aux (QI_id _, _) -> false
-  | QI_aux (QI_constant _, _) -> false
   | QI_aux (QI_constraint nc, _) -> prove __POS__ env nc
 
 let check_function_instantiation l id env bind1 bind2 =
   let direction check (typq1, typ1) (typq2, typ2) =
-    let check_env = Env.add_typquant l typq1 env in
-    let unifiers =
-      try unify l check_env (quant_kopts typq2 |> List.map kopt_kid |> KidSet.of_list) typ2 typ1
-      with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m)
-    in
-    
-    let quants = List.fold_left (instantiate_quants env) (quant_items typq2) (KBindings.bindings unifiers) in
-    if not (List.for_all (solve_quant env) quants) then (
-      typ_raise env l (Err_unresolved_quants (id, quants, Env.get_locals env, Env.get_constraints env))
-    );
-    let typ2 = subst_unifiers unifiers typ2 in
-  
-    check check_env typ1 typ2;
+    if quant_items typq1 <> [] && quant_items typq2 <> [] then (
+      let check_env = Env.add_typquant l typq1 env in
+      let typq2, typ2 = freshen_bind check_env (typq2, typ2) in
+      let unifiers =
+        try unify l check_env (quant_kopts typq2 |> List.map kopt_kid |> KidSet.of_list) typ2 typ1
+        with Unification_error (l, m) -> typ_error env l ("Unification error: " ^ m)
+      in
+ 
+      let quants = List.fold_left (instantiate_quants check_env) (quant_items typq2) (KBindings.bindings unifiers) in
+      if not (List.for_all (solve_quant check_env) quants) then (
+        typ_raise env l (Err_unresolved_quants (id, quants, Env.get_locals env, Env.get_constraints env))
+      );
+      let typ2 = subst_unifiers unifiers typ2 in
+      
+      check check_env typ1 typ2
+    ) else (
+      check env typ1 typ2
+    )
   in
   try direction (fun check_env typ1 typ2 -> subtyp l check_env typ1 typ2) bind1 bind2 with
   | Type_error (_, l1, err1) ->
@@ -5054,7 +5039,6 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, funcls), (l, _)) a
   let env = Env.define_val_spec id env in
   vs_def @ [DEF_fundef (FD_aux (FD_function (recopt, tannotopt, funcls), (l, None)))], env
 
-
 let check_mapdef env (MD_aux (MD_mapping (id, tannot_opt, mapcls), (l, _)) as md_aux) =
   typ_print (lazy ("\nChecking mapping " ^ string_of_id id));
   let have_val_spec, (quant, typ), env =
@@ -5292,8 +5276,9 @@ and check_outcome : 'a. Env.t -> outcome_spec -> 'a def list -> outcome_spec * t
          let local_env = { local_env with outcome_typschm = Some (quant, typ) } in
          List.iter valid_outcome_def defs;
          let defs, local_env = check_defs local_env defs in
+         let vals = Util.map_filter (function DEF_spec (VS_aux (VS_val_spec (_, id, _, _), _)) -> Some id | _ -> None) defs in
          decr depth;
-         OV_aux (OV_outcome (id, typschm, params), l), defs, Env.add_outcome id (quant, typ, params, local_env) env
+         OV_aux (OV_outcome (id, typschm, params), l), defs, Env.add_outcome id (quant, typ, params, vals, local_env) env
        with
        | Type_error (env, err_l, err) ->
           decr depth;
@@ -5316,7 +5301,7 @@ and check_impldef : 'a. Env.t -> 'a funcl -> tannot def list * Env.t =
 and check_outcome_instantiation : 'a. Env.t -> 'a instantiation_spec -> subst list -> tannot def list * Env.t =
   fun env (IN_aux (IN_id id, (l, _))) substs ->
   typ_print (lazy (Util.("Check instantiation " |> cyan |> clear) ^ string_of_id id));
-  let typq, typ, params, outcome_env = Env.get_outcome l id env in
+  let typq, typ, params, vals, outcome_env = Env.get_outcome l id env in
   (* Find the outcome parameters that were already instantiated by previous instantiation commands *)
   let instantiated, uninstantiated =
     Util.map_split (fun kopt ->
@@ -5359,6 +5344,12 @@ and check_outcome_instantiation : 'a. Env.t -> 'a instantiation_spec -> subst li
         typ_error env l ("Type variable " ^ string_of_kinded_id kopt ^ " must be instantiated")
     ) uninstantiated;
 
+  begin match List.find_opt (fun id -> not (List.exists (fun (id_from, _, _) -> Id.compare id id_from = 0) fns)) vals with
+  | Some val_id ->
+     typ_error env l ("Function " ^ string_of_id val_id ^ " must be instantiated for " ^ string_of_id id)
+  | None -> ()
+  end;
+  
   List.iter (fun (id_from, id_to, decl_l) ->
       let (to_typq, to_typ) = Env.get_val_spec id_to env in
       let (from_typq, from_typ) = Env.get_val_spec id_from outcome_env in
