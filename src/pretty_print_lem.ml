@@ -834,7 +834,15 @@ let doc_exp_lem, doc_let_lem =
           end
        | _ ->
           begin match destruct_tannot annot with
-          | Some (env, _) when Env.is_union_constructor f env ->
+          | Some (env, typ) when Env.is_union_constructor f env ->
+             let unwrap opt = match opt with
+               | Some x -> x
+               | None -> Reporting.unreachable l __POS__ ("Failed to get information about constructor " ^ string_of_id f) in
+             let (_, _, union_id, _) = Env.union_constructor_info f env |> unwrap in
+             let (typq, _) = Env.get_variants env |> Bindings.find_opt union_id |> unwrap in
+             (* If the union has type variables, we may need an annotation for Lem to typecheck it *)
+             let annotation_needed = List.length (quant_items typq) > 0 in
+             let wrap_union doc = if aexp_needed || annotation_needed then parens doc else doc in
              let epp =
                match args with
                | [] -> doc_id_lem_ctor f
@@ -842,11 +850,11 @@ let doc_exp_lem, doc_let_lem =
                | _ ->
                   doc_id_lem_ctor f ^^ space ^^ 
                     parens (separate_map comma (expV false) args) in
-             wrap_parens (align epp)
+             wrap_union (if annotation_needed then align epp ^^ doc_tannot_lem ctxt env false typ else align epp)
           | _ ->
              let call, is_extern = match destruct_tannot annot with
                | Some (env, _) when Env.is_extern f env "lem" ->
-                 string (Env.get_extern f env "lem"), true
+                  string (Env.get_extern f env "lem"), true
                | _ -> doc_id_lem f, false in
              let epp = hang 2 (flow (break 1) (call :: List.map expY args)) in
              let (taepp,aexp_needed) =
@@ -855,7 +863,7 @@ let doc_exp_lem, doc_let_lem =
                let eff = effect_of full_exp in
                if typ_needs_printed t then
                  if Id.compare f (mk_id "bitvector_cast_out") <> 0 &&
-                    Id.compare f (mk_id "zero_extend_type_hack") <> 0
+                      Id.compare f (mk_id "zero_extend_type_hack") <> 0
                  then (align (group (prefix 0 1 epp (doc_tannot_lem ctxt env (effectful eff) t))), true)
                  (* TODO: coordinate with the code in monomorphise.ml to find the correct
                     typing environment to use *)
@@ -909,15 +917,16 @@ let doc_exp_lem, doc_let_lem =
     | E_tuple exps ->
        parens (align (group (separate_map (comma ^^ break 1) expN exps)))
     | E_record fexps ->
-       let recordtyp = match destruct_tannot annot with
-         | Some (env, Typ_aux (Typ_id tid,_))
-         | Some (env, Typ_aux (Typ_app (tid, _), _)) ->
-           (* when Env.is_record tid env -> *)
-           tid
-         | _ ->  raise (report l __POS__ ("cannot get record type from annot " ^ string_of_tannot annot ^ " of exp " ^ string_of_exp full_exp)) in
-       wrap_parens (anglebars (space ^^ (align (separate_map
+       let recordtyp, annotation_needed, env, typ = match destruct_tannot annot with
+         | Some (env, (Typ_aux (Typ_id tid,_) as typ)) -> tid, false, env, typ
+         (* We need an annotation here because some record type parameters may be phantom *)
+         | Some (env, (Typ_aux (Typ_app (tid, _), _) as typ)) -> tid, true, env, typ
+         | _ -> Reporting.unreachable l __POS__ ("cannot get record type from annot " ^ string_of_tannot annot ^ " of exp " ^ string_of_exp full_exp) in
+       let wrap_record doc = if aexp_needed || annotation_needed then parens doc else doc in
+       wrap_record (anglebars (space ^^ (align (separate_map
                                         (semi_sp ^^ break 1)
-                                        (doc_fexp ctxt recordtyp) fexps)) ^^ space))
+                                        (doc_fexp ctxt recordtyp) fexps)) ^^ space)
+                    ^^ if annotation_needed then doc_tannot_lem ctxt env false typ else empty)
     | E_record_update(e, fexps) ->
        let recordtyp = match destruct_tannot annot with
          | Some (env, Typ_aux (Typ_id tid,_))
