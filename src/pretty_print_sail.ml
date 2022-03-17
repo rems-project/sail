@@ -235,14 +235,7 @@ let doc_kind (K_aux (k, _)) =
           | K_bool -> "Bool"
           | K_order -> "Order")
 
-let rec doc_kopts =
-  function
-  | kopt :: kopts ->
-     begin match kopts with
-     | [] -> empty
-     | _ -> doc_kopts kopts
-     end
-  | [] -> empty
+let doc_kopts = separate_map space doc_kopt
 
 let doc_quants quants =
   let rec get_kopts = function

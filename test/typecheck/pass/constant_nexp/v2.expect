@@ -1,8 +1,0 @@
-[93mType error[0m:
-[[96mconstant_nexp/v2.sail[0m]:12:10-38
-12[96m |[0m  let _ = czeros(sizeof('n - 10) + 20);
-  [91m |[0m          [91m^--------------------------^[0m
-  [91m |[0m Could not resolve quantifiers for czeros
-  [91m |[0m [94m*[0m is_constant(('fv162#n : Int))
-  [91m |[0m [94m*[0m (('n - 10) + 20) >= 0
-  [91m |[0m 

@@ -179,6 +179,7 @@ let all_pragmas =
       "include_end";
       "sail_internal";
       "target_set";
+      "non_exec"
     ]
 
 let wrap_include l file = function

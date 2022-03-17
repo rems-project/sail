@@ -80,6 +80,7 @@ type side_effect =
   | External
   | Undefined
   | Scattered
+  | NonExec
   | Outcome of id
 
 let string_of_side_effect = function
@@ -91,6 +92,7 @@ let string_of_side_effect = function
   | External -> "calls external function not marked pure"
   | Undefined -> "contains undefined literal"
   | Scattered -> "scattered function"
+  | NonExec -> "not executable"
   | Outcome id -> ("outcome " ^ string_of_id id)
 
 module Effect = struct
@@ -105,6 +107,7 @@ module Effect = struct
     | External, External -> 0
     | Undefined, Undefined -> 0
     | Scattered, Scattered -> 0
+    | NonExec, NonExec -> 0
     | Outcome id1, Outcome id2 -> Id.compare id1 id2
     | Throw, _ -> 1 | _, Throw -> -1
     | Exit, _ -> 1 | _, Exit -> -1
@@ -113,12 +116,15 @@ module Effect = struct
     | External, _ -> 1 | _, External -> -1
     | Undefined, _ -> 1 | _, Undefined -> -1
     | Scattered, _ -> 1 | _, Scattered -> -1
+    | NonExec, _ -> 1 | _, NonExec -> -1
     | Outcome _, _ -> 1 | _, Outcome _ -> -1
 end
 
 module EffectSet = Set.Make(Effect)
 
 let throws = EffectSet.mem Throw
+
+let non_exec = EffectSet.mem NonExec
 
 let pure = EffectSet.is_empty
 
@@ -187,10 +193,22 @@ let infer_def_direct_effects def =
     E_aux (e_aux, annot)
   in
 
+  let scan_pat p_aux annot =
+    begin match p_aux with
+    | P_string_append _ -> (prerr_endline "NE"; effects := EffectSet.add NonExec !effects)
+    | _ -> ()
+    end;
+    P_aux (p_aux, annot)
+  in
+
+  let pat_alg = { id_pat_alg with p_aux = (fun (p_aux, annot) -> scan_pat p_aux annot) } in
+    
   let rw_exp _ exp =
     fold_exp { id_exp_alg with e_aux = (fun (e_aux, annot) -> scan_exp e_aux annot);
-                               lEXP_aux = (fun (l_aux, annot) -> scan_lexp l_aux annot) } exp in
-  ignore (rewrite_ast_defs { rewriters_base with rewrite_exp = rw_exp } [def]);
+                               lEXP_aux = (fun (l_aux, annot) -> scan_lexp l_aux annot);
+                               pat_alg = pat_alg } exp in
+  ignore (rewrite_ast_defs { rewriters_base with rewrite_exp = rw_exp;
+                                                 rewrite_pat = (fun _ -> fold_pat pat_alg) } [def]);
 
   begin match def with
   | DEF_spec (VS_aux (VS_val_spec (_, id, Some { pure = false; _ }, _), _)) ->
@@ -218,12 +236,51 @@ let infer_def_direct_effects def =
   
   !effects
 
+let infer_mapdef_extra_direct_effects def =
+  let forward_effects = ref EffectSet.empty in
+  let backward_effects = ref EffectSet.empty in
+
+  let scan_mpat set mp_aux annot =
+    match mp_aux with
+    | Some (MP_string_append _ as aux) ->
+       set := EffectSet.add NonExec !set;
+       Some (MP_aux (aux, annot))
+    | Some aux -> Some (MP_aux (aux, annot))
+    | None -> None
+  in
+  let rw_mpat set = fold_mpat { id_mpat_alg with p_aux = (fun (mp_aux, annot) -> scan_mpat set mp_aux annot) } in
+  let scan_mpexp set (MPat_aux (aux, _)) =
+    match aux with
+    | MPat_pat mpat -> ignore (rw_mpat set mpat)
+    | MPat_when (mpat, _) -> ignore (rw_mpat set mpat)
+  in
+  let scan_mapcl (MCL_aux (aux, _)) =
+    match aux with
+    | MCL_bidir (forward, backward) ->
+       scan_mpexp forward_effects forward;
+       scan_mpexp backward_effects backward
+    | MCL_forwards (forward, _) ->
+       scan_mpexp forward_effects forward
+    | MCL_backwards (backward, _) ->
+       scan_mpexp backward_effects backward
+  in
+  
+  begin match def with
+  | DEF_mapdef (MD_aux (MD_mapping (_, _, mapcls), _)) ->
+     List.iter scan_mapcl mapcls
+  | _ -> ()
+  end;
+  
+  !forward_effects, !backward_effects
+
+  
+  
 (* A top-level definition can have a side effect if it contains an
    expression which could have some side effect *)
 let can_have_direct_side_effect = function
   | DEF_type _ -> false
   | DEF_fundef _ -> true
-  | DEF_mapdef _ -> true
+  | DEF_mapdef _ -> false 
   | DEF_impl _ -> true
   | DEF_val _ -> true
   | DEF_spec _ -> true
@@ -238,7 +295,7 @@ let can_have_direct_side_effect = function
   | DEF_reg_dec _ -> true
   | DEF_internal_mutrec _ -> true
   | DEF_pragma _ -> false
-
+ 
 type side_effect_info = {
     functions : EffectSet.t Bindings.t;
     letbinds : EffectSet.t Bindings.t;
@@ -266,13 +323,23 @@ let infer_side_effects ast =
   let direct_effects = ref Bindings.empty in
   List.iteri (fun i def ->
       Util.progress "Effects (direct) " (string_of_int (i + 1) ^ "/" ^ string_of_int total) (i + 1) total;
-      if can_have_direct_side_effect def then (
-        let effs = infer_def_direct_effects def in
-        let ids = ids_of_def def in
-        IdSet.iter (fun id ->
-            direct_effects := Bindings.add id effs !direct_effects
-          ) ids
-      )
+      (* Handle mapping separately to allow different effects for both directions *)
+      begin match def with
+      | DEF_mapdef mdef ->
+         let effs = infer_def_direct_effects def in
+         let fw, bk = infer_mapdef_extra_direct_effects def in
+         let id = id_of_mapdef mdef in
+         direct_effects := Bindings.add id effs !direct_effects;
+         direct_effects := Bindings.add (append_id id "_forwards") fw !direct_effects;
+         direct_effects := Bindings.add (append_id id "_backwards") bk !direct_effects
+      | _ when can_have_direct_side_effect def ->
+         let effs = infer_def_direct_effects def in
+         let ids = ids_of_def def in
+         IdSet.iter (fun id ->
+             direct_effects := Bindings.add id effs !direct_effects
+           ) ids
+      | _ -> ()
+      end
     ) ast.defs;
 
   let function_effects = ref Bindings.empty in
@@ -320,8 +387,10 @@ let infer_side_effects ast =
   }
 
 let check_side_effects effect_info ast =
+  let allowed_nonexec = ref IdSet.empty in
   List.iter (fun def ->
       match def with
+      | DEF_pragma ("non_exec", name, _) -> allowed_nonexec := IdSet.add (mk_id name) !allowed_nonexec
       | DEF_val _ ->
          IdSet.iter (fun id ->
              match Bindings.find_opt id effect_info.letbinds with
@@ -331,6 +400,11 @@ let check_side_effects effect_info ast =
                           ^ Util.string_of_list ", " string_of_side_effect (EffectSet.elements eff)))
              | _ -> ()
            ) (ids_of_def def)
+      | DEF_fundef fdef ->
+         let id = id_of_fundef fdef in
+         let eff = Bindings.find_opt (id_of_fundef fdef) effect_info.functions |> Util.option_default EffectSet.empty in
+         if non_exec eff && not (IdSet.mem id !allowed_nonexec) then
+           raise (Reporting.err_general (id_loc id) ("Function " ^ string_of_id id ^ " calls function marked non-executable"))
       | _ -> ()
     ) ast.defs
 

@@ -1,7 +1,0 @@
-[93mType error[0m:
-[[96mconstant_nexp/v1.sail[0m]:11:2-26
-11[96m |[0m  multi_param(2 + 3, n, 5);
-  [91m |[0m  [91m^----------------------^[0m
-  [91m |[0m Could not resolve quantifiers for multi_param
-  [91m |[0m [94m*[0m is_constant(('m : Int))
-  [91m |[0m 

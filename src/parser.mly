@@ -1404,7 +1404,7 @@ mapcl_doc:
     { $1 }
 
 mapcl_list:
-  | mapcl_doc
+  | mapcl_doc Comma?
     { [$1] }
   | mapcl_doc Comma mapcl_list
     { $1 :: $3 }
