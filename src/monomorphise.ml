@@ -767,20 +767,21 @@ let split_defs target all_errors splits env ast =
     (* set constrained numbers *)
     | Typ_app (Id_aux (Id "atom",_), [A_aux (A_nexp (Nexp_aux (value,_) as nexp),_)]) ->
        begin
-         let mk_lit kid i =
+         (* Introduce a wilcard for the last pattern to ensure completeness is clear *)
+         let mk_lit kid wildcard i =
             let lit = L_aux (L_num i,new_l) in
-            P_aux (P_lit lit,(l,annot)),
+            P_aux ((if wildcard then P_wild else P_lit lit), (l,annot)),
             [var,E_aux (E_lit lit,(new_l,annot))],[],
             match kid with None -> KBindings.empty
                          | Some k -> KBindings.singleton k (nconstant i)
          in
          match value with
-         | Nexp_constant i -> [mk_lit None i]
+         | Nexp_constant i -> [mk_lit None false i]
          | Nexp_var kvar ->
            let ncs = Env.get_constraints env in
            let nc = List.fold_left nc_and nc_true ncs in
            (match extract_set_nc env l kvar nc with
-           | (is,_) -> List.map (mk_lit (Some kvar)) is
+           | (is,_) -> Util.map_last (mk_lit (Some kvar)) is
            | exception Reporting.Fatal_error (Reporting.Err_general (_,msg)) -> cannot msg)
          | _ -> cannot ("unsupport atom nexp " ^ string_of_nexp nexp)
        end

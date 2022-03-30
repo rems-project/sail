@@ -104,6 +104,9 @@ val assoc_compare_opt : ('a -> 'a -> int) -> 'a -> ('a * 'b) list -> 'b option
 
 val power : int -> int -> int
 
+(** Map but pass true to the function for the last element *)
+val map_last : (bool -> 'a -> 'b) -> 'a list -> 'b list
+  
 (** {2 Option Functions} *)
 
 (** [option_map f None] returns [None], whereas
