@@ -364,6 +364,7 @@ and ocaml_pexp ctx = function
      ^//^ group (ocaml_exp ctx exp)
 and ocaml_block ctx = function
   | [exp] -> ocaml_exp ctx exp
+  | E_aux (E_let _, _) as exp :: exps -> ocaml_atomic_exp ctx exp ^^ semi ^/^ ocaml_block ctx exps
   | exp :: exps -> ocaml_exp ctx exp ^^ semi ^/^ ocaml_block ctx exps
   | _ -> assert false
 and ocaml_fexp record_id ctx (FE_aux (FE_Fexp (id, exp), _)) =
