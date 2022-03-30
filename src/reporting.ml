@@ -217,10 +217,10 @@ let pos_compare p1 p2 =
   let open Lexing in
   match String.compare p1.pos_fname p2.pos_fname with
   | 0 ->
-     begin match Int.compare p1.pos_lnum p2.pos_lnum with
+     begin match compare p1.pos_lnum p2.pos_lnum with
      | 0 ->
-        begin match Int.compare p1.pos_bol p2.pos_bol with
-        | 0 -> Int.compare p1.pos_cnum p2.pos_cnum
+        begin match compare p1.pos_bol p2.pos_bol with
+        | 0 -> compare p1.pos_cnum p2.pos_cnum
         | n -> n
         end
      | n -> n
