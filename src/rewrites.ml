@@ -4801,6 +4801,12 @@ type rewriter_arg =
   | String_arg of string
   | Literal_arg of string
 
+let rec describe_rewriter = function
+  | String_rewriter rw -> "<string>" :: describe_rewriter (rw "")
+  | Bool_rewriter rw -> "<bool>" :: describe_rewriter (rw false)
+  | Literal_rewriter rw -> "(ocaml|lem|all)" :: describe_rewriter (rw (fun _ -> true))
+  | Base_rewriter _ -> []
+ 
 let instantiate_rewriter rewriter args =
   let selector_function = function
     | "ocaml" -> rewrite_lit_ocaml
@@ -5098,7 +5104,27 @@ let rewrite effect_info env rewriters ast =
   try snd (List.fold_left (fun (n, astenv) rw -> n + 1, rewrite_step n total astenv rw) (1, (ast, effect_info, env)) rewriters) with
   | Type_check.Type_error (_, l, err) ->
      raise (Reporting.err_typ l (Type_error.string_of_type_error err))
-  
+
+let () =
+  let open Interactive in
+
+  Action (fun () ->
+    let print_rewriter (name, rw) =
+      print_endline (name ^ " " ^ Util.(String.concat " " (describe_rewriter rw) |> yellow |> clear))
+    in
+    List.sort (fun a b -> String.compare (fst a) (fst b)) all_rewriters
+    |> List.iter print_rewriter
+  ) |> register_command ~name:"list_rewrites" ~help:"List all rewrites for use with the :rewrite command";
+ 
+  ArgString ("target", fun target -> Action (fun () ->
+    let ast', effect_info', env' = rewrite !effect_info !env (rewrites_for_target target) !ast in
+    ast := ast';
+    effect_info := effect_info';
+    env := env'
+  )) |> register_command
+           ~name:"rewrites"
+           ~help:"Apply all rewrites for a specific target"
+
 let rewrite_check_annot =
   let check_annot exp =
     try

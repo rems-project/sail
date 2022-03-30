@@ -79,6 +79,8 @@ let env = ref Type_check.initial_env
 
 let ast = ref empty_ast
 
+let effect_info = ref Effects.empty_side_effect_info
+
 let arg str =
   ("<" ^ str ^ ">") |> Util.yellow |> Util.clear
 

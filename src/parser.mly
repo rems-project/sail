@@ -213,6 +213,12 @@ let rec desugar_rchain chain s e =
      tyop "&" nc1 (desugar_rchain (RC_nexp n2 :: chain) s e) s e
   | _ -> assert false
 
+let effect_deprecated l =
+  Reporting.warn ~once_from:__POS__ "Deprecated" l "Explicit effect annotations are deprecated. They no longer have any function and can be removed."
+
+let cast_deprecated l =
+  Reporting.warn ~once_from:__POS__ "Deprecated" l "Cast annotations are deprecated. They will be removed in a future version of the language."
+  
 %}
 
 /*Terminals with no content*/
@@ -689,17 +695,21 @@ typschm:
   | Forall typquant Dot typ MinusGt typ
     { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
   | typ MinusGt typ Effect effect_set
-    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, $5)) s e) s e) $startpos $endpos }
+    { effect_deprecated (loc $startpos($4) $endpos);
+      (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, $5)) s e) s e) $startpos $endpos }
   | Forall typquant Dot typ MinusGt typ Effect effect_set
-    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, $8)) s e) s e) $startpos $endpos }
+    { effect_deprecated (loc $startpos($7) $endpos);
+      (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, $8)) s e) s e) $startpos $endpos }
   | typ Bidir typ
     { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_bidir ($1, $3, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
   | Forall typquant Dot typ Bidir typ
     { (fun s e -> mk_typschm $2 (mk_typ (ATyp_bidir ($4, $6, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
   | typ Bidir typ Effect effect_set
-    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_bidir ($1, $3, $5)) s e) s e) $startpos $endpos }
+    { effect_deprecated (loc $startpos($4) $endpos);
+      (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_bidir ($1, $3, $5)) s e) s e) $startpos $endpos }
   | Forall typquant Dot typ Bidir typ Effect effect_set
-    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_bidir ($4, $6, $8)) s e) s e) $startpos $endpos }
+    { effect_deprecated (loc $startpos($7) $endpos);
+      (fun s e -> mk_typschm $2 (mk_typ (ATyp_bidir ($4, $6, $8)) s e) s e) $startpos $endpos }
 
 typschm_eof:
   | typschm Eof

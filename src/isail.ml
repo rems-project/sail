@@ -72,13 +72,12 @@ open Ast_util
 open Interpreter
 open Pretty_print_sail
 
-module Callgraph = Callgraph
+module Callgraph_commands = Callgraph_commands
 module Gdbmi = Gdbmi
 
 type mode =
   | Evaluation of frame
   | Normal
-  | Emacs
 
 let current_mode = ref Normal
 
@@ -86,7 +85,6 @@ let prompt () =
   match !current_mode with
   | Normal -> "sail> "
   | Evaluation _ -> "eval> "
-  | Emacs -> ""
 
 let eval_clear = ref true
 
@@ -94,7 +92,6 @@ let mode_clear () =
   match !current_mode with
   | Normal -> ()
   | Evaluation _ -> if !eval_clear then LNoise.clear_screen () else ()
-  | Emacs -> ()
 
 let rec user_input callback =
   match LNoise.linenoise (prompt ()) with
@@ -151,9 +148,7 @@ let () =
    x, y and turn the into functions that can be called by sail as
    foo(x, y), which lets us use sail to script itself. The
    sail_scripting_primops_once variable ensures we only add the
-   commands to the interpreter primops list once, although we may have
-   to reset the AST and env changes when we :load and :unload
-   files by calling this function multiple times. *)
+   commands to the interpreter primops list once. *)
 let sail_scripting_primops_once = ref true
 
 let setup_sail_scripting () =
@@ -196,7 +191,7 @@ let setup_sail_scripting () =
 
 let print_program () =
   match !current_mode with
-  | Normal | Emacs -> ()
+  | Normal -> ()
   | Evaluation (Step (out, _, _, stack))
     | Evaluation (Effect_request(out, _, stack,  _))
     | Evaluation (Fail (out, _, _, stack, _)) ->
@@ -208,7 +203,7 @@ let print_program () =
 
 let rec run () =
   match !current_mode with
-  | Normal | Emacs -> ()
+  | Normal -> ()
   | Evaluation frame ->
      begin match frame with
      | Done (state, v) ->
@@ -250,7 +245,7 @@ let rec run_function depth =
          ()
   in
   match !current_mode with
-  | Normal | Emacs -> ()
+  | Normal -> ()
   | Evaluation frame ->
      begin match frame with
      | Done (state, v) ->
@@ -284,7 +279,7 @@ let rec run_function depth =
 let rec run_steps n =
   match !current_mode with
   | _ when n <= 0 -> ()
-  | Normal | Emacs -> ()
+  | Normal -> ()
   | Evaluation frame ->
      begin match frame with
      | Done (state, v) ->
@@ -379,9 +374,6 @@ let help =
   | ":rewrite" ->
      sprintf ":rewrite %s - Apply a rewrite to the AST. %s shows all possible rewrites. See also %s"
              (color yellow "<rewrite> <args>") (color green ":list_rewrites") (color green ":rewrites")
-  | ":rewrites" ->
-     sprintf ":rewrites %s - Apply all rewrites for a specific target, valid targets are lem, coq, ocaml, c, and interpreter"
-             (color yellow "<target>")
   | ":compile" ->
      sprintf ":compile %s - Compile AST to a specified target, valid targets are lem, coq, ocaml, c, and ir (intermediate representation)"
              (color yellow "<target>")
@@ -413,14 +405,6 @@ let rec emacs_error l contents =
 
 let slice_roots = ref IdSet.empty
 let slice_cuts = ref IdSet.empty
-
-let rec describe_rewrite =
-  let open Rewrites in
-  function
-  | String_rewriter rw -> "<string>" :: describe_rewrite (rw "")
-  | Bool_rewriter rw -> "<bool>" :: describe_rewrite (rw false)
-  | Literal_rewriter rw -> "(ocaml|lem|all)" :: describe_rewrite (rw (fun _ -> true))
-  | Base_rewriter _ -> []
 
 type session = {
     id : string;
@@ -532,7 +516,7 @@ let handle_input' input =
         let more_commands = Util.string_of_list " " fst !Interactive.commands in
         let commands =
           [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help :output :option";
-            "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :recheck :rewrite :rewrites :list_rewrites :compile " ^ more_commands;
+            "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :recheck :compile " ^ more_commands;
             "Evaluation mode commands - :(r)un :(s)tep :step_(f)unction :(n)ormal";
             "";
             ":(c)ommand can be called as either :c or :command." ]
@@ -571,27 +555,6 @@ let handle_input' input =
      | Command (cmd, arg) ->
         (* Normal mode commands *)
         begin match cmd with
-        | ":l" | ":load" ->
-           let files = Util.split_on_char ' ' arg in
-           let (_, ast, env, effect_info) = Process_file.load_files !opt_target options !Interactive.env files in
-           let ast, env =
-             if !Interactive.opt_auto_interpreter_rewrites then
-               ast, env (* Process_file.rewrite_ast_target effect_info "interpreter" env ast *)
-             else
-               ast, env
-           in
-           Interactive.ast := append_ast !Interactive.ast ast;
-           Interactive.env := env;
-           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
-           vs_ids := val_spec_ids !Interactive.ast.defs
-        | ":u" | ":unload" ->
-           Interactive.ast := Ast_defs.empty_ast;
-           Interactive.env := Type_check.initial_env;
-           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
-           vs_ids := val_spec_ids !Interactive.ast.defs;
-           (* See initial_check.mli for an explanation of why we need this. *)
-           Initial_check.have_undefined_builtins := false;
-           Process_file.clear_symbols ()
         | ":b" | ":bind" ->
            let args = Str.split (Str.regexp " +") arg in
            begin match args with
@@ -618,12 +581,6 @@ let handle_input' input =
            Interactive.ast := append_ast !Interactive.ast ast;
            Interactive.env := env;
            interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
-        | ":list_rewrites" ->
-           let print_rewrite (name, rw) =
-             print_endline (name ^ " " ^ Util.(String.concat " " (describe_rewrite rw) |> yellow |> clear))
-           in
-           List.sort (fun a b -> String.compare (fst a) (fst b)) Rewrites.all_rewriters
-           |> List.iter print_rewrite
         | ":rewrite" ->
            let open Rewrites in
            let args = Str.split (Str.regexp " +") arg in
@@ -645,19 +602,13 @@ let handle_input' input =
            | rw :: args ->
               let rw = List.assoc rw Rewrites.all_rewriters in
               let rw = parse_args rw args in
-           (* Interactive.ast := rw !Interactive.env !Interactive.ast; *)
-              ()
+              let ast', effect_info', env' = rw !Interactive.effect_info !Interactive.env !Interactive.ast in
+              Interactive.ast := ast';
+              Interactive.effect_info := effect_info';
+              Interactive.env := env'
            | [] ->
               failwith "Must provide the name of a rewrite, use :list_rewrites for a list of possible rewrites"
            end
-        | ":rewrites" ->
-           (*
-           let new_ast, new_env = Process_file.rewrite_ast_target arg !Interactive.env !Interactive.ast in
-           Interactive.ast := new_ast;
-           Interactive.env := new_env;
-           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops
-            *)
-           ()
         | ":prover_regstate" ->
            let env, ast = prover_regstate (Some arg) !Interactive.ast !Interactive.env in
            Interactive.env := env;
@@ -693,61 +644,6 @@ let handle_input' input =
         current_mode := Evaluation (eval_frame (Step (lazy "", !interactive_state, return exp, [])));
         print_program ()
      | Empty -> ()
-     end
-
-  | Emacs ->
-     begin match input with
-     | Command (cmd, arg) ->
-        begin match cmd with
-        | ":load" ->
-           begin
-             try
-               load_into_session arg;
-               let (_, ast, env, _) = Process_file.load_files ~check:true None options !Interactive.env [arg] in
-               Interactive.ast := append_ast !Interactive.ast ast;
-               interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
-               Interactive.env := env;
-               vs_ids := val_spec_ids !Interactive.ast.defs;
-               print_endline ("(message \"Checked " ^ arg ^ " done\")\n");
-             with
-             | Reporting.Fatal_error (Err_type (l, msg)) ->
-                print_endline (emacs_error l (String.escaped msg))
-           end
-        | ":unload" ->
-           Interactive.ast := Ast_defs.empty_ast;
-           Interactive.env := Type_check.initial_env;
-           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
-           vs_ids := val_spec_ids !Interactive.ast.defs;
-           Initial_check.have_undefined_builtins := false;
-           Process_file.clear_symbols ()
-        | ":typeat" ->
-           let args = Str.split (Str.regexp " +") arg in
-           begin match args with
-           | [file; pos] ->
-              let open Lexing in
-              let pos = int_of_string pos in
-              let pos = { dummy_pos with pos_fname = file; pos_cnum = pos - 1 } in
-              let sl = Some (pos, pos) in
-              begin match find_annot_ast sl !Interactive.ast with
-              | Some annot ->
-                 let msg = String.escaped (string_of_typ (Type_check.typ_of_annot annot)) in
-                 begin match Reporting.simp_loc (fst annot) with
-                 | Some (p1, p2) ->
-                    print_endline ("(sail-highlight-region "
-                                   ^ string_of_int (p1.pos_cnum + 1) ^ " " ^ string_of_int (p2.pos_cnum + 1)
-                                   ^ " \"" ^ msg ^ "\")")
-                 | None ->
-                    print_endline ("(message \"" ^ msg ^ "\")")
-                 end
-              | None ->
-                 print_endline "(message \"No type here\")"
-              end
-           | _ ->
-              print_endline "(error \"Bad arguments for type at cursor\")"
-           end
-        | _ -> ()
-        end
-     | Expression _ | Empty -> ()
      end
 
   | Evaluation frame ->
@@ -810,7 +706,7 @@ let handle_input input =
   | Type_check.Type_error (env, l, err) ->
      print_endline (Type_error.string_of_type_error err)
   | Reporting.Fatal_error err ->
-     Reporting.print_error err
+     Reporting.print_error ~interactive:true err
   | exn ->
      print_endline (Printexc.to_string exn)
 
@@ -884,7 +780,7 @@ let () =
          | ":rewrite" :: rw :: args ->
             begin match List.assoc_opt rw Rewrites.all_rewriters with
             | Some rw ->
-               let hints = describe_rewrite rw in
+               let hints = Rewrites.describe_rewriter rw in
                let hints = Util.drop (List.length args) hints in
                (match hints with [] -> None | _ ->  hint (String.concat " " hints))
             | None -> None
@@ -899,13 +795,11 @@ let () =
     );
 
   if !Interactive.opt_auto_interpreter_rewrites then (
-    (*
-    let new_ast, new_env = Process_file.rewrite_ast_target "interpreter" !Interactive.env !Interactive.ast in
-    Interactive.ast := new_ast;
-    Interactive.env := new_env;
-    interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops
-     *)
-    ()
+    let ast, effect_info, env = Rewrites.rewrite !Interactive.effect_info !Interactive.env (Rewrites.rewrites_for_target "interpreter") !Interactive.ast in
+    Interactive.ast := ast;
+    Interactive.effect_info := effect_info;
+    Interactive.env := env;
+    interactive_state := initial_state ast env !Value.primops
   );
   
   (* Read the script file if it is set with the -is option, and excute them *)
@@ -926,9 +820,7 @@ let () =
   LNoise.history_set ~max_length:100 |> ignore;
 
   if !Interactive.opt_interactive then (
-    if not !Interactive.opt_emacs_mode then
-      List.iter print_endline sail_logo
-    else (current_mode := Emacs; Util.opt_colors := false);
+    List.iter print_endline sail_logo;
     setup_sail_scripting ();
     user_input handle_input
   )

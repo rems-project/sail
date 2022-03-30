@@ -685,7 +685,7 @@ let doc_spec ?comment:(comment=false) (VS_aux (v, annot)) =
   let doc_extern ext =
     match ext with
     | Some ext ->
-       let purity = if ext.pure then string "pure" ^^ space else string "monadic" in
+       let purity = if ext.pure then string "pure" ^^ space else string "monadic" ^^ space in
        let docs = List.map (fun (backend, rep) -> string (backend ^ ":") ^^ space ^^ utf8string ("\"" ^ String.escaped rep ^ "\"")) ext.bindings in
        equals ^^ space ^^ purity ^^ braces (separate (comma ^^ space) docs)
     | None ->

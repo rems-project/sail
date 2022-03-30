@@ -78,6 +78,8 @@ val ast : tannot ast ref
 
 val env : Env.t ref
 
+val effect_info : Effects.side_effect_info ref
+
 val arg : string -> string
 val command : string -> string
 

@@ -65,75 +65,101 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-(** In Sail, we need to distinguish between pure and impure
-   (side-effecting) functions. This is because there are few places,
-   such as top-level let-bindings and loop termination measures where
-   side effects must clearly be forbidden. This module implements
-   inference for which functions are pure and which are effectful, and
-   checking the above purity restrictions. *)
-
-open Ast
-open Ast_defs
 open Ast_util
+open Callgraph
+open Printf
+open Interactive
 
-(** A function is side-effectful if it throws an exception, can exit
-   abnormally (either via an assertion failing or an explicit exit
-   statement), contains a (possibly) incomplete pattern match, or
-   touches a register. Finally, it is transitively side-effectful if
-   it calls another function doing any of the above. *)
-type side_effect
+let node_string n = node_id n |> string_of_id |> String.escaped
+   
+let edge_color from_node to_node = "black"
+   
+let node_color cuts =
+  let module NodeSet = Set.Make(Node) in
+  function
+  | node when NodeSet.mem node cuts -> "red"
+  | Register _ -> "lightpink"
+  | Function _ -> "white"
+  | Mapping _ -> "azure2"
+  | Letbind _ -> "yellow"
+  | Type _ -> "springgreen"
+  | Overload _ -> "peachpuff"
+  | Constructor _ -> "lightslateblue"
+  | FunctionMeasure _ -> "olivegreen"
+  | LoopMeasures _ -> "green"
+  | Outcome _ -> "purple"
+   
+let dot_of_ast out_chan ast =
+  let module G = Graph.Make(Node) in
+  let module NodeSet = Set.Make(Node) in
+  let g = graph_of_ast ast in
+  G.make_dot (node_color NodeSet.empty) edge_color node_string out_chan g
+   
+let () =
+  let slice_roots = ref IdSet.empty in
+  let slice_keep_std = ref false in
+  let slice_cuts = ref IdSet.empty in
 
-module EffectSet : sig
-  include Set.S with type elt = side_effect
-end
+  ArgString ("identifiers", fun arg -> Action (fun () ->
+    let args = Str.split (Str.regexp " +") arg in
+    let ids = List.map mk_id args |> IdSet.of_list in
+    Specialize.add_initial_calls ids;
+    slice_roots := IdSet.union ids !slice_roots
+  )) |> register_command ~name:"slice_roots" ~help:"Set the roots for :slice";
 
-(* Note we intentionally keep the side effect type abstract, and
-   expose some functions on effect sets based on what we actually
-   need. *)
-     
-val throws : EffectSet.t -> bool
+  Action (fun () ->
+      slice_keep_std := true
+  ) |> register_command ~name:"slice_keep_std" ~help:"Keep standard library contents during :slice";
 
-val pure : EffectSet.t -> bool
+  ArgString ("identifiers", fun arg -> Action (fun () ->
+    let args = Str.split (Str.regexp " +") arg in
+    let ids = List.map mk_id args |> IdSet.of_list in
+    slice_cuts := IdSet.union ids !slice_cuts
+  )) |> register_command ~name:"slice_cuts" ~help:"Set the cuts for :slice";
 
-val effectful : EffectSet.t -> bool
+  Action (fun () ->
+    let module NodeSet = Set.Make(Node) in
+    let module G = Graph.Make(Node) in
+    let g = graph_of_ast !ast in
+    let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
+    let cuts = !slice_cuts |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
+    let g = G.prune roots cuts g in
+    ast := filter_ast_extra cuts g !ast !slice_keep_std
+  ) |> register_command
+         ~name:"slice"
+         ~help:"Slice AST to the definitions which the functions given \
+                by :slice_roots depend on, up to the functions given \
+                by :slice_cuts";
 
-(** Outcome identifiers correspond to the set of user-defined prompt
-   monad constructors in the concurrency interface, replacing the
-   various ad-hoc rmem, wmem, barrier, and so on effects in previous
-   Sail versions. For example, using the concurrency interface in the Sail
-   library, the equivalent to checking for the wmem effect would be:
+  Action (fun () ->
+    let module NodeSet = Set.Make(Node) in
+    let module NodeMap = Map.Make(Node) in
+    let module G = Graph.Make(Node) in
+    let g = graph_of_ast !ast in
+    let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
+    let keep = function
+      | (Function id,_) when IdSet.mem id (!slice_roots) -> None
+      | (Function id,_) -> Some (Function id)
+      | _ -> None
+    in
+    let cuts = NodeMap.bindings g |> Util.map_filter keep |> NodeSet.of_list in
+    let g = G.prune roots cuts g in
+    ast := filter_ast_extra cuts g !ast !slice_keep_std
+  ) |> register_command
+         ~name:"thin_slice"
+         ~help:(sprintf ":thin_slice - Slice AST to the function definitions given with %s" (command "slice_roots"));
 
-   has_outcome (mk_id "sail_mem_write_request") effects
-   *)
-val has_outcome : id -> EffectSet.t -> bool
+  ArgString ("format", fun arg -> Action (fun () ->
+    let format = if arg = "" then "svg" else arg in
+    let dotfile, out_chan = Filename.open_temp_file "sail_graph_" ".gz" in
+    let image = Filename.temp_file "sail_graph_" ("." ^ format) in
+    dot_of_ast out_chan !ast;
+    close_out out_chan;
+    let _ = Unix.system (Printf.sprintf "dot -T%s %s -o %s" format dotfile image) in
+    let _ = Unix.system (Printf.sprintf "xdg-open %s" image) in
+    ()
+  )) |> register_command
+          ~name:"graph"
+          ~help:"Draw a callgraph using dot in :0 (e.g. svg), and open with xdg-open"
 
-type side_effect_info = {
-    functions : EffectSet.t Bindings.t;
-    letbinds : EffectSet.t Bindings.t;
-    mappings : EffectSet.t Bindings.t
-  }
 
-val empty_side_effect_info : side_effect_info
-
-val function_is_pure : id -> side_effect_info -> bool
-                      
-val infer_side_effects : Type_check.tannot ast -> side_effect_info
-
-(** Checks constraints on side effects, raising an error if they are
-   violated. Currently these are that termination measures and
-   top-level letbindings must be pure. *)
-val check_side_effects : side_effect_info -> Type_check.tannot ast -> unit
-
-(** [copy_function_effect id_from info id_to] copies the effect
-   information from id_from to id_to in the side effect
-   information. The order of arguments is to make it convenient to use
-   with List.fold_left. *)
-val copy_function_effect : id -> side_effect_info -> id -> side_effect_info
-val copy_mapping_to_function : id -> side_effect_info -> id -> side_effect_info
-  
-(** Previous code mostly assumes that side effect info is attached to
-   nodes in the AST. To keep this code working, this rewrite pass
-   attaches effect info into to the AST. Note that the effect info is
-   simplified in its annotated form - it just becomes a boolean
-   representing effectful/non-effectful *)
-val rewrite_attach_effects : side_effect_info -> Type_check.tannot ast -> Type_check.tannot ast

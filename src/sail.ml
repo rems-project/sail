@@ -667,7 +667,7 @@ let main () =
       target !opt_target out_name ast effect_info type_envs;
 
       if !Interactive.opt_interactive then
-        (Interactive.ast := ast; Interactive.env := type_envs)
+        (Interactive.ast := ast; Interactive.env := type_envs; Interactive.effect_info := effect_info)
       else ();
 
       if !opt_memo_z3 then Constraint.save_digests () else ()

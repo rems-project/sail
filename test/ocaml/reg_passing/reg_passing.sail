@@ -3,7 +3,8 @@ register R1 : int
 register R2 : int
 register R3 : int
 
-val cast "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
+val __deref = monadic "reg_deref" : forall ('a : Type). register('a) -> 'a effect {rreg}
+
 val output = {
     ocaml: "(fun (str, n) -> print_endline (str ^ Big_int.to_string n))",
     interpreter: "print_int"
@@ -12,7 +13,7 @@ val output = {
 val f : register(int) -> unit effect {rreg, wreg}
 
 function f R = {
-  R1 = R;
+  R1 = *R;
 }
 
 val g : unit -> unit effect {rreg, wreg}

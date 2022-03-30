@@ -972,23 +972,39 @@ let initial_ctx = {
   }
 
 let exp_of_string str =
-  let exp = Parser.exp_eof Lexer.token (Lexing.from_string str) in
-  to_ast_exp initial_ctx exp
+  try
+    let exp = Parser.exp_eof Lexer.token (Lexing.from_string str) in
+    to_ast_exp initial_ctx exp
+  with
+  | Parser.Error ->
+     Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
 
 let typschm_of_string str =
-  let typschm = Parser.typschm_eof Lexer.token (Lexing.from_string str) in
-  let typschm, _ = to_ast_typschm initial_ctx typschm in
-  typschm
+  try
+    let typschm = Parser.typschm_eof Lexer.token (Lexing.from_string str) in
+    let typschm, _ = to_ast_typschm initial_ctx typschm in
+    typschm
+  with
+  | Parser.Error ->
+     Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
 
 let typ_of_string str =
-  let typ = Parser.typ_eof Lexer.token (Lexing.from_string str) in
-  let typ = to_ast_typ initial_ctx typ in
-  typ
+  try
+    let typ = Parser.typ_eof Lexer.token (Lexing.from_string str) in
+    let typ = to_ast_typ initial_ctx typ in
+    typ
+  with
+  | Parser.Error ->
+     Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
 
 let constraint_of_string str =
-  let atyp = Parser.typ_eof Lexer.token (Lexing.from_string str) in
-  to_ast_constraint initial_ctx atyp
-
+  try
+    let atyp = Parser.typ_eof Lexer.token (Lexing.from_string str) in
+    to_ast_constraint initial_ctx atyp
+  with
+  | Parser.Error ->
+     Reporting.unreachable Parse_ast.Unknown __POS__ ("Failed to parse " ^ str)
+    
 let extern_of_string ?(pure = false) id str =
   VS_val_spec (typschm_of_string str, id, Some { pure = pure; bindings = [("_", string_of_id id)] }, false)
   |> mk_val_spec

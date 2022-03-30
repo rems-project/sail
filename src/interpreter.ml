@@ -923,27 +923,25 @@ let default_effect_interp state eff =
      (* no-op in single-threaded interpreter *)
      cont () state
   | Read_reg (name, cont) ->
-     begin
-       if gstate.allow_registers then
-         try
-           cont (Bindings.find (mk_id name) gstate.registers) state
-         with Not_found ->
-           failwith ("Read of nonexistent register: " ^ name)
-       else
+     if gstate.allow_registers then (
+       try
+         cont (Bindings.find (mk_id name) gstate.registers) state
+       with Not_found ->
+         failwith ("Read of nonexistent register: " ^ name)
+     ) else (
          failwith ("Register read disallowed by allow_registers setting: " ^ name)
-     end
+     )
   | Write_reg (name, v, cont) ->
-     begin
-       let id = mk_id name in
-       if gstate.allow_registers then
-         if Bindings.mem id gstate.registers then
-           let state' = (lstate, { gstate with registers = Bindings.add id v gstate.registers }) in
-           cont () state'
-         else
-           failwith ("Write of nonexistent register: " ^ name)
+     let id = mk_id name in
+     if gstate.allow_registers then (
+       if Bindings.mem id gstate.registers then
+         let state' = (lstate, { gstate with registers = Bindings.add id v gstate.registers }) in
+         cont () state'
        else
-         failwith ("Register write disallowed by allow_registers setting: " ^ name)
-     end
+         failwith ("Write of nonexistent register: " ^ name)
+     ) else (
+       failwith ("Register write disallowed by allow_registers setting: " ^ name)
+     )
 
 let effect_interp = ref default_effect_interp
 

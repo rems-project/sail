@@ -170,10 +170,13 @@ type error =
 
 let issues = "\nPlease report this as an issue on GitHub at https://github.com/rems-project/sail/issues"
 
-let dest_err = function
+let dest_err ?(interactive = false) = function
   | Err_general (l, m) -> ("Error", Loc l, m)
   | Err_unreachable (l, (file, line, _, _), backtrace, m) ->
-     (Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line, Loc l, m ^ "\n\n" ^ Printexc.raw_backtrace_to_string backtrace ^ issues)
+     if interactive then
+       ("Error", Loc l, m)
+     else
+       (Printf.sprintf "Internal error: Unreachable code (at \"%s\" line %d)" file line, Loc l, m ^ "\n\n" ^ Printexc.raw_backtrace_to_string backtrace ^ issues)
   | Err_todo (l, m) -> ("Todo", Loc l, m)
   | Err_syntax (p, m) -> (Util.("Syntax error" |> yellow |> clear), Pos p, m)
   | Err_syntax_loc (l, m) -> (Util.("Syntax error" |> yellow |> clear), Loc l, m)
@@ -205,8 +208,8 @@ let forbid_errors ocaml_pos f x =
   | Fatal_error (Err_lex (p, m)) -> raise (err_unreachable (Range (p, p)) ocaml_pos m)
   | Fatal_error (Err_type (l, m)) -> raise (err_unreachable l ocaml_pos m)
  
-let print_error e =
-  let (m1, pos_l, m2) = dest_err e in
+let print_error ?(interactive = false) e =
+  let (m1, pos_l, m2) = dest_err ~interactive:interactive e in
   print_err_internal pos_l m1 m2
 
 (* Warnings *)
@@ -242,9 +245,21 @@ let suppress_warnings_for_file f =
   ignored_files := StringSet.add f !ignored_files
 
 let seen_warnings = ref RangeMap.empty
+let once_from_warnings = ref StringSet.empty
 
-let warn short_str l explanation =
-  if !opt_warnings then
+let warn ?once_from short_str l explanation =
+  let already_shown = match once_from with
+    | Some (file, lnum, cnum, enum) ->
+       let key = Printf.sprintf "%d:%d:%d:%s" lnum cnum enum file in
+       if StringSet.mem key !once_from_warnings then (
+         true
+       ) else (
+         once_from_warnings := StringSet.add key !once_from_warnings;
+         false
+       )
+    | None -> false
+  in
+  if !opt_warnings && not already_shown then (
     match simp_loc l with
     | Some (p1, p2) when not (StringSet.mem p1.pos_fname !ignored_files) ->
        let shorts = RangeMap.find_opt (p1, p2) !seen_warnings |> Util.option_default [] in
@@ -254,7 +269,6 @@ let warn short_str l explanation =
          seen_warnings := RangeMap.add (p1, p2) (short_str :: shorts) !seen_warnings
        )
     | _ -> prerr_endline (Util.("Warning" |> yellow |> clear) ^ ": " ^ short_str ^ "\n" ^ explanation ^ "\n")
-  else
-    ()
+  )
 
 let simple_warn str = warn str Parse_ast.Unknown ""

@@ -100,7 +100,9 @@ type rewriter =
   | Bool_rewriter of (bool -> rewriter)
   | String_rewriter of (string -> rewriter)
   | Literal_rewriter of ((lit -> bool) -> rewriter)
-  
+
+val describe_rewriter : rewriter -> string list
+                      
 val all_rewriters : (string * rewriter) list
   
 type rewrite_sequence = (string * (Effects.side_effect_info -> Env.t -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t)) list

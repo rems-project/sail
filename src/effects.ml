@@ -273,8 +273,6 @@ let infer_mapdef_extra_direct_effects def =
   
   !forward_effects, !backward_effects
 
-  
-  
 (* A top-level definition can have a side effect if it contains an
    expression which could have some side effect *)
 let can_have_direct_side_effect = function
@@ -300,6 +298,12 @@ type side_effect_info = {
     functions : EffectSet.t Bindings.t;
     letbinds : EffectSet.t Bindings.t;
     mappings : EffectSet.t Bindings.t
+  }
+
+let empty_side_effect_info = {
+    functions = Bindings.empty;
+    letbinds = Bindings.empty;
+    mappings = Bindings.empty
   }
 
 let function_is_pure id info =

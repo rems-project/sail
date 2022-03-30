@@ -130,13 +130,13 @@ val err_lex : Lexing.position -> string -> exn
 
 val unreachable : Parse_ast.l -> (string * int * int * int) -> string -> 'a
 
-val print_error : error -> unit
+val print_error : ?interactive:bool -> error -> unit
 
 val forbid_errors : (string * int * int * int) -> ('a -> 'b) -> 'a -> 'b
   
 (** Print a warning message. The first string is printed before the
    location, the second after. *)
-val warn : string -> Parse_ast.l -> string -> unit
+val warn : ?once_from:(string * int * int * int) -> string -> Parse_ast.l -> string -> unit
 
 (** Print a simple one-line warning without a location. *)
 val simple_warn: string -> unit

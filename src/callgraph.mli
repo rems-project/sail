@@ -101,3 +101,5 @@ val graph_of_ast : Type_check.tannot ast -> callgraph
 val filter_ast_ids : IdSet.t -> IdSet.t -> Type_check.tannot ast -> Type_check.tannot ast
 
 val filter_ast : Set.Make(Node).t -> callgraph -> Type_check.tannot ast -> Type_check.tannot ast
+
+val filter_ast_extra : Set.Make(Node).t -> callgraph -> Type_check.tannot ast -> bool -> Type_check.tannot ast
