@@ -602,6 +602,27 @@ let const_props target ast ref_vars =
          | None -> assigns
        in
        re (E_assign (le', e')) assigns
+    | E_var (le, e, e2) ->
+       let env = Type_check.env_of_annot (l, annot) in
+       let assigned_in = IdSet.union (assigned_vars_in_lexp le) (assigned_vars e) in
+       let assigns = isubst_minus_set assigns assigned_in in
+       let le',idopt = const_prop_lexp substs assigns le in
+       let e',_ = const_prop_exp substs assigns e in
+       let assigns =
+         match idopt with
+         | Some id ->
+            begin
+              match Env.lookup_id id env with
+              | Local (Mutable,_) | Unbound _ ->
+                 if is_value e' && not (IdSet.mem id ref_vars)
+                 then Bindings.add id (keep_undef_typ e') assigns
+                 else Bindings.remove id assigns
+              | _ -> assigns
+            end
+         | None -> assigns
+       in
+       let e2', _ = const_prop_exp substs assigns e2 in
+       re (E_var (le', e', e2')) assigns
     | E_exit e ->
        let e',_ = const_prop_exp substs assigns e in
        re (E_exit e') Bindings.empty
@@ -622,7 +643,6 @@ let const_props target ast ref_vars =
        re (E_assert (e1',e2')) assigns
 
     | E_app_infix _
-    | E_var _
     | E_internal_plet _
     | E_internal_return _
     | E_internal_value _

@@ -214,7 +214,7 @@ let rec desugar_rchain chain s e =
   | _ -> assert false
 
 let effect_deprecated l =
-  Reporting.warn ~once_from:__POS__ "Deprecated" l "Explicit effect annotations are deprecated. They no longer have any function and can be removed."
+  Reporting.warn ~once_from:__POS__ "Deprecated" l "Explicit effect annotations are deprecated. They are no longer used and can be removed."
 
 let cast_deprecated l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "Cast annotations are deprecated. They will be removed in a future version of the language."

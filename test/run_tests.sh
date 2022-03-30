@@ -30,7 +30,7 @@ printf "==========================================\n"
 ./mono/run_tests.sh
 
 printf "\n==========================================\n"
-printf "Ocaml tests\n"
+printf "OCaml tests\n"
 printf "==========================================\n"
 
 ./ocaml/run_tests.sh

@@ -16,9 +16,9 @@ printf "<testsuites>\n" >> $DIR/tests.xml
 
 for i in `ls $DIR/pass/ | grep sail`;
 do
-    if $SAILDIR/sail -no_memo_z3 -just_check -ddump_tc_ast -dsanity $DIR/pass/$i 2> /dev/null 1> $DIR/rtpass/$i;
+    if $SAILDIR/sail -no_memo_z3 -just_check -ddump_tc_ast $DIR/pass/$i 2> /dev/null 1> $DIR/rtpass/$i;
     then
-	if $SAILDIR/sail -no_memo_z3 -just_check -ddump_tc_ast -dmagic_hash -dno_cast -dsanity $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
+	if $SAILDIR/sail -no_memo_z3 -just_check -ddump_tc_ast -dmagic_hash -dno_cast $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
 	then
 	    if diff $DIR/rtpass/$i $DIR/rtpass2/$i;
 	    then

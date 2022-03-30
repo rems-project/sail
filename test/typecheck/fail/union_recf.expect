@@ -6,10 +6,13 @@
  [91m |[0m[91m^[0m
  [91m |[0m Types are not well-formed within this type definition. Note that recursive types are forbidden.
  [91m |[0m 
- [91m |[0m Well-formedness check failed for type
- [91m |[0m 
- [91m |[0m [93mCaused by [0m[[96munion_recf.sail[0m]:3:9-10
+ [91m |[0m [93mCaused by [0m[[96munion_recf.sail[0m]:3:2-15
  [91m |[0m 3[96m |[0m  Ctor : U -> U
- [91m |[0m  [91m |[0m         [91m^[0m
+ [91m |[0m  [91m |[0m  [91m^-----------^[0m
+ [91m |[0m  [91m |[0m Well-formedness check failed for type
+ [91m |[0m  [91m |[0m 
+ [91m |[0m  [91m |[0m [93mCaused by [0m[[96munion_recf.sail[0m]:3:9-10
+ [91m |[0m  [91m |[0m 3[96m |[0m  Ctor : U -> U
+ [91m |[0m  [91m |[0m  [91m |[0m         [91m^[0m
  [91m |[0m  [91m |[0m Undefined type U
  [91m |[0m 

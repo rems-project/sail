@@ -427,9 +427,6 @@ let options = Arg.align ([
   ( "-dno_cast",
     Arg.Set opt_dno_cast,
     " (debug) typecheck without any implicit casting");
-  ( "-dsanity",
-    Arg.Set opt_sanity,
-    " (debug) sanity check the AST (slow)");
   ( "-dmagic_hash",
     Arg.Set Initial_check.opt_magic_hash,
     " (debug) allow special character # in identifiers");
@@ -652,10 +649,6 @@ let main () =
          exit 1
       | None, _ -> ()
       end;
-
-      if !opt_sanity then
-        ignore (rewrite_ast_check effect_info type_envs ast)
-      else ();
 
       stash_pre_rewrite_info !opt_target ast type_envs;
 

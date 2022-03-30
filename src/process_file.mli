@@ -78,7 +78,6 @@ val add_symbol : string -> unit
 val preprocess : string option -> (Arg.key * Arg.spec * Arg.doc) list -> Parse_ast.def list -> Parse_ast.def list
 val check_ast : Type_check.Env.t -> unit ast -> Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info
 val rewrite_ast_initial : Effects.side_effect_info -> Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Effects.side_effect_info * Type_check.Env.t
-val rewrite_ast_check : Effects.side_effect_info -> Type_check.Env.t -> Type_check.tannot ast -> Type_check.tannot ast * Effects.side_effect_info * Type_check.Env.t
 
 val opt_file_out : string option ref
 val opt_memo_z3 : bool ref

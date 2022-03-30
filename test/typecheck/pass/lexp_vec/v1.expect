@@ -1,3 +1,9 @@
+[93mWarning[0m: Deprecated [[96mlexp_vec/v1.sail[0m]:9:63-76
+9[96m |[0mval write_V : forall 'i. (int('i), bitvector(32, dec)) -> unit effect {wreg}
+ [91m |[0m                                                               [91m^-----------^[0m
+ [91m |[0m 
+Explicit effect annotations are deprecated. They are no longer used and can be removed.
+
 [93mType error[0m:
 [[96mlexp_vec/v1.sail[0m]:12:2-6
 12[96m |[0m  V[i] = v

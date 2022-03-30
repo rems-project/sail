@@ -5124,34 +5124,3 @@ let () =
   )) |> register_command
            ~name:"rewrites"
            ~help:"Apply all rewrites for a specific target"
-
-let rewrite_check_annot =
-  let check_annot exp =
-    try
-      prerr_endline ("CHECKING: " ^ string_of_exp exp ^ " : " ^ string_of_typ (typ_of exp));
-      let _ = check_exp (env_of exp) (strip_exp exp) (typ_of exp) in
-      let typ1 = typ_of exp in
-      let typ2 = Env.expand_synonyms (env_of exp) (typ_of exp) in
-      (if not (alpha_equivalent (env_of exp) typ1 typ2)
-       then raise (Reporting.err_typ Parse_ast.Unknown
-                    ("Found synonym in annotation " ^ string_of_typ typ1 ^ " vs " ^ string_of_typ typ2))
-       else ());
-      exp
-    with
-      Type_error (_, l, err) -> raise (Reporting.err_typ l (Type_error.string_of_type_error err))
-  in
-  let check_pat pat =
-    prerr_endline ("CHECKING PAT: " ^ string_of_pat pat ^ " : " ^ string_of_typ (typ_of_pat pat));
-    let _, _ = bind_pat_no_guard (env_of_pat pat) (strip_pat pat) (typ_of_pat pat) in
-    pat
-  in
-
-  let rewrite_exp = { id_exp_alg with
-    e_aux = (fun (exp, annot) -> check_annot (E_aux (exp, annot)));
-    pat_alg = { id_pat_alg with p_aux = (fun (pat, annot) -> check_pat (P_aux (pat, annot))) } } in
-  rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp rewrite_exp);
-                                          rewrite_pat = (fun _ -> check_pat) }
-
-let rewrites_check = [
-    ("check_annotations", fun effect_info env defs -> rewrite_check_annot defs, effect_info, env);
-  ]

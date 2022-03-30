@@ -446,8 +446,6 @@ let output libpath out_arg files =
 
 let rewrite_ast_initial effect_info env = Rewrites.rewrite effect_info env [("initial", fun effect_info env ast -> Rewriter.rewrite_ast ast, effect_info, env)]
 
-let rewrite_ast_check effect_info env = Rewrites.rewrite effect_info env Rewrites.rewrites_check
-
 let descatter effect_info type_envs ast =
   let ast = Scattered.descatter ast in
   let ast, _, type_envs = rewrite_ast_initial effect_info type_envs ast in

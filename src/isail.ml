@@ -357,12 +357,6 @@ let help =
   | ":clear" ->
      sprintf ":clear %s - Set whether to clear the screen or not in evaluation mode."
              (color yellow "(on|off)")
-  | ":l" | ":load" -> String.concat "\n"
-     [ sprintf "(:l | :load) %s - Load sail files and add their definitions to the interactive environment."
-               (color yellow "<files>");
-       "Files containing scattered definitions must be loaded together." ]
-  | ":u" | ":unload" ->
-     "(:u | :unload) - Unload all loaded files."
   | ":output" ->
      sprintf ":output %s - Redirect evaluating expression output to a file."
              (color yellow "<file>")
@@ -386,22 +380,6 @@ let help =
      | None ->
         sprintf "Either invalid command passed to help, or no documentation for %s. Try %s."
                 (color green cmd) (color green ":help :help")
-
-let format_pos_emacs p1 p2 contents =
-  let open Lexing in
-  let b = Buffer.create 160 in
-  Printf.sprintf "(sail-error %d %d %d %d \"%s\")"
-                 p1.pos_lnum (p1.pos_cnum - p1.pos_bol)
-                 p2.pos_lnum (p2.pos_cnum - p2.pos_bol)
-                 contents
-
-let rec emacs_error l contents =
-  match l with
-  | Parse_ast.Unknown -> "(error \"no location info: " ^ contents ^ "\")"
-  | Parse_ast.Range (p1, p2) -> format_pos_emacs p1 p2 contents
-  | Parse_ast.Unique (_, l) -> emacs_error l contents
-  | Parse_ast.Documented (_, l) -> emacs_error l contents
-  | Parse_ast.Generated l -> emacs_error l contents
 
 let slice_roots = ref IdSet.empty
 let slice_cuts = ref IdSet.empty
@@ -630,8 +608,7 @@ let handle_input' input =
              | None -> "out.sail"
              | Some f -> f ^ ".sail"
            in
-        (* target (Some arg) out_name !Interactive.ast !Interactive.env *)
-           ()
+           target (Some arg) out_name !Interactive.ast !Interactive.effect_info !Interactive.env
         | _ ->
            match List.assoc_opt cmd !Interactive.commands with
            | Some (_, action) -> Interactive.run_action cmd arg action
@@ -650,23 +627,22 @@ let handle_input' input =
      begin match input with
      | Command (cmd, arg) ->
         (* Evaluation mode commands *)
-        begin
-          match cmd with
-          | ":r" | ":run" ->
-             run ()
-          | ":s" | ":step" ->
-             run_steps (int_of_string arg);
-             print_program ()
-          | ":f" | ":step_function" ->
-             run_function None;
-             print_program ()
-          | _ -> unrecognised_command cmd
+        begin match cmd with
+        | ":r" | ":run" ->
+           run ()
+        | ":s" | ":step" ->
+           run_steps (int_of_string arg);
+           print_program ()
+        | ":f" | ":step_function" ->
+           run_function None;
+           print_program ()
+        | _ -> unrecognised_command cmd
         end
      | Expression str ->
         print_endline "Already evaluating expression"
      | Empty ->
         (* Empty input will evaluate one step, or switch back to
-             normal mode when evaluation is completed. *)
+           normal mode when evaluation is completed. *)
         begin match frame with
         | Done (state, v) ->
            interactive_state := state;
@@ -711,7 +687,6 @@ let handle_input input =
      print_endline (Printexc.to_string exn)
 
 let () =
-  (* Auto complete function names based on val specs, directories if :load command, or rewrites if :rewrite command *)
   LNoise.set_completion_callback (
       fun line_so_far ln_completions ->
       let line_so_far, last_id =
@@ -726,18 +701,6 @@ let () =
       let cmd = Str.string_before line_so_far n in
       if last_id <> "" then
         begin match cmd with
-        | ":load" | ":l" ->
-           let dirname, basename = Filename.dirname last_id, Filename.basename last_id in
-           if Sys.file_exists last_id then
-             LNoise.add_completion ln_completions (line_so_far ^ last_id);
-           if (try Sys.is_directory dirname with Sys_error _ -> false) then
-             let contents = Sys.readdir (Filename.concat (Sys.getcwd ()) dirname) in
-             for i = 0 to Array.length contents - 1 do
-               if Str.string_match (Str.regexp_string basename) contents.(i) 0 then
-                 let is_dir = (try Sys.is_directory (Filename.concat dirname contents.(i)) with Sys_error _ -> false) in
-                 LNoise.add_completion ln_completions
-                   (line_so_far ^ Filename.concat dirname contents.(i) ^ (if is_dir then Filename.dir_sep else ""))
-             done
         | ":rewrite" ->
            List.map fst Rewrites.all_rewriters
            |> List.filter (fun opt -> Str.string_match (Str.regexp_string last_id) opt 0)
@@ -763,7 +726,7 @@ let () =
       let hint str = Some (" " ^ str, LNoise.Yellow, false) in
       match String.trim line_so_far with
       | _ when !Interactive.opt_emacs_mode -> None
-      | ":load"  | ":l" -> hint "<sail file>"
+      | ":clear" -> hint "(on|off)"
       | ":bind"  | ":b" -> hint "<id> : <type>"
       | ":infer" | ":i" -> hint "<expression>"
       | ":type"  | ":t" -> hint "<function id>"

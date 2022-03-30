@@ -1,3 +1,9 @@
+[93mWarning[0m: Deprecated [[96mshort_circuit_bool_ex/v1.sail[0m]:6:50-65
+6[96m |[0mval assertive : forall 'n. int('n) -> range(0,'n) effect {escape}
+ [91m |[0m                                                  [91m^-------------^[0m
+ [91m |[0m 
+Explicit effect annotations are deprecated. They are no longer used and can be removed.
+
 [93mType error[0m:
 [[96mshort_circuit_bool_ex/v1.sail[0m]:25:36-40
 25[96m |[0m  if (true | assertive(n) > 0) then true else true

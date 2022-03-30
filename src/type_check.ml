@@ -5143,23 +5143,14 @@ let forbid_recursive_types type_l f =
      let msg = "Types are not well-formed within this type definition. Note that recursive types are forbidden." in
      raise (Type_error (env, type_l, err_because (Err_other msg, l, err)))
 
-let check_type_union u_l non_rec_env env variant typq (Tu_aux (tu, l)) =
+let check_type_union u_l non_rec_env env variant typq (Tu_aux (Tu_ty_id (arg_typ, v), l)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
-  match tu with
-  | Tu_ty_id (Typ_aux (Typ_fn (arg_typ, ret_typ), _) as typ, v) ->
-     let typq = mk_typquant (List.map (mk_qi_id K_type) (KidSet.elements (tyvars_of_typ typ))) in
-     wf_binding l env (typq, typ);
-     forbid_recursive_types u_l (fun () -> wf_binding l non_rec_env (typq, tuple_typ arg_typ));
-     env
-     |> Env.add_union_id v (typq, typ)
-     |> Env.add_val_spec v (typq, typ)
-  | Tu_ty_id (arg_typ, v) ->
-     let typ' = mk_typ (Typ_fn ([arg_typ], ret_typ)) in
-     forbid_recursive_types u_l (fun () -> wf_binding l non_rec_env (typq, arg_typ));
-     wf_binding l env (typq, typ');
-     env
-     |> Env.add_union_id v (typq, typ')
-     |> Env.add_val_spec v (typq, typ')
+  let typ = mk_typ (Typ_fn ([arg_typ], ret_typ)) in
+  forbid_recursive_types u_l (fun () -> wf_binding l non_rec_env (typq, arg_typ));
+  wf_binding l env (typq, typ);
+  env
+  |> Env.add_union_id v (typq, typ)
+  |> Env.add_val_spec v (typq, typ)
 
 let rec check_typedef : 'a. Env.t -> 'a type_def -> (tannot def) list * Env.t =
   fun env (TD_aux (tdef, (l, _))) ->

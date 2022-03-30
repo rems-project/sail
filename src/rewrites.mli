@@ -110,10 +110,6 @@ type rewrite_sequence = (string * (Effects.side_effect_info -> Env.t -> tannot a
 (** Get the list of instantiated rewrites for a defined target *)
 val rewrites_for_target : string -> rewrite_sequence
 
-(** This is a special rewriter pass that checks AST invariants without
-   actually doing any re-writing *)   
-val rewrites_check : rewrite_sequence
-
 (** Apply a sequence of rewrites to an AST *)
 val rewrite : Effects.side_effect_info -> Env.t -> rewrite_sequence -> tannot ast -> tannot ast * Effects.side_effect_info * Env.t
   
