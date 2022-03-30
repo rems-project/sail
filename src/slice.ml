@@ -436,8 +436,10 @@ let () =
     let module NodeSet = Set.Make(Node) in
     let module G = Graph.Make(Node) in
     let g = graph_of_ast !ast in
-    let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
-    let cuts = !slice_cuts |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
+    let lets = Type_check.Env.get_toplevel_lets !env in
+    let node_of_id id = if IdSet.mem id lets then Letbind id else Function id in
+    let roots = !slice_roots |> IdSet.elements |> List.map node_of_id |> NodeSet.of_list in
+    let cuts = !slice_cuts |> IdSet.elements |> List.map node_of_id |> NodeSet.of_list in
     let g = G.prune roots cuts g in
     ast := filter_ast_extra cuts g !ast !slice_keep_std
   ) |> register_command
