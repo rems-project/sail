@@ -1,1 +1,1 @@
-feature.sail -auto_mono -undefined_gen -no_effects
+feature.sail -auto_mono -undefined_gen
