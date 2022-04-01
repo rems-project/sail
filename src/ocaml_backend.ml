@@ -432,7 +432,7 @@ let rec get_initialize_registers = function
 
 let initial_value_for id inits =
   let find_reg = function
-    | E_aux (E_assign (LEXP_aux (LEXP_cast (_, reg_id), _), init), _) when Id.compare id reg_id = 0 -> Some init
+    | E_aux (E_assign (LEXP_aux (LEXP_id reg_id, _), init), _) when Id.compare id reg_id = 0 -> Some init
     | _ -> None
   in
   match Util.option_first find_reg inits with

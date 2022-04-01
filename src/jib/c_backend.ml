@@ -929,56 +929,6 @@ let remove_alias =
      [CDEF_fundef (function_id, heap_return, args, opt body)]
   | cdef -> [cdef]
 
-(** This pass ensures that all variables created by I_decl have unique names *)
-let unique_names =
-  let unique_counter = ref 0 in
-  let unique_id () =
-    let id = mk_id ("u#" ^ string_of_int !unique_counter) in
-    incr unique_counter;
-    name id
-  in
-
-  let rec opt seen = function
-    | I_aux (I_decl (ctyp, id), aux) :: instrs when NameSet.mem id seen ->
-       let id' = unique_id () in
-       let instrs', seen = opt seen instrs in
-       I_aux (I_decl (ctyp, id'), aux) :: instrs_rename id id' instrs', seen
-
-    | I_aux (I_decl (ctyp, id), aux) :: instrs ->
-       let instrs', seen = opt (NameSet.add id seen) instrs in
-       I_aux (I_decl (ctyp, id), aux) :: instrs', seen
-
-    | I_aux (I_block block, aux) :: instrs ->
-       let block', seen = opt seen block in
-       let instrs', seen = opt seen instrs in
-       I_aux (I_block block', aux) :: instrs', seen
-
-    | I_aux (I_try_block block, aux) :: instrs ->
-       let block', seen = opt seen block in
-       let instrs', seen = opt seen instrs in
-       I_aux (I_try_block block', aux) :: instrs', seen
-
-    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
-       let then_instrs', seen = opt seen then_instrs in
-       let else_instrs', seen = opt seen else_instrs in
-       let instrs', seen = opt seen instrs in
-       I_aux (I_if (cval, then_instrs', else_instrs', ctyp), aux) :: instrs', seen
-
-    | instr :: instrs ->
-       let instrs', seen = opt seen instrs in
-       instr :: instrs', seen
-
-    | [] -> [], seen
-  in
-  function
-  | CDEF_fundef (function_id, heap_return, args, body) ->
-     [CDEF_fundef (function_id, heap_return, args, fst (opt NameSet.empty body))]
-  | CDEF_reg_dec (id, ctyp, instrs) ->
-     [CDEF_reg_dec (id, ctyp, fst (opt NameSet.empty instrs))]
-  | CDEF_let (n, bindings, instrs) ->
-     [CDEF_let (n, bindings, fst (opt NameSet.empty instrs))]
-  | cdef -> [cdef]
-
 (** This optimization looks for patterns of the form
 
     create x : t;
@@ -1074,7 +1024,6 @@ let concatMap f xs = List.concat (List.map f xs)
 let optimize recursive_functions cdefs =
   let nothing cdefs = cdefs in
   cdefs
-  |> (if !optimize_alias then concatMap unique_names else nothing)
   |> (if !optimize_alias then concatMap remove_alias else nothing)
   |> (if !optimize_alias then concatMap combine_variables else nothing)
   (* We need the runtime to initialize hoisted allocations *)

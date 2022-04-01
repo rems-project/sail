@@ -1355,6 +1355,49 @@ let fix_early_return ret instrs =
   rewrite_return [] instrs
   @ [ilabel end_function_label; iend ()]
 
+(** This pass ensures that all variables created by I_decl have unique names *)
+let unique_names =
+  let unique_counter = ref 0 in
+  let unique_id () =
+    let id = mk_id ("u#" ^ string_of_int !unique_counter) in
+    incr unique_counter;
+    name id
+  in
+
+  let rec opt seen = function
+    | I_aux (I_decl (ctyp, id), aux) :: instrs when NameSet.mem id seen ->
+       let id' = unique_id () in
+       let instrs', seen = opt seen instrs in
+       I_aux (I_decl (ctyp, id'), aux) :: instrs_rename id id' instrs', seen
+
+    | I_aux (I_decl (ctyp, id), aux) :: instrs ->
+       let instrs', seen = opt (NameSet.add id seen) instrs in
+       I_aux (I_decl (ctyp, id), aux) :: instrs', seen
+
+    | I_aux (I_block block, aux) :: instrs ->
+       let block', seen = opt seen block in
+       let instrs', seen = opt seen instrs in
+       I_aux (I_block block', aux) :: instrs', seen
+
+    | I_aux (I_try_block block, aux) :: instrs ->
+       let block', seen = opt seen block in
+       let instrs', seen = opt seen instrs in
+       I_aux (I_try_block block', aux) :: instrs', seen
+
+    | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
+       let then_instrs', seen = opt seen then_instrs in
+       let else_instrs', seen = opt seen else_instrs in
+       let instrs', seen = opt seen instrs in
+       I_aux (I_if (cval, then_instrs', else_instrs', ctyp), aux) :: instrs', seen
+
+    | instr :: instrs ->
+       let instrs', seen = opt seen instrs in
+       instr :: instrs', seen
+
+    | [] -> [], seen
+  in
+  fun instrs -> fst (opt NameSet.empty instrs)
+  
 let letdef_count = ref 0
 
 let compile_funcl ctx id pat guard exp =
@@ -1414,6 +1457,7 @@ let compile_funcl ctx id pat guard exp =
 
   let instrs = arg_setup @ destructure @ guard_instrs @ setup @ [call (CL_id (return, ret_ctyp))] @ cleanup @ destructure_cleanup @ arg_cleanup in
   let instrs = fix_early_return (CL_id (return, ret_ctyp)) instrs in
+  let instrs = unique_names instrs in
   let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
   let instrs = coverage_function_entry id (exp_loc exp) @ instrs in
 
@@ -1461,6 +1505,7 @@ and compile_def' n total ctx = function
      let aexp = C.optimize_anf ctx (no_shadow IdSet.empty (anf exp)) in
      let setup, call, cleanup = compile_aexp ctx aexp in
      let instrs = setup @ [call (CL_id (global id, ctyp_of_typ ctx typ))] @ cleanup in
+     let instrs = unique_names instrs in
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ, instrs)], ctx
 
   | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), _)) ->
@@ -1524,6 +1569,7 @@ and compile_def' n total ctx = function
        @ destructure_cleanup @ gs_cleanup
        @ [ilabel end_label]
      in
+     let instrs = unique_names instrs in
      [CDEF_let (n, bindings, instrs)],
      { ctx with letbinds = n :: ctx.letbinds }
 

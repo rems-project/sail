@@ -4980,13 +4980,16 @@ let rewrites_coq = [
     ("rewrite_loops_with_escape_effect", []);
     ("recheck_defs", []);
     ("remove_blocks", []);
+    ("attach_effects", []);
     ("letbind_effects", []);
     ("remove_e_assign", []);
+    ("attach_effects", []);
     ("internal_lets", []);
     ("remove_superfluous_letbinds", []);
     ("remove_superfluous_returns", []);
     ("bit_lists_to_lits", []);
-    ("recheck_defs", [])
+    ("recheck_defs", []);
+    ("attach_effects", [])
   ]
 
 let rewrites_ocaml = [

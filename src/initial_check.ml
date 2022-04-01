@@ -1158,7 +1158,7 @@ let generate_initialize_registers vs_ids defs =
       [val_spec_of_string (mk_id "initialize_registers") "unit -> unit";
        mk_fundef [mk_funcl (mk_id "initialize_registers")
                            (mk_pat (P_lit (mk_lit L_unit)))
-                           (mk_exp (E_block (List.map (fun (typ, id) -> mk_exp (E_assign (mk_lexp (LEXP_cast (typ, id)), mk_lit_exp L_undef))) regs)))]]
+                           (mk_exp (E_block (List.map (fun (typ, id) -> mk_exp (E_assign (mk_lexp (LEXP_id id), mk_lit_exp L_undef))) regs)))]]
   in
   defs @ initialize_registers
 
