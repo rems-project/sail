@@ -294,7 +294,7 @@ let () =
   let open Interactive in
   let open Jib_interactive in
 
-  ArgString ("(val|register)? identifier", fun arg -> Action (fun () ->
+  ArgString ("(val|register)? identifier", fun arg -> ActionUnit (fun _ ->
     let is_def id = function
       | CDEF_fundef (id', _, _, _) -> Id.compare id id' = 0
       | CDEF_spec (id', _, _, _) -> Id.compare id (prepend_id "val " id') = 0
@@ -310,7 +310,7 @@ let () =
        print_endline (Buffer.contents buf)
   )) |> Interactive.register_command ~name:"ir" ~help:"Print the ir representation of a toplevel definition";
 
-  ArgString ("file", fun file -> Action (fun () ->
+  ArgString ("file", fun file -> ActionUnit (fun _ ->
     let buf = Buffer.create 256 in
     let out_chan = open_out file in
     Flat_ir_formatter.output_defs buf !ir;

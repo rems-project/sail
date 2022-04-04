@@ -71,16 +71,19 @@ open Ast_util
 open Printf
 
 let opt_interactive = ref false
-let opt_emacs_mode = ref false
-let opt_suppress_banner = ref false
-let opt_auto_interpreter_rewrites = ref false
 
-let env = ref Type_check.initial_env
+type istate = {
+    ast : Type_check.tannot ast;
+    effect_info : Effects.side_effect_info;
+    env : Type_check.Env.t;
+  }
 
-let ast = ref empty_ast
-
-let effect_info = ref Effects.empty_side_effect_info
-
+let initial_istate () = {
+    ast = empty_ast;
+    effect_info = Effects.empty_side_effect_info;
+    env = Type_check.initial_env;
+  }
+ 
 let arg str =
   ("<" ^ str ^ ">") |> Util.yellow |> Util.clear
 
@@ -90,16 +93,22 @@ let command str =
 type action =
   | ArgString of string * (string -> action)
   | ArgInt of string * (int -> action)
-  | Action of (unit -> unit)
+  | Action of (istate -> istate)
+  | ActionUnit of (istate -> unit)
 
 let commands = ref []
 
+let get_command cmd = List.assoc_opt cmd !commands
+
+let all_commands () = !commands
+     
 let reflect_typ action =
   let open Type_check in
   let rec arg_typs = function
     | ArgString (_, next) -> string_typ :: arg_typs (next "")
     | ArgInt (_, next) -> int_typ :: arg_typs (next 0)
     | Action _ -> []
+    | ActionUnit _ -> []
   in
   match action with
   | Action _ -> function_typ [unit_typ] unit_typ
@@ -110,6 +119,7 @@ let generate_help name help action =
     | ArgString (hint, next) -> arg hint :: args (next "")
     | ArgInt (hint, next) -> arg hint :: args (next 0)
     | Action _ -> []
+    | ActionUnit _ -> []
   in
   let args = args action in
   let help = match String.split_on_char ':' help with
@@ -132,7 +142,7 @@ let generate_help name help action =
   in
   sprintf "%s %s - %s" Util.(name |> green |> clear) (String.concat ", " args) help
 
-let run_action cmd argument action =
+let run_action istate cmd argument action =
   let args = String.split_on_char ',' argument in
   let rec call args action =
     match args, action with
@@ -143,11 +153,14 @@ let run_action cmd argument action =
        if Str.string_match (Str.regexp "^[0-9]+$") x 0 then
          call xs (next (int_of_string x))
        else
-         print_endline (sprintf "%s argument %s must be an non-negative integer" (command cmd) (arg hint))
+         failwith (sprintf "%s argument %s must be an non-negative integer" (command cmd) (arg hint))
     | _, Action act ->
-       act ()
+       act istate
+    | _, ActionUnit act ->
+       act istate;
+       istate
     | _, _ ->
-       print_endline (sprintf "Bad arguments for %s, see (%s %s)" (command cmd) (command ":help") (command cmd))
+       failwith (sprintf "Bad arguments for %s, see (%s %s)" (command cmd) (command ":help") (command cmd))
   in
   call args action
   

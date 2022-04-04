@@ -2,10 +2,9 @@ true: -traverse, debug, use_menhir
 <**/parser.ml>: bin_annot, annot
 <**/*.ml> and not <**/parser.ml>: bin_annot, annot
 
-<sail.{byte,native}>: package(zarith), package(linksem), package(lem), package(omd), package(base64), package(pprint), package(yojson)
-<isail.{byte,native}>: package(zarith), package(linenoise), package(linksem), package(lem), package(omd), package(base64), package(yojson), package(pprint)
+<sail.{byte,native}>: package(zarith), package(linenoise), package(linksem), package(lem), package(omd), package(base64), package(pprint), package(yojson)
 
-<isail.ml>: package(linenoise), package(yojson)
+<repl.ml>: package(linenoise), package(yojson)
 <jib/c_codegen.m{l,li}>: package(yojson)
 <sail.ml>: package(yojson)
 <elf_loader.ml>: package(linksem)

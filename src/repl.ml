@@ -65,9 +65,8 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-open Sail
-
 open Ast
+open Ast_defs
 open Ast_util
 open Interpreter
 open Pretty_print_sail
@@ -79,43 +78,71 @@ type mode =
   | Evaluation of frame
   | Normal
 
-let current_mode = ref Normal
+type istate = {
+    ast : Type_check.tannot ast;
+    effect_info : Effects.side_effect_info;
+    env : Type_check.Env.t;
+    ref_state : Interactive.istate ref;
+    vs_ids : IdSet.t ref;
+    options : (Arg.key * Arg.spec * Arg.doc) list;
+    mode : mode;
+    clear : bool;
+    state : Interpreter.lstate * Interpreter.gstate
+  }
 
-let prompt () =
-  match !current_mode with
+let shrink_istate istate = ({
+    ast = istate.ast;
+    effect_info = istate.effect_info;
+    env = istate.env
+  } : Interactive.istate)
+                        
+let initial_istate options env effect_info ast = {
+    ast = ast;
+    effect_info = effect_info;
+    env = env;
+    ref_state = ref (Interactive.initial_istate ());
+    vs_ids = ref (val_spec_ids ast.defs);
+    options = options;
+    mode = Normal;
+    clear = true;
+    state = initial_state ~registers:false empty_ast Type_check.initial_env !Value.primops
+  }
+
+let setup_interpreter_state istate =
+  istate.ref_state := {
+      ast = istate.ast;
+      effect_info = istate.effect_info;
+      env = istate.env
+    };
+  { istate with state = initial_state istate.ast istate.env !Value.primops }
+
+let prompt istate =
+  match istate.mode with
   | Normal -> "sail> "
   | Evaluation _ -> "eval> "
 
-let eval_clear = ref true
-
-let mode_clear () =
-  match !current_mode with
+let mode_clear istate =
+  match istate.mode with
   | Normal -> ()
-  | Evaluation _ -> if !eval_clear then LNoise.clear_screen () else ()
-
-let rec user_input callback =
-  match LNoise.linenoise (prompt ()) with
+  | Evaluation _ -> if istate.clear then LNoise.clear_screen () else ()
+                      
+let rec user_input istate callback =
+  match LNoise.linenoise (prompt istate) with
   | None -> ()
-  | Some v ->
-     mode_clear ();
-     begin
-       try callback v with
-       | Reporting.Fatal_error e -> Reporting.print_error e
-     end;
-     user_input callback
+  | Some line ->
+     mode_clear istate;
+     user_input (callback istate line) callback
 
 let sail_logo =
   let banner str = str |> Util.bold |> Util.red |> Util.clear in
   let logo =
-    if !Interactive.opt_suppress_banner then []
-    else
-      [ {|    ___       ___       ___       ___ |};
-        {|   /\  \     /\  \     /\  \     /\__\|};
-        {|  /::\  \   /::\  \   _\:\  \   /:/  /|};
-        {| /\:\:\__\ /::\:\__\ /\/::\__\ /:/__/ |};
-        {| \:\:\/__/ \/\::/  / \::/\/__/ \:\  \ |};
-        {|  \::/  /    /:/  /   \:\__\    \:\__\|};
-        {|   \/__/     \/__/     \/__/     \/__/|} ]
+    [ {|    ___       ___       ___       ___ |};
+      {|   /\  \     /\  \     /\  \     /\__\|};
+      {|  /::\  \   /::\  \   _\:\  \   /:/  /|};
+      {| /\:\:\__\ /::\:\__\ /\/::\__\ /:/__/ |};
+      {| \:\:\/__/ \/\::/  / \::/\/__/ \:\  \ |};
+      {|  \::/  /    /:/  /   \:\__\    \:\__\|};
+      {|   \/__/     \/__/     \/__/     \/__/|} ]
   in
   let help =
     [ "Type :commands for a list of commands, and :help <command> for help.";
@@ -125,72 +152,63 @@ let sail_logo =
 
 let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear
 
-let vs_ids = ref (val_spec_ids !Interactive.ast.defs)
-
-let interactive_state =
-  ref (initial_state ~registers:false !Interactive.ast !Interactive.env !Value.primops)
-
 (* We can't set up the elf commands in elf_loader.ml because it's used
    by Sail OCaml emulators at runtime, so set them up here. *)
 let () =
   let open Interactive in
   let open Elf_loader in
 
-  ArgString ("file", fun file -> Action (fun () -> load_elf file))
+  ArgString ("file", fun file -> ActionUnit (fun _ -> load_elf file))
   |> register_command ~name:"elf" ~help:"Load an elf file";
 
-  ArgString ("addr", fun addr_s -> ArgString ("file", fun filename -> Action (fun () ->
+  ArgString ("addr", fun addr_s -> ArgString ("file", fun filename -> ActionUnit (fun _ ->
     let addr = Big_int.of_string addr_s in
     load_binary addr filename
   ))) |> register_command ~name:"bin" ~help:"Load a raw binary file at :0. Use :elf to load an ELF"
 
 (* This is a feature that lets us take interpreter commands like :foo
    x, y and turn the into functions that can be called by sail as
-   foo(x, y), which lets us use sail to script itself. The
-   sail_scripting_primops_once variable ensures we only add the
-   commands to the interpreter primops list once. *)
-let sail_scripting_primops_once = ref true
-
-let setup_sail_scripting () =
-  let open Interactive in
-
+   foo(x, y), which lets us use sail to script itself. *)
+let setup_sail_scripting istate =
   let sail_command_name cmd = "sail_" ^ String.sub cmd 1 (String.length cmd - 1) in
 
+  let cmds = Interactive.all_commands () in
+  
   let val_specs =
     List.map (fun (cmd, (_, action)) ->
         let name = sail_command_name cmd in
-        let typschm = mk_typschm (mk_typquant []) (reflect_typ action) in
+        let typschm = mk_typschm (mk_typquant []) (Interactive.reflect_typ action) in
         mk_val_spec (VS_val_spec (typschm, mk_id name, Some { pure = false; bindings = [("_", name)] }, false))
-      ) !commands in
-  let val_specs, env' = Type_check.check_defs !env val_specs in
-  ast := append_ast_defs !ast val_specs;
-  env := env';
-
-  if !sail_scripting_primops_once then (
-    List.iter (fun (cmd, (help, action)) ->
-        let open Value in
-        let name = sail_command_name cmd in
-        let impl values =
-          let rec call values action =
-            match values, action with
-            | (v :: vs), ArgString (_, next) ->
-               call vs (next (coerce_string v))
-            | (v :: vs), ArgInt (_, next) ->
-               call vs (next (Big_int.to_int (coerce_int v)))
-            | _, Action act ->
-               act (); V_unit
-            | _, _ ->
-               failwith help
-          in
-          call values action
+      ) cmds in
+  let val_specs, env = Type_check.check_defs istate.env val_specs in
+    
+  List.iter (fun (cmd, (help, action)) ->
+      let open Value in
+      let name = sail_command_name cmd in
+      let impl values =
+        let rec call values action =
+          match values, action with
+          | (v :: vs), Interactive.ArgString (_, next) ->
+             call vs (next (coerce_string v))
+          | (v :: vs), Interactive.ArgInt (_, next) ->
+             call vs (next (Big_int.to_int (coerce_int v)))
+          | _, ActionUnit act ->
+             act !(istate.ref_state); V_unit
+          | _, Action act ->
+             istate.ref_state := act !(istate.ref_state);
+             V_unit
+          | _, _ ->
+             failwith help
         in
-        Value.add_primop name impl
-      ) !commands;
-    sail_scripting_primops_once := false
-  )
+        call values action
+      in
+      Value.add_primop name impl
+    ) cmds;
 
-let print_program () =
-  match !current_mode with
+  { istate with ast = append_ast_defs istate.ast val_specs; env = env }
+
+let print_program istate =
+  match istate.mode with
   | Normal -> ()
   | Evaluation (Step (out, _, _, stack))
     | Evaluation (Effect_request(out, _, stack,  _))
@@ -201,113 +219,122 @@ let print_program () =
      print_endline (Value.string_of_value v |> Util.green |> Util.clear)
   | Evaluation _ -> ()
 
-let rec run () =
-  match !current_mode with
-  | Normal -> ()
+let rec run istate =
+  match istate.mode with
+  | Normal -> istate
   | Evaluation frame ->
      begin match frame with
      | Done (state, v) ->
-        interactive_state := state;
         print_endline ("Result = " ^ Value.string_of_value v);
-        current_mode := Normal
+        { istate with mode = Normal; state = state }
      | Fail (_, _, _, _, msg) ->
         print_endline ("Error: " ^ msg);
-        current_mode := Normal
+        { istate with mode = Normal }
      | Step (out, state, _, stack) ->
-        begin
+        let istate =
           try
-            current_mode := Evaluation (eval_frame frame)
+            { istate with mode = Evaluation (eval_frame frame) }
           with
-          | Failure str -> print_endline str; current_mode := Normal
-        end;
-        run ()
+          | Failure str ->
+             print_endline str;
+             { istate with mode = Normal }
+        in
+        run istate
      | Break frame ->
         print_endline "Breakpoint";
-        current_mode := Evaluation frame
+        { istate with mode = Evaluation frame }
      | Effect_request (out, state, stack, eff) ->
-        begin
+        let istate =
           try
-            current_mode := Evaluation (!Interpreter.effect_interp state eff)
+            { istate with mode = Evaluation (!Interpreter.effect_interp state eff) }
           with
-          | Failure str -> print_endline str; current_mode := Normal
-        end;
-        run ()
+          | Failure str ->
+             print_endline str;
+             { istate with mode = Normal }
+        in
+        run istate
      end
 
-let rec run_function depth =
-  let run_function' stack =
+let rec run_function istate depth =
+  let run_function' istate stack =
     match depth with
-    | None -> run_function (Some (List.length stack))
+    | None -> run_function istate (Some (List.length stack))
     | Some n ->
        if List.compare_length_with stack n >= 0 then
-         run_function depth
+         run_function istate depth
        else
-         ()
+         istate
   in
-  match !current_mode with
-  | Normal -> ()
+  match istate.mode with
+  | Normal -> istate
   | Evaluation frame ->
      begin match frame with
      | Done (state, v) ->
-        interactive_state := state;
         print_endline ("Result = " ^ Value.string_of_value v);
-        current_mode := Normal
+        { istate with mode = Normal; state = state }
      | Fail (_, _, _, _, msg) ->
         print_endline ("Error: " ^ msg);
-        current_mode := Normal
+        { istate with mode = Normal }
      | Step (out, state, _, stack) ->
-        begin
+        let istate =
           try
-            current_mode := Evaluation (eval_frame frame)
+            { istate with mode = Evaluation (eval_frame frame) }
           with
-          | Failure str -> print_endline str; current_mode := Normal
-        end;
-        run_function' stack
+          | Failure str ->
+             print_endline str;
+             { istate with mode = Normal }
+        in
+        run_function' istate stack
      | Break frame ->
         print_endline "Breakpoint";
-        current_mode := Evaluation frame
+        { istate with mode = Evaluation frame }
      | Effect_request (out, state, stack, eff) ->
-        begin
+        let istate =
           try
-            current_mode := Evaluation (!Interpreter.effect_interp state eff)
+            { istate with mode = Evaluation (!Interpreter.effect_interp state eff) }
           with
-          | Failure str -> print_endline str; current_mode := Normal
-        end;
-        run_function' stack
+          | Failure str ->
+             print_endline str;
+             { istate with mode = Normal }
+        in
+        run_function' istate stack
      end
 
-let rec run_steps n =
-  match !current_mode with
-  | _ when n <= 0 -> ()
-  | Normal -> ()
+let rec run_steps istate n =
+  match istate.mode with
+  | _ when n <= 0 -> istate
+  | Normal -> istate
   | Evaluation frame ->
      begin match frame with
      | Done (state, v) ->
-        interactive_state := state;
         print_endline ("Result = " ^ Value.string_of_value v);
-        current_mode := Normal
+        { istate with mode = Normal; state = state }
      | Fail (_, _, _, _, msg) ->
         print_endline ("Error: " ^ msg);
-        current_mode := Normal
+        { istate with mode = Normal }
      | Step (out, state, _, stack) ->
-        begin
+        let istate =
           try
-            current_mode := Evaluation (eval_frame frame)
+            { istate with mode = Evaluation (eval_frame frame) }
           with
-          | Failure str -> print_endline str; current_mode := Normal
-        end;
-        run_steps (n - 1)
+          | Failure str ->
+             print_endline str;
+             { istate with mode = Normal }
+        in
+        run_steps istate (n - 1)
      | Break frame ->
         print_endline "Breakpoint";
-        current_mode := Evaluation frame
+        { istate with mode = Evaluation frame }
      | Effect_request (out, state, stack, eff) ->
-        begin
+        let istate =
           try
-            current_mode := Evaluation (!Interpreter.effect_interp state eff)
+            { istate with mode = Evaluation (!Interpreter.effect_interp state eff) }
           with
-          | Failure str -> print_endline str; current_mode := Normal
-        end;
-        run_steps (n - 1)
+          | Failure str ->
+             print_endline str;
+             { istate with mode = Normal }
+        in
+        run_steps istate (n - 1)
      end
  
 let help =
@@ -368,70 +395,20 @@ let help =
   | ":rewrite" ->
      sprintf ":rewrite %s - Apply a rewrite to the AST. %s shows all possible rewrites. See also %s"
              (color yellow "<rewrite> <args>") (color green ":list_rewrites") (color green ":rewrites")
-  | ":compile" ->
-     sprintf ":compile %s - Compile AST to a specified target, valid targets are lem, coq, ocaml, c, and ir (intermediate representation)"
-             (color yellow "<target>")
   | "" ->
      sprintf "Type %s for a list of commands, and %s %s for information about a specific command"
              (color green ":commands") (color green ":help") (color yellow "<command>")
   | cmd ->
-     match List.assoc_opt cmd !Interactive.commands with
+     match Interactive.get_command cmd with
      | Some (help_message, action) -> Interactive.generate_help cmd help_message action
      | None ->
         sprintf "Either invalid command passed to help, or no documentation for %s. Try %s."
                 (color green cmd) (color green ":help :help")
 
-let slice_roots = ref IdSet.empty
-let slice_cuts = ref IdSet.empty
-
-type session = {
-    id : string;
-    files : string list
-  }
-
-let default_session = {
-    id = "none";
-    files = []
-  }
-
-let session = ref default_session
-
-let parse_session file =
-  let open Yojson.Basic.Util in
-  if Sys.file_exists file then
-    let json = Yojson.Basic.from_file file in
-    let args = Str.split (Str.regexp " +") (json |> member "options" |> to_string) in
-    Arg.parse_argv ~current:(ref 0) (Array.of_list ("sail" :: args)) Sail.options (fun _ -> ()) "";
-    print_endline ("(message \"Using session " ^ file ^ "\")");
-    {
-      id = file;
-      files = json |> member "files" |> convert_each to_string
-    }
-  else
-    default_session
-
-let load_session upto file =
-  match upto with
-  | None -> None
-  | Some upto_file when Filename.basename upto_file = file -> None
-  | Some upto_file ->
-     let (_, ast, env, _) =
-       Process_file.load_files ~check:true !opt_target options !Interactive.env [Filename.concat (Filename.dirname upto_file) file]
-     in
-     Interactive.ast := append_ast !Interactive.ast ast;
-     Interactive.env := env;
-     print_endline ("(message \"Checked " ^ file ^ "...\")\n");
-     Some upto_file
-
-let load_into_session file =
-  let session_file = Filename.concat (Filename.dirname file) "sail.json" in
-  session := (if session_file = !session.id then !session else parse_session session_file);
-  ignore (List.fold_left load_session (Some file) !session.files)
-
 type input = Command of string * string | Expression of string | Empty
 
 (* This function is called on every line of input passed to the interpreter *)
-let handle_input' input =
+let handle_input' istate input =
   LNoise.history_add input |> ignore;
 
   (* Process the input and check if it's a command, a raw expression,
@@ -453,81 +430,98 @@ let handle_input' input =
 
   let recognised = ref true in
 
-  let unrecognised_command cmd =
-    if !recognised = false then print_endline ("Command " ^ cmd ^ " is not a valid command in this mode.") else ()
+  let unrecognised_command istate cmd =
+    if !recognised = false then print_endline ("Command " ^ cmd ^ " is not a valid command in this mode.") else ();
+    istate
   in
 
   (* First handle commands that are mode-independent *)
-  begin match input with
-  | Command (cmd, arg) ->
-     begin match cmd with
-     | ":n" | ":normal" ->
-        current_mode := Normal
-     | ":t" | ":type" ->
-        let typq, typ = Type_check.Env.get_val_spec (mk_id arg) !Interactive.env in
-        pretty_sail stdout (doc_binding (typq, typ));
-        print_newline ();
-     | ":q" | ":quit" ->
-        Value.output_close ();
-        exit 0
-     | ":i" | ":infer" ->
-        let exp = Initial_check.exp_of_string arg in
-        let exp = Type_check.infer_exp !Interactive.env exp in
-        pretty_sail stdout (doc_typ (Type_check.typ_of exp));
-        print_newline ()
-     | ":prove" ->
-        let nc = Initial_check.constraint_of_string arg in
-        print_endline (string_of_bool (Type_check.prove __POS__ !Interactive.env nc))
-     | ":assume" ->
-        let nc = Initial_check.constraint_of_string arg in
-        Interactive.env := Type_check.Env.add_constraint nc !Interactive.env
-     | ":v" | ":verbose" ->
-            Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 3;
-            print_endline ("Verbosity: " ^ string_of_int !Type_check.opt_tc_debug)
-     | ":clear" ->
-        if arg = "on" then
-          eval_clear := true
-        else if arg = "off" then
-          eval_clear := false
-        else print_endline "Invalid argument for :clear, expected either :clear on or :clear off"
-     | ":commands" ->
-        let more_commands = Util.string_of_list " " fst !Interactive.commands in
-        let commands =
-          [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help :output :option";
-            "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :recheck :compile " ^ more_commands;
-            "Evaluation mode commands - :(r)un :(s)tep :step_(f)unction :(n)ormal";
-            "";
-            ":(c)ommand can be called as either :c or :command." ]
-        in
-        List.iter print_endline commands
-     | ":option" ->
-        begin
-          try
-            let args = Str.split (Str.regexp " +") arg in
-            begin match args with
-            | opt :: args ->
-               Arg.parse_argv ~current:(ref 0) (Array.of_list ["sail"; opt; String.concat " " args]) Sail.options (fun _ -> ()) "";
-            | [] -> print_endline "Must provide a valid option"
-            end
-          with
-          | Arg.Bad message | Arg.Help message -> print_endline message
-        end;
-     | ":pretty" ->
-        print_endline (Pretty_print_sail.to_string (Latex.defs !Interactive.ast))
-     | ":ast" ->
-        let chan = open_out arg in
-        Pretty_print_sail.pp_ast chan !Interactive.ast;
-        close_out chan
-     | ":output" ->
-        let chan = open_out arg in
-        Value.output_redirect chan
-     | ":help" -> print_endline (help arg)
-     | _ -> recognised := false
-     end
-  | _ -> ()
-  end;
+  let istate = match input with
+    | Command (cmd, arg) ->
+       begin match cmd with
+       | ":n" | ":normal" ->
+          { istate with mode = Normal }
+       | ":t" | ":type" ->
+          let typq, typ = Type_check.Env.get_val_spec (mk_id arg) istate.env in
+          pretty_sail stdout (doc_binding (typq, typ));
+          print_newline ();
+          istate
+       | ":q" | ":quit" ->
+          Value.output_close ();
+          exit 0
+       | ":i" | ":infer" ->
+          let exp = Initial_check.exp_of_string arg in
+          let exp = Type_check.infer_exp istate.env exp in
+          pretty_sail stdout (doc_typ (Type_check.typ_of exp));
+          print_newline ();
+          istate
+       | ":prove" ->
+          let nc = Initial_check.constraint_of_string arg in
+          print_endline (string_of_bool (Type_check.prove __POS__ istate.env nc));
+          istate
+       | ":assume" ->
+          let nc = Initial_check.constraint_of_string arg in
+          { istate with env = Type_check.Env.add_constraint nc istate.env }
+       | ":v" | ":verbose" ->
+          Type_check.opt_tc_debug := (!Type_check.opt_tc_debug + 1) mod 3;
+          print_endline ("Verbosity: " ^ string_of_int !Type_check.opt_tc_debug);
+          istate
+       | ":clear" ->
+          if arg = "on" || arg = "true" then
+            { istate with clear = true }
+          else if arg = "off" || arg = "false" then
+            { istate with clear = false }
+          else (
+            print_endline "Invalid argument for :clear, expected either :clear on or :clear off";
+            istate
+          )
+       | ":commands" ->
+          let more_commands = Util.string_of_list " " fst (Interactive.all_commands ()) in
+          let commands =
+            [ "Universal commands - :(t)ype :(i)nfer :(q)uit :(v)erbose :prove :assume :clear :commands :help :output :option";
+              "Normal mode commands - :elf :(l)oad :(u)nload :let :def :(b)ind :recheck :compile " ^ more_commands;
+              "Evaluation mode commands - :(r)un :(s)tep :step_(f)unction :(n)ormal";
+              "";
+              ":(c)ommand can be called as either :c or :command." ]
+          in
+          List.iter print_endline commands;
+          istate
+       | ":option" ->
+          begin
+            try
+              let args = Str.split (Str.regexp " +") arg in
+              begin match args with
+              | opt :: args ->
+                 Arg.parse_argv ~current:(ref 0) (Array.of_list ["sail"; opt; String.concat " " args]) istate.options (fun _ -> ()) "";
+              | [] -> print_endline "Must provide a valid option"
+              end
+            with
+            | Arg.Bad message | Arg.Help message -> print_endline message
+          end;
+          istate
+       | ":pretty" ->
+          print_endline (Pretty_print_sail.to_string (Latex.defs istate.ast));
+          istate
+       | ":ast" ->
+          let chan = open_out arg in
+          Pretty_print_sail.pp_ast chan istate.ast;
+          close_out chan;
+          istate
+       | ":output" ->
+          let chan = open_out arg in
+          Value.output_redirect chan;
+          istate
+       | ":help" ->
+          print_endline (help arg);
+          istate
+       | _ ->
+          recognised := false;
+          istate
+       end
+    | _ -> istate
+  in
 
-  match !current_mode with
+  match istate.mode with
   | Normal ->
      begin match input with
      | Command (cmd, arg) ->
@@ -538,27 +532,25 @@ let handle_input' input =
            begin match args with
            | v :: ":" :: args ->
               let typ = Initial_check.typ_of_string (String.concat " " args) in
-              let _, env, _ = Type_check.bind_pat !Interactive.env (mk_pat (P_id (mk_id v))) typ in
-              Interactive.env := env
-           | _ -> print_endline "Invalid arguments for :bind"
+              let _, env, _ = Type_check.bind_pat istate.env (mk_pat (P_id (mk_id v))) typ in
+              { istate with env = env }
+           | _ ->
+              failwith "Invalid arguments for :bind";
            end
         | ":let" ->
            let args = Str.split (Str.regexp " +") arg in
            begin match args with
            | v :: "=" :: args ->
               let exp = Initial_check.exp_of_string (String.concat " " args) in
-              let defs, env = Type_check.check_defs !Interactive.env [DEF_val (mk_letbind (mk_pat (P_id (mk_id v))) exp)] in
-              Interactive.ast := append_ast_defs !Interactive.ast defs;
-              Interactive.env := env;
-              interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
-           | _ -> print_endline "Invalid arguments for :let"
+              let defs, env = Type_check.check_defs istate.env [DEF_val (mk_letbind (mk_pat (P_id (mk_id v))) exp)] in
+              { istate with ast = append_ast_defs istate.ast defs; env = env }
+           | _ ->
+              failwith "Invalid arguments for :let";
            end
         | ":def" ->
-           let ast = Initial_check.ast_of_def_string_with __POS__ (Process_file.preprocess !opt_target options) arg in
-           let ast, env = Type_check.check !Interactive.env ast in
-           Interactive.ast := append_ast !Interactive.ast ast;
-           Interactive.env := env;
-           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
+           let ast = Initial_check.ast_of_def_string_with __POS__ (Process_file.preprocess None istate.options) arg in
+           let ast, env = Type_check.check istate.env ast in
+           { istate with ast = append_ast istate.ast ast; env = env }
         | ":rewrite" ->
            let open Rewrites in
            let args = Str.split (Str.regexp " +") arg in
@@ -572,7 +564,7 @@ let handle_input' input =
                 | "ocaml" -> parse_args (rw rewrite_lit_ocaml) args
                 | "lem" -> parse_args (rw rewrite_lit_lem) args
                 | "all" -> parse_args (rw (fun _ -> true)) args
-                | _ -> failwith "target for literal rewrite must be one of ocaml/lem/all"
+                | _ -> failwith "Target for literal rewrite must be one of ocaml/lem/all"
                 end
              | _, _ -> failwith "Invalid arguments to rewrite"
            in
@@ -580,47 +572,33 @@ let handle_input' input =
            | rw :: args ->
               let rw = List.assoc rw Rewrites.all_rewriters in
               let rw = parse_args rw args in
-              let ast', effect_info', env' = rw !Interactive.effect_info !Interactive.env !Interactive.ast in
-              Interactive.ast := ast';
-              Interactive.effect_info := effect_info';
-              Interactive.env := env'
+              let ast', effect_info', env' = rw istate.effect_info istate.env istate.ast in
+              { istate with ast = ast'; effect_info = effect_info'; env = env' }
            | [] ->
               failwith "Must provide the name of a rewrite, use :list_rewrites for a list of possible rewrites"
            end
-        | ":prover_regstate" ->
-           let env, ast = prover_regstate (Some arg) !Interactive.ast !Interactive.env in
-           Interactive.env := env;
-           Interactive.ast := ast;
-           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops
-        | ":recheck" ->
-           let ast, env = Type_check.check Type_check.initial_env !Interactive.ast in
-           Interactive.env := env;
-           Interactive.ast := ast;
-           interactive_state := initial_state !Interactive.ast !Interactive.env !Value.primops;
-           vs_ids := val_spec_ids !Interactive.ast.defs
-        | ":recheck_types" ->
-           let ast, env = Type_check.check Type_check.initial_env !Interactive.ast in
-           Interactive.env := env;
-           Interactive.ast := ast;
-           vs_ids := val_spec_ids !Interactive.ast.defs
-        | ":compile" ->
-           let out_name = match !Process_file.opt_file_out with
-             | None -> "out.sail"
-             | Some f -> f ^ ".sail"
-           in
-           target (Some arg) out_name !Interactive.ast !Interactive.effect_info !Interactive.env
+        | ":sync_script" ->
+           { istate with ast = !(istate.ref_state).ast; effect_info = !(istate.ref_state).effect_info; env = !(istate.ref_state).env }
+        | ":recheck" | ":recheck_types" ->
+           let ast, env = Type_check.check Type_check.initial_env istate.ast in
+           { istate with env = env; ast = ast }
         | _ ->
-           match List.assoc_opt cmd !Interactive.commands with
-           | Some (_, action) -> Interactive.run_action cmd arg action
-           | None -> unrecognised_command cmd
+           match Interactive.get_command cmd with
+           | Some (_, action) ->
+              let res = Interactive.run_action (shrink_istate istate) cmd arg action in
+              { istate with ast = res.ast; effect_info = res.effect_info; env = res.env }
+           | None ->
+              unrecognised_command istate cmd
         end
      | Expression str ->
         (* An expression in normal mode is type checked, then puts
              us in evaluation mode. *)
-        let exp = Type_check.infer_exp !Interactive.env (Initial_check.exp_of_string str) in
-        current_mode := Evaluation (eval_frame (Step (lazy "", !interactive_state, return exp, [])));
-        print_program ()
-     | Empty -> ()
+        let exp = Type_check.infer_exp istate.env (Initial_check.exp_of_string str) in
+        let istate = setup_interpreter_state istate in
+        let istate = { istate with mode = Evaluation (eval_frame (Step (lazy "", istate.state, return exp, []))) } in
+        print_program istate;
+        istate
+     | Empty -> istate
      end
 
   | Evaluation frame ->
@@ -629,64 +607,83 @@ let handle_input' input =
         (* Evaluation mode commands *)
         begin match cmd with
         | ":r" | ":run" ->
-           run ()
+           run istate
         | ":s" | ":step" ->
-           run_steps (int_of_string arg);
-           print_program ()
+           let istate = run_steps istate (int_of_string arg) in
+           print_program istate;
+           istate
         | ":f" | ":step_function" ->
-           run_function None;
-           print_program ()
-        | _ -> unrecognised_command cmd
+           let istate = run_function istate None in
+           print_program istate;
+           istate
+        | _ -> unrecognised_command istate cmd
         end
      | Expression str ->
-        print_endline "Already evaluating expression"
+        print_endline "Already evaluating expression";
+        istate
      | Empty ->
         (* Empty input will evaluate one step, or switch back to
            normal mode when evaluation is completed. *)
         begin match frame with
         | Done (state, v) ->
-           interactive_state := state;
            print_endline ("Result = " ^ Value.string_of_value v);
-           current_mode := Normal
+           { istate with mode = Normal; state = state }
         | Fail (_, _, _, _, msg) ->
            print_endline ("Error: " ^ msg);
-           current_mode := Normal
+           { istate with mode = Normal }
         | Step (out, state, _, stack) ->
            begin
              try
-               interactive_state := state;
-               current_mode := Evaluation (eval_frame frame);
-               print_program ()
+               let istate = { istate with mode = Evaluation (eval_frame frame); state = state } in
+               print_program istate;
+               istate
              with
-             | Failure str -> print_endline str; current_mode := Normal
+             | Failure str ->
+                print_endline str;
+                { istate with mode = Normal }
            end
         | Break frame ->
            print_endline "Breakpoint";
-           current_mode := Evaluation frame
+           { istate with mode = Evaluation frame }
         | Effect_request (out, state, stack, eff) ->
            begin
              try
-               interactive_state := state;
-               current_mode := Evaluation (!Interpreter.effect_interp state eff);
-               print_program ()
+               let istate = { istate with mode = Evaluation (!Interpreter.effect_interp state eff); state = state } in
+               print_program istate;
+               istate
              with
-             | Failure str -> print_endline str; current_mode := Normal
+             | Failure str ->
+                print_endline str;
+                { istate with mode = Normal }
            end
         end
      end
 
-let handle_input input =
-  try handle_input' input with
+let handle_input istate input =
+  try handle_input' istate input with
   | Failure str ->
-     print_endline ("Error: " ^ str)
+     print_endline ("Error: " ^ str);
+     istate
   | Type_check.Type_error (env, l, err) ->
-     print_endline (Type_error.string_of_type_error err)
+     print_endline (Type_error.string_of_type_error err);
+     { istate with env = env }
   | Reporting.Fatal_error err ->
-     Reporting.print_error ~interactive:true err
+     Reporting.print_error ~interactive:true err;
+     istate
   | exn ->
-     print_endline (Printexc.to_string exn)
+     print_endline (Printexc.to_string exn);
+     istate
 
-let () =
+let start_repl ?banner:(banner = true) ?commands:(script = []) ?auto_rewrites:(rewrites = true) ~options:options env effect_info ast =
+  let istate =
+    if rewrites then (
+      let ast, effect_info, env = Rewrites.rewrite effect_info env (Rewrites.rewrites_for_target "interpreter") ast in
+      initial_istate options env effect_info ast
+    ) else (
+      initial_istate options env effect_info ast
+    )
+  in
+
   LNoise.set_completion_callback (
       fun line_so_far ln_completions ->
       let line_so_far, last_id =
@@ -712,7 +709,7 @@ let () =
            |> List.map (fun completion -> line_so_far ^ completion)
            |> List.iter (LNoise.add_completion ln_completions)
         | _ ->
-          IdSet.elements !vs_ids
+          IdSet.elements !(istate.vs_ids)
           |> List.map string_of_id
           |> List.filter (fun id -> Str.string_match (Str.regexp_string last_id) id 0)
           |> List.map (fun completion -> line_so_far ^ completion)
@@ -725,7 +722,6 @@ let () =
       fun line_so_far ->
       let hint str = Some (" " ^ str, LNoise.Yellow, false) in
       match String.trim line_so_far with
-      | _ when !Interactive.opt_emacs_mode -> None
       | ":clear" -> hint "(on|off)"
       | ":bind"  | ":b" -> hint "<id> : <type>"
       | ":infer" | ":i" -> hint "<expression>"
@@ -757,33 +753,14 @@ let () =
          | _ -> None
     );
 
-  if !Interactive.opt_auto_interpreter_rewrites then (
-    let ast, effect_info, env = Rewrites.rewrite !Interactive.effect_info !Interactive.env (Rewrites.rewrites_for_target "interpreter") !Interactive.ast in
-    Interactive.ast := ast;
-    Interactive.effect_info := effect_info;
-    Interactive.env := env;
-    interactive_state := initial_state ast env !Value.primops
-  );
-  
-  (* Read the script file if it is set with the -is option, and excute them *)
-  begin match !opt_interactive_script with
-  | None -> ()
-  | Some file ->
-     let chan = open_in file in
-     try
-       while true do
-         let line = input_line chan in
-         handle_input line;
-       done;
-     with
-     | End_of_file -> ()
-  end;
+  let istate = List.fold_left handle_input istate script in
 
   LNoise.history_load ~filename:"sail_history" |> ignore;
   LNoise.history_set ~max_length:100 |> ignore;
 
-  if !Interactive.opt_interactive then (
-    List.iter print_endline sail_logo;
-    setup_sail_scripting ();
-    user_input handle_input
-  )
+  if banner then (
+    List.iter print_endline sail_logo
+  );
+  let istate = setup_sail_scripting istate in
+  user_input istate handle_input
+ 

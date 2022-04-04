@@ -89,6 +89,7 @@ let opt_process_elf : string option ref = ref None
 let opt_ocaml_generators = ref ([]:string list)
 let opt_splice = ref ([]:string list)
 let opt_have_feature = ref None
+let opt_auto_interpreter_rewrites = ref false
 
 let set_target name = Arg.Unit (fun _ -> opt_target := Some name)
 
@@ -105,12 +106,12 @@ let options = Arg.align ([
     "<prefix> select output filename prefix");
   ( "-i",
     Arg.Tuple [Arg.Set Interactive.opt_interactive;
-               Arg.Set Interactive.opt_auto_interpreter_rewrites;
+               Arg.Set opt_auto_interpreter_rewrites;
                Arg.Set Initial_check.opt_undefined_gen],
     " start interactive interpreter");
   ( "-is",
     Arg.Tuple [Arg.Set Interactive.opt_interactive;
-               Arg.Set Interactive.opt_auto_interpreter_rewrites;
+               Arg.Set opt_auto_interpreter_rewrites;
                Arg.Set Initial_check.opt_undefined_gen;
                Arg.String (fun s -> opt_interactive_script := Some s)],
     "<filename> start interactive interpreter and execute commands in script");
@@ -122,9 +123,6 @@ let options = Arg.align ([
     " drop to an interactive session after running Sail. Differs from \
      -i in that it does not set up the interpreter in the interactive \
      shell.");
-  ( "-emacs",
-    Arg.Set Interactive.opt_emacs_mode,
-    " run sail interactively as an emacs mode child process");
   ( "-no_warn",
     Arg.Clear Reporting.opt_warnings,
     " do not print warnings");
@@ -610,6 +608,17 @@ let target name out_name ast effect_info type_envs =
   | Some t ->
      raise (Reporting.err_unreachable Parse_ast.Unknown __POS__ ("Undefined target: " ^ t))
 
+let () =
+  let open Interactive in
+  ArgString ("target", fun tgt -> ActionUnit (fun istate ->
+    target (Some tgt) "out.sail" istate.ast istate.effect_info istate.env
+  )) |> register_command ~name:"compile" ~help:"compile Sail code for target backend";
+
+  ArgString ("prover", fun arg -> Action (fun istate ->
+    let env, ast = prover_regstate (Some arg) istate.ast istate.env in
+    { istate with ast = ast; env = env }
+  )) |> register_command ~name:"prover_regstate" ~help:"set up theorem prover register state primitives"
+ 
 let feature_check () =
   match !opt_have_feature with
   | None -> ()
@@ -659,11 +668,25 @@ let main () =
       in
       target !opt_target out_name ast effect_info type_envs;
 
-      if !Interactive.opt_interactive then
-        (Interactive.ast := ast; Interactive.env := type_envs; Interactive.effect_info := effect_info)
-      else ();
+      if !opt_memo_z3 then Constraint.save_digests () else ();
 
-      if !opt_memo_z3 then Constraint.save_digests () else ()
+      if !Interactive.opt_interactive then (
+        let script = match !opt_interactive_script with
+          | None -> []
+          | Some file ->
+             let chan = open_in file in
+             let lines = ref [] in
+             try
+               while true do
+                 let line = input_line chan in
+                 lines := line :: !lines
+               done;
+               []
+             with
+             | End_of_file -> List.rev !lines
+        in
+        Repl.start_repl ~commands:script ~options:options ~auto_rewrites:(!opt_auto_interpreter_rewrites) type_envs effect_info ast
+      )
     end
 
 let _ = try
@@ -673,6 +696,5 @@ let _ = try
     end
   with Reporting.Fatal_error e ->
     Reporting.print_error e;
-    Interactive.opt_suppress_banner := true;
     if !opt_memo_z3 then Constraint.save_digests () else ();
-    if !Interactive.opt_interactive then () else exit 1
+    exit 1

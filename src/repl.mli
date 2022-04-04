@@ -65,40 +65,24 @@
 (*  SUCH DAMAGE.                                                            *)
 (****************************************************************************)
 
-open Ast
+(** This module contains the function that starts an interactive sail read-eval-print loop *)
+
 open Ast_defs
 open Type_check
 
-val opt_interactive : bool ref
+(** Start an interactive top-level interpreter.
 
-(** Each interactive command is passed this struct, containing the
-   abstract syntax tree, effect into and the type-checking environment *)
-type istate = {
-    ast : Type_check.tannot ast;
-    effect_info : Effects.side_effect_info;
-    env : Type_check.Env.t;
-  }
-
-val initial_istate : unit -> istate
-
-val arg : string -> string
-val command : string -> string
-
-type action =
-  | ArgString of string * (string -> action)
-  | ArgInt of string * (int -> action)
-  | Action of (istate -> istate)
-  | ActionUnit of (istate -> unit)
-
-val reflect_typ : action -> typ
-
-val get_command : string -> (string * action) option
-
-val all_commands : unit -> (string * (string * action)) list
-  
-val generate_help : string -> string -> action -> string
-
-val run_action : istate -> string -> string -> action -> istate
-
-(** This is the main function used to register new interactive commands. *)
-val register_command : name:string -> help:string -> action -> unit
+    @param banner If true (default), then print an ASCII-art Sail logo.
+    @param commands An optional list of commands to run automatically in the repl
+    @param auto_rewrites Performs default rewrites (target "interpreter") on the ast passed to the repl
+    @param options This is the set of options for the :options interactive command
+ *)
+val start_repl :
+  ?banner:bool ->
+  ?commands:(string list) ->
+  ?auto_rewrites:bool ->
+  options:((Arg.key * Arg.spec * Arg.doc) list) ->
+  Env.t ->
+  Effects.side_effect_info ->
+  tannot ast ->
+  unit

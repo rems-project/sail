@@ -231,14 +231,14 @@ let () =
            correct version on Ubuntu, but other Linux distros and \
            operating systems may differ in how they package gdb with \
            support for multiple architectures."
-    (ArgString ("gdb", fun arg -> Action (fun () -> gdb_command := arg)));
+    (ArgString ("gdb", fun arg -> ActionUnit (fun _ -> gdb_command := arg)));
 
   register_command
     ~name:"gdb_start"
     ~help:"Start a child GDB process sending :0 as the first command, waiting for it to complete"
-    (ArgString ("command", fun cmd -> Action (fun () -> gdb_start cmd)));
+    (ArgString ("command", fun cmd -> ActionUnit (fun _ -> gdb_start cmd)));
 
-  (ArgString ("port", fun port -> Action (fun () ->
+  (ArgString ("port", fun port -> ActionUnit (fun _ ->
     if port = "" then
       gdb_start "target-select remote localhost:1234"
     else
@@ -250,24 +250,24 @@ let () =
   register_command
     ~name:"gdb_send"
     ~help:"Send a GDB/MI command to a child GDB process and wait for it to complete"
-    (ArgString ("command", fun cmd -> Action (fun () -> gdb_send cmd)));
+    (ArgString ("command", fun cmd -> ActionUnit (fun _ -> gdb_send cmd)));
 
   register_command
     ~name:"gdb_sync"
     ~help:"Sync sail registers with GDB"
-    (Action (fun () -> gdb_sync !session));
+    (ActionUnit (fun _ -> gdb_sync !session));
 
   register_command
     ~name:"gdb_list_registers"
     ~help:"Sync sail registers with GDB and list them"
-    (Action (fun () -> gdb_list_registers !session));
+    (ActionUnit (fun _ -> gdb_list_registers !session));
 
   register_command
     ~name:"gdb_hooks"
     ~help:"Make reading and writing memory go via GDB"
-    (Action (fun () -> gdb_hooks !session));
+    (ActionUnit (fun _ -> gdb_hooks !session));
 
-  (ArgString ("symbol_file", fun file -> Action (fun () ->
+  (ArgString ("symbol_file", fun file -> ActionUnit (fun _ ->
     send_regular !session ("symbol-file " ^ file)
   ))) |> register_command
            ~name:"gdb_symbol_file"

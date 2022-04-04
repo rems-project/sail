@@ -94,7 +94,6 @@ ast.lem: ../language/sail.ott
 sail_pp.ml: ../language/sail.ott
 	ott -sort false -generate_aux_rules true  -picky_multiple_parses true -ocaml_pp sail_pp.ml ../language/sail.ott
 
-
 jib.lem: ../language/jib.ott ast.lem
 	ott -sort false -generate_aux_rules true -o jib.lem -picky_multiple_parses true ../language/jib.ott
 
@@ -121,11 +120,7 @@ else
 endif
 
 sail: ast.ml jib.ml manifest.ml
-	ocamlbuild -use-ocamlfind sail.native sail_lib.cma sail_lib.cmxa
-
-isail: ast.ml jib.ml manifest.ml
-	ocamlbuild -use-ocamlfind isail.native sail_lib.cma sail_lib.cmxa libsail.cma libsail.cmxa
-
+	ocamlbuild -use-ocamlfind sail.native sail_lib.cma sail_lib.cmxa libsail.cma libsail.cmxa
 
 coverage: ast.ml jib.ml manifest.ml
 	BISECT_COVERAGE=YES ocamlbuild -use-ocamlfind -plugin-tag 'package(bisect_ppx-ocamlbuild)' isail.native
@@ -134,9 +129,6 @@ sail.native: sail
 
 sail.byte: ast.ml jib.ml manifest.ml
 	ocamlbuild -use-ocamlfind -cflag -g sail.byte
-
-isail.byte: ast.ml bytecode.ml share_directory.ml
-	ocamlbuild -use-ocamlfind isail.byte
 
 interpreter: lem_interp/interp_ast.lem
 	ocamlbuild -use-ocamlfind lem_interp/extract.cmxa

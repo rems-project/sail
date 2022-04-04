@@ -348,7 +348,7 @@ let () =
        { fixed with fields = Bindings.add id updated_fields fixed.fields }
   in
 
-  ArgString ("target", fun target -> ArgString ("assignments", fun assignments -> Action (fun () ->
+  ArgString ("target", fun target -> ArgString ("assignments", fun assignments -> Action (fun istate ->
     let assignments = Str.split (Str.regexp " +") assignments in
     let assignments =
       List.map (fun assignment ->
@@ -358,25 +358,25 @@ let () =
              | [reg; field] ->
                 let reg = mk_id reg in
                 let field = mk_id field in
-                begin match Env.lookup_id reg !env with
+                begin match Env.lookup_id reg istate.env with
                 | Register (Typ_aux (Typ_id rec_id, _)) ->
-                   let (_, fields) = Env.get_record rec_id !env in
+                   let (_, fields) = Env.get_record rec_id istate.env in
                    let typ = match List.find_opt (fun (typ, id) -> Id.compare id field = 0) fields with
                      | Some (typ, _) -> typ
                      | None -> failwith (sprintf "Register %s does not have a field %s" (string_of_id reg) (string_of_id field))
                    in
                    let exp = Initial_check.exp_of_string value in
-                   let exp = check_exp !env exp typ in
+                   let exp = check_exp istate.env exp typ in
                    Register_field (reg, field, typ, exp)
                 | _ ->
                    failwith (sprintf "Register %s is not defined as a record in the current environment" (string_of_id reg))
                 end
              | _ ->
                 let reg = mk_id reg in
-                begin match Env.lookup_id reg !env with
+                begin match Env.lookup_id reg istate.env with
                 | Register typ ->
                    let exp = Initial_check.exp_of_string value in
-                   let exp = check_exp !env exp typ in
+                   let exp = check_exp istate.env exp typ in
                    Register (reg, typ, exp)
                 | _ ->
                    failwith (sprintf "Register %s is not defined in the current environment" (string_of_id reg))
@@ -386,7 +386,7 @@ let () =
         ) assignments in
     let assignments = List.fold_left update_fixed no_fixed assignments in
 
-    ast := rewrite_constant_function_calls' assignments target !ast)))
+    { istate with ast = rewrite_constant_function_calls' assignments target istate.ast})))
   |> register_command
        ~name:"fix_registers"
        ~help:"Fix the value of specified registers, specified as a \

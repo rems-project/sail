@@ -4,13 +4,11 @@ INSTALL_DIR ?= .
 
 all: sail
 
+isail: sail
+
 sail:
 	$(MAKE) -C src sail
 	ln -f -s src/sail.native sail
-
-isail:
-	$(MAKE) -C src isail
-	ln -f -s src/isail.native sail
 
 coverage:
 	$(MAKE) -C src coverage

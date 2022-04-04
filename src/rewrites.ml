@@ -5111,7 +5111,7 @@ let rewrite effect_info env rewriters ast =
 let () =
   let open Interactive in
 
-  Action (fun () ->
+  ActionUnit (fun _ ->
     let print_rewriter (name, rw) =
       print_endline (name ^ " " ^ Util.(String.concat " " (describe_rewriter rw) |> yellow |> clear))
     in
@@ -5119,11 +5119,7 @@ let () =
     |> List.iter print_rewriter
   ) |> register_command ~name:"list_rewrites" ~help:"List all rewrites for use with the :rewrite command";
  
-  ArgString ("target", fun target -> Action (fun () ->
-    let ast', effect_info', env' = rewrite !effect_info !env (rewrites_for_target target) !ast in
-    ast := ast';
-    effect_info := effect_info';
-    env := env'
-  )) |> register_command
-           ~name:"rewrites"
-           ~help:"Apply all rewrites for a specific target"
+  ArgString ("target", fun target -> Action (fun istate ->
+    let ast', effect_info', env' = rewrite istate.effect_info istate.env (rewrites_for_target target) istate.ast in
+    { ast = ast'; effect_info = effect_info'; env = env' }
+  )) |> register_command ~name:"rewrites" ~help:"Apply all rewrites for a specific target"

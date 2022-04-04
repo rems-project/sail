@@ -634,8 +634,7 @@ let specialize = specialize_passes (-1)
 
 let () =
   let open Interactive in
-  Action (fun () ->
-    let ast', env' = specialize typ_ord_specialization !env !ast in
-    ast := ast';
-    env := env'
+  Action (fun istate ->
+    let ast', env' = specialize typ_ord_specialization istate.env istate.ast in
+    { istate with ast = ast'; env = env' }
   ) |> register_command ~name:"specialize" ~help:"Specialize Type and Order type variables in the AST"
