@@ -2183,6 +2183,11 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
     let deps, r, env = aux env (es,typs) in
     (deps, assigns, r, env)
   in
+  let is_toplevel_int tannot =
+    match destruct_atom_nexp (env_of_annot tannot) (typ_of_annot tannot) with
+    | Some (Nexp_aux (Nexp_var kid, _)) -> List.exists (fun k -> Kid.compare k kid == 0) env.top_kids
+    | _ -> false
+  in
   let merge_deps deps = List.fold_left dmerge dempty deps in
   let deps, assigns, r =
     match e with
@@ -2329,9 +2334,25 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        (merge_deps (deps::ds),
         List.fold_left dep_bindings_merge Bindings.empty assigns,
         List.fold_left merge r rs)
+
     | E_let (LB_aux (LB_val (pat,e1),_),e2) ->
        let d1,assigns,r1 = analyse_exp fn_id env assigns e1 in
        let env = update_env env d1 pat (env_of_annot (l,annot)) (env_of e2) in
+       let env =
+         (* As a special case, detect
+              let 'size = if ... then 'typaram1 else 'typaram2;
+            where we can reduce the dependencies of 'size to the guard. *)
+         match pat, e1 with
+         | P_aux (P_var (P_aux (P_id id, _), TP_aux (TP_var kid, _)),_),
+           E_aux (E_if (guard_exp,
+                        E_aux (E_id id1, annot1),
+                        E_aux (E_id id2, annot2)), _)
+              when is_toplevel_int annot1 && is_toplevel_int annot2 ->
+            let guard_deps, _, _ = analyse_exp fn_id env assigns guard_exp in
+            { env with kid_deps = KBindings.add kid guard_deps env.kid_deps }
+         | _, _ ->
+            env
+       in
        let d2,assigns,r2 = analyse_exp fn_id env assigns e2 in
        (d2,assigns,merge r1 r2)
     (* There's a more general assignment case above to update env inside a block. *)
