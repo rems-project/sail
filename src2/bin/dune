@@ -1,0 +1,10 @@
+(env
+  (dev
+    (flags (:standard -w -33))))
+
+(executable
+  (name sail)
+  (public_name sail)
+  (package sail)
+  (link_flags -linkall)
+  (libraries libsail linenoise dynlink))

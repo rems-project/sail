@@ -1,0 +1,57 @@
+open import Pervasives_extra
+open import Sail2_values
+open import Sail2_prompt_monad
+open import Sail2_prompt
+open import Sail2_state_monad
+open import {isabelle} `Sail2_state_monad_lemmas`
+
+(* Lifting from prompt monad to state monad *)
+val liftState : forall 'regval 'regs 'a 'e. SetType 'regval => register_accessors 'regs 'regval -> monad 'regval 'a 'e -> monadS 'regs 'a 'e
+let rec liftState ra m = match m with
+  | (Done a)                   -> returnS a
+  | (Read_mem rk a sz k)       -> bindS (read_mem_bytesS rk a sz)       (fun v -> liftState ra (k v))
+  | (Read_memt rk a sz k)      -> bindS (read_memt_bytesS rk a sz)      (fun v -> liftState ra (k v))
+  | (Write_mem wk a sz v k)    -> bindS (write_mem_bytesS wk a sz v)    (fun v -> liftState ra (k v))
+  | (Write_memt wk a sz v t k) -> bindS (write_memt_bytesS wk a sz v t) (fun v -> liftState ra (k v))
+  | (Read_reg r k)             -> bindS (read_regvalS ra r)             (fun v -> liftState ra (k v))
+  | (Excl_res k)               -> bindS (excl_resultS ())               (fun v -> liftState ra (k v))
+  | (Choose _ k)               -> bindS (chooseS universal)             (fun v -> liftState ra (k v))
+  | (Write_reg r v k)          -> seqS (write_regvalS ra r v)           (liftState ra k)
+  | (Write_ea _ _ _ k)         -> liftState ra k
+  | (Footprint k)              -> liftState ra k
+  | (Barrier _ k)              -> liftState ra k
+  | (Print _ k)                -> liftState ra k (* TODO *)
+  | (Fail descr)               -> failS descr
+  | (Exception e)              -> throwS e
+end
+
+val emitEventS : forall 'regval 'regs 'a 'e. Eq 'regval => register_accessors 'regs 'regval -> event 'regval -> sequential_state 'regs -> maybe (sequential_state 'regs)
+let emitEventS ra e s = match e with
+  | E_read_mem _ addr sz v ->
+     Maybe.bind (get_mem_bytes addr sz s) (fun (v', _) ->
+     if v' = v then Just s else Nothing)
+  | E_read_memt _ addr sz (v, tag) ->
+     Maybe.bind (get_mem_bytes addr sz s) (fun (v', tag') ->
+     if v' = v && tag' = tag then Just s else Nothing)
+  | E_write_mem _ addr sz v success ->
+     if success then Just (put_mem_bytes addr sz v B0 s) else Nothing
+  | E_write_memt _ addr sz v tag success ->
+     if success then Just (put_mem_bytes addr sz v tag s) else Nothing
+  | E_read_reg r v ->
+     let (read_reg, _) = ra in
+     Maybe.bind (read_reg r s.regstate) (fun v' ->
+     if v' = v then Just s else Nothing)
+  | E_write_reg r v ->
+     let (_, write_reg) = ra in
+     Maybe.bind (write_reg r v s.regstate) (fun rs' ->
+     Just <| s with regstate = rs' |>)
+  | _ -> Just s
+end
+
+val runTraceS : forall 'regval 'regs 'a 'e. Eq 'regval => register_accessors 'regs 'regval -> trace 'regval -> sequential_state 'regs -> maybe (sequential_state 'regs)
+let rec runTraceS ra t s = match t with
+  | [] -> Just s
+  | e :: t' -> Maybe.bind (emitEventS ra e s) (runTraceS ra t')
+end
+
+declare {isabelle} termination_argument runTraceS = automatic

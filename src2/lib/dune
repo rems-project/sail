@@ -1,0 +1,89 @@
+(env
+  (dev
+    (flags (:standard -w -33 -w -27 -w -32 -w -26 -w -37 -w -39))))
+
+(rule
+  (target ast.lem)
+  (deps (:sail_ott ../../language/sail.ott))
+  (action (run ott -sort false -generate_aux_rules true -o %{target} -picky_multiple_parses true %{sail_ott})))
+
+(rule
+  (target jib.lem)
+  (deps (:jib_ott ../../language/jib.ott) ast.lem)
+  (action (run ott -sort false -generate_aux_rules true -o %{target} -picky_multiple_parses true %{jib_ott})))
+
+(rule
+  (target ast.ml)
+  (deps (:ast ast.lem) (:sed ast.sed))
+  (action
+    (progn (run lem -ocaml %{ast})
+           (run sed -i.bak -f %{sed} %{target}))))
+
+(copy_files lem/*.lem)
+
+(rule
+  (targets
+    value2.ml
+    sail2_values.ml
+    sail2_prompt.ml
+    sail2_instr_kinds.ml
+    sail2_prompt_monad.ml
+    sail2_operators.ml
+    sail2_operators_bitlists.ml)
+  (deps
+    value2.lem
+    sail2_prompt.lem
+    sail2_values.lem
+    sail2_instr_kinds.lem
+    sail2_prompt_monad.lem
+    sail2_operators.lem
+    sail2_operators_bitlists.lem)
+  (action (run lem -wl_rename ign -wl_pat_comp ign -wl_comp_message ign -ocaml %{deps})))
+
+(rule
+  (target jib.ml)
+  (deps (:jib jib.lem) (:sed ast.sed) value2.ml (glob_files lem/*.lem))
+  (action
+    (progn (run lem -ocaml %{jib} -lib . -lib lem/)
+           (run sed -i.bak -f %{sed} %{target}))))
+
+(rule
+  (target manifest.ml)
+  (mode fallback)
+  (action
+    (with-outputs-to %{target}
+      (chdir %{workspace_root}
+        (run sail_manifest -gen_manifest)))))
+
+(menhir
+  (modules parser))
+
+(ocamllex lexer)
+
+(generate_sites_module
+  (module libsail_sites)
+  (sites libsail))
+ 
+(library
+  (name libsail)
+  (public_name libsail)
+  (libraries lem linksem pprint dune-site))
+
+(install
+  (section share)
+  (package libsail)
+  (files
+    (%{workspace_root}/lib/flow.sail as lib/flow.sail)
+    (%{workspace_root}/lib/vector_dec.sail as lib/vector_dec.sail)
+    (%{workspace_root}/lib/vector_inc.sail as lib/vector_inc.sail)
+    (%{workspace_root}/lib/arith.sail as lib/arith.sail)
+    (%{workspace_root}/lib/elf.sail as lib/elf.sail)
+    (%{workspace_root}/lib/real.sail as lib/real.sail)
+    (%{workspace_root}/lib/option.sail as lib/option.sail)
+    (%{workspace_root}/lib/result.sail as lib/result.sail)
+    (%{workspace_root}/lib/isla.sail as lib/isla.sail)
+    (%{workspace_root}/lib/regfp.sail as lib/regfp.sail)
+    (%{workspace_root}/lib/exception_basic.sail as lib/exception_basic.sail)
+    (%{workspace_root}/lib/concurrency_interface.sail as lib/concurrency_interface.sail)
+    (%{workspace_root}/lib/concurrency_interface/v1.sail as lib/concurrency_interface/v1.sail)
+    (%{workspace_root}/lib/prelude.sail as lib/prelude.sail)))

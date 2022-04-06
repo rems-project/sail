@@ -1,0 +1,93 @@
+open import Pervasives_extra
+open import Sail2_values
+open import Sail2_state_monad
+open import {isabelle} `Sail2_state_monad_lemmas`
+
+val iterS_aux : forall 'rv 'a 'e. integer -> (integer -> 'a -> monadS 'rv unit 'e) -> list 'a -> monadS 'rv unit 'e
+let rec iterS_aux i f xs = match xs with
+  | x :: xs -> f i x >>$ iterS_aux (i + 1) f xs
+  | [] -> returnS ()
+  end
+
+declare {isabelle} termination_argument iterS_aux = automatic
+
+val iteriS : forall 'rv 'a 'e. (integer -> 'a -> monadS 'rv unit 'e) -> list 'a -> monadS 'rv unit 'e
+let iteriS f xs = iterS_aux 0 f xs
+
+val iterS : forall 'rv 'a 'e. ('a -> monadS 'rv unit 'e) -> list 'a -> monadS 'rv unit 'e
+let iterS f xs = iteriS (fun _ x -> f x) xs
+
+val foreachS : forall 'a 'rv 'vars 'e.
+  list 'a -> 'vars -> ('a -> 'vars -> monadS 'rv 'vars 'e) -> monadS 'rv 'vars 'e
+let rec foreachS xs vars body = match xs with
+  | [] -> returnS vars
+  | x :: xs ->
+     body x vars >>$= fun vars ->
+     foreachS xs vars body
+end
+
+declare {isabelle} termination_argument foreachS = automatic
+
+val genlistS : forall 'a 'rv 'e. (nat -> monadS 'rv 'a 'e) -> nat -> monadS 'rv (list 'a) 'e
+let genlistS f n =
+  let indices = genlist (fun n -> n) n in
+  foreachS indices [] (fun n xs -> (f n >>$= (fun x -> returnS (xs ++ [x]))))
+
+val and_boolS : forall 'rv 'e. monadS 'rv bool 'e -> monadS 'rv bool 'e -> monadS 'rv bool 'e
+let and_boolS l r = l >>$= (fun l -> if l then r else returnS false)
+
+val or_boolS : forall 'rv 'e. monadS 'rv bool 'e -> monadS 'rv bool 'e -> monadS 'rv bool 'e
+let or_boolS l r = l >>$= (fun l -> if l then returnS true else r)
+
+val bool_of_bitU_fail : forall 'rv 'e. bitU -> monadS 'rv bool 'e
+let bool_of_bitU_fail = function
+  | B0 -> returnS false
+  | B1 -> returnS true
+  | BU -> failS "bool_of_bitU"
+end
+
+val bool_of_bitU_nondetS : forall 'rv 'e. bitU -> monadS 'rv bool 'e
+let bool_of_bitU_nondetS = function
+  | B0 -> returnS false
+  | B1 -> returnS true
+  | BU -> choose_boolS ()
+end
+
+val bools_of_bits_nondetS : forall 'rv 'e. list bitU -> monadS 'rv (list bool) 'e
+let bools_of_bits_nondetS bits =
+  foreachS bits []
+    (fun b bools ->
+      bool_of_bitU_nondetS b >>$= (fun b ->
+      returnS (bools ++ [b])))
+
+val of_bits_nondetS : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monadS 'rv 'a 'e
+let of_bits_nondetS bits =
+  bools_of_bits_nondetS bits >>$= (fun bs ->
+  returnS (of_bools bs))
+
+val of_bits_failS : forall 'rv 'a 'e. Bitvector 'a => list bitU -> monadS 'rv 'a 'e
+let of_bits_failS bits = maybe_failS "of_bits" (of_bits bits)
+
+val mword_nondetS : forall 'rv 'a 'e. Size 'a => unit -> monadS 'rv (mword 'a) 'e
+let mword_nondetS () =
+  bools_of_bits_nondetS (repeat [BU] (integerFromNat size)) >>$= (fun bs ->
+  returnS (wordFromBitlist bs))
+
+
+val whileS : forall 'rv 'vars 'e. 'vars -> ('vars -> monadS 'rv bool 'e) ->
+                ('vars -> monadS 'rv 'vars 'e) -> monadS 'rv 'vars 'e
+let rec whileS vars cond body s =
+  (cond vars >>$= (fun cond_val s' ->
+  if cond_val then
+    (body vars >>$= (fun vars s'' -> whileS vars cond body s'')) s'
+  else returnS vars s')) s
+
+val untilS : forall 'rv 'vars 'e. 'vars -> ('vars -> monadS 'rv bool 'e) ->
+                ('vars -> monadS 'rv 'vars 'e) -> monadS 'rv 'vars 'e
+let rec untilS vars cond body s =
+  (body vars >>$= (fun vars s' ->
+  (cond vars >>$= (fun cond_val s'' ->
+  if cond_val then returnS vars s'' else untilS vars cond body s'')) s')) s
+
+val choose_boolsS : forall 'rv 'e. nat -> monadS 'rv (list bool) 'e
+let choose_boolsS n = genlistS (fun _ -> choose_boolS ()) n
