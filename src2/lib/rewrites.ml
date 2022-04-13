@@ -4884,6 +4884,7 @@ let all_rewriters = [
     ("split", String_rewriter (fun str -> Base_rewriter (rewrite_split_fun_ctor_pats str)));
     ("properties", basic_rewriter (fun _ -> Property.rewrite));
     ("attach_effects", Base_rewriter (fun effect_info env ast -> Effects.rewrite_attach_effects effect_info ast, effect_info, env));
+    ("prover_regstate", Bool_rewriter (fun mwords -> Base_rewriter (fun effect_info env ast -> let env, ast = State.add_regstate_defs mwords env ast in ast, effect_info, env)))
   ]
 
 let rewrites_lem = [

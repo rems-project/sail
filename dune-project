@@ -67,6 +67,18 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
     (libsail :version)))    
 
 (package
+  (name sail_lem_backend)
+  (synopsis "Sail to Lem translation")
+  (depends
+    (libsail :version)))
+
+(package
+  (name sail_coq_backend)
+  (synopsis "Sail to Coq translation")
+  (depends
+    (libsail :version)))
+
+(package
   (name sail_output)
   (synopsis "Example Sail output plugin")
   (depends

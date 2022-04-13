@@ -1,0 +1,13 @@
+(env
+  (dev
+    (flags (:standard -w -33 -w -27 -w -32 -w -26 -w -37))))
+
+(executable
+  (name sail_plugin_lem)
+  (modes (native plugin))
+  (libraries libsail))
+
+(install
+  (section (site (libsail plugins)))
+  (package sail_lem_backend)
+  (files sail_plugin_lem.cmxs))
