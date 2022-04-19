@@ -318,5 +318,3 @@ val open_output_with_check : string option -> string -> (Format.formatter * (out
 val open_output_with_check_unformatted : string option -> string -> (out_channel * string * string option * string)
 
 val close_output_with_check : (out_channel * string * string option * string) -> unit
-
-val get_sail_dir : not_found:(string -> string) -> string

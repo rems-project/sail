@@ -115,6 +115,7 @@ type rewriter_arg =
   | If_mwords_arg
   | If_flag of bool ref
   | Bool_arg of bool
+  | Flag_arg of bool ref
   | String_arg of string
   | Literal_arg of string
 

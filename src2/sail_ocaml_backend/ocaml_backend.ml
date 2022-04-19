@@ -1044,26 +1044,18 @@ let system_checked str =
      exit 1
 
 let ocaml_compile spec ast generator_types =
-  let sail_dir =
-    try Sys.getenv "SAIL_DIR" with
-    | Not_found ->
-       let share_dir = "" (* Manifest.dir *) in
-       if Sys.file_exists share_dir then
-         share_dir
-       else
-         failwith "Could not find sail share directory, " ^ share_dir ^ ". Make sure sail is installed or try setting environment variable SAIL_DIR."
-  in
+  let sail_dir = Reporting.get_sail_dir () in
   if Sys.file_exists !opt_ocaml_build_dir then () else Unix.mkdir !opt_ocaml_build_dir 0o775;
   let cwd = Unix.getcwd () in
   Unix.chdir !opt_ocaml_build_dir;
-  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/elf_loader.ml .") in
-  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/sail_lib.ml .") in
-  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src/util.ml .") in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src2/lib/elf_loader.ml .") in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src2/lib/sail_lib.ml .") in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src2/lib/util.ml .") in
   let tags_file = if !opt_ocaml_coverage then "_tags_coverage" else "_tags" in
-  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/lib/" ^ tags_file ^ " _tags") in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/plugins/ocaml/" ^ tags_file ^ " _tags") in
   let out_chan = open_out (spec ^ ".ml") in
   if !opt_ocaml_coverage then
-    ignore(Unix.system ("cp -r " ^ sail_dir ^ "/lib/myocamlbuild_coverage.ml myocamlbuild.ml"));
+    ignore(Unix.system ("cp -r " ^ sail_dir ^ "/plugins/ocaml/myocamlbuild_coverage.ml myocamlbuild.ml"));
   ocaml_pp_ast out_chan ast generator_types;
   close_out out_chan;
   if IdSet.mem (mk_id "main") (val_spec_ids ast.defs)

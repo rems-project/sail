@@ -86,13 +86,16 @@ let lem_options = [
     "<filename> provide additional library to open in Lem output");
   ( "-lem_sequential",
     Arg.Set Pretty_print_lem.opt_sequential,
-    " use sequential state monad for Lem output")
+    " use sequential state monad for Lem output");
+  ( "-lem_mwords",
+    Arg.Set Monomorphise.opt_mwords,
+    " use native machine word library for Lem output");
 ]
 
 let lem_rewrites =
   let open Rewrites in
   [
-    ("prover_regstate", [If_mwords_arg]);
+    ("prover_regstate", [Flag_arg Monomorphise.opt_mwords]);
     ("instantiate_outcomes", [String_arg "lem"]);
     ("realize_mappings", []);
     ("remove_duplicate_valspecs", []);
@@ -202,7 +205,7 @@ let output_lem filename libs effect_info type_env ast =
 let output libs files =
   List.iter
     (fun (f, effect_info, env, ast) ->
-      let f' = Filename.basename (Filename.chop_extension f) in
+      let f' = Filename.basename (Filename.remove_extension f) in
       output_lem f' libs effect_info env ast)
     files
 

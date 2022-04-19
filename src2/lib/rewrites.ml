@@ -4798,6 +4798,7 @@ type rewriter_arg =
   | If_mwords_arg
   | If_flag of bool ref
   | Bool_arg of bool
+  | Flag_arg of bool ref
   | String_arg of string
   | Literal_arg of string
 
@@ -4820,6 +4821,7 @@ let instantiate_rewriter rewriter args =
     | Base_rewriter rw, If_mono_arg -> Base_rewriter (if_mono rw)
     | Base_rewriter rw, If_mwords_arg -> Base_rewriter (if_mwords rw)
     | Base_rewriter rw, If_flag flag -> Base_rewriter (if_flag flag rw)
+    | Bool_rewriter rw, Flag_arg b -> rw !b
     | Bool_rewriter rw, Bool_arg b -> rw b
     | String_rewriter rw, String_arg str -> rw str
     | Literal_rewriter rw, Literal_arg selector -> rw (selector_function selector)

@@ -74,7 +74,10 @@ let opt_auto_interpreter_rewrites : bool ref = ref false
 let opt_interactive_script : string option ref = ref None
 let opt_splice : string list ref = ref []
 let opt_print_version = ref false
-
+let opt_memo_z3 = ref false
+let opt_have_feature = ref None
+let opt_show_sail_dir = ref false
+                     
 (* Allow calling all options as either -foo_bar or -foo-bar *)
 let rec fix_options = function
   | (flag, spec, doc) :: opts -> (flag, spec, doc) :: (String.map (function '_' -> '-' | c -> c) flag, spec, "") :: fix_options opts
@@ -103,6 +106,9 @@ let rec options = ref ([
   ( "-o",
     Arg.String (fun f -> opt_file_out := Some f),
     "<prefix> select output filename prefix");
+  ( "-dir",
+    Arg.Set opt_show_sail_dir,
+    " show current Sail library directory");
   ( "-i",
     Arg.Tuple [Arg.Set Interactive.opt_interactive;
                Arg.Set opt_auto_interpreter_rewrites;
@@ -119,6 +125,9 @@ let rec options = ref ([
     " drop to an interactive session after running Sail. Differs from \
      -i in that it does not set up the interpreter in the interactive \
      shell.");
+  ( "-D",
+    Arg.String (fun symbol -> Preprocess.add_symbol symbol),
+    "<symbol> define a symbol for the preprocessor, as $define does in the source code");
   ( "-no_warn",
     Arg.Clear Reporting.opt_warnings,
     " do not print warnings");
@@ -128,12 +137,42 @@ let rec options = ref ([
   ( "-just_check",
     Arg.Set opt_just_check,
     " terminate immediately after typechecking");
+  ( "-memo_z3",
+    Arg.Set opt_memo_z3,
+    " memoize calls to z3, improving performance when typechecking repeatedly");
+  ( "-no_memo_z3",
+    Arg.Clear opt_memo_z3,
+    " do not memoize calls to z3 (default)");
+  ( "-have_feature",
+    Arg.String (fun symbol -> opt_have_feature := Some symbol),
+    " check if a feature symbol is set by default");
   ( "-undefined_gen",
     Arg.Set Initial_check.opt_undefined_gen,
     " generate undefined_type functions for types in the specification");
+  ( "-grouped_regstate",
+    Arg.Set State.opt_type_grouped_regstate,
+    " group registers with same type together in generated register state record");
+  ( "-enum_casts",
+    Arg.Set Initial_check.opt_enum_casts,
+    " allow enumerations to be automatically casted to numeric range types");
+  ( "-non_lexical_flow",
+    Arg.Set Nl_flow.opt_nl_flow,
+    " allow non-lexical flow typing");
+  ( "-no_lexp_bounds_check",
+    Arg.Set Type_check.opt_no_lexp_bounds_check,
+    " turn off bounds checking for vector assignments in l-expressions");
   ( "-splice",
     Arg.String (fun s -> opt_splice := s :: !opt_splice),
     "<filename> add functions from file, replacing existing definitions where necessary");
+  ( "-Oconstant_fold",
+    Arg.Set Constant_fold.optimize_constant_fold,
+    " apply constant folding optimizations");
+  ( "-Oaarch64_fast",
+    Arg.Set Jib_compile.optimize_aarch64_fast_struct,
+    " apply ARMv8.5 specific optimizations (potentially unsound in general)");
+  ( "-Ofast_undefined",
+    Arg.Set Initial_check.opt_fast_undefined,
+    " turn on fast-undefined mode");
   ( "-ddump_initial_ast",
     Arg.Set Frontend.opt_ddump_initial_ast,
     " (debug) dump the initial ast to stdout");
@@ -152,6 +191,15 @@ let rec options = ref ([
   ( "-dprofile",
     Arg.Set Profile.opt_profile,
     " (debug) provide basic profiling information for rewriting passes within Sail");
+  ( "-dno_cast",
+    Arg.Set Frontend.opt_dno_cast,
+    " (debug) typecheck without any implicit casting");
+  ( "-dallow_cast",
+    Arg.Tuple [
+        Arg.Unit (fun () -> Reporting.simple_warn "-dallow_cast option is deprecated");
+        Arg.Clear Frontend.opt_dno_cast
+      ],
+    " (debug) typecheck allowing implicit casting (deprecated)");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
@@ -181,7 +229,16 @@ let run_sail tgt =
   Target.action tgt !opt_file_out ast effect_info env;
 
   (ast, env, effect_info)
- 
+
+let feature_check () =
+  match !opt_have_feature with
+  | None -> ()
+  | Some symbol ->
+     if Preprocess.have_symbol symbol then
+       exit 0
+     else
+       exit 2
+  
 let main () =
   begin match Sys.getenv_opt "SAIL_NO_PLUGINS" with
   | Some _ -> ()
@@ -191,7 +248,8 @@ let main () =
         List.iter
           (fun plugin ->
             let path = Filename.concat dir plugin in
-            load_plugin options path)
+            if Filename.extension plugin = ".cmxs" then
+              load_plugin options path)
           (Array.to_list (Sys.readdir dir))
      | [] -> ()
   end;
@@ -202,19 +260,30 @@ let main () =
     (fun s ->
       opt_file_arguments := (!opt_file_arguments) @ [s])
     usage_msg;
-  
+
+  feature_check ();
+
   if !opt_print_version then (
     print_endline version;
     exit 0
   );
+
+  if !opt_show_sail_dir then (
+    print_endline (Reporting.get_sail_dir ());
+    exit 0
+  );
  
   let default_target = register_default_target () in
-    
+
+  if !opt_memo_z3 then Constraint.load_digests ();
+  
   let ast, env, effect_info = match Target.get_the_target () with
     | Some target when not !opt_just_check -> run_sail target
     | _ -> run_sail default_target
   in
-    
+
+  if !opt_memo_z3 then Constraint.save_digests ();
+
   if !Interactive.opt_interactive then (
     Repl.start_repl ~auto_rewrites:(!opt_auto_interpreter_rewrites) ~options:!(options) env effect_info ast
   )
@@ -222,8 +291,9 @@ let main () =
 let () =
   try (
     try main ()
-    with Failure s -> raise (Reporting.err_general Parse_ast.Unknown ("Failure " ^ s))
+    with Failure s -> raise (Reporting.err_general Parse_ast.Unknown s)
   ) with
   | Reporting.Fatal_error e ->
      Reporting.print_error e;
+     if !opt_memo_z3 then Constraint.save_digests () else ();
      exit 1

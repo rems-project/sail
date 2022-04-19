@@ -585,14 +585,3 @@ let close_output_with_check (o, temp_file_name, opt_dir, file_name) =
   let _ = if (not do_replace) then Sys.remove temp_file_name
           else move_file temp_file_name file_name in
   ()
-
-let get_sail_dir ~not_found:on_err =
-  match Sys.getenv_opt "SAIL_DIR" with
-  | Some path -> path
-  | None ->
-     let share_dir = Manifest.dir in
-     if Sys.file_exists share_dir then
-       share_dir
-     else
-       on_err share_dir
- 

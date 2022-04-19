@@ -103,7 +103,23 @@ let c_options = [
     " remove comma separated list of functions from C output, replacing them with unit");
   ( "-c_coverage",
     Arg.String (fun str -> C_backend.opt_branch_coverage := Some (open_out str)),
-    "<file> Turn on coverage tracking and output information about all branches and functions to a file")
+    "<file> Turn on coverage tracking and output information about all branches and functions to a file");
+  ( "-O",
+    Arg.Tuple [Arg.Set C_backend.optimize_primops;
+               Arg.Set C_backend.optimize_hoist_allocations;
+               Arg.Set Initial_check.opt_fast_undefined;
+               Arg.Set C_backend.optimize_struct_updates;
+               Arg.Set C_backend.optimize_alias],
+    " turn on optimizations for C compilation");
+  ( "-Ofixed_int",
+    Arg.Set C_backend.optimize_fixed_int,
+    " assume fixed size integers rather than GMP arbitrary precision integers");
+  ( "-Ofixed_bits",
+    Arg.Set C_backend.optimize_fixed_bits,
+    " assume fixed size bitvectors rather than arbitrary precision bitvectors");
+  ( "-static",
+    Arg.Set C_backend.opt_static,
+    " make generated C functions static");
 ]
  
 let c_rewrites =

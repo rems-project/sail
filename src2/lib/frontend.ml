@@ -70,7 +70,7 @@ open Ast_defs
 
 let opt_ddump_initial_ast = ref false
 let opt_ddump_tc_ast = ref false
-let opt_dno_cast = ref false
+let opt_dno_cast = ref true
                           
 let check_ast (env : Type_check.Env.t) (ast : unit ast) : Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info =
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
@@ -82,9 +82,7 @@ let check_ast (env : Type_check.Env.t) (ast : unit ast) : Type_check.tannot ast 
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_ast stdout ast else () in
   (ast, env, side_effects)
  
-let load_files ?target:target ?memoize_smt:(memoize_smt = false) options type_envs files =
-  if memoize_smt then Constraint.load_digests () else ();
-
+let load_files ?target:target options type_envs files =
   let t = Profile.start () in
 
   let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) files in
@@ -113,8 +111,6 @@ let load_files ?target:target ?memoize_smt:(memoize_smt = false) options type_en
   let t = Profile.start () in
   let (ast, type_envs, side_effects) = check_ast type_envs ast in
   Profile.finish "type checking" t;
-
-  if memoize_smt then Constraint.save_digests () else ();
 
   (ast, type_envs, side_effects)
 

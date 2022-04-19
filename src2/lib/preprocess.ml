@@ -199,10 +199,7 @@ let rec preprocess target opts = function
        wrap_include l include_file include_defs @ preprocess target opts defs
      else if file.[0] = '<' && file.[len - 1] = '>' then
        let file = String.sub file 1 (len - 2) in
-       let sail_dir =
-         Util.get_sail_dir ~not_found:(fun dir ->
-             failwith ("Library directory " ^ dir ^ " does not exist. Make sure sail is installed or try setting environment variable SAIL_DIR so that I can find $include " ^ file))
-       in
+       let sail_dir = Reporting.get_sail_dir () in
        let file = Filename.concat sail_dir ("lib/" ^ file) in
        let include_defs = Initial_check.parse_file ~loc:l file |> snd |> preprocess target opts in
        wrap_include l file include_defs @ preprocess target opts defs

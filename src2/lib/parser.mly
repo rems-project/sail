@@ -207,11 +207,23 @@ let rec desugar_rchain chain s e =
      tyop "&" nc1 (desugar_rchain (RC_nexp n2 :: chain) s e) s e
   | _ -> assert false
 
+let typschm_is_pure (TypSchm_aux (TypSchm_ts (_, ATyp_aux (typ, _)), _)) =
+  match typ with
+  | ATyp_fn (_, _, ATyp_aux (ATyp_set effs, _)) -> effs = []
+  | _ -> true
+
+let fix_extern typschm = function
+  | None -> None
+  | Some extern -> Some { extern with pure = typschm_is_pure typschm }
+       
 let effect_deprecated l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "Explicit effect annotations are deprecated. They are no longer used and can be removed."
 
 let cast_deprecated l =
   Reporting.warn ~once_from:__POS__ "Deprecated" l "Cast annotations are deprecated. They will be removed in a future version of the language."
+
+let warn_extern_effect l =
+  Reporting.warn ~once_from:__POS__ "Deprecated" l "All external bindings should be marked as either monadic or pure"
   
 %}
 
@@ -1430,8 +1442,6 @@ outcome_spec_def:
     { mk_outcome (OV_outcome ($2, $4, $6)) $startpos $endpos }
 
 pure_opt:
-  |
-    { true }
   | Monadic
     { false }
   | Pure
@@ -1445,22 +1455,33 @@ extern_binding:
 
 externs:
   |
-    { None }
+    { None, false }
+  | Eq String
+    { warn_extern_effect (loc $startpos $endpos);
+      Some { pure = true; bindings = [("_", $2)] }, true }
+  | Eq Lcurly separated_nonempty_list(Comma, extern_binding) Rcurly
+    { warn_extern_effect (loc $startpos $endpos);
+      Some { pure = true; bindings = $3 }, true }
   | Eq pure_opt String
-    { Some { pure = $2; bindings = [("_", $3)] } }
+    { Some { pure = $2; bindings = [("_", $3)] }, false }
   | Eq pure_opt Lcurly separated_nonempty_list(Comma, extern_binding) Rcurly
-    { Some { pure = $2; bindings = $4 } }
+    { Some { pure = $2; bindings = $4 }, false }
 
 val_spec_def:
   | Doc val_spec_def
     { doc_vs $1 $2 }
   | Val String Colon typschm
-    { mk_vs (VS_val_spec ($4, mk_id (Id $2) $startpos($2) $endpos($2), Some { pure = true; bindings = [("_", $2)] }, false)) $startpos $endpos }
+    { let typschm = $4 in
+      mk_vs (VS_val_spec (typschm, mk_id (Id $2) $startpos($2) $endpos($2), Some { pure = typschm_is_pure typschm; bindings = [("_", $2)] }, false)) $startpos $endpos }
   | Val id externs Colon typschm
-    { mk_vs (VS_val_spec ($5, $2, $3, false)) $startpos $endpos }
+    { let typschm = $5 in
+      let externs, need_fix = $3 in
+      mk_vs (VS_val_spec (typschm, $2, (if need_fix then fix_extern typschm externs else externs), false)) $startpos $endpos }
   | Val Cast id externs Colon typschm
     { cast_deprecated (loc $startpos($2) $endpos($2));
-      mk_vs (VS_val_spec ($6, $3, $4, true)) $startpos $endpos }
+      let typschm = $6 in
+      let externs, need_fix = $4 in
+      mk_vs (VS_val_spec (typschm, $3, (if need_fix then fix_extern typschm externs else externs), true)) $startpos $endpos }
 
 register_def:
   | Doc register_def

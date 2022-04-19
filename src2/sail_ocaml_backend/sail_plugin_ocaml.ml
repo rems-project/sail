@@ -131,3 +131,64 @@ let _ =
     ~pre_rewrites_hook:stash_pre_rewrite_info
     ~rewrites:ocaml_rewrites
     ocaml_target
+
+let opt_tofrominterp_output_dir : string option ref = ref None
+
+let tofrominterp_options = [
+  ( "-tofrominterp_lem",
+    Arg.Set ToFromInterp_backend.lem_mode,
+    " output embedding translation for the Lem backend rather than the OCaml backend, implies -tofrominterp");
+  ( "-tofrominterp_mwords",
+    Arg.Set ToFromInterp_backend.mword_mode,
+    " output embedding translation in machine-word mode rather than bit-list mode, implies -tofrominterp");
+  ( "-tofrominterp_output_dir",
+    Arg.String (fun dir -> opt_tofrominterp_output_dir := Some dir),
+    " set a custom directory to output embedding translation OCaml");
+]
+
+let tofrominterp_rewrites =
+  let open Rewrites in
+  [
+    ("instantiate_outcomes", [String_arg "interpreter"]);
+    ("realize_mappings", []);
+    ("toplevel_string_append", []);
+    ("pat_string_append", []);
+    ("mapping_builtins", []);
+    ("undefined", [Bool_arg false]);
+    ("tuple_assignments", []);
+    ("vector_concat_assignments", []);
+    ("simple_assignments", [])
+  ]
+    
+let tofrominterp_target out_file ast _ _ =
+  let out = match out_file with None -> "out" | Some s -> s in
+  ToFromInterp_backend.tofrominterp_output !opt_tofrominterp_output_dir out ast
+
+let _ =
+  Target.register
+    ~name:"tofrominterp"
+    ~description:"output OCaml functions to translate between shallow embedding and interpreter"
+    ~options:tofrominterp_options
+    ~rewrites:tofrominterp_rewrites
+    tofrominterp_target
+
+let marshal_target out_file ast _ env =
+  let out_filename = match out_file with None -> "out" | Some s -> s in
+  let f = open_out_bin (out_filename ^ ".defs") in
+  let remove_prover (l, tannot) =
+    if Type_check.is_empty_tannot tannot then
+      (l, Type_check.empty_tannot)
+    else
+      (l, Type_check.replace_env (Type_check.Env.set_prover None (Type_check.env_of_tannot tannot)) tannot)
+  in
+  Marshal.to_string (Ast_util.map_ast_annot remove_prover ast, Type_check.Env.set_prover None env) [Marshal.Compat_32]
+  |> Base64.encode_string
+  |> output_string f;
+  close_out f
+
+let _ =
+  Target.register
+    ~name:"marshal"
+    ~description:"OCaml-marshal out the rewritten AST to a file"
+    ~rewrites:tofrominterp_rewrites
+    marshal_target

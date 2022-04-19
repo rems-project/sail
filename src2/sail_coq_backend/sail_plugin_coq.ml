@@ -185,7 +185,7 @@ let output_coq opt_dir filename alt_modules alt_modules2 libs ast =
 let output libs files =
   List.iter
     (fun (f, _, _, ast) ->
-      let f' = Filename.basename (Filename.chop_extension f) in
+      let f' = Filename.basename (Filename.remove_extension f) in
       output_coq !opt_coq_output_dir f' !opt_alt_modules_coq !opt_alt_modules2_coq libs ast)
     files
 

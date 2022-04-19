@@ -75,7 +75,6 @@ val check_ast : Type_check.Env.t -> unit ast -> Type_check.tannot ast * Type_che
    
 val load_files :
   ?target:string ->
-  ?memoize_smt:bool ->
   (Arg.key * Arg.spec * Arg.doc) list ->
   Type_check.Env.t ->
   string list ->

@@ -170,7 +170,7 @@ let () =
     load_binary addr filename
   ))) |> register_command ~name:"bin" ~help:"Load a raw binary file at :0. Use :elf to load an ELF";
 
-  ActionUnit (fun _ -> print_endline (Util.get_sail_dir ~not_found:(fun _ -> "Sail directory not found")))
+  ActionUnit (fun _ -> print_endline (Reporting.get_sail_dir ()))
   |> register_command ~name:"sail_dir" ~help:"print Sail directory location"
 
 (* This is a feature that lets us take interpreter commands like :foo
