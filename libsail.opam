@@ -30,7 +30,7 @@ homepage: "https://github.com/rems-project/sail"
 bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
   "dune" {>= "3.0"}
-  "sail_manifest" {version}
+  "sail_manifest" {= version}
   "ott" {>= "0.28" & build}
   "lem" {>= "2018-12-14"}
   "linksem" {>= "0.3"}

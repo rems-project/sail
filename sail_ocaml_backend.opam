@@ -19,7 +19,7 @@ homepage: "https://github.com/rems-project/sail"
 bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
   "dune" {>= "3.0"}
-  "libsail" {version}
+  "libsail" {= version}
   "base64" {>= "3.1.0"}
   "odoc" {with-doc}
 ]

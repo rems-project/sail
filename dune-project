@@ -46,7 +46,7 @@ been used for several papers, available from
 http://www.cl.cam.ac.uk/~pes20/sail/.
 ")
   (depends
-    (sail_manifest :version)
+    (sail_manifest (= :version))
     (ott (and (>= 0.28) :build))
     (lem (>= "2018-12-14"))
     (linksem (>= "0.3"))
@@ -59,44 +59,44 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
   (name sail_ocaml_backend)
   (synopsis "Sail to OCaml translation")
   (depends
-    (libsail :version)
+    (libsail (= :version))
     (base64 (>= 3.1.0))))
 
 (package
   (name sail_c_backend)
   (synopsis "Sail to C translation")
   (depends
-    (libsail :version)))
+    (libsail (= :version))))
 
 (package
   (name sail_smt_backend)
   (synopsis "Sail to C translation")
   (depends
-    (libsail :version)))    
+    (libsail (= :version))))    
 
 (package
   (name sail_lem_backend)
   (synopsis "Sail to Lem translation")
   (depends
-    (libsail :version)))
+    (libsail (= :version))))
 
 (package
   (name sail_coq_backend)
   (synopsis "Sail to Coq translation")
   (depends
-    (libsail :version)))
+    (libsail (= :version))))
 
 (package
   (name sail_output)
   (synopsis "Example Sail output plugin")
   (depends
-    (libsail :version)))
+    (libsail (= :version))))
 
 (package
   (name sail_latex_backend)
   (synopsis "Sail to LaTeX formating")
   (depends
-    (libsail :version)
+    (libsail (= :version))
     (omd (and (>= 1.3.1) (< 1.4.0)))))
 
 (package
@@ -113,12 +113,12 @@ been used for several papers, available from
 http://www.cl.cam.ac.uk/~pes20/sail/.
 ")
   (depends
-    (libsail :version)
-    (sail_ocaml_backend :version)
-    (sail_c_backend :version)
-    (sail_smt_backend :version)
-    (sail_lem_backend :version)
-    (sail_coq_backend :version)
-    (sail_latex_backend :version)
-    (sail_output :version)
+    (libsail (= :version))
+    (sail_ocaml_backend (and (= :version) :post))
+    (sail_c_backend (and (= :version) :post))
+    (sail_smt_backend (and (= :version) :post))
+    (sail_lem_backend (and (= :version) :post))
+    (sail_coq_backend (and (= :version) :post))
+    (sail_latex_backend (and (= :version) :post))
+    (sail_output (and (= :version) :post))
     (linenoise (>= 1.1.0))))

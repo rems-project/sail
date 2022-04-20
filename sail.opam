@@ -30,7 +30,14 @@ homepage: "https://github.com/rems-project/sail"
 bug-reports: "https://github.com/rems-project/sail/issues"
 depends: [
   "dune" {>= "3.0"}
-  "libsail" {version}
+  "libsail" {= version}
+  "sail_ocaml_backend" {= version & post}
+  "sail_c_backend" {= version & post}
+  "sail_smt_backend" {= version & post}
+  "sail_lem_backend" {= version & post}
+  "sail_coq_backend" {= version & post}
+  "sail_latex_backend" {= version & post}
+  "sail_output" {= version & post}
   "linenoise" {>= "1.1.0"}
   "odoc" {with-doc}
 ]
