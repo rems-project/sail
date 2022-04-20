@@ -46,7 +46,8 @@ been used for several papers, available from
 http://www.cl.cam.ac.uk/~pes20/sail/.
 ")
   (depends
-    (sail_manifest (= :version))
+    (dune-site (>= 3.0.2))
+    (sail_manifest (and (= :version) :build))
     (ott (and (>= 0.28) :build))
     (lem (>= "2018-12-14"))
     (linksem (>= "0.3"))
