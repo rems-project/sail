@@ -114,4 +114,11 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
 ")
   (depends
     (libsail :version)
+    (sail_ocaml_backend :version)
+    (sail_c_backend :version)
+    (sail_smt_backend :version)
+    (sail_lem_backend :version)
+    (sail_coq_backend :version)
+    (sail_latex_backend :version)
+    (sail_output :version)
     (linenoise (>= 1.1.0))))
