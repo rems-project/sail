@@ -120,6 +120,9 @@ let rec options = ref ([
                Arg.Set Initial_check.opt_undefined_gen;
                Arg.String (fun s -> opt_interactive_script := Some s)],
     "<filename> start interactive interpreter and execute commands in script");
+  ( "-iout",
+    Arg.String (fun file -> Value.output_redirect (open_out file)),
+    "<filename> print interpreter output to file");
   ( "-interact_custom",
     Arg.Set Interactive.opt_interactive,
     " drop to an interactive session after running Sail. Differs from \

@@ -1,3 +1,5 @@
+$option -dallow_cast
+
 default Order dec
 
 /* this is here because if we don't have it before including vector_dec
