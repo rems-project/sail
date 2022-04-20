@@ -164,11 +164,6 @@ let output_coq opt_dir filename alt_modules alt_modules2 libs ast =
     | [] -> base_imports_default
     | _ -> Str.split (Str.regexp "[ \t]+") (String.concat " " alt_modules)
     ) in
-  let alt_modules2_imports =
-    (match alt_modules2 with
-    | [] -> []
-    | _ -> Str.split (Str.regexp "[ \t]+") (String.concat " " alt_modules2)
-    ) in
   let ((ot,_,_,_) as ext_ot) =
     Util.open_output_with_check_unformatted opt_dir (types_module ^ ".v") in
   let ((o,_,_,_) as ext_o) =

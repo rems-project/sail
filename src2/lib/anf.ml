@@ -444,7 +444,6 @@ let rec pp_aexp (AE_aux (aexp, _, _)) =
      pp_aval aval ^^ string " && " ^^ pp_aexp aexp
   | AE_let (mut, id, id_typ, binding, body, typ) -> group
      begin
-       let let_doc = string (match mut with Immutable -> "let" | Mutable -> "let mut") in
        match binding with
        | AE_aux (AE_let _, _, _) ->
           (pp_annot typ (separate space [string "let"; pp_annot id_typ (pp_id id); string "="])

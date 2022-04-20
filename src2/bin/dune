@@ -9,6 +9,7 @@
   (link_flags -linkall)
   (libraries libsail linenoise dynlink))
 
+; For legacy reasons install all the Sail files in lib as part of this package
 (install
   (section share)
   (package sail)

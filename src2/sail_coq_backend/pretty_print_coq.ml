@@ -3001,7 +3001,6 @@ let doc_funcl_init types_mod mutrec rec_opt ?rec_set (FCL_aux(FCL_Funcl(id, pexp
     | FirstFn -> string "Fixpoint"
     | LaterFn -> string "with"
   in
-  let terminalpp = match mutrec with NotMutrec -> dot | _ -> empty in
   (* Work around Coq bug 7975 about pattern binders followed by implicit arguments *)
   let implicitargs =
     if !used_a_pattern && List.length constrspp + List.length atom_constrs > 0 then
@@ -3096,7 +3095,7 @@ let doc_fundef types_mod (FD_aux(FD_function(r, typa, fcls),fannot)) =
 
 
 
-let doc_dec (DEC_aux (reg, ((l, _) as annot))) =
+let doc_dec (DEC_aux (reg, (l, _))) =
   match reg with
   | DEC_reg (typ, id, None) -> empty
      (*

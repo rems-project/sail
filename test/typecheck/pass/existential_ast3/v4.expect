@@ -2,8 +2,6 @@
 [[96mexistential_ast3/v4.sail[0m]:36:18-20
 36[96m |[0m    if is_64 then 64 else 32;
   [91m |[0m                  [91m^^[0m
-  [91m |[0m Tried performing type coercion from int(64) to {('d : Int), (('is_64 & 'd == 63) | (not('is_64) & 'd == 32)). int('d)} on 64
-  [91m |[0m Coercion failed because:
   [91m |[0m int(64) is not a subtype of {('d : Int), (('is_64 & 'd == 63) | (not('is_64) & 'd == 32)). int('d)}
   [91m |[0m [[96mexistential_ast3/v4.sail[0m]:34:6-12
   [91m |[0m 34[96m |[0m  let 'is_64 = b == 0b0;

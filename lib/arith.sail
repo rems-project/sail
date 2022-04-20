@@ -194,7 +194,7 @@ function fmod_int(n: int, m: int) -> int = {
   n - (m * fdiv_int(n, m))
 }
 
-val abs_int_plain = {
+val abs_int_plain = pure {
   smt : "abs",
   ocaml: "abs_int",
   interpreter: "abs_int",

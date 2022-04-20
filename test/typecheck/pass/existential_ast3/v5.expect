@@ -2,8 +2,6 @@
 [[96mexistential_ast3/v5.sail[0m]:37:50-65
 37[96m |[0m  let n : range(0, 'datasize - 2) = if is_64 then unsigned(b @ a) else unsigned(a);
   [91m |[0m                                                  [91m^-------------^[0m
-  [91m |[0m Tried performing type coercion from range(0, (2 ^ (1 + 5) - 1)) to range(0, ('datasize - 2)) on unsigned(bitvector_concat(b, a))
-  [91m |[0m Coercion failed because:
   [91m |[0m range(0, (2 ^ (1 + 5) - 1)) is not a subtype of range(0, ('datasize - 2))
   [91m |[0m [[96mexistential_ast3/v5.sail[0m]:35:6-15
   [91m |[0m 35[96m |[0m  let 'datasize : {'d, ('is_64 & 'd == 64) | (not('is_64) & 'd == 32). int('d)} =

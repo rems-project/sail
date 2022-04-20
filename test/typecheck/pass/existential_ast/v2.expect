@@ -2,5 +2,5 @@
 [[96mexistential_ast/v2.sail[0m]:39:7-21
 39[96m |[0m  Some(Ctor2(y, x, c))
   [91m |[0m       [91m^------------^[0m
-  [91m |[0m No valid casts resulted in unification
+  [91m |[0m range(0, 30) is not contained within range(0, 30)
   [91m |[0m 

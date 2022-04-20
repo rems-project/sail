@@ -1,3 +1,5 @@
+$option -dallow_cast
+
 default Order dec
 
 val add_range = {ocaml: "add", lem: "add"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).

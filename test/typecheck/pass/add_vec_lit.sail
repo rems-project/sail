@@ -1,3 +1,5 @@
+$option -dallow_cast
+
 default Order inc
 
 val add_vec = pure {ocaml: "add_vec", lem: "add_vec"}: forall ('n : Int).

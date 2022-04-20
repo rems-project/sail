@@ -429,7 +429,7 @@ let remove_tuples cdefs ctx =
        CTSet.empty
   in
   let rec tuple_depth = function
-    | CT_tup ctyps as ctyp ->
+    | CT_tup ctyps ->
        1 + List.fold_left (fun d ctyp -> max d (tuple_depth ctyp)) 0 ctyps
     | CT_struct (_, id_ctyps) | CT_variant (_, id_ctyps) ->
        List.fold_left (fun d (_, ctyp) -> max (tuple_depth ctyp) d) 0 id_ctyps
@@ -512,7 +512,7 @@ let remove_tuples cdefs ctx =
   and fix_instr (I_aux (instr, aux)) = I_aux (fix_instr_aux instr, aux)
   in
   let fix_conversions = function
-    | I_aux (I_copy (clexp, cval), ((_, l) as aux)) as instr ->
+    | I_aux (I_copy (clexp, cval), (_, l)) as instr ->
        begin match clexp_ctyp clexp, cval_ctyp cval with
        | CT_tup lhs_ctyps, CT_tup rhs_ctyps when List.length lhs_ctyps = List.length rhs_ctyps ->
           let elems = List.length lhs_ctyps in

@@ -2,7 +2,5 @@
 [[96mcomplex_exist_sat/v2.sail[0m]:3:18-19
 3[96m |[0mfunction foo(x) = 4
  [91m |[0m                  [91m^[0m
- [91m |[0m Tried performing type coercion from int(4) to {('q : Int), 'q in {0, 1}. int((2 * 'q))} on 4
- [91m |[0m Coercion failed because:
  [91m |[0m int(4) is not a subtype of {('q : Int), 'q in {0, 1}. int((2 * 'q))}
  [91m |[0m 

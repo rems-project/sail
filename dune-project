@@ -46,13 +46,21 @@ been used for several papers, available from
 http://www.cl.cam.ac.uk/~pes20/sail/.
 ")
   (depends
-    (sail_manifest :version)))
+    (sail_manifest :version)
+    (ott (and (>= 0.28) :build))
+    (lem (>= "2018-12-14"))
+    (linksem (>= "0.3"))
+    conf-gmp
+    conf-zlib
+    (yojson (>= 1.6.0))
+    pprint))
 
 (package
   (name sail_ocaml_backend)
   (synopsis "Sail to OCaml translation")
   (depends
-    (libsail :version)))
+    (libsail :version)
+    (base64 (>= 3.1.0))))
 
 (package
   (name sail_c_backend)
@@ -88,7 +96,8 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
   (name sail_latex_backend)
   (synopsis "Sail to LaTeX formating")
   (depends
-    (libsail :version)))
+    (libsail :version)
+    (omd (and (>= 1.3.1) (< 1.4.0)))))
 
 (package
   (name sail)
@@ -104,4 +113,5 @@ been used for several papers, available from
 http://www.cl.cam.ac.uk/~pes20/sail/.
 ")
   (depends
-    (libsail :version)))
+    (libsail :version)
+    (linenoise (>= 1.1.0))))

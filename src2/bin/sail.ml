@@ -161,9 +161,18 @@ let rec options = ref ([
   ( "-no_lexp_bounds_check",
     Arg.Set Type_check.opt_no_lexp_bounds_check,
     " turn off bounds checking for vector assignments in l-expressions");
+  ( "-auto_mono",
+    Arg.Set Rewrites.opt_auto_mono,
+    " automatically infer how to monomorphise code");
   ( "-splice",
     Arg.String (fun s -> opt_splice := s :: !opt_splice),
     "<filename> add functions from file, replacing existing definitions where necessary");
+  ( "-smt_solver",
+    Arg.String (fun s -> Constraint.set_solver (String.trim s)),
+    "<solver> choose SMT solver. Supported solvers are z3 (default), alt-ergo, cvc4, mathsat, vampire and yices.");
+  ( "-smt_linearize",
+    Arg.Set Type_check.opt_smt_linearize,
+    "(experimental) force linearization for constraints involving exponentials");
   ( "-Oconstant_fold",
     Arg.Set Constant_fold.optimize_constant_fold,
     " apply constant folding optimizations");

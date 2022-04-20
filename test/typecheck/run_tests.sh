@@ -2,23 +2,25 @@
 set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-SAILDIR="$DIR/../.."
+SAIL=${SAIL:=sail}
 
 mkdir -p $DIR/rtpass
 mkdir -p $DIR/rtpass2
 
 rm -f $DIR/tests.xml
 
+printf "\$SAIL is $SAIL\n"
+
 # shellcheck source=../test_helpers.sh
-source "$SAILDIR/test/test_helpers.sh"
+source "$DIR/../test_helpers.sh"
 
 printf "<testsuites>\n" >> $DIR/tests.xml
 
 for i in `ls $DIR/pass/ | grep sail`;
 do
-    if $SAILDIR/sail -no_memo_z3 -just_check -ddump_tc_ast $DIR/pass/$i 2> /dev/null 1> $DIR/rtpass/$i;
+    if $SAIL -no_memo_z3 -just_check -ddump_tc_ast $DIR/pass/$i 2> /dev/null 1> $DIR/rtpass/$i;
     then
-	if $SAILDIR/sail -no_memo_z3 -just_check -ddump_tc_ast -dmagic_hash -dno_cast $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
+	if $SAIL -no_memo_z3 -just_check -ddump_tc_ast -dmagic_hash -dno_cast $DIR/rtpass/$i 2> /dev/null 1> $DIR/rtpass2/$i;
 	then
 	    if diff $DIR/rtpass/$i $DIR/rtpass2/$i;
 	    then
@@ -37,7 +39,7 @@ do
     for file in $DIR/pass/${i%.sail}/*.sail;
     do
 	pushd $DIR/pass > /dev/null;
-	if $SAILDIR/sail -no_memo_z3 ${i%.sail}/$(basename $file) 2> result;
+	if $SAIL -no_memo_z3 ${i%.sail}/$(basename $file) 2> result;
 	then
 	    red "failing variant of $i $(basename $file) passed" "fail"
 	else
@@ -56,7 +58,7 @@ done
 for file in $DIR/fail/*.sail;
 do
     pushd $DIR/fail > /dev/null;
-    if $SAILDIR/sail -no_memo_z3 $(basename $file) 2> result
+    if $SAIL -no_memo_z3 $(basename $file) 2> result
     then
         red "Expected failure, but $(basename $file) passed" "fail"
     else

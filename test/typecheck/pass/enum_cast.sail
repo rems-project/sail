@@ -1,3 +1,5 @@
+$option -dallow_cast
+
 default Order dec
 
 $include <prelude.sail>

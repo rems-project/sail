@@ -2,7 +2,5 @@
 [[96mnexp_synonym/v2.sail[0m]:7:20-32
 7[96m |[0mlet v : bits(LEN) = 0xFFFF_FFFFF
  [91m |[0m                    [91m^----------^[0m
- [91m |[0m Tried performing type coercion from bitvector(36, dec) to bits(LEN) on 0xFFFFFFFFF
- [91m |[0m Coercion failed because:
  [91m |[0m Mismatched argument types in sub-typing check
  [91m |[0m 
