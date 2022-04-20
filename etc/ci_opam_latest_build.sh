@@ -2,6 +2,8 @@
 
 set -eu
 
+export OPAMVERBOSE=2
+
 opam init -y --no-setup --compiler=4.10.0 --shell=sh
 
 eval `opam config env`
