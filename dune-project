@@ -47,6 +47,7 @@ http://www.cl.cam.ac.uk/~pes20/sail/.
 ")
   (depends
     (dune-site (>= 3.0.2))
+    (menhir :build)
     (sail_manifest (and (= :version) :build))
     (ott (and (>= 0.28) :build))
     (lem (>= "2018-12-14"))

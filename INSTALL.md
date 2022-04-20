@@ -5,7 +5,7 @@ manager e.g. `sudo apt-get install opam` (on Ubuntu 20.04) or follow the [instru
 from the opam website](https://opam.ocaml.org/doc/Install.html).
 The opam version must be >= 2.0; opam 1 versions are no longer supported. On older Ubuntu versions such as 18.04 you will not be able to use opam from the package manager, and will need to install it following the instructions on the opam website.
 
-Use `ocaml -version` to check your OCaml version. If you have OCaml 4.06.1 or newer, that's fine, otherwise use `opam switch` to install 4.06.1:
+Use `ocaml -version` to check your OCaml version. If you have OCaml 4.08 or newer, that's fine, otherwise use `opam switch` to install 4.08:
 ```
 opam switch create 4.06.1
 ```
