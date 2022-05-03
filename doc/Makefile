@@ -58,7 +58,7 @@ all: manual.pdf
 
 .PHONY: clean
 
-code_riscv.tex: ${SAIL_RISCV}/model/riscv_duopod.sail
+code_riscv.tex: examples/riscv_duopod.sail
 	sail -o code_riscv -latex -latex_full_valspecs $^
 	cp code_riscv/commands.tex code_riscv.tex
 

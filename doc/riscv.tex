@@ -3,21 +3,33 @@
 
 We introduce the basic features of Sail via a small example from our
 \riscv\ model that includes just two instructions: add immediate and
-load double. We start by including two files from the main sail-riscv
-development:
+load double. We defining the default order (see \ref{sec:vec} for
+details), and including the Sail prelude.
 
 \begin{lstlisting}
-$include "prelude.sail"
-$include "riscv_xlen64.sail"
+default Order dec
+$include <prelude.sail>
 \end{lstlisting}
 
-The prelude sets up basic definitions we will use, it can vary on a
-per-architecture basis to account for stylistic differences in ISA
-specifications. \texttt{riscv\_xlen64.sail} introduces some type
-synonyms. It creates a integer type xlen, which is 64. Sail supports
-definitions which are generic over both regular types, and integers
-(think const generics in C++, but more expressive). We also create a
-type \ll{xlenbits} for bitvectors of length \ll{xlen}.
+\noindent The Sail prelude is very minimal, and it is expected that
+Sail specifications will usually build upon it. Some Sail
+specifications are derived from pre-existing pseudocode, which already
+use specific idioms---our Sail ARM specification uses ZeroExtend and
+SignExtend mirroring the ASL code, whereas our MIPS and RISC-V
+specification use EXTZ and EXTS for the same functions. Therefore for
+this example we define zero-extension and sign-extension functions as:
+
+\sailval{EXTZ}
+\sailfn{EXTZ}
+
+\sailval{EXTS}
+\sailfn{EXTS}
+
+We now define an integer type synonym xlen, which for this example
+will be equal to 64. Sail supports definitions which are generic over
+both regular types, and integers (think const generics in C++, but
+more expressive). We also create a type \ll{xlenbits} for bitvectors
+of length \ll{xlen}.
 
 \sailtype{xlen}
 \sailtype{xlen_bytes}
@@ -56,16 +68,9 @@ register Xs : vector(32, dec, xlenbits)
 
 \sailval{wX}
 \sailfn{wX}
-\sailoverloadXXX
 
 We also give a function \ll{MEMr} for reading memory, this function
-just points at a builtin we have defined elsewhere. Note that
-functions in Sail are annotated with effects. This effect system is
-quite basic, but indicates whether or not functions read or write
-registers (rreg and wreg), read and write memory (rmem and wmem), as
-well as a host of other concurrency model related effects. They also
-indicate whether a function throws exceptions or has other non-local
-control flow (the escape effect).
+just points at a builtin we have defined elsewhere.
 
 \sailval{MEMr}
 
@@ -84,9 +89,9 @@ decode functions, as well as the \ll{ast} union.
 \begin{lstlisting}
 scattered union ast
 
-val decode : bits(32) -> option(ast) effect pure
+val decode : bits(32) -> option(ast)
 
-val execute : ast -> unit effect {rmem, rreg, wreg}
+val execute : ast -> unit
 \end{lstlisting}
 
 Now we provide the clauses for the add-immediate \ll{ast} type, as
@@ -95,7 +100,7 @@ function by directly pattern matching on the bitvector representing
 the instruction. Sail supports vector concatenation patterns (\ll{@}
 is the vector concatenation operator), and uses the types provided
 (e.g. \ll{bits(12)} and \ll{regbits}) to destructure the vector in the
-correct way. We use the \ll{EXTS} library function that sign-extends
+correct way. We use the \ll{EXTS} function that sign-extends
 its argument.
 
 \begin{lstlisting}
@@ -114,8 +119,6 @@ union clause ast = LOAD : (bits(12), regbits, regbits)
 \sailfclLOADdecode
 \sailfclLOADexecute
 
-Finally we define the fallthrough case for the decode function. Note
+\noindent Finally we define the fallthrough case for the decode function. Note
 that the clauses in a scattered function will be matched in the order
-they appear in the file. The actual code for this example, as well as
-our more complete \riscv\ specification can be found on our github at
-\anonymise{\url{https://github.com/rems-project/sail-riscv/blob/master/model/riscv_duopod.sail}}.
+they appear in the file.

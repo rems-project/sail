@@ -14,8 +14,4 @@
 (install
   (section (site (libsail plugins)))
   (package sail_ocaml_backend)
-  (files
-    sail_plugin_ocaml.cmxs
-    (%{workspace_root}/plugins/ocaml/_tags as ocaml/_tags)
-    (%{workspace_root}/plugins/ocaml/_tags_coverage as ocaml/_tags_coverage)
-    (%{workspace_root}/plugins/ocaml/myocamlbuild_coverage.ml as ocaml/myocamlbuild_coverage.ml)))
+  (files sail_plugin_ocaml.cmxs))

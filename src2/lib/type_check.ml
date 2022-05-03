@@ -3017,6 +3017,14 @@ let rec exp_unconditionally_returns (E_aux (aux, _)) =
   | E_block exps -> exp_unconditionally_returns (List.hd (List.rev exps))
   | _ -> false
 
+let tc_assume nc (E_aux (aux, annot)) =
+  let l = gen_loc (fst annot) in
+  let env = env_of_annot annot in
+  E_aux (E_block [
+             E_aux (E_app (mk_id "_assume", [E_aux (E_constraint nc, (l, mk_tannot env bool_typ))]), (l, mk_tannot env unit_typ));
+             E_aux (aux, annot)
+           ], annot)
+ 
 module PC_config = struct
   type t = tannot
   let typ_of_t = typ_of_tannot
@@ -3303,7 +3311,11 @@ and check_block l env exps ret_typ =
         let typ = last_typ rest in
         [annot_exp (E_var (lexp, bind, annot_exp (E_block rest) typ ret_typ)) typ ret_typ]
      end
-        
+  | ((E_aux (E_app (f, [E_aux (E_constraint nc, _)]), _) as exp) :: exps) when string_of_id f = "_assume" ->
+     Env.wf_constraint env nc;
+     let env = Env.add_constraint nc env in
+     let annotated_exp = annot_exp (E_app (f, [annot_exp (E_constraint nc) bool_typ None])) unit_typ None in
+     annotated_exp :: check_block l env exps ret_typ
   | ((E_aux (E_assert (constr_exp, msg), (assert_l, _))) :: exps) ->
      let msg = assert_msg msg in
      let constr_exp = crule check_exp env constr_exp bool_typ in

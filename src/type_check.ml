@@ -3371,7 +3371,6 @@ and check_block l env exps ret_typ =
         let typ = last_typ rest in
         [annot_exp (E_var (lexp, bind, annot_exp (E_block rest) typ ret_typ)) typ ret_typ]
      end
-        
   | ((E_aux (E_assert (constr_exp, msg), (assert_l, _)) as exp) :: exps) ->
      let msg = assert_msg msg in
      let constr_exp = crule check_exp env constr_exp bool_typ in
@@ -3393,6 +3392,11 @@ and check_block l env exps ret_typ =
      ) else (
        texp :: checked_exps
      )
+  | ((E_aux (E_app (f, [E_aux (E_constraint nc, _)]), _) as exp) :: exps) when string_of_id f = "_assume" ->
+     Env.wf_constraint env nc;
+     let env = Env.add_constraint nc env in
+     let annotated_exp = annot_exp (E_app (f, [annot_exp (E_constraint nc) bool_typ bool_typ])) unit_typ unit_typ in
+     annoted_exp :: check_block l env exps ret_typ
   | ((E_aux (E_if (cond, (E_aux (E_throw _, _) | E_aux (E_block [E_aux (E_throw _, _)], _)), _), _) as exp) :: exps) ->
      let texp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
      let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in

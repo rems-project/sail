@@ -12,13 +12,4 @@
 (install
   (section (site (libsail plugins)))
   (package sail_c_backend)
-  (files
-    sail_plugin_c.cmxs
-    (%{workspace_root}/plugins/c/sail.h as c/sail.h)
-    (%{workspace_root}/plugins/c/sail.c as c/sail.c)
-    (%{workspace_root}/plugins/c/sail_failure.h as c/sail_failure.h)
-    (%{workspace_root}/plugins/c/sail_failure.c as c/sail_failure.c)
-    (%{workspace_root}/plugins/c/elf.h as c/elf.h)
-    (%{workspace_root}/plugins/c/elf.c as c/elf.c)
-    (%{workspace_root}/plugins/c/rts.h as c/rts.h)
-    (%{workspace_root}/plugins/c/rts.c as c/rts.c)))
+  (files sail_plugin_c.cmxs))

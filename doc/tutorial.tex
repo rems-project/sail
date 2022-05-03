@@ -43,47 +43,16 @@ expressions of the appropriate size that are available within the
 surrounding scope, in this case \ll{n} and \ll{length(xs)}. If no
 suitable expressions are found to trivially rewrite these type
 variables, then additional function parameters will be automatically
-added to pass around this information at run-time. This feature is
-however very useful for implementing functions with implicit
-parameters, e.g. we can implement a zero extension function that
-implicitly picks up its result length from the calling context as
-follows:
+added to pass around this information at run-time.
+
+Functions may also have implicit parameters, e.g. we can implement a
+zero extension function that implicitly picks up its result length
+from the calling context as follows:
 \mrbval{extz}
 \mrbfn{extz}
 
-Notice that we annotated the \ll{val} declaration as a
-\ll{cast}---this means that the type checker is allowed to
-automatically insert it where needed in order to make our code type
-check. This is another feature that must be used carefully, because
-too many implicit casts can quickly result in unreadable code. Sail
-does not make any distinction between expressions and statements, so
-since there is only a single line of code within the foreach block, we
-can drop it and simply write: \mrbfn{my_replicate_bits_3}
-
-%\subsection{External Bindings}
-
-%Rather than defining functions within Sail itself, they can be mapped
-%onto function definitions within the various backend targets supported
-%by Sail. This is primarily used to setup the primitive functions
-%defined in the Sail library. These declarations work much like FFI
-%bindings in many programming languages---in Sail we provide the
-%\ll{val} declaration, except rather than giving a function body we
-%supply a string used to identify the external operator in each
-%backend. For example, we could link the \ll{<<} operator with the
-%\verb|shiftl| primitive as \mrbzeightoperatorzzerozIzIznine If the
-%external function has the same name as the sail function, such as
-%\ll{shiftl = "shiftl"}, then we can use the shorthand syntax
-%\mrbshiftl
-
-%We can map onto differently-named operations for different targets by
-%using a JSON-like \ll{key: "value"} notation, for example:
-%\mrbzeightoperatorzzerozKzKznine We can also omit backends---in which
-%case those targets will expect a definition written in Sail. Note that
-%no checking is done to ensure that the definition in the target
-%matches the type of the Sail function. Finally, the \ll{_} key used
-%above is a wildcard that will be used for any backend not otherwise
-%included. If we use the wildcard key, then we cannot omit specific
-%backends to force them to use a definition in Sail.
+Implicit parameters are always integers, and they must appear first
+before any other parameters in the function type signature.
 
 \subsection{Mappings}
 \label{sec:mappings}

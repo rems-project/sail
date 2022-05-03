@@ -1,3 +1,0 @@
-true: debug
-<*.m{l,li}>: package(lem), package(linksem), package(zarith), coverage
-<main.native>: package(lem), package(linksem), package(zarith), coverage

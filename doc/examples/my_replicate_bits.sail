@@ -44,14 +44,6 @@ function my_replicate_bits_2(n, xs) = {
   ys
 }
 
-val cast extz : forall 'n 'm, 'm >= 'n. (implicit('m), bits('n)) -> bits('m)
+val extz : forall 'n 'm, 'm >= 'n. (implicit('m), bits('n)) -> bits('m)
 
 function extz(m, xs) = zero_extend(xs, m)
-
-val my_replicate_bits_3 : forall 'n 'm, 'm >= 1 & 'n >= 1. (int('n), bits('m)) -> bits('n * 'm)
-
-function my_replicate_bits_3(n, xs) = {
-  ys = zeros('n * 'm);
-  foreach (i from 1 to n) ys = ys << 'm | xs;
-  ys
-}

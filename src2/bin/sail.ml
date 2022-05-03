@@ -66,7 +66,7 @@
 (****************************************************************************)
 
 open Libsail
-
+   
 let opt_file_arguments : string list ref = ref []
 let opt_file_out : string option ref = ref None
 let opt_just_check : bool ref = ref false
@@ -212,6 +212,9 @@ let rec options = ref ([
         Arg.Clear Frontend.opt_dno_cast
       ],
     " (debug) typecheck allowing implicit casting (deprecated)");
+  ( "-ddump_rewrite_ast",
+    Arg.String (fun l -> Rewrites.opt_ddump_rewrite_ast := Some (l, 0); Specialize.opt_ddump_spec_ast := Some (l, 0)),
+    "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
@@ -250,12 +253,17 @@ let feature_check () =
        exit 0
      else
        exit 2
-  
+
+let get_plugin_dir () =
+  match Sys.getenv_opt "SAIL_PLUGIN_DIR" with
+  | Some path -> path :: Libsail_sites.Sites.plugins
+  | None -> Libsail_sites.Sites.plugins
+
 let main () =
   begin match Sys.getenv_opt "SAIL_NO_PLUGINS" with
   | Some _ -> ()
   | None ->
-     match Libsail_sites.Sites.plugins with
+     match get_plugin_dir () with
      | dir :: _ ->
         List.iter
           (fun plugin ->

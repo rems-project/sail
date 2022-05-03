@@ -386,6 +386,8 @@ val bind_pat_no_guard : Env.t -> unit pat -> typ -> tannot pat * Env.t
 
 val typ_error : Env.t -> Ast.l -> string -> 'a
 
+val tc_assume : n_constraint -> tannot exp -> tannot exp
+  
 (** {2 Destructuring type annotations}
 
    Partial functions: The expressions and patterns passed to these
