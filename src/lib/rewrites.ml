@@ -3213,6 +3213,13 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
        let (E_aux (expaux, annot) as exp) = add_vars overwrite exp vars in
        let typ' = typ_of exp in
        add_e_cast (env_of exp) typ' (E_aux (expaux, swaptyp typ' annot))
+    | E_app (early_return, args) when string_of_id early_return = "early_return" ->
+       (* Special case early return:  It has to be monadic for the prover
+        * backends, so the addition of vars below wouldn't work without an
+        * extra E_internal_return.  But threading through local vars to the
+        * outer block isn't necessary anyway, because we will exit the
+        * function, so just keep the early_return expression as is. *)
+       exp
     | _ ->
        (* after rewrite_ast_letbind_effects there cannot be terms that have
           effects/update local variables in "tail-position": check n_exp_term
