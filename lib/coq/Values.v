@@ -1574,7 +1574,6 @@ Ltac clean_up_props :=
 Ltac prepare_for_solver :=
 (*dump_context;*)
  generalize_embedded_proofs;
- clear_irrelevant_defns;
  clear_non_Z_bool_defns;
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let lia see through fns *)
  split_cases;
@@ -2218,6 +2217,7 @@ Ltac clear_proof_bodies :=
 
 Ltac solve_arithfact :=
   clear_proof_bodies;
+  clear_irrelevant_defns;
   try solve [squashed_andor_solver]; (* Do this first so that it can name the intros *)
   intros; (* To solve implications for derive_m *)
   clear_fixpoints; (* Avoid using recursive calls *)

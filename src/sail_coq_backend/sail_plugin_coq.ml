@@ -124,10 +124,11 @@ let coq_rewrites =
     ("split", [String_arg "execute"]);
     ("minimise_recursive_functions", []);
     ("recheck_defs", []);
-    ("exp_lift_assign", []);
     (* ("remove_assert", rewrite_ast_remove_assert); *)
     ("move_termination_measures", []);
     ("top_sort_defs", []);
+    ("const_prop_mutrec", [String_arg "coq"]);
+    ("exp_lift_assign", []);
     ("early_return", []);
     (* We need to do the exhaustiveness check before merging, because it may
        introduce new wildcard clauses *)
