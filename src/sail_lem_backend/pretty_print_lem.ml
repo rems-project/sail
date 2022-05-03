@@ -1478,7 +1478,7 @@ let doc_fundef_lem effect_info env (FD_aux (FD_function (r, typa, fcls), fannot)
 
 let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
   match reg with
-  | DEC_reg (typ, id, None) -> empty
+  | DEC_reg (typ, id, _) -> empty
      (* if !opt_sequential then empty
      else
        let env = env_of_annot annot in
@@ -1498,8 +1498,8 @@ let doc_dec_lem (DEC_aux (reg, ((l, _) as annot))) =
            ^/^ hardline
          else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ))
        else raise (Reporting.err_unreachable l __POS__ ("can't deal with register type " ^ string_of_typ typ)) *)
-  | DEC_reg (typ, id, Some exp) ->
-     separate space [string "let"; doc_id_lem id; equals; doc_exp_lem empty_ctxt false exp] ^^ hardline
+  (*| DEC_reg (typ, id, Some exp) ->
+     separate space [string "let"; doc_id_lem id; equals; doc_exp_lem empty_ctxt false exp] ^^ hardline*)
 
 let doc_spec_lem effect_info env (VS_aux (valspec, annot)) =
   match valspec with

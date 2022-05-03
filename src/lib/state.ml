@@ -87,7 +87,7 @@ let find_registers defs =
   List.fold_left
     (fun acc def ->
       match def with
-      | DEF_reg_dec (DEC_aux(DEC_reg (typ, id, None), (_, tannot))) ->
+      | DEF_reg_dec (DEC_aux(DEC_reg (typ, id, _), (_, tannot))) ->
          let env = match destruct_tannot tannot with
            | Some (env, _) -> env
            | _ -> Env.empty
