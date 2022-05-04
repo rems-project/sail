@@ -2550,7 +2550,7 @@ let doc_typdef types_mod generic_eq_types (TD_aux(td, (l, annot))) =
                         doc_typquant_items empty_ctxt Env.empty parens typq;
                         colon; string "Z"])
        (doc_nexp empty_ctxt nexp) ^^ dot ^^ hardline ^^
-     separate space [string "Hint Unfold"; idpp; colon; string "sail."] ^^
+     separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."] ^^
      twice hardline
   | TD_abbrev(id,typq,A_aux (A_bool nc,_)) ->
      let idpp = doc_id_type types_mod None id in
@@ -2559,7 +2559,7 @@ let doc_typdef types_mod generic_eq_types (TD_aux(td, (l, annot))) =
                         doc_typquant_items empty_ctxt Env.empty parens typq;
                         colon; string "bool"])
        (doc_nc_exp empty_ctxt Env.empty nc) ^^ dot ^^ hardline ^^
-     separate space [string "Hint Unfold"; idpp; colon; string "sail."] ^^
+     separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."] ^^
      twice hardline
   | TD_abbrev _ -> empty (* TODO? *)
   | TD_bitfield _ -> empty (* TODO? *)
@@ -2617,7 +2617,7 @@ let doc_typdef types_mod generic_eq_types (TD_aux(td, (l, annot))) =
     in
     let eq_pp =
       if IdSet.mem id generic_eq_types then
-        string "Instance Decidable_eq_" ^^ type_id_pp ^^ space ^^ colon ^/^
+        string "#[export] Instance Decidable_eq_" ^^ type_id_pp ^^ space ^^ colon ^/^
         string "forall (x y : " ^^ type_id_pp ^^ string "), Decidable (x = y)." ^^
         hardline ^^ intros_pp "x" ^^ intros_pp "y" ^^
         separate hardline (list_init numfields
@@ -2671,7 +2671,7 @@ let doc_typdef types_mod generic_eq_types (TD_aux(td, (l, annot))) =
              let eq_reqs_pp =
                separate (break 1) (Util.map_filter doc_dec_eq_req (quant_items typq))
              in
-             string "Instance Decidable_eq_" ^^ typ_nm ^^ space ^^ eq_reqs_pp ^^ colon ^/^
+             string "#[export] Instance Decidable_eq_" ^^ typ_nm ^^ space ^^ eq_reqs_pp ^^ colon ^/^
                string "forall (x y : " ^^ typ_use_pp ^^ string "), Decidable (x = y)." ^^ hardline ^^
                  string "refine (Decidable_eq_from_dec (fun x y => _))." ^^ hardline ^^
                    string "decide equality; refine (generic_dec _ _)." ^^ hardline ^^
@@ -2699,7 +2699,7 @@ let doc_typdef types_mod generic_eq_types (TD_aux(td, (l, annot))) =
                         (concat [string "Inductive"; space; id_pp])
                         (enums_doc) in
          let eq1_pp = string "Scheme Equality for" ^^ space ^^ id_pp ^^ dot in
-         let eq2_pp = string "Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon ^/^
+         let eq2_pp = string "#[export] Instance Decidable_eq_" ^^ id_pp ^^ space ^^ colon ^/^
            string "forall (x y : " ^^ id_pp ^^ string "), Decidable (x = y) :=" ^/^
            string "Decidable_eq_from_dec " ^^ id_pp ^^ string "_eq_dec." in
           typ_pp ^^ dot ^^ hardline ^^ eq1_pp ^^ hardline ^^ eq2_pp ^^ twice hardline)
@@ -3349,7 +3349,7 @@ let doc_val pat exp =
   let base_pp = doc_exp ctxt false exp ^^ dot in
   let () = debug_depth := 0 in
   group (string "Definition" ^^ space ^^ idpp ^^ typpp ^^ space ^^ coloneq ^/^ base_pp) ^^ hardline ^^
-  group (separate space [string "Hint Unfold"; idpp; colon; string "sail."]) ^^ hardline
+  group (separate space [string "#[export] Hint Unfold"; idpp; colon; string "sail."]) ^^ hardline
 
 let doc_def types_mod unimplemented generic_eq_types effect_info def =
   match def with

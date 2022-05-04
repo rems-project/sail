@@ -431,7 +431,7 @@ Lemma length_list_pos : forall {A} {l:list A}, 0 <= Z.of_nat (List.length l).
 unfold length_list.
 auto with zarith.
 Qed.
-Hint Resolve length_list_pos : sail.
+#[export] Hint Resolve length_list_pos : sail.
 
 Definition vec_of_bits (l:list bitU) : mword (length_list l) := opt_def dummy_vector (of_bits l).
 (*
@@ -623,7 +623,7 @@ end).
 * simpl. destruct x.
 Defined.
 
-Instance Decidable_eq_mword {n} : forall (x y : mword n), Decidable (x = y) :=
+#[export] Instance Decidable_eq_mword {n} : forall (x y : mword n), Decidable (x = y) :=
   Decidable_eq_from_dec eq_vec_dec.
 
 Program Fixpoint reverse_endianness_word {n} (bits : word n) : word n :=

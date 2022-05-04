@@ -157,7 +157,7 @@ Require Import Coq.Program.Tactics.
 
 Section Morphism.
 Local Obligation Tactic := try solve [simpl_relation | firstorder auto].
-Global Program Instance ArithFactP_iff_morphism :
+#[export] Program Instance ArithFactP_iff_morphism :
   Proper (iff ==> iff) ArithFactP.
 End Morphism.
 
@@ -192,7 +192,7 @@ rewrite <- Decidable_spec.
 destruct Decidable_witness; simpl in *; 
 congruence.
 Qed.
-Instance Decidable_eq_from_dec {T:Type} (eqdec: forall x y : T, {x = y} + {x <> y}) : 
+#[export] Instance Decidable_eq_from_dec {T:Type} (eqdec: forall x y : T, {x = y} + {x <> y}) : 
   forall (x y : T), Decidable (eq x y).
 refine (fun x y => {|
   Decidable_witness := proj1_sig (bool_of_sumbool (eqdec x y))
@@ -200,15 +200,15 @@ refine (fun x y => {|
 destruct (eqdec x y); simpl; split; congruence.
 Defined.
 
-Instance Decidable_eq_unit : forall (x y : unit), Decidable (x = y).
+#[export] Instance Decidable_eq_unit : forall (x y : unit), Decidable (x = y).
 refine (fun x y => {| Decidable_witness := true |}).
 destruct x, y; split; auto.
 Defined.
 
-Instance Decidable_eq_string : forall (x y : string), Decidable (x = y) :=
+#[export] Instance Decidable_eq_string : forall (x y : string), Decidable (x = y) :=
   Decidable_eq_from_dec String.string_dec.
 
-Instance Decidable_eq_pair {A B : Type} `(DA : forall x y : A, Decidable (x = y), DB : forall x y : B, Decidable (x = y)) : forall x y : A*B, Decidable (x = y).
+#[export] Instance Decidable_eq_pair {A B : Type} `(DA : forall x y : A, Decidable (x = y), DB : forall x y : B, Decidable (x = y)) : forall x y : A*B, Decidable (x = y).
 refine (fun x y =>
 {| Decidable_witness := andb (@Decidable_witness _ (DA (fst x) (fst y)))
      (@Decidable_witness _ (DB (snd x) (snd y))) |}).
@@ -237,7 +237,7 @@ refine ((if Decidable_witness as b return (b = true <-> x = y -> _) then fun H' 
 * right. intuition.
 Defined.
 
-Instance Decidable_eq_list {A : Type} `(D : forall x y : A, Decidable (x = y)) : forall (x y : list A), Decidable (x = y) :=
+#[export] Instance Decidable_eq_list {A : Type} `(D : forall x y : A, Decidable (x = y)) : forall (x y : list A), Decidable (x = y) :=
   Decidable_eq_from_dec (list_eq_dec (fun x y => generic_dec x y)).
 
 (* Used by generated code that builds Decidable equality instances for records. *)
@@ -322,7 +322,7 @@ apply ZEuclid.div_mod.
 assumption.
 Qed.
 
-Hint Resolve ZEuclid_div_pos ZEuclid_pos_div ZEuclid_div_ge ZEuclid_div_mod0 : sail.
+#[export] Hint Resolve ZEuclid_div_pos ZEuclid_pos_div ZEuclid_div_ge ZEuclid_div_mod0 : sail.
 
 Lemma Z_geb_ge n m : (n >=? m) = true <-> n >= m.
 rewrite Z.geb_leb.
@@ -520,7 +520,7 @@ Inductive bitU := B0 | B1 | BU.
 
 Scheme Equality for bitU.
 Definition eq_bit := bitU_beq.
-Instance Decidable_eq_bit : forall (x y : bitU), Decidable (x = y) :=
+#[export] Instance Decidable_eq_bit : forall (x y : bitU), Decidable (x = y) :=
   Decidable_eq_from_dec bitU_eq_dec.
 
 Definition showBitU b :=
@@ -546,7 +546,7 @@ Class BitU (a : Type) : Type := {
   of_bitU : bitU -> a
 }.
 
-Instance bitU_BitU : (BitU bitU) := {
+#[export] Instance bitU_BitU : (BitU bitU) := {
   to_bitU b := b;
   of_bitU b := b
 }.
@@ -1167,7 +1167,7 @@ Class Bitvector (a:Type) : Type := {
   arith_op_bv : (Z -> Z -> Z) -> bool -> a -> a -> a
 }.
 
-Instance bitlist_Bitvector {a : Type} `{BitU a} : (Bitvector (list a)) := {
+#[export] Instance bitlist_Bitvector {a : Type} `{BitU a} : (Bitvector (list a)) := {
   bits_of v := List.map to_bitU v;
   of_bits v := Some (List.map of_bitU v);
   of_bools v := List.map of_bitU (List.map bitU_of_bool v);
@@ -2241,18 +2241,18 @@ Ltac solve_arithfact :=
    slow running constraints into proof mode. *)
 Ltac run_solver := solve_arithfact.
 
-Hint Extern 0 (ArithFact _) => run_solver : typeclass_instances.
-Hint Extern 0 (ArithFactP _) => run_solver : typeclass_instances.
+#[export] Hint Extern 0 (ArithFact _) => run_solver : typeclass_instances.
+#[export] Hint Extern 0 (ArithFactP _) => run_solver : typeclass_instances.
 
-Hint Unfold length_mword : sail.
+#[export] Hint Unfold length_mword : sail.
 
 Lemma unit_comparison_lemma : true = true <-> True.
 intuition.
 Qed.
-Hint Resolve unit_comparison_lemma : sail.
+#[export] Hint Resolve unit_comparison_lemma : sail.
 
 Definition neq_atom (x : Z) (y : Z) : bool := negb (Z.eqb x y).
-Hint Unfold neq_atom : sail.
+#[export] Hint Unfold neq_atom : sail.
 
 Lemma ReasonableSize_witness (a : Z) (w : mword a) : ReasonableSize a.
 constructor.
@@ -2262,11 +2262,11 @@ destruct a.
 * destruct w.
 Qed.
 
-Hint Extern 0 (ReasonableSize ?A) => (unwrap_ArithFacts; solve [apply ReasonableSize_witness; assumption | constructor; auto with zarith]) : typeclass_instances.
+#[export] Hint Extern 0 (ReasonableSize ?A) => (unwrap_ArithFacts; solve [apply ReasonableSize_witness; assumption | constructor; auto with zarith]) : typeclass_instances.
 
 Definition to_range (x : Z) : {y : Z & ArithFact ((x <=? y <=? x))} := build_ex x.
 
-Instance mword_Bitvector {a : Z} `{ArithFact (a >=? 0)} : (Bitvector (mword a)) := {
+#[export] Instance mword_Bitvector {a : Z} `{ArithFact (a >=? 0)} : (Bitvector (mword a)) := {
   bits_of v := List.map bitU_of_bool (bitlistFromWord (get_word v));
   of_bits v := option_map (fun bl => to_word isPositive (fit_bbv_word (wordFromBitlist bl))) (just_list (List.map bool_of_bitU v));
   of_bools v := to_word isPositive (fit_bbv_word (wordFromBitlist v));
@@ -2859,7 +2859,7 @@ refine (if List.list_eq_dec D (projT1 x) (projT1 y) then left _ else right _).
 * contradict n0. rewrite n0. reflexivity.
 Defined.
 
-Instance Decidable_eq_vec {T : Type} {n} `(DT : forall x y : T, Decidable (x = y)) :
+#[export] Instance Decidable_eq_vec {T : Type} {n} `(DT : forall x y : T, Decidable (x = y)) :
   forall x y : vec T n, Decidable (x = y).
 refine (fun x y => {|
   Decidable_witness := proj1_sig (bool_of_sumbool (vec_eq_dec (fun x y => generic_dec x y) x y))
@@ -2953,7 +2953,7 @@ apply Z.le_ge.
 apply <- Z.shiftl_nonneg.
 lia.
 Qed.
-Hint Resolve shl_8_ge_0 : sail.
+#[export] Hint Resolve shl_8_ge_0 : sail.
 
 (* Limits for remainders *)
 
@@ -2973,7 +2973,7 @@ subst.
 apply Z.rem_bound_pos; auto with zarith.
 Qed.
 
-Hint Resolve Z_rem_really_nonneg Z_rem_pow_upper_bound : sail.
+#[export] Hint Resolve Z_rem_really_nonneg Z_rem_pow_upper_bound : sail.
 
 (* This is needed because Sail's internal constraint language doesn't have
    < and could disappear if we add it... *)
@@ -2982,14 +2982,14 @@ Lemma sail_lt_ge (x y : Z) :
   x < y <-> y >= x +1.
 lia.
 Qed.
-Hint Resolve sail_lt_ge : sail.
+#[export] Hint Resolve sail_lt_ge : sail.
 
 
 (* Override expensive unary exponential notation for binary, fill in sizes too *)
 Notation "sz ''b' a" := (Word.NToWord sz (BinNotation.bin a)) (at level 50).
 Notation "''b' a" := (Word.NToWord _ (BinNotation.bin a) :
                        mword (ltac:(let sz := eval cbv in (Z.of_nat (String.length a)) in exact sz)))
-                     (at level 50).
+                     (at level 50, only parsing).
 Notation "'Ox' a" := (NToWord _ (hex a) :
                        mword (ltac:(let sz := eval cbv in (4 * (Z.of_nat (String.length a))) in exact sz)))
-                     (at level 50).
+                     (at level 50, only parsing).

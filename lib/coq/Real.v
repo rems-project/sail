@@ -73,7 +73,7 @@ Require Import Lia.
 Local Open Scope Z.
 
 (* "Decidable" in a classical sense... *)
-Instance Decidable_eq_real : forall (x y : R), Decidable (x = y) :=
+#[export] Instance Decidable_eq_real : forall (x y : R), Decidable (x = y) :=
   Decidable_eq_from_dec Req_dec.
 
 Definition realFromFrac (num denom : Z) : R := Rdiv (IZR num) (IZR denom).
