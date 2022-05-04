@@ -73,10 +73,10 @@ open Ast_util
 open Interpreter
 open Pretty_print_sail
 
-   (*
 module Callgraph_commands = Callgraph_commands
+(*
 module Gdbmi = Gdbmi
-    *)
+*)
 
 type mode =
   | Evaluation of frame
