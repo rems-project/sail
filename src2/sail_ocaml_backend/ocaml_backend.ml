@@ -1052,7 +1052,7 @@ let ocaml_compile spec ast generator_types =
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src2/lib/sail_lib.ml .") in
   let _ = Unix.system ("cp -r " ^ sail_dir ^ "/src2/lib/util.ml .") in
   let tags_file = if !opt_ocaml_coverage then "_tags_coverage" else "_tags" in
-  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/lib/" ^ tags_file) in
+  let _ = Unix.system ("cp -r " ^ sail_dir ^ "/lib/" ^ tags_file ^ " _tags") in
   let out_chan = open_out (spec ^ ".ml") in
   if !opt_ocaml_coverage then
     ignore(Unix.system ("cp -r " ^ sail_dir ^ "/lib/myocamlbuild_coverage.ml myocamlbuild.ml"));

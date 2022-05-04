@@ -2,17 +2,21 @@
 set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-SAILDIR="$DIR/../.."
+SAIL=${SAIL:=sail}
+
+rm -f $DIR/tests.xml
+
+printf "\$SAIL is $SAIL\n"
 
 # shellcheck source=../test_helpers.sh
-source "$SAILDIR/test/test_helpers.sh"
+source "$DIR/../test_helpers.sh"
 
 printf "<testsuites>\n" >> $DIR/tests.xml
 
 for file in $DIR/*.sail;
 do
     pushd $DIR > /dev/null;
-    if $SAILDIR/sail $(basename $file) 2> $DIR/result 1> /dev/null;
+    if $SAIL $(basename $file) 2> $DIR/result 1> /dev/null;
     then
         red "tested $(basename $file) expecting error" "fail"
     else

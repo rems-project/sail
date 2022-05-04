@@ -2,13 +2,15 @@
 set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-SAILDIR="$DIR/../.."
+SAIL=${SAIL:=sail}
 TESTSDIR="$DIR/../typecheck/pass"
 
 rm -f $DIR/tests.xml
 
+printf "\$SAIL is $SAIL\n"
+
 # shellcheck source=../test_helpers.sh
-source "$SAILDIR/test/test_helpers.sh"
+source "$DIR/../test_helpers.sh"
 
 printf "<testsuites>\n" >> $DIR/tests.xml
 
@@ -16,9 +18,9 @@ cd $DIR
 
 for i in `ls $TESTSDIR/ | grep sail`;
 do
-    if $SAILDIR/sail -lem -o out $TESTSDIR/$i &>/dev/null;
+    if $SAIL -lem -o out $TESTSDIR/$i &>/dev/null;
     then
-	if lem -lib $SAILDIR/src/lem_interp -lib $SAILDIR/src/gen_lib out_types.lem out.lem &>/dev/null;
+	if lem -lib $DIR/../../src2/lib/lem out_types.lem out.lem &>/dev/null;
 	then
 	    green "tested $i expecting pass" "pass"
 	else

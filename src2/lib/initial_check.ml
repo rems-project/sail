@@ -1150,12 +1150,17 @@ let rec get_uninitialized_registers = function
 let generate_initialize_registers vs_ids defs =
   let regs = get_uninitialized_registers defs in
   let initialize_registers =
-    if IdSet.mem (mk_id "initialize_registers") vs_ids || regs = [] then []
+    if IdSet.mem (mk_id "initialize_registers") vs_ids then []
+    else if regs = [] then
+      [val_spec_of_string (mk_id "initialize_registers") "unit -> unit";
+       mk_fundef [mk_funcl (mk_id "initialize_registers")
+                    (mk_pat (P_lit (mk_lit L_unit)))
+                    (mk_exp (E_lit (mk_lit L_unit)))]]
     else
       [val_spec_of_string (mk_id "initialize_registers") "unit -> unit";
        mk_fundef [mk_funcl (mk_id "initialize_registers")
-                           (mk_pat (P_lit (mk_lit L_unit)))
-                           (mk_exp (E_block (List.map (fun (typ, id) -> mk_exp (E_assign (mk_lexp (LEXP_id id), mk_lit_exp L_undef))) regs)))]]
+                    (mk_pat (P_lit (mk_lit L_unit)))
+                    (mk_exp (E_block (List.map (fun (typ, id) -> mk_exp (E_assign (mk_lexp (LEXP_id id), mk_lit_exp L_undef))) regs)))]]
   in
   defs @ initialize_registers
 
@@ -1240,7 +1245,7 @@ let ast_of_def_string_with ocaml_pos f str =
   opt_magic_hash := true;
   lexbuf.lex_curr_p <- { pos_fname = ""; pos_lnum = 1; pos_bol = 0; pos_cnum = 0 };
   let def = Parser.def_eof Lexer.token lexbuf in
-  let ast = Reporting.forbid_errors ocaml_pos process_ast (P.Defs [("", f [def])]) in
+  let ast = Reporting.forbid_errors ocaml_pos (fun ast -> process_ast ~generate:false ast) (P.Defs [("", f [def])]) in
   opt_magic_hash := internal;
   ast
 

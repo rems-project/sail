@@ -305,7 +305,21 @@ let main () =
   if !opt_memo_z3 then Constraint.save_digests ();
 
   if !Interactive.opt_interactive then (
-    Repl.start_repl ~auto_rewrites:(!opt_auto_interpreter_rewrites) ~options:!(options) env effect_info ast
+    let script = match !opt_interactive_script with
+      | None -> []
+      | Some file ->
+         let chan = open_in file in
+         let lines = ref [] in
+         try
+           while true do
+             let line = input_line chan in
+             lines := line :: !lines
+           done;
+           []
+         with
+         | End_of_file -> List.rev !lines
+    in
+    Repl.start_repl ~commands:script ~auto_rewrites:(!opt_auto_interpreter_rewrites) ~options:!(options) env effect_info ast
   )
 
 let () =
