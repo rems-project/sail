@@ -75,9 +75,9 @@
   (section share)
   (package libsail)
   (files
-    (util.ml as src2/lib/util.ml)
-    (sail_lib.ml as src2/lib/sail_lib.ml)
-    (elf_loader.ml as src2/lib/elf_loader.ml)
+    (util.ml as src/lib/util.ml)
+    (sail_lib.ml as src/lib/sail_lib.ml)
+    (elf_loader.ml as src/lib/elf_loader.ml)
     (%{workspace_root}/lib/flow.sail as lib/flow.sail)
     (%{workspace_root}/lib/vector_dec.sail as lib/vector_dec.sail)
     (%{workspace_root}/lib/vector_inc.sail as lib/vector_inc.sail)

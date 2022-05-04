@@ -1,6 +1,0 @@
-# META file of package sail:
-description = "Sail is a language for describing the instruction-set architecture (ISA) semantics of processors."
-requires = "linenoise lem linksem omd base64 yojson pprint"
-version = "0.8"
-archive(byte) = "libsail.cma"
-archive(native) = "libsail.cmxa"

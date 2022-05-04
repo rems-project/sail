@@ -59,4 +59,4 @@ build: [
   ["dune" "install" "-p" name "--create-install-files" name]
 ]
 dev-repo: "git+https://github.com/rems-project/sail.git"
-substs: [ "src2/lib/manifest.ml" ]
+substs: [ "src/lib/manifest.ml" ]

@@ -7,7 +7,7 @@ The opam version must be >= 2.0; opam 1 versions are no longer supported. On old
 
 Use `ocaml -version` to check your OCaml version. If you have OCaml 4.08 or newer, that's fine, otherwise use `opam switch` to install 4.08:
 ```
-opam switch create 4.06.1
+opam switch create 4.08.0
 ```
 
 and set up the environment for that OCaml version (note that older versions of opam suggest backticks instead of `$(...)`, but it makes no difference):
@@ -59,3 +59,12 @@ opam pin remove sail
 ```
 
 Alternatively you could follow the instructions to [build Sail manually](BUILDING.md), optionally skipping the steps to install ott, lem and linksem if they were already installed via opam.
+
+### Building from source
+
+Sail is built using dune, so a simple
+```
+dune build --release
+dune install
+```
+Should be sufficient to build and install Sail

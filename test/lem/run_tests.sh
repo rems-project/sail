@@ -20,7 +20,7 @@ for i in `ls $TESTSDIR/ | grep sail`;
 do
     if $SAIL -lem -o out $TESTSDIR/$i &>/dev/null;
     then
-	if lem -lib $DIR/../../src2/lib/lem out_types.lem out.lem &>/dev/null;
+	if lem -lib $DIR/../../src/lib/lem out_types.lem out.lem &>/dev/null;
 	then
 	    green "tested $i expecting pass" "pass"
 	else
