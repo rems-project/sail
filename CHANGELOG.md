@@ -4,15 +4,30 @@ Changelog
 Sail 0.15
 ---------
 
+##### More modular codebase and dune build system
+
+The Sail internals have been refactored into seperate packages for
+each Sail backend (c/lem/coq and so on). The shared parts of Sail are
+now contained in a separate libsail OCaml library. The main Sail
+executable links together all the Sail backends into a single
+executable.
+
+With this architecture new backends can be implemented outside the
+main Sail repository as _plugins_, and loaded via `sail -plugin`.
+
+The Sail build system has been transitioned from the legacy ocamlbuild
+system to dune.
+
+This has been a significant refactoring of the core Sail codebase, and
+while all efforts have been taken to ensure backwards-compatibility
+and minimize any potential breakage, it is possible there exists some.
+
 ##### New pattern completeness checker
 
 Sail now has a new pattern completeness checker that can generate
 counterexamples for incomplete patterns. It is designed to be less
 noisy, as it only issues warnings when it can guarantee that the
 pattern is incomplete.
-
-##### New monad outcome syntax and concurrency interface support
-
 
 ##### Implicit casts now forbidden by default
 
