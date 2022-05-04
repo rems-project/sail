@@ -1642,15 +1642,28 @@ let doc_exp, doc_let =
                let vartuple_pp, body_lambda =
                  make_loop_vars [doc_id loopvar; underscore] vartuple_retyped
                in
-               parens (
-                   (prefix 2 1)
-                     ((separate space) [string combinator;
-                                        from_exp_pp; to_exp_pp; step_exp_pp;
-                                        vartuple_pp])
-                     (parens
-                        (prefix 2 1 (group body_lambda) (top_exp body_ctxt false body))
-                     )
-                 )
+               let wrap =
+                 let typ = expand_range_type (Env.expand_synonyms env (general_typ_of body)) in
+                 match effects, classify_ex_type ctxt env typ with
+                 | false, (ExGeneral, _, _) -> true
+                 | _, _ -> false
+               in
+               (* TODO: this should probably be construct_dep_pairs, but we would need
+                  to change it to use the updated context. *)
+               let body_pp = top_exp body_ctxt false body in
+               let body_pp = if wrap then prefix 2 1 (string "build_ex") (parens body_pp) else body_pp in
+               let loop_pp =
+                 parens (
+                     (prefix 2 1)
+                       ((separate space) [string combinator;
+                                          from_exp_pp; to_exp_pp; step_exp_pp;
+                                          vartuple_pp])
+                       (parens
+                          (prefix 2 1 (group body_lambda) body_pp)
+                       )
+                   )
+               in
+               if wrap then parens (prefix 2 1 (string "projT1") loop_pp) else loop_pp
           | _ -> raise (Reporting.err_unreachable l __POS__
              "Unexpected number of arguments for loop combinator")
           end
@@ -1672,12 +1685,12 @@ let doc_exp, doc_let =
               let a' = mk_tannot (env_of_annot (l,a)) bool_typ in
               E_aux (E_cast (bool_typ, exp), (l,a'))
             in
-            let csuffix, cond, body =
+            let csuffix, cond, body, body_effectful =
               match effectful (effect_of cond), effectful (effect_of body) with
-              | false, false -> "", cond, body
-              | false, true  -> "M", return cond, body
-              | true,  false -> "M", simple_bool cond, return body
-              | true,  true  -> "M", simple_bool cond, body
+              | false, false -> "", cond, body, false
+              | false, true  -> "M", return cond, body, true
+              | true,  false -> "M", simple_bool cond, return body, true
+              | true,  true  -> "M", simple_bool cond, body, true
             in
             (* If rewrite_loops_with_escape_effect added a dummy assertion to
                ensure that the loop can escape when it reaches the limit, omit
@@ -1694,7 +1707,9 @@ let doc_exp, doc_let =
             (* The variable tuple (and the loop body) may have
                overspecific types, so use the loop's type for deciding
                whether a proof is necessary *)
-            let body_pp = construct_dep_pairs (env_of body) false body (general_typ_of full_exp) in
+            let body_pp =
+              if body_effectful then expV false body
+              else construct_dep_pairs (env_of body) false body (general_typ_of full_exp) in
             let varstuple_retyped = check_exp env (strip_exp varstuple) (general_typ_of full_exp) in
             let varstuple_pp, lambda =
               make_loop_vars [] varstuple_retyped

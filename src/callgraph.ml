@@ -81,7 +81,7 @@ type node =
   | FunctionMeasure of id
   | LoopMeasures of id
   | Outcome of id
-                     
+
 let node_id = function
   | Register id -> id
   | Function id -> id

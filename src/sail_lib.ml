@@ -686,6 +686,7 @@ let lteq_real (x, y) = Rational.leq x y
 let gteq_real (x, y) = Rational.geq x y
 let to_real x = Rational.of_int (Big_int.to_int x) (* FIXME *)
 let negate_real x = Rational.neg x
+let neg_real x = Rational.neg x
 
 let string_of_real x =
   if Big_int.equal (Rational.den x) (Big_int.of_int 1) then
@@ -1232,6 +1233,8 @@ let trace_memory_write (_, _, _) = ()
 let trace_memory_read (_, _, _) = ()
 
 let sleep_request () = ()
+let wakeup_request () = ()
+let reset_registers () = ()
 
 let load_raw (paddr, file) =
   let i = ref 0 in
