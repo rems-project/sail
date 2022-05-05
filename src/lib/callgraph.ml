@@ -388,6 +388,8 @@ let id_of_typedef (TD_aux (aux, _)) =
 
 let id_of_reg_dec (DEC_aux (DEC_reg (_, id, _), _)) = id
 
+let id_of_funcl (FCL_aux (FCL_Funcl (id, _), _)) = id
+
 let filter_ast_extra cuts g ast keep_std =
   let rec filter_ast' g =
     let module NS = Set.Make(Node) in
@@ -396,6 +398,10 @@ let filter_ast_extra cuts g ast keep_std =
     | DEF_fundef fdef :: defs when NS.mem (Function (id_of_fundef fdef)) cuts -> filter_ast' g defs
     | DEF_fundef fdef :: defs when NM.mem (Function (id_of_fundef fdef)) g -> DEF_fundef fdef :: filter_ast' g defs
     | DEF_fundef _ :: defs -> filter_ast' g defs
+
+    | DEF_scattered (SD_aux (SD_funcl funcl, _)) :: defs when NS.mem (Function (id_of_funcl funcl)) cuts -> filter_ast' g defs
+    | DEF_scattered (SD_aux (SD_funcl funcl, a)) :: defs when NM.mem (Function (id_of_funcl funcl)) g -> DEF_scattered (SD_aux (SD_funcl funcl, a)) :: filter_ast' g defs
+    | DEF_scattered (SD_aux (SD_funcl _, _)) :: defs -> filter_ast' g defs
 
     | DEF_reg_dec rdec :: defs when NM.mem (Register (id_of_reg_dec rdec)) g -> DEF_reg_dec rdec :: filter_ast' g defs
     | DEF_reg_dec _ :: defs -> filter_ast' g defs
