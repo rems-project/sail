@@ -167,6 +167,9 @@ let rec options = ref ([
   ( "-auto_mono",
     Arg.Set Rewrites.opt_auto_mono,
     " automatically infer how to monomorphise code");
+  ( "-mono_rewrites",
+    Arg.Set Rewrites.opt_mono_rewrites,
+    " turn on rewrites for combining bitvector operations");
   ( "-splice",
     Arg.String (fun s -> opt_splice := s :: !opt_splice),
     "<filename> add functions from file, replacing existing definitions where necessary");
