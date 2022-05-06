@@ -138,8 +138,8 @@ let message_of_type_error =
        Seq [Line ("Could not resolve quantifiers for " ^ string_of_id id);
             Line (bullet ^ " " ^ Util.string_of_list ("\n" ^ bullet ^ " ") string_of_quant_item quants)]
 
-    | Err_lexp_bounds (check, locals, ncs) ->
-       Line ("Bounds check failed for l-expression: " ^ string_of_n_constraint check)
+    | Err_failed_constraint (check, locals, ncs) ->
+       Line ("Failed to prove constraint: " ^ string_of_n_constraint check)
 
     | Err_subtype (typ1, typ2, _, vars) ->
        let vars = KBindings.bindings vars in

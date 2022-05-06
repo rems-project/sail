@@ -119,7 +119,7 @@ type type_error =
   | Err_no_casts of unit exp * typ * typ * type_error * type_error list
   | Err_no_overloading of id * (id * type_error) list
   | Err_unresolved_quants of id * quant_item list * (mut * typ) Bindings.t * n_constraint list
-  | Err_lexp_bounds of n_constraint * (mut * typ) Bindings.t * n_constraint list
+  | Err_failed_constraint of n_constraint * (mut * typ) Bindings.t * n_constraint list
   | Err_subtype of typ * typ * n_constraint list * Ast.l KBindings.t
   | Err_no_num_ident of id
   | Err_other of string
@@ -2341,11 +2341,16 @@ let rec subtyp l env typ1 typ2 =
 
 and subtyp_arg l env (A_aux (aux1, _) as arg1) (A_aux (aux2, _) as arg2) =
   typ_print (lazy (("Subtype arg " |> Util.green |> Util.clear) ^ string_of_typ_arg arg1 ^ " and " ^ string_of_typ_arg arg2));
+  let raise_failed_constraint nc = typ_raise env l (Err_failed_constraint (nc, Env.get_locals env, Env.get_constraints env)) in
   match aux1, aux2 with
-  | A_nexp n1, A_nexp n2 when prove __POS__ env (nc_eq n1 n2) -> ()
+  | A_nexp n1, A_nexp n2 ->
+     let check = nc_eq n1 n2 in
+     if not (prove __POS__ env check) then raise_failed_constraint check
   | A_typ typ1, A_typ typ2 -> subtyp l env typ1 typ2
   | A_order ord1, A_order ord2 when ord_identical ord1 ord2 -> ()
-  | A_bool nc1, A_bool nc2 when prove __POS__ env (nc_and (nc_or (nc_not nc1) nc2) (nc_or (nc_not nc2) nc1)) -> ()
+  | A_bool nc1, A_bool nc2 ->
+     let check = (nc_and (nc_or (nc_not nc1) nc2) (nc_or (nc_not nc2) nc1)) in
+     if not (prove __POS__ env check) then raise_failed_constraint check
   | _, _ -> typ_error env l "Mismatched argument types in sub-typing check"
 
 let typ_equality l env typ1 typ2 =
@@ -3938,7 +3943,7 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
           if !opt_no_lexp_bounds_check || prove __POS__ env check then
             annot_lexp (LEXP_vector_range (inferred_v_lexp, inferred_exp1, inferred_exp2)) (bitvector_typ slice_len ord)
           else
-            typ_raise env l (Err_lexp_bounds (check, Env.get_locals env, Env.get_constraints env))
+            typ_raise env l (Err_failed_constraint (check, Env.get_locals env, Env.get_constraints env))
        | _ -> typ_error env l "Cannot assign slice of non vector type"
      end
   | LEXP_vector (v_lexp, exp) ->
@@ -3954,7 +3959,7 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
           if !opt_no_lexp_bounds_check || prove __POS__ env bounds_check then
             annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) elem_typ
           else
-            typ_raise env l (Err_lexp_bounds (bounds_check, Env.get_locals env, Env.get_constraints env))
+            typ_raise env l (Err_failed_constraint (bounds_check, Env.get_locals env, Env.get_constraints env))
        | Typ_app (id, [A_aux (A_nexp len, _); A_aux (A_order _, _)])
             when Id.compare id (mk_id "bitvector") = 0 ->
           let inferred_exp = infer_exp env exp in
@@ -3963,7 +3968,7 @@ and infer_lexp env (LEXP_aux (lexp_aux, (l, ())) as lexp) =
           if !opt_no_lexp_bounds_check || prove __POS__ env bounds_check then
             annot_lexp (LEXP_vector (inferred_v_lexp, inferred_exp)) bit_typ
           else
-            typ_raise env l (Err_lexp_bounds (bounds_check, Env.get_locals env, Env.get_constraints env))
+            typ_raise env l (Err_failed_constraint (bounds_check, Env.get_locals env, Env.get_constraints env))
        | Typ_id id ->
           begin match exp with
           | E_aux (E_id field, _) ->
