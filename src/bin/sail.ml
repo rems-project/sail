@@ -232,7 +232,7 @@ let run_sail tgt =
   Target.run_pre_parse_hook tgt ();
   let ast, env, effect_info = Frontend.load_files ~target:(Target.name tgt) !options Type_check.initial_env !opt_file_arguments in
   let ast, env = Frontend.descatter effect_info env ast in
-  let _ast, _env =
+  let ast, env =
     List.fold_right (fun file (ast, _) -> Splice.splice ast file)
       (!opt_splice) (ast, env)
   in
