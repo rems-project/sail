@@ -190,7 +190,7 @@ Definition hex_bits_n_matches_prefix sz `{ArithFact (sz >=? 0)} s : option (mwor
   | None => None
   | Some (n, len) =>
     if andb (0 <=? n) (n <? pow 2 sz)
-    then Some (of_int sz n, len)
+    then Some (mword_of_int n, len)
     else None
   end.
 
@@ -268,14 +268,15 @@ match z with
 | Zneg p => String "-" (hex_string_of_N (pos_limit p) (Npos p) "")
 end.
 
-Definition decimal_string_of_bv {a} `{Bitvector a} (bv : a) : string :=
-  match unsigned bv with
-  | None => "?"
-  | Some i => string_of_int i
+Definition decimal_string_of_bits {n} (bv : mword n) : string := string_of_int (int_of_mword false bv).
+
+Fixpoint string_of_word_acc {n} (w : Word.word n) (s : string) :=
+  match w with
+  | Word.WO => s
+  | Word.WS b w' => string_of_word_acc w' (String (if b then "1" else "0")%char s)
   end.
-
-Definition decimal_string_of_bits {n} (bv : mword n) : string := decimal_string_of_bv bv.
-
+Definition string_of_word {n} (bv : Word.word n) := String "0" (String "b" (string_of_word_acc bv "")).
+Definition string_of_bits {n} (w : mword n) : string := string_of_word (get_word w).
 
 (* Some aliases for compatibility. *)
 Definition dec_str := string_of_int.

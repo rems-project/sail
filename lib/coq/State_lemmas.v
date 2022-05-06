@@ -674,7 +674,7 @@ Lemma liftState_read_memt Regs Regval A B E H rk a sz r :
 unfold read_memt, read_memt_bytes, read_memtS, maybe_failS. simpl.
 apply bindS_cong; auto.
 intros [byte bit].
-destruct (option_map _); auto.
+destruct (of_bits _); auto.
 Qed.
 #[export] Hint Rewrite liftState_read_memt : liftState.
 #[export] Hint Resolve liftState_read_memt : liftState.
@@ -689,7 +689,7 @@ intros [ bytes | ]; auto. simpl.
 apply bindS_cong; auto.
 intros [byte bit].
 rewrite bindS_returnS_left. rewrite_liftState.
-destruct (option_map _); auto.
+destruct (of_bits _); auto.
 Qed.
 #[export] Hint Rewrite liftState_read_mem : liftState.
 #[export] Hint Resolve liftState_read_mem : liftState.

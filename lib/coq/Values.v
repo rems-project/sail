@@ -1155,29 +1155,6 @@ Local Close Scope nat.
 
 (*** Bitvectors *)
 
-Class Bitvector (a:Type) : Type := {
-  bits_of : a -> list bitU;
-  of_bits : list bitU -> option a;
-  of_bools : list bool -> a;
-  (* The first parameter specifies the desired length of the bitvector *)
-  of_int : Z -> Z -> a;
-  length : a -> Z;
-  unsigned : a -> option Z;
-  signed : a -> option Z;
-  arith_op_bv : (Z -> Z -> Z) -> bool -> a -> a -> a
-}.
-
-#[export] Instance bitlist_Bitvector {a : Type} `{BitU a} : (Bitvector (list a)) := {
-  bits_of v := List.map to_bitU v;
-  of_bits v := Some (List.map of_bitU v);
-  of_bools v := List.map of_bitU (List.map bitU_of_bool v);
-  of_int len n := List.map of_bitU (bits_of_int len n);
-  length := length_list;
-  unsigned v := unsigned_of_bits (List.map to_bitU v);
-  signed v := signed_of_bits (List.map to_bitU v);
-  arith_op_bv op sign l r := List.map of_bitU (arith_op_bits op sign (List.map to_bitU l) (List.map to_bitU r))
-}.
-
 Class ReasonableSize (a : Z) : Prop := {
   isPositive : a >=? 0 = true
 }.
@@ -2266,49 +2243,11 @@ Qed.
 
 Definition to_range (x : Z) : {y : Z & ArithFact ((x <=? y <=? x))} := build_ex x.
 
-#[export] Instance mword_Bitvector {a : Z} `{ArithFact (a >=? 0)} : (Bitvector (mword a)) := {
-  bits_of v := List.map bitU_of_bool (bitlistFromWord (get_word v));
-  of_bits v := option_map (fun bl => to_word isPositive (fit_bbv_word (wordFromBitlist bl))) (just_list (List.map bool_of_bitU v));
-  of_bools v := to_word isPositive (fit_bbv_word (wordFromBitlist v));
-  of_int len z := mword_of_int z; (* cheat a little *)
-  length v := a;
-  unsigned v := Some (Z.of_N (wordToN (get_word v)));
-  signed v := Some (wordToZ (get_word v));
-  arith_op_bv op sign l r := mword_of_int (op (int_of_mword sign l) (int_of_mword sign r))
-}.
-
-Section Bitvector_defs.
-Context {a b} `{Bitvector a} `{Bitvector b}.
-
 Definition opt_def {a} (def:a) (v:option a) :=
 match v with
 | Some x => x
 | None => def
 end.
-
-(* The Lem version is partial, but lets go with BU here to avoid constraints for now *)
-Definition access_bv_inc (v : a) n := opt_def BU (access_list_opt_inc (bits_of v) n).
-Definition access_bv_dec (v : a) n := opt_def BU (access_list_opt_dec (bits_of v) n).
-
-Definition update_bv_inc (v : a) n b := update_list true  (bits_of v) n b.
-Definition update_bv_dec (v : a) n b := update_list false (bits_of v) n b.
-
-Definition subrange_bv_inc (v : a) i j := subrange_list true  (bits_of v) i j.
-Definition subrange_bv_dec (v : a) i j := subrange_list true  (bits_of v) i j.
-
-Definition update_subrange_bv_inc (v : a) i j (v' : b) := update_subrange_list true  (bits_of v) i j (bits_of v').
-Definition update_subrange_bv_dec (v : a) i j (v' : b) := update_subrange_list false (bits_of v) i j (bits_of v').
-
-(*val extz_bv : forall a b. Bitvector a, Bitvector b => Z -> a -> b*)
-Definition extz_bv n (v : a) : option b := of_bits (extz_bits n (bits_of v)).
-
-(*val exts_bv : forall a b. Bitvector a, Bitvector b => Z -> a -> b*)
-Definition exts_bv n (v : a) : option b := of_bits (exts_bits n (bits_of v)).
-
-(*val string_of_bv : forall a. Bitvector a => a -> string *)
-Definition string_of_bv v := show_bitlist (bits_of v).
-
-End Bitvector_defs.
 
 (*** Bytes and addresses *)
 
@@ -2326,19 +2265,19 @@ Fixpoint byte_chunks {a} (bs : list a) := match bs with
 end.
 (*declare {isabelle} termination_argument byte_chunks = automatic*)
 
-Section BytesBits.
-Context {a} `{Bitvector a}.
+Definition bits_of {n} (v : mword n) := List.map bitU_of_bool (bitlistFromWord (get_word v)).
+Definition of_bits {n} v `{ArithFact (n >=? 0)} : option (mword n) := option_map (fun bl => to_word isPositive (fit_bbv_word (wordFromBitlist bl))) (just_list (List.map bool_of_bitU v)).
+Definition of_bools {n} v `{ArithFact (n >=? 0)} : mword n := to_word isPositive (fit_bbv_word (wordFromBitlist v)).
+
 
 (*val bytes_of_bits : forall a. Bitvector a => a -> option (list memory_byte)*)
-Definition bytes_of_bits (bs : a) := byte_chunks (bits_of bs).
+Definition bytes_of_bits {n} (bs : mword n) := byte_chunks (bits_of bs).
 
 (*val bits_of_bytes : forall a. Bitvector a => list memory_byte -> a*)
-Definition bits_of_bytes (bs : list memory_byte) : list bitU := List.concat (List.map bits_of bs).
+Definition bits_of_bytes (bs : list memory_byte) : list bitU := List.concat (List.map (List.map to_bitU) bs).
 
-Definition mem_bytes_of_bits (bs : a) := option_map (@rev (list bitU)) (bytes_of_bits bs).
+Definition mem_bytes_of_bits {n} (bs : mword n) := option_map (@rev (list bitU)) (bytes_of_bits bs).
 Definition bits_of_mem_bytes (bs : list memory_byte) := bits_of_bytes (List.rev bs).
-
-End BytesBits.
 
 (*val bitv_of_byte_lifteds : list Sail_impl_base.byte_lifted -> list bitU
 Definition bitv_of_byte_lifteds v :=
@@ -2953,8 +2892,8 @@ apply Z.le_ge.
 apply <- Z.shiftl_nonneg.
 lia.
 Qed.
-#[export] Hint Resolve shl_8_ge_0 : sail.
-
+(* #[export] Hint Resolve shl_8_ge_0 : sail.
+ *)
 (* Limits for remainders *)
 
 Require Zquot.

@@ -66,7 +66,6 @@
 (*==========================================================================*)
 
 Require Import Sail.Values.
-Require Import Sail.Operators.
 Require Import Sail.Prompt_monad.
 Require Import Sail.Prompt.
 Require Import bbv.Word.
@@ -205,17 +204,6 @@ Definition subrange_vec_dec {n} (v : mword n) m o `{ArithFact (0 <=? o)} `{Arith
 
 Definition subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <=? m)} `{ArithFact (m <=? o <? n)} : mword (o - m + 1) := autocast (subrange_vec_dec v (n-1-m) (n-1-o)).
 
-(* TODO: get rid of bogus default *)
-Parameter dummy_vector : forall {n} `{ArithFact (n >=? 0)}, mword n.
-
-(*val update_subrange_vec_inc : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a*)
-Definition update_subrange_vec_inc_unchecked {a b} (v : mword a) i j (w : mword b) : mword a :=
-  opt_def dummy_vector (of_bits (update_subrange_bv_inc v i j w)).
-
-(*val update_subrange_vec_dec : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> integer -> mword 'b -> mword 'a*)
-Definition update_subrange_vec_dec_unchecked {a b} (v : mword a) i j (w : mword b) : mword a :=
-  opt_def dummy_vector (of_bits (update_subrange_bv_dec v i j w)).
-
 Lemma update_subrange_vec_dec_pf {o m n} :
 ArithFact (0 <=? o) ->
 ArithFact (o <=? m <? n) ->
@@ -250,6 +238,14 @@ refine (
   let z := combine x (combine w' y) in
   cast_to_mword z (update_subrange_vec_dec_pf _ _)).
 Defined.
+
+(* Opaque identity for bad unchecked operations. *)
+Definition dummy {T:Type} (t:T) : T.
+exact t.
+Qed.
+
+Definition update_subrange_vec_dec_unchecked {a b} (v : mword a) i j (w : mword b) : mword a :=
+  if sumbool_of_bool ((0 <=? j) && (j <=? i) && (i <? a) && (b =? i - j + 1))%bool then update_subrange_vec_dec v i j (autocast w) else dummy v.
 
 Definition update_subrange_vec_inc {n} (v : mword n) m o `{ArithFact (0 <=? m)} `{ArithFact (m <=? o <? n)} (w : mword (o - (m - 1))) : mword n := update_subrange_vec_dec v (n-1-m) (n-1-o) (autocast w).
 
@@ -433,7 +429,9 @@ auto with zarith.
 Qed.
 #[export] Hint Resolve length_list_pos : sail.
 
-Definition vec_of_bits (l:list bitU) : mword (length_list l) := opt_def dummy_vector (of_bits l).
+Definition bool_of_bit b := match b with B0 => false | B1 => true | BU => dummy false end.
+
+Definition vec_of_bits (l:list bitU) : mword (length_list l) := of_bools (List.map bool_of_bit l).
 (*
 
 val msb : forall 'a. Size 'a => mword 'a -> bitU
@@ -442,8 +440,8 @@ Definition msb := most_significant
 val int_of_vec : forall 'a. Size 'a => bool -> mword 'a -> integer
 Definition int_of_vec := int_of_bv
 
-val string_of_vec : forall 'a. Size 'a => mword 'a -> string*)
-Definition string_of_bits {n} (w : mword n) : string := string_of_bv w.
+*)
+
 Definition with_word' {n} (P : Type -> Type) : (forall n, Word.word n -> P (Word.word n)) -> mword n -> P (mword n) := fun f w => @with_word n _ (f (Z.to_nat n)) w.
 Definition word_binop {n} (f : forall n, Word.word n -> Word.word n -> Word.word n) : mword n -> mword n -> mword n := with_word' (fun x => x -> x) f.
 Definition word_unop {n} (f : forall n, Word.word n -> Word.word n) : mword n -> mword n := with_word' (fun x => x) f.
@@ -477,9 +475,8 @@ val sadd_vec_int  : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val sub_vec_int   : forall 'a. Size 'a => mword 'a -> integer -> mword 'a
 val mult_vec_int  : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b
 val smult_vec_int : forall 'a 'b. Size 'a, Size 'b => mword 'a -> integer -> mword 'b*)
-Definition add_vec_int   {a} (l : mword a) (r : Z) : mword a := arith_op_bv_int Z.add   false l r.
-Definition sadd_vec_int  {a} (l : mword a) (r : Z) : mword a := arith_op_bv_int Z.add   true  l r.
-Definition sub_vec_int   {a} (l : mword a) (r : Z) : mword a := arith_op_bv_int Z.sub   false l r.
+Definition add_vec_int   {a} (l : mword a) (r : Z) : mword a := add_vec l (mword_of_int r).
+Definition sub_vec_int   {a} (l : mword a) (r : Z) : mword a := sub_vec l (mword_of_int r).
 (*Definition mult_vec_int  {a b} : mword a -> Z -> mword b := mult_bv_int.
 Definition smult_vec_int {a b} : mword a -> Z -> mword b := smult_bv_int.*)
 
@@ -640,7 +637,10 @@ Qed.
 
 Definition reverse_endianness {n} (bits : mword n) := with_word (P := id) reverse_endianness_word bits.
 
-Definition get_slice_int {a} `{ArithFact (a >=? 0)} : Z -> Z -> Z -> mword a := get_slice_int_bv.
+Definition get_slice_int {a} `{ArithFact (a >=? 0)} (len : Z) (n : Z) (lo : Z) : mword a :=
+  let hi := lo + len - 1 in
+  let bs := bools_of_int (hi + 1) n in
+  of_bools (subrange_list false bs hi lo).
 
 Definition set_slice n m (v : mword n) x (w : mword m) : mword n :=
   update_subrange_vec_dec_unchecked v (x + m - 1) x w.

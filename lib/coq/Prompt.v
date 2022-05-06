@@ -256,11 +256,11 @@ Definition bools_of_bits_nondet {rv E} (bits : list bitU) : monad rv (list bool)
       bool_of_bitU_nondet b >>= fun b => 
       returnm (bools ++ [b])).
 
-Definition of_bits_nondet {rv A E} `{Bitvector A} (bits : list bitU) : monad rv A E :=
+Definition of_bits_nondet {rv n E} (bits : list bitU) `{ArithFact (n >=? 0)} : monad rv (mword n) E :=
   bools_of_bits_nondet bits >>= fun bs =>
   returnm (of_bools bs).
 
-Definition of_bits_fail {rv A E} `{Bitvector A} (bits : list bitU) : monad rv A E :=
+Definition of_bits_fail {rv n E} (bits : list bitU) `{ArithFact (n >=? 0)} : monad rv (mword n) E :=
   maybe_fail "of_bits" (of_bits bits).
 
 (* For termination of recursive functions.  We don't name assertions, so use

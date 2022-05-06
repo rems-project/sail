@@ -24,8 +24,6 @@
     (%{workspace_root}/lib/coq/Impl_base.v as lib/coq/Impl_base.v)
     (%{workspace_root}/lib/coq/Instr_kinds.v as lib/coq/Instr_kinds.v)
     (%{workspace_root}/lib/coq/Makefile as lib/coq/Makefile)
-    (%{workspace_root}/lib/coq/Operators.v as lib/coq/Operators.v)
-    (%{workspace_root}/lib/coq/Operators_bitlists.v as lib/coq/Operators_bitlists.v)
     (%{workspace_root}/lib/coq/Operators_mwords.v as lib/coq/Operators_mwords.v)
     (%{workspace_root}/lib/coq/Prompt.v as lib/coq/Prompt.v)
     (%{workspace_root}/lib/coq/Prompt_monad.v as lib/coq/Prompt_monad.v)
