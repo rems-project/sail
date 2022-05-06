@@ -117,7 +117,7 @@ let doc_nexp nexp =
     | Nexp_constant c -> string (Big_int.to_string c)
     | Nexp_app (Id_aux (Operator op, _), [n1; n2]) ->
        separate space [atomic_nexp n1; string op; atomic_nexp n2]
-    | Nexp_app (id, nexps) -> string (string_of_nexp nexp)
+    | Nexp_app (_id, _nexps) -> string (string_of_nexp nexp)
     (* This segfaults??!!!!
        doc_id id ^^ (parens (separate_map (comma ^^ space) doc_nexp nexps))
      *)
@@ -162,7 +162,7 @@ let rec doc_nc nc =
        doc_id id ^^ parens (separate_map (comma ^^ space) doc_typ_arg args)
     | NC_var kid -> doc_kid kid
     | NC_or _ | NC_and _ -> nc0 ~parenthesize:true nc
-  and nc0 ?parenthesize:(parenthesize=false) (NC_aux (nc_aux, _) as nc) =
+  and nc0 ?parenthesize:(parenthesize=false) nc =
     (* Rather than parens (nc0 x) we use nc0 ~parenthesize:true x, because if
        we rewrite a disjunction as a set constraint, then we can
        always omit the parens. *)
@@ -180,7 +180,7 @@ let rec doc_nc nc =
           separate space [doc_kid kid; string "in"; braces (separate_map (comma ^^ space) doc_int (c :: cs))]
        end
     | _ -> parens' (separate_map (space ^^ bar ^^ space) nc1 disjs)
-  and nc1 (NC_aux (nc_aux, _) as nc) =
+  and nc1 nc =
     let conjs = constraint_conj nc in
     separate_map (space ^^ string "&" ^^ space) atomic_nc conjs
   in
@@ -191,7 +191,7 @@ and doc_typ ?(simple=false) (Typ_aux (typ_aux, l)) =
   | Typ_id id -> doc_id id
   | Typ_app (id, []) -> doc_id id
   | Typ_app (Id_aux (Operator str, _), [x; y]) ->
-     separate space [doc_typ_arg x; doc_typ_arg y]
+     separate space [doc_typ_arg x; string str; doc_typ_arg y]
   | Typ_app (id, typs) when Id.compare id (mk_id "atom") = 0 ->
      string "int" ^^ parens (separate_map (string ", ") doc_typ_arg typs)
   | Typ_app (id, typs) when Id.compare id (mk_id "atom_bool") = 0 ->
@@ -294,7 +294,7 @@ let doc_binding ?(simple=false) ((TypQ_aux (tq_aux, _) as typq), typ) =
 
 let doc_typschm ?(simple=false) (TypSchm_aux (TypSchm_ts (typq, typ), _)) = doc_binding ~simple:simple (typq, typ)
 
-let doc_typschm_typ (TypSchm_aux (TypSchm_ts (TypQ_aux (tq_aux, _), typ), _)) = doc_typ typ
+let doc_typschm_typ (TypSchm_aux (TypSchm_ts (_, typ), _)) = doc_typ typ
 
 let doc_typquant (TypQ_aux (tq_aux, _)) =
   match tq_aux with
@@ -316,7 +316,7 @@ let doc_lit (L_aux(l,_)) =
   | L_undef -> "undefined"
   | L_string s -> "\"" ^ String.escaped s ^ "\"")
 
-let rec doc_pat (P_aux (p_aux, (l, _))) =
+let rec doc_pat (P_aux (p_aux, _)) =
   match p_aux with
   | P_id id -> doc_id id
   | P_or (pat1, pat2) -> parens (doc_pat pat1 ^^ string " | " ^^ doc_pat pat2)
@@ -576,7 +576,7 @@ let doc_rec (Rec_aux (r,_)) =
   | Rec_rec -> empty
   | Rec_measure (pat,exp) -> braces (doc_pat pat ^^ string " => " ^^ doc_exp exp) ^^ space
 
-let doc_fundef (FD_aux (FD_function (r, typa, funcls), annot)) =
+let doc_fundef (FD_aux (FD_function (r, _, funcls), annot)) =
   docstring annot
   ^^ match funcls with
      | [] -> failwith "Empty function list"
@@ -619,7 +619,7 @@ let doc_mapcl (MCL_aux (cl, _)) =
      separate space [left; string "<-"; right]
 
 
-let doc_mapdef (MD_aux (MD_mapping (id, typa, mapcls), _)) =
+let doc_mapdef (MD_aux (MD_mapping (id, _, mapcls), _)) =
   match mapcls with
   | [] -> failwith "Empty mapping"
   | _ ->
@@ -639,7 +639,7 @@ let doc_dec (DEC_aux (reg,_)) =
 let doc_field (typ, id) =
   separate space [doc_id id; colon; doc_typ typ]
 
-let doc_union (Tu_aux (Tu_ty_id (typ, id), l)) = separate space [doc_id id; colon; doc_typ typ]
+let doc_union (Tu_aux (Tu_ty_id (typ, id), _)) = separate space [doc_id id; colon; doc_typ typ]
 
 let rec doc_index_range (BF_aux (ir, _)) =
   match ir with
@@ -767,7 +767,7 @@ let rec doc_def_no_hardline = function
        space ^^ equals ^/^ doc_exp exp
   | DEF_loop_measures (id,measures) ->
      string "termination_measure" ^^ space ^^ doc_id id ^/^ doc_loop_measures measures
-  | DEF_pragma (pragma, arg, l) ->
+  | DEF_pragma (pragma, arg, _) ->
      string ("$" ^ pragma ^ " " ^ arg)
   | DEF_fixity (prec, n, id) ->
      fixities := Bindings.add id (prec, Big_int.to_int n) !fixities;
@@ -823,7 +823,7 @@ let reformat dir { defs; _ } =
     | DEF_pragma ("include_start", path, _) ->
        output_include path;
        if Filename.is_relative path then push (Some (adjust_path path)) else push None
-    | DEF_pragma ("include_end", path, _) -> pop ()
+    | DEF_pragma ("include_end", _, _) -> pop ()
     | def -> output_def def
   in
 

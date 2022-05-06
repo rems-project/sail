@@ -338,7 +338,7 @@ and typ_arg_int_frees ?exs:(exs=KidSet.empty) (A_aux (typ_arg_aux, l)) =
 (* Implicit arguments have restrictions that won't hold
    post-specialisation, but we can just remove them and turn them into
    regular arguments. *)
-let rec remove_implicit (Typ_aux (aux, l) as t) =
+let rec remove_implicit (Typ_aux (aux, l)) =
   match aux with
   | Typ_internal_unknown -> Typ_aux (Typ_internal_unknown, l)
   | Typ_tup typs -> Typ_aux (Typ_tup (List.map remove_implicit typs), l)

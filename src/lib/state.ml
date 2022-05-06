@@ -145,7 +145,7 @@ let generate_initial_regstate defs =
   try
     (* Recursively choose a default value for every type in the spec.
        vals, constructed below, maps user-defined types to default values. *)
-    let rec lookup_init_val vals (Typ_aux (typ_aux, _) as typ) =
+    let rec lookup_init_val vals (Typ_aux (typ_aux, _)) =
       match typ_aux with
       | Typ_id id ->
          if string_of_id id = "bool" then "false" else
@@ -590,7 +590,6 @@ let rec regval_convs_coq (Typ_aux (t, _) as typ) = match t with
   | Typ_app _ when is_vector_typ typ && not (is_bitvector_typ typ) ->
      let size, ord, etyp = vector_typ_args_of typ in
      let size = string_of_nexp (nexp_simp size) in
-     let is_inc = if is_order_inc ord then "true" else "false" in
      let etyp_of, of_etyp = regval_convs_coq etyp in
      "(fun v => vector_of_regval " ^ size ^ " " ^ etyp_of ^ " v)",
      "(fun v => regval_of_vector " ^ of_etyp ^ " v)"

@@ -353,7 +353,7 @@ let rec string_of_ctyp = function
   | CT_real -> "%real"
   | CT_string -> "%string"
   | CT_tup ctyps -> "(" ^ Util.string_of_list ", " string_of_ctyp ctyps ^ ")"
-  | CT_struct (id, fields) ->
+  | CT_struct (id, _fields) ->
      "%struct " ^ Util.zencode_string (string_of_id id)
     (*
      ^ "{"
@@ -361,7 +361,7 @@ let rec string_of_ctyp = function
      ^ "}"
      *)
   | CT_enum (id, _) -> "%enum " ^ Util.zencode_string (string_of_id id)
-  | CT_variant (id, ctors) ->
+  | CT_variant (id, _ctors) ->
      "%union " ^ Util.zencode_string (string_of_id id)
     (*
      ^ "{"
@@ -418,7 +418,7 @@ let string_of_value = function
   | VL_undefined -> "undefined"
 
 let rec string_of_cval = function
-  | V_id (id, ctyp) -> string_of_name id
+  | V_id (id, _) -> string_of_name id
   | V_lit (VL_undefined, ctyp) -> string_of_value VL_undefined ^ " : " ^ string_of_ctyp ctyp
   | V_lit (vl, ctyp) -> string_of_value vl
   | V_call (op, cvals) ->
@@ -626,10 +626,10 @@ let rec ctyp_unify l ctyp1 ctyp2 =
   | CT_vector (b1, ctyp1), CT_vector (b2, ctyp2) when b1 = b2 ->
      ctyp_unify l ctyp1 ctyp2
 
-  | CT_vector (b1, ctyp1), CT_fvector (n, b2, ctyp2) when b1 = b2 ->
+  | CT_vector (b1, ctyp1), CT_fvector (_, b2, ctyp2) when b1 = b2 ->
      ctyp_unify l ctyp1 ctyp2
 
-  | CT_fvector (n, b1, ctyp1), CT_vector (b2, ctyp2) when b1 = b2 ->
+  | CT_fvector (_, b1, ctyp1), CT_vector (b2, ctyp2) when b1 = b2 ->
      ctyp_unify l ctyp1 ctyp2
 
   | CT_fvector (n1, b1, ctyp1), CT_fvector (n2, b2, ctyp2) when b1 = b2 ->
@@ -721,7 +721,7 @@ let rec cval_deps = function
   | V_call (_, cvals) -> List.fold_left NameSet.union NameSet.empty (List.map cval_deps cvals)
   | V_ctor_kind (cval, _, _, _) -> cval_deps cval
   | V_ctor_unwrap (cval, _, _) -> cval_deps cval
-  | V_struct (fields, ctyp) -> List.fold_left (fun ns (_, cval) -> NameSet.union ns (cval_deps cval)) NameSet.empty fields
+  | V_struct (fields, _) -> List.fold_left (fun ns (_, cval) -> NameSet.union ns (cval_deps cval)) NameSet.empty fields
 
 let rec clexp_deps = function
   | CL_id (id, _) -> NameSet.empty, NameSet.singleton id
@@ -733,11 +733,11 @@ let rec clexp_deps = function
 
 (* Return the direct, read/write dependencies of a single instruction *)
 let instr_deps = function
-  | I_decl (ctyp, id) -> NameSet.empty, NameSet.singleton id
-  | I_reset (ctyp, id) -> NameSet.empty, NameSet.singleton id
-  | I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval) -> cval_deps cval, NameSet.singleton id
+  | I_decl (_, id) -> NameSet.empty, NameSet.singleton id
+  | I_reset (_, id) -> NameSet.empty, NameSet.singleton id
+  | I_init (_, id, cval) | I_reinit (_, id, cval) -> cval_deps cval, NameSet.singleton id
   | I_if (cval, _, _, _) -> cval_deps cval, NameSet.empty
-  | I_jump (cval, label) -> cval_deps cval, NameSet.empty
+  | I_jump (cval, _) -> cval_deps cval, NameSet.empty
   | I_funcall (clexp, _, _, cvals) ->
      let reads, writes = clexp_deps clexp in
      List.fold_left NameSet.union reads (List.map cval_deps cvals), writes
@@ -882,7 +882,7 @@ let rec iter_instr f (I_aux (instr, aux)) =
   | I_decl _ | I_init _ | I_reset _ | I_reinit _
     | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _
     | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ | I_end _ -> f (I_aux (instr, aux))
-  | I_if (cval, instrs1, instrs2, ctyp) ->
+  | I_if (_, instrs1, instrs2, _) ->
      List.iter (iter_instr f) instrs1;
      List.iter (iter_instr f) instrs2
   | I_block instrs | I_try_block instrs ->
@@ -1007,13 +1007,13 @@ let rec infer_call op vs =
         CT_fbits (n, ord)
      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for zero/sign_extend argument"
      end
-  | Slice n, [vec; start] ->
+  | Slice n, [vec; _] ->
      begin match cval_ctyp vec with
      | CT_fbits (_, ord) | CT_sbits (_, ord) ->
         CT_fbits (n, ord)
      | _ -> Reporting.unreachable Parse_ast.Unknown __POS__ "Invalid type for extract argument"
      end
-  | Sslice n, [vec; start; len] ->
+  | Sslice n, [vec; _; _] ->
      begin match cval_ctyp vec with
      | CT_fbits (_, ord) | CT_sbits (_, ord) ->
         CT_sbits (n, ord)
@@ -1042,7 +1042,7 @@ let rec infer_call op vs =
 
 and cval_ctyp = function
   | V_id (_, ctyp) -> ctyp
-  | V_lit (vl, ctyp) -> ctyp
+  | V_lit (_, ctyp) -> ctyp
   | V_ctor_kind _ -> CT_bool
   | V_ctor_unwrap (_, _, ctyp) -> ctyp
   | V_tuple_member (cval, _, n) ->
@@ -1118,8 +1118,8 @@ and instrs_ctyps instrs = List.fold_left CTSet.union CTSet.empty (List.map instr
 
 let ctype_def_ctyps = function
   | CTD_enum _ -> []
-  | CTD_struct (id, fields) -> List.map snd fields
-  | CTD_variant (id, ctors) -> List.map snd ctors
+  | CTD_struct (_, fields) -> List.map snd fields
+  | CTD_variant (_, ctors) -> List.map snd ctors
 
 let cdef_ctyps = function
   | CDEF_reg_dec (_, ctyp, instrs) ->

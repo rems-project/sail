@@ -347,8 +347,8 @@ let rec constraint_simp (NC_aux (nc_aux, l)) =
        begin match nc1, nc2 with
        | NC_aux (NC_false, _), NC_aux (nc, _) -> nc
        | NC_aux (nc, _), NC_aux (NC_false, _) -> nc
-       | NC_aux (NC_true, _), NC_aux (nc, _) -> NC_true
-       | NC_aux (nc, _), NC_aux (NC_true, _) -> NC_true
+       | NC_aux (NC_true, _), NC_aux (_, _) -> NC_true
+       | NC_aux (_, _), NC_aux (NC_true, _) -> NC_true
        | _, _ -> NC_or (nc1, nc2)
        end
 
@@ -388,12 +388,12 @@ let rec constraint_simp (NC_aux (nc_aux, l)) =
   in
   NC_aux (nc_aux, l)
 
-let rec constraint_conj (NC_aux (nc_aux, l) as nc) =
+let rec constraint_conj (NC_aux (nc_aux, _) as nc) =
   match nc_aux with
   | NC_and (nc1, nc2) -> constraint_conj nc1 @ constraint_conj nc2
   | _ -> [nc]
 
-let rec constraint_disj (NC_aux (nc_aux, l) as nc) =
+let rec constraint_disj (NC_aux (nc_aux, _) as nc) =
   match nc_aux with
   | NC_or (nc1, nc2) -> constraint_disj nc1 @ constraint_disj nc2
   | _ -> [nc]
@@ -507,7 +507,7 @@ let quant_add qi typq =
   match qi, typq with
   | QI_aux (QI_constraint (NC_aux (NC_true, _)), _), _ -> typq
   | QI_aux (QI_id _, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qi :: qis), l)
-  | QI_aux (QI_constraint nc, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qis @ [qi]), l)
+  | QI_aux (QI_constraint _, _), TypQ_aux (TypQ_tq qis, l) -> TypQ_aux (TypQ_tq (qis @ [qi]), l)
   | _, TypQ_aux (TypQ_no_forall, l) -> TypQ_aux (TypQ_tq [qi], l)
 
 let quant_items : typquant -> quant_item list = function
@@ -765,7 +765,7 @@ let id_of_kid = function
 
 let kid_of_id = function
   | Id_aux (Id v, l) -> Kid_aux (Var ("'" ^ v), l)
-  | Id_aux (Operator v, _) -> assert false
+  | Id_aux (Operator _, _) -> assert false
 
 let prepend_id str = function
   | Id_aux (Id v, l) -> Id_aux (Id (str ^ v), l)
@@ -809,7 +809,7 @@ and string_of_nexp_aux = function
   | Nexp_neg n -> "- " ^ string_of_nexp n
 
 let rec string_of_typ = function
-  | Typ_aux (typ, l) -> string_of_typ_aux typ
+  | Typ_aux (typ, _) -> string_of_typ_aux typ
 and string_of_typ_aux = function
   | Typ_internal_unknown -> "<UNKNOWN TYPE>"
   | Typ_id id -> string_of_id id
@@ -827,7 +827,7 @@ and string_of_typ_aux = function
   | Typ_exist (kids, nc, typ) ->
      "{" ^ string_of_list " " string_of_kinded_id kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"
 and string_of_typ_arg = function
-  | A_aux (typ_arg, l) -> string_of_typ_arg_aux typ_arg
+  | A_aux (typ_arg, _) -> string_of_typ_arg_aux typ_arg
 and string_of_typ_arg_aux = function
   | A_nexp n -> string_of_nexp n
   | A_typ typ -> string_of_typ typ
@@ -952,7 +952,7 @@ and string_of_typ_pat (TP_aux (tpat_aux, _)) =
   | TP_wild -> "_"
   | TP_var kid -> string_of_kid kid
   | TP_app (f, tpats) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_typ_pat tpats ^ ")"
-and string_of_pat (P_aux (pat, l)) =
+and string_of_pat (P_aux (pat, _)) =
   match pat with
   | P_lit lit -> string_of_lit lit
   | P_wild -> "_"
@@ -972,7 +972,7 @@ and string_of_pat (P_aux (pat, l)) =
   | P_string_append [] -> "\"\""
   | P_string_append pats -> string_of_list " ^ " string_of_pat pats
 
-and string_of_mpat (MP_aux (pat, l)) =
+and string_of_mpat (MP_aux (pat, _)) =
   match pat with
   | MP_lit lit -> string_of_lit lit
   | MP_id v -> string_of_id v
@@ -999,7 +999,7 @@ and string_of_lexp (LEXP_aux (lexp, _)) =
      string_of_list " @ " string_of_lexp lexps
   | LEXP_field (lexp, id) -> string_of_lexp lexp ^ "." ^ string_of_id id
   | LEXP_memory (f, xs) -> string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")"
-and string_of_letbind (LB_aux (lb, l)) =
+and string_of_letbind (LB_aux (lb, _)) =
   match lb with
   | LB_val (pat, exp) -> string_of_pat pat ^ " = " ^ string_of_exp exp
 
@@ -1079,7 +1079,7 @@ let val_spec_ids defs =
   in
   let rec vs_ids = function
     | DEF_spec vs :: defs -> val_spec_id vs :: vs_ids defs
-    | def :: defs -> vs_ids defs
+    | _ :: defs -> vs_ids defs
     | [] -> []
   in
   IdSet.of_list (vs_ids defs)
@@ -1087,7 +1087,7 @@ let val_spec_ids defs =
 let record_ids defs =
   let rec rec_ids = function
     | DEF_type (TD_aux (TD_record (id, _, _, _), _)) :: defs -> id :: rec_ids defs
-    | def :: defs -> rec_ids defs
+    | _ :: defs -> rec_ids defs
     | [] -> []
   in
   IdSet.of_list (rec_ids defs)
@@ -1274,9 +1274,9 @@ let typ_app_args_of = function
        ("typ_app_args_of called on non-app type " ^ string_of_typ typ))
 
 let rec vector_typ_args_of typ = match typ_app_args_of typ with
-  | ("vector", [A_nexp len; A_order ord; A_typ etyp], l) ->
+  | ("vector", [A_nexp len; A_order ord; A_typ etyp], _) ->
      (nexp_simp len, ord, etyp)
-  | ("bitvector", [A_nexp len; A_order ord], l) ->
+  | ("bitvector", [A_nexp len; A_order ord], _) ->
      (nexp_simp len, ord, bit_typ)
   | ("register", [A_typ rtyp], _) -> vector_typ_args_of rtyp
   | (_, _, l) ->
@@ -1284,7 +1284,7 @@ let rec vector_typ_args_of typ = match typ_app_args_of typ with
        ("vector_typ_args_of called on non-vector type " ^ string_of_typ typ))
 
 let vector_start_index typ =
-  let (len, ord, etyp) = vector_typ_args_of typ in
+  let (len, ord, _) = vector_typ_args_of typ in
   match ord with
   | Ord_aux (Ord_inc, _) -> nint 0
   | Ord_aux (Ord_dec, _) -> nexp_simp (nminus len (nint 1))
@@ -1350,7 +1350,7 @@ let rec kopts_of_constraint (NC_aux (nc, _)) =
   | NC_or (nc1, nc2)
   | NC_and (nc1, nc2) ->
      KOptSet.union (kopts_of_constraint nc1) (kopts_of_constraint nc2)
-  | NC_app (id, args) ->
+  | NC_app (_, args) ->
      List.fold_left (fun s t -> KOptSet.union s (kopts_of_typ_arg t)) KOptSet.empty args
   | NC_var kid -> KOptSet.singleton (mk_kopt K_bool kid)
   | NC_true | NC_false -> KOptSet.empty
@@ -1408,7 +1408,7 @@ let rec tyvars_of_constraint (NC_aux (nc, _)) =
   | NC_or (nc1, nc2)
   | NC_and (nc1, nc2) ->
      KidSet.union (tyvars_of_constraint nc1) (tyvars_of_constraint nc2)
-  | NC_app (id, args) ->
+  | NC_app (_, args) ->
      List.fold_left (fun s t -> KidSet.union s (tyvars_of_typ_arg t)) KidSet.empty args
   | NC_var kid -> KidSet.singleton kid
   | NC_true
@@ -1891,7 +1891,7 @@ let order_subst_aux sv subst = function
 let order_subst sv subst (Ord_aux (ord, l)) = Ord_aux (order_subst_aux sv subst ord, l)
 
 let rec nexp_subst sv subst = function
-  | (Nexp_aux (Nexp_var kid, l)) as nexp ->
+  | (Nexp_aux (Nexp_var kid, _)) as nexp ->
      begin match subst with
      | A_aux (A_nexp n, _) when Kid.compare kid sv = 0 -> n
      | _ -> nexp
@@ -1995,20 +1995,19 @@ let typquant_subst_kid_aux sv subst = function
 
 let typquant_subst_kid sv subst (TypQ_aux (typq, l)) = TypQ_aux (typquant_subst_kid_aux sv subst typq, l)
 
-
 let subst_kids_nexp substs nexp =
   let rec s_snexp substs (Nexp_aux (ne,l) as nexp) =
     let re ne = Nexp_aux (ne,l) in
     let s_snexp = s_snexp substs in
     match ne with
-    | Nexp_var (Kid_aux (_,l) as kid) ->
-       (try KBindings.find kid substs
+    | Nexp_var v ->
+       (try KBindings.find v substs
        with Not_found -> nexp)
     | Nexp_id _
     | Nexp_constant _ -> nexp
-    | Nexp_times (n1,n2) -> re (Nexp_times (s_snexp n1, s_snexp n2))
-    | Nexp_sum (n1,n2)   -> re (Nexp_sum   (s_snexp n1, s_snexp n2))
-    | Nexp_minus (n1,n2) -> re (Nexp_minus (s_snexp n1, s_snexp n2))
+    | Nexp_times (n1, n2) -> re (Nexp_times (s_snexp n1, s_snexp n2))
+    | Nexp_sum (n1, n2)   -> re (Nexp_sum   (s_snexp n1, s_snexp n2))
+    | Nexp_minus (n1, n2) -> re (Nexp_minus (s_snexp n1, s_snexp n2))
     | Nexp_exp ne -> re (Nexp_exp (s_snexp ne))
     | Nexp_neg ne -> re (Nexp_neg (s_snexp ne))
     | Nexp_app (id,args) -> re (Nexp_app (id,List.map s_snexp args))
@@ -2097,7 +2096,7 @@ let rec find_annot_exp sl (E_aux (aux, (l, annot))) =
     let result = match aux with
       | E_block exps | E_tuple exps ->
          option_mapm (find_annot_exp sl) exps
-      | E_app (id, exps) ->
+      | E_app (_, exps) ->
          option_mapm (find_annot_exp sl) exps
       | E_let (LB_aux (LB_val (pat, exp), _), body) ->
          option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [exp; body])
@@ -2126,7 +2125,7 @@ and find_annot_lexp sl (LEXP_aux (aux, (l, annot))) =
          find_annot_exp sl exp
       | LEXP_tup lexps ->
          option_mapm (find_annot_lexp sl) lexps
-      | LEXP_memory (id, exps) ->
+      | LEXP_memory (_, exps) ->
          option_mapm (find_annot_exp sl) exps
       | _ -> None
     in
@@ -2145,7 +2144,7 @@ and find_annot_pat sl (P_aux (aux, (l, annot))) =
     | None -> Some (l, annot)
     | _ -> result
 
-and find_annot_pexp sl (Pat_aux (aux, (l, annot))) =
+and find_annot_pexp sl (Pat_aux (aux, (l, _))) =
   if not (subloc sl l) then None else
     match aux with
     | Pat_exp (pat, exp) ->
@@ -2153,7 +2152,7 @@ and find_annot_pexp sl (Pat_aux (aux, (l, annot))) =
     | Pat_when (pat, guard, exp) ->
        option_chain (find_annot_pat sl pat) (option_mapm (find_annot_exp sl) [guard; exp])
 
-let find_annot_funcl sl (FCL_aux (FCL_Funcl (id, pexp), (l, annot))) =
+let find_annot_funcl sl (FCL_aux (FCL_Funcl (_, pexp), (l, annot))) =
   if not (subloc sl l) then None else
     match find_annot_pexp sl pexp with
     | None -> Some (l, annot)

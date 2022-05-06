@@ -951,11 +951,11 @@ let rec run_frame frame =
   match frame with
   | Done (state, v) -> v
   | Fail (_, _, _, _, msg) -> failwith ("run_frame got Fail: " ^ msg)
-  | Step (lazy_str, _, _, _) ->
+  | Step (_, _, _, _) ->
      run_frame (eval_frame frame)
   | Break frame ->
      run_frame (eval_frame frame)
-  | Effect_request (out, state, stack, eff) ->
+  | Effect_request (_, state, _, eff) ->
      run_frame (!effect_interp state eff)
 
 let eval_exp state exp =

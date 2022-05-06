@@ -178,12 +178,12 @@ let string_of_event = function
   | Match -> "match_failure"
   | Return -> "return"
 
-let rec string_of_query = function
+let rec _string_of_query = function
   | Q_all ev -> "A " ^ string_of_event ev
   | Q_exist ev -> "E " ^ string_of_event ev
-  | Q_not q -> "~(" ^ string_of_query q ^ ")"
-  | Q_and qs -> "(" ^ Util.string_of_list " & " string_of_query qs ^ ")"
-  | Q_or qs -> "(" ^ Util.string_of_list " | " string_of_query qs ^ ")"
+  | Q_not q -> "~(" ^ _string_of_query q ^ ")"
+  | Q_and qs -> "(" ^ Util.string_of_list " & " _string_of_query qs ^ ")"
+  | Q_or qs -> "(" ^ Util.string_of_list " | " _string_of_query qs ^ ")"
 
 let parse_query =
   let amp = token (function Str.Delim "&" -> Some () | _ -> None) in

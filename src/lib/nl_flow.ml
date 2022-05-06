@@ -120,7 +120,7 @@ let modify_unsigned id value (E_aux (aux, annot) as exp) =
 
 let analyze' exps =
   match exps with
-  | E_aux (E_if (cond, then_exp, _), _) :: rest when escapes then_exp ->
+  | E_aux (E_if (cond, then_exp, _), _) :: _ when escapes then_exp ->
      begin match cond with
      | E_aux (E_app_infix (E_aux (E_id id, _), op, E_aux (E_lit lit, _)), _)
      | E_aux (E_app_infix (E_aux (E_lit lit, _), op, E_aux (E_id id, _)), _)

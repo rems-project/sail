@@ -91,7 +91,7 @@ let no_tannot_opt l = Typ_annot_opt_aux (Typ_annot_opt_none, gen_loc l)
 let rec get_union_clauses id = function
   | DEF_scattered (SD_aux (SD_unioncl (uid, tu), _)) :: defs when Id.compare id uid = 0 ->
      tu :: get_union_clauses id defs
-  | def :: defs ->
+  | _ :: defs ->
      get_union_clauses id defs
   | [] -> []
 
@@ -149,7 +149,7 @@ let rec descatter' funcls mapcls = function
      :: descatter' funcls mapcls (filter_union_clauses id defs)
 
   (* Therefore we should never see SD_unioncl... *)
-  | DEF_scattered (SD_aux (SD_unioncl _, (l, _))) :: defs ->
+  | DEF_scattered (SD_aux (SD_unioncl _, (l, _))) :: _ ->
      raise (Reporting.err_unreachable l __POS__ "Found union clause during de-scattering")
 
   | def :: defs -> def :: descatter' funcls mapcls defs

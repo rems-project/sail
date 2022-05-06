@@ -79,7 +79,7 @@ let opt_memo_cache = ref false
 
 let optimize_aarch64_fast_struct = ref false
 
-let (gensym, reset_gensym_counter) = symbol_generator "gs"
+let (gensym, _) = symbol_generator "gs"
 let ngensym () = name (gensym ())
 
 (**************************************************************************)
@@ -127,35 +127,9 @@ let is_ct_enum = function
   | CT_enum _ -> true
   | _ -> false
 
-let is_ct_variant = function
-  | CT_variant _ -> true
-  | _ -> false
-
-let is_ct_tup = function
-  | CT_tup _ -> true
-  | _ -> false
-
-let is_ct_list = function
-  | CT_list _ -> true
-  | _ -> false
-
-let is_ct_vector = function
-  | CT_vector _ -> true
-  | _ -> false
-
-let is_ct_struct = function
-  | CT_struct _ -> true
-  | _ -> false
-
-let is_ct_ref = function
-  | CT_ref _ -> true
-  | _ -> false
-
 let iblock1 = function
   | [instr] -> instr
   | instrs -> iblock instrs
-
-let ctor_bindings = List.fold_left (fun map (uid, ctyp) -> UBindings.add uid ctyp map) UBindings.empty
 
 (** The context type contains two type-checking
    environments. ctx.local_env contains the closest typechecking
@@ -405,7 +379,6 @@ let rec compile_aval l ctx = function
 
   | AV_record (fields, typ) when C.struct_value ->
      let ctyp = ctyp_of_typ ctx typ in
-     let gs = ngensym () in
      let compile_fields (id, aval) =
        let field_setup, cval, field_cleanup = compile_aval l ctx aval in
        field_setup,
@@ -416,9 +389,9 @@ let rec compile_aval l ctx = function
      let setup = List.concat (List.map (fun (s, _, _) -> s) field_triples) in
      let fields = List.map (fun (_, f, _) -> f) field_triples in
      let cleanup = List.concat (List.map (fun (_, _, c) -> c) field_triples) in
-     [idecl l ctyp gs],
+     setup,
      V_struct (fields, ctyp),
-     [iclear ctyp gs]
+     cleanup
 
   | AV_record (fields, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
@@ -888,7 +861,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
   (* FIXME: AE_record_update could be AV_record_update - would reduce some copying. *)
   | AE_record_update (aval, fields, typ) ->
      let ctyp = ctyp_of_typ ctx typ in
-     let ctors = match ctyp with
+     let _ctors = match ctyp with
        | CT_struct (_, ctors) -> List.fold_left (fun m (k, v) -> UBindings.add k v m) UBindings.empty ctors
        | _ -> raise (Reporting.err_general l "Cannot perform record update for non-record type")
      in
@@ -1044,9 +1017,8 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      []
 
   | AE_field (aval, id, typ) ->
-     let aval_ctyp = ctyp_of_typ ctx typ in
      let setup, cval, cleanup = compile_aval l ctx aval in
-     let ctyp = match cval_ctyp cval with
+     let _ctyp = match cval_ctyp cval with
        | CT_struct (struct_id, fields) ->
           begin match Util.assoc_compare_opt UId.compare (id, []) fields with
           | Some ctyp -> ctyp
@@ -1783,7 +1755,7 @@ let rec specialize_variants ctx prior =
   in
 
   function
-  | (CDEF_type (CTD_variant (var_id, ctors)) as cdef) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors ->
+  | CDEF_type (CTD_variant (var_id, ctors)) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors ->
      let typ_params = List.fold_left (fun set (_, ctyp) -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty ctors in
      
      let cdefs =
@@ -1812,7 +1784,7 @@ let rec specialize_variants ctx prior =
 
      specialize_variants ctx (List.map (fun (id, ctors) -> CDEF_type (CTD_variant (id, ctors))) monomorphized_variants @ prior) cdefs
 
-  | (CDEF_type (CTD_struct (struct_id, fields)) as cdef) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) fields ->
+  | CDEF_type (CTD_struct (struct_id, fields)) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) fields ->
      let typ_params = List.fold_left (fun set (_, ctyp) -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty fields in
  
      let cdefs = List.map (cdef_map_instr (specialize_field ctx struct_id)) cdefs in

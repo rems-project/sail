@@ -112,14 +112,14 @@ let index_range_update name field order start stop =
   let iru_overload = Printf.sprintf "overload update_%s = {_update_%s_%s}" field name field in
   List.concat [defs_of_string __POS__ iru_val; defs_of_string __POS__ iru_function; defs_of_string __POS__ iru_overload]
 
-let index_range_overload name field order =
+let index_range_overload name field =
   defs_of_string __POS__ (Printf.sprintf "overload _mod_%s = {_get_%s_%s, _set_%s_%s}" field name field name field)
 
 let index_range_accessor name field order (n, m) =
   let getter n m = index_range_getter name field order (Big_int.to_int n) (Big_int.to_int m) in
   let setter n m = index_range_setter name field order (Big_int.to_int n) (Big_int.to_int m) in
   let update n m = index_range_update name field order (Big_int.to_int n) (Big_int.to_int m) in
-  let overload = index_range_overload name field order in
+  let overload = index_range_overload name field in
   List.concat [getter n m; setter n m; update n m; overload]
 
 let field_accessor name order (id, ir) =

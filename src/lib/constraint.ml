@@ -186,7 +186,7 @@ let to_smt l vars constr =
     |> List.map (fun (v, k) -> sfun "declare-const" [smt_var v; smt_type l k])
     |> string_of_list "\n" pp_sexpr
   in
-  let rec smt_nexp (Nexp_aux (aux, l) : nexp) : sexpr =
+  let rec smt_nexp (Nexp_aux (aux, _) : nexp) : sexpr =
     match aux with
     | Nexp_id id -> Atom (Util.zencode_string (string_of_id id))
     | Nexp_var v -> smt_var v
@@ -210,7 +210,7 @@ let to_smt l vars constr =
        end
     | Nexp_neg nexp -> sfun "-" [smt_nexp nexp]
   in
-  let rec smt_constraint (NC_aux (aux, l) : n_constraint) : sexpr =
+  let rec smt_constraint (NC_aux (aux, _) : n_constraint) : sexpr =
     match aux with
     | NC_equal (nexp1, nexp2) -> sfun "=" [smt_nexp nexp1; smt_nexp nexp2]
     | NC_bounded_le (nexp1, nexp2) -> sfun "<=" [smt_nexp nexp1; smt_nexp nexp2]

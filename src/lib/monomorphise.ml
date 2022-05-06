@@ -160,17 +160,6 @@ let optmap v f =
 
 let kbindings_from_list = List.fold_left (fun s (v,i) -> KBindings.add v i s) KBindings.empty
 let bindings_from_list = List.fold_left (fun s (v,i) -> Bindings.add v i s) Bindings.empty
-(* union was introduced in 4.03.0, a bit too recently *)
-let bindings_union s1 s2 =
-  Bindings.merge (fun _ x y -> match x,y with
-  |  _, (Some x) -> Some x
-  |  (Some x), _ -> Some x
-  |  _,  _ -> None) s1 s2
-let kbindings_union s1 s2 =
-  KBindings.merge (fun _ x y -> match x,y with
-  |  _, (Some x) -> Some x
-  |  (Some x), _ -> Some x
-  |  _,  _ -> None) s1 s2
 
 let ids_in_exp exp =
   let open Rewriter in
@@ -201,13 +190,6 @@ let is_inc_vec typ =
     let (_, ord, _) = vector_typ_args_of typ in
     is_order_inc ord
   with _ -> false
-
-let rec cross = function
-  | [] -> failwith "cross"
-  | [(x,l)] -> List.map (fun y -> [(x,y)]) l
-  | (x,l)::t -> 
-     let t' = cross t in
-     List.concat (List.map (fun y -> List.map (fun l' -> (x,y)::l') t') l)
 
 let rec cross' = function
   | [] -> [[]]
@@ -286,11 +268,6 @@ let extract_set_nc env l var nc =
      raise (Reporting.err_general l ("No set constraint for " ^ string_of_kid var ^
                                               " in " ^ string_of_n_constraint nc))
 
-let rec peel = function
-  | [], l -> ([], l)
-  | h1::t1, h2::t2 -> let (l1,l2) = peel (t1, t2) in ((h1,h2)::l1,l2)
-  | _,_ -> assert false
-
 let rec split_insts = function
   | [] -> [],[]
   | (k,None)::t -> let l1,l2 = split_insts t in l1,k::l2
@@ -303,45 +280,6 @@ let apply_kid_insts kid_insts nc t =
     kid_insts in
   let subst = kbindings_from_list kid_insts in
   kids', subst_kids_nc subst nc, subst_kids_typ subst t
-
-let rec inst_src_type insts (Typ_aux (ty,l) as typ) =
-  match ty with
-  | Typ_id _
-  | Typ_var _
-    -> insts,typ
-  | Typ_fn _ ->
-     raise (Reporting.err_general l "Function type in constructor")
-  | Typ_bidir _ ->
-     raise (Reporting.err_general l "Mapping type in constructor")
-  | Typ_tup ts ->
-     let insts,ts = 
-       List.fold_right
-         (fun typ (insts,ts) -> let insts,typ = inst_src_type insts typ in insts,typ::ts)
-         ts (insts,[])
-     in insts, Typ_aux (Typ_tup ts,l)
-  | Typ_app (id,args) ->
-     let insts,ts = 
-       List.fold_right
-         (fun arg (insts,args) -> let insts,arg = inst_src_typ_arg insts arg in insts,arg::args)
-         args (insts,[])
-     in insts, Typ_aux (Typ_app (id,ts),l)
-  | Typ_exist (kopts, nc, t) -> begin
-     let kid_insts, insts' = peel (kopts,insts) in
-     let kopts', nc', t' = apply_kid_insts kid_insts nc t in
-     match kopts' with
-     | [] -> insts', t'
-     | _ -> insts', Typ_aux (Typ_exist (kopts', nc', t'), l)
-    end
-  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
-and inst_src_typ_arg insts (A_aux (ta,l) as tyarg) =
-  match ta with
-  | A_nexp _
-  | A_order _
-  | A_bool _
-      -> insts, tyarg
-  | A_typ typ ->
-     let insts', typ' = inst_src_type insts typ in
-     insts', A_aux (A_typ typ',l)
 
 let rec contains_exist (Typ_aux (ty,l)) =
   match ty with
@@ -480,21 +418,6 @@ let split_src_type all_errors env id ty (TypQ_aux (q,ql)) =
      let name l i = String.concat "" (i::(List.map name_seg l)) in
      Some (List.map (fun (l,ty) -> (l, wrap (name l),ty)) variants)
 
-let reduce_nexp subst ne =
-  let rec eval (Nexp_aux (ne,_) as nexp) =
-    match ne with
-    | Nexp_constant i -> i
-    | Nexp_sum (n1,n2) -> Big_int.add (eval n1) (eval n2)
-    | Nexp_minus (n1,n2) -> Big_int.sub (eval n1) (eval n2)
-    | Nexp_times (n1,n2) -> Big_int.mul (eval n1) (eval n2)
-    | Nexp_exp n -> Big_int.shift_left (eval n) 1
-    | Nexp_neg n -> Big_int.negate (eval n)
-    | _ ->
-       raise (Reporting.err_general Unknown ("Couldn't turn nexp " ^
-                                                      string_of_nexp nexp ^ " into concrete value"))
-  in eval ne
-
-
 let typ_of_args args =
   match args with
   | [(E_aux (E_tuple args, (_, tannot)) as exp)] ->
@@ -574,9 +497,6 @@ type split =
       nexp KBindings.t)             (* substitutions for type variables *)
       list
   | ConstrSplit of (tannot pat * nexp KBindings.t) list
-
-let isubst_minus subst subst' =
-  Bindings.merge (fun _ x y -> match x,y with (Some a), None -> Some a | _, _ -> None) subst subst'
 
 let freshen_id =
   let counter = ref 0 in
@@ -1275,12 +1195,6 @@ let split_defs target all_errors splits env ast =
 module AtomToItself =
 struct
 
-let findi f =
-  let rec aux n = function
-    | [] -> None
-    | h::t -> match f h with Some x -> Some (n,x) | _ -> aux (n+1) t
-  in aux 0
-
 let mapat f is xs =
   let rec aux n = function
     | [] -> []
@@ -1304,51 +1218,6 @@ let mapat_extra f is xs =
        let t',xs = aux (n+1) t in
        h::t',xs
   in aux 0 xs
-
-let tyvars_bound_in_pat pat =
-  let rec tp_kids s (TP_aux (tp,_)) =
-    match tp with
-    | TP_wild -> s
-    | TP_var kid -> KidSet.add kid s
-    | TP_app (_,tps) -> List.fold_left tp_kids s tps
-  in
-  let open Rewriter in
-  fst (fold_pat
-         { (compute_pat_alg KidSet.empty KidSet.union) with
-           p_var = (fun ((s,pat), tpat) ->
-                     tp_kids s tpat, P_var (pat, tpat)) }
-         pat)
-let tyvars_bound_in_lb (LB_aux (LB_val (pat,_),_)) = tyvars_bound_in_pat pat
-
-let rec sizes_of_typ (Typ_aux (t,l)) =
-  match t with
-  | Typ_id _
-  | Typ_var _
-    -> KidSet.empty
-  | Typ_fn _ -> raise (Reporting.err_general l
-                         "Function type on expression")
-  | Typ_bidir _ -> raise (Reporting.err_general l "Mapping type on expression")
-  | Typ_tup typs -> kidset_bigunion (List.map sizes_of_typ typs)
-  | Typ_exist (kopts,_,typ) ->
-     List.fold_left (fun s k -> KidSet.remove (kopt_kid k) s) (sizes_of_typ typ) kopts
-  | Typ_app (Id_aux (Id "bitvector",_),
-             [A_aux (A_nexp size,_);_]) ->
-     KidSet.of_list (size_nvars_nexp size)
-  | Typ_app (_,tas) ->
-     kidset_bigunion (List.map sizes_of_typarg tas)
-  | Typ_internal_unknown -> Reporting.unreachable l __POS__ "escaped Typ_internal_unknown"
-and sizes_of_typarg (A_aux (ta,_)) =
-  match ta with
-    A_nexp _
-  | A_order _
-  | A_bool _
-    -> KidSet.empty
-  | A_typ typ -> sizes_of_typ typ
-
-let sizes_of_annot (l, tannot) =
-  match destruct_tannot tannot with
-  | None -> KidSet.empty
-  | Some (env,typ) -> sizes_of_typ (Env.base_typ_of env typ)
 
 let change_parameter_pat i = function
   | P_aux (P_id var, (l,_))
@@ -1446,7 +1315,6 @@ let rewrite_size_parameters target type_env ast =
   in
 
   let sizes_funcl fsizes (FCL_aux (FCL_Funcl (id,pexp),(l,ann))) =
-    let pat,guard,exp,pannot = destruct_pexp pexp in
     let env = env_of_annot (l,ann) in
     let _, typ = Env.get_val_spec_orig id env in
     let already_visible_nexps =
@@ -1660,7 +1528,7 @@ in *)
        (* TODO rewrite tannopt? *)
        DEF_fundef (FD_aux (FD_function (recopt,tannopt,funcls),(l,empty_tannot)))
     | DEF_val lb -> DEF_val (rewrite_letbind lb)
-    | DEF_spec (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,annot))) as spec ->
+    | DEF_spec (VS_aux (VS_val_spec (typschm,id,extern,cast),(l,annot))) ->
        let typschm = match typschm with
          | TypSchm_aux (TypSchm_ts (tq, typ),l) ->
             TypSchm_aux (TypSchm_ts (tq, replace_funtype id typ), l)
@@ -1823,7 +1691,7 @@ let string_of_extra_splits s =
                               (KBindings.bindings ks))))
        (ExtraSplits.bindings s))
 
-let string_of_callerset s =
+let _string_of_callerset s =
   String.concat ", " (List.map (fun (id,arg) -> string_of_id id ^ "." ^ string_of_int arg)
                         (CallerArgSet.elements s))
 
@@ -1842,11 +1710,6 @@ let string_of_dep = function
 type call_dep = {
   in_fun : dependencies option;
   parents : CallerKidSet.t;
-}
-
-let empty_call_dep = {
-  in_fun = None;
-  parents = CallerKidSet.empty;
 }
 
 let in_fun_call_dep deps = { in_fun = Some deps; parents = CallerKidSet.empty }
@@ -3507,7 +3370,7 @@ let rec rewrite_app env typ (id,args) =
           is_id env (Id "xor_vec") id then
     match args with
     | [E_aux (E_app (subrange1, [vec1; start1; end1]), a1) as exp1;
-       E_aux (E_app (subrange2, [vec2; start2; end2]), a2) as exp2]
+       E_aux (E_app (subrange2, [vec2; start2; end2]), a2)]
       when is_subrange subrange1 && is_bitvector_typ (typ_of vec1) &&
            is_subrange subrange2 && is_bitvector_typ (typ_of vec2) &&
            not (is_constant_vec_typ env (typ_of exp1)) &&
@@ -3774,7 +3637,6 @@ let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
   if alpha_equivalent (env_of exp) typ target_typ then exp else
   let infer_arg_typ env f l typ =
     let (typq, ctor_typ) = Env.get_union_id f env in
-    let quants = quant_items typq in
     match Env.expand_synonyms env ctor_typ with
     | Typ_aux (Typ_fn ([arg_typ], ret_typ), _) ->
        begin
@@ -3935,7 +3797,6 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
            | (E_aux (E_assert (assert_exp,msg),ann) as h)::t ->
               (* Check the assertion for constraints that instantiate kids *)
               let is_known_kid kid = KBindings.mem kid (Env.get_typ_vars env) in
-              let is_int_kid kid = try Env.get_typ_var kid env = K_int with _ -> false in
               begin match Type_check.assert_constraint env true assert_exp with
                 | Some nc when KidSet.for_all is_known_kid (tyvars_of_constraint nc) ->
                    (* If the type checker can extract constraints from the assertion
@@ -3960,7 +3821,6 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
                        | None -> insts
                        | exception _ -> insts
                    in
-                   let kids = KidSet.filter is_int_kid (tyvars_of_constraint nc) in
                    let insts = KidSet.fold check_inst (tyvars_of_constraint nc) KBindings.empty in
                    if KBindings.is_empty insts then h :: (aux t) else begin
                      (* Propagate new instantiations and insert casts *)
@@ -4019,7 +3879,6 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
   specs_required := IdSet.empty;
   let defs = List.mapi rewrite_def defs in
   let _ = Util.progress "Adding casts " "done" (List.length defs) (List.length defs) in
-  let l = Generated Unknown in
   let cast_specs, _ =
     (* TODO: use default/relevant order *)
     let kid = mk_kid "n" in
@@ -4270,13 +4129,6 @@ type options = {
   all_split_errors : bool;
   continue_anyway : bool
 }
-
-let recheck defs =
-  let w = !Reporting.opt_warnings in
-  let () = Reporting.opt_warnings := false in
-  let r = Type_error.check (Type_check.Env.no_casts Type_check.initial_env) defs in
-  let () = Reporting.opt_warnings := w in
-  r
 
 let mono_rewrites = MonoRewrites.mono_rewrite
 

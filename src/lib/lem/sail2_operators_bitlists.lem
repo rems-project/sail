@@ -300,7 +300,7 @@ let slice v lo len =
   subrange_vec_dec v (lo + len - 1) lo
 
 val set_slice : integer -> integer -> list bitU -> integer -> list bitU -> list bitU
-let set_slice (out_len:ii) (slice_len:ii) out (n:ii) v =
+let set_slice (_:ii) (slice_len:ii) out (n:ii) v =
   update_subrange_vec_dec out (n + slice_len - 1) n v
 
 val eq_vec    : list bitU -> list bitU -> bool

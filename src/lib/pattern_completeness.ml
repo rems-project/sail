@@ -389,7 +389,7 @@ module Make(C: Config) = struct
     | _ :: rest -> unmatched_literal rest
     | [] -> None
  
-  let simple_matrix_is_complete ctx matrix =
+  let simple_matrix_is_complete _ctx matrix =
     let vars =
       List.mapi (fun i (Rows column) ->
           match find_smtlib_type column with

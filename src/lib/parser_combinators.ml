@@ -115,5 +115,5 @@ let parse p delim_regexp input =
   let tokens = List.filter non_whitespace tokens in
   match p tokens with
   | Ok (result, []) -> Some result
-  | Ok (result, _) -> None
+  | Ok (_, _) -> None
   | Fail -> None

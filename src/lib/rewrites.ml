@@ -89,10 +89,6 @@ let fresh_id pre l =
   let current = fresh_name () in
   Id_aux (Id (pre ^ string_of_int current), gen_loc l)
 
-let fresh_id_exp pre ((l,annot)) =
-  let id = fresh_id pre l in
-  E_aux (E_id id, (gen_loc l, annot))
-
 let fresh_id_pat pre ((l,annot)) =
   let id = fresh_id pre l in
   P_aux (P_id id, (gen_loc l, annot))
@@ -232,7 +228,7 @@ let rec rewrite_nexp_ids env (Nexp_aux (nexp, l) as nexp_aux) = match nexp with
   | Nexp_neg nexp -> Nexp_aux (Nexp_neg (rewrite_nexp_ids env nexp), l)
   | _ -> nexp_aux
 
-let rewrite_ast_nexp_ids, rewrite_typ_nexp_ids =
+let rewrite_ast_nexp_ids, _rewrite_typ_nexp_ids =
   let rec rewrite_typ env (Typ_aux (typ, l) as typ_aux) = match typ with
     | Typ_fn (arg_ts, ret_t) ->
        Typ_aux (Typ_fn (List.map (rewrite_typ env) arg_ts, rewrite_typ env ret_t), l)
@@ -289,18 +285,6 @@ let rewrite_ast_nexp_ids, rewrite_typ_nexp_ids =
     rewrite_def = rewrite_def env
     } defs),
   rewrite_typ
-
-
-let rewrite_ast_remove_assert defs =
-  let e_assert ((E_aux (eaux, (l, _)) as exp), str) = match eaux with
-    | E_constraint _ ->
-       E_assert (exp, str)
-    | _ ->
-       E_assert (E_aux (E_lit (mk_lit L_true), simple_annot l bool_typ), str) in
-  rewrite_ast_base
-    { rewriters_base with
-      rewrite_exp = (fun _ -> fold_exp { id_exp_alg with e_assert = e_assert}) }
-    defs
 
 let remove_vector_concat_pat pat =
 
@@ -1467,38 +1451,6 @@ let rewrite_ast_exp_lift_assign env defs = rewrite_ast_base
      rewrite_def = rewrite_def;
      rewrite_ast = rewrite_ast_base} defs
 
-
-(* Rewrite assignments to register references into calls to a builtin function
-   "write_reg_ref" (in the Lem shallow embedding). For example, if GPR is a
-   vector of register references, then
-     GPR[i] := exp;
-   becomes
-     write_reg_ref (vector_access (GPR, i)) exp
- *)
-let rewrite_register_ref_writes ast =
-  let write_reg_spec = fst (Type_error.check_defs initial_env (List.map (gen_vs ~pure:false)
-    [("write_reg_ref", "forall ('a : Type). (register('a), 'a) -> unit")])) in
-  let lexp_ref_exp (LEXP_aux (_, annot) as lexp) =
-    try
-      let exp = infer_exp (env_of_annot annot) (strip_exp (lexp_to_exp lexp)) in
-      if is_ref_typ (typ_of exp) then Some exp else None
-    with | _ -> None in
-  let e_assign (lexp, exp) =
-    let (lhs, rhs) = rewrite_lexp_to_rhs lexp in
-    match lexp_ref_exp lhs with
-    | Some (E_aux (_, annot) as lhs_exp) ->
-       let lhs = LEXP_aux (LEXP_memory (mk_id "write_reg_ref", [lhs_exp]), annot) in
-       E_assign (lhs, rhs exp)
-    | None -> E_assign (lexp, exp) in
-  let rewrite_exp _ = fold_exp { id_exp_alg with e_assign = e_assign } in
-
-  let rewriters = { rewriters_base with rewrite_exp = rewrite_exp } in
-  let rec rewrite ds = match ds with
-    | d::ds -> (rewriters.rewrite_def rewriters d)::(rewrite ds)
-    | [] -> [] in
-  { ast with defs = rewrite (write_reg_spec @ ast.defs) }
-
-
 (* Remove redundant return statements, and translate remaining ones into an
    (effectful) call to builtin function "early_return" (in the Lem shallow
    embedding).
@@ -2477,43 +2429,14 @@ let rewrite_ast_internal_lets env =
     ; rewrite_ast = rewrite_ast_base
     }
 
-
-let fold_guards guards =
-  match guards with
-  | [] -> (mk_exp (E_lit (mk_lit L_true)))
-  | g :: gs -> List.fold_left (fun g g' -> mk_exp (E_app (mk_id "and_bool", [strip_exp g; strip_exp g']))) g gs
-
 let fold_typed_guards env guards =
   match guards with
   | [] -> annot_exp (E_lit (mk_lit L_true)) Parse_ast.Unknown env bool_typ
   | g :: gs -> List.fold_left (fun g g' -> annot_exp (E_app (mk_id "and_bool", [g; g'])) Parse_ast.Unknown env bool_typ) g gs
 
-
-let rewrite_pexp_with_guards rewrite_pat (Pat_aux (pexp_aux, (annot: tannot annot)) as pexp) =
-  let guards = ref [] in
-
-  match pexp_aux with
-  | Pat_exp (pat, exp) ->
-     begin
-       let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat guards } pat in
-       match !guards with
-       | [] -> pexp
-       | gs ->
-          let unchecked_pexp = mk_pexp (Pat_when (strip_pat pat, List.map strip_exp gs |> fold_guards, strip_exp exp)) in
-          check_case (env_of_pat pat) (typ_of_pat pat) unchecked_pexp (typ_of exp)
-     end
-  | Pat_when (pat, guard, exp) ->
-     begin
-       let pat = fold_pat { id_pat_alg with p_aux = rewrite_pat guards } pat in
-       let unchecked_pexp = mk_pexp (Pat_when (strip_pat pat, List.map strip_exp !guards |> fold_guards, strip_exp exp)) in
-       check_case (env_of_pat pat) (typ_of_pat pat) unchecked_pexp (typ_of exp)
-     end
-
-
 let pexp_rewriters rewrite_pexp =
   let alg = { id_exp_alg with pat_aux = (fun (pexp_aux, annot) -> rewrite_pexp (Pat_aux (pexp_aux, annot))) } in
   rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) }
-
 
 let stringappend_counter = ref 0
 
@@ -3185,10 +3108,6 @@ let rewrite_ast_mapping_patterns env =
 let rewrite_lit_lem (L_aux (lit, _)) = match lit with
   | L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ -> true
   | _ -> false
-
-let rewrite_no_strings (L_aux (lit, _)) = match lit with
-  | L_string _ -> false
-  | _ -> true
 
 let rewrite_lit_ocaml (L_aux (lit, _)) = match lit with
   | L_num _ | L_string _ | L_hex _ | L_bin _ | L_real _ | L_unit -> false
@@ -4050,18 +3969,12 @@ struct
 
 type rlit =
   | RL_unit
-  (* TODO: zero and one are currently replaced by RL_inf to deal with BU;
-     needs more careful thought about semantics of BU *)
-  | RL_zero
-  | RL_one
   | RL_true
   | RL_false
   | RL_inf
 
 let string_of_rlit = function
   | RL_unit -> "()"
-  | RL_zero -> "bitzero"
-  | RL_one -> "bitone"
   | RL_true -> "true"
   | RL_false -> "false"
   | RL_inf -> "..."
@@ -4069,8 +3982,8 @@ let string_of_rlit = function
 let rlit_of_lit (L_aux (l,_)) =
   match l with
   | L_unit -> RL_unit
-  | L_zero -> (*RL_zero*) RL_inf
-  | L_one -> (*RL_one*) RL_inf
+  | L_zero -> RL_inf
+  | L_one -> RL_inf
   | L_true -> RL_true
   | L_false -> RL_false
   | L_num _ | L_hex _ | L_bin _ | L_string _ | L_real _ -> RL_inf
@@ -4079,8 +3992,8 @@ let rlit_of_lit (L_aux (l,_)) =
 let inv_rlit_of_lit (L_aux (l,_)) =
   match l with
   | L_unit -> []
-  | L_zero -> (*[RL_one]*) [RL_inf]
-  | L_one -> (*[RL_zero]*) [RL_inf]
+  | L_zero -> [RL_inf]
+  | L_one -> [RL_inf]
   | L_true -> [RL_false]
   | L_false -> [RL_true]
   | L_num _ | L_hex _ | L_bin _ | L_string _ | L_real _ -> [RL_inf]
@@ -4142,8 +4055,6 @@ let ctx_from_env env =
     constructor_to_rest = Bindings.fold (fun _ ids m -> make_cstr_mappings env ids m)
       (Bindings.map (fun (_, tus) -> IdSet.of_list (List.map type_union_id tus)) (Env.get_variants env)) Bindings.empty
   }
-
-let printprefix = ref "  "
 
 let rec remove_clause_from_pattern ctx (P_aux (rm_pat,ann)) res_pat =
   let subpats rm_pats res_pats =
@@ -4887,162 +4798,6 @@ let all_rewriters = [
     ("properties", basic_rewriter (fun _ -> Property.rewrite));
     ("attach_effects", Base_rewriter (fun effect_info env ast -> Effects.rewrite_attach_effects effect_info ast, effect_info, env));
     ("prover_regstate", Bool_rewriter (fun mwords -> Base_rewriter (fun effect_info env ast -> let env, ast = State.add_regstate_defs mwords env ast in ast, effect_info, env)))
-  ]
-
-let rewrites_lem = [
-    ("instantiate_outcomes", [String_arg "lem"]);
-    ("realize_mappings", []);
-    ("remove_duplicate_valspecs", []);
-    ("toplevel_string_append", []);
-    ("pat_string_append", []);
-    ("mapping_builtins", []);
-    ("mono_rewrites", [If_flag opt_mono_rewrites]);
-    ("recheck_defs", [If_flag opt_mono_rewrites]);
-    ("undefined", [Bool_arg false]);
-    ("toplevel_consts", [String_arg "lem"; If_mwords_arg]);
-    ("toplevel_nexps", [If_mono_arg]);
-    ("monomorphise", [String_arg "lem"; If_mono_arg]);
-    ("recheck_defs", [If_mwords_arg]);
-    ("add_bitvector_casts", [If_mwords_arg]);
-    ("atoms_to_singletons", [String_arg "lem"; If_mono_arg]);
-    ("recheck_defs", [If_mwords_arg]);
-    ("vector_string_pats_to_bit_list", []);
-    ("remove_not_pats", []);
-    ("remove_impossible_int_cases", []);
-    ("tuple_assignments", []);
-    ("vector_concat_assignments", []);
-    ("simple_assignments", []);
-    ("remove_vector_concat", []);
-    ("remove_bitvector_pats", []);
-    ("remove_numeral_pats", []);
-    ("pattern_literals", [Literal_arg "lem"]);
-    ("guarded_pats", []);
-    (* ("register_ref_writes", rewrite_register_ref_writes); *)
-    ("nexp_ids", []);
-    ("split", [String_arg "execute"]);
-    ("recheck_defs", []);
-    ("top_sort_defs", []);
-    ("const_prop_mutrec", [String_arg "lem"]);
-    ("vector_string_pats_to_bit_list", []);
-    ("exp_lift_assign", []);
-    ("early_return", []);
-    (* early_return currently breaks the types *)
-    ("recheck_defs", []);
-    ("remove_blocks", []);
-    ("attach_effects", []);
-    ("letbind_effects", []);
-    ("remove_e_assign", []);
-    ("attach_effects", []);
-    ("internal_lets", []);
-    ("remove_superfluous_letbinds", []);
-    ("remove_superfluous_returns", []);
-    ("merge_function_clauses", []);
-    ("bit_lists_to_lits", []);
-    ("recheck_defs", []);
-    ("attach_effects", [])
-  ]
-
-let rewrites_coq = [
-    ("instantiate_outcomes", [String_arg "coq"]);
-    ("realize_mappings", []);
-    ("remove_duplicate_valspecs", []);
-    ("toplevel_string_append", []);
-    ("pat_string_append", []);
-    ("mapping_builtins", []);
-    ("undefined", [Bool_arg true]);
-    ("vector_string_pats_to_bit_list", []);
-    ("remove_not_pats", []);
-    ("remove_impossible_int_cases", []);
-    ("tuple_assignments", []);
-    ("vector_concat_assignments", []);
-    ("simple_assignments", []);
-    ("remove_vector_concat", []);
-    ("remove_bitvector_pats", []);
-    ("remove_numeral_pats", []);
-    ("pattern_literals", [Literal_arg "lem"]);
-    ("guarded_pats", []);
-    (* ("register_ref_writes", rewrite_register_ref_writes); *)
-    ("nexp_ids", []);
-    ("split", [String_arg "execute"]);
-    ("minimise_recursive_functions", []);
-    ("recheck_defs", []);
-    ("exp_lift_assign", []);
-    (* ("remove_assert", rewrite_ast_remove_assert); *)
-    ("move_termination_measures", []);
-    ("top_sort_defs", []);
-    ("early_return", []);
-    (* We need to do the exhaustiveness check before merging, because it may
-       introduce new wildcard clauses *)
-    ("recheck_defs", []);
-    ("make_cases_exhaustive", []);
-    (* merge funcls before adding the measure argument so that it doesn't
-     disappear into an internal pattern match *)
-    ("merge_function_clauses", []);
-    ("recheck_defs", []);
-    ("rewrite_explicit_measure", []);
-    ("rewrite_loops_with_escape_effect", []);
-    ("recheck_defs", []);
-    ("remove_blocks", []);
-    ("attach_effects", []);
-    ("letbind_effects", []);
-    ("remove_e_assign", []);
-    ("attach_effects", []);
-    ("internal_lets", []);
-    ("remove_superfluous_letbinds", []);
-    ("remove_superfluous_returns", []);
-    ("bit_lists_to_lits", []);
-    ("recheck_defs", []);
-    ("attach_effects", [])
-  ]
-
-let rewrites_ocaml = [
-    ("instantiate_outcomes", [String_arg "ocaml"]);
-    ("realize_mappings", []);
-    ("toplevel_string_append", []);
-    ("pat_string_append", []);
-    ("mapping_builtins", []);
-    ("undefined", [Bool_arg false]);
-    ("vector_string_pats_to_bit_list", []);
-    ("tuple_assignments", []);
-    ("vector_concat_assignments", []);
-    ("simple_assignments", []);
-    ("remove_not_pats", []);
-    ("remove_vector_concat", []);
-    ("remove_bitvector_pats", []);
-    ("pattern_literals", [Literal_arg "ocaml"]);
-    ("remove_numeral_pats", []);
-    ("exp_lift_assign", []);
-    ("top_sort_defs", []);
-    ("simple_types", []);
-    ("overload_cast", [])
-  ]
-
-let rewrites_c = [
-    ("instantiate_outcomes", [String_arg "c"]);
-    ("realize_mappings", []);
-    ("toplevel_string_append", []);
-    ("pat_string_append", []);
-    ("mapping_builtins", []);
-    ("truncate_hex_literals", []);
-    ("mono_rewrites", [If_flag opt_mono_rewrites]);
-    ("recheck_defs", [If_flag opt_mono_rewrites]);
-    ("toplevel_nexps", [If_mono_arg]);
-    ("monomorphise", [String_arg "c"; If_mono_arg]);
-    ("atoms_to_singletons", [String_arg "c"; If_mono_arg]);
-    ("recheck_defs", [If_mono_arg]);
-    ("undefined", [Bool_arg false]);
-    ("vector_string_pats_to_bit_list", []);
-    ("remove_not_pats", []);
-    ("remove_vector_concat", []);
-    ("remove_bitvector_pats", []);
-    ("pattern_literals", [Literal_arg "all"]);
-    ("tuple_assignments", []);
-    ("vector_concat_assignments", []);
-    ("simple_struct_assignments", []);
-    ("exp_lift_assign", []);
-    ("merge_function_clauses", []);
-    ("optimize_recheck_defs", []);
-    ("constant_fold", [String_arg "c"])
   ]
 
 let rewrites_interpreter = [
