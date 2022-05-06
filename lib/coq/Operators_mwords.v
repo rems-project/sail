@@ -239,11 +239,6 @@ refine (
   cast_to_mword z (update_subrange_vec_dec_pf _ _)).
 Defined.
 
-(* Opaque identity for bad unchecked operations. *)
-Definition dummy {T:Type} (t:T) : T.
-exact t.
-Qed.
-
 Definition update_subrange_vec_dec_unchecked {a b} (v : mword a) i j (w : mword b) : mword a :=
   if sumbool_of_bool ((0 <=? j) && (j <=? i) && (i <? a) && (b =? i - j + 1))%bool then update_subrange_vec_dec v i j (autocast w) else dummy v.
 

@@ -92,6 +92,11 @@ Definition eq_dec := Z.eq_dec.
 End Z_eq_dec.
 Module ZEqdep := DecidableEqDep (Z_eq_dec).
 
+(* Opaque identity for bad unchecked operations. *)
+Definition dummy {T:Type} (t:T) : T.
+exact t.
+Qed.
+
 
 (* Constraint solving basics.  A HintDb which unfolding hints and lemmata
    can be added to, and a typeclass to wrap constraint arguments in to
@@ -781,11 +786,10 @@ Definition ext_bits pad len bits :=
   else pad_bitlist pad bits longer.
 
 Definition extz_bits len bits := ext_bits B0 len bits.
-Parameter undefined_list_bitU : list bitU.
+
 Definition exts_bits len bits :=
   match bits with
-  | BU :: _ => undefined_list_bitU (*failwith "exts_bits: undefined bit"*)
-  | B1 :: _ => ext_bits B1 len bits
+  | b :: _ => ext_bits b len bits
   | _ => ext_bits B0 len bits
   end.
 
@@ -793,7 +797,7 @@ Fixpoint add_one_bit_ignore_overflow_aux bits := match bits with
   | [] => []
   | B0 :: bits => B1 :: bits
   | B1 :: bits => B0 :: add_one_bit_ignore_overflow_aux bits
-  | BU :: _ => undefined_list_bitU (*failwith "add_one_bit_ignore_overflow: undefined bit"*)
+  | BU :: _ => dummy bits (*failwith "add_one_bit_ignore_overflow: undefined bit"*)
 end.
 (*declare {isabelle} termination_argument add_one_bit_ignore_overflow_aux = automatic*)
 
@@ -1019,34 +1023,9 @@ Definition word_to_mword {n} (w : word (Z.to_nat n)) `{H:ArithFact (n >=? 0)} : 
 (*val length_mword : forall a. mword a -> Z*)
 Definition length_mword {n} (w : mword n) := n.
 
-(*val slice_mword_dec : forall a b. mword a -> Z -> Z -> mword b*)
-(*Definition slice_mword_dec w i j := word_extract (Z.to_nat i) (Z.to_nat j) w.
-
-val slice_mword_inc : forall a b. mword a -> Z -> Z -> mword b
-Definition slice_mword_inc w i j :=
-  let top := (length_mword w) - 1 in
-  slice_mword_dec w (top - i) (top - j)
-
-val slice_mword : forall a b. bool -> mword a -> Z -> Z -> mword b
-Definition slice_mword is_inc w i j := if is_inc then slice_mword_inc w i j else slice_mword_dec w i j
-
-val update_slice_mword_dec : forall a b. mword a -> Z -> Z -> mword b -> mword a
-Definition update_slice_mword_dec w i j w' := word_update w (Z.to_nat i) (Z.to_nat j) w'
-
-val update_slice_mword_inc : forall a b. mword a -> Z -> Z -> mword b -> mword a
-Definition update_slice_mword_inc w i j w' :=
-  let top := (length_mword w) - 1 in
-  update_slice_mword_dec w (top - i) (top - j) w'
-
-val update_slice_mword : forall a b. bool -> mword a -> Z -> Z -> mword b -> mword a
-Definition update_slice_mword is_inc w i j w' :=
-  if is_inc then update_slice_mword_inc w i j w' else update_slice_mword_dec w i j w'
-
-val access_mword_dec : forall a. mword a -> Z -> bitU*)
-Parameter undefined_bit : bool.
 Definition getBit {n} :=
 match n with
-| O => fun (w : word O) i => undefined_bit
+| O => fun (w : word O) i => dummy false
 | S n => fun (w : word (S n)) i => wlsb (wrshift' w i)
 end.
 
