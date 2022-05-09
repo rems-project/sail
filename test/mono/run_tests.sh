@@ -3,10 +3,13 @@ set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SAILDIR=${SAIL_DIR:-"$DIR/../.."}
+SAIL=${SAIL:=sail}
 TESTSDIR="$DIR"
 OUTPUTDIR="$DIR/test-output"
 
 rm -f $DIR/tests.xml
+
+printf "\$SAIL is $SAIL\n"
 
 # shellcheck source=../test_helpers.sh
 source "$SAILDIR/test/test_helpers.sh"
@@ -30,7 +33,7 @@ do
     cd "$DIR"
     i=`basename "$i_full"`
     echo "Running test $i" >> log
-    if "$SAILDIR/sail" -lem -lem_mwords -lem_lib Test_extra -o out $(< "$i_full") &>>log;
+    if "$SAIL" -lem -lem_mwords -lem_lib Test_extra -o out $(< "$i_full") &>>log;
     then
         mv out.lem out_types.lem "$OUTPUTDIR"
 	if lem -ocaml -lib "$SAILDIR/src/lem_interp" \

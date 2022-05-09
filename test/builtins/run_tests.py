@@ -6,6 +6,7 @@ import sys
 import hashlib
 
 sail_dir = os.environ['SAIL_DIR']
+sail = os.environ['SAIL']
 os.chdir(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(sail_dir, 'test'))
 
@@ -20,7 +21,7 @@ def test_c_builtins(name, sail_opts):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('sail -no_warn -c {} {} 1> {}.c'.format(sail_opts, filename, basename))
+                step('{} -no_warn -c {} {} 1> {}.c'.format(sail, sail_opts, filename, basename))
                 step('gcc {}.c {}/lib/*.c -lgmp -lz -I {}/lib -o {}'.format(basename, sail_dir, sail_dir, basename))
                 step('./{}'.format(basename))
                 step('rm {}.c'.format(basename))
@@ -40,7 +41,7 @@ def test_ocaml_builtins(name, sail_opts):
             basename = os.path.splitext(os.path.basename(filename))[0]
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('sail -no_warn -ocaml -ocaml_build_dir _sbuild_{} -o {} {}'.format(basename, basename, filename))
+                step('{} -no_warn -ocaml -ocaml_build_dir _sbuild_{} -o {} {}'.format(sail, basename, basename, filename))
                 step('./{}'.format(basename))
                 step('rm -r _sbuild_{}'.format(basename))
                 step('rm {}'.format(basename))
@@ -60,7 +61,7 @@ def test_lem_builtins(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Lem from Sail
-                step('sail -no_warn -lem {}'.format(filename))
+                step('{} -no_warn -lem {}'.format(sail, filename))
 
                 # Create a directory to build the generated Lem and
                 # copy/move everything we need into it, as well as
@@ -96,7 +97,7 @@ def test_coq_builtins(name):
             tests[filename] = os.fork()
             if tests[filename] == 0:
                 # Generate Coq from Sail
-                step('sail -no_warn -coq -undefined_gen -o {} {}'.format(basename, filename))
+                step('{} -no_warn -coq -undefined_gen -o {} {}'.format(sail, basename, filename))
 
                 step('mkdir -p _coqbuild_{}'.format(basename))
                 step('mv {}.v _coqbuild_{}'.format(basename, basename))

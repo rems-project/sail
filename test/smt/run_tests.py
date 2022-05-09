@@ -7,6 +7,7 @@ import hashlib
 import distutils.spawn
 
 sail_dir = os.environ['SAIL_DIR']
+sail = os.environ['SAIL']
 os.chdir(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(sail_dir, 'test'))
 
@@ -22,7 +23,7 @@ def test_smt(name, solver, sail_opts):
             basename = basename.replace('.', '_')
             tests[filename] = os.fork()
             if tests[filename] == 0:
-                step('sail {} -smt {} -o {}'.format(sail_opts, filename, basename))
+                step('{} {} -smt {} -o {}'.format(sail, sail_opts, filename, basename))
                 step('timeout 300s {} {}_prop.smt2 1> {}.out'.format(solver, basename, basename))
                 if re.match('.+\.sat\.sail$', filename):
                     step('grep -q ^sat$ {}.out'.format(basename))

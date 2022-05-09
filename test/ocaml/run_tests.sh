@@ -3,9 +3,12 @@ set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd $DIR
+SAIL=${SAIL:=sail}
 SAILDIR="$DIR/../.."
 
 rm -f $DIR/tests.xml
+
+printf "\$SAIL is $SAIL\n"
 
 # shellcheck source=../test_helpers.sh
 source "$SAILDIR/test/test_helpers.sh"
@@ -15,7 +18,7 @@ printf "<testsuites>\n" >> $DIR/tests.xml
 for i in `ls -d */`;
 do
     cd $DIR/$i;
-    if $SAILDIR/sail -no_warn -o out -ocaml ../prelude.sail `ls *.sail` 1> /dev/null;
+    if "$SAIL" -no_warn -o out -ocaml ../prelude.sail `ls *.sail` 1> /dev/null;
     then
 	./out > result;
 	if diff expect result;
@@ -39,7 +42,7 @@ cd $DIR
 for i in `ls -d */`;
 do
     cd $DIR/$i;
-    if $SAILDIR/sail -no_warn -o out -ocaml -trace ../prelude.sail `ls *.sail` 1> /dev/null;
+    if "$SAIL" -no_warn -o out -ocaml -ocaml_trace ../prelude.sail `ls *.sail` 1> /dev/null;
     then
 	./out > result 2> /dev/null;
 	if diff expect result;
@@ -64,7 +67,7 @@ finish_suite "Ocaml trace testing"
 #for i in `ls -d */`;
 #do
 #    cd $DIR/$i;
-#    if $SAILDIR/sail -no_warn -undefined_gen -is test.isail ../prelude.sail `ls *.sail` 1> /dev/null;
+#    if "$SAIL" -no_warn -undefined_gen -is test.isail ../prelude.sail `ls *.sail` 1> /dev/null;
 #    then
 #	if diff expect result;
 #	then
