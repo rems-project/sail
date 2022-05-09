@@ -41,8 +41,6 @@ lib/hol/sail-heap
 
 # location specific things
 
-/sail
-
 /src/sail.docdir
 /src/ast.lem
 /src/ast.ml

@@ -12,7 +12,6 @@ install: sail
 
 clean:
 	dune clean
-	rm -f sail
 
 docker:
 	docker build --tag sail:0.1 .
