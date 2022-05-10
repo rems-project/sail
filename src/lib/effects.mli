@@ -137,3 +137,6 @@ val copy_mapping_to_function : id -> side_effect_info -> id -> side_effect_info
    simplified in its annotated form - it just becomes a boolean
    representing effectful/non-effectful *)
 val rewrite_attach_effects : side_effect_info -> Type_check.tannot ast -> Type_check.tannot ast
+
+(** Dumps the given side effect information to stderr. *)
+val dump_effects : side_effect_info -> unit

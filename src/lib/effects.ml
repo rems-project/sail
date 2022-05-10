@@ -475,3 +475,19 @@ let rewrite_attach_effects effect_info =
       }
   in
   rewrite_ast_base { rewriters_base with rewrite_exp = (fun _ exp -> snd (rw_exp exp)) }
+
+let string_of_effectset set =
+  String.concat ", " (List.map string_of_side_effect (EffectSet.elements set))
+
+let dump_effect_bindings bindings =
+  Bindings.iter (fun id set ->
+      Printf.eprintf "  %s: %s\n%!" (string_of_id id) (string_of_effectset set))
+    bindings
+
+let dump_effects effect_info =
+  prerr_endline "Function effects:";
+  dump_effect_bindings effect_info.functions;
+  prerr_endline "Letbind effects:";
+  dump_effect_bindings effect_info.letbinds;
+  prerr_endline "Mapping effects:";
+  dump_effect_bindings effect_info.mappings
