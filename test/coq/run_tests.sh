@@ -3,8 +3,11 @@ set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SAILDIR="$DIR/../.."
+SAIL=${SAIL:=sail}
 TYPECHECKTESTSDIR="$DIR/../typecheck/pass"
 EXTRATESTSDIR="$DIR/pass"
+
+printf "\$SAIL is $SAIL\n"
 
 if opam config var coq-bbv:share >/dev/null 2>/dev/null; then
   COQOPTS="-Q $SAILDIR/lib/coq Sail"

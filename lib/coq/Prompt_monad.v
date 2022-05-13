@@ -231,6 +231,23 @@ Definition catch_early_return {rv A E} (m : monadR rv A A E) :=
       | inr e => throw e
      end).
 
+(* Pure functions with early return using a sum: *)
+
+Definition pure_early_return_bind {A B E} (v : E + A) (f : A -> E + B) : E + B :=
+  match v with
+  | inl e => inl e
+  | inr a => f a
+  end.
+
+Notation "m >>$= f" := (pure_early_return_bind m f) (at level 50, left associativity).
+Notation "m >>$ n" := (m >>$= fun _ => n) (at level 50, left associativity).
+
+Definition pure_early_return {A} (v : A + A) : A :=
+  match v with
+  | inl v' => v'
+  | inr v' => v'
+  end.
+
 (* Lift to monad with early return by wrapping exceptions *)
 (*val liftR : forall rv a r e. monad rv a e -> monadR rv a r e*)
 Definition liftR {rv A R E} (m : monad rv A E) : monadR rv A R E :=

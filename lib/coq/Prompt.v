@@ -98,6 +98,14 @@ match l with
   foreachM xs vars body
 end.
 
+Fixpoint foreachE {a Vars e} (l : list a) (vars : Vars) (body : a -> Vars -> e + Vars) : e + Vars :=
+match l with
+| [] => inr vars
+| (x :: xs) =>
+  body x vars >>$= fun vars =>
+  foreachE xs vars body
+end.
+
 Fixpoint foreach_ZM_up' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 <? step)} `{ArithFact (0 <=? off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <=? z <=? to)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e.
 exact (
   if sumbool_of_bool (from + off <=? to) then
@@ -106,6 +114,16 @@ exact (
     | S n => body (from + off) _ vars >>= fun vars => foreach_ZM_up' rv e Vars from to step (off + step) n _ _ vars body
     end
   else returnm vars).
+Defined.
+
+Fixpoint foreach_ZE_up' {e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 <? step)} `{ArithFact (0 <=? off)} (vars : Vars) (body : forall (z : Z) `(ArithFact (from <=? z <=? to)), Vars -> e + Vars) {struct n} : e + Vars.
+exact (
+  if sumbool_of_bool (from + off <=? to) then
+    match n with
+    | O => inr vars
+    | S n => body (from + off) _ vars >>$= fun vars => foreach_ZE_up' e Vars from to step (off + step) n _ _ vars body
+    end
+  else inr vars).
 Defined.
 
 Fixpoint foreach_ZM_down' {rv e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 <? step)} `{ArithFact (off <=? 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <=? z <=? from)), Vars -> monad rv Vars e) {struct n} : monad rv Vars e.
@@ -118,10 +136,25 @@ exact (
   else returnm vars).
 Defined.
 
+Fixpoint foreach_ZE_down' {e Vars} (from to step off : Z) (n : nat) `{ArithFact (0 <? step)} `{ArithFact (off <=? 0)} (vars : Vars) (body : forall (z : Z) `(ArithFact (to <=? z <=? from)), Vars -> e + Vars) {struct n} : e + Vars.
+exact (
+  if sumbool_of_bool (to <=? from + off) then
+    match n with
+    | O => inr vars
+    | S n => body (from + off) _ vars >>$= fun vars => foreach_ZE_down' _ _ from to step (off - step) n _ _ vars body
+    end
+  else inr vars).
+Defined.
+
 Definition foreach_ZM_up {rv e Vars} from to step vars body `{ArithFact (0 <? step)} :=
     foreach_ZM_up' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
 Definition foreach_ZM_down {rv e Vars} from to step vars body `{ArithFact (0 <? step)} :=
     foreach_ZM_down' (rv := rv) (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
+
+Definition foreach_ZE_up {e Vars} from to step vars body `{ArithFact (0 <? step)} :=
+    foreach_ZE_up' (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
+Definition foreach_ZE_down {e Vars} from to step vars body `{ArithFact (0 <? step)} :=
+    foreach_ZE_down' (e := e) (Vars := Vars) from to step 0 (S (Z.abs_nat (from - to))) vars body.
 
 (*declare {isabelle} termination_argument foreachM = automatic*)
 
