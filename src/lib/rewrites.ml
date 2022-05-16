@@ -3847,18 +3847,20 @@ let rewrite_ast_realize_mappings effect_info env ast =
 
       let prefix_id = mk_id (string_of_id id ^ "_matches_prefix") in
       let string_defs =
-        begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then
+        begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then begin
+                effect_info := Effects.copy_mapping_to_function id !effect_info prefix_id;
                 let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)]), Parse_ast.Unknown) in
                 let forwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq forwards_prefix_typ, prefix_id, None, false), (Parse_ast.Unknown,())) in
                 let forwards_prefix_spec, env = Type_check.check_val_spec env forwards_prefix_spec in
                 forwards_prefix_spec
-              else
-                if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then
+              end else
+                if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then begin
+                  effect_info := Effects.copy_mapping_to_function id !effect_info prefix_id;
                   let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)]), Parse_ast.Unknown) in
                   let backwards_prefix_spec = VS_aux (VS_val_spec (mk_typschm typq backwards_prefix_typ, prefix_id, None, false), (Parse_ast.Unknown,())) in
                   let backwards_prefix_spec, env = Type_check.check_val_spec env backwards_prefix_spec in
                   backwards_prefix_spec
-                else
+                end else
                   []
         end
       in
@@ -3919,22 +3921,24 @@ let rewrite_ast_realize_mappings effect_info env ast =
     let prefix_id = mk_id (string_of_id id ^ "_matches_prefix") in
     let prefix_wildcard = mk_pexp (Pat_exp (mk_pat P_wild, mk_exp (E_app (mk_id "None", [mk_exp (E_lit (mk_lit L_unit))])))) in
     let string_defs =
-      begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then
+      begin if subtype_check env typ1 string_typ && subtype_check env string_typ typ1 then begin
+              effect_info := Effects.copy_mapping_to_function id !effect_info prefix_id;
               let forwards_prefix_typ = Typ_aux (Typ_fn ([typ1], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ2; nat_typ]), Parse_ast.Unknown)]), Parse_ast.Unknown) in
               let forwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realize_prefix_mapcl true prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
               let forwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl prefix_id arg_pat forwards_prefix_match]), (l, ()))) in
               typ_debug (lazy (Printf.sprintf "forwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef forwards_prefix_fun |> Pretty_print_sail.to_string)));
               let forwards_prefix_fun, _ = Type_check.check_fundef env forwards_prefix_fun in
               forwards_prefix_fun
-            else
-              if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then
+            end else
+              if subtype_check env typ2 string_typ && subtype_check env string_typ typ2 then begin
+                effect_info := Effects.copy_mapping_to_function id !effect_info prefix_id;
                 let backwards_prefix_typ = Typ_aux (Typ_fn ([typ2], app_typ (mk_id "option") [A_aux (A_typ (tuple_typ [typ1; nat_typ]), Parse_ast.Unknown)]), Parse_ast.Unknown) in
                 let backwards_prefix_match = mk_exp (E_case (arg_exp, ((List.map (fun mapcl -> strip_mapcl mapcl |> realize_prefix_mapcl false prefix_id) mapcls) |> List.flatten) @ [prefix_wildcard])) in
                 let backwards_prefix_fun = (FD_aux (FD_function (non_rec, no_tannot, [mk_funcl prefix_id arg_pat backwards_prefix_match]), (l, ()))) in
                 typ_debug (lazy (Printf.sprintf "backwards prefix matches for mapping %s: %s\n%!" (string_of_id id) (Pretty_print_sail.doc_fundef backwards_prefix_fun |> Pretty_print_sail.to_string)));
                 let backwards_prefix_fun, _ = Type_check.check_fundef env backwards_prefix_fun in
                 backwards_prefix_fun
-              else
+              end else
                 []
       end
     in
