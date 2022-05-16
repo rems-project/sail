@@ -173,6 +173,9 @@ Fixpoint n_leading_spaces (s:string) : nat :=
   | _ => 0
   end.
 
+Definition n_leading_spaces_Z (s:string) : {n : Z & ArithFact (n >=? 0)} :=
+  build_ex (Z.of_nat (n_leading_spaces s)).
+
 Definition opt_spc_matches_prefix s : option (unit * {n : Z & ArithFact (n >=? 0)}) :=
   Some (tt, build_ex (Z.of_nat (n_leading_spaces s))).
 

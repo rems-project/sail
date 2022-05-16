@@ -77,7 +77,7 @@ val string_length = "string_length" : string -> nat
 val string_append = {c: "concat_str", _: "string_append"} : (string, string) -> string
 val string_startswith = "string_startswith" : (string, string) -> bool
 
-val n_leading_spaces : string -> nat
+val n_leading_spaces = pure { coq: "n_leading_spaces_Z" } : string -> nat
 function n_leading_spaces s =
   match s {
     "" => 0,
