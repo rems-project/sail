@@ -414,6 +414,12 @@ let copy_function_effect id_from effect_info id_to =
      { effect_info with functions = Bindings.add id_to eff effect_info.functions }
   | None -> effect_info
 
+let add_function_effect id_from effect_info id_to =
+  match Bindings.find_opt id_from effect_info.functions with
+  | Some eff ->
+     { effect_info with functions = Bindings.update id_to (function Some eff0 -> Some (EffectSet.union eff0 eff) | None -> Some eff) effect_info.functions }
+  | None -> effect_info
+
 let copy_mapping_to_function id_from effect_info id_to =
   match Bindings.find_opt id_from effect_info.mappings with
   (* Avoid copying the mapping effect to the function if it already

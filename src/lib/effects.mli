@@ -130,6 +130,12 @@ val check_side_effects : side_effect_info -> Type_check.tannot ast -> unit
    with List.fold_left. *)
 val copy_function_effect : id -> side_effect_info -> id -> side_effect_info
 val copy_mapping_to_function : id -> side_effect_info -> id -> side_effect_info
+
+(** [add_function_effect id_from info id_to] adds the effect
+   information from id_from to id_to in the side effect information,
+   preserving any existing effects for id_to. The order of arguments is
+   to make it convenient to use with List.fold_left. *)
+val add_function_effect : id -> side_effect_info -> id -> side_effect_info
   
 (** Previous code mostly assumes that side effect info is attached to
    nodes in the AST. To keep this code working, this rewrite pass

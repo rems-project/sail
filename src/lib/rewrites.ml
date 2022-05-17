@@ -2626,7 +2626,7 @@ let construct_toplevel_string_append_func effect_info env f_id pat =
        let func_exp = annot_exp (E_app (mk_id mapping_prefix_func,
                                         [annot_exp (E_id s_id) unk env string_typ]))
                         unk env mapping_inner_typ in
-       effect_info := Effects.copy_function_effect (mk_id mapping_prefix_func) !effect_info f_id;
+       effect_info := Effects.add_function_effect (mk_id mapping_prefix_func) !effect_info f_id;
 
        (* construct some pattern -- Some (n#, len#) *)
        let opt_typ = app_typ (mk_id "option") [A_aux (A_typ mapping_inner_typ, unk)] in
@@ -4382,7 +4382,8 @@ let move_termination_measures env ast =
 
 (* Make recursive functions with a measure use the measure as an
    explicit recursion limit, enforced by an assertion. *)
-let rewrite_explicit_measure env ast =
+let rewrite_explicit_measure effect_info env ast =
+  let effect_info = ref effect_info in
   let scan_function measures = function
     | FD_aux (FD_function (Rec_aux (Rec_measure (mpat,mexp),rl),topt,
                            FCL_aux (FCL_Funcl (id,_),_)::_),ann) ->
@@ -4454,7 +4455,9 @@ let rewrite_explicit_measure env ast =
         } body
     in
     let body = E_aux (E_block [assert_exp; body],(loc,empty_tannot)) in
-    FCL_aux (FCL_Funcl (rec_id id, construct_pexp (P_aux (pat,pann),guard,body,ann)),fcl_ann)
+    let new_id = rec_id id in
+    effect_info := Effects.copy_function_effect id !effect_info new_id;
+    FCL_aux (FCL_Funcl (new_id, construct_pexp (P_aux (pat,pann),guard,body,ann)),fcl_ann)
   in
   let rewrite_function recset (FD_aux (FD_function (r,t,fcls),ann) as fd) =
     let loc = Parse_ast.Generated (fst ann) in
@@ -4517,7 +4520,8 @@ let rewrite_explicit_measure env ast =
        (DEF_internal_mutrec fds)::(List.map (fun f -> DEF_fundef f) extras)
     | d -> [d]
   in
-  { ast with defs = List.flatten (List.map rewrite_def ast.defs) }
+  let defs = List.flatten (List.map rewrite_def ast.defs) in
+  { ast with defs }, !effect_info, env
 
 (* Add a dummy assert to loops for backends that require loops to be able to
    fail.  Note that the Coq backend will spot the assert and omit it. *)
@@ -4803,7 +4807,7 @@ let all_rewriters = [
     ("merge_function_clauses", basic_rewriter merge_funcls);
     ("minimise_recursive_functions", basic_rewriter minimise_recursive_functions);
     ("move_termination_measures", basic_rewriter move_termination_measures);
-    ("rewrite_explicit_measure", basic_rewriter rewrite_explicit_measure);
+    ("rewrite_explicit_measure", Base_rewriter rewrite_explicit_measure);
     ("rewrite_loops_with_escape_effect", basic_rewriter rewrite_loops_with_escape_effect);
     ("simple_types", basic_rewriter rewrite_simple_types);
     ("overload_cast", basic_rewriter rewrite_overload_cast);
