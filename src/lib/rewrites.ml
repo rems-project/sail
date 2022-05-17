@@ -2532,7 +2532,7 @@ let construct_toplevel_string_append_call env f_id bindings binding_typs guard e
   let new_expr = annot_exp (E_let (new_letbind, expr)) unk env (typ_of expr) in
   (new_pat, [new_guard], new_expr)
 
-let construct_toplevel_string_append_func env f_id pat =
+let construct_toplevel_string_append_func effect_info env f_id pat =
   let binding_typs = binding_typs_of_pat pat in
   let bindings = bindings_of_pat pat in
   let bindings = if bindings = [] then
@@ -2626,6 +2626,8 @@ let construct_toplevel_string_append_func env f_id pat =
        let func_exp = annot_exp (E_app (mk_id mapping_prefix_func,
                                         [annot_exp (E_id s_id) unk env string_typ]))
                         unk env mapping_inner_typ in
+       effect_info := Effects.copy_function_effect (mk_id mapping_prefix_func) !effect_info f_id;
+
        (* construct some pattern -- Some (n#, len#) *)
        let opt_typ = app_typ (mk_id "option") [A_aux (A_typ mapping_inner_typ, unk)] in
        let tup_arg_pat = match arg_pats with
@@ -2670,8 +2672,9 @@ let construct_toplevel_string_append_func env f_id pat =
   let new_fun_def, env = Type_check.check_fundef env new_fun_def in
   List.flatten [new_val_spec; new_fun_def]
 
-let rewrite_ast_toplevel_string_append env ast =
+let rewrite_ast_toplevel_string_append effect_info env ast =
   let new_defs = ref ([] : tannot def list) in
+  let effect_info = ref effect_info in
   let rewrite_pexp (Pat_aux (pexp_aux, pexp_annot) as pexp) =
     (* merge cases of Pat_exp and Pat_when *)
     let (P_aux (p_aux, p_annot) as pat, guards, expr) =
@@ -2686,7 +2689,7 @@ let rewrite_ast_toplevel_string_append env ast =
       match pat with
       | P_aux (P_string_append appends, psa_annot) ->
          let f_id = fresh_stringappend_id () in
-         new_defs := (construct_toplevel_string_append_func env f_id pat) @ !new_defs;
+         new_defs := (construct_toplevel_string_append_func effect_info env f_id pat) @ !new_defs;
          construct_toplevel_string_append_call env f_id (bindings_of_pat pat) (binding_typs_of_pat pat) (fold_typed_guards env guards) expr
       | _ -> (pat, guards, expr)
     in
@@ -2704,7 +2707,9 @@ let rewrite_ast_toplevel_string_append env ast =
     let rewritten = rewrite_def { rewriters_base with rewrite_exp = (fun _ -> fold_exp alg) } def in
     !new_defs @ [rewritten]
   in
-  { ast with defs = List.map rewrite ast.defs |> List.flatten }
+
+  let new_defs = List.map rewrite ast.defs |> List.flatten in
+  { ast with defs = new_defs }, !effect_info, env
 
 
 let rewrite_ast_pat_string_append env =
@@ -4760,7 +4765,7 @@ let all_rewriters = [
     ("optimize_recheck_defs", basic_rewriter (fun _ -> Optimize.recheck));
     ("realize_mappings", Base_rewriter rewrite_ast_realize_mappings);
     ("remove_duplicate_valspecs", basic_rewriter remove_duplicate_valspecs);
-    ("toplevel_string_append", basic_rewriter rewrite_ast_toplevel_string_append);
+    ("toplevel_string_append", Base_rewriter rewrite_ast_toplevel_string_append);
     ("pat_string_append", basic_rewriter rewrite_ast_pat_string_append);
     ("mapping_builtins", basic_rewriter rewrite_ast_mapping_patterns);
     ("truncate_hex_literals", basic_rewriter rewrite_truncate_hex_literals);
