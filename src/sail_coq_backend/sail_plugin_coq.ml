@@ -106,6 +106,7 @@ let coq_rewrites =
     ("toplevel_string_append", []);
     ("pat_string_append", []);
     ("mapping_builtins", []);
+    ("add_unspecified_rec", []);
     ("undefined", [Bool_arg true]);
     ("vector_string_pats_to_bit_list", []);
     ("remove_not_pats", []);

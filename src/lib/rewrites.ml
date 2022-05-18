@@ -1635,19 +1635,28 @@ let swaptyp typ (l,tannot) = match destruct_tannot tannot with
   | _ -> raise (Reporting.err_unreachable l __POS__ "swaptyp called with empty type annotation")
 
 let is_funcl_rec (FCL_aux (FCL_Funcl (id, pexp), _)) =
-  let pat,guard,exp,pannot = destruct_pexp pexp in
-  let exp = match guard with None -> exp
-    | Some exp' -> E_aux (E_block [exp';exp],(Parse_ast.Unknown,empty_tannot)) in
-  fst (fold_exp
-    { (compute_exp_alg false (||) ) with
-      e_app = (fun (f, es) ->
-        let (rs, es) = List.split es in
-        (List.fold_left (||) (string_of_id f = string_of_id id) rs,
-         E_app (f, es)));
-      e_app_infix = (fun ((r1,e1), f, (r2,e2)) ->
-        (r1 || r2 || (string_of_id f = string_of_id id),
-         E_app_infix (e1, f, e2))) }
-    exp)
+  fold_pexp
+    { (pure_exp_alg false (||)) with
+      e_app = (fun (id',args) ->
+      Id.compare id id' == 0 || List.exists (fun x -> x) args);
+      e_app_infix = (fun (arg1,id',arg2) ->
+        arg1 || arg2 || Id.compare id id' == 0)
+    } pexp
+
+(* Sail code isn't required to declare recursive functions as
+   recursive, so if a backend needs them then this rewrite updates
+   them.  (Also see minimise_recursive_functions.) *)
+let rewrite_add_unspecified_rec env ast =
+  let rewrite_function (FD_aux (FD_function (recopt,topt,funcls),ann) as fd) =
+    match recopt with
+    | Rec_aux (Rec_nonrec, l) when List.exists is_funcl_rec funcls ->
+       FD_aux (FD_function (Rec_aux (Rec_rec, Generated l),topt,funcls),ann)
+    | _ -> fd
+  in
+  let rewrite_def = function
+    | DEF_fundef fd -> DEF_fundef (rewrite_function fd)
+    | d -> d
+  in { ast with defs = List.map rewrite_def ast.defs }
 
 let pat_var (P_aux (paux, a)) =
   let env = env_of_annot a in
@@ -4328,20 +4337,11 @@ end
    see if the flag can be turned off.  Doesn't handle mutual recursion
    for now. *)
 let minimise_recursive_functions env ast =
-  let funcl_is_rec (FCL_aux (FCL_Funcl (id,pexp),_)) =
-    fold_pexp
-      { (pure_exp_alg false (||)) with
-        e_app = (fun (id',args) ->
-          Id.compare id id' == 0 || List.exists (fun x -> x) args);
-        e_app_infix = (fun (arg1,id',arg2) ->
-          arg1 || arg2 || Id.compare id id' == 0)
-      } pexp
-  in
   let rewrite_function (FD_aux (FD_function (recopt,topt,funcls),ann) as fd) =
     match recopt with
     | Rec_aux (Rec_nonrec, _) -> fd
     | Rec_aux ((Rec_rec | Rec_measure _), l) ->
-       if List.exists funcl_is_rec funcls
+       if List.exists is_funcl_rec funcls
        then fd
        else FD_aux (FD_function (Rec_aux (Rec_nonrec, Generated l),topt,funcls),ann)
   in
@@ -4817,7 +4817,8 @@ let all_rewriters = [
     ("split", String_rewriter (fun str -> Base_rewriter (rewrite_split_fun_ctor_pats str)));
     ("properties", basic_rewriter (fun _ -> Property.rewrite));
     ("attach_effects", Base_rewriter (fun effect_info env ast -> Effects.rewrite_attach_effects effect_info ast, effect_info, env));
-    ("prover_regstate", Bool_rewriter (fun mwords -> Base_rewriter (fun effect_info env ast -> let env, ast = State.add_regstate_defs mwords env ast in ast, effect_info, env)))
+    ("prover_regstate", Bool_rewriter (fun mwords -> Base_rewriter (fun effect_info env ast -> let env, ast = State.add_regstate_defs mwords env ast in ast, effect_info, env)));
+    ("add_unspecified_rec", basic_rewriter rewrite_add_unspecified_rec);
   ]
 
 let rewrites_interpreter = [
