@@ -10,6 +10,7 @@ XXXXX needs some smart existential instantiation
 complex_exist_sat.sail
 XXXXX needs name collision avoidance due to type/constructor punning
 constraint_ctor.sail
+mapping_clause.sail
 XXXXX Complex existential type - probably going to need this for ARM instruction ASTs
 execute_decode_hard.sail
 existential_ast.sail
@@ -41,3 +42,6 @@ XXXXX Not yet - haven't decided whether to support register reads in measures
 while_MM_terminating.sail
 XXXXX TODO, add termination measure
 floor_pow2.sail
+try_while_try.sail
+XXXXX not yet supported existential type (probably quite easy?)
+existential_constraint_synonym.sail
