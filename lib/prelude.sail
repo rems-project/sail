@@ -79,5 +79,6 @@ $endif
 $include <arith.sail>
 
 $include <option.sail>
+$include <string.sail>
 
 $endif
