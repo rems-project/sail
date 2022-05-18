@@ -2580,6 +2580,11 @@ let doc_typdef types_mod generic_eq_types (TD_aux(td, (l, annot))) =
     let fs_doc = group (separate_map (break 1) f_pp fs) in
     let type_id_pp = doc_id_type types_mod None id in
     let match_parameters =
+      match quant_items typq with
+      | [] -> empty
+      | l -> space ^^ separate_map space (fun _ -> underscore) l
+    in
+    let build_parameters =
       let (kopts,_) = quant_split typq in
       match kopts with
       | [] -> empty
@@ -2599,7 +2604,7 @@ let doc_typdef types_mod generic_eq_types (TD_aux(td, (l, annot))) =
       | _   ->
          string "Notation \"{[ r 'with' '" ^^ idpp ^^ string "' := e ]}\" :=" ^//^
            string "match r with Build_" ^^ type_id_pp ^^ match_parameters ^^ space ^^ separate space (List.mapi (pp_field "_") fs) ^^ string " =>" ^//^
-           string "Build_" ^^ type_id_pp ^^ match_parameters ^^ space ^^ separate space (List.mapi (pp_field "e") fs) ^//^
+           string "Build_" ^^ type_id_pp ^^ build_parameters ^^ space ^^ separate space (List.mapi (pp_field "e") fs) ^//^
              string "end" ^^ dot
     in
     let updates_pp = separate hardline (List.map doc_update_field fs) in
