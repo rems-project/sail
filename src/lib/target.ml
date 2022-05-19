@@ -76,7 +76,8 @@ type target = {
     pre_parse_hook : (unit -> unit);
     pre_rewrites_hook : (tannot ast -> Effects.side_effect_info -> Env.t -> unit);
     rewrites : (string * Rewrites.rewriter_arg list) list;
-    action : string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit
+    action : string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit;
+    asserts_termination : bool;
   }
 
 let name tgt = tgt.name
@@ -88,7 +89,9 @@ let run_pre_rewrites_hook tgt = tgt.pre_rewrites_hook
 let action tgt = tgt.action
 
 let rewrites tgt = Rewrites.instantiate_rewrites tgt.rewrites
-               
+
+let asserts_termination tgt = tgt.asserts_termination
+
 let targets = ref StringMap.empty
 
 let the_target = ref None
@@ -101,6 +104,7 @@ let register
       ?pre_parse_hook:(pre_parse_hook = (fun () -> ()))
       ?pre_rewrites_hook:(pre_rewrites_hook = (fun _ _ _ -> ()))
       ?rewrites:(rewrites = [])
+      ?asserts_termination:(asserts_termination = false)
       action =
   let set_target () = match !the_target with
     | None -> the_target := Some name
@@ -122,7 +126,8 @@ let register
       pre_parse_hook = pre_parse_hook;
       pre_rewrites_hook = pre_rewrites_hook;
       rewrites = rewrites;
-      action = action
+      action = action;
+      asserts_termination = asserts_termination;
     } in
   targets := StringMap.add name tgt !targets;
   tgt

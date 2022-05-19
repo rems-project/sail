@@ -144,7 +144,7 @@ let funcls_info = function
   | FCL_aux (FCL_Funcl (id, Pat_aux (Pat_when (pat, _, _), _)), _) :: _ -> Some (id, typ_of_pat pat, env_of_pat pat)
   | _ -> None
 
-let infer_def_direct_effects def =
+let infer_def_direct_effects asserts_termination def =
   let effects = ref EffectSet.empty in
 
   let scan_lexp lexp_aux annot =
@@ -184,6 +184,8 @@ let infer_def_direct_effects def =
        if not (PC.is_complete (fst annot) ctx cases (typ_of exp)) then (
          effects := EffectSet.add IncompleteMatch !effects
        )
+    | E_loop (_, Measure_aux (Measure_some _, _), _, _) when asserts_termination ->
+       effects := EffectSet.add Exit !effects
     | _ -> ()
     end;
     E_aux (e_aux, annot)
@@ -315,25 +317,35 @@ let is_mapping = function
   | Callgraph.Mapping _ -> true
   | _ -> false
                       
-let infer_side_effects ast =
+let infer_side_effects asserts_termination ast =
   let module NodeSet = Set.Make(Callgraph.Node) in
   let cg = Callgraph.graph_of_ast ast in
 
   let total = List.length ast.defs in
   let direct_effects = ref Bindings.empty in
+  let fun_termination_asserts = ref IdSet.empty in
+  let infer_fun_termination_assert def =
+    if asserts_termination then
+      match def with
+      | DEF_measure (id,_,_) ->
+         Printf.eprintf "FOUND: %s\n%!" (string_of_id id);
+         fun_termination_asserts := IdSet.add id !fun_termination_asserts
+      | _ -> ()
+  in
   List.iteri (fun i def ->
       Util.progress "Effects (direct) " (string_of_int (i + 1) ^ "/" ^ string_of_int total) (i + 1) total;
       (* Handle mapping separately to allow different effects for both directions *)
       begin match def with
       | DEF_mapdef mdef ->
-         let effs = infer_def_direct_effects def in
+         let effs = infer_def_direct_effects asserts_termination def in
          let fw, bk = infer_mapdef_extra_direct_effects def in
          let id = id_of_mapdef mdef in
          direct_effects := Bindings.add id effs !direct_effects;
          direct_effects := Bindings.add (append_id id "_forwards") fw !direct_effects;
          direct_effects := Bindings.add (append_id id "_backwards") bk !direct_effects
       | _ when can_have_direct_side_effect def ->
-         let effs = infer_def_direct_effects def in
+         infer_fun_termination_assert def;
+         let effs = infer_def_direct_effects asserts_termination def in
          let ids = ids_of_def def in
          IdSet.iter (fun id ->
              direct_effects := Bindings.add id effs !direct_effects
@@ -341,6 +353,16 @@ let infer_side_effects ast =
       | _ -> ()
       end
     ) ast.defs;
+
+  (* If asserts_termination is true then we will have a set of
+     recursive functions where the target will assert that the
+     termination measure is respected, so add suitable effects for the
+     assert.  While loops are handled in infer_def_direct_effects
+     above.  *)
+  direct_effects := IdSet.fold
+                      (fun id -> Bindings.update id (function None -> Some (EffectSet.singleton Exit)
+                                                            | Some eff -> Some (EffectSet.add Exit eff)))
+                      !fun_termination_asserts !direct_effects;
 
   let function_effects = ref Bindings.empty in
   let letbind_effects = ref Bindings.empty in

@@ -116,8 +116,12 @@ type side_effect_info = {
 val empty_side_effect_info : side_effect_info
 
 val function_is_pure : id -> side_effect_info -> bool
-                      
-val infer_side_effects : Type_check.tannot ast -> side_effect_info
+
+(** [infer_side_effects asserts_termination ast] infers all of the
+   side effect information for [ast].  If [asserts_termination] is
+   true then it is assumed that the backend will enforce the
+   termination measures with assertions. *)
+val infer_side_effects : bool -> Type_check.tannot ast -> side_effect_info
 
 (** Checks constraints on side effects, raising an error if they are
    violated. Currently these are that termination measures and

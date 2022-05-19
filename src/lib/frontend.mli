@@ -71,10 +71,10 @@ val opt_dno_cast : bool ref
 
 open Ast_defs
 
-val check_ast : Type_check.Env.t -> unit ast -> Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info
+val check_ast : bool -> Type_check.Env.t -> unit ast -> Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info
    
 val load_files :
-  ?target:string ->
+  Target.target ->
   (Arg.key * Arg.spec * Arg.doc) list ->
   Type_check.Env.t ->
   string list ->

@@ -195,4 +195,5 @@ let _ =
     ~name:"coq"
     ~options:coq_options
     ~rewrites:coq_rewrites
+    ~asserts_termination:true
     coq_target

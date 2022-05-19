@@ -84,6 +84,8 @@ val rewrites : target -> Rewrites.rewrite_sequence
   
 val action : target -> string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit
 
+val asserts_termination : target -> bool
+
 (** {2 Target registration} *)
   
 (** Used for plugins to register custom Sail targets/backends.
@@ -100,7 +102,9 @@ val action : target -> string option -> tannot ast -> Effects.side_effect_info -
    @param ?options Additional options for the Sail executable
    @param ?pre_parse_hook A function to call right at the start, before parsing
    @param ?pre_rewrites_hook A function to call before doing any rewrites
-   @param ?rewrites A sequence of Sail to Sail rewrite passes for the target *)
+   @param ?rewrites A sequence of Sail to Sail rewrite passes for the target
+   @param ?asserts_termination Whether termination measures are enforced by assertions in the target
+ *)
 val register :
   name:string ->
   ?flag:string ->
@@ -109,6 +113,7 @@ val register :
   ?pre_parse_hook:(unit -> unit) ->
   ?pre_rewrites_hook:(tannot ast -> Effects.side_effect_info -> Env.t -> unit) ->
   ?rewrites:(string * Rewrites.rewriter_arg list) list ->
+  ?asserts_termination:bool ->
   (string option -> tannot ast -> Effects.side_effect_info -> Env.t -> unit) ->
   target
 
