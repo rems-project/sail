@@ -749,9 +749,17 @@ let split_defs target all_errors splits env ast =
           (* Check that split size is within limits before generating the list of literals *)
           if (Big_int.less_equal num_lits (Big_int.of_int size_set_limit)) then
             let lits = make_vectors sz in
-            List.map (fun lit ->
-              P_aux (P_lit lit,(l,annot)),
-              [var,E_aux (E_lit lit,(new_l,annot))],[],KBindings.empty) lits
+            (* Some parts of Sail don't recognise complete bitvector
+               matches, so make the last one a wildcard. *)
+            let rec map_lits = function
+              | [] -> []
+              | [lit] ->
+                 [P_aux (P_wild, (l,annot)),
+                  [var, E_aux (E_lit lit,(new_l,annot))],[],KBindings.empty]
+              | lit::tl ->
+                 (P_aux (P_lit lit,(l,annot)),
+                  [var,E_aux (E_lit lit,(new_l,annot))],[],KBindings.empty)::(map_lits tl)
+            in map_lits lits
           else
             cannot ("bitvector length outside limit, " ^ string_of_nexp len)
        | _ ->
@@ -3655,6 +3663,8 @@ let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
     match exp with
     | E_aux (E_let (lb,exp'),ann) ->
        E_aux (E_let (lb,aux exp' (typ, target_typ)),ann)
+    | E_aux (E_var (lexp, bind, exp'),ann) ->
+       E_aux (E_var (lexp, bind, aux exp' (typ, target_typ)), ann)
     | E_aux (E_block exps,ann) ->
        let exps' = match List.rev exps with
          | [] -> []

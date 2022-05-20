@@ -170,6 +170,14 @@ let rec options = ref ([
   ( "-mono_rewrites",
     Arg.Set Rewrites.opt_mono_rewrites,
     " turn on rewrites for combining bitvector operations");
+  ( "-mono_split",
+    Arg.String (fun s ->
+      let l = Util.split_on_char ':' s in
+      match l with
+      | [fname;line;var] ->
+         Rewrites.opt_mono_split := ((fname,int_of_string line),var)::!Rewrites.opt_mono_split
+      | _ -> raise (Arg.Bad (s ^ " not of form <filename>:<line>:<variable>"))),
+      "<filename>:<line>:<variable> manually gives a case split for monomorphisation");
   ( "-splice",
     Arg.String (fun s -> opt_splice := s :: !opt_splice),
     "<filename> add functions from file, replacing existing definitions where necessary");
@@ -218,6 +226,15 @@ let rec options = ref ([
   ( "-ddump_rewrite_ast",
     Arg.String (fun l -> Rewrites.opt_ddump_rewrite_ast := Some (l, 0); Specialize.opt_ddump_spec_ast := Some (l, 0)),
     "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
+  ( "-dmono_all_split_errors",
+    Arg.Set Rewrites.opt_dall_split_errors,
+    " (debug) display all case split errors from monomorphisation, rather than one");
+  ( "-dmono_analysis",
+    Arg.Set_int Rewrites.opt_dmono_analysis,
+    " (debug) dump information about monomorphisation analysis: 0 silent, 3 max");
+  ( "-dmono_continue",
+    Arg.Set Rewrites.opt_dmono_continue,
+    " (debug) continue despite monomorphisation errors");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
