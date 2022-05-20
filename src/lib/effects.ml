@@ -328,7 +328,6 @@ let infer_side_effects asserts_termination ast =
     if asserts_termination then
       match def with
       | DEF_measure (id,_,_) ->
-         Printf.eprintf "FOUND: %s\n%!" (string_of_id id);
          fun_termination_asserts := IdSet.add id !fun_termination_asserts
       | _ -> ()
   in
