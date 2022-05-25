@@ -234,6 +234,14 @@ val or_vec = pure {
 
 overload operator | = {or_vec}
 
+val xor_vec = pure {
+  lem: "xor_vec",
+  c: "xor_bits",
+  coq: "xor_vec",
+  ocaml: "xor_vec",
+  interpreter: "xor_vec"
+} : forall 'n. (bits('n), bits('n)) -> bits('n)
+
 val subrange_bits = pure {
   ocaml: "subrange",
   interpreter: "subrange",
