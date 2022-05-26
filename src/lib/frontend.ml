@@ -82,13 +82,14 @@ let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : unit 
   let () = if !opt_ddump_tc_ast then Pretty_print_sail.pp_ast stdout ast else () in
   (ast, env, side_effects)
  
-let load_files target options type_envs files =
+let load_files ?target:target options type_envs files =
   let t = Profile.start () in
 
   let parsed_files = List.map (fun f -> (f, Initial_check.parse_file f)) files in
 
   let comments = List.map (fun (f, (comments, _)) -> (f, comments)) parsed_files in
-  let ast = Parse_ast.Defs (List.map (fun (f, (_, file_ast)) -> (f, Preprocess.preprocess (Some (Target.name target)) options file_ast)) parsed_files) in
+  let target_name = Option.map Target.name target in
+  let ast = Parse_ast.Defs (List.map (fun (f, (_, file_ast)) -> (f, Preprocess.preprocess target_name options file_ast)) parsed_files) in
   let ast = Initial_check.process_ast ~generate:true ast in
   let ast = { ast with comments = comments } in
   
@@ -109,7 +110,8 @@ let load_files target options type_envs files =
   Profile.finish "parsing" t;
 
   let t = Profile.start () in
-  let (ast, type_envs, side_effects) = check_ast (Target.asserts_termination target) type_envs ast in
+  let asserts_termination = Option.fold ~none:false ~some:Target.asserts_termination target in
+  let (ast, type_envs, side_effects) = check_ast asserts_termination type_envs ast in
   Profile.finish "type checking" t;
 
   (ast, type_envs, side_effects)
