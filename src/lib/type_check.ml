@@ -3000,8 +3000,8 @@ let rec lexp_assignment_type env (LEXP_aux (aux, (l, ()))) =
      let lexp_is_declaration lexp = lexp_assignment_type env lexp |> is_declaration in
      begin match List.find_opt lexp_is_update lexps, List.find_opt lexp_is_declaration lexps with
      | Some (LEXP_aux (_, (l_u, _))), Some (LEXP_aux (_, (l_d, _))) ->
-        typ_raise env l_u (Err_inner (Err_other "Assignment expression declaring new variable mixed with expression updating an existing variable",
-                                      l_d,
+        typ_raise env l_d (Err_inner (Err_other "Assignment expression declaring new variable mixed with expression updating an existing variable",
+                                      l_u,
                                       "Existing variable",
                                       Err_other "This assignment is to an existing variable"))
      | None, _ -> Declaration
