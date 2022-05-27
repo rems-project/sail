@@ -93,6 +93,8 @@
     (%{workspace_root}/lib/string.sail as lib/string.sail)
     (%{workspace_root}/lib/mono_rewrites.sail as lib/mono_rewrites.sail)
     (%{workspace_root}/lib/generic_equality.sail as lib/generic_equality.sail)
+    (%{workspace_root}/lib/trace.sail as lib/trace.sail)
+    (%{workspace_root}/lib/instr_kinds.sail as lib/instr_kinds.sail)
     (%{workspace_root}/lib/exception_basic.sail as lib/exception_basic.sail)
     (%{workspace_root}/lib/reverse_endianness.sail as lib/reverse_endianness.sail)
     (%{workspace_root}/lib/concurrency_interface.sail as lib/concurrency_interface.sail)
