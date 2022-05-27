@@ -68,19 +68,19 @@
 $ifndef _TRACE
 $define _TRACE
 
-val enable_tracing = {
+val enable_tracing = pure {
   c: "enable_tracing"
 } : unit -> unit
 
 function enable_tracing() = ()
 
-val disable_tracing = {
+val disable_tracing = pure {
   c: "disable_tracing"
 } : unit -> unit
 
 function disable_tracing() = ()
 
-val is_tracing = {
+val is_tracing = pure {
   c: "is_tracing"
 } : unit -> bool
 
