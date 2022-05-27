@@ -3,5 +3,5 @@
 26[96m |[0m  Some(Ctor1(a, x, c))
   [91m |[0m       [91m^------------^[0m
   [91m |[0m Could not resolve quantifiers for Ctor1
-  [91m |[0m [94m*[0m 'ex317# in {32, 64}
+  [91m |[0m [94m*[0m 'ex320# in {32, 64}
   [91m |[0m 

@@ -8,10 +8,10 @@ Explicit effect annotations are deprecated. They are no longer used and can be r
 [[96mreg_32_64/v2.sail[0m]:21:2-15
 21[96m |[0m  (*R)['d .. 0] = data
   [91m |[0m  [91m^-----------^[0m
-  [91m |[0m Bounds check failed for l-expression: ((0 <= 0 & 0 <= 'd) & 'd < 64)
+  [91m |[0m Failed to prove constraint: ((0 <= 0 & 0 <= 'd) & 'd < 64)
   [91m |[0m 
   [91m |[0m [93mCaused by [0m[[96mreg_32_64/v2.sail[0m]:21:2-15
   [91m |[0m 21[96m |[0m  (*R)['d .. 0] = data
   [91m |[0m   [91m |[0m  [91m^-----------^[0m
-  [91m |[0m   [91m |[0m Bounds check failed for l-expression: ((0 <= 0 & 0 <= 'd) & 'd < 64)
+  [91m |[0m   [91m |[0m Failed to prove constraint: ((0 <= 0 & 0 <= 'd) & 'd < 64)
   [91m |[0m 

@@ -15,4 +15,6 @@
   [91m |[0m    Could not unify vector('n, dec, 'a) and bitvector(32, dec)
   [91m |[0m [94m*[0m eq_bits
   [91m |[0m    Could not unify vector('n, dec, 'a) and bitvector(32, dec)
+  [91m |[0m [94m*[0m eq_string
+  [91m |[0m    Could not unify vector('n, dec, 'a) and bitvector(32, dec)
   [91m |[0m 
