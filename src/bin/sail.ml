@@ -196,6 +196,9 @@ let rec options = ref ([
   ( "-Ofast_undefined",
     Arg.Set Initial_check.opt_fast_undefined,
     " turn on fast-undefined mode");
+  ( "-const_prop_mutrec",
+    Arg.String (fun name -> Constant_propagation_mutrec.targets := Ast_util.mk_id name :: !Constant_propagation_mutrec.targets),
+    " unroll function in a set of mutually recursive functions");
   ( "-ddump_initial_ast",
     Arg.Set Frontend.opt_ddump_initial_ast,
     " (debug) dump the initial ast to stdout");
@@ -235,9 +238,15 @@ let rec options = ref ([
   ( "-dmono_continue",
     Arg.Set Rewrites.opt_dmono_continue,
     " (debug) continue despite monomorphisation errors");
+  ( "-infer_effects",
+    Arg.Unit (fun () -> Reporting.simple_warn "-infer_effects option is deprecated"),
+    " Ignored for compatibility with older versions; effects are always inferred now (deprecated)");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");
+  ( "-verbose",
+    Arg.Int (fun verbosity -> Util.opt_verbosity := verbosity),
+    "<verbosity> produce verbose output");
   ( "-help",
     Arg.Unit (fun () -> help !options),
     " Display this list of options. Also available as -h or --help");
