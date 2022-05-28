@@ -3300,7 +3300,9 @@ and check_block l env exps ret_typ =
   let annot_exp exp typ exp_typ = E_aux (exp, (l, mk_expected_tannot env typ exp_typ)) in
   match Nl_flow.analyze exps with
   | [] -> (match ret_typ with Some typ -> typ_equality l env typ unit_typ; [] | None -> [])
-  | [exp] -> [final env exp]
+  (* We need the special case for assign even if it's the last
+     expression in the block because the block provides the scope when
+     it's a declaration. *)
   | (E_aux (E_assign (lexp, bind), (assign_l, _)) :: exps) ->
      begin match lexp_assignment_type env lexp with
      | Update ->
@@ -3316,6 +3318,7 @@ and check_block l env exps ret_typ =
         let typ = last_typ rest in
         [annot_exp (E_var (lexp, bind, annot_exp (E_block rest) typ ret_typ)) typ ret_typ]
      end
+  | [exp] -> [final env exp]
   | (E_aux (E_app (f, [E_aux (E_constraint nc, _)]), _) :: exps) when string_of_id f = "_assume" ->
      Env.wf_constraint env nc;
      let env = Env.add_constraint nc env in
