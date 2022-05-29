@@ -3453,14 +3453,20 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
      annot_exp (E_let (lb, body)) l env (typ_of body)
   | E_var (lexp,v,body) ->
      (* Rewrite E_var into E_let and call recursively *)
-     let paux, typ = match lexp with
+     let rec aux lexp = match lexp with
        | LEXP_aux (LEXP_id id, _) ->
           P_id id, typ_of v
        | LEXP_aux (LEXP_cast (typ, id), _) ->
           unaux_pat (add_p_typ env typ (annot_pat (P_id id) l env (typ_of v))), typ
+       | LEXP_aux (LEXP_tup lexps, _) ->
+          let pauxs_typs = List.map aux lexps in
+          let pats, typs = List.split (List.map (fun (paux, typ) ->
+                                           annot_pat paux l env typ, typ) pauxs_typs) in
+          P_tup pats, mk_typ (Typ_tup typs)
        | _ ->
          raise (Reporting.err_unreachable l __POS__
-           "E_var with a lexp that is not a variable") in
+           ("E_var with a lexp that is not a variable: " ^ string_of_lexp lexp)) in
+     let paux, typ = aux lexp in
      let lb = annot_letbind (paux, v) l env typ in
      let exp = annot_exp (E_let (lb, body)) l env (typ_of body) in
      rewrite_var_updates exp

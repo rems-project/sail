@@ -1,7 +1,12 @@
 default Order dec
 $include <prelude.sail>
 
-val some_tuple = monadic "some_tuple" : unit -> (int, int, int)
+val some_tuple : unit -> (int, int, int)
+
+function some_tuple() = {
+  print_endline("some_tuple");
+  (1,2,3)
+}
 
 val all_updated : unit -> int
 
