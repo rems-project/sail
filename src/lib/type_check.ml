@@ -3025,10 +3025,7 @@ let rec exp_unconditionally_returns (E_aux (aux, _)) =
 let tc_assume nc (E_aux (aux, annot)) =
   let l = gen_loc (fst annot) in
   let env = env_of_annot annot in
-  E_aux (E_block [
-             E_aux (E_app (mk_id "_assume", [E_aux (E_constraint nc, (l, mk_tannot env bool_typ))]), (l, mk_tannot env unit_typ));
-             E_aux (aux, annot)
-           ], annot)
+  E_aux (E_internal_assume (nc, E_aux (aux, annot)), annot)
  
 module PC_config = struct
   type t = tannot
@@ -3288,6 +3285,11 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      if is_typ_monomorphic typ || Env.polymorphic_undefineds env
      then annot_exp (E_lit lit) typ
      else typ_error env l ("Type " ^ string_of_typ typ ^ " failed undefined monomorphism restriction")
+  | E_internal_assume (nc, exp), _ ->
+     Env.wf_constraint env nc;
+     let env = Env.add_constraint nc env in
+     let exp' = crule check_exp env exp typ in
+     annot_exp (E_internal_assume (nc, exp')) typ
   | _, _ ->
      let inferred_exp = irule infer_exp env exp in
      type_coercion env inferred_exp typ
@@ -4297,6 +4299,11 @@ and infer_exp env (E_aux (exp_aux, (l, ())) as exp) =
   | E_ref id when Env.is_register id env ->
      let typ = Env.get_register id env in
      annot_exp (E_ref id) (register_typ typ)
+  | E_internal_assume (nc, exp) ->
+     Env.wf_constraint env nc;
+     let env = Env.add_constraint nc env in
+     let exp' = irule infer_exp env exp in
+     annot_exp (E_internal_assume (nc, exp')) (typ_of exp')
   | _ -> typ_error env l ("Cannot infer type of: " ^ string_of_exp exp)
 
 and infer_funapp l env f xs ret_ctx_typ = infer_funapp' l env f (Env.get_val_spec f env) xs ret_ctx_typ

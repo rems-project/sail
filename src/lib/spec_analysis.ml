@@ -292,6 +292,8 @@ let rec fv_of_exp consider_var bound used set (E_aux (e,(_,tannot))) : (Nameset.
      let _,u1,s1 = fv_of_exp consider_var bound used set exp1 in
      fv_of_exp consider_var bp (Nameset.union up u1) s1 exp2
   | E_constraint nc -> bound, fv_of_nconstraint consider_var bound used nc, set
+  | E_internal_assume (nc, e) ->
+     fv_of_exp consider_var bound (fv_of_nconstraint consider_var bound used nc) set e
 
 and fv_of_pes consider_var bound used set pes =
   match pes with
@@ -798,6 +800,7 @@ let nexp_subst_fns substs =
       | E_internal_return e -> re (E_internal_return (s_exp e))
       | E_throw e -> re (E_throw (s_exp e))
       | E_try (e,cases) -> re (E_try (s_exp e, List.map s_pexp cases))
+      | E_internal_assume (nc, e) -> re (E_internal_assume (subst_kids_nc substs nc, s_exp e))
     and s_measure (Measure_aux (m,l)) =
       let m = match m with
         | Measure_none -> m

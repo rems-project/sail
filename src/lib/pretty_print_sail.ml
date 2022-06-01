@@ -463,6 +463,9 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_internal_return exp -> string "internal_return" ^^ parens (doc_exp exp)
   | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
      separate space [string "2"; string "^"; doc_atomic_exp exp]
+  | E_internal_assume (nc, exp) ->
+     let le = string "internal_assume " ^^ doc_nc nc in
+     doc_op (string "in") le (doc_exp exp)
   | _ -> doc_atomic_exp exp
 and doc_measure (Measure_aux (m_aux, _)) =
   match m_aux with

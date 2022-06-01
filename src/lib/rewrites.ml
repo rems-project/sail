@@ -2345,6 +2345,8 @@ let rewrite_ast_letbind_effects effect_info env =
     | E_throw exp' ->
        n_exp_name exp' (fun exp' ->
        k (rewrap (E_throw exp')))
+    | E_internal_assume (nc, exp') ->
+       rewrap (E_internal_assume (nc, n_exp exp' k))
     | E_internal_plet _ -> failwith "E_internal_plet should not be here yet" in
 
   let rewrite_fun _ (FD_aux (FD_function(recopt,tannotopt,funcls),fdannot) as fd) =
@@ -3234,6 +3236,9 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
         * outer block isn't necessary anyway, because we will exit the
         * function, so just keep the early_return expression as is. *)
        exp
+    | E_internal_assume (nc,exp) ->
+       let exp = add_vars overwrite exp vars in
+       E_aux (E_internal_assume (nc,exp), swaptyp (typ_of exp) annot)
     | _ ->
        (* after rewrite_ast_letbind_effects there cannot be terms that have
           effects/update local variables in "tail-position": check n_exp_term
@@ -3480,6 +3485,9 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
   | E_cast (typ, exp) ->
      let exp' = rewrite_var_updates exp in
      E_aux (E_cast (typ, exp'), annot)
+  | E_internal_assume (nc, exp) ->
+     let exp' = rewrite_var_updates exp in
+     E_aux (E_internal_assume (nc, exp'), annot)
   (* There are no other expressions that have effects or variable updates in
      "tail-position": check the definition nexp_term and where it is used. *)
   | _ -> exp

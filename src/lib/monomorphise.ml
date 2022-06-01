@@ -494,7 +494,7 @@ type split =
   | VarSplit of (tannot pat *        (* pattern for this case *)
       (id * tannot Ast.exp) list *   (* substitutions for arguments *)
       pat_choice list * (* optional locations of constraints/case expressions to reduce *)
-      nexp KBindings.t)             (* substitutions for type variables *)
+      (nexp * bool) KBindings.t)     (* substitutions for type variables; bool says whether to generate an assertion because we generated a wildcard to make the completeness checker happy *)
       list
   | ConstrSplit of (tannot pat * nexp KBindings.t) list
 
@@ -698,8 +698,15 @@ let split_defs target all_errors splits env ast =
   let (refinements, defs') = split_constructors ast.defs in
 
   let subst_exp ref_vars substs ksubsts exp =
-    let substs = bindings_from_list substs, ksubsts in
-    fst (Constant_propagation.const_prop target ast ref_vars substs Bindings.empty exp)
+    let substs = bindings_from_list substs, KBindings.map fst ksubsts in
+    let exp = fst (Constant_propagation.const_prop target ast ref_vars substs Bindings.empty exp) in
+    let env = env_of exp in
+    KBindings.fold (fun kid (nexp, should_assert) exp ->
+        if should_assert && not (is_kid_generated kid) then
+          let assert_nc = nc_eq (nvar kid) nexp in
+          Type_check.tc_assume assert_nc exp
+        else
+          exp) ksubsts exp
   in
 
   (* Split a variable pattern into every possible value *)
@@ -774,7 +781,7 @@ let split_defs target all_errors splits env ast =
             P_aux ((if wildcard then P_wild else P_lit lit), (l,annot)),
             [var,E_aux (E_lit lit,(new_l,annot))],[],
             match kid with None -> KBindings.empty
-                         | Some k -> KBindings.singleton k (nconstant i)
+                         | Some k -> KBindings.singleton k (nconstant i, wildcard)
          in
          match value with
          | Nexp_constant i -> [mk_lit None false i]
@@ -826,10 +833,10 @@ let split_defs target all_errors splits env ast =
              | Some ps -> ps
            in
            let merge (h,hsubs,hpchoices,hksubs) (t,tsubs,tpchoices,tksubs) =
-             if KBindings.for_all (fun kid nexp ->
+             if KBindings.for_all (fun kid (nexp, _) ->
                     match KBindings.find_opt kid tksubs with
                     | None -> true
-                    | Some nexp' -> Nexp.compare nexp nexp' == 0) hksubs
+                    | Some (nexp',_) -> Nexp.compare nexp nexp' == 0) hksubs
              then Some (h::t, hsubs@tsubs, hpchoices@tpchoices,
                         KBindings.union (fun k a _ -> Some a) hksubs tksubs)
              else None
@@ -911,7 +918,7 @@ let split_defs target all_errors splits env ast =
                          (Typ_app (Id_aux (Id "atom",_),
                                    [A_aux (A_nexp
                                                    (Nexp_aux (Nexp_var var,_)),_)]),_) ->
-                        KBindings.singleton var (nconstant j)
+                        KBindings.singleton var (nconstant j, false)
                      | _ -> KBindings.empty
                    in
                    p,[id,E_aux (E_lit lit,(Generated pl,pannot))],[l,(i,max,[])],kid_subst
@@ -1069,6 +1076,7 @@ let split_defs target all_errors splits env ast =
         | E_var (le,e1,e2) -> re (E_var (map_lexp le, map_exp e1, map_exp e2))
         | E_internal_plet (p,e1,e2) -> re (E_internal_plet (check_single_pat p, map_exp e1, map_exp e2))
         | E_internal_return e -> re (E_internal_return (map_exp e))
+        | E_internal_assume (nc,e) -> re (E_internal_assume (nc, map_exp e))
       and map_fexp (FE_aux (FE_Fexp (id,e), annot)) =
         FE_aux (FE_Fexp (id,map_exp e),annot)
       and map_pexp = function
@@ -1079,7 +1087,8 @@ let split_defs target all_errors splits env ast =
            | VarSplit patsubsts ->
               if check_split_size patsubsts (pat_loc p) then
                 List.map (fun (pat',substs,pchoices,ksubsts) ->
-                  let exp' = Spec_analysis.nexp_subst_exp ksubsts e in
+                  let plain_ksubsts = KBindings.map fst ksubsts in
+                  let exp' = Spec_analysis.nexp_subst_exp plain_ksubsts e in
                   let exp' = apply_pat_choices pchoices exp' in
                   let exp' = subst_exp ref_vars substs ksubsts exp' in
                   let exp' = stop_at_false_assertions exp' in
@@ -1099,10 +1108,12 @@ let split_defs target all_errors splits env ast =
            | VarSplit patsubsts ->
               if check_split_size patsubsts (pat_loc p) then
                 List.map (fun (pat',substs,pchoices,ksubsts) ->
-                  let exp1' = Spec_analysis.nexp_subst_exp ksubsts e1 in
+                  let plain_ksubsts = KBindings.map fst ksubsts in
+                  let exp1' = Spec_analysis.nexp_subst_exp plain_ksubsts e1 in
                   let exp1' = apply_pat_choices pchoices exp1' in
                   let exp1' = subst_exp ref_vars substs ksubsts exp1' in
-                  let exp2' = Spec_analysis.nexp_subst_exp ksubsts e2 in
+                  let plain_ksubsts = KBindings.map fst ksubsts in
+                  let exp2' = Spec_analysis.nexp_subst_exp plain_ksubsts e2 in
                   let exp2' = apply_pat_choices pchoices exp2' in
                   let exp2' = subst_exp ref_vars substs ksubsts exp2' in
                   let exp2' = stop_at_false_assertions exp2' in
@@ -2336,6 +2347,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
         List.fold_left dep_bindings_merge Bindings.empty assigns,
         List.fold_left merge r rs)
     | E_assert (e1,_) -> analyse_exp fn_id env assigns e1
+    | E_internal_assume (nc,e1) -> analyse_exp fn_id env assigns e1
 
     | E_app_infix _
     | E_internal_plet _
@@ -3638,8 +3650,10 @@ let make_bitvector_env_casts top_env env quant_kids insts exp =
     | _::_, E_aux (_,(l,ann)) ->
        E_aux (E_block (assigns_in @ [exp] @ assigns_out), (Generated l,ann))
   in
-  Bindings.fold (fun var (mut,typ) exp ->
-    if mut = Immutable then mk_cast var typ exp else exp) immutables exp
+  let add_immutables exp =
+    Bindings.fold (fun var (mut,typ) exp ->
+        if mut = Immutable then mk_cast var typ exp else exp) immutables exp
+  in add_immutables exp
 
 let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
   if alpha_equivalent (env_of exp) typ target_typ then exp else
@@ -3683,6 +3697,8 @@ let make_bitvector_cast_exp cast_name cast_env quant_kids typ target_typ exp =
        let src_arg_typ = infer_arg_typ (env_of exp) f l typ in
        let tgt_arg_typ = infer_arg_typ (env_of exp) f l target_typ in
        E_aux (E_app (f,[aux arg (src_arg_typ, tgt_arg_typ)]),(l,ann))
+    | E_aux (E_internal_assume (nc, exp'), ann) ->
+       E_aux (E_internal_assume (nc, aux exp' (typ, target_typ)), ann)
     | _ ->
        (make_bitvector_cast_cast cast_name cast_env (env_of exp) quant_kids typ target_typ) exp
   in
@@ -3767,6 +3783,16 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
                      make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
                        (make_bitvector_env_casts env (env_of body) quant_kids (KBindings.singleton kid (nconstant i)) body)
                   | None -> body)
+               | P_aux (P_wild, _), None ->
+                  begin match body with
+                  | E_aux (E_internal_assume (NC_aux (NC_equal (Nexp_aux (Nexp_var kid', _), nexp), _) as nc, body'), assume_ann) when Kid.compare kid kid' == 0 ->
+                     (* Similar to the literal case *)
+                     let src_typ = fill_in_type (Env.add_constraint (nc_eq (nvar kid) nexp) env) result_typ in
+                     let body'' = make_bitvector_cast_exp "bitvector_cast_out" env quant_kids src_typ result_typ
+                                    (make_bitvector_env_casts env (env_of body') quant_kids (KBindings.singleton kid nexp) body')
+                     in E_aux (E_internal_assume (nc, body''), assume_ann)
+                  | _ -> body
+                  end
                | _ ->
                   body
              in

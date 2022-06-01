@@ -470,6 +470,7 @@ exp :: 'E_' ::=
   | let pat = exp in exp'   :: I :: internal_plet {{ com This is an internal node, used to distinguised some introduced lets during processing from original ones }}
   | return_int ( exp )      ::  :: internal_return {{ com For internal use to embed into monad definition }}
   | value :: I :: internal_value {{ com For internal use in interpreter to wrap pre-evaluated values when returning an action }}
+  | assume n_constraint in exp :: :: internal_assume {{ com Internal node for additional type checker assumptions }}
   | constraint n_constraint :: :: constraint
 
 lexp :: 'LEXP_' ::= {{ com lvalue expression }}

@@ -590,6 +590,7 @@ and map_exp_annot_aux f = function
   | E_var (lexp, exp1, exp2) -> E_var (map_lexp_annot f lexp, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_plet (pat, exp1, exp2) -> E_internal_plet (map_pat_annot f pat, map_exp_annot f exp1, map_exp_annot f exp2)
   | E_internal_return exp -> E_internal_return (map_exp_annot f exp)
+  | E_internal_assume (nc, exp) -> E_internal_assume (nc, map_exp_annot f exp)
 and map_measure_annot f (Measure_aux (m, l)) = Measure_aux (map_measure_annot_aux f m, l)
 and map_measure_annot_aux f = function
   | Measure_none -> Measure_none
@@ -935,6 +936,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_internal_return exp -> "internal_return (" ^ string_of_exp exp ^ ")"
   | E_internal_plet (pat, exp, body) -> "internal_plet " ^ string_of_pat pat ^ " = " ^ string_of_exp exp ^ " in " ^ string_of_exp body
   | E_internal_value v -> "INTERNAL_VALUE(" ^ Value.string_of_value v ^ ")"
+  | E_internal_assume (nc, exp) -> "internal_assume " ^ string_of_n_constraint nc ^ " in " ^ string_of_exp exp
 
 and string_of_measure (Measure_aux (m,_)) =
   match m with
@@ -1599,6 +1601,8 @@ let rec subst id value (E_aux (e_aux, annot) as exp) =
 
     | E_var (lexp, exp1, exp2) -> E_var (subst_lexp id value lexp, subst id value exp1, subst id value exp2)
 
+    | E_internal_assume (nc, exp) -> E_internal_assume (nc, subst id value exp)
+
     | E_internal_plet _ | E_internal_return _ -> failwith ("subst " ^ string_of_exp exp)
   in
   wrap e_aux
@@ -1823,6 +1827,7 @@ let rec locate : 'a. (l -> l) -> 'a exp -> 'a exp = fun f (E_aux (e_aux, (l, ann
     | E_internal_plet (pat, exp1, exp2) -> E_internal_plet (locate_pat f pat, locate f exp1, locate f exp2)
     | E_internal_return exp -> E_internal_return (locate f exp)
     | E_internal_value value -> E_internal_value value
+    | E_internal_assume (nc, exp) -> E_internal_assume (locate_nc f nc, locate f exp)
   in
   E_aux (e_aux, (f l, annot))
 

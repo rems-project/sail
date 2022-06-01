@@ -788,6 +788,8 @@ let rec anf (E_aux (e_aux, ((l, _) as exp_annot)) as exp) =
 
   | E_cast (typ, exp) -> mk_aexp (AE_cast (anf exp, typ))
 
+  | E_internal_assume (_nc, exp) -> anf exp
+
   | E_vector_access _ | E_vector_subrange _ | E_vector_update _ | E_vector_update_subrange _ | E_vector_append _ ->
      (* Should be re-written by type checker *)
      raise (Reporting.err_unreachable l __POS__ "encountered raw vector operation when converting to ANF")

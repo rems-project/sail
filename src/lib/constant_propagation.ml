@@ -598,6 +598,9 @@ let const_props target ast ref_vars =
     | E_assert (e1,e2) ->
        let e1',e2',assigns = non_det_exp_2 e1 e2 in
        re (E_assert (e1',e2')) assigns
+    | E_internal_assume (nc, e) ->
+       let e',_ = const_prop_exp substs assigns e in
+       re (E_internal_assume (nc, e')) assigns
 
     | E_app_infix _
     | E_internal_plet _

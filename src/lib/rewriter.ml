@@ -464,6 +464,7 @@ type ('a,'exp,'exp_aux,'lexp,'lexp_aux,'fexp,'fexp_aux,
   ; e_internal_plet          : 'pat * 'exp * 'exp -> 'exp_aux
   ; e_internal_return        : 'exp -> 'exp_aux
   ; e_internal_value         : Value.value -> 'exp_aux
+  ; e_internal_assume        : n_constraint * 'exp -> 'exp_aux
   ; e_aux                    : 'exp_aux * 'a annot -> 'exp
   ; lEXP_id                  : id -> 'lexp_aux
   ; lEXP_deref               : 'exp -> 'lexp_aux
@@ -536,6 +537,7 @@ let rec fold_exp_aux alg = function
      alg.e_internal_plet (fold_pat alg.pat_alg pat, fold_exp alg e1, fold_exp alg e2)
   | E_internal_return e -> alg.e_internal_return (fold_exp alg e)
   | E_internal_value v -> alg.e_internal_value v
+  | E_internal_assume (nc, e) -> alg.e_internal_assume (nc, fold_exp alg e)
 and fold_exp alg (E_aux (exp_aux,annot)) = alg.e_aux (fold_exp_aux alg exp_aux, annot)
 and fold_lexp_aux alg = function
   | LEXP_id id -> alg.lEXP_id id
@@ -605,6 +607,7 @@ let id_exp_alg =
   ; e_internal_plet = (fun (pat, e1, e2) -> E_internal_plet (pat,e1,e2))
   ; e_internal_return = (fun e -> E_internal_return e)
   ; e_internal_value = (fun v -> E_internal_value v)
+  ; e_internal_assume = (fun (nc,e) -> E_internal_assume (nc, e))
   ; e_aux = (fun (e,annot) -> E_aux (e,annot))
   ; lEXP_id = (fun id -> LEXP_id id)
   ; lEXP_deref = (fun e -> LEXP_deref e)
@@ -711,6 +714,7 @@ let compute_exp_alg bot join =
     (join_list [vp;v1;v2], E_internal_plet (pat,e1,e2)))
   ; e_internal_return = (fun (v,e) -> (v, E_internal_return e))
   ; e_internal_value = (fun v -> (bot, E_internal_value v))
+  ; e_internal_assume = (fun (nc,(v,e)) -> (v, E_internal_assume (nc,e)))
   ; e_aux = (fun ((v,e),annot) -> (v, E_aux (e,annot)))
   ; lEXP_id = (fun id -> (bot, LEXP_id id))
   ; lEXP_deref = (fun (v, e) -> (v, LEXP_deref e))
@@ -799,6 +803,7 @@ let pure_exp_alg bot join =
   ; e_internal_plet = (fun (vp, v1, v2) -> join_list [vp;v1;v2])
   ; e_internal_return = (fun v -> v)
   ; e_internal_value = (fun v -> bot)
+  ; e_internal_assume = (fun (_nc,v) -> v)
   ; e_aux = (fun (v,annot) -> v)
   ; lEXP_id = (fun id -> bot)
   ; lEXP_deref = (fun v -> v)
@@ -1012,6 +1017,9 @@ let default_fold_exp f x (E_aux (e,ann) as exp) =
   | E_internal_return e ->
      let x,e = f x e in x, re (E_internal_return e)
   | E_internal_value _ -> x,exp
+  | E_internal_assume (nc, e) ->
+     let x,e = f x e in
+     x, re (E_internal_assume (nc, e))
 
 let rec foldin_exp f x e = f (default_fold_exp (foldin_exp f)) x e
 let foldin_pexp f x e = default_fold_pexp (foldin_exp f) x e
