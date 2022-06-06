@@ -1458,7 +1458,7 @@ let rewrite_ast_exp_lift_assign env defs = rewrite_ast_base
    TODO: Maybe separate generic removal of redundant returns, and Lem-specific
    rewriting of early returns
  *)
-let rewrite_ast_early_return env ast =
+let rewrite_ast_early_return effect_info env ast =
   let is_unit (E_aux (exp, _)) = match exp with
   | E_lit (L_aux (L_unit, _)) -> true
   | _ -> false in
@@ -1623,12 +1623,15 @@ let rewrite_ast_early_return env ast =
     FD_aux (FD_function (rec_opt, tannot_opt,
       List.map (rewrite_funcl_early_return rewriters) funcls), a) in
 
-  let early_ret_spec = fst (Type_error.check_defs initial_env [gen_vs ~pure:true
+  let early_ret_spec = fst (Type_error.check_defs initial_env [gen_vs ~pure:false
     ("early_return", "forall ('a : Type) ('b : Type). 'a -> 'b")]) in
+  let effect_info = Effects.add_monadic_built_in (mk_id "early_return") effect_info in
 
-  rewrite_ast_base
-    { rewriters_base with rewrite_fun = rewrite_fun_early_return }
-    { ast with defs = early_ret_spec @ ast.defs }
+  let new_ast =
+    rewrite_ast_base
+      { rewriters_base with rewrite_fun = rewrite_fun_early_return }
+      { ast with defs = early_ret_spec @ ast.defs }
+  in new_ast, effect_info, env
 
 let swaptyp typ (l,tannot) = match destruct_tannot tannot with
   | Some (env, typ') -> (l, mk_tannot env typ)
@@ -4810,7 +4813,7 @@ let all_rewriters = [
     ("guarded_pats", basic_rewriter rewrite_ast_guarded_pats);
     ("bit_lists_to_lits", basic_rewriter rewrite_bit_lists_to_lits);
     ("exp_lift_assign", basic_rewriter rewrite_ast_exp_lift_assign);
-    ("early_return", basic_rewriter rewrite_ast_early_return);
+    ("early_return", Base_rewriter rewrite_ast_early_return);
     ("nexp_ids", basic_rewriter rewrite_ast_nexp_ids);
     ("remove_blocks", basic_rewriter rewrite_ast_remove_blocks);
     ("letbind_effects", Base_rewriter rewrite_ast_letbind_effects);

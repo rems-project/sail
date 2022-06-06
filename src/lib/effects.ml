@@ -458,7 +458,12 @@ let copy_mapping_to_function id_from effect_info id_to =
      { effect_info with functions = Bindings.add id_to (EffectSet.union eff existing_effects) effect_info.functions }
   | _ ->
      effect_info
- 
+
+let add_monadic_built_in id effect_info =
+  { effect_info with
+    functions = add_effects id (EffectSet.singleton External) effect_info.functions
+  }
+
 let rewrite_attach_effects effect_info =
   let rewrite_lexp_aux ((child_eff, lexp_aux), (l, tannot)) =
     let env = env_of_tannot tannot in
