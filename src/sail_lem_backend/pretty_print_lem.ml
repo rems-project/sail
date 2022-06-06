@@ -273,8 +273,17 @@ let doc_typ_lem, doc_typ_lem_brackets, doc_atomic_typ_lem =
   (* following the structure of parser for precedence *)
   let rec typ atyp_needed ty = tup_typ atyp_needed ty
     and tup_typ atyp_needed (Typ_aux (t, l) as ty) = match t with
-      | Typ_fn _ ->
-         Reporting.unreachable l __POS__ "Function type passed to doc_typ_lem"
+      | Typ_fn(args,ret) ->
+         let ret_typ =
+           (* TODO EFFECT: Monadicity as parameter or separate function. See Coq *)
+           (*
+           if effectful efct
+           then separate space [string "M"; tup_typ true ret]
+           else *) separate space [tup_typ false ret] in
+         let arg_typs = List.map (tup_typ false) args in
+         let tpp = separate (space ^^ arrow ^^ space) (arg_typs @ [ret_typ]) in
+         (* once we have proper excetions we need to know what the exceptions type is *)
+         if atyp_needed then parens tpp else tpp
       | Typ_tup typs ->
          parens (separate_map (space ^^ star ^^ space) (app_typ false) typs)
       | _ -> app_typ atyp_needed ty
