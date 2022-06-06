@@ -29,7 +29,7 @@ do
 	fi;
 	rm out;
 	rm result;
-	rm -r _sbuild
+	rm -rf _sbuild
     else
 	red "building $i" "fail"
     fi
@@ -53,7 +53,7 @@ do
 	fi;
 	rm out;
 	rm result;
-	rm -r _sbuild
+	rm -rf _sbuild
     else
 	red "building $i" "fail"
     fi
