@@ -316,6 +316,12 @@ let is_function = function
 let is_mapping = function
   | Callgraph.Mapping _ -> true
   | _ -> false
+
+(* Normally we only add effects once, but occasionally we need to add
+   more (e.g., if a function is external for some targets, but defined
+   in Sail for others). *)
+let add_effects id effect_set effect_map =
+  Bindings.update id (function Some effects -> Some (EffectSet.union effects effect_set) | None -> Some effect_set) effect_map
                       
 let infer_side_effects asserts_termination ast =
   let module NodeSet = Set.Make(Callgraph.Node) in
@@ -339,15 +345,15 @@ let infer_side_effects asserts_termination ast =
          let effs = infer_def_direct_effects asserts_termination def in
          let fw, bk = infer_mapdef_extra_direct_effects def in
          let id = id_of_mapdef mdef in
-         direct_effects := Bindings.add id effs !direct_effects;
-         direct_effects := Bindings.add (append_id id "_forwards") fw !direct_effects;
-         direct_effects := Bindings.add (append_id id "_backwards") bk !direct_effects
+         direct_effects := add_effects id effs !direct_effects;
+         direct_effects := add_effects (append_id id "_forwards") fw !direct_effects;
+         direct_effects := add_effects (append_id id "_backwards") bk !direct_effects
       | _ when can_have_direct_side_effect def ->
          infer_fun_termination_assert def;
          let effs = infer_def_direct_effects asserts_termination def in
          let ids = ids_of_def def in
          IdSet.iter (fun id ->
-             direct_effects := Bindings.add id effs !direct_effects
+             direct_effects := add_effects id effs !direct_effects
            ) ids
       | _ -> ()
       end
@@ -359,8 +365,7 @@ let infer_side_effects asserts_termination ast =
      assert.  While loops are handled in infer_def_direct_effects
      above.  *)
   direct_effects := IdSet.fold
-                      (fun id -> Bindings.update id (function None -> Some (EffectSet.singleton Exit)
-                                                            | Some eff -> Some (EffectSet.add Exit eff)))
+                      (fun id -> add_effects id (EffectSet.singleton Exit))
                       !fun_termination_asserts !direct_effects;
 
   let function_effects = ref Bindings.empty in
@@ -438,7 +443,7 @@ let copy_function_effect id_from effect_info id_to =
 let add_function_effect id_from effect_info id_to =
   match Bindings.find_opt id_from effect_info.functions with
   | Some eff ->
-     { effect_info with functions = Bindings.update id_to (function Some eff0 -> Some (EffectSet.union eff0 eff) | None -> Some eff) effect_info.functions }
+     { effect_info with functions = add_effects id_to eff effect_info.functions }
   | None -> effect_info
 
 let copy_mapping_to_function id_from effect_info id_to =
