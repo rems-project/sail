@@ -68,6 +68,7 @@
 val opt_ddump_initial_ast : bool ref
 val opt_ddump_tc_ast : bool ref
 val opt_dno_cast : bool ref
+val opt_reformat : string option ref
 
 open Ast_defs
 

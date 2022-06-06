@@ -71,6 +71,7 @@ open Ast_defs
 let opt_ddump_initial_ast = ref false
 let opt_ddump_tc_ast = ref false
 let opt_dno_cast = ref true
+let opt_reformat : string option ref = ref None
                           
 let check_ast (asserts_termination : bool) (env : Type_check.Env.t) (ast : unit ast) : Type_check.tannot ast * Type_check.Env.t * Effects.side_effect_info =
   let env = if !opt_dno_cast then Type_check.Env.no_casts env else env in
@@ -95,15 +96,13 @@ let load_files ?target:target options type_envs files =
   
   let () = if !opt_ddump_initial_ast then Pretty_print_sail.pp_ast stdout ast else () in
 
-  (*
   begin match !opt_reformat with
   | Some dir ->
      Pretty_print_sail.reformat dir ast;
      exit 0
   | None -> ()
   end;
-   *)
-  
+
   (* The separate loop measures declarations would be awkward to type check, so
      move them into the definitions beforehand. *)
   let ast = Rewrites.move_loop_measures ast in
