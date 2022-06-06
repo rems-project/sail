@@ -4794,7 +4794,7 @@ let all_rewriters = [
     ("atoms_to_singletons", String_rewriter (fun target -> (basic_rewriter (fun _ -> Monomorphise.rewrite_atoms_to_singletons target))));
     ("add_bitvector_casts", basic_rewriter Monomorphise.add_bitvector_casts);
     ("remove_impossible_int_cases", basic_rewriter Constant_propagation.remove_impossible_int_cases);
-    ("const_prop_mutrec", String_rewriter (fun target -> basic_rewriter (Constant_propagation_mutrec.rewrite_ast target)));
+    ("const_prop_mutrec", String_rewriter (fun target -> Base_rewriter (Constant_propagation_mutrec.rewrite_ast target)));
     ("make_cases_exhaustive", basic_rewriter MakeExhaustive.rewrite);
     ("undefined", Bool_rewriter (fun b -> basic_rewriter (rewrite_undefined_if_gen b)));
     ("vector_string_pats_to_bit_list", basic_rewriter rewrite_ast_vector_string_pats_to_bit_list);

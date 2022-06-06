@@ -208,7 +208,8 @@ let prop_args_pexp target ast ksubsts args pexp =
   in
   construct_pexp (pat', guard, exp', annot)
 
-let rewrite_ast target env ({ defs; _ } as ast) =
+let rewrite_ast target effect_info env ({ defs; _ } as ast) =
+  let effect_info = ref effect_info in
   let rec rewrite = function
     | [] -> []
     | DEF_internal_mutrec mutrecs :: ds ->
@@ -219,6 +220,7 @@ let rewrite_ast target env ({ defs; _ } as ast) =
        let rec e_app (id, args) (l, annot) =
          if IdSet.mem id mutrec_ids && List.exists is_const_exp args then
            let id' = generate_fun_id id args in
+           effect_info := Effects.copy_function_effect id !effect_info id';
            let args' = match List.filter (fun e -> not (is_const_exp e)) args with
              | [] -> [infer_exp env (mk_lit_exp L_unit)]
              | args' -> args'
@@ -266,4 +268,5 @@ let rewrite_ast target env ({ defs; _ } as ast) =
     | d :: ds ->
        d :: rewrite ds
   in
-  Spec_analysis.top_sort_defs { ast with defs = rewrite defs }
+  let new_ast = Spec_analysis.top_sort_defs { ast with defs = rewrite defs } in
+  new_ast, !effect_info, env
