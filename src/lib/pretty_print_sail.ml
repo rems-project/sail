@@ -415,8 +415,14 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_if (if_exp, then_exp, E_aux ((E_lit (L_aux (L_unit, _)) | E_block []), _)) ->
      group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp])
   *)
+  | E_if (if_exp, E_aux (E_block (_ :: _ as then_exps), _), E_aux (E_block (_ :: _ as else_exps), _)) ->
+     group (string "if" ^/^ doc_exp if_exp ^/^ string "then {") ^^ group (nest 4 (hardline ^^ doc_block then_exps) ^^ hardline) ^^ string "} else {" ^^ group (nest 4 (hardline ^^ doc_block else_exps) ^^ hardline ^^ rbrace)
+  | E_if (if_exp, E_aux (E_block (_ :: _ as then_exps), _), else_exp) ->
+     group (string "if" ^/^ doc_exp if_exp ^/^ string "then {") ^^ group (nest 4 (hardline ^^ doc_block then_exps) ^^ hardline) ^^ string "} else" ^//^ doc_exp else_exp
+  | E_if (if_exp, then_exp, E_aux (E_block (_ :: _ as else_exps), _)) ->
+     group ((group (string "if" ^/^ doc_exp if_exp ^/^ string "then") ^//^ doc_exp then_exp) ^/^ string "else {") ^^ group (nest 4 (hardline ^^ doc_block else_exps) ^^ hardline ^^ rbrace)
   | E_if (if_exp, then_exp, else_exp) ->
-     group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp; string "else"; doc_exp else_exp])
+     group ((group (string "if" ^/^ doc_exp if_exp ^/^ string "then") ^//^ doc_exp then_exp) ^/^ string "else") ^//^ doc_exp else_exp
 
   | E_list exps -> string "[|" ^^ separate_map (comma ^^ space) doc_exp exps ^^ string "|]"
   | E_cons (exp1, exp2) -> doc_atomic_exp exp1 ^^ space ^^ string "::" ^^ space ^^ doc_exp exp2
@@ -431,16 +437,11 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp exp; doc_pexps pexps]
   | E_let (LB_aux (LB_val (pat, binding), _), exp) ->
-     separate space [string "let"; doc_pat pat; equals; doc_exp binding; string "in"]
-     ^//^ doc_exp exp
+     doc_let_style "let" (doc_pat pat) (doc_exp binding) exp
   | E_internal_plet (pat, exp1, exp2) ->
-     let le =
-       prefix 2 1
-         (separate space [string "internal_plet"; doc_pat pat; equals])
-         (doc_exp exp1) in
-     doc_op (string "in") le (doc_exp exp2)
+     doc_let_style "internal_plet" (doc_pat pat) (doc_exp exp1) exp2
   | E_var (lexp, binding, exp) ->
-     separate space [string "var"; doc_lexp lexp; equals; doc_exp binding; string "in"; doc_exp exp]
+     doc_let_style "var" (doc_lexp lexp) (doc_exp binding) exp
   | E_assign (lexp, exp) ->
      separate space [doc_lexp lexp; equals; doc_exp exp]
   | E_for (id, exp1, exp2, exp3, order, exp4) ->
@@ -464,9 +465,19 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_app (id, [exp]) when Id.compare (mk_id "pow2") id == 0 ->
      separate space [string "2"; string "^"; doc_atomic_exp exp]
   | E_internal_assume (nc, exp) ->
-     let le = string "internal_assume " ^^ doc_nc nc in
-     doc_op (string "in") le (doc_exp exp)
+     doc_let_style_general "internal_assume" (doc_nc nc) None exp
   | _ -> doc_atomic_exp exp
+and doc_let_style keyword lhs rhs body = doc_let_style_general keyword lhs (Some rhs) body
+and doc_let_style_general keyword lhs rhs body =
+  (* Avoid staircases *)
+  let (^///^) =
+    match unaux_exp body with
+    | E_let _ | E_var _ | E_internal_plet _ | E_internal_assume _ -> (^/^)
+    | _ -> (^//^)
+  in
+  match rhs with
+  | Some rhs -> group ((separate space [string keyword; lhs; equals] ^//^ rhs) ^/^ string "in") ^///^ doc_exp body
+  | None     -> group ((string keyword ^//^ lhs) ^/^ string "in") ^///^ doc_exp body
 and doc_measure (Measure_aux (m_aux, _)) =
   match m_aux with
   | Measure_none -> []
