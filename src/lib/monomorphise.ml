@@ -3891,6 +3891,13 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
                       " is not a function type"))
     in
     let pat,guard,body,annot = destruct_pexp pexp in
+    let rec strip_assumes = function
+      | E_aux (E_internal_assume (nc, e), ann) ->
+         let e', k = strip_assumes e in
+         e', fun e -> E_aux (E_internal_assume (nc, k e), ann)
+      | e -> e, fun e -> e
+    in
+    let body, restore_assumes = strip_assumes body in
     let body = rewrite_body id quant_kids fun_env ret_typ body in
     (* Cast function arguments, if necessary *)
     let add_constraint insts = function
@@ -3898,11 +3905,13 @@ let add_bitvector_casts global_env ({ defs; _ } as ast) =
       | _ -> insts
     in
     let insts = List.fold_left add_constraint KBindings.empty (Env.get_constraints (env_of body)) in
+    let src_typ = fill_in_type (env_of body) (typ_of body) in
     let body = make_bitvector_env_casts fun_env (env_of body) quant_kids insts body in
     (* Also add a cast around the entire function clause body, if necessary *)
     let body =
-      make_bitvector_cast_exp "bitvector_cast_out" fun_env quant_kids (fill_in_type (env_of body) (typ_of body)) ret_typ body
+      make_bitvector_cast_exp "bitvector_cast_out" fun_env quant_kids src_typ ret_typ body
     in
+    let body = restore_assumes body in
     let pexp = construct_pexp (pat,guard,body,annot) in
     FCL_aux (FCL_Funcl (id,pexp),fcl_ann)
   in
