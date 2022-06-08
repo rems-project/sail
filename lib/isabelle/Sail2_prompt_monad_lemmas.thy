@@ -5,9 +5,12 @@ theory Sail2_prompt_monad_lemmas
 begin
 
 notation bind (infixr "\<bind>" 54)
+notation either_bind (infixr "\<bind>\<^sub>R" 54)
 
 abbreviation seq :: "('rv,unit,'e)monad \<Rightarrow> ('rv,'b,'e)monad \<Rightarrow>('rv,'b,'e)monad" (infixr "\<then>" 54) where
   "m \<then> n \<equiv> m \<bind> (\<lambda>_. n)"
+abbreviation seqR :: "('e,unit)sum \<Rightarrow> ('e,'b)sum \<Rightarrow>('e,'b)sum" (infixr "\<then>\<^sub>R" 54) where
+  "m \<then>\<^sub>R n \<equiv> m \<bind>\<^sub>R (\<lambda>_. n)"
 
 lemma All_bind_dom: "bind_dom (m, f)"
   by (induction m) (auto intro: bind.domintros)

@@ -9,7 +9,7 @@ declare isabelle target_rep function (>>=) = infix `\<bind>`
 let inline ~{isabelle} (>>=) = bind
 
 val (>>$=) : forall 'e 'a 'b. either 'e 'a -> ('a -> either 'e 'b) -> either 'e 'b
-declare isabelle target_rep function (>>$=) = infix `\<bind>`
+declare isabelle target_rep function (>>$=) = infix `\<bind>\<^sub>R`
 let inline ~{isabelle} (>>$=) = either_bind
 
 val (>>) : forall 'rv 'b 'e. monad 'rv unit 'e -> monad 'rv 'b 'e -> monad 'rv 'b 'e
@@ -17,7 +17,7 @@ declare isabelle target_rep function (>>) = infix `\<then>`
 let inline ~{isabelle} (>>) m n = m >>= fun (_ : unit) -> n
 
 val (>>$) : forall 'e 'a. either 'e unit -> either 'e 'a -> either 'e 'a
-declare isabelle target_rep function (>>$) = infix `\<then>`
+declare isabelle target_rep function (>>$) = infix `\<then>\<^sub>R`
 let inline ~{isabelle} (>>$) m n = m >>$= fun (_ : unit) -> n
 
 val iter_aux : forall 'rv 'a 'e. integer -> (integer -> 'a -> monad 'rv unit 'e) -> list 'a -> monad 'rv unit 'e
