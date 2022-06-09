@@ -265,6 +265,7 @@ let run_sail tgt =
     List.fold_right (fun file (ast, _) -> Splice.splice ast file)
       (!opt_splice) (ast, env)
   in
+  let effect_info = Effects.infer_side_effects (Target.asserts_termination tgt) ast in
   Reporting.opt_warnings := false; (* Don't show warnings during re-writing for now *)
 
   Target.run_pre_rewrites_hook tgt ast effect_info env;
