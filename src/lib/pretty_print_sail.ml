@@ -398,7 +398,9 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
      ^^ space ^^ string "else" ^^ space
      ^^ doc_exp_as_block else_exp
     
-  (* Various rules to try to format if blocks nicely based on content *)
+  (* Various rules to try to format if blocks nicely based on content.
+     There's also an if rule in doc_block for { ... if . then .; ... } because it's
+     unambiguous there. *)
   | E_if (if_exp, then_exp, else_exp) when if_block_then then_exp && if_block_else else_exp ->
      (separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp)
      ^/^ (string "else" ^//^ doc_exp else_exp)
@@ -411,10 +413,6 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
   | E_if (if_exp, then_exp, else_exp) when if_block_then then_exp ->
      (separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp)
      ^/^ (string "else" ^^ space ^^ doc_exp else_exp)
-  (* Disabled because you need to know that it's not in an ambiguous context
-  | E_if (if_exp, then_exp, E_aux ((E_lit (L_aux (L_unit, _)) | E_block []), _)) ->
-     group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp])
-  *)
   | E_if (if_exp, E_aux (E_block (_ :: _ as then_exps), _), E_aux (E_block (_ :: _ as else_exps), _)) ->
      group (string "if" ^/^ doc_exp if_exp ^/^ string "then {") ^^ group (nest 4 (hardline ^^ doc_block then_exps) ^^ hardline) ^^ string "} else {" ^^ group (nest 4 (hardline ^^ doc_block else_exps) ^^ hardline ^^ rbrace)
   | E_if (if_exp, E_aux (E_block (_ :: _ as then_exps), _), else_exp) ->
@@ -541,6 +539,9 @@ and doc_block = function
      separate space [string "let"; doc_pat pat; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block [exp]
   | [E_aux (E_var (lexp, binding, E_aux (E_block exps, _)), _)] ->
      separate space [string "var"; doc_lexp lexp; equals; doc_exp binding] ^^ semi ^^ hardline ^^ doc_block exps
+  | (E_aux (E_if (if_exp, then_exp, E_aux ((E_lit (L_aux (L_unit, _)) | E_block []), _)), _))::exps ->
+     group (separate space [string "if"; doc_exp if_exp; string "then"; doc_exp then_exp]) ^^ semi ^^ hardline ^^
+       doc_block exps
   | [exp] -> doc_exp exp
   | exp :: exps -> doc_exp exp ^^ semi ^^ hardline ^^ doc_block exps
 and doc_lexp (LEXP_aux (l_aux, _) as lexp) =
