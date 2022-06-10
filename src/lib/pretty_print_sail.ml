@@ -414,13 +414,15 @@ let rec doc_exp (E_aux (e_aux, _) as exp) =
      (separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp)
      ^/^ (string "else" ^^ space ^^ doc_exp else_exp)
   | E_if (if_exp, E_aux (E_block (_ :: _ as then_exps), _), E_aux (E_block (_ :: _ as else_exps), _)) ->
-     group (string "if" ^/^ doc_exp if_exp ^/^ string "then {") ^^ group (nest 4 (hardline ^^ doc_block then_exps) ^^ hardline) ^^ string "} else {" ^^ group (nest 4 (hardline ^^ doc_block else_exps) ^^ hardline ^^ rbrace)
+     separate space [string "if"; doc_exp if_exp; string "then {"] ^^ group (nest 4 (hardline ^^ doc_block then_exps) ^^ hardline) ^^ string "} else {" ^^ group (nest 4 (hardline ^^ doc_block else_exps) ^^ hardline ^^ rbrace)
+  | E_if (if_exp, E_aux (E_block (_ :: _ as then_exps), _), (E_aux (E_if _,_) as else_exp)) ->
+     separate space [string "if"; doc_exp if_exp; string "then {"] ^^ group (nest 4 (hardline ^^ doc_block then_exps) ^^ hardline) ^^ string "} else " ^^ doc_exp else_exp
   | E_if (if_exp, E_aux (E_block (_ :: _ as then_exps), _), else_exp) ->
-     group (string "if" ^/^ doc_exp if_exp ^/^ string "then {") ^^ group (nest 4 (hardline ^^ doc_block then_exps) ^^ hardline) ^^ string "} else" ^//^ doc_exp else_exp
+     separate space [string "if"; doc_exp if_exp; string "then {"] ^^ group (nest 4 (hardline ^^ doc_block then_exps) ^^ hardline) ^^ string "} else" ^//^ doc_exp else_exp
   | E_if (if_exp, then_exp, E_aux (E_block (_ :: _ as else_exps), _)) ->
-     group ((group (string "if" ^/^ doc_exp if_exp ^/^ string "then") ^//^ doc_exp then_exp) ^/^ string "else {") ^^ group (nest 4 (hardline ^^ doc_block else_exps) ^^ hardline ^^ rbrace)
+     group ((separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp) ^/^ string "else {") ^^ group (nest 4 (hardline ^^ doc_block else_exps) ^^ hardline ^^ rbrace)
   | E_if (if_exp, then_exp, else_exp) ->
-     group ((group (string "if" ^/^ doc_exp if_exp ^/^ string "then") ^//^ doc_exp then_exp) ^/^ string "else") ^//^ doc_exp else_exp
+     group ((separate space [string "if"; doc_exp if_exp; string "then"] ^//^ doc_exp then_exp) ^/^ string "else") ^//^ doc_exp else_exp
 
   | E_list exps -> string "[|" ^^ separate_map (comma ^^ space) doc_exp exps ^^ string "|]"
   | E_cons (exp1, exp2) -> doc_atomic_exp exp1 ^^ space ^^ string "::" ^^ space ^^ doc_exp exp2
