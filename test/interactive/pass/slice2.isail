@@ -1,0 +1,4 @@
+:slice_roots h
+:slice
+:ast out.sail
+:quit

@@ -1,0 +1,84 @@
+val internal_pick = monadic {_: "internal_pick"}: forall ('a : Type).
+  list('a) -> 'a
+
+val undefined_int = monadic {_: "undefined_int"}: unit -> int
+
+default Order dec
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+val mult_atom = pure {ocaml: "mult", interpreter: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"}: forall 'n 'm.
+  (int('n), int('m)) -> int('n * 'm)
+
+
+
+
+
+
+
+
+$sail_internal 
+
+
+
+
+
+
+enum e2 = {GHI, JKL}
+
+val undefined_e2 : unit -> e2
+
+function undefined_e2 () = internal_pick([|GHI, JKL|])
+
+struct s1 = {fA : int, fB : e2}
+
+val undefined_s1 : unit -> s1
+
+function undefined_s1 () = struct { fA = undefined_int(), fB = undefined_e2() }
+
+struct s3 = {fE : s1, fF : int}
+
+val undefined_s3 : unit -> s3
+
+function undefined_s3 () = struct { fE = undefined_s1(), fF = undefined_int() }
+
+val f : int -> int
+
+function f x = mult_atom(2, x)
+
+val k : int -> int
+
+function k x = {
+    var s : s3 = undefined_s3();
+    s = { s with fF = x };
+    f(s.fF)
+}

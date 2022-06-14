@@ -97,6 +97,15 @@ let dot_of_ast out_chan ast =
   let g = graph_of_ast ast in
   G.make_dot (node_color NodeSet.empty) edge_color node_string out_chan g
 
+let node_of_id env =
+  let lets = Type_check.Env.get_toplevel_lets env in
+  let specs = Type_check.Env.get_defined_val_specs env in
+  fun id ->
+  if IdSet.mem id lets then Letbind id
+  else if IdSet.mem id specs then Function id
+  else if Type_check.Env.bound_typ_id env id then Type id
+  else (prerr_endline ("Warning: unknown identifier " ^ string_of_id id); Function id)
+
 let () =
   let slice_roots = ref IdSet.empty in
   let slice_keep_std = ref false in
@@ -123,10 +132,8 @@ let () =
     let module NodeSet = Set.Make(Node) in
     let module G = Graph.Make(Node) in
     let g = graph_of_ast istate.ast in
-    let lets = Type_check.Env.get_toplevel_lets istate.env in
-    let node_of_id id = if IdSet.mem id lets then Letbind id else Function id in
-    let roots = !slice_roots |> IdSet.elements |> List.map node_of_id |> NodeSet.of_list in
-    let cuts = !slice_cuts |> IdSet.elements |> List.map node_of_id |> NodeSet.of_list in
+    let roots = !slice_roots |> IdSet.elements |> List.map (node_of_id istate.env) |> NodeSet.of_list in
+    let cuts = !slice_cuts |> IdSet.elements |> List.map (node_of_id istate.env) |> NodeSet.of_list in
     let g = G.prune roots cuts g in
     { istate with ast = filter_ast_extra cuts g istate.ast !slice_keep_std }
   ) |> register_command
@@ -140,7 +147,7 @@ let () =
     let module NodeMap = Map.Make(Node) in
     let module G = Graph.Make(Node) in
     let g = graph_of_ast istate.ast in
-    let roots = !slice_roots |> IdSet.elements |> List.map (fun id -> Function id) |> NodeSet.of_list in
+    let roots = !slice_roots |> IdSet.elements |> List.map (node_of_id istate.env) |> NodeSet.of_list in
     let keep = function
       | (Function id,_) when IdSet.mem id (!slice_roots) -> None
       | (Function id,_) -> Some (Function id)

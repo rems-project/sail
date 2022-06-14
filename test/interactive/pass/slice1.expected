@@ -1,0 +1,52 @@
+default Order dec
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+$sail_internal 
+
+
+
+
+
+
+enum e2 = {GHI, JKL}
+
+struct s1 = {fA : int, fB : e2}
+
+struct s3 = {fE : s1, fF : int}

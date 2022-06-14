@@ -185,7 +185,10 @@ module Env : sig
   val shadows : kid -> t -> int
 
   val get_typ_synonyms : t -> (typquant * typ_arg) Bindings.t
-    
+
+  (** Check whether the identifier is a type name *)
+  val bound_typ_id : t -> id -> bool
+
   val add_typ_var : Ast.l -> kinded_id -> t -> t
 
   val is_record : id -> t -> bool

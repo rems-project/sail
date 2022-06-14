@@ -1,0 +1,4 @@
+:slice_roots s3
+:slice
+:ast out.sail
+:quit

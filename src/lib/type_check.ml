@@ -560,6 +560,7 @@ module Env : sig
   val add_ret_typ : typ -> t -> t
   val add_typ_synonym : id -> typquant -> typ_arg -> t -> t
   val get_typ_synonyms : t -> (typquant * typ_arg) Bindings.t
+  val bound_typ_id : t -> id -> bool
   val add_overloads : id -> id list -> t -> t
   val get_overloads : id -> t -> id list
   val is_extern : id -> t -> string -> bool
