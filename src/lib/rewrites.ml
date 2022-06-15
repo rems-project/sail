@@ -1932,6 +1932,18 @@ let rewrite_simple_types env ast =
   rewrite_ast_base simple_defs ast
 
 let rewrite_vector_concat_assignments env defs =
+  let lit_int i = mk_exp (E_lit (mk_lit (L_num i))) in
+  let sub m n = match m, n with
+    | E_aux (E_lit (L_aux (L_num m, _)),_), E_aux (E_lit (L_aux (L_num n, _)),_) ->
+       lit_int (Big_int.sub m n)
+    | _, _ -> mk_exp (E_app_infix (m, mk_id "-", n))
+  in
+  let add m n = match m, n with
+    | E_aux (E_lit (L_aux (L_num m, _)),_), E_aux (E_lit (L_aux (L_num n, _)),_) ->
+       lit_int (Big_int.add m n)
+    | _, _ -> mk_exp (E_app_infix (m, mk_id "+", n))
+  in
+
   let assign_tuple e_aux annot =
     let env = env_of_annot annot in
     match e_aux with
@@ -1945,28 +1957,26 @@ let rewrite_vector_concat_assignments env defs =
            let ltyp = Env.base_typ_of env (typ_of_annot lannot) in
            if is_vector_typ ltyp || is_bitvector_typ ltyp then
              let (len, _, _) = vector_typ_args_of ltyp in
-             match nexp_simp len with
-             | Nexp_aux (Nexp_constant len, _) -> len
-             | _ -> (Big_int.of_int 1)
-           else (Big_int.of_int 1)
+             match Type_check.solve_unique (env_of_annot lannot) len with
+             | Some len -> mk_exp (E_lit (mk_lit (L_num len)))
+             | None -> mk_exp (E_sizeof (nexp_simp len))
+           else Reporting.unreachable (fst lannot) __POS__ "Lexp in vector concatenation assignment is not a vector"
          in
          let next i step =
            if is_order_inc ord
-           then (Big_int.sub (Big_int.add i step) (Big_int.of_int 1), Big_int.add i step)
-           else (Big_int.add (Big_int.sub i step) (Big_int.of_int 1), Big_int.sub i step)
+           then (sub (add i step) (lit_int (Big_int.of_int 1)), add i step)
+           else (add (sub i step) (lit_int (Big_int.of_int 1)), sub i step)
          in
-         let i = match nexp_simp start with
-           | (Nexp_aux (Nexp_constant i, _)) -> i
-           | _ -> if is_order_inc ord then Big_int.zero else Big_int.of_int (List.length lexps - 1)
+         let i = match Type_check.solve_unique (env_of exp) start with
+           | Some i -> lit_int i
+           | None -> mk_exp (E_sizeof (nexp_simp start))
          in
          let l = gen_loc (fst annot) in
          let vec_id = mk_id "split_vec" in
          let exp' = if small exp then strip_exp exp else mk_exp (E_id vec_id) in
          let lexp_to_exp (i, exps) lexp =
            let (j, i') = next i (len lexp) in
-           let i_exp = mk_exp (E_lit (mk_lit (L_num i))) in
-           let j_exp = mk_exp (E_lit (mk_lit (L_num j))) in
-           let sub = mk_exp (E_vector_subrange (exp', i_exp, j_exp)) in
+           let sub = mk_exp (E_vector_subrange (exp', i, j)) in
            (i', exps @ [sub])
          in
          let (_, exps) = List.fold_left lexp_to_exp (i, []) lexps in
