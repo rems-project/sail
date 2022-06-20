@@ -9,7 +9,7 @@ type xlenbits   : Type = bits(xlen)
 type regno ('n : Int), 0 <= 'n < 32 = atom('n)
 type regbits = bits(5)
 
-val cast regbits_to_regno : bits(5) -> {'n, 0 <= 'n < 32. regno('n)}
+val regbits_to_regno : bits(5) -> {'n, 0 <= 'n < 32. regno('n)}
 function regbits_to_regno b = unsigned(b)
 
 enum iop = {RISCV_ADDI, RISCV_SLTI, RISCV_SLTIU, RISCV_XORI, RISCV_ORI, RISCV_ANDI}
@@ -122,7 +122,12 @@ function wX(r, v) = {
   else R31 = v
 }
 
-overload X = {rX, wX}
+val rX_bits : bits(5) -> xlenbits effect {rreg}
+function rX_bits(r) = rX(regbits_to_regno(r))
+val wX_bits : (bits(5), xlenbits) -> unit effect {wreg}
+function wX_bits(r,v) = wX(regbits_to_regno(r), v)
+
+overload X = {rX, wX, rX_bits, wX_bits}
 
 scattered union ast
 
@@ -149,7 +154,7 @@ function prop(imm:  bits(12), rs1: regbits, rd: regbits) -> bool = {
   match decode(imm @ rs1 @ 0b000 @ rd @ 0b0010011) {
     Some(instr) => {
       execute(instr);
-      X(rd) == v + sail_sign_extend(imm, sizeof(xlen)) | rd == 0
+      X(rd) == v + sail_sign_extend(imm, sizeof(xlen)) | rd == 0b00000
     },
     _ => false
   }
