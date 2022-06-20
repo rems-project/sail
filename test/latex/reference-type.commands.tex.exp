@@ -66,8 +66,6 @@
 
 \newcommand{\sailvalDeref}{\saildoclabelled{sailzzyzyderef}{\saildocval{}{\lstinputlisting[language=sail]{out/valz__deref1dbc379e24bd1b182e1db755dea8c453.tex}}}}
 
-\newcommand{\sailvalBitfieldDeref}{\saildoclabelled{sailzzyzybitfieldzyderef}{\saildocval{}{\lstinputlisting[language=sail]{out/valz__bitfield_deref5ed587b7c1b91cf82e42f865304262ca.tex}}}}
-
 \newcommand{\sailtypebits}{\saildoclabelled{sailtypezbits}{\saildoctype{}{\lstinputlisting[language=sail]{out/typezbitsa4b31f9b3dc11c921007b665e0d0fce6.tex}}}}
 
 \newcommand{\sailvaleqBits}{\saildoclabelled{sailzeqzybits}{\saildocval{}{\lstinputlisting[language=sail]{out/valzeq_bits886ce7cf3ec93a28308e8d4e9d63f4be.tex}}}}
@@ -146,6 +144,8 @@
 
 \newcommand{\sailoverloadTzEightoperatorzZerozUzNine}{\saildoclabelled{sailoverloadTzz8operatorz0zUz9}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadTzz8operatorz0zuz99af95b281314726fa91893b57fc290dc.tex}}}}
 
+\newcommand{\sailvalxorVec}{\saildoclabelled{sailzxorzyvec}{\saildocval{}{\lstinputlisting[language=sail]{out/valzxor_vecdacd54acc32f073fb01d1c188177bc8c.tex}}}}
+
 \newcommand{\sailvalsubrangeBits}{\saildoclabelled{sailzsubrangezybits}{\saildocval{}{\lstinputlisting[language=sail]{out/valzsubrange_bits6c497c14df4f4754bd345a6c56ca2aad.tex}}}}
 
 \newcommand{\sailoverloadUvectorSubrange}{\saildoclabelled{sailoverloadUzvectorzysubrange}{\saildocoverload{}{\lstinputlisting[language=sail]{out/overloadUzvector_subrange270c799ffa6c20b5244f22c64fba0367.tex}}}}
@@ -219,8 +219,6 @@
 }{\lstinputlisting[language=sail]{out/fnzfunction_with_underscores6e195bff96b3fe3d60b356f28519989f.tex}}}}
 
 \newcommand{\sailval}[1]{
-  \ifstrequal{#1}{__bitfield_deref}{\sailvalBitfieldDeref}{}%
-  \ifstrequal{#1}{\_\_bitfield\_deref}{\sailvalBitfieldDeref}{}%
   \ifstrequal{#1}{__deref}{\sailvalDeref}{}%
   \ifstrequal{#1}{\_\_deref}{\sailvalDeref}{}%
   \ifstrequal{#1}{__id}{\sailvalId}{}%
@@ -328,11 +326,11 @@
   \ifstrequal{#1}{update_subrange_bits}{\sailvalupdateSubrangeBits}{}%
   \ifstrequal{#1}{update\_subrange\_bits}{\sailvalupdateSubrangeBits}{}%
   \ifstrequal{#1}{vector_length}{\sailvalvectorLength}{}%
-  \ifstrequal{#1}{vector\_length}{\sailvalvectorLength}{}}
+  \ifstrequal{#1}{vector\_length}{\sailvalvectorLength}{}%
+  \ifstrequal{#1}{xor_vec}{\sailvalxorVec}{}%
+  \ifstrequal{#1}{xor\_vec}{\sailvalxorVec}{}}
 
 \newcommand{\sailrefval}[2]{
-  \ifstrequal{#1}{__bitfield_deref}{\hyperref[sailzzyzybitfieldzyderef]{#2}}{}%
-  \ifstrequal{#1}{\_\_bitfield\_deref}{\hyperref[sailzzyzybitfieldzyderef]{#2}}{}%
   \ifstrequal{#1}{__deref}{\hyperref[sailzzyzyderef]{#2}}{}%
   \ifstrequal{#1}{\_\_deref}{\hyperref[sailzzyzyderef]{#2}}{}%
   \ifstrequal{#1}{__id}{\hyperref[sailzzyzyid]{#2}}{}%
@@ -440,7 +438,9 @@
   \ifstrequal{#1}{update_subrange_bits}{\hyperref[sailzupdatezysubrangezybits]{#2}}{}%
   \ifstrequal{#1}{update\_subrange\_bits}{\hyperref[sailzupdatezysubrangezybits]{#2}}{}%
   \ifstrequal{#1}{vector_length}{\hyperref[sailzvectorzylength]{#2}}{}%
-  \ifstrequal{#1}{vector\_length}{\hyperref[sailzvectorzylength]{#2}}{}}
+  \ifstrequal{#1}{vector\_length}{\hyperref[sailzvectorzylength]{#2}}{}%
+  \ifstrequal{#1}{xor_vec}{\hyperref[sailzxorzyvec]{#2}}{}%
+  \ifstrequal{#1}{xor\_vec}{\hyperref[sailzxorzyvec]{#2}}{}}
 
 \newcommand{\sailfn}[1]{
   \ifstrequal{#1}{__id}{\sailfnId}{}%

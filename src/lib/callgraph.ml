@@ -289,8 +289,8 @@ let add_def_to_graph graph def =
        scan_typquant (Type id) typq
     | TD_enum (id, ctors, _) ->
        List.iter (fun ctor_id -> graph := G.add_edge (Constructor ctor_id) (Type id) !graph) ctors
-    | TD_bitfield _ ->
-       Reporting.unreachable l __POS__ "Bitfield should be re-written"
+    | TD_bitfield (id, typ, ranges) ->
+       graph := G.add_edges (Type id) (List.map (fun id -> Type id) (IdSet.elements (typ_ids typ))) !graph
   in
 
   let scan_outcome_def l outcome = function
