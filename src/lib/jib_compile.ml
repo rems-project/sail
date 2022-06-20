@@ -146,6 +146,7 @@ type ctx =
     quants : ctyp KBindings.t;
     local_env : Env.t;
     tc_env : Env.t;
+    effect_info : Effects.side_effect_info;
     locals : (mut * ctyp) Bindings.t;
     letbinds : int list;
     no_raw : bool;
@@ -164,7 +165,7 @@ let ctx_get_extern id ctx =
      Reporting.unreachable (id_loc id) __POS__ ("Tried to get extern information for non-extern function " ^ string_of_id id)
   | None -> Env.get_extern id ctx.tc_env "c"
     
-let initial_ctx env =
+let initial_ctx env effect_info =
   let initial_valspecs = [
       (mk_id "size_itself_int", (Some "size_itself_int", [CT_lint], CT_lint));
       (mk_id "make_the_value", (Some "make_the_value", [CT_lint], CT_lint))
@@ -177,6 +178,7 @@ let initial_ctx env =
     quants = KBindings.empty;
     local_env = env;
     tc_env = env;
+    effect_info;
     locals = Bindings.empty;
     letbinds = [];
     no_raw = false;
@@ -1195,14 +1197,19 @@ let fix_exception_block ?return:(return=None) ctx instrs =
        @ [igoto end_block_label]
        @ rewrite_exception (historic @ before) after
     | before, (I_aux (I_funcall (x, _, f, args), (_, l)) as funcall) :: after ->
-       (* TODO EFFECT: Fix this *)
-       (* if has_effect effects BE_escape then *)
+       let effects =
+         match Bindings.find_opt (fst f) ctx.effect_info.functions with
+         | Some effects -> effects
+         (* Constructors and back-end built-in value operations might not be present *)
+         | None -> Effects.EffectSet.empty
+       in
+       if Effects.throws effects then
          before
          @ [funcall;
             iif l (V_id (have_exception, CT_bool)) (generate_cleanup (historic @ before) @ [igoto end_block_label]) [] CT_unit]
          @ rewrite_exception (historic @ before) after
-       (* else
-         before @ funcall :: rewrite_exception (historic @ before) after *)
+       else
+         before @ funcall :: rewrite_exception (historic @ before) after
     | _, _ -> assert false (* unreachable *)
   in
   match return with
@@ -1993,9 +2000,12 @@ let compile_ast ctx ast =
 
 end
 
-let add_special_functions env =
+let add_special_functions env effect_info =
   let assert_vs = Initial_check.extern_of_string (mk_id "sail_assert") "(bool, string) -> unit" in
   let exit_vs = Initial_check.extern_of_string (mk_id "sail_exit") "unit -> unit" in
   let cons_vs = Initial_check.extern_of_string (mk_id "sail_cons") "forall ('a : Type). ('a, list('a)) -> list('a)" in
 
-  snd (Type_error.check_defs env [assert_vs; exit_vs; cons_vs])
+  let effect_info = Effects.add_monadic_built_in (mk_id "sail_assert") effect_info in
+  let effect_info = Effects.add_monadic_built_in (mk_id "sail_exit") effect_info in
+
+  snd (Type_error.check_defs env [assert_vs; exit_vs; cons_vs]), effect_info

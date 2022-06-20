@@ -2278,16 +2278,17 @@ let rec get_recursive_functions defs =
   | _ :: defs -> get_recursive_functions defs
   | [] -> IdSet.empty
 
-let jib_of_ast env ast =
+let jib_of_ast env effect_info ast =
   let module Jibc = Make(C_config(struct let branch_coverage = !opt_branch_coverage end)) in
-  let ctx = initial_ctx (add_special_functions env) in
+  let env, effect_info = add_special_functions env effect_info in
+  let ctx = initial_ctx env effect_info in
   Jibc.compile_ast ctx ast
  
-let compile_ast env output_chan c_includes ast =
+let compile_ast env effect_info output_chan c_includes ast =
   try
     let recursive_functions = (Spec_analysis.top_sort_defs ast).defs |> get_recursive_functions in
 
-    let cdefs, ctx = jib_of_ast env ast in
+    let cdefs, ctx = jib_of_ast env effect_info ast in
     let cdefs', _ = Jib_optimize.remove_tuples cdefs ctx in
     let cdefs = insert_heap_returns Bindings.empty cdefs in
     let cdefs = optimize recursive_functions cdefs in
@@ -2417,8 +2418,8 @@ let compile_ast env output_chan c_includes ast =
   | Type_error (_, l, err) ->
      c_error ~loc:l ("Unexpected type error when compiling to C:\n" ^ Type_error.string_of_type_error err)
 
-let compile_ast_clib env ast codegen =
-  let cdefs, ctx = jib_of_ast env ast in
+let compile_ast_clib env effect_info ast codegen =
+  let cdefs, ctx = jib_of_ast env effect_info ast in
   let cdefs', _ = Jib_optimize.remove_tuples cdefs ctx in
   let cdefs = insert_heap_returns Bindings.empty cdefs in
   codegen ctx cdefs

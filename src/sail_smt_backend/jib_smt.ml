@@ -2399,10 +2399,11 @@ let rec build_register_map rmap = function
   | _ :: cdefs -> build_register_map rmap cdefs
   | [] -> rmap
 
-let compile env ast =
+let compile env effect_info ast =
   let cdefs, jib_ctx =
     let module Jibc = Jib_compile.Make(SMT_config(struct let unroll_limit = !opt_unroll_limit end)) in
-    let ctx = Jib_compile.(initial_ctx (add_special_functions env)) in
+    let env, effect_info = Jib_compile.add_special_functions env effect_info in
+    let ctx = Jib_compile.initial_ctx env effect_info in
     let t = Profile.start () in
     let cdefs, ctx = Jibc.compile_ast ctx ast in
     Profile.finish "Compiling to Jib IR" t;
@@ -2412,8 +2413,8 @@ let compile env ast =
   let rmap = build_register_map CTMap.empty cdefs in
   cdefs, jib_ctx, { (initial_ctx ()) with tc_env = jib_ctx.tc_env; register_map = rmap; ast = ast }
 
-let serialize_smt_model file env ast =
-  let cdefs, _, ctx = compile env ast in
+let serialize_smt_model file env effect_info ast =
+  let cdefs, _, ctx = compile env effect_info ast in
   let out_chan = open_out file in
   Marshal.to_channel out_chan cdefs [];
   Marshal.to_channel out_chan (Type_check.Env.set_prover None ctx.tc_env) [];
@@ -2428,9 +2429,9 @@ let deserialize_smt_model file =
   close_in in_chan;
   (cdefs, { (initial_ctx ()) with tc_env = env; register_map = rmap })
 
-let generate_smt props name_file env ast =
+let generate_smt props name_file env effect_info ast =
   try
-    let cdefs, _, ctx = compile env ast in
+    let cdefs, _, ctx = compile env effect_info ast in
     smt_cdefs props [] name_file ctx cdefs cdefs
   with
   | Type_check.Type_error (_, l, err) ->

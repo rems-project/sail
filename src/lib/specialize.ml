@@ -384,7 +384,7 @@ let safe_instantiation instantiation =
 let instantiate_constraints instantiation ncs =
   List.map (fun c -> List.fold_left (fun c (v, a) -> constraint_subst v a c) c (KBindings.bindings instantiation)) ncs
 
-let specialize_id_valspec spec instantiations id ast =
+let specialize_id_valspec spec instantiations id ast effect_info =
   match split_defs (is_valspec id) ast.defs with
   | None -> Reporting.unreachable (id_loc id) __POS__ ("Valspec " ^ string_of_id id ^ " does not exist!")
   | Some (pre_defs, vs, post_defs) ->
@@ -445,7 +445,9 @@ let specialize_id_valspec spec instantiations id ast =
 
      let specializations = List.map specialize_instance instantiations |> List.concat in
 
-     { ast with defs = pre_defs @ (vs :: specializations) @ post_defs }
+     let effect_info = IdSet.fold (fun id' effect_info -> Effects.copy_function_effect id effect_info id') !spec_ids effect_info in
+
+     { ast with defs = pre_defs @ (vs :: specializations) @ post_defs }, effect_info
 
 (* When we specialize a function definition we also need to specialize
    all the types that appear as annotations within the function
@@ -563,11 +565,11 @@ let remove_unused_valspecs env ast =
 
   List.fold_left (fun ast id -> { ast with defs = remove_unused ast.defs id }) ast (IdSet.elements unused)
 
-let specialize_id spec id ast =
+let specialize_id spec id ast effect_info =
   let instantiations = instantiations_of spec id ast in
-  let ast = specialize_id_valspec spec instantiations id ast in
+  let ast, effect_info = specialize_id_valspec spec instantiations id ast effect_info in
   let ast = specialize_id_fundef instantiations id ast in
-  specialize_id_overloads instantiations id ast
+  specialize_id_overloads instantiations id ast, effect_info
 
 (* When we generate specialized versions of functions, we need to
    ensure that the types they are specialized to appear before the
@@ -587,14 +589,14 @@ let reorder_typedefs ast =
   let others = filter_typedefs ast.defs in
   { ast with defs = List.rev !tdefs @ others }
 
-let specialize_ids spec ids ast =
+let specialize_ids spec ids ast effect_info =
   let t = Profile.start () in
   let total = IdSet.cardinal ids in
-  let _, ast =
+  let _, (ast, effect_info) =
     List.fold_left
-      (fun (n, ast) id ->
-        Util.progress "Specializing " (string_of_id id) n total; (n + 1, specialize_id spec id ast))
-      (1, ast) (IdSet.elements ids)
+      (fun (n, (ast, effect_info)) id ->
+        Util.progress "Specializing " (string_of_id id) n total; (n + 1, specialize_id spec id ast effect_info))
+      (1, (ast, effect_info)) (IdSet.elements ids)
   in
   let ast = reorder_typedefs ast in
   begin match !opt_ddump_spec_ast with
@@ -617,24 +619,24 @@ let specialize_ids spec ids ast =
   let ast, env = Type_error.check Type_check.initial_env ast in
   let ast = remove_unused_valspecs env ast in
   Profile.finish "specialization pass" t;
-  ast, env
+  ast, env, effect_info
 
-let rec specialize_passes n spec env ast =
+let rec specialize_passes n spec env ast effect_info =
   if n = 0 then
-    ast, env
+    ast, env, effect_info
   else
     let ids = polymorphic_functions spec ast.defs in
     if IdSet.is_empty ids then
-      ast, env
+      ast, env, effect_info
     else
-      let ast, env = specialize_ids spec ids ast in
-      specialize_passes (n - 1) spec env ast
+      let ast, env, effect_info = specialize_ids spec ids ast effect_info in
+      specialize_passes (n - 1) spec env ast effect_info
 
 let specialize = specialize_passes (-1)
 
 let () =
   let open Interactive in
   Action (fun istate ->
-    let ast', env' = specialize typ_ord_specialization istate.env istate.ast in
-    { istate with ast = ast'; env = env' }
+    let ast', env', effect_info' = specialize typ_ord_specialization istate.env istate.ast istate.effect_info in
+    { ast = ast'; env = env'; effect_info = effect_info' }
   ) |> register_command ~name:"specialize" ~help:"Specialize Type and Order type variables in the AST"

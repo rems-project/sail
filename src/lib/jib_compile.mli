@@ -101,6 +101,7 @@ type ctx =
     quants : ctyp KBindings.t;
     local_env : Env.t;
     tc_env : Env.t;
+    effect_info : Effects.side_effect_info;
     locals : (mut * ctyp) Bindings.t;
     letbinds : int list;
     no_raw : bool;
@@ -110,7 +111,7 @@ val ctx_is_extern : id -> ctx -> bool
 
 val ctx_get_extern : id -> ctx -> string
 
-val initial_ctx : Env.t -> ctx
+val initial_ctx : Env.t -> Effects.side_effect_info -> ctx
 
 (** {2 Compilation functions} *)
 
@@ -164,6 +165,6 @@ end
 (** Adds some special functions to the environment that are used to
    convert several Sail language features, these are sail_assert,
    sail_exit, and sail_cons. *)
-val add_special_functions : Env.t -> Env.t
+val add_special_functions : Env.t -> Effects.side_effect_info -> Env.t * Effects.side_effect_info
 
 val name_or_global : ctx -> id -> name

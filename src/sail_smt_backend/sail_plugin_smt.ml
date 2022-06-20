@@ -119,21 +119,21 @@ let smt_rewrites =
     ("properties", [])
   ]
 
-let smt_target out_file ast _ env =
+let smt_target out_file ast effect_info env =
   let open Ast_util in
   let props = Property.find_properties ast in
   let prop_ids = Bindings.bindings props |> List.map fst |> IdSet.of_list in
   let ast = Callgraph.filter_ast_ids prop_ids IdSet.empty ast in
   Specialize.add_initial_calls prop_ids;
-  let ast_smt, env = Specialize.(specialize typ_ord_specialization env ast) in
-  let ast_smt, env = Specialize.(specialize_passes 2 int_specialization_with_externs env ast_smt) in
+  let ast_smt, env, effect_info = Specialize.(specialize typ_ord_specialization env ast effect_info) in
+  let ast_smt, env, effect_info = Specialize.(specialize_passes 2 int_specialization_with_externs env ast_smt effect_info) in
   let name_file =
     match out_file with
     | Some f -> fun str -> f ^ "_" ^ str ^ ".smt2"
     | None -> fun str -> str ^ ".smt2"
   in
   Reporting.opt_warnings := true;
-  Jib_smt.generate_smt props name_file env ast_smt
+  Jib_smt.generate_smt props name_file env effect_info ast_smt
 
 let _ =
   Target.register
