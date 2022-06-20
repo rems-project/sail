@@ -2,17 +2,17 @@
 [[96mexistential_ast3/v1.sail[0m]:17:48-65
 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m                                                [91m^---------------^[0m
-  [91m |[0m (int(33), int('ex275#)) is not a subtype of (int('ex270#), int('ex271#))
+  [91m |[0m (int(33), int('ex281#)) is not a subtype of (int('ex276#), int('ex277#))
   [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
   [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
-  [91m |[0m   [93m |[0m 'ex270# bound here
+  [91m |[0m   [93m |[0m 'ex276# bound here
   [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
   [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
-  [91m |[0m   [93m |[0m 'ex271# bound here
+  [91m |[0m   [93m |[0m 'ex277# bound here
   [91m |[0m [[96mexistential_ast3/v1.sail[0m]:17:48-65
   [91m |[0m 17[96m |[0m    if b == 0b0 then (64, unsigned(b @ a)) else (33, unsigned(a));
   [91m |[0m   [93m |[0m                                                [93m^---------------^[0m
-  [91m |[0m   [93m |[0m 'ex275# bound here
+  [91m |[0m   [93m |[0m 'ex281# bound here
   [91m |[0m 
