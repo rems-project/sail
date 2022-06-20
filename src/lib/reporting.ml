@@ -113,6 +113,7 @@
 (**************************************************************************)
 
 let opt_warnings = ref true
+let opt_backtrace_length = ref 10
 
 type pos_or_loc = Loc of Parse_ast.l | Pos of Lexing.position
 
@@ -183,7 +184,7 @@ exception Fatal_error of error
 (* Abbreviations for the very common cases *)
 let err_todo l m = Fatal_error (Err_todo (l, m))
 let err_unreachable l ocaml_pos m =
-  let backtrace = Printexc.get_callstack 10 in
+  let backtrace = Printexc.get_callstack !opt_backtrace_length in
   Fatal_error (Err_unreachable (l, ocaml_pos, backtrace, m))
 let err_general l m = Fatal_error (Err_general (l, m))
 let err_typ l m = Fatal_error (Err_type (l, m))

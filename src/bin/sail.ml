@@ -241,6 +241,9 @@ let rec options = ref ([
   ( "-infer_effects",
     Arg.Unit (fun () -> Reporting.simple_warn "-infer_effects option is deprecated"),
     " Ignored for compatibility with older versions; effects are always inferred now (deprecated)");
+  ( "-dbacktrace",
+    Arg.Int (fun l -> Reporting.opt_backtrace_length := l),
+    "<length> Length of backtrace to show when reporting unreachable code");
   ( "-v",
     Arg.Set opt_print_version,
     " print version");

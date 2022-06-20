@@ -80,6 +80,9 @@
 (** If this is false, Sail will never generate any warnings *)
 val opt_warnings : bool ref
 
+(** How many backtrace entries to show for unreachable code errors *)
+val opt_backtrace_length : int ref
+
 (** {2 Auxiliary Functions } *)
 
 (** [loc_to_string] prints a location as a string, including source code *)
