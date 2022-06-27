@@ -170,36 +170,6 @@ let preserved_explanation =
   ^ "This bitvector pattern literal must be kept, as it is required for Sail to show that the surrounding pattern match is complete.\n"
   ^ "When translated into prover targets (e.g. Lem, Coq) without native bitvector patterns, they may be unable to verify completeness"
   
-let insert_wildcards (cinfo : complete_info) (pat : ('a * int) pat) : 'a pat =
-  let preserved = get_preserved_patterns cinfo in
-  let wildcards = get_wildcard_patterns cinfo in
-  let rec go wild (P_aux (aux, (l, (t, n)))) =
-    if IntSet.mem n preserved then (
-      Reporting.warn "Required literal" l preserved_explanation
-    );
-    let wild = wild || List.exists (fun wildcard -> wildcard = n) wildcards in
-    let aux = match aux with
-      | P_or (p1, p2) -> P_or (go wild p1, go wild p2)
-      | P_not p -> P_not (go wild p)
-      | P_as (p, id) -> P_as (go wild p, id)
-      | P_typ (typ, p) -> P_typ (typ, go wild p)
-      | P_var (p, tpat) -> P_var (go wild p, tpat)
-      | P_app (ctor, ps) -> P_app (ctor, List.map (go wild) ps)
-      | P_vector ps -> P_vector (List.map (go wild) ps)
-      | P_vector_concat ps -> P_vector_concat (List.map (go wild) ps)
-      | P_tup ps -> P_tup (List.map (go wild) ps)
-      | P_list ps -> P_list (List.map (go wild) ps)
-      | P_cons (p1, p2) -> P_cons (go wild p1, go wild p2)
-      | P_string_append ps -> P_string_append (List.map (go wild) ps)
-      | P_id id -> P_id id
-      | P_lit _ when wild -> P_wild
-      | P_lit lit -> P_lit lit
-      | P_wild -> P_wild
-    in
-    P_aux (aux, (l, t))
-  in
-  go false pat
-  
 let rows_to_list (Rows rs) = rs
 let columns_to_list (Columns cs) = cs 
  
@@ -242,6 +212,36 @@ module Make(C: Config) = struct
     | _, _ -> BVC_and (x, y)
 
   let typ_of_pat (P_aux (_, (_, (t, _)))) = C.typ_of_t t
+  
+  let insert_wildcards (cinfo : complete_info) (pat : (C.t * int) pat) : C.t pat =
+    let preserved = get_preserved_patterns cinfo in
+    let wildcards = get_wildcard_patterns cinfo in
+    let rec go wild (P_aux (aux, (l, (t, n))) as full_pat) =
+      if IntSet.mem n preserved then (
+        Reporting.warn "Required literal" l preserved_explanation
+      );
+      let wild = wild || List.exists (fun wildcard -> wildcard = n) wildcards in
+      let aux = match aux with
+        | P_or (p1, p2) -> P_or (go wild p1, go wild p2)
+        | P_not p -> P_not (go wild p)
+        | P_as (p, id) -> P_as (go wild p, id)
+        | P_typ (typ, p) -> P_typ (typ, go wild p)
+        | P_var (p, tpat) -> P_var (go wild p, tpat)
+        | P_app (ctor, ps) -> P_app (ctor, List.map (go wild) ps)
+        | P_vector ps -> P_vector (List.map (go wild) ps)
+        | P_vector_concat ps -> P_vector_concat (List.map (go wild) ps)
+        | P_tup ps -> P_tup (List.map (go wild) ps)
+        | P_list ps -> P_list (List.map (go wild) ps)
+        | P_cons (p1, p2) -> P_cons (go wild p1, go wild p2)
+        | P_string_append ps -> P_string_append (List.map (go wild) ps)
+        | P_id id -> P_id id
+        | P_lit _ when wild -> P_typ (typ_of_pat full_pat, P_aux (P_wild, (l, t)))
+        | P_lit lit -> P_lit lit
+        | P_wild -> P_wild
+      in
+      P_aux (aux, (l, t))
+    in
+    go false pat
  
   type gpat =
     | GP_wild
