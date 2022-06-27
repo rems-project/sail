@@ -558,7 +558,7 @@ module C_config(Opts : sig val branch_coverage : out_channel option end) : Confi
        AE_val (AV_cval (V_call (Bvaccess, [vec; n]), typ))
 
     | "add_int", [AV_cval (op1, _); AV_cval (op2, _)] ->
-       begin match destruct_range Env.empty typ with
+       begin match destruct_range ctx.local_env typ with
        | None -> no_change
        | Some (kids, constr, n, m) ->
           match nexp_simp n, nexp_simp m with
