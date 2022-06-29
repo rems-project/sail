@@ -175,6 +175,7 @@ let unique_per_function_ids cdefs =
     | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, unique_instrs i instrs)
     | CDEF_startup (id, instrs) -> CDEF_startup (id, unique_instrs i instrs)
     | CDEF_finish (id, instrs) -> CDEF_finish (id, unique_instrs i instrs)
+    | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
   in
   List.mapi unique_cdef cdefs
 
@@ -536,7 +537,9 @@ let remove_tuples cdefs ctx =
     | CT_tup ctyps ->
        let ctyps = List.map fix_tuples ctyps in
        let name = "tuple#" ^ Util.string_of_list "_" string_of_ctyp ctyps in
-       CDEF_type (CTD_struct (mk_id name, List.mapi (fun n ctyp -> (mk_id (name ^ string_of_int n), []), ctyp) ctyps))
+       let fields = List.mapi (fun n ctyp -> (mk_id (name ^ string_of_int n), []), ctyp) ctyps in
+       [CDEF_type (CTD_struct (mk_id name, fields));
+        CDEF_pragma ("tuplestruct", Util.string_of_list " " (fun x -> x) (Util.zencode_string name :: List.map (fun ((id, _), _) -> Util.zencode_string (string_of_id id)) fields))]
     | _ -> assert false
   in
   let rec go acc = function
@@ -552,7 +555,7 @@ let remove_tuples cdefs ctx =
          |> List.sort (fun (d1, _) (d2, _) -> compare d2 d1)
          |> List.map snd
        in
-       let structs = List.map to_struct sorted_tuples in
+       let structs = List.concat (List.map to_struct sorted_tuples) in
        already_removed := CTSet.union tuples !already_removed;
        let cdef =
          cdef

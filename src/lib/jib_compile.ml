@@ -1595,7 +1595,9 @@ let callgraph cdefs =
     ) IdGraph.empty cdefs
 
 let mangle_mono_id id ctx ctyps =
-  append_id id ("<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ">")
+  let new_id = append_id id ("<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ">") in
+  prerr_endline ("mangled " ^ string_of_id id ^ " to " ^ string_of_id new_id);
+  new_id
  
 let rec specialize_functions ctx cdefs =
   let polymorphic_functions =
@@ -1761,9 +1763,14 @@ let rec specialize_variants ctx prior =
     | instr -> instr
   in
 
+  let mangled_pragma orig_id mangled_id =
+    CDEF_pragma ("mangled", Util.zencode_string (string_of_id orig_id) ^ " " ^ Util.zencode_string (string_of_id mangled_id)) in
+  
   function
   | CDEF_type (CTD_variant (var_id, ctors)) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors ->
      let typ_params = List.fold_left (fun set (_, ctyp) -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty ctors in
+
+     prerr_endline ("VARIANT " ^ string_of_id var_id);
      
      let cdefs =
        List.fold_left
@@ -1772,10 +1779,17 @@ let rec specialize_variants ctx prior =
          ctors
      in
      let monomorphized_variants =
-       List.map (fun inst  ->
+       List.map (fun inst ->
            let substs = KBindings.of_seq (List.map2 (fun x y -> x, y) (KidSet.elements typ_params) inst |> List.to_seq) in
-           (mangle_mono_id var_id ctx inst, List.map (fun ((ctor_id, _), ctyp) -> (mangle_mono_id ctor_id ctx inst, []), fix_variants ctx var_id (subst_poly substs ctyp)) ctors)
+           (mangle_mono_id var_id ctx inst,
+            List.map (fun ((ctor_id, _), ctyp) -> (mangle_mono_id ctor_id ctx inst, []), fix_variants ctx var_id (subst_poly substs ctyp)) ctors)
          ) (CTListSet.elements !instantiations)
+     in
+     let mangled_ctors =
+       List.map (fun (_, monomorphized_ctors) ->
+           List.map2 (fun ((ctor_id, _), _) ((monomorphized_id, _), _) -> mangled_pragma ctor_id monomorphized_id) ctors monomorphized_ctors
+         ) monomorphized_variants
+       |> List.concat
      in
 
      let prior = List.map (cdef_map_ctyp (fix_variants ctx var_id)) prior in
@@ -1784,12 +1798,13 @@ let rec specialize_variants ctx prior =
  
      let ctx =
        List.fold_left (fun ctx (id, ctors) ->
+           prerr_endline ("Adding " ^ string_of_id id);
            { ctx with variants = Bindings.add id ([], UBindings.of_seq (List.to_seq ctors)) ctx.variants })
          ctx monomorphized_variants
      in
      let ctx = { ctx with variants = Bindings.remove var_id ctx.variants } in
 
-     specialize_variants ctx (List.map (fun (id, ctors) -> CDEF_type (CTD_variant (id, ctors))) monomorphized_variants @ prior) cdefs
+     specialize_variants ctx (List.concat (List.map (fun (id, ctors) -> [CDEF_type (CTD_variant (id, ctors)); mangled_pragma var_id id]) monomorphized_variants) @ mangled_ctors @ prior) cdefs
 
   | CDEF_type (CTD_struct (struct_id, fields)) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) fields ->
      let typ_params = List.fold_left (fun set (_, ctyp) -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty fields in
@@ -1800,6 +1815,12 @@ let rec specialize_variants ctx prior =
            let substs = KBindings.of_seq (List.map2 (fun x y -> x, y) (KidSet.elements typ_params) inst |> List.to_seq) in
            (mangle_mono_id struct_id ctx inst, List.map (fun ((field_id, _), ctyp) -> (field_id, []), fix_variants ctx struct_id (subst_poly substs ctyp)) fields)
          ) (CTListSet.elements !instantiations)
+     in
+     let mangled_fields =
+       List.map (fun (_, monomorphized_fields) ->
+           List.map2 (fun ((field_id, _), _) ((monomorphized_id, _), _) -> mangled_pragma field_id monomorphized_id) fields monomorphized_fields
+         ) monomorphized_structs
+       |> List.concat
      in
  
      let prior = List.map (cdef_map_ctyp (fix_variants ctx struct_id)) prior in
@@ -1813,10 +1834,11 @@ let rec specialize_variants ctx prior =
      in
      let ctx = { ctx with records = Bindings.remove struct_id ctx.records } in
      
-     specialize_variants ctx (List.map (fun (id, fields) -> CDEF_type (CTD_struct (id, fields))) monomorphized_structs @ prior) cdefs
+     specialize_variants ctx (List.concat (List.map (fun (id, fields) -> [CDEF_type (CTD_struct (id, fields)); mangled_pragma struct_id id]) monomorphized_structs) @ mangled_fields @ prior) cdefs
      
   | cdef :: cdefs ->
      specialize_variants ctx (cdef :: prior) cdefs
+
   | [] ->
      List.rev prior, ctx
 

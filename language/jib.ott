@@ -180,9 +180,9 @@ clexp :: 'CL_' ::=
 
 ctype_def :: 'CTD_' ::=
   {{ com C type definition }}
-  | enum id = id0 '|' ... '|' idn                       :: :: enum
-  | struct id = { uid0 : ctyp0 , ... , uidn : ctypn }   :: :: struct
-  | variant id  = { uid0 : ctyp0 , ... , uidn : ctypn } :: :: variant
+  | enum id = id0 '|' ... '|' idn                      :: :: enum
+  | struct id = { uid0 : ctyp0 , ... , uidn : ctypn }  :: :: struct
+  | variant id = { uid0 : ctyp0 , ... , uidn : ctypn } :: :: variant
 
 iannot :: '' ::=
   {{ lem nat * nat * nat }}
@@ -261,3 +261,6 @@ cdef :: 'CDEF_' ::=
   | finish id {
       instr0 ; ... ; instrn
     } :: :: finish
+
+% Directive preserved from Sail
+  | $ string1 string2 :: :: pragma

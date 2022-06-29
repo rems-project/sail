@@ -224,6 +224,7 @@ module Ir_formatter = struct
          Buffer.add_string buf "}"
       | CDEF_startup _ | CDEF_finish _ ->
          Reporting.unreachable Parse_ast.Unknown __POS__ "Unexpected startup / finish"
+      | CDEF_pragma _ -> ()
 
     let rec output_defs' buf = function
       | def :: defs ->

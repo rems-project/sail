@@ -358,18 +358,37 @@ let rec to_ast_letbind ctx (P.LB_aux(lb,l) : P.letbind) : unit letbind =
 and to_ast_exp ctx (P.E_aux(exp,l) : P.exp) =
   E_aux(
     (match exp with
-    | P.E_block(exps) ->
+    | P.E_block exps ->
       (match to_ast_fexps false ctx exps with
-      | Some(fexps) -> E_record(fexps)
-      | None -> E_block(List.map (to_ast_exp ctx) exps))
-    | P.E_id(id) -> E_id(to_ast_id ctx id)
-    | P.E_ref(id) -> E_ref(to_ast_id ctx id)
-    | P.E_lit(lit) -> E_lit(to_ast_lit lit)
-    | P.E_cast(typ,exp) -> E_cast(to_ast_typ ctx typ, to_ast_exp ctx exp)
-    | P.E_app(f,args) ->
+      | Some fexps -> E_record fexps
+      | None -> E_block (List.map (to_ast_exp ctx) exps))
+    | P.E_id id ->
+       (* We support identifiers the same as __LOC__, __FILE__ and
+          __LINE__ in the OCaml standard library, and similar
+          constructs in C *)
+       let id_str = string_of_parse_id id in
+       if id_str = "__LOC__" then (
+         E_lit (L_aux (L_string (Reporting.short_loc_to_string l), l))
+       ) else if id_str = "__FILE__" then (
+         let file = match Reporting.simp_loc l with
+           | Some (p, _) -> p.pos_fname
+           | None -> "unknown file" in
+         E_lit (L_aux (L_string file, l))
+       ) else if id_str = "__LINE__" then (
+         let lnum = match Reporting.simp_loc l with
+           | Some (p, _) -> p.pos_lnum
+           | None -> -1 in
+         E_lit (L_aux (L_num (Big_int.of_int lnum), l))
+       ) else (
+         E_id (to_ast_id ctx id)
+       )
+    | P.E_ref id -> E_ref (to_ast_id ctx id)
+    | P.E_lit lit -> E_lit (to_ast_lit lit)
+    | P.E_cast (typ, exp) -> E_cast (to_ast_typ ctx typ, to_ast_exp ctx exp)
+    | P.E_app (f, args) ->
       (match List.map (to_ast_exp ctx) args with
-	| [] -> E_app(to_ast_id ctx f, [])
-        | exps -> E_app(to_ast_id ctx f, exps))
+	| [] -> E_app (to_ast_id ctx f, [])
+        | exps -> E_app (to_ast_id ctx f, exps))
     | P.E_app_infix(left,op,right) ->
       E_app_infix(to_ast_exp ctx left, to_ast_id ctx op, to_ast_exp ctx right)
     | P.E_tuple(exps) -> E_tuple(List.map (to_ast_exp ctx) exps)

@@ -2190,6 +2190,8 @@ let codegen_def' ctx = function
      ^^ jump 0 2 (separate_map hardline (codegen_instr (mk_id "let") ctx) cleanup) ^^ hardline
      ^^ string "}"
 
+  | CDEF_pragma _ -> empty
+     
 (** As we generate C we need to generate specialized version of tuple,
    list, and vector type. These must be generated in the correct
    order. The ctyp_dependencies function generates a list of

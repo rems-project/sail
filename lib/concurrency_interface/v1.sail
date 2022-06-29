@@ -183,7 +183,7 @@ struct Mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type), 'n > 
   tag : option(bool),
 }
 
-val __write_tag# = "write_tag_bool" : (bits(64), bool) -> unit
+val __write_tag# = monadic "write_tag_bool" : (bits(64), bool) -> unit
 
 // the bool in the result is for the success/failure of a write-exclusive or a CAS, i.e.
 outcome sail_mem_write_request : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
@@ -322,7 +322,7 @@ outcome sail_eret_announce : 'pa -> unit with 'pa : Type = {
 }
 
 val sail_instr_announce
-  = { ocaml: "Platform.instr_announce", c: "platform_instr_announce", _: "instr_announce" }
+  = pure { ocaml: "Platform.instr_announce", c: "platform_instr_announce", _: "instr_announce" }
   : forall 'n, 'n > 0.
   bits('n) -> unit
 

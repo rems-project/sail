@@ -70,17 +70,17 @@ $define _ISLA
 
 $ifdef SYMBOLIC
 
-val isla_reset_registers = "reset_registers" : unit -> unit
+val isla_reset_registers = pure "reset_registers" : unit -> unit
 
-val isla_log_event = "log_event" : forall ('a: Type). (string, 'a) -> unit
+val isla_log_event = pure "log_event" : forall ('a: Type). (string, 'a) -> unit
 
-val isla_synchronize_registers = "synchronize_registers" : unit -> unit
+val isla_synchronize_registers = pure "synchronize_registers" : unit -> unit
 
-val isla_mark_register = "mark_register" : forall ('a: Type). (register('a), string) -> unit
+val isla_mark_register = pure "mark_register" : forall ('a: Type). (register('a), string) -> unit
 
-val isla_mark_register_pair = "mark_register_pair" : forall ('a: Type) ('b: Type). (register('a), register('b), string) -> unit
+val isla_mark_register_pair = pure "mark_register_pair" : forall ('a: Type) ('b: Type). (register('a), register('b), string) -> unit
 
-val isla_monomorphize = "monomorphize" : forall 'n, 'n >= 0. bits('n) -> bits('n)
+val isla_monomorphize = pure "monomorphize" : forall 'n, 'n >= 0. bits('n) -> bits('n)
 
 $else
 

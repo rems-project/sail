@@ -897,6 +897,7 @@ let cdef_map_instr f = function
   | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr f) instrs)
   | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, ctyps, ctyp)
   | CDEF_type tdef -> CDEF_type tdef
+  | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
 (** Map over each instruction in a cdef using concatmap_instr *)
 let cdef_concatmap_instr f = function
@@ -912,6 +913,7 @@ let cdef_concatmap_instr f = function
      CDEF_finish (id, List.concat (List.map (concatmap_instr f) instrs))
   | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, ctyps, ctyp)
   | CDEF_type tdef -> CDEF_type tdef
+  | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
 let ctype_def_map_ctyp f = function
   | CTD_enum (id, ids) -> CTD_enum (id, ids)
@@ -927,6 +929,7 @@ let cdef_map_ctyp f = function
   | CDEF_finish (id, instrs) -> CDEF_finish (id, List.map (map_instr_ctyp f) instrs)
   | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, List.map f ctyps, f ctyp)
   | CDEF_type tdef -> CDEF_type (ctype_def_map_ctyp f tdef)
+  | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
 let cdef_map_cval f = cdef_map_instr (map_instr_cval f)
                     
@@ -1133,6 +1136,7 @@ let cdef_ctyps = function
   | CDEF_let (_, bindings, instrs) ->
      List.fold_left (fun m ctyp -> CTSet.add ctyp m) CTSet.empty (List.map snd bindings)
      |> CTSet.union (instrs_ctyps instrs)
+  | CDEF_pragma (_, _) -> CTSet.empty
 
 let rec c_ast_registers = function
   | CDEF_reg_dec (id, ctyp, instrs) :: ast -> (id, ctyp, instrs) :: c_ast_registers ast

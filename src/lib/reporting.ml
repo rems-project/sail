@@ -144,7 +144,7 @@ let rec loc_file = function
   | Parse_ast.Generated l -> loc_file l
   | Parse_ast.Range (p1, _) -> Some p1.pos_fname
   | Parse_ast.Documented (_, l) -> loc_file l
-                          
+                                 
 let short_loc_to_string l =
   match simp_loc l with
   | None -> "unknown location"
