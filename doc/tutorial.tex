@@ -760,8 +760,10 @@ Structs are defined using the struct keyword like so:
 If we have a struct \ll{foo : Foo}, its fields can be accessed by
 \ll{foo.bar}, and set as \ll{foo.bar = 0xF}. It can also be updated in
 a purely functional fashion using the construct \ll{\{foo with bar =
-  0xF\}}. There is no lexical restriction on the name of a struct or
-the names of its fields.
+  0xF\}}. A new struct value can be created with
+\ll{struct \{foo = 0xF, baz = 42, quux = 3\}}. There is no lexical
+restriction on the name of a struct or the names of its fields.
+Pattern matching on structs is not possible.
 
 \subsubsection{Unions}
 \label{sec:union}
