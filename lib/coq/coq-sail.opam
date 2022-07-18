@@ -1,0 +1,43 @@
+opam-version: "2.0"
+name: "coq-sail"
+version: "0.15"
+maintainer: "Sail Devs <cl-sail-dev@lists.cam.ac.uk>"
+authors: [
+  "Alasdair Armstrong"
+  "Thomas Bauereiss"
+  "Brian Campbell"
+  "Shaked Flur"
+  "Jonathan French"
+  "Kathy Gray"
+  "Robert Norton"
+  "Christopher Pulte"
+  "Peter Sewell"
+  "Mark Wassell"
+]
+homepage: "http://www.cl.cam.ac.uk/~pes20/sail/"
+bug-reports: "https://github.com/rems-project/sail/issues"
+license: "BSD-3-clause"
+dev-repo: "git+https://github.com/rems-project/sail.git"
+build: [make ]
+install: [make "install"]
+depends: [
+  "coq" {>= "8.9.0"}
+  "coq-bbv" {>= "1.1"}
+]
+synopsis:
+  "Support library for Sail, a language for describing the instruction semantics of processors"
+description:
+  """The support library for instruction-set semantics generated from Sail.
+Sail is a language for describing the instruction-set
+architecture (ISA) semantics of processors. Sail aims to provide a
+engineer-friendly, vendor-pseudocode-like language for describing
+instruction semantics. It is essentially a first-order imperative
+language, but with lightweight dependent typing for numeric types and
+bitvector lengths, which are automatically checked using Z3. It has
+been used for several papers, available from
+http://www.cl.cam.ac.uk/~pes20/sail/.
+The Sail tool can be found in main opam repository."""
+tags: [
+  "logpath:Sail"
+  "category:CS/Semantics and Compilation/Semantics"
+]
