@@ -101,18 +101,20 @@ struct Explicit_access_kind = {
   strength : Access_strength
 }
 
-union Access_kind = {
+union Access_kind('arch_ak : Type) = {
   AK_explicit: Explicit_access_kind,
   AK_ifetch : unit, // Instruction fetch
-  AK_ttw : unit // Translation table walk
+  AK_ttw : unit, // Translation table walk
+  AK_arch : 'arch_ak // Archtecture specific type of access.
 }
 
-struct Mem_read_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type), 'n > 0 = {
-  access_kind : Access_kind,
+struct Mem_read_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
+                        'arch_ak: Type), 'n > 0 = {
+  access_kind : Access_kind('arch_ak),
   // There may not always be a virtual address, e.g. when translation is off.
   // Additionally, translate reads don't have a (VA, PA) pair in the
   // translation relation anyway.
-  va : option(bits('vasize)),  
+  va : option(bits('vasize)),
   pa : 'pa,
   translation : 'ts,
   size : int('n),
@@ -128,17 +130,19 @@ function bit_to_bool b = match b {
 }
 
 outcome sail_mem_read_request : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
-  Mem_read_request('n, 'vasize, 'pa, 'translation_summary) -> result((bits(8 * 'n), option(bool)), 'abort)
+  Mem_read_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak)
+      -> result((bits(8 * 'n), option(bool)), 'abort)
 with
   'pa : Type,
   'translation_summary : Type,
+  'arch_ak : Type,
   'read_kind : Type,
   'abort : Type
 = {
   val pa_bits : 'pa -> {'pasize, 'pasize in {32, 64}. bits('pasize)}
 
   val request_read_kind : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
-    Mem_read_request('n, 'vasize, 'pa, 'translation_summary) -> 'read_kind
+    Mem_read_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak) -> 'read_kind
 
   val platform_read_mem : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
     ('read_kind, int('addrsize), bits('addrsize), int('n)) -> bits(8 * 'n)
@@ -173,8 +177,9 @@ with
   }
 }
 
-struct Mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type), 'n > 0 = {
-  access_kind : Access_kind,
+struct Mem_write_request('n : Int, 'vasize : Int, 'pa : Type, 'ts : Type,
+                         'arch_ak : Type), 'n > 0 = {
+  access_kind : Access_kind('arch_ak),
   va : option(bits('vasize)),
   pa : 'pa,          
   translation : 'ts,
@@ -187,17 +192,19 @@ val __write_tag# = monadic "write_tag_bool" : (bits(64), bool) -> unit
 
 // the bool in the result is for the success/failure of a write-exclusive or a CAS, i.e.
 outcome sail_mem_write_request : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
-  Mem_write_request('n, 'vasize, 'pa, 'translation_summary) -> result(option(bool), 'abort)
+  Mem_write_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak)
+      -> result(option(bool), 'abort)
 with
   'pa : Type,
   'translation_summary : Type,
+  'arch_ak : Type,
   'write_kind : Type,
   'abort : Type
 = {
   val pa_bits : 'pa -> {'pasize, 'pasize in {32, 64}. bits('pasize)}
 
   val request_write_kind : forall 'n 'vasize, 'n > 0 & 'vasize > 0.
-    Mem_write_request('n, 'vasize, 'pa, 'translation_summary) -> 'write_kind
+    Mem_write_request('n, 'vasize, 'pa, 'translation_summary, 'arch_ak) -> 'write_kind
 
   val platform_write_mem : forall 'n 'addrsize, 'n > 0 & 'addrsize in {32, 64}.
     ('write_kind, int('addrsize), bits('addrsize), int('n), bits(8 * 'n)) -> bool
