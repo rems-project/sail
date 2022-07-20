@@ -417,7 +417,7 @@ let rec compile_aval l ctx = function
         | _ ->
         let gs = ngensym () in
         [idecl l vector_ctyp gs;
-         iextern (CL_id (gs, vector_ctyp)) (mk_id "internal_vector_init", []) [V_lit (VL_int Big_int.zero, CT_fint 64)]],
+         iextern l (CL_id (gs, vector_ctyp)) (mk_id "internal_vector_init", []) [V_lit (VL_int Big_int.zero, CT_fint 64)]],
         V_id (gs, vector_ctyp),
         [iclear vector_ctyp gs]
      end
@@ -473,7 +473,7 @@ let rec compile_aval l ctx = function
           [icopy l (CL_id (gs, ctyp)) (V_call (Bvor, [V_id (gs, ctyp); V_lit (mask i, ctyp)]))]
        | _ ->
           setup
-          @ [iextern (CL_id (gs, ctyp))
+          @ [iextern l (CL_id (gs, ctyp))
                      (mk_id "update_fbits", [])
                      [V_id (gs, ctyp); V_lit (VL_int (Big_int.of_int i), CT_constant (Big_int.of_int i)); cval]]
           @ cleanup
@@ -498,13 +498,13 @@ let rec compile_aval l ctx = function
      let aval_set i aval =
        let setup, cval, cleanup = compile_aval l ctx aval in
        setup
-       @ [iextern (CL_id (gs, vector_ctyp))
+       @ [iextern l (CL_id (gs, vector_ctyp))
                   (mk_id "internal_vector_update", [])
                   [V_id (gs, vector_ctyp); V_lit (VL_int (Big_int.of_int i), CT_fint 64); cval]]
        @ cleanup
      in
      [idecl l vector_ctyp gs;
-      iextern (CL_id (gs, vector_ctyp)) (mk_id "internal_vector_init", []) [V_lit (VL_int (Big_int.of_int len), CT_fint 64)]]
+      iextern l (CL_id (gs, vector_ctyp)) (mk_id "internal_vector_init", []) [V_lit (VL_int (Big_int.of_int len), CT_fint 64)]]
      @ List.concat (List.mapi aval_set (if direction then List.rev avals else avals)),
      V_id (gs, vector_ctyp),
      [iclear vector_ctyp gs]
@@ -520,7 +520,7 @@ let rec compile_aval l ctx = function
      let gs = ngensym () in
      let mk_cons aval =
        let setup, cval, cleanup = compile_aval l ctx aval in
-       setup @ [iextern (CL_id (gs, CT_list ctyp)) (mk_id "cons", [ctyp]) [cval; V_id (gs, CT_list ctyp)]] @ cleanup
+       setup @ [iextern l (CL_id (gs, CT_list ctyp)) (mk_id "cons", [ctyp]) [cval; V_id (gs, CT_list ctyp)]] @ cleanup
      in
      [idecl l (CT_list ctyp) gs]
      @ List.concat (List.map mk_cons (List.rev avals)),
@@ -828,7 +828,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      in
      assert (ctyp_equal ctyp (ctyp_of_typ ctx typ));
      [idecl l ctyp try_return_id;
-      itry_block (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
+      itry_block l (aexp_setup @ [aexp_call (CL_id (try_return_id, ctyp))] @ aexp_cleanup);
       ijump l (V_call (Bnot, [V_id (have_exception, CT_bool)])) post_exception_handlers_label;
       icopy l (CL_id (have_exception, CT_bool)) (V_lit (VL_bool false, CT_bool))]
      @ List.concat (List.map compile_case cases)
@@ -1282,7 +1282,7 @@ let fix_destructure fail_label = function
    flow to cleanup heap-allocated variables correctly when a function
    terminates early. See the generate_cleanup function for how this is
    done. *)
-let fix_early_return ret instrs =
+let fix_early_return l ret instrs =
   let end_function_label = label "end_function_" in
   let is_return_recur (I_aux (instr, _)) =
     match instr with
@@ -1292,9 +1292,9 @@ let fix_early_return ret instrs =
   let rec rewrite_return historic instrs =
     match instr_split_at is_return_recur instrs with
     | instrs, [] -> instrs
-    | before, I_aux (I_try_block instrs, _) :: after ->
+    | before, I_aux (I_try_block instrs, (_, l)) :: after ->
        before
-       @ [itry_block (rewrite_return (historic @ before) instrs)]
+       @ [itry_block l (rewrite_return (historic @ before) instrs)]
        @ rewrite_return (historic @ before) after
     | before, I_aux (I_block instrs, _) :: after ->
        before
@@ -1332,7 +1332,7 @@ let fix_early_return ret instrs =
     | _, _ -> assert false
   in
   rewrite_return [] instrs
-  @ [ilabel end_function_label; iend ()]
+  @ [ilabel end_function_label; iend l]
 
 (** This pass ensures that all variables created by I_decl have unique names *)
 let unique_names =
@@ -1435,7 +1435,7 @@ let compile_funcl ctx id pat guard exp =
   in
 
   let instrs = arg_setup @ destructure @ guard_instrs @ setup @ [call (CL_id (return, ret_ctyp))] @ cleanup @ destructure_cleanup @ arg_cleanup in
-  let instrs = fix_early_return (CL_id (return, ret_ctyp)) instrs in
+  let instrs = fix_early_return (exp_loc exp) (CL_id (return, ret_ctyp)) instrs in
   let instrs = unique_names instrs in
   let instrs = fix_exception ~return:(Some ret_ctyp) ctx instrs in
   let instrs = coverage_function_entry id (exp_loc exp) @ instrs in
@@ -1595,9 +1595,7 @@ let callgraph cdefs =
     ) IdGraph.empty cdefs
 
 let mangle_mono_id id ctx ctyps =
-  let new_id = append_id id ("<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ">") in
-  prerr_endline ("mangled " ^ string_of_id id ^ " to " ^ string_of_id new_id);
-  new_id
+  append_id id ("<" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ">")
  
 let rec specialize_functions ctx cdefs =
   let polymorphic_functions =
@@ -1769,8 +1767,6 @@ let rec specialize_variants ctx prior =
   function
   | CDEF_type (CTD_variant (var_id, ctors)) :: cdefs when List.exists (fun (_, ctyp) -> is_polymorphic ctyp) ctors ->
      let typ_params = List.fold_left (fun set (_, ctyp) -> KidSet.union (ctyp_vars ctyp) set) KidSet.empty ctors in
-
-     prerr_endline ("VARIANT " ^ string_of_id var_id);
      
      let cdefs =
        List.fold_left
@@ -1798,7 +1794,6 @@ let rec specialize_variants ctx prior =
  
      let ctx =
        List.fold_left (fun ctx (id, ctors) ->
-           prerr_endline ("Adding " ^ string_of_id id);
            { ctx with variants = Bindings.add id ([], UBindings.of_seq (List.to_seq ctors)) ctx.variants })
          ctx monomorphized_variants
      in

@@ -627,7 +627,7 @@ let fix_early_heap_return ret ret_ctyp instrs =
   let end_function_label = label "end_function_" in
   let is_return_recur (I_aux (instr, _)) =
     match instr with
-    | I_if _ | I_block _ | I_end _ | I_funcall _ | I_copy _ | I_undefined _ -> true
+    | I_if _ | I_block _ | I_try_block _ | I_end _ | I_funcall _ | I_copy _ | I_undefined _ -> true
     | _ -> false
   in
   let rec rewrite_return instrs =
@@ -636,6 +636,10 @@ let fix_early_heap_return ret ret_ctyp instrs =
     | before, I_aux (I_block instrs, _) :: after ->
        before
        @ [iblock (rewrite_return instrs)]
+       @ rewrite_return after
+    | before, I_aux (I_try_block instrs, (_, l)) :: after ->
+       before
+       @ [itry_block l (rewrite_return instrs)]
        @ rewrite_return after
     | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
        before
@@ -660,11 +664,11 @@ let fix_early_heap_return ret ret_ctyp instrs =
   rewrite_return instrs
   @ [ilabel end_function_label]
 
-(* This is like fix_early_return, but for stack allocated returns. *)
+(* This is like fix_early_heap_return, but for stack allocated returns. *)
 let fix_early_stack_return ret ret_ctyp instrs =
   let is_return_recur (I_aux (instr, _)) =
     match instr with
-    | I_if _ | I_block _ | I_end _ | I_funcall _ | I_copy _ -> true
+    | I_if _ | I_block _ | I_try_block _ | I_end _ | I_funcall _ | I_copy _ -> true
     | _ -> false
   in
   let rec rewrite_return instrs =
@@ -673,6 +677,10 @@ let fix_early_stack_return ret ret_ctyp instrs =
     | before, I_aux (I_block instrs, _) :: after ->
        before
        @ [iblock (rewrite_return instrs)]
+       @ rewrite_return after
+    | before, I_aux (I_try_block instrs, (_, l)) :: after ->
+       before
+       @ [itry_block l (rewrite_return instrs)]
        @ rewrite_return after
     | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), (_, l)) :: after ->
        before
@@ -1324,29 +1332,29 @@ let sgen_cval_param cval =
   | _ ->
      sgen_cval cval
 
-let rec sgen_clexp = function
+let rec sgen_clexp l = function
   | CL_id (Have_exception _, _) -> "have_exception"
   | CL_id (Current_exception _, _) -> "current_exception"
   | CL_id (Throw_location _, _) -> "throw_location"
-  | CL_id (Return _, _) -> assert false
+  | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_return should have been removed"
   | CL_id (Name (id, _), _) -> "&" ^ sgen_id id
   | CL_id (Global (id, _), _) -> "&" ^ sgen_id id
-  | CL_field (clexp, field) -> "&((" ^ sgen_clexp clexp ^ ")->" ^ zencode_uid field ^ ")"
-  | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp clexp ^ ")->ztup" ^ string_of_int n ^ ")"
-  | CL_addr clexp -> "(*(" ^ sgen_clexp clexp ^ "))"
+  | CL_field (clexp, field) -> "&((" ^ sgen_clexp l clexp ^ ")->" ^ zencode_uid field ^ ")"
+  | CL_tuple (clexp, n) -> "&((" ^ sgen_clexp l clexp ^ ")->ztup" ^ string_of_int n ^ ")"
+  | CL_addr clexp -> "(*(" ^ sgen_clexp l clexp ^ "))"
   | CL_void -> assert false
   | CL_rmw _ -> assert false
 
-let rec sgen_clexp_pure = function
+let rec sgen_clexp_pure l = function
   | CL_id (Have_exception _, _) -> "have_exception"
   | CL_id (Current_exception _, _) -> "current_exception"
   | CL_id (Throw_location _, _) -> "throw_location"
-  | CL_id (Return _, _) -> assert false
+  | CL_id (Return _, _) -> Reporting.unreachable l __POS__ "CL_return should have been removed"
   | CL_id (Name (id, _), _) -> sgen_id id
   | CL_id (Global (id, _), _) -> sgen_id id
-  | CL_field (clexp, field) -> sgen_clexp_pure clexp ^ "." ^ zencode_uid field
-  | CL_tuple (clexp, n) -> sgen_clexp_pure clexp ^ ".ztup" ^ string_of_int n
-  | CL_addr clexp -> "(*(" ^ sgen_clexp_pure clexp ^ "))"
+  | CL_field (clexp, field) -> sgen_clexp_pure l clexp ^ "." ^ zencode_uid field
+  | CL_tuple (clexp, n) -> sgen_clexp_pure l clexp ^ ".ztup" ^ string_of_int n
+  | CL_addr clexp -> "(*(" ^ sgen_clexp_pure l clexp ^ "))"
   | CL_void -> assert false
   | CL_rmw _ -> assert false
 
@@ -1362,9 +1370,9 @@ let rec codegen_conversion l clexp cval =
   (* When both types are equal, we don't need any conversion. *)
   | _, _ when ctyp_equal ctyp_to ctyp_from ->
      if is_stack_ctyp ctyp_to then
-       ksprintf string "  %s = %s;" (sgen_clexp_pure clexp) (sgen_cval cval)
+       ksprintf string "  %s = %s;" (sgen_clexp_pure l clexp) (sgen_cval cval)
      else
-       ksprintf string "  COPY(%s)(%s, %s);" (sgen_ctyp_name ctyp_to) (sgen_clexp clexp) (sgen_cval cval)
+       ksprintf string "  COPY(%s)(%s, %s);" (sgen_ctyp_name ctyp_to) (sgen_clexp l clexp) (sgen_cval cval)
 
   | CT_ref ctyp_to, ctyp_from ->
      codegen_conversion l (CL_addr clexp) cval
@@ -1373,8 +1381,8 @@ let rec codegen_conversion l clexp cval =
      let i = ngensym () in
      let from = ngensym () in
      let into = ngensym () in
-     ksprintf string "  KILL(%s)(%s);" (sgen_ctyp_name ctyp_to) (sgen_clexp clexp) ^^ hardline
-     ^^ ksprintf string "  internal_vector_init_%s(%s, %s.len);" (sgen_ctyp_name ctyp_to) (sgen_clexp clexp) (sgen_cval cval) ^^ hardline
+     ksprintf string "  KILL(%s)(%s);" (sgen_ctyp_name ctyp_to) (sgen_clexp l clexp) ^^ hardline
+     ^^ ksprintf string "  internal_vector_init_%s(%s, %s.len);" (sgen_ctyp_name ctyp_to) (sgen_clexp l clexp) (sgen_cval cval) ^^ hardline
      ^^ ksprintf string "  for (int %s = 0; %s < %s.len; %s++) {" (sgen_name i) (sgen_name i) (sgen_cval cval) (sgen_name i) ^^ hardline
      ^^ (if is_stack_ctyp ctyp_elem_from then
            ksprintf string "    %s %s = %s.data[%s];" (sgen_ctyp ctyp_elem_from) (sgen_name from) (sgen_cval cval) (sgen_name i)
@@ -1394,9 +1402,9 @@ let rec codegen_conversion l clexp cval =
                 ^^ codegen_conversion l (CL_id (into, ctyp_elem_to)) (V_id (from, ctyp_elem_from)))
      ^^ hardline
      ^^ (if is_stack_ctyp ctyp_elem_to then
-           ksprintf string "    %s.data[%s] = %s;" (sgen_clexp_pure clexp) (sgen_name i) (sgen_name into)
+           ksprintf string "    %s.data[%s] = %s;" (sgen_clexp_pure l clexp) (sgen_name i) (sgen_name into)
          else
-           ksprintf string "    COPY(%s)(&((%s)->data[%s]), %s);" (sgen_ctyp_name ctyp_elem_to) (sgen_clexp clexp) (sgen_name i) (sgen_name into)
+           ksprintf string "    COPY(%s)(&((%s)->data[%s]), %s);" (sgen_ctyp_name ctyp_elem_to) (sgen_clexp l clexp) (sgen_name i) (sgen_name into)
            ^^ hardline ^^ ksprintf string "    KILL(%s)(&%s);" (sgen_ctyp_name ctyp_elem_to) (sgen_name into)
         )
      ^^ (if is_stack_ctyp ctyp_elem_from then
@@ -1422,10 +1430,10 @@ let rec codegen_conversion l clexp cval =
   (* For anything not special cased, just try to call a appropriate CONVERT_OF function. *)
   | _, _ when is_stack_ctyp (clexp_ctyp clexp) ->
      ksprintf string "  %s = CONVERT_OF(%s, %s)(%s);"
-              (sgen_clexp_pure clexp) (sgen_ctyp_name ctyp_to) (sgen_ctyp_name ctyp_from) (sgen_cval_param cval)
+              (sgen_clexp_pure l clexp) (sgen_ctyp_name ctyp_to) (sgen_ctyp_name ctyp_from) (sgen_cval_param cval)
   | _, _ ->
      ksprintf string "  CONVERT_OF(%s, %s)(%s, %s);"
-              (sgen_ctyp_name ctyp_to) (sgen_ctyp_name ctyp_from) (sgen_clexp clexp) (sgen_cval_param cval)
+              (sgen_ctyp_name ctyp_to) (sgen_ctyp_name ctyp_from) (sgen_clexp l clexp) (sgen_cval_param cval)
 
 (* PPrint doesn't provide a nice way to filter out empty documents *)
 let squash_empty docs = List.filter (fun doc -> requirement doc > 0) docs
@@ -1531,14 +1539,14 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
      in
      if fname = "reg_deref" then
        if is_stack_ctyp ctyp then
-         string (Printf.sprintf  "  %s = *(%s);" (sgen_clexp_pure x) c_args)
+         string (Printf.sprintf  "  %s = *(%s);" (sgen_clexp_pure l x) c_args)
        else
-         string (Printf.sprintf  "  COPY(%s)(&%s, *(%s));" (sgen_ctyp_name ctyp) (sgen_clexp_pure x) c_args)
+         string (Printf.sprintf  "  COPY(%s)(&%s, *(%s));" (sgen_ctyp_name ctyp) (sgen_clexp_pure l x) c_args)
      else
        if is_stack_ctyp ctyp then
-         string (Printf.sprintf "  %s = %s(%s%s);" (sgen_clexp_pure x) fname (extra_arguments is_extern) c_args)
+         string (Printf.sprintf "  %s = %s(%s%s);" (sgen_clexp_pure l x) fname (extra_arguments is_extern) c_args)
        else
-         string (Printf.sprintf "  %s(%s%s, %s);" fname (extra_arguments is_extern) (sgen_clexp x) c_args)
+         string (Printf.sprintf "  %s(%s%s, %s);" fname (extra_arguments is_extern) (sgen_clexp l x) c_args)
 
   | I_clear (ctyp, id) when is_stack_ctyp ctyp ->
      empty
@@ -1547,11 +1555,11 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
 
   | I_init (ctyp, id, cval) ->
      codegen_instr fid ctx (idecl l ctyp id) ^^ hardline
-     ^^ codegen_conversion Parse_ast.Unknown (CL_id (id, ctyp)) cval
+     ^^ codegen_conversion l (CL_id (id, ctyp)) cval
 
   | I_reinit (ctyp, id, cval) ->
-     codegen_instr fid ctx (ireset ctyp id) ^^ hardline
-     ^^ codegen_conversion Parse_ast.Unknown (CL_id (id, ctyp)) cval
+     codegen_instr fid ctx (ireset l ctyp id) ^^ hardline
+     ^^ codegen_conversion l (CL_id (id, ctyp)) cval
 
   | I_reset (ctyp, id) when is_stack_ctyp ctyp ->
      string (Printf.sprintf "  %s %s;" (sgen_ctyp ctyp) (sgen_name id))
