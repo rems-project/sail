@@ -145,9 +145,13 @@ let rec descatter' funcls mapcls = function
      regular union declaration. *)
   | DEF_scattered (SD_aux (SD_variant (id, typq), (l, _))) :: defs ->
      let tus = get_union_clauses id defs in
-     DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot)))
-     :: descatter' funcls mapcls (filter_union_clauses id defs)
-
+     begin match tus with
+     | [] -> raise (Reporting.err_general l "No clauses found for scattered union type")
+     | _ ->
+        DEF_type (TD_aux (TD_variant (id, typq, tus, false), (gen_loc l, Type_check.empty_tannot)))
+        :: descatter' funcls mapcls (filter_union_clauses id defs)
+     end
+       
   (* Therefore we should never see SD_unioncl... *)
   | DEF_scattered (SD_aux (SD_unioncl _, (l, _))) :: _ ->
      raise (Reporting.err_unreachable l __POS__ "Found union clause during de-scattering")
