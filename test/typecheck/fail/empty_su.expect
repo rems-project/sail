@@ -1,0 +1,5 @@
+Error:
+[[96mempty_su.sail[0m]:5:0-19
+5[96m |[0mscattered union ast
+ [91m |[0m[91m^-----------------^[0m
+ [91m |[0m No clauses found for scattered union type
