@@ -493,14 +493,26 @@ let rec compile_aval l ctx = function
        | Ord_aux (Ord_dec, _) -> true
        | Ord_aux (Ord_var _, _) -> raise (Reporting.err_general l "Polymorphic vector direction found")
      in
-     let vector_ctyp = CT_vector (direction, ctyp_of_typ ctx typ) in
+     let elem_ctyp = ctyp_of_typ ctx typ in
+     let vector_ctyp = CT_vector (direction, elem_ctyp) in
      let gs = ngensym () in
      let aval_set i aval =
        let setup, cval, cleanup = compile_aval l ctx aval in
+       let cval, conversion_setup, conversion_cleanup =
+         if ctyp_equal (cval_ctyp cval) elem_ctyp then (
+           cval, [], []
+         ) else (
+           let gs = ngensym () in
+           V_id (gs, elem_ctyp),
+           [iinit l elem_ctyp gs cval],
+           [iclear elem_ctyp gs]
+         ) in
        setup
+       @ conversion_setup
        @ [iextern l (CL_id (gs, vector_ctyp))
                   (mk_id "internal_vector_update", [])
                   [V_id (gs, vector_ctyp); V_lit (VL_int (Big_int.of_int i), CT_fint 64); cval]]
+       @ conversion_cleanup
        @ cleanup
      in
      [idecl l vector_ctyp gs;
