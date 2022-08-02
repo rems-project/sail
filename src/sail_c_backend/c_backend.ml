@@ -1627,7 +1627,7 @@ let rec codegen_instr fid ctx (I_aux (instr, (_, l))) =
 
   | I_end _ -> assert false
 
-  | I_match_failure ->
+  | I_exit _ ->
      string ("  sail_match_failure(\"" ^ String.escaped (string_of_id fid) ^ "\");")
 
 let codegen_type_def ctx = function

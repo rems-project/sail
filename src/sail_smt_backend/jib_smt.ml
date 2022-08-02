@@ -1814,7 +1814,7 @@ let smt_terminator ctx =
      add_event ctx Return (Var (zencode_name id));
      []
 
-  | T_match_failure ->
+  | T_exit _ ->
      add_pathcond_event ctx Match;
      []
 
@@ -1977,7 +1977,7 @@ let smt_instr ctx =
   | I_aux (I_clear _, _) -> []
 
   (* Should only appear as terminators for basic blocks. *)
-  | I_aux ((I_jump _ | I_goto _ | I_end _ | I_match_failure | I_undefined _), (_, l)) ->
+  | I_aux ((I_jump _ | I_goto _ | I_end _ | I_exit _ | I_undefined _), (_, l)) ->
      Reporting.unreachable l __POS__ "SMT: Instruction should only appear as block terminator"
 
   | I_aux (_, (_, l)) ->

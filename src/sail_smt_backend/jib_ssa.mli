@@ -100,7 +100,7 @@ val topsort : 'a array_graph -> int list
 
 type terminator =
   | T_undefined of Jib.ctyp
-  | T_match_failure
+  | T_exit of string
   | T_end of Jib.name
   | T_goto of string
   | T_jump of int * string

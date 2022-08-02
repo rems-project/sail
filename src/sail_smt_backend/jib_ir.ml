@@ -155,8 +155,8 @@ module Ir_formatter = struct
                                  ^ " `" ^ output_loc l)
       | I_goto label ->
          add_instr n buf indent (C.keyword "goto" ^ " " ^ C.string_of_label (StringMap.find label label_map))
-      | I_match_failure ->
-         add_instr n buf indent (C.keyword "failure")
+      | I_exit cause ->
+         add_instr n buf indent (C.keyword "failure" ^ " " ^ cause)
       | I_undefined _ ->
          add_instr n buf indent (C.keyword "arbitrary")
       | I_end _ ->

@@ -201,7 +201,7 @@ instr :: 'I_' ::=
   | clexp = cval                                   :: :: copy
   | clear ctyp name                                :: :: clear
   | undefined ctyp                                 :: :: undefined
-  | match_failure                                  :: :: match_failure
+  | exit string                                    :: :: exit
   | end name                                       :: :: end
 
 % All instructions containing nested instructions can be flattened

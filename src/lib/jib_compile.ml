@@ -802,7 +802,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      @ (if num_cases > 1 then on_reached else [])
      @ [idecl l ctyp case_return_id]
      @ List.concat (List.map compile_case cases)
-     @ [imatch_failure ()]
+     @ [imatch_failure l]
      @ [ilabel finish_match_label],
      (fun clexp -> icopy l clexp (V_id (case_return_id, ctyp))),
      [iclear ctyp case_return_id]
@@ -1026,7 +1026,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
 
   | AE_exit (aval, typ) ->
      let exit_setup, cval, _ = compile_aval l ctx aval in
-     exit_setup @ [imatch_failure ()],
+     exit_setup @ [iexit l],
      (fun clexp -> icomment "unreachable after exit"),
      []
 
@@ -1089,7 +1089,7 @@ let rec compile_aexp ctx (AE_aux (aexp_aux, env, l)) =
      in
      (* We can either generate an actual loop body for C, or unroll the body for SMT *)
      let actual = loop_body [ilabel loop_start_label] (fun () -> [igoto loop_start_label]) in
-     let rec unroll max n = loop_body [] (fun () -> if n < max then unroll max (n + 1) else [imatch_failure ()]) in
+     let rec unroll max n = loop_body [] (fun () -> if n < max then unroll max (n + 1) else [imatch_failure l]) in
      let body = match C.unroll_loops with Some times -> unroll times 0 | None -> actual in
 
      variable_init from_gs from_setup from_call from_cleanup
@@ -1238,7 +1238,7 @@ let rec map_try_block f (I_aux (instr, aux)) =
     | I_funcall _ | I_copy _ | I_clear _ | I_throw _ | I_return _ -> instr
     | I_block instrs -> I_block (List.map (map_try_block f) instrs)
     | I_try_block instrs -> I_try_block (f (List.map (map_try_block f) instrs))
-    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_jump _ | I_match_failure | I_undefined _ | I_end _ -> instr
+    | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_jump _ | I_exit _ | I_undefined _ | I_end _ -> instr
   in
   I_aux (instr, aux)
 
@@ -1279,11 +1279,11 @@ let rec compile_arg_pats ctx label (P_aux (p_aux, (l, _)) as pat) ctyps =
 
 let combine_destructure_cleanup xs = List.concat (List.map fst xs), List.concat (List.rev (List.map snd xs))
 
-let fix_destructure fail_label = function
+let fix_destructure l fail_label = function
   | ([], cleanup) -> ([], cleanup)
   | destructure, cleanup ->
      let body_label = label "fundef_body_" in
-     (destructure @ [igoto body_label; ilabel fail_label; imatch_failure (); ilabel body_label], cleanup)
+     (destructure @ [igoto body_label; ilabel fail_label; imatch_failure l; ilabel body_label], cleanup)
 
 (** Functions that have heap-allocated return types are implemented by
    passing a pointer a location where the return value should be
@@ -1432,7 +1432,7 @@ let compile_funcl ctx id pat guard exp =
             @ [guard_call (CL_id (gs, CT_bool))]
             @ guard_cleanup
             @ [ijump (id_loc id) (V_id (gs, CT_bool)) guard_label;
-               imatch_failure ();
+               imatch_failure l;
                ilabel guard_label]
        )]
     | None -> []
@@ -1443,7 +1443,7 @@ let compile_funcl ctx id pat guard exp =
   
   let setup, call, cleanup = compile_aexp ctx aexp in
   let destructure, destructure_cleanup =
-    compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure fundef_label
+    compiled_args |> List.map snd |> combine_destructure_cleanup |> fix_destructure (id_loc id) fundef_label
   in
 
   let instrs = arg_setup @ destructure @ guard_instrs @ setup @ [call (CL_id (return, ret_ctyp))] @ cleanup @ destructure_cleanup @ arg_cleanup in

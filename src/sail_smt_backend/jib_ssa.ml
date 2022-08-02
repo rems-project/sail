@@ -225,7 +225,7 @@ let prune visited graph =
 
 type terminator =
   | T_undefined of ctyp
-  | T_match_failure
+  | T_exit of string
   | T_end of name
   | T_goto of string
   | T_jump of int * string
@@ -245,7 +245,7 @@ let to_terminator graph = function
      let n = add_cond cval graph in
      T_jump (n, label)
   | I_end name -> T_end name
-  | I_match_failure -> T_match_failure
+  | I_exit cause -> T_exit cause
   | I_undefined ctyp -> T_undefined ctyp
   | _ -> assert false
 
@@ -265,7 +265,7 @@ let control_flow_graph instrs =
 
   let cf_split (I_aux (aux, _)) =
     match aux with
-    | I_label _ | I_goto _ | I_jump _ | I_end _ | I_match_failure | I_undefined _ -> true
+    | I_label _ | I_goto _ | I_jump _ | I_end _ | I_exit _ | I_undefined _ -> true
     | _ -> false
   in
 
@@ -283,7 +283,7 @@ let control_flow_graph instrs =
          [n]
     in
     match terminator with
-    | T_end _ | T_match_failure | T_undefined _ ->
+    | T_end _ | T_exit _ | T_undefined _ ->
        cfg [] after
 
     | T_goto label ->

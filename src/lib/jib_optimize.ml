@@ -226,7 +226,7 @@ let rec instrs_subst id subst =
        | I_copy (clexp, cval) -> I_copy (clexp, cval_subst id subst cval)
        | I_clear (clexp, id') -> I_clear (clexp, id')
        | I_undefined ctyp -> I_undefined ctyp
-       | I_match_failure -> I_match_failure
+       | I_exit cause -> I_exit cause
        | I_end id' -> I_end id'
        | I_if (cval, then_instrs, else_instrs, ctyp) ->
           I_if (cval_subst id subst cval, instrs_subst id subst then_instrs, instrs_subst id subst else_instrs, ctyp)
@@ -509,7 +509,7 @@ let remove_tuples cdefs ctx =
     | I_block instrs -> I_block (List.map fix_instr instrs)
     | I_try_block instrs -> I_try_block (List.map fix_instr instrs)
     | (I_goto _ | I_label _ | I_decl _ | I_clear _ | I_end _ | I_comment _
-       | I_reset _ | I_undefined _ | I_match_failure | I_raw _) as instr -> instr
+       | I_reset _ | I_undefined _ | I_exit _ | I_raw _) as instr -> instr
   and fix_instr (I_aux (instr, aux)) = I_aux (fix_instr_aux instr, aux)
   in
   let fix_conversions = function
