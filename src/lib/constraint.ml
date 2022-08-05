@@ -440,9 +440,11 @@ let call_smt_solve l smt_file smt_vars var =
   close_out tmp_chan;
   let smt_output =
     try
+      let t = Profile.start_smt () in
       let smt_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
       let smt_output = String.concat " " (input_all smt_chan) in
       let _ = Unix.close_process_in smt_chan in
+      Profile.finish_smt t;
       smt_output
     with
     | exn ->
@@ -472,9 +474,11 @@ let call_smt_solve_bitvector l smt_file smt_vars =
   close_out tmp_chan;
   let smt_output =
     try
+      let t = Profile.start_smt () in
       let smt_chan = Unix.open_process_in ("z3 -t:1000 -T:10 " ^ input_file) in
       let smt_output = String.concat " " (input_all smt_chan) in
       let _ = Unix.close_process_in smt_chan in
+      Profile.finish_smt t;
       smt_output
     with
     | exn ->
@@ -523,7 +527,10 @@ let solve_unique_smt' l constraints exp_defn exp_bound var =
     | None ->
        match call_smt_solve l smt_file smt_vars var with
        | Some result ->
-          begin match call_smt' l exp_defn (nc_and constraints (nc_neq (nconstant result) (nvar var))) with
+          let t = Profile.start_smt () in
+          let smt_result' = call_smt' l exp_defn (nc_and constraints (nc_neq (nconstant result) (nvar var))) in
+          Profile.finish_smt t;
+          begin match smt_result' with
           | Unsat ->
              if Big_int.less_equal Big_int.zero result && Big_int.less result (Big_int.pow_int_positive 2 30) then
                known_uniques := DigestMap.add digest (Some (Big_int.to_int result)) !known_uniques
