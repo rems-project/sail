@@ -663,10 +663,10 @@ let rec is_irrefutable_pattern (P_aux (p,ann)) =
  *)
 let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
   let rewrap p = P_aux (p,annot1) in
-  let subsumes_list s pats1 pats2 =
+  let subsumes_list pats1 pats2 =
     if List.length pats1 = List.length pats2
     then
-      let subs = List.map2 s pats1 pats2 in
+      let subs = List.map2 subsumes_pat pats1 pats2 in
       List.fold_right
         (fun p acc -> match p, acc with
           | Some subst, Some substs -> Some (subst @ substs)
@@ -675,41 +675,44 @@ let rec subsumes_pat (P_aux (p1,annot1) as pat1) (P_aux (p2,annot2) as pat2) =
     else None in
   match p1, p2 with
   | P_lit (L_aux (lit1,_)), P_lit (L_aux (lit2,_)) ->
-      if lit1 = lit2 then Some [] else None
+     if lit1 = lit2 then Some [] else None
   | P_or(pat1, pat2), _ -> (* todo: possibly not the right answer *) None
   | _, P_or(pat1, pat2) -> (* todo: possibly not the right answer *) None
   | P_not(pat), _ -> (* todo: possibly not the right answer *) None
   | _, P_not(pat) -> (* todo: possibly not the right answer *) None
-  | P_as (pat1,_), _ -> subsumes_pat pat1 pat2
-  | _, P_as (pat2,_) -> subsumes_pat pat1 pat2
+  | P_as (pat1, id1), _ ->
+     (* Abuse subsumes_list to check that both the nested pattern and the
+      * variable binding can subsume the other pattern *)
+     subsumes_list [P_aux (P_id id1, annot1); pat1] [pat2; pat2]
+  | _, P_as (pat2, id2) ->
+     (* Ditto for the other direction *)
+     subsumes_list [pat1; pat1] [P_aux (P_id id2, annot2); pat2]
   | P_typ (_,pat1), _ -> subsumes_pat pat1 pat2
   | _, P_typ (_,pat2) -> subsumes_pat pat1 pat2
   | P_id (Id_aux (id1,_) as aid1), P_id (Id_aux (id2,_) as aid2) ->
-    if id1 = id2 then Some []
-    else if is_unbound (Env.lookup_id aid1 (env_of_annot annot1))
-    then if is_unbound (Env.lookup_id aid2 (env_of_annot annot2))
-      then Some [(id2,id1)]
-      else Some []
-    else None
+     if id1 = id2 then Some [] else
+     if is_unbound (Env.lookup_id aid1 (env_of_annot annot1)) then
+       if is_unbound (Env.lookup_id aid2 (env_of_annot annot2)) then Some [(id2,id1)] else Some []
+     else None
   | P_id id1, _ ->
-    if is_unbound (Env.lookup_id id1 (env_of_annot annot1)) then Some [] else None
+     if is_unbound (Env.lookup_id id1 (env_of_annot annot1)) then Some [] else None
   | P_var (pat1,_), P_var (pat2,_) -> subsumes_pat pat1 pat2
   | P_wild, _ -> Some []
   | P_app (Id_aux (id1,_),args1), P_app (Id_aux (id2,_),args2) ->
-    if id1 = id2 then subsumes_list subsumes_pat args1 args2 else None
+     if id1 = id2 then subsumes_list args1 args2 else None
   | P_vector pats1, P_vector pats2
   | P_vector_concat pats1, P_vector_concat pats2
   | P_tup pats1, P_tup pats2
   | P_list pats1, P_list pats2 ->
-    subsumes_list subsumes_pat pats1 pats2
+     subsumes_list pats1 pats2
   | P_list (pat1 :: pats1), P_cons _ ->
-    subsumes_pat (rewrap (P_cons (pat1, rewrap (P_list pats1)))) pat2
+     subsumes_pat (rewrap (P_cons (pat1, rewrap (P_list pats1)))) pat2
   | P_cons _, P_list (pat2 :: pats2)->
-    subsumes_pat pat1 (rewrap (P_cons (pat2, rewrap (P_list pats2))))
+     subsumes_pat pat1 (rewrap (P_cons (pat2, rewrap (P_list pats2))))
   | P_cons (pat1, pats1), P_cons (pat2, pats2) ->
-    (match subsumes_pat pat1 pat2, subsumes_pat pats1 pats2 with
-    | Some substs1, Some substs2 -> Some (substs1 @ substs2)
-    | _ -> None)
+     (match subsumes_pat pat1 pat2, subsumes_pat pats1 pats2 with
+     | Some substs1, Some substs2 -> Some (substs1 @ substs2)
+     | _ -> None)
   | _, P_wild -> if is_irrefutable_pattern pat1 then Some [] else None
   | _ -> None
 
