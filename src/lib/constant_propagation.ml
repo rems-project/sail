@@ -710,7 +710,7 @@ let const_props target ast ref_vars =
                if Id.compare id id' = 0 then DoesMatch ([],[]) else DoesNotMatch
             | _ ->
                (Reporting.print_err l' "Monomorphisation"
-                  "Unexpected kind of pattern for enumeration"; GiveUp)
+                  ("Unexpected kind of pattern for enumeration: " ^ string_of_pat pat); GiveUp)
            end
          | _ -> GiveUp)
       | E_lit (L_aux (lit_e, lit_l)), P_lit (L_aux (lit_p, _)) ->
@@ -732,7 +732,7 @@ let const_props target ast ref_vars =
                          [kid,nexp])
            | _ ->
               (Reporting.print_err lit_l "Monomorphisation"
-                 "Unexpected kind of literal for var match"; GiveUp)
+                 ("Unexpected kind of literal for var match: " ^ string_of_lit (L_aux (lit_e, lit_l))); GiveUp)
          end
       | E_lit ((L_aux ((L_bin _ | L_hex _), _) as lit)), P_vector _ ->
          let mk_bitlit lit = E_aux (E_lit lit, (Generated l, mk_tannot env bit_typ)) in
@@ -740,10 +740,11 @@ let const_props target ast ref_vars =
          check_exp_pat (E_aux (E_vector lits', (l, annot))) pat
       | E_lit _, _ ->
          (Reporting.print_err l' "Monomorphisation"
-            "Unexpected kind of pattern for literal"; GiveUp)
+            ("Unexpected kind of pattern for literal: " ^ string_of_pat pat); GiveUp)
       | E_vector es, P_vector ps
            when List.for_all (function (E_aux (E_lit _,_)) -> true | _ -> false) es ->
          let matches = List.map2 (fun e p ->
+           let p = match p with P_aux (P_typ (_,p'),_) -> p' | _ -> p in
            match e, p with
            | E_aux (E_lit (L_aux (lit,_)),_), P_aux (P_lit (L_aux (lit',_)),_) ->
               if lit_match (lit,lit') then DoesMatch ([],[]) else DoesNotMatch
@@ -759,7 +760,7 @@ let const_props target ast ref_vars =
          (match final with
          | GiveUp ->
             (Reporting.print_err l "Monomorphisation"
-               "Unexpected kind of pattern for vector literal"; GiveUp)
+               ("Unexpected kind of pattern for vector literal: " ^ string_of_pat pat); GiveUp)
          | _ -> final)
       | E_vector _, P_lit ((L_aux ((L_bin _ | L_hex _), _) as lit)) ->
          let mk_bitlit lit = P_aux (P_lit lit, (Generated l, mk_tannot env bit_typ)) in
@@ -767,7 +768,7 @@ let const_props target ast ref_vars =
          check_exp_pat exp (P_aux (P_vector lits', (l, annot)))
       | E_vector _, _ ->
          (Reporting.print_err l "Monomorphisation"
-            "Unexpected kind of pattern for vector literal"; GiveUp)
+            ("Unexpected kind of pattern for vector literal: " ^ string_of_pat pat); GiveUp)
       | E_cast (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_))),
         P_lit (L_aux (lit_p, _))
         -> DoesNotMatch
@@ -784,7 +785,7 @@ let const_props target ast ref_vars =
                     KBindings.bindings ksubst)
       | E_cast (undef_typ, (E_aux (E_lit (L_aux (L_undef, lit_l)),_))), _ ->
              (Reporting.print_err l' "Monomorphisation"
-                "Unexpected kind of pattern for literal"; GiveUp)
+                ("Unexpected kind of pattern for literal: " ^ string_of_pat pat); GiveUp)
       | E_record _,_ | E_cast (_, E_aux (E_record _, _)),_ -> DoesNotMatch
       | _ -> GiveUp
     in
