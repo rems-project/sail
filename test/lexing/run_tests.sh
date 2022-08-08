@@ -34,3 +34,5 @@ done
 finish_suite "Lexing tests"
 
 printf "</testsuites>\n" >> $DIR/tests.xml
+
+exit $returncode

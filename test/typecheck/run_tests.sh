@@ -76,3 +76,4 @@ done
 finish_suite "Typechecking tests"
 
 printf "</testsuites>\n" >> $DIR/tests.xml
+exit $returncode

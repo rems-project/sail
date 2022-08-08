@@ -5,6 +5,7 @@ NC='\033[0m'
 
 pass=0
 fail=0
+returncode=0
 XML=""
 
 function green {
@@ -15,12 +16,14 @@ function green {
 
 function yellow {
     (( fail += 1 ))
+    returncode=1
     printf "%s: ${YELLOW}$2${NC}\n" "$1"
     XML+="    <testcase name=\"$1\">\n      <error message=\"$2\">$2</error>\n    </testcase>\n"
 }
 
 function red {
     (( fail += 1 ))
+    returncode=1
     printf "%s: ${RED}$2${NC}\n" "$1"
     XML+="    <testcase name=\"$1\">\n      <error message=\"$2\">$2</error>\n    </testcase>\n"
 }

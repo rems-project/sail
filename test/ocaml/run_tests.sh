@@ -84,3 +84,4 @@ finish_suite "Ocaml trace testing"
 #finish_suite "Interpreter testing"
 
 printf "</testsuites>\n" >> $DIR/tests.xml
+exit $returncode
