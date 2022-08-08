@@ -17,4 +17,4 @@ jobs:
         sudo apt install opam
         etc/ci_opam_build.sh
     - name: Run core tests
-      run: test/run_core_tests.sh
+      run: etc/ci_core_tests.sh
