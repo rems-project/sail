@@ -697,9 +697,12 @@ let split_defs target all_errors splits env ast =
 
   let (refinements, defs') = split_constructors ast.defs in
 
+  (* This will perform the initialisation just once, and share it across all defs *)
+  let const_prop = Constant_propagation.const_prop target ast in
+
   let subst_exp ref_vars substs ksubsts exp =
     let substs = bindings_from_list substs, KBindings.map fst ksubsts in
-    let exp = fst (Constant_propagation.const_prop target ast ref_vars substs Bindings.empty exp) in
+    let exp = fst (const_prop ref_vars substs Bindings.empty exp) in
     let env = env_of exp in
     KBindings.fold (fun kid (nexp, should_assert) exp ->
         if should_assert && not (is_kid_generated kid) then

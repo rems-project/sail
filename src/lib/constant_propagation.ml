@@ -268,18 +268,22 @@ let is_env_inconsistent env ksubsts =
 module StringSet = Set.Make(String)
 module StringMap = Map.Make(String)
 
-let const_props target ast ref_vars =
+(* This is set up so that a partially applied version can be used multiple 
+   times, reducing start up time. *)
+
+let const_props target ast =
+
+  (* Constant-fold function applications with constant arguments *)
+  let interpreter_istate =
+    (* Do not interpret undefined_X functions *)
+    let open Interpreter in
+    let undefined_builtin_ids = ids_of_defs Initial_check.undefined_builtin_val_specs in
+    let remove_primop id = StringMap.remove (string_of_id id) in
+    let remove_undefined_primops = IdSet.fold remove_primop undefined_builtin_ids in
+    let (lstate, gstate) = Constant_fold.initial_state ast Type_check.initial_env in
+    (lstate, { gstate with primops = remove_undefined_primops gstate.primops })
+  in
   let const_fold exp =
-    (* Constant-fold function applications with constant arguments *)
-    let interpreter_istate =
-      (* Do not interpret undefined_X functions *)
-      let open Interpreter in
-      let undefined_builtin_ids = ids_of_defs Initial_check.undefined_builtin_val_specs in
-      let remove_primop id = StringMap.remove (string_of_id id) in
-      let remove_undefined_primops = IdSet.fold remove_primop undefined_builtin_ids in
-      let (lstate, gstate) = Constant_fold.initial_state ast Type_check.initial_env in
-      (lstate, { gstate with primops = remove_undefined_primops gstate.primops })
-    in
     try
       strip_exp exp
       |> infer_exp (env_of exp)
@@ -288,6 +292,9 @@ let const_props target ast ref_vars =
     with
     | _ -> exp
   in
+
+  fun ref_vars ->
+
   let constants =
     let add m = function
       | DEF_val (LB_aux (LB_val (P_aux ((P_id id | P_typ (_,P_aux (P_id id,_))),_), exp),_))
@@ -843,7 +850,7 @@ let const_props target ast ref_vars =
 
 in (const_prop_exp, const_prop_pexp)
 
-let const_prop target d r = fst (const_props target d r)
+let const_prop target d = let f = const_props target d in fun r -> fst (f r)
 
 let referenced_vars exp =
   let open Rewriter in
