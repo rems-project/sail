@@ -989,23 +989,27 @@ end*)
 
 (*** Machine words *)
 
+(* ISA models tend to use integers for sizes, so Sail's bitvectors are integer
+   indexed.  To avoid carrying around proofs that sizes are non-negative
+   everywhere we define negative sized machine words to be a trivial value. *)
+
 Definition mword (n : Z) :=
   match n with
-  | Zneg _ => False
+  | Zneg _ => word 0
   | Z0 => word 0
   | Zpos p => word (Pos.to_nat p)
   end.
 
 Definition get_word {n} : mword n -> word (Z.to_nat n) :=
   match n with
-  | Zneg _ => fun x => match x with end
+  | Zneg _ => fun x => x
   | Z0 => fun x => x
   | Zpos p => fun x => x
   end.
 
 Definition with_word {n} {P : Type -> Type} : (word (Z.to_nat n) -> P (word (Z.to_nat n))) -> mword n -> P (mword n) :=
 match n with
-| Zneg _ => fun f w => match w with end
+| Zneg _ => fun f w => f w
 | Z0 => fun f w => f w
 | Zpos _ => fun f w => f w
 end.
@@ -1069,7 +1073,7 @@ Definition update_mword {a} (is_inc : bool) (w : mword a) n b :=
   if is_inc then update_mword_inc w n b else update_mword_dec w n b.
 
 (*val int_of_mword : forall 'a. bool -> mword 'a -> integer*)
-Definition int_of_mword {a} `{ArithFact (a >=? 0)} (sign : bool) (w : mword a) :=
+Definition int_of_mword {a} (sign : bool) (w : mword a) :=
   if sign then wordToZ (get_word w) else Z.of_N (wordToN (get_word w)).
 
 
@@ -1078,17 +1082,12 @@ Definition mword_of_int len n :=
   let w := wordFromInteger n in
   if (length_mword w = len) then w else failwith "unexpected word length"
 *)
-Program Definition mword_of_int {len} `{H:ArithFact (len >=? 0)} n : mword len :=
+Definition mword_of_int {len} n : mword len :=
 match len with
-| Zneg _ => _
+| Zneg _ => WO
 | Z0 => ZToWord 0 n
 | Zpos p => ZToWord (Pos.to_nat p) n
 end.
-Next Obligation.
-destruct H as [H].
-unfold Z.geb, Z.compare in H.
-discriminate.
-Defined.
 
 (*
 (* Translating between a type level number (itself n) and an integer *)
@@ -1134,10 +1133,6 @@ Local Close Scope nat.
 
 (*** Bitvectors *)
 
-Class ReasonableSize (a : Z) : Prop := {
-  isPositive : a >=? 0 = true
-}.
-
 (* Definitions in the context that involve proof for other constraints can
    break some of the constraint solving tactics, so prune definition bodies
    down to integer types. *)
@@ -1159,13 +1154,6 @@ destruct (Bool.bool_dec l r) as [e | ne].
 * exists true; tauto.
 Qed.
 
-Lemma ArithFact_mword (a : Z) (w : mword a) : ArithFact (a >=? 0).
-constructor.
-destruct a.
-* auto with zarith.
-* auto using Z.le_ge, Zle_0_pos.
-* destruct w.
-Qed.
 (* Remove constructor from ArithFact(P)s and if they're used elsewhere
    in the context create a copy that rewrites will work on. *)
 Ltac unwrap_ArithFacts :=
@@ -1534,7 +1522,6 @@ Ltac prepare_for_solver :=
  autounfold with sail in * |- *; (* You can add Hint Unfold ... : sail to let lia see through fns *)
  split_cases;
  extract_properties;
- repeat match goal with w:mword ?n |- _ => apply ArithFact_mword in w end;
  unwrap_ArithFacts;
  destruct_exists;
  unbool_comparisons;
@@ -1923,8 +1910,7 @@ Ltac sail_extra_tactic := fail.
 
 Ltac main_solver :=
  solve
- [ apply ArithFact_mword; assumption
- | z_comparisons
+ [ z_comparisons
  | lia
    (* Try sail hints before dropping the existential *)
  | subst; eauto 3 with zarith sail
@@ -2210,16 +2196,6 @@ Qed.
 Definition neq_atom (x : Z) (y : Z) : bool := negb (Z.eqb x y).
 #[export] Hint Unfold neq_atom : sail.
 
-Lemma ReasonableSize_witness (a : Z) (w : mword a) : ReasonableSize a.
-constructor.
-destruct a.
-* auto with zarith.
-* auto using Z.le_ge, Zle_0_pos.
-* destruct w.
-Qed.
-
-#[export] Hint Extern 0 (ReasonableSize ?A) => (unwrap_ArithFacts; solve [apply ReasonableSize_witness; assumption | constructor; auto with zarith]) : typeclass_instances.
-
 Definition to_range (x : Z) : {y : Z & ArithFact ((x <=? y <=? x))} := build_ex x.
 
 Definition opt_def {a} (def:a) (v:option a) :=
@@ -2245,6 +2221,10 @@ end.
 (*declare {isabelle} termination_argument byte_chunks = automatic*)
 
 Definition bits_of {n} (v : mword n) := List.map bitU_of_bool (bitlistFromWord (get_word v)).
+Lemma isPositive {n} `{ArithFact (n >=? 0)} : n >=? 0 = true.
+destruct H.
+assumption.
+Qed.
 Definition of_bits {n} v `{ArithFact (n >=? 0)} : option (mword n) := option_map (fun bl => to_word isPositive (fit_bbv_word (wordFromBitlist bl))) (just_list (List.map bool_of_bitU v)).
 Definition of_bools {n} v `{ArithFact (n >=? 0)} : mword n := to_word isPositive (fit_bbv_word (wordFromBitlist v)).
 
