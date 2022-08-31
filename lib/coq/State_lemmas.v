@@ -894,6 +894,7 @@ Qed.
 Lemma liftState_undefined_bitvector Regs Regval E r n `{ArithFact (n >=? 0)} :
   liftState (Regs := Regs) (Regval := Regval) (E := E) r (undefined_bitvector n) === undefined_bitvectorS n.
 unfold undefined_bitvector, undefined_bitvectorS.
+destruct n; auto.
 rewrite_liftState.
 reflexivity.
 Qed.

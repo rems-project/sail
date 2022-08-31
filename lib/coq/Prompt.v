@@ -371,9 +371,12 @@ Fixpoint undefined_word_nat {rv e} n : monad rv (Word.word n) e :=
     returnm (Word.WS b t)
   end.
 
-Definition undefined_bitvector {rv e} n `{ArithFact (n >=? 0)} : monad rv (mword n) e :=
-  undefined_word_nat (Z.to_nat n) >>= fun w =>
-  returnm (word_to_mword w).
+Definition undefined_bitvector {rv e} n : monad rv (mword n) e :=
+  match n return monad rv (mword n) e with
+  | Zneg _ => returnm Word.WO
+  | Z0 => returnm Word.WO
+  | Zpos p => undefined_word_nat (Pos.to_nat p)
+  end.
 
 (* If we need to build an existential after a monadic operation, assume that
    we can do it entirely from the type. *)

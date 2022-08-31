@@ -263,8 +263,11 @@ Fixpoint undefined_word_natS {rv e} n : monadS rv (Word.word n) e :=
     returnS (Word.WS b t)
   end.
 
-Definition undefined_bitvectorS {rv e} n `{ArithFact (n >=? 0)} : monadS rv (mword n) e :=
-  undefined_word_natS (Z.to_nat n) >>$= fun w =>
-  returnS (word_to_mword w).
+Definition undefined_bitvectorS {rv e} n : monadS rv (mword n) e :=
+  match n return monadS rv (mword n) e with
+  | Zneg _ => returnS Word.WO
+  | Z0 => returnS Word.WO
+  | Zpos p => undefined_word_natS (Pos.to_nat p)
+  end.
 
 

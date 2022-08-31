@@ -1106,15 +1106,13 @@ Qed.
 
 Local Open Scope Z.
 
-Lemma PrePostE_undefined_bitvectorS_any Regs Ety n `{Sail.Values.ArithFact (n >=? 0)} (Q : Sail.Values.mword n -> predS Regs) (E : ex Ety -> predS Regs) :
+Lemma PrePostE_undefined_bitvectorS_any Regs Ety n (Q : Sail.Values.mword n -> predS Regs) (E : ex Ety -> predS Regs) :
   PrePostE (fun s => forall w, Q w s) (undefined_bitvectorS n) Q E.
 unfold undefined_bitvectorS.
-eapply PrePostE_strengthen_pre.
-eapply PrePostE_bindS; intros.
-apply (PrePostE_returnS _ _ _ Q).
-apply PrePostE_undefined_word_natS_any.
-simpl.
-auto.
+destruct n.
+2: { apply PrePostE_undefined_word_natS_any. }
+all: eapply PrePostE_strengthen_pre;
+     [ apply PrePostE_returnS | trivial].
 Qed.
 
 Lemma PrePostE_undefined_bitvectorS_ignore Regs Ety n `{Sail.Values.ArithFact (n >=? 0)} (Q : predS Regs) (E : ex Ety -> predS Regs) :
