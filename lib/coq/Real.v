@@ -100,6 +100,7 @@ Definition lt_real (x y : R) : bool := if Rlt_dec x y then true else false.
 
 (* Export select definitions from outside of Rbase *)
 Definition pow_real := powerRZ.
+Definition real_power := powerRZ.
 
 Definition print_real (_ : string) (_ : R) : unit := tt.
 Definition prerr_real (_ : string) (_ : R) : unit := tt.
