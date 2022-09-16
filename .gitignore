@@ -7,6 +7,8 @@
 *.native
 *.byte
 
+*.install
+
 a.out
 
 _build/
