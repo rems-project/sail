@@ -1857,7 +1857,8 @@ let make_calls_precise ctx cdefs =
     | Some (_, param_ctyps, ret_ctyp) -> Some (param_ctyps, ret_ctyp)
   in
  
-  let precise_call = function
+  let precise_call call tail =
+    match call with
     | I_aux (I_funcall (clexp, extern, (id, ctyp_args), args), ((_, l) as aux)) as instr ->
        begin match get_function_typ id with
        | None when string_of_id id = "cons" ->
@@ -1872,15 +1873,15 @@ let make_calls_precise ctx cdefs =
                let cleanup = [
                    iclear ~loc:l ctyp_arg gs
                  ] in
-               iblock (cast @ [I_aux (I_funcall (clexp, extern, (id, ctyp_args), [V_id (gs, ctyp_arg); tl_arg]), aux)] @ cleanup)
+               [iblock (cast @ [I_aux (I_funcall (clexp, extern, (id, ctyp_args), [V_id (gs, ctyp_arg); tl_arg]), aux)] @ tail @ cleanup)]
              else
-               instr
+               instr::tail
           | _ ->
              (* cons must have a single type parameter and two arguments *)
              Reporting.unreachable (id_loc id) __POS__ "Invalid cons call"
           end
        | None ->
-          instr
+          instr::tail
        | Some (param_ctyps, ret_ctyp) ->
           if List.compare_lengths args param_ctyps <> 0 then (
             Reporting.unreachable (id_loc id) __POS__ ("Function call found with incorrect arity: " ^ string_of_id id)
@@ -1912,10 +1913,10 @@ let make_calls_precise ctx cdefs =
           let casts = List.map (fun (x, _, _) -> x) casted_args |> List.concat in
           let args = List.map (fun (_, y, _) -> y) casted_args in
           let cleanup = List.rev_map (fun (_, _, z) -> z) casted_args |> List.concat in
-          iblock1 (casts @ ret_setup @ [I_aux (I_funcall (clexp, extern, (id, ctyp_args), args), aux)] @ ret_cleanup @ cleanup)
+          [iblock1 (casts @ ret_setup @ [I_aux (I_funcall (clexp, extern, (id, ctyp_args), args), aux)] @ tail @ ret_cleanup @ cleanup)]
        end
           
-    | instr -> instr
+    | instr -> instr::tail
   in
 
   let rec precise_calls prior = function
@@ -1926,7 +1927,7 @@ let make_calls_precise ctx cdefs =
        precise_calls (cdef :: prior) cdefs
        
     | cdef :: cdefs ->
-       precise_calls (cdef_map_instr precise_call cdef :: prior) cdefs
+       precise_calls (cdef_map_funcall precise_call cdef :: prior) cdefs
 
     | [] ->
        List.rev prior

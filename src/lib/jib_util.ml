@@ -896,6 +896,42 @@ let cdef_map_instr f = function
   | CDEF_type tdef -> CDEF_type tdef
   | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
 
+(** Map over function calls in an instruction sequence, including exception handler where present *)
+let rec map_funcall f instrs =
+  match instrs with
+  | [] -> []
+  | (I_aux (I_funcall _, _) as funcall_instr)::tail -> begin
+      match tail with
+      | (I_aux (I_if (V_id (id, CT_bool), _, [], CT_unit), _) as exception_instr)::tail'
+           when Name.compare id have_exception == 0 ->
+         f funcall_instr [exception_instr] @ map_funcall f tail'
+      | _ ->
+         f funcall_instr [] @ map_funcall f tail
+    end
+  | (I_aux (instr, aux))::tail ->
+     let instr = match instr with
+       | I_decl _ | I_init _ | I_reset _ | I_reinit _
+       | I_funcall _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _
+       | I_comment _ | I_label _ | I_goto _ | I_raw _ | I_match_failure | I_undefined _ | I_end _ -> instr
+       | I_if (cval, instrs1, instrs2, ctyp) ->
+          I_if (cval, map_funcall f instrs1, map_funcall f instrs2, ctyp)
+       | I_block instrs ->
+          I_block (map_funcall f instrs)
+       | I_try_block instrs ->
+          I_try_block (map_funcall f instrs)
+     in (I_aux (instr, aux)) :: map_funcall f tail
+
+(** Map over each function call in a cdef using map_funcall *)
+let cdef_map_funcall f = function
+  | CDEF_reg_dec (id, ctyp, instrs) -> CDEF_reg_dec (id, ctyp, map_funcall f instrs)
+  | CDEF_let (n, bindings, instrs) -> CDEF_let (n, bindings, map_funcall f instrs)
+  | CDEF_fundef (id, heap_return, args, instrs) -> CDEF_fundef (id, heap_return, args, map_funcall f instrs)
+  | CDEF_startup (id, instrs) -> CDEF_startup (id, map_funcall f instrs)
+  | CDEF_finish (id, instrs) -> CDEF_finish (id, map_funcall f instrs)
+  | CDEF_spec (id, extern, ctyps, ctyp) -> CDEF_spec (id, extern, ctyps, ctyp)
+  | CDEF_type tdef -> CDEF_type tdef
+  | CDEF_pragma (name, str) -> CDEF_pragma (name, str)
+
 (** Map over each instruction in a cdef using concatmap_instr *)
 let cdef_concatmap_instr f = function
   | CDEF_reg_dec (id, ctyp, instrs) ->
