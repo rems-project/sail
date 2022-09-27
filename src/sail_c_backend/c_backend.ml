@@ -147,6 +147,8 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
   | CT_ref ctyp -> true
   | CT_poly _ -> true
+  | CT_float n -> n <> 128
+  | CT_rounding_mode -> true
   | CT_constant n -> Big_int.less_equal (min_int 64) n && Big_int.greater_equal n (max_int 64)
 
 let v_mask_lower i = V_lit (VL_bits (Util.list_init i (fun _ -> Sail2_values.B1), true), CT_fbits (i, true))
@@ -1079,6 +1081,8 @@ let rec sgen_ctyp = function
   | CT_string -> "sail_string"
   | CT_real -> "real"
   | CT_ref ctyp -> sgen_ctyp ctyp ^ "*"
+  | CT_float n -> "float" ^ string_of_int n ^ "_t"
+  | CT_rounding_mode -> "uint_fast8_t"
   | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
              
 let rec sgen_ctyp_name = function
@@ -1101,6 +1105,8 @@ let rec sgen_ctyp_name = function
   | CT_string -> "sail_string"
   | CT_real -> "real"
   | CT_ref ctyp -> "ref_" ^ sgen_ctyp_name ctyp
+  | CT_float n -> "float" ^ string_of_int n
+  | CT_rounding_mode -> "rounding_mode"
   | CT_poly _ -> "POLY" (* c_error "Tried to generate code for non-monomorphic type" *)
  
 let sgen_mask n =
@@ -2219,7 +2225,8 @@ let rec ctyp_dependencies = function
   | CT_ref ctyp -> ctyp_dependencies ctyp
   | CT_struct (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
   | CT_variant (_, ctors) -> List.concat (List.map (fun (_, ctyp) -> ctyp_dependencies ctyp) ctors)
-  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool | CT_real | CT_bit | CT_string | CT_enum _ | CT_poly _ | CT_constant _ -> []
+  | CT_lint | CT_fint _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit | CT_bool
+    | CT_real | CT_bit | CT_string | CT_enum _ | CT_poly _ | CT_constant _ | CT_float _ | CT_rounding_mode -> []
 
 let codegen_ctg ctx = function
   | CTG_vector (direction, ctyp) -> codegen_vector ctx (direction, ctyp)

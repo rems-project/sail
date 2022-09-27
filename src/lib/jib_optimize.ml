@@ -436,8 +436,8 @@ let remove_tuples cdefs ctx =
        List.fold_left (fun d (_, ctyp) -> max (tuple_depth ctyp) d) 0 id_ctyps
     | CT_list ctyp | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_ref ctyp ->
        tuple_depth ctyp
-    | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _
-      | CT_unit | CT_bool | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ ->
+    | CT_lint | CT_fint _ | CT_lbits _ | CT_sbits _ | CT_fbits _ | CT_constant _ | CT_unit | CT_bool
+      | CT_real | CT_bit | CT_poly _ | CT_string | CT_enum _ | CT_float _ | CT_rounding_mode ->
        0
   in
   let rec fix_tuples = function

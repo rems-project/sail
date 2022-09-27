@@ -438,7 +438,7 @@ let rec string_of_cval = function
        (Util.string_of_list ", " (fun (field, cval) -> string_of_uid field ^ " = " ^ string_of_cval cval) fields)
 
 let rec map_ctyp f = function
-  | (CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _
+  | (CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_float _ | CT_rounding_mode
      | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _) as ctyp -> f ctyp
   | CT_tup ctyps -> f (CT_tup (List.map (map_ctyp f) ctyps))
   | CT_ref ctyp -> f (CT_ref (map_ctyp f ctyp))
@@ -604,6 +604,8 @@ let rec ctyp_suprema = function
   | CT_bit -> CT_bit
   | CT_tup ctyps -> CT_tup (List.map ctyp_suprema ctyps)
   | CT_string -> CT_string
+  | CT_float n -> CT_float n
+  | CT_rounding_mode -> CT_rounding_mode
   | CT_enum (id, ids) -> CT_enum (id, ids)
   (* Do we really never want to never call ctyp_suprema on constructor
      fields?  Doing it causes issues for structs (see
@@ -686,7 +688,7 @@ let rec ctyp_ids = function
   | CT_tup ctyps -> List.fold_left (fun ids ctyp -> IdSet.union (ctyp_ids ctyp) ids) IdSet.empty ctyps
   | CT_vector (_, ctyp) | CT_fvector (_, _, ctyp) | CT_list ctyp | CT_ref ctyp -> ctyp_ids ctyp
   | CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_unit
-    | CT_bool | CT_real | CT_bit | CT_string | CT_poly _ -> IdSet.empty
+    | CT_bool | CT_real | CT_bit | CT_string | CT_poly _ | CT_float _ | CT_rounding_mode -> IdSet.empty
 
 let rec subst_poly substs = function
   | CT_poly kid ->
@@ -704,7 +706,7 @@ let rec subst_poly substs = function
   | CT_struct (id, fields) ->
      CT_struct (id, List.map (fun (ctor_id, ctyp) -> ctor_id, subst_poly substs ctyp) fields)
   | (CT_lint | CT_fint _ | CT_constant _ | CT_unit | CT_bool | CT_bit | CT_string | CT_real
-     | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_enum _ as ctyp) -> ctyp
+     | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_enum _ | CT_float _ | CT_rounding_mode as ctyp) -> ctyp
  
 let is_ref_ctyp = function
   | CT_ref _ -> true

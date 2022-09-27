@@ -196,6 +196,8 @@ let rec mangle_string_of_ctyp ctx = function
   | CT_bool -> "o"
   | CT_real -> "r"
   | CT_string -> "s"
+  | CT_float n -> "f" ^ string_of_int n
+  | CT_rounding_mode -> "m"
   | CT_enum (id, _) -> "E" ^ string_of_id id ^ "%"
   | CT_ref ctyp -> "&" ^ mangle_string_of_ctyp ctx ctyp
   | CT_tup ctyps -> "(" ^ Util.string_of_list "," (mangle_string_of_ctyp ctx) ctyps ^ ")" 
@@ -1711,8 +1713,8 @@ let rec specialize_functions ctx cdefs =
     specialize_functions ctx cdefs
 
 let map_structs_and_variants f = function
-  | (CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _
-     | CT_bit | CT_unit | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _) as ctyp -> ctyp
+  | (CT_lint | CT_fint _ | CT_constant _ | CT_lbits _ | CT_fbits _ | CT_sbits _ | CT_bit | CT_unit
+     | CT_bool | CT_real | CT_string | CT_poly _ | CT_enum _ | CT_float _ | CT_rounding_mode) as ctyp -> ctyp
   | CT_tup ctyps -> CT_tup (List.map (map_ctyp f) ctyps)
   | CT_ref ctyp -> CT_ref (map_ctyp f ctyp)
   | CT_vector (direction, ctyp) -> CT_vector (direction, map_ctyp f ctyp)
